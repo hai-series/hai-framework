@@ -112,6 +112,8 @@ Podman 不自动继承远程服务的代理变量。需要代理时，使用 Age
 
 创建 session 默认共享 `main/` 路径，框架会阻止另一个共享 session 同时占用它。`newWorktree: true` 从每个工程当前已提交的本地主分支创建同名分支和 worktree，普通文件单独复制；可以指定 `branch`，默认 `acp/<sessionId>`。它不会自动拉远端，也不会导入主目录未提交修改。
 
+`session.info()` 返回的 `workspace` 提供聚合目录、各登记仓库的绝对路径和存储位置。可信预览进程可以直接使用本机目录。卷模式使用返回的实际引擎，把源码卷 `name` 挂到同一 `mountPath`，并以目标仓库的 `path` 为工作目录。关闭 Agent 后预览仍可继续读取。应用先停止预览并保存所需改动，再调用 `ai.acp.sessions.reclaimWorktree(id)`。它拒绝活动、脏或锁定的工作树，可按 ID 重试。开始回收后停止 resume/publish，完成后可删会话记录。分支、普通文件、状态及卷保留，旧记录缺少归属时由运维回收。完整卷和会话信息只交给已授权的可信执行器。
+
 - `session.updateMain()`：停止本 session 的执行环境，再 fetch 各工程的明确主分支并 ff-only 更新本地主目录；不把主分支合入 session，不自动 rebase。共享主目录被其他会话占用时返回 busy。
 - `session.publish({ mode: 'push-branch', message, author: { name, email } })`：提交隔离 session 修改并推送其同名分支。
 - `session.publish({ mode: 'merge-main', message, author })`：提交后检查、更新登记的主分支，再合并并推送。无 force push，不静默处理冲突。

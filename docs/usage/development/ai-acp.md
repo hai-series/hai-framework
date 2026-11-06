@@ -53,6 +53,14 @@ async function inspectProject() {
 
 正常关闭保留工程和原生状态。继续任务用 `ai.acp.sessions.resume(id, callbacks)`，只使用智能体声明的 load/resume 能力；原生不支持或模型/智能体定义已不兼容时返回失败。`sessions.remove(id)` 只移除关闭/失败的记录，不删除目录、worktree 或卷。
 
+## 将工作树交给预览
+
+成功创建受管会话后，`session.info()` 的 `workspace` 包含会话目录、各登记仓库的绝对路径和存储位置。`info.cwd` 是 Agent 当前绑定的目录。目录模式可以直接使用本机路径。卷模式由可信的同节点执行器使用 `workspace.storage.engine`，将 `workspace.storage.name` 挂到 `workspace.storage.mountPath`，再进入对应仓库路径。Git 工作树的链接需要保持原挂载路径。用于读取的预览可挂只读卷，需要写缓存的开发服务器应单独安排可写目录。
+
+预览可以读取未提交的改动，并在 `session.close()` 后继续运行。要释放工作树，先由应用停止预览，提交或另存所需改动，然后调用 `ai.acp.sessions.reclaimWorktree(id)`。它拒绝活动会话、有未提交改动或已被锁定的工作树，只删除登记在该任务下的干净工作树。Git 分支、普通文件、原生历史和卷都保留。已有会话若缺少归属记录，需沿用人工回收。
+
+回收过程中断时，按同一 ID 重试。开始移除后的记录会显示 `reclaiming`，全部完成后为 `reclaimed`。两个状态下的路径仅供追溯，无法再用于恢复会话或发布；需要移除记录时，在回收完成后调用 `sessions.remove(id)`。
+
 ## 更新主分支与发布修改
 
 - `session.updateMain()`：先停止本 session 执行环境，再逐仓 fetch 并 ff-only 更新登记的主分支；不把主分支合入 session 分支。

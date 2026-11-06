@@ -110,6 +110,25 @@ export interface ACPAgentLaunch {
 }
 
 /**
+ * 已准备的工程位置，供同一节点上的可信预览或检查进程使用。
+ * @example
+ * ```ts
+ * import type { ACPSessionWorkspace } from '@h-ai/ai'
+ * function webPath(workspace: ACPSessionWorkspace) { return workspace.repositories.find(repo => repo.id === 'web')?.path }
+ * ```
+ */
+export interface ACPSessionWorkspace {
+  /** 本机真实目录，或实际使用的引擎、源码卷和容器挂载点。 */
+  storage:
+    | { type: 'directory', path: string }
+    | { type: 'volume', engine: 'podman' | 'docker', name: string, mountPath: string }
+  /** 当前会话的聚合目录，位于上述宿主目录或容器挂载点内。 */
+  path: string
+  /** 登记仓库在同一文件系统中的绝对路径。 */
+  repositories: Array<{ id: string, path: string }>
+}
+
+/**
  * 持久会话绑定；原生 ID 不等于框架 ID，工作目录只能由登记信息生成。
  * @example
  * ```ts
@@ -132,6 +151,10 @@ export interface ACPSessionInfo {
   newWorktree: boolean
   /** 独立会话中所有工程共用的分支名。 */
   branch?: string
+  /** 受管目录交接信息；创建失败时可能只有部分工作树，旧记录或远程会话可能没有该字段。 */
+  workspace?: ACPSessionWorkspace
+  /** 显式回收已开始或完成。此时 workspace 仅供历史追溯，不可恢复会话或发布工作树。 */
+  worktreeStatus?: 'reclaiming' | 'reclaimed'
   /** 启动时选定的 Hai 模型 ID。 */
   modelId?: string
   /** 模型非密钥配置的摘要；用于阻止不兼容的会话恢复。 */

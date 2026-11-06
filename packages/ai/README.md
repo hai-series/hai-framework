@@ -222,6 +222,7 @@ Goose 1.57.0 镜像提供原生 `goose serve` HTTP/WS `/acp` 服务，通过 cus
 - `agents.register/get/list/update/remove/initialize/check` 维护智能体。`codex`、`deepseek-harness` 适配器引用 `llm.models`；其他原生程序用 `generic` 或可信 `AIInitOptions.acpAdapters`。自定义服务自行管理模型。
 - `workspaces.register/prepare/importFiles` 管理目录或持久 volume、多 Git 工程和普通文件；每个 Git 明确 `mainBranch`。prepare 不覆盖脏目录。
 - `sessions.create/resume/get/list/close` 管理会话；`newWorktree: true` 从各本地主分支建同名 worktree。可用 `repositoryId` 从指定仓库根目录启动与恢复，让 Agent 按该仓库发现规则和技能。prompt/stream/strict promptStructured、权限回调、MCP、模式配置、取消和能力检查沿用 ACP。
+- `session.info().data.workspace` 在成功时提供本机或同节点卷的工作树位置，可在 Agent 关闭后用于预览。先停止预览并保存改动，再用 `sessions.reclaimWorktree(id)` 定向回收干净工作树，保留分支、普通文件、原生历史和卷。
 - `session.updateMain()` 只 fetch/ff-only 更新明确主分支；`publish({ mode: 'merge-main' | 'push-branch', message, author })` 仅发布受管隔离 session，逐仓库报告部分失败，不强推。操作前停止执行环境，继续任务显式 resume。
 
 模型容量、模态和推理能力填 `llm.models[].capabilities`，未知不猜。Codex 要求原生 Responses；Hai 现有转换不是反向服务网关。关闭后保留代码/状态卷，确认拥有的进程停止才释放 CAS 占用；worktree 不是安全沙箱。

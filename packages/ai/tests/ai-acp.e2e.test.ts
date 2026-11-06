@@ -98,6 +98,40 @@ describe('aCP managed session E2E', () => {
     expect(JSON.parse(value(await resumed.prompt(prompt('inspect-repo'))).text)).toEqual(expected)
   }, 20000)
 
+  it('只回收停止且干净的目标工作树，保留其他会话和 Git 分支', async () => {
+    const api = await seed('api', 'trunk')
+    const web = await seed('web', 'trunk')
+    await workspace([{ id: 'api', url: api.remote, mainBranch: 'trunk' }, { id: 'web', url: web.remote, mainBranch: 'trunk' }])
+    const options = { agentId: 'fixture', workspaceId: 'project', repositoryId: 'web', newWorktree: true }
+    const target = value(await ai.acp.sessions.create({ ...options, id: 'target' }))
+    const other = value(await ai.acp.sessions.create({ ...options, id: 'other' }))
+    const targetInfo = value(await target.info())
+    const otherInfo = value(await other.info())
+    const root = await realpath(join(temporary, 'workspace'))
+    const targetDir = join(root, 'sessions', 'target')
+    expect(targetInfo.workspace).toEqual({
+      storage: { type: 'directory', path: root },
+      path: targetDir,
+      repositories: ['api', 'web'].map(id => ({ id, path: join(targetDir, id) })),
+    })
+    expect(await ai.acp.sessions.reclaimWorktree(target.id)).toMatchObject({ success: false, error: { code: 'hai:ai:074' } })
+    value(await target.close())
+    await writeFile(join(targetInfo.cwd, 'unfinished.txt'), 'draft')
+    expect(await ai.acp.sessions.reclaimWorktree(target.id)).toMatchObject({ success: false, error: { code: 'hai:ai:079' } })
+    expect(await readFile(join(targetDir, 'api', 'hello.txt'), 'utf8')).toBe('base')
+    expect(value(await target.info()).worktreeStatus).toBeUndefined()
+    value(await target.publish({ mode: 'push-branch', message: 'save draft', author }))
+    value(await ai.acp.sessions.reclaimWorktree(target.id))
+    value(await ai.acp.sessions.reclaimWorktree(target.id))
+    expect(value(await target.info()).worktreeStatus).toBe('reclaimed')
+    expect((await ai.acp.sessions.resume(target.id)).success).toBe(false)
+    expect((await target.publish({ mode: 'push-branch', message: 'gone', author })).success).toBe(false)
+    await expect(readFile(join(targetInfo.cwd, 'unfinished.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await git(join(root, 'main', 'web'), ['show', 'acp/target:unfinished.txt'])).toBe('draft')
+    expect(await readFile(join(otherInfo.cwd, 'hello.txt'), 'utf8')).toBe('base')
+    expect(value(await other.prompt(prompt('still active'))).text).toBe('still active')
+  }, 20000)
+
   it.each(['signal', 'api'] as const)('cooperative cancellation via %s 保留不可恢复 Agent 的同一会话和进程', async (method) => {
     await ai.close()
     value(await ai.init({ acp: { promptTimeout: 5000, cancelTimeout: 1000 } }))

@@ -14,6 +14,7 @@ import type {
   ACPClientOptions,
   ACPCreateSessionOptions,
   ACPSessionInfo,
+  ACPSessionWorkspace,
   ACPTransport,
 } from './ai-acp-types.js'
 import { Buffer } from 'node:buffer'
@@ -185,6 +186,53 @@ export function createACPOperations(
     workspace.storage.type === 'directory'
       ? `directory:${process.platform === 'win32' ? workspace.storage.path.toLowerCase() : workspace.storage.path}`
       : `volume:${workspace.storage.engine}:${workspace.storage.name}`
+  const sessionDirectory = (info: ACPSessionInfo) =>
+    info.newWorktree ? `sessions/${info.id}` : 'main'
+  function describeWorkspace(workspace: Workspace, runtime: ACPRuntime, info: ACPSessionInfo): ACPSessionWorkspace {
+    const directory = sessionDirectory(info)
+    const { storage } = workspace
+    let location: ACPSessionWorkspace['storage']
+    if (storage.type === 'directory') {
+      location = { type: 'directory', path: runtime.root }
+    }
+    else {
+      const { engine, name } = storage
+      if (engine === 'auto')
+        throw new ACPFailure('runtime')
+      location = { type: 'volume', engine, name, mountPath: runtime.root }
+    }
+    return {
+      storage: location,
+      path: runtime.path(directory),
+      repositories: workspace.repositories.map(repo => ({
+        id: repo.id,
+        path: runtime.path(`${directory}/${repo.id}`),
+      })),
+    }
+  }
+  function checkStorage(workspace: Workspace, info: ACPSessionInfo) {
+    const pinned = info.workspace?.storage
+    if (!pinned)
+      return
+    const current = workspace.storage
+    const matches = pinned.type === 'directory'
+      ? current.type === 'directory' && pinned.path === current.path
+      : current.type === 'volume' && pinned.name === current.name && pinned.engine === current.engine
+    if (!matches)
+      throw new ACPFailure('conflict')
+  }
+  function checkLayout(workspace: Workspace, runtime: ACPRuntime, info: ACPSessionInfo) {
+    const current = describeWorkspace(workspace, runtime, info)
+    const paths = new Map(current.repositories.map(repo => [repo.id, repo.path]))
+    const cwd = info.repositoryId ? paths.get(info.repositoryId) : current.path
+    if (info.cwd !== cwd)
+      throw new ACPFailure('conflict')
+    const pinned = info.workspace
+    if (pinned && (pinned.path !== current.path || pinned.repositories.length !== paths.size
+      || pinned.repositories.some(repo => paths.get(repo.id) !== repo.path))) {
+      throw new ACPFailure('conflict')
+    }
+  }
   async function normalizeWorkspace(workspace: Workspace) {
     if (workspace.storage.type === 'directory') {
       await mkdir(workspace.storage.path, { recursive: true })
@@ -379,22 +427,26 @@ export function createACPOperations(
     options: ACPClientOptions,
     resume: boolean,
   ) {
-    const agent = info.agent
     const releaseSession = await acquire(`session:${info.id}`)
     let releaseDirectory: (() => Promise<void>) | undefined
     let runtime: ACPRuntime | undefined
     let connection: ACPConnection | undefined
-    let recordExists = true
+    let recordMutable = !resume
     try {
+      if (resume) {
+        info = await get(sessions, info.id)
+        if (info.status === 'opening' || info.status === 'active')
+          throw new ACPFailure('busy')
+        if (info.worktreeStatus)
+          throw new ACPFailure('closed')
+        recordMutable = true
+      }
+      const agent = info.agent
       const workspace = info.workspaceId
         ? await getWorkspace(info.workspaceId)
         : undefined
       if (!agent.enabled)
         throw new ACPFailure('unsupported')
-      if (resume && !(await sessions.get(info.id))) {
-        recordExists = false
-        throw new ACPFailure('missing')
-      }
       if (workspace) {
         if (agent.mode === 'custom-service')
           throw new ACPFailure('unsupported')
@@ -417,6 +469,8 @@ export function createACPOperations(
         }
         if (!info.newWorktree)
           releaseDirectory = await acquire(`${workspaceKey(workspace)}:main`)
+        checkStorage(workspace, info)
+        const directory = sessionDirectory(info)
         if (!resume) {
           const releasePrepare = info.newWorktree
             ? await acquire(`${workspaceKey(workspace)}:main`)
@@ -427,13 +481,17 @@ export function createACPOperations(
             await sessions.save(info.id, info)
             const git = createGitOperations(workspace, runtime)
             await git.prepare()
-            info.cwd = info.newWorktree
-              ? await git.createWorktree(info.id, info.branch!)
-              : runtime.path('main')
-            if (info.repositoryId) {
-              const directory = info.newWorktree ? `sessions/${info.id}` : 'main'
-              info.cwd = runtime.path(`${directory}/${info.repositoryId}`)
+            const layout = describeWorkspace(workspace, runtime, info)
+            if (info.newWorktree) {
+              await runtime.file('mkdir', 'sessions')
+              // 独占新目录后才保存其归属；已有目录可能来自已经移除记录的历史会话。
+              await runtime.file('mkdir-exclusive', directory)
             }
+            info.workspace = layout
+            info.cwd = layout.repositories.find(repo => repo.id === info.repositoryId)?.path ?? layout.path
+            await sessions.save(info.id, info)
+            if (info.newWorktree)
+              await git.createWorktree(info.id, info.branch!)
           }
           finally {
             await releasePrepare?.()
@@ -442,15 +500,8 @@ export function createACPOperations(
         else {
           runtime = await openRuntime(workspace)
         }
-        if (info.repositoryId) {
-          const directory = info.newWorktree ? `sessions/${info.id}` : 'main'
-          const repoPath = `${directory}/${info.repositoryId}`
-          if (!workspace.repositories.some(repo => repo.id === info.repositoryId)
-            || info.cwd !== runtime.path(repoPath)) {
-            throw new ACPFailure('conflict')
-          }
-          await runtime.file('directory', repoPath)
-        }
+        checkLayout(workspace, runtime, info)
+        await runtime.file('directory', info.cwd)
       }
       else if (
         agent.mode !== 'custom-service'
@@ -501,7 +552,7 @@ export function createACPOperations(
       await runtime?.close()
       info.status = 'failed'
       info.resource = undefined
-      if (recordExists)
+      if (recordMutable)
         await sessions.save(info.id, info)
       await releaseDirectory?.()
       await releaseSession()
@@ -521,19 +572,24 @@ export function createACPOperations(
       const info = await get(sessions, id)
       if (!info.workspaceId || (request && !info.newWorktree))
         throw new ACPFailure('unsupported')
-      const workspace = await getWorkspace(info.workspaceId)
       // 关闭执行环境后才发布，防止后台工具仍修改文件；后续使用显式 resume。
       await stop(id)
       const release = await acquire(`session:${id}`)
       try {
-        return await workspaceOperation(workspace, runtime =>
-          request
-            ? createGitOperations(workspace, runtime).publish(
-                id,
-                info.branch!,
-                request,
-              )
-            : createGitOperations(workspace, runtime).updateMain())
+        const current = await get(sessions, id)
+        if (!current.workspaceId || (request && !current.newWorktree))
+          throw new ACPFailure('unsupported')
+        if (request && current.worktreeStatus)
+          throw new ACPFailure('closed')
+        const workspace = await getWorkspace(current.workspaceId)
+        checkStorage(workspace, current)
+        return await workspaceOperation(workspace, (runtime) => {
+          const git = createGitOperations(workspace, runtime)
+          if (!request)
+            return git.updateMain()
+          checkLayout(workspace, runtime, current)
+          return git.publish(id, current.branch!, request)
+        })
       }
       finally {
         await release()
@@ -1256,6 +1312,46 @@ export function createACPOperations(
        */
       close: (id: string) => protect(() => stop(id)),
       /**
+       * 回收停止后由框架登记的干净工作树；调用方须先停止独立预览。
+       * @param id - 框架会话 ID；仅支持记录了归属的独立 Git 会话。
+       * @returns 回收完成的 HaiResult；可重试，保留分支、普通文件及原生历史。
+       * @example
+       * ```ts
+       * import { ai } from '@h-ai/ai'
+       * // 前提：已关闭 Agent，已停止预览并提交或另存修改。
+       * const result = await ai.acp.sessions.reclaimWorktree('task-1')
+       * if (!result.success) throw new Error(result.error.message)
+       * ```
+       */
+      reclaimWorktree: (id: string) =>
+        protect(async () => {
+          sessionIdentitySchema.parse(id)
+          const release = await acquire(`session:${id}`)
+          try {
+            const info = await get(sessions, id)
+            if (info.status === 'opening' || info.status === 'active' || info.resource)
+              throw new ACPFailure('busy')
+            if (info.worktreeStatus === 'reclaimed')
+              return
+            if (!info.workspaceId || !info.workspace?.repositories.length || !info.newWorktree || !info.branch)
+              throw new ACPFailure('unsupported')
+            const workspace = await getWorkspace(info.workspaceId)
+            checkStorage(workspace, info)
+            await workspaceOperation(workspace, async (runtime) => {
+              checkLayout(workspace, runtime, info)
+              await createGitOperations(workspace, runtime).reclaimWorktree(id, info.branch!, async () => {
+                info.worktreeStatus = 'reclaiming'
+                await sessions.save(id, info)
+              })
+              info.worktreeStatus = 'reclaimed'
+              await sessions.save(id, info)
+            })
+          }
+          finally {
+            await release()
+          }
+        }),
+      /**
        * 仅删除已关闭或失败的会话记录；不删除工作树及原生文件，不替代 Git worktree 清理。
        * @param id - 框架会话 ID。
        * @returns 删除完成的 HaiResult；活动会话返回忙碌错误。
@@ -1269,16 +1365,12 @@ export function createACPOperations(
        */
       remove: (id: string) =>
         protect(async () => {
-          const info = await get(sessions, id)
-          if (
-            live.has(id)
-            || info.status === 'active'
-            || info.status === 'opening'
-          ) {
-            throw new ACPFailure('busy')
-          }
+          sessionIdentitySchema.parse(id)
           const release = await acquire(`session:${id}`)
           try {
+            const info = await get(sessions, id)
+            if (info.status === 'active' || info.status === 'opening' || info.worktreeStatus === 'reclaiming')
+              throw new ACPFailure('busy')
             await sessions.remove(id)
           }
           finally {

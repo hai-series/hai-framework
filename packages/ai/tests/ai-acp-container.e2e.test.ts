@@ -93,6 +93,7 @@ describe.skipIf(!image)('aCP container volume E2E', () => {
       value(
         await ai.acp.workspaces.importFiles('container', [
           { path: 'acp-agent.mjs', content: fixture },
+          { path: 'notes.txt', content: 'retained' },
         ]),
       )
       value(
@@ -111,12 +112,38 @@ describe.skipIf(!image)('aCP container volume E2E', () => {
           id: 'isolated',
           agentId: 'container-agent',
           workspaceId: 'container',
+          repositoryId: 'api',
           newWorktree: true,
           branch: 'task/isolated',
         }),
       )
-      value(await session.prompt([{ type: 'text', text: 'write' }]))
-      const resource = value(await session.info()).resource!
+      const info = value(await session.info())
+      const resource = info.resource!
+      const storage = info.workspace?.storage
+      expect(storage).toEqual({ type: 'volume', engine, name: volume, mountPath: '/workspace' })
+      if (storage?.type !== 'volume')
+        throw new Error('Expected volume handoff')
+      const preview = await run([
+        'run',
+        '-d',
+        '--mount',
+        `type=volume,src=${storage.name},dst=${storage.mountPath},ro`,
+        '--workdir',
+        info.cwd,
+        '--entrypoint',
+        'node',
+        image!,
+        '-e',
+        'require("node:http").createServer((_,res)=>require("node:fs").createReadStream("a.txt").pipe(res)).listen(19978,"127.0.0.1")',
+      ])
+      const previewContent = () => run([
+        'exec',
+        preview,
+        'node',
+        '-e',
+        '(async()=>{for(let i=0;i<100;i++){try{const r=await fetch("http://127.0.0.1:19978");process.stdout.write(await r.text());return}catch{}await new Promise(r=>setTimeout(r,50))}process.exit(1)})()',
+      ])
+      expect(await previewContent()).toBe('base')
       // Podman 远程服务可能自行注入代理；宿主回环代理在容器中不可达，且不属于显式授权环境。
       expect(await run([
         'exec',
@@ -142,9 +169,12 @@ describe.skipIf(!image)('aCP container volume E2E', () => {
         resource.container,
         'node',
         '-e',
-        'require(\'node:fs\').writeFileSync(\'/workspace/sessions/isolated/api/a.txt\',\'changed\')',
+        'require("node:fs").writeFileSync(process.argv[1],"changed")',
+        `${info.cwd}/a.txt`,
       ])
+      expect(await previewContent()).toBe('changed')
       value(await session.close())
+      expect(await previewContent()).toBe('changed')
       const resumed = value(await ai.acp.sessions.resume('isolated'))
       expect(
         value(await resumed.prompt([{ type: 'text', text: 'alive' }])).text,
@@ -170,6 +200,10 @@ describe.skipIf(!image)('aCP container volume E2E', () => {
         'trunk:a.txt',
       ])
       expect(content).toBe('changed')
+      value(await resumed.close())
+      await run(['rm', '-f', preview])
+      value(await ai.acp.sessions.reclaimWorktree(resumed.id))
+      expect(value(await resumed.info()).worktreeStatus).toBe('reclaimed')
       const copied = await run([
         'run',
         '--rm',
@@ -179,10 +213,10 @@ describe.skipIf(!image)('aCP container volume E2E', () => {
         'node',
         image!,
         '-e',
-        'process.stdout.write(require(\'node:fs\').readFileSync(\'/workspace/sessions/isolated/files/agent.txt\',\'utf8\'))',
+        'process.stdout.write(require("node:fs").readFileSync(process.argv[1],"utf8"))',
+        `${info.workspace?.path}/files/notes.txt`,
       ])
-      expect(copied).toBe('agent output')
-      value(await resumed.close())
+      expect(copied).toBe('retained')
       // 关闭隐式继承不影响应用明确授予 Agent 的代理配置；仅使用不可联网的测试地址。
       vi.stubEnv('HAI_ACP_TEST_PROXY', 'http://proxy.example.invalid:8123')
       value(await ai.acp.agents.register({

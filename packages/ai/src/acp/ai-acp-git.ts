@@ -2,6 +2,8 @@ import type { z } from 'zod'
 import type { ACPPublishSchema, ACPWorkspaceSchema } from './ai-acp-config.js'
 import type { ACPRuntime } from './ai-acp-runtime.js'
 import type { ACPGitReport } from './ai-acp-types.js'
+import { win32 } from 'node:path'
+import process from 'node:process'
 import { ACPFailure } from './ai-acp-errors.js'
 
 /**
@@ -36,7 +38,7 @@ export function createGitOperations(
     }
   }
   async function clean(path: string) {
-    if (await git(path, ['status', '--porcelain']))
+    if (await git(path, ['status', '--porcelain', '--untracked-files=normal']))
       throw new ACPFailure('conflict')
   }
   /** 普通 clone/worktree 不保证子模块或 LFS 内容完整，明确拒绝而非返回虚假的就绪。 */
@@ -56,11 +58,11 @@ export function createGitOperations(
     path = source(repo.id),
     branch = repo.mainBranch,
   ) {
+    await runtime.file('directory', path)
     if ((await git(path, ['branch', '--show-current'])) !== branch)
       throw new ACPFailure('conflict')
     if ((await git(path, ['remote', 'get-url', repo.remote])) !== repo.url)
       throw new ACPFailure('conflict')
-    await runtime.file('exists', path)
   }
   async function reports(
     operation: (
@@ -127,19 +129,18 @@ export function createGitOperations(
       return runtime.path('main')
     },
     /**
-     * 从每个工程本地主分支创建独立工作树并复制普通文件。
-     * @param sessionId - 已校验的框架会话 ID。
+     * 在调用方独占的会话目录创建各工程工作树并复制普通文件。
+     * @param sessionId - 已校验且已独占会话目录的框架会话 ID。
      * @param branch - 所有工程使用的同名新分支。
-     * @returns 独立会话目录；中途失败不回滚已有工作树。
+     * @returns 完成后返回；中途失败保留已建立的工作树。
      * @example
      * ```ts
      * // 内部上下文：runtime/git/connection 为相应工厂已创建的句柄。
-     * const directory = await git.createWorktree('task-1', 'acp/task-1')
+     * await git.createWorktree('task-1', 'acp/task-1')
      * ```
      */
     async createWorktree(sessionId: string, branch: string) {
       await ready()
-      await runtime.file('mkdir', `sessions/${sessionId}`)
       // 已创建的 worktree 不回滚删除：保留现场，失败的 session 可由管理员检查。
       for (const repo of workspace.repositories) {
         await checked(repo)
@@ -155,7 +156,49 @@ export function createGitOperations(
         ])
       }
       await runtime.file('copy', 'main/files', `sessions/${sessionId}/files`)
-      return runtime.path(`sessions/${sessionId}`)
+    },
+    /**
+     * 预检所有登记的会话工作树，确认回收状态已持久化后逐个执行 Git 移除。
+     * @param sessionId - 持久记录所拥有的会话目录 ID。
+     * @param branch - 创建时登记的会话分支。
+     * @param begin - 写入开始回收的持久状态；写入失败时不删除工作树。
+     * @returns 回收完成；失败保留其他工作树供重试。
+     * @example
+     * ```ts
+     * // 模块内部上下文：git 为工厂已创建的句柄，回调由持有会话锁的调用方提供。
+     * await git.reclaimWorktree('task-1', 'acp/task-1', async () => {})
+     * ```
+     */
+    async reclaimWorktree(sessionId: string, branch: string, begin: () => Promise<void>) {
+      await ready()
+      const paths: Array<{ main: string, worktree: string }> = []
+      for (const repo of workspace.repositories) {
+        await checked(repo)
+        const main = source(repo.id)
+        const worktree = runtime.path(`sessions/${sessionId}/${repo.id}`)
+        const exists = (await runtime.file('exists', worktree)) === 'true'
+        const registrations = await git(main, ['worktree', 'list', '--porcelain', '-z'])
+        const registration = registrations.split('\0\0').map(entry => entry.split('\0')).find(([entry]) => {
+          if (!entry?.startsWith('worktree '))
+            return false
+          const registeredPath = entry.slice('worktree '.length)
+          return !runtime.resource && process.platform === 'win32'
+            ? win32.relative(registeredPath, worktree) === ''
+            : registeredPath === worktree
+        })
+        if (!registration && !exists)
+          continue
+        if (!registration?.includes(`branch refs/heads/${branch}`)
+          || registration.some(entry => entry === 'locked' || entry.startsWith('locked '))) {
+          throw new ACPFailure('conflict')
+        }
+        if (exists)
+          await clean(worktree)
+        paths.push({ main, worktree })
+      }
+      await begin()
+      for (const { main, worktree } of paths)
+        await git(main, ['worktree', 'remove', '--', worktree])
     },
     /**
      * 更新各工程主分支，只允许快进合并。
