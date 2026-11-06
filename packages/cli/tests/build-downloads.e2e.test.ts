@@ -11,6 +11,9 @@ import { runDeployTestCommand } from './helpers/deploy-test-command.js'
 
 const enabled = process.env.HAI_CLI_RUN_GENERATE_GATES === '1'
 const root = fileURLToPath(new URL('../../..', import.meta.url))
+// GitHub runner 使用官方源，避免镜像加速站的区域限制阻断脚手架质量门禁；本地仍实测国内预设。
+const source = process.env.CI === 'true' ? 'official' : 'cn'
+const npmRegistry = source === 'official' ? 'https://registry.npmjs.org' : 'https://registry.npmmirror.com'
 
 it.skipIf(!enabled)('download source gates use the generated Dockerfile, Corepack, pnpm and a container-reachable proxy', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'hai-download-gate-'))
@@ -52,13 +55,13 @@ it.skipIf(!enabled)('download source gates use the generated Dockerfile, Corepac
     // 直接使用生成模板的下载阶段；业务编译改为小包验证，隔离框架应用安装开销。
     const proof = 'process.stdout.write(JSON.stringify({registry:process.env.pnpm_config_registry,corepackRegistry:process.env.COREPACK_NPM_REGISTRY,proxyHost:process.env.HTTPS_PROXY?new URL(process.env.HTTPS_PROXY).hostname:null,packageWorks:require(\'is-number\')(42)}))'
     writeFileSync(join(directory, 'images/serv.Dockerfile'), `${header}COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./\nRUN pnpm fetch --reporter=append-only --ignore-scripts && pnpm install --reporter=append-only --offline --frozen-lockfile --ignore-scripts\nRUN node -e "${proof}" > /download-proof.json\nCMD ["node", "-e", "process.stdout.write(require('node:fs').readFileSync('/download-proof.json','utf8'))"]\n`)
-    const pnpmArguments = ['install', '--lockfile-only', '--ignore-scripts', '--registry=https://registry.npmmirror.com']
+    const pnpmArguments = ['install', '--lockfile-only', '--ignore-scripts', `--registry=${npmRegistry}`]
     if (process.platform === 'win32')
-      await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '& pnpm.cmd install --lockfile-only --ignore-scripts --registry=https://registry.npmmirror.com; exit $LASTEXITCODE'])
+      await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `& pnpm.cmd ${pnpmArguments.join(' ')}; exit $LASTEXITCODE`])
     else await run('pnpm', pnpmArguments)
     const proxy = process.env.HTTPS_PROXY ?? process.env.https_proxy ?? process.env.HTTP_PROXY ?? process.env.http_proxy
     const proxyOptions = proxy ? ['--proxy-mode', 'custom', '--proxy-url', proxy] : ['--proxy-mode', 'none']
-    await run(process.execPath, [join(root, 'packages/cli/dist/index.js'), 'build', '--target', 'image', '--runtime', runtime, '--image-source', 'cn', '--npm-source', 'cn', '--yes', ...proxyOptions])
+    await run(process.execPath, [join(root, 'packages/cli/dist/index.js'), 'build', '--target', 'image', '--runtime', runtime, '--image-source', source, '--npm-source', source, '--yes', ...proxyOptions])
     const builds = join(directory, '.hai/build/docker')
     const buildId = readFileSync(join(builds, 'latest'), 'utf8').trim()
     const manifest: { images: Array<{ imageRef: string }> } = JSON.parse(readFileSync(join(builds, buildId, 'manifest.json'), 'utf8'))
@@ -70,7 +73,7 @@ it.skipIf(!enabled)('download source gates use the generated Dockerfile, Corepac
       throw new Error('Download gate did not return a trusted container ID')
     container = created
     const proofResult = JSON.parse(await run(runtime, ['start', '--attach', container]))
-    expect(proofResult).toMatchObject({ registry: 'https://registry.npmmirror.com', corepackRegistry: 'https://registry.npmmirror.com', packageWorks: true })
+    expect(proofResult).toMatchObject({ registry: npmRegistry, corepackRegistry: npmRegistry, packageWorks: true })
     if (proxy && ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(proxy).hostname))
       expect(proofResult.proxyHost).toBe(runtime === 'podman' ? new URL(proxy).hostname : 'host.docker.internal')
     const environment: string[] = JSON.parse(await run(runtime, ['image', 'inspect', '--format', '{{json .Config.Env}}', imageRef]))

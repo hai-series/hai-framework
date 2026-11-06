@@ -6,6 +6,8 @@
 
 容器测试通过 `HAI_TEST_CONTAINER_ENGINE=docker|podman` 显式选择宿主引擎，CI 使用已准备的 Docker；指定的引擎不可达时失败，不自动换到另一个引擎。本地未设置时仍先探测 Podman、再探测 Docker。Turbo 的 test/test:e2e 同步传递该选择，并将其纳入测试缓存身份；这只控制仓库夹具，不改变应用构建或部署的默认引擎。
 
+下载源容器门禁在 CI 使用官方镜像和 npm 源，实际构建并运行生成的 Dockerfile，验证 Corepack、pnpm 和已配置的代理。未设置 `CI=true` 的本地门禁仍实测国内预设；国内和自定义源的映射与参数转发同时由单元测试覆盖。
+
 ## 阶段与依赖
 
 CI 的 unit 阶段显式启用真实 Storage Chrome 上传取消门禁，该开关进入 Turbo 缓存身份。脚手架生成门禁包含下载源/代理容器验证；部署门禁先准备固定 PostgreSQL/MySQL/Redis/RustFS 镜像，再验证外部中间件配置。Windows 进程回收、存储路径安全与 CLI 参数回归在独立 Windows job 执行，并进入最终必需汇总。脚手架运行器通过 pnpm 的真实入口启动子进程，目录含空格也不经过 shell 重新分词。
