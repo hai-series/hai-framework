@@ -212,16 +212,17 @@ const deadline=Date.now()+4000;const timer=setInterval(()=>{if(pids.every(pid=>!
     const failedRunId = randomBytes(16).toString('hex')
     run(['tag', otherBaseRef, failedRef])
     images.set(failedRef, recordDeployTestImage(selected!, failedRef))
+    const startupGate = '/tmp/hai-startup-gate'
     const failedStartup = createDeployTestFixture(selected!, failedRef, '', directory, failedRunId, {
-      command: ['/hai-deploy-fixture-nonexistent-process'],
+      // Docker 会在进程退出时释放动态端口；先完成端口读取，再触发真实启动失败。
+      command: ['sh', '-c', `while [ ! -f ${startupGate} ]; do sleep 0.05; done; exec /hai-deploy-fixture-nonexistent-process`],
       prepare: async (fixture) => {
-        // --init 自身可正常启动；必须观察其受控子命令的真实非零退出，不能假设 start 同步拒绝。
+        run(['exec', fixture.containerId, 'touch', startupGate])
         const deadline = Date.now() + 5000
         while (Date.now() < deadline) {
           const [running, exit] = run(['container', 'inspect', '--format', '{{.State.Running}} {{.State.ExitCode}}', fixture.containerId]).split(' ')
           if (running === 'false') {
-            expect(Number.isInteger(Number(exit))).toBe(true)
-            expect(Number(exit)).toBeGreaterThan(0)
+            expect(Number(exit)).toBe(127)
             throw new Error('Fixture startup command exited unsuccessfully')
           }
           await new Promise(resolve => setTimeout(resolve, 25))
