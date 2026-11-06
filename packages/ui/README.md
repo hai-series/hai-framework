@@ -244,6 +244,8 @@ components/
 | `Confirm` | 确认框 | `open`, `title`, `message`, `variant`, `onconfirm`      |
 | `Popover` | 弹出层 | `open`, `position`, `trigger`, `offset`, `portal`       |
 
+`Popover` 默认挂载到 `body`。在 `click` 模式下按 Enter 或空格打开后，焦点进入面板，按 Escape 关闭并返回触发控件。需要内联挂载时使用 `portal={false}`。
+
 ##### 数据展示
 
 | 组件        | 描述     | 主要属性                                 |
@@ -286,6 +288,8 @@ components/
 | `Steps`      | 步骤条   | `items`, `current`, `direction`, `clickable` |
 | `Dropdown`   | 下拉菜单 | `items`, `trigger`, `triggerClass`, `position` |
 | `Tooltip`    | 提示     | `content`, `position`, `delay`, `portal`（裁剪容器内使用）               |
+
+`Dropdown` 的 `click` 和 `hover` 模式将菜单挂载到 `body`。在 `manual` 模式下，调用方通过 `class` 切换 `dropdown-open` 来控制内联菜单。
 
 ##### 状态占位
 

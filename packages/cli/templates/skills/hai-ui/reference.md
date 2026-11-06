@@ -273,6 +273,8 @@ const p = usePlatform()
 | `Skeleton`   | `variant`, `count`, `animation`                                    | 骨架屏        |
 | `Empty`      | `title`, `description`, `icon`                                     | 空状态        |
 
+滚动或裁剪容器中的 `Dropdown` 使用默认 `click` 或 `hover` 触发，菜单挂载到 `body`。由调用方控制开关时，使用 `trigger='manual'`，通过 `class` 切换 `dropdown-open` 显示内联菜单。`Popover` 默认挂载到 `body`，`click` 模式下键盘打开后焦点进入面板，Escape 关闭并返回触发控件。
+
 #### 移动端组合组件（7 个）
 
 | 组件             | Props 要点                                                                    | 说明             |

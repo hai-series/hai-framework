@@ -244,6 +244,8 @@ components/
 | `Confirm`      | 確認ダイアログ | `open`, `title`, `message`, `variant`, `onconfirm`                           |
 | `Popover`      | ポップオーバー | `open`, `position`, `trigger`, `offset`, `portal`                            |
 
+`Popover` は既定で `body` に描画されます。`click` モードでは Enter または Space で開くとパネルにフォーカスが移り、Escape で閉じるとトリガーに戻ります。インラインで描画する場合は `portal={false}` を指定します。
+
 ##### データ表示
 
 | コンポーネント | 説明             | 主なプロパティ                                                                                                                        |
@@ -286,6 +288,8 @@ components/
 | `Steps`        | ステップ                          | `items`, `current`, `direction`, `clickable`                                                               |
 | `Dropdown`     | ドロップダウンメニュー            | `items`, `trigger`, `triggerClass`, `position`                                                             |
 | `Tooltip`      | ツールチップ                      | `content`, `position`, `delay`, `portal`（クリップされるコンテナ内で使用）                                                                             |
+
+`Dropdown` の `click` と `hover` モードではメニューが `body` に描画されます。`manual` モードでは `class` の `dropdown-open` を切り替えてインラインメニューの開閉を制御します。
 
 ##### 状態表示
 

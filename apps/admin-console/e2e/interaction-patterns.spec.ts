@@ -1,6 +1,23 @@
 import { expect, test } from '@playwright/test'
 import { dutyAccounts, loginOnPage, registerAndLogin, waitForHydration } from './helpers'
 
+test('键盘打开弹出面板后可以关闭并返回触发按钮', async ({ page, request }) => {
+  await registerAndLogin(page, request, 'popoverkeyboard')
+  await page.goto('/admin/ui-gallery/compounds')
+  await waitForHydration(page)
+
+  const trigger = page.getByRole('button', { name: '点击弹出', exact: true }).and(page.locator('button'))
+  const panel = page.getByRole('dialog').filter({ hasText: '弹出面板' })
+  for (const key of ['Enter', 'Space']) {
+    await trigger.press(key)
+    await expect(panel).toBeVisible()
+    await expect(panel).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(panel).toBeHidden()
+    await expect(trigger).toBeFocused()
+  }
+})
+
 test('列表示例的键盘、排序、分页、筛选和错误恢复可连续操作', async ({ page, request }, testInfo) => {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))

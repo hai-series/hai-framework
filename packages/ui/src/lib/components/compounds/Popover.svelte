@@ -45,6 +45,7 @@
   /** 首帧布局收敛后的二次定位帧，关闭时必须取消避免过期写入。 */
   let portalPositionFrame: number | undefined = $state()
   let closeTimer: ReturnType<typeof setTimeout> | undefined
+  let returnFocus: HTMLElement | null = null
 
   const positionClass = $derived({
     top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
@@ -119,15 +120,38 @@
     onclose?.()
   }
 
-  function handleTriggerClick() {
-    if (trigger === 'click') {
-      if (open) {
-        handleClose()
-      }
-      else {
-        handleOpen()
-      }
+  async function handleTriggerClick(): Promise<void> {
+    if (trigger !== 'click')
+      return
+    if (open) {
+      handleClose()
+      return
     }
+
+    const active = document.activeElement
+    returnFocus = active instanceof HTMLElement && triggerElement?.contains(active) ? active : triggerElement
+    handleOpen()
+    await tick()
+    if (open)
+      popoverElement?.focus({ preventScroll: true })
+  }
+
+  function handleEscape(event: KeyboardEvent): void {
+    if (event.key !== 'Escape' || !open)
+      return
+    event.preventDefault()
+    event.stopPropagation()
+    handleClose()
+    returnFocus?.focus({ preventScroll: true })
+  }
+
+  function handleTriggerKeydown(event: KeyboardEvent): void {
+    // 插槽中的原生按钮会自行触发 click，只处理包装层本身的键盘激活。
+    if (event.target === event.currentTarget && trigger === 'click' && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault()
+      void handleTriggerClick()
+    }
+    handleEscape(event)
   }
 
   function handleMouseEnter() {
@@ -213,7 +237,9 @@
     onclick={handleTriggerClick}
     role='button'
     tabindex='0'
-    onkeydown={e => e.key === 'Enter' && handleTriggerClick()}
+    aria-haspopup='dialog'
+    aria-expanded={open}
+    onkeydown={handleTriggerKeydown}
   >
     {#if triggerContent}
       {@render triggerContent()}
@@ -229,6 +255,8 @@
         class='fixed z-50 rounded-box border border-base-200 bg-base-100 p-4 shadow-lg'
         style={portalStyle}
         role='dialog'
+        tabindex='-1'
+        onkeydown={handleEscape}
         onmouseenter={cancelClose}
         onmouseleave={handleMouseLeave}
       >
@@ -247,6 +275,8 @@
         )}
         style='--offset: {offset}px'
         role='dialog'
+        tabindex='-1'
+        onkeydown={handleEscape}
         onmouseenter={cancelClose}
         onmouseleave={handleMouseLeave}
       >

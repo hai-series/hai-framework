@@ -244,6 +244,8 @@ Text controls validate on blur after input and update errors as input is correct
 | `Confirm` | Confirmation dialog | `open`, `title`, `message`, `variant`, `onconfirm`                           |
 | `Popover` | Popover             | `open`, `position`, `trigger`, `offset`, `portal`                            |
 
+`Popover` renders in `body` by default. In `click` mode, Enter or Space opens the panel and moves focus into it. Escape closes the panel and returns focus to the trigger. Use `portal={false}` to render inline.
+
 ##### Data display
 
 | Component   | Description    | Key props                                                                                                                                   |
@@ -286,6 +288,8 @@ Text controls validate on blur after input and update errors as input is correct
 | `Steps`      | Steps                           | `items`, `current`, `direction`, `clickable`                                                               |
 | `Dropdown`   | Dropdown menu                   | `items`, `trigger`, `triggerClass`, `position`                                                             |
 | `Tooltip`    | Tooltip                         | `content`, `position`, `delay`, `portal` (use inside overflow-clipped containers)                                                                             |
+
+`Dropdown` renders the menu in `body` in `click` and `hover` modes. In `manual` mode, toggle `dropdown-open` through `class` to control the inline menu.
 
 ##### State placeholders
 

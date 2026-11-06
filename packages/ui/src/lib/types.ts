@@ -1107,7 +1107,7 @@ export interface DropdownItem {
 export interface DropdownProps extends DataAttributes {
   /** 菜单项 */
   items: DropdownItem[]
-  /** 触发方式；`manual` 由外部完全控制 open 状态。 */
+  /** 触发方式。`manual` 使用内联菜单，由调用方通过 `class` 切换 `dropdown-open`。 */
   trigger?: 'click' | 'hover' | 'manual'
   /** 位置 */
   position?: Position

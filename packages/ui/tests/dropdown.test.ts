@@ -82,6 +82,27 @@ describe('dropdown', () => {
     unmount(component)
   })
 
+  it('manual 保留调用方控制的菜单，并能选择菜单项', () => {
+    const onselect = vi.fn()
+    const target = host()
+    const component = mount(Dropdown, { target, props: { items, onselect, trigger: 'manual', class: 'dropdown-open' } })
+    flushSync()
+
+    const dropdown = target.querySelector('.dropdown.dropdown-open')
+    const content = dropdown?.querySelector('.dropdown-content')
+    expect(content).toBeTruthy()
+    dropdown?.querySelector('button')?.click()
+    flushSync()
+    expect(dropdown?.classList.contains('dropdown-open')).toBe(true)
+
+    const edit = Array.from(content?.querySelectorAll('button') ?? []).find(item => item.textContent?.trim() === '编辑')
+    expect(edit).toBeTruthy()
+    edit?.click()
+    expect(onselect).toHaveBeenCalledWith('edit')
+
+    unmount(component)
+  })
+
   it('hover 延迟打开，离开后关闭', () => {
     vi.useFakeTimers()
     const component = mount(Dropdown, { target: host(), props: { items, trigger: 'hover' } })

@@ -13,7 +13,7 @@
   ```
 -->
 <script lang='ts'>
-  import type { DataAttributes, DropdownProps } from '../../types.js'
+  import type { DataAttributes, DropdownItem, DropdownProps } from '../../types.js'
   import { DropdownMenu } from 'bits-ui'
   import { onDestroy } from 'svelte'
   import { cn, getDataAttributes } from '../../utils.js'
@@ -32,6 +32,11 @@
   }: DropdownProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const manualClass = $derived(cn(
+    'dropdown',
+    { top: 'dropdown-top', right: 'dropdown-right', bottom: 'dropdown-bottom', left: 'dropdown-left' }[position],
+    { start: 'dropdown-start', center: '', end: 'dropdown-end' }[align],
+  ))
   let open = $state(false)
   let openTimer: ReturnType<typeof setTimeout> | undefined
   let closeTimer: ReturnType<typeof setTimeout> | undefined
@@ -91,19 +96,40 @@
   onDestroy(clearTimers)
 </script>
 
+{#snippet itemContents(item: DropdownItem)}
+  {#if item.icon}
+    <span>{item.icon}</span>
+  {/if}
+  {item.label}
+{/snippet}
+
 <div
   {...dataAttributes}
-  class={cn('relative inline-block', className)}
+  class={cn(trigger === 'manual' ? manualClass : 'relative inline-block', className)}
   onpointerenter={scheduleOpen}
   onpointerleave={handleWrapperLeave}
 >
   {#if trigger === 'manual'}
-    <!-- manual 模式由外部控制；这里不挂 bits-ui 触发器，避免默认点击行为。 -->
+    <!-- 调用方使用 dropdown-open 控制内联菜单。 -->
     <BareButton type='button' class={triggerClass}>
       {#if children}
         {@render children()}
       {/if}
     </BareButton>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <ul tabindex='0' class='manual-menu dropdown-content menu bg-base-100 rounded-xl z-[var(--hai-z-dropdown,1000)] w-52 p-1.5 shadow-lg border border-base-content/6'>
+      {#each items as item, index (item.key || `divider-${index}`)}
+        {#if item.divider}
+          <li class='divider'></li>
+        {:else}
+          <li>
+            <BareButton type='button' class='w-full text-left text-[13px] rounded-lg' disabled={item.disabled} onclick={() => handleSelect(item.key)}>
+              {@render itemContents(item)}
+            </BareButton>
+          </li>
+        {/if}
+      {/each}
+    </ul>
   {:else}
     <DropdownMenu.Root {open} onOpenChange={handleOpenChange}>
       <DropdownMenu.Trigger type='button' class={triggerClass}>
@@ -130,10 +156,7 @@
                 disabled={item.disabled}
                 onSelect={() => handleSelect(item.key)}
               >
-                {#if item.icon}
-                  <span>{item.icon}</span>
-                {/if}
-                {item.label}
+                {@render itemContents(item)}
               </DropdownMenu.Item>
             {/if}
           {/each}
@@ -142,3 +165,10 @@
     </DropdownMenu.Root>
   {/if}
 </div>
+
+<style>
+  /* 手动菜单只响应调用方状态，避免 DaisyUI 在触发按钮聚焦时自动展开。 */
+  :global(.dropdown:not(.dropdown-open)) > .manual-menu {
+    display: none;
+  }
+</style>

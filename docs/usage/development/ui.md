@@ -110,6 +110,12 @@ SSR 保留图表高度和加载占位，浏览器挂载且有数据后按类型�
 
 认证表单应复用 `AuthPanel`、`ChangePasswordForm` 等组件，直接消费 IAM 的公开策略，避免前端和服务端各写一套密码规则。首次改密的实际流程见[认证指南](authentication.md#密码复杂度首次修改与复用)。
 
+## 菜单与弹出面板
+
+在滚动区域里使用 `Dropdown` 展示行操作时，`click` 和 `hover` 模式将菜单挂载到页面的 `body`，可越过父容器的裁剪。需要由调用方控制内联菜单时，设置 `trigger='manual'`，并用 `class={menuOpen ? 'dropdown-open' : ''}` 绑定当前开关状态。选择操作后，可在 `onselect` 中将 `menuOpen` 设为 `false`。
+
+`Popover` 的 `click` 模式适合展示补充信息或表单。按 Enter 或空格打开时，焦点进入面板，可继续按 Tab 操作面板中的控件。按 Escape 关闭，焦点回到打开面板的控件。面板默认挂载到 `body`，需要留在局部布局中时设置 `portal={false}`。
+
 ## 统一提示与问题追踪编号
 
 所有警告和错误均由 `ToastContainer` 展示，包括字段校验、权限不足和操作失败。保存成功等即时结果也使用同一容器。字段保留错误边框、`aria-invalid` 和读屏关联说明；重试、返回等恢复操作仍在原位置，用户能直接继续处理。`Alert` 仅用于 `info` / `success` 持续信息。只在根布局挂载一个 `ToastContainer`，避免重复显示。
