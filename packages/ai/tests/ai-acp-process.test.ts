@@ -29,6 +29,32 @@ async function cleanupWindowsJob(child: ChildProcess, name: string, closed: bool
   }
 }
 
+/** 等待真实夹具输出；启动预算包含冷启动的 Add-Type，并与 Job 清理期限分开。 */
+async function waitForWindowsFixture<T>(child: ChildProcess, read: () => T | undefined | Promise<T | undefined>, diagnostic: () => string): Promise<T> {
+  const deadline = performance.now() + 12_000
+  let startError: Error | undefined
+  const onError = (error: Error) => {
+    startError = error
+  }
+  child.once('error', onError)
+  try {
+    while (performance.now() < deadline) {
+      if (startError)
+        throw startError
+      const observed = await read()
+      if (observed !== undefined)
+        return observed
+      if (child.exitCode !== null || child.signalCode !== null)
+        throw new Error(`Windows Job launcher exited before fixture readiness: ${child.exitCode ?? child.signalCode}\n${diagnostic()}`)
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+    throw new Error(`Windows Job fixture did not become ready within 12 seconds\n${diagnostic()}`)
+  }
+  finally {
+    child.removeListener('error', onError)
+  }
+}
+
 describe('aCP owned process cleanup', () => {
   // 测试总期限覆盖 PowerShell 探测的 15 秒硬期限和断言收尾。
   it.skipIf(process.platform !== 'win32')('windows 私有 Job 不存在时查询确认无成员', () => {
@@ -64,40 +90,49 @@ describe('aCP owned process cleanup', () => {
     child.once('close', () => {
       closed = true
     })
-    let primaryFailure: unknown
+    const readHeartbeat = async () => {
+      const value = await readFile(heartbeat, 'utf8').catch((error: unknown) => {
+        if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
+          return ''
+        throw error
+      })
+      return /^\d+$/.test(value) ? Number(value) : undefined
+    }
+    let cleaned = false
     try {
-      let current = ''
-      for (let attempt = 0; attempt < 200; attempt++) {
-        current = await readFile(heartbeat, 'utf8').catch(() => '')
-        if (current)
-          break
-        await new Promise(done => setTimeout(done, 20))
+      let primaryFailure: unknown
+      try {
+        const current = await waitForWindowsFixture(child, readHeartbeat, () => stderr)
+        await expect.poll(async () => (await readHeartbeat()) ?? 0, { timeout: 2000 }).toBeGreaterThan(current)
       }
-      expect(current, stderr).not.toBe('')
-      await new Promise(done => setTimeout(done, 100))
-      expect(await readFile(heartbeat, 'utf8')).not.toBe(current)
-      await stopProcess(child, { ownedTree: true, closeObserved: closed, windowsJob: job.name })
+      catch (error) {
+        primaryFailure = error
+        throw error
+      }
+      finally {
+        await cleanupWindowsJob(child, job.name, closed, primaryFailure)
+        cleaned = true
+      }
       const stopped = await readFile(heartbeat, 'utf8')
       await new Promise(done => setTimeout(done, 100))
       expect(await readFile(heartbeat, 'utf8')).toBe(stopped)
     }
-    catch (error) {
-      primaryFailure = error
-      throw error
-    }
     finally {
-      await cleanupWindowsJob(child, job.name, closed, primaryFailure)
-      await rm(directory, { recursive: true, force: true })
+      if (cleaned)
+        await rm(directory, { recursive: true, force: true })
     }
     await expect(readFile(heartbeat)).rejects.toMatchObject({ code: 'ENOENT' })
-  }, 30000)
+  }, 35000)
 
   it.skipIf(process.platform !== 'win32')('windows Job 原样传递 UTF-8 stdio 和包含引号的参数', async () => {
     const argument = '中文 $() ; "quoted" C:\\tail\\'
     const code = 'process.stdout.write(JSON.stringify({arg:process.argv[1],privatePayload:Object.keys(process.env).some(name=>name.startsWith("__HAI_AI_ACP_JOB_"))})+"\\n");process.stdin.on("data",data=>process.stdout.write(data))'
     const job = windowsACPCommand(process.execPath, ['-e', code, argument])
     const child = spawn('powershell.exe', job.args, { env: { ...baseEnvironment(), ...job.env }, shell: false, windowsHide: true })
-    child.stderr.resume()
+    let stderr = ''
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr = `${stderr}${chunk.toString('utf8')}`.slice(-4000)
+    })
     let closed = false
     child.once('close', () => {
       closed = true
@@ -108,13 +143,10 @@ describe('aCP owned process cleanup', () => {
     try {
       const content = Buffer.from('你好 ACP 🧪\n', 'utf8')
       child.stdin.write(content)
-      let text = ''
-      for (let attempt = 0; attempt < 200; attempt++) {
-        text = Buffer.concat(chunks).toString('utf8')
-        if (text.includes('你好 ACP 🧪\n'))
-          break
-        await new Promise(done => setTimeout(done, 20))
-      }
+      const text = await waitForWindowsFixture(child, () => {
+        const output = Buffer.concat(chunks).toString('utf8')
+        return output.includes('你好 ACP 🧪\n') ? output : undefined
+      }, () => stderr)
       const lines = text.split('\n')
       expect(JSON.parse(lines[0]!)).toEqual({ arg: argument, privatePayload: false })
       expect(lines[1]).toBe('你好 ACP 🧪')
