@@ -40,6 +40,12 @@ describe('authentication error localization', () => {
     expect(authErrorMessage({ code: 'hai:iam:002', message: 'Private exception', httpStatus: 500 })).toBe('暂时无法完成认证请求，请稍后重试')
   })
 
+  it.each(['hai:crypto:071', 'hai:api-client:007'])('显示标准客户端的校时提示和服务器时间：%s', (code) => {
+    const message = '服务器时间为 2026-11-06 07:30:00 UTC。请开启设备的自动校时或手工修改时间。'
+    expect(authErrorMessage({ code, message, httpStatus: 400, cause: { transportCode: 'hai:crypto:071' } })).toBe(message)
+    expect(authErrorMessage({ code, message, httpStatus: 400 })).toBe('暂时无法完成认证请求，请稍后重试')
+  })
+
   it('重新本地化认证错误后仍在末尾保留 traceId', () => {
     setUILocale('en-US')
     expect(authErrorMessage({ code: 'hai:iam:002', message: '密码错误', traceId: 'req-login' })).toBe('Username or password is incorrect. (traceId: req-login)')

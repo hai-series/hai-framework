@@ -195,6 +195,10 @@ export interface TransportEncryptionConfig {
   basePath?: string
   /** 双向业务明文 UTF-8 字节上限；默认 1 MiB，整数范围 1 KiB～64 MiB。 */
   maxPlaintextBytes?: number
+  /** 请求时间允许领先服务器的秒数，默认 30，整数范围 0～300。 */
+  maxFutureSkewSeconds?: number
+  /** 请求从签发起的有效秒数，默认 300，整数范围 1～600。 */
+  maxRequestAgeSeconds?: number
   /** 路由明文容量；* 匹配一个完整路径段。 */
   routePlaintextBytes?: Readonly<Record<string, number>>
   /** 受管服务端密钥环，仅从服务端 Secret 注入，不放公开 kit 配置。 */

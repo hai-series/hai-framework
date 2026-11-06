@@ -65,16 +65,19 @@ const signedText = JSON.stringify([authenticatedText, tag])
 ## 接收顺序
 
 1. 有界读取并校验唯一 v2 格式，拒绝未定义的封装/上下文字段。HTTP 适配器从实际 Request 提取 clientId、method、pathname + search；不能把 payload 字段直接当作可信 expected 参数。
-2. 从实际 pathname + 原始 search 重算 SM3，与 pathHash 比对；输入最多 8192 个 UTF-8 字节，不重排/解码查询串。摘要参与签名和 MAC，绑定整个路径；JSON/头不重复传输长 URL，避免转义膨胀与超过 Node HTTP 默认头限制。检查其余上下文、版本、方向、状态；仅接受 issuedAt 在过去 5 分钟内、未来偏差最多 30 秒的请求。代理须保留原始路径/查询串。
+2. 从实际 pathname + 原始 search 重算 SM3，与 pathHash 比对；输入最多 8192 个 UTF-8 字节，不重排/解码查询串。摘要参与签名和 MAC，绑定整个路径；JSON/头不重复传输长 URL，避免转义膨胀与超过 Node HTTP 默认头限制。检查其余上下文、版本、方向、状态。代理须保留原始路径/查询串。
 3. 按 clientId 查询已注册公钥，先验 SM2 发送方签名，再解封两把密钥、常量时间验证 HMAC，最后解密 CBC。MAC 未通过绝不调用 CBC 解密。知道对端公钥无法伪造发送方签名。
-4. 服务端完整认证后原子消费 `(clientId, requestId)`；仅返回 true 的节点可把明文交给业务。存储故障、重复或读取期间过期均拒绝。业务失败也不退还 nonce。
-5. 客户端验签/MAC 前先校验响应 context 与本次请求逐字段相等，以及封装 status 与实际响应状态一致。缺少标记、格式错误或关联错误均 reject，不回退明文或原密文。
+4. 服务端验证请求时间。允许的最早签发时间由 `maxRequestAgeSeconds` 决定（整数 1～600，默认 300 秒，恰好到期即拒绝），允许的最晚签发时间由 `maxFutureSkewSeconds` 决定（整数 0～300，默认 30 秒，包含边界）。校验通过后原子消费 `(clientId, requestId)`，并再次检查有效期；仅消费成功且未过期的节点可把明文交给业务。存储故障、重复或消费期间过期均拒绝。业务失败也不退还 nonce。
+5. 对已通过绑定、签名和 MAC 但超出时间窗口的请求，Serv/Kit 返回认证加密 HTTP 400，错误码为 `hai:crypto:071`，`error.details.serverTime` 为校验时的 Unix 毫秒时间。HEAD 在响应头承载同一认证封装。客户端验签并核对原请求上下文后读取时间，显示 UTC 和校时建议。
+6. 客户端验签/MAC 前先校验响应 context 与本次请求逐字段相等，以及封装 status 与实际响应状态一致。缺少标记、格式错误或关联错误均 reject，不回退明文或原密文。
 
 自定义 HTTP 适配器使用公开的 `await authenticateTransportRequest(manager, request)`；成功时取 `data.plaintext` 与 `data.context`，响应用 `await manager.encryptResponse(data.context, json, status)`。业务逻辑不能调用未认证的 CBC primitive 来替代这条链路。
 
 ## 防重放状态
 
-requestId 至少保留到 issuedAt + 6 分钟，覆盖节点之间的最大 60 秒时钟差；部署需保证数据库与各节点时钟同步在 ±30 秒内。Redis provider 使用单 key CAS + TTL；SQL provider 使用 `hai_crypto_transport_requests` 的唯一主键插入，注册和周期 `pruneExpired()` 每批最多清理 100 条过期 nonce；nonce 消费不争用公钥容量锁。有效记录不能提前删除/驱逐；Redis 需要 noeviction 和符合部署持久化要求的配置。数据库/Redis 的回滚、数据丢失或不同节点连接不同后端会破坏去重，生产须使用同一可靠共享后端。
+requestId 至少保留到 issuedAt + 11 分钟，覆盖最长可配的 10 分钟有效期和 60 秒的节点间时钟差。部署需保证数据库与各节点时钟同步在 ±30 秒内。客户端未来偏差配置只控制请求是否被接受。升级旧版本时沿用默认窗口，等最后一个旧节点停止处理请求满 12 分钟后才把请求有效期调到 300 秒以上，以覆盖旧版本写入的 6 分钟保留记录。
+
+Redis provider 使用单 key CAS + TTL；SQL provider 使用 `hai_crypto_transport_requests` 的唯一主键插入，注册和周期 `pruneExpired()` 每批最多清理 100 条过期 nonce；nonce 消费不争用公钥容量锁。有效记录不能提前删除/驱逐；Redis 需要 noeviction 和符合部署持久化要求的配置。数据库/Redis 的回滚、数据丢失或不同节点连接不同后端会破坏去重，生产须使用同一可靠共享后端。
 
 内存实现只供显式开发/测试使用，同步 check/set 期间不 await，也不按客户端容量淘汰有效 nonce。它不提供跨进程保证。
 

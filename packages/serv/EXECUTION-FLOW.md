@@ -357,7 +357,7 @@ const app = serv.createApp({
    - await authenticateTransportRequest(manager, c.req.raw) 从实际 Request 提取 method、pathname + search、clientId。
    - 有界读取原始 JSON 流，密文预算 2 MiB + 32 KiB；头封装最多 16 KiB，超限取消流并返回 413。
    - 固定位置数组认证 version/direction/keyId/clientId/requestId/issuedAt/method/pathHash/status/encryptedKey/ciphertext/iv；pathHash 为实际 pathname + 原始 search 的 SM3 摘要。先验证 SM2 发送方签名，再验证独立 HMAC-SM3，最后解密 SM4-CBC。
-   - 过去 5 分钟/未来 30 秒之外拒绝；共享 registry 原子消费 (clientId, requestId)，nonce 至少保存至 issuedAt + 6 分钟，故障拒绝。
+   - 请求有效期默认 300 秒，允许领先服务端默认 30 秒。使用服务端 `transport.maxRequestAgeSeconds` 与 `transport.maxFutureSkewSeconds` 调整。已认证请求超限时返回带服务器时间的加密 400。共享 registry 原子消费 (clientId, requestId)，nonce 保存至 issuedAt + 11 分钟，存储故障拒绝。
    - 解密后明文最多 1 MiB UTF-8 字节；认证、时效或 claim 失败均不进入业务处理。
 
 4. **恢复业务 Request**

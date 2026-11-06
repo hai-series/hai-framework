@@ -153,9 +153,13 @@ cors:
 
 transport:
   keyExchangePath: /_hai/key-exchange
+  maxFutureSkewSeconds: 30
+  maxRequestAgeSeconds: 300
   excludePaths:
     - /health
 ```
+
+加密请求允许领先服务器 0～300 秒，默认 30 秒。请求有效期可设为 1～600 秒，默认 300 秒。超限时客户端显示服务端校验时的 UTC 时间，提示用户自动校时或手工修改设备时间后刷新。
 
 客户端默认调用方式：
 

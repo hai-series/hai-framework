@@ -48,6 +48,8 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
 {{/if}}
       keyExchangePath: servConfig.transport.keyExchangePath,
       maxPlaintextBytes: servConfig.transport.maxPlaintextBytes,
+      maxFutureSkewSeconds: servConfig.transport.maxFutureSkewSeconds,
+      maxRequestAgeSeconds: servConfig.transport.maxRequestAgeSeconds,
 {{#if features.feedback}}      routePlaintextBytes: {
         [`${servConfig.http.apiPrefix}/feedback/reports`]: feedbackBudget.maxTransportBytes,
         [`${servConfig.http.apiPrefix}/feedback/reports/*/evidence`]: feedbackBudget.maxTransportBytes,

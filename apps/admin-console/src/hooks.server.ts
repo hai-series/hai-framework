@@ -101,6 +101,8 @@ async function createHaiHandle(): Promise<Handle> {
     : {
         keyExchangePath: kitTransportConfig.keyExchangePath,
         maxPlaintextBytes: kitTransportConfig.maxPlaintextBytes,
+        maxFutureSkewSeconds: kitTransportConfig.maxFutureSkewSeconds,
+        maxRequestAgeSeconds: kitTransportConfig.maxRequestAgeSeconds,
         routePlaintextBytes: kitTransportConfig.routePlaintextBytes,
         excludePaths: [...kitTransportConfig.excludePaths],
       }

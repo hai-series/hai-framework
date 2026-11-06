@@ -5,7 +5,7 @@ description: "为独立 API 服务装配 contract/procedures、认证守卫、No
 
 # hai-serv
 
-transport 仅支持 v2：SM2 发送方签名、独立密钥的 Encrypt-then-HMAC、HTTP 上下文/响应状态绑定及共享原子防重放。GET/HEAD、空 POST 与空响应也认证；无降级开关。TLS 信任边界、5 分钟窗口、nonce 持久化与实现示例见 [参考](reference.md)。
+transport 仅支持 v2：SM2 发送方签名、独立密钥的 Encrypt-then-HMAC、HTTP 上下文/响应状态绑定及共享原子防重放。GET/HEAD、空 POST 与空响应也认证；无降级开关。TLS 信任边界、可配时间窗口、nonce 持久化与实现示例见 [参考](reference.md)。
 
 ## 能力契约
 

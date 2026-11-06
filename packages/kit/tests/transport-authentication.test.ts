@@ -22,19 +22,25 @@ describe('kit authenticated transport boundary', () => {
   })
   afterAll(async () => crypto.close())
 
-  it.each([600_000, -600_000])('时间偏差 %s 返回可认证的校时错误，不执行 resolve', async (offset) => {
-    const handle = kit.createHandle({ crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
+  it.each([{ offset: 120_000, method: 'POST' }, { offset: -20_000, method: 'HEAD' }])('时间偏差 $offset 经 $method 返回服务器时间，不执行 resolve', async ({ offset, method }) => {
+    const handle = kit.createHandle({ crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, maxFutureSkewSeconds: 10, maxRequestAgeSeconds: 90 } } })
     const resolve = vi.fn(() => Response.json({ accepted: true }))
+    let serverTime: number | undefined
     const client = crypto.transport.createClient({ keyExchangeUrl: 'http://localhost/api/_hai/key-exchange', fetch: async (input, init) => {
       const request = new Request(input, init)
-      const clock = request.url.endsWith('/_hai/key-exchange') ? undefined : vi.spyOn(Date, 'now').mockReturnValue(Date.now() + offset)
+      if (request.url.endsWith('/_hai/key-exchange'))
+        return dispatch(handle, request, resolve)
+      serverTime = Date.now() + offset
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(serverTime)
       try {
         return await dispatch(handle, request, resolve)
       }
-      finally { clock?.mockRestore() }
+      finally { clock.mockRestore() }
     } })
     try {
-      await expect(client.encryptedFetch('http://localhost/api/order', { method: 'POST', body: '{}' })).rejects.toThrow(TransportTimeError)
+      const error: unknown = await client.encryptedFetch('http://localhost/api/order', { method, body: method === 'POST' ? '{}' : undefined }).catch((error: unknown) => error)
+      expect(error).toBeInstanceOf(TransportTimeError)
+      expect(error).toMatchObject({ serverTime, message: expect.stringContaining('UTC') })
       expect(resolve).not.toHaveBeenCalled()
     }
     finally { client.destroy() }

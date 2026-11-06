@@ -42,9 +42,9 @@
 | @h-ai/core | `. (default)` | 78 |
 | @h-ai/core | `. (import)` | 78 |
 | @h-ai/core | `. (types)` | 78 |
-| @h-ai/crypto | `. (default)` | 54 |
-| @h-ai/crypto | `. (import)` | 54 |
-| @h-ai/crypto | `. (types)` | 54 |
+| @h-ai/crypto | `. (default)` | 55 |
+| @h-ai/crypto | `. (import)` | 55 |
+| @h-ai/crypto | `. (types)` | 55 |
 | @h-ai/datapipe | `. (import)` | 19 |
 | @h-ai/datapipe | `. (types)` | 19 |
 | @h-ai/deploy | `. (default)` | 48 |

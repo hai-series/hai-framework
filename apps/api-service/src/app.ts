@@ -51,6 +51,8 @@ export function createApiServiceApp(options: CreateApiServiceAppOptions = {}) {
       keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),
       keyExchangePath: servConfig.transport.keyExchangePath,
       maxPlaintextBytes: servConfig.transport.maxPlaintextBytes,
+      maxFutureSkewSeconds: servConfig.transport.maxFutureSkewSeconds,
+      maxRequestAgeSeconds: servConfig.transport.maxRequestAgeSeconds,
       excludePaths: [...new Set([
         ...servConfig.transport.excludePaths,
         ...(servConfig.http.health ? [servConfig.http.health.path, servConfig.http.health.readyPath].filter((path): path is `/${string}` => Boolean(path)) : []),

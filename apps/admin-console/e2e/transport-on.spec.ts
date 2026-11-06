@@ -43,6 +43,27 @@ test.describe('Transport enabled E2E', () => {
     return response
   }
 
+  test('shows server time when the device clock rejects encrypted login', async ({ page }) => {
+    await page.goto('/auth/login')
+    await waitForHydration(page)
+    await page.evaluate(() => {
+      const now = Date.now.bind(Date)
+      Date.now = () => now() + 600_000
+    })
+    await page.locator('#login-username').fill(transportAdmin.username)
+    await page.locator('input[type="password"]').first().fill(transportAdmin.password)
+    const [rejected] = await Promise.all([
+      page.waitForResponse(response => response.url().endsWith('/api/auth/login') && response.request().method() === 'POST'),
+      page.locator('button[type="submit"]').click(),
+    ])
+    expect(rejected.status()).toBe(400)
+    expect(rejected.headers()['x-encrypted']).toBe('true')
+    const advice = page.getByRole('alert').filter({ hasText: '请开启设备的自动校时或手工修改时间' })
+    await expect(advice).toContainText(/服务器时间为 \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC/)
+    await expect(page).toHaveURL(/\/auth\/login/)
+    await loginViaUi(page)
+  })
+
   test('encrypts login, API GET and SvelteKit navigation while the browser receives usable data', async ({ page }) => {
     await loginViaUi(page)
     await expect(page.getByTestId('app-environment-badge')).toBeVisible()

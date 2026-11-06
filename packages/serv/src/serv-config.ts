@@ -9,7 +9,7 @@
 import type { RequestAccessConfigInput, TrustedProxies } from '@h-ai/core'
 import process from 'node:process'
 import { RequestAccessConfigSchema, TrustedProxiesSchema } from '@h-ai/core'
-import { TRANSPORT_PLAINTEXT_RANGE } from '@h-ai/crypto'
+import { TRANSPORT_PLAINTEXT_RANGE, TRANSPORT_PROTOCOL, TRANSPORT_TIME_LIMITS } from '@h-ai/crypto'
 import { z } from 'zod'
 import { servM } from './serv-i18n.js'
 
@@ -118,6 +118,10 @@ export interface ServHealthHttpConfig {
 export interface ServTransportRuntimeConfig {
   /** 双向明文 UTF-8 字节上限；省略使用 1 MiB，范围 1 KiB～64 MiB。 */
   readonly maxPlaintextBytes?: number
+  /** 请求时间允许领先服务器的秒数，默认 30，整数范围 0～300。 */
+  readonly maxFutureSkewSeconds?: number
+  /** 请求从签发起的有效秒数，默认 300，整数范围 1～600。 */
+  readonly maxRequestAgeSeconds?: number
   /** 按完整路径段匹配的明文容量；* 匹配单段。 */
   readonly routePlaintextBytes?: Readonly<Record<string, number>>
   readonly keyExchangePath: `/${string}`
@@ -213,6 +217,8 @@ export type ServCorsRuntimeConfigInput = Partial<ServCorsRuntimeConfig>
  */
 export type ServTransportRuntimeConfigInput = Partial<{
   readonly maxPlaintextBytes: number | 'auto'
+  readonly maxFutureSkewSeconds: number
+  readonly maxRequestAgeSeconds: number
   readonly routePlaintextBytes: Readonly<Record<string, number>>
   readonly keyExchangePath: `/${string}`
   readonly excludePaths: readonly `/${string}`[]
@@ -285,6 +291,8 @@ const TransportRuntimeConfigInputSchema = z.union([
   z.literal(false),
   z.object({
     maxPlaintextBytes: z.union([z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max), z.literal('auto')]).transform(value => value === 'auto' ? undefined : value).optional().describe('普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明').meta({ default: 'auto' }),
+    maxFutureSkewSeconds: z.number().int().min(0).max(TRANSPORT_TIME_LIMITS.maxFutureSkewSeconds).optional().describe('允许客户端请求时间领先服务器的秒数').meta({ default: TRANSPORT_PROTOCOL.CLOCK_SKEW_MS / 1000 }),
+    maxRequestAgeSeconds: z.number().int().min(TRANSPORT_TIME_LIMITS.minRequestAgeSeconds).max(TRANSPORT_TIME_LIMITS.maxRequestAgeSeconds).optional().describe('请求从签发起的有效秒数').meta({ default: TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS / 1000 }),
     routePlaintextBytes: z.record(AbsolutePathSchema, z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max)).optional().describe('完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量'),
     keyExchangePath: AbsolutePathSchema.default('/_hai/key-exchange'),
     excludePaths: z.array(AbsolutePathSchema).default([]),

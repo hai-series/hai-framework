@@ -408,7 +408,7 @@ async function callObservedProcedure(rawClient: unknown, path: string[], args: u
       const safe = core.error.toPublic({ ...error, publicExt: error.ext }, receivedId)
       if (error.cause && typeof error.cause === 'object' && !Array.isArray(error.cause)) {
         const metadata: Record<string, unknown> = {}
-        for (const key of ['orpcCode', 'status', 'transportCode', 'direction', 'stage', 'limitBytes', 'actualBytes']) {
+        for (const key of ['orpcCode', 'status', 'transportCode', 'serverTime', 'direction', 'stage', 'limitBytes', 'actualBytes']) {
           const value: unknown = Reflect.get(error.cause, key)
           if (typeof value === 'number' || typeof value === 'string')
             metadata[key] = core.sanitize.sanitizeSensitiveValue(value, key)
@@ -845,7 +845,7 @@ async function fetchWithTimeout(
 function mapClientError(error: unknown) {
   const time = error instanceof TransportTimeError ? error : error instanceof Error && error.cause instanceof TransportTimeError ? error.cause : undefined
   if (time)
-    return err(HaiApiClientError.VALIDATION_FAILED, time.message, { transportCode: time.code })
+    return err(HaiApiClientError.VALIDATION_FAILED, time.message, { transportCode: time.code, serverTime: time.serverTime })
   const capacity = error instanceof TransportBodyTooLargeError ? error : error instanceof Error && error.cause instanceof TransportBodyTooLargeError ? error.cause : undefined
   if (capacity)
     return err(HaiApiClientError.PAYLOAD_TOO_LARGE, capacity.message, { direction: capacity.direction, stage: capacity.stage, limitBytes: capacity.limitBytes, actualBytes: capacity.actualBytes })

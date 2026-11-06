@@ -29,9 +29,9 @@ export const TRANSPORT_PROTOCOL = {
   ENVELOPE_HEADER: 'X-Hai-Transport',
   /** 唯一支持的认证协议版本；旧未认证格式拒绝。 */
   VERSION: 2,
-  /** 请求允许的过去时间窗口（毫秒）。 */
+  /** 默认请求有效期（毫秒）。 */
   REQUEST_WINDOW_MS: 300_000,
-  /** 节点时钟允许的最大未来偏差（毫秒）。 */
+  /** 默认允许的客户端未来偏差（毫秒），也是部署约定的节点对时误差上限。 */
   CLOCK_SKEW_MS: 30_000,
   /** 标识响应体已加密的响应头名。 */
   ENCRYPTED_HEADER: 'X-Encrypted',
@@ -40,6 +40,20 @@ export const TRANSPORT_PROTOCOL = {
   /** 密钥协商端点的默认子路径（相对于挂载前缀）。 */
   DEFAULT_KEY_EXCHANGE_PATH: '/_hai/key-exchange',
 } as const
+
+/**
+ * 服务端传输时间配置的允许范围，供 Crypto 工厂与 Serv/Kit 配置共用。
+ * @example
+ * ```ts
+ * import { TRANSPORT_TIME_LIMITS } from '@h-ai/crypto'
+ * const latest = TRANSPORT_TIME_LIMITS.maxRequestAgeSeconds
+ * ```
+ */
+export const TRANSPORT_TIME_LIMITS = Object.freeze({
+  maxFutureSkewSeconds: 300,
+  minRequestAgeSeconds: 1,
+  maxRequestAgeSeconds: 600,
+})
 
 /**
  * 密钥协商请求；只发送客户端公钥，私钥始终留在客户端，注册仍验证曲线点。
@@ -167,7 +181,7 @@ export interface TransportMessageContext {
   readonly clientId: string
   /** 128 位随机十六进制 nonce，同时用于响应关联。 */
   readonly requestId: string
-  /** 请求创建时间，Unix 毫秒；允许过去 5 分钟、未来 30 秒。 */
+  /** 请求创建时间，Unix 毫秒；时间窗口由服务端配置。 */
   readonly issuedAt: number
   /** 大写 HTTP 方法，必须与实际 Request 完全一致。 */
   readonly method: string
@@ -451,6 +465,10 @@ export interface TransportKeyStore {
  * ```
  */
 export interface TransportCreateServerOptions {
+  /** 请求时间允许领先服务器的秒数，默认 30，整数范围 0～300。 */
+  readonly maxFutureSkewSeconds?: number
+  /** 请求从签发起的有效秒数，默认 300，整数范围 1～600。 */
+  readonly maxRequestAgeSeconds?: number
   /** 双向业务明文 UTF-8 字节上限；默认 1 MiB，整数范围 1 KiB～64 MiB。 */
   readonly maxPlaintextBytes?: number
   /** 必填受管服务端密钥环；没有隐式随机生成或进程密钥回退。 */

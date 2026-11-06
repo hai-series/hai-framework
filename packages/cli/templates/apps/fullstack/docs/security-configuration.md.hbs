@@ -7,6 +7,7 @@
 | 文件                                                         | 用途                                               |
 | ------------------------------------------------------------ | -------------------------------------------------- |
 | `packages/{{projectName}}-serv/config/_iam.yml`              | 账号、密码、验证码、锁定、敏感操作、登录限制、会话 |
+| `packages/{{projectName}}-serv/config/_serv.yml`             | API 传输加密及请求时间窗口                          |
 | `packages/{{projectName}}-serv/config/_audit.yml`            | 审计采集、脱敏、保留、备份、告警                   |
 | `packages/{{projectName}}-serv/config/_reach.yml`            | 邮件、短信或通知 API 及通知模板                    |
 | `packages/{{projectName}}-serv/config/_scheduler.yml`        | 已有 Scheduler 的持久化及调度参数                  |
@@ -29,6 +30,8 @@ HAI_AUDIT_BACKUP_ENABLED=true
 ## 默认情况
 
 这里列的是 fullstack 模板默认值，不是所有项目或底层 Schema 的普适限制。
+
+加密请求默认有效 300 秒，允许客户端时间领先服务器最多 30 秒。可在 `_serv.yml` 的 `transport` 下设置 `maxRequestAgeSeconds`（1～600）和 `maxFutureSkewSeconds`（0～300），单位为整数秒。超限时，前端显示校验时的服务器 UTC 时间，提示用户开启设备自动校时或手工修改时间，然后刷新。升级旧版本后，从最后一个旧节点停止处理请求起等待 12 分钟，再把请求有效期调到 300 秒以上。
 
 | 条目                         | fullstack 默认及启用入口                                        | 使用影响                                                 |
 | ---------------------------- | --------------------------------------------------------------- | -------------------------------------------------------- |

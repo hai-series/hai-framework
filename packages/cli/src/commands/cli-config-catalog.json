@@ -5000,12 +5000,28 @@
     "constraint": "字符串；以 / 开头的路径字符串"
   },
   {
+    "name": "HAI_KIT_TRANSPORT_MAXFUTURESKEWSECONDS",
+    "module": "kit",
+    "path": "kit.transport.maxFutureSkewSeconds",
+    "description": "允许客户端请求时间领先服务器的秒数",
+    "value": "30",
+    "constraint": "整数；>= 0；<= 300"
+  },
+  {
     "name": "HAI_KIT_TRANSPORT_MAXPLAINTEXTBYTES",
     "module": "kit",
     "path": "kit.transport.maxPlaintextBytes",
     "description": "普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明",
     "value": "auto",
     "constraint": "整数；>= 1024；<= 67108864；字符串；取值：auto"
+  },
+  {
+    "name": "HAI_KIT_TRANSPORT_MAXREQUESTAGESECONDS",
+    "module": "kit",
+    "path": "kit.transport.maxRequestAgeSeconds",
+    "description": "请求从签发起的有效秒数",
+    "value": "300",
+    "constraint": "整数；>= 1；<= 600"
   },
   {
     "name": "HAI_KIT_TRANSPORT_ROUTEPLAINTEXTBYTES",
@@ -6848,12 +6864,28 @@
     "constraint": "字符串；以 / 开头的路径字符串"
   },
   {
+    "name": "HAI_SERV_TRANSPORT_MAXFUTURESKEWSECONDS",
+    "module": "serv",
+    "path": "serv.transport.maxFutureSkewSeconds",
+    "description": "允许客户端请求时间领先服务器的秒数",
+    "value": "30",
+    "constraint": "整数；>= 0；<= 300"
+  },
+  {
     "name": "HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES",
     "module": "serv",
     "path": "serv.transport.maxPlaintextBytes",
     "description": "普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明",
     "value": "1048576",
     "constraint": "整数；>= 1024；<= 67108864；字符串；取值：auto"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_MAXREQUESTAGESECONDS",
+    "module": "serv",
+    "path": "serv.transport.maxRequestAgeSeconds",
+    "description": "请求从签发起的有效秒数",
+    "value": "300",
+    "constraint": "整数；>= 1；<= 600"
   },
   {
     "name": "HAI_SERV_TRANSPORT_ROUTEPLAINTEXTBYTES",

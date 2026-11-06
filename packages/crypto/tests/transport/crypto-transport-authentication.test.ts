@@ -1,4 +1,4 @@
-import type { EncryptedPayload, EncryptedRequestPayload, TransportKeyPair, TransportMessageContext } from '../../src/index.js'
+import type { EncryptedPayload, EncryptedRequestPayload, TransportCreateServerOptions, TransportKeyPair, TransportMessageContext } from '../../src/index.js'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { authenticateTransportRequest, createInMemoryKeyStore, crypto, HaiCryptoError, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportTimeError } from '../../src/index.js'
 import { sealTransportPayload } from '../../src/transport/crypto-transport-codec.js'
@@ -6,11 +6,11 @@ import { sealTransportPayload } from '../../src/transport/crypto-transport-codec
 let serverKey: TransportKeyPair
 let clientKey: TransportKeyPair
 
-async function fixture() {
+async function fixture(timing?: Pick<TransportCreateServerOptions, 'maxFutureSkewSeconds' | 'maxRequestAgeSeconds'>) {
   const keyStore = createInMemoryKeyStore()
   const ring = { activeKeyId: 'v1', keys: { v1: serverKey } }
   const a = crypto.transport.createServer({ serverKeyRing: ring, keyStore })
-  const b = crypto.transport.createServer({ serverKeyRing: ring, keyStore })
+  const b = crypto.transport.createServer({ serverKeyRing: ring, keyStore, ...timing })
   if (!a.success || !b.success)
     throw new Error('Transport fixture initialization failed')
   const clientId = await a.data.registerClientKey(clientKey.publicKey)
@@ -54,16 +54,62 @@ describe('authenticated transport protocol', () => {
 
   it.each([TRANSPORT_PROTOCOL.CLOCK_SKEW_MS + 1000, -TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS - 1000])('已认证请求的时间偏差 %s 提供校时错误且不消费 nonce', async (offset) => {
     const f = await fixture()
-    const context = { ...f.payload.context, issuedAt: Date.now() + offset }
+    const now = Date.now()
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+    const context = { ...f.payload.context, issuedAt: now + offset }
     const sealed = sealTransportPayload(crypto, '{}', context, 'request', 0, serverKey.publicKey, clientKey.privateKey)
     if (!sealed.success)
       throw new Error(sealed.error.message)
     const claim = vi.spyOn(f.keyStore, 'claimRequest')
     const result = await f.a.decryptRequest({ ...sealed.data, direction: 'request', status: 0 }, f.expected)
-    expect(result).toMatchObject({ success: false, error: { code: HaiCryptoError.TRANSPORT_TIME_INVALID.code, cause: expect.any(TransportTimeError) } })
+    expect(result).toMatchObject({ success: false, error: { code: HaiCryptoError.TRANSPORT_TIME_INVALID.code, cause: { serverTime: now } } })
+    if (!result.success)
+      expect(result.error.cause).toBeInstanceOf(TransportTimeError)
     expect(claim).not.toHaveBeenCalled()
     const tampered = await f.a.decryptRequest({ ...f.payload, context }, f.expected)
     expect(tampered).toMatchObject({ success: false, error: { code: HaiCryptoError.INVALID_INPUT.code } })
+  })
+
+  it.each([[60_000, true], [60_001, false], [-599_999, true], [-600_000, false]] as const)('可配置的请求时间边界 %s：%s', async (offset, success) => {
+    const now = Date.now()
+    vi.spyOn(Date, 'now').mockReturnValue(now + offset)
+    const f = await fixture({ maxFutureSkewSeconds: 60, maxRequestAgeSeconds: 600 })
+    vi.mocked(Date.now).mockReturnValue(now)
+    const result = await f.b.decryptRequest(f.payload, f.expected)
+    expect(result.success).toBe(success)
+    if (!result.success)
+      expect(result.error.code).toBe(HaiCryptoError.TRANSPORT_TIME_INVALID.code)
+  })
+
+  it('短窗口节点接受的 nonce 在长窗口节点仍不可重放', async () => {
+    const f = await fixture({ maxRequestAgeSeconds: 600 })
+    expect((await f.a.decryptRequest(f.payload, f.expected)).success).toBe(true)
+    vi.spyOn(Date, 'now').mockReturnValue(f.payload.context.issuedAt + 400_000)
+    const replay = await f.b.decryptRequest(f.payload, f.expected)
+    expect(replay).toMatchObject({ success: false, error: { code: HaiCryptoError.INVALID_INPUT.code } })
+  })
+
+  it('等待 nonce 原子消费时过期，返回第二次校验的服务器时间', async () => {
+    const f = await fixture({ maxRequestAgeSeconds: 1 })
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(f.payload.context.issuedAt)
+    const expiredAt = f.payload.context.issuedAt + 1000
+    vi.spyOn(f.keyStore, 'claimRequest').mockImplementation(async () => {
+      clock.mockReturnValue(expiredAt)
+      return true
+    })
+    const result = await f.b.decryptRequest(f.payload, f.expected)
+    expect(result).toMatchObject({ success: false, error: { code: HaiCryptoError.TRANSPORT_TIME_INVALID.code, cause: { serverTime: expiredAt } } })
+  })
+
+  it.each([
+    { maxFutureSkewSeconds: -1 },
+    { maxFutureSkewSeconds: 301 },
+    { maxFutureSkewSeconds: 0.5 },
+    { maxRequestAgeSeconds: 0 },
+    { maxRequestAgeSeconds: 601 },
+  ])('工厂拒绝无效的时间配置 %j', (timing) => {
+    const result = crypto.transport.createServer({ serverKeyRing: { activeKeyId: 'v1', keys: { v1: serverKey } }, keyStore: createInMemoryKeyStore(), ...timing })
+    expect(result).toMatchObject({ success: false, error: { code: HaiCryptoError.INVALID_INPUT.code } })
   })
 
   it.each(['encryptedKey', 'ciphertext', 'iv', 'tag', 'signature'] as const)('篡改 %s 在 CBC 解密和 nonce 消费前拒绝', async (field) => {

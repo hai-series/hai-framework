@@ -50,18 +50,24 @@ function createFailingEncryptManager(): TransportEncryptionManager {
 }
 
 describe('serv.createApp({ transport })', () => {
-  it.each([600_000, -600_000])('时间偏差 %s 经真实 HTTP 中间件返回加密校时提示', async (offset) => {
-    const app = serv.createApp({ contract, procedures, http: { apiPrefix: '/api/v1', openapi: false, docs: false }, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto } })
+  it.each([{ offset: 120_000, method: 'POST' }, { offset: -20_000, method: 'HEAD' }])('时间偏差 $offset 经 $method 中间件返回服务器时间', async ({ offset, method }) => {
+    const app = serv.createApp({ contract, procedures, http: { apiPrefix: '/api/v1', openapi: false, docs: false }, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto, maxFutureSkewSeconds: 10, maxRequestAgeSeconds: 90 } })
+    let serverTime: number | undefined
     const client = crypto.transport.createClient({ keyExchangeUrl: 'http://localhost/api/v1/_hai/key-exchange', fetch: async (input, init) => {
       const request = new Request(input, init)
-      const clock = request.url.endsWith('/_hai/key-exchange') ? undefined : vi.spyOn(Date, 'now').mockReturnValue(Date.now() + offset)
+      if (request.url.endsWith('/_hai/key-exchange'))
+        return app.fetch(request)
+      serverTime = Date.now() + offset
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(serverTime)
       try {
         return await app.fetch(request)
       }
-      finally { clock?.mockRestore() }
+      finally { clock.mockRestore() }
     } })
     try {
-      await expect(client.encryptedFetch('http://localhost/api/v1/whatever', { method: 'POST', body: '{}' })).rejects.toThrow(TransportTimeError)
+      const error: unknown = await client.encryptedFetch('http://localhost/api/v1/whatever', { method, body: method === 'POST' ? '{}' : undefined }).catch((error: unknown) => error)
+      expect(error).toBeInstanceOf(TransportTimeError)
+      expect(error).toMatchObject({ serverTime, message: expect.stringContaining('UTC') })
     }
     finally { client.destroy() }
   })

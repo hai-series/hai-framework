@@ -1,5 +1,5 @@
 import type { HaiError } from '@h-ai/core'
-/** 按公开 IAM 错误码展示安全提示，不直接显示认证服务的原始消息。 */
+/** 按公开 IAM 错误码与客户端校时诊断展示安全提示。 */
 import type { UIMessageKey } from '../../../messages.js'
 import { core } from '@h-ai/core'
 import { uiM } from '../../../messages.js'
@@ -54,7 +54,7 @@ const messages: Partial<Record<string, UIMessageKey>> = {
 }
 
 /**
- * 将 IAM 错误映射为当前语言的安全认证提示；未知错误和服务异常使用通用提示。
+ * 将 IAM 错误映射为当前语言的安全认证提示，并保留标准客户端生成的校时建议。
  * @param error - 待显示的安全错误对象或消息。
  * @returns 本地化提示及有效 traceId，不包含原始异常、账户字段原因或其他内部信息。
  *
@@ -64,7 +64,12 @@ const messages: Partial<Record<string, UIMessageKey>> = {
  * const message = authErrorMessage({ code: 'hai:iam:020', message: '登录失败' })
  * ```
  */
-export function authErrorMessage(error: Pick<HaiError, 'code' | 'message' | 'traceId' | 'httpStatus'>): string {
+export function authErrorMessage(error: Pick<HaiError, 'code' | 'message' | 'traceId' | 'httpStatus' | 'cause'>): string {
+  const { cause } = error
+  if (error.httpStatus === 400 && (error.code === 'hai:crypto:071' || error.code === 'hai:api-client:007')
+    && cause && typeof cause === 'object' && 'transportCode' in cause && cause.transportCode === 'hai:crypto:071') {
+    return core.error.formatMessage({ message: core.sanitize.sanitizeText(error.message), traceId: error.traceId })
+  }
   const key = (error.httpStatus ?? 400) >= 500 || !Object.hasOwn(messages, error.code) ? 'auth_error_service' : messages[error.code] ?? 'auth_error_service'
   return core.error.formatMessage({ message: uiM(key), traceId: error.traceId })
 }

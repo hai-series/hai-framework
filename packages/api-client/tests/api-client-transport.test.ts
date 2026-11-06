@@ -22,7 +22,7 @@ const protectedContract = {
  * 模拟一个对端 serv：处理 key-exchange + 解密 echo 请求 + 加密响应。
  * 直接用 crypto.transport.createServer 复用真实加解密路径。
  */
-function makeServerFetch(clockOffset = 0): typeof fetch {
+function makeServerFetch(clockOffset = 0, legacyTimeError = false): typeof fetch {
   const key = crypto.asymmetric.generateKeyPair()
   if (!key.success)
     throw new Error(key.error.message)
@@ -50,8 +50,9 @@ function makeServerFetch(clockOffset = 0): typeof fetch {
     const clock = clockOffset ? vi.spyOn(Date, 'now').mockReturnValue(Date.now() + clockOffset) : undefined
     const verified = await authenticateTransportRequest(mgr, req).finally(() => clock?.mockRestore())
     if (!verified.success) {
-      if (verified.error.cause instanceof TransportTimeError && verified.error.cause.context)
-        return createTransportErrorResponse(verified.error.cause, { manager: mgr, context: verified.error.cause.context })
+      const time = verified.error.cause
+      if (time instanceof TransportTimeError && time.context)
+        return createTransportErrorResponse(legacyTimeError ? new TransportTimeError() : time, { manager: mgr, context: time.context })
       throw new Error(verified.error.message)
     }
     const input2 = JSON.parse(verified.data.plaintext) as { msg: string }
@@ -148,8 +149,28 @@ describe('api-client transport', () => {
     expect((await client.init({ baseUrl: 'https://test.local/api/v1', fetch, transport: { crypto } })).success).toBe(true)
     try {
       const result = await client.echo({ msg: 'pending business request' })
-      expect(result).toMatchObject({ success: false, error: { code: HaiApiClientError.VALIDATION_FAILED.code, message: expect.stringContaining(new TransportTimeError().message), cause: { transportCode: HaiCryptoError.TRANSPORT_TIME_INVALID.code } } })
+      expect(result).toMatchObject({ success: false, error: { code: HaiApiClientError.VALIDATION_FAILED.code, cause: { transportCode: HaiCryptoError.TRANSPORT_TIME_INVALID.code, serverTime: expect.any(Number) } } })
+      if (!result.success) {
+        const { cause } = result.error
+        if (!cause || typeof cause !== 'object' || !('serverTime' in cause) || typeof cause.serverTime !== 'number')
+          throw new Error('Expected server time in the transport error')
+        const timestamp = new Date(cause.serverTime).toISOString()
+        expect(result.error.message).toContain(`${timestamp.slice(0, 10)} ${timestamp.slice(11, 19)} UTC`)
+      }
       expect(fetch.mock.calls.filter(([request]) => new URL(request instanceof Request ? request.url : String(request)).pathname.endsWith('/echo'))).toHaveLength(1)
+    }
+    finally { await client.close() }
+  })
+
+  it('旧服务端缺少校验时间时仍保留校时提示', async () => {
+    const client = apiClient.create(testContract)
+    const fetch = makeServerFetch(600_000, true)
+    expect((await client.init({ baseUrl: 'https://test.local/api/v1', fetch, transport: { crypto } })).success).toBe(true)
+    try {
+      const result = await client.echo({ msg: 'pending business request' })
+      expect(result).toMatchObject({ success: false, error: { code: HaiApiClientError.VALIDATION_FAILED.code, message: expect.stringContaining(new TransportTimeError().message), cause: { transportCode: HaiCryptoError.TRANSPORT_TIME_INVALID.code } } })
+      if (!result.success)
+        expect(result.error.cause).not.toHaveProperty('serverTime')
     }
     finally { await client.close() }
   })

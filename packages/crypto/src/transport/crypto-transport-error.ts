@@ -6,7 +6,7 @@ import { HaiCryptoError } from '../crypto-types.js'
 import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
 
 /**
- * 已认证请求的时间窗口错误；只提供校时建议，不调整时钟或放宽防重放窗口。
+ * 已认证请求的时间窗口错误；附带校验失败时的服务器时间（Unix 毫秒）。
  * @example
  * ```ts
  * import { TransportTimeError } from '@h-ai/crypto'
@@ -16,10 +16,18 @@ import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
  */
 export class TransportTimeError extends Error {
   readonly code = HaiCryptoError.TRANSPORT_TIME_INVALID.code
+  readonly serverTime?: number
 
-  constructor(readonly context?: TransportMessageContext) {
-    super(cryptoM('crypto_transportTimeInvalid'))
+  constructor(readonly context?: TransportMessageContext, serverTime?: number) {
+    const validTime = typeof serverTime === 'number' && Number.isSafeInteger(serverTime) && serverTime >= 0 && serverTime <= 8.64e15
+      ? serverTime
+      : undefined
+    const message = validTime === undefined
+      ? cryptoM('crypto_transportTimeInvalid')
+      : cryptoM('crypto_transportTimeInvalidWithServerTime', { params: { serverTime: new Date(validTime).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC') } })
+    super(message)
     this.name = 'TransportTimeError'
+    this.serverTime = validTime
   }
 }
 
@@ -41,20 +49,30 @@ export async function createTransportErrorResponse(
   error: TransportBodyTooLargeError | TransportTimeError,
   authenticated?: { manager: TransportEncryptionManager, context: TransportMessageContext },
 ): Promise<Response> {
-  const status = error instanceof TransportTimeError ? 400 : error.direction === 'request' ? 413 : 500
-  const body = JSON.stringify({ success: false, error: { code: error.code, message: error.message, httpStatus: status, details: error instanceof TransportTimeError
+  const isTimeError = error instanceof TransportTimeError
+  const status = isTimeError ? 400 : error.direction === 'request' ? 413 : 500
+  const publicError = { code: error.code, message: isTimeError ? cryptoM('crypto_transportTimeInvalid') : error.message, httpStatus: status, details: isTimeError
     ? undefined
     : {
         direction: error.direction,
         stage: error.stage,
         limitBytes: error.limitBytes,
         actualBytes: error.actualBytes,
-      } } })
+      } }
   if (authenticated) {
+    const encryptedError = isTimeError && error.serverTime !== undefined
+      ? { ...publicError, message: error.message, details: { serverTime: error.serverTime } }
+      : publicError
+    const body = JSON.stringify({ success: false, error: encryptedError })
     const encrypted = await authenticated.manager.encryptResponse(authenticated.context, body, status)
     if (encrypted.success) {
-      return Response.json(encrypted.data, { status, headers: { [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE } })
+      const headers = new Headers({ [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE })
+      if (authenticated.context.method === 'HEAD') {
+        headers.set(TRANSPORT_PROTOCOL.ENVELOPE_HEADER, JSON.stringify(encrypted.data))
+        return new Response(null, { status, headers })
+      }
+      return Response.json(encrypted.data, { status, headers })
     }
   }
-  return new Response(body, { status, headers: { 'Content-Type': 'application/json; charset=utf-8' } })
+  return new Response(JSON.stringify({ success: false, error: publicError }), { status, headers: { 'Content-Type': 'application/json; charset=utf-8' } })
 }

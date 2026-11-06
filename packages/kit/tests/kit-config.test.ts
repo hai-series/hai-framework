@@ -62,6 +62,8 @@ describe('kit transport config', () => {
     expect(KitConfigSchema.parse({
       transport: {
         keyExchangePath: '/custom/key-exchange',
+        maxFutureSkewSeconds: 0,
+        maxRequestAgeSeconds: 600,
       },
     })).toEqual({
       server: DEFAULT_SERVER,
@@ -69,9 +71,15 @@ describe('kit transport config', () => {
       access: false,
       transport: {
         keyExchangePath: '/custom/key-exchange',
+        maxFutureSkewSeconds: 0,
+        maxRequestAgeSeconds: 600,
         excludePaths: [],
       },
     })
+  })
+
+  it.each([{ maxFutureSkewSeconds: 301 }, { maxRequestAgeSeconds: 0 }])('拒绝非法传输时间范围 %j', (transport) => {
+    expect(KitConfigSchema.safeParse({ transport }).success).toBe(false)
   })
 
   it('拒绝不合法的 keyExchangePath', () => {

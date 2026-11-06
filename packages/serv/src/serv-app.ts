@@ -486,6 +486,8 @@ export function createApp<
       serverKeyRing: options.transport.serverKeyRing,
       keyStore: options.transport.keyStore,
       maxPlaintextBytes: policy.maximum.plaintextBytes,
+      maxFutureSkewSeconds: options.transport.maxFutureSkewSeconds,
+      maxRequestAgeSeconds: options.transport.maxRequestAgeSeconds,
     })
     if (!mgr.success) {
       // 直接抛已存在的 HaiError 实例，保留 code/system/module/cause，便于上层定位到

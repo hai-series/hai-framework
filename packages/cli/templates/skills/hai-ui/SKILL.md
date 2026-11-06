@@ -33,7 +33,7 @@ Toast 支持 F8 聚焦/返回、Escape 关闭可关闭提示并恢复焦点；Mo
 
 状态层可从轻量 `@h-ai/ui/i18n` 导入同一个 `authErrorMessage`，避免加载场景组件；管理台、移动/桌面示例与模板保持一致。
 
-认证错误复用公开 `authErrorMessage(error)`（从 `@h-ai/ui/components/scenes/iam/index` 导入）：凭据错误统一，不显示未知原文，保留有效 traceId 供排查图标展开；首次/到期改密、密码复用 034 和会话上限有明确指引。AuthPanel 与敏感操作确认已内置；自定义改密复用此映射。确认密码按原始字符串比较，不裁剪或 Unicode 归一化；字段错误、操作成功和认证错误均使用统一 Toast，字段保留定位与无障碍关联。
+认证错误复用公开 `authErrorMessage(error)`（从 `@h-ai/ui/components/scenes/iam/index` 导入）：凭据错误统一，不显示未知原文，保留有效 traceId 供排查图标展开；首次/到期改密、密码复用 034 和会话上限有明确指引。AuthPanel 与敏感操作确认已内置；自定义改密复用此映射。确认密码按原始字符串比较，不裁剪或 Unicode 归一化；字段错误、操作成功和认证错误均使用统一 Toast，字段保留定位与无障碍关联。Kit 和 API Client 的已认证传输时间诊断会在认证提示中显示服务器 UTC 时间及校时建议。
 
 新页面或较大改版先使用 [hai-ui-design](../hai-ui-design/SKILL.md) 确定任务、布局、状态和组件映射；本 skill 负责正确实现。完成后按 [hai-ui-review](../hai-ui-review/SKILL.md) 查看真实页面，小范围修复沿用已有设计。
 

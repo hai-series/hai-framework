@@ -114,6 +114,8 @@ if (!started.success) throw new Error(started.error.message)
 | `transport` | `false` | `false` 使用明文宿主流程；对象启用后还需运行时私有依赖 |
 | `maxPlaintextBytes` | auto，实际1MiB；范围1KiB–64MiB | 双向明文UTF-8预算，超限尽早拒绝；不能只看加密后body长度 |
 | `routePlaintextBytes` | 无默认 | 按完整路径段匹配，`*`匹配单段，附件/导出单独给预算 |
+| `maxFutureSkewSeconds` | 30 秒 | 客户端请求时间可领先服务器的秒数，整数 0～300，包含上限 |
+| `maxRequestAgeSeconds` | 300 秒 | 自签发起的请求有效期，整数 1～600，到达上限即过期 |
 | `keyExchangePath` | Serv `/_hai/key-exchange`；Kit `/api/_hai/key-exchange` | Serv 是相对 `http.apiPrefix` 的子路径；Kit 是服务端完整路径；API Client 相对 `baseUrl`。例如 Serv 前缀 `/backend/api`、子路径 `/_hai/key-exchange` 对应 `/backend/api/_hai/key-exchange`，客户端 baseUrl 使用 `/backend/api` |
 | `excludePaths` | [] | 按需要排除健康等非业务入口，不能排除敏感请求逃避策略 |
 | 服务端keyring/`keyStore` | 无通用秘密默认 | 同环境各节点共用可持久密钥环和共享状态，禁止每次启动随机生成 |
@@ -121,6 +123,8 @@ if (!started.success) throw new Error(started.error.message)
 ```yaml schema=@h-ai/serv:ServConfigSchema
 transport:
   maxPlaintextBytes: auto
+  maxFutureSkewSeconds: 30
+  maxRequestAgeSeconds: 300
   routePlaintextBytes:
     /api/v1/feedback/*/attachments: 8388608
   keyExchangePath: /_hai/key-exchange
@@ -131,11 +135,13 @@ transport:
 
 ### 时间不同步时的提示与恢复
 
-加密请求会校验时间。设备时间偏差过大时，应提示用户开启自动校时并刷新；仍失败时联系管理员核对服务器时间，不通过放宽认证期限绕过保护。
+在服务端 `_serv.yml` 或 `_kit.yml` 的 `transport` 中设置时间窗口，重启服务后生效。请求有效期也计入签发后的网络耗时。各节点应保持时钟和配置一致。升级旧版本时，先以默认配置完成滚动升级，再从最后一个旧节点停止处理请求起等待 12 分钟，之后可把请求有效期调到 300 秒以上。共享注册表为新请求保留防重放记录至签发时间后 11 分钟。
+
+超出窗口时，前端提示显示服务端校验时的 UTC 时间。请开启设备的自动校时或手工修改时间，然后刷新重试。若仍失败，请联系管理员检查服务器时间。服务端时间来自已认证的加密错误，旧服务端未提供该值时，前端仍显示校时建议。
 
 ![390像素宽度下的校时提示与刷新入口](../images/transport-clock-skew-mobile.png)
 
-图来自实际部署的生成应用，测试在浏览器中将`Date.now`向未来注入10分钟偏差，受控触发校时失败；没有修改操作系统或服务器时钟。Toast完整显示校时、刷新及联系管理员的说明，默认不显示`traceId`，信息图标保留排查入口。恢复浏览器时钟后，测试明确点击刷新，确认登录表单重新出现、提示清除；不自动重放之前失败的业务请求。该图证明此受控场景的提示与恢复，不代表所有设备或网络时间故障都已验证。
+浏览器测试分别模拟设备时间快、慢 10 分钟。校正设备时间后，由用户点击刷新，登录表单重新出现，提示清除。
 
 ### Crypto共享注册表与算法参数
 

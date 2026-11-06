@@ -52,7 +52,9 @@
   "crypto_transportSessionKeyDecryptFailed": "Failed to decrypt transport session key",
   "crypto_transportBodyLimitInvalid": "Transport plaintext limit must be an integer between 1024 and 67108864 bytes",
   "crypto_transportBodyTooLarge": "Encrypted transport payload exceeds the configured byte limit",
-  "crypto_transportTimeInvalid": "Your device and server clocks may be out of sync, or the request has expired. Enable automatic time synchronization and refresh to retry. If this continues, ask an administrator to check the server clock.",
+  "crypto_transportTimeInvalid": "Your device and server clocks may be out of sync, or the request has expired. Enable automatic time synchronization or set your device time manually, then refresh to retry. If this continues, ask an administrator to check the server clock.",
+  "crypto_transportTimeInvalidWithServerTime": "Your device and server clocks may be out of sync, or the request has expired. Server time is {serverTime}. Enable automatic time synchronization or set your device time manually, then refresh to retry. If this continues, ask an administrator to check the server clock.",
+  "crypto_transportTimeConfigInvalid": "Invalid transport time settings. Future clock skew must be an integer from 0 to 300 seconds and request lifetime from 1 to 600 seconds.",
   "crypto_transportBodyLimitConflict": "Explicit transport limit {limit} bytes is below the enabled module requirement of {required} bytes; adjust the module budget or explicit limit",
   "crypto_transportBusy": "Material processing is busy. Please retry shortly."
 }

@@ -1,6 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveServConfig, resolveServHttpConfig, resolveServServerConfig, ServConfigSchema } from '../src/serv-config.js'
 
+describe('serv transport time config', () => {
+  it('保留传输时间配置的边界值', () => {
+    const transport = { maxFutureSkewSeconds: 0, maxRequestAgeSeconds: 600 }
+    expect(ServConfigSchema.parse({ transport }).transport).toMatchObject(transport)
+  })
+
+  it.each([{ maxFutureSkewSeconds: -1 }, { maxRequestAgeSeconds: 601 }])('拒绝非法传输时间范围 %j', (transport) => {
+    expect(ServConfigSchema.safeParse({ transport }).success).toBe(false)
+  })
+})
+
 describe('resolveServServerConfig', () => {
   beforeEach(() => {
     // 清除环境中可能存在的 HOST/PORT，保证默认值用例稳定

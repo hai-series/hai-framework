@@ -396,13 +396,15 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
 
     // 时间建议只来自已验签/MAC、关联当前请求的响应；明文 400 不作为可信时间诊断。
     if (response.status === 400) {
-      let failure: { success?: unknown, error?: { code?: unknown } } | undefined
+      let failure: { success?: unknown, error?: { code?: unknown, details?: { serverTime?: unknown } } } | undefined
       try {
         failure = JSON.parse(decResult.data)
       }
       catch {}
-      if (failure?.success === false && failure.error?.code === HaiCryptoError.TRANSPORT_TIME_INVALID.code)
-        throw new TransportTimeError()
+      if (failure?.success === false && failure.error?.code === HaiCryptoError.TRANSPORT_TIME_INVALID.code) {
+        const serverTime = failure.error.details?.serverTime
+        throw new TransportTimeError(undefined, typeof serverTime === 'number' ? serverTime : undefined)
+      }
     }
     // 只从已验签/MAC、关联请求和状态的错误报文恢复服务端响应容量诊断。
     if (response.status === 500) {

@@ -4776,6 +4776,20 @@
                   }
                 ]
               },
+              "maxFutureSkewSeconds": {
+                "description": "允许客户端请求时间领先服务器的秒数",
+                "default": 30,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 300
+              },
+              "maxRequestAgeSeconds": {
+                "description": "请求从签发起的有效秒数",
+                "default": 300,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 600
+              },
               "routePlaintextBytes": {
                 "description": "完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量",
                 "type": "object",
@@ -4842,6 +4856,20 @@
                     "const": "auto"
                   }
                 ]
+              },
+              "maxFutureSkewSeconds": {
+                "description": "允许客户端请求时间领先服务器的秒数",
+                "default": 30,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 300
+              },
+              "maxRequestAgeSeconds": {
+                "description": "请求从签发起的有效秒数",
+                "default": 300,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 600
               },
               "routePlaintextBytes": {
                 "description": "完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量",

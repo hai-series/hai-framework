@@ -3,7 +3,8 @@ import type { IamCreateCaptchaInputSchema, IamLoginInput, IamPublicConfig, IamRe
 import type { HaiResult } from '@h-ai/core'
 import type { KitClient } from './kit-client.js'
 import { apiContract, IamCaptchaChallengeSchema, IamPublicConfigSchema, IamReauthenticationProofSchema } from '@h-ai/api-contract'
-import { core, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
+import { HaiCryptoError, TransportTimeError } from '@h-ai/crypto'
 import { z } from 'zod'
 import { createKitClient } from './kit-client.js'
 
@@ -12,7 +13,7 @@ import { createKitClient } from './kit-client.js'
  * @param options - 可复用的 apiFetch 和标准认证端点 basePath。
  * @param options.apiFetch - 已装配 CSRF/transport 的 fetch；省略时使用默认 Kit 客户端。
  * @param options.basePath - 同源认证端点前缀，默认 /api/auth。
- * @returns 标准表单动作；业务返回 HaiResult，网络/格式错误会拒绝 Promise。
+ * @returns 标准表单动作；业务和已认证的时间错误返回 HaiResult，网络/格式错误会拒绝 Promise。
  * @example
  * ```ts
  * import { kit } from '@h-ai/kit'
@@ -24,10 +25,20 @@ import { createKitClient } from './kit-client.js'
 export function createKitAuthActions(options: { apiFetch?: KitClient['apiFetch'], basePath?: string } = {}) {
   const apiFetch = options.apiFetch ?? createKitClient().apiFetch
   const base = options.basePath ?? '/api/auth'
+  async function request<T>(schema: z.ZodType<T>, ...args: Parameters<KitClient['apiFetch']>): Promise<HaiResult<T>> {
+    try {
+      const response = await apiFetch(...args)
+      return apiContract.haiResultSchema(schema).parse(await response.json())
+    }
+    catch (error) {
+      if (error instanceof TransportTimeError)
+        return err(HaiCryptoError.TRANSPORT_TIME_INVALID, error.message, { transportCode: error.code, serverTime: error.serverTime })
+      throw error
+    }
+  }
   async function post(path: string, input: object, init: Pick<RequestInit, 'keepalive'> = {}): Promise<HaiResult<unknown>> {
-    const response = await apiFetch(`${base}/${path}`, { ...init, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }, { recoverSession: false })
     // void 成功响应在 JSON 中省略 data，统一还原为 HaiResult 的 data: undefined。
-    const result = apiContract.haiResultSchema(z.unknown().optional()).parse(await response.json())
+    const result = await request(z.unknown().optional(), `${base}/${path}`, { ...init, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }, { recoverSession: false })
     return result.success ? ok(result.data) : result
   }
   return {
@@ -52,9 +63,8 @@ export function createKitAuthActions(options: { apiFetch?: KitClient['apiFetch']
       const result = await post('captcha', input)
       return result.success ? ok(IamCaptchaChallengeSchema.parse(result.data)) : result
     },
-    async publicConfig(): Promise<HaiResult<IamPublicConfig | null>> {
-      const response = await apiFetch(`${base}/config`, undefined, { recoverSession: false })
-      return apiContract.haiResultSchema(IamPublicConfigSchema.nullable()).parse(await response.json())
+    publicConfig(): Promise<HaiResult<IamPublicConfig | null>> {
+      return request(IamPublicConfigSchema.nullable(), `${base}/config`, undefined, { recoverSession: false })
     },
     login(input: IamLoginInput & { method?: 'password' | 'ldap' | 'email' | 'sms', code?: string }) {
       if (input.method === 'ldap')
@@ -68,9 +78,8 @@ export function createKitAuthActions(options: { apiFetch?: KitClient['apiFetch']
     requestPasswordReset: (identifier: string, options?: { captcha?: string }) => post('password-reset/request', { identifier, ...options }),
     confirmPasswordReset: (token: string, newPassword: string) => post('password-reset/confirm', { token, newPassword }),
     renewPassword: (input: { identifier: string, password: string, newPassword: string, captcha?: string }) => post('password/renew', input),
-    async reauthenticate(password: string, operation: string) {
-      const response = await apiFetch(`${base}/reauthenticate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password, operation }) })
-      return apiContract.haiResultSchema(IamReauthenticationProofSchema).parse(await response.json())
+    reauthenticate(password: string, operation: string) {
+      return request(IamReauthenticationProofSchema, `${base}/reauthenticate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password, operation }) })
     },
   }
 }

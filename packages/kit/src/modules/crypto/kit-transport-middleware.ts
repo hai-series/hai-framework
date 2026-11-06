@@ -47,6 +47,8 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
     serverKeyRing: config.serverKeyRing,
     keyStore: config.keyStore,
     maxPlaintextBytes: policy.maximum.plaintextBytes,
+    maxFutureSkewSeconds: config.maxFutureSkewSeconds,
+    maxRequestAgeSeconds: config.maxRequestAgeSeconds,
   })
   if (!result.success) {
     // 与 Serv 一致：静态配置或必需依赖失败即拒绝装配，不能让健康页面掩盖不可用的业务加密。

@@ -21,7 +21,7 @@ import { resolveTransportBodyLimits } from './crypto-transport-body.js'
 import { hashTransportPath, isValidEncryptedPayload, openTransportPayload, sealTransportPayload, transportAuthenticationFailure } from './crypto-transport-codec.js'
 import { TransportTimeError } from './crypto-transport-error.js'
 import { parseTransportServerKeyRing } from './crypto-transport-keyring.js'
-import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
+import { TRANSPORT_PROTOCOL, TRANSPORT_TIME_LIMITS } from './crypto-transport-types.js'
 
 /**
  * 内部服务端工厂；创建时校验并捕获受管密钥环快照，不随机回退生成服务端密钥。
@@ -60,6 +60,18 @@ export function createTransportEncryption(
   cryptoService: TransportCryptoServiceLike,
   options: TransportCreateServerOptions,
 ): HaiResult<TransportEncryptionManager> {
+  const {
+    maxFutureSkewSeconds = TRANSPORT_PROTOCOL.CLOCK_SKEW_MS / 1000,
+    maxRequestAgeSeconds = TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS / 1000,
+  } = options ?? {}
+  if (!Number.isInteger(maxFutureSkewSeconds) || maxFutureSkewSeconds < 0 || maxFutureSkewSeconds > TRANSPORT_TIME_LIMITS.maxFutureSkewSeconds
+    || !Number.isInteger(maxRequestAgeSeconds) || maxRequestAgeSeconds < TRANSPORT_TIME_LIMITS.minRequestAgeSeconds || maxRequestAgeSeconds > TRANSPORT_TIME_LIMITS.maxRequestAgeSeconds) {
+    return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportTimeConfigInvalid'))
+  }
+  const futureSkewMs = maxFutureSkewSeconds * 1000
+  const requestAgeMs = maxRequestAgeSeconds * 1000
+  // 共享 registry 的保留期覆盖配置允许的最长窗口及节点偏差，避免配置不同时在长窗口节点重放。
+  const nonceRetentionMs = TRANSPORT_TIME_LIMITS.maxRequestAgeSeconds * 1000 + 2 * TRANSPORT_PROTOCOL.CLOCK_SKEW_MS
   let bodyLimits
   try {
     bodyLimits = resolveTransportBodyLimits(options?.maxPlaintextBytes)
@@ -147,20 +159,22 @@ export function createTransportEncryption(
         const plaintext = openTransportPayload(cryptoService, authenticated, key.privateKey, clientPublicKey, bodyLimits)
         if (!plaintext.success)
           return plaintext
-        const timeFailure = () => {
-          const error = new TransportTimeError(c)
+        const timeFailure = (serverTime: number) => {
+          const error = new TransportTimeError(c, serverTime)
           return err(HaiCryptoError.TRANSPORT_TIME_INVALID, error.message, error)
         }
         // 只有请求绑定、签名和 MAC 可信后才区分时间错误，不能把篡改报文误报为时钟问题。
         const now = Date.now()
-        if (c.issuedAt > now + TRANSPORT_PROTOCOL.CLOCK_SKEW_MS || now >= c.issuedAt + TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS)
-          return timeFailure()
+        const expiresAt = c.issuedAt + requestAgeMs
+        if (c.issuedAt > now + futureSkewMs || now >= expiresAt)
+          return timeFailure(now)
         // 只有完整认证成功后才占用 nonce；原子 claim 失败或存储故障均不向业务返回明文。
-        if (!await keyStore.claimRequest(c.clientId, c.requestId, c.issuedAt + TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS + 2 * TRANSPORT_PROTOCOL.CLOCK_SKEW_MS)) {
+        if (!await keyStore.claimRequest(c.clientId, c.requestId, c.issuedAt + nonceRetentionMs)) {
           return transportAuthenticationFailure()
         }
-        if (Date.now() >= c.issuedAt + TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS)
-          return timeFailure()
+        const claimedAt = Date.now()
+        if (claimedAt >= expiresAt)
+          return timeFailure(claimedAt)
         return plaintext
       }
       catch {

@@ -1,9 +1,20 @@
+import { TransportTimeError } from '@h-ai/crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createKitAuthActions } from '../src/client/kit-client-auth.js'
 
 afterEach(() => vi.unstubAllGlobals())
 
 describe('standard Cookie login actions', () => {
+  it('表单操作保留已认证的校时错误，普通网络错误仍拒绝', async () => {
+    const serverTime = Date.UTC(2026, 10, 6, 7, 30)
+    const error = new TransportTimeError(undefined, serverTime)
+    const apiFetch = vi.fn().mockRejectedValueOnce(error).mockRejectedValueOnce(new TypeError('Network failed'))
+    const actions = createKitAuthActions({ apiFetch })
+    const input = { identifier: 'alice', password: 'ExamplePassword123' }
+    expect(await actions.login(input)).toMatchObject({ success: false, error: { code: error.code, httpStatus: 400, message: error.message, cause: { transportCode: error.code, serverTime } } })
+    await expect(actions.login(input)).rejects.toThrow('Network failed')
+  })
+
   it.each([
     { method: 'password', path: '/login', body: { identifier: 'alice', password: 'ExamplePassword123' } },
     { method: 'ldap', path: '/login/ldap', body: { username: 'alice', password: 'ExamplePassword123' } },

@@ -455,6 +455,8 @@ function buildTransportMiddleware(
     excludePaths: transportOpts.excludePaths,
     keyStore: transportOpts.keyStore,
     maxPlaintextBytes: transportOpts.maxPlaintextBytes,
+    maxFutureSkewSeconds: transportOpts.maxFutureSkewSeconds,
+    maxRequestAgeSeconds: transportOpts.maxRequestAgeSeconds,
     routePlaintextBytes: transportOpts.routePlaintextBytes,
   }, encryption)
 }

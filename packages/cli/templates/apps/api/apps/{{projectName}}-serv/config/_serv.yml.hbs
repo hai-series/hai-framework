@@ -57,6 +57,9 @@ cors:
 {{else}}
   maxPlaintextBytes: ${HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES:1048576}
 {{/if}}
+  # 传输时钟窗口，单位秒；允许领先 0～300 秒，请求有效期 1～600 秒。
+  maxFutureSkewSeconds: ${HAI_SERV_TRANSPORT_MAXFUTURESKEWSECONDS:30}
+  maxRequestAgeSeconds: ${HAI_SERV_TRANSPORT_MAXREQUESTAGESECONDS:300}
   # HAI_SERV_TRANSPORT_ROUTEPLAINTEXTBYTES 可填 JSON 路径映射。
   routePlaintextBytes: {}
   # 单条路径需要更大请求体时填写字节数，* 只匹配一段路径。

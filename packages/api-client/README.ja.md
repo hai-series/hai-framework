@@ -77,7 +77,7 @@ await apiClient.close()
 await crypto.close()
 ```
 
-認証済み v2 のみを受け付けます。独立したランダム SM4-CBC 鍵と HMAC-SM3 鍵を SM2 で包み、送信者署名、MAC の順に検証してから CBC を復号します。要求はクライアント秘密鍵、応答は選択されたサーバー鍵バージョンで署名します。version、direction、serverKeyId、clientId、nonce を兼ねるランダム 128 ビット requestId、issuedAt、HTTP method、pathname と元の search の SM3 pathHash、応答 status を認証します。要求の有効期限は 5 分、未来方向の時計差は最大 30 秒です。共有 registry が (clientId, requestId) を原子的に消費し、ノード間の時計差を含め issuedAt + 6 分まで保持します。保存障害では拒否します。時計同期と Redis の noeviction/永続化により有効な nonce を保持してください。業務の再試行には別の冪等キーが必要です。
+認証済み v2 のみを受け付けます。独立したランダム SM4-CBC 鍵と HMAC-SM3 鍵を SM2 で包み、送信者署名、MAC の順に検証してから CBC を復号します。要求はクライアント秘密鍵、応答は選択されたサーバー鍵バージョンで署名します。version、direction、serverKeyId、clientId、nonce を兼ねるランダム 128 ビット requestId、issuedAt、HTTP method、pathname と元の search の SM3 pathHash、応答 status を認証します。既定では要求は 5 分で期限切れになり、クライアント時刻はサーバーより最大 30 秒先まで許容されます。サーバー側の `maxRequestAgeSeconds`（1～600）と `maxFutureSkewSeconds`（0～300）で整数秒単位に調整できます。共有レジストリは (clientId, requestId) をアトミックに消費し、設定可能な最長の有効期間とノード間の時刻差をカバーするため、nonce を issuedAt の 11 分後まで保持します。ストレージ障害時は要求を拒否します。時計同期と Redis の noeviction/永続化により有効な nonce を保持してください。業務の再試行には別の冪等キーが必要です。
 
 空の POST も空平文の認証封装を送ります。GET/HEAD は X-Hai-Transport ヘッダー、204/304/HEAD など本文なし応答も同じヘッダーを使います。他の要求・応答は JSON 本文と X-Encrypted: true を使います。クライアントは元の要求コンテキストと HTTP status を照合し、マーカー欠落、旧形式、認証失敗では reject します。平文 endpoint は Serv/Kit の `encryption: disabled` ルールまたはホストの `excludePaths` で明示的に許可し、呼出側も通常の要求を選びます。API Client/Kit のラッパーは自身の `excludePaths` を使用します。CORS では X-Hai-Transport を許可・公開してください。鍵交換の公開鍵認証は TLS に依存し、IAM の業務認可は別に必要です。
 
@@ -205,7 +205,7 @@ pnpm --filter @h-ai/api-client typecheck
 
 `transport.maxPlaintextBytes` は鍵交換で取得します。ローカル上限を明示した場合は小さい値を採用します。容量エラーは `HaiApiClientError.PAYLOAD_TOO_LARGE`（`hai:api-client:020`）と方向・段階・バイト診断を返します。[容量と移行](../crypto/TRANSPORT-CAPACITY.md)を参照してください。
 
-serv/kit は要求の結合、署名、MAC を検証した後、時間窓を超えた報文に暗号化した HTTP 400 時刻エラーを返します。クライアントは `TransportTimeError`（`hai:crypto:071`）で端末とサーバーの時刻同期・再読み込みを案内します。`api-client` は `VALIDATION_FAILED` に変換し `cause.transportCode` に原因を保持します。自動再送やリプレイ時間窓の緩和は行わず、改ざん・未認証の要求は従来の認証エラーです。
+Serv/Kit は要求の結合、署名、MAC を検証した後、時刻の許容範囲を超えた要求に暗号化した HTTP 400 を返します。クライアントは `TransportTimeError`（`hai:crypto:071`）をスローし、検証時のサーバー UTC 時刻を表示して、自動時刻同期を有効にするか手動で時刻を設定してから再読み込みするよう案内します。`serverTime` は Unix ミリ秒です。旧サーバーが値を返さない場合も時刻調整の案内を表示します。`api-client` は `VALIDATION_FAILED` に変換し、`cause.transportCode` と `cause.serverTime` を保持します。
 
 ## ライセンス
 

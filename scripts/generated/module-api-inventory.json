@@ -20846,6 +20846,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "TRANSPORT_TIME_LIMITS",
+              "kind": "value",
+              "declaration": "TRANSPORT_TIME_LIMITS",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "TransportBodyLimits",
               "kind": "type",
               "declaration": "TransportBodyLimits",
@@ -21180,6 +21186,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "TRANSPORT_TIME_LIMITS",
+              "kind": "value",
+              "declaration": "TRANSPORT_TIME_LIMITS",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "TransportBodyLimits",
               "kind": "type",
               "declaration": "TransportBodyLimits",
@@ -21511,6 +21523,12 @@
               "name": "TRANSPORT_PROTOCOL",
               "kind": "value",
               "declaration": "TRANSPORT_PROTOCOL",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "TRANSPORT_TIME_LIMITS",
+              "kind": "value",
+              "declaration": "TRANSPORT_TIME_LIMITS",
               "declarationKind": "VariableDeclaration"
             },
             {

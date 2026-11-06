@@ -78,6 +78,8 @@ for (const scenario of [{ offset: -600_000, width: 1440 }, { offset: 600_000, wi
     await page.goto('./')
     const advice = page.getByRole('alert').filter({ hasText: /同步|synchron|時刻/i })
     await expect(advice).toBeVisible()
+    await expect(advice).toContainText(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC/)
+    await expect(advice).toContainText(/请开启设备的自动校时或手工修改时间|set your device time manually|手動で時刻を設定/i)
     await expect(advice).toContainText(/刷新|refresh|再読み込み/i)
     await capture(page, `clock-skew-${scenario.width}.png`, testInfo.outputPath(`clock-skew-${scenario.width}.png`))
     // 校时后由用户明确刷新；不能自动重放之前失败的业务请求。
