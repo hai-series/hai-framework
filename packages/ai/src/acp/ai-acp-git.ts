@@ -2,7 +2,21 @@ import type { z } from 'zod'
 import type { ACPPublishSchema, ACPWorkspaceSchema } from './ai-acp-config.js'
 import type { ACPRuntime } from './ai-acp-runtime.js'
 import type { ACPGitReport } from './ai-acp-types.js'
+import { posix, win32 } from 'node:path'
+import process from 'node:process'
+import { resolveEnvironment } from './ai-acp-adapters.js'
 import { ACPFailure } from './ai-acp-errors.js'
+import { engineEnvironment } from './ai-acp-process.js'
+
+/**
+ * 已解析的单个登记仓库。
+ * @example
+ * ```ts
+ * // 模块内部上下文。
+ * function remoteName(repository: Repository) { return repository.remote }
+ * ```
+ */
+type Repository = z.infer<typeof ACPWorkspaceSchema>['repositories'][number]
 
 /**
  * Git 只访问登记的工程；不扫描、重置或强制推送用户仓库。
@@ -25,6 +39,65 @@ export function createGitOperations(
       ...env,
     })
   const source = (id: string) => runtime.path(`main/${id}`)
+  const path = !runtime.resource && process.platform === 'win32' ? win32 : posix
+  const scoped = Object.keys(workspace.gitEnvironmentRefs).length > 0
+  const remoteUrl = (url: string, cwd: string) =>
+    path.isAbsolute(url) || /^[^/\\]+:/.test(url) ? url : path.resolve(cwd, url)
+  async function withRemoteGit<T>(
+    action: (directory: string, remoteGit: (args: string[]) => Promise<string>) => Promise<T>,
+    main?: string,
+  ): Promise<T> {
+    const references = workspace.gitEnvironmentRefs
+    if (runtime.resource) {
+      // 引擎客户端保留变量的容器覆盖会进入 argv；Git 凭据不使用该传递方式。
+      const engineKeys = new Set(Object.keys(engineEnvironment()).map(key => key.toUpperCase()))
+      if (Object.keys(references).some(key => engineKeys.has(key.toUpperCase())))
+        throw new ACPFailure('invalid')
+    }
+    const credentials = resolveEnvironment(references)
+    return runtime.withTemporaryDirectory(async (directory) => {
+      const options = ['-c', `core.hooksPath=${path.join(directory, 'disabled-hooks')}`]
+      const home = { HOME: directory, USERPROFILE: directory, XDG_CONFIG_HOME: directory }
+      const privateGit = (args: string[], env?: Record<string, string>) =>
+        runtime.run('git', ['-C', directory, ...options, ...args], directory, { ...home, ...env, GIT_TERMINAL_PROMPT: '0' }, false)
+      if (main) {
+        const format = await git(main, ['rev-parse', '--show-object-format'])
+        const objects = await git(main, ['rev-parse', '--path-format=absolute', '--git-path', 'objects'])
+        if ((format !== 'sha1' && format !== 'sha256') || !path.isAbsolute(objects) || /[\r\n]/.test(objects))
+          throw new ACPFailure('conflict')
+        await privateGit(['init', '--bare', '--template=', `--object-format=${format}`])
+        // 对象引用只写入私有仓库；本机文件协议的远端 Git 不应继承 alternate 环境。
+        await runtime.run(runtime.resource ? 'node' : process.execPath, [
+          '-e',
+          'require("node:fs").writeFileSync(process.argv[1], process.argv[2] + "\\n", { flag: "wx" })',
+          path.join(directory, 'objects', 'info', 'alternates'),
+          objects,
+        ], directory, undefined, false)
+      }
+      // 只共享对象数据库。持有凭据的 Git 不读取会话的本地配置、远程别名或钩子。
+      return action(directory, args => privateGit(args, credentials))
+    })
+  }
+  async function clone(repo: Repository) {
+    const cloneArgs = ['clone', '--origin', repo.remote, '--branch', repo.mainBranch]
+    if (!scoped)
+      return git(runtime.root, [...cloneArgs, '--', repo.url, source(repo.id)])
+    return withRemoteGit(async (directory, remoteGit) => {
+      const staged = path.join(directory, 'remote.git')
+      await remoteGit(['clone', '--bare', '--no-local', '--template=', '--branch', repo.mainBranch, '--', remoteUrl(repo.url, runtime.root), staged])
+      await git(runtime.root, [...cloneArgs, '--', staged, source(repo.id)])
+      return git(source(repo.id), ['remote', 'set-url', repo.remote, repo.url])
+    })
+  }
+  async function fetchMain(repo: Repository, main: string) {
+    const ref = `refs/heads/${repo.mainBranch}`
+    if (!scoped)
+      return git(main, ['fetch', '--', repo.remote, ref])
+    return withRemoteGit(async (directory, remoteGit) => {
+      await remoteGit(['fetch', '--no-recurse-submodules', '--', remoteUrl(repo.url, main), `${ref}:${ref}`])
+      return git(main, ['fetch', '--no-recurse-submodules', '--', directory, ref])
+    }, main)
+  }
   async function ready() {
     if (!workspace.repositories.length)
       return
@@ -36,7 +109,7 @@ export function createGitOperations(
     }
   }
   async function clean(path: string) {
-    if (await git(path, ['status', '--porcelain']))
+    if (await git(path, ['status', '--porcelain', '--untracked-files=normal']))
       throw new ACPFailure('conflict')
   }
   /** 普通 clone/worktree 不保证子模块或 LFS 内容完整，明确拒绝而非返回虚假的就绪。 */
@@ -52,19 +125,19 @@ export function createGitOperations(
     }
   }
   async function checked(
-    repo: z.infer<typeof ACPWorkspaceSchema>['repositories'][number],
+    repo: Repository,
     path = source(repo.id),
     branch = repo.mainBranch,
   ) {
+    await runtime.file('directory', path)
     if ((await git(path, ['branch', '--show-current'])) !== branch)
       throw new ACPFailure('conflict')
     if ((await git(path, ['remote', 'get-url', repo.remote])) !== repo.url)
       throw new ACPFailure('conflict')
-    await runtime.file('exists', path)
   }
   async function reports(
     operation: (
-      repo: z.infer<typeof ACPWorkspaceSchema>['repositories'][number],
+      repo: Repository,
       report: ACPGitReport,
     ) => Promise<void>,
   ) {
@@ -109,37 +182,26 @@ export function createGitOperations(
           '--branch',
           repo.mainBranch,
         ])
-        if ((await runtime.file('exists', `main/${repo.id}`)) === 'false') {
-          await git(runtime.root, [
-            'clone',
-            '--origin',
-            repo.remote,
-            '--branch',
-            repo.mainBranch,
-            '--',
-            repo.url,
-            source(repo.id),
-          ])
-        }
+        if ((await runtime.file('exists', `main/${repo.id}`)) === 'false')
+          await clone(repo)
         await checked(repo)
         await supportedContent(source(repo.id))
       }
       return runtime.path('main')
     },
     /**
-     * 从每个工程本地主分支创建独立工作树并复制普通文件。
-     * @param sessionId - 已校验的框架会话 ID。
+     * 在调用方独占的会话目录创建各工程工作树并复制普通文件。
+     * @param sessionId - 已校验且已独占会话目录的框架会话 ID。
      * @param branch - 所有工程使用的同名新分支。
-     * @returns 独立会话目录；中途失败不回滚已有工作树。
+     * @returns 完成后返回；中途失败保留已建立的工作树。
      * @example
      * ```ts
      * // 内部上下文：runtime/git/connection 为相应工厂已创建的句柄。
-     * const directory = await git.createWorktree('task-1', 'acp/task-1')
+     * await git.createWorktree('task-1', 'acp/task-1')
      * ```
      */
     async createWorktree(sessionId: string, branch: string) {
       await ready()
-      await runtime.file('mkdir', `sessions/${sessionId}`)
       // 已创建的 worktree 不回滚删除：保留现场，失败的 session 可由管理员检查。
       for (const repo of workspace.repositories) {
         await checked(repo)
@@ -155,7 +217,49 @@ export function createGitOperations(
         ])
       }
       await runtime.file('copy', 'main/files', `sessions/${sessionId}/files`)
-      return runtime.path(`sessions/${sessionId}`)
+    },
+    /**
+     * 预检所有登记的会话工作树，确认回收状态已持久化后逐个执行 Git 移除。
+     * @param sessionId - 持久记录所拥有的会话目录 ID。
+     * @param branch - 创建时登记的会话分支。
+     * @param begin - 写入开始回收的持久状态；写入失败时不删除工作树。
+     * @returns 回收完成；失败保留其他工作树供重试。
+     * @example
+     * ```ts
+     * // 模块内部上下文：git 为工厂已创建的句柄，回调由持有会话锁的调用方提供。
+     * await git.reclaimWorktree('task-1', 'acp/task-1', async () => {})
+     * ```
+     */
+    async reclaimWorktree(sessionId: string, branch: string, begin: () => Promise<void>) {
+      await ready()
+      const paths: Array<{ main: string, worktree: string }> = []
+      for (const repo of workspace.repositories) {
+        await checked(repo)
+        const main = source(repo.id)
+        const worktree = runtime.path(`sessions/${sessionId}/${repo.id}`)
+        const exists = (await runtime.file('exists', worktree)) === 'true'
+        const registrations = await git(main, ['worktree', 'list', '--porcelain', '-z'])
+        const registration = registrations.split('\0\0').map(entry => entry.split('\0')).find(([entry]) => {
+          if (!entry?.startsWith('worktree '))
+            return false
+          const registeredPath = entry.slice('worktree '.length)
+          return !runtime.resource && process.platform === 'win32'
+            ? win32.relative(registeredPath, worktree) === ''
+            : registeredPath === worktree
+        })
+        if (!registration && !exists)
+          continue
+        if (!registration?.includes(`branch refs/heads/${branch}`)
+          || registration.some(entry => entry === 'locked' || entry.startsWith('locked '))) {
+          throw new ACPFailure('conflict')
+        }
+        if (exists)
+          await clean(worktree)
+        paths.push({ main, worktree })
+      }
+      await begin()
+      for (const { main, worktree } of paths)
+        await git(main, ['worktree', 'remove', '--', worktree])
     },
     /**
      * 更新各工程主分支，只允许快进合并。
@@ -172,12 +276,7 @@ export function createGitOperations(
         await checked(repo)
         await clean(path)
         report.phase = 'fetch'
-        await git(path, [
-          'fetch',
-          '--',
-          repo.remote,
-          `refs/heads/${repo.mainBranch}`,
-        ])
+        await fetchMain(repo, path)
         report.phase = 'merge'
         await git(path, ['merge', '--ff-only', 'FETCH_HEAD'])
         report.commit = await git(path, ['rev-parse', 'HEAD'])
@@ -223,12 +322,7 @@ export function createGitOperations(
         let targetBranch = branch
         if (request.mode === 'merge-main') {
           report.phase = 'fetch'
-          await git(main, [
-            'fetch',
-            '--',
-            repo.remote,
-            `refs/heads/${repo.mainBranch}`,
-          ])
+          await fetchMain(repo, main)
           report.phase = 'merge'
           // 上次已合并但 push 失败时，允许落后远端的本地祖先；不重复创建 merge commit。
           const remoteHead = await git(main, ['rev-parse', 'FETCH_HEAD'])
@@ -243,13 +337,18 @@ export function createGitOperations(
           targetBranch = repo.mainBranch
         }
         report.phase = 'push'
-        await git(target, [
-          'push',
-          '--',
-          repo.remote,
-          `HEAD:refs/heads/${targetBranch}`,
-        ])
-        report.commit = await git(target, ['rev-parse', 'HEAD'])
+        if (scoped) {
+          const commit = await git(target, ['rev-parse', 'HEAD'])
+          if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(commit))
+            throw new ACPFailure('conflict')
+          await withRemoteGit(async (_, remoteGit) =>
+            remoteGit(['push', '--no-recurse-submodules', '--', remoteUrl(repo.url, target), `${commit}:refs/heads/${targetBranch}`]), main)
+          report.commit = commit
+        }
+        else {
+          await git(target, ['push', '--', repo.remote, `HEAD:refs/heads/${targetBranch}`])
+          report.commit = await git(target, ['rev-parse', 'HEAD'])
+        }
       }),
   }
 }

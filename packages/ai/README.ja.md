@@ -204,7 +204,9 @@ Goose 1.57.0 イメージは `goose serve` のネイティブ HTTP/WS `/acp` を
 
 - `agents.register/get/list/update/remove/initialize/check` で管理します。`codex`、`deepseek-harness` は `llm.models` を参照し、その他は `generic` または信頼された `AIInitOptions.acpAdapters` を使用します。外部サービスは自身でモデルを管理します。
 - `workspaces.register/prepare/importFiles` は永続ディレクトリ/volume、複数 Git、通常ファイルを管理します。各 Git の `mainBranch` は必須で、prepare は未コミットの変更を上書きしません。
-- `sessions.create/resume/get/list/close` と `newWorktree: true` で各ローカル主ブランチから同名ブランチを作成します。prompt/stream、厳密な構造化結果、権限、MCP、設定、キャンセルは ACP の能力を確認して実行します。
+- リモート Git 専用の資格情報は workspace の `gitEnvironmentRefs`、エージェント専用の変数は agent の `environmentRefs` に設定します。既存の workspace の `environmentRefs` は引き続き共有です。
+- `sessions.create/resume/get/list/close` と `newWorktree: true` で各ローカル主ブランチから同名ブランチを作成します。`repositoryId` を指定すると、登録済みリポジトリのルートで開始・再開し、エージェントがそのルールとスキルを検出できます。prompt/stream、厳密な構造化結果、権限、MCP、設定、キャンセルは ACP の能力を確認して実行します。
+- `session.info()` が成功すると `data.workspace` から同じノード上のプレビューに必要なパスとボリューム情報を取得できます。プレビューを停止して変更を保存した後、`sessions.reclaimWorktree(id)` で対象のクリーンな worktree を削除できます。ブランチ、通常ファイル、履歴、ボリュームは保持されます。
 - `session.updateMain()` は指定主ブランチを fetch/ff-only 更新します。`publish({ mode: 'merge-main' | 'push-branch', message, author })` は管理対象の分離セッションだけを公開し、リポジトリ単位の部分失敗を報告します。強制 push は行いません。実行環境を停止してから操作し、続行には明示的に resume します。
 
 確認済み容量、モダリティ、推論能力は `llm.models[].capabilities` に設定します。Codex は Responses を必要とし、既存 Hai 変換は逆方向ゲートウェイではありません。close 後もコード/状態を保持し、所有プロセス停止を確認後 CAS 占有を解放します。worktree はセキュリティサンドボックスではありません。

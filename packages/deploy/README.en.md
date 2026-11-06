@@ -27,6 +27,8 @@ pnpm build --target image --images web
 pnpm build --target desktop --platform windows --arch x64
 ```
 
+Automation can select the exact build using `artifactDir` from `hai build --target image --json`. `readDeploymentArtifact` verifies archive paths and SHA-256 checksums, and returns source commit, dirty state and image platforms when present. Older manifests may omit those fields.
+
 #### Build options
 
 `--target` selects compile (default), image, app or desktop. `--images serv|web|serv,web` selects images. `--runtime auto|podman|docker` selects the local engine; auto prefers reachable Podman. `--network` overrides build networking, `--no-http-proxy` disables this build proxy (same as --proxy-mode none), and `--sqlite-prebuild-mirror` selects a trusted HTTP(S) binary mirror. Native `--platform` and `--arch` require the matching host SDK and Rust toolchain. Builds do not load deployment environments or runtime secrets.

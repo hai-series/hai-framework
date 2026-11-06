@@ -44,6 +44,8 @@ acp:
 
 Goose 原生服务用 `transport: http` 与 `http://.../acp`，或 `transport: ws` 与 `ws://.../acp`；`supportedTransports` 只填实际部署支持的类型。`headerEnv: { X-Secret-Key: HAI_GOOSE_SECRET }` 在启动连接时从宿主变量解析服务认证信息。Goose 自身通过 GOOSE_PROVIDER/GOOSE_MODEL/供应商密钥配置模型；不要给 custom-service 绑定 modelIds，也不要把服务凭据放进 URL。远程 TLS、卷、Git 与服务进程由部署方维护。
 
+受管仓库的读写凭据使用 `acp.workspaces[].gitEnvironmentRefs`，映射的值是宿主变量名。只有框架执行远程克隆、拉取或推送时才解析。Agent 专用变量使用 `acp.agents[].environmentRefs`。旧工作区的 `environmentRefs` 仍是共用映射，启用 Git 隔离时将原 Git 凭据及其网络设置移到 `gitEnvironmentRefs`，并从共用映射删除。可信部署方提供认证工具、路径或 HTTP 认证头。
+
 运行步骤和 API 示例见 [ACP 智能体与工程会话](../development/ai-acp.md)。
 
 ## 模型、协议与场景路由
@@ -285,6 +287,6 @@ a2a:
 
 `llm.models`、`audio.models`、`image.models`、`mcp.servers`、`retrieval.sources`、`acp.agents`、`acp.workspaces` 同时读取初始化配置和数据库，按 ID 合并，配置优先且不可修改。对应 API 均提供 list/get/register/update/remove；条目包含 value/source，数据库 get 带 version。更新为完整替换，可附版本拒绝过期写入。配置不会被写入数据库。
 
-ACP 会话通过 `mcpServerIds` 使用外部 MCP 清单；凭据用 environmentRefs/headerEnv 在启动时解析。运行中的会话保留模型绑定，恢复时检测配置变化。音频同步 getCapabilities 使用最近目录读写或异步调用刷新的快照。目录是可信服务端管理 API，不应直接向浏览器暴露含密钥的模型定义。
+ACP 会话通过 `mcpServerIds` 使用外部 MCP 清单；Agent 和远程服务在启动时解析 environmentRefs/headerEnv，受管 Git 在访问登记的远程仓库时解析 gitEnvironmentRefs。运行中的会话保留模型绑定，恢复时检测配置变化。音频同步 getCapabilities 使用最近目录读写或异步调用刷新的快照。目录是可信服务端管理 API，不应直接向浏览器暴露含密钥的模型定义。
 
 错误码 090 只读、091 不存在、092 冲突、093 无效定义、094 存储失败。CLI 生成项目中的 `.agents/skills/hai-ai/resources.md` 包含配置和 CRUD 示例。

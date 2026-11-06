@@ -68,7 +68,7 @@ async function run() {
     if (!workspace.success) return workspace
     const ready = await ai.acp.workspaces.prepare('project')
     if (!ready.success) return ready
-    const created = await ai.acp.sessions.create({ agentId: 'coder', workspaceId: 'project', newWorktree: true })
+    const created = await ai.acp.sessions.create({ agentId: 'coder', workspaceId: 'project', repositoryId: 'api', newWorktree: true })
     if (!created.success) return created
     const session = created.data
     const response = await session.prompt([{ type: 'text', text: '阅读工程并说明结构' }])
@@ -80,6 +80,8 @@ async function run() {
 ```
 
 `agents.initialize(id)` 检查模型绑定和原生配置能否生成；真正启动和握手用 `agents.check(id, { workspaceId })`。容器 Agent 的 `image` 必须与 workspace 的 image 一致。注册 volume 时固定实际选中的引擎；`auto` 优先就绪 Podman，再尝试 Docker，显式选定不可用引擎直接失败。
+
+`repositoryId` 选择已登记仓库的根目录，原生 Agent 从该目录启动和恢复，可发现仓库内的 `AGENTS.md` 和技能。省略时使用聚合目录。选择只影响工作目录，worktree 和发布仍覆盖全部登记仓库。远程 `custom-service` 使用对端可见的 `cwd`。
 
 生产环境先初始化共享数据库和网络向量库，或注入 shared AIStoreProvider。Agent/workspace/session 记录和 CAS 占用存入 AI Store，原生历史保存在隔离状态目录。不能把临时内存 Provider 当跨节点锁。
 
@@ -110,11 +112,15 @@ Podman 不自动继承远程服务的代理变量。需要代理时，使用 Age
 
 创建 session 默认共享 `main/` 路径，框架会阻止另一个共享 session 同时占用它。`newWorktree: true` 从每个工程当前已提交的本地主分支创建同名分支和 worktree，普通文件单独复制；可以指定 `branch`，默认 `acp/<sessionId>`。它不会自动拉远端，也不会导入主目录未提交修改。
 
+`session.info()` 返回的 `workspace` 提供聚合目录、各登记仓库的绝对路径和存储位置。可信预览进程可以直接使用本机目录。卷模式使用返回的实际引擎，把源码卷 `name` 挂到同一 `mountPath`，并以目标仓库的 `path` 为工作目录。关闭 Agent 后预览仍可继续读取。应用先停止预览并保存所需改动，再调用 `ai.acp.sessions.reclaimWorktree(id)`。它拒绝活动、脏或锁定的工作树，可按 ID 重试。开始回收后停止 resume/publish，完成后可删会话记录。分支、普通文件、状态及卷保留，旧记录缺少归属时由运维回收。完整卷和会话信息只交给已授权的可信执行器。
+
 - `session.updateMain()`：停止本 session 的执行环境，再 fetch 各工程的明确主分支并 ff-only 更新本地主目录；不把主分支合入 session，不自动 rebase。共享主目录被其他会话占用时返回 busy。
 - `session.publish({ mode: 'push-branch', message, author: { name, email } })`：提交隔离 session 修改并推送其同名分支。
 - `session.publish({ mode: 'merge-main', message, author })`：提交后检查、更新登记的主分支，再合并并推送。无 force push，不静默处理冲突。
 
 发布仅允许框架创建的隔离 session，避免将共享目录中别人的修改算入当前任务。操作前停止受管进程/容器，避免背景工具继续写入；要继续编码显式 `sessions.resume(id)`。原生 Agent 自己创建的 worktree 不自动纳入框架发布范围。
+
+私有仓库把 Git 凭据引用写入 workspace 的 `gitEnvironmentRefs`，把 Agent 专用变量写入 agent 的 `environmentRefs`。旧 workspace 的 `environmentRefs` 仍共用，迁移时移走其中的 Git 凭据。启用 Git 隔离后，远程克隆、拉取、推送只使用登记的远端地址和可信环境注入，在独立 Git 目录运行；需要的网络代理或 CA 设置也随 Git 引用配置。认证脚本和全局 Git 配置应由可信执行器提供。任务之间的访问权限仍由应用和运行环境隔离。
 
 多个工程不是原子事务。失败时返回 `ACP_PARTIAL_FAILURE`，`error.cause.reports` 列出每个工程 success、phase、commit 和 error；已完成工程不回滚，冲突保留现场。失败于 push 后，排除权限/网络问题可重试；远端结果不明时先核对实际分支。普通文件的修改留在 session 目录，不自动纳入 Git 发布。失败创建的 worktree 也保留，避免删除已有成果。
 

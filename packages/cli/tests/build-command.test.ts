@@ -1,4 +1,4 @@
-import type { SpawnOptions } from 'node:child_process'
+import type { ExecFileSyncOptions, SpawnOptions } from 'node:child_process'
 import { execFileSync } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
@@ -15,41 +15,49 @@ vi.mock('../src/commands/cli-build-downloads.js', async importOriginal => ({
   preflightDownloadProxy: vi.fn(),
 }))
 
-const state = vi.hoisted(() => ({ calls: [] as Array<{ command: string, args: string[], env: NodeJS.ProcessEnv, stdio: SpawnOptions['stdio'] }>, failPodman: false, failWeb: false, active: 0, peak: 0, copiedAppData: false }))
-vi.mock('node:child_process', async importOriginal => ({
-  ...await importOriginal<typeof import('node:child_process')>(),
-  spawn: (command: string, args: string[], options: { cwd: string, env: NodeJS.ProcessEnv, stdio: SpawnOptions['stdio'] }) => {
-    const child = new EventEmitter()
-    state.calls.push({ command, args, env: options.env, stdio: options.stdio })
-    if (args[0] === 'build') {
-      state.active++
-      state.peak = Math.max(state.peak, state.active)
-    }
-    queueMicrotask(() => {
-      if (args[0] === 'save')
-        writeFileSync(args[args.indexOf('-o') + 1], 'image archive')
-      if (args.includes('tauri')) {
-        const bundle = join(options.cwd, 'src-tauri', 'target', args[args.indexOf('--target') + 1], args.includes('--debug') ? 'debug' : 'release', 'bundle')
-        mkdirSync(bundle, { recursive: true })
-        writeFileSync(join(bundle, process.platform === 'win32' ? 'test.exe' : process.platform === 'darwin' ? 'test.dmg' : 'test.deb'), 'installer')
+const state = vi.hoisted(() => ({ calls: [] as Array<{ command: string, args: string[], env: NodeJS.ProcessEnv, stdio: SpawnOptions['stdio'] }>, failPodman: false, failWeb: false, platform: 'linux/arm64', active: 0, peak: 0, copiedAppData: false }))
+vi.mock('node:child_process', async (importOriginal) => {
+  const original = await importOriginal<typeof import('node:child_process')>()
+  return {
+    ...original,
+    execFileSync(file: string, args: string[], options: ExecFileSyncOptions) {
+      if (['docker', 'podman'].includes(file) && args[0] === 'image' && args[1] === 'inspect')
+        return `${state.platform}\n`
+      return original.execFileSync(file, args, options)
+    },
+    spawn: (command: string, args: string[], options: { cwd: string, env: NodeJS.ProcessEnv, stdio: SpawnOptions['stdio'] }) => {
+      const child = new EventEmitter()
+      state.calls.push({ command, args, env: options.env, stdio: options.stdio })
+      if (args[0] === 'build') {
+        state.active++
+        state.peak = Math.max(state.peak, state.active)
       }
-      if (args[0] === 'run' && args.includes('hai-android') && args.includes('Release')) {
-        const workspace = args.find(arg => arg.endsWith('target=/workspace'))?.match(/^type=bind,"source=(.+)",target=\/workspace$/)?.[1]
-        if (workspace) {
-          state.copiedAppData = existsSync(join(workspace, args.at(-1)!, 'src/data/example.json'))
-          const output = join(workspace, args.at(-1)!, 'android/app/build/outputs/apk/release')
-          mkdirSync(output, { recursive: true })
-          writeFileSync(join(output, 'app-release-unsigned.apk'), 'PK-container-apk')
+      queueMicrotask(() => {
+        if (args[0] === 'save')
+          writeFileSync(args[args.indexOf('-o') + 1], 'image archive')
+        if (args.includes('tauri')) {
+          const bundle = join(options.cwd, 'src-tauri', 'target', args[args.indexOf('--target') + 1], args.includes('--debug') ? 'debug' : 'release', 'bundle')
+          mkdirSync(bundle, { recursive: true })
+          writeFileSync(join(bundle, process.platform === 'win32' ? 'test.exe' : process.platform === 'darwin' ? 'test.dmg' : 'test.deb'), 'installer')
         }
-      }
-      const failed = (state.failPodman && command === 'podman' && args[0] === 'version') || (state.failWeb && args.some(value => value.endsWith('web.Dockerfile')))
-      if (args[0] === 'build')
-        state.active--
-      child.emit('exit', failed ? 1 : 0)
-    })
-    return child
-  },
-}))
+        if (args[0] === 'run' && args.includes('hai-android') && args.includes('Release')) {
+          const workspace = args.find(arg => arg.endsWith('target=/workspace'))?.match(/^type=bind,"source=(.+)",target=\/workspace$/)?.[1]
+          if (workspace) {
+            state.copiedAppData = existsSync(join(workspace, args.at(-1)!, 'src/data/example.json'))
+            const output = join(workspace, args.at(-1)!, 'android/app/build/outputs/apk/release')
+            mkdirSync(output, { recursive: true })
+            writeFileSync(join(output, 'app-release-unsigned.apk'), 'PK-container-apk')
+          }
+        }
+        const failed = (state.failPodman && command === 'podman' && args[0] === 'version') || (state.failWeb && args.some(value => value.endsWith('web.Dockerfile')))
+        if (args[0] === 'build')
+          state.active--
+        child.emit('exit', failed ? 1 : 0)
+      })
+      return child
+    },
+  }
+})
 let root: string
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'hai-build-command-'))
@@ -62,6 +70,7 @@ beforeEach(() => {
   state.calls = []
   state.failPodman = false
   state.failWeb = false
+  state.platform = 'linux/arm64'
   state.active = 0
   state.peak = 0
   state.copiedAppData = false
@@ -78,6 +87,39 @@ it.each([1, 2])('镜像并发上限 %s 保留清单顺序并等待全部任务�
   const parent = join(root, '.hai/build/docker')
   const manifest = JSON.parse(readFileSync(join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim(), 'manifest.json'), 'utf8'))
   expect(manifest.images.map((image: { name: string }) => image.name)).toEqual(['serv', 'web'])
+})
+
+it('jSON 返回各次独立构建的真实来源、平台和归档校验值', async () => {
+  writeFileSync(join(root, '.gitignore'), '.hai/\nimages/dependencies/\n')
+  execFileSync('git', ['init', '--quiet'], { cwd: root })
+  execFileSync('git', ['add', '.'], { cwd: root })
+  execFileSync('git', ['-c', 'user.name=Build fixture', '-c', 'user.email=build@example.invalid', 'commit', '--quiet', '-m', 'fixture'], { cwd: root })
+  const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()
+  const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+  try {
+    await Promise.all(['serv', 'web'].map(images => buildCommand({ cwd: root, target: 'image', images, runtime: 'docker', json: true })))
+    const results = stdout.mock.calls.map(([line]) => JSON.parse(String(line)))
+    expect(results).toHaveLength(2)
+    expect(new Set(results.map(result => result.artifactDir)).size).toBe(2)
+    expect(results.map(result => result.manifest.images[0].name).sort()).toEqual(['serv', 'web'])
+    for (const result of results) {
+      expect(result).toMatchObject({
+        schemaVersion: 1,
+        manifest: { source: { commit, dirty: false }, images: [{ platform: 'linux/arm64', sha256: expect.stringMatching(/^[a-f0-9]{64}$/) }] },
+      })
+      expect(result.manifestPath).toBe(join(result.artifactDir, 'manifest.json'))
+      expect(await readDeploymentArtifact(result.artifactDir)).toEqual(result.manifest)
+    }
+    writeFileSync(join(root, 'draft.txt'), 'untracked input')
+    await buildCommand({ cwd: root, target: 'image', runtime: 'docker', json: true })
+    expect(JSON.parse(String(stdout.mock.lastCall?.[0])).manifest.source).toEqual({ commit, dirty: true })
+    state.platform = 'invalid platform'
+    await expect(buildCommand({ cwd: root, target: 'image', runtime: 'docker', json: true })).rejects.toThrow()
+    expect(stdout).toHaveBeenCalledTimes(3)
+  }
+  finally {
+    stdout.mockRestore()
+  }
 })
 
 it.each(['docker', 'podman'] as const)('选源和代理参数实际传递给 %s 构建', async (runtime) => {

@@ -27,6 +27,8 @@ pnpm build --target image --images web
 pnpm build --target desktop --platform windows --arch x64
 ```
 
+自動化では `hai build --target image --json` の `artifactDir` で今回の成果物を指定できます。`readDeploymentArtifact` はアーカイブのパスと SHA-256 を検証し、マニフェストに含まれるソースコミット、変更状態、イメージのプラットフォームを返します。過去のマニフェストではこれらの項目を省略できます。
+
 #### build のオプション
 
 `--target` は compile（既定）、image、app、desktop を選択します。`--images serv|web|serv,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は 今回のビルドのプロキシ無効（none と同じ）、`--sqlite-prebuild-mirror` は信頼できる HTTP(S) バイナリ配布元です。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。

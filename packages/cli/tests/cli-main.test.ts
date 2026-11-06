@@ -101,13 +101,31 @@ afterEach(() => {
 
 describe('cli-main', () => {
   it('构建参数完整交给构建器，部署仅暴露一个跳过中间件选项', async () => {
-    const options = { cwd: 'C:/workspace', target: 'image', runtime: 'podman', network: 'pasta', httpProxy: false, sqlitePrebuildMirror: 'http://mirror.internal/sqlite' }
+    const options = { cwd: 'C:/workspace', target: 'image', json: true, runtime: 'podman', network: 'pasta', httpProxy: false, sqlitePrebuildMirror: 'http://mirror.internal/sqlite' }
     await getCommandAction('build')(options)
     expect(commandMocks.buildCommand).toHaveBeenCalledWith(options)
     expect(cliState.commands.get('build')!.options).toContain('--network <network>')
+    expect(cliState.commands.get('build')!.options).toContain('--json')
     const deployOptions = cliState.commands.get('deploy [appDir]')!.options
     expect(deployOptions).toContain('--skip-middleware')
     expect(deployOptions).not.toContain('--skip-provision')
+  })
+  it('镜像 JSON 构建失败时只在 stderr 写入错误', async () => {
+    const previousExitCode = process.exitCode
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    try {
+      commandMocks.buildCommand.mockRejectedValueOnce(new Error('Image build failed'))
+      await getCommandAction('build')({ target: 'image', json: true })
+      expect(stdout).not.toHaveBeenCalled()
+      expect(stderr).toHaveBeenCalledWith('Image build failed\n')
+      expect(process.exitCode).toBe(1)
+    }
+    finally {
+      process.exitCode = previousExitCode
+      stdout.mockRestore()
+      stderr.mockRestore()
+    }
   })
   it('create 失败设置退出码并让 stderr 完成输出，不强制终止进程', async () => {
     const previousExitCode = process.exitCode

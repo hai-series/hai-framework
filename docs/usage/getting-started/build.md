@@ -48,6 +48,16 @@ Web 入口在 HTML 解析时执行一段独立的经典脚本。检测到低版�
 
 `package.json.name`是资源身份，`version`是应用版本。镜像批次保存在 `.hai/build/docker/build-<工程>-image-<构建ID>/`，manifest记录版本、构建ID、镜像角色、partial、`hasWeb`和SHA-256。网站挂载目录由构建工具记录；发布到子目录时按[网站子目录配置](../configuration/delivery.md#网站部署在子目录)。相同版本允许重建，由`buildId`与镜像引用区分；只有全部导出成功才推进本机构建入口。
 
+### 在自动化中使用本次结果
+
+```sh
+hai build --target image --json
+```
+
+直接调用已安装的 `hai`，命令在成功时向 stdout 写一行 JSON，构建进度和失败信息写到 stderr。机器调用读取 `schemaVersion: 1`、绝对路径 `artifactDir` 和 `manifestPath`，并用 `manifest.images[].file` 定位该目录内的归档。并发任务各自保存返回的结果。交付时将 `artifactDir` 传给 `hai deploy --artifact-dir`，或调用 `readDeploymentArtifact(artifactDir)` 校验归档和 SHA-256。
+
+`manifest.source` 记录启动时观察到的 Git 提交和工程目录是否有未提交改动。无法识别提交时为 `unknown`，无法检查改动时 `dirty` 为 `null`。`manifest.images[].platform` 来自实际镜像，例如 `linux/arm64`。需要可追溯的发布时，构建 Worker 应从固定提交的干净检出启动。旧镜像清单可以省略来源和平台。
+
 ### 统一命名
 
 构建 ID 使用 `YYYYMMDD-HHmmss-<6位随机串>-<版本>`，与 deploy 共用 Core 的本地日期格式；时间取构建机本地时区，当前示例为 `Asia/Shanghai`。随机串区分同秒构建。工程标识取工程根 `package.json.name`，归一化规则与部署一致：去掉 scope、转小写、将不合法字符替换为连字符。应用显示名继续使用 Core `name`。

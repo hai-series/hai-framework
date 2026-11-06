@@ -23,6 +23,8 @@ const fs = require('node:fs/promises'); const path = require('node:path');
    catch (e) { if (e.code !== 'ENOENT') throw e; }
  }
  if (op === 'mkdir') await fs.mkdir(target, { recursive: true });
+ else if (op === 'mkdir-exclusive') await fs.mkdir(target);
+ else if (op === 'directory') { if (!(await fs.stat(target)).isDirectory()) throw Error('directory'); }
  else if (op === 'exists') process.stdout.write(String(await fs.stat(target).then(() => true, e => { if(e.code === 'ENOENT') return false; throw e; })));
  else if (op === 'write') { await fs.mkdir(path.dirname(target), { recursive: true }); await fs.writeFile(target, Buffer.from(content, 'base64'), { flag: 'wx', mode: 0o600 }); }
  else if (op === 'read') process.stdout.write((await fs.readFile(target)).toString('base64'));
@@ -145,9 +147,10 @@ export async function openRuntime(
     args: string[],
     cwd: string,
     env: Record<string, string> = {},
+    inheritWorkspaceEnvironment = true,
   ): ACPTransport {
     ensure()
-    const values = { ...environment, ...env }
+    const values = inheritWorkspaceEnvironment ? { ...environment, ...env } : env
     return engine && container
       ? {
           type: 'stdio',
@@ -176,8 +179,9 @@ export async function openRuntime(
     args: string[],
     cwd = root,
     env?: Record<string, string>,
+    inheritWorkspaceEnvironment = true,
   ) {
-    const launch = transport(command, args, cwd, env)
+    const launch = transport(command, args, cwd, env, inheritWorkspaceEnvironment)
     if (launch.type !== 'stdio')
       throw new ACPFailure('runtime')
     return execute(launch.command, launch.args ?? [], launch.cwd, launch.env)
@@ -188,6 +192,35 @@ export async function openRuntime(
     transport,
     run,
     resource: container ? { engine, container } : undefined,
+    /**
+     * 在运行端创建并回收私有临时目录，目录位于工作区挂载之外。
+     * @param action - 在临时目录存在时执行的操作。
+     * @returns 操作结果；成功或失败都清理当前调用拥有的目录。
+     * @example
+     * ```ts
+     * // 模块内部上下文：runtime 为已打开的执行环境。
+     * await runtime.withTemporaryDirectory(directory => runtime.run('git', ['-C', directory, 'init', '--bare']))
+     * ```
+     */
+    async withTemporaryDirectory<T>(action: (directory: string) => Promise<T>): Promise<T> {
+      const node = engine ? 'node' : process.execPath
+      const directory = await run(node, ['-e', `
+const fs = require('node:fs');
+const path = require('node:path');
+const base = fs.realpathSync(process.argv[1] || require('node:os').tmpdir());
+for (const mount of process.argv.slice(2)) {
+  const relative = path.relative(fs.realpathSync(mount), base);
+  if (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative)) throw Error('scope');
+}
+process.stdout.write(fs.mkdtempSync(path.join(base, 'hai-acp-git-')));
+`, ...(engine ? ['/tmp', root, '/state'] : ['', root])], root, undefined, false)
+      try {
+        return await action(directory)
+      }
+      finally {
+        await run(node, ['-e', 'require("node:fs").rmSync(process.argv[1], { recursive: true, force: true })', directory], root, undefined, false)
+      }
+    },
     /**
      * 计算受管理的会话状态目录。
      * @param sessionId - 已校验的会话 ID。
@@ -204,7 +237,7 @@ export async function openRuntime(
         : path(`.state/${sessionId}`),
     /**
      * 执行受工作区约束的文件操作，拒绝链接和路径逃逸。
-     * @param op - mkdir/exists/write/read/copy 操作。
+     * @param op - mkdir/mkdir-exclusive/directory/exists/write/read/copy 操作。
      * @param name - 工作区内相对路径或已校验的内部绝对路径。
      * @param content - write 时为 Base64，copy 时为目标路径，其余为空。
      * @returns 文本结果：exists 为 true/false，read 为 Base64，其余为空。
@@ -215,7 +248,7 @@ export async function openRuntime(
      * ```
      */
     async file(
-      op: 'mkdir' | 'exists' | 'write' | 'read' | 'copy',
+      op: 'mkdir' | 'mkdir-exclusive' | 'directory' | 'exists' | 'write' | 'read' | 'copy',
       name: string,
       content = '',
     ) {

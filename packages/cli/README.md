@@ -170,6 +170,8 @@ pnpm run deploy --env prod --build --services "serv,web"
 pnpm run deploy --env prod --build --bundle-only
 ```
 
+自动化使用 `hai build --target image --json`。成功时 stdout 只包含本次构建的 JSON，其中 `artifactDir` 可直接传给部署；`manifest` 包含来源提交、是否有未提交改动、镜像平台和 SHA-256。进度及失败信息写到 stderr。
+
 默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时报错，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar.gz`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
 
 制品格式4和5都记录 primaryService（serv/web），hasWeb 表示完整工程是否包含浏览器端；格式5另记录非根目录webBasePath。只有 serv + web 才生成同源 API 代理。格式1至3制品须重新构建。旧部署先备份并核对项目名、数据卷和受管凭据，再切换到新的完整部署基线；工具不自动跨项目迁移数据。完整部署仍会按 Compose 规则清理同项目的旧服务容器，不能仅修改 deploy-target.json.directory 完成迁移。

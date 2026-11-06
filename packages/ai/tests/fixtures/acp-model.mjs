@@ -10,7 +10,13 @@ createServer(async (request, response) => {
   let body = ''
   for await (const chunk of request) body += chunk
   const input = JSON.parse(body || '{}')
-  writeFileSync('/workspace/upstream.json', JSON.stringify({ url: request.url, model: input.model, authorization: request.headers.authorization }))
+  writeFileSync('/workspace/upstream.json', JSON.stringify({
+    url: request.url,
+    model: input.model,
+    authorization: request.headers.authorization,
+    repoInstructions: body.includes('hai-repo-instructions-v2'),
+    repoSkill: body.includes('hai-repo-skill-v2'),
+  }))
   response.writeHead(200, { 'content-type': 'text/event-stream' })
   const send = event => response.write(`data: ${JSON.stringify(event)}\n\n`)
   if (request.url.includes('/responses')) {

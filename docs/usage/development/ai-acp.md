@@ -28,7 +28,7 @@ Codex 使用 `adapter: 'codex'`，DeepSeek Harness 使用 `adapter: 'deepseek-ha
 
 ## 创建和恢复会话
 
-以下例子假定配置中已有 `coder`、`project`，且 AI 已成功初始化。`prepare` 只克隆缺失工程、检查已有目录，不自动 pull、reset 或覆盖未提交成果；普通文件通过 `workspaces.importFiles(id, [{ path, content }])` 导入，拒绝覆盖、路径逃逸和符号链接。
+以下例子假定配置中已有 `coder`、`project`，工作区登记了 `web` 仓库，且 AI 已成功初始化。`prepare` 只克隆缺失工程、检查已有目录，不自动 pull、reset 或覆盖未提交成果；普通文件通过 `workspaces.importFiles(id, [{ path, content }])` 导入，拒绝覆盖、路径逃逸和符号链接。
 
 ```ts
 import { ai } from '@h-ai/ai'
@@ -37,7 +37,7 @@ async function inspectProject() {
   const prepared = await ai.acp.workspaces.prepare('project')
   if (!prepared.success) return prepared
   const created = await ai.acp.sessions.create({
-    agentId: 'coder', workspaceId: 'project', newWorktree: true,
+    agentId: 'coder', workspaceId: 'project', repositoryId: 'web', newWorktree: true,
   })
   if (!created.success) return created
   const response = await created.data.prompt([{ type: 'text', text: '阅读工程，说明结构与改进建议。' }])
@@ -49,7 +49,17 @@ async function inspectProject() {
 
 一个 workspace 可包含多个 Git 工程和上传资料；每个工程必须明确 `mainBranch`，remote 默认 origin。共享会话使用同一个 `main/` 目录，框架限制同时占用；`newWorktree: true` 从各工程当前已提交的本地主分支建立同名会话分支，普通文件独立复制。它不自动拉取远端，也不包含主目录未提交修改。
 
+使用 `repositoryId` 时，Agent 进程和原生会话均从指定仓库的根目录启动，恢复使用同一目录。把适用于该工程的 `AGENTS.md` 和固定版本的技能放在所选仓库中，由原生执行器发现。省略时使用聚合目录。选择仅作用于工作目录，其他登记仓库仍参与 worktree 创建及 Git 发布。远程 `custom-service` 继续使用服务端可见的 `cwd`。
+
 正常关闭保留工程和原生状态。继续任务用 `ai.acp.sessions.resume(id, callbacks)`，只使用智能体声明的 load/resume 能力；原生不支持或模型/智能体定义已不兼容时返回失败。`sessions.remove(id)` 只移除关闭/失败的记录，不删除目录、worktree 或卷。
+
+## 将工作树交给预览
+
+成功创建受管会话后，`session.info()` 的 `workspace` 包含会话目录、各登记仓库的绝对路径和存储位置。`info.cwd` 是 Agent 当前绑定的目录。目录模式可以直接使用本机路径。卷模式由可信的同节点执行器使用 `workspace.storage.engine`，将 `workspace.storage.name` 挂到 `workspace.storage.mountPath`，再进入对应仓库路径。Git 工作树的链接需要保持原挂载路径。用于读取的预览可挂只读卷，需要写缓存的开发服务器应单独安排可写目录。
+
+预览可以读取未提交的改动，并在 `session.close()` 后继续运行。要释放工作树，先由应用停止预览，提交或另存所需改动，然后调用 `ai.acp.sessions.reclaimWorktree(id)`。它拒绝活动会话、有未提交改动或已被锁定的工作树，只删除登记在该任务下的干净工作树。Git 分支、普通文件、原生历史和卷都保留。已有会话若缺少归属记录，需沿用人工回收。
+
+回收过程中断时，按同一 ID 重试。开始移除后的记录会显示 `reclaiming`，全部完成后为 `reclaimed`。两个状态下的路径仅供追溯，无法再用于恢复会话或发布；需要移除记录时，在回收完成后调用 `sessions.remove(id)`。
 
 ## 更新主分支与发布修改
 
@@ -60,6 +70,19 @@ async function inspectProject() {
 发布只适用于框架管理的独立 worktree 会话，避免把共享目录修改错误归属给某个任务；应用可将其映射为确认后的按钮或指令。无 force push，脏主目录、分歧或占用会报错。多仓库不具备原子性；部分失败通过 `error.cause.reports` 返回各仓 success、phase、commit、error，已经完成的提交/推送保留。继续编码须显式 resume。
 
 没有 Git 的项目可以使用普通文件；涉及 Git 而命令缺失会返回 `ACP_GIT_NOT_FOUND`。托管 Git 检测到子模块或 LFS 属性时返回 `ACP_UNSUPPORTED`，不将缺失内容报告为准备成功。自备执行环境可使用低层 `connect`，其 Git 生命周期由应用负责。
+
+## 按用途配置凭据
+
+将 Git 凭据从 workspace 的共用 `environmentRefs` 迁入 `gitEnvironmentRefs`，Agent 自用变量放在 agent 的 `environmentRefs`。例如 HTTPS Git Worker 可以配置以下引用，并由服务端为 `ACP_GIT_CONFIG_COUNT` 提供 `1`，为 `ACP_GIT_HEADER_KEY` 提供绑定到登记地址的 Git `http.<url>.extraHeader` 配置键。认证头的值由密钥服务注入 `ACP_GIT_HEADER_VALUE`。
+
+```yaml
+gitEnvironmentRefs:
+  GIT_CONFIG_COUNT: ACP_GIT_CONFIG_COUNT
+  GIT_CONFIG_KEY_0: ACP_GIT_HEADER_KEY
+  GIT_CONFIG_VALUE_0: ACP_GIT_HEADER_VALUE
+```
+
+配置此映射后，远程 Git 操作在私有 Git 目录中读取凭据并使用登记地址。Agent、本地提交和工作树钩子不会继承这组变量。认证工具和 Git 配置路径须来自可信执行环境。平台仍需隔离运行不同信任级别的任务，并避免向浏览器公开卷或内部路径。
 
 ## Goose 原生 HTTP/WS 接入
 
