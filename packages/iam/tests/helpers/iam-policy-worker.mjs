@@ -13,10 +13,11 @@ const seedGate = new Promise((resolve) => {
   releaseSeed = resolve
 })
 let paused = false
+let initializationStage = 'database'
 core.init({ logging: { level: 'fatal' } })
 function checked(result) {
   if (!result.success)
-    throw new Error(String(result.error.code))
+    throw new Error(String(result.error.code), { cause: result.error.cause })
   return result.data
 }
 async function close() {
@@ -75,8 +76,11 @@ process.on('message', (message) => {
 })
 async function main() {
   checked(await reldb.init(input.db))
+  initializationStage = 'cache'
   checked(await cache.init(input.cache))
+  initializationStage = 'audit'
   checked(await audit.init())
+  initializationStage = 'iam'
   if (input.seedBarrier) {
     const pause = async (sql, params, execute) => {
       if (!paused && /INSERT INTO\s+"?hai_iam_roles/i.test(sql)) {
@@ -100,7 +104,18 @@ async function main() {
   process.send?.({ phase: 'ready' })
 }
 void main().catch(async (error) => {
-  process.send?.({ phase: 'failed', code: /^hai:[\w-]+:\d{3}$/.test(error.message) ? error.message : 'fixture:failed' })
+  const code = error instanceof Error && /^hai:[\w-]+:\d{3}$/.test(error.message) ? error.message : 'fixture:failed'
+  // 只传递固定的阶段名和错误码，避免把连接串、SQL 参数等写入 CI 日志。
+  let cause = error instanceof Error ? error.cause : undefined
+  let sqlState
+  for (let depth = 0; depth < 4 && cause && typeof cause === 'object'; depth++) {
+    if ('code' in cause && typeof cause.code === 'string' && /^[\dA-Z]{5}$/.test(cause.code)) {
+      sqlState = cause.code
+      break
+    }
+    cause = 'cause' in cause ? cause.cause : undefined
+  }
+  process.send?.({ phase: 'failed', stage: initializationStage, code, sqlState })
   process.exitCode = 1
   await close()
   process.disconnect()

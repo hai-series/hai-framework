@@ -33,7 +33,10 @@ function worker(configuration: object) {
       if (message.phase === 'ready')
         ready.resolve()
       if (message.phase === 'failed') {
-        const failure = new Error('Policy worker initialization failed')
+        const stage = 'stage' in message && typeof message.stage === 'string' ? message.stage : 'startup'
+        const code = 'code' in message && typeof message.code === 'string' ? message.code : 'fixture:failed'
+        const sqlState = 'sqlState' in message && typeof message.sqlState === 'string' ? `, SQLSTATE ${message.sqlState}` : ''
+        const failure = new Error(`Policy worker initialization failed at ${stage} (${code}${sqlState})`)
         ready.reject(failure)
         seed.reject(failure)
       }
