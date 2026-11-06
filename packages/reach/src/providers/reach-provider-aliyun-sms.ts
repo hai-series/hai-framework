@@ -18,6 +18,7 @@ import { HaiReachError } from '../reach-types.js'
 
 const logger = core.logger.child({ module: 'reach', scope: 'provider-aliyun-sms' })
 const ISO_MILLISECONDS_SUFFIX_REGEX = /\.\d{3}Z$/
+const RFC3986_RESERVED_CHARACTERS_REGEX = /[!'()*]/g
 
 /**
  * 将异常包装为 ReachError
@@ -36,10 +37,8 @@ function toReachError(error: unknown): HaiError {
  * 对字符串做 RFC 3986 编码
  */
 function percentEncode(str: string): string {
-  return encodeURIComponent(str)
-    .replace(/\+/g, '%20')
-    .replace(/\*/g, '%2A')
-    .replace(/~/g, '%7E')
+  return encodeURIComponent(str).replace(RFC3986_RESERVED_CHARACTERS_REGEX, char =>
+    `%${char.charCodeAt(0).toString(16).toUpperCase()}`)
 }
 
 /**
@@ -155,7 +154,8 @@ export function createAliyunSmsProvider(): ReachProvider {
         const body = await response.json() as { Code: string, Message: string, BizId?: string }
 
         if (body.Code !== 'OK') {
-          logger.warn('SMS send returned non-OK status', { code: body.Code, message: body.Message })
+          // 阿里云签名错误的描述可能回显包含短信变量的原始签名参数。
+          logger.warn('SMS send returned non-OK status', { code: body.Code })
           return err(
             HaiReachError.SEND_FAILED,
             reachM('reach_smsSendFailed', { params: { error: body.Message } }),

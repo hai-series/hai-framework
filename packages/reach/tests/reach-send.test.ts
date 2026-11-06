@@ -1,9 +1,10 @@
 /**
  * =============================================================================
- * @h-ai/reach - 发送操作测试（使用 console Provider）
+ * @h-ai/reach - 发送操作测试
  * =============================================================================
  */
 
+import { createHmac } from 'node:crypto'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HaiReachError, reach } from '../src/index.js'
@@ -209,6 +210,42 @@ describe.sequential('reach.send (template from config)', () => {
       vars: { name: '张三' },
     })
     expect(result.success).toBe(true)
+  })
+})
+
+describe('reach.send (Aliyun SMS)', () => {
+  afterEach(async () => {
+    vi.restoreAllMocks()
+    await reach.close()
+  })
+
+  it('短信模板变量中的保留字符应按阿里云 RPC 规则编码和签名', async () => {
+    const initialized = await reach.init({
+      providers: [{ name: 'sms', type: 'aliyun-sms', accessKeyId: 'test-ak', accessKeySecret: 'test-sk', signName: '测试签名' }],
+    })
+    expect(initialized.success).toBe(true)
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      Response.json({ Code: 'OK', Message: 'OK', BizId: 'biz-test' }),
+    )
+    const result = await reach.send({
+      provider: 'sms',
+      to: '13800138000',
+      extra: { templateCode: 'SMS_123456' },
+      vars: { value: '!\'()*~' },
+    })
+
+    expect(result).toMatchObject({ success: true, data: { messageId: 'biz-test' } })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const url = new URL(String(fetchMock.mock.calls[0][0]))
+    expect(url.search).toContain('TemplateParam=%7B%22value%22%3A%22%21%27%28%29%2A~%22%7D')
+
+    const signedParams = url.search.slice(1).split('&').filter(param => !param.startsWith('Signature='))
+    const canonicalQuery = signedParams.sort().join('&')
+    const signature = createHmac('sha1', 'test-sk&')
+      .update(`GET&%2F&${encodeURIComponent(canonicalQuery)}`)
+      .digest('base64')
+    expect(url.searchParams.get('Signature')).toBe(signature)
   })
 })
 
