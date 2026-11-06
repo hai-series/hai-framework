@@ -211,6 +211,39 @@ it('keeps HTTP API headers and access key identifiers private', () => {
   expect(readFileSync(join(envDir, '.env.test.local'), 'utf8')).toContain('test-private-header')
 })
 
+const gatewayPayload = 'fixture-private-gateway-body'
+it.each([
+  { source: 'fields', body: { client: gatewayPayload } },
+  { source: 'provider', body: { client: gatewayPayload } },
+  { source: 'providers', body: { client: gatewayPayload } },
+  { source: 'providers', body: [gatewayPayload, null] },
+  { source: 'providers', body: `{ "client": "${gatewayPayload}" }` },
+])('keeps gateway body and arbitrary headers private for $source overrides %#', ({ source, body }) => {
+  const envDir = fixture()
+  const file = join(envDir, '_reach.yml')
+  writeFileSync(join(envDir, '.env.test'), '# Test\n')
+  writeFileSync(file, 'providers: [{ name: sms, type: aliyun-sms }]\n')
+  const snapshot = loadDeploymentEnvironment({ environment: 'test', envDir })
+  if (!snapshot.success)
+    throw new Error('Missing fixture')
+  const gateway = { url: 'https://gateway.example.test/dx', headers: { 'X-Custom': 'fixture-private-gateway-header' }, body }
+  const provider = { name: 'sms', type: 'aliyun-sms', gateway }
+  const values = source === 'fields'
+    ? { HAI_REACH_PROVIDERS_0_GATEWAY_URL: gateway.url, HAI_REACH_PROVIDERS_0_GATEWAY_HEADERS: gateway.headers, HAI_REACH_PROVIDERS_0_GATEWAY_BODY: gateway.body }
+    : source === 'provider' ? { HAI_REACH_PROVIDERS_0: provider } : { HAI_REACH_PROVIDERS: [provider] }
+  expect(saveDeploymentEnvironment(snapshot.data, values).success).toBe(true)
+  const publicFile = readFileSync(join(envDir, '.env.test'), 'utf8')
+  const privateFile = readFileSync(join(envDir, '.env.test.local'), 'utf8')
+  for (const value of ['fixture-private-gateway-header', gatewayPayload]) {
+    expect(publicFile).not.toContain(value)
+    expect(privateFile).toContain(value)
+  }
+  const saved = loadDeploymentEnvironment({ environment: 'test', envDir })
+  expect(saved.success).toBe(true)
+  if (saved.success)
+    expect(loadDeploymentConfig('reach', file, saved.data.values)).toMatchObject({ success: true, data: { providers: [provider] } })
+})
+
 it('stores machine-specific host, port and key paths privately and reloads them', () => {
   const envDir = fixture()
   writeFileSync(join(envDir, '.env.prod'), '# Production\nHAI_DEPLOY_PROVIDER_TYPE=vercel\n')

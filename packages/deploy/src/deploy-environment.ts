@@ -190,8 +190,13 @@ export function loadDeploymentEnvironment(options: { environment: string, envDir
   }
 }
 
+const reachGatewayEnvironment = /^HAI_REACH_PROVIDERS_\d+_GATEWAY$/i
+
 /** 判断值是否包含凭据；连接 URL 和 JSON 配置需要递归检查。 */
 function isSecret(name: string, value: string): boolean {
+  // 任意网关头或正文都可能包含凭据，不能只靠字段名猜测。
+  if (/^HAI_REACH_PROVIDERS_\d+_GATEWAY_(?:HEADERS|BODY)(?:_|$)/i.test(name))
+    return true
   if (/PASSWORD|SECRET|TOKEN|APIKEY|PRIVATEKEY|ACCESSKEY|AUTHORIZATION/i.test(name.replace(/[^a-z0-9]/gi, '')) || /(?:^|_)PASS$/i.test(name) || value.includes('PRIVATE KEY'))
     return true
   try {
@@ -202,8 +207,11 @@ function isSecret(name: string, value: string): boolean {
   catch { /* 非 URL 配置继续按结构检查。 */ }
   try {
     const parsed: unknown = JSON.parse(value)
-    if (parsed && typeof parsed === 'object')
+    if (parsed && typeof parsed === 'object') {
+      if ((name === 'gateway' || reachGatewayEnvironment.test(name)) && (Object.hasOwn(parsed, 'headers') || Object.hasOwn(parsed, 'body')))
+        return true
       return Object.entries(parsed).some(([key, nested]) => isSecret(key, typeof nested === 'string' ? nested : JSON.stringify(nested)))
+    }
   }
   catch { /* 普通字符串无需 JSON 处理。 */ }
   return false
@@ -269,8 +277,12 @@ export function generatedVariables(values: Record<string, unknown>): Record<stri
     }
     // 未声明完整列表时，只展开已有数组项；不猜测或创建列表长度。
     for (const name of structuredNames.filter(name => /_\d+$/.test(name))) {
+      const value: unknown = JSON.parse(group[name]!)
+      // 缺少完整列表时无法按网关 Schema 展开。保留 Provider JSON，避免把正文内部键变成环境字段。
+      if (module === 'reach' && /^HAI_REACH_PROVIDERS_\d+$/.test(name) && value && typeof value === 'object' && 'gateway' in value)
+        continue
       delete generated[name]
-      const flattened = core.config.toEnv({ prefix: name, value: JSON.parse(group[name]!) })
+      const flattened = core.config.toEnv({ prefix: name, value })
       Object.assign(generated, flattened)
       if (Object.keys(flattened).some(key => key.startsWith(`${name}_`)))
         generated[name] = '{}'
@@ -350,7 +362,8 @@ export function saveDeploymentEnvironment(environment: DeploymentEnvironment, va
         return value
       if (Array.isArray(value))
         return value.map((item, index) => splitArrayValue(`${name}_${index}`, item) ?? null)
-      if (value && typeof value === 'object' && !isSecret(name, '') && Object.keys(value).every(key => /^[a-z][a-zA-Z0-9]*$/.test(key)))
+      // 网关整体写入私有文件，以保留请求体的 JSON 类型及原始字符串内容。
+      if (value && typeof value === 'object' && !reachGatewayEnvironment.test(name) && !isSecret(name, '') && Object.keys(value).every(key => /^[a-z][a-zA-Z0-9]*$/.test(key)))
         return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, splitArrayValue(`${name}_${key.toUpperCase()}`, item)]).filter(([, item]) => item !== undefined))
       privateValues[name] = literal
       return undefined
