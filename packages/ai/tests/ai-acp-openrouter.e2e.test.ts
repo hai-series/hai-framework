@@ -2,7 +2,7 @@ import type { SessionNotification } from '@agentclientprotocol/sdk'
 import type { HaiResult } from '@h-ai/core'
 import type { ACPSessionInfo } from '../src/index.js'
 import { execFile } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { randomInt, randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, extname, join, resolve } from 'node:path'
@@ -175,7 +175,7 @@ describe.sequential('openRouter real native ACP acceptance', () => {
         agent: agent.adapter,
         mode: agent.mode,
         model,
-        task: 'Read an undisclosed workspace token and write it to a result file. Independently request tool-based readback of the result. Close/resume and repeat both steps with a new token.',
+        task: 'Copy a synthetic inventory note to a result file. Independently request tool-based readback of the result. Close and resume, then repeat both steps with an updated note.',
         startedAt: new Date(started).toISOString(),
         status: 'running',
         stage: 'config',
@@ -236,9 +236,11 @@ describe.sequential('openRouter real native ACP acceptance', () => {
         }
         evidence.stage = 'prepare'
         value(await ai.acp.workspaces.prepare('project'))
-        const firstToken = `ACP-TOOL-${randomUUID()}`
+        // 使用普通业务文本，避免把形似访问凭据的标记交给真实模型复述。
+        const item = randomInt(10000, 100000)
+        const firstNote = `Inventory item ${item} is a blue clipboard on the front desk.`
         evidence.stage = 'import-initial'
-        value(await ai.acp.workspaces.importFiles('project', [{ path: 'challenge.txt', content: firstToken }]))
+        value(await ai.acp.workspaces.importFiles('project', [{ path: 'challenge.txt', content: firstNote }]))
         const options = {
           onEvent: (event: SessionNotification) => {
             if (evidence.events.length < 10000)
@@ -257,14 +259,14 @@ describe.sequential('openRouter real native ACP acceptance', () => {
         const originalNativeId = value(await session.info()).nativeId
         expect(originalNativeId).toBeTruthy()
         for (const phase of ['initial', 'resumed'] as const) {
-          const token = phase === 'initial' ? firstToken : `ACP-RESUME-${randomUUID()}`
+          const note = phase === 'initial' ? firstNote : `Inventory item ${item} is now a green folder on the second shelf.`
           const input = phase === 'initial' ? 'challenge.txt' : 'resume-challenge.txt'
           const output = phase === 'initial' ? 'result.txt' : 'resumed-result.txt'
           if (phase === 'resumed') {
             evidence.stage = 'close-before-resume'
             value(await session.close())
             evidence.stage = 'import-resumed'
-            value(await ai.acp.workspaces.importFiles('project', [{ path: input, content: token }]))
+            value(await ai.acp.workspaces.importFiles('project', [{ path: input, content: note }]))
             evidence.stage = 'resume'
             session = value(await ai.acp.sessions.resume('real-tool-session', options))
           }
@@ -273,30 +275,30 @@ describe.sequential('openRouter real native ACP acceptance', () => {
           expect(info.nativeId).toBe(originalNativeId)
           const eventOffset = evidence.events.length
           evidence.stage = `prompt-${phase}`
-          const written = value(await session.prompt([{ type: 'text', text: `In workspace ${JSON.stringify(info.cwd)}, use an actual workspace tool to copy files/${input} byte for byte to files/${output}. The input contains a unique random token not provided in this prompt. Use a file-copy operation such as cp files/${input} files/${output} on Linux or Copy-Item on PowerShell, so the bytes come directly from the source file. Verify the two files match using a workspace tool, then briefly confirm completion. Do not inspect environment variables, credentials, or files outside this temporary workspace. This is an isolated acceptance fixture; writing the requested result file is authorized.` }]))
+          const written = value(await session.prompt([{ type: 'text', text: `In workspace ${JSON.stringify(info.cwd)}, use an actual workspace tool to copy files/${input} byte for byte to files/${output}. The input is a synthetic inventory note whose wording is only in the file. Use a file-copy operation such as cp files/${input} files/${output} on Linux or Copy-Item on PowerShell, so the bytes come directly from the source file. Verify the two files match using a workspace tool, then briefly confirm completion. Limit the operation to these two files in the temporary workspace.` }]))
           evidence.stage = `verify-write-${phase}`
           const fileContent = redact((await sessionFile(info, output, engine)).trim())
           const writeReply = redact(written.text.trim())
           const writeToolCalls = evidence.events.slice(eventOffset).filter(event => event.type === 'tool_call').length
-          evidence.files.push({ path: `files/${output}`, passed: fileContent === token, summary: fileContent })
+          evidence.files.push({ path: `files/${output}`, passed: fileContent === note, summary: fileContent })
           expect(written.stopReason).toBe('end_turn')
           expect(writeToolCalls).toBeGreaterThan(0)
           expect(writeReply.length).toBeGreaterThan(0)
-          expect(fileContent).toBe(token)
+          expect(fileContent).toBe(note)
           // 每轮固定执行独立读回，不依据上一条回复是否复述标记来重试任务。
           const readbackOffset = evidence.events.length
           evidence.stage = `readback-${phase}`
-          const response = value(await session.prompt([{ type: 'text', text: `Read files/${output} from disk using your actual workspace tool. This is an explicit readback verification: do not rely on prior messages. Your final assistant response must contain the complete literal file contents, including the full random token. Return the contents, not a completion summary. Do not modify files or inspect anything outside this temporary workspace.` }]))
+          const response = value(await session.prompt([{ type: 'text', text: `Use an actual workspace tool to read files/${output} from disk. Include the complete inventory note exactly as it appears in the file in your final response. Limit this operation to reading that file.` }]))
           evidence.stage = `verify-readback-${phase}`
           const reply = redact(response.text.trim())
           const readbackToolCalls = evidence.events.slice(readbackOffset).filter(event => event.type === 'tool_call').length
           const toolCalls = evidence.events.slice(eventOffset).filter(event => event.type === 'tool_call').length
-          evidence.rounds.push({ phase, stopReason: response.stopReason, reply, expectedToken: token, fileContent, nativeId: info.nativeId ?? '', toolCalls, writeReply, writeStopReason: written.stopReason, writeToolCalls, readbackToolCalls })
+          evidence.rounds.push({ phase, stopReason: response.stopReason, reply, expectedToken: note, fileContent, nativeId: info.nativeId ?? '', toolCalls, writeReply, writeStopReason: written.stopReason, writeToolCalls, readbackToolCalls })
           evidence.reply += `${phase} write: ${writeReply}\n${phase} readback: ${reply}\n`
           expect(response.stopReason).toBe('end_turn')
           expect(readbackToolCalls).toBeGreaterThan(0)
-          // ACP 文本可包含原生 commentary；回复必须包含实际读出的随机值，文件仍严格逐字匹配。
-          expect(reply).toContain(token)
+          // ACP 文本可包含原生 commentary，回复仍须包含从文件读出的完整内容。
+          expect(reply).toContain(note)
         }
         evidence.stage = 'close'
         value(await session.close())
