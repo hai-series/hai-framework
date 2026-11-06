@@ -721,6 +721,8 @@ toast.add({ message: m.saved(), position: 'bottom-center' })
 </div>
 ```
 
+`BottomNav` 的导航按钮与 `ThemeSelector` 的主题按钮在客户端挂载后启用，确保点击时事件已绑定。
+
 #### 图标
 
 组件使用 Iconify (Tabler Icons)：

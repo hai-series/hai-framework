@@ -722,6 +722,8 @@ On mobile pages, match `BottomNav` width to the page shell to avoid spanning the
 </div>
 ```
 
+`BottomNav` and `ThemeSelector` keep their trigger buttons disabled until the client has mounted and the event handlers are ready.
+
 #### Icons
 
 Components use Iconify (Tabler Icons):

@@ -18,6 +18,7 @@
 <script lang='ts'>
   import type { DataAttributes } from '../../types.js'
   import type { BottomNavItem } from './bottom-nav-types.js'
+  import { onMount } from 'svelte'
   import { cn, getDataAttributes } from '../../utils.js'
 
   // eslint-disable-next-line no-import-assign -- type re-export
@@ -89,6 +90,12 @@
 
   const dataAttributes = $derived(getDataAttributes(restProps))
   const constrained = $derived(centered && maxWidth !== 'none')
+
+  // 服务端已渲染导航时，先等待客户端绑定事件，避免提前点击丢失。
+  let ready = $state(false)
+  onMount(() => {
+    ready = true
+  })
 </script>
 
 <nav {...dataAttributes}
@@ -104,6 +111,7 @@
     {#each items as item (item.id)}
       <button
         type='button'
+        disabled={!ready}
         class={cn(
           'flex flex-col items-center justify-center flex-1 h-full relative transition-colors',
           'hai-no-select',

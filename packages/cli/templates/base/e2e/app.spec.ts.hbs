@@ -1,3 +1,6 @@
+{{#if_eq appType 'h5'}}
+import type { Page } from '@playwright/test'
+{{/if_eq}}
 {{#if features.iam}}
 import { randomUUID } from 'node:crypto'
 {{/if}}
@@ -6,17 +9,40 @@ import path from 'node:path'
 import process from 'node:process'
 import { expect, test } from '@playwright/test'
 
+{{#if_eq appType 'h5'}}
+/** 延迟客户端脚本，覆盖 SSR 已显示而事件尚未绑定的阶段。 */
+async function whileClientBootPaused(page: Page, inspect: () => Promise<void>) {
+  let resumeClient = () => {}
+  const clientBoot = new Promise<void>((resolve) => {
+    resumeClient = resolve
+  })
+  await page.route('**/*.js', async (route) => {
+    await clientBoot
+    await route.continue()
+  })
+  try {
+    await inspect()
+  }
+  finally {
+    resumeClient()
+    await page.unrouteAll({ behavior: 'wait' })
+  }
+}
+
+{{/if_eq}}
 {{#if_eq appType 'admin'}}
 test('high contrast appearance is selectable and survives reload', async ({ page }) => {
   await page.goto('./')
   const header = page.locator('header').first()
-  await header.getByRole('button', { name: /选择主题|Select theme|テーマを選択/, exact: true }).click()
+  const themeToggle = header.getByRole('button', { name: /选择主题|Select theme|テーマを選択/, exact: true })
+  await themeToggle.click()
   await header.getByRole('button', { name: /高对比|High contrast|ハイコントラスト/, exact: true }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'high-contrast')
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'high-contrast')
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe('dark')
-  await header.getByRole('button', { name: /选择主题|Select theme|テーマを選択/, exact: true }).press('Enter')
+  await expect(themeToggle).toBeEnabled()
+  await themeToggle.press('Enter')
   await header.getByRole('button', { name: /简洁商务|Formal|ビジネス（角丸なし）/, exact: true }).press('Enter')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'formal')
   await page.reload()
@@ -28,10 +54,18 @@ test('high contrast appearance is selectable and survives reload', async ({ page
 {{#if hasUi}}
 {{#unless isCapacitorApp}}
 test('eye care appearance is selectable and survives reload', async ({ page }, testInfo) => {
-  await page.goto('./')
-  await page.setViewportSize({ width: 1440, height: 960 })
   const header = page.locator('header').first()
-  await header.getByRole('button', { name: /选择主题|Select theme|テーマを選択/, exact: true }).click()
+  const themeToggle = header.getByRole('button', { name: /选择主题|Select theme|テーマを選択/, exact: true })
+{{#if_eq appType 'h5'}}
+  await whileClientBootPaused(page, async () => {
+    await page.goto('./', { waitUntil: 'commit' })
+    await expect(themeToggle).toBeDisabled()
+  })
+{{else}}
+  await page.goto('./')
+{{/if_eq}}
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await themeToggle.click()
   await header.getByRole('button', { name: /护眼|Eye care|目にやさしい/, exact: true }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'eye-care')
   await page.reload()
@@ -81,10 +115,14 @@ test('home page renders from browser', async ({ page }) => {
   const nav = page.locator('nav')
   await nav.getByRole('button', { name: /发现|Discover/i, exact: true }).click()
   await expect(page).toHaveURL(/\/discover$/)
-  await page.reload()
-  await expect(page).toHaveURL(/\/discover$/)
-  await expect(page.getByRole('heading', { name: /发现|Discover/i })).toBeVisible()
-  await nav.getByRole('button', { name: /首页|Home/i, exact: true }).click()
+  const home = nav.getByRole('button', { name: /首页|Home/i, exact: true })
+  await whileClientBootPaused(page, async () => {
+    await page.reload({ waitUntil: 'commit' })
+    await expect(page).toHaveURL(/\/discover$/)
+    await expect(page.getByRole('heading', { name: /发现|Discover/i })).toBeVisible()
+    await expect(home).toBeDisabled()
+  })
+  await home.click()
   await expect(page).toHaveURL(/\/$/)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 {{/if_eq}}
@@ -205,24 +243,10 @@ test('configured IAM registration and password login', async ({ page, context })
   await page.screenshot({ path: path.join(evidence, '{{projectName}}-reset.png'), fullPage: true })
   const resetUrl = `{{#if isCapacitorApp}}/{{else}}/auth/reset-password{{/if}}?token=${encodeURIComponent(reset?.token ?? '')}`
 {{#if_eq appType 'h5'}}
-  // 延迟客户端脚本，确定性覆盖 SSR 页面已显示、事件绑定尚未完成的窗口。
-  let resumeClient = () => {}
-  const clientBoot = new Promise<void>((resolve) => {
-    resumeClient = resolve
-  })
-  await page.route('**/*.js', async (route) => {
-    await clientBoot
-    await route.continue()
-  })
-  try {
+  await whileClientBootPaused(page, async () => {
     await page.goto(resetUrl, { waitUntil: 'commit' })
     await expect(page.locator('input[type="password"]').nth(0)).toBeDisabled()
-  }
-  finally {
-    resumeClient()
-    // 等待正在恢复的路由完成，避免提前移除拦截导致 continue 被重复处理。
-    await page.unrouteAll({ behavior: 'wait' })
-  }
+  })
 {{else}}
   await page.goto(resetUrl)
 {{/if_eq}}

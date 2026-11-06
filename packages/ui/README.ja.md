@@ -722,6 +722,8 @@ toast.add({ message: m.saved(), position: 'bottom-center' })
 </div>
 ```
 
+`BottomNav` と `ThemeSelector` のボタンは、クライアントでのマウントが完了し、イベントを処理できる状態になってから有効になります。
+
 #### アイコン
 
 Iconify（Tabler Icons）を使用します：

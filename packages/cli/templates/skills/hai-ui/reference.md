@@ -279,7 +279,7 @@ const p = usePlatform()
 | ---------------- | ----------------------------------------------------------------------------- | ---------------- |
 | `SafeArea`       | `top`, `bottom`, `left`, `right`                                              | 安全区域容器     |
 | `AppBar`         | `title`, `backHref`, `onback`, `fixed`, `transparent`, snippet `left`/`right` | 顶部导航栏       |
-| `BottomNav`      | `items: BottomNavItem[]`, `active`                                            | 底部导航栏       |
+| `BottomNav`      | `items: BottomNavItem[]`, `active`                                            | 底部导航栏，客户端挂载后启用按钮 |
 | `ActionSheet`    | `open`, `title`, `items: ActionSheetItem[]`, `cancelText`, `onselect`         | 底部弹出操作面板 |
 | `PullRefresh`    | `refreshing`, `onrefresh`, `threshold`, `pullText`, `releaseText`             | 下拉刷新         |
 | `InfiniteScroll` | `loading`, `finished`, `threshold`, `onload`, `loadingText`, `finishedText`   | 无限滚动加载     |

@@ -20,7 +20,7 @@
 <script lang='ts'>
   import type { ThemeInfo } from '../../../theme-config.js'
   import type { DataAttributes } from '../../../types.js'
-  import { tick } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import { uiM } from '../../../messages.js'
   import { THEME_GROUPS, THEMES } from '../../../theme-config.js'
   import { cn, getDataAttributes } from '../../../utils.js'
@@ -68,6 +68,11 @@
   const displaySelectLabel = $derived(selectLabel ?? uiM('theme_selector_label'))
   const menuId = $props.id()
 
+  // SSR 先渲染按钮，等客户端绑定点击和键盘事件后再启用。
+  let ready = $state(false)
+  onMount(() => {
+    ready = true
+  })
   let open = $state(false)
   let containerRef = $state<HTMLDivElement | null>(null)
 
@@ -135,6 +140,7 @@
 <div {...dataAttributes} bind:this={containerRef} class={cn('dropdown', align === 'end' ? 'dropdown-end' : '', open ? 'dropdown-open' : '', className)}>
   <button
     type='button'
+    disabled={!ready}
     class='btn btn-ghost {compact ? 'btn-sm btn-square' : 'gap-2'}'
     onclick={() => (open = !open)}
     onkeydown={handleKeydown}
