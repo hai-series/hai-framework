@@ -57,7 +57,7 @@
       {#if actions}<div class='ml-auto flex max-w-full shrink-0 flex-wrap items-center gap-1.5 sm:gap-2'>{@render actions()}</div>{/if}
     </header>
   {/if}
-  <main {...dataAttributes} aria-labelledby={title ? headingId : undefined} class='flex min-h-0 min-w-0 flex-1 flex-col overflow-auto p-3 sm:p-4'>
+  <main {...dataAttributes} aria-labelledby={title ? headingId : undefined} class='relative flex min-h-0 min-w-0 flex-1 flex-col overflow-auto p-3 sm:p-4'>
     {@render children()}
   </main>
   {#if footer}<footer class='shrink-0 border-t border-base-content/8 px-3 py-1 text-center text-xs text-base-content/45 sm:px-4'>{@render footer()}</footer>{/if}
