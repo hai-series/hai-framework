@@ -3,14 +3,24 @@ name: Native delivery
 on:
   workflow_dispatch:
   pull_request:
-    paths:
+    paths: &native_paths
       - 'apps/desktop-app/**'
       - 'apps/mobile-app/**'
+      - 'apps/api-service-contract/**'
       - 'packages/**'
       - 'scripts/native-name.*'
       - scripts/run-tauri.mjs
+      - scripts/vite-runtime-config.ts
+      - .npmrc
+      - package.json
       - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - tsconfig.json
+      - turbo.json
       - .github/workflows/native.yml
+  push:
+    branches: [main]
+    paths: *native_paths
 
 permissions:
   contents: read

@@ -148,7 +148,7 @@ CI 单元阶段构建 Codex/dsh/Goose 基础镜像，并使用 Docker 实际执�
 
 npm 发布后可能先进入扫描阶段。CI 最多等待三十分钟确认所有包可查询，再统一推进 `latest`；处理方式见 [CI 发布说明](docs/ci.md#查看结果与重新运行)。
 
-独立的 Native delivery 验证 Windows、Android 和 iOS 模拟器打包；Windows/Android 制品使用 CLI 统一归档名，并核验 Core 显示名与校验和。触发条件和设备验收边界见 [CI 说明](docs/ci.md)。
+独立的 Native delivery 在相关 PR 和 `main` 推送时自动验证 Windows、Android 和 iOS 模拟器打包，也可手工运行。Windows/Android 制品使用 CLI 统一归档名，并核验 Core 显示名与校验和。触发范围和设备验收边界见 [CI 说明](docs/ci.md)。
 
 本地提交/推送钩子使用 `scripts/check-leak-words.mjs`，私有词表 `.leak-words.json` 不提交。容器门禁回收本轮登记的资源；历史测试镜像先运行 `node scripts/cleanup-test-images.mjs --runtime=podman --legacy` 预览，确认后加 `--apply`。[验收说明](docs/usage/governance/verification.md)区分实际运行、复用和环境依赖。
 

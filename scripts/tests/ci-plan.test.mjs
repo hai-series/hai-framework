@@ -194,3 +194,23 @@ describe('ci 真实workflow依赖图', () => {
     expect(restore.with.key).toContain('steps.environment.outputs.fingerprint')
   })
 })
+
+describe('native delivery 触发范围', () => {
+  it('main 推送与 PR 共用原生构建输入的路径筛选，并保留手工触发', () => {
+    const { on: triggers } = parse(readFileSync(new URL('../../.github/workflows/native.yml', import.meta.url), 'utf8'))
+    expect(triggers).toHaveProperty('workflow_dispatch')
+    expect(triggers.push).toEqual({ branches: ['main'], paths: triggers.pull_request.paths })
+    expect(triggers.push.paths).toEqual(expect.arrayContaining([
+      'apps/desktop-app/**',
+      'apps/mobile-app/**',
+      'apps/api-service-contract/**',
+      'packages/**',
+      'scripts/native-name.*',
+      'scripts/run-tauri.mjs',
+      'scripts/vite-runtime-config.ts',
+      'pnpm-lock.yaml',
+      'pnpm-workspace.yaml',
+      '.github/workflows/native.yml',
+    ]))
+  })
+})
