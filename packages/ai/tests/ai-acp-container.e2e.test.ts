@@ -63,6 +63,10 @@ describe.skipIf(!image)('aCP container volume E2E', () => {
       value(
         await ai.init({ acp: { requestTimeout: 30000, promptTimeout: 30000 } }),
       )
+      vi.stubEnv('ACP_FIXTURE_AGENT', 'agent-only-fixture')
+      vi.stubEnv('ACP_FIXTURE_GIT_HEADER', 'Authorization: Bearer git-only-fixture')
+      vi.stubEnv('ACP_FIXTURE_GIT_KEY', 'http.extraHeader')
+      vi.stubEnv('ACP_FIXTURE_GIT_COUNT', '1')
       value(
         await ai.acp.workspaces.register({
           id: 'container',
@@ -75,6 +79,7 @@ describe.skipIf(!image)('aCP container volume E2E', () => {
           repositories: [
             { id: 'api', url: '/workspace/remote.git', mainBranch: 'trunk' },
           ],
+          gitEnvironmentRefs: { GIT_CONFIG_COUNT: 'ACP_FIXTURE_GIT_COUNT', GIT_CONFIG_KEY_0: 'ACP_FIXTURE_GIT_KEY', GIT_CONFIG_VALUE_0: 'ACP_FIXTURE_GIT_HEADER' },
         }),
       )
       const seed = `const f=require('node:fs'),c=require('node:child_process');function git(...args){const r=c.spawnSync('git',args,{encoding:'utf8'});if(r.status!==0)throw Error(r.stderr)};git('init','--bare','/workspace/remote.git');git('init','-b','trunk','/workspace/seed');git('-C','/workspace/seed','config','user.name','ACP');git('-C','/workspace/seed','config','user.email','acp@example.invalid');f.writeFileSync('/workspace/seed/a.txt','base');git('-C','/workspace/seed','add','.');git('-C','/workspace/seed','commit','-m','base');git('-C','/workspace/seed','remote','add','origin','/workspace/remote.git');git('-C','/workspace/seed','push','origin','trunk');`
@@ -105,6 +110,7 @@ describe.skipIf(!image)('aCP container volume E2E', () => {
           engine: preference as 'auto' | 'podman' | 'docker',
           command: 'node',
           args: ['/workspace/main/files/acp-agent.mjs'],
+          environmentRefs: { ACP_TEST_AGENT_VALUE: 'ACP_FIXTURE_AGENT' },
         }),
       )
       const session = value(
@@ -118,6 +124,7 @@ describe.skipIf(!image)('aCP container volume E2E', () => {
         }),
       )
       const info = value(await session.info())
+      expect(JSON.parse(value(await session.prompt([{ type: 'text', text: 'credential-boundary' }])).text)).toEqual({ agent: true, git: false })
       const resource = info.resource!
       const storage = info.workspace?.storage
       expect(storage).toEqual({ type: 'volume', engine, name: volume, mountPath: '/workspace' })

@@ -147,9 +147,10 @@ export async function openRuntime(
     args: string[],
     cwd: string,
     env: Record<string, string> = {},
+    inheritWorkspaceEnvironment = true,
   ): ACPTransport {
     ensure()
-    const values = { ...environment, ...env }
+    const values = inheritWorkspaceEnvironment ? { ...environment, ...env } : env
     return engine && container
       ? {
           type: 'stdio',
@@ -178,8 +179,9 @@ export async function openRuntime(
     args: string[],
     cwd = root,
     env?: Record<string, string>,
+    inheritWorkspaceEnvironment = true,
   ) {
-    const launch = transport(command, args, cwd, env)
+    const launch = transport(command, args, cwd, env, inheritWorkspaceEnvironment)
     if (launch.type !== 'stdio')
       throw new ACPFailure('runtime')
     return execute(launch.command, launch.args ?? [], launch.cwd, launch.env)
@@ -190,6 +192,26 @@ export async function openRuntime(
     transport,
     run,
     resource: container ? { engine, container } : undefined,
+    /**
+     * 在运行端创建并回收私有临时目录，目录位于工作区挂载之外。
+     * @param action - 在临时目录存在时执行的操作。
+     * @returns 操作结果；成功或失败都清理当前调用拥有的目录。
+     * @example
+     * ```ts
+     * // 模块内部上下文：runtime 为已打开的执行环境。
+     * await runtime.withTemporaryDirectory(directory => runtime.run('git', ['-C', directory, 'init', '--bare']))
+     * ```
+     */
+    async withTemporaryDirectory<T>(action: (directory: string) => Promise<T>): Promise<T> {
+      const node = engine ? 'node' : process.execPath
+      const directory = await run(node, ['-e', 'const fs=require("node:fs");const {tmpdir}=require("node:os");const {join}=require("node:path");process.stdout.write(fs.mkdtempSync(join(fs.realpathSync(tmpdir()), "hai-acp-git-")))'], root, undefined, false)
+      try {
+        return await action(directory)
+      }
+      finally {
+        await run(node, ['-e', 'require("node:fs").rmSync(process.argv[1], { recursive: true, force: true })', directory], root, undefined, false)
+      }
+    },
     /**
      * 计算受管理的会话状态目录。
      * @param sessionId - 已校验的会话 ID。

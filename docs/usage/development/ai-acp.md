@@ -71,6 +71,19 @@ async function inspectProject() {
 
 没有 Git 的项目可以使用普通文件；涉及 Git 而命令缺失会返回 `ACP_GIT_NOT_FOUND`。托管 Git 检测到子模块或 LFS 属性时返回 `ACP_UNSUPPORTED`，不将缺失内容报告为准备成功。自备执行环境可使用低层 `connect`，其 Git 生命周期由应用负责。
 
+## 按用途配置凭据
+
+将 Git 凭据从 workspace 的共用 `environmentRefs` 迁入 `gitEnvironmentRefs`，Agent 自用变量放在 agent 的 `environmentRefs`。例如 HTTPS Git Worker 可以配置以下引用，并由服务端为 `ACP_GIT_CONFIG_COUNT` 提供 `1`，为 `ACP_GIT_HEADER_KEY` 提供绑定到登记地址的 Git `http.<url>.extraHeader` 配置键。认证头的值由密钥服务注入 `ACP_GIT_HEADER_VALUE`。
+
+```yaml
+gitEnvironmentRefs:
+  GIT_CONFIG_COUNT: ACP_GIT_CONFIG_COUNT
+  GIT_CONFIG_KEY_0: ACP_GIT_HEADER_KEY
+  GIT_CONFIG_VALUE_0: ACP_GIT_HEADER_VALUE
+```
+
+配置此映射后，远程 Git 操作在私有 Git 目录中读取凭据并使用登记地址。Agent、本地提交和工作树钩子不会继承这组变量。认证工具和 Git 配置路径须来自可信执行环境。平台仍需隔离运行不同信任级别的任务，并避免向浏览器公开卷或内部路径。
+
 ## Goose 原生 HTTP/WS 接入
 
 框架提供 Goose 1.57.0 镜像。由部署方启动其原生 `goose serve`，挂载工作目录和状态卷，在 Goose 端配置模型（例如 `GOOSE_PROVIDER=openrouter`、`GOOSE_MODEL`、`OPENROUTER_API_KEY`），并单独设置 `GOOSE_SERVER__SECRET_KEY`。Hai 的 custom-service 不接收或注入这些模型配置。

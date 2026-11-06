@@ -78,8 +78,10 @@ export const ACPWorkspaceSchema = z
     ]),
     /** 多个 Git 工程；默认空数组，不使用 Git 时仅创建文件目录。 */
     repositories: z.array(ACPRepositorySchema).default([]),
-    /** 目标环境变量名到宿主环境变量名的映射；保存引用而非明文凭据。 */
+    /** 工作区历史共用变量映射；Agent 专用凭据应配置在 Agent 定义中。 */
     environmentRefs: environment,
+    /** 仅供受管 Git 远程操作使用的环境变量引用，值不传给 Agent 或本地提交。 */
+    gitEnvironmentRefs: environment,
   })
   .refine(
     value =>

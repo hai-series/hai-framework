@@ -1,6 +1,8 @@
 import type { HaiResult } from '@h-ai/core'
+import { Buffer } from 'node:buffer'
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
@@ -53,6 +55,7 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   await ai.close()
+  vi.unstubAllEnvs()
   await rm(temporary, { recursive: true, force: true })
 })
 async function workspace(
@@ -131,6 +134,96 @@ describe('aCP managed session E2E', () => {
     expect(await readFile(join(otherInfo.cwd, 'hello.txt'), 'utf8')).toBe('base')
     expect(value(await other.prompt(prompt('still active'))).text).toBe('still active')
   }, 20000)
+
+  it('私有 Git 环境完成鉴权、fetch 和 push，Agent 与本地 remote 配置无法取得凭据', async () => {
+    const origin = await seed('authenticated', 'trunk')
+    const decoy = await seed('decoy', 'trunk')
+    const requests: string[] = []
+    const server = createServer(async (request, response) => {
+      if (request.headers.authorization !== 'Bearer git-only-fixture') {
+        response.writeHead(401).end()
+        return
+      }
+      const url = new URL(request.url!, 'http://localhost')
+      requests.push(url.pathname)
+      const chunks: Buffer[] = []
+      for await (const chunk of request)
+        chunks.push(Buffer.from(chunk))
+      const input = Buffer.concat(chunks)
+      const backend = execFile('git', ['http-backend'], {
+        encoding: 'buffer',
+        env: {
+          ...process.env,
+          GIT_PROJECT_ROOT: temporary,
+          GIT_HTTP_EXPORT_ALL: '1',
+          REMOTE_USER: 'fixture',
+          PATH_INFO: url.pathname,
+          QUERY_STRING: url.search.slice(1),
+          REQUEST_METHOD: request.method,
+          CONTENT_TYPE: request.headers['content-type'] ?? '',
+          CONTENT_LENGTH: String(input.length),
+        },
+      }, (error, output) => {
+        const boundary = output.indexOf('\r\n\r\n')
+        if (error || boundary < 0) {
+          response.writeHead(500).end()
+          return
+        }
+        const headers = new Headers()
+        for (const header of output.subarray(0, boundary).toString().split('\r\n')) {
+          const separator = header.indexOf(':')
+          headers.append(header.slice(0, separator), header.slice(separator + 1).trim())
+        }
+        response.writeHead(Number(headers.get('status')?.split(' ')[0] ?? 200), Object.fromEntries(headers)).end(output.subarray(boundary + 4))
+      })
+      backend.stdin?.end(input)
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const address = server.address()
+      if (!address || typeof address === 'string')
+        throw new Error('Expected Git fixture port')
+      vi.stubEnv('ACP_FIXTURE_AGENT', 'agent-only-fixture')
+      vi.stubEnv('ACP_FIXTURE_GIT_HEADER', 'Authorization: Bearer git-only-fixture')
+      vi.stubEnv('ACP_FIXTURE_GIT_KEY', 'http.extraHeader')
+      vi.stubEnv('ACP_FIXTURE_GIT_COUNT', '1')
+      value(await ai.acp.agents.register({
+        id: 'scoped',
+        name: 'Scoped fixture',
+        mode: 'embedded',
+        command: process.execPath,
+        args: [fixture],
+        environmentRefs: { ACP_TEST_AGENT_VALUE: 'ACP_FIXTURE_AGENT' },
+      }))
+      value(await ai.acp.workspaces.register({
+        id: 'project',
+        storage: { type: 'directory', path: join(temporary, 'workspace') },
+        repositories: [{ id: 'api', url: `http://127.0.0.1:${address.port}/authenticated.git`, mainBranch: 'trunk' }],
+        gitEnvironmentRefs: { GIT_CONFIG_COUNT: 'ACP_FIXTURE_GIT_COUNT', GIT_CONFIG_KEY_0: 'ACP_FIXTURE_GIT_KEY', GIT_CONFIG_VALUE_0: 'ACP_FIXTURE_GIT_HEADER' },
+      }))
+      const session = value(await ai.acp.sessions.create({ agentId: 'scoped', workspaceId: 'project', repositoryId: 'api', id: 'scoped', newWorktree: true }))
+      const info = value(await session.info())
+      expect(JSON.parse(value(await session.prompt(prompt('credential-boundary'))).text)).toEqual({ agent: true, git: false })
+      await writeFile(join(info.cwd, 'hello.txt'), 'authenticated change')
+      const hooks = join(temporary, 'hooks')
+      await mkdir(hooks)
+      await writeFile(join(hooks, 'pre-commit'), '#!/bin/sh\ntest -z "$GIT_CONFIG_VALUE_0"\n', { mode: 0o700 })
+      await writeFile(join(hooks, 'pre-push'), '#!/bin/sh\nexit 92\n', { mode: 0o700 })
+      await git(info.cwd, ['config', 'core.hooksPath', hooks])
+      await git(info.cwd, ['config', 'remote.origin.pushurl', decoy.remote])
+      value(await session.publish({ mode: 'push-branch', message: 'authenticated change', author }))
+      expect(await git(origin.remote, ['show', 'acp/scoped:hello.txt'])).toBe('authenticated change')
+      expect(await git(decoy.remote, ['branch', '--list', 'acp/scoped'])).toBe('')
+      await git(origin.source, ['commit', '--allow-empty', '-m', 'new base'])
+      await git(origin.source, ['push', 'origin', 'trunk'])
+      expect(value(await session.updateMain())[0]?.commit).toBe(await git(origin.source, ['rev-parse', 'HEAD']))
+      expect(requests).toContain('/authenticated.git/git-receive-pack')
+      expect(requests.filter(path => path === '/authenticated.git/git-upload-pack').length).toBeGreaterThan(1)
+    }
+    finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+    }
+  }, 30000)
 
   it.each(['signal', 'api'] as const)('cooperative cancellation via %s 保留不可恢复 Agent 的同一会话和进程', async (method) => {
     await ai.close()

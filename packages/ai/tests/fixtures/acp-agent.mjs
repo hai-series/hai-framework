@@ -82,6 +82,13 @@ line.on('line', async (text) => {
       event(params.sessionId, JSON.stringify({ cwd, processCwd: process.cwd(), instructions, skill }))
       return reply({ stopReason: 'end_turn' })
     }
+    if (content === 'credential-boundary') {
+      event(params.sessionId, JSON.stringify({
+        agent: process.env.ACP_TEST_AGENT_VALUE === 'agent-only-fixture',
+        git: Object.hasOwn(process.env, 'GIT_CONFIG_VALUE_0'),
+      }))
+      return reply({ stopReason: 'end_turn' })
+    }
     if (content === 'proxy') {
       event(params.sessionId, process.env.HTTP_PROXY ?? '')
       return reply({ stopReason: 'end_turn' })
