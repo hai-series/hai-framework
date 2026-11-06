@@ -1697,6 +1697,18 @@
                     "type": "string",
                     "pattern": "^[A-Z_]\\w*$"
                   }
+                },
+                "gitEnvironmentRefs": {
+                  "default": {},
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "pattern": "^[A-Z_]\\w*$"
+                  },
+                  "additionalProperties": {
+                    "type": "string",
+                    "pattern": "^[A-Z_]\\w*$"
+                  }
                 }
               },
               "required": [

@@ -9,6 +9,16 @@ import { ACPFailure } from './ai-acp-errors.js'
 import { engineEnvironment } from './ai-acp-process.js'
 
 /**
+ * 已解析的单个登记仓库。
+ * @example
+ * ```ts
+ * // 模块内部上下文。
+ * function remoteName(repository: Repository) { return repository.remote }
+ * ```
+ */
+type Repository = z.infer<typeof ACPWorkspaceSchema>['repositories'][number]
+
+/**
  * Git 只访问登记的工程；不扫描、重置或强制推送用户仓库。
  * @param workspace - 工程列表及每个工程的明确主分支。
  * @param runtime - 已打开且由调用方负责关闭的工作区环境。
@@ -29,7 +39,6 @@ export function createGitOperations(
       ...env,
     })
   const source = (id: string) => runtime.path(`main/${id}`)
-  type Repository = z.infer<typeof ACPWorkspaceSchema>['repositories'][number]
   const path = !runtime.resource && process.platform === 'win32' ? win32 : posix
   const scoped = Object.keys(workspace.gitEnvironmentRefs).length > 0
   const remoteUrl = (url: string, cwd: string) =>

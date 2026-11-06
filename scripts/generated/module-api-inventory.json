@@ -4384,6 +4384,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ACPSessionWorkspace",
+              "kind": "type",
+              "declaration": "ACPSessionWorkspace",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ACPTransport",
               "kind": "type",
               "declaration": "ACPTransport",
@@ -6506,6 +6512,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ACPSessionWorkspace",
+              "kind": "type",
+              "declaration": "ACPSessionWorkspace",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ACPTransport",
               "kind": "type",
               "declaration": "ACPTransport",
@@ -8625,6 +8637,12 @@
               "name": "ACPSessionInfo",
               "kind": "type",
               "declaration": "ACPSessionInfo",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPSessionWorkspace",
+              "kind": "type",
+              "declaration": "ACPSessionWorkspace",
               "declarationKind": "InterfaceDeclaration"
             },
             {

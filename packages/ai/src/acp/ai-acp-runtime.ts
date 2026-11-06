@@ -204,7 +204,16 @@ export async function openRuntime(
      */
     async withTemporaryDirectory<T>(action: (directory: string) => Promise<T>): Promise<T> {
       const node = engine ? 'node' : process.execPath
-      const directory = await run(node, ['-e', 'const fs=require("node:fs");const {tmpdir}=require("node:os");const {join}=require("node:path");process.stdout.write(fs.mkdtempSync(join(fs.realpathSync(tmpdir()), "hai-acp-git-")))'], root, undefined, false)
+      const directory = await run(node, ['-e', `
+const fs = require('node:fs');
+const path = require('node:path');
+const base = fs.realpathSync(process.argv[1] || require('node:os').tmpdir());
+for (const mount of process.argv.slice(2)) {
+  const relative = path.relative(fs.realpathSync(mount), base);
+  if (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative)) throw Error('scope');
+}
+process.stdout.write(fs.mkdtempSync(path.join(base, 'hai-acp-git-')));
+`, ...(engine ? ['/tmp', root, '/state'] : ['', root])], root, undefined, false)
       try {
         return await action(directory)
       }

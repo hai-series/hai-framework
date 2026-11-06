@@ -427,7 +427,15 @@
     "name": "HAI_AI_ACP_WORKSPACES_0_ENVIRONMENTREFS",
     "module": "ai",
     "path": "ai.acp.workspaces.0.environmentRefs",
-    "description": "目标环境变量名到宿主环境变量名的映射；保存引用而非明文凭据。",
+    "description": "工作区历史共用变量映射；Agent 专用凭据应配置在 Agent 定义中。",
+    "value": "{}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKSPACES_0_GITENVIRONMENTREFS",
+    "module": "ai",
+    "path": "ai.acp.workspaces.0.gitEnvironmentRefs",
+    "description": "仅供受管 Git 远程操作使用的环境变量引用，值不传给 Agent 或本地提交。",
     "value": "{}",
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
