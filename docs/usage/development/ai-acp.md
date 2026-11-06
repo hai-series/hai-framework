@@ -28,7 +28,7 @@ Codex 使用 `adapter: 'codex'`，DeepSeek Harness 使用 `adapter: 'deepseek-ha
 
 ## 创建和恢复会话
 
-以下例子假定配置中已有 `coder`、`project`，且 AI 已成功初始化。`prepare` 只克隆缺失工程、检查已有目录，不自动 pull、reset 或覆盖未提交成果；普通文件通过 `workspaces.importFiles(id, [{ path, content }])` 导入，拒绝覆盖、路径逃逸和符号链接。
+以下例子假定配置中已有 `coder`、`project`，工作区登记了 `web` 仓库，且 AI 已成功初始化。`prepare` 只克隆缺失工程、检查已有目录，不自动 pull、reset 或覆盖未提交成果；普通文件通过 `workspaces.importFiles(id, [{ path, content }])` 导入，拒绝覆盖、路径逃逸和符号链接。
 
 ```ts
 import { ai } from '@h-ai/ai'
@@ -37,7 +37,7 @@ async function inspectProject() {
   const prepared = await ai.acp.workspaces.prepare('project')
   if (!prepared.success) return prepared
   const created = await ai.acp.sessions.create({
-    agentId: 'coder', workspaceId: 'project', newWorktree: true,
+    agentId: 'coder', workspaceId: 'project', repositoryId: 'web', newWorktree: true,
   })
   if (!created.success) return created
   const response = await created.data.prompt([{ type: 'text', text: '阅读工程，说明结构与改进建议。' }])
@@ -48,6 +48,8 @@ async function inspectProject() {
 ```
 
 一个 workspace 可包含多个 Git 工程和上传资料；每个工程必须明确 `mainBranch`，remote 默认 origin。共享会话使用同一个 `main/` 目录，框架限制同时占用；`newWorktree: true` 从各工程当前已提交的本地主分支建立同名会话分支，普通文件独立复制。它不自动拉取远端，也不包含主目录未提交修改。
+
+使用 `repositoryId` 时，Agent 进程和原生会话均从指定仓库的根目录启动，恢复使用同一目录。把适用于该工程的 `AGENTS.md` 和固定版本的技能放在所选仓库中，由原生执行器发现。省略时使用聚合目录。选择仅作用于工作目录，其他登记仓库仍参与 worktree 创建及 Git 发布。远程 `custom-service` 继续使用服务端可见的 `cwd`。
 
 正常关闭保留工程和原生状态。继续任务用 `ai.acp.sessions.resume(id, callbacks)`，只使用智能体声明的 load/resume 能力；原生不支持或模型/智能体定义已不兼容时返回失败。`sessions.remove(id)` 只移除关闭/失败的记录，不删除目录、worktree 或卷。
 

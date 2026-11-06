@@ -430,6 +430,10 @@ export function createACPOperations(
             info.cwd = info.newWorktree
               ? await git.createWorktree(info.id, info.branch!)
               : runtime.path('main')
+            if (info.repositoryId) {
+              const directory = info.newWorktree ? `sessions/${info.id}` : 'main'
+              info.cwd = runtime.path(`${directory}/${info.repositoryId}`)
+            }
           }
           finally {
             await releasePrepare?.()
@@ -437,6 +441,15 @@ export function createACPOperations(
         }
         else {
           runtime = await openRuntime(workspace)
+        }
+        if (info.repositoryId) {
+          const directory = info.newWorktree ? `sessions/${info.id}` : 'main'
+          const repoPath = `${directory}/${info.repositoryId}`
+          if (!workspace.repositories.some(repo => repo.id === info.repositoryId)
+            || info.cwd !== runtime.path(repoPath)) {
+            throw new ACPFailure('conflict')
+          }
+          await runtime.file('directory', repoPath)
         }
       }
       else if (
@@ -1115,14 +1128,14 @@ export function createACPOperations(
     sessions: {
       /**
        * 绑定模型、工作区和 MCP，准备目录后建立原生会话；newWorktree 可选择独立工程分支。
-       * @param options - 智能体、工作区、模型、MCP 及可信回调；newWorktree 默认 false。
+       * @param options - 智能体、工作区、可选会话仓库、模型、MCP 及可信回调；newWorktree 默认 false。
        * @returns 可用于 prompt/stream/publish 的会话句柄；启动失败保留失败记录。
        * @example
        * ```ts
        * import { ai } from '@h-ai/ai'
        * // 前提：ai 已成功初始化。
        * // 普通 API 先检查 result.success，再读取 data 或 error。
-       * const result = await ai.acp.sessions.create({ agentId: 'coder', workspaceId: 'project', newWorktree: true })
+       * const result = await ai.acp.sessions.create({ agentId: 'coder', workspaceId: 'project', repositoryId: 'api', newWorktree: true })
        * ```
        */
       create: (options: ACPCreateSessionOptions) =>
@@ -1137,10 +1150,19 @@ export function createACPOperations(
               = options.modelId ?? agent.defaultModelId ?? agent.modelIds[0]
             if (modelId && !agent.modelIds.includes(modelId))
               throw new ACPFailure('model')
+            const workspace = options.workspaceId ? await getWorkspace(options.workspaceId) : undefined
+            if (options.repositoryId !== undefined) {
+              sessionIdentitySchema.parse(options.repositoryId)
+              if (!workspace || agent.mode === 'custom-service' || options.cwd !== undefined)
+                throw new ACPFailure('invalid')
+              if (!workspace.repositories.some(repo => repo.id === options.repositoryId))
+                throw new ACPFailure('missing', { id: options.repositoryId })
+            }
             const info: ACPSessionInfo = {
               id,
               agentId: agent.id,
               workspaceId: options.workspaceId,
+              repositoryId: options.repositoryId,
               cwd: options.cwd ?? '',
               newWorktree: options.newWorktree ?? false,
               branch: options.newWorktree
@@ -1153,8 +1175,6 @@ export function createACPOperations(
               mcpServers: options.mcpServers ?? [],
               mcpServerIds: options.mcpServerIds,
             }
-            if (options.workspaceId)
-              await getWorkspace(options.workspaceId)
             await unique(sessions, id, info)
             return info
           })

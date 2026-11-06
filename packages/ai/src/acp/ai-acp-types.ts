@@ -124,6 +124,8 @@ export interface ACPSessionInfo {
   agentId: string
   /** 受管理工作区 ID；远程自定义服务可省略。 */
   workspaceId?: string
+  /** 作为会话工作目录的已登记仓库；省略时使用聚合目录。 */
+  repositoryId?: string
   /** 智能体实际可见的绝对工作目录。 */
   cwd: string
   /** 是否使用独立检出目录；false 表示共享工作区主目录。 */
@@ -162,6 +164,8 @@ export interface ACPCreateSessionOptions extends ACPClientOptions {
   agentId: string
   /** 托管模式必填的工作区 ID。 */
   workspaceId?: string
+  /** 以已登记仓库的根目录启动与恢复；不改变 worktree 和 Git 发布的仓库范围。 */
+  repositoryId?: string
   /** 自定义远程服务可见的绝对路径；托管模式由工作区计算。 */
   cwd?: string
   /** 默认 false；true 时从每个工程当前本地主分支创建 worktree。 */

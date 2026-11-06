@@ -68,7 +68,7 @@ async function run() {
     if (!workspace.success) return workspace
     const ready = await ai.acp.workspaces.prepare('project')
     if (!ready.success) return ready
-    const created = await ai.acp.sessions.create({ agentId: 'coder', workspaceId: 'project', newWorktree: true })
+    const created = await ai.acp.sessions.create({ agentId: 'coder', workspaceId: 'project', repositoryId: 'api', newWorktree: true })
     if (!created.success) return created
     const session = created.data
     const response = await session.prompt([{ type: 'text', text: '阅读工程并说明结构' }])
@@ -80,6 +80,8 @@ async function run() {
 ```
 
 `agents.initialize(id)` 检查模型绑定和原生配置能否生成；真正启动和握手用 `agents.check(id, { workspaceId })`。容器 Agent 的 `image` 必须与 workspace 的 image 一致。注册 volume 时固定实际选中的引擎；`auto` 优先就绪 Podman，再尝试 Docker，显式选定不可用引擎直接失败。
+
+`repositoryId` 选择已登记仓库的根目录，原生 Agent 从该目录启动和恢复，可发现仓库内的 `AGENTS.md` 和技能。省略时使用聚合目录。选择只影响工作目录，worktree 和发布仍覆盖全部登记仓库。远程 `custom-service` 使用对端可见的 `cwd`。
 
 生产环境先初始化共享数据库和网络向量库，或注入 shared AIStoreProvider。Agent/workspace/session 记录和 CAS 占用存入 AI Store，原生历史保存在隔离状态目录。不能把临时内存 Provider 当跨节点锁。
 

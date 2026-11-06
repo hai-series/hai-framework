@@ -1,6 +1,6 @@
 import type { HaiResult } from '@h-ai/core'
 import { execFile } from 'node:child_process'
-import { mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
@@ -70,6 +70,34 @@ async function workspace(
 const prompt = (text: string) => [{ type: 'text' as const, text }]
 const author = { name: 'ACP test', email: 'test@example.invalid' }
 describe('aCP managed session E2E', () => {
+  it.each([false, true])('从已登记仓库启动和恢复，独立工作树=%s', async (newWorktree) => {
+    const api = await seed('api', 'trunk')
+    const web = await seed('web', 'trunk')
+    await mkdir(join(web.source, '.agents', 'skills', 'sample'), { recursive: true })
+    await writeFile(join(web.source, 'AGENTS.md'), 'web instructions')
+    await writeFile(join(web.source, '.agents', 'skills', 'sample', 'SKILL.md'), 'web skill v2')
+    await git(web.source, ['add', '.'])
+    await git(web.source, ['commit', '-m', 'instructions and skill'])
+    await git(web.source, ['push', 'origin', 'trunk'])
+    await workspace([{ id: 'api', url: api.remote, mainBranch: 'trunk' }, { id: 'web', url: web.remote, mainBranch: 'trunk' }])
+
+    const options = { id: 'selected', agentId: 'fixture', workspaceId: 'project', newWorktree }
+    for (const repositoryId of ['missing', '../web']) {
+      expect((await ai.acp.sessions.create({ ...options, repositoryId })).success).toBe(false)
+    }
+    expect(value(await ai.acp.sessions.list())).toEqual([])
+    const session = value(await ai.acp.sessions.create({ ...options, repositoryId: 'web' }))
+    const info = value(await session.info())
+    expect(info.repositoryId).toBe('web')
+    const directory = newWorktree ? join('sessions', 'selected') : 'main'
+    expect(info.cwd).toBe(await realpath(join(temporary, 'workspace', directory, 'web')))
+    const expected = { cwd: info.cwd, processCwd: info.cwd, instructions: 'web instructions', skill: 'web skill v2' }
+    expect(JSON.parse(value(await session.prompt(prompt('inspect-repo'))).text)).toEqual(expected)
+    value(await session.close())
+    const resumed = value(await ai.acp.sessions.resume(session.id))
+    expect(JSON.parse(value(await resumed.prompt(prompt('inspect-repo'))).text)).toEqual(expected)
+  }, 20000)
+
   it.each(['signal', 'api'] as const)('cooperative cancellation via %s 保留不可恢复 Agent 的同一会话和进程', async (method) => {
     await ai.close()
     value(await ai.init({ acp: { promptTimeout: 5000, cancelTimeout: 1000 } }))

@@ -23,6 +23,7 @@ const fs = require('node:fs/promises'); const path = require('node:path');
    catch (e) { if (e.code !== 'ENOENT') throw e; }
  }
  if (op === 'mkdir') await fs.mkdir(target, { recursive: true });
+ else if (op === 'directory') { if (!(await fs.stat(target)).isDirectory()) throw Error('directory'); }
  else if (op === 'exists') process.stdout.write(String(await fs.stat(target).then(() => true, e => { if(e.code === 'ENOENT') return false; throw e; })));
  else if (op === 'write') { await fs.mkdir(path.dirname(target), { recursive: true }); await fs.writeFile(target, Buffer.from(content, 'base64'), { flag: 'wx', mode: 0o600 }); }
  else if (op === 'read') process.stdout.write((await fs.readFile(target)).toString('base64'));
@@ -204,7 +205,7 @@ export async function openRuntime(
         : path(`.state/${sessionId}`),
     /**
      * 执行受工作区约束的文件操作，拒绝链接和路径逃逸。
-     * @param op - mkdir/exists/write/read/copy 操作。
+     * @param op - mkdir/directory/exists/write/read/copy 操作。
      * @param name - 工作区内相对路径或已校验的内部绝对路径。
      * @param content - write 时为 Base64，copy 时为目标路径，其余为空。
      * @returns 文本结果：exists 为 true/false，read 为 Base64，其余为空。
@@ -215,7 +216,7 @@ export async function openRuntime(
      * ```
      */
     async file(
-      op: 'mkdir' | 'exists' | 'write' | 'read' | 'copy',
+      op: 'mkdir' | 'directory' | 'exists' | 'write' | 'read' | 'copy',
       name: string,
       content = '',
     ) {

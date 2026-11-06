@@ -75,6 +75,13 @@ line.on('line', async (text) => {
   }
   if (method === 'session/prompt') {
     const content = params.prompt[0].text
+    if (content === 'inspect-repo') {
+      const cwd = sessions.get(params.sessionId)
+      const instructions = await readFile(join(cwd, 'AGENTS.md'), 'utf8')
+      const skill = await readFile(join(cwd, '.agents', 'skills', 'sample', 'SKILL.md'), 'utf8')
+      event(params.sessionId, JSON.stringify({ cwd, processCwd: process.cwd(), instructions, skill }))
+      return reply({ stopReason: 'end_turn' })
+    }
     if (content === 'proxy') {
       event(params.sessionId, process.env.HTTP_PROXY ?? '')
       return reply({ stopReason: 'end_turn' })
