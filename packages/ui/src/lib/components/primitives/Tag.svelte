@@ -21,7 +21,6 @@
 <script lang='ts'>
   import type { DataAttributes, TagProps } from '../../types.js'
   import { cn, getDataAttributes, getSizeClass, getVariantClass } from '../../utils.js'
-  import IconButton from './IconButton.svelte'
 
   const {
     text = '',
@@ -62,16 +61,13 @@
   {/if}
 
   {#if closable}
-    <IconButton
-      variant='ghost'
-      size='xs'
-      class='-mr-1'
+    <button
+      type='button'
+      class='-mr-1 flex size-4 shrink-0 items-center justify-center rounded-full text-current/70 transition-colors hover:bg-current/15 hover:text-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/40'
+      aria-label={removeLabel}
       onclick={handleClose}
-      ariaLabel={removeLabel}
     >
-      <svg xmlns='http://www.w3.org/2000/svg' class='h-3 w-3' viewBox='0 0 20 20' fill='currentColor'>
-        <path fill-rule='evenodd' d='M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z' clip-rule='evenodd' />
-      </svg>
-    </IconButton>
+      <span class='icon-[tabler--x] size-3' aria-hidden='true'></span>
+    </button>
   {/if}
 </span>

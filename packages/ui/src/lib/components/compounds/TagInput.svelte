@@ -105,6 +105,8 @@
       <Tag
         text={tag}
         size='sm'
+        variant='primary'
+        class='badge-soft'
         closable={!disabled}
         onclose={() => removeTag(index)}
       />
