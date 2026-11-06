@@ -1,12 +1,12 @@
 import { Buffer } from 'node:buffer'
-import { ChildProcess, spawn, spawnSync } from 'node:child_process'
+import { ChildProcess, spawn } from 'node:child_process'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { describe, expect, it } from 'vitest'
 import { windowsACPCommand, windowsACPJobProbe } from '../src/acp/ai-acp-process-windows.js'
-import { baseEnvironment, stopProcess } from '../src/acp/ai-acp-process.js'
+import { baseEnvironment, execute, stopProcess } from '../src/acp/ai-acp-process.js'
 
 /** 仅忽略本次拥有进程已经消失的情况；其它清理错误继续报告。 */
 function killOwned(pid: number) {
@@ -56,18 +56,11 @@ async function waitForWindowsFixture<T>(child: ChildProcess, read: () => T | und
 }
 
 describe('aCP owned process cleanup', () => {
-  // 测试总期限覆盖 PowerShell 探测的 15 秒硬期限和断言收尾。
-  it.skipIf(process.platform !== 'win32')('windows 私有 Job 不存在时查询确认无成员', () => {
+  // 首次加载 PowerShell Utility 和 C# 编译器单独计时；超时时按进程树回收编译子进程。
+  it.skipIf(process.platform !== 'win32')('windows 私有 Job 不存在时查询确认无成员', async () => {
     const job = windowsACPCommand(process.execPath, ['--version'])
-    const probe = spawnSync('powershell.exe', windowsACPJobProbe(job.name), {
-      env: baseEnvironment(),
-      windowsHide: true,
-      encoding: 'utf8',
-      timeout: 15000,
-    })
-    expect(probe.error, probe.stderr).toBeUndefined()
-    expect(probe.status, probe.stderr).toBe(0)
-  }, 20000)
+    await expect(execute('powershell.exe', windowsACPJobProbe(job.name), undefined, undefined, 30_000)).resolves.toBe('')
+  }, 35000)
 
   it.skipIf(process.platform !== 'win32').each([false, true])('windows Job 停止中间进程退出后的后台 writer（根退出=%s）', async (rootExits) => {
     const directory = await mkdtemp(join(tmpdir(), 'hai-acp-job-'))
