@@ -260,7 +260,7 @@ export async function initCapacitor() {
 
 CLI `build --target app` 归档的 APK 使用工程标识、平台、debug/release 和版本命名，如 `todo-android-debug-0.1.0.apk`；批次目录使用可读本地时间 `build-todo-app-android-debug-20261105-171924-62e4f1-0.1.0`。底层 Gradle 原始输出仍由 Gradle 管理，归档名称与 Core 应用显示名分别承担制品识别和用户展示职责。
 
-生成应用的 `appName` 通过 `scripts/native-name.mjs` 解析 Core `name`，支持 `HAI_CORE_NAME` 及 dotenv 覆盖；Fullstack 的脚本读取工程根环境文件和 serv 的 `_core.yml`。正式打包默认 prod，可由进程 HAI_CORE_ENV 切换。已有 Android/iOS 工程需同步平台显示名称后重打包；下面的固定名称仅用于说明最小 Capacitor 配置。
+生成应用的 `appName` 通过 `scripts/native-name.mjs` 解析 Core `name`，支持 `HAI_CORE_NAME` 及 dotenv 覆盖。Fullstack 从工程根读取环境文件，从 serv 读取 `_core.yml`。父级 `HAI_CORE` JSON 替换 YAML，省略 `name` 且没有生效的 `HAI_CORE_NAME` 时使用 Core 默认名 `hai Admin`。正式打包默认 prod，可由进程 `HAI_CORE_ENV` 切换。已有 Android/iOS 工程需同步平台显示名称后重打包。下面的示例使用固定名称演示最小 Capacitor 配置。
 
 Capacitor 原生壳读取 `webDir` 指定的静态产物。纯 Vite 模板默认为 `dist`；SvelteKit 项目需配置静态适配器，输出可能是 `build`。构建器、容器与 `webDir` 必须一致，以下是 Vite 示例：
 

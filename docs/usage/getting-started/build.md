@@ -53,7 +53,9 @@ App 的 Capacitor `appName`、Desktop 的 Tauri `productName` 和主窗口初始
 name: ${HAI_CORE_NAME:订单工作台}
 ```
 
-在 `.env.prod` 设置 `HAI_CORE_NAME=订单工作台正式版` 后，`pnpm build --target app --platform android` 的 Capacitor 配置名称，以及 `pnpm build --target desktop --platform windows --arch x64` 的产品名和主窗口标题都会解析为“订单工作台正式版”。进程变量可覆盖文件；完整优先级为进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML，父 `HAI_CORE` JSON 也沿用 Core 的覆盖规则。
+在 `.env.prod` 设置 `HAI_CORE_NAME=订单工作台正式版` 后，`pnpm build --target app --platform android` 的 Capacitor 配置名称，以及 `pnpm build --target desktop --platform windows --arch x64` 的产品名和主窗口标题都会解析为“订单工作台正式版”。完整优先级为进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML。
+
+父级 `HAI_CORE` 接收 JSON 对象并整段替换 YAML。若进程只设置 `HAI_CORE='{"env":"production"}'`，且同级没有 `HAI_CORE_NAME`，直接使用 Capacitor 或 Tauri 与通过 `hai build` 打包都会得到 Core 默认名 `hai Admin`。需要保留指定名称时，在父 JSON 中填写 `name`，或在同级设置 `HAI_CORE_NAME`。
 
 正式原生打包默认使用 `prod`，Tauri `tauri:dev` 使用 `dev`。Capacitor 直接命令优先使用 `NODE_ENV`，未设置时使用 `prod`；进程 `HAI_CORE_ENV=development|test|production|staging` 可显式选择模式，development/production 映射为 dev/prod。这是原生名称的构建输入：解析后只把名称交给原生配置，环境文件中的服务端秘密不会进入该配置；源码编译和 serv/web 镜像仍不加载部署环境文件。
 

@@ -51,6 +51,26 @@ it('uses explicit Core mode and parent JSON replacement while forwarding only na
   expect(nativeNameEnvironment()).toEqual({ HAI_CORE_NAME: 'Parent Name', HAI_CORE_ENV: 'development' })
 })
 
+it('uses the same default name when parent JSON replaces YAML in a build subprocess', () => {
+  const file = join(root, 'config/_core.yml')
+  vi.stubEnv('HAI_CORE', JSON.stringify({ logging: { level: 'warn' } }))
+  const directName = resolveNativeName(root, file, 'prod')
+  const environment = nativeNameEnvironment(root)
+
+  vi.stubEnv('HAI_CORE', undefined)
+  vi.stubEnv('HAI_CORE_NAME', environment.HAI_CORE_NAME)
+  vi.stubEnv('HAI_CORE_ENV', environment.HAI_CORE_ENV)
+  expect(directName).toBe('hai Admin')
+  expect(resolveNativeName(root, file, 'prod')).toBe(directName)
+  expect(environment).toEqual({ HAI_CORE_NAME: directName, HAI_CORE_ENV: 'production' })
+})
+
+it.each(['null', '[]', 'invalid-value'])('rejects a non-object HAI_CORE value (%s)', (value) => {
+  vi.stubEnv('HAI_CORE', value)
+  expect(() => nativeNameEnvironment(root)).toThrow('Invalid HAI_CORE: expected a JSON object')
+  expect(() => resolveNativeName(root, join(root, 'config/_core.yml'), 'prod')).toThrow('Invalid HAI_CORE: expected a JSON object')
+})
+
 it('fails on invalid dotenv, missing YAML and blank names, and restores the environment on failure', () => {
   const file = join(root, 'config/_core.yml')
   writeFileSync(join(root, '.env.prod'), 'HAI_CORE_NAME=One\nHAI_CORE_NAME=Two\n')

@@ -3,6 +3,21 @@ import process from 'node:process'
 import { core, CoreConfigSchema } from '@h-ai/core'
 
 /**
+ * 读取原生构建所需的 Core 环境覆盖，父级必须是对象。
+ * @param {NodeJS.ProcessEnv} [environment] 原生构建的已合并环境。
+ * @returns {Record<string, unknown>} Core 环境覆盖值。
+ */
+function resolveCoreInputs(environment) {
+  const resolved = core.config.resolve({ name: 'core', value: {}, schema: CoreConfigSchema, environment })
+  if (!resolved.success)
+    throw new Error(resolved.error.message)
+  const { data } = resolved
+  if (data === null || typeof data !== 'object' || Array.isArray(data))
+    throw new Error('Invalid HAI_CORE: expected a JSON object')
+  return /** @type {Record<string, unknown>} */ (data)
+}
+
+/**
  * 只将显式名称和环境模式传给原生构建子进程，父 JSON 中的其他字段不透传。
  * @param {string} [envDir] 指定时先读取该目录的环境文件，供隔离容器的名称输入使用。
  * @returns {Record<string, string>} 原生名称的公开构建输入。
@@ -12,19 +27,16 @@ export function nativeNameEnvironment(envDir) {
   /** @type {string | undefined} */
   let selectedMode
   if (envDir) {
-    const explicit = core.config.resolve({ name: 'core', value: {}, schema: CoreConfigSchema })
-    if (!explicit.success)
-      throw new Error(explicit.error.message)
-    selectedMode = /** @type {{ env?: string }} */ (explicit.data).env ?? 'production'
+    selectedMode = /** @type {string | undefined} */ (resolveCoreInputs().env) ?? 'production'
     const loaded = core.config.loadEnvFiles({ envDir, mode: selectedMode })
     if (!loaded.success)
       throw new Error(loaded.error.message)
     inputs = loaded.data
   }
-  const resolved = core.config.resolve({ name: 'core', value: {}, schema: CoreConfigSchema, environment: inputs })
-  if (!resolved.success)
-    throw new Error(resolved.error.message)
-  const value = /** @type {Record<string, unknown>} */ (resolved.data)
+  const value = resolveCoreInputs(inputs)
+  // 父 JSON 替换 YAML。只转发细项时也要保留 name 缺省后的 Schema 默认值。
+  if (inputs.HAI_CORE !== undefined && value.name === undefined)
+    value.name = CoreConfigSchema.shape.name.parse(undefined)
   /** @type {Record<string, string>} */
   const environment = {}
   for (const key of ['name', 'env']) {

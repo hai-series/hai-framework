@@ -101,6 +101,8 @@ jobs:
           pnpm --filter mobile-app exec cap add ios --packagemanager SPM
           pnpm --filter mobile-app exec cap sync ios
           xcodebuild -project apps/mobile-app/ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath .cache/native/ios CODE_SIGNING_ALLOWED=NO build
+          plist=.cache/native/ios/Build/Products/Debug-iphonesimulator/App.app/Info.plist
+          test "$(/usr/bin/plutil -extract CFBundleDisplayName raw "$plist")" = "$HAI_CORE_NAME"
       - name: Record acceptance boundary
         if: always()
         shell: bash

@@ -21,6 +21,8 @@ description: "构建或排查 hai 应用的源码、静态网站、容器镜像�
 
 - 原生名称是单独的公开构建输入：App 的 appName、Desktop 的 productName/主窗口初始标题复用 `_core.yml.name` 与 HAI_CORE_NAME，Fullstack 从工程根 dotenv 和 serv YAML 解析。正式打包默认 prod，Tauri dev 默认 dev，进程 HAI_CORE_ENV 可切换模式；只有名称写入原生配置。Desktop 使用 pnpm tauri/tauri:build 或 hai build 的入口，不绕过生成的 run-tauri.mjs；保留当前平台 JSON 的窗口数组与 null 删除，优先更新 main 标签窗口。已有 Capacitor 平台需另行同步显示名；源码/镜像的环境隔离规则保持适用。
 
+- 父级 `HAI_CORE` JSON 替换 YAML。父 JSON 未提供 `name` 且没有生效的 `HAI_CORE_NAME` 时，直接运行原生工具与 `hai build` 都使用 Core 默认名 `hai Admin`。
+
 - 先读当前 package.json、lockfile 与 README，识别 SvelteKit / API workspace / fullstack / Vite SPA / 原生 App，按实际 scripts 验证。
 - 升级 hai-framework、比较版本差异或同步框架 skills 时，使用 [hai-framework-sync](../hai-framework-sync/SKILL.md) 完成版本发现、差异分析、选择/阻塞处理、迁移与验证。
 - 功能开发先用 [development.md](../hai-app-create/development.md) 把需求匹配到当前版本的框架能力与配置；再读取所选模块 skill 和公开类型。
