@@ -305,6 +305,8 @@ From the application directory, ask the assistant to use [hai-framework-sync](..
 
 You can request a specific version or ask for comparison only. The skill queries the actual registry/dist-tag, verifies target versions and engine requirements for every used package, compares cumulative changes, updates exact versions and the lockfile, and migrates public API usage, settings, scripts, and complete skill resources. Network failures or incomplete releases are reported as blockers; cached data is not presented as “latest.”
 
+The upgrade uses the target release’s public capabilities wherever they meet the application’s requirements. After migrating callers, it removes redundant implementations and dependencies that no longer have consumers. If a patch is needed, the assistant explains the gap and asks you to choose among viable options. It flags configuration and critical workflow changes in advance and waits for your confirmation before changing a configuration contract or how a critical workflow behaves.
+
 `hai init` can add missing AI entry files and skills to older projects while preserving existing files. It is not a framework upgrade command and does not overwrite old rules. Merge existing skills using the old template, application customizations, and new template. Framework `main` is not necessarily the version published to npm.
 
 After upgrading, run the project's typecheck, lint, build, test, and affected E2E checks, including real authentication, data, and critical workflows. Rebuild deliverable images or installers, then deploy as described in section 5. A version edit or successful build alone does not complete an upgrade.

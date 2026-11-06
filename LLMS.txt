@@ -117,7 +117,7 @@ return result
 | Fullstack 默认管理后台与验证 | [CLI 用法](packages/cli/README.md#fullstack-mini-管理后台)；创建时分别在 `.env.dev.local/.env.test.local/.env.prod.local` 生成不同随机初始管理员密码及 transport ring，私有文件不提交Git，克隆后通过受保护配置分发；默认 pretty 日志并安装 pino-pretty；Web/App/Desktop 共享管理界面、typed client，使用 IAM 默认认证 procedures 和 UI 公开主题子路径，保留应用业务守卫 |
 | 生成应用审查/测试 | [hai-app-review](packages/cli/templates/skills/hai-app-review/SKILL.md) / [hai-app-tests](packages/cli/templates/skills/hai-app-tests/SKILL.md) |
 | CI / PR 审查 | [hai-ci](packages/cli/templates/skills/hai-ci/SKILL.md) / [hai-pr-review](packages/cli/templates/skills/hai-pr-review/SKILL.md) |
-| 框架升级到最新/指定版本、差异分析与 skills 同步 | [hai-framework-sync](packages/cli/templates/skills/hai-framework-sync/SKILL.md)，发现发布版本，处理用户选择/阻塞，迁移并验证 |
+| 框架升级到最新/指定版本、差异分析与 skills 同步 | [hai-framework-sync](packages/cli/templates/skills/hai-framework-sync/SKILL.md)，优先复用目标版能力并清理冗余，提前提示配置与关键流程变更，涉及补丁时由用户选择 |
 
 ## 配置与依赖
 
