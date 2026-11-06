@@ -264,3 +264,5 @@ retentionDays: 30
 ```
 
 先注册无外部副作用的任务，查看执行与日志，再模拟落库失败用`repairLog`补写。unknown先停止旧runner、核对实际副作用，再按`expectedUpdatedAt`调用`resolveUnknown`；不能只因租约释放重跑。生产多节点行锁、时钟偏差和故障恢复须目标服务验收。
+
+使用 PostgreSQL 时，同一分钟重启或多节点同时领取可能遇到已有执行记录或被占用的任务槽，调度器按正常竞争处理。通过 `scheduler.execution.get(occurrenceId)` 核对实际执行状态，保留执行账本和唯一约束以防止任务重复执行。

@@ -1,9 +1,12 @@
+import type { LogRecord } from '@h-ai/core'
 import type { ReldbConfigInput } from '@h-ai/reldb'
 import type { StartedTestContainer } from 'testcontainers'
 import type { TaskDefinition, TaskExecutionLog } from '../src/index.js'
-import { reldb } from '@h-ai/reldb'
+import { core } from '@h-ai/core'
+import { HaiReldbError, reldb } from '@h-ai/reldb'
 import { GenericContainer, Wait } from 'testcontainers'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { HaiSchedulerError, scheduler } from '../src/index.js'
 import { executionId, SchedulerExecutionRepository } from '../src/repositories/index.js'
 
 const task: TaskDefinition = { id: 'database-task', name: 'database-task', cron: '* * * * *', retry: { maxAttempts: 3 } }
@@ -24,6 +27,8 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
     let container: StartedTestContainer | undefined
     let repo: SchedulerExecutionRepository
     let now: number
+    const duplicateLogs: LogRecord[] = []
+    let stopObserving: (() => void) | undefined
 
     beforeAll(async () => {
       let config: ReldbConfigInput = { type: 'sqlite', database: ':memory:' }
@@ -48,6 +53,18 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
       repo = new SchedulerExecutionRepository(reldb)
       expect((await repo.count()).success).toBe(true)
       now = Date.now()
+      if (type === 'postgresql') {
+        duplicateLogs.length = 0
+        stopObserving = core.logger.observe((record) => {
+          if (record.level === 'error' && record.context.errorCode === HaiReldbError.DUPLICATE_ENTRY.code)
+            duplicateLogs.push(record)
+        })
+      }
+    })
+
+    afterEach(() => {
+      stopObserving?.()
+      expect(duplicateLogs).toEqual([])
     })
 
     afterAll(async () => {
@@ -123,6 +140,68 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
       expect(await repo.claim(task, id, trigger, 'b', 1000)).toMatchObject({ success: true, data: { status: 'success', attemptCount: 1 } })
       expect((await reldb.sql.execute(`UPDATE ${table} SET leased_until = ? WHERE occurrence_id = ?`, ['9007199254740993', id])).success).toBe(true)
       expect((await repo.byOccurrence(id)).success).toBe(false)
+    })
+
+    it.runIf(type === 'postgresql')('多实例同时领取只有一个 owner，其他触发等待同一个任务槽', async () => {
+      const id = executionId(task.id, 'manual', 'concurrent')
+      const peer = new SchedulerExecutionRepository(reldb)
+      const claims = await Promise.all([
+        repo.claim(task, id, trigger, 'a', 60_000),
+        peer.claim(task, id, trigger, 'b', 60_000),
+      ])
+      expect(claims).toEqual(expect.arrayContaining([
+        { success: true, data: null },
+        { success: true, data: expect.objectContaining({ occurrenceId: id, status: 'claimed', attemptCount: 0 }) },
+      ]))
+      const nextId = executionId(task.id, 'manual', 'other')
+      expect(await peer.claim(task, nextId, trigger, 'b', 60_000)).toEqual({ success: true, data: null })
+      expect(await repo.byOccurrence(nextId)).toEqual({ success: true, data: null })
+    })
+
+    it.runIf(type === 'postgresql')('同一数据库分钟重启调度器，已完成的定时任务只执行一次', async () => {
+      const slot = await repo.currentTime()
+      if (!slot.success)
+        throw new Error('Database time unavailable')
+      const id = executionId(task.id, 'scheduled', String(Math.floor(slot.data / 60_000)))
+      // 固定扫描分钟，所有领取、执行和租约条件仍使用真实 PostgreSQL。
+      const currentTime = vi.spyOn(SchedulerExecutionRepository.prototype, 'currentTime').mockResolvedValue(slot)
+      const onTaskExecute = vi.fn(() => 'committed')
+      const config = { tickInterval: 100, hooks: { onTaskExecute } }
+      try {
+        expect((await scheduler.init(config)).success).toBe(true)
+        expect((await scheduler.register(task)).success).toBe(true)
+        expect(scheduler.start().success).toBe(true)
+        await vi.waitFor(async () => {
+          expect(await scheduler.execution.get(id)).toMatchObject({ success: true, data: { status: 'success', attemptCount: 1, logPersistence: 'persisted' } })
+        }, { timeout: 5000 })
+        await scheduler.close()
+
+        expect((await scheduler.init(config)).success).toBe(true)
+        expect(scheduler.start().success).toBe(true)
+        await vi.waitFor(async () => {
+          expect(await scheduler.getLogs({ taskId: task.id })).toMatchObject({
+            success: true,
+            data: { items: expect.arrayContaining([expect.objectContaining({ occurrenceId: id, status: 'interrupted' })]) },
+          })
+        }, { timeout: 5000 })
+        expect(onTaskExecute).toHaveBeenCalledOnce()
+        expect(await scheduler.execution.get(id)).toMatchObject({ success: true, data: { status: 'success', attemptCount: 1 } })
+      }
+      finally {
+        await scheduler.close()
+        currentTime.mockRestore()
+      }
+    })
+
+    it.runIf(type === 'postgresql')('已有执行时仍返回领取语句的实际数据库错误', async () => {
+      const id = executionId(task.id, 'manual', 'sql-error')
+      const claim = await repo.claim(task, id, trigger, 'a', 60_000)
+      if (!claim.success || !claim.data)
+        throw new Error('Initial claim failed')
+      expect((await repo.begin(claim.data, 60_000)).success).toBe(true)
+      expect((await repo.finish(claim.data, successLog(now))).success).toBe(true)
+      expect((await reldb.sql.execute(`ALTER TABLE ${table} ADD CHECK (status <> 'claimed')`)).success).toBe(true)
+      expect(await repo.claim(task, id, trigger, 'b', 60_000)).toMatchObject({ success: false, error: { code: HaiSchedulerError.DB_SAVE_FAILED.code } })
     })
   })
 }

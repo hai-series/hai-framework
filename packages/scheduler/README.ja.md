@@ -214,6 +214,8 @@ const logs = await scheduler.getLogs({
 
 `context.occurrenceId` は永続化された発生 ID で、同じ cron 分と再試行で共通です。手動では 1～128 文字の `idempotencyKey` で元の記録を再利用し、省略時は別発生になります。`executionToken` は取得ごとに変わり、`sequence` / `attempt` が世代を示します。API は `Idempotency-Key`、`X-Scheduler-Sequence`、`X-Scheduler-Attempt`、`X-Scheduler-Task`（ID を percent-encoding）を上書きします。取得済みのライフサイクルイベントも `event.context` を提供し、副作用には同じキーによる排除が必要です。
 
+PostgreSQL では、同じ分内の再起動や複数ノードでの同時取得により、既存の実行記録や使用中のタスク枠に行き当たることがあります。スケジューラーはこれらを通常の競合として処理します。`scheduler.execution.get(occurrenceId)` で実行状態を確認し、重複実行を防ぐために実行台帳と一意制約を保持してください。
+
 `idempotent` の既定は false。受信側が排除台帳と全副作用をアトミックに永続化する場合だけ true にします。期限切れ実行は true のとき同 occurrenceId で引継ぎ、非冪等実行、または保存済み retry.maxAttempts（既定 1、範囲 1–100、初回と復旧を含む）の予算を使い切った場合は `unknown` となりタスク枠を保持します。停止中の旧プロセスが送った外部操作をリースで撤回できず、ヘッダーだけでは排除できません。再試行もこの宣言に従います。
 
 正規状態は `scheduler.execution.get(occurrenceId)`、不明一覧は `listUnknown({ limit, offset })`（limit 1～100、offset 0～1000000）で確認します。信頼された担当者が外部効果を照合し旧 runner の終了を確認してから、`resolveUnknown(id, { status: 'success' | 'discarded', expectedUpdatedAt })` の CAS で枠を解放します。不明実行を直接再投入しないでください。`log.occurrenceId` が照会用受領記録で、`getLogs` は試行の観測ログです。ログ保持は journal と排除履歴を削除しません。

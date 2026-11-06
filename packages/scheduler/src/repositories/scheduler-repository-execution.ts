@@ -3,7 +3,7 @@
  * @module scheduler-repository-execution
  */
 import type { HaiResult } from '@h-ai/core'
-import type { ReldbFunctions } from '@h-ai/reldb'
+import type { ExecuteResult, ReldbFunctions } from '@h-ai/reldb'
 import type { SchedulerExecutionEntry, SchedulerExecutionState, TaskDefinition, TaskExecutionLog, TaskTriggerInfo } from '../scheduler-types.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { err, ok } from '@h-ai/core'
@@ -291,18 +291,23 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
       return failed(ready.error)
     const clock = this.databaseClock()
     const owner = `${nodeId}:${randomUUID()}`
-    let created: HaiResult<unknown>
+    const postgres = this.db.config?.type === 'postgresql'
+    // 两个唯一约束都可能命中，后续读取区分已有执行和被其他 occurrence 占用的槽。
+    const conflictClause = postgres ? ' ON CONFLICT DO NOTHING' : ''
+    let created: HaiResult<ExecuteResult>
     try {
       // INSERT 的期限和初始时间与存储端同一语句计算，不接受本机 Date.now() 授权。
       created = await this.db.sql.execute(
         `INSERT INTO ${TABLE} (occurrence_id, task_id, active_task, status, owner, leased_until, attempt_count, max_attempts, idempotent, snapshot, trigger_json, log_persistence, updated_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ${clock} + ?, 0, ?, ?, ?, ?, ?, ${clock}, ${clock})`,
-        [id, task.id, task.id, 'claimed', owner, leaseMs, task.retry?.maxAttempts ?? 1, this.db.config?.type === 'postgresql' ? task.idempotent === true : Number(task.idempotent === true), JSON.stringify(task), JSON.stringify(trigger), 'unconfirmed'],
+         VALUES (?, ?, ?, ?, ?, ${clock} + ?, 0, ?, ?, ?, ?, ?, ${clock}, ${clock})${conflictClause}`,
+        [id, task.id, task.id, 'claimed', owner, leaseMs, task.retry?.maxAttempts ?? 1, postgres ? task.idempotent === true : Number(task.idempotent === true), JSON.stringify(task), JSON.stringify(trigger), 'unconfirmed'],
       )
     }
     catch (cause) {
       return failed(cause)
     }
+    if (postgres && !created.success)
+      return failed(created.error)
     const existing = await this.byOccurrence(id)
     if (!existing.success)
       return existing
@@ -312,7 +317,7 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
       return active.success && active.data.length > 0 ? ok(null) : failed(created.success ? undefined : created.error)
     }
     const row = existing.data
-    if (created.success || ['success', 'failed', 'interrupted', 'discarded'].includes(row.status))
+    if ((created.success && created.data.changes === 1) || ['success', 'failed', 'interrupted', 'discarded'].includes(row.status))
       return ok(row)
     if (row.status === 'unknown')
       return ok(null)

@@ -214,6 +214,8 @@ const logs = await scheduler.getLogs({
 
 `context.occurrenceId` 是持久发生标识；同一 cron 分钟跨节点一致，手动可传 1～128 字符 `idempotencyKey` 重用原记录，省略时每次独立。`executionToken` 每次领取变化，`sequence` / `attempt` 提供执行代信息。API 会覆盖 `Idempotency-Key`、`X-Scheduler-Sequence`、`X-Scheduler-Attempt`、`X-Scheduler-Task`（任务 ID 使用 percent-encoding）。Hook 及生命周期回调已领取时的 `event.context` 使用同一发生标识；观测回调若产生副作用也须去重。
 
+使用 PostgreSQL 时，同一分钟重启或多个节点同时领取可能遇到已有执行记录或被占用的任务槽。调度器将这些冲突作为正常竞争处理。排查任务是否完成时，用 `scheduler.execution.get(occurrenceId)` 查看执行状态，并保留账本和唯一约束以防止重复执行。
+
 `idempotent` 默认为 false；只有接收端已将幂等账本和全部副作用原子持久提交，才声明 true。租约过期的已执行任务仅在 true 时以同 occurrenceId 接管；非幂等或耗尽本 occurrence 保存的 retry.maxAttempts（默认 1，范围 1–100，包含首次执行及恢复）时进入 `unknown` 并继续占住任务槽。租约无法强制撤销暂停进程已发出的外部操作，单有 HTTP 头不构成去重实现。重试同样受幂等声明约束。
 
 `scheduler.execution.get(occurrenceId)` 查询权威状态；`listUnknown({ limit, offset })` 分页获取未知结果，limit 为 1～100，offset 为 0～1000000。可信人工先核实外部效果、确认旧 runner 已终止，再按 `expectedUpdatedAt` CAS 调用 `resolveUnknown(id, { status: 'success' | 'discarded', expectedUpdatedAt })` 释放占位；不能直接把 unknown 重排。`log.occurrenceId` 可作查询回执；`getLogs` 仅为尝试观测日志，日志保留策略不删除 journal/幂等历史。
