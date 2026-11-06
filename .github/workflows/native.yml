@@ -1,38 +1,20 @@
-name: Native delivery
+name: Nginx capacity probe
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - 'apps/desktop-app/**'
-      - 'apps/mobile-app/**'
-      - 'packages/**'
-      - 'scripts/native-name.*'
-      - scripts/run-tauri.mjs
-      - pnpm-lock.yaml
-      - .github/workflows/native.yml
 
 permissions:
   contents: read
 
 jobs:
-  package:
-    name: Native package (${{ matrix.platform }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: windows
-            os: windows-latest
-          - platform: android
-            os: ubuntu-latest
-          - platform: ios
-            os: macos-latest
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+  probe:
+    name: Check encrypted capacities on Docker and Nginx
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       CI: true
-      HAI_CORE_NAME: Native CI Application
+      HAI_TEST_CONTAINER_ENGINE: docker
+      HAI_DEPLOY_E2E: '1'
     steps:
       - uses: actions/checkout@v6.1.0
       - uses: pnpm/action-setup@v6.1.0
@@ -40,81 +22,6 @@ jobs:
         with:
           node-version: 24.22.1
           cache: pnpm
-      - uses: actions/setup-java@v5.7.0
-        if: matrix.platform == 'android'
-        with:
-          distribution: temurin
-          java-version: '21'
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Build framework dependencies
-        run: pnpm exec turbo run build --filter=desktop-app^... --filter=mobile-app^...
-      - name: Package Windows NSIS installer
-        if: matrix.platform == 'windows'
-        shell: pwsh
-        run: |
-          rustup show
-          pnpm --filter desktop-app build --target desktop --platform windows --arch x64
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $parent = 'apps/desktop-app/.hai/build/desktop/windows/release'
-          $batch = Join-Path $parent (Get-Content (Join-Path $parent 'latest') -Raw).Trim()
-          $manifest = Get-Content (Join-Path $batch 'manifest.json') -Raw | ConvertFrom-Json
-          if ($manifest.files.Count -ne 1) { throw 'Expected one Windows installer' }
-          foreach ($file in $manifest.files) {
-            $artifact = Join-Path $batch $file.file
-            if ((Split-Path $artifact -Leaf) -ne "desktop-app-windows-x64-release-$($manifest.appVersion)-setup.exe") { throw 'Unexpected installer name' }
-            if ((Get-Item -LiteralPath $artifact).VersionInfo.ProductName -ne $env:HAI_CORE_NAME) { throw 'Core product name was not applied' }
-            if ((Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToLowerInvariant() -ne $file.sha256) { throw 'Installer checksum mismatch' }
-          }
-      - name: Package Android debug APK
-        if: matrix.platform == 'android'
-        shell: bash
-        run: |
-          pnpm --filter mobile-app build
-          pnpm --filter mobile-app exec cap add android
-          pnpm --filter mobile-app build --target app --platform android --debug
-          parent=apps/mobile-app/.hai/build/app/android/debug
-          batch="$parent/$(cat "$parent/latest")"
-          artifact="$batch/debug/mobile-app-android-debug-$(node -p 'require("./apps/mobile-app/package.json").version').apk"
-          test -f "$artifact"
-          aapt2="$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name aapt2 -type f | sort -V | tail -n 1)"
-          "${aapt2%/aapt2}/apksigner" verify "$artifact"
-          "$aapt2" dump badging "$artifact" | grep -F "application-label:'$HAI_CORE_NAME'"
-          node --input-type=module - "$batch" <<'NODE'
-          import { createHash } from 'node:crypto'
-          import { readFileSync } from 'node:fs'
-          import { join } from 'node:path'
-          const batch = process.argv[2]
-          const manifest = JSON.parse(readFileSync(join(batch, 'manifest.json'), 'utf8'))
-          if (manifest.files.length !== 1) throw new Error('Expected one Android APK')
-          for (const file of manifest.files) {
-            const actual = createHash('sha256').update(readFileSync(join(batch, file.file))).digest('hex')
-            if (actual !== file.sha256) throw new Error('APK checksum mismatch')
-          }
-          NODE
-      - name: Package iOS simulator app
-        if: matrix.platform == 'ios'
-        shell: bash
-        run: |
-          xcodebuild -version
-          pnpm --filter mobile-app build
-          pnpm --filter mobile-app exec cap add ios --packagemanager SPM
-          pnpm --filter mobile-app exec cap sync ios
-          xcodebuild -project apps/mobile-app/ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath .cache/native/ios CODE_SIGNING_ALLOWED=NO build
-      - name: Record acceptance boundary
-        if: always()
-        shell: bash
-        run: |
-          mkdir -p .cache/native
-          printf 'commit=%s\nplatform=%s\nrun=%s\npackage_status=%s\ninstall_launch_auth_storage_network_upgrade=UNVERIFIED\n' '${{ github.sha }}' '${{ matrix.platform }}' '${{ github.run_id }}' '${{ job.status }}' > .cache/native/result.txt
-      - uses: actions/upload-artifact@v6.0.0
-        if: always()
-        with:
-          name: native-${{ matrix.platform }}-${{ github.sha }}
-          if-no-files-found: error
-          include-hidden-files: true
-          path: |
-            .cache/native/result.txt
-            apps/desktop-app/.hai/build/desktop/windows/release/**
-            apps/mobile-app/.hai/build/app/android/debug/**
-            .cache/native/ios/Build/Products/Debug-iphonesimulator/App.app
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec turbo run build --filter=@h-ai/cli --filter=@h-ai/serv
+      - run: pnpm --filter @h-ai/cli exec vitest run tests/deploy-nginx.e2e.test.ts -t '真实 Nginx 保留'
