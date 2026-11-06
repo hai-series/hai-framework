@@ -147,3 +147,13 @@
     {@render children({ active, isActivated })}
   </div>
 {/if}
+
+<style>
+  /* 禁用 tab 需要显示不可用指针；DaisyUI 的 hover 会恢复文字颜色，这里保持禁用外观。 */
+  button[disabled],
+  button[disabled]:hover {
+    pointer-events: auto;
+    cursor: not-allowed;
+    color: color-mix(in oklab, var(--color-base-content) 50%, transparent);
+  }
+</style>
