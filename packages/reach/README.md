@@ -97,7 +97,24 @@ const config = { name: 'dev', type: 'console' }
 | `accessKeyId`     | `string` | ✅   | —                       | AccessKey ID        |
 | `accessKeySecret` | `string` | ✅   | —                       | AccessKey Secret    |
 | `signName`        | `string` | ✅   | —                       | 短信签名            |
-| `endpoint`        | `string` | —    | `dysmsapi.aliyuncs.com` | API 端点            |
+| `endpoint`        | `string` | —    | `dysmsapi.aliyuncs.com` | HTTPS GET 直连端点  |
+| `gateway`         | `object` | —    | —                       | 可选的隔离网关      |
+
+在 `aliyun-sms` Provider 下添加 `gateway` 后，Reach 向完整 `url` 发送 POST。阿里云签名使用 `POST`、RPC 路径 `/` 和查询参数。网关路径、请求头和请求体仅用于网关这一跳。
+
+```yaml
+gateway:
+  url: https://sms-gateway.example.com/dx
+  headers:
+    X-Gateway-Client: delivery
+  body: {}
+```
+
+`headers` 接受字符串键值，`body` 可为 JSON 对象、数组或原始文本。省略 `body` 时发送无正文请求。对象和数组默认为 `application/json`，文本默认为 `text/plain; charset=utf-8`，可以用 `Content-Type` 覆盖。受信内网使用 HTTP 时须显式设 `allowInsecureHttp: true`。HTTP 下签名查询串、手机号及模板变量是明文，网关和代理的访问日志应对查询串脱敏。
+
+在服务端通过 `reach.init(config, { gatewayHooks: { sms: buildGatewayFields } })` 绑定同步或异步函数，其中 `sms` 是启用网关的 Provider 名称。函数接收 `{ method, url, body, signal }`，可返回 `{ headers, body }`。`body` 入参是已序列化的静态正文。函数返回的头按名称忽略大小写覆盖静态头，返回的正文整段替换。省略字段时使用静态配置。`Host`、`Content-Length` 等传输头由客户端管理。函数接收的已签名 URL 仅供服务端构造请求，`reach.config` 的网关快照仅展示地址和 HTTP 开关。
+
+函数和 HTTP 请求共用 10 秒期限，禁止重定向。HTTP 2xx 且阿里云返回 `Code: OK` 表示受理，`BizId` 可用于查询送达结果。发送结果不明时按原投递策略处理，网关分支不会自动回退直连。
 
 #### API 回调
 

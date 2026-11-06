@@ -6,7 +6,7 @@
  */
 
 import type { ErrorInfo, HaiResult } from '@h-ai/core'
-import type { ReachConfig, ReachConfigInput } from './reach-config.js'
+import type { AliyunSmsProviderConfig, ReachConfig, ReachConfigInput } from './reach-config.js'
 import { core } from '@h-ai/core'
 
 // ─── 错误定义（照 @h-ai/core 范式） ───
@@ -54,6 +54,41 @@ export const HaiReachError = core.error.buildHaiErrorsDef('reach', ReachErrorInf
 export type ReachChannel = 'email' | 'sms' | 'api'
 
 // ─── 消息与模板 ───
+
+/**
+ * 发送前为网关提供请求头或替换请求体。URL 已包含签名和可能敏感的查询数据，函数必须在可信服务端运行。
+ * 返回 undefined 保留静态配置；字符串 body 按原样发送。signal 覆盖函数执行与 HTTP 请求的共同期限。
+ *
+ * @example
+ * ```ts
+ * import type { ReachGatewayHook } from '@h-ai/reach'
+ * const hook: ReachGatewayHook = ({ body, signal }) => {
+ *   signal.throwIfAborted()
+ *   return { headers: { 'X-Client': 'delivery' }, body: body ?? '{}' }
+ * }
+ * ```
+ */
+export type ReachGatewayHook = (request: Readonly<{
+  method: 'POST'
+  url: string
+  body: string | undefined
+  signal: AbortSignal
+}>) => Pick<NonNullable<AliyunSmsProviderConfig['gateway']>, 'headers' | 'body'> | void
+  | Promise<Pick<NonNullable<AliyunSmsProviderConfig['gateway']>, 'headers' | 'body'> | void>
+
+/**
+ * 服务端运行时注入选项，与可序列化的配置分离。
+ *
+ * @example
+ * ```ts
+ * import type { ReachInitOptions } from '@h-ai/reach'
+ * const options: ReachInitOptions = { gatewayHooks: { sms: () => ({ headers: { 'X-Client': 'delivery' } }) } }
+ * ```
+ */
+export interface ReachInitOptions {
+  /** 以已配置网关的 Provider 名称绑定自定义函数。 */
+  gatewayHooks?: Readonly<Record<string, ReachGatewayHook>>
+}
 
 /**
  * 直接发送必须指定Provider名和内容；模板发送可由持久模板推导路由，vars做文本替换。
@@ -849,6 +884,7 @@ export interface ReachFunctions extends SendOperations {
   /**
    * 初始化触达模块（注册多个 Provider）
    * @param config - 实际操作输入，按本方法约束校验。
+   * @param options - 可选服务端运行时网关函数，按 Provider 名称绑定。
    * @returns HaiResult；先检查success，条件提交失败不能伪装成功。
    *
    * @example
@@ -878,7 +914,7 @@ export interface ReachFunctions extends SendOperations {
    * }
    * ```
    */
-  init: (config: ReachConfigInput) => Promise<HaiResult<void>>
+  init: (config: ReachConfigInput, options?: ReachInitOptions) => Promise<HaiResult<void>>
   /** 当前脱敏后的配置快照（未初始化时为 null） */
   readonly config: ReachConfig | null
   /** 是否已初始化 */

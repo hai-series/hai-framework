@@ -21,6 +21,7 @@ API 空 2xx 表示受理成功；非空 JSON 回执上限 64 KiB。redirect 默�
 
 - 先配置并注册 Provider，再保存绑定 Provider 的模板；模板发送只传 template/to/vars 即可，显式 provider 可覆盖；直接发送须提供 provider。启用 DND delay 必须先初始化 reldb 并确保队列表可用；成功时 `deferred: true` 与 `queueId` 表示可靠入队，尚未投递；缺库、断连或插入失败须按 HaiResult 失败处理。即时投递与排队状态须区分。
 - 验证模板替换和错误分支时使用隔离测试收件人；真实通知须在用户授权范围内。
+- 阿里云短信的 `gateway` 通过 POST 转发已签名查询，可配置请求头和正文；服务端 `reach.init` 可按 Provider 名注入 `gatewayHooks`。受信内网 HTTP 须显式启用，转发日志应脱敏查询串。
 - 缓存锁只减少扫描，按实际执行逐条领取并在途续租。API 只有接收端真正具备原子持久去重时才能声明 idempotent=true，全部请求固定用 queueId 作为 Idempotency-Key；旧节点迟到请求也必须去重。SMTP/短信/默认 API 的在途失败或过期转 unknown，禁止自动重发；可信服务端用 queue.get/resolveUnknown 在人工隔离旧 worker、核对外部记录后裁定 sent/discarded。
 - queue 重试策略随消息持久保存，默认最多领取 5 次，指数退避 60 秒至 1 小时；永久失败/超限进 dead，满批失败不会原地自旋。可信服务端用 queue.list 查询 dead/unknown；修复根因后以最新 updatedAt 调用 requeueDead，只能恢复 dead，保留同一 queueId 和接收端幂等要求。unknown 不能重排。
 

@@ -28457,6 +28457,18 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ReachGatewayHook",
+              "kind": "type",
+              "declaration": "ReachGatewayHook",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ReachInitOptions",
+              "kind": "type",
+              "declaration": "ReachInitOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ReachMessage",
               "kind": "type",
               "declaration": "ReachMessage",
@@ -28713,6 +28725,18 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ReachGatewayHook",
+              "kind": "type",
+              "declaration": "ReachGatewayHook",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ReachInitOptions",
+              "kind": "type",
+              "declaration": "ReachInitOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ReachMessage",
               "kind": "type",
               "declaration": "ReachMessage",
@@ -28966,6 +28990,18 @@
               "name": "ReachFunctions",
               "kind": "type",
               "declaration": "ReachFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ReachGatewayHook",
+              "kind": "type",
+              "declaration": "ReachGatewayHook",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ReachInitOptions",
+              "kind": "type",
+              "declaration": "ReachInitOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {

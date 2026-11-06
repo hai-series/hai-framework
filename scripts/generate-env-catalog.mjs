@@ -208,6 +208,10 @@ function walkSchema(node, segments, context, ancestors = new Set(), inheritedDef
   const effectiveDefault = inheritedDefault === undefined ? node.default : inheritedDefault
   const name = ['HAI', context.name, ...segments].map(segment => segment.replace(/[^a-z0-9]+/gi, '_').toUpperCase()).join('_')
   const constraints = []
+  // 网关正文是整体替换的 HTTP 载荷，数组元素不是独立配置字段。
+  const gatewayBody = context.name === 'reach' && segments.join('.') === 'providers.0.gateway.body'
+  if (gatewayBody)
+    constraints.push('JSON 对象、数组或原始文本')
   const enums = node.enum ?? ('const' in node ? [node.const] : [])
   if (node.type)
     constraints.push(node.type === 'boolean' && enums.length ? enums.map(String).join(' | ') : { string: '字符串', boolean: 'true | false', number: '数字', integer: '整数', object: 'JSON 对象；整体覆盖时替换该节点', array: 'JSON 数组；索引可按 0、1、2 扩展', null: 'null' }[node.type] ?? String(node.type))
@@ -251,6 +255,8 @@ function walkSchema(node, segments, context, ancestors = new Set(), inheritedDef
     const value = effectiveDefault === undefined ? '' : typeof effectiveDefault === 'object' ? JSON.stringify(effectiveDefault) : String(effectiveDefault)
     add(name, { module: context.name, path: [context.name, ...segments].join('.'), description, constraints, enums, value })
   }
+  if (gatewayBody)
+    return
   // 联合分支仍表示同一个字段，应继承字段用途；对象子字段不得继承父节点的笼统说明。
   for (const branch of [...(node.anyOf ?? []), ...(node.oneOf ?? []), ...(node.allOf ?? [])])
     walkSchema(branch, segments, context, ancestors, effectiveDefault, node.description || inheritedDescription)

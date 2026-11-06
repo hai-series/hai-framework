@@ -90,14 +90,31 @@ const config = { name: 'dev', type: 'console' }
 
 #### Alibaba Cloud SMS
 
-| フィールド        | 型       | 必須 | 既定値                  | 説明                  |
-| ----------------- | -------- | ---- | ----------------------- | --------------------- |
-| `name`            | `string` | ✅   | —                       | Provider 名           |
-| `type`            | `string` | ✅   | —                       | 固定値 `'aliyun-sms'` |
-| `accessKeyId`     | `string` | ✅   | —                       | AccessKey ID          |
-| `accessKeySecret` | `string` | ✅   | —                       | AccessKey Secret      |
-| `signName`        | `string` | ✅   | —                       | SMS 署名              |
-| `endpoint`        | `string` | —    | `dysmsapi.aliyuncs.com` | API endpoint          |
+| フィールド        | 型       | 必須 | 既定値                  | 説明                         |
+| ----------------- | -------- | ---- | ----------------------- | ---------------------------- |
+| `name`            | `string` | ✅   | —                       | Provider 名                  |
+| `type`            | `string` | ✅   | —                       | 固定値 `'aliyun-sms'`        |
+| `accessKeyId`     | `string` | ✅   | —                       | AccessKey ID                 |
+| `accessKeySecret` | `string` | ✅   | —                       | AccessKey Secret             |
+| `signName`        | `string` | ✅   | —                       | SMS 署名                     |
+| `endpoint`        | `string` | —    | `dysmsapi.aliyuncs.com` | HTTPS GET の直接接続先       |
+| `gateway`         | `object` | —    | —                       | オプションの分離ゲートウェイ |
+
+`aliyun-sms` Provider に `gateway` を追加すると、完全な `url` へ POST します。Alibaba Cloud の署名には `POST`、RPC パス `/`、クエリパラメーターを使用します。ゲートウェイのパス、ヘッダー、ボディはゲートウェイへのリクエストに適用されます。
+
+```yaml
+gateway:
+  url: https://sms-gateway.example.com/dx
+  headers:
+    X-Gateway-Client: delivery
+  body: {}
+```
+
+`headers` の値は文字列です。`body` には JSON オブジェクト、配列、またはテキストを指定でき、省略時はボディなしで送信します。既定の `Content-Type` はオブジェクトと配列が `application/json`、テキストが `text/plain; charset=utf-8` です。信頼できる内部ネットワークで HTTP を使う場合は `allowInsecureHttp: true` が必要です。HTTP では署名済みクエリ、電話番号、テンプレート変数が平文で送られるため、ゲートウェイとプロキシのアクセスログでクエリをマスクしてください。
+
+同期または非同期の関数は、サーバー側で `reach.init(config, { gatewayHooks: { sms: buildGatewayFields } })` のように Provider 名へ紐付けます。関数は `{ method, url, body, signal }` を受け取り、`{ headers, body }` を返せます。入力の `body` はシリアライズ済みです。ヘッダー名は大文字・小文字を区別せず上書きし、ボディは全体を置き換えます。省略した項目には静的設定を使います。`Host` や `Content-Length` は HTTP クライアントが管理します。署名済み URL は機密情報として扱います。`reach.config` のゲートウェイ情報には URL と HTTP の許可フラグが含まれます。
+
+関数と HTTP リクエストの合計期限は 10 秒で、リダイレクトは拒否します。HTTP 2xx かつ Alibaba Cloud の `Code: OK` で受理を確認し、`BizId` で配信結果を照会できます。結果が不明な場合は既存の配信ポリシーに従い、直接送信への切り替えは行いません。
 
 #### API 通知
 

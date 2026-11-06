@@ -90,14 +90,31 @@ const config = { name: 'dev', type: 'console' }
 
 #### Alibaba Cloud SMS
 
-| Field             | Type     | Required | Default                 | Description          |
-| ----------------- | -------- | -------- | ----------------------- | -------------------- |
-| `name`            | `string` | ✅       | —                       | Provider name        |
-| `type`            | `string` | ✅       | —                       | Fixed `'aliyun-sms'` |
-| `accessKeyId`     | `string` | ✅       | —                       | AccessKey ID         |
-| `accessKeySecret` | `string` | ✅       | —                       | AccessKey Secret     |
-| `signName`        | `string` | ✅       | —                       | SMS signature        |
-| `endpoint`        | `string` | —        | `dysmsapi.aliyuncs.com` | API endpoint         |
+| Field             | Type     | Required | Default                 | Description                |
+| ----------------- | -------- | -------- | ----------------------- | -------------------------- |
+| `name`            | `string` | ✅       | —                       | Provider name              |
+| `type`            | `string` | ✅       | —                       | Fixed `'aliyun-sms'`       |
+| `accessKeyId`     | `string` | ✅       | —                       | AccessKey ID               |
+| `accessKeySecret` | `string` | ✅       | —                       | AccessKey Secret           |
+| `signName`        | `string` | ✅       | —                       | SMS signature              |
+| `endpoint`        | `string` | —        | `dysmsapi.aliyuncs.com` | Direct HTTPS GET endpoint  |
+| `gateway`         | `object` | —        | —                       | Optional isolation gateway |
+
+Add `gateway` to an `aliyun-sms` provider to send a POST request to the full `url`. Alibaba Cloud signature input uses `POST`, the RPC path `/`, and the query parameters. The gateway path, headers, and body apply to the gateway hop.
+
+```yaml
+gateway:
+  url: https://sms-gateway.example.com/dx
+  headers:
+    X-Gateway-Client: delivery
+  body: {}
+```
+
+`headers` accepts string values. `body` accepts a JSON object, an array, or raw text. Omit `body` for a request without content. Objects and arrays default to `application/json`, and text defaults to `text/plain; charset=utf-8`. Set `Content-Type` to override the default. HTTP on a trusted private network requires `allowInsecureHttp: true`. The signed query, phone numbers, and template variables travel in plaintext over HTTP. Redact query strings in gateway and proxy access logs.
+
+Bind a synchronous or asynchronous server-side function with `reach.init(config, { gatewayHooks: { sms: buildGatewayFields } })`, using the configured provider name as the key. The hook receives `{ method, url, body, signal }`, with the static body already serialized, and can return `{ headers, body }`. Its headers override static values by case-insensitive name, and its body replaces the entire static body. Omitted fields inherit the static values. The HTTP client manages transport headers such as `Host` and `Content-Length`. Treat the signed URL as sensitive. The gateway snapshot in `reach.config` includes the URL and HTTP opt-in flag.
+
+The hook and request share a 10-second deadline. Redirects are rejected. HTTP 2xx with Alibaba Cloud `Code: OK` confirms acceptance, and `BizId` can be used to check delivery. Uncertain outcomes follow the existing delivery policy, without falling back to direct delivery.
 
 #### API callbacks
 

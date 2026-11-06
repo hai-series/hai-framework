@@ -9,7 +9,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { ReldbFunctions } from '@h-ai/reldb'
 import type { ReachProvider } from './providers/reach-provider-types.js'
 import type { DndConfig, ProviderConfig, ReachConfig, ReachConfigInput } from './reach-config.js'
-import type { ReachFunctions, ReachMessage, ReachQueueEntry, ReachTemplateRegistry, SendResult } from './reach-types.js'
+import type { ReachFunctions, ReachGatewayHook, ReachInitOptions, ReachMessage, ReachQueueEntry, ReachTemplateRegistry, SendResult } from './reach-types.js'
 import type { SendLogRepository, StoredSendLog } from './repositories/reach-repository-send-log.js'
 import type { TemplateRepository } from './repositories/reach-repository-template.js'
 import process from 'node:process'
@@ -64,14 +64,14 @@ let closeInProgress: Promise<void> | null = null
 /**
  * 根据配置创建对应的 Provider
  */
-function createProvider(config: ProviderConfig): ReachProvider {
+function createProvider(config: ProviderConfig, gatewayHook?: ReachGatewayHook): ReachProvider {
   switch (config.type) {
     case 'console':
       return createConsoleProvider()
     case 'smtp':
       return createSmtpProvider()
     case 'aliyun-sms':
-      return createAliyunSmsProvider()
+      return createAliyunSmsProvider(gatewayHook)
     case 'api':
       return createApiProvider()
   }
@@ -178,7 +178,7 @@ async function doClose(): Promise<void> {
 /**
  * 实际的初始化逻辑（由 init 包裹并发防护后调用）
  */
-async function doInit(config: ReachConfigInput): Promise<HaiResult<void>> {
+async function doInit(config: ReachConfigInput, options?: ReachInitOptions): Promise<HaiResult<void>> {
   if (providers.size > 0) {
     logger.warn('Reach module is already initialized, reinitializing')
     await doClose()
@@ -196,6 +196,11 @@ async function doInit(config: ReachConfigInput): Promise<HaiResult<void>> {
     )
   }
   const parsed = parseResult.data
+  const gatewayHooks = new Map(Object.entries(options?.gatewayHooks ?? {}))
+  for (const [name, hook] of gatewayHooks) {
+    if (typeof hook !== 'function' || !parsed.providers.some(provider => provider.name === name && provider.type === 'aliyun-sms' && provider.gateway))
+      return err(HaiReachError.CONFIG_ERROR, reachM('reach_gatewayHookInvalid'))
+  }
   // Console只证明本机日志调用；生产环境不能把它当作真实触达成功。
   if (core.module.requiresSharedState(process.env) && parsed.providers.some(provider => provider.type === 'console'))
     return err(HaiReachError.CONFIG_ERROR, reachM('reach_productionProviderRequired'))
@@ -215,7 +220,7 @@ async function doInit(config: ReachConfigInput): Promise<HaiResult<void>> {
     const newProviders = new Map<string, ReachProvider>()
 
     for (const providerConfig of parsed.providers) {
-      const provider = createProvider(providerConfig)
+      const provider = createProvider(providerConfig, gatewayHooks.get(providerConfig.name))
       const connectResult = await provider.connect(providerConfig)
       if (!connectResult.success) {
         logger.error('Provider initialization failed', {
@@ -395,7 +400,7 @@ export const reach: ReachFunctions = {
       return sendLogRepo.resolveUnknown(queueId, parsed.data)
     },
   },
-  async init(config: ReachConfigInput): Promise<HaiResult<void>> {
+  async init(config: ReachConfigInput, options?: ReachInitOptions): Promise<HaiResult<void>> {
     if (initInProgress || closeInProgress) {
       logger.warn('Reach module init already in progress, skipping')
       return err(
@@ -406,7 +411,7 @@ export const reach: ReachFunctions = {
 
     initInProgress = true
     try {
-      initCompletion = doInit(config)
+      initCompletion = doInit(config, options)
       return await initCompletion
     }
     finally {
@@ -429,7 +434,16 @@ export const reach: ReachFunctions = {
   },
 
   get config(): ReachConfig | null {
-    return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null
+    if (!currentConfig)
+      return null
+    const safeProviders = currentConfig.providers.map((provider) => {
+      if (provider.type !== 'aliyun-sms' || !provider.gateway)
+        return provider
+      const { url, allowInsecureHttp } = provider.gateway
+      // 自定义请求头和请求体可以使用任意字段名，诊断视图只保留路由配置。
+      return { ...provider, gateway: { url, allowInsecureHttp } }
+    })
+    return core.sanitize.sanitizeSensitiveFields({ ...currentConfig, providers: safeProviders })
   },
 
   get isInitialized(): boolean {

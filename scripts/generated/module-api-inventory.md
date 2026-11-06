@@ -81,9 +81,9 @@
 | @h-ai/payment | `. (types)` | 22 |
 | @h-ai/payment | `./client (import)` | 2 |
 | @h-ai/payment | `./client (types)` | 2 |
-| @h-ai/reach | `. (default)` | 41 |
-| @h-ai/reach | `. (import)` | 41 |
-| @h-ai/reach | `. (types)` | 41 |
+| @h-ai/reach | `. (default)` | 43 |
+| @h-ai/reach | `. (import)` | 43 |
+| @h-ai/reach | `. (types)` | 43 |
 | @h-ai/reldb | `. (default)` | 60 |
 | @h-ai/reldb | `. (import)` | 60 |
 | @h-ai/reldb | `. (types)` | 60 |

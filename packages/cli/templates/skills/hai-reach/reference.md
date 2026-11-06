@@ -47,6 +47,10 @@ providers:
     accessKeyId: ${HAI_REACH_PROVIDERS_0_ACCESSKEYID:}
     accessKeySecret: ${HAI_REACH_PROVIDERS_0_ACCESSKEYSECRET:}
     signName: ${HAI_REACH_PROVIDERS_0_SIGNNAME:}
+    # 按需启用隔离网关
+    # gateway:
+    #   url: https://sms-gateway.example.com/dx
+    #   body: {}
   - name: webhook
     type: api
     url: ${HAI_REACH_WEBHOOK_URL:}
@@ -165,13 +169,21 @@ await reach.send({
 })
 ```
 
+### 隔离网关与动态字段
+
+在 `aliyun-sms` 下配置 `gateway.url`，使用包含路径的完整 HTTPS 地址。受信内网确需明文时设置 `gateway.allowInsecureHttp: true`。请求使用 POST，阿里云签名仍基于 RPC 路径 `/` 和查询参数，网关路径、头和正文仅供网关使用。`gateway.headers` 取字符串键值，`gateway.body` 可设 JSON 对象、数组或原始文本，`body: {}` 表示空 JSON 对象。
+
+从服务端 `reach.init(config, { gatewayHooks: { sms: hook } })` 注入同步或异步函数。`sms` 对应已配置网关的 Provider 名称，`hook` 接收 `{ method, url, body, signal }`，其中 `body` 已序列化，`url` 含签名和敏感查询。返回 `{ headers, body }` 时，头按名称忽略大小写覆盖，正文整段替换，省略字段时沿用静态配置。`Host` 和 `Content-Length` 等由 HTTP 客户端管理。函数和请求共用 10 秒期限，拒绝重定向。`reach.config` 仅展示网关的地址和 HTTP 开关。
+
+验证网关转发时确认上游路径、方法和查询参数，HTTP 2xx 且阿里云 `Code: OK` 表示已受理，送达状态通过 `BizId` 查询。明文连接的访问日志应脱敏查询串，配置及测试均使用占位数据或受控的私有注入。
+
 ## 核心 API
 
 ### reach 对象
 
 | 方法 / 属性           | 签名                                                     | 说明                               |
 | --------------------- | -------------------------------------------------------- | ---------------------------------- |
-| `reach.init`          | `(config: ReachConfigInput) => Promise<HaiResult<void>>`    | 初始化（注册多个 Provider）        |
+| `reach.init`          | `(config: ReachConfigInput, options?: ReachInitOptions) => Promise<HaiResult<void>>` | 初始化 Provider，可注入网关函数 |
 | `reach.send`          | `(message: ReachMessage) => Promise<HaiResult<SendResult>>` | 发送消息（通过 provider 字段路由） |
 | `reach.queue.get` | `(queueId: string) => Promise<HaiResult<ReachQueueEntry \| null>>` | 不含正文/收件人的队列状态 |
 | `reach.queue.list` | `(options: ReachQueueListOptions) => Promise<HaiResult<ReachQueueEntry[]>>` | 可信服务端分页查询 dead/unknown，每页至多 100 条 |

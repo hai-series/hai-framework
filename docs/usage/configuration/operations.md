@@ -88,12 +88,14 @@ exportRetentionHours: 12
 | API `url` | 必填 HTTP(S) 地址 | 默认使用 `method: POST`，`timeout: 10000` 表示等待 10 秒；`redirect: error` 表示拒绝重定向。认证信息等请求头放在 `headers` 中 |
 | API `requireHttps` | 未填写时按消息和环境决定 | `true` 拒绝 HTTP 地址及 `follow` 重定向设置；`false` 明确允许 HTTP，包括生产中的敏感消息。生产通道需要强制 HTTPS 时填写 `true` |
 | API `idempotent` | `false` | 接收端能按同一个幂等键识别并丢弃重复消息时，才填写 `true`；这个开关不会替接收端实现去重 |
-| Aliyun短信 | `accessKeyId`/`accessKeySecret`/`signName`必填 | `endpoint`默认`dysmsapi.aliyuncs.com`；模板和目的地按真实服务授权 |
+| Aliyun短信 | `accessKeyId`/`accessKeySecret`/`signName`必填 | 直连默认 `dysmsapi.aliyuncs.com`。隔离网关配置 `gateway.url`，可加 `gateway.headers` 和 `gateway.body` |
 | `templates` | 可省略 | 每项必须有模板名 `name`、通道名 `provider` 和正文 `body`；邮件主题 `subject` 可选 |
 | `dnd.enabled` / `dnd.strategy` / `dnd.start` / `dnd.end` | `false`/`discard`/`00:00`/`00:00` | 开启后，指定时段内的消息按策略处理：`delay` 先存入关系数据库等待发送，`discard` 直接丢弃。丢弃不表示已发送 |
 | `queue.maxAttempts`/`queue.retryDelayMs`/`queue.maxRetryDelayMs` | 5 次 / 60000 毫秒 / 3600000 毫秒 | 最多尝试 5 次；首次重试等 1 分钟，以后逐次加倍，最长等 1 小时。修改只影响新入队消息 |
 
-省略 `requireHttps` 时，生产环境中的敏感消息（`sensitive: true`）会强制使用 HTTPS；普通消息和开发环境不自动强制。生产环境按 `NODE_ENV` 或 `HAI_CORE_ENV` 为 `production` 判断，显式 E2E 测试例外。填写 `false` 会覆盖这个自动判断。敏感消息始终不跟随重定向，与 `requireHttps` 的取值无关。
+API 回调省略 `requireHttps` 时，生产环境中的敏感消息（`sensitive: true`）会强制使用 HTTPS；普通消息和开发环境不自动强制。生产环境按 `NODE_ENV` 或 `HAI_CORE_ENV` 为 `production` 判断，显式 E2E 测试例外。填写 `false` 会覆盖这个自动判断。敏感消息始终不跟随重定向，与 `requireHttps` 的取值无关。
+
+阿里云隔离网关使用 `POST` 和已签名查询参数，`gateway.url` 填写完整路径。需要空 JSON 时填写 `body: {}`。网关需要逐次生成请求头或正文时，由服务端通过 `reach.init(config, { gatewayHooks: { sms: hook } })` 按 Provider 名称注入函数。网关默认使用 HTTPS，受信内网的明文地址需显式启用 `gateway.allowInsecureHttp`。明文查询串包含手机号和模板变量，网关及代理日志应对查询串脱敏。验收时确认网关把签名参数转发到阿里云 `/`，并回传 `Code: OK` 和 `BizId`；最终送达以运营商回执为准。
 
 免打扰的 `start` 和 `end` 使用运行进程的本地时区，不继承 IAM 或 Scheduler 的时区设置。部署时设置进程的 `TZ`，并让同一环境的节点保持一致。`22:00` 到 `08:00` 表示跨午夜，包含起点、不包含终点；起止时间相等表示**没有免打扰时段**。因此只打开 `enabled: true`，仍保留 `00:00` 到 `00:00`，不会拦截通知。必须送达的消息选择 `delay` 并先初始化关系数据库；选择 `discard` 会丢弃消息。
 

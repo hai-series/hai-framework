@@ -5387,7 +5387,7 @@
     "name": "HAI_REACH_PROVIDERS_0_ENDPOINT",
     "module": "reach",
     "path": "reach.providers.0.endpoint",
-    "description": "API 端点（默认 dysmsapi.aliyuncs.com）",
+    "description": "直连 API 端点（默认 dysmsapi.aliyuncs.com）；配置网关时使用网关 URL。",
     "value": "dysmsapi.aliyuncs.com",
     "constraint": "字符串"
   },
@@ -5398,6 +5398,46 @@
     "description": "发件人地址",
     "value": "noreply@example.com",
     "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_GATEWAY",
+    "module": "reach",
+    "path": "reach.providers.0.gateway",
+    "description": "可选的短信隔离网关，以 POST 请求转发已签名的查询参数。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_GATEWAY_ALLOWINSECUREHTTP",
+    "module": "reach",
+    "path": "reach.providers.0.gateway.allowInsecureHttp",
+    "description": "仅在受信内网显式允许明文 HTTP。",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_GATEWAY_BODY",
+    "module": "reach",
+    "path": "reach.providers.0.gateway.body",
+    "description": "网关请求体；对象和数组序列化为 JSON，字符串原样发送。省略时不发请求体。",
+    "value": "",
+    "constraint": "JSON 对象、数组或原始文本"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_GATEWAY_HEADERS",
+    "module": "reach",
+    "path": "reach.providers.0.gateway.headers",
+    "description": "网关自定义请求头；连接与消息长度相关的头由 HTTP 客户端管理。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_GATEWAY_URL",
+    "module": "reach",
+    "path": "reach.providers.0.gateway.url",
+    "description": "网关的完整 HTTP(S) URL；包含路径，不允许凭据、查询参数或片段。",
+    "value": "",
+    "constraint": "字符串；格式 uri"
   },
   {
     "name": "HAI_REACH_PROVIDERS_0_HEADERS",

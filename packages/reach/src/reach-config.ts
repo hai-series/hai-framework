@@ -7,6 +7,7 @@
 
 import { z } from 'zod'
 
+import { ReachGatewayConfigSchema } from './reach-gateway-config.js'
 import { reachM } from './reach-i18n.js'
 
 // ─── 单个 Provider 配置 Schema ───
@@ -72,8 +73,10 @@ export const AliyunSmsProviderConfigSchema = z.object({
   accessKeySecret: z.string().min(1, reachM('reach_config_accessKeySecretRequired')),
   /** 短信签名 */
   signName: z.string().min(1, reachM('reach_config_signNameRequired')),
-  /** API 端点（默认 dysmsapi.aliyuncs.com） */
+  /** 直连 API 端点（默认 dysmsapi.aliyuncs.com）；配置网关时使用网关 URL。 */
   endpoint: z.string().default('dysmsapi.aliyuncs.com'),
+  /** 可选的短信隔离网关，以 POST 请求转发已签名的查询参数。 */
+  gateway: ReachGatewayConfigSchema.optional(),
 })
 
 /**
