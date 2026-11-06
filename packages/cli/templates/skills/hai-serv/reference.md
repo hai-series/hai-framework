@@ -113,7 +113,7 @@ const app = serv.createApp({
 - 生产环境 `cors.origin` 禁止为空或 `*`，启动时 fail-fast。
 - 普通 Web Origin 仅接受 HTTP(S)；原生 Origin 通过 `cors.nativeOrigins` 显式允许 HTTP(S)、Capacitor 或 Tauri。
 - Origin 按完整规范化值精确匹配，不使用前缀/后缀匹配。
-- 生产环境自动要求 Secure refresh cookie，并把 OpenAPI/docs 作为安全上限关闭。
+- 生产环境默认给刷新 Cookie 加 `Secure`，并关闭 OpenAPI 和 docs。受控内网或 VPN 的 HTTP 入口可在后端进程设置 `HAI_SERV_REFRESH_COOKIE_SECURE=false`，重启并重新登录。HTTP 会明文传输刷新凭据，生产 CORS 仍须配置完整的实际 Origin。
 
 ### 2.1 Audio WebSocket 安全接入
 
@@ -750,7 +750,7 @@ const app = serv.createApp({
   refreshCookie: {
     // cookieName?: string              默认 'hai_refresh_token'
     // maxAge?: number                  默认 30 * 24 * 3600（30 天）
-    // secure?: boolean                 默认 NODE_ENV 或 HAI_CORE_ENV 为 production 时开启；测试开关不放宽
+    // secure?: boolean                 显式值优先于后端变量 HAI_SERV_REFRESH_COOKIE_SECURE
     // onRefresh?: (token) => ...       可选：覆盖默认的 iam.session.refresh
     nativeTokenTransport: {
       // 必须 fail-closed：同时校验平台标识与允许的原生 Origin。
@@ -773,8 +773,10 @@ const app = serv.createApp({
 | Path     | `{apiPrefix}/auth/refresh`（最小范围）               |
 | HttpOnly | ✓                                                    |
 | SameSite | `Strict`                                             |
-| Secure   | 生产自动开启，`secure: false` 可在 HTTP 开发环境关闭 |
+| Secure   | 显式 `secure` 优先，然后读取 `HAI_SERV_REFRESH_COOKIE_SECURE` 的 `true` 或 `false`，其余值按环境默认 |
 | Max-Age  | 30 天（可配置）                                      |
+
+直接调用 `serv.createApp` 时，环境默认根据 `NODE_ENV` 或 `HAI_CORE_ENV` 是否为 `production` 判断。通过 `serv.createRuntimeSecurityPolicy` 赋值时，策略的默认值来自传入的 `environment`。测试开关不参与该判断。
 
 ## 测试
 

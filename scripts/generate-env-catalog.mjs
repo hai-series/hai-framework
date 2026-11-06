@@ -345,6 +345,7 @@ const extraDescriptions = {
   NODE_ENV: ['Node/Vite 运行模式', 'development | test | production'],
   HOST: ['部署平台 HTTP 监听地址，覆盖 serv/kit server.host', '主机名或 IP'],
   PORT: ['部署平台 HTTP 监听端口，覆盖 serv/kit server.port', '整数 1–65535'],
+  HAI_SERV_REFRESH_COOKIE_SECURE: ['Serv 刷新 Cookie 的 Secure 属性；留空沿用环境默认值，生产默认开启', 'true | false；仅在受控内网或 VPN 的 HTTP 入口使用 false'],
   PUBLIC_API_BASE: ['浏览器/原生客户端 API 地址，不能含凭据', '有效 HTTP(S) URL；是否含 /api/v1 以对应客户端为准'],
   PUBLIC_API_TRANSPORT: ['客户端传输加密开关，须与服务端一致', 'on | off'],
   PUBLIC_API_KEY_EXCHANGE_PATH: ['公开密钥交换端点，须与服务端一致', '以 / 开头的路径'],

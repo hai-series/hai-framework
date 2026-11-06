@@ -11,7 +11,7 @@
  * - logout：浏览器清除 Cookie（Max-Age=0）；原生客户端自行清理安全存储
  * - refresh：**专属路由**（不走 oRPC），按请求来源从 Cookie 或 JSON body 读取并轮换 token
  *
- * **Cookie 规格**：`HttpOnly; SameSite=Strict; Secure`（生产）/ 无 Secure（开发）
+ * **Cookie 规格**：`HttpOnly; SameSite=Strict`，生产环境默认加 `Secure`。
  * Cookie Path 限制为 `{apiPrefix}/auth/refresh`，最小化浏览器自动发送范围（避免 CSRF 攻击面）。
  * @module serv-cookie-auth
  */
@@ -26,6 +26,7 @@ import { core, HaiCommonError } from '@h-ai/core'
 import { getCookie } from 'hono/cookie'
 import { buildHaiErrorBody } from './pipelines/serv-pipeline-helper.js'
 import { servM } from './serv-i18n.js'
+import { resolveSecureRefreshCookie } from './serv-runtime-security.js'
 import { resolveRequestLocale } from './serv-validation.js'
 
 // ─── 公共类型 ─────────────────────────────────────────────────────────────────
@@ -116,9 +117,8 @@ export interface RefreshCookieConfig {
    */
   readonly maxAge?: number
   /**
-   * 强制 Secure 属性。
-   * - 未传时：`NODE_ENV` 或 `HAI_CORE_ENV` 为 `production` 时自动开启；测试开关不放宽此要求。
-   * - 本地 HTTP 开发设为 `false` 可让 Cookie 在 HTTP 下正常工作。
+   * 显式指定 Secure 属性，优先于 `HAI_SERV_REFRESH_COOKIE_SECURE`。
+   * 两者均未指定时，`NODE_ENV` 或 `HAI_CORE_ENV` 为 `production` 即开启。测试开关不影响此默认值。
    */
   readonly secure?: boolean
   /**
@@ -186,7 +186,7 @@ function resolveRefreshCookieConfig(
   return {
     cookieName: config.cookieName ?? 'hai_refresh_token',
     maxAge: config.maxAge ?? 30 * 24 * 3600,
-    isSecure: config.secure ?? (process.env.NODE_ENV === 'production' || process.env.HAI_CORE_ENV === 'production'),
+    isSecure: config.secure ?? resolveSecureRefreshCookie(process.env.NODE_ENV === 'production' || process.env.HAI_CORE_ENV === 'production'),
     refreshCookiePath: `${apiPrefix}${IAM_AUTH_PATHS.refresh}`,
     onRefresh,
     nativeTokenTransport: config.nativeTokenTransport,

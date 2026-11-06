@@ -6,6 +6,8 @@
  * @module serv-runtime-security
  */
 
+import process from 'node:process'
+
 /**
  * 运行时安全策略输入；通常来自 `_core.yml.env` 与 `_serv.yml.cors`。
  *
@@ -39,12 +41,14 @@ export interface ServRuntimeSecurityPolicyInput {
 export interface ServRuntimeSecurityPolicy {
   readonly allowOrigin: (origin: string) => boolean
   readonly isNativeOrigin: (origin: string) => boolean
+  /** 刷新 Cookie 是否启用 Secure，默认在生产开启。 */
   readonly secureRefreshCookie: boolean
   readonly exposeApiDocs: boolean
 }
 
 /**
  * 校验部署 Origin 并生成 Cookie、文档与跨端 CORS 安全策略。
+ * `HAI_SERV_REFRESH_COOKIE_SECURE` 可覆盖刷新 Cookie 的 Secure 默认值。
  *
  * @param input - 部署环境与显式允许的 Web/原生 Origin
  * @returns 可用于 HTTP 装配的策略
@@ -82,9 +86,26 @@ export function createRuntimeSecurityPolicy(
       return normalizedWebOrigin !== undefined && allowedOrigins.has(normalizedWebOrigin)
     },
     isNativeOrigin: origin => allowedNativeOrigins.has(tryNormalizeNativeOrigin(origin) ?? ''),
-    secureRefreshCookie: production,
+    secureRefreshCookie: resolveSecureRefreshCookie(production),
     exposeApiDocs: !production,
   }
+}
+
+/**
+ * 读取后端进程的刷新 Cookie 开关。只有精确的 `true` 或 `false` 覆盖环境默认值。
+ * @param defaultSecure - 调用方现有的环境默认值
+ * @returns 是否为刷新 Cookie 设置 Secure
+ * @example 模块内部上下文
+ * ```ts
+ * // 未设置 HAI_SERV_REFRESH_COOKIE_SECURE 时，生产默认返回 true。
+ * const secure = resolveSecureRefreshCookie(true)
+ * ```
+ */
+export function resolveSecureRefreshCookie(defaultSecure: boolean): boolean {
+  const override = process.env.HAI_SERV_REFRESH_COOKIE_SECURE
+  if (override === 'true' || override === 'false')
+    return override === 'true'
+  return defaultSecure
 }
 
 function parseOrigins(value: string | undefined): '*' | string[] {

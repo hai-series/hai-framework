@@ -485,7 +485,7 @@ await apiClient.init({
 })
 ```
 
-> **Cookie 属性**：本番は `HttpOnly; SameSite=Strict; Secure`。`Path` は `{apiPrefix}/auth/refresh` に限定。
+> リフレッシュ Cookie には `HttpOnly` と `SameSite=Strict` が付き、パスは `{apiPrefix}/auth/refresh` に限定されます。本番では既定で `Secure` も付きます。
 
 ### API 一覧
 
@@ -638,7 +638,9 @@ const app = serv.createApp({
 })
 ```
 
-本番では `_serv.yml` の `cors.origin` が空・`*` なら起動に失敗します。Web・Capacitor/Tauri は正規化済み Origin 全体を厳密照合し、末尾偽装を防ぎます。本番は Secure refresh cookie を強制し OpenAPI/docs を無効化します。非本番の endpoint は設定ファイルで決めます。
+本番では `_serv.yml` の `cors.origin` に許可するオリジンを明示し、OpenAPI と docs は無効になります。Web と Capacitor/Tauri のオリジンは、正規化した値全体で照合します。
+
+管理されたプライベートネットワークや VPN の本番 HTTP 入口では、バックエンドのプロセス環境に `HAI_SERV_REFRESH_COOKIE_SECURE=false` を設定できます。再起動してログインし直すと、ログイン応答と更新応答の Cookie から `Secure` が外れ、HTTP でリフレッシュ認証情報が平文で送信されます。`true` は `Secure` を強制し、空欄や未対応の値では環境の既定値が使われます。`serv.createApp` を直接呼ぶ場合は、明示した `refreshCookie.secure`、この環境変数、`NODE_ENV` または `HAI_CORE_ENV` による本番判定の順に適用されます。
 
 ### 設定による認証画面
 

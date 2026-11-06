@@ -2,6 +2,8 @@
 
 Serv 原生 RPC 入口、HAI_SERV_HTTP_RPC 和 ServRpcHttpConfig 已移除；保留 OpenAPI/REST、api-client 和 oRPC contract/procedure。部署健康检查与同源文档路由按有效配置生成，文档认证仍由后端执行。
 
+Serv 生产刷新 Cookie 默认启用 Secure。受控内网或 VPN 的 HTTP 入口可用后端进程变量 `HAI_SERV_REFRESH_COOKIE_SECURE=false`，生产 CORS 白名单和 API 文档策略继续生效。见 [生产 HTTP 入口](docs/usage/configuration/http.md#生产-http-入口的-serv-刷新-cookie)。
+
 框架功能增删改涉及 type/interface/Schema 等结构、配置/环境变量、核心流程或模块边界时，先读 [hai-change-plan](.agents/skills/hai-change-plan/SKILL.md)：用简明语言说明方案与影响，由用户决定后实施，成套更新 README、配置、docs、GitHub Pages 内容源、注释、调用方、测试及模板。已确认且未扩大的方案不重复确认。
 
 TypeScript monorepo：Svelte 5/SvelteKit 或 Vite 客户端，oRPC contract + serv HTTP 服务，数据与 AI 模块。此文件用于选择入口；签名以当前源码类型及 package.json.exports 为准。应用消费已发布包时，以安装版本为准，不把源码仓库的新能力当成已发布能力。

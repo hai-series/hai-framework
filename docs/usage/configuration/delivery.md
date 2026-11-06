@@ -464,6 +464,8 @@ docker exec hai-orders-prod-serv node -e 'require("node:dns").lookup("db.intrane
 
 所有 Docker-SSH 模板共用 `provider.expose.https`，不区分 fullstack、API、admin、website、h5 或静态 SPA。`pnpm run deploy` 的 HTTPS 环节可选不启用、已有 PEM 证书、Let’s Encrypt；选择保存到当前环境私有文件，`--yes` 复用配置。未配置时保持 HTTP，HTTPS 端口默认 443，`redirectHttp` 默认 true。`expose.hostPort` 仍为 HTTP 端口，必须与 HTTPS 端口不同。
 
+使用 Serv 刷新 Cookie 的生产应用在受控内网或 VPN 上通过 HTTP 提供登录时，在所选部署环境的 `.env.prod.local` 中设置 `HAI_SERV_REFRESH_COOKIE_SECURE=false` 和实际 `HAI_SERV_CORS_ORIGIN`，再重新部署后端。验证步骤见 [生产 HTTP 入口的 Serv 刷新 Cookie](http.md#生产-http-入口的-serv-刷新-cookie)。
+
 已有证书配置（以下为 `hai.json.deploy` 的内容，也可用环境私有文件覆盖）：
 
 ```json schema=@h-ai/deploy:DeployConfigSchema

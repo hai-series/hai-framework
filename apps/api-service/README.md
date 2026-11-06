@@ -132,7 +132,7 @@ await crypto.close()
 - 默认密钥协商端点为 `POST /api/v1/_hai/key-exchange`；修改配置时，客户端的完整 API Base 与密钥协商路径也需同步。
 - 启用 `auth: {}` 与 `transport: { crypto }` 时，401 后的 `/auth/refresh` 也会复用同一 transport 会话，不会降级为明文刷新。
 - 浏览器 / WebView 跨 origin 联调统一配置 `config/_serv.yml` 的 `cors.origin` 与 `cors.nativeOrigins`。生产环境禁止空值和 `*`，并按规范化后的完整 Origin 精确匹配；不要在 `src/app.ts` 维护业务侧白名单函数。
-- `serv.createRuntimeSecurityPolicy(...)` 将配置收敛为运行时安全上限：生产环境启用 Secure refresh cookie，并关闭 OpenAPI/docs；路径、来源和凭据策略来自 `_serv.yml`；宿主额外允许 `x-request-client` 和 `x-hai-token-transport` 协议头。
+- `serv.createRuntimeSecurityPolicy(...)` 在生产环境默认给刷新 Cookie 加 `Secure`，并关闭 OpenAPI 和 docs。路径、来源和凭据策略来自 `_serv.yml`，宿主额外允许 `x-request-client` 和 `x-hai-token-transport` 协议头。
 
 ```yaml
 # config/_serv.yml
@@ -313,6 +313,8 @@ await crypto.close()
 配置环境变量统一按 `HAI_<配置名>_<YAML 路径>` 生成，优先级高于 YAML；
 camelCase key 不拆词，例如 `cors.nativeOrigins` 对应
 `HAI_SERV_CORS_NATIVEORIGINS`。
+
+独立的后端进程变量 `HAI_SERV_REFRESH_COOKIE_SECURE=false` 允许受控内网或 VPN 的生产 HTTP 入口使用刷新 Cookie。生产 `HAI_SERV_CORS_ORIGIN` 仍需配置实际入口的完整 Origin。修改后重启服务并重新登录。
 
 #### 认证页面
 

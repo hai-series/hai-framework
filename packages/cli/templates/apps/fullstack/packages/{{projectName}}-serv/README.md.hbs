@@ -53,6 +53,7 @@ CLI 同时在根 `.env.dev.local/.env.test.local/.env.prod.local` 分别生成�
 - 服务镜像直接由 `@h-ai/serv` 对外监听，配置挂载点为 `/app/config`，数据目录为 `/app/data`，不包含额外转发进程。
 - Web 镜像不烘焙 API 地址；启动时使用 `-e PUBLIC_API_BASE=https://api.example.com` 注入，同一镜像可部署到不同环境。未设置时 Web 默认请求自身 origin。
 - YAML 配置使用 `${ENV_NAME:default}` 接收运行时环境变量；不要把密钥写入镜像。
+- 受控内网或 VPN 的生产 HTTP 入口可在 `.env.prod.local` 设置 `HAI_SERV_REFRESH_COOKIE_SECURE=false` 和实际 `HAI_SERV_CORS_ORIGIN`，重新部署后端后重新登录。刷新凭据会经 HTTP 明文传输。
 
 ### IAM 认证配置
 

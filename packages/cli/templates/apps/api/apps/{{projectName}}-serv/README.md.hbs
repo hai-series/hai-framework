@@ -23,6 +23,8 @@ pnpm --filter {{api.servPackageName}} test
 
 
 - 配置默认打包自本目录 `config/`，可在运行时只读挂载到 `/app/config`，敏感值通过环境变量注入。
+{{#if features.iam}}- 受控内网或 VPN 的生产 HTTP 入口可设置 `HAI_SERV_REFRESH_COOKIE_SECURE=false` 和实际 `HAI_SERV_CORS_ORIGIN`，重新部署后端后重新登录。刷新凭据会经 HTTP 明文传输。
+{{/if}}
 
 
 ### 关键目录

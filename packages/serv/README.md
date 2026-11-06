@@ -485,7 +485,7 @@ await apiClient.init({
 })
 ```
 
-> **Cookie 规格**：`HttpOnly; SameSite=Strict; Secure`（生产）；`Path` 限制为 `{apiPrefix}/auth/refresh`。
+> 刷新 Cookie 带有 `HttpOnly` 和 `SameSite=Strict`，路径限制为 `{apiPrefix}/auth/refresh`。生产默认还会设置 `Secure`。
 
 ### API 概览
 
@@ -638,7 +638,9 @@ const app = serv.createApp({
 })
 ```
 
-生产环境下 `_serv.yml` 的 `cors.origin` 为空或为 `*` 会在启动时失败；Web 与 Capacitor/Tauri Origin 均按规范化后的完整 Origin 精确匹配，避免后缀伪造。生产环境同时强制 Secure refresh cookie 并关闭 OpenAPI/docs，配置文件仍决定非生产环境具体挂载哪些端点。
+生产环境要求 `_serv.yml` 的 `cors.origin` 显式列出允许的来源，并关闭 OpenAPI 和 docs。Web 与 Capacitor/Tauri Origin 按规范化后的完整值精确匹配。
+
+受控内网或 VPN 的生产 HTTP 入口可以在后端进程环境设置 `HAI_SERV_REFRESH_COOKIE_SECURE=false`。重新启动后端并登录后，登录和刷新响应会下发省略 `Secure` 的 Cookie，刷新凭据会经 HTTP 明文传输。设置 `true` 可强制启用 `Secure`，留空或其他值沿用环境默认值。直接调用 `serv.createApp` 时，显式 `refreshCookie.secure` 优先，其次是此变量，再按 `NODE_ENV` 或 `HAI_CORE_ENV` 判断是否为生产。
 
 ### 配置驱动认证页面
 

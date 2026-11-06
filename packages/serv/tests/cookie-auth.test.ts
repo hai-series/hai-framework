@@ -319,12 +319,41 @@ describe('mountRefreshCookieRoutes', () => {
       vi.stubEnv('HAI_CORE_ENV', 'development')
       vi.stubEnv(productionFlag, 'production')
       vi.stubEnv('HAI_E2E', '1')
+      vi.stubEnv('HAI_SERV_REFRESH_COOKIE_SECURE', undefined)
       const app = new Hono()
       mountRefreshCookieRoutes(app, API_PREFIX, {}, { session: { refresh: vi.fn() } })
       app.post(`${API_PREFIX}/auth/login`, c => c.json({ success: true, data: MOCK_AUTH_RESULT }))
       const response = await app.request(`${API_PREFIX}/auth/login`, { method: 'POST' })
       const refreshCookie = response.headers.getSetCookie().find(cookie => cookie.startsWith(COOKIE_NAME))
       expect(refreshCookie).toContain('; Secure')
+    })
+
+    it('显式允许生产 HTTP 时，登录和轮换的 Cookie 都可用于恢复会话', async () => {
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('HAI_SERV_REFRESH_COOKIE_SECURE', 'false')
+      const app = new Hono()
+      const rotatedTokens = { ...MOCK_TOKENS, refreshToken: 'rotated-refresh-token' }
+      const refresh = vi.fn().mockResolvedValue({ success: true, data: rotatedTokens })
+      mountRefreshCookieRoutes(app, API_PREFIX, {}, { session: { refresh } })
+      app.post(`${API_PREFIX}/auth/login`, c => c.json({ success: true, data: MOCK_AUTH_RESULT }))
+
+      const login = await app.request(`${API_PREFIX}/auth/login`, { method: 'POST' })
+      expect(login.status).toBe(200)
+      const [loginCookie] = login.headers.getSetCookie()
+      expect(loginCookie).toContain(`${COOKIE_NAME}=${MOCK_TOKENS.refreshToken};`)
+      expect(loginCookie).toContain('HttpOnly; SameSite=Strict')
+      expect(loginCookie).not.toContain('; Secure')
+
+      const result = await app.request(REFRESH_PATH, {
+        method: 'POST',
+        headers: { Cookie: loginCookie.split(';')[0] },
+      })
+      expect(result.status).toBe(200)
+      expect(refresh).toHaveBeenCalledWith(MOCK_TOKENS.refreshToken)
+      const [rotatedCookie] = result.headers.getSetCookie()
+      expect(rotatedCookie).toContain(`${COOKIE_NAME}=${rotatedTokens.refreshToken};`)
+      expect(rotatedCookie).toContain('HttpOnly; SameSite=Strict')
+      expect(rotatedCookie).not.toContain('; Secure')
     })
 
     it('secure: false 时，cookie 不含 Secure 属性', async () => {
@@ -342,6 +371,7 @@ describe('mountRefreshCookieRoutes', () => {
     })
 
     it('secure: true 时，cookie 包含 Secure 属性', async () => {
+      vi.stubEnv('HAI_SERV_REFRESH_COOKIE_SECURE', 'false')
       const app = new Hono()
       const iam = { session: { verifyToken: vi.fn(), refresh: vi.fn().mockResolvedValue({ success: true, data: MOCK_TOKENS }) } }
       mountRefreshCookieRoutes(app, API_PREFIX, { secure: true }, iam)

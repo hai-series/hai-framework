@@ -49,6 +49,8 @@ description: "构建并发布或交付已有镜像：完整离线包、按服务
 
 默认.tar.gz，显式--output release.tar为未压缩，README仅外层。镜像从解包目录导入，release只留配置/恢复状态；成功后清理本次incoming，失败保留诊断。中间件归档按镜像内容ID缓存且复用前验摘要。
 
+Serv 生产登录的刷新 Cookie 默认带 `Secure`。受控内网或 VPN 的 HTTP 部署可在所选 `.env.prod.local` 配置 `HAI_SERV_REFRESH_COOKIE_SECURE=false` 和实际 `HAI_SERV_CORS_ORIGIN`，再重新部署后端。详见 [Serv Cookie 配置](../hai-serv/reference.md#cookie-规格)。
+
 ## 后端运行配置重载
 
 交付 README 仅列初始账号变量名及所选环境文件或 `process.env` 来源，不打印密码。Fullstack 初始密码在创建工程时生成，部署带入已有值；已有账号不因环境变量变更重置密码或恢复旧职责，自定义应用以实际引导逻辑为准。

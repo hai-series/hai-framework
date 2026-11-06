@@ -61,6 +61,20 @@ cors:
 
 示例和模板统一向 IAM、审计、限流和业务传递可信地址。受管 Nginx 用经过确认的 remote_addr 覆盖 XFF 和 X-Real-IP；外层负载均衡需显式配置 `provider.trustedEdgeProxies`。rootless 网络是否保留原始地址必须实测，条件和独立文件部署见[真实 IP 与请求策略](request-access.md#3-运维人员先确认真实-ip-的来源)。
 
+## 生产 HTTP 入口的 Serv 刷新 Cookie
+
+Serv 在生产默认给刷新 Cookie 加 `Secure`。使用受控内网或 VPN 的 HTTP 入口时，可在项目所用的 `.env.prod.local` 中设置以下值，然后用更新后的后端重新部署。将示例 Origin 替换为浏览器实际使用的地址和端口。
+
+```dotenv
+HAI_CORE_ENV=production
+HAI_SERV_CORS_ORIGIN=http://192.0.2.10:12348
+HAI_SERV_REFRESH_COOKIE_SECURE=false
+```
+
+此变量由后端进程读取。`false` 省略 `Secure`，`true` 强制添加，省略或填写其他值沿用环境默认值。生产安全策略仍要求明确的 CORS 来源并关闭 API 文档。`HttpOnly`、`SameSite=Strict` 和刷新路径限制继续生效，HTTP 会明文传输刷新凭据。
+
+重新登录后，在浏览器网络面板确认登录响应的刷新 Cookie 省略了 `Secure`。重载页面时，确认 `POST /api/v1/auth/refresh` 携带该 Cookie、返回 `200` 并恢复登录。切回 HTTPS 时移除变量或设为 `true`，同步实际 HTTPS Origin，再重新登录确认 Cookie 带 `Secure`。
+
 ## Kit、Cookie与请求上下文
 
 `config/_kit.yml` 的 `server` 默认同Serv，`transport` 默认 `false`；默认协商路径为 `/api/_hai/key-exchange`，与Serv默认不同。Kit 没有 `close()`，认证、Cookie、限流和请求处理由 hooks 工厂参数装配，不能把Serv 整个 `http` 对象放入Kit。

@@ -485,7 +485,7 @@ await apiClient.init({
 })
 ```
 
-> **Cookie attributes**: `HttpOnly; SameSite=Strict; Secure` in production; `Path` is limited to `{apiPrefix}/auth/refresh`.
+> Refresh cookies use `HttpOnly` and `SameSite=Strict` and are scoped to `{apiPrefix}/auth/refresh`. Production adds `Secure` by default.
 
 ### API overview
 
@@ -638,7 +638,9 @@ const app = serv.createApp({
 })
 ```
 
-In production, empty or `*` `_serv.yml` `cors.origin` fails startup. Web and Capacitor/Tauri origins use exact normalized full-Origin matching to prevent suffix spoofing. Production also enforces Secure refresh cookies and disables OpenAPI/docs; configuration controls nonproduction endpoints.
+Production requires an explicit `_serv.yml` `cors.origin` allowlist and disables OpenAPI and docs. Web and Capacitor/Tauri origins match by their exact normalized values.
+
+For a production HTTP endpoint on a controlled private network or VPN, set `HAI_SERV_REFRESH_COOKIE_SECURE=false` in the backend process environment. After restarting the backend and signing in, login and refresh responses omit `Secure` from the cookie, and HTTP carries the refresh credential in plaintext. `true` forces `Secure`. An empty or unrecognized value uses the environment default. When calling `serv.createApp` directly, an explicit `refreshCookie.secure` takes precedence over this variable, followed by the production check on `NODE_ENV` or `HAI_CORE_ENV`.
 
 ### Configuration driven authentication
 
