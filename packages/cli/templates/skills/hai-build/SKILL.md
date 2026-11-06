@@ -40,6 +40,7 @@ description: "构建或排查 hai 应用的源码、静态网站、容器镜像�
 - 默认容器面向 CPU 运行或远程 AI 服务，Dockerfile 设置 `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`，跳过额外 CUDA/TensorRT 下载；使用宿主机 GPU 时定制镜像和运行参数，不修改本机 npm 或全局 AI/GPU 配置。
 - pnpm run deploy --build 显式串联构建、打包和发布；--bundle-only 只交付完整离线包与跨平台脚本；--services 以服务器成功状态为基线只更新选中服务。完整包自动包含自建中间件镜像，服务器禁止联网拉取。
 - `pnpm build` 默认仅编译源码（调用 compile）；`pnpm build --target image` 根据 hai.json.build.images 的 dockerfile 构建并导出 serv/web 镜像（可单独或组合），可用 --images web 只构建前端，默认最多两项并行，--concurrency 1可串行，auto 优先可达 Podman、其次 Docker，可用 --runtime 显式指定。
+- 自动化直接执行 `hai build --target image --json`，成功时 stdout 只有单行 JSON，进度和失败走 stderr。读取 `artifactDir` 作为本次部署输入，清单记录 Git 提交、dirty 状态、实际镜像 OS/架构、镜像引用和归档 SHA-256。发布 Worker 从固定提交的干净检出构建。
 - compile 交付源码编译结果，image 交付镜像归档，desktop 交付 Tauri 系统安装包，app 交付 Capacitor 原生制品；每次选择一个 target。hai.json 的 build.images[].dockerfile 指向独立镜像文件，build.desktop/build.app 声明原生工程目录，deploy 保存整个项目的部署配置；参数和平台前置以当前 CLI 类型与工程 scripts 为准。cap:sync 只同步工程，不能作为已打包或已安装的证据。
 - `--image-source` / `--npm-source` 分别选 official/cn/custom；首次交互保存到 hai.json.build.sources，参数仅覆盖本次，--yes 复用且未配置时走官方。cn 镜像用毫秒镜像覆盖 Docker Hub/GHCR，npm 用 npmmirror；保留版本和 lockfile 校验。旧 Dockerfile 缺参数时明确提示同步模板。自定义映射见 [下载源与代理](reference.md#下载源与代理)。
 - Docker/Podman 的构建代理用预定义参数传递；--proxy-mode 选 inherit/system/custom/none，--proxy-url 指定自定义地址，--proxy-bypass 覆盖绕过列表，--no-http-proxy 等价 none。Podman 默认网络保留原代理地址，显式 pasta 等隔离网络才改为宿主入口；Docker 非 host 网络使用宿主入口。首个下载步骤检查实际构建可达性，不能用 run 网络代替。镜像拉取端仍需 Docker daemon/Desktop 或 Podman Machine/API 自身代理，CLI 分别预检提示。不要把代理写成 Dockerfile ENV 或固化进运行镜像。

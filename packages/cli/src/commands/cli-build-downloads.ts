@@ -204,6 +204,7 @@ export function buildProxyArguments(proxy: DownloadProxyConfig, runtime: string,
  * 打包前检查本机代理端口，并单独报告引擎拉取代理的配置边界。
  * @param runtime - 实际或待探测的容器引擎。
  * @param proxy - 本次代理配置。
+ * @param report - 提示输出目标；JSON 模式将提示送到标准错误。
  * @returns 本机端口检查完成；引擎侧无法核实时显示说明。
  * @throws Error - 代理端口不可达或代理配置非法。
  * @example 模块内部上下文
@@ -211,7 +212,7 @@ export function buildProxyArguments(proxy: DownloadProxyConfig, runtime: string,
  * await preflightDownloadProxy('auto', { mode: 'inherit' })
  * ```
  */
-export async function preflightDownloadProxy(runtime: string, proxy: DownloadProxyConfig): Promise<void> {
+export async function preflightDownloadProxy(runtime: string, proxy: DownloadProxyConfig, report: (message: string) => void = writeCliMessage): Promise<void> {
   const environment = resolveDownloadProxy(proxy)
   for (const value of new Set([environment.HTTP_PROXY, environment.HTTPS_PROXY].filter(Boolean))) {
     const url = new URL(value)
@@ -235,12 +236,12 @@ export async function preflightDownloadProxy(runtime: string, proxy: DownloadPro
   for (const candidate of runtime === 'auto' ? ['podman', 'docker'] : [runtime]) {
     try {
       const data: { HTTPProxy?: string, HTTPSProxy?: string, host?: { serviceIsRemote?: boolean } } = JSON.parse(execFileSync(candidate, ['info', '--format', '{{json .}}'], { encoding: 'utf8', windowsHide: true, timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }))
-      writeCliMessage(cliM(candidate === 'docker' && (data.HTTPProxy || data.HTTPSProxy) ? 'cli_download_engine_proxy_configured' : candidate === 'podman' && !data.host?.serviceIsRemote ? 'cli_download_engine_proxy_local' : 'cli_download_engine_proxy_hint', { params: { runtime: candidate } }))
+      report(cliM(candidate === 'docker' && (data.HTTPProxy || data.HTTPSProxy) ? 'cli_download_engine_proxy_configured' : candidate === 'podman' && !data.host?.serviceIsRemote ? 'cli_download_engine_proxy_local' : 'cli_download_engine_proxy_hint', { params: { runtime: candidate } }))
       return
     }
     catch { /* 继续检查另一可用引擎，不替用户启动或修改引擎。 */ }
   }
-  writeCliMessage(cliM('cli_download_engine_proxy_hint', { params: { runtime } }))
+  report(cliM('cli_download_engine_proxy_hint', { params: { runtime } }))
 }
 
 /**

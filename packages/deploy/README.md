@@ -27,6 +27,8 @@ pnpm build --target image --images web
 pnpm build --target desktop --platform windows --arch x64
 ```
 
+自动化可使用 `hai build --target image --json` 的 `artifactDir` 指定本次构建。`readDeploymentArtifact` 校验归档路径及 SHA-256，并返回清单中的来源提交、工作区状态和镜像平台；历史清单可以省略这些字段。
+
 源码编译、镜像构建、桌面打包分别对应 compile/image/desktop。构建不选择部署环境、不注入运行期密钥。原生安装包在对应操作系统准备 SDK 与 Rust 工具链后构建。
 
 #### build 的可选参数

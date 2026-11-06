@@ -27,6 +27,13 @@ export const DeploymentArtifactSchema = z.object({
   appVersion: z.string().max(80).regex(/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9a-z-]+(?:\.[0-9a-z-]+)*)?(?:\+[0-9a-z-]+(?:\.[0-9a-z-]+)*)?$/i),
   /** 本次构建标识；同一应用版本允许重复构建。 */
   buildId: z.string().max(128).regex(/^[a-z0-9][\w.+-]*$/i),
+  /** 构建启动时观察到的 Git 来源；历史清单可以省略。 */
+  source: z.object({
+    /** 工程 package.json 所在仓库的提交 SHA；无法确定时为 unknown。 */
+    commit: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64}|unknown)$/),
+    /** 工程目录有未提交改动时为 true；无法检查时为 null。 */
+    dirty: z.boolean().nullable(),
+  }).optional(),
   /** 只包含所选镜像的构建不能用于首次安装。 */
   partial: z.boolean().default(false),
   /** 是否包含浏览器端；仅构建 serv 时也保留完整工程的 Web 拓扑。 */
@@ -47,6 +54,8 @@ export const DeploymentArtifactSchema = z.object({
     imageRef: z.string().regex(/^[a-z0-9][a-z0-9./:_-]*:[a-z0-9_][a-z0-9_.-]*$/).refine(value => !value.endsWith(':latest')),
     /** tar 内容的 SHA-256，用于部署前校验。 */
     sha256: z.string().regex(/^[a-f0-9]{64}$/),
+    /** 引擎实际构建的镜像 OS/架构；历史清单可以省略。 */
+    platform: z.string().regex(/^[a-z0-9][a-z0-9_.-]*\/[a-z0-9][a-z0-9_.-]*$/).optional(),
     /** 容器内部监听端口；服务器公开端口由部署选择。 */
     containerPort: z.number().int().min(1).max(65535).optional(),
   })).min(1).max(2).refine(images => new Set(images.map(image => image.name)).size === images.length),

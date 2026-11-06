@@ -1,5 +1,6 @@
-/** `pnpm build` 的构建入口：源码、OCI 镜像与原生安装包。 */
 import type { DeploymentArtifact } from '@h-ai/deploy'
+/** `pnpm build` 的构建入口：源码、OCI 镜像与原生安装包。 */
+import type { StdioOptions } from 'node:child_process'
 import type { GlobalOptions } from '../cli-types.js'
 import type { BuildDownloadOptions } from './cli-build-downloads.js'
 import type { NativeArtifact } from './cli-build-native.js'
@@ -33,6 +34,8 @@ export interface BuildCommandOptions extends GlobalOptions, BuildDownloadOptions
   target?: 'compile' | 'image' | 'desktop' | 'app'
   /** 逗号分隔的应用镜像名；省略时构建全部。 */
   images?: string
+  /** 镜像构建使用非交互模式，标准输出只包含本次制品的 JSON。 */
+  json?: boolean
   /** 并行镜像任务数，默认 2；内存受限时设为 1。 */
   concurrency?: number
   /** auto 优先使用可达的 Podman。 */
@@ -66,7 +69,7 @@ interface BuildConfig {
 }
 
 /** 子进程不经过 shell；pnpm 使用当前原生或 JS 入口，兼容 Windows 路径。 */
-async function run(command: string, args: string[], cwd: string, quiet = false, identity?: { buildId: string, commit: string }, compileEnvironment?: Record<string, string>): Promise<void> {
+async function run(command: string, args: string[], cwd: string, quiet = false, identity?: { buildId: string, commit: string }, compileEnvironment?: Record<string, string>, progressOnStderr = false): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(?:HAI_|PUBLIC_|VITE_)/.test(key)))
     Object.assign(env, compileEnvironment)
@@ -86,11 +89,12 @@ async function run(command: string, args: string[], cwd: string, quiet = false, 
     if (env.CI === '1' || env.CI === '0')
       env.CI = env.CI === '1' ? 'true' : 'false'
     const windowsOutput = !quiet && process.platform === 'win32'
-    const child = spawn(command, args, { cwd, env, windowsHide: true, stdio: quiet ? 'ignore' : windowsOutput ? ['inherit', 'pipe', 'pipe'] : 'inherit', shell: false })
+    const stdio: StdioOptions = quiet ? 'ignore' : windowsOutput ? ['inherit', 'pipe', 'pipe'] : progressOnStderr ? ['inherit', process.stderr, 'inherit'] : 'inherit'
+    const child = spawn(command, args, { cwd, env, windowsHide: true, stdio, shell: false })
     let output = Promise.resolve()
     if (windowsOutput && child.stdout && child.stderr) {
       output = Promise.all([
-        forwardWindowsBuildOutput(child.stdout, process.stdout),
+        forwardWindowsBuildOutput(child.stdout, progressOnStderr ? process.stderr : process.stdout),
         forwardWindowsBuildOutput(child.stderr, process.stderr),
       ]).then(() => undefined)
       // 输出流异常时结束本次本地子进程，再由 close 等待剩余管道关闭。
@@ -149,11 +153,49 @@ function sourceCommit(cwd: string): string {
     // 由 Git 在当前目录解释路径，避免 Windows 8.3 短名、长名和 junction 别名之间的字符串误判。
     execFileSync('git', ['--literal-pathspecs', 'ls-files', '--error-unmatch', '--', 'package.json'], options)
     const commit = execFileSync('git', ['rev-parse', 'HEAD'], options).trim()
-    return /^(?:[a-f\d]{40}|[a-f\d]{64})$/i.test(commit) ? commit : 'unknown'
+    return /^(?:[a-f\d]{40}|[a-f\d]{64})$/i.test(commit) ? commit.toLowerCase() : 'unknown'
   }
   catch {
     return 'unknown'
   }
+}
+
+/** 状态只检查当前工程目录，保留未跟踪、但未忽略的输入。 */
+function sourceDirty(cwd: string, commit: string): boolean | null {
+  if (commit === 'unknown')
+    return null
+  try {
+    const status = execFileSync('git', ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v2', '--branch', '--untracked-files=normal', '--', '.'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: 'pipe',
+      windowsHide: true,
+      timeout: 15000,
+    }).trim().split(/\r?\n/)
+    if (status[0] !== `# branch.oid ${commit}`)
+      return null
+    return status.some(line => !line.startsWith('# '))
+  }
+  catch {
+    return null
+  }
+}
+
+/** 架构取自本次引擎产物，远程引擎或模拟架构下可能与 CLI 宿主不同。 */
+function imagePlatform(runtime: string, image: string, cwd: string): string {
+  try {
+    const platform = execFileSync(runtime, ['image', 'inspect', '--format', '{{.Os}}/{{.Architecture}}', image], {
+      cwd,
+      encoding: 'utf8',
+      stdio: 'pipe',
+      windowsHide: true,
+      timeout: 15000,
+    }).trim()
+    if (/^[a-z0-9][a-z0-9_.-]*\/[a-z0-9][a-z0-9_.-]*$/.test(platform))
+      return platform
+  }
+  catch { /* 只返回本地化错误，避免暴露引擎错误上下文。 */ }
+  throw new Error(cliM('cli_build_image_platform_invalid'))
 }
 
 /** 复用镜像与 Android 的引擎选择顺序。 */
@@ -197,7 +239,7 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   const containerAndroid = target === 'app' && options.platform === 'android' && options.runtime !== undefined
   if (target === 'app' && options.platform === 'ios' && options.runtime !== undefined)
     throw new Error(cliM('cli_build_ios_runtime'))
-  if ((target !== 'image' && (options.images !== undefined || options.concurrency !== undefined || options.sqlitePrebuildMirror !== undefined))
+  if ((target !== 'image' && (options.images !== undefined || options.concurrency !== undefined || options.sqlitePrebuildMirror !== undefined || options.json))
     || (target !== 'image' && !containerAndroid && (options.runtime !== undefined || options.network !== undefined || options.httpProxy === false || options.imageSource !== undefined || options.imageMirrors !== undefined || options.npmSource !== undefined || options.npmRegistry !== undefined || options.proxyMode !== undefined || options.proxyUrl !== undefined || options.proxyBypass !== undefined))
     || (!['desktop', 'app'].includes(target) && (options.platform !== undefined || options.debug !== undefined)) || (target !== 'desktop' && options.arch !== undefined)) {
     throw new Error(cliM('cli_build_options_invalid'))
@@ -294,17 +336,17 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     if (!existsSync(resolve(cwd, image.dockerfile)))
       throw new Error(cliM('cli_build_dockerfile_missing', { params: { path: image.dockerfile } }))
   }
-  const downloads = await resolveBuildDownloads(cwd, options)
+  const { buildId, commit } = identity
+  const artifact: DeploymentArtifact = { version: 4, primaryService: config.images.some(image => image.name === 'serv') ? 'serv' : 'web', appVersion, buildId, source: { commit, dirty: sourceDirty(cwd, commit) }, partial: images.length !== config.images.length, hasWeb: config.images.some(image => image.name === 'web'), images: [] }
+  const downloads = await resolveBuildDownloads(cwd, options.json ? { ...options, yes: true } : options)
   for (const image of images) validateDownloadDockerfile(resolve(cwd, image.dockerfile), downloads)
   const runtime = await buildRuntime(cwd, options.runtime)
-  await preflightDownloadProxy(runtime, downloads.proxy)
+  await preflightDownloadProxy(runtime, downloads.proxy, options.json ? message => process.stderr.write(`${message}\n`) : undefined)
   if (options.sqlitePrebuildMirror) {
     const url = new URL(options.sqlitePrebuildMirror)
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)
       throw new Error(cliM('cli_build_mirror_invalid'))
   }
-  const { buildId, commit } = identity
-  const artifact: DeploymentArtifact = { version: 4, primaryService: config.images.some(image => image.name === 'serv') ? 'serv' : 'web', appVersion, buildId, partial: images.length !== config.images.length, hasWeb: config.images.some(image => image.name === 'web'), images: [] }
   if (webBasePath) {
     artifact.version = 5
     artifact.webBasePath = webBasePath
@@ -318,6 +360,7 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   mkdirSync(parent, { recursive: true })
   const staging = mkdtempSync(join(parent, '.building-'))
   const built: string[] = []
+  const runImage = (args: string[]) => run(runtime, args, cwd, false, undefined, undefined, options.json)
   try {
     for (const context of new Set(images.map(image => resolve(cwd, image.context ?? '.'))))
       prepareDependencyInputs(context)
@@ -358,13 +401,14 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
       if (image.name === 'web' && compileEnvironment.PUBLIC_BASE_PATH)
         args.push('--build-arg', `PUBLIC_BASE_PATH=${compileEnvironment.PUBLIC_BASE_PATH}`)
       built.push(imageRef)
-      await run(runtime, [...args, context], cwd)
+      await runImage([...args, context])
+      const platform = imagePlatform(runtime, imageRef, cwd)
       const file = `${image.name}-${appVersion}.tar`
-      await run(runtime, ['save', ...(runtime === 'podman' ? ['--format', 'docker-archive'] : []), '-o', join(staging, file), imageRef], cwd)
+      await runImage(['save', ...(runtime === 'podman' ? ['--format', 'docker-archive'] : []), '-o', join(staging, file), imageRef])
       const hash = createHash('sha256')
       for await (const chunk of createReadStream(join(staging, file)))
         hash.update(chunk)
-      return { name: image.name, file, imageRef, sha256: hash.digest('hex'), ...(image.containerPort ? { containerPort: image.containerPort } : {}) }
+      return { name: image.name, file, imageRef, sha256: hash.digest('hex'), platform, ...(image.containerPort ? { containerPort: image.containerPort } : {}) }
     }
     for (let offset = 0; offset < images.length; offset += concurrency) {
       // 等待同批任务全部退出后再处理失败，避免清理仍在写入的归档或镜像。
@@ -383,7 +427,12 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     renameSync(staging, output)
     writeFileSync(join(parent, `latest-${buildId}`), `${batch}\n`)
     renameSync(join(parent, `latest-${buildId}`), join(parent, 'latest'))
-    writeCliMessage(cliM('cli_build_ready', { params: { path: output, runtime } }))
+    if (options.json) {
+      process.stdout.write(`${JSON.stringify({ schemaVersion: 1, artifactDir: output, manifestPath: join(output, 'manifest.json'), manifest: artifact })}\n`)
+    }
+    else {
+      writeCliMessage(cliM('cli_build_ready', { params: { path: output, runtime } }))
+    }
   }
   catch (error) {
     for (const imageRef of built) {

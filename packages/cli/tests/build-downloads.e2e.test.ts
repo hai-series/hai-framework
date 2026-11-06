@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { readDeploymentArtifact } from '@h-ai/deploy'
 import { expect, it } from 'vitest'
 import { testContainerRuntimeCandidates } from './helpers/deploy-container-fixture.js'
 import { runDeployTestCommand } from './helpers/deploy-test-command.js'
@@ -61,13 +62,15 @@ it.skipIf(!enabled)('download source gates use the generated Dockerfile, Corepac
     else await run('pnpm', pnpmArguments)
     const proxy = process.env.HTTPS_PROXY ?? process.env.https_proxy ?? process.env.HTTP_PROXY ?? process.env.http_proxy
     const proxyOptions = proxy ? ['--proxy-mode', 'custom', '--proxy-url', proxy] : ['--proxy-mode', 'none']
-    await run(process.execPath, [join(root, 'packages/cli/dist/index.js'), 'build', '--target', 'image', '--runtime', runtime, '--image-source', source, '--npm-source', source, '--yes', ...proxyOptions])
+    const json = await run(process.execPath, [join(root, 'packages/cli/dist/index.js'), 'build', '--target', 'image', '--json', '--runtime', runtime, '--image-source', source, '--npm-source', source, ...proxyOptions])
     const builds = join(directory, '.hai/build/docker')
     const buildId = readFileSync(join(builds, 'latest'), 'utf8').trim()
     const manifest: { images: Array<{ imageRef: string }> } = JSON.parse(readFileSync(join(builds, buildId, 'manifest.json'), 'utf8'))
     imageRef = manifest.images[0]?.imageRef
     if (!imageRef?.startsWith(`localhost/hai-${project}-serv:`))
       throw new Error('Download gate did not return its owned image reference')
+    const artifactDir = join(builds, buildId)
+    expect(JSON.parse(json)).toEqual({ schemaVersion: 1, artifactDir, manifestPath: join(artifactDir, 'manifest.json'), manifest: await readDeploymentArtifact(artifactDir) })
     const created = await run(runtime, ['create', '--pull=never', imageRef])
     if (!/^[a-f\d]{64}$/.test(created))
       throw new Error('Download gate did not return a trusted container ID')

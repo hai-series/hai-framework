@@ -10,7 +10,7 @@ import process from 'node:process'
 import { cac } from 'cac'
 import chalk from 'chalk'
 import { cliM } from './cli-i18n.js'
-import { getCliVersion, writeCliMessage } from './cli-utils.js'
+import { getCliVersion, writeCliError, writeCliMessage } from './cli-utils.js'
 import { addModule, buildCommand, createProject, deployCommand, deploySecretsCommand, feedbackCommand, generate, initProject, upgradeCommand } from './commands/cli-commands.js'
 
 // CLI 版本（从 package.json 动态读取，避免硬编码与 npm 发布版本不一致）
@@ -123,6 +123,7 @@ cli
 cli
   .command('build', cliM('cli_help_build'))
   .option('--target <target>', cliM('cli_help_target'))
+  .option('--json', cliM('cli_help_buildJson'))
   .option('--images <names>', cliM('cli_help_images'))
   .option('--concurrency <count>', cliM('cli_help_buildConcurrency'))
   .option('--runtime <runtime>', cliM('cli_help_buildRuntime'))
@@ -145,7 +146,11 @@ cli
       await buildCommand(options)
     }
     catch (error) {
-      writeCliMessage(error instanceof Error ? error.message : String(error))
+      const message = error instanceof Error ? error.message : String(error)
+      if (options.json)
+        writeCliError(message)
+      else
+        writeCliMessage(message)
       process.exitCode = 1
     }
   })
