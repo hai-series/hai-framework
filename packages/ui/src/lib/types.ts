@@ -1595,7 +1595,7 @@ export interface PopoverProps extends DataAttributes {
   trigger?: 'click' | 'hover'
   /** 偏移量 */
   offset?: number
-  /** 是否将内容挂到 body，以逃逸祖先 overflow 和堆叠上下文。 */
+  /** 是否将内容挂到 body，以逃逸祖先 overflow 和堆叠上下文；默认 `true`，设为 `false` 时使用相对定位。 */
   portal?: boolean
   /** 自定义类名 */
   class?: string

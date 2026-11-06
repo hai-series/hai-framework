@@ -1209,5 +1209,8 @@
   "gallery_dashboard_cost": "Cost",
   "gallery_dashboard_direct": "Direct",
   "gallery_dashboard_search": "Search",
-  "gallery_dashboard_partner": "Partners"
+  "gallery_dashboard_partner": "Partners",
+  "gallery_demo_tooltip_in_clipped_container": "Inside a clipped container (portal)",
+  "gallery_demo_portal_tooltip_content": "Portal mode escapes the container clipping",
+  "gallery_demo_portal": "Hover to preview"
 }

@@ -285,7 +285,7 @@ components/
 | `Breadcrumb`   | パンくず                          | `items`, `separator`                                                                                       |
 | `Steps`        | ステップ                          | `items`, `current`, `direction`, `clickable`                                                               |
 | `Dropdown`     | ドロップダウンメニュー            | `items`, `trigger`, `triggerClass`, `position`                                                             |
-| `Tooltip`      | ツールチップ                      | `content`, `position`, `delay`                                                                             |
+| `Tooltip`      | ツールチップ                      | `content`, `position`, `delay`, `portal`（クリップされるコンテナ内で使用）                                                                             |
 
 ##### 状態表示
 

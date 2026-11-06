@@ -219,6 +219,10 @@
   <Button variant='primary' outline>上</Button>
 </Tooltip>
 
+<Tooltip content='portal 模式' position='bottom' portal>
+  <Button size='sm'>悬浮查看</Button>
+</Tooltip>
+
 <Popover position='bottom' trigger='click'>
   {#snippet triggerContent()}<Button>点击弹出</Button>{/snippet}
   <div class='p-3'>弹出内容</div>
@@ -640,6 +644,14 @@
             </Tooltip>
             <Tooltip content={m.gallery_demo_right_tooltip()} position='right'>
               <Button variant='primary' outline>{m.gallery_demo_right()}</Button>
+            </Tooltip>
+          </div>
+        </div>
+        <div>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_tooltip_in_clipped_container()}</p>
+          <div class='h-14 w-full max-w-xs overflow-hidden rounded-lg border border-base-300 bg-base-200/40 p-3'>
+            <Tooltip content={m.gallery_demo_portal_tooltip_content()} position='bottom' portal>
+              <Button size='sm'>{m.gallery_demo_portal()}</Button>
             </Tooltip>
           </div>
         </div>

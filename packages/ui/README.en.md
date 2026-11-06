@@ -285,7 +285,7 @@ Text controls validate on blur after input and update errors as input is correct
 | `Breadcrumb` | Breadcrumbs                     | `items`, `separator`                                                                                       |
 | `Steps`      | Steps                           | `items`, `current`, `direction`, `clickable`                                                               |
 | `Dropdown`   | Dropdown menu                   | `items`, `trigger`, `triggerClass`, `position`                                                             |
-| `Tooltip`    | Tooltip                         | `content`, `position`, `delay`                                                                             |
+| `Tooltip`    | Tooltip                         | `content`, `position`, `delay`, `portal` (use inside overflow-clipped containers)                                                                             |
 
 ##### State placeholders
 
