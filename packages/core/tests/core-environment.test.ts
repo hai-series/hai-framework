@@ -15,6 +15,24 @@ afterEach(() => {
     rmSync(directory, { recursive: true, force: true })
 })
 
+it('父 Serv 配置只替换结构字段，独立 Cookie 变量按同名来源覆盖', () => {
+  const envDir = mkdtempSync(join(tmpdir(), 'hai-env-cookie-'))
+  directories.push(envDir)
+  writeFileSync(join(envDir, '.env'), 'HAI_SERV_REFRESH_COOKIE_SECURE=false\nHAI_SERV_CORS_ORIGIN=https://old.example.test\n')
+  vi.stubEnv('HAI_SERV', '{}')
+  vi.stubEnv('HAI_SERV_REFRESH_COOKIE_SECURE', undefined)
+  const loaded = core.config.loadEnvFiles({ mode: 'test', envDir })
+  expect(loaded).toMatchObject({ success: true, data: { HAI_SERV_REFRESH_COOKIE_SECURE: 'false' } })
+  if (loaded.success)
+    expect(loaded.data.HAI_SERV_CORS_ORIGIN).toBeUndefined()
+  vi.stubEnv('HAI_SERV_REFRESH_COOKIE_SECURE', 'true')
+  expect(core.config.loadEnvFiles({ mode: 'test', envDir })).toMatchObject({ success: true, data: { HAI_SERV_REFRESH_COOKIE_SECURE: 'true' } })
+})
+
+it('dotenv 的缩进赋值同样不能重复', () => {
+  expect(() => core.config.parseEnv('HAI_EXAMPLE=first\n  export HAI_EXAMPLE=second\n')).toThrow(/duplicate/i)
+})
+
 it('通用配置按父 JSON、子对象和细项覆盖，新增可选字段不依赖模块名称', () => {
   const schema = z.object({ enabled: z.boolean(), connection: z.object({ host: z.string(), port: z.number(), publicEndpoint: z.string().optional(), password: z.string() }) })
   const result = core.config.resolve({ name: 'example', value: {}, schema, environment: {

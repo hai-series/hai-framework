@@ -159,6 +159,8 @@ return result
 - Docker/Podman 容器主机名映射用 `hai.json` 的 `deploy.container.compose.services.<serv 或 web>.extra_hosts`。打包校验，按选中服务更新，失败恢复使用旧映射。见[容器主机名映射](docs/usage/configuration/delivery.md#为容器设置主机名映射)。
 - `hai deploy` 自定义 PostgreSQL、MySQL、Redis 和 pgvector 时先选 URL 或分字段，终端只显示脱敏后的连接地址。S3 的 API `endpoint` 和 `bucket` 分开填写，配置错误会指出相应字段或文件。填写示例见[连接已有中间件](docs/usage/configuration/delivery.md#连接已有数据库缓存和对象存储)。
 
+- 部署归档 `APPLY.txt` 和外层 `README.txt` 提供文件索引、环境优先级和实际归档变量名。归档 `config/.env.runtime` 是发布输入，部署根同名文件是当前运行配置，release 同名文件是历史记录。外部 PostgreSQL 凭据随包交付，随包中间件复用服务器受管凭据。见[部署与运维](docs/usage/operations/deployment.md#修改运行配置后重启)。
+
 错误提示与日志：core.error.toPublic/formatMessage 区分安全 i18n 消息与内部诊断，默认只显示可读说明；traceId 在 ToastContainer 排查图标展开后查看和复制，并与前后端日志 requestId 关联；README 许可证唯一且最后，运行 pnpm check:readme。
 
 - 可选页面离开策略：`session.endOnPageHide` 默认 false；认证动作 `bindPageExit` 返回清理函数，关闭请求使用 `/auth/session/close`，不清除新登录 Cookie，浏览器仅尽力送达，配合服务端期限。

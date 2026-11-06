@@ -63,6 +63,8 @@ Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>
 
 运行文件固定为 `<部署目录>/config/.env.runtime`，只读挂载目录到 `/run/hai/config`；各 release 保留配置快照。单文件不超过 1 MiB，缺失、不可读、重复变量或超限阻止启动；dotenv 字面解析不执行 shell。同源细项覆盖 JSON，显式进程 HAI 配置优先。修改后重启、验健康和受影响业务，失败恢复备份再重启。
 
+每个部署包的外层 `README.txt` 和归档内 `APPLY.txt` 都包含文件索引、环境优先级、当前包的变量名和排障步骤。解包目录的 `config/.env.runtime` 是发布输入，部署根下的是当前运行配置，`releases/<ID>/` 下的是历史记录。外部 PostgreSQL 改密后更新项目源环境并发布后端。部署校验拒绝 URL 与分字段密码冲突，增量切换外部与随包中间件需要改用全量发布。 `HAI_SERV_REFRESH_COOKIE_SECURE` 独立于 `HAI_SERV` 父配置，容器部署接受 `true`、`false` 或空值。
+
 部署归档顶层包含 `apply.sh`、`APPLY.txt`、`manifest.json`、`config/`、`images/` 和 `.hai/`。`config/.env.runtime` 是唯一应用环境文件；`manifest.json.metadata` 集中保存依赖、布局、健康路径、镜像列表、受管绑定等非敏感元数据。`.hai/compose.json` 是完整服务快照；局部更新在服务边界替换并保留未选服务，不串联历史 Compose 文件。`.hai/` 还存原生环境、加载器、Nginx/TLS、策略和校验和，秘密不写入 manifest。辅助脚本合入 `apply.sh`。失败时先恢复原应用配置再恢复服务，凭据、后端账本和数据卷继续保护。新包格式为 2，不实现旧目录兼容或迁移。
 
 ## CLI

@@ -257,6 +257,23 @@ export function createDockerSshProvider(
     if (gateway)
       healthPaths.push('/_hai/gateway-health')
     const updatesApp = options?.selectedServices ? options.selectedServices.includes(primaryService) : !!app
+    const cookieSecure = env.HAI_SERV_REFRESH_COOKIE_SECURE
+    if (updatesApp && cookieSecure && cookieSecure !== 'true' && cookieSecure !== 'false')
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_refreshCookieSecureInvalid'))
+    if (updatesApp && !sidecar.services.includes('db') && !provisionEnv.HAI_DB) {
+      const database = scan.middlewares?.find(item => item.service === 'db' && item.backend === 'postgresql')?.config
+      if (typeof database?.url === 'string' && database.url && typeof database.password === 'string' && database.password) {
+        try {
+          const url = new URL(database.url)
+          const urlPassword = url.searchParams.getAll('password').at(-1) || decodeURIComponent(url.password)
+          if (urlPassword !== database.password)
+            return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_postgresPasswordConflict'))
+        }
+        catch {
+          // 非法连接串交由 PostgreSQL 驱动报告，避免错误中泄漏连接值。
+        }
+      }
+    }
     const serverPath = join(appDir, 'config', '_serv.yml')
     const server = existsSync(serverPath) || hasWebProxy ? loadDeploymentConfig('serv', serverPath, env) : ok<Record<string, unknown>>({})
     if (!server.success)
@@ -483,6 +500,7 @@ export function createDockerSshProvider(
       storageRouting,
       containerPort,
       managedAppKeys: Object.keys(sidecar.env),
+      unmanagedAppKeys: scan.middlewares?.filter(item => !Object.hasOwn(sidecar.env, item.envPrefix)).map(item => item.envPrefix),
       accountSources: describeDeploymentVariableSources(options?.envDir ?? scan.envDir ?? appDir, options?.environment ?? 'prod', env, ['HAI_ADMIN_DEFAULT_PASSWORD', 'HAI_AUDIT_ADMIN_PASSWORD', 'HAI_CONFIG_ADMIN_PASSWORD', 'HAI_BUSINESS_OPERATOR_PASSWORD']),
       healthPaths,
       httpsAssets,

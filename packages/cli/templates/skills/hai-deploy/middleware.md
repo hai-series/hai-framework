@@ -39,6 +39,8 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 中间件原生变量（`POSTGRES_*`、`MYSQL_*`、`RUSTFS_*`、`MINIO_*`、`LDAP_*`）按镜像契约保留原名，只写私有 `.hai/middleware-runtime.env`，仅由中间件读取。应用连接全部合并到 `config/.env.runtime`。
 
+外部 PostgreSQL 改密后，更新项目私有环境中实际生效的 URL 或分字段密码，再发布后端。打包校验会报告冲突字段名。`managed-secrets.env` 只由受管中间件使用，随包 PostgreSQL 已有数据卷时须通过数据库维护协调真实账号和受管状态。增量发布拦截外部与随包中间件的归属切换。
+
 数据库连接保存前复用所选后端的公开配置 Schema；MySQL `ssl` 仅 `false` 或严格对象，`{}` 默认验证证书链和 DNS 身份，`ca/cert/key` 为 PEM 内容且 `cert/key` 必须成对；私钥仅进入私有环境。PostgreSQL 保留其布尔值/字符串模式/对象契约。CLI 内联 `@h-ai/reldb/schemas` 与 Zod，无需为配置校验给目标应用额外安装数据库包或驱动；部署本身仍需已安装的 `@h-ai/deploy`，实际运行应用仍需其数据库依赖。
 
 先用 `deploy.scan(appDir, { environment, envDir })` 核对实际依赖、配置与环境值。扫描从目标 workspace 的 `pnpm-lock.yaml` importer 出发，沿 dependencies/optionalDependencies 遍历，排除 devDependencies、peerDependencies 和其他应用未被引用的依赖；workspace link 只沿运行依赖继续。pnpm 12 的工具链 YAML 文档不能混入应用图。lockfile、目标 importer 或依赖节点缺失时先执行 `pnpm install` 修复；依赖图不读取 package.json、pnpm-workspace.yaml 或项目目录布局。配置文件决定已识别模块的后端，保留的旧配置不能自行启用未依赖的模块。

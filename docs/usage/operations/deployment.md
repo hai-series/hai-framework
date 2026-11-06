@@ -67,6 +67,8 @@ Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>
 
 当前文件固定为 `<部署目录>/config/.env.runtime`。修改前备份，重启后检查健康与受影响业务；失败时恢复文件再重启。各 release 保留配置快照。详见[运行配置](../configuration/runtime.md#部署后重启加载运行配置)。
 
+每个部署包的外层 `README.txt` 和归档内 `APPLY.txt` 都包含文件索引、环境优先级、当前包的变量名和排障步骤。解包目录的 `config/.env.runtime` 是发布输入，部署根下的是当前运行配置，`releases/<ID>/` 下的是历史记录。外部 PostgreSQL 改密后更新项目源环境并发布后端。部署校验拒绝 URL 与分字段密码冲突，增量切换外部与随包中间件需要改用全量发布。
+
 ## 凭据、数据卷与未知结果
 
 服务器`managed-secrets.env`、persistent-backends和数据卷成套保护与备份。长期账本记录实际卷的后端家族，移除服务或首次安装失败都不会清掉；不能删除/编辑账本强行把旧PostgreSQL卷交给MySQL。活动卷缺失会停止发布，不自动建空库。旧active只有成功基线与唯一真实容器的挂载、镜像家族一致才能补证；未知遗留卷须先核实并迁移。有可信旧凭据可走[只读预检后显式导入](../../../packages/deploy/docs/credential-import.md)，该独立功能需要服务器Node，导入密码不替代后端证据。

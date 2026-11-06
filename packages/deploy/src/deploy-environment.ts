@@ -233,6 +233,9 @@ export function generatedVariables(values: Record<string, unknown>): Record<stri
       continue
     const text = typeof value === 'string' ? value : value === null || typeof value === 'object' ? JSON.stringify(value) : String(value)
     generated[name] = text
+    // 独立进程开关不参与 Serv Schema 展开，也不能被空父对象移除。
+    if (name === 'HAI_SERV_REFRESH_COOKIE_SECURE')
+      continue
     const module = /^HAI_([A-Z0-9]+)(?:_|$)/.exec(name)?.[1]?.toLowerCase()
     if (!module || !shapes[module])
       continue

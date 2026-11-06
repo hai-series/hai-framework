@@ -466,6 +466,8 @@ docker exec hai-orders-prod-serv node -e 'require("node:dns").lookup("db.intrane
 
 使用 Serv 刷新 Cookie 的生产应用在受控内网或 VPN 上通过 HTTP 提供登录时，在所选部署环境的 `.env.prod.local` 中设置 `HAI_SERV_REFRESH_COOKIE_SECURE=false` 和实际 `HAI_SERV_CORS_ORIGIN`，再重新部署后端。验证步骤见 [生产 HTTP 入口的 Serv 刷新 Cookie](http.md#生产-http-入口的-serv-刷新-cookie)。
 
+该开关独立于 `HAI_SERV` 父配置，仅同名变量能覆盖它。容器交付接受 `true`、`false` 或空值，空值沿用 Serv 的环境默认策略。`--plan` 展示源环境变量名，归档的 `APPLY.txt` 列出本包实际写入的变量名。
+
 已有证书配置（以下为 `hai.json.deploy` 的内容，也可用环境私有文件覆盖）：
 
 ```json schema=@h-ai/deploy:DeployConfigSchema
@@ -594,12 +596,14 @@ sh ./apply.sh
 apply.sh                # 部署入口，内嵌凭据和后端核验辅助脚本
 APPLY.txt               # 在 Linux 手工执行 apply.sh 的说明
 manifest.json           # 制品、选择服务及非敏感 metadata
-config/.env.runtime     # 唯一应用配置，包含最终连接细项
+config/.env.runtime     # 本次发布输入，应用后才生成服务器运行配置
 images/                 # 本次镜像归档
 .hai/                   # 内部运行资产与恢复证据
 ```
 
 `manifest.json.metadata` 合并依赖、布局、健康路径、镜像列表、网关路径和托管绑定等非敏感信息，秘密不进入 manifest。`.hai/compose.json` 保存完整 Compose 快照，局部更新按服务替换并保留未选定义，不链接历史 Compose 文件。原生环境 `.hai/middleware-runtime.env`、加载器、Nginx/TLS、请求策略和 `.hai/SHA256SUMS` 属于内部生成文件。新包格式为 2，不提供旧目录兼容或迁移。
+
+每个部署包的外层 `README.txt` 和归档内 `APPLY.txt` 都包含文件索引、环境优先级、当前包的变量名和排障步骤。解包目录的 `config/.env.runtime` 是发布输入，部署根下的是当前运行配置，`releases/<ID>/` 下的是历史记录。外部 PostgreSQL 改密后更新项目源环境并发布后端。部署校验拒绝 URL 与分字段密码冲突，增量切换外部与随包中间件需要改用全量发布。
 
 `current` 是普通文本，只有服务器本地部署健康通过后才更新。结合 `result-<ID>.json` 的 `stage`、`exitCode`、`recoveryStatus` 及 `steps-<ID>.jsonl` 判断结果，不能用 release 目录存在判断成功。增量部署可能继续引用旧 release 的只读内部挂载；清理前核对活动容器 Mounts、当前 `.hai/compose.json` 及恢复需要，不能简单删除所有非 current 目录。失败恢复先还原应用配置，再恢复旧服务。服务器凭据、账本和数据卷成套保护。
 

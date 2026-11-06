@@ -8,6 +8,7 @@ import { chmodSync, copyFileSync, createReadStream, createWriteStream, existsSyn
 import { basename, dirname, join, resolve } from 'node:path'
 import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
+import { core } from '@h-ai/core'
 import { parse } from 'yaml'
 import { artifactChecksum } from '../deploy-artifact.js'
 import { resolveDownloadProxy, resolveImageReference } from '../deploy-download.js'
@@ -38,6 +39,7 @@ import { usesSshPassword } from './deploy-ssh.js'
  * @param options.selected - 本次选择更新的 Compose 服务。
  * @param options.partial - 是否为增量服务部署；不能据此执行首次全量安装。
  * @param options.managedAppKeys - 应用增量继承的框架 HAI_* dotenv；镜像原生变量从独立文件读取。
+ * @param options.unmanagedAppKeys - 本次扫描明确声明、但未由随包中间件提供的应用连接。
  * @param options.accountSources - 初始账号变量名及来源，不包含密码值。
  * @param options.healthPaths - 允许执行的应用健康检查路径。
  * @param options.hasWebConfig - 是否挂载公开Nginx配置，包含前后端代理或独立Vite目录路由。
@@ -72,6 +74,7 @@ export async function createDeploymentBundle(options: {
   selected: string[]
   partial: boolean
   managedAppKeys: string[]
+  unmanagedAppKeys?: string[]
   /** 初始账号变量名与配置来源，不包含变量值。 */
   accountSources?: string
   healthPaths: string[]
@@ -205,8 +208,10 @@ export async function createDeploymentBundle(options: {
       files.push(`images/${file}`)
       imageList.push(`${file} ${reference}`)
     }
-    put('config/.env.runtime', readFileSync(join(directory, '.env.runtime'), 'utf8'))
-    if (selected.includes(artifact.primaryService) && existsSync(join(directory, 'request-access.yml')))
+    const applicationEnvironment = readFileSync(join(directory, '.env.runtime'), 'utf8')
+    put('config/.env.runtime', applicationEnvironment)
+    const updatesApp = selected.includes(artifact.primaryService)
+    if (updatesApp && existsSync(join(directory, 'request-access.yml')))
       put('.hai/request-access.yml', readFileSync(join(directory, 'request-access.yml'), 'utf8'))
     if (nodeRuntime)
       put('.hai/runtime-env.mjs', readFileSync(new URL('./deploy-runtime-env.mjs', import.meta.url), 'utf8'))
@@ -236,9 +241,11 @@ export async function createDeploymentBundle(options: {
       'proxy-service': options.hasWebConfig ? options.proxyService ?? 'web' : '',
       'https': options.httpsAssets?.https ?? '',
       'managed-project': managed['managed-project']!,
-      'managed-bindings': managed['managed-bindings']!,
+      // 未选应用时只带容器原生绑定，保持当前发布的应用连接归属。
+      'managed-bindings': updatesApp ? managed['managed-bindings']! : managed['managed-bindings']!.replace(/^.* prefix\n/gm, ''),
       'managed-volumes': managed['managed-volumes']!,
-      'managed-app-keys': `${[...new Set(options.managedAppKeys)].join('\n')}\n`,
+      'managed-app-keys': updatesApp ? `${[...new Set(options.managedAppKeys)].join('\n')}\n` : '\n',
+      'unmanaged-app-keys': updatesApp ? `${[...new Set(options.unmanagedAppKeys)].join('\n')}\n` : '\n',
       'state-backends': backend['state-backends']!,
     }
     put('manifest.json', `${JSON.stringify({ ...artifact, bundleFormat: 2, images: artifact.images.filter(image => references.has(image.imageRef)), deploymentId: options.deploymentId, selectedServices: selected, partial: options.partial, metadata }, null, 2)}\n`)
@@ -249,6 +256,7 @@ export async function createDeploymentBundle(options: {
     const selection = deployM('deploy_bundleSelection', { params: { mode, services: selected.join(', ') } })
     const instructions = `${selection}\n${deployM('deploy_bundleInstructions', { params: instructionParams })}`
     const runtimeGuide = deployM('deploy_bundleRuntime', { params: { directory: serverDirectory, deploymentId: options.deploymentId } })
+    const variableGuide = deployM('deploy_bundleVariables', { params: { environment, keys: Object.keys(core.config.parseEnv(applicationEnvironment)).sort().join(', ') || '—' } })
     const https = config.expose.https
     const certificates = https?.type === 'files' ? `${serverDirectory}/releases/${options.deploymentId}/.hai/tls` : `${serverDirectory}/https/certificates/${https?.domain}`
     const httpsGuide = https
@@ -256,10 +264,10 @@ export async function createDeploymentBundle(options: {
       + (https.type === 'letsencrypt' ? `\n${deployM('deploy_bundleAcme', { params: { state: `${serverDirectory}/https/acme`, domain: https.domain } })}` : '')
       : deployM('deploy_bundleHttpOnly', { params: { port: config.expose.hostPort } })
     const accountGuide = deployM('deploy_bundleAccounts', { params: { sources: options.accountSources || '—' } })
-    const guides = [runtimeGuide, httpsGuide, accountGuide, deployM('deploy_bundleDirectories', { params: { directory: serverDirectory, deploymentId: options.deploymentId } })].join('\n\n')
+    const guides = [runtimeGuide, variableGuide, httpsGuide, accountGuide, deployM('deploy_bundleDirectories', { params: { directory: serverDirectory, deploymentId: options.deploymentId } })].join('\n\n')
     const bundleMetadata = deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, deploymentId: options.deploymentId, compose: '.hai/compose.json' } })
     const manualGuide = deployM('deploy_bundleApplyGuide', { params: { file: shellArgument(basename(output)), directory: serverDirectory, target: shellArgument(serverDirectory), runtime: config.remote.runtime, deploymentId: options.deploymentId } })
-    put('APPLY.txt', `${bundleMetadata}\n${selection}\n\n${manualGuide}\n\n${httpsGuide}\n`)
+    put('APPLY.txt', `${bundleMetadata}\n${selection}\n\n${manualGuide}\n\n${guides}\n`)
     const readme = `${bundleMetadata}\n${instructions}\n\n${guides}\n`
     const checksums = []
     for (const file of files)

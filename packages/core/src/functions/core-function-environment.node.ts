@@ -83,7 +83,7 @@ function scalar(text: string, node: Shape, root: Shape): unknown {
 }
 
 /**
- * 从低到高合并来源；高来源父项删除旧细项，同来源始终先父后子。
+ * 从低到高合并来源；高来源父项删除旧结构细项，同来源始终先父后子。
  * @example 模块内部上下文
  * ```ts
  * const values = mergeEnv([{ HAI_APP_NAME: 'base' }, { HAI_APP_NAME: 'test' }])
@@ -97,7 +97,8 @@ export function mergeEnv(layers: readonly Environment[]): Record<string, string>
         continue
       if (name.startsWith('HAI_')) {
         for (const previous of Object.keys(values)) {
-          if (previous.startsWith(`${name}_`))
+          // 该开关由 Serv 直接读取进程变量，不属于 HAI_SERV 配置对象。
+          if (previous !== 'HAI_SERV_REFRESH_COOKIE_SECURE' && previous.startsWith(`${name}_`))
             delete values[previous]
         }
       }
@@ -117,7 +118,7 @@ export function mergeEnv(layers: readonly Environment[]): Record<string, string>
 export function parseEnvironment(text: string): Record<string, string> {
   const result = nodeParseEnv(text)
   const names = new Set<string>()
-  const assignments = /^(?:export\s+)?([A-Z_]\w*)\s*=\s*('[^']*'|"(?:[^"\\]|\\.)*"|`[^`]*`|[^\r\n]*)/gim
+  const assignments = /^[ \t]*(?:export[ \t]+)?([A-Z_]\w*)[ \t]*=[ \t]*('[^']*'|"(?:[^"\\]|\\.)*"|`[^`]*`|[^\r\n]*)/gim
   for (const match of text.matchAll(assignments)) {
     const name = match[1]!
     if (names.has(name))

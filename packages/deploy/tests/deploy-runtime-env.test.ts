@@ -9,7 +9,7 @@ import { parse } from 'yaml'
 import { generateComposeFile, serializeEnvFile } from '../src/container/deploy-container-compose.js'
 
 /** 真实 Node 入口读取实际交付脚本，不在测试中仿造 dotenv 逻辑。 */
-function fixture(run: (context: { directory: string, start: () => ReturnType<typeof spawnSync> }) => void): void {
+function fixture(run: (context: { directory: string, start: (overrides?: NodeJS.ProcessEnv) => ReturnType<typeof spawnSync> }) => void): void {
   const directory = mkdtempSync(join(tmpdir(), 'hai-deploy-runtime-env-'))
   const loader = join(directory, 'runtime-env.mjs')
   copyFileSync(new URL('../src/container/deploy-runtime-env.mjs', import.meta.url), loader)
@@ -18,7 +18,7 @@ function fixture(run: (context: { directory: string, start: () => ReturnType<typ
   try {
     run({
       directory: configuration,
-      start: () => spawnSync(process.execPath, ['--import', pathToFileURL(loader).href, '-e', 'process.stdout.write(JSON.stringify({value:process.env.HAI_RUNTIME_VALUE,removed:process.env.HAI_RUNTIME_REMOVED,db:process.env.HAI_RUNTIME_DB,proxy:process.env.HAI_DEPLOY_PRIVATE_PROXY}))'], { encoding: 'utf8', timeout: 5000, env: { ...process.env, NODE_OPTIONS: undefined, HAI_RUNTIME_VALUE: undefined, HAI_RUNTIME_REMOVED: undefined, HAI_RUNTIME_DB: undefined, HAI_DEPLOY_PRIVATE_PROXY: '1' } }),
+      start: overrides => spawnSync(process.execPath, ['--import', pathToFileURL(loader).href, '-e', 'process.stdout.write(JSON.stringify({value:process.env.HAI_RUNTIME_VALUE,removed:process.env.HAI_RUNTIME_REMOVED,db:process.env.HAI_RUNTIME_DB,proxy:process.env.HAI_DEPLOY_PRIVATE_PROXY,cookie:process.env.HAI_SERV_REFRESH_COOKIE_SECURE,origin:process.env.HAI_SERV_CORS_ORIGIN}))'], { encoding: 'utf8', timeout: 5000, env: { ...process.env, NODE_OPTIONS: undefined, HAI_RUNTIME_VALUE: undefined, HAI_RUNTIME_REMOVED: undefined, HAI_RUNTIME_DB: undefined, HAI_SERV_REFRESH_COOKIE_SECURE: undefined, HAI_SERV_CORS_ORIGIN: undefined, HAI_DEPLOY_PRIVATE_PROXY: '1', ...overrides } }),
     })
   }
   finally {
@@ -41,12 +41,26 @@ it.each(['ordinary', 'dollar-$-$(not-a-command)', 'both \'single\' and "double" 
   expect(JSON.parse(String(result.stdout)).value).toBe(value)
 }))
 
-it.each(['missing', 'directory', 'oversized', 'duplicate'])('运行文件 %s 时在应用代码前失败且不泄漏内容', kind => fixture(({ directory, start }) => {
+it('空 Serv 父对象与运行进程覆盖均保留独立 Cookie 开关', () => fixture(({ directory, start }) => {
+  writeFileSync(join(directory, '.env.runtime'), serializeEnvFile({ HAI_SERV: '{}', HAI_SERV_REFRESH_COOKIE_SECURE: 'false' }))
+  expect(JSON.parse(String(start().stdout))).toMatchObject({ cookie: 'false' })
+  writeFileSync(join(directory, '.env.runtime'), 'HAI_SERV_CORS_ORIGIN=https://old.example.test\nHAI_SERV_REFRESH_COOKIE_SECURE=false\n')
+  const structured = JSON.parse(String(start({ HAI_SERV: '{}' }).stdout))
+  expect(structured.cookie).toBe('false')
+  expect(structured.origin).toBeUndefined()
+  expect(JSON.parse(String(start({ HAI_SERV: '{}', HAI_SERV_REFRESH_COOKIE_SECURE: 'true' }).stdout))).toMatchObject({ cookie: 'true' })
+}))
+
+it.each(['missing', 'directory', 'oversized', 'duplicate', 'invalid-cookie'])('运行文件 %s 时在应用代码前失败且不泄漏内容', kind => fixture(({ directory, start }) => {
   const file = join(directory, '.env.runtime')
   if (kind === 'directory')
     mkdirSync(file)
   if (kind === 'oversized')
     writeFileSync(file, `PRIVATE_MARKER=${'x'.repeat(1024 * 1024)}`)
+  if (kind === 'duplicate')
+    writeFileSync(file, 'PRIVATE_MARKER=first\n  export PRIVATE_MARKER=second\n')
+  if (kind === 'invalid-cookie')
+    writeFileSync(file, 'HAI_SERV_REFRESH_COOKIE_SECURE=PRIVATE_MARKER\n')
   const result = start()
   expect(result.status).not.toBe(0)
   expect(String(result.stdout)).toBe('')

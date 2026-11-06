@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { parseEnv } from 'node:util'
 
 const maximumBytes = 1024 * 1024
+const refreshCookieSecure = 'HAI_SERV_REFRESH_COOKIE_SECURE'
 
 /** 拒绝特殊文件、链接、超限与不可读文件，不输出秘密。 */
 function readText(name) {
@@ -46,7 +47,7 @@ function readEnvironment(name) {
     const text = readText(name)
     const values = parseEnv(text)
     const names = new Set()
-    for (const match of text.matchAll(/^(?:export\s+)?([A-Z_]\w*)\s*=\s*('[^']*'|"(?:[^"\\]|\\.)*"|`[^`]*`|[^\r\n]*)/gim)) {
+    for (const match of text.matchAll(/^[ \t]*(?:export[ \t]+)?([A-Z_]\w*)[ \t]*=[ \t]*('[^']*'|"(?:[^"\\]|\\.)*"|`[^`]*`|[^\r\n]*)/gim)) {
       if (names.has(match[1]))
         throw new Error('Duplicate environment variable')
       names.add(match[1])
@@ -60,6 +61,13 @@ function readEnvironment(name) {
     return values
   }
   catch { throw new Error('Runtime environment file could not be parsed') }
+}
+
+/** 校验最终生效的独立进程开关，允许空值使用 Serv 默认策略。 */
+function validateRefreshCookie(values) {
+  const value = values[refreshCookieSecure]
+  if (value && value !== 'true' && value !== 'false')
+    throw new Error(`Runtime environment file: ${refreshCookieSecure} must be true, false or empty`)
 }
 
 /** 清单只保存非敏感元数据，不把环境值放入错误消息。 */
@@ -159,6 +167,7 @@ function prepare(directory, previousManifest, previousEnvironment, credentialSta
   if (state.PROJECT && project && state.PROJECT !== project.trim())
     throw new Error('Managed middleware credential project mismatch')
   applyManagedPasswords(next, bindings, state)
+  validateRefreshCookie(next)
   incoming.metadata['managed-app-keys'] = `${keys.join('\n')}${keys.length ? '\n' : ''}`
   incoming.metadata['managed-bindings'] = `${bindings}${bindings ? '\n' : ''}`
   if (project)
@@ -183,10 +192,12 @@ else {
   const inherited = Object.fromEntries(Object.entries(process.env).filter(([name, value]) => name.startsWith('HAI_') && value !== undefined))
   for (const name of Object.keys(inherited).sort((left, right) => left.length - right.length)) {
     for (const previous of Object.keys(values)) {
-      if (previous.startsWith(`${name}_`))
+      // 与 Core 来源合并保持一致：独立开关只允许同名变量覆盖。
+      if (previous !== refreshCookieSecure && previous.startsWith(`${name}_`))
         delete values[previous]
     }
     values[name] = inherited[name]
   }
+  validateRefreshCookie(values)
   Object.assign(process.env, values)
 }

@@ -38,7 +38,17 @@ it.each(['tar', 'tar.gz'])('交付包 %s 同时携带部署入口和操作说明
     expect(guide).toContain('steps-layout-001.jsonl')
     expect(guide).not.toContain('private-fixture-value')
     expect(extract('.hai/SHA256SUMS')).toContain(`${createHash('sha256').update(guide).digest('hex')}  APPLY.txt\n`)
-    expect(readFileSync(join(root, 'README.txt'), 'utf8')).toContain('APPLY.txt')
+    const readme = readFileSync(join(root, 'README.txt'), 'utf8')
+    for (const documentation of [guide, readme]) {
+      expect(documentation).toContain('APPLY.txt')
+      expect(documentation).toContain(`${baseDir}/layout-test/config/.env.runtime`)
+      expect(documentation).toContain(`${baseDir}/layout-test/releases/layout-001/config/.env.runtime`)
+      expect(documentation).toContain('.hai/middleware-runtime.env')
+      expect(documentation).toContain('HAI_SERV_REFRESH_COOKIE_SECURE=false')
+      expect(documentation).toContain('pnpm run deploy --env test --bundle-only --yes --services serv')
+      expect(documentation).toContain('HAI_STORAGE_SECRETACCESSKEY')
+      expect(documentation).not.toContain('private-fixture-value')
+    }
     expect(extract('config/.env.runtime')).toBe(environmentText)
     const environment = core.config.parseEnv(extract('config/.env.runtime'))
     expect(environment.HAI_STORAGE).toBeUndefined()

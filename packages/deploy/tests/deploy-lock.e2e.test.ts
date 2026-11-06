@@ -691,6 +691,24 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     }
   }, 60_000)
 
+  it.each([
+    { from: 'external', installed: { 'unmanaged-app-keys': 'HAI_DB\n' }, incoming: { 'managed-app-keys': 'HAI_DB\n' } },
+    { from: 'bundled', installed: { 'managed-app-keys': 'HAI_DB\n' }, incoming: { 'unmanaged-app-keys': 'HAI_DB\n' } },
+  ])('真实 Linux 增量拒绝从 $from 切换数据库归属，保持当前配置和成功基线', async ({ installed, incoming }) => {
+    const full = await pack()
+    updateMetadata(full.directory, Object.fromEntries(Object.entries(installed).filter(([, value]) => value !== undefined)))
+    expect(apply(full).status).toBe(0)
+    const active = execute('cat /fixture/server/config/.env.runtime')
+    const incremental = await pack(['serv'])
+    updateMetadata(incremental.directory, Object.fromEntries(Object.entries(incoming).filter(([, value]) => value !== undefined)))
+    execute(': > /fixture/commands.log')
+    const refused = apply(incremental)
+    expectPreflightRefusal(incremental, refused)
+    expect(refused.stderr).toContain('Use a full deployment to switch')
+    expect(execute('cat /fixture/server/current')).toBe(full.id)
+    expect(execute('cat /fixture/server/config/.env.runtime')).toBe(active)
+  }, 60_000)
+
   it('真实 Linux 增量保留当前托管配置细项，不复制无关原生变量，失败恢复精确保留原文件', async () => {
     const full = await pack()
     updateMetadata(full.directory, { 'managed-app-keys': 'HAI_STORAGE\n' })

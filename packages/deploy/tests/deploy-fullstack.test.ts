@@ -70,6 +70,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
   vi.clearAllMocks()
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
   vi.useRealTimers()
   rmSync(root, { recursive: true, force: true })
 })
@@ -84,6 +85,47 @@ function writeArtifact(web = true, appVersion = '1.2.3'): void {
   writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', hasWeb: web, appVersion, buildId: 'release-1', images }))
 }
 
+it.each([false, true])('带 Web 代理的交付保留独立的刷新 Cookie 开关（增量=%s）', async (partial) => {
+  writeFileSync(join(root, '.env.test.local'), 'HAI_SERV_REFRESH_COOKIE_SECURE=false\n')
+  vi.stubEnv('HAI_SERV', '{"cors":{"origin":"https://app.example.test"}}')
+  vi.stubEnv('HAI_SERV_REFRESH_COOKIE_SECURE', undefined)
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true, selectedServices: partial ? ['serv'] : undefined })
+  const environment = parseEnv(readBundleFile(deliveryDirectory(result), 'config/.env.runtime'))
+  expect(environment).toMatchObject({ HAI_SERV_REFRESH_COOKIE_SECURE: 'false', HAI_SERV_CORS_ORIGIN: 'https://app.example.test' })
+})
+
+it('打包拒绝拼错的刷新 Cookie 开关并只报告变量名', async () => {
+  writeFileSync(join(root, '.env.test.local'), 'HAI_SERV_REFRESH_COOKIE_SECURE=flase\n')
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  expect(result).toMatchObject({ success: false, error: { code: HaiDeployError.CONFIG_ERROR.code, message: expect.stringContaining('HAI_SERV_REFRESH_COOKIE_SECURE') } })
+  expect(JSON.stringify(result)).not.toContain('flase')
+})
+
+it.each([
+  { url: 'postgresql://hai:url-fixture%40password@external.example.test/hai', password: 'url-fixture@password', accepted: true },
+  { url: 'postgresql://hai:url-fixture%40password@external.example.test/hai', password: 'split-fixture-password', accepted: false },
+])('外部 PostgreSQL 校验 URL 与分字段认证是否冲突（通过=$accepted）', async ({ url, password, accepted }) => {
+  writeFileSync(join(root, 'config/_db.yml'), 'type: postgresql\n')
+  writeFileSync(join(root, 'pnpm-lock.yaml'), JSON.stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@h-ai/reldb': { version: '1' } } } }, packages: { '@h-ai/reldb@1': {} }, snapshots: { '@h-ai/reldb@1': {} } }))
+  writeFileSync(join(root, '.env.test.local'), `HAI_DB_URL='${url}'\nHAI_DB_PASSWORD='${password}'\n`)
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true, skipMiddleware: true })
+  expect(result.success).toBe(accepted)
+  if (result.success) {
+    const environment = parseEnv(readBundleFile(deliveryDirectory(result), 'config/.env.runtime'))
+    expect(environment.HAI_DB_URL).toBe(url)
+  }
+  else {
+    expect(result.error.code).toBe(HaiDeployError.CONFIG_ERROR.code)
+    expect(result.error.message).toContain('HAI_DB_URL')
+    expect(result.error.message).toContain('HAI_DB_PASSWORD')
+    expect(JSON.stringify(result)).not.toContain('fixture-password')
+    expect(JSON.stringify(result)).not.toContain('url-fixture')
+  }
+})
+
 it.each(['serv', 'kit'].flatMap(module => ['object', 'field'].map(source => ({ module, source }))))('全量和应用增量交付携带 $module/$source 独立请求策略快照，宿主环境保留原始文件引用', async ({ module, source }) => {
   const policyFile = join(root, 'config/access.yaml')
   writeFileSync(policyFile, 'rules:\n  - id: external\n    paths: [/custom-api/v2/external/**]\n    encryption: disabled\n    allowIps: [192.0.2.0/24]\n')
@@ -91,7 +133,7 @@ it.each(['serv', 'kit'].flatMap(module => ['object', 'field'].map(source => ({ m
   const file = { file: './config/access.yaml' }
   const settings = module === 'serv' ? { http: { apiPrefix: '/custom-api/v2', access: file } } : { access: file, transport: false }
   const field = module === 'serv' ? 'HAI_SERV_HTTP_ACCESS_FILE' : 'HAI_KIT_ACCESS_FILE'
-  writeFileSync(join(root, '.env.test'), `${configName}='${JSON.stringify(settings)}'\n${source === 'field' ? `${field}=./config/access.yaml\n` : ''}`)
+  writeFileSync(join(root, '.env.test'), `${configName}='${JSON.stringify(settings)}'\n${source === 'field' ? `${field}=./config/access.yaml\n` : ''}${module === 'serv' ? 'HAI_SERV_REFRESH_COOKIE_SECURE=false\n' : ''}`)
   const primary = module === 'serv' ? 'serv' : 'web'
   if (module === 'kit') {
     writeFileSync(join(root, 'svelte.config.js'), 'export default {}')
@@ -112,8 +154,10 @@ it.each(['serv', 'kit'].flatMap(module => ['object', 'field'].map(source => ({ m
     expect(readBundleFile(directory, '.hai/SHA256SUMS')).toContain(`${createHash('sha256').update(snapshot).digest('hex')}  .hai/request-access.yml`)
     const compose = JSON.parse(readBundleFile(directory, '.hai/compose.json'))
     expect(compose.services[primary].volumes).toContainEqual(expect.stringMatching(/\/request-access\.yml:\/run\/hai\/request-access\.yml:ro$/))
-    if (module === 'serv')
+    if (module === 'serv') {
       expect(compose.services.serv.environment.HAI_DEPLOY_PRIVATE_PROXY).toBe('1')
+      expect(environment.HAI_SERV_REFRESH_COOKIE_SECURE).toBe('false')
+    }
     expect(JSON.parse(parseEnv(readFileSync(join(root, '.env.test'), 'utf8'))[configName]!)).toEqual(settings)
     // 打包结果不依赖日后宿主文件内容，旧发布目录继续保存自己的策略。
     writeFileSync(policyFile, 'rules: []\n')

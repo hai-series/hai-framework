@@ -392,6 +392,23 @@ fi
 resolve_backend_state "$root" "$source_dir" "$runtime" "$previous" check
 if [ "$partial" = true ]; then
   test -n "$previous" || { printf 'Partial deployment requires a successful full installation. Deploy a complete bundle first.\n' >&2; exit 1; }
+  # 比较完整连接计划，而不是增量 Compose 中携带的服务子集。
+  case " $selected " in
+    *' @@PRIMARY@@ '*)
+      installed_keys=$(deployment_metadata_file "$root/releases/$previous" managed-app-keys)
+      incoming_keys=$(deployment_metadata_file "$source_dir" managed-app-keys)
+      unmanaged_keys=$(deployment_metadata_file "$source_dir" unmanaged-app-keys)
+      if ! LC_ALL=C awk '
+        !NF {next}
+        FILENAME == ARGV[1] {installed[$0]=1; next}
+        FILENAME == ARGV[2] {if (!($0 in installed)) exit 1; next}
+        $0 in installed {exit 1}
+      ' "$installed_keys" "$incoming_keys" "$unmanaged_keys"; then
+        printf 'Managed middleware connections changed. Use a full deployment to switch between bundled and external middleware.\n' >&2
+        exit 1
+      fi
+      ;;
+  esac
   # 目录属于完整Web拓扑；旧版本缺省为根目录，服务增量不能意外丢失或改变既有目录。
   current_web_base=$(deployment_json read metadata.web-base-path string "$source_dir/manifest.json")
   previous_web_base=$(deployment_json read metadata.web-base-path string "$root/releases/$previous/manifest.json")
