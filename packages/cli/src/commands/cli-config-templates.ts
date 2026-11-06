@@ -858,6 +858,11 @@ providers:
   #   accessKeySecret: \${HAI_REACH_PROVIDERS_1_ACCESSKEYSECRET}
   #   signName: MyApp
   #   endpoint: dysmsapi.aliyuncs.com
+  #   gateway: # 可选；配置后向完整 URL 发送 POST
+  #     url: https://sms-gateway.example.com/dx
+  #     headers:
+  #       X-Gateway-Client: delivery
+  #     body: {}
 
   # 通用 API（按需开启；可对接应用自有投递服务）
   # - name: custom

@@ -23,6 +23,9 @@ providers:
   #   accessKeySecret: ${HAI_REACH_PROVIDERS_1_ACCESSKEYSECRET}
   #   signName: MyApp
   #   endpoint: dysmsapi.aliyuncs.com
+  #   gateway: # 可选；配置后向完整 URL 发送 POST
+  #     url: https://sms-gateway.example.com/dx
+  #     body: {}
   # 自有发送服务：按需将 template.provider 改为 custom。
   # - name: custom
   #   type: api
