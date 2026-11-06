@@ -24,4 +24,4 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec turbo run build --filter=@h-ai/cli --filter=@h-ai/serv
-      - run: pnpm --filter @h-ai/cli exec vitest run tests/deploy-nginx.e2e.test.ts -t '真实 Nginx 保留'
+      - run: pnpm --filter @h-ai/cli exec vitest run tests/deploy-nginx.e2e.test.ts
