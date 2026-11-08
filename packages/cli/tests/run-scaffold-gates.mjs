@@ -31,16 +31,30 @@ const vitestCli = path.join(path.dirname(fileURLToPath(import.meta.resolve('vite
 const archiveRoot = mkdtempSync(path.join(tmpdir(), 'hai-cli-local-packages-'))
 const lightTestFiles = ['tests/generate-i18n.test.ts', 'tests/command-locales.test.ts', 'tests/environment-output.test.ts']
 const testFiles = deployGate
-  ? ['tests/deploy-fixture-ownership.e2e.test.ts', 'tests/deploy-nginx.e2e.test.ts', 'tests/deploy-storage-proxy.e2e.test.ts', 'tests/deploy-docker-ssh.e2e.test.ts', 'tests/deploy-external-middlewares.e2e.test.ts']
+  ? [
+      'tests/deploy-fixture-ownership.e2e.test.ts',
+      'tests/deploy-nginx.e2e.test.ts',
+      'tests/deploy-storage-proxy.e2e.test.ts',
+      'tests/deploy-docker-ssh.e2e.test.ts',
+      'tests/deploy-external-middlewares.e2e.test.ts',
+    ]
   : generateGate
     ? ['tests/generate-runtime.e2e.test.ts', 'tests/build-downloads.e2e.test.ts']
     : i18nGate
       ? lightTestFiles
-      : ['tests/scaffold-gates.e2e.test.ts', 'tests/generate-runtime.e2e.test.ts', 'tests/build-downloads.e2e.test.ts', ...lightTestFiles]
+      : [
+          'tests/scaffold-gates.e2e.test.ts',
+          'tests/generate-runtime.e2e.test.ts',
+          'tests/build-downloads.e2e.test.ts',
+          ...lightTestFiles,
+        ]
 // 两个重型文件同窗会争抢构建与安装资源；轻型进程门禁仍与 runtime 使用最多两个 worker。
 // list 保持一次完整发现，便于直接消费 JSON，并覆盖所有默认门禁。
 const batches = !deployGate && !generateGate && !i18nGate && !listGate
-  ? [['tests/generate-runtime.e2e.test.ts', 'tests/build-downloads.e2e.test.ts', ...lightTestFiles], ['tests/scaffold-gates.e2e.test.ts']]
+  ? [
+      ['tests/generate-runtime.e2e.test.ts', 'tests/build-downloads.e2e.test.ts', ...lightTestFiles],
+      ['tests/scaffold-gates.e2e.test.ts'],
+    ]
   : [testFiles]
 // 真实生成门禁统一放在名称含 gates 的 suite 中；新增同族用例自动纳入，避免重跑文件内普通单测。
 const namePattern = !deployGate && !vitestArgs.some(argument => /^(?:-t(?:=|$)|--testNamePattern(?:=|$))/.test(argument))
@@ -50,15 +64,28 @@ const namePattern = !deployGate && !vitestArgs.some(argument => /^(?:-t(?:=|$)|-
 let exitCode = 0
 try {
   // 按真实依赖图顺序构建，复用刚通过的产物，避免重新清理共享 dist 干扰其他门禁。
-  if (!focusedGate)
-    runPnpm(['exec', 'turbo', 'run', 'build', '--filter=@h-ai/*', '--concurrency=4'], repoRoot)
+  if (!focusedGate) {
+    runPnpm([
+      'exec',
+      'turbo',
+      'run',
+      'build',
+      '--filter=@h-ai/*',
+      '--concurrency=4',
+    ], repoRoot)
+  }
   // 定向生成门禁复用仓库已安装依赖；不隐式升级为全模块构建与发布包安装验收。
-  const packageSpecifiers = focusedGate ? {} : packPublicPackages(path.join(repoRoot, 'packages'), archiveRoot)
+  const packageSpecifiers = focusedGate
+    ? {}
+    : packPublicPackages(path.join(repoRoot, 'packages'), archiveRoot)
   // 仅覆盖实际依赖边；全局覆盖会把可选 peer 变成安装依赖，污染生成项目。
   const packageOverrides = {}
   for (const directory of readdirSync(path.join(repoRoot, 'packages'), { withFileTypes: true }).filter(entry => entry.isDirectory())) {
     const manifest = JSON.parse(readFileSync(path.join(repoRoot, 'packages', directory.name, 'package.json'), 'utf8'))
-    for (const name of Object.keys({ ...manifest.dependencies, ...manifest.optionalDependencies })) {
+    for (const name of Object.keys({
+      ...manifest.dependencies,
+      ...manifest.optionalDependencies,
+    })) {
       if (packageSpecifiers[name])
         packageOverrides[`${manifest.name}>${name}`] = packageSpecifiers[name]
     }
@@ -67,16 +94,33 @@ try {
   for (const files of batches) {
     const result = spawnSync(
       process.execPath,
-      [vitestCli, listGate ? 'list' : 'run', ...files, ...namePattern, ...(deployGate ? ['--no-file-parallelism'] : []), '--testTimeout', '1800000', ...vitestArgs],
+      [
+        vitestCli,
+        listGate ? 'list' : 'run',
+        ...files,
+        ...namePattern,
+        ...(deployGate
+          ? ['--no-file-parallelism']
+          : []),
+        '--testTimeout',
+        '1800000',
+        ...vitestArgs,
+      ],
       {
         env: {
           ...process.env,
           HAI_CLI_PACKAGE_SPECIFIERS: JSON.stringify(packageSpecifiers),
           HAI_CLI_PACKAGE_OVERRIDES: JSON.stringify(packageOverrides),
           HAI_CLI_RUN_SCAFFOLD_GATES: '1',
-          ...(!deployGate && !i18nGate ? { HAI_CLI_RUN_GENERATE_GATES: '1' } : {}),
-          ...(!deployGate && !generateGate ? { HAI_CLI_RUN_I18N_GATES: '1', HAI_CLI_RUN_LOCALE_GATES: '1', HAI_CLI_RUN_ENV_OUTPUT_GATES: '1' } : {}),
-          ...(deployGate ? { HAI_DEPLOY_E2E: '1', HAI_CLI_RUN_EXTERNAL_MIDDLEWARE_GATES: '1' } : {}),
+          ...(!deployGate && !i18nGate
+            ? { HAI_CLI_RUN_GENERATE_GATES: '1' }
+            : {}),
+          ...(!deployGate && !generateGate
+            ? { HAI_CLI_RUN_I18N_GATES: '1', HAI_CLI_RUN_LOCALE_GATES: '1', HAI_CLI_RUN_ENV_OUTPUT_GATES: '1' }
+            : {}),
+          ...(deployGate
+            ? { HAI_DEPLOY_E2E: '1', HAI_CLI_RUN_EXTERNAL_MIDDLEWARE_GATES: '1' }
+            : {}),
         },
         // 直接启动 Node，测试名中的空格/正则不能被 Windows shell 当成命令。
         shell: false,
@@ -136,7 +180,12 @@ function packPublicPackages(packagesRoot, destination) {
 }
 
 function runPnpm(args, cwd, stdio = 'inherit') {
-  const command = spawnSync(nodeEntry ? process.execPath : pnpmEntry, [...(nodeEntry ? [pnpmEntry] : []), ...args], {
+  const command = spawnSync(nodeEntry ? process.execPath : pnpmEntry, [
+    ...(nodeEntry
+      ? [pnpmEntry]
+      : []),
+    ...args,
+  ], {
     cwd,
     shell: false,
     windowsHide: true,

@@ -10,14 +10,23 @@ import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli
 it.each(['admin', 'api', 'fullstack'] as const)('%s 生成工程将本地产物身份接入实际编译与反馈初始化', async (appType) => {
   const directory = await mkdtemp(path.join(process.cwd(), '.tmp-build-metadata-template-'))
   try {
-    await generateFromTemplates(directory, buildTemplateContext({ name: 'metadata-sample', appType, frontends: ['web', 'app', 'desktop'], features: ['feedback'], packageManager: 'pnpm' }))
+    await generateFromTemplates(directory, buildTemplateContext({
+      name: 'metadata-sample',
+      appType,
+      frontends: ['web', 'app', 'desktop'],
+      features: ['feedback'],
+      packageManager: 'pnpm',
+    }))
     const read = (file: string) => readFile(path.join(directory, file), 'utf8')
     expect(await read('scripts/build-metadata.ts')).toContain('resolveBuildMetadata')
     const targets = appType === 'admin'
       ? ['vite.config.ts']
       : appType === 'api'
         ? ['apps/metadata-sample-serv/tsup.config.ts']
-        : ['packages/metadata-sample-serv/tsup.config.ts', ...['web', 'app', 'desktop'].map(target => `apps/metadata-sample-${target}/vite.config.ts`)]
+        : [
+            'packages/metadata-sample-serv/tsup.config.ts',
+            ...['web', 'app', 'desktop'].map(target => `apps/metadata-sample-${target}/vite.config.ts`),
+          ]
     for (const target of targets) {
       const config = await read(target)
       expect(config).toContain('__HAI_BUILD_METADATA__')
@@ -25,9 +34,19 @@ it.each(['admin', 'api', 'fullstack'] as const)('%s 生成工程将本地产物�
       expect(config).toContain('import.meta.url')
       await verifyMetadataOutput(config, path.join(directory, target))
     }
-    const runtime = appType === 'admin' ? 'src/lib/server/init.ts' : appType === 'api' ? 'apps/metadata-sample-serv/src/lib/server/init.ts' : 'packages/metadata-sample-serv/src/server/runtime.ts'
+    const runtime = appType === 'admin'
+      ? 'src/lib/server/init.ts'
+      : appType === 'api'
+        ? 'apps/metadata-sample-serv/src/lib/server/init.ts'
+        : 'packages/metadata-sample-serv/src/server/runtime.ts'
     expect(await read(runtime)).toContain('...buildMetadata')
-    const dockerfiles = appType === 'fullstack' ? ['images/serv.Dockerfile', 'images/web.Dockerfile'] : [appType === 'api' ? 'images/serv.Dockerfile' : 'images/web.Dockerfile']
+    const dockerfiles = appType === 'fullstack'
+      ? ['images/serv.Dockerfile', 'images/web.Dockerfile']
+      : [
+          appType === 'api'
+            ? 'images/serv.Dockerfile'
+            : 'images/web.Dockerfile',
+        ]
     for (const file of dockerfiles) {
       const dockerfile = await read(file)
       expect(dockerfile).toContain('ARG HAI_BUILD_ID=')
@@ -60,12 +79,19 @@ async function verifyMetadataOutput(source: string, configPath: string): Promise
     plugins?: unknown[]
     onSuccess?: () => Promise<void>
   }
-  const expected = { appVersion: '10.20.30', buildId: 'unit-artifact-build', commit: 'a'.repeat(40) }
+  const expected = {
+    appVersion: '10.20.30',
+    buildId: 'unit-artifact-build',
+    commit: 'a'.repeat(40),
+  }
   const emitted: Array<{ fileName: string, source: string }> = []
   const written: Array<{ destination: URL, body: string }> = []
   const sandbox = {
     config: undefined as BuildConfig | undefined,
-    process: { env: {}, cwd: () => path.dirname(configPath) },
+    process: {
+      env: {},
+      cwd: () => path.dirname(configPath),
+    },
     URL,
     path,
     fileURLToPath,
@@ -75,7 +101,9 @@ async function verifyMetadataOutput(source: string, configPath: string): Promise
     },
     // 本例隔离验证元数据输出；目录校验由base-path和真实生成工程验收覆盖。
     resolvePublicBasePath: () => '',
-    defineConfig: (input: unknown) => typeof input === 'function' ? input({ mode: 'production', command: 'build' }) : input,
+    defineConfig: (input: unknown) => typeof input === 'function'
+      ? input({ mode: 'production', command: 'build' })
+      : input,
     writeFile: async (destination: URL, body: string) => { written.push({ destination, body }) },
     sveltekit: () => ({}),
     svelte: () => ({}),
@@ -85,7 +113,9 @@ async function verifyMetadataOutput(source: string, configPath: string): Promise
     haiPrebundledDeps: [],
   }
   const executable = source.replace(/^import[^\n]*\n/gm, '').replace('export default', 'config =').replaceAll('import.meta.url', JSON.stringify(pathToFileURL(configPath).href))
-  runInNewContext(ts.transpileModule(executable, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText, sandbox)
+  runInNewContext(ts.transpileModule(executable, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+  }).outputText, sandbox)
   const config = sandbox.config
   expect(config).toBeDefined()
   if (!config)
@@ -99,10 +129,21 @@ async function verifyMetadataOutput(source: string, configPath: string): Promise
   }
   else {
     const plugin = config.plugins?.[0]
-    const hook = plugin && typeof plugin === 'object' && 'generateBundle' in plugin ? plugin.generateBundle : undefined
+    const hook = plugin && typeof plugin === 'object' && 'generateBundle' in plugin
+      ? plugin.generateBundle
+      : undefined
     expect(typeof hook).toBe('function')
-    if (typeof hook === 'function')
-      Reflect.apply(hook, { emitFile: (asset: { fileName: string, source: string }) => emitted.push(asset) }, [])
-    expect(emitted).toEqual([{ type: 'asset', fileName: 'build-metadata.json', source: JSON.stringify(expected) }])
+    if (typeof hook === 'function') {
+      Reflect.apply(hook, {
+        emitFile: (asset: { fileName: string, source: string }) => emitted.push(asset),
+      }, [])
+    }
+    expect(emitted).toEqual([
+      {
+        type: 'asset',
+        fileName: 'build-metadata.json',
+        source: JSON.stringify(expected),
+      },
+    ])
   }
 }

@@ -29,7 +29,10 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     root = mkdtempSync(path.join(tmpdir(), 'hai-deploy-nginx-'))
     const image = 'docker.io/nginxinc/nginx-unprivileged:1.29.8-alpine'
     ensureDeployTestBaseImage(runtime, image, deadline - Date.now(), process.env.HAI_DEPLOY_E2E_MIRROR)
-    fixture = await createDeployTestFixture(runtime, image, '', root, undefined, { command: ['sleep', 'infinity'], timeoutMs: deadline - Date.now() })
+    fixture = await createDeployTestFixture(runtime, image, '', root, undefined, {
+      command: ['sleep', 'infinity'],
+      timeoutMs: deadline - Date.now(),
+    })
     // 其余协议夹具使用固定回环上游；地址变化用例另行启动实际 DNS 响应器。
     await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', 'printf "resolver 127.0.0.1:18053 valid=1s;\\nresolver_timeout 1s;\\n" > /tmp/hai-dns.conf'])
   }, 120_000)
@@ -51,11 +54,32 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     const images = ['serv', 'web'].map((name) => {
       const file = `${name}-1.0.0.tar`
       writeFileSync(path.join(artifacts, file), name)
-      return { name, file, imageRef: `localhost/dns-${name}:1`, containerPort: name === 'web' ? 8080 : 3000, sha256: createHash('sha256').update(name).digest('hex') }
+      return {
+        name,
+        file,
+        imageRef: `localhost/dns-${name}:1`,
+        containerPort: name === 'web'
+          ? 8080
+          : 3000,
+        sha256: createHash('sha256').update(name).digest('hex'),
+      }
     })
-    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', hasWeb: true, appVersion: '1.0.0', buildId: 'dns-proxy', partial: false, images }))
+    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
+      version: 4,
+      primaryService: 'serv',
+      hasWeb: true,
+      appVersion: '1.0.0',
+      buildId: 'dns-proxy',
+      partial: false,
+      images,
+    }))
     await deploy.close()
-    expect((await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 18080 } } })).success).toBe(true)
+    expect((await deploy.init({
+      provider: {
+        type: 'docker-ssh',
+        expose: { hostPort: 18080 },
+      },
+    })).success).toBe(true)
     const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts })
     expect(bundle.success, bundle.success ? undefined : bundle.error.message).toBe(true)
     if (!bundle.success || !bundle.data.bundlePath)
@@ -69,13 +93,33 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     let started = false
     let hookInstalled = false
     try {
-      const identity = execFileSync(runtime, ['create', '--network', `container:${owned.containerId}`, '--entrypoint', 'node', image, '/tmp/proxy-dns-node.mjs'], { encoding: 'utf8', windowsHide: true, timeout: 15_000 }).trim()
+      const identity = execFileSync(runtime, [
+        'create',
+        '--network',
+        `container:${owned.containerId}`,
+        '--entrypoint',
+        'node',
+        image,
+        '/tmp/proxy-dns-node.mjs',
+      ], { encoding: 'utf8', windowsHide: true, timeout: 15_000 }).trim()
       if (!/^[a-f\d]{64}$/.test(identity))
         throw new Error('Expected a newly created DNS fixture identity')
       nodeContainer = identity
-      execFileSync(runtime, ['cp', path.resolve('tests/fixtures/proxy-dns-node.mjs'), `${identity}:/tmp/proxy-dns-node.mjs`], { windowsHide: true, timeout: 15_000 })
+      execFileSync(runtime, [
+        'cp',
+        path.resolve('tests/fixtures/proxy-dns-node.mjs'),
+        `${identity}:/tmp/proxy-dns-node.mjs`,
+      ], { windowsHide: true, timeout: 15_000 })
       execFileSync(runtime, ['start', identity], { windowsHide: true, timeout: 15_000, stdio: 'pipe' })
-      execFileSync(runtime, ['exec', '--user', '0', owned.containerId, 'sh', '-ec', 'printf "127.0.0.2 serv\\n" >> /etc/hosts'], { windowsHide: true, timeout: 15_000 })
+      execFileSync(runtime, [
+        'exec',
+        '--user',
+        '0',
+        owned.containerId,
+        'sh',
+        '-ec',
+        'printf "127.0.0.2 serv\\n" >> /etc/hosts',
+      ], { windowsHide: true, timeout: 15_000 })
       await executeDeployTestFixture(runtime, owned, ['sh', '-ec', 'printf "resolver 127.0.0.1:18053 valid=1s;\\nresolver_timeout 1s;\\n" > /tmp/hai-dns.conf'])
       await expect.poll(() => executeDeployTestFixture(runtime, owned, ['wget', '-qO-', 'http://127.0.0.1:19001/']).catch(() => ''), { timeout: 10_000 }).toBe('ready')
       execFileSync(runtime, ['cp', configuration, `${owned.containerId}:/tmp/dns-proxy.conf`], { windowsHide: true, timeout: 15_000 })
@@ -88,16 +132,44 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       // 真正的镜像入口执行钩子后仍继续原命令，不能把失败命令偷偷替换成 Nginx。
       execFileSync(runtime, ['cp', hook, `${owned.containerId}:/docker-entrypoint.d/18-hai-proxy-start.sh`], { windowsHide: true, timeout: 15_000 })
       hookInstalled = true
-      execFileSync(runtime, ['exec', '--user', '0', owned.containerId, 'chmod', '555', '/docker-entrypoint.d/18-hai-proxy-start.sh'], { windowsHide: true, timeout: 15_000 })
-      await executeDeployTestFixture(runtime, owned, ['/docker-entrypoint.sh', 'nginx', '-t', '-c', '/tmp/dns-proxy.conf'])
+      execFileSync(runtime, [
+        'exec',
+        '--user',
+        '0',
+        owned.containerId,
+        'chmod',
+        '555',
+        '/docker-entrypoint.d/18-hai-proxy-start.sh',
+      ], { windowsHide: true, timeout: 15_000 })
+      await executeDeployTestFixture(runtime, owned, [
+        '/docker-entrypoint.sh',
+        'nginx',
+        '-t',
+        '-c',
+        '/tmp/dns-proxy.conf',
+      ])
       expect(await executeDeployTestFixture(runtime, owned, ['cat', '/tmp/hai-dns.conf'])).toContain('valid=5s;')
-      const failed = spawnSync(runtime, ['exec', owned.containerId, '/docker-entrypoint.sh', 'sh', '-c', 'exit 23'], { windowsHide: true, timeout: 15_000, stdio: 'pipe' })
+      const failed = spawnSync(runtime, [
+        'exec',
+        owned.containerId,
+        '/docker-entrypoint.sh',
+        'sh',
+        '-c',
+        'exit 23',
+      ], { windowsHide: true, timeout: 15_000, stdio: 'pipe' })
       expect(failed.status).toBe(23)
     }
     finally {
       try {
-        if (started)
-          await executeDeployTestFixture(runtime, owned, ['nginx', '-c', '/tmp/dns-proxy.conf', '-s', 'quit'])
+        if (started) {
+          await executeDeployTestFixture(runtime, owned, [
+            'nginx',
+            '-c',
+            '/tmp/dns-proxy.conf',
+            '-s',
+            'quit',
+          ])
+        }
       }
       finally {
         try {
@@ -107,8 +179,17 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
           }
         }
         finally {
-          if (hookInstalled)
-            execFileSync(runtime, ['exec', '--user', '0', owned.containerId, 'rm', '-f', '/docker-entrypoint.d/18-hai-proxy-start.sh'], { windowsHide: true, timeout: 15_000, stdio: 'pipe' })
+          if (hookInstalled) {
+            execFileSync(runtime, [
+              'exec',
+              '--user',
+              '0',
+              owned.containerId,
+              'rm',
+              '-f',
+              '/docker-entrypoint.d/18-hai-proxy-start.sh',
+            ], { windowsHide: true, timeout: 15_000, stdio: 'pipe' })
+          }
         }
       }
     }
@@ -126,20 +207,73 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     writeFileSync(path.join(project, '.env.test'), 'HAI_CORE_ENV=test\n')
     const content = 'prebuilt-https-web'
     writeFileSync(path.join(artifacts, 'web-1.0.0.tar'), content)
-    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'web', hasWeb: true, appVersion: '1.0.0', buildId: 'https-nginx', partial: false, images: [{ name: 'web', file: 'web-1.0.0.tar', imageRef: 'localhost/https-web:1', containerPort: 8080, sha256: createHash('sha256').update(content).digest('hex') }] }))
-    const openssl = process.platform === 'win32' && existsSync('C:/Program Files/Git/usr/bin/openssl.exe') ? 'C:/Program Files/Git/usr/bin/openssl.exe' : 'openssl'
+    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
+      version: 4,
+      primaryService: 'web',
+      hasWeb: true,
+      appVersion: '1.0.0',
+      buildId: 'https-nginx',
+      partial: false,
+      images: [
+        {
+          name: 'web',
+          file: 'web-1.0.0.tar',
+          imageRef: 'localhost/https-web:1',
+          containerPort: 8080,
+          sha256: createHash('sha256').update(content).digest('hex'),
+        },
+      ],
+    }))
+    const openssl = process.platform === 'win32' && existsSync('C:/Program Files/Git/usr/bin/openssl.exe')
+      ? 'C:/Program Files/Git/usr/bin/openssl.exe'
+      : 'openssl'
     const certificate = (suffix: string) => {
       const cert = path.join(project, `cert-${suffix}.pem`)
       const key = path.join(project, `key-${suffix}.pem`)
-      execFileSync(openssl, ['req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-nodes', '-keyout', key, '-out', cert, '-days', '1', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost'], { stdio: 'ignore', windowsHide: true })
+      execFileSync(openssl, [
+        'req',
+        '-x509',
+        '-newkey',
+        'ec',
+        '-pkeyopt',
+        'ec_paramgen_curve:P-256',
+        '-nodes',
+        '-keyout',
+        key,
+        '-out',
+        cert,
+        '-days',
+        '1',
+        '-subj',
+        '/CN=localhost',
+        '-addext',
+        'subjectAltName=DNS:localhost',
+      ], { stdio: 'ignore', windowsHide: true })
       // 固定相同 mtime，确保热更新不能依赖两次生成恰好跨秒。
       const timestamp = new Date('2020-01-01T00:00:00Z')
       utimesSync(cert, timestamp, timestamp)
       utimesSync(key, timestamp, timestamp)
-      return { cert, key, pem: readFileSync(cert, 'utf8') }
+      return {
+        cert,
+        key,
+        pem: readFileSync(cert, 'utf8'),
+      }
     }
     const first = certificate('first')
-    expect((await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 18080, https: { type: 'files', domain: 'localhost', certificateFile: first.cert, privateKeyFile: first.key } } } })).success).toBe(true)
+    expect((await deploy.init({
+      provider: {
+        type: 'docker-ssh',
+        expose: {
+          hostPort: 18080,
+          https: {
+            type: 'files',
+            domain: 'localhost',
+            certificateFile: first.cert,
+            privateKeyFile: first.key,
+          },
+        },
+      },
+    })).success).toBe(true)
     const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts })
     expect(bundle.success, bundle.success ? undefined : bundle.error.message).toBe(true)
     if (!bundle.success || !bundle.data.bundlePath)
@@ -152,18 +286,47 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     writeFileSync(path.join(project, 'proxy-start.sh'), watcher)
     await executeDeployTestFixture(runtime, owned, ['sh', '-c', 'mkdir -p /tmp/hai-tls-pem /tmp/hai-tls-www; printf "https fixture" > /tmp/hai-tls-www/index.html'])
     const copyCertificate = (files: { cert: string, key: string }) => {
-      for (const [source, target] of [[files.key, 'privkey.pem'], [files.cert, 'fullchain.pem']])
+      for (const [source, target] of [
+        [files.key, 'privkey.pem'],
+        [files.cert, 'fullchain.pem'],
+      ])
         execFileSync(runtime, ['cp', source!, `${owned.containerId}:/tmp/hai-tls-pem/${target}.next`], { windowsHide: true })
       // 与实际续期脚本一致地原子替换；同 mtime 原地覆盖会复用 Nginx 缓存中的旧证书。
-      execFileSync(runtime, ['exec', '--user', '0', owned.containerId, 'sh', '-ec', 'chmod 444 /tmp/hai-tls-pem/fullchain.pem.next /tmp/hai-tls-pem/privkey.pem.next; mv /tmp/hai-tls-pem/privkey.pem.next /tmp/hai-tls-pem/privkey.pem; mv /tmp/hai-tls-pem/fullchain.pem.next /tmp/hai-tls-pem/fullchain.pem'], { windowsHide: true })
+      execFileSync(runtime, [
+        'exec',
+        '--user',
+        '0',
+        owned.containerId,
+        'sh',
+        '-ec',
+        'chmod 444 /tmp/hai-tls-pem/fullchain.pem.next /tmp/hai-tls-pem/privkey.pem.next; mv /tmp/hai-tls-pem/privkey.pem.next /tmp/hai-tls-pem/privkey.pem; mv /tmp/hai-tls-pem/fullchain.pem.next /tmp/hai-tls-pem/fullchain.pem',
+      ], { windowsHide: true })
     }
     copyCertificate(first)
-    execFileSync(runtime, ['cp', path.join(project, 'nginx.conf'), `${owned.containerId}:/tmp/hai-tls.conf`], { windowsHide: true })
-    execFileSync(runtime, ['cp', path.join(project, 'proxy-start.sh'), `${owned.containerId}:/tmp/hai-tls-start.sh`], { windowsHide: true })
+    execFileSync(runtime, [
+      'cp',
+      path.join(project, 'nginx.conf'),
+      `${owned.containerId}:/tmp/hai-tls.conf`,
+    ], { windowsHide: true })
+    execFileSync(runtime, [
+      'cp',
+      path.join(project, 'proxy-start.sh'),
+      `${owned.containerId}:/tmp/hai-tls-start.sh`,
+    ], { windowsHide: true })
     const probe = (ca: string, servername = 'localhost') => new Promise<{ body: string, fingerprint: string }>((resolve, reject) => {
-      const client = request({ hostname: '127.0.0.1', port: owned.apiHostPort, servername, ca, agent: false, timeout: 3000, path: '/' }, (response) => {
+      const client = request({
+        hostname: '127.0.0.1',
+        port: owned.apiHostPort,
+        servername,
+        ca,
+        agent: false,
+        timeout: 3000,
+        path: '/',
+      }, (response) => {
         let body = ''
-        const fingerprint = response.socket instanceof TLSSocket ? response.socket.getPeerCertificate().fingerprint256 : ''
+        const fingerprint = response.socket instanceof TLSSocket
+          ? response.socket.getPeerCertificate().fingerprint256
+          : ''
         response.setEncoding('utf8')
         response.on('data', (chunk) => {
           body += chunk
@@ -186,11 +349,20 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
         await new Promise(resolve => setTimeout(resolve, 200))
       }
       const startupLog = await executeDeployTestFixture(runtime, owned, ['cat', '/tmp/hai-tls-start.log'])
-      throw new Error(`HTTPS fixture did not serve the expected certificate: ${lastFailure instanceof Error ? lastFailure.message : String(lastFailure)}\n${startupLog}`)
+      throw new Error(`HTTPS fixture did not serve the expected certificate: ${lastFailure instanceof Error
+        ? lastFailure.message
+        : String(lastFailure)}\n${startupLog}`)
     }
     try {
       // 模拟 detached exec 关闭输出后重建日志描述符，避免 nginx -t 写 stderr 时提前失败。
-      execFileSync(runtime, ['exec', '-d', owned.containerId, 'sh', '-c', 'exec 1>&- 2>&-; exec sh /tmp/hai-tls-start.sh > /tmp/hai-tls-start.log 2>&1'], { windowsHide: true })
+      execFileSync(runtime, [
+        'exec',
+        '-d',
+        owned.containerId,
+        'sh',
+        '-c',
+        'exec 1>&- 2>&-; exec sh /tmp/hai-tls-start.sh > /tmp/hai-tls-start.log 2>&1',
+      ], { windowsHide: true })
       const initial = await waitForCertificate(first.pem)
       expect(initial.body).toBe('https fixture')
       await expect(probe(first.pem, 'wrong.example.test')).rejects.toThrow()
@@ -213,7 +385,9 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
 
   afterAll(async () => {
     const failures: DeployFixtureCleanupFailure[] = []
-    const report = fixture ? createDeployFixtureCleanupReport(fixture.runId, [fixture], []) : undefined
+    const report = fixture
+      ? createDeployFixtureCleanupReport(fixture.runId, [fixture], [])
+      : undefined
     try {
       await deploy.close()
     }
@@ -228,8 +402,14 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       failures.push({ stage: 'container-remove', error })
     }
     try {
-      if (root && path.dirname(root) === path.resolve(tmpdir()) && path.basename(root).startsWith('hai-deploy-nginx-'))
-        rmSync(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+      if (root && path.dirname(root) === path.resolve(tmpdir()) && path.basename(root).startsWith('hai-deploy-nginx-')) {
+        rmSync(root, {
+          recursive: true,
+          force: true,
+          maxRetries: 3,
+          retryDelay: 100,
+        })
+      }
     }
     catch (error) {
       failures.push({ stage: 'temporary-directory-remove', error })
@@ -244,9 +424,15 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       throw new AggregateError(failures.map(failure => failure.error), 'Nginx gate cleanup failed')
   }, 90_000)
 
-  it.each([{ base: '', standalone: false }, { base: '/yyy/sub', standalone: false }, { base: '/yyy/sub.v1-app', standalone: true }])('部署包Nginx配置与实际子目录请求有效：$base standalone=$standalone', async ({ base, standalone }) => {
+  it.each([
+    { base: '', standalone: false },
+    { base: '/yyy/sub', standalone: false },
+    { base: '/yyy/sub.v1-app', standalone: true },
+  ])('部署包Nginx配置与实际子目录请求有效：$base standalone=$standalone', async ({ base, standalone }) => {
     await deploy.close()
-    const project = path.join(root, `project-${standalone ? 'standalone' : base ? 'prefix' : 'root'}`)
+    const project = path.join(root, `project-${standalone
+      ? 'standalone'
+      : base ? 'prefix' : 'root'}`)
     const artifacts = path.join(project, '.hai/build/docker/release-1')
     mkdirSync(artifacts, { recursive: true })
     mkdirSync(path.join(project, 'config'))
@@ -254,15 +440,44 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     writeFileSync(path.join(project, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  .: {}\n')
     writeFileSync(path.join(project, '.env.test'), 'HAI_CORE_ENV=test\n')
     writeFileSync(path.join(project, 'config/_serv.yml'), 'http:\n  apiPrefix: /backend/v2\n')
-    const images = (standalone ? ['web'] : ['serv', 'web']).map((name) => {
+    const images = (standalone
+      ? ['web']
+      : ['serv', 'web']).map((name) => {
       const content = `prebuilt-${name}`
       const file = `${name}-1.2.3.tar`
       writeFileSync(path.join(artifacts, file), content)
-      return { name, file, imageRef: `localhost/nginx-check-${name}:1`, sha256: createHash('sha256').update(content).digest('hex'), containerPort: name === 'web' ? 8080 : 3000 }
+      return {
+        name,
+        file,
+        imageRef: `localhost/nginx-check-${name}:1`,
+        sha256: createHash('sha256').update(content).digest('hex'),
+        containerPort: name === 'web'
+          ? 8080
+          : 3000,
+      }
     })
-    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: base ? 5 : 4, primaryService: standalone ? 'web' : 'serv', appVersion: '1.2.3', buildId: 'release-1', hasWeb: true, webBasePath: base, images }))
-    expect((await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime }, expose: { hostPort: 18080 } } })).success).toBe(true)
-    const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts, output: path.join(project, 'proxy.tar') })
+    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
+      version: base ? 5 : 4,
+      primaryService: standalone ? 'web' : 'serv',
+      appVersion: '1.2.3',
+      buildId: 'release-1',
+      hasWeb: true,
+      webBasePath: base,
+      images,
+    }))
+    expect((await deploy.init({
+      provider: {
+        type: 'docker-ssh',
+        remote: { runtime },
+        expose: { hostPort: 18080 },
+      },
+    })).success).toBe(true)
+    const bundle = await deploy.deployApp(project, {
+      environment: 'test',
+      bundleOnly: true,
+      artifactDir: artifacts,
+      output: path.join(project, 'proxy.tar'),
+    })
     expect(bundle.success, bundle.success ? undefined : bundle.error.message).toBe(true)
     if (!bundle.success || !bundle.data.bundlePath || !fixture)
       throw new Error('Expected an owned Nginx fixture and public deployment bundle')
@@ -290,7 +505,12 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       writeFileSync(path.join(staticFiles, 'index.html'), `<!doctype html><h1>Prefix ready</h1><script type="module" src="${base}/assets/app.js"></script>`)
       writeFileSync(path.join(staticFiles, 'assets/app.js'), 'globalThis.prefixReady = true;')
       writeFileSync(path.join(runtimeFiles, 'runtime-config.js'), 'globalThis.__HAI_PUBLIC_CONFIG__={apiBase:"https://api.example.invalid/api/v1"};')
-      await executeDeployTestFixture(runtime, fixture, ['mkdir', '-p', '/tmp/hai-prefix-static', '/tmp/hai-prefix-runtime'], { timeoutMs: 10_000 })
+      await executeDeployTestFixture(runtime, fixture, [
+        'mkdir',
+        '-p',
+        '/tmp/hai-prefix-static',
+        '/tmp/hai-prefix-runtime',
+      ], { timeoutMs: 10_000 })
       execFileSync(runtime, ['cp', `${staticFiles}/.`, `${fixture.containerId}:/tmp/hai-prefix-static`], { windowsHide: true, timeout: 20_000 })
       execFileSync(runtime, ['cp', `${runtimeFiles}/.`, `${fixture.containerId}:/tmp/hai-prefix-runtime`], { windowsHide: true, timeout: 20_000 })
       let started = false
@@ -332,11 +552,33 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     const images = ['serv', 'web'].map((name) => {
       const file = `${name}-1.0.0.tar`
       writeFileSync(path.join(artifacts, file), name)
-      return { name, file, imageRef: `localhost/routes-${name}:1`, sha256: createHash('sha256').update(name).digest('hex'), containerPort: name === 'web' ? 8080 : 3000 }
+      return {
+        name,
+        file,
+        imageRef: `localhost/routes-${name}:1`,
+        sha256: createHash('sha256').update(name).digest('hex'),
+        containerPort: name === 'web'
+          ? 8080
+          : 3000,
+      }
     })
-    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 5, primaryService: 'serv', appVersion: '1.0.0', buildId: 'routes', hasWeb: true, webBasePath: '/somepath', images }))
+    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
+      version: 5,
+      primaryService: 'serv',
+      appVersion: '1.0.0',
+      buildId: 'routes',
+      hasWeb: true,
+      webBasePath: '/somepath',
+      images,
+    }))
     await deploy.close()
-    expect((await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime }, expose: { hostPort: 18080 } } })).success).toBe(true)
+    expect((await deploy.init({
+      provider: {
+        type: 'docker-ssh',
+        remote: { runtime },
+        expose: { hostPort: 18080 },
+      },
+    })).success).toBe(true)
     const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts })
     if (!bundle.success || !bundle.data.bundlePath)
       throw new Error('Expected a route deployment bundle')
@@ -348,7 +590,13 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     execFileSync(runtime, ['cp', configuration, `${fixture.containerId}:/tmp/routes-nginx.conf`], { windowsHide: true, timeout: 15_000 })
     await executeDeployTestFixture(runtime, fixture, ['sh', '-c', 'mkdir -p /tmp/routes-static; printf "frontend fallback" > /tmp/routes-static/index.html; nginx -t -c /tmp/routes-nginx.conf; nginx -c /tmp/routes-nginx.conf'], { timeoutMs: 15_000 })
     try {
-      const read = (pathname: string) => executeDeployTestFixture(runtime, fixture!, ['sh', '-c', 'wget -S -O - "$1" 2>&1 || true', 'probe', `http://127.0.0.1:8081${pathname}`], { timeoutMs: 10_000 })
+      const read = (pathname: string) => executeDeployTestFixture(runtime, fixture!, [
+        'sh',
+        '-c',
+        'wget -S -O - "$1" 2>&1 || true',
+        'probe',
+        `http://127.0.0.1:8081${pathname}`,
+      ], { timeoutMs: 10_000 })
       expect(await read('/somepath/status')).toContain('backend healthy')
       expect(await read('/somepath/ready')).toContain('ready')
       expect(await read('/somepath/api/v1/private')).toContain('401')
@@ -395,21 +643,62 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       writeFileSync(path.join(project, '.env.test'), `HAI_CORE_ENV=test\nHAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES=${maxPlaintextBytes}\n`)
       writeFileSync(path.join(project, 'config/_serv.yml'), `transport:\n  maxPlaintextBytes: \${HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES:1048576}\n`)
       if (maxPlaintextBytes === 24 * 1048576) {
-        writeFileSync(path.join(project, 'pnpm-lock.yaml'), JSON.stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@h-ai/crypto': { version: '1' }, '@h-ai/feedback': { version: '1' } } } }, packages: { '@h-ai/crypto@1': {}, '@h-ai/feedback@1': {} }, snapshots: { '@h-ai/crypto@1': {}, '@h-ai/feedback@1': {} } }))
+        writeFileSync(path.join(project, 'pnpm-lock.yaml'), JSON.stringify({
+          lockfileVersion: '9.0',
+          importers: {
+            '.': {
+              dependencies: {
+                '@h-ai/crypto': { version: '1' },
+                '@h-ai/feedback': { version: '1' },
+              },
+            },
+          },
+          packages: { '@h-ai/crypto@1': {}, '@h-ai/feedback@1': {} },
+          snapshots: { '@h-ai/crypto@1': {}, '@h-ai/feedback@1': {} },
+        }))
         writeFileSync(path.join(project, 'config/_feedback.yml'), 'appId: capacity\nnotificationMode: disabled\nmaxTotalBytes: 8388608\nmaxEvidenceBytes: 2097152\n')
         const key = createECDH('SM2')
         key.generateKeys()
-        const ring = JSON.stringify({ activeKeyId: 'fixture', keys: { fixture: { publicKey: key.getPublicKey('hex'), privateKey: key.getPrivateKey('hex').padStart(64, '0') } } })
+        const ring = JSON.stringify({
+          activeKeyId: 'fixture',
+          keys: {
+            fixture: {
+              publicKey: key.getPublicKey('hex'),
+              privateKey: key.getPrivateKey('hex').padStart(64, '0'),
+            },
+          },
+        })
         writeFileSync(path.join(project, '.env.test.local'), `HAI_CRYPTO_TRANSPORT_SERVERKEYRING='${ring}'\n`, { mode: 0o600 })
       }
       const images = ['serv', 'web'].map((name) => {
         const file = `${name}-1.2.3.tar`
         writeFileSync(path.join(artifacts, file), name)
-        return { name, file, imageRef: `localhost/proxy-capacity-${name}:1`, sha256: createHash('sha256').update(name).digest('hex'), containerPort: name === 'web' ? 18080 : 3000 }
+        return {
+          name,
+          file,
+          imageRef: `localhost/proxy-capacity-${name}:1`,
+          sha256: createHash('sha256').update(name).digest('hex'),
+          containerPort: name === 'web'
+            ? 18080
+            : 3000,
+        }
       })
-      writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'capacity', hasWeb: true, images }))
+      writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
+        version: 4,
+        primaryService: 'serv',
+        appVersion: '1.2.3',
+        buildId: 'capacity',
+        hasWeb: true,
+        images,
+      }))
       await deploy.close()
-      expect((await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime }, expose: { hostPort: 18080 } } })).success).toBe(true)
+      expect((await deploy.init({
+        provider: {
+          type: 'docker-ssh',
+          remote: { runtime },
+          expose: { hostPort: 18080 },
+        },
+      })).success).toBe(true)
       const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts })
       if (!bundle.success)
         throw new Error(bundle.error.message)
@@ -426,10 +715,34 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       const require = createRequire(import.meta.url)
       const builder = createRequire(require.resolve('tsup')).resolve('esbuild/bin/esbuild')
       const flow = path.join(root, 'transport-flow.mjs')
-      const buildArgs = [path.resolve('tests/fixtures/transport-capacity-node.ts'), '--bundle', '--platform=node', '--format=esm', '--target=node22', `--outfile=${flow}`, '--banner:js=import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);']
+      const buildArgs = [
+        path.resolve('tests/fixtures/transport-capacity-node.ts'),
+        '--bundle',
+        '--platform=node',
+        '--format=esm',
+        '--target=node22',
+        `--outfile=${flow}`,
+        '--banner:js=import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);',
+      ]
       // Windows 使用Node启动JS入口；POSIX入口可能已被esbuild优化为原生程序，也可由shebang直接启动。
-      execFileSync(process.platform === 'win32' ? process.execPath : builder, process.platform === 'win32' ? [builder, ...buildArgs] : buildArgs, { windowsHide: true, timeout: 15_000 })
-      const identity = execFileSync(runtime, ['create', '--network', `container:${fixture.containerId}`, '-e', 'NODE_ENV=test', '-e', `HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES=${maxPlaintextBytes}`, '--entrypoint', 'node', image, '/tmp/transport-flow.mjs'], { encoding: 'utf8', windowsHide: true, timeout: 15_000 }).trim()
+      execFileSync(process.platform === 'win32'
+        ? process.execPath
+        : builder, process.platform === 'win32'
+        ? [builder, ...buildArgs]
+        : buildArgs, { windowsHide: true, timeout: 15_000 })
+      const identity = execFileSync(runtime, [
+        'create',
+        '--network',
+        `container:${fixture.containerId}`,
+        '-e',
+        'NODE_ENV=test',
+        '-e',
+        `HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES=${maxPlaintextBytes}`,
+        '--entrypoint',
+        'node',
+        image,
+        '/tmp/transport-flow.mjs',
+      ], { encoding: 'utf8', windowsHide: true, timeout: 15_000 }).trim()
       if (!/^[a-f0-9]{64}$/.test(identity))
         throw new Error('Expected an owned Node container identity')
       nodeContainer = identity
@@ -446,11 +759,112 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
         }
       }
       finally {
-        if (nginxStarted && fixture)
-          await executeDeployTestFixture(runtime, fixture, ['nginx', '-c', remoteConfig, '-s', 'quit'], { timeoutMs: 15_000 })
+        if (nginxStarted && fixture) {
+          await executeDeployTestFixture(runtime, fixture, [
+            'nginx',
+            '-c',
+            remoteConfig,
+            '-s',
+            'quit',
+          ], { timeoutMs: 15_000 })
+        }
       }
     }
   }, 300_000)
+
+  it.each([false, true])('ssr gateway 在真实 Nginx 中阻止转发头伪造，只接受白名单边缘的单值协议；可信=%s', async (trustedEdge) => {
+    if (!fixture)
+      throw new Error('Expected an owned proxy fixture')
+    const project = path.join(root, `ssr-origin-${trustedEdge}`)
+    const artifacts = path.join(project, 'artifacts')
+    mkdirSync(artifacts, { recursive: true })
+    mkdirSync(path.join(project, 'config'))
+    writeFileSync(path.join(project, 'package.json'), JSON.stringify({
+      name: 'ssr-origin-check',
+      version: '1.0.0',
+      devDependencies: { '@sveltejs/kit': '3', '@sveltejs/adapter-node': '6' },
+    }))
+    writeFileSync(path.join(project, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  .:\n    devDependencies:\n      "@sveltejs/kit": {version: "3"}\n      "@sveltejs/adapter-node": {version: "6"}\npackages: {}\nsnapshots: {}\n')
+    writeFileSync(path.join(project, '.env.test'), 'HAI_CORE_ENV=test\n')
+    writeFileSync(path.join(artifacts, 'web-1.0.0.tar'), 'ssr-origin-fixture')
+    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
+      version: 4,
+      primaryService: 'web',
+      appVersion: '1.0.0',
+      buildId: 'ssr-origin',
+      hasWeb: true,
+      images: [
+        {
+          name: 'web',
+          file: 'web-1.0.0.tar',
+          imageRef: 'localhost/ssr-origin:1',
+          sha256: createHash('sha256').update('ssr-origin-fixture').digest('hex'),
+          containerPort: 3000,
+        },
+      ],
+    }))
+    await deploy.close()
+    expect((await deploy.init({
+      provider: {
+        type: 'docker-ssh',
+        remote: { runtime },
+        expose: { hostPort: 18080 },
+        trustedEdgeProxies: trustedEdge
+          ? ['127.0.0.1/32']
+          : [],
+      },
+    })).success).toBe(true)
+    const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts })
+    if (!bundle.success || !bundle.data.bundlePath)
+      throw new Error('Expected an SSR origin deployment bundle')
+    const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './.hai/web.conf'], { encoding: 'utf8', windowsHide: true })
+    const config = path.join(project, 'nginx.conf')
+    // 后端只回显实际收到的标准头；所有信任选择由交付包中的真实网关配置执行。
+    const backend = 'server { listen 3000; location / { default_type application/json; return 200 \'{"protocol":"$http_x_forwarded_proto","host":"$http_host","forwardedHost":"$http_x_forwarded_host","port":"$http_x_forwarded_port","forwarded":"$http_forwarded","address":"$http_x_forwarded_for"}\'; } }'
+    writeFileSync(config, `pid /tmp/ssr-origin-nginx.pid;\nevents {}\nhttp {\n${proxy.replaceAll('server web:', 'server 127.0.0.1:')}\n${backend}\n}\n`)
+    execFileSync(runtime, ['cp', config, `${fixture.containerId}:/tmp/ssr-origin-nginx.conf`], { windowsHide: true, timeout: 15_000 })
+    let started = false
+    try {
+      await executeDeployTestFixture(runtime, fixture, [
+        'nginx',
+        '-t',
+        '-c',
+        '/tmp/ssr-origin-nginx.conf',
+      ], { timeoutMs: 10_000 })
+      await executeDeployTestFixture(runtime, fixture, ['nginx', '-c', '/tmp/ssr-origin-nginx.conf'], { timeoutMs: 10_000 })
+      started = true
+      const read = async (protocol: string) => JSON.parse(await executeDeployTestFixture(runtime, fixture!, [
+        'wget',
+        '-qO-',
+        '--header',
+        'Host: app.example.test:18080',
+        '--header',
+        `X-Forwarded-Proto: ${protocol}`,
+        '--header',
+        'X-Forwarded-Host: attacker.example.test',
+        '--header',
+        'X-Forwarded-Port: 443',
+        '--header',
+        'Forwarded: proto=https;host=attacker.example.test',
+        '--header',
+        'X-Forwarded-For: 198.51.100.10',
+        'http://127.0.0.1:8080/probe',
+      ], { timeoutMs: 10_000 }))
+      expect(await read('https')).toEqual({
+        protocol: trustedEdge ? 'https' : 'http',
+        host: 'app.example.test:18080',
+        forwardedHost: 'app.example.test:18080',
+        port: '',
+        forwarded: '',
+        address: trustedEdge ? '198.51.100.10' : '127.0.0.1',
+      })
+      expect(await read('https,http')).toMatchObject({ protocol: 'http' })
+    }
+    finally {
+      if (started)
+        await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', 'nginx -s quit -c /tmp/ssr-origin-nginx.conf; for n in 1 2 3 4 5 6 7 8 9 10; do [ ! -e /tmp/ssr-origin-nginx.pid ] && exit 0; sleep 0.1; done; exit 1'], { timeoutMs: 10_000 })
+    }
+  }, 60_000)
 
   it.each([false, true])('真实 Nginx 与私有后端共享客户端 IP，Serv/Kit 策略拒绝不可绕过；信任外层代理=%s', async (trustedEdge) => {
     if (!fixture)
@@ -471,11 +885,35 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     const images = ['serv', 'web'].map((name) => {
       const file = `${name}-1.2.3.tar`
       writeFileSync(path.join(artifacts, file), name)
-      return { name, file, imageRef: `localhost/access-${name}:1`, sha256: createHash('sha256').update(name).digest('hex'), containerPort: name === 'web' ? 8080 : 3000 }
+      return {
+        name,
+        file,
+        imageRef: `localhost/access-${name}:1`,
+        sha256: createHash('sha256').update(name).digest('hex'),
+        containerPort: name === 'web'
+          ? 8080
+          : 3000,
+      }
     })
-    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'access', hasWeb: true, images }))
+    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
+      version: 4,
+      primaryService: 'serv',
+      appVersion: '1.2.3',
+      buildId: 'access',
+      hasWeb: true,
+      images,
+    }))
     await deploy.close()
-    const initialized = await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime }, expose: { hostPort: 18080 }, trustedEdgeProxies: trustedEdge ? ['127.0.0.1/32'] : [] } })
+    const initialized = await deploy.init({
+      provider: {
+        type: 'docker-ssh',
+        remote: { runtime },
+        expose: { hostPort: 18080 },
+        trustedEdgeProxies: trustedEdge
+          ? ['127.0.0.1/32']
+          : [],
+      },
+    })
     expect(initialized.success, initialized.success ? undefined : initialized.error.message).toBe(true)
     const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts })
     if (!bundle.success || !bundle.data.bundlePath)
@@ -492,8 +930,20 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     const flow = path.join(project, 'request-access-node.mjs')
     const require = createRequire(import.meta.url)
     const builder = createRequire(require.resolve('tsup')).resolve('esbuild/bin/esbuild')
-    const args = [path.resolve('tests/fixtures/request-access-node.ts'), '--bundle', '--platform=node', '--format=esm', '--target=node22', `--outfile=${flow}`, '--banner:js=import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);']
-    execFileSync(process.platform === 'win32' ? process.execPath : builder, process.platform === 'win32' ? [builder, ...args] : args, { windowsHide: true, timeout: 20_000, stdio: 'pipe' })
+    const args = [
+      path.resolve('tests/fixtures/request-access-node.ts'),
+      '--bundle',
+      '--platform=node',
+      '--format=esm',
+      '--target=node22',
+      `--outfile=${flow}`,
+      '--banner:js=import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);',
+    ]
+    execFileSync(process.platform === 'win32'
+      ? process.execPath
+      : builder, process.platform === 'win32'
+      ? [builder, ...args]
+      : args, { windowsHide: true, timeout: 20_000, stdio: 'pipe' })
     writeFileSync(policy, snapshot)
     let nodeContainer: string | undefined
     let started = false
@@ -501,7 +951,21 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       execFileSync(runtime, ['cp', config, `${fixture.containerId}:/tmp/request-access-nginx.conf`], { windowsHide: true, timeout: 15_000 })
       await executeDeployTestFixture(runtime, fixture, ['nginx', '-c', '/tmp/request-access-nginx.conf'], { timeoutMs: 10_000 })
       started = true
-      const identity = execFileSync(runtime, ['create', '--network', `container:${fixture.containerId}`, '-e', 'NODE_ENV=test', '-e', `HAI_DEPLOY_PRIVATE_PROXY=${privateProxy}`, '-e', `HAI_FIXTURE_EXPECTED_IP=${expectedIp}`, '--entrypoint', 'node', image, '/tmp/request-access-node.mjs'], { encoding: 'utf8', windowsHide: true, timeout: 15_000 }).trim()
+      const identity = execFileSync(runtime, [
+        'create',
+        '--network',
+        `container:${fixture.containerId}`,
+        '-e',
+        'NODE_ENV=test',
+        '-e',
+        `HAI_DEPLOY_PRIVATE_PROXY=${privateProxy}`,
+        '-e',
+        `HAI_FIXTURE_EXPECTED_IP=${expectedIp}`,
+        '--entrypoint',
+        'node',
+        image,
+        '/tmp/request-access-node.mjs',
+      ], { encoding: 'utf8', windowsHide: true, timeout: 15_000 }).trim()
       if (!/^[a-f\d]{64}$/.test(identity))
         throw new Error('Expected a newly created Node container identity')
       nodeContainer = identity
@@ -511,7 +975,11 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       expect(output).toContain(`REQUEST_ACCESS_IP_PASS:{"expectedIp":"${expectedIp}"`)
       if (process.env.HAI_AUTH_EVIDENCE_DIR) {
         mkdirSync(process.env.HAI_AUTH_EVIDENCE_DIR, { recursive: true })
-        writeFileSync(path.join(process.env.HAI_AUTH_EVIDENCE_DIR, `request-access-ip-${trustedEdge}.json`), JSON.stringify({ verifiedAt: new Date().toISOString(), fixture: 'Real Nginx and Node Fetch hosts; Kit uses a platform event assembled from the real socket', result: JSON.parse(output.split('REQUEST_ACCESS_IP_PASS:')[1]!.trim()) }, null, 2))
+        writeFileSync(path.join(process.env.HAI_AUTH_EVIDENCE_DIR, `request-access-ip-${trustedEdge}.json`), JSON.stringify({
+          verifiedAt: new Date().toISOString(),
+          fixture: 'Real Nginx and Node Fetch hosts; Kit uses a platform event assembled from the real socket',
+          result: JSON.parse(output.split('REQUEST_ACCESS_IP_PASS:')[1]!.trim()),
+        }, null, 2))
       }
     }
     finally {
@@ -522,8 +990,15 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
         }
       }
       finally {
-        if (started)
-          await executeDeployTestFixture(runtime, fixture, ['nginx', '-c', '/tmp/request-access-nginx.conf', '-s', 'quit'], { timeoutMs: 10_000 })
+        if (started) {
+          await executeDeployTestFixture(runtime, fixture, [
+            'nginx',
+            '-c',
+            '/tmp/request-access-nginx.conf',
+            '-s',
+            'quit',
+          ], { timeoutMs: 10_000 })
+        }
       }
     }
   }, 120_000)

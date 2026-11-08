@@ -13,7 +13,9 @@ import { cliM } from '../cli-i18n.js'
 import { writeCliMessage } from '../cli-utils.js'
 
 function object(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
 }
 
 /** 只识别发布声明的值导出；注释、字符串、私有声明和 type 导出不构成迁移能力。 */
@@ -21,7 +23,9 @@ function declaresValueExport(source: string, name: string): boolean {
   const declarations = source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g, ' ')
   if (new RegExp(`\\bexport\\s+(?:declare\\s+)?(?:function|const|let|var)\\s+${name}\\b`).test(declarations))
     return true
-  return [...declarations.matchAll(/\bexport\s*\{([^}]+)\}/g)].some(match => match[1]!.split(',').some((item) => {
+  return [
+    ...declarations.matchAll(/\bexport\s*\{([^}]+)\}/g),
+  ].some(match => match[1]!.split(',').some((item) => {
     const value = item.trim()
     return !value.startsWith('type ') && (value.split(/\s+as\s+/).at(-1)?.trim() === name)
   }))
@@ -58,18 +62,32 @@ export async function inspectFrameworkUpgrade(directory: string, version: string
     throw new Error(cliM('cli_upgrade_exact_version'))
   const root = realpathSync(resolve(directory))
   const workspaceFile = join(root, 'pnpm-workspace.yaml')
-  const workspace = existsSync(workspaceFile) ? object(parse(readFileSync(workspaceFile, 'utf8'))) : {}
+  const workspace = existsSync(workspaceFile)
+    ? object(parse(readFileSync(workspaceFile, 'utf8')))
+    : {}
   const rootManifest = object(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')))
-  const patterns: unknown[] = Array.isArray(workspace.packages) ? workspace.packages : Array.isArray(rootManifest.workspaces) ? rootManifest.workspaces : Array.isArray(object(rootManifest.workspaces).packages) ? object(rootManifest.workspaces).packages as unknown[] : []
+  const patterns: unknown[] = Array.isArray(workspace.packages)
+    ? workspace.packages
+    : Array.isArray(rootManifest.workspaces)
+      ? rootManifest.workspaces
+      : Array.isArray(object(rootManifest.workspaces).packages)
+        ? object(rootManifest.workspaces).packages as unknown[]
+        : []
   const directories = new Set([root])
   const safePatterns = patterns.filter((pattern): pattern is string => typeof pattern === 'string' && !isAbsolute(pattern.replace(/^!/, '')) && !pattern.split(/[\\/]/).includes('..'))
-  const exclude = ['**/node_modules/**', ...safePatterns.filter(pattern => pattern.startsWith('!')).map(pattern => `${pattern.slice(1)}/package.json`)]
+  const exclude = [
+    '**/node_modules/**',
+    ...safePatterns.filter(pattern => pattern.startsWith('!')).map(pattern => `${pattern.slice(1)}/package.json`),
+  ]
   for (const pattern of safePatterns.filter(pattern => !pattern.startsWith('!'))) {
     for await (const manifest of glob(`${pattern}/package.json`, { cwd: root, exclude })) {
       const location = realpathSync(dirname(join(root, manifest)))
       const fromRoot = relative(root, location)
-      if (!isAbsolute(fromRoot) && fromRoot !== '..' && !fromRoot.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`))
+      if (!isAbsolute(fromRoot) && fromRoot !== '..' && !fromRoot.startsWith(`..${process.platform === 'win32'
+        ? '\\'
+        : '/'}`)) {
         directories.add(location)
+      }
     }
   }
   const packages = new Set(['@h-ai/cli', '@h-ai/deploy'])
@@ -81,18 +99,33 @@ export async function inspectFrameworkUpgrade(directory: string, version: string
         if (document.errors.length)
           throw new Error(cliM('cli_upgrade_lock_invalid'))
         const part = object(document.toJS())
-        return { ...all, ...part, importers: { ...object(all.importers), ...object(part.importers) } }
+        return {
+          ...all,
+          ...part,
+          importers: {
+            ...object(all.importers),
+            ...object(part.importers),
+          },
+        }
       }, {})
     : {}
   for (const location of directories) {
     const manifest = object(JSON.parse(readFileSync(join(location, 'package.json'), 'utf8')))
-    const dependencies = { ...object(manifest.dependencies), ...object(manifest.devDependencies), ...object(manifest.optionalDependencies) }
+    const dependencies = {
+      ...object(manifest.dependencies),
+      ...object(manifest.devDependencies),
+      ...object(manifest.optionalDependencies),
+    }
     const importer = object(object(lock.importers)[relative(root, location).replaceAll('\\', '/') || '.'])
     for (const [name, specifier] of Object.entries(dependencies)) {
       if (!/^@h-ai\/[\w-]+$/.test(name) || typeof specifier !== 'string')
         continue
       packages.add(name)
-      const declared = specifier.startsWith('catalog:') ? String(object(specifier === 'catalog:' ? catalog : object(workspace.catalogs)[specifier.slice(8)])[name] ?? '') : specifier
+      const declared = specifier.startsWith('catalog:')
+        ? String(object(specifier === 'catalog:'
+            ? catalog
+            : object(workspace.catalogs)[specifier.slice(8)])[name] ?? '')
+        : specifier
       const issues: string[] = []
       if (declared !== version && !declared.startsWith('workspace:'))
         issues.push('declared-version-drift')
@@ -112,7 +145,13 @@ export async function inspectFrameworkUpgrade(directory: string, version: string
       const locked = object(object(importer.dependencies)[name] ?? object(importer.devDependencies)[name] ?? object(importer.optionalDependencies)[name])
       if (typeof locked.version !== 'string' || (!locked.version.startsWith('link:') && locked.version.split('(')[0] !== version))
         issues.push('lock-version-drift')
-      drift.push({ package: name, source: relative(root, join(location, 'package.json')).replaceAll('\\', '/'), declared, installed, issues })
+      drift.push({
+        package: name,
+        source: relative(root, join(location, 'package.json')).replaceAll('\\', '/'),
+        declared,
+        installed,
+        issues,
+      })
     }
   }
   const registry = new URL(process.env.npm_config_registry ?? 'https://registry.npmjs.org/')
@@ -127,7 +166,9 @@ export async function inspectFrameworkUpgrade(directory: string, version: string
     const item = { package: name, available: false, issues: [] as string[] }
     releases.push(item)
     try {
-      const response = await fetch(new URL(`${encodeURIComponent(name)}/${encodeURIComponent(version)}`, registry), { signal: AbortSignal.timeout(20000) })
+      const response = await fetch(new URL(`${encodeURIComponent(name)}/${encodeURIComponent(version)}`, registry), {
+        signal: AbortSignal.timeout(20000),
+      })
       if (!response.ok)
         throw new Error('Release missing')
       const metadata = object(await response.json())
@@ -143,11 +184,23 @@ export async function inspectFrameworkUpgrade(directory: string, version: string
       const url = new URL(dist.tarball)
       if (url.protocol !== 'https:' || url.username || url.password)
         throw new Error('Invalid tarball')
-      const available = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(20000) })
+      const available = await fetch(url, {
+        method: 'HEAD',
+        signal: AbortSignal.timeout(20000),
+      })
       if (!available.ok)
         throw new Error('Artifact missing')
-      if (['@h-ai/cli', '@h-ai/deploy', '@h-ai/iam', '@h-ai/reach', '@h-ai/scheduler', '@h-ai/audit'].includes(name)) {
-        const archive = await fetch(url, { signal: AbortSignal.timeout(30000) })
+      if ([
+        '@h-ai/cli',
+        '@h-ai/deploy',
+        '@h-ai/iam',
+        '@h-ai/reach',
+        '@h-ai/scheduler',
+        '@h-ai/audit',
+      ].includes(name)) {
+        const archive = await fetch(url, {
+          signal: AbortSignal.timeout(30000),
+        })
         if (!archive.ok || Number(archive.headers.get('content-length')) > 32 * 1024 * 1024)
           throw new Error('Artifact missing')
         const bytes = new Uint8Array(await archive.arrayBuffer())
@@ -160,7 +213,12 @@ export async function inspectFrameworkUpgrade(directory: string, version: string
         const manifest = files.get('package/package.json')
         if (!manifest || object(JSON.parse(new TextDecoder().decode(manifest))).version !== version || !files.has('package/dist/index.js'))
           throw new Error('Incomplete artifact')
-        const migration = { '@h-ai/iam': 'migrateIam', '@h-ai/reach': 'migrateReach', '@h-ai/scheduler': 'migrateScheduler', '@h-ai/audit': 'migrateAudit' }[name]
+        const migration = {
+          '@h-ai/iam': 'migrateIam',
+          '@h-ai/reach': 'migrateReach',
+          '@h-ai/scheduler': 'migrateScheduler',
+          '@h-ai/audit': 'migrateAudit',
+        }[name]
         if (migration && declaresValueExport(new TextDecoder().decode(files.get('package/dist/index.d.ts')), migration) && declaresValueExport(new TextDecoder().decode(files.get('package/dist/index.js')), migration))
           migrationPreflight.push(`${migration}({ dryRun: true })`)
         if (name === '@h-ai/cli') {
@@ -171,7 +229,14 @@ export async function inspectFrameworkUpgrade(directory: string, version: string
             if (!match)
               continue
             const local = join(root, '.agents/skills', match[1]!, 'SKILL.md')
-            skills.push({ name: match[1]!, state: !existsSync(local) ? 'missing' : createHash('sha256').update(readFileSync(local)).digest('hex') === createHash('sha256').update(bytes).digest('hex') ? 'current' : 'customized-or-older' })
+            skills.push({
+              name: match[1]!,
+              state: !existsSync(local)
+                ? 'missing'
+                : createHash('sha256').update(readFileSync(local)).digest('hex') === createHash('sha256').update(bytes).digest('hex')
+                  ? 'current'
+                  : 'customized-or-older',
+            })
           }
         }
       }
@@ -183,10 +248,46 @@ export async function inspectFrameworkUpgrade(directory: string, version: string
   }
   let dirtyFiles: string[] = []
   try {
-    dirtyFiles = execFileSync('git', ['status', '--porcelain', '--', '.'], { cwd: root, encoding: 'utf8', windowsHide: true, stdio: 'pipe' }).trim().split('\n').filter(Boolean)
+    dirtyFiles = execFileSync('git', ['status', '--porcelain', '--', '.'], {
+      cwd: root,
+      encoding: 'utf8',
+      windowsHide: true,
+      stdio: 'pipe',
+    }).trim().split('\n').filter(Boolean)
   }
   catch { /* 非 Git 工程仍可检查发布齐备性。 */ }
-  return { version, releaseComplete: releases.every(item => item.available), modified: false, releases, drift, skills, dirtyFiles, customizations: { overrides: [...new Set([...Object.keys(object(workspace.overrides)), ...Object.keys(object(rootManifest.overrides)), ...Object.keys(object(object(rootManifest.pnpm).overrides))])], patches: [...new Set([...Object.keys(object(workspace.patchedDependencies)), ...Object.keys(object(object(rootManifest.pnpm).patchedDependencies))])] }, migration: { preflight: migrationPreflight, inspectModuleReadmes: true, exclusiveAccess: true, backup: ['database', 'shared-session-cache'], rollback: 'restore-compatible-database-and-binaries', sessions: 'legacy-credential-sessions-require-login' } }
+  return {
+    version,
+    releaseComplete: releases.every(item => item.available),
+    modified: false,
+    releases,
+    drift,
+    skills,
+    dirtyFiles,
+    customizations: {
+      overrides: [
+        ...new Set([
+          ...Object.keys(object(workspace.overrides)),
+          ...Object.keys(object(rootManifest.overrides)),
+          ...Object.keys(object(object(rootManifest.pnpm).overrides)),
+        ]),
+      ],
+      patches: [
+        ...new Set([
+          ...Object.keys(object(workspace.patchedDependencies)),
+          ...Object.keys(object(object(rootManifest.pnpm).patchedDependencies)),
+        ]),
+      ],
+    },
+    migration: {
+      preflight: migrationPreflight,
+      inspectModuleReadmes: true,
+      exclusiveAccess: true,
+      backup: ['database', 'shared-session-cache'],
+      rollback: 'restore-compatible-database-and-binaries',
+      sessions: 'legacy-credential-sessions-require-login',
+    },
+  }
 }
 
 /**

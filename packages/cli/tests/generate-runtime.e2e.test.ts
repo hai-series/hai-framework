@@ -89,7 +89,12 @@ afterEach(async () => {
           failures.push(new Error('Unexpected runtime cleanup path'))
           continue
         }
-        await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+        await rm(root, {
+          recursive: true,
+          force: true,
+          maxRetries: 3,
+          retryDelay: 100,
+        })
       }
       catch (error) {
         failures.push(error)
@@ -132,8 +137,14 @@ function runtimeEnvironment(cwd: string): NodeJS.ProcessEnv {
         HAI_DB_TYPE: 'sqlite',
         HAI_DB_DATABASE: path.join(data, 'app.db'),
         HAI_CACHE: JSON.stringify({ type: 'memory' }),
-        HAI_STORAGE: JSON.stringify({ type: 'local', root: path.join(data, 'uploads') }),
-        HAI_VECDB: JSON.stringify({ type: 'lancedb', path: path.join(data, 'vecdb') }),
+        HAI_STORAGE: JSON.stringify({
+          type: 'local',
+          root: path.join(data, 'uploads'),
+        }),
+        HAI_VECDB: JSON.stringify({
+          type: 'lancedb',
+          path: path.join(data, 'vecdb'),
+        }),
         HAI_CRYPTO_TRANSPORT_SERVERKEYRING: createE2eTransportRing(),
         HAI_ADMIN_DEFAULT_PASSWORD: `Aa1!${randomBytes(24).toString('base64url')}`,
       }),
@@ -147,7 +158,18 @@ function runtimeEnvironment(cwd: string): NodeJS.ProcessEnv {
 async function tool(name: 'tsup' | 'vite' | 'eslint' | 'typescript', args: string[], cwd: string): Promise<void> {
   const manifestPath = fileURLToPath(import.meta.resolve(`${name}/package.json`))
   const manifest: { bin: Record<string, string> } = JSON.parse(await readFile(manifestPath, 'utf8'))
-  const result = spawnSync(process.execPath, [path.join(path.dirname(manifestPath), manifest.bin[name === 'typescript' ? 'tsc' : name]!), ...args], { cwd, windowsHide: true, encoding: 'utf8', timeout: 120_000, env: runtimeEnvironment(cwd) })
+  const result = spawnSync(process.execPath, [
+    path.join(path.dirname(manifestPath), manifest.bin[name === 'typescript'
+      ? 'tsc'
+      : name]!),
+    ...args,
+  ], {
+    cwd,
+    windowsHide: true,
+    encoding: 'utf8',
+    timeout: 120_000,
+    env: runtimeEnvironment(cwd),
+  })
   await appendFile(path.join(evidence, 'runtime-builds.log'), `${cwd}\n${result.stdout}\n${result.stderr}\n`)
   expect(result.error?.message).toBeUndefined()
   expect(result.status, result.stderr).toBe(0)
@@ -168,7 +190,17 @@ async function port(): Promise<number> {
 async function start(cwd: string, args: string[], selectedPort: number): Promise<string> {
   let output = ''
   serverOutputs.push(() => output)
-  const child = spawn(process.execPath, args, { cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...runtimeEnvironment(cwd), PORT: String(selectedPort), HOST: '127.0.0.1', HAI_SERV_SERVER_PORT: String(selectedPort) } })
+  const child = spawn(process.execPath, args, {
+    cwd,
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...runtimeEnvironment(cwd),
+      PORT: String(selectedPort),
+      HOST: '127.0.0.1',
+      HAI_SERV_SERVER_PORT: String(selectedPort),
+    },
+  })
   processes.push(child)
   const capture = (data: Buffer) => {
     output = (output + data.toString()).slice(-16_000)
@@ -194,12 +226,35 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
     const root = await mkdtemp(path.join(tempParent, 'cli-generate-runtime-'))
     roots.push(root)
     const project = path.join(root, 'native-names')
-    await createProject({ cwd: root, name: 'native-names', appType, frontends: ['app', 'desktop'], defaults: true, install: false, git: false, deploy: false, packageManager: 'pnpm' })
+    await createProject({
+      cwd: root,
+      name: 'native-names',
+      appType,
+      frontends: ['app', 'desktop'],
+      defaults: true,
+      install: false,
+      git: false,
+      deploy: false,
+      packageManager: 'pnpm',
+    })
     // 名称来源逐层验证，移除本轮创建器生成的更高优先级环境文件。
-    for (const file of ['.env', '.env.dev', '.env.test', '.env.prod', '.env.local', '.env.dev.local', '.env.test.local', '.env.prod.local'])
+    for (const file of [
+      '.env',
+      '.env.dev',
+      '.env.test',
+      '.env.prod',
+      '.env.local',
+      '.env.dev.local',
+      '.env.test.local',
+      '.env.prod.local',
+    ])
       await rm(path.join(project, file), { force: true })
-    const app = appType === 'fullstack' ? path.join(project, 'apps/native-names-app') : project
-    const config = path.join(project, appType === 'fullstack' ? 'packages/native-names-serv/config/_core.yml' : 'config/_core.yml')
+    const app = appType === 'fullstack'
+      ? path.join(project, 'apps/native-names-app')
+      : project
+    const config = path.join(project, appType === 'fullstack'
+      ? 'packages/native-names-serv/config/_core.yml'
+      : 'config/_core.yml')
     const require = createRequire(import.meta.url)
     const loader = path.join(path.dirname(require.resolve('@capacitor/cli')), 'config.js')
     const probe = `require(${JSON.stringify(loader)}).loadConfig().then(config => process.stdout.write(JSON.stringify({ name: config.app.appName, id: config.app.appId })))`
@@ -212,10 +267,19 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
         await writeFile(path.join(project, '.env.prod'), 'HAI_CORE_NAME="Changed dotenv Native"\n')
       if (source === 'process')
         env.HAI_CORE_NAME = 'Changed Process Native'
-      const result = spawnSync(process.execPath, ['-e', probe], { cwd: app, env, encoding: 'utf8', windowsHide: true })
+      const result = spawnSync(process.execPath, ['-e', probe], {
+        cwd: app,
+        env,
+        encoding: 'utf8',
+        windowsHide: true,
+      })
       expect(result.status, result.stderr).toBe(0)
       const value: { name: string, id: string } = JSON.parse(result.stdout)
-      expect(value.name).toBe(source === 'yaml' ? 'Changed YAML Native' : source === 'dotenv' ? 'Changed dotenv Native' : 'Changed Process Native')
+      expect(value.name).toBe(source === 'yaml'
+        ? 'Changed YAML Native'
+        : source === 'dotenv'
+          ? 'Changed dotenv Native'
+          : 'Changed Process Native')
       if (!appId)
         appId = value.id
       expect(value.id).toBe(appId)
@@ -230,10 +294,28 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
     await writeFile(path.join(fakeTool, 'tauri.js'), 'process.stdout.write(JSON.stringify(process.argv.slice(2)))')
     const desktopPackage = JSON.parse(await readFile(path.join(desktop, 'package.json'), 'utf8'))
     const [, runner, ...fixedArgs] = desktopPackage.scripts.tauri.split(' ')
-    const result = spawnSync(process.execPath, [path.resolve(desktop, runner), ...fixedArgs, 'build', '--config', '{"version":"2.4.6"}'], { cwd: desktop, env, encoding: 'utf8', windowsHide: true })
+    const result = spawnSync(process.execPath, [
+      path.resolve(desktop, runner),
+      ...fixedArgs,
+      'build',
+      '--config',
+      '{"version":"2.4.6"}',
+    ], {
+      cwd: desktop,
+      env,
+      encoding: 'utf8',
+      windowsHide: true,
+    })
     expect(result.status, result.stderr).toBe(0)
     const args: string[] = JSON.parse(result.stdout)
-    expect(JSON.parse(args[2]!)).toMatchObject({ productName: 'Changed Process Native', app: { windows: [{ title: 'Changed Process Native', width: 1280 }] } })
+    expect(JSON.parse(args[2]!)).toMatchObject({
+      productName: 'Changed Process Native',
+      app: {
+        windows: [
+          { title: 'Changed Process Native', width: 1280 },
+        ],
+      },
+    })
     expect(args.slice(3)).toEqual(['--config', '{"version":"2.4.6"}'])
   }, 30_000)
 
@@ -243,12 +325,26 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
     await mkdir(tempParent, { recursive: true })
     const root = await mkdtemp(path.join(tempParent, 'cli-generate-runtime-'))
     roots.push(root)
-    await createProject({ name: 'minimal-site', appType: 'website', cwd: root, defaults: true, install: false, git: false, deploy: false, packageManager: 'pnpm' })
+    await createProject({
+      name: 'minimal-site',
+      appType: 'website',
+      cwd: root,
+      defaults: true,
+      install: false,
+      git: false,
+      deploy: false,
+      packageManager: 'pnpm',
+    })
     const project = path.join(root, 'minimal-site')
     await mkdir(path.join(project, 'node_modules/@inlang'), { recursive: true })
     await symlink(path.join(repository, 'node_modules/@inlang/plugin-message-format'), path.join(project, 'node_modules/@inlang/plugin-message-format'), 'junction')
     await tool('vite', ['build'], project)
-    const base = await start(project, ['scripts/run-node.mjs', 'dev', '.', 'build/index.js'], await port())
+    const base = await start(project, [
+      'scripts/run-node.mjs',
+      'dev',
+      '.',
+      'build/index.js',
+    ], await port())
     expect((await fetch(base)).status).toBe(200)
     expect((await fetch(`${base}/api/health`)).status).toBe(200)
   }, 180_000)
@@ -259,11 +355,27 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
     await mkdir(tempParent, { recursive: true })
     const root = await mkdtemp(path.join(tempParent, 'cli-generate-runtime-'))
     roots.push(root)
-    await createProject({ name: 'runtime-route', appType, frontends: ['web'], cwd: root, defaults: true, install: false, git: false, deploy: false, packageManager: 'pnpm' })
+    await createProject({
+      name: 'runtime-route',
+      appType,
+      frontends: ['web'],
+      cwd: root,
+      defaults: true,
+      install: false,
+      git: false,
+      deploy: false,
+      packageManager: 'pnpm',
+    })
     const project = path.join(root, 'runtime-route')
     if (appType === 'website') {
       // 官网默认不接认证；本场景显式接入 IAM，保留生成业务路由的真实会话验收。
-      await generateFromTemplates(project, buildTemplateContext({ name: 'runtime-route', appType, features: ['iam'], packageManager: 'pnpm', deploy: false }))
+      await generateFromTemplates(project, buildTemplateContext({
+        name: 'runtime-route',
+        appType,
+        features: ['iam'],
+        packageManager: 'pnpm',
+        deploy: false,
+      }))
       for (const module of ['db', 'cache', 'iam'])
         await writeFile(path.join(project, 'config', `_${module}.yml`), generateConfigFile(module))
     }
@@ -282,7 +394,12 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
       await symlink(path.join(repository, 'node_modules/@inlang/plugin-message-format'), path.join(project, 'node_modules/@inlang/plugin-message-format'), 'junction')
       await generate({ type: 'page', name: 'route-page', cwd: project })
       await tool('vite', ['build'], project)
-      base = await start(project, ['scripts/run-node.mjs', 'dev', '.', 'build/index.js'], selectedPort)
+      base = await start(project, [
+        'scripts/run-node.mjs',
+        'dev',
+        '.',
+        'build/index.js',
+      ], selectedPort)
       const page = await fetch(`${base}/route-page`)
       expect(page.status).toBe(200)
       expect(await page.text()).toContain('RoutePage')
@@ -304,7 +421,9 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
       }
     }
     else {
-      const parent = appType === 'api' ? 'apps' : 'packages'
+      const parent = appType === 'api'
+        ? 'apps'
+        : 'packages'
       const contract = path.join(project, parent, 'runtime-route-contract')
       const service = path.join(project, parent, 'runtime-route-serv')
       // YAML 不声明可选路径时，实际启动仍须通过模块 Schema 识别细项。
@@ -312,19 +431,42 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
       await mkdir(path.join(service, 'node_modules'), { recursive: true })
       await symlink(contract, path.join(service, 'node_modules/runtime-route-contract'), 'junction')
       await tool('tsup', [], contract)
-      await tool('eslint', ['src/route-probe-contract.ts', 'src/aardvark-probe-contract.ts', 'src/runtime-route-contract.ts', 'src/index.ts'], contract)
+      await tool('eslint', [
+        'src/route-probe-contract.ts',
+        'src/aardvark-probe-contract.ts',
+        'src/runtime-route-contract.ts',
+        'src/index.ts',
+      ], contract)
       await tool('eslint', ['src/server/procedures/route-probe-procedures.ts', 'src/server/procedures/aardvark-probe-procedures.ts', 'src/server/procedures/index.ts'], service)
       await tool('typescript', ['--noEmit'], service)
       await tool('tsup', [], service)
-      const environmentRoot = appType === 'api' ? service : project
+      const environmentRoot = appType === 'api'
+        ? service
+        : project
       // 模拟克隆工程没有本机覆盖文件；正常运行仍使用本轮隔离后端。
       await rm(path.join(environmentRoot, '.env.local'), { force: true })
       await rm(path.join(environmentRoot, '.env.dev.local'), { force: true })
-      const entryArgs = [path.join(project, 'scripts/run-node.mjs'), 'dev', environmentRoot, 'dist/index.js']
+      const entryArgs = [
+        path.join(project, 'scripts/run-node.mjs'),
+        'dev',
+        environmentRoot,
+        'dist/index.js',
+      ]
       const expectFailure = async (override: NodeJS.ProcessEnv, expected: string[]) => {
         let output = ''
         serverOutputs.push(() => `${appType} failure ${expected.join(', ')}\n${output}`)
-        const child = spawn(process.execPath, entryArgs, { cwd: service, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...runtimeEnvironment(service), PORT: String(selectedPort), HOST: '127.0.0.1', HAI_SERV_SERVER_PORT: String(selectedPort), ...override } })
+        const child = spawn(process.execPath, entryArgs, {
+          cwd: service,
+          windowsHide: true,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: {
+            ...runtimeEnvironment(service),
+            PORT: String(selectedPort),
+            HOST: '127.0.0.1',
+            HAI_SERV_SERVER_PORT: String(selectedPort),
+            ...override,
+          },
+        })
         processes.push(child)
         child.stdout?.on('data', (chunk: Buffer) => output = (output + chunk.toString()).slice(-16_000))
         child.stderr?.on('data', (chunk: Buffer) => output = (output + chunk.toString()).slice(-16_000))
@@ -359,11 +501,20 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
           await writeFile(profilePath, profile)
         }
       }
-      if (appType === 'fullstack')
-        await expectMissing('HAI_ADMIN_DEFAULT_PASSWORD', ['bootstrap', 'hai:core:013', '未设置必需的环境变量', '.env'])
+      if (appType === 'fullstack') {
+        await expectMissing('HAI_ADMIN_DEFAULT_PASSWORD', [
+          'bootstrap',
+          'hai:core:013',
+          '未设置必需的环境变量',
+          '.env',
+        ])
+      }
       base = await start(service, entryArgs, selectedPort)
       expect((await readFile(path.join(root, 'runtime-data/app.db'))).subarray(0, 16).toString()).toBe('SQLite format 3\0')
-      await expectFailure({}, ['EADDRINUSE', String(selectedPort)])
+      await expectFailure({}, [
+        'EADDRINUSE',
+        String(selectedPort),
+      ])
       if (appType === 'fullstack') {
         await expectMissing('HAI_CRYPTO_TRANSPORT_SERVERKEYRING', ['hai:crypto:'])
       }
@@ -374,16 +525,32 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
       clients.push(client)
       request = client.encryptedFetch
     }
-    const prefix = appType === 'website' ? '/api' : '/api/v1'
+    const prefix = appType === 'website'
+      ? '/api'
+      : '/api/v1'
     const list = await request(`${base}${prefix}/route-probe`)
     expect(list.status).toBe(200)
-    expect(await list.json()).toMatchObject({ success: true, data: { items: [] } })
+    expect(await list.json()).toMatchObject({
+      success: true,
+      data: { items: [] },
+    })
     if (appType !== 'website')
       expect((await request(`${base}${prefix}/aardvark-probe`)).status).toBe(200)
-    const created = await request(`${base}${prefix}/route-probe`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Actual HTTP route' }) })
+    const created = await request(`${base}${prefix}/route-probe`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Actual HTTP route' }),
+    })
     expect(created.status).toBe(200)
-    expect(await created.json()).toMatchObject({ success: true, data: { name: 'Actual HTTP route' } })
-    const invalid = await request(`${base}${prefix}/route-probe`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: '' }) })
+    expect(await created.json()).toMatchObject({
+      success: true,
+      data: { name: 'Actual HTTP route' },
+    })
+    const invalid = await request(`${base}${prefix}/route-probe`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: '' }),
+    })
     expect(invalid.status).toBe(400)
   }, 180_000)
 })

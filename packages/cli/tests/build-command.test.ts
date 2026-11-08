@@ -15,7 +15,15 @@ vi.mock('../src/commands/cli-build-downloads.js', async importOriginal => ({
   preflightDownloadProxy: vi.fn(),
 }))
 
-const state = vi.hoisted(() => ({ calls: [] as Array<{ command: string, args: string[], env: NodeJS.ProcessEnv, stdio: SpawnOptions['stdio'] }>, failPodman: false, failWeb: false, platform: 'linux/arm64', active: 0, peak: 0, copiedAppData: false }))
+const state = vi.hoisted(() => ({
+  calls: [] as Array<{ command: string, args: string[], env: NodeJS.ProcessEnv, stdio: SpawnOptions['stdio'] }>,
+  failPodman: false,
+  failWeb: false,
+  platform: 'linux/arm64',
+  active: 0,
+  peak: 0,
+  copiedAppData: false,
+}))
 vi.mock('node:child_process', async (importOriginal) => {
   const original = await importOriginal<typeof import('node:child_process')>()
   return {
@@ -27,7 +35,12 @@ vi.mock('node:child_process', async (importOriginal) => {
     },
     spawn: (command: string, args: string[], options: { cwd: string, env: NodeJS.ProcessEnv, stdio: SpawnOptions['stdio'] }) => {
       const child = new EventEmitter()
-      state.calls.push({ command, args, env: options.env, stdio: options.stdio })
+      state.calls.push({
+        command,
+        args,
+        env: options.env,
+        stdio: options.stdio,
+      })
       if (args[0] === 'build') {
         state.active++
         state.peak = Math.max(state.peak, state.active)
@@ -36,9 +49,15 @@ vi.mock('node:child_process', async (importOriginal) => {
         if (args[0] === 'save')
           writeFileSync(args[args.indexOf('-o') + 1], 'image archive')
         if (args.includes('tauri')) {
-          const bundle = join(options.cwd, 'src-tauri', 'target', args[args.indexOf('--target') + 1], args.includes('--debug') ? 'debug' : 'release', 'bundle')
+          const bundle = join(options.cwd, 'src-tauri', 'target', args[args.indexOf('--target') + 1], args.includes('--debug')
+            ? 'debug'
+            : 'release', 'bundle')
           mkdirSync(bundle, { recursive: true })
-          writeFileSync(join(bundle, process.platform === 'win32' ? 'test.exe' : process.platform === 'darwin' ? 'test.dmg' : 'test.deb'), 'installer')
+          writeFileSync(join(bundle, process.platform === 'win32'
+            ? 'test.exe'
+            : process.platform === 'darwin'
+              ? 'test.dmg'
+              : 'test.deb'), 'installer')
         }
         if (args[0] === 'run' && args.includes('hai-android') && args.includes('Release')) {
           const workspace = args.find(arg => arg.endsWith('target=/workspace'))?.match(/^type=bind,"source=(.+)",target=\/workspace$/)?.[1]
@@ -62,7 +81,15 @@ let root: string
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'hai-build-command-'))
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'sample-app', version: '1.2.3' }))
-  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'serv', dockerfile: 'images/serv.Dockerfile' }, { name: 'web', dockerfile: 'images/web.Dockerfile', containerPort: 8080 }], desktop: ['apps/desktop'] } }))
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({
+    build: {
+      images: [
+        { name: 'serv', dockerfile: 'images/serv.Dockerfile' },
+        { name: 'web', dockerfile: 'images/web.Dockerfile', containerPort: 8080 },
+      ],
+      desktop: ['apps/desktop'],
+    },
+  }))
   mkdirSync(join(root, 'images'), { recursive: true })
   mkdirSync(join(root, 'apps/desktop'), { recursive: true })
   writeFileSync(join(root, 'images/serv.Dockerfile'), 'FROM node:24.22.1-bookworm-slim')
@@ -81,7 +108,12 @@ beforeEach(() => {
 })
 
 it.each([1, 2])('镜像并发上限 %s 保留清单顺序并等待全部任务退出', async (concurrency) => {
-  await buildCommand({ cwd: root, target: 'image', runtime: 'docker', concurrency })
+  await buildCommand({
+    cwd: root,
+    target: 'image',
+    runtime: 'docker',
+    concurrency,
+  })
   expect(state.peak).toBe(concurrency)
   expect(state.active).toBe(0)
   const parent = join(root, '.hai/build/docker')
@@ -93,11 +125,26 @@ it('jSON 返回各次独立构建的真实来源、平台和归档校验值', as
   writeFileSync(join(root, '.gitignore'), '.hai/\nimages/dependencies/\n')
   execFileSync('git', ['init', '--quiet'], { cwd: root })
   execFileSync('git', ['add', '.'], { cwd: root })
-  execFileSync('git', ['-c', 'user.name=Build fixture', '-c', 'user.email=build@example.invalid', 'commit', '--quiet', '-m', 'fixture'], { cwd: root })
+  execFileSync('git', [
+    '-c',
+    'user.name=Build fixture',
+    '-c',
+    'user.email=build@example.invalid',
+    'commit',
+    '--quiet',
+    '-m',
+    'fixture',
+  ], { cwd: root })
   const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()
   const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
   try {
-    await Promise.all(['serv', 'web'].map(images => buildCommand({ cwd: root, target: 'image', images, runtime: 'docker', json: true })))
+    await Promise.all(['serv', 'web'].map(images => buildCommand({
+      cwd: root,
+      target: 'image',
+      images,
+      runtime: 'docker',
+      json: true,
+    })))
     const results = stdout.mock.calls.map(([line]) => JSON.parse(String(line)))
     expect(results).toHaveLength(2)
     expect(new Set(results.map(result => result.artifactDir)).size).toBe(2)
@@ -105,16 +152,34 @@ it('jSON 返回各次独立构建的真实来源、平台和归档校验值', as
     for (const result of results) {
       expect(result).toMatchObject({
         schemaVersion: 1,
-        manifest: { source: { commit, dirty: false }, images: [{ platform: 'linux/arm64', sha256: expect.stringMatching(/^[a-f0-9]{64}$/) }] },
+        manifest: {
+          source: { commit, dirty: false },
+          images: [
+            {
+              platform: 'linux/arm64',
+              sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+            },
+          ],
+        },
       })
       expect(result.manifestPath).toBe(join(result.artifactDir, 'manifest.json'))
       expect(await readDeploymentArtifact(result.artifactDir)).toEqual(result.manifest)
     }
     writeFileSync(join(root, 'draft.txt'), 'untracked input')
-    await buildCommand({ cwd: root, target: 'image', runtime: 'docker', json: true })
+    await buildCommand({
+      cwd: root,
+      target: 'image',
+      runtime: 'docker',
+      json: true,
+    })
     expect(JSON.parse(String(stdout.mock.lastCall?.[0])).manifest.source).toEqual({ commit, dirty: true })
     state.platform = 'invalid platform'
-    await expect(buildCommand({ cwd: root, target: 'image', runtime: 'docker', json: true })).rejects.toThrow()
+    await expect(buildCommand({
+      cwd: root,
+      target: 'image',
+      runtime: 'docker',
+      json: true,
+    })).rejects.toThrow()
     expect(stdout).toHaveBeenCalledTimes(3)
   }
   finally {
@@ -122,16 +187,136 @@ it('jSON 返回各次独立构建的真实来源、平台和归档校验值', as
   }
 })
 
+it('镜像来源覆盖子工程之外的真实构建上下文', async () => {
+  const app = join(root, 'apps/frontend')
+  mkdirSync(join(app, 'images'), { recursive: true })
+  mkdirSync(join(root, 'packages/shared'), { recursive: true })
+  writeFileSync(join(root, '.gitignore'), '.hai/\nimages/dependencies/\n')
+  writeFileSync(join(root, 'packages/shared/input.ts'), 'export const value = 1\n')
+  writeFileSync(join(app, 'package.json'), JSON.stringify({ name: 'frontend', version: '1.2.3' }))
+  writeFileSync(join(app, 'hai.json'), JSON.stringify({
+    build: {
+      images: [
+        { name: 'web', context: '../..', dockerfile: 'images/web.Dockerfile' },
+      ],
+    },
+  }))
+  writeFileSync(join(app, 'images/web.Dockerfile'), 'FROM node:24.22.1-bookworm-slim')
+  execFileSync('git', ['init', '--quiet'], { cwd: root })
+  execFileSync('git', ['add', '.'], { cwd: root })
+  execFileSync('git', [
+    '-c',
+    'user.name=Build fixture',
+    '-c',
+    'user.email=build@example.invalid',
+    'commit',
+    '--quiet',
+    '-m',
+    'fixture',
+  ], { cwd: root })
+  const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+  try {
+    await buildCommand({
+      cwd: app,
+      target: 'image',
+      runtime: 'docker',
+      json: true,
+    })
+    expect(JSON.parse(String(stdout.mock.lastCall?.[0])).manifest.source.dirty).toBe(false)
+    writeFileSync(join(root, 'packages/shared/input.ts'), 'export const value = 2\n')
+    await buildCommand({
+      cwd: app,
+      target: 'image',
+      runtime: 'docker',
+      json: true,
+    })
+    expect(JSON.parse(String(stdout.mock.lastCall?.[0])).manifest.source.dirty).toBe(true)
+  }
+  finally {
+    stdout.mockRestore()
+  }
+})
+
+it('上下文属于被父仓库忽略的嵌套仓库时不能冒用工程提交标为干净', async () => {
+  const nested = join(root, 'external-context')
+  writeFileSync(join(root, '.gitignore'), '.hai/\nimages/dependencies/\nexternal-context/\n')
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({
+    build: {
+      images: [
+        { name: 'web', context: 'external-context', dockerfile: 'images/web.Dockerfile' },
+      ],
+    },
+  }))
+  execFileSync('git', ['init', '--quiet'], { cwd: root })
+  execFileSync('git', ['add', '.'], { cwd: root })
+  execFileSync('git', [
+    '-c',
+    'user.name=Build fixture',
+    '-c',
+    'user.email=build@example.invalid',
+    'commit',
+    '--quiet',
+    '-m',
+    'project',
+  ], { cwd: root })
+  mkdirSync(nested)
+  writeFileSync(join(nested, 'input.txt'), 'separate repository input')
+  execFileSync('git', ['init', '--quiet'], { cwd: nested })
+  execFileSync('git', ['add', '.'], { cwd: nested })
+  execFileSync('git', [
+    '-c',
+    'user.name=Build fixture',
+    '-c',
+    'user.email=build@example.invalid',
+    'commit',
+    '--quiet',
+    '-m',
+    'context',
+  ], { cwd: nested })
+  const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+  try {
+    await buildCommand({
+      cwd: root,
+      target: 'image',
+      runtime: 'docker',
+      json: true,
+    })
+    expect(JSON.parse(String(stdout.mock.lastCall?.[0])).manifest.source.dirty).toBeNull()
+  }
+  finally {
+    stdout.mockRestore()
+  }
+})
+
 it.each(['docker', 'podman'] as const)('选源和代理参数实际传递给 %s 构建', async (runtime) => {
-  for (const name of ['serv', 'web'])
-    writeFileSync(join(root, `images/${name}.Dockerfile`), ['ARG HAI_NODE_IMAGE=node:24.22.1-bookworm-slim', 'ARG HAI_NGINX_IMAGE=nginxinc/nginx-unprivileged:1.29.8-alpine', 'FROM $' + '{HAI_NODE_IMAGE}', 'ARG HAI_NPM_REGISTRY=https://registry.npmjs.org'].join('\n'))
-  await buildCommand({ cwd: root, target: 'image', runtime, network: runtime === 'podman' ? 'pasta' : undefined, imageSource: 'cn', npmSource: 'cn', proxyUrl: 'http://127.0.0.1:10808', yes: true })
+  for (const name of ['serv', 'web']) {
+    writeFileSync(join(root, `images/${name}.Dockerfile`), [
+      'ARG HAI_NODE_IMAGE=node:24.22.1-bookworm-slim',
+      'ARG HAI_NGINX_IMAGE=nginxinc/nginx-unprivileged:1.29.8-alpine',
+      'FROM $' + '{HAI_NODE_IMAGE}',
+      'ARG HAI_NPM_REGISTRY=https://registry.npmjs.org',
+    ].join('\n'))
+  }
+  await buildCommand({
+    cwd: root,
+    target: 'image',
+    runtime,
+    network: runtime === 'podman'
+      ? 'pasta'
+      : undefined,
+    imageSource: 'cn',
+    npmSource: 'cn',
+    proxyUrl: 'http://127.0.0.1:10808',
+    yes: true,
+  })
   const builds = state.calls.filter(call => call.args[0] === 'build')
   expect(builds).toHaveLength(2)
   for (const { args } of builds) {
     expect(args).toContain('HAI_NODE_IMAGE=docker.1ms.run/library/node:24.22.1-bookworm-slim')
     expect(args).toContain('HAI_NPM_REGISTRY=https://registry.npmmirror.com')
-    expect(args).toContain(`HTTPS_PROXY=http://${runtime === 'podman' ? 'host.containers.internal' : 'host.docker.internal'}:10808`)
+    expect(args).toContain(`HTTPS_PROXY=http://${runtime === 'podman'
+      ? 'host.containers.internal'
+      : 'host.docker.internal'}:10808`)
   }
 })
 
@@ -156,7 +341,9 @@ afterEach(() => {
 })
 
 it('构建批次使用工程标识、可读本地时间和末尾版本，清单身份独立于目录名', async () => {
-  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.useFakeTimers({
+    toFake: ['Date'],
+  })
   vi.setSystemTime(new Date(2026, 10, 5, 17, 19, 24))
   await buildCommand({ cwd: root, target: 'image', runtime: 'docker' })
   const parent = join(root, '.hai/build/docker')
@@ -168,14 +355,41 @@ it('构建批次使用工程标识、可读本地时间和末尾版本，清单�
   expect((await readDeploymentArtifact(join(parent, directory))).buildId).toBe(manifest.buildId)
 })
 
-it.each([{ names: ['serv'] }, { names: ['web'] }, { names: ['serv', 'web'] }])('按交付职责构建，镜像身份来自根包名而非目录：$names', async ({ names }) => {
+it.each([
+  {
+    names: ['serv'],
+  },
+  {
+    names: ['web'],
+  },
+  {
+    names: ['serv', 'web'],
+  },
+])('按交付职责构建，镜像身份来自根包名而非目录：$names', async ({ names }) => {
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: '@example/Order_Portal', version: '1.2.3' }))
-  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: names.map(name => ({ name, dockerfile: `images/${name}.Dockerfile`, containerPort: name === 'serv' ? 3000 : 8080 })) } }))
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({
+    build: {
+      images: names.map(name => ({
+        name,
+        dockerfile: `images/${name}.Dockerfile`,
+        containerPort: name === 'serv'
+          ? 3000
+          : 8080,
+      })),
+    },
+  }))
   writeFileSync(join(root, 'images/serv.Dockerfile'), 'FROM node:24.22.1-bookworm-slim')
   await buildCommand({ cwd: root, target: 'image', runtime: 'docker' })
   const parent = join(root, '.hai/build/docker')
   const manifest = JSON.parse(readFileSync(join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim(), 'manifest.json'), 'utf8'))
-  expect(manifest).toMatchObject({ version: 4, primaryService: names.includes('serv') ? 'serv' : 'web', hasWeb: names.includes('web'), partial: false })
+  expect(manifest).toMatchObject({
+    version: 4,
+    primaryService: names.includes('serv')
+      ? 'serv'
+      : 'web',
+    hasWeb: names.includes('web'),
+    partial: false,
+  })
   expect(manifest.images.map((image: { name: string }) => image.name)).toEqual(names)
   for (const image of manifest.images)
     expect(image.imageRef).toBe(`localhost/hai-order-portal-${image.name}:${manifest.buildId}`)
@@ -191,7 +405,12 @@ it('从 workspace 构建仍使用工程根名称、配置与产物目录', async
   const service = join(root, 'packages/different-serv')
   mkdirSync(service, { recursive: true })
   writeFileSync(join(service, 'package.json'), JSON.stringify({ name: 'different-serv', version: '9.9.9' }))
-  await buildCommand({ cwd: service, target: 'image', images: 'serv', runtime: 'docker' })
+  await buildCommand({
+    cwd: service,
+    target: 'image',
+    images: 'serv',
+    runtime: 'docker',
+  })
   const parent = join(root, '.hai/build/docker')
   const manifest = JSON.parse(readFileSync(join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim(), 'manifest.json'), 'utf8'))
   expect(manifest.appVersion).toBe('1.2.3')
@@ -222,7 +441,10 @@ it('pnpm build 默认编译源码，不选择环境、不调用容器工具', as
   vi.stubEnv('NODE_ENV', 'test')
   await buildCommand({ cwd: root })
   expect(state.calls).toHaveLength(1)
-  expect(state.calls[0]).toMatchObject({ command: process.execPath, args: ['/tools/pnpm.cjs', 'run', 'compile'] })
+  expect(state.calls[0]).toMatchObject({
+    command: process.execPath,
+    args: ['/tools/pnpm.cjs', 'run', 'compile'],
+  })
   expect(state.calls[0].env.HAI_DEPLOY_ENVIRONMENT).toBeUndefined()
   expect(state.calls[0].env.PUBLIC_API_BASE).toBeUndefined()
   expect(state.calls[0].env.HAI_E2E).toBeUndefined()
@@ -278,9 +500,19 @@ it('网站挂载前缀只作为Web镜像的公开构建参数，不传给serv或
   expect(manifest.version).toBe(5)
   expect(builds.find(call => call.args.includes(join(root, 'images/web.Dockerfile')))?.args).toEqual(expect.arrayContaining(['--build-arg', 'PUBLIC_BASE_PATH=/yyy/sub']))
   expect(builds.find(call => call.args.includes(join(root, 'images/serv.Dockerfile')))?.args).not.toContain('PUBLIC_BASE_PATH=/yyy/sub')
-  await buildCommand({ cwd: root, target: 'image', images: 'serv', runtime: 'docker' })
+  await buildCommand({
+    cwd: root,
+    target: 'image',
+    images: 'serv',
+    runtime: 'docker',
+  })
   const partial = JSON.parse(readFileSync(join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim(), 'manifest.json'), 'utf8'))
-  expect(partial).toMatchObject({ version: 5, webBasePath: '/yyy/sub', partial: true, hasWeb: true })
+  expect(partial).toMatchObject({
+    version: 5,
+    webBasePath: '/yyy/sub',
+    partial: true,
+    hasWeb: true,
+  })
   expect(partial.images.map((image: { name: string }) => image.name)).toEqual(['serv'])
   for (const target of ['app', 'desktop'] as const)
     await expect(buildCommand({ cwd: root, target })).rejects.toThrow()
@@ -288,12 +520,26 @@ it('网站挂载前缀只作为Web镜像的公开构建参数，不传给serv或
 
 it('没有声明Web镜像时，在探测容器引擎前拒绝网站挂载配置', async () => {
   vi.stubEnv('PUBLIC_BASE_PATH', '/yyy')
-  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'serv', dockerfile: 'images/serv.Dockerfile' }] } }))
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({
+    build: {
+      images: [
+        { name: 'serv', dockerfile: 'images/serv.Dockerfile' },
+      ],
+    },
+  }))
   await expect(buildCommand({ cwd: root, target: 'image', runtime: 'docker' })).rejects.toThrow('web')
   expect(state.calls).toEqual([])
 })
 
-it.each(['https://example.invalid', '//example.invalid', '/a/../b', '/a/%2e%2e/b', '/a\\b', '/a/', '/a?x=1'])('compile在运行子进程前拒绝非法PUBLIC_BASE_PATH：%s', async (base) => {
+it.each([
+  'https://example.invalid',
+  '//example.invalid',
+  '/a/../b',
+  '/a/%2e%2e/b',
+  '/a\\b',
+  '/a/',
+  '/a?x=1',
+])('compile在运行子进程前拒绝非法PUBLIC_BASE_PATH：%s', async (base) => {
   vi.stubEnv('HAI_BUILD_STATIC', '1')
   vi.stubEnv('PUBLIC_BASE_PATH', base)
   await expect(buildCommand({ cwd: root })).rejects.toThrow('PUBLIC_BASE_PATH')
@@ -316,7 +562,16 @@ it('构建身份使用当前受Git管理工程的精确提交，未跟踪的子�
   // Windows runner 的 tmpdir 可能使用 8.3 短名；manifest 跟踪状态必须由当前目录下的 Git 判断。
   execFileSync('git', ['init', '--quiet'], { cwd: root })
   execFileSync('git', ['add', 'package.json'], { cwd: root })
-  execFileSync('git', ['-c', 'user.name=Build fixture', '-c', 'user.email=build@example.invalid', 'commit', '--quiet', '-m', 'fixture'], { cwd: root })
+  execFileSync('git', [
+    '-c',
+    'user.name=Build fixture',
+    '-c',
+    'user.email=build@example.invalid',
+    'commit',
+    '--quiet',
+    '-m',
+    'fixture',
+  ], { cwd: root })
   const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()
   await buildCommand({ cwd: root })
   expect(state.calls[0]!.env.HAI_BUILD_COMMIT).toBe(commit)
@@ -338,7 +593,12 @@ it('docker 将同一次制品身份显式交给每个镜像编译，不继承外
   const directory = readFileSync(join(parent, 'latest'), 'utf8').trim()
   const { buildId } = JSON.parse(readFileSync(join(parent, directory, 'manifest.json'), 'utf8'))
   for (const build of state.calls.filter(call => call.args[0] === 'build')) {
-    expect(build.args).toEqual(expect.arrayContaining(['--build-arg', `HAI_BUILD_ID=${buildId}`, '--build-arg', 'HAI_BUILD_COMMIT=unknown']))
+    expect(build.args).toEqual(expect.arrayContaining([
+      '--build-arg',
+      `HAI_BUILD_ID=${buildId}`,
+      '--build-arg',
+      'HAI_BUILD_COMMIT=unknown',
+    ]))
     expect(build.args).not.toContain('HAI_BUILD_ID=forged-docker-build')
   }
 })
@@ -347,7 +607,15 @@ it('优先 Podman，全部镜像构建成功才发布清单，清单不含环境
   const builds = state.calls.filter(call => call.args[0] === 'build')
   expect(builds).toHaveLength(2)
   expect(builds.every(call => call.command === 'podman')).toBe(true)
-  expect(builds[1].args).toEqual(expect.arrayContaining(['--format', 'docker', '--jobs', '1', '--http-proxy=false', '-f', join(root, 'images/web.Dockerfile')]))
+  expect(builds[1].args).toEqual(expect.arrayContaining([
+    '--format',
+    'docker',
+    '--jobs',
+    '1',
+    '--http-proxy=false',
+    '-f',
+    join(root, 'images/web.Dockerfile'),
+  ]))
   expect(JSON.stringify(builds)).not.toContain('HAI_CORE_ENV')
   const parent = join(root, '.hai/build/docker')
   const latest = readFileSync(join(parent, 'latest'), 'utf8').trim()
@@ -370,7 +638,15 @@ it('只构建 Web 并记录部分制品，未知镜像名在启动引擎前失�
   expect(calls[0]!.args).not.toContain('--target')
   const parent = join(root, '.hai/build/docker')
   const manifest = JSON.parse(readFileSync(join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim(), 'manifest.json'), 'utf8'))
-  expect(manifest).toMatchObject({ version: 4, primaryService: 'serv', partial: true, hasWeb: true, images: [{ name: 'web' }] })
+  expect(manifest).toMatchObject({
+    version: 4,
+    primaryService: 'serv',
+    partial: true,
+    hasWeb: true,
+    images: [
+      { name: 'web' },
+    ],
+  })
   expect(manifest.servContainerPort).toBeUndefined()
   expect(manifest.webContainerPort).toBe(8080)
   state.calls = []
@@ -379,11 +655,26 @@ it('只构建 Web 并记录部分制品，未知镜像名在启动引擎前失�
 })
 
 it.each(['serv', 'web'])('部分构建保留未选镜像的显式容器端口：%s', async (selected) => {
-  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'serv', dockerfile: 'images/serv.Dockerfile', containerPort: 4100 }, { name: 'web', dockerfile: 'images/web.Dockerfile', containerPort: 8181 }] } }))
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({
+    build: {
+      images: [
+        { name: 'serv', dockerfile: 'images/serv.Dockerfile', containerPort: 4100 },
+        { name: 'web', dockerfile: 'images/web.Dockerfile', containerPort: 8181 },
+      ],
+    },
+  }))
   await buildCommand({ cwd: root, target: 'image', images: selected })
   const parent = join(root, '.hai/build/docker')
   const manifest = JSON.parse(readFileSync(join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim(), 'manifest.json'), 'utf8'))
-  expect(manifest).toMatchObject({ partial: true, hasWeb: true, servContainerPort: 4100, webContainerPort: 8181, images: [{ name: selected }] })
+  expect(manifest).toMatchObject({
+    partial: true,
+    hasWeb: true,
+    servContainerPort: 4100,
+    webContainerPort: 8181,
+    images: [
+      { name: selected },
+    ],
+  })
   expect(manifest.images).toHaveLength(1)
 })
 
@@ -425,11 +716,21 @@ it('podman 不可达则用 Docker；显式 Docker 不探测 Podman', async () =>
 })
 it('构建时显式向 Podman 传递主机代理，关闭时不传递', async () => {
   vi.stubEnv('HTTPS_PROXY', 'http://host.containers.internal:10808')
-  await buildCommand({ cwd: root, target: 'image', runtime: 'podman', network: 'pasta' })
+  await buildCommand({
+    cwd: root,
+    target: 'image',
+    runtime: 'podman',
+    network: 'pasta',
+  })
   expect(state.calls.find(call => call.args[0] === 'build')?.args).toEqual(expect.arrayContaining(['--network', 'pasta']))
   expect(state.calls.find(call => call.args[0] === 'build')?.args).toContain('HTTPS_PROXY=http://host.containers.internal:10808')
   state.calls = []
-  await buildCommand({ cwd: root, target: 'image', runtime: 'podman', httpProxy: false })
+  await buildCommand({
+    cwd: root,
+    target: 'image',
+    runtime: 'podman',
+    httpProxy: false,
+  })
   expect(state.calls.find(call => call.args[0] === 'build')?.args).not.toContain('HTTPS_PROXY=http://host.containers.internal:10808')
 })
 
@@ -444,13 +745,25 @@ it('web 构建失败清理半成品和镜像，不覆盖已有成功构建', asy
   expect(state.calls.filter(call => call.args[0] === 'image' && call.args[1] === 'rm')).toHaveLength(2)
 })
 it('当前 pnpm 是原生可执行文件时直接启动；JS 入口继续由 Node 启动', async () => {
-  for (const entry of ['/tools/pnpm.exe', '/tools/pnpm', '/tools/pnpm-native.exe', '/tools/pnpm-native', '/tools/pnpm.mjs']) {
+  for (const entry of [
+    '/tools/pnpm.exe',
+    '/tools/pnpm',
+    '/tools/pnpm-native.exe',
+    '/tools/pnpm-native',
+    '/tools/pnpm.mjs',
+  ]) {
     state.calls = []
     vi.stubEnv('npm_execpath', entry)
     await buildCommand({ cwd: root })
     expect(state.calls[0]).toMatchObject(entry.endsWith('.mjs')
-      ? { command: process.execPath, args: [entry, 'run', 'compile'] }
-      : { command: entry, args: ['run', 'compile'] })
+      ? {
+          command: process.execPath,
+          args: [entry, 'run', 'compile'],
+        }
+      : {
+          command: entry,
+          args: ['run', 'compile'],
+        })
   }
 })
 
@@ -460,32 +773,82 @@ it.skipIf(process.platform !== 'win32')('直接调用 CLI 时支持 PATH 中的�
   const executable = join(root, 'pnpm.exe')
   writeFileSync(executable, '')
   await buildCommand({ cwd: root })
-  expect(state.calls[0]).toMatchObject({ command: executable, args: ['run', 'compile'] })
+  expect(state.calls[0]).toMatchObject({
+    command: executable,
+    args: ['run', 'compile'],
+  })
 })
 
 it('tauri 构建按目标平台和类型归档，并拒绝其他系统的伪跨编译', async () => {
   vi.stubEnv('CI', '1')
-  await buildCommand({ cwd: root, target: 'desktop', arch: 'x64', debug: true })
+  await buildCommand({
+    cwd: root,
+    target: 'desktop',
+    arch: 'x64',
+    debug: true,
+  })
   expect(state.calls[0].env.CI).toBe('true')
-  expect(state.calls[0].args).toEqual(expect.arrayContaining(['exec', 'tauri', 'build', '--target', process.platform === 'win32' ? 'x86_64-pc-windows-msvc' : process.platform === 'darwin' ? 'x86_64-apple-darwin' : 'x86_64-unknown-linux-gnu']))
+  expect(state.calls[0].args).toEqual(expect.arrayContaining([
+    'exec',
+    'tauri',
+    'build',
+    '--target',
+    process.platform === 'win32'
+      ? 'x86_64-pc-windows-msvc'
+      : process.platform === 'darwin'
+        ? 'x86_64-apple-darwin'
+        : 'x86_64-unknown-linux-gnu',
+  ]))
   expect(state.calls[0].args).toContain('--debug')
   expect(JSON.parse(state.calls[0].args[state.calls[0].args.indexOf('--config') + 1])).toMatchObject({ version: '1.2.3' })
-  const platform = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux'
+  const platform = process.platform === 'win32'
+    ? 'windows'
+    : process.platform === 'darwin'
+      ? 'macos'
+      : 'linux'
   const parent = join(root, '.hai/build/desktop', platform, 'debug')
   const batch = join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim())
   const manifest = JSON.parse(readFileSync(join(batch, 'manifest.json'), 'utf8'))
-  expect(manifest).toMatchObject({ kind: 'desktop', platform, variant: 'debug', appVersion: '1.2.3', files: [{ sha256: expect.stringMatching(/^[a-f0-9]{64}$/) }] })
+  expect(manifest).toMatchObject({
+    kind: 'desktop',
+    platform,
+    variant: 'debug',
+    appVersion: '1.2.3',
+    files: [
+      {
+        sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      },
+    ],
+  })
   expect(manifest.arch).toBe('x64')
-  expect(manifest.files[0].file).toBe(`apps/desktop/sample-app-${platform}-x64-debug-1.2.3${platform === 'windows' ? '-setup.exe' : platform === 'macos' ? '.dmg' : '.deb'}`)
+  expect(manifest.files[0].file).toBe(`apps/desktop/sample-app-${platform}-x64-debug-1.2.3${platform === 'windows'
+    ? '-setup.exe'
+    : platform === 'macos'
+      ? '.dmg'
+      : '.deb'}`)
   expect(readFileSync(join(batch, manifest.files[0].file), 'utf8')).toBe('installer')
   state.calls = []
-  await expect(buildCommand({ cwd: root, target: 'desktop', platform: process.platform === 'win32' ? 'linux' : 'windows' })).rejects.toThrow()
+  await expect(buildCommand({
+    cwd: root,
+    target: 'desktop',
+    platform: process.platform === 'win32'
+      ? 'linux'
+      : 'windows',
+  })).rejects.toThrow()
   expect(state.calls).toHaveLength(0)
 })
 
 it('desktop uses its configured Tauri script and forwards only the Core name and mode', async () => {
-  writeFileSync(join(root, 'apps/desktop/package.json'), JSON.stringify({ scripts: { tauri: 'node ../../scripts/run-tauri.mjs ../.. config/_core.yml' } }))
-  vi.stubEnv('HAI_CORE', JSON.stringify({ name: 'Configured Desktop', env: 'test', logging: { context: { secret: 'private-context' } } }))
+  writeFileSync(join(root, 'apps/desktop/package.json'), JSON.stringify({
+    scripts: { tauri: 'node ../../scripts/run-tauri.mjs ../.. config/_core.yml' },
+  }))
+  vi.stubEnv('HAI_CORE', JSON.stringify({
+    name: 'Configured Desktop',
+    env: 'test',
+    logging: {
+      context: { secret: 'private-context' },
+    },
+  }))
   vi.stubEnv('HAI_DB_PASSWORD', 'private-password')
   await buildCommand({ cwd: root, target: 'desktop', arch: 'x64' })
   expect(state.calls[0].args).toEqual(expect.arrayContaining(['run', 'tauri', 'build']))
@@ -495,7 +858,12 @@ it('desktop uses its configured Tauri script and forwards only the Core name and
 })
 
 it('iOS 和源码构建拒绝不适用的容器与调试参数', async () => {
-  await expect(buildCommand({ cwd: root, target: 'app', platform: 'ios', runtime: 'docker' })).rejects.toThrow(/Xcode/)
+  await expect(buildCommand({
+    cwd: root,
+    target: 'app',
+    platform: 'ios',
+    runtime: 'docker',
+  })).rejects.toThrow(/Xcode/)
   await expect(buildCommand({ cwd: root, target: 'compile', debug: true })).rejects.toThrow()
   expect(state.calls).toHaveLength(0)
 })
@@ -509,7 +877,11 @@ it('容器 Android 从锁文件所在 workspace 构建，只有独立签名步�
   writeFileSync(join(app, 'capacitor.config.ts'), 'export default {}')
   writeFileSync(join(app, 'src/data/example.json'), '{}')
   writeFileSync(join(app, 'package.json'), JSON.stringify({ name: 'sample-mobile', version: '1.2.3' }))
-  writeFileSync(join(app, 'hai.json'), JSON.stringify({ build: { app: ['.'] } }))
+  writeFileSync(join(app, 'hai.json'), JSON.stringify({
+    build: {
+      app: ['.'],
+    },
+  }))
   writeFileSync(join(app, '.env.prod'), 'HAI_CORE_NAME=Container Native\nHAI_DB_PASSWORD=private-env-password\n')
   writeFileSync(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0')
   writeFileSync(join(definition, 'android.Dockerfile'), 'ARG HAI_ANDROID_IMAGE=ghcr.io/example/sdk:36\nFROM $' + '{HAI_ANDROID_IMAGE}')
@@ -519,7 +891,13 @@ it('容器 Android 从锁文件所在 workspace 构建，只有独立签名步�
   vi.stubEnv('HAI_ANDROID_STORE_PASSWORD', 'fixture-store-password')
   vi.stubEnv('HAI_ANDROID_KEY_ALIAS', 'fixture-alias')
   vi.stubEnv('HAI_ANDROID_KEY_PASSWORD', 'fixture-key-password')
-  await buildCommand({ cwd: app, target: 'app', platform: 'android', runtime: 'docker', yes: true })
+  await buildCommand({
+    cwd: app,
+    target: 'app',
+    platform: 'android',
+    runtime: 'docker',
+    yes: true,
+  })
   const [build, sign] = state.calls.filter(call => call.args[0] === 'run')
   expect(state.copiedAppData).toBe(true)
   expect(build.args.at(-1)).toBe('apps/mobile')
@@ -543,7 +921,13 @@ it('容器 Android 从锁文件所在 workspace 构建，只有独立签名步�
       writeFileSync(join(bin, command), '#!/bin/bash\nexit 0\n', { mode: 0o755 })
     writeFileSync(join(appDirectory, 'gradlew'), '#!/bin/bash\nnode -e \'require("node:fs").writeFileSync(process.env.GRADLE_CAPTURE, JSON.stringify(process.argv.slice(1)))\' -- "$@"\n')
     const script = build.args[build.args.indexOf('-c') + 1].replaceAll('/workspace', workspace).replaceAll('/cache', cache)
-    execFileSync('bash', ['-c', script, 'hai-android', 'Debug', 'apps/mobile'], {
+    execFileSync('bash', [
+      '-c',
+      script,
+      'hai-android',
+      'Debug',
+      'apps/mobile',
+    ], {
       timeout: 10_000,
       env: {
         ...process.env,
@@ -555,7 +939,15 @@ it('容器 Android 从锁文件所在 workspace 构建，只有独立签名步�
       },
     })
     const args = JSON.parse(readFileSync(capture, 'utf8'))
-    expect(args).toEqual(expect.arrayContaining(['--no-daemon', 'assembleDebug', '-Dhttp.proxyHost=proxy.example.test', '-Dhttp.proxyPort=8080', '-Dhttps.proxyHost=proxy.example.test', '-Dhttps.proxyPort=8080', '-Dhttp.nonProxyHosts=localhost|*.example.test']))
+    expect(args).toEqual(expect.arrayContaining([
+      '--no-daemon',
+      'assembleDebug',
+      '-Dhttp.proxyHost=proxy.example.test',
+      '-Dhttp.proxyPort=8080',
+      '-Dhttps.proxyHost=proxy.example.test',
+      '-Dhttps.proxyPort=8080',
+      '-Dhttp.nonProxyHosts=localhost|*.example.test',
+    ]))
   }
   expect(build.args.join(' ')).not.toContain(keystore)
   expect(sign.args).toEqual(expect.arrayContaining(['--network', 'none', 'HAI_ANDROID_KEY_PASSWORD']))
@@ -572,7 +964,13 @@ it('错误版本、容器端口或不适用的构建参数在启动工具前失�
     await expect(buildCommand({ cwd: root, target: 'image' })).rejects.toThrow()
   }
   writeFileSync(join(root, 'package.json'), JSON.stringify({ version: '1.2.3' }))
-  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'serv', containerPort: 70000 }] } }))
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({
+    build: {
+      images: [
+        { name: 'serv', containerPort: 70000 },
+      ],
+    },
+  }))
   await expect(buildCommand({ cwd: root, target: 'image' })).rejects.toThrow()
   await expect(buildCommand({ cwd: root, target: 'compile', runtime: 'docker' })).rejects.toThrow()
   await expect(buildCommand({ cwd: root, target: 'compile', network: 'pasta' })).rejects.toThrow()
@@ -582,10 +980,23 @@ it('错误版本、容器端口或不适用的构建参数在启动工具前失�
 })
 
 it('dockerfile 阶段与 SQLite 镜像参数传给所选引擎，非法镜像地址不会启动构建', async () => {
-  await buildCommand({ cwd: root, target: 'image', runtime: 'docker', sqlitePrebuildMirror: 'http://mirror.internal/better-sqlite3' })
+  await buildCommand({
+    cwd: root,
+    target: 'image',
+    runtime: 'docker',
+    sqlitePrebuildMirror: 'http://mirror.internal/better-sqlite3',
+  })
   expect(state.calls.filter(call => call.args[0] === 'build').map(call => call.args)).toEqual([
-    expect.arrayContaining(['-f', join(root, 'images/serv.Dockerfile'), '--build-arg', 'SQLITE_PREBUILD_MIRROR=http://mirror.internal/better-sqlite3']),
-    expect.arrayContaining(['-f', join(root, 'images/web.Dockerfile')]),
+    expect.arrayContaining([
+      '-f',
+      join(root, 'images/serv.Dockerfile'),
+      '--build-arg',
+      'SQLITE_PREBUILD_MIRROR=http://mirror.internal/better-sqlite3',
+    ]),
+    expect.arrayContaining([
+      '-f',
+      join(root, 'images/web.Dockerfile'),
+    ]),
   ])
   state.calls = []
   for (const url of ['file:///binary', 'https://user:password@mirror.internal', 'https://mirror.internal?token=private'])

@@ -56,7 +56,7 @@ function object(value: unknown): Record<string, unknown> {
 function registryUrl(value: unknown): string {
   try {
     if (typeof value !== 'string')
-      throw new Error('Missing registry')
+      throw new TypeError('Missing registry')
     const url = new URL(value)
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)
       throw new Error('Invalid registry')
@@ -86,16 +86,27 @@ export async function resolveBuildDownloads(directory: string, options: BuildDow
   const savedProxy = object(build.proxy)
   const interactive = !!process.stdin.isTTY && !options.yes
   const choose = async (message: string, values: Array<'official' | 'cn' | 'custom' | 'inherit' | 'system' | 'none'>): Promise<string> => {
-    const answer = await prompts({ type: 'select', name: 'value', message, choices: values.map(value => ({ title: cliM(`cli_download_${value}`), value })) })
+    const answer = await prompts({
+      type: 'select',
+      name: 'value',
+      message,
+      choices: values.map(value => ({
+        title: cliM(`cli_download_${value}`),
+        value,
+      })),
+    })
     if (typeof answer.value !== 'string')
-      throw new Error(cliM('cli_deploy_cancelled'))
+      throw new TypeError(cliM('cli_deploy_cancelled'))
     return answer.value
   }
   const mirrorEntries = options.imageMirrors?.split(',').map((entry) => {
     const separator = entry.indexOf('=')
     if (separator <= 0 || separator === entry.length - 1)
       throw new Error(cliM('cli_download_invalid'))
-    return [entry.slice(0, separator).trim(), entry.slice(separator + 1).trim()]
+    return [
+      entry.slice(0, separator).trim(),
+      entry.slice(separator + 1).trim(),
+    ]
   })
   if (mirrorEntries && new Set(mirrorEntries.map(([key]) => key)).size !== mirrorEntries.length)
     throw new Error(cliM('cli_download_invalid'))
@@ -111,22 +122,38 @@ export async function resolveBuildDownloads(directory: string, options: BuildDow
   npmType ??= 'official'
   if (typeof imageType !== 'string' || !['official', 'cn', 'custom'].includes(imageType) || typeof npmType !== 'string' || !['official', 'cn', 'custom'].includes(npmType))
     throw new Error(cliM('cli_download_invalid'))
-  let registries = mirrorEntries ? Object.fromEntries(mirrorEntries) : savedImage.registries
+  let registries = mirrorEntries
+    ? Object.fromEntries(mirrorEntries)
+    : savedImage.registries
   if (imageType === 'custom' && !registries && interactive) {
-    const answer = await prompts({ type: 'text', name: 'value', message: cliM('cli_download_image_mirrors') })
+    const answer = await prompts({
+      type: 'text',
+      name: 'value',
+      message: cliM('cli_download_image_mirrors'),
+    })
     if (typeof answer.value !== 'string' || !answer.value.trim())
       throw new Error(cliM('cli_deploy_cancelled'))
     registries = Object.fromEntries(answer.value.split(',').map((entry: string) => {
       const index = entry.indexOf('=')
       if (index <= 0)
         throw new Error(cliM('cli_download_invalid'))
-      return [entry.slice(0, index).trim(), entry.slice(index + 1).trim()]
+      return [
+        entry.slice(0, index).trim(),
+        entry.slice(index + 1).trim(),
+      ]
     }))
   }
-  const mappings = registries === undefined ? undefined : object(registries)
+  const mappings = registries === undefined
+    ? undefined
+    : object(registries)
   if (mappings && Object.entries(mappings).some(([key, value]) => !/^[\w.-]+(?::\d+)?$/.test(key) || typeof value !== 'string'))
     throw new Error(cliM('cli_download_invalid'))
-  const imageSource: ImageSourceConfig = { type: imageType as ImageSourceConfig['type'], ...(imageType === 'custom' ? { registries: mappings as Record<string, string> | undefined } : {}) }
+  const imageSource: ImageSourceConfig = {
+    type: imageType as ImageSourceConfig['type'],
+    ...(imageType === 'custom'
+      ? { registries: mappings as Record<string, string> | undefined }
+      : {}),
+  }
   if (mirrorEntries && imageType !== 'custom')
     throw new Error(cliM('cli_download_invalid'))
   if (imageType === 'custom') {
@@ -136,15 +163,28 @@ export async function resolveBuildDownloads(directory: string, options: BuildDow
   }
   let customRegistry = options.npmRegistry ?? savedNpm.registry
   if (npmType === 'custom' && !customRegistry && interactive) {
-    const answer = await prompts({ type: 'text', name: 'value', message: cliM('cli_download_npm_registry') })
+    const answer = await prompts({
+      type: 'text',
+      name: 'value',
+      message: cliM('cli_download_npm_registry'),
+    })
     if (typeof answer.value !== 'string' || !answer.value.trim())
       throw new Error(cliM('cli_deploy_cancelled'))
     customRegistry = answer.value
   }
   if (options.npmRegistry && npmType !== 'custom')
     throw new Error(cliM('cli_download_invalid'))
-  const npmRegistry = npmType === 'cn' ? 'https://registry.npmmirror.com' : npmType === 'official' ? 'https://registry.npmjs.org' : registryUrl(customRegistry)
-  const npmSource: BuildDownloads['npmSource'] = { type: npmType as BuildDownloads['npmSource']['type'], ...(npmType === 'custom' ? { registry: npmRegistry } : {}) }
+  const npmRegistry = npmType === 'cn'
+    ? 'https://registry.npmmirror.com'
+    : npmType === 'official'
+      ? 'https://registry.npmjs.org'
+      : registryUrl(customRegistry)
+  const npmSource: BuildDownloads['npmSource'] = {
+    type: npmType as BuildDownloads['npmSource']['type'],
+    ...(npmType === 'custom'
+      ? { registry: npmRegistry }
+      : {}),
+  }
   let proxyMode = options.proxyMode ?? (options.proxyUrl ? 'custom' : savedProxy.mode)
   const saveProxy = proxyMode === undefined && interactive && options.httpProxy !== false
   if (saveProxy)
@@ -158,7 +198,11 @@ export async function resolveBuildDownloads(directory: string, options: BuildDow
     throw new Error(cliM('cli_download_invalid'))
   let proxyUrl = options.proxyUrl ?? savedProxy.url
   if (proxyMode === 'custom' && !proxyUrl && interactive) {
-    const answer = await prompts({ type: 'text', name: 'value', message: cliM('cli_download_proxy_url') })
+    const answer = await prompts({
+      type: 'text',
+      name: 'value',
+      message: cliM('cli_download_proxy_url'),
+    })
     if (typeof answer.value !== 'string' || !answer.value.trim())
       throw new Error(cliM('cli_deploy_cancelled'))
     proxyUrl = answer.value
@@ -166,13 +210,42 @@ export async function resolveBuildDownloads(directory: string, options: BuildDow
   const bypass = options.proxyBypass ?? savedProxy.bypass
   if ((proxyUrl !== undefined && typeof proxyUrl !== 'string') || (bypass !== undefined && typeof bypass !== 'string'))
     throw new Error(cliM('cli_download_invalid'))
-  const proxy: DownloadProxyConfig = { mode: options.httpProxy === false ? 'none' : proxyMode as DownloadProxyConfig['mode'], ...(proxyMode === 'custom' && options.httpProxy !== false ? { url: proxyUrl as string | undefined } : {}), ...(bypass !== undefined ? { bypass: bypass as string } : {}) }
+  const proxy: DownloadProxyConfig = {
+    mode: options.httpProxy === false
+      ? 'none'
+      : proxyMode as DownloadProxyConfig['mode'],
+    ...(proxyMode === 'custom' && options.httpProxy !== false
+      ? { url: proxyUrl as string | undefined }
+      : {}),
+    ...(bypass !== undefined
+      ? { bypass: bypass as string }
+      : {}),
+  }
   resolveDownloadProxy(proxy)
   if (saveImage || saveNpm || saveProxy) {
-    project.build = { ...build, sources: { ...sources, ...(saveImage ? { image: imageSource } : {}), ...(saveNpm ? { npm: npmSource } : {}) }, ...(saveProxy ? { proxy } : {}) }
+    project.build = {
+      ...build,
+      sources: {
+        ...sources,
+        ...(saveImage
+          ? { image: imageSource }
+          : {}),
+        ...(saveNpm
+          ? { npm: npmSource }
+          : {}),
+      },
+      ...(saveProxy
+        ? { proxy }
+        : {}),
+    }
     writeFileSync(path, `${JSON.stringify(project, null, 2)}\n`)
   }
-  return { imageSource, npmRegistry, npmSource, proxy }
+  return {
+    imageSource,
+    npmRegistry,
+    npmSource,
+    proxy,
+  }
 }
 
 /**
@@ -188,12 +261,21 @@ export async function resolveBuildDownloads(directory: string, options: BuildDow
  */
 export function buildProxyArguments(proxy: DownloadProxyConfig, runtime: string, network?: string): string[] {
   const environment = resolveDownloadProxy(proxy)
-  for (const key of ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'ALL_PROXY', 'all_proxy']) {
+  for (const key of [
+    'HTTP_PROXY',
+    'HTTPS_PROXY',
+    'http_proxy',
+    'https_proxy',
+    'ALL_PROXY',
+    'all_proxy',
+  ]) {
     if (!environment[key])
       continue
     const url = new URL(environment[key])
     if (network !== 'host' && (runtime === 'docker' || network !== undefined) && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
-      url.hostname = runtime === 'podman' ? 'host.containers.internal' : 'host.docker.internal'
+      url.hostname = runtime === 'podman'
+        ? 'host.containers.internal'
+        : 'host.docker.internal'
       environment[key] = url.toString().replace(/\/$/, '')
     }
   }
@@ -217,7 +299,12 @@ export async function preflightDownloadProxy(runtime: string, proxy: DownloadPro
   for (const value of new Set([environment.HTTP_PROXY, environment.HTTPS_PROXY].filter(Boolean))) {
     const url = new URL(value)
     await new Promise<void>((resolve, reject) => {
-      const socket = connect({ host: url.hostname.replace(/^\[|\]$/g, ''), port: Number(url.port || (url.protocol === 'https:' ? 443 : 80)) })
+      const socket = connect({
+        host: url.hostname.replace(/^\[|\]$/g, ''),
+        port: Number(url.port || (url.protocol === 'https:'
+          ? 443
+          : 80)),
+      })
       socket.setTimeout(3000)
       socket.once('connect', () => {
         socket.destroy()
@@ -233,15 +320,30 @@ export async function preflightDownloadProxy(runtime: string, proxy: DownloadPro
   }
   if (!environment.HTTP_PROXY && !environment.HTTPS_PROXY)
     return
-  for (const candidate of runtime === 'auto' ? ['podman', 'docker'] : [runtime]) {
+  for (const candidate of runtime === 'auto'
+    ? ['podman', 'docker']
+    : [runtime]) {
     try {
-      const data: { HTTPProxy?: string, HTTPSProxy?: string, host?: { serviceIsRemote?: boolean } } = JSON.parse(execFileSync(candidate, ['info', '--format', '{{json .}}'], { encoding: 'utf8', windowsHide: true, timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }))
-      report(cliM(candidate === 'docker' && (data.HTTPProxy || data.HTTPSProxy) ? 'cli_download_engine_proxy_configured' : candidate === 'podman' && !data.host?.serviceIsRemote ? 'cli_download_engine_proxy_local' : 'cli_download_engine_proxy_hint', { params: { runtime: candidate } }))
+      const data: { HTTPProxy?: string, HTTPSProxy?: string, host?: { serviceIsRemote?: boolean } } = JSON.parse(execFileSync(candidate, ['info', '--format', '{{json .}}'], {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 5000,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }))
+      report(cliM(candidate === 'docker' && (data.HTTPProxy || data.HTTPSProxy)
+        ? 'cli_download_engine_proxy_configured'
+        : candidate === 'podman' && !data.host?.serviceIsRemote
+          ? 'cli_download_engine_proxy_local'
+          : 'cli_download_engine_proxy_hint', {
+        params: { runtime: candidate },
+      }))
       return
     }
     catch { /* 继续检查另一可用引擎，不替用户启动或修改引擎。 */ }
   }
-  report(cliM('cli_download_engine_proxy_hint', { params: { runtime } }))
+  report(cliM('cli_download_engine_proxy_hint', {
+    params: { runtime },
+  }))
 }
 
 /**
@@ -259,6 +361,8 @@ export function validateDownloadDockerfile(file: string, downloads: BuildDownloa
   const content = readFileSync(file, 'utf8')
   if ((downloads.imageSource.type !== 'official' && !/^ARG HAI_NODE_IMAGE=/m.test(content))
     || (downloads.npmSource.type !== 'official' && !/^ARG HAI_NPM_REGISTRY[=\s]/m.test(content))) {
-    throw new Error(cliM('cli_download_template_required', { params: { path: file } }))
+    throw new Error(cliM('cli_download_template_required', {
+      params: { path: file },
+    }))
   }
 }

@@ -79,7 +79,20 @@ for apk in "$@"; do
 done
 `
 
-const copyExclusions = new Set(['node_modules', '.git', '.hai', '.turbo', '.svelte-kit', '.pnpm-store', '.cache', '.gradle', '.idea', 'test-results', 'playwright-report', 'local.properties'])
+const copyExclusions = new Set([
+  'node_modules',
+  '.git',
+  '.hai',
+  '.turbo',
+  '.svelte-kit',
+  '.pnpm-store',
+  '.cache',
+  '.gradle',
+  '.idea',
+  'test-results',
+  'playwright-report',
+  'local.properties',
+])
 
 /**
  * 容器构建使用已解析的下载设置和选定的运行时命令。
@@ -149,8 +162,11 @@ export async function buildContainerAndroid<T>(root: string, apps: readonly stri
     throw new Error(cliM('cli_build_app_platform'))
   const directories = apps.map(app => nativeProjectDirectory(root, app))
   for (const directory of directories) {
-    if (!existsSync(join(directory, 'capacitor.config.ts')) || (!debug && !existsSync(join(directory, 'android'))))
-      throw new Error(cliM('cli_build_app_missing', { params: { platform: 'android' } }))
+    if (!existsSync(join(directory, 'capacitor.config.ts')) || (!debug && !existsSync(join(directory, 'android')))) {
+      throw new Error(cliM('cli_build_app_missing', {
+        params: { platform: 'android' },
+      }))
+    }
   }
   const signing: Record<string, string> = {}
   let keystore: string | undefined
@@ -181,15 +197,39 @@ export async function buildContainerAndroid<T>(root: string, apps: readonly stri
   const builder = `localhost/hai-capacitor-android:${fingerprint}`
   const proxyArgs = buildProxyArguments(downloads.proxy, runtime, network)
   const engineArgs = [
-    ...(network === undefined ? [] : ['--network', network]),
-    ...(runtime === 'docker' && process.platform === 'linux' && network !== 'host' ? ['--add-host', 'host.docker.internal:host-gateway'] : []),
-    ...(runtime === 'podman' && downloads.proxy.mode === 'none' ? ['--http-proxy=false'] : []),
+    ...(network === undefined
+      ? []
+      : ['--network', network]),
+    ...(runtime === 'docker' && process.platform === 'linux' && network !== 'host'
+      ? ['--add-host', 'host.docker.internal:host-gateway']
+      : []),
+    ...(runtime === 'podman' && downloads.proxy.mode === 'none'
+      ? ['--http-proxy=false']
+      : []),
   ]
   try {
     await run(['image', 'inspect', builder], true)
   }
   catch {
-    await run(['build', '--platform', 'linux/amd64', ...engineArgs, ...(runtime === 'podman' ? ['--format', 'docker'] : []), '-f', definition, '-t', builder, '--build-arg', `HAI_ANDROID_IMAGE=${image}`, '--build-arg', `HAI_NPM_REGISTRY=${downloads.npmRegistry}`, ...proxyArgs, dirname(definition)])
+    await run([
+      'build',
+      '--platform',
+      'linux/amd64',
+      ...engineArgs,
+      ...(runtime === 'podman'
+        ? ['--format', 'docker']
+        : []),
+      '-f',
+      definition,
+      '-t',
+      builder,
+      '--build-arg',
+      `HAI_ANDROID_IMAGE=${image}`,
+      '--build-arg',
+      `HAI_NPM_REGISTRY=${downloads.npmRegistry}`,
+      ...proxyArgs,
+      dirname(definition),
+    ])
   }
   const cache = join(root, '.hai', 'build', 'cache', 'android')
   // 后续调试包继续使用本工程的 Android 调试证书，允许覆盖安装。
@@ -216,19 +256,29 @@ export async function buildContainerAndroid<T>(root: string, apps: readonly stri
     })
     const proxy = Object.fromEntries(proxyArgs.filter((_, index) => index % 2 === 1).map((argument) => {
       const equals = argument.indexOf('=')
-      return [argument.slice(0, equals), argument.slice(equals + 1)]
+      return [
+        argument.slice(0, equals),
+        argument.slice(equals + 1),
+      ]
     }))
     const uid = process.getuid?.()
     const gid = process.getgid?.()
     const userArgs = uid === undefined || gid === undefined
       ? []
       : [
-          ...(runtime === 'podman' && uid !== 0 ? ['--userns=keep-id'] : []),
+          ...(runtime === 'podman' && uid !== 0
+            ? ['--userns=keep-id']
+            : []),
           '--user',
           `${uid}:${gid}`,
         ]
     const relativeApps = directories.map(path => relative(dependencies, path).split(sep).join('/') || '.')
-    const environment = { ...proxy, ...options.environment, npm_config_registry: downloads.npmRegistry, npm_config_nodedir: '/usr/local' }
+    const environment = {
+      ...proxy,
+      ...options.environment,
+      npm_config_registry: downloads.npmRegistry,
+      npm_config_nodedir: '/usr/local',
+    }
     const workspaceMount = bindMount(workspace, '/workspace')
     await run([
       'run',
@@ -266,10 +316,15 @@ export async function buildContainerAndroid<T>(root: string, apps: readonly stri
     for (const [index, app] of relativeApps.entries()) {
       const output = join(workspace, app, 'android/app/build/outputs/apk')
       const variant = debug ? 'debug' : 'release'
-      const files = [...nativeFiles(output, (path, isDirectory) => !isDirectory && path.endsWith('.apk') && basename(dirname(path)) === variant).keys()]
+      const files = [
+        ...nativeFiles(output, (path, isDirectory) => !isDirectory && path.endsWith('.apk') && basename(dirname(path)) === variant).keys(),
+      ]
       if (!files.length || !files.every(isNativeZip))
         throw new Error(cliM('cli_build_app_artifact'))
-      artifacts.push(...files.map(path => ({ source: path, file: join(relative(root, directories[index]), relative(output, path).replace(/-unsigned\.apk$/, '.apk')) })))
+      artifacts.push(...files.map(path => ({
+        source: path,
+        file: join(relative(root, directories[index]), relative(output, path).replace(/-unsigned\.apk$/, '.apk')),
+      })))
     }
     await run([
       'run',
@@ -280,7 +335,9 @@ export async function buildContainerAndroid<T>(root: string, apps: readonly stri
       'none',
       ...userArgs,
       ...workspaceMount,
-      ...(keystore ? bindMount(keystore, '/run/hai/android-keystore', true) : []),
+      ...(keystore
+        ? bindMount(keystore, '/run/hai/android-keystore', true)
+        : []),
       '--env',
       'HOME=/tmp',
       ...Object.keys(signing).flatMap(key => ['--env', key]),
@@ -295,6 +352,11 @@ export async function buildContainerAndroid<T>(root: string, apps: readonly stri
     return await publish(artifacts)
   }
   finally {
-    rmSync(temporary, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+    rmSync(temporary, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 100,
+    })
   }
 }

@@ -25,7 +25,10 @@ async function tool(command: string, args: string[], deadline: number): Promise<
   if (performance.now() >= deadline)
     return { success: false, output: '' }
   return new Promise((resolve) => {
-    const child = spawn(command, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] })
+    const child = spawn(command, args, {
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
     let output = ''
     const timer = setTimeout(() => {
       child.kill('SIGKILL')
@@ -89,10 +92,16 @@ async function groupExited(pid: number): Promise<boolean> {
 export async function runDeployTestCommand(command: string, args: string[], options: DeployTestCommandOptions = {}): Promise<string> {
   if (options.signal?.aborted)
     throw new DeployTestCommandError('abort', 'not-started', 'Deployment command was cancelled before starting')
-  const job = process.platform === 'win32' ? windowsTestCommand(command, args) : undefined
+  const job = process.platform === 'win32'
+    ? windowsTestCommand(command, args)
+    : undefined
   const child = spawn(job ? 'powershell.exe' : command, job?.args ?? args, {
     cwd: options.cwd,
-    env: { ...process.env, ...options.env, ...job?.env },
+    env: {
+      ...process.env,
+      ...options.env,
+      ...job?.env,
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
     detached: process.platform !== 'win32',
@@ -143,7 +152,9 @@ export async function runDeployTestCommand(command: string, args: string[], opti
         catch (error) { verified = exited(-pid) && error instanceof Error && 'code' in error && error.code === 'ESRCH' }
       }
       while (performance.now() < deadline) {
-        const treeStopped = job ? closed && (await tool('powershell.exe', windowsTestJobProbe(job.name), deadline)).success : await groupExited(pid)
+        const treeStopped = job
+          ? closed && (await tool('powershell.exe', windowsTestJobProbe(job.name), deadline)).success
+          : await groupExited(pid)
         if (closed && treeStopped)
           return verified ? 'confirmed' : 'unknown'
         await delay(20)
@@ -157,10 +168,16 @@ export async function runDeployTestCommand(command: string, args: string[], opti
   }
   const capture = (text: string, stream: 'stdout' | 'stderr'): void => {
     bytes += Buffer.byteLength(text)
-    if (stream === 'stdout')
-      stdout = reason ? (stdout + text).slice(-6000) : stdout + text
-    else
-      stderr = reason ? (stderr + text).slice(-6000) : stderr + text
+    if (stream === 'stdout') {
+      stdout = reason
+        ? (stdout + text).slice(-6000)
+        : stdout + text
+    }
+    else {
+      stderr = reason
+        ? (stderr + text).slice(-6000)
+        : stderr + text
+    }
     if (bytes > (options.maxOutputBytes ?? 16 * 1024 * 1024))
       stop('output-limit')
   }
@@ -177,7 +194,9 @@ export async function runDeployTestCommand(command: string, args: string[], opti
     // POSIX 组长退出不代表整个进程组结束；Windows owner 在原生 Job 清空前不会正常返回。
     if (!stopping && child.pid && !job && !await groupExited(child.pid))
       stop('exit')
-    const localTermination = stopping ? await stopping : child.pid ? 'confirmed' : 'not-started'
+    const localTermination = stopping
+      ? await stopping
+      : child.pid ? 'confirmed' : 'not-started'
     if (reason || spawnError || child.exitCode !== 0)
       throw new DeployTestCommandError(reason ?? (spawnError ? 'spawn' : 'exit'), localTermination, `${command} ${args[0] ?? ''} failed: ${reason ?? spawnError?.message ?? `exit ${child.exitCode}`}\n${stdout.slice(-6000)}\n${stderr.slice(-6000)}`, child.exitCode)
     return stdout
@@ -212,7 +231,12 @@ export function createDeployTestCommands(options: { timeoutMs: number, cleanupRe
       if (performance.now() >= deadline)
         controller.abort(new Error('Deployment phase deadline exceeded'))
       controller.signal.throwIfAborted()
-      const task = runDeployTestCommand(command, args, { cwd, env, signal: controller.signal, timeoutMs: Math.max(1, Math.min(900_000, deadline - performance.now())) })
+      const task = runDeployTestCommand(command, args, {
+        cwd,
+        env,
+        signal: controller.signal,
+        timeoutMs: Math.max(1, Math.min(900_000, deadline - performance.now())),
+      })
       pending.add(task)
       void task.then(() => pending.delete(task), (error: unknown) => {
         pending.delete(task)

@@ -25,8 +25,20 @@ export type AppCommand = (args: string[], cwd: string) => Promise<void>
 export function gradleCommand(debug: boolean): [string, ...string[]] {
   const task = debug ? 'assembleDebug' : 'assembleRelease'
   return process.platform === 'win32'
-    ? ['cmd.exe', '/d', '/c', 'gradlew.bat', task, '--no-daemon']
-    : ['bash', './gradlew', task, '--no-daemon']
+    ? [
+        'cmd.exe',
+        '/d',
+        '/c',
+        'gradlew.bat',
+        task,
+        '--no-daemon',
+      ]
+    : [
+        'bash',
+        './gradlew',
+        task,
+        '--no-daemon',
+      ]
 }
 
 /**
@@ -56,25 +68,54 @@ export async function buildMobileApp(root: string, directories: readonly string[
   const outputs: NativeArtifact[] = []
   for (const item of directories) {
     const directory = nativeProjectDirectory(root, item)
-    if (!existsSync(join(directory, platform)) || !existsSync(join(directory, 'capacitor.config.ts')))
-      throw new Error(cliM('cli_build_app_missing', { params: { platform } }))
-    const output = platform === 'android' ? join(directory, 'android/app/build/outputs/apk') : join(directory, 'ios/App/output')
+    if (!existsSync(join(directory, platform)) || !existsSync(join(directory, 'capacitor.config.ts'))) {
+      throw new Error(cliM('cli_build_app_missing', {
+        params: { platform },
+      }))
+    }
+    const output = platform === 'android'
+      ? join(directory, 'android/app/build/outputs/apk')
+      : join(directory, 'ios/App/output')
     const packages = (): Map<string, string> => nativeFiles(output, (path, isDirectory) => !isDirectory && isAppPackage(path, platform, debug))
     const before = packages()
     await run(['run', 'build'], directory)
     await run(['exec', 'cap', 'sync', platform], directory)
-    const nativeConfig = platform === 'android' ? join(directory, 'android/app/src/main/assets/capacitor.config.json') : join(directory, 'ios/App/App/capacitor.config.json')
+    const nativeConfig = platform === 'android'
+      ? join(directory, 'android/app/src/main/assets/capacitor.config.json')
+      : join(directory, 'ios/App/App/capacitor.config.json')
     const config: { server?: { url?: unknown } } = JSON.parse(readFileSync(nativeConfig, 'utf8'))
     if (config.server?.url)
       throw new Error(cliM('cli_build_app_reload'))
-    if (platform === 'android' && debug && runGradle)
+    if (platform === 'android' && debug && runGradle) {
       await runGradle(join(directory, 'android'))
-    else
-      await run(['exec', 'cap', 'build', platform, ...(platform === 'android' ? ['--androidreleasetype', 'APK'] : debug ? ['--configuration', 'Debug', '--xcode-export-method', 'debugging'] : [])], directory)
-    const files = [...packages()].filter(([file, stamp]) => before.get(file) !== stamp && isNativeZip(file))
+    }
+    else {
+      await run([
+        'exec',
+        'cap',
+        'build',
+        platform,
+        ...(platform === 'android'
+          ? ['--androidreleasetype', 'APK']
+          : debug
+            ? [
+                '--configuration',
+                'Debug',
+                '--xcode-export-method',
+                'debugging',
+              ]
+            : []),
+      ], directory)
+    }
+    const files = [
+      ...packages(),
+    ].filter(([file, stamp]) => before.get(file) !== stamp && isNativeZip(file))
     if (!files.length)
       throw new Error(cliM('cli_build_app_artifact'))
-    outputs.push(...files.map(([source]) => ({ source, file: join(relative(root, directory), relative(output, source)) })))
+    outputs.push(...files.map(([source]) => ({
+      source,
+      file: join(relative(root, directory), relative(output, source)),
+    })))
   }
   return outputs
 }

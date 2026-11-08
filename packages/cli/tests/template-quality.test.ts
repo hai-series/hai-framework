@@ -14,22 +14,69 @@ let tmpRoot = ''
 const linters = new Map<string, ESLint>()
 const mobileProjects = new Map<boolean, string>()
 
-const projectTypes: AppType[] = ['admin', 'website', 'h5', 'api', 'mobile-app', 'fullstack']
-const linterNames = ['admin', 'website', 'h5', 'api', 'mobile-app', 'fullstack', 'web', 'app', 'desktop'] as const
-const svelteAppNames = ['admin', 'website', 'h5', 'mobile-app', 'web', 'app', 'desktop'] as const
+const projectTypes: AppType[] = [
+  'admin',
+  'website',
+  'h5',
+  'api',
+  'mobile-app',
+  'fullstack',
+]
+const linterNames = [
+  'admin',
+  'website',
+  'h5',
+  'api',
+  'mobile-app',
+  'fullstack',
+  'web',
+  'app',
+  'desktop',
+] as const
+const svelteAppNames = [
+  'admin',
+  'website',
+  'h5',
+  'mobile-app',
+  'web',
+  'app',
+  'desktop',
+] as const
 
 beforeAll(async () => {
   tmpRoot = await mkdtemp(path.join(process.cwd(), '.tmp-template-quality-'))
   for (const appType of projectTypes) {
     const name = `quality-${appType}`
     const projectPath = path.join(tmpRoot, name)
-    const context = buildTemplateContext({ name, appType, features: appType === 'fullstack' ? ['iam', 'db', 'cache', 'crypto', 'storage', 'audit', 'scheduler', 'feedback'] : [], packageManager: 'pnpm' })
+    const context = buildTemplateContext({
+      name,
+      appType,
+      features: appType === 'fullstack'
+        ? [
+            'iam',
+            'db',
+            'cache',
+            'crypto',
+            'storage',
+            'audit',
+            'scheduler',
+            'feedback',
+          ]
+        : [],
+      packageManager: 'pnpm',
+    })
     await generateFromTemplates(projectPath, context)
-    linters.set(appType, new ESLint({ cwd: projectPath, overrideConfigFile: path.join(projectPath, 'eslint.config.js') }))
+    linters.set(appType, new ESLint({
+      cwd: projectPath,
+      overrideConfigFile: path.join(projectPath, 'eslint.config.js'),
+    }))
     if (appType === 'fullstack') {
       for (const target of ['web', 'app', 'desktop']) {
         const frontendPath = path.join(projectPath, 'apps', `${name}-${target}`)
-        linters.set(target, new ESLint({ cwd: frontendPath, overrideConfigFile: path.join(frontendPath, 'eslint.config.js') }))
+        linters.set(target, new ESLint({
+          cwd: frontendPath,
+          overrideConfigFile: path.join(frontendPath, 'eslint.config.js'),
+        }))
       }
     }
   }
@@ -37,11 +84,26 @@ beforeAll(async () => {
   for (const encrypted of [true, false]) {
     const cwd = path.join(tmpRoot, `mobile-transport-${encrypted}`)
     if (encrypted) {
-      await createProject({ name: 'mobile-test', appType: 'mobile-app', defaults: true, install: false, git: false, deploy: false, packageManager: 'pnpm', cwd })
+      await createProject({
+        name: 'mobile-test',
+        appType: 'mobile-app',
+        defaults: true,
+        install: false,
+        git: false,
+        deploy: false,
+        packageManager: 'pnpm',
+        cwd,
+      })
     }
     else {
       const directory = path.join(cwd, 'mobile-test')
-      await generateFromTemplates(directory, buildTemplateContext({ name: 'mobile-test', appType: 'mobile-app', features: ['api-client', 'capacitor'], deploy: false, packageManager: 'pnpm' }))
+      await generateFromTemplates(directory, buildTemplateContext({
+        name: 'mobile-test',
+        appType: 'mobile-app',
+        features: ['api-client', 'capacitor'],
+        deploy: false,
+        packageManager: 'pnpm',
+      }))
       await writeFile(path.join(directory, '.env.example'), '# Plaintext template fixture\n')
     }
     mobileProjects.set(encrypted, path.join(cwd, 'mobile-test'))
@@ -59,7 +121,12 @@ afterAll(async () => {
   if (path.dirname(target) !== process.cwd() || !path.basename(target).startsWith('.tmp-template-quality-'))
     throw new Error('Unexpected template quality cleanup directory')
   // Windows 扫描器可能短暂持有刚生成的文件；只在已确认归属的目录内重试。
-  await rm(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+  await rm(target, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 200,
+  })
 })
 
 async function lint(name: string, code: string, filePath = 'src/quality.ts'): Promise<Linter.LintMessage[]> {
@@ -104,10 +171,20 @@ describe('实际移动工程的静态消费契约', () => {
   }, 30_000)
 
   it('crypto 开关的实际消费者一次解析公共类型声明并保持严格检查', () => {
-    const consumers = [...mobileProjects.values()].map(project => path.join(project, 'src/lib/api.ts'))
+    const consumers = [
+      ...mobileProjects.values(),
+    ].map(project => path.join(project, 'src/lib/api.ts'))
     expect(consumers).toHaveLength(2)
     // 复用仓库已安装的真实声明，不把静态消费检查当作独立安装验收。
-    const program = ts.createProgram(consumers, { noEmit: true, strict: true, skipLibCheck: true, module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, moduleResolution: ts.ModuleResolutionKind.Bundler, types: ['node', 'vite/client'] })
+    const program = ts.createProgram(consumers, {
+      noEmit: true,
+      strict: true,
+      skipLibCheck: true,
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      types: ['node', 'vite/client'],
+    })
     const diagnostics = ts.getPreEmitDiagnostics(program)
     expect(diagnostics.map(item => ts.flattenDiagnosticMessageText(item.messageText, '\n'))).toEqual([])
   }, 30_000)
@@ -130,7 +207,9 @@ describe('共享质量规则', () => {
     ['敏感 token 持久化', 'localStorage.setItem(\'accessToken\', \'value\')\n', 'no-restricted-syntax'],
     ['window token 持久化', 'window.localStorage.setItem(\'refresh_token\', \'value\')\n', 'no-restricted-syntax'],
   ])('阻止%s', async (_label, code, ruleId) => {
-    expect(await lint(name, code)).toEqual(expect.arrayContaining([expect.objectContaining({ ruleId, severity: 2 })]))
+    expect(await lint(name, code)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ruleId, severity: 2 }),
+    ]))
   })
 
   it('js 同样强制禁止 console', async () => {
@@ -186,11 +265,23 @@ window.localStorage.setItem('refresh_token', 'value')
       expect.objectContaining({ ruleId: 'eslint-comments/require-description', severity: 2 }),
     ]))
     const messages = await lint(name, code.replace('/* eslint-disable */\n', ''))
-    for (const ruleId of ['ts/no-explicit-any', 'ts/ban-ts-comment', 'no-console', 'no-restricted-syntax', 'no-restricted-imports'])
-      expect(messages).toEqual(expect.arrayContaining([expect.objectContaining({ ruleId, severity: 2 })]))
+    for (const ruleId of [
+      'ts/no-explicit-any',
+      'ts/ban-ts-comment',
+      'no-console',
+      'no-restricted-syntax',
+      'no-restricted-imports',
+    ]) {
+      expect(messages).toEqual(expect.arrayContaining([
+        expect.objectContaining({ ruleId, severity: 2 }),
+      ]))
+    }
     const javascript = await lint(name, 'import fs from \'node:fs\'\n\nconst unused = 1\nconsole.warn(\'value\')\n', 'src/quality.js')
-    for (const ruleId of ['no-console', 'unused-imports/no-unused-vars', 'unused-imports/no-unused-imports'])
-      expect(javascript).toEqual(expect.arrayContaining([expect.objectContaining({ ruleId, severity: 2 })]))
+    for (const ruleId of ['no-console', 'unused-imports/no-unused-vars', 'unused-imports/no-unused-imports']) {
+      expect(javascript).toEqual(expect.arrayContaining([
+        expect.objectContaining({ ruleId, severity: 2 }),
+      ]))
+    }
   })
 
   it('公开入口、合理豁免和实际使用的 JS 表达式可通过', async () => {
@@ -223,14 +314,24 @@ describe('构建元数据配置的静态质量', () => {
       ? ['vite.config.ts']
       : appType === 'api'
         ? [`apps/${projectName}-serv/tsup.config.ts`]
-        : [`packages/${projectName}-serv/tsup.config.ts`, ...['web', 'app', 'desktop'].map(target => `apps/${projectName}-${target}/vite.config.ts`)]
+        : [
+            `packages/${projectName}-serv/tsup.config.ts`,
+            ...['web', 'app', 'desktop'].map(target => `apps/${projectName}-${target}/vite.config.ts`),
+          ]
     // 复用beforeAll预热后的真实linter；前端App和build-metadata消费者由下方业务源码门禁覆盖。
     expect(await lintFiles(appType, [...targets, 'scripts/build-metadata.ts'])).toEqual([])
   })
 })
 
 describe('生成 fullstack 的业务 workspace 质量', () => {
-  it.each(['contract', 'serv', 'shared', 'web', 'app', 'desktop'])('%s 业务源码通过实际 eslint 检查', async (workspace) => {
+  it.each([
+    'contract',
+    'serv',
+    'shared',
+    'web',
+    'app',
+    'desktop',
+  ])('%s 业务源码通过实际 eslint 检查', async (workspace) => {
     const eslint = linters.get('fullstack')
     if (!eslint)
       throw new Error('Missing generated fullstack linter')
@@ -244,8 +345,12 @@ describe('生成 fullstack 的业务 workspace 质量', () => {
 })
 
 describe.each(svelteAppNames)('生成项目 %s 的 Svelte 门禁', (name) => {
-  it('svelte.config.js 通过实际 eslint 检查', async () => {
-    expect(await lintFiles(name, ['svelte.config.js'])).toEqual([])
+  it('svelte 或 SvelteKit 配置通过实际 eslint 检查', async () => {
+    expect(await lintFiles(name, [
+      name === 'mobile-app' || name === 'web' || name === 'app' || name === 'desktop'
+        ? 'svelte.config.js'
+        : 'vite.config.ts',
+    ])).toEqual([])
   })
 
   it('svelte 脚本的 any 和 console 进入同一门禁', async () => {
@@ -260,7 +365,14 @@ describe.each(svelteAppNames)('生成项目 %s 的 Svelte 门禁', (name) => {
 describe.each(['admin', 'website', 'h5'] as const)('生成项目 %s 的认证布局', (appType) => {
   it.each([false, true])('iam=%s 的实际根布局通过生成项目 lint', async (enabled) => {
     const projectPath = path.join(tmpRoot, `${appType}-layout-${enabled}`)
-    await generateFromTemplates(projectPath, buildTemplateContext({ name: `${appType}-layout-${enabled}`, appType, features: enabled ? ['iam'] : [], packageManager: 'pnpm' }))
+    await generateFromTemplates(projectPath, buildTemplateContext({
+      name: `${appType}-layout-${enabled}`,
+      appType,
+      features: enabled
+        ? ['iam']
+        : [],
+      packageManager: 'pnpm',
+    }))
     const source = await readFile(path.join(projectPath, 'src/routes/+layout.svelte'), 'utf8')
     expect((await lint(appType, source, 'src/routes/+layout.svelte')).filter(message => message.severity === 2)).toEqual([])
   })
@@ -269,8 +381,18 @@ describe.each(['admin', 'website', 'h5'] as const)('生成项目 %s 的认证布
 describe('固定窗口限流模板', () => {
   it.each([false, true])('cache=%s 的实际hooks可通过生成项目lint', async (enabled) => {
     const projectPath = path.join(tmpRoot, `rate-limit-${enabled}`)
-    await generateFromTemplates(projectPath, buildTemplateContext({ name: `rate-limit-${enabled}`, appType: 'website', features: enabled ? ['cache'] : [], packageManager: 'pnpm' }))
-    const eslint = new ESLint({ cwd: projectPath, overrideConfigFile: path.join(projectPath, 'eslint.config.js') })
+    await generateFromTemplates(projectPath, buildTemplateContext({
+      name: `rate-limit-${enabled}`,
+      appType: 'website',
+      features: enabled
+        ? ['cache']
+        : [],
+      packageManager: 'pnpm',
+    }))
+    const eslint = new ESLint({
+      cwd: projectPath,
+      overrideConfigFile: path.join(projectPath, 'eslint.config.js'),
+    })
     const results = await eslint.lintFiles(['src/hooks.server.ts'])
     expect(results.flatMap(result => result.messages.filter(message => message.severity === 2))).toEqual([])
   })
@@ -279,9 +401,24 @@ describe('固定窗口限流模板', () => {
 describe.each(['admin', 'website', 'h5'] as const)('%s 传输加密模板装配', (appType) => {
   it.each([false, true])('db=%s 的 crypto 配置、服务端装配和浏览器投影通过实际生成 lint', async (database) => {
     const projectPath = path.join(tmpRoot, `${appType}-transport-${database}`)
-    await generateFromTemplates(projectPath, buildTemplateContext({ name: `${appType}-transport-${database}`, appType, features: database ? ['crypto', 'db'] : ['crypto'], packageManager: 'pnpm' }))
-    const eslint = new ESLint({ cwd: projectPath, overrideConfigFile: path.join(projectPath, 'eslint.config.js') })
-    const results = await eslint.lintFiles(['src/hooks.server.ts', 'src/lib/server/kit-config.ts', 'src/routes/+layout.server.ts', 'src/routes/+layout.svelte'])
+    await generateFromTemplates(projectPath, buildTemplateContext({
+      name: `${appType}-transport-${database}`,
+      appType,
+      features: database
+        ? ['crypto', 'db']
+        : ['crypto'],
+      packageManager: 'pnpm',
+    }))
+    const eslint = new ESLint({
+      cwd: projectPath,
+      overrideConfigFile: path.join(projectPath, 'eslint.config.js'),
+    })
+    const results = await eslint.lintFiles([
+      'src/hooks.server.ts',
+      'src/lib/server/kit-config.ts',
+      'src/routes/+layout.server.ts',
+      'src/routes/+layout.svelte',
+    ])
     expect(results.flatMap(result => result.messages.filter(message => message.severity === 2))).toEqual([])
   })
 })

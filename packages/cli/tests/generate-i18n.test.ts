@@ -14,8 +14,14 @@ import { cliM } from '../src/cli-i18n.js'
 import { generate } from '../src/commands/cli-generate.js'
 
 const roots: string[] = []
-const spinner = vi.hoisted(() => ({ start: vi.fn(), succeed: vi.fn(), fail: vi.fn() }))
-vi.mock('ora', () => ({ default: () => spinner }))
+const spinner = vi.hoisted(() => ({
+  start: vi.fn(),
+  succeed: vi.fn(),
+  fail: vi.fn(),
+}))
+vi.mock('ora', () => ({
+  default: () => spinner,
+}))
 
 beforeEach(() => {
   vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
@@ -36,7 +42,18 @@ afterEach(async () => {
 async function project(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), 'hai-generate-i18n-'))
   roots.push(root)
-  await writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'locale-fixture', type: 'module', dependencies: { '@h-ai/core': '*', '@h-ai/kit': '*', '@h-ai/reldb': '*', '@sveltejs/kit': '*', 'svelte': '*', 'zod': '*' } }))
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({
+    name: 'locale-fixture',
+    type: 'module',
+    dependencies: {
+      '@h-ai/core': '*',
+      '@h-ai/kit': '*',
+      '@h-ai/reldb': '*',
+      '@sveltejs/kit': '*',
+      'svelte': '*',
+      'zod': '*',
+    },
+  }))
   return root
 }
 
@@ -77,11 +94,23 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('generate locale %s', (locale) => {
     const textQuestion = text.mock.calls[0]![0]
     expect(selectQuestion.message).toBe(cliM('cli_generateTypePrompt'))
     expect(textQuestion.message).toBe(cliM('cli_generateNamePrompt'))
-    const descriptions = [cliM('cli_generatePageDescription'), cliM('cli_generateComponentDescription'), cliM('cli_generateApiDescription'), cliM('cli_generateModelDescription'), cliM('cli_generateMigrationDescription')]
+    const descriptions = [
+      cliM('cli_generatePageDescription'),
+      cliM('cli_generateComponentDescription'),
+      cliM('cli_generateApiDescription'),
+      cliM('cli_generateModelDescription'),
+      cliM('cli_generateMigrationDescription'),
+    ]
     const choices = selectQuestion.choices
     if (!Array.isArray(choices))
-      throw new Error('Expected concrete generator choices')
-    expect(choices.map(choice => choice.title)).toEqual(descriptions.map((description, i) => `${['page', 'component', 'api', 'model', 'migration'][i]} - ${description}`))
+      throw new TypeError('Expected concrete generator choices')
+    expect(choices.map(choice => choice.title)).toEqual(descriptions.map((description, i) => `${[
+      'page',
+      'component',
+      'api',
+      'model',
+      'migration',
+    ][i]} - ${description}`))
     select.mockRestore()
     text.mockRestore()
     const rendered = await renderPrompt(selectQuestion) + await renderPrompt(textQuestion, 'InfoCard')
@@ -89,14 +118,24 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('generate locale %s', (locale) => {
     expect(rendered).toContain(cliM('cli_generateNameRequired'))
     if (locale === 'en-US')
       expect(rendered).not.toMatch(/\p{Script=Han}/u)
-    expect(spinner.start).toHaveBeenCalledWith(cliM('cli_generateProgress', { params: { description: cliM('cli_generateComponentDescription') } }))
+    expect(spinner.start).toHaveBeenCalledWith(cliM('cli_generateProgress', {
+      params: {
+        description: cliM('cli_generateComponentDescription'),
+      },
+    }))
     expect(spinner.succeed).toHaveBeenCalledWith(cliM('cli_generateComplete'))
     expect(await readFile(path.join(root, 'src/lib/components/InfoCard.svelte'), 'utf8')).toContain('interface Props')
   })
 
   it('非交互五种生成类型描述、成功与文件列表无遗漏', async () => {
     const root = await project()
-    for (const type of ['page', 'component', 'api', 'model', 'migration'] as const)
+    for (const type of [
+      'page',
+      'component',
+      'api',
+      'model',
+      'migration',
+    ] as const)
       await generate({ type, name: 'localized', cwd: root })
     expect(spinner.start).toHaveBeenCalledTimes(5)
     expect(spinner.succeed).toHaveBeenCalledTimes(5)
@@ -120,10 +159,16 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('generate locale %s', (locale) => {
 
   it('未知类型、非法名称和文件冲突均输出当前语言的失败原因', async () => {
     const root = await project()
-    await expect(generate({ type: 'toString' as never, name: 'unknown', cwd: root })).rejects.toThrow(cliM('cli_generateUnknownType', { params: { type: 'toString' } }))
+    await expect(generate({ type: 'toString' as never, name: 'unknown', cwd: root })).rejects.toThrow(cliM('cli_generateUnknownType', {
+      params: { type: 'toString' },
+    }))
     await expect(generate({ type: 'page', name: '../escape', cwd: root })).rejects.toThrow(cliM('cli_invalidGenerateName'))
     await generate({ type: 'component', name: 'existing', cwd: root })
-    await expect(generate({ type: 'component', name: 'existing', cwd: root })).rejects.toThrow(cliM('cli_generateExists', { params: { path: path.join(root, 'src/lib/components/Existing.svelte') } }))
+    await expect(generate({ type: 'component', name: 'existing', cwd: root })).rejects.toThrow(cliM('cli_generateExists', {
+      params: {
+        path: path.join(root, 'src/lib/components/Existing.svelte'),
+      },
+    }))
     const output = vi.mocked(process.stderr.write).mock.calls.map(([message]) => String(message)).join('')
     expect(output).toContain(cliM('cli_generateFailureDetail'))
     if (locale === 'en-US')
@@ -144,27 +189,76 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('generate locale %s', (locale) => {
 
 describe.skipIf(process.env.HAI_CLI_RUN_I18N_GATES !== '1')('built CLI locale environment gates', () => {
   it.each([
-    { environment: { HAI_CORE_DEFAULTLOCALE: 'en-US', LANG: 'zh_CN.UTF-8' }, locale: 'en-US' },
-    { environment: { HAI_CORE_DEFAULTLOCALE: 'zh-CN', LANG: 'en_US.UTF-8' }, locale: 'zh-CN' },
-    { environment: { LC_ALL: 'en_GB.UTF-8', LC_MESSAGES: 'zh_CN', LANG: 'zh_CN' }, locale: 'en-US' },
-    { environment: { LC_MESSAGES: 'en_US.UTF-8', LANG: 'zh_CN' }, locale: 'en-US' },
-    { environment: { LANG: 'en_US.UTF-8' }, locale: 'en-US' },
-    { environment: { HAI_CORE_DEFAULTLOCALE: ' ', LC_ALL: ' C.UTF-8 ' }, locale: 'en-US' },
-    { environment: { LANG: 'POSIX' }, locale: 'en-US' },
-    { environment: { LC_MESSAGES: 'zh_TW.UTF-8', LANG: 'en_US.UTF-8' }, locale: 'zh-CN' },
-    { environment: { HAI_CORE_DEFAULTLOCALE: 'ja-JP', LANG: 'en_US.UTF-8' }, locale: 'ja-JP' },
-    { environment: { LC_ALL: 'ja_JP.UTF-8', LC_MESSAGES: 'en_US.UTF-8' }, locale: 'ja-JP' },
-    { environment: { LC_MESSAGES: 'ja_JP.UTF-8', LANG: 'en_US.UTF-8' }, locale: 'ja-JP' },
-    { environment: { LANG: 'ja_JP.UTF-8' }, locale: 'ja-JP' },
-    { environment: { HAI_CORE_DEFAULTLOCALE: 'fr-FR', LANG: 'en_US.UTF-8' }, locale: 'zh-CN' },
+    {
+      environment: { HAI_CORE_DEFAULTLOCALE: 'en-US', LANG: 'zh_CN.UTF-8' },
+      locale: 'en-US',
+    },
+    {
+      environment: { HAI_CORE_DEFAULTLOCALE: 'zh-CN', LANG: 'en_US.UTF-8' },
+      locale: 'zh-CN',
+    },
+    {
+      environment: { LC_ALL: 'en_GB.UTF-8', LC_MESSAGES: 'zh_CN', LANG: 'zh_CN' },
+      locale: 'en-US',
+    },
+    {
+      environment: { LC_MESSAGES: 'en_US.UTF-8', LANG: 'zh_CN' },
+      locale: 'en-US',
+    },
+    {
+      environment: { LANG: 'en_US.UTF-8' },
+      locale: 'en-US',
+    },
+    {
+      environment: { HAI_CORE_DEFAULTLOCALE: ' ', LC_ALL: ' C.UTF-8 ' },
+      locale: 'en-US',
+    },
+    {
+      environment: { LANG: 'POSIX' },
+      locale: 'en-US',
+    },
+    {
+      environment: { LC_MESSAGES: 'zh_TW.UTF-8', LANG: 'en_US.UTF-8' },
+      locale: 'zh-CN',
+    },
+    {
+      environment: { HAI_CORE_DEFAULTLOCALE: 'ja-JP', LANG: 'en_US.UTF-8' },
+      locale: 'ja-JP',
+    },
+    {
+      environment: { LC_ALL: 'ja_JP.UTF-8', LC_MESSAGES: 'en_US.UTF-8' },
+      locale: 'ja-JP',
+    },
+    {
+      environment: { LC_MESSAGES: 'ja_JP.UTF-8', LANG: 'en_US.UTF-8' },
+      locale: 'ja-JP',
+    },
+    {
+      environment: { LANG: 'ja_JP.UTF-8' },
+      locale: 'ja-JP',
+    },
+    {
+      environment: { HAI_CORE_DEFAULTLOCALE: 'fr-FR', LANG: 'en_US.UTF-8' },
+      locale: 'zh-CN',
+    },
   ])('真实进程的help/成功/失败按环境选择语言 $environment', async ({ environment, locale }) => {
     const root = await project()
     const env = { ...process.env }
-    for (const key of ['HAI_CORE_DEFAULTLOCALE', 'LC_ALL', 'LC_MESSAGES', 'LANG'])
+    for (const key of [
+      'HAI_CORE_DEFAULTLOCALE',
+      'LC_ALL',
+      'LC_MESSAGES',
+      'LANG',
+    ])
       delete env[key]
     Object.assign(env, environment)
     const binary = path.resolve('dist/index.js')
-    const run = (args: string[]) => spawnSync(process.execPath, [binary, '--cwd', root, ...args], { env, encoding: 'utf8', windowsHide: true, timeout: 30_000 })
+    const run = (args: string[]) => spawnSync(process.execPath, [binary, '--cwd', root, ...args], {
+      env,
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 30_000,
+    })
     const help = run(['generate', '--help'])
     expect(help.status).toBe(0)
     const success = run(['generate', 'component', 'NativeCard'])

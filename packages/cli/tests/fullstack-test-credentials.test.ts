@@ -14,17 +14,30 @@ interface PlaywrightConfig {
 
 /** 执行实际生成的配置与凭据声明，不启动服务，不读取宿主的真实密码。 */
 function evaluate(source: string, environment: Record<string, string>): Record<string, unknown> {
-  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS },
+  }).outputText
   const exports: Record<string, unknown> = {}
   runInNewContext(compiled, {
     exports,
     URL,
     require: (name: string) => {
-      if (name === 'node:process')
-        return { __esModule: true, default: { env: environment } }
-      if (name === '@playwright/test')
-        return { defineConfig: (configuration: unknown) => configuration }
-      return { createE2eServerEnv: (configuration: unknown) => configuration, createE2eNotificationEnv: () => ({}), createE2eTransportRing: () => 'fixture-ring' }
+      if (name === 'node:process') {
+        return {
+          __esModule: true,
+          default: { env: environment },
+        }
+      }
+      if (name === '@playwright/test') {
+        return {
+          defineConfig: (configuration: unknown) => configuration,
+        }
+      }
+      return {
+        createE2eServerEnv: (configuration: unknown) => configuration,
+        createE2eNotificationEnv: () => ({}),
+        createE2eTransportRing: () => 'fixture-ring',
+      }
     },
   })
   return exports
@@ -35,14 +48,25 @@ it.each([true, false])('fullstack真实模板反馈=%s的职责密码覆盖、�
   if (path.dirname(directory) !== process.cwd() || !path.basename(directory).startsWith('.tmp-template-credentials-'))
     throw new Error('Unexpected template credentials cleanup path')
   try {
-    await generateFromTemplates(directory, buildTemplateContext({ name: 'credential-fixture', appType: 'fullstack', frontends: ['web'], features: feedback ? ['feedback'] : [], packageManager: 'pnpm' }))
+    await generateFromTemplates(directory, buildTemplateContext({
+      name: 'credential-fixture',
+      appType: 'fullstack',
+      frontends: ['web'],
+      features: feedback
+        ? ['feedback']
+        : [],
+      packageManager: 'pnpm',
+    }))
     const configuration = await readFile(path.join(directory, 'playwright.config.ts'), 'utf8')
     await expect(readFile(path.join(directory, 'playwright.session-close.config.ts'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
     const manifest = JSON.parse(await readFile(path.join(directory, 'package.json'), 'utf8'))
     expect(manifest.scripts['test:e2e']).toContain('--config playwright.config.ts --next --e2e-group=session-close --config playwright.config.ts')
     const spec = await readFile(path.join(directory, 'e2e/fullstack.spec.ts'), 'utf8')
     const session = await readFile(path.join(directory, 'e2e/session-close.spec.ts'), 'utf8')
-    const environments: Record<string, string>[] = [{}, { E2E_AUDIT_ADMIN_PASSWORD: 'fixture-audit-override', E2E_CONFIG_ADMIN_PASSWORD: 'fixture-config-override', E2E_BUSINESS_OPERATOR_PASSWORD: 'fixture-operator-override' }]
+    const environments: Record<string, string>[] = [
+      {},
+      { E2E_AUDIT_ADMIN_PASSWORD: 'fixture-audit-override', E2E_CONFIG_ADMIN_PASSWORD: 'fixture-config-override', E2E_BUSINESS_OPERATOR_PASSWORD: 'fixture-operator-override' },
+    ]
     for (const environment of environments) {
       const config = evaluate(configuration, environment).default as PlaywrightConfig
       const sessionConfig = evaluate(configuration, { ...environment, HAI_E2E_GROUP: 'session-close' }).default as PlaywrightConfig
@@ -58,14 +82,19 @@ it.each([true, false])('fullstack真实模板反馈=%s的职责密码覆盖、�
       expect(sessionConfig.testIgnore).toBeUndefined()
       for (const key of Object.keys(sessionOverrides))
         expect(config.webServer[0].env).not.toHaveProperty(key)
-      expect(sessionConfig.webServer[0].env).toEqual({ ...config.webServer[0].env, ...sessionOverrides })
+      expect(sessionConfig.webServer[0].env).toEqual({
+        ...config.webServer[0].env,
+        ...sessionOverrides,
+      })
       expect(sessionConfig.webServer.slice(1)).toEqual(config.webServer.slice(1))
       const prefix = spec.slice(0, spec.indexOf('// 测试专用'))
       const captured = evaluate(`${prefix}\nexport const captured = { auditAdminPassword, configAdminPassword${feedback ? ', businessOperatorPassword' : ''} }`, environment).captured
       expect(captured).toEqual({
         auditAdminPassword: config.webServer[0].env.HAI_AUDIT_ADMIN_PASSWORD,
         configAdminPassword: config.webServer[0].env.HAI_CONFIG_ADMIN_PASSWORD,
-        ...(feedback ? { businessOperatorPassword: config.webServer[0].env.HAI_BUSINESS_OPERATOR_PASSWORD } : {}),
+        ...(feedback
+          ? { businessOperatorPassword: config.webServer[0].env.HAI_BUSINESS_OPERATOR_PASSWORD }
+          : {}),
       })
       expect(config.webServer[0].env).toMatchObject({
         HAI_AUDIT_ADMIN_PASSWORD: environment.E2E_AUDIT_ADMIN_PASSWORD || 'Scaffold-test-Audit123!',
@@ -86,6 +115,11 @@ it.each([true, false])('fullstack真实模板反馈=%s的职责密码覆盖、�
       expect(spec).toContain('login(page, \'business_operator\', businessOperatorPassword)')
   }
   finally {
-    await rm(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 100,
+    })
   }
 }, 30_000)

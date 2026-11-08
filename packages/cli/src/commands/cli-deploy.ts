@@ -70,15 +70,21 @@ export interface DeployCommandOptions extends GlobalOptions, BuildDownloadOption
 
 /** 配置输入中的可选对象；不让未完成的配置绕过最终 Provider Schema。 */
 function configObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
 }
 
 /** 将部署 Schema 的问题整理成字段和约束，避免输出输入值或未知配置键。 */
 function describeDeployConfigIssues(issues: readonly { path: readonly PropertyKey[], code: string, message: string }[], prefix = 'deploy'): string {
   return issues.map((issue) => {
     const field = [prefix, ...issue.path].join('.')
-    const reason = issue.code === 'unrecognized_keys' ? cliM('cli_deploy_config_unknown_fields') : core.sanitize.sanitizeText(issue.message)
-    return cliM('cli_deploy_middleware_field_error', { params: { variable: field, reason } })
+    const reason = issue.code === 'unrecognized_keys'
+      ? cliM('cli_deploy_config_unknown_fields')
+      : core.sanitize.sanitizeText(issue.message)
+    return cliM('cli_deploy_middleware_field_error', {
+      params: { variable: field, reason },
+    })
   }).join('\n')
 }
 
@@ -93,7 +99,12 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
     const existing = original
     if (existing.type && existing.type !== 'docker-ssh')
       throw new Error(cliM('cli_deploy_bundle_provider'))
-    config.provider = { type: 'docker-ssh', remote: { runtime: 'auto' }, expose: { hostPort: 3000 }, ...existing }
+    config.provider = {
+      type: 'docker-ssh',
+      remote: { runtime: 'auto' },
+      expose: { hostPort: 3000 },
+      ...existing,
+    }
     const candidate = module.ProviderConfigSchema.safeParse(config.provider)
     // 仅打包不依赖 SSH；未填写完整的连接由交付目录中的目标文件补齐。
     if (!candidate.success && candidate.error.issues.some(issue => issue.path[0] === 'ssh')) {
@@ -101,7 +112,12 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
       delete provider.ssh
     }
     if (!nonInteractive) {
-      const answer = await prompts({ type: 'confirm', name: 'value', message: cliM('cli_deploy_bundle_configure_ssh'), initial: false })
+      const answer = await prompts({
+        type: 'confirm',
+        name: 'value',
+        message: cliM('cli_deploy_bundle_configure_ssh'),
+        initial: false,
+      })
       if (answer.value === undefined)
         throw new Error(cliM('cli_deploy_cancelled'))
       editBundleTarget = answer.value === true
@@ -112,11 +128,24 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
     config.provider = current.data
     writeCliMessage(bundleOnly
       ? cliM('cli_deploy_bundle_target')
-      : cliM('cli_deploy_target_reused', { params: { target: current.data.type === 'docker-ssh' && current.data.ssh ? `${current.data.ssh.username}@${current.data.ssh.host}:${current.data.ssh.port}` : 'Vercel' } }))
+      : cliM('cli_deploy_target_reused', {
+          params: {
+            target: current.data.type === 'docker-ssh' && current.data.ssh
+              ? `${current.data.ssh.username}@${current.data.ssh.host}:${current.data.ssh.port}`
+              : 'Vercel',
+          },
+        }))
     return
   }
-  if (nonInteractive || (bundleOnly && !editBundleTarget))
-    throw new Error(cliM('cli_deploy_target_missing', { params: { fields: current.success ? 'provider.ssh' : describeDeployConfigIssues(current.error.issues, 'provider') } }))
+  if (nonInteractive || (bundleOnly && !editBundleTarget)) {
+    throw new Error(cliM('cli_deploy_target_missing', {
+      params: {
+        fields: current.success
+          ? 'provider.ssh'
+          : describeDeployConfigIssues(current.error.issues, 'provider'),
+      },
+    }))
+  }
 
   const platform = bundleOnly
     ? { value: 'docker-ssh' }
@@ -124,8 +153,16 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
         type: 'select',
         name: 'value',
         message: cliM('cli_deploy_target_platform'),
-        choices: [{ title: cliM('cli_deploy_target_ssh'), value: 'docker-ssh' }, { title: 'Vercel', value: 'vercel' }],
-        initial: original.type === 'vercel' ? 1 : 0,
+        choices: [
+          {
+            title: cliM('cli_deploy_target_ssh'),
+            value: 'docker-ssh',
+          },
+          { title: 'Vercel', value: 'vercel' },
+        ],
+        initial: original.type === 'vercel'
+          ? 1
+          : 0,
       })
   if (!platform.value)
     throw new Error(cliM('cli_deploy_cancelled'))
@@ -134,15 +171,25 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
     const answer = await prompts({
       type: options.secret ? 'password' : 'text',
       name: 'value',
-      message: options.keepSecret ? cliM('cli_deploy_inputPASSWORDKEEP') : cliM(`cli_deploy_input${name.split('_').at(-1)}` as Parameters<typeof cliM>[0]),
-      initial: options.secret ? undefined : initial === undefined ? '' : String(initial),
+      message: options.keepSecret
+        ? cliM('cli_deploy_inputPASSWORDKEEP')
+        : cliM(`cli_deploy_input${name.split('_').at(-1)}` as Parameters<typeof cliM>[0]),
+      initial: options.secret
+        ? undefined
+        : initial === undefined
+          ? ''
+          : String(initial),
       validate: (value: string) => options.port
         ? (/^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 65535) || cliM('cli_deploy_port_invalid')
-        : options.optional || !!(options.trim === false ? value : value.trim()) || cliM('cli_deploy_invalid_value'),
+        : options.optional || !!(options.trim === false
+          ? value
+          : value.trim()) || cliM('cli_deploy_invalid_value'),
     })
     if (answer.value === undefined)
       throw new Error(cliM('cli_deploy_cancelled'))
-    return options.trim === false ? String(answer.value) : String(answer.value).trim()
+    return options.trim === false
+      ? String(answer.value)
+      : String(answer.value).trim()
   }
   let provider: Record<string, unknown>
   if (platform.value === 'docker-ssh') {
@@ -158,29 +205,69 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
       type: 'select',
       name: 'value',
       message: cliM('cli_deploy_target_auth'),
-      choices: [{ title: cliM('cli_deploy_target_auth_key'), value: 'key' }, { title: cliM('cli_deploy_target_auth_password'), value: 'password' }],
+      choices: [
+        {
+          title: cliM('cli_deploy_target_auth_key'),
+          value: 'key',
+        },
+        {
+          title: cliM('cli_deploy_target_auth_password'),
+          value: 'password',
+        },
+      ],
       initial: previousPasswordMode ? 1 : 0,
     })
     if (!['key', 'password'].includes(authentication.value))
       throw new Error(cliM('cli_deploy_cancelled'))
     const auth = authentication.value as 'key' | 'password'
-    const previousPassword = previousPasswordMode && typeof ssh.password === 'string' && ssh.password.length > 0 ? ssh.password : undefined
-    const password = auth === 'password'
-      ? previousPassword && !editBundleTarget ? previousPassword : await input('HAI_DEPLOY_PROVIDER_SSH_PASSWORD', undefined, { secret: true, trim: false, optional: !!previousPassword, keepSecret: !!previousPassword }) || previousPassword
+    const previousPassword = previousPasswordMode && typeof ssh.password === 'string' && ssh.password.length > 0
+      ? ssh.password
       : undefined
-    const identityFile = auth === 'key' ? await input('HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE', ssh.identityFile, { optional: true }) : undefined
+    const password = auth === 'password'
+      ? previousPassword && !editBundleTarget
+        ? previousPassword
+        : await input('HAI_DEPLOY_PROVIDER_SSH_PASSWORD', undefined, {
+          secret: true,
+          trim: false,
+          optional: !!previousPassword,
+          keepSecret: !!previousPassword,
+        }) || previousPassword
+      : undefined
+    const identityFile = auth === 'key'
+      ? await input('HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE', ssh.identityFile, { optional: true })
+      : undefined
     const knownHostsFile = await input('HAI_DEPLOY_PROVIDER_SSH_KNOWNHOSTSFILE', ssh.knownHostsFile, { optional: true })
     const baseDir = await input('HAI_DEPLOY_PROVIDER_REMOTE_BASEDIR', remote.baseDir || '/opt/hai/apps')
-    const runtime = await prompts({ type: 'select', name: 'value', message: cliM('cli_deploy_target_runtime'), choices: ['auto', 'podman', 'docker'].map(value => ({ title: value, value })), initial: ['auto', 'podman', 'docker'].indexOf(String(remote.runtime ?? 'auto')) })
+    const runtime = await prompts({
+      type: 'select',
+      name: 'value',
+      message: cliM('cli_deploy_target_runtime'),
+      choices: ['auto', 'podman', 'docker'].map(value => ({ title: value, value })),
+      initial: ['auto', 'podman', 'docker'].indexOf(String(remote.runtime ?? 'auto')),
+    })
     if (!runtime.value)
       throw new Error(cliM('cli_deploy_cancelled'))
     const hostPort = Number(await input('HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT', expose.hostPort || 3000, { port: true }))
     const containerPort = Number(await input('HAI_DEPLOY_PROVIDER_EXPOSE_CONTAINERPORT', expose.containerPort || 3000, { port: true }))
     provider = {
       type: 'docker-ssh',
-      ssh: { ...ssh, host, port, username, auth, password, identityFile: identityFile || undefined, knownHostsFile: knownHostsFile || undefined },
+      ssh: {
+        ...ssh,
+        host,
+        port,
+        username,
+        auth,
+        password,
+        identityFile: identityFile || undefined,
+        knownHostsFile: knownHostsFile || undefined,
+      },
       remote: { ...remote, baseDir, runtime: runtime.value },
-      expose: { ...expose, type: 'port', hostPort, containerPort },
+      expose: {
+        ...expose,
+        type: 'port',
+        hostPort,
+        containerPort,
+      },
     }
   }
   else {
@@ -208,10 +295,23 @@ async function configureDeployHttps(module: typeof import('@h-ai/deploy'), confi
     name: 'httpsMode',
     message: cliM('cli_deploy_https_mode'),
     choices: [
-      { title: cliM(previous.type ? 'cli_deploy_https_keep' : 'cli_deploy_https_off'), value: 'keep' },
-      { title: cliM('cli_deploy_https_files'), value: 'files' },
+      {
+        title: cliM(previous.type ? 'cli_deploy_https_keep' : 'cli_deploy_https_off'),
+        value: 'keep',
+      },
+      {
+        title: cliM('cli_deploy_https_files'),
+        value: 'files',
+      },
       { title: 'Let\'s Encrypt (Certbot)', value: 'letsencrypt' },
-      ...(previous.type ? [{ title: cliM('cli_deploy_https_off'), value: 'off' }] : []),
+      ...(previous.type
+        ? [
+            {
+              title: cliM('cli_deploy_https_off'),
+              value: 'off',
+            },
+          ]
+        : []),
     ],
   })
   if (selection.httpsMode === undefined)
@@ -221,12 +321,25 @@ async function configureDeployHttps(module: typeof import('@h-ai/deploy'), confi
   let https: Record<string, unknown> | undefined
   if (selection.httpsMode !== 'off') {
     const ask = async (name: string, initial?: unknown): Promise<string> => {
-      const answer = await prompts({ type: 'text', name, message: cliM((`cli_deploy_${name}`) as Parameters<typeof cliM>[0]), initial: initial === undefined ? '' : String(initial), validate: (value: string) => !!value.trim() || cliM('cli_deploy_invalid_value') })
+      const answer = await prompts({
+        type: 'text',
+        name,
+        message: cliM((`cli_deploy_${name}`) as Parameters<typeof cliM>[0]),
+        initial: initial === undefined
+          ? ''
+          : String(initial),
+        validate: (value: string) => !!value.trim() || cliM('cli_deploy_invalid_value'),
+      })
       if (answer[name] === undefined)
         throw new Error(cliM('cli_deploy_cancelled'))
       return String(answer[name]).trim()
     }
-    https = { type: selection.httpsMode, domain: await ask('httpsDomain', previous.domain), port: Number(await ask('httpsPort', previous.port ?? 443)), redirectHttp: true }
+    https = {
+      type: selection.httpsMode,
+      domain: await ask('httpsDomain', previous.domain),
+      port: Number(await ask('httpsPort', previous.port ?? 443)),
+      redirectHttp: true,
+    }
     if (https.type === 'files') {
       https.certificateFile = await ask('httpsCertificate', previous.certificateFile)
       https.privateKeyFile = await ask('httpsPrivateKey', previous.privateKeyFile)
@@ -234,13 +347,27 @@ async function configureDeployHttps(module: typeof import('@h-ai/deploy'), confi
     else {
       writeCliMessage(cliM('cli_deploy_https_requirements'))
       https.email = await ask('httpsEmail', previous.email)
-      const consent = await prompts({ type: 'confirm', name: 'acceptTerms', message: cliM('cli_deploy_https_terms'), initial: previous.acceptTerms === true })
+      const consent = await prompts({
+        type: 'confirm',
+        name: 'acceptTerms',
+        message: cliM('cli_deploy_https_terms'),
+        initial: previous.acceptTerms === true,
+      })
       if (consent.acceptTerms !== true)
         throw new Error(cliM('cli_deploy_cancelled'))
       https.acceptTerms = true
     }
   }
-  const parsed = module.ProviderConfigSchema.safeParse({ ...provider, expose: { ...expose, ...(https?.type === 'letsencrypt' ? { hostPort: 80 } : {}), https } })
+  const parsed = module.ProviderConfigSchema.safeParse({
+    ...provider,
+    expose: {
+      ...expose,
+      ...(https?.type === 'letsencrypt'
+        ? { hostPort: 80 }
+        : {}),
+      https,
+    },
+  })
   if (!parsed.success)
     throw new Error(cliM('cli_deploy_invalid_value'))
   const saved = module.saveDeploymentEnvironment(environment, { HAI_DEPLOY_PROVIDER: parsed.data }, { private: true })
@@ -291,7 +418,12 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     if (!environmentName) {
       if (!process.stdin.isTTY)
         throw new Error(cliM('cli_deploy_environment_hint'))
-      const answer = await prompts({ type: 'text', name: 'environment', message: cliM('cli_deploy_environment'), initial: 'prod' })
+      const answer = await prompts({
+        type: 'text',
+        name: 'environment',
+        message: cliM('cli_deploy_environment'),
+        initial: 'prod',
+      })
       environmentName = answer.environment
       if (!environmentName)
         throw new Error(cliM('cli_deploy_cancelled'))
@@ -330,38 +462,86 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
 
     const { deploy } = deployModule
 
-    const scanResult = await deploy.scan(appDir, { environment: environmentName, envDir: options.envDir ? resolve(cwd, options.envDir) : undefined })
-    if (!scanResult.success)
-      throw new Error(cliM('cli_deploy_scan_failed', { params: { message: scanResult.error.message } }))
+    const scanResult = await deploy.scan(appDir, {
+      environment: environmentName,
+      envDir: options.envDir
+        ? resolve(cwd, options.envDir)
+        : undefined,
+    })
+    if (!scanResult.success) {
+      throw new Error(cliM('cli_deploy_scan_failed', {
+        params: { message: scanResult.error.message },
+      }))
+    }
     const scan = scanResult.data
     appDir = scan.appDir ?? appDir
     const buildFile = projectConfigPath(appDir)
     const buildRoot = dirname(buildFile)
-    const project = existsSync(buildFile) ? readProjectConfig(buildFile) : {}
+    const project = existsSync(buildFile)
+      ? readProjectConfig(buildFile)
+      : {}
     const buildConfig = configObject(project.build)
     const imageNames = Array.isArray(buildConfig.images)
       ? buildConfig.images.flatMap((image) => {
           const name = configObject(image).name
-          return typeof name === 'string' ? [name] : []
+          return typeof name === 'string'
+            ? [name]
+            : []
         })
       : ['serv', 'web']
-    const names = [...imageNames, ...(scan.middlewares ?? []).filter(item => !['sqlite', 'local', 'memory', 'disabled', 'console', 'lancedb'].includes(item.backend)).map(item => item.service)]
-    const available = [...new Set(names)]
-    if (selectedServices?.some(name => !available.includes(name)))
-      throw new Error(cliM('cli_deploy_services_invalid', { params: { services: available.join(', ') } }))
+    const names = [
+      ...imageNames,
+      ...(scan.middlewares ?? []).filter(item => ![
+        'sqlite',
+        'local',
+        'memory',
+        'disabled',
+        'console',
+        'lancedb',
+      ].includes(item.backend)).map(item => item.service),
+    ]
+    const available = [
+      ...new Set(names),
+    ]
+    if (selectedServices?.some(name => !available.includes(name))) {
+      throw new Error(cliM('cli_deploy_services_invalid', {
+        params: {
+          services: available.join(', '),
+        },
+      }))
+    }
     const environment = deployModule.loadDeploymentEnvironment({ environment: environmentName, envDir: scan.envDir ?? appDir })
     if (!environment.success)
       throw new Error(environment.error.message)
     if (options.plan) {
       if (options.build || options.bundleOnly || options.output || options.imageSource !== undefined || options.imageMirrors !== undefined || options.npmSource !== undefined || options.npmRegistry !== undefined || options.proxyMode !== undefined || options.proxyUrl !== undefined || options.proxyBypass !== undefined || options.httpProxy === false)
         throw new Error(cliM('cli_deploy_plan_options'))
-      const loaded = deployModule.loadDeploymentConfig('deploy', buildFile, { ...process.env, ...environment.data.values })
+      const loaded = deployModule.loadDeploymentConfig('deploy', buildFile, {
+        ...process.env,
+        ...environment.data.values,
+      })
       if (!loaded.success)
         throw new Error(loaded.error.message)
       const validated = deployModule.DeployConfigSchema.safeParse(loaded.data)
-      if (!validated.success)
-        throw new Error(cliM('cli_deploy_config_invalid', { params: { path: buildFile, fields: describeDeployConfigIssues(validated.error.issues) } }))
-      const plan = await deployModule.createDeploymentPlan(appDir, validated.data, { inspectRemote: options.inspectRemote, environment: environmentName, envDir: environment.data.envDir, selectedServices, skipMiddleware: options.skipMiddleware, artifactDir: options.artifactDir ? resolve(cwd, options.artifactDir) : undefined, runtime: options.runtime })
+      if (!validated.success) {
+        throw new Error(cliM('cli_deploy_config_invalid', {
+          params: {
+            path: buildFile,
+            fields: describeDeployConfigIssues(validated.error.issues),
+          },
+        }))
+      }
+      const plan = await deployModule.createDeploymentPlan(appDir, validated.data, {
+        inspectRemote: options.inspectRemote,
+        environment: environmentName,
+        envDir: environment.data.envDir,
+        selectedServices,
+        skipMiddleware: options.skipMiddleware,
+        artifactDir: options.artifactDir
+          ? resolve(cwd, options.artifactDir)
+          : undefined,
+        runtime: options.runtime,
+      })
       if (!plan.success)
         throw new Error(plan.error.message)
       writeCliMessage(JSON.stringify(plan.data, null, 2))
@@ -373,17 +553,25 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     spinner.start(cliM('cli_deploy_load_credentials'))
     const credResult = deploy.credentials.load()
     if (!credResult.success) {
-      throw new Error(cliM('cli_deploy_credentials_failed', { params: { message: credResult.error.message } }))
+      throw new Error(cliM('cli_deploy_credentials_failed', {
+        params: { message: credResult.error.message },
+      }))
     }
-    spinner.succeed(cliM('cli_deploy_credentials_loaded', { params: { count: credResult.data.length } }))
+    spinner.succeed(cliM('cli_deploy_credentials_loaded', {
+      params: { count: credResult.data.length },
+    }))
 
     // 2. 读取部署配置
     spinner.start(cliM('cli_deploy_load_config'))
     const configPath = buildFile
     if (!existsSync(configPath)) {
-      spinner.fail(chalk.red(cliM('cli_deploy_config_missing', { params: { path: configPath } })))
+      spinner.fail(chalk.red(cliM('cli_deploy_config_missing', {
+        params: { path: configPath },
+      })))
       writeCliMessage(chalk.cyan(cliM('cli_deploy_config_hint')))
-      throw new Error(cliM('cli_deploy_config_missing', { params: { path: configPath } }))
+      throw new Error(cliM('cli_deploy_config_missing', {
+        params: { path: configPath },
+      }))
     }
 
     const loadedConfig = deployModule.loadDeploymentConfig('deploy', configPath, process.env)
@@ -392,7 +580,9 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     const deployConfig = loadedConfig.data
     spinner.succeed(cliM('cli_deploy_config_loaded'))
     if (!options.build && !selectedServices && configObject(deployConfig.provider).type === 'docker-ssh') {
-      let artifactDirectory = options.artifactDir ? resolve(cwd, options.artifactDir) : resolve(buildRoot, '.hai/build/docker')
+      let artifactDirectory = options.artifactDir
+        ? resolve(cwd, options.artifactDir)
+        : resolve(buildRoot, '.hai/build/docker')
       if (existsSync(resolve(artifactDirectory, 'latest'))) {
         const pointer = readFileSync(resolve(artifactDirectory, 'latest'), 'utf8').trim()
         if (!/^[a-z0-9][\w.+-]*$/i.test(pointer))
@@ -414,7 +604,12 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       const provider = configObject(deployConfig.provider)
       if (provider.type && provider.type !== 'docker-ssh')
         throw new Error(cliM('cli_deploy_bundle_provider'))
-      deployConfig.provider = { type: 'docker-ssh', remote: { runtime: 'auto' }, expose: { hostPort: 3000 }, ...provider }
+      deployConfig.provider = {
+        type: 'docker-ssh',
+        remote: { runtime: 'auto' },
+        expose: { hostPort: 3000 },
+        ...provider,
+      }
     }
     else {
       await configureDeployTarget(deployModule, deployConfig, environment.data, options.yes)
@@ -425,7 +620,13 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     if (!options.yes && !selectedServices && configObject(deployConfig.provider).type === 'docker-ssh') {
       if (existsSync(buildFile)) {
         if (available.length > 1) {
-          const choice = await prompts({ type: 'multiselect', name: 'value', message: cliM('cli_deploy_choose_services'), choices: available.map(name => ({ title: name, value: name, selected: true })), min: 1 })
+          const choice = await prompts({
+            type: 'multiselect',
+            name: 'value',
+            message: cliM('cli_deploy_choose_services'),
+            choices: available.map(name => ({ title: name, value: name, selected: true })),
+            min: 1,
+          })
           if (!Array.isArray(choice.value) || choice.value.length === 0)
             throw new Error(cliM('cli_deploy_cancelled'))
           if (choice.value.length !== available.length)
@@ -434,9 +635,17 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       }
     }
 
-    spinner.succeed(cliM('cli_deploy_scanned', { params: { name: scan.appName, sveltekit: String(scan.isSvelteKit), services: scan.requiredServices.join(', ') || cliM('cli_deploy_none') } }))
+    spinner.succeed(cliM('cli_deploy_scanned', {
+      params: {
+        name: scan.appName,
+        sveltekit: String(scan.isSvelteKit),
+        services: scan.requiredServices.join(', ') || cliM('cli_deploy_none'),
+      },
+    }))
 
-    const downloads = configObject(deployConfig.provider).type === 'docker-ssh' ? await resolveBuildDownloads(buildRoot, options) : undefined
+    const downloads = configObject(deployConfig.provider).type === 'docker-ssh'
+      ? await resolveBuildDownloads(buildRoot, options)
+      : undefined
     let builtImages = false
     if (options.build) {
       if (!existsSync(buildFile))
@@ -445,22 +654,55 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       if (!selectedServices || imageNames?.length) {
         writeCliMessage(cliM('cli_deploy_build_started'))
         builtImages = true
-        await buildCommand({ ...options, cwd: buildRoot, target: 'image', images: imageNames?.join(','), yes: true, imageSource: downloads?.imageSource.type, imageMirrors: downloads?.imageSource.registries ? Object.entries(downloads.imageSource.registries).map(([key, value]) => `${key}=${value}`).join(',') : undefined, npmSource: downloads?.npmSource.type, npmRegistry: downloads?.npmSource.registry, proxyMode: downloads?.proxy.mode, proxyUrl: downloads?.proxy.url, proxyBypass: downloads?.proxy.bypass })
+        await buildCommand({
+          ...options,
+          cwd: buildRoot,
+          target: 'image',
+          images: imageNames?.join(','),
+          yes: true,
+          imageSource: downloads?.imageSource.type,
+          imageMirrors: downloads?.imageSource.registries
+            ? Object.entries(downloads.imageSource.registries).map(([key, value]) => `${key}=${value}`).join(',')
+            : undefined,
+          npmSource: downloads?.npmSource.type,
+          npmRegistry: downloads?.npmSource.registry,
+          proxyMode: downloads?.proxy.mode,
+          proxyUrl: downloads?.proxy.url,
+          proxyBypass: downloads?.proxy.bypass,
+        })
       }
     }
-    if (selectedServices)
-      writeCliMessage(cliM('cli_deploy_services', { params: { services: selectedServices.join(', ') } }))
+    if (selectedServices) {
+      writeCliMessage(cliM('cli_deploy_services', {
+        params: {
+          services: selectedServices.join(', '),
+        },
+      }))
+    }
     let skipMiddleware = options.skipMiddleware || selectedServices?.every(name => ['serv', 'web'].includes(name))
     if (!skipMiddleware && !options.yes && !selectedServices && scan.haiModules?.includes('@h-ai/reach')
       && /^\s*\[\s*\]\s*$/.test(environment.data.values.HAI_REACH_PROVIDERS ?? '')) {
-      writeCliMessage(cliM('cli_deploy_reach_empty', { params: { file: resolve(environment.data.envDir, `.env.${environment.data.environment}.local`) } }))
+      writeCliMessage(cliM('cli_deploy_reach_empty', {
+        params: {
+          file: resolve(environment.data.envDir, `.env.${environment.data.environment}.local`),
+        },
+      }))
     }
     if (!skipMiddleware && !options.yes && scan.requiredServices.length) {
       const action = await prompts({
         type: 'select',
         name: 'value',
         message: cliM('cli_deploy_middleware_plan'),
-        choices: [{ title: cliM('cli_deploy_middleware_configure'), value: 'configure' }, { title: cliM('cli_deploy_middleware_skip'), value: 'skip' }],
+        choices: [
+          {
+            title: cliM('cli_deploy_middleware_configure'),
+            value: 'configure',
+          },
+          {
+            title: cliM('cli_deploy_middleware_skip'),
+            value: 'skip',
+          },
+        ],
       })
       if (!action.value)
         throw new Error(cliM('cli_deploy_cancelled'))
@@ -470,7 +712,10 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       writeCliMessage(cliM('cli_deploy_middleware_skipped'))
     const serviceModes = skipMiddleware
       ? Object.fromEntries(scan.requiredServices.map(service => [service, 'keep' as const]))
-      : await configureDeployMiddleware(deployModule, { ...scan, middlewares: scan.middlewares?.filter(item => !selectedServices || selectedServices.includes(item.service)) }, environment.data, deployConfig, options.yes)
+      : await configureDeployMiddleware(deployModule, {
+          ...scan,
+          middlewares: scan.middlewares?.filter(item => !selectedServices || selectedServices.includes(item.service)),
+        }, environment.data, deployConfig, options.yes)
     if (skipMiddleware)
       deployConfig.services = undefined
     // 离线模式在构建和中间件配置之后最后询问；生成 tar 和 target 时使用同一份目标。
@@ -491,11 +736,19 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     // 4. 初始化 deploy 模块
     spinner.start(cliM('cli_deploy_initializing'))
     const validatedConfig = deployModule.DeployConfigSchema.safeParse(deployConfig)
-    if (!validatedConfig.success)
-      throw new Error(cliM('cli_deploy_config_invalid', { params: { path: configPath, fields: describeDeployConfigIssues(validatedConfig.error.issues) } }))
+    if (!validatedConfig.success) {
+      throw new Error(cliM('cli_deploy_config_invalid', {
+        params: {
+          path: configPath,
+          fields: describeDeployConfigIssues(validatedConfig.error.issues),
+        },
+      }))
+    }
     const initResult = await deploy.init(validatedConfig.data)
     if (!initResult.success) {
-      throw new Error(cliM('cli_deploy_init_failed', { params: { message: initResult.error.message } }))
+      throw new Error(cliM('cli_deploy_init_failed', {
+        params: { message: initResult.error.message },
+      }))
     }
     closeDeploy = () => deploy.close()
     spinner.succeed(cliM('cli_deploy_initialized'))
@@ -511,9 +764,13 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       runtime: options.runtime,
       onProgress: stage => writeCliMessage(cliM(`cli_deploy_stage_${stage}`)),
       skipMiddleware,
-      artifactDir: options.artifactDir ? resolve(cwd, options.artifactDir) : undefined,
+      artifactDir: options.artifactDir
+        ? resolve(cwd, options.artifactDir)
+        : undefined,
       bundleOnly: options.bundleOnly,
-      output: options.output ? resolve(cwd, options.output) : undefined,
+      output: options.output
+        ? resolve(cwd, options.output)
+        : undefined,
       environment: environment.data.environment,
       envDir: environment.data.envDir,
       serviceModes,
@@ -522,10 +779,17 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     if (!deployResult.success) {
       const execution = deployModule.getDeployCommandState(deployResult.error)
       if (execution) {
-        const localKey = execution.localTermination === 'not-started' ? 'cli_deploy_local_not_started' : execution.localTermination === 'confirmed' ? 'cli_deploy_local_confirmed' : 'cli_deploy_local_unknown'
+        const localKey = execution.localTermination === 'not-started'
+          ? 'cli_deploy_local_not_started'
+          : execution.localTermination === 'confirmed'
+            ? 'cli_deploy_local_confirmed'
+            : 'cli_deploy_local_unknown'
         writeCliMessage(cliM(localKey))
-        if (execution.remoteExecution)
-          writeCliMessage(cliM(execution.remoteExecution === 'finished' ? 'cli_deploy_remote_finished' : 'cli_deploy_remote_unknown'))
+        if (execution.remoteExecution) {
+          writeCliMessage(cliM(execution.remoteExecution === 'finished'
+            ? 'cli_deploy_remote_finished'
+            : 'cli_deploy_remote_unknown'))
+        }
         if (execution.remoteRecovery) {
           const recoveryKeys = {
             'not-needed': 'cli_deploy_recovery_not_needed',
@@ -535,39 +799,67 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
           } as const
           writeCliMessage(cliM(recoveryKeys[execution.remoteRecovery]))
         }
-        if (execution.deploymentId && execution.resultFile)
-          writeCliMessage(cliM('cli_deploy_result_check', { params: { id: execution.deploymentId, path: execution.resultFile } }))
+        if (execution.deploymentId && execution.resultFile) {
+          writeCliMessage(cliM('cli_deploy_result_check', {
+            params: { id: execution.deploymentId, path: execution.resultFile },
+          }))
+        }
       }
       if (deployResult.error.ext?.recovery) {
         writeCliMessage(deployResult.error.suggestion ?? cliM('cli_deploy_command_failed'))
       }
-      throw new Error(cliM('cli_deploy_failed', { params: { message: deployResult.error.message } }))
+      throw new Error(cliM('cli_deploy_failed', {
+        params: { message: deployResult.error.message },
+      }))
     }
 
-    spinner.succeed(chalk.green(cliM(deployResult.data.status === 'packaged' ? 'cli_deploy_bundle_ready' : 'cli_deploy_success')))
+    spinner.succeed(chalk.green(cliM(deployResult.data.status === 'packaged'
+      ? 'cli_deploy_bundle_ready'
+      : 'cli_deploy_success')))
     writeCliMessage('')
-    if (deployResult.data.bundlePath && (deployResult.data.status !== 'packaged' || !deployResult.data.instructions))
-      writeCliMessage(cliM('cli_deploy_bundle_path', { params: { path: deployResult.data.bundlePath } }))
-    if (deployResult.data.status === 'packaged')
+    if (deployResult.data.bundlePath && (deployResult.data.status !== 'packaged' || !deployResult.data.instructions)) {
+      writeCliMessage(cliM('cli_deploy_bundle_path', {
+        params: { path: deployResult.data.bundlePath },
+      }))
+    }
+    if (deployResult.data.status === 'packaged') {
       writeCliMessage(deployResult.data.instructions ?? '')
-    else
-      writeCliMessage(chalk.cyan(cliM('cli_deploy_url', { params: { url: deployResult.data.url } })))
-    writeCliMessage(chalk.gray(cliM('cli_deploy_id', { params: { id: deployResult.data.deploymentId } })))
-    if (refreshed.data.values.HAI_ADMIN_DEFAULT_PASSWORD && (!selectedServices || selectedServices.includes(imageNames.includes('serv') ? 'serv' : 'web'))) {
+    }
+    else {
+      writeCliMessage(chalk.cyan(cliM('cli_deploy_url', {
+        params: { url: deployResult.data.url },
+      })))
+    }
+    writeCliMessage(chalk.gray(cliM('cli_deploy_id', {
+      params: { id: deployResult.data.deploymentId },
+    })))
+    if (refreshed.data.values.HAI_ADMIN_DEFAULT_PASSWORD && (!selectedServices || selectedServices.includes(imageNames.includes('serv')
+      ? 'serv'
+      : 'web'))) {
       const passwordKey = 'HAI_ADMIN_DEFAULT_PASSWORD'
       const source = originalEnv[passwordKey] !== undefined
         ? cliM('cli_deploy_processEnvironment')
-        : [`.env.${refreshed.data.environment}.local`, '.env.local', `.env.${refreshed.data.environment}`, '.env']
+        : [
+            `.env.${refreshed.data.environment}.local`,
+            '.env.local',
+            `.env.${refreshed.data.environment}`,
+            '.env',
+          ]
             .map(file => resolve(refreshed.data.envDir, file))
             .find(file => existsSync(file) && parseEnv(readFileSync(file, 'utf8'))[passwordKey] !== undefined)
-      if (source)
-        writeCliMessage(chalk.cyan(cliM('cli_deploy_adminPasswordSource', { params: { source } })))
+      if (source) {
+        writeCliMessage(chalk.cyan(cliM('cli_deploy_adminPasswordSource', {
+          params: { source },
+        })))
+      }
     }
     writeCliMessage('')
   }
   catch (error) {
     spinner.fail(chalk.red(cliM('cli_deploy_command_failed')))
-    writeCliError(error instanceof Error ? error.message : String(error))
+    writeCliError(error instanceof Error
+      ? error.message
+      : String(error))
     throw error
   }
   finally {

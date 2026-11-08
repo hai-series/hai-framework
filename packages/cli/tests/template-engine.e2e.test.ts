@@ -35,33 +35,92 @@ import { loadConfigText } from './helpers/config.js'
 let tmpRoot = ''
 
 it('fullstack 默认提供护眼主题，同时保留宿主的默认值与显式主题白名单', () => {
-  const options = { name: 'eye-care', appType: 'fullstack', features: [], packageManager: 'pnpm' } as const
+  const options = {
+    name: 'eye-care',
+    appType: 'fullstack',
+    features: [],
+    packageManager: 'pnpm',
+  } as const
   const defaults = buildTemplateContext({ ...options, features: [] })
   expect(defaults.fullstack?.theme.defaultTheme).toBe('light')
   expect(defaults.fullstack?.theme.themes).toContain('eye-care')
-  const custom = buildTemplateContext({ ...options, features: [], moduleConfigs: { fullstack: { theme: { defaultTheme: 'dark', themes: ['light', 'dark'] } } } })
-  expect(custom.fullstack?.theme).toEqual({ defaultTheme: 'dark', themes: ['light', 'dark'] })
+  const custom = buildTemplateContext({
+    ...options,
+    features: [],
+    moduleConfigs: {
+      fullstack: {
+        theme: {
+          defaultTheme: 'dark',
+          themes: ['light', 'dark'],
+        },
+      },
+    },
+  })
+  expect(custom.fullstack?.theme).toEqual({
+    defaultTheme: 'dark',
+    themes: ['light', 'dark'],
+  })
 })
 
-it.each(['api', 'admin', 'website', 'h5', 'mobile-app'] as const)('单独 %s 工程按职责命名镜像，手机原生目标独立配置', async (appType) => {
+it.each([
+  'api',
+  'admin',
+  'website',
+  'h5',
+  'mobile-app',
+] as const)('单独 %s 工程按职责命名镜像，手机原生目标独立配置', async (appType) => {
   const project = path.join(tmpRoot, `role-${appType}`)
-  await generateFromTemplates(project, buildTemplateContext({ name: `role-${appType}`, appType, features: [], packageManager: 'pnpm' }))
+  await generateFromTemplates(project, buildTemplateContext({
+    name: `role-${appType}`,
+    appType,
+    features: [],
+    packageManager: 'pnpm',
+  }))
   const { build } = JSON.parse(await readGenerated(project, 'hai.json'))
-  const role = appType === 'api' ? 'serv' : 'web'
-  expect(build.images).toEqual([{ name: role, dockerfile: `images/${role}.Dockerfile`, containerPort: appType === 'mobile-app' ? 8080 : 3000 }])
+  const role = appType === 'api'
+    ? 'serv'
+    : 'web'
+  expect(build.images).toEqual([
+    {
+      name: role,
+      dockerfile: `images/${role}.Dockerfile`,
+      containerPort: appType === 'mobile-app'
+        ? 8080
+        : 3000,
+    },
+  ])
   expect(await fileExists(project, `images/${role}.Dockerfile`)).toBe(true)
-  expect(build.app).toEqual(appType === 'mobile-app' ? ['.'] : undefined)
+  expect(build.app).toEqual(appType === 'mobile-app'
+    ? ['.']
+    : undefined)
 })
 
 it.each([true, false])('fullstack 实际 workspace 的所有 catalog 依赖都能解析（feedback=%s）', async (feedback) => {
   const name = `catalog-${feedback}`
   const project = path.join(tmpRoot, name)
-  await generateFromTemplates(project, buildTemplateContext({ name, appType: 'fullstack', frontends: ['web'], features: feedback ? ['feedback'] : [], packageManager: 'pnpm' }))
+  await generateFromTemplates(project, buildTemplateContext({
+    name,
+    appType: 'fullstack',
+    frontends: ['web'],
+    features: feedback
+      ? ['feedback']
+      : [],
+    packageManager: 'pnpm',
+  }))
   const workspace = parse(await fse.readFile(path.join(project, 'pnpm-workspace.yaml'), 'utf8')) as { catalog: Record<string, string> }
   const missing: string[] = []
-  for (const directory of ['.', `packages/${name}-serv`, `packages/${name}-shared`, `packages/${name}-contract`, `apps/${name}-web`]) {
+  for (const directory of [
+    '.',
+    `packages/${name}-serv`,
+    `packages/${name}-shared`,
+    `packages/${name}-contract`,
+    `apps/${name}-web`,
+  ]) {
     const manifest = JSON.parse(await fse.readFile(path.join(project, directory, 'package.json'), 'utf8')) as { dependencies?: Record<string, string>, devDependencies?: Record<string, string> }
-    for (const [dependency, specifier] of Object.entries({ ...manifest.dependencies, ...manifest.devDependencies })) {
+    for (const [dependency, specifier] of Object.entries({
+      ...manifest.dependencies,
+      ...manifest.devDependencies,
+    })) {
       if (specifier === 'catalog:' && !workspace.catalog[dependency])
         missing.push(`${directory}: ${dependency}`)
     }
@@ -69,9 +128,18 @@ it.each([true, false])('fullstack 实际 workspace 的所有 catalog 依赖都�
   expect(missing).toEqual([])
 })
 
-it.each([['web'], ['app']] as const)('fullstack 部署显式描述所选 Web，原生端不生成 Web 服务（%s）', async (target) => {
+it.each([
+  ['web'],
+  ['app'],
+] as const)('fullstack 部署显式描述所选 Web，原生端不生成 Web 服务（%s）', async (target) => {
   const project = path.join(tmpRoot, `deploy-${target}`)
-  await generateFromTemplates(project, buildTemplateContext({ name: `deploy-${target}`, appType: 'fullstack', frontends: [target], features: [], packageManager: 'pnpm' }))
+  await generateFromTemplates(project, buildTemplateContext({
+    name: `deploy-${target}`,
+    appType: 'fullstack',
+    frontends: [target],
+    features: [],
+    packageManager: 'pnpm',
+  }))
   const loaded = loadDeploymentConfig('deploy', path.join(project, 'hai.json'), {})
   expect(loaded.success).toBe(true)
   if (!loaded.success)
@@ -79,14 +147,24 @@ it.each([['web'], ['app']] as const)('fullstack 部署显式描述所选 Web，�
   expect(loaded.data.container).toEqual({ s3Engine: 'rustfs' })
   const build = (JSON.parse(await readGenerated(project, 'hai.json')) as { build: { images: Array<{ name: string, dockerfile: string }> } }).build
   expect(await fileExists(project, 'scripts/run-e2e.mjs')).toBe(true)
-  expect(build.images.map(image => image.name)).toEqual(target === 'web' ? ['serv', 'web'] : ['serv'])
+  expect(build.images.map(image => image.name)).toEqual(target === 'web'
+    ? ['serv', 'web']
+    : ['serv'])
 })
 
 it.each(['api', 'fullstack'] as const)('正式容量配置在 %s 生成项目中由同一环境值解析', async (appType) => {
   const name = `capacity-${appType}`
   const project = path.join(tmpRoot, name)
-  await generateFromTemplates(project, buildTemplateContext({ name, appType, frontends: ['web'], features: ['crypto', 'db'], packageManager: 'pnpm' }))
-  const service = appType === 'api' ? `apps/${name}-serv` : `packages/${name}-serv`
+  await generateFromTemplates(project, buildTemplateContext({
+    name,
+    appType,
+    frontends: ['web'],
+    features: ['crypto', 'db'],
+    packageManager: 'pnpm',
+  }))
+  const service = appType === 'api'
+    ? `apps/${name}-serv`
+    : `packages/${name}-serv`
   const file = path.join(project, service, 'config/_serv.yml')
   const content = await fse.readFile(file, 'utf8')
   for (const variable of ['HAI_SERV_HTTP_ACCESS_GLOBAL_TIMEZONE', 'HAI_SERV_HTTP_DOCS', 'HAI_SERV_TRANSPORT_ROUTEPLAINTEXTBYTES'])
@@ -96,7 +174,16 @@ it.each(['api', 'fullstack'] as const)('正式容量配置在 %s 生成项目中
     HAI_SERV_TRANSPORT_ROUTEPLAINTEXTBYTES: '{"/api/v1/uploads/*":16777216}',
     HAI_SERV_HTTP_DOCS: 'false',
   })
-  expect(loaded).toMatchObject({ success: true, data: { http: { docs: false }, transport: { maxPlaintextBytes: 8388608, routePlaintextBytes: { '/api/v1/uploads/*': 16777216 } } } })
+  expect(loaded).toMatchObject({
+    success: true,
+    data: {
+      http: { docs: false },
+      transport: {
+        maxPlaintextBytes: 8388608,
+        routePlaintextBytes: { '/api/v1/uploads/*': 16777216 },
+      },
+    },
+  })
 })
 
 /**
@@ -146,11 +233,19 @@ beforeAll(async () => {
 
 it.each([true, false])('部署工具选项 %s 保持依赖、入口和镜像忽略规则一致', async (enabled) => {
   const project = path.join(tmpRoot, `deployment-${enabled}`)
-  await generateFromTemplates(project, buildTemplateContext({ name: `deployment-${enabled}`, appType: 'fullstack', features: [], deploy: enabled, packageManager: 'pnpm' }))
+  await generateFromTemplates(project, buildTemplateContext({
+    name: `deployment-${enabled}`,
+    appType: 'fullstack',
+    features: [],
+    deploy: enabled,
+    packageManager: 'pnpm',
+  }))
   const manifest = JSON.parse(await readGenerated(project, 'package.json'))
   expect(manifest.dependencies['@h-ai/deploy']).toBeUndefined()
   expect(manifest.devDependencies['@h-ai/deploy']).toBe(enabled ? 'catalog:' : undefined)
-  expect(manifest.scripts.deploy).toBe(enabled ? `hai deploy packages/deployment-${enabled}-serv` : undefined)
+  expect(manifest.scripts.deploy).toBe(enabled
+    ? `hai deploy packages/deployment-${enabled}-serv`
+    : undefined)
   const projectConfig = JSON.parse(await readGenerated(project, 'hai.json'))
   expect(projectConfig.build.images).toHaveLength(2)
   expect(projectConfig.deploy !== undefined).toBe(enabled)
@@ -159,27 +254,63 @@ it.each([true, false])('部署工具选项 %s 保持依赖、入口和镜像忽�
 })
 
 afterAll(async () => {
-  if (tmpRoot)
-    await rm(tmpRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+  if (tmpRoot) {
+    await rm(tmpRoot, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 200,
+    })
+  }
 })
 
-it.each<AppType>(['admin', 'website', 'h5', 'api', 'mobile-app', 'fullstack'])('%s 忽略所有层级的数据目录，容器文件使用 LF 并由 Git 保留', async (appType) => {
+it.each<AppType>([
+  'admin',
+  'website',
+  'h5',
+  'api',
+  'mobile-app',
+  'fullstack',
+])('%s 忽略所有层级的数据目录，容器文件使用 LF 并由 Git 保留', async (appType) => {
   const projectPath = await generateProject({ name: `ignore-data-${appType}`, appType })
-  const dataPaths = ['data/app.db', 'data/.gitkeep', 'packages/service/data/uploads/avatar.png', 'apps/web/data/.gitkeep']
+  const dataPaths = [
+    'data/app.db',
+    'data/.gitkeep',
+    'packages/service/data/uploads/avatar.png',
+    'apps/web/data/.gitkeep',
+  ]
   for (const dataPath of dataPaths)
     await fse.outputFile(path.join(projectPath, dataPath), '')
   execFileSync('git', ['init', '--quiet', projectPath])
-  const ignored = execFileSync('git', ['-C', projectPath, 'check-ignore', '--stdin'], {
+  const ignored = execFileSync('git', [
+    '-C',
+    projectPath,
+    'check-ignore',
+    '--stdin',
+  ], {
     input: [...dataPaths, 'src/main.ts', 'config/_iam.yml'].join('\n'),
     encoding: 'utf-8',
   }).trim().split(/\r?\n/)
   expect(ignored).toEqual(dataPaths)
-  const containerFiles = ['.dockerignore', 'images/serv.Dockerfile', 'images/web.Dockerfile', 'images/web/19-runtime-config.envsh', 'images/web/19-runtime-config.sh']
+  const containerFiles = [
+    '.dockerignore',
+    'images/serv.Dockerfile',
+    'images/web.Dockerfile',
+    'images/web/19-runtime-config.envsh',
+    'images/web/19-runtime-config.sh',
+  ]
   for (const file of containerFiles) {
     if (!await fileExists(projectPath, file))
       continue
     expect(await readGenerated(projectPath, file), file).not.toContain('\r')
-    const attribute = execFileSync('git', ['-C', projectPath, 'check-attr', 'eol', '--', file], { encoding: 'utf8' }).trim()
+    const attribute = execFileSync('git', [
+      '-C',
+      projectPath,
+      'check-attr',
+      'eol',
+      '--',
+      file,
+    ], { encoding: 'utf8' }).trim()
     expect(attribute, file).toBe(`${file}: eol: lf`)
   }
 })
@@ -193,7 +324,12 @@ it('fullstack 应保留完整配置文件、用户选择和未启用模块的注
     features: [],
     frontends: ['web'],
     moduleConfigs: {
-      db: { type: 'postgresql', host: 'db.internal', port: 5433, database: 'app: primary' },
+      db: {
+        type: 'postgresql',
+        host: 'db.internal',
+        port: 5433,
+        database: 'app: primary',
+      },
       cache: { type: 'redis', host: 'cache.internal', port: 6380 },
       iam: { loginPassword: true, loginOtp: true },
     },
@@ -203,9 +339,17 @@ it('fullstack 应保留完整配置文件、用户选择和未启用模块的注
   const db = loadConfigText('db', await readGenerated(projectPath, `${configDir}/_db.yml`))
   const cache = loadConfigText('cache', await readGenerated(projectPath, `${configDir}/_cache.yml`))
   const iam = loadConfigText('iam', await readGenerated(projectPath, `${configDir}/_iam.yml`))
-  expect(db).toMatchObject({ type: 'postgresql', host: 'db.internal', port: 5433, database: 'app: primary' })
+  expect(db).toMatchObject({
+    type: 'postgresql',
+    host: 'db.internal',
+    port: 5433,
+    database: 'app: primary',
+  })
   expect(cache).toMatchObject({ type: 'redis', host: 'cache.internal', port: 6380 })
-  expect(iam).toMatchObject({ login: { otp: true }, seedDefaultData: false })
+  expect(iam).toMatchObject({
+    login: { otp: true },
+    seedDefaultData: false,
+  })
   for (const moduleKey of ['ai', 'vecdb', 'payment', 'scheduler']) {
     const content = await readGenerated(projectPath, `${configDir}/_${moduleKey}.yml`)
     // 注释文件解析为空，不会触发可选模块，也不会读取其凭据占位符。
@@ -222,7 +366,9 @@ it('fullstack 应保留完整配置文件、用户选择和未启用模块的注
   expect(iamContent).toContain('superAdminRole:')
   // 用户整文件去掉一层注释后，应直接得到合法配置，而非残留说明文字导致 YAML 解析失败。
   const aiExample = await readGenerated(projectPath, `${configDir}/_ai.yml`)
-  expect(loadConfigText('ai', aiExample.replace(/^# /gm, ''))).toMatchObject({ llm: { model: 'gpt-4o-mini' } })
+  expect(loadConfigText('ai', aiExample.replace(/^# /gm, ''))).toMatchObject({
+    llm: { model: 'gpt-4o-mini' },
+  })
 })
 
 it('fullstack 选择可选模块时应保留其可用配置及创建参数', async () => {
@@ -233,11 +379,15 @@ it('fullstack 选择可选模块时应保留其可用配置及创建参数', asy
     appType: 'fullstack',
     features: ['ai'],
     frontends: ['web'],
-    moduleConfigs: { ai: { defaultProvider: 'anthropic', model: 'claude-sonnet-4-5' } },
+    moduleConfigs: {
+      ai: { defaultProvider: 'anthropic', model: 'claude-sonnet-4-5' },
+    },
     packageManager: 'pnpm',
   }))
   const config = loadConfigText('ai', await readGenerated(projectPath, `packages/${projectName}-serv/config/_ai.yml`))
-  expect(config).toMatchObject({ llm: { protocol: 'anthropic', model: 'claude-sonnet-4-5' } })
+  expect(config).toMatchObject({
+    llm: { protocol: 'anthropic', model: 'claude-sonnet-4-5' },
+  })
 })
 
 it('fullstack 的原生应用名称应读取 core 配置并正确转义', async () => {
@@ -248,7 +398,9 @@ it('fullstack 的原生应用名称应读取 core 配置并正确转义', async 
     appType: 'fullstack',
     frontends: ['web', 'app', 'desktop'],
     features: [],
-    moduleConfigs: { core: { name } },
+    moduleConfigs: {
+      core: { name },
+    },
     packageManager: 'pnpm',
   })
   await generateFromTemplates(projectPath, context)
@@ -288,10 +440,14 @@ it.each([
   }
   // 使用区分大小写的独立环境，在 Windows 上也能复现 Linux CI 的变量解析。
   for (const overrides of [env, {}]) {
-    expect(runInNewContext(expression!, { process: { env: overrides } })).toEqual(
+    expect(runInNewContext(expression!, {
+      process: { env: overrides },
+    })).toEqual(
       frontends.slice(1).map(target => ({
         target,
-        url: overrides === env ? env[`HAI_E2E_${target.toUpperCase()}_URL`] : `http://127.0.0.1:${ports[target]}`,
+        url: overrides === env
+          ? env[`HAI_E2E_${target.toUpperCase()}_URL`]
+          : `http://127.0.0.1:${ports[target]}`,
       })),
     )
   }
@@ -342,8 +498,8 @@ describe('admin 应用类型生成', () => {
       expect(await fileExists(projectPath, 'tsconfig.json')).toBe(true)
     })
 
-    it('应生成 svelte.config.js', async () => {
-      expect(await fileExists(projectPath, 'svelte.config.js')).toBe(true)
+    it('svelteKit 配置统一由 Vite 交付', async () => {
+      expect(await fileExists(projectPath, 'svelte.config.js')).toBe(false)
     })
 
     it('应生成 eslint.config.js 并含 @antfu/eslint-config', async () => {
@@ -445,12 +601,12 @@ describe('admin 应用类型生成', () => {
       expect(content).toContain('bits-ui')
     })
 
-    it('svelte.config.js 应包含 autoImportHaiUi 和 runes', async () => {
-      const content = await readGenerated(projectPath, 'svelte.config.js')
+    it('vite 插件包含完整的 SvelteKit 预处理及安全配置', async () => {
+      const content = await readGenerated(projectPath, 'vite.config.ts')
       expect(content).toContain('autoImportHaiUi')
       expect(content).toContain('runes: true')
       expect(content).toContain('trustedOrigins')
-      expect(content).toContain('$components')
+      expect(content).toContain('relative: false')
     })
 
     it('app.css 应包含 DaisyUI 主题配置和 iconify', async () => {
@@ -469,7 +625,7 @@ describe('admin 应用类型生成', () => {
       expect(content).toContain('kit.i18n.runWithLocale(locale, () => resolve(event')
       expect(content).not.toContain('kit.i18n.setLocale(')
       expect(content).toContain('paraglideMiddleware')
-      expect(content).toContain('import { paraglideMiddleware } from \'$lib/paraglide/server.js\'')
+      expect(content).toContain('import { paraglideMiddleware } from \'#lib/paraglide/server.js\'')
     })
 
     it('hooks.server.ts 的 handle 序列应包含 i18nHandle', async () => {
@@ -494,7 +650,7 @@ describe('admin 应用类型生成', () => {
 
     it('应生成根 +page.svelte（带 i18n）', async () => {
       const content = await readGenerated(projectPath, 'src/routes/+page.svelte')
-      expect(content).toContain('import * as m from \'$lib/paraglide/messages\'')
+      expect(content).toContain('import * as m from \'#lib/paraglide/messages.js\'')
       expect(content).toContain('{page.data.appConfig.name}')
       // i18n 模式下不应有硬编码中文文案（注释除外）
       const scriptEnd = content.indexOf('</script>')
@@ -533,7 +689,8 @@ describe('admin 应用类型生成', () => {
       const content = await readGenerated(projectPath, 'src/routes/(auth)/auth/login/+page.svelte')
       expect(content).toContain('AuthPanel')
       expect(content).toContain('page.data.iamPublicConfig')
-      expect(content).toContain('kit.client.createAuthActions({ basePath: `$' + '{base}/api/auth` })')
+      // eslint-disable-next-line no-template-curly-in-string -- 静态核对生成代码，插值必须保留到目标应用执行。
+      expect(content).toContain('kit.client.createAuthActions({ basePath: `${resolve(\'\').replace(/\\/$/, \'\')}/api/auth` })')
       expect(content).not.toContain('>登录<')
     })
 
@@ -835,7 +992,14 @@ describe('feature 叠加', () => {
     projectPath = await generateProject({
       name: 'test-full',
       appType: 'admin',
-      features: ['iam', 'db', 'cache', 'crypto', 'storage', 'ai'],
+      features: [
+        'iam',
+        'db',
+        'cache',
+        'crypto',
+        'storage',
+        'ai',
+      ],
     })
   })
 
@@ -877,7 +1041,8 @@ describe('feature 叠加', () => {
   it('iam 认证模板应装配统一场景、配置与客户端动作', async () => {
     const login = await readGenerated(projectPath, 'src/routes/(auth)/auth/login/+page.svelte')
     expect(login).toContain('AuthPanel')
-    expect(login).toContain('kit.client.createAuthActions({ basePath: `$' + '{base}/api/auth` })')
+    // eslint-disable-next-line no-template-curly-in-string -- 静态核对生成代码，插值必须保留到目标应用执行。
+    expect(login).toContain('kit.client.createAuthActions({ basePath: `${resolve(\'\').replace(/\\/$/, \'\')}/api/auth` })')
 
     const register = await readGenerated(projectPath, 'src/routes/(auth)/auth/register/+page.svelte')
     expect(register).toContain('AuthPanel')
@@ -934,7 +1099,9 @@ describe('buildTemplateContext', () => {
       name: 'test',
       appType: 'website',
       features: [],
-      moduleConfigs: { core: { defaultLocale: 'en-US' } },
+      moduleConfigs: {
+        core: { defaultLocale: 'en-US' },
+      },
       packageManager: 'npm',
     })
     expect(ctx.defaultLocale).toBe('en-US')
@@ -951,7 +1118,6 @@ describe('生成产物结构完整性', () => {
   const BASE_FILES = [
     'package.json',
     'tsconfig.json',
-    'svelte.config.js',
     'vite.config.ts',
     'vitest.config.ts',
     'eslint.config.js',
@@ -1051,7 +1217,9 @@ describe('japanese scaffolds', () => {
       appType,
       features: [],
       packageManager: 'pnpm',
-      moduleConfigs: { core: { defaultLocale: 'ja-JP' } },
+      moduleConfigs: {
+        core: { defaultLocale: 'ja-JP' },
+      },
     }))
     const settings = JSON.parse(await readGenerated(project, 'project.inlang/settings.json'))
     expect(settings.baseLocale).toBe('ja-JP')
@@ -1069,7 +1237,9 @@ describe('japanese scaffolds', () => {
       appType: 'api',
       features: [],
       packageManager: 'pnpm',
-      moduleConfigs: { core: { defaultLocale: 'ja-JP' } },
+      moduleConfigs: {
+        core: { defaultLocale: 'ja-JP' },
+      },
     }))
     const config = loadConfigText<{ defaultLocale: string }>('core', await readGenerated(project, 'apps/japanese-api-serv/config/_core.yml'))
     expect(config.defaultLocale).toBe('ja-JP')
@@ -1084,9 +1254,14 @@ describe('japanese scaffolds', () => {
       frontends: ['web', 'app', 'desktop', 'miniapp'],
       features: [],
       packageManager: 'pnpm',
-      moduleConfigs: { core: { defaultLocale: 'ja-JP' } },
+      moduleConfigs: {
+        core: { defaultLocale: 'ja-JP' },
+      },
     }))
-    for (const directory of ['packages/japanese-fullstack-shared', ...['web', 'app', 'desktop', 'miniapp'].map(target => `apps/japanese-fullstack-${target}`)]) {
+    for (const directory of [
+      'packages/japanese-fullstack-shared',
+      ...['web', 'app', 'desktop', 'miniapp'].map(target => `apps/japanese-fullstack-${target}`),
+    ]) {
       const settings = JSON.parse(await readGenerated(project, `${directory}/project.inlang/settings.json`))
       expect(settings.baseLocale).toBe('ja-JP')
       expect(settings.locales).toEqual(['ja-JP', 'zh-CN', 'en-US'])
@@ -1107,7 +1282,14 @@ describe('japanese scaffolds', () => {
       frontends: ['web'],
       features: [],
       packageManager: 'pnpm',
-      moduleConfigs: { fullstack: { i18n: { baseLocale: 'ja-JP', locales: ['ja-JP'] } } },
+      moduleConfigs: {
+        fullstack: {
+          i18n: {
+            baseLocale: 'ja-JP',
+            locales: ['ja-JP'],
+          },
+        },
+      },
     }))
     const source = await readGenerated(project, 'packages/restricted-locales-contract/src/admin-schemas.ts')
     expect(source).toContain('locale: z.enum([\'ja-JP\']).optional()')

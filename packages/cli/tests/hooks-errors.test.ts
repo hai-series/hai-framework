@@ -9,9 +9,16 @@ import { buildTemplateContext } from '../src/commands/cli-template-engine.js'
 
 it('website 实际生成的请求错误处理器对外隐藏底层异常且保留可读错误', async () => {
   const template = await readFile(new URL('../templates/base/src/hooks.server.ts.hbs', import.meta.url), 'utf8')
-  const context = buildTemplateContext({ name: 'public-errors', appType: 'website', features: [], packageManager: 'pnpm' })
+  const context = buildTemplateContext({
+    name: 'public-errors',
+    appType: 'website',
+    features: [],
+    packageManager: 'pnpm',
+  })
   const rendered = renderTemplate(template, context)
-  const compiled = ts.transpileModule(rendered, { compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText
+  const compiled = ts.transpileModule(rendered, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true },
+  }).outputText
   const runtimeProcess = Object.assign(new EventEmitter(), { env: {} })
   let onError: ((error: unknown, event: unknown) => Response) | undefined
   const hookExports: { handle?: (input: unknown) => Promise<unknown> } = {}
@@ -30,14 +37,16 @@ it('website 实际生成的请求错误处理器对外隐藏底层异常且保�
           return runtimeProcess
         if (module === '@h-ai/core')
           return { core }
-        if (module === '$lib/server/kit-config.js')
+        if (module === '#lib/server/kit-config.js')
           return { getKitConfig }
         if (module === '@h-ai/kit') {
-          return { kit: {
-            createHandle,
-            // 本用例隔离业务 Handle；完整组合、初始化与语言中间件由生成项目 E2E 验证。
-            sequence: (...handles: Array<(input: unknown) => Promise<unknown>>) => handles.at(-1),
-          } }
+          return {
+            kit: {
+              createHandle,
+              // 本用例隔离业务 Handle；完整组合、初始化与语言中间件由生成项目 E2E 验证。
+              sequence: (...handles: Array<(input: unknown) => Promise<unknown>>) => handles.at(-1),
+            },
+          }
         }
         // 模块只装配Handle，不执行初始化或语言中间件。
         return {}
@@ -56,7 +65,13 @@ it('website 实际生成的请求错误处理器对外隐藏底层异常且保�
     expect(response.status).toBe(500)
     expect(response.headers.get('content-type')).toBe('application/json')
     const payload = await response.json()
-    expect(payload).toMatchObject({ success: false, error: { code: 'INTERNAL_ERROR', message: expect.any(String) } })
+    expect(payload).toMatchObject({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: expect.any(String),
+      },
+    })
     expect(payload.error.message.trim().length).toBeGreaterThan(0)
     expect(JSON.stringify(payload)).not.toMatch(/private-secret|internal-db|password|Database/)
     expect(logger).toHaveBeenCalledWith('Request error:', { error: failure })

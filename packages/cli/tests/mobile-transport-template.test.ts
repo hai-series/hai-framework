@@ -14,18 +14,37 @@ interface MobileClient {
 const template = readFileSync(new URL('../templates/apps/mobile-app/src/lib/api.ts.hbs', import.meta.url), 'utf8')
 
 function instantiate(options: { encrypted?: boolean, transport?: string, native?: boolean } = {}) {
-  const context = buildTemplateContext({ name: 'mobile', appType: 'mobile-app', features: options.encrypted === false ? ['api-client', 'capacitor'] : ['iam'], packageManager: 'pnpm' })
+  const context = buildTemplateContext({
+    name: 'mobile',
+    appType: 'mobile-app',
+    features: options.encrypted === false
+      ? ['api-client', 'capacitor']
+      : ['iam'],
+    packageManager: 'pnpm',
+  })
   const source = Handlebars.compile(template)(context)
   // Vite 的 import.meta.env 是编译期入口；仅把该环境边界替换为可注入绑定。
-  const compiled = ts.transpileModule(source.replaceAll('import.meta.env', 'runtimeEnv'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } })
+  const compiled = ts.transpileModule(source.replaceAll('import.meta.env', 'runtimeEnv'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  })
   const calls: string[] = []
-  const state = { cryptoInitialized: false, cryptoFailure: false, clientFailure: false, storageFailure: false, closeFailure: false }
+  const state = {
+    cryptoInitialized: false,
+    cryptoFailure: false,
+    clientFailure: false,
+    storageFailure: false,
+    closeFailure: false,
+  }
   const crypto = {
     get isInitialized() { return state.cryptoInitialized },
     init: vi.fn(async () => {
       calls.push('crypto.init')
-      if (state.cryptoFailure)
-        return { success: false, error: { message: 'Crypto unavailable' } }
+      if (state.cryptoFailure) {
+        return {
+          success: false,
+          error: { message: 'Crypto unavailable' },
+        }
+      }
       state.cryptoInitialized = true
       return { success: true }
     }),
@@ -35,14 +54,21 @@ function instantiate(options: { encrypted?: boolean, transport?: string, native?
     }),
   }
   const client = {
-    tokenStorage: { httpOnlyCookie: () => {
-      if (state.storageFailure)
-        throw new Error('Storage unavailable')
-      return { kind: 'httpOnlyCookie' }
-    } },
+    tokenStorage: {
+      httpOnlyCookie: () => {
+        if (state.storageFailure)
+          throw new Error('Storage unavailable')
+        return { kind: 'httpOnlyCookie' }
+      },
+    },
     init: vi.fn(async (_config: Record<string, unknown>) => {
       calls.push('client.init')
-      return state.clientFailure ? { success: false, error: { message: 'Client unavailable' } } : { success: true }
+      return state.clientFailure
+        ? {
+            success: false,
+            error: { message: 'Client unavailable' },
+          }
+        : { success: true }
     }),
     close: vi.fn(async () => {
       calls.push('client.close')
@@ -60,16 +86,32 @@ function instantiate(options: { encrypted?: boolean, transport?: string, native?
         return { apiClient: client }
       if (name === '@h-ai/crypto')
         return { crypto }
-      if (name === '@h-ai/capacitor')
-        return { createCapacitorTokenStorage: () => ({ kind: 'native' }) }
-      if (name === '@capacitor/core')
-        return { Capacitor: { isNativePlatform: () => options.native === true } }
+      if (name === '@h-ai/capacitor') {
+        return {
+          createCapacitorTokenStorage: () => ({ kind: 'native' }),
+        }
+      }
+      if (name === '@capacitor/core') {
+        return {
+          Capacitor: {
+            isNativePlatform: () => options.native === true,
+          },
+        }
+      }
       throw new Error(`Unexpected template import: ${name}`)
     },
   })
   if (!exported.initApi || !exported.closeApi)
     throw new Error('Generated mobile lifecycle missing')
-  return { context, application: exported as MobileClient, calls, state, crypto, client, source }
+  return {
+    context,
+    application: exported as MobileClient,
+    calls,
+    state,
+    crypto,
+    client,
+    source,
+  }
 }
 
 describe('generated mobile crypto transport', () => {
@@ -78,8 +120,14 @@ describe('generated mobile crypto transport', () => {
     await fixture.application.initApi()
     expect(fixture.client.init.mock.calls[0]?.[0]).toMatchObject({
       clientName: 'hai-mobile-app',
-      auth: { storage: { kind: native ? 'native' : 'httpOnlyCookie' } },
-      headers: native ? { 'x-hai-token-transport': 'body' } : {},
+      auth: {
+        storage: {
+          kind: native ? 'native' : 'httpOnlyCookie',
+        },
+      },
+      headers: native
+        ? { 'x-hai-token-transport': 'body' }
+        : {},
     })
     await fixture.application.closeApi()
   })
@@ -88,9 +136,16 @@ describe('generated mobile crypto transport', () => {
     const fixture = instantiate()
     expect(fixture.context.haiCatalogPackages['@h-ai/crypto']).toBeDefined()
     await fixture.application.initApi()
-    expect(fixture.client.init.mock.calls[0]?.[0]).toMatchObject({ transport: { crypto: fixture.crypto, keyExchangePath: '/custom/key-exchange' } })
+    expect(fixture.client.init.mock.calls[0]?.[0]).toMatchObject({
+      transport: { crypto: fixture.crypto, keyExchangePath: '/custom/key-exchange' },
+    })
     await fixture.application.closeApi()
-    expect(fixture.calls).toEqual(['crypto.init', 'client.init', 'client.close', 'crypto.close'])
+    expect(fixture.calls).toEqual([
+      'crypto.init',
+      'client.init',
+      'client.close',
+      'crypto.close',
+    ])
   })
 
   it('crypto 初始化失败不能启动明文 client，恢复后可重试', async () => {
@@ -131,7 +186,10 @@ describe('generated mobile crypto transport', () => {
     expect(fixture.state.cryptoInitialized).toBe(true)
   })
 
-  it.each([{ encrypted: false }, { transport: 'off' }])('保留明确选择的无 crypto/明文 API 模式 %j', async (options) => {
+  it.each([
+    { encrypted: false },
+    { transport: 'off' },
+  ])('保留明确选择的无 crypto/明文 API 模式 %j', async (options) => {
     const fixture = instantiate(options)
     await fixture.application.initApi()
     expect(fixture.client.init.mock.calls[0]?.[0]).not.toHaveProperty('transport')

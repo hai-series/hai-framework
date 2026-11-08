@@ -48,12 +48,23 @@ export async function withDatabaseIsolation(project: string, evidence: string, e
       continue
     try {
       const url = new URL(value)
-      if (['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))
-        plannedPorts.add(Number(url.port || (url.protocol === 'https:' ? 443 : 80)))
+      if (['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) {
+        plannedPorts.add(Number(url.port || (url.protocol === 'https:'
+          ? 443
+          : 80)))
+      }
     }
     catch { /* 相对 API 路径不占用宿主端口。 */ }
   }
-  const child = spawn(process.execPath, [sentinel, 'serve', stateFile, JSON.stringify([...plannedPorts])], { windowsHide: true, stdio: ['ignore', output, output] })
+  const child = spawn(process.execPath, [
+    sentinel,
+    'serve',
+    stateFile,
+    JSON.stringify([...plannedPorts]),
+  ], {
+    windowsHide: true,
+    stdio: ['ignore', output, output],
+  })
   closeSync(output)
   let spawnFailure: Error | undefined
   child.once('error', (error) => {
@@ -85,16 +96,31 @@ export async function withDatabaseIsolation(project: string, evidence: string, e
     }
   }
   const command = (mode: 'ready' | 'probe' | 'closed') => {
-    const result = spawnSync(process.execPath, [sentinel, mode, stateFile], { env, windowsHide: true, encoding: 'utf8', timeout: 15_000 })
-    if (result.error || result.status !== 0)
-      throw result.error ?? new Error(`Database isolation ${mode} failed: ${result.stderr}; state=${existsSync(stateFile) ? readFileSync(stateFile, 'utf8') : 'absent'}; process=${readFileSync(diagnostic, 'utf8')}`)
+    const result = spawnSync(process.execPath, [sentinel, mode, stateFile], {
+      env,
+      windowsHide: true,
+      encoding: 'utf8',
+      timeout: 15_000,
+    })
+    if (result.error || result.status !== 0) {
+      throw result.error ?? new Error(`Database isolation ${mode} failed: ${result.stderr}; state=${existsSync(stateFile)
+        ? readFileSync(stateFile, 'utf8')
+        : 'absent'}; process=${readFileSync(diagnostic, 'utf8')}`)
+    }
   }
   const readState = () => JSON.parse(readFileSync(stateFile, 'utf8')) as SentinelState
   const failures: unknown[] = []
   let baseline = 0
   try {
     command('ready')
-    const database = JSON.stringify({ type: 'postgresql', host: '127.0.0.1', port: readState().port, database: 'isolation_probe', user: 'probe', password: 'probe' })
+    const database = JSON.stringify({
+      type: 'postgresql',
+      host: '127.0.0.1',
+      port: readState().port,
+      database: 'isolation_probe',
+      user: 'probe',
+      password: 'probe',
+    })
     env.HAI_DB = database
     command('probe')
     baseline = readState().connections
@@ -111,7 +137,9 @@ export async function withDatabaseIsolation(project: string, evidence: string, e
       if (directory !== project && !existsSync(path.join(directory, 'config', '_db.yml')))
         continue
       const local = path.join(directory, '.env.local')
-      const before = existsSync(local) ? readFileSync(local) : undefined
+      const before = existsSync(local)
+        ? readFileSync(local)
+        : undefined
       savedFiles.set(local, before)
       writeFileSync(local, `${before?.toString('utf8') ?? ''}\nHAI_DB='${database}'\n`)
     }
@@ -156,8 +184,11 @@ export async function withDatabaseIsolation(project: string, evidence: string, e
   }
   if (failures.length === 1)
     throw failures[0]
-  if (failures.length > 1)
-    throw new AggregateError(failures, `Scaffold E2E gate and isolation cleanup failed: ${failures.map(error => error instanceof Error ? error.message : String(error)).join('; ')}`)
+  if (failures.length > 1) {
+    throw new AggregateError(failures, `Scaffold E2E gate and isolation cleanup failed: ${failures.map(error => error instanceof Error
+      ? error.message
+      : String(error)).join('; ')}`)
+  }
   if (spawnFailure)
     throw spawnFailure
 }

@@ -36,16 +36,29 @@ it('loads provisioned connections through Core in a real generated application',
   })
   vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, options?: RequestInit) => {
     const url = new URL(String(input))
-    if (url.hostname === 'api.vercel.com')
-      return Response.json({ user: { username: 'test' } })
+    if (url.hostname === 'api.vercel.com') {
+      return Response.json({
+        user: { username: 'test' },
+      })
+    }
     if (url.hostname === 'console.neon.tech') {
       return Response.json(options?.method === 'POST'
-        ? { project: { id: 'project-1' }, connection_uris: [{ connection_uri: 'postgresql://user:pass@db.example.test/neondb?sslmode=require' }] }
+        ? {
+            project: { id: 'project-1' },
+            connection_uris: [
+              { connection_uri: 'postgresql://user:pass@db.example.test/neondb?sslmode=require' },
+            ],
+          }
         : { projects: [] })
     }
     if (url.hostname === 'api.upstash.com') {
       return Response.json(options?.method === 'POST'
-        ? { database_id: 'cache-1', endpoint: 'cache.example.test', port: 6379, password: 'p@ss:word' }
+        ? {
+            database_id: 'cache-1',
+            endpoint: 'cache.example.test',
+            port: 6379,
+            password: 'p@ss:word',
+          }
         : [])
     }
     return Response.json({ result: [], data: [] })
@@ -55,9 +68,20 @@ it('loads provisioned connections through Core in a real generated application',
     services: {
       db: { provisioner: 'neon', apiKey: 'test-neon' },
       cache: { provisioner: 'upstash', email: 'owner@example.test', apiKey: 'test-upstash' },
-      storage: { provisioner: 'cloudflare-r2', accountId: 'account', apiToken: 'test-cf', accessKeyId: 'test-s3', secretAccessKey: 'test-secret' },
+      storage: {
+        provisioner: 'cloudflare-r2',
+        accountId: 'account',
+        apiToken: 'test-cf',
+        accessKeyId: 'test-s3',
+        secretAccessKey: 'test-secret',
+      },
       email: { provisioner: 'resend', apiKey: 'test-resend', from: 'sender@example.test' },
-      sms: { provisioner: 'aliyun', accessKeyId: 'test-sms', accessKeySecret: 'test-sms-secret', signName: 'Test' },
+      sms: {
+        provisioner: 'aliyun',
+        accessKeyId: 'test-sms',
+        accessKeySecret: 'test-sms-secret',
+        signName: 'Test',
+      },
     },
   })).toMatchObject({ success: true })
   const provisioned = await deploy.provisionAll('cloud-app')
@@ -87,13 +111,26 @@ it('loads provisioned connections through Core in a real generated application',
   expect(storage.success, JSON.stringify(storage)).toBe(true)
   expect(storage).toMatchObject({
     success: true,
-    data: { type: 's3', region: 'auto', bucket: 'cloud-app-storage', accessKeyId: 'test-s3', secretAccessKey: 'test-secret' },
+    data: {
+      type: 's3',
+      region: 'auto',
+      bucket: 'cloud-app-storage',
+      accessKeyId: 'test-s3',
+      secretAccessKey: 'test-secret',
+    },
   })
   const reach = core.config.load('reach', join(config, '_reach.yml'), ReachConfigSchema)
   expect(reach.success).toBe(true)
   if (reach.success) {
     expect(reach.data.providers).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'email', type: 'smtp', host: 'smtp.resend.com', port: 465, secure: true, from: 'sender@example.test' }),
+      expect.objectContaining({
+        name: 'email',
+        type: 'smtp',
+        host: 'smtp.resend.com',
+        port: 465,
+        secure: true,
+        from: 'sender@example.test',
+      }),
       expect.objectContaining({ name: 'sms', type: 'aliyun-sms', signName: 'Test' }),
     ]))
   }

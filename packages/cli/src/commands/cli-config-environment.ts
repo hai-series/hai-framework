@@ -31,7 +31,9 @@ function withoutGeneratedDocumentation(content: string): string {
     const line = lines[location.line - 1] ?? ''
     const prefix = /^(\s*)# (?=\s*(?:[a-z][\w-]*:|-\s))/i.exec(line)
     const column = location.col - 1
-    const removed = prefix && (column > prefix[1].length || (!end && column === prefix[1].length)) ? 2 : 0
+    const removed = prefix && (column > prefix[1].length || (!end && column === prefix[1].length))
+      ? 2
+      : 0
     return (starts[location.line - 1] ?? content.length) + column + removed
   }
   function collect(node: unknown, virtual: boolean): void {
@@ -43,7 +45,12 @@ function withoutGeneratedDocumentation(content: string): string {
       node.items.forEach(item => collect(item, virtual))
     }
     else if (isScalar(node) && node.range) {
-      ranges.push(virtual ? [originalOffset(node.range[0], false), originalOffset(node.range[1], true)] : [node.range[0], node.range[1]])
+      ranges.push(virtual
+        ? [
+            originalOffset(node.range[0], false),
+            originalOffset(node.range[1], true),
+          ]
+        : [node.range[0], node.range[1]])
     }
   }
   collect(parseDocument(content).contents, false)
@@ -55,7 +62,11 @@ function withoutGeneratedDocumentation(content: string): string {
     if (metadata && !protectedAt(starts[index] + metadata[1].length))
       return []
     const suffix = line.lastIndexOf(' # 说明：')
-    return [suffix >= 0 && !protectedAt(starts[index] + suffix + 1) ? line.slice(0, suffix) : line]
+    return [
+      suffix >= 0 && !protectedAt(starts[index] + suffix + 1)
+        ? line.slice(0, suffix)
+        : line,
+    ]
   }).join('\n')
 }
 
@@ -98,13 +109,24 @@ export function documentConfig(name: string, content: string): string {
         if (!isScalar(pair.key))
           continue
         clearGeneratedComments(pair.key)
-        const field = [...segments, String(pair.key.value)]
+        const field = [
+          ...segments,
+          String(pair.key.value),
+        ]
         const description = catalogByPath.get([name, ...field].join('.').replace(/\.\d+(?=\.|$)/g, '.0'))?.description
         if (description) {
           // 数组项的首字段说明放在短横线之前，避免生成 "- # 注释" 破坏既有排版规范。
-          const target = sequenceItem && index === 0 ? node : pair.key
+          const target = sequenceItem && index === 0
+            ? node
+            : pair.key
           const entry = catalogByPath.get([name, ...field].join('.').replace(/\.\d+(?=\.|$)/g, '.0'))
-          const comment = [target.commentBefore, ` 说明：${description}`, entry?.constraint ? ` 取值：${configurationConstraint(entry.constraint)}` : undefined].filter(Boolean).join('\n')
+          const comment = [
+            target.commentBefore,
+            ` 说明：${description}`,
+            entry?.constraint
+              ? ` 取值：${configurationConstraint(entry.constraint)}`
+              : undefined,
+          ].filter(Boolean).join('\n')
           if (target.commentBefore !== comment) {
             target.commentBefore = comment
             changed = true
@@ -114,12 +136,17 @@ export function documentConfig(name: string, content: string): string {
       }
     }
     else if (isSeq(node)) {
-      node.items.forEach((item, index) => walk(item, [...segments, String(index)], true))
+      node.items.forEach((item, index) => walk(item, [
+        ...segments,
+        String(index),
+      ], true))
     }
   }
   walk(document.contents, [])
   // YAML 序列化可能把空注释行写成 "#  "；只清理顶格空注释，不触碰块字符串内容。
-  return documentOptionalConfig(name, changed ? document.toString({ lineWidth: 0 }) : content).replace(/^#[\t ]+$/gm, '#')
+  return documentOptionalConfig(name, changed
+    ? document.toString({ lineWidth: 0 })
+    : content).replace(/^#[\t ]+$/gm, '#')
 }
 
 /** 注释中的可选字段同样要说明用途与取值；保持单层 #，不启用可选功能。 */
@@ -133,7 +160,10 @@ function documentOptionalConfig(name: string, content: string): string {
       for (const pair of node.items) {
         if (!isScalar(pair.key))
           continue
-        const segments = [...path, String(pair.key.value)]
+        const segments = [
+          ...path,
+          String(pair.key.value),
+        ]
         const entry = catalogByPath.get([name, ...segments].join('.').replace(/\.\d+(?=\.|$)/g, '.0'))
         if (entry && pair.key.range) {
           const line = counter.linePos(pair.key.range[0]).line - 1
@@ -146,7 +176,10 @@ function documentOptionalConfig(name: string, content: string): string {
       }
     }
     else if (isSeq(node)) {
-      node.items.forEach((item, index) => walk(item, [...path, String(index)]))
+      node.items.forEach((item, index) => walk(item, [
+        ...path,
+        String(index),
+      ]))
     }
   }
   walk(document.contents, [])
@@ -216,12 +249,19 @@ export function parameterizeConfig(name: string, content: string): string {
 
     if (isMap(node)) {
       for (const pair of node.items) {
-        if (isScalar(pair.key))
-          walk(pair.value, [...path, String(pair.key.value)])
+        if (isScalar(pair.key)) {
+          walk(pair.value, [
+            ...path,
+            String(pair.key.value),
+          ])
+        }
       }
     }
     else if (isSeq(node)) {
-      node.items.forEach((item, index) => walk(item, [...path, String(index)]))
+      node.items.forEach((item, index) => walk(item, [
+        ...path,
+        String(index),
+      ]))
     }
     else if (isScalar(node) && node.value !== null && node.value !== undefined) {
       const value = String(node.value)
@@ -230,7 +270,9 @@ export function parameterizeConfig(name: string, content: string): string {
         return
       const variable = ['HAI', name, ...path].map(part => part.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toUpperCase()).join('_')
       const parsed = parseDocument(value)
-      const fallback = typeof node.value === 'string' && value !== '' && (parsed.errors.length > 0 || !isScalar(parsed.contents) || parsed.contents.value !== value) ? JSON.stringify(value) : value
+      const fallback = typeof node.value === 'string' && value !== '' && (parsed.errors.length > 0 || !isScalar(parsed.contents) || parsed.contents.value !== value)
+        ? JSON.stringify(value)
+        : value
       node.value = `\${${variable}:${fallback}}`
       node.type = Scalar.PLAIN
       changed = true
@@ -238,7 +280,9 @@ export function parameterizeConfig(name: string, content: string): string {
   }
 
   walk(document.contents, [])
-  return changed ? document.toString({ lineWidth: 0 }) : content
+  return changed
+    ? document.toString({ lineWidth: 0 })
+    : content
 }
 
 /** 可选 YAML 示例保留注释状态，但使用与启用字段相同的环境路径，便于取消注释后直接配置。 */
@@ -250,12 +294,19 @@ function parameterizeOptionalConfig(name: string, content: string): string {
   function walk(node: unknown, segments: string[]): void {
     if (isMap(node)) {
       for (const pair of node.items) {
-        if (isScalar(pair.key))
-          walk(pair.value, [...segments, String(pair.key.value)])
+        if (isScalar(pair.key)) {
+          walk(pair.value, [
+            ...segments,
+            String(pair.key.value),
+          ])
+        }
       }
     }
     else if (isSeq(node)) {
-      node.items.forEach((item, index) => walk(item, [...segments, String(index)]))
+      node.items.forEach((item, index) => walk(item, [
+        ...segments,
+        String(index),
+      ]))
     }
     else if (isScalar(node) && node.range && node.value !== null && node.value !== undefined) {
       const location = counter.linePos(node.range[0])
@@ -268,10 +319,16 @@ function parameterizeOptionalConfig(name: string, content: string): string {
       const variable = ['HAI', name, ...segments].map(part => part.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toUpperCase()).join('_')
       const text = String(node.value)
       const parsed = parseDocument(text)
-      const fallback = typeof node.value === 'string' && text !== '' && (parsed.errors.length > 0 || !isScalar(parsed.contents) || parsed.contents.value !== text) ? JSON.stringify(text) : text
+      const fallback = typeof node.value === 'string' && text !== '' && (parsed.errors.length > 0 || !isScalar(parsed.contents) || parsed.contents.value !== text)
+        ? JSON.stringify(text)
+        : text
       const replacement = `\${${variable}:${fallback}}`
       const list = edits.get(location.line - 1) ?? []
-      list.push({ start: location.col + 1, end: location.col + 1 + node.range[1] - node.range[0], value: JSON.stringify(replacement) })
+      list.push({
+        start: location.col + 1,
+        end: location.col + 1 + node.range[1] - node.range[0],
+        value: JSON.stringify(replacement),
+      })
       edits.set(location.line - 1, list)
     }
   }
@@ -301,12 +358,19 @@ export function configEnvironmentVariables(name: string, content: string): Confi
   function locate(node: unknown, path: string[]): void {
     if (isMap(node)) {
       for (const pair of node.items) {
-        if (isScalar(pair.key))
-          locate(pair.value, [...path, String(pair.key.value)])
+        if (isScalar(pair.key)) {
+          locate(pair.value, [
+            ...path,
+            String(pair.key.value),
+          ])
+        }
       }
     }
     else if (isSeq(node)) {
-      node.items.forEach((item, index) => locate(item, [...path, String(index)]))
+      node.items.forEach((item, index) => locate(item, [
+        ...path,
+        String(index),
+      ]))
     }
     else if (isScalar(node) && typeof node.value === 'string') {
       for (const match of node.value.matchAll(/\$\{([^}:]+)(?::([^}]*))?\}/g)) {
@@ -323,8 +387,12 @@ export function configEnvironmentVariables(name: string, content: string): Confi
       continue
     const normalized = catalogByName.get(variable.replace(/_\d+(?=_|$)/g, '_0'))
     const entry = catalogByName.get(variable) ?? normalized
-    const indices = [...variable.matchAll(/_(\d+)(?=_|$)/g)].map(item => item[1])
-    const catalogPath = (entry?.path === variable ? normalized?.path : entry?.path)?.replace(/\.0(?=\.|$)/g, () => `.${indices.shift() ?? '0'}`)
+    const indices = [
+      ...variable.matchAll(/_(\d+)(?=_|$)/g),
+    ].map(item => item[1])
+    const catalogPath = (entry?.path === variable
+      ? normalized?.path
+      : entry?.path)?.replace(/\.0(?=\.|$)/g, () => `.${indices.shift() ?? '0'}`)
     variables.set(variable, {
       name: variable,
       path: locations.get(variable) ?? catalogPath ?? `${name} (${variable}，可选块)`,
@@ -334,7 +402,9 @@ export function configEnvironmentVariables(name: string, content: string): Confi
       optional: !locations.has(variable),
     })
   }
-  return [...variables.values()]
+  return [
+    ...variables.values(),
+  ]
 }
 
 /** 根据公开模块 Schema 和基础标量类型描述取值约束。 */
@@ -377,8 +447,11 @@ function variableConstraint(name: string, value: string): string {
     return '整数 1–65535'
   if (name.endsWith('TEMPERATURE'))
     return '数字 0–2'
-  if (/^HAI_AI_.*(?:TIMEOUT|MAXTOKENS|CACHE_TTL)$/.test(name))
-    return name.endsWith('MAXTOKENS') ? '数字 > 0，单位 token' : '数字 > 0，单位毫秒'
+  if (/^HAI_AI_.*(?:TIMEOUT|MAXTOKENS|CACHE_TTL)$/.test(name)) {
+    return name.endsWith('MAXTOKENS')
+      ? '数字 > 0，单位 token'
+      : '数字 > 0，单位毫秒'
+  }
   if (name === 'HAI_CACHE_DB')
     return '整数 0–15'
   if (name === 'HAI_DB_DATABASE')
@@ -406,7 +479,9 @@ export function renderEnvironment(variables: ConfigEnvironmentVariable[]): strin
     const value = variable.value.includes('\'')
       ? JSON.stringify(variable.value)
       : `'${variable.value}'`
-    return `# ${variable.path}${variable.description ? ` — ${variable.description}` : ''}\n# 约束：${variable.constraint}\n${variable.name}=${value}`
+    return `# ${variable.path}${variable.description
+      ? ` — ${variable.description}`
+      : ''}\n# 约束：${variable.constraint}\n${variable.name}=${value}`
   }).join('\n\n')
 }
 
@@ -437,11 +512,20 @@ export function runtimeEnvironmentVariables(content: string): ConfigEnvironmentV
   const variables = new Map<string, ConfigEnvironmentVariable>()
   for (const match of content.matchAll(/(?:process\.env|import\.meta\.env)(?:\?\.)?\.?(?:([A-Z][A-Z0-9_]+)|\[['"]([A-Z][A-Z0-9_]+)['"]\])|\$\{((?:HAI_|PUBLIC_|VITE_)[A-Z0-9_]+)(?::[^}]*)?\}/g)) {
     const name = match[1] ?? match[2] ?? match[3]
-    if (match[0].startsWith('import.meta.env') && ['SSR', 'MODE', 'DEV', 'PROD', 'BASE_URL'].includes(name))
+    if (match[0].startsWith('import.meta.env') && [
+      'SSR',
+      'MODE',
+      'DEV',
+      'PROD',
+      'BASE_URL',
+    ].includes(name)) {
       continue
+    }
     const variable = catalogByName.get(name)
     if (variable)
       variables.set(name, variable)
   }
-  return [...variables.values()]
+  return [
+    ...variables.values(),
+  ]
 }
