@@ -20,7 +20,6 @@
   import { HashRouter } from './lib/navigation/hash-router.svelte.js'
   import * as m from './lib/paraglide/messages.js'
   import { getLocale, setLocale } from './lib/paraglide/runtime.js'
-
 {{#if features.iam}}
   const authActions = apiClient.createAuthActions(apiClient)
   let authConfig = $state<IamPublicConfig | null>(null)
@@ -48,9 +47,21 @@
   let nativeTokenStorage = $state(false)
 
   const navItems = $derived([
-    { id: 'home', label: m.nav_home(), iconClass: 'icon-[tabler--layout-dashboard]' },
-    { id: 'tasks', label: m.nav_tasks(), iconClass: 'icon-[tabler--checkbox]' },
-    { id: 'profile', label: m.nav_profile(), iconClass: 'icon-[tabler--user-circle]' },
+    {
+      id: 'home',
+      label: m.nav_home(),
+      iconClass: 'icon-[tabler--layout-dashboard]',
+    },
+    {
+      id: 'tasks',
+      label: m.nav_tasks(),
+      iconClass: 'icon-[tabler--checkbox]',
+    },
+    {
+      id: 'profile',
+      label: m.nav_profile(),
+      iconClass: 'icon-[tabler--user-circle]',
+    },
   ])
 
   async function bootstrap(): Promise<void> {
@@ -144,7 +155,7 @@
 {{#if features.iam}}
     {#if authenticated && !booting && !bootError}
 {{/if}}
-      <BottomNav items={navItems} active={router.path.slice(1)} onchange={handleTabChange} safeArea centered maxWidth='none' />
+    <BottomNav items={navItems} active={router.path.slice(1)} onchange={handleTabChange} safeArea centered maxWidth='none' />
 {{#if features.iam}}
     {/if}
 {{/if}}

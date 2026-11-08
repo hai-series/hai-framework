@@ -3,17 +3,37 @@
   /**
    * 仪表盘页面
    */
-{{#if hasI18n}}
-  import * as m from '$lib/paraglide/messages'
-{{/if}}
   import { Card, PageHeader } from '@h-ai/ui'
+{{#if hasI18n}}
+  import * as m from '#lib/paraglide/messages.js'
+{{/if}}
 {{#if hasI18n}}
 
   const stats = $derived([
-    { label: m.page_dashboard_total_users(), value: '0', icon: 'icon-[tabler--users]', accent: 'text-primary' },
-    { label: m.page_dashboard_today_active(), value: '0', icon: 'icon-[tabler--activity]', accent: 'text-success' },
-    { label: m.page_dashboard_revenue(), value: '¥0', icon: 'icon-[tabler--coin]', accent: 'text-warning' },
-    { label: m.page_dashboard_orders(), value: '0', icon: 'icon-[tabler--shopping-cart]', accent: 'text-info' },
+    {
+      label: m.page_dashboard_total_users(),
+      value: '0',
+      icon: 'icon-[tabler--users]',
+      accent: 'text-primary',
+    },
+    {
+      label: m.page_dashboard_today_active(),
+      value: '0',
+      icon: 'icon-[tabler--activity]',
+      accent: 'text-success',
+    },
+    {
+      label: m.page_dashboard_revenue(),
+      value: '¥0',
+      icon: 'icon-[tabler--coin]',
+      accent: 'text-warning',
+    },
+    {
+      label: m.page_dashboard_orders(),
+      value: '0',
+      icon: 'icon-[tabler--shopping-cart]',
+      accent: 'text-info',
+    },
   ])
 {{else}}
   const stats = [

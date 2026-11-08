@@ -35,7 +35,13 @@ async function capture(page: Page, name: string, fallback: string) {
     await mkdir(evidence, { recursive: true })
   await expect(page.getByTestId('guide-loading')).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
-  await page.screenshot({ path: evidence ? path.join(evidence, name) : fallback, fullPage: true, animations: 'disabled' })
+  await page.screenshot({
+    path: evidence
+      ? path.join(evidence, name)
+      : fallback,
+    fullPage: true,
+    animations: 'disabled',
+  })
 }
 
 async function dismissToasts(page: Page) {
@@ -62,13 +68,18 @@ async function login(page: Page, username: string, password: string, keepGuide =
 async function userEditor(page: Page, username: string) {
   await page.getByTestId('users-search').locator('input').fill(username)
   await page.getByTestId('users-page').getByRole('button', { name: /查询|Search/ }).click()
-  const row = page.getByRole('row').filter({ has: page.getByText(`@${username}`, { exact: true }) })
+  const row = page.getByRole('row').filter({
+    has: page.getByText(`@${username}`, { exact: true }),
+  })
   await expect(row).toBeVisible()
   await row.getByRole('button', { name: /编辑|Edit/, exact: true }).click()
   return row
 }
 
-for (const scenario of [{ offset: -600_000, width: 1440 }, { offset: 600_000, width: 390 }]) {
+for (const scenario of [
+  { offset: -600_000, width: 1440 },
+  { offset: 600_000, width: 390 },
+]) {
   test(`clock offset ${scenario.offset} displays synchronization advice and recovers after correction`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: scenario.width, height: 900 })
     await page.addInitScript((offset) => {
@@ -99,10 +110,11 @@ test('service health endpoint is ready', async ({ request }) => {
 })
 
 test('service rejects plaintext business requests', async ({ request }) => {
-  const response = await request.post(`${apiBaseUrl}${apiPrefix}${apiContract.pathOf({{fullstack.contractExportName}}.app.echo)}`, { data: { message: 'hello e2e' } })
+  const response = await request.post(`${apiBaseUrl}${apiPrefix}${apiContract.pathOf({{fullstack.contractExportName}}.app.echo)}`, {
+    data: { message: 'hello e2e' },
+  })
   expect(response.status()).toBe(400)
 })
-
 {{#if fullstack.e2eFrontend}}
 test('hash routing and responsive workspace preserve usable content width', async ({ page }, testInfo) => {
   await page.goto('./#/roles?source=direct')
@@ -289,7 +301,11 @@ const additionalFrontends = [
 
 for (const frontend of additionalFrontends) {
   test(`${frontend.target} preview supports login, tour, help and profile navigation`, async ({ browser }, testInfo) => {
-    const page = await browser.newPage({ viewport: frontend.target === 'app' ? { width: 390, height: 844 } : { width: 1440, height: 960 } })
+    const page = await browser.newPage({
+      viewport: frontend.target === 'app'
+        ? { width: 390, height: 844 }
+        : { width: 1440, height: 960 },
+    })
     const pageErrors: string[] = []
     page.on('pageerror', error => pageErrors.push(error.message))
     try {
@@ -329,11 +345,17 @@ test('shared authentication supports public registration with configuration', as
   await mkdir(evidence, { recursive: true })
   await page.goto('./')
   await expect(page.getByTestId('login-form')).toBeVisible()
-  await page.screenshot({ path: path.join(evidence, '{{projectName}}-login.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, '{{projectName}}-login.png'),
+    fullPage: true,
+  })
   await page.getByRole('button', { name: /立即注册|Register now/i }).click()
   const registerForm = page.locator('.register-form')
   await expect(registerForm.locator('#register-username')).toBeVisible()
-  await page.screenshot({ path: path.join(evidence, '{{projectName}}-register.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, '{{projectName}}-register.png'),
+    fullPage: true,
+  })
   const username = `signup${randomUUID().replaceAll('-', '').slice(0, 12)}`
   await registerForm.locator('#register-username').fill(username)
   await registerForm.locator('#register-email').fill(`${username}@example.com`)
@@ -347,7 +369,10 @@ test('shared authentication supports public registration with configuration', as
   const email = `${username}@example.com`
   await page.getByTestId('logout').click()
   await page.getByRole('button', { name: /邮件验证码|Email code/i, exact: true }).click()
-  await page.screenshot({ path: path.join(evidence, '{{projectName}}-email.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, '{{projectName}}-email.png'),
+    fullPage: true,
+  })
   await page.locator('#login-username').fill(email)
   await page.getByRole('button', { name: /发送验证码|Send code/i, exact: true }).click()
   await expect(page.getByRole('button', { name: /秒后重发|Resend in/ })).toBeDisabled()
@@ -363,14 +388,20 @@ test('shared authentication supports public registration with configuration', as
   await expect(page.getByTestId('settings-page')).toBeVisible()
   await page.getByTestId('logout').click()
   await page.getByRole('button', { name: /忘记密码|Forgot password/i }).click()
-  await page.screenshot({ path: path.join(evidence, '{{projectName}}-forgot.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, '{{projectName}}-forgot.png'),
+    fullPage: true,
+  })
   await page.locator('input[type="email"]').fill(email)
   await page.locator('button[type="submit"]').click()
   await expect(page.locator('.hai-toast-item[data-variant="success"]')).toBeVisible()
   const reset = await received('password_reset')
   expect(Boolean(reset?.token)).toBe(true)
   await page.getByRole('button', { name: /已有重置令牌|I have a reset token/i }).click()
-  await page.screenshot({ path: path.join(evidence, '{{projectName}}-reset.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, '{{projectName}}-reset.png'),
+    fullPage: true,
+  })
   await page.goto(`./?token=${encodeURIComponent(reset?.token ?? '')}`)
   await expect(page.locator('input[type="password"]').nth(0)).toBeVisible()
   await page.locator('input[type="password"]').nth(0).fill('FullstackReset456')
@@ -401,7 +432,12 @@ test('frontend displays configured core metadata and restores the administrator 
   const evidence = process.env.HAI_AUTH_EVIDENCE_DIR
   if (evidence)
     await mkdir(evidence, { recursive: true })
-  await page.screenshot({ path: evidence ? path.join(evidence, '{{projectName}}-users.png') : testInfo.outputPath('users.png'), fullPage: true })
+  await page.screenshot({
+    path: evidence
+      ? path.join(evidence, '{{projectName}}-users.png')
+      : testInfo.outputPath('users.png'),
+    fullPage: true,
+  })
   await page.getByTestId('logout').click()
   await expect(page.getByTestId('login-form')).toBeVisible()
 })
@@ -524,9 +560,13 @@ test('audit filters collapse without losing values and fit compact workspaces', 
     await page.setViewportSize({ width, height: 900 })
     if (width < 1024)
       await expect.poll(() => page.locator('aside').evaluate(sidebar => sidebar.getBoundingClientRect().right)).toBeLessThanOrEqual(1)
-    const controls = await page.getByTestId('audit-advanced').evaluate(panel => [...panel.querySelectorAll('input')].map((element) => {
+    const controls = await page.getByTestId('audit-advanced').evaluate(panel => [
+      ...panel.querySelectorAll('input'),
+    ].map((element) => {
       // 复合控件的点击框包含边框和留白，内部文字输入区不等于完整控件高度。
-      const control = element.closest('.fieldset') ? element.parentElement! : element
+      const control = element.closest('.fieldset')
+        ? element.parentElement!
+        : element
       const rect = control.getBoundingClientRect()
       return { left: rect.left, right: rect.right, height: rect.height }
     }))
@@ -542,7 +582,13 @@ test('audit filters collapse without losing values and fit compact workspaces', 
       if (evidence)
         await mkdir(evidence, { recursive: true })
       const file = `{{projectName}}-audit-${width}.png`
-      await page.screenshot({ path: evidence ? path.join(evidence, file) : testInfo.outputPath(file), fullPage: true, animations: 'disabled' })
+      await page.screenshot({
+        path: evidence
+          ? path.join(evidence, file)
+          : testInfo.outputPath(file),
+        fullPage: true,
+        animations: 'disabled',
+      })
     }
   }
   const reset = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/admin/audit/list'))
@@ -563,7 +609,11 @@ test('audit filters collapse without losing values and fit compact workspaces', 
   await toggle.click()
   await page.getByTestId('audit-page').getByRole('button', { name: /详情|Details/ }).first().click()
   await expect(page.getByRole('dialog')).toBeVisible()
-  await page.screenshot({ path: testInfo.outputPath('audit-short-table-details.png'), fullPage: true, animations: 'disabled' })
+  await page.screenshot({
+    path: testInfo.outputPath('audit-short-table-details.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
 })
 
 test('administrator manages every duty through one lifecycle and the shared password reset form', async ({ page, browser }, testInfo) => {
@@ -718,8 +768,16 @@ test('administrator and user complete account, avatar, preference, password and 
     await userPage.getByRole('option', { name: 'English', exact: true }).click()
     await expect(userPage.getByTestId('nav-settings')).toHaveText('Personal settings')
     await expect(userPage.locator('html')).toHaveAttribute('lang', 'en-US')
-    const themes = [{{#each fullstack.theme.themes}}'{{this}}'{{#unless @last}}, {{/unless}}{{/each}}]
-    const selectedTheme = themes.includes('formal') ? 'formal' : themes.includes('high-contrast') ? 'high-contrast' : themes.find(theme => theme !== '{{fullstack.theme.defaultTheme}}') ?? themes[0]
+    const themes = [
+{{#each fullstack.theme.themes}}
+      '{{this}}',
+{{/each}}
+    ]
+    const selectedTheme = themes.includes('formal')
+      ? 'formal'
+      : themes.includes('high-contrast')
+        ? 'high-contrast'
+        : themes.find(theme => theme !== '{{fullstack.theme.defaultTheme}}') ?? themes[0]
     await userPage.getByTestId('profile-theme').click()
     await userPage.getByRole('option').nth(themes.indexOf(selectedTheme)).click()
     await expect(userPage.locator('html')).toHaveAttribute('data-theme', selectedTheme)
@@ -738,7 +796,10 @@ test('administrator and user complete account, avatar, preference, password and 
       await expect(userPage.locator('html')).toHaveAttribute('data-theme', 'eye-care')
       await expect.poll(() => userPage.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe('light')
       await expect.poll(() => userPage.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-base-100').trim())).toBe('#e8f0df')
-      await userPage.screenshot({ path: testInfo.outputPath('fullstack-eye-care.png'), animations: 'disabled' })
+      await userPage.screenshot({
+        path: testInfo.outputPath('fullstack-eye-care.png'),
+        animations: 'disabled',
+      })
     }
     await expect(userPage.getByTestId('profile-form').locator('input[name="displayName"]')).toHaveValue('Updated member')
     await expect(userPage.getByTestId('profile-form').locator('input[name="email"]')).toHaveValue('')
@@ -868,7 +929,11 @@ test('feedback submits an empty description and business operator can process an
   await dialog.locator('input[type=file]').setInputFiles([
     { name: 'attached-preview.png', mimeType: 'image/png', buffer: feedbackImage },
     { name: 'attached-large-log.txt', mimeType: 'text/plain', buffer: feedbackLog },
-    { name: 'discarded.txt', mimeType: 'text/plain', buffer: Buffer.from('discarded local material') },
+    {
+      name: 'discarded.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('discarded local material'),
+    },
   ])
   const uploaded = dialog.locator('img[alt="attached-preview.png"]')
   await expect(uploaded).toBeVisible()
@@ -876,7 +941,10 @@ test('feedback submits an empty description and business operator can process an
   await expectDialogViewport()
   await expectUncovered(uploaded)
   await capture(page, 'feedback-image-before-mask.png', testInfo.outputPath('feedback-image-before-mask.png'))
-  await uploaded.screenshot({ path: testInfo.outputPath('feedback-image-before-mask-detail.png'), animations: 'disabled' })
+  await uploaded.screenshot({
+    path: testInfo.outputPath('feedback-image-before-mask-detail.png'),
+    animations: 'disabled',
+  })
   const originalPreview = await uploaded.getAttribute('src')
   await dialog.getByRole('button', { name: /遮挡敏感区域|Mask sensitive area|機密情報を隠す/ }).last().click()
   await dialog.getByRole('button', { name: /应用标注|Apply annotation|注釈を適用/ }).last().click()
@@ -901,7 +969,10 @@ test('feedback submits an empty description and business operator can process an
   await expectDialogViewport()
   await expectUncovered(uploaded)
   await capture(page, 'feedback-preview.png', testInfo.outputPath('feedback-preview.png'))
-  await uploaded.screenshot({ path: testInfo.outputPath('feedback-image-after-mask-detail.png'), animations: 'disabled' })
+  await uploaded.screenshot({
+    path: testInfo.outputPath('feedback-image-after-mask-detail.png'),
+    animations: 'disabled',
+  })
   // 回执只表示记录已受理；等这份大附件真正上传成功，再开始后台处理操作。
   const largeUpload = page.waitForResponse(response => response.request().method() === 'POST'
     && /\/feedback\/reports\/[^/]+\/attachments\/[^/]+$/.test(new URL(response.url()).pathname)
@@ -972,7 +1043,12 @@ test('feedback submits an empty description and business operator can process an
   const serverManifest: { version: string } = JSON.parse(await readFile(path.resolve('packages/{{projectName}}-serv/package.json'), 'utf8'))
   let expectedCommit = 'unknown'
   try {
-    execFileSync('git', ['ls-files', '--error-unmatch', '--', 'package.json'], { stdio: 'pipe', windowsHide: true })
+    execFileSync('git', [
+      'ls-files',
+      '--error-unmatch',
+      '--',
+      'package.json',
+    ], { stdio: 'pipe', windowsHide: true })
     expectedCommit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', stdio: 'pipe', windowsHide: true }).trim()
   }
   catch { /* 无 Git 的源码归档必须明确保留 unknown，不冒用父工程提交。 */ }
@@ -981,7 +1057,10 @@ test('feedback submits an empty description and business operator can process an
     expect(expectedCommit).toMatch(/^(?:[a-f\d]{40}|[a-f\d]{64})$/i)
     expect(browserManifest.version).not.toBe(serverManifest.version)
   }
-  for (const [metadata, version] of [[browserMetadata, browserManifest.version], [serverMetadata, serverManifest.version]] as const) {
+  for (const [metadata, version] of [
+    [browserMetadata, browserManifest.version],
+    [serverMetadata, serverManifest.version],
+  ] as const) {
     expect(Object.keys(metadata).sort()).toEqual(['appVersion', 'buildId', 'commit'])
     expect(metadata.appVersion).toBe(version)
     expect(metadata.buildId).toMatch(/^[\w.+-]{1,160}$/)
@@ -993,7 +1072,10 @@ test('feedback submits an empty description and business operator can process an
   expect(browserEnvironment?.data).toMatchObject(browserMetadata)
   expect(serverEnvironment?.data.service).toMatchObject(serverMetadata)
   expect(bundle.report).toMatchObject(browserMetadata)
-  await testInfo.attach('feedback-build-metadata', { body: JSON.stringify({ browser: browserMetadata, server: serverMetadata }), contentType: 'application/json' })
+  await testInfo.attach('feedback-build-metadata', {
+    body: JSON.stringify({ browser: browserMetadata, server: serverMetadata }),
+    contentType: 'application/json',
+  })
   expect(bundle.report.number).toBe(number)
   expect(bundle.manifest.reportId).toBe(bundle.report.id)
   expect(bundle.manifest.evidenceRevision).toBe(bundle.report.evidenceRevision)
@@ -1009,7 +1091,10 @@ test('feedback submits an empty description and business operator can process an
     throw new Error('The exported large log attachment is missing')
   expect(bundle.files[largeLog.path]).toEqual(new Uint8Array(feedbackLog))
   expect(bundle.manifest.files.some(file => file.name === 'discarded.txt')).toBe(false)
-  await testInfo.attach('feedback-export-masked', { body: Buffer.from(bundle.files[masked.path]!), contentType: 'image/png' })
+  await testInfo.attach('feedback-export-masked', {
+    body: Buffer.from(bundle.files[masked.path]!),
+    contentType: 'image/png',
+  })
 })
 {{/if}}
 {{/if}}

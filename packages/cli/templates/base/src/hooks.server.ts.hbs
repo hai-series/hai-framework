@@ -3,28 +3,22 @@
  * {{projectName}} - Server Hooks
  * =============================================================================
  */
-
 {{#if features.crypto}}
 import type { TransportEncryptionOptions } from '@h-ai/kit'
 {{/if}}
-import type { Handle } from '@sveltejs/kit'
+import type { Handle } from '@sveltejs/kit/hooks'
 import process from 'node:process'
 {{#if hasI18n}}
-import { base } from '$app/paths'
+import { resolve as resolvePath } from '$app/paths'
 {{else}}
 {{#if features.iam}}
-import { base } from '$app/paths'
+import { resolve as resolvePath } from '$app/paths'
 {{else}}
 {{#if features.crypto}}
-import { base } from '$app/paths'
+import { resolve as resolvePath } from '$app/paths'
 {{/if}}
 {{/if}}
 {{/if}}
-{{#if hasI18n}}
-import { paraglideMiddleware } from '$lib/paraglide/server.js'
-{{/if}}
-import { closeApp, initApp } from '$lib/server/init.js'
-import { getKitConfig } from '$lib/server/kit-config.js'
 {{#if features.cache}}
 import { cache } from '@h-ai/cache'
 {{/if}}
@@ -41,6 +35,11 @@ import { kit } from '@h-ai/kit'
 import { reldb } from '@h-ai/reldb'
 {{/if}}
 {{/if}}
+{{#if hasI18n}}
+import { paraglideMiddleware } from '#lib/paraglide/server.js'
+{{/if}}
+import { closeApp, initApp } from '#lib/server/init.js'
+import { getKitConfig } from '#lib/server/kit-config.js'
 
 // =============================================================================
 // 应用初始化
@@ -74,7 +73,6 @@ const initHandle: Handle = async ({ event, resolve }) => {
   await ensureAppInitialized()
   return resolve(event)
 }
-
 {{#if hasI18n}}
 // =============================================================================
 // Paraglide i18n Middleware
@@ -86,7 +84,7 @@ const initHandle: Handle = async ({ event, resolve }) => {
  * API 请求跳过 paraglideMiddleware（不需要页面级 locale + 避免消耗 body）
  */
 const i18nHandle: Handle = async ({ event, resolve }) => {
-  if (event.url.pathname.startsWith(`${base}/api/`)) {
+  if (event.url.pathname.startsWith(`${resolvePath('/').replace(/\/$/, '')}/api/`)) {
     const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? '{{defaultLocale}}'
     event.locals.locale = locale
     return kit.i18n.runWithLocale(locale, () => resolve(event))
@@ -99,7 +97,6 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
     }))
   })
 }
-
 {{/if}}
 // =============================================================================
 // hai Handle（会话验证 + 限流 + 日志）
@@ -113,20 +110,20 @@ const haiHandle: Handle = async (input) => {
     let transport: TransportEncryptionOptions | undefined
     if (settings.transport !== false) {
 {{#unless features.db}}
-      if (core.module.requiresSharedState(process.env))
-        throw new Error('Production transport requires the db feature and a shared database registry')
+          if (core.module.requiresSharedState(process.env))
+            throw new Error('Production transport requires the db feature and a shared database registry')
 {{/unless}}
       const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
       if (!ring.success)
         throw new Error(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ${ring.error.message} (${ring.error.code})`)
       transport = {
         ...settings.transport,
-        basePath: base,
+        basePath: resolvePath('/').replace(/\/$/, ''),
         serverKeyRing: ring.data,
 {{#if features.db}}
         keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),
 {{else}}
-        keyStore: createInMemoryKeyStore(),
+            keyStore: createInMemoryKeyStore(),
 {{/if}}
       }
     }
@@ -140,7 +137,7 @@ const haiHandle: Handle = async (input) => {
 {{#if features.crypto}}
       crypto: { crypto, transport },
 {{/if}}
-    {{#if features.iam}}
+{{#if features.iam}}
       auth: {
         verifyToken: async (token) => {
           const result = await iam.auth.verifyToken(token)
@@ -156,18 +153,27 @@ const haiHandle: Handle = async (input) => {
             data: session.data,
           }
         },
-        loginUrl: `${base}/auth/login`,
-        protectedPaths: ['/admin/*', '/api/*'].map(path => `${base}${path}`),
-        publicPaths: [...kit.auth.publicPaths, '/api/auth/logout', '/api/public/*', '/api/health'].map(path => `${base}${path}`),
+        loginUrl: `${resolvePath('/').replace(/\/$/, '')}/auth/login`,
+        protectedPaths: ['/admin/*', '/api/*'].map(path => `${resolvePath('/').replace(/\/$/, '')}${path}`),
+        publicPaths: [
+          ...kit.auth.publicPaths,
+          '/api/auth/logout',
+          '/api/public/*',
+          '/api/health',
+        ].map(path => `${resolvePath('/').replace(/\/$/, '')}${path}`),
         operations: () => iam.auth,
       },
-    {{/if}}
-    {{#if features.cache}}
-      rateLimit: { windowMs: 60000, maxRequests: 200, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: '{{projectName}}', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' }) },
-    {{else}}
+{{/if}}
+{{#if features.cache}}
+      rateLimit: {
+        windowMs: 60000,
+        maxRequests: 200,
+        store: kit.middleware.createCacheRateLimitStore(cache, { namespace: '{{projectName}}', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' }),
+      },
+{{else}}
       // 未选择cache能力时不启用限流；启用前须接入共享原子store。
       rateLimit: false,
-    {{/if}}
+{{/if}}
       logging: { logBody: false },
       onError: (error: unknown, _event) => {
         core.logger.error('Request error:', { error })
@@ -176,7 +182,10 @@ const haiHandle: Handle = async (input) => {
             success: false,
             error: core.error.toPublic({ code: 'INTERNAL_ERROR', message: '', httpStatus: 500 }),
           }),
-          { status: 500, headers: { 'Content-Type': 'application/json' } },
+          {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+          },
         )
       },
     })

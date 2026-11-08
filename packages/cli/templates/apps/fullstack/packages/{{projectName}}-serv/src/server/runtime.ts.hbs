@@ -42,7 +42,10 @@ function startFeedback(): Promise<void> {
   feedbackClosing = false
   feedbackStarting = (async () => {
     try {
-      const result = await feedback.init({ ...core.config.getOrThrow<import('@h-ai/feedback').FeedbackConfigInput>('feedback'), ...buildMetadata })
+      const result = await feedback.init({
+        ...core.config.getOrThrow<import('@h-ai/feedback').FeedbackConfigInput>('feedback'),
+        ...buildMetadata,
+      })
       if (!result.success) {
         if (feedbackFailure !== result.error.code)
           core.logger.warn('Optional feedback unavailable; business runtime remains ready', { module: 'feedback', code: result.error.code })
@@ -76,62 +79,127 @@ async function closeFeedback() {
   await feedbackStarting
   return feedback.close()
 }
-
 {{/if}}
 const runtime = core.module.createRuntime([
-  { name: 'configuration', start: () => {
-    core.init({
-      configDir: './config',
-      configSchemas: {
+  {
+    name: 'configuration',
+    start: () => {
+      core.init({
+        configDir: './config',
+        configSchemas: {
 {{#if features.ai}}
-        ai: AIConfigSchema,
+          ai: AIConfigSchema,
 {{/if}}
-        audit: AuditInitConfigSchema,
-        cache: CacheConfigSchema,
-        db: ReldbConfigSchema,
+          audit: AuditInitConfigSchema,
+          cache: CacheConfigSchema,
+          db: ReldbConfigSchema,
 {{#if features.feedback}}
-        feedback: FeedbackConfigSchema,
+          feedback: FeedbackConfigSchema,
 {{/if}}
-        iam: IamConfigSchema,
-        reach: ReachConfigSchema,
-        scheduler: SchedulerConfigSchema,
-        serv: ServConfigSchema,
-        storage: StorageConfigSchema,
+          iam: IamConfigSchema,
+          reach: ReachConfigSchema,
+          scheduler: SchedulerConfigSchema,
+          serv: ServConfigSchema,
+          storage: StorageConfigSchema,
 {{#if features.vecdb}}
-        vecdb: VecdbConfigSchema,
+          vecdb: VecdbConfigSchema,
 {{/if}}
-      },
-    })
-  }, close: () => {} },
-  { name: 'serv-config', start: () => core.config.validate('serv', ServConfigSchema), close: () => {} },
-  { name: 'reldb', start: async () => {
-    const config = ReldbConfigSchema.parse(core.config.getOrThrow('db'))
-    if (config.type === 'sqlite' && config.database !== ':memory:')
-      await mkdir(path.dirname(config.database), { recursive: true })
-    return reldb.init(config)
-  }, close: () => reldb.close() },
-  { name: 'cache', start: () => cache.init(CacheConfigSchema.parse(core.config.getOrThrow('cache'))), close: () => cache.close() },
+        },
+      })
+    },
+    close: () => { },
+  },
+  {
+    name: 'serv-config',
+    start: () => core.config.validate('serv', ServConfigSchema),
+    close: () => { },
+  },
+  {
+    name: 'reldb',
+    start: async () => {
+      const config = ReldbConfigSchema.parse(core.config.getOrThrow('db'))
+      if (config.type === 'sqlite' && config.database !== ':memory:')
+        await mkdir(path.dirname(config.database), { recursive: true })
+      return reldb.init(config)
+    },
+    close: () => reldb.close(),
+  },
+  {
+    name: 'cache',
+    start: () => cache.init(CacheConfigSchema.parse(core.config.getOrThrow('cache'))),
+    close: () => cache.close(),
+  },
 {{#if features.vecdb}}
-  { name: 'vecdb', start: () => vecdb.init(VecdbConfigSchema.parse(core.config.getOrThrow('vecdb'))), close: () => vecdb.close() },
+  {
+    name: 'vecdb',
+    start: () => vecdb.init(VecdbConfigSchema.parse(core.config.getOrThrow('vecdb'))),
+    close: () => vecdb.close(),
+  },
 {{/if}}
-  { name: 'crypto', start: () => crypto.init(), close: () => crypto.close() },
-  { name: 'storage', start: () => storage.init(StorageConfigSchema.parse(core.config.getOrThrow('storage'))), close: () => storage.close() },
-  { name: 'reach', enabled: () => Boolean(core.config.get('reach')), start: () => reach.init(ReachConfigSchema.parse(core.config.getOrThrow('reach'))), close: () => reach.close() },
-  { name: 'audit', start: () => audit.init({ ...AuditInitConfigSchema.parse(core.config.get('audit') ?? {}), storage, reach }), close: () => audit.close() },
-  { name: 'iam', start: () => iam.init({ ...IamConfigSchema.parse(core.config.getOrThrow('iam')), reach }), close: () => iam.close() },
-  { name: 'audit-jobs', enabled: () => Boolean(audit.schedulerPlan), start: startAuditJobs, close: () => scheduler.close() },
+  {
+    name: 'crypto',
+    start: () => crypto.init(),
+    close: () => crypto.close(),
+  },
+  {
+    name: 'storage',
+    start: () => storage.init(StorageConfigSchema.parse(core.config.getOrThrow('storage'))),
+    close: () => storage.close(),
+  },
+  {
+    name: 'reach',
+    enabled: () => Boolean(core.config.get('reach')),
+    start: () => reach.init(ReachConfigSchema.parse(core.config.getOrThrow('reach'))),
+    close: () => reach.close(),
+  },
+  {
+    name: 'audit',
+    start: () => audit.init({
+      ...AuditInitConfigSchema.parse(core.config.get('audit') ?? {}),
+      storage,
+      reach,
+    }),
+    close: () => audit.close(),
+  },
+  {
+    name: 'iam',
+    start: () => iam.init({
+      ...IamConfigSchema.parse(core.config.getOrThrow('iam')),
+      reach,
+    }),
+    close: () => iam.close(),
+  },
+  {
+    name: 'audit-jobs',
+    enabled: () => Boolean(audit.schedulerPlan),
+    start: startAuditJobs,
+    close: () => scheduler.close(),
+  },
 {{#if features.feedback}}
-  { name: 'feedback', enabled: () => Boolean(core.config.get('feedback')), start: startFeedback, close: closeFeedback },
+  {
+    name: 'feedback',
+    enabled: () => Boolean(core.config.get('feedback')),
+    start: startFeedback,
+    close: closeFeedback,
+  },
 {{/if}}
 {{#if features.ai}}
-  { name: 'ai', start: () => ai.init(AIConfigSchema.parse(core.config.getOrThrow('ai'))), close: () => ai.close() },
+  {
+    name: 'ai',
+    start: () => ai.init(AIConfigSchema.parse(core.config.getOrThrow('ai'))),
+    close: () => ai.close(),
+  },
 {{/if}}
-  { name: 'bootstrap', start: async () => {
-    requireInitialized(await initBusinessSettings(), 'business-settings')
-    await ensureRolesAndAdmin()
-    const app = core.config.getOrThrow<CoreConfig>('core')
-    core.logger.info('Application initialized', { name: app.name, version: app.version, environment: app.env })
-  }, close: () => {} },
+  {
+    name: 'bootstrap',
+    start: async () => {
+      requireInitialized(await initBusinessSettings(), 'business-settings')
+      await ensureRolesAndAdmin()
+      const app = core.config.getOrThrow<CoreConfig>('core')
+      core.logger.info('Application initialized', { name: app.name, version: app.version, environment: app.env })
+    },
+    close: () => { },
+  },
 ])
 
 /** 仅声明模块和业务钩子，失败回滚、并发及关闭重试由 core 负责。 */
@@ -149,15 +217,27 @@ export async function closeModules(): Promise<void> {
 
 /** 此函数仅用于进程启动边界，业务请求继续返回 HaiResult。 */
 function requireInitialized<T>(result: HaiResult<T>, moduleName: string): T {
-  if (!result.success)
-    throw Object.assign(new Error(moduleName), { code: result.error.code, ext: { fields: moduleName === 'iam-bootstrap' ? ['HAI_ADMIN_DEFAULT_PASSWORD'] : [] } })
+  if (!result.success) {
+    throw Object.assign(new Error(moduleName), {
+      code: result.error.code,
+      ext: {
+        fields: moduleName === 'iam-bootstrap'
+          ? ['HAI_ADMIN_DEFAULT_PASSWORD']
+          : [],
+      },
+    })
+  }
   return result.data
 }
 
 async function ensureRolesAndAdmin(): Promise<void> {
   requireInitialized(await seedAppDuties(), 'app-duties')
   await ensureInitialSystemAdmin()
-  for (const [username, password] of [['audit_admin', process.env.HAI_AUDIT_ADMIN_PASSWORD], ['config_admin', process.env.HAI_CONFIG_ADMIN_PASSWORD], ['business_operator', process.env.HAI_BUSINESS_OPERATOR_PASSWORD]] as const)
+  for (const [username, password] of [
+    ['audit_admin', process.env.HAI_AUDIT_ADMIN_PASSWORD],
+    ['config_admin', process.env.HAI_CONFIG_ADMIN_PASSWORD],
+    ['business_operator', process.env.HAI_BUSINESS_OPERATOR_PASSWORD],
+  ] as const)
     requireInitialized(await bootstrapDutyAccount(username, password), 'app-duty-bootstrap')
 }
 
@@ -166,9 +246,19 @@ async function ensureInitialSystemAdmin(): Promise<void> {
   if (users.total > 0)
     return
   const password = process.env.HAI_ADMIN_DEFAULT_PASSWORD?.trim()
-  if (!password)
-    throw Object.assign(new Error('Administrator bootstrap configuration required'), { code: HaiConfigError.CONFIG_ENV_VAR_MISSING.code, ext: { fields: ['HAI_ADMIN_DEFAULT_PASSWORD'] } })
-  const registered = requireInitialized(await iam.user.createUser({ username: 'admin', password, displayName: serverM('admin') }), 'iam-bootstrap')
+  if (!password) {
+    throw Object.assign(new Error('Administrator bootstrap configuration required'), {
+      code: HaiConfigError.CONFIG_ENV_VAR_MISSING.code,
+      ext: {
+        fields: ['HAI_ADMIN_DEFAULT_PASSWORD'],
+      },
+    })
+  }
+  const registered = requireInitialized(await iam.user.createUser({
+    username: 'admin',
+    password,
+    displayName: serverM('admin'),
+  }), 'iam-bootstrap')
   const adminRole = requireInitialized(await iam.authz.getRoleByCode('admin'), 'iam-role')
   if (!adminRole)
     throw new Error('Administrator role is missing')

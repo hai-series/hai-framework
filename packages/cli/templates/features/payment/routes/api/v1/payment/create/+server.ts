@@ -1,9 +1,12 @@
 /** 创建支付参数 API；渠道、场景与 openid 必须通过显式校验，禁止回落到其它支付模式。 */
 import type { RequestHandler } from './$types'
-import { base } from '$app/paths'
+import { resolve } from '$app/paths'
 import { kit } from '@h-ai/kit'
 import { payment } from '@h-ai/payment'
 import { z } from 'zod'
+
+// Vite 配置固定 paths.relative=false，HTTP 前缀不会随 SSR 页面深度改变。
+const base = resolve('/').replace(/\/$/, '')
 
 /** 本模板的业务字段；服务端仍需从可信订单重新核对金额、描述、订单号和所属用户。 */
 const CreatePaymentSchema = z.object({
@@ -15,7 +18,13 @@ const CreatePaymentSchema = z.object({
   userId: z.string().trim().min(1).max(128).optional(),
   metadata: z.record(z.string(), z.string()).optional(),
   notifyUrl: z.url({ protocol: /^https?$/ }).optional(),
-}).strict().refine(input => input.tradeType === (input.provider === 'wechat' ? 'jsapi' : 'h5'), { path: ['tradeType'] }).refine(input => input.provider !== 'wechat' || input.userId !== undefined, { path: ['userId'] })
+}).strict().refine(input => input.tradeType === (input.provider === 'wechat'
+  ? 'jsapi'
+  : 'h5'), {
+  path: ['tradeType'],
+}).refine(input => input.provider !== 'wechat' || input.userId !== undefined, {
+  path: ['userId'],
+})
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   const { provider, tradeType, outTradeNo, totalAmount, subject, notifyUrl, userId, metadata } = await kit.validate.body(request, CreatePaymentSchema)

@@ -1,6 +1,6 @@
 {{! @skipIfEmpty }}
 {{#if useCatalogProtocol}}
-shellEmulator: true
+minimumReleaseAgeExcludePrune: true
 
 trustPolicy: no-downgrade
 # 上游构建工具仍要求 4.x；4.0.3 tarball 已核对原 lockfile 的 SHA-512。
@@ -9,32 +9,50 @@ trustPolicyExclude:
 
 # pnpm 12 配置；原生依赖仅运行明确列出的安装脚本。
 nodeLinker: hoisted
-allowBuilds:
-  cpu-features: true
-  onnxruntime-node: true
-  protobufjs: true
-  ssh2: true
-  vue-demi: true
-  better-sqlite3: true
-  esbuild: true
-  core-js: false
-
-overrides:
-  "@ai-sdk/provider-utils@>=4.0.0 <4.0.33": 4.0.57
-  cookie@<0.7.0: 0.7.2
-  esbuild@<0.28.1: 0.28.2
-  katex@<0.18.2: 0.18.10
-  sharp@<0.35.5: 0.35.5
-  tinypool@<2.1.2: 2.2.0
-  '@qdrant/js-client-rest>undici': 7.30.0
-  xcode>uuid: 11.1.1
-  "@types/node": "{{versions.nodeTypes}}"
+shellEmulator: true
 
 packages:
   - .
 
+# 构建与浏览器依赖的安全修复；版本与框架工作区同步维护。
+overrides:
+  '@ai-sdk/provider-utils@>=4.0.0 <4.0.33': 4.0.57
+  '@types/node': {{versions.nodeTypes}}
+  body-parser@>=2 <2.4.0: 2.4.0
+  cookie@<0.7.0: 0.7.2
+  dompurify@>=3 <3.4.17: 3.4.17
+  esbuild@<0.28.1: 0.28.2
+  fast-uri@>=3 <3.1.9: 3.1.9
+  follow-redirects@>=1.16.0 <1.16.2: 1.16.2
+  glob@>=9 <=14.0.1: 14.0.4
+  ip-address@<=10.7.3: 10.7.6
+  katex@<0.18.2: 0.18.10
+  minimatch@>=7 <11.0.1: 11.0.5
+  parse5@>=8 <8.1.0: 8.1.0
+  qs@>=6.7 <6.16.1: 6.17.1
+  runed@<0.38.0: 0.38.0
+  sharp@<0.35.5: 0.35.5
+  tinypool@<2.1.2: 2.2.0
+  xcode>uuid: 11.1.1
+
+{{#if hasUi}}
+patchedDependencies:
+  daisyui@5.7.50: patches/daisyui-5.7.50.patch
+  deepmerge@4.3.1: patches/deepmerge-4.3.1.patch
+{{/if}}
+
+allowBuilds:
+  better-sqlite3: true
+  core-js: false
+  cpu-features: true
+  esbuild: true
+  onnxruntime-node: true
+  protobufjs: true
+  ssh2: true
+  vue-demi: true
+
 catalog:
 {{#each haiCatalogPackages}}
-  '{{@key}}': {{this}}
+  {{{yaml @key this}}}
 {{/each}}
 {{/if}}

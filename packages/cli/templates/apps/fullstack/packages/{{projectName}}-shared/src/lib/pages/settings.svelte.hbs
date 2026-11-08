@@ -11,8 +11,24 @@
 
   interface Props { store: ManagementStore }
   const { store }: Props = $props()
-  const languageOptions = $derived(locales.filter(locale => store.info?.supportedLocales.includes(locale)).map(locale => ({ value: locale, label: locale === 'zh-CN' ? '简体中文' : locale === 'ja-JP' ? '日本語' : 'English' })))
-  const themeOptions = $derived(AVAILABLE_THEMES.map(theme => ({ value: theme, label: theme === 'high-contrast' ? m.theme_high_contrast() : theme === 'formal' ? m.theme_formal() : theme === 'eye-care' ? m.theme_eye_care() : getThemeInfo(theme)?.name ?? theme })))
+  const languageOptions = $derived(locales.filter(locale => store.info?.supportedLocales.includes(locale)).map(locale => ({
+    value: locale,
+    label: locale === 'zh-CN'
+      ? '简体中文'
+      : locale === 'ja-JP'
+        ? '日本語'
+        : 'English',
+  })))
+  const themeOptions = $derived(AVAILABLE_THEMES.map(theme => ({
+    value: theme,
+    label: theme === 'high-contrast'
+      ? m.theme_high_contrast()
+      : theme === 'formal'
+        ? m.theme_formal()
+        : theme === 'eye-care'
+          ? m.theme_eye_care()
+          : getThemeInfo(theme)?.name ?? theme,
+  })))
 </script>
 
 <section class='grid w-full min-w-0 gap-4 xl:grid-cols-2' data-testid='settings-page'>
@@ -21,7 +37,13 @@
     <Card class='xl:row-span-2' title={m.profile_title()} bordered shadow={false} data-guide='admin-profile-form'>
       <div class='mb-5 flex flex-wrap items-center gap-3 border-b border-base-content/8 pb-4'>
         <p class='min-w-0 break-all text-sm text-base-content/55'>@{store.user.username}</p>
-        <Badge size='sm' variant='ghost'>{store.user.roles.filter((code): code is import('{{fullstack.contractPackageName}}').AdminRoleCode => ['admin', 'audit_admin', 'config_admin', 'business_operator', 'user'].includes(code)).map(roleLabel).join(', ')}</Badge>
+        <Badge size='sm' variant='ghost'>{store.user.roles.filter((code): code is import('{{fullstack.contractPackageName}}').AdminRoleCode => [
+          'admin',
+          'audit_admin',
+          'config_admin',
+          'business_operator',
+          'user',
+        ].includes(code)).map(roleLabel).join(', ')}</Badge>
       </div>
       <UserProfile columns={2} user={store.user} editable alwaysEditable fields={['avatar', 'displayName', 'email']} avatarAccept='image/png,image/jpeg,image/webp' avatarHint={m.avatar_hint()} loading={store.saving} onsubmit={data => store.saveProfile(data)} onavatarchange={file => void store.uploadAvatar(file)} data-testid='profile-form' />
     </Card>

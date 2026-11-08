@@ -34,8 +34,17 @@ interface LoginData { user: { id: string }, tokens: { accessToken: string, refre
 async function call<T>(route: string, input?: object, token?: string, method = 'POST'): Promise<HaiResult<T>> {
   const response = await transport.encryptedFetch(`http://localhost${PREFIX}${route}`, {
     method,
-    headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
-    ...(input ? { body: JSON.stringify(input) } : {}),
+    headers: {
+      'content-type': 'application/json',
+      ...(token
+        ? { authorization: `Bearer ${token}` }
+        : {}),
+    },
+    ...(input
+      ? {
+          body: JSON.stringify(input),
+        }
+      : {}),
   })
   return response.json() as Promise<HaiResult<T>>
 }
@@ -49,7 +58,10 @@ beforeAll(async () => {
   const key = crypto.asymmetric.generateKeyPair()
   if (!key.success)
     throw new Error(key.error.message)
-  vi.stubEnv('HAI_CRYPTO_TRANSPORT_SERVERKEYRING', JSON.stringify({ activeKeyId: 'test-v1', keys: { 'test-v1': key.data } }))
+  vi.stubEnv('HAI_CRYPTO_TRANSPORT_SERVERKEYRING', JSON.stringify({
+    activeKeyId: 'test-v1',
+    keys: { 'test-v1': key.data },
+  }))
   app = createServerApp()
   transport = crypto.transport.createClient({
     keyExchangeUrl: `http://localhost${PREFIX}/_hai/key-exchange`,
@@ -99,7 +111,12 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     if (!result.success)
       return
     const config = core.config.getOrThrow<CoreConfig>('core')
-    expect(result.data).toMatchObject({ name: config.name, version: config.version, env: config.env, defaultLocale: config.defaultLocale })
+    expect(result.data).toMatchObject({
+      name: config.name,
+      version: config.version,
+      env: config.env,
+      defaultLocale: config.defaultLocale,
+    })
     const invalid = await transport.encryptedFetch(`http://localhost${PREFIX}/app/echo`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -129,7 +146,14 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
   it('mounts public auth routes while keeping default IAM administration routes private', async () => {
     const config = await transport.encryptedFetch(`http://localhost${PREFIX}/auth/config`)
     expect(config.status).toBe(200)
-    for (const route of ['/auth/register', '/auth/login/ldap', '/auth/login/otp', '/auth/otp/send', '/auth/password-reset/request', '/auth/password-reset/confirm']) {
+    for (const route of [
+      '/auth/register',
+      '/auth/login/ldap',
+      '/auth/login/otp',
+      '/auth/otp/send',
+      '/auth/password-reset/request',
+      '/auth/password-reset/confirm',
+    ]) {
       const response = await transport.encryptedFetch(`http://localhost${PREFIX}${route}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -144,14 +168,21 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
       const response = await transport.encryptedFetch(`http://localhost${PREFIX}${route}`, {
         method,
         headers: { 'content-type': 'application/json', 'authorization': `Bearer ${adminToken}` },
-        ...(method === 'POST' ? { body: '{}' } : {}),
+        ...(method === 'POST'
+          ? { body: '{}' }
+          : {}),
       })
       expect(response.status).toBe(404)
     }
   })
 
   it('creates a normal user and enforces guards on every administration API', async () => {
-    const created = await call<AdminUser>('/admin/users/create', { username: 'normal-user', password: TEST_PASSWORD, role: 'user', accountStatus: 'active' }, adminToken)
+    const created = await call<AdminUser>('/admin/users/create', {
+      username: 'normal-user',
+      password: TEST_PASSWORD,
+      role: 'user',
+      accountStatus: 'active',
+    }, adminToken)
     expect(created.success).toBe(true)
     if (!created.success)
       return
@@ -162,14 +193,35 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
       return
     userToken = loggedIn.data.tokens.accessToken
     for (const [route, input] of [
-      ['/admin/users/list', { page: 1, pageSize: 20 }],
-      ['/admin/users/create', { username: 'forbidden', password: TEST_PASSWORD }],
-      ['/admin/users/update', { id: adminId, accountStatus: 'dormant' }],
-      ['/admin/users/delete', { id: adminId }],
-      ['/admin/users/avatar', { id: adminId, contentType: 'image/png', base64: PNG }],
+      [
+        '/admin/users/list',
+        { page: 1, pageSize: 20 },
+      ],
+      [
+        '/admin/users/create',
+        { username: 'forbidden', password: TEST_PASSWORD },
+      ],
+      [
+        '/admin/users/update',
+        { id: adminId, accountStatus: 'dormant' },
+      ],
+      [
+        '/admin/users/delete',
+        { id: adminId },
+      ],
+      [
+        '/admin/users/avatar',
+        { id: adminId, contentType: 'image/png', base64: PNG },
+      ],
       ['/admin/roles/list', undefined],
-      ['/admin/roles/update', { id: 'missing', description: 'x' }],
-      ['/admin/audit/list', { page: 1, pageSize: 20 }],
+      [
+        '/admin/roles/update',
+        { id: 'missing', description: 'x' },
+      ],
+      [
+        '/admin/audit/list',
+        { page: 1, pageSize: 20 },
+      ],
     ] as const) {
       const denied = await call(route, input, userToken)
       expect(denied.success).toBe(false)
@@ -179,8 +231,16 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
   })
 
   it('allows refresh-token body transport only for an identified trusted native origin', async () => {
-    for (const [clientName, origin] of [['{{projectName}}-app', 'capacitor://localhost'], ['{{projectName}}-desktop', 'http://tauri.localhost']] as const) {
-      const headers = { 'content-type': 'application/json', 'x-request-client': clientName, 'x-hai-token-transport': 'body', origin }
+    for (const [clientName, origin] of [
+      ['{{projectName}}-app', 'capacitor://localhost'],
+      ['{{projectName}}-desktop', 'http://tauri.localhost'],
+    ] as const) {
+      const headers = {
+        'content-type': 'application/json',
+        'x-request-client': clientName,
+        'x-hai-token-transport': 'body',
+        origin,
+      }
       const login = await transport.encryptedFetch(`http://localhost${PREFIX}/auth/login`, {
         method: 'POST',
         headers,
@@ -202,10 +262,18 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
       if (refreshed.success)
         expect(refreshed.data.tokens.refreshToken).not.toBe(result.data.tokens.refreshToken)
     }
-    for (const [clientName, origin] of [['{{projectName}}-app', 'http://untrusted.example'], ['unrecognized-client', 'capacitor://localhost']] as const) {
+    for (const [clientName, origin] of [
+      ['{{projectName}}-app', 'http://untrusted.example'],
+      ['unrecognized-client', 'capacitor://localhost'],
+    ] as const) {
       const response = await transport.encryptedFetch(`http://localhost${PREFIX}/auth/login`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-request-client': clientName, 'x-hai-token-transport': 'body', origin },
+        headers: {
+          'content-type': 'application/json',
+          'x-request-client': clientName,
+          'x-hai-token-transport': 'body',
+          origin,
+        },
         body: JSON.stringify({ identifier: 'admin', password: TEST_PASSWORD }),
       })
       const result = await response.json() as HaiResult<LoginData>
@@ -222,7 +290,20 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
       expect(listed.data.items).toHaveLength(1)
       expect(listed.data.total).toBe(2)
     }
-    for (const [route, input] of [['/admin/users/delete', { id: adminId }], ['/admin/users/update', { id: adminId, accountStatus: 'dormant' }], ['/admin/users/update', { id: adminId, role: 'user' }]] as const) {
+    for (const [route, input] of [
+      [
+        '/admin/users/delete',
+        { id: adminId },
+      ],
+      [
+        '/admin/users/update',
+        { id: adminId, accountStatus: 'dormant' },
+      ],
+      [
+        '/admin/users/update',
+        { id: adminId, role: 'user' },
+      ],
+    ] as const) {
       const denied = await call(route, input, adminToken)
       expect(denied.success).toBe(false)
       if (!denied.success)
@@ -248,7 +329,10 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     expect(invalid.success).toBe(false)
     if (!invalid.success)
       expect(invalid.error.httpStatus).toBe(400)
-    const oversized = await call('/profile/avatar', { contentType: 'image/png', base64: Buffer.alloc(512 * 1024 + 1).toString('base64') }, userToken)
+    const oversized = await call('/profile/avatar', {
+      contentType: 'image/png',
+      base64: Buffer.alloc(512 * 1024 + 1).toString('base64'),
+    }, userToken)
     expect(oversized.success).toBe(false)
     const anonymous = await call('/profile/avatar', { contentType: 'image/png', base64: PNG })
     expect(anonymous.success).toBe(false)
@@ -296,7 +380,13 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     const roles = await call<{ items: { id: string, code: string, userCount: number }[] }>('/admin/roles/list', undefined, adminToken)
     expect(roles.success).toBe(true)
     if (roles.success) {
-      expect(roles.data.items.map(item => item.code).sort()).toEqual(['admin', 'audit_admin', 'business_operator', 'config_admin', 'user'])
+      expect(roles.data.items.map(item => item.code).sort()).toEqual([
+        'admin',
+        'audit_admin',
+        'business_operator',
+        'config_admin',
+        'user',
+      ])
       const role = roles.data.items.find(item => item.code === 'user')!
       expect(role.userCount).toBe(1)
       expect((await call('/admin/roles/update', { id: role.id, description: 'Updated description' }, adminToken)).success).toBe(true)
@@ -324,7 +414,12 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     const before = await iam.user.getUser(user.id)
     expect(before.success).toBe(true)
     const sync = vi.spyOn(iam.authz, 'syncRoles').mockResolvedValueOnce(err(HaiCommonError.API_ERROR, 'Injected role persistence failure'))
-    const failed = await call('/admin/users/update', { id: user.id, role: 'admin', email: 'changed@example.com', displayName: 'Should not change' }, adminToken)
+    const failed = await call('/admin/users/update', {
+      id: user.id,
+      role: 'admin',
+      email: 'changed@example.com',
+      displayName: 'Should not change',
+    }, adminToken)
     sync.mockRestore()
     expect(failed.success).toBe(false)
     const after = await iam.user.getUser(user.id)
@@ -338,7 +433,7 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     const log = vi.spyOn(audit, 'log').mockImplementation((input, tx) => input.action === 'update' && input.resource === 'profile'
       ? Promise.resolve(err(HaiCommonError.API_ERROR, 'Injected audit persistence failure'))
       : originalLog(input, tx))
-    const logger = vi.spyOn(core.logger, 'error').mockImplementation(() => {})
+    const logger = vi.spyOn(core.logger, 'error').mockImplementation(() => { })
     try {
       const result = await call<AdminUser>('/profile/update', { displayName: 'Committed profile' }, userToken)
       expect(result.success).toBe(true)
@@ -374,9 +469,22 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     const snapshot = await iam.session.get(userToken)
     if (!snapshot.success || !snapshot.data)
       throw new Error('Session unavailable')
-    const stale = await iam.session.update(userToken, { roles: ['admin'], permissions: ['*'] }, snapshot.data.version)
+    const stale = await iam.session.update(userToken, {
+      roles: ['admin'],
+      permissions: ['*'],
+    }, snapshot.data.version)
     expect(stale.success).toBe(true)
-    for (const [route, input] of [['/admin/users/list', { page: 1, pageSize: 20 }], ['/admin/roles/list', undefined], ['/admin/audit/list', { page: 1, pageSize: 20 }]] as const) {
+    for (const [route, input] of [
+      [
+        '/admin/users/list',
+        { page: 1, pageSize: 20 },
+      ],
+      ['/admin/roles/list', undefined],
+      [
+        '/admin/audit/list',
+        { page: 1, pageSize: 20 },
+      ],
+    ] as const) {
       const denied = await call(route, input, userToken)
       expect(denied.success).toBe(false)
       if (!denied.success)
@@ -415,8 +523,8 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     expect(otherLogin.success).toBe(true)
     if (!otherLogin.success)
       return
-    let resume: () => void = () => {}
-    let entered: () => void = () => {}
+    let resume: () => void = () => { }
+    let entered: () => void = () => { }
     const paused = new Promise<void>((resolve) => {
       resume = resolve
     })
@@ -467,7 +575,10 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
       call('/admin/users/update', { id: adminId, accountStatus: 'dormant' }, loggedIn.data.tokens.accessToken),
     ])
     expect(results.filter(result => result.success)).toHaveLength(1)
-    const admins = await iam.user.listUsers({ accountStatus: 'active', include: ['roles'] })
+    const admins = await iam.user.listUsers({
+      accountStatus: 'active',
+      include: ['roles'],
+    })
     expect(admins.success).toBe(true)
     if (admins.success) {
       const surviving = admins.data.items.filter(item => item.roles?.some(role => role.code === 'admin'))

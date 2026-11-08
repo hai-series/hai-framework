@@ -30,14 +30,38 @@
   })
   let menuOpen = $state(false)
   const items = $derived([
-    { id: 'users', label: m.nav_users(), icon: 'icon-[tabler--users]' },
-    { id: 'roles', label: m.nav_roles(), icon: 'icon-[tabler--shield-lock]' },
-    { id: 'configuration', label: m.business_settings_title(), icon: 'icon-[tabler--adjustments]' },
-    { id: 'audit', label: m.nav_audit(), icon: 'icon-[tabler--file-text]' },
+    {
+      id: 'users',
+      label: m.nav_users(),
+      icon: 'icon-[tabler--users]',
+    },
+    {
+      id: 'roles',
+      label: m.nav_roles(),
+      icon: 'icon-[tabler--shield-lock]',
+    },
+    {
+      id: 'configuration',
+      label: m.business_settings_title(),
+      icon: 'icon-[tabler--adjustments]',
+    },
+    {
+      id: 'audit',
+      label: m.nav_audit(),
+      icon: 'icon-[tabler--file-text]',
+    },
 {{#if features.feedback}}
-    { id: 'feedback', label: m.nav_feedback(), icon: 'icon-[tabler--message-report]' },
+    {
+      id: 'feedback',
+      label: m.nav_feedback(),
+      icon: 'icon-[tabler--message-report]',
+    },
 {{/if}}
-    { id: 'settings', label: m.settings_title(), icon: 'icon-[tabler--settings]' },
+    {
+      id: 'settings',
+      label: m.settings_title(),
+      icon: 'icon-[tabler--settings]',
+    },
   ].filter(item => store.canOpenPage(item.id)))
   const title = $derived(items.find(item => item.id === store.page)?.label ?? store.info?.name ?? '')
 
@@ -61,7 +85,9 @@
     </div>
     <nav class="flex-1 space-y-1 p-3" aria-label={m.navigation()}>
       {#each items as item (item.id)}
-        <BareButton class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors {store.page === item.id ? 'bg-primary/10 font-medium text-primary' : 'text-base-content/60 hover:bg-base-content/4'}" onclick={() => navigate(item.id)} data-testid="nav-{item.id}">
+        <BareButton class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors {store.page === item.id
+? 'bg-primary/10 font-medium text-primary'
+: 'text-base-content/60 hover:bg-base-content/4'}" onclick={() => navigate(item.id)} data-testid="nav-{item.id}">
           <span class="{item.icon} size-4.5"></span>{item.label}
         </BareButton>
       {/each}

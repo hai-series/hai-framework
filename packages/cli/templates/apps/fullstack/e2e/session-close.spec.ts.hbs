@@ -20,8 +20,13 @@ async function login(page: Page, username = 'admin', initialPassword = process.e
   // 每例使用独立初始账号，真实完成服务端限制下的首次改密后才能建立普通会话。
   await expect(page.locator('#old-password')).toBeVisible()
   await expect(page.getByTestId('logout')).toHaveCount(0)
-  await page.screenshot({ path: test.info().outputPath('initial-password-renewal.png'), fullPage: true })
-  const form = page.locator('form').filter({ has: page.locator('#old-password') })
+  await page.screenshot({
+    path: test.info().outputPath('initial-password-renewal.png'),
+    fullPage: true,
+  })
+  const form = page.locator('form').filter({
+    has: page.locator('#old-password'),
+  })
   const error = page.locator('.hai-toast-item[data-variant=error]')
   await dismissToasts(page)
   // 同密码仍由服务端拒绝，显示安全原因与关联编号；本地确认不一致则直接提示字段。
@@ -34,7 +39,10 @@ async function login(page: Page, username = 'admin', initialPassword = process.e
   await error.getByRole('button', { name: /^(查看排查信息|View diagnostic details|調査情報を表示)$/ }).click()
   await expect(error.locator('code')).toHaveText(/^[\w.:-]{1,128}$/)
   await expect(page.getByTestId('logout')).toHaveCount(0)
-  await page.screenshot({ path: test.info().outputPath('initial-password-same.png'), fullPage: true })
+  await page.screenshot({
+    path: test.info().outputPath('initial-password-same.png'),
+    fullPage: true,
+  })
   await expect(form.locator('.alert-error')).toHaveCount(0)
   await dismissToasts(page)
   const password = `${initialPassword}-Renewed!`
@@ -100,13 +108,19 @@ test('server idle expiry opens normal login in place and resumes one rejected sa
   const dialog = page.getByTestId('session-recovery-dialog')
   await expect(dialog).toBeVisible()
   await expect(page.getByTestId('business-notice-input').locator('textarea')).toHaveValue(draft)
-  await page.screenshot({ path: test.info().outputPath('idle-session-recovery.png'), fullPage: true })
+  await page.screenshot({
+    path: test.info().outputPath('idle-session-recovery.png'),
+    fullPage: true,
+  })
   const form = dialog.locator('form.login-form')
   await form.locator('input[type=password]').fill('Incorrect-test-password!')
   await form.locator('button[type=submit]').click()
   await expect(page.locator('.hai-toast-item[data-variant=error]')).toBeVisible()
   await expect(page.locator('.hai-toast-item[data-variant=error]')).toBeInViewport({ ratio: 1 })
-  await page.screenshot({ path: test.info().outputPath('idle-session-recovery-error-toast.png'), fullPage: true })
+  await page.screenshot({
+    path: test.info().outputPath('idle-session-recovery-error-toast.png'),
+    fullPage: true,
+  })
   expect(statuses).toHaveLength(1)
   await form.locator('input[type=password]').fill(password)
   await form.locator('button[type=submit]').click()

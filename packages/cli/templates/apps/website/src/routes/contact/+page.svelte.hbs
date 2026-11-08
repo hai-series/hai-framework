@@ -3,10 +3,10 @@
   /**
    * 联系我们页面
    */
-{{#if hasI18n}}
-  import * as m from '$lib/paraglide/messages'
-{{/if}}
   import { Button, Card, FormField, FormLayout, Input, notifyWarning, PageHeader, Textarea } from '@h-ai/ui'
+{{#if hasI18n}}
+  import * as m from '#lib/paraglide/messages.js'
+{{/if}}
 
   let name = $state('')
   let email = $state('')

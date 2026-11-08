@@ -6,10 +6,29 @@ import { ManagementStore } from '../src/lib/stores/management-store.svelte.js'
 
 const api = vi.hoisted(() => ({
   initialize: vi.fn(),
-  app: { info: vi.fn() },
-  auth: { clear: vi.fn() },
-  iam: { auth: { logout: vi.fn(), currentUser: vi.fn(), reauthenticate: vi.fn(), changePassword: vi.fn() } },
-  admin: { users: { list: vi.fn(), resetPassword: vi.fn() }, audit: { list: vi.fn() } },
+  app: {
+    info: vi.fn(),
+  },
+  auth: {
+    clear: vi.fn(),
+  },
+  iam: {
+    auth: {
+      logout: vi.fn(),
+      currentUser: vi.fn(),
+      reauthenticate: vi.fn(),
+      changePassword: vi.fn(),
+    },
+  },
+  admin: {
+    users: {
+      list: vi.fn(),
+      resetPassword: vi.fn(),
+    },
+    audit: {
+      list: vi.fn(),
+    },
+  },
 }))
 vi.mock('../src/lib/api/api-client.js', () => ({
   managementApi: api,
@@ -27,8 +46,17 @@ const member = {
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
-const administrator = { ...member, id: 'admin-id', username: 'admin', roles: ['admin'], permissions: ['app.users.manage', 'app.roles.manage'] }
-const forbidden = { success: false, error: { code: 'test:forbidden', message: 'Forbidden', httpStatus: 403 } } as const
+const administrator = {
+  ...member,
+  id: 'admin-id',
+  username: 'admin',
+  roles: ['admin'],
+  permissions: ['app.users.manage', 'app.roles.manage'],
+}
+const forbidden = {
+  success: false,
+  error: { code: 'test:forbidden', message: 'Forbidden', httpStatus: 403 },
+} as const
 
 function deferred<T>() {
   let resolve!: (result: T) => void
@@ -41,7 +69,10 @@ function deferred<T>() {
 beforeEach(() => {
   vi.resetAllMocks()
   vi.stubGlobal('location', { hash: '#/users' })
-  vi.stubGlobal('history', { replaceState: vi.fn(), pushState: vi.fn() })
+  vi.stubGlobal('history', {
+    replaceState: vi.fn(),
+    pushState: vi.fn(),
+  })
   api.iam.auth.logout.mockResolvedValue({ success: true })
   api.iam.auth.currentUser.mockResolvedValue({ success: true, data: member })
 })
@@ -66,7 +97,19 @@ describe('management session and request ownership', () => {
   })
 
   it.each(['hai:iam:002', 'hai:iam:034', 'hai:iam:999'])('password failures use safe messages and keep the active session: %s', async (code) => {
-    api.iam.auth.changePassword.mockResolvedValueOnce({ success: false, error: { code, message: 'Private password or database detail', httpStatus: code === 'hai:iam:002' ? 401 : code === 'hai:iam:999' ? 500 : 400, traceId: 'password-failure' } })
+    api.iam.auth.changePassword.mockResolvedValueOnce({
+      success: false,
+      error: {
+        code,
+        message: 'Private password or database detail',
+        httpStatus: code === 'hai:iam:002'
+          ? 401
+          : code === 'hai:iam:999'
+            ? 500
+            : 400,
+        traceId: 'password-failure',
+      },
+    })
     const store = createStore()
     store.user = member
     await store.changePassword({ oldPassword: 'CurrentPassword123!', newPassword: 'NewPassword123!', confirmPassword: 'NewPassword123!' })
@@ -88,13 +131,22 @@ describe('management session and request ownership', () => {
   })
 
   it.each(['dormant', 'closed'] as const)('resetting another duty password preserves its %s state and the administrator session', async (accountStatus) => {
-    const target: AdminUser = { ...member, roles: ['config_admin'], accountStatus, accountType: 'permanent', accountExpiresAt: null, lastLoginAt: null }
+    const target: AdminUser = {
+      ...member,
+      roles: ['config_admin'],
+      accountStatus,
+      accountType: 'permanent',
+      accountExpiresAt: null,
+      lastLoginAt: null,
+    }
     api.admin.users.resetPassword.mockResolvedValueOnce({ success: true })
     const store = createStore()
     store.user = administrator
     store.users = [target]
     expect(await store.resetUserPassword(target, 'NewPassword123!')).toBe(true)
-    expect(api.admin.users.resetPassword).toHaveBeenCalledWith({ id: target.id, newPassword: 'NewPassword123!' }, expect.objectContaining({ context: expect.any(Object) }))
+    expect(api.admin.users.resetPassword).toHaveBeenCalledWith({ id: target.id, newPassword: 'NewPassword123!' }, expect.objectContaining({
+      context: expect.any(Object),
+    }))
     expect(store.users[0]?.accountStatus).toBe(accountStatus)
     expect(store.user?.id).toBe(administrator.id)
     expect(api.auth.clear).not.toHaveBeenCalled()
@@ -102,8 +154,22 @@ describe('management session and request ownership', () => {
   })
 
   it('an unsuccessful self reset retains authentication and hides private server details', async () => {
-    const target: AdminUser = { ...administrator, roles: ['admin'], accountType: 'permanent', accountExpiresAt: null, lastLoginAt: null }
-    api.admin.users.resetPassword.mockResolvedValueOnce({ success: false, error: { code: 'hai:iam:999', httpStatus: 500, message: 'Private password reset detail', traceId: 'reset-failure' } })
+    const target: AdminUser = {
+      ...administrator,
+      roles: ['admin'],
+      accountType: 'permanent',
+      accountExpiresAt: null,
+      lastLoginAt: null,
+    }
+    api.admin.users.resetPassword.mockResolvedValueOnce({
+      success: false,
+      error: {
+        code: 'hai:iam:999',
+        httpStatus: 500,
+        message: 'Private password reset detail',
+        traceId: 'reset-failure',
+      },
+    })
     const store = createStore()
     store.user = administrator
     expect(await store.resetUserPassword(target, 'NewPassword123!')).toBe(false)
@@ -114,7 +180,13 @@ describe('management session and request ownership', () => {
   })
 
   it('a successful self reset clears local authentication after the server confirms revocation', async () => {
-    const target: AdminUser = { ...administrator, roles: ['admin'], accountType: 'permanent', accountExpiresAt: null, lastLoginAt: null }
+    const target: AdminUser = {
+      ...administrator,
+      roles: ['admin'],
+      accountType: 'permanent',
+      accountExpiresAt: null,
+      lastLoginAt: null,
+    }
     const response = deferred<{ success: true }>()
     api.admin.users.resetPassword.mockReturnValueOnce(response.promise)
     const store = createStore()
@@ -131,7 +203,15 @@ describe('management session and request ownership', () => {
   it('preserves the clock synchronization advice when application bootstrap is rejected', async () => {
     const message = 'Synchronize device and server clocks, then refresh to retry.'
     api.initialize.mockResolvedValueOnce({ success: true })
-    api.app.info.mockResolvedValueOnce({ success: false, error: { code: 'hai:api-client:007', httpStatus: 400, message, cause: { transportCode: 'hai:crypto:071' } } })
+    api.app.info.mockResolvedValueOnce({
+      success: false,
+      error: {
+        code: 'hai:api-client:007',
+        httpStatus: 400,
+        message,
+        cause: { transportCode: 'hai:crypto:071' },
+      },
+    })
     const store = createStore()
     await store.initialize({ baseUrl: 'https://api.example.test' })
     expect(store.error).toBe(message)
@@ -141,7 +221,10 @@ describe('management session and request ownership', () => {
 
   it('preserves useful validation advice instead of replacing it with a generic operation error', async () => {
     const message = 'Synchronize device and server clocks, then refresh to retry.'
-    api.admin.users.list.mockResolvedValueOnce({ success: false, error: { code: 'hai:api-client:007', httpStatus: 400, message } })
+    api.admin.users.list.mockResolvedValueOnce({
+      success: false,
+      error: { code: 'hai:api-client:007', httpStatus: 400, message },
+    })
     const store = createStore()
     store.user = administrator
     await store.loadUsers()
@@ -185,7 +268,14 @@ describe('management session and request ownership', () => {
     api.admin.users.list.mockResolvedValueOnce(forbidden)
     const store = createStore()
     store.user = administrator
-    store.roles = [{ id: 'role-id', code: 'admin', name: 'Administrator', userCount: 1 }]
+    store.roles = [
+      {
+        id: 'role-id',
+        code: 'admin',
+        name: 'Administrator',
+        userCount: 1,
+      },
+    ]
     await store.loadUsers()
     expect(store.user?.roles).toEqual(['user'])
     expect(store.page).toBe('settings')
@@ -197,7 +287,10 @@ describe('management session and request ownership', () => {
   })
 
   it.each(['hai:iam:105', 'hai:common:100'])('keeps the page, original user and unsaved fields when an expired session request is cancelled: %s', async (code) => {
-    api.admin.users.list.mockResolvedValueOnce({ success: false, error: { code, message: 'Expired', httpStatus: 401 } })
+    api.admin.users.list.mockResolvedValueOnce({
+      success: false,
+      error: { code, message: 'Expired', httpStatus: 401 },
+    })
     const store = createStore()
     store.user = administrator
     store.businessNotice = 'Unsaved business input'
@@ -221,7 +314,15 @@ describe('management session and request ownership', () => {
 })
 
 it('user paging and header sorting keep applied filters until Query submits drafts', async () => {
-  api.admin.users.list.mockResolvedValue({ success: true, data: { items: [], total: 60, page: 1, pageSize: 20 } })
+  api.admin.users.list.mockResolvedValue({
+    success: true,
+    data: {
+      items: [],
+      total: 60,
+      page: 1,
+      pageSize: 20,
+    },
+  })
   const store = createStore()
   store.user = administrator
   store.usersSearch = 'applied'
@@ -232,13 +333,29 @@ it('user paging and header sorting keep applied filters until Query submits draf
   await store.loadUsers(2)
   expect(api.admin.users.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, search: 'applied', accountStatus: 'active' }))
   await store.sortUsers('username', 'asc')
-  expect(api.admin.users.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, search: 'applied', accountStatus: 'active', sortBy: 'username', sortDirection: 'asc' }))
+  expect(api.admin.users.list).toHaveBeenLastCalledWith(expect.objectContaining({
+    page: 1,
+    search: 'applied',
+    accountStatus: 'active',
+    sortBy: 'username',
+    sortDirection: 'asc',
+  }))
   await store.queryUsers()
   expect(api.admin.users.list).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'draft', accountStatus: 'dormant' }))
 })
 
 it('audit paging and header sorting do not submit unfinished filter drafts', async () => {
-  api.admin.audit.list.mockResolvedValue({ success: true, data: { items: [], stats: [], backupEnabled: false, total: 60, page: 1, pageSize: 20 } })
+  api.admin.audit.list.mockResolvedValue({
+    success: true,
+    data: {
+      items: [],
+      stats: [],
+      backupEnabled: false,
+      total: 60,
+      page: 1,
+      pageSize: 20,
+    },
+  })
   const store = createStore()
   store.user = administrator
   store.auditResource = 'applied'
@@ -247,7 +364,12 @@ it('audit paging and header sorting do not submit unfinished filter drafts', asy
   await store.loadAudit(2)
   expect(api.admin.audit.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, resource: 'applied' }))
   await store.sortAudit('action', 'asc')
-  expect(api.admin.audit.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, resource: 'applied', sortBy: 'action', sortDirection: 'asc' }))
+  expect(api.admin.audit.list).toHaveBeenLastCalledWith(expect.objectContaining({
+    page: 1,
+    resource: 'applied',
+    sortBy: 'action',
+    sortDirection: 'asc',
+  }))
   await store.queryAudit()
   expect(api.admin.audit.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, resource: 'draft' }))
 })

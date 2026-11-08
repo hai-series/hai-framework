@@ -6,10 +6,10 @@
   import type { Snippet } from 'svelte'
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
-{{#if hasI18n}}
-  import * as m from '$lib/paraglide/messages'
-{{/if}}
   import { WorkspaceLayout } from '@h-ai/ui'
+{{#if hasI18n}}
+  import * as m from '#lib/paraglide/messages.js'
+{{/if}}
 
   interface Props {
     children: Snippet
@@ -31,11 +31,19 @@
 
   const navItems = $derived([
 {{#if hasI18n}}
-    { path: '/admin', label: m.nav_dashboard(), icon: 'icon-[tabler--layout-dashboard]' },
-    { path: '/admin/settings', label: m.nav_settings(), icon: 'icon-[tabler--settings]' },
+    {
+      path: resolve('admin'),
+      label: m.nav_dashboard(),
+      icon: 'icon-[tabler--layout-dashboard]',
+    },
+    {
+      path: resolve('admin/settings'),
+      label: m.nav_settings(),
+      icon: 'icon-[tabler--settings]',
+    },
 {{else}}
-    { path: '/admin', label: '仪表盘', icon: 'icon-[tabler--layout-dashboard]' },
-    { path: '/admin/settings', label: '设置', icon: 'icon-[tabler--settings]' },
+    { path: resolve('admin'), label: '仪表盘', icon: 'icon-[tabler--layout-dashboard]' },
+    { path: resolve('admin/settings'), label: '设置', icon: 'icon-[tabler--settings]' },
 {{/if}}
   ] as const)
 </script>
@@ -64,10 +72,12 @@
       <ul class='gap-1'>
         {#each navItems as item (item.path)}
           <li>
-            <a href={resolve(item.path, {})} class:menu-active={page.url.pathname === resolve(item.path, {})} onclick={closeDrawer}>
+            <!-- eslint-disable svelte/no-navigation-without-resolve -- 菜单字段已由 resolve 生成完整挂载地址；规则无法追踪派生/筛选后的集合，不能二次添加前缀。 -->
+            <a href={item.path} class:menu-active={page.url.pathname === item.path} onclick={closeDrawer}>
               <span class='{item.icon} size-5'></span>
               {item.label}
             </a>
+            <!-- eslint-enable svelte/no-navigation-without-resolve -->
           </li>
         {/each}
       </ul>

@@ -2,13 +2,26 @@ import { IamListUsersInputSchema, IamPermissionSchema } from '@h-ai/api-contract
 import { z } from 'zod'
 
 /** 权限的敏感操作配置复用框架字段；职责授权仍由应用控制。 */
-export const AdminPermissionPolicySchema = IamPermissionSchema.pick({ id: true, code: true, name: true, sensitiveOperations: true })
+export const AdminPermissionPolicySchema = IamPermissionSchema.pick({
+  id: true,
+  code: true,
+  name: true,
+  sensitiveOperations: true,
+})
 export const AdminPermissionPolicyInputSchema = AdminPermissionPolicySchema.pick({ id: true, sensitiveOperations: true })
 export type AdminPermissionPolicy = z.infer<typeof AdminPermissionPolicySchema>
 
-export const BusinessSettingsSchema = z.object({ notice: z.string().trim().max(200) }).strict()
+export const BusinessSettingsSchema = z.object({
+  notice: z.string().trim().max(200),
+}).strict()
 
-export const AdminRoleCodeSchema = z.enum(['admin', 'audit_admin', 'config_admin', 'business_operator', 'user'])
+export const AdminRoleCodeSchema = z.enum([
+  'admin',
+  'audit_admin',
+  'config_admin',
+  'business_operator',
+  'user',
+])
 export const AdminPageInputSchema = z.object({
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(100).default(20),
@@ -49,10 +62,16 @@ export const AdminCreateUserSchema = z.object({
   accountStatus: z.enum(['active', 'dormant', 'closed']).default('active'),
   accountExpiresAt: z.string().datetime().nullable().optional(),
 }).strict()
-export const AdminInviteUserSchema = AdminCreateUserSchema.omit({ password: true }).extend({ phone: z.string().trim().min(1).max(32).optional(), accountStatus: z.literal('active').default('active') })
+export const AdminInviteUserSchema = AdminCreateUserSchema.omit({ password: true }).extend({
+  phone: z.string().trim().min(1).max(32).optional(),
+  accountStatus: z.literal('active').default('active'),
+})
 export const AdminUpdateUserSchema = z.object({
   id: z.string().min(1),
-  email: z.union([z.email(), z.literal('')]).optional(),
+  email: z.union([
+    z.email(),
+    z.literal(''),
+  ]).optional(),
   displayName: z.string().max(100).optional(),
   accountType: z.enum(['permanent', 'temporary']).optional(),
   accountStatus: z.enum(['active', 'dormant', 'closed']).optional(),
@@ -73,7 +92,14 @@ export const AdminAuditInputSchema = AdminPageInputSchema.extend({
   scopeId: z.string().max(256).optional(),
   requestId: z.string().max(256).optional(),
   traceId: z.string().max(256).optional(),
-  sortBy: z.enum(['createdAt', 'action', 'resource', 'category', 'outcome', 'severity']).optional(),
+  sortBy: z.enum([
+    'createdAt',
+    'action',
+    'resource',
+    'category',
+    'outcome',
+    'severity',
+  ]).optional(),
   sortDirection: z.enum(['asc', 'desc']).optional(),
   userId: z.string().max(100).optional(),
   action: z.string().max(50).optional(),
@@ -88,7 +114,12 @@ export const AdminAuditLogSchema = z.object({
   scopeId: z.string().nullish(),
   requestId: z.string().nullish(),
   traceId: z.string().nullish(),
-  actorSnapshot: z.object({ id: z.string(), username: z.string().optional(), displayName: z.string().optional(), roles: z.array(z.string()).optional() }).nullish(),
+  actorSnapshot: z.object({
+    id: z.string(),
+    username: z.string().optional(),
+    displayName: z.string().optional(),
+    roles: z.array(z.string()).optional(),
+  }).nullish(),
   id: z.string(),
   userId: z.string().nullable(),
   username: z.string().nullable(),
@@ -100,10 +131,20 @@ export const AdminAuditLogSchema = z.object({
   userAgent: z.string().nullable(),
   createdAt: z.string().datetime(),
 })
-export const AuditBackupReceiptSchema = z.object({ id: z.string(), key: z.string(), recordCount: z.number(), sha256: z.string(), createdAt: z.string().datetime(), cutoff: z.string().datetime() })
+export const AuditBackupReceiptSchema = z.object({
+  id: z.string(),
+  key: z.string(),
+  recordCount: z.number(),
+  sha256: z.string(),
+  createdAt: z.string().datetime(),
+  cutoff: z.string().datetime(),
+})
 export const AdminAuditSchema = z.object({
   backupEnabled: z.boolean(),
-  stats: z.array(z.object({ action: z.string(), count: z.number() })),
+  stats: z.array(z.object({
+    action: z.string(),
+    count: z.number(),
+  })),
   items: z.array(AdminAuditLogSchema),
   total: z.number(),
   page: z.number(),
@@ -111,7 +152,10 @@ export const AdminAuditSchema = z.object({
 })
 export const ProfileUpdateSchema = z.object({
   displayName: z.string().max(100).optional(),
-  email: z.union([z.email(), z.literal('')]).optional(),
+  email: z.union([
+    z.email(),
+    z.literal(''),
+  ]).optional(),
   locale: z.enum([{{#each fullstack.i18n.locales}}'{{this}}'{{#unless @last}}, {{/unless}}{{/each}}]).optional(),
   theme: z.string().min(1).max(40).regex(/^[\w-]+$/).optional(),
 }).strict()
@@ -120,7 +164,9 @@ export const AvatarUploadSchema = z.object({
   contentType: z.enum(['image/png', 'image/jpeg', 'image/webp']),
   base64: z.string().min(1).max(699052).regex(/^[A-Z\d+/]+={0,2}$/i),
 }).strict()
-export const AvatarOutputSchema = z.object({ avatarUrl: z.string().describe('Generated relative asset path') })
+export const AvatarOutputSchema = z.object({
+  avatarUrl: z.string().describe('Generated relative asset path'),
+})
 
 export type AdminUser = z.infer<typeof AdminUserSchema>
 export type AdminRole = z.infer<typeof AdminRoleSchema>

@@ -1,14 +1,27 @@
 import type { CoreConfig } from '@h-ai/core'
 import type { {{#if features.feedback}}CreateServContext, {{/if}}ServConfig{{#if features.crypto}}, ServTransportConfig{{/if}} } from '@h-ai/serv'
-{{#if features.crypto}}import process from 'node:process'
+{{#if features.crypto}}
+import process from 'node:process'
 {{/if}}
-{{#if features.feedback}}import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
-{{/if}}import { core } from '@h-ai/core'
-{{#if features.crypto}}import { {{#if features.db}}createReldbTransportKeyStore{{else}}createInMemoryKeyStore{{/if}}, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
-{{/if}}{{#if features.feedback}}import { FeedbackConfigSchema } from '@h-ai/feedback'
-{{/if}}{{#if features.iam}}import { iam } from '@h-ai/iam'
-{{/if}}{{#if features.crypto}}{{#if features.db}}import { reldb } from '@h-ai/reldb'
-{{/if}}{{/if}}import { serv } from '@h-ai/serv'
+{{#if features.feedback}}
+import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
+{{/if}}
+import { core } from '@h-ai/core'
+{{#if features.crypto}}
+import { {{#if features.db}}createReldbTransportKeyStore{{else}}createInMemoryKeyStore{{/if}}, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+{{/if}}
+{{#if features.feedback}}
+import { FeedbackConfigSchema } from '@h-ai/feedback'
+{{/if}}
+{{#if features.iam}}
+import { iam } from '@h-ai/iam'
+{{/if}}
+{{#if features.crypto}}
+{{#if features.db}}
+import { reldb } from '@h-ai/reldb'
+{{/if}}
+{{/if}}
+import { serv } from '@h-ai/serv'
 import { {{api.contractExportName}} } from '{{api.contractPackageName}}'
 import { {{api.serviceProceduresFactoryName}} } from './server/procedures/index.js'
 
@@ -28,56 +41,80 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
     corsOrigin: servConfig.cors.origin,
     nativeOrigins: servConfig.cors.nativeOrigins,
   })
-{{#if features.crypto}}  const transportMode = _options.transport ?? 'config'
+{{#if features.crypto}}
+  const transportMode = _options.transport ?? 'config'
   let transport: ServTransportConfig | undefined
   if (transportMode !== 'disabled' && servConfig.transport !== false) {
-{{#unless features.db}}    if (coreConfig.env !== 'development' && coreConfig.env !== 'test')
-      throw new Error('Production transport requires a shared registry; enable the db feature and configure a shared database')
+{{#unless features.db}}
+if (coreConfig.env !== 'development' && coreConfig.env !== 'test')
+                throw new Error('Production transport requires a shared registry; enable the db feature and configure a shared database')
 {{/unless}}
     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     if (!ring.success)
       throw new Error(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ${ring.error.message} (${ring.error.code})`)
-{{#if features.feedback}}    // 可选反馈故障重试期间仍使用配置预算，避免缓存默认容量。
+{{#if features.feedback}}
+    // 可选反馈故障重试期间仍使用配置预算，避免缓存默认容量。
     const feedbackSettings = FeedbackConfigSchema.safeParse(core.config.get('feedback'))
-    const feedbackBudget = resolveFeedbackBudget(feedbackSettings.success ? feedbackSettings.data : {})
-{{/if}}    transport = {
+    const feedbackBudget = resolveFeedbackBudget(feedbackSettings.success
+      ? feedbackSettings.data
+      : {})
+{{/if}}
+    transport = {
       crypto,
       serverKeyRing: ring.data,
-{{#if features.db}}      keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),
-{{else}}      keyStore: createInMemoryKeyStore(), // 无 db 的模板仅在 development/test 使用内存 registry。
+{{#if features.db}}
+      keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),
+{{else}}
+keyStore: createInMemoryKeyStore(), // 无 db 的模板仅在 development/test 使用内存 registry。
 {{/if}}
       keyExchangePath: servConfig.transport.keyExchangePath,
       maxPlaintextBytes: servConfig.transport.maxPlaintextBytes,
       maxFutureSkewSeconds: servConfig.transport.maxFutureSkewSeconds,
       maxRequestAgeSeconds: servConfig.transport.maxRequestAgeSeconds,
-{{#if features.feedback}}      routePlaintextBytes: {
+{{#if features.feedback}}
+      routePlaintextBytes: {
         [`${servConfig.http.apiPrefix}/feedback/reports`]: feedbackBudget.maxTransportBytes,
         [`${servConfig.http.apiPrefix}/feedback/reports/*/evidence`]: feedbackBudget.maxTransportBytes,
         [`${servConfig.http.apiPrefix}/feedback/reports/*/attachments/*`]: feedbackBudget.maxTransportBytes,
         [`${servConfig.http.apiPrefix}/feedback/reports/*/exports/*`]: feedbackBudget.maxTransportBytes,
         ...servConfig.transport.routePlaintextBytes,
       },
-{{else}}      routePlaintextBytes: servConfig.transport.routePlaintextBytes,
+{{else}}
+routePlaintextBytes: servConfig.transport.routePlaintextBytes,
 {{/if}}
-      excludePaths: [...new Set([
-        ...servConfig.transport.excludePaths,
-        ...(servConfig.http.health ? [servConfig.http.health.path, servConfig.http.health.readyPath].filter((path): path is `/${string}` => Boolean(path)) : []),
-        ...(servConfig.http.openapi && security.exposeApiDocs ? [servConfig.http.openapi.path] : []),
-        ...(servConfig.http.docs && security.exposeApiDocs ? [servConfig.http.docs.path, `${servConfig.http.docs.path.slice(0, servConfig.http.docs.path.lastIndexOf('/') + 1)}_hai/scalar.js`] : []),
-      ])],
+      excludePaths: [
+        ...new Set([
+          ...servConfig.transport.excludePaths,
+          ...(servConfig.http.health
+            ? [servConfig.http.health.path, servConfig.http.health.readyPath].filter((path): path is `/${string}` => Boolean(path))
+            : []),
+          ...(servConfig.http.openapi && security.exposeApiDocs
+            ? [servConfig.http.openapi.path]
+            : []),
+          ...(servConfig.http.docs && security.exposeApiDocs
+            ? [servConfig.http.docs.path, `${servConfig.http.docs.path.slice(0, servConfig.http.docs.path.lastIndexOf('/') + 1)}_hai/scalar.js`]
+            : []),
+        ]),
+      ],
     }
   }
-{{else}}  const transport = undefined
+{{else}}
+  const transport = undefined
 {{/if}}
 {{#if features.iam}}
   const refreshCookie = _options.refreshCookie === 'disabled'
     ? undefined
-    : { secure: security.secureRefreshCookie, nativeTokenTransport: { isRequest: (request: Request) => request.headers.get('x-hai-token-transport') === 'body'
-      && ['hai-mobile-app', 'hai-desktop-app'].includes(request.headers.get('x-request-client') ?? '')
-      && security.isNativeOrigin(request.headers.get('origin') ?? '') } }
+    : {
+        secure: security.secureRefreshCookie,
+        nativeTokenTransport: {
+          isRequest: (request: Request) => request.headers.get('x-hai-token-transport') === 'body'
+            && ['hai-mobile-app', 'hai-desktop-app'].includes(request.headers.get('x-request-client') ?? '')
+            && security.isNativeOrigin(request.headers.get('origin') ?? ''),
+        },
+      }
 {{/if}}
 {{#if features.feedback}}
-  // 普通业务日志与反馈使用同一可信应用范围；身份仍由 IAM 验证。
+      // 普通业务日志与反馈使用同一可信应用范围；身份仍由 IAM 验证。
   const authenticatedContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
   const createContext: CreateServContext = async input => ({
     ...await authenticatedContext(input),
@@ -119,7 +156,9 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
         middleware: serv.cors({
           origin: security.allowOrigin,
           credentials: servConfig.cors.credentials,
-          allowedHeaders: [...new Set([...servConfig.cors.allowedHeaders, 'x-request-client', 'x-hai-token-transport'])],
+          allowedHeaders: [
+            ...new Set([...servConfig.cors.allowedHeaders, 'x-request-client', 'x-hai-token-transport']),
+          ],
           exposedHeaders: [...servConfig.cors.exposedHeaders],
         }),
       },

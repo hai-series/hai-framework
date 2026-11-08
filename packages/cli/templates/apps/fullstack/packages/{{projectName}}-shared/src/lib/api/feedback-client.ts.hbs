@@ -2,12 +2,10 @@
 {{#if features.feedback}}
 import { createFeedbackClient, createFeedbackReview, saveFeedbackFile } from '@h-ai/feedback/client'
 import { managementApi } from './api-client.js'
-
 /** 仅装配共享采集器，不复制采集、脱敏、上传或离线打包逻辑。 */
 export const browserFeedback = createFeedbackClient()
 export const feedbackReview = createFeedbackReview(managementApi.feedback.reports)
 export { feedbackDataBytes } from '@h-ai/feedback/client'
-
 export async function initializeBrowserFeedback(metadata: { appVersion: string, buildId: string, commit: string }): Promise<void> {
   const result = await browserFeedback.init({
     appId: '{{projectName}}',
@@ -26,7 +24,6 @@ export async function initializeBrowserFeedback(metadata: { appVersion: string, 
   if (!result.success)
     throw new Error(result.error.message, { cause: result.error })
 }
-
 /** 下载的内容来自受权 API 或本地采集器；对象 URL 在发起后释放。 */
 export async function downloadFeedback(bytes: Uint8Array, name: string, contentType = 'application/zip'): Promise<void> {
   const result = await saveFeedbackFile(bytes, name, contentType)

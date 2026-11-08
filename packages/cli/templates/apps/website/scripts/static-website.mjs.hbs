@@ -28,9 +28,22 @@ const message = core.i18n.createMessageGetter({
     assets: 'staticは公開資産ディレクトリーです。非公開.envファイルやシンボリックリンクを置かず、非公開内容を移動してから構築してください。',
   },
 })
-const serverFeatures = [{{#each websiteServerFeatures}}'{{this}}'{{#unless @last}}, {{/unless}}{{/each}}]
-const requestedLocale = [process.env.HAI_CORE_DEFAULTLOCALE, process.env.LC_ALL, process.env.LC_MESSAGES, process.env.LANG].find(value => value?.trim())?.split(/[_.-]/)[0]?.toLowerCase()
-const locale = requestedLocale === 'en' || requestedLocale === 'c' || requestedLocale === 'posix' ? 'en-US' : requestedLocale === 'ja' ? 'ja-JP' : 'zh-CN'
+const serverFeatures = [
+{{#each websiteServerFeatures}}
+  '{{this}}',
+{{/each}}
+]
+const requestedLocale = [
+  process.env.HAI_CORE_DEFAULTLOCALE,
+  process.env.LC_ALL,
+  process.env.LC_MESSAGES,
+  process.env.LANG,
+].find(value => value?.trim())?.split(/[_.-]/)[0]?.toLowerCase()
+const locale = requestedLocale === 'en' || requestedLocale === 'c' || requestedLocale === 'posix'
+  ? 'en-US'
+  : requestedLocale === 'ja'
+    ? 'ja-JP'
+    : 'zh-CN'
 
 /** 只读取显式构建值，不加载dotenv和服务端秘密。 */
 export function resolveStaticWebsite() {

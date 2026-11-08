@@ -5,10 +5,10 @@
    */
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
-{{#if hasI18n}}
-  import * as m from '$lib/paraglide/messages'
-{{/if}}
   import { Badge, Card } from '@h-ai/ui'
+{{#if hasI18n}}
+  import * as m from '#lib/paraglide/messages.js'
+{{/if}}
 </script>
 
 <svelte:head>
@@ -31,7 +31,7 @@
     <h1 class='mt-4 text-4xl font-black tracking-tight'>{page.data.appConfig.name}</h1>
     <p class='mt-3 text-base-content/60'>{m.page_home_subtitle()}</p>
     <div class='mt-8 flex flex-wrap gap-3 justify-center'>
-      <a href={resolve('/admin', {})} class='btn btn-primary'>
+      <a href={resolve('admin')} class='btn btn-primary'>
         <span class='icon-[tabler--layout-dashboard] size-5'></span>
         {m.nav_admin()}
       </a>
@@ -46,7 +46,7 @@
     <h1 class='mt-4 text-4xl font-black tracking-tight'>{page.data.appConfig.name}</h1>
     <p class='mt-3 text-base-content/60'>基于 hai Agent Framework 构建</p>
     <div class='mt-8 flex flex-wrap gap-3 justify-center'>
-      <a href={resolve('/admin', {})} class='btn btn-primary'>
+      <a href={resolve('admin')} class='btn btn-primary'>
         <span class='icon-[tabler--layout-dashboard] size-5'></span>
         进入后台
       </a>

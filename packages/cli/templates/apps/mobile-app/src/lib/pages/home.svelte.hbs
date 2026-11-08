@@ -46,12 +46,16 @@
       <div>
         <p class='text-base-content/50'>{m.status_runtime_label()}</p>
         <Badge variant={nativeRuntime ? 'success' : 'warning'} size='sm'>
-          {nativeRuntime ? m.status_runtime_native() : m.status_runtime_web()}
+          {nativeRuntime
+            ? m.status_runtime_native()
+            : m.status_runtime_web()}
         </Badge>
       </div>
       <div class='col-span-2'>
         <p class='text-base-content/50'>{m.status_token_label()}</p>
-        <p class='font-medium'>{nativeTokenStorage ? m.status_token_native() : m.status_token_memory()}</p>
+        <p class='font-medium'>{nativeTokenStorage
+          ? m.status_token_native()
+          : m.status_token_memory()}</p>
       </div>
     </div>
   </Card>

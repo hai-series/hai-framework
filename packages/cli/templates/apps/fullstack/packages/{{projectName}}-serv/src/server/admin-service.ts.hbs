@@ -11,8 +11,18 @@ import { storage } from '@h-ai/storage'
 import { SUPPORTED_LOCALES } from '{{fullstack.contractPackageName}}'
 import { serverM } from './messages.js'
 
-const ROLE_CODES = new Set<AdminRoleCode>(['admin', 'audit_admin', 'config_admin', 'business_operator', 'user'])
-const SUPPORTED_THEMES = [{{#each fullstack.theme.themes}}'{{this}}'{{#unless @last}}, {{/unless}}{{/each}}] as readonly string[]
+const ROLE_CODES = new Set<AdminRoleCode>([
+  'admin',
+  'audit_admin',
+  'config_admin',
+  'business_operator',
+  'user',
+])
+const SUPPORTED_THEMES = [
+{{#each fullstack.theme.themes}}
+  '{{this}}',
+{{/each}}
+] as readonly string[]
 let adminMutationActive = false
 
 /** 管理写操作串行化，锁内重新鉴权，防止两个管理员同时互相删除或降级。 */
@@ -42,7 +52,10 @@ export async function withAdminMutation<T>(context: ServContext, operation: stri
       void cache.lock.extend(key, 300, owner).then((renewed) => {
         if (!renewed.success || !renewed.data) {
           leaseLost = true
-          core.logger.error('Admin mutation lease renewal failed', { owner, error: renewed.success ? 'lease_not_owned' : renewed.error.code })
+          core.logger.error('Admin mutation lease renewal failed', {
+            owner,
+            error: renewed.success ? 'lease_not_owned' : renewed.error.code,
+          })
         }
       }).catch(() => {
         leaseLost = true
@@ -55,7 +68,9 @@ export async function withAdminMutation<T>(context: ServContext, operation: stri
     const actor = await getAdminUser(context.session?.userId ?? '')
     if (!actor.success)
       return actor
-    const permitted = await iam.authz.checkPermission(actor.data.id, operation.startsWith('iam.roles.') ? 'app.roles.manage' : 'app.users.manage')
+    const permitted = await iam.authz.checkPermission(actor.data.id, operation.startsWith('iam.roles.')
+      ? 'app.roles.manage'
+      : 'app.users.manage')
     if (!permitted.success)
       return permitted
     if (actor.data.accountStatus !== 'active' || (actor.data.accountType === 'temporary' && (!actor.data.accountExpiresAt || new Date(actor.data.accountExpiresAt).getTime() <= Date.now())) || !permitted.data)
@@ -73,8 +88,12 @@ export async function withAdminMutation<T>(context: ServContext, operation: stri
     try {
       if (acquired) {
         const released = await cache.lock.release(key, owner)
-        if (!released.success || !released.data)
-          core.logger.error('Failed to release admin mutation lock', { owner, error: released.success ? 'lease_not_owned' : released.error.code })
+        if (!released.success || !released.data) {
+          core.logger.error('Failed to release admin mutation lock', {
+            owner,
+            error: released.success ? 'lease_not_owned' : released.error.code,
+          })
+        }
       }
     }
     finally {
@@ -123,7 +142,12 @@ export async function createAdminUser(input: AdminCreateUser, context: ServConte
     return role
   if (!role.data)
     return err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale }))
-  const registered = await iam.user.createUser({ ...input, accountExpiresAt: input.accountExpiresAt ? new Date(input.accountExpiresAt) : undefined })
+  const registered = await iam.user.createUser({
+    ...input,
+    accountExpiresAt: input.accountExpiresAt
+      ? new Date(input.accountExpiresAt)
+      : undefined,
+  })
   if (!registered.success)
     return registered
   const userId = registered.data.user.id
@@ -139,9 +163,17 @@ export async function createAdminUser(input: AdminCreateUser, context: ServConte
 /** 安全通知发送后发生未知结果时保留账号，不自动重试或删除已发出的邀请。 */
 export async function inviteAdminUser(input: AdminInviteUser, context: ServContext): Promise<HaiResult<AdminUser>> {
   const role = await iam.authz.getRoleByCode(input.role)
-  if (!role.success || !role.data)
-    return role.success ? err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale })) : role
-  const created = await iam.user.inviteUser({ ...input, accountExpiresAt: input.accountExpiresAt ? new Date(input.accountExpiresAt) : undefined })
+  if (!role.success || !role.data) {
+    return role.success
+      ? err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale }))
+      : role
+  }
+  const created = await iam.user.inviteUser({
+    ...input,
+    accountExpiresAt: input.accountExpiresAt
+      ? new Date(input.accountExpiresAt)
+      : undefined,
+  })
   if (!created.success)
     return created
   const assigned = await iam.authz.syncRoles(created.data.user.id, [role.data.id])
@@ -165,7 +197,9 @@ export async function updateAdminUser(input: AdminUpdateUser, context: ServConte
     return existing
   if (!existing.data)
     return err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale }))
-  const role = input.role ? await iam.authz.getRoleByCode(input.role) : undefined
+  const role = input.role
+    ? await iam.authz.getRoleByCode(input.role)
+    : undefined
   if (role && !role.success)
     return role
   if (role?.success && !role.data)
@@ -179,7 +213,14 @@ export async function updateAdminUser(input: AdminUpdateUser, context: ServConte
     if (!assigned.success)
       return assigned
   }
-  const updated = await iam.user.updateUser(id, { ...profile, accountExpiresAt: profile.accountExpiresAt === undefined ? undefined : profile.accountExpiresAt ? new Date(profile.accountExpiresAt) : null })
+  const updated = await iam.user.updateUser(id, {
+    ...profile,
+    accountExpiresAt: profile.accountExpiresAt === undefined
+      ? undefined
+      : profile.accountExpiresAt
+        ? new Date(profile.accountExpiresAt)
+        : null,
+  })
   if (!updated.success) {
     // 角色 ID 可精确还原，避免 undefined 资料字段被 updateUser 忽略后无法补偿。
     if (role?.success && role.data) {
@@ -189,7 +230,10 @@ export async function updateAdminUser(input: AdminUpdateUser, context: ServConte
     }
     return updated
   }
-  await recordAudit(context, 'update', 'users', id, { fields: Object.keys(profile), role: input.role })
+  await recordAudit(context, 'update', 'users', id, {
+    fields: Object.keys(profile),
+    role: input.role,
+  })
   return getAdminUser(id)
 }
 
@@ -201,13 +245,15 @@ export async function getAdminRoles(): Promise<HaiResult<{ items: AdminRole[] }>
   const counts = await iam.authz.getRoleUserCounts(items.map(role => role.id))
   if (!counts.success)
     return counts
-  return ok({ items: items.map(role => ({
-    id: role.id,
-    code: role.code as AdminRoleCode,
-    name: role.name,
-    description: role.description,
-    userCount: counts.data.get(role.id) ?? 0,
-  })) })
+  return ok({
+    items: items.map(role => ({
+      id: role.id,
+      code: role.code as AdminRoleCode,
+      name: role.name,
+      description: role.description,
+      userCount: counts.data.get(role.id) ?? 0,
+    })),
+  })
 }
 
 export async function updateProfile(input: ProfileUpdate, context: ServContext): Promise<HaiResult<AdminUser>> {
@@ -225,7 +271,9 @@ export async function updateProfile(input: ProfileUpdate, context: ServContext):
   const updated = await iam.user.updateCurrentUser(token, { displayName: input.displayName, email: input.email, metadata })
   if (!updated.success)
     return updated
-  await recordAudit(context, 'update', 'profile', current.data.id, { fields: Object.keys(input) })
+  await recordAudit(context, 'update', 'profile', current.data.id, {
+    fields: Object.keys(input),
+  })
   return getAdminUser(current.data.id)
 }
 

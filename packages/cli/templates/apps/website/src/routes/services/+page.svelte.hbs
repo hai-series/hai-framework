@@ -3,16 +3,31 @@
   /**
    * 服务页面
    */
-{{#if hasI18n}}
-  import * as m from '$lib/paraglide/messages'
-{{/if}}
   import { Card, PageHeader } from '@h-ai/ui'
+{{#if hasI18n}}
+  import * as m from '#lib/paraglide/messages.js'
+{{/if}}
 
 {{#if hasI18n}}
   const services = $derived([
-    { id: 'consulting', title: m.page_services_item1(), desc: m.page_services_desc(), icon: 'icon-[tabler--message-circle]' },
-    { id: 'development', title: m.page_services_item2(), desc: m.page_services_desc(), icon: 'icon-[tabler--code]' },
-    { id: 'operations', title: m.page_services_item3(), desc: m.page_services_desc(), icon: 'icon-[tabler--server-cog]' },
+    {
+      id: 'consulting',
+      title: m.page_services_item1(),
+      desc: m.page_services_desc(),
+      icon: 'icon-[tabler--message-circle]',
+    },
+    {
+      id: 'development',
+      title: m.page_services_item2(),
+      desc: m.page_services_desc(),
+      icon: 'icon-[tabler--code]',
+    },
+    {
+      id: 'operations',
+      title: m.page_services_item3(),
+      desc: m.page_services_desc(),
+      icon: 'icon-[tabler--server-cog]',
+    },
   ])
 {{else}}
   const services = [

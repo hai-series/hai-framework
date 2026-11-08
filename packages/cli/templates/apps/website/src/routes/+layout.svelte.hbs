@@ -4,13 +4,9 @@
    * 官网根布局
    */
   import type { Snippet } from 'svelte'
-  import { browser } from '$app/environment'
-  import { {{#if features.iam}}base, {{else}}{{#if features.crypto}}base, {{/if}}{{/if}}resolve } from '$app/paths'
+  import { browser } from '$app/env'
+  import { resolve } from '$app/paths'
   import { page } from '$app/state'
-{{#if hasI18n}}
-  import * as m from '$lib/paraglide/messages'
-  import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
-{{/if}}
 {{#if features.crypto}}
   import { crypto } from '@h-ai/crypto'
   import { kit } from '@h-ai/kit'
@@ -28,6 +24,10 @@
 {{#if features.crypto}}
   import { untrack } from 'svelte'
 {{/if}}
+{{#if hasI18n}}
+  import * as m from '#lib/paraglide/messages.js'
+  import { getLocale, setLocale } from '#lib/paraglide/runtime.js'
+{{/if}}
   import '../app.css'
 
   interface Props {
@@ -35,7 +35,9 @@
   }
 
   const { children }: Props = $props()
-  const initialTheme = browser ? getSavedTheme() : 'light'
+  const initialTheme = browser
+    ? getSavedTheme()
+    : 'light'
   let currentTheme = $state(initialTheme)
   if (browser)
     applyTheme(initialTheme, false)
@@ -44,27 +46,42 @@
     currentTheme = theme
     applyTheme(theme)
   }
-
 {{#if features.crypto}}
-  if (browser)
-    kit.client.installBrowserTransport(untrack(() => page.data.kitConfig), { crypto, basePath: base })
+  if (browser) {
+    kit.client.installBrowserTransport(untrack(() => page.data.kitConfig), {
+      crypto,
+      basePath: resolve('/').replace(/\/$/, ''),
+    })
+  }
 {{/if}}
 {{#if features.iam}}
-  const authActions = kit.client.createAuthActions({ basePath: `${base}/api/auth` })
+  const authActions = kit.client.createAuthActions({ basePath: `${resolve('/').replace(/\/$/, '')}/api/auth` })
   $effect(() => authActions.bindPageExit({ enabled: page.data.iamPublicConfig?.session.endOnPageHide }))
 {{/if}}
 
   const navItems = [
 {{#if hasI18n}}
-    { path: '/', label: m.nav_home() },
-    { path: '/about', label: m.nav_about() },
-    { path: '/services', label: m.nav_services() },
-    { path: '/contact', label: m.nav_contact() },
+    {
+      path: resolve('/'),
+      label: m.nav_home(),
+    },
+    {
+      path: resolve('about'),
+      label: m.nav_about(),
+    },
+    {
+      path: resolve('services'),
+      label: m.nav_services(),
+    },
+    {
+      path: resolve('contact'),
+      label: m.nav_contact(),
+    },
 {{else}}
-    { path: '/', label: '首页' },
-    { path: '/about', label: '关于' },
-    { path: '/services', label: '服务' },
-    { path: '/contact', label: '联系我们' },
+    { path: resolve('/'), label: '首页' },
+    { path: resolve('about'), label: '关于' },
+    { path: resolve('services'), label: '服务' },
+    { path: resolve('contact'), label: '联系我们' },
 {{/if}}
   ] as const
 {{#if hasI18n}}
@@ -89,15 +106,17 @@
   <header class='navbar flex-wrap bg-base-100 shadow-sm'>
     <div class='flex-1'>
 {{#if hasI18n}}
-      <a href={resolve('/', {})} class='btn btn-ghost text-xl font-black tracking-tight'>{page.data.appConfig.name}</a>
+      <a href={resolve('/')} class='btn btn-ghost text-xl font-black tracking-tight'>{page.data.appConfig.name}</a>
 {{else}}
-      <a href={resolve('/', {})} class='btn btn-ghost text-xl font-black tracking-tight'>{page.data.appConfig.name}</a>
+      <a href={resolve('/')} class='btn btn-ghost text-xl font-black tracking-tight'>{page.data.appConfig.name}</a>
 {{/if}}
     </div>
     <nav class='w-full flex-none sm:w-auto'>
       <ul class='menu menu-horizontal flex-wrap px-1'>
         {#each navItems as item (item.path)}
-          <li><a href={resolve(item.path, {})}>{item.label}</a></li>
+          <li><!-- eslint-disable svelte/no-navigation-without-resolve -- 菜单字段已由 resolve 生成完整挂载地址；规则无法追踪派生/筛选后的集合，不能二次添加前缀。 -->
+            <a href={item.path}>{item.label}</a>
+            <!-- eslint-enable svelte/no-navigation-without-resolve --></li>
         {/each}
       </ul>
     </nav>
@@ -114,7 +133,9 @@
   <footer class='footer footer-center p-4 bg-base-300 text-base-content'>
     <span>{page.data.appConfig.name} · {page.data.appConfig.version} · {page.data.appConfig.env}</span>
 {{#if hasI18n}}
-    <p>{m.footer_copyright({ year: new Date().getFullYear() })}</p>
+    <p>{m.footer_copyright({
+      year: new Date().getFullYear(),
+    })}</p>
 {{else}}
     <p>Copyright © 2025 - All rights reserved</p>
 {{/if}}

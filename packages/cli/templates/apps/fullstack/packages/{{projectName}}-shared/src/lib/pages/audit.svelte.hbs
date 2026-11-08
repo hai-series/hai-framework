@@ -9,14 +9,44 @@
   const { store }: Props = $props()
   let selected = $state<AdminAuditLog | null>(null)
   const columns = $derived([
-    { key: 'createdAt', sortable: true, label: m.created_at() },
-    { key: 'username', label: m.audit_actor() },
-    { key: 'action', sortable: true, label: m.audit_action() },
-    { key: 'category', sortable: true, label: m.audit_category() },
-    { key: 'outcome', sortable: true, label: m.audit_outcome() },
-    { key: 'severity', sortable: true, label: m.audit_severity() },
-    { key: 'resource', sortable: true, label: m.audit_resource() },
-    { key: 'ipAddress', label: m.audit_ip() },
+    {
+      key: 'createdAt',
+      sortable: true,
+      label: m.created_at(),
+    },
+    {
+      key: 'username',
+      label: m.audit_actor(),
+    },
+    {
+      key: 'action',
+      sortable: true,
+      label: m.audit_action(),
+    },
+    {
+      key: 'category',
+      sortable: true,
+      label: m.audit_category(),
+    },
+    {
+      key: 'outcome',
+      sortable: true,
+      label: m.audit_outcome(),
+    },
+    {
+      key: 'severity',
+      sortable: true,
+      label: m.audit_severity(),
+    },
+    {
+      key: 'resource',
+      sortable: true,
+      label: m.audit_resource(),
+    },
+    {
+      key: 'ipAddress',
+      label: m.audit_ip(),
+    },
   ])
 </script>
 
@@ -30,7 +60,15 @@
       event.preventDefault()
       void store.queryAudit()
     }}>
-      <FilterBar data-testid='audit-filters' activeCount={[store.auditAction, store.auditResource, store.auditStartDate, store.auditEndDate, store.auditCategory, store.auditOutcome, store.auditSeverity].filter(Boolean).length} onreset={() => {
+      <FilterBar data-testid='audit-filters' activeCount={[
+store.auditAction,
+store.auditResource,
+store.auditStartDate,
+store.auditEndDate,
+store.auditCategory,
+store.auditOutcome,
+store.auditSeverity,
+].filter(Boolean).length} onreset={() => {
         store.auditAction = ''
         store.auditResource = ''
         store.auditStartDate = ''
@@ -48,9 +86,60 @@
           <FormField label={m.audit_resource()}><Input size='sm' id="audit-resource" bind:value={store.auditResource} placeholder={m.audit_resource_placeholder()} data-testid="audit-resource" /></FormField>
           <FormField label={m.audit_start()} for="audit-start"><input id="audit-start" type="date" class="input block h-9 min-w-0 w-full" bind:value={store.auditStartDate} /></FormField>
           <FormField label={m.audit_end()} for="audit-end"><input id="audit-end" type="date" class="input block h-9 min-w-0 w-full" bind:value={store.auditEndDate} /></FormField>
-          <FormField label={m.audit_category()}><Select size='sm' bind:value={store.auditCategory} options={[{ value: '', label: m.audit_all() }, { value: 'system', label: m.audit_category_system() }, { value: 'business', label: m.audit_category_business() }]} data-testid='audit-category' /></FormField>
-          <FormField label={m.audit_outcome()}><Select size='sm' bind:value={store.auditOutcome} options={[{ value: '', label: m.audit_all() }, { value: 'success', label: m.audit_success() }, { value: 'failure', label: m.audit_failure() }, { value: 'denied', label: m.audit_denied() }]} data-testid='audit-outcome' /></FormField>
-          <FormField label={m.audit_severity()}><Select size='sm' bind:value={store.auditSeverity} options={[{ value: '', label: m.audit_all() }, { value: 'info', label: m.audit_info() }, { value: 'warning', label: m.audit_warning() }, { value: 'error', label: m.audit_error() }, { value: 'critical', label: m.audit_critical() }]} data-testid='audit-severity' /></FormField>
+          <FormField label={m.audit_category()}><Select size='sm' bind:value={store.auditCategory} options={[
+{
+value: '',
+label: m.audit_all(),
+},
+{
+value: 'system',
+label: m.audit_category_system(),
+},
+{
+value: 'business',
+label: m.audit_category_business(),
+},
+]} data-testid='audit-category' /></FormField>
+          <FormField label={m.audit_outcome()}><Select size='sm' bind:value={store.auditOutcome} options={[
+{
+value: '',
+label: m.audit_all(),
+},
+{
+value: 'success',
+label: m.audit_success(),
+},
+{
+value: 'failure',
+label: m.audit_failure(),
+},
+{
+value: 'denied',
+label: m.audit_denied(),
+},
+]} data-testid='audit-outcome' /></FormField>
+          <FormField label={m.audit_severity()}><Select size='sm' bind:value={store.auditSeverity} options={[
+{
+value: '',
+label: m.audit_all(),
+},
+{
+value: 'info',
+label: m.audit_info(),
+},
+{
+value: 'warning',
+label: m.audit_warning(),
+},
+{
+value: 'error',
+label: m.audit_error(),
+},
+{
+value: 'critical',
+label: m.audit_critical(),
+},
+]} data-testid='audit-severity' /></FormField>
         </FormLayout>
       <div class='w-full space-y-2'>
         <p class='text-xs text-base-content/60'>{m.audit_stats_hint()}</p>
@@ -81,7 +170,9 @@
       <dt>{m.audit_request_id()}</dt><dd class='break-all'>{selected.requestId ?? '—'}</dd>
       <dt>{m.audit_trace_id()}</dt><dd class='break-all'>{selected.traceId ?? '—'}</dd>
       <dt>{m.audit_scope()}</dt><dd class='break-all'>{selected.scopeId ?? '—'}</dd>
-      <dt>{m.audit_actor_snapshot()}</dt><dd class='break-all'>{selected.actorSnapshot ? JSON.stringify(selected.actorSnapshot) : '—'}</dd>
+      <dt>{m.audit_actor_snapshot()}</dt><dd class='break-all'>{selected.actorSnapshot
+? JSON.stringify(selected.actorSnapshot)
+: '—'}</dd>
       <dt class="text-base-content/50">{m.created_at()}</dt><dd>{store.formatDate(selected.createdAt)}</dd>
       <dt class="text-base-content/50">{m.audit_actor()}</dt><dd class="break-all">{selected.username || m.audit_system()}</dd>
       <dt class="text-base-content/50">{m.audit_action()}</dt><dd>{selected.action}</dd>

@@ -12,7 +12,9 @@ const cli = require.resolve('@playwright/test/cli')
 const dataParent = resolve(process.env.HAI_E2E_DATA_ROOT || tmpdir())
 mkdirSync(dataParent, { recursive: true })
 const dataRoot = mkdtempSync(join(dataParent, 'hai-browser-e2e-'))
-const groups = [{ args: [], name: undefined }]
+const groups = [
+  { args: [], name: undefined },
+]
 for (const argument of process.argv.slice(2)) {
   if (argument === '--next')
     groups.push({ args: [], name: undefined })
@@ -39,7 +41,12 @@ function stop() {
   if (process.platform === 'win32' && child?.pid && child.exitCode === null) {
     // Windows 的 kill 不传递 SIGTERM；同时结束本次 Playwright 创建的浏览器与服务进程。
     stopping = new Promise((resolve) => {
-      const killer = spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], { windowsHide: true, stdio: 'ignore' })
+      const killer = spawn('taskkill', [
+        '/pid',
+        String(child.pid),
+        '/t',
+        '/f',
+      ], { windowsHide: true, stdio: 'ignore' })
       killer.once('error', () => {
         child?.kill()
         resolve()
@@ -63,16 +70,30 @@ try {
     const groupDataRoot = join(dataRoot, `group-${index + 1}`)
     mkdirSync(groupDataRoot)
     const hasOutput = args.some(argument => argument === '--output' || argument.startsWith('--output='))
-    const outputArgs = hasOutput ? [] : ['--output', join(groupRoot, 'results')]
+    const outputArgs = hasOutput
+      ? []
+      : [
+          '--output',
+          join(groupRoot, 'results'),
+        ]
     const html = process.env.PLAYWRIGHT_HTML_OUTPUT_DIR || process.env.PLAYWRIGHT_HTML_REPORT
     const code = await new Promise((resolve, reject) => {
-      child = spawn(process.execPath, [cli, 'test', ...args, ...outputArgs], {
+      child = spawn(process.execPath, [
+        cli,
+        'test',
+        ...args,
+        ...outputArgs,
+      ], {
         cwd,
         windowsHide: true,
         stdio: 'inherit',
         env: {
           ...process.env,
-          ...(!html ? { PLAYWRIGHT_HTML_OUTPUT_DIR: join(groupRoot, 'html') } : {}),
+          ...(!html
+            ? {
+                PLAYWRIGHT_HTML_OUTPUT_DIR: join(groupRoot, 'html'),
+              }
+            : {}),
           HAI_AUTH_EVIDENCE_DIR: process.env.HAI_AUTH_EVIDENCE_DIR || join(groupRoot, 'evidence'),
           HAI_E2E_DATA_ROOT: groupDataRoot,
           HAI_E2E_GROUP: name,
@@ -82,8 +103,11 @@ try {
       child.once('exit', resolve)
     })
     // 配置组互相独立，普通失败继续收集；保留首个失败码，中断才停止后续组。
-    if (code !== 0)
-      process.exitCode ||= typeof code === 'number' && code !== 0 ? code : 1
+    if (code !== 0) {
+      process.exitCode ||= typeof code === 'number' && code !== 0
+        ? code
+        : 1
+    }
     if (interrupted) {
       process.exitCode ||= 1
       break
@@ -96,10 +120,17 @@ finally {
   await stopping
   // Playwright 退出后服务进程已关闭，此时删除 SQLite / storage，避免 Windows 文件锁。
   try {
-    rmSync(dataRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+    rmSync(dataRoot, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 100,
+    })
   }
   catch (error) {
-    process.stderr.write(`E2E data cleanup failed: ${error instanceof Error ? error.message : String(error)}\n`)
+    process.stderr.write(`E2E data cleanup failed: ${error instanceof Error
+      ? error.message
+      : String(error)}\n`)
     // 清理错误不能把原始失败（如 exit 7）覆盖成另一状态，也不能让成功变为假成功。
     if (!process.exitCode)
       process.exitCode = 1
