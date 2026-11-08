@@ -1,11 +1,13 @@
 minimumReleaseAgeExcludePrune: true
+minimumReleaseAgeExclude:
+  - eslint-plugin-svelte@3.24.1
+  - hono@4.13.17
+  - nodemailer@10.4.0
 
 trustPolicy: no-downgrade
 # 上游构建工具仍要求 4.x；4.0.3 tarball 已核对原 lockfile 的 SHA-512。
 trustPolicyExclude:
   - chokidar@4.0.3
-  # 1.19 删除 Mem0 3.3.1 所需 search；回退至最后受测的公开 API。
-  - '@qdrant/js-client-rest@1.18.0'
 
 nodeLinker: hoisted
 shellEmulator: true
@@ -28,19 +30,35 @@ packages:
 overrides:
   # 上游仍锁定存在漏洞的间接依赖；只覆盖受影响范围，维持原有 API 与主版本。
   '@ai-sdk/provider-utils@>=4.0.0 <4.0.33': 4.0.57
-  '@qdrant/js-client-rest>undici': 7.30.0
-  '@types/node': ^26.6.5
+  '@types/node': ^26.6.6
+  body-parser@>=2 <2.4.0: 2.4.0
   cookie@<0.7.0: 0.7.2
   # d3-shape@3（layerchart 图表依赖）需要 d3-path@3 的 `Path` 导出；强制统一到 3.1.0，
   # 消除 d3-shape@1.3.7 引入的 d3-path@1.0.9 嵌套冲突（否则应用打包报 MISSING_EXPORT "Path"）。
   d3-path: 3.1.0
+  dompurify@>=3 <3.4.17: 3.4.17
   esbuild@<0.28.1: 0.28.2
   eslint-plugin-yml: 3.9.0
 
+  fast-uri@>=3 <3.1.9: 3.1.9
+  follow-redirects@>=1.16.0 <1.16.2: 1.16.2
+
+  glob@>=9 <=14.0.1: 14.0.4
+  ip-address@<=10.7.3: 10.7.6
   katex@<0.18.2: 0.18.10
+  minimatch@>=7 <11.0.1: 11.0.5
+  # parser-stream 8.1 使用 parse5 8.1 的 tokenizer API，避免宽范围复用旧锁定版本。
+  parse5@>=8 <8.1.0: 8.1.0
+  qs@>=6.7 <6.16.1: 6.17.1
+  # SvelteKit 3 对应的 runed 稳定版，统一 UI 依赖的宿主契约。
+  runed@<0.38.0: 0.38.0
   sharp@<0.35.5: 0.35.5
   tinypool@<2.1.2: 2.2.0
   xcode>uuid: 11.1.1
+
+patchedDependencies:
+  daisyui@5.7.50: patches/daisyui-5.7.50.patch
+  deepmerge@4.3.1: patches/deepmerge-4.3.1.patch
 
 allowBuilds:
   better-sqlite3: true
@@ -63,38 +81,37 @@ catalog:
   # 对象存储 (S3 协议)
   # ---------------------------------------------------------------------------
 
-  # 1.x 改变协议与公开数据结构；现有 A2A 0.3 接口继续使用其最新稳定版本。
-  '@a2a-js/sdk': ^0.3.12
-  '@agentclientprotocol/sdk': 2.2.0
-  '@antfu/eslint-config': ^9.5.1
+  '@a2a-js/sdk': ^1.3.0
+  '@agentclientprotocol/sdk': 2.4.0
+  '@antfu/eslint-config': ^10.0.0
   '@aparajita/capacitor-secure-storage': ^8.0.1
-  '@aws-sdk/client-s3': ^3.1149.0
-  '@aws-sdk/lib-storage': ^3.1149.0
-  '@aws-sdk/s3-request-presigner': ^3.1149.0
+  '@aws-sdk/client-s3': ^3.1164.0
+  '@aws-sdk/lib-storage': ^3.1164.0
+  '@aws-sdk/s3-request-presigner': ^3.1164.0
 
-  '@capacitor/android': ^8.5.3
+  '@capacitor/android': ^8.6.0
   '@capacitor/app': ^8.1.2
-  '@capacitor/camera': ^8.2.5
-  '@capacitor/cli': ^8.5.3
-  '@capacitor/core': ^8.5.3
+  '@capacitor/camera': ^8.2.6
+  '@capacitor/cli': ^8.6.0
+  '@capacitor/core': ^8.6.0
   '@capacitor/device': ^8.0.3
   '@capacitor/filesystem': ^8.1.5
-  '@capacitor/ios': ^8.5.3
+  '@capacitor/ios': ^8.6.0
   '@capacitor/preferences': ^8.0.1
   '@capacitor/push-notifications': ^8.1.3
   '@capacitor/share': ^8.0.3
   '@capacitor/status-bar': ^8.0.4
 
-  '@hono/node-server': ^2.1.4
+  '@hono/node-server': ^2.1.6
 
-  '@iconify-json/tabler': ^1.2.42
+  '@iconify-json/tabler': ^1.2.43
   '@iconify/tailwind4': ^1.2.3
 
   # ---------------------------------------------------------------------------
   # i18n
   # ---------------------------------------------------------------------------
-  '@inlang/paraglide-js': ^2.27.0
-  '@inlang/plugin-message-format': ^4.5.0
+  '@inlang/paraglide-js': ^3.2.1
+  '@inlang/plugin-message-format': ^4.6.0
 
   # ---------------------------------------------------------------------------
   # UI (Tailwind CSS / DaisyUI / Bits UI / Icons)
@@ -103,50 +120,44 @@ catalog:
   # ---------------------------------------------------------------------------
   # Vector DB
   # ---------------------------------------------------------------------------
-  '@lancedb/lancedb': ^0.40.0
+  '@lancedb/lancedb': ^0.41.0
 
-  '@modelcontextprotocol/sdk': ^1.32.1
-  '@orpc/client': ^1.15.5
-  '@orpc/contract': ^1.15.5
-  '@orpc/openapi': ^1.15.5
-  '@orpc/openapi-client': ^1.15.5
-  '@orpc/server': ^1.15.5
-  '@orpc/zod': ^1.15.5
-  '@playwright/test': ^1.64.0
-  # ---------------------------------------------------------------------------
-  # Qdrant
-  # ---------------------------------------------------------------------------
-  # Mem0 3.3.1 仍调用 search；1.19 已移除，按真实 SDK 回归锁定受测版本。
-  '@qdrant/js-client-rest': 1.18.0
-
-  '@rrweb/record': ^2.1.7
-  '@rrweb/replay': ^2.1.7
-  '@scalar/api-reference': ^1.73.1
+  '@modelcontextprotocol/sdk': ^1.32.2
+  '@orpc/client': ^1.16.2
+  '@orpc/contract': ^1.16.2
+  '@orpc/openapi': ^1.16.2
+  '@orpc/openapi-client': ^1.16.2
+  '@orpc/server': ^1.16.2
+  '@orpc/zod': ^1.16.2
+  '@playwright/test': ^1.65.0
+  '@rrweb/record': ^2.2.1
+  '@rrweb/replay': ^2.2.1
+  '@scalar/api-reference': ^1.77.0
 
   # ---------------------------------------------------------------------------
   # Markdown & Syntax Highlighting
   # ---------------------------------------------------------------------------
-  '@shikijs/langs': ^4.5.0
-  '@sveltejs/adapter-node': ^5.5.7
-  '@sveltejs/adapter-static': ^3.0.10
-  '@sveltejs/kit': ^2.70.3
-  '@sveltejs/package': ^3.0.0
+  '@shikijs/langs': ^4.6.0
+  '@sveltejs/adapter-node': ^6.0.1
+  '@sveltejs/adapter-static': ^4.0.1
+  '@sveltejs/kit': ^3.1.1
+  '@sveltejs/package': ^3.0.2
   '@sveltejs/vite-plugin-svelte': ^7.3.1
 
-  '@tailwindcss/vite': ^4.3.3
+  '@tailwindcss/vite': ^4.3.5
   # ---------------------------------------------------------------------------
   # Tauri (桌面应用)
   # ---------------------------------------------------------------------------
-  '@tauri-apps/cli': ^2.12.1
+  '@tauri-apps/cli': ^2.12.4
 
-  '@tauri-apps/plugin-dialog': ^2.8.3
+  '@tauri-apps/plugin-dialog': ^2.8.4
   '@tauri-apps/plugin-fs': ^2.7.1
   '@types/better-sqlite3': ^9.6.0
   '@types/fs-extra': ^11.0.4
   # ---------------------------------------------------------------------------
   # Node.js 类型
   # ---------------------------------------------------------------------------
-  '@types/node': ^26.6.5
+  '@types/node': ^26.6.6
   '@types/nodemailer': ^8.0.2
   '@types/pg': ^8.23.1
   '@types/prompts': ^2.4.9
@@ -156,36 +167,35 @@ catalog:
   # ---------------------------------------------------------------------------
   # 数据库
   # ---------------------------------------------------------------------------
-  # Mem0 的稳定版仍要求 12.x；使用该分支的最新稳定驱动，保持依赖契约一致。
-  better-sqlite3: ^12.11.1
-  bits-ui: ^2.19.5
+  better-sqlite3: ^13.0.3
+  bits-ui: ^2.20.6
   # ---------------------------------------------------------------------------
   # CLI 工具
   # ---------------------------------------------------------------------------
-  cac: ^7.0.1
+  cac: ^7.1.0
   chalk: ^6.0.1
   chromadb: ^3.5.0
-  croner: ^10.0.1
-  d3-shape: ^3.2.0
-  daisyui: ^5.7.47
-  driver.js: 1.9.0
+  croner: ^11.0.0
+  d3-shape: ^3.2.1
+  daisyui: ^5.7.50
+  driver.js: 1.10.2
   esbuild: ^0.28.2
   # ---------------------------------------------------------------------------
   # ESLint (已内置代码格式化，无需 Prettier)
   # ---------------------------------------------------------------------------
-  eslint: ^10.12.0
+  eslint: ^10.14.0
   eslint-plugin-format: ^2.0.1
 
   # ---------------------------------------------------------------------------
   # ESLint Svelte Support
   # ---------------------------------------------------------------------------
-  eslint-plugin-svelte: ^3.23.1
+  eslint-plugin-svelte: ^3.24.1
   fast-string-width: ^3.0.2
   fast-wrap-ansi: ^0.2.2
   fflate: ^0.8.3
   fs-extra: ^11.4.1
   handlebars: ^4.7.10
-  hono: ^4.13.13
+  hono: ^4.13.17
   # ---------------------------------------------------------------------------
   # 缓存
   # ---------------------------------------------------------------------------
@@ -196,19 +206,17 @@ catalog:
   husky: ^9.1.7
   ioredis: ^6.0.0
 
-  jsdom: ^30.1.2
+  jsdom: ^31.0.0
   jspdf: ^4.2.1
-  layerchart: 2.6.1
+  layerchart: 2.9.2
   ldapts: ^9.2.0
   lint-staged: ^17.6.0
   loglevel: ^1.9.2
-  marked: ^18.1.0
+  marked: ^18.1.3
 
-  mem0ai: ^3.3.1
+  mermaid: ^12.3.0
 
-  mermaid: ^12.1.0
-
-  mysql2: ^3.24.5
+  mysql2: ^3.24.6
 
   # ---------------------------------------------------------------------------
   # ID 生成 & 验证 & 配置
@@ -217,12 +225,12 @@ catalog:
   # ---------------------------------------------------------------------------
   # 邮件
   # ---------------------------------------------------------------------------
-  nodemailer: ^10.1.0
+  nodemailer: ^10.4.0
   # ---------------------------------------------------------------------------
   # AI
   # ---------------------------------------------------------------------------
-  openai: ^7.32.0
-  ora: ^9.4.1
+  openai: ^7.53.0
+  ora: ^10.0.0
   pg: ^8.23.1
   # ---------------------------------------------------------------------------
   # 日志
@@ -230,38 +238,38 @@ catalog:
   pino: ^10.4.0
   pino-pretty: ^13.2.0
   prompts: ^2.4.2
-  rimraf: ^6.1.3
+  rimraf: ^6.1.4
 
-  shiki: ^4.5.0
+  shiki: ^4.6.0
 
   # ---------------------------------------------------------------------------
   # 加密
   # ---------------------------------------------------------------------------
-  sm-crypto: ^0.5.7
+  sm-crypto: ^0.5.8
   # ---------------------------------------------------------------------------
   # Svelte & SvelteKit
   # ---------------------------------------------------------------------------
-  svelte: ^5.57.2
-  svelte-check: ^4.7.6
-  svelte-eslint-parser: ^1.9.0
+  svelte: ^5.57.3
+  svelte-check: ^4.7.8
+  svelte-eslint-parser: ^1.10.1
   tailwind-merge: ^3.7.0
-  tailwindcss: ^4.3.3
-  testcontainers: ^12.2.0
+  tailwindcss: ^4.3.5
+  testcontainers: ^12.2.1
 
-  tsup: ^8.5.1
-  turbo: ^2.11.7
+  tsup: ^9.0.0
+  turbo: ^2.11.10
 
   # ---------------------------------------------------------------------------
   # TypeScript & 构建工具
   # ---------------------------------------------------------------------------
+  # SvelteKit/tsup/ESLint 使用 JavaScript 编译器 API；类型检查另用 @typescript/native。
   typescript: ^6.0.3
-  undici: ^8.11.2
-  vite: ^8.3.4
+  undici: ^8.12.4
+  vite: ^8.3.6
   # ---------------------------------------------------------------------------
   # 测试
   # ---------------------------------------------------------------------------
-  # 5.x 移除现有串行 suite API 并改变 mock 生命周期；保持最新兼容稳定分支。
-  vitest: ^4.1.11
-  ws: ^8.22.0
+  vitest: ^5.1.0
+  ws: ^8.22.1
   yaml: ^2.9.1
-  zod: ^4.6.5
+  zod: ^4.6.7

@@ -77,5 +77,8 @@
     "@inlang/paraglide-js": "catalog:",
     "@inlang/plugin-message-format": "catalog:",
     "@sveltejs/adapter-static": "catalog:"
+  },
+  "imports": {
+    "#lib/*": "./src/lib/*"
   }
 }

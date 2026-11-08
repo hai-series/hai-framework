@@ -39,7 +39,6 @@
   },
   "optionalDependencies": {
     "@lancedb/lancedb": "catalog:",
-    "@qdrant/js-client-rest": "catalog:",
     "chromadb": "catalog:",
     "pg": "catalog:"
   },

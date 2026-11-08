@@ -7,11 +7,16 @@ import { fileURLToPath } from 'node:url'
 
 const manifestPath = fileURLToPath(import.meta.resolve('@typescript/native/package.json'))
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
-const executable = typeof manifest.bin === 'string' ? manifest.bin : manifest.bin?.tsc
+const executable = typeof manifest.bin === 'string'
+  ? manifest.bin
+  : manifest.bin?.tsc
 if (typeof executable !== 'string')
-  throw new Error('The native TypeScript package does not provide a tsc executable')
+  throw new TypeError('The native TypeScript package does not provide a tsc executable')
 
-const result = spawnSync(process.execPath, [path.resolve(path.dirname(manifestPath), executable), ...process.argv.slice(2)], { stdio: 'inherit' })
+const result = spawnSync(process.execPath, [
+  path.resolve(path.dirname(manifestPath), executable),
+  ...process.argv.slice(2),
+], { stdio: 'inherit' })
 if (result.error)
   throw result.error
 process.exit(result.status ?? 1)
