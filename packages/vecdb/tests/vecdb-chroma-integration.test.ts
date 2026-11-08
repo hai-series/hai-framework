@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createChromaProvider } from '../src/providers/vecdb-provider-chroma.js'
 import { VecdbConfigSchema } from '../src/vecdb-config.js'
 
-describe.sequential('chroma actual SDK behind a Bearer gateway', () => {
+describe('chroma actual SDK behind a Bearer gateway', { concurrent: false }, () => {
   let container: StartedTestContainer | undefined
   let gateway: Server | undefined
   let url = ''
@@ -26,7 +26,10 @@ describe.sequential('chroma actual SDK behind a Bearer gateway', () => {
       .withWaitStrategy(Wait.forHttp('/api/v2/heartbeat', 8000).forStatusCode(200))
       .withStartupTimeout(120_000)
       .start()
-    const upstream = { hostname: container.getHost(), port: container.getMappedPort(8000) }
+    const upstream = {
+      hostname: container.getHost(),
+      port: container.getMappedPort(8000),
+    }
     gateway = createServer((request, response) => {
       const heartbeat = request.url?.endsWith('/heartbeat')
       if (!heartbeat && (!authorized || request.headers.authorization !== `Bearer ${token}`)) {
@@ -39,7 +42,12 @@ describe.sequential('chroma actual SDK behind a Bearer gateway', () => {
         authenticatedRequests += 1
       if (request.method === 'POST' && /\/(?:add|upsert)$/.test(request.url ?? ''))
         vectorWrites += 1
-      const proxy = httpRequest({ ...upstream, path: request.url, method: request.method, headers: request.headers }, (received) => {
+      const proxy = httpRequest({
+        ...upstream,
+        path: request.url,
+        method: request.method,
+        headers: request.headers,
+      }, (received) => {
         response.writeHead(received.statusCode ?? 502, received.headers)
         received.pipe(response)
       })
@@ -55,8 +63,11 @@ describe.sequential('chroma actual SDK behind a Bearer gateway', () => {
   }, 150_000)
 
   afterAll(async () => {
-    if (gateway)
-      await new Promise<void>((resolve, reject) => gateway!.close(error => error ? reject(error) : resolve()))
+    if (gateway) {
+      await new Promise<void>((resolve, reject) => gateway!.close(error => error
+        ? reject(error)
+        : resolve()))
+    }
     await container?.stop()
   }, 30_000)
 
@@ -83,19 +94,55 @@ describe.sequential('chroma actual SDK behind a Bearer gateway', () => {
       expect((await first.connect(config)).success).toBe(true)
       expect((await first.collection.create(name, { dimension: 3 })).success).toBe(true)
       expect((await first.vector.insert(name, [
-        { id: 'a', vector: [1, 0, 0], content: 'original', metadata: { tenant: 'alpha', version: 1 } },
-        { id: 'b', vector: [0, 1, 0], content: 'other', metadata: { tenant: 'beta', version: 1 } },
+        {
+          id: 'a',
+          vector: [1, 0, 0],
+          content: 'original',
+          metadata: { tenant: 'alpha', version: 1 },
+        },
+        {
+          id: 'b',
+          vector: [0, 1, 0],
+          content: 'other',
+          metadata: { tenant: 'beta', version: 1 },
+        },
       ])).success).toBe(true)
-      expect((await first.vector.upsert(name, [{ id: 'a', vector: [1, 0, 0], content: 'updated', metadata: { tenant: 'alpha', version: 2 } }])).success).toBe(true)
+      expect((await first.vector.upsert(name, [
+        {
+          id: 'a',
+          vector: [1, 0, 0],
+          content: 'updated',
+          metadata: { tenant: 'alpha', version: 2 },
+        },
+      ])).success).toBe(true)
       expect((await second.connect(config)).success).toBe(true)
-      const read = await second.vector.search(name, [1, 0, 0], { topK: 1, filter: { tenant: 'alpha' } })
+      const read = await second.vector.search(name, [1, 0, 0], {
+        topK: 1,
+        filter: { tenant: 'alpha' },
+      })
       expect(read.success && read.data.map(record => ({ id: record.id, content: record.content, metadata: record.metadata })))
-        .toEqual([{ id: 'a', content: 'updated', metadata: { tenant: 'alpha', version: 2 } }])
+        .toEqual([
+          {
+            id: 'a',
+            content: 'updated',
+            metadata: { tenant: 'alpha', version: 2 },
+          },
+        ])
       const info = await second.collection.info(name)
-      expect(info.success && info.data).toMatchObject({ name, dimension: 3, count: 2, metric: 'cosine' })
+      expect(info.success && info.data).toMatchObject({
+        name,
+        dimension: 3,
+        count: 2,
+        metric: 'cosine',
+      })
 
       authorized = false
-      expect((await first.vector.insert(name, [{ id: 'forbidden', vector: [1, 0, 0] }])).success).toBe(false)
+      expect((await first.vector.insert(name, [
+        {
+          id: 'forbidden',
+          vector: [1, 0, 0],
+        },
+      ])).success).toBe(false)
       expect((await first.collection.list()).success).toBe(false)
       authorized = true
       const count = await second.vector.count(name)
@@ -119,15 +166,41 @@ describe.sequential('chroma actual SDK behind a Bearer gateway', () => {
     try {
       expect((await provider.connect(VecdbConfigSchema.parse({ type: 'chroma', url, apiKey: token }))).success).toBe(true)
       expect((await provider.collection.create(name, { dimension: 3 })).success).toBe(true)
-      expect((await provider.vector.insert(name, [{ id: 'without-content', vector: [1, 0, 0], metadata: { tenant: 'alpha', active: true } }])).success).toBe(true)
-      const result = await provider.vector.search(name, [1, 0, 0], { filter: { tenant: 'alpha', active: true } })
-      expect(result.success && result.data).toMatchObject([{ id: 'without-content', content: undefined, metadata: { tenant: 'alpha', active: true } }])
+      expect((await provider.vector.insert(name, [
+        {
+          id: 'without-content',
+          vector: [1, 0, 0],
+          metadata: { tenant: 'alpha', active: true },
+        },
+      ])).success).toBe(true)
+      const result = await provider.vector.search(name, [1, 0, 0], {
+        filter: { tenant: 'alpha', active: true },
+      })
+      expect(result.success && result.data).toMatchObject([
+        {
+          id: 'without-content',
+          content: undefined,
+          metadata: { tenant: 'alpha', active: true },
+        },
+      ])
       const before = vectorWrites
-      expect((await provider.vector.insert(name, [{ id: 'invalid-metadata', vector: [1, 0, 0], metadata: { nested: { unsupported: true } } }])).success).toBe(false)
+      expect((await provider.vector.insert(name, [
+        {
+          id: 'invalid-metadata',
+          vector: [1, 0, 0],
+          metadata: {
+            nested: { unsupported: true },
+          },
+        },
+      ])).success).toBe(false)
       expect(vectorWrites).toBe(before)
       const count = await provider.vector.count(name)
       expect(count.success && count.data).toBe(1)
-      expect((await provider.vector.search(name, [1, 0, 0], { filter: { tenant: { $invalid: 'operator' } } })).success).toBe(false)
+      expect((await provider.vector.search(name, [1, 0, 0], {
+        filter: {
+          tenant: { $invalid: 'operator' },
+        },
+      })).success).toBe(false)
       expect((await provider.collection.drop(name)).success).toBe(true)
     }
     finally {

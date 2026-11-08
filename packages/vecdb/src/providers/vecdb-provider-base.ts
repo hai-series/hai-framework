@@ -9,7 +9,7 @@
  */
 
 import type { HaiErrorDef, HaiResult } from '@h-ai/core'
-import type { VecdbConfig, VecdbOperationLogConfig } from '../vecdb-config.js'
+import type { DistanceMetric, VecdbConfig, VecdbOperationLogConfig } from '../vecdb-config.js'
 import type {
   CollectionCreateOptions,
   CollectionInfo,
@@ -24,6 +24,24 @@ import { err, ok } from '@h-ai/core'
 
 import { vecdbM } from '../vecdb-i18n.js'
 import { HaiVecdbError } from '../vecdb-types.js'
+
+/**
+ * 将余弦距离、非负欧氏距离或负内积转换为公开的 0–1 相似度；分数越大越相似。
+ * @param distance - 余弦的 1-cos、后端原生 L2 距离或负内积。
+ * @param metric - 集合实际距离算法。
+ * @returns 单调转换后的相似度，不表示概率。
+ * @example 模块内部上下文
+ * ```ts
+ * const score = vectorScoreFromDistance(0, 'cosine') // 1
+ * ```
+ */
+export function vectorScoreFromDistance(distance: number, metric: DistanceMetric): number {
+  if (metric === 'cosine')
+    return Math.max(0, Math.min(1, 1 - distance / 2))
+  if (metric === 'dot')
+    return 1 / (1 + Math.exp(distance))
+  return 1 / (1 + Math.max(0, distance))
+}
 
 // ─── Provider 接口（内部，不暴露给模块消费者） ───
 
@@ -159,11 +177,15 @@ function stringifyOperationPayload(payload: unknown, maxLength: number): string 
       }
       return value
     })
-    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
+    return text.length > maxLength
+      ? `${text.slice(0, maxLength)}...`
+      : text
   }
   catch {
     const text = String(payload)
-    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
+    return text.length > maxLength
+      ? `${text.slice(0, maxLength)}...`
+      : text
   }
 }
 
@@ -202,13 +224,21 @@ export function logVecdbOperation(
 function errorMsgFromCode(def: HaiErrorDef, errorStr: string): string {
   switch (def) {
     case HaiVecdbError.DELETE_FAILED:
-      return vecdbM('vecdb_deleteFailed', { params: { error: errorStr } })
+      return vecdbM('vecdb_deleteFailed', {
+        params: { error: errorStr },
+      })
     case HaiVecdbError.INSERT_FAILED:
-      return vecdbM('vecdb_insertFailed', { params: { error: errorStr } })
+      return vecdbM('vecdb_insertFailed', {
+        params: { error: errorStr },
+      })
     case HaiVecdbError.UPDATE_FAILED:
-      return vecdbM('vecdb_updateFailed', { params: { error: errorStr } })
+      return vecdbM('vecdb_updateFailed', {
+        params: { error: errorStr },
+      })
     default:
-      return vecdbM('vecdb_queryFailed', { params: { error: errorStr } })
+      return vecdbM('vecdb_queryFailed', {
+        params: { error: errorStr },
+      })
   }
 }
 
@@ -261,7 +291,11 @@ export function createBaseCollectionOps(ctx: VecdbOpsContext, driver: Collection
       if (!Number.isInteger(options.dimension) || options.dimension <= 0) {
         return err(
           HaiVecdbError.DIMENSION_MISMATCH,
-          vecdbM('vecdb_invalidDimension', { params: { dimension: String(options.dimension) } }),
+          vecdbM('vecdb_invalidDimension', {
+            params: {
+              dimension: String(options.dimension),
+            },
+          }),
         )
       }
       logVecdbOperation(ctx, 'write', 'collection.create', { name, options })
@@ -336,7 +370,9 @@ export function createBaseVectorOps(ctx: VecdbOpsContext, driver: VectorDriver):
       logVecdbOperation(ctx, 'write', 'vector.insert', { collection, count: documents.length, documents })
       return wrapOp(
         ctx,
-        () => documents.length === 0 ? Promise.resolve(ok(undefined)) : driver.insert(collection, documents),
+        () => documents.length === 0
+          ? Promise.resolve(ok(undefined))
+          : driver.insert(collection, documents),
         HaiVecdbError.INSERT_FAILED,
         'Failed to insert vectors',
         { collection },
@@ -346,7 +382,9 @@ export function createBaseVectorOps(ctx: VecdbOpsContext, driver: VectorDriver):
       logVecdbOperation(ctx, 'write', 'vector.upsert', { collection, count: documents.length, documents })
       return wrapOp(
         ctx,
-        () => documents.length === 0 ? Promise.resolve(ok(undefined)) : driver.upsert(collection, documents),
+        () => documents.length === 0
+          ? Promise.resolve(ok(undefined))
+          : driver.upsert(collection, documents),
         HaiVecdbError.UPDATE_FAILED,
         'Failed to upsert vectors',
         { collection },
@@ -356,7 +394,9 @@ export function createBaseVectorOps(ctx: VecdbOpsContext, driver: VectorDriver):
       logVecdbOperation(ctx, 'write', 'vector.delete', { collection, count: ids.length, ids })
       return wrapOp(
         ctx,
-        () => ids.length === 0 ? Promise.resolve(ok(undefined)) : driver.delete(collection, ids),
+        () => ids.length === 0
+          ? Promise.resolve(ok(undefined))
+          : driver.delete(collection, ids),
         HaiVecdbError.DELETE_FAILED,
         'Failed to delete vectors',
         { collection },

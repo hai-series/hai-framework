@@ -16,6 +16,8 @@
 
 ## 使用入门
 
+所有 Provider 的 `score` 都为 0–1，越大越相似；`minScore` 在转换后过滤。余弦使用 `(1 + cosine) / 2`，内积使用 `sigmoid(dotProduct)`，欧氏使用 `1 / (1 + distance)`；LanceDB/Chroma 的 distance 是原生 squared L2，其余后端使用原生 L2。不同 metric/后端的阈值仍需按业务校准，score 不代表概率。Qdrant 不再将公开 minScore 直接当作原生距离阈值。
+
 ### 快速开始
 
 ```ts
@@ -31,7 +33,12 @@ await vecdb.collection.create('docs', { dimension: 1536 })
 
 // 插入向量
 await vecdb.vector.insert('docs', [
-  { id: 'doc-1', vector: Array.from({ length: 1536 }).fill(0.1), content: '文档内容', metadata: { source: 'wiki' } },
+  {
+    id: 'doc-1',
+    vector: Array.from({ length: 1536 }).fill(0.1),
+    content: '文档内容',
+    metadata: { source: 'wiki' }
+  },
 ])
 
 // 搜索
@@ -92,7 +99,9 @@ Chroma 的可选 `apiKey` 按本模块约定发送 `Authorization: Bearer <apiKe
 
 直连初始化的总截止为 5 秒，本地服务拉起使用 `startupTimeout`。超时中止候选 HTTP 请求；成功后清除初始化 timer，此截止不限制后续业务请求。
 
-Qdrant 使用 `@qdrant/js-client-rest 1.18.0` 的实际类型与 Query API，支持未命名向量字段的 cosine/euclidean/dot 集合。外部 named-vector 或 Manhattan 集合的 info/写入/搜索返回 `CONFIG_ERROR`，不猜测为零维或默认 cosine；仅 HTTP 404 表示集合不存在。Provider 的 URL 日志复用 core 的统一脱敏。
+Qdrant 使用原生 HTTP 固定 REST 端点，无额外 SDK 依赖，支持未命名向量字段的 cosine/euclidean/dot。30 秒超时覆盖完整响应体，16 MiB 响应上限超出时明确失败；路径段编码，写入/删除等待实际应用完成。外部 named-vector 或 Manhattan 集合返回 `CONFIG_ERROR`，仅 HTTP 404 表示集合不存在，日志复用 core 脱敏。
+
+Qdrant 固定后端请求拒绝 HTTP 重定向，API Key 不会被转发到重定向目标。
 
 Chroma 的 metadata/filter 遵循 `chromadb 3.5.0` 原生校验，非法值返回操作错误，不丢弃过滤或回退为无过滤查询。可省略文档 content，搜索仍返回 `undefined`；内部按 SDK 的字符串字段传递。各后端的 null、复杂元数据与过滤语义需单独核对。
 
@@ -142,7 +151,7 @@ await vecdb.init({
 
 > 行为说明：空批量 `insert/upsert/delete` 会被视为 no-op；写入与搜索会校验向量维度，不匹配时返回 `HaiVecdbError.DIMENSION_MISMATCH`；缺少可选驱动时返回 `HaiVecdbError.DRIVER_NOT_FOUND`。
 
-Qdrant 的 `insert/upsert/delete` 使用 `wait: true`，成功表示服务端已应用该操作；`vector.count` 使用精确计数，不使用集合信息的近似 points_count。多个操作之间仍不构成事务。
+Qdrant 使用原生 HTTP 固定 REST 端点，无额外 SDK 依赖，支持未命名向量字段的 cosine/euclidean/dot。30 秒超时覆盖完整响应体，16 MiB 响应上限超出时明确失败；路径段编码，写入/删除等待实际应用完成。外部 named-vector 或 Manhattan 集合返回 `CONFIG_ERROR`，仅 HTTP 404 表示集合不存在，日志复用 core 脱敏。
 
 ### 错误处理
 

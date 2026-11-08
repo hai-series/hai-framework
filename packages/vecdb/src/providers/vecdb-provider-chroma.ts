@@ -26,7 +26,7 @@ import { core, err, ok } from '@h-ai/core'
 
 import { vecdbM } from '../vecdb-i18n.js'
 import { HaiVecdbError } from '../vecdb-types.js'
-import { createBaseCollectionOps, createBaseVectorOps } from './vecdb-provider-base.js'
+import { createBaseCollectionOps, createBaseVectorOps, vectorScoreFromDistance } from './vecdb-provider-base.js'
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'chroma' })
 const DIMENSION_METADATA_KEY = 'hai_dimension'
@@ -79,9 +79,10 @@ function fromChromaSpace(space: unknown): DistanceMetric {
 
 /** 将 Chroma 距离转换为相似度分数 [0, 1] */
 function distanceToScore(distance: number, metric: DistanceMetric): number {
-  if (metric === 'cosine')
-    return Math.max(0, Math.min(1, 1 - distance))
-  return 1 / (1 + Math.max(0, distance))
+  // Chroma 的内积距离为 1-dot；共享转换接收负内积。
+  return vectorScoreFromDistance(metric === 'dot'
+    ? distance - 1
+    : distance, metric)
 }
 
 /** 构建 Chroma where 过滤条件（单键直接匹配，多键用 $and） */
@@ -93,7 +94,9 @@ function buildWhere(filter?: Record<string, unknown>): Where | undefined {
     return undefined
   const where = entries.length === 1
     ? { [entries[0][0]]: entries[0][1] }
-    : { $and: entries.map(([key, value]) => ({ [key]: value })) }
+    : {
+        $and: entries.map(([key, value]) => ({ [key]: value })),
+      }
   // 公共 filter 保留各后端的原生能力；query 会先调用 SDK validateWhere 校验，不复制上游规则。
   return where as Where
 }
@@ -117,7 +120,9 @@ export function createChromaProvider(): VecdbProvider {
   let closing: Promise<HaiResult<void>> | null = null
 
   function isMissingModuleError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = error instanceof Error
+      ? error.message
+      : String(error)
     return message.includes('chromadb')
   }
 
@@ -128,14 +133,22 @@ export function createChromaProvider(): VecdbProvider {
       if (!isChromaModule(mod)) {
         const error = new Error('chromadb driver module does not export ChromaClient')
         logger.error('Failed to load Chroma driver', { error: error.message })
-        return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', { params: { driver: 'chromadb' } }), error)
+        return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', {
+          params: { driver: 'chromadb' },
+        }), error)
       }
       return ok(mod)
     }
     catch (error) {
       if (isMissingModuleError(error)) {
-        logger.error('Failed to load Chroma driver', { error: error instanceof Error ? error.message : String(error) })
-        return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', { params: { driver: 'chromadb' } }), error)
+        logger.error('Failed to load Chroma driver', {
+          error: error instanceof Error
+            ? error.message
+            : String(error),
+        })
+        return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', {
+          params: { driver: 'chromadb' },
+        }), error)
       }
       throw error
     }
@@ -143,7 +156,15 @@ export function createChromaProvider(): VecdbProvider {
 
   /** 拉起本地 Chroma 服务（嵌入式模式） */
   async function startEmbeddedServer(chromaConfig: ChromaConfig): Promise<void> {
-    const args = ['run', '--path', chromaConfig.path ?? './data/chroma', '--host', chromaConfig.host, '--port', String(chromaConfig.port)]
+    const args = [
+      'run',
+      '--path',
+      chromaConfig.path ?? './data/chroma',
+      '--host',
+      chromaConfig.host,
+      '--port',
+      String(chromaConfig.port),
+    ]
     logger.info('Starting embedded Chroma server', { command: chromaConfig.serverCommand, host: chromaConfig.host, port: chromaConfig.port })
     spawnFailed = false
     const proc = spawn(chromaConfig.serverCommand, args, { stdio: 'ignore' })
@@ -198,7 +219,9 @@ export function createChromaProvider(): VecdbProvider {
               failed(new Error('Chroma child termination signal was rejected'))
           }
           catch (cause) {
-            failed(cause instanceof Error ? cause : new Error(String(cause)))
+            failed(cause instanceof Error
+              ? cause
+              : new Error(String(cause)))
           }
         }
         child.once('exit', exited)
@@ -228,7 +251,18 @@ export function createChromaProvider(): VecdbProvider {
           return ok(undefined)
         }
         catch (cause) {
-          return err({ ...HaiVecdbError.CONNECTION_FAILED, message: vecdbM('vecdb_closeFailed', { params: { error: cause instanceof Error ? cause.message : String(cause) } }), cause, ext: { cleanupPending: true } })
+          return err({
+            ...HaiVecdbError.CONNECTION_FAILED,
+            message: vecdbM('vecdb_closeFailed', {
+              params: {
+                error: cause instanceof Error
+                  ? cause.message
+                  : String(cause),
+              },
+            }),
+            cause,
+            ext: { cleanupPending: true },
+          })
         }
       })().finally(() => { closing = null })
     }
@@ -249,7 +283,9 @@ export function createChromaProvider(): VecdbProvider {
         await delay(HEARTBEAT_POLL_INTERVAL)
       }
     }
-    throw new Error(`Chroma heartbeat timed out after ${timeout}ms: ${lastError instanceof Error ? lastError.message : String(lastError)}`)
+    throw new Error(`Chroma heartbeat timed out after ${timeout}ms: ${lastError instanceof Error
+      ? lastError.message
+      : String(lastError)}`)
   }
 
   /** 获取集合（含维度校验所需的 metadata） */
@@ -260,7 +296,9 @@ export function createChromaProvider(): VecdbProvider {
   /** 读取集合存储的维度 */
   function readDimension(collection: Collection): number {
     const value = collection.metadata?.[DIMENSION_METADATA_KEY]
-    return typeof value === 'number' ? value : 0
+    return typeof value === 'number'
+      ? value
+      : 0
   }
 
   function validateDimension<T>(expected: number, actual: number): HaiResult<T> | null {
@@ -268,11 +306,20 @@ export function createChromaProvider(): VecdbProvider {
       return null
     return err(
       HaiVecdbError.DIMENSION_MISMATCH,
-      vecdbM('vecdb_dimensionMismatch', { params: { expected: String(expected), actual: String(actual) } }),
+      vecdbM('vecdb_dimensionMismatch', {
+        params: {
+          expected: String(expected),
+          actual: String(actual),
+        },
+      }),
     )
   }
 
-  const ctx = { isConnected: () => client !== null, logger, operationLog: () => config?.operationLog }
+  const ctx = {
+    isConnected: () => client !== null,
+    logger,
+    operationLog: () => config?.operationLog,
+  }
 
   // ─── 集合操作适配器 ───
 
@@ -282,13 +329,19 @@ export function createChromaProvider(): VecdbProvider {
 
       const existing = await client!.listCollections()
       const exists = existing.some(item => item.name === name)
-      if (exists)
-        return err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', { params: { name } }))
+      if (exists) {
+        return err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', {
+          params: { name },
+        }))
+      }
 
       const metric = options.metric ?? config?.metric ?? 'cosine'
       await client!.getOrCreateCollection({
         name,
-        metadata: { [SPACE_METADATA_KEY]: toChromaSpace(metric), [DIMENSION_METADATA_KEY]: options.dimension },
+        metadata: {
+          [SPACE_METADATA_KEY]: toChromaSpace(metric),
+          [DIMENSION_METADATA_KEY]: options.dimension,
+        },
         embeddingFunction: NOOP_EMBEDDING_FUNCTION,
       })
 
@@ -300,8 +353,11 @@ export function createChromaProvider(): VecdbProvider {
       logger.debug('Dropping collection', { name })
       const existing = await client!.listCollections()
       const exists = existing.some(item => item.name === name)
-      if (!exists)
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
+      if (!exists) {
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+          params: { name },
+        }))
+      }
 
       await client!.deleteCollection({ name })
       logger.info('Collection dropped', { name })
@@ -317,8 +373,11 @@ export function createChromaProvider(): VecdbProvider {
     async info(name) {
       logger.debug('Getting collection info', { name })
       const existing = await client!.listCollections()
-      if (!existing.some(item => item.name === name))
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
+      if (!existing.some(item => item.name === name)) {
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+          params: { name },
+        }))
+      }
 
       const collection = await getCollection(name)
       const count = await collection.count()
@@ -399,7 +458,11 @@ export function createChromaProvider(): VecdbProvider {
         return validation
 
       const metric = fromChromaSpace(target.metadata?.[SPACE_METADATA_KEY])
-      const response = await target.query({ queryEmbeddings: [vector], nResults: topK, where: buildWhere(options?.filter) })
+      const response = await target.query({
+        queryEmbeddings: [vector],
+        nResults: topK,
+        where: buildWhere(options?.filter),
+      })
 
       const ids = response.ids[0] ?? []
       const distances = response.distances?.[0] ?? []
@@ -415,8 +478,12 @@ export function createChromaProvider(): VecdbProvider {
         results.push({
           id: ids[i],
           score,
-          content: typeof _content === 'string' && _content.length > 0 ? _content : undefined,
-          metadata: Object.keys(rest).length > 0 ? rest : undefined,
+          content: typeof _content === 'string' && _content.length > 0
+            ? _content
+            : undefined,
+          metadata: Object.keys(rest).length > 0
+            ? rest
+            : undefined,
         })
       }
       return ok(results)
@@ -435,8 +502,11 @@ export function createChromaProvider(): VecdbProvider {
     name: 'chroma',
 
     async connect(cfg): Promise<HaiResult<void>> {
-      if (cfg.type !== 'chroma')
-        return err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', { params: { type: cfg.type } }))
+      if (cfg.type !== 'chroma') {
+        return err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', {
+          params: { type: cfg.type },
+        }))
+      }
 
       if (serverProcess || client || closing) {
         const cleaned = await closeResources()
@@ -457,9 +527,17 @@ export function createChromaProvider(): VecdbProvider {
         if (embedded)
           await startEmbeddedServer(chromaConfig)
 
-        const endpoint = chromaConfig.url ? new URL(chromaConfig.url) : undefined
+        const endpoint = chromaConfig.url
+          ? new URL(chromaConfig.url)
+          : undefined
         const clientParams: ChromaClientArgs = endpoint
-          ? { host: endpoint.hostname, port: Number(endpoint.port || (endpoint.protocol === 'https:' ? 443 : 80)), ssl: endpoint.protocol === 'https:' }
+          ? {
+              host: endpoint.hostname,
+              port: Number(endpoint.port || (endpoint.protocol === 'https:'
+                ? 443
+                : 80)),
+              ssl: endpoint.protocol === 'https:',
+            }
           : { host: chromaConfig.host, port: chromaConfig.port, ssl: false }
         if (chromaConfig.apiKey)
           clientParams.headers = { Authorization: `Bearer ${chromaConfig.apiKey}` }
@@ -476,16 +554,32 @@ export function createChromaProvider(): VecdbProvider {
           throw new Error('Chroma child exited before readiness was confirmed')
         client = chromaClient
         config = chromaConfig
-        logger.info('Chroma connected', { embedded, host: clientParams.host, port: clientParams.port, ssl: clientParams.ssl })
+        logger.info('Chroma connected', {
+          embedded,
+          host: clientParams.host,
+          port: clientParams.port,
+          ssl: clientParams.ssl,
+        })
         return ok(undefined)
       }
       catch (error) {
         startupAbort.abort()
         const cleanup = await closeResources()
-        logger.error('Failed to connect to Chroma', { error: error instanceof Error ? error.message : String(error) })
-        const failure = err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', { params: { error: String(error) } }), error)
+        logger.error('Failed to connect to Chroma', {
+          error: error instanceof Error
+            ? error.message
+            : String(error),
+        })
+        const failure = err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
         return !failure.success && !cleanup.success
-          ? err({ ...failure.error, ext: { cleanupPending: true, cleanupError: cleanup.error } })
+          ? err({
+              ...failure.error,
+              ext: { cleanupPending: true, cleanupError: cleanup.error },
+            })
           : failure
       }
       finally {

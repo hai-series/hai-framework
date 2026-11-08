@@ -67,13 +67,28 @@ async function closeOwnedProvider(): Promise<HaiResult<void>> {
     return ok(undefined)
   try {
     const result = await pendingProvider.close()
-    if (!result.success)
-      return err({ ...result.error, ext: { ...result.error.ext, cleanupPending: true } })
+    if (!result.success) {
+      return err({
+        ...result.error,
+        ext: { ...result.error.ext, cleanupPending: true },
+      })
+    }
     pendingProvider = null
     return result
   }
   catch (cause) {
-    return err({ ...HaiVecdbError.CONNECTION_FAILED, message: vecdbM('vecdb_closeFailed', { params: { error: cause instanceof Error ? cause.message : String(cause) } }), cause, ext: { cleanupPending: true } })
+    return err({
+      ...HaiVecdbError.CONNECTION_FAILED,
+      message: vecdbM('vecdb_closeFailed', {
+        params: {
+          error: cause instanceof Error
+            ? cause.message
+            : String(cause),
+        },
+      }),
+      cause,
+      ext: { cleanupPending: true },
+    })
   }
 }
 
@@ -92,12 +107,21 @@ async function failInitialization(result: HaiResult<void>): Promise<HaiResult<vo
   const cleanup = await closeOwnedProvider()
   if (result.success)
     return result
-  if (!cleanup.success)
-    return err({ ...result.error, ext: { ...result.error.ext, cleanupPending: true, cleanupError: cleanup.error } })
+  if (!cleanup.success) {
+    return err({
+      ...result.error,
+      ext: { ...result.error.ext, cleanupPending: true, cleanupError: cleanup.error },
+    })
+  }
   const ext = { ...result.error.ext }
   delete ext.cleanupPending
   delete ext.cleanupError
-  return err({ ...result.error, ext: Object.keys(ext).length ? ext : undefined })
+  return err({
+    ...result.error,
+    ext: Object.keys(ext).length
+      ? ext
+      : undefined,
+  })
 }
 
 // ─── Provider 工厂 ───
@@ -137,18 +161,38 @@ const notInitializedVector = notInitialized.proxy<VectorOperations>()
 
 /** 稳定转发层不泄漏 Provider 引用；旧调用方持有的操作在关闭期间同样停止服务。 */
 const collectionOps: CollectionOperations = {
-  create: (name, options) => currentProvider && !closingPromise ? currentProvider.collection.create(name, options) : notInitializedCollection.create(name, options),
-  drop: name => currentProvider && !closingPromise ? currentProvider.collection.drop(name) : notInitializedCollection.drop(name),
-  exists: name => currentProvider && !closingPromise ? currentProvider.collection.exists(name) : notInitializedCollection.exists(name),
-  info: name => currentProvider && !closingPromise ? currentProvider.collection.info(name) : notInitializedCollection.info(name),
-  list: () => currentProvider && !closingPromise ? currentProvider.collection.list() : notInitializedCollection.list(),
+  create: (name, options) => currentProvider && !closingPromise
+    ? currentProvider.collection.create(name, options)
+    : notInitializedCollection.create(name, options),
+  drop: name => currentProvider && !closingPromise
+    ? currentProvider.collection.drop(name)
+    : notInitializedCollection.drop(name),
+  exists: name => currentProvider && !closingPromise
+    ? currentProvider.collection.exists(name)
+    : notInitializedCollection.exists(name),
+  info: name => currentProvider && !closingPromise
+    ? currentProvider.collection.info(name)
+    : notInitializedCollection.info(name),
+  list: () => currentProvider && !closingPromise
+    ? currentProvider.collection.list()
+    : notInitializedCollection.list(),
 }
 const vectorOps: VectorOperations = {
-  insert: (collection, documents) => currentProvider && !closingPromise ? currentProvider.vector.insert(collection, documents) : notInitializedVector.insert(collection, documents),
-  upsert: (collection, documents) => currentProvider && !closingPromise ? currentProvider.vector.upsert(collection, documents) : notInitializedVector.upsert(collection, documents),
-  delete: (collection, ids) => currentProvider && !closingPromise ? currentProvider.vector.delete(collection, ids) : notInitializedVector.delete(collection, ids),
-  search: (collection, vector, options) => currentProvider && !closingPromise ? currentProvider.vector.search(collection, vector, options) : notInitializedVector.search(collection, vector, options),
-  count: collection => currentProvider && !closingPromise ? currentProvider.vector.count(collection) : notInitializedVector.count(collection),
+  insert: (collection, documents) => currentProvider && !closingPromise
+    ? currentProvider.vector.insert(collection, documents)
+    : notInitializedVector.insert(collection, documents),
+  upsert: (collection, documents) => currentProvider && !closingPromise
+    ? currentProvider.vector.upsert(collection, documents)
+    : notInitializedVector.upsert(collection, documents),
+  delete: (collection, ids) => currentProvider && !closingPromise
+    ? currentProvider.vector.delete(collection, ids)
+    : notInitializedVector.delete(collection, ids),
+  search: (collection, vector, options) => currentProvider && !closingPromise
+    ? currentProvider.vector.search(collection, vector, options)
+    : notInitializedVector.search(collection, vector, options),
+  count: collection => currentProvider && !closingPromise
+    ? currentProvider.vector.count(collection)
+    : notInitializedVector.count(collection),
 }
 
 // ─── 统一向量数据库服务对象 ───
@@ -208,7 +252,9 @@ export const vecdb: VecdbFunctions = {
       const parseResult = VecdbConfigSchema.safeParse(config)
       if (!parseResult.success) {
         logger.error('Vecdb config validation failed', { error: parseResult.error.message })
-        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_configError', { params: { error: parseResult.error.message } }), parseResult.error)
+        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_configError', {
+          params: { error: parseResult.error.message },
+        }), parseResult.error)
       }
       const parsed = parseResult.data
       if (core.module.requiresSharedState(process.env) && (parsed.type === 'lancedb' || (parsed.type === 'chroma' && !!parsed.path && !parsed.url)))
@@ -233,7 +279,13 @@ export const vecdb: VecdbFunctions = {
       }
       catch (error) {
         logger.error('Vecdb module initialization failed', { error })
-        return await failInitialization(err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }), error))
+        return await failInitialization(err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_initFailed', {
+          params: {
+            error: error instanceof Error
+              ? error.message
+              : String(error),
+          },
+        }), error))
       }
     }
     finally {
@@ -263,7 +315,9 @@ export const vecdb: VecdbFunctions = {
 
   /** 获取当前脱敏配置快照（未初始化时为 null） */
   get config(): VecdbConfig | null {
-    return currentConfig && !closingPromise ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null
+    return currentConfig && !closingPromise
+      ? core.sanitize.sanitizeSensitiveFields(currentConfig)
+      : null
   },
 
   /** 获取底层后端的原始连接信息（含凭证，未初始化时为 null；仅供同进程内集成使用） */

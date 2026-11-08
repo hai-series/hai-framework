@@ -16,6 +16,8 @@
 
 ## 使い始める
 
+すべての Provider の `score` は 0–1 で、高いほど類似し、`minScore` は変換後に適用します。cosine は `(1 + cosine) / 2`、dot は `sigmoid(dotProduct)`、euclidean は `1 / (1 + distance)` です。LanceDB/Chroma はネイティブの squared L2、他のバックエンドはネイティブ L2 を使います。閾値は metric・バックエンドごとに業務で校正し、score を確率とは扱いません。Qdrant は公開 minScore をネイティブ距離の閾値として直接送信しません。
+
 ### クイックスタート
 
 ```ts
@@ -31,7 +33,12 @@ await vecdb.collection.create('docs', { dimension: 1536 })
 
 // 插入向量
 await vecdb.vector.insert('docs', [
-  { id: 'doc-1', vector: Array.from({ length: 1536 }).fill(0.1), content: '文档内容', metadata: { source: 'wiki' } },
+  {
+    id: 'doc-1',
+    vector: Array.from({ length: 1536 }).fill(0.1),
+    content: '文档内容',
+    metadata: { source: 'wiki' }
+  },
 ])
 
 // 搜索
@@ -92,7 +99,9 @@ Chroma の任意の `apiKey` は、このモジュールの規約として `Auth
 
 直接接続の初期化全体の期限は 5 秒です。ローカルサービス起動では `startupTimeout` を使用します。期限を超えると候補 HTTP リクエストを中止します。成功時はタイマーを解除するため、この期限は以後の業務リクエストには適用されません。
 
-Qdrant は `@qdrant/js-client-rest 1.18.0` の実際の型と Query API を使用し、名前のない単一ベクトルフィールドと cosine/euclidean/dot に対応します。外部の named-vector・Manhattan 集合の info・書き込み・検索は `CONFIG_ERROR` を返し、ゼロ次元や既定 cosine と推測しません。集合が存在しないと判断するのは HTTP 404 のみです。Provider の URL ログは core の共通マスク処理を使います。
+Qdrant は追加 SDK なしでネイティブ HTTP の固定 REST エンドポイントを使い、名前のない cosine/euclidean/dot ベクトルに対応します。30 秒のタイムアウトは本文全体を含み、16 MiB 超の応答は明示的に失敗します。パスをエンコードし、書き込み・削除は適用完了を待ちます。named-vector・Manhattan は `CONFIG_ERROR`、存在しないと判断するのは HTTP 404 のみです。ログは core のマスク処理を使います。
+
+Qdrant の固定バックエンド要求は HTTP リダイレクトを拒否し、API Key を転送先に渡しません。
 
 Chroma の metadata/filter は `chromadb 3.5.0` の検証に従います。不正値は操作エラーとなり、フィルターの削除や無条件検索にはフォールバックしません。content は省略でき、検索結果は `undefined` のままです。内部書き込みでは SDK の文字列フィールドに合わせます。null・複雑なメタデータ・フィルターの意味はバックエンドごとに確認してください。
 
@@ -142,7 +151,7 @@ await vecdb.init({
 
 > 動作：空の一括 `insert/upsert/delete` は何もしません。書き込み・検索時にはベクトル次元を検証し、不一致なら `HaiVecdbError.DIMENSION_MISMATCH`、任意ドライバーの不足なら `HaiVecdbError.DRIVER_NOT_FOUND` を返します。
 
-Qdrant の `insert/upsert/delete` は `wait: true` を使用し、成功はサーバーでの適用完了を表します。`vector.count` は集合情報の近似値ではなく正確な件数を取得します。複数操作をまとめたトランザクションではありません。
+Qdrant は追加 SDK なしでネイティブ HTTP の固定 REST エンドポイントを使い、名前のない cosine/euclidean/dot ベクトルに対応します。30 秒のタイムアウトは本文全体を含み、16 MiB 超の応答は明示的に失敗します。パスをエンコードし、書き込み・削除は適用完了を待ちます。named-vector・Manhattan は `CONFIG_ERROR`、存在しないと判断するのは HTTP 404 のみです。ログは core のマスク処理を使います。
 
 ### エラー処理
 

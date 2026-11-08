@@ -13,11 +13,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 afterEach(() => {
   vi.doUnmock('pg')
-  vi.doUnmock('@qdrant/js-client-rest')
+  vi.unstubAllGlobals()
   vi.resetModules()
 })
 
-describe.sequential('vecdb optional drivers and error semantics', () => {
+describe('vecdb optional drivers and error semantics', { concurrent: false }, () => {
   it('缺少 pg 驱动时应返回 DRIVER_NOT_FOUND', async () => {
     // Vitest 4 会将 factory throw 包装成 mock 错误；这里用缺失关键导出模拟驱动不可用。
     vi.doMock('pg', () => ({}))
@@ -40,36 +40,13 @@ describe.sequential('vecdb optional drivers and error semantics', () => {
     await vecdb.close()
   })
 
-  it('缺少 Qdrant 驱动时应返回 DRIVER_NOT_FOUND', async () => {
-    // Vitest 4 会将 factory throw 包装成 mock 错误；这里用缺失关键导出模拟驱动不可用。
-    vi.doMock('@qdrant/js-client-rest', () => ({}))
-
-    const { HaiVecdbError, vecdb } = await import('../src/index.js')
-    const result = await vecdb.init({
-      type: 'qdrant',
-      url: 'http://localhost:6333',
-    })
-
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.code).toBe(HaiVecdbError.DRIVER_NOT_FOUND.code)
-    }
-
-    await vecdb.close()
-  })
-
-  it.each([404, 503])('qdrant 按实际 SDK 顶层 HTTP status 处理不存在/失败：%s', async (status) => {
-    vi.doMock('@qdrant/js-client-rest', () => ({
-      QdrantClient: class {
-        getCollections = async () => ({ collections: [] })
-        getCollection = async () => { throw Object.assign(new Error('request failed'), { status }) }
-        createCollection = async () => ({})
-        deleteCollection = async () => ({})
-        upsert = async () => ({})
-        delete = async () => ({})
-        query = async () => ({ points: [] })
-      },
-    }))
+  it.each([404, 503])('qdrant 按实际 REST HTTP status 处理不存在/失败：%s', async (status) => {
+    vi.stubGlobal('fetch', vi.fn(async (input: URL) => input.pathname === '/collections'
+      ? Response.json({
+          status: 'ok',
+          result: { collections: [] },
+        })
+      : new Response('private-backend-response', { status })))
 
     const { HaiVecdbError, vecdb } = await import('../src/index.js')
     const initResult = await vecdb.init({

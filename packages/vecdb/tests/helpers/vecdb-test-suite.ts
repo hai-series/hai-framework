@@ -51,7 +51,7 @@ export function defineVecdbSuite(
   setup: () => Promise<VecdbTestEnv> | VecdbTestEnv,
   defineTests: () => void,
 ): void {
-  describe.sequential(`vecdb (${label})`, () => {
+  describe(`vecdb (${label})`, { concurrent: false }, () => {
     let env: VecdbTestEnv | null = null
 
     beforeAll(async () => {

@@ -19,7 +19,7 @@ import { DistanceMetricSchema } from '../vecdb-config.js'
 import { vecdbM } from '../vecdb-i18n.js'
 import { HaiVecdbError } from '../vecdb-types.js'
 
-import { createBaseCollectionOps, createBaseVectorOps } from './vecdb-provider-base.js'
+import { createBaseCollectionOps, createBaseVectorOps, vectorScoreFromDistance } from './vecdb-provider-base.js'
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'pgvector' })
 
@@ -101,23 +101,14 @@ export function createPgvectorProvider(): VecdbProvider {
 
   /** 将距离转换为相似度得分 [0, 1] */
   function distanceToScore(distance: number, metric: DistanceMetric): number {
-    switch (metric) {
-      case 'cosine':
-        // cosine distance ∈ [0, 2]，相似度 = 1 - distance/2 → [0, 1]
-        return 1 - distance / 2
-      case 'euclidean':
-        return 1 / (1 + distance)
-      case 'dot':
-        // 内积距离为负内积，得分 = -distance
-        return -distance
-      default:
-        return 1 / (1 + distance)
-    }
+    return vectorScoreFromDistance(distance, metric)
   }
 
   /** 判断动态 import 是否因缺少驱动失败 */
   function isMissingModuleError(error: unknown, packageName: string): boolean {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = error instanceof Error
+      ? error.message
+      : String(error)
     return message.includes(`'${packageName}'`) || message.includes(`\"${packageName}\"`) || message.includes(packageName)
   }
 
@@ -128,15 +119,23 @@ export function createPgvectorProvider(): VecdbProvider {
       if (!isPgModule(mod)) {
         const error = new Error('pg driver module does not export Pool')
         logger.error('Failed to load pg driver', { error: error.message })
-        return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', { params: { driver: 'pg' } }), error)
+        return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', {
+          params: { driver: 'pg' },
+        }), error)
       }
 
       return ok(mod)
     }
     catch (error) {
       if (isMissingModuleError(error, 'pg')) {
-        logger.error('Failed to load pg driver', { error: error instanceof Error ? error.message : String(error) })
-        return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', { params: { driver: 'pg' } }), error)
+        logger.error('Failed to load pg driver', {
+          error: error instanceof Error
+            ? error.message
+            : String(error),
+        })
+        return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', {
+          params: { driver: 'pg' },
+        }), error)
       }
       throw error
     }
@@ -151,15 +150,21 @@ export function createPgvectorProvider(): VecdbProvider {
       [table],
     )
     if (!existsResult.rows[0].exists) {
-      return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
+      return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+        params: { name },
+      }))
     }
 
     const dimResult = await pool!.query(`
       SELECT atttypmod FROM pg_attribute
       WHERE attrelid = $1::regclass AND attname = 'vector'
-    `, [quoteIdent(table)])
+    `, [
+      quoteIdent(table),
+    ])
 
-    return ok(dimResult.rows.length > 0 ? Number(dimResult.rows[0].atttypmod) : 0)
+    return ok(dimResult.rows.length > 0
+      ? Number(dimResult.rows[0].atttypmod)
+      : 0)
   }
 
   /** 集合算法保存在向量列注释；旧集合从实际索引恢复，不受连接默认值变化影响。 */
@@ -167,12 +172,20 @@ export function createPgvectorProvider(): VecdbProvider {
     const result = await pool!.query(`SELECT col_description(a.attrelid, a.attnum) AS definition,
       (SELECT opc.opcname FROM pg_index i JOIN pg_opclass opc ON opc.oid = ANY(i.indclass)
        WHERE i.indrelid = a.attrelid AND opc.opcname IN ('vector_cosine_ops', 'vector_l2_ops', 'vector_ip_ops') LIMIT 1) AS operator
-      FROM pg_attribute a WHERE a.attrelid = $1::regclass AND a.attname = 'vector'`, [quoteIdent(tableName(name))])
+      FROM pg_attribute a WHERE a.attrelid = $1::regclass AND a.attname = 'vector'`, [
+      quoteIdent(tableName(name)),
+    ])
     const row = result.rows[0]
     const stored = typeof row?.definition === 'string' && row.definition.startsWith('hai.vecdb.metric=')
       ? row.definition.slice('hai.vecdb.metric='.length)
       : undefined
-    const inherited = row?.operator === 'vector_cosine_ops' ? 'cosine' : row?.operator === 'vector_l2_ops' ? 'euclidean' : row?.operator === 'vector_ip_ops' ? 'dot' : undefined
+    const inherited = row?.operator === 'vector_cosine_ops'
+      ? 'cosine'
+      : row?.operator === 'vector_l2_ops'
+        ? 'euclidean'
+        : row?.operator === 'vector_ip_ops'
+          ? 'dot'
+          : undefined
     const metric = stored ?? inherited
     const parsed = DistanceMetricSchema.safeParse(metric)
     if (metric === undefined || !parsed.success)
@@ -189,7 +202,10 @@ export function createPgvectorProvider(): VecdbProvider {
     return err(
       HaiVecdbError.DIMENSION_MISMATCH,
       vecdbM('vecdb_dimensionMismatch', {
-        params: { expected: String(expected), actual: String(actual) },
+        params: {
+          expected: String(expected),
+          actual: String(actual),
+        },
       }),
     )
   }
@@ -208,7 +224,11 @@ export function createPgvectorProvider(): VecdbProvider {
 
   // ─── 操作上下文 ───
 
-  const ctx = { isConnected: () => pool !== null, logger, operationLog: () => config?.operationLog }
+  const ctx = {
+    isConnected: () => pool !== null,
+    logger,
+    operationLog: () => config?.operationLog,
+  }
 
   // ─── 集合操作适配器 ───
 
@@ -227,7 +247,9 @@ export function createPgvectorProvider(): VecdbProvider {
         [table],
       )
       if (checkResult.rows[0].exists) {
-        return err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', { params: { name } }))
+        return err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', {
+          params: { name },
+        }))
       }
 
       // 创建表
@@ -281,7 +303,9 @@ export function createPgvectorProvider(): VecdbProvider {
         [table],
       )
       if (!checkResult.rows[0].exists) {
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+          params: { name },
+        }))
       }
 
       await pool!.query(`DROP TABLE ${quoteIdent(table)}`)
@@ -295,7 +319,9 @@ export function createPgvectorProvider(): VecdbProvider {
 
       const result = await pool!.query(
         `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)`,
-        [tableName(name)],
+        [
+          tableName(name),
+        ],
       )
       return ok(result.rows[0].exists as boolean)
     },
@@ -512,7 +538,9 @@ export function createPgvectorProvider(): VecdbProvider {
 
     async connect(cfg): Promise<HaiResult<void>> {
       if (cfg.type !== 'pgvector') {
-        return err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', { params: { type: cfg.type } }))
+        return err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', {
+          params: { type: cfg.type },
+        }))
       }
 
       const pgConfig = cfg as PgvectorConfig
@@ -547,8 +575,18 @@ export function createPgvectorProvider(): VecdbProvider {
       }
       catch (error) {
         // 仅提取错误消息，避免 error 对象中的连接字符串泄漏密码
-        logger.error('Failed to connect to pgvector', { error: error instanceof Error ? error.message : String(error) })
-        return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', { params: { error: error instanceof Error ? error.message : String(error) } }), error)
+        logger.error('Failed to connect to pgvector', {
+          error: error instanceof Error
+            ? error.message
+            : String(error),
+        })
+        return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', {
+          params: {
+            error: error instanceof Error
+              ? error.message
+              : String(error),
+          },
+        }), error)
       }
     },
 
@@ -563,8 +601,16 @@ export function createPgvectorProvider(): VecdbProvider {
         return ok(undefined)
       }
       catch (error) {
-        logger.error('Failed to close pgvector connection', { error: error instanceof Error ? error.message : String(error) })
-        return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_closeFailed', { params: { error: String(error) } }), error)
+        logger.error('Failed to close pgvector connection', {
+          error: error instanceof Error
+            ? error.message
+            : String(error),
+        })
+        return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_closeFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     },
 
