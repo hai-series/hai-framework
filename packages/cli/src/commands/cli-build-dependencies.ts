@@ -314,7 +314,7 @@ export function prepareDependencyInputs(cwd: string): void {
       try {
         fd = openSync(source, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0))
         const metadata = fstatSync(fd, { bigint: true })
-        if (!metadata.isFile() || !same(before, metadata) || metadata.size < 0n || metadata.size > BigInt(Number.MAX_SAFE_INTEGER))
+        if (!metadata.isFile() || metadata.nlink !== 1n || !same(before, metadata) || metadata.size < 0n || metadata.size > BigInt(Number.MAX_SAFE_INTEGER))
           throw unsafe(source, 'changed')
         publish(join(destination, file), { fd, metadata, file: source }, Number(metadata.mode & 0o777n))
       }

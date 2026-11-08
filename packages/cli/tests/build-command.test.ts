@@ -848,6 +848,16 @@ function dependencyContext(contextRoot = root): { context: string, destination: 
   }
 }
 
+it('依赖缓存安全：不把context外硬链接源文件复制进镜像输入', async () => {
+  const { context, destination } = dependencyContext()
+  const outside = join(root, 'outside-archive')
+  writeFileSync(outside, 'private-outside-context')
+  linkSync(outside, join(context, 'linked.tgz'))
+  await expect(buildCommand({ cwd: root, target: 'image', images: 'serv' })).rejects.toThrow()
+  expect(existsSync(join(destination, 'linked.tgz'))).toBe(false)
+  expect(state.calls.some(call => call.args[0] === 'build')).toBe(false)
+})
+
 it.each(['tracking', 'copy-target'] as const)('依赖缓存安全：拒绝%s硬链接，外部JSON保持原样', async (kind) => {
   const { destination } = dependencyContext()
   mkdirSync(destination, { recursive: true })
