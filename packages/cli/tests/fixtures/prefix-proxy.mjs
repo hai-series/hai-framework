@@ -19,9 +19,19 @@ const server = createServer((request, response) => {
   const isApi = url.pathname.startsWith(`${prefix}/api/`)
   if (!url.pathname.startsWith(`${prefix}/`))
     return response.writeHead(404).end()
-  const upstream = new URL(`${isApi
+  const upstream = new URL(isApi ? service : web)
+  const pathname = isApi
     ? url.pathname
-    : url.pathname.slice(prefix.length)}${url.search}`, isApi ? service : web)
+    : url.pathname.slice(prefix.length)
+  try {
+    if (decodeURIComponent(pathname).replaceAll('\\', '/').startsWith('//'))
+      return response.writeHead(400).end()
+  }
+  catch {
+    return response.writeHead(400).end()
+  }
+  upstream.pathname = pathname
+  upstream.search = url.search
   const forwarded = proxyRequest(upstream, { method: request.method, headers: request.headers }, (result) => {
     response.writeHead(result.statusCode ?? 502, result.headers)
     result.pipe(response)

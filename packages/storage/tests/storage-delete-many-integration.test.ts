@@ -12,7 +12,10 @@ import { acquireRustfsContainer } from './helpers/rustfs-container'
 async function interruptDeleteResponses(endpoint: string) {
   let deleteRequests = 0
   const server = createServer((incoming, outgoing) => {
-    const target = new URL(incoming.url ?? '/', endpoint)
+    const requested = new URL(incoming.url ?? '/', 'http://fixture.invalid')
+    const target = new URL(endpoint)
+    target.pathname = requested.pathname
+    target.search = requested.search
     const isDelete = incoming.method === 'POST' && target.searchParams.has('delete')
     const forwarded = request(target, { method: incoming.method, headers: incoming.headers }, (response) => {
       if (isDelete) {
@@ -46,6 +49,51 @@ async function interruptDeleteResponses(endpoint: string) {
     },
   }
 }
+
+it('故障代理固定S3目标origin，不转发absolute-form请求到其他服务', async () => {
+  let unexpected = 0
+  const target = createServer((_request, response) => response.end('s3-origin'))
+  const attacker = createServer((_request, response) => {
+    unexpected++
+    response.end('unexpected-origin')
+  })
+  let proxy: Awaited<ReturnType<typeof interruptDeleteResponses>> | undefined
+  const listen = async (server: ReturnType<typeof createServer>) => {
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string')
+      throw new Error('Missing owned proxy target')
+    return `http://127.0.0.1:${address.port}`
+  }
+  try {
+    const trusted = await listen(target)
+    const untrusted = await listen(attacker)
+    proxy = await interruptDeleteResponses(trusted)
+    const address = new URL(proxy.endpoint)
+    const body = await new Promise<string>((resolve, reject) => {
+      const client = request({ hostname: address.hostname, port: address.port, path: `${untrusted}/probe?value=1` }, (response) => {
+        let value = ''
+        response.setEncoding('utf8')
+        response.on('data', chunk => value += chunk)
+        response.on('end', () => resolve(value))
+      })
+      client.setTimeout(3000, () => client.destroy(new Error('Proxy probe timeout')))
+      client.once('error', reject)
+      client.end()
+    })
+    expect(body).toBe('s3-origin')
+    expect(unexpected).toBe(0)
+  }
+  finally {
+    await proxy?.close()
+    for (const server of [target, attacker]) {
+      if (server.listening) {
+        server.closeAllConnections()
+        await new Promise<void>(resolve => server.close(() => resolve()))
+      }
+    }
+  }
+})
 
 describe.each([
   { backend: 'MinIO', acquire: acquireMinioContainer },

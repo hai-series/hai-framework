@@ -35,7 +35,10 @@ describe('real Mem0 data-format Qdrant contract', { timeout: 60_000 }, () => {
   const proxyErrors: unknown[] = []
   // 原样转发真实 Qdrant 请求和响应，只记录 SDK 写入回执，不替换服务端行为。
   const proxy = createServer((incoming, outgoing) => {
-    const target = new URL(incoming.url ?? '/', lease!.url)
+    const requested = new URL(incoming.url ?? '/', 'http://fixture.invalid')
+    const target = new URL(lease!.url)
+    target.pathname = requested.pathname
+    target.search = requested.search
     const operation = incoming.method === 'PUT' && target.pathname === `/collections/${collection}/points`
       ? 'upsert'
       : incoming.method === 'POST' && target.pathname === `/collections/${collection}/points/delete`
@@ -188,6 +191,47 @@ describe('real Mem0 data-format Qdrant contract', { timeout: 60_000 }, () => {
     }
     expect(proxyErrors).toEqual([])
   }, 60_000)
+
+  it('qdrant测试代理固定origin，不转发absolute-form请求到其他服务', async () => {
+    let unexpected = 0
+    const attacker = createServer((_request, response) => {
+      unexpected++
+      response.end('unexpected-origin')
+    })
+    try {
+      await new Promise<void>(resolve => attacker.listen(0, '127.0.0.1', resolve))
+      const attackerAddress = attacker.address()
+      const proxyAddress = proxy.address()
+      if (!attackerAddress || typeof attackerAddress === 'string' || !proxyAddress || typeof proxyAddress === 'string')
+        throw new Error('Missing owned Qdrant proxy target')
+      const result = await new Promise<{ status: number, body: string }>((resolve, reject) => {
+        const client = httpRequest({
+          hostname: '127.0.0.1',
+          port: proxyAddress.port,
+          path: `http://127.0.0.1:${attackerAddress.port}/collections`,
+        }, (response) => {
+          let body = ''
+          response.setEncoding('utf8')
+          response.on('data', chunk => body += chunk)
+          response.on('end', () => resolve({ status: response.statusCode ?? 0, body }))
+        })
+        client.setTimeout(3000, () => client.destroy(new Error('Qdrant proxy probe timeout')))
+        client.once('error', reject)
+        client.end()
+      })
+      expect(result.status).toBe(200)
+      expect(JSON.parse(result.body)).toMatchObject({
+        result: {
+          collections: expect.any(Array),
+        },
+      })
+      expect(unexpected).toBe(0)
+    }
+    finally {
+      attacker.closeAllConnections()
+      await new Promise<void>(resolve => attacker.close(() => resolve()))
+    }
+  })
 
   it('real add/get/search/update/delete/deleteAll preserve isolation and stable identifiers across factories', async () => {
     const writeOffset = writes.length
