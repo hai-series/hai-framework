@@ -213,7 +213,11 @@ test('configured IAM registration and password login', async ({ page, context })
   await expect(page.getByTestId('profile-theme')).toBeVisible()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'eye-care')
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-base-100').trim())).toBe('#e8f0df')
-  await page.screenshot({ path: path.join(evidence, '{{projectName}}-eye-care.png'), fullPage: true, animations: 'disabled' })
+  await page.screenshot({
+    path: path.join(evidence, '{{projectName}}-eye-care.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
 {{else}}
   // 通过页面 fetch 复用 Cookie 与已安装的传输加密，避免 HTTP 辅助客户端绕过浏览器协议。
   const me = await page.evaluate(async url => (await fetch(url)).status, new URL('./api/auth/me', test.info().project.use.baseURL).href)

@@ -11,6 +11,7 @@ import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:f
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import ts from 'typescript'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse, stringify } from 'yaml'
 import { createE2eServerEnv, createE2eTransportRing } from '../../../scripts/e2e-env.js'
@@ -253,16 +254,28 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
     await writeFile(path.join(projectPath, 'scripts/static-gate-server.mjs'), `import { readFile, stat } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import path from 'node:path'
+import process from 'node:process'
+
 const root = path.resolve('build')
-const base = ${JSON.stringify(basePath)}
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json' }
+const base = ${jsStringLiteral(basePath)}
+const types = {
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.css': 'text/css',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.json': 'application/json',
+}
 const server = createServer(async (request, response) => {
   const pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname)
-  if (!pathname.startsWith(base + '/')) return response.writeHead(404).end()
-  let file = path.resolve(root, '.' + pathname.slice(base.length))
-  if (file !== root && !file.startsWith(root + path.sep)) return response.writeHead(403).end()
+  if (!pathname.startsWith(\`\${base}/\`))
+    return response.writeHead(404).end()
+  let file = path.resolve(root, \`.\${pathname.slice(base.length)}\`)
+  if (file !== root && !file.startsWith(root + path.sep))
+    return response.writeHead(403).end()
   try {
-    if ((await stat(file)).isDirectory()) file = path.join(file, 'index.html')
+    if ((await stat(file)).isDirectory())
+      file = path.join(file, 'index.html')
     response.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' }).end(await readFile(file))
   }
   catch { response.writeHead(404).end() }
@@ -271,42 +284,61 @@ server.listen(${Number(new URL(baseUrl).port)}, '127.0.0.1')
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => server.close())
 `)
     await writeFile(path.join(projectPath, 'playwright.static.config.ts'), `import { defineConfig } from '@playwright/test'
+
 export default defineConfig({
-  testDir: './e2e', testMatch: 'static-website.spec.ts', workers: 1, retries: 0, timeout: 45000,
-  use: { baseURL: ${JSON.stringify(baseUrl)}, channel: 'chrome', trace: 'retain-on-failure', screenshot: 'only-on-failure' },
-  webServer: { command: 'node scripts/static-gate-server.mjs', url: ${JSON.stringify(baseUrl)}, reuseExistingServer: false },
+  testDir: './e2e',
+  testMatch: 'static-website.spec.ts',
+  workers: 1,
+  retries: 0,
+  timeout: 45000,
+  use: {
+    baseURL: ${jsStringLiteral(baseUrl)},
+    channel: 'chrome',
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+  },
+  webServer: { command: 'node scripts/static-gate-server.mjs', url: ${jsStringLiteral(baseUrl)}, reuseExistingServer: false },
 })
 `)
     await writeFile(path.join(projectPath, 'e2e/static-website.spec.ts'), `import { expect, test } from '@playwright/test'
+
 test('static Pages deep links, public assets and honest contact feedback', async ({ page, request }, testInfo) => {
   const errors: string[] = []
   const failed: string[] = []
   const posts: string[] = []
   page.on('pageerror', error => errors.push(error.message))
-  page.on('response', response => { if (response.status() >= 400) failed.push(response.url()) })
-  page.on('request', request => { if (request.method() === 'POST') posts.push(request.url()) })
+  page.on('response', (response) => {
+    if (response.status() >= 400)
+      failed.push(response.url())
+  })
+  page.on('request', (request) => {
+    if (request.method() === 'POST')
+      posts.push(request.url())
+  })
   for (const route of ['', 'about/', 'services/', 'contact/']) {
-    const response = await page.goto(${JSON.stringify(baseUrl)} + route)
+    const response = await page.goto(\`${jsTemplateFragment(baseUrl)}\${route}\`)
     expect(response?.status()).toBe(200)
     await expect(page.locator('header')).toBeVisible()
     await expect(page.locator('main')).toBeVisible()
     await expect(page.locator('footer')).toBeVisible()
     expect((await page.reload())?.status()).toBe(200)
-    await expect(page).toHaveURL(${JSON.stringify(baseUrl)} + route)
+    await expect(page).toHaveURL(\`${jsTemplateFragment(baseUrl)}\${route}\`)
   }
-  const home = await (await request.get(${JSON.stringify(baseUrl)})).text()
-  const assets = [...home.matchAll(/["']([^"']+\\.(?:js|css|png))["']/g)].map(match => match[1])
+  const home = await (await request.get(${jsStringLiteral(baseUrl)})).text()
+  const assets = [
+    ...home.matchAll(/["']([^"']+\\.(?:js|css|png))["']/g),
+  ].map(match => match[1])
   expect(assets.some(value => value.endsWith('.js'))).toBe(true)
   expect(assets.some(value => value.endsWith('.css'))).toBe(true)
   for (const asset of assets) {
-    const resolved = new URL(asset, ${JSON.stringify(baseUrl)})
-    expect(resolved.origin).toBe(new URL(${JSON.stringify(baseUrl)}).origin)
-    expect(resolved.pathname.startsWith(${JSON.stringify(`${basePath}/`)})).toBe(true)
+    const resolved = new URL(asset, ${jsStringLiteral(baseUrl)})
+    expect(resolved.origin).toBe(new URL(${jsStringLiteral(baseUrl)}).origin)
+    expect(resolved.pathname.startsWith(${jsStringLiteral(`${basePath}/`)})).toBe(true)
     expect((await request.get(resolved.href)).status(), asset).toBe(200)
   }
-  expect(await (await request.get(${JSON.stringify(`${baseUrl}public-probe.svg`)})).text()).toContain('Public static asset')
+  expect(await (await request.get(${jsStringLiteral(`${baseUrl}public-probe.svg`)})).text()).toContain('Public static asset')
   for (const route of ['api/health', 'api/not-present', 'not-a-page/'])
-    expect((await request.get(${JSON.stringify(baseUrl)} + route)).status()).toBe(404)
+    expect((await request.get(\`${jsTemplateFragment(baseUrl)}\${route}\`)).status()).toBe(404)
   await page.locator('#name').fill('Static visitor')
   await page.locator('#email').fill('visitor@example.invalid')
   await page.locator('#message').fill('Contact input should remain available.')
@@ -315,10 +347,16 @@ test('static Pages deep links, public assets and honest contact feedback', async
   await expect(page.locator('#name')).toHaveValue('Static visitor')
   await expect(page.locator('#email')).toHaveValue('visitor@example.invalid')
   await expect(page.locator('#message')).toHaveValue('Contact input should remain available.')
-  await page.screenshot({ path: testInfo.outputPath('static-website-contact-warning.png'), fullPage: true })
+  await page.screenshot({
+    path: testInfo.outputPath('static-website-contact-warning.png'),
+    fullPage: true,
+  })
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: testInfo.outputPath('static-website-mobile.png'), fullPage: true })
+  await page.screenshot({
+    path: testInfo.outputPath('static-website-mobile.png'),
+    fullPage: true,
+  })
   expect(posts).toEqual([])
   expect(errors).toEqual([])
   expect(failed).toEqual([])
@@ -463,7 +501,12 @@ test('static Pages deep links, public assets and honest contact feedback', async
         for (const name of ['request-open', 'request-denied', 'request-required']) {
           const route = path.join(projectPath, 'src/routes/api/public', name)
           await mkdir(route, { recursive: true })
-          await writeFile(path.join(route, '+server.ts'), `import type { RequestHandler } from './$types'\n\nexport const GET: RequestHandler = ({ getClientAddress }) => Response.json({ ip: getClientAddress() })\n`)
+          await writeFile(path.join(route, '+server.ts'), `import type { RequestHandler } from './$types'
+
+export const GET: RequestHandler = ({ getClientAddress }) => Response.json({
+  ip: getClientAddress(),
+})
+`)
         }
         await writeFile(path.join(projectPath, 'e2e/request-policy.spec.ts'), `import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -474,15 +517,26 @@ test('generated SvelteKit applies file policies, trusted socket identity and pat
   const baseURL = testInfo.project.use.baseURL
   if (!baseURL)
     throw new Error('The generated-project policy gate requires baseURL')
-  const open = await request.get('./api/public/request-open', { headers: { 'x-forwarded-for': '203.0.113.9' } })
+  const open = await request.get('./api/public/request-open', {
+    headers: { 'x-forwarded-for': '203.0.113.9' },
+  })
   expect(open.status()).toBe(200)
-  expect(await open.json()).toMatchObject({ ip: expect.stringMatching(/^(127\\.0\\.0\\.1|::1)$/) })
-  const denied = await request.get('./api/public/request-denied', { headers: { 'x-request-id': 'scaffold-policy-probe' } })
+  expect(await open.json()).toMatchObject({
+    ip: expect.stringMatching(/^(127\\.0\\.0\\.1|::1)$/),
+  })
+  const denied = await request.get('./api/public/request-denied', {
+    headers: { 'x-request-id': 'scaffold-policy-probe' },
+  })
   expect(denied.status()).toBe(403)
-  expect(await denied.json()).toMatchObject({ success: false, error: { code: 'hai:common:104', traceId: 'scaffold-policy-probe' } })
+  expect(await denied.json()).toMatchObject({
+    success: false,
+    error: { code: 'hai:common:104', traceId: 'scaffold-policy-probe' },
+  })
   const requiredWithoutProtocol = await request.get('./api/public/request-required')
   expect(requiredWithoutProtocol.status()).toBe(400)
-  const modeMismatch = await request.get('./api/public/request-open', { headers: { 'x-encrypted': 'true' } })
+  const modeMismatch = await request.get('./api/public/request-open', {
+    headers: { 'x-encrypted': 'true' },
+  })
   expect(modeMismatch.status()).toBe(400)
   let encrypted = false
   page.on('response', (response) => {
@@ -497,12 +551,37 @@ test('generated SvelteKit applies file policies, trusted socket identity and pat
     return { status: response.status, body: await response.json() }
   }, new URL('api/public/request-required', baseURL).href)
   expect(protectedReply.status).toBe(200)
-  expect(protectedReply.body).toMatchObject({ ip: expect.stringMatching(/^(127\\.0\\.0\\.1|::1)$/) })
+  expect(protectedReply.body).toMatchObject({
+    ip: expect.stringMatching(/^(127\\.0\\.0\\.1|::1)$/),
+  })
   expect(encrypted).toBe(true)
   const directory = process.env.HAI_AUTH_EVIDENCE_DIR || testInfo.outputDir
   await mkdir(directory, { recursive: true })
-  const receiptName = new URL(baseURL).pathname === '/yyy/' ? 'request-encryption-kit-prefix.json' : 'request-encryption-kit.json'
-  await writeFile(path.join(directory, receiptName), JSON.stringify({ checkedAt: new Date().toISOString(), host: 'generated SvelteKit / Admin', baseURL, plain: { status: open.status(), body: await open.json(), encrypted: false }, denied: { status: denied.status(), body: await denied.json() }, requiredWithoutProtocol: { status: requiredWithoutProtocol.status() }, encryptedEnvelopeOnPlainEndpoint: { status: modeMismatch.status(), body: await modeMismatch.json() }, requiredWithProtocol: { ...protectedReply, encrypted } }, null, 2))
+  const receiptName = new URL(baseURL).pathname === '/yyy/'
+    ? 'request-encryption-kit-prefix.json'
+    : 'request-encryption-kit.json'
+  await writeFile(path.join(directory, receiptName), JSON.stringify({
+    checkedAt: new Date().toISOString(),
+    host: 'generated SvelteKit / Admin',
+    baseURL,
+    plain: {
+      status: open.status(),
+      body: await open.json(),
+      encrypted: false,
+    },
+    denied: {
+      status: denied.status(),
+      body: await denied.json(),
+    },
+    requiredWithoutProtocol: {
+      status: requiredWithoutProtocol.status(),
+    },
+    encryptedEnvelopeOnPlainEndpoint: {
+      status: modeMismatch.status(),
+      body: await modeMismatch.json(),
+    },
+    requiredWithProtocol: { ...protectedReply, encrypted },
+  }, null, 2))
 })
 `)
         // 不只验证 create：增量生成的文件必须进入实际项目的编译、lint 与运行测试。
@@ -580,18 +659,7 @@ it('generated migration executes up and down with HaiResult', async () => {
         }))
         const appFile = path.join(servDirectory, 'src/app-server.ts')
         const source = await readFile(appFile, 'utf8')
-        if (!source.includes('middlewares: [{'))
-          throw new Error('The actual Fullstack middleware assembly must be available to add the external-endpoint fixture')
-        await writeFile(appFile, source.replace('middlewares: [{', `middlewares: [{
-      path: '/api/v1/policy-plain',
-      middleware: async c => c.json({ kind: 'plain-external' }),
-    }, {
-      path: '/api/v1/policy-denied',
-      middleware: async c => c.json({ kind: 'must-not-run' }),
-    }, {
-      path: '/api/v1/policy-required',
-      middleware: async c => c.json({ kind: 'encrypted-internal' }),
-    }, {`))
+        await writeFile(appFile, injectRequestPolicyEndpoints(source))
         await writeFile(path.join(projectPath, 'e2e/request-policy.spec.ts'), await readFile(path.resolve(process.cwd(), 'tests/fixtures/request-encryption.ts'), 'utf8'))
         // 前后端与 core 展示版本故意不同；提交仅属于本轮临时生成工程。
         for (const [target, version] of [
@@ -836,6 +904,59 @@ async function getFreePort(): Promise<number> {
   })
 }
 
+/** 动态地址作为 JS 字符串编码；单引号输出与生成工程的 lint 规则一致。 */
+function jsStringLiteral(value: string): string {
+  return `'${JSON.stringify(value).slice(1, -1).replace(/\\"/g, '"').replace(/'/g, '\\\'')}'`
+}
+
+/** 地址嵌入模板字符串的文本段时，保留内容并阻止反引号或插值被当成代码。 */
+function jsTemplateFragment(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${').replace(/\r/g, '\\r').replace(/\n/g, '\\n')
+}
+
+/** 只在真实 App 的唯一中间件数组插入夹具，避免依赖源码单行/多行格式。 */
+function injectRequestPolicyEndpoints(source: string): string {
+  const file = ts.createSourceFile('app-server.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const arrays: ts.ArrayLiteralExpression[] = []
+  function visit(node: ts.Node): void {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+      && ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'serv'
+      && node.expression.name.text === 'createApp') {
+      const options = node.arguments[0]
+      if (options && ts.isObjectLiteralExpression(options)) {
+        for (const property of options.properties) {
+          if (ts.isPropertyAssignment(property) && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+            && property.name.text === 'middlewares' && ts.isArrayLiteralExpression(property.initializer)) {
+            arrays.push(property.initializer)
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  const [middlewareArray] = arrays
+  if (arrays.length !== 1 || !middlewareArray)
+    throw new Error('The actual Fullstack App must have exactly one middleware array for the external-endpoint fixture')
+  const opening = middlewareArray.getStart(file)
+  if (source[opening] !== '[')
+    throw new Error('The actual Fullstack middleware array opening is invalid')
+  const endpoints = `
+      {
+        path: '/api/v1/policy-plain',
+        middleware: async c => c.json({ kind: 'plain-external' }),
+      },
+      {
+        path: '/api/v1/policy-denied',
+        middleware: async c => c.json({ kind: 'must-not-run' }),
+      },
+      {
+        path: '/api/v1/policy-required',
+        middleware: async c => c.json({ kind: 'encrypted-internal' }),
+      },`
+  return source.slice(0, opening + 1) + endpoints + source.slice(opening + 1)
+}
+
 /** 复用本轮安装与构建，额外验收真实生成工程的目录挂载和认证边界。 */
 async function runPrefixBrowserGates(projectPath: string, kind: 'sveltekit' | 'vite', envOptions: GateEnvOptions): Promise<void> {
   const fixtures = path.resolve(process.cwd(), 'tests/fixtures')
@@ -849,7 +970,14 @@ async function runPrefixBrowserGates(projectPath: string, kind: 'sveltekit' | 'v
   if (kind === 'sveltekit') {
     const route = path.join(projectPath, 'src/routes/api/prefix-probe')
     await mkdir(route, { recursive: true })
-    await writeFile(path.join(route, '+server.ts'), `/** 专用于验证全局认证守卫，处理器自身不重复实现认证。 */\nexport const GET = () => Response.json({ success: true, data: { private: true } })\n`)
+    await writeFile(path.join(route, '+server.ts'), `/** 专用于验证全局认证守卫，处理器自身不重复实现认证。 */
+export function GET() {
+  return Response.json({
+    success: true,
+    data: { private: true },
+  })
+}
+`)
   }
   else {
     await writeFile(path.join(projectPath, 'scripts/prefix-proxy.mjs'), await readFile(path.join(fixtures, 'prefix-proxy.mjs')))

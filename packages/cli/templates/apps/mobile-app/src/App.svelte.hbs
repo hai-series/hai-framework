@@ -20,6 +20,7 @@
   import { HashRouter } from './lib/navigation/hash-router.svelte.js'
   import * as m from './lib/paraglide/messages.js'
   import { getLocale, setLocale } from './lib/paraglide/runtime.js'
+
 {{#if features.iam}}
   const authActions = apiClient.createAuthActions(apiClient)
   let authConfig = $state<IamPublicConfig | null>(null)
@@ -154,10 +155,10 @@
     </footer>
 {{#if features.iam}}
     {#if authenticated && !booting && !bootError}
-{{/if}}
-    <BottomNav items={navItems} active={router.path.slice(1)} onchange={handleTabChange} safeArea centered maxWidth='none' />
-{{#if features.iam}}
+      <BottomNav items={navItems} active={router.path.slice(1)} onchange={handleTabChange} safeArea centered maxWidth='none' />
     {/if}
+{{else}}
+    <BottomNav items={navItems} active={router.path.slice(1)} onchange={handleTabChange} safeArea centered maxWidth='none' />
 {{/if}}
   </div>
 </div>
