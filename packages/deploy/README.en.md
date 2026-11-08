@@ -2,17 +2,49 @@
 
 [简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
 
-## Introduction
-
 Deploy existing images or Vercel prebuilt output, including complete offline bundles, selected service updates, SSH automation and platform upload scripts. The SDK consumes artifacts; CLI --build explicitly orchestrates build then deployment.
 
-## Core features
+## Quick Start
+
+Run in an application created by the CLI with a configured deploy script. Inspect the read-only plan, verify the environment, destination and selected services, then build and deploy:
+
+```sh
+pnpm run deploy --env prod --plan
+pnpm run deploy --env prod --build
+```
+
+The command returns a deployment URL or an offline delivery directory. On failure, check the safe message and local/remote execution states. Keep production credentials in `.env.prod.local` and prepare data backups and recovery before deployment. The sections below explain build, configuration and delivery boundaries.
+
+## Features
 
 - Build, package, upload over SSH, start services and check access from one CLI command.
 - Include application and self-hosted middleware images, or update selected services.
 - Deliver offline tar bundles with Windows/Linux/macOS operator scripts, step results and recovery on failure.
 
-## Getting started
+### Operations and results
+
+Use the complete initialization flow in this section first. The host validates and authorizes example business values; check success before reading data from asynchronous domain results. Here void means completion without data, null means absent; synchronous factories/tools return the listed type directly.
+
+#### deploy
+
+Deployment: scan project/options yields a scan; provisionAll project/services yields provisioned resources; deployApp project/options yields URL/bundle/recovery receipts, checking success first.
+
+| Entry                 | Input parameters      | Successful result   | Call example                                                                         |
+| --------------------- | --------------------- | ------------------- | ------------------------------------------------------------------------------------ |
+| `deploy.scan`         | appDir, options       | `ScanResult`        | `await deploy.scan('./apps/orders', { environment: 'prod' })`                        |
+| `deploy.provisionAll` | projectName, services | `ProvisionResult[]` | `await deploy.provisionAll('orders', ['db', 'cache'])`                               |
+| `deploy.deployApp`    | appDir, options       | `DeployResult`      | `await deploy.deployApp('./apps/orders', { environment: 'prod', bundleOnly: true })` |
+
+#### deploy.credentials
+
+Local private credentials need no init: getPath returns path, load a HaiResult of loaded variable names; save/saveAll take key/value or mapping and yield void HaiResult without returning secrets for display.
+
+| Entry                        | Input parameters | Successful result | Call example                                                          |
+| ---------------------------- | ---------------- | ----------------- | --------------------------------------------------------------------- |
+| `deploy.credentials.getPath` | No arguments     | `string`          | `deploy.credentials.getPath()`                                        |
+| `deploy.credentials.load`    | No arguments     | `string[]`        | `deploy.credentials.load()`                                           |
+| `deploy.credentials.save`    | key, value       | `void`            | `deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', providerToken)` |
+| `deploy.credentials.saveAll` | entries          | `void`            | `deploy.credentials.saveAll(privateCredentialEntries)`                |
 
 ### Prepare build artifacts
 
@@ -35,9 +67,9 @@ Automation can select the exact build using `artifactDir` from `hai build --targ
 
 #### Download sources and proxies
 
-Existing projects should remove the old SQLite mirror option and update their Dockerfiles. Image builds open an in-memory database to verify that the bundled native binary loads on the target platform.
+Image builds open an in-memory database to verify that the bundled native binary loads on the target platform.
 
-`--image-source official|cn|custom` covers application base images and missing middleware images during packaging. `--npm-source` requires `--build` and controls Corepack/pnpm. The China preset uses 1ms for Docker Hub/GHCR and npmmirror for npm. First interactive choices are saved in `hai.json.build.sources`; flags override one invocation. Set `--proxy-mode inherit|system|custom|none`, `--proxy-url`, and `--proxy-bypass`; `--no-http-proxy` means none. Docker/remote Podman image pulls require engine-side proxy settings; build containers check connectivity separately. See [sources and proxies](../../docs/usage/configuration/delivery.md#下载源和代理) for custom sources, supported platforms and old-template updates.
+`--image-source official|cn|custom` covers application base images and missing middleware images during packaging. `--npm-source` requires `--build` and controls Corepack/pnpm. The China preset uses 1ms for Docker Hub/GHCR and npmmirror for npm. First interactive choices are saved in `hai.json.build.sources`; flags override one invocation. Set `--proxy-mode inherit|system|custom|none`, `--proxy-url`, and `--proxy-bypass`; `--no-http-proxy` means none. Docker/remote Podman image pulls require engine-side proxy settings; build containers check connectivity separately. See [sources and proxies](../../docs/usage/configuration/delivery.md#下载源和代理) for custom sources and supported platforms.
 
 SDK `DeployAppOptions.imageSource` accepts `{ type: 'cn' }` or `{ type: 'custom', registries: { 'docker.io': 'mirror.example.com/docker.io', 'ghcr.io': 'mirror.example.com/ghcr.io' } }`; `proxy` accepts `{ mode: 'inherit' }` or `{ mode: 'custom', url: 'http://127.0.0.1:10808', bypass: 'localhost' }`. Defaults use official sources and inherited process proxies. `resolveImageReference()` / `resolveDownloadProxy()` need no init and do not change engine settings. Middleware archives preserve canonical references for offline server imports.
 
@@ -81,7 +113,7 @@ pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source 
 
 Each image has its own Dockerfile. Web runtime assets live in images/web/. Dockerfiles retain internal build/runtime stages; configuration does not select stages. Omit absent images and add desktop directories only for native projects.
 
-Set `transport.maxPlaintextBytes` for both request and response JSON plaintext, measured in UTF-8 bytes: default 1 MiB, integer range 1 KiB–64 MiB. Clients learn the server limit during key exchange. `resolveTransportBodyLimits()` derives encrypted/proxy bytes as twice the plaintext limit plus 32 KiB. Handshake, public-key, header and replay constraints remain independent. Oversized streams are cancelled and readers released: requests return 413; oversized responses return an encrypted 500 capacity error, recognized as `TransportBodyTooLargeError` / `hai:crypto:070`. Full and serv-only incremental deployments derive the proxy limit from resolved `_serv.yml`. Capacity changes recreate the proxy using its installed Web image and restore the prior configuration on health failure. SvelteKit deployments also derive adapter-node `BODY_SIZE_LIMIT` from `_kit.yml`. [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
+Set `transport.maxPlaintextBytes` for both request and response JSON plaintext, measured in UTF-8 bytes: default 1 MiB, integer range 1 KiB–64 MiB. Clients learn the server limit during key exchange. `resolveTransportBodyLimits()` derives encrypted/proxy bytes as twice the plaintext limit plus 32 KiB. Handshake, public-key, header and replay constraints remain independent. Oversized streams are cancelled and readers released: requests return 413; oversized responses return an encrypted 500 capacity error, recognized as `TransportBodyTooLargeError` / `hai:crypto:070`. Full and serv-only incremental deployments derive the proxy limit from resolved `_serv.yml`. Capacity changes recreate the proxy using its installed Web image and restore the prior configuration on health failure. SvelteKit deployments also derive adapter-node `BODY_SIZE_LIMIT` from `_kit.yml`. [Transport capacity](../crypto/TRANSPORT-CAPACITY.md).
 
 Bodyless authenticated envelopes use X-Hai-Transport. Generated proxies set large_client_header_buffers 4 32k and proxy_buffer_size 32k to admit these headers; custom proxies must preserve and admit them.
 
@@ -105,10 +137,6 @@ For a gateway that only exposes `/somepath/`, build with `PUBLIC_BASE_PATH=/some
 
 Artifact formats 4 and 5 record primaryService (serv/web); hasWeb describes the complete browser topology. Format 5 also records a non-root webBasePath. Only serv + web generates a same-origin API proxy. Rebuild artifacts using formats 1–3. Back up the existing deployment and verify project identity, volumes and managed credentials before establishing a new full deployment baseline. Tools do not migrate data across projects. Full deployments still remove obsolete service containers under the same Compose project; editing deploy-target.json.directory alone does not migrate resources.
 
-For existing projects, update build.images names in hai.json, Dockerfile filenames and references first. Rename API service directories/packages and dependent references to -serv, then reinstall dependencies and build a complete artifact. Renaming archives or editing manifest files does not replace a new build.
-
-The CLI --project-name option and SDK DeployAppOptions.projectName override have been removed. Obsolete overrides fail explicitly; maintain resource identity in the root package.json.name.
-
 Prepare `.env.<environment>` and the project root `hai.json`, with image/native configuration in `build` and application deployment in `deploy`. Fullstack scripts still point to packages/<project>-serv, and API workspaces to apps/<project>-serv, only to scan runtime dependencies and module YAML. Frontend and backend share the project configuration.
 
 `deploy` supports `${VARIABLE:fallback}` and hierarchical `HAI_DEPLOY_*` overrides, including whole JSON objects. Known SSH leaf fields can also create an omitted SSH node. A parent object from a higher-priority source overrides lower-source leaves; leaves take precedence within the same source. SSH text stays verbatim, including numeric passwords, leading zeros and surrounding spaces.
@@ -120,10 +148,6 @@ All `HAI_*` settings use process > `.env.<mode>.local` > `.env.local` > `.env.<m
 Public settings live in `.env` and `.env.<mode>`; SSH settings and credentials go to Git-ignored `.env.<mode>.local`. `.env.local` contains shared machine-private settings. Builds do not read deployment secrets.
 
 All custom HTTP API headers are treated as private values regardless of header names. Saving an existing environment also moves indented, `export` and multiline quoted entries out of the same-mode public file, so their previous values are not left behind.
-
-For existing projects, move the previous build object into `hai.json.build`, convert deployment YAML into `hai.json.deploy`, remove the old files and retain `HAI_DEPLOY_*` variables. Existing self-hosted S3 installations must use a full deployment for this upgrade: their old baseline contains an exited initialization service, which fails the dependency checks of new incremental packages. The full deployment also refreshes the `createBucket` middleware setting; subsequent incremental updates work normally.
-
-The CLI --project-name option and SDK DeployAppOptions.projectName override have been removed. Obsolete overrides fail explicitly; maintain resource identity in the root package.json.name.
 
 For direct deployment, the wizard asks for missing server, SSH user, authentication and port settings using readable labels. Complete valid settings are reused, including with `--yes`. SSH accepts `auth: key` (private key/agent) or `auth: password`. Without `auth`, only a nonempty `password` selects password authentication; otherwise key/agent remains in use. Explicit `key` ignores a leftover password. Password input is hidden and preserves surrounding spaces and leading zeros. Effective passwords must not contain CR/LF/NUL and must fit within 1023 UTF-8 bytes. Private keys are referenced by path; their contents are never read or copied.
 
@@ -181,7 +205,7 @@ On isolated Linux servers, copy the delivery directory and run `sh deploy-local.
 
 The bundle `manifest.json` records `partial` and `selectedServices`, and the apply script embeds the same choice. A complete build without `--services` is a full deployment; explicit service selection or a partial build is incremental. Incremental packages require a matching successful `current` baseline and cannot perform a first installation.
 
-The server holds a nonblocking kernel lock with util-linux `flock` on `.deploy.lock` in the deployment root, throughout deployment and recovery. Normal foreground deployment and synchronous failure recovery explicitly unlock after finalization and terminal-result publication, so background services do not block later deployments. Keep this file permanently: never delete, replace or steal it based on elapsed time, and use a filesystem that supports `flock`. On HUP/INT/TERM or a killed parent shell, active child commands retain the inherited lock until every holder exits or the server restarts. The old `.deploy-lock` directory is ignored and left untouched; stop old deployment processes before upgrading and avoid mixing old bundles. Forced termination or power loss skips recovery traps. Without a result file, execution is unknown: inspect containers, images and the successful `current` baseline before recovering with a new bundle. An unlocked file does not prove success or rolled-back effects.
+The server holds a nonblocking kernel lock with util-linux `flock` on `.deploy.lock` in the deployment root, throughout deployment and recovery. Normal foreground deployment and synchronous failure recovery explicitly unlock after finalization and terminal-result publication, so background services do not block later deployments. Keep this file permanently: never delete, replace or steal it based on elapsed time, and use a filesystem that supports `flock`. On HUP/INT/TERM or a killed parent shell, active child commands retain the inherited lock until every holder exits or the server restarts. Forced termination or power loss skips recovery traps. Without a result file, execution is unknown: inspect containers, images and the successful `current` baseline before recovering with a new bundle. An unlocked file does not prove success or rolled-back effects.
 
 #### Failure recovery and reverting a successful release
 
@@ -255,6 +279,8 @@ finally {
 
 `selectedServices: ['web']` selects a partial update. `onProgress` receives actual packaging/server stages. `deploy.scan` and `deploy.credentials.*` are available before init. Check HaiResult.success before using data. Vercel uploads existing .vercel/output through the prebuilt API and requires internet; it does not provide offline or Compose partial deployment.
 
+Vercel API requests and file uploads use the official endpoint, reject redirects and share a 30-second deadline per request, including complete JSON response reads. There is no new configuration option. A timeout does not prove that the platform rejected a deployment; check its actual status before deciding whether to publish again.
+
 Command execution redacts correctly decoded UTF-8 logical streams, including known secrets split across stdout/stderr chunks. Successful captures, errors and output callbacks use the same boundary. Internal command callers must enumerate sensitive literals in `secrets`, including separately encoded or transformed forms. Each stream captures only its last 1 Mi characters by default; `maxCaptureChars` accepts 1 through 16 Mi characters. Check `stdoutTruncated` / `stderrTruncated` before parsing structured output. Async `onOutput` callbacks receive all safe stdout in order with pipe backpressure; deployment progress parses only the first 512 characters of each line. Total secret length is limited to 1 Mi UTF-16 units; invalid redaction fails closed. A timeout reports failure; remote process termination still requires confirmation.
 
 Command deadlines include helper startup and output handling. Timeouts, input/output errors and callback failures terminate managed processes. POSIX uses a separate process group. Windows uses an embedded PowerShell/.NET Job Object: create suspended, assign successfully, then resume, with no breakaway. Helper, compilation or assignment failure never falls back to an unmanaged process. System PowerShell and Add-Type are required on Windows; execution is hidden without user profiles, preserving arguments, environment and UTF-8 pipes. POSIX commands must keep descendants in the inherited group; detached system daemons and remote services are outside local termination confirmation.
@@ -265,7 +291,7 @@ SSH interruptions initially report `remoteExecution: 'unknown'`. The docker-ssh 
 
 ### Runtime environment files and repeated deployments
 
-SvelteKit SSR uses a separate `gateway` for HTTP and HTTPS, without publishing the backend port. The gateway overwrites standard forwarding headers, and Compose fixes the adapter's protocol, Host and client address trust settings; the application runtime file cannot override them. adapter-node 6 no longer reads runtime `ORIGIN`, and applications leave build-time `paths.origin` unset by default. Replace an older directly exposed SSR deployment with a new full bundle generated by the current tools.
+SvelteKit SSR uses a separate `gateway` for HTTP and HTTPS, without publishing the backend port. The gateway overwrites standard forwarding headers, and Compose fixes the adapter's protocol, Host and client address trust settings; the application runtime file cannot override them. The adapter does not read runtime `ORIGIN`; applications leave build-time `paths.origin` unset by default. Changes to the SSR ingress topology require a full bundle.
 
 For upstream TLS termination, list the load balancer's actual IPs/CIDRs in `trustedEdgeProxies`. The separate gateway accepts a single `http` or `https` protocol only from those actual peers; other sources and combined values use its own connection scheme. External `Forwarded` and forwarded host/port values are overwritten.
 
@@ -299,7 +325,7 @@ Project-root `hai.json.deploy` stores deployment structure, `.env.<environment>`
 
 The server persists managed middleware passwords in `<remoteDir>/managed-secrets.env` (mode 0600); back it up with data volumes. Each package supplies random first-use candidates without a build-machine cache. The online SDK, deploy.sh, deploy.ps1 and deploy-local.sh resolve server values under the deployment lock and update both application connections and native middleware variables. The delivery tar stays immutable; only private server runtime files receive resolved values. Missing state with an existing corresponding volume stops deployment before services change: restore the server credential backup. Deployment never silently rotates passwords or deletes data. Legacy credentials can be explicitly verified and imported using the procedure below.
 
-## Read-only deployment plan
+### Read-only deployment plan
 
 `createDeploymentPlan(appDir, config, options)` initializes no provider, generates no credentials/output and connects to no target. It shares real scanning, environment resolution, resource naming and artifact checksums, reporting project `root`, service source/configuration `serviceDir`, versions, build ID, selected/retained services, source files/key names, baseline requirements and recovery paths without values or SSH credentials. Unread remote current is not-inspected; execution still strictly requires a successful baseline for partial updates. Compose recovery does not undo database changes/migrations. CLI: `hai deploy --env prod --plan`.
 
@@ -307,13 +333,13 @@ Use `--plan --inspect-remote` (SDK inspectRemote:true) to read current and the s
 
 Resources use the complete execution topology. `containers` lists selected explicit container names; Compose-named LDAP/SMTP services appear in `composeManagedServices`. The SSR/API storage gateway appears in the actual selected or retained scope. `logicalVolumes` declares the complete Compose topology, including retained services and data volumes still mounted by the app; it does not mean those volumes will be created or replaced. Engine names are scoped by the Compose project. Unselected middleware has action keep, and cloud provisioning follows the actual selection without exposing credentials.
 
-## Capacity consistency and legacy credential import
+### Capacity and credential import
 
 Explicit plaintext limits are preserved. Packaging rejects feedback requirements above an explicit limit with a configuration conflict. Omitted/auto values derive capacity; the Web proxy and Kit BODY_SIZE_LIMIT use the same encrypted budget. Plan target.runtime reports remote provider.remote.runtime separately from local packaging options.runtime; auto is not a detected runtime.
 
 Use `importDeploymentSecrets({ directory, inputFile, runtime })` or run `hai deploy-secrets <directory> --import <private.json>` on the server for read-only verification. Only explicit `--apply` / dryRun:false imports state. The tool verifies projects, containers, volumes and live credentials; it never infers passwords from old bundles, rotates credentials or rebuilds services. V2 state supports special characters and is atomically written with mode 0600 under the deployment flock. Ordinary offline deployment still requires no server Node; this one-time import tool needs supported Node and installed CLI/deploy. See the [import and recovery procedure](docs/credential-import.en.md).
 
-## Request policy files and trusted proxies
+### Request policy files and trusted proxies
 
 Serv `http.access` and SvelteKit `access` can reference separate yml/yaml files. Deployment reads effective application configuration, including environment overrides such as `HAI_SERV`, `HAI_SERV_HTTP_ACCESS` and `HAI_KIT_ACCESS`, validates the file and includes a normalized snapshot in the bundle. Runtime configuration points to `/run/hai/request-access.yml` with a read-only Compose mount. The project retains its original file reference. The snapshot participates in SHA-256 verification; missing or invalid files fail before upload. The upload archive and its policy snapshot are integrity-checked inputs; replacing the SDK-managed snapshot requires a new bundle and deployment. The deployed Node backend reads its mounted `.env.runtime` on restart as described above. Inline rule changes do not rewrite the policy snapshot or Nginx configuration.
 
@@ -323,7 +349,19 @@ For operator-managed rules that reload on restart, manage a read-only file outsi
 
 Managed Compose sets `HAI_DEPLOY_PRIVATE_PROXY=1` only when a Web/gateway proxy fronts a backend without public ports. Serv/Kit default `trustedProxies: auto` uses container networks there and ignores forwarded headers on other hosts. Generated Nginx overwrites client-supplied forwarding headers with the actual peer. For an upstream load balancer, explicitly set Docker SSH Provider `trustedEdgeProxies` to its IPs/CIDRs; omitting it trusts no upstream, and `[]` explicitly selects the same behavior. Source addresses lost before Nginx cannot be reconstructed, including some rootless forwarding environments. See the [request access handbook](../../docs/usage/configuration/request-access.md) for examples and verification.
 
-## Development and testing
+## Configuration
+
+Lifecycle: init takes backend/business configuration; use the module only after success. Await close before releasing borrowed dependencies. Follow the quick-start example and public signatures for exact return values.
+
+The host loads and validates configuration before passing it to this module. Keep secrets in private server environment files. Select the backend, capacity, deadlines and logging for the actual use case; reinitialize and check the result after changes.
+
+[Per-option purpose, use cases and examples](../../docs/usage/configuration/delivery.md).
+
+## Error Handling
+
+Check result.success for domain operations. Handle failures with the module error definitions and safe messages; retain codes, correlation IDs and sanitized causes in server logs. Synchronous tools, factories, stream iteration and lifecycle calls follow their own signatures. A completed Promise alone is not business success. See each feature for recovery limits.
+
+## Development
 
 ```sh
 pnpm --filter @h-ai/deploy typecheck

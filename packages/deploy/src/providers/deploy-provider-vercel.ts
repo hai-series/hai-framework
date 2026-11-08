@@ -20,6 +20,9 @@ const logger = core.logger.child({ module: 'deploy', scope: 'provider-vercel' })
 /** Vercel API 基址 */
 const VERCEL_API = 'https://api.vercel.com'
 
+/** 每次平台请求与响应体读取共用期限，重定向不能改变凭据或文件的接收入口。 */
+const REQUEST_TIMEOUT = 30000
+
 /** 部署状态轮询间隔（毫秒） */
 const POLL_INTERVAL = 3000
 
@@ -67,6 +70,8 @@ async function vercelFetch<T>(token: string, path: string, options?: RequestInit
   const url = `${VERCEL_API}${path}`
   const response = await fetch(url, {
     ...options,
+    redirect: 'error',
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT),
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -338,6 +343,8 @@ async function uploadFile(token: string, content: Uint8Array, sha: string): Prom
   const uploadContent = new Uint8Array(content)
   const response = await fetch(url, {
     method: 'POST',
+    redirect: 'error',
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT),
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/octet-stream',

@@ -2,17 +2,49 @@
 
 [简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
 
-## 概要
-
 既存イメージまたは Vercel prebuilt 成果物を配布します。完全オフライン、サービス選択、SSH 自動化、OS 別の手動配布スクリプトに対応します。SDK は成果物を消費し、CLI --build は構築から配布を明示的に実行します。
 
-## 主な機能
+## クイックスタート
+
+CLI で作成し deploy スクリプトを設定した工程のルートで実行します。読取専用計画で環境・対象・サービスを確認してからビルドと配布を行います。
+
+```sh
+pnpm run deploy --env prod --plan
+pnpm run deploy --env prod --build
+```
+
+配布 URL またはオフライン成果物のディレクトリーを返します。失敗時は安全な説明とローカル/リモートの実行状態を確認してください。本番資格情報は `.env.prod.local` に保存し、事前にデータのバックアップと回復手順を準備します。以下で構築・設定・配布の範囲を説明します。
+
+## 機能
 
 - CLI でビルド、梱包、SSH 転送、起動、アクセス確認を実行。
 - アプリと自前ミドルウェアのイメージを同梱し、選択したサービスだけの更新にも対応。
 - オフライン用 tar と Windows/Linux/macOS 操作スクリプトを生成し、手順の結果と失敗時の復元を扱う。
 
-## 使い始める
+### 操作と入出力
+
+本節の完全な初期化手順を先に実行します。例の業務値はホストが検証・認可し、非同期領域結果は success を確認してから data を読みます。void はデータなし完了、null は不存在、同期ファクトリー/ツールは表の型を直接返します。
+
+#### deploy
+
+配布。scan は工程/指定から走査結果、provisionAll は工程名/サービスから開通配列、deployApp は工程/指定から URL・パッケージ・回復情報。先に成否確認。
+
+| 入口                  | 入力引数              | 成功結果            | 呼出し例                                                                             |
+| --------------------- | --------------------- | ------------------- | ------------------------------------------------------------------------------------ |
+| `deploy.scan`         | appDir, options       | `ScanResult`        | `await deploy.scan('./apps/orders', { environment: 'prod' })`                        |
+| `deploy.provisionAll` | projectName, services | `ProvisionResult[]` | `await deploy.provisionAll('orders', ['db', 'cache'])`                               |
+| `deploy.deployApp`    | appDir, options       | `DeployResult`      | `await deploy.deployApp('./apps/orders', { environment: 'prod', bundleOnly: true })` |
+
+#### deploy.credentials
+
+ローカル非公開資格情報は初期化不要。getPath はパス、load は読込変数名 HaiResult、save/saveAll はキー値/対応から void HaiResult。秘密を表示用に返さない。
+
+| 入口                         | 入力引数   | 成功結果   | 呼出し例                                                              |
+| ---------------------------- | ---------- | ---------- | --------------------------------------------------------------------- |
+| `deploy.credentials.getPath` | 引数なし   | `string`   | `deploy.credentials.getPath()`                                        |
+| `deploy.credentials.load`    | 引数なし   | `string[]` | `deploy.credentials.load()`                                           |
+| `deploy.credentials.save`    | key, value | `void`     | `deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', providerToken)` |
+| `deploy.credentials.saveAll` | entries    | `void`     | `deploy.credentials.saveAll(privateCredentialEntries)`                |
 
 ### 4. ソースをコンパイルし、配布物を作る
 
@@ -35,9 +67,9 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### 取得元とプロキシ
 
-既存プロジェクトでは旧 SQLite ミラー引数を削除し、Dockerfile を更新してください。イメージ構築時にインメモリデータベースを開き、同梱されたネイティブバイナリーが対象環境で読み込めることを検証します。
+イメージ構築時にインメモリデータベースを開き、同梱されたネイティブバイナリーが対象環境で読み込めることを検証します。
 
-`--image-source official|cn|custom` はアプリのベースと梱包時に不足したミドルウェアイメージに適用します。`--npm-source` は `--build` と併用し Corepack/pnpm を制御します。中国本土は毫秒镜像の Docker Hub/GHCR 通道と npmmirror を使用します。初回対話で `hai.json.build.sources` に保存し、引数は今回のみ上書きします。プロキシは `--proxy-mode inherit|system|custom|none`、`--proxy-url`、`--proxy-bypass` で指定し、`--no-http-proxy` は none と同じです。Docker／リモート Podman の取得はエンジン側の設定が必要で、ビルドコンテナの接続は別途確認します。カスタム設定、対応 OS、旧テンプレートの更新は[取得元とプロキシ](../../docs/usage/configuration/delivery.md#下载源和代理)を参照してください。
+`--image-source official|cn|custom` はアプリのベースと梱包時に不足したミドルウェアイメージに適用します。`--npm-source` は `--build` と併用し Corepack/pnpm を制御します。中国本土は毫秒镜像の Docker Hub/GHCR 通道と npmmirror を使用します。初回対話で `hai.json.build.sources` に保存し、引数は今回のみ上書きします。プロキシは `--proxy-mode inherit|system|custom|none`、`--proxy-url`、`--proxy-bypass` で指定し、`--no-http-proxy` は none と同じです。Docker／リモート Podman の取得はエンジン側の設定が必要で、ビルドコンテナの接続は別途確認します。カスタム設定と対応 OS は[取得元とプロキシ](../../docs/usage/configuration/delivery.md#下载源和代理)を参照してください。
 
 SDK の `DeployAppOptions.imageSource` は `{ type: 'cn' }` または `{ type: 'custom', registries: { 'docker.io': 'mirror.example.com/docker.io', 'ghcr.io': 'mirror.example.com/ghcr.io' } }`、`proxy` は `{ mode: 'inherit' }` または `{ mode: 'custom', url: 'http://127.0.0.1:10808', bypass: 'localhost' }` です。既定は公式とプロセスの継承です。`resolveImageReference()`／`resolveDownloadProxy()` は init 不要でエンジン設定を変更しません。ミドルウェアの元参照をアーカイブに保ち、サーバーではオフラインで読み込みます。
 
@@ -81,7 +113,7 @@ pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source 
 
 各イメージに独立した Dockerfile を用意します。Web 用設定は images/web/ に置きます。Dockerfile 内の構築・実行段階は維持しますが、設定から段階を選びません。不要なイメージ項目は削除し、desktop ディレクトリは対象プロジェクトのみ設定します。
 
-`transport.maxPlaintextBytes` でリクエストとレスポンスの JSON 平文容量を共通設定します。単位は UTF-8 バイト、既定値は 1 MiB、有効範囲は 1 KiB～64 MiB の整数です。クライアントは鍵交換で上限を取得し、`resolveTransportBodyLimits()` が暗号文とプロキシ容量（平文の 2 倍 + 32 KiB）を算出します。鍵交換、公開鍵、認証ヘッダー、防リプレイ制約は独立です。超過時は元ストリームを停止して reader を解放します。要求は 413、応答は暗号化された 500 容量エラーとなり、`TransportBodyTooLargeError` / `hai:crypto:070` で識別できます。 全量と app の増分デプロイは同じ `_serv.yml` からプロキシ上限を算出します。容量変更時は既存 Web イメージでプロキシを再作成し、ヘルスチェック失敗時は旧設定を復元します。SvelteKit の adapter-node `BODY_SIZE_LIMIT` も `_kit.yml` から算出します。 [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
+`transport.maxPlaintextBytes` でリクエストとレスポンスの JSON 平文容量を共通設定します。単位は UTF-8 バイト、既定値は 1 MiB、有効範囲は 1 KiB～64 MiB の整数です。クライアントは鍵交換で上限を取得し、`resolveTransportBodyLimits()` が暗号文とプロキシ容量（平文の 2 倍 + 32 KiB）を算出します。鍵交換、公開鍵、認証ヘッダー、防リプレイ制約は独立です。超過時は元ストリームを停止して reader を解放します。要求は 413、応答は暗号化された 500 容量エラーとなり、`TransportBodyTooLargeError` / `hai:crypto:070` で識別できます。 全量と app の増分デプロイは同じ `_serv.yml` からプロキシ上限を算出します。容量変更時は既存 Web イメージでプロキシを再作成し、ヘルスチェック失敗時は旧設定を復元します。SvelteKit の adapter-node `BODY_SIZE_LIMIT` も `_kit.yml` から算出します。 [Transport capacity](../crypto/TRANSPORT-CAPACITY.md).
 
 本文なし認証封装には X-Hai-Transport を使います。生成設定は large_client_header_buffers 4 32k と proxy_buffer_size 32k を指定します。独自プロキシもこのヘッダーを保持し、通過させてください。
 
@@ -91,7 +123,7 @@ pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source 
 
 #### サイトの公開ディレクトリー
 
-`/somepath/` のみを公開する場合、`PUBLIC_BASE_PATH=/somepath` でビルドし、Serv の `http.apiPrefix`、ヘルス/準備確認、ドキュメントとストレージ `publicEndpoint` を同じディレクトリに明示設定します。SDK は実効設定からプロキシとブラウザ API アドレスを生成します。外側では接頭辞を保持し、内部プローブとルートの ACME 検証は別に扱います。[設定と検証](../../docs/usage/configuration/delivery.md#所有对外业务路径必须带同一目录)。
+`/somepath/` のみを公開する場合、`PUBLIC_BASE_PATH=/somepath` でビルドし、Serv の `http.apiPrefix`、ヘルス/準備確認、ドキュメントとストレージ `publicEndpoint` を同じディレクトリに明示設定します。SDK は実効設定からプロキシとブラウザ API アドレスを生成します。外側では接頭辞を保持し、内部プローブとルートの ACME 検証は別に扱います。[設定と検証](../../docs/usage/configuration/delivery.md#所有对外业务路径必须带同一目录).
 
 既定はサイトルートです。`https://example.com/yyy/`で公開する場合は、アプリ構築プロセスで`PUBLIC_BASE_PATH=/yyy`を明示します。CLIは形式5を生成し、webBasePathを保存します。これは構築情報であり、デプロイ環境で上書きする設定ではありません。各区間はASCII英数字・`_`・`.`・`-`のみ、末尾の斜線や単独の`.`/`..`区間は使用できません。形式5対応のCLI/Deployが必要で、旧ツールは拒否します。形式番号を手で変更しないでください。
 
@@ -105,10 +137,6 @@ SDKは対応するNginx、実行時設定URL、SSRヘルスチェック、公開
 
 成果物形式4・5はprimaryService（serv/web）と、工程全体のブラウザー構成を示すhasWebを記録します。形式5には非ルートのwebBasePathも含まれます。同一オリジンAPIプロキシはserv + webの場合だけ生成します。形式1～3は再構築が必要です。既存デプロイをバックアップし、プロジェクト名・ボリューム・管理対象の認証情報を確認してから、新しい完全デプロイの基準を作成してください。プロジェクト間のデータ移行は自動化しません。完全デプロイでは同じComposeプロジェクトの旧サービスコンテナーを削除するため、deploy-target.json.directoryの変更だけでは移行できません。
 
-既存工程では、hai.json の build.images 名、Dockerfile 名と参照を先に更新します。API サービスのディレクトリ、パッケージ名と依存参照を -serv に統一し、依存を再インストールして完全な成果物を再構築してください。アーカイブ名や manifest の手動変更では再構築を代替できません。
-
-CLI の --project-name と SDK の DeployAppOptions.projectName 上書きは廃止しました。旧引数は明示的に失敗します。工程ルートの package.json.name で識別名を管理してください。
-
 `.env.<環境>` とプロジェクトルートの `hai.json` を用意します。`build` にイメージ・ネイティブ構築、`deploy` にアプリ全体の配置設定を保存します。fullstack は packages/<プロジェクト>-serv、API workspace は apps/<プロジェクト>-serv を実行依存とモジュール YAML の走査入口として使います。フロントとバックエンドは同じ設定を共有します。
 
 `deploy` は `${変数:既定値}` と `HAI_DEPLOY_*` による階層的な上書き（JSON オブジェクト全体も可）をサポートします。省略された SSH ノードも Schema で定義済みの末端フィールドから補えます。優先度の高いソースの親オブジェクトは下位ソースの末端値より優先され、同一ソースでは末端値が優先されます。SSH の文字列は数値パスワード、先頭のゼロ、前後の空白もそのまま保持します。
@@ -120,8 +148,6 @@ CLI の --project-name と SDK の DeployAppOptions.projectName 上書きは廃�
 公開設定は `.env` と `.env.<mode>`、SSH と資格情報は Git 対象外の `.env.<mode>.local`、マシン共通の秘密値は `.env.local` に保存します。構築時には配備の秘密値を読みません。
 
 HTTP API のカスタムヘッダーは名前にかかわらず全体を秘密値として扱います。既存環境の保存時は、インデント、`export`、複数行の引用値も同じモードの公開ファイルから非公開ファイルへ移し、以前の値を残しません。
-
-既存プロジェクトは旧構築オブジェクトを `hai.json.build`、旧配置 YAML を JSON に変換して `hai.json.deploy` に移し、元のファイルを削除します。`HAI_DEPLOY_*` は継続利用できます。既存の自前 S3 は今回の初回更新で全量配置が必要です。旧基準には終了済みの初期化サービスが残っており、新しい増分パッケージの依存稼働チェックで拒否されます。全量配置で `createBucket` 設定も更新した後は増分更新を継続できます。
 
 直接デプロイでは、サーバー、SSH ユーザー、認証方式、ポートなどの不足項目を説明付きで質問します。有効で完全な設定は `--yes` でも再利用し、再入力を求めません。SSH は `auth: key`（秘密鍵/agent）と `auth: password` に対応します。`auth` を省略した場合、空でない `password` があるときだけパスワード認証を使い、それ以外は key/agent を維持します。明示した `key` は残存パスワードを無視します。パスワード入力は非表示で、前後の空白と先頭のゼロを保持します。有効なパスワードは CR/LF/NUL を含まず、UTF-8 で 1023 バイト以内である必要があります。秘密鍵はパスのみ参照し、内容を読み取り・コピーしません。
 
@@ -179,7 +205,7 @@ pnpm run deploy --env prod --build --bundle-only
 
 パッケージの `manifest.json` の `partial` と `selectedServices`、実行スクリプトに配置モードと対象を記録します。完全な構築で `--services` を省略すると全量、明示的なサービス選択または部分構築では増分です。増分にはサーバーの成功済み `current` と一致する基準が必要で、初回インストールは拒否します。
 
-サーバーは util-linux の `flock` で配置ルートの `.deploy.lock` に非ブロッキングのカーネルロックを取得し、復元処理の終了まで保持します。通常の前景配置と同期の失敗復元は、後処理と終端結果の公開後に明示解放し、背景サービスの稼働は次の配置を妨げません。このファイルは残し、削除・置換・経過時間による横取りをしないでください。対応するファイルシステムが必要です。HUP/INT/TERM または親 shell の強制終了時は、記述子を継承した実行中の子コマンドが全 holder の終了かサーバー再起動までロックを保持します。旧 `.deploy-lock` ディレクトリは判定に使わず削除もしません。更新前に旧配置プロセスを終了し、旧パッケージを併用しないでください。強制終了・停電では復元 trap が動きません。結果ファイルがなければ実行状態は不明です。コンテナー、イメージ、成功した `current` を確認して新しいパッケージで復旧してください。ロック解放は成功や副作用の取消を意味しません。
+サーバーは util-linux の `flock` で配置ルートの `.deploy.lock` に非ブロッキングのカーネルロックを取得し、復元処理の終了まで保持します。通常の前景配置と同期の失敗復元は、後処理と終端結果の公開後に明示解放し、背景サービスの稼働は次の配置を妨げません。このファイルは残し、削除・置換・経過時間による横取りをしないでください。対応するファイルシステムが必要です。HUP/INT/TERM または親 shell の強制終了時は、記述子を継承した実行中の子コマンドが全 holder の終了かサーバー再起動までロックを保持します。強制終了・停電では復元 trap が動きません。結果ファイルがなければ実行状態は不明です。コンテナー、イメージ、成功した `current` を確認して新しいパッケージで復旧してください。ロック解放は成功や副作用の取消を意味しません。
 
 #### 失敗時の復元と公開後のロールバック
 
@@ -253,6 +279,8 @@ finally {
 
 `selectedServices: ['web']` は部分更新を選択し、`onProgress` はパッケージ作成とサーバー実行の段階を通知します。`deploy.scan` と `deploy.credentials.*` は初期化前も使用できます。HaiResult.success を確認してからデータを読み取ります。Vercel は既存 .vercel/output を prebuilt API でアップロードするためネット接続が必要で、オフラインや Compose の部分公開には対応しません。
 
+Vercel API とファイル転送は公式エンドポイントのみを使用し、リダイレクトを拒否します。各リクエストと JSON 応答の全体読込は共通の 30 秒期限に従い、設定項目は追加しません。タイムアウトだけでは配布未受理を断定できないため、再公開の前にプラットフォーム上の状態を確認してください。
+
 コマンド出力は正しく UTF-8 デコードした論理ストリーム単位で秘匿し、stdout/stderr のチャンク境界をまたぐ既知の秘密も保護します。成功結果、エラー、出力コールバックは同じ境界を使います。内部コマンドの `secrets` に機密リテラルを指定し、変換・エンコードした値も別途指定してください。各ストリームは既定で末尾 1 Mi 文字を保持し、`maxCaptureChars` は 1～16 Mi 文字です。構造化出力の解析前に `stdoutTruncated` / `stderrTruncated` を確認します。非同期 `onOutput` を順に待ち pipe の背圧を保ち、安全な stdout 全体を渡します。進捗解析は各行の先頭 512 文字のみです。秘密の合計上限は UTF-16 で 1 Mi 単位、秘匿失敗は処理失敗とします。タイムアウトだけでリモートプロセスの終了を断定せず、終了を確認してください。
 
 コマンド期限は helper 起動と出力処理を含みます。タイムアウト、入出力・コールバック失敗時は管理対象プロセスを終了します。POSIX は独立したプロセスグループ、Windows は内嵌 PowerShell/.NET Job Object を使い、停止状態で作成して割当成功後だけ再開します。breakaway は許可せず、helper・コンパイル・割当失敗時に裸のプロセスへ切り替えません。Windows はシステム PowerShell と Add-Type が必要です。非表示で profile を読み込まず、引数・環境・UTF-8 pipe を保持します。POSIX の子孫は同じグループを継承してください。独立したシステム daemon と遠隔サービスはローカル終了確認の対象外です。
@@ -263,7 +291,7 @@ SSH 中断は最初に `remoteExecution: 'unknown'` とし、docker-ssh SDK は�
 
 ### 実行環境ファイルと設定の再利用
 
-SvelteKit SSR は HTTP/HTTPS ともに独立した `gateway` を使用し、バックエンドのポートを公開しません。ゲートウェイが標準の転送ヘッダーを上書きし、Compose が adapter のプロトコル、Host、クライアントアドレスの信頼設定を固定します。業務の実行環境ファイルでは変更できません。adapter-node 6 は実行時の `ORIGIN` を読み取らず、アプリは既定で構築時の `paths.origin` を固定しません。直接公開していた古い SSR 配置は、現在のツールで新しい完全配布物を作成して更新してください。
+SvelteKit SSR は HTTP/HTTPS ともに独立した `gateway` を使用し、バックエンドのポートを公開しません。ゲートウェイが標準の転送ヘッダーを上書きし、Compose が adapter のプロトコル、Host、クライアントアドレスの信頼設定を固定します。業務の実行環境ファイルでは変更できません。adapter は実行時 `ORIGIN` を読み取らず、アプリは既定で構築時 `paths.origin` を固定しません。SSR 入口構成を変更する場合は完全配布物を生成してください。
 
 上位で TLS を終端する場合は、ロードバランサーの実際の IP/CIDR を `trustedEdgeProxies` に指定します。独立 gateway は許可した実際の接続元の単一 `http` / `https` だけを採用し、その他の接続元や複合値では自身の接続プロトコルを使います。外部の `Forwarded`、ホスト/ポート転送値は上書きします。
 
@@ -297,7 +325,7 @@ Podman では設定済みの healthcheck を明示的に実行して状態を再
 
 自前ミドルウェアのパスワードはサーバーの `<remoteDir>/managed-secrets.env`（権限 0600）で永続管理し、データボリュームと一緒にバックアップします。各パッケージは初回用の候補のみ生成し、ビルド端末のキャッシュに依存しません。オンライン SDK、deploy.sh、deploy.ps1、deploy-local.sh は配置ロック内でサーバー値を再利用し、アプリ接続とミドルウェア固有変数の両方へ反映します。配布 tar は変更せず、サーバーの非公開実行ファイルだけに確定値を反映します。対応するボリュームが存在し状態がない場合、サービス変更前に停止してバックアップ復元を求めます。自動的なパスワード変更やデータ削除は行わず、旧認証情報は下記の明示的な検証・導入手順で移行できます。
 
-## 読み取り専用デプロイ計画
+### 読み取り専用デプロイ計画
 
 `createDeploymentPlan(appDir, config, options)` は Provider 初期化、認証情報・出力作成、対象への接続を行いません。実際の走査、環境解決、命名と checksum 検証を共用し、工程 `root`、サービスのソース・設定 `serviceDir`、版、ビルド ID、更新・保持範囲、設定元とキー名、基準要件と復旧先を返します。値と SSH 認証情報を除外します。未読の current は not-inspected とし、部分更新は実行時に成功基準を厳密に要求します。Compose 復旧は DB データや移行を戻しません。CLI は `hai deploy --env prod --plan`。
 
@@ -305,13 +333,13 @@ Podman では設定済みの healthcheck を明示的に実行して状態を再
 
 リソースは実行側の完全な構成を共用します。`containers` は今回選択した明示名のみ、Compose が命名する LDAP/SMTP は `composeManagedServices` に表示します。SSR/API のストレージ gateway も更新・保持対象に表示します。`logicalVolumes` は保持サービスとアプリが継続使用するデータを含む構成全体の論理キーで、新規作成や再作成の指示ではありません。実際の名前は Compose プロジェクトのスコープで決まります。未選択ミドルウェアの action は keep で、クラウド開通は実際の選択範囲に従い、認証値を表示しません。
 
-## 容量の一貫性と旧認証情報のインポート
+### 容量と認証情報のインポート
 
 明示された平文上限を保持し、フィードバックの必要量が超える場合は競合を示して梱包を拒否します。省略/auto だけ自動計算し、Web プロキシと Kit BODY_SIZE_LIMIT は同じ暗号文予算を使います。計画の target.runtime はリモートの provider.remote.runtime を示し、ローカル梱包 options.runtime とは別です。auto を検出済みと表示しません。
 
 `importDeploymentSecrets({ directory, inputFile, runtime })` またはサーバー上の `hai deploy-secrets <directory> --import <private.json>` で読み取り専用検査を行います。明示 `--apply` / dryRun:false のみ保存します。プロジェクト・コンテナ・ボリューム・実際の認証情報を検証し、古いパッケージからの推測、パスワード変更、サービス再作成はしません。特殊文字対応 v2 状態をデプロイ共通 flock 内で原子的に0600で保存します。通常のオフライン配布にサーバー Node は不要で、一度限りの移行ツールには対応 Node と CLI/deploy が必要です。[導入・復旧手順](docs/credential-import.ja.md)を参照してください。
 
-## リクエストポリシーファイルと信頼する代理
+### リクエストポリシーファイルと信頼する代理
 
 Serv の `http.access` と SvelteKit の `access` は独立した yml/yaml を参照できます。配備は `HAI_SERV`、`HAI_SERV_HTTP_ACCESS`、`HAI_KIT_ACCESS` などの環境上書きを含む実効設定を読み、検証済みの正規化スナップショットを配布物へ含めます。実行時は `/run/hai/request-access.yml` を Compose の読み取り専用マウントで参照し、工程の元の参照先は変更しません。SHA-256 検証に含まれ、ファイル不足・不正はアップロード前に失敗します。アップロードするアーカイブとそのポリシースナップショットは整合性検証の対象です。SDK 管理のスナップショットを置き換える場合は新しい配布物を作成します。配置済み Node バックエンドのマウント済み `.env.runtime` は上記手順で編集・再起動できます。インライン規則の変更ではスナップショットや Nginx 設定は書き換わりません。
 
@@ -320,6 +348,18 @@ Serv の `http.access` と SvelteKit の `access` は独立した yml/yaml を�
 運用側でルールを変更して再起動で反映する場合は、配布物の外で読み取り専用ファイルを管理し、Compose override で同じ `/run/hai/request-access.yml` のマウントを置き換えます。この外部ファイルは SDK の自動復旧対象外です。初回マウント適用はコンテナ再作成、以後のファイル変更は再起動で反映できます。Compose の `env_file` だけで環境変数を注入する独自コンテナは、変更後に再作成します。通常イメージ再構築は不要です。SDK の Node バックエンドはマウント済み `.env.runtime` を再起動時に読み取ります。[設定と実測の境界](../../docs/usage/configuration/request-access.md#44-运维独立管理文件修改后重启生效)を参照してください。
 
 Web/gateway 入口がありバックエンドのポートが非公開の場合だけ、管理 Compose は `HAI_DEPLOY_PRIVATE_PROXY=1` を設定します。この構成の `trustedProxies: auto` はコンテナネットワークを採用し、他のホストでは転送ヘッダーを無視します。生成 Nginx は実接続元で転送ヘッダーを上書きします。外側の負荷分散器は Docker SSH Provider の `trustedEdgeProxies` に実 IP/CIDR を明記してください。省略時は上流を信頼せず、`[]` も同じ動作です。Nginx 到達前に失われた源 IP は復元できず、一部の rootless 構成も実測が必要です。[リクエスト制御手引き](../../docs/usage/configuration/request-access.md)に例と確認手順を記載しています。
+
+## 設定
+
+ライフサイクル。init にバックエンド/業務設定を渡し成功後に使用します。借用依存先の解放前に close の完了を待ち、正確な戻り値は例と公開署名に従います。
+
+設定はホストが読込・検証してから渡します。秘密はサーバーの非公開環境に保存し、利用場面に応じてバックエンド・容量・期限・ログを選びます。変更後は再初期化の結果を確認してください。
+
+[項目別の用途・適用場面・例](../../docs/usage/configuration/delivery.md).
+
+## エラー処理
+
+領域操作は result.success を確認し、失敗時はモジュールのエラー定義と安全な説明を使います。コード・関連 ID・秘匿した原因をサーバーログに残します。同期ツール・ファクトリー・ストリーム反復・ライフサイクルは各署名に従い、Promise 完了だけで成功と判断しません。回復条件は各機能を参照してください。
 
 ## 開発とテスト
 

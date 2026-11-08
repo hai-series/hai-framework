@@ -4,7 +4,9 @@
  * =============================================================================
  */
 
+import { once } from 'node:events'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,6 +14,7 @@ import { HaiDeployError } from '../src/deploy-types.js'
 import { createVercelProvider } from '../src/providers/deploy-provider-vercel.js'
 
 // mock fetch
+const nativeFetch = globalThis.fetch
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
 
@@ -39,6 +42,85 @@ describe('createVercelProvider', () => {
   })
 
   describe('authenticate', () => {
+    it.each(['authenticate', 'upload'] as const)('应拒绝%s重定向而不将请求转发至另一个入口', async (operation) => {
+      let redirected = 0
+      let outputDir: string | undefined
+      const server = createServer((request, response) => {
+        if (request.url === '/redirected') {
+          redirected++
+          response.end(JSON.stringify({
+            user: { username: 'unexpected' },
+          }))
+          return
+        }
+        response.writeHead(302, {
+          Location: '/redirected',
+        }).end()
+      })
+      try {
+        server.listen(0, '127.0.0.1')
+        await once(server, 'listening')
+        const address = server.address()
+        if (!address || typeof address === 'string')
+          throw new Error('Expected a loopback fixture address')
+        const provider = createVercelProvider()
+        if (operation === 'upload') {
+          mockFetch.mockResolvedValueOnce(mockJsonResponse({
+            user: { username: 'fixture-user' },
+          }))
+          expect((await provider.authenticate('fixture-token')).success).toBe(true)
+          outputDir = mkdtempSync(join(tmpdir(), 'hai-vercel-redirect-'))
+          writeFileSync(join(outputDir, 'config.json'), '{"version":3}')
+        }
+        mockFetch.mockImplementationOnce((_url, options) => nativeFetch(`http://127.0.0.1:${address.port}/start`, options))
+        const result = outputDir
+          ? await provider.deploy('fixture-project', outputDir)
+          : await provider.authenticate('fixture-token')
+        expect(result.success).toBe(false)
+        expect(redirected).toBe(0)
+      }
+      finally {
+        server.closeAllConnections()
+        await new Promise<void>((resolve, reject) => server.close(error => error
+          ? reject(error)
+          : resolve()))
+        if (outputDir)
+          rmSync(outputDir, { recursive: true, force: true })
+      }
+    })
+
+    it.each(['headers', 'body'] as const)('请求在%s阶段停滞时应在总期限内失败', async (stage) => {
+      const nativeTimeout = AbortSignal.timeout
+      const deadlines: number[] = []
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockImplementation((milliseconds) => {
+        deadlines.push(milliseconds)
+        return nativeTimeout(5)
+      })
+      try {
+        mockFetch.mockImplementationOnce((_url, options: RequestInit) => {
+          const signal = options.signal
+          if (!signal)
+            throw new Error('Expected an explicit request deadline')
+          if (stage === 'headers') {
+            return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }))
+          }
+          return Promise.resolve(new Response(new ReadableStream({
+            start(controller) {
+              signal.addEventListener('abort', () => controller.error(signal.reason), { once: true })
+            },
+          })))
+        })
+        const completed = await createVercelProvider().authenticate('fixture-token')
+        expect(completed.success).toBe(false)
+        expect(deadlines).toEqual([30000])
+        if (!completed.success)
+          expect(completed.error.code).toBe(HaiDeployError.AUTH_FAILED.code)
+      }
+      finally {
+        timeoutSpy.mockRestore()
+      }
+    })
+
     it('should authenticate with valid token', async () => {
       mockFetch.mockResolvedValueOnce(
         mockJsonResponse({
@@ -217,6 +299,39 @@ describe('createVercelProvider', () => {
   })
 
   describe('deploy', () => {
+    it('文件上传停滞时应在请求期限内失败', async () => {
+      const outputDir = mkdtempSync(join(tmpdir(), 'hai-vercel-upload-timeout-'))
+      const nativeTimeout = AbortSignal.timeout
+      try {
+        writeFileSync(join(outputDir, 'config.json'), '{"version":3}')
+        mockFetch.mockResolvedValueOnce(mockJsonResponse({
+          user: { username: 'fixture-user' },
+        }))
+        const provider = createVercelProvider()
+        expect((await provider.authenticate('fixture-token')).success).toBe(true)
+        const deadlines: number[] = []
+        vi.spyOn(AbortSignal, 'timeout').mockImplementation((milliseconds) => {
+          deadlines.push(milliseconds)
+          return nativeTimeout(5)
+        })
+        mockFetch.mockImplementationOnce((_url, options: RequestInit) => {
+          const signal = options.signal
+          if (!signal)
+            throw new Error('Expected an explicit upload deadline')
+          return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }))
+        })
+        const result = await provider.deploy('fixture-project', outputDir)
+        expect(result.success).toBe(false)
+        expect(deadlines).toEqual([30000])
+        if (!result.success)
+          expect(result.error.code).toBe(HaiDeployError.UPLOAD_FAILED.code)
+      }
+      finally {
+        vi.restoreAllMocks()
+        rmSync(outputDir, { recursive: true, force: true })
+      }
+    })
+
     it('should upload exact file bytes and use POSIX file paths', async () => {
       const outputDir = mkdtempSync(join(tmpdir(), 'hai-vercel-output-'))
       try {

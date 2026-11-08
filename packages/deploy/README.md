@@ -2,17 +2,49 @@
 
 [简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
 
-## 简介
-
 部署已有镜像与 Vercel prebuilt 产物。支持完整离线交付、选择服务更新、SSH 自动发布和跨平台人工部署脚本。SDK 不构建源码，CLI 的 --build 明确编排先构建后发布。
 
-## 核心功能清单
+## 快速开始
+
+在 CLI 创建并已配置 `deploy` 脚本的工程根目录执行。先查看只读计划，核对环境、目标和服务范围，再构建并发布：
+
+```sh
+pnpm run deploy --env prod --plan
+pnpm run deploy --env prod --build
+```
+
+命令返回部署 URL 或离线交付目录；失败时按安全提示及本地/远端执行状态排查。生产凭据放 `.env.prod.local`，部署前准备数据备份与恢复方案。以下功能介绍分别说明构建、配置和交付边界。
+
+## 功能
 
 - 一条命令完成构建、打包、SSH 上传、启动和访问检查。
 - 完整包包含应用与自建中间件镜像；支持只更新选中的服务。
 - 离线交付生成 tar 和 Windows/Linux/macOS 操作脚本，记录步骤结果并在失败时尝试恢复。
 
-## 使用入门
+### 功能输入输出
+
+以下片段依赖本节完整初始化流程。示例中的业务值由宿主校验和授权后传入；异步领域结果先判断 success，再读取 data。表中 void 表示操作已完成且没有返回数据，null 表示不存在；同步工厂/工具直接返回表中类型。
+
+#### deploy
+
+部署编排。scan 输入工程路径/环境返回扫描结果；provisionAll 输入工程名/服务范围返回开通数组；deployApp 输入工程/选项返回 URL、交付包及恢复回执，先检查结果。
+
+| 入口                  | 输入参数              | 成功结果            | 调用示例                                                                             |
+| --------------------- | --------------------- | ------------------- | ------------------------------------------------------------------------------------ |
+| `deploy.scan`         | appDir, options       | `ScanResult`        | `await deploy.scan('./apps/orders', { environment: 'prod' })`                        |
+| `deploy.provisionAll` | projectName, services | `ProvisionResult[]` | `await deploy.provisionAll('orders', ['db', 'cache'])`                               |
+| `deploy.deployApp`    | appDir, options       | `DeployResult`      | `await deploy.deployApp('./apps/orders', { environment: 'prod', bundleOnly: true })` |
+
+#### deploy.credentials
+
+本机私有凭据辅助无需初始化。getPath 返回文件路径，load 返回已加载变量名的 HaiResult；save/saveAll 输入键值/映射返回 void HaiResult，不返回真实秘密供展示。
+
+| 入口                         | 输入参数   | 成功结果   | 调用示例                                                              |
+| ---------------------------- | ---------- | ---------- | --------------------------------------------------------------------- |
+| `deploy.credentials.getPath` | 无参数     | `string`   | `deploy.credentials.getPath()`                                        |
+| `deploy.credentials.load`    | 无参数     | `string[]` | `deploy.credentials.load()`                                           |
+| `deploy.credentials.save`    | key, value | `void`     | `deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', providerToken)` |
+| `deploy.credentials.saveAll` | entries    | `void`     | `deploy.credentials.saveAll(privateCredentialEntries)`                |
 
 ### 准备构建产物
 
@@ -44,9 +76,9 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### 下载源和代理
 
-SQLite 13 的原生二进制随 npm 包交付，使用同一 npm 源，无须额外下载器。已有工程升级时删除旧 SQLite 镜像参数并同步 Dockerfile；构建会实际打开内存数据库，确认目标平台的二进制可加载。
+SQLite 13 的原生二进制随 npm 包交付，使用同一 npm 源，无须额外下载器。构建会实际打开内存数据库，确认目标平台的二进制可加载。
 
-`--image-source official|cn|custom` 同时作用于应用基础镜像和打包时缺少的中间件镜像。`--npm-source` 随 `--build` 控制 Corepack/pnpm；cn 使用毫秒镜像的 Docker Hub/GHCR 通道和 npmmirror。首次交互保存 `hai.json.build.sources`，命令覆盖只作用本次。代理使用 `--proxy-mode inherit|system|custom|none`、`--proxy-url` 与 `--proxy-bypass`；`--no-http-proxy` 等价 none。Docker/远程 Podman 的镜像拉取代理须在引擎侧设置，构建容器另做可达性检查。自定义源、平台范围及旧模板迁移见[下载源和代理](../../docs/usage/configuration/delivery.md#下载源和代理)。
+`--image-source official|cn|custom` 同时作用于应用基础镜像和打包时缺少的中间件镜像。`--npm-source` 随 `--build` 控制 Corepack/pnpm；cn 使用毫秒镜像的 Docker Hub/GHCR 通道和 npmmirror。首次交互保存 `hai.json.build.sources`，命令覆盖只作用本次。代理使用 `--proxy-mode inherit|system|custom|none`、`--proxy-url` 与 `--proxy-bypass`；`--no-http-proxy` 等价 none。Docker/远程 Podman 的镜像拉取代理须在引擎侧设置，构建容器另做可达性检查。自定义源与平台范围见[下载源和代理](../../docs/usage/configuration/delivery.md#下载源和代理).
 
 SDK 的 `DeployAppOptions.imageSource` 为 `{ type: 'cn' }` 或 `{ type: 'custom', registries: { 'docker.io': 'mirror.example.com/docker.io', 'ghcr.io': 'mirror.example.com/ghcr.io' } }`，`proxy` 为 `{ mode: 'inherit' }` 或 `{ mode: 'custom', url: 'http://127.0.0.1:10808', bypass: 'localhost' }`。缺省为官方源、继承进程代理。`resolveImageReference()` / `resolveDownloadProxy()` 是无需 init 的解析工具，不修改引擎设置。中间件归档保留原始引用，服务器继续离线导入。
 
@@ -93,7 +125,7 @@ pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source 
 
 每个镜像独立 Dockerfile；web 的 Nginx 配置与启动资源放 `images/web/`。Dockerfile 内保留编译/运行阶段，配置不再选择阶段。没有 Web 或 desktop 时删除相应项。
 
-业务容量通过 `transport.maxPlaintextBytes` 统一配置：默认 1 MiB，整数范围 1 KiB～64 MiB，请求和响应共用 UTF-8 明文字节预算。客户端从握手自动获取上限，密文与部署代理预算由 `resolveTransportBodyLimits()` 推导（两倍明文 + 32 KiB）。握手、公钥、认证头和防重放约束独立；超限取消原流并释放 reader，请求 413、响应为加密的 500 容量错误，客户端识别 `TransportBodyTooLargeError` / `hai:crypto:070`。 全量和 app 增量部署都从解析后的 `_serv.yml` 推导代理上限；容量变化会复用现有 Web 镜像重建代理，健康失败恢复旧配置。SvelteKit 的 adapter-node `BODY_SIZE_LIMIT` 从 `_kit.yml` 同步推导。 [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
+业务容量通过 `transport.maxPlaintextBytes` 统一配置：默认 1 MiB，整数范围 1 KiB～64 MiB，请求和响应共用 UTF-8 明文字节预算。客户端从握手自动获取上限，密文与部署代理预算由 `resolveTransportBodyLimits()` 推导（两倍明文 + 32 KiB）。握手、公钥、认证头和防重放约束独立；超限取消原流并释放 reader，请求 413、响应为加密的 500 容量错误，客户端识别 `TransportBodyTooLargeError` / `hai:crypto:070`。 全量和 app 增量部署都从解析后的 `_serv.yml` 推导代理上限；容量变化会复用现有 Web 镜像重建代理，健康失败恢复旧配置。SvelteKit 的 adapter-node `BODY_SIZE_LIMIT` 从 `_kit.yml` 同步推导。 [Transport capacity](../crypto/TRANSPORT-CAPACITY.md).
 
 无正文认证封装通过 X-Hai-Transport 头传输，生成配置使用 large_client_header_buffers 4 32k 与 proxy_buffer_size 32k 容纳头字段；自有代理也须允许并保留该头。
 
@@ -105,7 +137,7 @@ pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source 
 
 默认网站位于根目录。需要`https://example.com/yyy/`时，在应用构建进程显式设置`PUBLIC_BASE_PATH=/yyy`，由CLI生成格式5制品；webBasePath是构建结果，不是部署环境的可覆盖参数。各目录段仅ASCII字母、数字、`_`、`.`、`-`，无末尾斜杠或单独的`.`/`..`段。使用支持格式5的CLI/Deploy，旧工具拒绝该格式；不能手改编号绕过。
 
-SDK据制品生成Nginx目录、运行配置入口、SSR健康路径和返回URL，额外网关应保留此前缀。同源API仍由Serv的http.apiPrefix独立决定，CORS允许源只包含协议、域名和端口。独立Vite站点保留其运行配置中的外部API地址。完整及部分构建保持同一PUBLIC_BASE_PATH，即使只构建serv；增量在替换前拒绝目录不一致，目录变更使用全量部署。失败恢复按旧发布记录的健康路径验证。操作示例、两种框架差异与真实截图见[网站子目录配置](../../docs/usage/configuration/delivery.md#网站部署在子目录)。
+SDK据制品生成Nginx目录、运行配置入口、SSR健康路径和返回URL，额外网关应保留此前缀。同源API仍由Serv的http.apiPrefix独立决定，CORS允许源只包含协议、域名和端口。独立Vite站点保留其运行配置中的外部API地址。完整及部分构建保持同一PUBLIC_BASE_PATH，即使只构建serv；增量在替换前拒绝目录不一致，目录变更使用全量部署。失败恢复按旧发布记录的健康路径验证。操作示例、两种框架差异与真实截图见[网站子目录配置](../../docs/usage/configuration/delivery.md#网站部署在子目录).
 
 ### 部署到环境
 
@@ -113,13 +145,9 @@ SDK据制品生成Nginx目录、运行配置入口、SSR健康路径和返回URL
 
 默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时报错，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar.gz`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
 
-全站仅开放 `/somepath/` 时，构建设置 `PUBLIC_BASE_PATH=/somepath`，并将 Serv 的 `http.apiPrefix`、健康/就绪和文档路径及存储 `publicEndpoint` 显式配置到同一目录。SDK 按这些有效配置生成代理和浏览器 API 地址；外层网关保留前缀，内部探活和 ACME 根路径单独处理。[完整配置与验收](../../docs/usage/configuration/delivery.md#所有对外业务路径必须带同一目录)。
+全站仅开放 `/somepath/` 时，构建设置 `PUBLIC_BASE_PATH=/somepath`，并将 Serv 的 `http.apiPrefix`、健康/就绪和文档路径及存储 `publicEndpoint` 显式配置到同一目录。SDK 按这些有效配置生成代理和浏览器 API 地址；外层网关保留前缀，内部探活和 ACME 根路径单独处理。[完整配置与验收](../../docs/usage/configuration/delivery.md#所有对外业务路径必须带同一目录).
 
 制品格式4和5都记录primaryService（serv/web），hasWeb表示完整工程是否包含浏览器端；格式5另记录非根目录webBasePath。只有serv + web才生成同源API代理。格式1至3制品须重新构建。旧部署先备份并核对项目名、数据卷和受管凭据，再切换到新的完整部署基线；工具不自动跨项目迁移数据。完整部署仍会按Compose规则清理同项目的旧服务容器，不能仅修改deploy-target.json.directory完成迁移。
-
-迁移已有工程时，先同步 hai.json 的 build.images 名称、Dockerfile 文件名与引用；API workspace 的服务目录、包名和依赖引用统一为 -serv，并重新安装依赖。随后重新构建完整制品；不要仅改归档文件名或手工修改 manifest 冒充新构建。
-
-CLI 的 --project-name 与 SDK 的 DeployAppOptions.projectName 覆盖入口已移除；旧参数会明确报错，请在工程根 package.json.name 维护资源身份。
 
 准备 `.env.<环境>`（例如 `.env.prod`）和项目根 `hai.json`，其中 `build` 描述镜像与桌面构建，`deploy` 描述整个应用的部署。fullstack 的 deploy 参数仍指向 `packages/<项目>-serv`，API workspace 指向 `apps/<项目>-serv`，仅用于扫描运行依赖和模块 YAML；前后端构建与部署配置统一在项目根。
 
@@ -151,7 +179,7 @@ SSH 参数保存到选中环境的 `.env.<环境>.local`。`--bundle-only` 在�
 
 自建 S3 的 `endpoint` 使用 Compose 内部地址，浏览器地址用 `_storage.yml` 的 `publicEndpoint` 配置，例如 `https://app.example.com/delivery/files`。Nginx 对外开放 `/delivery/files/<bucket>/...`，去掉 `/delivery/files` 后将原始桶 URI、签名查询与 Host 直接转发 storage:9000，文件不经过 Serv；省略目录时继续使用根桶路径。入口可位于网站目录内，API/资源/健康路径冲突会在打包前失败。存储端口与控制台不公开，对象缓冲和签名日志关闭；S3 负责私有桶授权和跨源 CORS。外层代理须保留完整入口路径与 Host，只由 SDK 网关去掉前缀。
 
-自建配置保留 bucket/region/prefix/publicEndpoint/publicUrl/operationLog，只替换内部连接与托管凭据。首次增加网关或改变这些访问设置须全量部署，增量预检按配置摘要拒绝不一致；普通应用/存储增量刷新保留代理的服务 DNS，失败恢复使用旧拓扑。外部/保持连接不生成本地存储路由，Local 不公开私有目录。详见[存储配置手册](../../docs/usage/configuration/data.md#配置人员区分三个访问地址)。
+自建配置保留 bucket/region/prefix/publicEndpoint/publicUrl/operationLog，只替换内部连接与托管凭据。首次增加网关或改变这些访问设置须全量部署，增量预检按配置摘要拒绝不一致；普通应用/存储增量刷新保留代理的服务 DNS，失败恢复使用旧拓扑。外部/保持连接不生成本地存储路由，Local 不公开私有目录。详见[存储配置手册](../../docs/usage/configuration/data.md#配置人员区分三个访问地址).
 
 #### deploy 的可选参数
 
@@ -201,7 +229,7 @@ pnpm run deploy --env prod --build --bundle-only
 
 离线包的 `manifest.json` 用 `partial` 与 `selectedServices` 明确记录模式和本次服务；执行脚本固化同一选择，不靠文件名猜测。不指定 `--services` 且使用完整构建时为全量；指定 `--services` 或使用部分构建时为增量。增量包必须匹配服务器 `current` 的成功基线，首次安装会拒绝。
 
-服务器使用 util-linux `flock` 对部署根目录的 `.deploy.lock` 持有非阻塞内核锁，覆盖部署和失败恢复。正常前台部署及同步失败恢复收尾、发布终态后显式解锁，后台服务继续运行不阻塞后续部署。锁文件永久保留，禁止删除、替换或按经过时间抢锁；目录所在文件系统须支持 `flock`。HUP/INT/TERM 中断或父 shell 被强杀后，继承文件描述符的活跃子命令继续持锁，所有 holder 退出或服务器重启后才释放。旧 `.deploy-lock` 目录不再参与判锁，也不自动删除；升级前须结束旧版部署进程，勿混用旧包。强杀/断电不会运行恢复 trap，缺少结果文件时执行状态未知：先核对容器、镜像和 `current` 成功基线，再用新部署包恢复，不能把锁释放视为部署成功或副作用已回滚。
+服务器使用 util-linux `flock` 对部署根目录的 `.deploy.lock` 持有非阻塞内核锁，覆盖部署和失败恢复。正常前台部署及同步失败恢复收尾、发布终态后显式解锁，后台服务继续运行不阻塞后续部署。锁文件永久保留，禁止删除、替换或按经过时间抢锁；目录所在文件系统须支持 `flock`。HUP/INT/TERM 中断或父 shell 被强杀后，继承文件描述符的活跃子命令继续持锁，所有 holder 退出或服务器重启后才释放。强杀/断电不会运行恢复 trap，缺少结果文件时执行状态未知：先核对容器、镜像和 `current` 成功基线，再用新部署包恢复，不能把锁释放视为部署成功或副作用已回滚。
 
 #### 失败恢复与发布后回滚
 
@@ -278,6 +306,8 @@ finally {
 
 `selectedServices: ['web']` 选择局部更新，`onProgress` 返回打包与服务器执行阶段。`deploy.scan` 和 `deploy.credentials.*` 可在初始化前使用。先判断 HaiResult.success 再读取数据。Vercel 使用 prebuilt API 上传已有 .vercel/output，需要网络，不提供离线交付或 Compose 局部发布。
 
+Vercel API 与文件上传固定请求官方入口，拒绝重定向，每次请求及完整 JSON 响应读取共用 30 秒期限；没有新增配置项。超时不证明平台未受理部署，应先在平台查询结果再决定后续操作，避免无条件重复发布。
+
 命令执行按正确解码的 UTF-8 逻辑流脱敏，已知秘密即使跨 stdout/stderr 数据块也不会原样释放；成功捕获结果、错误与进度回调遵循同一边界。调用内部命令工具时用 `secrets` 明确列出敏感字面量；编码、截取或转换后的值须单独列入。每条流默认仅捕获最后 1 Mi 字符，`maxCaptureChars` 可设 1～16 Mi 字符，结果用 `stdoutTruncated` / `stderrTruncated` 标记截断，解析结构化输出前必须检查。`onOutput` 可异步，按序等待并保留 pipe 背压，收到的是全部安全 stdout；部署进度仅解析每行前 512 字符。秘密总长度最多 1 Mi UTF-16 单元，超限或脱敏异常失败关闭；超时表示命令执行失败，远程进程终止仍需确认。
 
 命令 deadline 包含 helper 启动和输出处理；超时、输入/输出或回调异常会终止受管理进程。POSIX 使用独立进程组，Windows 通过内嵌 PowerShell/.NET Job Object 先挂起创建、成功分配后恢复，禁止 breakaway；helper、编译或分配失败不会降级为裸进程。Windows 需要系统 PowerShell 和 Add-Type，调用隐藏窗口且不加载用户 profile，参数、环境与 UTF-8 管道保持原样。POSIX 命令须让后代继承进程组；已脱离组的系统守护进程及远端服务不在本地终止确认范围。
@@ -288,7 +318,7 @@ SSH 中断始终先记 `remoteExecution: 'unknown'`。docker-ssh SDK 用新连�
 
 ### 运行环境文件与重复部署
 
-SvelteKit SSR 的 HTTP/HTTPS 均使用独立 `gateway`，后端不公开端口。网关覆盖标准转发头，Compose 固定 adapter 的协议/Host/客户端地址信任；这些值不接受业务运行文件覆盖。adapter-node 6 不再读取运行期 `ORIGIN`，应用默认不固定构建期 `paths.origin`；旧直接公开 SSR 的部署须用当前工具重新生成全量交付包。
+SvelteKit SSR 的 HTTP/HTTPS 均使用独立 `gateway`，后端不公开端口。网关覆盖标准转发头，Compose 固定 adapter 的协议/Host/客户端地址信任；这些值不接受业务运行文件覆盖。adapter 不读取运行期 `ORIGIN`，应用默认不固定构建期 `paths.origin`；变更 SSR 入口拓扑时生成全量交付包。
 
 外层 TLS 终止须将负载均衡真实 IP/CIDR 加入 `trustedEdgeProxies`；独立 gateway 仅对白名单真实对端接受单值 `http` / `https`，其他来源和组合值使用本连接协议，外部 `Forwarded` 与主机/端口转发头不直接透传。
 
@@ -304,7 +334,7 @@ Nginx 通过动态上游跟随应用和存储容器的 DNS 地址变化。共用
 
 生成端优先写细项，数组保留 JSON；手写 JSON 允许兜底，放在对应模块细项之前。同源细项覆盖 JSON，动态字典、JSON 文本和显式空对象保留原义；整体替换展开时以最上层 `{}` 标记阻止旧 YAML 字段恢复。容器路径只写交付配置，不反写工程源环境。
 
-部署归档顶层包含 `apply.sh`、`APPLY.txt`、`manifest.json`、`config/`、`images/` 和 `.hai/`。`config/.env.runtime` 是唯一应用环境文件；`manifest.json.metadata` 集中保存依赖、布局、健康路径、镜像列表、受管绑定等非敏感元数据。`.hai/compose.json` 是完整服务快照；局部更新在服务边界替换并保留未选服务，不串联历史 Compose 文件。`.hai/` 还存原生环境、加载器、Nginx/TLS、策略和校验和，秘密不写入 manifest。辅助脚本合入 `apply.sh`。失败时先恢复原应用配置再恢复服务，凭据、后端账本和数据卷继续保护。新包格式为 2，不实现旧目录兼容或迁移。 运行配置定稿复用本包已导入的 Node 应用镜像，临时容器禁网，不额外下载镜像；服务器无需安装 Node 或 jq。
+部署归档顶层包含 `apply.sh`、`APPLY.txt`、`manifest.json`、`config/`、`images/` 和 `.hai/`。`config/.env.runtime` 是唯一应用环境文件；`manifest.json.metadata` 集中保存依赖、布局、健康路径、镜像列表、受管绑定等非敏感元数据。`.hai/compose.json` 是完整服务快照；局部更新在服务边界替换并保留未选服务，不串联历史 Compose 文件。`.hai/` 还存原生环境、加载器、Nginx/TLS、策略和校验和，秘密不写入 manifest。辅助脚本合入 `apply.sh`。失败时先恢复原应用配置再恢复服务，凭据、后端账本和数据卷继续保护。交付包目录格式为 2。 运行配置定稿复用本包已导入的 Node 应用镜像，临时容器禁网，不额外下载镜像；服务器无需安装 Node 或 jq。
 
 中间件原生变量（`POSTGRES_*`、`MYSQL_*`、`RUSTFS_*`、`MINIO_*`、`LDAP_*`）按镜像契约保留原名，只写私有 `.hai/middleware-runtime.env`，仅由中间件读取。应用连接全部合并到 `config/.env.runtime`。
 
@@ -316,23 +346,23 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 创建工程时为 `.env.dev.local`、`.env.test.local`、`.env.prod.local` 分别生成独立初始密码和传输密钥环，文件不提交 Git。克隆工程后通过受保护文件或 Secret Manager 分发对应环境秘密，同环境所有节点使用同一 ring 与共享 registry，不在节点启动时生成。缺少或无效的 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 在上传前报错。CLI 和离线说明只提示初始密码变量及来源，不输出值；密码仅用于创建缺失账号，已有账号不被重置。
 
-每次交付仍生成 归档内 `config/.env.runtime`，供后端启动预加载（静态 Web 仍用 Compose env_file）；它是生成产物，不是配置记忆源。`NODE_ENV` 默认随目标环境选择：`test` → `test`，`dev/development` → `development`，`prod/production` 及其他模式 → `production`。环境文件中显式设置的 `NODE_ENV` 仍优先于该默认值；`--build` 的构建优化模式不决定运行环境。旧交付包不会自动改写，需重新打包。
+每次交付仍生成 归档内 `config/.env.runtime`，供后端启动预加载（静态 Web 仍用 Compose env_file）；它是生成产物，不是配置记忆源。`NODE_ENV` 默认随目标环境选择：`test` → `test`，`dev/development` → `development`，`prod/production` 及其他模式 → `production`。环境文件中显式设置的 `NODE_ENV` 仍优先于该默认值；`--build` 的构建优化模式不决定运行环境。运行配置变更后需重新打包交付。
 
 项目根 `hai.json.deploy` 保存部署结构，`.env.<环境>` 保存公共配置，`.env.<环境>.local` 保存 SSH 及中间件秘密值。环境文件默认来自项目/workspace 根，`--env-dir` 可指定目录。完整配置后可使用 `pnpm run deploy --env test --build --bundle-only --yes` 无交互复用；只想保留现有中间件配置时追加 `--skip-middleware`。交互式仅打包会在最后询问是否保存或修改 SSH 信息；修改交付目录的 `deploy-target.json` 不会回写工程。
 
-自建中间件的密码由服务器 `<remoteDir>/managed-secrets.env` 持久保存（权限 0600），应与数据卷一起备份。每次打包只生成首次初始化的随机候选，不依赖打包机缓存；在线 SDK、deploy.sh、deploy.ps1 和 deploy-local.sh 都在部署锁内复用服务器值，同时更新应用连接配置及中间件原生变量。交付 tar 保持不可变，只有服务器私有运行文件使用定稿值。若状态缺失而对应数据卷已存在，部署在变更服务前明确停止，须恢复服务器凭据备份；不会自动换密或删除数据。旧版本可通过显式预检和凭据导入流程迁移，缺状态的普通部署仍拒绝。
+自建中间件的密码由服务器 `<remoteDir>/managed-secrets.env` 持久保存（权限 0600），应与数据卷一起备份。每次打包只生成首次初始化的随机候选，不依赖打包机缓存；在线 SDK、deploy.sh、deploy.ps1 和 deploy-local.sh 都在部署锁内复用服务器值，同时更新应用连接配置及中间件原生变量。交付 tar 保持不可变，只有服务器私有运行文件使用定稿值。若状态缺失而对应数据卷已存在，部署在变更服务前明确停止，须恢复服务器凭据备份；不会自动换密或删除数据。状态缺失时可按显式预检和凭据导入流程补全，普通部署仍拒绝缺失状态。
 
-## 请求策略文件与可信代理
+### 请求策略文件与可信代理
 
 Serv 的 `http.access`、SvelteKit 的 `access` 可引用独立 yml/yaml。部署读取应用实际生效配置，包括 `.env.<环境>` / 私有覆盖中的 `HAI_SERV`、`HAI_SERV_HTTP_ACCESS` 或 `HAI_KIT_ACCESS`，校验文件后把规范化快照放入交付包。运行环境改为 `/run/hai/request-access.yml`，Compose 只读挂载；工程的原始文件引用不会被容器路径覆盖。快照参加 SHA-256 校验，无效或缺失文件在上传前失败。待上传的归档和其中的策略快照参与完整性校验，不应手工修改；替换 SDK 策略快照时重新打包部署。已部署 Node 后端挂载的 `.env.runtime` 可以按“运行配置重载”修改并重启，改变内联规则不会重写策略快照或 Nginx 配置。
 
 全量与包含后端的增量都交付自己的快照；仅更新前端时保留后端原挂载。失败恢复使用旧成功发布的 Compose 和策略文件。运行账号无需 root：发布目录私有，策略文件在受限目录内以只读权限供容器读取。回滚镜像和策略不撤销数据库迁移或已经产生的业务效果。
 
-如需由运维独立改规则、重启后生效，可在交付之外管理只读文件，并用 Compose override 替换同一 `/run/hai/request-access.yml` 挂载。该外部文件不参与 SDK 自动回滚，首次附加挂载需要重新创建容器；后续文件修改后重启即可。自行维护且只用 Compose `env_file` 注入环境的容器，修改该文件仍需重新创建，通常无需重建镜像；这与 SDK 默认挂载读取的后端 `.env.runtime` 不同。步骤与验证边界见[独立文件重启配置](../../docs/usage/configuration/request-access.md#44-运维独立管理文件修改后重启生效)。
+如需由运维独立改规则、重启后生效，可在交付之外管理只读文件，并用 Compose override 替换同一 `/run/hai/request-access.yml` 挂载。该外部文件不参与 SDK 自动回滚，首次附加挂载需要重新创建容器；后续文件修改后重启即可。自行维护且只用 Compose `env_file` 注入环境的容器，修改该文件仍需重新创建，通常无需重建镜像；这与 SDK 默认挂载读取的后端 `.env.runtime` 不同。步骤与验证边界见[独立文件重启配置](../../docs/usage/configuration/request-access.md#44-运维独立管理文件修改后重启生效).
 
-受管 Compose 只有存在 Web/gateway 代理且后端没有公开端口时，才设置 `HAI_DEPLOY_PRIVATE_PROXY=1`。Serv/Kit 默认 `trustedProxies: auto` 在此采用容器网段，其他宿主默认忽略转发头。生成 Nginx 用实际对端覆盖客户端提交的转发头；外层负载均衡需在 Docker SSH Provider 的 `trustedEdgeProxies` 显式配置真实 IP/CIDR，省略时不信任上游，`[]` 同样关闭信任。根本未传到 Nginx 的源 IP 无法恢复，Podman rootless 等环境应实际核验入口日志。完整示例和验证步骤见[请求访问控制手册](../../docs/usage/configuration/request-access.md)。
+受管 Compose 只有存在 Web/gateway 代理且后端没有公开端口时，才设置 `HAI_DEPLOY_PRIVATE_PROXY=1`。Serv/Kit 默认 `trustedProxies: auto` 在此采用容器网段，其他宿主默认忽略转发头。生成 Nginx 用实际对端覆盖客户端提交的转发头；外层负载均衡需在 Docker SSH Provider 的 `trustedEdgeProxies` 显式配置真实 IP/CIDR，省略时不信任上游，`[]` 同样关闭信任。根本未传到 Nginx 的源 IP 无法恢复，Podman rootless 等环境应实际核验入口日志。完整示例和验证步骤见[请求访问控制手册](../../docs/usage/configuration/request-access.md).
 
-## 只读部署计划
+### 只读部署计划
 
 `createDeploymentPlan(appDir, config, options)` 不初始化 Provider、不生成中间件凭据、不创建输出目录、不连接目标。复用实际扫描、环境解析、资源名称与制品 checksum 校验，返回工程根 `root`、部署服务目录 `serviceDir`、版本、构建 ID、范围、保留服务、配置文件与变量名、基线要求和恢复目录，省略所有变量值与 SSH 凭据。远端 current 未读取时明确 not-inspected；局部更新仍由执行端严格要求成功基线。Compose 恢复不会回退数据库数据或迁移。CLI 对应 `hai deploy --env prod --plan`。
 
@@ -340,11 +370,23 @@ Serv 的 `http.access`、SvelteKit 的 `access` 可引用独立 yml/yaml。部�
 
 资源清单复用执行端的完整 sidecar 拓扑：`containers` 只列本次选中的显式容器名，LDAP/SMTP 等由 Compose 命名的服务列在 `composeManagedServices`；自建 S3 的 SSR/API gateway 也会列入实际更新或保留范围。`logicalVolumes` 是完整拓扑的 Compose 逻辑卷声明，包含保留服务和应用继续挂载的数据卷，不表示新建或重建这些卷；实际引擎卷名由 Compose 项目作用域决定。未选中间件的 action 为 keep，云开通仅按实际选择范围计算，不展示凭据值。
 
-## 容量一致性与旧凭据导入
+### 容量与凭据导入
 
 传输明文上限保留显式设置；反馈需求超过显式值时拒绝打包并说明冲突。缺省/auto 才按模块预算推导，Web 代理和 Kit BODY_SIZE_LIMIT 使用同一密文预算。计划的 target.runtime 表示远端 provider.remote.runtime，与本地镜像打包 options.runtime 分离；auto 不冒充已探测事实。
 
-旧目标可用 `importDeploymentSecrets({ directory, inputFile, runtime })` 或在服务器执行 `hai deploy-secrets <directory> --import <private.json>` 只读核验；显式 `--apply` / dryRun:false 才导入。工具核验项目、容器、卷和实际服务凭据，不猜测旧包、不轮换密码、不重建服务。新 v2 状态支持特殊字符并与部署共用 flock，原子写入权限 0600。常规离线部署无需服务器 Node；一次性导入工具需要受支持的 Node 与已安装的 CLI/deploy。详见[导入与恢复流程](docs/credential-import.md)。
+旧目标可用 `importDeploymentSecrets({ directory, inputFile, runtime })` 或在服务器执行 `hai deploy-secrets <directory> --import <private.json>` 只读核验；显式 `--apply` / dryRun:false 才导入。工具核验项目、容器、卷和实际服务凭据，不猜测旧包、不轮换密码、不重建服务。新 v2 状态支持特殊字符并与部署共用 flock，原子写入权限 0600。常规离线部署无需服务器 Node；一次性导入工具需要受支持的 Node 与已安装的 CLI/deploy。详见[导入与恢复流程](docs/credential-import.md).
+
+## 配置
+
+生命周期：init 输入后端/业务配置，成功后才能使用；close 在释放借用依赖前等待完成。返回值以快速开始示例和公开签名为准。
+
+配置由宿主加载和校验，再传入本模块；私密值放服务端私有环境，不传到浏览器。按实际使用场景逐项选择后端、容量、期限和日志策略，修改后重新初始化并核验成功结果。
+
+[逐项配置说明、适用场景和示例](../../docs/usage/configuration/delivery.md).
+
+## 错误处理
+
+领域操作先判断 `result.success`，失败按本模块错误定义与安全提示处理，服务端保留错误码、关联编号和脱敏原因。同步工具、工厂、流迭代及生命周期按各自签名处理，不把 Promise 完成视为业务成功。具体失败与恢复边界见对应功能。
 
 ## 开发测试
 
