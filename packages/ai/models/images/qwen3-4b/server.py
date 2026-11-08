@@ -57,13 +57,23 @@ def build_args() -> list[str]:
     if MODEL_REVISION and not USE_MODELSCOPE:
         args.extend(["--revision", MODEL_REVISION])
     if EXTRA_ARGS:
-        args.extend(shlex.split(EXTRA_ARGS))
+        extra = shlex.split(EXTRA_ARGS)
+        # vLLM 同时接受下划线拼写和长选项缩写，统一拦截这些密钥入口。
+        for value in extra:
+            option = value.split("=", 1)[0].replace("_", "-")
+            if option.startswith("--") and option != "--" and "--api-key".startswith(option):
+                raise ValueError("Configure API keys through HAI_MODEL_API_KEY, not VLLM_EXTRA_ARGS")
+        args.extend(extra)
     return args
 
 
 def main() -> None:
+    # vLLM 原生从环境读取认证密钥，不把私密值放入 argv 或启动日志。
+    api_key = os.environ.get("HAI_MODEL_API_KEY")
+    if api_key:
+        os.environ["VLLM_API_KEY"] = api_key
     args = build_args()
-    print(f"[qwen3-4b] exec: {' '.join(args)}")
+    print(f"[qwen3-4b] starting service on {HOST}:{PORT}", flush=True)
     # 用 exec 替换当前进程，保证容器信号正确传递给 vLLM
     os.execvp(args[0], args)
 

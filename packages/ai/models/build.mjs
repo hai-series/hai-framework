@@ -31,12 +31,16 @@ import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
+  renameSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
@@ -695,7 +699,7 @@ function gitBlobSha(file) {
  * 容器无法使用该代理。源码改由宿主机 curl 并行获取，每个文件按 Git blob 校验，
  * 再作为命名构建上下文传入，既复用宿主机代理，也支持中断后增量续传。
  */
-function prepareSourceContext(manifest, proxy) {
+export function prepareSourceContext(manifest, proxy) {
   if (!manifest.source)
     return undefined
 
@@ -711,99 +715,65 @@ function prepareSourceContext(manifest, proxy) {
   const completeFile = join(cacheDir, 'complete.json')
   const env = withProxyEnvironment(process.env, proxy)
 
-  mkdirSync(sourceDir, { recursive: true })
-
-  let completedTree
+  // 模型工具在可信仓库运行，但缓存可能残留链接；逐层检查后才创建或替换目录项。
+  const directory = (target) => {
+    const offset = relative(MODELS_DIR, target)
+    if (!offset || isAbsolute(offset) || offset === '..' || offset.startsWith(`..${sep}`))
+      throw new Error('Unsafe model source cache directory')
+    let current = MODELS_DIR
+    for (const part of offset.split(sep)) {
+      current = join(current, part)
+      let metadata
+      try {
+        metadata = lstatSync(current)
+      }
+      catch (error) {
+        if (error?.code !== 'ENOENT')
+          throw error
+        mkdirSync(current)
+        metadata = lstatSync(current)
+      }
+      if (!metadata.isDirectory() || metadata.isSymbolicLink())
+        throw new Error(`Unsafe model source cache directory: ${current}`)
+    }
+  }
+  const regular = (file) => {
+    directory(dirname(file))
+    let metadata
+    try {
+      metadata = lstatSync(file)
+    }
+    catch (error) {
+      if (error?.code === 'ENOENT')
+        return false
+      throw error
+    }
+    if (!metadata.isFile() || metadata.nlink !== 1)
+      throw new Error(`Unsafe model source cache file: ${file}`)
+    return true
+  }
+  directory(sourceDir)
+  // 每轮下载仅写入本次独占的私有目录，完成校验后原子替换，不直接更新既有 inode。
+  const staging = mkdtempSync(join(cacheDir, '.download-'))
+  const owned = lstatSync(staging)
+  const publish = (temporary, target) => {
+    regular(target)
+    const metadata = lstatSync(temporary)
+    if (!metadata.isFile() || metadata.nlink !== 1 || dirname(temporary) !== staging)
+      throw new Error('Unsafe model source download')
+    renameSync(temporary, target)
+  }
   try {
-    completedTree = existsSync(completeFile)
-      ? JSON.parse(readFileSync(completeFile, 'utf8')).tree
-      : undefined
-  }
-  catch {
-    completedTree = undefined
-  }
+    regular(completeFile)
+    regular(treeFile)
+    regular(curlConfig)
 
-  if (
-    completedTree === manifest.source.tree
-    && existsSync(join(sourceDir, 'indextts', 'infer_v2_5.py'))
-  ) {
-    console.log(`Using cached source ${sourceDir}`)
-    return sourceDir
-  }
+    const treeUrl
+      = `https://api.github.com/repos/${manifest.source.repository}`
+        + `/git/trees/${manifest.source.tree}?recursive=1`
 
-  const treeUrl
-    = `https://api.github.com/repos/${manifest.source.repository}`
-      + `/git/trees/${manifest.source.tree}?recursive=1`
-
-  runCommand(
-    'curl',
-    [
-      '--silent',
-      '--show-error',
-      '--fail',
-      '--location',
-      '--retry',
-      '5',
-      '--retry-all-errors',
-      '--output',
-      treeFile,
-      treeUrl,
-    ],
-    { env },
-  )
-
-  const tree = JSON.parse(readFileSync(treeFile, 'utf8'))
-  if (tree.sha !== manifest.source.tree) {
-    throw new Error(
-      `Source tree mismatch for ${manifest.name}: `
-      + `expected ${manifest.source.tree}, got ${tree.sha || 'unknown'}`,
-    )
-  }
-
-  const rootFiles = new Set([
-    'LICENSE',
-    'MANIFEST.in',
-    'README.md',
-    'pyproject.toml',
-    'uv.lock',
-  ])
-  const files = tree.tree.filter(entry =>
-    entry.type === 'blob'
-    && (
-      rootFiles.has(entry.path)
-      || entry.path.startsWith('indextts/')
-    )
-    && !entry.path.includes('/.ipynb_checkpoints/')
-    // 该旧 MaskGCT 资源约 21 MiB，IndexTTS-2.5 推理链不加载它。
-    && entry.path !== 'indextts/utils/maskgct/models/codec/facodec/modules/JDC/bst.t7',
-  )
-
-  const pending = []
-  for (const entry of files) {
-    const output = join(sourceDir, ...entry.path.split('/'))
-    if (existsSync(output) && gitBlobSha(output) === entry.sha)
-      continue
-
-    mkdirSync(dirname(output), { recursive: true })
-    const encodedPath = entry.path
-      .split('/')
-      .map(encodeURIComponent)
-      .join('/')
-    const url
-      = `https://raw.githubusercontent.com/${manifest.source.repository}`
-        + `/${manifest.source.revision}/${encodedPath}`
-    pending.push(
-      `url = "${url}"`,
-      `output = "${output.replaceAll('\\', '/')}"`,
-    )
-  }
-
-  if (pending.length > 0) {
-    console.log(
-      `Fetching ${pending.length / 2} source files `
-      + `from ${manifest.source.repository}#${manifest.source.revision}`,
-    )
-    writeFileSync(curlConfig, `${pending.join('\n')}\n`, 'utf8')
+    // 校验依据每轮来自固定 HTTPS 端点，不信任缓存 JSON 自报的 tree/blob SHA。
+    const downloadedTree = join(staging, 'tree.json')
     runCommand(
       'curl',
       [
@@ -814,34 +784,122 @@ function prepareSourceContext(manifest, proxy) {
         '--retry',
         '5',
         '--retry-all-errors',
-        '--parallel',
-        '--parallel-max',
-        '16',
-        '--config',
-        curlConfig,
+        '--output',
+        downloadedTree,
+        treeUrl,
       ],
       { env },
     )
-  }
+    const tree = JSON.parse(readFileSync(downloadedTree, 'utf8'))
+    if (tree.sha !== manifest.source.tree) {
+      throw new Error(
+        `Source tree mismatch for ${manifest.name}: `
+        + `expected ${manifest.source.tree}, got ${tree.sha || 'unknown'}`,
+      )
+    }
+    publish(downloadedTree, treeFile)
 
-  const invalid = files.filter((entry) => {
-    const file = join(sourceDir, ...entry.path.split('/'))
-    return !existsSync(file) || gitBlobSha(file) !== entry.sha
-  })
-  if (invalid.length > 0) {
-    throw new Error(
-      `Source verification failed for ${manifest.name}: ${
-        invalid.slice(0, 5).map(entry => entry.path).join(', ')}`,
+    const rootFiles = new Set([
+      'LICENSE',
+      'MANIFEST.in',
+      'README.md',
+      'pyproject.toml',
+      'uv.lock',
+    ])
+    const files = tree.tree.filter(entry =>
+      entry.type === 'blob'
+      && (
+        rootFiles.has(entry.path)
+        || entry.path.startsWith('indextts/')
+      )
+      && !entry.path.includes('/.ipynb_checkpoints/')
+      // 该旧 MaskGCT 资源约 21 MiB，IndexTTS-2.5 推理链不加载它。
+      && entry.path !== 'indextts/utils/maskgct/models/codec/facodec/modules/JDC/bst.t7',
     )
+
+    const pending = []
+    const downloads = []
+    for (const entry of files) {
+      if (entry.path.split('/').some(part => !part || part === '.' || part === '..') || entry.path.includes('\\') || entry.path.includes(':'))
+        throw new Error('Unsafe model source tree path')
+      const output = join(sourceDir, ...entry.path.split('/'))
+      if (regular(output) && gitBlobSha(output) === entry.sha)
+        continue
+
+      const temporary = join(staging, `source-${downloads.length}`)
+      downloads.push({ temporary, output, sha: entry.sha })
+      const encodedPath = entry.path
+        .split('/')
+        .map(encodeURIComponent)
+        .join('/')
+      const url
+        = `https://raw.githubusercontent.com/${manifest.source.repository}`
+          + `/${manifest.source.revision}/${encodedPath}`
+      pending.push(
+        `url = "${url}"`,
+        `output = ${JSON.stringify(temporary.replaceAll('\\', '/'))}`,
+      )
+    }
+
+    if (pending.length > 0) {
+      console.log(
+        `Fetching ${pending.length / 2} source files `
+        + `from ${manifest.source.repository}#${manifest.source.revision}`,
+      )
+      const downloadConfig = join(staging, 'curl.conf')
+      writeFileSync(downloadConfig, `${pending.join('\n')}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 })
+      runCommand(
+        'curl',
+        [
+          '--silent',
+          '--show-error',
+          '--fail',
+          '--location',
+          '--retry',
+          '5',
+          '--retry-all-errors',
+          '--parallel',
+          '--parallel-max',
+          '16',
+          '--config',
+          downloadConfig,
+        ],
+        { env },
+      )
+      for (const { temporary, output, sha } of downloads) {
+        if (gitBlobSha(temporary) !== sha)
+          throw new Error(`Source verification failed for ${manifest.name}: ${relative(sourceDir, output)}`)
+        publish(temporary, output)
+      }
+      publish(downloadConfig, curlConfig)
+    }
+
+    const invalid = files.filter((entry) => {
+      const file = join(sourceDir, ...entry.path.split('/'))
+      return !regular(file) || gitBlobSha(file) !== entry.sha
+    })
+    if (invalid.length > 0) {
+      throw new Error(
+        `Source verification failed for ${manifest.name}: ${
+          invalid.slice(0, 5).map(entry => entry.path).join(', ')}`,
+      )
+    }
+
+    const completion = join(staging, 'complete.json')
+    writeFileSync(
+      completion,
+      `${JSON.stringify({ tree: manifest.source.tree, files: files.length }, null, 2)}\n`,
+      { encoding: 'utf8', flag: 'wx' },
+    )
+    publish(completion, completeFile)
+
+    return sourceDir
   }
-
-  writeFileSync(
-    completeFile,
-    `${JSON.stringify({ tree: manifest.source.tree, files: files.length }, null, 2)}\n`,
-    'utf8',
-  )
-
-  return sourceDir
+  finally {
+    const current = lstatSync(staging)
+    if (current.isDirectory() && !current.isSymbolicLink() && current.dev === owned.dev && current.ino === owned.ino)
+      rmSync(staging, { recursive: true, force: true })
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1351,7 +1409,7 @@ function cmdBuild(name, args) {
 // run
 // ─────────────────────────────────────────────────────────────
 
-async function cmdRun(name, args) {
+export async function cmdRun(name, args) {
   requireName(
     name,
     'run',
@@ -1410,8 +1468,11 @@ async function cmdRun(name, args) {
   const runArgs = [
     'run',
     '-p',
-    `${hostPort}:${manifest.port}`,
+    `127.0.0.1:${hostPort}:${manifest.port}`,
   ]
+  // 本机运行只发布回环地址，凭据由引擎按变量名从环境读取，不能出现在进程参数中。
+  if (process.env.HAI_MODEL_API_KEY)
+    runArgs.push('--env', 'HAI_MODEL_API_KEY')
 
   /**
    * Podman 默认会把宿主机代理环境自动注入容器。
