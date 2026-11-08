@@ -1,5 +1,7 @@
 # hai-ui — 详细用法
 
+HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 `httpStatus` 或状态非法时按 500 返回安全提示。手写业务错误须提供完整错误定义或显式状态，不能依赖缺省状态展示原文。
+
 从 [SKILL.md](SKILL.md) 选择主题后读取对应小节。代码片段展示 API 用法；省略的业务变量、schema、依赖与 return 上下文需由应用补齐。
 
 > `@h-ai/ui` 是基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 + Bits UI v2，内置 15 个精选 DaisyUI 主题及 high-contrast 高对比、formal 直角商务、eye-care 暖绿护眼主题、内置中英日文 i18n、自动导入。内置 Shiki 代码高亮、Mermaid 图表渲染、Design Token 系统和 7 个移动端组件。
@@ -39,7 +41,7 @@
 
 至少检查以下四项：
 
-- `svelte.config.*`：`autoImportHaiUi()` 在 `vitePreprocess()` 前。
+- SvelteKit 3 在 `vite.config.*` 的 `sveltekit({...})` 中设置预处理；纯 Svelte/Vite 使用 `svelte.config.*`。两者的 `autoImportHaiUi()` 都在 `vitePreprocess()` 前。
 - `vite.config.*`：`ssr.noExternal` 包含 `@h-ai/ui` 和 `@h-ai/kit`，`optimizeDeps.exclude` 包含 `bits-ui`。
 - `app.css`：已导入 `global.css` / `theme.css`；移动端还要导入 `design-tokens.css` / `mobile.css`。
 - Tailwind：已配置 `@source` 扫描 `@h-ai/ui/dist/**/*.{svelte,js,ts}`。
@@ -99,55 +101,39 @@ npm install -D tailwindcss @tailwindcss/vite daisyui
 npm install -D @iconify/tailwind4 @iconify-json/tabler
 ```
 
-Node adapter 使用 Crypto、Kit 或 IAM 时，还需将 `sm-crypto@0.5.7` 作为直接生产依赖安装，保留 Node 原生模块解析。
+Node adapter 使用 Crypto、Kit 或 IAM 时，还需将 `sm-crypto@0.5.8` 作为直接生产依赖安装，保留 Node 原生模块解析。
 
-### 2. svelte.config.js
+### 2. package.json 的应用导入
 
-```js
-import { autoImportHaiUi } from '@h-ai/ui/auto-import'
-import adapter from '@sveltejs/adapter-node'
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
-
-/** @type {import('@sveltejs/kit').Config} */
-const config = {
-  // autoImportHaiUi 必须在 vitePreprocess 之前
-  preprocess: [autoImportHaiUi(), vitePreprocess()],
-  compilerOptions: {
-    runes: true, // 强制 Svelte 5 Runes 模式
-  },
-  kit: {
-    adapter: adapter(),
-    alias: {
-      $components: './src/lib/components',
-      $stores: './src/lib/stores',
-    },
-  },
-}
-
-export default config
+```json
+{ "imports": { "#lib/*": "./src/lib/*" } }
 ```
 
 ### 3. vite.config.ts
 
+SvelteKit 3 的预处理、编译器和适配器统一配置在 Vite 插件；纯 Svelte/Vite 工程保留自己的 svelte.config.js。
+
 ```ts
+import { autoImportHaiUi } from '@h-ai/ui/auto-import'
+import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
+import adapter from '@sveltejs/adapter-node'
 import { sveltekit } from '@sveltejs/kit/vite'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [
-    sveltekit(),
+    sveltekit({
+      preprocess: [autoImportHaiUi(), vitePreprocess()],
+      compilerOptions: { runes: true },
+      adapter: adapter(),
+      paths: { relative: false },
+    }),
     tailwindcss(),
   ],
-  optimizeDeps: {
-    // bits-ui 使用 Svelte 虚拟模块，需排除预构建
-    exclude: ['bits-ui'],
-  },
-  ssr: {
-    // @h-ai 包为 ESM + Svelte 组件，需 Vite 在 SSR 时处理
-    noExternal: ['@h-ai/ui', '@h-ai/kit'],
-    external: ['@h-ai/core', 'sm-crypto'],
-  },
+  optimizeDeps: { exclude: [...haiOptimizeExclude], include: [...haiPrebundledDeps] },
+  ssr: { noExternal: ['@h-ai/ui', '@h-ai/kit'], external: ['@h-ai/core', 'sm-crypto'] },
 })
 ```
 
@@ -366,6 +352,8 @@ const p = usePlatform()
 | `LoginForm`    | `showForgotPassword`, `showRegisterLink`, `errors`  | 登录表单 |
 | `RegisterForm` | `fields`, `minPasswordLength`, `errors`         | 注册表单 |
 | `UserProfile`  | `user`, `editable`, `fields`, `avatarAccept`, `avatarHint` | 用户资料，选择器和提示对齐业务校验；最终验证和上传仍由回调负责 |
+
+`UserProfile.onsubmit` 必须返回 `true` / `false` 表示保存成功 / 失败；仅成功退出编辑，失败保留编辑器与草稿。宿主在失败时更新错误提示并返回 `false`，不要把失败转换成正常关闭。
 
 #### 错误页 / 设置场景组件
 

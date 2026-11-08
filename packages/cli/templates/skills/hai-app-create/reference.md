@@ -8,7 +8,7 @@
 
 - 新增页面（路由）
 - 新增 API 端点
-- 新增服务层模块（`$lib/server/services/`）
+- 新增服务层模块（`#lib/server/services/`）
 - 新增数据库表 / 数据模型
 - 新增业务组件
 - 修改或修复已有功能、接口和交互
@@ -197,7 +197,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 
 ## 创建服务层
 
-服务层位于 `$lib/server/services/`，处理业务逻辑。
+服务层位于 `#lib/server/services/`，处理业务逻辑。
 
 ```typescript
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
@@ -237,7 +237,7 @@ export async function listArticles(params: ListParams): Promise<HaiResult<Pagina
 
 ### Schema 定义（SQL DDL）
 
-沿用当前应用的迁移/建表入口；仅开发初始化用的简单 SvelteKit 示例可在 `$lib/server/init.ts` 建表。不要把本例 SQLite DDL 无修改复制到 PostgreSQL/MySQL，迁移与索引需匹配实际数据库。
+沿用当前应用的迁移/建表入口；仅开发初始化用的简单 SvelteKit 示例可在 `#lib/server/init.ts` 建表。不要把本例 SQLite DDL 无修改复制到 PostgreSQL/MySQL，迁移与索引需匹配实际数据库。
 
 ```typescript
 const BUSINESS_SCHEMA = `
@@ -279,13 +279,13 @@ interface CreateArticleInput {
 
 ## 创建业务组件
 
-业务组件放在 `$lib/components/`，通用 UI 使用 `@h-ai/ui`。
+业务组件放在 `#lib/components/`，通用 UI 使用 `@h-ai/ui`。
 
 ```svelte
 <!-- src/lib/components/ArticleCard.svelte -->
 <script lang="ts">
-  import type { Article } from '$lib/types/article'
-  import * as m from '$lib/paraglide/messages.js'
+  import type { Article } from '#lib/types/article.js'
+  import * as m from '#lib/paraglide/messages.js'
 
   let { article, onEdit }: { article: Article, onEdit?: () => void } = $props()
 </script>
@@ -311,7 +311,7 @@ interface CreateArticleInput {
 - 事件回调通过 props 传入（非 `createEventDispatcher`）
 - 样式使用 TailwindCSS 4 + DaisyUI 5 class
 - 通用 UI 组件优先使用 `@h-ai/ui`，不重复实现
-- i18n 文本使用 `$lib/paraglide/messages.js` 中的 key
+- i18n 文本使用 `#lib/paraglide/messages.js` 中的 key
 
 ## 初始化顺序
 
@@ -325,7 +325,7 @@ H5 所有页面继承根布局的 header/footer；认证页隐藏底部导航，
 
 Fullstack 的公共 `.env` 启用当前模块的运行参数，YAML 显式引用同名变量并保留本地回退；未启用模块与可选字段保留注释。环境文件的用途、加载优先级及私有值保存方式遵守 [环境配置规范](development.md#环境配置)，模块仍按公开 Schema 校验。
 
-复用当前应用服务端启动/关闭入口；SvelteKit 通常为 `$lib/server/init.ts`，API/fullstack 使用已有 service/serv 初始化文件。下列是启用 IAM 时的常见依赖关系，不要求无关应用安装这些模块：
+复用当前应用服务端启动/关闭入口；SvelteKit 通常为 `#lib/server/init.ts`，API/fullstack 使用已有 service/serv 初始化文件。下列是启用 IAM 时的常见依赖关系，不要求无关应用安装这些模块：
 
 ```
 core.init() → crypto.init() → reldb.init() → cache.init() → iam.init() → createBusinessTables()

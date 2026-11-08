@@ -44,7 +44,7 @@ Toast 支持 F8 聚焦/返回、Escape 关闭可关闭提示并恢复焦点；Mo
 - 按安装版本的 exports 选择明确列出的 components barrel 入口（不开放任意内部文件）；主题工具使用 `@h-ai/ui/theme`，避免仅为主题加载根入口的 AI/图表组件。禁止导入内部 src/dist；例如原子组件使用 `@h-ai/ui/components/primitives/index`。
 - 自动导入识别无分号、跨行及别名的运行时 import；已绑定的本地组件名称不会重复注入。
 - 应用只提供页面级文案；组件内部中英日文由 @h-ai/ui 维护。
-- `UserProfile` 用 `avatarAccept` / `avatarHint` 对齐业务的头像格式与大小限制；文件最终校验和上传由业务回调完成。
+- `UserProfile` 用 `avatarAccept` / `avatarHint` 对齐业务的头像格式与大小限制；文件最终校验和上传由业务回调完成。`onsubmit` 必须返回 boolean，只有 `true` 退出编辑，`false` 或异常保留草稿与重试入口。
 - `BareInput type="file"` 通过 `onchange` 的 `currentTarget.files` 读取文件，不绑定文件路径 `value`；其他输入类型可 `bind:value`。
 - AI 文本视为不可信；Markdown/Mermaid 预览与允许执行 HTML/JS 的预览有不同边界。
 

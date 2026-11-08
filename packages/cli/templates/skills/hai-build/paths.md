@@ -4,7 +4,7 @@
 
 ## SvelteKit
 
-启用 transport 时，服务端 `crypto.transport.basePath` 和浏览器 `installBrowserTransport(config, { crypto, basePath: base })` 均取 `$app/paths.base`；独立 Kit client 同步 `transport.basePath`。默认空字符串为域名根目录，不在 YAML 另维护一份挂载目录。交换/排除/容量路径仍用完整路径。目录验收须检查带前缀 API 的加密标记和缺协议拒绝，页面、登录成功不能替代协议验证。
+SvelteKit 3 的宿主在 `sveltekit({ paths: { base: 挂载目录, relative: false } })` 中固定绝对前缀，再通过公开 `$app/paths.resolve('/').replace(/\/$/, '')` 获取目录。启用 transport 时，将同一前缀传给服务端 `crypto.transport.basePath`、浏览器 `installBrowserTransport(config, { crypto, basePath })` 与独立 Kit client 的 `transport.basePath`。默认空字符串为域名根目录，不在 YAML 另维护一份挂载目录；SSR 相对路径不能作为协议前缀。交换/排除/容量路径仍用完整路径。目录验收须检查带前缀 API 的加密标记和缺协议拒绝，页面、登录成功不能替代协议验证。
 
 - admin、h5和website从构建进程的PUBLIC_BASE_PATH设置kit.paths.base，默认空字符串。根目录保持空，子目录如`/yyy`无末尾斜杠；构建不读取私有dotenv中的这个控制值。
 - 组件链接用`$app/paths`的resolve；认证动作使用带base的api/auth地址。守卫匹配实际URL，protectedPaths/publicPaths/loginUrl都应带base。新模板已接好，旧应用与自定义路由须同步核对。

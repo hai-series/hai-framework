@@ -4,7 +4,7 @@
 
 ## 运行环境
 
-Local 的 key 路径拒绝文件符号链接和目录 junction，`.meta.json` / `.upload.tmp` 保留后缀不区分大小写。覆盖 put 清除旧元数据，copy 默认继承源元数据。浏览器根入口仅导出 Schema、类型和客户端辅助能力。
+Local 的 key 路径拒绝文件符号链接和目录 junction；每个路径段都保留 `.meta.json` / `.upload.tmp` 后缀及 `.hai-storage-meta` 目录，不区分大小写。先在该内部目录准备文件身份对应的代际元数据（含显式空默认值），再原子发布内容；准备失败不改内容，发布后的历史记录清理失败只记录诊断，不回滚其他写入。代际记录是唯一格式，不读取旧 `<key>.meta.json`；缺少当前记录时明确失败，旧数据须离线迁移或重新 `file.put()`。备份与迁移包含内容和内部记录，不混用旧程序写入。copy 默认继承源元数据；S3 copy 接收原始 key，内部逐段编码 Unicode、空格和 URL 分隔字符。浏览器根入口仅导出 Schema、类型和客户端辅助能力。
 
 > ⚠️ **服务端模块**。`storage.file` / `storage.dir` / `storage.presign` 均在 Node.js 端使用。浏览器端通过预签名 URL 或 API 端点间接访问存储（见下方「浏览器端文件上传」）。
 
@@ -198,10 +198,19 @@ if (!result.success) return result
 
 `checksum.generate(data, options?)` / `checksum.verify(data, expected, options?)` 默认 SHA-256、小写 hex，可选 sha384/sha512/sha1/md5、base64 编码与 signal；流仅消费一次，读取失败返回 HaiResult 错误，不匹配返回 false。MD5/SHA-1 不作安全认证，ETag 和 multipart 复合 checksum 不当作完整文件摘要。浏览器不导入 Node checksum；离线增量摘要需使用适用的浏览器实现，不把 SubtleCrypto.digest 当流式 API。
 
-### 与 kit 集成（文件上传 API）
+### Serv / Fullstack 私有附件
+
+Fullstack/API 项目先读取本工程已交付的 hai-serv/reference.md 中“扩展应用自有 contract + procedures”和“Feature Procedures”，结合 hai-api-contract、hai-api-client 扩展；保留其 contract/serv/shared 分层，不复制下方 SvelteKit 路由。
+
+- 在 `packages/<name>-contract`（API 为 `apps/<name>-contract`）声明应用自己的附件 contract，在 serv 的 procedures 聚合入口挂载。当前生成的 Fullstack 客户端是共享 `managementApi`，需先将新领域纳入工程 contract；不能把文档中的默认 `apiClient.storage` 当作工程已经开放的接口。
+- 自有 procedure 使用 `serv.implement(contract).context<ServContext>().route(...).auth().handle(...)`；owner 来自可信 `context.session.userId`，按 ID 操作还须查验业务记录归属、状态与租户。key 由服务端生成，列表也在服务端限定本人范围。
+- 可复用 `createStorageProcedures({ storage, authorize })` 的已有签名/列表/元数据/删除操作，authorize 必须按可信 session 核对 operation 与全部 keys，拒绝空 prefix 与跨用户请求。只挂载实际需要的子路由，不能绕过应用附件记录、限额或审计；框架没有默认的 `attachments.*` 业务 API。
+- FileUpload 注入应用 uploadHandler；S3 签名 URL 是短期访问凭据，不能当作持续会话授权。上传完成后仍验证大小、实际内容与对象状态；仍有效的 PUT URL 可以重写其目标，严格发布时使用 staging/final 对象隔离。需要 Local 或严格逐次鉴权的二进制流程时，通过 Serv 自有 middleware 接入 `storage.file.put/getStream`，显式认证并精确配置传输策略，不能把公开 `serv.storageAssets` 用于本人私有附件。
+
+### 与 kit 集成（SvelteKit 文件上传 API）
 
 ```typescript
-import { storage } from '$lib/server/init'
+import { storage } from '#lib/server/init.js'
 // src/routes/api/files/upload/+server.ts
 import { kit } from '@h-ai/kit'
 import { z } from 'zod'

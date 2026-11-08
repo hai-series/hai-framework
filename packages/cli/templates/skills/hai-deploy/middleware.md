@@ -94,6 +94,8 @@ AI 使用 MySQL 的首次建表需 CREATE 与 INDEX 权限，节点可并发初�
 
 以下是自定义向导的连接字段；完整可用项、枚举与范围仍以项目 `.env.example` 和公开 Schema 为准。变量前缀为 `HAI_DB`、`HAI_CACHE`、`HAI_STORAGE`、`HAI_VECDB`、`HAI_IAM_LDAP`；Reach 使用实际索引 `HAI_REACH_PROVIDERS_<index>`。camelCase 不拆词，例如 `bindPassword` → `BINDPASSWORD`。
 
+HTTP API 的全部自定义请求头整体写入私有环境文件，不能按头名猜测秘密。迁移已有 dotenv 项会处理行首空格/Tab、export 与多行引号，并移除同模式公共文件中的旧值；操作后仍核对私有文件与忽略规则，不在日志中输出值。
+
 | 后端               | 连接字段                                                                                                                             |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
 | SQLite             | database（文件路径或 `:memory:`）                                                                                                    |

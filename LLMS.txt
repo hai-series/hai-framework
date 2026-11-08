@@ -1,170 +1,69 @@
-# hai Framework — AI 使用索引
+# hai-framework — AI 使用索引
 
-Serv 原生 RPC 入口、HAI_SERV_HTTP_RPC 和 ServRpcHttpConfig 已移除；保留 OpenAPI/REST、api-client 和 oRPC contract/procedure。部署健康检查与同源文档路由按有效配置生成，文档认证仍由后端执行。
+本文件只导航，不重复维护 API、配置或迁移契约。先按任务选择一个入口，仅读取相关小节；签名以当前公开类型和 package.json.exports 为准。应用消费发布包时以实际安装版本为准，源码新能力不代表已发布。
 
-Serv 生产刷新 Cookie 默认启用 Secure。受控内网或 VPN 的 HTTP 入口可用后端进程变量 `HAI_SERV_REFRESH_COOKIE_SECURE=false`，生产 CORS 白名单和 API 文档策略继续生效。见 [生产 HTTP 入口](docs/usage/configuration/http.md#生产-http-入口的-serv-刷新-cookie)。
-
-框架功能增删改涉及 type/interface/Schema 等结构、配置/环境变量、核心流程或模块边界时，先读 [hai-change-plan](.agents/skills/hai-change-plan/SKILL.md)：用简明语言说明方案与影响，由用户决定后实施，成套更新 README、配置、docs、GitHub Pages 内容源、注释、调用方、测试及模板。已确认且未扩大的方案不重复确认。
-
-TypeScript monorepo：Svelte 5/SvelteKit 或 Vite 客户端，oRPC contract + serv HTTP 服务，数据与 AI 模块。此文件用于选择入口；签名以当前源码类型及 package.json.exports 为准。应用消费已发布包时，以安装版本为准，不把源码仓库的新能力当成已发布能力。
-
-README 文档入口：[简体中文](README.md) · [English](README.en.md) · [日本語](README.ja.md)。根目录与 `packages/*` 使用同目录三语 README，语言切换、模块索引和相关模块链接保持对应语言；更新用法时同步三种版本。扩展指南与 skills 仍使用各自原有语言，运行时、示例应用和 CLI 模板内置 `zh-CN`、`en-US`、`ja-JP`，新增文案须同步三种语言。
-
-模块、示例与生成项目的 README 面向人类，按简介、核心功能清单、使用入门、开发测试、许可证组织；许可证在最后，更新融入对应章节。根 README 以框架介绍和任务导航为主。SKILL.md 面向 AI，保留适用场景、输入输出、边界和执行路径，长 API/范本放相邻参考，按任务读取并核验当前公开类型。
-
-应用文档：[简体中文](docs/usage/README.md) · [English](docs/usage/README.en.md) · [日本語](docs/usage/README.ja.md)。采用“认识框架 → 首次交付 → 业务开发 → 配置管理 → 发布运行 → 维护验收”的多级章节；先按[六类工作路线](docs/usage/overview/reading-paths.md)选择顺序，再读同一份领域正文。导航元数据在[usage/navigation.json](docs/usage/navigation.json)，官网直接消费人工Markdown，不维护重复副本。应用根package.json.version驱动镜像/原生交付，制品的appVersion/buildId区分版本与实际构建；网站目录由构建工具记录并供部署工具消费，不需要手工设置清单格式。跳过中间件统一--skip-middleware / skipMiddleware。
-
-配置统一从[应用配置手册](docs/usage/configuration/README.md)进入，按八个领域说明用途、配置位置、真实默认条件、不同取值影响、完整示例与生效方式；同一参数不按角色重复维护。[首次交付](docs/usage/getting-started/README.md)解释创建、开发、打包和升级；[业务开发](docs/usage/development/README.md)解释HTTP/数据/身份/AI/UI/集成；[发布运行](docs/usage/operations/README.md)解释部署、反馈与排错；[维护、安全和验收](docs/usage/governance/README.md)解释同步维护和证据边界。check:usage-examples递归校验例子，不生成正文。详细领域手册目前中文，保留三语入口与创建发布流程。协作默认遵循[结论优先与同步维护](packages/cli/templates/skills/hai-app-create/collaboration.md)。
-
-LLM 协议字段统一为 `llm.protocol`、`llm.models[].protocol`、`tempModel.protocol`，值为 `chat | responses | anthropic`；使用 `HAI_AI_LLM_PROTOCOL`、`HAI_AI_LLM_MODELS_0_PROTOCOL` 等变量。旧 `api` 字段及旧协议变量明确报迁移错误，`apiKey` 不变。配置模板为启用项和可选块统一生成字段说明与环境映射；`.env.example` 优先展示细项，保留必要的功能开关和动态映射。日志脱敏路径及审计实际用途见配置手册，不用终端输出截图替代说明。
-
-## 读取顺序
-
-Beta 使用前先确认 npm 的 `@h-ai/cli@beta` 实际版本并固定同一版本；当前目标为 `1.0.0-beta.1`，未发布源码功能不能当作已发布能力。CI 按 SemVer 将 alpha/beta/rc 分别发布到对应 dist-tag，稳定版使用 latest；完整验收、npm 各包可用性与实际 CLI 创建验证分别确认，不能仅据 tag 或工作流启动声称发布完成。
-
-Web 入口先以经典脚本检测已知低版本，门槛为 Chrome/Edge 111、Firefox 114、Safari 与 iOS/iPadOS 16.4。admin、website、h5 和 Fullstack Web 生成独立升级页，保留发布子目录及官方更新链接。见[浏览器启动检测](docs/usage/getting-started/build.md#浏览器启动检测)。
-
-每个模板只安装实际使用的模块，AI/payment/vecdb/datapipe不默认安装；所有项目保留完整模块配置与.env.example，未启用项保持注释且不进入公共环境默认值。新增功能时安装依赖、启用所需配置并接入初始化、反序关闭及业务代码；依赖安装不自动启用功能。LDAP仅在有效配置iam.login.ldap=true时参与部署扫描。`--template`、`--features`、`--examples/--no-examples` 已删除，`create --yes/-y` 改为 `--defaults`，旧参数明确报错；`deploy --yes` 保持原义。已有工程的模块选择不受影响。website默认Node SSR，只安装Core/Kit/UI，可直接切换静态构建；后续新增的服务端业务依赖、初始化和API/actions须先移除。compile显式构建`HAI_BUILD_STATIC=1`，公开子路径PUBLIC_BASE_PATH默认空、项目站例如`/docs-site`，目录段仅ASCII字母、数字、_、.、-且无末尾斜杠；HAI_BUILD_STATIC仅用于compile，PUBLIC_BASE_PATH也支持Docker网站，不是VITE_ADAPTER的别名。静态构建拒绝服务端业务模块、自定义API/actions与未预渲染页面，默认健康端点不发布，不放宽生产守卫。静态托管只上传build（含.nojekyll），不上传配置或私密文件；见[静态网站](docs/usage/configuration/delivery.md#静态website与github-pages)。SvelteKit编译base、Vite相对资源、API地址与网站目录按[网站子目录](docs/usage/configuration/delivery.md#网站部署在子目录)分别处理，全量/部分构建保持相同目录，变更目录使用全量。本仓库[官网应用](apps/framework-website/README.md)固定`/hai-framework/`并直接消费人工usage文档，不提供业务后端或Docker入口。
-
-1. 修改本仓库：先读 [AGENTS.md](AGENTS.md)，按路径选择规范。
-2. 使用模块：下表选择一个 SKILL.md；仅在任务需要时读其相邻 reference.md/guide.md。
-3. `.agents/instructions/` 保存工具无关的仓库规范；`.agents/skills/` 面向仓库开发；`packages/cli/templates/skills/` 面向生成应用，CLI 复制完整 skill 目录到应用 `.agents/skills/`，不把仓库私有路径复制到应用。
-   Codex 原生读取 `AGENTS.md` 并发现 `.agents/skills/`，可用 `$hai-module-create` 等名称调用；规范按 AGENTS 的任务导航读取，不依赖 `applyTo`。Copilot 的 `.github` 指令仅桥接共享规则，OpenCode 直接引用 `AGENTS.md`。Claude Code 通过根 `CLAUDE.md` 的 `@AGENTS.md` 导入共享规则，并按导航读取同一份技能正文和参考。CLI 不生成 `.claude/` 技能副本；此模式不提供 Claude 原生技能自动发现或 `/skill` 命令。
-4. API 示例是使用片段，业务变量/schema 需结合当前应用补齐；先判断返回类型，再处理结果，不能猜测导出或初始化方式。
-
-5. 配置变量总表读取根 [.env.example](.env.example)；分环境加载与 CLI 模板入口读取 [环境配置与维护流程](README.md#配置与环境变量)。
-
-框架源码的文件族、固定入口例外与冗余清理依据见[22 包代码风格清单](.agents/instructions/module-conventions.md#文件族清单)。
-
-公开入口审查读取 [22 包实际 API 清单](scripts/generated/module-api-inventory.md)。package.exports、公开 barrel、内部文件分层；允许 selective/type-only/Svelte 默认组件及 client/server 条件入口。内置 Provider/Deps 不公开，PaymentProvider 与 AIStoreProvider 保留真实扩展契约；IAM 浏览器仅配置/类型/错误；UI 仅明确组件 barrel，Kit 无 vite 子路径。源码仓库构建后用 generate:api/check:api/test:api 验证，应用按已安装版本消费。
-
-配置化安全增强：IAM 的账号生命周期、密码/挑战/再认证、时段IP与会话策略见 [IAM参考](packages/cli/templates/skills/hai-iam/reference.md)；审计分类/脱敏/保留/私有备份/Reach告警见 [Audit](packages/audit/README.md)。admin-console/fullstack 的四类职责及基础成员由宿主配置，服务端限制跨职责授权；UI createSensitiveActions + ReauthenticationDialog 复用确认状态与界面，Kit/API client 注入认证动作；SDK options.context.reauthentication 只给本次敏感请求；会话轮换或证明失效时用本次 reauthorize 回调重新确认，取消不续发。不要将示例角色变成框架通用固定规则。
-
-轻量数据看板使用 UI 的 MetricCard / ReportCard / DashboardGrid；Chart 提供 grouped-bar、stacked-bar、stacked-area、donut、sparkline 预设，显式原生属性优先。图形按类型在客户端动态加载，SSR 和空数据不加载引擎。更多 LayerChart 图形可放入 ReportCard children，由应用显式依赖并按需加载原生组件，详见[图表与看板](packages/cli/templates/skills/hai-ui/charts.md)。
-
-## 生命周期与返回值
-
-后台页面复用 UI 的 WorkspaceLayout / FilterBar，标题在导航中只显示一次，列表统一卡片内查询栏、独立滚动表格、底部分页；多条件可收起并保留草稿，查询或 Enter 一次提交，重置清空条件，排序仅在后端支持的列头显示，IAM 用户 HTTP 列表支持 sortBy/sortDirection，翻页/排序沿用已提交条件；放大时顶栏可换行。theme.css 提供 high-contrast 高对比、formal 直角商务与 eye-care 暖绿护眼主题，默认模板可选择。查询/登录保留原生 Enter 提交及输入法边界，Button submitHint 只提供实际表单提示；主题菜单和弹窗须验证键盘与焦点恢复。详见 [UI](packages/cli/templates/skills/hai-ui/SKILL.md)。
-
-| 类别 | 契约 |
-| --- | --- |
-| reldb/cache/crypto/iam/ai/storage/vecdb/payment/reach/feedback/audit/scheduler/deploy/api-client/capacitor | 有状态模块，按各包 init → use → close；领域操作通常返回 HaiResult，getter/工厂/流另看签名 |
-| core | init 同步返回 void，无 close；工具直接返回值，配置 validate/load 等返回 HaiResult；浏览器不加载文件配置；Node core.access 编译可信代理与 IP/时间/路径策略，公共类型集中 core-types |
-| datapipe / kit / api-contract | 纯函数或契约定义，无 init/close |
-| serv | App 工厂，无 init/close；createApp 启动配置错误可抛出，依赖由应用管理 |
-| ui | Svelte 组件与工具，使用公开组件/样式入口 |
-| AI 流与显式抛错 API | AsyncIterable 迭代可能抛错；getOrThrow、客户端传输和框架控制流按各自签名处理 |
-
-返回 HaiResult 的业务操作先判断 success；不能把 Promise 完成或 HTTP 200 当成业务成功：
-
-```ts
-import { reldb } from '@h-ai/reldb'
-
-// 应用启动时已成功初始化 reldb；此片段位于 async 业务函数中。
-const result = await reldb.sql.query('SELECT id FROM users WHERE active = ?', [true])
-if (!result.success) return result
-return result
-```
-
-业务错误直接透传；内部 SDK 异常在公共边界转为 HaiResult。数据库 tx.wrap 是特殊回调边界：正常返回一律提交，即使返回失败 HaiResult；每步失败须抛错触发外层回滚。需保留原错误码时用 begin/rollback/commit。
-
-## 模块导航
-
-以下 skills 位于 CLI 模板源目录，可在生成应用中通过 `.agents/skills/<同名目录>/` 读取。
-
-生产部署先核对[22 包共享状态与恢复能力表](.agents/instructions/distributed-state.md)，使用共享后端并逐步检查初始化/关闭结果；NODE_ENV 或 HAI_CORE_ENV 为 production 时拒绝本地状态后端，只有明确 E2E 测试豁免。
-
-| 模块 | 选择依据与入口 | 关键边界 |
-| --- | --- | --- |
-| @h-ai/core | [配置、结果/错误、日志、i18n 与工具](packages/cli/templates/skills/hai-core/SKILL.md) | YAML/环境映射仅 Node；监听支持原子替换和删除重建，失败保留缓存；项目根 hai.json 的 build/deploy 由 CLI 读取；单项load失败记日志并继续，必需配置须validate检查success，目录扫描等异常仍可能传播；Core 无 close，多模块启动/清理由 module.createRuntime 管理；日志不执行自定义toJSON，类实例仅取自有可枚举数据属性；parallel非法并发拒绝RangeError；Node请求等待异步操作后仍保留自己的语言，显式locale优先 |
-| @h-ai/reldb | [SQL、DDL、CRUD、事务、分页](packages/cli/templates/skills/hai-reldb/SKILL.md) | 纯配置入口@h-ai/reldb/schemas仅Zod、无实例/驱动，可CLI/浏览器校验；SQLite/PostgreSQL/MySQL；动态值参数化；MySQL有界FIFO借用deadline/queueLimit，拒绝min/idleTimeout/timezone，URL优先且禁query/fragment；TLS严格对象默认校验证书链及DNS身份，IP验证拒绝；operationLog只输出安全数量摘要，不记录SQL原文/值/驱动错误；init失败清理候选，close返回HaiResult；清理失败保留待重试资源并停止业务操作；JSON.merge为三后端RFC7396对象补丁，PG参数化递归CTE单SQL提交，非应用读改写 |
-| @h-ai/vecdb | [向量集合与检索](packages/cli/templates/skills/hai-vecdb/SKILL.md) | LanceDB/pgvector/Qdrant/Chroma；pgvector 集合 metric 持久化于 vector 列注释，旧集合从实际索引恢复；LanceDB schema 持久维度/metric/id主键，原生 JSON metadata 顶层标量精确预过滤，insert 保留已有 ID、upsert 原子 merge；同名本地路径不自动跨节点共享；Qdrant 服务端 1.10.0+；Chroma 根端点/Bearer 网关认证，初始化验证数据权限；关闭失败保留清理所有权、旧操作停止服务、同一close可重试；内嵌Chroma确认直接子进程exit |
-| @h-ai/cache | [KV、Hash/List/Set/ZSet、锁](packages/cli/templates/skills/hai-cache/SKILL.md) | Memory 不跨节点；锁 owner 每次获锁唯一；release/extend 必须携带；Cluster 鉴权覆盖发现节点，URL 使用 URL 凭据；scan 使用可移交字符串游标遍历全部 master 并返回逻辑 key，mset/集合多键须同 slot；compareAndSwap 原子比较快照并更新值/TTL；init失败清理候选，close返回HaiResult；清理失败保留待重试资源并停止业务操作；SET 检查 success 与 boolean applied，过期选项显式校验 |
-| @h-ai/storage | [本地/S3、流式读写、checksum、预签名上传](packages/cli/templates/skills/hai-storage/SKILL.md) | S3 包含 MinIO/RustFS；prefix（HAI_STORAGE_PREFIX）限定对象键范围，启动探测和默认列表按目录前缀查询，凭据隔离由 S3 策略执行；publicEndpoint 仅用于浏览器签名，接受 HTTP(S) origin 及安全目录前缀，目录由网关去除以还原 S3 签名路径，未设仍用内部 endpoint/AWS 端点，publicUrl 不授权私有对象；自建 Compose 的 Web/gateway 桶路由直达 storage，大文件绕过 Serv，访问配置变化须全量，增量核对摘要并刷新代理 DNS，外部 S3/local 不生成本地桶路由；createBucket 默认false，启用后init仅在明确缺桶时创建，自建S3部署启用；deleteMany 按 1000 分批核对回执，失败进度在 error.ext.deleteMany；unknown 先核对后补偿；ifNoneMatch 原子拒覆盖；Node checksum 无需 init；预签名仅S3，local getUrl/putUrl返回UNSUPPORTED_OPERATION且publicUrl为null，浏览器先检查API success；Local list UTF-8排序、范围绑定无状态游标可跨实例续页，files/commonPrefixes共用maxKeys，仍扫描且非快照，游标不代替授权；init失败清理候选，close返回HaiResult；清理失败保留待重试资源并停止业务操作；跨端纯schemas统一1024 UTF8字节key/HTTP批删1000上限，签名1..604800整数，HTTP拒绝未实现contentLength等选项，Node流/checksum无默认端点；浏览器进度XHR预取消不发送、终态解绑监听，取消不等于远端对象回滚 |
-| @h-ai/datapipe | [文本清洗与分块](packages/cli/templates/skills/hai-datapipe/SKILL.md) | 不负责 embedding，无生命周期；分块保留源文，word按词其余codepoint，max含overlap，默认overlap0且小于max |
-| @h-ai/iam | [登录、会话、用户、RBAC](packages/cli/templates/skills/hai-iam/SKILL.md) | 服务端公开入口 iam.auth，verifyToken 读取当前状态/授权并拒绝读取失败；API Key scopes 收敛权限，受限 key 无角色授权；先初始化 reldb/cache；有效公开配置 await iam.getPublicConfig()，先检查 success；同步 iam.publicConfig 仅含文件快照；配置输入/解析输出与可信会话版本示例按真实入口校验，内部工厂不作为应用扩展入口；LDAP/Reach 可选；共享 DB + Redis，会话/refresh/索引在用户单键CAS中原子发布；token 为不透明字符串；session.update 必须传读取的 version，批量更新不覆盖后续登录代际；会话固有 maxAge 统一签发/刷新 expiresIn 与单调滑动时间；未启用额外期限时 refresh 独立于 access 到期；idleTimeout/absoluteTimeout 同时约束二者，maxSessions 与 singleDeviceMode 在共享CAS执行；账号状态/期限与自动休眠、可配置密码复杂度/首次或过期改密、失败窗口/锁定、可信IP/时段与单次再鉴别、邀请设密见 IAM skill；logout 对过期 access 仍原子撤销 refresh并传播缓存故障，HTTP撤销只认持有令牌，Kit/客户端不得吞失败；删除与轮换原子撤销二者；OTP单key CAS与密码重置DB代际条件提交；会话绑定credentialVersion，通知稳定幂等键与投递unknown边界；密码登录仅 identifier/password，AuthPanel 映射 username，表单不提供持久会话偏好，期限由服务端 session 配置决定 ；可选自托管 ALTCHA：createCaptcha/自动AuthPanel求解，交互入口用途绑定/共享Cache单次消费，APIKey豁免，默认关闭 |
-| @h-ai/reach | [邮件、短信、API 通知](packages/cli/templates/skills/hai-reach/SKILL.md) | DND delay 先初始化 reldb，持久化成功才返回 deferred/queueId；queue策略随消息保存、有限退避/超限dead，可信服务端list/requeueDead按版本恢复；API 默认拒绝重定向、生产敏感消息要求 HTTPS，空 2xx 回执成功、非空需有界 JSON；阿里云短信支持 `gateway` 和服务端 `gatewayHooks` 补充请求头、正文；API idempotent须接收端持久去重，非幂等在途不明结果unknown仅resolveUnknown人工裁定，禁止重排；真实发送遵循授权 |
-| @h-ai/feedback | [用户反馈、现场、管理员处理与离线包](packages/cli/templates/skills/hai-feedback/SKILL.md) | 可选启动独立失败/重试；按需截图/回放与 pause；共享日累计/存储预留、导出过期；先初始化 reldb/storage，通知独立选 disabled/console/reach；反馈、证据和任务入库，附件在私有 S3；范围来自可信服务端；处理/采集/通知独立；浏览器 /client 支持跨页截图，getView/比例标注/跨端保存由 SDK 管理，UI 可主动无声短录屏并查看脱敏材料；createFeedbackReview 统一回放分页、导出和 retryReport 失败任务重试；详情按需加载完整页面回放，/bundle 可断网校验/查询并播放录屏；回放不等同重新执行业务 |
-| @h-ai/ai | [LLM、Tools/MCP、RAG、记忆、图像、Audio、A2A、ACP](packages/cli/templates/skills/hai-ai/SKILL.md) | ACP 是 Node 端原生智能体/工作区/会话能力，见 [接入步骤](docs/usage/development/ai-acp.md) 与 [共享技能指南](packages/cli/templates/skills/hai-ai/acp.md)；模型复用 llm.models；agents/workspaces、模型/MCP/检索源支持配置只读与数据库 CRUD 合并，见 hai-ai/resources.md；repositoryId 选择已登记仓库作为启动与恢复目录；会话信息的 workspace 提供同节点预览路径，reclaimWorktree 定向回收已停止会话的干净工作树；gitEnvironmentRefs 仅供受管远程 Git，Agent 使用自身 environmentRefs；Git 发布仅受管隔离 worktree，进程停止后释放占用；tools/stream 无需 init；生产 Store 必须 shared（PostgreSQL/MySQL+网络vecdb），临时 Store 仅开发/测试；图片 URL 仅公网 HTTPS，下载/响应流有界且覆盖总超时；Context scope 必填、共享 CAS/存储端期限，跨节点读 reload，pending 按 turnId 幂等提交；flush报告后台HaiResult/异常并传播至save/reset(wait)/consolidate，同轮报告后确认且不重放；IndexTTS同版本Undici fetch/Agent；Knowledge 按 revision 原子发布，cleanupPending 须分页 repair；A2A共享journal支持跨节点订阅/真实owner取消/续接，日志失败不发布成功，查询984，失租标中断且不重放未知副作用；Knowledge分块失败在embedding/发布前返回错误，不绕过长度预算；MySQL并发初始化只接受1061后真实索引结构一致，DDL/权限失败阻止启动，待全部在途结束后逆序清理；Mem0生产核验实际持久Qdrant，列表/条件清理1000原始候选超限906且无部分删除，原地更新保留ID；/client仅独立createAudioClient，HTTP走api-client typed契约，无legacy字符串路径/SSE helper；JSDoc公开例从真实入口导入、内部例按模块作用域编译，check:jsdoc --package ai；SSE统一CRLF/LF/CR与UTF8跨片，保留data空白/多行/连接metadata，EOF不补事件，encoder非法metadata显式throw，退出取消释放正文且不重连重放 |
-| @h-ai/payment | [订单、回调、查单、退款](packages/cli/templates/skills/hai-payment/SKILL.md) | 创建矩阵仅微信jsapi（openid必填）/支付宝h5（returnUrl必填HTTPS，签名fields由浏览器POST固定网关、不解析HTML）/Stripe h5；公开TradeType仅jsapi/h5，其它组合联网前拒绝。 微信必填platformKeys按serial验签/轮换并限制签名时钟300秒，支付宝必填sellerId核对app/商户并严格北京时间；所有通知返回eventId/currency，应用事务持久去重+订单CAS+outbox，外部履约携稳定键幂等。支付宝查单/退款/关单校验业务码/envelope/字段/订单号，HTTP 200不代表成功，退款processing需渠道确认。Stripe仅h5托管Checkout、当前账户且拒绝Connect/context，successUrl必填/cancelUrl可选；主动关单需确认Session expired，已付款拒绝。先初始化共享reldb，持久化Session/PaymentIntent映射和稳定orderNo/refundNo幂等结果；未知结果超过23小时先核对渠道。completed/unpaid为pending，只有status=paid才履约且防乱序回退；浏览器/client调起不代表已付款；公开示例区分配置输入/输出和HaiResult/渠道状态，内部签名与幂等仓库不作深层导入 |
-| @h-ai/audit | [审计记录、查询、清理](packages/cli/templates/skills/hai-audit/SKILL.md) | 服务端，init等待DDL/仓库就绪才发布；数据库时钟统一写入/截止/告警窗口；事件 category/outcome/severity、关联上下文和事件时身份快照；可配置框架自动 capture 与成功读取，IAM/Serv/Kit 可信事件；显式 log 支持现有事务，回滚不残留成功事件；凭据始终隐藏，业务隐私默认可配置；list/统计分类过滤与受控排序；共享最低保留及数据库改删/覆盖保护，cleanup(0)不能绕过；迁移预检保留历史未知，close等待在途写入；可选私有流式 JSONL/SHA256 备份与稳定ID复用，schedulerPlan 由宿主装配 Scheduler；可配置分级阈值告警使用 Reach，已提交事件固定窗口/共享DB一次领取，未知通知不盲目重发，关闭排空且不接管存储；list 返回统一 PaginatedResult，直接使用规范化 page/pageSize |
-| @h-ai/scheduler | [定时/API/JS/Hook 任务](packages/cli/templates/skills/hai-scheduler/SKILL.md) | 任务定义刷新/注册/修改/删除在进程内按序提交、close 排空；强制共享RelDB journal/可续租任务槽，leaseMs代替lockExpireMs；cron/manual跨周期统一串行；idempotent仅声明接收端原子持久去重，过期未知保留槽，先停旧runner并核对副作用再execution.resolveUnknown按版本人工裁定；日志UUID固定、persistence独立于业务status，终态fence后投影；listLogFailures/repairLog幂等补写不重跑业务，未确认终态不投影成功；大载荷JSON；共享租约SQL内以DB执行时钟原子判期限，cron分钟身份取DB时间且默认UTC/显式IANA、不读节点TZ，节点±2h/真实行锁等待不能提前接管或迟到提交；JSDoc例区分公开入口/内部上下文、HaiResult/取消与void关闭，类型编译不代替真实分布式行为验证 |
-| @h-ai/crypto | [SM2/SM3/SM4、密码、transport](packages/cli/templates/skills/hai-crypto/SKILL.md) | password 仅 Node；SM4密钥用generateKey，不提供密码KDF；isValidSM2PublicKey纯验证编码/曲线点，握手先验再注册；DB registry失败可重试、事务共享maxClients、pruneExpired有界清理且不驱逐有效nonce；服务端显式注入serverKeyRing与共享keyStore，v2以SM2签名+Encrypt-then-HMAC绑定HTTP上下文/响应status，requestId兼nonce并由共享registry原子防重放，支持跨节点/重启/版本轮换；私钥仅Secret/私有环境；transport.maxPlaintextBytes默认1MiB且范围1KiB～64MiB，双向UTF-8明文；握手同步客户端，resolveTransportBodyLimits按 requiredPlaintextBytes 合并模块需要，显式上限不足拒绝、auto/省略才推导，密文/代理预算一致；超限TransportBodyTooLargeError(hai:crypto:070)，已认证时效错误TransportTimeError(hai:crypto:071)带服务器校验时间serverTime（Unix毫秒），前端显示UTC并提示校时；readTransportBody按UTF-8字节有界读取；客户端握手30秒超时 |
-| @h-ai/api-contract | [共享领域 HTTP contract](packages/cli/templates/skills/hai-api-contract/SKILL.md) | 业务路径唯一来源，不含服务端实现；公开转出路由声明推导所需的上游 builder/Schema 类型，独立 contract 包验证声明构建；AI completion 为非流式 JSON，拒绝 stream，完整 function JSON Schema/strict/tool_choice 按角色校验透传 |
-| @h-ai/serv | [procedures、HTTP App、OpenAPI、守卫](packages/cli/templates/skills/hai-serv/SKILL.md) | Node 自动提供 socket 对端，Fetch 显式 remoteAddress；http.trustedProxies 默认 auto（普通宿主忽略，受管私有 Compose 采用容器网段）；http.access 默认 false，支持全局/路径规则和启动一次读取的独立 YAML；普通中间件在解密/策略之后，提前返回仍加密；Hono 是内部实现；Storage feature 必须注入 authorize 资源策略，缺失时拒绝；AI feature 默认绑定认证用户，跨主体须显式 authorizeObject，补全仅非流式且完整透传工具/选择，不自动执行工具；transport必填受管serverKeyRing与共享keyStore；transport可设maxFutureSkewSeconds（默认30，0～300）和maxRequestAgeSeconds（默认300，1～600），单位秒；包括空正文的每个请求/响应均认证，GET/HEAD用X-Hai-Transport头，缺标记/篡改/重放拒绝；transport.maxPlaintextBytes支持正式配置并传入transport，客户端握手同步；安全预算独立，超限取消原流，请求413/响应500；JSDoc实际入口/内部上下文类型校验，工厂throw/领域HaiResult/listener关闭分界，toFetch仅签名适配且仍需Node依赖；toFetch统一RequestInit覆盖/正文校验，取消传signal并结束等待/清迟到响应，不撤回外部效果 |
-| @h-ai/kit | [SvelteKit hooks、guard、validate、response](packages/cli/templates/skills/hai-kit/SKILL.md) | 仅 SvelteKit 集成，不替代共享 HTTP contract；服务端transport对象必填serverKeyRing/keyStore，私钥不进公开_kit.yml/浏览器；transport可设maxFutureSkewSeconds（默认30，0～300）和maxRequestAgeSeconds（默认300，1～600），单位秒；v2完整性/上下文绑定及共享原子防重放，空请求/响应也认证，无降级开关；共享UTF-8预算，超限取消原流，请求413/响应500；i18n.runWithLocale包裹SSR resolve；限流必须显式原子store，共享Redis CAS固定窗口，生产禁止隐式内存/非原子回退，故障503；开发 memory 限流无定时器且容量有界，外部 store 由调用者管理 |
-| @h-ai/api-client | [typed API、Token、自动刷新](packages/cli/templates/skills/hai-api-client/SKILL.md) | Cookie/transport 与服务端一致；退出/换账号用 auth.clear/setTokens 使在途刷新失效；close 废弃旧刷新并等待存储写入，JSON 正文也受 timeout 限制，自定义流保持按需读取并支持 signal 取消，异步存储串行提交；SSR 避免共享用户状态；默认 AI completion 无 stream，工具调用结果由业务授权执行后按 tool_call_id 回传 |
-| @h-ai/capacitor | [原生设备、推送、安全存储与 Android 打包](packages/cli/templates/skills/hai-capacitor/SKILL.md) | Web 与 Android/iOS 能力不同；TokenStorage 平台/存储失败拒绝Promise，clear立即屏蔽本实例旧凭据并传播删除失败；跨重启撤销依赖服务端；push 设置阶段30秒、可取消、close回收含迟到句柄，cleanup/close返回HaiResult并保留失败句柄重试；包内 `images/android.Dockerfile` 提供 Android SDK 36 构建环境 |
-| @h-ai/deploy | [使用与离线部署](packages/deploy/README.md)、[部署与基础设施](packages/cli/templates/skills/hai-deploy/SKILL.md)、[环境与中间件](packages/cli/templates/skills/hai-deploy/middleware.md) | 根hai.json的build/deploy统一项目配置，部署支持SSH密钥/密码及HAI_DEPLOY分层覆盖，Core与部署共用模式私有/共享私有/模式公共等来源顺序，同源细项覆盖JSON，离线target只引用passwordEnv、不含SSH密码；先选环境，核对Provider、工具链和发布授权；build按images/独立Dockerfile选择serv/web镜像，app/desktop只交付原生包；镜像和容器身份共用根package.json.name归一化规则。制品格式4/5记录primaryService/hasWeb，非根目录用格式5及webBasePath，所有部分构建保持同一PUBLIC_BASE_PATH，目录变化必须全量；deploy --build可串联构建，完整离线包自动包含中间件，--services增量更新，--bundle-only在打包前最后可保存修改SSH并按环境复用，单一交付目录仅含tar/target/入口/说明，清单与运行配置只在tar内；服务器deploy-local.sh自动解包，单独传输归档时按包内APPLY.txt手工执行apply.sh，manifest.partial/selectedServices固定模式，新部署包格式2，应用配置统一config/.env.runtime，内部资产集中.hai/，manifest合并非敏感元数据；Compose网络hai-app无锚点；测试产物自动清理；Linux flock固定锁及继承FD子命令退出后释放；命令跨块脱敏/背压/有界捕获，异常后核验本地Job/进程组退出；getDeployCommandState分离本地终止与远端unknown/匹配终态finished，未知不自动重跑或回滚；persistent-backends长期保存实际卷家族与服务器引擎身份，移除/失败不清空，缺活动卷拒绝空库自愈；旧凭据用importDeploymentSecrets / hai deploy-secrets只读预检及显式导入v2状态，核验项目/卷/实际凭据并在部署flock内原子0600保存；未认领卷须v2精确项目/组/卷与唯一running原容器的真实Compose角色标签、Mounts、Image家族共同补证，不覆盖known ledger或daemon冲突；导入不建立current，缺成功基线首次必须当前CLI新ID完整全量，之后才可增量；此流程不恢复数据库数据或转换格式 |
-可选HTTPS统一支持已有PEM证书/私钥复制交付，或官方Certbot单域名HTTP-01申请与续期（公网域名、80端口、CA网络及条款确认），见[HTTPS](docs/usage/configuration/delivery.md#可选https证书)。计划root为工程根、serviceDir为服务源码/配置目录。Node后端默认启动时重读发布.env.runtime，修改后restart生效；无新开关/override，静态Web及中间件不变，托管连接优先，长期修改同步源环境，见[配置重载](docs/usage/configuration/runtime.md#部署后重启加载运行配置)。镜像target=image，默认两项并行（--concurrency 1可串行），安装层和按内容验证的中间件归档缓存复用。默认tar.gz，README仅外层，成功清理本次incoming，release不复制镜像归档。Vercel与云开通保留。
-| @h-ai/ui | [组件、主题、移动适配、AI 内容](packages/cli/templates/skills/hai-ui/SKILL.md) | WorkspaceLayout 统一紧凑工作区与单一导航标题；FilterBar/CrudFilterBar 收起保留条件，activeCount/onreset 接入业务；操作成功和失败提示（含认证/改密/CRUD/上传）由 UI toast/notify/useToastFeedback 与根布局单一 ToastContainer 提供，所有警告/错误经 Toast；字段只保留错误标记、aria-invalid、读屏关联及恢复动作；默认右下角、六方位、主题语义色区分提示/成功/警告/错误、自动/手工关闭、FIFO 逐条展示且展示后计时；info/success 持续说明保留页面内，不重复渲染字段错误段落；表单 Form/FormLayout 支持 columns、labelPosition、自动/显式 colSpan；控件与 CRUD 失焦校验、修正即时更新，错误随 UI 语言更新；认证使用 AuthPanel + IAM 公开配置、Markdown/URL 协议弹窗和表单 snippet；标准客户端的已认证校时错误显示服务器 UTC 时间；components 公开入口与轻量 /theme、/i18n、/toast；SSR locale store/setter 不写全局语言，由 Node 请求上下文供消息读取；Tailwind 扫描路径须正确；locale遍历全部浏览器候选后回退，区域匹配返回支持列表代码，SSR不写全局 |
-| @h-ai/ui/guide | [新手引导与帮助中心](packages/cli/templates/skills/hai-ui/guide.md) | createGuide + GuideHost；局部错误边界释放辅助遮罩；首次 Cookie 提示、手动重看、宿主导航与 data-guide；业务翻译延迟求值、显式 locale、按用户和版本记录；fullstack Web/App/Desktop 默认接入 |
-| @h-ai/cli | [安装、创建、添加模块、生成与脚手架验证](packages/cli/README.md#安装-cli) | 部署保存前按真实DB Schema校验TLS，内联纯schema/Zod无需应用数据库依赖、部署仍需可解析@h-ai/deploy；先 `pnpm add -g @h-ai/cli@beta`，再执行 `hai`；PowerShell 使用 `pnpm.cmd`，以已安装 CLI 的 `--help` 和模板为准；生成框架依赖固定为 CLI 对应版本，安装失败展示命令和原始输出；独立 mobile 选 IAM/crypto 时默认加密 typed client，明文模式须与 API 明确匹配，握手失败不降级；hai build --target image --json 返回本次制品路径、Git 来源、实际镜像平台和归档摘要 |
-
-## 任务导航
-
-认证提示由 UI 的公开 `authErrorMessage` 统一映射：凭据错误合并、未知异常隐藏、traceId 保留，首次改密/密码复用 034/会话上限提供操作指引；确认密码按原始字符串比较。详见 [IAM](packages/cli/templates/skills/hai-iam/SKILL.md) 与 [UI](packages/cli/templates/skills/hai-ui/SKILL.md)。
+## 按任务读取
 
 | 任务 | 入口 |
 | --- | --- |
-| 仓库新增/审查模块 | [hai-module-create](.agents/skills/hai-module-create/SKILL.md) / [hai-module-review](.agents/skills/hai-module-review/SKILL.md) |
-| 仓库新增/审查应用 | [hai-app-create](.agents/skills/hai-app-create/SKILL.md) / [hai-app-review](.agents/skills/hai-app-review/SKILL.md) |
-| 仓库 AI / IAM / reldb / UI 用法 | [AI](.agents/skills/hai-ai/SKILL.md) / [IAM](.agents/skills/hai-iam/SKILL.md) / [reldb](.agents/skills/hai-reldb/SKILL.md) / [UI](.agents/skills/hai-ui/SKILL.md) |
-| 生成应用架构/构建 | [hai-build](packages/cli/templates/skills/hai-build/SKILL.md) |
-| 需求/设计文档与 AI 生成准备审查 | [hai-spec-review](packages/cli/templates/skills/hai-spec-review/SKILL.md)，以用户指定业务文档为基线检查完备性、歧义、技术正确性与命名一致性；模板差异列为适配项，真实问题未解决不判定可生成 |
-| 文档驱动的任务规划、实施、返修与变更同步 | [hai-spec-implement](packages/cli/templates/skills/hai-spec-implement/SKILL.md)，维护任务与已验收 Git 基线；文档提交后比较固定快照，更新/新增任务，独立分支 TDD、验证、合并，整体验收后推进基线；返修保留原任务与历史 |
-| 生成应用新增/修改/修复功能 | [hai-app-create](packages/cli/templates/skills/hai-app-create/SKILL.md)，先读 [能力选择与安全质量规则](packages/cli/templates/skills/hai-app-create/development.md)；按实际版本/目标端复用适用功能和配置 |
-| Fullstack 默认管理后台与验证 | [CLI 用法](packages/cli/README.md#fullstack-mini-管理后台)；创建时分别在 `.env.dev.local/.env.test.local/.env.prod.local` 生成不同随机初始管理员密码及 transport ring，私有文件不提交Git，克隆后通过受保护配置分发；默认 pretty 日志并安装 pino-pretty；Web/App/Desktop 共享管理界面、typed client，使用 IAM 默认认证 procedures 和 UI 公开主题子路径，保留应用业务守卫 |
-| 生成应用审查/测试 | [hai-app-review](packages/cli/templates/skills/hai-app-review/SKILL.md) / [hai-app-tests](packages/cli/templates/skills/hai-app-tests/SKILL.md) |
-| CI / PR 审查 | [hai-ci](packages/cli/templates/skills/hai-ci/SKILL.md) / [hai-pr-review](packages/cli/templates/skills/hai-pr-review/SKILL.md) |
-| 框架升级到最新/指定版本、差异分析与 skills 同步 | [hai-framework-sync](packages/cli/templates/skills/hai-framework-sync/SKILL.md)，优先复用目标版能力并清理冗余，提前提示配置与关键流程变更，涉及补丁时由用户选择 |
+| 修改或审查本仓库 | [AGENTS.md](AGENTS.md)，再按路径读取工作规范与专属规范 |
+| 应用首次接入或配置 | [使用指南](docs/usage/README.md)、[六类阅读路线](docs/usage/overview/reading-paths.md)、[配置手册](docs/usage/configuration/README.md) |
+| 新增或修改应用 | [hai-app-create](.agents/skills/hai-app-create/SKILL.md)；现有业务由用户需求决定，模板不是固定限制 |
+| 应用代码或界面审查 | [hai-app-review](.agents/skills/hai-app-review/SKILL.md)、[hai-ui-review](.agents/skills/hai-ui-review/SKILL.md) |
+| 创建或审查框架模块 | [hai-module-create](.agents/skills/hai-module-create/SKILL.md)、[hai-module-review](.agents/skills/hai-module-review/SKILL.md) |
+| 需求/设计审查与文档驱动实施 | [hai-spec-review](.agents/skills/hai-spec-review/SKILL.md)、[hai-spec-implement](.agents/skills/hai-spec-implement/SKILL.md) |
+| 测试、CI 与证据 | [hai-app-tests](.agents/skills/hai-app-tests/SKILL.md)、[CI 分层与结果复用](docs/ci.md) |
+| UI 设计与组件实现 | [hai-ui-design](.agents/skills/hai-ui-design/SKILL.md)、[hai-ui](.agents/skills/hai-ui/SKILL.md)、[仓库设计约定](.agents/instructions/ui-design.md) |
+| 版本升级、差异与技能同步 | [hai-framework-sync](packages/cli/templates/skills/hai-framework-sync/SKILL.md)；在线固定目标及各包实际发布产物，不预填“当前最新版本” |
+| 结构、配置、核心流程或边界变化 | [hai-change-plan](.agents/skills/hai-change-plan/SKILL.md)，沿当前会话已确认的方案与授权执行 |
 
-## 配置与依赖
+## 模块导航
 
-构建与部署的日期统一为构建机本地 `YYYYMMDD-HHmmss`，构建目录以 `build-<工程>-<目标>` 开头、版本结尾，部署保留 bundle 命名；原生归档文件包含工程、平台、架构（Desktop）、类型和版本。latest 指向批次目录，旧制品仍可读取，见[统一命名](docs/usage/getting-started/build.md#统一命名)。
+下表指向生成应用也会交付的使用正文。仓库私有规范位于 .agents/instructions；仓库 skill 的公共使用契约通过相对转引共用模板正文。模块已交付 skill 不等于已安装或启用，接入时核对实际依赖与配置。
 
-原生 App/Desktop 的名称统一复用 `_core.yml.name` 与 `HAI_CORE_NAME`。Fullstack 使用根环境文件和 serv YAML。父级 `HAI_CORE` JSON 替换 YAML，省略 `name` 且没有生效的 `HAI_CORE_NAME` 时使用 Core 默认名。Desktop 通过生成的 `pnpm tauri` 入口设置产品名和窗口标题。原生名称模式与已有 Capacitor 平台的迁移见[原生应用名称](docs/usage/getting-started/build.md#原生应用名称)。
+| 模块 | 按需入口 |
+| --- | --- |
+| @h-ai/core | [配置、结果/错误、日志、i18n 与工具](packages/cli/templates/skills/hai-core/SKILL.md) |
+| @h-ai/reldb | [SQL、DDL、CRUD、事务、分页](packages/cli/templates/skills/hai-reldb/SKILL.md) |
+| @h-ai/vecdb | [向量集合与检索](packages/cli/templates/skills/hai-vecdb/SKILL.md) |
+| @h-ai/cache | [KV、Hash/List/Set/ZSet、锁](packages/cli/templates/skills/hai-cache/SKILL.md) |
+| @h-ai/storage | [本地/S3、流式读写、checksum、预签名上传](packages/cli/templates/skills/hai-storage/SKILL.md) |
+| @h-ai/datapipe | [文本清洗与分块](packages/cli/templates/skills/hai-datapipe/SKILL.md) |
+| @h-ai/iam | [登录、会话、用户、RBAC](packages/cli/templates/skills/hai-iam/SKILL.md) |
+| @h-ai/reach | [邮件、短信、API 通知](packages/cli/templates/skills/hai-reach/SKILL.md) |
+| @h-ai/feedback | [用户反馈、现场、管理员处理与离线包](packages/cli/templates/skills/hai-feedback/SKILL.md) |
+| @h-ai/ai | [LLM、Tools/MCP、RAG、记忆、图像、Audio、A2A、ACP](packages/cli/templates/skills/hai-ai/SKILL.md) |
+| @h-ai/payment | [订单、回调、查单、退款](packages/cli/templates/skills/hai-payment/SKILL.md) |
+| @h-ai/audit | [审计记录、查询、清理](packages/cli/templates/skills/hai-audit/SKILL.md) |
+| @h-ai/scheduler | [定时/API/JS/Hook 任务](packages/cli/templates/skills/hai-scheduler/SKILL.md) |
+| @h-ai/crypto | [SM2/SM3/SM4、密码、transport](packages/cli/templates/skills/hai-crypto/SKILL.md) |
+| @h-ai/api-contract | [共享领域 HTTP contract](packages/cli/templates/skills/hai-api-contract/SKILL.md) |
+| @h-ai/serv | [procedures、HTTP App、OpenAPI、守卫、ServFunctions 公开类型](packages/cli/templates/skills/hai-serv/SKILL.md) |
+| @h-ai/kit | [SvelteKit hooks、guard、validate、response、服务端/浏览器命名空间类型](packages/cli/templates/skills/hai-kit/SKILL.md) |
+| @h-ai/api-client | [typed API、Token、自动刷新](packages/cli/templates/skills/hai-api-client/SKILL.md) |
+| @h-ai/capacitor | [原生设备、推送、安全存储与 Android 打包](packages/cli/templates/skills/hai-capacitor/SKILL.md) |
+| @h-ai/deploy | [使用与离线部署](packages/deploy/README.md)、[部署与基础设施](packages/cli/templates/skills/hai-deploy/SKILL.md)、[环境与中间件](packages/cli/templates/skills/hai-deploy/middleware.md) |
+| @h-ai/ui | [组件、主题、移动适配、AI 内容](packages/cli/templates/skills/hai-ui/SKILL.md) |
+| @h-ai/ui/guide | [新手引导与帮助中心](packages/cli/templates/skills/hai-ui/guide.md) |
+| @h-ai/cli | [安装、创建、添加模块、生成与脚手架验证](packages/cli/README.md#安装-cli) |
 
-打包下载用 `--image-source` / `--npm-source` 选择 official/cn/custom，项目默认在 `hai.json.build.sources`，参数只覆盖本次；cn 使用毫秒镜像（Docker Hub/GHCR）及 npmmirror。代理用 `build.proxy` 与 `--proxy-mode inherit|system|custom|none`；Docker/远程 Podman 拉取需引擎自身代理，构建容器单独检查。旧 Dockerfile 同步 HAI_NODE_IMAGE / HAI_NGINX_IMAGE / HAI_NPM_REGISTRY；SDK DeployAppOptions.imageSource/proxy 与 resolveImageReference/resolveDownloadProxy 契约见[下载源和代理](docs/usage/configuration/delivery.md#下载源和代理)。
+有生命周期的模块按实际依赖 init → use → close 并逐步检查结果；core、serv、kit、datapipe、api-contract、ui 不套用该约定。HaiResult 先检查 success，工厂、流与显式抛错按真实签名。完整边界见各模块正文，不根据导航摘要推断 API。
 
-- Node 配置：`core.init({ configDir: './config' })` 加载 YAML；例如 `_db.yml` 注册为 `db`。使用模块 Schema 校验结果后传给 init；依赖按顺序初始化并检查 success，失败清理已创建资源。
-- CLI 所有项目忽略 `**/data/`（含嵌套 workspace 和 `.gitkeep`）。Fullstack 为各模块生成 YAML（包含 _feedback.yml），构建部署配置位于项目根 hai.json；默认部署名取工程根 package.json.name（缺失或无效时报错）并附加显式环境，扫描服务目录不参与命名，旧 app 命名资源须单独迁移并建立完整部署基线。未使用模块及可选字段用注释保留；先安装、校验、初始化模块并接入业务，再按需取消注释，存在文件不代表模块已启用。详细步骤见 [CLI 配置说明](packages/cli/README.md#应用配置与显示)。
-- `hai generate` 按实际应用选择 SvelteKit 文件路由或 serv 共享 contract/procedure；多应用用 `--workspace` 指定包名或相对路径。纯 Vite 不生成假文件路由；serv 只更新模板标注的既有聚合入口，未知结构明确拒绝。提示/校验/结果复用中英日消息，初始语言按 `HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` 选择，省略参数时交互输入，取消不写文件。详见 [CLI 代码生成](packages/cli/README.md#已有项目与代码生成)。 `create` / `add` / `init` 的选择目录、校验与完成提示使用同一 CLI locale；终端语言不改目标应用默认语言与中文工程说明。
-- `HAI_<配置名>_<YAML路径>` 可整体覆盖 YAML 根/对象/数组或具体叶子项；层级用 `_`，camelCase 不拆词。例如 `llm.apiKey` → `HAI_AI_LLM_APIKEY`，`llm.models[0].temperature` → `HAI_AI_LLM_MODELS_0_TEMPERATURE`。
-- Core、构建和部署共用配置规则：进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML；同源父 JSON 为基础，细项继续覆盖，高来源整段替换清掉低来源细项。宿主用 `configSchemas` 显式提供模块结构，模块仍负责业务校验。生成器优先细项，数组、动态字典和显式空对象保留含义，JSON 排在对应模块细项之前。服务器应用配置统一为 `config/.env.runtime`，部署内部文件位于 `.hai/`，详见[部署环境契约](packages/cli/templates/skills/hai-deploy/middleware.md)。
-- 密钥不写死、不进入日志或 PUBLIC_/VITE_ 客户端变量。日志英文，代码注释中文，用户文案同步 i18n。
-- AI 持久化：先初始化 reldb + vecdb，或给 ai.init 提供 storeProvider；否则临时 Store 在关闭/退出后丢失。按 objectId/sessionId 隔离，模型/检索内容不作为工具授权。
-- 每次请求的路径/IP/时间限制、接口 required/disabled 加密模式、独立 YAML、真实 IP 与策略部署见[共享请求访问约定](packages/cli/templates/skills/hai-core/request-access.md)。Core 通过 core.access 注册调用，公开类型集中 core-types，浏览器无服务端执行实现。Kit 完整配置留在服务端，只投影公开 transport；模式冲突或缺少必需加密装配须拒绝创建宿主。
-- 浏览器公共 HTTP API：api-contract → serv → api-client；同源 SvelteKit 可用 kit。内置 Token 存储仅 Cookie/页面内存，原生 App 注入平台安全 TokenStorage；禁止凭据持久化到 Web Storage。
-- SvelteKit 子目录加密的服务端 `crypto.transport.basePath`、浏览器安装器 `deps.basePath` 和独立 Kit client 的 `transport.basePath` 均取宿主 `$app/paths.base`，默认空字符串为域名根目录；交换/排除/容量路径仍为完整请求路径。验证前缀 API 的实际加密头和普通请求拒绝，不能仅凭登录成功判断协议覆盖。
+## 配置、运行与交付
 
-## 源码定位与验证
+- [环境文件与运行配置](docs/usage/configuration/runtime.md)、[变量清单](.env.example)：Core 与部署同源先父 JSON 后细项，高来源父对象清除低来源细项；秘密不得进入公开变量或浏览器。
+- [HTTP、Cookie 与访问控制](docs/usage/configuration/http.md)：生产 HTTP 入口的 Secure 刷新 Cookie、可信代理、CORS 和文档授权按实际后端配置处理。
+- [业务开发](docs/usage/development/README.md)、[ACP 接入](docs/usage/development/ai-acp.md)：按模块现有入口接入，授权与资源归属由可信服务端落实。
+- [构建与浏览器要求](docs/usage/getting-started/build.md)、[部署与原生交付](docs/usage/configuration/delivery.md)、[部署运维](docs/usage/operations/deployment.md)：版本、构建 ID、目录、静态托管、产物与实际运行结果分别核验。
+- [共享状态与恢复边界](.agents/instructions/distributed-state.md)：核对每个模块真实后端与失败处理，不把数据库连接或锁本身当作一致性保证。
+- [公开 API 清单](scripts/generated/module-api-inventory.md)、[模块规范](.agents/instructions/module-conventions.md)：从公开入口使用真实类型，内部实现不能作为消费者扩展入口。
 
-`packages/<module>/package.json` 的 exports 确定入口；`src/*-types.ts`、`*-config.ts` 和公共实现确定签名、Schema 与错误码。错误由 `buildHaiErrorsDef` 生成 `hai:<namespace>:<三位码>`，不要自行猜数字或把错误定义对象当 code 字符串。
+## AI 工具入口与文档维护
 
-按 [工作规范](.agents/instructions/workspace.md#验证与交付) 分轮验证：先脚本化收集可执行门禁与日志，汇总问题后集中修复，再验证失败及受影响项；普通失败不立即从头重跑。优先定向运行 `pnpm --filter <workspace> typecheck/lint/build/test`，UI/路由加相应 E2E。根 lint 包含 check:skills；CLI 模板交付用 `pnpm --filter @h-ai/cli test:scaffold-gates`。未运行、mock、真实外部服务和实际部署的结果必须分别报告。
+Codex 从根 AGENTS.md 及 .agents/skills 发现指引；Claude 的 [CLAUDE.md](CLAUDE.md) 引入同一入口；[Copilot 入口](.github/copilot-instructions.md) 与路径规则桥接共享规范；[OpenCode 配置](opencode.json) 引用 AGENTS.md。这提供可发现指引，不保证模型执行结果，必须核对行为与证据。
 
-浏览器测试经托管 test:e2e 入口装配绝对数据目录、完整测试后端及可信 transport ring，服务子进程隔离 ambient 模块变量与用户 .env.local；普通开发/生产 dotenv 和共享后端守卫不放宽。
+CLI 复制兼容 skill 的完整目录到生成应用 .agents/skills，并选择适合其架构的 AGENTS；公共规则在 [生成应用共同规则](packages/cli/templates/skills/hai-app-create/project.md) 维护。升级合并时保留有效私有规则，不覆盖用户定制。
 
-## 前端设计与工作交接
+README 入口：[简体中文](README.md) · [English](README.en.md) · [日本語](README.ja.md)。使用指南入口：[简体中文](docs/usage/README.md) · [English](docs/usage/README.en.md) · [日本語](docs/usage/README.ja.md)。修改同一公开用法时同步相关语言、配置、skills、调用方和测试；README 许可证唯一且最后。官网 [framework-website](apps/framework-website/README.md) 直接消费 docs/usage 人工正文与 [navigation.json](docs/usage/navigation.json)，不维护第二份 Pages 文档。
 
-- [hai-ui-design](packages/cli/templates/skills/hai-ui-design/SKILL.md)：页面任务、信息结构、状态、设计约定和真实组件映射。
-- [hai-ui-review](packages/cli/templates/skills/hai-ui-review/SKILL.md)：真实页面的交互、布局、语言/主题、可访问性和恢复验收。
-- [工作交接](packages/cli/templates/skills/hai-spec-implement/handoff.md)、[差异审查](packages/cli/templates/skills/hai-app-review/differential.md)、[行为回放](packages/cli/templates/skills/hai-spec-implement/evaluation.md)。
-- [界面设计约定与示例](.agents/instructions/ui-design.md)。技能目录与 name 一致；仓库和生成应用采用相同领域命名。
-
-- 宿主顺序与失败清理用 core.module.createRuntime；配置失败保留字段、底层错误码和处理建议，必需环境变量缺失用 HaiConfigError.CONFIG_ENV_VAR_MISSING + ext.fields 标识。框架表迁移由模块 migrateIam/migrateReach/migrateScheduler/migrateAudit 预检及初始化负责，先备份停旧写入，MySQL DDL 可重入、旧凭据会话重新登录。
-- 凭据 Reach 通知使用 sensitive/expiresAt/idempotencyKey，只留元数据回执，无明文/延迟重投。feedback.budget 为采集、附件总量、传输和离线包的共同来源；新工程通知默认 console 且 consoleContent 默认 metadata；摘要需显式开启。feedback.init(config, { collectEvidence }) 在持久采集任务中 await 业务 text/data/附件（含 ZIP/GZIP），遵守超时、脱敏和共享预算；webhookUrl 独立启用采集终态后的 feedback.created，持久重试、固定载荷、eventId 去重及可选 HMAC 签名，状态见 get().jobs，管理员 retry target: webhook。
-- hai upgrade <精确版本> 只读核对全发布与本地漂移；hai deploy --env prod --plan 只读部署计划，未检查远端基线不得声称成功；App 安装包使用 hai build --target app --platform android|ios，Android 可指定 --runtime auto 容器打包。App 和桌面支持 --debug，并按平台、构建类型和批次归档到 .hai/build/app/ 与 .hai/build/desktop/。
-- Docker/Podman 容器主机名映射用 `hai.json` 的 `deploy.container.compose.services.<serv 或 web>.extra_hosts`。打包校验，按选中服务更新，失败恢复使用旧映射。见[容器主机名映射](docs/usage/configuration/delivery.md#为容器设置主机名映射)。
-- `hai deploy` 自定义 PostgreSQL、MySQL、Redis 和 pgvector 时先选 URL 或分字段，终端只显示脱敏后的连接地址。S3 的 API `endpoint` 和 `bucket` 分开填写，配置错误会指出相应字段或文件。填写示例见[连接已有中间件](docs/usage/configuration/delivery.md#连接已有数据库缓存和对象存储)。
-
-- 部署归档 `APPLY.txt` 和外层 `README.txt` 提供文件索引、环境优先级和实际归档变量名。归档 `config/.env.runtime` 是发布输入，部署根同名文件是当前运行配置，release 同名文件是历史记录。外部 PostgreSQL 凭据随包交付，随包中间件复用服务器受管凭据。见[部署与运维](docs/usage/operations/deployment.md#修改运行配置后重启)。
-
-错误提示与日志：core.error.toPublic/formatMessage 区分安全 i18n 消息与内部诊断，默认只显示可读说明；traceId 在 ToastContainer 排查图标展开后查看和复制，并与前后端日志 requestId 关联；README 许可证唯一且最后，运行 pnpm check:readme。
-
-- 可选页面离开策略：`session.endOnPageHide` 默认 false；认证动作 `bindPageExit` 返回清理函数，关闭请求使用 `/auth/session/close`，不清除新登录 Cookie，浏览器仅尽力送达，配合服务端期限。
-
-- 安全交互复用 UI createSensitiveActions / SensitiveOperationsForm / createSessionRecovery / SessionRecoveryDialog；IAM getPublicConfig 合并文件与权限数据库的敏感操作，主体恢复限定 expectedUserId，终端配额 terminalLimits 与全局会话上限同一 CAS 执行。临时 fullstack+web+feedback 验证工程不属于框架模块，不提交 Git。
-
-- IAM 热路径使用共享代际缓存；写前登记、提交/回滚后失效，外部事务与未知提交保持安全回源。业务传输容量与反馈材料的 routePlaintextBytes 分离，代理/握手只使用路由最大值；大/小请求独立准入，503 不自动重放写入。
+协作与同步按 [collaboration.md](packages/cli/templates/skills/hai-app-create/collaboration.md)，工作交接按 [handoff.md](packages/cli/templates/skills/hai-spec-implement/handoff.md)，多项门禁按 [validation.md](packages/cli/templates/skills/hai-app-tests/validation.md)。引用检查运行 pnpm check:skills，API/配置/文档示例按改动选择相应检查；结构检查不能代替实际行为验收。

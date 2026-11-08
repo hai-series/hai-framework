@@ -1,5 +1,5 @@
 ---
-applyTo: "**/*.svelte"
+applyTo: "**/*.svelte,**/*.svelte.hbs"
 ---
 
 # Copilot 路径指引

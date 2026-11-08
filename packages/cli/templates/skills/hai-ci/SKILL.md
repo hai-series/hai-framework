@@ -79,6 +79,7 @@ lint/typecheck 只能执行已配置的规则。新增开发规范时区分可�
 - [ ] 使用 `concurrency` 取消同分支旧任务
 - [ ] 不在 CI 日志打印 token、cookie、连接串、`.env` 内容
 - [ ] release workflow 独立提权，只在 main/tag/manual 触发
+- [ ] 自动推进默认发布标签时核对实际来源顺序；互斥锁不保证旧 CI 先完成，迟到版本不能回退默认标签，人工回退使用显式入口
 - [ ] 失败日志可定位，不吞错、不 `|| true` 掩盖核心质量门禁
 
 ## Secret scan 策略

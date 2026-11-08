@@ -341,6 +341,8 @@ class UserRepository extends BaseReldbCrudRepository<User> {
 
 ### 事务 — `reldb.tx`
 
+一个事务只允许一个结束操作。`commit()` 或 `rollback()` 开始后，新查询、重复提交和并发回滚立即返回 TRANSACTION_FAILED；连接只归还一次。调用方仍须等待首次结束结果，不能把并发结束当作故障恢复。
+
 ```typescript
 // 方式1：wrap（自动 commit/rollback）
 const result = await reldb.tx.wrap(async (tx) => {
@@ -497,6 +499,8 @@ const result = await reldb.tx.wrap(async (tx) => {
 - `hai-cache`：缓存穿透保护中配合 reldb 使用
 
 ## 生产共享状态
+
+应用自己的表迁移使用 `reldb.schemaColumns(table, sql?)` 读取真实列，使用 `reldb.migrateSchema(module, steps, options?)` 执行版本步骤；两者属于已初始化实例，不另传 reldb 句柄。`dryRun: true` 不写账本，失败不推进版本；MySQL DDL 必须可重入。框架表由各模块迁移入口维护，应用不要直接修改。
 
 生产仅使用 PostgreSQL/MySQL；SQLite（含磁盘文件）只用于开发/明确测试，不能作为跨主机共享状态。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化成功前检查，只有 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试豁免。不要将租约当作最终写入条件，外部未知效果须按稳定业务键核对。
 

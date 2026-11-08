@@ -136,7 +136,7 @@ describe('article persistence', () => {
 ### Schema 校验测试模板
 
 ```typescript
-import { CreateUserSchema } from '$lib/server/schemas/user'
+import { CreateUserSchema } from '#lib/server/schemas/user.js'
 // tests/schemas/user-schema.test.ts
 import { describe, expect, it } from 'vitest'
 

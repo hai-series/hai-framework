@@ -10,7 +10,7 @@
 <script lang='ts'>
   import { createGuide, GuideHost } from '@h-ai/ui/guide'
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
-  import * as m from '$lib/paraglide/messages.js'
+  import * as m from '#lib/paraglide/messages.js'
 
   const guide = createGuide({
     nav: createSvelteKitNavAdapter(),

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { checkSkillContracts } from '../check-skill-contracts.mjs'
+import { checkSkillContracts, checkTemplateEntrypoints } from '../check-skill-contracts.mjs'
 
 const roots = []
 const contract = `---
@@ -36,10 +36,22 @@ async function createSkill() {
 
 describe('skill reference delivery contract', () => {
   it.each([
-    ['invalid YAML', contract.replace('name: hai-sample', 'An instruction accidentally inserted here.\nname: hai-sample')],
-    ['duplicate keys', contract.replace('name: hai-sample', 'name: hai-other\nname: hai-sample')],
-    ['non-string description', contract.replace('description: Exercise a local skill resource.', 'description: [not, a, description]')],
-    ['invalid name', contract.replace('name: hai-sample', 'name: HAI_SAMPLE')],
+    [
+      'invalid YAML',
+      contract.replace('name: hai-sample', 'An instruction accidentally inserted here.\nname: hai-sample'),
+    ],
+    [
+      'duplicate keys',
+      contract.replace('name: hai-sample', 'name: hai-other\nname: hai-sample'),
+    ],
+    [
+      'non-string description',
+      contract.replace('description: Exercise a local skill resource.', 'description: [not, a, description]'),
+    ],
+    [
+      'invalid name',
+      contract.replace('name: hai-sample', 'name: HAI_SAMPLE'),
+    ],
   ])('rejects %s frontmatter that skill loaders cannot consume', async (_, content) => {
     const { root, skillsRoot, skillPath } = await createSkill()
     await writeFile(path.join(skillPath, 'SKILL.md'), content)
@@ -113,5 +125,43 @@ describe('skill reference delivery contract', () => {
     expect(result.failures).toHaveLength(1)
     expect(result.failures[0]).toContain('AGENTS.md: 本地参考文件不存在: .agents/instructions/workspace.md')
     expect(result.referenceCount).toBe(2)
+  })
+
+  it('checks Claude imports, reference-style links and OpenCode instruction files', async () => {
+    const { root, skillsRoot, skillPath } = await createSkill()
+    await writeFile(path.join(skillPath, 'SKILL.md'), contract)
+    const claude = path.join(root, 'CLAUDE.md')
+    const agents = path.join(root, 'AGENTS.md')
+    const opencode = path.join(root, 'opencode.json')
+    await writeFile(claude, '@AGENTS.md\n')
+    await writeFile(agents, '[Guide][shared]\n\n[shared]: missing-guide.md\n')
+    await writeFile(opencode, JSON.stringify({
+      instructions: ['AGENTS.md', 'missing-instructions.md'],
+    }))
+    const result = await checkSkillContracts(root, [skillsRoot], [claude, agents, opencode])
+    expect(result.failures).toHaveLength(2)
+    expect(result.failures.join('\n')).toContain('missing-guide.md')
+    expect(result.failures.join('\n')).toContain('missing-instructions.md')
+    expect(result.referenceCount).toBe(4)
+  })
+
+  it('resolves template entrypoints from their generated destinations and rejects repository-only paths', async () => {
+    const { root } = await createSkill()
+    const templates = path.join(root, 'packages/cli/templates/skills')
+    await mkdir(path.join(templates, 'bridges/admin'), { recursive: true })
+    await mkdir(path.join(templates, 'hai-app-create'), { recursive: true })
+    await writeFile(path.join(templates, 'hai-app-create/project.md'), '# Shared rules\n')
+    await writeFile(path.join(templates, 'AGENTS.md'), '[Shared](.agents/skills/hai-app-create/project.md)\n')
+    await writeFile(path.join(templates, 'bridges/admin/AGENTS.md'), '[Private source](../../.agents/instructions/workspace.md)\n')
+    await writeFile(path.join(templates, 'CLAUDE.md'), '@AGENTS.md\n')
+    await writeFile(path.join(templates, 'copilot-instructions.md'), '[Rules](../AGENTS.md)\n')
+    await writeFile(path.join(templates, 'opencode.json'), JSON.stringify({
+      instructions: ['AGENTS.md'],
+    }))
+    const failed = await checkTemplateEntrypoints(root)
+    expect(failed.failures).toHaveLength(1)
+    expect(failed.failures[0]).toContain('workspace.md')
+    await writeFile(path.join(templates, 'bridges/admin/AGENTS.md'), '[Shared](.agents/skills/hai-app-create/project.md)\n')
+    expect((await checkTemplateEntrypoints(root)).failures).toEqual([])
   })
 })

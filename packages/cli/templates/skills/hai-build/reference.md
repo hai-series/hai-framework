@@ -4,6 +4,8 @@
 
 应用 Node/工具链要求以当前 `package.json.engines`、lockfile 与 CI 为准。使用 Turbo 时核对影响产物的环境变量、共享配置和模式切换清理策略，并验证实际产物；不要假定应用使用框架仓库的 tsup/Turbo 私有脚本。
 
+镜像 JSON 的 `manifest.source.dirty` 检查工程、所选 context 与 Dockerfile 中未忽略文件的 Git 状态；context 指向仓库根时包含兄弟包。跨所属仓库或检查不完整返回 null，不能解释为干净；它不是构建输入的内容证明，发布 Worker 仍须使用固定提交的受控检出。
+
 本技能帮助识别应用架构、依赖和技能。日常开发决策、安全边界与能力选择见 [development.md](../hai-app-create/development.md)。
 
 ## 适用场景
@@ -74,14 +76,14 @@ CLI website模板默认Node SSR，只安装Core/Kit/UI；注释配置和环境�
 **Adapter 切换**：
 
 ```typescript
-// svelte.config.js — 使用 kit 提供的 createAdapter
+// vite.config.ts — SvelteKit 3 的配置在 Vite 插件中
 import { createAdapter } from '@h-ai/kit/adapter'
+import { sveltekit } from '@sveltejs/kit/vite'
+import { defineConfig } from 'vite'
 
-const config = {
-  kit: {
-    adapter: await createAdapter(), // 异步加载对应适配器，必须等待完成
-  },
-}
+export default defineConfig({
+  plugins: [sveltekit({ adapter: await createAdapter(), paths: { relative: false } })],
+})
 ```
 
 - `VITE_ADAPTER=node`（默认）→ adapter-node（SSR）

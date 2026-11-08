@@ -4,11 +4,15 @@
 
 > `@h-ai/serv` 是 hai-framework 的 API Service 运行时，对外暴露最小 HTTP App 抽象，将 `@h-ai/api-contract` 的领域 contract 挂载成跨端可访问的 HTTP API；Hono 是内部实现细节，应用代码不要直接 import 或暴露 Hono。
 
+命名空间的公开类型是根入口的 `ServFunctions`。上下文、工厂与泛型 contract 实现器均通过 `serv.xx` 使用；应用可导出方法或整个命名空间并生成声明，不要为类型推导改用私有构建路径或导入内部函数。
+
 ## 运行环境
 
 > ⚠️ **服务端模块（Node.js 或满足同等 Node API 依赖的宿主）。** 浏览器端通过 `@h-ai/api-client` 调用由本模块暴露的 HTTP API。
 
 > 生命周期说明：`@h-ai/serv` 是无状态 HTTP App 装配器，不提供 `init()` / `close()`；依赖模块（iam/storage/ai/crypto 等）由应用先初始化，并在 `serv.listen(..., { onClose })` 中反向释放。`serv.createApp()` 的启动期配置错误会 fail-fast 抛出。
+
+返回的监听句柄允许立即 `close()` 取消未完成绑定，重复关闭复用结果；真实监听错误仍会拒绝。调用 `handle.close()` 不代替宿主的业务模块清理。
 
 ## 适用场景
 
@@ -24,6 +28,8 @@
 - 高级场景通过 `createApp({ middlewares })` 自定义 HTTP middleware，通过 `createContext` 注入请求级业务字段
 - 公开只读文件通过 `serv.storageAssets(...)` 统一处理安全 key、MIME 白名单、GET/HEAD、ETag 与缓存头
 - 为 Audio WebSocket 配置一次性 ticket 校验、IAM/模型/配额授权与并发释放钩子
+
+权限遵循 IAM/Kit 的精确值、全局 `*` 与冒号前缀 `users:*` 规则；声明多个权限时全部满足。返回的 listener `close()` 幂等并移除信号监听器，先关闭 Audio WebSocket，1 秒后终止未配合的音频连接；业务模块由宿主反序释放。
 
 ## 使用步骤
 
@@ -63,6 +69,7 @@ const procedures = {
 const app = serv.createApp({
   contract,
   procedures,
+  iam,
   http: {
     apiPrefix: '/api/v1',
     openapi: { path: '/openapi.json' },
@@ -98,6 +105,7 @@ const app = serv.createApp({
     openapi: security.exposeApiDocs ? servConfig.http.openapi : false,
     docs: security.exposeApiDocs ? servConfig.http.docs : false,
   },
+  iam,
   refreshCookie: { secure: security.secureRefreshCookie },
   middlewares: [{
     middleware: serv.cors({
@@ -552,7 +560,7 @@ HTTP 审计、限流、CORS、租户头校验等跨 route 能力继续放在
 
 HTTP middleware、自定义 Response、refresh-cookie、OpenAPI 入口权限和 transport 协议错误分别按自身响应契约处理，可返回真实 HTTP 4xx/5xx。`@h-ai/api-client` 在真实 HTTP 401 或 HTTP 200 的有效失败 HaiResult（`success=false`、字符串 `error.code/message`、`error.httpStatus=401`）后自动刷新，成功后只重试一次；内置登录、注册和配置的刷新路径除外，403/500 不刷新。启用 transport 时刷新和重试复用加密链路，不能手写明文刷新请求。
 
-SvelteKit 的 `kit.response.fromError` 根据 `error.httpStatus` 生成 HTTP Response；`kit.response.fromResult` 使用显式错误码映射，未命中默认 400。这些响应转换规则不能套用到 serv 普通 procedure。
+SvelteKit 的 `kit.response.fromError` 根据归一化后的 `error.httpStatus` 生成 HTTP Response；`kit.response.fromResult` 优先使用显式错误码映射，再使用错误自身的 `httpStatus`，缺失或非法状态统一为 500。这些响应转换规则不能套用到 serv 普通 procedure。
 
 按三层处理：
 
@@ -581,7 +589,7 @@ const procedures = serv
   .build()
 ```
 
-> 如果错误来自下游模块（如 `iam` / `storage`）并且该模块已经返回 `HaiResult`，serv 默认**透传**它的 `error.message`。由于 `HaiError` 目前不携带 `messageKey/params`，serv 边界不能对任意下游错误再做通用重翻译；要做请求级 i18n，必须在创建该错误的模块/feature 里就拿到 locale。
+> 下游 4xx 消息经脱敏后公开，5xx 和缺失或非法状态使用安全内部错误与 traceId，完整原因只记录服务端日志。`HaiError` 不携带 `messageKey/params`，领域消息的请求级 i18n 仍在创建消息的模块/feature 中接收 locale 后完成。自动审计使用同一归一化状态，失败不能按非法原始状态记为成功。
 
 ### `serv.parseRequestContext` — 默认 Context 解析器
 
@@ -736,6 +744,8 @@ route 实现器内置以下错误：
 
 原生客户端匹配 `nativeTokenTransport.isRequest` 后，登录/注册/刷新响应保留轮换后的
 `refreshToken`，刷新请求从 `{ refreshToken }` body 读取，且不读写浏览器 Cookie。
+
+刷新失败经过同一公开错误投影，并记录英文关联日志；仅 401 认证失效会清除浏览器刷新 Cookie，限流、5xx 和缺失或非法状态保留凭据供稍后重试。未捕获的刷新异常返回安全的 HTTP 500 JSON，不公开内部 cause/ext。
 
 若同时启用 `transport: { crypto, serverKeyRing, keyStore }`，`/auth/refresh` 也必须走加密链路；cookie-only 刷新请求允许空 body，服务端不要把 `Request.body === null` 误判为需要解密的请求体。
 

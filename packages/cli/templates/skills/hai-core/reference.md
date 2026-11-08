@@ -1,5 +1,7 @@
 # hai-core — 详细用法
 
+HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 `httpStatus` 或状态非法时按 500 返回安全提示。手写业务错误须提供完整错误定义或显式状态，不能依赖缺省状态展示原文。
+
 从 [SKILL.md](SKILL.md) 选择主题后读取对应小节。代码片段展示 API 用法；省略的业务变量、schema、依赖与 return 上下文需由应用补齐。
 
 > `@h-ai/core` 是 hai-framework 的基础模块，提供配置管理、结构化日志、国际化、HaiResult 错误模型、Zod 校验错误本地化与模块生命周期工具。所有其他模块均依赖 core。
@@ -448,6 +450,7 @@ Core 模块定义了两组标准错误码：
 | `HaiCommonError.VALIDATION_ERROR` | `hai:common:200` | 校验失败 |
 | `HaiCommonError.INVALID_REQUEST` | `hai:common:201` | 请求无效 |
 | `HaiCommonError.PARAMETER_MISSING` | `hai:common:202` | 参数缺失 |
+| `HaiCommonError.RATE_LIMIT_EXCEEDED` | `hai:common:203` | 请求频率超限（HTTP 429） |
 | `HaiCommonError.NOT_FOUND` | `hai:common:300` | 资源不存在 |
 | `HaiCommonError.ALREADY_EXISTS` | `hai:common:301` | 资源已存在 |
 | `HaiCommonError.CONFLICT` | `hai:common:302` | 冲突 |
