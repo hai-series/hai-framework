@@ -73,10 +73,18 @@ function summarizeOperationPayload(payload: unknown): Record<string, number> {
       return {}
     const fields = payload as Record<string, unknown>
     return {
-      ...(typeof fields.sql === 'string' ? { sqlLength: fields.sql.length } : {}),
-      ...(Array.isArray(fields.params) ? { parameterCount: fields.params.length } : {}),
-      ...(Array.isArray(fields.statements) ? { statementCount: fields.statements.length } : {}),
-      ...(fields.columns && typeof fields.columns === 'object' ? { columnCount: Object.keys(fields.columns).length } : {}),
+      ...(typeof fields.sql === 'string'
+        ? { sqlLength: fields.sql.length }
+        : {}),
+      ...(Array.isArray(fields.params)
+        ? { parameterCount: fields.params.length }
+        : {}),
+      ...(Array.isArray(fields.statements)
+        ? { statementCount: fields.statements.length }
+        : {}),
+      ...(fields.columns && typeof fields.columns === 'object'
+        ? { columnCount: Object.keys(fields.columns).length }
+        : {}),
     }
   }
   catch {
@@ -112,7 +120,9 @@ export function logReldbOperation(
   ctx.logger[config.level]('RelDB operation executed', {
     category,
     operation,
-    payload: config.maxLength <= 0 ? '' : JSON.stringify(summarizeOperationPayload(payload)).slice(0, config.maxLength),
+    payload: config.maxLength <= 0
+      ? ''
+      : JSON.stringify(summarizeOperationPayload(payload)).slice(0, config.maxLength),
   })
 }
 
@@ -139,10 +149,18 @@ async function wrapOp<T>(
   const failed = (error: unknown, original?: HaiError): HaiResult<T> => {
     let definition = original ?? errorDef
     const traceId = core.context.get().traceId ?? core.context.get().requestId ?? original?.traceId ?? core.id.uuid()
-    const fields = error && typeof error === 'object' ? error as Record<string, unknown> : {}
+    const fields = error && typeof error === 'object'
+      ? error as Record<string, unknown>
+      : {}
     // 驱动差异在数据库层收敛；业务不解析本地化消息或依赖驱动类型。
-    if (definition.code === HaiReldbError.QUERY_FAILED.code && (['23505', 'ER_DUP_ENTRY', 'SQLITE_CONSTRAINT_UNIQUE', 'SQLITE_CONSTRAINT_PRIMARYKEY'].includes(String(fields.code)) || fields.errno === 1062))
+    if (definition.code === HaiReldbError.QUERY_FAILED.code && ([
+      '23505',
+      'ER_DUP_ENTRY',
+      'SQLITE_CONSTRAINT_UNIQUE',
+      'SQLITE_CONSTRAINT_PRIMARYKEY',
+    ].includes(String(fields.code)) || fields.errno === 1062)) {
       definition = HaiReldbError.DUPLICATE_ENTRY
+    }
     const secrets = new Set<string>()
     const seen = new WeakSet<object>()
     const collect = (value: unknown): void => {
@@ -158,25 +176,66 @@ async function wrapOp<T>(
       }
     }
     collect(errorMeta?.params)
-    const payloads = [errorMeta, ...(Array.isArray(errorMeta?.statements) ? errorMeta.statements as Record<string, unknown>[] : [])]
+    const payloads = [
+      errorMeta,
+      ...(Array.isArray(errorMeta?.statements)
+        ? errorMeta.statements as Record<string, unknown>[]
+        : []),
+    ]
     for (const payload of payloads) {
       collect(payload?.params)
-      for (const match of (typeof payload?.sql === 'string' ? payload.sql : '').matchAll(/'((?:''|[^'])*)'/g))
+      for (const match of (typeof payload?.sql === 'string'
+        ? payload.sql
+        : '').matchAll(/'((?:''|[^'])*)'/g))
         secrets.add(match[1].replaceAll('\'\'', '\''))
     }
     // 只复制驱动诊断白名单；完整 SQL、绑定参数和连接配置从不进入日志。
     const diagnostic: Record<string, unknown> = {}
-    for (const key of ['name', 'message', 'stack', 'code', 'errno', 'sqlState', 'detail', 'hint', 'constraint', 'schema', 'routine', 'severity', 'table', 'column']) {
-      const value: unknown = error instanceof Error && key === 'message' ? error.message : error instanceof Error && key === 'stack' ? error.stack : fields[key]
+    for (const key of [
+      'name',
+      'message',
+      'stack',
+      'code',
+      'errno',
+      'sqlState',
+      'detail',
+      'hint',
+      'constraint',
+      'schema',
+      'routine',
+      'severity',
+      'table',
+      'column',
+    ]) {
+      const value: unknown = error instanceof Error && key === 'message'
+        ? error.message
+        : error instanceof Error && key === 'stack'
+          ? error.stack
+          : fields[key]
       if (typeof value === 'string') {
-        if (['code', 'sqlState', 'schema', 'routine', 'severity', 'constraint', 'table', 'column'].includes(key)) {
+        if ([
+          'code',
+          'sqlState',
+          'schema',
+          'routine',
+          'severity',
+          'constraint',
+          'table',
+          'column',
+        ].includes(key)) {
           diagnostic[key] = core.sanitize.sanitizeText(value)
         }
         else {
           // 参数值只遮蔽诊断正文，不把数字参数误当成错误码或堆栈行号。
-          const frames = key === 'stack' ? value.search(/^\s+at\s/m) : -1
-          const body = frames < 0 ? value : value.slice(0, frames)
-          diagnostic[key] = core.sanitize.sanitizeText(body, [...secrets]).replace(/'(?:''|[^'])*'/g, '\'[REDACTED]\'') + (frames < 0 ? '' : core.sanitize.sanitizeText(value.slice(frames)))
+          const frames = key === 'stack'
+            ? value.search(/^\s+at\s/m)
+            : -1
+          const body = frames < 0
+            ? value
+            : value.slice(0, frames)
+          diagnostic[key] = core.sanitize.sanitizeText(body, [...secrets]).replace(/'(?:''|[^'])*'/g, '\'[REDACTED]\'') + (frames < 0
+            ? ''
+            : core.sanitize.sanitizeText(value.slice(frames)))
         }
       }
       else if (typeof value === 'number') {
@@ -185,13 +244,35 @@ async function wrapOp<T>(
     }
     if (!Object.keys(diagnostic).length)
       diagnostic.message = core.sanitize.sanitizeText(String(error), [...secrets])
-    ctx.logger.error(errorLabel, { ...summarizeOperationPayload(errorMeta), table: errorMeta?.tableName, column: errorMeta?.columnName, errorCode: definition.code, traceId, error: diagnostic })
-    const key = definition.code === HaiReldbError.DDL_FAILED.code ? 'reldb_ddlFailed' : definition.code === HaiReldbError.TRANSACTION_FAILED.code ? 'reldb_txFailed' : 'reldb_queryFailed'
-    return err({ ...definition, traceId, message: definition.code === HaiReldbError.DUPLICATE_ENTRY.code ? reldbM('reldb_duplicateEntry') : original ? core.sanitize.sanitizeText(original.message, [...secrets]) : reldbM(key), cause: diagnostic })
+    ctx.logger.error(errorLabel, {
+      ...summarizeOperationPayload(errorMeta),
+      table: errorMeta?.tableName,
+      column: errorMeta?.columnName,
+      errorCode: definition.code,
+      traceId,
+      error: diagnostic,
+    })
+    const key = definition.code === HaiReldbError.DDL_FAILED.code
+      ? 'reldb_ddlFailed'
+      : definition.code === HaiReldbError.TRANSACTION_FAILED.code
+        ? 'reldb_txFailed'
+        : 'reldb_queryFailed'
+    return err({
+      ...definition,
+      traceId,
+      message: definition.code === HaiReldbError.DUPLICATE_ENTRY.code
+        ? reldbM('reldb_duplicateEntry')
+        : original
+          ? core.sanitize.sanitizeText(original.message, [...secrets])
+          : reldbM(key),
+      cause: diagnostic,
+    })
   }
   try {
     const result = await fn()
-    return result.success ? result : failed(result.error.cause ?? result.error, result.error)
+    return result.success
+      ? result
+      : failed(result.error.cause ?? result.error, result.error)
   }
   catch (error) {
     return failed(error)
@@ -434,7 +515,11 @@ export async function queryPageAsync<T>(
 
   // 数据查询
   const dataSql = `${options.sql} LIMIT ? OFFSET ?`
-  const dataParams = [...(options.params ?? []), pagination.limit, pagination.offset]
+  const dataParams = [
+    ...(options.params ?? []),
+    pagination.limit,
+    pagination.offset,
+  ]
   const rows = await queryRows(dataSql, dataParams)
 
   return buildPaginatedResult(rows as T[], total, pagination)

@@ -18,8 +18,15 @@ interface StartupResult {
 function startupNode(database: string, executor: 'sync' | 'worker') {
   const child = spawn(process.execPath, [
     fileURLToPath(new URL('./fixtures/sqlite-startup-node.mjs', import.meta.url)),
-    JSON.stringify({ type: 'sqlite', database, sqlite: { executor } }),
-  ], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe', 'ipc'] })
+    JSON.stringify({
+      type: 'sqlite',
+      database,
+      sqlite: { executor },
+    }),
+  ], {
+    windowsHide: true,
+    stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+  })
   let stderr = ''
   let result: StartupResult | undefined
   const ready = Promise.withResolvers<void>()
@@ -58,14 +65,24 @@ it.each([
   const root = fileURLToPath(new URL('../tmp/', import.meta.url))
   await mkdir(root, { recursive: true })
   const directory = await mkdtemp(join(root, 'sqlite-startup-'))
-  const nodes = [startupNode(join(directory, 'shared.sqlite'), first), startupNode(join(directory, 'shared.sqlite'), second)]
+  const nodes = [
+    startupNode(join(directory, 'shared.sqlite'), first),
+    startupNode(join(directory, 'shared.sqlite'), second),
+  ]
   try {
     await Promise.all(nodes.map(node => node.ready))
     for (const node of nodes)
       node.child.send({ action: 'initialize' })
     const results = await Promise.all(nodes.map(node => node.done))
-    for (const result of results)
-      expect(result).toMatchObject({ success: true, mode: 'wal', timeout: 5000, closed: true, initialized: false })
+    for (const result of results) {
+      expect(result).toMatchObject({
+        success: true,
+        mode: 'wal',
+        timeout: 5000,
+        closed: true,
+        initialized: false,
+      })
+    }
   }
   finally {
     for (const node of nodes) {

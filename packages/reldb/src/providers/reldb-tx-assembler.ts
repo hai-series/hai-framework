@@ -122,13 +122,13 @@ export function createTxHandle(baseDmlOps: DmlOperations, callbacks: TxCallbacks
       const check = ensureActive()
       if (!check.success)
         return check
+      // 在等待驱动前独占结束权，阻止并发提交/回滚及结束期间的新操作。
+      active = false
       try {
         await callbacks.commit()
-        active = false
         return ok(undefined)
       }
       catch (error) {
-        active = false
         return err(HaiReldbError.TRANSACTION_FAILED, callbacks.errorMessage(String(error)), error)
       }
       finally {
@@ -140,13 +140,12 @@ export function createTxHandle(baseDmlOps: DmlOperations, callbacks: TxCallbacks
       const check = ensureActive()
       if (!check.success)
         return check
+      active = false
       try {
         await callbacks.rollback()
-        active = false
         return ok(undefined)
       }
       catch (error) {
-        active = false
         return err(HaiReldbError.TRANSACTION_FAILED, callbacks.errorMessage(String(error)), error)
       }
       finally {
@@ -190,7 +189,11 @@ export function createTxWrap(
     }
     catch (error) {
       await txResult.data.rollback()
-      return err(HaiReldbError.TRANSACTION_FAILED, reldbM('reldb_txFailed', { params: { error: String(error) } }), error)
+      return err(HaiReldbError.TRANSACTION_FAILED, reldbM('reldb_txFailed', {
+        params: {
+          error: String(error),
+        },
+      }), error)
     }
   }
 }

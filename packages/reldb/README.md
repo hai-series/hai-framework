@@ -129,7 +129,11 @@ MySQL `close()` 立即拒绝新请求并结束排队等待，随后等待已借�
 MySQL 支持仅传 `url`（`mysql://`），未给 URL 时 `database` 必填。URL 中的 host/port/database/user/password 优先，冲突的分字段不参与连接；`pool`、`mysql.charset`、`ssl` 和 `operationLog` 独立适用。URL 仅接受连接地址，query/fragment 会被拒绝，不能用隐藏 URL 参数改变 TLS 或池策略。URL 模式的连接日志会脱敏。以下示例假定已设置 `HAI_DB_URL`：
 
 ```ts
-const initialized = await reldb.init({ type: 'mysql', url: process.env.HAI_DB_URL, pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 } })
+const initialized = await reldb.init({
+  type: 'mysql',
+  url: process.env.HAI_DB_URL,
+  pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 }
+})
 if (!initialized.success)
   throw new Error(initialized.error.message)
 ```
@@ -144,7 +148,12 @@ MySQL 的空 `url`（例如空环境变量占位）表示使用 host/port/databa
 
 ```ts
 // trustedCaPem 由部署时的受信 CA 提供，不是任意远端返回的证书。
-const initialized = await reldb.init({ type: 'mysql', host: 'db.example.com', database: 'app', ssl: { ca: trustedCaPem } })
+const initialized = await reldb.init({
+  type: 'mysql',
+  host: 'db.example.com',
+  database: 'app',
+  ssl: { ca: trustedCaPem }
+})
 if (!initialized.success)
   throw new Error(initialized.error.message)
 ```
@@ -203,6 +212,8 @@ await reldb.init({
 操作日志记录固定操作名、SQL 长度、参数数量和批量数量等摘要。失败日志额外保留错误码、traceId 以及白名单内的脱敏驱动消息和堆栈，便于定位；不会直接记录整份 SQL、绑定参数或连接配置。
 
 ### 事务
+
+一个事务只允许一个结束操作。`commit()` 或 `rollback()` 开始后，新查询、重复提交和并发回滚立即返回 TRANSACTION_FAILED；连接只归还一次。调用方仍须等待首次结束结果，不能把并发结束当作故障恢复。
 
 三种使用方式：
 
@@ -272,8 +283,14 @@ if (!rolledBack.success)
 ```ts
 await reldb.tx.wrap(async (tx) => {
   const inserted = await tx.batch([
-    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['Alice'] },
-    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['Bob'] },
+    {
+      sql: 'INSERT INTO users (name) VALUES (?)',
+      params: ['Alice']
+    },
+    {
+      sql: 'INSERT INTO users (name) VALUES (?)',
+      params: ['Bob']
+    },
   ])
   if (!inserted.success)
     throw new Error(inserted.error.message, { cause: inserted.error })
@@ -376,10 +393,16 @@ await userCrud.deleteById(1)
 #### count / exists / existsById
 
 ```ts
-const total = await userCrud.count({ where: 'name LIKE ?', params: ['%张%'] })
+const total = await userCrud.count({
+  where: 'name LIKE ?',
+  params: ['%张%']
+})
 // total.data → 5
 
-const has = await userCrud.exists({ where: 'email = ?', params: ['test@example.com'] })
+const has = await userCrud.exists({
+  where: 'email = ?',
+  params: ['test@example.com']
+})
 // has.data → true
 
 const found = await userCrud.existsById(1)
@@ -426,11 +449,46 @@ interface UserRow {
 }
 
 const USER_FIELDS: ReldbCrudFieldDefinition[] = [
-  { fieldName: 'id', columnName: 'id', def: { type: 'INTEGER', primaryKey: true, autoIncrement: true }, select: true, create: false, update: false },
-  { fieldName: 'name', columnName: 'name', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: true },
-  { fieldName: 'email', columnName: 'email', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: true },
-  { fieldName: 'createdAt', columnName: 'created_at', def: { type: 'TIMESTAMP', notNull: true }, select: true, create: true, update: false },
-  { fieldName: 'updatedAt', columnName: 'updated_at', def: { type: 'TIMESTAMP', notNull: true }, select: true, create: true, update: false },
+  {
+    fieldName: 'id',
+    columnName: 'id',
+    def: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+    select: true,
+    create: false,
+    update: false
+  },
+  {
+    fieldName: 'name',
+    columnName: 'name',
+    def: { type: 'TEXT', notNull: true },
+    select: true,
+    create: true,
+    update: true
+  },
+  {
+    fieldName: 'email',
+    columnName: 'email',
+    def: { type: 'TEXT', notNull: true },
+    select: true,
+    create: true,
+    update: true
+  },
+  {
+    fieldName: 'createdAt',
+    columnName: 'created_at',
+    def: { type: 'TIMESTAMP', notNull: true },
+    select: true,
+    create: true,
+    update: false
+  },
+  {
+    fieldName: 'updatedAt',
+    columnName: 'updated_at',
+    def: { type: 'TIMESTAMP', notNull: true },
+    select: true,
+    create: true,
+    update: false
+  },
 ]
 
 class UserRepository extends BaseReldbCrudRepository<UserRow> {
@@ -440,7 +498,11 @@ class UserRepository extends BaseReldbCrudRepository<UserRow> {
 
   /** 自定义查询方法 */
   async findByEmail(email: string) {
-    return this.findAll({ where: 'email = ?', params: [email], limit: 1 })
+    return this.findAll({
+      where: 'email = ?',
+      params: [email],
+      limit: 1
+    })
   }
 
   /** 自定义方法中使用 this.sql(tx) 自动路由到事务 */
@@ -568,7 +630,13 @@ await reldb.ddl.createTable('products', {
 // 插入初始 JSON
 await reldb.sql.execute(
   `INSERT INTO products (meta) VALUES (?)`,
-  [JSON.stringify({ status: 'draft', tags: ['new'], version: 1 })],
+  [
+    JSON.stringify({
+      status: 'draft',
+      tags: ['new'],
+      version: 1
+    })
+  ],
 )
 
 // 设置字段
@@ -636,7 +704,7 @@ if (!result.success) {
 
 ## 模块架构迁移
 
-`schemaColumns(reldb, table, sql?)` 只读检查真实结构；`migrateSchema(reldb, module, steps, { dryRun: true })` 不创建账本。版本步骤由所属模块维护，业务不修改框架内部表。执行使用 `hai_schema_migrations`，SQLite/PostgreSQL 整体事务，MySQL DDL 隐式提交因此步骤必须可重入；失败不推进版本，重新检查真实结构后续做，拒绝向低版本降级。升级前停止所有旧写入并备份 DB/会话缓存；回退需恢复兼容数据库与旧代码，不能只换二进制。详见 [升级指南](../../docs/usage/README.md)。
+`reldb.schemaColumns(table, sql?)` 只读检查真实结构；`reldb.migrateSchema(module, steps, { dryRun: true })` 不创建账本。版本步骤由所属模块维护，业务不修改框架内部表。执行使用 `hai_schema_migrations`，SQLite/PostgreSQL 整体事务，MySQL DDL 隐式提交因此步骤必须可重入；失败不推进版本，重新检查真实结构后续做，拒绝向低版本降级。升级前停止所有旧写入并备份 DB/会话缓存；回退需恢复兼容数据库与旧代码，不能只换二进制。详见 [升级指南](../../docs/usage/README.md)。
 
 ## 错误提示与关联日志
 

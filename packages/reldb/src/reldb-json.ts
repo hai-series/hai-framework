@@ -186,7 +186,9 @@ const JSON_PATH_OBJECT_SEGMENT_REGEX = /^([^.[]+)/
  */
 export function parseJsonPath(path: string): string[] {
   // 移除前缀 $
-  let remaining = path.startsWith('$') ? path.slice(1) : path
+  let remaining = path.startsWith('$')
+    ? path.slice(1)
+    : path
   const segments: string[] = []
 
   while (remaining.length > 0) {
@@ -246,14 +248,20 @@ function createSqliteJsonOps(): ReldbJsonOps {
     set(column, path, value) {
       return {
         sql: `json_set(${column}, ?, json(?))`,
-        params: [path, JSON.stringify(value)],
+        params: [
+          path,
+          JSON.stringify(value),
+        ],
       }
     },
 
     insert(column, path, value) {
       return {
         sql: `json_insert(${column}, ?, json(?))`,
-        params: [path, JSON.stringify(value)],
+        params: [
+          path,
+          JSON.stringify(value),
+        ],
       }
     },
 
@@ -267,7 +275,9 @@ function createSqliteJsonOps(): ReldbJsonOps {
     merge(column, patch) {
       return {
         sql: `json_patch(${column}, ?)`,
-        params: [JSON.stringify(patch)],
+        params: [
+          JSON.stringify(patch),
+        ],
       }
     },
   }
@@ -295,14 +305,27 @@ function buildPostgresMergePatch(column: string, patch: Record<string, unknown>)
     throw new TypeError(reldbM('reldb_jsonPatchObjectRequired'))
 
   const steps: Array<{ path: string[], value: unknown, object: boolean }> = []
-  const pending: Array<{ path: string[], value: unknown }> = Object.entries(normalized).reverse().map(([key, value]) => ({ path: [key], value }))
+  const pending: Array<{ path: string[], value: unknown }> = Object.entries(normalized).reverse().map(([key, value]) => ({
+    path: [key],
+    value,
+  }))
   while (pending.length > 0) {
     const entry = pending.pop()!
     const object = entry.value !== null && typeof entry.value === 'object' && !Array.isArray(entry.value)
-    steps.push({ path: entry.path, value: object ? {} : entry.value, object })
+    steps.push({
+      path: entry.path,
+      value: object
+        ? {}
+        : entry.value,
+      object,
+    })
     if (object) {
-      for (const [key, value] of Object.entries(entry.value as Record<string, unknown>).reverse())
-        pending.push({ path: [...entry.path, key], value })
+      for (const [key, value] of Object.entries(entry.value as Record<string, unknown>).reverse()) {
+        pending.push({
+          path: [...entry.path, key],
+          value,
+        })
+      }
     }
   }
 
@@ -328,7 +351,9 @@ function buildPostgresMergePatch(column: string, patch: Record<string, unknown>)
         FROM merged JOIN patch_steps ON patch_steps.step = merged.step + 1
       )
       SELECT document FROM merged ORDER BY step DESC LIMIT 1)`,
-    params: [JSON.stringify(steps)],
+    params: [
+      JSON.stringify(steps),
+    ],
   }
 }
 
@@ -352,7 +377,10 @@ function createPostgresJsonOps(): ReldbJsonOps {
       const segments = parseJsonPath(path)
       return {
         sql: `jsonb_set(${column}, ?::text[], ?::jsonb)`,
-        params: [segments, JSON.stringify(value)],
+        params: [
+          segments,
+          JSON.stringify(value),
+        ],
       }
     },
 
@@ -360,7 +388,10 @@ function createPostgresJsonOps(): ReldbJsonOps {
       const segments = parseJsonPath(path)
       return {
         sql: `jsonb_insert(${column}, ?::text[], ?::jsonb)`,
-        params: [segments, JSON.stringify(value)],
+        params: [
+          segments,
+          JSON.stringify(value),
+        ],
       }
     },
 
@@ -396,14 +427,20 @@ function createMysqlJsonOps(): ReldbJsonOps {
     set(column, path, value) {
       return {
         sql: `JSON_SET(${column}, ?, CAST(? AS JSON))`,
-        params: [path, JSON.stringify(value)],
+        params: [
+          path,
+          JSON.stringify(value),
+        ],
       }
     },
 
     insert(column, path, value) {
       return {
         sql: `JSON_INSERT(${column}, ?, CAST(? AS JSON))`,
-        params: [path, JSON.stringify(value)],
+        params: [
+          path,
+          JSON.stringify(value),
+        ],
       }
     },
 
@@ -417,7 +454,9 @@ function createMysqlJsonOps(): ReldbJsonOps {
     merge(column, patch) {
       return {
         sql: `JSON_MERGE_PATCH(${column}, CAST(? AS JSON))`,
-        params: [JSON.stringify(patch)],
+        params: [
+          JSON.stringify(patch),
+        ],
       }
     },
   }

@@ -129,7 +129,11 @@ MySQL `close()` rejects new and queued requests immediately, then waits for borr
 MySQL accepts a `mysql://` URL without split connection fields; `database` is required without a URL. URL host/port/database/user/password take precedence over conflicting split fields. `pool`, `mysql.charset`, `ssl` and `operationLog` remain independent options. Query strings and fragments are rejected, so hidden URL parameters cannot change TLS or pool policy. Connection logs sanitize URLs. This example assumes `HAI_DB_URL` is set:
 
 ```ts
-const initialized = await reldb.init({ type: 'mysql', url: process.env.HAI_DB_URL, pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 } })
+const initialized = await reldb.init({
+  type: 'mysql',
+  url: process.env.HAI_DB_URL,
+  pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 }
+})
 if (!initialized.success)
   throw new Error(initialized.error.message)
 ```
@@ -144,7 +148,12 @@ Omitting `ssl` or using `false` disables TLS. Enabling it requires a strict obje
 
 ```ts
 // Supply trustedCaPem from deployment trust configuration, not an arbitrary peer certificate.
-const initialized = await reldb.init({ type: 'mysql', host: 'db.example.com', database: 'app', ssl: { ca: trustedCaPem } })
+const initialized = await reldb.init({
+  type: 'mysql',
+  host: 'db.example.com',
+  database: 'app',
+  ssl: { ca: trustedCaPem }
+})
 if (!initialized.success)
   throw new Error(initialized.error.message)
 ```
@@ -203,6 +212,8 @@ await reldb.init({
 Operation logs contain fixed operation names and SQL length, parameter count, and batch count. Failure logs also retain error codes, traceId, and allowlisted, sanitized driver messages and stacks for diagnosis. Full SQL, bound parameters, and connection configuration are not logged directly.
 
 ### Transactions
+
+A transaction has one finishing owner. Once commit or rollback starts, new queries, duplicate commits, and concurrent rollbacks immediately return TRANSACTION_FAILED; the connection is released once. Await the first finishing result rather than using concurrent completion as recovery.
 
 Three approaches:
 
@@ -272,8 +283,14 @@ if (!rolledBack.success)
 ```ts
 await reldb.tx.wrap(async (tx) => {
   const inserted = await tx.batch([
-    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['Alice'] },
-    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['Bob'] },
+    {
+      sql: 'INSERT INTO users (name) VALUES (?)',
+      params: ['Alice']
+    },
+    {
+      sql: 'INSERT INTO users (name) VALUES (?)',
+      params: ['Bob']
+    },
   ])
   if (!inserted.success)
     throw new Error(inserted.error.message, { cause: inserted.error })
@@ -376,10 +393,16 @@ await userCrud.deleteById(1)
 #### count / exists / existsById
 
 ```ts
-const total = await userCrud.count({ where: 'name LIKE ?', params: ['%张%'] })
+const total = await userCrud.count({
+  where: 'name LIKE ?',
+  params: ['%张%']
+})
 // total.data → 5
 
-const has = await userCrud.exists({ where: 'email = ?', params: ['test@example.com'] })
+const has = await userCrud.exists({
+  where: 'email = ?',
+  params: ['test@example.com']
+})
 // has.data → true
 
 const found = await userCrud.existsById(1)
@@ -426,11 +449,46 @@ interface UserRow {
 }
 
 const USER_FIELDS: ReldbCrudFieldDefinition[] = [
-  { fieldName: 'id', columnName: 'id', def: { type: 'INTEGER', primaryKey: true, autoIncrement: true }, select: true, create: false, update: false },
-  { fieldName: 'name', columnName: 'name', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: true },
-  { fieldName: 'email', columnName: 'email', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: true },
-  { fieldName: 'createdAt', columnName: 'created_at', def: { type: 'TIMESTAMP', notNull: true }, select: true, create: true, update: false },
-  { fieldName: 'updatedAt', columnName: 'updated_at', def: { type: 'TIMESTAMP', notNull: true }, select: true, create: true, update: false },
+  {
+    fieldName: 'id',
+    columnName: 'id',
+    def: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+    select: true,
+    create: false,
+    update: false
+  },
+  {
+    fieldName: 'name',
+    columnName: 'name',
+    def: { type: 'TEXT', notNull: true },
+    select: true,
+    create: true,
+    update: true
+  },
+  {
+    fieldName: 'email',
+    columnName: 'email',
+    def: { type: 'TEXT', notNull: true },
+    select: true,
+    create: true,
+    update: true
+  },
+  {
+    fieldName: 'createdAt',
+    columnName: 'created_at',
+    def: { type: 'TIMESTAMP', notNull: true },
+    select: true,
+    create: true,
+    update: false
+  },
+  {
+    fieldName: 'updatedAt',
+    columnName: 'updated_at',
+    def: { type: 'TIMESTAMP', notNull: true },
+    select: true,
+    create: true,
+    update: false
+  },
 ]
 
 class UserRepository extends BaseReldbCrudRepository<UserRow> {
@@ -440,7 +498,11 @@ class UserRepository extends BaseReldbCrudRepository<UserRow> {
 
   /** 自定义查询方法 */
   async findByEmail(email: string) {
-    return this.findAll({ where: 'email = ?', params: [email], limit: 1 })
+    return this.findAll({
+      where: 'email = ?',
+      params: [email],
+      limit: 1
+    })
   }
 
   /** 自定义方法中使用 this.sql(tx) 自动路由到事务 */
@@ -568,7 +630,13 @@ await reldb.ddl.createTable('products', {
 // 插入初始 JSON
 await reldb.sql.execute(
   `INSERT INTO products (meta) VALUES (?)`,
-  [JSON.stringify({ status: 'draft', tags: ['new'], version: 1 })],
+  [
+    JSON.stringify({
+      status: 'draft',
+      tags: ['new'],
+      version: 1
+    })
+  ],
 )
 
 // 设置字段
@@ -636,7 +704,7 @@ Production requires PostgreSQL/MySQL. SQLite, including disk files, is for devel
 
 ## Module schema migrations
 
-`schemaColumns(reldb, table, sql?)` inspects real columns. `migrateSchema(reldb, module, steps, { dryRun: true })` creates no ledger. Modules own their steps. Execution journals versions in `hai_schema_migrations`; SQLite/PostgreSQL are transactional, while MySQL implicit DDL commits require reentrant steps. Failures do not advance versions; retries inspect real state. Older code rejects newer ledgers. Stop old writers and back up DB/session cache first. Rollback restores compatible database and binaries together. See the [upgrade guide](../../docs/usage/README.en.md).
+`reldb.schemaColumns(table, sql?)` inspects real columns. `reldb.migrateSchema(module, steps, { dryRun: true })` creates no ledger. Modules own their steps. Execution journals versions in `hai_schema_migrations`; SQLite/PostgreSQL are transactional, while MySQL implicit DDL commits require reentrant steps. Failures do not advance versions; retries inspect real state. Older code rejects newer ledgers. Stop old writers and back up DB/session cache first. Rollback restores compatible database and binaries together. See the [upgrade guide](../../docs/usage/README.en.md).
 
 ## Error messages and correlated logs
 

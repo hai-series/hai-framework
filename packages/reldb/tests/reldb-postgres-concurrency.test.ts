@@ -14,7 +14,15 @@ let config: ReldbConfigInput
 beforeAll(async () => {
   const lease = await acquirePostgresContainer()
   release = lease.release
-  config = { type: 'postgresql', host: lease.host, port: lease.port, database: lease.database, user: lease.user, password: lease.password, pool: { max: 5 } }
+  config = {
+    type: 'postgresql',
+    host: lease.host,
+    port: lease.port,
+    database: lease.database,
+    user: lease.user,
+    password: lease.password,
+    pool: { max: 5 },
+  }
   const result = await reldb.init(config)
   expect(result.success).toBe(true)
 }, 120_000)
@@ -30,8 +38,11 @@ describe.each(['table', 'index'] as const)('concurrent PostgreSQL %s creation', 
   it.each(['ddl', 'sql'] as const)('%s 等待另一个事务提交后仍返回成功', async (entry) => {
     const table = `ddl_race_${kind}_${entry}`
     const index = `${table}_idx`
-    if (kind === 'index')
-      expect((await reldb.ddl.createTable(table, { id: { type: 'TEXT' } })).success).toBe(true)
+    if (kind === 'index') {
+      expect((await reldb.ddl.createTable(table, {
+        id: { type: 'TEXT' },
+      })).success).toBe(true)
+    }
     const statement = kind === 'table'
       ? `CREATE TABLE IF NOT EXISTS "${table}" ("id" TEXT)`
       : `CREATE INDEX IF NOT EXISTS "${index}" ON "${table}"("id")`
@@ -44,11 +55,17 @@ describe.each(['table', 'index'] as const)('concurrent PostgreSQL %s creation', 
       pending = entry === 'sql'
         ? reldb.sql.execute(statement)
         : kind === 'table'
-          ? reldb.ddl.createTable(table, { id: { type: 'TEXT' } })
-          : reldb.ddl.createIndex(table, index, { columns: ['id'] })
+          ? reldb.ddl.createTable(table, {
+              id: { type: 'TEXT' },
+            })
+          : reldb.ddl.createIndex(table, index, {
+              columns: ['id'],
+            })
       // 必须观察到真实目录锁等待，再释放胜者事务；不靠随机延时碰运气。
       await vi.waitFor(async () => {
-        const waiting = await reldb.sql.get<{ count: string }>('SELECT COUNT(*) AS count FROM pg_stat_activity WHERE wait_event_type = \'Lock\' AND query LIKE ?', [`%${kind === 'table' ? table : index}%`])
+        const waiting = await reldb.sql.get<{ count: string }>('SELECT COUNT(*) AS count FROM pg_stat_activity WHERE wait_event_type = \'Lock\' AND query LIKE ?', [`%${kind === 'table'
+          ? table
+          : index}%`])
         expect(waiting.success && Number(waiting.data?.count)).toBe(1)
       }, { timeout: 5000 })
       expect((await begun.data.commit()).success).toBe(true)
@@ -75,19 +92,84 @@ it.each(['heap_create_with_catalog', 'TypeCreate'])('建表类型竞争 %s 仅�
 })
 
 it.each([
-  { statement: 'INSERT INTO events VALUES (1)', code: '23505', constraint: 'pg_class_relname_nsp_index', calls: 1 },
-  { statement: 'CREATE INDEX duplicate ON events(id)', code: '23505', constraint: 'pg_class_relname_nsp_index', calls: 1 },
-  { statement: 'CREATE INDEX IF NOT EXISTS denied ON events(id)', code: '42501', constraint: 'pg_class_relname_nsp_index', calls: 1 },
-  { statement: 'CREATE UNIQUE INDEX IF NOT EXISTS business ON events(id)', code: '23505', constraint: 'business_unique', calls: 1 },
-  { statement: 'CREATE INDEX IF NOT EXISTS still_failing ON events(id)', code: '23505', constraint: 'pg_class_relname_nsp_index', calls: 2 },
-  { statement: 'INSERT INTO events VALUES (1)', code: 'EAI_AGAIN', constraint: '', calls: 1 },
-  { statement: 'CREATE INDEX IF NOT EXISTS duplicate ON events(id)', code: '42710', constraint: '', routine: 'TypeCreate', calls: 1 },
-  { statement: 'CREATE TABLE duplicate (id TEXT)', code: '42710', constraint: '', routine: 'TypeCreate', calls: 1 },
-  { statement: 'CREATE TABLE IF NOT EXISTS duplicate (id TEXT); SELECT 1', code: '42710', constraint: '', routine: 'TypeCreate', calls: 1 },
-  { statement: 'CREATE TABLE IF NOT EXISTS duplicate (id TEXT)', code: '42710', constraint: '', routine: 'DefineRelation', calls: 1 },
-  { statement: 'CREATE TABLE IF NOT EXISTS still_failing (id TEXT)', code: '42710', constraint: '', routine: 'TypeCreate', calls: 2 },
+  {
+    statement: 'INSERT INTO events VALUES (1)',
+    code: '23505',
+    constraint: 'pg_class_relname_nsp_index',
+    calls: 1,
+  },
+  {
+    statement: 'CREATE INDEX duplicate ON events(id)',
+    code: '23505',
+    constraint: 'pg_class_relname_nsp_index',
+    calls: 1,
+  },
+  {
+    statement: 'CREATE INDEX IF NOT EXISTS denied ON events(id)',
+    code: '42501',
+    constraint: 'pg_class_relname_nsp_index',
+    calls: 1,
+  },
+  {
+    statement: 'CREATE UNIQUE INDEX IF NOT EXISTS business ON events(id)',
+    code: '23505',
+    constraint: 'business_unique',
+    calls: 1,
+  },
+  {
+    statement: 'CREATE INDEX IF NOT EXISTS still_failing ON events(id)',
+    code: '23505',
+    constraint: 'pg_class_relname_nsp_index',
+    calls: 2,
+  },
+  {
+    statement: 'INSERT INTO events VALUES (1)',
+    code: 'EAI_AGAIN',
+    constraint: '',
+    calls: 1,
+  },
+  {
+    statement: 'CREATE INDEX IF NOT EXISTS duplicate ON events(id)',
+    code: '42710',
+    constraint: '',
+    routine: 'TypeCreate',
+    calls: 1,
+  },
+  {
+    statement: 'CREATE TABLE duplicate (id TEXT)',
+    code: '42710',
+    constraint: '',
+    routine: 'TypeCreate',
+    calls: 1,
+  },
+  {
+    statement: 'CREATE TABLE IF NOT EXISTS duplicate (id TEXT); SELECT 1',
+    code: '42710',
+    constraint: '',
+    routine: 'TypeCreate',
+    calls: 1,
+  },
+  {
+    statement: 'CREATE TABLE IF NOT EXISTS duplicate (id TEXT)',
+    code: '42710',
+    constraint: '',
+    routine: 'DefineRelation',
+    calls: 1,
+  },
+  {
+    statement: 'CREATE TABLE IF NOT EXISTS still_failing (id TEXT)',
+    code: '42710',
+    constraint: '',
+    routine: 'TypeCreate',
+    calls: 2,
+  },
 ])('保留失败且有界执行：$statement', async ({ statement, code, constraint, routine, calls }) => {
-  const error = Object.assign(new Error('Injected driver failure'), { code, constraint, routine, schema: 'pg_catalog' })
+  const error = Object.assign(new Error('Injected driver failure'), {
+    code,
+    constraint,
+    routine,
+    schema: 'pg_catalog',
+  })
   const query = vi.spyOn(pg.Pool.prototype, 'query').mockImplementation(async () => {
     throw error
   })
@@ -97,10 +179,15 @@ it.each([
 })
 
 it('业务唯一索引即使与系统目录同名也不重复构建', async () => {
-  expect((await reldb.ddl.createTable('business_collision', { id: { type: 'TEXT' } })).success).toBe(true)
+  expect((await reldb.ddl.createTable('business_collision', {
+    id: { type: 'TEXT' },
+  })).success).toBe(true)
   expect((await reldb.sql.execute('INSERT INTO business_collision (id) VALUES (?), (?)', ['same', 'same'])).success).toBe(true)
   const query = vi.spyOn(pg.Pool.prototype, 'query')
-  const result = await reldb.ddl.createIndex('business_collision', 'pg_class_relname_nsp_index', { columns: ['id'], unique: true })
+  const result = await reldb.ddl.createIndex('business_collision', 'pg_class_relname_nsp_index', {
+    columns: ['id'],
+    unique: true,
+  })
   expect(result.success).toBe(false)
   if (!result.success)
     expect(result.error.cause).toMatchObject({ code: '23505', schema: 'public', constraint: 'pg_class_relname_nsp_index' })
@@ -111,19 +198,27 @@ it.each(['ddl', 'sql', 'transaction'] as const)('真实同名类型冲突不会�
   const table = `existing_type_${entry}`
   expect((await reldb.ddl.raw(`CREATE TYPE "${table}" AS ENUM ('reserved')`)).success).toBe(true)
   const query = vi.spyOn(pg.Pool.prototype, 'query')
-  const begun = entry === 'transaction' ? await reldb.tx.begin() : undefined
+  const begun = entry === 'transaction'
+    ? await reldb.tx.begin()
+    : undefined
   if (begun && !begun.success)
     throw new Error(begun.error.message)
   try {
     const statement = `CREATE TABLE IF NOT EXISTS "${table}" (id TEXT)`
     const result = begun?.success
       ? await begun.data.execute(statement)
-      : entry === 'ddl' ? await reldb.ddl.createTable(table, { id: { type: 'TEXT' } }) : await reldb.sql.execute(statement)
+      : entry === 'ddl'
+        ? await reldb.ddl.createTable(table, {
+            id: { type: 'TEXT' },
+          })
+        : await reldb.sql.execute(statement)
     expect(result.success).toBe(false)
     if (!result.success)
       expect(result.error.cause).toMatchObject({ code: '42710', routine: 'heap_create_with_catalog' })
     // 自动提交只重试一次；事务内错误保留给调用方回滚。
-    expect(query).toHaveBeenCalledTimes(entry === 'transaction' ? 0 : 2)
+    expect(query).toHaveBeenCalledTimes(entry === 'transaction'
+      ? 0
+      : 2)
   }
   finally {
     if (begun?.success)
@@ -133,9 +228,24 @@ it.each(['ddl', 'sql', 'transaction'] as const)('真实同名类型冲突不会�
 })
 
 it.each([
-  { code: 'EAI_AGAIN', failures: 2, success: true, calls: 3 },
-  { code: 'EAI_AGAIN', failures: 3, success: false, calls: 3 },
-  { code: '28P01', failures: 1, success: false, calls: 1 },
+  {
+    code: 'EAI_AGAIN',
+    failures: 2,
+    success: true,
+    calls: 3,
+  },
+  {
+    code: 'EAI_AGAIN',
+    failures: 3,
+    success: false,
+    calls: 3,
+  },
+  {
+    code: '28P01',
+    failures: 1,
+    success: false,
+    calls: 1,
+  },
 ])('连接探测仅对临时 DNS 错误有界重试：$code/$failures', async ({ code, failures, success, calls }) => {
   expect((await reldb.close()).success).toBe(true)
   const original = pg.Pool.prototype.query
