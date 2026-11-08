@@ -1,7 +1,8 @@
 import type { FeedbackBundle } from '@h-ai/feedback/bundle'
 import type { GlobalOptions } from '../cli-types.js'
+import { Buffer } from 'node:buffer'
 import { randomBytes } from 'node:crypto'
-import { readFile, stat } from 'node:fs/promises'
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from 'node:fs'
 import { createServer } from 'node:http'
 import path from 'node:path'
 import process from 'node:process'
@@ -135,6 +136,44 @@ export async function startFeedbackViewer(bundle: FeedbackBundle, options: { por
   }
 }
 
+/** 本地包只读取已检查的同一普通文件；增长和替换不能突破64MiB限制。 */
+function readBundleFile(filePath: string): Buffer {
+  let fd: number | undefined
+  try {
+    const before = lstatSync(filePath, { bigint: true })
+    if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1n || before.size > 64n * 1024n * 1024n)
+      throw new Error('Invalid local bundle metadata')
+    fd = openSync(filePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0))
+    const opened = fstatSync(fd, { bigint: true })
+    if (!opened.isFile() || opened.nlink !== 1n || opened.dev !== before.dev || opened.ino !== before.ino
+      || opened.size > 64n * 1024n * 1024n) {
+      throw new Error('Local bundle changed before opening')
+    }
+    const size = Number(opened.size)
+    const bytes = Buffer.alloc(size + 1)
+    let length = 0
+    while (length < bytes.length) {
+      const read = readSync(fd, bytes, length, bytes.length - length, null)
+      if (!read)
+        break
+      length += read
+    }
+    const after = fstatSync(fd, { bigint: true })
+    if (length !== size || after.nlink !== 1n || after.size !== opened.size
+      || after.mtimeNs !== opened.mtimeNs || after.ctimeNs !== opened.ctimeNs) {
+      throw new Error('Local bundle changed while reading')
+    }
+    return bytes.subarray(0, length)
+  }
+  catch {
+    throw new Error(cliM('cli_feedback_invalidBundle'))
+  }
+  finally {
+    if (fd !== undefined)
+      closeSync(fd)
+  }
+}
+
 /**
  * 离线读取问题包，输出摘要、manifest 或证据分页，或启动本机查看器。
  * @throws Error - 参数、文件或包校验失败。
@@ -154,10 +193,7 @@ export async function feedbackCommand(action: string, bundlePath: string, option
     throw new Error(cliM('cli_feedback_invalidAction'))
   }
   const filePath = path.resolve(options.cwd ?? process.cwd(), bundlePath)
-  const metadata = await stat(filePath)
-  if (!metadata.isFile() || metadata.size > 64 * 1024 * 1024)
-    throw new Error(cliM('cli_feedback_invalidBundle'))
-  const result = await readFeedbackBundle(await readFile(filePath))
+  const result = await readFeedbackBundle(readBundleFile(filePath))
   if (!result.success)
     throw new Error(result.error.message)
   const bundle = result.data

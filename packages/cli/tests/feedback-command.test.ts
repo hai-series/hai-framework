@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { link, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -7,6 +7,28 @@ import { describe, expect, it, vi } from 'vitest'
 import { feedbackCommand, startFeedbackViewer } from '../src/commands/cli-feedback.js'
 
 describe('feedback 离线 CLI', () => {
+  it('拒绝具有其他硬链接别名的反馈包', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'hai-feedback-cli-link-'))
+    const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+    try {
+      const created = await createFeedbackBundle({
+        report: { id: 'linked-fixture' },
+        evidence: [],
+      })
+      expect(created.success).toBe(true)
+      if (!created.success)
+        return
+      await writeFile(path.join(directory, 'original.zip'), created.data)
+      await link(path.join(directory, 'original.zip'), path.join(directory, 'linked.zip'))
+      await expect(feedbackCommand('summary', 'linked.zip', { cwd: directory })).rejects.toThrow()
+      expect(output).not.toHaveBeenCalled()
+    }
+    finally {
+      output.mockRestore()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
   it('仅用本地 ZIP 输出摘要与按请求分页证据', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'hai-feedback-cli-'))
     const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
