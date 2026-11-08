@@ -112,6 +112,10 @@ if (!result.success)
 
 上传选项 `{ ifNoneMatch: '*' }` 通过标准 S3 条件写或本地原子发布拒绝覆盖，冲突返回 `ALREADY_EXISTS`；S3 服务不支持条件写时返回错误，不降级为覆盖。失败/取消会清理临时文件或未完成分片；取消不能撤销已经发布的对象。
 
+Local 在内容文件旁的保留目录 `.hai-storage-meta/` 中准备与文件身份绑定的代际元数据，再以内容文件的原子发布作为提交点。元数据准备失败不会新增或覆盖内容；默认元数据也有空记录，不继承旧对象的类型或业务字段。发布后清理明确旧代际失败只记录诊断，不将已提交写入报告为失败；并发或崩溃可能留下尚未确认可回收的内部记录，不做推测性删除。`.meta.json`、`.upload.tmp` 后缀和 `.hai-storage-meta` 在每个路径段均保留，不能直接读写或删除。代际记录是唯一元数据格式，不读取旧 `<key>.meta.json`；缺少当前记录时明确返回错误，旧数据需要离线迁移或通过 `file.put()` 重新上传。备份/迁移必须同时保存内容与内部记录，不混用旧程序写入。
+
+S3 `file.copy()` 对源键按路径段编码，中文、空格及 URL 分隔字符仍作为原始对象键处理；调用方传原始 key，不要提前编码。
+
 `file.deleteMany(keys)` 返回 `StorageDeleteResult`：成功时 `data` 为 `{ deletedKeys, failures: [] }`；任一删除项未确认完成时返回 `OPERATION_FAILED`，进度在 `error.ext?.deleteMany`（初始化等前置错误可能不带进度）。重复输入只处理一次，输出 key 不含配置 prefix。S3 每批最多 1000 项，逐项检查 `Deleted` 与 `Errors`；HTTP 200 不代表全部成功，遗漏/重复/未知回执标为 `unknown`。本地删除最多并发 32 项。
 
 只对明确的 `InternalError / ServiceUnavailable / SlowDown / RequestTimeout` 项最多尝试三次；成功及权限失败项不重发。`DeleteObjects` 专用客户端禁用 SDK 请求重试；网络中断立即标为 `unknown`，未发送的后续批次标为 `notAttempted`，不盲目重放未知结果。`retryable` 只表示故障类别，调用方重试前仍须核对未知结果及并发写入。`dir.delete()` 传播删除失败；它不能阻止并发新增对象。S3 使用不带 VersionId 的删除，开启版本控制的桶可能创建删除标记，不保证清除历史版本。
@@ -290,7 +294,9 @@ import { StorageKeySchema } from '@h-ai/storage/schemas'
 
 const key = StorageKeySchema.safeParse('users/u1/report.pdf')
 if (key.success) {
-  const input = StorageDeleteFilesInputSchema.parse({ keys: [key.data] })
+  const input = StorageDeleteFilesInputSchema.parse({
+    keys: [key.data]
+  })
   // 把 input 交给已初始化的 client.storage.files.deleteMany；仍须检查返回值 success。
 }
 ```

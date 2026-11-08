@@ -6,7 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { storage } from '../src/index.js'
 import { acquireMinioContainer } from './helpers/minio-container.js'
 
-describe.sequential('s3 lifecycle ownership', () => {
+describe('s3 lifecycle ownership', { concurrent: false }, () => {
   let lease: Awaited<ReturnType<typeof acquireMinioContainer>> | undefined
   beforeAll(async () => {
     lease = await acquireMinioContainer()
@@ -21,7 +21,15 @@ describe.sequential('s3 lifecycle ownership', () => {
   function config() {
     if (!lease)
       throw new Error('Missing MinIO container')
-    return { type: 's3' as const, bucket: lease.bucket, region: lease.region, endpoint: lease.endpoint, accessKeyId: lease.accessKeyId, secretAccessKey: lease.secretAccessKey, forcePathStyle: true }
+    return {
+      type: 's3' as const,
+      bucket: lease.bucket,
+      region: lease.region,
+      endpoint: lease.endpoint,
+      accessKeyId: lease.accessKeyId,
+      secretAccessKey: lease.secretAccessKey,
+      forcePathStyle: true,
+    }
   }
 
   it.each([false, true])('post-health failures release all clients and actual keepalive sockets, public endpoint=%s', async (publicAccess) => {
@@ -47,7 +55,12 @@ describe.sequential('s3 lifecycle ownership', () => {
         await send.call(this, command)
         throw new Error('injected health failure after actual S3 request')
       })
-      expect((await storage.init({ ...config(), ...(publicAccess ? { publicEndpoint: 'https://files.example.invalid' } : {}) })).success).toBe(false)
+      expect((await storage.init({
+        ...config(),
+        ...(publicAccess
+          ? { publicEndpoint: 'https://files.example.invalid' }
+          : {}),
+      })).success).toBe(false)
       expect(storage.isInitialized).toBe(false)
     }
     expect(destroyed.size).toBe(publicAccess ? 9 : 6)
@@ -58,7 +71,12 @@ describe.sequential('s3 lifecycle ownership', () => {
   }, 30_000)
 
   it.each([false, true])('one destroy failure still releases the others and blocks replacement, public endpoint=%s', async (publicAccess) => {
-    expect((await storage.init({ ...config(), ...(publicAccess ? { publicEndpoint: 'https://files.example.invalid' } : {}) })).success).toBe(true)
+    expect((await storage.init({
+      ...config(),
+      ...(publicAccess
+        ? { publicEndpoint: 'https://files.example.invalid' }
+        : {}),
+    })).success).toBe(true)
     const counts = new Map<S3Client, number>()
     const blocked = new Set<S3Client>()
     let failures = 2
@@ -79,7 +97,11 @@ describe.sequential('s3 lifecycle ownership', () => {
     expect((await storage.init(config())).success).toBe(false)
     expect(send).not.toHaveBeenCalled()
     expect((await storage.close()).success).toBe(true)
-    expect([...counts.values()].sort()).toEqual(publicAccess ? [1, 1, 3] : [1, 3])
+    expect([
+      ...counts.values(),
+    ].sort()).toEqual(publicAccess
+      ? [1, 1, 3]
+      : [1, 3])
     expect((await storage.init(config())).success).toBe(true)
   })
 
@@ -90,7 +112,12 @@ describe.sequential('s3 lifecycle ownership', () => {
       destroyed.add(this)
       destroy.call(this)
     })
-    expect((await storage.init({ ...config(), ...(publicAccess ? { publicEndpoint: 'https://files.example.invalid:9443' } : {}) })).success).toBe(true)
+    expect((await storage.init({
+      ...config(),
+      ...(publicAccess
+        ? { publicEndpoint: 'https://files.example.invalid:9443' }
+        : {}),
+    })).success).toBe(true)
     expect((await storage.file.put('internal.txt', 'internal CRUD remains available')).success).toBe(true)
     expect((await storage.file.get('internal.txt')).success).toBe(true)
     for (const operation of ['getUrl', 'putUrl'] as const) {
@@ -98,7 +125,9 @@ describe.sequential('s3 lifecycle ownership', () => {
       expect(signed.success).toBe(true)
       if (signed.success) {
         const url = new URL(signed.data)
-        expect(url.origin).toBe(publicAccess ? 'https://files.example.invalid:9443' : new URL(config().endpoint).origin)
+        expect(url.origin).toBe(publicAccess
+          ? 'https://files.example.invalid:9443'
+          : new URL(config().endpoint).origin)
         expect(url.pathname).toBe(`/${config().bucket}/internal.txt`)
         expect(url.searchParams.get('X-Amz-SignedHeaders')).toContain('host')
       }

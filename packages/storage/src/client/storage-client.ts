@@ -99,8 +99,12 @@ export async function uploadWithPresignedUrl(
 ): Promise<{ success: boolean, error?: string }> {
   try {
     const signal = options.abortController?.signal
-    if (signal?.aborted)
-      return { success: false, error: storageM('storage_uploadCanceled') }
+    if (signal?.aborted) {
+      return {
+        success: false,
+        error: storageM('storage_uploadCanceled'),
+      }
+    }
 
     // 准备请求体
     const body: BodyInit = data
@@ -136,7 +140,10 @@ export async function uploadWithPresignedUrl(
         }
 
         function onAbort(): void {
-          finish({ success: false, error: storageM('storage_uploadCanceled') })
+          finish({
+            success: false,
+            error: storageM('storage_uploadCanceled'),
+          })
         }
 
         /**
@@ -155,23 +162,40 @@ export async function uploadWithPresignedUrl(
         }
 
         function onError(): void {
-          finish({ success: false, error: storageM('storage_networkError') })
+          finish({
+            success: false,
+            error: storageM('storage_networkError'),
+          })
         }
 
         function onLoad(): void {
           finish(xhr.status >= 200 && xhr.status < 300
             ? { success: true }
-            : { success: false, error: storageM('storage_uploadFailedStatus', { params: { status: xhr.status, statusText: xhr.statusText } }) })
+            : {
+                success: false,
+                error: storageM('storage_uploadFailedStatus', {
+                  params: { status: xhr.status, statusText: xhr.statusText },
+                }),
+              })
         }
 
         function onProgress(event: ProgressEvent): void {
           if (settled || !event.lengthComputable)
             return
           try {
-            options.onProgress?.({ loaded: event.loaded, total: event.total, percent: Math.round((event.loaded / event.total) * 100) })
+            options.onProgress?.({
+              loaded: event.loaded,
+              total: event.total,
+              percent: Math.round((event.loaded / event.total) * 100),
+            })
           }
           catch (error) {
-            finish({ success: false, error: error instanceof Error ? error.message : storageM('storage_unknownError') })
+            finish({
+              success: false,
+              error: error instanceof Error
+                ? error.message
+                : storageM('storage_unknownError'),
+            })
             xhr.abort()
           }
         }
@@ -196,7 +220,12 @@ export async function uploadWithPresignedUrl(
           xhr.send(body)
         }
         catch (error) {
-          finish({ success: false, error: error instanceof Error ? error.message : storageM('storage_unknownError') })
+          finish({
+            success: false,
+            error: error instanceof Error
+              ? error.message
+              : storageM('storage_unknownError'),
+          })
           xhr.abort()
         }
       })
@@ -215,7 +244,9 @@ export async function uploadWithPresignedUrl(
     if (!response.ok) {
       return {
         success: false,
-        error: storageM('storage_uploadFailedStatus', { params: { status: response.status, statusText: response.statusText } }),
+        error: storageM('storage_uploadFailedStatus', {
+          params: { status: response.status, statusText: response.statusText },
+        }),
       }
     }
 
@@ -223,11 +254,16 @@ export async function uploadWithPresignedUrl(
   }
   catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      return { success: false, error: storageM('storage_uploadCanceled') }
+      return {
+        success: false,
+        error: storageM('storage_uploadCanceled'),
+      }
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : storageM('storage_unknownError'),
+      error: error instanceof Error
+        ? error.message
+        : storageM('storage_unknownError'),
     }
   }
 }
@@ -264,7 +300,9 @@ export async function downloadWithPresignedUrl(
     if (!response.ok) {
       return {
         success: false,
-        error: storageM('storage_downloadFailedStatus', { params: { status: response.status, statusText: response.statusText } }),
+        error: storageM('storage_downloadFailedStatus', {
+          params: { status: response.status, statusText: response.statusText },
+        }),
       }
     }
 
@@ -273,11 +311,16 @@ export async function downloadWithPresignedUrl(
   }
   catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      return { success: false, error: storageM('storage_downloadCanceled') }
+      return {
+        success: false,
+        error: storageM('storage_downloadCanceled'),
+      }
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : storageM('storage_unknownError'),
+      error: error instanceof Error
+        ? error.message
+        : storageM('storage_unknownError'),
     }
   }
 }
@@ -328,7 +371,9 @@ export async function downloadAndSave(
   catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : storageM('storage_saveFileFailed'),
+      error: error instanceof Error
+        ? error.message
+        : storageM('storage_saveFileFailed'),
     }
   }
 }
@@ -354,7 +399,9 @@ export async function downloadAndSave(
 export function getFileExtension(file: File): string {
   const name = file.name
   const lastDot = name.lastIndexOf('.')
-  return lastDot > -1 ? name.slice(lastDot + 1).toLowerCase() : ''
+  return lastDot > -1
+    ? name.slice(lastDot + 1).toLowerCase()
+    : ''
 }
 
 /**
@@ -400,5 +447,7 @@ export function formatFileSize(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(1024))
   const size = bytes / 1024 ** i
 
-  return `${size.toFixed(i > 0 ? 2 : 0)} ${units[i]}`
+  return `${size.toFixed(i > 0
+    ? 2
+    : 0)} ${units[i]}`
 }

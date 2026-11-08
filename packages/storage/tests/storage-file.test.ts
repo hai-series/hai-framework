@@ -211,8 +211,12 @@ describe('storage.file', () => {
 
       const result = await storage.file.deleteMany(['batch-a.txt', 'batch-b.txt', 'batch-c.txt'])
       expect(result.success).toBe(true)
-      if (result.success)
-        expect(result.data).toEqual({ deletedKeys: ['batch-a.txt', 'batch-b.txt', 'batch-c.txt'], failures: [] })
+      if (result.success) {
+        expect(result.data).toEqual({
+          deletedKeys: ['batch-a.txt', 'batch-b.txt', 'batch-c.txt'],
+          failures: [],
+        })
+      }
 
       for (const key of ['batch-a.txt', 'batch-b.txt', 'batch-c.txt']) {
         const exists = await storage.file.exists(key)

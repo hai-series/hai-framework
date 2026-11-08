@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { storage } from '../src/index.js'
 import { HaiStorageError } from '../src/storage-types.js'
 
-describe.sequential('storage (not initialized)', () => {
+describe('storage (not initialized)', { concurrent: false }, () => {
   beforeEach(async () => {
     await storage.close()
   })
