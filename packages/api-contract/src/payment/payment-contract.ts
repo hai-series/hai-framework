@@ -30,24 +30,60 @@ const notifyMessageOutputSchema = haiResultSchema(PaymentNotifyMessageSchema)
  */
 export const paymentContract = {
   orders: {
-    create: route({ method: 'POST', path: '/payment/orders', operationId: 'payment.orders.create', summary: 'Create payment order', tags: ['payment', 'orders'] })
+    create: route({
+      method: 'POST',
+      path: '/payment/orders',
+      operationId: 'payment.orders.create',
+      summary: 'Create payment order',
+      tags: ['payment', 'orders'],
+    })
       .input(PaymentCreateOrderInputSchema)
       .output(haiResultSchema(PaymentCreateOrderDataSchema)),
-    get: route({ method: 'GET', path: '/payment/orders/{orderNo}', operationId: 'payment.orders.get', summary: 'Get payment order', tags: ['payment', 'orders'] })
+    get: route({
+      method: 'GET',
+      path: '/payment/orders/{orderNo}',
+      operationId: 'payment.orders.get',
+      summary: 'Get payment order',
+      tags: ['payment', 'orders'],
+    })
       .input(PaymentQueryOrderInputSchema)
       .output(haiResultSchema(PaymentOrderSchema)),
-    refund: route({ method: 'POST', path: '/payment/orders/{orderNo}/refunds', operationId: 'payment.orders.refund', summary: 'Refund payment order', tags: ['payment', 'orders'] })
+    refund: route({
+      method: 'POST',
+      path: '/payment/orders/{orderNo}/refunds',
+      operationId: 'payment.orders.refund',
+      summary: 'Refund payment order',
+      tags: ['payment', 'orders'],
+    })
       .input(PaymentRefundInputSchema)
       .output(haiResultSchema(PaymentRefundDataSchema)),
   },
   notifications: {
-    wechat: route({ method: 'POST', path: '/payment/notifications/wechat', operationId: 'payment.notifications.wechat', summary: 'Handle WeChat payment notification', tags: ['payment', 'notifications'] })
+    wechat: route({
+      method: 'POST',
+      path: '/payment/notifications/wechat',
+      operationId: 'payment.notifications.wechat',
+      summary: 'Handle WeChat payment notification',
+      tags: ['payment', 'notifications'],
+    })
       .input(WebhookBodySchema)
       .output(notifyMessageOutputSchema),
-    alipay: route({ method: 'POST', path: '/payment/notifications/alipay', operationId: 'payment.notifications.alipay', summary: 'Handle Alipay payment notification', tags: ['payment', 'notifications'] })
+    alipay: route({
+      method: 'POST',
+      path: '/payment/notifications/alipay',
+      operationId: 'payment.notifications.alipay',
+      summary: 'Handle Alipay payment notification',
+      tags: ['payment', 'notifications'],
+    })
       .input(WebhookBodySchema)
       .output(notifyMessageOutputSchema),
-    stripe: route({ method: 'POST', path: '/payment/notifications/stripe', operationId: 'payment.notifications.stripe', summary: 'Handle Stripe payment notification', tags: ['payment', 'notifications'] })
+    stripe: route({
+      method: 'POST',
+      path: '/payment/notifications/stripe',
+      operationId: 'payment.notifications.stripe',
+      summary: 'Handle Stripe payment notification',
+      tags: ['payment', 'notifications'],
+    })
       .input(WebhookBodySchema)
       .output(haiResultSchema(PaymentStripeNotifyDataSchema)),
   },

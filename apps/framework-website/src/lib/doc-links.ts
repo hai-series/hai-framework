@@ -5,5 +5,7 @@ export function docSlug(file: string): string {
 
 export function docLink(file: string, base: string): string {
   const slug = docSlug(file)
-  return `${base}/docs/${slug ? `${slug}/` : ''}`
+  return `${base}/docs/${slug
+    ? `${slug}/`
+    : ''}`
 }

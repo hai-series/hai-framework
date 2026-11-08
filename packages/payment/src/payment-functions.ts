@@ -187,7 +187,14 @@ export async function handleNotify(
       action: 'payment_notify',
       resource: 'payment',
       resourceId: notifyResult.data.orderNo,
-      details: { provider: providerName, transactionId: notifyResult.data.transactionId, eventId: notifyResult.data.eventId, status: notifyResult.data.status, amount: notifyResult.data.amount, currency: notifyResult.data.currency },
+      details: {
+        provider: providerName,
+        transactionId: notifyResult.data.transactionId,
+        eventId: notifyResult.data.eventId,
+        status: notifyResult.data.status,
+        amount: notifyResult.data.amount,
+        currency: notifyResult.data.currency,
+      },
     })
   }
   return notifyResult

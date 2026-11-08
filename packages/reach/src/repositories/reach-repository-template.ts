@@ -266,7 +266,9 @@ export async function createTemplateRepository(db: ReldbFunctions): Promise<HaiR
   if (!initResult.success) {
     return err(
       HaiReachError.SEND_FAILED,
-      reachM('reach_templateDbInitFailed', { params: { error: initResult.error.message } }),
+      reachM('reach_templateDbInitFailed', {
+        params: { error: initResult.error.message },
+      }),
       initResult.error,
     )
   }
@@ -303,7 +305,11 @@ class DbTemplateRepository extends BaseReldbCrudRepository<StoredTemplate> imple
 
   /** 按名称查找模板 */
   async findByName(name: string, tx?: DmlWithTxOperations): Promise<HaiResult<StoredTemplate | undefined>> {
-    const result = await this.findAll({ where: 'name = ?', params: [name], limit: 1 }, tx)
+    const result = await this.findAll({
+      where: 'name = ?',
+      params: [name],
+      limit: 1,
+    }, tx)
     if (!result.success) {
       return result
     }

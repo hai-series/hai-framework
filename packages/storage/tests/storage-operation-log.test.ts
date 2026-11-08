@@ -15,10 +15,18 @@ describe('storage operation log', () => {
 
     logStorageOperation(
       logger,
-      { read: false, write: true, maxLength: 1000, level: 'debug' },
+      {
+        read: false,
+        write: true,
+        maxLength: 1000,
+        level: 'debug',
+      },
       'write',
       'file.put',
-      { key: 'a.txt', body: new Uint8Array([1, 2, 3]) },
+      {
+        key: 'a.txt',
+        body: new Uint8Array([1, 2, 3]),
+      },
     )
 
     expect(logger.debug).toHaveBeenCalledWith('Storage operation executed', {

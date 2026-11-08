@@ -11,11 +11,17 @@ function createKeyRing(): TransportServerKeyRing {
   const key = crypto.asymmetric.generateKeyPair()
   if (!key.success)
     throw new Error(key.error.message)
-  return { activeKeyId: 'v1', keys: { v1: key.data } }
+  return {
+    activeKeyId: 'v1',
+    keys: { v1: key.data },
+  }
 }
 
 function createManager(serverKeyRing: TransportServerKeyRing): TransportEncryptionManager {
-  const server = crypto.transport.createServer({ serverKeyRing, keyStore: createReldbTransportKeyStore({ reldb }) })
+  const server = crypto.transport.createServer({
+    serverKeyRing,
+    keyStore: createReldbTransportKeyStore({ reldb }),
+  })
   if (!server.success)
     throw new Error(server.error.message)
   return server.data
@@ -112,11 +118,23 @@ describe('managed transport server key ring', () => {
     expect(rotated.getServerKeyId()).toBe('v2')
     expect(await decrypt(staged, newRequest)).toMatchObject({ success: true, data: 'new-client' })
     expect(await decrypt(rotated, oldRequest)).toMatchObject({ success: true, data: 'old-client' })
-    const revoked = createManager({ activeKeyId: 'v2', keys: { v2: keys.v2 } })
-    expect(await decrypt(revoked, oldRequest)).toMatchObject({ success: false, error: { code: HaiCryptoError.INVALID_INPUT.code } })
+    const revoked = createManager({
+      activeKeyId: 'v2',
+      keys: { v2: keys.v2 },
+    })
+    expect(await decrypt(revoked, oldRequest)).toMatchObject({
+      success: false,
+      error: { code: HaiCryptoError.INVALID_INPUT.code },
+    })
     expect(await decrypt(revoked, await encryptRequest(rotated, 'new-client'))).toMatchObject({ success: true, data: 'new-client' })
-    expect((await decrypt(rotated, { ...newRequest, context: { ...newRequest.context, serverKeyId: 'unknown' } })).success).toBe(false)
-    expect((await decrypt(rotated, { ...newRequest, context: { ...newRequest.context, serverKeyId: 'v1' } })).success).toBe(false)
+    expect((await decrypt(rotated, {
+      ...newRequest,
+      context: { ...newRequest.context, serverKeyId: 'unknown' },
+    })).success).toBe(false)
+    expect((await decrypt(rotated, {
+      ...newRequest,
+      context: { ...newRequest.context, serverKeyId: 'v1' },
+    })).success).toBe(false)
   })
 
   it('版本化客户端协商字段会绑定每次请求，无需节点亲和', async () => {
@@ -129,7 +147,11 @@ describe('managed transport server key ring', () => {
         const request = new Request(input, init)
         if (request.url.endsWith('/exchange')) {
           const body = await request.json() as { clientPublicKey: string }
-          return Response.json({ serverKeyId: handshakeNode.getServerKeyId(), serverPublicKey: handshakeNode.getServerPublicKey(), clientId: await handshakeNode.registerClientKey(body.clientPublicKey) })
+          return Response.json({
+            serverKeyId: handshakeNode.getServerKeyId(),
+            serverPublicKey: handshakeNode.getServerPublicKey(),
+            clientId: await handshakeNode.registerClientKey(body.clientPublicKey),
+          })
         }
         const payload = await request.json() as EncryptedRequestPayload
         expect(payload.context.serverKeyId).toBe('v1')
@@ -139,7 +161,9 @@ describe('managed transport server key ring', () => {
         const encrypted = await businessNode.encryptResponse(payload.context, plaintext.data, 200)
         if (!encrypted.success)
           throw new Error(encrypted.error.message)
-        return Response.json(encrypted.data, { headers: { 'X-Encrypted': 'true' } })
+        return Response.json(encrypted.data, {
+          headers: { 'X-Encrypted': 'true' },
+        })
       },
     })
     expect(await (await client.encryptedFetch('https://example.test/business', { method: 'POST', body: '"value"' })).json()).toBe('value')
@@ -152,13 +176,23 @@ describe('managed transport server key ring', () => {
     // @ts-expect-error 验证非 TypeScript 调用方遗漏必填 registry 时不会隐式创建内存存储。
     expect(crypto.transport.createServer({ serverKeyRing: first }).success).toBe(false)
     // @ts-expect-error 验证非 TypeScript 调用方遗漏必填 ring 时不会隐式生成密钥。
-    expect(crypto.transport.createServer({ keyStore: createReldbTransportKeyStore({ reldb }) }).success).toBe(false)
+    expect(crypto.transport.createServer({
+      keyStore: createReldbTransportKeyStore({ reldb }),
+    }).success).toBe(false)
     expect(parseTransportServerKeyRing(undefined).success).toBe(false)
     expect(parseTransportServerKeyRing({ activeKeyId: 'missing', keys: first.keys }).success).toBe(false)
     const malformed = parseTransportServerKeyRing(`{"privateKey":"${first.keys.v1!.privateKey}"`)
     expect(malformed.success).toBe(false)
     expect(JSON.stringify(malformed)).not.toContain(first.keys.v1!.privateKey)
-    const mismatched = crypto.transport.createServer({ keyStore: createReldbTransportKeyStore({ reldb }), serverKeyRing: { activeKeyId: 'v1', keys: { v1: { publicKey: first.keys.v1!.publicKey, privateKey: second.keys.v1!.privateKey } } } })
+    const mismatched = crypto.transport.createServer({
+      keyStore: createReldbTransportKeyStore({ reldb }),
+      serverKeyRing: {
+        activeKeyId: 'v1',
+        keys: {
+          v1: { publicKey: first.keys.v1!.publicKey, privateKey: second.keys.v1!.privateKey },
+        },
+      },
+    })
     expect(mismatched.success).toBe(false)
     expect(JSON.stringify(mismatched)).not.toContain(second.keys.v1!.privateKey)
     expect(generate).not.toHaveBeenCalled()
@@ -167,7 +201,12 @@ describe('managed transport server key ring', () => {
 
   it('管理器捕获密钥环快照，调用方修改原始对象不能隐式轮换', async () => {
     const original = createKeyRing()
-    const mutable = { activeKeyId: 'v1', keys: { v1: { ...original.keys.v1! } } }
+    const mutable = {
+      activeKeyId: 'v1',
+      keys: {
+        v1: { ...original.keys.v1! },
+      },
+    }
     const manager = createManager(mutable)
     const request = await encryptRequest(manager, 'kept')
     mutable.activeKeyId = 'changed'
@@ -181,7 +220,15 @@ describe('managed transport server key ring', () => {
     const ring = createKeyRing()
     const manager = createManager(ring)
     await reldb.close()
-    const encrypted = await manager.encryptResponse({ version: 2, serverKeyId: 'v1', clientId: 'client-id', requestId: crypto.symmetric.generateKey(), issuedAt: Date.now(), method: 'POST', pathHash: 'a'.repeat(64) }, 'private business plaintext', 200)
+    const encrypted = await manager.encryptResponse({
+      version: 2,
+      serverKeyId: 'v1',
+      clientId: 'client-id',
+      requestId: crypto.symmetric.generateKey(),
+      issuedAt: Date.now(),
+      method: 'POST',
+      pathHash: 'a'.repeat(64),
+    }, 'private business plaintext', 200)
     expect(encrypted.success).toBe(false)
     expect(JSON.stringify(encrypted)).not.toContain('private business plaintext')
     expect(JSON.stringify(encrypted)).not.toContain(ring.keys.v1!.privateKey)

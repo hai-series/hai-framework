@@ -55,7 +55,10 @@ function defineStreamTests() {
       throw new Error('source failed')
     }
     expect((await storage.file.put('stream/stable.txt', broken())).success).toBe(false)
-    expect(await storage.file.get('stream/stable.txt')).toEqual({ success: true, data: Buffer.from('original') })
+    expect(await storage.file.get('stream/stable.txt')).toEqual({
+      success: true,
+      data: Buffer.from('original'),
+    })
     const listed = await storage.dir.list({ prefix: 'stream/' })
     expect(listed.success).toBe(true)
     if (listed.success)
@@ -63,7 +66,9 @@ function defineStreamTests() {
   })
 
   it('预先取消不写入对象，缺失文件读取返回错误', async () => {
-    expect((await storage.file.put('stream/cancelled.txt', 'content', { signal: AbortSignal.abort() })).success).toBe(false)
+    expect((await storage.file.put('stream/cancelled.txt', 'content', {
+      signal: AbortSignal.abort(),
+    })).success).toBe(false)
     expect(await storage.file.exists('stream/cancelled.txt')).toEqual({ success: true, data: false })
     const missing = await storage.file.getStream('stream/missing.txt')
     expect(missing.success).toBe(false)

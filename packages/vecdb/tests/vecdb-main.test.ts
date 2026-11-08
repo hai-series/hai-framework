@@ -45,7 +45,12 @@ describe('vecdb 未初始化', () => {
   })
 
   it('vector.insert 返回 NOT_INITIALIZED', async () => {
-    const result = await vecdb.vector.insert('test', [{ id: '1', vector: [0.1] }])
+    const result = await vecdb.vector.insert('test', [
+      {
+        id: '1',
+        vector: [0.1],
+      },
+    ])
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toBe(HaiVecdbError.NOT_INITIALIZED.code)
@@ -179,9 +184,24 @@ describe('vecdb LanceDB 集成测试', async () => {
 
   it.skipIf(!available)('插入向量', async () => {
     const result = await vecdb.vector.insert('test-collection', [
-      { id: 'doc-1', vector: [0.1, 0.2, 0.3, 0.4], content: 'First document', metadata: { source: 'test' } },
-      { id: 'doc-2', vector: [0.5, 0.6, 0.7, 0.8], content: 'Second document', metadata: { source: 'test' } },
-      { id: 'doc-3', vector: [0.9, 0.1, 0.2, 0.3], content: 'Third document', metadata: { source: 'other' } },
+      {
+        id: 'doc-1',
+        vector: [0.1, 0.2, 0.3, 0.4],
+        content: 'First document',
+        metadata: { source: 'test' },
+      },
+      {
+        id: 'doc-2',
+        vector: [0.5, 0.6, 0.7, 0.8],
+        content: 'Second document',
+        metadata: { source: 'test' },
+      },
+      {
+        id: 'doc-3',
+        vector: [0.9, 0.1, 0.2, 0.3],
+        content: 'Third document',
+        metadata: { source: 'other' },
+      },
     ])
     expect(result.success).toBe(true)
   })
@@ -211,7 +231,11 @@ describe('vecdb LanceDB 集成测试', async () => {
 
   it.skipIf(!available)('upsert 向量', async () => {
     const result = await vecdb.vector.upsert('test-collection', [
-      { id: 'doc-1', vector: [0.9, 0.8, 0.7, 0.6], content: 'Updated first document' },
+      {
+        id: 'doc-1',
+        vector: [0.9, 0.8, 0.7, 0.6],
+        content: 'Updated first document',
+      },
     ])
     expect(result.success).toBe(true)
   })

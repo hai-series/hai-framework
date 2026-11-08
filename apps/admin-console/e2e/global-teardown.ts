@@ -4,7 +4,10 @@ import type { FullConfig } from '@playwright/test'
 export default async function globalTeardown(config: FullConfig) {
   if (config.metadata.notificationFixture !== true)
     return
-  const response = await fetch('http://127.0.0.1:12580/shutdown', { method: 'POST', signal: AbortSignal.timeout(15_000) })
+  const response = await fetch('http://127.0.0.1:12580/shutdown', {
+    method: 'POST',
+    signal: AbortSignal.timeout(15_000),
+  })
   if (!response.ok)
     throw new Error('Notification fixture shutdown failed')
   await response.json()

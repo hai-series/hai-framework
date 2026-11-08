@@ -17,7 +17,10 @@ export default {
         ],
       },
       fontSize: {
-        '2xs': ['0.625rem', { lineHeight: '0.875rem' }],
+        '2xs': [
+          '0.625rem',
+          { lineHeight: '0.875rem' },
+        ],
       },
     },
   },

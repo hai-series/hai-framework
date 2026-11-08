@@ -18,7 +18,9 @@ try {
     throw new Error('SDK deployment did not pass its health check')
 }
 catch (error) {
-  process.stderr.write(`${error instanceof Error ? error.message.slice(-6000) : 'SDK deployment failed'}\n`)
+  process.stderr.write(`${error instanceof Error
+    ? error.message.slice(-6000)
+    : 'SDK deployment failed'}\n`)
   // 固定测试私有退出码只传递 unknown 状态，不把配置/密钥载荷写入诊断。
   process.exitCode = remoteUnknown ? 76 : 1
 }

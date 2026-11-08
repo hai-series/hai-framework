@@ -24,7 +24,11 @@ export class TransportTimeError extends Error {
       : undefined
     const message = validTime === undefined
       ? cryptoM('crypto_transportTimeInvalid')
-      : cryptoM('crypto_transportTimeInvalidWithServerTime', { params: { serverTime: new Date(validTime).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC') } })
+      : cryptoM('crypto_transportTimeInvalidWithServerTime', {
+          params: {
+            serverTime: new Date(validTime).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC'),
+          },
+        })
     super(message)
     this.name = 'TransportTimeError'
     this.serverTime = validTime
@@ -50,18 +54,33 @@ export async function createTransportErrorResponse(
   authenticated?: { manager: TransportEncryptionManager, context: TransportMessageContext },
 ): Promise<Response> {
   const isTimeError = error instanceof TransportTimeError
-  const status = isTimeError ? 400 : error.direction === 'request' ? 413 : 500
-  const publicError = { code: error.code, message: isTimeError ? cryptoM('crypto_transportTimeInvalid') : error.message, httpStatus: status, details: isTimeError
-    ? undefined
-    : {
-        direction: error.direction,
-        stage: error.stage,
-        limitBytes: error.limitBytes,
-        actualBytes: error.actualBytes,
-      } }
+  const status = isTimeError
+    ? 400
+    : error.direction === 'request'
+      ? 413
+      : 500
+  const publicError = {
+    code: error.code,
+    message: isTimeError
+      ? cryptoM('crypto_transportTimeInvalid')
+      : error.message,
+    httpStatus: status,
+    details: isTimeError
+      ? undefined
+      : {
+          direction: error.direction,
+          stage: error.stage,
+          limitBytes: error.limitBytes,
+          actualBytes: error.actualBytes,
+        },
+  }
   if (authenticated) {
     const encryptedError = isTimeError && error.serverTime !== undefined
-      ? { ...publicError, message: error.message, details: { serverTime: error.serverTime } }
+      ? {
+          ...publicError,
+          message: error.message,
+          details: { serverTime: error.serverTime },
+        }
       : publicError
     const body = JSON.stringify({ success: false, error: encryptedError })
     const encrypted = await authenticated.manager.encryptResponse(authenticated.context, body, status)
@@ -74,5 +93,8 @@ export async function createTransportErrorResponse(
       return Response.json(encrypted.data, { status, headers })
     }
   }
-  return new Response(JSON.stringify({ success: false, error: publicError }), { status, headers: { 'Content-Type': 'application/json; charset=utf-8' } })
+  return new Response(JSON.stringify({ success: false, error: publicError }), {
+    status,
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+  })
 }

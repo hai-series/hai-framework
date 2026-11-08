@@ -56,7 +56,13 @@ describe('desktop api bootstrap', () => {
     const { initApi } = await import('../src/lib/api.js')
     await initApi()
     expect(createdClient.init).toHaveBeenCalledWith(expect.objectContaining({ baseUrl: 'https://runtime.example.test/custom-api' }))
-    expect(createdClient.init).toHaveBeenCalledWith(expect.objectContaining({ clientName: 'hai-desktop-app', headers: { 'x-hai-token-transport': 'body' }, auth: expect.objectContaining({ storage: { kind: 'memory' } }) }))
+    expect(createdClient.init).toHaveBeenCalledWith(expect.objectContaining({
+      clientName: 'hai-desktop-app',
+      headers: { 'x-hai-token-transport': 'body' },
+      auth: expect.objectContaining({
+        storage: { kind: 'memory' },
+      }),
+    }))
     expect(cookieTokenStorage).not.toHaveBeenCalled()
   })
 

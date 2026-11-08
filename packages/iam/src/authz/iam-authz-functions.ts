@@ -175,7 +175,9 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
   function mapRepositoryError(messageKey: Parameters<typeof iamM>[0], message: string) {
     return err(
       HaiIamError.REPOSITORY_ERROR,
-      iamM(messageKey, { params: { message } }),
+      iamM(messageKey, {
+        params: { message },
+      }),
     )
   }
 
@@ -328,7 +330,9 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
 
   /** 在调用方事务中完整替换权限，任何一步失败由外层统一回滚。 */
   async function replaceRolePermissions(roleId: string, permissionIds: string[], tx: DmlWithTxOperations): Promise<HaiResult<void>> {
-    const uniqueIds = [...new Set(permissionIds)]
+    const uniqueIds = [
+      ...new Set(permissionIds),
+    ]
     for (const id of uniqueIds) {
       const permission = await permissionRepository.findById(id, tx)
       if (!permission.success)
@@ -350,16 +354,33 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
   async function getUserAuthorization(userId: string): ReturnType<AuthzOperations['getUserAuthorization']> {
     return readIamCache(`authorization:${userId}`, async () => {
       const rows = await reldb.sql.query<{ role_code: string, permission_code: string | null }>('SELECT r.code AS role_code, p.code AS permission_code FROM hai_iam_user_roles ur JOIN hai_iam_roles r ON r.id = ur.role_id LEFT JOIN hai_iam_role_permissions rp ON rp.role_id = r.id LEFT JOIN hai_iam_permissions p ON p.id = rp.permission_id WHERE ur.user_id = ?', [userId])
-      return rows.success ? ok({ roles: [...new Set(rows.data.map(row => row.role_code))], permissions: [...new Set(rows.data.flatMap(row => row.permission_code ? [row.permission_code] : []))] }) : rows
+      return rows.success
+        ? ok({
+            roles: [
+              ...new Set(rows.data.map(row => row.role_code)),
+            ],
+            permissions: [
+              ...new Set(rows.data.flatMap(row => row.permission_code
+                ? [row.permission_code]
+                : [])),
+            ],
+          })
+        : rows
     })
   }
 
   return {
-    getSensitiveOperations: operation => rbacConfig.enabled ? readIamCache(`sensitive:${operation ?? '*'}`, () => permissionRepository.getSensitiveOperations(operation)) : Promise.resolve(ok([])),
+    getSensitiveOperations: operation => rbacConfig.enabled
+      ? readIamCache(`sensitive:${operation ?? '*'}`, () => permissionRepository.getSensitiveOperations(operation))
+      : Promise.resolve(ok([])),
     async setPermissionSensitiveOperations(permissionId, operations) {
       if (!Array.isArray(operations) || operations.length > 1000 || operations.some(value => typeof value !== 'string' || !value.trim() || value.length > 128))
         return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sensitiveOperationsInvalid'))
-      const updated = await permissionRepository.updateById(permissionId, { sensitiveOperations: [...new Set(operations.map(value => value.trim()))] })
+      const updated = await permissionRepository.updateById(permissionId, {
+        sensitiveOperations: [
+          ...new Set(operations.map(value => value.trim())),
+        ],
+      })
       if (!updated.success)
         return updated
       // MySQL 对相同值的幂等更新可能返回 0，需区分记录不存在与内容未变化。
@@ -496,7 +517,11 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
           await tx.rollback()
         return err(
           HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_syncRolesFailed', { params: { message: String(error) } }),
+          iamM('iam_syncRolesFailed', {
+            params: {
+              message: String(error),
+            },
+          }),
           error,
         )
       }
@@ -573,7 +598,11 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
           await tx.rollback()
         return err(
           HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_createRoleFailed', { params: { message: String(error) } }),
+          iamM('iam_createRoleFailed', {
+            params: {
+              message: String(error),
+            },
+          }),
           error,
         )
       }
@@ -685,7 +714,11 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
           await tx.rollback()
         return err(
           HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_updateRoleFailed', { params: { message: String(error) } }),
+          iamM('iam_updateRoleFailed', {
+            params: {
+              message: String(error),
+            },
+          }),
           error,
         )
       }
@@ -753,7 +786,11 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
           await tx.rollback()
         return err(
           HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_deleteRoleFailed', { params: { message: String(error) } }),
+          iamM('iam_deleteRoleFailed', {
+            params: {
+              message: String(error),
+            },
+          }),
           error,
         )
       }
@@ -775,7 +812,12 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       const operations = permission.sensitiveOperations ?? []
       if (!Array.isArray(operations) || operations.length > 1000 || operations.some(value => typeof value !== 'string' || !value.trim() || value.length > 128))
         return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sensitiveOperationsInvalid'))
-      permission = { ...permission, sensitiveOperations: [...new Set(operations.map(value => value.trim()))] }
+      permission = {
+        ...permission,
+        sensitiveOperations: [
+          ...new Set(operations.map(value => value.trim())),
+        ],
+      }
       // 使用调用方事务或创建新事务，保证 create+findByCode 原子性
       const ownTx = !tx
       if (!tx) {
@@ -824,7 +866,11 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
           await tx.rollback()
         return err(
           HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_createPermissionFailed', { params: { message: String(error) } }),
+          iamM('iam_createPermissionFailed', {
+            params: {
+              message: String(error),
+            },
+          }),
           error,
         )
       }
@@ -863,8 +909,12 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       }
 
       const result = await permissionRepository.findPage({
-        where: whereClauses.length > 0 ? whereClauses.join(' AND ') : undefined,
-        params: whereParams.length > 0 ? whereParams : undefined,
+        where: whereClauses.length > 0
+          ? whereClauses.join(' AND ')
+          : undefined,
+        params: whereParams.length > 0
+          ? whereParams
+          : undefined,
         orderBy: 'created_at DESC',
         pagination: options,
       })
@@ -888,7 +938,9 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
 
       // 事务前：从 DB 查询哪些角色关联此权限（事务中会删除关联行）
       const affectedRoleIdsResult = await rolePermissionRepository.getRoleIdsByPermissionId(permissionId)
-      const affectedRoleIds = affectedRoleIdsResult.success ? affectedRoleIdsResult.data : []
+      const affectedRoleIds = affectedRoleIdsResult.success
+        ? affectedRoleIdsResult.data
+        : []
 
       // 使用调用方事务或创建新事务，保证级联删除原子执行
       const ownTx = !tx
@@ -929,7 +981,11 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
           await tx.rollback()
         return err(
           HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_deletePermissionFailed', { params: { message: String(error) } }),
+          iamM('iam_deletePermissionFailed', {
+            params: {
+              message: String(error),
+            },
+          }),
           error,
         )
       }

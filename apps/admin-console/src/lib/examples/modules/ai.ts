@@ -7,7 +7,11 @@ export async function chatExample(config: AIConfigInput, question: string) {
   if (!initialized.success)
     return initialized
   try {
-    return await ai.llm.chat({ messages: [{ role: 'user', content: question }] })
+    return await ai.llm.chat({
+      messages: [
+        { role: 'user', content: question },
+      ],
+    })
     // 流式入口为 chatStream；迭代可能抛错，调用方需 catch 并在取消时停止消费。
     // 嵌入入口为 embedText(text) / embedBatch(texts)，不要传 { input: text }。
   }

@@ -18,7 +18,9 @@ function withoutJsdoc(content, fileName) {
   }
   visit(source)
   // 保留长度与换行，避免删除注释后把相邻词法单元拼成新的变量引用。
-  return [...ranges.values()].sort((a, b) => b.pos - a.pos).reduce((text, range) =>
+  return [
+    ...ranges.values(),
+  ].sort((a, b) => b.pos - a.pos).reduce((text, range) =>
     text.slice(0, range.pos) + text.slice(range.pos, range.end).replace(/[^\r\n]/g, ' ') + text.slice(range.end), content)
 }
 

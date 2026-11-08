@@ -31,7 +31,11 @@ function sortedMasters(client: Cluster): Redis[] {
   return client.nodes('master').sort((left, right) => {
     const a = `${left.options.host}:${left.options.port}`
     const b = `${right.options.host}:${right.options.port}`
-    return a < b ? -1 : a > b ? 1 : 0
+    return a < b
+      ? -1
+      : a > b
+        ? 1
+        : 0
   })
 }
 
@@ -57,7 +61,9 @@ function escapeGlob(prefix: string): string {
  * ```
  */
 export async function scanRedisKeys(client: Redis | Cluster, cursor: string, options: ScanOptions = {}): Promise<[string, string[]]> {
-  const prefix = client.options.keyPrefix ?? ('redisOptions' in client.options ? client.options.redisOptions?.keyPrefix : '') ?? ''
+  const prefix = client.options.keyPrefix ?? ('redisOptions' in client.options
+    ? client.options.redisOptions?.keyPrefix
+    : '') ?? ''
   const count = options.count ?? 10
   if (!Number.isSafeInteger(count) || count <= 0 || typeof cursor !== 'string' || cursor.length > 1024)
     throw new RedisScanError('invalid')

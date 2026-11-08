@@ -20,8 +20,20 @@ const CAPACITOR_ORIGINS = [
  */
 const defaultConfig: Required<CorsConfig> = {
   origin: '*',
-  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Hai-Reauthentication'],
+  methods: [
+    'GET',
+    'HEAD',
+    'PUT',
+    'PATCH',
+    'POST',
+    'DELETE',
+  ],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'X-Hai-Reauthentication',
+  ],
   exposedHeaders: [],
   credentials: false,
   maxAge: 86400,
@@ -45,8 +57,13 @@ const defaultConfig: Required<CorsConfig> = {
  * ```
  */
 export function corsMiddleware(config: CorsConfig = {}): Middleware {
-  const mergedConfig = { ...defaultConfig, ...config }
-  mergedConfig.exposedHeaders = [...new Set(['X-Request-Id', 'X-Trace-Id', ...mergedConfig.exposedHeaders])]
+  const mergedConfig = {
+    ...defaultConfig,
+    ...config,
+  }
+  mergedConfig.exposedHeaders = [
+    ...new Set(['X-Request-Id', 'X-Trace-Id', ...mergedConfig.exposedHeaders]),
+  ]
 
   return async (context, next) => {
     const { event } = context
@@ -100,15 +117,21 @@ function getAllowedOrigin(
   }
 
   if (typeof configOrigin === 'string') {
-    return matchWildcardOrigin(origin, configOrigin) ? origin : null
+    return matchWildcardOrigin(origin, configOrigin)
+      ? origin
+      : null
   }
 
   if (Array.isArray(configOrigin)) {
-    return configOrigin.some(pattern => matchWildcardOrigin(origin, pattern)) ? origin : null
+    return configOrigin.some(pattern => matchWildcardOrigin(origin, pattern))
+      ? origin
+      : null
   }
 
   if (typeof configOrigin === 'function') {
-    return configOrigin(origin) ? origin : null
+    return configOrigin(origin)
+      ? origin
+      : null
   }
 
   return null

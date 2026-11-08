@@ -60,20 +60,28 @@ describe('estimateMessagesTokens', () => {
   })
 
   it('将 assistant 的 reasoning_content 与 tool_calls 参数计入预算', () => {
-    const baseline: ChatMessage[] = [{ role: 'assistant', content: null }]
-    const protocolMessage: ChatMessage[] = [{
-      role: 'assistant',
-      content: null,
-      reasoning_content: 'r'.repeat(2000),
-      tool_calls: [{
-        id: 'call-large-arguments',
-        type: 'function',
-        function: {
-          name: 'prepare_assignment',
-          arguments: JSON.stringify({ payload: 'x'.repeat(2000) }),
-        },
-      }],
-    }]
+    const baseline: ChatMessage[] = [
+      { role: 'assistant', content: null },
+    ]
+    const protocolMessage: ChatMessage[] = [
+      {
+        role: 'assistant',
+        content: null,
+        reasoning_content: 'r'.repeat(2000),
+        tool_calls: [
+          {
+            id: 'call-large-arguments',
+            type: 'function',
+            function: {
+              name: 'prepare_assignment',
+              arguments: JSON.stringify({
+                payload: 'x'.repeat(2000),
+              }),
+            },
+          },
+        ],
+      },
+    ]
 
     expect(estimateMessagesTokens(protocolMessage, 0.25))
       .toBeGreaterThan(estimateMessagesTokens(baseline, 0.25) + 900)

@@ -15,16 +15,38 @@ import { createTokenOperations } from '../src/token/ai-token-functions.js'
 /** 仅替代外部模型；Context 与 Memory/SQLite 状态协议均调用真实实现。 */
 function model(reply: () => Promise<string>): LLMOperations {
   return {
-    chat: vi.fn<LLMOperations['chat']>(async () => ({ success: true, data: {
-      id: 'completion',
-      object: 'chat.completion',
-      created: 0,
-      model: 'test',
-      choices: [{ index: 0, logprobs: null, finish_reason: 'stop', message: { role: 'assistant', content: await reply(), refusal: null } }],
-    } })),
+    chat: vi.fn<LLMOperations['chat']>(async () => ({
+      success: true,
+      data: {
+        id: 'completion',
+        object: 'chat.completion',
+        created: 0,
+        model: 'test',
+        choices: [
+          {
+            index: 0,
+            logprobs: null,
+            finish_reason: 'stop',
+            message: { role: 'assistant', content: await reply(), refusal: null },
+          },
+        ],
+      },
+    })),
     async* chatStream() {
       for (const content of ['first', 'second']) {
-        yield { id: 'stream', object: 'chat.completion.chunk', created: 0, model: 'test', choices: [{ index: 0, delta: { content }, finish_reason: null }] }
+        yield {
+          id: 'stream',
+          object: 'chat.completion.chunk',
+          created: 0,
+          model: 'test',
+          choices: [
+            {
+              index: 0,
+              delta: { content },
+              finish_reason: null,
+            },
+          ],
+        }
       }
     },
     listModels: vi.fn(),
@@ -39,29 +61,55 @@ function model(reply: () => Promise<string>): LLMOperations {
 let sequence = 0
 describe.each(['memory', 'sqlite'] as const)('shared context %s', (backend) => {
   async function setup(llm = model(async () => 'reply')) {
-    const provider = backend === 'memory' ? createMemoryStoreProvider() : createDbStoreProviderFromModules()
+    const provider = backend === 'memory'
+      ? createMemoryStoreProvider()
+      : createDbStoreProviderFromModules()
     const table = `hai_ai_context_shared_${sequence++}`
     const store = provider.createRelStore<PersistedContextState>(table, { hasObjectId: true, hasSessionId: true })
     const sessions = provider.createRelStore<SessionInfo>(`${table}_sessions`, { hasObjectId: true })
     await provider.initialize()
     const token = createTokenOperations({ tokenRatio: 0.25 })
     const config = CompressConfigSchema.parse({})
-    const summary = createSummaryOperations(LLMConfigSchema.parse({ baseUrl: 'http://unused.test', apiKey: 'test', model: 'test', timeout: 1000 }), llm, token, {})
+    const summary = createSummaryOperations(LLMConfigSchema.parse({
+      baseUrl: 'http://unused.test',
+      apiKey: 'test',
+      model: 'test',
+      timeout: 1000,
+    }), llm, token, {})
     const compress = createCompressOperations(config, token, summary, 4096)
-    const scope = { objectId: 'user', sessionId: crypto.randomUUID() }
+    const scope = {
+      objectId: 'user',
+      sessionId: crypto.randomUUID(),
+    }
     const ops = createContextOperations(config, token, compress, store, sessions, { llm })
     function manager() {
-      const result = ops.createManager({ scope, turnCommit: 'manual', compress: { auto: false } })
+      const result = ops.createManager({
+        scope,
+        turnCommit: 'manual',
+        compress: { auto: false },
+      })
       if (!result.success)
         throw new Error(result.error.message)
       return result.data
     }
-    return { store, ops, scope, a: manager(), b: manager(), llm }
+    return {
+      store,
+      ops,
+      scope,
+      a: manager(),
+      b: manager(),
+      llm,
+    }
   }
 
   it('两个管理器并发追加不丢失，读取副本不能修改共享状态', async () => {
     const { a, b } = await setup()
-    const results = await Promise.all(Array.from({ length: 20 }, (_, index) => (index % 2 ? a : b).addMessage({ role: 'user', content: String(index) })))
+    const results = await Promise.all(Array.from({ length: 20 }, (_, index) => (index % 2
+      ? a
+      : b).addMessage({
+      role: 'user',
+      content: String(index),
+    })))
     expect(results.every(result => result.success)).toBe(true)
     expect((await b.reload()).success).toBe(true)
     const messages = b.getMessages()
@@ -84,12 +132,27 @@ describe.each(['memory', 'sqlite'] as const)('shared context %s', (backend) => {
     expect(restored.success).toBe(true)
     if (!restored.success)
       return
-    expect(restored.data.getTurns()).toMatchObject({ success: true, data: [{ id: generated.data.turnId, generated: 'reply', committed: '' }] })
+    expect(restored.data.getTurns()).toMatchObject({
+      success: true,
+      data: [
+        { id: generated.data.turnId, generated: 'reply', committed: '' },
+      ],
+    })
     expect((await b.chat('must-wait')).success).toBe(false)
-    const results = await Promise.all([a.commitTurn(generated.data.turnId), restored.data.commitTurn(generated.data.turnId), b.commitTurn(generated.data.turnId)])
+    const results = await Promise.all([
+      a.commitTurn(generated.data.turnId),
+      restored.data.commitTurn(generated.data.turnId),
+      b.commitTurn(generated.data.turnId),
+    ])
     expect(results.every(result => result.success)).toBe(true)
     await b.reload()
-    expect(b.getMessages()).toMatchObject({ success: true, data: [{ content: 'question' }, { content: 'reply' }] })
+    expect(b.getMessages()).toMatchObject({
+      success: true,
+      data: [
+        { content: 'question' },
+        { content: 'reply' },
+      ],
+    })
     expect((await b.commitTurn(generated.data.turnId, { text: 'different' })).success).toBe(false)
   })
 
@@ -98,14 +161,27 @@ describe.each(['memory', 'sqlite'] as const)('shared context %s', (backend) => {
     const stream = a.chatStream('question')[Symbol.asyncIterator]()
     const started = await stream.next()
     expect(started.value).toMatchObject({ type: 'turn_started' })
-    const id = started.value?.type === 'turn_started' ? started.value.turnId : ''
+    const id = started.value?.type === 'turn_started'
+      ? started.value.turnId
+      : ''
     expect((await stream.next()).value).toEqual({ type: 'delta', text: 'first' })
     await b.reload()
-    expect(b.getTurns()).toMatchObject({ success: true, data: [{ generated: 'first' }] })
+    expect(b.getTurns()).toMatchObject({
+      success: true,
+      data: [
+        { generated: 'first' },
+      ],
+    })
     expect((await b.interruptTurn(id, { text: 'fir' })).success).toBe(true)
     await expect(stream.next()).rejects.toThrow('ownership')
     await b.reload()
-    expect(b.getMessages()).toMatchObject({ success: true, data: [{ content: 'question' }, { content: 'fir' }] })
+    expect(b.getMessages()).toMatchObject({
+      success: true,
+      data: [
+        { content: 'question' },
+        { content: 'fir' },
+      ],
+    })
   })
 
   it.each(['reset', 'remove'] as const)('%s 拒绝忽略取消信号的旧生成，旧 save 不能复活删除会话', async (operation) => {
@@ -116,7 +192,9 @@ describe.each(['memory', 'sqlite'] as const)('shared context %s', (backend) => {
     const { a, b, ops, scope, llm } = await setup(model(() => upstream))
     const pending = a.chat('old')
     await vi.waitFor(() => expect(llm.chat).toHaveBeenCalledOnce())
-    expect((operation === 'reset' ? await b.reset() : await ops.removeSession(scope)).success).toBe(true)
+    expect((operation === 'reset'
+      ? await b.reset()
+      : await ops.removeSession(scope)).success).toBe(true)
     finish('stale')
     expect((await pending).success).toBe(false)
     if (operation === 'remove') {
@@ -133,11 +211,19 @@ describe.each(['memory', 'sqlite'] as const)('shared context %s', (backend) => {
     const { a, b } = await setup()
     const stream = a.chatStream('question')[Symbol.asyncIterator]()
     const started = await stream.next()
-    const id = started.value?.type === 'turn_started' ? started.value.turnId : ''
+    const id = started.value?.type === 'turn_started'
+      ? started.value.turnId
+      : ''
     await stream.next()
     await stream.return?.()
     expect((await b.interruptTurn(id, { text: 'fir' })).success).toBe(true)
-    expect(b.getMessages()).toMatchObject({ success: true, data: [{ content: 'question' }, { content: 'fir' }] })
+    expect(b.getMessages()).toMatchObject({
+      success: true,
+      data: [
+        { content: 'question' },
+        { content: 'fir' },
+      ],
+    })
   })
 
   it('创建后修改输入或暴露scope副本不能改变持久主体', async () => {
@@ -155,7 +241,9 @@ describe.each(['memory', 'sqlite'] as const)('shared context %s', (backend) => {
     const controller = new AbortController()
     const stream = a.chatStream('question', { signal: controller.signal })[Symbol.asyncIterator]()
     const started = await stream.next()
-    const id = started.value?.type === 'turn_started' ? started.value.turnId : ''
+    const id = started.value?.type === 'turn_started'
+      ? started.value.turnId
+      : ''
     await stream.next()
     controller.abort()
     await vi.waitFor(async () => {
@@ -164,14 +252,23 @@ describe.each(['memory', 'sqlite'] as const)('shared context %s', (backend) => {
     })
     expect((await b.interruptTurn(id, { text: 'fir' })).success).toBe(true)
     await stream.return?.()
-    expect(b.getMessages()).toMatchObject({ success: true, data: [{ content: 'question' }, { content: 'fir' }] })
+    expect(b.getMessages()).toMatchObject({
+      success: true,
+      data: [
+        { content: 'question' },
+        { content: 'fir' },
+      ],
+    })
   })
 
   it('持久化故障失败关闭，既不伪造成功也不发布本地未提交快照', async () => {
     const { a, store } = await setup()
     const spy = vi.spyOn(store, 'compareAndSwap').mockRejectedValueOnce(new Error('Database unavailable'))
     const failed = await a.addMessage({ role: 'user', content: 'uncommitted' })
-    expect(failed).toMatchObject({ success: false, error: { code: HaiAIError.STORE_FAILED.code } })
+    expect(failed).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.STORE_FAILED.code },
+    })
     expect(a.getMessages()).toEqual({ success: true, data: [] })
     spy.mockRestore()
     expect((await a.reload()).success).toBe(true)
@@ -182,9 +279,17 @@ describe.each(['memory', 'sqlite'] as const)('shared context %s', (backend) => {
     const { a, b, ops, scope } = await setup()
     expect((await a.addMessage({ role: 'user', content: 'one' })).success).toBe(true)
     expect((await a.save()).success).toBe(true)
-    const concurrent = await Promise.all([ops.renameSession(scope, 'kept-title'), b.save()])
+    const concurrent = await Promise.all([
+      ops.renameSession(scope, 'kept-title'),
+      b.save(),
+    ])
     expect(concurrent.every(result => result.success)).toBe(true)
-    expect(await ops.listSessions(scope.objectId)).toMatchObject({ success: true, data: [{ title: 'kept-title' }] })
+    expect(await ops.listSessions(scope.objectId)).toMatchObject({
+      success: true,
+      data: [
+        { title: 'kept-title' },
+      ],
+    })
     expect((await ops.removeSession(scope)).success).toBe(true)
     expect((await a.save()).success).toBe(false)
     expect(await ops.listSessions(scope.objectId)).toEqual({ success: true, data: [] })

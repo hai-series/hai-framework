@@ -23,8 +23,31 @@ dns.on('message', (query, peer) => {
   header.writeUInt16BE(0x8180, 2)
   header.writeUInt16BE(1, 4)
   header.writeUInt16BE(addressQuery ? 1 : 0, 6)
-  const answer = addressQuery ? Buffer.from([0xC0, 0x0C, 0, 1, 0, 1, 0, 0, 0, 1, 0, 4, 127, 0, 0, active]) : Buffer.alloc(0)
-  dns.send(Buffer.concat([header, query.subarray(12, end), answer]), peer.port, peer.address)
+  const answer = addressQuery
+    ? Buffer.from([
+        0xC0,
+        0x0C,
+        0,
+        1,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        4,
+        127,
+        0,
+        0,
+        active,
+      ])
+    : Buffer.alloc(0)
+  dns.send(Buffer.concat([
+    header,
+    query.subarray(12, end),
+    answer,
+  ]), peer.port, peer.address)
 })
 dns.bind(18053, '127.0.0.1')
 

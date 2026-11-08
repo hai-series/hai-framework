@@ -12,7 +12,10 @@ import { ai, HaiAIError } from '../src/index.js'
 
 vi.mock('undici', async (importOriginal) => {
   const original = await importOriginal<typeof import('undici')>()
-  return { ...original, fetch: vi.fn() }
+  return {
+    ...original,
+    fetch: vi.fn(),
+  }
 })
 
 beforeEach(() => {
@@ -44,7 +47,9 @@ function imageResponse(bytes = PNG_BYTES, mimeType = 'image/png'): Response {
 
 /** 下载链使用与 Agent 同版本的 Response；厂商接口继续使用全局 fetch。 */
 function downloadedImage(bytes = PNG_BYTES, mimeType = 'image/png'): ImageResponse {
-  return new ImageResponse(bytes, { headers: { 'content-type': mimeType } })
+  return new ImageResponse(bytes, {
+    headers: { 'content-type': mimeType },
+  })
 }
 
 async function initImage(model: {
@@ -85,7 +90,12 @@ describe('ai.image 公共契约', () => {
   })
 
   it('拒绝空提示词', async () => {
-    await initImage({ id: 'openai', provider: 'openai', model: 'gpt-image-2', apiKey: 'sk-openai' })
+    await initImage({
+      id: 'openai',
+      provider: 'openai',
+      model: 'gpt-image-2',
+      apiKey: 'sk-openai',
+    })
     const result = await ai.image.generate({ prompt: '   ' })
     expect(result.success).toBe(false)
     if (!result.success)
@@ -94,7 +104,12 @@ describe('ai.image 公共契约', () => {
   })
 
   it('拒绝未知模型', async () => {
-    await initImage({ id: 'openai', provider: 'openai', model: 'gpt-image-2', apiKey: 'sk-openai' })
+    await initImage({
+      id: 'openai',
+      provider: 'openai',
+      model: 'gpt-image-2',
+      apiKey: 'sk-openai',
+    })
     const result = await ai.image.generate({ prompt: '一只猫', model: 'missing' })
     expect(result.success).toBe(false)
     if (!result.success)
@@ -107,7 +122,12 @@ describe('ai.image 公共契约', () => {
     { width: 1024.5, height: 1024 },
     { width: Number.NaN, height: 1024 },
   ])('拒绝无效尺寸 $width x $height', async (size) => {
-    await initImage({ id: 'openai', provider: 'openai', model: 'gpt-image-2', apiKey: 'sk-openai' })
+    await initImage({
+      id: 'openai',
+      provider: 'openai',
+      model: 'gpt-image-2',
+      apiKey: 'sk-openai',
+    })
     const result = await ai.image.generate({ prompt: '一只猫', size })
     expect(result.success).toBe(false)
     if (!result.success)
@@ -116,8 +136,18 @@ describe('ai.image 公共契约', () => {
   })
 
   it('接受省略或传入空参考图数组', async () => {
-    await initImage({ id: 'openai', provider: 'openai', model: 'gpt-image-2', apiKey: 'sk-openai' })
-    vi.mocked(fetch).mockImplementation(async () => jsonResponse({ data: [{ b64_json: PNG_BASE64 }], output_format: 'png' }))
+    await initImage({
+      id: 'openai',
+      provider: 'openai',
+      model: 'gpt-image-2',
+      apiKey: 'sk-openai',
+    })
+    vi.mocked(fetch).mockImplementation(async () => jsonResponse({
+      data: [
+        { b64_json: PNG_BASE64 },
+      ],
+      output_format: 'png',
+    }))
 
     const omitted = await ai.image.generate({ prompt: '一只猫' })
     const empty = await ai.image.generate({ prompt: '一只猫', referenceImages: [] })
@@ -131,11 +161,31 @@ describe('ai.image 公共契约', () => {
   })
 
   it.each([
-    { referenceImages: [{ data: new Uint8Array(), mimeType: 'image/png' }] },
-    { referenceImages: [{ data: PNG_BYTES, mimeType: '' }] },
-    { referenceImages: [{ data: PNG_BYTES, mimeType: 'text/plain' }] },
+    {
+      referenceImages: [
+        {
+          data: new Uint8Array(),
+          mimeType: 'image/png',
+        },
+      ],
+    },
+    {
+      referenceImages: [
+        { data: PNG_BYTES, mimeType: '' },
+      ],
+    },
+    {
+      referenceImages: [
+        { data: PNG_BYTES, mimeType: 'text/plain' },
+      ],
+    },
   ])('拒绝内容为空或 MIME 非图片的参考图', async ({ referenceImages }) => {
-    await initImage({ id: 'openai', provider: 'openai', model: 'gpt-image-2', apiKey: 'sk-openai' })
+    await initImage({
+      id: 'openai',
+      provider: 'openai',
+      model: 'gpt-image-2',
+      apiKey: 'sk-openai',
+    })
     const result = await ai.image.generate({ prompt: '一只猫', referenceImages })
     expect(result.success).toBe(false)
     if (!result.success)
@@ -144,7 +194,12 @@ describe('ai.image 公共契约', () => {
   })
 
   it('请求前已取消时不调用厂商接口', async () => {
-    await initImage({ id: 'openai', provider: 'openai', model: 'gpt-image-2', apiKey: 'sk-openai' })
+    await initImage({
+      id: 'openai',
+      provider: 'openai',
+      model: 'gpt-image-2',
+      apiKey: 'sk-openai',
+    })
     const controller = new AbortController()
     controller.abort()
 
@@ -168,15 +223,25 @@ describe('ai.image Provider 官方格式', () => {
   })
 
   it('openAI GPT Image 使用 /images/generations 并解析 b64_json', async () => {
-    await initImage({ id: 'gpt-image', provider: 'openai', model: 'gpt-image-2', apiKey: 'sk-openai' })
+    await initImage({
+      id: 'gpt-image',
+      provider: 'openai',
+      model: 'gpt-image-2',
+      apiKey: 'sk-openai',
+    })
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({
       created: 1,
-      data: [{ b64_json: PNG_BASE64 }],
+      data: [
+        { b64_json: PNG_BASE64 },
+      ],
       output_format: 'png',
       size: '1024x1024',
     }))
 
-    const result = await ai.image.generate({ prompt: '一只戴围巾的猫', size: { width: 1024, height: 1024 } })
+    const result = await ai.image.generate({
+      prompt: '一只戴围巾的猫',
+      size: { width: 1024, height: 1024 },
+    })
 
     expect(result.success).toBe(true)
     if (result.success) {
@@ -197,9 +262,17 @@ describe('ai.image Provider 官方格式', () => {
   })
 
   it('openAI 参考图使用 /images/edits multipart，并保留每张图的 MIME 与字节', async () => {
-    await initImage({ id: 'gpt-image', provider: 'openai', model: 'gpt-image-2', apiKey: 'sk-openai' })
+    await initImage({
+      id: 'gpt-image',
+      provider: 'openai',
+      model: 'gpt-image-2',
+      apiKey: 'sk-openai',
+    })
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({
-      data: [{ b64_json: JPEG_BASE64 }, { b64_json: JPEG_BASE64 }],
+      data: [
+        { b64_json: JPEG_BASE64 },
+        { b64_json: JPEG_BASE64 },
+      ],
       output_format: 'jpeg',
     }))
 
@@ -233,23 +306,43 @@ describe('ai.image Provider 官方格式', () => {
   })
 
   it('google Gemini Image 使用 generateContent 并解析 inlineData', async () => {
-    await initImage({ id: 'nano-banana', provider: 'google', model: 'gemini-3.1-flash-image', apiKey: 'google-key' })
+    await initImage({
+      id: 'nano-banana',
+      provider: 'google',
+      model: 'gemini-3.1-flash-image',
+      apiKey: 'google-key',
+    })
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({
-      candidates: [{
-        content: {
-          parts: [{ inlineData: { mimeType: 'image/png', data: PNG_BASE64 } }],
+      candidates: [
+        {
+          content: {
+            parts: [
+              {
+                inlineData: { mimeType: 'image/png', data: PNG_BASE64 },
+              },
+            ],
+          },
         },
-      }],
+      ],
     }))
 
-    const result = await ai.image.generate({ prompt: '极简香蕉图标', size: { width: 1024, height: 1024 } })
+    const result = await ai.image.generate({
+      prompt: '极简香蕉图标',
+      size: { width: 1024, height: 1024 },
+    })
 
     expect(result.success).toBe(true)
     const [url, init] = vi.mocked(fetch).mock.calls[0]!
     expect(url).toBe('https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-image:generateContent')
     expect(init?.headers).toMatchObject({ 'x-goog-api-key': 'google-key', 'Content-Type': 'application/json' })
     expect(JSON.parse(String(init?.body))).toEqual({
-      contents: [{ parts: [{ text: '极简香蕉图标' }] }],
+      contents: [
+        {
+          parts: [
+            { text: '极简香蕉图标' },
+          ],
+        },
+      ],
       generationConfig: {
         responseModalities: ['IMAGE'],
         responseFormat: {
@@ -260,9 +353,24 @@ describe('ai.image Provider 官方格式', () => {
   })
 
   it('google 将多张参考图编码为 generateContent inlineData parts', async () => {
-    await initImage({ id: 'nano-banana', provider: 'google', model: 'gemini-3.1-flash-image', apiKey: 'google-key' })
+    await initImage({
+      id: 'nano-banana',
+      provider: 'google',
+      model: 'gemini-3.1-flash-image',
+      apiKey: 'google-key',
+    })
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({
-      candidates: [{ content: { parts: [{ inline_data: { mime_type: 'image/jpeg', data: JPEG_BASE64 } }] } }],
+      candidates: [
+        {
+          content: {
+            parts: [
+              {
+                inline_data: { mime_type: 'image/jpeg', data: JPEG_BASE64 },
+              },
+            ],
+          },
+        },
+      ],
     }))
 
     const result = await ai.image.generate({ prompt: '融合两张参考图', referenceImages: REFERENCE_IMAGES })
@@ -272,14 +380,22 @@ describe('ai.image Provider 官方格式', () => {
       expect(result.data.images[0]).toMatchObject({ data: JPEG_BYTES, mimeType: 'image/jpeg' })
     const [, init] = vi.mocked(fetch).mock.calls[0]!
     expect(JSON.parse(String(init?.body))).toEqual({
-      contents: [{
-        parts: [
-          { inlineData: { mimeType: 'image/png', data: PNG_BASE64 } },
-          { inlineData: { mimeType: 'image/jpeg', data: JPEG_BASE64 } },
-          { text: '融合两张参考图' },
-        ],
-      }],
-      generationConfig: { responseModalities: ['IMAGE'] },
+      contents: [
+        {
+          parts: [
+            {
+              inlineData: { mimeType: 'image/png', data: PNG_BASE64 },
+            },
+            {
+              inlineData: { mimeType: 'image/jpeg', data: JPEG_BASE64 },
+            },
+            { text: '融合两张参考图' },
+          ],
+        },
+      ],
+      generationConfig: {
+        responseModalities: ['IMAGE'],
+      },
     })
   })
 
@@ -294,16 +410,26 @@ describe('ai.image Provider 官方格式', () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(jsonResponse({
         output: {
-          choices: [{
-            finish_reason: 'stop',
-            message: { role: 'assistant', content: [{ image: 'https://temporary.example/qwen.png' }] },
-          }],
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: {
+                role: 'assistant',
+                content: [
+                  { image: 'https://temporary.example/qwen.png' },
+                ],
+              },
+            },
+          ],
         },
         usage: { width: 1024, height: 1024, image_count: 1 },
       }))
     vi.mocked(fetchImage).mockResolvedValueOnce(downloadedImage())
 
-    const result = await ai.image.generate({ prompt: '中文海报', size: { width: 1024, height: 1024 } })
+    const result = await ai.image.generate({
+      prompt: '中文海报',
+      size: { width: 1024, height: 1024 },
+    })
 
     expect(result.success).toBe(true)
     expect(fetch).toHaveBeenCalledTimes(1)
@@ -313,7 +439,14 @@ describe('ai.image Provider 官方格式', () => {
     expect(JSON.parse(String(init?.body))).toEqual({
       model: 'qwen-image-3.0-pro',
       input: {
-        messages: [{ role: 'user', content: [{ text: '中文海报' }] }],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { text: '中文海报' },
+            ],
+          },
+        ],
       },
       parameters: {
         n: 1,
@@ -334,7 +467,17 @@ describe('ai.image Provider 官方格式', () => {
     })
     vi.mocked(fetch)
       .mockResolvedValueOnce(jsonResponse({
-        output: { choices: [{ message: { content: [{ image: 'https://temporary.example/qwen.png' }] } }] },
+        output: {
+          choices: [
+            {
+              message: {
+                content: [
+                  { image: 'https://temporary.example/qwen.png' },
+                ],
+              },
+            },
+          ],
+        },
       }))
     vi.mocked(fetchImage).mockResolvedValueOnce(downloadedImage())
 
@@ -346,28 +489,40 @@ describe('ai.image Provider 官方格式', () => {
     expect(JSON.parse(String(init?.body))).toEqual({
       model: 'qwen-image-2.0-pro',
       input: {
-        messages: [{
-          role: 'user',
-          content: [
-            { image: `data:image/png;base64,${PNG_BASE64}` },
-            { image: `data:image/jpeg;base64,${JPEG_BASE64}` },
-            { text: '保留主体，更换背景' },
-          ],
-        }],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { image: `data:image/png;base64,${PNG_BASE64}` },
+              { image: `data:image/jpeg;base64,${JPEG_BASE64}` },
+              { text: '保留主体，更换背景' },
+            ],
+          },
+        ],
       },
       parameters: { n: 1, watermark: false },
     })
   })
 
   it('seedream 4.x/5.x 使用 Ark images/generations 并解析 b64_json', async () => {
-    await initImage({ id: 'seedream', provider: 'seedream', model: 'doubao-seedream-5-0-lite', apiKey: 'ark-key' })
+    await initImage({
+      id: 'seedream',
+      provider: 'seedream',
+      model: 'doubao-seedream-5-0-lite',
+      apiKey: 'ark-key',
+    })
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({
       model: 'doubao-seedream-5-0-lite',
       created: 1,
-      data: [{ b64_json: PNG_BASE64, size: '1024x1024' }],
+      data: [
+        { b64_json: PNG_BASE64, size: '1024x1024' },
+      ],
     }))
 
-    const result = await ai.image.generate({ prompt: '电影感山谷', size: { width: 1024, height: 1024 } })
+    const result = await ai.image.generate({
+      prompt: '电影感山谷',
+      size: { width: 1024, height: 1024 },
+    })
 
     expect(result.success).toBe(true)
     const [url, init] = vi.mocked(fetch).mock.calls[0]!
@@ -383,10 +538,17 @@ describe('ai.image Provider 官方格式', () => {
   })
 
   it('seedream 将参考图转换为顶层 image Data URL 数组', async () => {
-    await initImage({ id: 'seedream', provider: 'seedream', model: 'doubao-seedream-4-5', apiKey: 'ark-key' })
+    await initImage({
+      id: 'seedream',
+      provider: 'seedream',
+      model: 'doubao-seedream-4-5',
+      apiKey: 'ark-key',
+    })
     vi.mocked(fetch)
       .mockResolvedValueOnce(jsonResponse({
-        data: [{ url: 'https://temporary.example/seedream.jpeg' }],
+        data: [
+          { url: 'https://temporary.example/seedream.jpeg' },
+        ],
       }))
     vi.mocked(fetchImage).mockResolvedValueOnce(downloadedImage(JPEG_BYTES, 'image/jpeg'))
 
@@ -410,10 +572,18 @@ describe('ai.image Provider 官方格式', () => {
   })
 
   it('pollinations 免费模型使用二进制图片接口', async () => {
-    await initImage({ id: 'free-image', provider: 'pollinations', model: 'zimage', apiKey: 'pollinations-key' })
+    await initImage({
+      id: 'free-image',
+      provider: 'pollinations',
+      model: 'zimage',
+      apiKey: 'pollinations-key',
+    })
     vi.mocked(fetch).mockResolvedValueOnce(imageResponse(PNG_BYTES, 'image/png'))
 
-    const result = await ai.image.generate({ prompt: 'free image', size: { width: 768, height: 512 } })
+    const result = await ai.image.generate({
+      prompt: 'free image',
+      size: { width: 768, height: 512 },
+    })
 
     expect(result.success).toBe(true)
     const [url, init] = vi.mocked(fetch).mock.calls[0]!
@@ -422,9 +592,16 @@ describe('ai.image Provider 官方格式', () => {
   })
 
   it('pollinations 参考图使用 OpenAI-compatible multipart edits 接口', async () => {
-    await initImage({ id: 'free-image-edit', provider: 'pollinations', model: 'nanobanana', apiKey: 'pollinations-key' })
+    await initImage({
+      id: 'free-image-edit',
+      provider: 'pollinations',
+      model: 'nanobanana',
+      apiKey: 'pollinations-key',
+    })
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({
-      data: [{ b64_json: PNG_BASE64 }],
+      data: [
+        { b64_json: PNG_BASE64 },
+      ],
     }))
 
     const result = await ai.image.generate({
@@ -457,27 +634,79 @@ describe('ai.image Provider 错误与响应边界', () => {
   })
 
   it('base64 在解码前检查单图大小，数量超限和参考图超限均失败', async () => {
-    const model = { id: 'openai', provider: 'openai', model: 'gpt-image-2', apiKey: 'test-key' } as const
+    const model = {
+      id: 'openai',
+      provider: 'openai',
+      model: 'gpt-image-2',
+      apiKey: 'test-key',
+    } as const
     await initImage(model, { maxImageBytes: 8, maxImages: 1 })
-    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ data: [{ b64_json: Buffer.alloc(9).toString('base64') }] }))
-    expect(await ai.image.generate({ prompt: 'image' })).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_TOO_LARGE.code } })
-    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ data: [{ b64_json: PNG_BASE64 }, { b64_json: PNG_BASE64 }] }))
-    expect(await ai.image.generate({ prompt: 'image' })).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_TOO_LARGE.code } })
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({
+      data: [
+        {
+          b64_json: Buffer.alloc(9).toString('base64'),
+        },
+      ],
+    }))
+    expect(await ai.image.generate({ prompt: 'image' })).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_TOO_LARGE.code },
+    })
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({
+      data: [
+        { b64_json: PNG_BASE64 },
+        { b64_json: PNG_BASE64 },
+      ],
+    }))
+    expect(await ai.image.generate({ prompt: 'image' })).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_TOO_LARGE.code },
+    })
     const calls = vi.mocked(fetch).mock.calls.length
-    expect(await ai.image.generate({ prompt: 'image', referenceImages: [{ data: new Uint8Array(9), mimeType: 'image/png' }] })).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_TOO_LARGE.code } })
-    expect(await ai.image.generate({ prompt: 'image', referenceImages: REFERENCE_IMAGES })).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_TOO_LARGE.code } })
+    expect(await ai.image.generate({
+      prompt: 'image',
+      referenceImages: [
+        {
+          data: new Uint8Array(9),
+          mimeType: 'image/png',
+        },
+      ],
+    })).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_TOO_LARGE.code },
+    })
+    expect(await ai.image.generate({ prompt: 'image', referenceImages: REFERENCE_IMAGES })).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_TOO_LARGE.code },
+    })
     expect(fetch).toHaveBeenCalledTimes(calls)
   })
 
   it('声明长度超过限制时在读入之前取消响应，缺失 MIME 和魔数不符均拒绝', async () => {
-    await initImage({ id: 'free', provider: 'pollinations', model: 'zimage', apiKey: 'test-key' }, { maxImageBytes: 8 })
+    await initImage({
+      id: 'free',
+      provider: 'pollinations',
+      model: 'zimage',
+      apiKey: 'test-key',
+    }, { maxImageBytes: 8 })
     const cancel = vi.fn()
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(new ReadableStream({ cancel }), { headers: { 'content-type': 'image/png', 'content-length': '1000' } }))
-    expect(await ai.image.generate({ prompt: 'image' })).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_TOO_LARGE.code } })
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(new ReadableStream({ cancel }), {
+      headers: { 'content-type': 'image/png', 'content-length': '1000' },
+    }))
+    expect(await ai.image.generate({ prompt: 'image' })).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_TOO_LARGE.code },
+    })
     expect(cancel).toHaveBeenCalledOnce()
-    for (const response of [new Response(PNG_BYTES), imageResponse(JPEG_BYTES, 'image/png')]) {
+    for (const response of [
+      new Response(PNG_BYTES),
+      imageResponse(JPEG_BYTES, 'image/png'),
+    ]) {
       vi.mocked(fetch).mockResolvedValueOnce(response)
-      expect(await ai.image.generate({ prompt: 'image' })).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_PROTOCOL_ERROR.code } })
+      expect(await ai.image.generate({ prompt: 'image' })).toMatchObject({
+        success: false,
+        error: { code: HaiAIError.IMAGE_PROTOCOL_ERROR.code },
+      })
     }
   })
 
@@ -494,8 +723,15 @@ describe('ai.image Provider 错误与响应边界', () => {
   })
 
   it('将厂商非 2xx 响应映射为 IMAGE_UPSTREAM_ERROR', async () => {
-    await initImage({ id: 'openai', provider: 'openai', model: 'gpt-image-2', apiKey: 'sk-openai' })
-    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ error: { message: 'rate limited' } }, 429))
+    await initImage({
+      id: 'openai',
+      provider: 'openai',
+      model: 'gpt-image-2',
+      apiKey: 'sk-openai',
+    })
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({
+      error: { message: 'rate limited' },
+    }, 429))
 
     const result = await ai.image.generate({ prompt: '一只猫' })
 
@@ -505,7 +741,12 @@ describe('ai.image Provider 错误与响应边界', () => {
   })
 
   it('将 Pollinations 402 解释为余额或 Key 预算耗尽，并保留安全诊断字段', async () => {
-    await initImage({ id: 'free', provider: 'pollinations', model: 'zimage', apiKey: 'test-key' })
+    await initImage({
+      id: 'free',
+      provider: 'pollinations',
+      model: 'zimage',
+      apiKey: 'test-key',
+    })
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({
       error: {
         code: 'PAYMENT_REQUIRED',
@@ -533,7 +774,12 @@ describe('ai.image Provider 错误与响应边界', () => {
   })
 
   it('将无法解析的 JSON 映射为 IMAGE_PROTOCOL_ERROR', async () => {
-    await initImage({ id: 'openai', provider: 'openai', model: 'gpt-image-2', apiKey: 'sk-openai' })
+    await initImage({
+      id: 'openai',
+      provider: 'openai',
+      model: 'gpt-image-2',
+      apiKey: 'sk-openai',
+    })
     vi.mocked(fetch).mockResolvedValueOnce(new Response('not-json', {
       status: 200,
       headers: { 'content-type': 'application/json' },
@@ -547,17 +793,71 @@ describe('ai.image Provider 错误与响应边界', () => {
   })
 
   it.each([
-    ['openai', { data: [] }],
-    ['openai', { data: [{ b64_json: '' }] }],
-    ['google', { candidates: [{ content: { parts: [{ text: 'no image' }] } }] }],
-    ['google', { candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: '' } }] } }] }],
-    ['qwen', { output: { choices: [] } }],
-    ['seedream', { data: [{}] }],
+    [
+      'openai',
+      { data: [] },
+    ],
+    [
+      'openai',
+      {
+        data: [
+          { b64_json: '' },
+        ],
+      },
+    ],
+    [
+      'google',
+      {
+        candidates: [
+          {
+            content: {
+              parts: [
+                { text: 'no image' },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+    [
+      'google',
+      {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  inlineData: { mimeType: 'image/png', data: '' },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+    [
+      'qwen',
+      {
+        output: { choices: [] },
+      },
+    ],
+    [
+      'seedream',
+      {
+        data: [{}],
+      },
+    ],
   ] as const)('%s 空图片响应映射为 IMAGE_PROTOCOL_ERROR', async (provider, response) => {
     await initImage({
       id: provider,
       provider,
-      model: provider === 'google' ? 'gemini-3.1-flash-image' : provider === 'qwen' ? 'qwen-image-3.0-pro' : provider === 'seedream' ? 'doubao-seedream-5-0-lite' : 'gpt-image-2',
+      model: provider === 'google'
+        ? 'gemini-3.1-flash-image'
+        : provider === 'qwen'
+          ? 'qwen-image-3.0-pro'
+          : provider === 'seedream'
+            ? 'doubao-seedream-5-0-lite'
+            : 'gpt-image-2',
       apiKey: 'test-key',
     })
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(response))
@@ -570,10 +870,25 @@ describe('ai.image Provider 错误与响应边界', () => {
   })
 
   it('下载临时 URL 失败时返回 IMAGE_UPSTREAM_ERROR', async () => {
-    await initImage({ id: 'qwen', provider: 'qwen', model: 'qwen-image-3.0-pro', apiKey: 'test-key' })
+    await initImage({
+      id: 'qwen',
+      provider: 'qwen',
+      model: 'qwen-image-3.0-pro',
+      apiKey: 'test-key',
+    })
     vi.mocked(fetch)
       .mockResolvedValueOnce(jsonResponse({
-        output: { choices: [{ message: { content: [{ image: 'https://temporary.example/fail.png' }] } }] },
+        output: {
+          choices: [
+            {
+              message: {
+                content: [
+                  { image: 'https://temporary.example/fail.png' },
+                ],
+              },
+            },
+          ],
+        },
       }))
     vi.mocked(fetchImage).mockResolvedValueOnce(new ImageResponse(null, { status: 404 }))
 
@@ -585,10 +900,25 @@ describe('ai.image Provider 错误与响应边界', () => {
   })
 
   it('临时 URL 返回非图片 MIME 时返回 IMAGE_PROTOCOL_ERROR', async () => {
-    await initImage({ id: 'qwen', provider: 'qwen', model: 'qwen-image-3.0-pro', apiKey: 'test-key' })
+    await initImage({
+      id: 'qwen',
+      provider: 'qwen',
+      model: 'qwen-image-3.0-pro',
+      apiKey: 'test-key',
+    })
     vi.mocked(fetch)
       .mockResolvedValueOnce(jsonResponse({
-        output: { choices: [{ message: { content: [{ image: 'https://temporary.example/not-image' }] } }] },
+        output: {
+          choices: [
+            {
+              message: {
+                content: [
+                  { image: 'https://temporary.example/not-image' },
+                ],
+              },
+            },
+          ],
+        },
       }))
     vi.mocked(fetchImage).mockResolvedValueOnce(new ImageResponse('<html>expired</html>', {
       status: 200,
@@ -603,7 +933,12 @@ describe('ai.image Provider 错误与响应边界', () => {
   })
 
   it('pollinations 二进制接口返回空图片时返回 IMAGE_PROTOCOL_ERROR', async () => {
-    await initImage({ id: 'free', provider: 'pollinations', model: 'zimage', apiKey: 'test-key' })
+    await initImage({
+      id: 'free',
+      provider: 'pollinations',
+      model: 'zimage',
+      apiKey: 'test-key',
+    })
     vi.mocked(fetch).mockResolvedValueOnce(imageResponse(new Uint8Array()))
 
     const result = await ai.image.generate({ prompt: '一只猫' })
@@ -614,7 +949,12 @@ describe('ai.image Provider 错误与响应边界', () => {
   })
 
   it('abortError 映射为 IMAGE_CANCELLED，普通网络异常映射为 IMAGE_UPSTREAM_ERROR', async () => {
-    await initImage({ id: 'openai', provider: 'openai', model: 'gpt-image-2', apiKey: 'sk-openai' })
+    await initImage({
+      id: 'openai',
+      provider: 'openai',
+      model: 'gpt-image-2',
+      apiKey: 'sk-openai',
+    })
     vi.mocked(fetch).mockRejectedValueOnce(new DOMException('cancelled', 'AbortError'))
     const cancelled = await ai.image.generate({ prompt: '一只猫' })
     vi.mocked(fetch).mockRejectedValueOnce(new TypeError('network failed'))

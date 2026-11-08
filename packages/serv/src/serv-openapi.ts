@@ -69,7 +69,9 @@ export async function generateSpec(
   options: GenerateOpenAPISpecOptions = {},
 ): Promise<OpenAPI.Document> {
   const generator = new OpenAPIGenerator({
-    schemaConverters: [new ZodToJsonSchemaConverter()],
+    schemaConverters: [
+      new ZodToJsonSchemaConverter(),
+    ],
   })
 
   return generator.generate(contract, {
@@ -78,8 +80,14 @@ export async function generateSpec(
       version: options.version ?? '0.1.0',
       description: options.description,
     },
-    servers: options.apiPrefix ? [{ url: options.apiPrefix }] : undefined,
-    security: [{ bearerAuth: [] }],
+    servers: options.apiPrefix
+      ? [
+          { url: options.apiPrefix },
+        ]
+      : undefined,
+    security: [
+      { bearerAuth: [] },
+    ],
     components: {
       securitySchemes: {
         bearerAuth: { type: 'http', scheme: 'bearer' },
@@ -191,5 +199,7 @@ function readScalarBrowserEntry(packageInfo: unknown): string | undefined {
   if (typeof packageInfo !== 'object' || packageInfo === null || Array.isArray(packageInfo))
     return undefined
   const browser = (packageInfo as Record<string, unknown>).browser
-  return typeof browser === 'string' ? browser : undefined
+  return typeof browser === 'string'
+    ? browser
+    : undefined
 }

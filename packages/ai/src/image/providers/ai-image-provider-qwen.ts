@@ -44,22 +44,30 @@ export function createQwenImageProvider(): ImageProvider {
           headers: {
             'Authorization': `Bearer ${request.model.apiKey}`,
             'Content-Type': 'application/json',
-            ...(request.model.workspaceId ? { 'X-DashScope-WorkSpace': request.model.workspaceId } : {}),
+            ...(request.model.workspaceId
+              ? { 'X-DashScope-WorkSpace': request.model.workspaceId }
+              : {}),
           },
           body: JSON.stringify({
             model: request.model.model,
             input: {
-              messages: [{
-                role: 'user',
-                content: [
-                  ...request.referenceImages.map(image => ({ image: referenceImageDataUrl(image) })),
-                  { text: request.prompt },
-                ],
-              }],
+              messages: [
+                {
+                  role: 'user',
+                  content: [
+                    ...request.referenceImages.map(image => ({
+                      image: referenceImageDataUrl(image),
+                    })),
+                    { text: request.prompt },
+                  ],
+                },
+              ],
             },
             parameters: {
               n: 1,
-              ...(request.size ? { size: `${request.size.width}*${request.size.height}` } : {}),
+              ...(request.size
+                ? { size: `${request.size.width}*${request.size.height}` }
+                : {}),
               watermark: false,
             },
           }),
@@ -72,7 +80,9 @@ export function createQwenImageProvider(): ImageProvider {
         const body = parsed.data as QwenImageResponse
         const urls = body.output?.choices
           ?.flatMap(choice => choice.message?.content ?? [])
-          .flatMap(item => item.image ? [item.image] : []) ?? []
+          .flatMap(item => item.image
+            ? [item.image]
+            : []) ?? []
         if (!urls.length)
           return imageProtocolError()
         return await downloadImages(urls, request)

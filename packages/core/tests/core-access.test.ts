@@ -17,10 +17,21 @@ it('关闭策略直接允许，路径只在策略启用后校验', () => {
 
 it('按完整路径段匹配，方法过滤且多条规则和全局条件取交集', () => {
   const check = core.access.createRequestCheck({
-    global: { denyIps: ['192.0.2.7'] },
+    global: {
+      denyIps: ['192.0.2.7'],
+    },
     rules: [
-      { id: 'external', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.0/24', '2001:db8::/32'] },
-      { id: 'write', paths: ['/api/v1/external/sync'], methods: ['POST'], denyIps: ['192.0.2.8'] },
+      {
+        id: 'external',
+        paths: ['/api/v1/external/**'],
+        allowIps: ['192.0.2.0/24', '2001:db8::/32'],
+      },
+      {
+        id: 'write',
+        paths: ['/api/v1/external/sync'],
+        methods: ['POST'],
+        denyIps: ['192.0.2.8'],
+      },
     ],
   })
   expect(check('/api/v1/external/sync', 'POST', '192.0.2.10').allowed).toBe(true)
@@ -35,15 +46,46 @@ it('按完整路径段匹配，方法过滤且多条规则和全局条件取交�
 })
 
 it('不能使用编码、双重编码、重复分隔符或点段绕过规则', () => {
-  const check = core.access.createRequestCheck({ rules: [{ id: 'api', paths: ['/api/v1/**'], allowIps: ['192.0.2.10'] }] })
+  const check = core.access.createRequestCheck({
+    rules: [
+      {
+        id: 'api',
+        paths: ['/api/v1/**'],
+        allowIps: ['192.0.2.10'],
+      },
+    ],
+  })
   expect(check('/%61pi/v1/sync', 'GET', '198.51.100.10')).toMatchObject({ allowed: false, ruleId: 'api' })
-  for (const pathname of ['/api%2fv1/sync', '/api%252fv1/sync', '/api//v1/sync', '/api/../v1/sync', '/api\\v1', '/api/%ZZ', '/api/%00'])
+  for (const pathname of [
+    '/api%2fv1/sync',
+    '/api%252fv1/sync',
+    '/api//v1/sync',
+    '/api/../v1/sync',
+    '/api\\v1',
+    '/api/%ZZ',
+    '/api/%00',
+  ])
     expect(check(pathname, 'GET', '192.0.2.10')).toMatchObject({ allowed: false, reason: 'path' })
 })
 
 it('使用 UTC 与本地时区，跨午夜、含起不含止在分钟边界准确生效', () => {
   vi.useFakeTimers()
-  const check = core.access.createRequestCheck({ rules: [{ id: 'night', paths: ['/**'], timezone: 'Asia/Shanghai', windows: [{ days: [1], start: '22:00', end: '02:00' }] }] })
+  const check = core.access.createRequestCheck({
+    rules: [
+      {
+        id: 'night',
+        paths: ['/**'],
+        timezone: 'Asia/Shanghai',
+        windows: [
+          {
+            days: [1],
+            start: '22:00',
+            end: '02:00',
+          },
+        ],
+      },
+    ],
+  })
   for (const [time, expected] of [
     ['2026-10-26T13:59:59.999Z', false],
     ['2026-10-26T14:00:00.000Z', true],
@@ -54,7 +96,16 @@ it('使用 UTC 与本地时区，跨午夜、含起不含止在分钟边界准�
     vi.setSystemTime(new Date(time))
     expect(check('/api', 'POST').allowed, time).toBe(expected)
   }
-  const login = core.access.createConditionCheck(AccessConditionSchema.parse({ timezone: 'UTC', windows: [{ days: [1], start: '14:00', end: '18:00' }] }))
+  const login = core.access.createConditionCheck(AccessConditionSchema.parse({
+    timezone: 'UTC',
+    windows: [
+      {
+        days: [1],
+        start: '14:00',
+        end: '18:00',
+      },
+    ],
+  }))
   vi.setSystemTime(new Date('2026-10-26T14:00:00Z'))
   expect(login().allowed).toBe(true)
   vi.setSystemTime(new Date('2026-10-26T18:00:00Z'))
@@ -90,18 +141,51 @@ it('规则文件只在启动读取，拒绝未知字段、别名、重复键和�
 })
 
 it('启动拒绝重复编号、正则路径、无效 IP/时区和相同起止时间', () => {
-  const rule = { id: 'one', paths: ['/api/**'] }
+  const rule = {
+    id: 'one',
+    paths: ['/api/**'],
+  }
   for (const config of [
-    { rules: [rule, rule] },
-    { rules: [{ ...rule, paths: ['/api/*/sync'] }] },
-    { global: { allowIps: ['192.0.2.0/99'] } },
-    { global: { timezone: 'invalid' } },
-    { global: { windows: [{ days: [1], start: '09:00', end: '09:00' }] } },
+    {
+      rules: [rule, rule],
+    },
+    {
+      rules: [
+        {
+          ...rule,
+          paths: ['/api/*/sync'],
+        },
+      ],
+    },
+    {
+      global: {
+        allowIps: ['192.0.2.0/99'],
+      },
+    },
+    {
+      global: { timezone: 'invalid' },
+    },
+    {
+      global: {
+        windows: [
+          {
+            days: [1],
+            start: '09:00',
+            end: '09:00',
+          },
+        ],
+      },
+    },
   ]) expect(RequestAccessPolicySchema.safeParse(config).success).toBe(false)
 })
 
 it('千条规则精确和前缀索引保持选择性，GET 不自动包含 HEAD', () => {
-  const rules = Array.from({ length: 1000 }, (_, index) => ({ id: `route-${index}`, paths: [`/api/v1/item-${index}/**`], methods: ['POST' as const], allowIps: ['192.0.2.10'] }))
+  const rules = Array.from({ length: 1000 }, (_, index) => ({
+    id: `route-${index}`,
+    paths: [`/api/v1/item-${index}/**`],
+    methods: ['POST' as const],
+    allowIps: ['192.0.2.10'],
+  }))
   const check = core.access.createRequestCheck({ rules })
   expect(check('/api/v1/item-999/publish', 'POST', '192.0.2.11')).toMatchObject({ allowed: false, ruleId: 'route-999' })
   expect(check('/api/v1/item-999/publish', 'HEAD', '192.0.2.11').allowed).toBe(true)
@@ -109,11 +193,28 @@ it('千条规则精确和前缀索引保持选择性，GET 不自动包含 HEAD'
 })
 
 it('加密模式按完整路径和方法选择，不改变 IP 条件或未配置路径的宿主默认值', () => {
-  const check = core.access.createRequestCheck({ rules: [
-    { id: 'partner-post', paths: ['/api/v1/partner/**'], methods: ['POST'], encryption: 'disabled', allowIps: ['192.0.2.10'] },
-    { id: 'partner-get', paths: ['/api/v1/partner/**'], methods: ['GET'], encryption: 'required' },
-    { id: 'exact', paths: ['/health'], encryption: 'required' },
-  ] })
+  const check = core.access.createRequestCheck({
+    rules: [
+      {
+        id: 'partner-post',
+        paths: ['/api/v1/partner/**'],
+        methods: ['POST'],
+        encryption: 'disabled',
+        allowIps: ['192.0.2.10'],
+      },
+      {
+        id: 'partner-get',
+        paths: ['/api/v1/partner/**'],
+        methods: ['GET'],
+        encryption: 'required',
+      },
+      {
+        id: 'exact',
+        paths: ['/health'],
+        encryption: 'required',
+      },
+    ],
+  })
   expect(check.requiresEncryption).toBe(true)
   expect(check.encryption('/api/v1/partner/sync', 'POST')).toBe('disabled')
   expect(check.encryption('/api/v1/partner/', 'GET')).toBe('required')
@@ -127,7 +228,15 @@ it('加密模式按完整路径和方法选择，不改变 IP 条件或未配置
   expect(check('/api/v1/partner/sync', 'POST', '198.51.100.10')).toMatchObject({ allowed: false, reason: 'address' })
   expect(core.access.createRequestCheck(false).requiresEncryption).toBe(false)
   expect(core.access.createRequestCheck(false).encryption('/health', 'GET')).toBeUndefined()
-  expect(RequestAccessPolicySchema.safeParse({ rules: [{ id: 'invalid', paths: ['/api'], encryption: true }] }).success).toBe(false)
+  expect(RequestAccessPolicySchema.safeParse({
+    rules: [
+      {
+        id: 'invalid',
+        paths: ['/api'],
+        encryption: true,
+      },
+    ],
+  }).success).toBe(false)
 })
 
 it('重叠路径和方法的加密冲突在启动时拒绝，与声明顺序无关；同模式和分离方法可组合', () => {
@@ -137,32 +246,69 @@ it('重叠路径和方法的加密冲突在启动时拒绝，与声明顺序无�
     ['/api/partner', '/api/partner/'],
     ['/**', '/api/partner/**'],
   ]) {
-    const rules = paths.map((path, index) => ({ id: `rule-${index}`, paths: [path!], encryption: index ? 'disabled' as const : 'required' as const }))
+    const rules = paths.map((path, index) => ({
+      id: `rule-${index}`,
+      paths: [path!],
+      encryption: index ? 'disabled' as const : 'required' as const,
+    }))
     expect(() => core.access.createRequestCheck({ rules })).toThrow(/encryption conflicts/)
-    expect(() => core.access.createRequestCheck({ rules: rules.toReversed() })).toThrow(/encryption conflicts/)
+    expect(() => core.access.createRequestCheck({
+      rules: rules.toReversed(),
+    })).toThrow(/encryption conflicts/)
   }
-  const check = core.access.createRequestCheck({ rules: [
-    { id: 'same-parent', paths: ['/api/**'], methods: ['POST'], encryption: 'disabled' },
-    { id: 'same-child', paths: ['/api/partner'], methods: ['POST'], encryption: 'disabled' },
-    { id: 'different-method', paths: ['/api/partner'], methods: ['GET'], encryption: 'required' },
-    { id: 'sibling', paths: ['/apix/**'], encryption: 'required' },
-  ] })
+  const check = core.access.createRequestCheck({
+    rules: [
+      {
+        id: 'same-parent',
+        paths: ['/api/**'],
+        methods: ['POST'],
+        encryption: 'disabled',
+      },
+      {
+        id: 'same-child',
+        paths: ['/api/partner'],
+        methods: ['POST'],
+        encryption: 'disabled',
+      },
+      {
+        id: 'different-method',
+        paths: ['/api/partner'],
+        methods: ['GET'],
+        encryption: 'required',
+      },
+      {
+        id: 'sibling',
+        paths: ['/apix/**'],
+        encryption: 'required',
+      },
+    ],
+  })
   expect(check.encryption('/api/partner', 'POST')).toBe('disabled')
   expect(check.encryption('/api/partner', 'GET')).toBe('required')
 })
 
 it('直连不信任伪造头；可信代理链从右侧解析，过长或无效链不降级为可信 IP', () => {
   const resolve = core.access.createClientIpResolver(['192.0.2.10', '192.0.2.20'])
-  const forwarded = new Request('https://example.test', { headers: { 'x-forwarded-for': '203.0.113.99, 198.51.100.10, 192.0.2.20' } })
+  const forwarded = new Request('https://example.test', {
+    headers: { 'x-forwarded-for': '203.0.113.99, 198.51.100.10, 192.0.2.20' },
+  })
   expect(resolve(forwarded, '192.0.2.10')).toBe('198.51.100.10')
   expect(resolve(forwarded, '198.51.100.10')).toBe('198.51.100.10')
-  expect(resolve(new Request('https://example.test', { headers: { 'x-forwarded-for': 'invalid' } }), '192.0.2.10')).toBeUndefined()
-  expect(resolve(new Request('https://example.test', { headers: { 'x-forwarded-for': Array.from({ length: 33 }).fill('192.0.2.20').join(',') } }), '192.0.2.10')).toBeUndefined()
+  expect(resolve(new Request('https://example.test', {
+    headers: { 'x-forwarded-for': 'invalid' },
+  }), '192.0.2.10')).toBeUndefined()
+  expect(resolve(new Request('https://example.test', {
+    headers: {
+      'x-forwarded-for': Array.from({ length: 33 }).fill('192.0.2.20').join(','),
+    },
+  }), '192.0.2.10')).toBeUndefined()
   expect(resolve(forwarded)).toBeUndefined()
 })
 
 it('auto 只在受管私有代理部署中采用容器网段，显式空数组仍禁用转发头', () => {
-  const request = new Request('https://example.test', { headers: { 'x-forwarded-for': '198.51.100.10' } })
+  const request = new Request('https://example.test', {
+    headers: { 'x-forwarded-for': '198.51.100.10' },
+  })
   vi.stubEnv('HAI_DEPLOY_PRIVATE_PROXY', '')
   expect(core.access.createClientIpResolver('auto')(request, '192.0.2.10')).toBe('192.0.2.10')
   const local = Object.values(networkInterfaces()).flat().find(value => value && !value.internal && value.cidr && !value.cidr.includes('%'))

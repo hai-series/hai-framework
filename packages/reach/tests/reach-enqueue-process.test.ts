@@ -12,7 +12,10 @@ const workerPath = fileURLToPath(new URL('./fixtures/reach-queue-worker.mjs', im
 
 async function runWorker(args: string[]): Promise<{ queueId: string, status: string, messageId?: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [workerPath, ...args], { cwd: packageDir, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(process.execPath, [workerPath, ...args], {
+      cwd: packageDir,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
     let stdout = ''
     let stderr = ''
     const timer = setTimeout(() => child.kill(), 10000)
@@ -58,13 +61,21 @@ it('入队进程退出后，另一进程从同一持久化库恢复并实际投�
     // 从当前源码创建隔离执行产物，不依赖本包可能过期的 dist。
     await build({
       config: false,
-      entry: { index: join(packageDir, 'src/index.ts') },
+      entry: {
+        index: join(packageDir, 'src/index.ts'),
+      },
       outDir: temporary,
       format: ['esm'],
       bundle: true,
       dts: false,
       silent: true,
-      external: ['@h-ai/core', '@h-ai/cache', '@h-ai/reldb', 'zod', 'nodemailer'],
+      external: [
+        '@h-ai/core',
+        '@h-ai/cache',
+        '@h-ai/reldb',
+        'zod',
+        'nodemailer',
+      ],
     })
     server.listen(0, '127.0.0.1')
     await once(server, 'listening')
@@ -77,7 +88,13 @@ it('入队进程退出后，另一进程从同一持久化库恢复并实际投�
     const queued = await runWorker([bundle, 'enqueue', database, url])
     expect(queued.status).toBe('pending')
     expect(received).toHaveLength(0)
-    const delivered = await runWorker([bundle, 'deliver', database, url, queued.queueId])
+    const delivered = await runWorker([
+      bundle,
+      'deliver',
+      database,
+      url,
+      queued.queueId,
+    ])
     expect(delivered).toEqual({ queueId: queued.queueId, status: 'sent', messageId: 'callback-delivered' })
     expect(received).toHaveLength(1)
     expect(JSON.parse(received[0])).toMatchObject({ to: 'process-test', body: 'durable across processes' })
@@ -85,7 +102,9 @@ it('入队进程退出后，另一进程从同一持久化库恢复并实际投�
   finally {
     if (server.listening) {
       server.closeAllConnections()
-      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+      await new Promise<void>((resolve, reject) => server.close(error => error
+        ? reject(error)
+        : resolve()))
     }
     // 仅清理本用例创建的目录；两个子进程均已退出后才删除 SQLite 文件。
     await rm(temporary, { recursive: true, force: true })

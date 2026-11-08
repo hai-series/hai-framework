@@ -125,7 +125,9 @@ function escapeHtmlText(text: string): string {
  */
 export function sanitizeLinkHref(href: string | null | undefined): string {
   const normalized = href?.trim() ?? ''
-  return SAFE_LINK_HREF_REGEX.test(normalized) ? normalized : ''
+  return SAFE_LINK_HREF_REGEX.test(normalized)
+    ? normalized
+    : ''
 }
 
 /**
@@ -154,7 +156,9 @@ export function isExternalLinkHref(href: string): boolean {
  */
 export function sanitizeImageSrc(src: string | null | undefined): string {
   const normalized = src?.trim() ?? ''
-  return SAFE_IMAGE_SRC_REGEX.test(normalized) ? normalized : ''
+  return SAFE_IMAGE_SRC_REGEX.test(normalized)
+    ? normalized
+    : ''
 }
 
 function sanitizeAlignValue(value: string | null | undefined): string | undefined {
@@ -345,7 +349,9 @@ function sanitizeHtmlTag(rawTag: string): string {
   }
 
   if (isClosingTag) {
-    return VOID_HTML_TAGS.has(tagName) ? '' : `</${tagName}>`
+    return VOID_HTML_TAGS.has(tagName)
+      ? ''
+      : `</${tagName}>`
   }
 
   const attributes = readSanitizedAttributes(tagName, rawAttributes)

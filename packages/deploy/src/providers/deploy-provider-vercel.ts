@@ -31,7 +31,12 @@ const MAX_POLL_ATTEMPTS = 60
 /** Vercel API 错误，保留状态码用于区分 404 与真实失败 */
 class VercelApiError extends Error {
   constructor(readonly status: number) {
-    super(deployM('deploy_apiError', { params: { service: 'Vercel', status: String(status) } }))
+    super(deployM('deploy_apiError', {
+      params: {
+        service: 'Vercel',
+        status: String(status),
+      },
+    }))
   }
 }
 
@@ -40,7 +45,11 @@ function toDeployError(codeDef: HaiErrorDef, messageKey: string, error: unknown)
   return {
     ...codeDef,
     message: deployM(messageKey as Parameters<typeof deployM>[0], {
-      params: { error: error instanceof Error ? error.message : String(error) },
+      params: {
+        error: error instanceof Error
+          ? error.message
+          : String(error),
+      },
     }),
     cause: error,
   }
@@ -339,7 +348,11 @@ async function uploadFile(token: string, content: Uint8Array, sha: string): Prom
 
   if (!response.ok && response.status !== 409) {
     // 409 表示文件已存在，可忽略
-    throw new Error(deployM('deploy_fileUploadFailed', { params: { status: String(response.status) } }))
+    throw new Error(deployM('deploy_fileUploadFailed', {
+      params: {
+        status: String(response.status),
+      },
+    }))
   }
 }
 

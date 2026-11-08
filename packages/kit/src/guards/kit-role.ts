@@ -65,7 +65,11 @@ export function roleGuard(config: RoleGuardConfig): RouteGuard {
       if (apiMode) {
         return {
           allowed: false,
-          message: kitM('kit_requiredRoles', { params: { roles: roles.join(', ') } }),
+          message: kitM('kit_requiredRoles', {
+            params: {
+              roles: roles.join(', '),
+            },
+          }),
           status: 403,
         }
       }

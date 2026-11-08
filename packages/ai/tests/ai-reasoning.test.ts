@@ -26,15 +26,17 @@ function createMockLLM(responses: Array<{ content: string | null, finish_reason?
           object: 'chat.completion' as const,
           created: Date.now(),
           model: 'test-model',
-          choices: [{
-            index: 0,
-            message: {
-              role: 'assistant' as const,
-              content: resp.content,
-              tool_calls: resp.tool_calls,
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: 'assistant' as const,
+                content: resp.content,
+                tool_calls: resp.tool_calls,
+              },
+              finish_reason: resp.finish_reason ?? 'stop',
             },
-            finish_reason: resp.finish_reason ?? 'stop',
-          }],
+          ],
           usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
         },
       }
@@ -104,11 +106,13 @@ describe('reasoning ReAct', () => {
       {
         content: 'Thinking...',
         finish_reason: 'tool_calls',
-        tool_calls: [{
-          id: 'call_1',
-          type: 'function',
-          function: { name: 'search', arguments: '{"q":"test"}' },
-        }],
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: { name: 'search', arguments: '{"q":"test"}' },
+          },
+        ],
       },
     ])
 
@@ -173,7 +177,9 @@ describe('reasoning 默认', () => {
   })
 
   it('未知策略返回错误', async () => {
-    const mockLLM = createMockLLM([{ content: '' }])
+    const mockLLM = createMockLLM([
+      { content: '' },
+    ])
     const reasoning = createReasoningOperations(mockConfig, mockLLM)
 
     const result = await reasoning.run('test', { strategy: 'unknown' as ReasoningStrategy })
@@ -206,7 +212,9 @@ describe('resolveModelEntry', () => {
     const result = resolveModelEntry(LLMConfigSchema.parse({
       model: 'gpt-4o-mini',
       apiKey: 'k',
-      models: [{ id: 'strong', model: 'gpt-4o' }],
+      models: [
+        { id: 'strong', model: 'gpt-4o' },
+      ],
       scenarios: { reasoning: 'strong' },
     }), 'reasoning')
     expect(result.success).toBe(true)

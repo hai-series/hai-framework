@@ -30,7 +30,16 @@ describe('configuration and database resource registries', () => {
       for await (const _chunk of request) { /* 消费完整请求后返回固定查询向量。 */ }
       embeddingRequests++
       response.setHeader('content-type', 'application/json')
-      response.end(JSON.stringify({ model: 'fixture-embedding', data: [{ index: 0, embedding: [1, 0, 0] }], usage: { prompt_tokens: 1, total_tokens: 1 } }))
+      response.end(JSON.stringify({
+        model: 'fixture-embedding',
+        data: [
+          {
+            index: 0,
+            embedding: [1, 0, 0],
+          },
+        ],
+        usage: { prompt_tokens: 1, total_tokens: 1 },
+      }))
     })
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
     const address = server.address()
@@ -40,7 +49,13 @@ describe('configuration and database resource registries', () => {
     try {
       for (const collection of collections) {
         value(await vecdb.collection.create(collection, { dimension: 3 }))
-        value(await vecdb.vector.upsert(collection, [{ id: collection, vector: [1, 0, 0], content: collection }]))
+        value(await vecdb.vector.upsert(collection, [
+          {
+            id: collection,
+            vector: [1, 0, 0],
+            content: collection,
+          },
+        ]))
       }
       const llm = { apiKey: 'fixture', baseUrl: `http://127.0.0.1:${address.port}/v1` }
       value(await ai.init({ llm }))
@@ -49,15 +64,38 @@ describe('configuration and database resource registries', () => {
       value(await ai.retrieval.sources.register({ id: 'deleted', name: 'Deleted', collection: 'registry_deleted' }))
       value(await ai.retrieval.sources.remove('deleted'))
       await ai.close()
-      value(await ai.init({ llm, retrieval: { sources: [
-        { id: 'shared', name: 'Configured', collection: 'registry_configured' },
-        { id: 'config-only', name: 'Configured', collection: 'registry_configured' },
-      ] } }))
-      expect(value(await ai.retrieval.retrieve({ query: 'query', sources: ['config-only'] })).items).toMatchObject([{ id: 'registry_configured', sourceId: 'config-only' }])
-      expect(value(await ai.retrieval.retrieve({ query: 'query', sources: ['shared'] })).items).toMatchObject([{ id: 'registry_configured', sourceId: 'shared' }])
-      expect(value(await ai.retrieval.retrieve({ query: 'query', sources: ['database-only'] })).items).toMatchObject([{ id: 'registry_database', sourceId: 'database-only' }])
+      value(await ai.init({
+        llm,
+        retrieval: {
+          sources: [
+            { id: 'shared', name: 'Configured', collection: 'registry_configured' },
+            { id: 'config-only', name: 'Configured', collection: 'registry_configured' },
+          ],
+        },
+      }))
+      expect(value(await ai.retrieval.retrieve({
+        query: 'query',
+        sources: ['config-only'],
+      })).items).toMatchObject([
+        { id: 'registry_configured', sourceId: 'config-only' },
+      ])
+      expect(value(await ai.retrieval.retrieve({
+        query: 'query',
+        sources: ['shared'],
+      })).items).toMatchObject([
+        { id: 'registry_configured', sourceId: 'shared' },
+      ])
+      expect(value(await ai.retrieval.retrieve({
+        query: 'query',
+        sources: ['database-only'],
+      })).items).toMatchObject([
+        { id: 'registry_database', sourceId: 'database-only' },
+      ])
       const requestsBeforeDeleted = embeddingRequests
-      const deleted = await ai.retrieval.retrieve({ query: 'query', sources: ['deleted'] })
+      const deleted = await ai.retrieval.retrieve({
+        query: 'query',
+        sources: ['deleted'],
+      })
       expect(deleted.success).toBe(false)
       if (!deleted.success)
         expect(deleted.error.code).toBe(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND.code)
@@ -74,7 +112,13 @@ describe('configuration and database resource registries', () => {
   })
 
   it('并发版本更新只允许一个成功，返回副本不能改写配置', async () => {
-    value(await ai.init({ llm: { models: [{ id: 'fixed', model: 'original' }] } }))
+    value(await ai.init({
+      llm: {
+        models: [
+          { id: 'fixed', model: 'original' },
+        ],
+      },
+    }))
     const entry = value(await ai.llm.models.get('fixed'))
     entry.value.model = 'mutated'
     expect(value(await ai.llm.models.get('fixed')).value.model).toBe('original')
@@ -84,10 +128,23 @@ describe('configuration and database resource registries', () => {
     expect(results.filter(result => result.success)).toHaveLength(1)
     expect(results.filter(result => code(result) === 'hai:ai:092')).toHaveLength(1)
     await ai.close()
-    expect((await ai.init({ llm: { models: [{ id: 'duplicate', model: 'a' }, { id: 'duplicate', model: 'b' }] } })).success).toBe(false)
+    expect((await ai.init({
+      llm: {
+        models: [
+          { id: 'duplicate', model: 'a' },
+          { id: 'duplicate', model: 'b' },
+        ],
+      },
+    })).success).toBe(false)
   })
   it('配置优先且只读，数据库 CAS CRUD、墓碑重建和重启持久化', async () => {
-    const config = { llm: { models: [{ id: 'fixed', model: 'configured' }] } }
+    const config = {
+      llm: {
+        models: [
+          { id: 'fixed', model: 'configured' },
+        ],
+      },
+    }
     value(await ai.init(config))
     expect(
       code(await ai.llm.models.update({ id: 'fixed', model: 'changed' })),
@@ -117,7 +174,11 @@ describe('configuration and database resource registries', () => {
     await ai.close()
     value(
       await ai.init({
-        llm: { models: [{ id: 'dynamic', model: 'override' }] },
+        llm: {
+          models: [
+            { id: 'dynamic', model: 'override' },
+          ],
+        },
       }),
     )
     expect(value(await ai.llm.models.get('dynamic'))).toMatchObject({
@@ -173,7 +234,9 @@ describe('configuration and database resource registries', () => {
           llm: {
             apiKey: 'fixture',
             baseUrl: `http://127.0.0.1:${address.port}/v1`,
-            models: [{ id: 'fixed', model: 'fixed-wire' }],
+            models: [
+              { id: 'fixed', model: 'fixed-wire' },
+            ],
           },
         }),
       )
@@ -212,7 +275,12 @@ describe('configuration and database resource registries', () => {
       }
       else {
         response.setHeader('content-type', 'application/json')
-        response.end(JSON.stringify({ data: [{ b64_json: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/a9sAAAAASUVORK5CYII=' }], output_format: 'png' }))
+        response.end(JSON.stringify({
+          data: [
+            { b64_json: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/a9sAAAAASUVORK5CYII=' },
+          ],
+          output_format: 'png',
+        }))
       }
     })
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -222,8 +290,21 @@ describe('configuration and database resource registries', () => {
     try {
       value(await ai.init())
       const baseUrl = `http://127.0.0.1:${address.port}/v1`
-      const audio = value(await ai.audio.models.register({ id: 'voice', provider: 'openai', model: 'tts-first', operations: ['synthesize'], apiKey: 'fixture', baseUrl }))
-      const image = value(await ai.image.models.register({ id: 'image', provider: 'openai', model: 'image-first', apiKey: 'fixture', baseUrl }))
+      const audio = value(await ai.audio.models.register({
+        id: 'voice',
+        provider: 'openai',
+        model: 'tts-first',
+        operations: ['synthesize'],
+        apiKey: 'fixture',
+        baseUrl,
+      }))
+      const image = value(await ai.image.models.register({
+        id: 'image',
+        provider: 'openai',
+        model: 'image-first',
+        apiKey: 'fixture',
+        baseUrl,
+      }))
       value(await ai.audio.synthesize({ model: 'voice', text: 'hello' }))
       value(await ai.image.generate({ model: 'image', prompt: 'a tree' }))
       value(await ai.audio.models.update({ ...audio.value, model: 'tts-second' }, audio.version))
@@ -276,7 +357,9 @@ describe('configuration and database resource registries', () => {
           ],
         },
         retrieval: {
-          sources: [{ id: 'source-fixed', name: 'Docs', collection: 'docs' }],
+          sources: [
+            { id: 'source-fixed', name: 'Docs', collection: 'docs' },
+          ],
         },
       }),
     )
@@ -350,21 +433,39 @@ describe('configuration and database resource registries', () => {
               name: 'Fixture',
               mode: 'embedded',
               command: process.execPath,
-              args: [resolve('tests/fixtures/acp-agent.mjs')],
+              args: [
+                resolve('tests/fixtures/acp-agent.mjs'),
+              ],
             },
           ],
           workspaces: [
             // 未使用的容器配置不能阻止本机工作区登记或准备。
-            { id: 'unused-volume', storage: { type: 'volume', name: 'unused', image: 'unused:1', engine: 'docker' } },
+            {
+              id: 'unused-volume',
+              storage: {
+                type: 'volume',
+                name: 'unused',
+                image: 'unused:1',
+                engine: 'docker',
+              },
+            },
             {
               id: 'configured',
-              storage: { type: 'directory', path: join(root, 'configured') },
+              storage: {
+                type: 'directory',
+                path: join(root, 'configured'),
+              },
             },
           ],
         },
         mcp: {
           servers: [
-            { id: 'tools', name: 'Tools', transport: 'stdio', command: 'node' },
+            {
+              id: 'tools',
+              name: 'Tools',
+              transport: 'stdio',
+              command: 'node',
+            },
           ],
         },
       }),
@@ -388,13 +489,30 @@ describe('configuration and database resource registries', () => {
     value(
       await ai.acp.workspaces.register({
         id: 'stored',
-        storage: { type: 'directory', path: join(root, 'stored') },
+        storage: {
+          type: 'directory',
+          path: join(root, 'stored'),
+        },
       }),
     )
     const changed = value(await ai.acp.workspaces.get('stored'))
-    expect((await ai.acp.workspaces.update({ ...changed.value, storage: { type: 'directory', path: join(root, 'configured', 'nested') } }, changed.version)).success).toBe(false)
-    value(await ai.acp.workspaces.update({ ...changed.value, storage: { type: 'directory', path: join(root, 'updated') } }, changed.version))
-    expect(value(await ai.acp.workspaces.get('stored')).value.storage).toMatchObject({ path: join(root, 'updated') })
+    expect((await ai.acp.workspaces.update({
+      ...changed.value,
+      storage: {
+        type: 'directory',
+        path: join(root, 'configured', 'nested'),
+      },
+    }, changed.version)).success).toBe(false)
+    value(await ai.acp.workspaces.update({
+      ...changed.value,
+      storage: {
+        type: 'directory',
+        path: join(root, 'updated'),
+      },
+    }, changed.version))
+    expect(value(await ai.acp.workspaces.get('stored')).value.storage).toMatchObject({
+      path: join(root, 'updated'),
+    })
     expect(value(await ai.acp.agents.list())).toHaveLength(2)
     expect(value(await ai.acp.workspaces.list())).toHaveLength(3)
     const session = value(
@@ -405,7 +523,9 @@ describe('configuration and database resource registries', () => {
       }),
     )
     expect(
-      value(await session.prompt([{ type: 'text', text: 'mcp' }])).text,
+      value(await session.prompt([
+        { type: 'text', text: 'mcp' },
+      ])).text,
     ).toBe('Tools')
     value(await session.close())
     value(await ai.acp.agents.remove('stored'))

@@ -32,7 +32,9 @@ export function publicRuntimeConfig(config: PublicRuntimeConfig): Plugin {
           version: metadata.version,
           env: metadata.env,
           defaultLocale: metadata.defaultLocale,
-          logging: metadata.logging ? { level: metadata.logging.level, format: metadata.logging.format } : undefined,
+          logging: metadata.logging
+            ? { level: metadata.logging.level, format: metadata.logging.format }
+            : undefined,
         }
       : undefined,
   }
@@ -45,11 +47,15 @@ export function publicRuntimeConfig(config: PublicRuntimeConfig): Plugin {
   return {
     name: 'hai-public-runtime-config',
     configureServer(server) {
-      const base = server.config.base.startsWith('/') ? server.config.base : '/'
+      const base = server.config.base.startsWith('/')
+        ? server.config.base
+        : '/'
       server.middlewares.use(`${base}runtime-config.js`, respond)
     },
     configurePreviewServer(server) {
-      const base = server.config.base.startsWith('/') ? server.config.base : '/'
+      const base = server.config.base.startsWith('/')
+        ? server.config.base
+        : '/'
       server.middlewares.use(`${base}runtime-config.js`, respond)
     },
   }

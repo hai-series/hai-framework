@@ -14,7 +14,12 @@ async function run() {
     parentPort.postMessage({ success: true, data: result })
   }
   catch (error) {
-    parentPort.postMessage({ success: false, message: error instanceof Error ? error.message : String(error) })
+    parentPort.postMessage({
+      success: false,
+      message: error instanceof Error
+        ? error.message
+        : String(error),
+    })
   }
 }
 

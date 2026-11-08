@@ -89,11 +89,17 @@ export function compileJsTaskHandler(config: JsTaskConfig): HaiResult<JsTaskHand
           clearTimeout(timer)
           signal?.removeEventListener('abort', aborted)
           // 等待线程停止后才结束本次尝试，禁止超时任务与后续重试并行。
-          void worker.terminate().then(() => error ? reject(error) : resolve(result), reject)
+          void worker.terminate().then(() => error
+            ? reject(error)
+            : resolve(result), reject)
         }
-        timer = setTimeout(() => finish(new Error(schedulerM('scheduler_jsTimedOut', { params: { timeout } }))), timeout)
+        timer = setTimeout(() => finish(new Error(schedulerM('scheduler_jsTimedOut', {
+          params: { timeout },
+        }))), timeout)
         signal?.addEventListener('abort', aborted, { once: true })
-        worker.once('error', error => finish(error instanceof Error ? error : new Error(String(error))))
+        worker.once('error', error => finish(error instanceof Error
+          ? error
+          : new Error(String(error))))
         worker.once('exit', code => finish(new Error(`JS worker exited before returning a result (${code})`)))
         worker.once('message', (message: { success: boolean, data?: unknown, message?: string }) => {
           if (message.success)
@@ -111,7 +117,11 @@ export function compileJsTaskHandler(config: JsTaskConfig): HaiResult<JsTaskHand
     return err(
       HaiSchedulerError.JS_COMPILE_FAILED,
       schedulerM('scheduler_jsCompileFailed', {
-        params: { error: error instanceof Error ? error.message : String(error) },
+        params: {
+          error: error instanceof Error
+            ? error.message
+            : String(error),
+        },
       }),
       error,
     )

@@ -7,7 +7,12 @@ import { scheduler } from '../src/index.js'
 describe.skipIf(!process.env.HAI_SCHEDULER_TEST_POSTGRES)('postgreSQL definition coordination', () => {
   beforeAll(async () => {
     const url = process.env.HAI_SCHEDULER_TEST_POSTGRES!
-    expect((await reldb.init({ type: 'postgresql', url, database: decodeURIComponent(new URL(url).pathname.slice(1)), pool: { max: 8 } })).success).toBe(true)
+    expect((await reldb.init({
+      type: 'postgresql',
+      url,
+      database: decodeURIComponent(new URL(url).pathname.slice(1)),
+      pool: { max: 8 },
+    })).success).toBe(true)
     expect((await scheduler.init()).success).toBe(true)
   })
   afterAll(async () => {
@@ -18,11 +23,18 @@ describe.skipIf(!process.env.HAI_SCHEDULER_TEST_POSTGRES)('postgreSQL definition
     for (let round = 0; round < 100; round++) {
       const ids = Array.from({ length: 31 }, (_, index) => `definition-${round}-${index}`)
       const pending = ids.map(id => scheduler.register({ id, name: id, cron: '0 0 1 1 *' }))
-      const results = await Promise.all([...pending, scheduler.refreshTasks(), scheduler.refreshTasks()])
+      const results = await Promise.all([
+        ...pending,
+        scheduler.refreshTasks(),
+        scheduler.refreshTasks(),
+      ])
       expect(results.every(result => result.success)).toBe(true)
       expect((await scheduler.refreshTasks()).success).toBe(true)
       expect(ids.every(id => scheduler.tasks.has(id))).toBe(true)
-      expect(await reldb.sql.get('SELECT COUNT(*)::int AS count FROM hai_scheduler_tasks')).toMatchObject({ success: true, data: { count: 31 } })
+      expect(await reldb.sql.get('SELECT COUNT(*)::int AS count FROM hai_scheduler_tasks')).toMatchObject({
+        success: true,
+        data: { count: 31 },
+      })
       expect((await Promise.all(ids.map(id => scheduler.unregister(id)))).every(result => result.success)).toBe(true)
     }
     expect((await scheduler.refreshTasks()).success).toBe(true)

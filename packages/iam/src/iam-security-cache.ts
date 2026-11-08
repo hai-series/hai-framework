@@ -27,7 +27,9 @@ export async function readIamUserSecurity(repository: UserRepository, userId: st
           avatarUrl: user.avatarUrl,
           accountType: user.accountType,
           accountStatus: user.accountStatus,
-          accountExpiresAt: user.accountExpiresAt ? new Date(user.accountExpiresAt).getTime() : null,
+          accountExpiresAt: user.accountExpiresAt
+            ? new Date(user.accountExpiresAt).getTime()
+            : null,
           credentialVersion: user.credentialVersion ?? '',
           mustChangePassword: user.mustChangePassword,
           hasPassword: !!user.passwordHash,
@@ -37,7 +39,16 @@ export async function readIamUserSecurity(repository: UserRepository, userId: st
   })
   return found.success
     ? ok(found.data
-        ? { ...found.data, accountExpiresAt: found.data.accountExpiresAt === null ? null : new Date(found.data.accountExpiresAt), passwordUpdatedAt: found.data.passwordUpdatedAt === null ? undefined : new Date(found.data.passwordUpdatedAt), passwordHash: found.data.hasPassword ? 'present' : undefined }
+        ? {
+            ...found.data,
+            accountExpiresAt: found.data.accountExpiresAt === null
+              ? null
+              : new Date(found.data.accountExpiresAt),
+            passwordUpdatedAt: found.data.passwordUpdatedAt === null
+              ? undefined
+              : new Date(found.data.passwordUpdatedAt),
+            passwordHash: found.data.hasPassword ? 'present' : undefined,
+          }
         : null)
     : found
 }

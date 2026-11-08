@@ -29,7 +29,12 @@ it('reads current YAML and preserves literal names without requiring service ini
 })
 
 it('honors all dotenv layers and process precedence without retaining private variables', () => {
-  const files = ['.env', '.env.prod', '.env.local', '.env.prod.local']
+  const files = [
+    '.env',
+    '.env.prod',
+    '.env.local',
+    '.env.prod.local',
+  ]
   for (const [index, file] of files.entries()) {
     writeFileSync(join(root, file), `HAI_CORE_NAME=Layer ${index}\nNATIVE_TEST_PRIVATE=private-${index}\n`)
     expect(resolveNativeName(root, join(root, 'config/_core.yml'), 'production')).toBe(`Layer ${index}`)
@@ -46,14 +51,21 @@ it('uses explicit Core mode and parent JSON replacement while forwarding only na
   writeFileSync(join(root, '.env.dev'), 'HAI_CORE_NAME=Development Name\n')
   vi.stubEnv('HAI_CORE_ENV', 'development')
   expect(resolveNativeName(root, join(root, 'config/_core.yml'), 'prod')).toBe('Development Name')
-  vi.stubEnv('HAI_CORE', JSON.stringify({ name: 'Parent Name', logging: { context: { secret: 'private-context' } } }))
+  vi.stubEnv('HAI_CORE', JSON.stringify({
+    name: 'Parent Name',
+    logging: {
+      context: { secret: 'private-context' },
+    },
+  }))
   expect(resolveNativeName(root, join(root, 'config/_core.yml'), 'prod')).toBe('Parent Name')
   expect(nativeNameEnvironment()).toEqual({ HAI_CORE_NAME: 'Parent Name', HAI_CORE_ENV: 'development' })
 })
 
 it('uses the same default name when parent JSON replaces YAML in a build subprocess', () => {
   const file = join(root, 'config/_core.yml')
-  vi.stubEnv('HAI_CORE', JSON.stringify({ logging: { level: 'warn' } }))
+  vi.stubEnv('HAI_CORE', JSON.stringify({
+    logging: { level: 'warn' },
+  }))
   const directName = resolveNativeName(root, file, 'prod')
   const environment = nativeNameEnvironment(root)
 
@@ -110,41 +122,140 @@ it.each(['dev', 'build', 'bundle'])('tauri %s overrides names while retaining ar
   writeFileSync(join(root, 'package.json'), '{"type":"module"}')
   writeFileSync(join(toolDirectory, 'tauri.js'), 'require("node:fs").writeFileSync("tool-args.json", JSON.stringify(process.argv.slice(2)))')
   mkdirSync(join(root, 'src-tauri'))
-  const original = JSON.stringify({ identifier: 'com.example.test', app: { windows: [{ label: 'main', width: 1280 }, { label: 'help', title: 'Help' }] } })
+  const original = JSON.stringify({
+    identifier: 'com.example.test',
+    app: {
+      windows: [
+        { label: 'main', width: 1280 },
+        { label: 'help', title: 'Help' },
+      ],
+    },
+  })
   writeFileSync(join(root, 'src-tauri/tauri.conf.json'), original)
   writeFileSync(join(root, '.env.dev'), 'HAI_CORE_NAME=Development Native\n')
   writeFileSync(join(root, '.env.prod'), 'HAI_CORE_NAME=Production Native\n')
   const runner = fileURLToPath(new URL('../templates/shared/run-tauri.mjs', import.meta.url))
-  execFileSync(process.execPath, [runner, '.', 'config/_core.yml', command, '--config', '{"version":"1.2.3"}', '--', 'user-argument', '--help'], { cwd: root, windowsHide: true })
+  execFileSync(process.execPath, [
+    runner,
+    '.',
+    'config/_core.yml',
+    command,
+    '--config',
+    '{"version":"1.2.3"}',
+    '--',
+    'user-argument',
+    '--help',
+  ], { cwd: root, windowsHide: true })
   const args: string[] = JSON.parse(readFileSync(join(root, 'tool-args.json'), 'utf8'))
   expect(args.slice(0, 2)).toEqual([command, '--config'])
   const overlay = JSON.parse(args[2]!)
-  const name = command === 'dev' ? 'Development Native' : 'Production Native'
-  expect(overlay).toEqual({ productName: name, app: { windows: [{ label: 'main', width: 1280, title: name }, { label: 'help', title: 'Help' }] } })
-  expect(args.slice(3)).toEqual(['--config', '{"version":"1.2.3"}', '--', 'user-argument', '--help'])
+  const name = command === 'dev'
+    ? 'Development Native'
+    : 'Production Native'
+  expect(overlay).toEqual({
+    productName: name,
+    app: {
+      windows: [
+        { label: 'main', width: 1280, title: name },
+        { label: 'help', title: 'Help' },
+      ],
+    },
+  })
+  expect(args.slice(3)).toEqual([
+    '--config',
+    '{"version":"1.2.3"}',
+    '--',
+    'user-argument',
+    '--help',
+  ])
   expect(readFileSync(join(root, 'src-tauri/tauri.conf.json'), 'utf8')).toBe(original)
 })
 
 it.each([
-  { description: 'named main window', patch: {}, windows: [{ label: 'help', title: 'Help' }, { label: 'main', width: 900, title: 'YAML Native' }] },
-  { description: 'platform windows', patch: { app: { windows: [{ label: 'help', title: 'Platform Help' }, { label: 'main', width: 1440, decorations: false }] } }, windows: [{ label: 'help', title: 'Platform Help' }, { label: 'main', width: 1440, decorations: false, title: 'YAML Native' }] },
-  { description: 'platform window removal', patch: { app: { windows: null } }, windows: undefined },
-  { description: 'platform app removal', patch: { app: null }, windows: undefined },
-  { description: 'platform empty windows', patch: { app: { windows: [] } }, windows: [] },
+  {
+    description: 'named main window',
+    patch: {},
+    windows: [
+      { label: 'help', title: 'Help' },
+      { label: 'main', width: 900, title: 'YAML Native' },
+    ],
+  },
+  {
+    description: 'platform windows',
+    patch: {
+      app: {
+        windows: [
+          { label: 'help', title: 'Platform Help' },
+          { label: 'main', width: 1440, decorations: false },
+        ],
+      },
+    },
+    windows: [
+      { label: 'help', title: 'Platform Help' },
+      {
+        label: 'main',
+        width: 1440,
+        decorations: false,
+        title: 'YAML Native',
+      },
+    ],
+  },
+  {
+    description: 'platform window removal',
+    patch: {
+      app: { windows: null },
+    },
+    windows: undefined,
+  },
+  {
+    description: 'platform app removal',
+    patch: { app: null },
+    windows: undefined,
+  },
+  {
+    description: 'platform empty windows',
+    patch: {
+      app: { windows: [] },
+    },
+    windows: [],
+  },
 ])('retains $description when applying the Core name', ({ patch, windows }) => {
   const toolDirectory = join(root, 'node_modules/@tauri-apps/cli')
   mkdirSync(toolDirectory, { recursive: true })
   writeFileSync(join(root, 'package.json'), '{"type":"module"}')
   writeFileSync(join(toolDirectory, 'tauri.js'), 'require("node:fs").writeFileSync("tool-args.json", JSON.stringify(process.argv.slice(2)))')
   mkdirSync(join(root, 'src-tauri'))
-  writeFileSync(join(root, 'src-tauri/tauri.conf.json'), JSON.stringify({ app: { windows: [{ label: 'help', title: 'Help' }, { label: 'main', width: 900 }] } }))
-  const platform = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux'
+  writeFileSync(join(root, 'src-tauri/tauri.conf.json'), JSON.stringify({
+    app: {
+      windows: [
+        { label: 'help', title: 'Help' },
+        { label: 'main', width: 900 },
+      ],
+    },
+  }))
+  const platform = process.platform === 'win32'
+    ? 'windows'
+    : process.platform === 'darwin'
+      ? 'macos'
+      : 'linux'
   const file = join(root, `src-tauri/tauri.${platform}.conf.json`)
   const original = JSON.stringify(patch)
   writeFileSync(file, original)
   const runner = fileURLToPath(new URL('../templates/shared/run-tauri.mjs', import.meta.url))
-  execFileSync(process.execPath, [runner, '.', 'config/_core.yml', 'build'], { cwd: root, windowsHide: true })
+  execFileSync(process.execPath, [
+    runner,
+    '.',
+    'config/_core.yml',
+    'build',
+  ], { cwd: root, windowsHide: true })
   const args: string[] = JSON.parse(readFileSync(join(root, 'tool-args.json'), 'utf8'))
-  expect(JSON.parse(args[2]!)).toEqual({ productName: 'YAML Native', ...(windows ? { app: { windows } } : {}) })
+  expect(JSON.parse(args[2]!)).toEqual({
+    productName: 'YAML Native',
+    ...(windows
+      ? {
+          app: { windows },
+        }
+      : {}),
+  })
   expect(readFileSync(file, 'utf8')).toBe(original)
 })

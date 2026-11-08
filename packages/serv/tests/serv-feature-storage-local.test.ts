@@ -30,7 +30,12 @@ it('local 能力经真实 HTTP 和 apiClient 保留预签名失败并支持游�
     expect((await storage.file.put(key, 'private local bytes')).success).toBe(true)
     const app = serv.createApp({
       contract,
-      procedures: { storage: createStorageProcedures({ storage, authorize: ({ keys }) => keys.every(key => key.startsWith('users/user-1/')) }) },
+      procedures: {
+        storage: createStorageProcedures({
+          storage,
+          authorize: ({ keys }) => keys.every(key => key.startsWith('users/user-1/')),
+        }),
+      },
       createContext: ({ request }) => ({
         request,
         requestId: 'local-presign-test',
@@ -45,7 +50,12 @@ it('local 能力经真实 HTTP 和 apiClient 保留预签名失败并支持游�
     if (!address || typeof address === 'string')
       throw new Error('Local presign HTTP server did not start')
     const baseUrl = `http://127.0.0.1:${address.port}/api/v1`
-    expect((await client.init({ baseUrl, auth: { storage: apiClient.tokenStorage.memory() } })).success).toBe(true)
+    expect((await client.init({
+      baseUrl,
+      auth: {
+        storage: apiClient.tokenStorage.memory(),
+      },
+    })).success).toBe(true)
 
     for (const operation of ['download', 'upload']) {
       const response = await fetch(`${baseUrl}/storage/presigned-urls/${operation}`, {
@@ -55,7 +65,10 @@ it('local 能力经真实 HTTP 和 apiClient 保留预签名失败并支持游�
       })
       expect(response.status).toBe(200)
       const body: unknown = await response.json()
-      expect(body).toMatchObject({ success: false, error: { code: HaiStorageError.UNSUPPORTED_OPERATION.code } })
+      expect(body).toMatchObject({
+        success: false,
+        error: { code: HaiStorageError.UNSUPPORTED_OPERATION.code },
+      })
       expect(body).not.toHaveProperty('data')
     }
     for (const operation of ['createDownload', 'createUpload'] as const) {
@@ -74,7 +87,13 @@ it('local 能力经真实 HTTP 和 apiClient 保留预签名失败并支持游�
     expect(storage.presign.publicUrl(key)).toBeNull()
 
     const prefix = 'users/user-1/page/'
-    for (const name of ['a.txt', 'b/first.txt', 'b/second.txt', 'c.txt', 'd.txt'])
+    for (const name of [
+      'a.txt',
+      'b/first.txt',
+      'b/second.txt',
+      'c.txt',
+      'd.txt',
+    ])
       expect((await storage.file.put(prefix + name, name)).success).toBe(true)
     const first = await client.storage.files.list({ prefix, delimiter: '/', maxKeys: 2 })
     expect(first.success).toBe(true)
@@ -85,7 +104,12 @@ it('local 能力经真实 HTTP 和 apiClient 保留预签名失败并支持游�
     expect(first.data.isTruncated).toBe(true)
     expect((await storage.close()).success).toBe(true)
     expect((await storage.init({ type: 'local', root: directory })).success).toBe(true)
-    const second = await client.storage.files.list({ prefix, delimiter: '/', maxKeys: 2, continuationToken: first.data.nextContinuationToken })
+    const second = await client.storage.files.list({
+      prefix,
+      delimiter: '/',
+      maxKeys: 2,
+      continuationToken: first.data.nextContinuationToken,
+    })
     expect(second.success).toBe(true)
     if (second.success) {
       expect(second.data.files.map(file => file.key)).toEqual([`${prefix}c.txt`, `${prefix}d.txt`])

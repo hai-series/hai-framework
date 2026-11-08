@@ -44,7 +44,21 @@ describe('shared execution gates', () => {
     expect((await repo.renew(old, 1000)).success).toBe(false)
     expect((await repo.begin(next, 1000)).success).toBe(true)
     expect(next.attemptCount).toBe(1)
-    const log = { id: crypto.randomUUID(), persistence: { status: 'pending' as const }, taskId: task.id, taskName: task.name, taskType: 'hook', triggerType: 'manual', triggerSource: null, status: 'success', result: null, error: null, startedAt: now, finishedAt: now, duration: 0 } as const
+    const log = {
+      id: crypto.randomUUID(),
+      persistence: { status: 'pending' as const },
+      taskId: task.id,
+      taskName: task.name,
+      taskType: 'hook',
+      triggerType: 'manual',
+      triggerSource: null,
+      status: 'success',
+      result: null,
+      error: null,
+      startedAt: now,
+      finishedAt: now,
+      duration: 0,
+    } as const
     expect((await repo.finish(old, log)).success).toBe(false)
     expect((await repo.finish(next, log)).success).toBe(true)
   })
@@ -54,7 +68,10 @@ describe('shared execution gates', () => {
     expect((await repo.begin(row, 1000)).success).toBe(true)
     await expire(row)
     expect(await repo.claim(task, row.occurrenceId, trigger, 'new', 1000)).toMatchObject({ success: true, data: null })
-    expect(await repo.byOccurrence(row.occurrenceId)).toMatchObject({ success: true, data: { status: 'unknown' } })
+    expect(await repo.byOccurrence(row.occurrenceId)).toMatchObject({
+      success: true,
+      data: { status: 'unknown' },
+    })
     expect(await repo.claim(task, executionId(task.id, 'scheduled', 'new-minute'), trigger, 'new', 1000)).toMatchObject({ success: true, data: null })
     const unknown = await repo.byOccurrence(row.occurrenceId)
     if (!unknown.success || !unknown.data)
@@ -67,7 +84,11 @@ describe('shared execution gates', () => {
   })
 
   it('幂等任务耗尽持久尝试预算后也不无限接管，外部不明结果留unknown人工核对', async () => {
-    const safe = { ...task, idempotent: true, retry: { maxAttempts: 1 } }
+    const safe = {
+      ...task,
+      idempotent: true,
+      retry: { maxAttempts: 1 },
+    }
     const id = executionId(task.id, 'manual', 'budget')
     const claimed = await repo.claim(safe, id, trigger, 'first', 1000)
     if (!claimed.success || !claimed.data)
@@ -75,7 +96,10 @@ describe('shared execution gates', () => {
     expect((await repo.begin(claimed.data, 1000)).success).toBe(true)
     await expire(claimed.data)
     expect(await repo.claim(safe, id, trigger, 'second', 1000)).toMatchObject({ success: true, data: null })
-    expect(await repo.byOccurrence(id)).toMatchObject({ success: true, data: { status: 'unknown', attemptCount: 1 } })
+    expect(await repo.byOccurrence(id)).toMatchObject({
+      success: true,
+      data: { status: 'unknown', attemptCount: 1 },
+    })
   })
 
   it('生产配置不允许无数据库执行，执行与运维边界有输入上限', async () => {
@@ -107,18 +131,36 @@ describe('shared execution gates', () => {
     expect((await scheduler.register(task)).success).toBe(true)
     const first = await scheduler.trigger(task.id, { idempotencyKey: 'stable' })
     const second = await scheduler.trigger(task.id, { idempotencyKey: 'stable' })
-    expect(first).toMatchObject({ success: true, data: { status: 'success' } })
+    expect(first).toMatchObject({
+      success: true,
+      data: { status: 'success' },
+    })
     expect(second).toEqual(first)
     expect(calls).toHaveLength(1)
     expect(starts[0].context?.occurrenceId).toBe(calls[0].context.occurrenceId)
     expect(finishes[0].context?.occurrenceId).toBe(calls[0].context.occurrenceId)
     expect(finishes[0].log.occurrenceId).toBe(calls[0].context.occurrenceId)
-    expect(calls[0].context).toMatchObject({ occurrenceId: expect.stringMatching(/^[a-f\d]{64}$/), executionToken: expect.any(String), sequence: 1, attempt: 1 })
+    expect(calls[0].context).toMatchObject({
+      occurrenceId: expect.stringMatching(/^[a-f\d]{64}$/),
+      executionToken: expect.any(String),
+      sequence: 1,
+      attempt: 1,
+    })
     const metadata = await scheduler.execution.get(calls[0].context.occurrenceId!)
-    expect(metadata).toMatchObject({ success: true, data: { status: 'success', attemptCount: 1 } })
+    expect(metadata).toMatchObject({
+      success: true,
+      data: { status: 'success', attemptCount: 1 },
+    })
     expect(JSON.stringify(metadata)).not.toContain('executionToken')
     expect(JSON.stringify(metadata)).not.toContain(calls[0].context.executionToken!)
     const observed = await scheduler.getLogs({ taskId: task.id })
-    expect(observed).toMatchObject({ success: true, data: { items: [expect.objectContaining({ occurrenceId: calls[0].context.occurrenceId })] } })
+    expect(observed).toMatchObject({
+      success: true,
+      data: {
+        items: [
+          expect.objectContaining({ occurrenceId: calls[0].context.occurrenceId }),
+        ],
+      },
+    })
   })
 })

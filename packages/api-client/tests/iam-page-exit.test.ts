@@ -13,11 +13,25 @@ it.each([false, true])('页面离开策略=%s：keepalive、重复事件、BFCac
   const requests: { request: Request, init?: RequestInit }[] = []
   const storage = apiClient.tokenStorage.memory()
   const client = apiClient.create({ iam: apiContract.iam })
-  expect((await client.init({ baseUrl: 'https://app.test/api', auth: { storage }, fetch: async (request, init) => {
-    requests.push({ request: request instanceof Request ? request : new Request(request, init), init })
-    return Response.json({ success: true })
-  } })).success).toBe(true)
-  await client.auth.setTokens({ accessToken: 'exit-access', refreshToken: 'exit-refresh', expiresIn: 3600, tokenType: 'Bearer' })
+  expect((await client.init({
+    baseUrl: 'https://app.test/api',
+    auth: { storage },
+    fetch: async (request, init) => {
+      requests.push({
+        request: request instanceof Request
+          ? request
+          : new Request(request, init),
+        init,
+      })
+      return Response.json({ success: true })
+    },
+  })).success).toBe(true)
+  await client.auth.setTokens({
+    accessToken: 'exit-access',
+    refreshToken: 'exit-refresh',
+    expiresIn: 3600,
+    tokenType: 'Bearer',
+  })
   const stop = apiClient.createAuthActions(client).bindPageExit({ enabled })
   try {
     if (!enabled)
@@ -58,11 +72,25 @@ it('页面离开收到401不刷新凭据，不把失败当作服务端已撤销'
   const urls: string[] = []
   const storage = apiClient.tokenStorage.memory()
   const client = apiClient.create({ iam: apiContract.iam })
-  expect((await client.init({ baseUrl: 'https://app.test/api', auth: { storage }, fetch: async (request) => {
-    urls.push(request instanceof Request ? request.url : String(request))
-    return Response.json({ success: false, error: { code: 'test:denied', message: 'Denied', httpStatus: 401 } }, { status: 401 })
-  } })).success).toBe(true)
-  await client.auth.setTokens({ accessToken: 'exit-access', refreshToken: 'exit-refresh', expiresIn: 3600, tokenType: 'Bearer' })
+  expect((await client.init({
+    baseUrl: 'https://app.test/api',
+    auth: { storage },
+    fetch: async (request) => {
+      urls.push(request instanceof Request
+        ? request.url
+        : String(request))
+      return Response.json({
+        success: false,
+        error: { code: 'test:denied', message: 'Denied', httpStatus: 401 },
+      }, { status: 401 })
+    },
+  })).success).toBe(true)
+  await client.auth.setTokens({
+    accessToken: 'exit-access',
+    refreshToken: 'exit-refresh',
+    expiresIn: 3600,
+    tokenType: 'Bearer',
+  })
   const stop = apiClient.createAuthActions(client).bindPageExit({ enabled: true })
   try {
     target.dispatchEvent(new Event('pagehide'))
@@ -86,16 +114,24 @@ it('实例关闭只清理自己的监听，旧页面响应不清空后来设置�
   const second = apiClient.create({ iam: apiContract.iam })
   let firstCalls = 0
   let secondCalls = 0
-  expect((await first.init({ baseUrl: 'https://app.test/api', auth: {}, fetch: async () => {
-    firstCalls++
-    return Response.json({ success: true })
-  } })).success).toBe(true)
-  expect((await second.init({ baseUrl: 'https://app.test/api', auth: { storage }, fetch: async () => {
-    secondCalls++
-    return new Promise<Response>((resolve) => {
-      release = resolve
-    })
-  } })).success).toBe(true)
+  expect((await first.init({
+    baseUrl: 'https://app.test/api',
+    auth: {},
+    fetch: async () => {
+      firstCalls++
+      return Response.json({ success: true })
+    },
+  })).success).toBe(true)
+  expect((await second.init({
+    baseUrl: 'https://app.test/api',
+    auth: { storage },
+    fetch: async () => {
+      secondCalls++
+      return new Promise<Response>((resolve) => {
+        release = resolve
+      })
+    },
+  })).success).toBe(true)
   apiClient.createAuthActions(first).bindPageExit({ enabled: true })
   apiClient.createAuthActions(second).bindPageExit({ enabled: true })
   try {
@@ -103,7 +139,12 @@ it('实例关闭只清理自己的监听，旧页面响应不清空后来设置�
     target.dispatchEvent(new Event('pagehide'))
     await vi.waitFor(() => expect(secondCalls).toBe(1))
     expect(firstCalls).toBe(0)
-    await second.auth.setTokens({ accessToken: 'new-login', refreshToken: 'new-refresh', expiresIn: 3600, tokenType: 'Bearer' })
+    await second.auth.setTokens({
+      accessToken: 'new-login',
+      refreshToken: 'new-refresh',
+      expiresIn: 3600,
+      tokenType: 'Bearer',
+    })
     release?.(Response.json({ success: true }))
     await setTimeout(0)
     expect(await storage.getAccessToken()).toBe('new-login')

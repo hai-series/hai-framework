@@ -24,8 +24,15 @@ describe('environment configuration', () => {
     try {
       mkdirSync(join(directory, 'config'))
       const path = join(directory, 'config/_iam.yml')
-      const connection = { url: 'ldaps://directory.example.test:636', bindDn: 'cn=service,dc=example,dc=test', bindPassword: 'fixture-only', searchBase: 'ou=users,dc=example,dc=test' }
-      writeFileSync(path, `${generateConfigFile('iam')}\n${source === 'yaml' ? `ldap: ${JSON.stringify(connection)}\n` : ''}`)
+      const connection = {
+        url: 'ldaps://directory.example.test:636',
+        bindDn: 'cn=service,dc=example,dc=test',
+        bindPassword: 'fixture-only',
+        searchBase: 'ou=users,dc=example,dc=test',
+      }
+      writeFileSync(path, `${generateConfigFile('iam')}\n${source === 'yaml'
+        ? `ldap: ${JSON.stringify(connection)}\n`
+        : ''}`)
       writeFileSync(join(directory, '.env.test'), '')
       const environment = loadDeploymentEnvironment({ environment: 'test', envDir: directory })
       expect(environment.success).toBe(true)
@@ -34,7 +41,15 @@ describe('environment configuration', () => {
       if (source === 'environment') {
         const enabled = saveMiddlewareEnvironment(environment.data, {
           appDir: directory,
-          requirement: { service: 'ldap', backend: 'disabled', source: 'iam', configName: 'iam', configPath: ['ldap'], envPrefix: 'HAI_IAM_LDAP', config: {} },
+          requirement: {
+            service: 'ldap',
+            backend: 'disabled',
+            source: 'iam',
+            configName: 'iam',
+            configPath: ['ldap'],
+            envPrefix: 'HAI_IAM_LDAP',
+            config: {},
+          },
           backend: 'ldap',
           configuration: connection,
         })
@@ -42,7 +57,17 @@ describe('environment configuration', () => {
       }
       const saved = saveMiddlewareEnvironment(environment.data, {
         appDir: directory,
-        requirement: { service: 'ldap', backend: 'disabled', source: 'iam', configName: 'iam', configPath: ['ldap'], envPrefix: 'HAI_IAM_LDAP', config: source === 'unset' ? {} : connection },
+        requirement: {
+          service: 'ldap',
+          backend: 'disabled',
+          source: 'iam',
+          configName: 'iam',
+          configPath: ['ldap'],
+          envPrefix: 'HAI_IAM_LDAP',
+          config: source === 'unset'
+            ? {}
+            : connection,
+        },
         backend: 'disabled',
         configuration: {},
       })
@@ -52,13 +77,20 @@ describe('environment configuration', () => {
       if (!reloaded.success)
         throw new Error(reloaded.error.message)
       // 下一轮镜像会打包保存后的 YAML，再由运行时细项解析和模块 Schema 校验。
-      const resolved = core.config.resolve({ name: 'iam', value: parse(readFileSync(path, 'utf8')), schema: IamConfigSchema, environment: reloaded.data.values })
+      const resolved = core.config.resolve({
+        name: 'iam',
+        value: parse(readFileSync(path, 'utf8')),
+        schema: IamConfigSchema,
+        environment: reloaded.data.values,
+      })
       expect(resolved.success).toBe(true)
       if (!resolved.success)
         throw new Error(resolved.error.message)
       const result = IamConfigSchema.parse(resolved.data)
       expect(result.login.ldap).toBe(false)
-      expect(result.ldap).toEqual(source === 'unset' ? undefined : expect.objectContaining(connection))
+      expect(result.ldap).toEqual(source === 'unset'
+        ? undefined
+        : expect.objectContaining(connection))
     }
     finally {
       // directory 由本用例 mkdtempSync 返回，仅删除本用例拥有的临时工程。
@@ -75,7 +107,9 @@ describe('environment configuration', () => {
   })
   it.each(['iam', 'reach'].flatMap(module => ['LF', 'CRLF'].map(newline => ({ module, newline }))))('真实应用 $module 配置在 $newline 换行下可重复更新，数组与段尾注释不累加', async ({ module, newline }) => {
     const source = await readFile(new URL(`../../../apps/admin-console/config/_${module}.yml`, import.meta.url), 'utf8')
-    const original = source.replaceAll('\r\n', '\n').replaceAll('\n', newline === 'CRLF' ? '\r\n' : '\n')
+    const original = source.replaceAll('\r\n', '\n').replaceAll('\n', newline === 'CRLF'
+      ? '\r\n'
+      : '\n')
     const first = documentConfig(module, original)
     expect(loadConfigText(module, first)).toEqual(loadConfigText(module, original))
     expect(documentConfig(module, first)).toBe(first)
@@ -109,7 +143,9 @@ describe('environment configuration', () => {
   })
   it('服务端密钥环仅出现在实际服务端入口，不能随客户端 crypto 配置推荐', () => {
     expect(moduleEnvironmentVariables('crypto').some(variable => variable.name === 'HAI_CRYPTO_TRANSPORT_SERVERKEYRING')).toBe(false)
-    expect(runtimeEnvironmentVariables('const ring = process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING')).toMatchObject([{ name: 'HAI_CRYPTO_TRANSPORT_SERVERKEYRING' }])
+    expect(runtimeEnvironmentVariables('const ring = process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING')).toMatchObject([
+      { name: 'HAI_CRYPTO_TRANSPORT_SERVERKEYRING' },
+    ])
   })
   it('同一份数据库 YAML 仅通过环境变量即可切换三种 Provider，并拒绝非法类型/端口', () => {
     const yaml = generateConfigFile('db')
@@ -119,7 +155,9 @@ describe('environment configuration', () => {
       vi.stubEnv('HAI_DB_TYPE', type)
       vi.stubEnv('HAI_DB_DATABASE', 'business')
       vi.stubEnv('HAI_DB_HOST', 'db.internal')
-      vi.stubEnv('HAI_DB_PORT', type === 'mysql' ? '3306' : '5432')
+      vi.stubEnv('HAI_DB_PORT', type === 'mysql'
+        ? '3306'
+        : '5432')
       expect(ReldbConfigSchema.parse(loadConfigText('db', yaml))).toMatchObject({ type, host: 'db.internal', database: 'business' })
     }
     vi.stubEnv('HAI_DB_PORT', '70000')
@@ -144,7 +182,12 @@ describe('environment configuration', () => {
     const environment = renderEnvironment(configEnvironmentVariables('sample', yaml))
     for (const [name, value] of Object.entries(parseEnv(environment)))
       vi.stubEnv(name, value)
-    expect(loadConfigText('sample', yaml)).toEqual({ label: 'Ops: primary #1', code: '123', text: 'false', enabled: false })
+    expect(loadConfigText('sample', yaml)).toEqual({
+      label: 'Ops: primary #1',
+      code: '123',
+      text: 'false',
+      enabled: false,
+    })
   })
 
   it('业务正文/表结构保留原样，运行参数及数组索引生成统一变量和约束', () => {

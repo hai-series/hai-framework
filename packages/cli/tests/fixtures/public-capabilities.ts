@@ -26,11 +26,17 @@ it('installed public APIs support streams, scopes, current authorization, templa
     unwrap(await reldb.init({ type: 'sqlite', database: ':memory:' }))
     unwrap(await cache.init({ type: 'memory' }))
     unwrap(await audit.init())
-    unwrap(await iam.init({ login: { password: true, apikey: true } }))
+    unwrap(await iam.init({
+      login: { password: true, apikey: true },
+    }))
     unwrap(await storage.init({ type: 'local', root }))
     unwrap(await reach.init({
-      providers: [{ name: 'local', type: 'console' }],
-      templates: [{ name: 'hello', provider: 'local', body: 'Hello {name}' }],
+      providers: [
+        { name: 'local', type: 'console' },
+      ],
+      templates: [
+        { name: 'hello', provider: 'local', body: 'Hello {name}' },
+      ],
     }))
 
     async function* bytes() {
@@ -46,9 +52,16 @@ it('installed public APIs support streams, scopes, current authorization, templa
     const user = unwrap(await iam.user.createUser({ username: 'public-capabilities', password: 'Test123456!' })).user
     const readPermission = unwrap(await iam.authz.createPermission({ code: 'example:read', name: 'Read', type: 'api' }))
     const writePermission = unwrap(await iam.authz.createPermission({ code: 'example:write', name: 'Write', type: 'api' }))
-    const role = unwrap(await iam.authz.createRole({ code: 'example-reader', name: 'Reader', permissionIds: [readPermission.id, writePermission.id] }))
+    const role = unwrap(await iam.authz.createRole({
+      code: 'example-reader',
+      name: 'Reader',
+      permissionIds: [readPermission.id, writePermission.id],
+    }))
     unwrap(await iam.authz.assignRole(user.id, role.id))
-    const key = unwrap(await iam.apiKey.createApiKey(user.id, { name: 'read-only', scopes: ['example:read'] }))
+    const key = unwrap(await iam.apiKey.createApiKey(user.id, {
+      name: 'read-only',
+      scopes: ['example:read'],
+    }))
     const login = unwrap(await iam.auth.loginWithApiKey({ key: key.rawKey }))
     expect(login.permissions).toEqual(['example:read'])
     expect(login.roles).toEqual([])
@@ -60,7 +73,11 @@ it('installed public APIs support streams, scopes, current authorization, templa
     unwrap(await iam.apiKey.revokeApiKey(key.apiKey.id))
     expect((await iam.auth.verifyToken(login.tokens.accessToken)).success).toBe(false)
 
-    expect(unwrap(await reach.send({ to: 'test@example.invalid', template: 'hello', vars: { name: 'Tester' } })).success).toBe(true)
+    expect(unwrap(await reach.send({
+      to: 'test@example.invalid',
+      template: 'hello',
+      vars: { name: 'Tester' },
+    })).success).toBe(true)
     expect((await reach.send({ to: 'test@example.invalid', body: 'hello' })).success).toBe(false)
     unwrap(await audit.log({ action: 'read', resource: 'example' }))
     unwrap(await audit.log({ action: 'read', resource: 'example' }))

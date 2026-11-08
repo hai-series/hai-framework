@@ -66,18 +66,102 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
       table: SCHEDULER_LOG_TABLE,
       idColumn: 'id',
       fields: [
-        { fieldName: 'id', columnName: 'id', def: { type: 'TEXT', primaryKey: true }, select: true, create: true, update: false },
-        { fieldName: 'occurrenceId', columnName: 'occurrence_id', def: { type: 'TEXT' }, select: true, create: true, update: false },
-        { fieldName: 'taskId', columnName: 'task_id', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: false },
-        { fieldName: 'taskName', columnName: 'task_name', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: false },
-        { fieldName: 'taskType', columnName: 'task_type', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: false },
-        { fieldName: 'triggerType', columnName: 'trigger_type', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: false },
-        { fieldName: 'triggerSource', columnName: 'trigger_source', def: { type: 'TEXT' }, select: true, create: true, update: false },
-        { fieldName: 'status', columnName: 'status', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: false },
-        { fieldName: 'payload', columnName: 'payload', def: { type: 'JSON', notNull: true }, select: true, create: true, update: false },
-        { fieldName: 'startedAt', columnName: 'started_at', def: { type: 'BIGINT', notNull: true }, select: true, create: true, update: false },
-        { fieldName: 'finishedAt', columnName: 'finished_at', def: { type: 'BIGINT', notNull: true }, select: true, create: true, update: false },
-        { fieldName: 'duration', columnName: 'duration', def: { type: 'INTEGER', notNull: true }, select: true, create: true, update: false },
+        {
+          fieldName: 'id',
+          columnName: 'id',
+          def: { type: 'TEXT', primaryKey: true },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'occurrenceId',
+          columnName: 'occurrence_id',
+          def: { type: 'TEXT' },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'taskId',
+          columnName: 'task_id',
+          def: { type: 'TEXT', notNull: true },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'taskName',
+          columnName: 'task_name',
+          def: { type: 'TEXT', notNull: true },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'taskType',
+          columnName: 'task_type',
+          def: { type: 'TEXT', notNull: true },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'triggerType',
+          columnName: 'trigger_type',
+          def: { type: 'TEXT', notNull: true },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'triggerSource',
+          columnName: 'trigger_source',
+          def: { type: 'TEXT' },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'status',
+          columnName: 'status',
+          def: { type: 'TEXT', notNull: true },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'payload',
+          columnName: 'payload',
+          def: { type: 'JSON', notNull: true },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'startedAt',
+          columnName: 'started_at',
+          def: { type: 'BIGINT', notNull: true },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'finishedAt',
+          columnName: 'finished_at',
+          def: { type: 'BIGINT', notNull: true },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'duration',
+          columnName: 'duration',
+          def: { type: 'INTEGER', notNull: true },
+          select: true,
+          create: true,
+          update: false,
+        },
       ],
     })
   }
@@ -87,7 +171,10 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
    * @example `const saved = await repository.saveLog(log); if (!saved.success) return saved`
    */
   async saveLog(log: TaskExecutionLog): Promise<HaiResult<void>> {
-    const payload: TaskExecutionLog = { ...log, persistence: { status: 'persisted' } }
+    const payload: TaskExecutionLog = {
+      ...log,
+      persistence: { status: 'persisted' },
+    }
     try {
       const created = await this.create({
         id: log.id,
@@ -151,8 +238,12 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
 
     try {
       const pageResult = await this.findPage({
-        where: conditions.length > 0 ? conditions.join(' AND ') : undefined,
-        params: params.length > 0 ? params : undefined,
+        where: conditions.length > 0
+          ? conditions.join(' AND ')
+          : undefined,
+        params: params.length > 0
+          ? params
+          : undefined,
         orderBy: 'started_at DESC, id DESC',
         pagination,
         overrides: { defaultPageSize: 20, maxPageSize: 200 },
@@ -161,14 +252,19 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
       if (!pageResult.success) {
         return err(
           HaiSchedulerError.DB_SAVE_FAILED,
-          schedulerM('scheduler_dbSaveFailed', { params: { error: pageResult.error.message } }),
+          schedulerM('scheduler_dbSaveFailed', {
+            params: { error: pageResult.error.message },
+          }),
           pageResult.error,
         )
       }
 
       return ok({
         ...pageResult.data,
-        items: pageResult.data.items.map(row => ({ ...row.payload, persistence: { status: 'persisted' as const } })),
+        items: pageResult.data.items.map(row => ({
+          ...row.payload,
+          persistence: { status: 'persisted' as const },
+        })),
       })
     }
     catch (error) {
@@ -176,7 +272,11 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
       return err(
         HaiSchedulerError.DB_SAVE_FAILED,
         schedulerM('scheduler_dbSaveFailed', {
-          params: { error: error instanceof Error ? error.message : String(error) },
+          params: {
+            error: error instanceof Error
+              ? error.message
+              : String(error),
+          },
         }),
         error,
       )
@@ -199,7 +299,9 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
         if (!retentionResult.success) {
           return err(
             HaiSchedulerError.DB_SAVE_FAILED,
-            schedulerM('scheduler_dbSaveFailed', { params: { error: retentionResult.error.message } }),
+            schedulerM('scheduler_dbSaveFailed', {
+              params: { error: retentionResult.error.message },
+            }),
             retentionResult.error,
           )
         }
@@ -222,7 +324,9 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
         if (!maxLogsResult.success) {
           return err(
             HaiSchedulerError.DB_SAVE_FAILED,
-            schedulerM('scheduler_dbSaveFailed', { params: { error: maxLogsResult.error.message } }),
+            schedulerM('scheduler_dbSaveFailed', {
+              params: { error: maxLogsResult.error.message },
+            }),
             maxLogsResult.error,
           )
         }
@@ -235,7 +339,11 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
       return err(
         HaiSchedulerError.DB_SAVE_FAILED,
         schedulerM('scheduler_dbSaveFailed', {
-          params: { error: error instanceof Error ? error.message : String(error) },
+          params: {
+            error: error instanceof Error
+              ? error.message
+              : String(error),
+          },
         }),
         error,
       )

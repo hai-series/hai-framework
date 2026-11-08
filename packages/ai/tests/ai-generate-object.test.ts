@@ -7,18 +7,36 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
-const { mockCreate } = vi.hoisted(() => ({ mockCreate: vi.fn() }))
+const { mockCreate } = vi.hoisted(() => ({
+  mockCreate: vi.fn(),
+}))
 
 vi.mock('openai', () => {
   function MockOpenAI() {
     return {
-      chat: { completions: { create: mockCreate } },
-      responses: { create: vi.fn() },
-      models: { list: vi.fn() },
-      audio: { transcriptions: { create: vi.fn() }, speech: { create: vi.fn() } },
+      chat: {
+        completions: { create: mockCreate },
+      },
+      responses: {
+        create: vi.fn(),
+      },
+      models: {
+        list: vi.fn(),
+      },
+      audio: {
+        transcriptions: {
+          create: vi.fn(),
+        },
+        speech: {
+          create: vi.fn(),
+        },
+      },
     }
   }
-  return { default: MockOpenAI, toFile: vi.fn() }
+  return {
+    default: MockOpenAI,
+    toFile: vi.fn(),
+  }
 })
 
 // eslint-disable-next-line import/first -- vi.mock 需在 import 之前
@@ -31,7 +49,13 @@ function makeCompletion(content: string) {
     object: 'chat.completion',
     created: 1700000000,
     model: 'gpt-4o-mini',
-    choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }],
+    choices: [
+      {
+        index: 0,
+        message: { role: 'assistant', content },
+        finish_reason: 'stop',
+      },
+    ],
     usage: { prompt_tokens: 5, completion_tokens: 5, total_tokens: 10 },
   }
 }
@@ -39,7 +63,9 @@ function makeCompletion(content: string) {
 describe('ai.llm.generateObject', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    const init = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    const init = await ai.init({
+      llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' },
+    })
     expect(init.success).toBe(true)
   })
   afterEach(async () => {
@@ -47,11 +73,19 @@ describe('ai.llm.generateObject', () => {
   })
 
   it('返回符合 schema 的对象', async () => {
-    mockCreate.mockResolvedValue(makeCompletion(JSON.stringify({ isQuestion: true, targets: ['expert-1'] })))
+    mockCreate.mockResolvedValue(makeCompletion(JSON.stringify({
+      isQuestion: true,
+      targets: ['expert-1'],
+    })))
 
     const result = await ai.llm.generateObject({
-      schema: z.object({ isQuestion: z.boolean(), targets: z.array(z.string()) }),
-      messages: [{ role: 'user', content: '这是一个问题吗？' }],
+      schema: z.object({
+        isQuestion: z.boolean(),
+        targets: z.array(z.string()),
+      }),
+      messages: [
+        { role: 'user', content: '这是一个问题吗？' },
+      ],
     })
 
     expect(result.success).toBe(true)
@@ -68,8 +102,12 @@ describe('ai.llm.generateObject', () => {
       .mockResolvedValueOnce(makeCompletion(JSON.stringify({ value: 42 })))
 
     const result = await ai.llm.generateObject({
-      schema: z.object({ value: z.number() }),
-      messages: [{ role: 'user', content: '给我一个数字' }],
+      schema: z.object({
+        value: z.number(),
+      }),
+      messages: [
+        { role: 'user', content: '给我一个数字' },
+      ],
     })
 
     expect(result.success).toBe(true)
@@ -82,8 +120,12 @@ describe('ai.llm.generateObject', () => {
     mockCreate.mockResolvedValue(makeCompletion('永远不是 JSON'))
 
     const result = await ai.llm.generateObject({
-      schema: z.object({ value: z.number() }),
-      messages: [{ role: 'user', content: 'x' }],
+      schema: z.object({
+        value: z.number(),
+      }),
+      messages: [
+        { role: 'user', content: 'x' },
+      ],
       maxRepairs: 1,
     })
 

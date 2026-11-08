@@ -49,12 +49,37 @@ describe('core.config', () => {
 
   it('对象与数组整体替换节点后继续应用更细的覆盖，仍通过 Schema 验证', () => {
     writeFileSync(configPath, 'providers:\n  - name: console\n    type: console\n', 'utf-8')
-    const providersSchema = z.object({ providers: z.array(z.object({ name: z.string(), type: z.string() })) })
-    vi.stubEnv('HAI_APP_PROVIDERS', JSON.stringify([{ name: 'email', type: 'smtp' }]))
-    expect(core.config.load('app', configPath, providersSchema)).toMatchObject({ success: true, data: { providers: [{ name: 'email', type: 'smtp' }] } })
+    const providersSchema = z.object({
+      providers: z.array(z.object({
+        name: z.string(),
+        type: z.string(),
+      })),
+    })
+    vi.stubEnv('HAI_APP_PROVIDERS', JSON.stringify([
+      { name: 'email', type: 'smtp' },
+    ]))
+    expect(core.config.load('app', configPath, providersSchema)).toMatchObject({
+      success: true,
+      data: {
+        providers: [
+          { name: 'email', type: 'smtp' },
+        ],
+      },
+    })
     core.config.clear()
-    vi.stubEnv('HAI_APP', JSON.stringify({ providers: [{ name: 'sms', type: 'sms' }] }))
-    expect(core.config.load('app', configPath, providersSchema)).toMatchObject({ success: true, data: { providers: [{ name: 'email', type: 'smtp' }] } })
+    vi.stubEnv('HAI_APP', JSON.stringify({
+      providers: [
+        { name: 'sms', type: 'sms' },
+      ],
+    }))
+    expect(core.config.load('app', configPath, providersSchema)).toMatchObject({
+      success: true,
+      data: {
+        providers: [
+          { name: 'email', type: 'smtp' },
+        ],
+      },
+    })
     core.config.clear()
     vi.stubEnv('HAI_APP', 'invalid-object')
     expect(core.config.load('app', configPath, providersSchema).success).toBe(false)
@@ -111,7 +136,10 @@ describe('core.config', () => {
 
   it('load schema 校验失败应返回 VALIDATION_ERROR', () => {
     writeFileSync(configPath, 'foo: 123\nbar: ok\n', 'utf-8')
-    const strictSchema = z.object({ foo: z.number(), bar: z.number() })
+    const strictSchema = z.object({
+      foo: z.number(),
+      bar: z.number(),
+    })
     const result = core.config.load('app', configPath, strictSchema)
     expect(result.success).toBe(false)
     if (!result.success) {
@@ -132,16 +160,23 @@ describe('core.config', () => {
     process.env.FOO = 'x'
     // eslint-disable-next-line no-template-curly-in-string
     writeFileSync(configPath, 'items:\n  - ${FOO}\n  - fixed\n', 'utf-8')
-    const arrSchema = z.object({ items: z.array(z.string()) })
+    const arrSchema = z.object({
+      items: z.array(z.string()),
+    })
     const result = core.config.load('app', configPath, arrSchema)
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data).toEqual({ items: ['x', 'fixed'] })
+      expect(result.data).toEqual({
+        items: ['x', 'fixed'],
+      })
     }
   })
 
   it('load 环境变量默认值应还原为 YAML 原生类型（boolean/number）', () => {
-    const typedSchema = z.object({ debug: z.boolean(), port: z.number() })
+    const typedSchema = z.object({
+      debug: z.boolean(),
+      port: z.number(),
+    })
     // eslint-disable-next-line no-template-curly-in-string
     writeFileSync(configPath, 'debug: ${HAI_DEBUG:false}\nport: ${HAI_PORT:8080}\n', 'utf-8')
 
@@ -154,7 +189,9 @@ describe('core.config', () => {
   })
 
   it('load 空插值应保留为空字符串而不是 YAML null', () => {
-    const optionalSchema = z.object({ secret: z.string() })
+    const optionalSchema = z.object({
+      secret: z.string(),
+    })
     // eslint-disable-next-line no-template-curly-in-string
     writeFileSync(configPath, 'secret: ${OPTIONAL_SECRET:}\n', 'utf-8')
 
@@ -176,7 +213,10 @@ describe('core.config', () => {
   it('load 环境变量值应还原为 YAML 原生类型', () => {
     process.env.HAI_DEBUG = 'true'
     process.env.HAI_PORT = '3000'
-    const typedSchema = z.object({ debug: z.boolean(), port: z.number() })
+    const typedSchema = z.object({
+      debug: z.boolean(),
+      port: z.number(),
+    })
     // eslint-disable-next-line no-template-curly-in-string
     writeFileSync(configPath, 'debug: ${HAI_DEBUG}\nport: ${HAI_PORT}\n', 'utf-8')
 
@@ -238,7 +278,9 @@ describe('core.config', () => {
         apiKey: 'secret',
         baseUrl: 'https://example.com/v1',
         maxTokens: 2048,
-        models: [{ id: 'fast', temperature: 0 }],
+        models: [
+          { id: 'fast', temperature: 0 },
+        ],
       })
     }
   })
@@ -314,7 +356,9 @@ describe('core.config', () => {
     const looseSchema = z.any()
     core.config.load('app', configPath, looseSchema)
 
-    const strictSchema = z.object({ foo: z.number() })
+    const strictSchema = z.object({
+      foo: z.number(),
+    })
     const result = core.config.validate('app', strictSchema)
     expect(result.success).toBe(false)
     if (!result.success) {

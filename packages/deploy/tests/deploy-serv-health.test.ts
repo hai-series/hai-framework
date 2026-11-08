@@ -14,7 +14,9 @@ it.each(['compose', 'api', 'fullstack'])('%s 探针使用应用的真实 Schema�
   const requests: string[] = []
   const server = createServer((request, response) => {
     requests.push(request.url ?? '')
-    response.statusCode = request.url === '/status' || request.url === '/parent-status' ? 200 : 404
+    response.statusCode = request.url === '/status' || request.url === '/parent-status'
+      ? 200
+      : 404
     response.end('ok')
   })
   try {
@@ -28,11 +30,29 @@ it.each(['compose', 'api', 'fullstack'])('%s 探针使用应用的真实 Schema�
     mkdirSync(join(directory, 'node_modules/@h-ai'), { recursive: true })
     for (const name of ['core', 'serv']) {
       const target = fileURLToPath(new URL(`../../${name}`, import.meta.url))
-      symlinkSync(target, join(directory, 'node_modules/@h-ai', name), process.platform === 'win32' ? 'junction' : 'dir')
+      symlinkSync(target, join(directory, 'node_modules/@h-ai', name), process.platform === 'win32'
+        ? 'junction'
+        : 'dir')
     }
     let script: string
     if (source === 'compose') {
-      const compose = parse(generateComposeFile({ projectName: 'probe', appVersion: '1.0.0', imageRef: 'probe:1', containerPort: 3000, hostPort: 18080, sidecar: { services: [], composeServices: {}, volumes: {}, appVolumes: [], env: {}, containerEnv: {}, dependsOn: [], secrets: [] } }))
+      const compose = parse(generateComposeFile({
+        projectName: 'probe',
+        appVersion: '1.0.0',
+        imageRef: 'probe:1',
+        containerPort: 3000,
+        hostPort: 18080,
+        sidecar: {
+          services: [],
+          composeServices: {},
+          volumes: {},
+          appVolumes: [],
+          env: {},
+          containerEnv: {},
+          dependsOn: [],
+          secrets: [],
+        },
+      }))
       script = compose.services.serv.healthcheck.test.at(-1)
     }
     else {
@@ -44,7 +64,21 @@ it.each(['compose', 'api', 'fullstack'])('%s 探针使用应用的真实 Schema�
     if (!address || typeof address === 'string')
       throw new Error('Expected an owned health probe listener')
     const run = (extra: Record<string, string | undefined>) => new Promise<number | null>((resolve, reject) => {
-      const child = spawn(process.execPath, ['-e', script], { cwd: directory, env: { ...process.env, NODE_OPTIONS: `--import ${pathToFileURL(join(directory, 'runtime-env.mjs')).href}`, HAI_SERV: undefined, HAI_SERV_HTTP_HEALTH: undefined, HAI_SERV_HTTP_HEALTH_PATH: undefined, PORT: String(address.port), ...extra }, stdio: 'ignore', windowsHide: true, timeout: 20_000 })
+      const child = spawn(process.execPath, ['-e', script], {
+        cwd: directory,
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `--import ${pathToFileURL(join(directory, 'runtime-env.mjs')).href}`,
+          HAI_SERV: undefined,
+          HAI_SERV_HTTP_HEALTH: undefined,
+          HAI_SERV_HTTP_HEALTH_PATH: undefined,
+          PORT: String(address.port),
+          ...extra,
+        },
+        stdio: 'ignore',
+        windowsHide: true,
+        timeout: 20_000,
+      })
       child.once('error', reject)
       child.once('exit', resolve)
     })

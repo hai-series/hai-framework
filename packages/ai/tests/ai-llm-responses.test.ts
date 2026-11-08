@@ -36,32 +36,68 @@ describe('toResponsesInput', () => {
       {
         role: 'assistant',
         content: null,
-        tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'getWeather', arguments: '{"city":"北京"}' } }],
+        tool_calls: [
+          {
+            id: 'call-1',
+            type: 'function',
+            function: { name: 'getWeather', arguments: '{"city":"北京"}' },
+          },
+        ],
       },
       { role: 'tool', tool_call_id: 'call-1', content: '晴' },
     ]
     const input = toResponsesInput(messages)
-    expect(input).toContainEqual({ type: 'function_call', call_id: 'call-1', name: 'getWeather', arguments: '{"city":"北京"}' })
+    expect(input).toContainEqual({
+      type: 'function_call',
+      call_id: 'call-1',
+      name: 'getWeather',
+      arguments: '{"city":"北京"}',
+    })
     expect(input).toContainEqual({ type: 'function_call_output', call_id: 'call-1', output: '晴' })
   })
 
   it('多模态数组内容仅提取 text 片段', () => {
     const messages: ChatMessage[] = [
-      { role: 'user', content: [{ type: 'text', text: '看图' }, { type: 'image_url', image_url: { url: 'http://x/y.png' } }] },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: '看图' },
+          {
+            type: 'image_url',
+            image_url: { url: 'http://x/y.png' },
+          },
+        ],
+      },
     ]
     const input = toResponsesInput(messages)
-    expect(input).toEqual([{ role: 'user', content: '看图' }])
+    expect(input).toEqual([
+      { role: 'user', content: '看图' },
+    ])
   })
 })
 
 describe('toResponsesTools', () => {
   it('转换 function 工具定义', () => {
-    const tools: ToolDefinition[] = [{
-      type: 'function',
-      function: { name: 'add', description: '相加', parameters: { type: 'object', properties: {} } },
-    }]
+    const tools: ToolDefinition[] = [
+      {
+        type: 'function',
+        function: {
+          name: 'add',
+          description: '相加',
+          parameters: { type: 'object', properties: {} },
+        },
+      },
+    ]
     const mapped = toResponsesTools(tools)
-    expect(mapped).toEqual([{ type: 'function', name: 'add', description: '相加', parameters: { type: 'object', properties: {} }, strict: false }])
+    expect(mapped).toEqual([
+      {
+        type: 'function',
+        name: 'add',
+        description: '相加',
+        parameters: { type: 'object', properties: {} },
+        strict: false,
+      },
+    ])
   })
 
   it('空工具返回 undefined', () => {
@@ -93,7 +129,14 @@ describe('responsesToChatResponse', () => {
       created_at: 1700000000,
       output_text: '',
       model: 'gpt-4.1',
-      output: [{ type: 'function_call', call_id: 'c1', name: 'getWeather', arguments: '{"city":"上海"}' }],
+      output: [
+        {
+          type: 'function_call',
+          call_id: 'c1',
+          name: 'getWeather',
+          arguments: '{"city":"上海"}',
+        },
+      ],
       usage: { input_tokens: 8, output_tokens: 3, total_tokens: 11 },
     } as unknown as OpenAI.Responses.Response
 
@@ -101,7 +144,11 @@ describe('responsesToChatResponse', () => {
     expect(mapped.choices[0].finish_reason).toBe('tool_calls')
     expect(mapped.choices[0].message.content).toBeNull()
     expect(mapped.choices[0].message.tool_calls).toEqual([
-      { id: 'c1', type: 'function', function: { name: 'getWeather', arguments: '{"city":"上海"}' } },
+      {
+        id: 'c1',
+        type: 'function',
+        function: { name: 'getWeather', arguments: '{"city":"上海"}' },
+      },
     ])
   })
 })
@@ -120,7 +167,12 @@ describe('responsesEventToChunk', () => {
     const chunk = responsesEventToChunk(
       {
         type: 'response.completed',
-        response: { id: 'resp-3', created_at: 1700000000, model: 'gpt-4.1', usage: { input_tokens: 4, output_tokens: 2, total_tokens: 6 } },
+        response: {
+          id: 'resp-3',
+          created_at: 1700000000,
+          model: 'gpt-4.1',
+          usage: { input_tokens: 4, output_tokens: 2, total_tokens: 6 },
+        },
       } as unknown as OpenAI.Responses.ResponseStreamEvent,
       'gpt-4.1',
     )

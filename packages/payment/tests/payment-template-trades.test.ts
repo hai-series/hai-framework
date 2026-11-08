@@ -2,16 +2,32 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST } from '../../cli/templates/features/payment/routes/api/v1/payment/create/+server'
 
-const { createOrder, mount } = vi.hoisted(() => ({ createOrder: vi.fn(), mount: { base: '' } }))
-vi.mock('@h-ai/payment', () => ({ payment: { createOrder } }))
+const { createOrder, mount } = vi.hoisted(() => ({
+  createOrder: vi.fn(),
+  mount: { base: '' },
+}))
+vi.mock('@h-ai/payment', () => ({
+  payment: { createOrder },
+}))
 vi.mock('$app/paths', () => mount)
 
-const valid = { provider: 'wechat', tradeType: 'jsapi', outTradeNo: 'ORDER_1', totalAmount: 100, subject: '商品', userId: 'openid-test' }
+const valid = {
+  provider: 'wechat',
+  tradeType: 'jsapi',
+  outTradeNo: 'ORDER_1',
+  totalAmount: 100,
+  subject: '商品',
+  userId: 'openid-test',
+}
 
 /** 本路由只读取request/locals；挂载目录由SvelteKit虚拟模块提供，其余事件字段不参与协议验证。 */
 function event(body: unknown): Parameters<typeof POST>[0] {
   return {
-    request: new Request('https://shop.example/api/v1/payment/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+    request: new Request('https://shop.example/api/v1/payment/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
     locals: { requestId: 'request-trade-1' },
   } as Parameters<typeof POST>[0]
 }
@@ -19,7 +35,10 @@ function event(body: unknown): Parameters<typeof POST>[0] {
 beforeEach(() => {
   mount.base = ''
   createOrder.mockReset()
-  createOrder.mockResolvedValue({ success: true, data: { provider: 'wechat', tradeType: 'jsapi', clientParams: {} } })
+  createOrder.mockResolvedValue({
+    success: true,
+    data: { provider: 'wechat', tradeType: 'jsapi', clientParams: {} },
+  })
 })
 
 describe('payment template trade validation', () => {
@@ -60,10 +79,16 @@ describe('payment template trade validation', () => {
   })
 
   it('支付宝 h5 不改变模式，调用失败按 HaiResult 返回', async () => {
-    createOrder.mockResolvedValueOnce({ success: false, error: { code: 'hai:payment:042', message: 'Invalid input' } })
+    createOrder.mockResolvedValueOnce({
+      success: false,
+      error: { code: 'hai:payment:042', message: 'Invalid input' },
+    })
     const response = await POST(event({ ...valid, provider: 'alipay', tradeType: 'h5' }))
     expect(createOrder.mock.calls[0][1].tradeType).toBe('h5')
     expect(response?.status).toBe(400)
-    expect(await response?.json()).toMatchObject({ success: false, error: { code: 'hai:payment:042' } })
+    expect(await response?.json()).toMatchObject({
+      success: false,
+      error: { code: 'hai:payment:042' },
+    })
   })
 })

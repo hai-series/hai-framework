@@ -42,7 +42,9 @@ const StripeOrderMappingSchema = z.object({
 /** Session 查询只接受实际有意义的支付状态，并核对其业务身份。 */
 const StripeRetrievedSessionSchema = z.object({
   id: z.string().min(1),
-  metadata: z.object({ orderNo: z.string().min(1) }),
+  metadata: z.object({
+    orderNo: z.string().min(1),
+  }),
   amount_total: z.number().int().nonnegative(),
   currency: z.string().regex(/^[a-z]{3}$/i),
   payment_status: z.enum(['paid', 'unpaid', 'no_payment_required']),
@@ -53,7 +55,13 @@ const StripeRetrievedSessionSchema = z.object({
 /** 退款受理结果；渠道错误或未知状态不能映射为假成功。 */
 const StripeRefundSchema = z.object({
   id: z.string().min(1),
-  status: z.enum(['pending', 'requires_action', 'succeeded', 'failed', 'canceled']),
+  status: z.enum([
+    'pending',
+    'requires_action',
+    'succeeded',
+    'failed',
+    'canceled',
+  ]),
 })
 
 /**
@@ -79,7 +87,9 @@ const StripeCheckoutEventSchema = z.object({
       object: z.literal('checkout.session'),
       id: z.string().min(1),
       mode: z.literal('payment'),
-      metadata: z.object({ orderNo: z.string().min(1).regex(/\S/) }).passthrough(),
+      metadata: z.object({
+        orderNo: z.string().min(1).regex(/\S/),
+      }).passthrough(),
       amount_total: z.number().int().nonnegative(),
       currency: z.string().regex(/^[a-z]{3}$/i),
       payment_status: z.enum(['paid', 'unpaid', 'no_payment_required']),
@@ -129,10 +139,16 @@ export function createStripeProvider(
         'Authorization': `Bearer ${config.secretKey}`,
         'Content-Type': 'application/x-www-form-urlencoded',
         'Stripe-Version': STRIPE_API_VERSION,
-        ...(options?.idempotencyKey ? { 'Idempotency-Key': options.idempotencyKey } : {}),
+        ...(options?.idempotencyKey
+          ? { 'Idempotency-Key': options.idempotencyKey }
+          : {}),
       },
       body: options?.body
-        ? Object.entries(options.body).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')
+        ? Object.entries(options.body).sort(([a], [b]) => a < b
+            ? -1
+            : a > b
+              ? 1
+              : 0).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')
         : undefined,
     })
 
@@ -151,7 +167,9 @@ export function createStripeProvider(
         const mode = /^(?:sk|rk)_(test|live)_/.exec(config.secretKey)?.[1]
         if (!mode)
           throw new Error('Stripe requires a test or live secret/restricted API key')
-        const account = z.object({ id: z.string().regex(/^acct_/).min(6) }).parse(await stripeRequest('GET', '/account'))
+        const account = z.object({
+          id: z.string().regex(/^acct_/).min(6),
+        }).parse(await stripeRequest('GET', '/account'))
         return `${account.id}:${mode}`
       })().catch((error: unknown) => {
         accountScopePromise = undefined
@@ -212,7 +230,11 @@ export function createStripeProvider(
   }): Promise<T> {
     const requestHash = createHash('sha256').update(JSON.stringify([
       options.path,
-      Object.entries(options.body).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0),
+      Object.entries(options.body).sort(([a], [b]) => a < b
+        ? -1
+        : a > b
+          ? 1
+          : 0),
     ])).digest('hex')
     const reserved = await repository.reserve(options.id, requestHash)
     if (reserved.result !== null)
@@ -386,7 +408,9 @@ export function createStripeProvider(
           ? 'closed'
           : event.type === 'checkout.session.async_payment_failed'
             ? 'failed'
-            : obj.payment_status === 'unpaid' ? 'pending' : 'paid'
+            : obj.payment_status === 'unpaid'
+              ? 'pending'
+              : 'paid'
 
         return ok({
           orderNo: obj.metadata.orderNo,
@@ -396,7 +420,9 @@ export function createStripeProvider(
           currency: obj.currency.toUpperCase(),
           status,
           // 使用支付成功事件的时间，使重复通知不会改变 paidAt；pending/failed/closed 不宣称已支付。
-          paidAt: status === 'paid' ? new Date(event.created * 1000) : undefined,
+          paidAt: status === 'paid'
+            ? new Date(event.created * 1000)
+            : undefined,
           raw: event,
         })
       }
@@ -422,7 +448,9 @@ export function createStripeProvider(
         return ok({
           orderNo,
           transactionId: session.id,
-          status: session.status === 'expired' ? 'closed' : statusMap[session.payment_status],
+          status: session.status === 'expired'
+            ? 'closed'
+            : statusMap[session.payment_status],
           amount: session.amount_total,
         })
       }
@@ -466,7 +494,11 @@ export function createStripeProvider(
         return ok({
           refundNo: input.refundNo,
           refundId: refund.id,
-          status: refund.status === 'succeeded' ? 'success' : refund.status === 'failed' || refund.status === 'canceled' ? 'failed' : 'processing',
+          status: refund.status === 'succeeded'
+            ? 'success'
+            : refund.status === 'failed' || refund.status === 'canceled'
+              ? 'failed'
+              : 'processing',
         })
       }
       catch (cause) {
@@ -487,7 +519,10 @@ export function createStripeProvider(
           return ok(undefined)
 
         try {
-          const expired = z.object({ id: z.string(), status: z.literal('expired') }).parse(
+          const expired = z.object({
+            id: z.string(),
+            status: z.literal('expired'),
+          }).parse(
             await stripeRequest('POST', `/checkout/sessions/${encodeURIComponent(session.id)}/expire`, {
               body: {},
               idempotencyKey: await operationId('close', orderNo),

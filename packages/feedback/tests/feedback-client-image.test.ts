@@ -39,7 +39,13 @@ it('普通控件保留外观并隐藏内容，密码和私密容器继续遮挡�
     expect(replacements[2]!.textContent).toBe('••••')
     expect(replacements[3]!.children).toHaveLength(0)
     frame.remove()
-    return { toBlob: (callback: (blob: Blob) => void) => callback({ arrayBuffer: async () => new Uint8Array([1]).buffer } as Blob), width: 1, height: 1 }
+    return {
+      toBlob: (callback: (blob: Blob) => void) => callback({
+        arrayBuffer: async () => new Uint8Array([1]).buffer,
+      } as Blob),
+      width: 1,
+      height: 1,
+    }
   })
   await captureFeedbackScreenshot()
   expect(clonedBody).not.toContain('private-')

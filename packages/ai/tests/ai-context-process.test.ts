@@ -20,8 +20,17 @@ interface Reply {
 }
 
 async function start(directory: string, name: string) {
-  const child = spawn(process.execPath, [fileURLToPath(new URL('./fixtures/context-node.mjs', import.meta.url))], {
-    env: { ...process.env, NODE_ENV: 'test', CONTEXT_NODE_INPUT: JSON.stringify({ database: join(directory, 'shared.db'), vectors: join(directory, name) }) },
+  const child = spawn(process.execPath, [
+    fileURLToPath(new URL('./fixtures/context-node.mjs', import.meta.url)),
+  ], {
+    env: {
+      ...process.env,
+      NODE_ENV: 'test',
+      CONTEXT_NODE_INPUT: JSON.stringify({
+        database: join(directory, 'shared.db'),
+        vectors: join(directory, name),
+      }),
+    },
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   })
@@ -92,15 +101,32 @@ it('旧节点事件循环暂停45秒后最终提交失败，pending在节点崩�
     nodes.push(a)
     const b = await start(directory, 'vectors-b')
     nodes.push(b)
-    const id = a.send({ action: 'chat', scope, text: 'old-question', reply: 'old-reply', pause: true })
+    const id = a.send({
+      action: 'chat',
+      scope,
+      text: 'old-question',
+      reply: 'old-reply',
+      pause: true,
+    })
     await a.wait(message => message.phase === 'paused')
     // 真实时间跨过30秒租约；不修改存储值、不暂停别的进程或伪造存储端时钟。
     await delay(31_000)
-    expect((await b.request({ action: 'chat', scope, text: 'new-question', reply: 'new-reply' })).result?.success).toBe(true)
+    expect((await b.request({
+      action: 'chat',
+      scope,
+      text: 'new-question',
+      reply: 'new-reply',
+    })).result?.success).toBe(true)
     const old = await a.wait(message => message.id === id)
     expect(old.pausedFor).toBeGreaterThanOrEqual(44_000)
     expect(old.result?.success).toBe(false)
-    const pending = await a.request({ action: 'chat', scope, manual: true, text: 'manual-question', reply: 'actual-reply' })
+    const pending = await a.request({
+      action: 'chat',
+      scope,
+      manual: true,
+      text: 'manual-question',
+      reply: 'actual-reply',
+    })
     expect(pending.result?.success).toBe(true)
     const turnId = pending.result?.data?.turnId
     expect(turnId).toEqual(expect.any(String))
@@ -110,7 +136,13 @@ it('旧节点事件循环暂停45秒后最终提交失败，pending在节点崩�
     expect(committed.result?.success).toBe(true)
     expect((await b.request({ action: 'commit', scope, turnId })).result?.success).toBe(true)
     const snapshot = await b.request({ action: 'read', scope })
-    expect(snapshot.messages?.data.map(message => message.content)).toEqual(['old-question', 'new-question', 'new-reply', 'manual-question', 'actual-reply'])
+    expect(snapshot.messages?.data.map(message => message.content)).toEqual([
+      'old-question',
+      'new-question',
+      'new-reply',
+      'manual-question',
+      'actual-reply',
+    ])
   }
   finally {
     await Promise.all(nodes.map(node => node.close()))

@@ -24,7 +24,9 @@ function resolvePortFromBaseUrl(urlString: string, fallbackPort: string): string
       return url.port
     }
 
-    return url.protocol === 'https:' ? '443' : '80'
+    return url.protocol === 'https:'
+      ? '443'
+      : '80'
   }
   catch {
     return fallbackPort

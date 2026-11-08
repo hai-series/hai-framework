@@ -52,7 +52,10 @@ async function start() {
     const client = new Client({ url: `ldap://${ldap.getHost()}:${ldap.getMappedPort(389)}`, timeout: 10_000, connectTimeout: 10_000 })
     try {
       await client.bind('cn=admin,dc=example,dc=org', 'admin')
-      await client.add('ou=users,dc=example,dc=org', { objectClass: ['organizationalUnit'], ou: ['users'] })
+      await client.add('ou=users,dc=example,dc=org', {
+        objectClass: ['organizationalUnit'],
+        ou: ['users'],
+      })
       await client.add('uid=ldapui,ou=users,dc=example,dc=org', {
         objectClass: ['inetOrgPerson'],
         uid: ['ldapui'],

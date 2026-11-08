@@ -25,7 +25,12 @@ afterEach(async () => {
 function event(key: string): RequestEvent {
   const url = new URL(`https://example.test/api/storage/${key}`)
   // 仅模拟平台事件；文件读写与真实公开路由都参与验证。
-  return { params: { key }, locals: {}, request: new Request(url), url } as RequestEvent
+  return {
+    params: { key },
+    locals: {},
+    request: new Request(url),
+    url,
+  } as RequestEvent
 }
 
 it('真实文件存在时仍拒绝匿名归档读取，普通公开图片读取保持可用', async () => {

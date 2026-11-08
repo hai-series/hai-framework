@@ -10,7 +10,17 @@ vi.mock('../src/lib/components/scenes/charts/renderers/LineChart.svelte', () => 
 
 it('分块加载失败保留恢复操作，统一提示不暴露底层异常', async () => {
   const target = document.createElement('div')
-  const component = mount(Chart, { target, props: { type: 'line', data: [{ x: 'A', y: 1 }], x: 'x', y: 'y' } })
+  const component = mount(Chart, {
+    target,
+    props: {
+      type: 'line',
+      data: [
+        { x: 'A', y: 1 },
+      ],
+      x: 'x',
+      y: 'y',
+    },
+  })
   try {
     flushSync()
     await vi.waitFor(() => expect(target.querySelector('button')).not.toBeNull())

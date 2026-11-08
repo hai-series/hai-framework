@@ -50,7 +50,9 @@ export function createAliyunProvisioner(): ServiceProvisioner {
         const akSecret = credentials.accessKeySecret ?? credentials.access_key_secret ?? credentials.secret_key ?? ''
 
         if (!akId || !akSecret || !credentials.signName) {
-          throw new Error(deployM('deploy_credentialMissing', { params: { fields: 'accessKeyId, accessKeySecret, signName' } }))
+          throw new Error(deployM('deploy_credentialMissing', {
+            params: { fields: 'accessKeyId, accessKeySecret, signName' },
+          }))
         }
 
         accessKey = akId
@@ -64,7 +66,11 @@ export function createAliyunProvisioner(): ServiceProvisioner {
         return err(
           HaiDeployError.AUTH_FAILED,
           deployM('deploy_authFailed', {
-            params: { error: error instanceof Error ? error.message : String(error) },
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
           }),
           error,
         )
@@ -87,7 +93,15 @@ export function createAliyunProvisioner(): ServiceProvisioner {
         provisionerName: 'aliyun',
         resourceStatus: 'reused',
         envVars: {
-          HAI_REACH_PROVIDERS: JSON.stringify([{ name: 'sms', type: 'aliyun-sms', accessKeyId: accessKey, accessKeySecret: secretKey, signName }]),
+          HAI_REACH_PROVIDERS: JSON.stringify([
+            {
+              name: 'sms',
+              type: 'aliyun-sms',
+              accessKeyId: accessKey,
+              accessKeySecret: secretKey,
+              signName,
+            },
+          ]),
         },
         resourceInfo: 'aliyun:verify-only',
       })

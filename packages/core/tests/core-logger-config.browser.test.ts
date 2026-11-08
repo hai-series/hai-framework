@@ -16,14 +16,31 @@ describe('已有 Browser logger 应用 core 配置', () => {
     const original = core.logger
     const child = original.child({ module: 'browser-fixture' }).child({ scope: 'nested' })
     const named = original.create({ name: 'browser-before-init' })
-    const explicit = original.create({ name: 'browser-explicit', level: 'debug', format: 'pretty', context: { source: 'local' } })
-    core.init({ logging: { level: 'warn', format: 'json', context: { source: 'global' }, redact: ['metadata.code', 'members[*].ref'] } })
+    const explicit = original.create({
+      name: 'browser-explicit',
+      level: 'debug',
+      format: 'pretty',
+      context: { source: 'local' },
+    })
+    core.init({
+      logging: {
+        level: 'warn',
+        format: 'json',
+        context: { source: 'global' },
+        redact: ['metadata.code', 'members[*].ref'],
+      },
+    })
     info.mockClear()
     warn.mockClear()
     original.info('default-hidden')
     child.info('child-hidden')
     named.info('named-hidden')
-    const payload = { metadata: { code: 'private-code' }, members: [{ ref: 'private-reference' }] }
+    const payload = {
+      metadata: { code: 'private-code' },
+      members: [
+        { ref: 'private-reference' },
+      ],
+    }
     child.warn('child-visible', payload)
     named.warn('named-visible')
     explicit.info('explicit-visible')
@@ -39,7 +56,9 @@ describe('已有 Browser logger 应用 core 配置', () => {
       module: 'browser-fixture',
       scope: 'nested',
       metadata: { code: '[REDACTED]' },
-      members: [{ ref: '[REDACTED]' }],
+      members: [
+        { ref: '[REDACTED]' },
+      ],
     })
     expect(JSON.parse(String(warn.mock.calls[1]?.[0]))).toMatchObject({ msg: 'named-visible', source: 'global' })
     expect(payload.metadata.code).toBe('private-code')

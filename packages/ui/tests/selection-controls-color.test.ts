@@ -10,7 +10,10 @@ describe('selection controls default color', () => {
     const component = mount(Radio, {
       target,
       props: {
-        options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }],
+        options: [
+          { value: 'a', label: 'A' },
+          { value: 'b', label: 'B' },
+        ],
         value: 'a',
       },
     })
@@ -30,7 +33,10 @@ describe('selection controls default color', () => {
   it('checkbox 默认使用主题主色', async () => {
     const target = document.createElement('div')
     document.body.append(target)
-    const component = mount(Checkbox, { target, props: { checked: true, label: 'A' } })
+    const component = mount(Checkbox, {
+      target,
+      props: { checked: true, label: 'A' },
+    })
     try {
       flushSync()
       const input = target.querySelector('input[type=checkbox]')!
@@ -45,7 +51,10 @@ describe('selection controls default color', () => {
   it('checkbox 显式颜色类名优先于默认主色', async () => {
     const target = document.createElement('div')
     document.body.append(target)
-    const component = mount(Checkbox, { target, props: { checked: true, label: 'A', class: 'checkbox-success' } })
+    const component = mount(Checkbox, {
+      target,
+      props: { checked: true, label: 'A', class: 'checkbox-success' },
+    })
     try {
       flushSync()
       const input = target.querySelector('input[type=checkbox]')!

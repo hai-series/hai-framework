@@ -245,7 +245,9 @@ test.describe('IAM Permissions CRUD', () => {
     expect(listRes.ok()).toBe(true)
     const listBody = await listRes.json()
     expect(listBody.success).toBe(true)
-    const permissions = Array.isArray(listBody.data) ? listBody.data : listBody.data?.items
+    const permissions = Array.isArray(listBody.data)
+      ? listBody.data
+      : listBody.data?.items
     expect(Array.isArray(permissions)).toBe(true)
     const found = permissions.find((p: Record<string, unknown>) => p.id === permId)
     expect(found).toBeTruthy()
@@ -301,7 +303,12 @@ test.describe('IAM Role-Permission Linkage', () => {
     const permName = permBody.data?.code ?? permBody.data?.name
 
     // 定义本身不授予管理员新权限；拒绝超出本人范围的角色授权。
-    const denied = await request.post('/api/iam/roles', { data: { name: `DeniedLink_${ts}`, permissions: [permName] } })
+    const denied = await request.post('/api/iam/roles', {
+      data: {
+        name: `DeniedLink_${ts}`,
+        permissions: [permName],
+      },
+    })
     expect(denied.status()).toBe(403)
     // 使用管理员已有权限验证真实关联流程。
     const roleRes = await request.post('/api/iam/roles', {

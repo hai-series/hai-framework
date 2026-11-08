@@ -19,7 +19,9 @@ interface CommandResult {
   error?: Error
 }
 
-function runRunner(results: CommandResult[] = [], args: string[] = [], env: Record<string, string> = { npm_execpath: path.join(tmpdir(), 'pnpm entry.cjs') }) {
+function runRunner(results: CommandResult[] = [], args: string[] = [], env: Record<string, string> = {
+  npm_execpath: path.join(tmpdir(), 'pnpm entry.cjs'),
+}) {
   const archive = path.join(tmpdir(), 'controlled-scaffold-archives')
   const vitestManifest = path.join(tmpdir(), 'vitest/package.json')
   const calls: string[][] = []
@@ -29,16 +31,35 @@ function runRunner(results: CommandResult[] = [], args: string[] = [], env: Reco
   runInNewContext(source, {
     scriptUrl,
     vitestManifest,
-    fileURLToPath: (value: string) => value === vitestManifest ? value : fileURLToPath(value),
+    fileURLToPath: (value: string) => value === vitestManifest
+      ? value
+      : fileURLToPath(value),
     path,
     tmpdir,
     mkdtempSync: () => archive,
     readdirSync: () => [],
     readFileSync: () => '{}',
     rmSync: removals,
-    process: { argv: ['node', fileURLToPath(scriptUrl), ...args], execPath: process.execPath, platform: process.platform, env, stderr: { write: vi.fn() }, exit: (code: number) => { exitCode = code } },
+    process: {
+      argv: [
+        'node',
+        fileURLToPath(scriptUrl),
+        ...args,
+      ],
+      execPath: process.execPath,
+      platform: process.platform,
+      env,
+      stderr: {
+        write: vi.fn(),
+      },
+      exit: (code: number) => { exitCode = code },
+    },
     spawnSync: (command: string, commandArgs: string[], options: { shell?: boolean }) => {
-      invocations.push({ command, args: [...commandArgs], shell: options.shell })
+      invocations.push({
+        command,
+        args: [...commandArgs],
+        shell: options.shell,
+      })
       if (!commandArgs[0]?.endsWith('vitest.mjs'))
         return { status: 0 }
       calls.push([...commandArgs])
@@ -55,24 +76,41 @@ describe('scaffold runner 批次契约', () => {
     expect(result.exitCode).toBe(0)
     expect(result.calls).toHaveLength(2)
     const files = result.calls.map(args => args.filter(argument => argument.endsWith('.test.ts')))
-    expect(files[0]).toEqual(['tests/generate-runtime.e2e.test.ts', 'tests/build-downloads.e2e.test.ts', 'tests/generate-i18n.test.ts', 'tests/command-locales.test.ts', 'tests/environment-output.test.ts'])
+    expect(files[0]).toEqual([
+      'tests/generate-runtime.e2e.test.ts',
+      'tests/build-downloads.e2e.test.ts',
+      'tests/generate-i18n.test.ts',
+      'tests/command-locales.test.ts',
+      'tests/environment-output.test.ts',
+    ])
     expect(files[1]).toEqual(['tests/scaffold-gates.e2e.test.ts'])
     expect(new Set(files.flat()).size).toBe(6)
   })
 
   it('普通失败继续下一批且保留首个失败码', () => {
-    const result = runRunner([{ status: 7 }, { status: 9 }])
+    const result = runRunner([
+      { status: 7 },
+      { status: 9 },
+    ])
     expect(result.calls).toHaveLength(2)
     expect(result.exitCode).toBe(7)
   })
 
   it.each([130, 143, 3221225786, -1073741510])('取消退出码 %s 停止后续批次并清理归档', (status) => {
-    const result = runRunner([{ status }])
+    const result = runRunner([
+      { status },
+    ])
     expect(result.calls).toHaveLength(1)
     expect(result.exitCode).toBe(status)
   })
 
-  it.each([{ status: null, signal: 'SIGTERM' }, { status: null, error: new Error('Controlled spawn failure') }])('信号或启动失败停止后续批次 %j', (failure) => {
+  it.each([
+    { status: null, signal: 'SIGTERM' },
+    {
+      status: null,
+      error: new Error('Controlled spawn failure'),
+    },
+  ])('信号或启动失败停止后续批次 %j', (failure) => {
     const result = runRunner([failure])
     expect(result.calls).toHaveLength(1)
     expect(result.exitCode).toBe(1)
@@ -89,7 +127,19 @@ describe('scaffold runner 批次契约', () => {
     const entry = path.join(tmpdir(), 'pnpm entry.cjs')
     const pattern = 'scaffold with spaces.*api'
     const result = runRunner([], ['--testNamePattern', pattern])
-    expect(result.invocations[0]).toMatchObject({ command: process.execPath, args: [entry, 'exec', 'turbo', 'run', 'build', '--filter=@h-ai/*', '--concurrency=4'], shell: false })
+    expect(result.invocations[0]).toMatchObject({
+      command: process.execPath,
+      args: [
+        entry,
+        'exec',
+        'turbo',
+        'run',
+        'build',
+        '--filter=@h-ai/*',
+        '--concurrency=4',
+      ],
+      shell: false,
+    })
     expect(result.calls.every(args => args.includes(pattern))).toBe(true)
     expect(result.invocations.every(call => call.shell === false)).toBe(true)
   })
@@ -97,6 +147,17 @@ describe('scaffold runner 批次契约', () => {
   it('大小写不同的 npm_execpath 与原生 pnpm 入口也保持原始路径', () => {
     const entry = path.join(tmpdir(), 'pnpm entry.exe')
     const result = runRunner([], [], { NPM_EXECPATH: entry })
-    expect(result.invocations[0]).toMatchObject({ command: entry, args: ['exec', 'turbo', 'run', 'build', '--filter=@h-ai/*', '--concurrency=4'], shell: false })
+    expect(result.invocations[0]).toMatchObject({
+      command: entry,
+      args: [
+        'exec',
+        'turbo',
+        'run',
+        'build',
+        '--filter=@h-ai/*',
+        '--concurrency=4',
+      ],
+      shell: false,
+    })
   })
 })

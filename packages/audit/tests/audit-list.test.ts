@@ -37,7 +37,12 @@ describe('audit.list', () => {
     await audit.init()
     // 插入测试数据
     await audit.log({ userId: 'user_1', action: 'login', resource: 'auth' })
-    await audit.log({ userId: 'user_1', action: 'update', resource: 'users', resourceId: 'user_2' })
+    await audit.log({
+      userId: 'user_1',
+      action: 'update',
+      resource: 'users',
+      resourceId: 'user_2',
+    })
     await audit.log({ action: 'system_check', resource: 'system' })
   })
 

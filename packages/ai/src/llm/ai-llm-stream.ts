@@ -110,7 +110,9 @@ export function createStreamProcessor(): StreamProcessor {
       const result = this.getResult()
       const message: AssistantMessage = {
         role: 'assistant',
-        content: result.toolCalls.length > 0 ? null : result.content,
+        content: result.toolCalls.length > 0
+          ? null
+          : result.content,
       }
       if (result.reasoningContent) {
         message.reasoning_content = result.reasoningContent
@@ -194,7 +196,18 @@ export function createSSEDecoder(): SSEDecoder {
     line = ''
     if (current === '') {
       const result: SSEEvent | undefined = data.length > 0
-        ? { data: data.join('\n'), ...(eventType ? { event: eventType } : {}), ...(lastId === undefined ? {} : { id: lastId }), ...(retry === undefined ? {} : { retry }) }
+        ? {
+            data: data.join('\n'),
+            ...(eventType
+              ? { event: eventType }
+              : {}),
+            ...(lastId === undefined
+              ? {}
+              : { id: lastId }),
+            ...(retry === undefined
+              ? {}
+              : { retry }),
+          }
         : undefined
       data = []
       eventType = ''
@@ -203,8 +216,12 @@ export function createSSEDecoder(): SSEDecoder {
     if (current.startsWith(':'))
       return undefined
     const colon = current.indexOf(':')
-    const field = colon < 0 ? current : current.slice(0, colon)
-    let value = colon < 0 ? '' : current.slice(colon + 1)
+    const field = colon < 0
+      ? current
+      : current.slice(0, colon)
+    let value = colon < 0
+      ? ''
+      : current.slice(colon + 1)
     if (value.startsWith(' '))
       value = value.slice(1)
     if (field === 'data')

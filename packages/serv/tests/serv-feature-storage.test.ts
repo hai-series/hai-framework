@@ -29,7 +29,10 @@ function createStorageMock(): StorageFunctions {
     close: async () => ok(undefined),
     config: null,
     isInitialized: true,
-    checksum: { generate: async () => ok('digest'), verify: async () => ok(true) },
+    checksum: {
+      generate: async () => ok('digest'),
+      verify: async () => ok(true),
+    },
     file: {
       put: async () => ok(baseFileMetadata),
       get: async () => ok(Buffer.from('demo')),
@@ -71,7 +74,10 @@ describe('serv feature storage', () => {
   it('对非法存储 key 返回本地化字段错误', async () => {
     const app = serv.createApp({
       contract: apiContract.storage,
-      procedures: createStorageProcedures({ storage: createStorageMock(), authorize: authorizeUserKeys }),
+      procedures: createStorageProcedures({
+        storage: createStorageMock(),
+        authorize: authorizeUserKeys,
+      }),
       createContext: createContext('en-US'),
       http: { openapi: false, docs: false },
     })
@@ -95,7 +101,10 @@ describe('serv feature storage', () => {
   it('deleteMany 会指出首个非法 key 的数组字段路径', async () => {
     const app = serv.createApp({
       contract: apiContract.storage,
-      procedures: createStorageProcedures({ storage: createStorageMock(), authorize: authorizeUserKeys }),
+      procedures: createStorageProcedures({
+        storage: createStorageMock(),
+        authorize: authorizeUserKeys,
+      }),
       createContext: createContext('zh-CN'),
       http: { openapi: false, docs: false },
     })
@@ -103,7 +112,9 @@ describe('serv feature storage', () => {
     const response = await app.request('/api/v1/storage/files/delete-many', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ keys: ['ok/demo.txt', '../escape.txt'] }),
+      body: JSON.stringify({
+        keys: ['ok/demo.txt', '../escape.txt'],
+      }),
     })
 
     expect(response.status).toBe(400)
@@ -120,11 +131,22 @@ describe('serv feature storage', () => {
     const storage = createStorageMock()
     const summary = {
       deletedKeys: ['users/user-1/a.txt'],
-      failures: [{ key: 'users/user-1/b.txt', code: 'AccessDenied', retryable: false, outcome: 'failed' as const }],
+      failures: [
+        {
+          key: 'users/user-1/b.txt',
+          code: 'AccessDenied',
+          retryable: false,
+          outcome: 'failed' as const,
+        },
+      ],
     }
     vi.spyOn(storage.file, 'deleteMany').mockResolvedValue({
       success: false,
-      error: { code: 'hai:storage:002', message: 'Delete failed', ext: { deleteMany: summary } },
+      error: {
+        code: 'hai:storage:002',
+        message: 'Delete failed',
+        ext: { deleteMany: summary },
+      },
     })
     const app = serv.createApp({
       contract: apiContract.storage,
@@ -134,21 +156,71 @@ describe('serv feature storage', () => {
     const response = await app.request('/api/v1/storage/files/delete-many', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ keys: ['users/user-1/a.txt', 'users/user-1/b.txt'] }),
+      body: JSON.stringify({
+        keys: ['users/user-1/a.txt', 'users/user-1/b.txt'],
+      }),
     })
     expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({ success: false, error: { code: 'hai:storage:002', ext: { deleteMany: summary } } })
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        code: 'hai:storage:002',
+        ext: { deleteMany: summary },
+      },
+    })
   })
 
   it.each([
-    { path: '/storage/presigned-urls/download', method: 'POST', input: { key: 'users/user-2/private.txt' }, target: 'download' },
-    { path: '/storage/presigned-urls/upload', method: 'POST', input: { key: 'users/user-2/private.txt' }, target: 'upload' },
-    { path: '/storage/files/metadata', method: 'POST', input: { key: 'users/user-2/private.txt' }, target: 'metadata' },
-    { path: '/storage/files', method: 'DELETE', input: { key: 'users/user-2/private.txt' }, target: 'delete' },
-    { path: '/storage/files/delete-many', method: 'POST', input: { keys: ['users/user-1/own.txt', 'users/user-2/private.txt'] }, target: 'deleteMany' },
-    { path: '/storage/files?prefix=users%2Fuser-2%2F', method: 'GET', input: undefined, target: 'list' },
-    { path: '/storage/files', method: 'GET', input: undefined, target: 'list' },
-    { path: '/storage/files?prefix=users%2Fuser-10%2F', method: 'GET', input: undefined, target: 'list' },
+    {
+      path: '/storage/presigned-urls/download',
+      method: 'POST',
+      input: { key: 'users/user-2/private.txt' },
+      target: 'download',
+    },
+    {
+      path: '/storage/presigned-urls/upload',
+      method: 'POST',
+      input: { key: 'users/user-2/private.txt' },
+      target: 'upload',
+    },
+    {
+      path: '/storage/files/metadata',
+      method: 'POST',
+      input: { key: 'users/user-2/private.txt' },
+      target: 'metadata',
+    },
+    {
+      path: '/storage/files',
+      method: 'DELETE',
+      input: { key: 'users/user-2/private.txt' },
+      target: 'delete',
+    },
+    {
+      path: '/storage/files/delete-many',
+      method: 'POST',
+      input: {
+        keys: ['users/user-1/own.txt', 'users/user-2/private.txt'],
+      },
+      target: 'deleteMany',
+    },
+    {
+      path: '/storage/files?prefix=users%2Fuser-2%2F',
+      method: 'GET',
+      input: undefined,
+      target: 'list',
+    },
+    {
+      path: '/storage/files',
+      method: 'GET',
+      input: undefined,
+      target: 'list',
+    },
+    {
+      path: '/storage/files?prefix=users%2Fuser-10%2F',
+      method: 'GET',
+      input: undefined,
+      target: 'list',
+    },
   ])('拒绝用户越权 $target 且不调用存储（$path）', async ({ path, method, input }) => {
     const storage = createStorageMock()
     const spies = [
@@ -166,8 +238,12 @@ describe('serv feature storage', () => {
     })
     const response = await app.request(`/api/v1${path}`, {
       method,
-      headers: input ? { 'Content-Type': 'application/json' } : undefined,
-      body: input ? JSON.stringify(input) : undefined,
+      headers: input
+        ? { 'Content-Type': 'application/json' }
+        : undefined,
+      body: input
+        ? JSON.stringify(input)
+        : undefined,
     })
     const result = await response.json()
     expect(result.success).toBe(false)
@@ -199,7 +275,14 @@ describe('serv feature storage', () => {
         storage,
         authorize: request => request.context.session.permissions.includes('storage.manage'),
       }),
-      createContext: ({ request }) => ({ ...createContext('en-US')({ request }), session: { userId: 'admin', roles: [], permissions: ['storage.manage'] } }),
+      createContext: ({ request }) => ({
+        ...createContext('en-US')({ request }),
+        session: {
+          userId: 'admin',
+          roles: [],
+          permissions: ['storage.manage'],
+        },
+      }),
     })
     const adminResponse = await adminApp.request('/api/v1/storage/files/metadata', {
       method: 'POST',
@@ -211,23 +294,62 @@ describe('serv feature storage', () => {
   })
 
   it.each([
-    { path: '/storage/presigned-urls/download', method: 'POST', input: { key: 'users/user-1/own.txt' }, operation: 'download' },
-    { path: '/storage/presigned-urls/upload', method: 'POST', input: { key: 'users/user-1/own.txt' }, operation: 'upload' },
-    { path: '/storage/files/metadata', method: 'POST', input: { key: 'users/user-1/own.txt' }, operation: 'metadata' },
-    { path: '/storage/files', method: 'DELETE', input: { key: 'users/user-1/own.txt' }, operation: 'delete' },
-    { path: '/storage/files/delete-many', method: 'POST', input: { keys: ['users/user-1/a.txt', 'users/user-1/b.txt'] }, operation: 'deleteMany' },
-    { path: '/storage/files?prefix=users%2Fuser-1%2F', method: 'GET', input: undefined, operation: 'list' },
+    {
+      path: '/storage/presigned-urls/download',
+      method: 'POST',
+      input: { key: 'users/user-1/own.txt' },
+      operation: 'download',
+    },
+    {
+      path: '/storage/presigned-urls/upload',
+      method: 'POST',
+      input: { key: 'users/user-1/own.txt' },
+      operation: 'upload',
+    },
+    {
+      path: '/storage/files/metadata',
+      method: 'POST',
+      input: { key: 'users/user-1/own.txt' },
+      operation: 'metadata',
+    },
+    {
+      path: '/storage/files',
+      method: 'DELETE',
+      input: { key: 'users/user-1/own.txt' },
+      operation: 'delete',
+    },
+    {
+      path: '/storage/files/delete-many',
+      method: 'POST',
+      input: {
+        keys: ['users/user-1/a.txt', 'users/user-1/b.txt'],
+      },
+      operation: 'deleteMany',
+    },
+    {
+      path: '/storage/files?prefix=users%2Fuser-1%2F',
+      method: 'GET',
+      input: undefined,
+      operation: 'list',
+    },
   ])('本人资源的 $operation 通过异步授权后正常执行', async ({ path, method, input, operation }) => {
     const authorize = vi.fn(async (request: Parameters<StorageProcedureDeps['authorize']>[0]) => authorizeUserKeys(request))
     const app = serv.createApp({
       contract: apiContract.storage,
-      procedures: createStorageProcedures({ storage: createStorageMock(), authorize }),
+      procedures: createStorageProcedures({
+        storage: createStorageMock(),
+        authorize,
+      }),
       createContext: createContext('en-US'),
     })
     const response = await app.request(`/api/v1${path}`, {
       method,
-      headers: input ? { 'Content-Type': 'application/json' } : undefined,
-      body: input ? JSON.stringify(input) : undefined,
+      headers: input
+        ? { 'Content-Type': 'application/json' }
+        : undefined,
+      body: input
+        ? JSON.stringify(input)
+        : undefined,
     })
     expect((await response.json()).success).toBe(true)
     expect(authorize).toHaveBeenCalledOnce()

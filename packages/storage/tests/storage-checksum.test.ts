@@ -4,7 +4,13 @@ import { describe, expect, it } from 'vitest'
 import { HaiStorageError, storage } from '../src/index.js'
 
 describe('storage.checksum', () => {
-  it.each(['sha256', 'sha384', 'sha512', 'sha1', 'md5'] as const)('无需初始化，%s 的字节流摘要与独立实现一致', async (algorithm) => {
+  it.each([
+    'sha256',
+    'sha384',
+    'sha512',
+    'sha1',
+    'md5',
+  ] as const)('无需初始化，%s 的字节流摘要与独立实现一致', async (algorithm) => {
     async function* content() {
       yield Buffer.from('a')
       yield Buffer.from('bc')
@@ -32,7 +38,9 @@ describe('storage.checksum', () => {
       throw new Error('source unavailable')
     }
     expect((await storage.checksum.generate(broken())).success).toBe(false)
-    expect((await storage.checksum.generate('abc', { signal: AbortSignal.abort() })).success).toBe(false)
+    expect((await storage.checksum.generate('abc', {
+      signal: AbortSignal.abort(),
+    })).success).toBe(false)
   })
 
   it.each(['consumer', 'source'] as const)('取消等待中的字节流立即返回失败并关闭迭代器（%s）', async (cancelledBy) => {

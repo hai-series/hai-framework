@@ -126,18 +126,27 @@ async function seedTestData(container: StartedTestContainer): Promise<void> {
   try {
     await client.bind(LDAP_ADMIN_DN, LDAP_ADMIN_PASSWORD)
     const entries: [string, Record<string, string[]>][] = [
-      [`ou=users,${LDAP_BASE_DN}`, { objectClass: ['organizationalUnit'], ou: ['users'] }],
-      [`uid=ldapuser,ou=users,${LDAP_BASE_DN}`, {
-        objectClass: ['inetOrgPerson', 'posixAccount', 'shadowAccount'],
-        uid: ['ldapuser'],
-        sn: ['User'],
-        cn: ['LDAP Test User'],
-        mail: ['ldapuser@example.org'],
-        userPassword: [TEST_USER_PASSWORD],
-        uidNumber: ['10000'],
-        gidNumber: ['10000'],
-        homeDirectory: ['/home/ldapuser'],
-      }],
+      [
+        `ou=users,${LDAP_BASE_DN}`,
+        {
+          objectClass: ['organizationalUnit'],
+          ou: ['users'],
+        },
+      ],
+      [
+        `uid=ldapuser,ou=users,${LDAP_BASE_DN}`,
+        {
+          objectClass: ['inetOrgPerson', 'posixAccount', 'shadowAccount'],
+          uid: ['ldapuser'],
+          sn: ['User'],
+          cn: ['LDAP Test User'],
+          mail: ['ldapuser@example.org'],
+          userPassword: [TEST_USER_PASSWORD],
+          uidNumber: ['10000'],
+          gidNumber: ['10000'],
+          homeDirectory: ['/home/ldapuser'],
+        },
+      ],
     ]
     for (const [dn, attributes] of entries) {
       try {

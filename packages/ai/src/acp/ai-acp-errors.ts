@@ -86,7 +86,9 @@ export function acpError(error: unknown) {
   const failure
     = error instanceof ACPFailure
       ? error
-      : new ACPFailure(error instanceof ZodError ? 'invalid' : 'failed')
+      : new ACPFailure(error instanceof ZodError
+          ? 'invalid'
+          : 'failed')
   const [code, message] = mappings[failure.kind]
   return err(HaiAIError[code], aiM(message), failure.details)
 }

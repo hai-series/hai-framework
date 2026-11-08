@@ -881,7 +881,12 @@ describe('iam.workflow', () => {
 
         const otpIam = await initIam({
           login: { password: true, otp: true },
-          otp: { length: 6, expiresIn: 300, maxAttempts: 3, resendInterval: 30 },
+          otp: {
+            length: 6,
+            expiresIn: 300,
+            maxAttempts: 3,
+            resendInterval: 30,
+          },
           onOtpSendEmail: async (email, code) => {
             capturedEmail = email
             capturedCode = code
@@ -922,7 +927,12 @@ describe('iam.workflow', () => {
 
         const otpIam = await initIam({
           login: { password: true, otp: true },
-          otp: { length: 4, expiresIn: 300, maxAttempts: 3, resendInterval: 30 },
+          otp: {
+            length: 4,
+            expiresIn: 300,
+            maxAttempts: 3,
+            resendInterval: 30,
+          },
           onOtpSendSms: async (phone, code) => {
             capturedPhone = phone
             capturedCode = code
@@ -942,7 +952,12 @@ describe('iam.workflow', () => {
       it('未配置发送渠道时 sendOtp 应返回 LOGIN_DISABLED', async () => {
         const otpIam = await initIam({
           login: { password: true, otp: true },
-          otp: { length: 6, expiresIn: 300, maxAttempts: 3, resendInterval: 30 },
+          otp: {
+            length: 6,
+            expiresIn: 300,
+            maxAttempts: 3,
+            resendInterval: 30,
+          },
           // 不注入 onOtpSendEmail
         })
 
@@ -958,7 +973,12 @@ describe('iam.workflow', () => {
       it('onOtpSendEmail 抛异常时应返回 INTERNAL_ERROR', async () => {
         const otpIam = await initIam({
           login: { password: true, otp: true },
-          otp: { length: 6, expiresIn: 300, maxAttempts: 3, resendInterval: 30 },
+          otp: {
+            length: 6,
+            expiresIn: 300,
+            maxAttempts: 3,
+            resendInterval: 30,
+          },
           onOtpSendEmail: async () => {
             throw new Error('SMTP connection failed')
           },
@@ -978,7 +998,12 @@ describe('iam.workflow', () => {
 
         const otpIam = await initIam({
           login: { password: true, otp: true },
-          otp: { length: 6, expiresIn: 300, maxAttempts: 3, resendInterval: 30 },
+          otp: {
+            length: 6,
+            expiresIn: 300,
+            maxAttempts: 3,
+            resendInterval: 30,
+          },
           onOtpSendEmail: async (_email, code) => {
             capturedCode = code
           },

@@ -22,7 +22,9 @@ async function serve() {
   const app = agent({ name: 'remote-fixture' })
     .onRequest(methods.agent.initialize, () => ({
       protocolVersion: PROTOCOL_VERSION,
-      agentCapabilities: { sessionCapabilities: { list: {} } },
+      agentCapabilities: {
+        sessionCapabilities: { list: {} },
+      },
       authMethods: [],
     }))
     .onRequest(methods.agent.session.new, async ({ client }) => {
@@ -70,7 +72,9 @@ async function serve() {
           message: 'Choose a name',
           requestedSchema: {
             type: 'object',
-            properties: { name: { type: 'string' } },
+            properties: {
+              name: { type: 'string' },
+            },
           },
         })
         let foreignRejected = false
@@ -91,7 +95,12 @@ async function serve() {
             sessionUpdate: 'agent_message_chunk',
             content: {
               type: 'text',
-              text: JSON.stringify({ file, output, answer, foreignRejected }),
+              text: JSON.stringify({
+                file,
+                output,
+                answer,
+                foreignRejected,
+              }),
             },
             messageId: 'answer',
           },
@@ -117,7 +126,10 @@ async function serve() {
         sessionId: params.sessionId,
         update: {
           sessionUpdate: 'agent_message_chunk',
-          content: { type: 'text', text: JSON.stringify(permission) },
+          content: {
+            type: 'text',
+            text: JSON.stringify(permission),
+          },
           messageId: 'answer',
         },
         _meta: { fixture: true },
@@ -141,7 +153,9 @@ async function serve() {
       ws.close()
       server.closeAllConnections()
       await new Promise<void>((resolve, reject) =>
-        server.close(error => (error ? reject(error) : resolve())),
+        server.close(error => (error
+          ? reject(error)
+          : resolve())),
       )
     },
   }
@@ -175,7 +189,9 @@ describe('aCP native remote E2E', () => {
           }),
         )
         const response = value(
-          await session.prompt([{ type: 'text', text: 'permission' }]),
+          await session.prompt([
+            { type: 'text', text: 'permission' },
+          ]),
         )
         expect(JSON.parse(response.text).outcome.outcome).toBe('cancelled')
         expect(events).toHaveLength(2)
@@ -202,7 +218,9 @@ describe('aCP native remote E2E', () => {
         )
         expect(
           JSON.parse(
-            value(await allowed.prompt([{ type: 'text', text: 'allow' }])).text,
+            value(await allowed.prompt([
+              { type: 'text', text: 'allow' },
+            ])).text,
           ).outcome.optionId,
         ).toBe('allow')
         value(await allowed.close())
@@ -221,7 +239,9 @@ describe('aCP native remote E2E', () => {
       const calls: string[] = []
       try {
         value(
-          await ai.init({ acp: { promptTimeout: 3000, cancelTimeout: 100 } }),
+          await ai.init({
+            acp: { promptTimeout: 3000, cancelTimeout: 100 },
+          }),
         )
         const connected = value(
           await ai.acp.connect(
@@ -277,7 +297,9 @@ describe('aCP native remote E2E', () => {
         const prompt = await session.prompt([
           {
             type: 'text',
-            text: transport === 'ws' ? 'callbacks-foreign' : 'callbacks',
+            text: transport === 'ws'
+              ? 'callbacks-foreign'
+              : 'callbacks',
           },
         ])
         expect(prompt.success, JSON.stringify(calls)).toBe(true)
@@ -285,7 +307,10 @@ describe('aCP native remote E2E', () => {
         expect(JSON.parse(response.text)).toMatchObject({
           file: { content: 'read' },
           output: { output: 'ok' },
-          answer: { action: 'accept', content: { name: 'project' } },
+          answer: {
+            action: 'accept',
+            content: { name: 'project' },
+          },
           foreignRejected: transport === 'ws',
         })
         expect(calls).toEqual([
@@ -306,14 +331,18 @@ describe('aCP native remote E2E', () => {
     15000,
   )
   it('能力回调不完整时不宣称支持；连接失败不降级', async () => {
-    value(await ai.init({ acp: { requestTimeout: 300 } }))
+    value(await ai.init({
+      acp: { requestTimeout: 300 },
+    }))
     const server = await serve()
     try {
       expect(
         (
           await ai.acp.connect(
             { type: 'http', url: `http://127.0.0.1:${server.port}/acp` },
-            { capabilities: { terminal: true } },
+            {
+              capabilities: { terminal: true },
+            },
           )
         ).success,
       ).toBe(false)

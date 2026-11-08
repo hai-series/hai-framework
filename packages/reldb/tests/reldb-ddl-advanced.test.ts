@@ -36,13 +36,26 @@ describe('reldb.ddl advanced', () => {
       expect(result.success).toBe(true)
 
       // 验证表可以正常插入
-      const boolVal = label === 'postgresql' ? true : 1
-      const tsVal = label === 'sqlite' ? Date.now() : new Date()
-      const jsonVal = label === 'sqlite' || label === 'mysql' ? '{"key":"value"}' : '{"key":"value"}'
+      const boolVal = label === 'postgresql'
+        ? true
+        : 1
+      const tsVal = label === 'sqlite'
+        ? Date.now()
+        : new Date()
+      const jsonVal = label === 'sqlite' || label === 'mysql'
+        ? '{"key":"value"}'
+        : '{"key":"value"}'
 
       const insert = await reldb.sql.execute(
         'INSERT INTO all_types (text_col, int_col, real_col, bool_col, ts_col, json_col) VALUES (?, ?, ?, ?, ?, ?)',
-        ['hello', 42, 3.14, boolVal, tsVal, jsonVal],
+        [
+          'hello',
+          42,
+          3.14,
+          boolVal,
+          tsVal,
+          jsonVal,
+        ],
       )
       expect(insert.success).toBe(true)
 

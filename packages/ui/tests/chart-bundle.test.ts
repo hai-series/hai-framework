@@ -10,7 +10,12 @@ import { expect, it, vi } from 'vitest'
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url))
 const publicEntry = createRequire(import.meta.url).resolve('@h-ai/ui/components/scenes/charts/index')
 
-it.each(['MetricCard', 'ReportCard', 'DashboardGrid', 'Chart'])('%s 的真实发布入口按需打包图形引擎', async (component) => {
+it.each([
+  'MetricCard',
+  'ReportCard',
+  'DashboardGrid',
+  'Chart',
+])('%s 的真实发布入口按需打包图形引擎', async (component) => {
   const directory = await mkdtemp(join(tmpdir(), 'hai-ui-chart-bundle-'))
   // Vitest 默认 NODE_ENV=test；这里验收真实生产构建，避免开发组件注册阻止摇树。
   vi.stubEnv('NODE_ENV', 'production')
@@ -21,10 +26,26 @@ it.each(['MetricCard', 'ReportCard', 'DashboardGrid', 'Chart'])('%s 的真实发
       root: packageDirectory,
       configFile: false,
       logLevel: 'silent',
-      plugins: [svelte({ configFile: false })],
-      build: { write: false, minify: true, lib: { entry, formats: ['es'] }, rollupOptions: { external: [/^svelte(?:\/.*)?$/] } },
+      plugins: [
+        svelte({ configFile: false }),
+      ],
+      build: {
+        write: false,
+        minify: true,
+        lib: {
+          entry,
+          formats: ['es'],
+        },
+        rollupOptions: {
+          external: [/^svelte(?:\/.*)?$/],
+        },
+      },
     })
-    const outputs = (Array.isArray(result) ? result : [result]).flatMap(item => 'output' in item ? item.output : [])
+    const outputs = (Array.isArray(result)
+      ? result
+      : [result]).flatMap(item => 'output' in item
+      ? item.output
+      : [])
     const chunks = outputs.filter(item => item.type === 'chunk')
     const byName = new Map(chunks.map(item => [item.fileName, item]))
     const initial = new Set<string>()

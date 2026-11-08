@@ -27,7 +27,11 @@ const server = createServer(async (request, response) => {
     return
   response.writeHead(responseStatus, { Location: '/redirect-target' }).end()
 })
-const actor = { scopeId: 'business', userId: 'user', permissions: ['feedback:*'] }
+const actor = {
+  scopeId: 'business',
+  userId: 'user',
+  permissions: ['feedback:*'],
+}
 const config = { appId: 'business-test', notificationMode: 'disabled' as const, workerIntervalMs: 0 }
 
 beforeEach(async () => {
@@ -47,7 +51,9 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await feedback.close()
   server.closeAllConnections()
-  await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+  await new Promise<void>((resolve, reject) => server.close(error => error
+    ? reject(error)
+    : resolve()))
   await storage.close()
   await reldb.close()
   await rm(directory, { recursive: true, force: true })
@@ -70,11 +76,24 @@ async function drain() {
 
 describe('业务补采与反馈 Webhook', () => {
   it('等待异步业务日志和 ZIP，脱敏文本，详情/离线包可读取且重复提交不重复采集', async () => {
-    const archive = zipSync({ 'safe.log': strToU8('Order diagnostic log') })
+    const archive = zipSync({
+      'safe.log': strToU8('Order diagnostic log'),
+    })
     const collectEvidence = vi.fn<NonNullable<FeedbackInitOptions['collectEvidence']>>(async ({ report, signal }) => {
       await Promise.resolve()
       expect(signal.aborted).toBe(false)
-      return { text: `Order ${report.number}, password=private-sentinel`, data: { orderId: 'order-1' }, attachments: [{ id: 'logs', name: 'logs.zip', contentType: 'application/zip', bytes: archive }] }
+      return {
+        text: `Order ${report.number}, password=private-sentinel`,
+        data: { orderId: 'order-1' },
+        attachments: [
+          {
+            id: 'logs',
+            name: 'logs.zip',
+            contentType: 'application/zip',
+            bytes: archive,
+          },
+        ],
+      }
     })
     expect((await feedback.init(config, { collectEvidence })).success).toBe(true)
     const report = await submit()
@@ -82,10 +101,17 @@ describe('业务补采与反馈 Webhook', () => {
     await drain()
     expect(collectEvidence).toHaveBeenCalledTimes(1)
     const events = await feedback.getEvidence({ id: report.id, kind: 'business' }, actor)
-    expect(events.success && events.data.items).toEqual([expect.objectContaining({ source: 'server:business', data: expect.objectContaining({ orderId: 'order-1' }) })])
+    expect(events.success && events.data.items).toEqual([
+      expect.objectContaining({
+        source: 'server:business',
+        data: expect.objectContaining({ orderId: 'order-1' }),
+      }),
+    ])
     expect(JSON.stringify(events)).not.toContain('private-sentinel')
     const detail = await feedback.get(report.id, actor)
-    expect(detail.success && detail.data.attachments).toEqual([expect.objectContaining({ name: 'logs.zip', status: 'available' })])
+    expect(detail.success && detail.data.attachments).toEqual([
+      expect.objectContaining({ name: 'logs.zip', status: 'available' }),
+    ])
     if (!detail.success)
       return
     const file = await feedback.getAttachment({ id: report.id, attachmentId: detail.data.attachments[0]!.id }, actor)
@@ -109,10 +135,12 @@ describe('业务补采与反馈 Webhook', () => {
 
   it('采集超时会取消并持久重试，缺少同一采集器的重启不能静默成功', async () => {
     let signal: AbortSignal | undefined
-    expect((await feedback.init({ ...config, businessCollectionTimeoutMs: 15, maxAttempts: 2 }, { collectEvidence: (context) => {
-      signal = context.signal
-      return new Promise(() => {})
-    } })).success).toBe(true)
+    expect((await feedback.init({ ...config, businessCollectionTimeoutMs: 15, maxAttempts: 2 }, {
+      collectEvidence: (context) => {
+        signal = context.signal
+        return new Promise(() => {})
+      },
+    })).success).toBe(true)
     const report = await submit()
     expect((await feedback.runJobs()).success).toBe(true)
     expect(signal?.aborted).toBe(true)
@@ -120,15 +148,25 @@ describe('业务补采与反馈 Webhook', () => {
     expect((await feedback.init({ ...config, maxAttempts: 2 })).success).toBe(true)
     await drain()
     const detail = await feedback.get(report.id, actor)
-    expect(detail).toMatchObject({ success: true, data: { report: { collectionStatus: 'failed' }, jobs: expect.arrayContaining([expect.objectContaining({ type: 'collect', status: 'failed', attempts: 2 })]) } })
+    expect(detail).toMatchObject({
+      success: true,
+      data: {
+        report: { collectionStatus: 'failed' },
+        jobs: expect.arrayContaining([
+          expect.objectContaining({ type: 'collect', status: 'failed', attempts: 2 }),
+        ]),
+      },
+    })
   })
 
   it('关闭模块时中止等待中的业务采集并释放任务，不等待完整超时', async () => {
     let signal: AbortSignal | undefined
-    expect((await feedback.init(config, { collectEvidence: (context) => {
-      signal = context.signal
-      return new Promise(() => {})
-    } })).success).toBe(true)
+    expect((await feedback.init(config, {
+      collectEvidence: (context) => {
+        signal = context.signal
+        return new Promise(() => {})
+      },
+    })).success).toBe(true)
     await submit()
     const running = feedback.runJobs()
     await vi.waitFor(() => expect(signal).toBeDefined())
@@ -138,43 +176,128 @@ describe('业务补采与反馈 Webhook', () => {
   })
 
   it('拒绝超量/伪造压缩包且不保存半批附件，管理员重试后可以恢复', async () => {
-    const collectEvidence = vi.fn<NonNullable<FeedbackInitOptions['collectEvidence']>>(() => ({ attachments: [{ id: 'invalid', name: 'bad.zip', contentType: 'application/zip', bytes: strToU8('not zip') }] }))
+    const collectEvidence = vi.fn<NonNullable<FeedbackInitOptions['collectEvidence']>>(() => ({
+      attachments: [
+        {
+          id: 'invalid',
+          name: 'bad.zip',
+          contentType: 'application/zip',
+          bytes: strToU8('not zip'),
+        },
+      ],
+    }))
     expect((await feedback.init({ ...config, maxAttempts: 1 }, { collectEvidence })).success).toBe(true)
     const report = await submit()
     await drain()
-    expect(await feedback.get(report.id, actor)).toMatchObject({ success: true, data: { report: { collectionStatus: 'failed' }, attachments: [] } })
-    collectEvidence.mockImplementation(() => ({ attachments: [{ id: 'large', name: 'huge.log', contentType: 'text/plain', bytes: new Uint8Array(feedback.budget.maxAttachmentBytes + 1) }] }))
+    expect(await feedback.get(report.id, actor)).toMatchObject({
+      success: true,
+      data: {
+        report: { collectionStatus: 'failed' },
+        attachments: [],
+      },
+    })
+    collectEvidence.mockImplementation(() => ({
+      attachments: [
+        {
+          id: 'large',
+          name: 'huge.log',
+          contentType: 'text/plain',
+          bytes: new Uint8Array(feedback.budget.maxAttachmentBytes + 1),
+        },
+      ],
+    }))
     expect((await feedback.retry({ id: report.id, target: 'collect' }, actor)).success).toBe(true)
     await drain()
-    expect(await feedback.get(report.id, actor)).toMatchObject({ success: true, data: { report: { collectionStatus: 'failed' }, attachments: [] } })
+    expect(await feedback.get(report.id, actor)).toMatchObject({
+      success: true,
+      data: {
+        report: { collectionStatus: 'failed' },
+        attachments: [],
+      },
+    })
     collectEvidence.mockImplementation(() => ({ text: 'Recovered diagnostics' }))
     expect((await feedback.retry({ id: report.id, target: 'collect' }, actor)).success).toBe(true)
     await drain()
-    expect(await feedback.getEvidence({ id: report.id, kind: 'business' }, actor)).toMatchObject({ success: true, data: { total: 1 } })
+    expect(await feedback.getEvidence({ id: report.id, kind: 'business' }, actor)).toMatchObject({
+      success: true,
+      data: { total: 1 },
+    })
   })
 
   it('业务附件与用户附件共享总预算，超限时不发布业务证据', async () => {
-    expect((await feedback.init({ ...config, maxTotalBytes: 4 * 1048576, maxAttempts: 1 }, { collectEvidence: () => ({ attachments: [{ id: 'extra', name: 'extra.log', contentType: 'text/plain', bytes: Buffer.from('x'.repeat(400000)) }] }) })).success).toBe(true)
-    const accepted = await feedback.submit({ appId: config.appId, submissionId: 'budget', attachments: [{ id: 'client', name: 'client.log', contentType: 'text/plain', size: 700000, checksum: '0'.repeat(64) }] }, actor)
+    expect((await feedback.init({ ...config, maxTotalBytes: 4 * 1048576, maxAttempts: 1 }, {
+      collectEvidence: () => ({
+        attachments: [
+          {
+            id: 'extra',
+            name: 'extra.log',
+            contentType: 'text/plain',
+            bytes: Buffer.from('x'.repeat(400000)),
+          },
+        ],
+      }),
+    })).success).toBe(true)
+    const accepted = await feedback.submit({
+      appId: config.appId,
+      submissionId: 'budget',
+      attachments: [
+        {
+          id: 'client',
+          name: 'client.log',
+          contentType: 'text/plain',
+          size: 700000,
+          checksum: '0'.repeat(64),
+        },
+      ],
+    }, actor)
     expect(accepted.success).toBe(true)
     if (!accepted.success)
       return
     await feedback.completeCollection({ id: accepted.data.id }, actor)
     await drain()
-    expect(await feedback.getEvidence({ id: accepted.data.id, kind: 'business' }, actor)).toMatchObject({ success: true, data: { total: 0 } })
-    expect(await feedback.get(accepted.data.id, actor)).toMatchObject({ success: true, data: { report: { collectionStatus: 'failed' }, attachments: [expect.objectContaining({ id: 'client' })] } })
+    expect(await feedback.getEvidence({ id: accepted.data.id, kind: 'business' }, actor)).toMatchObject({
+      success: true,
+      data: { total: 0 },
+    })
+    expect(await feedback.get(accepted.data.id, actor)).toMatchObject({
+      success: true,
+      data: {
+        report: { collectionStatus: 'failed' },
+        attachments: [
+          expect.objectContaining({ id: 'client' }),
+        ],
+      },
+    })
   })
 
   it('对象保存失败不发布半批材料，持久重试可完整恢复', async () => {
-    const options: FeedbackInitOptions = { collectEvidence: () => ({ text: 'Complete batch', attachments: ['first', 'second'].map(id => ({ id, name: `${id}.log`, contentType: 'text/plain', bytes: strToU8(id) })) }) }
+    const options: FeedbackInitOptions = {
+      collectEvidence: () => ({
+        text: 'Complete batch',
+        attachments: ['first', 'second'].map(id => ({
+          id,
+          name: `${id}.log`,
+          contentType: 'text/plain',
+          bytes: strToU8(id),
+        })),
+      }),
+    }
     expect((await feedback.init(config, options)).success).toBe(true)
     const report = await submit()
     const put = storage.file.put.bind(storage.file)
     let count = 0
-    const fail = vi.spyOn(storage.file, 'put').mockImplementation(async (...args) => ++count === 2 ? err(HaiFeedbackError.OPERATION_FAILED, 'Storage test failure') : put(...args))
+    const fail = vi.spyOn(storage.file, 'put').mockImplementation(async (...args) => ++count === 2
+      ? err(HaiFeedbackError.OPERATION_FAILED, 'Storage test failure')
+      : put(...args))
     expect((await feedback.runJobs()).success).toBe(true)
-    expect(await feedback.get(report.id, actor)).toMatchObject({ success: true, data: { attachments: [] } })
-    expect(await feedback.getEvidence({ id: report.id, kind: 'business' }, actor)).toMatchObject({ success: true, data: { total: 0 } })
+    expect(await feedback.get(report.id, actor)).toMatchObject({
+      success: true,
+      data: { attachments: [] },
+    })
+    expect(await feedback.getEvidence({ id: report.id, kind: 'business' }, actor)).toMatchObject({
+      success: true,
+      data: { total: 0 },
+    })
     fail.mockRestore()
     await drain()
     const detail = await feedback.get(report.id, actor)
@@ -183,27 +306,38 @@ describe('业务补采与反馈 Webhook', () => {
 
   it('失去租约的迟到业务采集不能发布证据或附件', async () => {
     let finish: ((value: { text: string }) => void) | undefined
-    expect((await feedback.init(config, { collectEvidence: () => new Promise((resolve) => {
-      finish = resolve
-    }) })).success).toBe(true)
+    expect((await feedback.init(config, {
+      collectEvidence: () => new Promise((resolve) => {
+        finish = resolve
+      }),
+    })).success).toBe(true)
     const report = await submit()
     const running = feedback.runJobs()
     await vi.waitFor(() => expect(finish).toBeDefined())
     expect((await reldb.sql.execute('UPDATE hai_feedback_jobs SET token = \'another-worker\', lease_until = lease_until + 60000 WHERE kind = \'collect\'')).success).toBe(true)
     finish!({ text: 'Late evidence' })
     await running
-    expect(await feedback.getEvidence({ id: report.id, kind: 'business' }, actor)).toMatchObject({ success: true, data: { total: 0 } })
+    expect(await feedback.getEvidence({ id: report.id, kind: 'business' }, actor)).toMatchObject({
+      success: true,
+      data: { total: 0 },
+    })
   })
 
   it('独立 Webhook 在补采后发送固定载荷、签名和稳定幂等键，故障/重启后重试', async () => {
     responseStatus = 503
-    const initialized = await feedback.init({ ...config, webhookUrl, webhookSecret: 'test-signing-key' }, { collectEvidence: async () => ({ text: 'Collected business evidence' }) })
+    const initialized = await feedback.init({ ...config, webhookUrl, webhookSecret: 'test-signing-key' }, {
+      collectEvidence: async () => ({ text: 'Collected business evidence' }),
+    })
     expect(initialized.success).toBe(true)
     const report = await submit()
     await drain()
     expect(requests.length).toBeGreaterThan(0)
     const first = requests[0]!
-    expect(JSON.parse(first.body)).toMatchObject({ event: 'feedback.created', report: { id: report.id }, evidence: { business: true } })
+    expect(JSON.parse(first.body)).toMatchObject({
+      event: 'feedback.created',
+      report: { id: report.id },
+      evidence: { business: true },
+    })
     expect(JSON.parse(first.body).report.collectionStatus).not.toBe('collecting')
     const timestamp = first.headers['x-hai-feedback-timestamp']
     expect(first.headers['x-hai-feedback-signature']).toBe(`sha256=${createHmac('sha256', 'test-signing-key').update(`${timestamp}.${first.body}`).digest('hex')}`)
@@ -216,7 +350,15 @@ describe('业务补采与反馈 Webhook', () => {
     const last = requests.at(-1)!
     expect(last.body).toBe(first.body)
     expect(last.headers['idempotency-key']).toBe(idempotencyKey)
-    expect(await feedback.get(report.id, actor)).toMatchObject({ success: true, data: { report: { notificationStatus: 'disabled' }, jobs: expect.arrayContaining([expect.objectContaining({ type: 'webhook', status: 'succeeded' })]) } })
+    expect(await feedback.get(report.id, actor)).toMatchObject({
+      success: true,
+      data: {
+        report: { notificationStatus: 'disabled' },
+        jobs: expect.arrayContaining([
+          expect.objectContaining({ type: 'webhook', status: 'succeeded' }),
+        ]),
+      },
+    })
     const count = requests.length
     await drain()
     expect(requests).toHaveLength(count)
@@ -228,8 +370,18 @@ describe('业务补采与反馈 Webhook', () => {
     const report = await submit()
     await drain()
     expect(requests).toHaveLength(1)
-    expect(await feedback.get(report.id, actor)).toMatchObject({ success: true, data: { jobs: expect.arrayContaining([expect.objectContaining({ type: 'webhook', status: 'failed' })]) } })
-    expect((await feedback.retry({ id: report.id, target: 'webhook' }, { ...actor, permissions: ['feedback:create'] })).success).toBe(false)
+    expect(await feedback.get(report.id, actor)).toMatchObject({
+      success: true,
+      data: {
+        jobs: expect.arrayContaining([
+          expect.objectContaining({ type: 'webhook', status: 'failed' }),
+        ]),
+      },
+    })
+    expect((await feedback.retry({ id: report.id, target: 'webhook' }, {
+      ...actor,
+      permissions: ['feedback:create'],
+    })).success).toBe(false)
     responseStatus = 204
     expect((await feedback.retry({ id: report.id, target: 'webhook' }, actor)).success).toBe(true)
     await drain()
@@ -238,11 +390,24 @@ describe('业务补采与反馈 Webhook', () => {
 
   it('webhook 超时有界失败，不泄漏回调 URL 或签名密钥', async () => {
     holdResponse = true
-    expect((await feedback.init({ ...config, webhookUrl: `${webhookUrl}?token=private-url-sentinel`, webhookSecret: 'private-secret-sentinel', webhookTimeoutMs: 15, maxAttempts: 1 })).success).toBe(true)
+    expect((await feedback.init({
+      ...config,
+      webhookUrl: `${webhookUrl}?token=private-url-sentinel`,
+      webhookSecret: 'private-secret-sentinel',
+      webhookTimeoutMs: 15,
+      maxAttempts: 1,
+    })).success).toBe(true)
     const report = await submit()
     await drain()
     const detail = await feedback.get(report.id, actor)
-    expect(detail).toMatchObject({ success: true, data: { jobs: expect.arrayContaining([expect.objectContaining({ type: 'webhook', status: 'failed' })]) } })
+    expect(detail).toMatchObject({
+      success: true,
+      data: {
+        jobs: expect.arrayContaining([
+          expect.objectContaining({ type: 'webhook', status: 'failed' }),
+        ]),
+      },
+    })
     expect(JSON.stringify(detail)).not.toContain('private-url-sentinel')
     expect(JSON.stringify(detail)).not.toContain('private-secret-sentinel')
   })

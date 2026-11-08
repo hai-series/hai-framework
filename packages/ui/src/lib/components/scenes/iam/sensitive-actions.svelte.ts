@@ -72,7 +72,10 @@ export function createSensitiveActions(options: SensitiveActionsOptions): Sensit
     private resolve?: (ticket: string | null) => void
 
     configure(policy: { enabled: boolean, operations: readonly string[] }): void {
-      this.policy = { enabled: policy.enabled, operations: [...policy.operations] }
+      this.policy = {
+        enabled: policy.enabled,
+        operations: [...policy.operations],
+      }
       // configure 通常从宿主 $effect 调用；不要把弹窗状态变成该 effect 的依赖。
       untrack(() => {
         if (this.open && (!policy.enabled || !policy.operations.includes(this.operation)))

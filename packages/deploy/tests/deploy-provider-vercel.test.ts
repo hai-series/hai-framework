@@ -41,7 +41,9 @@ describe('createVercelProvider', () => {
   describe('authenticate', () => {
     it('should authenticate with valid token', async () => {
       mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ user: { username: 'testuser', email: 'test@example.com' } }),
+        mockJsonResponse({
+          user: { username: 'testuser', email: 'test@example.com' },
+        }),
       )
 
       const provider = createVercelProvider()
@@ -82,7 +84,9 @@ describe('createVercelProvider', () => {
     it('should find existing project', async () => {
       // authenticate
       mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ user: { username: 'testuser', email: 'test@example.com' } }),
+        mockJsonResponse({
+          user: { username: 'testuser', email: 'test@example.com' },
+        }),
       )
       const provider = createVercelProvider()
       await provider.authenticate('vel_valid')
@@ -102,7 +106,9 @@ describe('createVercelProvider', () => {
     it('should create new project when not found', async () => {
       // authenticate
       mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ user: { username: 'testuser', email: 'test@example.com' } }),
+        mockJsonResponse({
+          user: { username: 'testuser', email: 'test@example.com' },
+        }),
       )
       const provider = createVercelProvider()
       await provider.authenticate('vel_valid')
@@ -125,7 +131,9 @@ describe('createVercelProvider', () => {
 
     it('should reuse project when create returns conflict', async () => {
       mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ user: { username: 'testuser', email: 'test@example.com' } }),
+        mockJsonResponse({
+          user: { username: 'testuser', email: 'test@example.com' },
+        }),
       )
       const provider = createVercelProvider()
       await provider.authenticate('vel_valid')
@@ -153,7 +161,9 @@ describe('createVercelProvider', () => {
     it('should not create project when lookup fails with non-404 error', async () => {
       // authenticate
       mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ user: { username: 'testuser', email: 'test@example.com' } }),
+        mockJsonResponse({
+          user: { username: 'testuser', email: 'test@example.com' },
+        }),
       )
       const provider = createVercelProvider()
       await provider.authenticate('vel_valid')
@@ -186,7 +196,9 @@ describe('createVercelProvider', () => {
     it('should set env vars on project', async () => {
       // authenticate
       mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ user: { username: 'testuser', email: 'test@example.com' } }),
+        mockJsonResponse({
+          user: { username: 'testuser', email: 'test@example.com' },
+        }),
       )
       const provider = createVercelProvider()
       await provider.authenticate('vel_valid')
@@ -214,7 +226,9 @@ describe('createVercelProvider', () => {
 
         // authenticate
         mockFetch.mockResolvedValueOnce(
-          mockJsonResponse({ user: { username: 'testuser', email: 'test@example.com' } }),
+          mockJsonResponse({
+            user: { username: 'testuser', email: 'test@example.com' },
+          }),
         )
         const provider = createVercelProvider()
         await provider.authenticate('vel_valid')
@@ -236,7 +250,10 @@ describe('createVercelProvider', () => {
         const deployBody = JSON.parse(deployOptions.body as string) as { files: Array<{ file: string }> }
         expect(deployBody.files.map(file => file.file)).toEqual(['.vercel/output/config.json', '.vercel/output/nested/file.txt'])
         expect(String(mockFetch.mock.calls[3][0])).toContain('?prebuilt=1')
-        expect(deployBody).toMatchObject({ version: 2, projectSettings: { framework: null, buildCommand: '', installCommand: '' } })
+        expect(deployBody).toMatchObject({
+          version: 2,
+          projectSettings: { framework: null, buildCommand: '', installCommand: '' },
+        })
       }
       finally {
         rmSync(outputDir, { recursive: true, force: true })

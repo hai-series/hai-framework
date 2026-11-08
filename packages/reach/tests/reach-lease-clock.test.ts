@@ -37,7 +37,14 @@ it('pG 行锁真实等待跨过截止时间后，Reach 旧 owner 续租应失败
   if (!created.success)
     return
   const repository = created.data
-  const inserted = await repository.create({ queueId: crypto.randomUUID(), provider: 'review-fixture', toAddr: 'review-fixture', body: 'no external delivery', status: 'pending', createdAt: Date.now() })
+  const inserted = await repository.create({
+    queueId: crypto.randomUUID(),
+    provider: 'review-fixture',
+    toAddr: 'review-fixture',
+    body: 'no external delivery',
+    status: 'pending',
+    createdAt: Date.now(),
+  })
   expect(inserted.success).toBe(true)
   const claimed = await repository.claimPendingBatch('review-old-owner', { limit: 1, lockMs: 10000 })
   expect(claimed.success).toBe(true)
@@ -70,9 +77,12 @@ it('pG 行锁真实等待跨过截止时间后，Reach 旧 owner 续租应失败
     renewal = repository.renewClaim(row.id, 'review-old-owner', 10000)
     const controller = new AbortController()
     try {
-      await Promise.race([requested.promise, delay(5000, undefined, { signal: controller.signal }).then(() => {
-        throw new Error('Renewal did not reach SQL')
-      })])
+      await Promise.race([
+        requested.promise,
+        delay(5000, undefined, { signal: controller.signal }).then(() => {
+          throw new Error('Renewal did not reach SQL')
+        }),
+      ])
     }
     finally {
       controller.abort()
@@ -99,7 +109,14 @@ it('工作节点墙钟相差一小时也不能提前失效或抢占有效租约'
   if (!created.success)
     return
   const repository = created.data
-  const stored = await repository.create({ queueId: crypto.randomUUID(), provider: 'clock-fixture', toAddr: 'fixture', body: 'no external delivery', status: 'pending', createdAt: Date.now() })
+  const stored = await repository.create({
+    queueId: crypto.randomUUID(),
+    provider: 'clock-fixture',
+    toAddr: 'fixture',
+    body: 'no external delivery',
+    status: 'pending',
+    createdAt: Date.now(),
+  })
   expect(stored.success).toBe(true)
   const claim = await repository.claimPendingBatch('clock-owner', { limit: 1, lockMs: 10000 })
   expect(claim.success && claim.data.length).toBe(1)

@@ -141,8 +141,15 @@ describe('browser-safety helpers', () => {
     })
 
     const mockExecCommand = vi.fn(() => true)
-    const mockBody = { appendChild: vi.fn(), removeChild: vi.fn() }
-    const mockTextarea = { value: '', style: { cssText: '' }, select: vi.fn() }
+    const mockBody = {
+      appendChild: vi.fn(),
+      removeChild: vi.fn(),
+    }
+    const mockTextarea = {
+      value: '',
+      style: { cssText: '' },
+      select: vi.fn(),
+    }
     const mockCreateElement = vi.fn(() => ({ ...mockTextarea }))
 
     Object.defineProperty(globalThis, 'document', {
@@ -173,8 +180,15 @@ describe('browser-safety helpers', () => {
       },
     })
 
-    const mockBody = { appendChild: vi.fn(), removeChild: vi.fn() }
-    const mockTextarea = { value: '', style: { cssText: '' }, select: vi.fn() }
+    const mockBody = {
+      appendChild: vi.fn(),
+      removeChild: vi.fn(),
+    }
+    const mockTextarea = {
+      value: '',
+      style: { cssText: '' },
+      select: vi.fn(),
+    }
 
     Object.defineProperty(globalThis, 'document', {
       configurable: true,
@@ -203,8 +217,15 @@ describe('browser-safety helpers', () => {
       },
     })
 
-    const mockBody = { appendChild: vi.fn(), removeChild: vi.fn() }
-    const mockTextarea = { value: '', style: { cssText: '' }, select: vi.fn() }
+    const mockBody = {
+      appendChild: vi.fn(),
+      removeChild: vi.fn(),
+    }
+    const mockTextarea = {
+      value: '',
+      style: { cssText: '' },
+      select: vi.fn(),
+    }
 
     Object.defineProperty(globalThis, 'document', {
       configurable: true,
@@ -235,8 +256,15 @@ describe('browser-safety helpers', () => {
       },
     })
 
-    const mockBody = { appendChild: vi.fn(), removeChild: vi.fn() }
-    const mockTextarea = { value: '', style: { cssText: '' }, select: vi.fn() }
+    const mockBody = {
+      appendChild: vi.fn(),
+      removeChild: vi.fn(),
+    }
+    const mockTextarea = {
+      value: '',
+      style: { cssText: '' },
+      select: vi.fn(),
+    }
 
     Object.defineProperty(globalThis, 'document', {
       configurable: true,

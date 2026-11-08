@@ -123,7 +123,14 @@ describe('core.async', () => {
     expect(result).toEqual([3, 6, 9])
   })
 
-  it.each([0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1])('parallel 回归：拒绝非法并发值 %s，且不执行任务', async (concurrency) => {
+  it.each([
+    0,
+    -1,
+    0.5,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.MAX_SAFE_INTEGER + 1,
+  ])('parallel 回归：拒绝非法并发值 %s，且不执行任务', async (concurrency) => {
     const task = vi.fn(async (value: number) => value * 2)
     await expect(core.async.parallel([1, 2], task, concurrency)).rejects.toBeInstanceOf(RangeError)
     await expect(core.async.parallel([], task, concurrency)).rejects.toBeInstanceOf(RangeError)

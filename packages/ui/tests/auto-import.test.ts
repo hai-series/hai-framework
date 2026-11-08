@@ -47,7 +47,9 @@ function process(content: string, filename = '/app/src/routes/+page.svelte') {
 }
 
 function uniqueSorted(values: string[]): string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right))
+  return [
+    ...new Set(values),
+  ].sort((left, right) => left.localeCompare(right))
 }
 
 function readRuntimeRegistry(): string[] {
@@ -56,14 +58,18 @@ function readRuntimeRegistry(): string[] {
   const items = setMatch?.groups?.items ?? ''
 
   return uniqueSorted(
-    [...items.matchAll(/'([A-Z][A-Za-z0-9]+)'/g)].map(match => match[1]!),
+    [
+      ...items.matchAll(/'([A-Z][A-Za-z0-9]+)'/g),
+    ].map(match => match[1]!),
   )
 }
 
 function readGlobalDeclarations(): string[] {
   const source = readFileSync(AUTO_IMPORT_DTS_FILE, 'utf8')
   return uniqueSorted(
-    [...source.matchAll(/^\s*const\s+([A-Z][A-Za-z0-9]*)\s*:/gm)].map(match => match[1]!),
+    [
+      ...source.matchAll(/^\s*const\s+([A-Z][A-Za-z0-9]*)\s*:/gm),
+    ].map(match => match[1]!),
   )
 }
 
@@ -71,7 +77,9 @@ function readExportedComponentNames(): string[] {
   return uniqueSorted(
     COMPONENT_EXPORT_INDEX_FILES.flatMap((filePath) => {
       const source = readFileSync(filePath, 'utf8')
-      return [...source.matchAll(/export\s+\{\s*default\s+as\s+([A-Z][A-Za-z0-9]*)\s*\}/g)].map(match => match[1]!)
+      return [
+        ...source.matchAll(/export\s+\{\s*default\s+as\s+([A-Z][A-Za-z0-9]*)\s*\}/g),
+      ].map(match => match[1]!)
     }),
   )
 }

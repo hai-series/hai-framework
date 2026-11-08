@@ -28,5 +28,11 @@ export function applyApiKeyScopes<T extends Pick<Session, 'roles' | 'permissions
         permissions.add(permission)
     }
   }
-  return { ...access, roles: scopes.includes('*') ? access.roles : [], permissions: [...permissions] }
+  return {
+    ...access,
+    roles: scopes.includes('*')
+      ? access.roles
+      : [],
+    permissions: [...permissions],
+  }
 }

@@ -72,7 +72,9 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
         || (signatureType !== undefined && signatureType !== 'WECHATPAY2-SHA256-RSA2048')) {
         return false
       }
-      const key = Object.hasOwn(config.platformKeys, serial) ? config.platformKeys[serial] : undefined
+      const key = Object.hasOwn(config.platformKeys, serial)
+        ? config.platformKeys[serial]
+        : undefined
       if (!key)
         return false
       if (key.includes('-----BEGIN CERTIFICATE-----')) {
@@ -95,7 +97,9 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
   async function wechatRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
     const timestamp = getTimestamp()
     const nonce = generateNonce()
-    const bodyStr = body ? JSON.stringify(body) : ''
+    const bodyStr = body
+      ? JSON.stringify(body)
+      : ''
 
     const signature = signRequest(method, path, timestamp, nonce, bodyStr, config.privateKey)
 
@@ -251,7 +255,9 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
           transactionId: response.transaction_id,
           status: statusMap[response.trade_state] ?? 'pending',
           amount: response.amount.total,
-          paidAt: response.success_time ? new Date(response.success_time) : undefined,
+          paidAt: response.success_time
+            ? new Date(response.success_time)
+            : undefined,
         })
       }
       catch (cause) {

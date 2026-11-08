@@ -21,21 +21,67 @@ it('根入口导出独立 MCP Server 工厂', () => {
 it('独立 MCP Server 与官方 Client 完成初始化、发现和调用', async () => {
   const server = createMcpServer({ name: 'integration', version: '1.0.0' })
   const client = new Client({ name: 'test-client', version: '1.0.0' })
-  server.registerTool('echo', { inputSchema: { text: z.string() } }, async ({ text }) => ({ content: [{ type: 'text', text }] }))
-  server.registerResource('data', 'test://data', {}, async uri => ({ contents: [{ uri: uri.href, text: 'resource' }] }))
-  server.registerPrompt('greet', { argsSchema: { name: z.string() } }, async ({ name }) => ({ messages: [{ role: 'user', content: { type: 'text', text: name } }] }))
+  server.registerTool('echo', {
+    inputSchema: {
+      text: z.string(),
+    },
+  }, async ({ text }) => ({
+    content: [
+      { type: 'text', text },
+    ],
+  }))
+  server.registerResource('data', 'test://data', {}, async uri => ({
+    contents: [
+      { uri: uri.href, text: 'resource' },
+    ],
+  }))
+  server.registerPrompt('greet', {
+    argsSchema: {
+      name: z.string(),
+    },
+  }, async ({ name }) => ({
+    messages: [
+      {
+        role: 'user',
+        content: { type: 'text', text: name },
+      },
+    ],
+  }))
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
   try {
     await server.connect(serverTransport)
     await client.connect(clientTransport)
     expect(client.getServerCapabilities()).toMatchObject({ tools: {}, resources: {}, prompts: {} })
     expect((await client.listTools()).tools.map(tool => tool.name)).toEqual(['echo'])
-    expect(await client.callTool({ name: 'echo', arguments: { text: 'hello' } })).toMatchObject({ content: [{ text: 'hello' }] })
-    expect(await client.callTool({ name: 'echo', arguments: { text: 1 } })).toMatchObject({ isError: true })
+    expect(await client.callTool({
+      name: 'echo',
+      arguments: { text: 'hello' },
+    })).toMatchObject({
+      content: [
+        { text: 'hello' },
+      ],
+    })
+    expect(await client.callTool({
+      name: 'echo',
+      arguments: { text: 1 },
+    })).toMatchObject({ isError: true })
     expect((await client.listResources()).resources).toHaveLength(1)
-    expect(await client.readResource({ uri: 'test://data' })).toMatchObject({ contents: [{ text: 'resource' }] })
+    expect(await client.readResource({ uri: 'test://data' })).toMatchObject({
+      contents: [
+        { text: 'resource' },
+      ],
+    })
     expect((await client.listPrompts()).prompts).toHaveLength(1)
-    expect(await client.getPrompt({ name: 'greet', arguments: { name: 'Ada' } })).toMatchObject({ messages: [{ content: { text: 'Ada' } }] })
+    expect(await client.getPrompt({
+      name: 'greet',
+      arguments: { name: 'Ada' },
+    })).toMatchObject({
+      messages: [
+        {
+          content: { text: 'Ada' },
+        },
+      ],
+    })
   }
   finally {
     await client.close()
@@ -47,17 +93,35 @@ describe('ai.mcp — 协议校验', () => {
   it('非法输入不会执行工具，非法 Schema 不会替换已有工具', async () => {
     expect((await ai.init()).success).toBe(true)
     const handler = vi.fn(async () => 'ok')
-    expect(ai.mcp.registerTool({ name: 'typed', description: '', inputSchema: {
-      type: 'object',
-      properties: { count: { type: 'integer', minimum: 1 } },
-      required: ['count'],
-      additionalProperties: false,
-    } }, handler).success).toBe(true)
-    for (const args of [{}, { count: '1' }, { count: 0 }, { count: 1, extra: true }]) {
-      expect(await ai.mcp.callTool('typed', args)).toMatchObject({ success: false, error: { code: HaiAIError.MCP_TOOL_ERROR.code } })
+    expect(ai.mcp.registerTool({
+      name: 'typed',
+      description: '',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          count: { type: 'integer', minimum: 1 },
+        },
+        required: ['count'],
+        additionalProperties: false,
+      },
+    }, handler).success).toBe(true)
+    for (const args of [
+      {},
+      { count: '1' },
+      { count: 0 },
+      { count: 1, extra: true },
+    ]) {
+      expect(await ai.mcp.callTool('typed', args)).toMatchObject({
+        success: false,
+        error: { code: HaiAIError.MCP_TOOL_ERROR.code },
+      })
     }
     expect(handler).not.toHaveBeenCalled()
-    expect(ai.mcp.registerTool({ name: 'typed', description: '', inputSchema: { type: 'invalid' } }, handler).success).toBe(false)
+    expect(ai.mcp.registerTool({
+      name: 'typed',
+      description: '',
+      inputSchema: { type: 'invalid' },
+    }, handler).success).toBe(false)
     expect((await ai.mcp.callTool('typed', { count: 1 })).success).toBe(true)
   })
 
@@ -65,30 +129,63 @@ describe('ai.mcp — 协议校验', () => {
     await ai.init()
     const handler = vi.fn(async () => 'ok')
     ai.mcp.registerTool({ name: 'context', description: '', inputSchema: {} }, handler)
-    const context = { metadata: { scope: 'test' } }
+    const context = {
+      metadata: { scope: 'test' },
+    }
     expect((await ai.mcp.callTool('context', {}, context)).success).toBe(true)
-    expect(handler.mock.calls[0]?.[1]).toMatchObject({ requestId: expect.any(String), metadata: context.metadata })
+    expect(handler.mock.calls[0]?.[1]).toMatchObject({
+      requestId: expect.any(String),
+      metadata: context.metadata,
+    })
     expect(context).not.toHaveProperty('requestId')
   })
 
   it('必填提示词参数不能来自原型', async () => {
     await ai.init()
     const handler = vi.fn(async () => [])
-    ai.mcp.registerPrompt({ name: 'required', arguments: [{ name: 'toString', required: true }] }, handler)
-    expect(await ai.mcp.getPrompt('required', {})).toMatchObject({ success: false, error: { code: HaiAIError.MCP_PROTOCOL_ERROR.code } })
+    ai.mcp.registerPrompt({
+      name: 'required',
+      arguments: [
+        { name: 'toString', required: true },
+      ],
+    }, handler)
+    expect(await ai.mcp.getPrompt('required', {})).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.MCP_PROTOCOL_ERROR.code },
+    })
     expect(handler).not.toHaveBeenCalled()
   })
 
-  it.each([{}, { text: 'both', blob: 'YQ==' }, { blob: 'base64...' }, { text: 'valid', blob: 'base64...' }])('拒绝不符合 text/blob 契约的资源 %j', async (content) => {
+  it.each([
+    {},
+    { text: 'both', blob: 'YQ==' },
+    { blob: 'base64...' },
+    { text: 'valid', blob: 'base64...' },
+  ])('拒绝不符合 text/blob 契约的资源 %j', async (content) => {
     await ai.init()
     ai.mcp.registerResource({ uri: 'test://resource', name: 'test' }, async () => ({ uri: 'test://resource', ...content }))
-    expect(await ai.mcp.readResource('test://resource')).toMatchObject({ success: false, error: { code: HaiAIError.MCP_RESOURCE_ERROR.code } })
+    expect(await ai.mcp.readResource('test://resource')).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.MCP_RESOURCE_ERROR.code },
+    })
   })
 
   it('支持 SDK 图片提示词内容', async () => {
     await ai.init()
-    ai.mcp.registerPrompt({ name: 'image' }, async () => [{ role: 'user', content: { type: 'image', data: 'YQ==', mimeType: 'image/png' } }])
-    expect(await ai.mcp.getPrompt('image', {})).toMatchObject({ success: true, data: [{ content: { type: 'image' } }] })
+    ai.mcp.registerPrompt({ name: 'image' }, async () => [
+      {
+        role: 'user',
+        content: { type: 'image', data: 'YQ==', mimeType: 'image/png' },
+      },
+    ])
+    expect(await ai.mcp.getPrompt('image', {})).toMatchObject({
+      success: true,
+      data: [
+        {
+          content: { type: 'image' },
+        },
+      ],
+    })
   })
 })
 
@@ -101,7 +198,11 @@ describe('ai.mcp — Tool', () => {
     await ai.init()
 
     ai.mcp.registerTool(
-      { name: 'add', description: '加法', inputSchema: { type: 'object' } },
+      {
+        name: 'add',
+        description: '加法',
+        inputSchema: { type: 'object' },
+      },
       async (input: unknown) => {
         const { a, b } = input as { a: number, b: number }
         return { sum: a + b }
@@ -302,9 +403,20 @@ describe('ai.mcp — Prompt', () => {
     await ai.init()
 
     ai.mcp.registerPrompt(
-      { name: 'greeting', description: '问候', arguments: [{ name: 'name', required: true }] },
+      {
+        name: 'greeting',
+        description: '问候',
+        arguments: [
+          { name: 'name', required: true },
+        ],
+      },
       async (args) => {
-        return [{ role: 'user', content: { type: 'text', text: `Hello ${args.name}` } }]
+        return [
+          {
+            role: 'user',
+            content: { type: 'text', text: `Hello ${args.name}` },
+          },
+        ]
       },
     )
 
@@ -330,7 +442,12 @@ describe('ai.mcp — Prompt', () => {
     await ai.init()
 
     ai.mcp.registerPrompt(
-      { name: 'strict', arguments: [{ name: 'required_arg', required: true }] },
+      {
+        name: 'strict',
+        arguments: [
+          { name: 'required_arg', required: true },
+        ],
+      },
       async () => [],
     )
 
@@ -368,7 +485,12 @@ describe('ai.mcp — Prompt', () => {
           { name: 'optional', required: false },
         ],
       },
-      async args => [{ role: 'user', content: { type: 'text', text: args.required } }],
+      async args => [
+        {
+          role: 'user',
+          content: { type: 'text', text: args.required },
+        },
+      ],
     )
 
     const result = await ai.mcp.getPrompt('flexible', { required: 'yes' })
@@ -381,9 +503,18 @@ describe('ai.mcp — Prompt', () => {
     ai.mcp.registerPrompt(
       { name: 'multi' },
       async () => [
-        { role: 'user', content: { type: 'text', text: '请翻译' } },
-        { role: 'assistant', content: { type: 'text', text: '好的' } },
-        { role: 'user', content: { type: 'text', text: 'Hello' } },
+        {
+          role: 'user',
+          content: { type: 'text', text: '请翻译' },
+        },
+        {
+          role: 'assistant',
+          content: { type: 'text', text: '好的' },
+        },
+        {
+          role: 'user',
+          content: { type: 'text', text: 'Hello' },
+        },
       ],
     )
 
@@ -401,13 +532,15 @@ describe('ai.mcp — Prompt', () => {
 
     ai.mcp.registerPrompt(
       { name: 'with_resource' },
-      async () => [{
-        role: 'user',
-        content: {
-          type: 'resource',
-          resource: { uri: 'file:///doc.md', text: '# Title', mimeType: 'text/markdown' },
+      async () => [
+        {
+          role: 'user',
+          content: {
+            type: 'resource',
+            resource: { uri: 'file:///doc.md', text: '# Title', mimeType: 'text/markdown' },
+          },
         },
-      }],
+      ],
     )
 
     const result = await ai.mcp.getPrompt('with_resource', {})

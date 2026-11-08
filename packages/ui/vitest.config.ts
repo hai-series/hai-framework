@@ -8,8 +8,12 @@ import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
-  resolve: { conditions: ['browser'] },
-  plugins: [svelte()],
+  resolve: {
+    conditions: ['browser'],
+  },
+  plugins: [
+    svelte(),
+  ],
   test: {
     maxWorkers: 2,
     globals: true,

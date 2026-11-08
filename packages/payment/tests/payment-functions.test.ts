@@ -389,7 +389,14 @@ describe('payment-functions — 审计日志', () => {
       action: 'payment_notify',
       resource: 'payment',
       resourceId: 'ORD001',
-      details: { provider: 'mock', transactionId: 'TXN001', eventId: 'evt_mock_001', currency: 'CNY', status: 'paid', amount: 100 },
+      details: {
+        provider: 'mock',
+        transactionId: 'TXN001',
+        eventId: 'evt_mock_001',
+        currency: 'CNY',
+        status: 'paid',
+        amount: 100,
+      },
     })
   })
 

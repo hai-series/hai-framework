@@ -101,7 +101,12 @@ export function createAiProcedures(deps: AiProcedureDeps) {
   ): Promise<HaiResult<string>> {
     const objectId = input.objectId ?? context.session.userId
     if (objectId !== context.session.userId
-      && await deps.authorizeObject?.({ context, objectId, sessionId: input.sessionId, operation }) !== true) {
+      && await deps.authorizeObject?.({
+        context,
+        objectId,
+        sessionId: input.sessionId,
+        operation,
+      }) !== true) {
       return err(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale: context.locale }))
     }
     return ok(objectId)
@@ -229,7 +234,9 @@ function mapChatRecordsResult(result: HaiResult<Array<import('@h-ai/ai').ChatRec
     return result
   }
 
-  return ok({ items: result.data.map(toApiChatRecord) })
+  return ok({
+    items: result.data.map(toApiChatRecord),
+  })
 }
 
 function toApiChatRecord(record: import('@h-ai/ai').ChatRecord): AiChatRecord {
@@ -258,7 +265,11 @@ function toApiChatRecord(record: import('@h-ai/ai').ChatRecord): AiChatRecord {
 
 function toApiChatMessage(message: ChatMessage): AiChatCompletionInput['messages'][number] {
   if (message.role === 'tool') {
-    return { role: 'tool', content: toContentText(message.content), tool_call_id: message.tool_call_id }
+    return {
+      role: 'tool',
+      content: toContentText(message.content),
+      tool_call_id: message.tool_call_id,
+    }
   }
 
   if (message.role === 'assistant') {
@@ -271,10 +282,20 @@ function toApiChatMessage(message: ChatMessage): AiChatCompletionInput['messages
   }
 
   if (message.role === 'user') {
-    return { role: 'user', content: toContentText(message.content), name: message.name }
+    return {
+      role: 'user',
+      content: toContentText(message.content),
+      name: message.name,
+    }
   }
 
-  return { role: 'system', content: toContentText(message.content), name: message.role === 'system' || message.role === 'developer' ? message.name : undefined }
+  return {
+    role: 'system',
+    content: toContentText(message.content),
+    name: message.role === 'system' || message.role === 'developer'
+      ? message.name
+      : undefined,
+  }
 }
 
 function toContentText(content: unknown): string {
@@ -298,7 +319,9 @@ function toContentText(content: unknown): string {
 
     if (typeof record.image_url === 'object' && record.image_url !== null) {
       const image = record.image_url as Record<string, unknown>
-      return typeof image.url === 'string' ? image.url : ''
+      return typeof image.url === 'string'
+        ? image.url
+        : ''
     }
 
     return ''
@@ -311,14 +334,16 @@ function mapFunctionToolCalls(toolCalls: ToolCall[] | undefined) {
       return []
     }
 
-    return [{
-      id: toolCall.id,
-      type: 'function' as const,
-      function: {
-        name: toolCall.function.name,
-        arguments: toolCall.function.arguments,
+    return [
+      {
+        id: toolCall.id,
+        type: 'function' as const,
+        function: {
+          name: toolCall.function.name,
+          arguments: toolCall.function.arguments,
+        },
       },
-    }]
+    ]
   })
 }
 

@@ -25,15 +25,26 @@ async function execute(pages, current = trigger, status = 200) {
   let output = ''
   await runInNewContext(`(async () => { ${script} })()`, {
     process: {
-      env: { GITHUB_REPOSITORY: 'owner/repo', GITHUB_API_URL: 'https://api.github.com', GITHUB_EVENT_PATH: 'event.json', GITHUB_OUTPUT: 'output', PAGES_READ_TOKEN: 'fixture-token' },
-      stdout: { write() {} },
+      env: {
+        GITHUB_REPOSITORY: 'owner/repo',
+        GITHUB_API_URL: 'https://api.github.com',
+        GITHUB_EVENT_PATH: 'event.json',
+        GITHUB_OUTPUT: 'output',
+        PAGES_READ_TOKEN: 'fixture-token',
+      },
+      stdout: {
+        write() {},
+      },
     },
     readFileSync: () => JSON.stringify({ workflow_run: current }),
     appendFileSync: (_file, value) => { output += value },
     URLSearchParams,
     AbortSignal,
     fetch: async (url, options) => {
-      requests.push({ url: new URL(url), options })
+      requests.push({
+        url: new URL(url),
+        options,
+      })
       return Response.json(pages[Math.min(requests.length - 1, pages.length - 1)], { status })
     },
   })
@@ -42,33 +53,69 @@ async function execute(pages, current = trigger, status = 200) {
 
 describe('pages实际workflow来源guard', () => {
   it('最新成功来源发布，仅用同workflow/main/push/success与创建时间查询', async () => {
-    const result = await execute([{ total_count: 1, workflow_runs: [trigger] }])
+    const result = await execute([
+      {
+        total_count: 1,
+        workflow_runs: [trigger],
+      },
+    ])
     expect(result.publish).toBe(true)
     expect(result.requests[0].url.pathname).toBe('/repos/owner/repo/actions/workflows/9/runs')
-    expect(Object.fromEntries(result.requests[0].url.searchParams)).toMatchObject({ branch: 'main', event: 'push', status: 'success', created: `>=${trigger.created_at}`, per_page: '100' })
+    expect(Object.fromEntries(result.requests[0].url.searchParams)).toMatchObject({
+      branch: 'main',
+      event: 'push',
+      status: 'success',
+      created: `>=${trigger.created_at}`,
+      per_page: '100',
+    })
     expect(result.requests[0].options.redirect).toBe('error')
   })
 
   it('旧run重跑不能覆盖较新成功run，同秒创建也用run_number区分', async () => {
     const oldRetry = { ...trigger, run_attempt: 3, updated_at: '2026-11-01T00:00:00Z' }
-    expect((await execute([{ total_count: 2, workflow_runs: [oldRetry, { ...trigger, id: 11, run_number: 1001 }] }], oldRetry)).publish).toBe(false)
+    expect((await execute([
+      {
+        total_count: 2,
+        workflow_runs: [
+          oldRetry,
+          { ...trigger, id: 11, run_number: 1001 },
+        ],
+      },
+    ], oldRetry)).publish).toBe(false)
   })
 
   it('仅main有sync bot提交不阻止当前成功来源，更新失败/pending或其他来源不算成功替代', async () => {
     const irrelevant = [
       { conclusion: 'failure' },
       { status: 'in_progress', conclusion: null },
-      { head_repository: { full_name: 'fork/repo' } },
+      {
+        head_repository: { full_name: 'fork/repo' },
+      },
       { workflow_id: 99 },
       { event: 'pull_request' },
       { head_branch: 'feature' },
-    ].map((fields, index) => ({ ...trigger, id: 20 + index, run_number: 1001 + index, ...fields }))
-    expect((await execute([{ total_count: 1, workflow_runs: [trigger] }])).publish).toBe(true)
-    expect((await execute([{ total_count: irrelevant.length, workflow_runs: irrelevant }])).publish).toBe(true)
+    ].map((fields, index) => ({
+      ...trigger,
+      id: 20 + index,
+      run_number: 1001 + index,
+      ...fields,
+    }))
+    expect((await execute([
+      {
+        total_count: 1,
+        workflow_runs: [trigger],
+      },
+    ])).publish).toBe(true)
+    expect((await execute([
+      { total_count: irrelevant.length, workflow_runs: irrelevant },
+    ])).publish).toBe(true)
   })
 
   it('跨仓库触发者直接跳过，不取得任何API结果', async () => {
-    const result = await execute([], { ...trigger, head_repository: { full_name: 'fork/repo' } })
+    const result = await execute([], {
+      ...trigger,
+      head_repository: { full_name: 'fork/repo' },
+    })
     expect(result.publish).toBe(false)
     expect(result.requests).toHaveLength(0)
   })
@@ -77,7 +124,12 @@ describe('pages实际workflow来源guard', () => {
     const older = Array.from({ length: 100 }, (_, index) => ({ ...trigger, id: 100 + index, run_number: 999 - index }))
     const result = await execute([
       { total_count: 101, workflow_runs: older },
-      { total_count: 101, workflow_runs: [{ ...trigger, run_number: 1001 }] },
+      {
+        total_count: 101,
+        workflow_runs: [
+          { ...trigger, run_number: 1001 },
+        ],
+      },
     ])
     expect(result.publish).toBe(false)
     expect(result.requests).toHaveLength(2)
@@ -86,9 +138,13 @@ describe('pages实际workflow来源guard', () => {
 
   it('aPI故障、列表截断和1000条搜索上限均失败关闭，不宣称可以发布', async () => {
     await expect(execute([{}], trigger, 503)).rejects.toThrow('HTTP 503')
-    await expect(execute([{ total_count: 2, workflow_runs: [] }])).rejects.toThrow('incomplete')
+    await expect(execute([
+      { total_count: 2, workflow_runs: [] },
+    ])).rejects.toThrow('incomplete')
     const fullPage = Array.from({ length: 100 }).fill(trigger)
-    await expect(execute([{ total_count: 1000, workflow_runs: fullPage }])).rejects.toThrow('verification limit')
+    await expect(execute([
+      { total_count: 1000, workflow_runs: fullPage },
+    ])).rejects.toThrow('verification limit')
   })
 
   it('仅guard明确true才下载、重打包和部署，不增加checkout或写权限', () => {

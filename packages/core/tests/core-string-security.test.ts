@@ -6,7 +6,10 @@ import { core } from '../src/index.js'
 
 vi.mock('node:crypto', async (importOriginal) => {
   const original = await importOriginal<typeof import('node:crypto')>()
-  return { ...original, timingSafeEqual: vi.fn(original.timingSafeEqual) }
+  return {
+    ...original,
+    timingSafeEqual: vi.fn(original.timingSafeEqual),
+  }
 })
 
 beforeEach(() => {
@@ -29,7 +32,9 @@ describe('原生凭证比较', () => {
     ['\uD800', '\uFFFD', false],
   ] as const)('按原始 UTF-16 单元比较第 %# 组', (a, b, expected) => {
     expect(core.string.constantTimeEqual(a, b)).toBe(expected)
-    expect(timingSafeEqual).toHaveBeenCalledTimes(a.length === b.length ? 1 : 0)
+    expect(timingSafeEqual).toHaveBeenCalledTimes(a.length === b.length
+      ? 1
+      : 0)
   })
 
   it('浏览器保持字符串比较语义，不引入 Node 加密运行时', () => {

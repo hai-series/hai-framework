@@ -312,7 +312,9 @@ export function createTokenManager(
       const useHttpOnlyCookie = refreshToken === HTTPONLY_COOKIE_SENTINEL
       const requestInit: RequestInit = {
         method: 'POST',
-        body: useHttpOnlyCookie ? undefined : JSON.stringify({ refreshToken }),
+        body: useHttpOnlyCookie
+          ? undefined
+          : JSON.stringify({ refreshToken }),
         credentials: useHttpOnlyCookie ? 'include' : 'same-origin',
         signal: controller.signal,
       }
@@ -345,7 +347,14 @@ export function createTokenManager(
         return null
       }
       if (!useHttpOnlyCookie && !parsed.data.refreshToken) {
-        logger.warn('Token refresh returned invalid data', { issues: [{ path: ['refreshToken'], message: 'Required' }] })
+        logger.warn('Token refresh returned invalid data', {
+          issues: [
+            {
+              path: ['refreshToken'],
+              message: 'Required',
+            },
+          ],
+        })
         await failRefresh(refreshGeneration)
         return null
       }
@@ -376,7 +385,9 @@ export function createTokenManager(
           return null
         cb(tokens)
       }
-      return refreshGeneration === generation ? tokens : null
+      return refreshGeneration === generation
+        ? tokens
+        : null
     }
     catch (error) {
       if (refreshGeneration !== generation)

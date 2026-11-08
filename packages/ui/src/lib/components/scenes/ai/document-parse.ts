@@ -251,7 +251,9 @@ function createHeadingId(state: MarkdownRenderState, text: string): string {
   // next count per slug ensures stable suffixing.
   const nextCount = (state.headingIds.get(base) ?? 0) + 1
   state.headingIds.set(base, nextCount)
-  return nextCount === 1 ? base : `${base}-${nextCount}`
+  return nextCount === 1
+    ? base
+    : `${base}-${nextCount}`
 }
 
 /**
@@ -279,7 +281,9 @@ function createNumberedOutline(
 
     return {
       ...item,
-      numberedTitle: prefix ? `${prefix} ${item.text}` : item.text,
+      numberedTitle: prefix
+        ? `${prefix} ${item.text}`
+        : item.text,
     }
   })
 }
@@ -387,9 +391,11 @@ function createRendererObject(
         + `<div class="hai-md-code-header-main">${codePreviewToggle}${langLabel}${previewHint}</div>`
         + `<div class="hai-md-code-actions">${runBtn}${copyBtn}</div>`
         + `</div>`
-        + `<pre><code class="hai-hl${highlightLanguage ? ` language-${escapeHtml(highlightLanguage)}` : ''}">${highlighted}</code></pre>`
-        + `${previewHost}`
-        + `</div>`
+        + `<pre><code class="hai-hl${highlightLanguage
+          ? ` language-${escapeHtml(highlightLanguage)}`
+          : ''}">${highlighted}</code></pre>`
+          + `${previewHost}`
+          + `</div>`
     },
 
     html(token: Tokens.HTML | Tokens.Tag): string {
@@ -409,7 +415,9 @@ function createRendererObject(
       // attrs is the flattened HTML attribute string.
       const attrs = [
         `href="${escapeHtml(safeHref)}"`,
-        title ? `title="${escapeHtml(title)}"` : '',
+        title
+          ? `title="${escapeHtml(title)}"`
+          : '',
         isExternal ? 'target="_blank" rel="noopener noreferrer"' : '',
       ].filter(Boolean).join(' ')
 
@@ -423,7 +431,9 @@ function createRendererObject(
       const attrs = [
         `src="${escapeHtml(safeSrc)}"`,
         `alt="${escapeHtml(text || '')}"`,
-        title ? `title="${escapeHtml(title)}"` : '',
+        title
+          ? `title="${escapeHtml(title)}"`
+          : '',
         'loading="lazy"',
         'class="hai-md-img"',
       ].filter(Boolean).join(' ')
@@ -436,7 +446,9 @@ function createRendererObject(
       let headerHtml = ''
       for (const cell of token.header) {
         // align adds text alignment for each header cell.
-        const align = cell.align ? ` style="text-align:${cell.align}"` : ''
+        const align = cell.align
+          ? ` style="text-align:${cell.align}"`
+          : ''
         headerHtml += `<th${align}>${this.parser.parseInline(cell.tokens)}</th>`
       }
 
@@ -447,7 +459,9 @@ function createRendererObject(
         let rowHtml = ''
         for (const cell of row) {
           // align adds text alignment for each body cell.
-          const align = cell.align ? ` style="text-align:${cell.align}"` : ''
+          const align = cell.align
+            ? ` style="text-align:${cell.align}"`
+            : ''
           rowHtml += `<td${align}>${this.parser.parseInline(cell.tokens)}</td>`
         }
         bodyHtml += `<tr>${rowHtml}</tr>`
@@ -509,7 +523,9 @@ function renderMarkdownDocumentHtmlChunk(
   const result = marked.parse(content)
 
   return {
-    html: typeof result === 'string' ? result : '',
+    html: typeof result === 'string'
+      ? result
+      : '',
     codeBlocks: state.codeBlocks,
   }
 }

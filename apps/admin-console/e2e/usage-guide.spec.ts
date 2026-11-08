@@ -9,10 +9,16 @@ async function capture(page: Page, testInfo: TestInfo, name: string, target?: Lo
   if (target) {
     await target.scrollIntoViewIfNeeded()
     await expect(target).toBeVisible()
-    await target.screenshot({ path: testInfo.outputPath(`${name}.png`), animations: 'disabled' })
+    await target.screenshot({
+      path: testInfo.outputPath(`${name}.png`),
+      animations: 'disabled',
+    })
   }
   else {
-    await page.screenshot({ path: testInfo.outputPath(`${name}.png`), animations: 'disabled' })
+    await page.screenshot({
+      path: testInfo.outputPath(`${name}.png`),
+      animations: 'disabled',
+    })
   }
 }
 
@@ -37,9 +43,16 @@ test('使用指南：真实表单布局、空状态、失败恢复与窄屏', as
   await capture(page, testInfo, 'ui-form-mobile', form)
   await page.setViewportSize({ width: 1440, height: 1000 })
   const patterns = page.getByTestId('interaction-patterns')
-  for (const [state, label] of [['ready', '正常'], ['loading', '加载'], ['empty', '空态'], ['error', '失败']]) {
+  for (const [state, label] of [
+    ['ready', '正常'],
+    ['loading', '加载'],
+    ['empty', '空态'],
+    ['error', '失败'],
+  ]) {
     await patterns.getByRole('tab', { name: label, exact: true }).click()
-    await capture(page, testInfo, `ui-list-${state}`, state === 'error' ? undefined : patterns)
+    await capture(page, testInfo, `ui-list-${state}`, state === 'error'
+      ? undefined
+      : patterns)
   }
   await patterns.getByRole('button', { name: '重试', exact: true }).click()
   await expect(patterns.locator('tbody tr')).toHaveCount(10)
@@ -53,8 +66,15 @@ test('组件演示切换中英日语言后保持可读，并实际操作英文�
   const failures: string[] = []
   page.on('pageerror', error => failures.push(error.message))
   for (const locale of ['en-US', 'ja-JP', 'zh-CN']) {
-    await context.addCookies([{ name: 'PARAGLIDE_LOCALE', value: locale, url: new URL(page.url()).origin }])
-    for (const section of ['primitives', 'compounds', 'overlays', 'scenes']) {
+    await context.addCookies([
+      { name: 'PARAGLIDE_LOCALE', value: locale, url: new URL(page.url()).origin },
+    ])
+    for (const section of [
+      'primitives',
+      'compounds',
+      'overlays',
+      'scenes',
+    ]) {
       await page.goto(`/admin/ui-gallery/${section}`)
       await waitForHydration(page)
       // 排除代码示例、语言自称和虚构姓名；可操作文案必须使用当前语言。
@@ -67,9 +87,22 @@ test('组件演示切换中英日语言后保持可读，并实际操作英文�
         expect(visibleCopy).not.toMatch(/请输入|请选择|提交成功|确认框|用户名|加载中|默认卡片|下拉选择|订单|库存/)
       await capture(page, testInfo, `gallery-${section}-${locale}`)
       if (section === 'scenes') {
-        const fullExample = locale === 'en-US' ? 'MarkdownRenderer · full example' : locale === 'ja-JP' ? 'MarkdownRenderer · 全機能の例' : 'MarkdownRenderer · 全功能演示'
-        await page.getByRole('button', { name: new RegExp(`^${fullExample}`) }).click()
-        const markdown = page.getByRole('heading', { name: locale === 'en-US' ? 'Markdown reading example' : locale === 'ja-JP' ? 'Markdown の閲覧例' : 'Markdown 阅读示例', exact: true })
+        const fullExample = locale === 'en-US'
+          ? 'MarkdownRenderer · full example'
+          : locale === 'ja-JP'
+            ? 'MarkdownRenderer · 全機能の例'
+            : 'MarkdownRenderer · 全功能演示'
+        await page.getByRole('button', {
+          name: new RegExp(`^${fullExample}`),
+        }).click()
+        const markdown = page.getByRole('heading', {
+          name: locale === 'en-US'
+            ? 'Markdown reading example'
+            : locale === 'ja-JP'
+              ? 'Markdown の閲覧例'
+              : 'Markdown 阅读示例',
+          exact: true,
+        })
         await expect(markdown).toBeVisible()
         await capture(page, testInfo, `ai-markdown-html-off-${locale}`, page.getByTestId('markdown-html-off-demo'))
         await capture(page, testInfo, `ai-markdown-html-on-${locale}`, page.getByTestId('markdown-html-on-demo'))
@@ -78,7 +111,9 @@ test('组件演示切换中英日语言后保持可读，并实际操作英文�
       }
     }
   }
-  await context.addCookies([{ name: 'PARAGLIDE_LOCALE', value: 'en-US', url: new URL(page.url()).origin }])
+  await context.addCookies([
+    { name: 'PARAGLIDE_LOCALE', value: 'en-US', url: new URL(page.url()).origin },
+  ])
   await page.goto('/admin/ui-gallery/overlays')
   await waitForHydration(page)
   await page.getByRole('button', { name: 'Confirm dialog', exact: true }).click()
@@ -107,12 +142,14 @@ test('反馈并发处理冲突保留恢复建议与追踪标识，刷新后可�
   const before: HaiResult<FeedbackDetail> = await (await page.request.get(`/api/feedback/reports/${id}`)).json()
   if (!before.success)
     throw new Error(before.error.message, { cause: before.error })
-  const concurrent = await page.request.patch(`/api/feedback/reports/${id}/status`, { data: {
-    id,
-    status: 'handled',
-    expectedVersion: before.data.report.version,
-    note: 'Reviewed in another session',
-  } })
+  const concurrent = await page.request.patch(`/api/feedback/reports/${id}/status`, {
+    data: {
+      id,
+      status: 'handled',
+      expectedVersion: before.data.report.version,
+      note: 'Reviewed in another session',
+    },
+  })
   expect((await concurrent.json()).success).toBe(true)
   await detail.getByRole('button', { name: '标记已处理', exact: true }).click()
   const toast = page.locator('.hai-toast-item[data-variant=error]')

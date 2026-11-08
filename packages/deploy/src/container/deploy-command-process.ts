@@ -104,10 +104,17 @@ export interface CommandProcess {
  * ```
  */
 export function spawnCommand(command: string, args: string[], options: Pick<SpawnOptionsWithoutStdio, 'cwd' | 'env'>): CommandProcess {
-  const job = process.platform === 'win32' ? windowsCommand(command, args) : undefined
+  const job = process.platform === 'win32'
+    ? windowsCommand(command, args)
+    : undefined
   const child = spawn(job ? 'powershell.exe' : command, job?.args ?? args, {
     ...options,
-    env: job ? { ...options.env, ...job.env } : options.env,
+    env: job
+      ? {
+          ...options.env,
+          ...job.env,
+        }
+      : options.env,
     windowsHide: true,
     shell: false,
     detached: !job,
@@ -135,7 +142,12 @@ export function spawnCommand(command: string, args: string[], options: Pick<Spaw
         if (job) {
           if (!exited) {
             // /T 也覆盖 Add-Type 的编译器；payload 的断链后代由 Job 的 close-kill 保证收回。
-            windowsKillConfirmed = await helper('taskkill', ['/pid', String(child.pid), '/t', '/f'], Math.max(1, deadline - performance.now()))
+            windowsKillConfirmed = await helper('taskkill', [
+              '/pid',
+              String(child.pid),
+              '/t',
+              '/f',
+            ], Math.max(1, deadline - performance.now()))
             child.kill('SIGKILL')
           }
         }

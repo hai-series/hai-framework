@@ -16,14 +16,23 @@ test.describe('Corporate pages and partner flow', () => {
     })
     expect(login.ok()).toBe(true)
     await page.goto('/partners/admin')
-    await page.route('**/api/partners/admin/logout', route => route.fulfill({ status: 500, json: { success: false, error: { code: 'INTERNAL_ERROR' } } }))
+    await page.route('**/api/partners/admin/logout', route => route.fulfill({
+      status: 500,
+      json: {
+        success: false,
+        error: { code: 'INTERNAL_ERROR' },
+      },
+    }))
     const logout = page.getByRole('button', { name: /退出登录|Log Out|ログアウト/ })
     await logout.click()
     const notification = page.locator('.hai-toast-item[data-variant=error]')
     await expect(notification).toContainText('退出登录失败，请重试')
     await expect(page).toHaveURL(/\/partners\/admin$/)
     expect((await page.request.get('/api/partners/admin/records')).ok()).toBe(true)
-    await page.screenshot({ path: testInfo.outputPath('logout-failed-retry.png'), animations: 'disabled' })
+    await page.screenshot({
+      path: testInfo.outputPath('logout-failed-retry.png'),
+      animations: 'disabled',
+    })
     await page.unroute('**/api/partners/admin/logout')
     await logout.click()
     await expect(page).toHaveURL(/\/partners\/admin\/login$/)
@@ -33,11 +42,17 @@ test.describe('Corporate pages and partner flow', () => {
   test('partner login uses safe Toast for both credential failures on narrow and wide screens', async ({ page }, testInfo) => {
     await page.route('**/api/partners/admin/login', route => route.fulfill({
       status: 401,
-      json: { success: false, error: { code: 'AUTH_FAILED', message: 'Private credential field details', traceId: 'partner-login-request' } },
+      json: {
+        success: false,
+        error: { code: 'AUTH_FAILED', message: 'Private credential field details', traceId: 'partner-login-request' },
+      },
     }))
     await page.goto('/partners/admin/login')
     await page.waitForLoadState('networkidle')
-    for (const [username, width] of [['missing-user', 390], ['partner-admin', 1440]] as const) {
+    for (const [username, width] of [
+      ['missing-user', 390],
+      ['partner-admin', 1440],
+    ] as const) {
       await page.setViewportSize({ width, height: 960 })
       await page.locator('#admin-username').fill(username)
       await page.locator('#admin-password').fill('Incorrect-test-password!')
@@ -51,7 +66,10 @@ test.describe('Corporate pages and partner flow', () => {
       await expect(notification).toBeInViewport({ ratio: 1 })
       await expect(page.locator('form .alert-error')).toHaveCount(0)
       await expect(page.locator('#admin-username')).toHaveValue(username)
-      await page.screenshot({ path: testInfo.outputPath(`partner-login-toast-${width}.png`), fullPage: true })
+      await page.screenshot({
+        path: testInfo.outputPath(`partner-login-toast-${width}.png`),
+        fullPage: true,
+      })
       const diagnostics = notification.getByRole('button', { name: '查看排查信息', exact: true })
       await expect(diagnostics).toHaveAttribute('aria-expanded', 'false')
       await diagnostics.click()
@@ -60,7 +78,10 @@ test.describe('Corporate pages and partner flow', () => {
       await expect(notification.getByText('联系客户支持或开发人员时，请提供此编号，便于定位相关记录。', { exact: true })).toBeVisible()
       await expect(notification).not.toContainText('Private')
       await expect(notification).toBeInViewport({ ratio: 1 })
-      await page.screenshot({ path: testInfo.outputPath(`partner-login-diagnostics-${width}.png`), fullPage: true })
+      await page.screenshot({
+        path: testInfo.outputPath(`partner-login-diagnostics-${width}.png`),
+        fullPage: true,
+      })
       await notification.getByRole('button', { name: '关闭', exact: true }).click()
       await expect(notification).toHaveCount(0)
     }
@@ -69,7 +90,10 @@ test.describe('Corporate pages and partner flow', () => {
   test('contact delivery failure preserves input and success clears it', async ({ page }) => {
     let sent = false
     await page.route('**/api/contact', route => route.fulfill({
-      json: { success: true, data: { sent } },
+      json: {
+        success: true,
+        data: { sent },
+      },
     }))
     await page.goto('/contact')
     await page.locator('#name').fill('Contact tester')
@@ -140,7 +164,18 @@ test.describe('Corporate pages and partner flow', () => {
     const registerBody = await registerRes.json() as ApiResponse<{ id: string }>
     expect(registerBody.success).toBe(true)
     expect(registerBody.data?.id).toBeTruthy()
-    const another = await page.request.post('/api/partners/register', { data: { companyName: `${companyName} Z`, contactName: 'Second Tester', email: 'second@example.com', phone: '13800138001', cooperationType: 'solution', budgetRange: '100k-500k', message: 'Second partnership request for sorting acceptance.', source: 'e2e' } })
+    const another = await page.request.post('/api/partners/register', {
+      data: {
+        companyName: `${companyName} Z`,
+        contactName: 'Second Tester',
+        email: 'second@example.com',
+        phone: '13800138001',
+        cooperationType: 'solution',
+        budgetRange: '100k-500k',
+        message: 'Second partnership request for sorting acceptance.',
+        source: 'e2e',
+      },
+    })
     expect(another.status()).toBe(201)
 
     const unauthorized = await page.request.get('/api/partners/admin/records')
@@ -200,7 +235,10 @@ test.describe('Corporate pages and partner flow', () => {
       await page.setViewportSize({ width, height: 900 })
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
       await expect(page.locator('.hai-pagination__navigation')).toBeVisible()
-      await page.screenshot({ path: testInfo.outputPath(`partners-unified-${width}.png`), animations: 'disabled' })
+      await page.screenshot({
+        path: testInfo.outputPath(`partners-unified-${width}.png`),
+        animations: 'disabled',
+      })
     }
     const recordsRes = await page.request.get('/api/partners/admin/records?page=1&pageSize=20')
     expect(recordsRes.ok()).toBeTruthy()

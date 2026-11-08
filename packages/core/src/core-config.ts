@@ -17,7 +17,12 @@ import { z } from 'zod'
  * const config = EnvSchema.parse('production')
  * ```
  */
-export const EnvSchema = z.enum(['development', 'production', 'test', 'staging'])
+export const EnvSchema = z.enum([
+  'development',
+  'production',
+  'test',
+  'staging',
+])
 
 /**
  * 日志级别 Schema。
@@ -27,7 +32,14 @@ export const EnvSchema = z.enum(['development', 'production', 'test', 'staging']
  * const config = LogLevelSchema.parse('info')
  * ```
  */
-export const LogLevelSchema = z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal'])
+export const LogLevelSchema = z.enum([
+  'trace',
+  'debug',
+  'info',
+  'warn',
+  'error',
+  'fatal',
+])
 
 /**
  * 日志格式 Schema。

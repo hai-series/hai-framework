@@ -53,7 +53,9 @@ describe('serv.storageAssets', () => {
     expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
     expect(response.headers.get('cross-origin-resource-policy')).toBe('cross-origin')
     expect(response.headers.get('etag')).toBe(METADATA.etag)
-    expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([...CONTENT])
+    expect([
+      ...new Uint8Array(await response.arrayBuffer()),
+    ]).toEqual([...CONTENT])
     expect(storage.file.head).toHaveBeenCalledWith(METADATA.key)
     expect(storage.file.get).toHaveBeenCalledWith(METADATA.key)
   })
@@ -105,7 +107,10 @@ describe('serv.storageAssets', () => {
       }),
     })
     const missingStorage = createStorage({
-      head: vi.fn().mockResolvedValue({ success: false, error: { code: 'NOT_FOUND' } }),
+      head: vi.fn().mockResolvedValue({
+        success: false,
+        error: { code: 'NOT_FOUND' },
+      }),
     })
 
     expect((await createApp(wrongMimeStorage).request('/api/v1/avatar-assets/avatars/persona-1/avatar-1.png')).status).toBe(404)

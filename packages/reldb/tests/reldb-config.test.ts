@@ -40,7 +40,9 @@ describe('dbConfigSchema', () => {
       sqlite: {},
     })
     expect(result.type).toBe('sqlite')
-    expect(result).toMatchObject({ sqlite: { walMode: true, readonly: false } })
+    expect(result).toMatchObject({
+      sqlite: { walMode: true, readonly: false },
+    })
   })
 
   it('应校验通过有效的 postgresql 配置', () => {
@@ -63,7 +65,15 @@ describe('dbConfigSchema', () => {
       database: 'testdb',
       pool: {},
     })
-    expect(result).toMatchObject({ type: 'postgresql', pool: { min: 1, max: 10, idleTimeout: 30000, acquireTimeout: 10000 } })
+    expect(result).toMatchObject({
+      type: 'postgresql',
+      pool: {
+        min: 1,
+        max: 10,
+        idleTimeout: 30000,
+        acquireTimeout: 10000,
+      },
+    })
   })
 
   it('应校验通过有效的 mysql 配置', () => {
@@ -256,7 +266,10 @@ describe('reldb.pagination', () => {
   describe('build', () => {
     it('应正确构建分页结果', () => {
       const result = reldb.pagination.build(
-        [{ id: 1 }, { id: 2 }],
+        [
+          { id: 1 },
+          { id: 2 },
+        ],
         5,
         { page: 1, pageSize: 2 },
       )

@@ -24,7 +24,9 @@ afterEach(() => {
 })
 
 function button(target: HTMLElement, name: string): HTMLButtonElement {
-  const found = [...target.querySelectorAll<HTMLButtonElement>('button')].find(item => item.textContent?.trim() === name)
+  const found = [
+    ...target.querySelectorAll<HTMLButtonElement>('button'),
+  ].find(item => item.textContent?.trim() === name)
   expect(found, `Expected button: ${name}`).toBeDefined()
   return found!
 }
@@ -56,7 +58,15 @@ it('反馈详情展示 Webhook 失败与尝试次数，独立提供重试入口'
   const target = document.createElement('div')
   document.body.append(target)
   const onretry = vi.fn(async () => {})
-  const component = mount(FeedbackDetail, { target, props: { report: { ...report, collectionStatus: 'complete', notificationStatus: 'disabled' }, webhook: { status: 'failed', attempts: 3, lastError: 'hai:feedback:020' }, permissions: { read: true, retry: true }, onretry } })
+  const component = mount(FeedbackDetail, {
+    target,
+    props: {
+      report: { ...report, collectionStatus: 'complete', notificationStatus: 'disabled' },
+      webhook: { status: 'failed', attempts: 3, lastError: 'hai:feedback:020' },
+      permissions: { read: true, retry: true },
+      onretry,
+    },
+  })
   try {
     flushSync()
     expect(target.textContent).toContain('Webhook 回调')
@@ -78,11 +88,44 @@ it('业务信息页签单独分页请求 business 证据并安全展示正文', 
   const target = document.createElement('div')
   document.body.append(target)
   const onevidencequery = vi.fn(async () => {})
-  const component = mount(FeedbackDetail, { target, props: { report, permissions: { read: true }, evidenceQuery: { page: 2, pageSize: 20, requestId: 'previous-request', errorId: 'previous-error' }, evidence: { items: [{ id: 'business', source: 'server:business', sequence: 0, timestamp: 1, kind: 'business', data: { text: '<script>diagnostics</script>' } }], total: 1, page: 1, pageSize: 20 }, onevidencequery } })
+  const component = mount(FeedbackDetail, {
+    target,
+    props: {
+      report,
+      permissions: { read: true },
+      evidenceQuery: {
+        page: 2,
+        pageSize: 20,
+        requestId: 'previous-request',
+        errorId: 'previous-error',
+      },
+      evidence: {
+        items: [
+          {
+            id: 'business',
+            source: 'server:business',
+            sequence: 0,
+            timestamp: 1,
+            kind: 'business',
+            data: { text: '<script>diagnostics</script>' },
+          },
+        ],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+      },
+      onevidencequery,
+    },
+  })
   try {
     flushSync()
     button(target, '业务信息').click()
-    await vi.waitFor(() => expect(onevidencequery).toHaveBeenCalledWith(expect.objectContaining({ kind: 'business', page: 1, requestId: undefined, errorId: undefined })))
+    await vi.waitFor(() => expect(onevidencequery).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'business',
+      page: 1,
+      requestId: undefined,
+      errorId: undefined,
+    })))
     expect(target.textContent).toContain('<script>diagnostics</script>')
     expect(target.querySelector('script')).toBeNull()
   }
@@ -92,14 +135,35 @@ it('业务信息页签单独分页请求 business 证据并安全展示正文', 
   }
 })
 
-it.each([['环境', 'environment'], ['操作现场', 'interaction']])('从日志筛选切换到%s时清除请求和错误条件', async (label, kind) => {
+it.each([
+  ['环境', 'environment'],
+  ['操作现场', 'interaction'],
+])('从日志筛选切换到%s时清除请求和错误条件', async (label, kind) => {
   const target = document.createElement('div')
   const onevidencequery = vi.fn(async () => {})
-  const component = mount(FeedbackDetail, { target, props: { report, permissions: { read: true }, evidenceQuery: { page: 2, pageSize: 20, requestId: 'old-request', errorId: 'old-error' }, onevidencequery } })
+  const component = mount(FeedbackDetail, {
+    target,
+    props: {
+      report,
+      permissions: { read: true },
+      evidenceQuery: {
+        page: 2,
+        pageSize: 20,
+        requestId: 'old-request',
+        errorId: 'old-error',
+      },
+      onevidencequery,
+    },
+  })
   try {
     flushSync()
     button(target, label).click()
-    await vi.waitFor(() => expect(onevidencequery).toHaveBeenCalledWith(expect.objectContaining({ page: 1, kind, requestId: undefined, errorId: undefined })))
+    await vi.waitFor(() => expect(onevidencequery).toHaveBeenCalledWith(expect.objectContaining({
+      page: 1,
+      kind,
+      requestId: undefined,
+      errorId: undefined,
+    })))
   }
   finally { await unmount(component) }
 })
@@ -108,7 +172,23 @@ it.each(['Asia/Shanghai', 'America/New_York'])('日期筛选按 %s 本地日历�
   vi.stubEnv('TZ', timezone)
   const target = document.createElement('div')
   const onquerychange = vi.fn(async (_input: FeedbackListQuery) => {})
-  const component = mount(FeedbackList, { target, props: { data: { items: [report], total: 1, page: 1, pageSize: 20 }, query: { page: 1, pageSize: 20, from: new Date(2026, 2, 8).getTime() }, onquerychange } })
+  const component = mount(FeedbackList, {
+    target,
+    props: {
+      data: {
+        items: [report],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+      },
+      query: {
+        page: 1,
+        pageSize: 20,
+        from: new Date(2026, 2, 8).getTime(),
+      },
+      onquerychange,
+    },
+  })
   try {
     flushSync()
     target.querySelector<HTMLButtonElement>('[aria-controls]')!.click()
@@ -122,28 +202,88 @@ it.each(['Asia/Shanghai', 'America/New_York'])('日期筛选按 %s 本地日历�
     expect(onquerychange).not.toHaveBeenCalled()
     target.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     await vi.waitFor(() => expect(onquerychange).toHaveBeenCalled())
-    expect(onquerychange.mock.calls.at(-1)?.[0]).toMatchObject({ from: new Date(2026, 2, 8).getTime(), to: new Date(2026, 2, 9).getTime() - 1 })
+    expect(onquerychange.mock.calls.at(-1)?.[0]).toMatchObject({
+      from: new Date(2026, 2, 8).getTime(),
+      to: new Date(2026, 2, 9).getTime() - 1,
+    })
   }
   finally { await unmount(component) }
 })
 
 describe('feedback collection', () => {
   it.each([
-    { name: '小数', bounds: [10, 20, 200, 100], start: [31, 41], end: [130, 80], rect: { x: 0.105, y: 0.21, width: 0.495, height: 0.39 } },
-    { name: '小于百分之一', bounds: [10, 20, 200, 100], start: [30, 40], end: [30.5, 40.5], rect: { x: 0.1, y: 0.2, width: 0.0025, height: 0.005 } },
-    { name: '越过边缘反向拖动', bounds: [10, 20, 200, 100], start: [220, 130], end: [0, 0], rect: { x: 0, y: 0, width: 1, height: 1 } },
-    { name: '缩放显示', bounds: [10, 20, 50, 25], start: [15, 25], end: [40, 40], rect: { x: 0.1, y: 0.2, width: 0.5, height: 0.6 } },
+    {
+      name: '小数',
+      bounds: [10, 20, 200, 100],
+      start: [31, 41],
+      end: [130, 80],
+      rect: {
+        x: 0.105,
+        y: 0.21,
+        width: 0.495,
+        height: 0.39,
+      },
+    },
+    {
+      name: '小于百分之一',
+      bounds: [10, 20, 200, 100],
+      start: [30, 40],
+      end: [30.5, 40.5],
+      rect: {
+        x: 0.1,
+        y: 0.2,
+        width: 0.0025,
+        height: 0.005,
+      },
+    },
+    {
+      name: '越过边缘反向拖动',
+      bounds: [10, 20, 200, 100],
+      start: [220, 130],
+      end: [0, 0],
+      rect: { x: 0, y: 0, width: 1, height: 1 },
+    },
+    {
+      name: '缩放显示',
+      bounds: [10, 20, 50, 25],
+      start: [15, 25],
+      end: [40, 40],
+      rect: {
+        x: 0.1,
+        y: 0.2,
+        width: 0.5,
+        height: 0.6,
+      },
+    },
   ])('$name框选按实际图片归一化，表单不产生步长错误', async ({ bounds, start, end, rect }) => {
     const target = document.createElement('div')
     document.body.append(target)
     const onannotate = vi.fn(async (_input: FeedbackAnnotation) => {})
-    const component = mount(FeedbackForm, { target, props: { onannotate, attachments: [{ id: 'screen', name: 'screen.png', mimeType: 'image/png', url: 'blob:screen' }] } })
+    const component = mount(FeedbackForm, {
+      target,
+      props: {
+        onannotate,
+        attachments: [
+          {
+            id: 'screen',
+            name: 'screen.png',
+            mimeType: 'image/png',
+            url: 'blob:screen',
+          },
+        ],
+      },
+    })
     try {
       flushSync()
       button(target, '遮挡敏感区域').click()
       const image = target.querySelector('img')!.parentElement!
       vi.spyOn(target.querySelector('img')!, 'getBoundingClientRect').mockReturnValue(new DOMRect(...bounds))
-      image.dispatchEvent(new MouseEvent('pointerdown', { clientX: start[0], clientY: start[1], bubbles: true, cancelable: true }))
+      image.dispatchEvent(new MouseEvent('pointerdown', {
+        clientX: start[0],
+        clientY: start[1],
+        bubbles: true,
+        cancelable: true,
+      }))
       image.dispatchEvent(new MouseEvent('pointermove', { clientX: end[0], clientY: end[1], bubbles: true }))
       image.dispatchEvent(new MouseEvent('pointerup', { clientX: end[0], clientY: end[1], bubbles: true }))
       flushSync()
@@ -163,14 +303,38 @@ describe('feedback collection', () => {
   it('收集材料显示日志和真实环境内容，诊断文本不解释为HTML', async () => {
     const target = document.createElement('div')
     document.body.append(target)
-    const component = mount(FeedbackForm, { target, props: { evidence: [
-      { id: 'log', source: 'browser:one', sequence: 1, timestamp: 1, kind: 'log', data: { message: '<script>diagnostic()</script>' } },
-      { id: 'env', source: 'browser:one', sequence: 2, timestamp: 2, kind: 'environment', data: { viewport: { width: 390, height: 844 }, appVersion: 'actual-build' } },
-    ] } })
+    const component = mount(FeedbackForm, {
+      target,
+      props: {
+        evidence: [
+          {
+            id: 'log',
+            source: 'browser:one',
+            sequence: 1,
+            timestamp: 1,
+            kind: 'log',
+            data: { message: '<script>diagnostic()</script>' },
+          },
+          {
+            id: 'env',
+            source: 'browser:one',
+            sequence: 2,
+            timestamp: 2,
+            kind: 'environment',
+            data: {
+              viewport: { width: 390, height: 844 },
+              appVersion: 'actual-build',
+            },
+          },
+        ],
+      },
+    })
     try {
       flushSync()
       expect(target.textContent).toContain('收集材料')
-      const materials = [...target.querySelectorAll('details')].find(item => item.querySelector('summary')?.textContent === '收集材料')!
+      const materials = [
+        ...target.querySelectorAll('details'),
+      ].find(item => item.querySelector('summary')?.textContent === '收集材料')!
       expect(materials.querySelector('pre')).toBeNull()
       for (const item of materials.querySelectorAll('details')) {
         item.open = true
@@ -192,7 +356,21 @@ describe('feedback collection', () => {
     const target = document.createElement('div')
     document.body.append(target)
     const oncapture = vi.fn(async (_id?: string) => {})
-    const component = mount(FeedbackModal, { target, props: { open: true, oncapture, attachments: [{ id: 'screen', name: 'screen.png', mimeType: 'image/png', url: 'blob:screen' }] } })
+    const component = mount(FeedbackModal, {
+      target,
+      props: {
+        open: true,
+        oncapture,
+        attachments: [
+          {
+            id: 'screen',
+            name: 'screen.png',
+            mimeType: 'image/png',
+            url: 'blob:screen',
+          },
+        ],
+      },
+    })
     try {
       flushSync()
       field(document.body, 'Keep the description')
@@ -226,7 +404,10 @@ describe('feedback collection', () => {
     const target = document.createElement('div')
     header.append(target)
     document.body.append(header)
-    const component = mount(FeedbackModal, { target, props: { 'open': true, 'data-testid': 'feedback-in-sticky-header' } })
+    const component = mount(FeedbackModal, {
+      target,
+      props: { 'open': true, 'data-testid': 'feedback-in-sticky-header' },
+    })
     let portalRoot: HTMLElement | null = null
     try {
       flushSync()
@@ -246,17 +427,25 @@ describe('feedback collection', () => {
     expect(portalRoot?.isConnected).toBe(false)
   })
 
-  it.each([['初始', false], ['响应式更新后', true]] as const)('公开data属性在%s仅挂载于Modal宿主，不重复落在Form', async (_phase, update) => {
+  it.each([
+    ['初始', false],
+    ['响应式更新后', true],
+  ] as const)('公开data属性在%s仅挂载于Modal宿主，不重复落在Form', async (_phase, update) => {
     const target = document.createElement('div')
     document.body.append(target)
-    const attributes = new SvelteMap([['tracking', 'feedback-initial']])
-    const component = mount(FeedbackModal, { target, props: {
-      'open': true,
-      'data-testid': 'public-feedback-entry',
-      get 'data-tracking'() {
-        return attributes.get('tracking')
+    const attributes = new SvelteMap([
+      ['tracking', 'feedback-initial'],
+    ])
+    const component = mount(FeedbackModal, {
+      target,
+      props: {
+        'open': true,
+        'data-testid': 'public-feedback-entry',
+        get 'data-tracking'() {
+          return attributes.get('tracking')
+        },
       },
-    } })
+    })
     try {
       flushSync()
       if (update) {
@@ -267,8 +456,12 @@ describe('feedback collection', () => {
       const form = host.querySelector<HTMLFormElement>('.feedback-form')!
       expect(host.getAttribute('data-tracking')).toBe(update ? 'feedback-updated' : 'feedback-initial')
       expect(host.getAttribute('data-testid')).toBe('public-feedback-entry')
-      expect([...document.body.querySelectorAll('[data-tracking]')]).toEqual([host])
-      expect([...document.body.querySelectorAll('[data-testid="public-feedback-entry"]')]).toEqual([host])
+      expect([
+        ...document.body.querySelectorAll('[data-tracking]'),
+      ]).toEqual([host])
+      expect([
+        ...document.body.querySelectorAll('[data-testid="public-feedback-entry"]'),
+      ]).toEqual([host])
       expect(form.hasAttribute('data-tracking')).toBe(false)
       expect(form.hasAttribute('data-testid')).toBe(false)
       expect(form.getAttribute('data-feedback-ignore')).toBe('true')
@@ -283,10 +476,15 @@ describe('feedback collection', () => {
     const target = document.createElement('div')
     document.body.append(target)
     const onsubmit = vi.fn(async (_input: FeedbackFormData) => {})
-    const component = mount(FeedbackModal, { target, props: { open: true, onsubmit } })
+    const component = mount(FeedbackModal, {
+      target,
+      props: { open: true, onsubmit },
+    })
     try {
       flushSync()
-      const submit = [...document.body.querySelectorAll<HTMLButtonElement>('.feedback-form button')].find(button => button.textContent?.includes('提交反馈'))!
+      const submit = [
+        ...document.body.querySelectorAll<HTMLButtonElement>('.feedback-form button'),
+      ].find(button => button.textContent?.includes('提交反馈'))!
       submit.click()
       await vi.waitFor(() => expect(onsubmit).toHaveBeenCalledOnce())
       expect(onsubmit.mock.calls[0]?.[0]).toMatchObject({ description: '' })
@@ -301,7 +499,10 @@ describe('feedback collection', () => {
     const target = document.createElement('div')
     document.body.append(target)
     const onsubmit = vi.fn(async (_input: FeedbackFormData) => ({ number: 'FB-321', collectionStatus: 'collecting' as const }))
-    const component = mount(FeedbackModal, { target, props: { open: true, onsubmit } })
+    const component = mount(FeedbackModal, {
+      target,
+      props: { open: true, onsubmit },
+    })
     try {
       flushSync()
       const form = document.body.querySelector<HTMLElement>('.feedback-form')!
@@ -332,12 +533,28 @@ describe('feedback collection', () => {
     })
     const onexport = vi.fn(async (_input: FeedbackFormData) => {})
     const file = new File(['evidence'], 'evidence.txt', { type: 'text/plain' })
-    const component = mount(FeedbackForm, { target, props: { onsubmit, onexport, evidenceSummary: [{ label: 'Logs', count: 12, status: 'partial', detail: 'Truncated' }] } })
+    const component = mount(FeedbackForm, {
+      target,
+      props: {
+        onsubmit,
+        onexport,
+        evidenceSummary: [
+          {
+            label: 'Logs',
+            count: 12,
+            status: 'partial',
+            detail: 'Truncated',
+          },
+        ],
+      },
+    })
     try {
       flushSync()
       field(target, 'The save button did nothing')
       const upload = target.querySelector<HTMLInputElement>('input[type="file"]')!
-      Object.defineProperty(upload, 'files', { value: [file] })
+      Object.defineProperty(upload, 'files', {
+        value: [file],
+      })
       upload.dispatchEvent(new Event('change', { bubbles: true }))
       flushSync()
       button(target, '提交反馈').click()
@@ -349,7 +566,10 @@ describe('feedback collection', () => {
       expect(target.textContent).toContain('Truncated')
       button(target, '保存反馈到本地').click()
       await vi.waitFor(() => expect(onexport).toHaveBeenCalledOnce())
-      expect(onexport.mock.calls[0]?.[0]).toMatchObject({ description: 'The save button did nothing', files: [file] })
+      expect(onexport.mock.calls[0]?.[0]).toMatchObject({
+        description: 'The save button did nothing',
+        files: [file],
+      })
       await vi.waitFor(() => expect(toast.items.at(-1)?.message).toBe('已开始下载反馈文件。'))
       expect(target.textContent).not.toContain('已开始下载反馈文件。')
     }
@@ -366,7 +586,10 @@ describe('feedback collection', () => {
     const onsubmit = vi.fn((_input: FeedbackFormData) => new Promise<void>((resolve) => {
       finish = resolve
     }))
-    const component = mount(FeedbackForm, { target, props: { onsubmit } })
+    const component = mount(FeedbackForm, {
+      target,
+      props: { onsubmit },
+    })
     try {
       flushSync()
       const form = target.querySelector('form')!
@@ -386,7 +609,21 @@ describe('feedback collection', () => {
     document.body.append(target)
     const onannotate = vi.fn(async (_input: FeedbackAnnotation) => {})
     const onsubmit = vi.fn(async (_input: FeedbackFormData) => {})
-    const component = mount(FeedbackForm, { target, props: { onannotate, onsubmit, attachments: [{ id: 'screen', name: 'screen.png', mimeType: 'image/png', url: 'blob:screen' }] } })
+    const component = mount(FeedbackForm, {
+      target,
+      props: {
+        onannotate,
+        onsubmit,
+        attachments: [
+          {
+            id: 'screen',
+            name: 'screen.png',
+            mimeType: 'image/png',
+            url: 'blob:screen',
+          },
+        ],
+      },
+    })
     try {
       flushSync()
       expect(target.querySelector('img')?.getAttribute('src')).toBe('blob:screen')
@@ -395,7 +632,16 @@ describe('feedback collection', () => {
       flushSync()
       button(target, '应用标注').click()
       await vi.waitFor(() => expect(onannotate).toHaveBeenCalledOnce())
-      expect(onannotate.mock.calls[0]?.[0]).toEqual({ id: 'screen', mode: 'mask', rect: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } })
+      expect(onannotate.mock.calls[0]?.[0]).toEqual({
+        id: 'screen',
+        mode: 'mask',
+        rect: {
+          x: 0.1,
+          y: 0.1,
+          width: 0.2,
+          height: 0.2,
+        },
+      })
       await vi.waitFor(() => expect(target.querySelector<HTMLButtonElement>('[aria-label="删除 screen.png"]')!.disabled).toBe(false))
       target.querySelector<HTMLButtonElement>('[aria-label="删除 screen.png"]')!.click()
       flushSync()
@@ -421,11 +667,16 @@ describe('feedback collection', () => {
     const onannotate = vi.fn(async (_input: FeedbackAnnotation) => {})
     const onsubmit = vi.fn(async (_input: FeedbackFormData) => {})
     const file = new File(['jpeg-fixture'], 'user-image.jpg', { type: 'image/jpeg' })
-    const component = mount(FeedbackFilesHarness, { target, props: { onfileschange, onannotate, onsubmit } })
+    const component = mount(FeedbackFilesHarness, {
+      target,
+      props: { onfileschange, onannotate, onsubmit },
+    })
     try {
       flushSync()
       const upload = target.querySelector<HTMLInputElement>('input[type="file"]')!
-      Object.defineProperty(upload, 'files', { value: [file] })
+      Object.defineProperty(upload, 'files', {
+        value: [file],
+      })
       upload.dispatchEvent(new Event('change', { bubbles: true }))
       flushSync()
       expect(onfileschange).toHaveBeenCalledWith([file])
@@ -456,12 +707,17 @@ describe('feedback collection', () => {
     const onannotate = vi.fn(async (_input: FeedbackAnnotation) => {})
     const onsubmit = vi.fn(async (_input: FeedbackFormData) => {})
     const file = new File(['png-fixture'], 'retry-image.png', { type: 'image/png' })
-    const component = mount(FeedbackFilesHarness, { target, props: { onfileschange, onannotate, onsubmit } })
+    const component = mount(FeedbackFilesHarness, {
+      target,
+      props: { onfileschange, onannotate, onsubmit },
+    })
     try {
       flushSync()
       field(target, 'Keep this description')
       const upload = target.querySelector<HTMLInputElement>('input[type="file"]')!
-      Object.defineProperty(upload, 'files', { value: [file] })
+      Object.defineProperty(upload, 'files', {
+        value: [file],
+      })
       upload.dispatchEvent(new Event('change', { bubbles: true }))
       await vi.waitFor(() => expect(toast.items.at(-1)?.message).toBe('操作失败，请重试'))
       expect(toast.items.at(-1)?.traceId).toEqual(expect.any(String))
@@ -487,7 +743,17 @@ describe('feedback management', () => {
     document.body.append(target)
     const serverSummary = 'POST /api/orders failed with HTTP 503'
     const summarizedReport = { ...report, description: '', summary: serverSummary }
-    const component = mount(FeedbackList, { target, props: { data: { items: [summarizedReport], total: 1, page: 1, pageSize: 20 } } })
+    const component = mount(FeedbackList, {
+      target,
+      props: {
+        data: {
+          items: [summarizedReport],
+          total: 1,
+          page: 1,
+          pageSize: 20,
+        },
+      },
+    })
     try {
       flushSync()
       const row = target.querySelector('tbody tr')!
@@ -507,11 +773,19 @@ describe('feedback management', () => {
     const target = document.createElement('div')
     document.body.append(target)
     const onquerychange = vi.fn(async (_input: FeedbackListQuery) => {})
-    const component = mount(FeedbackList, { target, props: {
-      data: { items: [report], total: 3, page: 3, pageSize: 1 },
-      query: { page: 3, pageSize: 1 },
-      onquerychange,
-    } })
+    const component = mount(FeedbackList, {
+      target,
+      props: {
+        data: {
+          items: [report],
+          total: 3,
+          page: 3,
+          pageSize: 1,
+        },
+        query: { page: 3, pageSize: 1 },
+        onquerychange,
+      },
+    })
     try {
       flushSync()
       const control = target.querySelector<HTMLInputElement>('input[role="combobox"][id$="-size"]')!
@@ -521,7 +795,9 @@ describe('feedback management', () => {
       expect(control.value).toBe('1')
       control.click()
       flushSync()
-      const twenty = [...document.querySelectorAll<HTMLElement>('[role="listbox"] [role="option"]')].find(option => option.textContent?.trim() === '20')
+      const twenty = [
+        ...document.querySelectorAll<HTMLElement>('[role="listbox"] [role="option"]'),
+      ].find(option => option.textContent?.trim() === '20')
       expect(twenty).toBeDefined()
       twenty!.click()
       await vi.waitFor(() => expect(onquerychange).toHaveBeenCalledOnce())
@@ -540,7 +816,20 @@ describe('feedback management', () => {
     const onstatus = vi.fn(async (_input: FeedbackStatusChange) => {
       throw new Error('Version conflict')
     })
-    const component = mount(FeedbackList, { target, props: { data: { items: [report], total: 3, page: 1, pageSize: 1 }, permissions: { read: true, process: true }, onquerychange, onstatus } })
+    const component = mount(FeedbackList, {
+      target,
+      props: {
+        data: {
+          items: [report],
+          total: 3,
+          page: 1,
+          pageSize: 1,
+        },
+        permissions: { read: true, process: true },
+        onquerychange,
+        onstatus,
+      },
+    })
     try {
       flushSync()
       target.querySelector<HTMLButtonElement>('[aria-label="下一页"]')!.click()
@@ -565,8 +854,25 @@ describe('feedback management', () => {
       const target = document.createElement('div')
       document.body.append(target)
       const component = detail
-        ? mount(FeedbackDetail, { target, props: { report, permissions: { read: false } } })
-        : mount(FeedbackList, { target, props: { data: { items: [report], total: 1, page: 1, pageSize: 20 }, permissions: { read: false } } })
+        ? mount(FeedbackDetail, {
+            target,
+            props: {
+              report,
+              permissions: { read: false },
+            },
+          })
+        : mount(FeedbackList, {
+            target,
+            props: {
+              data: {
+                items: [report],
+                total: 1,
+                page: 1,
+                pageSize: 20,
+              },
+              permissions: { read: false },
+            },
+          })
       try {
         flushSync()
         expect(toast.items.at(-1)).toMatchObject({ message: '您没有查看反馈的权限。', variant: 'warning' })
@@ -585,13 +891,31 @@ describe('feedback management', () => {
     document.body.append(target)
     const onevidencequery = vi.fn(async (_input: { page: number, pageSize: number, kind?: string }) => {})
     const onstatus = vi.fn(async (_input: FeedbackStatusChange) => {})
-    const component = mount(FeedbackDetail, { target, props: {
-      report: { ...report, status: 'handled' },
-      permissions: { read: true, reopen: true },
-      onstatus,
-      onevidencequery,
-      evidence: { items: [{ id: 'e1', source: 'browser', sequence: 1, kind: 'log', timestamp: 1, data: { message: '<img src=x onerror=alert(1)>' }, missingReason: 'buffer-expired' }], total: 1, page: 1, pageSize: 20 },
-    } })
+    const component = mount(FeedbackDetail, {
+      target,
+      props: {
+        report: { ...report, status: 'handled' },
+        permissions: { read: true, reopen: true },
+        onstatus,
+        onevidencequery,
+        evidence: {
+          items: [
+            {
+              id: 'e1',
+              source: 'browser',
+              sequence: 1,
+              kind: 'log',
+              timestamp: 1,
+              data: { message: '<img src=x onerror=alert(1)>' },
+              missingReason: 'buffer-expired',
+            },
+          ],
+          total: 1,
+          page: 1,
+          pageSize: 20,
+        },
+      },
+    })
     try {
       flushSync()
       button(target, '日志与请求').click()

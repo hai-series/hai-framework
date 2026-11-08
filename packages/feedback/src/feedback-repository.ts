@@ -15,7 +15,17 @@ const JOBS = 'hai_feedback_jobs'
 const QUOTAS = 'hai_feedback_quotas'
 
 // 仅允许本模块静态身份列；不能把外部输入拼成 SQL 标识符。
-const identityColumns = ['id', 'report_id', 'scope_id', 'app_id', 'user_id', 'source', 'request_id', 'error_id', 'client_id'] as const
+const identityColumns = [
+  'id',
+  'report_id',
+  'scope_id',
+  'app_id',
+  'user_id',
+  'source',
+  'request_id',
+  'error_id',
+  'client_id',
+] as const
 
 /**
  * 内部身份等值条件：保留索引预筛，并在 MySQL 中排除 CI/PAD SPACE 排序规则的别名。
@@ -179,7 +189,9 @@ export interface FeedbackAttachmentRow {
  * ```
  */
 export function readFeedbackJson(value: unknown): unknown {
-  return typeof value === 'string' ? JSON.parse(value) : value
+  return typeof value === 'string'
+    ? JSON.parse(value)
+    : value
 }
 
 /**
@@ -195,12 +207,26 @@ export function readFeedbackJson(value: unknown): unknown {
  * ```
  */
 export class FeedbackReportRepository extends BaseReldbCrudRepository<FeedbackReportRow> {
-  readonly tables = { reports: REPORTS, evidence: EVIDENCE, attachments: ATTACHMENTS, history: HISTORY, jobs: JOBS, quotas: QUOTAS }
+  readonly tables = {
+    reports: REPORTS,
+    evidence: EVIDENCE,
+    attachments: ATTACHMENTS,
+    history: HISTORY,
+    jobs: JOBS,
+    quotas: QUOTAS,
+  }
 
   constructor() {
     super(reldb, {
       table: REPORTS,
-      fields: Object.entries(reportDef).map(([name, def]) => ({ fieldName: name, columnName: name, def, select: true, create: true, update: name !== 'id' })),
+      fields: Object.entries(reportDef).map(([name, def]) => ({
+        fieldName: name,
+        columnName: name,
+        def,
+        select: true,
+        create: true,
+        update: name !== 'id',
+      })),
     })
   }
 
@@ -209,67 +235,86 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<FeedbackRe
     if (!report.success)
       return report
     const definitions: Array<[string, ReldbTableDef]> = [
-      [QUOTAS, {
-        id: { type: 'TEXT', primaryKey: true },
-        app_id: { type: 'TEXT', notNull: true },
-        scope_id: { type: 'TEXT', notNull: true },
-        user_id: { type: 'TEXT', notNull: true },
-        period: { type: 'BIGINT', notNull: true },
-        report_count: { type: 'BIGINT', notNull: true },
-        reserved_bytes: { type: 'BIGINT', notNull: true },
-        report_bytes: { type: 'BIGINT', notNull: true, defaultValue: 0 },
-        export_limit: { type: 'INTEGER', notNull: true, defaultValue: 0 },
-        updated_at: { type: 'BIGINT', notNull: true },
-      }],
-      [EVIDENCE, {
-        id: { type: 'TEXT', primaryKey: true },
-        report_id: { type: 'TEXT' },
-        scope_id: { type: 'TEXT', notNull: true },
-        user_id: { type: 'TEXT', notNull: true },
-        app_id: { type: 'TEXT', notNull: true },
-        source: { type: 'TEXT', notNull: true },
-        sequence: { type: 'BIGINT', notNull: true },
-        kind: { type: 'TEXT', notNull: true },
-        timestamp: { type: 'BIGINT', notNull: true },
-        request_id: { type: 'TEXT' },
-        error_id: { type: 'TEXT' },
-        revision: { type: 'INTEGER', notNull: true },
-        bytes: { type: 'INTEGER', notNull: true },
-        expires_at: { type: 'BIGINT', notNull: true },
-        payload: { type: 'JSON', notNull: true },
-      }],
-      [ATTACHMENTS, {
-        id: { type: 'TEXT', primaryKey: true },
-        client_id: { type: 'TEXT', notNull: true },
-        report_id: { type: 'TEXT', notNull: true },
-        scope_id: { type: 'TEXT', notNull: true },
-        object_key: { type: 'TEXT', notNull: true },
-        status: { type: 'TEXT', notNull: true },
-        size: { type: 'BIGINT', notNull: true },
-        checksum: { type: 'TEXT', notNull: true },
-        updated_at: { type: 'BIGINT', notNull: true },
-        payload: { type: 'JSON', notNull: true },
-      }],
-      [HISTORY, { id: { type: 'TEXT', primaryKey: true }, report_id: { type: 'TEXT', notNull: true }, payload: { type: 'JSON', notNull: true } }],
-      [JOBS, {
-        id: { type: 'TEXT', primaryKey: true },
-        app_id: { type: 'TEXT', notNull: true },
-        snapshot_revision: { type: 'INTEGER' },
-        snapshot_version: { type: 'INTEGER' },
-        report_id: { type: 'TEXT', notNull: true },
-        scope_id: { type: 'TEXT', notNull: true },
-        kind: { type: 'TEXT', notNull: true },
-        status: { type: 'TEXT', notNull: true },
-        token: { type: 'TEXT' },
-        lease_until: { type: 'BIGINT', notNull: true },
-        attempts: { type: 'INTEGER', notNull: true },
-        next_run_at: { type: 'BIGINT', notNull: true },
-        created_at: { type: 'BIGINT', notNull: true },
-        updated_at: { type: 'BIGINT', notNull: true },
-        last_error: { type: 'TEXT' },
-        payload: { type: 'JSON', notNull: true },
-        result: { type: 'JSON' },
-      }],
+      [
+        QUOTAS,
+        {
+          id: { type: 'TEXT', primaryKey: true },
+          app_id: { type: 'TEXT', notNull: true },
+          scope_id: { type: 'TEXT', notNull: true },
+          user_id: { type: 'TEXT', notNull: true },
+          period: { type: 'BIGINT', notNull: true },
+          report_count: { type: 'BIGINT', notNull: true },
+          reserved_bytes: { type: 'BIGINT', notNull: true },
+          report_bytes: { type: 'BIGINT', notNull: true, defaultValue: 0 },
+          export_limit: { type: 'INTEGER', notNull: true, defaultValue: 0 },
+          updated_at: { type: 'BIGINT', notNull: true },
+        },
+      ],
+      [
+        EVIDENCE,
+        {
+          id: { type: 'TEXT', primaryKey: true },
+          report_id: { type: 'TEXT' },
+          scope_id: { type: 'TEXT', notNull: true },
+          user_id: { type: 'TEXT', notNull: true },
+          app_id: { type: 'TEXT', notNull: true },
+          source: { type: 'TEXT', notNull: true },
+          sequence: { type: 'BIGINT', notNull: true },
+          kind: { type: 'TEXT', notNull: true },
+          timestamp: { type: 'BIGINT', notNull: true },
+          request_id: { type: 'TEXT' },
+          error_id: { type: 'TEXT' },
+          revision: { type: 'INTEGER', notNull: true },
+          bytes: { type: 'INTEGER', notNull: true },
+          expires_at: { type: 'BIGINT', notNull: true },
+          payload: { type: 'JSON', notNull: true },
+        },
+      ],
+      [
+        ATTACHMENTS,
+        {
+          id: { type: 'TEXT', primaryKey: true },
+          client_id: { type: 'TEXT', notNull: true },
+          report_id: { type: 'TEXT', notNull: true },
+          scope_id: { type: 'TEXT', notNull: true },
+          object_key: { type: 'TEXT', notNull: true },
+          status: { type: 'TEXT', notNull: true },
+          size: { type: 'BIGINT', notNull: true },
+          checksum: { type: 'TEXT', notNull: true },
+          updated_at: { type: 'BIGINT', notNull: true },
+          payload: { type: 'JSON', notNull: true },
+        },
+      ],
+      [
+        HISTORY,
+        {
+          id: { type: 'TEXT', primaryKey: true },
+          report_id: { type: 'TEXT', notNull: true },
+          payload: { type: 'JSON', notNull: true },
+        },
+      ],
+      [
+        JOBS,
+        {
+          id: { type: 'TEXT', primaryKey: true },
+          app_id: { type: 'TEXT', notNull: true },
+          snapshot_revision: { type: 'INTEGER' },
+          snapshot_version: { type: 'INTEGER' },
+          report_id: { type: 'TEXT', notNull: true },
+          scope_id: { type: 'TEXT', notNull: true },
+          kind: { type: 'TEXT', notNull: true },
+          status: { type: 'TEXT', notNull: true },
+          token: { type: 'TEXT' },
+          lease_until: { type: 'BIGINT', notNull: true },
+          attempts: { type: 'INTEGER', notNull: true },
+          next_run_at: { type: 'BIGINT', notNull: true },
+          created_at: { type: 'BIGINT', notNull: true },
+          updated_at: { type: 'BIGINT', notNull: true },
+          last_error: { type: 'TEXT' },
+          payload: { type: 'JSON', notNull: true },
+          result: { type: 'JSON' },
+        },
+      ],
     ]
     for (const [table, definition] of definitions) {
       const created = await reldb.ddl.createTable(table, definition)
@@ -277,16 +322,56 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<FeedbackRe
         return created
     }
     const indexes = [
-      { table: QUOTAS, name: 'hai_feedback_quotas_expiry', columns: ['app_id', 'period'] },
-      { table: REPORTS, name: 'hai_feedback_reports_scope_time', columns: ['scope_id', 'created_at'] },
-      { table: REPORTS, name: 'hai_feedback_reports_scope_status', columns: ['scope_id', 'status', 'created_at'] },
-      { table: EVIDENCE, name: 'hai_feedback_evidence_report_seq', columns: ['report_id', 'source', 'sequence'] },
-      { table: EVIDENCE, name: 'hai_feedback_evidence_temp_expiry', columns: ['app_id', 'report_id', 'expires_at'] },
-      { table: EVIDENCE, name: 'hai_feedback_evidence_temp_scope', columns: ['scope_id', 'user_id', 'timestamp'] },
-      { table: ATTACHMENTS, name: 'hai_feedback_attachments_report', columns: ['report_id'] },
-      { table: HISTORY, name: 'hai_feedback_history_report', columns: ['report_id'] },
-      { table: JOBS, name: 'hai_feedback_jobs_pending', columns: ['app_id', 'status', 'next_run_at'] },
-      { table: JOBS, name: 'hai_feedback_jobs_snapshot', columns: ['report_id', 'snapshot_revision', 'snapshot_version'] },
+      {
+        table: QUOTAS,
+        name: 'hai_feedback_quotas_expiry',
+        columns: ['app_id', 'period'],
+      },
+      {
+        table: REPORTS,
+        name: 'hai_feedback_reports_scope_time',
+        columns: ['scope_id', 'created_at'],
+      },
+      {
+        table: REPORTS,
+        name: 'hai_feedback_reports_scope_status',
+        columns: ['scope_id', 'status', 'created_at'],
+      },
+      {
+        table: EVIDENCE,
+        name: 'hai_feedback_evidence_report_seq',
+        columns: ['report_id', 'source', 'sequence'],
+      },
+      {
+        table: EVIDENCE,
+        name: 'hai_feedback_evidence_temp_expiry',
+        columns: ['app_id', 'report_id', 'expires_at'],
+      },
+      {
+        table: EVIDENCE,
+        name: 'hai_feedback_evidence_temp_scope',
+        columns: ['scope_id', 'user_id', 'timestamp'],
+      },
+      {
+        table: ATTACHMENTS,
+        name: 'hai_feedback_attachments_report',
+        columns: ['report_id'],
+      },
+      {
+        table: HISTORY,
+        name: 'hai_feedback_history_report',
+        columns: ['report_id'],
+      },
+      {
+        table: JOBS,
+        name: 'hai_feedback_jobs_pending',
+        columns: ['app_id', 'status', 'next_run_at'],
+      },
+      {
+        table: JOBS,
+        name: 'hai_feedback_jobs_snapshot',
+        columns: ['report_id', 'snapshot_revision', 'snapshot_version'],
+      },
     ]
     for (const index of indexes) {
       // MySQL 的 CREATE INDEX 不支持 IF NOT EXISTS；重启和多节点启动须核验真实索引定义。
@@ -297,7 +382,9 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<FeedbackRe
         if (!found.data.length)
           return ok(false)
         const matches = found.data.length === index.columns.length && found.data.every((column, position) => column.column_name === index.columns[position] && Number(column.non_unique) === 1)
-        return matches ? ok(true) : err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
+        return matches
+          ? ok(true)
+          : err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
       }
       if (reldb.config?.type === 'mysql') {
         const existing = await inspect()
@@ -321,11 +408,15 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<FeedbackRe
   }
 
   async find(id: string, scope: string, sql: DmlOperations = reldb.sql) {
-    const lock = sql !== reldb.sql && reldb.config?.type !== 'sqlite' ? ' FOR UPDATE' : ''
+    const lock = sql !== reldb.sql && reldb.config?.type !== 'sqlite'
+      ? ' FOR UPDATE'
+      : ''
     const params: unknown[] = []
     const condition = `${feedbackTextEquals('id', id, params)} AND ${feedbackTextEquals('scope_id', scope, params)}`
     const result = await sql.get<FeedbackReportRow>(`SELECT * FROM ${REPORTS} WHERE ${condition}${lock}`, params)
-    return result.success && result.data && (result.data.id !== id || result.data.scope_id !== scope) ? ok(null) : result
+    return result.success && result.data && (result.data.id !== id || result.data.scope_id !== scope)
+      ? ok(null)
+      : result
   }
 
   report(row: FeedbackReportRow) {

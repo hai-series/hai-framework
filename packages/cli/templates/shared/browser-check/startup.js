@@ -44,12 +44,21 @@
     var currentMinor = Number(parts[1] || 0)
     if (currentMajor > major || (currentMajor === major && currentMinor >= minor))
       return null
-    return { name: name, version: version, minimum: minor ? major + '.' + minor : String(major), help: help }
+    return {
+      name: name,
+      version: version,
+      minimum: minor
+        ? major + '.' + minor
+        : String(major),
+      help: help,
+    }
   }
 
   function getLanguage(value) {
     var language = (value || '').toLowerCase().split(/[-_]/)[0]
-    return language === 'zh' || language === 'ja' || language === 'en' ? language : ''
+    return language === 'zh' || language === 'ja' || language === 'en'
+      ? language
+      : ''
   }
 
   function openUpdatePage() {
@@ -62,13 +71,30 @@
   function showUpdateInstructions() {
     var locale = getLanguage(location.hash.slice(1)) || getLanguage(navigator.language) || 'en'
     var messages = {
-      zh: ['浏览器版本过低', '当前使用 {name} {version}。此站点至少需要 {name} {minimum}。', '请更新到最新版本，然后重新打开此站点。', '查看官方更新说明'],
-      en: ['Update your browser', 'You are using {name} {version}. This site requires {name} {minimum} or later.', 'Install the latest update, then reopen this site.', 'Official update instructions'],
-      ja: ['ブラウザーを更新してください', '現在のバージョンは {name} {version} です。このサイトには {name} {minimum} 以降が必要です。', '最新版に更新してから、このサイトを開き直してください。', '公式の更新手順を見る'],
+      zh: [
+        '浏览器版本过低',
+        '当前使用 {name} {version}。此站点至少需要 {name} {minimum}。',
+        '请更新到最新版本，然后重新打开此站点。',
+        '查看官方更新说明',
+      ],
+      en: [
+        'Update your browser',
+        'You are using {name} {version}. This site requires {name} {minimum} or later.',
+        'Install the latest update, then reopen this site.',
+        'Official update instructions',
+      ],
+      ja: [
+        'ブラウザーを更新してください',
+        '現在のバージョンは {name} {version} です。このサイトには {name} {minimum} 以降が必要です。',
+        '最新版に更新してから、このサイトを開き直してください。',
+        '公式の更新手順を見る',
+      ],
     }
     var message = messages[locale]
     var help = document.getElementById('browser-update-help')
-    root.lang = locale === 'zh' ? 'zh-CN' : locale
+    root.lang = locale === 'zh'
+      ? 'zh-CN'
+      : locale
     document.title = message[0]
     document.getElementById('browser-update-title').textContent = message[0]
     document.getElementById('browser-update-version').textContent = message[1].replace(/\{(name|version|minimum)\}/g, function (_match, key) {

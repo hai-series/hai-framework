@@ -50,7 +50,12 @@ describe('e2E server environment', () => {
     vi.stubEnv('HAI_E2E_DATA_ROOT', root)
     vi.stubEnv('HAI_AUTH_EVIDENCE_DIR', path.join(root, 'evidence'))
     vi.stubEnv('HAI_CORE_NAME', 'Configured scaffold')
-    const env = createE2eServerEnv({ HAI_DB: JSON.stringify({ type: 'sqlite', database: path.join(root, 'test.db') }) })
+    const env = createE2eServerEnv({
+      HAI_DB: JSON.stringify({
+        type: 'sqlite',
+        database: path.join(root, 'test.db'),
+      }),
+    })
     expect(JSON.parse(env.HAI_DB).type).toBe('sqlite')
     expect(env.HAI_DB_URL).toBeUndefined()
     expect(env.PUBLIC_TOKEN).toBeUndefined()
@@ -66,8 +71,14 @@ describe('e2E server environment', () => {
     vi.stubEnv('HAI_E2E_DATA_ROOT', '')
     expect(() => createE2eServerEnv({})).toThrow('absolute')
     expect(() => createE2eServerEnv({ HAI_E2E_DATA_ROOT: './data' })).toThrow('absolute')
-    expect(() => createE2eServerEnv({ HAI_E2E_DATA_ROOT: temporaryRoot(), PUBLIC_API_BASE: 'https://example.invalid/api' })).toThrow('loopback')
-    expect(() => createE2eServerEnv({ HAI_E2E_DATA_ROOT: temporaryRoot(), PUBLIC_API_BASE: 'http://user:password@localhost/api' })).toThrow('loopback')
+    expect(() => createE2eServerEnv({
+      HAI_E2E_DATA_ROOT: temporaryRoot(),
+      PUBLIC_API_BASE: 'https://example.invalid/api',
+    })).toThrow('loopback')
+    expect(() => createE2eServerEnv({
+      HAI_E2E_DATA_ROOT: temporaryRoot(),
+      PUBLIC_API_BASE: 'http://user:password@localhost/api',
+    })).toThrow('loopback')
   })
 
   it('generates distinct real SM2 keys with matching public/private material', () => {
@@ -116,15 +127,33 @@ describe('independent database connection counter', () => {
     const env = { ...process.env }
     await withDatabaseIsolation(root, evidence, env, () => {
       expect(readFileSync(local, 'utf8')).toContain('HAI_DB=')
-      const serverEnv = createE2eServerEnv({ HAI_E2E_DATA_ROOT: root, HAI_DB: JSON.stringify({ type: 'sqlite', database: path.join(root, 'owned.db') }) })
-      const result = spawnSync(process.execPath, ['-e', 'if (JSON.parse(process.env.HAI_DB).type !== "sqlite") process.exit(2)'], { env: { ...env, ...serverEnv } })
+      const serverEnv = createE2eServerEnv({
+        HAI_E2E_DATA_ROOT: root,
+        HAI_DB: JSON.stringify({
+          type: 'sqlite',
+          database: path.join(root, 'owned.db'),
+        }),
+      })
+      const result = spawnSync(process.execPath, ['-e', 'if (JSON.parse(process.env.HAI_DB).type !== "sqlite") process.exit(2)'], {
+        env: {
+          ...env,
+          ...serverEnv,
+        },
+      })
       expect(result.status).toBe(0)
     })
     expect(readFileSync(local, 'utf8')).toBe('PRIVATE_FIXTURE=preserved\n')
     expect(JSON.parse(readFileSync(path.join(evidence, 'database-isolation.json'), 'utf8'))).toMatchObject({ connections: 1, closed: true })
   })
 
-  it.each(['BASE_URL', 'SERVICE_BASE_URL', 'PUBLIC_API_BASE', 'HAI_E2E_WEB_URL', 'HAI_E2E_APP_URL', 'HAI_E2E_DESKTOP_URL'])('does not occupy the planned %s port or count HTTP health probes as database connections', async (control) => {
+  it.each([
+    'BASE_URL',
+    'SERVICE_BASE_URL',
+    'PUBLIC_API_BASE',
+    'HAI_E2E_WEB_URL',
+    'HAI_E2E_APP_URL',
+    'HAI_E2E_DESKTOP_URL',
+  ])('does not occupy the planned %s port or count HTTP health probes as database connections', async (control) => {
     const { root, evidence } = fixture()
     const preview = createServer((_request, response) => response.end('owned preview'))
     preview.listen(0, '127.0.0.1')
@@ -138,7 +167,11 @@ describe('independent database connection counter', () => {
     // 强制计数进程首次分配到尚未启动的预览端口，重现 CI 的抢占窗口。
     const preload = path.join(root, 'preview-port-collision.mjs')
     writeFileSync(preload, `import net from 'node:net'; if(process.argv[2]==='serve'){const original=net.Server.prototype.listen;let first=true;net.Server.prototype.listen=function(port,...args){if(port===0&&first){first=false;return original.call(this,${address.port},...args)}return original.call(this,port,...args)}}`)
-    const env = { ...process.env, [control]: baseUrl, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import=${pathToFileURL(preload).href}`.trim() }
+    const env = {
+      ...process.env,
+      [control]: baseUrl,
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import=${pathToFileURL(preload).href}`.trim(),
+    }
     vi.stubEnv('NODE_OPTIONS', env.NODE_OPTIONS)
     try {
       await withDatabaseIsolation(root, evidence, env, async () => {
@@ -164,7 +197,10 @@ describe('independent database connection counter', () => {
     const preload = path.join(root, 'rename-conflict.mjs')
     const trace = path.join(root, 'rename-attempts.json')
     writeFileSync(preload, `import fs from 'node:fs'; import {syncBuiltinESMExports} from 'node:module'; if(process.argv[2]==='serve'){const original=fs.promises.rename;let failures=0;fs.promises.rename=async(...args)=>{if(failures<3){failures++;fs.writeFileSync(${JSON.stringify(trace)},JSON.stringify({failures}));throw Object.assign(new Error('fixture sharing conflict'),{code:'EPERM'});}return original(...args)};syncBuiltinESMExports();}`)
-    const env = { ...process.env, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import=${pathToFileURL(preload).href}`.trim() }
+    const env = {
+      ...process.env,
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import=${pathToFileURL(preload).href}`.trim(),
+    }
     vi.stubEnv('NODE_OPTIONS', env.NODE_OPTIONS)
     await withDatabaseIsolation(root, evidence, env, () => {})
     expect(JSON.parse(readFileSync(trace, 'utf8'))).toEqual({ failures: 3 })

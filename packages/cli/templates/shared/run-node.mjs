@@ -12,13 +12,22 @@ if (!mode || !environmentDirectory || !entry)
 // 从实际应用解析公开 Core 入口，脚本可以放在 workspace 根目录。
 const require = createRequire(resolve('package.json'))
 const { core } = await import(pathToFileURL(require.resolve('@h-ai/core')).href)
-const loaded = core.config.loadEnvFiles({ mode, envDir: resolve(environmentDirectory) })
+const loaded = core.config.loadEnvFiles({
+  mode,
+  envDir: resolve(environmentDirectory),
+})
 if (!loaded.success)
   throw new Error(loaded.error.message)
 
-const child = spawn(process.execPath, [resolve(entry), ...arguments_], {
+const child = spawn(process.execPath, [
+  resolve(entry),
+  ...arguments_,
+], {
   cwd: process.cwd(),
-  env: { ...process.env, ...loaded.data },
+  env: {
+    ...process.env,
+    ...loaded.data,
+  },
   stdio: 'inherit',
   windowsHide: true,
 })
@@ -35,7 +44,9 @@ try {
     child.once('error', reject)
     child.once('close', (code, signal) => resolve({ code, signal }))
   })
-  process.exitCode = result.code ?? (result.signal === 'SIGINT' ? 130 : 143)
+  process.exitCode = result.code ?? (result.signal === 'SIGINT'
+    ? 130
+    : 143)
 }
 finally {
   process.off('SIGINT', interrupt)

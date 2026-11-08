@@ -32,7 +32,12 @@ function deferred<T>(): Deferred<T> {
 }
 
 function page(items: Row[], total: number, pageNum = 1, size = 10): PaginatedResult<Row> {
-  return { items, total, page: pageNum, pageSize: size }
+  return {
+    items,
+    total,
+    page: pageNum,
+    pageSize: size,
+  }
 }
 
 interface ListCall {
@@ -54,7 +59,14 @@ describe('createCrudController', () => {
       name: 'row',
       label: 'Row',
       defaultPageSize: 10,
-      fields: [{ id: 'name', label: 'Name', type: 'text', filterable: true }],
+      fields: [
+        {
+          id: 'name',
+          label: 'Name',
+          type: 'text',
+          filterable: true,
+        },
+      ],
       api: {
         list: (params, options) => {
           const d = deferred<PaginatedResult<Row>>()
@@ -75,13 +87,17 @@ describe('createCrudController', () => {
     expect(controller.loading).toBe(true)
     expect(controller.loaded).toBe(false)
 
-    calls[0].deferred.resolve(page([{ id: '1', name: 'A' }], 1))
+    calls[0].deferred.resolve(page([
+      { id: '1', name: 'A' },
+    ], 1))
     await p
 
     expect(controller.loading).toBe(false)
     expect(controller.loaded).toBe(true)
     expect(controller.error).toBeUndefined()
-    expect(controller.data.items).toEqual([{ id: '1', name: 'A' }])
+    expect(controller.data.items).toEqual([
+      { id: '1', name: 'A' },
+    ])
     expect(controller.data.total).toBe(1)
   })
 
@@ -119,18 +135,24 @@ describe('createCrudController', () => {
     expect(controller.error).toBeDefined()
 
     p = controller.reload()
-    calls[1].deferred.resolve(page([{ id: '1', name: 'A' }], 1))
+    calls[1].deferred.resolve(page([
+      { id: '1', name: 'A' },
+    ], 1))
     await p
 
     expect(controller.error).toBeUndefined()
     expect(controller.loaded).toBe(true)
-    expect(controller.data.items).toEqual([{ id: '1', name: 'A' }])
+    expect(controller.data.items).toEqual([
+      { id: '1', name: 'A' },
+    ])
   })
 
   it('失败保留旧数据：已有数据时刷新失败不清空列表', async () => {
     const controller = createCrudController(makeCrud(), { autoLoad: false })
     let p = controller.load()
-    calls[0].deferred.resolve(page([{ id: '1', name: 'A' }], 1))
+    calls[0].deferred.resolve(page([
+      { id: '1', name: 'A' },
+    ], 1))
     await p
 
     p = controller.reload()
@@ -139,7 +161,9 @@ describe('createCrudController', () => {
 
     expect(controller.error?.message).toBe('boom')
     // 旧数据保留，不用空列表覆盖。
-    expect(controller.data.items).toEqual([{ id: '1', name: 'A' }])
+    expect(controller.data.items).toEqual([
+      { id: '1', name: 'A' },
+    ])
     expect(controller.loaded).toBe(true)
   })
 
@@ -155,15 +179,23 @@ describe('createCrudController', () => {
     expect(calls[0].signal?.aborted).toBe(true)
 
     // 先结算最新一轮（b）。
-    calls[1].deferred.resolve(page([{ id: '2', name: 'B' }], 1))
+    calls[1].deferred.resolve(page([
+      { id: '2', name: 'B' },
+    ], 1))
     await p2
-    expect(controller.data.items).toEqual([{ id: '2', name: 'B' }])
+    expect(controller.data.items).toEqual([
+      { id: '2', name: 'B' },
+    ])
     expect(controller.data.filters.search).toBe('b')
 
     // 旧请求（a）晚到，必须被忽略。
-    calls[0].deferred.resolve(page([{ id: '1', name: 'A' }], 1))
+    calls[0].deferred.resolve(page([
+      { id: '1', name: 'A' },
+    ], 1))
     await p1
-    expect(controller.data.items).toEqual([{ id: '2', name: 'B' }])
+    expect(controller.data.items).toEqual([
+      { id: '2', name: 'B' },
+    ])
     expect(controller.data.filters.search).toBe('b')
   })
 
@@ -176,7 +208,9 @@ describe('createCrudController', () => {
     const p = controller.load()
     // 首次激活才发起请求。
     expect(calls.length).toBe(1)
-    calls[0].deferred.resolve(page([{ id: '1', name: 'A' }], 1))
+    calls[0].deferred.resolve(page([
+      { id: '1', name: 'A' },
+    ], 1))
     await p
     expect(controller.loaded).toBe(true)
   })
@@ -187,28 +221,50 @@ describe('createCrudController', () => {
     const p2 = controller.load()
     expect(calls.length).toBe(1)
 
-    calls[0].deferred.resolve(page([{ id: '1', name: 'A' }], 1))
+    calls[0].deferred.resolve(page([
+      { id: '1', name: 'A' },
+    ], 1))
     await Promise.all([p1, p2])
-    expect(controller.data.items).toEqual([{ id: '1', name: 'A' }])
+    expect(controller.data.items).toEqual([
+      { id: '1', name: 'A' },
+    ])
   })
 
   it('autoLoad 默认立即加载', async () => {
     const controller = createCrudController(makeCrud())
     expect(controller.loading).toBe(true)
     expect(calls.length).toBe(1)
-    calls[0].deferred.resolve(page([{ id: '1', name: 'A' }], 1))
+    calls[0].deferred.resolve(page([
+      { id: '1', name: 'A' },
+    ], 1))
     await controller.load()
     expect(controller.loaded).toBe(true)
-    expect(controller.data.items).toEqual([{ id: '1', name: 'A' }])
+    expect(controller.data.items).toEqual([
+      { id: '1', name: 'A' },
+    ])
   })
 })
 
 describe('mapPaginated', () => {
   it('映射条目并保留分页元数据', () => {
     const result = mapPaginated(
-      { items: [{ id: '1', name: 'A' }], total: 5, page: 2, pageSize: 20 },
+      {
+        items: [
+          { id: '1', name: 'A' },
+        ],
+        total: 5,
+        page: 2,
+        pageSize: 20,
+      },
       row => ({ label: row.name }),
     )
-    expect(result).toEqual({ items: [{ label: 'A' }], total: 5, page: 2, pageSize: 20 })
+    expect(result).toEqual({
+      items: [
+        { label: 'A' },
+      ],
+      total: 5,
+      page: 2,
+      pageSize: 20,
+    })
   })
 })

@@ -23,7 +23,11 @@ function tests(getIam: () => IamFunctions) {
     expect(created.success && permission.success).toBe(true)
     if (!created.success || !permission.success)
       return
-    const role = await iam.authz.createRole({ code: name, name: 'Reader', permissionIds: [permission.data.id] })
+    const role = await iam.authz.createRole({
+      code: name,
+      name: 'Reader',
+      permissionIds: [permission.data.id],
+    })
     expect(role.success).toBe(true)
     if (!role.success)
       return
@@ -74,7 +78,12 @@ function tests(getIam: () => IamFunctions) {
       expect((await begin.data.commit()).success).toBe(true)
     }
     finally { await begin.data.rollback() }
-    expect(await iam.authz.getUserAuthorization(user.data.user.id)).toMatchObject({ success: true, data: { roles: expect.arrayContaining([name]) } })
+    expect(await iam.authz.getUserAuthorization(user.data.user.id)).toMatchObject({
+      success: true,
+      data: {
+        roles: expect.arrayContaining([name]),
+      },
+    })
     const other = await reldb.tx.begin()
     expect(other.success).toBe(true)
     if (!other.success)
@@ -83,18 +92,31 @@ function tests(getIam: () => IamFunctions) {
       expect((await iam.authz.removeRole(user.data.user.id, role.data.id, other.data)).success).toBe(true)
     }
     finally { expect((await other.data.rollback()).success).toBe(true) }
-    expect(await iam.authz.getUserAuthorization(user.data.user.id)).toMatchObject({ success: true, data: { roles: expect.arrayContaining([name]) } })
+    expect(await iam.authz.getUserAuthorization(user.data.user.id)).toMatchObject({
+      success: true,
+      data: {
+        roles: expect.arrayContaining([name]),
+      },
+    })
     const revision = await cache.kv.get<{ writers: number }>('hai:iam:read_cache:revision')
-    expect(revision).toMatchObject({ success: true, data: { writers: 0 } })
+    expect(revision).toMatchObject({
+      success: true,
+      data: { writers: 0 },
+    })
   })
   it('aPI Key 重复验证命中共享缓存且撤销后立即失败，不重复数据库/哈希读取', async () => {
-    const iam = await initIam({ login: { apikey: true } })
+    const iam = await initIam({
+      login: { apikey: true },
+    })
     const name = `cached-key-${crypto.randomUUID()}`
     const user = await iam.user.createUser({ username: name, password: TEST_PASSWORD })
     expect(user.success).toBe(true)
     if (!user.success)
       return
-    const issued = await iam.apiKey.createApiKey(user.data.user.id, { name: 'Cache fixture', scopes: ['record:read'] })
+    const issued = await iam.apiKey.createApiKey(user.data.user.id, {
+      name: 'Cache fixture',
+      scopes: ['record:read'],
+    })
     expect(issued.success).toBe(true)
     if (!issued.success)
       return
@@ -134,8 +156,16 @@ function tests(getIam: () => IamFunctions) {
     }
     finally { fault.mockRestore() }
     try {
-      expect(await cache.kv.get('hai:iam:read_cache:revision')).toMatchObject({ success: true, data: { writers: 1 } })
-      expect(await iam.authz.getUserAuthorization(user.data.user.id)).toMatchObject({ success: true, data: { roles: expect.arrayContaining([`${name}-updated`]) } })
+      expect(await cache.kv.get('hai:iam:read_cache:revision')).toMatchObject({
+        success: true,
+        data: { writers: 1 },
+      })
+      expect(await iam.authz.getUserAuthorization(user.data.user.id)).toMatchObject({
+        success: true,
+        data: {
+          roles: expect.arrayContaining([`${name}-updated`]),
+        },
+      })
     }
     finally {
       // 夹具内没有活动写事务；模拟维护窗口修复，不能在真实在线写入时清空栅栏。

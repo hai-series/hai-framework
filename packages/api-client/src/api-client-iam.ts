@@ -88,7 +88,9 @@ export function createIamAuthActions(client: {
           return
         sent = true
         // 不清理 Cookie/本地存储，避免迟到响应覆盖下一文档刚建立的新身份。
-        void client.iam.auth.closeSession({}, { context: { keepalive: true, autoRefresh: false } }).then((result) => {
+        void client.iam.auth.closeSession({}, {
+          context: { keepalive: true, autoRefresh: false },
+        }).then((result) => {
           if (!result.success)
             core.logger.warn('Page exit session revocation failed', { errorCode: result.error.code })
         }).catch(() => core.logger.warn('Page exit session request did not complete'))
@@ -109,10 +111,25 @@ export function createIamAuthActions(client: {
     createCaptcha: (input: Parameters<typeof client.iam.auth.createCaptcha>[0]) => client.iam.auth.createCaptcha(input),
     login: async (input: IamAuthLoginInput) => {
       const result = input.method === 'ldap'
-        ? await client.iam.auth.loginWithLdap({ username: input.identifier, password: input.password, captcha: input.captcha, expectedUserId: input.expectedUserId })
+        ? await client.iam.auth.loginWithLdap({
+            username: input.identifier,
+            password: input.password,
+            captcha: input.captcha,
+            expectedUserId: input.expectedUserId,
+          })
         : input.method === 'email' || input.method === 'sms'
-          ? await client.iam.auth.loginWithOtp({ identifier: input.identifier, code: input.code ?? '', captcha: input.captcha, expectedUserId: input.expectedUserId })
-          : await client.iam.auth.login({ identifier: input.identifier, password: input.password, captcha: input.captcha, expectedUserId: input.expectedUserId })
+          ? await client.iam.auth.loginWithOtp({
+              identifier: input.identifier,
+              code: input.code ?? '',
+              captcha: input.captcha,
+              expectedUserId: input.expectedUserId,
+            })
+          : await client.iam.auth.login({
+              identifier: input.identifier,
+              password: input.password,
+              captcha: input.captcha,
+              expectedUserId: input.expectedUserId,
+            })
       return save(result)
     },
     register: async (input: IamRegisterInput) => save(await client.iam.auth.register(input)),

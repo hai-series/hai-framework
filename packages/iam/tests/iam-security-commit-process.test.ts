@@ -15,8 +15,13 @@ import { acquireRedisContainer } from './helpers/redis-container.js'
 interface WorkerResult { success: boolean, code?: string, pausedFor: number }
 
 function pausedWorker(input: object) {
-  const child = spawn(process.execPath, [fileURLToPath(new URL('./helpers/iam-security-commit-worker.mjs', import.meta.url))], {
-    env: { ...process.env, IAM_COMMIT_WORKER_INPUT: JSON.stringify(input) },
+  const child = spawn(process.execPath, [
+    fileURLToPath(new URL('./helpers/iam-security-commit-worker.mjs', import.meta.url)),
+  ], {
+    env: {
+      ...process.env,
+      IAM_COMMIT_WORKER_INPUT: JSON.stringify(input),
+    },
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   })
@@ -70,23 +75,43 @@ it('独立旧节点跨旧锁期限暂停后，OTP旧CAS与密码旧SQL都被接�
   let redis: Awaited<ReturnType<typeof acquireRedisContainer>> | undefined
   try {
     redis = await acquireRedisContainer()
-    const db = { type: 'sqlite' as const, database: join(folder, 'iam.db') }
+    const db = {
+      type: 'sqlite' as const,
+      database: join(folder, 'iam.db'),
+    }
     const cacheConfig = { type: 'redis' as const, host: redis.host, port: redis.port }
     expect((await reldb.init(db)).success).toBe(true)
     expect((await cache.init(cacheConfig)).success).toBe(true)
     let code = ''
     let token = ''
-    expect((await iam.init({ otp: { resendInterval: 30, expiresIn: 120 }, onOtpSendEmail: async (_id, value) => {
-      code = value
-    }, onPasswordResetRequest: async (_user, value) => {
-      token = value
-    } })).success).toBe(true)
+    expect((await iam.init({
+      otp: { resendInterval: 30, expiresIn: 120 },
+      onOtpSendEmail: async (_id, value) => {
+        code = value
+      },
+      onPasswordResetRequest: async (_user, value) => {
+        token = value
+      },
+    })).success).toBe(true)
     expect((await iam.user.register({ username: 'commit-reset', password: 'Password123' })).success).toBe(true)
     expect((await iam.auth.sendOtp('commit-otp@example.com')).success).toBe(true)
     expect((await iam.user.requestPasswordReset('commit-reset')).success).toBe(true)
     const resumeFile = join(folder, 'resume')
-    workers.push(pausedWorker({ db, cache: cacheConfig, resumeFile, operation: 'otp', identifier: 'commit-otp@example.com', code }))
-    workers.push(pausedWorker({ db, cache: cacheConfig, resumeFile, operation: 'reset', token }))
+    workers.push(pausedWorker({
+      db,
+      cache: cacheConfig,
+      resumeFile,
+      operation: 'otp',
+      identifier: 'commit-otp@example.com',
+      code,
+    }))
+    workers.push(pausedWorker({
+      db,
+      cache: cacheConfig,
+      resumeFile,
+      operation: 'reset',
+      token,
+    }))
     await Promise.all(workers.map(worker => worker.paused))
     expect((await iam.user.requestPasswordReset('commit-reset')).success).toBe(true)
     expect((await iam.user.confirmPasswordReset(token, 'NewNodePassword345')).success).toBe(true)

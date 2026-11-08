@@ -50,7 +50,16 @@ describe('storage workflow', () => {
         expect(putText.data.contentType).toBe('text/plain')
       }
 
-      const binaryData = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+      const binaryData = Buffer.from([
+        0x89,
+        0x50,
+        0x4E,
+        0x47,
+        0x0D,
+        0x0A,
+        0x1A,
+        0x0A,
+      ])
       const putBinary = await storage.file.put('workflow/images/logo.png', binaryData, {
         contentType: 'image/png',
       })
@@ -281,7 +290,16 @@ describe('storage workflow', () => {
     })
 
     it('s3: 客户端通过签名 URL 上传二进制文件并下载验证', async () => {
-      const binaryContent = Buffer.from([0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03])
+      const binaryContent = Buffer.from([
+        0xDE,
+        0xAD,
+        0xBE,
+        0xEF,
+        0x00,
+        0x01,
+        0x02,
+        0x03,
+      ])
 
       // 生成上传签名 URL
       const putUrlResult = await storage.presign.putUrl('presign-test/binary.bin', {

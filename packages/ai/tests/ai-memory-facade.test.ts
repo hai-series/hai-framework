@@ -19,7 +19,15 @@ import { describe, expect, it, vi } from 'vitest'
 import { createMemoryOperations } from '../src/memory/ai-memory-facade.js'
 
 function makeEntry(id: string): MemoryEntry {
-  return { id, content: 'x', type: 'fact', importance: 0.5, createdAt: 0, lastAccessedAt: 0, accessCount: 0 }
+  return {
+    id,
+    content: 'x',
+    type: 'fact',
+    importance: 0.5,
+    createdAt: 0,
+    lastAccessedAt: 0,
+    accessCount: 0,
+  }
 }
 
 /** 记录参数的 mock 核心操作 */
@@ -85,23 +93,43 @@ describe('createMemoryOperations — scoped 绑定', () => {
   it('scoped 操作自动携带 objectId 与 scope', async () => {
     const { core, calls } = createMockCore()
     const memory = createMemoryOperations(core)
-    const scoped = memory.scoped({ objectId: 'u-9', scope: { topicId: 't-1' } })
+    const scoped = memory.scoped({
+      objectId: 'u-9',
+      scope: { topicId: 't-1' },
+    })
 
     await scoped.add({ content: 'hi', type: 'fact' })
-    expect(calls.add).toHaveBeenCalledWith({ content: 'hi', type: 'fact', objectId: 'u-9', scope: { topicId: 't-1' } })
+    expect(calls.add).toHaveBeenCalledWith({
+      content: 'hi',
+      type: 'fact',
+      objectId: 'u-9',
+      scope: { topicId: 't-1' },
+    })
 
     await scoped.recall('q')
-    expect(calls.recall.mock.calls[0][1]).toMatchObject({ objectId: 'u-9', scope: { topicId: 't-1' } })
+    expect(calls.recall.mock.calls[0][1]).toMatchObject({
+      objectId: 'u-9',
+      scope: { topicId: 't-1' },
+    })
 
     await scoped.list()
-    expect(calls.list.mock.calls[0][0]).toMatchObject({ objectId: 'u-9', scope: { topicId: 't-1' } })
+    expect(calls.list.mock.calls[0][0]).toMatchObject({
+      objectId: 'u-9',
+      scope: { topicId: 't-1' },
+    })
   })
 
   it('scoped 的 get / update / remove 自动施加归属校验（accessScope）', async () => {
     const { core, calls } = createMockCore()
     const memory = createMemoryOperations(core)
-    const scoped = memory.scoped({ objectId: 'u-9', scope: { topicId: 't-1' } })
-    const expectedScope: MemoryAccessScope = { objectId: 'u-9', scope: { topicId: 't-1' } }
+    const scoped = memory.scoped({
+      objectId: 'u-9',
+      scope: { topicId: 't-1' },
+    })
+    const expectedScope: MemoryAccessScope = {
+      objectId: 'u-9',
+      scope: { topicId: 't-1' },
+    }
 
     await scoped.get('m1')
     expect(calls.get).toHaveBeenCalledWith('m1', expectedScope)

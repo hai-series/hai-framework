@@ -4,7 +4,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 vi.mock('node:child_process', async (original) => {
   const module = await original<typeof import('node:child_process')>()
-  return { ...module, execSync: vi.fn() }
+  return {
+    ...module,
+    execSync: vi.fn(),
+  }
 })
 
 const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')

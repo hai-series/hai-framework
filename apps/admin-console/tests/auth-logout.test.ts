@@ -10,7 +10,11 @@ import { POST as adminLogout } from '../src/routes/api/auth/logout/+server.js'
 function event(): RequestEvent {
   const url = new URL('https://app.example.com/api/auth/logout')
   const locals: RequestEvent['locals'] = { requestId: 'logout-route-test', accessToken: 'held-token' }
-  const cookies: Pick<RequestEvent['cookies'], 'get' | 'set' | 'delete'> = { get: () => 'held-token', set: vi.fn(), delete: vi.fn() }
+  const cookies: Pick<RequestEvent['cookies'], 'get' | 'set' | 'delete'> = {
+    get: () => 'held-token',
+    set: vi.fn(),
+    delete: vi.fn(),
+  }
   return {
     url,
     request: new Request(url, { method: 'POST' }),
@@ -22,7 +26,10 @@ function event(): RequestEvent {
 
 afterEach(() => vi.restoreAllMocks())
 
-for (const [name, handler] of [['Admin', adminLogout], ['H5', h5Logout]] as const) {
+for (const [name, handler] of [
+  ['Admin', adminLogout],
+  ['H5', h5Logout],
+] as const) {
   it(`${name}实际路由返回撤销失败及对应HTTP状态`, async () => {
     const failure = err({ code: 'TEST_SESSION_UNAVAILABLE', message: 'Session state unavailable', httpStatus: 503 })
     const logout = vi.spyOn(kit.auth, 'logout').mockResolvedValueOnce(failure)
@@ -30,7 +37,10 @@ for (const [name, handler] of [['Admin', adminLogout], ['H5', h5Logout]] as cons
     const response = await handler(request)
     expect(logout).toHaveBeenCalledWith(request.cookies, 'held-token')
     expect(response.status).toBe(503)
-    expect(await response.json()).toMatchObject({ success: false, error: { code: 'TEST_SESSION_UNAVAILABLE' } })
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: { code: 'TEST_SESSION_UNAVAILABLE' },
+    })
   })
 
   it(`${name}实际路由仅在确认撤销成功后返回退出成功`, async () => {

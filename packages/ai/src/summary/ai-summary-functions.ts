@@ -105,7 +105,9 @@ export function createSummaryOperations(
           ? (m.content ?? '[tool call]')
           : m.role === 'tool'
             ? `[tool result: ${m.content.slice(0, 200)}]`
-            : (typeof m.content === 'string' ? m.content : '[multimodal]')
+            : (typeof m.content === 'string'
+                ? m.content
+                : '[multimodal]')
         return `${m.role}: ${content}`
       })
       .join('\n')
@@ -123,7 +125,11 @@ export function createSummaryOperations(
     })
 
     if (!chatResult.success) {
-      return err(HaiAIError.CONTEXT_SUMMARIZE_FAILED, aiM('ai_contextSummarizeFailed', { params: { error: String(chatResult.error.message) } }), chatResult.error)
+      return err(HaiAIError.CONTEXT_SUMMARIZE_FAILED, aiM('ai_contextSummarizeFailed', {
+        params: {
+          error: String(chatResult.error.message),
+        },
+      }), chatResult.error)
     }
 
     return ok(chatResult.data.choices[0]?.message?.content ?? '')
@@ -152,7 +158,11 @@ export function createSummaryOperations(
     }
     catch (error) {
       logger.error('Context summarization failed', { error })
-      return err(HaiAIError.CONTEXT_SUMMARIZE_FAILED, aiM('ai_contextSummarizeFailed', { params: { error: String(error) } }), error)
+      return err(HaiAIError.CONTEXT_SUMMARIZE_FAILED, aiM('ai_contextSummarizeFailed', {
+        params: {
+          error: String(error),
+        },
+      }), error)
     }
   }
 

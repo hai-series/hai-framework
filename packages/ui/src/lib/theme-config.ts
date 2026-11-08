@@ -75,25 +75,133 @@ export interface ThemeGroup {
  */
 export const THEMES: ThemeInfo[] = [
   // 亮色主题
-  { id: 'light', name: 'Light', dark: false, primaryColor: '#570df8', bgColor: '#ffffff' },
-  { id: 'cupcake', name: 'Cupcake', dark: false, primaryColor: '#65c3c8', bgColor: '#faf7f5' },
-  { id: 'emerald', name: 'Emerald', dark: false, primaryColor: '#66cc8a', bgColor: '#ffffff' },
-  { id: 'corporate', name: 'Corporate', dark: false, primaryColor: '#4b6bfb', bgColor: '#ffffff' },
-  { id: 'lofi', name: 'Lo-Fi', dark: false, primaryColor: '#0d0d0d', bgColor: '#ffffff' },
-  { id: 'winter', name: 'Winter', dark: false, primaryColor: '#047aff', bgColor: '#ffffff' },
-  { id: 'nord', name: 'Nord', dark: false, primaryColor: '#5e81ac', bgColor: '#eceff4' },
-  { id: 'formal', name: 'Formal', dark: false, primaryColor: '#123d70', bgColor: '#ffffff' },
-  { id: 'eye-care', name: 'Eye care', dark: false, primaryColor: '#365e3d', bgColor: '#e8f0df' },
+  {
+    id: 'light',
+    name: 'Light',
+    dark: false,
+    primaryColor: '#570df8',
+    bgColor: '#ffffff',
+  },
+  {
+    id: 'cupcake',
+    name: 'Cupcake',
+    dark: false,
+    primaryColor: '#65c3c8',
+    bgColor: '#faf7f5',
+  },
+  {
+    id: 'emerald',
+    name: 'Emerald',
+    dark: false,
+    primaryColor: '#66cc8a',
+    bgColor: '#ffffff',
+  },
+  {
+    id: 'corporate',
+    name: 'Corporate',
+    dark: false,
+    primaryColor: '#4b6bfb',
+    bgColor: '#ffffff',
+  },
+  {
+    id: 'lofi',
+    name: 'Lo-Fi',
+    dark: false,
+    primaryColor: '#0d0d0d',
+    bgColor: '#ffffff',
+  },
+  {
+    id: 'winter',
+    name: 'Winter',
+    dark: false,
+    primaryColor: '#047aff',
+    bgColor: '#ffffff',
+  },
+  {
+    id: 'nord',
+    name: 'Nord',
+    dark: false,
+    primaryColor: '#5e81ac',
+    bgColor: '#eceff4',
+  },
+  {
+    id: 'formal',
+    name: 'Formal',
+    dark: false,
+    primaryColor: '#123d70',
+    bgColor: '#ffffff',
+  },
+  {
+    id: 'eye-care',
+    name: 'Eye care',
+    dark: false,
+    primaryColor: '#365e3d',
+    bgColor: '#e8f0df',
+  },
   // 暗色主题
-  { id: 'dark', name: 'Dark', dark: true, primaryColor: '#661ae6', bgColor: '#1d232a' },
-  { id: 'dracula', name: 'Dracula', dark: true, primaryColor: '#ff79c6', bgColor: '#282a36' },
-  { id: 'business', name: 'Business', dark: true, primaryColor: '#1c4f82', bgColor: '#202020' },
-  { id: 'night', name: 'Night', dark: true, primaryColor: '#38bdf8', bgColor: '#0f172a' },
-  { id: 'dim', name: 'Dim', dark: true, primaryColor: '#9fe88d', bgColor: '#2a303c' },
-  { id: 'sunset', name: 'Sunset', dark: true, primaryColor: '#ff865b', bgColor: '#1a1919' },
-  { id: 'luxury', name: 'Luxury', dark: true, primaryColor: '#c9a53d', bgColor: '#171618' },
-  { id: 'coffee', name: 'Coffee', dark: true, primaryColor: '#db924b', bgColor: '#20161f' },
-  { id: 'high-contrast', name: 'High contrast', dark: true, primaryColor: '#ffe04d', bgColor: '#000000' },
+  {
+    id: 'dark',
+    name: 'Dark',
+    dark: true,
+    primaryColor: '#661ae6',
+    bgColor: '#1d232a',
+  },
+  {
+    id: 'dracula',
+    name: 'Dracula',
+    dark: true,
+    primaryColor: '#ff79c6',
+    bgColor: '#282a36',
+  },
+  {
+    id: 'business',
+    name: 'Business',
+    dark: true,
+    primaryColor: '#1c4f82',
+    bgColor: '#202020',
+  },
+  {
+    id: 'night',
+    name: 'Night',
+    dark: true,
+    primaryColor: '#38bdf8',
+    bgColor: '#0f172a',
+  },
+  {
+    id: 'dim',
+    name: 'Dim',
+    dark: true,
+    primaryColor: '#9fe88d',
+    bgColor: '#2a303c',
+  },
+  {
+    id: 'sunset',
+    name: 'Sunset',
+    dark: true,
+    primaryColor: '#ff865b',
+    bgColor: '#1a1919',
+  },
+  {
+    id: 'luxury',
+    name: 'Luxury',
+    dark: true,
+    primaryColor: '#c9a53d',
+    bgColor: '#171618',
+  },
+  {
+    id: 'coffee',
+    name: 'Coffee',
+    dark: true,
+    primaryColor: '#db924b',
+    bgColor: '#20161f',
+  },
+  {
+    id: 'high-contrast',
+    name: 'High contrast',
+    dark: true,
+    primaryColor: '#ffe04d',
+    bgColor: '#000000',
+  },
 ]
 
 /**
@@ -256,7 +364,9 @@ export function normalizeThemeId(
   if (SUPPORTED_THEME_ID_SET.has(normalized)) {
     return normalized
   }
-  return SUPPORTED_THEME_ID_SET.has(fallbackThemeId) ? fallbackThemeId : DEFAULT_THEME
+  return SUPPORTED_THEME_ID_SET.has(fallbackThemeId)
+    ? fallbackThemeId
+    : DEFAULT_THEME
 }
 
 /**
@@ -296,7 +406,9 @@ export function normalizeHexColor(value: string | null | undefined): string | nu
  * ```
  */
 export function resolveThemeTone(themeId: string): 'light' | 'dark' {
-  return isDarkTheme(themeId) ? 'dark' : 'light'
+  return isDarkTheme(themeId)
+    ? 'dark'
+    : 'light'
 }
 
 // ─── 主题初始化工具 ───
@@ -436,7 +548,9 @@ export function applyTheme(theme: string, persist = true): void {
     return
 
   document.documentElement.setAttribute('data-theme', theme)
-  document.documentElement.style.setProperty('color-scheme', getThemeInfo(theme) ? resolveThemeTone(theme) : '')
+  document.documentElement.style.setProperty('color-scheme', getThemeInfo(theme)
+    ? resolveThemeTone(theme)
+    : '')
 
   if (persist) {
     writeStoredValue(THEME_STORAGE_KEY, theme)

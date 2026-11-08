@@ -60,7 +60,13 @@ export function createSM2(): AsymmetricOperations {
       catch (error) {
         return err(
           HaiCryptoError.KEY_GENERATION_FAILED,
-          cryptoM('crypto_sm2KeyPairGenerateFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          cryptoM('crypto_sm2KeyPairGenerateFailed', {
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
+          }),
           error,
         )
       }
@@ -92,7 +98,9 @@ export function createSM2(): AsymmetricOperations {
 
       try {
         // 确保公钥带 04 前缀
-        const key = publicKey.length === 130 ? publicKey : `04${publicKey}`
+        const key = publicKey.length === 130
+          ? publicKey
+          : `04${publicKey}`
         const encrypted = sm2.doEncrypt(data, key, cipherMode)
 
         if (!encrypted) {
@@ -111,7 +119,13 @@ export function createSM2(): AsymmetricOperations {
       catch (error) {
         return err(
           HaiCryptoError.ENCRYPTION_FAILED,
-          cryptoM('crypto_sm2EncryptFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          cryptoM('crypto_sm2EncryptFailed', {
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
+          }),
           error,
         )
       }
@@ -162,7 +176,13 @@ export function createSM2(): AsymmetricOperations {
       catch (error) {
         return err(
           HaiCryptoError.DECRYPTION_FAILED,
-          cryptoM('crypto_sm2DecryptFailedWithError', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          cryptoM('crypto_sm2DecryptFailedWithError', {
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
+          }),
           error,
         )
       }
@@ -207,7 +227,13 @@ export function createSM2(): AsymmetricOperations {
       catch (error) {
         return err(
           HaiCryptoError.SIGN_FAILED,
-          cryptoM('crypto_sm2SignFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          cryptoM('crypto_sm2SignFailed', {
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
+          }),
           error,
         )
       }
@@ -241,14 +267,22 @@ export function createSM2(): AsymmetricOperations {
 
       try {
         // 确保公钥带 04 前缀
-        const key = publicKey.length === 130 ? publicKey : `04${publicKey}`
+        const key = publicKey.length === 130
+          ? publicKey
+          : `04${publicKey}`
         const isValid = sm2.doVerifySignature(data, signature, key, { hash, userId })
         return ok(!!isValid)
       }
       catch (error) {
         return err(
           HaiCryptoError.VERIFY_FAILED,
-          cryptoM('crypto_sm2VerifyFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          cryptoM('crypto_sm2VerifyFailed', {
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
+          }),
           error,
         )
       }

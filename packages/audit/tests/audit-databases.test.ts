@@ -17,8 +17,13 @@ async function simultaneous(config: ReldbConfigInput) {
   let ready = 0
   try {
     await Promise.all(Array.from({ length: 2 }, () => new Promise<void>((resolve, reject) => {
-      const child = spawn(process.execPath, [fileURLToPath(new URL('./fixtures/audit-node.mjs', import.meta.url))], {
-        env: { ...process.env, AUDIT_DB_INPUT: JSON.stringify(config) },
+      const child = spawn(process.execPath, [
+        fileURLToPath(new URL('./fixtures/audit-node.mjs', import.meta.url)),
+      ], {
+        env: {
+          ...process.env,
+          AUDIT_DB_INPUT: JSON.stringify(config),
+        },
         windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       })
@@ -80,20 +85,37 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
     const directory = await mkdtemp(join(tmpdir(), 'hai-audit-ready-'))
     let container: Awaited<ReturnType<GenericContainer['start']>> | undefined
     try {
-      let config: ReldbConfigInput = { type: 'sqlite', database: join(directory, 'shared.db') }
+      let config: ReldbConfigInput = {
+        type: 'sqlite',
+        database: join(directory, 'shared.db'),
+      }
       if (type !== 'sqlite') {
         const pg = type === 'postgresql'
         const port = pg ? 5432 : 3306
         container = await new GenericContainer(pg ? 'docker.io/library/postgres:16.15-alpine' : 'docker.io/library/mysql:8.4.11')
           .withExposedPorts(port)
-          .withEnvironment(pg ? { POSTGRES_DB: 'audit_ready', POSTGRES_USER: 'audit_test', POSTGRES_PASSWORD: 'audit_test' } : { MYSQL_DATABASE: 'audit_ready', MYSQL_ROOT_PASSWORD: 'audit_test' })
-          .withWaitStrategy(pg ? Wait.forLogMessage('database system is ready to accept connections', 2) : Wait.forLogMessage(/ready for connections\..*port: 3306/))
+          .withEnvironment(pg
+            ? { POSTGRES_DB: 'audit_ready', POSTGRES_USER: 'audit_test', POSTGRES_PASSWORD: 'audit_test' }
+            : { MYSQL_DATABASE: 'audit_ready', MYSQL_ROOT_PASSWORD: 'audit_test' })
+          .withWaitStrategy(pg
+            ? Wait.forLogMessage('database system is ready to accept connections', 2)
+            : Wait.forLogMessage(/ready for connections\..*port: 3306/))
           .withStartupTimeout(120000)
           .start()
-        config = { type, host: container.getHost(), port: container.getMappedPort(port), user: pg ? 'audit_test' : 'root', password: 'audit_test', database: 'audit_ready' }
+        config = {
+          type,
+          host: container.getHost(),
+          port: container.getMappedPort(port),
+          user: pg ? 'audit_test' : 'root',
+          password: 'audit_test',
+          database: 'audit_ready',
+        }
       }
       expect((await reldb.init(config)).success).toBe(true)
-      expect((await reldb.ddl.createTable('hai_iam_users', { id: { type: 'TEXT', primaryKey: true }, username: { type: 'TEXT' } }, true)).success).toBe(true)
+      expect((await reldb.ddl.createTable('hai_iam_users', {
+        id: { type: 'TEXT', primaryKey: true },
+        username: { type: 'TEXT' },
+      }, true)).success).toBe(true)
       for (let round = 0;
         round < 3;
         round++) {

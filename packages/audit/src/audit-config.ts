@@ -66,7 +66,12 @@ export const AuditInitConfigSchema = z.object({
       /** Cron 使用的 IANA 时区，例如 Asia/Shanghai；UTC 不等于北京时间。 */
       timezone: z.string().trim().min(1).max(128).default('UTC'),
     }).default({ enabled: false, cron: '* * * * *', timezone: 'UTC' }),
-  }).default({ enabled: false, maxNotificationsPerCheck: 100, rules: [], schedule: { enabled: false, cron: '* * * * *', timezone: 'UTC' } }).refine(alerts => !alerts.enabled || alerts.rules.length > 0),
+  }).default({
+    enabled: false,
+    maxNotificationsPerCheck: 100,
+    rules: [],
+    schedule: { enabled: false, cron: '* * * * *', timezone: 'UTC' },
+  }).refine(alerts => !alerts.enabled || alerts.rules.length > 0),
   /** 可选的流式归档；自动执行由宿主现有 Scheduler 装配。 */
   backup: z.object({
     /** 是否允许手动/计划归档审计；需已初始化的私有 Storage，关闭不影响审计采集。 */
@@ -84,7 +89,12 @@ export const AuditInitConfigSchema = z.object({
       /** 定时备份采用的 IANA 时区；Asia/Shanghai 为北京时间，UTC 的 02:00 对应北京时间 10:00。 */
       timezone: z.string().trim().min(1).max(128).default('UTC'),
     }).default({ enabled: false, cron: '0 2 * * *', timezone: 'UTC' }),
-  }).default({ enabled: false, batchSize: 200, maxRecordBytes: 1024 * 1024, schedule: { enabled: false, cron: '0 2 * * *', timezone: 'UTC' } }),
+  }).default({
+    enabled: false,
+    batchSize: 200,
+    maxRecordBytes: 1024 * 1024,
+    schedule: { enabled: false, cron: '0 2 * * *', timezone: 'UTC' },
+  }),
   /** 框架入口自动采集；显式 audit.log 不受此开关影响。 */
   capture: z.object({
     /** 是否自动记录已接入框架入口的重要操作、失败和拒绝；关闭不阻止显式 audit.log 写入。 */

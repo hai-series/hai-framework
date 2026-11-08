@@ -13,7 +13,9 @@ import antfu, { GLOB_SRC } from '@antfu/eslint-config'
 
 export default antfu({
   // unused-imports 使用 TS 规则；JS 使用同一 parser 保持 scope 契约一致。
-  typescript: { files: [GLOB_SRC] },
+  typescript: {
+    files: [GLOB_SRC],
+  },
 
   // 格式化器（CSS/HTML/Markdown）
   formatters: true,

@@ -96,7 +96,16 @@ export async function consumePaymentNotification(
       `UPDATE example_payment_orders SET status = ?, transaction_id = ?
        WHERE id = ? AND provider = ? AND merchant_scope = ? AND amount = ? AND currency = ?
        AND status = ? AND transaction_id IS NULL`,
-      ['paid', notify.transactionId, notify.orderNo, provider, merchantScope, notify.amount, notify.currency, 'pending'],
+      [
+        'paid',
+        notify.transactionId,
+        notify.orderNo,
+        provider,
+        merchantScope,
+        notify.amount,
+        notify.currency,
+        'pending',
+      ],
     )
     if (!updated.success)
       throw new Error('Failed to update payment order', { cause: updated.error })
@@ -117,13 +126,26 @@ export async function consumePaymentNotification(
 
     const event = await tx.execute(
       'INSERT INTO example_payment_events (id, order_no, transaction_id) VALUES (?, ?, ?)',
-      [JSON.stringify([provider, merchantScope, notify.eventId]), notify.orderNo, notify.transactionId],
+      [
+        JSON.stringify([provider, merchantScope, notify.eventId]),
+        notify.orderNo,
+        notify.transactionId,
+      ],
     )
     if (!event.success)
       throw new Error('Failed to persist payment notification', { cause: event.error })
     const outbox = await tx.execute(
       'INSERT INTO example_payment_outbox (id, order_no, payload) VALUES (?, ?, ?)',
-      [JSON.stringify([provider, merchantScope, notify.orderNo, 'paid']), notify.orderNo, JSON.stringify({ orderNo: notify.orderNo, transactionId: notify.transactionId })],
+      [
+        JSON.stringify([
+          provider,
+          merchantScope,
+          notify.orderNo,
+          'paid',
+        ]),
+        notify.orderNo,
+        JSON.stringify({ orderNo: notify.orderNo, transactionId: notify.transactionId }),
+      ],
     )
     if (!outbox.success)
       throw new Error('Failed to persist payment fulfillment outbox', { cause: outbox.error })

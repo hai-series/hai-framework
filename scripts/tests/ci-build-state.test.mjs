@@ -16,7 +16,12 @@ it('共享构建包包含应用契约、静态目录和构建元数据，不夹�
       'apps/framework-website/.svelte-kit/output/server/index.js',
       '.turbo/cache/task.tar.zst',
     ]
-    for (const file of [...outputs, '.env.local', 'apps/framework-website/.env.local', 'packages/core/src/private.ts']) {
+    for (const file of [
+      ...outputs,
+      '.env.local',
+      'apps/framework-website/.env.local',
+      'packages/core/src/private.ts',
+    ]) {
       mkdirSync(path.dirname(path.join(root, file)), { recursive: true })
       writeFileSync(path.join(root, file), file)
     }
@@ -24,11 +29,26 @@ it('共享构建包包含应用契约、静态目录和构建元数据，不夹�
     const workflow = parse(readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'))
     const command = workflow.jobs.build.steps.find(step => step.name === 'Pack build state').run
     const gitPath = execFileSync('git', ['--exec-path'], { encoding: 'utf8', windowsHide: true }).trim()
-    const bash = process.platform === 'win32' ? path.resolve(gitPath, '../../../usr/bin/bash.exe') : 'bash'
+    const bash = process.platform === 'win32'
+      ? path.resolve(gitPath, '../../../usr/bin/bash.exe')
+      : 'bash'
     if (process.platform === 'win32')
       expect(existsSync(bash)).toBe(true)
-    execFileSync(bash, ['--noprofile', '--norc', '-c', command], { cwd: root, env: { ...process.env, RUNNER_TEMP: 'out', BASH_ENV: '', ENV: '' }, windowsHide: true, timeout: 10000 })
-    const members = execFileSync('tar', ['-tf', path.join(root, 'out/build-state.tgz')], { encoding: 'utf8', windowsHide: true }).split(/\r?\n/)
+    execFileSync(bash, ['--noprofile', '--norc', '-c', command], {
+      cwd: root,
+      env: {
+        ...process.env,
+        RUNNER_TEMP: 'out',
+        BASH_ENV: '',
+        ENV: '',
+      },
+      windowsHide: true,
+      timeout: 10000,
+    })
+    const members = execFileSync('tar', [
+      '-tf',
+      path.join(root, 'out/build-state.tgz'),
+    ], { encoding: 'utf8', windowsHide: true }).split(/\r?\n/)
     for (const file of outputs)
       expect(members).toContain(file)
     expect(members.some(file => file.includes('.env.local') || file.includes('/src/'))).toBe(false)

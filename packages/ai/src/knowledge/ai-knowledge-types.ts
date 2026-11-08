@@ -26,7 +26,15 @@ import { z } from 'zod'
  * const builtIn = parsed.data
  * ```
  */
-export const EntityTypeSchema = z.enum(['person', 'project', 'concept', 'organization', 'location', 'event', 'other'])
+export const EntityTypeSchema = z.enum([
+  'person',
+  'project',
+  'concept',
+  'organization',
+  'location',
+  'event',
+  'other',
+])
 
 /**
  * 实体类型（字符串，支持内置类型及用户自定义类型）

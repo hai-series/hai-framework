@@ -60,7 +60,9 @@ export function feedbackDataBytes(data: FeedbackAttachmentData): Uint8Array {
  * ```
  */
 export async function saveFeedbackFile(bytes: Uint8Array, filename: string, contentType = 'application/zip', signal?: AbortSignal): Promise<HaiResult<FeedbackSaveResult>> {
-  const name = [...filename].map(character => character.charCodeAt(0) < 32 || /[\\/:*?"<>|]/.test(character) ? '_' : character).join('').slice(0, 200) || 'feedback.zip'
+  const name = [...filename].map(character => character.charCodeAt(0) < 32 || /[\\/:*?"<>|]/.test(character)
+    ? '_'
+    : character).join('').slice(0, 200) || 'feedback.zip'
   try {
     if (signal?.aborted)
       return ok({ status: 'cancelled' })
@@ -88,7 +90,10 @@ export async function saveFeedbackFile(bytes: Uint8Array, filename: string, cont
     return ok({ status: 'saved' })
   }
   catch (cause) {
-    const error = core.error.toPublic({ ...HaiFeedbackError.OPERATION_FAILED, message: feedbackM('feedback_operationFailed') })
+    const error = core.error.toPublic({
+      ...HaiFeedbackError.OPERATION_FAILED,
+      message: feedbackM('feedback_operationFailed'),
+    })
     core.logger.error('Feedback file save failed', { traceId: error.traceId, error: cause })
     return err(error)
   }

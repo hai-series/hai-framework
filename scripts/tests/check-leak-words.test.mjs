@@ -30,7 +30,12 @@ beforeAll(() => {
   git(['config', 'core.autocrlf', 'false'])
   writeFileSync(join(directory, 'initial.txt'), 'initial\n')
   git(['add', 'initial.txt'])
-  git(['commit', '--quiet', '-m', 'Initial fixture'])
+  git([
+    'commit',
+    '--quiet',
+    '-m',
+    'Initial fixture',
+  ])
   baseOid = git(['rev-parse', 'HEAD'])
 })
 
@@ -44,10 +49,16 @@ afterEach(() => rmSync(directory, { recursive: true, force: true }))
 afterAll(() => rmSync(seed, { recursive: true, force: true }))
 
 function check(args, input) {
-  const result = spawnSync(process.execPath, [join(directory, 'scripts/check-leak-words.mjs'), ...args], {
+  const result = spawnSync(process.execPath, [
+    join(directory, 'scripts/check-leak-words.mjs'),
+    ...args,
+  ], {
     cwd: directory,
     encoding: 'utf8',
-    env: { ...process.env, LEAK_WORDS: JSON.stringify([BLOCKED_TERM]) },
+    env: {
+      ...process.env,
+      LEAK_WORDS: JSON.stringify([BLOCKED_TERM]),
+    },
     input,
     timeout: 10_000,
     windowsHide: true,
@@ -62,7 +73,12 @@ function checkPatch(mode, content) {
   if (mode === '--staged')
     return check([mode])
 
-  git(['commit', '--quiet', '-m', 'Large patch fixture'])
+  git([
+    'commit',
+    '--quiet',
+    '-m',
+    'Large patch fixture',
+  ])
   const headOid = git(['rev-parse', 'HEAD'])
   if (mode === '--range')
     return check([mode, baseOid, headOid])
@@ -89,12 +105,26 @@ it.each(['--staged', '--range', '--push'])('%s 检出大补丁末尾的敏感词
 it('range 仍扫描后来被删除的历史提交内容', () => {
   writeFileSync(join(directory, 'large.txt'), `${LARGE_CONTENT}${BLOCKED_TERM}\n`)
   git(['add', 'large.txt'])
-  git(['commit', '--quiet', '-m', 'Introduce fixture content'])
+  git([
+    'commit',
+    '--quiet',
+    '-m',
+    'Introduce fixture content',
+  ])
   writeFileSync(join(directory, 'large.txt'), LARGE_CONTENT)
   git(['add', 'large.txt'])
-  git(['commit', '--quiet', '-m', 'Remove fixture content'])
+  git([
+    'commit',
+    '--quiet',
+    '-m',
+    'Remove fixture content',
+  ])
 
-  const result = check(['--range', baseOid, git(['rev-parse', 'HEAD'])])
+  const result = check([
+    '--range',
+    baseOid,
+    git(['rev-parse', 'HEAD']),
+  ])
   expect(result.status).toBe(1)
   expect(result.stderr).toContain(`large.txt:${LINE_COUNT + 1} hit 1 blocked term(s)`)
 })
@@ -102,7 +132,12 @@ it('range 仍扫描后来被删除的历史提交内容', () => {
 it('大补丁仅删除敏感词时不误报', () => {
   writeFileSync(join(directory, 'large.txt'), `${BLOCKED_TERM}\n`)
   git(['add', 'large.txt'])
-  git(['commit', '--quiet', '-m', 'Existing fixture content'])
+  git([
+    'commit',
+    '--quiet',
+    '-m',
+    'Existing fixture content',
+  ])
 
   const result = checkPatch('--staged', LARGE_CONTENT)
   expect(result.status).toBe(0)

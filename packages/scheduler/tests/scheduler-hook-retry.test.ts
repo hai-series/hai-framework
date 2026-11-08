@@ -13,8 +13,19 @@ it('treats failed hooks as retryable failures and retains unsuccessful one-time 
   })
   expect((await scheduler.init({ enableDb: true })).success).toBe(true)
   scheduler.setHooks({ onTaskExecute: execute })
-  await scheduler.register({ id: 'retry', name: 'Retry', cron: '* * * * *', enabled: true, deleteAfterRun: true, idempotent: true, retry: { maxAttempts: 3 } })
-  expect(await scheduler.trigger('retry')).toMatchObject({ success: true, data: { status: 'failed' } })
+  await scheduler.register({
+    id: 'retry',
+    name: 'Retry',
+    cron: '* * * * *',
+    enabled: true,
+    deleteAfterRun: true,
+    idempotent: true,
+    retry: { maxAttempts: 3 },
+  })
+  expect(await scheduler.trigger('retry')).toMatchObject({
+    success: true,
+    data: { status: 'failed' },
+  })
   expect(execute).toHaveBeenCalledTimes(3)
   expect(scheduler.tasks.has('retry')).toBe(true)
 })
@@ -27,9 +38,22 @@ it('keeps one occurrence across retries and deletes a one-time task only after s
       throw new Error('Transient failure')
     return { completed: true }
   })
-  await scheduler.init({ enableDb: true, hooks: { onTaskExecute: execute } })
-  await scheduler.register({ id: 'retry-success', name: 'Retry', cron: '* * * * *', deleteAfterRun: true, idempotent: true, retry: { maxAttempts: 3 } })
-  expect(await scheduler.trigger('retry-success')).toMatchObject({ success: true, data: { status: 'success' } })
+  await scheduler.init({
+    enableDb: true,
+    hooks: { onTaskExecute: execute },
+  })
+  await scheduler.register({
+    id: 'retry-success',
+    name: 'Retry',
+    cron: '* * * * *',
+    deleteAfterRun: true,
+    idempotent: true,
+    retry: { maxAttempts: 3 },
+  })
+  expect(await scheduler.trigger('retry-success')).toMatchObject({
+    success: true,
+    data: { status: 'success' },
+  })
   expect(occurrences).toHaveLength(3)
   expect(occurrences[0]).toMatch(/^[a-f\d]{64}$/u)
   expect(new Set(occurrences).size).toBe(1)

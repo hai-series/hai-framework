@@ -16,7 +16,9 @@ describe('ai.tools.define', () => {
     const greet = ai.tools.define({
       name: 'greet',
       description: '问候',
-      parameters: z.object({ name: z.string() }),
+      parameters: z.object({
+        name: z.string(),
+      }),
       handler: ({ name }) => `Hello ${name}`,
     })
 
@@ -34,7 +36,9 @@ describe('ai.tools.define', () => {
     const fetchUser = ai.tools.define({
       name: 'fetch_user',
       description: '获取用户',
-      parameters: z.object({ id: z.number() }),
+      parameters: z.object({
+        id: z.number(),
+      }),
       handler: async ({ id }) => ({ id, name: `User-${id}` }),
     })
 
@@ -49,7 +53,9 @@ describe('ai.tools.define', () => {
     const tool = ai.tools.define({
       name: 'strict_tool',
       description: 'test',
-      parameters: z.object({ count: z.number().min(1) }),
+      parameters: z.object({
+        count: z.number().min(1),
+      }),
       handler: ({ count }) => count * 2,
     })
 
@@ -118,7 +124,9 @@ describe('ai.tools.define', () => {
 
     const result = await tool.execute({
       title: 'Meeting',
-      attendees: [{ name: 'Alice', email: 'alice@example.com' }],
+      attendees: [
+        { name: 'Alice', email: 'alice@example.com' },
+      ],
     })
     expect(result.success).toBe(true)
     if (result.success) {
@@ -136,13 +144,17 @@ describe('ai.tools.define', () => {
       name: 'nested',
       description: 'test',
       parameters: z.object({
-        items: z.array(z.object({ count: z.number().min(0) })),
+        items: z.array(z.object({
+          count: z.number().min(0),
+        })),
       }),
       handler: input => input,
     })
 
     const result = await tool.execute({
-      items: [{ count: -1 }],
+      items: [
+        { count: -1 },
+      ],
     })
     expect(result.success).toBe(false)
     if (!result.success) {
@@ -160,13 +172,19 @@ describe('ai.tools.createRegistry', () => {
     const add = ai.tools.define({
       name: 'add',
       description: '加法',
-      parameters: z.object({ a: z.number(), b: z.number() }),
+      parameters: z.object({
+        a: z.number(),
+        b: z.number(),
+      }),
       handler: ({ a, b }) => a + b,
     })
     const multiply = ai.tools.define({
       name: 'multiply',
       description: '乘法',
-      parameters: z.object({ a: z.number(), b: z.number() }),
+      parameters: z.object({
+        a: z.number(),
+        b: z.number(),
+      }),
       handler: ({ a, b }) => a * b,
     })
     return { add, multiply }
@@ -282,7 +300,9 @@ describe('ai.tools.createRegistry', () => {
     const echo = ai.tools.define({
       name: 'echo',
       description: '回显',
-      parameters: z.object({ text: z.string() }),
+      parameters: z.object({
+        text: z.string(),
+      }),
       handler: ({ text }) => text,
     })
     registry.register(echo)
@@ -305,8 +325,16 @@ describe('ai.tools.createRegistry', () => {
     registry.registerMany([add, multiply])
 
     const calls: ToolCall[] = [
-      { id: 'c1', type: 'function', function: { name: 'add', arguments: '{"a":1,"b":2}' } },
-      { id: 'c2', type: 'function', function: { name: 'multiply', arguments: '{"a":3,"b":4}' } },
+      {
+        id: 'c1',
+        type: 'function',
+        function: { name: 'add', arguments: '{"a":1,"b":2}' },
+      },
+      {
+        id: 'c2',
+        type: 'function',
+        function: { name: 'multiply', arguments: '{"a":3,"b":4}' },
+      },
     ]
 
     const result = await registry.executeAll(calls, { parallel: true })
@@ -324,7 +352,11 @@ describe('ai.tools.createRegistry', () => {
     registry.register(add)
 
     const calls: ToolCall[] = [
-      { id: 'c1', type: 'function', function: { name: 'add', arguments: '{"a":10,"b":20}' } },
+      {
+        id: 'c1',
+        type: 'function',
+        function: { name: 'add', arguments: '{"a":10,"b":20}' },
+      },
     ]
 
     const result = await registry.executeAll(calls, { parallel: false })
@@ -340,8 +372,16 @@ describe('ai.tools.createRegistry', () => {
     registry.register(add)
 
     const calls: ToolCall[] = [
-      { id: 'c1', type: 'function', function: { name: 'add', arguments: '{"a":1,"b":2}' } },
-      { id: 'c2', type: 'function', function: { name: 'unknown', arguments: '{}' } },
+      {
+        id: 'c1',
+        type: 'function',
+        function: { name: 'add', arguments: '{"a":1,"b":2}' },
+      },
+      {
+        id: 'c2',
+        type: 'function',
+        function: { name: 'unknown', arguments: '{}' },
+      },
     ]
 
     const result = await registry.executeAll(calls, { parallel: false })
@@ -397,13 +437,17 @@ describe('ai.tools.createRegistry', () => {
     const v1 = ai.tools.define({
       name: 'calc',
       description: 'v1',
-      parameters: z.object({ x: z.number() }),
+      parameters: z.object({
+        x: z.number(),
+      }),
       handler: ({ x }) => x * 2,
     })
     const v2 = ai.tools.define({
       name: 'calc',
       description: 'v2',
-      parameters: z.object({ x: z.number() }),
+      parameters: z.object({
+        x: z.number(),
+      }),
       handler: ({ x }) => x * 10,
     })
 
@@ -451,8 +495,16 @@ describe('ai.tools.createRegistry', () => {
     registry.register(add)
 
     const calls: ToolCall[] = [
-      { id: 'c1', type: 'function', function: { name: 'add', arguments: '{"a":1,"b":2}' } },
-      { id: 'c2', type: 'function', function: { name: 'missing', arguments: '{}' } },
+      {
+        id: 'c1',
+        type: 'function',
+        function: { name: 'add', arguments: '{"a":1,"b":2}' },
+      },
+      {
+        id: 'c2',
+        type: 'function',
+        function: { name: 'missing', arguments: '{}' },
+      },
     ]
 
     const result = await registry.executeAll(calls, { parallel: true })
@@ -501,7 +553,9 @@ describe('ai.tools.createRegistry', () => {
     const slow = ai.tools.define({
       name: 'slow',
       description: 'slow',
-      parameters: z.object({ value: z.number() }),
+      parameters: z.object({
+        value: z.number(),
+      }),
       handler: async ({ value }) => {
         active += 1
         maxActive = Math.max(maxActive, active)
@@ -514,7 +568,10 @@ describe('ai.tools.createRegistry', () => {
     const calls: ToolCall[] = [1, 2].map(value => ({
       id: `c${value}`,
       type: 'function',
-      function: { name: 'slow', arguments: JSON.stringify({ value }) },
+      function: {
+        name: 'slow',
+        arguments: JSON.stringify({ value }),
+      },
     }))
 
     const result = await registry.executeAll(calls)
@@ -627,8 +684,16 @@ describe('ai.tools 执行上下文', () => {
     }))
 
     const calls: ToolCall[] = [
-      { id: 'c1', type: 'function', function: { name: 'a', arguments: '{}' } },
-      { id: 'c2', type: 'function', function: { name: 'b', arguments: '{}' } },
+      {
+        id: 'c1',
+        type: 'function',
+        function: { name: 'a', arguments: '{}' },
+      },
+      {
+        id: 'c2',
+        type: 'function',
+        function: { name: 'b', arguments: '{}' },
+      },
     ]
     const result = await registry.executeAll(calls, { objectId: 'tenant-9' })
     expect(result.success).toBe(true)
@@ -645,7 +710,9 @@ describe('ai.tools 授权', () => {
     registry.register(ai.tools.define({
       name: 'delete_record',
       description: 'delete',
-      parameters: z.object({ id: z.string() }),
+      parameters: z.object({
+        id: z.string(),
+      }),
       handler: () => {
         handled = true
         return 'deleted'
@@ -675,7 +742,9 @@ describe('ai.tools 授权', () => {
     registry.register(ai.tools.define({
       name: 'validated',
       description: 'validated',
-      parameters: z.object({ count: z.number().int().positive() }),
+      parameters: z.object({
+        count: z.number().int().positive(),
+      }),
       handler: ({ count }) => count,
     }))
 

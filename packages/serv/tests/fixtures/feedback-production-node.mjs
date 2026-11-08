@@ -10,7 +10,9 @@ import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 
 const config = JSON.parse(process.env.FEEDBACK_PRODUCTION_FIXTURE)
-core.init({ logging: { level: 'fatal' } })
+core.init({
+  logging: { level: 'fatal' },
+})
 function checked(result) {
   if (!result.success)
     throw new Error(String(result.error.code))
@@ -32,7 +34,10 @@ process.on('message', (message) => {
     }
     else if (message.action === 'close') {
       await close()
-      process.send?.({ id: message.id, result: { success: true } }, () => process.disconnect())
+      process.send?.({
+        id: message.id,
+        result: { success: true },
+      }, () => process.disconnect())
     }
   })().catch(() => process.send?.({ id: message.id, failed: true }))
 })
@@ -43,12 +48,24 @@ async function main() {
   checked(await audit.init())
   checked(await iam.init({ seedDefaultData: false }))
   checked(await iam.auth.verifyToken(config.accessToken))
-  checked(await feedback.init(config.feedback, { collectEvidence: async () => {
-    process.send?.({ phase: 'business-started' })
-    if (config.pauseBusiness)
-      await new Promise(() => {})
-    return { text: 'Production process business diagnostics', attachments: [{ id: 'diagnostics', name: 'diagnostics.gz', contentType: 'application/gzip', bytes: gzipSync('Stable cross-node diagnostic attachment') }] }
-  } }))
+  checked(await feedback.init(config.feedback, {
+    collectEvidence: async () => {
+      process.send?.({ phase: 'business-started' })
+      if (config.pauseBusiness)
+        await new Promise(() => {})
+      return {
+        text: 'Production process business diagnostics',
+        attachments: [
+          {
+            id: 'diagnostics',
+            name: 'diagnostics.gz',
+            contentType: 'application/gzip',
+            bytes: gzipSync('Stable cross-node diagnostic attachment'),
+          },
+        ],
+      }
+    },
+  }))
   process.send?.({ phase: 'ready' })
 }
 void main().catch(async () => {

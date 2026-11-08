@@ -78,14 +78,22 @@ describe('createAudioClient 浏览器语音客户端', () => {
   })
 
   function createClient() {
-    return createAudioClient({ url: 'wss://host/ai/audio', getTicket: () => 'ticket-1' })
+    return createAudioClient({
+      url: 'wss://host/ai/audio',
+      getTicket: () => 'ticket-1',
+    })
   }
 
   it('synthesize 从 segment_started 读取服务端真实格式（不猜测请求参数）', async () => {
     // 请求未指定 format，服务端解析 Provider 后返回 mp3
     MockDomWebSocket.script = (data, ws) => {
       if (isDone(data)) {
-        ws.serverText(JSON.stringify({ type: 'segment_started', segmentId: 'synthesis', text: '你好', format: 'mp3' }))
+        ws.serverText(JSON.stringify({
+          type: 'segment_started',
+          segmentId: 'synthesis',
+          text: '你好',
+          format: 'mp3',
+        }))
         ws.serverBinary(new Uint8Array([1, 2]))
         ws.serverBinary(new Uint8Array([3, 4]))
         ws.serverText(JSON.stringify({ type: 'segment_done', segmentId: 'synthesis' }))
@@ -114,7 +122,12 @@ describe('createAudioClient 浏览器语音客户端', () => {
   it('未收到 end 便关闭连接时抛出 AUDIO_CONNECTION_FAILED', async () => {
     MockDomWebSocket.script = (data, ws) => {
       if (isDone(data)) {
-        ws.serverText(JSON.stringify({ type: 'segment_started', segmentId: 'synthesis', text: '你好', format: 'mp3' }))
+        ws.serverText(JSON.stringify({
+          type: 'segment_started',
+          segmentId: 'synthesis',
+          text: '你好',
+          format: 'mp3',
+        }))
         ws.serverBinary(new Uint8Array([1, 2]))
         ws.serverText(JSON.stringify({ type: 'segment_done', segmentId: 'synthesis' }))
         // 未发送 end 直接关闭
@@ -143,7 +156,12 @@ describe('createAudioClient 浏览器语音客户端', () => {
   it('收到 end 但合成段未完成时抛出 AUDIO_PROTOCOL_ERROR（不返回部分音频）', async () => {
     MockDomWebSocket.script = (data, ws) => {
       if (isDone(data)) {
-        ws.serverText(JSON.stringify({ type: 'segment_started', segmentId: 'synthesis', text: '你好', format: 'mp3' }))
+        ws.serverText(JSON.stringify({
+          type: 'segment_started',
+          segmentId: 'synthesis',
+          text: '你好',
+          format: 'mp3',
+        }))
         ws.serverBinary(new Uint8Array([1, 2]))
         // 未发送 segment_done 便结束
         ws.serverText(JSON.stringify({ type: 'end' }))
@@ -159,7 +177,13 @@ describe('createAudioClient 浏览器语音客户端', () => {
   it('连接建立后网络异常断连时抛出 AUDIO_CONNECTION_FAILED', async () => {
     MockDomWebSocket.script = (data, ws) => {
       if (isDone(data)) {
-        ws.serverText(JSON.stringify({ type: 'segment_started', segmentId: 'synthesis', text: '你好', format: 'pcm16', sampleRate: 24000 }))
+        ws.serverText(JSON.stringify({
+          type: 'segment_started',
+          segmentId: 'synthesis',
+          text: '你好',
+          format: 'pcm16',
+          sampleRate: 24000,
+        }))
         ws.serverBinary(new Uint8Array([1, 2]))
         ws.fail()
         ws.close()
@@ -180,7 +204,12 @@ describe('createAudioClient 浏览器语音客户端', () => {
       }
     }
 
-    const result = await createClient().transcribe({ audio: { data: new Uint8Array([1, 2, 3]), format: 'wav' } })
+    const result = await createClient().transcribe({
+      audio: {
+        data: new Uint8Array([1, 2, 3]),
+        format: 'wav',
+      },
+    })
     expect(result.text).toBe('人工智能')
   })
 })

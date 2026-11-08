@@ -20,7 +20,15 @@ const captchaProofSchema = z.string().min(1).max(4096).optional()
  * const input = IamCreateCaptchaInputSchema.parse({ operation: 'login' })
  * ```
  */
-export const IamCreateCaptchaInputSchema = z.object({ operation: z.enum(['login', 'register', 'sendOtp', 'passwordReset', 'renewPassword']) })
+export const IamCreateCaptchaInputSchema = z.object({
+  operation: z.enum([
+    'login',
+    'register',
+    'sendOtp',
+    'passwordReset',
+    'renewPassword',
+  ]),
+})
 
 /**
  * 自托管 ALTCHA 可公开挑战；不会返回签名秘密。
@@ -42,7 +50,12 @@ export const IamCaptchaChallengeSchema = z.object({
       keyLength: z.number().int().min(16).max(64),
       keyPrefix: z.string().min(1).max(128),
       keySignature: z.string().max(256).optional(),
-      data: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+      data: z.record(z.string(), z.union([
+        z.string(),
+        z.number(),
+        z.boolean(),
+        z.null(),
+      ])).optional(),
     }),
   }),
 })
@@ -212,7 +225,14 @@ export const IamLoginInputSchema = z.object({
  * const expired = IamSessionErrorCodeSchema.safeParse('hai:iam:103').success
  * ```
  */
-export const IamSessionErrorCodeSchema = z.enum(['hai:iam:101', 'hai:iam:102', 'hai:iam:103', 'hai:iam:105', 'hai:iam:106', 'hai:iam:107'])
+export const IamSessionErrorCodeSchema = z.enum([
+  'hai:iam:101',
+  'hai:iam:102',
+  'hai:iam:103',
+  'hai:iam:105',
+  'hai:iam:106',
+  'hai:iam:107',
+])
 
 /**
  * LDAP 登录与密码找回入参。
@@ -227,7 +247,12 @@ export const IamSessionErrorCodeSchema = z.enum(['hai:iam:101', 'hai:iam:102', '
  * void value
  * ```
  */
-export const IamLdapLoginInputSchema = z.object({ username: z.string().trim().min(1), password: z.string().min(1), captcha: captchaProofSchema, expectedUserId: z.string().min(1).max(200).optional() })
+export const IamLdapLoginInputSchema = z.object({
+  username: z.string().trim().min(1),
+  password: z.string().min(1),
+  captcha: captchaProofSchema,
+  expectedUserId: z.string().min(1).max(200).optional(),
+})
 /**
  * IamRequestPasswordResetInput 数据的运行时 Zod 校验约束。
  * @example
@@ -240,7 +265,10 @@ export const IamLdapLoginInputSchema = z.object({ username: z.string().trim().mi
  * void value
  * ```
  */
-export const IamRequestPasswordResetInputSchema = z.object({ identifier: z.string().trim().min(1), captcha: captchaProofSchema })
+export const IamRequestPasswordResetInputSchema = z.object({
+  identifier: z.string().trim().min(1),
+  captcha: captchaProofSchema,
+})
 /**
  * IamConfirmPasswordResetInput 数据的运行时 Zod 校验约束。
  * @example
@@ -254,7 +282,10 @@ export const IamRequestPasswordResetInputSchema = z.object({ identifier: z.strin
  * void value
  * ```
  */
-export const IamConfirmPasswordResetInputSchema = z.object({ token: z.string().min(1), newPassword: z.string().min(1) })
+export const IamConfirmPasswordResetInputSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(1),
+})
 
 /**
  * 无普通会话的首次或过期改密；必须重新验证原密码。
@@ -264,7 +295,12 @@ export const IamConfirmPasswordResetInputSchema = z.object({ token: z.string().m
  * const input = IamRenewPasswordInputSchema.parse({ identifier: 'alice', password: 'Initial123!', newPassword: 'Chosen456!' })
  * ```
  */
-export const IamRenewPasswordInputSchema = z.object({ identifier: z.string().trim().min(1), password: z.string().min(1), newPassword: z.string().min(1), captcha: captchaProofSchema })
+export const IamRenewPasswordInputSchema = z.object({
+  identifier: z.string().trim().min(1),
+  password: z.string().min(1),
+  newPassword: z.string().min(1),
+  captcha: captchaProofSchema,
+})
 
 /**
  * 对当前会话的指定操作重新鉴别；操作本身仍需独立授权。
@@ -274,7 +310,10 @@ export const IamRenewPasswordInputSchema = z.object({ identifier: z.string().tri
  * const input = IamReauthenticateInputSchema.parse({ password: 'ChosenPassword123!', operation: 'iam.users.delete' })
  * ```
  */
-export const IamReauthenticateInputSchema = z.object({ password: z.string().min(1), operation: z.string().trim().min(1).max(128) })
+export const IamReauthenticateInputSchema = z.object({
+  password: z.string().min(1),
+  operation: z.string().trim().min(1).max(128),
+})
 
 /**
  * 短期、用途绑定的单次操作证明，不能持久化到浏览器存储。
@@ -284,7 +323,10 @@ export const IamReauthenticateInputSchema = z.object({ password: z.string().min(
  * const proof = IamReauthenticationProofSchema.parse({ ticket: 'example-only-ticket', expiresAt: Date.now() + 300000 })
  * ```
  */
-export const IamReauthenticationProofSchema = z.object({ ticket: z.string().min(1), expiresAt: z.number() })
+export const IamReauthenticationProofSchema = z.object({
+  ticket: z.string().min(1),
+  expiresAt: z.number(),
+})
 
 /**
  * 认证页面公开配置白名单，独立于服务端连接/凭据配置。
@@ -335,17 +377,60 @@ export const IamReauthenticationProofSchema = z.object({ ticket: z.string().min(
  * ```
  */
 export const IamPublicConfigSchema = z.object({
-  captcha: z.object({ enabled: z.boolean() }).default({ enabled: false }),
-  reauthentication: z.object({ enabled: z.boolean(), operations: z.array(z.string()) }).optional(),
-  initialCredentials: z.object({ enabled: z.boolean() }).optional(),
-  password: z.object({ minLength: z.number(), maxLength: z.number(), requireUppercase: z.boolean(), requireLowercase: z.boolean(), requireNumber: z.boolean(), requireSpecialChar: z.boolean(), expirationDays: z.number(), minCharacterClasses: z.number().optional(), preventSamePassword: z.boolean().optional(), requireInitialChange: z.boolean().optional() }),
-  register: z.object({ enabled: z.boolean() }),
-  login: z.object({ password: z.boolean(), otp: z.boolean(), ldap: z.boolean(), email: z.boolean(), sms: z.boolean() }),
-  passwordReset: z.object({ enabled: z.boolean(), mode: z.enum(['email', 'phone']) }),
-  otp: z.object({ length: z.number(), resendInterval: z.number() }),
+  captcha: z.object({
+    enabled: z.boolean(),
+  }).default({ enabled: false }),
+  reauthentication: z.object({
+    enabled: z.boolean(),
+    operations: z.array(z.string()),
+  }).optional(),
+  initialCredentials: z.object({
+    enabled: z.boolean(),
+  }).optional(),
+  password: z.object({
+    minLength: z.number(),
+    maxLength: z.number(),
+    requireUppercase: z.boolean(),
+    requireLowercase: z.boolean(),
+    requireNumber: z.boolean(),
+    requireSpecialChar: z.boolean(),
+    expirationDays: z.number(),
+    minCharacterClasses: z.number().optional(),
+    preventSamePassword: z.boolean().optional(),
+    requireInitialChange: z.boolean().optional(),
+  }),
+  register: z.object({
+    enabled: z.boolean(),
+  }),
+  login: z.object({
+    password: z.boolean(),
+    otp: z.boolean(),
+    ldap: z.boolean(),
+    email: z.boolean(),
+    sms: z.boolean(),
+  }),
+  passwordReset: z.object({
+    enabled: z.boolean(),
+    mode: z.enum(['email', 'phone']),
+  }),
+  otp: z.object({
+    length: z.number(),
+    resendInterval: z.number(),
+  }),
   agreements: IamAgreementDisplaySchema,
-  ui: z.object({ variant: z.enum(['card', 'split']), title: z.string().optional(), subtitle: z.string().optional(), brandTitle: z.string().optional(), brandText: z.string().optional(), logoUrl: z.string().optional(), illustrationUrl: z.string().optional() }),
-  session: z.object({ maxAge: z.number(), endOnPageHide: z.boolean().default(false) }),
+  ui: z.object({
+    variant: z.enum(['card', 'split']),
+    title: z.string().optional(),
+    subtitle: z.string().optional(),
+    brandTitle: z.string().optional(),
+    brandText: z.string().optional(),
+    logoUrl: z.string().optional(),
+    illustrationUrl: z.string().optional(),
+  }),
+  session: z.object({
+    maxAge: z.number(),
+    endOnPageHide: z.boolean().default(false),
+  }),
 })
 
 /**
@@ -524,7 +609,13 @@ export const IamUpdateCurrentUserInputSchema = z.object({
  * ```
  */
 export const IamListUsersInputSchema = PaginationQuerySchema.extend({
-  sortBy: z.enum(['username', 'email', 'displayName', 'accountStatus', 'createdAt']).optional(),
+  sortBy: z.enum([
+    'username',
+    'email',
+    'displayName',
+    'accountStatus',
+    'createdAt',
+  ]).optional(),
   sortDirection: z.enum(['asc', 'desc']).optional(),
   roleCode: z.string().trim().min(1).max(100).optional(),
   search: z.string().optional(),
@@ -565,7 +656,9 @@ export const IamAdminCreateUserInputSchema = z.strictObject({
  * const input = IamInviteUserInputSchema.parse({ username: 'alice', email: 'alice@example.com' })
  * ```
  */
-export const IamInviteUserInputSchema = IamAdminCreateUserInputSchema.omit({ password: true }).extend({ accountStatus: z.literal('active').optional() })
+export const IamInviteUserInputSchema = IamAdminCreateUserInputSchema.omit({ password: true }).extend({
+  accountStatus: z.literal('active').optional(),
+})
 
 /**
  * 单次邀请的管理端输入。

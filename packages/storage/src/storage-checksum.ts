@@ -10,7 +10,13 @@ import { HaiStorageError } from './storage-types.js'
 
 const HEX_CHECKSUM = /^[\da-f]+$/i
 const BASE64_CHECKSUM = /^(?:[A-Z\d+/]{4})*(?:[A-Z\d+/]{2}==|[A-Z\d+/]{3}=)?$/i
-const ALGORITHMS = new Set(['sha256', 'sha384', 'sha512', 'sha1', 'md5'])
+const ALGORITHMS = new Set([
+  'sha256',
+  'sha384',
+  'sha512',
+  'sha1',
+  'md5',
+])
 
 async function generate(data: StorageData, options: ChecksumOptions = {}): Promise<HaiResult<string>> {
   try {

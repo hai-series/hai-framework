@@ -126,12 +126,19 @@ function keyFor(...parts: string[]): string {
 
 /** 发布快照与暂存输入分离，调用方修改输入不能隐式更改已发布内容。 */
 function snapshot(document: KnowledgeDocumentRevision): PublishedRevision {
-  return structuredClone({ ...document, chunks: document.chunks.map(({ vector: _vector, ...chunk }) => chunk) })
+  return structuredClone({
+    ...document,
+    chunks: document.chunks.map(({ vector: _vector, ...chunk }) => chunk),
+  })
 }
 
 /** 已完成的旧版本可以移除补偿记录；被遗弃的写入需保留永久墓碑。 */
 function garbageFor(document: PublishedRevision, abandoned: boolean): GarbageRevision {
-  return { revision: document.revision, ids: document.chunks.map(chunk => chunk.id), abandoned }
+  return {
+    revision: document.revision,
+    ids: document.chunks.map(chunk => chunk.id),
+    abandoned,
+  }
 }
 
 /**
@@ -159,7 +166,9 @@ export function createDbKnowledgeStore(deps: KnowledgeDbDependencies): Knowledge
   }
 
   async function visible(collection?: string): Promise<KnowledgeDocumentManifest[]> {
-    const rows = await documents.query(collection ? { objectId: collection } : {})
+    const rows = await documents.query(collection
+      ? { objectId: collection }
+      : {})
     const states = new Map((await collections.query({})).map(state => [state.collection, state]))
     return rows.filter((row) => {
       const state = states.get(row.collection)
@@ -173,7 +182,14 @@ export function createDbKnowledgeStore(deps: KnowledgeDbDependencies): Knowledge
       const row = await documents.readVersioned(key)
       if (!row?.data.pending || row.data.pending.deadline > await documents.currentTime())
         return
-      const next = { ...row.data, pending: undefined, garbage: [...row.data.garbage, garbageFor(row.data.pending.document, true)] }
+      const next = {
+        ...row.data,
+        pending: undefined,
+        garbage: [
+          ...row.data.garbage,
+          garbageFor(row.data.pending.document, true),
+        ],
+      }
       if (await documents.compareAndSwap(key, { expectedVersion: row.version, data: next }))
         return
     }
@@ -196,7 +212,10 @@ export function createDbKnowledgeStore(deps: KnowledgeDbDependencies): Knowledge
       const completed = new Set(eligible.filter(item => !item.abandoned).map(item => item.revision))
       if (completed.size === 0)
         return
-      const next = { ...row.data, garbage: row.data.garbage.filter(item => !completed.has(item.revision)) }
+      const next = {
+        ...row.data,
+        garbage: row.data.garbage.filter(item => !completed.has(item.revision)),
+      }
       if (await documents.compareAndSwap(key, { expectedVersion: row.version, data: next }))
         return
     }
@@ -209,7 +228,14 @@ export function createDbKnowledgeStore(deps: KnowledgeDbDependencies): Knowledge
       const row = await documents.readVersioned(key)
       if (row?.data.pending?.document.revision !== revision)
         return
-      const next = { ...row.data, pending: undefined, garbage: [...row.data.garbage, garbageFor(row.data.pending.document, true)] }
+      const next = {
+        ...row.data,
+        pending: undefined,
+        garbage: [
+          ...row.data.garbage,
+          garbageFor(row.data.pending.document, true),
+        ],
+      }
       if (await documents.compareAndSwap(key, { expectedVersion: row.version, data: next }))
         return
     }
@@ -227,7 +253,19 @@ export function createDbKnowledgeStore(deps: KnowledgeDbDependencies): Knowledge
         ...row.data,
         current: undefined,
         pending: undefined,
-        garbage: [...row.data.garbage, ...(row.data.current ? [garbageFor(row.data.current, false)] : []), ...(row.data.pending ? [garbageFor(row.data.pending.document, true)] : [])],
+        garbage: [
+          ...row.data.garbage,
+          ...(row.data.current
+            ? [
+                garbageFor(row.data.current, false),
+              ]
+            : []),
+          ...(row.data.pending
+            ? [
+                garbageFor(row.data.pending.document, true),
+              ]
+            : []),
+        ],
       }
       if (await documents.compareAndSwap(key, { expectedVersion: row.version, data: next })) {
         await cleanup(key)
@@ -280,7 +318,12 @@ export function createDbKnowledgeStore(deps: KnowledgeDbDependencies): Knowledge
           ...manifest,
           current: published,
           pending: undefined,
-          garbage: manifest.current ? [...manifest.garbage, garbageFor(manifest.current, false)] : manifest.garbage,
+          garbage: manifest.current
+            ? [
+                ...manifest.garbage,
+                garbageFor(manifest.current, false),
+              ]
+            : manifest.garbage,
         }
         if (!await documents.compareAndSwap(key, { expectedVersion: claimVersion, data: next, notAfter: pending.deadline }))
           throw new Error('Knowledge document publication lease expired or was revoked')
@@ -307,7 +350,10 @@ export function createDbKnowledgeStore(deps: KnowledgeDbDependencies): Knowledge
     },
 
     async repair(collection, options) {
-      const page = await documents.queryPage({ objectId: collection, orderBy: { field: 'key', direction: 'asc' } }, { offset: options?.offset ?? 0, limit: options?.limit ?? 100 })
+      const page = await documents.queryPage({
+        objectId: collection,
+        orderBy: { field: 'key', direction: 'asc' },
+      }, { offset: options?.offset ?? 0, limit: options?.limit ?? 100 })
       const state = await collections.get(keyFor(collection))
       for (const row of page.items) {
         if (!state || state.deleted || row.generation !== state.generation) {
@@ -361,7 +407,13 @@ export function createDbKnowledgeStore(deps: KnowledgeDbDependencies): Knowledge
         .filter(entity => (!options?.type || options.type === entity.type)
           && [entity.name, ...entity.aliases].some(value => value.toLocaleLowerCase().includes(needle)))
         .map(entity => ({
-          entity: { id: entity.id, name: entity.name, type: entity.type, aliases: entity.aliases, description: entity.description ?? null },
+          entity: {
+            id: entity.id,
+            name: entity.name,
+            type: entity.type,
+            aliases: entity.aliases,
+            description: entity.description ?? null,
+          },
           documents: entity.chunkIds.map(chunkId => ({
             documentId: row.documentId,
             chunkId,
@@ -374,11 +426,15 @@ export function createDbKnowledgeStore(deps: KnowledgeDbDependencies): Knowledge
 
     async getDocument(documentId, collection) {
       const row = (await visible(collection)).find(item => item.documentId === documentId)
-      return row?.current ? documentInfo(row.current) : undefined
+      return row?.current
+        ? documentInfo(row.current)
+        : undefined
     },
 
     async listDocuments(collection, options) {
-      return (await visible(collection)).map(row => documentInfo(row.current!)).sort((a, b) => b.createdAt - a.createdAt || a.documentId.localeCompare(b.documentId)).slice(options?.offset ?? 0, options?.limit === undefined ? undefined : (options.offset ?? 0) + options.limit)
+      return (await visible(collection)).map(row => documentInfo(row.current!)).sort((a, b) => b.createdAt - a.createdAt || a.documentId.localeCompare(b.documentId)).slice(options?.offset ?? 0, options?.limit === undefined
+        ? undefined
+        : (options.offset ?? 0) + options.limit)
     },
 
     removeDocument: (documentId, collection) => removeManifest(documentId, collection),
@@ -400,7 +456,12 @@ export function createDbKnowledgeStore(deps: KnowledgeDbDependencies): Knowledge
           const hits = required(await vecdb.vector.search(collection, vector, { ...options, topK: requested }))
           results = hits.filter(hit => active.has(hit.id)).map((hit) => {
             const chunk = active.get(hit.id)!
-            return { id: hit.id, score: hit.score, content: chunk.content, metadata: chunk.metadata }
+            return {
+              id: hit.id,
+              score: hit.score,
+              content: chunk.content,
+              metadata: chunk.metadata,
+            }
           })
           if (results.length >= topK || hits.length < requested) {
             complete = true
@@ -441,7 +502,12 @@ export function createDbKnowledgeStore(deps: KnowledgeDbDependencies): Knowledge
         }
         if (await collections.compareAndSwap(key, {
           expectedVersion: row?.version,
-          data: { collection, dimension, generation: randomUUID(), deleted: false },
+          data: {
+            collection,
+            dimension,
+            generation: randomUUID(),
+            deleted: false,
+          },
         })) {
           return
         }
@@ -460,7 +526,10 @@ export function createDbKnowledgeStore(deps: KnowledgeDbDependencies): Knowledge
         const row = await collections.readVersioned(key)
         if (!row)
           return
-        if (row.data.deleted || await collections.compareAndSwap(key, { expectedVersion: row.version, data: { ...row.data, deleted: true } })) {
+        if (row.data.deleted || await collections.compareAndSwap(key, {
+          expectedVersion: row.version,
+          data: { ...row.data, deleted: true },
+        })) {
           // 先撤销可见性，再按页清理；只把当前页加载进内存，失败保留进度清单供 repair。
           let offset = 0
           while (true) {

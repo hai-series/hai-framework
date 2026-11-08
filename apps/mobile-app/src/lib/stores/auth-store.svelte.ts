@@ -44,7 +44,12 @@ function resolveHaiResultFailure(
     return { success: false, message: fallback }
 
   const error = HaiErrorSchema.safeParse(maybeResult.error)
-  return { success: false, message: error.success ? authErrorMessage(error.data) : fallback }
+  return {
+    success: false,
+    message: error.success
+      ? authErrorMessage(error.data)
+      : fallback,
+  }
 }
 
 function isSuccessResult<TData>(result: unknown): result is { success: true, data: TData } {

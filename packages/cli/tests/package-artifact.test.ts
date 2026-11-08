@@ -17,17 +17,28 @@ afterAll(async () => {
 it('发布归档包含全部模板，不能丢失隐藏的依赖配置和敏感文件忽略规则', async () => {
   const archiveRoot = await fse.mkdtemp(path.join(tmpdir(), 'hai-cli-package-artifact-'))
   temporaryRoots.push(archiveRoot)
-  const packed = spawnSync(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', [
+  const packed = spawnSync(process.platform === 'win32'
+    ? 'pnpm.cmd'
+    : 'pnpm', [
     'pack',
     '--pack-destination',
     archiveRoot,
-  ], { cwd: packageRoot, shell: process.platform === 'win32', encoding: 'utf8', windowsHide: true, timeout: 60_000 })
+  ], {
+    cwd: packageRoot,
+    shell: process.platform === 'win32',
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 60_000,
+  })
   expect(packed.error).toBeUndefined()
   expect(packed.status, packed.stderr || packed.stdout).toBe(0)
   const archiveName = (await fse.readdir(archiveRoot)).find(name => name.endsWith('.tgz'))
   expect(archiveName).toBeDefined()
 
-  const listed = spawnSync('tar', ['-tf', path.join(archiveRoot, archiveName!)], { encoding: 'utf8', windowsHide: true })
+  const listed = spawnSync('tar', [
+    '-tf',
+    path.join(archiveRoot, archiveName!),
+  ], { encoding: 'utf8', windowsHide: true })
   expect(listed.error).toBeUndefined()
   expect(listed.status, listed.stderr).toBe(0)
   const archivedFiles = new Set(listed.stdout.split(/\r?\n/u))
@@ -57,7 +68,10 @@ it('发布 CLI 内联数据库 Schema，未安装依赖的目标应用也能拒�
   // 按真实生产及可选依赖闭包打包，发布前不能从 registry 获取本次尚未发布的框架包。
   for (const name of packages) {
     const manifest = await fse.readJson(path.resolve(packageRoot, '..', name, 'package.json')) as { name: string, dependencies?: Record<string, string>, optionalDependencies?: Record<string, string> }
-    for (const dependency of Object.keys({ ...manifest.dependencies, ...manifest.optionalDependencies })) {
+    for (const dependency of Object.keys({
+      ...manifest.dependencies,
+      ...manifest.optionalDependencies,
+    })) {
       if (!dependency.startsWith('@h-ai/'))
         continue
       packages.add(dependency.slice('@h-ai/'.length))
@@ -65,17 +79,43 @@ it('发布 CLI 内联数据库 Schema，未安装依赖的目标应用也能拒�
     }
     const destination = path.join(root, 'archives', name)
     await fse.ensureDir(destination)
-    const packed = spawnSync(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['pack', '--pack-destination', destination], { cwd: path.resolve(packageRoot, '..', name), shell: process.platform === 'win32', encoding: 'utf8', windowsHide: true, timeout: 60_000, env: cleanEnv })
+    const packed = spawnSync(process.platform === 'win32'
+      ? 'pnpm.cmd'
+      : 'pnpm', ['pack', '--pack-destination', destination], {
+      cwd: path.resolve(packageRoot, '..', name),
+      shell: process.platform === 'win32',
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 60_000,
+      env: cleanEnv,
+    })
     expect(packed.status, packed.error?.message || packed.stderr || packed.stdout).toBe(0)
     const archive = (await fse.readdir(destination)).find(file => file.endsWith('.tgz'))
     expect(archive).toBeDefined()
     archives[`@h-ai/${name}`] = `file:${path.join(destination, archive!).replaceAll(path.sep, '/')}`
   }
   // 仅覆盖真实依赖边，不把传递依赖提升为工具直接依赖；目标应用始终没有 node_modules。
-  await fse.writeJson(path.join(tool, 'package.json'), { name: 'published-cli-closure', private: true, type: 'module', dependencies: Object.fromEntries(roots.map(name => [`@h-ai/${name}`, archives[`@h-ai/${name}`]])) })
-  await fse.writeFile(path.join(tool, 'pnpm-workspace.yaml'), stringify({ packages: [], overrides: Object.fromEntries(Object.entries(dependencyEdges).map(([edge, dependency]) => [edge, archives[dependency]])) }))
+  await fse.writeJson(path.join(tool, 'package.json'), {
+    name: 'published-cli-closure',
+    private: true,
+    type: 'module',
+    dependencies: Object.fromEntries(roots.map(name => [`@h-ai/${name}`, archives[`@h-ai/${name}`]])),
+  })
+  await fse.writeFile(path.join(tool, 'pnpm-workspace.yaml'), stringify({
+    packages: [],
+    overrides: Object.fromEntries(Object.entries(dependencyEdges).map(([edge, dependency]) => [edge, archives[dependency]])),
+  }))
   // frozen-lockfile 安装不保证缓存中含 semver 元数据；发布安装缺少元数据时应从 registry 获取。
-  const installed = spawnSync(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['install', '--prefer-offline', '--ignore-scripts'], { cwd: tool, shell: process.platform === 'win32', encoding: 'utf8', windowsHide: true, timeout: 90_000, env: cleanEnv })
+  const installed = spawnSync(process.platform === 'win32'
+    ? 'pnpm.cmd'
+    : 'pnpm', ['install', '--prefer-offline', '--ignore-scripts'], {
+    cwd: tool,
+    shell: process.platform === 'win32',
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 90_000,
+    env: cleanEnv,
+  })
   expect(installed.status, installed.error?.message || installed.stderr || installed.stdout).toBe(0)
   const installedCli = path.join(tool, 'node_modules/@h-ai/cli/dist/index.js')
   const metadata = await fse.readJson(path.join(tool, 'node_modules/@h-ai/cli/dist/metafile-esm.json')) as { inputs: Record<string, { imports: Array<{ path: string, external?: boolean }> }> }
@@ -106,10 +146,32 @@ it('发布 CLI 内联数据库 Schema，未安装依赖的目标应用也能拒�
     '  return resolved',
     '} })',
   ].join('\n'))
-  const run = (args: string[]) => spawnSync(process.execPath, ['--import', pathToFileURL(guard).href, installedCli, ...args], { cwd: app, encoding: 'utf8', windowsHide: true, timeout: 30_000, env: { ...cleanEnv, HAI_CORE_DEFAULTLOCALE: 'en-US' } })
+  const run = (args: string[]) => spawnSync(process.execPath, [
+    '--import',
+    pathToFileURL(guard).href,
+    installedCli,
+    ...args,
+  ], {
+    cwd: app,
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 30_000,
+    env: { ...cleanEnv, HAI_CORE_DEFAULTLOCALE: 'en-US' },
+  })
   const help = run(['--help'])
   expect(help.status, help.error?.message || help.stderr || help.stdout).toBe(0)
-  const diagnostic = await createFeedbackBundle({ report: { id: 'artifact-feedback', description: 'Standalone published CLI feedback' }, evidence: [{ source: 'browser', kind: 'log', timestamp: 1, requestId: 'request-artifact', data: { message: 'offline' } }] })
+  const diagnostic = await createFeedbackBundle({
+    report: { id: 'artifact-feedback', description: 'Standalone published CLI feedback' },
+    evidence: [
+      {
+        source: 'browser',
+        kind: 'log',
+        timestamp: 1,
+        requestId: 'request-artifact',
+        data: { message: 'offline' },
+      },
+    ],
+  })
   expect(diagnostic.success).toBe(true)
   if (!diagnostic.success)
     throw new Error(diagnostic.error.message)
@@ -117,15 +179,49 @@ it('发布 CLI 内联数据库 Schema，未安装依赖的目标应用也能拒�
   const summary = run(['feedback', 'summary', 'feedback.zip'])
   expect(summary.status, summary.error?.message || summary.stderr || summary.stdout).toBe(0)
   expect(summary.stdout).toContain('Standalone published CLI feedback')
-  const evidence = run(['feedback', 'evidence', 'feedback.zip', '--request-id', 'request-artifact'])
+  const evidence = run([
+    'feedback',
+    'evidence',
+    'feedback.zip',
+    '--request-id',
+    'request-artifact',
+  ])
   expect(evidence.status, evidence.error?.message || evidence.stderr || evidence.stdout).toBe(0)
   expect(JSON.parse(evidence.stdout).total).toBe(1)
   const version = (await fse.readJson(path.join(packageRoot, 'package.json')) as { version: string }).version
-  await fse.writeJson(path.join(app, 'package.json'), { name: 'schema-app', version: '1.0.0', type: 'module', dependencies: { '@h-ai/reldb': version } })
-  await fse.writeFile(path.join(app, 'pnpm-lock.yaml'), stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@h-ai/reldb': { version } } } }, packages: { [`@h-ai/reldb@${version}`]: {} }, snapshots: { [`@h-ai/reldb@${version}`]: {} } }))
-  await fse.writeJson(path.join(app, 'hai.json'), { deploy: { provider: { type: 'docker-ssh' } } })
+  await fse.writeJson(path.join(app, 'package.json'), {
+    name: 'schema-app',
+    version: '1.0.0',
+    type: 'module',
+    dependencies: { '@h-ai/reldb': version },
+  })
+  await fse.writeFile(path.join(app, 'pnpm-lock.yaml'), stringify({
+    lockfileVersion: '9.0',
+    importers: {
+      '.': {
+        dependencies: {
+          '@h-ai/reldb': { version },
+        },
+      },
+    },
+    packages: { [`@h-ai/reldb@${version}`]: {} },
+    snapshots: { [`@h-ai/reldb@${version}`]: {} },
+  }))
+  await fse.writeJson(path.join(app, 'hai.json'), {
+    deploy: {
+      provider: { type: 'docker-ssh' },
+    },
+  })
   const envFile = path.join(app, '.env.test')
-  const args = ['deploy', '--env', 'test', '--yes', '--bundle-only', '--artifact-dir', 'absent-artifact']
+  const args = [
+    'deploy',
+    '--env',
+    'test',
+    '--yes',
+    '--bundle-only',
+    '--artifact-dir',
+    'absent-artifact',
+  ]
   await fse.writeFile(envFile, 'HAI_CORE_ENV=test\n')
   await fse.writeFile(path.join(app, 'config/_db.yml'), 'type: mysql\ndatabase: shop\nhost: db.example.test\nssl: true\n')
   const invalid = run(args)

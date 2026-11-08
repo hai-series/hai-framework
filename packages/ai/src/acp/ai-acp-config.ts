@@ -174,7 +174,9 @@ export const ACPAgentSchema = z
       const protocol = new URL(value.url).protocol
       if (
         !(
-          value.transport === 'http' ? ['http:', 'https:'] : ['ws:', 'wss:']
+          value.transport === 'http'
+            ? ['http:', 'https:']
+            : ['ws:', 'wss:']
         ).includes(protocol)
         || !value.supportedTransports.includes(value.transport)
       ) {

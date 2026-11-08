@@ -11,8 +11,12 @@ test('new page is discovered without changing routes and survives refresh and hi
   const mobile = appType === 'mobile-app'
   if (mobile)
     await page.setViewportSize({ width: 390, height: 844 })
-  const username = mobile ? `hash${Date.now()}` : 'admin'
-  const password = mobile ? 'ScaffoldHash123!' : process.env.E2E_ADMIN_PASSWORD || 'Scaffold-test-Admin123!'
+  const username = mobile
+    ? `hash${Date.now()}`
+    : 'admin'
+  const password = mobile
+    ? 'ScaffoldHash123!'
+    : process.env.E2E_ADMIN_PASSWORD || 'Scaffold-test-Admin123!'
   await page.goto('/#/auto-discovered?source=probe')
   await expect(page.locator('#login-username')).toBeVisible()
   if (mobile) {
@@ -53,5 +57,9 @@ test('new page is discovered without changing routes and survives refresh and hi
   await expect(page).toHaveURL(/#\/auto-discovered\?source=probe$/)
   const evidence = process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve('test-results/hash-discovery')
   await mkdir(evidence, { recursive: true })
-  await page.screenshot({ path: path.join(evidence, `${appType}-hash-discovery.png`), fullPage: true, animations: 'disabled' })
+  await page.screenshot({
+    path: path.join(evidence, `${appType}-hash-discovery.png`),
+    fullPage: true,
+    animations: 'disabled',
+  })
 })

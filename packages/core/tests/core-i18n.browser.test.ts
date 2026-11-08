@@ -16,7 +16,9 @@ describe('core.i18n (browser)', () => {
     core.i18n.setGlobalLocale('ja')
     expect(core.i18n.getGlobalLocale()).toBe('ja-JP')
     expect(core.i18n.coreM('core_errorTimeout')).toBe('リクエストがタイムアウトしました')
-    expect(core.i18n.coreM('core_timeDaysAgo', { params: { n: 2 } })).toBe('2日前')
+    expect(core.i18n.coreM('core_timeDaysAgo', {
+      params: { n: 2 },
+    })).toBe('2日前')
   })
 
   it('createMessageGetter 应该在 locale 覆盖时优先使用指定语言', () => {

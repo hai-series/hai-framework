@@ -10,7 +10,9 @@ afterEach(() => core.config.clear())
 const apps = fileURLToPath(new URL('../../../apps/', import.meta.url))
 const examples = readdirSync(apps, { withFileTypes: true })
   .filter(entry => entry.isDirectory())
-  .flatMap(entry => readdirSync(join(apps, entry.name), { withFileTypes: true }).some(child => child.isDirectory() && child.name === 'config') ? [entry.name] : [])
+  .flatMap(entry => readdirSync(join(apps, entry.name), { withFileTypes: true }).some(child => child.isDirectory() && child.name === 'config')
+    ? [entry.name]
+    : [])
   .filter(name => readdirSync(join(apps, name, 'config')).includes('_core.yml'))
 
 it.each(examples)('%s 的实际 YAML 经环境解析和严格 Core Schema 可加载', (name) => {

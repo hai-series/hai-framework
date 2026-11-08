@@ -31,7 +31,9 @@ function matchSupportedLocale(locale: Locale, supportedLocales: LocaleInfo[]): L
     if (variant)
       return variant.code
     const separator = candidate.lastIndexOf('-')
-    candidate = separator < 0 ? '' : candidate.slice(0, separator)
+    candidate = separator < 0
+      ? ''
+      : candidate.slice(0, separator)
   }
   return null
 }
@@ -118,7 +120,9 @@ function detectBrowserLocale(supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): 
 function interpolate(template: string, params: Record<string, string | number | boolean> = {}): string {
   return template.replace(/\{(\w+)\}/g, (_, key: string) => {
     const value = params[key]
-    return value !== undefined ? String(value) : `{${key}}`
+    return value !== undefined
+      ? String(value)
+      : `{${key}}`
   })
 }
 
@@ -165,7 +169,9 @@ export function createLocaleStore(options: {
   if (typeof window !== 'undefined') {
     // 1. 优先从 localStorage 读取
     const savedLocale = readStoredValue(persistKey)
-    const supportedSavedLocale = savedLocale ? matchSupportedLocale(savedLocale, supportedLocales) : null
+    const supportedSavedLocale = savedLocale
+      ? matchSupportedLocale(savedLocale, supportedLocales)
+      : null
     if (supportedSavedLocale) {
       initialLocale = supportedSavedLocale
     }

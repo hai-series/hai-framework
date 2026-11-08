@@ -22,7 +22,15 @@ export type NoPlaceholder = typeof import('@h-ai/ai/client').createUnconfiguredA
 describe('published client exports', () => {
   it('exports only the standalone audio factory', () => {
     expect(Object.keys(client)).toEqual(['createAudioClient'])
-    const operations = client.createAudioClient({ url: 'wss://audio.example.com/api/v1/ai/audio', getTicket: () => 'test-only-ticket' })
-    expect(Object.keys(operations).sort()).toEqual(['synthesize', 'synthesizeStream', 'transcribe', 'transcribeStream'])
+    const operations = client.createAudioClient({
+      url: 'wss://audio.example.com/api/v1/ai/audio',
+      getTicket: () => 'test-only-ticket',
+    })
+    expect(Object.keys(operations).sort()).toEqual([
+      'synthesize',
+      'synthesizeStream',
+      'transcribe',
+      'transcribeStream',
+    ])
   })
 })

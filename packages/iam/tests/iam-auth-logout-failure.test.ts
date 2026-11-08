@@ -19,7 +19,12 @@ async function permit(command: 'get' | 'eval', allowed: boolean): Promise<void> 
   if (!redis)
     throw new Error('Redis fixture not initialized')
   const endpoint = redis
-  const args = ['ACL', 'SETUSER', 'default', `${allowed ? '+' : '-'}${command}`]
+  const args = [
+    'ACL',
+    'SETUSER',
+    'default',
+    `${allowed ? '+' : '-'}${command}`,
+  ]
   const request = `*${args.length}\r\n${args.map(value => `$${Buffer.byteLength(value)}\r\n${value}\r\n`).join('')}`
   await new Promise<void>((resolve, reject) => {
     const socket = createConnection({ host: endpoint.host, port: endpoint.port })
@@ -56,7 +61,11 @@ beforeAll(async () => {
   redis = await acquireRedisContainer()
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
   expect((await cache.init({ type: 'redis', host: redis.host, port: redis.port })).success).toBe(true)
-  expect((await iam.init({ seedDefaultData: false, rbac: { enabled: false }, session: { sliding: false } })).success).toBe(true)
+  expect((await iam.init({
+    seedDefaultData: false,
+    rbac: { enabled: false },
+    session: { sliding: false },
+  })).success).toBe(true)
 }, 120000)
 
 afterAll(async () => {
@@ -102,7 +111,9 @@ it('access已经过期但refresh仍有效时，登出仍原子撤销整个会话
   const found = await iam.session.get(tokens.accessToken)
   if (!found.success || !found.data)
     throw new Error('Missing issued session')
-  expect((await iam.session.update(tokens.accessToken, { expiresAt: new Date(Date.now() - 1) }, found.data.version)).success).toBe(true)
+  expect((await iam.session.update(tokens.accessToken, {
+    expiresAt: new Date(Date.now() - 1),
+  }, found.data.version)).success).toBe(true)
   expect(await iam.session.get(tokens.accessToken)).toEqual({ success: true, data: null })
   const pending = await createCacheSessionRepository(604800).getByRefreshToken(tokens.refreshToken)
   expect(pending.success && pending.data?.accessToken).toBe(tokens.accessToken)

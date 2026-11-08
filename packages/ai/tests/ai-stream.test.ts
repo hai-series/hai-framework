@@ -26,11 +26,13 @@ function textChunk(content: string, finishReason?: FinishReason): ChatCompletion
     object: 'chat.completion.chunk',
     created: Date.now(),
     model: 'test-model',
-    choices: [{
-      index: 0,
-      delta: { content },
-      finish_reason: finishReason ?? null,
-    }],
+    choices: [
+      {
+        index: 0,
+        delta: { content },
+        finish_reason: finishReason ?? null,
+      },
+    ],
   }
 }
 
@@ -41,13 +43,15 @@ function reasoningChunk(reasoning: string, finishReason?: FinishReason): ChatCom
     object: 'chat.completion.chunk',
     created: Date.now(),
     model: 'test-model',
-    choices: [{
-      index: 0,
-      delta: {
-        reasoning_content: reasoning,
-      } as ChatCompletionChunk['choices'][number]['delta'],
-      finish_reason: finishReason ?? null,
-    }],
+    choices: [
+      {
+        index: 0,
+        delta: {
+          reasoning_content: reasoning,
+        } as ChatCompletionChunk['choices'][number]['delta'],
+        finish_reason: finishReason ?? null,
+      },
+    ],
   }
 }
 
@@ -64,20 +68,30 @@ function toolCallChunk(
     object: 'chat.completion.chunk',
     created: Date.now(),
     model: 'test-model',
-    choices: [{
-      index: 0,
-      delta: {
-        tool_calls: [{
-          index,
-          ...(id ? { id } : {}),
-          function: {
-            ...(name !== undefined ? { name } : {}),
-            ...(args !== undefined ? { arguments: args } : {}),
-          },
-        }],
+    choices: [
+      {
+        index: 0,
+        delta: {
+          tool_calls: [
+            {
+              index,
+              ...(id
+                ? { id }
+                : {}),
+              function: {
+                ...(name !== undefined
+                  ? { name }
+                  : {}),
+                ...(args !== undefined
+                  ? { arguments: args }
+                  : {}),
+              },
+            },
+          ],
+        },
+        finish_reason: finishReason ?? null,
       },
-      finish_reason: finishReason ?? null,
-    }],
+    ],
   }
 }
 
@@ -326,7 +340,9 @@ describe('ai.stream.encodeSSE', () => {
 describe('ai.stream.createSSEDecoder', () => {
   it('解码单个事件', () => {
     const decoder = ai.stream.createSSEDecoder()
-    const events = [...decoder.decode('data: hello\n\n')]
+    const events = [
+      ...decoder.decode('data: hello\n\n'),
+    ]
     expect(events).toHaveLength(1)
     expect(events[0].data).toBe('hello')
   })
@@ -334,7 +350,9 @@ describe('ai.stream.createSSEDecoder', () => {
   it('解码带 event 和 id 的完整事件', () => {
     const decoder = ai.stream.createSSEDecoder()
     const text = 'event: update\nid: 42\nretry: 5000\ndata: payload\n\n'
-    const events = [...decoder.decode(text)]
+    const events = [
+      ...decoder.decode(text),
+    ]
 
     expect(events).toHaveLength(1)
     expect(events[0].event).toBe('update')
@@ -347,11 +365,15 @@ describe('ai.stream.createSSEDecoder', () => {
     const decoder = ai.stream.createSSEDecoder()
 
     // 第一次只传了一部分
-    const events1 = [...decoder.decode('data: hel')]
+    const events1 = [
+      ...decoder.decode('data: hel'),
+    ]
     expect(events1).toHaveLength(0)
 
     // 第二次传完
-    const events2 = [...decoder.decode('lo\n\n')]
+    const events2 = [
+      ...decoder.decode('lo\n\n'),
+    ]
     expect(events2).toHaveLength(1)
     expect(events2[0].data).toBe('hello')
   })
@@ -359,7 +381,9 @@ describe('ai.stream.createSSEDecoder', () => {
   it('多个事件一起解码', () => {
     const decoder = ai.stream.createSSEDecoder()
     const text = 'data: one\n\ndata: two\n\ndata: three\n\n'
-    const events = [...decoder.decode(text)]
+    const events = [
+      ...decoder.decode(text),
+    ]
     expect(events).toHaveLength(3)
     expect(events.map(e => e.data)).toEqual(['one', 'two', 'three'])
   })
@@ -369,7 +393,9 @@ describe('ai.stream.createSSEDecoder', () => {
     const encoded = ai.stream.encodeSSE(original)
 
     const decoder = ai.stream.createSSEDecoder()
-    const events = [...decoder.decode(encoded)]
+    const events = [
+      ...decoder.decode(encoded),
+    ]
 
     expect(events).toHaveLength(1)
     expect(events[0].event).toBe(original.event)
@@ -381,13 +407,17 @@ describe('ai.stream.createSSEDecoder', () => {
     const decoder = ai.stream.createSSEDecoder()
 
     // 传入不完整的数据
-    const events1 = [...decoder.decode('data: partial')]
+    const events1 = [
+      ...decoder.decode('data: partial'),
+    ]
     expect(events1).toHaveLength(0)
 
     // 重置后，之前的缓冲丢失
     decoder.reset()
 
-    const events2 = [...decoder.decode('data: fresh\n\n')]
+    const events2 = [
+      ...decoder.decode('data: fresh\n\n'),
+    ]
     expect(events2).toHaveLength(1)
     expect(events2[0].data).toBe('fresh')
   })

@@ -307,7 +307,12 @@ describe('api provider', () => {
 
   it('只有显式声明接收端持久幂等能力时才允许在途重试', async () => {
     expect(provider.supportsIdempotency).toBe(false)
-    const parsed = ApiProviderConfigSchema.parse({ name: 'api', type: 'api', url: 'https://example.invalid', idempotent: true })
+    const parsed = ApiProviderConfigSchema.parse({
+      name: 'api',
+      type: 'api',
+      url: 'https://example.invalid',
+      idempotent: true,
+    })
     expect((await provider.connect(parsed)).success).toBe(true)
     expect(provider.supportsIdempotency).toBe(true)
     await provider.close()

@@ -26,7 +26,9 @@ import { TRANSPORT_BODY_LIMITS } from './crypto-transport-body.js'
  */
 export function parseTransportServerKeyRing(serialized: unknown): HaiResult<TransportServerKeyRing> {
   try {
-    const value: unknown = typeof serialized === 'string' ? JSON.parse(serialized) : serialized
+    const value: unknown = typeof serialized === 'string'
+      ? JSON.parse(serialized)
+      : serialized
     if (isTransportServerKeyRing(value))
       return ok(value)
   }

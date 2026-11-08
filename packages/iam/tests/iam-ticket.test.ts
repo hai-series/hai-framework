@@ -17,7 +17,10 @@ describe('iam ticket', () => {
 
   it('nX 未实际写入时不签发票据', async () => {
     const write = vi.spyOn(cache.kv, 'set').mockResolvedValueOnce(ok(false))
-    expect(await iam.ticket.issue({ subjectId: 'collision-user', purpose: 'test' })).toMatchObject({ success: false, error: { code: HaiIamError.TICKET_ISSUE_FAILED.code } })
+    expect(await iam.ticket.issue({ subjectId: 'collision-user', purpose: 'test' })).toMatchObject({
+      success: false,
+      error: { code: HaiIamError.TICKET_ISSUE_FAILED.code },
+    })
     expect(write).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ subjectId: 'collision-user' }), expect.objectContaining({ nx: true }))
   })
 

@@ -65,12 +65,27 @@ test('登录和查询可按 Enter 执行，直角主题与弹窗可全程用键�
   await page.reload()
   await waitForHydration(page)
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'formal')
-  await page.screenshot({ path: testInfo.outputPath('formal-keyboard.png'), animations: 'disabled' })
+  await page.screenshot({
+    path: testInfo.outputPath('formal-keyboard.png'),
+    animations: 'disabled',
+  })
 })
 
 for (const theme of [
-  { id: 'high-contrast', label: '高对比', tone: 'dark', contrast: 7, outline: '3px' },
-  { id: 'eye-care', label: '护眼', tone: 'light', contrast: 4.5, outline: '2px' },
+  {
+    id: 'high-contrast',
+    label: '高对比',
+    tone: 'dark',
+    contrast: 7,
+    outline: '3px',
+  },
+  {
+    id: 'eye-care',
+    label: '护眼',
+    tone: 'light',
+    contrast: 4.5,
+    outline: '2px',
+  },
 ]) {
   test(`${theme.label}主题可从导航选择，刷新保留，真实控件对比度及放大布局可用`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1440, height: 960 })
@@ -85,7 +100,11 @@ for (const theme of [
     await waitForHydration(page)
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme.id)
     expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe(theme.tone)
-    const controls = [page.locator('.hai-workspace button.btn-primary').first(), page.locator('.hai-workspace > footer'), page.locator('.hai-workspace input[type="search"]:visible').first()]
+    const controls = [
+      page.locator('.hai-workspace button.btn-primary').first(),
+      page.locator('.hai-workspace > footer'),
+      page.locator('.hai-workspace input[type="search"]:visible').first(),
+    ]
     for (const control of controls) {
       await expect(control).toBeVisible()
       const ratios = await control.evaluate((element) => {
@@ -102,7 +121,9 @@ for (const theme of [
           context.fillStyle = background
           context.fillRect(0, 0, 1, 1)
         }
-        const luminance = (values: Uint8ClampedArray) => [...values].slice(0, 3).map(value => value / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4).reduce((total, value, index) => total + value * [0.2126, 0.7152, 0.0722][index]!, 0)
+        const luminance = (values: Uint8ClampedArray) => [...values].slice(0, 3).map(value => value / 255).map(value => value <= 0.04045
+          ? value / 12.92
+          : ((value + 0.055) / 1.055) ** 2.4).reduce((total, value, index) => total + value * [0.2126, 0.7152, 0.0722][index]!, 0)
         const background = luminance(context.getImageData(0, 0, 1, 1).data)
         const colors = [getComputedStyle(element).color]
         if (element instanceof HTMLInputElement)
@@ -121,20 +142,29 @@ for (const theme of [
     await search.focus()
     await page.keyboard.press('Tab')
     expect(await page.evaluate(() => getComputedStyle(document.activeElement!).outlineWidth)).toBe(theme.outline)
-    await page.screenshot({ path: testInfo.outputPath(`${theme.id}-1440.png`), animations: 'disabled' })
+    await page.screenshot({
+      path: testInfo.outputPath(`${theme.id}-1440.png`),
+      animations: 'disabled',
+    })
     await page.evaluate(() => {
       document.documentElement.style.fontSize = '200%'
     })
     await page.setViewportSize({ width: 640, height: 960 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     expect(await page.locator('.hai-workspace > header h1').evaluate(element => element.clientWidth >= element.scrollWidth)).toBe(true)
-    await page.screenshot({ path: testInfo.outputPath(`${theme.id}-200-percent.png`), animations: 'disabled' })
+    await page.screenshot({
+      path: testInfo.outputPath(`${theme.id}-200-percent.png`),
+      animations: 'disabled',
+    })
     await page.evaluate(() => {
       document.documentElement.style.fontSize = ''
     })
     await page.setViewportSize({ width: 390, height: 844 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    await page.screenshot({ path: testInfo.outputPath(`${theme.id}-390.png`), animations: 'disabled' })
+    await page.screenshot({
+      path: testInfo.outputPath(`${theme.id}-390.png`),
+      animations: 'disabled',
+    })
   })
 }
 
@@ -151,29 +181,50 @@ test('管理工作区压缩留白，导航显示单一标题，分页不挤出�
       const header = element.querySelector(':scope > header')!
       const main = element.querySelector(':scope > main')!
       const footer = element.querySelector(':scope > footer')!
-      return { header: header.getBoundingClientRect().height, footer: footer.getBoundingClientRect().height, padding: Number.parseFloat(getComputedStyle(main).paddingTop), width: document.documentElement.scrollWidth }
+      return {
+        header: header.getBoundingClientRect().height,
+        footer: footer.getBoundingClientRect().height,
+        padding: Number.parseFloat(getComputedStyle(main).paddingTop),
+        width: document.documentElement.scrollWidth,
+      }
     })
     expect(dimensions.header).toBeLessThanOrEqual(52)
     expect(dimensions.footer).toBeLessThanOrEqual(32)
     expect(dimensions.padding).toBeLessThanOrEqual(16)
     expect(dimensions.width).toBeLessThanOrEqual(width)
     await expect(page.locator('.hai-pagination__navigation')).toBeVisible()
-    await page.screenshot({ path: testInfo.outputPath(`compact-workspace-${width}.png`), animations: 'disabled' })
+    await page.screenshot({
+      path: testInfo.outputPath(`compact-workspace-${width}.png`),
+      animations: 'disabled',
+    })
   }
 })
 
-for (const [locale, expandedLabel] of [['zh-CN', '展开筛选'], ['en-US', 'Expand filters'], ['ja-JP', '絞り込みを展開']] as const) {
+for (const [locale, expandedLabel] of [
+  ['zh-CN', '展开筛选'],
+  ['en-US', 'Expand filters'],
+  ['ja-JP', '絞り込みを展開'],
+] as const) {
   test(`筛选折叠在 ${locale} 保留输入并支持键盘和主题`, async ({ page, context, browser }, testInfo) => {
     await loginOnPage(page, 'admin', 'admin123456')
     const origin = new URL(page.url()).origin
-    await context.addCookies([{ name: 'PARAGLIDE_LOCALE', value: locale, url: origin }])
+    await context.addCookies([
+      { name: 'PARAGLIDE_LOCALE', value: locale, url: origin },
+    ])
     await page.goto('/admin/ui-gallery/compounds')
     await waitForHydration(page)
-    const theme = locale === 'zh-CN' ? 'light' : 'dark'
+    const theme = locale === 'zh-CN'
+      ? 'light'
+      : 'dark'
     if (await page.locator('html').getAttribute('data-theme') !== theme) {
       const appearance = page.locator('[data-guide="admin-theme"]')
       await appearance.locator('button').first().click()
-      await appearance.getByRole('button', { name: theme === 'dark' ? 'Dark' : 'Light', exact: true }).click()
+      await appearance.getByRole('button', {
+        name: theme === 'dark'
+          ? 'Dark'
+          : 'Light',
+        exact: true,
+      }).click()
     }
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
     await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe(theme)
@@ -199,7 +250,10 @@ for (const [locale, expandedLabel] of [['zh-CN', '展开筛选'], ['en-US', 'Exp
       await toggle.press('Enter')
       await expect(field).toHaveValue('Retained role')
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-      await filters.screenshot({ path: testInfo.outputPath(`filters-${locale}-${width}.png`), animations: 'disabled' })
+      await filters.screenshot({
+        path: testInfo.outputPath(`filters-${locale}-${width}.png`),
+        animations: 'disabled',
+      })
       await filters.getByRole('button', { name: /重置|Reset|リセット/, exact: true }).click()
       await expect(field).toHaveValue('')
       await toggle.click()
@@ -207,7 +261,13 @@ for (const [locale, expandedLabel] of [['zh-CN', '展开筛选'], ['en-US', 'Exp
       await expect(panel).toBeHidden()
     }
     if (locale === 'zh-CN') {
-      const touchContext = await browser.newContext({ baseURL: origin, viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, storageState: await context.storageState() })
+      const touchContext = await browser.newContext({
+        baseURL: origin,
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+        storageState: await context.storageState(),
+      })
       try {
         const touch = await touchContext.newPage()
         await touch.goto('/admin/ui-gallery/compounds')
@@ -218,7 +278,9 @@ for (const [locale, expandedLabel] of [['zh-CN', '展开筛选'], ['en-US', 'Exp
         await control.scrollIntoViewIfNeeded()
         expect(await touch.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true)
         expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44)
-        await touch.getByTestId('gallery-collapsible-filters').screenshot({ path: testInfo.outputPath('filters-touch.png') })
+        await touch.getByTestId('gallery-collapsible-filters').screenshot({
+          path: testInfo.outputPath('filters-touch.png'),
+        })
       }
       finally {
         await touchContext.close()

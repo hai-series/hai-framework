@@ -22,8 +22,16 @@ it('无效输入在授权和 Provider 前失败，允许的 1000 项真实删除
     expect((await storage.init({ type: 'local', root: directory })).success).toBe(true)
     const app = serv.createApp({
       contract,
-      procedures: { storage: createStorageProcedures({ storage, authorize }) },
-      createContext: ({ request }) => ({ request, requestId: 'storage-input', locale: 'en-US', logger: core.logger.child({ module: 'serv-test' }), session: { userId: 'u1', roles: [], permissions: [] } }),
+      procedures: {
+        storage: createStorageProcedures({ storage, authorize }),
+      },
+      createContext: ({ request }) => ({
+        request,
+        requestId: 'storage-input',
+        locale: 'en-US',
+        logger: core.logger.child({ module: 'serv-test' }),
+        session: { userId: 'u1', roles: [], permissions: [] },
+      }),
     })
     node = serv.listen(app, { host: '127.0.0.1', port: 0 })
     await once(node.server, 'listening')
@@ -31,25 +39,51 @@ it('无效输入在授权和 Provider 前失败，允许的 1000 项真实删除
     if (!address || typeof address === 'string')
       throw new Error('Storage input HTTP server did not start')
     const baseUrl = `http://127.0.0.1:${address.port}/api/v1`
-    expect((await client.init({ baseUrl, auth: { storage: apiClient.tokenStorage.memory() } })).success).toBe(true)
+    expect((await client.init({
+      baseUrl,
+      auth: {
+        storage: apiClient.tokenStorage.memory(),
+      },
+    })).success).toBe(true)
 
-    for (const key of ['../secret', '/absolute', 'users/u1/a\\b', `users/u1/${'报'.repeat(342)}`]) {
+    for (const key of [
+      '../secret',
+      '/absolute',
+      'users/u1/a\\b',
+      `users/u1/${'报'.repeat(342)}`,
+    ]) {
       const result = await client.storage.files.getMetadata({ key })
-      expect(result).toMatchObject({ success: false, error: {
+      expect(result).toMatchObject({
+        success: false,
+        error: {
+          code: HaiCommonError.VALIDATION_ERROR.code,
+          httpStatus: 400,
+          traceId: expect.any(String),
+          cause: expect.arrayContaining([
+            expect.objectContaining({ field: 'key' }),
+          ]),
+        },
+      })
+    }
+    const tooMany = await client.storage.files.deleteMany({
+      keys: Array.from({ length: STORAGE_DELETE_MAX_KEYS + 1 }, (_, i) => `users/u1/${i}`),
+    })
+    expect(tooMany).toMatchObject({
+      success: false,
+      error: {
         code: HaiCommonError.VALIDATION_ERROR.code,
         httpStatus: 400,
         traceId: expect.any(String),
-        cause: expect.arrayContaining([expect.objectContaining({ field: 'key' })]),
-      } })
-    }
-    const tooMany = await client.storage.files.deleteMany({ keys: Array.from({ length: STORAGE_DELETE_MAX_KEYS + 1 }, (_, i) => `users/u1/${i}`) })
-    expect(tooMany).toMatchObject({ success: false, error: {
-      code: HaiCommonError.VALIDATION_ERROR.code,
-      httpStatus: 400,
-      traceId: expect.any(String),
-      cause: expect.arrayContaining([expect.objectContaining({ field: 'keys' })]),
-    } })
-    const unsupported = await fetch(`${baseUrl}/storage/presigned-urls/upload`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'users/u1/a', contentLength: 100 }) })
+        cause: expect.arrayContaining([
+          expect.objectContaining({ field: 'keys' }),
+        ]),
+      },
+    })
+    const unsupported = await fetch(`${baseUrl}/storage/presigned-urls/upload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'users/u1/a', contentLength: 100 }),
+    })
     expect(unsupported.status).toBe(400)
     expect(authorize).not.toHaveBeenCalled()
 
@@ -68,7 +102,10 @@ it('无效输入在授权和 Provider 前失败，允许的 1000 项真实删除
     expect(await readdir(join(directory, 'users', 'u1'))).toEqual([])
     expect(authorize).toHaveBeenCalledOnce()
     const forbidden = await client.storage.files.getMetadata({ key: 'users/u2/private.txt' })
-    expect(forbidden).toMatchObject({ success: false, error: { code: HaiCommonError.FORBIDDEN.code } })
+    expect(forbidden).toMatchObject({
+      success: false,
+      error: { code: HaiCommonError.FORBIDDEN.code },
+    })
   }
   finally {
     await client.close()

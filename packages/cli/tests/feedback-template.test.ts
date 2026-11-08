@@ -14,7 +14,12 @@ import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli
 
 describe('feedback 生成工程', () => {
   it.each(['api', 'fullstack'] as const)('%s 选择 feedback 补齐持久化、附件和认证依赖', (appType) => {
-    const context = buildTemplateContext({ name: 'feedback-sample', appType, features: ['feedback' as FeatureId], packageManager: 'pnpm' })
+    const context = buildTemplateContext({
+      name: 'feedback-sample',
+      appType,
+      features: ['feedback' as FeatureId],
+      packageManager: 'pnpm',
+    })
     expect(context.features.db).toBe(true)
     expect(context.features.storage).toBe(true)
     expect(context.features.reach).not.toBe(true)
@@ -36,11 +41,21 @@ describe('feedback 生成工程', () => {
   it.each([false, true])('原生反馈保存按功能开关隔离依赖和权限，启用=%s', async (enabled) => {
     const directory = await mkdtemp(path.join(process.cwd(), '.tmp-native-feedback-'))
     try {
-      await generateFromTemplates(directory, buildTemplateContext({ name: 'native-feedback', appType: 'fullstack', frontends: ['app', 'desktop'], features: enabled ? ['feedback'] : [], packageManager: 'pnpm' }))
+      await generateFromTemplates(directory, buildTemplateContext({
+        name: 'native-feedback',
+        appType: 'fullstack',
+        frontends: ['app', 'desktop'],
+        features: enabled
+          ? ['feedback']
+          : [],
+        packageManager: 'pnpm',
+      }))
       for (const target of ['app', 'desktop']) {
         const root = path.join(directory, 'apps', `native-feedback-${target}`)
         const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'))
-        const plugins = target === 'app' ? ['@capacitor/filesystem', '@capacitor/share'] : ['@tauri-apps/plugin-dialog', '@tauri-apps/plugin-fs']
+        const plugins = target === 'app'
+          ? ['@capacitor/filesystem', '@capacitor/share']
+          : ['@tauri-apps/plugin-dialog', '@tauri-apps/plugin-fs']
         for (const name of ['@h-ai/feedback', ...plugins])
           expect(Boolean(manifest.dependencies[name])).toBe(enabled)
         expect((await readFile(path.join(root, 'src/main.ts'), 'utf8')).includes('configureFeedbackSaving')).toBe(enabled)
@@ -51,8 +66,17 @@ describe('feedback 生成工程', () => {
       expect(capabilities.permissions.includes('fs:allow-write-file')).toBe(enabled)
       expect((await readFile(path.join(native, 'Cargo.toml'), 'utf8')).includes('tauri-plugin-fs')).toBe(enabled)
       expect((await readFile(path.join(native, 'src/lib.rs'), 'utf8')).includes('tauri_plugin_fs::init')).toBe(enabled)
-      const eslint = new ESLint({ cwd: directory, overrideConfigFile: path.join(directory, 'eslint.config.js') })
-      const results = await eslint.lintFiles(['apps/native-feedback-app/package.json', 'apps/native-feedback-app/capacitor.config.ts', 'apps/native-feedback-app/src/main.ts', 'apps/native-feedback-desktop/package.json', 'apps/native-feedback-desktop/src/main.ts'])
+      const eslint = new ESLint({
+        cwd: directory,
+        overrideConfigFile: path.join(directory, 'eslint.config.js'),
+      })
+      const results = await eslint.lintFiles([
+        'apps/native-feedback-app/package.json',
+        'apps/native-feedback-app/capacitor.config.ts',
+        'apps/native-feedback-app/src/main.ts',
+        'apps/native-feedback-desktop/package.json',
+        'apps/native-feedback-desktop/src/main.ts',
+      ])
       expect(results.flatMap(result => result.messages.filter(message => message.severity === 2).map(message => `${path.relative(directory, result.filePath)}:${message.line} ${message.ruleId} ${message.message}`))).toEqual([])
     }
     finally {
@@ -63,8 +87,16 @@ describe('feedback 生成工程', () => {
   it.each(['api', 'fullstack'] as const)('%s 的普通业务上下文从可信令牌取得用户并绑定应用 scope', async (appType) => {
     const directory = await mkdtemp(path.join(tmpdir(), 'hai-feedback-context-'))
     try {
-      await generateFromTemplates(directory, buildTemplateContext({ name: 'feedback-sample', appType, frontends: ['web'], features: ['feedback'], packageManager: 'pnpm' }))
-      const file = appType === 'api' ? 'apps/feedback-sample-serv/src/app.ts' : 'packages/feedback-sample-serv/src/app-server.ts'
+      await generateFromTemplates(directory, buildTemplateContext({
+        name: 'feedback-sample',
+        appType,
+        frontends: ['web'],
+        features: ['feedback'],
+        packageManager: 'pnpm',
+      }))
+      const file = appType === 'api'
+        ? 'apps/feedback-sample-serv/src/app.ts'
+        : 'packages/feedback-sample-serv/src/app-server.ts'
       const source = await readFile(path.join(directory, file), 'utf8')
       const parsed = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)
       const declarations: string[] = []
@@ -76,16 +108,37 @@ describe('feedback 生成工程', () => {
       visit(parsed)
       expect(declarations).toHaveLength(2)
       expect(source).toMatch(/\bcreateContext,/)
-      const verifyToken = vi.fn(async (token: string) => token === 'trusted-token' ? ok({ userId: 'trusted-user', roles: ['user'], permissions: ['feedback:create'] }) : err(HaiCommonError.UNAUTHORIZED))
-      const code = ts.transpileModule(`${declarations.join('\n')}\ncreateContext`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText
-      const result: unknown = runInNewContext(code, { serv: { buildAuthContextFactory }, iam: { auth: { verifyToken } } })
+      const verifyToken = vi.fn(async (token: string) => token === 'trusted-token'
+        ? ok({
+            userId: 'trusted-user',
+            roles: ['user'],
+            permissions: ['feedback:create'],
+          })
+        : err(HaiCommonError.UNAUTHORIZED))
+      const code = ts.transpileModule(`${declarations.join('\n')}\ncreateContext`, {
+        compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+      }).outputText
+      const result: unknown = runInNewContext(code, {
+        serv: { buildAuthContextFactory },
+        iam: {
+          auth: { verifyToken },
+        },
+      })
       expect(typeof result).toBe('function')
       const createContext = result as CreateServContext
-      const context = await createContext({ request: new Request('https://example.test/api', { headers: { 'authorization': 'Bearer trusted-token', 'x-scope-id': 'untrusted-scope', 'x-user-id': 'untrusted-user' } }) })
+      const context = await createContext({
+        request: new Request('https://example.test/api', {
+          headers: { 'authorization': 'Bearer trusted-token', 'x-scope-id': 'untrusted-scope', 'x-user-id': 'untrusted-user' },
+        }),
+      })
       expect(context.scopeId).toBe('feedback-sample')
       expect(context.session?.userId).toBe('trusted-user')
       expect(verifyToken).toHaveBeenCalledWith('trusted-token')
-      const anonymous = await createContext({ request: new Request('https://example.test/api', { headers: { 'authorization': 'Bearer invalid', 'x-scope-id': 'untrusted-scope' } }) })
+      const anonymous = await createContext({
+        request: new Request('https://example.test/api', {
+          headers: { 'authorization': 'Bearer invalid', 'x-scope-id': 'untrusted-scope' },
+        }),
+      })
       expect(anonymous.scopeId).toBe('feedback-sample')
       expect(anonymous.session).toBeUndefined()
     }
@@ -97,7 +150,13 @@ describe('feedback 生成工程', () => {
   it('fullstack 实际生成相同采集组件的入口、列表、初始化和受保护接口', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'hai-feedback-template-'))
     try {
-      await generateFromTemplates(directory, buildTemplateContext({ name: 'feedback-sample', appType: 'fullstack', frontends: ['web'], features: ['feedback'], packageManager: 'pnpm' }))
+      await generateFromTemplates(directory, buildTemplateContext({
+        name: 'feedback-sample',
+        appType: 'fullstack',
+        frontends: ['web'],
+        features: ['feedback'],
+        packageManager: 'pnpm',
+      }))
       const shared = 'packages/feedback-sample-shared'
       const service = 'packages/feedback-sample-serv'
       const entry = await readFile(path.join(directory, shared, 'src/lib/components/FeedbackEntry.svelte'), 'utf8')
@@ -130,11 +189,37 @@ describe('feedback 生成工程', () => {
   it.each(['api', 'fullstack'] as const)('%s 的反馈入口通过生成工程的实际 lint 规则', async (appType) => {
     const directory = await mkdtemp(path.join(process.cwd(), '.tmp-feedback-quality-'))
     try {
-      await generateFromTemplates(directory, buildTemplateContext({ name: 'feedback-sample', appType, frontends: ['web'], features: ['feedback'], packageManager: 'pnpm' }))
-      const eslint = new ESLint({ cwd: directory, overrideConfigFile: path.join(directory, 'eslint.config.js') })
+      await generateFromTemplates(directory, buildTemplateContext({
+        name: 'feedback-sample',
+        appType,
+        frontends: ['web'],
+        features: ['feedback'],
+        packageManager: 'pnpm',
+      }))
+      const eslint = new ESLint({
+        cwd: directory,
+        overrideConfigFile: path.join(directory, 'eslint.config.js'),
+      })
       const paths = appType === 'api'
-        ? ['e2e', 'apps/feedback-sample-serv/src/app.ts', 'apps/feedback-sample-serv/src/lib/server/init.ts', 'apps/feedback-sample-serv/src/server/procedures/index.ts', 'apps/feedback-sample-contract/src/feedback-sample-contract.ts']
-        : ['e2e', 'packages/feedback-sample-serv/src/app-server.ts', 'packages/feedback-sample-serv/src/server/runtime.ts', 'packages/feedback-sample-serv/src/server/procedures/index.ts', 'packages/feedback-sample-contract/src/feedback-sample-contract.ts', 'packages/feedback-sample-shared/src/lib/api/feedback-client.ts', 'packages/feedback-sample-shared/src/lib/components/FeedbackEntry.svelte', 'packages/feedback-sample-shared/src/lib/components/AdminWorkspace.svelte', 'packages/feedback-sample-shared/src/lib/components/AppShell.svelte', 'packages/feedback-sample-shared/src/lib/pages/feedback.svelte']
+        ? [
+            'e2e',
+            'apps/feedback-sample-serv/src/app.ts',
+            'apps/feedback-sample-serv/src/lib/server/init.ts',
+            'apps/feedback-sample-serv/src/server/procedures/index.ts',
+            'apps/feedback-sample-contract/src/feedback-sample-contract.ts',
+          ]
+        : [
+            'e2e',
+            'packages/feedback-sample-serv/src/app-server.ts',
+            'packages/feedback-sample-serv/src/server/runtime.ts',
+            'packages/feedback-sample-serv/src/server/procedures/index.ts',
+            'packages/feedback-sample-contract/src/feedback-sample-contract.ts',
+            'packages/feedback-sample-shared/src/lib/api/feedback-client.ts',
+            'packages/feedback-sample-shared/src/lib/components/FeedbackEntry.svelte',
+            'packages/feedback-sample-shared/src/lib/components/AdminWorkspace.svelte',
+            'packages/feedback-sample-shared/src/lib/components/AppShell.svelte',
+            'packages/feedback-sample-shared/src/lib/pages/feedback.svelte',
+          ]
       const results = await eslint.lintFiles(paths)
       expect(results.flatMap(result => result.messages.filter(message => message.severity === 2).map(message => `${path.relative(directory, result.filePath)}:${message.line} ${message.ruleId} ${message.message}`))).toEqual([])
     }

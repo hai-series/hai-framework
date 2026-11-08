@@ -11,5 +11,10 @@ export default defineConfig({
     'payment/index': 'src/payment/index.ts',
     'feedback/index': 'src/feedback/index.ts',
   },
-  external: ['@h-ai/storage/schemas', '@h-ai/core', '@orpc/contract', 'zod'],
+  external: [
+    '@h-ai/storage/schemas',
+    '@h-ai/core',
+    '@orpc/contract',
+    'zod',
+  ],
 })

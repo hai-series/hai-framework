@@ -54,7 +54,9 @@ export function createHttpsAssets(config: HttpsConfig, projectDirectory: string)
       const now = Date.now()
       if (!publicKey.equals(parsed.publicKey.export({ type: 'spki', format: 'der' }))
         || now < Date.parse(parsed.validFrom) || now >= Date.parse(parsed.validTo)
-        || !(isIP(config.domain) ? parsed.checkIP(config.domain) : parsed.checkHost(config.domain))) {
+        || !(isIP(config.domain)
+          ? parsed.checkIP(config.domain)
+          : parsed.checkHost(config.domain))) {
         throw new Error('Certificate validation failed')
       }
       assets['tls/fullchain.pem'] = certificate
@@ -84,10 +86,14 @@ export function createHttpsAssets(config: HttpsConfig, projectDirectory: string)
  * ```
  */
 export function renderHttpsProxy(source: string, config: HttpsConfig, httpPort: number): string {
-  const publicPort = config.port === 443 ? '' : `:${config.port}`
+  const publicPort = config.port === 443
+    ? ''
+    : `:${config.port}`
   const challenge = '  location ^~ /.well-known/acme-challenge/ { root /var/www/certbot; }\n'
   const tls = source
-    .replace(`listen ${httpPort};`, `listen ${httpPort === 8443 ? 8444 : 8443} ssl;\n  ssl_certificate /etc/nginx/tls/fullchain.pem;\n  ssl_certificate_key /etc/nginx/tls/privkey.pem;`)
+    .replace(`listen ${httpPort};`, `listen ${httpPort === 8443
+      ? 8444
+      : 8443} ssl;\n  ssl_certificate /etc/nginx/tls/fullchain.pem;\n  ssl_certificate_key /etc/nginx/tls/privkey.pem;`)
     .replace('server_name _;', `server_name ${config.domain};`)
     .replaceAll('proxy_set_header X-Forwarded-Proto $scheme;', 'proxy_set_header X-Forwarded-Proto https;')
   const http = config.redirectHttp

@@ -19,20 +19,37 @@ let pg: PostgresContainerLease
 let redis: RedisContainerLease
 let db: Parameters<typeof reldb.init>[0]
 let cacheConfig: Parameters<typeof cache.init>[0]
-const settings: IamConfigInput = { otp: {}, security: { maxLoginAttempts: 3, lockoutDuration: 60 } }
+const settings: IamConfigInput = {
+  otp: {},
+  security: { maxLoginAttempts: 3, lockoutDuration: 60 },
+}
 let code = ''
 let token = ''
 beforeAll(async () => {
-  ;[pg, redis] = await Promise.all([acquirePostgresContainer(), acquireRedisContainer()])
-  db = { type: 'postgresql', host: pg.host, port: pg.port, database: pg.database, user: pg.user, password: pg.password }
+  ;[pg, redis] = await Promise.all([
+    acquirePostgresContainer(),
+    acquireRedisContainer(),
+  ])
+  db = {
+    type: 'postgresql',
+    host: pg.host,
+    port: pg.port,
+    database: pg.database,
+    user: pg.user,
+    password: pg.password,
+  }
   cacheConfig = { type: 'redis', host: redis.host, port: redis.port }
   expect((await reldb.init(db)).success).toBe(true)
   expect((await cache.init(cacheConfig)).success).toBe(true)
-  expect((await iam.init({ ...settings, onOtpSendEmail: async (_id, value) => {
-    code = value
-  }, onPasswordResetRequest: async (_user, value) => {
-    token = value
-  } })).success).toBe(true)
+  expect((await iam.init({
+    ...settings,
+    onOtpSendEmail: async (_id, value) => {
+      code = value
+    },
+    onPasswordResetRequest: async (_user, value) => {
+      token = value
+    },
+  })).success).toBe(true)
 }, 300_000)
 afterAll(async () => {
   await iam.close()
@@ -44,7 +61,20 @@ afterAll(async () => {
 
 function worker(input: object): Promise<{ success: boolean, code?: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [fileURLToPath(new URL('./helpers/iam-security-worker.mjs', import.meta.url))], { env: { ...process.env, IAM_SECURITY_WORKER_INPUT: JSON.stringify({ db, cache: cacheConfig, iam: settings, ...input }) }, windowsHide: true })
+    const child = spawn(process.execPath, [
+      fileURLToPath(new URL('./helpers/iam-security-worker.mjs', import.meta.url)),
+    ], {
+      env: {
+        ...process.env,
+        IAM_SECURITY_WORKER_INPUT: JSON.stringify({
+          db,
+          cache: cacheConfig,
+          iam: settings,
+          ...input,
+        }),
+      },
+      windowsHide: true,
+    })
     let output = ''
     let diagnostics = ''
     child.stdout.on('data', (data: Buffer) => {
@@ -64,15 +94,24 @@ function worker(input: object): Promise<{ success: boolean, code?: string }> {
 
 it('独立节点累计错误密码达到统一锁定阈值', async () => {
   expect((await iam.user.register({ username: 'distributed-password', password: 'Password123' })).success).toBe(true)
-  const results = await Promise.all(Array.from({ length: 6 }, () => worker({ operation: 'password', credentials: { identifier: 'distributed-password', password: 'wrong' } })))
+  const results = await Promise.all(Array.from({ length: 6 }, () => worker({
+    operation: 'password',
+    credentials: { identifier: 'distributed-password', password: 'wrong' },
+  })))
   expect(results.every(result => !result.success)).toBe(true)
-  expect(await iam.auth.login({ identifier: 'distributed-password', password: 'Password123' })).toMatchObject({ success: false, error: { code: HaiIamError.INVALID_CREDENTIALS.code } })
+  expect(await iam.auth.login({ identifier: 'distributed-password', password: 'Password123' })).toMatchObject({
+    success: false,
+    error: { code: HaiIamError.INVALID_CREDENTIALS.code },
+  })
   await expectAccountLocked('distributed-password')
 }, 60_000)
 
 it('独立节点仅有一次 OTP 消费和一次发送成功', async () => {
   await iam.auth.sendOtp('distributed-otp@example.com')
-  const results = await Promise.all(Array.from({ length: 6 }, () => worker({ operation: 'otp', credentials: { identifier: 'distributed-otp@example.com', code } })))
+  const results = await Promise.all(Array.from({ length: 6 }, () => worker({
+    operation: 'otp',
+    credentials: { identifier: 'distributed-otp@example.com', code },
+  })))
   expect(results.filter(result => result.success)).toHaveLength(1)
   const sent = await Promise.all(Array.from({ length: 6 }, () => worker({ operation: 'send', identifier: 'distributed-send@example.com' })))
   expect(sent.filter(result => result.success)).toHaveLength(1)

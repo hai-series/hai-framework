@@ -20,14 +20,24 @@ describe('core.config.loadEnvFiles', () => {
     writeFileSync(path.join(envDir, '.env.local'), 'HAI_ENV_TEST_VALUE=private\nHAI_ENV_TEST_EMPTY=\n')
     vi.stubEnv('HAI_ENV_TEST_SHELL', 'shell')
     const result = core.config.loadEnvFiles({ envDir, mode: 'development' })
-    expect(result).toMatchObject({ success: true, data: { HAI_ENV_TEST_VALUE: 'private', HAI_ENV_TEST_EMPTY: '', HAI_ENV_TEST_SHELL: 'shell' } })
+    expect(result).toMatchObject({
+      success: true,
+      data: { HAI_ENV_TEST_VALUE: 'private', HAI_ENV_TEST_EMPTY: '', HAI_ENV_TEST_SHELL: 'shell' },
+    })
     expect(process.env.HAI_ENV_TEST_VALUE).toBeUndefined()
   })
 
-  it.each([['dev', 'development'], ['test', 'test'], ['prod', 'production']])('读取 %s 环境文件（%s）', (mode, alias) => {
+  it.each([
+    ['dev', 'development'],
+    ['test', 'test'],
+    ['prod', 'production'],
+  ])('读取 %s 环境文件（%s）', (mode, alias) => {
     writeFileSync(path.join(envDir, '.env'), 'HAI_ENV_TEST_VALUE=base\n')
     writeFileSync(path.join(envDir, `.env.${mode}`), `HAI_ENV_TEST_VALUE=${mode}\n`)
-    expect(core.config.loadEnvFiles({ envDir, mode: alias })).toMatchObject({ success: true, data: { HAI_ENV_TEST_VALUE: mode } })
+    expect(core.config.loadEnvFiles({ envDir, mode: alias })).toMatchObject({
+      success: true,
+      data: { HAI_ENV_TEST_VALUE: mode },
+    })
   })
 
   it('不存在的文件可省略，模式名不能逃逸目录', () => {

@@ -40,10 +40,16 @@ function createContextOperations(
   deps?: Parameters<typeof createRawContextOperations>[5],
 ) {
   const ops = createRawContextOperations(config, token, compress, store, sessions, deps)
-  return { ...ops, createManager: (options?: Partial<ContextManagerOptions>) => ops.createManager({
-    scope: { objectId: 'test-user', sessionId: crypto.randomUUID() },
-    ...options,
-  }) }
+  return {
+    ...ops,
+    createManager: (options?: Partial<ContextManagerOptions>) => ops.createManager({
+      scope: {
+        objectId: 'test-user',
+        sessionId: crypto.randomUUID(),
+      },
+      ...options,
+    }),
+  }
 }
 
 // ─── Mock 工厂 ───
@@ -61,11 +67,13 @@ function createMockLLM(responses: Array<{ content: string | null }>): LLMOperati
           object: 'chat.completion' as const,
           created: Date.now(),
           model: 'test-model',
-          choices: [{
-            index: 0,
-            message: { role: 'assistant' as const, content: resp.content },
-            finish_reason: 'stop' as const,
-          }],
+          choices: [
+            {
+              index: 0,
+              message: { role: 'assistant' as const, content: resp.content },
+              finish_reason: 'stop' as const,
+            },
+          ],
           usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
         },
       }
@@ -118,7 +126,9 @@ describe('context createManager', () => {
     const llm = createMockLLM([])
     const ops = createOps(defaultCompressConfig, llm, 8000)
 
-    const result = ops.createManager({ compress: { maxTokens: 4000 } })
+    const result = ops.createManager({
+      compress: { maxTokens: 4000 },
+    })
     expect(result.success).toBe(true)
     if (result.success) {
       const messages = result.data.getMessages()
@@ -133,7 +143,9 @@ describe('context createManager', () => {
     const llm = createMockLLM([])
     const ops = createOps(defaultCompressConfig, llm, 100000)
 
-    const managerResult = ops.createManager({ compress: { maxTokens: 100000 } })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 100000 },
+    })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
       return
@@ -150,9 +162,11 @@ describe('context createManager', () => {
   })
 
   it('超限时自动压缩', async () => {
-    const llm = createMockLLM([{
-      content: 'Compressed summary of conversation.',
-    }])
+    const llm = createMockLLM([
+      {
+        content: 'Compressed summary of conversation.',
+      },
+    ])
     const ops = createOps(defaultCompressConfig, llm, 8000)
 
     const managerResult = ops.createManager({
@@ -215,7 +229,9 @@ describe('context createManager', () => {
     const llm = createMockLLM([])
     const ops = createOps(defaultCompressConfig, llm, 8000)
 
-    const managerResult = ops.createManager({ compress: { maxTokens: 5000 } })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 5000 },
+    })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
       return
@@ -235,7 +251,9 @@ describe('context createManager', () => {
     const llm = createMockLLM([])
     const ops = createOps(defaultCompressConfig, llm, 100000)
 
-    const managerResult = ops.createManager({ compress: { maxTokens: 100000 } })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 100000 },
+    })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
       return
@@ -351,7 +369,9 @@ describe('context session management', () => {
       updatedAt: now,
     })
     await contextStore.save(key, {
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
       scope,
       summaries: [],
       turns: [],
@@ -375,10 +395,38 @@ describe('context session management', () => {
     const now = Date.now()
     const keyA = JSON.stringify(['user-A', 'shared'])
     const keyB = JSON.stringify(['user-B', 'shared'])
-    await sessionStore.save(keyA, { sessionId: 'shared', objectId: 'user-A', createdAt: now, updatedAt: now })
-    await sessionStore.save(keyB, { sessionId: 'shared', objectId: 'user-B', createdAt: now, updatedAt: now })
-    await contextStore.save(keyA, { scope: { objectId: 'user-A', sessionId: 'shared' }, messages: [{ role: 'user', content: 'A' }], summaries: [], turns: [], epoch: crypto.randomUUID(), updatedAt: now })
-    await contextStore.save(keyB, { scope: { objectId: 'user-B', sessionId: 'shared' }, messages: [{ role: 'user', content: 'B' }], summaries: [], turns: [], epoch: crypto.randomUUID(), updatedAt: now })
+    await sessionStore.save(keyA, {
+      sessionId: 'shared',
+      objectId: 'user-A',
+      createdAt: now,
+      updatedAt: now,
+    })
+    await sessionStore.save(keyB, {
+      sessionId: 'shared',
+      objectId: 'user-B',
+      createdAt: now,
+      updatedAt: now,
+    })
+    await contextStore.save(keyA, {
+      scope: { objectId: 'user-A', sessionId: 'shared' },
+      messages: [
+        { role: 'user', content: 'A' },
+      ],
+      summaries: [],
+      turns: [],
+      epoch: crypto.randomUUID(),
+      updatedAt: now,
+    })
+    await contextStore.save(keyB, {
+      scope: { objectId: 'user-B', sessionId: 'shared' },
+      messages: [
+        { role: 'user', content: 'B' },
+      ],
+      summaries: [],
+      turns: [],
+      epoch: crypto.randomUUID(),
+      updatedAt: now,
+    })
 
     await ops.removeSession({ objectId: 'user-A', sessionId: 'shared' })
 
@@ -446,7 +494,9 @@ describe('context chat / chatStream', () => {
   }
 
   it('chat 发送消息并获取回复', async () => {
-    const llm = createMockLLM([{ content: '你好！很高兴认识你。' }])
+    const llm = createMockLLM([
+      { content: '你好！很高兴认识你。' },
+    ])
     const ops = createOpsWithDeps(llm)
 
     const managerResult = ops.createManager({
@@ -482,7 +532,9 @@ describe('context chat / chatStream', () => {
     // 不传 deps
     const ops = createContextOperations(defaultCompressConfig, tokenOps, compressOps)
 
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 } })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+    })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
       return
@@ -521,7 +573,9 @@ describe('context chat / chatStream', () => {
   })
 
   it('chat 含 systemPrompt 时消息列表包含 system', async () => {
-    const llm = createMockLLM([{ content: '我是助手' }])
+    const llm = createMockLLM([
+      { content: '我是助手' },
+    ])
     const ops = createOpsWithDeps(llm)
 
     const managerResult = ops.createManager({
@@ -544,10 +598,14 @@ describe('context chat / chatStream', () => {
   })
 
   it('chat 使用 enablePersist:false 调用 LLM', async () => {
-    const llm = createMockLLM([{ content: 'reply' }])
+    const llm = createMockLLM([
+      { content: 'reply' },
+    ])
     const ops = createOpsWithDeps(llm)
 
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 } })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+    })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
       return
@@ -567,7 +625,9 @@ describe('context chat / chatStream', () => {
     ])
     const ops = createOpsWithDeps(llm)
 
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 } })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+    })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
       return
@@ -600,9 +660,13 @@ describe('context conversation commit layer', () => {
   }
 
   it('auto 模式（默认）：chat 自动提交完整生成文本', async () => {
-    const llm = createMockLLM([{ content: '完整回答一千字' }])
+    const llm = createMockLLM([
+      { content: '完整回答一千字' },
+    ])
     const ops = createOpsWithDeps(llm)
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 } })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+    })
     if (!managerResult.success)
       return
     const manager = managerResult.data
@@ -629,9 +693,14 @@ describe('context conversation commit layer', () => {
   })
 
   it('manual 模式：生成后不写入上下文，需显式 commitTurn', async () => {
-    const llm = createMockLLM([{ content: '完整回答' }])
+    const llm = createMockLLM([
+      { content: '完整回答' },
+    ])
     const ops = createOpsWithDeps(llm)
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, turnCommit: 'manual' })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+      turnCommit: 'manual',
+    })
     if (!managerResult.success)
       return
     const manager = managerResult.data
@@ -663,9 +732,14 @@ describe('context conversation commit layer', () => {
   })
 
   it('manual 模式：被打断时只写入实际播放的文本', async () => {
-    const llm = createMockLLM([{ content: '本想说满一千字的完整回答' }])
+    const llm = createMockLLM([
+      { content: '本想说满一千字的完整回答' },
+    ])
     const ops = createOpsWithDeps(llm)
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, turnCommit: 'manual' })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+      turnCommit: 'manual',
+    })
     if (!managerResult.success)
       return
     const manager = managerResult.data
@@ -692,9 +766,14 @@ describe('context conversation commit layer', () => {
   })
 
   it('manual 模式：打断且未表达任何内容时不写入 assistant 消息', async () => {
-    const llm = createMockLLM([{ content: '还没来得及说' }])
+    const llm = createMockLLM([
+      { content: '还没来得及说' },
+    ])
     const ops = createOpsWithDeps(llm)
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, turnCommit: 'manual' })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+      turnCommit: 'manual',
+    })
     if (!managerResult.success)
       return
     const manager = managerResult.data
@@ -712,9 +791,14 @@ describe('context conversation commit layer', () => {
   })
 
   it('commitTurn 未知 turnId 返回 CONTEXT_TURN_NOT_FOUND', async () => {
-    const llm = createMockLLM([{ content: 'x' }])
+    const llm = createMockLLM([
+      { content: 'x' },
+    ])
     const ops = createOpsWithDeps(llm)
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, turnCommit: 'manual' })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+      turnCommit: 'manual',
+    })
     if (!managerResult.success)
       return
 
@@ -725,9 +809,14 @@ describe('context conversation commit layer', () => {
   })
 
   it('同一轮次重复提交幂等且不同内容拒绝', async () => {
-    const llm = createMockLLM([{ content: 'x' }])
+    const llm = createMockLLM([
+      { content: 'x' },
+    ])
     const ops = createOpsWithDeps(llm)
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, turnCommit: 'manual' })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+      turnCommit: 'manual',
+    })
     if (!managerResult.success)
       return
     const manager = managerResult.data
@@ -746,9 +835,14 @@ describe('context conversation commit layer', () => {
   })
 
   it('markTurnSpeaking 将 generating 轮次标记为 speaking', async () => {
-    const llm = createMockLLM([{ content: 'x' }])
+    const llm = createMockLLM([
+      { content: 'x' },
+    ])
     const ops = createOpsWithDeps(llm)
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, turnCommit: 'manual' })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+      turnCommit: 'manual',
+    })
     if (!managerResult.success)
       return
     const manager = managerResult.data
@@ -772,9 +866,22 @@ describe('context consolidate (memory lifecycle)', () => {
   function createMockMemory(): { memory: MemoryOperations, extract: ReturnType<typeof vi.fn> } {
     const extract = vi.fn(async () => ({
       success: true as const,
-      data: [{ id: 'lt1', content: '长期事实', type: 'fact' as const, importance: 0.8, createdAt: Date.now(), lastAccessedAt: Date.now(), accessCount: 0 }],
+      data: [
+        {
+          id: 'lt1',
+          content: '长期事实',
+          type: 'fact' as const,
+          importance: 0.8,
+          createdAt: Date.now(),
+          lastAccessedAt: Date.now(),
+          accessCount: 0,
+        },
+      ],
     }))
-    return { memory: { extract } as unknown as MemoryOperations, extract }
+    return {
+      memory: { extract } as unknown as MemoryOperations,
+      extract,
+    }
   }
 
   function createOpsWithMemoryAndSummary(llm: LLMOperations, memory: MemoryOperations) {
@@ -786,14 +893,19 @@ describe('context consolidate (memory lifecycle)', () => {
 
   it('consolidate 生成摘要并以持久作用域固化长期记忆', async () => {
     // 第一个 mock 回复用于 chat，第二个用于 summary.generate
-    const llm = createMockLLM([{ content: 'AI 回复' }, { content: '本次会话摘要' }])
+    const llm = createMockLLM([
+      { content: 'AI 回复' },
+      { content: '本次会话摘要' },
+    ])
     const { memory, extract } = createMockMemory()
     const ops = createOpsWithMemoryAndSummary(llm, memory)
 
     const managerResult = ops.createManager({
       scope: { objectId: 'user-1', sessionId: 'sess-1' },
       compress: { maxTokens: 8000 },
-      memory: { scope: { sessionId: 'sess-1' } },
+      memory: {
+        scope: { sessionId: 'sess-1' },
+      },
     })
     if (!managerResult.success)
       return
@@ -801,7 +913,9 @@ describe('context consolidate (memory lifecycle)', () => {
 
     await manager.chat('聊点什么')
 
-    const result = await manager.consolidate({ scope: { userId: 'user-1' } })
+    const result = await manager.consolidate({
+      scope: { userId: 'user-1' },
+    })
     expect(result.success).toBe(true)
     if (!result.success)
       return
@@ -810,18 +924,25 @@ describe('context consolidate (memory lifecycle)', () => {
 
     // 固化使用传入的持久作用域（不含 sessionId）
     const extractCall = extract.mock.calls[0]
-    expect(extractCall[1]).toEqual(expect.objectContaining({ objectId: 'user-1', scope: { userId: 'user-1' } }))
+    expect(extractCall[1]).toEqual(expect.objectContaining({
+      objectId: 'user-1',
+      scope: { userId: 'user-1' },
+    }))
   })
 
   it('consolidate 缺少 summary/memory 依赖时返回 MEMORY_PROMOTE_FAILED', async () => {
     const tokenOps = createTokenOperations(defaultTokenConfig)
-    const llm = createMockLLM([{ content: 'x' }])
+    const llm = createMockLLM([
+      { content: 'x' },
+    ])
     const summaryOps = createSummaryOperations(defaultLLMConfig, llm, tokenOps, defaultSummaryConfig)
     const compressOps = createCompressOperations(defaultCompressConfig, tokenOps, summaryOps, 8000)
     // 只传 llm，无 memory / summary
     const ops = createContextOperations(defaultCompressConfig, tokenOps, compressOps, undefined, undefined, { llm })
 
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 } })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+    })
     if (!managerResult.success)
       return
 
@@ -871,15 +992,17 @@ describe('context chat tool call loop', () => {
               object: 'chat.completion' as const,
               created: Date.now(),
               model: 'test-model',
-              choices: [{
-                index: 0,
-                message: {
-                  role: 'assistant' as const,
-                  content: null,
-                  tool_calls: toolCalls,
+              choices: [
+                {
+                  index: 0,
+                  message: {
+                    role: 'assistant' as const,
+                    content: null,
+                    tool_calls: toolCalls,
+                  },
+                  finish_reason: 'tool_calls' as const,
                 },
-                finish_reason: 'tool_calls' as const,
-              }],
+              ],
               usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
             },
           }
@@ -892,11 +1015,13 @@ describe('context chat tool call loop', () => {
             object: 'chat.completion' as const,
             created: Date.now(),
             model: 'test-model',
-            choices: [{
-              index: 0,
-              message: { role: 'assistant' as const, content: finalReply },
-              finish_reason: 'stop' as const,
-            }],
+            choices: [
+              {
+                index: 0,
+                message: { role: 'assistant' as const, content: finalReply },
+                finish_reason: 'stop' as const,
+              },
+            ],
             usage: { prompt_tokens: 20, completion_tokens: 10, total_tokens: 30 },
           },
         }
@@ -907,11 +1032,13 @@ describe('context chat tool call loop', () => {
   }
 
   it('chat 自动执行工具并返回最终回复', async () => {
-    const toolCalls: ToolCall[] = [{
-      id: 'call-1',
-      type: 'function',
-      function: { name: 'getWeather', arguments: '{"city":"北京"}' },
-    }]
+    const toolCalls: ToolCall[] = [
+      {
+        id: 'call-1',
+        type: 'function',
+        function: { name: 'getWeather', arguments: '{"city":"北京"}' },
+      },
+    ]
 
     const llm = createToolCallLLM(toolCalls, '北京今天25度，晴天。')
     const ops = createOpsWithDeps(llm)
@@ -920,7 +1047,9 @@ describe('context chat tool call loop', () => {
     const weatherTool = ai.tools.define({
       name: 'getWeather',
       description: '获取天气',
-      parameters: z.object({ city: z.string() }),
+      parameters: z.object({
+        city: z.string(),
+      }),
       handler: async ({ city }) => ({ temp: 25, city, condition: '晴' }),
     })
     const registry = ai.tools.createRegistry()
@@ -946,7 +1075,9 @@ describe('context chat tool call loop', () => {
   })
 
   it('chat 无 tool_calls 时直接返回文本', async () => {
-    const llm = createMockLLM([{ content: '直接回复' }])
+    const llm = createMockLLM([
+      { content: '直接回复' },
+    ])
     const ops = createOpsWithDeps(llm)
 
     const registry = ai.tools.createRegistry()
@@ -968,11 +1099,13 @@ describe('context chat tool call loop', () => {
   })
 
   it('chat 工具执行失败时错误信息回传 LLM', async () => {
-    const toolCalls: ToolCall[] = [{
-      id: 'call-err',
-      type: 'function',
-      function: { name: 'failTool', arguments: '{}' },
-    }]
+    const toolCalls: ToolCall[] = [
+      {
+        id: 'call-err',
+        type: 'function',
+        function: { name: 'failTool', arguments: '{}' },
+      },
+    ]
     const llm = createToolCallLLM(toolCalls, '工具调用失败了，请稍后再试。')
     const ops = createOpsWithDeps(llm)
 
@@ -1024,35 +1157,43 @@ describe('context chat tool call loop', () => {
               object: 'chat.completion.chunk',
               created: Date.now(),
               model: 'test-model',
-              choices: [{
-                index: 0,
-                delta: {
-                  role: 'assistant',
-                  tool_calls: [{
-                    index: 0,
-                    id: 'call-stream-1',
-                    type: 'function',
-                    function: { name: 'add', arguments: '{"a":' },
-                  }],
+              choices: [
+                {
+                  index: 0,
+                  delta: {
+                    role: 'assistant',
+                    tool_calls: [
+                      {
+                        index: 0,
+                        id: 'call-stream-1',
+                        type: 'function',
+                        function: { name: 'add', arguments: '{"a":' },
+                      },
+                    ],
+                  },
+                  finish_reason: null,
                 },
-                finish_reason: null,
-              }],
+              ],
             } as ChatCompletionChunk
             yield {
               id: 'chunk-2',
               object: 'chat.completion.chunk',
               created: Date.now(),
               model: 'test-model',
-              choices: [{
-                index: 0,
-                delta: {
-                  tool_calls: [{
-                    index: 0,
-                    function: { arguments: '3,"b":5}' },
-                  }],
+              choices: [
+                {
+                  index: 0,
+                  delta: {
+                    tool_calls: [
+                      {
+                        index: 0,
+                        function: { arguments: '3,"b":5}' },
+                      },
+                    ],
+                  },
+                  finish_reason: 'tool_calls',
                 },
-                finish_reason: 'tool_calls',
-              }],
+              ],
             } as ChatCompletionChunk
           })()
         }
@@ -1063,22 +1204,26 @@ describe('context chat tool call loop', () => {
             object: 'chat.completion.chunk',
             created: Date.now(),
             model: 'test-model',
-            choices: [{
-              index: 0,
-              delta: { role: 'assistant', content: '3+5=' },
-              finish_reason: null,
-            }],
+            choices: [
+              {
+                index: 0,
+                delta: { role: 'assistant', content: '3+5=' },
+                finish_reason: null,
+              },
+            ],
           } as ChatCompletionChunk
           yield {
             id: 'chunk-4',
             object: 'chat.completion.chunk',
             created: Date.now(),
             model: 'test-model',
-            choices: [{
-              index: 0,
-              delta: { content: '8' },
-              finish_reason: 'stop',
-            }],
+            choices: [
+              {
+                index: 0,
+                delta: { content: '8' },
+                finish_reason: 'stop',
+              },
+            ],
           } as ChatCompletionChunk
         })()
       }),
@@ -1090,7 +1235,10 @@ describe('context chat tool call loop', () => {
     const addTool = ai.tools.define({
       name: 'add',
       description: '加法',
-      parameters: z.object({ a: z.number(), b: z.number() }),
+      parameters: z.object({
+        a: z.number(),
+        b: z.number(),
+      }),
       handler: async ({ a, b }) => a + b,
     })
     const registry = ai.tools.createRegistry()
@@ -1135,21 +1283,35 @@ describe('context chat tool call loop', () => {
           object: 'chat.completion.chunk',
           created: Date.now(),
           model: 'test-model',
-          choices: [{ index: 0, delta: { role: 'assistant', content: '你好' }, finish_reason: null }],
+          choices: [
+            {
+              index: 0,
+              delta: { role: 'assistant', content: '你好' },
+              finish_reason: null,
+            },
+          ],
         } as ChatCompletionChunk
         yield {
           id: 'c2',
           object: 'chat.completion.chunk',
           created: Date.now(),
           model: 'test-model',
-          choices: [{ index: 0, delta: { content: '，世界' }, finish_reason: 'stop' }],
+          choices: [
+            {
+              index: 0,
+              delta: { content: '，世界' },
+              finish_reason: 'stop',
+            },
+          ],
         } as ChatCompletionChunk
       })()),
       listModels: vi.fn(),
     } as unknown as LLMOperations
 
     const ops = createOpsWithDeps(llm)
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 } })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+    })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
       return
@@ -1178,7 +1340,13 @@ describe('context chat tool call loop', () => {
           object: 'chat.completion.chunk',
           created: Date.now(),
           model: 'test-model',
-          choices: [{ index: 0, delta: { role: 'assistant', content: '已经说的部分' }, finish_reason: null }],
+          choices: [
+            {
+              index: 0,
+              delta: { role: 'assistant', content: '已经说的部分' },
+              finish_reason: null,
+            },
+          ],
         } as ChatCompletionChunk
         // 模拟外部打断
         controller.abort()
@@ -1189,14 +1357,23 @@ describe('context chat tool call loop', () => {
           object: 'chat.completion.chunk',
           created: Date.now(),
           model: 'test-model',
-          choices: [{ index: 0, delta: { content: '不该出现' }, finish_reason: 'stop' }],
+          choices: [
+            {
+              index: 0,
+              delta: { content: '不该出现' },
+              finish_reason: 'stop',
+            },
+          ],
         } as ChatCompletionChunk
       })()),
       listModels: vi.fn(),
     } as unknown as LLMOperations
 
     const ops = createOpsWithDeps(llm)
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, turnCommit: 'manual' })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+      turnCommit: 'manual',
+    })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
       return
@@ -1236,21 +1413,36 @@ describe('context chat tool call loop', () => {
           object: 'chat.completion.chunk',
           created: Date.now(),
           model: 'test-model',
-          choices: [{ index: 0, delta: { role: 'assistant', content: '说了一部分' }, finish_reason: null }],
+          choices: [
+            {
+              index: 0,
+              delta: { role: 'assistant', content: '说了一部分' },
+              finish_reason: null,
+            },
+          ],
         } as ChatCompletionChunk
         yield {
           id: 'c2',
           object: 'chat.completion.chunk',
           created: Date.now(),
           model: 'test-model',
-          choices: [{ index: 0, delta: { content: '后面还想说的' }, finish_reason: 'stop' }],
+          choices: [
+            {
+              index: 0,
+              delta: { content: '后面还想说的' },
+              finish_reason: 'stop',
+            },
+          ],
         } as ChatCompletionChunk
       })()),
       listModels: vi.fn(),
     } as unknown as LLMOperations
 
     const ops = createOpsWithDeps(llm)
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, turnCommit: 'manual' })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+      turnCommit: 'manual',
+    })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
       return
@@ -1329,7 +1521,12 @@ describe('context memory scope + flush', () => {
       clear: vi.fn(),
     } as unknown as MemoryOperations
 
-    return { memory, injectCalls, extractCalls, resolveExtract: () => resolveExtract() }
+    return {
+      memory,
+      injectCalls,
+      extractCalls,
+      resolveExtract: () => resolveExtract(),
+    }
   }
 
   function createOpsWithMemory(llm: LLMOperations, memory: MemoryOperations) {
@@ -1340,7 +1537,9 @@ describe('context memory scope + flush', () => {
   }
 
   it('chat 将 scope / types / minImportance 完整透传给 injectMemories（issue #5）', async () => {
-    const llm = createMockLLM([{ content: 'ok' }])
+    const llm = createMockLLM([
+      { content: 'ok' },
+    ])
     const mock = createMemoryMock()
     const ops = createOpsWithMemory(llm, mock.memory)
 
@@ -1374,7 +1573,9 @@ describe('context memory scope + flush', () => {
   })
 
   it('chat 将 scope / model / systemPrompt 透传给 extract（issue #5）', async () => {
-    const llm = createMockLLM([{ content: 'ok' }])
+    const llm = createMockLLM([
+      { content: 'ok' },
+    ])
     const mock = createMemoryMock()
     const ops = createOpsWithMemory(llm, mock.memory)
 
@@ -1409,7 +1610,9 @@ describe('context memory scope + flush', () => {
   })
 
   it('flush 等待后台记忆提取完成，pendingMemoryTasks 反映挂起数量（issue #14）', async () => {
-    const llm = createMockLLM([{ content: 'ok' }])
+    const llm = createMockLLM([
+      { content: 'ok' },
+    ])
     const mock = createMemoryMock()
     const ops = createOpsWithMemory(llm, mock.memory)
 
@@ -1436,7 +1639,9 @@ describe('context memory scope + flush', () => {
   })
 
   it('save 前自动 flush 后台记忆提取（issue #14）', async () => {
-    const llm = createMockLLM([{ content: 'ok' }])
+    const llm = createMockLLM([
+      { content: 'ok' },
+    ])
     const mock = createMemoryMock()
     const ops = createOpsWithMemory(llm, mock.memory)
 
@@ -1495,7 +1700,13 @@ describe('context concurrency + reset', () => {
             object: 'chat.completion' as const,
             created: Date.now(),
             model: 'test-model',
-            choices: [{ index: 0, message: { role: 'assistant' as const, content: '回复' }, finish_reason: 'stop' as const }],
+            choices: [
+              {
+                index: 0,
+                message: { role: 'assistant' as const, content: '回复' },
+                finish_reason: 'stop' as const,
+              },
+            ],
             usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
           },
         }
@@ -1503,7 +1714,11 @@ describe('context concurrency + reset', () => {
       chatStream: vi.fn(),
       listModels: vi.fn(),
     } as unknown as LLMOperations
-    return { llm, release: () => releaseFn(), callCount: () => calls }
+    return {
+      llm,
+      release: () => releaseFn(),
+      callCount: () => calls,
+    }
   }
 
   function createOpsWithDeps(llm: LLMOperations) {
@@ -1516,7 +1731,9 @@ describe('context concurrency + reset', () => {
   it('concurrency=reject（默认）：活动生成期间第二次 chat 返回 CONTEXT_BUSY', async () => {
     const { llm, release, callCount } = createControllableLLM()
     const ops = createOpsWithDeps(llm)
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 } })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+    })
     if (!managerResult.success)
       return
     const manager = managerResult.data
@@ -1542,7 +1759,10 @@ describe('context concurrency + reset', () => {
   it('concurrency=queue：第二次 chat 排队等待前一轮完成后再执行，保持消息顺序', async () => {
     const { llm, release, callCount } = createControllableLLM()
     const ops = createOpsWithDeps(llm)
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, concurrency: 'queue' })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+      concurrency: 'queue',
+    })
     if (!managerResult.success)
       return
     const manager = managerResult.data
@@ -1566,16 +1786,26 @@ describe('context concurrency + reset', () => {
     // 顺序正确：user1 → assistant1 → user2 → assistant2
     const msgs = manager.getMessages()
     if (msgs.success) {
-      expect(msgs.data.map(m => m.role)).toEqual(['user', 'assistant', 'user', 'assistant'])
+      expect(msgs.data.map(m => m.role)).toEqual([
+        'user',
+        'assistant',
+        'user',
+        'assistant',
+      ])
       expect(msgs.data[0].content).toBe('第一轮')
       expect(msgs.data[2].content).toBe('第二轮')
     }
   })
 
   it('reset 默认保留系统提示词并清空消息 / 轮次', async () => {
-    const llm = createMockLLM([{ content: '回复' }])
+    const llm = createMockLLM([
+      { content: '回复' },
+    ])
     const ops = createOpsWithDeps(llm)
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, systemPrompt: '你是助手' })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+      systemPrompt: '你是助手',
+    })
     if (!managerResult.success)
       return
     const manager = managerResult.data
@@ -1602,9 +1832,14 @@ describe('context concurrency + reset', () => {
   })
 
   it('reset preserveSystemPrompt=false 时不保留系统提示词', async () => {
-    const llm = createMockLLM([{ content: '回复' }])
+    const llm = createMockLLM([
+      { content: '回复' },
+    ])
     const ops = createOpsWithDeps(llm)
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, systemPrompt: '你是助手' })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+      systemPrompt: '你是助手',
+    })
     if (!managerResult.success)
       return
     const manager = managerResult.data
@@ -1620,7 +1855,9 @@ describe('context concurrency + reset', () => {
   it('reset 终止活动生成并释放屏障，之后可立即开始新一轮', async () => {
     const { llm, release, callCount } = createControllableLLM()
     const ops = createOpsWithDeps(llm)
-    const managerResult = ops.createManager({ compress: { maxTokens: 8000 } })
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+    })
     if (!managerResult.success)
       return
     const manager = managerResult.data

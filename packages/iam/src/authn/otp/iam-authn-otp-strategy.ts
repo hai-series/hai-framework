@@ -157,7 +157,12 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
     : OtpConfigSchema.parse({})
   const maxLoginAttempts = config.maxLoginAttempts ?? 5
   const lockoutDuration = config.lockoutDuration ?? 900
-  const failurePolicy = { maxLoginAttempts, lockoutDuration, lockoutEnabled: config.lockoutEnabled ?? true, failureWindow: config.failureWindow ?? 86400 }
+  const failurePolicy = {
+    maxLoginAttempts,
+    lockoutDuration,
+    lockoutEnabled: config.lockoutEnabled ?? true,
+    failureWindow: config.failureWindow ?? 86400,
+  }
   const registerConfig = config.registerConfig
   const allowAutoRegister = registerConfig?.enabled ?? config.autoRegister ?? false
   const defaultAccountStatus = registerConfig?.defaultAccountStatus ?? 'active'
@@ -212,8 +217,12 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
         const type = identifierType(identifier)
         const createResult = await config.userRepository.create({
           username: identifier,
-          email: type === 'email' ? identifier : undefined,
-          phone: type === 'phone' ? identifier : undefined,
+          email: type === 'email'
+            ? identifier
+            : undefined,
+          phone: type === 'phone'
+            ? identifier
+            : undefined,
           accountStatus: defaultAccountStatus,
           emailVerified: type === 'email',
           phoneVerified: type === 'phone',
@@ -221,7 +230,9 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
         if (!createResult.success) {
           return err(
             HaiIamError.REPOSITORY_ERROR,
-            iamM('iam_createUserFailed', { params: { message: createResult.error.message } }),
+            iamM('iam_createUserFailed', {
+              params: { message: createResult.error.message },
+            }),
             createResult.error,
           )
         }
@@ -259,7 +270,10 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
         return resetResult
       logger.debug('OTP authentication succeeded', { userId: storedUser.id })
 
-      return ok({ ...toUser(storedUser), credentialVersion: storedUser.credentialVersion ?? '' })
+      return ok({
+        ...toUser(storedUser),
+        credentialVersion: storedUser.credentialVersion ?? '',
+      })
     },
   }
 
@@ -276,7 +290,12 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
     if (!isChannelEnabled(identifier))
       return err(HaiIamError.LOGIN_DISABLED, iamM('iam_identifierTypeNotSupported'))
     const code = generateOtpCode(otpConfig.length)
-    const saved = await config.otpRepository.issueOtp({ identifier, code, expiresIn: otpConfig.expiresIn, resendInterval: otpConfig.resendInterval })
+    const saved = await config.otpRepository.issueOtp({
+      identifier,
+      code,
+      expiresIn: otpConfig.expiresIn,
+      resendInterval: otpConfig.resendInterval,
+    })
     if (!saved.success)
       return saved
     const context = saved.data

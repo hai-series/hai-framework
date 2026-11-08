@@ -273,7 +273,9 @@ function htmlToMarkdown(content: Buffer | string): string {
 
   // 表格（简化：每行单元格用 | 分隔）
   md = md.replace(HTML_TABLE_ROW_REGEX, (_, row) => {
-    const cells = [...row.matchAll(HTML_TABLE_CELL_REGEX)]
+    const cells = [
+      ...row.matchAll(HTML_TABLE_CELL_REGEX),
+    ]
     return `| ${cells.map(([, c]) => stripTags(c).trim()).join(' | ')} |\n`
   })
   md = md.replace(HTML_TABLE_CONTAINER_TAG_REGEX, '')
@@ -301,13 +303,17 @@ async function parsePdfContent(content: Buffer, outputFormat: OutputFormat = 'te
       // @ts-expect-error — pdfjs-dist is an optional peer dependency
       'pdfjs-dist/legacy/build/pdf.mjs',
     ) as { getDocument: (...args: unknown[]) => { promise: Promise<unknown> } }
-    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(content) })
+    const loadingTask = pdfjs.getDocument({
+      data: new Uint8Array(content),
+    })
     const pdf = await loadingTask.promise as {
       numPages: number
       getPage: (n: number) => Promise<{ getTextContent: () => Promise<{ items: Array<{ str?: string }> }> }>
     }
     const totalPages = pdf.numPages
-    const pagesToProcess = maxPages ? Math.min(maxPages, totalPages) : totalPages
+    const pagesToProcess = maxPages
+      ? Math.min(maxPages, totalPages)
+      : totalPages
     const textParts: string[] = []
 
     for (let i = 1; i <= pagesToProcess; i++) {
@@ -320,11 +326,20 @@ async function parsePdfContent(content: Buffer, outputFormat: OutputFormat = 'te
     }
 
     // markdown 模式用页分隔线区分每页
-    const separator = outputFormat === 'markdown' ? '\n\n---\n\n' : '\n\n'
-    return ok({ text: textParts.join(separator), pageCount: totalPages })
+    const separator = outputFormat === 'markdown'
+      ? '\n\n---\n\n'
+      : '\n\n'
+    return ok({
+      text: textParts.join(separator),
+      pageCount: totalPages,
+    })
   }
   catch (error) {
-    return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', { params: { error: String(error) } }), error)
+    return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', {
+      params: {
+        error: String(error),
+      },
+    }), error)
   }
 }
 
@@ -352,7 +367,11 @@ async function parseDocxContent(content: Buffer, outputFormat: OutputFormat = 't
     return ok(result.value)
   }
   catch (error) {
-    return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', { params: { error: String(error) } }), error)
+    return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', {
+      params: {
+        error: String(error),
+      },
+    }), error)
   }
 }
 
@@ -396,7 +415,9 @@ async function parseImageWithOcr(
   })
 
   if (!result.success) {
-    return err(HaiAIError.FILE_OCR_FAILED, aiM('ai_fileOcrFailed', { params: { error: result.error.message } }), result.error)
+    return err(HaiAIError.FILE_OCR_FAILED, aiM('ai_fileOcrFailed', {
+      params: { error: result.error.message },
+    }), result.error)
   }
 
   return ok(result.data.choices[0]?.message?.content ?? '')
@@ -435,7 +456,9 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
     systemPrompt: string | undefined,
   ): Promise<HaiResult<FileParseResult>> {
     const resolvedResult = resolveModelEntry(config.llm, 'ocr', model, {
-      missingApiKeyMessage: aiM('ai_configError', { params: { error: 'API Key is required for OCR' } }),
+      missingApiKeyMessage: aiM('ai_configError', {
+        params: { error: 'API Key is required for OCR' },
+      }),
     })
     if (!resolvedResult.success)
       return resolvedResult
@@ -466,12 +489,19 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
     const mimeType = detectMimeType(content, filename, options.mimeType)
     const outputFormat: OutputFormat = options.outputFormat ?? 'text'
 
-    logger.trace('Parsing file', { filename, mimeType, outputFormat, useOcr: options.useOcr })
+    logger.trace('Parsing file', {
+      filename,
+      mimeType,
+      outputFormat,
+      useOcr: options.useOcr,
+    })
 
     // 强制 OCR 模式
     if (options.useOcr) {
       if (!Buffer.isBuffer(content)) {
-        return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', { params: { reason: 'OCR requires Buffer content' } }))
+        return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', {
+          params: { reason: 'OCR requires Buffer content' },
+        }))
       }
       return runOcr(content, mimeType, filename, options.model, outputFormat, options.systemPrompt)
     }
@@ -488,7 +518,9 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
 
     // HTML：按输出格式选择解析方式
     if (mimeType === 'text/html') {
-      const text = outputFormat === 'markdown' ? htmlToMarkdown(content) : parseHtmlContent(content)
+      const text = outputFormat === 'markdown'
+        ? htmlToMarkdown(content)
+        : parseHtmlContent(content)
       return ok({
         text,
         method: 'html' as FileParseMethod,
@@ -499,7 +531,9 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
     // PDF：尝试 pdfjs-dist，失败则回退 OCR
     if (mimeType === 'application/pdf') {
       if (!Buffer.isBuffer(content)) {
-        return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', { params: { reason: 'PDF parsing requires Buffer content' } }))
+        return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', {
+          params: { reason: 'PDF parsing requires Buffer content' },
+        }))
       }
       const pdfResult = await parsePdfContent(content, outputFormat, options.maxPages)
       if (pdfResult.success) {
@@ -521,7 +555,9 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
       || mimeType === 'application/zip'
     ) {
       if (!Buffer.isBuffer(content)) {
-        return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', { params: { reason: 'DOCX parsing requires Buffer content' } }))
+        return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', {
+          params: { reason: 'DOCX parsing requires Buffer content' },
+        }))
       }
       const docxResult = await parseDocxContent(content, outputFormat)
       if (docxResult.success) {
@@ -538,13 +574,17 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
     // 图片格式：OCR
     if (IMAGE_MIME_TYPES.has(mimeType)) {
       if (!Buffer.isBuffer(content)) {
-        return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', { params: { reason: 'Image OCR requires Buffer content' } }))
+        return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', {
+          params: { reason: 'Image OCR requires Buffer content' },
+        }))
       }
       return runOcr(content, mimeType, filename, options.model, outputFormat, options.systemPrompt)
     }
 
     // 其他格式：不支持
-    return err(HaiAIError.FILE_UNSUPPORTED_FORMAT, aiM('ai_fileUnsupportedFormat', { params: { mimeType } }))
+    return err(HaiAIError.FILE_UNSUPPORTED_FORMAT, aiM('ai_fileUnsupportedFormat', {
+      params: { mimeType },
+    }))
   }
 
   return {
@@ -554,7 +594,11 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
       }
       catch (error) {
         logger.error('File parse failed unexpectedly', { filename: request.filename, error })
-        return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', { params: { error: String(error) } }), error)
+        return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     },
 

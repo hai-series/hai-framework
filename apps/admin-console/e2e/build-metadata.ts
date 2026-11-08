@@ -46,14 +46,20 @@ export function readAdminBuildFacts(appDir = fileURLToPath(new URL('../', import
             for (const property of node.properties) {
               if (!ts.isPropertyAssignment(property) || !ts.isStringLiteralLike(property.initializer))
                 continue
-              const name = ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name) ? property.name.text : ''
+              const name = ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)
+                ? property.name.text
+                : ''
               if (name === 'appVersion' || name === 'buildId' || name === 'commit')
                 values[name] = property.initializer.text
             }
             if (typeof values.appVersion === 'string' && typeof values.buildId === 'string' && typeof values.commit === 'string') {
               if (values.appVersion !== manifest.version || values.commit !== commit || !values.buildId.trim())
                 throw new Error(`Built metadata does not match this source: ${relative(appDir, filename)}`)
-              matches.push({ path: relative(appDir, filename), sha256: createHash('sha256').update(bytes).digest('hex'), metadata: { appVersion: values.appVersion, buildId: values.buildId, commit: values.commit } })
+              matches.push({
+                path: relative(appDir, filename),
+                sha256: createHash('sha256').update(bytes).digest('hex'),
+                metadata: { appVersion: values.appVersion, buildId: values.buildId, commit: values.commit },
+              })
             }
           }
           ts.forEachChild(node, visit)

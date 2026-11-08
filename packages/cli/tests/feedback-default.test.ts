@@ -26,15 +26,35 @@ describe('fullstack 默认反馈生成', () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hai-feedback-default-'))
     temporaryRoots.push(root)
     const name = 'default-feedback'
-    await createProject({ name, appType: 'fullstack', frontends: ['web'], defaults: true, install: false, git: false, packageManager: 'pnpm', cwd: root })
+    await createProject({
+      name,
+      appType: 'fullstack',
+      frontends: ['web'],
+      defaults: true,
+      install: false,
+      git: false,
+      packageManager: 'pnpm',
+      cwd: root,
+    })
     const directory = path.join(root, name)
     const service = `packages/${name}-serv`
     const shared = `packages/${name}-shared`
     const manifest: { dependencies: Record<string, string> } = JSON.parse(await readFile(path.join(directory, service, 'package.json'), 'utf8'))
-    for (const dependency of ['feedback', 'reach', 'storage', 'iam', 'reldb', 'cache', 'crypto'])
+    for (const dependency of [
+      'feedback',
+      'reach',
+      'storage',
+      'iam',
+      'reldb',
+      'cache',
+      'crypto',
+    ])
       expect(manifest.dependencies[`@h-ai/${dependency}`], dependency).toBe('catalog:')
     const config = parse(await readFile(path.join(directory, service, 'config/_feedback.yml'), 'utf8'))
-    expect(config).toMatchObject({ notificationMode: expect.stringContaining(':console'), recipients: [] })
+    expect(config).toMatchObject({
+      notificationMode: expect.stringContaining(':console'),
+      recipients: [],
+    })
     expect(parseEnv(await readFile(path.join(directory, '.env.example'), 'utf8')).HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES).toBe('auto')
     expect(parseEnv(await readFile(path.join(directory, '.env'), 'utf8')).HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES).toBe('auto')
     const procedures = await readFile(path.join(directory, service, 'src/server/procedures/index.ts'), 'utf8')
@@ -54,13 +74,28 @@ describe('fullstack 默认反馈生成', () => {
 
   it.each([
     { label: '显式空选择', features: [] as FeatureId[] },
-    { label: '显式其它模块', features: ['ai'] as FeatureId[] },
+    {
+      label: '显式其它模块',
+      features: ['ai'] as FeatureId[],
+    },
   ])('$label 已移除，在写入文件前明确拒绝', async ({ features }) => {
     const root = await mkdtemp(path.join(tmpdir(), 'hai-feedback-explicit-'))
     temporaryRoots.push(root)
     const name = 'explicit-features'
-    const options = Object.assign({ name, appType: 'fullstack' as const, frontends: ['web'] as const, defaults: true, install: false, git: false, packageManager: 'pnpm' as const, cwd: root }, { features })
-    await expect(createProject({ ...options, frontends: ['web'] })).rejects.toThrow('create')
+    const options = Object.assign({
+      name,
+      appType: 'fullstack' as const,
+      frontends: ['web'] as const,
+      defaults: true,
+      install: false,
+      git: false,
+      packageManager: 'pnpm' as const,
+      cwd: root,
+    }, { features })
+    await expect(createProject({
+      ...options,
+      frontends: ['web'],
+    })).rejects.toThrow('create')
     expect(await readdir(root)).toEqual([])
   })
 
@@ -68,7 +103,15 @@ describe('fullstack 默认反馈生成', () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hai-feedback-api-default-'))
     temporaryRoots.push(root)
     const name = 'default-api'
-    await createProject({ name, appType: 'api', defaults: true, install: false, git: false, packageManager: 'pnpm', cwd: root })
+    await createProject({
+      name,
+      appType: 'api',
+      defaults: true,
+      install: false,
+      git: false,
+      packageManager: 'pnpm',
+      cwd: root,
+    })
     const directory = path.join(root, name)
     const service = `apps/${name}-serv`
     const manifest: { dependencies: Record<string, string> } = JSON.parse(await readFile(path.join(directory, service, 'package.json'), 'utf8'))

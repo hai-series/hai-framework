@@ -33,7 +33,16 @@ it('源码归档不推断父框架提交，真实受控工程读取精确Git SHA
   writeFileSync(join(directory, 'package.json'), JSON.stringify({ version: '1.0.0' }))
   execFileSync('git', ['init', '--quiet'], { cwd: directory })
   execFileSync('git', ['add', 'package.json'], { cwd: directory })
-  execFileSync('git', ['-c', 'user.name=Build fixture', '-c', 'user.email=build@example.invalid', 'commit', '--quiet', '-m', 'fixture'], { cwd: directory })
+  execFileSync('git', [
+    '-c',
+    'user.name=Build fixture',
+    '-c',
+    'user.email=build@example.invalid',
+    'commit',
+    '--quiet',
+    '-m',
+    'fixture',
+  ], { cwd: directory })
   const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: directory, encoding: 'utf8' }).trim()
   expect(resolveBuildMetadata(directory).commit).toBe(commit)
   vi.stubEnv('HAI_BUILD_ID', undefined)
@@ -49,7 +58,11 @@ it('显式构建tuple只接受有界的非敏感ID与Git SHA，不修改其它�
   vi.stubEnv('HAI_BUILD_ID', '  release-42  ')
   vi.stubEnv('HAI_BUILD_COMMIT', 'a'.repeat(40))
   vi.stubEnv('HAI_PRIVATE_SECRET', 'untouched-secret')
-  expect(resolveBuildMetadata(directory)).toEqual({ appVersion: '1.0.0', buildId: 'release-42', commit: 'a'.repeat(40) })
+  expect(resolveBuildMetadata(directory)).toEqual({
+    appVersion: '1.0.0',
+    buildId: 'release-42',
+    commit: 'a'.repeat(40),
+  })
   expect(process.env.HAI_PRIVATE_SECRET).toBe('untouched-secret')
   vi.stubEnv('HAI_BUILD_ID', 'bad\nidentity')
   vi.stubEnv('HAI_BUILD_COMMIT', 'invalid-commit')

@@ -17,8 +17,13 @@ async function race<T>(input: Record<string, unknown>): Promise<HaiResult<T>[]> 
   let snapshots = 0
   try {
     const tasks = Array.from({ length: 2 }, () => new Promise<HaiResult<T>>((resolve, reject) => {
-      const child = spawn(process.execPath, [fileURLToPath(new URL('./helpers/iam-session-worker.mjs', import.meta.url))], {
-        env: { ...process.env, IAM_SESSION_WORKER_INPUT: JSON.stringify(input) },
+      const child = spawn(process.execPath, [
+        fileURLToPath(new URL('./helpers/iam-session-worker.mjs', import.meta.url)),
+      ], {
+        env: {
+          ...process.env,
+          IAM_SESSION_WORKER_INPUT: JSON.stringify(input),
+        },
         windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       })
@@ -77,7 +82,15 @@ it('真实Redis双进程refresh唯一后继，singleDevice最终仅一个会话�
   const config = { type: 'redis' as const, host: redis.host, port: redis.port }
   try {
     expect((await cache.init(config)).success).toBe(true)
-    const createdOps = await createSessionOperations({ readCredential: async () => ({ success: true, data: { version: '', available: true } }), config: IamConfigSchema.parse({ session: { sliding: false } }) })
+    const createdOps = await createSessionOperations({
+      readCredential: async () => ({
+        success: true,
+        data: { version: '', available: true },
+      }),
+      config: IamConfigSchema.parse({
+        session: { sliding: false },
+      }),
+    })
     if (!createdOps.success)
       throw new Error(createdOps.error.message)
     const ops = createdOps.data
@@ -91,7 +104,12 @@ it('真实Redis双进程refresh唯一后继，singleDevice最终仅一个会话�
     if (!winner?.success)
       throw new Error('No successful rotation')
     expect((await ops.verifyToken(winner.data.accessToken)).success).toBe(true)
-    const logins = await race<Session>({ cache: config, operation: 'create', singleDevice: true, userId: 'two-process-single' })
+    const logins = await race<Session>({
+      cache: config,
+      operation: 'create',
+      singleDevice: true,
+      userId: 'two-process-single',
+    })
     expect(logins.every(result => result.success)).toBe(true)
     const valid = await Promise.all(logins.map(async result => result.success && (await ops.verifyToken(result.data.accessToken)).success))
     expect(valid.filter(Boolean)).toHaveLength(1)
@@ -105,10 +123,20 @@ it('真实Redis双进程refresh唯一后继，singleDevice最终仅一个会话�
 it('真实redis双进程竞争app单会话额度，不突破配额且保留两个web会话', async () => {
   const redis = await acquireRedisContainer()
   const config = { type: 'redis' as const, host: redis.host, port: redis.port }
-  const session = { maxSessions: 3, terminalLimits: { web: 2, app: 1 }, sliding: false }
+  const session = {
+    maxSessions: 3,
+    terminalLimits: { web: 2, app: 1 },
+    sliding: false,
+  }
   try {
     expect((await cache.init(config)).success).toBe(true)
-    const created = await createSessionOperations({ readCredential: async () => ({ success: true, data: { version: '', available: true } }), config: IamConfigSchema.parse({ session }) })
+    const created = await createSessionOperations({
+      readCredential: async () => ({
+        success: true,
+        data: { version: '', available: true },
+      }),
+      config: IamConfigSchema.parse({ session }),
+    })
     if (!created.success)
       throw new Error(created.error.message)
     const userId = 'two-process-terminal-quota'
@@ -116,7 +144,13 @@ it('真实redis双进程竞争app单会话额度，不突破配额且保留两�
     const second = await created.data.create({ userId, terminalType: 'web' })
     if (!first.success || !second.success)
       throw new Error('Web test sessions could not be created')
-    const results = await race<Session>({ cache: config, operation: 'create', userId, session, terminalType: 'app' })
+    const results = await race<Session>({
+      cache: config,
+      operation: 'create',
+      userId,
+      session,
+      terminalType: 'app',
+    })
     expect(results.filter(result => result.success)).toHaveLength(1)
     expect((await created.data.verifyToken(first.data.accessToken)).success).toBe(true)
     expect((await created.data.verifyToken(second.data.accessToken)).success).toBe(true)

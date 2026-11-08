@@ -88,7 +88,9 @@ export interface CreateTransportClientOptions {
 export function createTransportClient(options: CreateTransportClientOptions): TransportClient {
   const baseFetch = options.fetch ?? fetch
   // 显式本地配置立即校验；未配置时由可信 TLS 握手提供服务端预算。
-  const localLimits = options.maxPlaintextBytes === undefined ? undefined : resolveTransportBodyLimits(options.maxPlaintextBytes)
+  const localLimits = options.maxPlaintextBytes === undefined
+    ? undefined
+    : resolveTransportBodyLimits(options.maxPlaintextBytes)
   let bodyLimits = localLimits ?? resolveTransportBodyLimits()
   let keyPair: TransportKeyPair | null = null
   let serverPublicKey: string | null = null
@@ -136,7 +138,9 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
 
       if (!response.ok) {
         void response.body?.cancel().catch(() => {})
-        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeHttpFailed', { params: { status: response.status } }))
+        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeHttpFailed', {
+          params: { status: response.status },
+        }))
       }
 
       let body: unknown
@@ -245,7 +249,9 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
   }
 
   const encryptedFetch: typeof fetch = async (input, init) => {
-    const requestInput = isRequestLike(input) ? input : undefined
+    const requestInput = isRequestLike(input)
+      ? input
+      : undefined
     const signal = init?.signal ?? requestInput?.signal ?? undefined
     signal?.throwIfAborted()
     // 密钥协商请求本身不加密，避免无限递归。
@@ -310,7 +316,9 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
       method,
       pathHash: pathHash.data,
     }
-    const plaintext = rawBody == null ? '' : await readTransportBody(new Response(rawBody).body, { maxBytes: bodyLimits.plaintextBytes, signal })
+    const plaintext = rawBody == null
+      ? ''
+      : await readTransportBody(new Response(rawBody).body, { maxBytes: bodyLimits.plaintextBytes, signal })
     const encResult = encryptBody(plaintext, context)
     if (!encResult.success)
       throw new Error(encResult.error.message)
@@ -372,13 +380,20 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
       }
       if (envelope && new TextEncoder().encode(envelope).byteLength > TRANSPORT_BODY_LIMITS.envelopeHeaderBytes)
         throw new TransportBodyTooLargeError(TRANSPORT_BODY_LIMITS.envelopeHeaderBytes, new TextEncoder().encode(envelope).byteLength, { direction: 'response', stage: 'header' })
-      payload = JSON.parse(envelope ?? await readTransportBody(response.body, { maxBytes: bodyLimits.encryptedPayloadBytes, direction: 'response', stage: 'encrypted', signal }))
+      payload = JSON.parse(envelope ?? await readTransportBody(response.body, {
+        maxBytes: bodyLimits.encryptedPayloadBytes,
+        direction: 'response',
+        stage: 'encrypted',
+        signal,
+      }))
     }
     catch (error) {
       if (error instanceof TransportBodyTooLargeError)
         throw error
       // 保留调用方取消语义；其它解析异常不携带可能包含明文/密文的原始响应片段。
-      throw new Error(cryptoM('crypto_transportResponseDecryptFailed'), signal?.aborted ? { cause: signal.reason } : undefined)
+      throw new Error(cryptoM('crypto_transportResponseDecryptFailed'), signal?.aborted
+        ? { cause: signal.reason }
+        : undefined)
     }
     if (!isValidEncryptedPayload(payload, bodyLimits) || payload.direction !== 'response' || payload.status !== response.status
       || !sameTransportContext(payload.context, context)) {
@@ -403,7 +418,9 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
       catch {}
       if (failure?.success === false && failure.error?.code === HaiCryptoError.TRANSPORT_TIME_INVALID.code) {
         const serverTime = failure.error.details?.serverTime
-        throw new TransportTimeError(undefined, typeof serverTime === 'number' ? serverTime : undefined)
+        throw new TransportTimeError(undefined, typeof serverTime === 'number'
+          ? serverTime
+          : undefined)
       }
     }
     // 只从已验签/MAC、关联请求和状态的错误报文恢复服务端响应容量诊断。
@@ -417,7 +434,9 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
       if (failure?.success === false && failure.error?.code === 'hai:crypto:070' && details?.direction === 'response'
         && (details.stage === 'plaintext' || details.stage === 'encrypted' || details.stage === 'header')
         && typeof details.limitBytes === 'number' && Number.isSafeInteger(details.limitBytes) && details.limitBytes >= 0) {
-        throw new TransportBodyTooLargeError(details.limitBytes, typeof details.actualBytes === 'number' ? details.actualBytes : undefined, { direction: 'response', stage: details.stage })
+        throw new TransportBodyTooLargeError(details.limitBytes, typeof details.actualBytes === 'number'
+          ? details.actualBytes
+          : undefined, { direction: 'response', stage: details.stage })
       }
     }
 
@@ -427,7 +446,9 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     respHeaders.delete(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)
     respHeaders.delete('Content-Length')
     respHeaders.delete('Content-Encoding')
-    return new Response(method === 'HEAD' || [204, 304].includes(response.status) ? null : decResult.data, {
+    return new Response(method === 'HEAD' || [204, 304].includes(response.status)
+      ? null
+      : decResult.data, {
       status: response.status,
       statusText: response.statusText,
       headers: respHeaders,

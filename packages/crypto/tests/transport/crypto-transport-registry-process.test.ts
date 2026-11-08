@@ -80,17 +80,31 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
     const workers: ChildProcess[] = []
     let container: Awaited<ReturnType<GenericContainer['start']>> | undefined
     try {
-      let config: ReldbConfigInput = { type: 'sqlite', database: join(directory, 'shared.db') }
+      let config: ReldbConfigInput = {
+        type: 'sqlite',
+        database: join(directory, 'shared.db'),
+      }
       if (type !== 'sqlite') {
         const postgres = type === 'postgresql'
         const port = postgres ? 5432 : 3306
         container = await new GenericContainer(postgres ? 'docker.io/library/postgres:16.15-alpine' : 'docker.io/library/mysql:8.4.11')
           .withExposedPorts(port)
-          .withEnvironment(postgres ? { POSTGRES_DB: 'crypto_registry', POSTGRES_USER: 'registry_test', POSTGRES_PASSWORD: 'registry_test' } : { MYSQL_DATABASE: 'crypto_registry', MYSQL_ROOT_PASSWORD: 'registry_test' })
-          .withWaitStrategy(postgres ? Wait.forLogMessage('database system is ready to accept connections', 2) : Wait.forLogMessage(/ready for connections\..*port: 3306/))
+          .withEnvironment(postgres
+            ? { POSTGRES_DB: 'crypto_registry', POSTGRES_USER: 'registry_test', POSTGRES_PASSWORD: 'registry_test' }
+            : { MYSQL_DATABASE: 'crypto_registry', MYSQL_ROOT_PASSWORD: 'registry_test' })
+          .withWaitStrategy(postgres
+            ? Wait.forLogMessage('database system is ready to accept connections', 2)
+            : Wait.forLogMessage(/ready for connections\..*port: 3306/))
           .withStartupTimeout(120000)
           .start()
-        config = { type, database: 'crypto_registry', host: container.getHost(), port: container.getMappedPort(port), user: postgres ? 'registry_test' : 'root', password: 'registry_test' }
+        config = {
+          type,
+          database: 'crypto_registry',
+          host: container.getHost(),
+          port: container.getMappedPort(port),
+          user: postgres ? 'registry_test' : 'root',
+          password: 'registry_test',
+        }
       }
       expect((await reldb.init(config)).success).toBe(true)
       expect((await crypto.init()).success).toBe(true)
@@ -100,17 +114,24 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
       const publicKey = keyPair.data.publicKey
       const registry = createReldbTransportKeyStore({ reldb, ttlSeconds: 3600, maxClients: 3 })
       async function startWorker() {
-        const worker = fork(new URL('./fixtures/crypto-transport-registry-node.mjs', import.meta.url), { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] })
+        const worker = fork(new URL('./fixtures/crypto-transport-registry-node.mjs', import.meta.url), {
+          stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+        })
         workers.push(worker)
         expect(await send(worker, { type: 'init', config, maxClients: 3 })).toMatchObject({ success: true })
         return worker
       }
       // 空库由两个独立 Node 首次同时初始化，不能依赖父进程预先建表。
-      const [first, second] = await Promise.all([startWorker(), startWorker()])
+      const [first, second] = await Promise.all([
+        startWorker(),
+        startWorker(),
+      ])
       const persistentId = await registry.register(publicKey)
       const expiry = Date.now() + 360000
       expect(await registry.claimRequest(persistentId, 'consumed', expiry)).toBe(true)
-      const replies = await Promise.all(Array.from({ length: 12 }, (_, index) => send(index % 2 ? first : second, { type: 'register', publicKey })))
+      const replies = await Promise.all(Array.from({ length: 12 }, (_, index) => send(index % 2
+        ? first
+        : second, { type: 'register', publicKey })))
       const accepted = replies.filter(reply => reply.success)
       expect(accepted).toHaveLength(2)
       const count = await reldb.sql.get<{ total: number | string }>('SELECT COUNT(*) AS total FROM hai_crypto_transport_client_keys')
@@ -128,7 +149,10 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
       )).success).toBe(true)
       let removed = 0
       for (let batch = 0; batch < 4; batch++) {
-        const pruned = await Promise.all([send(first, { type: 'prune' }), send(second, { type: 'prune' })])
+        const pruned = await Promise.all([
+          send(first, { type: 'prune' }),
+          send(second, { type: 'prune' }),
+        ])
         for (const reply of pruned) {
           expect(reply.success).toBe(true)
           expect(reply.removed).toBeLessThanOrEqual(200)
@@ -137,7 +161,12 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
       }
       expect(removed).toBe(expiredCount * 2)
       expect(await registry.get(persistentId)).toBe(publicKey)
-      expect(await send(second, { type: 'claim', clientId: persistentId, requestId: 'consumed', expiresAt: expiry })).toMatchObject({ success: true, claimed: false })
+      expect(await send(second, {
+        type: 'claim',
+        clientId: persistentId,
+        requestId: 'consumed',
+        expiresAt: expiry,
+      })).toMatchObject({ success: true, claimed: false })
 
       const expiredId = accepted[0]!.clientId!
       expect((await reldb.sql.execute('UPDATE hai_crypto_transport_client_keys SET expires_at_ms = ? WHERE client_id = ?', [1, expiredId])).success).toBe(true)
@@ -147,7 +176,12 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
       const restarted = await startWorker()
       expect(await send(restarted, { type: 'get', clientId: persistentId })).toMatchObject({ success: true, publicKey })
       expect(await send(restarted, { type: 'register', publicKey })).toMatchObject({ success: false })
-      expect(await send(restarted, { type: 'claim', clientId: persistentId, requestId: 'consumed', expiresAt: expiry })).toMatchObject({ success: true, claimed: false })
+      expect(await send(restarted, {
+        type: 'claim',
+        clientId: persistentId,
+        requestId: 'consumed',
+        expiresAt: expiry,
+      })).toMatchObject({ success: true, claimed: false })
     }
     finally {
       await Promise.all(workers.map(stopWorker))

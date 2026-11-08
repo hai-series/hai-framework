@@ -10,10 +10,15 @@ afterEach(() => vi.useRealTimers())
 
 it.each(['submit', 'button', 'reset'] as const)('%s 按钮仅在原生提交时提示 Enter', async (type) => {
   const target = document.body.appendChild(document.createElement('div'))
-  const component = mount(Button, { target, props: { type, submitHint: true } })
+  const component = mount(Button, {
+    target,
+    props: { type, submitHint: true },
+  })
   try {
     flushSync()
-    expect(target.querySelector('button')?.getAttribute('aria-keyshortcuts')).toBe(type === 'submit' ? 'Enter' : null)
+    expect(target.querySelector('button')?.getAttribute('aria-keyshortcuts')).toBe(type === 'submit'
+      ? 'Enter'
+      : null)
     expect(target.querySelector('kbd') !== null).toBe(type === 'submit')
   }
   finally {
@@ -26,12 +31,20 @@ it('搜索原生提交只查询一次；输入法确认阻止隐式提交', asyn
   vi.useFakeTimers()
   const target = document.body.appendChild(document.createElement('div'))
   const onsearch = vi.fn()
-  const component = mount(CrudFilterBar, { target, props: { searchValue: 'needle', onsearch } })
+  const component = mount(CrudFilterBar, {
+    target,
+    props: { searchValue: 'needle', onsearch },
+  })
   try {
     flushSync()
     const input = target.querySelector('input')!
     input.dispatchEvent(new Event('input', { bubbles: true }))
-    const composing = new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true, cancelable: true })
+    const composing = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      isComposing: true,
+      bubbles: true,
+      cancelable: true,
+    })
     input.dispatchEvent(composing)
     expect(composing.defaultPrevented).toBe(true)
     expect(onsearch).not.toHaveBeenCalled()
@@ -50,15 +63,24 @@ it('原生取消事件同步关闭确认状态，并调用取消回调', async (
   // jsdom 缺少原生 dialog API；本用例只验证 cancel 的状态与回调，焦点另做浏览器验收。
   const show = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal')
   const close = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close')
-  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value(this: HTMLDialogElement) {
-    this.open = true
-  } })
-  Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value(this: HTMLDialogElement) {
-    this.open = false
-  } })
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.open = true
+    },
+  })
+  Object.defineProperty(HTMLDialogElement.prototype, 'close', {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.open = false
+    },
+  })
   const target = document.body.appendChild(document.createElement('div'))
   const oncancel = vi.fn()
-  const component = mount(Confirm, { target, props: { open: true, oncancel } })
+  const component = mount(Confirm, {
+    target,
+    props: { open: true, oncancel },
+  })
   try {
     flushSync()
     const dialog = target.querySelector('dialog')!
@@ -70,7 +92,10 @@ it('原生取消事件同步关闭确认状态，并调用取消回调', async (
   finally {
     await unmount(component)
     target.remove()
-    for (const [name, descriptor] of [['showModal', show], ['close', close]] as const) {
+    for (const [name, descriptor] of [
+      ['showModal', show],
+      ['close', close],
+    ] as const) {
       if (descriptor)
         Object.defineProperty(HTMLDialogElement.prototype, name, descriptor)
       else Reflect.deleteProperty(HTMLDialogElement.prototype, name)

@@ -17,8 +17,14 @@ import { initProject } from '../src/commands/cli-init.js'
 
 const roots: string[] = []
 const frames: string[] = []
-const spinner = vi.hoisted(() => ({ start: vi.fn(), succeed: vi.fn(), fail: vi.fn() }))
-vi.mock('ora', () => ({ default: () => spinner }))
+const spinner = vi.hoisted(() => ({
+  start: vi.fn(),
+  succeed: vi.fn(),
+  fail: vi.fn(),
+}))
+vi.mock('ora', () => ({
+  default: () => spinner,
+}))
 
 beforeEach(() => {
   vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
@@ -51,7 +57,12 @@ async function fixture(): Promise<string> {
 
 /** 收集当前终端与 spinner 的用户消息。 */
 function output(): string {
-  return stripVTControlCharacters([...frames, ...spinner.start.mock.calls.flat(), ...spinner.succeed.mock.calls.flat(), ...spinner.fail.mock.calls.flat()].join('\n'))
+  return stripVTControlCharacters([
+    ...frames,
+    ...spinner.start.mock.calls.flat(),
+    ...spinner.succeed.mock.calls.flat(),
+    ...spinner.fail.mock.calls.flat(),
+  ].join('\n'))
 }
 
 /** 使用 prompts 真实终端渲染器，不替换选择项或校验逻辑。 */
@@ -77,7 +88,18 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('create/add/init locale %s', (locale)
 
   it('真实创建 API 工程并本地化完成提示，目标语言配置独立保留', async () => {
     const root = await fixture()
-    await createProject({ cwd: root, name: 'shop', appType: 'api', defaults: true, install: false, git: false, deploy: false, moduleConfigs: { core: { defaultLocale: 'zh-CN' } } })
+    await createProject({
+      cwd: root,
+      name: 'shop',
+      appType: 'api',
+      defaults: true,
+      install: false,
+      git: false,
+      deploy: false,
+      moduleConfigs: {
+        core: { defaultLocale: 'zh-CN' },
+      },
+    })
     expect(await fse.pathExists(path.join(root, 'shop/apps/shop-serv/src/index.ts'))).toBe(true)
     expect(await readFile(path.join(root, 'shop/apps/shop-serv/config/_core.yml'), 'utf8')).toContain('zh-CN')
     if (locale === 'en-US') {
@@ -97,11 +119,18 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('create/add/init locale %s', (locale)
 
   it('添加模块、补配置、force 覆盖及缺少项目均使用同一语言', async () => {
     const root = await fixture()
-    await writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'locale-app', version: '1.0.0', type: 'module', dependencies: { '@h-ai/core': '*' } }))
+    await writeFile(path.join(root, 'package.json'), JSON.stringify({
+      name: 'locale-app',
+      version: '1.0.0',
+      type: 'module',
+      dependencies: { '@h-ai/core': '*' },
+    }))
     await addModule({ cwd: root, module: 'cache', install: false })
     await rm(path.join(root, 'config/_cache.yml'))
     await initProject({ cwd: root, force: true })
-    await initProject({ cwd: path.join(root, 'missing') })
+    await initProject({
+      cwd: path.join(root, 'missing'),
+    })
     expect(await fse.pathExists(path.join(root, 'config/_cache.yml'))).toBe(true)
     expect(await fse.readJson(path.join(root, 'package.json'))).toHaveProperty('dependencies.@h-ai/cache')
     if (locale === 'en-US') {
@@ -125,40 +154,74 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('create/add/init locale %s', (locale)
     const root = await fixture()
     const selected = vi.spyOn(prompts.prompts, 'select').mockImplementation(() => 'admin')
     const typed = vi.spyOn(prompts.prompts, 'text').mockImplementation(() => 'bad/name')
-    await expect(createProject({ cwd: root, name: '', moduleConfigs: {}, install: false, git: false, packageManager: 'pnpm', deploy: false })).rejects.toThrow('bad/name')
+    await expect(createProject({
+      cwd: root,
+      name: '',
+      moduleConfigs: {},
+      install: false,
+      git: false,
+      packageManager: 'pnpm',
+      deploy: false,
+    })).rejects.toThrow('bad/name')
     const appQuestion = selected.mock.calls[0]![0]
     const nameQuestion = typed.mock.calls[0]![0]
     selected.mockRestore()
     typed.mockRestore()
-    expect(await render(appQuestion)).toContain(locale === 'en-US' ? 'Application type' : locale === 'ja-JP' ? 'アプリケーション種別' : '应用类型')
+    expect(await render(appQuestion)).toContain(locale === 'en-US'
+      ? 'Application type'
+      : locale === 'ja-JP'
+        ? 'アプリケーション種別'
+        : '应用类型')
     const validate = nameQuestion.validate
     expect(typeof validate).toBe('function')
     if (typeof validate === 'function') {
       const invalid = await validate('../escape', {}, nameQuestion)
-      expect(invalid).toBe(locale === 'en-US' ? 'Project names may contain only lowercase letters, digits and hyphens' : locale === 'ja-JP' ? 'プロジェクト名には小文字の英字、数字、ハイフンのみ使用できます' : '项目名称只能包含小写字母、数字和连字符')
+      expect(invalid).toBe(locale === 'en-US'
+        ? 'Project names may contain only lowercase letters, digits and hyphens'
+        : locale === 'ja-JP'
+          ? 'プロジェクト名には小文字の英字、数字、ハイフンのみ使用できます'
+          : '项目名称只能包含小写字母、数字和连字符')
     }
     expect(await fse.pathExists(path.join(root, 'bad'))).toBe(false)
     if (locale === 'en-US')
       expect(output()).not.toMatch(/\p{Script=Han}/u)
-    await writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'locale-app', version: '1.0.0', dependencies: { '@h-ai/core': '*' } }))
+    await writeFile(path.join(root, 'package.json'), JSON.stringify({
+      name: 'locale-app',
+      version: '1.0.0',
+      dependencies: { '@h-ai/core': '*' },
+    }))
     const addChoice = vi.spyOn(prompts.prompts, 'select').mockImplementation(() => undefined)
     await addModule({ cwd: root, install: false })
     const addQuestion = addChoice.mock.calls[0]![0]
     addChoice.mockRestore()
     const rendered = await render(addQuestion)
-    expect(rendered).toContain(locale === 'en-US' ? 'Select a module' : locale === 'ja-JP' ? 'モジュールを選択してください' : '选择要添加的模块')
+    expect(rendered).toContain(locale === 'en-US'
+      ? 'Select a module'
+      : locale === 'ja-JP'
+        ? 'モジュールを選択してください'
+        : '选择要添加的模块')
     if (locale === 'en-US')
       expect(rendered).not.toMatch(/\p{Script=Han}/u)
   })
 
   it('管理后台预设只询问核心与依赖模块配置，并动态读取当前语言', async () => {
     const root = await fixture()
-    const selected = vi.spyOn(prompts.prompts, 'select').mockImplementation(question => Array.isArray(question.choices) ? question.choices[0]?.value : undefined)
+    const selected = vi.spyOn(prompts.prompts, 'select').mockImplementation(question => Array.isArray(question.choices)
+      ? question.choices[0]?.value
+      : undefined)
     const features = vi.spyOn(prompts.prompts, 'multiselect').mockImplementation(() => ['iam', 'ai', 'storage'])
     const typed = vi.spyOn(prompts.prompts, 'text').mockImplementation(question => question.initial)
     vi.spyOn(prompts.prompts, 'confirm').mockImplementation(() => false)
     // 非法名称在选项收集后拒绝，仍完整走过所有配置提示，且不会创建目录。
-    await expect(createProject({ cwd: root, name: 'bad/name', appType: 'admin', install: false, git: false, deploy: false, packageManager: 'pnpm' })).rejects.toThrow('bad/name')
+    await expect(createProject({
+      cwd: root,
+      name: 'bad/name',
+      appType: 'admin',
+      install: false,
+      git: false,
+      deploy: false,
+      packageManager: 'pnpm',
+    })).rejects.toThrow('bad/name')
     const questions = selected.mock.calls.map(([question]) => question)
     expect(features).not.toHaveBeenCalled()
     // admin 启用 IAM/Reach，依赖展开后只有语言、数据库与缓存需要 select 配置。
@@ -203,12 +266,24 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('create/add/init locale %s', (locale)
       throw new Error('Cancelled test process')
     })
     await expect(createProject({ cwd: root, name: '' })).rejects.toThrow('Cancelled test process')
-    expect(output()).toContain(locale === 'en-US' ? 'Cancelled' : locale === 'ja-JP' ? 'キャンセルしました' : '已取消')
+    expect(output()).toContain(locale === 'en-US'
+      ? 'Cancelled'
+      : locale === 'ja-JP'
+        ? 'キャンセルしました'
+        : '已取消')
     exit.mockRestore()
-    await writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'locale-app', version: '1.0.0', dependencies: { '@h-ai/core': '*' } }))
+    await writeFile(path.join(root, 'package.json'), JSON.stringify({
+      name: 'locale-app',
+      version: '1.0.0',
+      dependencies: { '@h-ai/core': '*' },
+    }))
     vi.spyOn(fse, 'writeJson').mockRejectedValue(new Error('Filesystem unavailable'))
     await expect(addModule({ cwd: root, module: 'cache', install: false })).rejects.toThrow('Filesystem unavailable')
-    expect(output()).toContain(locale === 'en-US' ? 'Adding module failed' : locale === 'ja-JP' ? 'モジュールの追加に失敗しました' : '添加模块失败')
+    expect(output()).toContain(locale === 'en-US'
+      ? 'Adding module failed'
+      : locale === 'ja-JP'
+        ? 'モジュールの追加に失敗しました'
+        : '添加模块失败')
     if (locale === 'en-US')
       expect(output()).not.toMatch(/\p{Script=Han}/u)
   })
@@ -219,8 +294,22 @@ describe.skipIf(process.env.HAI_CLI_RUN_LOCALE_GATES !== '1')('built create/add/
     const root = await fixture()
     const env = { ...process.env, HAI_CORE_DEFAULTLOCALE: locale }
     const binary = path.resolve('dist/index.js')
-    const run = (cwd: string, args: string[]) => spawnSync(process.execPath, [binary, '--cwd', cwd, ...args], { env, encoding: 'utf8', windowsHide: true, timeout: 30_000 })
-    const created = run(root, ['create', 'shop', '--type', 'api', '--defaults', '--no-install', '--no-git', '--no-deploy'])
+    const run = (cwd: string, args: string[]) => spawnSync(process.execPath, [binary, '--cwd', cwd, ...args], {
+      env,
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 30_000,
+    })
+    const created = run(root, [
+      'create',
+      'shop',
+      '--type',
+      'api',
+      '--defaults',
+      '--no-install',
+      '--no-git',
+      '--no-deploy',
+    ])
     expect(created.status).toBe(0)
     const target = path.join(root, 'shop')
     const service = path.join(target, 'apps/shop-serv')
@@ -229,7 +318,16 @@ describe.skipIf(process.env.HAI_CLI_RUN_LOCALE_GATES !== '1')('built create/add/
     const initialized = run(service, ['init', '--force'])
     expect(initialized.status).toBe(0)
     const failed = run(service, ['add', 'unknown-module', '--no-install'])
-    const invalidName = run(root, ['create', 'BAD_NAME', '--type', 'api', '--defaults', '--no-install', '--no-git', '--no-deploy'])
+    const invalidName = run(root, [
+      'create',
+      'BAD_NAME',
+      '--type',
+      'api',
+      '--defaults',
+      '--no-install',
+      '--no-git',
+      '--no-deploy',
+    ])
     expect(invalidName.status).toBe(1)
     expect(await fse.pathExists(path.join(root, 'BAD_NAME'))).toBe(false)
     const diagnostics = [created, added, initialized, failed].map(r => r.stdout + r.stderr).join('\n')

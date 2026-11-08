@@ -4,7 +4,11 @@ import { createFeedbackBundle, getFeedbackBundleViewerFiles, queryFeedbackBundle
 
 describe('feedback 离线问题包', () => {
   it('固定快照与创建时间生成确定性 ZIP，非法时间不进入归档', async () => {
-    const input = { report: { id: 'fb-deterministic', evidenceRevision: 1 }, evidence: [], createdAt: 1000 }
+    const input = {
+      report: { id: 'fb-deterministic', evidenceRevision: 1 },
+      evidence: [],
+      createdAt: 1000,
+    }
     const first = await createFeedbackBundle(input)
     const second = await createFeedbackBundle(input)
     expect(first.success && second.success).toBe(true)
@@ -14,21 +18,53 @@ describe('feedback 离线问题包', () => {
   })
 
   it('构建身份在诊断包中同样限制为 128 字符', async () => {
-    const accepted = await createFeedbackBundle({ report: { id: 'fb-build', buildId: 'b'.repeat(128) }, evidence: [] })
+    const accepted = await createFeedbackBundle({
+      report: {
+        id: 'fb-build',
+        buildId: 'b'.repeat(128),
+      },
+      evidence: [],
+    })
     expect(accepted.success).toBe(true)
     if (accepted.success)
       expect((await readFeedbackBundle(accepted.data)).success).toBe(true)
     for (const field of ['buildId', 'appVersion', 'commit']) {
-      expect((await createFeedbackBundle({ report: { id: 'fb-build', [field]: 'b'.repeat(129) }, evidence: [] })).success).toBe(false)
+      expect((await createFeedbackBundle({
+        report: {
+          id: 'fb-build',
+          [field]: 'b'.repeat(129),
+        },
+        evidence: [],
+      })).success).toBe(false)
     }
   })
 
   it('无生产连接也能归档并读取现场与截图', async () => {
     const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
     const created = await createFeedbackBundle({
-      report: { id: 'fb-test', number: 'FB-1', description: '按钮没有反应', evidenceRevision: 2 },
-      evidence: [{ source: 'browser', kind: 'error', timestamp: 20, requestId: 'req-1', data: { message: 'failed' } }],
-      attachments: [{ id: 'screen-1', name: '页面.png', contentType: 'image/png', bytes }],
+      report: {
+        id: 'fb-test',
+        number: 'FB-1',
+        description: '按钮没有反应',
+        evidenceRevision: 2,
+      },
+      evidence: [
+        {
+          source: 'browser',
+          kind: 'error',
+          timestamp: 20,
+          requestId: 'req-1',
+          data: { message: 'failed' },
+        },
+      ],
+      attachments: [
+        {
+          id: 'screen-1',
+          name: '页面.png',
+          contentType: 'image/png',
+          bytes,
+        },
+      ],
     })
     expect(created.success).toBe(true)
     if (!created.success)
@@ -48,7 +84,10 @@ describe('feedback 离线问题包', () => {
   })
 
   it('材料篡改或附加未声明文件时拒绝读取', async () => {
-    const created = await createFeedbackBundle({ report: { id: 'fb-test' }, evidence: [] })
+    const created = await createFeedbackBundle({
+      report: { id: 'fb-test' },
+      evidence: [],
+    })
     expect(created.success).toBe(true)
     if (!created.success)
       return
@@ -60,15 +99,40 @@ describe('feedback 离线问题包', () => {
   })
 
   it('拒绝路径逃逸、大小写路径碰撞以及解压超限', async () => {
-    expect((await readFeedbackBundle(zipSync({ '../escape': strToU8('x') }))).success).toBe(false)
-    expect((await readFeedbackBundle(zipSync({ 'file.json': strToU8('x'), 'FILE.json': strToU8('y') }))).success).toBe(false)
-    expect((await readFeedbackBundle(zipSync({ 'oversized.json': strToU8('x'.repeat(2000)) }), { maxFileBytes: 100 })).success).toBe(false)
+    expect((await readFeedbackBundle(zipSync({
+      '../escape': strToU8('x'),
+    }))).success).toBe(false)
+    expect((await readFeedbackBundle(zipSync({
+      'file.json': strToU8('x'),
+      'FILE.json': strToU8('y'),
+    }))).success).toBe(false)
+    expect((await readFeedbackBundle(zipSync({
+      'oversized.json': strToU8('x'.repeat(2000)),
+    }), { maxFileBytes: 100 })).success).toBe(false)
   })
 
   it('附件 checksum 不符或名称被用于逃逸时不会生成问题包', async () => {
-    const attachment = { id: 'screen-1', name: '../somewhere.png', contentType: 'image/png', bytes: new Uint8Array([1, 2]) }
-    expect((await createFeedbackBundle({ report: { id: 'fb-test' }, evidence: [], attachments: [{ ...attachment, checksum: '0'.repeat(64) }] })).success).toBe(false)
-    const created = await createFeedbackBundle({ report: { id: 'fb-test' }, evidence: [], attachments: [attachment] })
+    const attachment = {
+      id: 'screen-1',
+      name: '../somewhere.png',
+      contentType: 'image/png',
+      bytes: new Uint8Array([1, 2]),
+    }
+    expect((await createFeedbackBundle({
+      report: { id: 'fb-test' },
+      evidence: [],
+      attachments: [
+        {
+          ...attachment,
+          checksum: '0'.repeat(64),
+        },
+      ],
+    })).success).toBe(false)
+    const created = await createFeedbackBundle({
+      report: { id: 'fb-test' },
+      evidence: [],
+      attachments: [attachment],
+    })
     expect(created.success).toBe(true)
     if (!created.success)
       return
@@ -85,9 +149,30 @@ describe('feedback 离线问题包', () => {
   })
 
   it('不透明附件标识往返且大小写、Unicode和代理项保持独立，显示名不参与路径', async () => {
-    const ids = ['screen:1', 'space id', 'A', 'a', '页面截图', '../escape', 'emoji-😀', 'é', 'e\u0301', '\uD800', '\uD801']
-    const attachments = ids.map((id, index) => ({ id, name: `页面:截图 / 原始文件${index}.txt`, contentType: 'text/plain', bytes: strToU8(`material ${index}`) }))
-    const created = await createFeedbackBundle({ report: { id: 'fb-opaque' }, evidence: [], attachments })
+    const ids = [
+      'screen:1',
+      'space id',
+      'A',
+      'a',
+      '页面截图',
+      '../escape',
+      'emoji-😀',
+      'é',
+      'e\u0301',
+      '\uD800',
+      '\uD801',
+    ]
+    const attachments = ids.map((id, index) => ({
+      id,
+      name: `页面:截图 / 原始文件${index}.txt`,
+      contentType: 'text/plain',
+      bytes: strToU8(`material ${index}`),
+    }))
+    const created = await createFeedbackBundle({
+      report: { id: 'fb-opaque' },
+      evidence: [],
+      attachments,
+    })
     expect(created.success).toBe(true)
     if (!created.success)
       return
@@ -109,8 +194,17 @@ describe('feedback 离线问题包', () => {
   })
 
   it('大小写不同的两个附件能同时归档并独立读取', async () => {
-    const attachments = ['A', 'a'].map(id => ({ id, name: `${id}.txt`, contentType: 'text/plain', bytes: strToU8(`material ${id}`) }))
-    const created = await createFeedbackBundle({ report: { id: 'fb-case' }, evidence: [], attachments })
+    const attachments = ['A', 'a'].map(id => ({
+      id,
+      name: `${id}.txt`,
+      contentType: 'text/plain',
+      bytes: strToU8(`material ${id}`),
+    }))
+    const created = await createFeedbackBundle({
+      report: { id: 'fb-case' },
+      evidence: [],
+      attachments,
+    })
     expect(created.success).toBe(true)
     if (!created.success)
       return
@@ -127,8 +221,17 @@ describe('feedback 离线问题包', () => {
   })
 
   it('同一附件标识重复声明时拒绝生成', async () => {
-    const attachment = { id: 'screen-1', name: 'note.txt', contentType: 'text/plain', bytes: strToU8('material') }
-    const created = await createFeedbackBundle({ report: { id: 'fb-duplicate' }, evidence: [], attachments: [attachment, attachment] })
+    const attachment = {
+      id: 'screen-1',
+      name: 'note.txt',
+      contentType: 'text/plain',
+      bytes: strToU8('material'),
+    }
+    const created = await createFeedbackBundle({
+      report: { id: 'fb-duplicate' },
+      evidence: [],
+      attachments: [attachment, attachment],
+    })
     expect(created.success).toBe(false)
     if (!created.success)
       expect(created.error.code).toBe('hai:common:200')
@@ -137,7 +240,15 @@ describe('feedback 离线问题包', () => {
   it('按请求和时间分页读取且摘要区分用户描述与事实', async () => {
     const created = await createFeedbackBundle({
       report: { id: 'fb-query', description: '用户的解释', appVersion: '1.2.3' },
-      evidence: Array.from({ length: 30 }, (_, index) => ({ source: 'server', kind: 'log', timestamp: index, requestId: index % 2 ? 'req-a' : 'req-b', data: { index } })),
+      evidence: Array.from({ length: 30 }, (_, index) => ({
+        source: 'server',
+        kind: 'log',
+        timestamp: index,
+        requestId: index % 2
+          ? 'req-a'
+          : 'req-b',
+        data: { index },
+      })),
       missing: ['Screenshot unavailable'],
     })
     expect(created.success).toBe(true)
@@ -147,7 +258,12 @@ describe('feedback 离线问题包', () => {
     expect(read.success).toBe(true)
     if (!read.success)
       return
-    const page = queryFeedbackBundle(read.data, { requestId: 'req-a', from: 10, page: 2, pageSize: 3 })
+    const page = queryFeedbackBundle(read.data, {
+      requestId: 'req-a',
+      from: 10,
+      page: 2,
+      pageSize: 3,
+    })
     expect(page.total).toBe(10)
     expect(page.items.map(item => item.timestamp)).toEqual([17, 19, 21])
     expect(summarizeFeedbackBundle(read.data)).toContain('用户的解释')
@@ -169,13 +285,37 @@ describe('feedback 离线问题包', () => {
       requestId: 'req-a',
       sequence,
       timestamp: sequence,
-      kind: sequence === 100 || sequence === 150 ? 'error' : 'log',
-      errorId: sequence === 150 || sequence > 200 ? 'error-second' : 'error-first',
+      kind: sequence === 100 || sequence === 150
+        ? 'error'
+        : 'log',
+      errorId: sequence === 150 || sequence > 200
+        ? 'error-second'
+        : 'error-first',
       data: { sequence },
     }))
     const created = await createFeedbackBundle({
       report: { id: 'fb-overlap' },
-      evidence: [...events, { source: 'server-b', requestId: 'req-a', sequence: 151, timestamp: 151, kind: 'log', errorId: 'error-second', data: {} }, { source: 'server-a', requestId: 'req-b', sequence: 151, timestamp: 151, kind: 'log', errorId: 'error-second', data: {} }],
+      evidence: [
+        ...events,
+        {
+          source: 'server-b',
+          requestId: 'req-a',
+          sequence: 151,
+          timestamp: 151,
+          kind: 'log',
+          errorId: 'error-second',
+          data: {},
+        },
+        {
+          source: 'server-a',
+          requestId: 'req-b',
+          sequence: 151,
+          timestamp: 151,
+          kind: 'log',
+          errorId: 'error-second',
+          data: {},
+        },
+      ],
     })
     expect(created.success).toBe(true)
     if (!created.success)

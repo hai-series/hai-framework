@@ -18,7 +18,12 @@ afterEach(async () => {
   for (const root of roots.splice(0)) {
     if (path.dirname(root) !== path.resolve(tmpdir()) || !path.basename(root).startsWith('hai-cli-env-output-'))
       throw new Error('Unexpected environment fixture cleanup path')
-    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    await rm(root, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    })
   }
 })
 
@@ -32,7 +37,11 @@ async function fixture(): Promise<string> {
 /** 将真实输出交给 Core YAML 插值与严格 Schema，验证仍有消费的字段。 */
 async function expectProfiles(envRoot: string, configRoot: string): Promise<void> {
   const yaml = await readFile(path.join(configRoot, 'config/_core.yml'), 'utf8')
-  for (const [mode, environment, level] of [['dev', 'development', 'debug'], ['test', 'test', 'warn'], ['prod', 'production', 'info']]) {
+  for (const [mode, environment, level] of [
+    ['dev', 'development', 'debug'],
+    ['test', 'test', 'warn'],
+    ['prod', 'production', 'info'],
+  ]) {
     const text = await readFile(path.join(envRoot, `.env.${mode}`), 'utf8')
     const values = parseEnv(text)
     expect(text).not.toContain('HAI_CORE_DEBUG')
@@ -50,10 +59,26 @@ describe('generated environment profiles', () => {
   it.each(['website', 'api', 'fullstack'] as const)('%s 的 dev/test/prod 文件不再生成无消费的 DEBUG', async (appType) => {
     const root = await fixture()
     const name = `env-${appType}`
-    await createProject({ cwd: root, name, appType, defaults: true, install: false, git: false, deploy: false, frontends: ['web'], packageManager: 'pnpm' })
+    await createProject({
+      cwd: root,
+      name,
+      appType,
+      defaults: true,
+      install: false,
+      git: false,
+      deploy: false,
+      frontends: ['web'],
+      packageManager: 'pnpm',
+    })
     const project = path.join(root, name)
-    const service = appType === 'api' ? path.join(project, 'apps', `${name}-serv`) : appType === 'fullstack' ? path.join(project, 'packages', `${name}-serv`) : project
-    await expectProfiles(appType === 'api' ? service : project, service)
+    const service = appType === 'api'
+      ? path.join(project, 'apps', `${name}-serv`)
+      : appType === 'fullstack'
+        ? path.join(project, 'packages', `${name}-serv`)
+        : project
+    await expectProfiles(appType === 'api'
+      ? service
+      : project, service)
   })
 })
 
@@ -61,11 +86,27 @@ describe.skipIf(process.env.HAI_CLI_RUN_ENV_OUTPUT_GATES !== '1')('built environ
   it.each(['website', 'api', 'fullstack'] as const)('%s 真实输出包含 ACP 配置、环境变量和可读取的接入指南', async (appType) => {
     const root = await fixture()
     const name = `ai-${appType}`
-    const created = spawnSync(process.execPath, [path.resolve('dist/index.js'), '--cwd', root, 'create', name, '--type', appType, '--defaults', '--no-install', '--no-git', '--no-deploy'], { encoding: 'utf8', windowsHide: true, timeout: 30_000 })
+    const created = spawnSync(process.execPath, [
+      path.resolve('dist/index.js'),
+      '--cwd',
+      root,
+      'create',
+      name,
+      '--type',
+      appType,
+      '--defaults',
+      '--no-install',
+      '--no-git',
+      '--no-deploy',
+    ], { encoding: 'utf8', windowsHide: true, timeout: 30_000 })
     expect(created.error).toBeUndefined()
     expect(created.status, created.stderr).toBe(0)
     const project = path.join(root, name)
-    const service = appType === 'api' ? path.join(project, 'apps', `${name}-serv`) : appType === 'fullstack' ? path.join(project, 'packages', `${name}-serv`) : project
+    const service = appType === 'api'
+      ? path.join(project, 'apps', `${name}-serv`)
+      : appType === 'fullstack'
+        ? path.join(project, 'packages', `${name}-serv`)
+        : project
     const config = await readFile(path.join(service, 'config/_ai.yml'), 'utf8')
     expect(config).toContain('# acp:')
     expect(config).toContain('HAI_AI_ACP_AGENTS_0_MODELIDS_0:coding')
@@ -77,7 +118,9 @@ describe.skipIf(process.env.HAI_CLI_RUN_ENV_OUTPUT_GATES !== '1')('built environ
     const enabledConfig = loadConfigText<{ llm: { model: string, protocol: string }, acp?: unknown }>('ai', config.replace(/^# /gm, ''))
     expect(enabledConfig.llm).toMatchObject({ model: 'gpt-4o-mini', protocol: 'chat' })
     expect(enabledConfig.acp).toBeUndefined()
-    const env = await readFile(path.join(appType === 'api' ? service : project, '.env.example'), 'utf8')
+    const env = await readFile(path.join(appType === 'api'
+      ? service
+      : project, '.env.example'), 'utf8')
     expect(env).toContain('HAI_AI_ACP_AGENTS_0_ID')
     expect(env).toContain('HAI_AI_ACP_WORKSPACES_0_ID')
     expect(env).toContain('HAI_AI_LLM_MODELS_0_CAPABILITIES_CONTEXTWINDOW')
@@ -89,7 +132,19 @@ describe.skipIf(process.env.HAI_CLI_RUN_ENV_OUTPUT_GATES !== '1')('built environ
 
   it('fresh CLI Node 入口生成的 API 环境文件及 S3 前缀可由 Core 消费', async () => {
     const root = await fixture()
-    const created = spawnSync(process.execPath, [path.resolve('dist/index.js'), '--cwd', root, 'create', 'env-binary', '--type', 'api', '--defaults', '--no-install', '--no-git', '--no-deploy'], { encoding: 'utf8', windowsHide: true, timeout: 30_000 })
+    const created = spawnSync(process.execPath, [
+      path.resolve('dist/index.js'),
+      '--cwd',
+      root,
+      'create',
+      'env-binary',
+      '--type',
+      'api',
+      '--defaults',
+      '--no-install',
+      '--no-git',
+      '--no-deploy',
+    ], { encoding: 'utf8', windowsHide: true, timeout: 30_000 })
     expect(created.error).toBeUndefined()
     expect(created.status, created.stderr).toBe(0)
     const service = path.join(root, 'env-binary/apps/env-binary-serv')
@@ -104,7 +159,10 @@ describe.skipIf(process.env.HAI_CLI_RUN_ENV_OUTPUT_GATES !== '1')('built environ
     vi.stubEnv('HAI_STORAGE_PREFIX', 'my-app/uploads')
     try {
       const config = core.config.load('storage', storagePath, StorageConfigSchema)
-      expect(config).toMatchObject({ success: true, data: { type: 's3', prefix: 'my-app/uploads' } })
+      expect(config).toMatchObject({
+        success: true,
+        data: { type: 's3', prefix: 'my-app/uploads' },
+      })
     }
     finally {
       core.config.clear('storage')

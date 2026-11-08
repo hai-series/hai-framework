@@ -48,7 +48,13 @@ export const PaymentCreateOrderInputSchema = z.object({
   tradeType: PaymentTradeTypeSchema,
   userId: z.string().trim().min(1).max(128).optional(),
   metadata: z.record(z.string(), z.string()).optional(),
-}).strict().refine(input => input.tradeType === (input.provider === 'wechat' ? 'jsapi' : 'h5'), { path: ['tradeType'] }).refine(input => input.provider !== 'wechat' || input.userId !== undefined, { path: ['userId'] })
+}).strict().refine(input => input.tradeType === (input.provider === 'wechat'
+  ? 'jsapi'
+  : 'h5'), {
+  path: ['tradeType'],
+}).refine(input => input.provider !== 'wechat' || input.userId !== undefined, {
+  path: ['userId'],
+})
 
 /**
  * 创建支付订单业务数据 Schema。
@@ -77,7 +83,11 @@ export const PaymentCreateOrderDataSchema = z.object({
   tradeType: PaymentTradeTypeSchema,
   clientParams: z.record(z.string(), z.unknown()),
   prepayId: z.string().optional(),
-}).refine(order => order.tradeType === (order.provider === 'wechat' ? 'jsapi' : 'h5'), { path: ['tradeType'] })
+}).refine(order => order.tradeType === (order.provider === 'wechat'
+  ? 'jsapi'
+  : 'h5'), {
+  path: ['tradeType'],
+})
 
 /**
  * 查询支付订单入参 Schema。
@@ -112,7 +122,13 @@ export const PaymentQueryOrderInputSchema = z.object({
 export const PaymentOrderSchema = z.object({
   orderNo: z.string(),
   transactionId: z.string().optional(),
-  status: z.enum(['pending', 'paid', 'closed', 'refunded', 'failed']),
+  status: z.enum([
+    'pending',
+    'paid',
+    'closed',
+    'refunded',
+    'failed',
+  ]),
   amount: z.number(),
   // ISO 8601 时间戳（例如 `2024-01-02T03:04:05.000Z`），由服务端以 `Date#toISOString()` 序列化。
   paidAt: z.iso.datetime().optional(),

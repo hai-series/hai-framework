@@ -10,11 +10,13 @@ export async function vectorSearchExample(path: string, vector: number[]) {
     const created = await vecdb.collection.create('example_documents', { dimension: vector.length })
     if (!created.success)
       return created
-    const inserted = await vecdb.vector.insert('example_documents', [{
-      id: 'doc-1',
-      vector,
-      content: 'Framework introduction',
-    }])
+    const inserted = await vecdb.vector.insert('example_documents', [
+      {
+        id: 'doc-1',
+        vector,
+        content: 'Framework introduction',
+      },
+    ])
     if (!inserted.success)
       return inserted
     return await vecdb.vector.search('example_documents', vector, { topK: 3 })

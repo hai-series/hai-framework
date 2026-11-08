@@ -33,6 +33,8 @@ test('DataTable默认斑马纹在明暗主题中保留奇偶底色，固定操�
     }
     await page.mouse.move(0, 0)
     await expect(secondCell).toHaveCSS('background-color', secondBackground)
-    await table.screenshot({ path: testInfo.outputPath(`data-table-striped-${theme}.png`) })
+    await table.screenshot({
+      path: testInfo.outputPath(`data-table-striped-${theme}.png`),
+    })
   }
 })

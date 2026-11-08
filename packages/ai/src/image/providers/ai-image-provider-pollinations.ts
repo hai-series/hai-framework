@@ -57,16 +57,25 @@ export function createPollinationsImageProvider(): ImageProvider {
           if ((body.data?.length ?? 0) > request.maxImages)
             throw new RangeError('Image count exceeds limit')
           const base64Images = body.data?.flatMap(item => item.b64_json
-            ? [imageFromBase64(item.b64_json, 'image/png', request)]
+            ? [
+                imageFromBase64(item.b64_json, 'image/png', request),
+              ]
             : []) ?? []
-          const urls = body.data?.flatMap(item => item.url ? [item.url] : []) ?? []
+          const urls = body.data?.flatMap(item => item.url
+            ? [item.url]
+            : []) ?? []
           if (base64Images.length + urls.length > request.maxImages)
             throw new RangeError('Image count exceeds limit')
           const downloaded = await downloadImages(urls, request)
           if (!downloaded.success)
             return downloaded
-          const images = [...base64Images, ...downloaded.data]
-          return images.length ? { success: true, data: images } : imageProtocolError()
+          const images = [
+            ...base64Images,
+            ...downloaded.data,
+          ]
+          return images.length
+            ? { success: true, data: images }
+            : imageProtocolError()
         }
 
         const url = new URL(`${request.model.baseUrl}/image/${encodeURIComponent(request.prompt)}`)
@@ -81,7 +90,12 @@ export function createPollinationsImageProvider(): ImageProvider {
           redirect: 'error',
         })
         const image = await readImageResponse(response, request)
-        return image.success ? { success: true, data: [image.data] } : image
+        return image.success
+          ? {
+              success: true,
+              data: [image.data],
+            }
+          : image
       }
       catch (error) {
         return imageProviderFailure(error)

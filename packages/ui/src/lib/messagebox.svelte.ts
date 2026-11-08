@@ -83,7 +83,9 @@ class MessageBoxState {
    * ```
    */
   confirm(options: MessageBoxOptions | string): Promise<boolean> {
-    const opts = typeof options === 'string' ? { message: options } : options
+    const opts = typeof options === 'string'
+      ? { message: options }
+      : options
     return this.createItem({ type: 'confirm', ...opts })
   }
 
@@ -99,7 +101,9 @@ class MessageBoxState {
    * ```
    */
   alert(options: MessageBoxOptions | string): Promise<boolean> {
-    const opts = typeof options === 'string' ? { message: options } : options
+    const opts = typeof options === 'string'
+      ? { message: options }
+      : options
     return this.createItem({ type: 'alert', showCancel: false, ...opts })
   }
 

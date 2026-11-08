@@ -4,7 +4,12 @@ import { describe, expect, it } from 'vitest'
 import { HaiPaymentError } from '../src/payment-types'
 import { createStripeProvider } from '../src/providers/stripe/payment-provider-stripe'
 
-const config = { successUrl: 'https://example.invalid/payment/success', secretKey: 'test-only-api-key', webhookSecret: 'test-only-webhook-key', webhookToleranceSeconds: 300 }
+const config = {
+  successUrl: 'https://example.invalid/payment/success',
+  secretKey: 'test-only-api-key',
+  webhookSecret: 'test-only-webhook-key',
+  webhookToleranceSeconds: 300,
+}
 
 /** 构造与 Stripe Checkout Session 快照一致的通知。 */
 function createEvent(type = 'checkout.session.completed', paymentStatus = 'paid') {
@@ -60,7 +65,9 @@ describe('stripe Checkout notifications', () => {
       eventId: event.id,
       currency: 'USD',
     })
-    expect(result.data.paidAt).toEqual(expectedStatus === 'paid' ? new Date(event.created * 1000) : undefined)
+    expect(result.data.paidAt).toEqual(expectedStatus === 'paid'
+      ? new Date(event.created * 1000)
+      : undefined)
   })
 
   it('异步成功事件与未支付状态矛盾时拒绝', async () => {
@@ -70,7 +77,10 @@ describe('stripe Checkout notifications', () => {
 
   it('相同事件在不同实例重复解析保留事件身份和时间', async () => {
     const event = createEvent()
-    const [first, second] = await Promise.all([notify(event), notify(event)])
+    const [first, second] = await Promise.all([
+      notify(event),
+      notify(event),
+    ])
     expect(first).toEqual(second)
   })
 
@@ -91,7 +101,12 @@ describe('stripe Checkout notifications', () => {
     { field: 'object', value: 'payment_intent' },
   ])('拒绝非法 $field=$value', async ({ field, value }) => {
     const event = createEvent()
-    const result = await notify({ ...event, data: { object: { ...event.data.object, [field]: value } } })
+    const result = await notify({
+      ...event,
+      data: {
+        object: { ...event.data.object, [field]: value },
+      },
+    })
     expect(result.success).toBe(false)
   })
 

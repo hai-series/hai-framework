@@ -88,8 +88,12 @@ describe('models build.mjs 清单', () => {
   })
 
   it('provides 支持一个或多个能力', () => {
-    expect(validateManifest(baseManifest({ provides: ['audio.transcribe'] })).success).toBe(true)
-    expect(validateManifest(baseManifest({ provides: ['audio.transcribe', 'audio.synthesize'] })).success).toBe(true)
+    expect(validateManifest(baseManifest({
+      provides: ['audio.transcribe'],
+    })).success).toBe(true)
+    expect(validateManifest(baseManifest({
+      provides: ['audio.transcribe', 'audio.synthesize'],
+    })).success).toBe(true)
   })
 
   it('空 provides 校验失败', () => {
@@ -101,7 +105,9 @@ describe('models build.mjs 清单', () => {
   })
 
   it('devices 仅接受 cpu / gpu', () => {
-    expect(validateManifest(baseManifest({ devices: ['tpu'] })).success).toBe(false)
+    expect(validateManifest(baseManifest({
+      devices: ['tpu'],
+    })).success).toBe(false)
   })
 
   it('根目录暴露约定的 pnpm model 命令', () => {

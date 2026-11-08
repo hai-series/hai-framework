@@ -47,11 +47,15 @@ function stringifyOperationPayload(payload: unknown, maxLength: number): string 
       }
       return normalizePayloadValue(value)
     })
-    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
+    return text.length > maxLength
+      ? `${text.slice(0, maxLength)}...`
+      : text
   }
   catch {
     const text = String(payload)
-    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
+    return text.length > maxLength
+      ? `${text.slice(0, maxLength)}...`
+      : text
   }
 }
 

@@ -15,17 +15,53 @@ import { createRetrievalOperations } from '../src/retrieval/ai-retrieval-functio
 // ─── Mock Embedding ───
 
 const mockEmbedding: EmbeddingOperations = {
-  embed: async () => ({ success: true as const, data: { model: 'test', data: [{ index: 0, embedding: [0.1, 0.2] }], usage: { prompt_tokens: 1, total_tokens: 1 } } }),
-  embedText: async () => ({ success: true as const, data: [0.1, 0.2, 0.3] }),
-  embedBatch: async () => ({ success: true as const, data: [[0.1], [0.2]] }),
+  embed: async () => ({
+    success: true as const,
+    data: {
+      model: 'test',
+      data: [
+        {
+          index: 0,
+          embedding: [0.1, 0.2],
+        },
+      ],
+      usage: { prompt_tokens: 1, total_tokens: 1 },
+    },
+  }),
+  embedText: async () => ({
+    success: true as const,
+    data: [0.1, 0.2, 0.3],
+  }),
+  embedBatch: async () => ({
+    success: true as const,
+    data: [
+      [0.1],
+      [0.2],
+    ],
+  }),
 }
 
 // ─── Mock AIStoreProvider ───
 
 const mockStoreProvider: AIStoreProvider = {
   name: 'mock',
-  createRelStore: () => ({ save: async () => {}, saveMany: async () => {}, get: async () => undefined, query: async () => [], queryPage: async () => ({ items: [], total: 0 }), remove: async () => false, removeBy: async () => 0, count: async () => 0, clear: async () => {} }) as AIRelStore<never>,
-  createVectorStore: () => ({ upsert: async () => {}, search: async () => [], remove: async () => {}, clear: async () => {} }),
+  createRelStore: () => ({
+    save: async () => {},
+    saveMany: async () => {},
+    get: async () => undefined,
+    query: async () => [],
+    queryPage: async () => ({ items: [], total: 0 }),
+    remove: async () => false,
+    removeBy: async () => 0,
+    count: async () => 0,
+    clear: async () => {},
+  }) as AIRelStore<never>,
+  createVectorStore: () => ({
+    upsert: async () => {},
+    search: async () => [],
+    remove: async () => {},
+    clear: async () => {},
+  }),
   initialize: async () => {},
 }
 
@@ -40,7 +76,10 @@ function createMockSourceStore(): AIRelStore<RetrievalSource> {
     async query() { return Array.from(store.values()) },
     async queryPage(_, page) {
       const items = Array.from(store.values())
-      return { items: items.slice(page.offset, page.offset + page.limit), total: items.length }
+      return {
+        items: items.slice(page.offset, page.offset + page.limit),
+        total: items.length,
+      }
     },
     async remove(id) { return store.delete(id) },
     async removeBy() { return 0 },

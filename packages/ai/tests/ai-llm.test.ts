@@ -32,7 +32,9 @@ vi.mock('openai', () => {
   function MockOpenAI(...args: unknown[]) {
     constructorCalls.push(args)
     return {
-      chat: { completions: { create: mockCreate } },
+      chat: {
+        completions: { create: mockCreate },
+      },
       responses: { create: mockResponsesCreate },
       models: { list: mockListModels },
     }
@@ -58,19 +60,21 @@ function makeSDKChatCompletion(content: string, options?: {
     object: 'chat.completion',
     created: 1700000000,
     model: options?.model ?? 'gpt-4o-mini',
-    choices: [{
-      index: 0,
-      message: {
-        role: 'assistant',
-        content,
-        tool_calls: options?.toolCalls?.map(tc => ({
-          id: tc.id,
-          type: 'function',
-          function: tc.function,
-        })),
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: 'assistant',
+          content,
+          tool_calls: options?.toolCalls?.map(tc => ({
+            id: tc.id,
+            type: 'function',
+            function: tc.function,
+          })),
+        },
+        finish_reason: options?.finishReason ?? 'stop',
       },
-      finish_reason: options?.finishReason ?? 'stop',
-    }],
+    ],
     usage: options?.usage ?? {
       prompt_tokens: 10,
       completion_tokens: 5,
@@ -95,15 +99,17 @@ function makeSDKChunk(content: string | undefined, options?: {
     object: 'chat.completion.chunk',
     created: 1700000000,
     model: 'gpt-4o-mini',
-    choices: [{
-      index: 0,
-      delta: {
-        role: options?.role ?? undefined,
-        content: content ?? undefined,
-        tool_calls: options?.toolCalls,
+    choices: [
+      {
+        index: 0,
+        delta: {
+          role: options?.role ?? undefined,
+          content: content ?? undefined,
+          tool_calls: options?.toolCalls,
+        },
+        finish_reason: options?.finishReason ?? null,
       },
-      finish_reason: options?.finishReason ?? null,
-    }],
+    ],
   }
 }
 
@@ -115,7 +121,9 @@ describe('ai.llm.chat', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    const initResult = await ai.init({
+      llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' },
+    })
     expect(initResult.success).toBe(true)
   })
 
@@ -128,7 +136,9 @@ describe('ai.llm.chat', () => {
     mockCreate.mockResolvedValue(sdkResponse)
 
     const result = await ai.llm.chat({
-      messages: [{ role: 'user', content: '你好' }],
+      messages: [
+        { role: 'user', content: '你好' },
+      ],
     })
 
     expect(result.success).toBe(true)
@@ -149,7 +159,9 @@ describe('ai.llm.chat', () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
 
     await ai.llm.chat({
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
       model: 'gpt-4o',
     })
 
@@ -162,7 +174,9 @@ describe('ai.llm.chat', () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
 
     const result = await ai.llm.chat({
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
     })
 
     expect(mockCreate).toHaveBeenCalledWith(
@@ -196,16 +210,20 @@ describe('ai.llm.chat', () => {
 
   it('tool_calls 响应正确映射', async () => {
     const sdkResponse = makeSDKChatCompletion('', {
-      toolCalls: [{
-        id: 'call-abc',
-        function: { name: 'getWeather', arguments: '{"city":"北京"}' },
-      }],
+      toolCalls: [
+        {
+          id: 'call-abc',
+          function: { name: 'getWeather', arguments: '{"city":"北京"}' },
+        },
+      ],
       finishReason: 'tool_calls',
     })
     mockCreate.mockResolvedValue(sdkResponse)
 
     const result = await ai.llm.chat({
-      messages: [{ role: 'user', content: '北京天气' }],
+      messages: [
+        { role: 'user', content: '北京天气' },
+      ],
     })
 
     expect(result.success).toBe(true)
@@ -226,7 +244,9 @@ describe('ai.llm.chat', () => {
     mockCreate.mockResolvedValue(sdkResponse)
 
     const result = await ai.llm.chat({
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
     })
 
     expect(result.success).toBe(true)
@@ -239,7 +259,9 @@ describe('ai.llm.chat', () => {
     mockCreate.mockRejectedValue(new MockAPIError(429, 'Rate limit exceeded'))
 
     const result = await ai.llm.chat({
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
     })
 
     expect(result.success).toBe(false)
@@ -252,7 +274,9 @@ describe('ai.llm.chat', () => {
     mockCreate.mockRejectedValue(new MockAPIError(404, 'Model not found'))
 
     const result = await ai.llm.chat({
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
     })
 
     expect(result.success).toBe(false)
@@ -265,7 +289,9 @@ describe('ai.llm.chat', () => {
     mockCreate.mockRejectedValue(new MockAPIError(400, 'Invalid request'))
 
     const result = await ai.llm.chat({
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
     })
 
     expect(result.success).toBe(false)
@@ -278,7 +304,9 @@ describe('ai.llm.chat', () => {
     mockCreate.mockRejectedValue(new MockAPIError(500, 'Server error'))
 
     const result = await ai.llm.chat({
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
     })
 
     expect(result.success).toBe(false)
@@ -293,7 +321,9 @@ describe('ai.llm.chat', () => {
     mockCreate.mockRejectedValue(abortErr)
 
     const result = await ai.llm.chat({
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
     })
 
     expect(result.success).toBe(false)
@@ -306,7 +336,9 @@ describe('ai.llm.chat', () => {
     mockCreate.mockRejectedValue(new TypeError('unexpected'))
 
     const result = await ai.llm.chat({
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
     })
 
     expect(result.success).toBe(false)
@@ -319,7 +351,9 @@ describe('ai.llm.chat', () => {
     mockCreate.mockRejectedValue('string error')
 
     const result = await ai.llm.chat({
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
     })
 
     expect(result.success).toBe(false)
@@ -332,7 +366,9 @@ describe('ai.llm.chat', () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
 
     await ai.llm.chat({
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
       temperature: 0.3,
       max_tokens: 1000,
       top_p: 0.9,
@@ -352,15 +388,24 @@ describe('ai.llm.chat', () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
 
     await ai.llm.chat({
-      messages: [{ role: 'user', content: 'test' }],
-      tools: [{
-        type: 'function',
-        function: {
-          name: 'search',
-          description: '搜索',
-          parameters: { type: 'object', properties: { q: { type: 'string' } } },
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'search',
+            description: '搜索',
+            parameters: {
+              type: 'object',
+              properties: {
+                q: { type: 'string' },
+              },
+            },
+          },
         },
-      }],
+      ],
       tool_choice: 'auto',
     })
 
@@ -380,7 +425,9 @@ describe('ai.llm.chat', () => {
     mockCreate.mockResolvedValue(sdkResponse)
 
     const result = await ai.llm.chat({
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
     })
 
     expect(result.success).toBe(true)
@@ -398,7 +445,9 @@ describe('ai.llm.chatStream', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = await ai.init({ llm: { apiKey: 'sk-test' } })
+    const initResult = await ai.init({
+      llm: { apiKey: 'sk-test' },
+    })
     expect(initResult.success).toBe(true)
   })
 
@@ -421,7 +470,9 @@ describe('ai.llm.chatStream', () => {
 
     const collected: string[] = []
     for await (const chunk of ai.llm.chatStream({
-      messages: [{ role: 'user', content: 'hi' }],
+      messages: [
+        { role: 'user', content: 'hi' },
+      ],
     })) {
       if (chunk.choices[0]?.delta?.content) {
         collected.push(chunk.choices[0].delta.content)
@@ -435,18 +486,22 @@ describe('ai.llm.chatStream', () => {
     const streamChunks = [
       makeSDKChunk(undefined, {
         role: 'assistant',
-        toolCalls: [{
-          index: 0,
-          id: 'call-1',
-          type: 'function',
-          function: { name: 'search', arguments: '{"q":' },
-        }],
+        toolCalls: [
+          {
+            index: 0,
+            id: 'call-1',
+            type: 'function',
+            function: { name: 'search', arguments: '{"q":' },
+          },
+        ],
       }),
       makeSDKChunk(undefined, {
-        toolCalls: [{
-          index: 0,
-          function: { arguments: '"test"}' },
-        }],
+        toolCalls: [
+          {
+            index: 0,
+            function: { arguments: '"test"}' },
+          },
+        ],
       }),
       makeSDKChunk(undefined, { finishReason: 'tool_calls' }),
     ]
@@ -459,7 +514,9 @@ describe('ai.llm.chatStream', () => {
 
     const processor = ai.stream.createProcessor()
     for await (const chunk of ai.llm.chatStream({
-      messages: [{ role: 'user', content: 'search test' }],
+      messages: [
+        { role: 'user', content: 'search test' },
+      ],
     })) {
       processor.process(chunk)
     }
@@ -476,7 +533,9 @@ describe('ai.llm.chatStream', () => {
     })())
 
     for await (const _chunk of ai.llm.chatStream({
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
     })) {
       // consume stream
     }
@@ -495,7 +554,9 @@ describe('ai.llm.listModels', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = await ai.init({ llm: { apiKey: 'sk-test' } })
+    const initResult = await ai.init({
+      llm: { apiKey: 'sk-test' },
+    })
     expect(initResult.success).toBe(true)
   })
 
@@ -553,11 +614,17 @@ describe('openAI 客户端配置', () => {
 
   it('apiKey 传递给 OpenAI 构造函数', async () => {
     constructorCalls.length = 0
-    await ai.init({ llm: { apiKey: 'sk-my-key' } })
+    await ai.init({
+      llm: { apiKey: 'sk-my-key' },
+    })
 
     // 客户端延迟创建，需触发一次调用
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
-    await ai.llm.chat({ messages: [{ role: 'user', content: 'test' }] })
+    await ai.llm.chat({
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
+    })
 
     expect(constructorCalls).toHaveLength(1)
     expect(constructorCalls[0][0]).toEqual(
@@ -575,7 +642,11 @@ describe('openAI 客户端配置', () => {
     })
 
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
-    await ai.llm.chat({ messages: [{ role: 'user', content: 'test' }] })
+    await ai.llm.chat({
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
+    })
 
     expect(constructorCalls[0][0]).toEqual(
       expect.objectContaining({ baseURL: 'https://custom.api.com/v1' }),
@@ -592,7 +663,11 @@ describe('openAI 客户端配置', () => {
     })
 
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
-    await ai.llm.chat({ messages: [{ role: 'user', content: 'test' }] })
+    await ai.llm.chat({
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
+    })
 
     expect(constructorCalls[0][0]).toEqual(
       expect.objectContaining({ timeout: 30000 }),
@@ -600,14 +675,22 @@ describe('openAI 客户端配置', () => {
   })
 
   it('重新初始化使用新配置', async () => {
-    await ai.init({ llm: { apiKey: 'sk-old' } })
+    await ai.init({
+      llm: { apiKey: 'sk-old' },
+    })
     constructorCalls.length = 0
     vi.clearAllMocks()
 
-    await ai.init({ llm: { apiKey: 'sk-new', model: 'gpt-4o' } })
+    await ai.init({
+      llm: { apiKey: 'sk-new', model: 'gpt-4o' },
+    })
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
 
-    await ai.llm.chat({ messages: [{ role: 'user', content: 'test' }] })
+    await ai.llm.chat({
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
+    })
 
     expect(constructorCalls).toHaveLength(1)
     expect(constructorCalls[0][0]).toEqual(
@@ -627,7 +710,9 @@ describe('ai.llm — 临时模型 (tempModel)', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = await ai.init({ llm: { apiKey: 'sk-global', model: 'gpt-4o-mini' } })
+    const initResult = await ai.init({
+      llm: { apiKey: 'sk-global', model: 'gpt-4o-mini' },
+    })
     expect(initResult.success).toBe(true)
   })
 
@@ -640,8 +725,15 @@ describe('ai.llm — 临时模型 (tempModel)', () => {
     constructorCalls.length = 0
 
     await ai.llm.chat({
-      messages: [{ role: 'user', content: 'hi' }],
-      tempModel: { model: 'claude-3', apiKey: 'sk-temp', baseUrl: 'https://temp.api/v1', timeout: 12345 },
+      messages: [
+        { role: 'user', content: 'hi' },
+      ],
+      tempModel: {
+        model: 'claude-3',
+        apiKey: 'sk-temp',
+        baseUrl: 'https://temp.api/v1',
+        timeout: 12345,
+      },
     })
 
     expect(constructorCalls[0][0]).toEqual(
@@ -656,8 +748,15 @@ describe('ai.llm — 临时模型 (tempModel)', () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
 
     await ai.llm.chat({
-      messages: [{ role: 'user', content: 'hi' }],
-      tempModel: { model: 'm', apiKey: 'sk-temp', maxTokens: 2048, temperature: 0.2 },
+      messages: [
+        { role: 'user', content: 'hi' },
+      ],
+      tempModel: {
+        model: 'm',
+        apiKey: 'sk-temp',
+        maxTokens: 2048,
+        temperature: 0.2,
+      },
     })
 
     expect(mockCreate).toHaveBeenCalledWith(
@@ -669,10 +768,17 @@ describe('ai.llm — 临时模型 (tempModel)', () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
 
     await ai.llm.chat({
-      messages: [{ role: 'user', content: 'hi' }],
+      messages: [
+        { role: 'user', content: 'hi' },
+      ],
       max_tokens: 777,
       temperature: 0.9,
-      tempModel: { model: 'm', apiKey: 'sk-temp', maxTokens: 2048, temperature: 0.2 },
+      tempModel: {
+        model: 'm',
+        apiKey: 'sk-temp',
+        maxTokens: 2048,
+        temperature: 0.2,
+      },
     })
 
     expect(mockCreate).toHaveBeenCalledWith(
@@ -684,7 +790,9 @@ describe('ai.llm — 临时模型 (tempModel)', () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
 
     await ai.llm.chat({
-      messages: [{ role: 'user', content: 'hi' }],
+      messages: [
+        { role: 'user', content: 'hi' },
+      ],
       tempModel: { model: 'm', apiKey: 'sk-temp' },
     })
 
@@ -699,11 +807,15 @@ describe('ai.llm — 临时模型 (tempModel)', () => {
     delete process.env.HAI_AI_LLM_APIKEY
     delete process.env.OPENAI_API_KEY
     try {
-      await ai.init({ llm: { model: 'gpt-4o-mini' } })
+      await ai.init({
+        llm: { model: 'gpt-4o-mini' },
+      })
       mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
 
       const result = await ai.llm.chat({
-        messages: [{ role: 'user', content: 'hi' }],
+        messages: [
+          { role: 'user', content: 'hi' },
+        ],
         tempModel: { model: 'm' },
       })
 
@@ -724,8 +836,18 @@ describe('ai.llm — 临时模型 (tempModel)', () => {
     constructorCalls.length = 0
     const tempModel = { model: 'm', apiKey: 'sk-temp', baseUrl: 'https://temp.api/v1' }
 
-    await ai.llm.chat({ messages: [{ role: 'user', content: 'a' }], tempModel })
-    await ai.llm.chat({ messages: [{ role: 'user', content: 'b' }], tempModel })
+    await ai.llm.chat({
+      messages: [
+        { role: 'user', content: 'a' },
+      ],
+      tempModel,
+    })
+    await ai.llm.chat({
+      messages: [
+        { role: 'user', content: 'b' },
+      ],
+      tempModel,
+    })
 
     // 全局客户端未触发（均走临时模型），临时客户端仅创建一次
     expect(constructorCalls).toHaveLength(1)
@@ -735,22 +857,39 @@ describe('ai.llm — 临时模型 (tempModel)', () => {
     await ai.close()
     vi.useFakeTimers()
     try {
-      await ai.init({ llm: { apiKey: 'sk-global', tempModelCacheTtl: 1000 } })
+      await ai.init({
+        llm: { apiKey: 'sk-global', tempModelCacheTtl: 1000 },
+      })
       mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
       constructorCalls.length = 0
       const tempModel = { model: 'm', apiKey: 'sk-temp' }
 
-      await ai.llm.chat({ messages: [{ role: 'user', content: 'a' }], tempModel })
+      await ai.llm.chat({
+        messages: [
+          { role: 'user', content: 'a' },
+        ],
+        tempModel,
+      })
       expect(constructorCalls).toHaveLength(1)
 
       // 未过期：复用缓存
       vi.advanceTimersByTime(500)
-      await ai.llm.chat({ messages: [{ role: 'user', content: 'b' }], tempModel })
+      await ai.llm.chat({
+        messages: [
+          { role: 'user', content: 'b' },
+        ],
+        tempModel,
+      })
       expect(constructorCalls).toHaveLength(1)
 
       // 超过 TTL：缓存失效，重建客户端
       vi.advanceTimersByTime(1000)
-      await ai.llm.chat({ messages: [{ role: 'user', content: 'c' }], tempModel })
+      await ai.llm.chat({
+        messages: [
+          { role: 'user', content: 'c' },
+        ],
+        tempModel,
+      })
       expect(constructorCalls).toHaveLength(2)
     }
     finally {
@@ -782,7 +921,9 @@ describe('ai.llm — 临时模型 (tempModel)', () => {
     constructorCalls.length = 0
 
     for await (const _chunk of ai.llm.chatStream({
-      messages: [{ role: 'user', content: 'x' }],
+      messages: [
+        { role: 'user', content: 'x' },
+      ],
       tempModel: { model: 'm', apiKey: 'sk-temp' },
     })) {
       // consume stream
@@ -805,7 +946,9 @@ describe('llm 完整对话流程', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = await ai.init({ llm: { apiKey: 'sk-test' } })
+    const initResult = await ai.init({
+      llm: { apiKey: 'sk-test' },
+    })
     expect(initResult.success).toBe(true)
   })
 
@@ -841,24 +984,35 @@ describe('llm 完整对话流程', () => {
   it('工具调用完整循环：chat → tool_calls → tool result → chat', async () => {
     // 第一轮：模型决定调用工具
     const toolCallResponse = makeSDKChatCompletion('', {
-      toolCalls: [{
-        id: 'call-weather',
-        function: { name: 'getWeather', arguments: '{"city":"北京"}' },
-      }],
+      toolCalls: [
+        {
+          id: 'call-weather',
+          function: { name: 'getWeather', arguments: '{"city":"北京"}' },
+        },
+      ],
       finishReason: 'tool_calls',
     })
     mockCreate.mockResolvedValueOnce(toolCallResponse)
 
     const firstResult = await ai.llm.chat({
-      messages: [{ role: 'user', content: '北京天气怎么样？' }],
-      tools: [{
-        type: 'function',
-        function: {
-          name: 'getWeather',
-          description: '获取天气',
-          parameters: { type: 'object', properties: { city: { type: 'string' } } },
+      messages: [
+        { role: 'user', content: '北京天气怎么样？' },
+      ],
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'getWeather',
+            description: '获取天气',
+            parameters: {
+              type: 'object',
+              properties: {
+                city: { type: 'string' },
+              },
+            },
+          },
         },
-      }],
+      ],
     })
 
     expect(firstResult.success).toBe(true)
@@ -900,7 +1054,9 @@ describe('llm 完整对话流程', () => {
     const calculator = ai.tools.define({
       name: 'calculate',
       description: '计算表达式',
-      parameters: z.object({ expression: z.string() }),
+      parameters: z.object({
+        expression: z.string(),
+      }),
       handler: ({ expression }) => {
         if (expression === '1+1')
           return { result: 2 }
@@ -912,16 +1068,20 @@ describe('llm 完整对话流程', () => {
 
     // 模型返回工具调用
     const toolCallResponse = makeSDKChatCompletion('', {
-      toolCalls: [{
-        id: 'call-calc',
-        function: { name: 'calculate', arguments: '{"expression":"1+1"}' },
-      }],
+      toolCalls: [
+        {
+          id: 'call-calc',
+          function: { name: 'calculate', arguments: '{"expression":"1+1"}' },
+        },
+      ],
       finishReason: 'tool_calls',
     })
     mockCreate.mockResolvedValueOnce(toolCallResponse)
 
     const chatResult = await ai.llm.chat({
-      messages: [{ role: 'user', content: '1+1=?' }],
+      messages: [
+        { role: 'user', content: '1+1=?' },
+      ],
       tools: registry.getDefinitions(),
     })
 
@@ -958,7 +1118,11 @@ describe('llm 完整对话流程', () => {
     })())
 
     const result = await ai.stream.collect(
-      ai.llm.chatStream({ messages: [{ role: 'user', content: '你好' }] }),
+      ai.llm.chatStream({
+        messages: [
+          { role: 'user', content: '你好' },
+        ],
+      }),
     )
 
     expect(result.content).toBe('你好！')
@@ -974,7 +1138,9 @@ describe('ai.llm — chat recording', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    const initResult = await ai.init({
+      llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' },
+    })
     expect(initResult.success).toBe(true)
   })
 
@@ -986,7 +1152,9 @@ describe('ai.llm — chat recording', () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('回复内容'))
 
     await ai.llm.chat({
-      messages: [{ role: 'user', content: '你好' }],
+      messages: [
+        { role: 'user', content: '你好' },
+      ],
       objectId: 'user-1',
       sessionId: 'session-1',
     })
@@ -1012,7 +1180,9 @@ describe('ai.llm — chat recording', () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
 
     await ai.llm.chat({
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
     })
 
     const historyResult = await ai.llm.getHistory({
@@ -1029,7 +1199,9 @@ describe('ai.llm — chat recording', () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
 
     await ai.llm.chat({
-      messages: [{ role: 'user', content: '你好' }],
+      messages: [
+        { role: 'user', content: '你好' },
+      ],
       objectId: 'user-1',
     })
 
@@ -1047,14 +1219,18 @@ describe('ai.llm — chat recording', () => {
   it('多条记录按时间倒序返回', async () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('first'))
     await ai.llm.chat({
-      messages: [{ role: 'user', content: 'q1' }],
+      messages: [
+        { role: 'user', content: 'q1' },
+      ],
       objectId: 'user-1',
       sessionId: 's1',
     })
 
     mockCreate.mockResolvedValue(makeSDKChatCompletion('second'))
     await ai.llm.chat({
-      messages: [{ role: 'user', content: 'q2' }],
+      messages: [
+        { role: 'user', content: 'q2' },
+      ],
       objectId: 'user-1',
       sessionId: 's1',
     })
@@ -1074,7 +1250,9 @@ describe('ai.llm — chat recording', () => {
     for (let i = 0; i < 3; i++) {
       mockCreate.mockResolvedValue(makeSDKChatCompletion(`reply-${i}`))
       await ai.llm.chat({
-        messages: [{ role: 'user', content: `q-${i}` }],
+        messages: [
+          { role: 'user', content: `q-${i}` },
+        ],
         objectId: 'user-1',
         sessionId: 's1',
       })
@@ -1095,7 +1273,9 @@ describe('ai.llm.listSessions', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    const initResult = await ai.init({
+      llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' },
+    })
     expect(initResult.success).toBe(true)
   })
 
@@ -1106,7 +1286,9 @@ describe('ai.llm.listSessions', () => {
   it('记录对话后自动创建会话', async () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
     await ai.llm.chat({
-      messages: [{ role: 'user', content: '你好' }],
+      messages: [
+        { role: 'user', content: '你好' },
+      ],
       objectId: 'user-1',
       sessionId: 'session-a',
     })
@@ -1124,12 +1306,16 @@ describe('ai.llm.listSessions', () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
 
     await ai.llm.chat({
-      messages: [{ role: 'user', content: 'q1' }],
+      messages: [
+        { role: 'user', content: 'q1' },
+      ],
       objectId: 'user-1',
       sessionId: 'session-a',
     })
     await ai.llm.chat({
-      messages: [{ role: 'user', content: 'q2' }],
+      messages: [
+        { role: 'user', content: 'q2' },
+      ],
       objectId: 'user-1',
       sessionId: 'session-b',
     })
@@ -1148,12 +1334,16 @@ describe('ai.llm.listSessions', () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
 
     await ai.llm.chat({
-      messages: [{ role: 'user', content: 'q1' }],
+      messages: [
+        { role: 'user', content: 'q1' },
+      ],
       objectId: 'user-1',
       sessionId: 'session-a',
     })
     await ai.llm.chat({
-      messages: [{ role: 'user', content: 'q2' }],
+      messages: [
+        { role: 'user', content: 'q2' },
+      ],
       objectId: 'user-2',
       sessionId: 'session-b',
     })
@@ -1173,7 +1363,9 @@ describe('ai.llm.listSessions', () => {
   it('新建会话时从用户消息提取 title', async () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
     await ai.llm.chat({
-      messages: [{ role: 'user', content: '请帮我写一篇关于人工智能的文章' }],
+      messages: [
+        { role: 'user', content: '请帮我写一篇关于人工智能的文章' },
+      ],
       objectId: 'user-1',
       sessionId: 'session-title',
     })
@@ -1190,7 +1382,9 @@ describe('ai.llm.listSessions', () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
     const longMsg = '这是一条非常长的消息用来测试标题截断功能是否生效当消息超过五十个字符时应该被截断并追加省略号以确保用户体验保持良好的状态'
     await ai.llm.chat({
-      messages: [{ role: 'user', content: longMsg }],
+      messages: [
+        { role: 'user', content: longMsg },
+      ],
       objectId: 'user-1',
       sessionId: 'session-long',
     })
@@ -1211,7 +1405,9 @@ describe('ai.llm.chatStream 记录保存', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    const initResult = await ai.init({
+      llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' },
+    })
     expect(initResult.success).toBe(true)
   })
 
@@ -1231,7 +1427,9 @@ describe('ai.llm.chatStream 记录保存', () => {
     })())
 
     for await (const _chunk of ai.llm.chatStream({
-      messages: [{ role: 'user', content: '你好' }],
+      messages: [
+        { role: 'user', content: '你好' },
+      ],
       objectId: 'user-1',
       sessionId: 'stream-session',
     })) {
@@ -1259,7 +1457,9 @@ describe('ai.llm.chatStream 记录保存', () => {
     })())
 
     for await (const _chunk of ai.llm.chatStream({
-      messages: [{ role: 'user', content: '帮我翻译这段话' }],
+      messages: [
+        { role: 'user', content: '帮我翻译这段话' },
+      ],
       objectId: 'user-1',
       sessionId: 'stream-s',
     })) {
@@ -1280,7 +1480,9 @@ describe('ai.llm.chatStream 记录保存', () => {
     })())
 
     for await (const _chunk of ai.llm.chatStream({
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
     })) {
       // 消费所有 chunk
     }
@@ -1304,7 +1506,9 @@ describe('ai.llm.ask', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    const initResult = await ai.init({
+      llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' },
+    })
     expect(initResult.success).toBe(true)
   })
 
@@ -1355,7 +1559,9 @@ describe('ai.llm.askStream', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    const initResult = await ai.init({
+      llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' },
+    })
     expect(initResult.success).toBe(true)
   })
 
@@ -1387,7 +1593,9 @@ describe('ai.llm chat AbortSignal', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    const initResult = await ai.init({
+      llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' },
+    })
     expect(initResult.success).toBe(true)
   })
 
@@ -1399,7 +1607,12 @@ describe('ai.llm chat AbortSignal', () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
     const controller = new AbortController()
 
-    await ai.llm.chat({ messages: [{ role: 'user', content: 'hi' }], signal: controller.signal })
+    await ai.llm.chat({
+      messages: [
+        { role: 'user', content: 'hi' },
+      ],
+      signal: controller.signal,
+    })
 
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({ stream: false }),
@@ -1410,7 +1623,11 @@ describe('ai.llm chat AbortSignal', () => {
   it('未传 signal 时不附加请求选项参数', async () => {
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
 
-    await ai.llm.chat({ messages: [{ role: 'user', content: 'hi' }] })
+    await ai.llm.chat({
+      messages: [
+        { role: 'user', content: 'hi' },
+      ],
+    })
 
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({ stream: false }),
@@ -1433,7 +1650,9 @@ describe('ai.llm 多协议路由', () => {
       llm: {
         apiKey: 'sk-test',
         model: 'gpt-4.1',
-        models: [{ id: 'gpt-4.1', model: 'gpt-4.1', protocol: 'responses' }],
+        models: [
+          { id: 'gpt-4.1', model: 'gpt-4.1', protocol: 'responses' },
+        ],
         scenarios: { chat: 'gpt-4.1' },
       },
     })
@@ -1448,7 +1667,12 @@ describe('ai.llm 多协议路由', () => {
       usage: { input_tokens: 6, output_tokens: 3, total_tokens: 9 },
     })
 
-    const result = await ai.llm.chat({ messages: [{ role: 'user', content: 'hi' }], model: 'gpt-4.1' })
+    const result = await ai.llm.chat({
+      messages: [
+        { role: 'user', content: 'hi' },
+      ],
+      model: 'gpt-4.1',
+    })
     expect(result.success).toBe(true)
     if (!result.success)
       return
@@ -1460,11 +1684,17 @@ describe('ai.llm 多协议路由', () => {
 
   it('默认 api=chat 的模型走 Chat Completions', async () => {
     vi.clearAllMocks()
-    const initResult = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    const initResult = await ai.init({
+      llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' },
+    })
     expect(initResult.success).toBe(true)
 
     mockCreate.mockResolvedValue(makeSDKChatCompletion('来自 Chat'))
-    const result = await ai.llm.chat({ messages: [{ role: 'user', content: 'hi' }] })
+    const result = await ai.llm.chat({
+      messages: [
+        { role: 'user', content: 'hi' },
+      ],
+    })
     expect(result.success && result.data.choices[0].message.content).toBe('来自 Chat')
     expect(mockResponsesCreate).not.toHaveBeenCalled()
   })

@@ -29,7 +29,12 @@ export const ListApiKeysQuerySchema = PaginationQuerySchema.extend({
     .transform(v => v === 'true')
     .optional(),
   /** 服务端排序字段 */
-  sortBy: z.enum(['name', 'createdAt', 'lastUsedAt', 'expiresAt']).optional(),
+  sortBy: z.enum([
+    'name',
+    'createdAt',
+    'lastUsedAt',
+    'expiresAt',
+  ]).optional(),
   /** 服务端排序方向 */
   sortDirection: z.enum(['asc', 'desc']).optional(),
 })

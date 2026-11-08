@@ -16,18 +16,66 @@ it.each(['tar', 'tar.gz'])('交付包 %s 同时携带部署入口和操作说明
     mkdirSync(artifacts)
     const content = 'prebuilt image archive'
     writeFileSync(join(artifacts, 'serv-1.0.0.tar'), content)
-    const artifact = DeploymentArtifactSchema.parse({ version: 4, primaryService: 'serv', appVersion: '1.0.0', buildId: 'layout-fixture', images: [{ name: 'serv', file: 'serv-1.0.0.tar', imageRef: 'localhost/layout:1.0.0', sha256: createHash('sha256').update(content).digest('hex') }] })
+    const artifact = DeploymentArtifactSchema.parse({
+      version: 4,
+      primaryService: 'serv',
+      appVersion: '1.0.0',
+      buildId: 'layout-fixture',
+      images: [
+        {
+          name: 'serv',
+          file: 'serv-1.0.0.tar',
+          imageRef: 'localhost/layout:1.0.0',
+          sha256: createHash('sha256').update(content).digest('hex'),
+        },
+      ],
+    })
     writeFileSync(join(root, 'docker-compose-1.0.0.yml'), 'services:\n  serv:\n    image: localhost/layout:1.0.0\n    environment:\n      NODE_OPTIONS: --import /run/hai/runtime-env.mjs\n    volumes:\n      - ./config:/run/hai/config:ro\n      - ./runtime-env.mjs:/run/hai/runtime-env.mjs:ro\n')
-    const environmentText = core.config.stringifyEnv({ APP_VALUE: 'mixed \'single\' and \"double\"\n中文', HAI_STORAGE_TYPE: 's3', HAI_STORAGE_PUBLICENDPOINT: 'https://files.example.test:8443/files', HAI_STORAGE_SECRETACCESSKEY: 'private-fixture-value' })
+    const environmentText = core.config.stringifyEnv({
+      APP_VALUE: 'mixed \'single\' and \"double\"\n中文',
+      HAI_STORAGE_TYPE: 's3',
+      HAI_STORAGE_PUBLICENDPOINT: 'https://files.example.test:8443/files',
+      HAI_STORAGE_SECRETACCESSKEY: 'private-fixture-value',
+    })
     writeFileSync(join(root, '.env.runtime'), environmentText)
     const baseDir = '/opt/hai/apps with spaces'
-    const config = ProviderConfigSchema.parse({ type: 'docker-ssh', ssh: { host: 'example.test', username: 'deploy' }, remote: { baseDir }, expose: { hostPort: 3000 } })
+    const config = ProviderConfigSchema.parse({
+      type: 'docker-ssh',
+      ssh: { host: 'example.test', username: 'deploy' },
+      remote: { baseDir },
+      expose: { hostPort: 3000 },
+    })
     if (config.type !== 'docker-ssh')
       throw new Error('Expected docker SSH configuration')
     const fileName = `deployment.${format}`
-    const result = await createDeploymentBundle({ directory: root, artifactDir: artifacts, artifact, projectName: 'layout-test', deploymentId: 'layout-001', environment: 'test', config, runtime: 'docker', output: join(root, fileName), selected: ['serv'], partial: false, managedAppKeys: ['HAI_STORAGE'], healthPaths: ['/health'], hasWebConfig: false, containerPort: 3000 })
+    const result = await createDeploymentBundle({
+      directory: root,
+      artifactDir: artifacts,
+      artifact,
+      projectName: 'layout-test',
+      deploymentId: 'layout-001',
+      environment: 'test',
+      config,
+      runtime: 'docker',
+      output: join(root, fileName),
+      selected: ['serv'],
+      partial: false,
+      managedAppKeys: ['HAI_STORAGE'],
+      healthPaths: ['/health'],
+      hasWebConfig: false,
+      containerPort: 3000,
+    })
     const listing = execFileSync('tar', ['-tf', result.bundlePath], { encoding: 'utf8', windowsHide: true }).split(/\r?\n/).map(path => path.replace(/^\.\//, '')).filter(Boolean)
-    expect([...new Set(listing.map(path => path.split('/')[0]))].sort()).toEqual(['.hai', 'APPLY.txt', 'apply.sh', 'config', 'images', 'manifest.json'])
+    expect([
+      ...new Set(listing.map(path => path.split('/')[0])),
+    ].sort()).toEqual([
+      '.hai',
+      'APPLY.txt',
+      'apply.sh',
+      'config',
+      'images',
+      'manifest.json',
+    ])
     expect(listing.some(path => /middleware\.env|compose-entry|proxy-entry|resolve-backend-state|resolve-managed-secrets/.test(path))).toBe(false)
     const extract = (file: string) => execFileSync('tar', ['-xOf', result.bundlePath, `./${file}`], { encoding: 'utf8', windowsHide: true })
     const guide = extract('APPLY.txt')

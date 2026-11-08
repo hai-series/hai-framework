@@ -149,7 +149,9 @@ function main() {
     }
   }
   catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error)
+    const errorMsg = error instanceof Error
+      ? error.message
+      : String(error)
     console.warn(`Warning: Could not process packages/cli/templates/base/package.json.hbs: ${errorMsg}`)
   }
 

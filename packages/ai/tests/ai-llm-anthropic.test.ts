@@ -52,8 +52,14 @@ describe('anthropic provider chat', () => {
       content: [],
       usage: { input_tokens: 0, output_tokens: 0 },
     }))
-    const config = AIConfigSchema.parse({ llm: { protocol: 'anthropic', model: 'claude-test' } })
-    const result = await createAnthropicProvider({ config }).chat({ messages: [{ role: 'user', content: 'test' }] })
+    const config = AIConfigSchema.parse({
+      llm: { protocol: 'anthropic', model: 'claude-test' },
+    })
+    const result = await createAnthropicProvider({ config }).chat({
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
+    })
     expect(result.success).toBe(true)
     expect(fetchMock.mock.calls[0][0]).toBe('https://anthropic-proxy.example/v1/messages')
     expect(((fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>)['x-api-key']).toBe('test-anthropic-key')
@@ -61,13 +67,22 @@ describe('anthropic provider chat', () => {
     config.llm.protocol = 'chat'
     config.llm.baseUrl = 'https://openai.example'
     vi.stubEnv('ANTHROPIC_BASE_URL', 'https://anthropic-vendor.example')
-    await createAnthropicProvider({ config }).chat({ model: 'claude-test', messages: [{ role: 'user', content: 'test' }] })
+    await createAnthropicProvider({ config }).chat({
+      model: 'claude-test',
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
+    })
     expect(fetchMock.mock.calls[1][0]).toBe('https://anthropic-vendor.example/v1/messages')
 
     config.llm.protocol = 'anthropic'
     config.llm.baseUrl = undefined
     vi.stubEnv('HAI_AI_LLM_BASEURL', '   ')
-    await createAnthropicProvider({ config }).chat({ messages: [{ role: 'user', content: 'test' }] })
+    await createAnthropicProvider({ config }).chat({
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
+    })
     expect(fetchMock.mock.calls[2][0]).toBe('https://anthropic-vendor.example/v1/messages')
   })
 
@@ -75,12 +90,16 @@ describe('anthropic provider chat', () => {
     fetchMock.mockResolvedValue(jsonResponse({
       id: 'msg_1',
       model: 'claude-3-5-sonnet-latest',
-      content: [{ type: 'text', text: '你好！' }],
+      content: [
+        { type: 'text', text: '你好！' },
+      ],
       stop_reason: 'end_turn',
       usage: { input_tokens: 12, output_tokens: 4 },
     }))
 
-    const provider = createAnthropicProvider({ config: makeConfig() })
+    const provider = createAnthropicProvider({
+      config: makeConfig(),
+    })
     const result = await provider.chat({
       messages: [
         { role: 'system', content: '你是助手' },
@@ -101,26 +120,48 @@ describe('anthropic provider chat', () => {
     expect((init.headers as Record<string, string>)['anthropic-version']).toBe('2023-06-01')
     const body = JSON.parse(init.body as string)
     expect(body.system).toBe('你是助手')
-    expect(body.messages).toEqual([{ role: 'user', content: '你好' }])
+    expect(body.messages).toEqual([
+      { role: 'user', content: '你好' },
+    ])
   })
 
   it('映射 tool_use 块为 tool_calls，finish_reason 为 tool_calls', async () => {
     fetchMock.mockResolvedValue(jsonResponse({
       id: 'msg_2',
       model: 'claude-3-5-sonnet-latest',
-      content: [{ type: 'tool_use', id: 'tu_1', name: 'getWeather', input: { city: '北京' } }],
+      content: [
+        {
+          type: 'tool_use',
+          id: 'tu_1',
+          name: 'getWeather',
+          input: { city: '北京' },
+        },
+      ],
       stop_reason: 'tool_use',
       usage: { input_tokens: 20, output_tokens: 8 },
     }))
 
-    const provider = createAnthropicProvider({ config: makeConfig() })
-    const result = await provider.chat({ messages: [{ role: 'user', content: '天气' }] })
+    const provider = createAnthropicProvider({
+      config: makeConfig(),
+    })
+    const result = await provider.chat({
+      messages: [
+        { role: 'user', content: '天气' },
+      ],
+    })
     expect(result.success).toBe(true)
     if (!result.success)
       return
     expect(result.data.choices[0].finish_reason).toBe('tool_calls')
     expect(result.data.choices[0].message.tool_calls).toEqual([
-      { id: 'tu_1', type: 'function', function: { name: 'getWeather', arguments: JSON.stringify({ city: '北京' }) } },
+      {
+        id: 'tu_1',
+        type: 'function',
+        function: {
+          name: 'getWeather',
+          arguments: JSON.stringify({ city: '北京' }),
+        },
+      },
     ])
   })
 
@@ -142,10 +183,17 @@ describe('anthropic provider chat', () => {
       })
     })
 
-    const provider = createAnthropicProvider({ config: makeConfig() })
+    const provider = createAnthropicProvider({
+      config: makeConfig(),
+    })
     const controller = new AbortController()
     controller.abort()
-    const result = await provider.chat({ messages: [{ role: 'user', content: 'x' }], signal: controller.signal })
+    const result = await provider.chat({
+      messages: [
+        { role: 'user', content: 'x' },
+      ],
+      signal: controller.signal,
+    })
     expect(result.success).toBe(false)
     if (!result.success)
       expect(result.error.code).toBe(HaiAIError.TIMEOUT.code)
@@ -153,8 +201,14 @@ describe('anthropic provider chat', () => {
 
   it('非 2xx 状态映射为对应错误码', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ error: 'rate limited' }, false, 429))
-    const provider = createAnthropicProvider({ config: makeConfig() })
-    const result = await provider.chat({ messages: [{ role: 'user', content: 'x' }] })
+    const provider = createAnthropicProvider({
+      config: makeConfig(),
+    })
+    const result = await provider.chat({
+      messages: [
+        { role: 'user', content: 'x' },
+      ],
+    })
     expect(result.success).toBe(false)
   })
 })
@@ -186,9 +240,15 @@ describe('anthropic provider chatStream', () => {
     })
     fetchMock.mockResolvedValue({ ok: true, status: 200, body: stream } as unknown as Response)
 
-    const provider = createAnthropicProvider({ config: makeConfig() })
+    const provider = createAnthropicProvider({
+      config: makeConfig(),
+    })
     const chunks: string[] = []
-    for await (const chunk of provider.chatStream({ messages: [{ role: 'user', content: '你好' }] })) {
+    for await (const chunk of provider.chatStream({
+      messages: [
+        { role: 'user', content: '你好' },
+      ],
+    })) {
       const delta = chunk.choices[0]?.delta?.content
       if (delta)
         chunks.push(delta)

@@ -52,7 +52,9 @@ public static class HaiFixtureIdentity {
 /** 从夹具自己的父进程和实际创建实例记录身份，不从子进程的 PPID 推断所有权。 */
 export function windowsTreeFixture(childFile: string, identityFile: string, heartbeatFile: string, earlyExit?: number): { command: string, args: string[] } {
   const quote = (value: string) => `'${value.replaceAll('\'', '\'\'')}'`
-  const exit = earlyExit === undefined ? '' : `if(Test-Path -LiteralPath ${quote(heartbeatFile)}){exit ${earlyExit}}`
+  const exit = earlyExit === undefined
+    ? ''
+    : `if(Test-Path -LiteralPath ${quote(heartbeatFile)}){exit ${earlyExit}}`
   const script = `$ErrorActionPreference='Stop'
 $parent=[Diagnostics.Process]::GetCurrentProcess()
 $start=New-Object Diagnostics.ProcessStartInfo
@@ -67,7 +69,16 @@ $identities=@{parent=@{pid=$PID;creationTime=$parent.StartTime.ToFileTimeUtc().T
 [IO.File]::WriteAllText(${quote(identityFile)},$identities,(New-Object Text.UTF8Encoding($false)))
 $streams=@(@{Reader=$child.StandardOutput;Pending=$child.StandardOutput.ReadLineAsync();Writer=[Console]::Out},@{Reader=$child.StandardError;Pending=$child.StandardError.ReadLineAsync();Writer=[Console]::Error})
 while($true){foreach($stream in $streams){if($null -ne $stream.Pending -and $stream.Pending.IsCompleted){$line=$stream.Pending.GetAwaiter().GetResult();if($null -eq $line){$stream.Pending=$null}else{$stream.Writer.WriteLine($line);$stream.Pending=$stream.Reader.ReadLineAsync()}}};${exit};Start-Sleep -Milliseconds 10}`
-  return { command: 'powershell.exe', args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')] }
+  return {
+    command: 'powershell.exe',
+    args: [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-EncodedCommand',
+      Buffer.from(script, 'utf16le').toString('base64'),
+    ],
+  }
 }
 
 /** 创建时间保留十进制字符串，避免 FILETIME 超出 JavaScript 安全整数精度。 */
@@ -94,8 +105,17 @@ export async function windowsFixtureProcessesStopped(identities: FixtureProcessI
   const compile = `Add-Type -TypeDefinition ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${Buffer.from(identitySource).toString('base64')}')))`
   const script = `$ErrorActionPreference='Stop';${compile};$items=$env:HAI_TEST_OWNED_PROCESSES | ConvertFrom-Json;foreach($item in $items){if(-not [HaiFixtureIdentity]::Stopped([uint32]$item.pid,[string]$item.creationTime,$${terminate})){exit 1}};exit 0`
   try {
-    await execute('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], {
-      env: { ...process.env, HAI_TEST_OWNED_PROCESSES: JSON.stringify(identities) },
+    await execute('powershell.exe', [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-EncodedCommand',
+      Buffer.from(script, 'utf16le').toString('base64'),
+    ], {
+      env: {
+        ...process.env,
+        HAI_TEST_OWNED_PROCESSES: JSON.stringify(identities),
+      },
       windowsHide: true,
       timeout: 10_000,
     })

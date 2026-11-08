@@ -10,7 +10,13 @@ it('静态预览缺少构建时立即提示准备步骤，不启动只返回404�
     const source = readFileSync(new URL('../../apps/framework-website/scripts/serve-pages.mjs', import.meta.url), 'utf8')
     // 使用系统分配端口，仅隔离本轮夹具，不改变被测启动校验。
     writeFileSync(path.join(root, 'preview.mjs'), source.replace('server.listen(4297,', 'server.listen(0,'))
-    const result = spawnSync(process.execPath, ['preview.mjs'], { cwd: root, env: { ...process.env, NODE_OPTIONS: '' }, windowsHide: true, encoding: 'utf8', timeout: 2000 })
+    const result = spawnSync(process.execPath, ['preview.mjs'], {
+      cwd: root,
+      env: { ...process.env, NODE_OPTIONS: '' },
+      windowsHide: true,
+      encoding: 'utf8',
+      timeout: 2000,
+    })
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('pnpm build')
   }

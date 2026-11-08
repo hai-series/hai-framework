@@ -37,18 +37,53 @@ async function seed(documents: VectorDocument[]) {
 /** 通过公共 API 验证搜索成功，并返回可比较的文档 ID。 */
 async function matching(filter: Record<string, unknown>, topK = 20) {
   const result = await vecdb.vector.search('docs', [1, 0], { filter, topK })
-  expect(result.success, result.success ? undefined : String(result.error.cause)).toBe(true)
-  return result.success ? result.data.map(row => row.id).sort() : []
+  expect(result.success, result.success
+    ? undefined
+    : String(result.error.cause)).toBe(true)
+  return result.success
+    ? result.data.map(row => row.id).sort()
+    : []
 }
 
 describe('lancedb metadata filter', () => {
   it('值和键中的引号、反斜线、通配符、JSONPath 与 SQL 片段只能按字面量匹配', async () => {
-    const values = ['alice\' OR TRUE --', 'quote"slash\\%_', '\'); DROP TABLE docs; --', '普通\n文本', '', 'a.b[0]']
-    const keys = ['key\' OR TRUE --', 'quote"slash\\%_', 'a.b[0]', '', '$.*']
+    const values = [
+      'alice\' OR TRUE --',
+      'quote"slash\\%_',
+      '\'); DROP TABLE docs; --',
+      '普通\n文本',
+      '',
+      'a.b[0]',
+    ]
+    const keys = [
+      'key\' OR TRUE --',
+      'quote"slash\\%_',
+      'a.b[0]',
+      '',
+      '$.*',
+    ]
     await seed([
-      ...values.map((value, index) => ({ id: `value-${index}`, vector: [1, 0], metadata: { owner: value } })),
-      ...keys.map((key, index) => ({ id: `key-${index}`, vector: [1, 0], metadata: { [key]: values[1] } })),
-      { id: 'bob', vector: [1, 0], metadata: { owner: 'bob', nested: { owner: values[0] }, a: { b: [values[1]] } } },
+      ...values.map((value, index) => ({
+        id: `value-${index}`,
+        vector: [1, 0],
+        metadata: { owner: value },
+      })),
+      ...keys.map((key, index) => ({
+        id: `key-${index}`,
+        vector: [1, 0],
+        metadata: { [key]: values[1] },
+      })),
+      {
+        id: 'bob',
+        vector: [1, 0],
+        metadata: {
+          owner: 'bob',
+          nested: { owner: values[0] },
+          a: {
+            b: [values[1]],
+          },
+        },
+      },
     ])
     for (const [index, value] of values.entries())
       expect(await matching({ owner: value })).toEqual([`value-${index}`])
@@ -59,12 +94,48 @@ describe('lancedb metadata filter', () => {
   })
 
   it('数字、字符串、布尔与 null 精确区分，缺失字段和嵌套同名字段不匹配', async () => {
-    const values = [1, '1', true, 'true', false, 'false', null, 'null', 1e20, 1e-7, -2.5, 0, 1e308]
+    const values = [
+      1,
+      '1',
+      true,
+      'true',
+      false,
+      'false',
+      null,
+      'null',
+      1e20,
+      1e-7,
+      -2.5,
+      0,
+      1e308,
+    ]
     await seed([
-      ...values.map((value, index) => ({ id: `typed-${index}`, vector: [1, 0], metadata: { value } })),
-      { id: 'missing', vector: [1, 0], metadata: { nested: { value: null } } },
-      { id: 'array', vector: [1, 0], metadata: { value: [1] } },
-      { id: 'object', vector: [1, 0], metadata: { value: { value: 1 } } },
+      ...values.map((value, index) => ({
+        id: `typed-${index}`,
+        vector: [1, 0],
+        metadata: { value },
+      })),
+      {
+        id: 'missing',
+        vector: [1, 0],
+        metadata: {
+          nested: { value: null },
+        },
+      },
+      {
+        id: 'array',
+        vector: [1, 0],
+        metadata: {
+          value: [1],
+        },
+      },
+      {
+        id: 'object',
+        vector: [1, 0],
+        metadata: {
+          value: { value: 1 },
+        },
+      },
     ])
     for (const [index, value] of values.entries())
       expect(await matching({ value })).toEqual([`typed-${index}`])
@@ -74,34 +145,117 @@ describe('lancedb metadata filter', () => {
 
   it('过滤在 topK 之前执行，多字段 AND 与 minScore 不漏掉允许的最近邻', async () => {
     await seed([
-      { id: 'other-nearest', vector: [1, 0], metadata: { tenant: 'other', active: true } },
-      { id: 'allowed-near', vector: [0.9, 0], metadata: { tenant: 'mine', active: true } },
-      { id: 'inactive', vector: [0.95, 0], metadata: { tenant: 'mine', active: false } },
-      { id: 'allowed-far', vector: [-1, 0], metadata: { tenant: 'mine', active: true } },
+      {
+        id: 'other-nearest',
+        vector: [1, 0],
+        metadata: { tenant: 'other', active: true },
+      },
+      {
+        id: 'allowed-near',
+        vector: [0.9, 0],
+        metadata: { tenant: 'mine', active: true },
+      },
+      {
+        id: 'inactive',
+        vector: [0.95, 0],
+        metadata: { tenant: 'mine', active: false },
+      },
+      {
+        id: 'allowed-far',
+        vector: [-1, 0],
+        metadata: { tenant: 'mine', active: true },
+      },
     ])
     expect(await matching({ tenant: 'mine', active: true }, 1)).toEqual(['allowed-near'])
-    const result = await vecdb.vector.search('docs', [1, 0], { filter: { tenant: 'mine', active: true }, topK: 2, minScore: 0.5 })
-    expect(result).toMatchObject({ success: true, data: [{ id: 'allowed-near' }] })
+    const result = await vecdb.vector.search('docs', [1, 0], {
+      filter: { tenant: 'mine', active: true },
+      topK: 2,
+      minScore: 0.5,
+    })
+    expect(result).toMatchObject({
+      success: true,
+      data: [
+        { id: 'allowed-near' },
+      ],
+    })
     expect((await matching({})).length).toBe(4)
   })
 
   it('不支持的 filter 结构和非有限数明确失败，不能执行无过滤查询', async () => {
-    await seed([{ id: 'secret', vector: [1, 0], metadata: { owner: 'alice' } }])
-    for (const value of [{ owner: 'alice' }, ['alice'], undefined, Number.NaN, Number.POSITIVE_INFINITY, 1n, new Date()]) {
-      const result = await vecdb.vector.search('docs', [1, 0], { filter: { owner: value } })
-      expect(result).toMatchObject({ success: false, error: { code: HaiVecdbError.CONFIG_ERROR.code } })
+    await seed([
+      {
+        id: 'secret',
+        vector: [1, 0],
+        metadata: { owner: 'alice' },
+      },
+    ])
+    for (const value of [
+      { owner: 'alice' },
+      ['alice'],
+      undefined,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      1n,
+      new Date(),
+    ]) {
+      const result = await vecdb.vector.search('docs', [1, 0], {
+        filter: { owner: value },
+      })
+      expect(result).toMatchObject({
+        success: false,
+        error: { code: HaiVecdbError.CONFIG_ERROR.code },
+      })
     }
   })
 
   it('原生 JSON 字段经 insert/upsert、重启后保留完整对象，替换后的类型和过滤值立即生效', async () => {
-    const database = await seed([{ id: 'one', vector: [1, 0], metadata: { before: true, owner: 'old', nested: { items: [null, 'x', 2] } } }])
-    const metadata = { owner: 'new\'\\%_', count: 2, active: false, empty: null, nested: { items: [1, { ok: true }] } }
-    expect((await vecdb.vector.upsert('docs', [{ id: 'one', vector: [0.9, 0], metadata }])).success).toBe(true)
+    const database = await seed([
+      {
+        id: 'one',
+        vector: [1, 0],
+        metadata: {
+          before: true,
+          owner: 'old',
+          nested: {
+            items: [null, 'x', 2],
+          },
+        },
+      },
+    ])
+    const metadata = {
+      owner: 'new\'\\%_',
+      count: 2,
+      active: false,
+      empty: null,
+      nested: {
+        items: [
+          1,
+          { ok: true },
+        ],
+      },
+    }
+    expect((await vecdb.vector.upsert('docs', [
+      {
+        id: 'one',
+        vector: [0.9, 0],
+        metadata,
+      },
+    ])).success).toBe(true)
     await vecdb.close()
     expect((await vecdb.init({ type: 'lancedb', path: database })).success).toBe(true)
-    expect(await matching({ owner: metadata.owner, count: 2, active: false, empty: null })).toEqual(['one'])
+    expect(await matching({
+      owner: metadata.owner,
+      count: 2,
+      active: false,
+      empty: null,
+    })).toEqual(['one'])
     expect(await matching({ before: true })).toEqual([])
-    expect(await vecdb.vector.search('docs', [1, 0])).toMatchObject({ success: true, data: [{ id: 'one', metadata }] })
+    expect(await vecdb.vector.search('docs', [1, 0])).toMatchObject({
+      success: true,
+      data: [
+        { id: 'one', metadata },
+      ],
+    })
     const connection = await driver.connect(database)
     const table = await connection.openTable('docs')
     try {
@@ -116,10 +270,24 @@ describe('lancedb metadata filter', () => {
   it('旧 Utf8 metadata 表明确拒绝过滤，不猜测 JSON 内容或返回未过滤数据', async () => {
     const database = path.join(directory, 'legacy')
     const connection = await driver.connect(database)
-    const table = await connection.createTable('docs', driver.makeArrowTable([{ id: 'secret', vector: [1, 0], content: '', metadata: '{"owner":"alice"}' }], {}, new Map([['hai.vecdb.metric', 'cosine']])))
+    const table = await connection.createTable('docs', driver.makeArrowTable([
+      {
+        id: 'secret',
+        vector: [1, 0],
+        content: '',
+        metadata: '{"owner":"alice"}',
+      },
+    ], {}, new Map([
+      ['hai.vecdb.metric', 'cosine'],
+    ])))
     try {
       expect((await vecdb.init({ type: 'lancedb', path: database })).success).toBe(true)
-      expect(await vecdb.vector.search('docs', [1, 0], { filter: { owner: 'alice' } })).toMatchObject({ success: false, error: { code: HaiVecdbError.CONFIG_ERROR.code } })
+      expect(await vecdb.vector.search('docs', [1, 0], {
+        filter: { owner: 'alice' },
+      })).toMatchObject({
+        success: false,
+        error: { code: HaiVecdbError.CONFIG_ERROR.code },
+      })
       expect(await table.countRows()).toBe(1)
     }
     finally {

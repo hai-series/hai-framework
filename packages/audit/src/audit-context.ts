@@ -26,7 +26,22 @@ export function getAuditContext(): Readonly<AuditContext> {
  */
 export function withAuditContext<T>(context: AuditContext, operation: () => T): T {
   const previous = getAuditContext()
-  const actor = Object.hasOwn(context, 'actor') ? context.actor : previous.actor
-  const snapshot = actor ? { ...actor, ...(actor.roles ? { roles: [...actor.roles] } : {}) } : actor
-  return storage.run({ ...previous, ...context, actor: snapshot }, operation)
+  const actor = Object.hasOwn(context, 'actor')
+    ? context.actor
+    : previous.actor
+  const snapshot = actor
+    ? {
+        ...actor,
+        ...(actor.roles
+          ? {
+              roles: [...actor.roles],
+            }
+          : {}),
+      }
+    : actor
+  return storage.run({
+    ...previous,
+    ...context,
+    actor: snapshot,
+  }, operation)
 }

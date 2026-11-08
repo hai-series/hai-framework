@@ -22,7 +22,12 @@ it('路由预算按完整段匹配，业务保留自身容量，大包不会占�
   deeper.release()
 })
 
-it.each(['https://example.test/api', '/api/foo*', '/api/**', '/api/path?q=1'])('拒绝非完整路径模式 %s', (path) => {
+it.each([
+  'https://example.test/api',
+  '/api/foo*',
+  '/api/**',
+  '/api/path?q=1',
+])('拒绝非完整路径模式 %s', (path) => {
   expect(() => createTransportBodyPolicy(undefined, { [path]: 1024 })).toThrow(RangeError)
 })
 

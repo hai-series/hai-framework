@@ -30,9 +30,12 @@ import { serv } from '../src/serv-main.js'
 async function deadline<T>(promise: Promise<T>, ms = 30000): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    return await Promise.race([promise, new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error('Production feedback fixture timed out')), ms)
-    })])
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Production feedback fixture timed out')), ms)
+      }),
+    ])
   }
   finally {
     clearTimeout(timer)
@@ -40,7 +43,16 @@ async function deadline<T>(promise: Promise<T>, ms = 30000): Promise<T> {
 }
 function worker(configuration: object) {
   const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(?:HAI_|PUBLIC_|VITE_)/i.test(key)))
-  const child = fork(fileURLToPath(new URL('./fixtures/feedback-production-node.mjs', import.meta.url)), { env: { ...environment, NODE_ENV: 'production', HAI_CORE_ENV: 'production', FEEDBACK_PRODUCTION_FIXTURE: JSON.stringify(configuration) }, windowsHide: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] })
+  const child = fork(fileURLToPath(new URL('./fixtures/feedback-production-node.mjs', import.meta.url)), {
+    env: {
+      ...environment,
+      NODE_ENV: 'production',
+      HAI_CORE_ENV: 'production',
+      FEEDBACK_PRODUCTION_FIXTURE: JSON.stringify(configuration),
+    },
+    windowsHide: true,
+    stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+  })
   let sequence = 0
   const pending = new Map<number, { resolve: (result: unknown) => void, reject: (error: Error) => void }>()
   const ready = Promise.withResolvers<void>()
@@ -110,7 +122,12 @@ it('生产PG+Redis+S3：采集进程崩溃后接管，HTTP超时及重启后Webh
       let body = ''
       for await (const chunk of request) body += String(chunk)
       const event: FeedbackWebhookEvent = JSON.parse(body)
-      requests.push({ body, id: String(request.headers['idempotency-key']), signature: String(request.headers['x-hai-feedback-signature']), timestamp: String(request.headers['x-hai-feedback-timestamp']) })
+      requests.push({
+        body,
+        id: String(request.headers['idempotency-key']),
+        signature: String(request.headers['x-hai-feedback-signature']),
+        timestamp: String(request.headers['x-hai-feedback-timestamp']),
+      })
       const inserted = await reldb.sql.execute('INSERT INTO hai_fixture_webhook_receipts (event_id, body) VALUES (?, ?) ON CONFLICT(event_id) DO NOTHING', [event.eventId, body])
       if (!inserted.success)
         throw new Error('Receiver persistence failed')
@@ -129,11 +146,18 @@ it('生产PG+Redis+S3：采集进程崩溃后接管，HTTP超时及重启后Webh
     expect((await cache.init(sharedCache)).success).toBe(true)
     expect((await storage.init(objects.config)).success).toBe(true)
     expect((await audit.init()).success).toBe(true)
-    expect((await iam.init({ seedDefaultData: false, rbac: { defaultRole: '' } })).success).toBe(true)
+    expect((await iam.init({
+      seedDefaultData: false,
+      rbac: { defaultRole: '' },
+    })).success).toBe(true)
     const permission = await iam.authz.createPermission({ code: 'feedback:*', name: 'Feedback fixture management' })
     if (!permission.success)
       throw new Error('Permission fixture failed')
-    const role = await iam.authz.createRole({ code: 'feedback-process', name: 'Feedback process', permissionIds: [permission.data.id] })
+    const role = await iam.authz.createRole({
+      code: 'feedback-process',
+      name: 'Feedback process',
+      permissionIds: [permission.data.id],
+    })
     const user = await iam.user.createUser({ username: 'production-feedback-user', password: 'FixturePassword123!' })
     if (!role.success || !user.success)
       throw new Error('Identity fixture failed')
@@ -146,21 +170,51 @@ it('生产PG+Redis+S3：采集进程崩溃后接管，HTTP超时及重启后Webh
     const receiverAddress = receiver.address()
     if (!receiverAddress || typeof receiverAddress === 'string')
       throw new Error('Receiver did not start')
-    const config = { appId: 'production-process-feedback', notificationMode: 'disabled' as const, workerIntervalMs: 0, leaseMs: 1000, webhookTimeoutMs: 250, webhookUrl: `http://127.0.0.1:${receiverAddress.port}/feedback`, webhookSecret: secret }
-    expect((await feedback.init(config, { collectEvidence: async () => ({ text: 'Host declares collection capability' }) })).success).toBe(true)
-    const app = serv.createApp({ contract, procedures: { feedback: createFeedbackProcedures({ feedback, resolveContext: ({ session }) => ({ scopeId: 'production-scope', userId: session.userId, permissions: session.permissions }) }) }, iam })
+    const config = {
+      appId: 'production-process-feedback',
+      notificationMode: 'disabled' as const,
+      workerIntervalMs: 0,
+      leaseMs: 1000,
+      webhookTimeoutMs: 250,
+      webhookUrl: `http://127.0.0.1:${receiverAddress.port}/feedback`,
+      webhookSecret: secret,
+    }
+    expect((await feedback.init(config, {
+      collectEvidence: async () => ({ text: 'Host declares collection capability' }),
+    })).success).toBe(true)
+    const app = serv.createApp({
+      contract,
+      procedures: {
+        feedback: createFeedbackProcedures({
+          feedback,
+          resolveContext: ({ session }) => ({ scopeId: 'production-scope', userId: session.userId, permissions: session.permissions }),
+        }),
+      },
+      iam,
+    })
     http = serv.listen(app, { host: '127.0.0.1', port: 0 })
     await once(http.server, 'listening')
     const address = http.server.address()
     if (!address || typeof address === 'string')
       throw new Error('HTTP fixture did not start')
-    expect((await client.init({ baseUrl: `http://127.0.0.1:${address.port}/api/v1`, auth: { storage: apiClient.tokenStorage.memory() } })).success).toBe(true)
+    expect((await client.init({
+      baseUrl: `http://127.0.0.1:${address.port}/api/v1`,
+      auth: {
+        storage: apiClient.tokenStorage.memory(),
+      },
+    })).success).toBe(true)
     await client.auth.setTokens(logged.data.tokens)
     const submitted = await client.feedback.reports.submit({ appId: config.appId, submissionId: 'crash-and-restart' })
     if (!submitted.success)
       throw new Error('Authenticated intake failed')
     expect((await client.feedback.reports.completeCollection({ id: submitted.data.id })).success).toBe(true)
-    const configuration = { database: database.config, cache: sharedCache, storage: objects.config, feedback: config, accessToken: logged.data.tokens.accessToken }
+    const configuration = {
+      database: database.config,
+      cache: sharedCache,
+      storage: objects.config,
+      feedback: config,
+      accessToken: logged.data.tokens.accessToken,
+    }
     nodes.push(worker({ ...configuration, pauseBusiness: true }), worker(configuration))
     await Promise.all(nodes.map(node => node.ready()))
     expect(new Set(nodes.map(node => node.child.pid)).size).toBe(2)
@@ -183,12 +237,17 @@ it('生产PG+Redis+S3：采集进程崩溃后接管，HTTP超时及重启后Webh
     if (!detail.success)
       throw new Error('Shared detail missing')
     expect(detail.data.report.collectionStatus).not.toBe('collecting')
-    expect(detail.data.attachments).toEqual([expect.objectContaining({ name: 'diagnostics.gz', status: 'available' })])
+    expect(detail.data.attachments).toEqual([
+      expect.objectContaining({ name: 'diagnostics.gz', status: 'available' }),
+    ])
     const attachment = await client.feedback.attachments.get({ id: submitted.data.id, attachmentId: detail.data.attachments[0]!.id })
     expect(attachment.success).toBe(true)
     if (attachment.success)
       expect(gunzipSync(Buffer.from(attachment.data.dataBase64, 'base64')).toString()).toBe('Stable cross-node diagnostic attachment')
-    expect((await client.feedback.reports.getEvidence({ id: submitted.data.id, kind: 'business' }))).toMatchObject({ success: true, data: { total: 1 } })
+    expect((await client.feedback.reports.getEvidence({ id: submitted.data.id, kind: 'business' }))).toMatchObject({
+      success: true,
+      data: { total: 1 },
+    })
     expect((await client.feedback.reports.setStatus({ id: submitted.data.id, status: 'handled', expectedVersion: detail.data.report.version })).success).toBe(true)
     nodes[1]!.child.kill()
     await deadline(nodes[1]!.closed)
@@ -201,7 +260,10 @@ it('生产PG+Redis+S3：采集进程崩溃后接管，HTTP超时及重启后Webh
     expect(requests[1]!.body).toBe(requests[0]!.body)
     for (const request of requests)
       expect(request.signature).toBe(`sha256=${createHmac('sha256', secret).update(`${request.timestamp}.${request.body}`).digest('hex')}`)
-    expect(await reldb.sql.get('SELECT COUNT(*)::int AS count FROM hai_fixture_webhook_receipts')).toMatchObject({ success: true, data: { count: 1 } })
+    expect(await reldb.sql.get('SELECT COUNT(*)::int AS count FROM hai_fixture_webhook_receipts')).toMatchObject({
+      success: true,
+      data: { count: 1 },
+    })
     const final = await client.feedback.reports.get({ id: submitted.data.id })
     expect(final.success && final.data.jobs.find(job => job.type === 'webhook')?.status).toBe('succeeded')
   }

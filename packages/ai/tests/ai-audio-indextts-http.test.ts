@@ -13,7 +13,14 @@ afterEach(async () => {
   vi.unstubAllGlobals()
   await ai.close()
 })
-const reference = { audio: { data: new Uint8Array([1, 2, 3, 4]), format: 'wav' as const }, language: 'ja', transcript: 'reference' }
+const reference = {
+  audio: {
+    data: new Uint8Array([1, 2, 3, 4]),
+    format: 'wav' as const,
+  },
+  language: 'ja',
+  transcript: 'reference',
+}
 
 async function serverTest(
   handler: (request: IncomingMessage, response: ServerResponse) => Promise<void>,
@@ -42,15 +49,30 @@ async function serverTest(
   }
   finally {
     server.closeAllConnections()
-    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+    await new Promise<void>((resolve, reject) => server.close(error => error
+      ? reject(error)
+      : resolve()))
   }
 }
 
 async function init(baseUrl: string, timeout = 2000): Promise<void> {
-  const result = await ai.init({ llm: { apiKey: 'unused' }, audio: {
-    models: [{ id: 'index', provider: 'indextts', model: 'indextts-2.5', operations: ['synthesize'], baseUrl, apiKey: 'local-only-key', timeout }],
-    synthesizeModel: 'index',
-  } })
+  const result = await ai.init({
+    llm: { apiKey: 'unused' },
+    audio: {
+      models: [
+        {
+          id: 'index',
+          provider: 'indextts',
+          model: 'indextts-2.5',
+          operations: ['synthesize'],
+          baseUrl,
+          apiKey: 'local-only-key',
+          timeout,
+        },
+      ],
+      synthesizeModel: 'index',
+    },
+  })
   expect(result.success).toBe(true)
 }
 
@@ -62,7 +84,9 @@ it('真实 multipart 请求携带参考音频和控制字段，解析二进制�
     authorization = request.headers.authorization
     const chunks: Uint8Array[] = []
     for await (const chunk of request) chunks.push(Buffer.from(chunk))
-    form = await new Response(Buffer.concat(chunks), { headers: { 'Content-Type': request.headers['content-type'] ?? '' } }).formData()
+    form = await new Response(Buffer.concat(chunks), {
+      headers: { 'Content-Type': request.headers['content-type'] ?? '' },
+    }).formData()
     response.writeHead(200, {
       'Content-Type': 'audio/wav',
       'x-hai-audio-duration-ms': '3210',
@@ -91,7 +115,13 @@ it('真实 multipart 请求携带参考音频和控制字段，解析二进制�
     expect(result.success).toBe(true)
     if (result.success) {
       expect(Array.from(result.data.data)).toEqual([7, 8, 9])
-      expect(result.data).toMatchObject({ format: 'wav', durationMs: 3210, sampleRate: 24000, channels: 1, metadata: { speed: 1.1, durationMatched: true } })
+      expect(result.data).toMatchObject({
+        format: 'wav',
+        durationMs: 3210,
+        sampleRate: 24000,
+        channels: 1,
+        metadata: { speed: 1.1, durationMatched: true },
+      })
     }
     expect(builtin).not.toHaveBeenCalled()
     expect(authorization).toBe('Bearer local-only-key')
@@ -161,7 +191,10 @@ it('真实错误响应返回 AUDIO_UPSTREAM_ERROR，按段流式失败保留抛�
     if (!result.success)
       expect(result.error.code).toBe(HaiAIError.AUDIO_UPSTREAM_ERROR.code)
     const consume = async () => {
-      for await (const _event of ai.audio.synthesizeStream({ text: { id: 'one', text: 'error' }, speakerReference: reference })) { /* 完整消费以验证迭代抛错。 */ }
+      for await (const _event of ai.audio.synthesizeStream({
+        text: { id: 'one', text: 'error' },
+        speakerReference: reference,
+      })) { /* 完整消费以验证迭代抛错。 */ }
     }
     await expect(consume()).rejects.toMatchObject({ code: HaiAIError.AUDIO_UPSTREAM_ERROR.code })
     await expect.poll(() => sockets.size).toBe(0)

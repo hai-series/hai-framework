@@ -71,7 +71,9 @@ const MULTI_SPACE_REGEX = /[ \t]{2,}/g
 export function cleanText(text: string, options?: CleanOptionsInput): HaiResult<string> {
   const parseResult = CleanOptionsSchema.safeParse(options ?? {})
   if (!parseResult.success) {
-    return err(HaiDatapipeError.CONFIG_ERROR, datapipeM('datapipe_configError', { params: { error: parseResult.error.message } }), parseResult.error)
+    return err(HaiDatapipeError.CONFIG_ERROR, datapipeM('datapipe_configError', {
+      params: { error: parseResult.error.message },
+    }), parseResult.error)
   }
 
   const opts = parseResult.data
@@ -101,7 +103,11 @@ export function cleanText(text: string, options?: CleanOptionsInput): HaiResult<
           regex = new RegExp(pattern, 'g')
         }
         catch (regexError) {
-          return err(HaiDatapipeError.CONFIG_ERROR, datapipeM('datapipe_configError', { params: { error: String(regexError) } }), regexError)
+          return err(HaiDatapipeError.CONFIG_ERROR, datapipeM('datapipe_configError', {
+            params: {
+              error: String(regexError),
+            },
+          }), regexError)
         }
         result = result.replace(regex, replacement)
       }
@@ -121,6 +127,10 @@ export function cleanText(text: string, options?: CleanOptionsInput): HaiResult<
     return ok(result)
   }
   catch (error) {
-    return err(HaiDatapipeError.CLEAN_FAILED, datapipeM('datapipe_cleanFailed', { params: { error: String(error) } }), error)
+    return err(HaiDatapipeError.CLEAN_FAILED, datapipeM('datapipe_cleanFailed', {
+      params: {
+        error: String(error),
+      },
+    }), error)
   }
 }

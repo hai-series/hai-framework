@@ -129,7 +129,9 @@ export const ChunkOptionsSchema = z.object({
   markdownMinLevel: z.number().int().min(1).max(6).default(2),
   /** 是否保留 Markdown 标题在分块内容中（默认 true） */
   markdownKeepTitle: z.boolean().default(true),
-}).refine(options => options.overlap < options.maxSize, { path: ['overlap'] })
+}).refine(options => options.overlap < options.maxSize, {
+  path: ['overlap'],
+})
 
 /**
  * 分块选项类型

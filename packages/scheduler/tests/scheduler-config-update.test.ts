@@ -15,31 +15,70 @@ afterEach(async () => {
 it('shares a concurrent refresh instead of rejecting another reader of the same snapshot', async () => {
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
   expect((await scheduler.init({ enableDb: true })).success).toBe(true)
-  const results = await Promise.all([scheduler.refreshTasks(), scheduler.refreshTasks(), scheduler.refreshTasks()])
+  const results = await Promise.all([
+    scheduler.refreshTasks(),
+    scheduler.refreshTasks(),
+    scheduler.refreshTasks(),
+  ])
   expect(results.every(result => result.success)).toBe(true)
 })
 
 it('retains an edited one-time definition after an earlier execution completes', async () => {
-  await scheduler.init({ enableDb: true, hooks: { onTaskExecute: async (event) => {
-    expect((await scheduler.updateTask(event.task.id, { name: 'Next definition', params: { version: 2 } })).success).toBe(true)
-    return { completed: true }
-  } } })
-  await scheduler.register({ id: 'edited', name: 'Original', cron: '* * * * *', deleteAfterRun: true, params: { version: 1 } })
-  expect(await scheduler.trigger('edited')).toMatchObject({ success: true, data: { status: 'success' } })
-  expect(scheduler.tasks.get('edited')).toMatchObject({ name: 'Next definition', params: { version: 2 } })
+  await scheduler.init({
+    enableDb: true,
+    hooks: {
+      onTaskExecute: async (event) => {
+        expect((await scheduler.updateTask(event.task.id, {
+          name: 'Next definition',
+          params: { version: 2 },
+        })).success).toBe(true)
+        return { completed: true }
+      },
+    },
+  })
+  await scheduler.register({
+    id: 'edited',
+    name: 'Original',
+    cron: '* * * * *',
+    deleteAfterRun: true,
+    params: { version: 1 },
+  })
+  expect(await scheduler.trigger('edited')).toMatchObject({
+    success: true,
+    data: { status: 'success' },
+  })
+  expect(scheduler.tasks.get('edited')).toMatchObject({
+    name: 'Next definition',
+    params: { version: 2 },
+  })
 })
 
 it('does not execute a replacement definition under an earlier failed occurrence', async () => {
   const execute = vi.fn(async (event: SchedulerTaskExecuteEvent) => {
     if (execute.mock.calls.length === 1) {
-      await scheduler.updateTask(event.task.id, { params: { version: 2 } })
+      await scheduler.updateTask(event.task.id, {
+        params: { version: 2 },
+      })
       throw new Error('Original attempt failed')
     }
     return { completed: true }
   })
-  await scheduler.init({ enableDb: true, hooks: { onTaskExecute: execute } })
-  await scheduler.register({ id: 'edited', name: 'Original', cron: '* * * * *', idempotent: true, retry: { maxAttempts: 2 }, params: { version: 1 } })
-  expect(await scheduler.trigger('edited')).toMatchObject({ success: true, data: { status: 'unknown' } })
+  await scheduler.init({
+    enableDb: true,
+    hooks: { onTaskExecute: execute },
+  })
+  await scheduler.register({
+    id: 'edited',
+    name: 'Original',
+    cron: '* * * * *',
+    idempotent: true,
+    retry: { maxAttempts: 2 },
+    params: { version: 1 },
+  })
+  expect(await scheduler.trigger('edited')).toMatchObject({
+    success: true,
+    data: { status: 'unknown' },
+  })
   expect(execute).toHaveBeenCalledOnce()
   expect(scheduler.tasks.get('edited')?.params).toEqual({ version: 2 })
 })
@@ -48,9 +87,22 @@ it('keeps the old cron when another part of an update fails validation', async (
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-10-08T12:34:00Z'))
   const execute = vi.fn()
-  await scheduler.init({ enableDb: true, tickInterval: 100, hooks: { onTaskExecute: execute } })
-  await scheduler.register({ id: 'invalid-update', name: 'Original', cron: '* * * * *', timezone: 'UTC' })
-  expect((await scheduler.updateTask('invalid-update', { cron: '0 0 * * *', idempotent: true, retry: { maxAttempts: 0 } })).success).toBe(false)
+  await scheduler.init({
+    enableDb: true,
+    tickInterval: 100,
+    hooks: { onTaskExecute: execute },
+  })
+  await scheduler.register({
+    id: 'invalid-update',
+    name: 'Original',
+    cron: '* * * * *',
+    timezone: 'UTC',
+  })
+  expect((await scheduler.updateTask('invalid-update', {
+    cron: '0 0 * * *',
+    idempotent: true,
+    retry: { maxAttempts: 0 },
+  })).success).toBe(false)
   scheduler.start()
   await vi.advanceTimersByTimeAsync(100)
   expect(execute).toHaveBeenCalledOnce()
@@ -67,8 +119,19 @@ it('keeps a definition in memory when persistent deletion fails', async () => {
 
 it.each([false, true])('atomically checks the executed definition at database deletion, concurrent edit=%s', async (edit) => {
   await reldb.init({ type: 'sqlite', database: ':memory:' })
-  await scheduler.init({ enableDb: true, hooks: { onTaskExecute: async () => ({ completed: true }) } })
-  await scheduler.register({ id: 'atomic-delete', name: 'Original', cron: '* * * * *', deleteAfterRun: true, params: { version: 1 } })
+  await scheduler.init({
+    enableDb: true,
+    hooks: {
+      onTaskExecute: async () => ({ completed: true }),
+    },
+  })
+  await scheduler.register({
+    id: 'atomic-delete',
+    name: 'Original',
+    cron: '* * * * *',
+    deleteAfterRun: true,
+    params: { version: 1 },
+  })
   const executeSql = reldb.sql.execute.bind(reldb.sql)
   let changed = false
   vi.spyOn(reldb.sql, 'execute').mockImplementation(async (sql, params) => {
@@ -79,7 +142,10 @@ it.each([false, true])('atomically checks the executed definition at database de
     }
     return executeSql(sql, params)
   })
-  expect(await scheduler.trigger('atomic-delete')).toMatchObject({ success: true, data: { status: 'success' } })
+  expect(await scheduler.trigger('atomic-delete')).toMatchObject({
+    success: true,
+    data: { status: 'success' },
+  })
   expect((await scheduler.refreshTasks()).success).toBe(true)
   expect(scheduler.tasks.has('atomic-delete')).toBe(edit)
   if (edit)

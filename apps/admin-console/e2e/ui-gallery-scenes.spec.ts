@@ -30,7 +30,9 @@ test.describe('UI Gallery Scenes', () => {
     try {
       const svg = await documentDemo.locator('.hai-md-mermaid svg').first().evaluate(element => element.outerHTML)
       await diagram.setContent(`<html lang="zh-CN"><body style="margin:24px;background:white">${svg}</body></html>`)
-      await diagram.locator('svg').screenshot({ path: testInfo.outputPath('ai-mermaid-diagram.png') })
+      await diagram.locator('svg').screenshot({
+        path: testInfo.outputPath('ai-mermaid-diagram.png'),
+      })
     }
     finally { await diagram.close() }
 
@@ -76,9 +78,13 @@ test.describe('UI Gallery Scenes', () => {
         context.clearRect(0, 0, 1, 1)
         context.fillStyle = value
         context.fillRect(0, 0, 1, 1)
-        const rgb = [...context.getImageData(0, 0, 1, 1).data].slice(0, 3).map((channel) => {
+        const rgb = [
+          ...context.getImageData(0, 0, 1, 1).data,
+        ].slice(0, 3).map((channel) => {
           const unit = channel / 255
-          return unit <= 0.04045 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4
+          return unit <= 0.04045
+            ? unit / 12.92
+            : ((unit + 0.055) / 1.055) ** 2.4
         })
         return rgb[0]! * 0.2126 + rgb[1]! * 0.7152 + rgb[2]! * 0.0722
       }
@@ -94,10 +100,19 @@ test.describe('UI Gallery Scenes', () => {
       const before = measure()
       const animations = element.getAnimations()
       await Promise.all(animations.map(animation => animation.finished))
-      return { before, after: measure(), animationCount: animations.length }
+      return {
+        before,
+        after: measure(),
+        animationCount: animations.length,
+      }
     })
-    await testInfo.attach('theme-contrast.json', { body: JSON.stringify(colors, null, 2), contentType: 'application/json' })
-    await documentDemo.screenshot({ path: testInfo.outputPath('ai-document-dark.png') })
+    await testInfo.attach('theme-contrast.json', {
+      body: JSON.stringify(colors, null, 2),
+      contentType: 'application/json',
+    })
+    await documentDemo.screenshot({
+      path: testInfo.outputPath('ai-document-dark.png'),
+    })
     expect(colors.after.contrast).toBeGreaterThanOrEqual(4.5)
   })
 })

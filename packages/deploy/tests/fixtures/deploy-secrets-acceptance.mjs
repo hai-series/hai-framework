@@ -23,8 +23,18 @@ async function main() {
     projectName: fixture.projectName,
     credentials: { DB_PASSWORD: fixture.dbPassword, STORAGE_PASSWORD: fixture.storagePassword },
     services: [
-      { service: 'db', kind: 'postgresql', container: fixture.dbName, volumes: [fixture.dbVolume] },
-      { service: 'storage', kind: 's3', container: fixture.storageName, volumes: [fixture.storageVolume] },
+      {
+        service: 'db',
+        kind: 'postgresql',
+        container: fixture.dbName,
+        volumes: [fixture.dbVolume],
+      },
+      {
+        service: 'storage',
+        kind: 's3',
+        container: fixture.storageName,
+        volumes: [fixture.storageVolume],
+      },
     ],
   }
   const saveInput = value => writeFileSync(inputFile, JSON.stringify(value), { mode: 0o600 })
@@ -45,7 +55,10 @@ async function main() {
   for (const secret of Object.values(input.credentials))
     assert.equal(JSON.stringify(plan).includes(secret), false)
 
-  saveInput({ ...input, credentials: { ...input.credentials, DB_PASSWORD: 'WRONG_SYNTHETIC_PASSWORD' } })
+  saveInput({
+    ...input,
+    credentials: { ...input.credentials, DB_PASSWORD: 'WRONG_SYNTHETIC_PASSWORD' },
+  })
   const wrong = await api.importDeploymentSecrets(options)
   assert.equal(wrong.success, false)
   assert.equal(existsSync(path.join(directory, 'managed-secrets.env')), false)
@@ -58,13 +71,23 @@ async function main() {
   let importer
   try {
     execFileSync('podman', ['pause', fixture.dbName], { stdio: 'pipe', timeout: 15000 })
-    importer = spawn(process.execPath, ['--input-type=module', '-e', `const api=await import(process.argv[1]);await api.importDeploymentSecrets(JSON.parse(process.argv[2]))`, pathToFileURL(process.argv[2]).href, JSON.stringify({ ...options, directory: interrupted, dryRun: false })], { stdio: 'ignore' })
+    importer = spawn(process.execPath, [
+      '--input-type=module',
+      '-e',
+      `const api=await import(process.argv[1]);await api.importDeploymentSecrets(JSON.parse(process.argv[2]))`,
+      pathToFileURL(process.argv[2]).href,
+      JSON.stringify({ ...options, directory: interrupted, dryRun: false }),
+    ], { stdio: 'ignore' })
     const closed = once(importer, 'close')
     const started = Date.now()
     while (true) {
       if (existsSync(path.join(interrupted, '.deploy.lock'))) {
         try {
-          execFileSync('flock', ['-n', path.join(interrupted, '.deploy.lock'), 'true'], { stdio: 'ignore' })
+          execFileSync('flock', [
+            '-n',
+            path.join(interrupted, '.deploy.lock'),
+            'true',
+          ], { stdio: 'ignore' })
         }
         catch {
           break
@@ -83,7 +106,11 @@ async function main() {
   const releasedAt = Date.now()
   while (true) {
     try {
-      execFileSync('flock', ['-n', path.join(interrupted, '.deploy.lock'), 'true'], { stdio: 'ignore' })
+      execFileSync('flock', [
+        '-n',
+        path.join(interrupted, '.deploy.lock'),
+        'true',
+      ], { stdio: 'ignore' })
       break
     }
     catch {
@@ -95,7 +122,15 @@ async function main() {
   assert.equal(readFileSync(path.join(interrupted, 'current'), 'utf8'), 'original-release\n')
   assert.equal((await api.importDeploymentSecrets({ ...options, directory: interrupted, dryRun: false })).success, true)
 
-  const owner = spawn('flock', ['-n', path.join(directory, '.deploy.lock'), process.execPath, '-e', 'process.stdout.write("READY\\n");process.stdin.resume()'], { stdio: ['pipe', 'pipe', 'inherit'] })
+  const owner = spawn('flock', [
+    '-n',
+    path.join(directory, '.deploy.lock'),
+    process.execPath,
+    '-e',
+    'process.stdout.write("READY\\n");process.stdin.resume()',
+  ], {
+    stdio: ['pipe', 'pipe', 'inherit'],
+  })
   const ownerClosed = once(owner, 'close')
   try {
     const [ready] = await once(owner.stdout, 'data')
@@ -140,16 +175,41 @@ async function main() {
     const release = path.join(root, `computer-${index}`)
     mkdirSync(release, { mode: 0o700 })
     const candidate = (partial ? 'B' : 'A').repeat(32)
-    const native = `POSTGRES_PASSWORD=${candidate}\n${partial ? '' : `RUSTFS_SECRET_KEY=${candidate}\n`}`
-    const services = { db: { env_file: ['middleware-runtime.env'], volumes: ['db-data:/data'] }, ...(partial ? {} : { storage: { env_file: ['middleware-runtime.env'], volumes: ['storage-data:/data'] } }) }
-    const volumes = { 'db-data': { name: fixture.dbVolume }, 'storage-data': { name: fixture.storageVolume } }
+    const native = `POSTGRES_PASSWORD=${candidate}\n${partial
+      ? ''
+      : `RUSTFS_SECRET_KEY=${candidate}\n`}`
+    const services = {
+      db: {
+        env_file: ['middleware-runtime.env'],
+        volumes: ['db-data:/data'],
+      },
+      ...(partial
+        ? {}
+        : {
+            storage: {
+              env_file: ['middleware-runtime.env'],
+              volumes: ['storage-data:/data'],
+            },
+          }),
+    }
+    const volumes = {
+      'db-data': { name: fixture.dbVolume },
+      'storage-data': { name: fixture.storageVolume },
+    }
     const assets = api.createManagedSecretAssets(fixture.projectName, native, { services, volumes })
     for (const [name, text] of Object.entries(assets))
       writeFileSync(path.join(release, name), text, { mode: 0o600 })
     writeFileSync(path.join(release, 'middleware-runtime.env'), native, { mode: 0o600 })
     writeFileSync(path.join(release, '.env.runtime'), `HAI_DB_PASSWORD=${candidate}\n`, { mode: 0o600 })
-    writeFileSync(path.join(release, 'middleware.env'), `HAI_DB='${JSON.stringify({ type: 'postgresql', url: `postgresql://hai:${candidate}@db:5432/hai` })}'\n${partial ? '' : `HAI_STORAGE='${JSON.stringify({ secretAccessKey: candidate })}'\n`}`, { mode: 0o600 })
-    execFileSync('sh', [path.join(release, 'resolve-managed-secrets.sh'), directory, release, 'podman'], { stdio: 'pipe', timeout: 20000 })
+    writeFileSync(path.join(release, 'middleware.env'), `HAI_DB='${JSON.stringify({ type: 'postgresql', url: `postgresql://hai:${candidate}@db:5432/hai` })}'\n${partial
+      ? ''
+      : `HAI_STORAGE='${JSON.stringify({ secretAccessKey: candidate })}'\n`}`, { mode: 0o600 })
+    execFileSync('sh', [
+      path.join(release, 'resolve-managed-secrets.sh'),
+      directory,
+      release,
+      'podman',
+    ], { stdio: 'pipe', timeout: 20000 })
     const application = parseEnv(readFileSync(path.join(release, 'middleware.env'), 'utf8'))
     assert.equal(decodeURIComponent(new URL(JSON.parse(application.HAI_DB).url).password), fixture.dbPassword)
     if (!partial)

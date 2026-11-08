@@ -23,22 +23,50 @@ describe('aCP contracts', () => {
   ])('dsh 原生输出预算为 min($budget, capacity)，上下文容量保持独立', async ({ budget, expected }) => {
     const config = AIConfigSchema.parse({
       llm: {
-        models: [{
-          id: 'coding',
-          model: 'fixture-model',
-          protocol: 'chat',
-          apiKey: 'fixture-key',
-          maxTokens: budget,
-          capabilities: { contextWindow: 1048576, maxOutputTokens: 65535, inputModalities: ['text', 'image'], outputModalities: ['text'], toolCalling: true, reasoning: { supported: false } },
-        }],
+        models: [
+          {
+            id: 'coding',
+            model: 'fixture-model',
+            protocol: 'chat',
+            apiKey: 'fixture-key',
+            maxTokens: budget,
+            capabilities: {
+              contextWindow: 1048576,
+              maxOutputTokens: 65535,
+              inputModalities: ['text', 'image'],
+              outputModalities: ['text'],
+              toolCalling: true,
+              reasoning: { supported: false },
+            },
+          },
+        ],
       },
     })
     const entry = '/native/dsh/lib/bin.js'
-    const agent = ACPAgentSchema.parse({ id: 'dsh', name: 'DSH', mode: 'embedded', adapter: 'deepseek-harness', modelIds: ['coding'], command: process.execPath, args: [entry] })
+    const agent = ACPAgentSchema.parse({
+      id: 'dsh',
+      name: 'DSH',
+      mode: 'embedded',
+      adapter: 'deepseek-harness',
+      modelIds: ['coding'],
+      command: process.execPath,
+      args: [entry],
+    })
     // 直接验证原生配置边界，不启动程序或模型请求。
-    const launch = await nativeAdapters['deepseek-harness']!.configure({ agent, models: resolveAgentModels(agent, config), modelId: 'coding', statePath: '/state/test' })
+    const launch = await nativeAdapters['deepseek-harness']!.configure({
+      agent,
+      models: resolveAgentModels(agent, config),
+      modelId: 'coding',
+      statePath: '/state/test',
+    })
     expect(launch.command).toBe(process.execPath)
-    expect(launch.args).toEqual([entry, '--profile', 'acp', '--patch', '/state/test/hai-config.json'])
+    expect(launch.args).toEqual([
+      entry,
+      '--profile',
+      'acp',
+      '--patch',
+      '/state/test/hai-config.json',
+    ])
     const patch: unknown = JSON.parse(launch.files!['hai-config.json']!)
     expect(patch).toMatchObject([
       {
@@ -48,16 +76,26 @@ describe('aCP contracts', () => {
             'hai-0': {
               defaultMaxTokens: expected,
               defaultContextWindow: 1048576,
-              models: [{ id: 'fixture-model', contextWindow: 1048576 }],
+              models: [
+                { id: 'fixture-model', contextWindow: 1048576 },
+              ],
             },
           },
         },
       },
-      { id: 'acp', config: { provider: 'hai-0', model: 'fixture-model' } },
+      {
+        id: 'acp',
+        config: { provider: 'hai-0', model: 'fixture-model' },
+      },
     ])
   })
 
-  it.each(['ai-playground', 'api-service', 'corporate-website', 'h5-app'])('%s 原配置和启用后的 ACP 示例均符合实际 Schema', async (app) => {
+  it.each([
+    'ai-playground',
+    'api-service',
+    'corporate-website',
+    'h5-app',
+  ])('%s 原配置和启用后的 ACP 示例均符合实际 Schema', async (app) => {
     const text = await readFile(path.resolve('../../apps', app, 'config/_ai.yml'), 'utf8')
     const directory = await mkdtemp(path.join(tmpdir(), 'hai-acp-config-'))
     if (path.dirname(directory) !== path.resolve(tmpdir()) || !path.basename(directory).startsWith('hai-acp-config-'))
@@ -96,7 +134,9 @@ describe('aCP contracts', () => {
       ACPWorkspaceSchema.safeParse({
         id: 'test',
         storage: { type: 'directory', path: '/tmp/test' },
-        repositories: [{ id: 'code', url: 'local' }],
+        repositories: [
+          { id: 'code', url: 'local' },
+        ],
       }).success,
     ).toBe(false)
     expect(
@@ -107,7 +147,10 @@ describe('aCP contracts', () => {
     ).toBe(false)
     expect(
       ModelCapabilitiesSchema.safeParse({
-        reasoning: { supported: false, efforts: ['high'] },
+        reasoning: {
+          supported: false,
+          efforts: ['high'],
+        },
       }).success,
     ).toBe(false)
     expect(
@@ -140,8 +183,31 @@ describe('aCP contracts', () => {
     expect((await acp.agents.list()).success).toBe(false)
   })
   it('dsh 缺少推理档位时在初始化阶段返回模型不兼容', async () => {
-    expect((await ai.init({ llm: { models: [{ id: 'reasoning', model: 'fixture', apiKey: 'fixture', capabilities: { contextWindow: 32768, maxOutputTokens: 1024, inputModalities: ['text'], toolCalling: true, reasoning: { supported: true } } }] } })).success).toBe(true)
-    expect((await ai.acp.agents.register({ id: 'dsh', name: 'DSH', mode: 'embedded', adapter: 'deepseek-harness', modelIds: ['reasoning'] })).success).toBe(true)
+    expect((await ai.init({
+      llm: {
+        models: [
+          {
+            id: 'reasoning',
+            model: 'fixture',
+            apiKey: 'fixture',
+            capabilities: {
+              contextWindow: 32768,
+              maxOutputTokens: 1024,
+              inputModalities: ['text'],
+              toolCalling: true,
+              reasoning: { supported: true },
+            },
+          },
+        ],
+      },
+    })).success).toBe(true)
+    expect((await ai.acp.agents.register({
+      id: 'dsh',
+      name: 'DSH',
+      mode: 'embedded',
+      adapter: 'deepseek-harness',
+      modelIds: ['reasoning'],
+    })).success).toBe(true)
     const result = await ai.acp.agents.initialize('dsh')
     expect(result.success).toBe(false)
     if (!result.success)
@@ -153,7 +219,9 @@ describe('aCP contracts', () => {
         await ai.init({
           llm: {
             apiKey: 'fixture-key',
-            models: [{ id: 'chat-only', model: 'fixture', protocol: 'chat' }],
+            models: [
+              { id: 'chat-only', model: 'fixture', protocol: 'chat' },
+            ],
           },
         })
       ).success,

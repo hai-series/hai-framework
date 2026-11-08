@@ -8,21 +8,46 @@ it('应用和包均只执行一次；所有类型的容器依赖进入串行组�
   const directory = mkdtempSync(join(tmpdir(), 'hai-test-plan-'))
   try {
     const manifests = [
-      ['packages/unit', { name: 'unit', scripts: { test: 'vitest run' } }],
-      ['apps/web', { name: 'web', scripts: { test: 'vitest run' } }],
+      [
+        'packages/unit',
+        {
+          name: 'unit',
+          scripts: { test: 'vitest run' },
+        },
+      ],
+      [
+        'apps/web',
+        {
+          name: 'web',
+          scripts: { test: 'vitest run' },
+        },
+      ],
       ...['dependencies', 'devDependencies', 'optionalDependencies'].map((dependency, index) => [
         `packages/container-${index}`,
-        { name: `container-${index}`, scripts: { test: 'vitest run' }, [dependency]: { testcontainers: '*' } },
+        {
+          name: `container-${index}`,
+          scripts: { test: 'vitest run' },
+          [dependency]: { testcontainers: '*' },
+        },
       ]),
-      ['apps/contract', { name: 'contract' }],
+      [
+        'apps/contract',
+        { name: 'contract' },
+      ],
     ]
     for (const [path, manifest] of manifests) {
       mkdirSync(join(directory, path), { recursive: true })
       writeFileSync(join(directory, path, 'package.json'), JSON.stringify(manifest))
     }
     expect(testGroups(directory)).toEqual([
-      { names: ['unit', 'web'], concurrency: 4 },
-      { names: ['container-0', 'container-1', 'container-2'], concurrency: 1 },
+      {
+        names: ['unit', 'web'],
+        concurrency: 4,
+      },
+      {
+        names: ['container-0', 'container-1', 'container-2'],
+        concurrency: 1,
+      },
     ])
   }
   finally {

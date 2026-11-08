@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const locale = vi.hoisted(() => ({ current: 'en-US' }))
-vi.mock('@h-ai/ui/i18n', async importOriginal => ({ ...await importOriginal<typeof import('@h-ai/ui/i18n')>(), getGlobalLocale: () => locale.current }))
+vi.mock('@h-ai/ui/i18n', async importOriginal => ({
+  ...await importOriginal<typeof import('@h-ai/ui/i18n')>(),
+  getGlobalLocale: () => locale.current,
+}))
 
 const login = vi.fn()
 const register = vi.fn()
@@ -88,7 +91,12 @@ describe('auth-store', () => {
   it('logout 会清理 token 与本地用户状态', async () => {
     currentUser.mockResolvedValueOnce({
       success: true,
-      data: { id: 'u-3', username: 'carol', roles: ['user'], permissions: ['profile:read'] },
+      data: {
+        id: 'u-3',
+        username: 'carol',
+        roles: ['user'],
+        permissions: ['profile:read'],
+      },
     })
     logout.mockResolvedValueOnce({ success: true, data: undefined })
 
@@ -115,14 +123,34 @@ describe('auth-store', () => {
   })
 
   it.each(['login', 'register'] as const)('%s 使用统一凭据提示并隐藏未知服务错误', async (method) => {
-    const action = method === 'login' ? login : register
-    action.mockResolvedValueOnce({ success: false, error: { code: 'hai:iam:002', message: 'Private account field', httpStatus: 401, traceId: 'desktop-auth' } })
+    const action = method === 'login'
+      ? login
+      : register
+    action.mockResolvedValueOnce({
+      success: false,
+      error: {
+        code: 'hai:iam:002',
+        message: 'Private account field',
+        httpStatus: 401,
+        traceId: 'desktop-auth',
+      },
+    })
     const store = await import('../src/lib/auth-store.svelte.js')
-    const authenticate = () => method === 'login' ? store.login({ identifier: 'alice', password: 'example' }) : store.register({ username: 'alice', password: 'example' })
+    const authenticate = () => method === 'login'
+      ? store.login({ identifier: 'alice', password: 'example' })
+      : store.register({ username: 'alice', password: 'example' })
     const credentials = await authenticate()
     expect(credentials).toMatch(/用户名或密码不正确|Username or password is incorrect/)
     expect(credentials).toContain('traceId: desktop-auth')
-    action.mockResolvedValueOnce({ success: false, error: { code: 'app:unknown', message: 'Private database detail', httpStatus: 500, traceId: 'desktop-internal' } })
+    action.mockResolvedValueOnce({
+      success: false,
+      error: {
+        code: 'app:unknown',
+        message: 'Private database detail',
+        httpStatus: 500,
+        traceId: 'desktop-internal',
+      },
+    })
     const unknown = await authenticate()
     expect(unknown).not.toContain('Private')
     expect(unknown).toContain('traceId: desktop-internal')
@@ -166,7 +194,12 @@ describe('auth-store', () => {
   it('logout 网络失败清理本地token，但向调用方返回服务端撤销未确认', async () => {
     currentUser.mockResolvedValueOnce({
       success: true,
-      data: { id: 'u-4', username: 'dave', roles: ['user'], permissions: [] },
+      data: {
+        id: 'u-4',
+        username: 'dave',
+        roles: ['user'],
+        permissions: [],
+      },
     })
     logout.mockRejectedValueOnce(new Error('offline'))
 
@@ -186,7 +219,10 @@ describe('auth-store', () => {
     { language: 'ja-JP', message: 'サーバーでのログアウトを確認できませんでした' },
   ])('logout HaiResult失败使用$language文案且仍清理本地凭据', async ({ language, message }) => {
     locale.current = language
-    logout.mockResolvedValueOnce({ success: false, error: { code: 'REPOSITORY_ERROR', message: 'state unavailable' } })
+    logout.mockResolvedValueOnce({
+      success: false,
+      error: { code: 'REPOSITORY_ERROR', message: 'state unavailable' },
+    })
     const authStore = await import('../src/lib/auth-store.svelte.js')
     const error = await authStore.logout()
     expect(error).toContain(message)
@@ -196,9 +232,27 @@ describe('auth-store', () => {
   })
 
   it.each([
-    { language: 'en-US', loginRequest: 'Login request failed', registerRequest: 'Register request failed', loginResponse: 'Unexpected login response from server', registerResponse: 'Unexpected register response from server' },
-    { language: 'zh-CN', loginRequest: '登录请求失败', registerRequest: '注册请求失败', loginResponse: '服务端登录响应异常', registerResponse: '服务端注册响应异常' },
-    { language: 'ja-JP', loginRequest: 'ログインリクエストに失敗しました', registerRequest: '登録リクエストに失敗しました', loginResponse: 'サーバーからのログイン応答が無効です', registerResponse: 'サーバーからの登録応答が無効です' },
+    {
+      language: 'en-US',
+      loginRequest: 'Login request failed',
+      registerRequest: 'Register request failed',
+      loginResponse: 'Unexpected login response from server',
+      registerResponse: 'Unexpected register response from server',
+    },
+    {
+      language: 'zh-CN',
+      loginRequest: '登录请求失败',
+      registerRequest: '注册请求失败',
+      loginResponse: '服务端登录响应异常',
+      registerResponse: '服务端注册响应异常',
+    },
+    {
+      language: 'ja-JP',
+      loginRequest: 'ログインリクエストに失敗しました',
+      registerRequest: '登録リクエストに失敗しました',
+      loginResponse: 'サーバーからのログイン応答が無効です',
+      registerResponse: 'サーバーからの登録応答が無効です',
+    },
   ])('登录注册的未知响应与请求失败使用$language文案', async (messages) => {
     locale.current = messages.language
     const authStore = await import('../src/lib/auth-store.svelte.js')

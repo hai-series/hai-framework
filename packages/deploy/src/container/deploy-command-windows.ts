@@ -132,7 +132,13 @@ public static class HaiCommandJob {
 
 /** 生成隐藏 PowerShell 的静态脚本；执行策略不影响内联命令，不加载用户 profile。 */
 function powershell(script: string): string[] {
-  return ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')]
+  return [
+    '-NoLogo',
+    '-NoProfile',
+    '-NonInteractive',
+    '-EncodedCommand',
+    Buffer.from(script, 'utf16le').toString('base64'),
+  ]
 }
 
 /**
@@ -160,7 +166,13 @@ ${nativeJob}
   [Environment]::SetEnvironmentVariable('${key}', $null)
   exit ([HaiCommandJob]::Run([string]$inputConfig.name, [string]$inputConfig.command, [string[]]$inputConfig.args))
 } catch { [Console]::Error.WriteLine('Windows command job failed'); exit 125 }`
-  return { name, args: powershell(script), env: { [key]: JSON.stringify({ name, command, args }) } }
+  return {
+    name,
+    args: powershell(script),
+    env: {
+      [key]: JSON.stringify({ name, command, args }),
+    },
+  }
 }
 
 /**

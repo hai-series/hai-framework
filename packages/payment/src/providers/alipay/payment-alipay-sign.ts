@@ -36,7 +36,9 @@ export function signAlipayParams(
     .map(k => `${k}=${params[k]}`)
     .join('&')
 
-  const algorithm = signType === 'RSA2' ? 'RSA-SHA256' : 'RSA-SHA1'
+  const algorithm = signType === 'RSA2'
+    ? 'RSA-SHA256'
+    : 'RSA-SHA1'
   const sign = createSign(algorithm)
   sign.update(sorted)
   return sign.sign(privateKey, 'base64')
@@ -75,7 +77,9 @@ export function verifyAlipayNotify(
     .map(k => `${k}=${params[k]}`)
     .join('&')
 
-  const algorithm = signType === 'RSA2' ? 'RSA-SHA256' : 'RSA-SHA1'
+  const algorithm = signType === 'RSA2'
+    ? 'RSA-SHA256'
+    : 'RSA-SHA1'
   const verify = createVerify(algorithm)
   verify.update(sorted)
   return verify.verify(alipayPublicKey, sign, 'base64')

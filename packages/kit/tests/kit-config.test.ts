@@ -48,11 +48,18 @@ describe('kit transport config', () => {
   })
 
   it('默认关闭 transport', () => {
-    expect(resolveKitConfig({})).toEqual({ server: DEFAULT_SERVER, transport: false, trustedProxies: 'auto', access: false })
+    expect(resolveKitConfig({})).toEqual({
+      server: DEFAULT_SERVER,
+      transport: false,
+      trustedProxies: 'auto',
+      access: false,
+    })
   })
 
   it('补齐 transport 默认值', () => {
-    expect(resolveKitTransportConfig({ excludePaths: ['/api/public'] })).toEqual({
+    expect(resolveKitTransportConfig({
+      excludePaths: ['/api/public'],
+    })).toEqual({
       keyExchangePath: '/api/_hai/key-exchange',
       excludePaths: ['/api/public'],
     })
@@ -78,7 +85,10 @@ describe('kit transport config', () => {
     })
   })
 
-  it.each([{ maxFutureSkewSeconds: 301 }, { maxRequestAgeSeconds: 0 }])('拒绝非法传输时间范围 %j', (transport) => {
+  it.each([
+    { maxFutureSkewSeconds: 301 },
+    { maxRequestAgeSeconds: 0 },
+  ])('拒绝非法传输时间范围 %j', (transport) => {
     expect(KitConfigSchema.safeParse({ transport }).success).toBe(false)
   })
 

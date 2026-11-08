@@ -69,28 +69,92 @@ export async function createMysqlTlsFixture(serverName: string): Promise<MysqlTl
     const executable = await findOpenSsl()
     const openssl = (args: string[]) => execute(executable, args, { cwd: directory, windowsHide: true, timeout: 30_000 })
     for (const authority of ['ca', 'wrong-ca']) {
-      await openssl(['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-days', '1', '-subj', `/CN=hai-${authority}`, '-keyout', `${authority}.key`, '-out', `${authority}.crt`, '-addext', 'basicConstraints=critical,CA:TRUE', '-addext', 'keyUsage=critical,keyCertSign,cRLSign'])
+      await openssl([
+        'req',
+        '-x509',
+        '-newkey',
+        'rsa:2048',
+        '-nodes',
+        '-sha256',
+        '-days',
+        '1',
+        '-subj',
+        `/CN=hai-${authority}`,
+        '-keyout',
+        `${authority}.key`,
+        '-out',
+        `${authority}.crt`,
+        '-addext',
+        'basicConstraints=critical,CA:TRUE',
+        '-addext',
+        'keyUsage=critical,keyCertSign,cRLSign',
+      ])
     }
     for (const name of ['server', 'client']) {
-      await openssl(['req', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-subj', `/CN=${name === 'server' ? serverName : 'hai-client'}`, '-keyout', `${name}.key`, '-out', `${name}.csr`])
+      await openssl([
+        'req',
+        '-newkey',
+        'rsa:2048',
+        '-nodes',
+        '-sha256',
+        '-subj',
+        `/CN=${name === 'server'
+          ? serverName
+          : 'hai-client'}`,
+        '-keyout',
+        `${name}.key`,
+        '-out',
+        `${name}.csr`,
+      ])
       await writeFile(join(directory, `${name}.ext`), [
         'basicConstraints=critical,CA:FALSE',
         'keyUsage=critical,digitalSignature,keyEncipherment',
-        `extendedKeyUsage=${name === 'server' ? 'serverAuth' : 'clientAuth'}`,
-        ...(name === 'server' ? [`subjectAltName=DNS:${serverName}`] : []),
+        `extendedKeyUsage=${name === 'server'
+          ? 'serverAuth'
+          : 'clientAuth'}`,
+        ...(name === 'server'
+          ? [`subjectAltName=DNS:${serverName}`]
+          : []),
       ].join('\n'))
-      await openssl(['x509', '-req', '-in', `${name}.csr`, '-CA', 'ca.crt', '-CAkey', 'ca.key', '-CAcreateserial', '-sha256', '-days', '1', '-extfile', `${name}.ext`, '-out', `${name}.crt`])
+      await openssl([
+        'x509',
+        '-req',
+        '-in',
+        `${name}.csr`,
+        '-CA',
+        'ca.crt',
+        '-CAkey',
+        'ca.key',
+        '-CAcreateserial',
+        '-sha256',
+        '-days',
+        '1',
+        '-extfile',
+        `${name}.ext`,
+        '-out',
+        `${name}.crt`,
+      ])
     }
     const password = randomBytes(24).toString('hex')
     container = await new GenericContainer('docker.io/library/mysql:8.4.11')
       .withExposedPorts(3306)
       .withEnvironment({ MYSQL_DATABASE: 'db_test', MYSQL_ROOT_PASSWORD: password })
-      .withCopyFilesToContainer(['ca.crt', 'server.crt', 'server.key'].map(name => ({ source: join(directory, name), target: `/tmp/hai-${name}`, mode: 0o644 })))
+      .withCopyFilesToContainer(['ca.crt', 'server.crt', 'server.key'].map(name => ({
+        source: join(directory, name),
+        target: `/tmp/hai-${name}`,
+        mode: 0o644,
+      })))
       .withCommand(['--ssl-ca=/tmp/hai-ca.crt', '--ssl-cert=/tmp/hai-server.crt', '--ssl-key=/tmp/hai-server.key'])
       .withWaitStrategy(Wait.forLogMessage(/ready for connections\..*port: 3306/))
       .withStartupTimeout(120_000)
       .start()
-    const connection = { host: 'localhost', port: container.getMappedPort(3306), database: 'db_test', user: 'root', password }
+    const connection = {
+      host: 'localhost',
+      port: container.getMappedPort(3306),
+      database: 'db_test',
+      user: 'root',
+      password,
+    }
     const ca = await readFile(join(directory, 'ca.crt'), 'utf8')
     const client = mysql.createPool(connection)
     try {
@@ -104,8 +168,18 @@ export async function createMysqlTlsFixture(serverName: string): Promise<MysqlTl
     finally { await client.end() }
     const ssl: Exclude<MysqlConfig['ssl'], false | undefined> = { ca, rejectUnauthorized: true, verifyIdentity: true }
     return {
-      config: { type: 'mysql', ...connection, ssl, pool: { max: 2, acquireTimeout: 5000 } },
-      clientConfig: { type: 'mysql', ...connection, user: 'hai_tls_client', ssl: { ...ssl, cert: await readFile(join(directory, 'client.crt'), 'utf8'), key: await readFile(join(directory, 'client.key'), 'utf8') } },
+      config: {
+        type: 'mysql',
+        ...connection,
+        ssl,
+        pool: { max: 2, acquireTimeout: 5000 },
+      },
+      clientConfig: {
+        type: 'mysql',
+        ...connection,
+        user: 'hai_tls_client',
+        ssl: { ...ssl, cert: await readFile(join(directory, 'client.crt'), 'utf8'), key: await readFile(join(directory, 'client.key'), 'utf8') },
+      },
       wrongCa: await readFile(join(directory, 'wrong-ca.crt'), 'utf8'),
       close,
     }

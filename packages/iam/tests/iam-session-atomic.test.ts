@@ -6,7 +6,15 @@ import { IamConfigSchema } from '../src/iam-config.js'
 import { createSessionOperations } from '../src/session/iam-session-functions.js'
 
 async function sessions(singleDevice = false) {
-  const result = await createSessionOperations({ readCredential: async () => ({ success: true, data: { version: '', available: true } }), config: IamConfigSchema.parse({ session: { singleDevice, sliding: false } }) })
+  const result = await createSessionOperations({
+    readCredential: async () => ({
+      success: true,
+      data: { version: '', available: true },
+    }),
+    config: IamConfigSchema.parse({
+      session: { singleDevice, sliding: false },
+    }),
+  })
   if (!result.success)
     throw new Error(result.error.message)
   return result.data
@@ -26,7 +34,10 @@ it('同一refresh仅一个后继，旧access与refresh一起撤销', async () =>
   if (!original.success)
     throw new Error(original.error.message)
   const token = original.data.data!._tokenPair!.refreshToken
-  const results = await Promise.all([ops.refresh(token), ops.refresh(token)])
+  const results = await Promise.all([
+    ops.refresh(token),
+    ops.refresh(token),
+  ])
   expect(results.filter(result => result.success)).toHaveLength(1)
   expect(await ops.get(original.data.accessToken)).toEqual({ success: true, data: null })
   expect((await ops.refresh(token)).success).toBe(false)
@@ -38,7 +49,10 @@ it('同一refresh仅一个后继，旧access与refresh一起撤销', async () =>
 
 it('并发单设备发布最终只有一个有效会话', async () => {
   const ops = await sessions(true)
-  const results = await Promise.all([ops.create({ userId: 'single-race' }), ops.create({ userId: 'single-race' })])
+  const results = await Promise.all([
+    ops.create({ userId: 'single-race' }),
+    ops.create({ userId: 'single-race' }),
+  ])
   const valid = await Promise.all(results.map(async result => result.success && (await ops.verifyToken(result.data.accessToken)).success))
   expect(results.every(result => result.success)).toBe(true)
   expect(valid.filter(Boolean)).toHaveLength(1)

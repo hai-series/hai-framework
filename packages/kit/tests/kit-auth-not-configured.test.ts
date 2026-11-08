@@ -25,8 +25,19 @@ afterEach(() => vi.unstubAllEnvs())
 /** 使用真实认证契约构造成功响应，避免强制断言掩盖 Cookie 消费字段变化。 */
 function createAuthOperations() {
   const result: AuthResult = {
-    user: { id: '1', username: 'user', accountStatus: 'active', createdAt: new Date(), updatedAt: new Date() },
-    tokens: { accessToken: 'tk', refreshToken: 'refresh', expiresIn: 3600, tokenType: 'Bearer' },
+    user: {
+      id: '1',
+      username: 'user',
+      accountStatus: 'active',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    tokens: {
+      accessToken: 'tk',
+      refreshToken: 'refresh',
+      expiresIn: 3600,
+      tokenType: 'Bearer',
+    },
     roles: [],
     permissions: [],
   }
@@ -97,7 +108,10 @@ describe('kit.auth 未配置时返回 HaiResult 错误', () => {
 
   it('logout 有token但未配置时清除Cookie且返回失败，不能假称服务端已撤销', async () => {
     const cookies = createCookies()
-    await expect(logout(cookies, 'some-token')).resolves.toMatchObject({ success: false, error: { code: 'KIT_AUTH_NOT_CONFIGURED' } })
+    await expect(logout(cookies, 'some-token')).resolves.toMatchObject({
+      success: false,
+      error: { code: 'KIT_AUTH_NOT_CONFIGURED' },
+    })
     expect(cookies.delete).toHaveBeenCalledWith('hai_access_token', { path: '/' })
   })
 
@@ -150,7 +164,9 @@ describe('kit.auth 已配置时正常委托给 operations', () => {
     vi.stubEnv('HAI_CORE_ENV', 'development')
     vi.stubEnv(productionFlag, 'production')
     vi.stubEnv('HAI_E2E', '1')
-    configureAuth({ operations: createAuthOperations() })
+    configureAuth({
+      operations: createAuthOperations(),
+    })
     const cookies = createCookies()
     await login(cookies, { identifier: 'user', password: 'password' })
     expect(cookies.set).toHaveBeenCalledWith('hai_access_token', 'tk', expect.objectContaining({ secure: true }))

@@ -13,7 +13,9 @@ describe('aI Playground input schemas', () => {
     const result = ChatRequestSchema.safeParse({
       profileId: 'demo-user',
       sessionId: 'session-1',
-      messages: [{ role: 'user', content: '你好' }],
+      messages: [
+        { role: 'user', content: '你好' },
+      ],
       useMemory: true,
     })
     expect(result.success).toBe(true)
@@ -38,7 +40,9 @@ describe('aI Playground input schemas', () => {
   })
 
   it('rejects oversized TTS text', () => {
-    const result = TtsRequestSchema.safeParse({ text: 'a'.repeat(2001) })
+    const result = TtsRequestSchema.safeParse({
+      text: 'a'.repeat(2001),
+    })
     expect(result.success).toBe(false)
   })
 

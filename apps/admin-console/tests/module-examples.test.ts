@@ -15,12 +15,18 @@ import { storeFileExample } from '../src/lib/examples/modules/storage'
 describe('模块页展示的独立本地示例', () => {
   it('参数化写入并读回包含引号的用户名称，随后释放数据库', async () => {
     const result = await createUserExample('Alice\'s team')
-    expect(result).toMatchObject({ success: true, data: { id: 'u1', name: 'Alice\'s team' } })
+    expect(result).toMatchObject({
+      success: true,
+      data: { id: 'u1', name: 'Alice\'s team' },
+    })
     expect(reldb.isInitialized).toBe(false)
   })
 
   it('缓存保存真实结构化数据并释放内存实例', async () => {
-    expect(await cacheProfileExample()).toMatchObject({ success: true, data: { name: 'Alice' } })
+    expect(await cacheProfileExample()).toMatchObject({
+      success: true,
+      data: { name: 'Alice' },
+    })
     expect(cache.isInitialized).toBe(false)
   })
 

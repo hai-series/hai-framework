@@ -2,8 +2,16 @@
 import { core } from '@h-ai/core'
 
 const runtime = core.module.createRuntime([
-  { name: 'configuration', start: () => { core.init({ configDir: './config' }) }, close: () => {} },
-  { name: 'bootstrap', start: () => { core.logger.info('Application initialized') }, close: () => {} },
+  {
+    name: 'configuration',
+    start: () => { core.init({ configDir: './config' }) },
+    close: () => {},
+  },
+  {
+    name: 'bootstrap',
+    start: () => { core.logger.info('Application initialized') },
+    close: () => {},
+  },
 ])
 
 /** 启动失败只报告模块、错误码和配置路径，私密值不进入错误上下文。 */

@@ -37,14 +37,20 @@ afterAll(async () => {
 })
 
 function start(dbConfig: ReldbConfigInput, vectorUrl: string, barrier = false) {
-  const child = spawn(process.execPath, [fileURLToPath(new URL('./fixtures/store-index-node.mjs', import.meta.url))], {
+  const child = spawn(process.execPath, [
+    fileURLToPath(new URL('./fixtures/store-index-node.mjs', import.meta.url)),
+  ], {
     env: {
       ...process.env,
       NODE_ENV: 'production',
       HAI_CORE_ENV: 'production',
       HAI_E2E: '0',
       HAI_E2E_MOCK: '0',
-      AI_INDEX_NODE_INPUT: JSON.stringify({ dbConfig, vecdbConfig: { type: 'qdrant', url: vectorUrl }, barrier }),
+      AI_INDEX_NODE_INPUT: JSON.stringify({
+        dbConfig,
+        vecdbConfig: { type: 'qdrant', url: vectorUrl },
+        barrier,
+      }),
     },
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
@@ -93,7 +99,12 @@ function start(dbConfig: ReldbConfigInput, vectorUrl: string, barrier = false) {
         send('release')
         send('close')
         const closed = await wait('closed')
-        expect(closed).toMatchObject({ cleanupSucceeded: true, aiInitialized: false, vectorInitialized: false, databaseInitialized: false })
+        expect(closed).toMatchObject({
+          cleanupSucceeded: true,
+          aiInitialized: false,
+          vectorInitialized: false,
+          databaseInitialized: false,
+        })
         // Node 尚在等待 finish；必须由显式 close 释放连接，不能依赖进程退出代劳。
         const open = await reldb.sql.query('SELECT ID FROM information_schema.PROCESSLIST WHERE ID = ?', [closed.connectionId])
         expect(open.success).toBe(true)
@@ -143,7 +154,11 @@ async function withDatabase(operation: (context: {
     expect((await reldb.init(env.config)).success).toBe(true)
     expect((await reldb.sql.execute(`CREATE DATABASE ${database}`)).success).toBe(true)
     created = true
-    const config: MysqlConfigInput = { ...env.config, database, pool: { max: 1 } }
+    const config: MysqlConfigInput = {
+      ...env.config,
+      database,
+      pool: { max: 1 },
+    }
     expect((await reldb.close()).success).toBe(true)
     expect((await reldb.init(config)).success).toBe(true)
     await operation({
@@ -180,14 +195,23 @@ it('真实空 MySQL 两进程同时读到无索引再放行 DDL，均成功且�
   await withDatabase(async ({ node, database }) => {
     const a = node(undefined, true)
     const b = node(undefined, true)
-    const missing = await Promise.all([a.wait('missing'), b.wait('missing')])
+    const missing = await Promise.all([
+      a.wait('missing'),
+      b.wait('missing'),
+    ])
     expect(missing[0]?.connectionId).not.toBe(missing[1]?.connectionId)
     a.release()
     b.release()
-    const results = await Promise.all([a.wait('result'), b.wait('result')])
+    const results = await Promise.all([
+      a.wait('result'),
+      b.wait('result'),
+    ])
     expect(results.every(result => result.success && result.initialized)).toBe(true)
     // 来自 mysql2 的真实失败回执证明实际触发了竞态，而非两个节点恰好串行启动。
-    expect([...a.driverErrors, ...b.driverErrors]).toContainEqual(expect.objectContaining({ code: 'ER_DUP_KEYNAME', errno: 1061, index: 'idx_hai_ai_context_object_id' }))
+    expect([
+      ...a.driverErrors,
+      ...b.driverErrors,
+    ]).toContainEqual(expect.objectContaining({ code: 'ER_DUP_KEYNAME', errno: 1061, index: 'idx_hai_ai_context_object_id' }))
     const indexes = await reldb.sql.query<{ index_name: string, column_name: string, seq: number, non_unique: number, sub_part: number | null, index_type: string, collation: string, is_visible: string }>(
       'SELECT INDEX_NAME AS index_name, COLUMN_NAME AS column_name, SEQ_IN_INDEX AS seq, NON_UNIQUE AS non_unique, SUB_PART AS sub_part, INDEX_TYPE AS index_type, COLLATION AS collation, IS_VISIBLE AS is_visible FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME <> ? ORDER BY INDEX_NAME, SEQ_IN_INDEX',
       [database, 'hai_ai_context', 'PRIMARY'],

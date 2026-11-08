@@ -143,15 +143,21 @@ export function createSyncSqliteEngine(options: SqliteEngineOptions): SqliteEngi
     },
     async all(sql, params) {
       const stmt = db.prepare(sql)
-      return params ? stmt.all(...params) : stmt.all()
+      return params
+        ? stmt.all(...params)
+        : stmt.all()
     },
     async get(sql, params) {
       const stmt = db.prepare(sql)
-      return (params ? stmt.get(...params) : stmt.get()) ?? null
+      return (params
+        ? stmt.get(...params)
+        : stmt.get()) ?? null
     },
     async run(sql, params) {
       const stmt = db.prepare(sql)
-      const result = params ? stmt.run(...params) : stmt.run()
+      const result = params
+        ? stmt.run(...params)
+        : stmt.run()
       return { changes: result.changes, lastInsertRowid: result.lastInsertRowid }
     },
     async exec(sql) {
@@ -260,7 +266,9 @@ export function createWorkerSqliteEngine(
   })
   worker.on('error', (error) => {
     open = false
-    rejectAll(error instanceof Error ? error : new Error(String(error)))
+    rejectAll(error instanceof Error
+      ? error
+      : new Error(String(error)))
   })
   worker.on('exit', (code) => {
     exited = true
@@ -345,7 +353,9 @@ export function createWorkerSqliteEngine(
       if (closing)
         return closing
       const wasOpen = open
-      const gracefulClose = wasOpen ? post('close', {}) : Promise.resolve()
+      const gracefulClose = wasOpen
+        ? post('close', {})
+        : Promise.resolve()
       open = false
       closing = (async () => {
         // 握手失败时也必须终止线程；终止失败保留所有权，下一次 close 再试。

@@ -414,7 +414,9 @@ describe('getSavedTheme - 获取保存的主题', () => {
   it('保存的用户主题优先于宿主默认主题', () => {
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
-      value: { getItem: vi.fn(() => 'dark') },
+      value: {
+        getItem: vi.fn(() => 'dark'),
+      },
     })
     expect(getSavedTheme('corporate')).toBe('dark')
   })
@@ -430,7 +432,9 @@ describe('applyTheme - 主题应用', () => {
         documentElement: {
           setAttribute,
           getAttribute: vi.fn(() => null),
-          style: { setProperty: vi.fn() },
+          style: {
+            setProperty: vi.fn(),
+          },
         },
       },
     })

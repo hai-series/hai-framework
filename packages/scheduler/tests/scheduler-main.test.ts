@@ -58,12 +58,18 @@ describe('scheduler', () => {
       const clock = vi.spyOn(SchedulerExecutionRepository.prototype, 'currentTime')
         .mockResolvedValue(err(HaiSchedulerError.DB_SAVE_FAILED, 'Clock unavailable'))
       const onTaskExecute = vi.fn(() => 'done')
-      expect((await scheduler.init({ tickInterval: 100, hooks: { onTaskExecute } })).success).toBe(true)
+      expect((await scheduler.init({
+        tickInterval: 100,
+        hooks: { onTaskExecute },
+      })).success).toBe(true)
       expect((await scheduler.register({ id: 'clock-read-failure', name: '共享时间恢复', cron: '* * * * *' })).success).toBe(true)
       expect(scheduler.start().success).toBe(true)
       await vi.advanceTimersByTimeAsync(200)
       expect(onTaskExecute).not.toHaveBeenCalled()
-      clock.mockResolvedValue({ success: true, data: Date.UTC(2026, 4, 25, 4, 5, 39) })
+      clock.mockResolvedValue({
+        success: true,
+        data: Date.UTC(2026, 4, 25, 4, 5, 39),
+      })
       await vi.advanceTimersByTimeAsync(200)
       expect(onTaskExecute).toHaveBeenCalledTimes(1)
       scheduler.stop()
@@ -73,10 +79,17 @@ describe('scheduler', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date(Date.UTC(2026, 4, 25, 4, 5, second)))
       // 此单测只验证任务时区匹配；租约与 DB 时钟由真实双进程用例验证。
-      vi.spyOn(SchedulerExecutionRepository.prototype, 'currentTime').mockResolvedValue({ success: true, data: Date.UTC(2026, 4, 25, 4, 5, second) })
+      vi.spyOn(SchedulerExecutionRepository.prototype, 'currentTime').mockResolvedValue({
+        success: true,
+        data: Date.UTC(2026, 4, 25, 4, 5, second),
+      })
       const onTaskExecute = vi.fn((event: SchedulerTaskExecuteEvent) => ({ taskId: event.task.id }))
 
-      await scheduler.init({ enableDb: true, tickInterval: 100, hooks: { onTaskExecute } })
+      await scheduler.init({
+        enableDb: true,
+        tickInterval: 100,
+        hooks: { onTaskExecute },
+      })
 
       const registerResult = await scheduler.register({
         id: 'timezone-task',
@@ -253,7 +266,10 @@ describe('scheduler', () => {
         name: '重试任务',
         cron: '* * * * *',
         idempotent: true,
-        retry: { maxAttempts: 3, backoffMs: [1, 1] },
+        retry: {
+          maxAttempts: 3,
+          backoffMs: [1, 1],
+        },
         handler: {
           kind: 'api',
           url: 'https://example.com/retry',

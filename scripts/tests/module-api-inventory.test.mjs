@@ -31,10 +31,26 @@ describe('published module API inventory', () => {
       './blocked': null,
     })
     expect(entries.map(({ subpath, conditions, target }) => ({ subpath, conditions, target }))).toEqual([
-      { subpath: '.', conditions: ['types'], target: './dist/index.d.ts' },
-      { subpath: '.', conditions: ['browser'], target: './dist/browser.js' },
-      { subpath: '.', conditions: ['import'], target: './dist/index.js' },
-      { subpath: './component/button', conditions: ['import'], target: './dist/button.js' },
+      {
+        subpath: '.',
+        conditions: ['types'],
+        target: './dist/index.d.ts',
+      },
+      {
+        subpath: '.',
+        conditions: ['browser'],
+        target: './dist/browser.js',
+      },
+      {
+        subpath: '.',
+        conditions: ['import'],
+        target: './dist/index.js',
+      },
+      {
+        subpath: './component/button',
+        conditions: ['import'],
+        target: './dist/button.js',
+      },
     ])
     expect(expandPackageExports(root, './dist/button.js')[0].subpath).toBe('.')
     expect(() => expandPackageExports(root, { '.': '../private.js' })).toThrow('Invalid export target')
@@ -43,7 +59,12 @@ describe('published module API inventory', () => {
 
   it('follows aliases and stars while distinguishing type-only values and ambiguous bindings', () => fixture((root, put) => {
     const base = 'packages/example/'
-    put(`${base}package.json`, JSON.stringify({ name: '@test/example', exports: { '.': { types: './dist/index.d.ts', import: './dist/index.js' } } }))
+    put(`${base}package.json`, JSON.stringify({
+      name: '@test/example',
+      exports: {
+        '.': { types: './dist/index.d.ts', import: './dist/index.js' },
+      },
+    }))
     put(`${base}dist/a.js`, 'export const value = 1; export const conflict = 2')
     put(`${base}dist/a.d.ts`, 'export declare const value: number; export declare const conflict: number; export interface Options { enabled: boolean }')
     put(`${base}dist/b.js`, 'export const conflict = 3')
@@ -55,14 +76,22 @@ describe('published module API inventory', () => {
     const result = inspectModuleApi(root)
     expect(result.errors).toEqual([])
     const symbols = result.packages[0].entries[0].symbols
-    expect(symbols).toContainEqual({ name: 'renamed', kind: 'value', declaration: 'value', declarationKind: 'VariableDeclaration' })
+    expect(symbols).toContainEqual({
+      name: 'renamed',
+      kind: 'value',
+      declaration: 'value',
+      declarationKind: 'VariableDeclaration',
+    })
     expect(symbols.find(item => item.name === 'Options')?.kind).toBe('type')
     expect(symbols.find(item => item.name === 'internal')?.kind).toBe('type')
     expect(symbols.find(item => item.name === 'conflict')?.kind).toBe('type')
   }))
 
   it('reports missing artifacts instead of replacing them with source declarations', () => fixture((root, put) => {
-    put('packages/example/package.json', JSON.stringify({ name: '@test/example', exports: { browser: './dist/browser.js' } }))
+    put('packages/example/package.json', JSON.stringify({
+      name: '@test/example',
+      exports: { browser: './dist/browser.js' },
+    }))
     put('packages/example/src/browser.ts', 'export const browser = true')
     const result = inspectModuleApi(root)
     expect(result.errors).toEqual(['@test/example [browser]: missing ./dist/browser.js'])

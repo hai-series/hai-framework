@@ -15,9 +15,15 @@ test.describe('Login Form UI', () => {
     await gotoHydrated(page, '/auth/login')
     await page.waitForLoadState('load')
     await page.setViewportSize({ width: 1440, height: 1000 })
-    await page.screenshot({ path: testInfo.outputPath('auth-login-split.png'), animations: 'disabled' })
+    await page.screenshot({
+      path: testInfo.outputPath('auth-login-split.png'),
+      animations: 'disabled',
+    })
     await page.setViewportSize({ width: 390, height: 960 })
-    await page.screenshot({ path: testInfo.outputPath('auth-login-mobile.png'), animations: 'disabled' })
+    await page.screenshot({
+      path: testInfo.outputPath('auth-login-mobile.png'),
+      animations: 'disabled',
+    })
 
     // 填写错误密码
     await page.locator('#login-username').fill(user.username)
@@ -28,7 +34,10 @@ test.describe('Login Form UI', () => {
 
     // 应显示错误提示（Alert 组件）
     await expect(page.locator('[role="alert"], .alert')).toBeVisible({ timeout: 10_000 })
-    await page.screenshot({ path: testInfo.outputPath('auth-login-failed.png'), animations: 'disabled' })
+    await page.screenshot({
+      path: testInfo.outputPath('auth-login-failed.png'),
+      animations: 'disabled',
+    })
   })
 })
 

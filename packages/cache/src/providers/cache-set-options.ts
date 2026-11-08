@@ -56,11 +56,20 @@ export function validateSetOptions(options?: SetOptions): HaiResult<ValidatedSet
     const value = options![mode]!
     if (!Number.isSafeInteger(value) || value <= 0)
       return invalid()
-    const milliseconds = mode === 'ex' || mode === 'exat' ? value * 1000 : value
-    const expiresAt = mode === 'ex' || mode === 'px' ? Date.now() + milliseconds : milliseconds
+    const milliseconds = mode === 'ex' || mode === 'exat'
+      ? value * 1000
+      : value
+    const expiresAt = mode === 'ex' || mode === 'px'
+      ? Date.now() + milliseconds
+      : milliseconds
     if (!Number.isSafeInteger(expiresAt))
       return invalid()
-    const command = { ex: 'EX', px: 'PX', exat: 'EXAT', pxat: 'PXAT' } as const
+    const command = {
+      ex: 'EX',
+      px: 'PX',
+      exat: 'EXAT',
+      pxat: 'PXAT',
+    } as const
     result.expiry = [command[mode], value]
     result.expiresAt = expiresAt
   }

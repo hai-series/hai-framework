@@ -7,14 +7,26 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { buildProxyArguments, resolveBuildDownloads, validateDownloadDockerfile } from '../src/commands/cli-build-downloads.js'
 
 const answers = vi.hoisted(() => [] as Array<{ value?: string }>)
-vi.mock('prompts', () => ({ default: vi.fn(async () => answers.shift() ?? {}) }))
-vi.mock('node:child_process', async importOriginal => ({ ...await importOriginal<typeof import('node:child_process')>(), execFileSync: vi.fn() }))
+vi.mock('prompts', () => ({
+  default: vi.fn(async () => answers.shift() ?? {}),
+}))
+vi.mock('node:child_process', async importOriginal => ({
+  ...await importOriginal<typeof import('node:child_process')>(),
+  execFileSync: vi.fn(),
+}))
 let root: string
 const tty = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY')
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'hai-build-downloads-'))
-  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'serv', dockerfile: 'images/serv.Dockerfile' }] }, custom: { keep: true } }))
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({
+    build: {
+      images: [
+        { name: 'serv', dockerfile: 'images/serv.Dockerfile' },
+      ],
+    },
+    custom: { keep: true },
+  }))
   answers.length = 0
 })
 afterEach(() => {
@@ -38,15 +50,38 @@ it('首次交互保存选源，后续复用并保留其他项目字段', async (
   answers.push({ value: 'cn' }, { value: 'cn' }, { value: 'inherit' })
   const first = await resolveBuildDownloads(root, {})
   expect(first.npmRegistry).toBe('https://registry.npmmirror.com')
-  expect(JSON.parse(readFileSync(join(root, 'hai.json'), 'utf8'))).toMatchObject({ custom: { keep: true }, build: { sources: { image: { type: 'cn' }, npm: { type: 'cn' } }, proxy: { mode: 'inherit' } } })
+  expect(JSON.parse(readFileSync(join(root, 'hai.json'), 'utf8'))).toMatchObject({
+    custom: { keep: true },
+    build: {
+      sources: {
+        image: { type: 'cn' },
+        npm: { type: 'cn' },
+      },
+      proxy: { mode: 'inherit' },
+    },
+  })
   expect(await resolveBuildDownloads(root, {})).toEqual(first)
   expect(answers).toHaveLength(0)
 })
 
 it('显式参数覆盖已保存配置但不回写默认', async () => {
-  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { sources: { image: { type: 'cn' }, npm: { type: 'cn' } }, proxy: { mode: 'none' } } }))
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({
+    build: {
+      sources: {
+        image: { type: 'cn' },
+        npm: { type: 'cn' },
+      },
+      proxy: { mode: 'none' },
+    },
+  }))
   const before = readFileSync(join(root, 'hai.json'), 'utf8')
-  const result = await resolveBuildDownloads(root, { imageSource: 'custom', imageMirrors: 'docker.io=mirror.example.com/docker.io,ghcr.io=mirror.example.com/ghcr.io', npmRegistry: 'https://npm.example.com/registry/', proxyUrl: 'http://127.0.0.1:10808', yes: true })
+  const result = await resolveBuildDownloads(root, {
+    imageSource: 'custom',
+    imageMirrors: 'docker.io=mirror.example.com/docker.io,ghcr.io=mirror.example.com/ghcr.io',
+    npmRegistry: 'https://npm.example.com/registry/',
+    proxyUrl: 'http://127.0.0.1:10808',
+    yes: true,
+  })
   expect(result.imageSource.registries?.['ghcr.io']).toBe('mirror.example.com/ghcr.io')
   expect(result.npmRegistry).toBe('https://npm.example.com/registry')
   expect(result.proxy).toEqual({ mode: 'custom', url: 'http://127.0.0.1:10808' })
@@ -72,15 +107,23 @@ it('取消交互不保存半份选择', async () => {
 })
 
 it.each(['podman', 'docker'])('构建容器代理将宿主回环替换为 %s 的可达入口', (runtime) => {
-  const args = buildProxyArguments({ mode: 'custom', url: 'http://127.0.0.1:10808', bypass: 'localhost' }, runtime, runtime === 'podman' ? 'pasta' : undefined)
-  expect(args).toContain(`HTTPS_PROXY=http://${runtime === 'podman' ? 'host.containers.internal' : 'host.docker.internal'}:10808`)
+  const args = buildProxyArguments({ mode: 'custom', url: 'http://127.0.0.1:10808', bypass: 'localhost' }, runtime, runtime === 'podman'
+    ? 'pasta'
+    : undefined)
+  expect(args).toContain(`HTTPS_PROXY=http://${runtime === 'podman'
+    ? 'host.containers.internal'
+    : 'host.docker.internal'}:10808`)
   expect(args).not.toContain('HTTPS_PROXY=http://127.0.0.1:10808')
   expect(buildProxyArguments({ mode: 'none' }, runtime)).toContain('HTTPS_PROXY=')
   expect(execFileSync).not.toHaveBeenCalled()
 })
 
 it('podman 默认网络与显式 host 网络保留调用者代理地址', () => {
-  for (const [runtime, network] of [['podman', undefined], ['podman', 'host'], ['docker', 'host']])
+  for (const [runtime, network] of [
+    ['podman', undefined],
+    ['podman', 'host'],
+    ['docker', 'host'],
+  ])
     expect(buildProxyArguments({ mode: 'custom', url: 'http://127.0.0.1:10808' }, runtime!, network)).toContain('HTTPS_PROXY=http://127.0.0.1:10808')
 })
 

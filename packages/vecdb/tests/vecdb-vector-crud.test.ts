@@ -27,8 +27,18 @@ describe('vecdb.vector CRUD', () => {
       await vecdb.collection.create(COLLECTION, { dimension: DIM })
 
       const result = await vecdb.vector.insert(COLLECTION, [
-        { id: 'doc-1', vector: randomVector(DIM), content: 'First document', metadata: { source: 'test' } },
-        { id: 'doc-2', vector: randomVector(DIM), content: 'Second document', metadata: { source: 'test' } },
+        {
+          id: 'doc-1',
+          vector: randomVector(DIM),
+          content: 'First document',
+          metadata: { source: 'test' },
+        },
+        {
+          id: 'doc-2',
+          vector: randomVector(DIM),
+          content: 'Second document',
+          metadata: { source: 'test' },
+        },
       ])
       expect(result.success).toBe(true)
 
@@ -43,7 +53,11 @@ describe('vecdb.vector CRUD', () => {
       await vecdb.collection.create(COLLECTION, { dimension: DIM })
 
       const result = await vecdb.vector.upsert(COLLECTION, [
-        { id: 'upsert-1', vector: randomVector(DIM), content: 'Upserted doc' },
+        {
+          id: 'upsert-1',
+          vector: randomVector(DIM),
+          content: 'Upserted doc',
+        },
       ])
       expect(result.success).toBe(true)
 
@@ -78,8 +92,16 @@ describe('vecdb.vector CRUD', () => {
       await vecdb.collection.create(COLLECTION, { dimension: DIM })
 
       await vecdb.vector.insert(COLLECTION, [
-        { id: 'del-1', vector: randomVector(DIM), content: 'To delete' },
-        { id: 'del-2', vector: randomVector(DIM), content: 'To keep' },
+        {
+          id: 'del-1',
+          vector: randomVector(DIM),
+          content: 'To delete',
+        },
+        {
+          id: 'del-2',
+          vector: randomVector(DIM),
+          content: 'To keep',
+        },
       ])
 
       const result = await vecdb.vector.delete(COLLECTION, ['del-1'])
@@ -94,10 +116,23 @@ describe('vecdb.vector CRUD', () => {
     it('删除特殊字符 ID 时只删除指定记录', async () => {
       const created = await vecdb.collection.create(COLLECTION, { dimension: DIM })
       expect(created.success).toBe(true)
-      const ids = ['O\'Reilly', 'double"quote', 'slash\\id', 'literal%', 'under_score', 'x\') OR true --']
+      const ids = [
+        'O\'Reilly',
+        'double"quote',
+        'slash\\id',
+        'literal%',
+        'under_score',
+        'x\') OR true --',
+      ]
       const inserted = await vecdb.vector.insert(COLLECTION, [
-        { id: 'keep', vector: randomVector(DIM) },
-        ...ids.map(id => ({ id, vector: randomVector(DIM) })),
+        {
+          id: 'keep',
+          vector: randomVector(DIM),
+        },
+        ...ids.map(id => ({
+          id,
+          vector: randomVector(DIM),
+        })),
       ])
       expect(inserted.success).toBe(true)
 
@@ -157,7 +192,11 @@ describe('vecdb.vector CRUD', () => {
     it('空批量 delete 应视为 no-op', async () => {
       await vecdb.collection.create(COLLECTION, { dimension: DIM })
       await vecdb.vector.insert(COLLECTION, [
-        { id: 'keep-me', vector: randomVector(DIM), content: 'Keep me' },
+        {
+          id: 'keep-me',
+          vector: randomVector(DIM),
+          content: 'Keep me',
+        },
       ])
 
       const result = await vecdb.vector.delete(COLLECTION, [])
@@ -174,7 +213,11 @@ describe('vecdb.vector CRUD', () => {
       await vecdb.collection.create(COLLECTION, { dimension: DIM })
 
       const result = await vecdb.vector.insert(COLLECTION, [
-        { id: 'bad-doc', vector: randomVector(DIM - 1), content: 'Bad dimension' },
+        {
+          id: 'bad-doc',
+          vector: randomVector(DIM - 1),
+          content: 'Bad dimension',
+        },
       ])
 
       expect(result.success).toBe(false)
@@ -187,7 +230,11 @@ describe('vecdb.vector CRUD', () => {
       await vecdb.collection.create(COLLECTION, { dimension: DIM })
 
       const result = await vecdb.vector.upsert(COLLECTION, [
-        { id: 'bad-upsert', vector: randomVector(DIM + 1), content: 'Bad dimension' },
+        {
+          id: 'bad-upsert',
+          vector: randomVector(DIM + 1),
+          content: 'Bad dimension',
+        },
       ])
 
       expect(result.success).toBe(false)

@@ -34,7 +34,10 @@ export function emitLogRecord(record: LogRecord): void {
   try {
     for (const observer of observers) {
       try {
-        const result: unknown = observer({ ...record, context: sanitize.sanitizeSensitiveFields(record.context) })
+        const result: unknown = observer({
+          ...record,
+          context: sanitize.sanitizeSensitiveFields(record.context),
+        })
         if (result instanceof Promise)
           void result.catch(() => {})
       }
@@ -82,7 +85,9 @@ function redactPath(value: unknown, segments: string[]): void {
     return
   const record = value as Record<string, unknown>
   const [segment, ...rest] = segments
-  for (const key of segment === '*' ? Object.keys(record) : [segment!]) {
+  for (const key of segment === '*'
+    ? Object.keys(record)
+    : [segment!]) {
     if (!Object.hasOwn(record, key) || ['__proto__', 'constructor', 'prototype'].includes(key))
       continue
     if (rest.length === 0)

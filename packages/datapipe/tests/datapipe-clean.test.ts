@@ -9,8 +9,14 @@ import { datapipe } from '../src/index.js'
 
 describe('datapipe.clean', () => {
   it.each([
-    { input: '<'.repeat(262144), options: { removeHtml: true } },
-    { input: 'a'.repeat(262144), options: { removeEmails: true } },
+    {
+      input: '<'.repeat(262144),
+      options: { removeHtml: true },
+    },
+    {
+      input: 'a'.repeat(262144),
+      options: { removeEmails: true },
+    },
   ])('长未闭合标签或无邮箱输入不触发重复扫描', ({ input, options }) => {
     const start = performance.now()
     const result = datapipe.clean(input, options)
@@ -149,7 +155,9 @@ describe('datapipe.clean', () => {
   describe('customReplacements', () => {
     it('单条自定义替换', () => {
       const result = datapipe.clean('Hello World', {
-        customReplacements: [{ pattern: 'World', replacement: 'AI' }],
+        customReplacements: [
+          { pattern: 'World', replacement: 'AI' },
+        ],
       })
       expect(result.success).toBe(true)
       expect(result.data).toBe('Hello AI')
@@ -168,7 +176,9 @@ describe('datapipe.clean', () => {
 
     it('正则模式自定义替换', () => {
       const result = datapipe.clean('Version 1.2.3 and 4.5.6', {
-        customReplacements: [{ pattern: '\\d+\\.\\d+\\.\\d+', replacement: 'X.X.X' }],
+        customReplacements: [
+          { pattern: '\\d+\\.\\d+\\.\\d+', replacement: 'X.X.X' },
+        ],
       })
       expect(result.success).toBe(true)
       expect(result.data).toBe('Version X.X.X and X.X.X')

@@ -42,7 +42,10 @@ it('notify 双节点与重启后重复到达不重复履约，校验失败和事
     const signer = createSign('RSA-SHA256')
     signer.update(Object.keys(params).filter(key => key !== 'sign_type').sort().map(key => `${key}=${params[key]}`).join('&'))
     params.sign = signer.sign(privateKey, 'base64')
-    return { body: new URLSearchParams(params).toString(), headers: {} }
+    return {
+      body: new URLSearchParams(params).toString(),
+      headers: {},
+    }
   }
 
   try {
@@ -57,7 +60,14 @@ it('notify 双节点与重启后重复到达不重复履约，校验失败和事
     ]) {
       expect((await reldb.sql.execute(
         'INSERT INTO example_payment_orders (id, provider, merchant_scope, amount, currency, status) VALUES (?, ?, ?, ?, ?, ?)',
-        [orderNo, provider, 'trusted_merchant_scope', 100, currency, 'pending'],
+        [
+          orderNo,
+          provider,
+          'trusted_merchant_scope',
+          100,
+          currency,
+          'pending',
+        ],
       )).success).toBe(true)
     }
     await reldb.close()
@@ -73,10 +83,23 @@ it('notify 双节点与重启后重复到达不重复履约，校验失败和事
       splitting: false,
       config: false,
       silent: true,
-      external: ['@h-ai/core', '@h-ai/reldb', '@h-ai/audit', 'zod'],
+      external: [
+        '@h-ai/core',
+        '@h-ai/reldb',
+        '@h-ai/audit',
+        'zod',
+      ],
     })
     await writeFile(path.join(directory, 'fixtures.json'), JSON.stringify({
-      config: { alipay: { appId: 'app_notify_process', sellerId: 'seller_notify_process', privateKey, alipayPublicKey: publicKey, returnUrl: 'https://example.invalid/payment/return' } },
+      config: {
+        alipay: {
+          appId: 'app_notify_process',
+          sellerId: 'seller_notify_process',
+          privateKey,
+          alipayPublicKey: publicKey,
+          returnUrl: 'https://example.invalid/payment/return',
+        },
+      },
       notifications: {
         valid: signedNotification(),
         pending: signedNotification({ trade_status: 'WAIT_BUYER_PAY', notify_id: 'notify_pending' }),
@@ -180,22 +203,46 @@ process.stdout.write('NOTIFY_RESULT=' + JSON.stringify({ pid: process.pid, resul
     expect((await run('reusedEvent'))[0].result.success).toBe(false)
 
     expect((await reldb.init({ type: 'sqlite', database })).success).toBe(true)
-    expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM example_payment_outbox')).toMatchObject({ success: true, data: { count: 1 } })
-    expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM example_payment_events')).toMatchObject({ success: true, data: { count: 1 } })
-    expect(await reldb.sql.get('SELECT status FROM example_payment_orders WHERE id = ?', ['ORDER_PROCESS'])).toMatchObject({ success: true, data: { status: 'paid' } })
-    expect(await reldb.sql.get('SELECT status FROM example_payment_orders WHERE id = ?', ['ORDER_OTHER'])).toMatchObject({ success: true, data: { status: 'pending' } })
+    expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM example_payment_outbox')).toMatchObject({
+      success: true,
+      data: { count: 1 },
+    })
+    expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM example_payment_events')).toMatchObject({
+      success: true,
+      data: { count: 1 },
+    })
+    expect(await reldb.sql.get('SELECT status FROM example_payment_orders WHERE id = ?', ['ORDER_PROCESS'])).toMatchObject({
+      success: true,
+      data: { status: 'paid' },
+    })
+    expect(await reldb.sql.get('SELECT status FROM example_payment_orders WHERE id = ?', ['ORDER_OTHER'])).toMatchObject({
+      success: true,
+      data: { status: 'pending' },
+    })
     expect((await reldb.sql.execute('UPDATE example_payment_orders SET status = ? WHERE id = ?', ['refunded', 'ORDER_PROCESS'])).success).toBe(true)
     await reldb.close()
     expect((await run('valid'))[0].result).toEqual({ success: true, data: 'duplicate' })
     expect((await reldb.init({ type: 'sqlite', database })).success).toBe(true)
-    expect(await reldb.sql.get('SELECT status FROM example_payment_orders WHERE id = ?', ['ORDER_PROCESS'])).toMatchObject({ success: true, data: { status: 'refunded' } })
-    expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM example_payment_outbox')).toMatchObject({ success: true, data: { count: 1 } })
+    expect(await reldb.sql.get('SELECT status FROM example_payment_orders WHERE id = ?', ['ORDER_PROCESS'])).toMatchObject({
+      success: true,
+      data: { status: 'refunded' },
+    })
+    expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM example_payment_outbox')).toMatchObject({
+      success: true,
+      data: { count: 1 },
+    })
     expect((await reldb.ddl.dropTable('example_payment_outbox')).success).toBe(true)
     await reldb.close()
     expect((await run('rollback'))[0].result.success).toBe(false)
     expect((await reldb.init({ type: 'sqlite', database })).success).toBe(true)
-    expect(await reldb.sql.get('SELECT status FROM example_payment_orders WHERE id = ?', ['ORDER_ROLLBACK'])).toMatchObject({ success: true, data: { status: 'pending' } })
-    expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM example_payment_events')).toMatchObject({ success: true, data: { count: 1 } })
+    expect(await reldb.sql.get('SELECT status FROM example_payment_orders WHERE id = ?', ['ORDER_ROLLBACK'])).toMatchObject({
+      success: true,
+      data: { status: 'pending' },
+    })
+    expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM example_payment_events')).toMatchObject({
+      success: true,
+      data: { count: 1 },
+    })
   }
   finally {
     await reldb.close()

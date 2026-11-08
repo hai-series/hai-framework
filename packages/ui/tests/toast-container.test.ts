@@ -46,8 +46,12 @@ describe('浮动操作提示', () => {
         flushSync()
         const notification = document.querySelector<HTMLElement>('.hai-toast-item')!
         expect(notification.dataset.variant).toBe(variant)
-        expect(notification.getAttribute('role')).toBe(variant === 'error' ? 'alert' : 'status')
-        expect(notification.getAttribute('aria-live')).toBe(variant === 'error' ? 'assertive' : 'polite')
+        expect(notification.getAttribute('role')).toBe(variant === 'error'
+          ? 'alert'
+          : 'status')
+        expect(notification.getAttribute('aria-live')).toBe(variant === 'error'
+          ? 'assertive'
+          : 'polite')
         toast.remove(id)
         flushSync()
       }
@@ -101,7 +105,9 @@ describe('浮动操作提示', () => {
       if (!success)
         throw new Error('Clipboard unavailable')
     })
-    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    vi.stubGlobal('navigator', {
+      clipboard: { writeText },
+    })
     const target = document.body.appendChild(document.createElement('div'))
     const component = mount(ToastContainer, { target })
     try {
@@ -160,8 +166,21 @@ describe('浮动操作提示', () => {
       vi.advanceTimersByTime(1)
       flushSync()
       expect(document.querySelector('[role="status"]')).toBeNull()
-      for (const position of ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'] as const) {
-        const id = toast.add({ 'message': '配置提示', position, 'duration': 0, 'dismissible': false, 'data-testid': 'configured-toast' })
+      for (const position of [
+        'top-left',
+        'top-center',
+        'top-right',
+        'bottom-left',
+        'bottom-center',
+        'bottom-right',
+      ] as const) {
+        const id = toast.add({
+          'message': '配置提示',
+          position,
+          'duration': 0,
+          'dismissible': false,
+          'data-testid': 'configured-toast',
+        })
         flushSync()
         expect(document.querySelector('.hai-toast-position')?.getAttribute('data-position')).toBe(position)
         expect(document.querySelector('[data-testid="configured-toast"]')).not.toBeNull()

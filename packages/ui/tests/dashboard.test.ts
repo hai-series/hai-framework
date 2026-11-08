@@ -9,7 +9,16 @@ afterEach(() => setUILocale('zh-CN'))
 
 it('指标卡显示零值、带方向的变化和业务比较说明，加载时隐藏旧值', async () => {
   const target = document.createElement('div')
-  const component = mount(MetricCard, { target, props: { title: 'Revenue', value: 0, trend: -8.2, trendLabel: 'vs previous month', trendTone: 'success' } })
+  const component = mount(MetricCard, {
+    target,
+    props: {
+      title: 'Revenue',
+      value: 0,
+      trend: -8.2,
+      trendLabel: 'vs previous month',
+      trendTone: 'success',
+    },
+  })
   try {
     flushSync()
     expect(target.textContent).toContain('0')
@@ -18,7 +27,10 @@ it('指标卡显示零值、带方向的变化和业务比较说明，加载时�
     expect(target.querySelector('[data-trend-direction]')?.getAttribute('data-trend-direction')).toBe('down')
   }
   finally { await unmount(component) }
-  const loading = mount(MetricCard, { target, props: { title: 'Revenue', value: 999, loading: true } })
+  const loading = mount(MetricCard, {
+    target,
+    props: { title: 'Revenue', value: 999, loading: true },
+  })
   try {
     flushSync()
     expect(target.textContent).not.toContain('999')
@@ -30,7 +42,10 @@ it('指标卡显示零值、带方向的变化和业务比较说明，加载时�
 it('指标卡不将缺失值或非有限数显示为零，变化方向不决定好坏', async () => {
   const target = document.createElement('div')
   for (const value of [null, Number.NaN, Number.POSITIVE_INFINITY]) {
-    const component = mount(MetricCard, { target, props: { title: 'Revenue', value, trend: Number.NaN } })
+    const component = mount(MetricCard, {
+      target,
+      props: { title: 'Revenue', value, trend: Number.NaN },
+    })
     try {
       flushSync()
       expect(target.textContent).toContain('—')
@@ -42,9 +57,18 @@ it('指标卡不将缺失值或非有限数显示为零，变化方向不决定�
 
 it('报表内容插槽可承载任意原生图形，空态和加载态不渲染内容', async () => {
   const target = document.createElement('div')
-  const children = createRawSnippet(() => ({ render: () => '<div data-native-chart>Native visualization</div>' }))
-  for (const state of [{}, { loading: true }, { empty: true }]) {
-    const component = mount(ReportCard, { target, props: { title: 'Report', children, ...state } })
+  const children = createRawSnippet(() => ({
+    render: () => '<div data-native-chart>Native visualization</div>',
+  }))
+  for (const state of [
+    {},
+    { loading: true },
+    { empty: true },
+  ]) {
+    const component = mount(ReportCard, {
+      target,
+      props: { title: 'Report', children, ...state },
+    })
     try {
       flushSync()
       expect(target.querySelector('[data-native-chart]') !== null).toBe(!('loading' in state || 'empty' in state))
@@ -56,7 +80,10 @@ it('报表内容插槽可承载任意原生图形，空态和加载态不渲染�
 
 it('指标卡的变化辅助信息随语言更新', async () => {
   const target = document.createElement('div')
-  const component = mount(MetricCard, { target, props: { title: 'Revenue', value: 10, trend: 4 } })
+  const component = mount(MetricCard, {
+    target,
+    props: { title: 'Revenue', value: 10, trend: 4 },
+  })
   try {
     flushSync()
     expect(target.textContent).toContain('上升')

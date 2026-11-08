@@ -5,11 +5,22 @@ import { saveCapacitorFeedbackFile } from '../src/client/feedback-client-capacit
 import { saveTauriFeedbackFile } from '../src/client/feedback-client-tauri.js'
 import { configureFeedbackSaving, saveFeedbackFile } from '../src/client/index.js'
 
-const native = vi.hoisted(() => ({ save: vi.fn(), writeFile: vi.fn(), write: vi.fn(), share: vi.fn(), remove: vi.fn() }))
+const native = vi.hoisted(() => ({
+  save: vi.fn(),
+  writeFile: vi.fn(),
+  write: vi.fn(),
+  share: vi.fn(),
+  remove: vi.fn(),
+}))
 vi.mock('@tauri-apps/plugin-dialog', () => ({ save: native.save }))
 vi.mock('@tauri-apps/plugin-fs', () => ({ writeFile: native.writeFile }))
-vi.mock('@capacitor/filesystem', () => ({ Directory: { Cache: 'CACHE' }, Filesystem: { writeFile: native.write, rmdir: native.remove } }))
-vi.mock('@capacitor/share', () => ({ Share: { share: native.share } }))
+vi.mock('@capacitor/filesystem', () => ({
+  Directory: { Cache: 'CACHE' },
+  Filesystem: { writeFile: native.write, rmdir: native.remove },
+}))
+vi.mock('@capacitor/share', () => ({
+  Share: { share: native.share },
+}))
 afterEach(() => {
   configureFeedbackSaving(undefined)
   Reflect.deleteProperty(window, '__TAURI_INTERNALS__')
@@ -28,14 +39,19 @@ it('tauri 取消不写文件；选择路径后才保存实际字节', async () =
 })
 
 it('capacitor 只分享缓存文件，完成和失败均清理本次临时目录', async () => {
-  Reflect.set(window, 'Capacitor', { isNativePlatform: () => true })
+  Reflect.set(window, 'Capacitor', {
+    isNativePlatform: () => true,
+  })
   configureFeedbackSaving(saveCapacitorFeedbackFile)
   native.write.mockResolvedValue({ uri: 'file:///cache/feedback.zip' })
   native.remove.mockResolvedValue(undefined)
   native.share.mockResolvedValueOnce({})
   expect(await saveFeedbackFile(new Uint8Array([97]), 'feedback.zip')).toEqual(ok({ status: 'shared' }))
   expect(native.write).toHaveBeenCalledWith(expect.objectContaining({ data: 'YQ==', directory: 'CACHE' }))
-  expect(native.share).toHaveBeenCalledWith({ files: ['file:///cache/feedback.zip'], dialogTitle: 'feedback.zip' })
+  expect(native.share).toHaveBeenCalledWith({
+    files: ['file:///cache/feedback.zip'],
+    dialogTitle: 'feedback.zip',
+  })
   native.share.mockRejectedValueOnce(new Error('Native share failed'))
   expect((await saveFeedbackFile(new Uint8Array([97]), 'feedback.zip')).success).toBe(false)
   expect(native.remove).toHaveBeenCalledTimes(2)

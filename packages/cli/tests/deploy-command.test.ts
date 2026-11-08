@@ -47,7 +47,11 @@ function createDeployApp(): string {
   mkdirSync(join(appDir, 'config'), { recursive: true })
   writeFileSync(
     join(appDir, 'hai.json'),
-    JSON.stringify({ deploy: { provider: { type: 'vercel', token: 'test-token' } } }),
+    JSON.stringify({
+      deploy: {
+        provider: { type: 'vercel', token: 'test-token' },
+      },
+    }),
     'utf-8',
   )
   writeFileSync(join(appDir, '.env.prod'), 'HAI_CORE_ENV=production\n')
@@ -71,7 +75,12 @@ beforeEach(() => {
   })
   mocks.init.mockResolvedValue({ success: true, data: undefined })
   mocks.close.mockResolvedValue(undefined)
-  mocks.plan.mockResolvedValue({ success: true, data: { baseline: { state: 'not-inspected' } } })
+  mocks.plan.mockResolvedValue({
+    success: true,
+    data: {
+      baseline: { state: 'not-inspected' },
+    },
+  })
 })
 
 afterEach(() => {
@@ -82,14 +91,52 @@ describe('deployCommand', () => {
   it.each(['en-US', 'zh-CN', 'ja-JP'])('清楚区分恢复验证结果并说明数据边界 (%s)', async (locale) => {
     core.i18n.setGlobalLocale(locale)
     const expected = {
-      'en-US': ['not required', 'Business data was not reverted', 'failed recovery verification', 'newly deployed services were stopped'],
-      'zh-CN': ['无需恢复', '业务数据未回退', '未通过恢复验证', '已停止本次新服务'],
-      'ja-JP': ['復旧は不要', '業務データは元に戻していません', '復旧確認に失敗', '新しいサービスを停止'],
+      'en-US': [
+        'not required',
+        'Business data was not reverted',
+        'failed recovery verification',
+        'newly deployed services were stopped',
+      ],
+      'zh-CN': [
+        '无需恢复',
+        '业务数据未回退',
+        '未通过恢复验证',
+        '已停止本次新服务',
+      ],
+      'ja-JP': [
+        '復旧は不要',
+        '業務データは元に戻していません',
+        '復旧確認に失敗',
+        '新しいサービスを停止',
+      ],
     }
-    for (const [index, remoteRecovery] of ['not-needed', 'passed', 'failed', 'stopped'].entries()) {
+    for (const [index, remoteRecovery] of [
+      'not-needed',
+      'passed',
+      'failed',
+      'stopped',
+    ].entries()) {
       mocks.writeMessage.mockClear()
-      mocks.deployApp.mockResolvedValue({ success: false, error: { message: 'deployment failed', ext: { commandExecution: { reason: 'timeout', localTermination: 'confirmed', remoteExecution: 'finished', remoteRecovery } } } })
-      await expect(deployCommand({ env: 'prod', yes: true, appDir: createDeployApp(), cwd: tmpRoot })).rejects.toThrow('deployment failed')
+      mocks.deployApp.mockResolvedValue({
+        success: false,
+        error: {
+          message: 'deployment failed',
+          ext: {
+            commandExecution: {
+              reason: 'timeout',
+              localTermination: 'confirmed',
+              remoteExecution: 'finished',
+              remoteRecovery,
+            },
+          },
+        },
+      })
+      await expect(deployCommand({
+        env: 'prod',
+        yes: true,
+        appDir: createDeployApp(),
+        cwd: tmpRoot,
+      })).rejects.toThrow('deployment failed')
       expect(mocks.writeMessage.mock.calls.map(([message]) => String(message)).join('\n')).toContain(expected[locale as keyof typeof expected][index])
     }
   })
@@ -99,7 +146,14 @@ describe('deployCommand', () => {
     const before = readdirSync(tmpRoot, { recursive: true })
     const envBefore = readFileSync(join(appDir, '.env.prod'), 'utf8')
     const processBefore = { ...process.env }
-    await deployCommand({ cwd: tmpRoot, appDir, env: 'prod', plan: true, inspectRemote, yes: true })
+    await deployCommand({
+      cwd: tmpRoot,
+      appDir,
+      env: 'prod',
+      plan: true,
+      inspectRemote,
+      yes: true,
+    })
     expect(mocks.plan).toHaveBeenCalledWith(appDir, expect.anything(), expect.objectContaining({ inspectRemote }))
     expect(mocks.loadCredentials).not.toHaveBeenCalled()
     expect(mocks.init).not.toHaveBeenCalled()
@@ -112,17 +166,41 @@ describe('deployCommand', () => {
   it('reports the invalid deployment field and expected type without echoing the value', async () => {
     const appDir = createDeployApp()
     const path = join(appDir, 'hai.json')
-    writeFileSync(path, JSON.stringify({ deploy: { provider: { type: 'docker-ssh', expose: { hostPort: 'fixture-private-value' } } } }))
-    const command = deployCommand({ cwd: tmpRoot, appDir, env: 'prod', plan: true, yes: true })
+    writeFileSync(path, JSON.stringify({
+      deploy: {
+        provider: {
+          type: 'docker-ssh',
+          expose: { hostPort: 'fixture-private-value' },
+        },
+      },
+    }))
+    const command = deployCommand({
+      cwd: tmpRoot,
+      appDir,
+      env: 'prod',
+      plan: true,
+      yes: true,
+    })
     await expect(command).rejects.toThrow(path)
     await expect(command).rejects.toThrow(/deploy\.provider\.expose\.hostPort.*expected number/)
     await expect(command).rejects.not.toThrow('fixture-private-value')
     expect(mocks.plan).not.toHaveBeenCalled()
   })
 
-  it.each([{ inspectRemote: true }, { plan: true, build: true }, { plan: true, bundleOnly: true }, { plan: true, output: 'bundle.tar' }])('拒绝只读模式的冲突参数 %j', async (options) => {
+  it.each([
+    { inspectRemote: true },
+    { plan: true, build: true },
+    { plan: true, bundleOnly: true },
+    { plan: true, output: 'bundle.tar' },
+  ])('拒绝只读模式的冲突参数 %j', async (options) => {
     const appDir = createDeployApp()
-    await expect(deployCommand({ cwd: tmpRoot, appDir, env: 'prod', yes: true, ...options })).rejects.toThrow()
+    await expect(deployCommand({
+      cwd: tmpRoot,
+      appDir,
+      env: 'prod',
+      yes: true,
+      ...options,
+    })).rejects.toThrow()
     expect(mocks.loadCredentials).not.toHaveBeenCalled()
     expect(mocks.init).not.toHaveBeenCalled()
     expect(mocks.deployApp).not.toHaveBeenCalled()
@@ -130,39 +208,88 @@ describe('deployCommand', () => {
   it.each(['en-US', 'zh-CN'])('未知或已结束的远端状态与本地终止结论分别展示 (%s)', async (locale) => {
     core.i18n.setGlobalLocale(locale)
     for (const remoteExecution of ['unknown', 'finished']) {
-      mocks.deployApp.mockResolvedValue({ success: false, error: { message: 'command interrupted', ext: { commandExecution: { reason: 'timeout', localTermination: 'confirmed', remoteExecution, deploymentId: 'deployment-1', resultFile: '/srv/app/result-deployment-1.json' } } } })
-      await expect(deployCommand({ env: 'prod', yes: true, appDir: createDeployApp(), cwd: tmpRoot, verbose: false })).rejects.toThrow('command interrupted')
+      mocks.deployApp.mockResolvedValue({
+        success: false,
+        error: {
+          message: 'command interrupted',
+          ext: {
+            commandExecution: {
+              reason: 'timeout',
+              localTermination: 'confirmed',
+              remoteExecution,
+              deploymentId: 'deployment-1',
+              resultFile: '/srv/app/result-deployment-1.json',
+            },
+          },
+        },
+      })
+      await expect(deployCommand({
+        env: 'prod',
+        yes: true,
+        appDir: createDeployApp(),
+        cwd: tmpRoot,
+        verbose: false,
+      })).rejects.toThrow('command interrupted')
     }
     const text = mocks.writeMessage.mock.calls.map(([message]) => String(message)).join('\n')
     expect(text).toContain('/srv/app/result-deployment-1.json')
-    expect(text).toContain(locale === 'en-US' ? 'Local command tree: confirmed exited' : '本地命令进程树：已确认全部退出')
-    expect(text).toContain(locale === 'en-US' ? 'Remote deployment execution: unknown' : '远端部署执行状态：未知')
-    expect(text).toContain(locale === 'en-US' ? 'script and recovery finished' : '脚本与恢复已结束')
+    expect(text).toContain(locale === 'en-US'
+      ? 'Local command tree: confirmed exited'
+      : '本地命令进程树：已确认全部退出')
+    expect(text).toContain(locale === 'en-US'
+      ? 'Remote deployment execution: unknown'
+      : '远端部署执行状态：未知')
+    expect(text).toContain(locale === 'en-US'
+      ? 'script and recovery finished'
+      : '脚本与恢复已结束')
   })
   it.each([
     ['en-US', 'Deploy failed: network unavailable'],
     ['zh-CN', '部署失败：network unavailable'],
   ])('localizes deployment failures in %s', async (locale, message) => {
     core.i18n.setGlobalLocale(locale)
-    mocks.deployApp.mockResolvedValue({ success: false, error: { message: 'network unavailable' } })
-    await expect(deployCommand({ env: 'prod', yes: true, appDir: createDeployApp(), cwd: tmpRoot, verbose: false })).rejects.toThrow(message)
+    mocks.deployApp.mockResolvedValue({
+      success: false,
+      error: { message: 'network unavailable' },
+    })
+    await expect(deployCommand({
+      env: 'prod',
+      yes: true,
+      appDir: createDeployApp(),
+      cwd: tmpRoot,
+      verbose: false,
+    })).rejects.toThrow(message)
     expect(mocks.close).toHaveBeenCalledOnce()
   })
   it.each(['credentials', 'scan', 'init'])('propagates failure from %s to the CLI entry', async (stage) => {
     const appDir = createDeployApp()
-    const failed = { success: false, error: { code: 'test', message: 'stage rejected' } }
+    const failed = {
+      success: false,
+      error: { code: 'test', message: 'stage rejected' },
+    }
     if (stage === 'credentials')
       mocks.loadCredentials.mockReturnValue(failed)
     if (stage === 'scan')
       mocks.scan.mockResolvedValue(failed)
     if (stage === 'init')
       mocks.init.mockResolvedValue(failed)
-    await expect(deployCommand({ env: 'prod', yes: true, appDir, cwd: tmpRoot, verbose: false })).rejects.toThrow('stage rejected')
+    await expect(deployCommand({
+      env: 'prod',
+      yes: true,
+      appDir,
+      cwd: tmpRoot,
+      verbose: false,
+    })).rejects.toThrow('stage rejected')
     expect(mocks.deployApp).not.toHaveBeenCalled()
   })
 
   it('rejects missing configuration', async () => {
-    await expect(deployCommand({ env: 'prod', yes: true, cwd: tmpRoot, verbose: false })).rejects.toThrow('Deploy config not found')
+    await expect(deployCommand({
+      env: 'prod',
+      yes: true,
+      cwd: tmpRoot,
+      verbose: false,
+    })).rejects.toThrow('Deploy config not found')
   })
 
   it.each(['en-US', 'zh-CN'])('deploy 成功时应透传参数并关闭 deploy 模块 (%s)', async (locale) => {
@@ -177,7 +304,14 @@ describe('deployCommand', () => {
       },
     })
 
-    await deployCommand({ env: 'prod', yes: true, appDir, cwd: tmpRoot, skipMiddleware: true, verbose: false })
+    await deployCommand({
+      env: 'prod',
+      yes: true,
+      appDir,
+      cwd: tmpRoot,
+      skipMiddleware: true,
+      verbose: false,
+    })
 
     expect(mocks.deployApp).toHaveBeenCalledWith(appDir, expect.objectContaining({
       skipMiddleware: true,
@@ -198,7 +332,13 @@ describe('deployCommand', () => {
       error: { code: 'hai:deploy:001', message: 'deploy failed' },
     })
 
-    await expect(deployCommand({ env: 'prod', yes: true, appDir, cwd: tmpRoot, verbose: false })).rejects.toThrow('Deploy failed')
+    await expect(deployCommand({
+      env: 'prod',
+      yes: true,
+      appDir,
+      cwd: tmpRoot,
+      verbose: false,
+    })).rejects.toThrow('Deploy failed')
 
     expect(mocks.close).toHaveBeenCalledTimes(1)
   })
@@ -217,7 +357,14 @@ describe('deployCommand', () => {
       },
     })
 
-    await deployCommand({ env: 'prod', yes: true, appDir, cwd: tmpRoot, skipMiddleware: true, verbose: false })
+    await deployCommand({
+      env: 'prod',
+      yes: true,
+      appDir,
+      cwd: tmpRoot,
+      skipMiddleware: true,
+      verbose: false,
+    })
 
     const output = mocks.writeMessage.mock.calls.map(([message]) => message).join('\n')
     expect(output.split(bundlePath)).toHaveLength(2)
@@ -230,7 +377,13 @@ describe('deployCommand', () => {
     const appDir = createDeployApp()
     mocks.deployApp.mockRejectedValue(new Error('unexpected deploy error'))
 
-    await expect(deployCommand({ env: 'prod', yes: true, appDir, cwd: tmpRoot, verbose: false })).rejects.toThrow('unexpected deploy error')
+    await expect(deployCommand({
+      env: 'prod',
+      yes: true,
+      appDir,
+      cwd: tmpRoot,
+      verbose: false,
+    })).rejects.toThrow('unexpected deploy error')
 
     expect(mocks.close).toHaveBeenCalledTimes(1)
   })

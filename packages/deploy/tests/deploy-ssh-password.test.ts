@@ -25,19 +25,40 @@ vi.mock('../src/container/deploy-command.js', async (original) => {
         writeFileSync(output, 'fixed test helper')
       }
       const helper = options.env?.SSH_ASKPASS
-      const helperFiles = helper ? readdirSync(dirname(helper)).map(file => readFileSync(join(dirname(helper), file), 'utf8')) : []
+      const helperFiles = helper
+        ? readdirSync(dirname(helper)).map(file => readFileSync(join(dirname(helper), file), 'utf8'))
+        : []
       calls.push({ command, args, options, helperFiles })
-      return ok({ code: 0, stdout: command === 'ssh' ? 'connected' : '', stderr: '', stdoutTruncated: false, stderrTruncated: false })
+      return ok({
+        code: 0,
+        stdout: command === 'ssh'
+          ? 'connected'
+          : '',
+        stderr: '',
+        stdoutTruncated: false,
+        stderrTruncated: false,
+      })
     }),
   }
 })
 
 const secret = ' 0019 中 "$value" '
 function config(overrides: Partial<SshConfig> = {}): SshConfig {
-  return { host: '127.0.0.1', port: 2222, username: 'deploy', strictHostKeyChecking: true, connectTimeoutSeconds: 5, ...overrides }
+  return {
+    host: '127.0.0.1',
+    port: 2222,
+    username: 'deploy',
+    strictHostKeyChecking: true,
+    connectTimeoutSeconds: 5,
+    ...overrides,
+  }
 }
 function parse(ssh: Record<string, unknown>) {
-  return ProviderConfigSchema.safeParse({ type: 'docker-ssh', ssh: { host: '127.0.0.1', username: 'deploy', ...ssh }, expose: { hostPort: 3000 } })
+  return ProviderConfigSchema.safeParse({
+    type: 'docker-ssh',
+    ssh: { host: '127.0.0.1', username: 'deploy', ...ssh },
+    expose: { hostPort: 3000 },
+  })
 }
 
 beforeEach(() => {
@@ -61,12 +82,20 @@ describe('ssh password configuration', () => {
     expect(parse({ auth: 'password', password }).success).toBe(false)
   })
 
-  it.each(['a\nb', 'a\rb', 'a\0b', '中'.repeat(342)])('有效密码方式拒绝控制字符或超过readpass字节上限', (password) => {
+  it.each([
+    'a\nb',
+    'a\rb',
+    'a\0b',
+    '中'.repeat(342),
+  ])('有效密码方式拒绝控制字符或超过readpass字节上限', (password) => {
     expect(parse({ auth: 'password', password }).success).toBe(false)
   })
 
   it('接受精确1023字节以及只含空格的非空密码', () => {
-    expect(parse({ auth: 'password', password: '中'.repeat(341) }).success).toBe(true)
+    expect(parse({
+      auth: 'password',
+      password: '中'.repeat(341),
+    }).success).toBe(true)
     expect(parse({ auth: 'password', password: '  ' }).success).toBe(true)
   })
 
@@ -83,7 +112,10 @@ describe('ssh password configuration', () => {
 
 describe('ssh password execution boundary', () => {
   it('省略auth时由非空密码启用密码认证，密码不进入SSH或SCP参数', () => {
-    for (const args of [buildSshExecArgs(config({ password: secret, identityFile: '/old/key' }), 'true'), buildScpUploadArgs(config({ password: secret }), '/local/file.tar', '/remote/file.tar')]) {
+    for (const args of [
+      buildSshExecArgs(config({ password: secret, identityFile: '/old/key' }), 'true'),
+      buildScpUploadArgs(config({ password: secret }), '/local/file.tar', '/remote/file.tar'),
+    ]) {
       expect(args).toContain('BatchMode=no')
       expect(args).toContain('PreferredAuthentications=password')
       expect(args).toContain('PubkeyAuthentication=no')
@@ -105,7 +137,10 @@ describe('ssh password execution boundary', () => {
 
   it('仅向受控子进程环境传密码，自动纳入脱敏并回收无秘密helper', async () => {
     const ssh = createSshExecutor(config({ auth: 'password', password: secret }))
-    expect((await ssh.exec('true', { secrets: ['existing-secret'], timeoutMs: 10_000 })).success).toBe(true)
+    expect((await ssh.exec('true', {
+      secrets: ['existing-secret'],
+      timeoutMs: 10_000,
+    })).success).toBe(true)
     const call = calls.find(item => item.command === 'ssh')
     expect(call).toBeDefined()
     expect(call?.options.env?.HAI_DEPLOY_ASKPASS_PASSWORD).toBe(secret)
@@ -132,7 +167,14 @@ describe('ssh password execution boundary', () => {
     preparation.delayMs = 100
     const ssh = createSshExecutor(config({ password: secret }))
     const result = await ssh.exec('true', { timeoutMs: 50 })
-    expect(result).toMatchObject({ success: false, error: { ext: { commandExecution: { reason: 'timeout', localTermination: 'not-started' } } } })
+    expect(result).toMatchObject({
+      success: false,
+      error: {
+        ext: {
+          commandExecution: { reason: 'timeout', localTermination: 'not-started' },
+        },
+      },
+    })
     expect(calls.some(call => call.command === 'ssh')).toBe(false)
     for (const call of calls) {
       const output = call.options.env?.HAI_DEPLOY_ASKPASS_OUTPUT

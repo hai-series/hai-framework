@@ -3,13 +3,23 @@ import { describe, expect, it } from 'vitest'
 import { PaymentCreateOrderDataSchema, PaymentCreateOrderInputSchema } from '../src/payment/payment-schemas'
 
 describe('payment Checkout contract', () => {
-  const input = { provider: 'stripe', amount: 100, description: 'Test', tradeType: 'h5' }
+  const input = {
+    provider: 'stripe',
+    amount: 100,
+    description: 'Test',
+    tradeType: 'h5',
+  }
 
   it('接受托管 h5 创建请求', () => {
     expect(PaymentCreateOrderInputSchema.safeParse(input).success).toBe(true)
   })
 
-  it.each(['jsapi', 'app', 'native', 'mini_program'])('拒绝 Stripe %s', (tradeType) => {
+  it.each([
+    'jsapi',
+    'app',
+    'native',
+    'mini_program',
+  ])('拒绝 Stripe %s', (tradeType) => {
     expect(PaymentCreateOrderInputSchema.safeParse({ ...input, tradeType }).success).toBe(false)
   })
 
@@ -18,7 +28,12 @@ describe('payment Checkout contract', () => {
   })
 
   it('保留其它渠道已有的支付场景', () => {
-    expect(PaymentCreateOrderInputSchema.safeParse({ ...input, provider: 'wechat', tradeType: 'jsapi', userId: 'trusted-openid' }).success).toBe(true)
+    expect(PaymentCreateOrderInputSchema.safeParse({
+      ...input,
+      provider: 'wechat',
+      tradeType: 'jsapi',
+      userId: 'trusted-openid',
+    }).success).toBe(true)
   })
 })
 
@@ -35,11 +50,23 @@ describe('built-in payment trade matrix', () => {
     ['alipay', 'native', false],
     ['alipay', 'mini_program', false],
   ])('%s/%s allowed=%s', (provider, tradeType, allowed) => {
-    expect(PaymentCreateOrderInputSchema.safeParse({ provider, tradeType, amount: 100, description: '商品', userId: 'openid-test' }).success).toBe(allowed)
+    expect(PaymentCreateOrderInputSchema.safeParse({
+      provider,
+      tradeType,
+      amount: 100,
+      description: '商品',
+      userId: 'openid-test',
+    }).success).toBe(allowed)
     expect(PaymentCreateOrderDataSchema.safeParse({ provider, tradeType, clientParams: {} }).success).toBe(allowed)
   })
 
   it.each([undefined, '', '  '])('微信缺少有效 openid=%s 时拒绝', (userId) => {
-    expect(PaymentCreateOrderInputSchema.safeParse({ provider: 'wechat', tradeType: 'jsapi', amount: 100, description: '商品', userId }).success).toBe(false)
+    expect(PaymentCreateOrderInputSchema.safeParse({
+      provider: 'wechat',
+      tradeType: 'jsapi',
+      amount: 100,
+      description: '商品',
+      userId,
+    }).success).toBe(false)
   })
 })

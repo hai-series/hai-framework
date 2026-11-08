@@ -9,7 +9,13 @@ const RecoverySchema = z.object({
   stage: z.string(),
   platformProjectId: z.string().optional(),
   resources: z.array(z.object({
-    serviceType: z.enum(['db', 'cache', 'storage', 'email', 'sms']),
+    serviceType: z.enum([
+      'db',
+      'cache',
+      'storage',
+      'email',
+      'sms',
+    ]),
     provisionerName: z.string(),
     resourceInfo: z.string(),
     resourceStatus: z.enum(['created', 'reused', 'unknown']),
@@ -17,14 +23,26 @@ const RecoverySchema = z.object({
 })
 
 const CommandStateSchema = z.object({
-  reason: z.enum(['timeout', 'output', 'input', 'spawn', 'exit', 'configuration']),
+  reason: z.enum([
+    'timeout',
+    'output',
+    'input',
+    'spawn',
+    'exit',
+    'configuration',
+  ]),
   localTermination: z.enum(['confirmed', 'unknown', 'not-started']),
   remoteExecution: z.enum(['unknown', 'finished']).optional(),
   deploymentId: z.string().optional(),
   resultFile: z.string().optional(),
   remoteExitCode: z.number().int().optional(),
   remoteStage: z.string().optional(),
-  remoteRecovery: z.enum(['not-needed', 'passed', 'failed', 'stopped']).optional(),
+  remoteRecovery: z.enum([
+    'not-needed',
+    'passed',
+    'failed',
+    'stopped',
+  ]).optional(),
 })
 
 /**
@@ -81,7 +99,9 @@ export function recoveryFailure(error: HaiError, recovery: DeployRecoveryInfo): 
     httpStatus: error.httpStatus,
     system: error.system,
     module: error.module,
-    message: deployM('deploy_recoveryFailure', { params: { stage: recovery.stage } }),
+    message: deployM('deploy_recoveryFailure', {
+      params: { stage: recovery.stage },
+    }),
     suggestion: deployM('deploy_recoverySuggestion'),
     ext: { recovery },
   })

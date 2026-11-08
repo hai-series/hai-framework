@@ -44,7 +44,13 @@ export function installRequestLocales(storage: AsyncLocalStorage<{ locale: Local
 
 /** 规范化公共语言简写，未知语言由消息获取器按字典回退。 */
 function normalizeLocale(locale: Locale): Locale {
-  return locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja-JP' : locale
+  return locale === 'en'
+    ? 'en-US'
+    : locale === 'zh'
+      ? 'zh-CN'
+      : locale === 'ja'
+        ? 'ja-JP'
+        : locale
 }
 
 function getGlobalLocale(): Locale {
@@ -80,7 +86,9 @@ function setGlobalLocale(locale: Locale): void {
 function runWithLocale<T>(locale: Locale, operation: () => T): T {
   if (!requestLocales)
     throw new Error('Request locale context requires the Node.js entry')
-  return requestLocales.run({ locale: normalizeLocale(locale) }, operation)
+  return requestLocales.run({
+    locale: normalizeLocale(locale),
+  }, operation)
 }
 
 // ─── 消息获取工厂 ───
@@ -126,7 +134,9 @@ function createMessageGetter<K extends string>(
     if (options?.params) {
       return template.replace(/\{(\w+)\}/g, (_, paramKey) => {
         const value = options.params![paramKey]
-        return value !== undefined ? String(value) : `{${paramKey}}`
+        return value !== undefined
+          ? String(value)
+          : `{${paramKey}}`
       })
     }
 

@@ -40,7 +40,9 @@ async function interruptDeleteResponses(endpoint: string) {
     get deleteRequests() { return deleteRequests },
     async close() {
       server.closeAllConnections()
-      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+      await new Promise<void>((resolve, reject) => server.close(error => error
+        ? reject(error)
+        : resolve()))
     },
   }
 }
@@ -64,8 +66,18 @@ describe.each([
     if (!lease)
       throw new Error('Missing S3 lease')
     const prefix = `batch-${randomUUID()}`
-    const config = { type: 's3' as const, ...lease, prefix, forcePathStyle: true }
-    const s3 = new S3Client({ region: lease.region, endpoint: lease.endpoint, forcePathStyle: true, credentials: lease })
+    const config = {
+      type: 's3' as const,
+      ...lease,
+      prefix,
+      forcePathStyle: true,
+    }
+    const s3 = new S3Client({
+      region: lease.region,
+      endpoint: lease.endpoint,
+      forcePathStyle: true,
+      credentials: lease,
+    })
     try {
       expect((await storage.init(config)).success).toBe(true)
       const keys = Array.from({ length: 1001 }, (_, index) => `key-${index}`)
@@ -99,7 +111,12 @@ describe.each([
   it('真实后端已删除但所有响应中断时返回 unknown，不能伪装失败未执行或成功', async () => {
     if (!lease)
       throw new Error('Missing S3 lease')
-    const config = { type: 's3' as const, ...lease, prefix: `interrupt-${randomUUID()}`, forcePathStyle: true }
+    const config = {
+      type: 's3' as const,
+      ...lease,
+      prefix: `interrupt-${randomUUID()}`,
+      forcePathStyle: true,
+    }
     expect((await storage.init(config)).success).toBe(true)
     expect((await storage.file.put('a.txt', 'data')).success).toBe(true)
     await storage.close()
@@ -110,7 +127,17 @@ describe.each([
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.code).toBe('hai:storage:002')
-        expect(result.error.ext?.deleteMany).toEqual({ deletedKeys: [], failures: [{ key: 'a.txt', code: expect.any(String), retryable: true, outcome: 'unknown' }] })
+        expect(result.error.ext?.deleteMany).toEqual({
+          deletedKeys: [],
+          failures: [
+            {
+              key: 'a.txt',
+              code: expect.any(String),
+              retryable: true,
+              outcome: 'unknown',
+            },
+          ],
+        })
       }
       // SDK 与模块都不得重放未知结果；并发上传的新对象不能被第二次删除。
       expect(proxy.deleteRequests).toBe(1)

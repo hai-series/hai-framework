@@ -11,7 +11,13 @@ describe('readme structure', () => {
     expect(readmeIssues('## License\n\nApache-2.0Feature added\n')).toContain('Move feature content out of the license section')
     expect(readmeIssues('### 📄 许可证\n\nApache-2.0\n\n## 许可证\n\nApache-2.0\n')).toContain('Duplicate license section')
   })
-  it.each(['开发测试', '二次开发', 'Development and testing', 'Development', '開発とテスト'])('keeps feature content before %s', (heading) => {
+  it.each([
+    '开发测试',
+    '二次开发',
+    'Development and testing',
+    'Development',
+    '開発とテスト',
+  ])('keeps feature content before %s', (heading) => {
     expect(readmeIssues(`## ${heading}\n\nTesting\n\n## Usage\n\nExample\n\n## License\n\nApache-2.0\n`)).toContain('Place feature sections before development/testing')
     expect(readmeIssues(`## Usage\n\nExample\n\n## ${heading}\n\n### Test commands\n\nTesting\n\n## License\n\nApache-2.0\n`)).toEqual([])
   })

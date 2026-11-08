@@ -60,9 +60,18 @@ async function closeOwnedProvider(): Promise<HaiResult<void>> {
   }
   catch (error) {
     logger.error('Provider cleanup failed; retaining resource for retry', { error })
-    return err({ ...HaiStorageError.CONNECTION_FAILED, message: storageM('storage_operationFailed', {
-      params: { error: error instanceof Error ? error.message : String(error) },
-    }), cause: error, ext: { cleanupPending: true } })
+    return err({
+      ...HaiStorageError.CONNECTION_FAILED,
+      message: storageM('storage_operationFailed', {
+        params: {
+          error: error instanceof Error
+            ? error.message
+            : String(error),
+        },
+      }),
+      cause: error,
+      ext: { cleanupPending: true },
+    })
   }
 }
 
@@ -75,9 +84,17 @@ async function failInitialization(result: HaiResult<void>): Promise<HaiResult<vo
     const ext = { ...result.error.ext }
     delete ext.cleanupPending
     delete ext.cleanupError
-    return err({ ...result.error, ext: Object.keys(ext).length > 0 ? ext : undefined })
+    return err({
+      ...result.error,
+      ext: Object.keys(ext).length > 0
+        ? ext
+        : undefined,
+    })
   }
-  return err({ ...result.error, ext: { ...result.error.ext, cleanupPending: true, cleanupError: cleanup.error } })
+  return err({
+    ...result.error,
+    ext: { ...result.error.ext, cleanupPending: true, cleanupError: cleanup.error },
+  })
 }
 
 // ─── Provider 工厂 ───
@@ -94,7 +111,9 @@ function createProvider(config: StorageConfig): StorageProvider {
     case 's3': return createS3Provider()
     case 'local': return createLocalProvider()
     default:
-      throw new Error(storageM('storage_unsupportedType', { params: { type: (config as StorageConfig).type } }))
+      throw new Error(storageM('storage_unsupportedType', {
+        params: { type: (config as StorageConfig).type },
+      }))
   }
 }
 
@@ -126,7 +145,9 @@ const notInitializedPresignBase = notInitialized.proxy<PresignOperations>()
 const notInitializedPresign = new Proxy(
   notInitializedPresignBase,
   {
-    get: (target, prop, receiver) => prop === 'publicUrl' ? () => null : Reflect.get(target, prop, receiver),
+    get: (target, prop, receiver) => prop === 'publicUrl'
+      ? () => null
+      : Reflect.get(target, prop, receiver),
   },
 )
 
@@ -181,7 +202,9 @@ export const storage: StorageFunctions = {
       logger.warn('Storage init already in progress, skipping concurrent call')
       return err(
         HaiStorageError.OPERATION_FAILED,
-        storageM('storage_operationFailed', { params: { error: 'Concurrent initialization detected' } }),
+        storageM('storage_operationFailed', {
+          params: { error: 'Concurrent initialization detected' },
+        }),
       )
     }
     initInProgress = true
@@ -202,7 +225,9 @@ export const storage: StorageFunctions = {
         logger.error('Storage config validation failed', { error: parseResult.error.message })
         return err(
           HaiStorageError.CONFIG_ERROR,
-          storageM('storage_configError', { params: { error: parseResult.error.message } }),
+          storageM('storage_configError', {
+            params: { error: parseResult.error.message },
+          }),
           parseResult.error,
         )
       }
@@ -231,7 +256,11 @@ export const storage: StorageFunctions = {
       return await failInitialization(err(
         HaiStorageError.CONNECTION_FAILED,
         storageM('storage_operationFailed', {
-          params: { error: error instanceof Error ? error.message : String(error) },
+          params: {
+            error: error instanceof Error
+              ? error.message
+              : String(error),
+          },
         }),
         error,
       ))
@@ -254,7 +283,9 @@ export const storage: StorageFunctions = {
 
   /** 当前脱敏后的存储配置快照；未初始化或已关闭时为 null */
   get config() {
-    return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null
+    return currentConfig
+      ? core.sanitize.sanitizeSensitiveFields(currentConfig)
+      : null
   },
 
   /** 是否已完成初始化 */

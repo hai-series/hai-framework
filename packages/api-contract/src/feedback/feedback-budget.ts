@@ -44,7 +44,14 @@ export function resolveFeedbackBudget(input: { maxTotalBytes?: number, maxAttach
   const maxEvidenceBytes = Math.min(input.maxEvidenceBytes ?? 4 * MiB, Math.floor(maxTotalBytes / 8))
   // ZIP 中同时保存 timeline 和 records；另为修订字段、历史、摘要、查看器和目录预留 2 MiB。
   const maxAttachmentsBytes = maxTotalBytes - 2 * maxEvidenceBytes - 2 * MiB
-  return FeedbackBudgetSchema.parse({ maxTotalBytes, maxEvidenceBytes, maxAttachmentsBytes, maxAttachmentBytes: Math.min(input.maxAttachmentBytes ?? 5 * MiB, maxAttachmentsBytes), maxAttachmentCount: 20, maxEvidenceCount: Math.min(input.maxEvidenceCount ?? 2000, 2000),
+  return FeedbackBudgetSchema.parse({
+    maxTotalBytes,
+    maxEvidenceBytes,
+    maxAttachmentsBytes,
+    maxAttachmentBytes: Math.min(input.maxAttachmentBytes ?? 5 * MiB, maxAttachmentsBytes),
+    maxAttachmentCount: 20,
+    maxEvidenceCount: Math.min(input.maxEvidenceCount ?? 2000, 2000),
     // 包下载也经过双向加密；不是仅按单个上传附件推导。
-    maxTransportBytes: 4 * Math.ceil(maxTotalBytes / 3) + 65536 })
+    maxTransportBytes: 4 * Math.ceil(maxTotalBytes / 3) + 65536,
+  })
 }

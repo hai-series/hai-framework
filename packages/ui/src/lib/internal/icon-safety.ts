@@ -34,10 +34,14 @@ export function sanitizeInlineSvg(markup: string): string {
   if (!trimmed || !/^<svg(?:\s[^>]*)?>[\s\S]*<\/svg>$/i.test(trimmed))
     return ''
 
-  const hasUnsafeElement = [...trimmed.matchAll(/<\s*([a-z][\w-]*)\b/gi)]
+  const hasUnsafeElement = [
+    ...trimmed.matchAll(/<\s*([a-z][\w-]*)\b/gi),
+  ]
     .some(([, tagName]) => tagName && unsafeSvgElements.has(tagName.toLowerCase()))
   const hasUnsafeAttribute = /\s(?:on[a-z]+|style|href|xlink:href|src)\s*=/i.test(trimmed)
   const hasExternalReference = /url\s*\(|@import|javascript:|vbscript:|data:text\/html|<\s*!/i.test(trimmed)
 
-  return hasUnsafeElement || hasUnsafeAttribute || hasExternalReference ? '' : trimmed
+  return hasUnsafeElement || hasUnsafeAttribute || hasExternalReference
+    ? ''
+    : trimmed
 }

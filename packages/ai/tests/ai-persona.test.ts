@@ -20,11 +20,15 @@ function createMockStore<T>(): AIRelStore<T> {
     saveMany: vi.fn(),
     get: vi.fn(async (id: string) => {
       const v = data.get(id)
-      return v ? { ...v as object } as T : undefined
+      return v
+        ? { ...v as object } as T
+        : undefined
     }),
     query: vi.fn(async (filter?: { objectId?: string }) => {
       const all = Array.from(data.values()).map(v => ({ ...v as object } as T))
-      return filter?.objectId ? all.filter(v => (v as { objectId?: string }).objectId === filter.objectId) : all
+      return filter?.objectId
+        ? all.filter(v => (v as { objectId?: string }).objectId === filter.objectId)
+        : all
     }),
     queryPage: vi.fn(),
     remove: vi.fn(async (id: string) => data.delete(id)),
@@ -38,7 +42,12 @@ describe('createPersonaOperations', () => {
   it('save 创建并保留时间戳，get 命中', async () => {
     const persona = createPersonaOperations(createMockStore())
 
-    const saved = await persona.save({ id: 'xiaop', name: '小P', systemPrompt: '你是社会学家', traits: ['谨慎'] })
+    const saved = await persona.save({
+      id: 'xiaop',
+      name: '小P',
+      systemPrompt: '你是社会学家',
+      traits: ['谨慎'],
+    })
     expect(saved.success).toBe(true)
     if (!saved.success)
       return
@@ -64,7 +73,9 @@ describe('createPersonaOperations', () => {
     if (!saved.success)
       return
 
-    const updated = await persona.update('xiaoq', { traits: ['数据驱动'] })
+    const updated = await persona.update('xiaoq', {
+      traits: ['数据驱动'],
+    })
     expect(updated.success).toBe(true)
     if (!updated.success)
       return
@@ -83,7 +94,11 @@ describe('createPersonaOperations', () => {
 
   it('compose 组合 systemPrompt 与 traits', async () => {
     const persona = createPersonaOperations(createMockStore())
-    await persona.save({ id: 'r', systemPrompt: '你是技术专家', traits: ['严谨', '喜欢举例'] })
+    await persona.save({
+      id: 'r',
+      systemPrompt: '你是技术专家',
+      traits: ['严谨', '喜欢举例'],
+    })
 
     const composed = await persona.compose('r')
     expect(composed.success).toBe(true)

@@ -11,8 +11,17 @@ const basePathMessage = core.i18n.createMessageGetter({
 /** @param {string} [value] - 无末尾斜杠的公开目录；空字符串表示域名根目录。 */
 export function resolvePublicBasePath(value = process.env.PUBLIC_BASE_PATH ?? '') {
   if (value && (!/^\/[\w.-]+(?:\/[\w.-]+)*$/.test(value) || value.split('/').some(segment => segment === '.' || segment === '..'))) {
-    const language = [process.env.HAI_CORE_DEFAULTLOCALE, process.env.LC_ALL, process.env.LC_MESSAGES, process.env.LANG].find(item => item?.trim())?.split(/[_.-]/)[0]?.toLowerCase()
-    const locale = language === 'en' || language === 'c' || language === 'posix' ? 'en-US' : language === 'ja' ? 'ja-JP' : 'zh-CN'
+    const language = [
+      process.env.HAI_CORE_DEFAULTLOCALE,
+      process.env.LC_ALL,
+      process.env.LC_MESSAGES,
+      process.env.LANG,
+    ].find(item => item?.trim())?.split(/[_.-]/)[0]?.toLowerCase()
+    const locale = language === 'en' || language === 'c' || language === 'posix'
+      ? 'en-US'
+      : language === 'ja'
+        ? 'ja-JP'
+        : 'zh-CN'
     throw new Error(basePathMessage('invalid', { locale }))
   }
   return value

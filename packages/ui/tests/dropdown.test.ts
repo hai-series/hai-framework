@@ -49,7 +49,10 @@ function menu() {
 describe('dropdown', () => {
   it('click 打开菜单，选择后关闭并回调', () => {
     const onselect = vi.fn()
-    const component = mount(Dropdown, { target: host(), props: { items, onselect } })
+    const component = mount(Dropdown, {
+      target: host(),
+      props: { items, onselect },
+    })
     flushSync()
 
     const trigger = document.querySelector('[aria-haspopup="menu"]') as HTMLElement
@@ -69,7 +72,10 @@ describe('dropdown', () => {
 
   it('禁用项不触发选择', () => {
     const onselect = vi.fn()
-    const component = mount(Dropdown, { target: host(), props: { items, onselect } })
+    const component = mount(Dropdown, {
+      target: host(),
+      props: { items, onselect },
+    })
     flushSync()
     ;(document.querySelector('[aria-haspopup="menu"]') as HTMLElement).click()
     flushSync()
@@ -85,7 +91,15 @@ describe('dropdown', () => {
   it('manual 保留调用方控制的菜单，并能选择菜单项', () => {
     const onselect = vi.fn()
     const target = host()
-    const component = mount(Dropdown, { target, props: { items, onselect, trigger: 'manual', class: 'dropdown-open' } })
+    const component = mount(Dropdown, {
+      target,
+      props: {
+        items,
+        onselect,
+        trigger: 'manual',
+        class: 'dropdown-open',
+      },
+    })
     flushSync()
 
     const dropdown = target.querySelector('.dropdown.dropdown-open')
@@ -105,7 +119,10 @@ describe('dropdown', () => {
 
   it('hover 延迟打开，离开后关闭', () => {
     vi.useFakeTimers()
-    const component = mount(Dropdown, { target: host(), props: { items, trigger: 'hover' } })
+    const component = mount(Dropdown, {
+      target: host(),
+      props: { items, trigger: 'hover' },
+    })
     flushSync()
 
     const wrapper = document.querySelector('div.relative.inline-block') as HTMLElement

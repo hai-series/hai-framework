@@ -13,12 +13,22 @@ vi.mock('ldapts', () => {
   throw new Error('Optional LDAP package unavailable')
 })
 
-const ldap = { url: 'ldap://localhost', bindDn: 'cn=admin', bindPassword: 'fixture-only', searchBase: 'dc=test' }
+const ldap = {
+  url: 'ldap://localhost',
+  bindDn: 'cn=admin',
+  bindPassword: 'fixture-only',
+  searchBase: 'dc=test',
+}
 
 defineIamSuite('optional integrations', sqliteMemoryEnv(), () => {
   it('基础注册与密码登录不加载 Reach 或 LDAP，默认关闭目录登录', async () => {
     expect(iam.config?.login.ldap).toBe(false)
-    expect(iam.publicConfig?.login).toMatchObject({ password: true, ldap: false, email: false, sms: false })
+    expect(iam.publicConfig?.login).toMatchObject({
+      password: true,
+      ldap: false,
+      email: false,
+      sms: false,
+    })
     expect(iam.publicConfig?.passwordReset.enabled).toBe(false)
     expect((await iam.auth.registerAndLogin({ username: 'optional-base', password: TEST_PASSWORD })).success).toBe(true)
     expect((await iam.auth.login({ identifier: 'optional-base', password: TEST_PASSWORD })).success).toBe(true)
@@ -27,23 +37,41 @@ defineIamSuite('optional integrations', sqliteMemoryEnv(), () => {
   it('只声明 LDAP 连接不会隐式启用或加载 SDK', async () => {
     await initIam({ ldap })
     expect(iam.publicConfig?.login.ldap).toBe(false)
-    expect(await iam.auth.loginWithLdap({ username: 'directory', password: TEST_PASSWORD })).toMatchObject({ success: false, error: { code: HaiIamError.LOGIN_DISABLED.code } })
+    expect(await iam.auth.loginWithLdap({ username: 'directory', password: TEST_PASSWORD })).toMatchObject({
+      success: false,
+      error: { code: HaiIamError.LOGIN_DISABLED.code },
+    })
   })
 
   it('启用 LDAP 并注入工厂后不需要 ldapts', async () => {
     const factory: LdapClientFactory = async () => ok({
       bind: async () => ok(undefined),
-      search: async () => ok([{ dn: 'uid=directory,dc=test', attributes: { uid: 'directory', mail: 'directory@example.com', cn: 'Directory user' } }]),
+      search: async () => ok([
+        {
+          dn: 'uid=directory,dc=test',
+          attributes: { uid: 'directory', mail: 'directory@example.com', cn: 'Directory user' },
+        },
+      ]),
       unbind: async () => ok(undefined),
     })
-    await initIam({ login: { ldap: true }, ldap, ldapClientFactory: factory })
+    await initIam({
+      login: { ldap: true },
+      ldap,
+      ldapClientFactory: factory,
+    })
     expect((await iam.auth.loginWithLdap({ username: 'directory', password: TEST_PASSWORD })).success).toBe(true)
   })
 
   it('显式启用 LDAP 却缺少默认 SDK 时返回初始化错误', async () => {
     await iam.close()
-    const result = await iam.init({ login: { ldap: true }, ldap })
-    expect(result).toMatchObject({ success: false, error: { code: HaiIamError.CONFIG_ERROR.code } })
+    const result = await iam.init({
+      login: { ldap: true },
+      ldap,
+    })
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: HaiIamError.CONFIG_ERROR.code },
+    })
     expect(iam.isInitialized).toBe(false)
   })
 

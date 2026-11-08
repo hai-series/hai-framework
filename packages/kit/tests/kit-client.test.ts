@@ -69,7 +69,14 @@ function createTransportFetch(options: { encryptedResponseBody?: string, maxPlai
   const key = crypto.asymmetric.generateKeyPair()
   if (!key.success)
     throw new Error(key.error.message)
-  const manager = expectManager(crypto.transport.createServer({ keyStore: createInMemoryKeyStore(), serverKeyRing: { activeKeyId: 'test-v1', keys: { 'test-v1': key.data } }, maxPlaintextBytes: options.maxPlaintextBytes }))
+  const manager = expectManager(crypto.transport.createServer({
+    keyStore: createInMemoryKeyStore(),
+    serverKeyRing: {
+      activeKeyId: 'test-v1',
+      keys: { 'test-v1': key.data },
+    },
+    maxPlaintextBytes: options.maxPlaintextBytes,
+  }))
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = toRequest(input, init)
     const url = new URL(request.url)
@@ -77,7 +84,12 @@ function createTransportFetch(options: { encryptedResponseBody?: string, maxPlai
     if (url.pathname === KEY_EXCHANGE_URL || url.pathname === '/my/exchange') {
       const body = await request.json() as { clientPublicKey: string }
       const clientId = await manager.registerClientKey(body.clientPublicKey)
-      return new Response(JSON.stringify({ serverPublicKey: manager.getServerPublicKey(), serverKeyId: manager.getServerKeyId(), clientId, maxPlaintextBytes: manager.bodyLimits.plaintextBytes }), {
+      return new Response(JSON.stringify({
+        serverPublicKey: manager.getServerPublicKey(),
+        serverKeyId: manager.getServerKeyId(),
+        clientId,
+        maxPlaintextBytes: manager.bodyLimits.plaintextBytes,
+      }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -206,7 +218,9 @@ describe('createKitClient - 传输加密', () => {
   it('init 触发统一密钥交换', async () => {
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
-    const client = createKitClient({ transport: { crypto } })
+    const client = createKitClient({
+      transport: { crypto },
+    })
 
     expect(client.ready).toBe(false)
 
@@ -219,7 +233,9 @@ describe('createKitClient - 传输加密', () => {
   it('自定义密钥交换端点', async () => {
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
-    const client = createKitClient({ transport: { crypto, keyExchangeUrl: '/my/exchange' } })
+    const client = createKitClient({
+      transport: { crypto, keyExchangeUrl: '/my/exchange' },
+    })
 
     await client.init()
 
@@ -229,7 +245,9 @@ describe('createKitClient - 传输加密', () => {
   it('写请求自动加密 body 并附加协议头', async () => {
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
-    const client = createKitClient({ transport: { crypto } })
+    const client = createKitClient({
+      transport: { crypto },
+    })
 
     await client.apiFetch('/api/data', {
       method: 'POST',
@@ -251,7 +269,9 @@ describe('createKitClient - 传输加密', () => {
   it('挂载目录的 transport 客户端保护前缀 API，不依赖协商端点所在目录', async () => {
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
-    const client = kit.client.create({ transport: { crypto, basePath: '/yyy', keyExchangeUrl: '/my/exchange' } })
+    const client = kit.client.create({
+      transport: { crypto, basePath: '/yyy', keyExchangeUrl: '/my/exchange' },
+    })
     try {
       expect(await (await client.apiFetch('/yyy/api/private')).text()).toBe('OK')
       const request = fetchSpy.mock.calls.map(call => toRequest(call[0], call[1])).find(request => new URL(request.url).pathname === '/yyy/api/private')
@@ -265,7 +285,9 @@ describe('createKitClient - 传输加密', () => {
     const formData = new FormData()
     formData.append('file', new Blob(['avatar'], { type: 'image/png' }), 'avatar.png')
 
-    const client = createKitClient({ transport: { crypto } })
+    const client = createKitClient({
+      transport: { crypto },
+    })
 
     await client.apiFetch('/api/upload', {
       method: 'POST',
@@ -291,7 +313,9 @@ describe('createKitClient - 传输加密', () => {
     })
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
-    const client = createKitClient({ transport: { crypto } })
+    const client = createKitClient({
+      transport: { crypto },
+    })
     expect((await client.apiFetch(request)).ok).toBe(true)
 
     const encrypted = toRequest(fetchSpy.mock.calls[1]![0], fetchSpy.mock.calls[1]![1])
@@ -305,7 +329,9 @@ describe('createKitClient - 传输加密', () => {
     const formData = new FormData()
     formData.append('file', new Blob(['avatar'], { type: 'image/png' }), 'avatar.png')
     const request = new Request('http://localhost/api/upload', { method: 'POST', body: formData })
-    const client = createKitClient({ transport: { crypto } })
+    const client = createKitClient({
+      transport: { crypto },
+    })
     await client.apiFetch(request)
 
     expect(fetchSpy).toHaveBeenCalledTimes(1)
@@ -340,10 +366,14 @@ describe('createKitClient - 传输加密', () => {
   })
 
   it('加密响应自动解密', async () => {
-    const originalData = JSON.stringify({ users: ['Alice', 'Bob'] })
+    const originalData = JSON.stringify({
+      users: ['Alice', 'Bob'],
+    })
     fetchSpy = createTransportFetch({ encryptedResponseBody: originalData })
     vi.stubGlobal('fetch', fetchSpy)
-    const client = createKitClient({ transport: { crypto } })
+    const client = createKitClient({
+      transport: { crypto },
+    })
 
     const response = await client.apiFetch('/api/users')
 
@@ -354,7 +384,9 @@ describe('createKitClient - 传输加密', () => {
   it('destroy 重置所有状态', async () => {
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
-    const client = createKitClient({ transport: { crypto } })
+    const client = createKitClient({
+      transport: { crypto },
+    })
 
     await client.init()
     expect(client.ready).toBe(true)
@@ -366,7 +398,9 @@ describe('createKitClient - 传输加密', () => {
   it('lazy init：首次写请求自动触发密钥交换', async () => {
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
-    const client = createKitClient({ transport: { crypto } })
+    const client = createKitClient({
+      transport: { crypto },
+    })
 
     await client.apiFetch('/api/users', { method: 'POST', body: '{"name":"test"}' })
 
@@ -378,7 +412,9 @@ describe('createKitClient - 传输加密', () => {
   it('并发请求共用同一次密钥交换', async () => {
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
-    const client = createKitClient({ transport: { crypto } })
+    const client = createKitClient({
+      transport: { crypto },
+    })
 
     await Promise.all([
       client.apiFetch('/api/a', { method: 'POST', body: '{}' }),
@@ -450,10 +486,14 @@ describe('createKitClient - auth', () => {
 
 describe('installBrowserTransportFetch', () => {
   it('公开浏览器安装器跟随运行时握手容量，不被构建时的旧容量限制', async () => {
-    const payload = JSON.stringify({ text: '合法内容'.repeat(90_000) })
+    const payload = JSON.stringify({
+      text: '合法内容'.repeat(90_000),
+    })
     fetchSpy = createTransportFetch({ encryptedResponseBody: payload, maxPlaintextBytes: 2 * 1024 * 1024 })
     stubBrowserFetch(fetchSpy)
-    kit.client.installBrowserTransport({ transport: { keyExchangePath: KEY_EXCHANGE_URL, excludePaths: [], maxPlaintextBytes: 1024 } }, { crypto })
+    kit.client.installBrowserTransport({
+      transport: { keyExchangePath: KEY_EXCHANGE_URL, excludePaths: [], maxPlaintextBytes: 1024 },
+    }, { crypto })
     const response = await fetch('http://localhost/api/data')
     expect(await response.text()).toBe(payload)
   })
@@ -479,7 +519,12 @@ describe('installBrowserTransportFetch', () => {
   it('挂载目录的 transport 全局 fetch 真实加密 API，保留排除路径和相邻目录', async () => {
     fetchSpy = createTransportFetch()
     stubBrowserFetch(fetchSpy)
-    kit.client.installBrowserTransport({ transport: { keyExchangePath: '/my/exchange', excludePaths: ['/yyy/api/public'] } }, { crypto, basePath: '/yyy' })
+    kit.client.installBrowserTransport({
+      transport: {
+        keyExchangePath: '/my/exchange',
+        excludePaths: ['/yyy/api/public'],
+      },
+    }, { crypto, basePath: '/yyy' })
     for (const pathname of ['/yyy/api/private', '/yyy/api/public/ping', '/yyy-other/api/private'])
       expect(await (await fetch(`http://localhost${pathname}`)).text()).toBe('OK')
     const requests = fetchSpy.mock.calls.map(call => toRequest(call[0], call[1]))

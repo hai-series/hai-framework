@@ -242,7 +242,10 @@ export function createCompressOperations(
       + protectedUnits.reduce((total, unit) => total + estimateUnitTokens(unit), 0)
     let retainedStart = removableUnits.length
     let retainedUnits = [...protectedUnits]
-    let finalMessages = [...systemMessages, ...flattenUnits(retainedUnits)]
+    let finalMessages = [
+      ...systemMessages,
+      ...flattenUnits(retainedUnits),
+    ]
 
     // 受保护尾部即使自身超过预算也不能静默丢弃；调用方可据 compressedTokens 作显式处理。
     if (retainedTokens > maxTokens) {
@@ -266,8 +269,14 @@ export function createCompressOperations(
       retainedStart = index
     }
 
-    retainedUnits = [...removableUnits.slice(retainedStart), ...protectedUnits]
-    finalMessages = [...systemMessages, ...flattenUnits(retainedUnits)]
+    retainedUnits = [
+      ...removableUnits.slice(retainedStart),
+      ...protectedUnits,
+    ]
+    finalMessages = [
+      ...systemMessages,
+      ...flattenUnits(retainedUnits),
+    ]
 
     return {
       messages: finalMessages,
@@ -347,7 +356,11 @@ export function createCompressOperations(
           content: `${CONVERSATION_SUMMARY_PREFIX}\n${summaryText}`,
         }
 
-        const compressed = [...systemMessages, summaryMessage, ...preserved]
+        const compressed = [
+          ...systemMessages,
+          summaryMessage,
+          ...preserved,
+        ]
         const compressedTokens = token.estimateMessages(compressed)
 
         logger.trace('Summary compression completed', { originalTokens, compressedTokens, removedCount: toSummarize.length })
@@ -396,7 +409,11 @@ export function createCompressOperations(
           content: `${CONVERSATION_SUMMARY_PREFIX}\n${summaryText}`,
         }
 
-        const compressed = [...systemMessages, summaryMessage, ...preservedMessages]
+        const compressed = [
+          ...systemMessages,
+          summaryMessage,
+          ...preservedMessages,
+        ]
         const compressedTokens = token.estimateMessages(compressed)
 
         logger.trace('Hybrid compression completed', { originalTokens, compressedTokens, removedCount: toSummarize.length })
@@ -418,7 +435,11 @@ export function createCompressOperations(
     }
     catch (error) {
       logger.error('Context compression failed', { error })
-      return err(HaiAIError.CONTEXT_COMPRESS_FAILED, aiM('ai_contextCompressFailed', { params: { error: String(error) } }), error)
+      return err(HaiAIError.CONTEXT_COMPRESS_FAILED, aiM('ai_contextCompressFailed', {
+        params: {
+          error: String(error),
+        },
+      }), error)
     }
   }
 

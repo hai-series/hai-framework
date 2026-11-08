@@ -11,17 +11,44 @@ describe('deploy.scan', () => {
     try {
       fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'commented-config' }))
       fs.mkdirSync(path.join(root, 'config'))
-      const modules = { db: 'reldb', cache: 'cache', storage: 'storage', vecdb: 'vecdb', iam: 'iam', reach: 'reach' }
+      const modules = {
+        db: 'reldb',
+        cache: 'cache',
+        storage: 'storage',
+        vecdb: 'vecdb',
+        iam: 'iam',
+        reach: 'reach',
+      }
       for (const config of Object.keys(modules))
         fs.writeFileSync(path.join(root, 'config', `_${config}.yml`), '# # 未启用\n# type: placeholder\n')
       fs.writeFileSync(path.join(root, '.env.prod'), enabled ? 'HAI_DB=\'{"type":"postgresql"}\'\n' : 'HAI_CORE_ENV=production\n')
       const edges = Object.fromEntries(Object.values(modules).map(name => [`@h-ai/${name}`, '1']))
-      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({ importers: { '.': { dependencies: { '@h-ai/kit': { version: '1' } } } }, packages: { '@h-ai/kit@1': {}, ...Object.fromEntries(Object.keys(edges).map(name => [`${name}@1`, {}])) }, snapshots: { '@h-ai/kit@1': { dependencies: edges }, ...Object.fromEntries(Object.keys(edges).map(name => [`${name}@1`, {}])) } }))
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({
+        importers: {
+          '.': {
+            dependencies: {
+              '@h-ai/kit': { version: '1' },
+            },
+          },
+        },
+        packages: {
+          '@h-ai/kit@1': {},
+          ...Object.fromEntries(Object.keys(edges).map(name => [`${name}@1`, {}])),
+        },
+        snapshots: {
+          '@h-ai/kit@1': { dependencies: edges },
+          ...Object.fromEntries(Object.keys(edges).map(name => [`${name}@1`, {}])),
+        },
+      }))
       const result = await deploy.scan(root, { environment: 'prod' })
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.requiredServices).toEqual(enabled ? ['db'] : [])
-        expect(result.data.serviceBackends).toEqual(enabled ? { db: 'postgresql' } : {})
+        expect(result.data.requiredServices).toEqual(enabled
+          ? ['db']
+          : [])
+        expect(result.data.serviceBackends).toEqual(enabled
+          ? { db: 'postgresql' }
+          : {})
       }
     }
     finally { fs.rmSync(root, { recursive: true, force: true }) }
@@ -32,13 +59,32 @@ describe('deploy.scan', () => {
     try {
       fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'ldap-activation' }))
       fs.mkdirSync(path.join(root, 'config'))
-      fs.writeFileSync(path.join(root, 'config/_iam.yml'), stringify({ login: { ldap: enabled }, ldap: { url: 'ldap://directory.test:389' } }))
-      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({ importers: { '.': { dependencies: { '@h-ai/iam': { version: '1' } } } }, packages: { '@h-ai/iam@1': {} }, snapshots: { '@h-ai/iam@1': {} } }))
+      fs.writeFileSync(path.join(root, 'config/_iam.yml'), stringify({
+        login: { ldap: enabled },
+        ldap: { url: 'ldap://directory.test:389' },
+      }))
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({
+        importers: {
+          '.': {
+            dependencies: {
+              '@h-ai/iam': { version: '1' },
+            },
+          },
+        },
+        packages: { '@h-ai/iam@1': {} },
+        snapshots: { '@h-ai/iam@1': {} },
+      }))
       const result = await deploy.scan(root)
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.requiredServices).toEqual(enabled ? ['ldap'] : [])
-        expect(result.data.middlewares).toEqual(enabled ? [expect.objectContaining({ service: 'ldap', backend: 'ldap' })] : [])
+        expect(result.data.requiredServices).toEqual(enabled
+          ? ['ldap']
+          : [])
+        expect(result.data.middlewares).toEqual(enabled
+          ? [
+              expect.objectContaining({ service: 'ldap', backend: 'ldap' }),
+            ]
+          : [])
       }
     }
     finally { fs.rmSync(root, { recursive: true, force: true }) }
@@ -51,39 +97,90 @@ describe('deploy.scan', () => {
     { entry: 'packages/orders-serv', name: '   ', expected: undefined },
   ])('工程命名独立于扫描入口，缺少名称拒绝部署 ($entry, $name)', async ({ entry, name, expected }) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-project-name-'))
-    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: path.basename(root) }))
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
+      name: path.basename(root),
+    }))
     try {
       const app = path.join(root, entry)
       fs.mkdirSync(app, { recursive: true })
-      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({ lockfileVersion: '9.0', importers: { '.': {}, [entry]: {} } }))
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({
+        lockfileVersion: '9.0',
+        importers: { '.': {}, [entry]: {} },
+      }))
       fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name }))
       if (entry !== '.')
         fs.writeFileSync(path.join(app, 'package.json'), '{"name":"irrelevant-service-name"}')
-      expect(await deploy.scan(app)).toMatchObject(expected ? { success: true, data: { appName: expected, appDir: app } } : { success: false })
+      expect(await deploy.scan(app)).toMatchObject(expected
+        ? {
+            success: true,
+            data: { appName: expected, appDir: app },
+          }
+        : { success: false })
     }
     finally { fs.rmSync(root, { recursive: true, force: true }) }
   })
 
   it.each(['console', 'api'])('keeps email and SMS %s providers distinct without dropping repeated email backends', async (type) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-reach-channels-'))
-    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: path.basename(root) }))
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
+      name: path.basename(root),
+    }))
     try {
       fs.mkdirSync(path.join(root, 'config'))
-      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@h-ai/reach': { version: '1' } } } }, packages: { '@h-ai/reach@1': {} }, snapshots: { '@h-ai/reach@1': {} } }))
-      fs.writeFileSync(path.join(root, 'config/_reach.yml'), stringify({ providers: [
-        { name: 'email', type: 'console' },
-        { name: 'sms', type, ...(type === 'api' ? { url: 'https://sms.example.test/send' } : {}) },
-        { name: 'marketing', type: 'smtp', host: 'smtp.example.test', from: 'sender@example.test' },
-      ] }))
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({
+        lockfileVersion: '9.0',
+        importers: {
+          '.': {
+            dependencies: {
+              '@h-ai/reach': { version: '1' },
+            },
+          },
+        },
+        packages: { '@h-ai/reach@1': {} },
+        snapshots: { '@h-ai/reach@1': {} },
+      }))
+      fs.writeFileSync(path.join(root, 'config/_reach.yml'), stringify({
+        providers: [
+          { name: 'email', type: 'console' },
+          {
+            name: 'sms',
+            type,
+            ...(type === 'api'
+              ? { url: 'https://sms.example.test/send' }
+              : {}),
+          },
+          {
+            name: 'marketing',
+            type: 'smtp',
+            host: 'smtp.example.test',
+            from: 'sender@example.test',
+          },
+        ],
+      }))
       const result = await deploy.scan(root)
       expect(result.success).toBe(true)
       if (!result.success)
         return
       expect(result.data.requiredServices).toEqual(['email', 'sms'])
       expect(result.data.middlewares).toMatchObject([
-        { service: 'email', backend: 'console', envPrefix: 'HAI_REACH_PROVIDERS_0', config: { name: 'email' } },
-        { service: 'sms', backend: type, envPrefix: 'HAI_REACH_PROVIDERS_1', config: { name: 'sms' } },
-        { service: 'email', backend: 'smtp', envPrefix: 'HAI_REACH_PROVIDERS_2', config: { name: 'marketing' } },
+        {
+          service: 'email',
+          backend: 'console',
+          envPrefix: 'HAI_REACH_PROVIDERS_0',
+          config: { name: 'email' },
+        },
+        {
+          service: 'sms',
+          backend: type,
+          envPrefix: 'HAI_REACH_PROVIDERS_1',
+          config: { name: 'sms' },
+        },
+        {
+          service: 'email',
+          backend: 'smtp',
+          envPrefix: 'HAI_REACH_PROVIDERS_2',
+          config: { name: 'marketing' },
+        },
       ])
     }
     finally { fs.rmSync(root, { recursive: true, force: true }) }
@@ -91,13 +188,27 @@ describe('deploy.scan', () => {
 
   it('follows every Hai component runtime edge, including indirect AI/payment/scheduler dependencies', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-components-'))
-    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: path.basename(root) }))
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
+      name: path.basename(root),
+    }))
     try {
       const edges: Record<string, string[]> = {
-        'ai': ['api-contract', 'core', 'datapipe', 'reldb', 'vecdb'],
+        'ai': [
+          'api-contract',
+          'core',
+          'datapipe',
+          'reldb',
+          'vecdb',
+        ],
         'payment': ['audit', 'core'],
         'scheduler': ['cache', 'core', 'reldb'],
-        'iam': ['audit', 'cache', 'core', 'crypto', 'reldb'],
+        'iam': [
+          'audit',
+          'cache',
+          'core',
+          'crypto',
+          'reldb',
+        ],
         'reach': ['cache', 'core', 'reldb'],
         'audit': ['core', 'reldb'],
         'api-contract': ['core'],
@@ -108,8 +219,31 @@ describe('deploy.scan', () => {
         'crypto': ['core'],
         'core': [],
       }
-      const snapshots = Object.fromEntries(Object.entries(edges).map(([name, dependencies]) => [`@h-ai/${name}@1`, { dependencies: Object.fromEntries(dependencies.map(dependency => [`@h-ai/${dependency}`, '1'])) }]))
-      const lock = { lockfileVersion: '9.0', importers: { '.': { dependencies: Object.fromEntries(['ai', 'payment', 'scheduler', 'iam', 'reach'].map(name => [`@h-ai/${name}`, { version: '1' }])) } }, packages: Object.fromEntries(Object.keys(snapshots).map(key => [key, {}])), snapshots }
+      const snapshots = Object.fromEntries(Object.entries(edges).map(([name, dependencies]) => [
+        `@h-ai/${name}@1`,
+        {
+          dependencies: Object.fromEntries(dependencies.map(dependency => [`@h-ai/${dependency}`, '1'])),
+        },
+      ]))
+      const lock = {
+        lockfileVersion: '9.0',
+        importers: {
+          '.': {
+            dependencies: Object.fromEntries([
+              'ai',
+              'payment',
+              'scheduler',
+              'iam',
+              'reach',
+            ].map(name => [
+              `@h-ai/${name}`,
+              { version: '1' },
+            ])),
+          },
+        },
+        packages: Object.fromEntries(Object.keys(snapshots).map(key => [key, {}])),
+        snapshots,
+      }
       fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify(lock))
       const result = await deploy.scan(root)
       expect(result.success).toBe(true)
@@ -123,18 +257,42 @@ describe('deploy.scan', () => {
 
   it('requires a lockfile and reads build adapters from its importer with root project identity', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-lock-only-'))
-    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: path.basename(root) }))
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
+      name: path.basename(root),
+    }))
     try {
       expect((await deploy.scan(root)).success).toBe(false)
-      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({ lockfileVersion: '9.0', importers: { '.': { devDependencies: { '@sveltejs/kit': { version: '2' }, '@sveltejs/adapter-node': { version: '5' } } } }, packages: {}, snapshots: {} }))
-      expect(await deploy.scan(root)).toMatchObject({ success: true, data: { isSvelteKit: true, nodeAdapterInstalled: true, adapterInstalled: false, requiredServices: [] } })
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({
+        lockfileVersion: '9.0',
+        importers: {
+          '.': {
+            devDependencies: {
+              '@sveltejs/kit': { version: '2' },
+              '@sveltejs/adapter-node': { version: '5' },
+            },
+          },
+        },
+        packages: {},
+        snapshots: {},
+      }))
+      expect(await deploy.scan(root)).toMatchObject({
+        success: true,
+        data: {
+          isSvelteKit: true,
+          nodeAdapterInstalled: true,
+          adapterInstalled: false,
+          requiredServices: [],
+        },
+      })
     }
     finally { fs.rmSync(root, { recursive: true, force: true }) }
   })
 
   it('walks only the selected importer runtime graph, excluding peers, dev dependencies and other workspaces', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-lock-'))
-    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: path.basename(root) }))
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
+      name: path.basename(root),
+    }))
     const app = path.join(root, 'apps/service')
     try {
       fs.mkdirSync(path.join(app, 'config'), { recursive: true })
@@ -142,12 +300,33 @@ describe('deploy.scan', () => {
       const lock = {
         lockfileVersion: '9.0',
         importers: {
-          'apps/service': { dependencies: { '@project/business': { version: 'link:../../packages/business' } }, devDependencies: { '@h-ai/cache': { version: '1' } } },
-          'packages/business': { dependencies: { '@h-ai/serv': { version: '1(@h-ai/ai@1)' }, '@h-ai/iam': { version: '1' } } },
-          'apps/other': { dependencies: { '@h-ai/vecdb': { version: '1' } } },
+          'apps/service': {
+            dependencies: {
+              '@project/business': { version: 'link:../../packages/business' },
+            },
+            devDependencies: {
+              '@h-ai/cache': { version: '1' },
+            },
+          },
+          'packages/business': {
+            dependencies: {
+              '@h-ai/serv': { version: '1(@h-ai/ai@1)' },
+              '@h-ai/iam': { version: '1' },
+            },
+          },
+          'apps/other': {
+            dependencies: {
+              '@h-ai/vecdb': { version: '1' },
+            },
+          },
         },
         packages: {
-          '@h-ai/serv@1': { peerDependencies: { '@h-ai/ai': '1' }, peerDependenciesMeta: { '@h-ai/ai': { optional: true } } },
+          '@h-ai/serv@1': {
+            peerDependencies: { '@h-ai/ai': '1' },
+            peerDependenciesMeta: {
+              '@h-ai/ai': { optional: true },
+            },
+          },
           '@h-ai/iam@1': {},
           '@h-ai/reldb@1': {},
           '@h-ai/ai@1': {},
@@ -155,16 +334,25 @@ describe('deploy.scan', () => {
           '@h-ai/cache@1': {},
         },
         snapshots: {
-          '@h-ai/serv@1(@h-ai/ai@1)': { dependencies: { '@h-ai/ai': '1' } },
-          '@h-ai/iam@1': { dependencies: { '@h-ai/reldb': '1' } },
+          '@h-ai/serv@1(@h-ai/ai@1)': {
+            dependencies: { '@h-ai/ai': '1' },
+          },
+          '@h-ai/iam@1': {
+            dependencies: { '@h-ai/reldb': '1' },
+          },
           '@h-ai/reldb@1': {},
-          '@h-ai/ai@1': { dependencies: { '@h-ai/vecdb': '1' } },
+          '@h-ai/ai@1': {
+            dependencies: { '@h-ai/vecdb': '1' },
+          },
           '@h-ai/vecdb@1': {},
           '@h-ai/cache@1': {},
         },
       }
       // 工具链文档同样有 importer，不能误选为应用图。
-      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), `---\n${stringify({ lockfileVersion: '9.0', importers: { '.': {} } })}---\n${stringify(lock)}`)
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), `---\n${stringify({
+        lockfileVersion: '9.0',
+        importers: { '.': {} },
+      })}---\n${stringify(lock)}`)
       const result = await deploy.scan(app)
       expect(result.success).toBe(true)
       if (result.success)
@@ -181,7 +369,9 @@ describe('deploy.scan', () => {
 
   it('fails on an existing lockfile without the target importer instead of guessing dependencies', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-stale-lock-'))
-    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: path.basename(root) }))
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
+      name: path.basename(root),
+    }))
     try {
       fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  apps/other: {}\n')
       expect((await deploy.scan(root)).success).toBe(false)
@@ -191,10 +381,32 @@ describe('deploy.scan', () => {
 
   it('uses the application document when pnpm 12 has two root importers', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-root-lock-'))
-    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: path.basename(root) }))
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
+      name: path.basename(root),
+    }))
     try {
-      const tools = { lockfileVersion: '9.0', importers: { '.': { packageManagerDependencies: { pnpm: { version: '12' } } } } }
-      const app = { lockfileVersion: '9.0', importers: { '.': { dependencies: { 'db-alias': { version: '@h-ai/reldb@1' } } } }, packages: { '@h-ai/reldb@1': {} }, snapshots: { '@h-ai/reldb@1': {} } }
+      const tools = {
+        lockfileVersion: '9.0',
+        importers: {
+          '.': {
+            packageManagerDependencies: {
+              pnpm: { version: '12' },
+            },
+          },
+        },
+      }
+      const app = {
+        lockfileVersion: '9.0',
+        importers: {
+          '.': {
+            dependencies: {
+              'db-alias': { version: '@h-ai/reldb@1' },
+            },
+          },
+        },
+        packages: { '@h-ai/reldb@1': {} },
+        snapshots: { '@h-ai/reldb@1': {} },
+      }
       fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), `---\n${stringify(tools)}---\n${stringify(app)}`)
       const result = await deploy.scan(root)
       expect(result.success).toBe(true)
@@ -207,10 +419,25 @@ describe('deploy.scan', () => {
 
   it('resolves backend placeholders and optional IAM LDAP using the selected environment', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-selected-env-'))
-    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: path.basename(root) }))
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
+      name: path.basename(root),
+    }))
     try {
       fs.mkdirSync(path.join(root, 'config'))
-      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@h-ai/iam': { version: '1' }, '@h-ai/reldb': { version: '1' }, '@h-ai/cache': { version: '1' } } } }, packages: { '@h-ai/iam@1': {}, '@h-ai/reldb@1': {}, '@h-ai/cache@1': {} }, snapshots: { '@h-ai/iam@1': {}, '@h-ai/reldb@1': {}, '@h-ai/cache@1': {} } }))
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({
+        lockfileVersion: '9.0',
+        importers: {
+          '.': {
+            dependencies: {
+              '@h-ai/iam': { version: '1' },
+              '@h-ai/reldb': { version: '1' },
+              '@h-ai/cache': { version: '1' },
+            },
+          },
+        },
+        packages: { '@h-ai/iam@1': {}, '@h-ai/reldb@1': {}, '@h-ai/cache@1': {} },
+        snapshots: { '@h-ai/iam@1': {}, '@h-ai/reldb@1': {}, '@h-ai/cache@1': {} },
+      }))
       fs.writeFileSync(path.join(root, '.env.prod'), 'HAI_DB_TYPE=postgresql\nHAI_CACHE_TYPE=redis\nHAI_IAM_LOGIN_LDAP=true\n')
       fs.writeFileSync(path.join(root, 'config/_db.yml'), `type: \${HAI_DB_TYPE:sqlite}\ndatabase: app\n`)
       fs.writeFileSync(path.join(root, 'config/_cache.yml'), `type: \${HAI_CACHE_TYPE:memory}\n`)
@@ -220,7 +447,10 @@ describe('deploy.scan', () => {
       if (result.success) {
         expect(result.data.serviceBackends).toMatchObject({ db: 'postgresql', cache: 'redis', ldap: 'ldap' })
         expect(result.data.requiredServices).toEqual(expect.arrayContaining(['db', 'cache', 'ldap']))
-        expect(result.data.middlewares?.find(item => item.service === 'ldap')).toMatchObject({ envPrefix: 'HAI_IAM_LDAP', config: { url: 'ldap://directory:389' } })
+        expect(result.data.middlewares?.find(item => item.service === 'ldap')).toMatchObject({
+          envPrefix: 'HAI_IAM_LDAP',
+          config: { url: 'ldap://directory:389' },
+        })
       }
     }
     finally { fs.rmSync(root, { recursive: true, force: true }) }

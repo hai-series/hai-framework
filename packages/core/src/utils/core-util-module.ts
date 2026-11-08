@@ -62,21 +62,37 @@ export function createNotInitializedKit<E extends HaiError>(
     if (isHaiErrorDef(codeOrDef)) {
       return errorUtils.buildHaiErrorInst(codeOrDef, messageFn()) as E
     }
-    return { code: codeOrDef, message: messageFn() } as E
+    return {
+      code: codeOrDef,
+      message: messageFn(),
+    } as E
   }
 
   /** 创建未初始化错误的 HaiResult */
-  const result = <T>(): HaiResult<T> => ({ success: false, error: error() as HaiError })
+  const result = <T>(): HaiResult<T> => ({
+    success: false,
+    error: error() as HaiError,
+  })
 
   /** 异步占位操作 */
-  const asyncOp = async (): Promise<HaiResult<unknown>> => ({ success: false, error: error() as HaiError })
+  const asyncOp = async (): Promise<HaiResult<unknown>> => ({
+    success: false,
+    error: error() as HaiError,
+  })
 
   /** 同步占位操作 */
-  const syncOp = (): HaiResult<unknown> => ({ success: false, error: error() as HaiError })
+  const syncOp = (): HaiResult<unknown> => ({
+    success: false,
+    error: error() as HaiError,
+  })
 
   /** 创建 Proxy 代理 */
   const proxy = <T>(mode: 'async' | 'sync' = 'async'): T =>
-    new Proxy({}, { get: () => mode === 'sync' ? syncOp : asyncOp }) as T
+    new Proxy({}, {
+      get: () => mode === 'sync'
+        ? syncOp
+        : asyncOp,
+    }) as T
 
   return { error, result, proxy }
 }

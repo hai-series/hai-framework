@@ -11,7 +11,18 @@ describe('feedback 离线 CLI', () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'hai-feedback-cli-'))
     const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
     try {
-      const created = await createFeedbackBundle({ report: { id: 'fb-cli', description: '用户描述' }, evidence: [{ source: 'server', kind: 'log', timestamp: 1, requestId: 'req-1', data: {} }] })
+      const created = await createFeedbackBundle({
+        report: { id: 'fb-cli', description: '用户描述' },
+        evidence: [
+          {
+            source: 'server',
+            kind: 'log',
+            timestamp: 1,
+            requestId: 'req-1',
+            data: {},
+          },
+        ],
+      })
       expect(created.success).toBe(true)
       if (!created.success)
         return
@@ -31,7 +42,10 @@ describe('feedback 离线 CLI', () => {
   })
 
   it('本机查看器隔离路径，不执行包内替换脚本，也不对外监听', async () => {
-    const created = await createFeedbackBundle({ report: { id: 'fb-view' }, evidence: [] })
+    const created = await createFeedbackBundle({
+      report: { id: 'fb-view' },
+      evidence: [],
+    })
     expect(created.success).toBe(true)
     if (!created.success)
       return
@@ -40,7 +54,13 @@ describe('feedback 离线 CLI', () => {
     if (!read.success)
       return
     const bundle = read.data
-    const viewer = await startFeedbackViewer({ ...bundle, files: { ...bundle.files, 'viewer/app.js': new TextEncoder().encode('untrusted-script') } })
+    const viewer = await startFeedbackViewer({
+      ...bundle,
+      files: {
+        ...bundle.files,
+        'viewer/app.js': new TextEncoder().encode('untrusted-script'),
+      },
+    })
     try {
       const url = new URL(viewer.url)
       expect(url.hostname).toBe('127.0.0.1')

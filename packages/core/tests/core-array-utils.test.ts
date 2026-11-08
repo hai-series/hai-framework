@@ -14,7 +14,11 @@ describe('core.array', () => {
 
   it('groupBy 应该按条件分组', () => {
     const result = core.array.groupBy(
-      [{ role: 'admin' }, { role: 'user' }, { role: 'admin' }],
+      [
+        { role: 'admin' },
+        { role: 'user' },
+        { role: 'admin' },
+      ],
       item => item.role,
     )
     expect(result.admin).toHaveLength(2)
@@ -22,18 +26,36 @@ describe('core.array', () => {
   })
 
   it('chunk 应该分块', () => {
-    expect(core.array.chunk([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]])
+    expect(core.array.chunk([1, 2, 3, 4, 5], 2)).toEqual([
+      [1, 2],
+      [3, 4],
+      [5],
+    ])
   })
 
   it('groupBy 回归：原型同名键与数字键均作为独立分组，保留顺序', () => {
-    const items = ['__proto__', 'constructor', 'toString', 'hasOwnProperty', '__proto__']
+    const items = [
+      '__proto__',
+      'constructor',
+      'toString',
+      'hasOwnProperty',
+      '__proto__',
+    ]
     const grouped = core.array.groupBy(items, item => item)
-    expect(Object.keys(grouped)).toEqual(['__proto__', 'constructor', 'toString', 'hasOwnProperty'])
+    expect(Object.keys(grouped)).toEqual([
+      '__proto__',
+      'constructor',
+      'toString',
+      'hasOwnProperty',
+    ])
     expect(Object.getOwnPropertyDescriptor(grouped, '__proto__')?.value).toEqual(['__proto__', '__proto__'])
     expect(grouped.constructor).toEqual(['constructor'])
     expect(grouped.toString).toEqual(['toString'])
     expect(Object.getPrototypeOf(grouped)).toBe(Object.prototype)
-    expect(core.array.groupBy([1, 2, 3], value => value % 2)).toEqual({ 0: [2], 1: [1, 3] })
+    expect(core.array.groupBy([1, 2, 3], value => value % 2)).toEqual({
+      0: [2],
+      1: [1, 3],
+    })
   })
 
   it('chunk size <= 0 应返回空数组', () => {
@@ -47,7 +69,10 @@ describe('core.array', () => {
   })
 
   it('flatten 应该扁平化', () => {
-    expect(core.array.flatten([[1], [2, 3]])).toEqual([1, 2, 3])
+    expect(core.array.flatten([
+      [1],
+      [2, 3],
+    ])).toEqual([1, 2, 3])
   })
 
   it('compact 应该移除 null/undefined', () => {

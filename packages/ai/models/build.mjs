@@ -192,7 +192,9 @@ function formatIssues(error) {
 /** 解析设备参数 */
 function parseDevice(args) {
   const index = args.indexOf('--device')
-  const device = index >= 0 ? args[index + 1] : 'cpu'
+  const device = index >= 0
+    ? args[index + 1]
+    : 'cpu'
 
   if (device !== 'cpu' && device !== 'gpu')
     throw new Error(`Invalid --device: ${device} (expected cpu | gpu)`)
@@ -440,7 +442,12 @@ function isLoopbackProxy(value) {
   if (!value)
     return false
   const hostname = new URL(value).hostname
-  return ['127.0.0.1', 'localhost', '[::1]', '::1'].includes(hostname)
+  return [
+    '127.0.0.1',
+    'localhost',
+    '[::1]',
+    '::1',
+  ].includes(hostname)
 }
 
 /**
@@ -1639,8 +1646,12 @@ async function cmdRun(name, args) {
     )
 
     const detail = (logs.stderr || logs.stdout || '').trim()
-    const message = error instanceof Error ? error.message : String(error)
-    throw new Error(detail ? `${message}\nContainer logs:\n${detail}` : message)
+    const message = error instanceof Error
+      ? error.message
+      : String(error)
+    throw new Error(detail
+      ? `${message}\nContainer logs:\n${detail}`
+      : message)
   }
 }
 

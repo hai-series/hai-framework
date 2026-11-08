@@ -54,7 +54,12 @@ const AlipayAmountSchema = z.string().regex(/^\d+(?:\.\d{1,2})?$/)
 export const AlipayQueryResponseSchema = z.object({
   out_trade_no: z.string().min(1),
   trade_no: z.string().min(1),
-  trade_status: z.enum(['WAIT_BUYER_PAY', 'TRADE_CLOSED', 'TRADE_SUCCESS', 'TRADE_FINISHED']),
+  trade_status: z.enum([
+    'WAIT_BUYER_PAY',
+    'TRADE_CLOSED',
+    'TRADE_SUCCESS',
+    'TRADE_FINISHED',
+  ]),
   total_amount: AlipayAmountSchema,
   send_pay_date: AlipayTimeSchema.optional(),
 })
@@ -117,7 +122,12 @@ export const AlipayNotifyParamsSchema = z.object({
   sign: z.string().min(1),
   out_trade_no: z.string().min(1),
   trade_no: z.string().min(1),
-  trade_status: z.enum(['WAIT_BUYER_PAY', 'TRADE_CLOSED', 'TRADE_SUCCESS', 'TRADE_FINISHED']),
+  trade_status: z.enum([
+    'WAIT_BUYER_PAY',
+    'TRADE_CLOSED',
+    'TRADE_SUCCESS',
+    'TRADE_FINISHED',
+  ]),
   total_amount: AlipayAmountSchema,
   gmt_payment: AlipayTimeSchema.optional(),
 }).catchall(z.string()).refine(params => !['TRADE_SUCCESS', 'TRADE_FINISHED'].includes(params.trade_status) || !!params.gmt_payment)

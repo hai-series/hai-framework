@@ -30,11 +30,16 @@ async function revision(): Promise<HaiResult<Revision>> {
     return current
   if (current.data)
     return ok(current.data)
-  const created = await cache.kv.set(revisionKey, { epoch: randomUUID(), writers: 0 }, { nx: true })
+  const created = await cache.kv.set(revisionKey, {
+    epoch: randomUUID(),
+    writers: 0,
+  }, { nx: true })
   if (!created.success)
     return created
   const loaded = await cache.kv.get<Revision>(revisionKey)
-  return loaded.success && loaded.data ? ok(loaded.data) : failure()
+  return loaded.success && loaded.data
+    ? ok(loaded.data)
+    : failure()
 }
 
 async function change(delta: number): Promise<HaiResult<void>> {
@@ -42,7 +47,10 @@ async function change(delta: number): Promise<HaiResult<void>> {
     const current = await revision()
     if (!current.success)
       return current
-    const written = await cache.kv.compareAndSwap(revisionKey, current.data, { epoch: randomUUID(), writers: Math.max(0, current.data.writers + delta) })
+    const written = await cache.kv.compareAndSwap(revisionKey, current.data, {
+      epoch: randomUUID(),
+      writers: Math.max(0, current.data.writers + delta),
+    })
     if (!written.success)
       return written
     if (written.data)
@@ -138,12 +146,16 @@ async function enroll(tx: DmlWithTxOperations): Promise<HaiResult<void>> {
  */
 export function guardIamMutation<A extends unknown[], T>(operation: (...args: A) => Promise<HaiResult<T>>, txIndex?: number): (...args: A) => Promise<HaiResult<T>> {
   return async (...args) => {
-    const candidate = txIndex === undefined ? undefined : args[txIndex]
+    const candidate = txIndex === undefined
+      ? undefined
+      : args[txIndex]
     // 事务参数来自已声明的 IAM 方法签名；此处只收窄公共事务句柄。
     const tx = candidate as DmlWithTxOperations | undefined
     let started: HaiResult<void>
     try {
-      started = tx ? await enroll(tx) : await change(1)
+      started = tx
+        ? await enroll(tx)
+        : await change(1)
     }
     catch { return failure() }
     if (!started.success)

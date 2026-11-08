@@ -48,7 +48,9 @@ export function nativeFiles(root: string, accepts: (path: string, isDirectory: b
   function stamp(path: string): string {
     const info = lstatSync(path, { bigint: true })
     const own = `${info.mtimeNs}:${info.ctimeNs}:${info.size}`
-    return info.isDirectory() ? `${own}:${readdirSync(path).map(name => stamp(join(path, name))).join(',')}` : own
+    return info.isDirectory()
+      ? `${own}:${readdirSync(path).map(name => stamp(join(path, name))).join(',')}`
+      : own
   }
   function visit(path: string): void {
     for (const entry of readdirSync(path, { withFileTypes: true })) {
@@ -106,7 +108,12 @@ export async function publishNativeArtifacts(root: string, project: string, kind
       const namedFile = join(dirname(artifact.file), nativePackageFile(project, platform, debug, identity.appVersion, artifact.file, arch))
       const output = join(staging, namedFile)
       mkdirSync(dirname(output), { recursive: true })
-      cpSync(artifact.source, output, { recursive: true, force: false, errorOnExist: true, verbatimSymlinks: true })
+      cpSync(artifact.source, output, {
+        recursive: true,
+        force: false,
+        errorOnExist: true,
+        verbatimSymlinks: true,
+      })
       const file = namedFile.split(sep).join('/')
       if (lstatSync(output).isDirectory()) {
         files.push({ file })
@@ -115,9 +122,21 @@ export async function publishNativeArtifacts(root: string, project: string, kind
       const hash = createHash('sha256')
       for await (const chunk of createReadStream(output))
         hash.update(chunk)
-      files.push({ file, sha256: hash.digest('hex') })
+      files.push({
+        file,
+        sha256: hash.digest('hex'),
+      })
     }
-    writeFileSync(join(staging, 'manifest.json'), `${JSON.stringify({ ...identity, kind, platform, ...(arch ? { arch } : {}), variant, files }, null, 2)}\n`)
+    writeFileSync(join(staging, 'manifest.json'), `${JSON.stringify({
+      ...identity,
+      kind,
+      platform,
+      ...(arch
+        ? { arch }
+        : {}),
+      variant,
+      files,
+    }, null, 2)}\n`)
     renameSync(staging, batch)
     writeFileSync(latest, `${name}\n`)
     renameSync(latest, join(parent, 'latest'))

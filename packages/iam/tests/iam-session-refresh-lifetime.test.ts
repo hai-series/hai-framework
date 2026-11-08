@@ -6,7 +6,15 @@ import { createSessionOperations } from '../src/session/iam-session-functions.js
 import { acquireRedisContainer } from './helpers/redis-container.js'
 
 async function operations() {
-  const result = await createSessionOperations({ readCredential: async () => ({ success: true, data: { version: '', available: true } }), config: IamConfigSchema.parse({ session: { sliding: false, refreshTokenMaxAge: 3600 } }) })
+  const result = await createSessionOperations({
+    readCredential: async () => ({
+      success: true,
+      data: { version: '', available: true },
+    }),
+    config: IamConfigSchema.parse({
+      session: { sliding: false, refreshTokenMaxAge: 3600 },
+    }),
+  })
   if (!result.success)
     throw new Error(result.error.message)
   return result.data
@@ -21,7 +29,9 @@ afterEach(async () => {
 })
 
 it('access已过期仍可刷新，消费旧refresh及access并沿用会话时长', async () => {
-  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.useFakeTimers({
+    toFake: ['Date'],
+  })
   const ops = await operations()
   const issued = await ops.create({ userId: 'expired-access', maxAge: 2 })
   if (!issued.success)
@@ -39,20 +49,28 @@ it('access已过期仍可刷新，消费旧refresh及access并沿用会话时长
 })
 
 it.each(['refresh', 'access', 'user'] as const)('access到期后%s撤销仍覆盖待刷新记录', async (mode) => {
-  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.useFakeTimers({
+    toFake: ['Date'],
+  })
   const ops = await operations()
   const issued = await ops.create({ userId: `revoke-${mode}`, maxAge: 2 })
   if (!issued.success)
     throw new Error(issued.error.message)
   vi.setSystemTime(Date.now() + 3000)
   const token = issued.data.data!._tokenPair!.refreshToken
-  const revoked = mode === 'refresh' ? await ops.revokeRefresh(token) : mode === 'access' ? await ops.delete(issued.data.accessToken) : await ops.deleteByUserId(issued.data.userId)
+  const revoked = mode === 'refresh'
+    ? await ops.revokeRefresh(token)
+    : mode === 'access'
+      ? await ops.delete(issued.data.accessToken)
+      : await ops.deleteByUserId(issued.data.userId)
   expect(revoked.success).toBe(true)
   expect((await ops.refresh(token)).success).toBe(false)
 })
 
 it('refresh独立到期不能轮换，但长寿命access保持其自身有效期', async () => {
-  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.useFakeTimers({
+    toFake: ['Date'],
+  })
   const ops = await operations()
   const issued = await ops.create({ userId: 'short-refresh', maxAge: 7200 })
   if (!issued.success)

@@ -8,19 +8,30 @@ import { reldb } from '@h-ai/reldb'
 /** 初始化独立节点，在快照屏障后执行会话操作并释放资源。 */
 async function main() {
   const input = JSON.parse(process.env.IAM_SESSION_WORKER_INPUT)
-  core.init({ logging: { level: 'fatal' } })
+  core.init({
+    logging: { level: 'fatal' },
+  })
   try {
     for (const initialize of [
       () => reldb.init({ type: 'sqlite', database: ':memory:' }),
       () => cache.init(input.cache),
-      () => iam.init({ seedDefaultData: false, session: { ...input.session, singleDevice: input.singleDevice ?? input.session?.singleDevice, sliding: false } }),
+      () => iam.init({
+        seedDefaultData: false,
+        session: { ...input.session, singleDevice: input.singleDevice ?? input.session?.singleDevice, sliding: false },
+      }),
     ]) {
       const initialized = await initialize()
       if (!initialized.success)
         throw new Error(`Session worker initialization failed (${initialized.error.code})`)
     }
     const userId = input.userId ?? 'two-process-refresh'
-    const seeded = await reldb.sql.execute('INSERT INTO hai_iam_users (id, username, account_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', [userId, userId, 'active', Date.now(), Date.now()])
+    const seeded = await reldb.sql.execute('INSERT INTO hai_iam_users (id, username, account_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', [
+      userId,
+      userId,
+      'active',
+      Date.now(),
+      Date.now(),
+    ])
     if (!seeded.success)
       throw new Error(`Session worker user seed failed: ${seeded.error.message}`)
     const get = cache.kv.get.bind(cache.kv)
@@ -43,7 +54,9 @@ async function main() {
   }
   catch (error) {
     process.exitCode = 1
-    process.stderr.write(error instanceof Error ? error.message : 'Session worker failed')
+    process.stderr.write(error instanceof Error
+      ? error.message
+      : 'Session worker failed')
   }
   finally {
     await iam.close()

@@ -14,20 +14,38 @@ const WHISPER_BASE = 'http://127.0.0.1:8101/v1'
 
 /** 构造 Whisper 模型条目（默认显式配置 baseUrl） */
 function whisperModels(extra: Record<string, unknown> = {}): Array<Record<string, unknown>> {
-  return [{ id: 'whisper', provider: 'whisper', model: 'faster-whisper-large-v3', operations: ['transcribe'], baseUrl: WHISPER_BASE, ...extra }]
+  return [
+    {
+      id: 'whisper',
+      provider: 'whisper',
+      model: 'faster-whisper-large-v3',
+      operations: ['transcribe'],
+      baseUrl: WHISPER_BASE,
+      ...extra,
+    },
+  ]
 }
 
 async function initWhisper(models: Array<Record<string, unknown>> = whisperModels()): Promise<void> {
-  const result = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' }, audio: { models, transcribeModel: 'whisper' } })
+  const result = await ai.init({
+    llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' },
+    audio: { models, transcribeModel: 'whisper' },
+  })
   expect(result.success).toBe(true)
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
 }
 
 function wav(bytes = 16): { data: Uint8Array, format: 'wav' } {
-  return { data: new Uint8Array(bytes).fill(1), format: 'wav' }
+  return {
+    data: new Uint8Array(bytes).fill(1),
+    format: 'wav',
+  }
 }
 
 describe('ai.audio Whisper Provider', () => {
@@ -41,12 +59,32 @@ describe('ai.audio Whisper Provider', () => {
       text: '你好世界',
       language: 'zh',
       durationMs: 4120,
-      segments: [{ id: 0, text: '你好世界', startMs: 100, endMs: 4000, words: [{ text: '你好', startMs: 100, endMs: 800, confidence: 0.98 }] }],
+      segments: [
+        {
+          id: 0,
+          text: '你好世界',
+          startMs: 100,
+          endMs: 4000,
+          words: [
+            {
+              text: '你好',
+              startMs: 100,
+              endMs: 800,
+              confidence: 0.98,
+            },
+          ],
+        },
+      ],
     }))
     vi.stubGlobal('fetch', fetchMock)
     await initWhisper()
 
-    const r = await ai.audio.transcribe({ audio: wav(), language: 'zh', timestampGranularities: ['segment', 'word'], vad: true })
+    const r = await ai.audio.transcribe({
+      audio: wav(),
+      language: 'zh',
+      timestampGranularities: ['segment', 'word'],
+      vad: true,
+    })
     expect(r.success).toBe(true)
     if (r.success) {
       expect(r.data.text).toBe('你好世界')
@@ -72,7 +110,9 @@ describe('ai.audio Whisper Provider', () => {
     await initWhisper()
 
     const pcm = new Uint8Array(32).fill(7)
-    const r = await ai.audio.transcribe({ audio: { data: pcm, format: 'pcm16', sampleRate: 16000 } })
+    const r = await ai.audio.transcribe({
+      audio: { data: pcm, format: 'pcm16', sampleRate: 16000 },
+    })
     expect(r.success).toBe(true)
 
     const form = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData
@@ -87,7 +127,9 @@ describe('ai.audio Whisper Provider', () => {
     vi.stubGlobal('fetch', fetchMock)
     await initWhisper()
 
-    await ai.audio.transcribe({ audio: wav() })
+    await ai.audio.transcribe({
+      audio: wav(),
+    })
     const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>
     expect(headers.Authorization).toBeUndefined()
   })
@@ -97,7 +139,9 @@ describe('ai.audio Whisper Provider', () => {
     vi.stubGlobal('fetch', fetchMock)
     await initWhisper(whisperModels({ apiKey: 'secret' }))
 
-    await ai.audio.transcribe({ audio: wav() })
+    await ai.audio.transcribe({
+      audio: wav(),
+    })
     const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>
     expect(headers.Authorization).toBe('Bearer secret')
   })
@@ -105,10 +149,22 @@ describe('ai.audio Whisper Provider', () => {
   it('未配置 baseUrl 返回 CONFIGURATION_ERROR', async () => {
     const result = await ai.init({
       llm: { apiKey: 'sk', model: 'gpt-4o-mini' },
-      audio: { models: [{ id: 'w', provider: 'whisper', model: 'faster-whisper-large-v3', operations: ['transcribe'] }], transcribeModel: 'w' },
+      audio: {
+        models: [
+          {
+            id: 'w',
+            provider: 'whisper',
+            model: 'faster-whisper-large-v3',
+            operations: ['transcribe'],
+          },
+        ],
+        transcribeModel: 'w',
+      },
     })
     expect(result.success).toBe(true)
-    const r = await ai.audio.transcribe({ audio: wav() })
+    const r = await ai.audio.transcribe({
+      audio: wav(),
+    })
     expect(r.success).toBe(false)
     if (!r.success)
       expect(r.error.code).toBe(HaiAIError.CONFIGURATION_ERROR.code)
@@ -135,9 +191,14 @@ describe('ai.audio Whisper Provider', () => {
     await initWhisper()
 
     const events = []
-    for await (const event of ai.audio.transcribeStream({ audio: wav(), model: 'whisper' }))
+    for await (const event of ai.audio.transcribeStream({
+      audio: wav(),
+      model: 'whisper',
+    }))
       events.push(event)
-    expect(events).toEqual([{ type: 'transcript', text: '最终文本', final: true }])
+    expect(events).toEqual([
+      { type: 'transcript', text: '最终文本', final: true },
+    ])
   })
 
   it('无原生流式：持续音频输入被拒绝（不伪装实时）', async () => {
@@ -146,7 +207,14 @@ describe('ai.audio Whisper Provider', () => {
       yield new Uint8Array([1])
     }
     await expect(async () => {
-      for await (const _ of ai.audio.transcribeStream({ audio: { chunks: chunks(), format: 'pcm16', sampleRate: 16000 }, model: 'whisper' }))
+      for await (const _ of ai.audio.transcribeStream({
+        audio: {
+          chunks: chunks(),
+          format: 'pcm16',
+          sampleRate: 16000,
+        },
+        model: 'whisper',
+      }))
         void _
     }).rejects.toThrow()
   })

@@ -20,7 +20,13 @@ const rotatedPair = generateKeyPairSync('rsa', {
   publicKeyEncoding: { type: 'spki', format: 'pem' },
   privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
 })
-const alipayConfig = AlipayConfigSchema.parse({ appId: 'app_security', sellerId: 'seller_security', privateKey: pair.privateKey, alipayPublicKey: pair.publicKey, returnUrl: 'https://example.invalid/payment/return' })
+const alipayConfig = AlipayConfigSchema.parse({
+  appId: 'app_security',
+  sellerId: 'seller_security',
+  privateKey: pair.privateKey,
+  alipayPublicKey: pair.publicKey,
+  returnUrl: 'https://example.invalid/payment/return',
+})
 const wechatConfig = {
   appId: 'wx_security',
   mchId: 'mch_security',
@@ -33,8 +39,14 @@ const wechatConfig = {
 /** 最小 DER 构造只用于测试生成临时证书，避免硬编码私钥或依赖 openssl 命令。 */
 function der(tag: number, ...parts: Buffer[]): Buffer {
   const bytes = Buffer.concat(parts)
-  const length = bytes.length < 128 ? Buffer.from([bytes.length]) : Buffer.from([0x82, bytes.length >> 8, bytes.length & 255])
-  return Buffer.concat([Buffer.from([tag]), length, bytes])
+  const length = bytes.length < 128
+    ? Buffer.from([bytes.length])
+    : Buffer.from([0x82, bytes.length >> 8, bytes.length & 255])
+  return Buffer.concat([
+    Buffer.from([tag]),
+    length,
+    bytes,
+  ])
 }
 
 /** 用临时密钥生成真实 X.509 PEM，以验证序列号与有效期而非 mock crypto。 */
@@ -64,10 +76,15 @@ function alipayRequest(overrides: Record<string, string> = {}) {
     sign_type: 'RSA2',
     ...overrides,
   }
-  const signer = createSign(params.sign_type === 'RSA' ? 'RSA-SHA1' : 'RSA-SHA256')
+  const signer = createSign(params.sign_type === 'RSA'
+    ? 'RSA-SHA1'
+    : 'RSA-SHA256')
   signer.update(Object.keys(params).filter(key => key !== 'sign_type').sort().map(key => `${key}=${params[key]}`).join('&'))
   params.sign = signer.sign(pair.privateKey, 'base64')
-  return { body: new URLSearchParams(params).toString(), headers: {} }
+  return {
+    body: new URLSearchParams(params).toString(),
+    headers: {},
+  }
 }
 
 /** 构造真实 AES-GCM 加密与 RSA 签名的微信通知。 */
@@ -90,13 +107,23 @@ function wechatRequest(options: {
   }
   const cipher = createCipheriv('aes-256-gcm', wechatConfig.apiV3Key, '0123456789ab')
   cipher.setAAD(Buffer.from('transaction'))
-  const encrypted = Buffer.concat([cipher.update(JSON.stringify(resource)), cipher.final(), cipher.getAuthTag()]).toString('base64')
+  const encrypted = Buffer.concat([
+    cipher.update(JSON.stringify(resource)),
+    cipher.final(),
+    cipher.getAuthTag(),
+  ]).toString('base64')
   const body = JSON.stringify({
     id: 'WX_EVENT',
     create_time: '2026-10-20T00:00:00Z',
     event_type: 'TRANSACTION.SUCCESS',
     resource_type: 'encrypt-resource',
-    resource: { algorithm: 'AEAD_AES_256_GCM', original_type: 'transaction', ciphertext: encrypted, nonce: '0123456789ab', associated_data: 'transaction' },
+    resource: {
+      algorithm: 'AEAD_AES_256_GCM',
+      original_type: 'transaction',
+      ciphertext: encrypted,
+      nonce: '0123456789ab',
+      associated_data: 'transaction',
+    },
     ...options.envelope,
   })
   const timestamp = options.timestamp ?? String(now.getTime() / 1000)
@@ -124,9 +151,16 @@ afterEach(() => {
 })
 
 describe('alipay notification security', () => {
-  it.each<Record<string, string>>([{ app_id: 'OTHER_APP' }, { seller_id: 'OTHER_SELLER' }, { sign_type: 'RSA' }])('有效签名但身份或算法错误时拒绝：%j', async (fields) => {
+  it.each<Record<string, string>>([
+    { app_id: 'OTHER_APP' },
+    { seller_id: 'OTHER_SELLER' },
+    { sign_type: 'RSA' },
+  ])('有效签名但身份或算法错误时拒绝：%j', async (fields) => {
     const result = await createAlipayProvider(alipayConfig).handleNotify(alipayRequest(fields))
-    expect(result).toMatchObject({ success: false, error: { code: HaiPaymentError.NOTIFY_VERIFY_FAILED.code } })
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: HaiPaymentError.NOTIFY_VERIFY_FAILED.code },
+    })
   })
 
   it.each<Record<string, string>>([
@@ -142,7 +176,10 @@ describe('alipay notification security', () => {
 
   it('跨日合法重试保留同一事件和支付时间，返回币种供业务核对', async () => {
     const result = await createAlipayProvider(alipayConfig).handleNotify(alipayRequest())
-    expect(result).toMatchObject({ success: true, data: { eventId: 'ALI_EVENT', currency: 'CNY', status: 'paid' } })
+    expect(result).toMatchObject({
+      success: true,
+      data: { eventId: 'ALI_EVENT', currency: 'CNY', status: 'paid' },
+    })
     if (result.success)
       expect(result.data.paidAt?.toISOString()).toBe('2026-10-20T00:00:00.000Z')
   })
@@ -156,7 +193,15 @@ describe('alipay notification security', () => {
   it('uTC 节点使用北京时间签名，并将订单和签名放在 form body 而非 URL', async () => {
     const fetchSpy = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ alipay_trade_query_response: { code: '10000', out_trade_no: 'ORDER_PRIVATE', trade_no: 'ALI_PRIVATE', trade_status: 'WAIT_BUYER_PAY', total_amount: '1.00' } }),
+      json: async () => ({
+        alipay_trade_query_response: {
+          code: '10000',
+          out_trade_no: 'ORDER_PRIVATE',
+          trade_no: 'ALI_PRIVATE',
+          trade_status: 'WAIT_BUYER_PAY',
+          total_amount: '1.00',
+        },
+      }),
     })
     vi.stubGlobal('fetch', fetchSpy)
     const result = await createAlipayProvider(alipayConfig).queryOrder('ORDER_PRIVATE')
@@ -173,16 +218,32 @@ describe('alipay notification security', () => {
 })
 
 describe('wechat notification security', () => {
-  it.each([{ appid: 'OTHER_APP' }, { mchid: 'OTHER_MERCHANT' }])('有效签名和解密但商户错误时拒绝：%j', async (resource) => {
+  it.each([
+    { appid: 'OTHER_APP' },
+    { mchid: 'OTHER_MERCHANT' },
+  ])('有效签名和解密但商户错误时拒绝：%j', async (resource) => {
     expect(await createWechatPayProvider(wechatConfig).handleNotify(wechatRequest({ resource })))
-      .toMatchObject({ success: false, error: { code: HaiPaymentError.NOTIFY_VERIFY_FAILED.code } })
+      .toMatchObject({
+        success: false,
+        error: { code: HaiPaymentError.NOTIFY_VERIFY_FAILED.code },
+      })
   })
 
-  it.each(['', '1700000000abc', '1e9', '01700000000', String(now.getTime() / 1000 - 301), String(now.getTime() / 1000 + 301)])(
+  it.each([
+    '',
+    '1700000000abc',
+    '1e9',
+    '01700000000',
+    String(now.getTime() / 1000 - 301),
+    String(now.getTime() / 1000 + 301),
+  ])(
     '有效签名但时间戳 %s 不合法/过期时拒绝',
     async (timestamp) => {
       expect(await createWechatPayProvider(wechatConfig).handleNotify(wechatRequest({ timestamp })))
-        .toMatchObject({ success: false, error: { code: HaiPaymentError.NOTIFY_VERIFY_FAILED.code } })
+        .toMatchObject({
+          success: false,
+          error: { code: HaiPaymentError.NOTIFY_VERIFY_FAILED.code },
+        })
     },
   )
 
@@ -197,19 +258,31 @@ describe('wechat notification security', () => {
   it('真实证书验签成功；证书自身序列号不符和过期证书拒绝', async () => {
     const certificate = testCertificate(1)
     const serial = new X509Certificate(certificate).serialNumber
-    expect((await createWechatPayProvider({ ...wechatConfig, platformKeys: { [serial]: certificate } })
+    expect((await createWechatPayProvider({
+      ...wechatConfig,
+      platformKeys: { [serial]: certificate },
+    })
       .handleNotify(wechatRequest({ serial }))).success).toBe(true)
-    expect((await createWechatPayProvider({ ...wechatConfig, platformKeys: { WRONG_SERIAL: certificate } })
+    expect((await createWechatPayProvider({
+      ...wechatConfig,
+      platformKeys: { WRONG_SERIAL: certificate },
+    })
       .handleNotify(wechatRequest({ serial: 'WRONG_SERIAL' }))).success).toBe(false)
     const expired = testCertificate(2, '210101000000Z')
     const expiredSerial = new X509Certificate(expired).serialNumber
-    expect((await createWechatPayProvider({ ...wechatConfig, platformKeys: { [expiredSerial]: expired } })
+    expect((await createWechatPayProvider({
+      ...wechatConfig,
+      platformKeys: { [expiredSerial]: expired },
+    })
       .handleNotify(wechatRequest({ serial: expiredSerial }))).success).toBe(false)
   })
 
   it('通知事件时间可以很早，签名时间必须新鲜；返回事件 ID 与币种', async () => {
     expect(await createWechatPayProvider(wechatConfig).handleNotify(wechatRequest()))
-      .toMatchObject({ success: true, data: { eventId: 'WX_EVENT', currency: 'CNY', status: 'paid' } })
+      .toMatchObject({
+        success: true,
+        data: { eventId: 'WX_EVENT', currency: 'CNY', status: 'paid' },
+      })
   })
 
   it('缺少或重复大小写形式的签名头时拒绝', async () => {
@@ -221,13 +294,24 @@ describe('wechat notification security', () => {
     expect((await createWechatPayProvider(wechatConfig).handleNotify(duplicated)).success).toBe(false)
   })
 
-  it.each([{ id: '' }, { create_time: '2026-02-30T00:00:00Z' }, { event_type: 'REFUND.SUCCESS' }, { resource: {} }])(
+  it.each([
+    { id: '' },
+    { create_time: '2026-02-30T00:00:00Z' },
+    { event_type: 'REFUND.SUCCESS' },
+    { resource: {} },
+  ])(
     '拒绝畸形/非支付成功 envelope：%j',
     async (envelope) => {
       expect((await createWechatPayProvider(wechatConfig).handleNotify(wechatRequest({ envelope }))).success).toBe(false)
     },
   )
-  it.each([{ amount: { total: -1, currency: 'CNY' } }, { success_time: '2026-02-30T00:00:00Z' }, { trade_state: 'PAYERROR' }])(
+  it.each([
+    {
+      amount: { total: -1, currency: 'CNY' },
+    },
+    { success_time: '2026-02-30T00:00:00Z' },
+    { trade_state: 'PAYERROR' },
+  ])(
     '拒绝非法解密资源：%j',
     async (resource) => {
       expect((await createWechatPayProvider(wechatConfig).handleNotify(wechatRequest({ resource }))).success).toBe(false)
@@ -242,20 +326,44 @@ describe('stripe notification security', () => {
     created: 1_700_000_000,
     livemode: false,
     type: 'checkout.session.completed',
-    data: { object: { id: 'cs_security', object: 'checkout.session', mode: 'payment', metadata: { orderNo: 'ORDER_SECURITY' }, amount_total: 100, currency: 'usd', payment_status: 'paid' } },
+    data: {
+      object: {
+        id: 'cs_security',
+        object: 'checkout.session',
+        mode: 'payment',
+        metadata: { orderNo: 'ORDER_SECURITY' },
+        amount_total: 100,
+        currency: 'usd',
+        payment_status: 'paid',
+      },
+    },
   }
 
   /** 按指定时间串签名，以证明拒绝畸形时间并非签名不匹配。 */
   function request(overrides: Record<string, unknown> = {}, timestamp = String(now.getTime() / 1000)) {
-    const body = JSON.stringify({ ...event, ...overrides })
+    const body = JSON.stringify({
+      ...event,
+      ...overrides,
+    })
     const signature = createHmac('sha256', config.webhookSecret).update(`${timestamp}.${body}`).digest('hex')
-    return { body, headers: { 'Stripe-Signature': `t=${timestamp},v1=${signature}` } }
+    return {
+      body,
+      headers: { 'Stripe-Signature': `t=${timestamp},v1=${signature}` },
+    }
   }
 
-  it.each([{ livemode: true }, { account: 'acct_other' }, { context: 'acct_other' }])('有效签名但其它模式/账户事件拒绝：%j', async (fields) => {
+  it.each([
+    { livemode: true },
+    { account: 'acct_other' },
+    { context: 'acct_other' },
+  ])('有效签名但其它模式/账户事件拒绝：%j', async (fields) => {
     expect((await createStripeProvider(config).handleNotify(request(fields))).success).toBe(false)
   })
-  it.each(['', `${now.getTime() / 1000}abc`, String(now.getTime() / 1000 - 301)])('拒绝畸形/过期签名时间 %s', async (timestamp) => {
+  it.each([
+    '',
+    `${now.getTime() / 1000}abc`,
+    String(now.getTime() / 1000 - 301),
+  ])('拒绝畸形/过期签名时间 %s', async (timestamp) => {
     expect((await createStripeProvider(config).handleNotify(request({}, timestamp))).success).toBe(false)
   })
   it('密钥轮换的多 v1 签名可匹配当前密钥；重复 t 拒绝', async () => {

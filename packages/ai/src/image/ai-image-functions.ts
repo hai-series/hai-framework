@@ -90,7 +90,9 @@ export function createImageOperations(config: AIConfig): ImageOperations {
           prompt: request.prompt.trim(),
           size: request.size,
           referenceImages: request.referenceImages ?? [],
-          signal: request.signal ? AbortSignal.any([request.signal, deadline.signal]) : deadline.signal,
+          signal: request.signal
+            ? AbortSignal.any([request.signal, deadline.signal])
+            : deadline.signal,
           maxImageBytes: imageConfig.maxImageBytes,
           maxImages: imageConfig.maxImages,
         })
@@ -128,9 +130,14 @@ export function createImageOperations(config: AIConfig): ImageOperations {
         ...logContext,
         durationMs: Date.now() - startedAt,
         imageCount: generated.data.length,
-        mimeTypes: [...new Set(images.map(image => image.mimeType))],
+        mimeTypes: [
+          ...new Set(images.map(image => image.mimeType)),
+        ],
       })
-      return { success: true, data: { images } }
+      return {
+        success: true,
+        data: { images },
+      }
     },
   }
 }

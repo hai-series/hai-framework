@@ -8,13 +8,27 @@ import { vecdb } from '@h-ai/vecdb'
 
 async function main() {
   const input = JSON.parse(process.env.CONTEXT_NODE_INPUT)
-  core.init({ logging: { level: 'fatal' } })
+  core.init({
+    logging: { level: 'fatal' },
+  })
   let reply = 'reply'
   const upstream = createServer((request, response) => {
     request.resume()
     request.once('end', () => {
       response.setHeader('Content-Type', 'application/json')
-      response.end(JSON.stringify({ id: 'completion', object: 'chat.completion', created: 0, model: 'test', choices: [{ index: 0, message: { role: 'assistant', content: reply }, finish_reason: 'stop' }] }))
+      response.end(JSON.stringify({
+        id: 'completion',
+        object: 'chat.completion',
+        created: 0,
+        model: 'test',
+        choices: [
+          {
+            index: 0,
+            message: { role: 'assistant', content: reply },
+            finish_reason: 'stop',
+          },
+        ],
+      }))
     })
   })
   await new Promise(resolve => upstream.listen(0, '127.0.0.1', resolve))
@@ -24,7 +38,9 @@ async function main() {
   for (const initialize of [
     () => reldb.init({ type: 'sqlite', database: input.database }),
     () => vecdb.init({ type: 'lancedb', path: input.vectors }),
-    () => ai.init({ llm: { apiKey: 'test', baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'test' } }),
+    () => ai.init({
+      llm: { apiKey: 'test', baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'test' },
+    }),
   ]) {
     const result = await initialize()
     if (!result.success)
@@ -37,7 +53,9 @@ async function main() {
     if (pause && sql.startsWith('UPDATE hai_ai_context SET')
       && params?.some(value => typeof value === 'string' && value.includes('"generated":"old-reply"'))) {
       pause = false
-      await new Promise((resolve, reject) => process.send({ phase: 'paused' }, error => error ? reject(error) : resolve()))
+      await new Promise((resolve, reject) => process.send({ phase: 'paused' }, error => error
+        ? reject(error)
+        : resolve()))
       const start = Date.now()
       // 真正暂停事件循环与续租，不是只等待一个业务 Promise。
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 45_000)
@@ -55,7 +73,11 @@ async function main() {
       return
     }
     try {
-      const options = { scope: message.scope, turnCommit: message.manual ? 'manual' : 'auto', compress: { auto: false } }
+      const options = {
+        scope: message.scope,
+        turnCommit: message.manual ? 'manual' : 'auto',
+        compress: { auto: false },
+      }
       const manager = message.action === 'chat'
         ? ai.context.createManager(options)
         : await ai.context.restoreManager(message.scope, options)
@@ -73,14 +95,29 @@ async function main() {
       else {
         result = await manager.data.reload()
       }
-      process.send({ id: message.id, result, messages: manager.data.getMessages(), turns: manager.data.getTurns(), pausedFor })
+      process.send({
+        id: message.id,
+        result,
+        messages: manager.data.getMessages(),
+        turns: manager.data.getTurns(),
+        pausedFor,
+      })
     }
-    catch (error) { process.send({ id: message.id, failed: error instanceof Error ? error.message : 'Context node failed' }) }
+    catch (error) {
+      process.send({
+        id: message.id,
+        failed: error instanceof Error
+          ? error.message
+          : 'Context node failed',
+      })
+    }
   })
   process.send({ phase: 'ready' })
 }
 
 void main().catch((error) => {
-  process.stderr.write(error instanceof Error ? error.message : 'Context node failed')
+  process.stderr.write(error instanceof Error
+    ? error.message
+    : 'Context node failed')
   process.exitCode = 1
 })

@@ -75,13 +75,17 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
    */
   async function callEmbeddingAPI(request: EmbeddingRequest): Promise<HaiResult<EmbeddingResponse>> {
     const resolvedResult = resolveModelEntry(config.llm, 'embedding', request.model, {
-      missingApiKeyMessage: aiM('ai_configError', { params: { error: 'API Key is required for embedding' } }),
+      missingApiKeyMessage: aiM('ai_configError', {
+        params: { error: 'API Key is required for embedding' },
+      }),
     })
     if (!resolvedResult.success)
       return resolvedResult
     const resolved = resolvedResult.data
 
-    const input = Array.isArray(request.input) ? request.input : [request.input]
+    const input = Array.isArray(request.input)
+      ? request.input
+      : [request.input]
 
     try {
       const client = getOrCreateClient(resolved)
@@ -111,7 +115,11 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
     }
     catch (error) {
       logger.error('Embedding API call failed', { error })
-      return err(HaiAIError.EMBEDDING_API_ERROR, aiM('ai_internalError', { params: { error: String(error) } }), error)
+      return err(HaiAIError.EMBEDDING_API_ERROR, aiM('ai_internalError', {
+        params: {
+          error: String(error),
+        },
+      }), error)
     }
   }
 
@@ -119,7 +127,9 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
    * 对外统一嵌入入口：单条 / 批量都复用同一套分批逻辑
    */
   async function embedRequest(request: EmbeddingRequest): Promise<HaiResult<EmbeddingResponse>> {
-    const input = Array.isArray(request.input) ? request.input : [request.input]
+    const input = Array.isArray(request.input)
+      ? request.input
+      : [request.input]
     const batchSize = embeddingConfig.batchSize
 
     // 如果输入不超过 batchSize，直接调用
@@ -170,7 +180,9 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
         return result
       const first = result.data.data.find(item => item.index === 0)
       if (!first) {
-        return err(HaiAIError.EMBEDDING_API_ERROR, aiM('ai_internalError', { params: { error: 'Embedding result is empty' } }))
+        return err(HaiAIError.EMBEDDING_API_ERROR, aiM('ai_internalError', {
+          params: { error: 'Embedding result is empty' },
+        }))
       }
       return ok(first.embedding)
     },

@@ -1,6 +1,8 @@
 /** 二进制展示只使用本地 Blob URL，不向组件暴露存储凭据。 */
 export function feedbackBlobUrl(bytes: Uint8Array, contentType: string): string {
-  return URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: contentType }))
+  return URL.createObjectURL(new Blob([
+    new Uint8Array(bytes),
+  ], { type: contentType }))
 }
 
 export function feedbackBase64Bytes(value: string): Uint8Array {

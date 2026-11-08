@@ -38,7 +38,9 @@ export function parseCronExpression(expression: string, timezone?: string): HaiR
   catch {
     return err(
       HaiSchedulerError.INVALID_CRON,
-      schedulerM('scheduler_invalidCron', { params: { expression } }),
+      schedulerM('scheduler_invalidCron', {
+        params: { expression },
+      }),
     )
   }
 }

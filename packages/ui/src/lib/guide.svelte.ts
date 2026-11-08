@@ -21,7 +21,9 @@ let stopActiveGuide: (() => void) | undefined
  * ```
  */
 export function resolveGuideText(text?: GuideText): string {
-  return typeof text === 'function' ? text() : text ?? ''
+  return typeof text === 'function'
+    ? text()
+    : text ?? ''
 }
 
 function escapeGuideText(text: GuideText): string {
@@ -38,11 +40,15 @@ function findTarget(step: GuideStep): Element | null {
   try {
     const element = typeof step.target === 'function'
       ? step.target()
-      : [...document.querySelectorAll('[data-guide]')].find(item => item.getAttribute('data-guide') === step.target)
+      : [
+          ...document.querySelectorAll('[data-guide]'),
+        ].find(item => item.getAttribute('data-guide') === step.target)
     if (!element?.isConnected || !element.getClientRects().length || element.closest('[hidden], [aria-hidden="true"]'))
       return null
     const style = getComputedStyle(element)
-    return style.visibility === 'hidden' || style.display === 'none' ? null : element
+    return style.visibility === 'hidden' || style.display === 'none'
+      ? null
+      : element
   }
   catch { return null }
 }
@@ -69,7 +75,9 @@ function waitForTarget(step: GuideStep, signal: AbortSignal, timeout: number, re
         return
       }
       try {
-        const element = ready() ? findTarget(step) : null
+        const element = ready()
+          ? findTarget(step)
+          : null
         if (element)
           finish(element)
       }
@@ -80,7 +88,9 @@ function waitForTarget(step: GuideStep, signal: AbortSignal, timeout: number, re
       return
     }
     try {
-      const initial = ready() ? findTarget(step) : null
+      const initial = ready()
+        ? findTarget(step)
+        : null
       if (initial) {
         finish(initial)
         return
@@ -175,7 +185,11 @@ export function createGuide(options: GuideOptions): GuideController {
   }
 
   function mark(tour: GuideTour, status: GuideProgress['status']): void {
-    storage.set(progressKey(tour.id), { version: tour.version ?? 1, status, updatedAt: Date.now() })
+    storage.set(progressKey(tour.id), {
+      version: tour.version ?? 1,
+      status,
+      updatedAt: Date.now(),
+    })
   }
 
   function getProgress(id: string): GuideProgress | null {
@@ -224,7 +238,9 @@ export function createGuide(options: GuideOptions): GuideController {
     activeTourId = id
     busy = true
     stopActiveGuide = stop
-    focusBefore = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    focusBefore = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
     const requiredSeen = new SvelteSet<number>()
     let finishHighlight: (() => void) | undefined
     function hasPreviousStep(index = driver?.getActiveIndex() ?? 0): boolean {
@@ -264,7 +280,10 @@ export function createGuide(options: GuideOptions): GuideController {
           }
           requiredSeen.add(index)
           activeElement = element
-          driver?.setConfig({ ...driver.getConfig(), ...translatedConfig(tour!) })
+          driver?.setConfig({
+            ...driver.getConfig(),
+            ...translatedConfig(tour!),
+          })
           // 等到引擎完成首帧定位后再报告启动成功，键盘此时已可操作。
           await new Promise<void>((resolve) => {
             const finished = () => {
@@ -324,7 +343,12 @@ export function createGuide(options: GuideOptions): GuideController {
         expectedPath = tour.route.split('?')[0]
         navigating = true
         try {
-          sessionStorage.setItem(pendingKey, JSON.stringify({ id, scope, route: expectedPath, createdAt: Date.now() }))
+          sessionStorage.setItem(pendingKey, JSON.stringify({
+            id,
+            scope,
+            route: expectedPath,
+            createdAt: Date.now(),
+          }))
         }
         catch {
           // Cookie 或 WebView 存储限制不阻止客户端导航。
@@ -374,16 +398,18 @@ export function createGuide(options: GuideOptions): GuideController {
         },
         onPopoverRender: (popover) => {
           try {
-          // 第三方默认支持 HTML；业务翻译和插值统一按纯文本写入。
-          const index = driver?.getActiveIndex() ?? 0
-          const step = tour.steps[index]
-          popover.title.textContent = resolveGuideText(step?.title)
-          popover.description.textContent = resolveGuideText(step?.description)
-          popover.nextButton.textContent = msg(index === tour.steps.length - 1 ? 'guide_done' : 'guide_next')
-          popover.previousButton.textContent = msg('guide_previous')
-          popover.progress.textContent = uiM('guide_progress', { current: index + 1, total: tour.steps.length }, locale)
-          popover.nextButton.disabled = busy
-          popover.previousButton.disabled = busy || !hasPreviousStep(index)
+            // 第三方默认支持 HTML；业务翻译和插值统一按纯文本写入。
+            const index = driver?.getActiveIndex() ?? 0
+            const step = tour.steps[index]
+            popover.title.textContent = resolveGuideText(step?.title)
+            popover.description.textContent = resolveGuideText(step?.description)
+            popover.nextButton.textContent = msg(index === tour.steps.length - 1
+              ? 'guide_done'
+              : 'guide_next')
+            popover.previousButton.textContent = msg('guide_previous')
+            popover.progress.textContent = uiM('guide_progress', { current: index + 1, total: tour.steps.length }, locale)
+            popover.nextButton.disabled = busy
+            popover.previousButton.disabled = busy || !hasPreviousStep(index)
           }
           catch {
             error = 'guide_startFailed'
@@ -417,10 +443,18 @@ export function createGuide(options: GuideOptions): GuideController {
   return {
     get tours() { return options.tours.filter(tour => !tour.enabled || tour.enabled()) },
     get articles() { return (options.articles ?? []).filter(article => !article.enabled || article.enabled()) },
-    get offeredTour() { return offeredId ? tourFor(offeredId) : undefined },
+    get offeredTour() {
+      return offeredId
+        ? tourFor(offeredId)
+        : undefined
+    },
     get activeTourId() { return activeTourId },
     get busy() { return busy },
-    get error() { return error ? msg(error) : '' },
+    get error() {
+      return error
+        ? msg(error)
+        : ''
+    },
     get locale() { return locale },
     get pathname() { return nav.pathname },
     get helpOpen() { return helpOpen },
@@ -439,13 +473,17 @@ export function createGuide(options: GuideOptions): GuideController {
       return true
     },
     defer() {
-      const tour = offeredId ? tourFor(offeredId) : undefined
+      const tour = offeredId
+        ? tourFor(offeredId)
+        : undefined
       if (tour)
         mark(tour, 'deferred')
       offeredId = null
     },
     dismiss() {
-      const tour = offeredId ? tourFor(offeredId) : undefined
+      const tour = offeredId
+        ? tourFor(offeredId)
+        : undefined
       if (tour)
         mark(tour, 'dismissed')
       offeredId = null
@@ -464,10 +502,15 @@ export function createGuide(options: GuideOptions): GuideController {
     clearError() { error = '' },
     setLocale(value) {
       locale = value
-      const tour = activeTourId ? tourFor(activeTourId) : undefined
+      const tour = activeTourId
+        ? tourFor(activeTourId)
+        : undefined
       if (driver && tour) {
         try {
-          driver.setConfig({ ...driver.getConfig(), ...translatedConfig(tour) })
+          driver.setConfig({
+            ...driver.getConfig(),
+            ...translatedConfig(tour),
+          })
           driver.drive(driver.getActiveIndex() ?? 0)
         }
         catch {

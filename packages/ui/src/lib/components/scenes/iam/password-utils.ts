@@ -45,7 +45,12 @@ export function passwordPolicyError(password: string, policy: PasswordPolicy): s
     return uiM('password_policy_number')
   if (policy.requireSpecialChar && !/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password))
     return uiM('password_policy_special')
-  const classes = [/[A-Z]/, /[a-z]/, /\d/, /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/].filter(pattern => pattern.test(password)).length
+  const classes = [
+    /[A-Z]/,
+    /[a-z]/,
+    /\d/,
+    /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/,
+  ].filter(pattern => pattern.test(password)).length
   if (classes < (policy.minCharacterClasses ?? 0))
     return uiM('password_policy_classes', { count: policy.minCharacterClasses ?? 0 })
   return ''
@@ -62,7 +67,9 @@ export function passwordPolicyError(password: string, policy: PasswordPolicy): s
  * ```
  */
 export function passwordPolicyHint(policy: PasswordPolicy): string {
-  const requirements = [uiM('password_policy_length', { min: policy.minLength, max: policy.maxLength })]
+  const requirements = [
+    uiM('password_policy_length', { min: policy.minLength, max: policy.maxLength }),
+  ]
   if (policy.requireUppercase)
     requirements.push(uiM('password_policy_uppercase'))
   if (policy.requireLowercase)

@@ -16,7 +16,10 @@ afterEach(async () => {
 
 /** 测试生成真实 tar.gz，检查发布内容和完整性，不绕过归档解析。 */
 function archive(version: string, cli: boolean) {
-  const entries: Record<string, string> = { 'package/package.json': JSON.stringify({ version }), 'package/dist/index.js': 'export {}' }
+  const entries: Record<string, string> = {
+    'package/package.json': JSON.stringify({ version }),
+    'package/dist/index.js': 'export {}',
+  }
   if (cli)
     entries['package/templates/skills/hai-feedback/SKILL.md'] = '---\nname: hai-feedback\n---\nRelease skill\n'
   const chunks: Uint8Array[] = []
@@ -42,7 +45,10 @@ function archive(version: string, cli: boolean) {
 it('发布缺 Scheduler 不修改工程，齐备后同时报告 catalog/lock/安装和定制 skill 漂移', async () => {
   root = await mkdtemp(join(tmpdir(), 'hai-upgrade-'))
   const version = '0.1.0-alpha.71'
-  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'consumer', dependencies: { '@h-ai/core': 'catalog:', '@h-ai/scheduler': 'catalog:' } }))
+  await writeFile(join(root, 'package.json'), JSON.stringify({
+    name: 'consumer',
+    dependencies: { '@h-ai/core': 'catalog:', '@h-ai/scheduler': 'catalog:' },
+  }))
   await writeFile(join(root, 'pnpm-workspace.yaml'), 'catalog:\n  \'@h-ai/core\': 0.1.0-alpha.70\n  \'@h-ai/scheduler\': 0.1.0-alpha.70\n')
   await mkdir(join(root, '.agents/skills/hai-feedback'), { recursive: true })
   const skillPath = join(root, '.agents/skills/hai-feedback/SKILL.md')
@@ -58,7 +64,10 @@ it('发布缺 Scheduler 不修改工程，齐备后同时报告 catalog/lock/安
       return new Response(archive(version, url.includes('cli')))
     const name = decodeURIComponent(new URL(url).pathname.split('/')[1]!)
     const bytes = archive(version, name === '@h-ai/cli')
-    return Response.json({ version, dist: { tarball: `https://registry.npmjs.org/${name.split('/')[1]}.tgz`, integrity: `sha512-${createHash('sha512').update(bytes).digest('base64')}` } })
+    return Response.json({
+      version,
+      dist: { tarball: `https://registry.npmjs.org/${name.split('/')[1]}.tgz`, integrity: `sha512-${createHash('sha512').update(bytes).digest('base64')}` },
+    })
   }))
   expect((await inspectFrameworkUpgrade(root, version)).releaseComplete).toBe(false)
   expect(await readFile(join(root, 'package.json'), 'utf8')).toBe(before)
@@ -68,6 +77,11 @@ it('发布缺 Scheduler 不修改工程，齐备后同时报告 catalog/lock/安
   expect(complete.releaseComplete).toBe(true)
   expect(complete.modified).toBe(false)
   expect(complete.drift.find(item => item.package === '@h-ai/core')?.issues).not.toContain('lock-version-drift')
-  expect(complete.drift).toEqual(expect.arrayContaining([expect.objectContaining({ package: '@h-ai/scheduler', issues: expect.arrayContaining(['declared-version-drift', 'lock-version-drift']) })]))
+  expect(complete.drift).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      package: '@h-ai/scheduler',
+      issues: expect.arrayContaining(['declared-version-drift', 'lock-version-drift']),
+    }),
+  ]))
   expect(complete.skills).toContainEqual({ name: 'hai-feedback', state: 'customized-or-older' })
 })

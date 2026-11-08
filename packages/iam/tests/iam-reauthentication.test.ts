@@ -13,17 +13,32 @@ function tests() {
   }
 
   it('关闭或未选操作不增加认证步骤；选定操作缺少证明会拒绝', async () => {
-    const iam = await initIam({ reauthentication: { enabled: false, operations: ['user.delete'] } })
+    const iam = await initIam({
+      reauthentication: {
+        enabled: false,
+        operations: ['user.delete'],
+      },
+    })
     const token = await signIn(iam)
     expect((await iam.auth.checkSensitiveOperation(token, 'user.delete')).success).toBe(true)
-    await initIam({ reauthentication: { enabled: true, operations: ['user.delete'] } })
+    await initIam({
+      reauthentication: {
+        enabled: true,
+        operations: ['user.delete'],
+      },
+    })
     expect((await iam.auth.checkSensitiveOperation(token, 'report.read')).success).toBe(true)
     expect((await iam.auth.checkSensitiveOperation(token, 'user.delete')).success).toBe(false)
     expect((await iam.auth.checkSensitiveOperation('invalid-token', 'report.read')).success).toBe(false)
   })
 
   it('错误密码不签发证明，正确证明只允许选定操作单次并发消费', async () => {
-    const iam = await initIam({ reauthentication: { enabled: true, operations: ['user.delete'] } })
+    const iam = await initIam({
+      reauthentication: {
+        enabled: true,
+        operations: ['user.delete'],
+      },
+    })
     const token = await signIn(iam)
     expect((await iam.auth.reauthenticate(token, 'wrong', 'user.delete')).success).toBe(false)
     const proof = await iam.auth.reauthenticate(token, TEST_PASSWORD, 'user.delete')
@@ -35,7 +50,12 @@ function tests() {
   })
 
   it('证明不能跨操作、跨用户、跨会话使用，撤销会话后也失效', async () => {
-    const iam = await initIam({ reauthentication: { enabled: true, operations: ['user.delete', 'user.update'] } })
+    const iam = await initIam({
+      reauthentication: {
+        enabled: true,
+        operations: ['user.delete', 'user.update'],
+      },
+    })
     const token = await signIn(iam)
     const other = await signIn(iam)
     const current = await iam.auth.verifyToken(token)
@@ -44,7 +64,11 @@ function tests() {
     const anotherSession = await iam.session.create({ userId: current.data.userId })
     if (!anotherSession.success)
       throw new Error(anotherSession.error.message)
-    for (const [targetToken, operation] of [[token, 'user.update'], [other, 'user.delete'], [anotherSession.data.accessToken, 'user.delete']] as const) {
+    for (const [targetToken, operation] of [
+      [token, 'user.update'],
+      [other, 'user.delete'],
+      [anotherSession.data.accessToken, 'user.delete'],
+    ] as const) {
       const proof = await iam.auth.reauthenticate(token, TEST_PASSWORD, 'user.delete')
       if (!proof.success)
         throw new Error(proof.error.message)
@@ -58,12 +82,20 @@ function tests() {
   })
 
   it('短期证明到期后不能使用', async () => {
-    const iam = await initIam({ reauthentication: { enabled: true, operations: ['user.delete'], ttlSeconds: 10 } })
+    const iam = await initIam({
+      reauthentication: {
+        enabled: true,
+        operations: ['user.delete'],
+        ttlSeconds: 10,
+      },
+    })
     const token = await signIn(iam)
     const proof = await iam.auth.reauthenticate(token, TEST_PASSWORD, 'user.delete')
     if (!proof.success)
       throw new Error(proof.error.message)
-    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
     vi.setSystemTime(Date.now() + 11_000)
     expect((await iam.auth.checkSensitiveOperation(token, 'user.delete', proof.data.ticket)).success).toBe(false)
   })

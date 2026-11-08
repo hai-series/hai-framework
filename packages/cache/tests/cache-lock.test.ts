@@ -97,7 +97,10 @@ describe('cache lock operations', () => {
     }
     finally {
       try {
-        await Promise.allSettled([left.close(), right.close()])
+        await Promise.allSettled([
+          left.close(),
+          right.close(),
+        ])
       }
       finally {
         await lease.release()

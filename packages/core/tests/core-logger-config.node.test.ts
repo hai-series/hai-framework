@@ -15,7 +15,9 @@ afterEach(() => {
 function captureOutput(): string[] {
   const writes: string[] = []
   vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: string | Uint8Array) => {
-    writes.push(typeof chunk === 'string' ? chunk : chunk.toString('utf8'))
+    writes.push(typeof chunk === 'string'
+      ? chunk
+      : chunk.toString('utf8'))
     return true
   }) as typeof process.stdout.write)
   return writes
@@ -48,7 +50,9 @@ logging:
       original.info('default-hidden')
       moduleLogger.info('module-hidden')
       named.info('named-hidden')
-      nested.warn('nested-visible', { metadata: { code: 'call-private' } })
+      nested.warn('nested-visible', {
+        metadata: { code: 'call-private' },
+      })
       named.warn('named-visible')
 
       const records: unknown[] = output.join('').trim().split('\n').map(line => JSON.parse(line))
@@ -62,7 +66,12 @@ logging:
         employeeId: '[REDACTED]',
         metadata: { code: '[REDACTED]' },
       })
-      expect(records[1]).toMatchObject({ level: 'warn', name: 'early-module', deployment: 'configured', msg: 'named-visible' })
+      expect(records[1]).toMatchObject({
+        level: 'warn',
+        name: 'early-module',
+        deployment: 'configured',
+        msg: 'named-visible',
+      })
       expect(output.join('')).not.toContain('hidden')
       expect(output.join('')).not.toContain('call-private')
     }
@@ -72,21 +81,39 @@ logging:
   })
 
   it('setLevel 改变实际输出，create 显式级别与本地上下文继续优先于全局', () => {
-    core.logger.configure({ level: 'info', format: 'json', context: { source: 'global-before' } })
+    core.logger.configure({
+      level: 'info',
+      format: 'json',
+      context: { source: 'global-before' },
+    })
     const output = captureOutput()
     const inherited = core.logger.create({ name: 'inherited' }).child({ feature: 'child' })
-    const explicit = core.logger.create({ name: 'explicit', level: 'debug', format: 'json', context: { source: 'local' } })
+    const explicit = core.logger.create({
+      name: 'explicit',
+      level: 'debug',
+      format: 'json',
+      context: { source: 'local' },
+    })
     core.logger.setLevel('error')
     inherited.warn('inherited-hidden')
     explicit.debug('explicit-debug')
-    core.logger.configure({ context: { source: 'global-after' }, redact: ['employeeId'] })
+    core.logger.configure({
+      context: { source: 'global-after' },
+      redact: ['employeeId'],
+    })
     inherited.error('inherited-error', { employeeId: 'private-id' })
     explicit.info('explicit-info')
 
     const records: unknown[] = output.join('').trim().split('\n').map(line => JSON.parse(line))
     expect(records).toHaveLength(3)
     expect(records[0]).toMatchObject({ msg: 'explicit-debug', level: 'debug', source: 'local' })
-    expect(records[1]).toMatchObject({ msg: 'inherited-error', level: 'error', source: 'global-after', feature: 'child', employeeId: '[REDACTED]' })
+    expect(records[1]).toMatchObject({
+      msg: 'inherited-error',
+      level: 'error',
+      source: 'global-after',
+      feature: 'child',
+      employeeId: '[REDACTED]',
+    })
     expect(records[2]).toMatchObject({ msg: 'explicit-info', level: 'info', source: 'local' })
     expect(output.join('')).not.toContain('inherited-hidden')
   })

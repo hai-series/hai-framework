@@ -11,7 +11,9 @@ afterEach(() => {
 })
 
 function button(target: ParentNode, text: string) {
-  const found = [...target.querySelectorAll('button')].find(item => item.textContent?.trim() === text)
+  const found = [
+    ...target.querySelectorAll('button'),
+  ].find(item => item.textContent?.trim() === text)
   expect(found).toBeDefined()
   return found!
 }
@@ -21,9 +23,16 @@ describe('反馈短录屏', () => {
     if (action === '超时' || action === '延迟启动')
       vi.useFakeTimers()
     let beginEncoding = () => {}
-    const track = Object.assign(new EventTarget(), { stop: vi.fn() })
-    const getDisplayMedia = vi.fn(async () => ({ getTracks: () => [track], getVideoTracks: () => [track] }))
-    vi.stubGlobal('navigator', { mediaDevices: { getDisplayMedia } })
+    const track = Object.assign(new EventTarget(), {
+      stop: vi.fn(),
+    })
+    const getDisplayMedia = vi.fn(async () => ({
+      getTracks: () => [track],
+      getVideoTracks: () => [track],
+    }))
+    vi.stubGlobal('navigator', {
+      mediaDevices: { getDisplayMedia },
+    })
     class Recorder {
       static isTypeSupported() {
         return true
@@ -46,8 +55,25 @@ describe('反馈短录屏', () => {
         this.state = 'inactive'
         // 原生结束事件异步发送；最终数据写出前不能关闭共享轨道。
         queueMicrotask(() => {
-          const bytes = track.stop.mock.calls.length ? new Uint8Array() : new Uint8Array([0x1A, 0x45, 0xDF, 0xA3, 0, 0, 0, 0, 0, 0, 0, 0])
-          this.ondataavailable?.({ data: new Blob([bytes]) })
+          const bytes = track.stop.mock.calls.length
+            ? new Uint8Array()
+            : new Uint8Array([
+                0x1A,
+                0x45,
+                0xDF,
+                0xA3,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+              ])
+          this.ondataavailable?.({
+            data: new Blob([bytes]),
+          })
           void this.onstop?.()
         })
       }
@@ -57,7 +83,10 @@ describe('反馈短录屏', () => {
     document.body.append(target)
     const onrecord = vi.fn(async (_file: File) => {})
     const onactive = vi.fn()
-    const component = mount(FeedbackRecorder, { target, props: { onrecord, onactive } })
+    const component = mount(FeedbackRecorder, {
+      target,
+      props: { onrecord, onactive },
+    })
     let disposed = false
     try {
       flushSync()
@@ -84,7 +113,9 @@ describe('反馈短录屏', () => {
         await vi.advanceTimersByTimeAsync(60_000)
       }
       else {
-        button(document.body, action === '取消' ? '取消录屏' : '停止录屏').click()
+        button(document.body, action === '取消'
+          ? '取消录屏'
+          : '停止录屏').click()
       }
       await Promise.resolve()
       expect(track.stop).toHaveBeenCalledOnce()
@@ -104,9 +135,13 @@ describe('反馈短录屏', () => {
   })
 
   it('用户拒绝选择时保留反馈入口并显示可重试提示', async () => {
-    vi.stubGlobal('navigator', { mediaDevices: { getDisplayMedia: vi.fn(async () => {
-      throw new DOMException('Denied', 'NotAllowedError')
-    }) } })
+    vi.stubGlobal('navigator', {
+      mediaDevices: {
+        getDisplayMedia: vi.fn(async () => {
+          throw new DOMException('Denied', 'NotAllowedError')
+        }),
+      },
+    })
     vi.stubGlobal('MediaRecorder', class {
       static isTypeSupported() {
         return true
@@ -115,7 +150,13 @@ describe('反馈短录屏', () => {
     const target = document.createElement('div')
     document.body.append(target)
     const onactive = vi.fn()
-    const component = mount(FeedbackRecorder, { target, props: { onrecord: vi.fn(), onactive } })
+    const component = mount(FeedbackRecorder, {
+      target,
+      props: {
+        onrecord: vi.fn(),
+        onactive,
+      },
+    })
     try {
       flushSync()
       button(target, '录屏').click()

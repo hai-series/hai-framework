@@ -14,7 +14,12 @@ import { z } from 'zod'
  */
 export const TrustedProxiesSchema = z.union([
   z.literal('auto'),
-  z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()])).max(1000),
+  z.array(z.union([
+    z.ipv4(),
+    z.ipv6(),
+    z.cidrv4(),
+    z.cidrv6(),
+  ])).max(1000),
 ]).describe('可信代理 IP/CIDR；默认 auto 在普通宿主忽略转发头，仅受管私有 Compose 采用容器网段')
 
 /**
@@ -27,9 +32,19 @@ export const TrustedProxiesSchema = z.union([
  */
 export const AccessConditionSchema = z.strictObject({
   /** 允许的 IPv4/IPv6 地址或 CIDR；非空时只允许匹配的可信客户端地址。 */
-  allowIps: z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()])).max(1000).default([]).describe('允许的 IPv4/IPv6 地址或 CIDR；空数组不限，最多 1000 项'),
+  allowIps: z.array(z.union([
+    z.ipv4(),
+    z.ipv6(),
+    z.cidrv4(),
+    z.cidrv6(),
+  ])).max(1000).default([]).describe('允许的 IPv4/IPv6 地址或 CIDR；空数组不限，最多 1000 项'),
   /** 拒绝的 IP/CIDR；与 allowIps 同时命中时拒绝优先。 */
-  denyIps: z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()])).max(1000).default([]).describe('拒绝的 IP/CIDR；拒绝优先，空数组不限，最多 1000 项'),
+  denyIps: z.array(z.union([
+    z.ipv4(),
+    z.ipv6(),
+    z.cidrv4(),
+    z.cidrv6(),
+  ])).max(1000).default([]).describe('拒绝的 IP/CIDR；拒绝优先，空数组不限，最多 1000 项'),
   /** 时间窗口的 IANA 时区，默认 UTC；不使用客户端时钟。 */
   timezone: z.string().default('UTC').refine((value) => {
     try {
@@ -50,7 +65,9 @@ export const AccessConditionSchema = z.strictObject({
 })
 
 const requestPathSchema = z.string().min(1).max(2048).refine((value) => {
-  const path = value.endsWith('/**') ? value.slice(0, -3) || '/' : value
+  const path = value.endsWith('/**')
+    ? value.slice(0, -3) || '/'
+    : value
   // eslint-disable-next-line no-control-regex -- 配置边界必须拒绝控制字符，避免路径匹配和代理解释产生差异。
   return path.startsWith('/') && !/[\\%?#*\u0000-\u0020\u007F]/.test(path) && !path.includes('//')
     && !path.split('/').some(segment => segment === '.' || segment === '..')
@@ -74,7 +91,17 @@ export const RequestAccessPolicySchema = z.strictObject({
     /** 完整请求路径；末尾 /** 同时匹配该路径及子路径，大小写敏感。 */
     paths: z.array(requestPathSchema).min(1).max(100).describe('完整请求路径列表，包含部署前缀；精确或末尾 /**，最多 100 项'),
     /** HTTP 方法，空数组表示所有方法；GET 不隐含 HEAD。 */
-    methods: z.array(z.enum(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'CONNECT', 'TRACE'])).max(9).default([]).describe('受该规则约束的 HTTP 方法；空数组全部方法，GET 不隐含 HEAD'),
+    methods: z.array(z.enum([
+      'GET',
+      'HEAD',
+      'POST',
+      'PUT',
+      'PATCH',
+      'DELETE',
+      'OPTIONS',
+      'CONNECT',
+      'TRACE',
+    ])).max(9).default([]).describe('受该规则约束的 HTTP 方法；空数组全部方法，GET 不隐含 HEAD'),
     /** 省略沿用宿主；required 强制应用层加密，disabled 要求普通明文请求，HTTPS 仍须启用。 */
     encryption: z.enum(['required', 'disabled']).optional().describe('路径的应用层加解密模式；省略沿用宿主，required 强制加密，disabled 明文；重叠路径和方法不得冲突'),
   })).max(1000).default([]).describe('路径访问规则，最多 1000 条；全局和所有匹配规则都必须通过'),

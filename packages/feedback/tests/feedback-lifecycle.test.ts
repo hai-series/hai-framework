@@ -12,7 +12,11 @@ beforeAll(async () => {
   root = await mkdtemp(join(tmpdir(), 'hai-feedback-test-'))
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
   expect((await storage.init({ type: 'local', root })).success).toBe(true)
-  expect((await reach.init({ providers: [{ name: 'email', type: 'console' }] })).success).toBe(true)
+  expect((await reach.init({
+    providers: [
+      { name: 'email', type: 'console' },
+    ],
+  })).success).toBe(true)
 })
 afterAll(async () => {
   await feedback.close()
@@ -24,7 +28,13 @@ afterAll(async () => {
 })
 
 it('前置服务已就绪时建立反馈存储，关闭后恢复未初始化状态', async () => {
-  const result = await feedback.init({ appId: 'feedback-test', recipients: ['admin@example.test'], notificationProvider: 'email', adminUrl: 'http://localhost/admin/feedback', workerIntervalMs: 0 })
+  const result = await feedback.init({
+    appId: 'feedback-test',
+    recipients: ['admin@example.test'],
+    notificationProvider: 'email',
+    adminUrl: 'http://localhost/admin/feedback',
+    workerIntervalMs: 0,
+  })
   expect(result.success).toBe(true)
   expect(feedback.isInitialized).toBe(true)
   const table = await reldb.sql.get('SELECT COUNT(*) AS count FROM hai_feedback_reports')

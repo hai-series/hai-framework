@@ -142,22 +142,39 @@ export function createDeployFixtureCleanupReport(runId: string, fixtures: Iterab
   let created = false
   return (failures) => {
     const errors = failures.map(({ stage, error }) => {
-      const status = error && typeof error === 'object' && 'status' in error ? error.status : undefined
+      const status = error && typeof error === 'object' && 'status' in error
+        ? error.status
+        : undefined
       return {
         stage,
-        kind: error instanceof AggregateError ? 'aggregate-error' : error instanceof Error ? 'error' : 'unknown-error',
-        ...(typeof status === 'number' && Number.isInteger(status) && status >= 0 && status <= 255 ? { exitCode: status } : {}),
+        kind: error instanceof AggregateError
+          ? 'aggregate-error'
+          : error instanceof Error
+            ? 'error'
+            : 'unknown-error',
+        ...(typeof status === 'number' && Number.isInteger(status) && status >= 0 && status <= 255
+          ? { exitCode: status }
+          : {}),
       }
     })
     mkdirSync(directory, { recursive: true })
-    writeFileSync(reportPath, `${JSON.stringify({ ...resources, errors }, null, 2)}\n`, { flag: created ? 'w' : 'wx', mode: 0o600 })
+    writeFileSync(reportPath, `${JSON.stringify({ ...resources, errors }, null, 2)}\n`, {
+      flag: created ? 'w' : 'wx',
+      mode: 0o600,
+    })
     created = true
   }
 }
 
 /** 只对明确参数执行引擎命令；该夹具不接受任意 shell 片段。 */
 function command(runtime: DeployFixtureRuntime, args: string[], timeoutMs = 15_000): string {
-  return execFileSync(runtime, args, { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024 })
+  return execFileSync(runtime, args, {
+    encoding: 'utf8',
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: timeoutMs,
+    maxBuffer: 4 * 1024 * 1024,
+  })
 }
 
 /**
@@ -187,7 +204,9 @@ export function ensureDeployTestBaseImage(runtime: DeployFixtureRuntime, imageRe
     return
   }
   catch (error) {
-    const stderr = error && typeof error === 'object' && 'stderr' in error ? String(error.stderr) : ''
+    const stderr = error && typeof error === 'object' && 'stderr' in error
+      ? String(error.stderr)
+      : ''
     if (!/no such image|image not known|image not found|unable to find image/i.test(stderr))
       throw new Error('Deployment public base image inspection failed')
   }
@@ -196,7 +215,11 @@ export function ensureDeployTestBaseImage(runtime: DeployFixtureRuntime, imageRe
     throw new Error('Deployment base image preparation deadline exceeded')
   try {
     const publicPath = imageRef.replace(/^docker\.io\//, '')
-    const source = mirror ? `${mirror}/${publicPath.includes('/') ? '' : 'library/'}${publicPath}` : imageRef
+    const source = mirror
+      ? `${mirror}/${publicPath.includes('/')
+        ? ''
+        : 'library/'}${publicPath}`
+      : imageRef
     command(runtime, ['pull', source], pullBudget)
     if (source !== imageRef) {
       const tagBudget = deadline - Date.now()
@@ -248,8 +271,18 @@ export async function executeDeployTestFixture(runtime: DeployFixtureRuntime, fi
         return
       }
       if (outcome.error) {
-        const nativeCode = 'code' in outcome.error ? outcome.error.code : undefined
-        const reason = options.signal?.aborted ? options.signal.reason instanceof Error && options.signal.reason.name === 'TimeoutError' ? 'timeout' : 'aborted' : nativeCode === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' ? 'output-limit' : signal === 'SIGKILL' ? 'timeout' : 'failed'
+        const nativeCode = 'code' in outcome.error
+          ? outcome.error.code
+          : undefined
+        const reason = options.signal?.aborted
+          ? options.signal.reason instanceof Error && options.signal.reason.name === 'TimeoutError'
+            ? 'timeout'
+            : 'aborted'
+          : nativeCode === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
+            ? 'output-limit'
+            : signal === 'SIGKILL'
+              ? 'timeout'
+              : 'failed'
         // 安装工具可能输出代理认证信息；失败时连 stdio 尾部也不交给 Vitest 序列化。
         const diagnostic = classifyDeployFixturePreparation(`${outcome.stdout}\n${outcome.stderr}`)
         reject(new Error(`Deployment fixture preparation ${options.stage ?? 'command'} ${reason}; exit=${code ?? 'none'}; signal=${signal ?? 'none'}; diagnostic=${diagnostic}`))
@@ -305,7 +338,15 @@ interface DeployFixturePreparation {
 /** 按成功 create 的完整 ID 删除并核验消失；查询结果仅核验，不作为领养依据。 */
 function removeCreatedContainer(runtime: DeployFixtureRuntime, containerId: string): void {
   command(runtime, ['rm', '-f', containerId], 60_000)
-  const remaining = command(runtime, ['container', 'ls', '--all', '--quiet', '--no-trunc', '--filter', `id=${containerId}`]).trim()
+  const remaining = command(runtime, [
+    'container',
+    'ls',
+    '--all',
+    '--quiet',
+    '--no-trunc',
+    '--filter',
+    `id=${containerId}`,
+  ]).trim()
   if (remaining)
     throw new Error(`Deployment fixture removal was not confirmed for ${containerId}`)
 }
@@ -372,7 +413,9 @@ export async function createDeployTestFixture(runtime: DeployFixtureRuntime, ima
     throw new Error('Deployment fixture preparation deadline exceeded')
   const deadline = Date.now() + timeoutMs
   const deadlineSignal = AbortSignal.timeout(timeoutMs)
-  const signal = preparation.signal ? AbortSignal.any([preparation.signal, deadlineSignal]) : deadlineSignal
+  const signal = preparation.signal
+    ? AbortSignal.any([preparation.signal, deadlineSignal])
+    : deadlineSignal
   const remaining = (): number => {
     const remainingMs = deadline - Date.now()
     if (signal.aborted || remainingMs <= 0)
@@ -387,14 +430,23 @@ export async function createDeployTestFixture(runtime: DeployFixtureRuntime, ima
       '--init',
       '--pull=never',
       '--network=bridge',
-      ...(runtime === 'podman' ? ['--http-proxy=false'] : []),
+      ...(runtime === 'podman'
+        ? ['--http-proxy=false']
+        : []),
       '--name',
       `hai-deploy-e2e-sshd-${runId}`,
       '--cidfile',
       cidfile,
       '--label',
       `${DEPLOY_FIXTURE_OWNER_LABEL}=${runId}`,
-      ...(preparation.nestedRuntime ? ['--privileged', '--cgroupns=host', '-v', '/sys/fs/cgroup:/sys/fs/cgroup:rw'] : []),
+      ...(preparation.nestedRuntime
+        ? [
+            '--privileged',
+            '--cgroupns=host',
+            '-v',
+            '/sys/fs/cgroup:/sys/fs/cgroup:rw',
+          ]
+        : []),
       '-p',
       '127.0.0.1::22',
       '-p',
@@ -405,12 +457,16 @@ export async function createDeployTestFixture(runtime: DeployFixtureRuntime, ima
       `AUTHORIZED_KEY=${publicKey}`,
       '-e',
       `HAI_DEPLOY_E2E_RUN=${runId}`,
-      ...(preparation.command?.length ? ['--entrypoint', preparation.command[0]!] : []),
+      ...(preparation.command?.length
+        ? ['--entrypoint', preparation.command[0]!]
+        : []),
       imageRef,
       ...(preparation.command?.slice(1) ?? []),
     ], remaining()).trim()
     // 不通过名称恢复拥有权；只接收成功 create 的 stdout 或其独占 cidfile。
-    const identity = /^[a-f0-9]{64}$/i.test(output) ? output : readFileSync(cidfile, 'utf8').trim()
+    const identity = /^[a-f0-9]{64}$/i.test(output)
+      ? output
+      : readFileSync(cidfile, 'utf8').trim()
     if (!/^[a-f0-9]{64}$/i.test(identity))
       throw new Error('Container create did not return a valid deployment fixture ID')
     containerId = identity
@@ -421,7 +477,13 @@ export async function createDeployTestFixture(runtime: DeployFixtureRuntime, ima
     const container = record(inspected[0])
     if (record(record(container.Config).Labels)[DEPLOY_FIXTURE_OWNER_LABEL] !== runId)
       throw new Error('Deployment fixture ownership label does not match its create identity')
-    const fixture = { containerId, runId, sshHostPort: mappedPort(container, 22), webHostPort: mappedPort(container, DEPLOY_FIXTURE_WEB_PORT), apiHostPort: mappedPort(container, DEPLOY_FIXTURE_API_PORT) }
+    const fixture = {
+      containerId,
+      runId,
+      sshHostPort: mappedPort(container, 22),
+      webHostPort: mappedPort(container, DEPLOY_FIXTURE_WEB_PORT),
+      apiHostPort: mappedPort(container, DEPLOY_FIXTURE_API_PORT),
+    }
     remaining()
     await preparation.prepare?.(fixture, signal)
     if (signal.aborted || deadline <= Date.now())
@@ -436,7 +498,11 @@ export async function createDeployTestFixture(runtime: DeployFixtureRuntime, ima
       catch (cleanupError) {
         const failures: unknown[] = [error, cleanupError]
         try {
-          createDeployFixtureCleanupReport(runId, [{ containerId, runId }], [])([{ stage: 'container-remove', error: cleanupError }])
+          createDeployFixtureCleanupReport(runId, [
+            { containerId, runId },
+          ], [])([
+            { stage: 'container-remove', error: cleanupError },
+          ])
         }
         catch (reportError) {
           failures.push(reportError)

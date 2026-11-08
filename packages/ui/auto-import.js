@@ -172,7 +172,10 @@ function mergeHaiUiImport(scriptContent, components) {
       .map(name => name.trim())
       .filter(Boolean)
 
-    const merged = [...existing, ...components.filter(name => !existing.includes(name))]
+    const merged = [
+      ...existing,
+      ...components.filter(name => !existing.includes(name)),
+    ]
     const updated = `import { ${merged.join(', ')} } from '@h-ai/ui'`
     return scriptContent.replace(UI_IMPORT_REGEX, updated)
   }

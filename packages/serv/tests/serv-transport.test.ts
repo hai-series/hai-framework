@@ -27,13 +27,44 @@ function createCryptoWithTransportServer(
 
 // 仅隔离 HTTP 适配器的字节预算；真实算法与重放另有端到端回归。
 function testPayload(): EncryptedRequestPayload {
-  return { context: { version: 2, serverKeyId: 'test-v1', clientId: 'client-id', requestId: 'a'.repeat(32), issuedAt: Date.now(), method: 'POST', pathHash: 'a'.repeat(64) }, direction: 'request', status: 0, encryptedKey: 'a'.repeat(256), ciphertext: 'a'.repeat(32), iv: 'a'.repeat(32), tag: 'a'.repeat(64), signature: 'a'.repeat(128) }
+  return {
+    context: {
+      version: 2,
+      serverKeyId: 'test-v1',
+      clientId: 'client-id',
+      requestId: 'a'.repeat(32),
+      issuedAt: Date.now(),
+      method: 'POST',
+      pathHash: 'a'.repeat(64),
+    },
+    direction: 'request',
+    status: 0,
+    encryptedKey: 'a'.repeat(256),
+    ciphertext: 'a'.repeat(32),
+    iv: 'a'.repeat(32),
+    tag: 'a'.repeat(64),
+    signature: 'a'.repeat(128),
+  }
 }
 function testResponse(): EncryptedPayload {
-  return { ...testPayload(), direction: 'response', status: 200 }
+  return {
+    ...testPayload(),
+    direction: 'response',
+    status: 200,
+  }
 }
 function authenticatedGetHeaders() {
-  return { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: 'true', [TRANSPORT_PROTOCOL.ENVELOPE_HEADER]: JSON.stringify({ ...testPayload(), context: { ...testPayload().context, method: 'GET' } }) }
+  return {
+    [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id',
+    [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: 'true',
+    [TRANSPORT_PROTOCOL.ENVELOPE_HEADER]: JSON.stringify({
+      ...testPayload(),
+      context: {
+        ...testPayload().context,
+        method: 'GET',
+      },
+    }),
+  }
 }
 
 function createFailingEncryptManager(): TransportEncryptionManager {
@@ -50,24 +81,49 @@ function createFailingEncryptManager(): TransportEncryptionManager {
 }
 
 describe('serv.createApp({ transport })', () => {
-  it.each([{ offset: 120_000, method: 'POST' }, { offset: -20_000, method: 'HEAD' }])('时间偏差 $offset 经 $method 中间件返回服务器时间', async ({ offset, method }) => {
-    const app = serv.createApp({ contract, procedures, http: { apiPrefix: '/api/v1', openapi: false, docs: false }, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto, maxFutureSkewSeconds: 10, maxRequestAgeSeconds: 90 } })
+  it.each([
+    { offset: 120_000, method: 'POST' },
+    { offset: -20_000, method: 'HEAD' },
+  ])('时间偏差 $offset 经 $method 中间件返回服务器时间', async ({ offset, method }) => {
+    const app = serv.createApp({
+      contract,
+      procedures,
+      http: { apiPrefix: '/api/v1', openapi: false, docs: false },
+      transport: {
+        keyStore: createInMemoryKeyStore(),
+        serverKeyRing,
+        crypto,
+        maxFutureSkewSeconds: 10,
+        maxRequestAgeSeconds: 90,
+      },
+    })
     let serverTime: number | undefined
-    const client = crypto.transport.createClient({ keyExchangeUrl: 'http://localhost/api/v1/_hai/key-exchange', fetch: async (input, init) => {
-      const request = new Request(input, init)
-      if (request.url.endsWith('/_hai/key-exchange'))
-        return app.fetch(request)
-      serverTime = Date.now() + offset
-      const clock = vi.spyOn(Date, 'now').mockReturnValue(serverTime)
-      try {
-        return await app.fetch(request)
-      }
-      finally { clock.mockRestore() }
-    } })
+    const client = crypto.transport.createClient({
+      keyExchangeUrl: 'http://localhost/api/v1/_hai/key-exchange',
+      fetch: async (input, init) => {
+        const request = new Request(input, init)
+        if (request.url.endsWith('/_hai/key-exchange'))
+          return app.fetch(request)
+        serverTime = Date.now() + offset
+        const clock = vi.spyOn(Date, 'now').mockReturnValue(serverTime)
+        try {
+          return await app.fetch(request)
+        }
+        finally { clock.mockRestore() }
+      },
+    })
     try {
-      const error: unknown = await client.encryptedFetch('http://localhost/api/v1/whatever', { method, body: method === 'POST' ? '{}' : undefined }).catch((error: unknown) => error)
+      const error: unknown = await client.encryptedFetch('http://localhost/api/v1/whatever', {
+        method,
+        body: method === 'POST'
+          ? '{}'
+          : undefined,
+      }).catch((error: unknown) => error)
       expect(error).toBeInstanceOf(TransportTimeError)
-      expect(error).toMatchObject({ serverTime, message: expect.stringContaining('UTC') })
+      expect(error).toMatchObject({
+        serverTime,
+        message: expect.stringContaining('UTC'),
+      })
     }
     finally { client.destroy() }
   })
@@ -76,7 +132,10 @@ describe('serv.createApp({ transport })', () => {
     const key = crypto.asymmetric.generateKeyPair()
     if (!key.success)
       throw new Error(key.error.message)
-    serverKeyRing = { activeKeyId: 'test-v1', keys: { 'test-v1': key.data } }
+    serverKeyRing = {
+      activeKeyId: 'test-v1',
+      keys: { 'test-v1': key.data },
+    }
   })
   afterAll(async () => {
     await crypto.close()
@@ -87,7 +146,11 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       http: { apiPrefix, openapi: false, docs: false },
-      transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto },
+      transport: {
+        keyStore: createInMemoryKeyStore(),
+        serverKeyRing,
+        crypto,
+      },
     })
 
     // 健康检查路径不在 keyExchange 范围；但缺少 X-Client-Id 时被中间件拦截。
@@ -156,7 +219,11 @@ describe('serv.createApp({ transport })', () => {
           },
         },
       ],
-      transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto },
+      transport: {
+        keyStore: createInMemoryKeyStore(),
+        serverKeyRing,
+        crypto,
+      },
     })
 
     const response = await app.request('/api/v1/_hai/key-exchange', {
@@ -178,7 +245,11 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       http: { apiPrefix: '/api/v1', openapi: false, docs: false },
-      transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto },
+      transport: {
+        keyStore: createInMemoryKeyStore(),
+        serverKeyRing,
+        crypto,
+      },
     })
 
     // 注册一个会回显请求体的纯 Hono 路由（绕开 oRPC）：直接读取明文 body 并返回 JSON。
@@ -191,7 +262,11 @@ describe('serv.createApp({ transport })', () => {
     const client = crypto.transport.createClient({
       keyExchangeUrl: 'http://test.local/api/v1/_hai/key-exchange',
       fetch: async (input, init) => {
-        const req = input instanceof Request ? input : new Request(typeof input === 'string' ? input : input.toString(), init)
+        const req = input instanceof Request
+          ? input
+          : new Request(typeof input === 'string'
+              ? input
+              : input.toString(), init)
         // app.request 接受 path（或 Request）；这里直接传 Request。
         return app.fetch(req)
       },
@@ -209,12 +284,23 @@ describe('serv.createApp({ transport })', () => {
   })
 
   it('空 POST 仍使用认证封装，普通空请求拒绝', async () => {
-    const app = serv.createApp({ contract, procedures, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto } })
+    const app = serv.createApp({
+      contract,
+      procedures,
+      transport: {
+        keyStore: createInMemoryKeyStore(),
+        serverKeyRing,
+        crypto,
+      },
+    })
     const handler = vi.fn(() => new Response(null, { status: 204 }))
     app.post('/api/v1/empty', handler)
     expect((await app.request('/api/v1/empty', { method: 'POST' })).status).toBe(400)
     expect(handler).not.toHaveBeenCalled()
-    const client = crypto.transport.createClient({ keyExchangeUrl: 'http://test.local/api/v1/_hai/key-exchange', fetch: (input, init) => app.fetch(new Request(input, init)) })
+    const client = crypto.transport.createClient({
+      keyExchangeUrl: 'http://test.local/api/v1/_hai/key-exchange',
+      fetch: (input, init) => app.fetch(new Request(input, init)),
+    })
     expect((await client.encryptedFetch('http://test.local/api/v1/empty', { method: 'POST' })).status).toBe(204)
     expect(handler).toHaveBeenCalledOnce()
   })
@@ -228,7 +314,11 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       http: { apiPrefix: '/api/v1', openapi: false, docs: false },
-      transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto: failingCrypto },
+      transport: {
+        keyStore: createInMemoryKeyStore(),
+        serverKeyRing,
+        crypto: failingCrypto,
+      },
     })
 
     app.get('/api/v1/secret', c => c.json({ secret: 'plain' }))
@@ -239,18 +329,44 @@ describe('serv.createApp({ transport })', () => {
 
     expect(resp.status).toBe(500)
     expect(resp.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
-    await expect(resp.json()).resolves.toMatchObject({ error: expect.not.stringContaining('plain') })
+    await expect(resp.json()).resolves.toMatchObject({
+      error: expect.not.stringContaining('plain'),
+    })
   })
 
   it.each([
     { name: '无 Content-Type/Length 的字节正文', stream: false, headers: {} },
     { name: '无 Content-Type/Length 的流正文', stream: true, headers: {} },
-    { name: 'chunked 流正文', stream: true, headers: { 'Transfer-Encoding': 'chunked' } },
-    { name: '伪造 Content-Length=0 的非空流', stream: true, headers: { 'Content-Length': '0', 'Content-Type': 'application/json' } },
-    { name: '自定义方法的非空流', stream: true, headers: { 'Content-Type': 'application/json' }, method: 'PROPFIND' },
+    {
+      name: 'chunked 流正文',
+      stream: true,
+      headers: { 'Transfer-Encoding': 'chunked' },
+    },
+    {
+      name: '伪造 Content-Length=0 的非空流',
+      stream: true,
+      headers: { 'Content-Length': '0', 'Content-Type': 'application/json' },
+    },
+    {
+      name: '自定义方法的非空流',
+      stream: true,
+      headers: { 'Content-Type': 'application/json' },
+      method: 'PROPFIND',
+    },
   ])('实际非空请求必须加密：$name', async ({ stream, headers, method }) => {
-    const transportCrypto = createCryptoWithTransportServer(() => ({ success: true, data: createFailingEncryptManager() }))
-    const app = serv.createApp({ contract, procedures, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto: transportCrypto } })
+    const transportCrypto = createCryptoWithTransportServer(() => ({
+      success: true,
+      data: createFailingEncryptManager(),
+    }))
+    const app = serv.createApp({
+      contract,
+      procedures,
+      transport: {
+        keyStore: createInMemoryKeyStore(),
+        serverKeyRing,
+        crypto: transportCrypto,
+      },
+    })
     const handler = vi.fn(() => new Response(null, { status: 204 }))
     app.all('/api/v1/raw-body', handler)
     const bytes = new TextEncoder().encode('{"amount":90000}')
@@ -274,8 +390,19 @@ describe('serv.createApp({ transport })', () => {
   })
 
   it('无认证的零字节请求流仍拒绝进入业务', async () => {
-    const transportCrypto = createCryptoWithTransportServer(() => ({ success: true, data: createFailingEncryptManager() }))
-    const app = serv.createApp({ contract, procedures, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto: transportCrypto } })
+    const transportCrypto = createCryptoWithTransportServer(() => ({
+      success: true,
+      data: createFailingEncryptManager(),
+    }))
+    const app = serv.createApp({
+      contract,
+      procedures,
+      transport: {
+        keyStore: createInMemoryKeyStore(),
+        serverKeyRing,
+        crypto: transportCrypto,
+      },
+    })
     const handler = vi.fn(async (request: Request) => {
       expect(await request.text()).toBe('')
       return new Response(null, { status: 204 })
@@ -284,7 +411,9 @@ describe('serv.createApp({ transport })', () => {
     const request = new Request('http://localhost/api/v1/raw-body', {
       method: 'POST',
       headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', 'Content-Type': 'application/json' },
-      body: new ReadableStream<Uint8Array>({ start: controller => controller.close() }),
+      body: new ReadableStream<Uint8Array>({
+        start: controller => controller.close(),
+      }),
       // @ts-expect-error Node fetch 的流式请求需要 duplex。
       duplex: 'half',
     })
@@ -293,8 +422,19 @@ describe('serv.createApp({ transport })', () => {
   })
 
   it('响应伪造 Content-Length=0 也不能跳过加密', async () => {
-    const transportCrypto = createCryptoWithTransportServer(() => ({ success: true, data: createFailingEncryptManager() }))
-    const app = serv.createApp({ contract, procedures, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto: transportCrypto } })
+    const transportCrypto = createCryptoWithTransportServer(() => ({
+      success: true,
+      data: createFailingEncryptManager(),
+    }))
+    const app = serv.createApp({
+      contract,
+      procedures,
+      transport: {
+        keyStore: createInMemoryKeyStore(),
+        serverKeyRing,
+        crypto: transportCrypto,
+      },
+    })
     app.get('/api/v1/secret', () => new Response('{"secret":"private"}', {
       headers: { 'Content-Type': 'application/json', 'Content-Length': '0' },
     }))
@@ -313,7 +453,15 @@ describe('serv.createApp({ transport })', () => {
     const register = vi.spyOn(manager, 'registerClientKey')
     const decrypt = vi.spyOn(manager, 'decryptRequest')
     const transportCrypto = createCryptoWithTransportServer(() => ok(manager))
-    const app = serv.createApp({ contract, procedures, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto: transportCrypto } })
+    const app = serv.createApp({
+      contract,
+      procedures,
+      transport: {
+        keyStore: createInMemoryKeyStore(),
+        serverKeyRing,
+        crypto: transportCrypto,
+      },
+    })
     const cancel = vi.fn()
     let pulled = 0
     const body = new ReadableStream<Uint8Array>({
@@ -329,7 +477,9 @@ describe('serv.createApp({ transport })', () => {
       headers: {
         'Content-Type': 'application/json',
         [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id',
-        ...(encrypted ? { [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE } : {}),
+        ...(encrypted
+          ? { [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE }
+          : {}),
       },
       // @ts-expect-error Node fetch 的流式请求需要 duplex。
       duplex: 'half',
@@ -342,10 +492,26 @@ describe('serv.createApp({ transport })', () => {
     expect(decrypt).not.toHaveBeenCalled()
   })
 
-  it.each([null, { clientPublicKey: 'key' }, { clientPublicKey: `04${'0'.repeat(128)}` }, { clientPublicKey: `04${'f'.repeat(128)}` }, { clientPublicKey: '你'.repeat(1366) }])('拒绝握手内无效或公钥字段超限的输入：%j', async (body) => {
+  it.each([
+    null,
+    { clientPublicKey: 'key' },
+    { clientPublicKey: `04${'0'.repeat(128)}` },
+    { clientPublicKey: `04${'f'.repeat(128)}` },
+    {
+      clientPublicKey: '你'.repeat(1366),
+    },
+  ])('拒绝握手内无效或公钥字段超限的输入：%j', async (body) => {
     const manager = createFailingEncryptManager()
     const register = vi.spyOn(manager, 'registerClientKey')
-    const app = serv.createApp({ contract, procedures, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto: createCryptoWithTransportServer(() => ok(manager)) } })
+    const app = serv.createApp({
+      contract,
+      procedures,
+      transport: {
+        keyStore: createInMemoryKeyStore(),
+        serverKeyRing,
+        crypto: createCryptoWithTransportServer(() => ok(manager)),
+      },
+    })
     const response = await app.request('/api/v1/_hai/key-exchange', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -357,7 +523,15 @@ describe('serv.createApp({ transport })', () => {
 
   it('读取请求期间取消会停止原流并释放 reader', async () => {
     const manager = createFailingEncryptManager()
-    const app = serv.createApp({ contract, procedures, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto: createCryptoWithTransportServer(() => ok(manager)) } })
+    const app = serv.createApp({
+      contract,
+      procedures,
+      transport: {
+        keyStore: createInMemoryKeyStore(),
+        serverKeyRing,
+        crypto: createCryptoWithTransportServer(() => ok(manager)),
+      },
+    })
     const controller = new AbortController()
     const cancel = vi.fn()
     const body = new ReadableStream<Uint8Array>({ cancel })
@@ -381,8 +555,19 @@ describe('serv.createApp({ transport })', () => {
     const manager = createFailingEncryptManager()
     vi.spyOn(manager, 'getServerPublicKey').mockReturnValue('k'.repeat(TRANSPORT_BODY_LIMITS.publicKeyBytes + 1))
     const register = vi.spyOn(manager, 'registerClientKey')
-    const app = serv.createApp({ contract, procedures, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto: createCryptoWithTransportServer(() => ok(manager)) } })
-    const response = await app.request('/api/v1/_hai/key-exchange', { method: 'POST', body: JSON.stringify({ clientPublicKey: serverKeyRing.keys[serverKeyRing.activeKeyId]!.publicKey }) })
+    const app = serv.createApp({
+      contract,
+      procedures,
+      transport: {
+        keyStore: createInMemoryKeyStore(),
+        serverKeyRing,
+        crypto: createCryptoWithTransportServer(() => ok(manager)),
+      },
+    })
+    const response = await app.request('/api/v1/_hai/key-exchange', {
+      method: 'POST',
+      body: JSON.stringify({ clientPublicKey: serverKeyRing.keys[serverKeyRing.activeKeyId]!.publicKey }),
+    })
     expect(response.status).toBe(500)
     expect(register).not.toHaveBeenCalled()
   })
@@ -390,17 +575,38 @@ describe('serv.createApp({ transport })', () => {
   it('响应超过 UTF-8 字节上限时提前取消且不泄漏明文', async () => {
     const manager = createFailingEncryptManager()
     const encrypt = vi.spyOn(manager, 'encryptResponse')
-    const app = serv.createApp({ contract, procedures, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto: createCryptoWithTransportServer(() => ok(manager)) } })
+    const app = serv.createApp({
+      contract,
+      procedures,
+      transport: {
+        keyStore: createInMemoryKeyStore(),
+        serverKeyRing,
+        crypto: createCryptoWithTransportServer(() => ok(manager)),
+      },
+    })
     const cancel = vi.fn()
     const bytes = new TextEncoder().encode('你'.repeat(400_000))
-    const body = new ReadableStream<Uint8Array>({ start: controller => controller.enqueue(bytes), cancel })
-    app.get('/api/v1/raw-response', () => new Response(body, { headers: { 'Content-Type': 'application/json', 'Content-Length': '1' } }))
-    const response = await app.request('/api/v1/raw-response', { headers: authenticatedGetHeaders() })
+    const body = new ReadableStream<Uint8Array>({
+      start: controller => controller.enqueue(bytes),
+      cancel,
+    })
+    app.get('/api/v1/raw-response', () => new Response(body, {
+      headers: { 'Content-Type': 'application/json', 'Content-Length': '1' },
+    }))
+    const response = await app.request('/api/v1/raw-response', {
+      headers: authenticatedGetHeaders(),
+    })
     expect(response.status).toBe(500)
     expect(await response.text()).not.toContain('你')
     expect(encrypt).toHaveBeenCalledOnce()
     expect(encrypt.mock.calls[0]?.[1]).not.toContain('你')
-    expect(JSON.parse(encrypt.mock.calls[0]![1])).toMatchObject({ success: false, error: { code: 'hai:crypto:070', details: { direction: 'response' } } })
+    expect(JSON.parse(encrypt.mock.calls[0]![1])).toMatchObject({
+      success: false,
+      error: {
+        code: 'hai:crypto:070',
+        details: { direction: 'response' },
+      },
+    })
     expect(cancel).toHaveBeenCalledOnce()
     expect(body.locked).toBe(false)
   })
@@ -408,11 +614,23 @@ describe('serv.createApp({ transport })', () => {
   it('允许精确 UTF-8 边界的响应并清除旧编码与长度头', async () => {
     const manager = createFailingEncryptManager()
     const encrypt = vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok(testResponse()))
-    const app = serv.createApp({ contract, procedures, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto: createCryptoWithTransportServer(() => ok(manager)) } })
+    const app = serv.createApp({
+      contract,
+      procedures,
+      transport: {
+        keyStore: createInMemoryKeyStore(),
+        serverKeyRing,
+        crypto: createCryptoWithTransportServer(() => ok(manager)),
+      },
+    })
     const payloadSize = TRANSPORT_BODY_LIMITS.plaintextBytes - 8
     const text = `{"x":"${'你'.repeat(Math.floor(payloadSize / 3))}${'a'.repeat(payloadSize % 3)}"}`
-    app.get('/api/v1/raw-response', () => new Response(text, { headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' } }))
-    const response = await app.request('/api/v1/raw-response', { headers: authenticatedGetHeaders() })
+    app.get('/api/v1/raw-response', () => new Response(text, {
+      headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' },
+    }))
+    const response = await app.request('/api/v1/raw-response', {
+      headers: authenticatedGetHeaders(),
+    })
     expect(response.status).toBe(200)
     expect(encrypt).toHaveBeenCalledWith(expect.objectContaining({ clientId: 'client-id' }), text, 200)
     expect(response.headers.get('Content-Length')).toBeNull()
@@ -430,11 +648,19 @@ describe('serv.createApp({ transport })', () => {
     const app = serv.createApp({
       contract,
       procedures,
-      transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto: createCryptoWithTransportServer(() => ok(manager)) },
-      middlewares: [{ middleware: async (c, next) => {
-        await middleware(c)
-        await next()
-      } }],
+      transport: {
+        keyStore: createInMemoryKeyStore(),
+        serverKeyRing,
+        crypto: createCryptoWithTransportServer(() => ok(manager)),
+      },
+      middlewares: [
+        {
+          middleware: async (c, next) => {
+            await middleware(c)
+            await next()
+          },
+        },
+      ],
     })
     const handler = vi.fn()
     app.post('/api/v1/raw-body', async (c) => {
@@ -463,7 +689,9 @@ describe('serv.createApp({ transport })', () => {
     const app = new Hono()
     // 真实 Hono 宿主可在安装传输层前缓存正文；解密后不得复用该密文缓存。
     app.use(async (c, next) => {
-      c.req.bodyCache = { text: c.req.raw.clone().text() }
+      c.req.bodyCache = {
+        text: c.req.raw.clone().text(),
+      }
       expect(c.req.bodyCache.text).toBeDefined()
       await next()
     })
@@ -488,7 +716,11 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       http: { apiPrefix: '/api/v1', openapi: false, docs: false },
-      transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto },
+      transport: {
+        keyStore: createInMemoryKeyStore(),
+        serverKeyRing,
+        crypto,
+      },
     })
 
     // 注册一个返回 >1 MiB JSON 且不显式设置 Content-Length 的路由
@@ -512,7 +744,11 @@ describe('serv.createApp({ transport })', () => {
     // 通过 crypto 客户端发起加密请求
     const client = crypto.transport.createClient({
       keyExchangeUrl: 'http://test.local/api/v1/_hai/key-exchange',
-      fetch: async (input, init) => app.fetch(input instanceof Request ? input : new Request(typeof input === 'string' ? input : input.toString(), init)),
+      fetch: async (input, init) => app.fetch(input instanceof Request
+        ? input
+        : new Request(typeof input === 'string'
+            ? input
+            : input.toString(), init)),
     })
     // 复用已注册的 clientId / serverPublicKey 以模拟会话
     void exchanged

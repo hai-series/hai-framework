@@ -46,8 +46,14 @@ describe('reldb.tx', () => {
 
       const result = await reldb.tx.wrap(async (tx) => {
         await tx.batch([
-          { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户1'] },
-          { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户2'] },
+          {
+            sql: 'INSERT INTO users (name) VALUES (?)',
+            params: ['用户1'],
+          },
+          {
+            sql: 'INSERT INTO users (name) VALUES (?)',
+            params: ['用户2'],
+          },
         ])
         return 'ok'
       })
@@ -192,7 +198,9 @@ describe('reldb.tx', () => {
       const result = await reldb.tx.wrap(async (tx) => {
         await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户A'])
         const rows = await tx.query<{ name: string }>('SELECT name FROM users')
-        return rows.success ? rows.data : []
+        return rows.success
+          ? rows.data
+          : []
       })
 
       expect(result.success).toBe(true)

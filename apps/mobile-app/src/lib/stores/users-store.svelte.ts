@@ -37,7 +37,12 @@ async function fetchUsers(nextPage: number, append: boolean): Promise<void> {
 
   page = nextPage
   total = result.data.total
-  users = append ? [...users, ...result.data.items] : result.data.items
+  users = append
+    ? [
+        ...users,
+        ...result.data.items,
+      ]
+    : result.data.items
   loading = false
 }
 

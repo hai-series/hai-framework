@@ -18,7 +18,9 @@ if (!stateFile || !['serve', 'ready', 'probe', 'closed'].includes(mode))
  * ```
  */
 function state() {
-  return existsSync(stateFile) ? JSON.parse(readFileSync(stateFile, 'utf8')) : undefined
+  return existsSync(stateFile)
+    ? JSON.parse(readFileSync(stateFile, 'utf8'))
+    : undefined
 }
 
 /**
@@ -43,7 +45,12 @@ async function waitFor(predicate) {
 }
 
 if (mode === 'serve') {
-  const current = { pid: process.pid, port: 0, connections: 0, closed: false }
+  const current = {
+    pid: process.pid,
+    port: 0,
+    connections: 0,
+    closed: false,
+  }
   let pending = Promise.resolve()
   /**
    * 单写者先完整写临时文件，再原子替换本轮快照，持久保留计数供父进程验收。

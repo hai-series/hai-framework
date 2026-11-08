@@ -32,7 +32,10 @@ describe('iam.init', () => {
         iam.ticket.issue({ subjectId: 'test', purpose: 'test' }),
       ])
       for (const result of results) {
-        expect(result).toMatchObject({ success: false, error: { code: HaiIamError.NOT_INITIALIZED.code } })
+        expect(result).toMatchObject({
+          success: false,
+          error: { code: HaiIamError.NOT_INITIALIZED.code },
+        })
       }
     })
 
@@ -40,13 +43,22 @@ describe('iam.init', () => {
       await iam.close()
       await cache.close()
       await reldb.close()
-      expect(await iam.init({})).toMatchObject({ success: false, error: { code: HaiIamError.CONFIG_ERROR.code } })
+      expect(await iam.init({})).toMatchObject({
+        success: false,
+        error: { code: HaiIamError.CONFIG_ERROR.code },
+      })
       expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
-      expect(await iam.init({})).toMatchObject({ success: false, error: { code: HaiIamError.CONFIG_ERROR.code } })
+      expect(await iam.init({})).toMatchObject({
+        success: false,
+        error: { code: HaiIamError.CONFIG_ERROR.code },
+      })
       expect(iam.isInitialized).toBe(false)
       await reldb.close()
       expect((await cache.init({ type: 'memory' })).success).toBe(true)
-      expect(await iam.init({})).toMatchObject({ success: false, error: { code: HaiIamError.CONFIG_ERROR.code } })
+      expect(await iam.init({})).toMatchObject({
+        success: false,
+        error: { code: HaiIamError.CONFIG_ERROR.code },
+      })
       expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
       expect((await iam.init({})).success).toBe(true)
       await iam.close()

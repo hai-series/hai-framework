@@ -8,11 +8,16 @@ function startBrowser(userAgent: string, language = 'en-US') {
   const source = readFileSync(new URL('../templates/shared/browser-check/startup.js', import.meta.url), 'utf8')
   runInNewContext(source, {
     document: {
-      documentElement: { lang: language, hasAttribute: () => false },
+      documentElement: {
+        lang: language,
+        hasAttribute: () => false,
+      },
       getElementById: () => ({ src: asset }),
     },
     navigator: { userAgent, language },
-    window: { location: { replace } },
+    window: {
+      location: { replace },
+    },
   })
   return replace
 }

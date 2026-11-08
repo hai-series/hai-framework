@@ -146,7 +146,10 @@ export function createTransportEncryption(
         if (!isValidEncryptedPayload(payload, bodyLimits) || payload.direction !== 'request' || payload.status !== 0)
           return transportAuthenticationFailure()
         // 在任何异步 registry 调用前捕获快照，避免调用方修改同一对象造成认证/消费上下文错位。
-        const authenticated = { ...payload, context: { ...payload.context } }
+        const authenticated = {
+          ...payload,
+          context: { ...payload.context },
+        }
         const c = authenticated.context
         const pathHash = hashTransportPath(cryptoService, expected.path)
         if (!pathHash.success || c.clientId !== expected.clientId || c.method !== expected.method || c.pathHash !== pathHash.data) {

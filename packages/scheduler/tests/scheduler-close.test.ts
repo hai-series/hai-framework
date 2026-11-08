@@ -25,7 +25,10 @@ describe('scheduler close during execution', () => {
     })
     const execute = vi.fn(() => 'unexpected execution')
     try {
-      expect((await scheduler.init({ tickInterval: 100, hooks: { onTaskExecute: execute } })).success).toBe(true)
+      expect((await scheduler.init({
+        tickInterval: 100,
+        hooks: { onTaskExecute: execute },
+      })).success).toBe(true)
       expect((await scheduler.register({ id: 'late-tick', name: 'late-tick', cron: '* * * * *' })).success).toBe(true)
       expect(scheduler.start().success).toBe(true)
       await entered.promise
@@ -34,7 +37,9 @@ describe('scheduler close during execution', () => {
       }
       else {
         await scheduler.close()
-        expect((await scheduler.init({ hooks: { onTaskExecute: execute } })).success).toBe(true)
+        expect((await scheduler.init({
+          hooks: { onTaskExecute: execute },
+        })).success).toBe(true)
       }
       release.resolve()
       await completed.promise
@@ -99,7 +104,12 @@ describe('scheduler close during execution', () => {
         onTaskFinish: finished,
       },
     })).success).toBe(true)
-    expect((await scheduler.register({ id: 'same', name: 'old', cron: '* * * * *', deleteAfterRun: true })).success).toBe(true)
+    expect((await scheduler.register({
+      id: 'same',
+      name: 'old',
+      cron: '* * * * *',
+      deleteAfterRun: true,
+    })).success).toBe(true)
     const oldRun = scheduler.trigger('same')
     await entered
     await scheduler.close()
@@ -145,7 +155,10 @@ describe('scheduler close during execution', () => {
       cron: '* * * * *',
       handler: { kind: 'api', url: 'http://localhost/test' },
       idempotent: true,
-      retry: { maxAttempts: 3, backoffMs: [60000] },
+      retry: {
+        maxAttempts: 3,
+        backoffMs: [60000],
+      },
     })).success).toBe(true)
     const running = scheduler.trigger('retry')
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))

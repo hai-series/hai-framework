@@ -12,7 +12,10 @@ function deferred() {
   const promise = new Promise<void>((done) => {
     resolve = done
   })
-  return { promise, release: () => resolve() }
+  return {
+    promise,
+    release: () => resolve(),
+  }
 }
 
 defineIamSuite('security commits sqlite+memory', sqliteMemoryEnv(), () => {
@@ -48,9 +51,12 @@ defineIamSuite('security commits sqlite+memory', sqliteMemoryEnv(), () => {
 
   it('旧 OTP 消费暂停后不能删除新一代验证码或创建用户', async () => {
     let code = ''
-    const iam = await initIam({ otp: { resendInterval: 30 }, onOtpSendEmail: async (_id, value) => {
-      code = value
-    } })
+    const iam = await initIam({
+      otp: { resendInterval: 30 },
+      onOtpSendEmail: async (_id, value) => {
+        code = value
+      },
+    })
     await iam.auth.sendOtp('consume@example.com')
     const paused = deferred()
     const resume = deferred()
@@ -67,7 +73,9 @@ defineIamSuite('security commits sqlite+memory', sqliteMemoryEnv(), () => {
     const late = iam.auth.loginWithOtp({ identifier: 'consume@example.com', code })
     await paused.promise
     try {
-      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.useFakeTimers({
+        toFake: ['Date'],
+      })
       vi.setSystemTime(Date.now() + 31_000)
       expect((await iam.auth.sendOtp('consume@example.com')).success).toBe(true)
     }
@@ -79,9 +87,11 @@ defineIamSuite('security commits sqlite+memory', sqliteMemoryEnv(), () => {
 
   it('旧确认不能覆盖新令牌和接管节点的新密码', async () => {
     let token = ''
-    const iam = await initIam({ onPasswordResetRequest: async (_user, value) => {
-      token = value
-    } })
+    const iam = await initIam({
+      onPasswordResetRequest: async (_user, value) => {
+        token = value
+      },
+    })
     await iam.user.register({ username: 'reset-takeover', password: TEST_PASSWORD })
     await iam.user.requestPasswordReset('reset-takeover')
     const firstToken = token
@@ -142,9 +152,11 @@ defineIamSuite('security commits sqlite+memory', sqliteMemoryEnv(), () => {
 
   it('最终 SQL 使用数据库时钟拒绝暂停期间到期的重置，不受应用旧时钟影响', async () => {
     let token = ''
-    const iam = await initIam({ onPasswordResetRequest: async (_user, value) => {
-      token = value
-    } })
+    const iam = await initIam({
+      onPasswordResetRequest: async (_user, value) => {
+        token = value
+      },
+    })
     await iam.user.register({ username: 'reset-expired-commit', password: TEST_PASSWORD })
     await iam.user.requestPasswordReset('reset-expired-commit')
     const original = reldb.sql.execute.bind(reldb.sql)
@@ -162,9 +174,11 @@ defineIamSuite('security commits sqlite+memory', sqliteMemoryEnv(), () => {
 
   it('密码提交清除旧重置授权，并拒绝旧凭据快照的迟到改密', async () => {
     let token = ''
-    const iam = await initIam({ onPasswordResetRequest: async (_user, value) => {
-      token = value
-    } })
+    const iam = await initIam({
+      onPasswordResetRequest: async (_user, value) => {
+        token = value
+      },
+    })
     const registered = await iam.user.register({ username: 'password-takeover', password: TEST_PASSWORD })
     if (!registered.success)
       throw new Error('Test user missing')
@@ -203,7 +217,10 @@ defineIamSuite('security commits sqlite+memory', sqliteMemoryEnv(), () => {
     })
     const iam = await initIam({ otp: {}, onOtpSendEmail })
     const result = await iam.auth.sendOtp('unknown@example.com')
-    expect(result).toMatchObject({ success: false, error: { code: HaiIamError.INTERNAL_ERROR.code } })
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: HaiIamError.INTERNAL_ERROR.code },
+    })
     expect(JSON.stringify(result)).not.toContain(code)
     expect(context?.idempotencyKey).toMatch(/^iam-otp:/)
     expect(context?.idempotencyKey).not.toContain(code)

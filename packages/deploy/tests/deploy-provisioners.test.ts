@@ -78,7 +78,9 @@ describe('neon provisioner', () => {
     // provision: list existing -> create
     mockFetch.mockResolvedValueOnce(mockJsonResponse({ projects: [] }))
     mockFetch.mockResolvedValueOnce(mockJsonResponse({
-      connection_uris: [{ connection_uri: 'postgres://user:pass@host/db' }],
+      connection_uris: [
+        { connection_uri: 'postgres://user:pass@host/db' },
+      ],
       project: { id: 'neon_prj_1' },
     }))
 
@@ -97,7 +99,9 @@ describe('neon provisioner', () => {
     await neon.authenticate({ token: 'neon_valid' })
 
     mockFetch.mockResolvedValueOnce(mockJsonResponse({
-      projects: [{ id: 'neon_prj_existing', name: 'my-app-db' }],
+      projects: [
+        { id: 'neon_prj_existing', name: 'my-app-db' },
+      ],
     }))
     mockFetch.mockResolvedValueOnce(mockJsonResponse({
       uri: 'postgres://existing:pass@host/neondb',
@@ -220,7 +224,12 @@ describe('r2 provisioner', () => {
   it('should authenticate with account_id + api_token', async () => {
     mockFetch.mockResolvedValueOnce(mockJsonResponse({ result: [] }))
     const r2 = createR2Provisioner()
-    const result = await r2.authenticate({ account_id: 'acc_123', api_token: 'cf_token', accessKeyId: 's3-key', secretAccessKey: 's3-secret' })
+    const result = await r2.authenticate({
+      account_id: 'acc_123',
+      api_token: 'cf_token',
+      accessKeyId: 's3-key',
+      secretAccessKey: 's3-secret',
+    })
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data).toBe('acc_123')
@@ -230,7 +239,12 @@ describe('r2 provisioner', () => {
   it('should authenticate with camelCase keys from config', async () => {
     mockFetch.mockResolvedValueOnce(mockJsonResponse({ result: [] }))
     const r2 = createR2Provisioner()
-    const result = await r2.authenticate({ accountId: 'acc_123', apiToken: 'cf_token', accessKeyId: 's3-key', secretAccessKey: 's3-secret' })
+    const result = await r2.authenticate({
+      accountId: 'acc_123',
+      apiToken: 'cf_token',
+      accessKeyId: 's3-key',
+      secretAccessKey: 's3-secret',
+    })
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data).toBe('acc_123')
@@ -246,7 +260,12 @@ describe('r2 provisioner', () => {
   it('should fail provision when bucket creation fails', async () => {
     mockFetch.mockResolvedValueOnce(mockJsonResponse({ result: [] }))
     const r2 = createR2Provisioner()
-    await r2.authenticate({ accountId: 'acc_123', apiToken: 'cf_token', accessKeyId: 's3-key', secretAccessKey: 's3-secret' })
+    await r2.authenticate({
+      accountId: 'acc_123',
+      apiToken: 'cf_token',
+      accessKeyId: 's3-key',
+      secretAccessKey: 's3-secret',
+    })
 
     mockFetch.mockResolvedValueOnce(mockJsonResponse({ error: 'token failed' }, 500))
 

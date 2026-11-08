@@ -23,9 +23,15 @@ test('官网在仓库子路径呈现，模板预览、导航、全文搜索与�
     expect((await request.get(new URL(href!, page.url()).href)).status()).toBe(200)
   }
   await page.evaluate(() => window.scrollTo(0, 0))
-  await page.screenshot({ path: testInfo.outputPath('website-home-overview.png'), fullPage: true })
+  await page.screenshot({
+    path: testInfo.outputPath('website-home-overview.png'),
+    fullPage: true,
+  })
   await page.locator('#template-previews').evaluate(element => element.scrollIntoView({ block: 'start' }))
-  await page.screenshot({ path: testInfo.outputPath('website-templates-desktop.png'), fullPage: false })
+  await page.screenshot({
+    path: testInfo.outputPath('website-templates-desktop.png'),
+    fullPage: false,
+  })
   const originalPage = page.waitForEvent('popup')
   await previews.first().getByRole('link').click()
   const original = await originalPage
@@ -51,7 +57,10 @@ test('官网在仓库子路径呈现，模板预览、导航、全文搜索与�
   await image.scrollIntoViewIfNeeded()
   await expect(image).toHaveJSProperty('complete', true)
   expect(await image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
-  await page.screenshot({ path: testInfo.outputPath('website-documentation.png'), fullPage: false })
+  await page.screenshot({
+    path: testInfo.outputPath('website-documentation.png'),
+    fullPage: false,
+  })
   await sidebar.locator('[data-doc-section="configuration"] > summary').click()
   await page.getByRole('button', { name: '搜索文档', exact: true }).click()
   await dialog.getByRole('searchbox').fill('maxAge')
@@ -77,7 +86,10 @@ test('三语首页和深色主题可切换并保留选择', async ({ page }, tes
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await expect(page.getByRole('link', { name: 'Quick start', exact: true })).toBeVisible()
-  await page.screenshot({ path: testInfo.outputPath('website-home-dark-en.png'), fullPage: false })
+  await page.screenshot({
+    path: testInfo.outputPath('website-home-dark-en.png'),
+    fullPage: false,
+  })
   await page.getByRole('button', { name: /语言|language|言語/i }).click()
   await page.getByRole('button', { name: /日本語/ }).click()
   await expect(page.getByRole('link', { name: 'クイックスタート', exact: true })).toBeVisible()
@@ -88,7 +100,10 @@ test('三语首页和深色主题可切换并保留选择', async ({ page }, tes
   await expect(page.getByRole('heading', { level: 1 })).toContainText('アイデアから')
   await expect(page.locator('html')).toHaveAttribute('lang', 'ja-JP')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
-  await page.screenshot({ path: testInfo.outputPath('website-home-dark-ja.png'), fullPage: false })
+  await page.screenshot({
+    path: testInfo.outputPath('website-home-dark-ja.png'),
+    fullPage: false,
+  })
 })
 
 test('三级配置目录、接口配置代码与账号操作图在桌面和手机可读', async ({ page }, testInfo) => {
@@ -106,11 +121,15 @@ test('三级配置目录、接口配置代码与账号操作图在桌面和手�
   await expect(encryption).toBeInViewport()
   await page.reload()
   await expect(encryption).toBeInViewport()
-  const policyCode = page.locator('article .hai-md-code-block').filter({ has: page.locator('code.language-yaml') }).first()
+  const policyCode = page.locator('article .hai-md-code-block').filter({
+    has: page.locator('code.language-yaml'),
+  }).first()
   await expect(policyCode.locator('code span[style*="color:"]').first()).toBeAttached()
   await expect(page.locator('article img[src*="request-access-"]')).toHaveCount(0)
   await encryption.scrollIntoViewIfNeeded()
-  await page.screenshot({ path: testInfo.outputPath('website-request-access-desktop.png') })
+  await page.screenshot({
+    path: testInfo.outputPath('website-request-access-desktop.png'),
+  })
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByText('文档目录', { exact: true }).click()
   const mobile = page.locator('.mobile-doc-navigation')
@@ -126,13 +145,17 @@ test('三级配置目录、接口配置代码与账号操作图在桌面和手�
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391)
   await page.getByRole('heading', { name: '系统管理员统一管理账号', exact: true }).scrollIntoViewIfNeeded()
-  await page.screenshot({ path: testInfo.outputPath('website-account-guide-mobile.png') })
+  await page.screenshot({
+    path: testInfo.outputPath('website-account-guide-mobile.png'),
+  })
 })
 
 test('配置与命令实际高亮，复制保留 YAML 原文，深色主题和窄屏可读', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await page.goto('/hai-framework/docs/configuration/runtime/')
-  const yaml = page.locator('.hai-md-code-block').filter({ has: page.locator('code.language-yaml') }).first()
+  const yaml = page.locator('.hai-md-code-block').filter({
+    has: page.locator('code.language-yaml'),
+  }).first()
   await yaml.scrollIntoViewIfNeeded()
   const original = await yaml.locator('code').textContent()
   expect(original).toContain('logging:')
@@ -142,11 +165,15 @@ test('配置与命令实际高亮，复制保留 YAML 原文，深色主题和�
   await yaml.locator('[data-copy-code]').click()
   // Windows 剪贴板会把换行转为 CRLF；只统一行尾，其余代码与缩进逐字核对。
   await expect.poll(async () => (await page.evaluate(() => navigator.clipboard.readText())).replaceAll('\r\n', '\n')).toBe(original?.replaceAll('\r\n', '\n'))
-  await page.screenshot({ path: testInfo.outputPath('website-yaml-highlight.png') })
+  await page.screenshot({
+    path: testInfo.outputPath('website-yaml-highlight.png'),
+  })
   await page.getByRole('button', { name: /暗色|深色|Switch to dark|ダーク/ }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await yaml.scrollIntoViewIfNeeded()
-  await page.screenshot({ path: testInfo.outputPath('website-yaml-highlight-dark.png') })
+  await page.screenshot({
+    path: testInfo.outputPath('website-yaml-highlight-dark.png'),
+  })
   await page.goto('/hai-framework/docs/configuration/delivery/')
   const powershell = page.locator('code.language-powershell').first()
   await powershell.scrollIntoViewIfNeeded()
@@ -154,7 +181,9 @@ test('配置与命令实际高亮，复制保留 YAML 原文，深色主题和�
   await page.setViewportSize({ width: 390, height: 844 })
   await powershell.scrollIntoViewIfNeeded()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391)
-  await page.screenshot({ path: testInfo.outputPath('website-command-highlight-mobile.png') })
+  await page.screenshot({
+    path: testInfo.outputPath('website-command-highlight-mobile.png'),
+  })
 })
 
 test('配置流程图可加载、保留比例，手机端可以打开原图阅读', async ({ page }) => {
@@ -180,7 +209,10 @@ test('390像素官网预览和文档可操作，不出现整页横向溢出', as
   await expect(page.locator('.mobile-doc-navigation')).not.toHaveAttribute('open')
   const dimensions = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: window.innerWidth }))
   expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.width + 1)
-  await page.screenshot({ path: testInfo.outputPath('website-mobile.png'), fullPage: false })
+  await page.screenshot({
+    path: testInfo.outputPath('website-mobile.png'),
+    fullPage: false,
+  })
   await page.goto('/hai-framework/')
   for (const screenshot of await page.locator('[data-template-preview] img').all()) {
     await screenshot.scrollIntoViewIfNeeded()
@@ -189,9 +221,15 @@ test('390像素官网预览和文档可操作，不出现整页横向溢出', as
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391)
   await page.evaluate(() => window.scrollTo(0, 0))
-  await page.screenshot({ path: testInfo.outputPath('website-home-mobile-overview.png'), fullPage: true })
+  await page.screenshot({
+    path: testInfo.outputPath('website-home-mobile-overview.png'),
+    fullPage: true,
+  })
   await page.locator('#template-previews').evaluate(element => element.scrollIntoView({ block: 'start' }))
-  await page.screenshot({ path: testInfo.outputPath('website-templates-mobile.png'), fullPage: false })
+  await page.screenshot({
+    path: testInfo.outputPath('website-templates-mobile.png'),
+    fullPage: false,
+  })
 })
 
 test('搜索索引故障只提示一次，明确重试后恢复', async ({ page }) => {

@@ -38,7 +38,12 @@ describe('scheduler HTTP response boundaries', () => {
           id,
           name: path,
           cron: '* * * * *',
-          handler: { kind: 'api', url: `http://127.0.0.1:${address.port}/${path}`, timeout: 250, maxResponseBytes },
+          handler: {
+            kind: 'api',
+            url: `http://127.0.0.1:${address.port}/${path}`,
+            timeout: 250,
+            maxResponseBytes,
+          },
         })).success).toBe(true)
         const result = await scheduler.trigger(id)
         expect(result.success).toBe(true)
@@ -58,7 +63,14 @@ describe('scheduler HTTP response boundaries', () => {
       let invalidRequests = 0
       const onRequest = () => invalidRequests++
       server.on('request', onRequest)
-      for (const limit of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
+      for (const limit of [
+        0,
+        -1,
+        1.5,
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        Number.MAX_SAFE_INTEGER + 1,
+      ]) {
         const registered = await scheduler.register({
           id: `invalid-${runIndex++}`,
           name: 'invalid',
@@ -92,7 +104,9 @@ describe('scheduler HTTP response boundaries', () => {
     }
     finally {
       server.closeAllConnections()
-      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+      await new Promise<void>((resolve, reject) => server.close(error => error
+        ? reject(error)
+        : resolve()))
     }
   })
 })

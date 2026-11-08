@@ -29,7 +29,9 @@ export const load: PageServerLoad = async ({ locals }) => {
   }
 
   try {
-    const userResult = await iam.user.getUser(userId, { include: ['roles'] })
+    const userResult = await iam.user.getUser(userId, {
+      include: ['roles'],
+    })
 
     if (!userResult.success || !userResult.data) {
       return { profile: fallbackProfile }

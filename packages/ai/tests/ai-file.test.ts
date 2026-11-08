@@ -25,7 +25,11 @@ const mockConfig: AIConfig = {
 
 /** 构造有 OCR 场景模型映射的 AI 配置 */
 const mockConfigWithOcrScenario: AIConfig = {
-  llm: { apiKey: 'sk-test', model: 'gpt-4o-mini', scenarios: { ocr: 'gpt-4o' } },
+  llm: {
+    apiKey: 'sk-test',
+    model: 'gpt-4o-mini',
+    scenarios: { ocr: 'gpt-4o' },
+  },
 } as unknown as AIConfig
 
 /** 构造 mock LLM，OCR 调用返回指定文本 */
@@ -34,7 +38,11 @@ function makeMockLLM(ocrText: string): LLMOperations {
     chat: vi.fn(async () => ({
       success: true as const,
       data: {
-        choices: [{ message: { content: ocrText, role: 'assistant' } }],
+        choices: [
+          {
+            message: { content: ocrText, role: 'assistant' },
+          },
+        ],
         model: 'gpt-4o',
         usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
         id: 'test-id',
@@ -162,7 +170,10 @@ describe('file operations — HTML', () => {
   it('通过 mimeType 覆盖强制 HTML 解析', async () => {
     const ops = createFileOperations(mockConfig, makeMockLLM(''))
     const html = '<p>Hello</p>'
-    const result = await ops.parse({ content: html, options: { mimeType: 'text/html' } })
+    const result = await ops.parse({
+      content: html,
+      options: { mimeType: 'text/html' },
+    })
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.method).toBe('html')
@@ -205,7 +216,17 @@ describe('file operations — image OCR', () => {
     const ops = createFileOperations(mockConfig, mockLLM)
 
     // PNG magic bytes: \x89PNG
-    const fakePng = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, ...Buffer.from('fake png data')])
+    const fakePng = Buffer.from([
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      0x0D,
+      0x0A,
+      0x1A,
+      0x0A,
+      ...Buffer.from('fake png data'),
+    ])
     const result = await ops.parse({ content: fakePng })
 
     expect(result.success).toBe(true)
@@ -221,7 +242,13 @@ describe('file operations — image OCR', () => {
     const ops = createFileOperations(mockConfig, mockLLM)
 
     // JPEG magic bytes: \xFF\xD8
-    const fakeJpeg = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, ...Buffer.from('fake jpeg')])
+    const fakeJpeg = Buffer.from([
+      0xFF,
+      0xD8,
+      0xFF,
+      0xE0,
+      ...Buffer.from('fake jpeg'),
+    ])
     const result = await ops.parse({ content: fakeJpeg, filename: 'photo.jpg' })
 
     expect(result.success).toBe(true)
@@ -234,7 +261,13 @@ describe('file operations — image OCR', () => {
     const mockLLM = makeMockLLM('OCR with model')
     const ops = createFileOperations(mockConfigWithOcrScenario, mockLLM)
 
-    const fakePng = Buffer.from([0x89, 0x50, 0x4E, 0x47, ...Buffer.from('png')])
+    const fakePng = Buffer.from([
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      ...Buffer.from('png'),
+    ])
     await ops.parse({ content: fakePng })
 
     // 验证 chat 被调用（OCR 是通过 chat 实现的）
@@ -247,7 +280,13 @@ describe('file operations — image OCR', () => {
     const mockLLM = makeMockLLMError()
     const ops = createFileOperations(mockConfig, mockLLM)
 
-    const fakePng = Buffer.from([0x89, 0x50, 0x4E, 0x47, ...Buffer.from('png')])
+    const fakePng = Buffer.from([
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      ...Buffer.from('png'),
+    ])
     const result = await ops.parse({ content: fakePng })
 
     expect(result.success).toBe(false)
@@ -334,7 +373,13 @@ describe('file operations — MIME type detection', () => {
     const ops = createFileOperations(mockConfig, mockLLM)
 
     // PNG magic bytes
-    const fakePng = Buffer.from([0x89, 0x50, 0x4E, 0x47, ...Buffer.from('data')])
+    const fakePng = Buffer.from([
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      ...Buffer.from('data'),
+    ])
     const result = await ops.parse({ content: fakePng }) // 无文件名
 
     expect(result.success).toBe(true)
@@ -450,7 +495,13 @@ describe('file operations — outputFormat: markdown', () => {
   it('oCR 强制模式 + markdown：请求中包含 Markdown 指令', async () => {
     const mockLLM = makeMockLLM('# 标题\n\n正文内容')
     const ops = createFileOperations(mockConfig, mockLLM)
-    const fakeImage = Buffer.from([0x89, 0x50, 0x4E, 0x47, ...Buffer.from('png')])
+    const fakeImage = Buffer.from([
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      ...Buffer.from('png'),
+    ])
     const result = await ops.parse({
       content: fakeImage,
       filename: 'screenshot.png',

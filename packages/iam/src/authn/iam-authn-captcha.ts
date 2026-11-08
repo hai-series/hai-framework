@@ -12,10 +12,20 @@ import { HaiIamError } from '../iam-types.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'captcha' })
 const prefix = 'hai:iam:captcha:'
-const operationSchema = z.enum(['login', 'register', 'sendOtp', 'passwordReset', 'renewPassword'])
+const operationSchema = z.enum([
+  'login',
+  'register',
+  'sendOtp',
+  'passwordReset',
+  'renewPassword',
+])
 const proofSchema = z.object({
   id: z.string().regex(/^[a-f0-9]{64}$/),
-  solution: z.object({ counter: z.number().int().min(0).max(2000), derivedKey: z.string().regex(/^[a-f0-9]{64}$/i), time: z.number().finite().nonnegative().optional() }),
+  solution: z.object({
+    counter: z.number().int().min(0).max(2000),
+    derivedKey: z.string().regex(/^[a-f0-9]{64}$/i),
+    time: z.number().finite().nonnegative().optional(),
+  }),
 })
 
 /**
@@ -61,7 +71,12 @@ export async function createIamCaptcha(config: IamConfig['captcha'], input: { op
       data: { operation: operation.data },
     })
     // Cache 自己的相对 TTL 是到期真值，不用各节点的墙钟延长或重签证明。
-    const record: StoredCaptcha = { operation: operation.data, challenge, signatureSecret, keySecret }
+    const record: StoredCaptcha = {
+      operation: operation.data,
+      challenge,
+      signatureSecret,
+      keySecret,
+    }
     const saved = await cache.kv.set(`${prefix}${id}`, record, { nx: true, ex: config.ttlSeconds })
     if (!saved.success || !saved.data)
       return err(HaiIamError.CAPTCHA_UNAVAILABLE, iamM('iam_captchaUnavailable'))
@@ -110,13 +125,21 @@ export async function verifyIamCaptcha(config: IamConfig['captcha'], operation: 
     if (!found.data || found.data.operation !== operation)
       return err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
     const record = found.data
-    const result = await verifySolution({ challenge: record.challenge, solution: payload.solution, deriveKey: pbkdf2.deriveKey, hmacSignatureSecret: record.signatureSecret, hmacKeySignatureSecret: record.keySecret })
+    const result = await verifySolution({
+      challenge: record.challenge,
+      solution: payload.solution,
+      deriveKey: pbkdf2.deriveKey,
+      hmacSignatureSecret: record.signatureSecret,
+      hmacKeySignatureSecret: record.keySecret,
+    })
     if (!result.verified)
       return err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
     const removed = await cache.kv.del(key)
     if (!removed.success)
       return err(HaiIamError.CAPTCHA_UNAVAILABLE, iamM('iam_captchaUnavailable'))
-    return removed.data === 1 ? ok(undefined) : err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
+    return removed.data === 1
+      ? ok(undefined)
+      : err(HaiIamError.CAPTCHA_INVALID, iamM('iam_captchaInvalid'))
   }
   catch (error) {
     logger.error('Captcha verification failed', { operation, error })

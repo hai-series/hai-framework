@@ -50,7 +50,19 @@ async function loadMermaid(): Promise<MermaidApi> {
         securityLevel: 'strict',
         theme: 'default',
         // 不允许文档指令修改安全策略、消毒规则或注入页面级 CSS。
-        secure: ['secure', 'securityLevel', 'startOnLoad', 'maxTextSize', 'suppressErrorRendering', 'maxEdges', 'themeCSS', 'themeVariables', 'fontFamily', 'altFontFamily', 'dompurifyConfig'],
+        secure: [
+          'secure',
+          'securityLevel',
+          'startOnLoad',
+          'maxTextSize',
+          'suppressErrorRendering',
+          'maxEdges',
+          'themeCSS',
+          'themeVariables',
+          'fontFamily',
+          'altFontFamily',
+          'dompurifyConfig',
+        ],
       })
       return mermaid
     })

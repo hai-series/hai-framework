@@ -46,7 +46,16 @@ export interface LoggingMiddlewareConfig {
  * ```
  */
 export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middleware {
-  const { logBody = false, logResponse = false, redactFields = ['password', 'token', 'secret', 'authorization', 'apikey', 'api_key', 'creditcard', 'credit_card'] } = config
+  const { logBody = false, logResponse = false, redactFields = [
+    'password',
+    'token',
+    'secret',
+    'authorization',
+    'apikey',
+    'api_key',
+    'creditcard',
+    'credit_card',
+  ] } = config
 
   return async (context, next) => {
     const { event, requestId } = context

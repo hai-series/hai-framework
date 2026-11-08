@@ -5,11 +5,26 @@ import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWO
 
 function tests() {
   it('文件与权限表组合，实时更新生效且清空数据库不能移除文件规则', async () => {
-    const iam = await initIam({ reauthentication: { enabled: true, operations: ['file.operation'], ttlSeconds: 300 } })
-    const permission = await iam.authz.createPermission({ code: `policy-${crypto.randomUUID()}`, name: '业务资源', resource: 'orders', action: 'manage', sensitiveOperations: ['\torders.approve \n', 'file.operation'] })
+    const iam = await initIam({
+      reauthentication: {
+        enabled: true,
+        operations: ['file.operation'],
+        ttlSeconds: 300,
+      },
+    })
+    const permission = await iam.authz.createPermission({
+      code: `policy-${crypto.randomUUID()}`,
+      name: '业务资源',
+      resource: 'orders',
+      action: 'manage',
+      sensitiveOperations: ['\torders.approve \n', 'file.operation'],
+    })
     if (!permission.success)
       throw new Error(permission.error.message)
-    expect(await iam.authz.getSensitiveOperations('orders.approve')).toEqual({ success: true, data: ['orders.approve'] })
+    expect(await iam.authz.getSensitiveOperations('orders.approve')).toEqual({
+      success: true,
+      data: ['orders.approve'],
+    })
     expect(await iam.authz.getSensitiveOperations('unconfigured.operation')).toEqual({ success: true, data: [] })
     const config = await iam.getPublicConfig()
     expect(config.success && config.data.reauthentication.operations).toEqual(['file.operation', 'orders.approve'])
@@ -30,7 +45,14 @@ function tests() {
     expect((await iam.authz.setPermissionSensitiveOperations('nonexistent-permission', [])).success).toBe(false)
     expect((await iam.auth.checkSensitiveOperation(token, 'orders.approve')).success).toBe(true)
     expect((await iam.auth.checkSensitiveOperation(token, 'file.operation')).success).toBe(false)
-    expect((await iam.getPublicConfig())).toMatchObject({ success: true, data: { reauthentication: { operations: ['file.operation'] } } })
+    expect((await iam.getPublicConfig())).toMatchObject({
+      success: true,
+      data: {
+        reauthentication: {
+          operations: ['file.operation'],
+        },
+      },
+    })
     expect((await iam.authz.setPermissionSensitiveOperations(permission.data.id, [' '])).success).toBe(false)
   })
 
@@ -48,15 +70,41 @@ function tests() {
   })
 
   it('rbac关闭不读取数据库规则，主开关关闭时保留简单使用方式', async () => {
-    const iam = await initIam({ rbac: { enabled: false }, reauthentication: { enabled: true, operations: ['file.only'] } })
-    expect((await iam.authz.createPermission({ code: `db-${crypto.randomUUID()}`, name: 'Database rule', sensitiveOperations: ['db.only'] })).success).toBe(true)
-    expect(await iam.getPublicConfig()).toMatchObject({ success: true, data: { reauthentication: { operations: ['file.only'] } } })
-    await initIam({ reauthentication: { enabled: false, operations: [] } })
-    expect(await iam.getPublicConfig()).toMatchObject({ success: true, data: { reauthentication: { enabled: false, operations: [] } } })
+    const iam = await initIam({
+      rbac: { enabled: false },
+      reauthentication: {
+        enabled: true,
+        operations: ['file.only'],
+      },
+    })
+    expect((await iam.authz.createPermission({
+      code: `db-${crypto.randomUUID()}`,
+      name: 'Database rule',
+      sensitiveOperations: ['db.only'],
+    })).success).toBe(true)
+    expect(await iam.getPublicConfig()).toMatchObject({
+      success: true,
+      data: {
+        reauthentication: {
+          operations: ['file.only'],
+        },
+      },
+    })
+    await initIam({
+      reauthentication: { enabled: false, operations: [] },
+    })
+    expect(await iam.getPublicConfig()).toMatchObject({
+      success: true,
+      data: {
+        reauthentication: { enabled: false, operations: [] },
+      },
+    })
   })
 
   it('规则表读取失败不降级为无需二次认证', async () => {
-    const iam = await initIam({ reauthentication: { enabled: true, operations: [] } })
+    const iam = await initIam({
+      reauthentication: { enabled: true, operations: [] },
+    })
     // 仅操作本套隔离数据库；实际驱动故障由缺失表产生，不用mock伪造通过。
     const renamed = await reldb.sql.execute('ALTER TABLE hai_iam_permissions RENAME TO hai_iam_permissions_temporarily_unavailable')
     expect(renamed.success).toBe(true)

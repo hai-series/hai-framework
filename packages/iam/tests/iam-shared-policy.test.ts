@@ -4,7 +4,10 @@ import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWO
 
 function tests() {
   it('其他节点撤销与重新指定超管角色后，当前节点立即使用最新角色代码', async () => {
-    const iam = await initIam({ seedDefaultData: false, rbac: { defaultRole: '', superAdminRole: 'shared-super' } })
+    const iam = await initIam({
+      seedDefaultData: false,
+      rbac: { defaultRole: '', superAdminRole: 'shared-super' },
+    })
     const user = await iam.user.createUser({ username: `shared-policy-${crypto.randomUUID()}`, password: TEST_PASSWORD })
     const role = await iam.authz.createRole({ code: 'shared-super', name: 'Shared administrator' })
     expect(user.success && role.success).toBe(true)

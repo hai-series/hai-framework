@@ -26,7 +26,9 @@ export function generateConfigFile(moduleKey: string, configs?: ModuleConfigs, e
   const content = documentConfig(moduleKey, parameterizeConfig(moduleKey, generateLiteralConfigFile(moduleKey, configs)))
   return enabled
     ? content
-    : `# # 未启用：安装对应模块并在服务端 runtime 中初始化，再取消所需配置的注释。\n${content.split('\n').map(line => line ? `# ${line}` : '').join('\n')}`
+    : `# # 未启用：安装对应模块并在服务端 runtime 中初始化，再取消所需配置的注释。\n${content.split('\n').map(line => line
+      ? `# ${line}`
+      : '').join('\n')}`
 }
 
 function generateLiteralConfigFile(moduleKey: string, configs?: ModuleConfigs): string {
@@ -164,11 +166,17 @@ transport: false
 
 function generateDbConfig(cfg?: DbModuleConfig): string {
   const dbType = cfg?.type ?? 'sqlite'
-  const database = cfg?.database ?? (dbType === 'sqlite' ? './data/app.db' : 'hai')
+  const database = cfg?.database ?? (dbType === 'sqlite'
+    ? './data/app.db'
+    : 'hai')
   const host = cfg?.host ?? 'localhost'
-  const port = cfg?.port ?? (dbType === 'mysql' ? 3306 : 5432)
+  const port = cfg?.port ?? (dbType === 'mysql'
+    ? 3306
+    : 5432)
 
-  const user = dbType === 'mysql' ? 'root' : 'postgres'
+  const user = dbType === 'mysql'
+    ? 'root'
+    : 'postgres'
   const connection = stringify({ host, port, user, password: '' }).trim()
   const networkOptions = `# url: \${HAI_DB_URL} # 可用连接串替代 host/port/user/password
 # PostgreSQL ssl：布尔值、require/prefer/allow/disable 或 TLS 对象。
@@ -212,7 +220,12 @@ function generateCacheConfig(cfg?: CacheModuleConfig): string {
   const cacheType = cfg?.type ?? 'memory'
   const host = cfg?.host ?? 'localhost'
   const port = cfg?.port ?? 6379
-  const connection = stringify({ host, port, password: '', keyPrefix: 'hai:' }).trim()
+  const connection = stringify({
+    host,
+    port,
+    password: '',
+    keyPrefix: 'hai:',
+  }).trim()
 
   return `# =============================================================================
 # 缓存配置
@@ -301,7 +314,9 @@ ${(loginOtp ? '' : '# 保留默认策略入口，单独切换 login.otp 即可�
   length: 6
   expiresIn: 300
   maxAttempts: 3
-  resendInterval: 60`.split('\n').map(line => loginOtp ? line : `# ${line}`).join('\n')}
+  resendInterval: 60`.split('\n').map(line => loginOtp
+    ? line
+    : `# ${line}`).join('\n')}
 passwordReset:
   enabled: true
   mode: email # phone 使用 password_reset_sms 模板
@@ -434,7 +449,9 @@ ${s3}
 
 function generateAiConfig(cfg?: AiModuleConfig): string {
   const model = cfg?.model ?? 'gpt-4o-mini'
-  const api = cfg?.defaultProvider === 'anthropic' ? 'anthropic' : 'chat'
+  const api = cfg?.defaultProvider === 'anthropic'
+    ? 'anthropic'
+    : 'chat'
   return `# =============================================================================
 # AI 配置
 # =============================================================================
@@ -667,8 +684,34 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
  * ```
  */
 export function generateEnvExample(features: FeatureId[], configs?: ModuleConfigs, includeDisabled = false, configContents: Record<string, string> = {}): string {
-  const keys = new Set(['core', ...['serv', 'kit'].filter(key => configContents[key]), ...features.filter(feature => !['crypto', 'api-client', 'capacitor', 'datapipe'].includes(feature))])
-  const allKeys = ['core', 'serv', 'kit', 'crypto', 'db', 'cache', 'iam', 'storage', 'ai', 'vecdb', 'reach', 'payment', 'scheduler', 'deploy', 'audit', 'feedback']
+  const keys = new Set([
+    'core',
+    ...['serv', 'kit'].filter(key => configContents[key]),
+    ...features.filter(feature => ![
+      'crypto',
+      'api-client',
+      'capacitor',
+      'datapipe',
+    ].includes(feature)),
+  ])
+  const allKeys = [
+    'core',
+    'serv',
+    'kit',
+    'crypto',
+    'db',
+    'cache',
+    'iam',
+    'storage',
+    'ai',
+    'vecdb',
+    'reach',
+    'payment',
+    'scheduler',
+    'deploy',
+    'audit',
+    'feedback',
+  ]
   const sections = [`# Environment configuration
 # .env / .env.dev / .env.test / .env.prod are public configuration tracked in Git.
 # .env.local is private to this machine and ignored by Git.
@@ -691,8 +734,12 @@ export function generateEnvExample(features: FeatureId[], configs?: ModuleConfig
       && !primitiveArrays.some(parent => variable.name.startsWith(`${parent.name}_`))
       && !variables.some(child => child.name.startsWith(`${variable.name}_`) && (variable.constraint.includes('JSON 对象') || variable.constraint.includes('JSON 数组')) && !variable.constraint.includes('false'))
       && (!(variable.constraint.includes('JSON 对象') || variable.constraint.includes('JSON 数组')) || variable.constraint.includes('false') || !candidates.some(child => child.name.startsWith(`${variable.name}_`)) || primitiveArrays.includes(variable))))
-    const commented = (value: string) => value.split('\n').map(line => line && !line.startsWith('#') ? `# ${line}` : line).join('\n')
-    sections.push(`# --- ${key} ---\n${keys.has(key) ? section : commented(section)}\n\n# 可选字段：先在 YAML 中启用对应配置块；下列变量名与字段路径一一对应。\n${commented(declaredOptional)}\n${commented(optional)}`)
+    const commented = (value: string) => value.split('\n').map(line => line && !line.startsWith('#')
+      ? `# ${line}`
+      : line).join('\n')
+    sections.push(`# --- ${key} ---\n${keys.has(key)
+      ? section
+      : commented(section)}\n\n# 可选字段：先在 YAML 中启用对应配置块；下列变量名与字段路径一一对应。\n${commented(declaredOptional)}\n${commented(optional)}`)
   }
   if (includeDisabled)
     sections.push('# 服务端传输密钥环：启用 crypto transport 后，通过私有环境注入版本化 JSON；不得下发到浏览器。\n# HAI_CRYPTO_TRANSPORT_SERVERKEYRING=')
@@ -725,8 +772,17 @@ export function generateProductionEnvironment(features: FeatureId[], configs?: M
   ]
   if (enabled.has('db')) {
     const mysql = configs?.db?.type === 'mysql'
-    const database = configs?.db?.type !== 'sqlite' && configs?.db?.database ? configs.db.database : 'hai'
-    sections.push('', '# 必须私有注入 HAI_DB_PASSWORD；外部数据库可覆盖下列连接字段。', `HAI_DB_TYPE=${mysql ? 'mysql' : 'postgresql'}`, 'HAI_DB_HOST=db', `HAI_DB_PORT=${mysql ? 3306 : 5432}`, renderEnvironment([{ name: 'HAI_DB_DATABASE', path: 'db.database', value: database, constraint: '生产数据库名' }]), `HAI_DB_USER=${mysql ? 'root' : 'postgres'}`)
+    const database = configs?.db?.type !== 'sqlite' && configs?.db?.database
+      ? configs.db.database
+      : 'hai'
+    sections.push('', '# 必须私有注入 HAI_DB_PASSWORD；外部数据库可覆盖下列连接字段。', `HAI_DB_TYPE=${mysql ? 'mysql' : 'postgresql'}`, 'HAI_DB_HOST=db', `HAI_DB_PORT=${mysql ? 3306 : 5432}`, renderEnvironment([
+      {
+        name: 'HAI_DB_DATABASE',
+        path: 'db.database',
+        value: database,
+        constraint: '生产数据库名',
+      },
+    ]), `HAI_DB_USER=${mysql ? 'root' : 'postgres'}`)
   }
   if (enabled.has('cache'))
     sections.push('', '# 必须私有注入 HAI_CACHE_PASSWORD。', 'HAI_CACHE_TYPE=redis', 'HAI_CACHE_HOST=cache', 'HAI_CACHE_PORT=6379')

@@ -29,7 +29,12 @@ export function createE2eServerEnv(profile: Record<string, string>): Record<stri
   const environment: Record<string, string | undefined> = Object.fromEntries(
     Object.keys(process.env).filter(key => /^(?:HAI_|PUBLIC_|VITE_)/i.test(key)).map(key => [key, undefined]),
   )
-  for (const name of ['HAI_E2E_DATA_ROOT', 'HAI_AUTH_EVIDENCE_DIR', 'HAI_CORE_NAME', 'HAI_CORE_VERSION']) {
+  for (const name of [
+    'HAI_E2E_DATA_ROOT',
+    'HAI_AUTH_EVIDENCE_DIR',
+    'HAI_CORE_NAME',
+    'HAI_CORE_VERSION',
+  ]) {
     if (process.env[name] !== undefined)
       environment[name] = process.env[name]
   }
@@ -56,10 +61,15 @@ export function createE2eServerEnv(profile: Record<string, string>): Record<stri
 export function createE2eTransportRing(): string {
   const key = createECDH('SM2')
   key.generateKeys()
-  return JSON.stringify({ activeKeyId: 'e2e-v1', keys: { 'e2e-v1': {
-    publicKey: key.getPublicKey('hex'),
-    privateKey: key.getPrivateKey('hex').padStart(64, '0'),
-  } } })
+  return JSON.stringify({
+    activeKeyId: 'e2e-v1',
+    keys: {
+      'e2e-v1': {
+        publicKey: key.getPublicKey('hex'),
+        privateKey: key.getPrivateKey('hex').padStart(64, '0'),
+      },
+    },
+  })
 }
 
 /**
@@ -93,6 +103,12 @@ export function createE2eNotificationEnv(): Record<string, string> {
       { name: 'password_reset', provider: 'email', body: 'Reset: {token}' },
       { name: 'password_reset_sms', provider: 'sms', body: 'Reset: {token}' },
     ]),
-    HAI_IAM_AGREEMENTS: JSON.stringify({ showOnRegister: true, showOnLogin: true, userAgreementMarkdown: '# Configured registration agreement\n\n**Registration terms**\n\n- Keep your account credentials secure.', userAgreementUrl: new URL('/terms', url).href, privacyPolicyUrl: new URL('/privacy', url).href }),
+    HAI_IAM_AGREEMENTS: JSON.stringify({
+      showOnRegister: true,
+      showOnLogin: true,
+      userAgreementMarkdown: '# Configured registration agreement\n\n**Registration terms**\n\n- Keep your account credentials secure.',
+      userAgreementUrl: new URL('/terms', url).href,
+      privacyPolicyUrl: new URL('/privacy', url).href,
+    }),
   }
 }

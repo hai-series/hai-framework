@@ -300,8 +300,14 @@ describe('reldb.tx advanced', () => {
         await tx.execute('INSERT INTO users (name, balance) VALUES (?, ?)', ['新用户', 200])
         // batch 中包含无效 SQL
         const batchResult = await tx.batch([
-          { sql: 'INSERT INTO users (name, balance) VALUES (?, ?)', params: ['批量用户', 300] },
-          { sql: 'INSERT INTO nonexistent_xyz (col) VALUES (?)', params: ['error'] },
+          {
+            sql: 'INSERT INTO users (name, balance) VALUES (?, ?)',
+            params: ['批量用户', 300],
+          },
+          {
+            sql: 'INSERT INTO nonexistent_xyz (col) VALUES (?)',
+            params: ['error'],
+          },
         ])
         if (!batchResult.success) {
           throw new Error('batch failed')

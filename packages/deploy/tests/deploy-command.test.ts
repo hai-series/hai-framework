@@ -41,7 +41,9 @@ describe('runCommand', () => {
   })
 
   it('retains bounded stdout diagnostics and masks supplied secrets on failure', async () => {
-    const result = await runCommand(process.execPath, ['-e', 'process.stdout.write("native build rejected test-private-token"); process.exit(7)'], { secrets: ['test-private-token'] })
+    const result = await runCommand(process.execPath, ['-e', 'process.stdout.write("native build rejected test-private-token"); process.exit(7)'], {
+      secrets: ['test-private-token'],
+    })
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.message).toContain('native build rejected ***')

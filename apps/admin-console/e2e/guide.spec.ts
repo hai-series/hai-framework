@@ -9,7 +9,11 @@ test('首次导览完成后不重复提示，帮助中心支持搜索、重看�
   await expect(popover).toBeVisible()
   await expect(popover.locator('.driver-popover-progress-text')).toContainText('1')
   await expect(popover.locator('.driver-popover-next-btn')).toBeEnabled()
-  await page.screenshot({ path: testInfo.outputPath('admin-guide-desktop.png'), fullPage: true, animations: 'disabled' })
+  await page.screenshot({
+    path: testInfo.outputPath('admin-guide-desktop.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
   for (let step = 1; step < 4; step++) {
     await popover.locator('.driver-popover-next-btn').click()
     await expect(popover.locator('.driver-popover-progress-text')).toContainText(String(step + 1))
@@ -54,7 +58,11 @@ test('手机上可以暂缓首次提示、阅读帮助，导览跟随暗色主�
   await page.getByTestId('admin-help').click()
   await expect(page.getByTestId('guide-article-content')).toContainText('快速认识管理后台')
   await expect(page.getByTestId('guide-article-content').getByRole('heading', { name: '从哪里开始' })).toBeVisible()
-  await page.screenshot({ path: testInfo.outputPath('admin-help-mobile-dark.png'), fullPage: true, animations: 'disabled' })
+  await page.screenshot({
+    path: testInfo.outputPath('admin-help-mobile-dark.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
   await page.getByTestId('guide-tour-overview').click()
   const popover = page.locator('.hai-guide-popover')
   await expect(popover).toBeVisible()
@@ -63,7 +71,11 @@ test('手机上可以暂缓首次提示、阅读帮助，导览跟随暗色主�
   expect(box!.x).toBeGreaterThanOrEqual(0)
   expect(box!.x + box!.width).toBeLessThanOrEqual(390)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: testInfo.outputPath('admin-guide-mobile-dark.png'), fullPage: true, animations: 'disabled' })
+  await page.screenshot({
+    path: testInfo.outputPath('admin-guide-mobile-dark.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
   await page.keyboard.press('Escape')
   await expect(popover).toHaveCount(0)
 })

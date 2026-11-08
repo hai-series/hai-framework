@@ -20,15 +20,23 @@ export function getAdminKitConfig(): KitConfig {
   const prefix = '/api/feedback/reports'
   // 容量来自配置，不依赖可选反馈的初始化/重试结果。
   const feedbackSettings = FeedbackConfigSchema.safeParse(core.config.get('feedback'))
-  const material = resolveFeedbackBudget(feedbackSettings.success ? feedbackSettings.data : {}).maxTransportBytes
-  current = { ...result.data, transport: result.data.transport === false
-    ? false
-    : { ...result.data.transport, routePlaintextBytes: {
-        [prefix]: material,
-        [`${prefix}/*/evidence`]: material,
-        [`${prefix}/*/attachments/*`]: material,
-        [`${prefix}/*/exports/*`]: material,
-        ...result.data.transport.routePlaintextBytes,
-      } } }
+  const material = resolveFeedbackBudget(feedbackSettings.success
+    ? feedbackSettings.data
+    : {}).maxTransportBytes
+  current = {
+    ...result.data,
+    transport: result.data.transport === false
+      ? false
+      : {
+          ...result.data.transport,
+          routePlaintextBytes: {
+            [prefix]: material,
+            [`${prefix}/*/evidence`]: material,
+            [`${prefix}/*/attachments/*`]: material,
+            [`${prefix}/*/exports/*`]: material,
+            ...result.data.transport.routePlaintextBytes,
+          },
+        },
+  }
   return current
 }

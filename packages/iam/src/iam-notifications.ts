@@ -33,7 +33,15 @@ export async function resolveIamNotifications(input: IamConfigInput): Promise<Pi
     if (!reach?.isInitialized || !provider || !to)
       throw new Error(iamM('iam_passwordResetDeliveryFailed'))
     // Reach 的返回结果与投递状态都必须成功，不能把 HTTP/调用完成当作通知送达。
-    const result = await reach.send({ provider, to, template, vars, idempotencyKey: context.idempotencyKey, sensitive: true, expiresAt: context.expiresAt.getTime() })
+    const result = await reach.send({
+      provider,
+      to,
+      template,
+      vars,
+      idempotencyKey: context.idempotencyKey,
+      sensitive: true,
+      expiresAt: context.expiresAt.getTime(),
+    })
     if (!result.success || !result.data.success)
       throw new Error(iamM('iam_passwordResetDeliveryFailed'))
   }
@@ -41,13 +49,23 @@ export async function resolveIamNotifications(input: IamConfigInput): Promise<Pi
     callbacks.onOtpSendEmail = (email, code, context) => send('otp_email', email, { code }, context)
   if (needsSms && configured.has('otp_sms'))
     callbacks.onOtpSendSms = (phone, code, context) => send('otp_sms', phone, { code }, context)
-  const resetTemplate = input.passwordReset?.mode === 'phone' ? 'password_reset_sms' : 'password_reset'
+  const resetTemplate = input.passwordReset?.mode === 'phone'
+    ? 'password_reset_sms'
+    : 'password_reset'
   if (needsReset && configured.has(resetTemplate)) {
     callbacks.onPasswordResetRequest = (user, token, context) => {
-      const url = input.passwordReset?.resetUrl ? new URL(input.passwordReset.resetUrl) : null
+      const url = input.passwordReset?.resetUrl
+        ? new URL(input.passwordReset.resetUrl)
+        : null
       url?.searchParams.set('token', token)
-      const vars = { token, expiresAt: context.expiresAt.toISOString(), resetUrl: url?.toString() ?? token }
-      return send(resetTemplate, input.passwordReset?.mode === 'phone' ? user.phone ?? '' : user.email ?? '', vars, context)
+      const vars = {
+        token,
+        expiresAt: context.expiresAt.toISOString(),
+        resetUrl: url?.toString() ?? token,
+      }
+      return send(resetTemplate, input.passwordReset?.mode === 'phone'
+        ? user.phone ?? ''
+        : user.email ?? '', vars, context)
     }
   }
   return callbacks

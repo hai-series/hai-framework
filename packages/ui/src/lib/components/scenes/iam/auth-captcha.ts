@@ -20,7 +20,14 @@ export async function solveAuthCaptcha(input: { id: string, challenge: Challenge
   controller.signal.throwIfAborted()
   const { solveChallenge, pbkdf2 } = await import('altcha/lib')
   controller.signal.throwIfAborted()
-  const solution = await solveChallenge({ challenge: input.challenge, deriveKey: pbkdf2.deriveKey, controller, timeout: 20000 })
+  const solution = await solveChallenge({
+    challenge: input.challenge,
+    deriveKey: pbkdf2.deriveKey,
+    controller,
+    timeout: 20000,
+  })
   controller.signal.throwIfAborted()
-  return solution ? JSON.stringify({ id: input.id, solution }) : null
+  return solution
+    ? JSON.stringify({ id: input.id, solution })
+    : null
 }

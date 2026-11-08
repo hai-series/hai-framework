@@ -44,7 +44,9 @@ export function createLLMProvider(deps: AILLMFunctionsDeps): LLMProvider {
   /** 按请求解析协议并选择 Provider（chat / responses → OpenAI；anthropic → Anthropic） */
   function pick(request: ChatCompletionRequest): LLMProvider {
     const api = resolveModelApi(deps.config.llm, request.model, request.tempModel?.protocol)
-    return api === 'anthropic' ? getAnthropic() : openai
+    return api === 'anthropic'
+      ? getAnthropic()
+      : openai
   }
 
   return {
@@ -52,7 +54,9 @@ export function createLLMProvider(deps: AILLMFunctionsDeps): LLMProvider {
     chatStream: (request): AsyncIterable<ChatCompletionChunk> => pick(request).chatStream(request),
     listModels: () => {
       const api = deps.config.llm.protocol ?? 'chat'
-      return api === 'anthropic' ? getAnthropic().listModels() : openai.listModels()
+      return api === 'anthropic'
+        ? getAnthropic().listModels()
+        : openai.listModels()
     },
   }
 }

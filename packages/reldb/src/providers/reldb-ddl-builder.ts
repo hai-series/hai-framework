@@ -54,7 +54,9 @@ export function buildColumnSqlBase(
   def: ReldbColumnDef,
   options: ColumnSqlOptions,
 ): string {
-  const parts: string[] = [options.quoteId(name)]
+  const parts: string[] = [
+    options.quoteId(name),
+  ]
 
   parts.push(options.mapType(def))
 
@@ -167,7 +169,9 @@ export function buildDefaultCreateIndexSql(
 ): string {
   const uniqueClause = indexDef.unique ? 'UNIQUE ' : ''
   const columns = indexDef.columns.map(c => quoteId(c)).join(', ')
-  const whereClause = indexDef.where ? ` WHERE ${indexDef.where}` : ''
+  const whereClause = indexDef.where
+    ? ` WHERE ${indexDef.where}`
+    : ''
   return `CREATE ${uniqueClause}INDEX IF NOT EXISTS ${quotedIndex} ON ${quotedTable} (${columns})${whereClause}`
 }
 
