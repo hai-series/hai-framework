@@ -114,7 +114,7 @@ export interface FileParseRequest {
  * ```
  */
 export interface FileParseResult {
-  /** 提取的文本内容（当 `outputFormat` 为 `'markdown'` 时为 Markdown 格式） */
+  /** 提取的文本内容（当 `outputFormat` 为 `'markdown'` 时为 Markdown 格式）；不是可直接执行的可信 HTML。 */
   text: string
   /** 解析方法 */
   method: FileParseMethod

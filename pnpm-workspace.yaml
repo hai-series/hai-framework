@@ -3,6 +3,7 @@ minimumReleaseAgeExclude:
   - eslint-plugin-svelte@3.24.1
   - hono@4.13.17
   - nodemailer@10.4.0
+  - parse5@8.1.1
 
 trustPolicy: no-downgrade
 # 上游构建工具仍要求 4.x；4.0.3 tarball 已核对原 lockfile 的 SHA-512。
@@ -230,6 +231,7 @@ catalog:
   # ---------------------------------------------------------------------------
   openai: ^7.53.0
   ora: ^10.0.0
+  parse5: ^8.1.1
   pg: ^8.23.1
   # ---------------------------------------------------------------------------
   # 日志

@@ -518,6 +518,12 @@ if (result.success) {
 
 `image.maxImageBytes` 默认 20971520（20 MiB，最大 100 MiB），限制单张输出和参考图；`image.maxImages` 默认 4（最大 16），限制输出与参考图数量，临时 URL 串行下载。实际读取（含解压后）超过上限立即取消；JSON 响应最多 `max(64 KiB, 2 × maxImageBytes)`，错误正文最多 64 KiB。模型 `timeout` 默认 120000ms，覆盖厂商请求、重定向和全部下载；`signal` 可取消整个过程。输出仅支持 PNG/JPEG/GIF/WebP 的 MIME 与魔数匹配，拒绝 SVG；魔数校验不等于完整图片解码或尺寸核验。拒绝地址、超限、超时分别返回 `IMAGE_DOWNLOAD_BLOCKED`、`IMAGE_TOO_LARGE`、`IMAGE_TIMEOUT`，调用方须先检查 success。
 
+#### 文件解析（File）
+
+向 `ai.file.parse({ content, filename, options: { outputFormat: 'markdown' } })` 传入业务文件内容和名称；先检查 `success`，再读取 `data.text`，纯文本输出选择 `outputFormat: 'text'`。HTML 使用 parse5 解析结构并迭代提取，忽略 script/style，保留标题、列表、链接、图片、引用、代码和表格等常见 Markdown 结构，不以截断正常文档规避畸形标签的正则回溯。
+
+结果是文本或 Markdown，不是可信 HTML；界面使用文本绑定或框架的 `MarkdownRenderer`，不要直接交给 `{@html}`。配置、调用参数和错误码保持原有契约。
+
 #### Context 管理器
 
 自动记忆提取在本节点后台运行；`pendingMemoryTasks=0` 不代表全部成功。`flush()` 等待本批任务，异常和失败 HaiResult 都返回 `MEMORY_EXTRACT_FAILED`（含失败数量），同轮并发观察者共享结果。返回即确认该批报告，后续只观察新任务，不自动重放可能部分完成的提取。`save()`、`reset({ waitForMemoryTasks: true })`、`consolidate()` 遇到该失败立即返回，不继续后续状态或记忆写入。进程崩溃后的外部效果仍须人工核对。

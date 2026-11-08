@@ -61,6 +61,7 @@
     "@modelcontextprotocol/sdk": "catalog:",
     "nanoid": "catalog:",
     "openai": "catalog:",
+    "parse5": "catalog:",
     "undici": "catalog:",
     "ws": "catalog:",
     "zod": "catalog:"

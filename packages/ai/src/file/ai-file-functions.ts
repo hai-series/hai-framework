@@ -24,29 +24,9 @@ import { core, err, ok } from '@h-ai/core'
 import { resolveModelEntry } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
+import { parseHtmlFile } from './ai-file-html.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'file' })
-const HTML_SCRIPT_BLOCK_REGEX = /<script[^>]*>[\s\S]*?<\/script[^>]*>/gi
-const HTML_STYLE_BLOCK_REGEX = /<style[^>]*>[\s\S]*?<\/style[^>]*>/gi
-const HTML_LIST_OPEN_TAG_REGEX = /<[ou]l[^>]*>/gi
-const HTML_LIST_CLOSE_TAG_REGEX = /<\/[ou]l>/gi
-const HTML_BOLD_TAG_REGEX = /<(?:strong|b)[^>]*>([\s\S]*?)<\/(?:strong|b)>/gi
-const HTML_ITALIC_TAG_REGEX = /<(?:em|i)[^>]*>([\s\S]*?)<\/(?:em|i)>/gi
-const HTML_LINK_TAG_REGEX = /<a[^>]+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi
-const HTML_IMAGE_TAG_REGEX = /<img([^>]*)>/gi
-const HTML_IMAGE_SRC_ATTR_REGEX = /src="([^"]*)"/
-const HTML_IMAGE_ALT_ATTR_REGEX = /alt="([^"]*)"/
-const HTML_INLINE_CODE_TAG_REGEX = /<code[^>]*>([\s\S]*?)<\/code>/gi
-const HTML_TABLE_ROW_REGEX = /<tr[^>]*>([\s\S]*?)<\/tr>/gi
-const HTML_TABLE_CELL_REGEX = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi
-const HTML_TABLE_CONTAINER_TAG_REGEX = /<\/?t(?:able|head|body|foot)[^>]*>/gi
-const HTML_TABLE_ELEMENT_TAG_REGEX = /<\/?t[rdh][^>]*>/gi
-const HTML_LINE_BREAK_REGEX = /<br\s*\/?>/gi
-const HTML_BLOCK_CLOSE_TAG_REGEX = /<\/(?:p|div|section|article|header|footer|main|nav|aside)>/gi
-const HTML_BLOCK_OPEN_TAG_REGEX = /<(?:p|div|section|article|header|footer|main|nav|aside)[^>]*>/gi
-const HTML_ANY_TAG_REGEX = /<[^>]+>/g
-const MULTI_LINE_BREAK_REGEX = /\n{3,}/g
-
 // ─── MIME 类型与扩展名映射 ───
 
 /** 文本 MIME 类型集合（直接解码） */
@@ -166,133 +146,6 @@ function parseTextContent(content: Buffer | string): string {
   return content.toString('utf-8')
 }
 
-/** HTML 实体名称映射表 */
-const HTML_ENTITIES: Record<string, string> = {
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: '\'',
-  nbsp: ' ',
-  mdash: '—',
-  ndash: '–',
-  ldquo: '\u201C',
-  rdquo: '\u201D',
-  lsquo: '\u2018',
-  rsquo: '\u2019',
-  hellip: '…',
-  copy: '©',
-  reg: '®',
-  trade: '™',
-}
-
-/** 解码 HTML 实体（命名实体 + 十进制/十六进制数字实体） */
-function decodeHtmlEntities(text: string): string {
-  return text.replace(/&(?:#(\d+)|#x([\dA-Fa-f]+)|([A-Za-z]+));/g, (match, dec, hex, named) => {
-    if (dec !== undefined)
-      return String.fromCharCode(Number.parseInt(dec, 10))
-    if (hex !== undefined)
-      return String.fromCharCode(Number.parseInt(hex, 16))
-    return HTML_ENTITIES[named] ?? match
-  })
-}
-
-/** 剥除 HTML 标签，仅保留文本内容 */
-function stripTags(html: string): string {
-  return html.replace(HTML_ANY_TAG_REGEX, '')
-}
-
-/**
- * 解析 HTML，剥除标签并提取纯文本
- */
-function parseHtmlContent(content: Buffer | string): string {
-  const html = parseTextContent(content)
-  const noScript = html.replace(HTML_SCRIPT_BLOCK_REGEX, ' ')
-  const noStyle = noScript.replace(HTML_STYLE_BLOCK_REGEX, ' ')
-  const noTags = noStyle.replace(HTML_ANY_TAG_REGEX, ' ')
-  return decodeHtmlEntities(noTags).replace(/\s+/g, ' ').trim()
-}
-
-/**
- * 将 HTML 转换为 Markdown
- *
- * 保留常见文档结构：标题、列表、粗体/斜体、超链接、代码块、水平线。
- * 不支持的复杂结构（如嵌套表格、内联样式）将降级为纯文本。
- */
-function htmlToMarkdown(content: Buffer | string): string {
-  let md = parseTextContent(content)
-
-  // 移除 script / style 块
-  md = md.replace(HTML_SCRIPT_BLOCK_REGEX, '')
-  md = md.replace(HTML_STYLE_BLOCK_REGEX, '')
-
-  // 代码块（pre > code，先处理避免内部标签被转换）
-  md = md.replace(/<pre[^>]*>\s*<code[^>]*>([\s\S]*?)<\/code>\s*<\/pre>/gi, (_, code) =>
-    `\n\`\`\`\n${decodeHtmlEntities(stripTags(code)).trim()}\n\`\`\`\n`)
-  md = md.replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, (_, code) =>
-    `\n\`\`\`\n${decodeHtmlEntities(stripTags(code)).trim()}\n\`\`\`\n`)
-
-  // 标题 h1–h6
-  for (let level = 1; level <= 6; level++) {
-    md = md.replace(
-      new RegExp(`<h${level}[^>]*>([\\s\\S]*?)<\\/h${level}>`, 'gi'),
-      (_, c) => `\n${'#'.repeat(level)} ${stripTags(c).trim()}\n`,
-    )
-  }
-
-  // 水平线
-  md = md.replace(/<hr\s*\/?>/gi, '\n\n---\n\n')
-
-  // 引用块
-  md = md.replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, (_, c) =>
-    stripTags(c).trim().split('\n').map(l => `> ${l.trim()}`).filter(l => l !== '> ').join('\n'))
-
-  // 列表项
-  md = md.replace(HTML_LIST_OPEN_TAG_REGEX, '\n')
-  md = md.replace(HTML_LIST_CLOSE_TAG_REGEX, '\n')
-  md = md.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (_, c) => `\n- ${stripTags(c).trim()}`)
-
-  // 粗体 / 斜体
-  md = md.replace(HTML_BOLD_TAG_REGEX, (_, c) => `**${stripTags(c).trim()}**`)
-  md = md.replace(HTML_ITALIC_TAG_REGEX, (_, c) => `*${stripTags(c).trim()}*`)
-
-  // 超链接
-  md = md.replace(HTML_LINK_TAG_REGEX, (_, href, text) =>
-    `[${stripTags(text).trim()}](${href})`)
-
-  // 图片（src/alt 属性顺序不定，逐属性提取）
-  md = md.replace(HTML_IMAGE_TAG_REGEX, (_, attrs: string) => {
-    const src = attrs.match(HTML_IMAGE_SRC_ATTR_REGEX)?.[1] ?? ''
-    const alt = attrs.match(HTML_IMAGE_ALT_ATTR_REGEX)?.[1] ?? ''
-    return `![${alt}](${src})`
-  })
-
-  // 行内代码
-  md = md.replace(HTML_INLINE_CODE_TAG_REGEX, (_, c) =>
-    `\`${decodeHtmlEntities(stripTags(c))}\``)
-
-  // 表格（简化：每行单元格用 | 分隔）
-  md = md.replace(HTML_TABLE_ROW_REGEX, (_, row) => {
-    const cells = [
-      ...row.matchAll(HTML_TABLE_CELL_REGEX),
-    ]
-    return `| ${cells.map(([, c]) => stripTags(c).trim()).join(' | ')} |\n`
-  })
-  md = md.replace(HTML_TABLE_CONTAINER_TAG_REGEX, '')
-  md = md.replace(HTML_TABLE_ELEMENT_TAG_REGEX, '')
-
-  // 换行与段落
-  md = md.replace(HTML_LINE_BREAK_REGEX, '\n')
-  md = md.replace(HTML_BLOCK_CLOSE_TAG_REGEX, '\n\n')
-  md = md.replace(HTML_BLOCK_OPEN_TAG_REGEX, '')
-
-  // 移除剩余标签并解码实体
-  md = md.replace(HTML_ANY_TAG_REGEX, '')
-  md = decodeHtmlEntities(md)
-
-  return md.replace(MULTI_LINE_BREAK_REGEX, '\n\n').trim()
-}
-
 /**
  * 使用 pdfjs-dist 解析 PDF 内容
  */
@@ -361,7 +214,7 @@ async function parseDocxContent(content: Buffer, outputFormat: OutputFormat = 't
     }
     if (outputFormat === 'markdown') {
       const result = await mammoth.convertToHtml({ buffer: content })
-      return ok(htmlToMarkdown(result.value))
+      return ok(parseHtmlFile(result.value, 'markdown'))
     }
     const result = await mammoth.extractRawText({ buffer: content })
     return ok(result.value)
@@ -518,9 +371,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
 
     // HTML：按输出格式选择解析方式
     if (mimeType === 'text/html') {
-      const text = outputFormat === 'markdown'
-        ? htmlToMarkdown(content)
-        : parseHtmlContent(content)
+      const text = parseHtmlFile(parseTextContent(content), outputFormat)
       return ok({
         text,
         method: 'html' as FileParseMethod,

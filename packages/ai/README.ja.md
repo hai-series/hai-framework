@@ -497,6 +497,12 @@ if (result.success) {
 
 `image.maxImageBytes` は出力/参照画像ごとに既定 20971520（20 MiB、最大 100 MiB）、`image.maxImages` は出力/参照画像数ごとに既定 4（最大 16）です。URL は順次取得し、解凍後を含む実測バイト数が上限を超えると応答をキャンセルします。JSON は `max(64 KiB, 2 × maxImageBytes)`、エラー本文は 64 KiB までです。モデル `timeout` は既定 120000ms で API・リダイレクト・全ダウンロードを含み、`signal` で全体をキャンセルできます。出力は PNG/JPEG/GIF/WebP の MIME とマジック値の一致を要求し、SVG は拒否します。完全な画像デコード・寸法検証は行いません。アドレス拒否・上限超過・タイムアウトはそれぞれ `IMAGE_DOWNLOAD_BLOCKED`・`IMAGE_TOO_LARGE`・`IMAGE_TIMEOUT` を返すため、success を確認してください。
 
+#### ファイル解析（File）
+
+業務のファイル内容と名前を `ai.file.parse({ content, filename, options: { outputFormat: 'markdown' } })` に渡します。`success` を確認してから `data.text` を読み、通常のテキストには `outputFormat: 'text'` を使います。HTML は parse5 と反復走査で処理し、script/style を除外して、見出し・リスト・リンク・画像・引用・コード・表などの一般的な Markdown 構造を保持します。不正なタグの正規表現バックトラック対策として正常な文書を切り詰めません。
+
+結果はテキストまたは Markdown であり、信頼済み HTML ではありません。テキストバインディングまたはフレームワークの `MarkdownRenderer` で表示し、直接 `{@html}` に渡さないでください。設定、引数、エラーコードは従来の契約を維持します。
+
 #### Context 管理
 
 自動記憶抽出は現在のノードのバックグラウンドで動作し、`pendingMemoryTasks=0` だけでは成功を示しません。`flush()` は当該バッチを待ち、例外と失敗 HaiResult を件数付き `MEMORY_EXTRACT_FAILED` として返します。同時の観測者は同じ結果を受け取り、戻り時点で報告を確認済みとし、次回は新規タスクだけを観測します。部分実行の可能性がある処理を自動再実行しません。`save()`・`reset({ waitForMemoryTasks: true })`・`consolidate()` は失敗時に後続の書き込みへ進まず、プロセス停止後の外部効果は別途確認します。

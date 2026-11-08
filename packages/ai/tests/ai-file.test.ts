@@ -7,6 +7,7 @@
 import type { AIConfig } from '../src/ai-config.js'
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import { Buffer } from 'node:buffer'
+import { Worker } from 'node:worker_threads'
 import { describe, expect, it, vi } from 'vitest'
 import { HaiAIError } from '../src/ai-types.js'
 import { createFileOperations } from '../src/file/ai-file-functions.js'
@@ -130,6 +131,81 @@ describe('file operations — text formats', () => {
 // ─── HTML 解析测试 ───
 
 describe('file operations — HTML', () => {
+  it.each(['text', 'markdown'] as const)('畸形 HTML 的 %s 提取在独立线程期限内保留全部文本', async (outputFormat) => {
+    const size = 1024 * 1024
+    const worker = new Worker(`
+      const { parentPort, workerData } = require('node:worker_threads')
+      import(workerData.module).then(({ parseHtmlFile }) => {
+        const value = parseHtmlFile('<'.repeat(workerData.size) + ' END', workerData.outputFormat)
+        parentPort.postMessage({ length: value.length, suffix: value.slice(-3) })
+      }).catch(error => { throw error })
+    `, {
+      eval: true,
+      execArgv: ['--experimental-strip-types'],
+      workerData: { module: new URL('../src/file/ai-file-html.ts', import.meta.url).href, size, outputFormat },
+    })
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    try {
+      const result = await new Promise<{ length: number, suffix: string }>((resolve, reject) => {
+        deadline = setTimeout(() => reject(new Error('HTML extraction exceeded the worker deadline')), 3000)
+        worker.once('message', resolve)
+        worker.once('error', reject)
+        worker.once('exit', code => code === 0
+          ? undefined
+          : reject(new Error(`HTML worker exited (${code})`)))
+      })
+      expect(result).toEqual({ length: size + 4, suffix: 'END' })
+    }
+    finally {
+      clearTimeout(deadline)
+      await worker.terminate()
+    }
+  }, 10_000)
+
+  it.each(['text', 'markdown'] as const)('大型正常文档的 %s 提取不截断正文', async (outputFormat) => {
+    const ops = createFileOperations(mockConfig, makeMockLLM(''))
+    const rows = Array.from({ length: 10_000 }, (_, index) => `row-${index}`)
+    const result = await ops.parse({
+      content: rows.map(row => `<p>${row}</p>`).join(''),
+      filename: 'large.html',
+      options: { outputFormat },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.text).toBe(rows.join(outputFormat === 'text'
+        ? ' '
+        : '\n\n'))
+    }
+  })
+
+  it('markdown 提取保留引用、代码、图片、表格和链接，并忽略脚本样式', async () => {
+    const ops = createFileOperations(mockConfig, makeMockLLM(''))
+    const result = await ops.parse({
+      filename: 'structures.html',
+      content: '<blockquote>first\nsecond</blockquote><p><code>x &lt; y</code></p><img src="https://example.com/a.png" alt="caption"><hr><table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table><a href="https://example.com/?a=1&amp;b=2">link</a><script data-marker=">">hiddenScript()</script><style>.hidden{}</style>',
+      options: { outputFormat: 'markdown' },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.text).toContain('> first\n> second')
+      expect(result.data.text).toContain('`x < y`')
+      expect(result.data.text).toContain('![caption](https://example.com/a.png)')
+      expect(result.data.text).toContain('| A | B |\n| 1 | 2 |')
+      expect(result.data.text).toContain('[link](https://example.com/?a=1&b=2)')
+      expect(result.data.text).toContain('---')
+      expect(result.data.text).not.toContain('hiddenScript')
+      expect(result.data.text).not.toContain('.hidden')
+    }
+  })
+
+  it('完整解码非 BMP 实体，深层结构不依赖递归调用栈', async () => {
+    const ops = createFileOperations(mockConfig, makeMockLLM(''))
+    const result = await ops.parse({ filename: 'deep.html', content: `${'<div>'.repeat(2048)}&#x1F600;${'</div>'.repeat(2048)}` })
+    expect(result.success).toBe(true)
+    if (result.success)
+      expect(result.data.text).toBe('😀')
+  })
+
   it('剥除 HTML 标签提取文本', async () => {
     const ops = createFileOperations(mockConfig, makeMockLLM(''))
     const html = '<html><body><h1>标题</h1><p>内容段落</p></body></html>'

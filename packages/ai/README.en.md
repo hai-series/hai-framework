@@ -497,6 +497,12 @@ Downloads require public HTTPS on default port 443 without URL credentials. Sock
 
 `image.maxImageBytes` defaults to 20971520 (20 MiB; maximum 100 MiB) per output/reference image. `image.maxImages` defaults to 4 (maximum 16) for output/reference counts, with sequential URL downloads. Actual streamed bytes, including decompressed bytes, are bounded and excess responses are cancelled. JSON responses are limited to `max(64 KiB, 2 × maxImageBytes)` and error bodies to 64 KiB. Model `timeout` defaults to 120000ms for the entire vendor request, redirects, and downloads; `signal` cancels the whole process. Outputs require matching PNG/JPEG/GIF/WebP MIME and magic bytes; SVG is rejected. Magic checks do not decode complete images or verify dimensions. Address rejection, limits, and deadlines return `IMAGE_DOWNLOAD_BLOCKED`, `IMAGE_TOO_LARGE`, and `IMAGE_TIMEOUT`; check success before use.
 
+#### File parsing
+
+Pass the business file content and filename to `ai.file.parse({ content, filename, options: { outputFormat: 'markdown' } })`. Check `success` before reading `data.text`; use `outputFormat: 'text'` for plain text. HTML uses parse5 and iterative traversal, omits script/style content, and preserves common Markdown headings, lists, links, images, quotations, code and tables. Normal documents are not truncated to avoid malformed-tag regex backtracking.
+
+The result is text or Markdown, not trusted HTML. Render it with text bindings or the framework's `MarkdownRenderer`. Configuration, parameters and error codes retain their existing contract.
+
 #### Context manager
 
 Automatic memory extraction runs locally in the background; `pendingMemoryTasks=0` does not imply success. `flush()` waits for the batch and returns `MEMORY_EXTRACT_FAILED` with a count for thrown errors or failed HaiResults. Concurrent observers share that result. Returning acknowledges the report; later flushes observe new tasks without replaying partially completed effects. `save()`, `reset({ waitForMemoryTasks: true })`, and `consolidate()` return that failure before subsequent writes. Reconcile external effects after a process crash.

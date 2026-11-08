@@ -457,6 +457,7 @@ export const POST = kit.handler(async ({ request }) => {
 - 只向模型注册允许自动执行的工具；写操作默认要求业务侧确认或幂等键，不能把“模型请求调用”当作授权。
 - 批量导入、批量 embedding 用批量 API，避免 await-in-loop。
 - 文件解析/OCR 失败按 `HaiAIError.FILE_*` 返回，不抛业务异常。
+- HTML 文件按 HTML 结构解析并迭代提取，script/style 不进入结果，正常正文不截断。`data.text` 仍是文本/Markdown，不是可信 HTML；使用文本绑定或 `MarkdownRenderer`，不能直接交给 `{@html}`。
 - A2A 认证失败返回 `A2A_AUTH_FAILED`；`callRemoteAgent` 只依赖 `ai.init()`，无需注册本地 executor。远端 URL 仅接受 HTTP(S) 且不得内嵌凭据，应用仍须配置 origin 白名单与出口网络策略。不要记录 token、apiKey、私钥、完整 headers 或带 query 的 URL。
 - A2A 入站日志保存并重验租约后才执行业务，出站日志在已有有界队列内完成后才发布；日志失败产生 failed/interrupted Task，不重放相同 receipt。日志不是交付回执，按 requiresEffectReconciliation 核对可能已执行的效果；listMessages 失败为安全的 A2A_LIST_MESSAGES_FAILED（984）。
 - A2A 任务与事件只有共享 journal 一套权威，不装配旧 TaskStore；push notification 配置和 authenticated extended card RPC 返回 SDK 标准不支持/未配置错误。应用通过公开 executor 接口接入，不导入内部 handler/Store 装配类型。
