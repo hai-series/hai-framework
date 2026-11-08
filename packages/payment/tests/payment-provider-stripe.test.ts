@@ -21,7 +21,7 @@ const testConfig = {
 /** 测试断言真实 RequestInit 中的 form body，避免把未知 body 强转为字符串。 */
 function readRequestBody(options: RequestInit): string {
   if (typeof options.body !== 'string')
-    throw new Error('Expected a string form body')
+    throw new TypeError('Expected a string form body')
   return options.body
 }
 
@@ -162,7 +162,9 @@ describe('payment-provider-stripe', () => {
     })
 
     it('fetch 失败返回 CREATE_ORDER_FAILED', async () => {
-      fetchSpy.mockResolvedValueOnce(Response.json({ error: { message: 'Card declined' } }, { status: 402 }))
+      fetchSpy.mockResolvedValueOnce(Response.json({
+        error: { message: 'Card declined' },
+      }, { status: 402 }))
 
       const provider = createStripeProvider(testConfig)
       const result = await provider.createOrder({
@@ -321,7 +323,12 @@ describe('payment-provider-stripe', () => {
     })
 
     it('签名不匹配返回 NOTIFY_VERIFY_FAILED', async () => {
-      const event = { type: 'test', data: { object: { id: 'x' } } }
+      const event = {
+        type: 'test',
+        data: {
+          object: { id: 'x' },
+        },
+      }
       const payload = JSON.stringify(event)
 
       const provider = createStripeProvider(testConfig)
