@@ -20,7 +20,9 @@ afterEach(async () => {
 })
 
 async function initialize(withCache = false) {
-  fetchMock.mockResolvedValueOnce(Response.json({ user: { username: 'test' } }))
+  fetchMock.mockResolvedValueOnce(Response.json({
+    user: { username: 'test' },
+  }))
   fetchMock.mockResolvedValueOnce(Response.json({ projects: [] }))
   if (withCache)
     fetchMock.mockResolvedValueOnce(Response.json([]))
@@ -28,7 +30,11 @@ async function initialize(withCache = false) {
     provider: { type: 'vercel', token: 'private-platform-token' },
     services: {
       db: { provisioner: 'neon', apiKey: 'private-neon-key' },
-      ...(withCache ? { cache: { provisioner: 'upstash' as const, email: 'test@example.test', apiKey: 'private-cache-key' } } : {}),
+      ...(withCache
+        ? {
+            cache: { provisioner: 'upstash' as const, email: 'test@example.test', apiKey: 'private-cache-key' },
+          }
+        : {}),
     },
   })).toMatchObject({ success: true })
 }
@@ -37,7 +43,9 @@ function newDatabase() {
   fetchMock.mockResolvedValueOnce(Response.json({ projects: [] }))
   fetchMock.mockResolvedValueOnce(Response.json({
     project: { id: 'database-created' },
-    connection_uris: [{ connection_uri: 'postgresql://u:private-password@host/db' }],
+    connection_uris: [
+      { connection_uri: 'postgresql://u:private-password@host/db' },
+    ],
   }))
 }
 
@@ -67,11 +75,21 @@ describe('deployment recovery', () => {
   it('preserves a known created resource when connection extraction fails', async () => {
     await initialize()
     fetchMock.mockResolvedValueOnce(Response.json({ projects: [] }))
-    fetchMock.mockResolvedValueOnce(Response.json({ project: { id: 'created-without-uri' } }))
+    fetchMock.mockResolvedValueOnce(Response.json({
+      project: { id: 'created-without-uri' },
+    }))
     const result = await deploy.provisionAll('same-project')
     expect(result.success).toBe(false)
-    if (!result.success)
-      expect(getDeployRecovery(result.error)?.resources).toEqual([{ serviceType: 'db', provisionerName: 'neon', resourceInfo: 'neon-project:created-without-uri', resourceStatus: 'created' }])
+    if (!result.success) {
+      expect(getDeployRecovery(result.error)?.resources).toEqual([
+        {
+          serviceType: 'db',
+          provisionerName: 'neon',
+          resourceInfo: 'neon-project:created-without-uri',
+          resourceStatus: 'created',
+        },
+      ])
+    }
   })
 
   it('returns resource and platform project information after uploading prebuilt output fails', async () => {
@@ -90,17 +108,28 @@ describe('deployment recovery', () => {
     expect(getDeployRecovery(result.error)).toMatchObject({
       stage: 'deploy',
       platformProjectId: 'platform-existing',
-      resources: [{ resourceStatus: 'created', resourceInfo: 'neon-project:database-created' }],
+      resources: [
+        { resourceStatus: 'created', resourceInfo: 'neon-project:database-created' },
+      ],
     })
     expect(JSON.stringify(result)).not.toContain('private-')
   })
 
   it('marks same-name database reuse on retry and does not create or delete it', async () => {
     await initialize()
-    fetchMock.mockResolvedValueOnce(Response.json({ projects: [{ id: 'existing-db', name: 'same-project-db' }] }))
+    fetchMock.mockResolvedValueOnce(Response.json({
+      projects: [
+        { id: 'existing-db', name: 'same-project-db' },
+      ],
+    }))
     fetchMock.mockResolvedValueOnce(Response.json({ uri: 'postgresql://u:p@host/db' }))
     const result = await deploy.provisionAll('same-project')
-    expect(result).toMatchObject({ success: true, data: [{ resourceStatus: 'reused', resourceInfo: 'neon-project:existing-db' }] })
+    expect(result).toMatchObject({
+      success: true,
+      data: [
+        { resourceStatus: 'reused', resourceInfo: 'neon-project:existing-db' },
+      ],
+    })
     expect(fetchMock.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true)
   })
 })

@@ -26,18 +26,27 @@ export function resolveImageReference(reference: string, source?: ImageSourceCon
     throw new Error(deployM('deploy_downloadInvalid'))
   const parts = reference.split('/')
   const explicit = parts.length > 1 && /[.:]|^localhost$/.test(parts[0])
-  const registry = explicit ? parts.shift()! : 'docker.io'
+  const registry = explicit
+    ? parts.shift()!
+    : 'docker.io'
   if (registry === 'docker.io' && parts.length === 1)
     parts.unshift('library')
-  const mappings: Record<string, string> | undefined = source.type === 'cn' ? { 'docker.io': 'docker.1ms.run', 'ghcr.io': 'ghcr.1ms.run' } : source.registries
+  const mappings: Record<string, string> | undefined = source.type === 'cn'
+    ? { 'docker.io': 'docker.1ms.run', 'ghcr.io': 'ghcr.1ms.run' }
+    : source.registries
   const replacement = mappings?.[registry]
-  if (!replacement || typeof replacement !== 'string')
-    throw new Error(deployM('deploy_imageSourceMissing', { params: { registry } }))
+  if (!replacement || typeof replacement !== 'string') {
+    throw new Error(deployM('deploy_imageSourceMissing', {
+      params: { registry },
+    }))
+  }
   if (replacement.split('/').some(part => part === '.' || part === '..'))
     throw new Error(deployM('deploy_downloadInvalid'))
   let url: URL
   try {
-    url = new URL(replacement.includes('://') ? replacement : `https://${replacement}`)
+    url = new URL(replacement.includes('://')
+      ? replacement
+      : `https://${replacement}`)
   }
   catch { throw new Error(deployM('deploy_downloadInvalid')) }
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || /%|\/\//.test(url.pathname)
@@ -51,20 +60,38 @@ export function resolveImageReference(reference: string, source?: ImageSourceCon
 function systemProxy(): { http?: string, https?: string, bypass?: string } {
   if (process.platform === 'win32') {
     const script = '$p=Get-ItemProperty -LiteralPath \'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\'; @{enabled=($p.ProxyEnable -eq 1);server=$p.ProxyServer;bypass=$p.ProxyOverride;pac=$p.AutoConfigURL}|ConvertTo-Json -Compress'
-    const value: { enabled?: boolean, server?: string, bypass?: string, pac?: string } = JSON.parse(execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', windowsHide: true, timeout: 5000 }))
+    const value: { enabled?: boolean, server?: string, bypass?: string, pac?: string } = JSON.parse(execFileSync('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      script,
+    ], { encoding: 'utf8', windowsHide: true, timeout: 5000 }))
     if (value.pac)
       throw new Error(deployM('deploy_proxySystemUnsupported'))
     if (!value.enabled || !value.server)
       return {}
-    const entries = Object.fromEntries(value.server.split(';').map(item => item.includes('=') ? item.split('=', 2) : ['all', item]))
-    return { http: entries.http ?? entries.all, https: entries.https ?? entries.http ?? entries.all, bypass: value.bypass?.split(';').filter(item => item !== '<local>').join(',') }
+    const entries = Object.fromEntries(value.server.split(';').map(item => item.includes('=')
+      ? item.split('=', 2)
+      : ['all', item]))
+    return {
+      http: entries.http ?? entries.all,
+      https: entries.https ?? entries.http ?? entries.all,
+      bypass: value.bypass?.split(';').filter(item => item !== '<local>').join(','),
+    }
   }
   if (process.platform === 'darwin') {
     const output = execFileSync('/usr/sbin/scutil', ['--proxy'], { encoding: 'utf8', timeout: 5000 })
     const get = (key: string): string | undefined => output.match(new RegExp(`^\\s*${key}\\s*:\\s*(.+)$`, 'm'))?.[1]?.trim()
     if (get('ProxyAutoConfigEnable') === '1' || get('ProxyAutoDiscoveryEnable') === '1')
       throw new Error(deployM('deploy_proxySystemUnsupported'))
-    return { http: get('HTTPEnable') === '1' ? `http://${get('HTTPProxy')}:${get('HTTPPort')}` : undefined, https: get('HTTPSEnable') === '1' ? `http://${get('HTTPSProxy')}:${get('HTTPSPort')}` : undefined }
+    return {
+      http: get('HTTPEnable') === '1'
+        ? `http://${get('HTTPProxy')}:${get('HTTPPort')}`
+        : undefined,
+      https: get('HTTPSEnable') === '1'
+        ? `http://${get('HTTPSProxy')}:${get('HTTPSPort')}`
+        : undefined,
+    }
   }
   throw new Error(deployM('deploy_proxySystemUnsupported'))
 }
@@ -98,7 +125,9 @@ export function resolveDownloadProxy(config?: DownloadProxyConfig): Record<strin
     if (!value)
       return ''
     try {
-      const url = new URL(value.includes('://') ? value : `http://${value}`)
+      const url = new URL(value.includes('://')
+        ? value
+        : `http://${value}`)
       if (!['http:', 'https:'].includes(url.protocol) || url.search || url.hash || url.pathname !== '/' || (mode === 'custom' && (url.username || url.password)))
         throw new Error('Invalid proxy URL')
       return url.toString().replace(/\/$/, '')
@@ -107,8 +136,29 @@ export function resolveDownloadProxy(config?: DownloadProxyConfig): Record<strin
   }
   const http = normalize(values.http)
   const https = normalize(values.https ?? values.http)
-  const bypass = mode === 'none' ? '' : config?.bypass ?? values.bypass ?? ''
+  const bypass = mode === 'none'
+    ? ''
+    : config?.bypass ?? values.bypass ?? ''
   if (/[\r\n\0]/.test(bypass))
     throw new Error(deployM('deploy_downloadInvalid'))
-  return { HTTP_PROXY: http, http_proxy: http, HTTPS_PROXY: https, https_proxy: https, NO_PROXY: bypass, no_proxy: bypass, ALL_PROXY: mode === 'inherit' ? process.env.ALL_PROXY ?? process.env.all_proxy ?? '' : '', all_proxy: mode === 'inherit' ? process.env.ALL_PROXY ?? process.env.all_proxy ?? '' : '', FTP_PROXY: mode === 'inherit' ? process.env.FTP_PROXY ?? process.env.ftp_proxy ?? '' : '', ftp_proxy: mode === 'inherit' ? process.env.FTP_PROXY ?? process.env.ftp_proxy ?? '' : '' }
+  return {
+    HTTP_PROXY: http,
+    http_proxy: http,
+    HTTPS_PROXY: https,
+    https_proxy: https,
+    NO_PROXY: bypass,
+    no_proxy: bypass,
+    ALL_PROXY: mode === 'inherit'
+      ? process.env.ALL_PROXY ?? process.env.all_proxy ?? ''
+      : '',
+    all_proxy: mode === 'inherit'
+      ? process.env.ALL_PROXY ?? process.env.all_proxy ?? ''
+      : '',
+    FTP_PROXY: mode === 'inherit'
+      ? process.env.FTP_PROXY ?? process.env.ftp_proxy ?? ''
+      : '',
+    ftp_proxy: mode === 'inherit'
+      ? process.env.FTP_PROXY ?? process.env.ftp_proxy ?? ''
+      : '',
+  }
 }

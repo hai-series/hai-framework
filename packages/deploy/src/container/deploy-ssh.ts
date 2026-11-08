@@ -57,7 +57,10 @@ export function usesSshPassword(config: Pick<SshConfig, 'auth' | 'password'>): b
 /** 构造 ssh 公共连接选项；密码从 child env 供给，不进入参数。 */
 function buildConnectOptions(config: SshConfig): string[] {
   const password = usesSshPassword(config)
-  const args: string[] = ['-o', password ? 'BatchMode=no' : 'BatchMode=yes']
+  const args: string[] = [
+    '-o',
+    password ? 'BatchMode=no' : 'BatchMode=yes',
+  ]
   if (password)
     args.push('-o', 'PreferredAuthentications=password', '-o', 'PasswordAuthentication=yes', '-o', 'PubkeyAuthentication=no', '-o', 'NumberOfPasswordPrompts=1')
   args.push('-o', `ConnectTimeout=${config.connectTimeoutSeconds}`)
@@ -117,7 +120,9 @@ export function buildScpUploadArgs(config: SshConfig, localPath: string, remoteP
     '-P',
     String(config.port),
     localPath,
-    `${config.username}@${config.host.includes(':') ? `[${config.host}]` : config.host}:${remotePath}`,
+    `${config.username}@${config.host.includes(':')
+      ? `[${config.host}]`
+      : config.host}:${remotePath}`,
   ]
 }
 
@@ -139,9 +144,18 @@ export function createSshExecutor(config: SshConfig): SshExecutor {
   const runAuthenticated = async (command: string, args: string[], options: CommandOptions): Promise<HaiResult<CommandResult>> => {
     if (!usesSshPassword(config))
       return runCommand(command, args, options)
-    if (!config.password || (options.timeoutMs !== undefined && (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs <= 0 || options.timeoutMs > 2147483647)))
-      return err({ ...HaiDeployError.REMOTE_COMMAND_FAILED, message: deployM('deploy_sshPasswordInvalid'), ext: { commandExecution: { reason: 'configuration', localTermination: 'not-started' } } })
-    const deadline = options.timeoutMs === undefined ? Number.POSITIVE_INFINITY : performance.now() + options.timeoutMs
+    if (!config.password || (options.timeoutMs !== undefined && (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs <= 0 || options.timeoutMs > 2147483647))) {
+      return err({
+        ...HaiDeployError.REMOTE_COMMAND_FAILED,
+        message: deployM('deploy_sshPasswordInvalid'),
+        ext: {
+          commandExecution: { reason: 'configuration', localTermination: 'not-started' },
+        },
+      })
+    }
+    const deadline = options.timeoutMs === undefined
+      ? Number.POSITIVE_INFINITY
+      : performance.now() + options.timeoutMs
     const prepared = await prepareSshAskpass(config.password, deadline, options.terminationTimeoutMs)
     if (!prepared.success)
       return prepared
@@ -150,22 +164,42 @@ export function createSshExecutor(config: SshConfig): SshExecutor {
     try {
       const remaining = deadline - performance.now()
       result = remaining <= 0
-        ? err({ ...HaiDeployError.REMOTE_COMMAND_FAILED, message: deployM('deploy_sshAskpassFailed'), ext: { commandExecution: { reason: 'timeout', localTermination: 'not-started' } } })
+        ? err({
+            ...HaiDeployError.REMOTE_COMMAND_FAILED,
+            message: deployM('deploy_sshAskpassFailed'),
+            ext: {
+              commandExecution: { reason: 'timeout', localTermination: 'not-started' },
+            },
+          })
         : await runCommand(command, args, {
             ...options,
             env: prepared.data.env,
-            timeoutMs: Number.isFinite(deadline) ? Math.ceil(remaining) : undefined,
-            secrets: [...(options.secrets ?? []), config.password],
+            timeoutMs: Number.isFinite(deadline)
+              ? Math.ceil(remaining)
+              : undefined,
+            secrets: [
+              ...(options.secrets ?? []),
+              config.password,
+            ],
           })
     }
     catch {
-      result = err({ ...HaiDeployError.REMOTE_COMMAND_FAILED, message: deployM('deploy_sshAskpassFailed'), ext: { commandExecution: { reason: 'configuration', localTermination: 'unknown' } } })
+      result = err({
+        ...HaiDeployError.REMOTE_COMMAND_FAILED,
+        message: deployM('deploy_sshAskpassFailed'),
+        ext: {
+          commandExecution: { reason: 'configuration', localTermination: 'unknown' },
+        },
+      })
     }
     finally {
       removed = prepared.data.cleanup()
     }
-    if (!removed.success)
-      return result.success ? removed : err({ ...result.error, message: `${result.error.message}\n${removed.error.message}` })
+    if (!removed.success) {
+      return result.success
+        ? removed
+        : err({ ...result.error, message: `${result.error.message}\n${removed.error.message}` })
+    }
     return result
   }
 
@@ -181,14 +215,32 @@ export function createSshExecutor(config: SshConfig): SshExecutor {
       return result
     const state = getDeployCommandState(result.error)
     // 连接客户端退出并不能证明远端进程结束；只增加安全状态，不暴露远程命令原文。
-    return err({ ...result.error, suggestion: deployM('deploy_remoteUnknown'), ext: { ...result.error.ext, commandExecution: { ...state, reason: state?.reason ?? 'exit', localTermination: state?.localTermination ?? 'unknown', remoteExecution: 'unknown' } } })
+    return err({
+      ...result.error,
+      suggestion: deployM('deploy_remoteUnknown'),
+      ext: {
+        ...result.error.ext,
+        commandExecution: {
+          ...state,
+          reason: state?.reason ?? 'exit',
+          localTermination: state?.localTermination ?? 'unknown',
+          remoteExecution: 'unknown',
+        },
+      },
+    })
   }
 
   const upload: SshExecutor['upload'] = async (localPath, remotePath) => {
     const args = buildScpUploadArgs(config, localPath, remotePath)
     const result = await runAuthenticated('scp', args, { timeoutMs: 600_000 })
     if (!result.success) {
-      return err({ ...HaiDeployError.IMAGE_TRANSFER_FAILED, message: deployM('deploy_imageTransferFailed', { params: { error: result.error.message } }), ext: result.error.ext })
+      return err({
+        ...HaiDeployError.IMAGE_TRANSFER_FAILED,
+        message: deployM('deploy_imageTransferFailed', {
+          params: { error: result.error.message },
+        }),
+        ext: result.error.ext,
+      })
     }
     return ok(undefined)
   }
@@ -197,7 +249,13 @@ export function createSshExecutor(config: SshConfig): SshExecutor {
     logger.debug('SSH preflight', { host: config.host, port: config.port })
     const result = await exec('true', { timeoutMs: 20_000 })
     if (!result.success) {
-      return err({ ...HaiDeployError.REMOTE_CONNECT_FAILED, message: deployM('deploy_remoteConnectFailed', { params: { host: config.host, error: result.error.message } }), ext: result.error.ext })
+      return err({
+        ...HaiDeployError.REMOTE_CONNECT_FAILED,
+        message: deployM('deploy_remoteConnectFailed', {
+          params: { host: config.host, error: result.error.message },
+        }),
+        ext: result.error.ext,
+      })
     }
     return ok(undefined)
   }

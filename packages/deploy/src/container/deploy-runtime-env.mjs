@@ -8,6 +8,16 @@ import { parseEnv } from 'node:util'
 
 const maximumBytes = 1024 * 1024
 const refreshCookieSecure = 'HAI_SERV_REFRESH_COOKIE_SECURE'
+// 启动参数、代理身份和 adapter 转发信任均由 Compose 固定，不属于业务可重载配置。
+const startupEnvironment = new Set([
+  'NODE_OPTIONS',
+  'HAI_DEPLOY_PRIVATE_PROXY',
+  'PROTOCOL_HEADER',
+  'HOST_HEADER',
+  'PORT_HEADER',
+  'ADDRESS_HEADER',
+  'XFF_DEPTH',
+])
 
 /** 拒绝特殊文件、链接、超限与不可读文件，不输出秘密。 */
 function readText(name) {
@@ -109,9 +119,19 @@ function applyManagedPasswords(values, bindings, state) {
       }
       catch { throw new Error(`Invalid managed application configuration: ${prefix}`) }
     }
-    const passwordField = prefix === 'HAI_STORAGE' ? 'secretAccessKey' : prefix === 'HAI_IAM_LDAP' ? 'bindPassword' : 'password'
-    if (!['HAI_STORAGE', 'HAI_IAM_LDAP', 'HAI_DB', 'HAI_VECDB'].includes(prefix))
+    const passwordField = prefix === 'HAI_STORAGE'
+      ? 'secretAccessKey'
+      : prefix === 'HAI_IAM_LDAP'
+        ? 'bindPassword'
+        : 'password'
+    if (![
+      'HAI_STORAGE',
+      'HAI_IAM_LDAP',
+      'HAI_DB',
+      'HAI_VECDB',
+    ].includes(prefix)) {
       throw new Error('Unsupported managed middleware binding')
+    }
     const url = values[`${prefix}_URL`] ?? configuration.url
     if (['HAI_DB', 'HAI_VECDB'].includes(prefix) && url) {
       try {
@@ -129,8 +149,10 @@ function applyManagedPasswords(values, bindings, state) {
 
 /** 保留父 JSON 与显式细项；粗细覆盖由应用通用配置解析器完成。 */
 function serialize(values) {
-  return `${Object.entries(values).sort(([left], [right]) => left.localeCompare(right)).filter(([name]) => name !== 'NODE_OPTIONS' && name !== 'HAI_DEPLOY_PRIVATE_PROXY').map(([name, value]) => {
-    const literal = !value.includes('\'') ? `'${value}'` : JSON.stringify(value).replaceAll('\'', '\\u0027')
+  return `${Object.entries(values).sort(([left], [right]) => left.localeCompare(right)).filter(([name]) => !startupEnvironment.has(name)).map(([name, value]) => {
+    const literal = !value.includes('\'')
+      ? `'${value}'`
+      : JSON.stringify(value).replaceAll('\'', '\\u0027')
     return `${name}=${literal}`
   }).join('\n')}\n`
 }
@@ -141,10 +163,16 @@ function prepare(directory, previousManifest, previousEnvironment, credentialSta
     throw new Error('Invalid runtime configuration preparation mode')
   const base = new URL(directory, import.meta.url)
   const incoming = readManifest(new URL('manifest.json', base))
-  const previous = mode === 'full' ? { metadata: {} } : readManifest(previousManifest)
-  const before = mode === 'full' ? {} : readEnvironment(previousEnvironment)
+  const previous = mode === 'full'
+    ? { metadata: {} }
+    : readManifest(previousManifest)
+  const before = mode === 'full'
+    ? {}
+    : readEnvironment(previousEnvironment)
   const next = readEnvironment(new URL('config/.env.runtime', base))
-  const entries = key => [...new Set(`${previous.metadata[key] ?? ''}\n${incoming.metadata[key] ?? ''}`.split('\n').filter(Boolean))]
+  const entries = key => [
+    ...new Set(`${previous.metadata[key] ?? ''}\n${incoming.metadata[key] ?? ''}`.split('\n').filter(Boolean)),
+  ]
   const keys = entries('managed-app-keys')
   if (keys.some(key => !/^HAI_[A-Z0-9_]+$/.test(key)))
     throw new Error('Invalid managed application environment key')
@@ -185,9 +213,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 }
 else {
   const values = readEnvironment('./config/.env.runtime')
-  // 启动参数与私有代理身份属于部署装配，不由业务运行文件覆盖。
-  delete values.NODE_OPTIONS
-  delete values.HAI_DEPLOY_PRIVATE_PROXY
+  for (const name of startupEnvironment)
+    delete values[name]
   // HAI 配置的显式进程来源最高；镜像内 NODE_ENV/HOST/PORT 默认值由运行文件定稿。
   const inherited = Object.fromEntries(Object.entries(process.env).filter(([name, value]) => name.startsWith('HAI_') && value !== undefined))
   for (const name of Object.keys(inherited).sort((left, right) => left.length - right.length)) {

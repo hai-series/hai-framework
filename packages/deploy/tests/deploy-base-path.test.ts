@@ -3,9 +3,36 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { stringify } from 'yaml'
 import { deploy } from '../src/index.js'
+
+// 本文件验收交付包结构；网关镜像用隔离归档夹具，实际引擎由部署 E2E 覆盖。
+vi.mock('../src/container/deploy-command.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../src/container/deploy-command.js')>()
+  return {
+    ...original,
+    runCommand: async (command: string, args: string[]) => {
+      let stdout = ''
+      if (command === 'tar')
+        stdout = execFileSync(command, args, { encoding: 'utf8', windowsHide: true })
+      else if (args[0] === 'save')
+        writeFileSync(args[args.indexOf('-o') + 1]!, 'gateway-image-fixture')
+      else if (args[0] === 'image' && args[1] === 'inspect')
+        stdout = createHash('sha256').update('gateway-image-fixture').digest('hex')
+      return {
+        success: true,
+        data: {
+          code: 0,
+          stdout,
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+        },
+      }
+    },
+  }
+})
 
 const roots: string[] = []
 afterEach(async () => {
@@ -23,33 +50,101 @@ it.each(['fullstack', 'sveltekit', 'vite'])('子目录部署包记录路径、�
   const artifacts = path.join(root, 'artifacts')
   mkdirSync(artifacts)
   mkdirSync(path.join(root, 'config'))
-  writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'prefix-deploy', version: '1.0.0', ...(ssr ? { devDependencies: { '@sveltejs/kit': '^2.0.0' } } : {}) }))
-  writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({ lockfileVersion: '9.0', importers: { '.': ssr ? { devDependencies: { '@sveltejs/kit': { version: '2.0.0' } } } : {} }, packages: ssr ? { '@sveltejs/kit@2.0.0': {} } : {}, snapshots: ssr ? { '@sveltejs/kit@2.0.0': {} } : {} }))
+  writeFileSync(path.join(root, 'package.json'), JSON.stringify({
+    name: 'prefix-deploy',
+    version: '1.0.0',
+    ...(ssr
+      ? {
+          devDependencies: { '@sveltejs/kit': '^2.0.0' },
+        }
+      : {}),
+  }))
+  writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({
+    lockfileVersion: '9.0',
+    importers: {
+      '.': ssr
+        ? {
+            devDependencies: {
+              '@sveltejs/kit': { version: '2.0.0' },
+            },
+          }
+        : {},
+    },
+    packages: ssr
+      ? { '@sveltejs/kit@2.0.0': {} }
+      : {},
+    snapshots: ssr
+      ? { '@sveltejs/kit@2.0.0': {} }
+      : {},
+  }))
   writeFileSync(path.join(root, '.env.test'), 'HAI_CORE_ENV=test\n')
-  writeFileSync(path.join(root, 'config/_serv.yml'), kind === 'fullstack' ? 'http:\n  apiPrefix: /yyy/sub/api/v1\n  health: {path: /yyy/sub/health, readyPath: /yyy/sub/ready}\n  docs: {path: /yyy/sub/docs}\n  openapi: {path: /yyy/sub/openapi.json}\n' : 'http:\n  apiPrefix: /api/v1\n')
-  const images = (kind === 'fullstack' ? ['serv', 'web'] : ['web']).map((name) => {
+  writeFileSync(path.join(root, 'config/_serv.yml'), kind === 'fullstack'
+    ? 'http:\n  apiPrefix: /yyy/sub/api/v1\n  health: {path: /yyy/sub/health, readyPath: /yyy/sub/ready}\n  docs: {path: /yyy/sub/docs}\n  openapi: {path: /yyy/sub/openapi.json}\n'
+    : 'http:\n  apiPrefix: /api/v1\n')
+  const images = (kind === 'fullstack'
+    ? ['serv', 'web']
+    : ['web']).map((name) => {
     const content = `prefix-${name}`
     const file = `${name}-1.0.0.tar`
     writeFileSync(path.join(artifacts, file), content)
-    return { name, file, imageRef: `localhost/prefix-${name}:build-1`, sha256: createHash('sha256').update(content).digest('hex'), containerPort: name === 'web' && !ssr ? 8080 : 3000 }
+    return {
+      name,
+      file,
+      imageRef: `localhost/prefix-${name}:build-1`,
+      sha256: createHash('sha256').update(content).digest('hex'),
+      containerPort: name === 'web' && !ssr
+        ? 8080
+        : 3000,
+    }
   })
-  writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 5, appVersion: '1.0.0', buildId: 'prefix-build', primaryService: kind === 'fullstack' ? 'serv' : 'web', hasWeb: true, webBasePath: '/yyy/sub', images }))
-  expect((await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime: 'docker' }, expose: { hostPort: 18080 } } })).success).toBe(true)
-  const bundle = await deploy.deployApp(root, { environment: 'test', bundleOnly: true, artifactDir: artifacts, output: path.join(root, 'prefix.tar') })
+  writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
+    version: 5,
+    appVersion: '1.0.0',
+    buildId: 'prefix-build',
+    primaryService: kind === 'fullstack'
+      ? 'serv'
+      : 'web',
+    hasWeb: true,
+    webBasePath: '/yyy/sub',
+    images,
+  }))
+  expect((await deploy.init({
+    provider: {
+      type: 'docker-ssh',
+      remote: { runtime: 'docker' },
+      expose: { hostPort: 18080 },
+    },
+  })).success).toBe(true)
+  const bundle = await deploy.deployApp(root, {
+    environment: 'test',
+    bundleOnly: true,
+    artifactDir: artifacts,
+    output: path.join(root, 'prefix.tar'),
+  })
   expect(bundle.success, bundle.success ? undefined : bundle.error.message).toBe(true)
   if (!bundle.success || !bundle.data.bundlePath)
     throw new Error('Expected a prefix deployment bundle')
   const read = (file: string) => execFileSync('tar', ['-xOf', bundle.data.bundlePath!, `./${file}`], { encoding: 'utf8', windowsHide: true })
   expect(JSON.parse(read('manifest.json'))).toMatchObject({ webBasePath: '/yyy/sub' })
   expect(JSON.parse(read('manifest.json')).metadata['web-base-path'].trim()).toBe('/yyy/sub')
-  expect(JSON.parse(read('manifest.json')).metadata['health-paths'].trim().split(/\r?\n/)).toEqual(ssr ? ['/yyy/sub/'] : kind === 'fullstack' ? ['/yyy/sub/health', '/_hai/web-health', '/yyy/sub/'] : ['/health', '/yyy/sub/'])
+  expect(JSON.parse(read('manifest.json')).metadata['health-paths'].trim().split(/\r?\n/)).toEqual(ssr
+    ? ['/yyy/sub/', '/_hai/gateway-health']
+    : kind === 'fullstack'
+      ? ['/yyy/sub/health', '/_hai/web-health', '/yyy/sub/']
+      : ['/health', '/yyy/sub/'])
   expect(read('apply.sh')).toContain('Web base path changed')
   if (!ssr) {
     expect(read('.hai/web.conf')).toContain('location /yyy/sub/')
     expect(read('.hai/web.conf')).toContain('location = /yyy/sub/runtime-config.js')
     if (kind === 'fullstack') {
       const proxy = read('.hai/web.conf')
-      for (const endpoint of ['health', 'ready', 'docs', 'openapi.json', '_hai/scalar.js'])
+      for (const endpoint of [
+        'health',
+        'ready',
+        'docs',
+        'openapi.json',
+        '_hai/scalar.js',
+      ])
         expect(proxy).toContain(`location = /yyy/sub/${endpoint} {`)
       expect(proxy).toContain('location /yyy/sub/api/v1/')
       expect(proxy).toContain('location.origin+"/yyy/sub/api/v1"')

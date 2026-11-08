@@ -25,19 +25,30 @@ function exited(pid: number): boolean {
 
 /** 子进程先写 PID，再周期性落盘心跳；输出足够长，越过秘密匹配的保留尾部。 */
 function childCode(): string {
-  const record = process.platform === 'win32' ? '' : `fs.writeFileSync(${JSON.stringify(path.join(root, 'pids.json'))},JSON.stringify({parent:process.ppid,child:process.pid}));`
+  const record = process.platform === 'win32'
+    ? ''
+    : `fs.writeFileSync(${JSON.stringify(path.join(root, 'pids.json'))},JSON.stringify({parent:process.ppid,child:process.pid}));`
   return `const fs=require('node:fs');${record}process.stdout.write('tree ready ready ready ready ready\\n');setInterval(()=>fs.appendFileSync(${JSON.stringify(path.join(root, 'heartbeat'))},'x'),30)`
 }
 
 /** 创建两层命令树；父进程早退时先等待子进程已真正开始，而非依赖调度速度。 */
 function tree(earlyParentExit = false): string {
-  return `const {spawn}=require('node:child_process');spawn(process.execPath,['-e',${JSON.stringify(childCode())}],{stdio:${JSON.stringify(earlyParentExit ? 'ignore' : 'inherit')}});${earlyParentExit ? `setInterval(()=>{if(require('node:fs').existsSync(${JSON.stringify(path.join(root, 'pids.json'))}))process.exit(0)},10)` : 'setInterval(()=>{},1000)'}`
+  return `const {spawn}=require('node:child_process');spawn(process.execPath,['-e',${JSON.stringify(childCode())}],{stdio:${JSON.stringify(earlyParentExit ? 'ignore' : 'inherit')}});${earlyParentExit
+    ? `setInterval(()=>{if(require('node:fs').existsSync(${JSON.stringify(path.join(root, 'pids.json'))}))process.exit(0)},10)`
+    : 'setInterval(()=>{},1000)'}`
 }
 
 /** Windows 显式创建和记录父/子实例；原生父进程不会由 Node 自带 Job 提前清空测试后代。 */
 async function treeInput(earlyParentExit = false): Promise<{ command: string, args: string[] }> {
-  if (process.platform !== 'win32')
-    return { command: process.execPath, args: ['-e', tree(earlyParentExit)] }
+  if (process.platform !== 'win32') {
+    return {
+      command: process.execPath,
+      args: [
+        '-e',
+        tree(earlyParentExit),
+      ],
+    }
+  }
   const childFile = path.join(root, 'child.cjs')
   await writeFile(childFile, childCode())
   return windowsTreeFixture(childFile, path.join(root, 'pids.json'), path.join(root, 'heartbeat'), earlyParentExit ? 0 : undefined)
@@ -80,7 +91,9 @@ afterEach(async () => {
     expect(await windowsFixtureProcessesStopped(identities, true)).toBe(true)
   }
   // 测试异常时仍只清理本轮记录的子进程，不依赖下一次运行回收。
-  const recorded = process.platform === 'win32' ? '' : await readFile(path.join(root, 'pids.json'), 'utf8').catch(() => '')
+  const recorded = process.platform === 'win32'
+    ? ''
+    : await readFile(path.join(root, 'pids.json'), 'utf8').catch(() => '')
   if (recorded) {
     const value: unknown = JSON.parse(recorded)
     if (value && typeof value === 'object') {
@@ -125,9 +138,12 @@ describe('managed local command trees', () => {
 
   it('回调失败同样等待整树退出且不泄漏原始回调异常', async () => {
     const input = await treeInput()
-    const result = await runCommand(input.command, input.args, { onOutput: () => {
-      throw new Error('private-callback-value')
-    }, secrets: ['private-callback-value'] })
+    const result = await runCommand(input.command, input.args, {
+      onOutput: () => {
+        throw new Error('private-callback-value')
+      },
+      secrets: ['private-callback-value'],
+    })
     expect(result.success).toBe(false)
     if (result.success)
       throw new Error('Expected output failure')
@@ -150,20 +166,41 @@ describe('managed local command trees', () => {
   }, 30_000)
 
   it('unicode/空格工作目录、空参数、引号、尾反斜杠、环境与 UTF-8 stdin 原样传递', async () => {
-    const args = ['', 'a b', '引号"和路径\\', '\\"', 'emoji 🐈']
+    const args = [
+      '',
+      'a b',
+      '引号"和路径\\',
+      '\\"',
+      'emoji 🐈',
+    ]
     const input = '输入 🐈\n第二行'
     const script = `let input='';process.stdin.setEncoding('utf8');process.stdin.on('data',part=>input+=part);process.stdin.on('end',()=>process.stdout.write(JSON.stringify({args:process.argv.slice(1),cwd:process.cwd(),env:process.env.TEST_COMMAND_UNICODE,input})))`
-    const result = await runCommand(process.execPath, ['-e', script, ...args], { cwd: root, env: { TEST_COMMAND_UNICODE: '环境 值 🐈' }, input })
+    const result = await runCommand(process.execPath, ['-e', script, ...args], {
+      cwd: root,
+      env: { TEST_COMMAND_UNICODE: '环境 值 🐈' },
+      input,
+    })
     expect(result.success).toBe(true)
     if (!result.success)
       throw new Error(result.error.message)
-    expect(JSON.parse(result.data.stdout)).toEqual({ args, cwd: root, env: '环境 值 🐈', input })
+    expect(JSON.parse(result.data.stdout)).toEqual({
+      args,
+      cwd: root,
+      env: '环境 值 🐈',
+      input,
+    })
   }, 20_000)
 
   it('非法 timeout/核验等待/空字节参数在执行前拒绝，不产生标记文件', async () => {
     const marker = path.join(root, 'should-not-run')
     const args = ['-e', `require('node:fs').writeFileSync(${JSON.stringify(marker)},'ran')`]
-    const cases = [{ timeoutMs: 0 }, { timeoutMs: -1 }, { timeoutMs: 2147483648 }, { terminationTimeoutMs: 0 }, { terminationTimeoutMs: 60001 }]
+    const cases = [
+      { timeoutMs: 0 },
+      { timeoutMs: -1 },
+      { timeoutMs: 2147483648 },
+      { terminationTimeoutMs: 0 },
+      { terminationTimeoutMs: 60001 },
+    ]
     for (const options of cases) {
       const result = await runCommand(process.execPath, args, options)
       expect(result.success).toBe(false)
@@ -181,10 +218,13 @@ describe('managed local command trees', () => {
       release = resolve
     })
     const input = await treeInput()
-    const result = await runCommand(input.command, input.args, { timeoutMs: 2500, onOutput: async () => {
-      calls++
-      await pending
-    } })
+    const result = await runCommand(input.command, input.args, {
+      timeoutMs: 2500,
+      onOutput: async () => {
+        calls++
+        await pending
+      },
+    })
     expect(result.success).toBe(false)
     if (!result.success)
       expect(getDeployCommandState(result.error)?.localTermination).toBe('confirmed')

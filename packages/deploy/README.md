@@ -130,6 +130,8 @@ CLI 的 --project-name 与 SDK 的 DeployAppOptions.projectName 覆盖入口已�
 
 公共配置保存在 `.env` 和 `.env.<mode>`，连接凭据与 SSH 配置保存在忽略 Git 的 `.env.<mode>.local`，`.env.local` 用于本机共享私有值。构建不读取部署秘密。
 
+HTTP API 的自定义请求头整体视为秘密，不按头名猜测是否包含凭据。保存已有环境时，缩进、`export` 与多行引号的旧项也会从同模式公共文件移入私有文件，避免原值残留。
+
 已有项目需把原构建对象移入 `hai.json.build`，把原部署 YAML 转成 JSON 放入 `hai.json.deploy`，删除原文件并保留现有 `HAI_DEPLOY_*` 变量。已有自建 S3 的项目首次升级必须全量部署：旧成功基线仍含已退出的一次性初始化服务，直接使用新增量包会被依赖存活检查拒绝；全量部署同时刷新中间件环境中的 `createBucket`，之后即可继续增量更新。
 
 直接部署时，向导按说明补齐服务器、SSH 用户、认证方式和端口等缺失配置，完整有效配置直接复用；`--yes` 不重复询问。SSH 支持 `auth: key`（私钥/agent）或 `auth: password`。省略 `auth` 时，仅非空 `password` 启用密码方式，否则保留 key/agent；显式 `key` 忽略残留密码。密码输入不回显并保留前后空格、前导零；有效密码不得包含 CR/LF/NUL，UTF-8 最多 1023 字节。私钥只保存路径，不读取或复制私钥内容。
@@ -246,7 +248,12 @@ SDK 在服务器本地健康通过并提交 `current` 后，还从操作机检�
 ```ts
 import { deploy } from '@h-ai/deploy'
 
-const initialized = await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 18080 } } })
+const initialized = await deploy.init({
+  provider: {
+    type: 'docker-ssh',
+    expose: { hostPort: 18080 }
+  }
+})
 if (!initialized.success)
   throw new Error(initialized.error.message)
 try {
@@ -277,6 +284,10 @@ finally {
 SSH 中断始终先记 `remoteExecution: 'unknown'`。docker-ssh SDK 用新连接只读核对 `result-<deploymentId>.json`，仅完整、未截断且 ID 匹配的终态记录可确认 `finished`，同时给出真实阶段及退出码；脚本结束不表示容器停止。即使终态退出码为 0，原 SSH/输出失败仍保留为失败，避免丢失回执被伪装成成功。CLI 分别显示本地和远端状态及结果路径；缺结果、旧 ID、损坏内容或重连失败均保持未知，不自动重跑发布或回滚。手工上传脚本在 SSH 失败时保守提示未知和核对目录，部署 ID 见包内 manifest。先核对步骤文件、`current`、真实服务与数据，再决定恢复。
 
 ### 运行环境文件与重复部署
+
+SvelteKit SSR 的 HTTP/HTTPS 均使用独立 `gateway`，后端不公开端口。网关覆盖标准转发头，Compose 固定 adapter 的协议/Host/客户端地址信任；这些值不接受业务运行文件覆盖。adapter-node 6 不再读取运行期 `ORIGIN`，应用默认不固定构建期 `paths.origin`；旧直接公开 SSR 的部署须用当前工具重新生成全量交付包。
+
+外层 TLS 终止须将负载均衡真实 IP/CIDR 加入 `trustedEdgeProxies`；独立 gateway 仅对白名单真实对端接受单值 `http` / `https`，其他来源和组合值使用本连接协议，外部 `Forwarded` 与主机/端口转发头不直接透传。
 
 Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>/config/.env.runtime`。应用配置与托管连接在此合并，修改 `HAI_STORAGE_PUBLICENDPOINT` 等细项后重启对应后端即可；同一来源的细项覆盖父 JSON。配置目录只读挂载到 `/run/hai/config`，编辑器原子替换文件也会被下一次启动读取。私有代理标记和 Node 启动参数由部署装配管理；静态 Web、中间件原生环境、端口/挂载、Nginx 路由与限额变更仍需部署。仅更新 Web/中间件保留当前应用配置；后端局部更新保留服务器托管连接，其余值来自新包，全量更新采用新包并按已有凭据状态定稿。手工修改先备份，长期配置同步回源环境。
 

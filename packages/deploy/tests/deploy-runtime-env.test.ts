@@ -18,7 +18,31 @@ function fixture(run: (context: { directory: string, start: (overrides?: NodeJS.
   try {
     run({
       directory: configuration,
-      start: overrides => spawnSync(process.execPath, ['--import', pathToFileURL(loader).href, '-e', 'process.stdout.write(JSON.stringify({value:process.env.HAI_RUNTIME_VALUE,removed:process.env.HAI_RUNTIME_REMOVED,db:process.env.HAI_RUNTIME_DB,proxy:process.env.HAI_DEPLOY_PRIVATE_PROXY,cookie:process.env.HAI_SERV_REFRESH_COOKIE_SECURE,origin:process.env.HAI_SERV_CORS_ORIGIN}))'], { encoding: 'utf8', timeout: 5000, env: { ...process.env, NODE_OPTIONS: undefined, HAI_RUNTIME_VALUE: undefined, HAI_RUNTIME_REMOVED: undefined, HAI_RUNTIME_DB: undefined, HAI_SERV_REFRESH_COOKIE_SECURE: undefined, HAI_SERV_CORS_ORIGIN: undefined, HAI_DEPLOY_PRIVATE_PROXY: '1', ...overrides } }),
+      start: overrides => spawnSync(process.execPath, [
+        '--import',
+        pathToFileURL(loader).href,
+        '-e',
+        'process.stdout.write(JSON.stringify({value:process.env.HAI_RUNTIME_VALUE,removed:process.env.HAI_RUNTIME_REMOVED,db:process.env.HAI_RUNTIME_DB,proxy:process.env.HAI_DEPLOY_PRIVATE_PROXY,cookie:process.env.HAI_SERV_REFRESH_COOKIE_SECURE,origin:process.env.HAI_SERV_CORS_ORIGIN,protocol:process.env.PROTOCOL_HEADER,host:process.env.HOST_HEADER,port:process.env.PORT_HEADER,address:process.env.ADDRESS_HEADER,depth:process.env.XFF_DEPTH}))',
+      ], {
+        encoding: 'utf8',
+        timeout: 5000,
+        env: {
+          ...process.env,
+          NODE_OPTIONS: undefined,
+          HAI_RUNTIME_VALUE: undefined,
+          HAI_RUNTIME_REMOVED: undefined,
+          HAI_RUNTIME_DB: undefined,
+          HAI_SERV_REFRESH_COOKIE_SECURE: undefined,
+          HAI_SERV_CORS_ORIGIN: undefined,
+          HAI_DEPLOY_PRIVATE_PROXY: '1',
+          PROTOCOL_HEADER: undefined,
+          HOST_HEADER: undefined,
+          PORT_HEADER: undefined,
+          ADDRESS_HEADER: undefined,
+          XFF_DEPTH: undefined,
+          ...overrides,
+        },
+      }),
     })
   }
   finally {
@@ -28,13 +52,44 @@ function fixture(run: (context: { directory: string, start: (overrides?: NodeJS.
 
 it('重新启动读取唯一运行文件，替换文件也能生效，保留部署代理身份', () => fixture(({ directory, start }) => {
   writeFileSync(join(directory, '.env.runtime'), 'HAI_RUNTIME_VALUE=first\nHAI_RUNTIME_REMOVED=temporary\nHAI_RUNTIME_DB=managed\nHAI_DEPLOY_PRIVATE_PROXY=0\n')
-  expect(JSON.parse(String(start().stdout))).toEqual({ value: 'first', removed: 'temporary', db: 'managed', proxy: '1' })
+  expect(JSON.parse(String(start().stdout))).toEqual({
+    value: 'first',
+    removed: 'temporary',
+    db: 'managed',
+    proxy: '1',
+  })
   writeFileSync(join(directory, '.env.runtime.next'), 'HAI_RUNTIME_VALUE=second\nHAI_RUNTIME_DB=updated\n')
   renameSync(join(directory, '.env.runtime.next'), join(directory, '.env.runtime'))
   expect(JSON.parse(String(start().stdout))).toEqual({ value: 'second', db: 'updated', proxy: '1' })
 }))
 
-it.each(['ordinary', 'dollar-$-$(not-a-command)', 'both \'single\' and "double" $x', 'line\nwith \' and " quotes', 'a\\path'])('交付值 %s 在真实 Node 加载中保持原样且不执行 shell', value => fixture(({ directory, start }) => {
+it('adapter 转发信任不能被业务运行文件覆盖，保留 Compose 固定值', () => fixture(({ directory, start }) => {
+  writeFileSync(join(directory, '.env.runtime'), 'PROTOCOL_HEADER=x-client-proto\nHOST_HEADER=x-client-host\nPORT_HEADER=x-client-port\nADDRESS_HEADER=x-client-ip\nXFF_DEPTH=99\n')
+  const result = start({
+    PROTOCOL_HEADER: 'x-forwarded-proto',
+    HOST_HEADER: 'host',
+    PORT_HEADER: '',
+    ADDRESS_HEADER: 'x-forwarded-for',
+    XFF_DEPTH: '1',
+  })
+  expect(result.status).toBe(0)
+  expect(JSON.parse(String(result.stdout))).toEqual({
+    proxy: '1',
+    protocol: 'x-forwarded-proto',
+    host: 'host',
+    port: '',
+    address: 'x-forwarded-for',
+    depth: '1',
+  })
+}))
+
+it.each([
+  'ordinary',
+  'dollar-$-$(not-a-command)',
+  'both \'single\' and "double" $x',
+  'line\nwith \' and " quotes',
+  'a\\path',
+])('交付值 %s 在真实 Node 加载中保持原样且不执行 shell', value => fixture(({ directory, start }) => {
   writeFileSync(join(directory, '.env.runtime'), serializeEnvFile({ HAI_RUNTIME_VALUE: value }))
   const result = start()
   expect(result.status).toBe(0)
@@ -51,7 +106,13 @@ it('空 Serv 父对象与运行进程覆盖均保留独立 Cookie 开关', () =>
   expect(JSON.parse(String(start({ HAI_SERV: '{}', HAI_SERV_REFRESH_COOKIE_SECURE: 'true' }).stdout))).toMatchObject({ cookie: 'true' })
 }))
 
-it.each(['missing', 'directory', 'oversized', 'duplicate', 'invalid-cookie'])('运行文件 %s 时在应用代码前失败且不泄漏内容', kind => fixture(({ directory, start }) => {
+it.each([
+  'missing',
+  'directory',
+  'oversized',
+  'duplicate',
+  'invalid-cookie',
+])('运行文件 %s 时在应用代码前失败且不泄漏内容', kind => fixture(({ directory, start }) => {
   const file = join(directory, '.env.runtime')
   if (kind === 'directory')
     mkdirSync(file)
@@ -69,15 +130,48 @@ it.each(['missing', 'directory', 'oversized', 'duplicate', 'invalid-cookie'])('�
 }))
 
 it('后端默认采用只读文件加载，静态 Web 和中间件保持原有方式', () => {
-  const sidecar = { services: [], composeServices: {}, volumes: {}, appVolumes: [], env: {}, containerEnv: {}, dependsOn: [], secrets: [] }
-  const base = { projectName: 'runtime', appVersion: '1.0.0', imageRef: 'app:1', hostPort: 18080, containerPort: 3000, sidecar }
-  const node = parse(generateComposeFile({ ...base, web: { imageRef: 'web:1', containerPort: 8080 } })).services
+  const sidecar = {
+    services: [],
+    composeServices: {},
+    volumes: {},
+    appVolumes: [],
+    env: {},
+    containerEnv: {},
+    dependsOn: [],
+    secrets: [],
+  }
+  const base = {
+    projectName: 'runtime',
+    appVersion: '1.0.0',
+    imageRef: 'app:1',
+    hostPort: 18080,
+    containerPort: 3000,
+    sidecar,
+  }
+  const node = parse(generateComposeFile({
+    ...base,
+    web: { imageRef: 'web:1', containerPort: 8080 },
+  })).services
   expect(node.serv.env_file).toBeUndefined()
   expect(node.serv.environment.NODE_OPTIONS).toContain('--import /run/hai/runtime-env.mjs')
   expect(node.serv.volumes).toContain('./config:/run/hai/config:ro')
   expect(node.web.volumes).not.toContain('./config:/run/hai/config:ro')
   const staticWeb = parse(generateComposeFile({ ...base, primaryService: 'web' })).services.web
   expect(staticWeb.env_file).toEqual(['.env.runtime'])
-  const ssr = parse(generateComposeFile({ ...base, primaryService: 'web', nodeRuntime: true })).services.web
+  expect(() => generateComposeFile({ ...base, primaryService: 'web', nodeRuntime: true })).toThrow('SvelteKit SSR requires a private gateway')
+  const ssr = parse(generateComposeFile({
+    ...base,
+    primaryService: 'web',
+    nodeRuntime: true,
+    gateway: true,
+  })).services.web
   expect(ssr.env_file).toBeUndefined()
+  expect(ssr.ports).toBeUndefined()
+  expect(ssr.environment).toMatchObject({
+    PROTOCOL_HEADER: 'x-forwarded-proto',
+    HOST_HEADER: 'host',
+    PORT_HEADER: '',
+    ADDRESS_HEADER: 'x-forwarded-for',
+    XFF_DEPTH: '1',
+  })
 })

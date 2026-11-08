@@ -117,6 +117,8 @@ CLI の --project-name と SDK の DeployAppOptions.projectName 上書きは廃�
 
 公開設定は `.env` と `.env.<mode>`、SSH と資格情報は Git 対象外の `.env.<mode>.local`、マシン共通の秘密値は `.env.local` に保存します。構築時には配備の秘密値を読みません。
 
+HTTP API のカスタムヘッダーは名前にかかわらず全体を秘密値として扱います。既存環境の保存時は、インデント、`export`、複数行の引用値も同じモードの公開ファイルから非公開ファイルへ移し、以前の値を残しません。
+
 既存プロジェクトは旧構築オブジェクトを `hai.json.build`、旧配置 YAML を JSON に変換して `hai.json.deploy` に移し、元のファイルを削除します。`HAI_DEPLOY_*` は継続利用できます。既存の自前 S3 は今回の初回更新で全量配置が必要です。旧基準には終了済みの初期化サービスが残っており、新しい増分パッケージの依存稼働チェックで拒否されます。全量配置で `createBucket` 設定も更新した後は増分更新を継続できます。
 
 直接デプロイでは、サーバー、SSH ユーザー、認証方式、ポートなどの不足項目を説明付きで質問します。有効で完全な設定は `--yes` でも再利用し、再入力を求めません。SSH は `auth: key`（秘密鍵/agent）と `auth: password` に対応します。`auth` を省略した場合、空でない `password` があるときだけパスワード認証を使い、それ以外は key/agent を維持します。明示した `key` は残存パスワードを無視します。パスワード入力は非表示で、前後の空白と先頭のゼロを保持します。有効なパスワードは CR/LF/NUL を含まず、UTF-8 で 1023 バイト以内である必要があります。秘密鍵はパスのみ参照し、内容を読み取り・コピーしません。
@@ -220,7 +222,12 @@ SDK はサーバー内の正常性確認と `current` 更新後、操作端末�
 ```ts
 import { deploy } from '@h-ai/deploy'
 
-const initialized = await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 18080 } } })
+const initialized = await deploy.init({
+  provider: {
+    type: 'docker-ssh',
+    expose: { hostPort: 18080 }
+  }
+})
 if (!initialized.success)
   throw new Error(initialized.error.message)
 try {
@@ -251,6 +258,10 @@ finally {
 SSH 中断は最初に `remoteExecution: 'unknown'` とし、docker-ssh SDK は別接続で `result-<deploymentId>.json` を読みます。完全で未切断、ID が一致する終端結果だけ `finished` と実際の段階・終了値を確認できます。script 終了はコンテナー停止を意味しません。終了値が 0 でも元の SSH/出力失敗は失敗として残します。CLI はローカルと遠隔の状態と結果パスを別々に表示します。欠落・旧 ID・破損・再接続失敗は不明のまま、配置や rollback を自動再実行しません。手動アップロード script は SSH 失敗を不明と表示し、確認先を示します。配置 ID はパッケージの manifest で確認します。手順、`current`、実サービスとデータを確認して復旧してください。
 
 ### 実行環境ファイルと設定の再利用
+
+SvelteKit SSR は HTTP/HTTPS ともに独立した `gateway` を使用し、バックエンドのポートを公開しません。ゲートウェイが標準の転送ヘッダーを上書きし、Compose が adapter のプロトコル、Host、クライアントアドレスの信頼設定を固定します。業務の実行環境ファイルでは変更できません。adapter-node 6 は実行時の `ORIGIN` を読み取らず、アプリは既定で構築時の `paths.origin` を固定しません。直接公開していた古い SSR 配置は、現在のツールで新しい完全配布物を作成して更新してください。
+
+上位で TLS を終端する場合は、ロードバランサーの実際の IP/CIDR を `trustedEdgeProxies` に指定します。独立 gateway は許可した実際の接続元の単一 `http` / `https` だけを採用し、その他の接続元や複合値では自身の接続プロトコルを使います。外部の `Forwarded`、ホスト/ポート転送値は上書きします。
 
 環境フラグ・初期アカウントパスワード・転送キーリングは起動コードも直接読み取るため、同じ接頭辞の親設定があっても保持します。
 
