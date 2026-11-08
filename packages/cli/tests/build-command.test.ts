@@ -979,27 +979,21 @@ it('错误版本、容器端口或不适用的构建参数在启动工具前失�
   expect(state.calls).toHaveLength(0)
 })
 
-it('dockerfile 阶段与 SQLite 镜像参数传给所选引擎，非法镜像地址不会启动构建', async () => {
+it('每个镜像使用自己的 Dockerfile，新 SQLite 不再传递独立下载地址', async () => {
   await buildCommand({
     cwd: root,
     target: 'image',
     runtime: 'docker',
-    sqlitePrebuildMirror: 'http://mirror.internal/better-sqlite3',
   })
   expect(state.calls.filter(call => call.args[0] === 'build').map(call => call.args)).toEqual([
     expect.arrayContaining([
       '-f',
       join(root, 'images/serv.Dockerfile'),
-      '--build-arg',
-      'SQLITE_PREBUILD_MIRROR=http://mirror.internal/better-sqlite3',
     ]),
     expect.arrayContaining([
       '-f',
       join(root, 'images/web.Dockerfile'),
     ]),
   ])
-  state.calls = []
-  for (const url of ['file:///binary', 'https://user:password@mirror.internal', 'https://mirror.internal?token=private'])
-    await expect(buildCommand({ cwd: root, target: 'image', sqlitePrebuildMirror: url })).rejects.toThrow()
-  expect(state.calls.filter(call => call.args[0] === 'build')).toHaveLength(0)
+  expect(state.calls.filter(call => call.args[0] === 'build').flatMap(call => call.args).join(' ')).not.toContain('SQLITE_PREBUILD_MIRROR')
 })

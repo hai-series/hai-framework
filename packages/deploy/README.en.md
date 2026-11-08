@@ -31,9 +31,11 @@ Automation can select the exact build using `artifactDir` from `hai build --targ
 
 #### Build options
 
-`--target` selects compile (default), image, app or desktop. `--images serv|web|serv,web` selects images. `--runtime auto|podman|docker` selects the local engine; auto prefers reachable Podman. `--network` overrides build networking, `--no-http-proxy` disables this build proxy (same as --proxy-mode none), and `--sqlite-prebuild-mirror` selects a trusted HTTP(S) binary mirror. Native `--platform` and `--arch` require the matching host SDK and Rust toolchain. Builds do not load deployment environments or runtime secrets.
+`--target` selects compile (default), image, app or desktop. `--images serv|web|serv,web` selects images. `--runtime auto|podman|docker` selects the local engine; auto prefers reachable Podman. `--network` overrides build networking, `--no-http-proxy` disables this build proxy (same as --proxy-mode none). SQLite 13 includes native binaries in its npm package and uses the configured npm registry. Native `--platform` and `--arch` require the matching host SDK and Rust toolchain. Builds do not load deployment environments or runtime secrets.
 
 #### Download sources and proxies
+
+Existing projects should remove the old SQLite mirror option and update their Dockerfiles. Image builds open an in-memory database to verify that the bundled native binary loads on the target platform.
 
 `--image-source official|cn|custom` covers application base images and missing middleware images during packaging. `--npm-source` requires `--build` and controls Corepack/pnpm. The China preset uses 1ms for Docker Hub/GHCR and npmmirror for npm. First interactive choices are saved in `hai.json.build.sources`; flags override one invocation. Set `--proxy-mode inherit|system|custom|none`, `--proxy-url`, and `--proxy-bypass`; `--no-http-proxy` means none. Docker/remote Podman image pulls require engine-side proxy settings; build containers check connectivity separately. See [sources and proxies](../../docs/usage/configuration/delivery.md#下载源和代理) for custom sources, supported platforms and old-template updates.
 

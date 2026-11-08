@@ -70,7 +70,6 @@ HAI_REACH_PROVIDERS='[{"name":"email","type":"api","url":"https://mail.example.i
 | `--concurrency` | 2；仅`image` | 同时构建的镜像数，只接受1或2；`deploy` `--build`也可使用 |
 | `--runtime` | `image` 默认 `auto`；Android 省略时使用本机工具链 | `auto` 优先 Podman，显式 `docker` 或 `podman` 选择容器引擎 |
 | `--network`/`--no-http-proxy` | 默认引擎网络/默认继承规则 | 按网络环境明确设置，完全离线还需基础镜像和依赖缓存 |
-| `--sqlite-prebuild-mirror` | 无通用镜像地址默认 | 可信HTTP(S)预编译根地址，需匹配ABI/架构/libc |
 | `--platform`/`--arch` | 按目标工具链 | 原生包需对应OS/SDK/签名；同步资源不等于生成安装包 |
 | `--debug` | app/desktop 默认 release | 生成对应平台的调试安装包 |
 
@@ -81,6 +80,8 @@ HAI_REACH_PROVIDERS='[{"name":"email","type":"api","url":"https://mail.example.i
 批次目录统一使用 `build-<工程>-<目标>-YYYYMMDD-HHmmss-<随机串>-<版本>`，安装包使用工程标识、平台、Desktop 架构、类型和版本。`latest` 保存批次目录名，清单 `buildId` 是不含工程与目标前缀的短标识；旧目录仍可读取。完整示例见[统一命名](../getting-started/build.md#统一命名)。
 
 ### 构建并发和缓存
+
+SQLite 13 的原生二进制随 npm 包交付。旧的 `--sqlite-prebuild-mirror`、`SQLITE_PREBUILD_MIRROR` 和独立安装器已经移除；升级既有工程时同步 Dockerfile，并删除旧命令参数。离线构建仍需缓存完整 npm 包，生成镜像会实际打开内存数据库验证原生依赖。
 
 `image` 目标默认最多并行两项镜像，资源紧张时用 `--concurrency 1`。Dockerfile 在源码 COPY 前安装依赖，前后端仅复制各自必要的源码，源码变化可复用下载与安装层。运行镜像移除应用自身的声明文件、源码映射与说明文件。打包按镜像内容 ID 在 `.hai/cache/images` 缓存中间件归档，复用前验证摘要，损坏则重新导出；应用镜像复制时同步计算摘要。速度取决于资源与缓存命中，不承诺固定比例。
 
@@ -123,7 +124,7 @@ pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source 
 pnpm build --target image --image-source custom --image-mirrors "docker.io=mirror.example.com/docker.io,ghcr.io=mirror.example.com/ghcr.io" --npm-source custom --npm-registry https://npm.example.com/registry
 ```
 
-对应配置为 `image: { "type": "custom", "registries": { "docker.io": "mirror.example.com/docker.io", "ghcr.io": "mirror.example.com/ghcr.io" } }`、`npm: { "type": "custom", "registry": "https://npm.example.com/registry" }`。所需原仓库缺少映射时明确失败。镜像映射采用 HTTPS，npm registry 支持 HTTP(S)，地址不包含认证信息、查询或片段。registry 同时供 Corepack 下载 pnpm、pnpm 获取依赖使用；lockfile 中显式的 tarball、Git URL 和原生预编译包仍按各自地址下载，SQLite 继续使用 `--sqlite-prebuild-mirror`。
+对应配置为 `image: { "type": "custom", "registries": { "docker.io": "mirror.example.com/docker.io", "ghcr.io": "mirror.example.com/ghcr.io" } }`、`npm: { "type": "custom", "registry": "https://npm.example.com/registry" }`。所需原仓库缺少映射时明确失败。镜像映射采用 HTTPS，npm registry 支持 HTTP(S)，地址不包含认证信息、查询或片段。registry 同时供 Corepack 下载 pnpm、pnpm 获取依赖使用；lockfile 中显式的 tarball、Git URL 和原生预编译包仍按各自地址下载。SQLite 13 的原生二进制随 npm 包提供，使用同一 npm 源，不再单独下载。
 
 代理单独选择，不随下载源自动改变：
 

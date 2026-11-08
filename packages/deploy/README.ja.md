@@ -31,9 +31,11 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### build のオプション
 
-`--target` は compile（既定）、image、app、desktop を選択します。`--images serv|web|serv,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は 今回のビルドのプロキシ無効（none と同じ）、`--sqlite-prebuild-mirror` は信頼できる HTTP(S) バイナリ配布元です。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
+`--target` は compile（既定）、image、app、desktop を選択します。`--images serv|web|serv,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は 今回のビルドのプロキシ無効（none と同じ）です。SQLite 13 のネイティブバイナリーは npm パッケージに同梱され、設定済みの npm レジストリーを使用します。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
 
 #### 取得元とプロキシ
+
+既存プロジェクトでは旧 SQLite ミラー引数を削除し、Dockerfile を更新してください。イメージ構築時にインメモリデータベースを開き、同梱されたネイティブバイナリーが対象環境で読み込めることを検証します。
 
 `--image-source official|cn|custom` はアプリのベースと梱包時に不足したミドルウェアイメージに適用します。`--npm-source` は `--build` と併用し Corepack/pnpm を制御します。中国本土は毫秒镜像の Docker Hub/GHCR 通道と npmmirror を使用します。初回対話で `hai.json.build.sources` に保存し、引数は今回のみ上書きします。プロキシは `--proxy-mode inherit|system|custom|none`、`--proxy-url`、`--proxy-bypass` で指定し、`--no-http-proxy` は none と同じです。Docker／リモート Podman の取得はエンジン側の設定が必要で、ビルドコンテナの接続は別途確認します。カスタム設定、対応 OS、旧テンプレートの更新は[取得元とプロキシ](../../docs/usage/configuration/delivery.md#下载源和代理)を参照してください。
 
@@ -141,7 +143,7 @@ SSH 設定は選択環境の `.env.<環境>.local` に保存します。`--bundl
 
 #### deploy のオプション
 
---env/--env-dir は環境、--build は先行する選択イメージ構築、--services は更新対象、--artifact-dir は既存成果物を指定します。--bundle-only は SSH 接続なしで tar と OS 別スクリプトを生成します。--runtime はローカル構築・イメージ出力エンジンです。--output はコマンドの作業ディレクトリを基準とする出力先を指定し、アプリ版を末尾に付けます。--yes は有効な設定を非対話で使い、不足値はエラーで示します。一体化構築でも --network、--no-http-proxy、--sqlite-prebuild-mirror を指定できます。
+--env/--env-dir は環境、--build は先行する選択イメージ構築、--services は更新対象、--artifact-dir は既存成果物を指定します。--bundle-only は SSH 接続なしで tar と OS 別スクリプトを生成します。--runtime はローカル構築・イメージ出力エンジンです。--output はコマンドの作業ディレクトリを基準とする出力先を指定し、アプリ版を末尾に付けます。--yes は有効な設定を非対話で使い、不足値はエラーで示します。一体化構築でも --network、--no-http-proxy を指定できます。
 
 #### マシン同士が接続できる場合：自動デプロイ
 

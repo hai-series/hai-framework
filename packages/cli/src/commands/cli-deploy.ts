@@ -60,7 +60,6 @@ export interface DeployCommandOptions extends GlobalOptions, BuildDownloadOption
   runtime?: 'auto' | 'podman' | 'docker'
   /** 构建阶段的网络与原生依赖设置。 */
   network?: string
-  sqlitePrebuildMirror?: string
   httpProxy?: boolean
   /** 只生成 tar，手工搬运。 */
   bundleOnly?: boolean
@@ -408,7 +407,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       throw new Error(cliM('cli_build_runtime_missing'))
     if (options.artifactDir && options.build)
       throw new Error(cliM('cli_deploy_build_artifact_conflict'))
-    if (!options.build && (options.concurrency !== undefined || options.network !== undefined || options.sqlitePrebuildMirror !== undefined || options.npmSource !== undefined || options.npmRegistry !== undefined))
+    if (!options.build && (options.concurrency !== undefined || options.network !== undefined || options.npmSource !== undefined || options.npmRegistry !== undefined))
       throw new Error(cliM('cli_deploy_build_options_required'))
     let selectedServices = options.services?.split(',').map(name => name.trim())
     if (selectedServices && (!selectedServices.length || selectedServices.some(name => !/^[a-z][a-z0-9-]*$/.test(name)) || new Set(selectedServices).size !== selectedServices.length))

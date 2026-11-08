@@ -33,17 +33,18 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### build 的可选参数
 
-| 参数                       | 用途                                      |
-| -------------------------- | ----------------------------------------- |
-| `--target`                 | compile（默认）、image、app、desktop      |
-| `--images`                 | serv、web 或 serv,web；只构建导出所选镜像 |
-| `--runtime`                | auto（优先 Podman）、podman、docker       |
-| `--network`                | 容器构建网络，默认引擎设置                |
-| `--no-http-proxy`          | 禁用本次构建代理（等价 none）             |
-| `--sqlite-prebuild-mirror` | SQLite 预编译包的可信 HTTP(S) 根地址      |
-| `--platform` / `--arch`    | 原生安装包的系统与架构                    |
+| 参数                    | 用途                                      |
+| ----------------------- | ----------------------------------------- |
+| `--target`              | compile（默认）、image、app、desktop      |
+| `--images`              | serv、web 或 serv,web；只构建导出所选镜像 |
+| `--runtime`             | auto（优先 Podman）、podman、docker       |
+| `--network`             | 容器构建网络，默认引擎设置                |
+| `--no-http-proxy`       | 禁用本次构建代理（等价 none）             |
+| `--platform` / `--arch` | 原生安装包的系统与架构                    |
 
 #### 下载源和代理
+
+SQLite 13 的原生二进制随 npm 包交付，使用同一 npm 源，无须额外下载器。已有工程升级时删除旧 SQLite 镜像参数并同步 Dockerfile；构建会实际打开内存数据库，确认目标平台的二进制可加载。
 
 `--image-source official|cn|custom` 同时作用于应用基础镜像和打包时缺少的中间件镜像。`--npm-source` 随 `--build` 控制 Corepack/pnpm；cn 使用毫秒镜像的 Docker Hub/GHCR 通道和 npmmirror。首次交互保存 `hai.json.build.sources`，命令覆盖只作用本次。代理使用 `--proxy-mode inherit|system|custom|none`、`--proxy-url` 与 `--proxy-bypass`；`--no-http-proxy` 等价 none。Docker/远程 Podman 的镜像拉取代理须在引擎侧设置，构建容器另做可达性检查。自定义源、平台范围及旧模板迁移见[下载源和代理](../../docs/usage/configuration/delivery.md#下载源和代理)。
 

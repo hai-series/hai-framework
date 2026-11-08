@@ -135,7 +135,6 @@ cli
   .option('--platform <platform>', cliM('cli_help_platform'))
   .option('--arch <arch>', cliM('cli_help_arch'))
   .option('--debug', cliM('cli_help_buildDebug'))
-  .option('--sqlite-prebuild-mirror <url>', cliM('cli_help_sqliteMirror'))
   .option('--no-http-proxy', cliM('cli_help_noHttpProxy'))
   .option('-y, --yes', cliM('cli_help_deployYes'))
   .option('--image-source <source>', cliM('cli_help_imageSource'))
@@ -188,7 +187,6 @@ cli
   .option('--build', cliM('cli_help_deployBuild'))
   .option('--concurrency <count>', cliM('cli_help_buildConcurrency'))
   .option('--network <network>', cliM('cli_help_deployNetwork'))
-  .option('--sqlite-prebuild-mirror <url>', cliM('cli_help_deploySqliteMirror'))
   .option('--no-http-proxy', cliM('cli_help_deployNoProxy'))
   .option('--image-source <source>', cliM('cli_help_imageSource'))
   .option('--image-mirrors <mappings>', cliM('cli_help_imageMirrors'))
@@ -215,7 +213,6 @@ cli
         build: options.build as boolean,
         concurrency: options.concurrency as number,
         network: options.network as string,
-        sqlitePrebuildMirror: options.sqlitePrebuildMirror as string,
         httpProxy: options.httpProxy as boolean,
         imageSource: options.imageSource as 'official' | 'cn' | 'custom',
         imageMirrors: options.imageMirrors as string,

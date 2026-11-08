@@ -58,7 +58,7 @@ pnpm build --target image --image-source custom --image-mirrors "docker.io=mirro
 
 代理形如 `{ "mode": "custom", "url": "http://127.0.0.1:10808", "bypass": "localhost,127.0.0.1" }`。inherit 使用进程变量；system 读取 Windows/macOS 静态代理，PAC/自动发现或其他平台用继承/自定义；none 清空本次代理变量，--no-http-proxy 等价 none。自定义地址不含认证，认证代理仅从环境继承。Podman 默认构建网络保留原代理地址，显式 --network pasta 等隔离网络时回环地址替换为 host.containers.internal；Docker 非 host 网络使用 host.docker.internal。须验证真实构建网络，run 结果不能代替；默认不通时显式试 --network pasta 或改用可达代理地址。Docker/远程 Podman 拉取使用引擎侧代理，不能用构建参数代替配置引擎，修改与重启独立安排。
 
-Dockerfile 在 FROM 前声明 HAI_NODE_IMAGE / 适用的 HAI_NGINX_IMAGE，构建阶段用 HAI_NPM_REGISTRY 设置 COREPACK_NPM_REGISTRY、npm_config_registry、pnpm_config_registry。首个下载步骤验证代理 TCP 可达性，代理不进入运行 ENV。旧工程同步模板后重新构建；显式 tarball/Git URL 和原生包不由 registry 覆盖，SQLite 继续用 --sqlite-prebuild-mirror。deploy 的 npm 参数须与 --build 一起使用。
+Dockerfile 在 FROM 前声明 HAI_NODE_IMAGE / 适用的 HAI_NGINX_IMAGE，构建阶段用 HAI_NPM_REGISTRY 设置 COREPACK_NPM_REGISTRY、npm_config_registry、pnpm_config_registry。首个下载步骤验证代理 TCP 可达性，代理不进入运行 ENV。旧工程同步模板后重新构建；显式 tarball/Git URL 和原生包不由 registry 覆盖。SQLite 13 原生二进制随 npm 包交付，使用同一 npm 源，无独立下载步骤。deploy 的 npm 参数须与 --build 一起使用。
 
 ### SvelteKit Adapter 模式
 

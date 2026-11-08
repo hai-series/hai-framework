@@ -61,7 +61,6 @@ const enabled = process.env.HAI_DEPLOY_E2E === '1' && runtime !== null
 const REGISTRY_MIRROR = process.env.HAI_DEPLOY_E2E_MIRROR
 const APT_MIRROR = process.env.HAI_DEPLOY_E2E_APT_MIRROR
 const NPM_MIRROR = process.env.HAI_DEPLOY_E2E_NPM_MIRROR
-const SQLITE_MIRROR = process.env.HAI_DEPLOY_E2E_SQLITE_MIRROR
 // 容器可达的代理地址；Windows 的 localhost 代理可改用 host.containers.internal。
 const CONTAINER_PROXY = process.env.HAI_DEPLOY_E2E_CONTAINER_PROXY
 const CONTAINER_NETWORK = process.env.HAI_DEPLOY_E2E_CONTAINER_NETWORK
@@ -990,9 +989,7 @@ done`
         ...(CONTAINER_PROXY
           ? []
           : ['--no-http-proxy']),
-        ...(SQLITE_MIRROR
-          ? ['--sqlite-prebuild-mirror', SQLITE_MIRROR]
-          : []),
+
       ], appDir, CONTAINER_PROXY
         ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY }
         : undefined)
@@ -1437,9 +1434,7 @@ done`
         ...(CONTAINER_PROXY
           ? []
           : ['--no-http-proxy']),
-        ...(SQLITE_MIRROR
-          ? ['--sqlite-prebuild-mirror', SQLITE_MIRROR]
-          : []),
+
       ], appDir, CONTAINER_PROXY
         ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY }
         : undefined)
@@ -1672,9 +1667,7 @@ done`
       ...(CONTAINER_PROXY
         ? []
         : ['--no-http-proxy']),
-      ...(SQLITE_MIRROR
-        ? ['--sqlite-prebuild-mirror', SQLITE_MIRROR]
-        : []),
+
     ], project, CONTAINER_PROXY
       ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY }
       : undefined)

@@ -48,8 +48,6 @@ export interface BuildCommandOptions extends GlobalOptions, BuildDownloadOptions
   arch?: 'x64' | 'arm64'
   /** 原生安装包使用 Debug 构建类型；默认 Release。 */
   debug?: boolean
-  /** 可信 SQLite 预编译包根地址，不包含凭据。 */
-  sqlitePrebuildMirror?: string
   /** Podman 是否继承代理。 */
   httpProxy?: boolean
 }
@@ -333,7 +331,7 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   const containerAndroid = target === 'app' && options.platform === 'android' && options.runtime !== undefined
   if (target === 'app' && options.platform === 'ios' && options.runtime !== undefined)
     throw new Error(cliM('cli_build_ios_runtime'))
-  if ((target !== 'image' && (options.images !== undefined || options.concurrency !== undefined || options.sqlitePrebuildMirror !== undefined || options.json))
+  if ((target !== 'image' && (options.images !== undefined || options.concurrency !== undefined || options.json))
     || (target !== 'image' && !containerAndroid && (options.runtime !== undefined || options.network !== undefined || options.httpProxy === false || options.imageSource !== undefined || options.imageMirrors !== undefined || options.npmSource !== undefined || options.npmRegistry !== undefined || options.proxyMode !== undefined || options.proxyUrl !== undefined || options.proxyBypass !== undefined))
     || (!['desktop', 'app'].includes(target) && (options.platform !== undefined || options.debug !== undefined)) || (target !== 'desktop' && options.arch !== undefined)) {
     throw new Error(cliM('cli_build_options_invalid'))
@@ -502,11 +500,6 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   await preflightDownloadProxy(runtime, downloads.proxy, options.json
     ? message => process.stderr.write(`${message}\n`)
     : undefined)
-  if (options.sqlitePrebuildMirror) {
-    const url = new URL(options.sqlitePrebuildMirror)
-    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)
-      throw new Error(cliM('cli_build_mirror_invalid'))
-  }
   if (webBasePath) {
     artifact.version = 5
     artifact.webBasePath = webBasePath
@@ -567,8 +560,6 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
           ? ['--http-proxy=false']
           : []))
       }
-      if (options.sqlitePrebuildMirror)
-        args.push('--build-arg', `SQLITE_PREBUILD_MIRROR=${options.sqlitePrebuildMirror}`)
       if (image.name === 'web' && compileEnvironment.PUBLIC_BASE_PATH)
         args.push('--build-arg', `PUBLIC_BASE_PATH=${compileEnvironment.PUBLIC_BASE_PATH}`)
       built.push(imageRef)
