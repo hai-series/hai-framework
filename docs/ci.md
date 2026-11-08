@@ -81,15 +81,17 @@ flowchart TD
 
 ## 查看结果与重新运行
 
-GitHub Release 默认设置为 Latest（`prerelease: false`、`make_latest: 'true'`），包含版本名带 `-alpha`、`-beta`、`-rc` 的发布。这不改变版本的 SemVer 含义。npm 首先按版本发布 `alpha`、`beta`、`rc` 或 `next` 渠道；全部公开包发布完整、GitHub Release 创建成功后，统一将本次版本设为 npm `latest`，原渠道标签保留。正式版直接使用 `latest`。
+GitHub Release 保持 `prerelease: false`，包含版本名带 `-alpha`、`-beta`、`-rc` 的发布；这不改变版本的 SemVer 含义。npm 预发布版先进入 `alpha`、`beta`、`rc` 或 `next`，正式版先进入 `release`；发布包的步骤不直接改写 `latest`。自动发布在现有写入互斥锁内核对 npm `latest` 与 GitHub Latest 的真实 Git tag 来源：只有当前默认来源均为目标来源的祖先或同版本，才将 GitHub Release 设为 Latest 并推进 npm `latest`。未知 tag 或分叉来源保守保留默认值；迟到的旧流水线仍可补齐该版制品，不会覆盖更新的默认版本。判断使用 Git 祖先关系，不以历史预发布名称的 SemVer 排序代替发布顺序。
 
-只需要调整默认安装版本时，先查询 `pnpm view @h-ai/cli dist-tags`，再使用 **Promote npm latest → Run workflow** 填写已存在的目标版本。脚本从不可变的 `v<版本>` 标签读取公开包名单，先确认所有目标包版本已存在、所有当前标签可查询，再逐包更新并复核。该流程不安装依赖、不构建、不发布 tarball、不移动 Git 标签；与自动发布共用写入互斥组。npm 标签更新没有跨包事务，中途失败时可以重跑，已完成项不会重复写入。原始发布来源和同版包的内容保持不变。
+只需要调整默认安装版本时，先查询 `pnpm view @h-ai/cli dist-tags`，再使用 **Promote npm latest → Run workflow** 填写已存在的目标版本。该人工入口显式传入 `--allow-downgrade`，允许操作者选择回退；自动入口使用 `--automatic`，创建 GitHub Release 前的判定使用 `--check-automatic`。脚本从不可变的 `v<版本>` 标签读取公开包名单，先确认所有目标包版本已存在、所有当前标签可查询，再逐包更新并复核。该流程不安装依赖、不构建、不发布 tarball、不移动 Git 标签；与自动发布共用写入互斥组。npm 标签更新没有跨包事务，中途失败时可以重跑，已完成项不会重复写入。原始发布来源和同版包的内容保持不变。
 
 npm 会在包可安装前进行扫描，发布回执可能先于版本查询可见；[官方说明](https://github.blog/changelog/2026-07-28-npm-publish-time-malware-scanning-and-dual-use-metadata/)指出通常约五分钟，高峰期可能超过十五分钟。推进 `latest` 的预检只对明确的 HTTP 404 每十秒重查一次，最多等待三十分钟；期间不改标签、不重发包。发布任务保留四十五分钟预算，覆盖安装、扫描等待及标签核验。认证、网络或服务错误继续立即报错。
 
 等待超过上限时先核对注册表。即使版本暂时查不到，重新发布也可能返回 `409 Cannot publish over previously staged version`，这不能当作发布完成。应等待目标版本可查询，再从原始发布提交重跑失败阶段；只有全部目标版本可确认后才开始修改标签。已发布版本的内容和来源标签保持原样。
 
 **CodeQL** 在独立工作流中与 CI 并行，按 `security-extended` 查询分析 JavaScript/TypeScript，无需构建或安装应用依赖，结果上传到 GitHub Security。工作流成功代表分析和上传完成，发现项仍需逐项审查。**Leak Checker** 是现有私有词表检查，作用与 CodeQL 不同；两者均不能替代授权边界和实际部署测试。CodeQL Action 固定到已核验的 v4 提交，仓库生成产物不参与分析。
+
+当前 `daisyui@5.7.50` 补丁修复 CSS 构建兼容性，并非安全漏洞补丁。Tailwind 将 join 的 `@scope` 提升后，Lightning CSS 1.33 会错误丢弃两条相对选择器规则，影响焦点/悬停边框层级；补丁只添加零特异性的 `:where(:scope)` 锚点，保持优化开启。依据见 [Tailwind 官方问题](https://github.com/tailwindlabs/tailwindcss/issues/20668)、[DaisyUI 问题](https://github.com/saadeghi/daisyui/issues/4851) 和[尚未合并的上游修复](https://github.com/tailwindlabs/tailwindcss/pull/20671)。真实 compile→optimize 回归检查声明保留且无警告；升级到上游修复版后，核对实际产物再移除补丁与注册。根工作区和生成 UI 工程成套携带补丁；纯 API 不注册未使用的 DaisyUI/deepmerge 补丁。
 
 - 每个阶段的日志和 Job Summary 明确写出实际运行，或复用的来源运行编号、提交及阶段。复用不应报告成当前提交重新执行了全部测试。
 - 同一提交的瞬时环境故障，可在 Actions 使用 **Re-run failed jobs**，保留其他独立阶段的结果。断言失败应先定位并修复；新提交按输入指纹决定复用范围。

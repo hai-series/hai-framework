@@ -11,9 +11,17 @@ const root = fileURLToPath(new URL('../../', import.meta.url))
 /** 直接执行固定的 CI 工具；失败立即阻止后续测试，不使用 shell 或输出环境变量。 */
 async function execute(command, args, environment = process.env) {
   await new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: root, env: environment, stdio: 'inherit', shell: false, windowsHide: true })
+    const child = spawn(command, args, {
+      cwd: root,
+      env: environment,
+      stdio: 'inherit',
+      shell: false,
+      windowsHide: true,
+    })
     child.once('error', reject)
-    child.once('close', code => code === 0 ? resolve() : reject(new Error(`ACP CI command failed: ${command}; exit ${code}`)))
+    child.once('close', code => code === 0
+      ? resolve()
+      : reject(new Error(`ACP CI command failed: ${command}; exit ${code}`)))
   })
 }
 
@@ -34,8 +42,12 @@ export async function runACPContainerTests(run = execute, environment = process.
   delete fixtureEnvironment.HAI_ACP_E2E_REQUIRED
   delete fixtureEnvironment.HAI_ACP_E2E_GOOSE
   await run('docker', ['info'], fixtureEnvironment)
-  if (fixtureEnvironment.RUNNER_OS === 'Linux' && environment.GITHUB_EVENT_NAME === 'push' && environment.GITHUB_REF === 'refs/heads/main')
-    await run('sudo', ['sh', fileURLToPath(new URL('./ci-prepare-codex-sandbox.sh', import.meta.url))], fixtureEnvironment)
+  if (fixtureEnvironment.RUNNER_OS === 'Linux' && environment.GITHUB_EVENT_NAME === 'push' && environment.GITHUB_REF === 'refs/heads/main') {
+    await run('sudo', [
+      'sh',
+      fileURLToPath(new URL('./ci-prepare-codex-sandbox.sh', import.meta.url)),
+    ], fixtureEnvironment)
+  }
   const images = {}
   const manifests = []
   for (const name of ['codex-acp', 'deepseek-harness', 'goose']) {
@@ -69,9 +81,17 @@ export async function runACPContainerTests(run = execute, environment = process.
   const nativeManifests = manifests.filter(manifest => typeof manifest.package === 'string')
   const packages = nativeManifests.flatMap(manifest => [
     `${manifest.package}@${manifest.version}`,
-    ...(manifest.runtime ? [`${manifest.runtime.package}@${manifest.runtime.version}`] : []),
+    ...(manifest.runtime
+      ? [`${manifest.runtime.package}@${manifest.runtime.version}`]
+      : []),
   ])
-  await run('npm', ['install', '--global', '--no-audit', '--no-fund', ...packages], fixtureEnvironment)
+  await run('npm', [
+    'install',
+    '--global',
+    '--no-audit',
+    '--no-fund',
+    ...packages,
+  ], fixtureEnvironment)
   for (const manifest of nativeManifests) {
     await run(manifest.command, ['--version'], fixtureEnvironment)
     if (manifest.runtime)
@@ -88,13 +108,32 @@ export async function runACPContainerTests(run = execute, environment = process.
       await mkdir(home)
       await writeFile(join(directory, 'probe-input.txt'), 'ACP sandbox filesystem probe')
       const code = 'const fs=require("node:fs");const input=fs.readFileSync("probe-input.txt","utf8");fs.writeFileSync("probe-output.txt",input);if(fs.readFileSync("probe-output.txt","utf8")!==input)process.exit(1);process.stdout.write("Codex native sandbox ready\\n")'
-      await run('codex', ['sandbox', '-P', ':workspace', '-C', directory, '--', process.execPath, '-e', code], { ...fixtureEnvironment, CODEX_HOME: home })
+      await run('codex', [
+        'sandbox',
+        '-P',
+        ':workspace',
+        '-C',
+        directory,
+        '--',
+        process.execPath,
+        '-e',
+        code,
+      ], { ...fixtureEnvironment, CODEX_HOME: home })
     }
     finally {
       await rm(directory, { recursive: true, force: true })
     }
   }
-  await run('pnpm', ['--filter', '@h-ai/ai', 'exec', 'vitest', 'run', 'tests/ai-acp-openrouter.e2e.test.ts', 'tests/ai-acp-goose.e2e.test.ts', '--maxWorkers=1'], {
+  await run('pnpm', [
+    '--filter',
+    '@h-ai/ai',
+    'exec',
+    'vitest',
+    'run',
+    'tests/ai-acp-openrouter.e2e.test.ts',
+    'tests/ai-acp-goose.e2e.test.ts',
+    '--maxWorkers=1',
+  ], {
     ...fixtureTestEnvironment,
     OPENROUTER_APIKEY: apiKey,
     HAI_ACP_E2E_OPENROUTER: '1',

@@ -6,7 +6,10 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { commitVersionSync, missingPackages, releaseChannel, releasePending } from '../release-status.mjs'
 
-const packages = [{ name: '@h-ai/a', version: '1.0.0', directory: 'packages/a' }, { name: '@h-ai/b', version: '1.0.0', directory: 'packages/b' }]
+const packages = [
+  { name: '@h-ai/a', version: '1.0.0', directory: 'packages/a' },
+  { name: '@h-ai/b', version: '1.0.0', directory: 'packages/b' },
+]
 
 describe('release recovery', () => {
   it('publishes GitHub Latest independently from npm prerelease channels', () => {
@@ -14,7 +17,15 @@ describe('release recovery', () => {
     const steps = workflow.jobs.release.steps
     const release = steps.find(step => step.name === 'Create GitHub Release')
     const publish = steps.find(step => step.name === 'Publish missing npm packages')
-    expect(release.with).toMatchObject({ draft: false, prerelease: false, make_latest: 'true' })
+    const decision = steps.find(step => step.id === 'default_promotion')
+    const promotion = steps.find(step => step.name === 'Promote verified release to npm latest')
+    const defaultDecision = '$' + '{{ steps.default_promotion.outputs.promote }}'
+    expect(release.with).toMatchObject({ draft: false, prerelease: false, make_latest: defaultDecision })
+    expect(decision.run).toContain('--check-automatic')
+    expect(promotion.if).toBe('steps.default_promotion.outputs.promote == \'true\'')
+    expect(promotion.run).toContain('--automatic')
+    const manual = parse(readFileSync(new URL('../../.github/workflows/npm-promote.yml', import.meta.url), 'utf8'))
+    expect(manual.jobs.promote.steps.find(step => step.name === 'Verify release and promote latest').run).toContain('--allow-downgrade')
     expect(publish.env.NPM_DIST_TAG).toMatch(/^\$\{\{ needs\.quality\.outputs\.npm_tag \}\}$/)
     expect(releaseChannel('1.0.0-beta.1').npmTag).toBe('beta')
   })
@@ -25,8 +36,8 @@ describe('release recovery', () => {
     ['1.0.0-rc.2', 'rc', true],
     ['1.0.0-preview.1', 'next', true],
     ['1.0.0-1', 'next', true],
-    ['1.0.0', 'latest', false],
-    ['1.0.0+build-with-hyphens', 'latest', false],
+    ['1.0.0', 'release', false],
+    ['1.0.0+build-with-hyphens', 'release', false],
   ])('selects the release channel for %s', (version, npmTag, prerelease) => {
     expect(releaseChannel(version)).toEqual({ npmTag, prerelease })
   })
@@ -34,7 +45,11 @@ describe('release recovery', () => {
     const root = mkdtempSync(join(tmpdir(), 'hai-release-'))
     const remote = join(root, 'remote.git')
     const checkout = join(root, 'checkout')
-    const git = (...args) => execFileSync('git', args, { cwd: checkout, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+    const git = (...args) => execFileSync('git', args, {
+      cwd: checkout,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim()
     try {
       mkdirSync(checkout)
       execFileSync('git', ['init', '--bare', remote], { stdio: 'ignore' })
@@ -98,7 +113,9 @@ describe('release recovery', () => {
     const requests = []
     const fetcher = async (url) => {
       requests.push(url)
-      return url.includes('api.github.com') ? Response.json({ draft: false }) : new Response('', { status: 404 })
+      return url.includes('api.github.com')
+        ? Response.json({ draft: false })
+        : new Response('', { status: 404 })
     }
     expect(await releasePending(packages, 'owner/repo', '2.0.0', { fetcher })).toBe(true)
     expect(requests.filter(url => url.includes('registry.npmjs.org')).every(url => url.endsWith('/2.0.0'))).toBe(true)
@@ -106,7 +123,9 @@ describe('release recovery', () => {
   it('retries missing npm packages even when a release already exists', async () => {
     const fetcher = async url => url.includes('@h-ai%2fb')
       ? new Response('', { status: 404 })
-      : Response.json(url.includes('api.github.com') ? { draft: false } : { version: '1.0.0', latest: '1.0.0' })
+      : Response.json(url.includes('api.github.com')
+          ? { draft: false }
+          : { version: '1.0.0', latest: '1.0.0' })
     expect((await missingPackages(packages, fetcher)).map(pkg => pkg.name)).toEqual(['@h-ai/b'])
     expect(await releasePending(packages, 'owner/repo', '1.0.0', { fetcher })).toBe(true)
   })
@@ -114,12 +133,20 @@ describe('release recovery', () => {
   it('resumes a release whose versions and GitHub Release exist but latest is only partly promoted', async () => {
     const fetcher = async url => Response.json(url.includes('api.github.com')
       ? { draft: false }
-      : url.endsWith('/dist-tags') ? { latest: url.includes('%2fb') ? '0.9.0' : '1.0.0' } : { version: '1.0.0' })
+      : url.endsWith('/dist-tags')
+        ? {
+            latest: url.includes('%2fb')
+              ? '0.9.0'
+              : '1.0.0',
+          }
+        : { version: '1.0.0' })
     expect(await releasePending(packages, 'owner/repo', '1.0.0', { fetcher })).toBe(true)
   })
 
   it('repairs a missing GitHub release after npm publish succeeds', async () => {
-    const fetcher = async url => url.includes('api.github.com') ? new Response('', { status: 404 }) : Response.json({ version: '1.0.0', latest: '1.0.0' })
+    const fetcher = async url => url.includes('api.github.com')
+      ? new Response('', { status: 404 })
+      : Response.json({ version: '1.0.0', latest: '1.0.0' })
     expect(await releasePending(packages, 'owner/repo', '1.0.0', { fetcher })).toBe(true)
   })
 
@@ -135,9 +162,13 @@ describe('release recovery', () => {
   })
 
   it('skips only a complete release and never treats lookup failures as missing packages', async () => {
-    const fetcher = async url => Response.json(url.includes('api.github.com') ? { draft: false } : { version: '1.0.0', latest: '1.0.0' })
+    const fetcher = async url => Response.json(url.includes('api.github.com')
+      ? { draft: false }
+      : { version: '1.0.0', latest: '1.0.0' })
     expect(await releasePending(packages, 'owner/repo', '1.0.0', { fetcher })).toBe(false)
     await expect(missingPackages(packages, async () => new Response('', { status: 503 }))).rejects.toThrow('503')
-    await expect(releasePending([], 'owner/repo', '1.0.0', { fetcher: async () => new Response('', { status: 401 }) })).rejects.toThrow('401')
+    await expect(releasePending([], 'owner/repo', '1.0.0', {
+      fetcher: async () => new Response('', { status: 401 }),
+    })).rejects.toThrow('401')
   })
 })

@@ -29,7 +29,7 @@ jobs:
           node-version: 24.22.1
           registry-url: https://registry.npmjs.org
       - name: Verify release and promote latest
-        run: node scripts/promote-npm-latest.mjs "$RELEASE_VERSION"
+        run: node scripts/promote-npm-latest.mjs "$RELEASE_VERSION" --allow-downgrade
         env:
           RELEASE_VERSION: ${{ inputs.version }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

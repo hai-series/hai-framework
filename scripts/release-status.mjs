@@ -13,12 +13,17 @@ export function publicPackages(root) {
   }).filter(pkg => !pkg.private)
 }
 
-/** 按版本保留渠道标签；全部发布后再独立推进默认 latest。 */
+/** 按版本保留发布中渠道；正式版也先使用 release，防止旧流水线在来源核对前改写 latest。 */
 export function releaseChannel(version) {
   const coreVersion = version.split('+')[0]
   const prerelease = coreVersion.includes('-')
   const channel = /^\d+\.\d+\.\d+-(alpha|beta|rc)(?:\.|$)/.exec(coreVersion)?.[1]
-  return { prerelease, npmTag: prerelease ? channel ?? 'next' : 'latest' }
+  return {
+    prerelease,
+    npmTag: prerelease
+      ? channel ?? 'next'
+      : 'release',
+  }
 }
 
 export async function missingPackages(packages, fetcher = fetch) {
@@ -26,7 +31,10 @@ export async function missingPackages(packages, fetcher = fetch) {
   for (const pkg of packages) {
     // 沿用 npm 的规范 scoped 路径，并重新校验状态，避免发布前的负缓存误判为缺包。
     const packagePath = encodeURIComponent(pkg.name).replace(/^%40/, '@').replaceAll('%2F', '%2f')
-    const response = await fetcher(`https://registry.npmjs.org/${packagePath}/${encodeURIComponent(pkg.version)}`, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
+    const response = await fetcher(`https://registry.npmjs.org/${packagePath}/${encodeURIComponent(pkg.version)}`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(15000),
+    })
     if (response.status === 404) {
       missing.push(pkg)
       continue
@@ -45,7 +53,10 @@ export async function readLatest(packages, fetcher = fetch) {
   const tags = new Map()
   for (const pkg of packages) {
     const name = encodeURIComponent(pkg.name).replace(/^%40/, '@').replaceAll('%2F', '%2f')
-    const response = await fetcher(`https://registry.npmjs.org/-/package/${name}/dist-tags`, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
+    const response = await fetcher(`https://registry.npmjs.org/-/package/${name}/dist-tags`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(15000),
+    })
     if (!response.ok)
       throw new Error(`npm tag lookup failed: ${response.status} for ${pkg.name}`)
     tags.set(pkg.name, (await response.json()).latest)
@@ -59,7 +70,12 @@ export async function releasePending(packages, repository, version, options = {}
   const missing = await missingPackages(packages.map(pkg => ({ ...pkg, version })), fetcher)
   const response = await fetcher(`${options.apiUrl ?? 'https://api.github.com'}/repos/${repository}/releases/tags/${encodeURIComponent(`v${version}`)}`, {
     signal: AbortSignal.timeout(15000),
-    headers: { Accept: 'application/vnd.github+json', ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}) },
+    headers: {
+      Accept: 'application/vnd.github+json',
+      ...(options.token
+        ? { Authorization: `Bearer ${options.token}` }
+        : {}),
+    },
   })
   if (response.status === 404)
     return true
@@ -113,7 +129,9 @@ async function main() {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   void main().catch((error) => {
-    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+    process.stderr.write(`${error instanceof Error
+      ? error.message
+      : String(error)}\n`)
     process.exitCode = 1
   })
 }
