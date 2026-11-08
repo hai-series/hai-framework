@@ -113,12 +113,30 @@ import { z } from 'zod'
  */
 export const ${contractName} = {
   list: apiContract
-    .route({ method: 'GET', path: '/${context.kebabCase}', operationId: '${context.camelCase}.list', tags: ['${context.kebabCase}'] })
-    .output(apiContract.haiResultSchema(z.object({ items: z.array(z.object({ name: z.string() })) }))),
+    .route({
+      method: 'GET',
+      path: '/${context.kebabCase}',
+      operationId: '${context.camelCase}.list',
+      tags: ['${context.kebabCase}'],
+    })
+    .output(apiContract.haiResultSchema(z.object({
+      items: z.array(z.object({
+        name: z.string(),
+      })),
+    }))),
   create: apiContract
-    .route({ method: 'POST', path: '/${context.kebabCase}', operationId: '${context.camelCase}.create', tags: ['${context.kebabCase}'] })
-    .input(z.object({ name: z.string().min(1) }))
-    .output(apiContract.haiResultSchema(z.object({ name: z.string() }))),
+    .route({
+      method: 'POST',
+      path: '/${context.kebabCase}',
+      operationId: '${context.camelCase}.create',
+      tags: ['${context.kebabCase}'],
+    })
+    .input(z.object({
+      name: z.string().min(1),
+    }))
+    .output(apiContract.haiResultSchema(z.object({
+      name: z.string(),
+    }))),
 }
 `
   const procedureContent = `${domainMarker}

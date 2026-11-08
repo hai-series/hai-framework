@@ -7,6 +7,7 @@ import ts from 'typescript'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { createProject } from '../src/commands/cli-create.js'
+import { generate } from '../src/commands/cli-generate.js'
 import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
 
 /** 每次运行独有的目录，避免进程 ID 复用导致误删其他运行中的工程。 */
@@ -144,6 +145,36 @@ async function lintFiles(name: string, patterns: string[]): Promise<Linter.LintM
   const results = await eslint.lintFiles(patterns)
   return results.flatMap(result => result.messages.filter(message => message.severity === 2))
 }
+
+describe('增量 Serv 路由', () => {
+  it.each(['api', 'fullstack'] as const)('%s 的新增 contract、procedure 与聚合入口直接通过实际项目 lint', async (appType) => {
+    const name = `quality-${appType}`
+    const project = path.join(tmpRoot, name)
+    const parent = appType === 'api'
+      ? 'apps'
+      : 'packages'
+    for (const domain of ['route-probe', 'aardvark-probe'])
+      await generate({ type: 'api', name: domain, cwd: project })
+    const contract = `${parent}/${name}-contract/src`
+    const procedures = `${parent}/${name}-serv/src/server/procedures`
+    const files = [
+      `${contract}/route-probe-contract.ts`,
+      `${contract}/aardvark-probe-contract.ts`,
+      `${contract}/${name}-contract.ts`,
+      `${contract}/index.ts`,
+      `${procedures}/route-probe-procedures.ts`,
+      `${procedures}/aardvark-probe-procedures.ts`,
+      `${procedures}/index.ts`,
+    ]
+    const messages: string[] = []
+    for (const file of files) {
+      const code = await readFile(path.join(project, file), 'utf8')
+      const result = await lint(appType, code, file)
+      messages.push(...result.map(message => `${file}:${message.line}:${message.column} ${message.ruleId} ${message.message}`))
+    }
+    expect(messages).toEqual([])
+  }, 30_000)
+})
 
 describe('实际移动工程的静态消费契约', () => {
   it.each([true, false])('crypto=%s 的依赖、catalog 和公开配置与实际消费者一致', async (encrypted) => {
