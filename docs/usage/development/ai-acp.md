@@ -63,6 +63,8 @@ async function inspectProject() {
 
 ## 更新主分支与发布修改
 
+登记的相对 Git 地址以工作区根目录为基准，准备、更新和发布使用同一远端。Agent 异常退出后仍可显式 close：协议取消失败不会阻止对所拥有进程/容器的退出核验；无法确认退出时继续保留占用。并发删除和同 ID 重建在创建记录前争用同一会话锁，忙碌失败不会留下 opening 记录。
+
 - `session.updateMain()`：先停止本 session 执行环境，再逐仓 fetch 并 ff-only 更新登记的主分支；不把主分支合入 session 分支。
 - `session.publish({ mode: 'push-branch', message, author: { name, email } })`：提交独立会话修改，以同名分支推送各工程。
 - `session.publish({ mode: 'merge-main', message, author })`：提交后检查并更新各工程明确的主分支，再合并和普通 push。

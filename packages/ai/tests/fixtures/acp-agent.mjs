@@ -35,7 +35,13 @@ line.on('line', async (text) => {
       agentInfo: { name: 'fixture', version: '1' },
       agentCapabilities: {
         loadSession: resumable,
-        sessionCapabilities: { ...(resumable ? { resume: {} } : {}), close: {}, list: {} },
+        sessionCapabilities: {
+          ...(resumable
+            ? { resume: {} }
+            : {}),
+          close: {},
+          list: {},
+        },
         promptCapabilities: {},
       },
       authMethods: [],
@@ -68,18 +74,28 @@ line.on('line', async (text) => {
     return reply({ configOptions: [] })
   if (method === 'session/cancel') {
     if (pending) {
-      send({ id: pending, result: { stopReason: 'cancelled' } })
+      send({
+        id: pending,
+        result: { stopReason: 'cancelled' },
+      })
       pending = undefined
     }
     return
   }
   if (method === 'session/prompt') {
     const content = params.prompt[0].text
+    if (content === 'exit')
+      process.exit(1)
     if (content === 'inspect-repo') {
       const cwd = sessions.get(params.sessionId)
       const instructions = await readFile(join(cwd, 'AGENTS.md'), 'utf8')
       const skill = await readFile(join(cwd, '.agents', 'skills', 'sample', 'SKILL.md'), 'utf8')
-      event(params.sessionId, JSON.stringify({ cwd, processCwd: process.cwd(), instructions, skill }))
+      event(params.sessionId, JSON.stringify({
+        cwd,
+        processCwd: process.cwd(),
+        instructions,
+        skill,
+      }))
       return reply({ stopReason: 'end_turn' })
     }
     if (content === 'credential-boundary') {
@@ -132,7 +148,9 @@ line.on('line', async (text) => {
           : content,
     )
     return reply({
-      stopReason: content === 'max-tokens' ? 'max_tokens' : 'end_turn',
+      stopReason: content === 'max-tokens'
+        ? 'max_tokens'
+        : 'end_turn',
     })
   }
   if (id !== undefined) {

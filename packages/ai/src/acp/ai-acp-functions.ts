@@ -106,7 +106,10 @@ export function createACPOperations(
   const locks = provider.createRelStore<{ owner: string | null }>(
     'hai_ai_acp_locks',
   )
-  const adapters = { ...nativeAdapters, ...extensions }
+  const adapters = {
+    ...nativeAdapters,
+    ...extensions,
+  }
   const live = new Map<string, LiveSession>()
   const connections = new Set<ACPConnection>()
   const limits = ACPConfigSchema.parse(config.acp ?? {})
@@ -184,10 +187,14 @@ export function createACPOperations(
   }
   const workspaceKey = (workspace: Workspace) =>
     workspace.storage.type === 'directory'
-      ? `directory:${process.platform === 'win32' ? workspace.storage.path.toLowerCase() : workspace.storage.path}`
+      ? `directory:${process.platform === 'win32'
+        ? workspace.storage.path.toLowerCase()
+        : workspace.storage.path}`
       : `volume:${workspace.storage.engine}:${workspace.storage.name}`
   const sessionDirectory = (info: ACPSessionInfo) =>
-    info.newWorktree ? `sessions/${info.id}` : 'main'
+    info.newWorktree
+      ? `sessions/${info.id}`
+      : 'main'
   function describeWorkspace(workspace: Workspace, runtime: ACPRuntime, info: ACPSessionInfo): ACPSessionWorkspace {
     const directory = sessionDirectory(info)
     const { storage } = workspace
@@ -199,7 +206,12 @@ export function createACPOperations(
       const { engine, name } = storage
       if (engine === 'auto')
         throw new ACPFailure('runtime')
-      location = { type: 'volume', engine, name, mountPath: runtime.root }
+      location = {
+        type: 'volume',
+        engine,
+        name,
+        mountPath: runtime.root,
+      }
     }
     return {
       storage: location,
@@ -224,7 +236,9 @@ export function createACPOperations(
   function checkLayout(workspace: Workspace, runtime: ACPRuntime, info: ACPSessionInfo) {
     const current = describeWorkspace(workspace, runtime, info)
     const paths = new Map(current.repositories.map(repo => [repo.id, repo.path]))
-    const cwd = info.repositoryId ? paths.get(info.repositoryId) : current.path
+    const cwd = info.repositoryId
+      ? paths.get(info.repositoryId)
+      : current.path
     if (info.cwd !== cwd)
       throw new ACPFailure('conflict')
     const pinned = info.workspace
@@ -404,9 +418,9 @@ export function createACPOperations(
     const current = live.get(id)
     if (!current)
       return
-    await current.connection.cancel()
     // 先请求协议关闭，再关闭进程/容器。任一清理失败都保留锁和恢复记录。
     try {
+      await current.connection.cancel()
       await current.connection.closeSession()
     }
     catch {
@@ -426,8 +440,9 @@ export function createACPOperations(
     info: ACPSessionInfo,
     options: ACPClientOptions,
     resume: boolean,
+    ownedSession?: () => Promise<void>,
   ) {
-    const releaseSession = await acquire(`session:${info.id}`)
+    const releaseSession = ownedSession ?? await acquire(`session:${info.id}`)
     let releaseDirectory: (() => Promise<void>) | undefined
     let runtime: ACPRuntime | undefined
     let connection: ACPConnection | undefined
@@ -568,7 +583,9 @@ export function createACPOperations(
       return value
     }
     async function gitOperation(publish?: z.input<typeof ACPPublishSchema>) {
-      const request = publish ? ACPPublishSchema.parse(publish) : undefined
+      const request = publish
+        ? ACPPublishSchema.parse(publish)
+        : undefined
       const info = await get(sessions, id)
       if (!info.workspaceId || (request && !info.newWorktree))
         throw new ACPFailure('unsupported')
@@ -879,8 +896,11 @@ export function createACPOperations(
             const existing = await agentRegistry.read(id)
             if (existing?.source === 'config')
               return agentRegistry.operations.remove(id, version)
-            if ((await sessions.query({ where: { agentId: id } })).length)
+            if ((await sessions.query({
+              where: { agentId: id },
+            })).length) {
               throw new ACPFailure('busy')
+            }
             return agentRegistry.operations.remove(id, version)
           })
         }),
@@ -1061,7 +1081,9 @@ export function createACPOperations(
           const release = await acquire('definition-registry')
           try {
             if (
-              (await sessions.query({ where: { workspaceId: workspace.id } }))
+              (await sessions.query({
+                where: { workspaceId: workspace.id },
+              }))
                 .length
             ) {
               throw new ACPFailure('busy')
@@ -1152,7 +1174,9 @@ export function createACPOperations(
                 Buffer.from(file.content).toString('base64'),
               )
             }
-            return { imported: files.map(file => file.path) }
+            return {
+              imported: files.map(file => file.path),
+            }
           })
         }),
       /**
@@ -1175,8 +1199,11 @@ export function createACPOperations(
             const existing = await workspaceRegistry.read(id)
             if (existing?.source === 'config')
               return workspaceRegistry.operations.remove(id, version)
-            if ((await sessions.query({ where: { workspaceId: id } })).length)
+            if ((await sessions.query({
+              where: { workspaceId: id },
+            })).length) {
               throw new ACPFailure('busy')
+            }
             return workspaceRegistry.operations.remove(id, version)
           })
         }),
@@ -1196,45 +1223,57 @@ export function createACPOperations(
        */
       create: (options: ACPCreateSessionOptions) =>
         protect(async () => {
-          const info = await withDefinitions(async () => {
-            const agent = await getAgent(options.agentId)
-            await validateAgent(agent)
-            if (!agent.enabled)
-              throw new ACPFailure('unsupported')
-            const id = sessionIdentitySchema.parse(options.id ?? randomUUID())
-            const modelId
-              = options.modelId ?? agent.defaultModelId ?? agent.modelIds[0]
-            if (modelId && !agent.modelIds.includes(modelId))
-              throw new ACPFailure('model')
-            const workspace = options.workspaceId ? await getWorkspace(options.workspaceId) : undefined
-            if (options.repositoryId !== undefined) {
-              sessionIdentitySchema.parse(options.repositoryId)
-              if (!workspace || agent.mode === 'custom-service' || options.cwd !== undefined)
-                throw new ACPFailure('invalid')
-              if (!workspace.repositories.some(repo => repo.id === options.repositoryId))
-                throw new ACPFailure('missing', { id: options.repositoryId })
-            }
-            const info: ACPSessionInfo = {
-              id,
-              agentId: agent.id,
-              workspaceId: options.workspaceId,
-              repositoryId: options.repositoryId,
-              cwd: options.cwd ?? '',
-              newWorktree: options.newWorktree ?? false,
-              branch: options.newWorktree
-                ? branchNameSchema.parse(options.branch ?? `acp/${id}`)
-                : undefined,
-              modelId,
-              modelSignature: await modelSignature(agent),
-              status: 'opening',
-              agent,
-              mcpServers: options.mcpServers ?? [],
-              mcpServerIds: options.mcpServerIds,
-            }
-            await unique(sessions, id, info)
-            return info
-          })
-          return start(info, options, false)
+          const id = sessionIdentitySchema.parse(options.id ?? randomUUID())
+          // 与删除共用会话锁，避免新记录已创建但执行所有权仍被旧删除操作持有。
+          const releaseSession = await acquire(`session:${id}`)
+          let handedOff = false
+          try {
+            const info = await withDefinitions(async () => {
+              const agent = await getAgent(options.agentId)
+              await validateAgent(agent)
+              if (!agent.enabled)
+                throw new ACPFailure('unsupported')
+              const modelId
+                = options.modelId ?? agent.defaultModelId ?? agent.modelIds[0]
+              if (modelId && !agent.modelIds.includes(modelId))
+                throw new ACPFailure('model')
+              const workspace = options.workspaceId
+                ? await getWorkspace(options.workspaceId)
+                : undefined
+              if (options.repositoryId !== undefined) {
+                sessionIdentitySchema.parse(options.repositoryId)
+                if (!workspace || agent.mode === 'custom-service' || options.cwd !== undefined)
+                  throw new ACPFailure('invalid')
+                if (!workspace.repositories.some(repo => repo.id === options.repositoryId))
+                  throw new ACPFailure('missing', { id: options.repositoryId })
+              }
+              const info: ACPSessionInfo = {
+                id,
+                agentId: agent.id,
+                workspaceId: options.workspaceId,
+                repositoryId: options.repositoryId,
+                cwd: options.cwd ?? '',
+                newWorktree: options.newWorktree ?? false,
+                branch: options.newWorktree
+                  ? branchNameSchema.parse(options.branch ?? `acp/${id}`)
+                  : undefined,
+                modelId,
+                modelSignature: await modelSignature(agent),
+                status: 'opening',
+                agent,
+                mcpServers: options.mcpServers ?? [],
+                mcpServerIds: options.mcpServerIds,
+              }
+              await unique(sessions, id, info)
+              return info
+            })
+            handedOff = true
+            return await start(info, options, false, releaseSession)
+          }
+          finally {
+            if (!handedOff)
+              await releaseSession()
+          }
         }),
       /**
        * 获取持久会话的管理句柄；已关闭会话需要 resume 后才能执行 prompt。
@@ -1267,7 +1306,11 @@ export function createACPOperations(
        */
       list: (workspaceId?: string) =>
         protect(() =>
-          sessions.query({ where: workspaceId ? { workspaceId } : {} }),
+          sessions.query({
+            where: workspaceId
+              ? { workspaceId }
+              : {},
+          }),
         ),
       /**
        * 使用原生会话 ID 和保留状态恢复；智能体定义或模型能力已改变时拒绝恢复。
@@ -1505,19 +1548,27 @@ export function createACPOperations(
     async close() {
       closed = true
       await Promise.allSettled(
-        [...live.values()].map(value => value.connection.cancel()),
+        [
+          ...live.values(),
+        ].map(value => value.connection.cancel()),
       )
       await Promise.allSettled(
         [...connections].map(connection => connection.close()),
       )
       await Promise.allSettled([...pending])
-      const results = await Promise.allSettled([...live.keys()].map(stop))
+      const results = await Promise.allSettled([
+        ...live.keys(),
+      ].map(stop))
       const more = await Promise.allSettled(
         [...connections].map(connection => connection.close()),
       )
       connections.clear()
-      if ([...results, ...more].some(result => result.status === 'rejected'))
+      if ([
+        ...results,
+        ...more,
+      ].some(result => result.status === 'rejected')) {
         throw new ACPFailure('cleanup')
+      }
     },
   }
   async function createGitOperationsInput(id: string, runtime: ACPRuntime) {

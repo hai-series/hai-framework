@@ -39,10 +39,15 @@ export function createGitOperations(
       ...env,
     })
   const source = (id: string) => runtime.path(`main/${id}`)
-  const path = !runtime.resource && process.platform === 'win32' ? win32 : posix
+  const path = !runtime.resource && process.platform === 'win32'
+    ? win32
+    : posix
   const scoped = Object.keys(workspace.gitEnvironmentRefs).length > 0
-  const remoteUrl = (url: string, cwd: string) =>
-    path.isAbsolute(url) || /^[^/\\]+:/.test(url) ? url : path.resolve(cwd, url)
+  // 相对登记地址始终相对于工作区根目录；clone、fetch 和 push 不随执行目录改变目标。
+  const remoteUrl = (url: string) =>
+    path.isAbsolute(url) || /^[^/\\]+:/.test(url)
+      ? url
+      : path.resolve(runtime.root, url)
   async function withRemoteGit<T>(
     action: (directory: string, remoteGit: (args: string[]) => Promise<string>) => Promise<T>,
     main?: string,
@@ -59,13 +64,32 @@ export function createGitOperations(
       const options = ['-c', `core.hooksPath=${path.join(directory, 'disabled-hooks')}`]
       const home = { HOME: directory, USERPROFILE: directory, XDG_CONFIG_HOME: directory }
       const privateGit = (args: string[], env?: Record<string, string>) =>
-        runtime.run('git', ['-C', directory, ...options, ...args], directory, { ...home, ...env, GIT_TERMINAL_PROMPT: '0' }, false)
+        runtime.run('git', [
+          '-C',
+          directory,
+          ...options,
+          ...args,
+        ], directory, {
+          ...home,
+          ...env,
+          GIT_TERMINAL_PROMPT: '0',
+        }, false)
       if (main) {
         const format = await git(main, ['rev-parse', '--show-object-format'])
-        const objects = await git(main, ['rev-parse', '--path-format=absolute', '--git-path', 'objects'])
+        const objects = await git(main, [
+          'rev-parse',
+          '--path-format=absolute',
+          '--git-path',
+          'objects',
+        ])
         if ((format !== 'sha1' && format !== 'sha256') || !path.isAbsolute(objects) || /[\r\n]/.test(objects))
           throw new ACPFailure('conflict')
-        await privateGit(['init', '--bare', '--template=', `--object-format=${format}`])
+        await privateGit([
+          'init',
+          '--bare',
+          '--template=',
+          `--object-format=${format}`,
+        ])
         // 对象引用只写入私有仓库；本机文件协议的远端 Git 不应继承 alternate 环境。
         await runtime.run(runtime.resource ? 'node' : process.execPath, [
           '-e',
@@ -79,23 +103,73 @@ export function createGitOperations(
     })
   }
   async function clone(repo: Repository) {
-    const cloneArgs = ['clone', '--origin', repo.remote, '--branch', repo.mainBranch]
-    if (!scoped)
-      return git(runtime.root, [...cloneArgs, '--', repo.url, source(repo.id)])
+    const cloneArgs = [
+      'clone',
+      '--origin',
+      repo.remote,
+      '--branch',
+      repo.mainBranch,
+    ]
+    if (!scoped) {
+      return git(runtime.root, [
+        ...cloneArgs,
+        '--',
+        remoteUrl(repo.url),
+        source(repo.id),
+      ])
+    }
     return withRemoteGit(async (directory, remoteGit) => {
       const staged = path.join(directory, 'remote.git')
-      await remoteGit(['clone', '--bare', '--no-local', '--template=', '--branch', repo.mainBranch, '--', remoteUrl(repo.url, runtime.root), staged])
-      await git(runtime.root, [...cloneArgs, '--', staged, source(repo.id)])
-      return git(source(repo.id), ['remote', 'set-url', repo.remote, repo.url])
+      await remoteGit([
+        'clone',
+        '--bare',
+        '--no-local',
+        '--template=',
+        '--branch',
+        repo.mainBranch,
+        '--',
+        remoteUrl(repo.url),
+        staged,
+      ])
+      await git(runtime.root, [
+        ...cloneArgs,
+        '--',
+        staged,
+        source(repo.id),
+      ])
+      return git(source(repo.id), [
+        'remote',
+        'set-url',
+        repo.remote,
+        remoteUrl(repo.url),
+      ])
     })
   }
   async function fetchMain(repo: Repository, main: string) {
     const ref = `refs/heads/${repo.mainBranch}`
-    if (!scoped)
-      return git(main, ['fetch', '--', repo.remote, ref])
+    if (!scoped) {
+      return git(main, [
+        'fetch',
+        '--',
+        remoteUrl(repo.url),
+        ref,
+      ])
+    }
     return withRemoteGit(async (directory, remoteGit) => {
-      await remoteGit(['fetch', '--no-recurse-submodules', '--', remoteUrl(repo.url, main), `${ref}:${ref}`])
-      return git(main, ['fetch', '--no-recurse-submodules', '--', directory, ref])
+      await remoteGit([
+        'fetch',
+        '--no-recurse-submodules',
+        '--',
+        remoteUrl(repo.url),
+        `${ref}:${ref}`,
+      ])
+      return git(main, [
+        'fetch',
+        '--no-recurse-submodules',
+        '--',
+        directory,
+        ref,
+      ])
     }, main)
   }
   async function ready() {
@@ -117,7 +191,13 @@ export function createGitOperations(
     const index = await git(path, ['ls-files', '--stage', '-z'])
     if (index.split('\0').some(entry => entry.startsWith('160000 ')))
       throw new ACPFailure('unsupported')
-    const attributes = await git(path, ['ls-files', '-z', '--', '.gitattributes', ':(glob)**/.gitattributes'])
+    const attributes = await git(path, [
+      'ls-files',
+      '-z',
+      '--',
+      '.gitattributes',
+      ':(glob)**/.gitattributes',
+    ])
     for (const file of attributes.split('\0').filter(Boolean)) {
       const content = await git(path, ['show', `HEAD:${file}`])
       if (content.split('\n').some(line => !line.trimStart().startsWith('#') && /\bfilter=lfs\b/.test(line)))
@@ -132,7 +212,7 @@ export function createGitOperations(
     await runtime.file('directory', path)
     if ((await git(path, ['branch', '--show-current'])) !== branch)
       throw new ACPFailure('conflict')
-    if ((await git(path, ['remote', 'get-url', repo.remote])) !== repo.url)
+    if (remoteUrl(await git(path, ['remote', 'get-url', repo.remote])) !== remoteUrl(repo.url))
       throw new ACPFailure('conflict')
   }
   async function reports(
@@ -155,7 +235,9 @@ export function createGitOperations(
         report.phase = 'done'
       }
       catch (error) {
-        report.error = error instanceof ACPFailure ? error.kind : 'failed'
+        report.error = error instanceof ACPFailure
+          ? error.kind
+          : 'failed'
       }
       output.push(report)
     }
@@ -238,7 +320,12 @@ export function createGitOperations(
         const main = source(repo.id)
         const worktree = runtime.path(`sessions/${sessionId}/${repo.id}`)
         const exists = (await runtime.file('exists', worktree)) === 'true'
-        const registrations = await git(main, ['worktree', 'list', '--porcelain', '-z'])
+        const registrations = await git(main, [
+          'worktree',
+          'list',
+          '--porcelain',
+          '-z',
+        ])
         const registration = registrations.split('\0\0').map(entry => entry.split('\0')).find(([entry]) => {
           if (!entry?.startsWith('worktree '))
             return false
@@ -342,11 +429,22 @@ export function createGitOperations(
           if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(commit))
             throw new ACPFailure('conflict')
           await withRemoteGit(async (_, remoteGit) =>
-            remoteGit(['push', '--no-recurse-submodules', '--', remoteUrl(repo.url, target), `${commit}:refs/heads/${targetBranch}`]), main)
+            remoteGit([
+              'push',
+              '--no-recurse-submodules',
+              '--',
+              remoteUrl(repo.url),
+              `${commit}:refs/heads/${targetBranch}`,
+            ]), main)
           report.commit = commit
         }
         else {
-          await git(target, ['push', '--', repo.remote, `HEAD:refs/heads/${targetBranch}`])
+          await git(target, [
+            'push',
+            '--',
+            remoteUrl(repo.url),
+            `HEAD:refs/heads/${targetBranch}`,
+          ])
           report.commit = await git(target, ['rev-parse', 'HEAD'])
         }
       }),
