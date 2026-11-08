@@ -1,3 +1,5 @@
+import { once } from 'node:events'
+import { createServer } from 'node:http'
 import { apiContract } from '@h-ai/api-contract'
 import { core } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -7,11 +9,15 @@ import { apiClient, HaiApiClientError } from '../src/index.js'
 const testContract = {
   health: apiContract
     .route({ method: 'GET', path: '/health' })
-    .output(apiContract.haiResultSchema(z.object({ status: z.string() }))),
+    .output(apiContract.haiResultSchema(z.object({
+      status: z.string(),
+    }))),
 }
 
 function toRequest(input: RequestInfo | URL, init?: RequestInit): Request {
-  return input instanceof Request ? input : new Request(input, init)
+  return input instanceof Request
+    ? input
+    : new Request(input, init)
 }
 
 describe('apiClient.create', () => {
@@ -24,7 +30,9 @@ describe('apiClient.create', () => {
     const fetch = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({
       success: true,
       data: { status: 'ok' },
-    }), { headers: { 'content-type': 'application/json' } })))
+    }), {
+      headers: { 'content-type': 'application/json' },
+    })))
     const client = apiClient.create(testContract)
     try {
       expect((await client.init({ baseUrl: 'https://api.test.com/api/v1', fetch })).success).toBe(true)
@@ -35,7 +43,11 @@ describe('apiClient.create', () => {
       expect((await client.health()).success).toBe(true)
       expect(toRequest(fetch.mock.calls.at(-1)![0]).headers.get('accept-language')).toBe('en-US')
       await client.close()
-      expect((await client.init({ baseUrl: 'https://api.test.com/api/v1', fetch, headers: { 'Accept-Language': 'ja-JP' } })).success).toBe(true)
+      expect((await client.init({
+        baseUrl: 'https://api.test.com/api/v1',
+        fetch,
+        headers: { 'Accept-Language': 'ja-JP' },
+      })).success).toBe(true)
       expect((await client.health()).success).toBe(true)
       expect(toRequest(fetch.mock.calls.at(-1)![0]).headers.get('accept-language')).toBe('ja-JP')
     }
@@ -64,7 +76,10 @@ describe('apiClient.create', () => {
 
   it('init 后可按 contract 直接调用 procedure', async () => {
     const fetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ success: true, data: { status: 'ok' } }), {
+      new Response(JSON.stringify({
+        success: true,
+        data: { status: 'ok' },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
@@ -76,7 +91,10 @@ describe('apiClient.create', () => {
 
     expect(initResult.success).toBe(true)
     expect(client.isInitialized).toBe(true)
-    expect(result).toEqual({ success: true, data: { status: 'ok' } })
+    expect(result).toEqual({
+      success: true,
+      data: { status: 'ok' },
+    })
     expect(fetch).toHaveBeenCalledTimes(1)
     const request = fetch.mock.calls[0]?.[0] as Request
     expect(request.url).toBe('https://api.test.com/api/v1/health')
@@ -84,13 +102,19 @@ describe('apiClient.create', () => {
 
   it('重复 init 返回 CONFIG_ERROR 并保留原始 client 状态', async () => {
     const firstFetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ success: true, data: { status: 'ok' } }), {
+      new Response(JSON.stringify({
+        success: true,
+        data: { status: 'ok' },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
     )
     const secondFetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ success: true, data: { status: 'other' } }), {
+      new Response(JSON.stringify({
+        success: true,
+        data: { status: 'other' },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
@@ -108,7 +132,10 @@ describe('apiClient.create', () => {
     }
     // 重复 init 不应覆盖已可用实例；重新配置必须显式 close()，否则旧 transport 难以释放。
     expect(client.config?.baseUrl).toBe('https://api.test.com/api/v1')
-    expect(result).toEqual({ success: true, data: { status: 'ok' } })
+    expect(result).toEqual({
+      success: true,
+      data: { status: 'ok' },
+    })
     expect(firstFetch).toHaveBeenCalledTimes(1)
     expect(secondFetch).not.toHaveBeenCalled()
   })
@@ -129,7 +156,10 @@ describe('apiClient.create', () => {
     const fetch = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const request = toRequest(input, init)
       if (request.url === 'https://api.test.com/api/v1/auth/refresh') {
-        return Promise.resolve(new Response(JSON.stringify({ success: true, data: { tokens: newTokens } }), {
+        return Promise.resolve(new Response(JSON.stringify({
+          success: true,
+          data: { tokens: newTokens },
+        }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         }))
@@ -139,7 +169,10 @@ describe('apiClient.create', () => {
         return Promise.resolve(new Response(JSON.stringify({ message: 'expired' }), { status: 401 }))
       }
 
-      return Promise.resolve(new Response(JSON.stringify({ success: true, data: { status: 'ok' } }), {
+      return Promise.resolve(new Response(JSON.stringify({
+        success: true,
+        data: { status: 'ok' },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }))
@@ -171,7 +204,10 @@ describe('apiClient.create', () => {
 
   it('apiClient 默认单例绑定 iam/storage/ai contract，并保留 create/tokenStorage 入口', async () => {
     const fetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ success: true, data: { status: 'ok' } }), {
+      new Response(JSON.stringify({
+        success: true,
+        data: { status: 'ok' },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
@@ -195,14 +231,26 @@ describe('apiClient.create', () => {
         expect(request.credentials).toBe('include')
         expect(request.body).toBeNull()
         refreshed = true
-        return Response.json({ success: true, data: { tokens: { accessToken: 'restored', expiresIn: 3600, tokenType: 'Bearer' } } })
+        return Response.json({
+          success: true,
+          data: {
+            tokens: { accessToken: 'restored', expiresIn: 3600, tokenType: 'Bearer' },
+          },
+        })
       }
       calls++
-      if (!refreshed)
-        return Response.json({ success: false, error: { code: 'hai:serv:401', message: 'Unauthorized', httpStatus: 401 } })
+      if (!refreshed) {
+        return Response.json({
+          success: false,
+          error: { code: 'hai:serv:401', message: 'Unauthorized', httpStatus: 401 },
+        })
+      }
       expect(request.headers.get('authorization')).toBe('Bearer restored')
       // 第二次仍未授权时必须原样返回，不能进入无限刷新。
-      return Response.json({ success: false, error: { code: 'hai:serv:401', message: 'Still unauthorized', httpStatus: 401 } })
+      return Response.json({
+        success: false,
+        error: { code: 'hai:serv:401', message: 'Still unauthorized', httpStatus: 401 },
+      })
     })
     const client = apiClient.create(testContract)
     expect((await client.init({ baseUrl: 'https://api.test.com/api/v1', fetch, auth: {} })).success).toBe(true)
@@ -216,12 +264,22 @@ describe('apiClient.create', () => {
   })
 
   it.each([403, 500])('hTTP 200 HaiResult 的 %i 不触发认证刷新', async (status) => {
-    const failure = { success: false, error: { code: 'app:failure', message: 'Failure', httpStatus: status } }
+    const failure = {
+      success: false,
+      error: { code: 'app:failure', message: 'Failure', httpStatus: status },
+    }
     const fetch = vi.fn(async () => Response.json(failure))
     const client = apiClient.create(testContract)
     expect((await client.init({ baseUrl: 'https://api.test.com/api/v1', fetch, auth: {} })).success).toBe(true)
     const result = await client.health()
-    expect(result).toMatchObject({ success: false, error: { code: failure.error.code, httpStatus: status, traceId: expect.any(String) } })
+    expect(result).toMatchObject({
+      success: false,
+      error: {
+        code: failure.error.code,
+        httpStatus: status,
+        traceId: expect.any(String),
+      },
+    })
     if (!result.success) {
       expect(result.error.message).toMatch(/\(traceId: [\w.:-]+\)$/)
       if (status === 500)
@@ -233,7 +291,10 @@ describe('apiClient.create', () => {
 
   it('登录失败不自动刷新已有 Cookie 或重试错误凭据', async () => {
     const contract = apiContract.create({ iam: apiContract.iam })
-    const fetch = vi.fn(async () => Response.json({ success: false, error: { code: 'hai:iam:401', message: 'Invalid credentials', httpStatus: 401 } }))
+    const fetch = vi.fn(async () => Response.json({
+      success: false,
+      error: { code: 'hai:iam:401', message: 'Invalid credentials', httpStatus: 401 },
+    }))
     const client = apiClient.create(contract)
     expect((await client.init({ baseUrl: 'https://api.test.com/api/v1', fetch, auth: {} })).success).toBe(true)
     const result = await client.iam.auth.login({ identifier: 'alice', password: 'wrong-password' })
@@ -286,8 +347,12 @@ describe('apiClient.create', () => {
   it('401 后带 body 的请求能用 clone 重发，body 不被丢失', async () => {
     const echoContract = {
       echo: apiContract.route({ method: 'POST', path: '/echo' })
-        .input(z.object({ msg: z.string() }))
-        .output(apiContract.haiResultSchema(z.object({ received: z.string() }))),
+        .input(z.object({
+          msg: z.string(),
+        }))
+        .output(apiContract.haiResultSchema(z.object({
+          received: z.string(),
+        }))),
     }
 
     const storage = apiClient.tokenStorage.memory()
@@ -306,7 +371,10 @@ describe('apiClient.create', () => {
     const fetch = vi.fn().mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = toRequest(input, init)
       if (request.url === 'https://api.test.com/api/v1/auth/refresh') {
-        return new Response(JSON.stringify({ success: true, data: { tokens: newTokens } }), {
+        return new Response(JSON.stringify({
+          success: true,
+          data: { tokens: newTokens },
+        }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         })
@@ -316,7 +384,10 @@ describe('apiClient.create', () => {
       if (request.headers.get('authorization') === 'Bearer old-access') {
         return new Response(JSON.stringify({ message: 'expired' }), { status: 401 })
       }
-      return new Response(JSON.stringify({ success: true, data: { received: text } }), {
+      return new Response(JSON.stringify({
+        success: true,
+        data: { received: text },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
@@ -338,5 +409,41 @@ describe('apiClient.create', () => {
     expect(businessBodies[0]).toContain('hello')
     expect(businessBodies[1]).toContain('hello')
     await client.close()
+  })
+
+  it.each([401, 500])('非 JSON 的 %s 正文不结束时仍超时，且不会触发刷新', async (status) => {
+    const server = createServer((_request, response) => {
+      response.writeHead(status, { 'Content-Type': 'text/html' })
+      response.write('<html>pending')
+    })
+    const client = apiClient.create(testContract)
+    const fetch = vi.fn(globalThis.fetch)
+    try {
+      server.listen(0, '127.0.0.1')
+      await once(server, 'listening')
+      const address = server.address()
+      if (!address || typeof address === 'string')
+        throw new Error('Missing test server address')
+      const storage = apiClient.tokenStorage.memory()
+      await storage.setRefreshToken('review-refresh')
+      expect((await client.init({
+        baseUrl: `http://127.0.0.1:${address.port}`,
+        timeout: 100,
+        fetch,
+        auth: { storage },
+      })).success).toBe(true)
+      const result = await client.health()
+      expect(result.success).toBe(false)
+      if (!result.success)
+        expect(result.error.code).toBe(HaiApiClientError.TIMEOUT.code)
+      expect(fetch).toHaveBeenCalledTimes(1)
+    }
+    finally {
+      await client.close()
+      server.closeAllConnections()
+      await new Promise<void>((resolve, reject) => server.close(error => error
+        ? reject(error)
+        : resolve()))
+    }
   })
 })

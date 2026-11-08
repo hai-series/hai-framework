@@ -199,7 +199,11 @@ export function createApiClient<const TContract extends AnyContractRouter>(
           state.transport = undefined
           return err(
             HaiApiClientError.CONFIG_ERROR,
-            apiClientM('apiClient_configError', { params: { error: String(error) } }),
+            apiClientM('apiClient_configError', {
+              params: {
+                error: String(error),
+              },
+            }),
             error,
           )
         }
@@ -230,7 +234,11 @@ export function createApiClient<const TContract extends AnyContractRouter>(
         closePromise = null
       }
     },
-    get config() { return state.config ? core.sanitize.sanitizeSensitiveFields(state.config) : null },
+    get config() {
+      return state.config
+        ? core.sanitize.sanitizeSensitiveFields(state.config)
+        : null
+    },
     get isInitialized() { return state.rawClient !== null },
     auth,
     observeRequests(observer) {
@@ -392,10 +400,24 @@ function createProcedureProxy<TContract extends AnyContractRouter>(
 
 /** 不复制业务入参；通过 oRPC 每次调用的 context 将同一关联传给传输层。 */
 async function callObservedProcedure(rawClient: unknown, path: string[], args: unknown[], observers?: ReadonlySet<ApiRequestObserver>): Promise<unknown> {
-  const record: MutableRequestRecord = { requestId: core.context.get().requestId ?? core.id.uuid(), procedure: path.join('.'), timestamp: Date.now(), duration: 0, success: false, attempts: 0 }
-  const provided = args[1] && typeof args[1] === 'object' ? args[1] as Record<string, unknown> : {}
-  const providedContext = provided.context && typeof provided.context === 'object' ? provided.context : {}
-  const options = { ...provided, context: { ...providedContext, [REQUEST_OBSERVATION]: record } }
+  const record: MutableRequestRecord = {
+    requestId: core.context.get().requestId ?? core.id.uuid(),
+    procedure: path.join('.'),
+    timestamp: Date.now(),
+    duration: 0,
+    success: false,
+    attempts: 0,
+  }
+  const provided = args[1] && typeof args[1] === 'object'
+    ? args[1] as Record<string, unknown>
+    : {}
+  const providedContext = provided.context && typeof provided.context === 'object'
+    ? provided.context
+    : {}
+  const options = {
+    ...provided,
+    context: { ...providedContext, [REQUEST_OBSERVATION]: record },
+  }
   let result = await callProcedure(rawClient, path, [args[0], options])
   record.duration = Math.max(0, Date.now() - record.timestamp)
   record.success = !(result && typeof result === 'object' && 'success' in result && result.success === false)
@@ -403,12 +425,23 @@ async function callObservedProcedure(rawClient: unknown, path: string[], args: u
     record.errorCode = String(result.error.code)
     if ('message' in result.error && typeof result.error.message === 'string') {
       const error = result.error as Parameters<typeof core.error.toPublic>[0]
-      const receivedId = error.traceId && /^[\w.:-]{1,128}$/.test(error.traceId) ? error.traceId : record.requestId
+      const receivedId = error.traceId && /^[\w.:-]{1,128}$/.test(error.traceId)
+        ? error.traceId
+        : record.requestId
       record.requestId = receivedId
       const safe = core.error.toPublic({ ...error, publicExt: error.ext }, receivedId)
       if (error.cause && typeof error.cause === 'object' && !Array.isArray(error.cause)) {
         const metadata: Record<string, unknown> = {}
-        for (const key of ['orpcCode', 'status', 'transportCode', 'serverTime', 'direction', 'stage', 'limitBytes', 'actualBytes']) {
+        for (const key of [
+          'orpcCode',
+          'status',
+          'transportCode',
+          'serverTime',
+          'direction',
+          'stage',
+          'limitBytes',
+          'actualBytes',
+        ]) {
           const value: unknown = Reflect.get(error.cause, key)
           if (typeof value === 'number' || typeof value === 'string')
             metadata[key] = core.sanitize.sanitizeSensitiveValue(value, key)
@@ -416,7 +449,13 @@ async function callObservedProcedure(rawClient: unknown, path: string[], args: u
         if (Object.keys(metadata).length)
           safe.cause = metadata
       }
-      core.logger.error('API request failed', { traceId: safe.traceId, requestId: record.requestId, procedure: record.procedure, status: record.status, error: result.error })
+      core.logger.error('API request failed', {
+        traceId: safe.traceId,
+        requestId: record.requestId,
+        procedure: record.procedure,
+        status: record.status,
+        error: result.error,
+      })
       result = { ...result, error: safe }
     }
   }
@@ -498,11 +537,15 @@ function buildTokenManager(config: ApiClientConfig, transport: TransportClient |
   const storage = config.auth.storage ?? createHttpOnlyCookieTokenStorage()
   const baseUrl = config.baseUrl.replace(TRAILING_SLASHES_REGEX, '')
   const refreshPath = config.auth.refreshPath ?? DEFAULT_REFRESH_PATH
-  const refreshUrl = `${baseUrl}${refreshPath.startsWith('/') ? refreshPath : `/${refreshPath}`}`
+  const refreshUrl = `${baseUrl}${refreshPath.startsWith('/')
+    ? refreshPath
+    : `/${refreshPath}`}`
 
   // 刷新沿用客户端标识与自定义头（包括原生 body 通道标识），并复用同一加密 fetch。
   const refreshFetch: typeof fetch = async (input, init) => {
-    const configured = typeof config.headers === 'function' ? await config.headers() : config.headers ?? {}
+    const configured = typeof config.headers === 'function'
+      ? await config.headers()
+      : config.headers ?? {}
     const headers = new Headers(configured)
     if (!headers.has('accept-language'))
       headers.set('accept-language', core.i18n.getGlobalLocale())
@@ -535,7 +578,9 @@ function buildTransportSession(config: ApiClientConfig): TransportClient | undef
   const baseFetch = config.fetch ?? globalThis.fetch.bind(globalThis)
   const baseUrl = config.baseUrl.replace(TRAILING_SLASHES_REGEX, '')
   const path = config.transport.keyExchangePath ?? '/_hai/key-exchange'
-  const keyExchangeUrl = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`
+  const keyExchangeUrl = `${baseUrl}${path.startsWith('/')
+    ? path
+    : `/${path}`}`
   return config.transport.crypto.transport.createClient({ keyExchangeUrl, fetch: baseFetch, maxPlaintextBytes: config.transport.maxPlaintextBytes })
 }
 
@@ -578,16 +623,24 @@ function buildRawClient<TContract extends AnyContractRouter>(
         url.hash = ''
         record.url = core.sanitize.sanitizeUrl(url.toString())
       }
-      const requestInit = options.context.keepalive === true ? { ...init, keepalive: true } : init
+      const requestInit = options.context.keepalive === true
+        ? { ...init, keepalive: true }
+        : init
       const confirm = options.context.reauthorize
       const reauthorize = typeof confirm === 'function'
         ? async () => {
           const value: unknown = await confirm()
-          return typeof value === 'string' || value === undefined ? value : null
+          return typeof value === 'string' || value === undefined
+            ? value
+            : null
         }
         : undefined
-      const authenticatedRequest = tokenManager?.usesCookieCredentials ? new Request(request, { credentials: 'include' }) : request
-      const response = await fetchWithRefresh(authenticatedRequest, requestInit, config, options.context.autoRefresh === false ? undefined : tokenManager, transport, record, reauthorize)
+      const authenticatedRequest = tokenManager?.usesCookieCredentials
+        ? new Request(request, { credentials: 'include' })
+        : request
+      const response = await fetchWithRefresh(authenticatedRequest, requestInit, config, options.context.autoRefresh === false
+        ? undefined
+        : tokenManager, transport, record, reauthorize)
       if (record) {
         record.status = response.status
         const traceId = response.headers.get('x-trace-id') ?? response.headers.get('x-request-id')
@@ -603,7 +656,9 @@ function buildRawClient<TContract extends AnyContractRouter>(
 /** 内部 context 属性只由逻辑调用建立，不能从业务输入读取。 */
 function getObservation(context: Record<PropertyKey, unknown>): MutableRequestRecord | undefined {
   const record = context[REQUEST_OBSERVATION]
-  return record && typeof record === 'object' && 'requestId' in record ? record as MutableRequestRecord : undefined
+  return record && typeof record === 'object' && 'requestId' in record
+    ? record as MutableRequestRecord
+    : undefined
 }
 
 /**
@@ -623,7 +678,9 @@ async function buildHeaders(
   tokenManager: TokenManager | undefined,
   requestId?: string,
 ): Promise<Record<string, string>> {
-  const configured = typeof config.headers === 'function' ? await config.headers() : config.headers ?? {}
+  const configured = typeof config.headers === 'function'
+    ? await config.headers()
+    : config.headers ?? {}
   const headers = new Headers(configured)
   headers.set('x-hai-terminal', config.auth?.terminalType ?? 'web')
   if (!headers.has('accept-language'))
@@ -633,7 +690,9 @@ async function buildHeaders(
     ...Object.fromEntries(headers),
     'x-request-client': config.clientName ?? DEFAULT_CLIENT_NAME,
     'x-request-id': requestId ?? core.context.get().requestId ?? core.id.uuid(),
-    ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
+    ...(accessToken
+      ? { authorization: `Bearer ${accessToken}` }
+      : {}),
   }
 }
 
@@ -667,11 +726,14 @@ async function fetchWithRefresh(
 ): Promise<Response> {
   // Fetch Request 的 body 是一次性可读流；为了支持 401 后重发 POST/PUT 等带 body 的请求，
   // 必须在首次发送前 `clone()` 一份。即使没有 401，clone 后的副本也只会被 GC 回收，无副作用。
-  const retryRequest = tokenManager || reauthorize ? request.clone() : undefined
+  const retryRequest = tokenManager || reauthorize
+    ? request.clone()
+    : undefined
   const identityGeneration = tokenManager?.generation
   if (observation)
     observation.attempts++
   const response = await fetchWithTimeout(request, init, config, transport)
+  request.signal.throwIfAborted()
   if (!retryRequest)
     return response
 
@@ -704,12 +766,17 @@ async function fetchWithRefresh(
   const baseUrl = config.baseUrl.replace(TRAILING_SLASHES_REGEX, '')
   const refreshPath = config.auth?.refreshPath ?? DEFAULT_REFRESH_PATH
   const excludedPaths = [...AUTH_ENTRY_PATHS, refreshPath]
-  if (excludedPaths.some(path => new URL(`${baseUrl}${path.startsWith('/') ? path : `/${path}`}`).pathname === new URL(request.url).pathname))
+  if (excludedPaths.some(path => new URL(`${baseUrl}${path.startsWith('/')
+    ? path
+    : `/${path}`}`).pathname === new URL(request.url).pathname)) {
     return response
-  const failure: unknown = response.status === 401 || response.headers.get('content-type')?.includes('application/json')
+  }
+  const failure: unknown = response.headers.get('content-type')?.includes('application/json')
     ? await response.clone().json().catch(() => undefined)
     : undefined
-  const code = failure && typeof failure === 'object' && 'success' in failure && failure.success === false && 'error' in failure && failure.error && typeof failure.error === 'object' && 'code' in failure.error ? failure.error.code : undefined
+  const code = failure && typeof failure === 'object' && 'success' in failure && failure.success === false && 'error' in failure && failure.error && typeof failure.error === 'object' && 'code' in failure.error
+    ? failure.error.code
+    : undefined
   if (code === 'hai:iam:027' && reauthorize)
     return retryAuthorized()
   if (!tokenManager)
@@ -723,6 +790,7 @@ async function fetchWithRefresh(
   if (tokenManager.generation !== identityGeneration)
     return response
 
+  request.signal.throwIfAborted()
   const tokens = await tokenManager.refresh()
   if (tokenManager.generation !== identityGeneration)
     return response
@@ -813,10 +881,11 @@ async function fetchWithTimeout(
     const response = await fetchFn(new Request(request, { signal: controller.signal }), init)
     const contentType = response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() ?? ''
     const json = contentType.endsWith('/json') || contentType.endsWith('+json')
-    // JSON 正文纳入同一预算；自定义流保持按需消费，原生管道管理调用方取消与监听释放。
+    // JSON 与错误响应正文都纳入同一预算，避免非 JSON 401 在刷新/协议解析时无限等待。
+    // 成功的自定义流保持按需消费，原生管道管理调用方取消与监听释放。
     const body = response.body === null
       ? null
-      : json
+      : json || !response.ok
         ? await response.arrayBuffer()
         : response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>(), { signal: userSignal })
     return new Response(body, {
@@ -843,16 +912,32 @@ async function fetchWithTimeout(
  * ```
  */
 function mapClientError(error: unknown) {
-  const time = error instanceof TransportTimeError ? error : error instanceof Error && error.cause instanceof TransportTimeError ? error.cause : undefined
+  const time = error instanceof TransportTimeError
+    ? error
+    : error instanceof Error && error.cause instanceof TransportTimeError
+      ? error.cause
+      : undefined
   if (time)
     return err(HaiApiClientError.VALIDATION_FAILED, time.message, { transportCode: time.code, serverTime: time.serverTime })
-  const capacity = error instanceof TransportBodyTooLargeError ? error : error instanceof Error && error.cause instanceof TransportBodyTooLargeError ? error.cause : undefined
-  if (capacity)
-    return err(HaiApiClientError.PAYLOAD_TOO_LARGE, capacity.message, { direction: capacity.direction, stage: capacity.stage, limitBytes: capacity.limitBytes, actualBytes: capacity.actualBytes })
+  const capacity = error instanceof TransportBodyTooLargeError
+    ? error
+    : error instanceof Error && error.cause instanceof TransportBodyTooLargeError
+      ? error.cause
+      : undefined
+  if (capacity) {
+    return err(HaiApiClientError.PAYLOAD_TOO_LARGE, capacity.message, {
+      direction: capacity.direction,
+      stage: capacity.stage,
+      limitBytes: capacity.limitBytes,
+      actualBytes: capacity.actualBytes,
+    })
+  }
   if (error instanceof ORPCError) {
     // Kit 等 HTTP 宿主使用非 2xx HaiResult；oRPC 将该包络放在 data.body 中。
     // 恢复已校验的业务错误，HTTP 状态优先，不能让正文把 5xx 降为可公开的 4xx。
-    const body: unknown = error.data && typeof error.data === 'object' && 'body' in error.data ? error.data.body : undefined
+    const body: unknown = error.data && typeof error.data === 'object' && 'body' in error.data
+      ? error.data.body
+      : undefined
     if (body && typeof body === 'object' && 'success' in body && body.success === false && 'error' in body) {
       const parsed = HaiErrorSchema.safeParse(body.error)
       if (parsed.success)
