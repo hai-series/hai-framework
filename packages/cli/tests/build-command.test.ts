@@ -23,7 +23,28 @@ const state = vi.hoisted(() => ({
   active: 0,
   peak: 0,
   copiedAppData: false,
+  shortPathAlias: false,
+  blockedRemoval: '',
+  removedPaths: [] as string[],
 }))
+vi.mock('node:fs', async (importOriginal) => {
+  const original = await importOriginal<typeof import('node:fs')>()
+  return {
+    ...original,
+    // JS realpath不会展开DOS短名，Git/native会；模拟同一目录的两种合法拼写。
+    realpathSync: Object.assign((file: string) => {
+      const actual = original.realpathSync(file)
+      return state.shortPathAlias && !file.includes('/')
+        ? actual.replace(/\\users\\[^\\]+/i, '\\Users\\RUNNER~1')
+        : actual
+    }, { native: original.realpathSync.native }),
+    rmSync: (file: Parameters<typeof original.rmSync>[0], options?: Parameters<typeof original.rmSync>[1]) => {
+      state.removedPaths.push(String(file))
+      if (String(file) !== state.blockedRemoval)
+        original.rmSync(file, options)
+    },
+  }
+})
 vi.mock('node:child_process', async (importOriginal) => {
   const original = await importOriginal<typeof import('node:child_process')>()
   return {
@@ -101,6 +122,9 @@ beforeEach(() => {
   state.active = 0
   state.peak = 0
   state.copiedAppData = false
+  state.shortPathAlias = false
+  state.blockedRemoval = ''
+  state.removedPaths = []
   vi.stubEnv('npm_execpath', '/tools/pnpm.cjs')
   // 本文件模拟构建器，不向真实引擎清理账本登记虚构镜像。
   vi.stubEnv('HAI_TEST_IMAGE_RUN', '')
@@ -185,6 +209,74 @@ it('jSON 返回各次独立构建的真实来源、平台和归档校验值', as
   finally {
     stdout.mockRestore()
   }
+})
+
+it.skipIf(process.platform !== 'win32')('windows DOS短名与大小写别名保持真实Git来源，外部上下文仍为未知', async () => {
+  writeFileSync(join(root, '.gitignore'), '.hai/\nimages/dependencies/\n')
+  execFileSync('git', ['init', '--quiet'], { cwd: root })
+  execFileSync('git', ['add', '.'], { cwd: root })
+  execFileSync('git', [
+    '-c',
+    'user.name=Build fixture',
+    '-c',
+    'user.email=build@example.invalid',
+    'commit',
+    '--quiet',
+    '-m',
+    'fixture',
+  ], { cwd: root })
+  state.shortPathAlias = true
+  const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+  try {
+    await buildCommand({
+      cwd: root.toUpperCase(),
+      target: 'image',
+      runtime: 'docker',
+      json: true,
+    })
+    expect(JSON.parse(String(stdout.mock.lastCall?.[0])).manifest.source.dirty).toBe(false)
+    writeFileSync(join(root, 'draft.txt'), 'untracked')
+    await buildCommand({
+      cwd: root.toUpperCase(),
+      target: 'image',
+      runtime: 'docker',
+      json: true,
+    })
+    expect(JSON.parse(String(stdout.mock.lastCall?.[0])).manifest.source.dirty).toBe(true)
+    const external = join(root, 'external-context')
+    mkdirSync(external)
+    execFileSync('git', ['init', '--quiet'], { cwd: external })
+    writeFileSync(join(root, 'hai.json'), JSON.stringify({
+      build: {
+        images: [
+          { name: 'web', context: external, dockerfile: 'images/web.Dockerfile' },
+        ],
+      },
+    }))
+    await buildCommand({
+      cwd: root,
+      target: 'image',
+      runtime: 'docker',
+      json: true,
+    })
+    expect(JSON.parse(String(stdout.mock.lastCall?.[0])).manifest.source.dirty).toBeNull()
+  }
+  finally {
+    stdout.mockRestore()
+  }
+})
+
+it.skipIf(process.platform !== 'win32')('依赖缓存元数据不能触发跨盘清理，也不信任非字符串条目', async () => {
+  const destination = join(root, 'images/dependencies')
+  mkdirSync(destination, { recursive: true })
+  state.blockedRemoval = 'Z:\\unrelated-codeql-probe.txt'
+  writeFileSync(join(destination, '.managed.json'), JSON.stringify([
+    state.blockedRemoval,
+    42,
+    { file: '../outside' },
+  ]))
+  await buildCommand({ cwd: root, target: 'image', runtime: 'docker' })
+  expect(state.removedPaths).not.toContain(state.blockedRemoval)
 })
 
 it('镜像来源覆盖子工程之外的真实构建上下文', async () => {

@@ -219,14 +219,14 @@ function sourceDirty(cwd: string, commit: string, inputs: readonly string[]): bo
       windowsHide: true,
       timeout: 15000,
     }
-    const gitRoot = realpathSync(execFileSync('git', ['rev-parse', '--show-toplevel'], options).trim())
+    const gitRoot = realpathSync.native(execFileSync('git', ['rev-parse', '--show-toplevel'], options).trim())
     const paths: string[] = []
     for (const input of [cwd, ...inputs]) {
-      const actual = realpathSync(input)
+      const actual = realpathSync.native(input)
       const path = relative(gitRoot, actual)
       if (isAbsolute(path) || path === '..' || path.startsWith(`..${sep}`))
         return null
-      const owner = realpathSync(execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      const owner = realpathSync.native(execFileSync('git', ['rev-parse', '--show-toplevel'], {
         ...options,
         cwd: statSync(actual).isDirectory()
           ? actual
@@ -639,8 +639,11 @@ function prepareDependencyInputs(cwd: string): void {
   const destination = join(cwd, 'images', 'dependencies')
   mkdirSync(destination, { recursive: true })
   const tracking = join(destination, '.managed.json')
-  const previous: string[] = existsSync(tracking)
+  const recorded: unknown = existsSync(tracking)
     ? JSON.parse(readFileSync(tracking, 'utf8'))
+    : []
+  const previous = Array.isArray(recorded)
+    ? recorded.filter((file): file is string => typeof file === 'string')
     : []
   const files: string[] = []
   const walk = (directory: string): void => {
@@ -680,7 +683,8 @@ function prepareDependencyInputs(cwd: string): void {
   walk(cwd)
   for (const file of previous) {
     const target = resolve(destination, file)
-    if (!files.includes(file) && !relative(destination, target).startsWith('..'))
+    const offset = relative(destination, target)
+    if (!files.includes(file) && offset && !isAbsolute(offset) && offset !== '..' && !offset.startsWith(`..${sep}`))
       rmSync(target, { force: true })
   }
   const content = `${JSON.stringify(files)}\n`
