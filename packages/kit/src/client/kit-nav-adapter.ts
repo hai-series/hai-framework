@@ -22,16 +22,16 @@
  * @module kit-nav-adapter
  */
 
-import { goto, invalidateAll } from '$app/navigation'
+import { goto, refreshAll } from '$app/navigation'
 import { page } from '$app/state'
 
 /**
  * SvelteKit `NavAdapter`：
  *
  * - `pathname` 来自 `$app/state` 的 `page.url.pathname`（响应式）。
- * - `navigate` 使用 `$app/navigation` 的 `goto`，并自动 `invalidateAll`，
+ * - `navigate` 使用 `$app/navigation` 的 `goto`，并自动 `refreshAll`，
  *   触发 `+page.server.ts` 的 `load` 重新执行。
- * - `refresh` 调用 `invalidateAll()`，常用于写操作后刷新列表数据。
+ * - `refresh` 调用 `refreshAll()`，常用于写操作后刷新列表数据。
  * @returns 读取当前 pathname 并调用 SvelteKit navigate/refresh 的适配器。
  * @example 模块内部上下文
  * ```ts
@@ -50,10 +50,10 @@ export function createSvelteKitNavAdapter(): {
       return page.url.pathname
     },
     async navigate(url: string) {
-      await goto(url, { invalidateAll: true })
+      await goto(url, { refreshAll: true })
     },
     async refresh() {
-      await invalidateAll()
+      await refreshAll()
     },
   }
 }

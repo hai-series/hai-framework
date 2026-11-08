@@ -1,21 +1,61 @@
 /** 无定时器的内存限流：生命周期、容量、惰性回收与外部存储所有权。 */
 import type { RequestEvent } from '@sveltejs/kit'
 import type { MiddlewareContext } from '../src/kit-types.js'
+import { HaiCommonError } from '@h-ai/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryRateLimitStore, rateLimitMiddleware } from '../src/middleware/kit-ratelimit.js'
 
 function context(key = 'client'): MiddlewareContext {
-  return { event: { getClientAddress: () => key } as RequestEvent, requestId: 'memory-lifecycle' }
+  return {
+    event: {
+      getClientAddress: () => key,
+    } as RequestEvent,
+    requestId: 'memory-lifecycle',
+  }
 }
 
 describe('memory rate limit lifecycle', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
+  it('限流与存储故障返回统一错误和追踪编号，不公开内部故障详情', async () => {
+    const limited = rateLimitMiddleware({
+      windowMs: 1000,
+      maxRequests: 1,
+      store: createMemoryRateLimitStore(),
+    })
+    const next = vi.fn(async () => new Response())
+    await limited(context(), next)
+    const denied = await limited(context(), next)
+    expect(denied.headers.get('Retry-After')).toBe('1')
+    expect(denied.headers.get('X-Trace-Id')).toBe('memory-lifecycle')
+    expect(await denied.json()).toMatchObject({
+      error: { code: HaiCommonError.RATE_LIMIT_EXCEEDED.code, httpStatus: 429, traceId: 'memory-lifecycle' },
+    })
+    const unavailable = rateLimitMiddleware({
+      windowMs: 1000,
+      maxRequests: 1,
+      store: {
+        scope: 'shared',
+        increment() { throw new Error('private database address') },
+      },
+    })
+    const failure = await unavailable(context(), next)
+    expect(failure.status).toBe(503)
+    const body = await failure.json()
+    expect(body.error).toMatchObject({ code: HaiCommonError.SERVICE_UNAVAILABLE.code, httpStatus: 503, traceId: 'memory-lifecycle' })
+    expect(JSON.stringify(body)).not.toContain('private database')
+    expect(next).toHaveBeenCalledOnce()
+  })
+
   it('重复创建和使用不产生计时器，丢弃引用即可回收', async () => {
     const timers = vi.getTimerCount()
     for (let index = 0; index < 100; index++) {
-      const middleware = rateLimitMiddleware({ windowMs: 1000, maxRequests: 1, store: createMemoryRateLimitStore() })
+      const middleware = rateLimitMiddleware({
+        windowMs: 1000,
+        maxRequests: 1,
+        store: createMemoryRateLimitStore(),
+      })
       expect((await middleware(context(), async () => new Response())).status).toBe(200)
     }
     expect(vi.getTimerCount()).toBe(timers)
@@ -51,7 +91,12 @@ describe('memory rate limit lifecycle', () => {
   })
 
   it('外部注入 store 的关闭与资源生命周期仍由调用者管理', async () => {
-    const external = { scope: 'shared' as const, increment: vi.fn(() => ({ count: 1, resetAt: Date.now() + 1000 })), close: vi.fn(), stopCleanup: vi.fn() }
+    const external = {
+      scope: 'shared' as const,
+      increment: vi.fn(() => ({ count: 1, resetAt: Date.now() + 1000 })),
+      close: vi.fn(),
+      stopCleanup: vi.fn(),
+    }
     for (let index = 0; index < 100; index++) {
       const middleware = rateLimitMiddleware({ windowMs: 1000, maxRequests: 1, store: external })
       await middleware(context(), async () => new Response())

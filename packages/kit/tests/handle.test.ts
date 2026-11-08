@@ -1,11 +1,13 @@
+import type { RequestEvent } from '@sveltejs/kit'
 /**
  * =============================================================================
  * @h-ai/kit - Handle Hook 测试
  * =============================================================================
  */
 
-import type { Handle, RequestEvent } from '@sveltejs/kit'
+import type { Handle } from '@sveltejs/kit/hooks'
 import type { SessionData } from '../src/kit-types.js'
+import { HaiCommonError } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
 import { createHandle, sequence } from '../src/hooks/index.js'
 
@@ -47,7 +49,14 @@ function createMockEvent(options: {
 
 describe('createHandle', () => {
   it.each(['/api/private', '/(service)/api/private'])('带挂载前缀的API仍返回401，不重定向或绕过认证：%s', async (routeId) => {
-    const handle = createHandle({ logging: false, auth: { verifyToken: async () => null, protectedPaths: ['/yyy/api/**'], loginUrl: '/yyy/auth/login' } })
+    const handle = createHandle({
+      logging: false,
+      auth: {
+        verifyToken: async () => null,
+        protectedPaths: ['/yyy/api/**'],
+        loginUrl: '/yyy/auth/login',
+      },
+    })
     const event = createMockEvent({ path: '/yyy/api/private', routeId })
     const resolve = vi.fn().mockResolvedValue(new Response('must not resolve'))
     const response = await handle({ event, resolve })
@@ -193,7 +202,7 @@ describe('createHandle', () => {
     expect(response.status).toBe(500)
     const body = await response.json()
     expect(body.success).toBe(false)
-    expect(body.error.code).toBe('INTERNAL_ERROR')
+    expect(body.error.code).toBe(HaiCommonError.INTERNAL_ERROR.code)
   })
 
   it('应该使用自定义错误处理', async () => {
@@ -232,7 +241,10 @@ describe('sequence', () => {
       const html = await options?.transformPageChunk?.({ html: '<html lang="%lang%">', done: true })
       return new Response(html)
     }
-    const response = await combined({ event: createMockEvent(), resolve })
+    const response = await combined({
+      event: createMockEvent(),
+      resolve,
+    })
     expect(await response.text()).toBe('<html lang="ja-JP"><p>日本語</p>')
   })
 

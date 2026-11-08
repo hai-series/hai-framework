@@ -50,12 +50,17 @@ function createMockEvent(overrides: {
 
 describe('a2A HTTP 协议边界', () => {
   function requestEvent(body: string): RequestEvent {
-    return { url: new URL('http://localhost/a2a'), request: new Request('http://localhost/a2a', { method: 'POST', body }) } as RequestEvent
+    return {
+      url: new URL('http://localhost/a2a'),
+      request: new Request('http://localhost/a2a', { method: 'POST', body }),
+    } as RequestEvent
   }
 
   it('已配置认证但返回 null 时拒绝执行', async () => {
     const handleRequest = vi.fn()
-    const handler = createA2AHandler(handleRequest, { authenticate: async () => null })
+    const handler = createA2AHandler(handleRequest, {
+      authenticate: async () => null,
+    })
     const response = await handler(requestEvent('{}'))
     expect(response.status).toBe(401)
     expect(handleRequest).not.toHaveBeenCalled()
@@ -65,13 +70,23 @@ describe('a2A HTTP 协议边界', () => {
     const handleRequest = vi.fn()
     const response = await createA2AHandler(handleRequest)(requestEvent('{'))
     expect(response.status).toBe(400)
-    expect(await response.json()).toMatchObject({ jsonrpc: '2.0', id: null, error: { code: -32700 } })
+    expect(await response.json()).toMatchObject({
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: -32700 },
+    })
     expect(handleRequest).not.toHaveBeenCalled()
   })
 
   it('hook 使用标准发现路径并共享 fail-closed 认证', async () => {
-    const operations = { getAgentCard: () => ({ success: true, data: {} }), handleRequest: vi.fn() }
-    const config = resolveA2AConfig({ operations, authenticate: async () => null })!
+    const operations = {
+      getAgentCard: () => ({ success: true, data: {} }),
+      handleRequest: vi.fn(),
+    }
+    const config = resolveA2AConfig({
+      operations,
+      authenticate: async () => null,
+    })!
     expect(config.cardPath).toBe('/.well-known/agent-card.json')
     const response = await handleA2ARequest(requestEvent('{}'), 'req-1', config)
     expect(response?.status).toBe(401)
@@ -87,7 +102,10 @@ describe('a2A HTTP 协议边界', () => {
       }
       finally { finished() }
     }
-    const response = await createA2AHandler(async () => ({ streaming: true, stream: stream() }))(requestEvent('{}'))
+    const response = await createA2AHandler(async () => ({
+      streaming: true,
+      stream: stream(),
+    }))(requestEvent('{}'))
     const reader = response.body!.getReader()
     await reader.read()
     await reader.cancel()
@@ -96,15 +114,29 @@ describe('a2A HTTP 协议边界', () => {
 
   it('从标准 securitySchemes 读取自定义 API Key 参数', async () => {
     const verifyMock = await getIamMock()
-    verifyMock.mockResolvedValueOnce({ success: true, data: { id: 'key', userId: 'user', scopes: [] } })
+    verifyMock.mockResolvedValueOnce({
+      success: true,
+      data: { id: 'key', userId: 'user', scopes: [] },
+    })
     const config = resolveA2AConfig({
       operations: {
-        getAgentCard: () => ({ success: true, data: { securitySchemes: { apiKey: { type: 'apiKey', in: 'query', name: 'custom_key' } } } }),
+        getAgentCard: () => ({
+          success: true,
+          data: {
+            securitySchemes: {
+              apiKey: {
+                apiKeySecurityScheme: { location: 'query', name: 'custom_key' },
+              },
+            },
+          },
+        }),
         handleRequest: vi.fn(),
       },
       authenticate: 'apiKey',
     })!
-    expect(await config.authenticate!(createMockEvent({ searchParams: { custom_key: 'test-key' } }))).toMatchObject({ agentId: 'user' })
+    expect(await config.authenticate!(createMockEvent({
+      searchParams: { custom_key: 'test-key' },
+    }))).toMatchObject({ agentId: 'user' })
     expect(verifyMock).toHaveBeenCalledWith('test-key')
   })
 })
@@ -114,11 +146,17 @@ describe('createA2AApiKeyAuthenticator', () => {
     const verifyMock = await getIamMock()
     verifyMock.mockResolvedValueOnce({
       success: true,
-      data: { id: 'key-1', userId: 'user-1', scopes: ['read'] },
+      data: {
+        id: 'key-1',
+        userId: 'user-1',
+        scopes: ['read'],
+      },
     })
 
     const auth = createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })
-    const result = await auth(createMockEvent({ headers: { 'x-api-key': 'hai_abc123' } }))
+    const result = await auth(createMockEvent({
+      headers: { 'x-api-key': 'hai_abc123' },
+    }))
 
     expect(result).toEqual({
       agentId: 'user-1',
@@ -136,7 +174,9 @@ describe('createA2AApiKeyAuthenticator', () => {
     })
 
     const auth = createA2AApiKeyAuthenticator({ in: 'query', name: 'api_key' })
-    const result = await auth(createMockEvent({ searchParams: { api_key: 'hai_xyz789' } }))
+    const result = await auth(createMockEvent({
+      searchParams: { api_key: 'hai_xyz789' },
+    }))
 
     expect(result).toEqual({
       agentId: 'user-2',
@@ -160,7 +200,9 @@ describe('createA2AApiKeyAuthenticator', () => {
     })
 
     const auth = createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })
-    const result = await auth(createMockEvent({ headers: { 'x-api-key': 'hai_invalid' } }))
+    const result = await auth(createMockEvent({
+      headers: { 'x-api-key': 'hai_invalid' },
+    }))
 
     expect(result).toBeNull()
   })
@@ -176,7 +218,11 @@ describe('resolveA2AConfig — apiKey authenticate', () => {
         data: {
           name: 'test',
           url: 'http://localhost',
-          securitySchemes: { apiKey: { type: 'apiKey', in: 'header' as const, name: 'x-api-key' } },
+          securitySchemes: {
+            apiKey: {
+              apiKeySecurityScheme: { location: 'header', name: 'x-api-key' },
+            },
+          },
         },
       }),
       handleRequest: vi.fn(),
@@ -194,7 +240,10 @@ describe('resolveA2AConfig — apiKey authenticate', () => {
   it('authenticate: 函数直接透传', () => {
     const customAuth = vi.fn()
     const operations = {
-      getAgentCard: () => ({ success: true, data: { name: 'test', url: 'http://localhost' } }),
+      getAgentCard: () => ({
+        success: true,
+        data: { name: 'test', url: 'http://localhost' },
+      }),
       handleRequest: vi.fn(),
     }
 
@@ -208,7 +257,10 @@ describe('resolveA2AConfig — apiKey authenticate', () => {
 
   it('无 authenticate 时为 undefined', () => {
     const operations = {
-      getAgentCard: () => ({ success: true, data: { name: 'test', url: 'http://localhost' } }),
+      getAgentCard: () => ({
+        success: true,
+        data: { name: 'test', url: 'http://localhost' },
+      }),
       handleRequest: vi.fn(),
     }
 
@@ -239,7 +291,9 @@ describe('resolveA2AConfig — apiKey authenticate', () => {
 
     // 使用默认 header: x-api-key
     const result = await resolved!.authenticate!(
-      createMockEvent({ headers: { 'x-api-key': 'hai_test123' } }),
+      createMockEvent({
+        headers: { 'x-api-key': 'hai_test123' },
+      }),
     )
     expect(result).toEqual({
       agentId: 'user-1',

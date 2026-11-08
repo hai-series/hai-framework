@@ -92,12 +92,14 @@ function resolveAuthenticate(
   // 'apiKey' 快捷方式：从 Agent Card 获取 security 配置
   const cardResult = operations.getAgentCard()
   const securitySchemes = cardResult.success && cardResult.data
-    ? (cardResult.data as { securitySchemes?: Record<string, { type: string, in?: string, name?: string }> }).securitySchemes
+    ? (cardResult.data as { securitySchemes?: Record<string, { apiKeySecurityScheme?: { location?: string, name?: string } }> }).securitySchemes
     : undefined
-  const apiKeyCfg = securitySchemes?.apiKey
+  const apiKeyCfg = securitySchemes?.apiKey?.apiKeySecurityScheme
 
   return createA2AApiKeyAuthenticator({
-    in: apiKeyCfg?.in === 'query' ? 'query' : 'header',
+    in: apiKeyCfg?.location === 'query'
+      ? 'query'
+      : 'header',
     name: apiKeyCfg?.name ?? 'x-api-key',
   })
 }
@@ -137,8 +139,16 @@ export async function handleA2ARequest(
       })
     }
     return new Response(
-      JSON.stringify({ error: { code: 'A2A_NOT_CONFIGURED', message: kitM('kit_a2aCardUnavailable') } }),
-      { status: 503, headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId } },
+      JSON.stringify({
+        error: {
+          code: 'A2A_NOT_CONFIGURED',
+          message: kitM('kit_a2aCardUnavailable'),
+        },
+      }),
+      {
+        status: 503,
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
+      },
     )
   }
 

@@ -1,3 +1,4 @@
+import { HaiCommonError } from '@h-ai/core'
 /**
  * =============================================================================
  * @h-ai/kit - Response 测试
@@ -11,6 +12,8 @@ import {
   created,
   error,
   forbidden,
+  fromError,
+  fromResult,
   internalError,
   noContent,
   notFound,
@@ -21,6 +24,83 @@ import {
 } from '../src/kit-response.js'
 
 describe('response Helpers', () => {
+  it('未分类错误和非法状态统一返回安全500，显式业务状态仍可映射', async () => {
+    for (const response of [
+      fromError({ code: 'unknown', message: 'SELECT private_data' }),
+      fromResult({
+        success: false,
+        error: { code: 'unknown', message: 'SELECT private_data' },
+      }),
+      error('unknown', 'SELECT private_data', 200, undefined, { detail: 'private detail' }),
+    ]) {
+      expect(response.status).toBe(500)
+      const body = await response.json()
+      expect(body.error.httpStatus).toBe(500)
+      expect(JSON.stringify(body)).not.toContain('private')
+      expect(JSON.stringify(body)).not.toContain('SELECT')
+    }
+    const business = fromResult({
+      success: false,
+      error: { code: 'missing', message: '文件不存在' },
+    }, { missing: 404 })
+    expect(business.status).toBe(404)
+    expect((await business.json()).error.message).toContain('文件不存在')
+  })
+  it('非法追踪编号不会原样返回，公开编号与响应头保持一致', async () => {
+    const response = fromError({ code: 'app:failed', message: 'Invalid input', httpStatus: 400 }, 'invalid\ntrace')
+    const body = await response.json()
+    expect(body.requestId).toBe(body.error.traceId)
+    expect(response.headers.get('X-Trace-Id')).toBe(body.requestId)
+    expect(body.requestId).toMatch(/^[\w.:-]{1,128}$/)
+  })
+  it('模块失败保留安全字段校验和公开上下文', async () => {
+    const response = fromResult({
+      success: false,
+      error: {
+        code: 'app:validation',
+        message: '请检查邮箱',
+        httpStatus: 422,
+        cause: [
+          { field: 'email', message: '邮箱格式不正确', rejectedValue: 'private@example.com' },
+        ],
+        ext: { privateNote: 'internal only' },
+        publicExt: { retryable: false },
+      },
+    }, undefined, 'validation-1')
+    const body = await response.json()
+    expect(response.status).toBe(422)
+    expect(body.error).toMatchObject({
+      code: 'app:validation',
+      httpStatus: 422,
+      traceId: 'validation-1',
+      cause: [
+        { field: 'email', message: '邮箱格式不正确' },
+      ],
+      ext: { retryable: false },
+    })
+    expect(JSON.stringify(body)).not.toContain('private@example.com')
+    expect(JSON.stringify(body)).not.toContain('internal only')
+    expect(response.headers.get('X-Trace-Id')).toBe(body.error.traceId)
+  })
+
+  it('模块内部错误仅显示安全提示且保留追踪编号', async () => {
+    const response = fromError({
+      code: 'app:storage',
+      message: 'SELECT secret FROM private_table',
+      httpStatus: 500,
+      cause: new Error('Database password is private'),
+      ext: { secret: 'internal only' },
+    }, 'storage-1')
+    const body = await response.json()
+    expect(response.status).toBe(500)
+    expect(body.error.httpStatus).toBe(500)
+    expect(body.error.traceId).toBe('storage-1')
+    expect(body.error.cause).toBeUndefined()
+    expect(body.error.ext).toBeUndefined()
+    expect(JSON.stringify(body)).not.toContain('private')
+    expect(JSON.stringify(body)).not.toContain('SELECT')
+  })
+
   describe('ok', () => {
     it('应该创建 200 响应', async () => {
       const response = ok({ message: 'hello' }, 'req123')
@@ -76,7 +156,7 @@ describe('response Helpers', () => {
       expect(response.status).toBe(400)
 
       const body = await response.json()
-      expect(body.error.code).toBe('BAD_REQUEST')
+      expect(body.error.code).toBe(HaiCommonError.INVALID_REQUEST.code)
     })
   })
 
@@ -87,7 +167,7 @@ describe('response Helpers', () => {
       expect(response.status).toBe(401)
 
       const body = await response.json()
-      expect(body.error.code).toBe('UNAUTHORIZED')
+      expect(body.error.code).toBe(HaiCommonError.UNAUTHORIZED.code)
     })
   })
 
@@ -98,7 +178,7 @@ describe('response Helpers', () => {
       expect(response.status).toBe(403)
 
       const body = await response.json()
-      expect(body.error.code).toBe('FORBIDDEN')
+      expect(body.error.code).toBe(HaiCommonError.FORBIDDEN.code)
     })
   })
 
@@ -120,11 +200,29 @@ describe('response Helpers', () => {
       expect(response.status).toBe(409)
 
       const body = await response.json()
-      expect(body.error.code).toBe('CONFLICT')
+      expect(body.error.code).toBe(HaiCommonError.CONFLICT.code)
     })
   })
 
   describe('validationError', () => {
+    it('仅公开字段和提示，不回显结构兼容对象中的输入值或SQL', async () => {
+      const issues = [
+        {
+          field: 'email',
+          message: 'Invalid email',
+          rejectedValue: 'private@example.com',
+          sql: 'SELECT secret',
+        },
+      ]
+      const response = validationError(issues)
+      const body = await response.json()
+      expect(body.error.cause).toEqual([
+        { field: 'email', message: 'Invalid email' },
+      ])
+      expect(body.error.details).toBeUndefined()
+      expect(JSON.stringify(body)).not.toContain('private@example.com')
+      expect(JSON.stringify(body)).not.toContain('SELECT')
+    })
     it('应该创建 422 响应并包含错误详情', async () => {
       const errors = [
         { field: 'email', message: 'Invalid email' },
@@ -136,8 +234,8 @@ describe('response Helpers', () => {
       expect(response.status).toBe(422)
 
       const body = await response.json()
-      expect(body.error.code).toBe('VALIDATION_ERROR')
-      expect(body.error.details.errors).toEqual(errors)
+      expect(body.error.code).toBe(HaiCommonError.VALIDATION_ERROR.code)
+      expect(body.error.cause).toEqual(errors)
     })
   })
 
@@ -148,7 +246,7 @@ describe('response Helpers', () => {
       expect(response.status).toBe(500)
 
       const body = await response.json()
-      expect(body.error.code).toBe('INTERNAL_ERROR')
+      expect(body.error.code).toBe(HaiCommonError.INTERNAL_ERROR.code)
     })
   })
 

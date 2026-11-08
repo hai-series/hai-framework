@@ -5,11 +5,154 @@
  * @module kit-types
  */
 
-import type { RequestAccessConfigInput, TrustedProxies } from '@h-ai/core'
+import type { core, HaiError, HaiResult, RequestAccessConfigInput, TrustedProxies } from '@h-ai/core'
 import type { CryptoFunctions, TransportKeyStore, TransportServerKeyRing } from '@h-ai/crypto'
-import type { AuthnOperations } from '@h-ai/iam'
+import type { ApiKeyCredentials, AuthnOperations, AuthRequestContext, AuthResult, LdapCredentials, OtpCredentials, PasswordCredentials, RegisterOptions } from '@h-ai/iam'
 import type { RequestEvent } from '@sveltejs/kit'
-import type { RateLimitStore } from './middleware/kit-ratelimit.js'
+
+import type { createKitAuthActions } from './client/kit-client-auth.js'
+import type { createKitClient, installBrowserTransport, installBrowserTransportFetch } from './client/kit-client.js'
+import type { defineCrud } from './crud/kit-crud.js'
+import type { hasPermission, requirePermission } from './guards/kit-permission.js'
+import type { requireSensitiveOperation } from './guards/kit-sensitive.js'
+import type { createHandle, sequence } from './hooks/kit-handle.js'
+import type { createAuthApi } from './kit-auth-api.js'
+import type { createFeedbackHandler } from './kit-feedback.js'
+import type { handler } from './kit-handler.js'
+import type { badRequest, conflict, created, error, forbidden, fromError, fromResult, internalError, noContent, notFound, ok, redirect, unauthorized, validationError } from './kit-response.js'
+import type { IdParamSchema, PaginationQuerySchema, validateFormOrFail, validateParamsOrFail, validateQueryOrFail } from './kit-validation.js'
+import type { MemoryRateLimitStore, RateLimitCache, RateLimitStore } from './middleware/kit-ratelimit.js'
+
+/**
+ * 当前请求的认证 Cookie 写入契约；不持有跨请求状态。
+ * @example
+ * ```ts
+ * import type { AuthCookieWriter } from '@h-ai/kit'
+ * import { kit } from '@h-ai/kit'
+ *
+ * async function signOut(cookies: AuthCookieWriter) {
+ *   const result = await kit.auth.logout(cookies)
+ *   return result.success
+ * }
+ * ```
+ */
+export interface AuthCookieWriter {
+  set: (name: string, value: string, options: {
+    path: string
+    httpOnly: boolean
+    sameSite: 'lax' | 'strict' | 'none'
+    secure: boolean
+    maxAge?: number
+  }) => void
+  delete: (name: string, options: { path: string }) => void
+}
+
+/**
+ * Kit 服务端公开命名空间；消费者声明只引用公开类型，不暴露内部函数入口。
+ * @example
+ * ```ts
+ * import type { KitFunctions } from '@h-ai/kit'
+ * import { kit } from '@h-ai/kit'
+ *
+ * const runtime: KitFunctions = kit
+ * const response = runtime.response.ok({ ready: true })
+ * void response.status
+ * ```
+ */
+export interface KitFunctions {
+  createFeedbackHandler: typeof createFeedbackHandler
+  middleware: {
+    rateLimit: (config: RateLimitConfig) => Middleware
+    createCacheRateLimitStore: (backend: RateLimitCache, options: { namespace: string, allowMemory?: boolean }) => RateLimitStore
+    createMemoryRateLimitStore: () => MemoryRateLimitStore
+  }
+  createHandle: typeof createHandle
+  sequence: typeof sequence
+  handler: typeof handler
+  guard: {
+    requireSensitive: typeof requireSensitiveOperation
+    require: typeof requirePermission
+    check: typeof hasPermission
+  }
+  response: {
+    ok: typeof ok
+    created: typeof created
+    noContent: typeof noContent
+    error: typeof error
+    badRequest: typeof badRequest
+    unauthorized: typeof unauthorized
+    forbidden: typeof forbidden
+    notFound: typeof notFound
+    conflict: typeof conflict
+    validationError: typeof validationError
+    internalError: typeof internalError
+    redirect: typeof redirect
+    fromResult: typeof fromResult
+    fromError: typeof fromError
+  }
+  validate: {
+    body: typeof validateFormOrFail
+    query: typeof validateQueryOrFail
+    params: typeof validateParamsOrFail
+    IdParamSchema: typeof IdParamSchema
+    PaginationQuerySchema: typeof PaginationQuerySchema
+  }
+  client: {
+    create: typeof createKitClient
+    createAuthActions: typeof createKitAuthActions
+    installBrowserTransport: typeof installBrowserTransport
+    installBrowserTransportFetch: typeof installBrowserTransportFetch
+  }
+  auth: {
+    publicPaths: string[]
+    createApi: typeof createAuthApi
+    login: (cookies: AuthCookieWriter, credentials: PasswordCredentials, context?: AuthRequestContext) => Promise<HaiResult<AuthResult>>
+    loginWithOtp: (cookies: AuthCookieWriter, credentials: OtpCredentials, context?: AuthRequestContext) => Promise<HaiResult<AuthResult>>
+    loginWithLdap: (cookies: AuthCookieWriter, credentials: LdapCredentials, context?: AuthRequestContext) => Promise<HaiResult<AuthResult>>
+    loginWithApiKey: (cookies: AuthCookieWriter, credentials: ApiKeyCredentials, context?: AuthRequestContext) => Promise<HaiResult<AuthResult>>
+    registerAndLogin: (cookies: AuthCookieWriter, options: RegisterOptions, context?: AuthRequestContext) => Promise<HaiResult<AuthResult>>
+    logout: (cookies: AuthCookieWriter, accessToken?: string | null) => Promise<HaiResult<void>>
+    setBrowserToken: (token: string) => void
+    clearBrowserToken: () => void
+  }
+  crud: {
+    define: typeof defineCrud
+  }
+  i18n: {
+    setLocale: (locale: string) => void
+    runWithLocale: typeof core.i18n.runWithLocale
+  }
+}
+
+/**
+ * 浏览器实际可用的 Kit 命名空间；不含服务端认证、Hook 或中间件。
+ * @example
+ * ```ts
+ * import type { BrowserKitFunctions } from '@h-ai/kit'
+ * import { kit } from '@h-ai/kit'
+ *
+ * const browser: BrowserKitFunctions = kit
+ * browser.auth.clearBrowserToken()
+ * ```
+ */
+export interface BrowserKitFunctions {
+  client: {
+    create: typeof createKitClient
+    createAuthActions: typeof createKitAuthActions
+    installBrowserTransport: typeof installBrowserTransport
+    installBrowserTransportFetch: typeof installBrowserTransportFetch
+  }
+  crud: {
+    define: typeof defineCrud
+  }
+  auth: {
+    setBrowserToken: (token: string) => void
+    clearBrowserToken: () => void
+  }
+  i18n: {
+    setLocale: (locale: string) => void
+  }
+}
 
 /**
  * 服务器监听配置（对应 `config/_kit.yml` 的 `server`）。
@@ -510,7 +653,7 @@ export interface HandleA2AConfig {
  * ```
  */
 export interface TransportEncryptionOptions {
-  /** 宿主构建挂载目录，默认空字符串；SvelteKit 传入 $app/paths.base。 */
+  /** 宿主构建挂载目录，默认空字符串；SvelteKit 传入 paths.relative=false 时的 resolve('/').replace(/\/$/, '')。 */
   basePath?: string
   /** 双向业务明文 UTF-8 字节上限；默认 1 MiB，整数范围 1 KiB～64 MiB。 */
   maxPlaintextBytes?: number
@@ -590,6 +733,12 @@ export interface ApiResponse<T = unknown> {
     code: string
     message: string
     traceId?: string
+    /** 对应 HTTP 状态 */
+    httpStatus?: number
+    /** 仅含已本地化 field/message 的字段校验信息 */
+    cause?: HaiError['cause']
+    /** 经公开边界脱敏的扩展信息 */
+    ext?: HaiError['ext']
     details?: unknown
   }
   /** 请求 ID */

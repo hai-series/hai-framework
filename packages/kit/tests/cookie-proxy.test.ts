@@ -38,7 +38,10 @@ function createMockSymmetric() {
     encryptWithIV: (data: string, _key: string) => {
       const iv = 'mock_iv_12345678'
       const ciphertext = Buffer.from(data).toString('base64')
-      return { success: true, data: { ciphertext, iv } }
+      return {
+        success: true,
+        data: { ciphertext, iv },
+      }
     },
     decryptWithIV: (ciphertext: string, _key: string, _iv: string) => {
       const plaintext = Buffer.from(ciphertext, 'base64').toString()
@@ -50,15 +53,21 @@ function createMockSymmetric() {
 function createFailingSymmetric() {
   return {
     generateKey: () => 'dummy',
-    encryptWithIV: () => ({ success: false, error: { code: 1, message: 'Encrypt failed' } }),
-    decryptWithIV: () => ({ success: false, error: { code: 2, message: 'Decrypt failed' } }),
+    encryptWithIV: () => ({
+      success: false,
+      error: { code: 1, message: 'Encrypt failed' },
+    }),
+    decryptWithIV: () => ({
+      success: false,
+      error: { code: 2, message: 'Decrypt failed' },
+    }),
   }
 }
 
 // ─── 测试 ───
 
 describe('createEncryptedCookieProxy', () => {
-  const encryptionKey = 'test_encryption_key_0123456789ab'
+  const encryptionKey = '0123456789abcdef0123456789abcdef'
 
   function makeConfig(overrides: Partial<CookieProxyConfig> = {}): CookieProxyConfig {
     return {
@@ -70,6 +79,27 @@ describe('createEncryptedCookieProxy', () => {
   }
 
   // ─── set() 加密写入 ───
+
+  it('真实 SM4 密文往返且拒绝篡改和换名', async () => {
+    expect((await crypto.init()).success).toBe(true)
+    try {
+      const store: Record<string, string> = {}
+      const proxy = createEncryptedCookieProxy(createMockCookies(store), makeConfig({ symmetric: crypto.symmetric }))
+      proxy.set('session_token', '含中文的会话凭据', { path: '/' })
+      expect(proxy.get('session_token')).toBe('含中文的会话凭据')
+      store.refresh_token = store.session_token!
+      expect(proxy.get('refresh_token')).toBeUndefined()
+      const parts = store.session_token!.split(':')
+      parts[2] = `${parts[2]![0] === '0'
+        ? '1'
+        : '0'}${parts[2]!.slice(1)}`
+      store.session_token = parts.join(':')
+      expect(proxy.get('session_token')).toBeUndefined()
+    }
+    finally {
+      await crypto.close()
+    }
+  })
 
   describe('set()', () => {
     it('加密名单中的 Cookie 写入加密值', () => {
@@ -84,10 +114,11 @@ describe('createEncryptedCookieProxy', () => {
       const setCall = cookies.set.mock.calls[0]!
       expect(setCall[0]).toBe('session_token')
       expect(setCall[1]).toMatch(/^enc:/)
-      // enc:{iv}:{ciphertext} 格式
+      // enc:v2:{iv}:{ciphertext}:{mac} 格式
       const parts = (setCall[1] as string).split(':')
-      expect(parts.length).toBe(3)
+      expect(parts.length).toBe(5)
       expect(parts[0]).toBe('enc')
+      expect(parts[1]).toBe('v2')
     })
 
     it('不在加密名单中的 Cookie 原样写入', () => {
@@ -106,7 +137,9 @@ describe('createEncryptedCookieProxy', () => {
     it('加密失败时拒绝写入明文', () => {
       const store: Record<string, string> = {}
       const cookies = createMockCookies(store)
-      const config = makeConfig({ symmetric: createFailingSymmetric() })
+      const config = makeConfig({
+        symmetric: createFailingSymmetric(),
+      })
       const proxy = createEncryptedCookieProxy(cookies, config)
 
       expect(() => proxy.set('session_token', 'my_secret_token', { path: '/' }))
@@ -121,15 +154,38 @@ describe('createEncryptedCookieProxy', () => {
     it('读取加密 Cookie 时自动解密', () => {
       const config = makeConfig()
 
-      // 先用 encryptWithIV 手动加密一个值
-      const encResult = config.symmetric.encryptWithIV('my_secret_token', encryptionKey)
-      const storedValue = `enc:${encResult.data!.iv}:${encResult.data!.ciphertext}`
-
-      const cookies = createMockCookies({ session_token: storedValue })
+      const cookies = createMockCookies()
       const proxy = createEncryptedCookieProxy(cookies, config)
+      proxy.set('session_token', 'my_secret_token', { path: '/' })
 
       const value = proxy.get('session_token')
       expect(value).toBe('my_secret_token')
+    })
+
+    it.each([2, 3, 4])('认证失败时拒绝第 %s 段的修改且不尝试解密', (index) => {
+      const store: Record<string, string> = {}
+      const config = makeConfig()
+      const decrypt = vi.spyOn(config.symmetric, 'decryptWithIV')
+      const proxy = createEncryptedCookieProxy(createMockCookies(store), config)
+      proxy.set('session_token', 'review-value', { path: '/' })
+      const parts = store.session_token!.split(':')
+      parts[index] = `${parts[index]![0] === '0'
+        ? '1'
+        : '0'}${parts[index]!.slice(1)}`
+      store.session_token = parts.join(':')
+      expect(proxy.get('session_token')).toBeUndefined()
+      expect(decrypt).not.toHaveBeenCalled()
+    })
+
+    it('拒绝旧无认证格式和不同 Cookie 名之间的密文替换', () => {
+      const store: Record<string, string> = {}
+      const config = makeConfig()
+      const proxy = createEncryptedCookieProxy(createMockCookies(store), config)
+      proxy.set('session_token', 'review-value', { path: '/' })
+      store.refresh_token = store.session_token!
+      expect(proxy.get('refresh_token')).toBeUndefined()
+      store.session_token = 'enc:old-iv:old-ciphertext'
+      expect(proxy.get('session_token')).toBeUndefined()
     })
 
     it('没有 enc: 前缀的受保护 Cookie 被拒绝', () => {
@@ -162,7 +218,9 @@ describe('createEncryptedCookieProxy', () => {
     it('解密失败时不暴露原始密文', () => {
       const storedValue = 'enc:bad_iv:bad_ciphertext'
       const cookies = createMockCookies({ session_token: storedValue })
-      const config = makeConfig({ symmetric: createFailingSymmetric() })
+      const config = makeConfig({
+        symmetric: createFailingSymmetric(),
+      })
       const proxy = createEncryptedCookieProxy(cookies, config)
 
       const value = proxy.get('session_token')

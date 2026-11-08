@@ -10,7 +10,7 @@
 
 import type { HaiError } from '@h-ai/core'
 import type { ApiResponse } from './kit-types.js'
-import { core } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { kitM } from './kit-i18n.js'
 
 /**
@@ -92,7 +92,7 @@ export function noContent(): Response {
  * @param message - 人可读错误消息
  * @param status - HTTP 状态码，默认 400
  * @param requestId - 可选请求 ID
- * @param details - 可选额外详情
+ * @param details - 显式公开的业务详情；不要传原始异常、SQL、输入值或内部上下文
  * @returns `{ success: false, error: { code, message, details } }` 格式的 JSON Response
  * @example
  * ```ts
@@ -103,27 +103,39 @@ export function noContent(): Response {
  * ```
  */
 export function error(
-  code: string,
+  code: HaiError['code'],
   message: string,
   status = 400,
   requestId?: string,
   details?: unknown,
 ): Response {
   const safe = core.error.toPublic({ code, message, httpStatus: status }, requestId)
-  core.logger.error('API request failed', { traceId: safe.traceId, error: { code, message, httpStatus: status, details } })
+  const safeStatus = safe.httpStatus ?? 500
+  core.logger.error('API request failed', {
+    traceId: safe.traceId,
+    error: {
+      code,
+      message,
+      httpStatus: status,
+      details,
+    },
+  })
   const response: ApiResponse = {
     success: false,
     error: {
-      code,
+      code: String(safe.code),
       message: safe.message,
       traceId: safe.traceId,
-      details: status < 500 ? core.sanitize.sanitizeSensitiveFields(details) : undefined,
+      httpStatus: safeStatus,
+      details: safeStatus < 500
+        ? core.sanitize.sanitizeSensitiveFields(details)
+        : undefined,
     },
-    requestId: requestId ?? core.context.get().requestId ?? safe.traceId,
+    requestId: safe.traceId,
   }
 
   return new Response(JSON.stringify(response), {
-    status,
+    status: safeStatus,
     headers: { 'Content-Type': 'application/json', 'X-Trace-Id': safe.traceId! },
   })
 }
@@ -134,7 +146,7 @@ export function error(
  * @param message - 错误消息
  * @param requestId - 可选请求 ID
  * @param details - 可选额外详情
- * @returns error code 为 `'BAD_REQUEST'` 的 JSON Response
+ * @returns error code 为 `HaiCommonError.INVALID_REQUEST.code` 的 JSON Response
  * @example
  * ```ts
  * import { kit } from '@h-ai/kit'
@@ -144,7 +156,7 @@ export function error(
  * ```
  */
 export function badRequest(message: string, requestId?: string, details?: unknown): Response {
-  return error('BAD_REQUEST', message, 400, requestId, details)
+  return error(HaiCommonError.INVALID_REQUEST.code, message, 400, requestId, details)
 }
 
 /**
@@ -152,7 +164,7 @@ export function badRequest(message: string, requestId?: string, details?: unknow
  *
  * @param message - 错误消息，默认 `'Authentication required'`
  * @param requestId - 可选请求 ID
- * @returns error code 为 `'UNAUTHORIZED'` 的 JSON Response
+ * @returns error code 为 `HaiCommonError.UNAUTHORIZED.code` 的 JSON Response
  * @example
  * ```ts
  * import { kit } from '@h-ai/kit'
@@ -162,7 +174,7 @@ export function badRequest(message: string, requestId?: string, details?: unknow
  * ```
  */
 export function unauthorized(message?: string, requestId?: string): Response {
-  return error('UNAUTHORIZED', message ?? kitM('kit_authRequired'), 401, requestId)
+  return error(HaiCommonError.UNAUTHORIZED.code, message ?? kitM('kit_authRequired'), 401, requestId)
 }
 
 /**
@@ -170,7 +182,7 @@ export function unauthorized(message?: string, requestId?: string): Response {
  *
  * @param message - 错误消息，默认 `'Access denied'`
  * @param requestId - 可选请求 ID
- * @returns error code 为 `'FORBIDDEN'` 的 JSON Response
+ * @returns error code 为 `HaiCommonError.FORBIDDEN.code` 的 JSON Response
  * @example
  * ```ts
  * import { kit } from '@h-ai/kit'
@@ -180,7 +192,7 @@ export function unauthorized(message?: string, requestId?: string): Response {
  * ```
  */
 export function forbidden(message?: string, requestId?: string): Response {
-  return error('FORBIDDEN', message ?? kitM('kit_accessDenied'), 403, requestId)
+  return error(HaiCommonError.FORBIDDEN.code, message ?? kitM('kit_accessDenied'), 403, requestId)
 }
 
 /**
@@ -188,7 +200,7 @@ export function forbidden(message?: string, requestId?: string): Response {
  *
  * @param message - 错误消息，默认 `'Resource not found'`
  * @param requestId - 可选请求 ID
- * @returns error code 为 `'NOT_FOUND'` 的 JSON Response
+ * @returns error code 为 `HaiCommonError.NOT_FOUND.code` 的 JSON Response
  * @example
  * ```ts
  * import { kit } from '@h-ai/kit'
@@ -198,7 +210,7 @@ export function forbidden(message?: string, requestId?: string): Response {
  * ```
  */
 export function notFound(message?: string, requestId?: string): Response {
-  return error('NOT_FOUND', message ?? kitM('kit_resourceNotFound'), 404, requestId)
+  return error(HaiCommonError.NOT_FOUND.code, message ?? kitM('kit_resourceNotFound'), 404, requestId)
 }
 
 /**
@@ -206,7 +218,7 @@ export function notFound(message?: string, requestId?: string): Response {
  *
  * @param message - 冲突描述（如重复创建等）
  * @param requestId - 可选请求 ID
- * @returns error code 为 `'CONFLICT'` 的 JSON Response
+ * @returns error code 为 `HaiCommonError.CONFLICT.code` 的 JSON Response
  * @example
  * ```ts
  * import { kit } from '@h-ai/kit'
@@ -216,7 +228,7 @@ export function notFound(message?: string, requestId?: string): Response {
  * ```
  */
 export function conflict(message: string, requestId?: string): Response {
-  return error('CONFLICT', message, 409, requestId)
+  return error(HaiCommonError.CONFLICT.code, message, 409, requestId)
 }
 
 /**
@@ -224,7 +236,7 @@ export function conflict(message: string, requestId?: string): Response {
  *
  * @param errors - 字段级别的验证错误列表
  * @param requestId - 可选请求 ID
- * @returns error code 为 `'VALIDATION_ERROR'`，details 包含 `errors` 数组
+ * @returns error code 为 `HaiCommonError.VALIDATION_ERROR.code`，cause 仅包含 field/message
  * @example
  * ```ts
  * import { kit } from '@h-ai/kit'
@@ -237,7 +249,12 @@ export function validationError(
   errors: Array<{ field: string, message: string }>,
   requestId?: string,
 ): Response {
-  return error('VALIDATION_ERROR', kitM('kit_validationFailed'), 422, requestId, { errors })
+  return fromError({
+    ...HaiCommonError.VALIDATION_ERROR,
+    message: kitM('kit_validationFailed'),
+    httpStatus: 422,
+    cause: errors,
+  }, requestId)
 }
 
 /**
@@ -245,7 +262,7 @@ export function validationError(
  *
  * @param message - 错误消息，默认 `'Internal server error'`
  * @param requestId - 可选请求 ID
- * @returns error code 为 `'INTERNAL_ERROR'` 的 JSON Response
+ * @returns error code 为 `HaiCommonError.INTERNAL_ERROR.code` 的 JSON Response
  * @example
  * ```ts
  * import { kit } from '@h-ai/kit'
@@ -255,7 +272,7 @@ export function validationError(
  * ```
  */
 export function internalError(message?: string, requestId?: string): Response {
-  return error('INTERNAL_ERROR', message ?? kitM('kit_internalError'), 500, requestId)
+  return error(HaiCommonError.INTERNAL_ERROR.code, message ?? kitM('kit_internalError'), 500, requestId)
 }
 
 /**
@@ -285,7 +302,7 @@ export function redirect(url: string, status: 301 | 302 | 303 | 307 | 308 = 302)
  * 将 HaiResult<T> 转换为标准 API Response
  *
  * 成功时返回 200 ok(data)，失败时从 error 对象中提取 code、message，
- * 并根据 httpStatusMap 映射 HTTP 状态码（未命中时默认 400）。
+ * 并根据 httpStatusMap 或错误定义映射 HTTP 状态码；未知状态按 500 安全处理。
  *
  * @param result - core HaiResult 对象（{ success, data } 或 { success: false, error }）
  * @param httpStatusMap - 模块导出的错误码 → HTTP 状态码映射表（如 IamErrorHttpStatus）
@@ -308,7 +325,9 @@ export function fromResult<T>(
     return ok(result.data, requestId)
   }
 
-  const status = httpStatusMap?.[result.error.code] ?? (typeof result.error.httpStatus === 'number' ? result.error.httpStatus : 400)
+  const status = httpStatusMap?.[result.error.code] ?? (typeof result.error.httpStatus === 'number'
+    ? result.error.httpStatus
+    : 500)
   return fromError({ ...result.error, httpStatus: status }, requestId)
 }
 
@@ -331,5 +350,18 @@ export function fromError(
 ): Response {
   const safe = core.error.toPublic(haiError, requestId)
   core.logger.error('API operation failed', { traceId: safe.traceId, error: haiError })
-  return error(String(safe.code), safe.message, safe.httpStatus ?? 400, safe.traceId)
+  // 已经过公开边界过滤，直接保留安全字段；再次调用 error 会丢失校验详情并重复记日志。
+  const response: ApiResponse = {
+    success: false,
+    error: {
+      ...safe,
+      code: String(safe.code),
+      httpStatus: safe.httpStatus ?? 500,
+    },
+    requestId: safe.traceId,
+  }
+  return new Response(JSON.stringify(response), {
+    status: safe.httpStatus ?? 500,
+    headers: { 'Content-Type': 'application/json', 'X-Trace-Id': safe.traceId! },
+  })
 }

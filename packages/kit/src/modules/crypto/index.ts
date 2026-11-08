@@ -5,6 +5,5 @@
  * @module index
  */
 
-export * from './kit-crypto-helpers.js'
 export * from './kit-crypto-types.js'
 export * from './kit-transport-middleware.js'

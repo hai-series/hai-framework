@@ -6,8 +6,9 @@
  */
 
 import type { RequestEvent, RequestHandler } from '@sveltejs/kit'
-import { core } from '@h-ai/core'
-import { internalError } from './kit-response.js'
+import { HaiCommonError } from '@h-ai/core'
+import { kitM } from './kit-i18n.js'
+import { fromError } from './kit-response.js'
 import { isResponseLike, isSvelteKitControlFlow } from './kit-utils.js'
 
 /**
@@ -46,22 +47,13 @@ export function handler(fn: (event: RequestEvent) => Promise<Response> | Respons
         throw error
       }
 
-      const normalizedError = error instanceof Error
-        ? {
-            name: error.name,
-            message: error.message,
-            stack: error.stack,
-            cause: error.cause,
-          }
-        : error
-
-      core.logger.error('Request handler error', {
-        error: normalizedError,
-        path: event.url.pathname,
-        method: event.request.method,
+      return fromError({
+        ...HaiCommonError.INTERNAL_ERROR,
+        message: kitM('kit_internalError'),
+        // 由 Core 统一规范化原始异常，保留驱动码和 AggregateError 的子错误。
+        cause: error,
+        ext: { path: event.url.pathname, method: event.request.method },
       })
-
-      return internalError()
     }
   }
 }

@@ -8,14 +8,17 @@
 
 import type { AuditActorSnapshot } from '@h-ai/audit'
 import type { RequestAccessCheck } from '@h-ai/core'
-import type { Handle, RequestEvent, ResolveOptions } from '@sveltejs/kit'
+import type { RequestEvent } from '@sveltejs/kit'
+import type { Handle, ResolveOptions } from '@sveltejs/kit/hooks'
 import type { GuardConfig, GuardResult, HandleConfig, Middleware, MiddlewareContext, SessionData } from '../kit-types.js'
 import type { CookieProxyConfig } from './kit-cookie-proxy.js'
+import process from 'node:process'
 import { audit } from '@h-ai/audit'
 import { core, err, HaiCommonError } from '@h-ai/core'
 import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { configureAuth, getAccessToken } from '../kit-auth.js'
 import { kitM } from '../kit-i18n.js'
+import { fromError } from '../kit-response.js'
 import { isSvelteKitControlFlow } from '../kit-utils.js'
 import { loggingMiddleware as loggingMiddlewareFn } from '../middleware/kit-logging.js'
 import { rateLimitMiddleware as rateLimitMiddlewareFn } from '../middleware/kit-ratelimit.js'
@@ -106,7 +109,9 @@ export function createHandle(config: HandleConfig = {}): Handle {
   // ── 构建中间件链 ──
   const builtinMiddleware: Middleware[] = []
   if (loggingConfig) {
-    const logOpts = typeof loggingConfig === 'object' ? loggingConfig : { logBody: false }
+    const logOpts = typeof loggingConfig === 'object'
+      ? loggingConfig
+      : { logBody: false }
     builtinMiddleware.push(loggingMiddlewareFn(logOpts))
   }
   if (rateLimitConfig) {
@@ -116,7 +121,10 @@ export function createHandle(config: HandleConfig = {}): Handle {
       maxRequests: rateLimitConfig.maxRequests ?? 100,
     }))
   }
-  const allMiddleware = [...builtinMiddleware, ...customMiddleware]
+  const allMiddleware = [
+    ...builtinMiddleware,
+    ...customMiddleware,
+  ]
 
   // ── 传输加密中间件单独包裹整个 handle 流程 ──
   const transportMiddleware = buildTransportMiddleware(cryptoConfig, checkAccess ? checkAccess.encryption : undefined)
@@ -126,7 +134,9 @@ export function createHandle(config: HandleConfig = {}): Handle {
 
   return async ({ event, resolve }) => {
     const suppliedRequestId = event.request.headers.get('x-request-id')
-    const requestId = suppliedRequestId && /^[\w.:-]{1,128}$/.test(suppliedRequestId) ? suppliedRequestId : generateId('req')
+    const requestId = suppliedRequestId && /^[\w.:-]{1,128}$/.test(suppliedRequestId)
+      ? suppliedRequestId
+      : generateId('req')
     let clientAddress: string | undefined
     try {
       clientAddress = event.getClientAddress()
@@ -134,16 +144,26 @@ export function createHandle(config: HandleConfig = {}): Handle {
     catch { /* 静态预渲染等宿主可能没有连接地址，不能改信任请求转发头。 */ }
     const resolvedAddress = resolveIp(event.request, clientAddress)
     if (resolvedAddress !== clientAddress) {
-      // IAM、审计、限流及业务路由读取同一可信地址；无效代理链不能降级为代理身份。
-      event.getClientAddress = () => {
-        if (!resolvedAddress)
-          throw new Error('Trusted client address is unavailable')
-        return resolvedAddress
+      // 向下游传递新的请求视图，不修改 SvelteKit 只读事件；无效链不能降级为代理身份。
+      event = {
+        ...event,
+        getClientAddress: () => {
+          if (!resolvedAddress)
+            throw new Error('Trusted client address is unavailable')
+          return resolvedAddress
+        },
       }
     }
     clientAddress = resolvedAddress
-    const accessDecision = checkAccess ? checkAccess(event.url.pathname, event.request.method, clientAddress) : undefined
-    return core.context.run({ requestId, userId: undefined, scopeId: undefined, jobId: undefined }, () => audit.withContext({
+    const accessDecision = checkAccess
+      ? checkAccess(event.url.pathname, event.request.method, clientAddress)
+      : undefined
+    return core.context.run({
+      requestId,
+      userId: undefined,
+      scopeId: undefined,
+      jobId: undefined,
+    }, () => audit.withContext({
       actor: null,
       requestId,
       traceId: requestId,
@@ -164,12 +184,26 @@ export function createHandle(config: HandleConfig = {}): Handle {
           resource,
           userId: actor?.id ?? null,
           actorSnapshot: actor,
-          category: /\/(?:auth|iam|audit)(?:\/|$)/.test(resource) ? 'system' : 'business',
-          outcome: guardDenied || [401, 403, 423, 429].includes(status) ? 'denied' : requestFailed || status >= 400 ? 'failure' : 'success',
+          category: /\/(?:auth|iam|audit)(?:\/|$)/.test(resource)
+            ? 'system'
+            : 'business',
+          outcome: guardDenied || [401, 403, 423, 429].includes(status)
+            ? 'denied'
+            : requestFailed || status >= 400
+              ? 'failure'
+              : 'success',
           details: { method: event.request.method, status },
-        }, { read: ['GET', 'HEAD', 'OPTIONS'].includes(event.request.method) })
+        }, {
+          read: ['GET', 'HEAD', 'OPTIONS'].includes(event.request.method),
+        })
         if (!written.success)
           core.logger.error('Request audit failed', { requestId, resource, error: written.error })
+      }
+      if (cookieProxyConfig) {
+        event = {
+          ...event,
+          cookies: createEncryptedCookieProxy(event.cookies, cookieProxyConfig),
+        }
       }
       const context: MiddlewareContext = {
         event,
@@ -181,27 +215,33 @@ export function createHandle(config: HandleConfig = {}): Handle {
       const locals = event.locals as unknown as Record<string, unknown>
       locals.requestId = requestId
 
-      // ── Cookie 加密代理（透明） ──
-      if (cookieProxyConfig) {
-        const proxiedCookies = createEncryptedCookieProxy(event.cookies, cookieProxyConfig)
-        Object.defineProperty(event, 'cookies', {
-          value: proxiedCookies,
-          writable: true,
-          configurable: true,
-        })
-      }
-
       const runRequest = async (): Promise<Response> => {
         try {
           if (accessDecision && !accessDecision.allowed) {
             guardDenied = true
-            core.logger.info('Request access policy denied', { ruleId: accessDecision.ruleId, reason: accessDecision.reason, method: event.request.method, ipAddress: clientAddress })
-            return Response.json({ success: false, error: { ...HaiCommonError.REQUEST_ACCESS_DENIED, message: core.i18n.coreM('core_requestAccessDenied'), traceId: requestId } }, { status: 403 })
+            core.logger.info('Request access policy denied', {
+              ruleId: accessDecision.ruleId,
+              reason: accessDecision.reason,
+              method: event.request.method,
+              ipAddress: clientAddress,
+            })
+            return Response.json({
+              success: false,
+              error: {
+                ...HaiCommonError.REQUEST_ACCESS_DENIED,
+                message: core.i18n.coreM('core_requestAccessDenied'),
+                traceId: requestId,
+              },
+            }, { status: 403 })
           }
           if (!transportMiddleware && event.request.method !== 'OPTIONS'
             && (event.request.headers.has(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) || event.request.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER))
             && checkAccess && checkAccess.encryption(event.url.pathname, event.request.method) === 'disabled') {
-            return Response.json(err({ ...HaiCommonError.VALIDATION_ERROR, message: kitM('kit_transportPlaintextRequired'), traceId: requestId }), { status: 400 })
+            return Response.json(err({
+              ...HaiCommonError.VALIDATION_ERROR,
+              message: kitM('kit_transportPlaintextRequired'),
+              traceId: requestId,
+            }), { status: 400 })
           }
           // ── A2A 端点拦截（在认证/守卫之前，A2A 有专用认证） ──
           if (a2aResolved) {
@@ -224,7 +264,9 @@ export function createHandle(config: HandleConfig = {}): Handle {
             }
           }
           context.session = session
-          actor = session ? { id: session.userId, username: session.username, roles: session.roles } : null
+          actor = session
+            ? { id: session.userId, username: session.username, roles: session.roles }
+            : null
 
           return await audit.withContext({ actor }, () => core.context.run({ userId: session?.userId }, async () => {
             // ── 执行守卫 ──
@@ -240,20 +282,13 @@ export function createHandle(config: HandleConfig = {}): Handle {
                   })
                 }
 
-                return new Response(
-                  JSON.stringify({
-                    success: false,
-                    error: {
-                      code: 'FORBIDDEN',
-                      message: guardResult.message ?? kitM('kit_accessDenied'),
-                    },
-                    requestId,
-                  }),
-                  {
-                    status: guardResult.status ?? 403,
-                    headers: { 'Content-Type': 'application/json' },
-                  },
-                )
+                return fromError({
+                  ...(guardResult.status === 401
+                    ? HaiCommonError.UNAUTHORIZED
+                    : HaiCommonError.FORBIDDEN),
+                  message: guardResult.message ?? kitM('kit_accessDenied'),
+                  httpStatus: guardResult.status ?? 403,
+                }, requestId)
               }
             }
 
@@ -277,28 +312,17 @@ export function createHandle(config: HandleConfig = {}): Handle {
           }
 
           requestFailed = true
-          core.logger.error('Request failed', { requestId, error })
-
           if (onError) {
+            core.logger.error('Request failed', { requestId, error })
             return onError(error, event)
           }
 
           // 默认错误响应
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error: {
-                code: 'INTERNAL_ERROR',
-                message: core.error.formatMessage({ message: kitM('kit_internalError'), traceId: requestId }),
-                traceId: requestId,
-              },
-              requestId,
-            }),
-            {
-              status: 500,
-              headers: { 'Content-Type': 'application/json' },
-            },
-          )
+          return fromError({
+            ...HaiCommonError.INTERNAL_ERROR,
+            message: kitM('kit_internalError'),
+            cause: error,
+          }, requestId)
         }
       }
 
@@ -470,11 +494,12 @@ function buildCookieProxyConfig(
   if (!cryptoConfig?.encryptedCookies?.length)
     return null
 
-  // eslint-disable-next-line node/prefer-global/process
-  const key = cryptoConfig.cookieEncryptionKey ?? (typeof process !== 'undefined' ? process.env?.HAI_KIT_COOKIE_KEY : undefined)
+  const key = cryptoConfig.cookieEncryptionKey ?? process.env.HAI_KIT_COOKIE_KEY
   if (!key) {
     throw new Error('Cookie encryption requires crypto.cookieEncryptionKey or HAI_KIT_COOKIE_KEY')
   }
+  if (!/^[\da-f]{32}$/i.test(key))
+    throw new Error('Cookie encryption requires a 32-character hexadecimal key')
 
   return {
     names: new Set(cryptoConfig.encryptedCookies),

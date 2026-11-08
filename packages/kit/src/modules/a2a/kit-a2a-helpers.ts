@@ -16,11 +16,11 @@ import { createA2AApiKeyAuthenticator } from './kit-a2a-auth.js'
  *
  * 返回当前 Agent 的 Agent Card（JSON），通常挂载在 `/.well-known/agent-card.json`。
  *
- * @param getAgentCard - 获取 Agent Card 的回调（通常调用 `ai.a2a.getAgentCard()`）
+ * @param getAgentCard - 返回标准 ProtoJSON Agent Card 文档的回调（成功时取 `ai.a2a.getAgentCard().data`）
  * @returns SvelteKit GET 处理器
  * @example 模块内部上下文
  * ```ts
- * const handler = createAgentCardHandler(() => ({ name: 'Example agent', url: 'https://agent.example.com/a2a' }))
+ * const handler = createAgentCardHandler(() => ({ name: 'Example agent', supportedInterfaces: [{ url: 'https://agent.example.com/a2a', protocolBinding: 'JSONRPC', protocolVersion: '1.0' }] }))
  * void handler
  * ```
  */
@@ -67,8 +67,14 @@ export function createA2AHandler(
         ? config.authenticate
         : createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })
       const authResult = await authFn(event)
-      if (!authResult)
-        return Response.json({ error: { code: 'A2A_AUTH_FAILED', message: kitM('kit_a2aAuthFailed') } }, { status: 401 })
+      if (!authResult) {
+        return Response.json({
+          error: {
+            code: 'A2A_AUTH_FAILED',
+            message: kitM('kit_a2aAuthFailed'),
+          },
+        }, { status: 401 })
+      }
       context = authResult
     }
 
@@ -78,7 +84,14 @@ export function createA2AHandler(
       requestBody = await event.request.json()
     }
     catch {
-      return Response.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: kitM('kit_a2aParseError') } }, { status: 400 })
+      return Response.json({
+        jsonrpc: '2.0',
+        id: null,
+        error: {
+          code: -32700,
+          message: kitM('kit_a2aParseError'),
+        },
+      }, { status: 400 })
     }
     const result = await handleRequest(requestBody, context)
 

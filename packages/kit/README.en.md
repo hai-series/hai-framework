@@ -8,6 +8,8 @@
 
 `@h-ai/kit` integrates SvelteKit with hai-framework, providing a shared request pipeline and same-origin endpoint utilities:
 
+Use runtime operations through `kit.xx`. Public namespace types are `KitFunctions` on the server and `BrowserKitFunctions` in the browser. The browser condition exposes only clients, CRUD, page tokens, and default locale operations. `AuthCookieWriter` describes the current request's minimal server authentication cookie writer. Re-exported methods and namespaces support consumer declaration emission without importing internal helpers.
+
 ## Core features
 
 - Handle hook composition (`createHandle` / `sequence`)
@@ -27,7 +29,7 @@
 ### Installation
 
 ```bash
-npm install @h-ai/kit @h-ai/core sm-crypto@0.5.7
+npm install @h-ai/kit @h-ai/core sm-crypto@0.5.8
 npm install svelte @sveltejs/kit zod
 npm install -D @sveltejs/vite-plugin-svelte vite
 ```
@@ -41,44 +43,43 @@ npm install -D @sveltejs/vite-plugin-svelte vite
 
 #### Project configuration
 
-**svelte.config.js**：
-
-```js
-import adapter from '@sveltejs/adapter-node'
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
-
-const config = {
-  preprocess: [vitePreprocess()],
-  compilerOptions: { runes: true },
-  kit: {
-    adapter: adapter(),
-    // 双构建模式：import { createAdapter } from '@h-ai/kit/adapter'
-    // adapter: await createAdapter(),
-  },
-}
-
-export default config
-```
-
 **vite.config.ts**：
 
 ```ts
+import adapter from '@sveltejs/adapter-node'
 import { sveltekit } from '@sveltejs/kit/vite'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [sveltekit(), tailwindcss()],
-  optimizeDeps: { exclude: ['bits-ui'] },
-  ssr: { noExternal: ['@h-ai/ui', '@h-ai/kit'], external: ['@h-ai/core', 'sm-crypto'] },
+  plugins: [
+    sveltekit({
+      adapter: adapter(),
+      preprocess: [
+        vitePreprocess()
+      ],
+      compilerOptions: { runes: true },
+      // 绝对路径保持 SSR 与浏览器端认证、加密路径一致。
+      paths: { base: '', relative: false },
+    }),
+    tailwindcss(),
+  ],
+  optimizeDeps: {
+    exclude: ['bits-ui']
+  },
+  ssr: {
+    noExternal: ['@h-ai/ui', '@h-ai/kit'],
+    external: ['@h-ai/core', 'sm-crypto']
+  },
 })
 ```
 
-When using Crypto or Kit/IAM, include `sm-crypto@0.5.7` in application production dependencies. CLI projects already do this; for manual setup, run `pnpm add sm-crypto@0.5.7`. The external option alone is insufficient: adapter-node also uses direct production dependencies to preserve native package loading.
+When using Crypto or Kit/IAM, include `sm-crypto@0.5.8` in application production dependencies. CLI projects already do this; for manual setup, run `pnpm add sm-crypto@0.5.8`. The external option alone is insufficient: adapter-node also uses direct production dependencies to preserve native package loading.
 
 #### Build the request pipeline
 
-When mounting an application under `/yyy/`, keep SvelteKit's `kit.paths.base` and the actual URLs used by guards consistent. Prefix `protectedPaths`, `publicPaths` and `loginUrl` with `base` from `$app/paths`, for example `${base}/api/*`. Authentication pages use ``kit.client.createAuthActions({ basePath: `${base}/api/auth` })``. Kit recognizes application `/api/*` routes through route groups and mount prefixes: unauthenticated APIs return 401, while pages follow the configured login redirect. Generated templates include this wiring.
+When mounting an application under `/yyy/`, keep SvelteKit's `paths.base` and the actual URLs used by guards consistent. Prefix `protectedPaths`, `publicPaths` and `loginUrl` with `resolve('/').replace(/\/$/, '')` from `$app/paths` with `paths.relative: false`, for example `${base}/api/*`. Authentication pages use ``kit.client.createAuthActions({ basePath: `${base}/api/auth` })``. Kit recognizes application `/api/*` routes through route groups and mount prefixes: unauthenticated APIs return 401, while pages follow the configured login redirect. Generated templates include this wiring.
 
 The Hook examples assume the application has initialized its database, shared cache and IAM and checked every result. The application owns resource cleanup; do not initialize modules per request.
 
@@ -100,7 +101,11 @@ const haiHandle = kit.createHandle({
     protectedPaths: ['/admin/*', '/api/*'],
     publicPaths: ['/api/auth/*', '/api/public/*'],
   },
-  rateLimit: { windowMs: 60_000, maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' }) },
+  rateLimit: {
+    windowMs: 60_000,
+    maxRequests: 100,
+    store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' })
+  },
   logging: true,
 })
 
@@ -141,7 +146,7 @@ export const { apiFetch } = client
 
 ```typescript
 // 使用
-import { apiFetch } from '$lib/utils/api'
+import { apiFetch } from '#lib/utils/api.js'
 
 const response = await apiFetch('/api/users', { method: 'GET' })
 ```
@@ -155,17 +160,19 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 kit delegates transport encryption to `@h-ai/crypto`. The server creates a manager with `crypto.transport.createServer({ serverKeyRing, keyStore })`; the browser installs a same-origin fetch wrapper with one call to `kit.client.installBrowserTransport(kitConfig, { crypto })`. Servers must also inject a managed key ring and shared registry.
 
-For subdirectory hosting, read `base` from `$app/paths`: pass `basePath: base` in server `crypto.transport`, use `installBrowserTransport(kitConfig, { crypto, basePath: base })` in the browser, and set the same `transport.basePath` for a standalone `kit.client.create`. The default empty string means the domain root. This runtime argument comes from the host build path, without a duplicate YAML setting or inference from forwarding headers. Exchange paths, exclusions and route budgets still use full request paths. CLI SSR templates assemble both sides.
+For subdirectory hosting, read `resolve('/').replace(/\/$/, '')` from `$app/paths` with `paths.relative: false`: pass `basePath: base` in server `crypto.transport`, use `installBrowserTransport(kitConfig, { crypto, basePath: base })` in the browser, and set the same `transport.basePath` for a standalone `kit.client.create`. The default empty string means the domain root. This runtime argument comes from the host build path, without a duplicate YAML setting or inference from forwarding headers. Exchange paths, exclusions and route budgets still use full request paths. CLI SSR templates assemble both sides.
 
 **src/hooks.server.ts**：
 
 ```ts
-import { base } from '$app/paths'
-import { appKitConfig } from '$lib/server/kit-config'
+import { resolve } from '$app/paths'
 import { cache } from '@h-ai/cache'
 import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+import { appKitConfig } from '#lib/server/kit-config.js'
+
+const base = resolve('/').replace(/\/$/, '')
 
 const cryptoReady = await crypto.init()
 if (!cryptoReady.success)
@@ -203,12 +210,14 @@ export const handle = kit.createHandle({
 
 ```svelte
 <script lang='ts'>
-  import { browser } from '$app/environment'
-  import { base } from '$app/paths'
+  import { browser } from '$app/env'
+  import { resolve } from '$app/paths'
   import { page } from '$app/state'
   import { crypto } from '@h-ai/crypto'
   import { kit } from '@h-ai/kit'
   import { untrack } from 'svelte'
+
+  const base = resolve('/').replace(/\/$/, '')
 
   // 一次性安装：内部按 _kit.yml 决定是否启用 transport，并预热 crypto
   if (browser) {
@@ -276,7 +285,7 @@ export const publicKitConfig = { transport: appKitConfig.transport }
 Pass the public projection through `src/routes/+layout.server.ts` to the browser layout above, without importing the server configuration into browser code:
 
 ```ts
-import { publicKitConfig } from '$lib/server/kit-config'
+import { publicKitConfig } from '#lib/server/kit-config.js'
 
 export function load() {
   return { kitConfig: publicKitConfig }
@@ -307,6 +316,10 @@ Request/response summaries use the `trace` level. Logging is enabled by default 
 Automatic request auditing runs only when `audit.isInitialized`. Static sites and applications without Audit need not initialize it for this handle. State is checked per request, so modules may initialize after the handle is created. Applications selecting Audit must still check `audit.init()` and stop startup on failure. Explicit `audit.log/capture` calls retain their uninitialized errors, and initialized modules still report actual write failures as `Request audit failed`. Mandatory business auditing must check explicit results and enforce the application's transaction rules.
 
 With `crypto.encryptedCookies`, also provide `crypto.cookieEncryptionKey` or `HAI_KIT_COOKIE_KEY`. Missing keys fail immediately in `createHandle()`. Plaintext, damaged ciphertext, or decryption failures for protected cookies are treated as absent; encryption failures never fall back to writing plaintext.
+
+The key must contain 32 hexadecimal characters. Cookies use separately derived SM4-CBC and HMAC-SHA256 keys, authenticating the version, cookie name, IV, and ciphertext before decryption to reject tampering and cross-name substitution. Legacy unauthenticated cookies become invalid after upgrading and require signing in again; there is no legacy fallback.
+
+Unused Crypto Helpers without a runtime entry or real consumers have been removed, along with the `CryptoServiceLike`, `EncryptedCookieConfig`, `CryptoCsrfConfig`, and `WebhookVerifyConfig` type exports. Protect cookies through the `kit.createHandle` configuration above; use the actual public `@h-ai/crypto` contract for other cryptographic operations.
 
 Authentication cookies default to `Secure` when either `NODE_ENV` or `HAI_CORE_ENV` is `production`; `HAI_E2E` / `HAI_E2E_MOCK` do not relax cookie security. Production rate limiting recognizes both flags; only explicit test switches permit memory counters.
 
@@ -382,6 +395,13 @@ export const PATCH = handler
 ```
 
 ## Error messages and correlated logs
+
+`kit.response.fromError/fromResult` preserve safe field-validation `cause`, explicitly public `publicExt` (mapped to `ext`), and `httpStatus`. Internal causes and extensions remain private. Each module failure produces one correlated log entry.
+
+HTTP/UI boundaries expose business messages only for explicit valid 4xx statuses. Missing or invalid `httpStatus` is treated as 500 with a safe message. Custom business errors must carry a complete error definition or an explicit status.
+
+`kit.response.validationError(errors)` uses the same allowlist: `error.cause` contains only localized `field/message` pairs. It does not echo rejected values, SQL or additional fields, and no longer uses `details.errors`.
+Shortcut responses, authentication guards and rate limiting use `HaiCommonError` codes with `httpStatus`, `traceId` and `X-Trace-Id`. Unauthenticated requests use `UNAUTHORIZED.code`, denied permissions use `FORBIDDEN.code`, and throttled requests use `RATE_LIMIT_EXCEEDED.code` (429). Rate limit storage failures return a safe 503 and retain the original cause in server logs.
 
 HTTP errors carry safe localized messages and a reference ID. ToastContainer hides the ID by default and reveals it through its diagnostic icon. The same ID remains in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
 

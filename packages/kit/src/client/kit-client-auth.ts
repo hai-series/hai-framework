@@ -38,8 +38,15 @@ export function createKitAuthActions(options: { apiFetch?: KitClient['apiFetch']
   }
   async function post(path: string, input: object, init: Pick<RequestInit, 'keepalive'> = {}): Promise<HaiResult<unknown>> {
     // void 成功响应在 JSON 中省略 data，统一还原为 HaiResult 的 data: undefined。
-    const result = await request(z.unknown().optional(), `${base}/${path}`, { ...init, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }, { recoverSession: false })
-    return result.success ? ok(result.data) : result
+    const result = await request(z.unknown().optional(), `${base}/${path}`, {
+      ...init,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }, { recoverSession: false })
+    return result.success
+      ? ok(result.data)
+      : result
   }
   return {
     bindPageExit(options: { enabled?: boolean } = {}) {
@@ -61,17 +68,36 @@ export function createKitAuthActions(options: { apiFetch?: KitClient['apiFetch']
     },
     async createCaptcha(input: z.input<typeof IamCreateCaptchaInputSchema>) {
       const result = await post('captcha', input)
-      return result.success ? ok(IamCaptchaChallengeSchema.parse(result.data)) : result
+      return result.success
+        ? ok(IamCaptchaChallengeSchema.parse(result.data))
+        : result
     },
     publicConfig(): Promise<HaiResult<IamPublicConfig | null>> {
       return request(IamPublicConfigSchema.nullable(), `${base}/config`, undefined, { recoverSession: false })
     },
     login(input: IamLoginInput & { method?: 'password' | 'ldap' | 'email' | 'sms', code?: string }) {
-      if (input.method === 'ldap')
-        return post('login/ldap', { username: input.identifier, password: input.password, captcha: input.captcha, expectedUserId: input.expectedUserId })
-      if (input.method === 'email' || input.method === 'sms')
-        return post('login/otp', { identifier: input.identifier, code: input.code, captcha: input.captcha, expectedUserId: input.expectedUserId })
-      return post('login', { identifier: input.identifier, password: input.password, captcha: input.captcha, expectedUserId: input.expectedUserId })
+      if (input.method === 'ldap') {
+        return post('login/ldap', {
+          username: input.identifier,
+          password: input.password,
+          captcha: input.captcha,
+          expectedUserId: input.expectedUserId,
+        })
+      }
+      if (input.method === 'email' || input.method === 'sms') {
+        return post('login/otp', {
+          identifier: input.identifier,
+          code: input.code,
+          captcha: input.captcha,
+          expectedUserId: input.expectedUserId,
+        })
+      }
+      return post('login', {
+        identifier: input.identifier,
+        password: input.password,
+        captcha: input.captcha,
+        expectedUserId: input.expectedUserId,
+      })
     },
     register: (input: IamRegisterInput) => post('register', { ...input, confirmPassword: input.password }),
     sendOtp: (identifier: string, options?: { captcha?: string }) => post('otp/send', { identifier, ...options }),
@@ -79,7 +105,11 @@ export function createKitAuthActions(options: { apiFetch?: KitClient['apiFetch']
     confirmPasswordReset: (token: string, newPassword: string) => post('password-reset/confirm', { token, newPassword }),
     renewPassword: (input: { identifier: string, password: string, newPassword: string, captcha?: string }) => post('password/renew', input),
     reauthenticate(password: string, operation: string) {
-      return request(IamReauthenticationProofSchema, `${base}/reauthenticate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password, operation }) })
+      return request(IamReauthenticationProofSchema, `${base}/reauthenticate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password, operation }),
+      })
     },
   }
 }

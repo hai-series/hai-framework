@@ -12,8 +12,9 @@ import type { Middleware, RateLimitConfig } from '../kit-types.js'
 import { createHash } from 'node:crypto'
 import { isIP } from 'node:net'
 import process from 'node:process'
-import { core } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { kitM } from '../kit-i18n.js'
+import { fromError } from '../kit-response.js'
 
 /**
  * 速率限制存储条目
@@ -106,14 +107,18 @@ export function createCacheRateLimitStore(backend: RateLimitCache, options: { na
       for (let attempt = 0; attempt < 64; attempt++) {
         const read = await backend.kv.get<RateLimitEntry>(cacheKey)
         if (!read.success)
-          throw new Error('Rate limit cache read failed')
+          throw new Error('Rate limit cache read failed', { cause: read.error })
         const old = read.data ?? undefined
         if (old && (!Number.isSafeInteger(old.count) || old.count <= 0 || old.count >= Number.MAX_SAFE_INTEGER || !Number.isSafeInteger(old.resetAt)))
           throw new Error('Invalid rate limit state')
-        const next = old ? { count: old.count + 1, resetAt: old.resetAt } : { count: 1, resetAt: Date.now() + windowMs }
-        const written = await backend.kv.compareAndSwap(cacheKey, old, next, old ? { keepTtl: true } : { px: windowMs })
+        const next = old
+          ? { count: old.count + 1, resetAt: old.resetAt }
+          : { count: 1, resetAt: Date.now() + windowMs }
+        const written = await backend.kv.compareAndSwap(cacheKey, old, next, old
+          ? { keepTtl: true }
+          : { px: windowMs })
         if (!written.success)
-          throw new Error('Rate limit cache commit failed')
+          throw new Error('Rate limit cache commit failed', { cause: written.error })
         if (written.data)
           return next
       }
@@ -150,7 +155,12 @@ function clientKey(address: string): string {
   if (!mapped)
     return normalized
   const value = Number.parseInt(mapped[1]!, 16) * 65536 + Number.parseInt(mapped[2]!, 16)
-  return [value >>> 24, (value >>> 16) & 255, (value >>> 8) & 255, value & 255].join('.')
+  return [
+    value >>> 24,
+    (value >>> 16) & 255,
+    (value >>> 8) & 255,
+    value & 255,
+  ].join('.')
 }
 
 /**
@@ -269,9 +279,12 @@ export function rateLimitMiddleware(config: RateLimitConfig): Middleware {
       if (!Number.isSafeInteger(entry.count) || entry.count <= 0 || !Number.isSafeInteger(entry.resetAt))
         throw new TypeError('Invalid atomic rate limit result')
     }
-    catch {
-      core.logger.error('Rate limit store unavailable', { requestId })
-      return new Response(JSON.stringify({ success: false, error: { code: 'RATE_LIMIT_UNAVAILABLE', message: kitM('kit_internalError') }, requestId }), { status: 503, headers: { 'Content-Type': 'application/json' } })
+    catch (cause) {
+      return fromError({
+        ...HaiCommonError.SERVICE_UNAVAILABLE,
+        message: kitM('kit_internalError'),
+        cause,
+      }, requestId)
     }
 
     // 设置速率限制头
@@ -279,32 +292,19 @@ export function rateLimitMiddleware(config: RateLimitConfig): Middleware {
     const resetTime = Math.ceil(entry.resetAt / 1000)
 
     if (entry.count > maxRequests) {
-      core.logger.warn('Rate limit exceeded', { requestId })
-
       if (onLimitReached) {
+        core.logger.warn('Rate limit exceeded', { requestId })
         return onLimitReached(event)
       }
-
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: {
-            code: 'RATE_LIMIT_EXCEEDED',
-            message: kitM('kit_rateLimitExceeded'),
-          },
-          requestId,
-        }),
-        {
-          status: 429,
-          headers: {
-            'Content-Type': 'application/json',
-            'X-RateLimit-Limit': String(maxRequests),
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': String(resetTime),
-            'Retry-After': String(Math.max(1, Math.ceil((entry.resetAt - now) / 1000))),
-          },
-        },
-      )
+      const response = fromError({
+        ...HaiCommonError.RATE_LIMIT_EXCEEDED,
+        message: kitM('kit_rateLimitExceeded'),
+      }, requestId)
+      response.headers.set('X-RateLimit-Limit', String(maxRequests))
+      response.headers.set('X-RateLimit-Remaining', '0')
+      response.headers.set('X-RateLimit-Reset', String(resetTime))
+      response.headers.set('Retry-After', String(Math.max(1, Math.ceil((entry.resetAt - now) / 1000))))
+      return response
     }
 
     const response = await next()

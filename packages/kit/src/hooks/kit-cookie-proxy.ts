@@ -1,12 +1,14 @@
 /**
  * @h-ai/kit — Cookie 加密代理
  *
- * 通过 Proxy 拦截 SvelteKit Cookies 对象的 get/set 方法， 对指定名称的 Cookie 自动进行 SM4-CBC 加解密。
+ * 通过 Proxy 对指定 Cookie 进行 SM4-CBC 加密和 HMAC-SHA256 认证，先验真再解密。
  * @module kit-cookie-proxy
  */
 
 import type { CryptoFunctions } from '@h-ai/crypto'
 import type { Cookies } from '@sveltejs/kit'
+import { Buffer } from 'node:buffer'
+import { createHmac, hkdfSync, timingSafeEqual } from 'node:crypto'
 import { core } from '@h-ai/core'
 
 /**
@@ -36,7 +38,7 @@ export interface CookieProxyConfig {
  * 用于区分已加密和未加密的 Cookie 值，
  * 避免对明文值做解密导致乱码。
  */
-const ENCRYPTED_PREFIX = 'enc:'
+const ENCRYPTED_PREFIX = 'enc:v2:'
 
 /**
  * 创建加密 Cookie 代理
@@ -64,6 +66,14 @@ export function createEncryptedCookieProxy(
 ): Cookies {
   const { names, symmetric, encryptionKey } = config
   const logger = core.logger.child({ module: 'kit', scope: 'cookie-proxy' })
+  if (!/^[\da-f]{32}$/i.test(encryptionKey))
+    throw new Error('Cookie encryption requires a 32-character hexadecimal key')
+  // 从宿主密钥分离加密与认证子密钥；版本、Cookie 名、IV 和密文一起认证。
+  const keys = Buffer.from(hkdfSync('sha256', Buffer.from(encryptionKey, 'hex'), Buffer.alloc(0), 'hai:kit:cookie:v2', 48))
+  const cipherKey = keys.subarray(0, 16).toString('hex')
+  const macKey = keys.subarray(16)
+  const authenticate = (name: string, iv: string, ciphertext: string) =>
+    createHmac('sha256', macKey).update(JSON.stringify(['v2', name, iv, ciphertext])).digest()
 
   return new Proxy(cookies, {
     get(target, prop, receiver) {
@@ -82,17 +92,20 @@ export function createEncryptedCookieProxy(
 
           try {
             const ciphertext = raw.slice(ENCRYPTED_PREFIX.length)
-            // 格式: iv:ciphertext
-            const separatorIndex = ciphertext.indexOf(':')
-            if (separatorIndex === -1) {
+            // 旧版无认证格式不再接受，不能以兼容回退绕过验真。
+            const parts = ciphertext.split(':')
+            if (parts.length !== 3 || !/^[\da-f]{64}$/i.test(parts[2]!)) {
               logger.warn('Encrypted cookie has invalid format', { name })
               return undefined
             }
 
-            const iv = ciphertext.slice(0, separatorIndex)
-            const encrypted = ciphertext.slice(separatorIndex + 1)
+            const [iv, encrypted, signature] = parts as [string, string, string]
+            if (!timingSafeEqual(authenticate(name, iv, encrypted), Buffer.from(signature, 'hex'))) {
+              logger.warn('Cookie authentication failed', { name })
+              return undefined
+            }
 
-            const result = symmetric.decryptWithIV(encrypted, encryptionKey, iv)
+            const result = symmetric.decryptWithIV(encrypted, cipherKey, iv)
             if (!result.success || typeof result.data !== 'string') {
               logger.warn('Cookie decryption failed', { name })
               return undefined
@@ -111,13 +124,13 @@ export function createEncryptedCookieProxy(
       if (prop === 'set') {
         return (name: string, value: string, opts: Parameters<Cookies['set']>[2]) => {
           if (names.has(name)) {
-            const result = symmetric.encryptWithIV(value, encryptionKey)
+            const result = symmetric.encryptWithIV(value, cipherKey)
             if (!result.success || !result.data) {
               logger.error('Cookie encryption failed', { name })
               throw new Error('Cookie encryption failed')
             }
-            // 格式: enc:iv:ciphertext
-            value = `${ENCRYPTED_PREFIX}${result.data.iv}:${result.data.ciphertext}`
+            const { iv, ciphertext } = result.data
+            value = `${ENCRYPTED_PREFIX}${iv}:${ciphertext}:${authenticate(name, iv, ciphertext).toString('hex')}`
           }
 
           return target.set(name, value, opts)
