@@ -5,9 +5,36 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { feedbackViewerFiles } from './feedback-bundle-viewer.js'
 
 const bundleM = core.i18n.createMessageGetter({
-  'zh-CN': { invalid: '问题包格式、容量或完整性校验失败', title: '问题反馈', facts: '采集事实', missing: '缺失材料', user: '用户描述', empty: '未填写', evidence: '证据', attachments: '附件' },
-  'en-US': { invalid: 'The feedback bundle failed format, size or integrity validation', title: 'Feedback report', facts: 'Collected facts', missing: 'Missing evidence', user: 'User description', empty: 'Not provided', evidence: 'Evidence', attachments: 'Attachments' },
-  'ja-JP': { invalid: '問題パッケージの形式、容量または整合性の検証に失敗しました', title: '問題フィードバック', facts: '収集した事実', missing: '不足している資料', user: 'ユーザーの説明', empty: '未入力', evidence: '証拠', attachments: '添付ファイル' },
+  'zh-CN': {
+    invalid: '问题包格式、容量或完整性校验失败',
+    title: '问题反馈',
+    facts: '采集事实',
+    missing: '缺失材料',
+    user: '用户描述',
+    empty: '未填写',
+    evidence: '证据',
+    attachments: '附件',
+  },
+  'en-US': {
+    invalid: 'The feedback bundle failed format, size or integrity validation',
+    title: 'Feedback report',
+    facts: 'Collected facts',
+    missing: 'Missing evidence',
+    user: 'User description',
+    empty: 'Not provided',
+    evidence: 'Evidence',
+    attachments: 'Attachments',
+  },
+  'ja-JP': {
+    invalid: '問題パッケージの形式、容量または整合性の検証に失敗しました',
+    title: '問題フィードバック',
+    facts: '収集した事実',
+    missing: '不足している資料',
+    user: 'ユーザーの説明',
+    empty: '未入力',
+    evidence: '証拠',
+    attachments: '添付ファイル',
+  },
 })
 
 const MAX_FILES = 1024
@@ -45,8 +72,13 @@ function objectFromFile(files: Readonly<Record<string, Uint8Array>>, path: strin
 function evidenceFrom(value: unknown): FeedbackBundleEvidence {
   const record = jsonObject(value)
   if (typeof record.source !== 'string' || typeof record.kind !== 'string' || typeof record.timestamp !== 'number' || !Number.isFinite(record.timestamp))
-    throw new Error('Invalid evidence')
-  for (const key of ['id', 'requestId', 'errorId', 'missingReason']) {
+    throw new TypeError('Invalid evidence')
+  for (const key of [
+    'id',
+    'requestId',
+    'errorId',
+    'missingReason',
+  ]) {
     if (record[key] !== undefined && typeof record[key] !== 'string')
       throw new Error('Invalid evidence field')
   }
@@ -56,12 +88,24 @@ function evidenceFrom(value: unknown): FeedbackBundleEvidence {
     source: record.source,
     kind: record.kind,
     timestamp: record.timestamp,
-    ...(typeof record.id === 'string' ? { id: record.id } : {}),
-    ...(typeof record.sequence === 'number' ? { sequence: record.sequence } : {}),
-    ...(typeof record.requestId === 'string' ? { requestId: record.requestId } : {}),
-    ...(typeof record.errorId === 'string' ? { errorId: record.errorId } : {}),
-    ...(typeof record.missingReason === 'string' ? { missingReason: record.missingReason } : {}),
-    ...(record.data !== undefined ? { data: record.data } : {}),
+    ...(typeof record.id === 'string'
+      ? { id: record.id }
+      : {}),
+    ...(typeof record.sequence === 'number'
+      ? { sequence: record.sequence }
+      : {}),
+    ...(typeof record.requestId === 'string'
+      ? { requestId: record.requestId }
+      : {}),
+    ...(typeof record.errorId === 'string'
+      ? { errorId: record.errorId }
+      : {}),
+    ...(typeof record.missingReason === 'string'
+      ? { missingReason: record.missingReason }
+      : {}),
+    ...(record.data !== undefined
+      ? { data: record.data }
+      : {}),
   }
 }
 
@@ -130,7 +174,14 @@ function parseManifest(value: Record<string, unknown>): FeedbackBundleManifest {
     if (typeof file.path !== 'string' || !safePath(file.path) || file.path === 'manifest.json'
       || typeof file.size !== 'number' || !Number.isSafeInteger(file.size) || file.size < 0
       || typeof file.sha256 !== 'string' || !SHA256.test(file.sha256)
-      || !['report', 'evidence', 'history', 'attachment', 'summary', 'viewer'].includes(String(file.kind))) {
+      || ![
+        'report',
+        'evidence',
+        'history',
+        'attachment',
+        'summary',
+        'viewer',
+      ].includes(String(file.kind))) {
       throw new Error('Invalid manifest file')
     }
     return {
@@ -138,14 +189,28 @@ function parseManifest(value: Record<string, unknown>): FeedbackBundleManifest {
       size: file.size,
       sha256: file.sha256,
       kind: file.kind as FeedbackBundleFile['kind'],
-      ...(typeof file.attachmentId === 'string' ? { attachmentId: file.attachmentId } : {}),
-      ...(typeof file.name === 'string' ? { name: file.name } : {}),
-      ...(typeof file.contentType === 'string' ? { contentType: file.contentType } : {}),
+      ...(typeof file.attachmentId === 'string'
+        ? { attachmentId: file.attachmentId }
+        : {}),
+      ...(typeof file.name === 'string'
+        ? { name: file.name }
+        : {}),
+      ...(typeof file.contentType === 'string'
+        ? { contentType: file.contentType }
+        : {}),
     }
   })
   if (new Set(files.map(file => file.path)).size !== files.length)
     throw new Error('Duplicate manifest file')
-  return { format: 'hai-feedback', version: 1, reportId: value.reportId, evidenceRevision: value.evidenceRevision, createdAt: value.createdAt, missing: value.missing as string[], files }
+  return {
+    format: 'hai-feedback',
+    version: 1,
+    reportId: value.reportId,
+    evidenceRevision: value.evidenceRevision,
+    createdAt: value.createdAt,
+    missing: value.missing as string[],
+    files,
+  }
 }
 
 /**
@@ -170,7 +235,9 @@ export async function createFeedbackBundle<TReport extends { id: string }>(input
       throw new Error('Invalid evidence revision')
     const evidence = input.evidence.map(evidenceFrom)
     const history = (input.history ?? []).map(jsonObject)
-    const missing = [...(input.missing ?? [])]
+    const missing = [
+      ...(input.missing ?? []),
+    ]
     if (missing.some(item => typeof item !== 'string'))
       throw new Error('Invalid missing evidence')
     const files: Record<string, Uint8Array> = {
@@ -186,29 +253,78 @@ export async function createFeedbackBundle<TReport extends { id: string }>(input
       if (typeof attachment.id !== 'string' || attachment.id.length < 1 || attachment.id.length > 128 || ids.has(attachment.id) || attachment.bytes.byteLength > MAX_FILE_BYTES)
         throw new Error('Invalid attachment')
       ids.add(attachment.id)
-      const suffix = ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'video/webm': 'webm', 'video/mp4': 'mp4', 'text/plain': 'txt', 'application/json': 'json', 'application/pdf': 'pdf' } as Record<string, string>)[attachment.contentType] ?? 'bin'
+      const suffix = ({
+        'image/png': 'png',
+        'image/jpeg': 'jpg',
+        'image/webp': 'webp',
+        'video/webm': 'webm',
+        'video/mp4': 'mp4',
+        'text/plain': 'txt',
+        'application/json': 'json',
+        'application/pdf': 'pdf',
+      } as Record<string, string>)[attachment.contentType] ?? 'bin'
       // 原始标识仅保存在清单，使用区分大小写且保留字符串编码的摘要构造安全路径。
       const path = `attachments/${await checksum(strToU8(JSON.stringify(attachment.id)))}.${suffix}`
       const hash = await checksum(attachment.bytes)
       if (attachment.checksum && attachment.checksum !== hash)
         throw new Error('Attachment checksum mismatch')
       files[path] = new Uint8Array(attachment.bytes)
-      manifestFiles.push({ path, size: attachment.bytes.byteLength, sha256: hash, kind: 'attachment', attachmentId: attachment.id, name: attachment.name, contentType: attachment.contentType })
+      manifestFiles.push({
+        path,
+        size: attachment.bytes.byteLength,
+        sha256: hash,
+        kind: 'attachment',
+        attachmentId: attachment.id,
+        name: attachment.name,
+        contentType: attachment.contentType,
+      })
     }
-    const manifest: FeedbackBundleManifest = { format: 'hai-feedback', version: 1, reportId: report.id, evidenceRevision: typeof report.evidenceRevision === 'number' ? report.evidenceRevision : 0, createdAt: input.createdAt ?? Date.now(), missing, files: manifestFiles }
-    const temporary: FeedbackBundle = { report: { ...report, id: report.id }, evidence, history, manifest, files }
+    const manifest: FeedbackBundleManifest = {
+      format: 'hai-feedback',
+      version: 1,
+      reportId: report.id,
+      evidenceRevision: typeof report.evidenceRevision === 'number'
+        ? report.evidenceRevision
+        : 0,
+      createdAt: input.createdAt ?? Date.now(),
+      missing,
+      files: manifestFiles,
+    }
+    const temporary: FeedbackBundle = {
+      report: { ...report, id: report.id },
+      evidence,
+      history,
+      manifest,
+      files,
+    }
     files['summary.md'] = strToU8(summarizeFeedbackBundle(temporary))
     for (const [path, bytes] of Object.entries(files)) {
       if (manifestFiles.some(file => file.path === path))
         continue
-      const kind = path === 'report.json' ? 'report' : path === 'summary.md' ? 'summary' : path.startsWith('viewer/') ? 'viewer' : path.endsWith('history.json') ? 'history' : 'evidence'
-      manifest.files.push({ path, size: bytes.byteLength, sha256: await checksum(bytes), kind })
+      const kind = path === 'report.json'
+        ? 'report'
+        : path === 'summary.md'
+          ? 'summary'
+          : path.startsWith('viewer/')
+            ? 'viewer'
+            : path.endsWith('history.json')
+              ? 'history'
+              : 'evidence'
+      manifest.files.push({
+        path,
+        size: bytes.byteLength,
+        sha256: await checksum(bytes),
+        kind,
+      })
     }
     files['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2))
     const total = Object.values(files).reduce((sum, file) => sum + file.byteLength, 0)
     if (Object.keys(files).length > MAX_FILES || total > Math.min(input.maxBytes ?? MAX_BYTES, MAX_BYTES) || Object.values(files).some(file => file.byteLength > MAX_FILE_BYTES))
       throw new Error('Bundle limits exceeded')
-    return ok(zipSync(files, { level: 1, mtime: new Date(1980, 0, 1) }))
+    return ok(zipSync(files, {
+      level: 1,
+      mtime: new Date(1980, 0, 1),
+    }))
   }
   catch {
     return err(HaiCommonError.VALIDATION_ERROR, bundleM('invalid'))
@@ -252,8 +368,14 @@ export async function readFeedbackBundle(bytes: Uint8Array, options?: FeedbackBu
     const records: unknown = JSON.parse(strFromU8(files['evidence/records.json'] ?? new Uint8Array()))
     const history: unknown = JSON.parse(strFromU8(files['evidence/history.json'] ?? new Uint8Array()))
     if (!Array.isArray(records) || !Array.isArray(history))
-      throw new Error('Invalid evidence collection')
-    return ok({ manifest, report: { ...report, id: report.id }, evidence: records.map(evidenceFrom), history: history.map(jsonObject), files })
+      throw new TypeError('Invalid evidence collection')
+    return ok({
+      manifest,
+      report: { ...report, id: report.id },
+      evidence: records.map(evidenceFrom),
+      history: history.map(jsonObject),
+      files,
+    })
   }
   catch {
     return err(HaiCommonError.VALIDATION_ERROR, bundleM('invalid'))
@@ -274,7 +396,9 @@ export async function readFeedbackBundle(bytes: Uint8Array, options?: FeedbackBu
  */
 export function summarizeFeedbackBundle(bundle: FeedbackBundle): string {
   const report = bundle.report
-  const safeText = (value: unknown) => typeof value === 'string' || typeof value === 'number' ? String(value).replaceAll('\r', '').replaceAll('\n', ' ') : ''
+  const safeText = (value: unknown) => typeof value === 'string' || typeof value === 'number'
+    ? String(value).replaceAll('\r', '').replaceAll('\n', ' ')
+    : ''
   return [
     `# ${bundleM('title')} ${safeText(report.number ?? report.id)}`,
     '',
@@ -311,8 +435,12 @@ export function summarizeFeedbackBundle(bundle: FeedbackBundle): string {
  * ```
  */
 export function queryFeedbackBundle(bundle: FeedbackBundle, query: FeedbackBundleQuery = {}): FeedbackBundleEvidencePage {
-  const page = Number.isSafeInteger(query.page) && (query.page ?? 0) > 0 ? query.page! : 1
-  const pageSize = Number.isSafeInteger(query.pageSize) && (query.pageSize ?? 0) > 0 ? Math.min(100, query.pageSize!) : 20
+  const page = Number.isSafeInteger(query.page) && (query.page ?? 0) > 0
+    ? query.page!
+    : 1
+  const pageSize = Number.isSafeInteger(query.pageSize) && (query.pageSize ?? 0) > 0
+    ? Math.min(100, query.pageSize!)
+    : 20
   let candidates = bundle.evidence
   if (query.errorId) {
     const anchor = candidates.find(item => item.kind === 'error' && item.errorId === query.errorId)
@@ -322,14 +450,22 @@ export function queryFeedbackBundle(bundle: FeedbackBundle, query: FeedbackBundl
     const context = candidates.filter(item => item.source === anchor.source && item.requestId === anchor.requestId && ['log', 'error'].includes(item.kind))
     const before = context.filter(item => (item.sequence ?? item.timestamp) <= anchorSequence).sort((left, right) => (right.sequence ?? right.timestamp) - (left.sequence ?? left.timestamp)).slice(0, 101)
     const after = context.filter(item => (item.sequence ?? item.timestamp) > anchorSequence).sort((left, right) => (left.sequence ?? left.timestamp) - (right.sequence ?? right.timestamp)).slice(0, 100)
-    const window = new Set([...before, ...after])
+    const window = new Set([
+      ...before,
+      ...after,
+    ])
     candidates = candidates.filter(item => window.has(item))
   }
   const records = candidates.filter(item => (!query.kind || item.kind === query.kind)
     && (!query.requestId || item.requestId === query.requestId)
     && (query.from === undefined || item.timestamp >= query.from) && (query.to === undefined || item.timestamp <= query.to))
     .sort((left, right) => left.timestamp - right.timestamp || left.source.localeCompare(right.source) || (left.sequence ?? 0) - (right.sequence ?? 0))
-  return { items: records.slice((page - 1) * pageSize, page * pageSize), total: records.length, page, pageSize }
+  return {
+    items: records.slice((page - 1) * pageSize, page * pageSize),
+    total: records.length,
+    page,
+    pageSize,
+  }
 }
 
 /**

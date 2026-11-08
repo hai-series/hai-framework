@@ -13,13 +13,29 @@ import { sanitizeFeedbackReplay } from '../src/client/feedback-client-sanitize.j
 import { createFeedbackClient } from '../src/client/index.js'
 
 const clients: ReturnType<typeof createFeedbackClient>[] = []
-const report: FeedbackReport = { id: 'report-1', number: 'FB-1', appId: 'orders', scopeId: 'scope-1', userId: 'user-1', status: 'pending', collectionStatus: 'collecting', notificationStatus: 'pending', createdAt: 1, updatedAt: 1, version: 1, evidenceRevision: 1 }
+const report: FeedbackReport = {
+  id: 'report-1',
+  number: 'FB-1',
+  appId: 'orders',
+  scopeId: 'scope-1',
+  userId: 'user-1',
+  status: 'pending',
+  collectionStatus: 'collecting',
+  notificationStatus: 'pending',
+  createdAt: 1,
+  updatedAt: 1,
+  version: 1,
+  evidenceRevision: 1,
+}
 
 function actions(): FeedbackClientActions {
   return {
     submit: vi.fn(async () => ok(report)),
     upload: vi.fn(async () => ok(undefined)),
-    appendEvidence: vi.fn(async input => ok({ acknowledged: input.evidence.map(item => item.id), evidenceRevision: 2 })),
+    appendEvidence: vi.fn(async input => ok({
+      acknowledged: input.evidence.map(item => item.id),
+      evidenceRevision: 2,
+    })),
     completeCollection: vi.fn(async () => ok({ ...report, collectionStatus: 'complete' })),
   }
 }
@@ -29,14 +45,21 @@ async function setup(overrides: Partial<Parameters<ReturnType<typeof createFeedb
   const client = createFeedbackClient()
   clients.push(client)
   const transport = actions()
-  expect((await client.init({ appId: 'orders', actions: transport, screenshot: false, ...overrides })).success).toBe(true)
+  expect((await client.init({
+    appId: 'orders',
+    actions: transport,
+    screenshot: false,
+    ...overrides,
+  })).success).toBe(true)
   return { client, transport }
 }
 
 function plainTextFile(text: string, name = 'diagnostic.log'): File {
   const file = new File([text], name, { type: 'text/plain' })
   // jsdom 未实现 Blob.text；补齐浏览器标准接口，实际 File.size 仍由构造内容决定。
-  Object.defineProperty(file, 'text', { value: vi.fn(async () => text) })
+  Object.defineProperty(file, 'text', {
+    value: vi.fn(async () => text),
+  })
   return file
 }
 
@@ -44,12 +67,18 @@ it('服务端策略限制附件总量，失败不留下半批材料，预览在�
   const budget = resolveFeedbackBudget({ maxTotalBytes: 4 * 1048576 })
   const policy = vi.fn(async () => ok(budget))
   const transport = actions()
-  const { client } = await setup({ actions: { ...transport, policy } })
+  const { client } = await setup({
+    actions: { ...transport, policy },
+  })
   expect(policy).toHaveBeenCalledOnce()
   expect(client.budget).toEqual(budget)
   await client.prepare()
-  const large = new File([new Uint8Array(budget.maxAttachmentsBytes)], 'large.webm', { type: 'video/webm' })
-  Object.defineProperty(large, 'arrayBuffer', { value: async () => new Uint8Array(budget.maxAttachmentsBytes).buffer })
+  const large = new File([
+    new Uint8Array(budget.maxAttachmentsBytes),
+  ], 'large.webm', { type: 'video/webm' })
+  Object.defineProperty(large, 'arrayBuffer', {
+    value: async () => new Uint8Array(budget.maxAttachmentsBytes).buffer,
+  })
   expect((await client.addFiles([large, pngFile().file])).success).toBe(false)
   expect(client.getDraft()!.attachments).toHaveLength(0)
   const create = vi.fn(() => 'blob:owned-preview')
@@ -68,7 +97,9 @@ function pngFile(name = 'pending.png'): { file: File, bytes: Uint8Array<ArrayBuf
   const bytes = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lMsAAAAASUVORK5CYII=', 'base64'))
   const file = new File([bytes], name, { type: 'image/png' })
   // jsdom 未实现 Blob.arrayBuffer；返回真实 PNG 内容，保持 File.size 与读取结果一致。
-  Object.defineProperty(file, 'arrayBuffer', { value: vi.fn(async () => bytes.slice().buffer) })
+  Object.defineProperty(file, 'arrayBuffer', {
+    value: vi.fn(async () => bytes.slice().buffer),
+  })
   return { file, bytes }
 }
 
@@ -82,21 +113,70 @@ afterEach(async () => {
 
 describe('feedback browser collection', () => {
   it.each([
-    ['browser.log', '', 'text/plain', 'safe log'],
-    ['browser.LOG', 'application/octet-stream', 'text/plain', 'safe log'],
-    ['capture.png', '', 'image/png', 'binary fixture'],
-    ['capture.png', 'image/x-png', 'image/png', 'binary fixture'],
-    ['facts.json', 'application/json; charset=utf-8', 'application/json', '{"enabled":true}'],
-    ['document.pdf', '', 'application/pdf', '%PDF-1.7 fixture'],
-    ['logs.zip', '', 'application/zip', 'binary archive fixture'],
-    ['logs.zip', 'application/x-zip-compressed', 'application/zip', 'binary archive fixture'],
-    ['logs.tgz', 'application/x-gzip', 'application/gzip', 'binary archive fixture'],
+    [
+      'browser.log',
+      '',
+      'text/plain',
+      'safe log',
+    ],
+    [
+      'browser.LOG',
+      'application/octet-stream',
+      'text/plain',
+      'safe log',
+    ],
+    [
+      'capture.png',
+      '',
+      'image/png',
+      'binary fixture',
+    ],
+    [
+      'capture.png',
+      'image/x-png',
+      'image/png',
+      'binary fixture',
+    ],
+    [
+      'facts.json',
+      'application/json; charset=utf-8',
+      'application/json',
+      '{"enabled":true}',
+    ],
+    [
+      'document.pdf',
+      '',
+      'application/pdf',
+      '%PDF-1.7 fixture',
+    ],
+    [
+      'logs.zip',
+      '',
+      'application/zip',
+      'binary archive fixture',
+    ],
+    [
+      'logs.zip',
+      'application/x-zip-compressed',
+      'application/zip',
+      'binary archive fixture',
+    ],
+    [
+      'logs.tgz',
+      'application/x-gzip',
+      'application/gzip',
+      'binary archive fixture',
+    ],
   ])('选择本地附件规范化系统 MIME：%s (%s)', async (name, mime, contentType, content) => {
     const { client } = await setup()
     await client.prepare()
     const file = new File([content], name, { type: mime })
-    Object.defineProperty(file, 'text', { value: async () => content })
-    Object.defineProperty(file, 'arrayBuffer', { value: async () => new TextEncoder().encode(content).buffer })
+    Object.defineProperty(file, 'text', {
+      value: async () => content,
+    })
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: async () => new TextEncoder().encode(content).buffer,
+    })
     expect((await client.addFiles([file])).success).toBe(true)
     expect(client.getDraft()!.attachments[0]?.contentType).toBe(contentType)
   })
@@ -107,10 +187,18 @@ describe('feedback browser collection', () => {
     const { client } = await setup({ actions: transport })
     expect((await client.submit()).success).toBe(false)
     const file = new File(['safe log'], 'offline.log')
-    Object.defineProperty(file, 'text', { value: async () => 'safe log' })
-    const result = await client.exportDraft({ files: [file] })
+    Object.defineProperty(file, 'text', {
+      value: async () => 'safe log',
+    })
+    const result = await client.exportDraft({
+      files: [file],
+    })
     expect(result.success).toBe(true)
-    const unsupported = await client.exportDraft({ files: [new File(['binary'], 'file.png', { type: 'application/x-msdownload' })] })
+    const unsupported = await client.exportDraft({
+      files: [
+        new File(['binary'], 'file.png', { type: 'application/x-msdownload' }),
+      ],
+    })
     expect(unsupported.success).toBe(false)
     if (!unsupported.success) {
       expect(unsupported.error.message).toMatch(/PNG|格式|format/i)
@@ -120,9 +208,11 @@ describe('feedback browser collection', () => {
   })
 
   it('本地失败返回安全提示与关联标识，详细脱敏日志和本地 UI trace 可检索', async () => {
-    const { client } = await setup({ captureScreenshot: async () => {
-      throw new Error('Capture driver unavailable verificationCode=PRIVATE_DIAGNOSTIC_CODE')
-    } })
+    const { client } = await setup({
+      captureScreenshot: async () => {
+        throw new Error('Capture driver unavailable verificationCode=PRIVATE_DIAGNOSTIC_CODE')
+      },
+    })
     await client.prepare()
     const records: LogRecord[] = []
     const stop = core.logger.observe(record => records.push(record))
@@ -146,7 +236,10 @@ describe('feedback browser collection', () => {
   it('当前页面截图排在历史操作截图之前，换页重开草稿补充当前现场', async () => {
     const captureScreenshot = vi.fn(async () => pngFile().bytes)
     const { client } = await setup({ screenshot: true, captureScreenshot, keyScreenshots: true })
-    client.record({ kind: 'error', data: { message: 'Earlier page failed' } })
+    client.record({
+      kind: 'error',
+      data: { message: 'Earlier page failed' },
+    })
     await vi.waitFor(() => expect(captureScreenshot).toHaveBeenCalledOnce())
     await client.prepare()
     const draft = client.getDraft()!
@@ -176,7 +269,9 @@ describe('feedback browser collection', () => {
     expect((await client.captureScreenshot(first.id)).success).toBe(true)
     expect(client.getDraft()!.attachments).toHaveLength(2)
     expect(client.getDraft()!.attachments.some(item => item.id === first.id)).toBe(true)
-    const before = [...client.getDraft()!.attachments]
+    const before = [
+      ...client.getDraft()!.attachments,
+    ]
     captureScreenshot.mockRejectedValueOnce(new Error('Capture unavailable'))
     expect((await client.captureScreenshot(first.id)).success).toBe(false)
     expect(client.getDraft()!.attachments).toEqual(before)
@@ -189,10 +284,32 @@ describe('feedback browser collection', () => {
     const { client } = await setup({ appVersion: 'version-fixture', buildId: 'build-fixture', commit: 'commit-fixture' })
     await client.prepare()
     const env = client.getDraft()!.evidence.find(item => item.kind === 'environment')!
-    expect(env.data).toMatchObject({ url: `${location.origin}${location.pathname}`, appVersion: 'version-fixture', buildId: 'build-fixture', commit: 'commit-fixture', browser: navigator.userAgent, viewport: { width: innerWidth, height: innerHeight } })
-    const bytes = new Uint8Array([0x1A, 0x45, 0xDF, 0xA3, 0, 0, 0, 0, 0, 0, 0, 0])
+    expect(env.data).toMatchObject({
+      url: `${location.origin}${location.pathname}`,
+      appVersion: 'version-fixture',
+      buildId: 'build-fixture',
+      commit: 'commit-fixture',
+      browser: navigator.userAgent,
+      viewport: { width: innerWidth, height: innerHeight },
+    })
+    const bytes = new Uint8Array([
+      0x1A,
+      0x45,
+      0xDF,
+      0xA3,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+    ])
     const file = new File([bytes], 'recording.webm', { type: 'video/webm' })
-    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer })
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: async () => bytes.buffer,
+    })
     expect((await client.addFiles([file])).success).toBe(true)
     const exported = await client.exportDraft({ description: 'Local diagnostic' })
     expect(exported.success).toBe(true)
@@ -202,20 +319,34 @@ describe('feedback browser collection', () => {
     expect(bundle.success).toBe(true)
     if (!bundle.success)
       return
-    expect(bundle.data.report).toMatchObject({ description: 'Local diagnostic', appVersion: 'version-fixture', buildId: 'build-fixture', commit: 'commit-fixture' })
+    expect(bundle.data.report).toMatchObject({
+      description: 'Local diagnostic',
+      appVersion: 'version-fixture',
+      buildId: 'build-fixture',
+      commit: 'commit-fixture',
+    })
     const video = bundle.data.manifest.files.find(item => item.name === 'recording.webm')!
     expect(video.path).toMatch(/\.webm$/)
     expect(bundle.data.files[video.path]).toEqual(bytes)
   })
 
   it('提交期间完成的旧标注不能修改冻结附件及校验和', async () => {
-    const { client, transport } = await setup({ screenshot: true, captureScreenshot: async () => pngFile().bytes })
+    const { client, transport } = await setup({
+      screenshot: true,
+      captureScreenshot: async () => pngFile().bytes,
+    })
     await client.prepare()
     const original = client.getDraft()!.attachments[0]!
     const checksum = original.checksum
     let complete!: (bytes: Uint8Array) => void
     vi.spyOn(images, 'annotateFeedbackImage').mockReturnValueOnce(new Promise(resolve => complete = resolve))
-    const pending = client.annotate(original.id, { x: 0, y: 0, width: 1, height: 1, mode: 'mask' })
+    const pending = client.annotate(original.id, {
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+      mode: 'mask',
+    })
     expect((await client.submit()).success).toBe(true)
     complete(new Uint8Array([4, 5, 6]))
     expect((await pending).success).toBe(false)
@@ -225,8 +356,15 @@ describe('feedback browser collection', () => {
 
   it('并发重初始化仅有一个成功，日志不重复采集', async () => {
     const { client } = await setup()
-    const config = { appId: 'orders', actions: actions(), screenshot: false }
-    const results = await Promise.all([client.init(config), client.init(config)])
+    const config = {
+      appId: 'orders',
+      actions: actions(),
+      screenshot: false,
+    }
+    const results = await Promise.all([
+      client.init(config),
+      client.init(config),
+    ])
     expect(results.filter(result => result.success)).toHaveLength(1)
     core.logger.info('Lifecycle collection probe')
     await client.prepare()
@@ -244,7 +382,11 @@ describe('feedback browser collection', () => {
     expect((await pending).success).toBe(false)
     await stopped
     expect(client.getDraft()).toBeUndefined()
-    expect((await client.init({ appId: 'next', actions: actions(), screenshot: false })).success).toBe(true)
+    expect((await client.init({
+      appId: 'next',
+      actions: actions(),
+      screenshot: false,
+    })).success).toBe(true)
     expect((await client.prepare()).success).toBe(true)
     expect(client.getDraft()!.attachments).toEqual([])
   })
@@ -254,7 +396,11 @@ describe('feedback browser collection', () => {
     expect((await client.prepare()).success).toBe(true)
     const result = await client.submit()
     expect(result.success).toBe(true)
-    expect(transport.submit).toHaveBeenCalledWith(expect.objectContaining({ submissionId: expect.any(String), appId: 'orders', anchor: expect.objectContaining({ kind: 'feedback' }) }))
+    expect(transport.submit).toHaveBeenCalledWith(expect.objectContaining({
+      submissionId: expect.any(String),
+      appId: 'orders',
+      anchor: expect.objectContaining({ kind: 'feedback' }),
+    }))
     const payload = vi.mocked(transport.submit).mock.calls[0]![0]
     expect(payload).not.toHaveProperty('userId')
     expect(payload).not.toHaveProperty('scopeId')
@@ -263,12 +409,23 @@ describe('feedback browser collection', () => {
 
   it('错误前后各100条有界收集，重试只确认后才释放后续块', async () => {
     const { client, transport } = await setup()
-    for (let index = 0; index < 150; index++)
-      client.record({ kind: 'log', data: { message: `before-${index}` } })
-    client.record({ kind: 'error', data: { message: 'failure' } })
+    for (let index = 0; index < 150; index++) {
+      client.record({
+        kind: 'log',
+        data: { message: `before-${index}` },
+      })
+    }
+    client.record({
+      kind: 'error',
+      data: { message: 'failure' },
+    })
     await client.prepare()
-    for (let index = 0; index < 120; index++)
-      client.record({ kind: 'log', data: { message: `after-${index}` } })
+    for (let index = 0; index < 120; index++) {
+      client.record({
+        kind: 'log',
+        data: { message: `after-${index}` },
+      })
+    }
     const draft = client.getDraft()!
     expect(draft.evidence.filter(item => item.kind === 'log' && String(item.data.message).startsWith('before-'))).toHaveLength(100)
     expect(draft.evidence.filter(item => item.kind === 'log' && String(item.data.message).startsWith('after-'))).toHaveLength(100)
@@ -281,8 +438,16 @@ describe('feedback browser collection', () => {
   it('采集前脱敏自由文本/嵌套凭据，Cookie只保留普通白名单', async () => {
     document.cookie = 'theme=dark'
     document.cookie = 'access_token=never-store'
-    const { client } = await setup({ cookieAllowlist: ['theme', 'access_token'] })
-    client.record({ kind: 'log', data: { message: 'Authorization: Bearer never-store', nested: { password: 'private', apiKey: 'secret' } } })
+    const { client } = await setup({
+      cookieAllowlist: ['theme', 'access_token'],
+    })
+    client.record({
+      kind: 'log',
+      data: {
+        message: 'Authorization: Bearer never-store',
+        nested: { password: 'private', apiKey: 'secret' },
+      },
+    })
     await client.prepare()
     const serialized = JSON.stringify(client.getDraft())
     expect(serialized).not.toContain('never-store')
@@ -297,7 +462,9 @@ describe('feedback browser collection', () => {
     const text = `${'diagnostic log line completed\n'.repeat(75_000)}safe-log-tail`
     const original = new TextEncoder().encode(text)
     expect(original.byteLength).toBeGreaterThan(2 * 1024 * 1024)
-    expect((await client.addFiles([plainTextFile(text)])).success).toBe(true)
+    expect((await client.addFiles([
+      plainTextFile(text),
+    ])).success).toBe(true)
     const draft = client.getDraft()!
     expect(draft.attachments).toHaveLength(1)
     expect(draft.attachments[0]!.bytes.byteLength).toBe(original.byteLength)
@@ -314,7 +481,9 @@ describe('feedback browser collection', () => {
     expect((await client.prepare()).success).toBe(true)
     const prefix = 'safe diagnostic entry\n'.repeat(2000)
     const text = `${prefix}{"password":"tail-password-sentinel"}\ntoken=tail-token-sentinel\nAuthorization: Basic dGFpbC1iYXNpYy1zZW50aW5lbA==\nhttps://example.test/check?token=tail-url-sentinel&visible=keep\nsafe-final-line`
-    expect((await client.addFiles([plainTextFile(text)])).success).toBe(true)
+    expect((await client.addFiles([
+      plainTextFile(text),
+    ])).success).toBe(true)
     const sanitized = new TextDecoder().decode(client.getDraft()!.attachments[0]!.bytes)
     expect(sanitized.length).toBeGreaterThan(8192)
     expect(sanitized.startsWith(prefix)).toBe(true)
@@ -333,7 +502,11 @@ describe('feedback browser collection', () => {
     expect((await client.submit()).success).toBe(false)
     const prefix = 'offline diagnostic line\n'.repeat(2000)
     const text = `${prefix}session=offline-session-sentinel\nsafe-offline-tail`
-    const exported = await client.exportDraft({ files: [plainTextFile(text, 'offline.log')] })
+    const exported = await client.exportDraft({
+      files: [
+        plainTextFile(text, 'offline.log'),
+      ],
+    })
     expect(exported.success).toBe(true)
     if (!exported.success)
       return
@@ -386,7 +559,9 @@ describe('feedback browser collection', () => {
     expect(file.size).toBe(5 * 1024 * 1024)
     const added = mode === 'addFiles'
       ? await client.addFiles([file])
-      : await client.exportDraft({ files: [file] })
+      : await client.exportDraft({
+          files: [file],
+        })
     expect(file.text).toHaveBeenCalledOnce()
     expect(added.success).toBe(false)
     if (!added.success)
@@ -396,28 +571,45 @@ describe('feedback browser collection', () => {
   })
 
   it.each(['oversized', 'invalid-type', 'json-missing'] as const)('混合附件批次%s失败保持原草稿，清空待选文件后不提交或上传隐藏文件', async (mode) => {
-    const { client, transport } = await setup({ afterCount: 0, screenshot: true, captureScreenshot: async () => {
-      throw new Error('Screenshot unavailable')
-    } })
+    const { client, transport } = await setup({
+      afterCount: 0,
+      screenshot: true,
+      captureScreenshot: async () => {
+        throw new Error('Screenshot unavailable')
+      },
+    })
     expect((await client.prepare()).success).toBe(true)
-    expect((await client.addFiles([plainTextFile('existing safe log', 'existing.log')])).success).toBe(true)
+    expect((await client.addFiles([
+      plainTextFile('existing safe log', 'existing.log'),
+    ])).success).toBe(true)
     const original = structuredClone(client.getDraft()!)
     const existingIds = original.attachments.map(item => item.id)
     const image = pngFile()
     let first = image.file
     if (mode === 'json-missing') {
-      const text = JSON.stringify({ message: 'safe diagnostic line'.repeat(1000) })
+      const text = JSON.stringify({
+        message: 'safe diagnostic line'.repeat(1000),
+      })
       first = new File([text], 'pending.json', { type: 'application/json' })
-      Object.defineProperty(first, 'text', { value: vi.fn(async () => text) })
+      Object.defineProperty(first, 'text', {
+        value: vi.fn(async () => text),
+      })
     }
     const bad = mode === 'oversized'
-      ? new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'oversized.png', { type: 'image/png' })
+      ? new File([
+          new Uint8Array(5 * 1024 * 1024 + 1),
+        ], 'oversized.png', { type: 'image/png' })
       : new File(['unsupported'], 'unsupported.bin', { type: 'application/octet-stream' })
     const result = await client.addFiles([first, bad])
-    expect(mode === 'json-missing' ? first.text : first.arrayBuffer).toHaveBeenCalledOnce()
+    expect(mode === 'json-missing'
+      ? first.text
+      : first.arrayBuffer).toHaveBeenCalledOnce()
     expect(result.success).toBe(false)
-    if (!result.success)
-      expect(result.error.code).toBe(mode === 'oversized' ? 'hai:feedback:024' : 'hai:feedback:025')
+    if (!result.success) {
+      expect(result.error.code).toBe(mode === 'oversized'
+        ? 'hai:feedback:024'
+        : 'hai:feedback:025')
+    }
     expect.soft(client.getDraft()).toEqual(original)
     expect((await client.submit({ files: [] })).success).toBe(true)
     expect((await client.flush()).success).toBe(true)
@@ -470,7 +662,9 @@ describe('feedback browser collection', () => {
     const pending = client.addFiles([image.file])
     try {
       await entered.promise
-      expect((await client.addFiles([plainTextFile('fast safe log', 'fast.log')])).success).toBe(true)
+      expect((await client.addFiles([
+        plainTextFile('fast safe log', 'fast.log'),
+      ])).success).toBe(true)
     }
     finally {
       release.resolve()
@@ -491,9 +685,12 @@ describe('feedback browser collection', () => {
   })
 
   it('截图失败不阻塞反馈；本地包明确未取得后端材料', async () => {
-    const { client } = await setup({ screenshot: true, captureScreenshot: async () => {
-      throw new Error('Canvas unavailable')
-    } })
+    const { client } = await setup({
+      screenshot: true,
+      captureScreenshot: async () => {
+        throw new Error('Canvas unavailable')
+      },
+    })
     const prepared = await client.prepare()
     expect(prepared.success).toBe(true)
     expect(client.getDraft()!.missing).toContain('screenshot-unavailable')
@@ -517,12 +714,26 @@ describe('feedback browser collection', () => {
 
   it('重叠错误窗口合并，同一条证据只提交一次', async () => {
     const { client } = await setup()
-    for (let index = 0; index < 80; index++)
-      client.record({ kind: 'log', data: { message: `first-${index}` } })
-    client.record({ kind: 'error', data: { message: 'first-error' } })
-    for (let index = 0; index < 80; index++)
-      client.record({ kind: 'log', data: { message: `middle-${index}` } })
-    client.record({ kind: 'error', data: { message: 'second-error' } })
+    for (let index = 0; index < 80; index++) {
+      client.record({
+        kind: 'log',
+        data: { message: `first-${index}` },
+      })
+    }
+    client.record({
+      kind: 'error',
+      data: { message: 'first-error' },
+    })
+    for (let index = 0; index < 80; index++) {
+      client.record({
+        kind: 'log',
+        data: { message: `middle-${index}` },
+      })
+    }
+    client.record({
+      kind: 'error',
+      data: { message: 'second-error' },
+    })
     await client.prepare()
     const evidence = client.getDraft()!.evidence
     expect(evidence.filter(item => item.kind === 'error')).toHaveLength(2)
@@ -531,8 +742,12 @@ describe('feedback browser collection', () => {
 
   it('容量淘汰明确记录缺失，beforeCount为0不会反而返回全部历史', async () => {
     const { client } = await setup({ maxEvents: 5, beforeCount: 0 })
-    for (let index = 0; index < 20; index++)
-      client.record({ kind: 'log', data: { message: `entry-${index}` } })
+    for (let index = 0; index < 20; index++) {
+      client.record({
+        kind: 'log',
+        data: { message: `entry-${index}` },
+      })
+    }
     await client.prepare()
     expect(client.getDraft()!.evidence.filter(item => item.kind === 'log')).toHaveLength(0)
     expect(client.getDraft()!.missing.some(item => item.startsWith('browser-buffer-truncated:'))).toBe(true)
@@ -541,7 +756,12 @@ describe('feedback browser collection', () => {
   it('截图上传失败保留字节与同一附件标识，确认后才结束采集', async () => {
     const transport = actions()
     vi.mocked(transport.upload).mockResolvedValueOnce(err(HaiCommonError.INTERNAL_ERROR, 'Storage unavailable'))
-    const { client } = await setup({ actions: transport, screenshot: true, captureScreenshot: async () => new Uint8Array([1, 2, 3]), afterCount: 0 })
+    const { client } = await setup({
+      actions: transport,
+      screenshot: true,
+      captureScreenshot: async () => new Uint8Array([1, 2, 3]),
+      afterCount: 0,
+    })
     const result = await client.submit()
     expect(result.success).toBe(true)
     expect((await client.flush()).success).toBe(false)
@@ -566,7 +786,11 @@ describe('feedback browser collection', () => {
   it('持久化需要产品提供身份范围，不能把其他用户材料恢复进当前反馈', async () => {
     const client = createFeedbackClient()
     clients.push(client)
-    expect((await client.init({ appId: 'orders', actions: actions(), persistDraft: true })).success).toBe(false)
+    expect((await client.init({
+      appId: 'orders',
+      actions: actions(),
+      persistDraft: true,
+    })).success).toBe(false)
   })
 
   it('服务端已受理而ACK丢失后，继续操作和换路由也按冻结包络重试', async () => {
@@ -581,11 +805,20 @@ describe('feedback browser collection', () => {
     })
     const { client } = await setup({ actions: transport })
     expect((await client.submit({ description: 'original' })).success).toBe(false)
-    client.record({ kind: 'log', data: { message: 'operation after lost response' } })
+    client.record({
+      kind: 'log',
+      data: { message: 'operation after lost response' },
+    })
     history.pushState({}, '', '/another-route')
     expect((await client.submit({ description: 'original' })).success).toBe(true)
     expect((await client.flush()).success).toBe(true)
-    expect(transport.appendEvidence).toHaveBeenCalledWith(expect.objectContaining({ evidence: expect.arrayContaining([expect.objectContaining({ data: { message: 'operation after lost response' } })]) }))
+    expect(transport.appendEvidence).toHaveBeenCalledWith(expect.objectContaining({
+      evidence: expect.arrayContaining([
+        expect.objectContaining({
+          data: { message: 'operation after lost response' },
+        }),
+      ]),
+    }))
   })
 
   it('await补传期间新增的最后一条日志必须ACK后才能结束采集', async () => {
@@ -594,11 +827,20 @@ describe('feedback browser collection', () => {
     await client.flush()
     let release: (() => void) | undefined
     vi.mocked(transport.appendEvidence).mockImplementationOnce(input => new Promise((resolve) => {
-      release = () => resolve(ok({ acknowledged: input.evidence.map(item => item.id), evidenceRevision: 2 }))
+      release = () => resolve(ok({
+        acknowledged: input.evidence.map(item => item.id),
+        evidenceRevision: 2,
+      }))
     }))
-    client.record({ kind: 'log', data: { message: 'first post-submit' } })
+    client.record({
+      kind: 'log',
+      data: { message: 'first post-submit' },
+    })
     const draining = client.flush()
-    client.record({ kind: 'log', data: { message: 'last post-submit' } })
+    client.record({
+      kind: 'log',
+      data: { message: 'last post-submit' },
+    })
     expect(transport.completeCollection).not.toHaveBeenCalled()
     release!()
     expect((await draining).success).toBe(true)
@@ -609,19 +851,35 @@ describe('feedback browser collection', () => {
 
   it('凭据标准名称和回放textContent均在进入离线材料前脱敏', async () => {
     const { client } = await setup()
-    client.record({ kind: 'log', data: { message: 'refresh_token=REFRESH_SENTINEL access_token=ACCESS_SENTINEL accessToken=CAMEL_SENTINEL' } })
+    client.record({
+      kind: 'log',
+      data: { message: 'refresh_token=REFRESH_SENTINEL access_token=ACCESS_SENTINEL accessToken=CAMEL_SENTINEL' },
+    })
     await client.prepare()
     expect(JSON.stringify(client.getDraft())).not.toContain('SENTINEL')
-    expect(JSON.stringify(sanitizeFeedbackReplay({ node: { textContent: 'token=REPLAY_SENTINEL' } }))).not.toContain('REPLAY_SENTINEL')
+    expect(JSON.stringify(sanitizeFeedbackReplay({
+      node: { textContent: 'token=REPLAY_SENTINEL' },
+    }))).not.toContain('REPLAY_SENTINEL')
   })
 
   it('错误发生时固定前100条，即使常态环形缓冲已淘汰也保留窗口', async () => {
     const { client } = await setup({ maxEvents: 250 })
-    for (let index = 0; index < 100; index++)
-      client.record({ kind: 'log', data: { message: `protected-${index}` } })
-    client.record({ kind: 'error', data: { message: 'anchor' } })
-    for (let index = 0; index < 500; index++)
-      client.record({ kind: 'log', data: { message: `later-${index}` } })
+    for (let index = 0; index < 100; index++) {
+      client.record({
+        kind: 'log',
+        data: { message: `protected-${index}` },
+      })
+    }
+    client.record({
+      kind: 'error',
+      data: { message: 'anchor' },
+    })
+    for (let index = 0; index < 500; index++) {
+      client.record({
+        kind: 'log',
+        data: { message: `later-${index}` },
+      })
+    }
     await client.prepare()
     expect(client.getDraft()!.evidence.filter(item => String(item.data.message).startsWith('protected-'))).toHaveLength(100)
     expect(client.getDraft()!.evidence.filter(item => String(item.data.message).startsWith('later-'))).toHaveLength(100)
@@ -630,7 +888,10 @@ describe('feedback browser collection', () => {
   it('长时间空闲后不把已过期的历史日志带进新反馈', async () => {
     vi.useFakeTimers()
     const { client } = await setup({ maxAgeMs: 100 })
-    client.record({ kind: 'log', data: { message: 'expired-event' } })
+    client.record({
+      kind: 'log',
+      data: { message: 'expired-event' },
+    })
     vi.setSystemTime(Date.now() + 101)
     await client.prepare()
     expect(JSON.stringify(client.getDraft())).not.toContain('expired-event')
@@ -653,7 +914,12 @@ describe('feedback browser collection', () => {
     vi.useFakeTimers()
     const transport = actions()
     vi.mocked(transport.upload).mockResolvedValue(err({ code: 'app:rejected', httpStatus, message: 'Upload rejected' }))
-    const { client } = await setup({ actions: transport, screenshot: true, captureScreenshot: async () => new Uint8Array([1, 2, 3]), afterCount: 0 })
+    const { client } = await setup({
+      actions: transport,
+      screenshot: true,
+      captureScreenshot: async () => new Uint8Array([1, 2, 3]),
+      afterCount: 0,
+    })
     expect((await client.submit()).success).toBe(true)
     await vi.advanceTimersByTimeAsync(3_600_000)
     expect(transport.upload).toHaveBeenCalledOnce()
@@ -686,7 +952,12 @@ describe('feedback browser collection', () => {
   it('退出身份丢弃草稿时不发起新的补传请求', async () => {
     const transport = actions()
     vi.mocked(transport.upload).mockResolvedValue(err(HaiCommonError.INTERNAL_ERROR, 'Temporary outage'))
-    const { client } = await setup({ actions: transport, screenshot: true, captureScreenshot: async () => new Uint8Array([1, 2, 3]), afterCount: 0 })
+    const { client } = await setup({
+      actions: transport,
+      screenshot: true,
+      captureScreenshot: async () => new Uint8Array([1, 2, 3]),
+      afterCount: 0,
+    })
     expect((await client.submit()).success).toBe(true)
     await client.flush()
     const before = vi.mocked(transport.upload).mock.calls.length
@@ -699,7 +970,12 @@ describe('feedback browser collection', () => {
     let finish: (() => void) | undefined
     const transport = actions()
     vi.mocked(transport.upload).mockImplementation(() => new Promise(resolve => finish = () => resolve(ok(undefined))))
-    const { client } = await setup({ actions: transport, screenshot: true, captureScreenshot: async () => new Uint8Array([1]), afterCount: 0 })
+    const { client } = await setup({
+      actions: transport,
+      screenshot: true,
+      captureScreenshot: async () => new Uint8Array([1]),
+      afterCount: 0,
+    })
     expect((await client.submit()).success).toBe(true)
     expect(transport.upload).toHaveBeenCalledOnce()
     const closing = client.close({ discard: true })
@@ -712,7 +988,13 @@ describe('feedback browser collection', () => {
 
   it('稳定操作触发截图早于反馈出现，后续反馈携带有界关键截图', async () => {
     const captureScreenshot = vi.fn(async () => new Uint8Array([1, 2, 3]))
-    const { client } = await setup({ screenshot: true, captureScreenshot, keyScreenshots: true, keyScreenshotThrottleMs: 10000, maxKeyScreenshots: 1 })
+    const { client } = await setup({
+      screenshot: true,
+      captureScreenshot,
+      keyScreenshots: true,
+      keyScreenshotThrottleMs: 10000,
+      maxKeyScreenshots: 1,
+    })
     const button = document.createElement('button')
     button.dataset.feedbackAction = 'order:save'
     document.body.append(button)
@@ -732,7 +1014,10 @@ describe('feedback browser collection', () => {
   })
 
   it('超限自动截图记录缺失而不阻塞空说明反馈', async () => {
-    const { client } = await setup({ screenshot: true, captureScreenshot: async () => new Uint8Array(5 * 1024 * 1024 + 1) })
+    const { client } = await setup({
+      screenshot: true,
+      captureScreenshot: async () => new Uint8Array(5 * 1024 * 1024 + 1),
+    })
     expect((await client.submit()).success).toBe(true)
     expect(client.getDraft()!.attachments).toHaveLength(0)
     expect(client.getDraft()!.missing).toContain('screenshot-size-limit-exceeded')
@@ -759,7 +1044,13 @@ it('退出发生在策略读取期间时，迟到初始化不能复活采集会�
   const policy = new Promise<HaiResult<ReturnType<typeof resolveFeedbackBudget>>>((resolve) => {
     release = resolve
   })
-  const pending = client.init({ appId: 'orders', actions: { ...actions(), policy: () => policy } })
+  const pending = client.init({
+    appId: 'orders',
+    actions: {
+      ...actions(),
+      policy: () => policy,
+    },
+  })
   await client.close({ discard: true })
   release(ok(resolveFeedbackBudget()))
   expect((await pending).success).toBe(false)
@@ -770,7 +1061,9 @@ it('退出发生在策略读取期间时，迟到初始化不能复活采集会�
 it('离线策略请求失败仍可保存本地草稿，在线提交重新确认有效预算', async () => {
   const transport = actions()
   const policy = vi.fn().mockResolvedValueOnce(err(HaiCommonError.NETWORK_ERROR, 'Offline')).mockResolvedValueOnce(ok(resolveFeedbackBudget()))
-  const { client } = await setup({ actions: { ...transport, policy } })
+  const { client } = await setup({
+    actions: { ...transport, policy },
+  })
   expect((await client.prepare()).success).toBe(true)
   expect(client.getDraft()?.missing).toContain('server-policy-unavailable')
   const exported = await client.exportDraft({ description: 'Offline feedback' })
@@ -781,10 +1074,16 @@ it('离线策略请求失败仍可保存本地草稿，在线提交重新确认�
 })
 
 it('删除旧附件后添加新文件按剩余预算原子合并', async () => {
-  const { client } = await setup({ budget: resolveFeedbackBudget({ maxTotalBytes: 4 * 1048576 }) })
+  const { client } = await setup({
+    budget: resolveFeedbackBudget({ maxTotalBytes: 4 * 1048576 }),
+  })
   await client.prepare()
-  const file = new File([new Uint8Array(1048576)], 'old.webm', { type: 'video/webm' })
-  Object.defineProperty(file, 'arrayBuffer', { value: async () => new Uint8Array(1048576).buffer })
+  const file = new File([
+    new Uint8Array(1048576),
+  ], 'old.webm', { type: 'video/webm' })
+  Object.defineProperty(file, 'arrayBuffer', {
+    value: async () => new Uint8Array(1048576).buffer,
+  })
   expect((await client.addFiles([file])).success).toBe(true)
   const id = client.getDraft()!.attachments[0]!.id
   expect((await client.addFiles([pngFile('replacement.png').file], [id])).success).toBe(true)
@@ -793,7 +1092,10 @@ it('删除旧附件后添加新文件按剩余预算原子合并', async () => {
 
 it('hash 路由换页重开补充当前截图，片段参数不进入诊断包', async () => {
   const original = location.href
-  const { client } = await setup({ screenshot: true, captureScreenshot: async () => pngFile().bytes })
+  const { client } = await setup({
+    screenshot: true,
+    captureScreenshot: async () => pngFile().bytes,
+  })
   try {
     history.replaceState({}, '', '/#/overview')
     await client.prepare()

@@ -23,8 +23,12 @@ function runGit(args, options = {}) {
     }).trimEnd()
   }
   catch (error) {
-    const stderr = error instanceof Error && 'stderr' in error ? String(error.stderr || '') : ''
-    const message = stderr.trim() || (error instanceof Error ? error.message : String(error))
+    const stderr = error instanceof Error && 'stderr' in error
+      ? String(error.stderr || '')
+      : ''
+    const message = stderr.trim() || (error instanceof Error
+      ? error.message
+      : String(error))
     throw new Error(message)
   }
 }
@@ -93,7 +97,9 @@ async function parsePatchMatches(lines, blockedTerms) {
 
     if (line.startsWith('@@')) {
       const match = line.match(/\+(\d+)(?:,\d+)?/)
-      newLineNumber = match ? Number(match[1]) : 0
+      newLineNumber = match
+        ? Number(match[1])
+        : 0
       continue
     }
 
@@ -125,7 +131,11 @@ async function parsePatchMatches(lines, blockedTerms) {
 
 async function scanGitPatch(args, blockedTerms) {
   // 补丁可能超过 execFileSync 默认缓冲上限，逐行扫描并保留完整检查范围。
-  const child = spawn('git', args, { cwd: ROOT, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+  const child = spawn('git', args, {
+    cwd: ROOT,
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
   let stderr = ''
   child.stderr.setEncoding('utf8')
   child.stderr.on('data', (chunk) => {
@@ -135,15 +145,22 @@ async function scanGitPatch(args, blockedTerms) {
   const completion = new Promise((resolve, reject) => {
     child.once('error', reject)
     child.once('close', (code, signal) => {
-      if (code === 0)
+      if (code === 0) {
         resolve()
-      else
-        reject(new Error(stderr.trim() || `git exited with ${signal ? `signal ${signal}` : `code ${code}`}.`))
+      }
+      else {
+        reject(new Error(stderr.trim() || `git exited with ${signal
+          ? `signal ${signal}`
+          : `code ${code}`}.`))
+      }
     })
   })
   const lines = createInterface({ input: child.stdout, crlfDelay: Infinity })
   try {
-    const [matches] = await Promise.all([parsePatchMatches(lines, blockedTerms), completion])
+    const [matches] = await Promise.all([
+      parsePatchMatches(lines, blockedTerms),
+      completion,
+    ])
     return matches
   }
   finally {
@@ -160,7 +177,9 @@ function printPatchMatches(header, matches) {
 
   console.error(header)
   for (const match of matches) {
-    const location = match.line > 0 ? `${match.file}:${match.line}` : match.file
+    const location = match.line > 0
+      ? `${match.file}:${match.line}`
+      : match.file
     console.error(`  - ${location} hit ${match.terms.length} blocked term(s)`)
     console.error(`    ${redactTerms(match.content, match.terms)}`)
   }
@@ -195,7 +214,14 @@ function scanCommitMessageFile(messageFile, config) {
 }
 
 function scanStagedPatch(config) {
-  return scanGitPatch(['diff', '--cached', '--unified=0', '--no-color', '--no-ext-diff', '--diff-filter=AMCR'], config.blockedTerms)
+  return scanGitPatch([
+    'diff',
+    '--cached',
+    '--unified=0',
+    '--no-color',
+    '--no-ext-diff',
+    '--diff-filter=AMCR',
+  ], config.blockedTerms)
 }
 
 function getCommitsForPushUpdate(localOid, remoteOid) {
@@ -204,12 +230,21 @@ function getCommitsForPushUpdate(localOid, remoteOid) {
   }
 
   if (!remoteOid || remoteOid === ZERO_OID) {
-    const output = runGit(['rev-list', localOid, '--not', '--remotes'])
-    return output ? output.split('\n').filter(Boolean) : []
+    const output = runGit([
+      'rev-list',
+      localOid,
+      '--not',
+      '--remotes',
+    ])
+    return output
+      ? output.split('\n').filter(Boolean)
+      : []
   }
 
   const output = runGit(['rev-list', `${remoteOid}..${localOid}`])
-  return output ? output.split('\n').filter(Boolean) : []
+  return output
+    ? output.split('\n').filter(Boolean)
+    : []
 }
 
 function scanCommitMessage(commitOid, config) {
@@ -218,7 +253,15 @@ function scanCommitMessage(commitOid, config) {
 }
 
 function scanCommitPatch(commitOid, config) {
-  return scanGitPatch(['show', '--format=', '--unified=0', '--no-color', '--no-ext-diff', '--diff-filter=AMCR', commitOid], config.blockedTerms)
+  return scanGitPatch([
+    'show',
+    '--format=',
+    '--unified=0',
+    '--no-color',
+    '--no-ext-diff',
+    '--diff-filter=AMCR',
+    commitOid,
+  ], config.blockedTerms)
 }
 
 function failWithSummary(title, detailsPrinter) {
@@ -264,7 +307,12 @@ async function handlePushMode(config) {
     .split('\n')
     .map((line) => {
       const [localRef, localOid, remoteRef, remoteOid] = line.trim().split(/\s+/)
-      return { localRef, localOid, remoteRef, remoteOid }
+      return {
+        localRef,
+        localOid,
+        remoteRef,
+        remoteOid,
+      }
     })
     .filter(update => update.localRef && update.localOid)
 

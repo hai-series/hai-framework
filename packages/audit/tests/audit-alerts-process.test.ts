@@ -32,7 +32,15 @@ it('独立 PostgreSQL 节点并发不重复通知；外部已收请求后进程�
     })
   })
   function startWorker(config: string, offset = 0) {
-    const child = spawn(process.execPath, [fileURLToPath(new URL('./fixtures/audit-alert-worker.mjs', import.meta.url)), pathToFileURL(path.join(directory, 'index.js')).href, config, String(offset)], { cwd: packageDir, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
+    const child = spawn(process.execPath, [
+      fileURLToPath(new URL('./fixtures/audit-alert-worker.mjs', import.meta.url)),
+      pathToFileURL(path.join(directory, 'index.js')).href,
+      config,
+      String(offset),
+    ], {
+      cwd: packageDir,
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+    })
     let stdout = ''
     let stderr = ''
     let result: unknown
@@ -67,7 +75,23 @@ it('独立 PostgreSQL 节点并发不重复通知；外部已收请求后进程�
   }
   try {
     environment = await postgresEnv()
-    await build({ config: false, entry: { index: path.join(packageDir, 'src/index.ts') }, outDir: directory, format: ['esm'], bundle: true, dts: false, silent: true, external: ['@h-ai/core', '@h-ai/reldb', '@h-ai/reach', 'zod'] })
+    await build({
+      config: false,
+      entry: {
+        index: path.join(packageDir, 'src/index.ts'),
+      },
+      outDir: directory,
+      format: ['esm'],
+      bundle: true,
+      dts: false,
+      silent: true,
+      external: [
+        '@h-ai/core',
+        '@h-ai/reldb',
+        '@h-ai/reach',
+        'zod',
+      ],
+    })
     server.listen(0, '127.0.0.1')
     await once(server, 'listening')
     const address = server.address()
@@ -76,7 +100,21 @@ it('独立 PostgreSQL 节点并发不重复通知；外部已收请求后进程�
     const config = {
       database: environment.config,
       url: `http://127.0.0.1:${address.port}`,
-      alerts: { enabled: true, rules: [{ id: 'multiprocess', actions: ['node.alert'], threshold: 1, windowSeconds: 86400, severity: 'critical', targets: [{ id: 'security', provider: 'notify', to: 'security@example.invalid' }] }] },
+      alerts: {
+        enabled: true,
+        rules: [
+          {
+            id: 'multiprocess',
+            actions: ['node.alert'],
+            threshold: 1,
+            windowSeconds: 86400,
+            severity: 'critical',
+            targets: [
+              { id: 'security', provider: 'notify', to: 'security@example.invalid' },
+            ],
+          },
+        ],
+      },
     }
     expect((await reldb.init(environment.config)).success).toBe(true)
     expect((await audit.init()).success).toBe(true)
@@ -90,7 +128,12 @@ it('独立 PostgreSQL 节点并发不重复通知；外部已收请求后进程�
     nodes.forEach(node => node.child.send('check'))
     const results = await Promise.all(nodes.map(node => node.completed))
     expect(results.every(result => result.code === 0)).toBe(true)
-    expect(results.map(result => result.result)).toEqual(expect.arrayContaining([expect.objectContaining({ success: true, data: expect.objectContaining({ submitted: 1 }) })]))
+    expect(results.map(result => result.result)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({ submitted: 1 }),
+      }),
+    ]))
     expect(received).toBe(1)
 
     // 新规则用于独立故障场景；不更改既有领取。服务已收请求但未回复时终止该进程。
@@ -103,9 +146,12 @@ it('独立 PostgreSQL 节点并发不重复通知；外部已收请求后进程�
     const crashed = startWorker(configFile)
     await crashed.ready
     crashed.child.send('check')
-    await Promise.race([accepted, crashed.completed.then(() => {
-      throw new Error('Worker exited before receiver accepted request')
-    })])
+    await Promise.race([
+      accepted,
+      crashed.completed.then(() => {
+        throw new Error('Worker exited before receiver accepted request')
+      }),
+    ])
     crashed.child.kill()
     await crashed.completed
     hold = false
@@ -113,7 +159,13 @@ it('独立 PostgreSQL 节点并发不重复通知；外部已收请求后进程�
     const restarted = startWorker(configFile)
     await restarted.ready
     restarted.child.send('check')
-    expect(await restarted.completed).toMatchObject({ code: 0, result: { success: true, data: { submitted: 0 } } })
+    expect(await restarted.completed).toMatchObject({
+      code: 0,
+      result: {
+        success: true,
+        data: { submitted: 0 },
+      },
+    })
     expect(received).toBe(2)
   }
   finally {
@@ -122,8 +174,11 @@ it('独立 PostgreSQL 节点并发不重复通知；外部已收请求后进程�
     await audit.close()
     await reldb.close()
     server.closeAllConnections()
-    if (server.listening)
-      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+    if (server.listening) {
+      await new Promise<void>((resolve, reject) => server.close(error => error
+        ? reject(error)
+        : resolve()))
+    }
     await environment?.release?.()
     const actual = await realpath(directory)
     expect(actual.startsWith(`${await realpath(root)}${path.sep}audit-alert-nodes-`), 'Owned alert fixture cleanup path').toBe(true)

@@ -240,13 +240,17 @@ export function defineIamSuite(
 ): void {
   const envRef: { env: IamTestEnv | null } = { env: null }
 
-  describe.sequential(`iam (${label})`, () => {
+  describe(`iam (${label})`, { concurrent: false }, () => {
     beforeAll(async () => {
-      const env = typeof envOrFactory === 'function' ? await envOrFactory() : envOrFactory
+      const env = typeof envOrFactory === 'function'
+        ? await envOrFactory()
+        : envOrFactory
       envRef.env = env
       await env.setup()
 
-      const resolvedSettings = typeof iamSettings === 'function' ? iamSettings() : (iamSettings ?? {})
+      const resolvedSettings = typeof iamSettings === 'function'
+        ? iamSettings()
+        : (iamSettings ?? {})
 
       const result = await iam.init(resolvedSettings)
       if (!result.success) {
@@ -281,9 +285,11 @@ export function defineIamEnvSuite(
 ): void {
   const envRef: { env: IamTestEnv | null } = { env: null }
 
-  describe.sequential(`iam (${label})`, () => {
+  describe(`iam (${label})`, { concurrent: false }, () => {
     beforeAll(async () => {
-      const env = typeof envOrFactory === 'function' ? await envOrFactory() : envOrFactory
+      const env = typeof envOrFactory === 'function'
+        ? await envOrFactory()
+        : envOrFactory
       envRef.env = env
       await env.setup()
     }, 300_000)

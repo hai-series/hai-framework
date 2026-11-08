@@ -12,25 +12,37 @@ const contentTypes = {
 export function browserStartupAssets(): Plugin {
   const assets = new Map(Object.entries(contentTypes).map(([name, contentType]) => {
     const source = new URL(`../packages/cli/templates/shared/browser-check/${name}`, import.meta.url)
-    return [`${assetDirectory}/${name}`, { contentType, source }]
+    return [
+      `${assetDirectory}/${name}`,
+      { contentType, source },
+    ]
   }))
   return {
     name: 'hai-browser-startup-assets',
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
         const pathname = request.url?.split('?')[0] ?? ''
-        const asset = pathname.startsWith(server.config.base) ? assets.get(pathname.slice(server.config.base.length)) : undefined
+        const asset = pathname.startsWith(server.config.base)
+          ? assets.get(pathname.slice(server.config.base.length))
+          : undefined
         if (!asset || (request.method !== 'GET' && request.method !== 'HEAD'))
           return next()
         response.setHeader('Content-Type', asset.contentType)
-        response.end(request.method === 'HEAD' ? undefined : readFileSync(asset.source))
+        response.end(request.method === 'HEAD'
+          ? undefined
+          : readFileSync(asset.source))
       })
     },
     generateBundle() {
       if (this.environment.config.build.ssr)
         return
-      for (const [fileName, asset] of assets)
-        this.emitFile({ type: 'asset', fileName, source: readFileSync(asset.source) })
+      for (const [fileName, asset] of assets) {
+        this.emitFile({
+          type: 'asset',
+          fileName,
+          source: readFileSync(asset.source),
+        })
+      }
     },
   }
 }

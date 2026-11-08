@@ -57,7 +57,9 @@ function boundedEnd(boundaries: number[], start: number, limit: number, overlap:
       upper = middle
   }
   const candidate = boundaries[lower - 1]
-  return candidate !== undefined && candidate > start + overlap ? candidate : limit
+  return candidate !== undefined && candidate > start + overlap
+    ? candidate
+    : limit
 }
 
 /**
@@ -70,7 +72,9 @@ function splitCharacters(text: string, maxSize: number, overlap: number, express
   const chunks: string[] = []
   for (let start = 0; start < points.length;) {
     const limit = Math.min(start + maxSize, points.length)
-    const end = limit === points.length ? limit : boundedEnd(boundaries, start, limit, overlap)
+    const end = limit === points.length
+      ? limit
+      : boundedEnd(boundaries, start, limit, overlap)
     chunks.push(points.slice(start, end).join(''))
     if (end === points.length)
       break
@@ -81,12 +85,18 @@ function splitCharacters(text: string, maxSize: number, overlap: number, express
 
 /** 按非空白词滑窗，切片仍使用原始字符串的 offset，保留词间全部空白。 */
 function splitWords(text: string, maxSize: number, overlap: number): string[] {
-  const words = [...text.matchAll(/\S+/gu)]
+  const words = [
+    ...text.matchAll(/\S+/gu),
+  ]
   const chunks: string[] = []
   for (let start = 0; start < words.length;) {
     const end = Math.min(start + maxSize, words.length)
-    const from = start === 0 ? 0 : words[start]!.index
-    const to = end === words.length ? text.length : words[end]!.index
+    const from = start === 0
+      ? 0
+      : words[start]!.index
+    const to = end === words.length
+      ? text.length
+      : words[end]!.index
     chunks.push(text.slice(from, to))
     if (end === words.length)
       break
@@ -120,14 +130,35 @@ function markdownSections(text: string, minLevel: number): MarkdownSection[] {
       // 只移除空白分隔的尾部 #，按线性扫描处理，避免可交换量词造成正则回溯。
       if (end < title.length && (title[end - 1] === ' ' || title[end - 1] === '\t'))
         title = title.slice(0, end).trimEnd()
-      headings.push({ start: line.index, bodyStart: line.index + line[0].length, title, level: heading[1]!.length })
+      headings.push({
+        start: line.index,
+        bodyStart: line.index + line[0].length,
+        title,
+        level: heading[1]!.length,
+      })
     }
   }
-  if (headings.length === 0)
-    return [{ start: 0, bodyStart: 0, end: text.length, title: '', level: 0 }]
+  if (headings.length === 0) {
+    return [
+      {
+        start: 0,
+        bodyStart: 0,
+        end: text.length,
+        title: '',
+        level: 0,
+      },
+    ]
+  }
   const sections: MarkdownSection[] = []
-  if (headings[0]!.start > 0)
-    sections.push({ start: 0, bodyStart: 0, end: headings[0]!.start, title: '', level: 0 })
+  if (headings[0]!.start > 0) {
+    sections.push({
+      start: 0,
+      bodyStart: 0,
+      end: headings[0]!.start,
+      title: '',
+      level: 0,
+    })
+  }
   headings.forEach((heading, index) => sections.push({ ...heading, end: headings[index + 1]?.start ?? text.length }))
   return sections
 }
@@ -160,8 +191,11 @@ function modeExpression(mode: ChunkMode, separator?: string): RegExp | undefined
  */
 export function chunkText(text: string, options: ChunkOptionsInput): HaiResult<DataChunk[]> {
   const parsed = ChunkOptionsSchema.safeParse(options)
-  if (!parsed.success)
-    return err(HaiDatapipeError.CONFIG_ERROR, datapipeM('datapipe_configError', { params: { error: parsed.error.message } }), parsed.error)
+  if (!parsed.success) {
+    return err(HaiDatapipeError.CONFIG_ERROR, datapipeM('datapipe_configError', {
+      params: { error: parsed.error.message },
+    }), parsed.error)
+  }
   const opts = parsed.data
   if (opts.mode === 'custom' && !opts.separator)
     return err(HaiDatapipeError.MISSING_SEPARATOR, datapipeM('datapipe_missingSeparator'))
@@ -173,8 +207,19 @@ export function chunkText(text: string, options: ChunkOptionsInput): HaiResult<D
       for (const section of markdownSections(text, opts.markdownMinLevel)) {
         const content = text.slice(opts.markdownKeepTitle ? section.start : section.bodyStart, section.end)
         const parts = splitCharacters(content, opts.maxSize, opts.overlap, modeExpression('paragraph'))
-        for (const part of parts)
-          chunks.push({ index: chunks.length, content: part, metadata: { title: section.title, level: section.level, ...(parts.length > 1 ? { subChunk: true } : {}) } })
+        for (const part of parts) {
+          chunks.push({
+            index: chunks.length,
+            content: part,
+            metadata: {
+              title: section.title,
+              level: section.level,
+              ...(parts.length > 1
+                ? { subChunk: true }
+                : {}),
+            },
+          })
+        }
       }
       return ok(chunks)
     }
@@ -184,6 +229,10 @@ export function chunkText(text: string, options: ChunkOptionsInput): HaiResult<D
     return ok(parts.map((content, index) => ({ index, content })))
   }
   catch (cause) {
-    return err(HaiDatapipeError.CHUNK_FAILED, datapipeM('datapipe_chunkFailed', { params: { error: String(cause) } }), cause)
+    return err(HaiDatapipeError.CHUNK_FAILED, datapipeM('datapipe_chunkFailed', {
+      params: {
+        error: String(cause),
+      },
+    }), cause)
   }
 }

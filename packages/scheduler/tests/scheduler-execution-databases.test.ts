@@ -9,12 +9,31 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { HaiSchedulerError, scheduler } from '../src/index.js'
 import { executionId, SchedulerExecutionRepository } from '../src/repositories/index.js'
 
-const task: TaskDefinition = { id: 'database-task', name: 'database-task', cron: '* * * * *', retry: { maxAttempts: 3 } }
+const task: TaskDefinition = {
+  id: 'database-task',
+  name: 'database-task',
+  cron: '* * * * *',
+  retry: { maxAttempts: 3 },
+}
 const trigger = { type: 'manual', source: null } as const
 const table = 'hai_scheduler_executions'
 
 function successLog(now: number): TaskExecutionLog {
-  return { id: crypto.randomUUID(), persistence: { status: 'pending' as const }, taskId: task.id, taskName: task.name, taskType: 'hook', triggerType: 'manual', triggerSource: null, status: 'success', result: 'committed', error: null, startedAt: now, finishedAt: now, duration: 0 }
+  return {
+    id: crypto.randomUUID(),
+    persistence: { status: 'pending' as const },
+    taskId: task.id,
+    taskName: task.name,
+    taskType: 'hook',
+    triggerType: 'manual',
+    triggerSource: null,
+    status: 'success',
+    result: 'committed',
+    error: null,
+    startedAt: now,
+    finishedAt: now,
+    duration: 0,
+  }
 }
 
 /** 构造真实持久过期状态；节点墙钟不是租约测试的时间控制入口。 */
@@ -23,7 +42,7 @@ async function expire(id: string): Promise<void> {
 }
 
 for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
-  describe.sequential(`shared execution protocol (${type})`, () => {
+  describe(`shared execution protocol (${type})`, { concurrent: false }, () => {
     let container: StartedTestContainer | undefined
     let repo: SchedulerExecutionRepository
     let now: number
@@ -40,10 +59,19 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
           .withEnvironment(postgres
             ? { POSTGRES_DB: 'scheduler_execution', POSTGRES_USER: 'scheduler_test', POSTGRES_PASSWORD: 'scheduler_test' }
             : { MYSQL_DATABASE: 'scheduler_execution', MYSQL_ROOT_PASSWORD: 'scheduler_test' })
-          .withWaitStrategy(postgres ? Wait.forLogMessage('database system is ready to accept connections', 2) : Wait.forLogMessage(/ready for connections\..*port: 3306/))
+          .withWaitStrategy(postgres
+            ? Wait.forLogMessage('database system is ready to accept connections', 2)
+            : Wait.forLogMessage(/ready for connections\..*port: 3306/))
           .withStartupTimeout(120_000)
           .start()
-        config = { type, host: container.getHost(), port: container.getMappedPort(port), database: 'scheduler_execution', user: postgres ? 'scheduler_test' : 'root', password: 'scheduler_test' }
+        config = {
+          type,
+          host: container.getHost(),
+          port: container.getMappedPort(port),
+          database: 'scheduler_execution',
+          user: postgres ? 'scheduler_test' : 'root',
+          password: 'scheduler_test',
+        }
       }
       expect((await reldb.init(config)).success).toBe(true)
     }, 150_000)
@@ -120,7 +148,10 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
       else {
         expect(next).toMatchObject({ success: true, data: null })
         const unknown = await repo.byOccurrence(id)
-        expect(unknown).toMatchObject({ success: true, data: { status: 'unknown', attemptCount: 1 } })
+        expect(unknown).toMatchObject({
+          success: true,
+          data: { status: 'unknown', attemptCount: 1 },
+        })
         expect(await repo.claim(task, executionId(task.id, 'manual', 'blocked'), trigger, 'new', 1000)).toMatchObject({ success: true, data: null })
         if (!unknown.success || !unknown.data)
           throw new Error('Unknown state missing')
@@ -137,7 +168,10 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
         throw new Error('Claim failed')
       expect((await repo.begin(claimed.data, 1000)).success).toBe(true)
       expect((await repo.finish(claimed.data, successLog(now))).success).toBe(true)
-      expect(await repo.claim(task, id, trigger, 'b', 1000)).toMatchObject({ success: true, data: { status: 'success', attemptCount: 1 } })
+      expect(await repo.claim(task, id, trigger, 'b', 1000)).toMatchObject({
+        success: true,
+        data: { status: 'success', attemptCount: 1 },
+      })
       expect((await reldb.sql.execute(`UPDATE ${table} SET leased_until = ? WHERE occurrence_id = ?`, ['9007199254740993', id])).success).toBe(true)
       expect((await repo.byOccurrence(id)).success).toBe(false)
     })
@@ -151,7 +185,10 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
       ])
       expect(claims).toEqual(expect.arrayContaining([
         { success: true, data: null },
-        { success: true, data: expect.objectContaining({ occurrenceId: id, status: 'claimed', attemptCount: 0 }) },
+        {
+          success: true,
+          data: expect.objectContaining({ occurrenceId: id, status: 'claimed', attemptCount: 0 }),
+        },
       ]))
       const nextId = executionId(task.id, 'manual', 'other')
       expect(await peer.claim(task, nextId, trigger, 'b', 60_000)).toEqual({ success: true, data: null })
@@ -166,13 +203,19 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
       // 固定扫描分钟，所有领取、执行和租约条件仍使用真实 PostgreSQL。
       const currentTime = vi.spyOn(SchedulerExecutionRepository.prototype, 'currentTime').mockResolvedValue(slot)
       const onTaskExecute = vi.fn(() => 'committed')
-      const config = { tickInterval: 100, hooks: { onTaskExecute } }
+      const config = {
+        tickInterval: 100,
+        hooks: { onTaskExecute },
+      }
       try {
         expect((await scheduler.init(config)).success).toBe(true)
         expect((await scheduler.register(task)).success).toBe(true)
         expect(scheduler.start().success).toBe(true)
         await vi.waitFor(async () => {
-          expect(await scheduler.execution.get(id)).toMatchObject({ success: true, data: { status: 'success', attemptCount: 1, logPersistence: 'persisted' } })
+          expect(await scheduler.execution.get(id)).toMatchObject({
+            success: true,
+            data: { status: 'success', attemptCount: 1, logPersistence: 'persisted' },
+          })
         }, { timeout: 5000 })
         await scheduler.close()
 
@@ -181,11 +224,18 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
         await vi.waitFor(async () => {
           expect(await scheduler.getLogs({ taskId: task.id })).toMatchObject({
             success: true,
-            data: { items: expect.arrayContaining([expect.objectContaining({ occurrenceId: id, status: 'interrupted' })]) },
+            data: {
+              items: expect.arrayContaining([
+                expect.objectContaining({ occurrenceId: id, status: 'interrupted' }),
+              ]),
+            },
           })
         }, { timeout: 5000 })
         expect(onTaskExecute).toHaveBeenCalledOnce()
-        expect(await scheduler.execution.get(id)).toMatchObject({ success: true, data: { status: 'success', attemptCount: 1 } })
+        expect(await scheduler.execution.get(id)).toMatchObject({
+          success: true,
+          data: { status: 'success', attemptCount: 1 },
+        })
       }
       finally {
         await scheduler.close()
@@ -201,7 +251,10 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
       expect((await repo.begin(claim.data, 60_000)).success).toBe(true)
       expect((await repo.finish(claim.data, successLog(now))).success).toBe(true)
       expect((await reldb.sql.execute(`ALTER TABLE ${table} ADD CHECK (status <> 'claimed')`)).success).toBe(true)
-      expect(await repo.claim(task, id, trigger, 'b', 60_000)).toMatchObject({ success: false, error: { code: HaiSchedulerError.DB_SAVE_FAILED.code } })
+      expect(await repo.claim(task, id, trigger, 'b', 60_000)).toMatchObject({
+        success: false,
+        error: { code: HaiSchedulerError.DB_SAVE_FAILED.code },
+      })
     })
   })
 }

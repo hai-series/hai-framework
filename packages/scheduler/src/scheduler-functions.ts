@@ -39,7 +39,9 @@ let definitionLifetime = new AbortController()
 
 function withTaskDefinitions<T>(operation: (signal: AbortSignal) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
   const signal = definitionLifetime.signal
-  const result = definitionTail.then(() => signal.aborted ? err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing')) : operation(signal))
+  const result = definitionTail.then(() => signal.aborted
+    ? err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing'))
+    : operation(signal))
   definitionTail = result.then(() => undefined, () => undefined)
   return result
 }
@@ -266,14 +268,18 @@ function normalizeTaskDescription(description: string | undefined): string | und
     return undefined
 
   const trimmed = description.trim()
-  return trimmed.length > 0 ? trimmed : undefined
+  return trimmed.length > 0
+    ? trimmed
+    : undefined
 }
 
 function validateRetryPolicy(taskId: string, retry: TaskRetryPolicy): HaiResult<TaskRetryPolicy> {
   if (!Number.isInteger(retry.maxAttempts) || retry.maxAttempts < 1 || retry.maxAttempts > 100) {
     return err(
       HaiSchedulerError.EXECUTION_FAILED,
-      schedulerM('scheduler_invalidRetryConfig', { params: { taskId } }),
+      schedulerM('scheduler_invalidRetryConfig', {
+        params: { taskId },
+      }),
     )
   }
 
@@ -282,14 +288,20 @@ function validateRetryPolicy(taskId: string, retry: TaskRetryPolicy): HaiResult<
     if (hasInvalidBackoff) {
       return err(
         HaiSchedulerError.EXECUTION_FAILED,
-        schedulerM('scheduler_invalidRetryConfig', { params: { taskId } }),
+        schedulerM('scheduler_invalidRetryConfig', {
+          params: { taskId },
+        }),
       )
     }
   }
 
   return ok({
     maxAttempts: retry.maxAttempts,
-    ...(retry.backoffMs ? { backoffMs: [...retry.backoffMs] } : {}),
+    ...(retry.backoffMs
+      ? {
+          backoffMs: [...retry.backoffMs],
+        }
+      : {}),
   })
 }
 
@@ -330,7 +342,10 @@ async function refreshPersistedTasks(taskRepo: SchedulerTaskRepository, epoch: n
   })
   let loadResult: HaiResult<TaskDefinition[]>
   try {
-    loadResult = await Promise.race([taskRepo.loadTasks(), cancelled])
+    loadResult = await Promise.race([
+      taskRepo.loadTasks(),
+      cancelled,
+    ])
   }
   finally {
     signal.removeEventListener('abort', cancel)
@@ -349,8 +364,11 @@ async function refreshPersistedTasks(taskRepo: SchedulerTaskRepository, epoch: n
   for (const task of loadResult.data) {
     if (!task.id)
       return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_taskIdEmpty'))
-    if (nextTasks.has(task.id))
-      return err(HaiSchedulerError.TASK_ALREADY_EXISTS, schedulerM('scheduler_taskAlreadyExists', { params: { taskId: task.id } }))
+    if (nextTasks.has(task.id)) {
+      return err(HaiSchedulerError.TASK_ALREADY_EXISTS, schedulerM('scheduler_taskAlreadyExists', {
+        params: { taskId: task.id },
+      }))
+    }
     const cronResult = parseCronExpression(task.cron, task.timezone)
     if (!cronResult.success)
       return cronResult
@@ -423,7 +441,9 @@ async function registerTaskDefinition(
 ): Promise<HaiResult<void>> {
   if ((task.handler && !TaskHandlerConfigSchema.safeParse(task.handler).success)
     || (task.idempotent !== undefined && typeof task.idempotent !== 'boolean')) {
-    return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_invalidHandlerConfig', { params: { taskId: task.id } }))
+    return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_invalidHandlerConfig', {
+      params: { taskId: task.id },
+    }))
   }
   if (!task.id) {
     return err(
@@ -435,7 +455,9 @@ async function registerTaskDefinition(
   if (hasTask(task.id)) {
     return err(
       HaiSchedulerError.TASK_ALREADY_EXISTS,
-      schedulerM('scheduler_taskAlreadyExists', { params: { taskId: task.id } }),
+      schedulerM('scheduler_taskAlreadyExists', {
+        params: { taskId: task.id },
+      }),
     )
   }
 
@@ -443,7 +465,9 @@ async function registerTaskDefinition(
   if (!cronResult.success)
     return cronResult
 
-  const retryResult = task.retry ? validateRetryPolicy(task.id, task.retry) : ok(undefined)
+  const retryResult = task.retry
+    ? validateRetryPolicy(task.id, task.retry)
+    : ok(undefined)
   if (!retryResult.success)
     return retryResult
 
@@ -464,7 +488,9 @@ async function registerTaskDefinition(
       logger.warn('Failed to persist task definition', { taskId: task.id, error: saveResult.error.message })
       return err(
         HaiSchedulerError.DB_SAVE_FAILED,
-        schedulerM('scheduler_dbSaveFailed', { params: { error: saveResult.error.message } }),
+        schedulerM('scheduler_dbSaveFailed', {
+          params: { error: saveResult.error.message },
+        }),
         saveResult.error,
       )
     }
@@ -514,7 +540,9 @@ async function unregisterTaskDefinition(
   if (!hasTask(taskId)) {
     return err(
       HaiSchedulerError.TASK_NOT_FOUND,
-      schedulerM('scheduler_taskNotFound', { params: { taskId } }),
+      schedulerM('scheduler_taskNotFound', {
+        params: { taskId },
+      }),
     )
   }
 
@@ -525,7 +553,9 @@ async function unregisterTaskDefinition(
       logger.warn('Failed to delete persisted task definition', { taskId, error: deleteResult.error.message })
       return err(
         HaiSchedulerError.DB_SAVE_FAILED,
-        schedulerM('scheduler_dbSaveFailed', { params: { error: deleteResult.error.message } }),
+        schedulerM('scheduler_dbSaveFailed', {
+          params: { error: deleteResult.error.message },
+        }),
         deleteResult.error,
       )
     }
@@ -577,7 +607,9 @@ async function updateTaskDefinition(
   if (!existingTask) {
     return err(
       HaiSchedulerError.TASK_NOT_FOUND,
-      schedulerM('scheduler_taskNotFound', { params: { taskId } }),
+      schedulerM('scheduler_taskNotFound', {
+        params: { taskId },
+      }),
     )
   }
 
@@ -586,7 +618,9 @@ async function updateTaskDefinition(
 
   if (updates.cron !== undefined || updates.timezone !== undefined) {
     const cronExpression = updates.cron ?? existingTask.cron
-    const timezone = updates.timezone === null ? undefined : (updates.timezone ?? existingTask.timezone)
+    const timezone = updates.timezone === null
+      ? undefined
+      : (updates.timezone ?? existingTask.timezone)
     const cronResult = parseCronExpression(cronExpression, timezone)
     if (!cronResult.success)
       return cronResult
@@ -614,27 +648,53 @@ async function updateTaskDefinition(
 
   const normalizedUpdates: TaskUpdateInput = {
     ...updates,
-    ...(updates.description !== undefined ? { description: normalizedDescription } : {}),
-    ...(updates.retry !== undefined ? { retry: normalizedRetry } : {}),
+    ...(updates.description !== undefined
+      ? { description: normalizedDescription }
+      : {}),
+    ...(updates.retry !== undefined
+      ? { retry: normalizedRetry }
+      : {}),
   }
 
   if ((updates.handler && !TaskHandlerConfigSchema.safeParse(updates.handler).success)
     || (updates.idempotent !== undefined && typeof updates.idempotent !== 'boolean')) {
-    return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_invalidHandlerConfig', { params: { taskId } }))
+    return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_invalidHandlerConfig', {
+      params: { taskId },
+    }))
   }
 
   const updatedTask: TaskDefinition = {
     ...existingTask,
-    ...(normalizedUpdates.name !== undefined ? { name: normalizedUpdates.name } : {}),
-    ...(normalizedUpdates.description !== undefined ? { description: normalizedUpdates.description || undefined } : {}),
-    ...(normalizedUpdates.cron !== undefined ? { cron: normalizedUpdates.cron } : {}),
-    ...(normalizedUpdates.timezone !== undefined ? { timezone: normalizedUpdates.timezone ?? undefined } : {}),
-    ...(normalizedUpdates.enabled !== undefined ? { enabled: normalizedUpdates.enabled } : {}),
-    ...(normalizedUpdates.idempotent !== undefined ? { idempotent: normalizedUpdates.idempotent } : {}),
-    ...(normalizedUpdates.deleteAfterRun !== undefined ? { deleteAfterRun: normalizedUpdates.deleteAfterRun } : {}),
-    ...(normalizedUpdates.retry !== undefined ? { retry: normalizedUpdates.retry ?? undefined } : {}),
-    ...(normalizedUpdates.params !== undefined ? { params: normalizedUpdates.params } : {}),
-    ...(normalizedUpdates.handler !== undefined ? { handler: normalizedUpdates.handler ?? undefined } : {}),
+    ...(normalizedUpdates.name !== undefined
+      ? { name: normalizedUpdates.name }
+      : {}),
+    ...(normalizedUpdates.description !== undefined
+      ? { description: normalizedUpdates.description || undefined }
+      : {}),
+    ...(normalizedUpdates.cron !== undefined
+      ? { cron: normalizedUpdates.cron }
+      : {}),
+    ...(normalizedUpdates.timezone !== undefined
+      ? { timezone: normalizedUpdates.timezone ?? undefined }
+      : {}),
+    ...(normalizedUpdates.enabled !== undefined
+      ? { enabled: normalizedUpdates.enabled }
+      : {}),
+    ...(normalizedUpdates.idempotent !== undefined
+      ? { idempotent: normalizedUpdates.idempotent }
+      : {}),
+    ...(normalizedUpdates.deleteAfterRun !== undefined
+      ? { deleteAfterRun: normalizedUpdates.deleteAfterRun }
+      : {}),
+    ...(normalizedUpdates.retry !== undefined
+      ? { retry: normalizedUpdates.retry ?? undefined }
+      : {}),
+    ...(normalizedUpdates.params !== undefined
+      ? { params: normalizedUpdates.params }
+      : {}),
+    ...(normalizedUpdates.handler !== undefined
+      ? { handler: normalizedUpdates.handler ?? undefined }
+      : {}),
   }
 
   if (taskRepo) {
@@ -643,7 +703,9 @@ async function updateTaskDefinition(
       logger.warn('Failed to update persisted task definition', { taskId, error: updateResult.error.message })
       return err(
         HaiSchedulerError.DB_SAVE_FAILED,
-        schedulerM('scheduler_dbSaveFailed', { params: { error: updateResult.error.message } }),
+        schedulerM('scheduler_dbSaveFailed', {
+          params: { error: updateResult.error.message },
+        }),
         updateResult.error,
       )
     }

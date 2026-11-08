@@ -92,7 +92,15 @@ export function executionId(taskId: string, type: string, key: string): string {
  * ```
  */
 export function executionEntry(row: StoredExecution): SchedulerExecutionEntry {
-  return { occurrenceId: row.occurrenceId, taskId: row.taskId, status: row.status, sequence: row.sequence, attemptCount: row.attemptCount, updatedAt: row.updatedAt, logPersistence: row.logPersistence }
+  return {
+    occurrenceId: row.occurrenceId,
+    taskId: row.taskId,
+    status: row.status,
+    sequence: row.sequence,
+    attemptCount: row.attemptCount,
+    updatedAt: row.updatedAt,
+    logPersistence: row.logPersistence,
+  }
 }
 
 /** 统一持久状态失败；不回退为本地执行。 */
@@ -125,22 +133,60 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
       idColumn: 'sequence',
       idField: 'sequence',
       fields: [
-        { fieldName: 'sequence', columnName: 'sequence', def: { type: 'INTEGER', primaryKey: true, autoIncrement: true }, select: true, create: false, update: false },
+        {
+          fieldName: 'sequence',
+          columnName: 'sequence',
+          def: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+          select: true,
+          create: false,
+          update: false,
+        },
         ...[
-          ['occurrenceId', 'occurrence_id', true, true],
+          [
+            'occurrenceId',
+            'occurrence_id',
+            true,
+            true,
+          ],
           ['taskId', 'task_id', true, false],
-          ['activeTask', 'active_task', false, true],
+          [
+            'activeTask',
+            'active_task',
+            false,
+            true,
+          ],
           ['status', 'status', true, false],
           ['owner', 'owner', false, false],
           ['snapshot', 'snapshot', true, false],
-          ['triggerJson', 'trigger_json', true, false],
+          [
+            'triggerJson',
+            'trigger_json',
+            true,
+            false,
+          ],
           ['logJson', 'log_json', false, false],
           ['logsJson', 'logs_json', false, false],
-          ['logPersistence', 'log_persistence', true, false],
+          [
+            'logPersistence',
+            'log_persistence',
+            true,
+            false,
+          ],
         ].map(([fieldName, columnName, notNull, unique]) => ({
           fieldName: String(fieldName),
           columnName: String(columnName),
-          def: { type: ['snapshot', 'triggerJson', 'logJson', 'logsJson'].includes(String(fieldName)) ? 'JSON' as const : 'TEXT' as const, notNull: Boolean(notNull), unique: Boolean(unique) },
+          def: {
+            type: [
+              'snapshot',
+              'triggerJson',
+              'logJson',
+              'logsJson',
+            ].includes(String(fieldName))
+              ? 'JSON' as const
+              : 'TEXT' as const,
+            notNull: Boolean(notNull),
+            unique: Boolean(unique),
+          },
           select: true,
           create: true,
           update: true,
@@ -159,7 +205,14 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
           create: true,
           update: true,
         })),
-        { fieldName: 'idempotent', columnName: 'idempotent', def: { type: 'BOOLEAN', notNull: true }, select: true, create: true, update: true },
+        {
+          fieldName: 'idempotent',
+          columnName: 'idempotent',
+          def: { type: 'BOOLEAN', notNull: true },
+          select: true,
+          create: true,
+          update: true,
+        },
       ],
     })
   }
@@ -195,18 +248,32 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
     if (!result.success)
       return failed(result.error)
     const now = Number(result.data?.now)
-    return Number.isSafeInteger(now) && now >= 0 ? ok(now) : failed()
+    return Number.isSafeInteger(now) && now >= 0
+      ? ok(now)
+      : failed()
   }
 
   /** 读取统一校验 BIGINT，不能把 PG 字符串时间或舍入的序号用于 owner 判断。 */
   private normalize(row: StoredExecution): HaiResult<StoredExecution> {
     const value = { ...row }
     // JSON 大载荷避免 MySQL 的 TEXT→VARCHAR(255) 映射；驱动解码后统一恢复内部 JSON 文本契约。
-    for (const field of ['snapshot', 'triggerJson', 'logJson', 'logsJson'] as const) {
+    for (const field of [
+      'snapshot',
+      'triggerJson',
+      'logJson',
+      'logsJson',
+    ] as const) {
       if (row[field] !== undefined && row[field] !== null && typeof row[field] !== 'string')
         value[field] = JSON.stringify(row[field])
     }
-    for (const field of ['sequence', 'leasedUntil', 'attemptCount', 'maxAttempts', 'updatedAt', 'createdAt'] as const) {
+    for (const field of [
+      'sequence',
+      'leasedUntil',
+      'attemptCount',
+      'maxAttempts',
+      'updatedAt',
+      'createdAt',
+    ] as const) {
       const number = Number(row[field])
       if (!Number.isSafeInteger(number) || number < 0)
         return failed()
@@ -217,10 +284,16 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
 
   /** 按稳定回执读取。@example await repository.byOccurrence(id) */
   async byOccurrence(id: string): Promise<HaiResult<StoredExecution | null>> {
-    const rows = await this.findAll({ where: 'occurrence_id = ?', params: [id], limit: 1 })
+    const rows = await this.findAll({
+      where: 'occurrence_id = ?',
+      params: [id],
+      limit: 1,
+    })
     if (!rows.success)
       return failed(rows.error)
-    return rows.data[0] ? this.normalize(rows.data[0]) : ok(null)
+    return rows.data[0]
+      ? this.normalize(rows.data[0])
+      : ok(null)
   }
 
   /** 有界读取过期执行，跨分钟恢复原 occurrence，而不是创建新的副作用身份。@example await repository.expired() */
@@ -233,9 +306,17 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
     const result = await this.db.sql.execute(
       `UPDATE ${TABLE} SET status = ?, owner = NULL, leased_until = 0, updated_at = ${this.nextUpdatedAt()}
        WHERE occurrence_id = ? AND owner = ? AND leased_until <= ${this.databaseClock()} AND status IN (?, ?)`,
-      ['unknown', row.occurrenceId, row.owner, 'claimed', 'running'],
+      [
+        'unknown',
+        row.occurrenceId,
+        row.owner,
+        'claimed',
+        'running',
+      ],
     )
-    return result.success && result.data.changes === 1 ? ok(undefined) : failed()
+    return result.success && result.data.changes === 1
+      ? ok(undefined)
+      : failed()
   }
 
   /** 有界读取待人工核对记录。@example await repository.unknown(50, 0) */
@@ -259,16 +340,35 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
     const result = await this.db.sql.execute(
       `UPDATE ${TABLE} SET log_persistence = ?, log_json = ?, updated_at = ${this.nextUpdatedAt()}
        WHERE occurrence_id = ? AND updated_at = ? AND log_persistence = ? AND status NOT IN (?, ?)`,
-      ['persisted', JSON.stringify({ ...log, persistence: { status: 'persisted' } }), row.occurrenceId, row.updatedAt, 'pending', 'claimed', 'running'],
+      [
+        'persisted',
+        JSON.stringify({
+          ...log,
+          persistence: { status: 'persisted' },
+        }),
+        row.occurrenceId,
+        row.updatedAt,
+        'pending',
+        'claimed',
+        'running',
+      ],
     )
     if (result.success && result.data.changes === 1)
       return ok(undefined)
     const current = await this.byOccurrence(row.occurrenceId)
-    return current.success && current.data?.logPersistence === 'persisted' && current.data.logsJson === row.logsJson ? ok(undefined) : failed()
+    return current.success && current.data?.logPersistence === 'persisted' && current.data.logsJson === row.logsJson
+      ? ok(undefined)
+      : failed()
   }
 
   private async rows(where: string, params: unknown[], limit: number, offset: number): Promise<HaiResult<StoredExecution[]>> {
-    const result = await this.findAll({ where, params, limit, offset, orderBy: 'sequence ASC' })
+    const result = await this.findAll({
+      where,
+      params,
+      limit,
+      offset,
+      orderBy: 'sequence ASC',
+    })
     if (!result.success)
       return failed(result.error)
     const rows: StoredExecution[] = []
@@ -300,7 +400,21 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
       created = await this.db.sql.execute(
         `INSERT INTO ${TABLE} (occurrence_id, task_id, active_task, status, owner, leased_until, attempt_count, max_attempts, idempotent, snapshot, trigger_json, log_persistence, updated_at, created_at)
          VALUES (?, ?, ?, ?, ?, ${clock} + ?, 0, ?, ?, ?, ?, ?, ${clock}, ${clock})${conflictClause}`,
-        [id, task.id, task.id, 'claimed', owner, leaseMs, task.retry?.maxAttempts ?? 1, postgres ? task.idempotent === true : Number(task.idempotent === true), JSON.stringify(task), JSON.stringify(trigger), 'unconfirmed'],
+        [
+          id,
+          task.id,
+          task.id,
+          'claimed',
+          owner,
+          leaseMs,
+          task.retry?.maxAttempts ?? 1,
+          postgres
+            ? task.idempotent === true
+            : Number(task.idempotent === true),
+          JSON.stringify(task),
+          JSON.stringify(trigger),
+          'unconfirmed',
+        ],
       )
     }
     catch (cause) {
@@ -313,12 +427,24 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
       return existing
     if (!existing.data) {
       // 冲突可能来自另一个 occurrence 的串行槽；只有实际存在占用者才按正常竞争处理。
-      const active = await this.findAll({ where: 'active_task = ?', params: [task.id], limit: 1 })
-      return active.success && active.data.length > 0 ? ok(null) : failed(created.success ? undefined : created.error)
+      const active = await this.findAll({
+        where: 'active_task = ?',
+        params: [task.id],
+        limit: 1,
+      })
+      return active.success && active.data.length > 0
+        ? ok(null)
+        : failed(created.success ? undefined : created.error)
     }
     const row = existing.data
-    if ((created.success && created.data.changes === 1) || ['success', 'failed', 'interrupted', 'discarded'].includes(row.status))
+    if ((created.success && created.data.changes === 1) || [
+      'success',
+      'failed',
+      'interrupted',
+      'discarded',
+    ].includes(row.status)) {
       return ok(row)
+    }
     if (row.status === 'unknown')
       return ok(null)
     // 是否过期只在下方写语句里判断，不能先用某个节点的墙钟决定接管或隔离。
@@ -328,16 +454,28 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
          WHERE occurrence_id = ? AND owner = ? AND leased_until <= ${clock} AND status = ?`,
         ['unknown', id, row.owner, 'running'],
       )
-      return isolated.success ? ok(null) : failed(isolated.error)
+      return isolated.success
+        ? ok(null)
+        : failed(isolated.error)
     }
     const recovered = await this.db.sql.execute(
       `UPDATE ${TABLE} SET status = ?, owner = ?, leased_until = ${clock} + ?, updated_at = ${this.nextUpdatedAt()}
        WHERE occurrence_id = ? AND owner = ? AND leased_until <= ${clock} AND status IN (?, ?)`,
-      ['claimed', owner, leaseMs, id, row.owner, 'claimed', 'running'],
+      [
+        'claimed',
+        owner,
+        leaseMs,
+        id,
+        row.owner,
+        'claimed',
+        'running',
+      ],
     )
     if (!recovered.success)
       return failed(recovered.error)
-    return recovered.data.changes === 1 ? this.byOccurrence(id) : ok(null)
+    return recovered.data.changes === 1
+      ? this.byOccurrence(id)
+      : ok(null)
   }
 
   /** 外部副作用前的条件门闩，并原子递增持久尝试次数。@example await repository.begin(row, leaseMs) */
@@ -346,7 +484,14 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
     const result = await this.db.sql.execute(
       `UPDATE ${TABLE} SET status = ?, attempt_count = attempt_count + 1, leased_until = ${clock} + ?, updated_at = ${this.nextUpdatedAt()}
        WHERE occurrence_id = ? AND owner = ? AND leased_until > ${clock} AND status IN (?, ?) AND attempt_count < max_attempts`,
-      ['running', leaseMs, row.occurrenceId, row.owner, 'claimed', 'running'],
+      [
+        'running',
+        leaseMs,
+        row.occurrenceId,
+        row.owner,
+        'claimed',
+        'running',
+      ],
     )
     if (!result.success || result.data.changes !== 1)
       return failed(result.success ? undefined : result.error)
@@ -360,9 +505,17 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
     const clock = this.databaseClock()
     const result = await this.db.sql.execute(
       `UPDATE ${TABLE} SET leased_until = ${clock} + ?, updated_at = ${this.nextUpdatedAt()} WHERE occurrence_id = ? AND owner = ? AND leased_until > ${clock} AND status IN (?, ?)`,
-      [leaseMs, row.occurrenceId, row.owner, 'claimed', 'running'],
+      [
+        leaseMs,
+        row.occurrenceId,
+        row.owner,
+        'claimed',
+        'running',
+      ],
     )
-    return result.success && result.data.changes === 1 ? ok(undefined) : failed()
+    return result.success && result.data.changes === 1
+      ? ok(undefined)
+      : failed()
   }
 
   /** 有效 owner 确认终态；unknown 保留串行槽，阻止下一 cron/manual 与旧副作用并行。@example await repository.finish(row, log) */
@@ -371,17 +524,38 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
     const result = await this.db.sql.execute(
       `UPDATE ${TABLE} SET status = ?, active_task = ?, owner = NULL, leased_until = 0, log_json = ?, logs_json = ?, log_persistence = ?, updated_at = ${this.nextUpdatedAt()}
        WHERE occurrence_id = ? AND owner = ? AND leased_until > ${clock} AND status IN (?, ?)`,
-      [log.status, log.status === 'unknown' ? row.taskId : null, JSON.stringify(log), JSON.stringify(logs), 'pending', row.occurrenceId, row.owner, 'claimed', 'running'],
+      [
+        log.status,
+        log.status === 'unknown'
+          ? row.taskId
+          : null,
+        JSON.stringify(log),
+        JSON.stringify(logs),
+        'pending',
+        row.occurrenceId,
+        row.owner,
+        'claimed',
+        'running',
+      ],
     )
-    return result.success && result.data.changes === 1 ? ok(undefined) : failed()
+    return result.success && result.data.changes === 1
+      ? ok(undefined)
+      : failed()
   }
 
   /** 人工隔离旧 runner 后条件裁定；不重排旧 occurrence，只有成功裁定才释放任务槽。@example await repository.resolve(id, 'discarded', updatedAt) */
   async resolve(id: string, status: 'success' | 'discarded', expectedUpdatedAt: number): Promise<HaiResult<void>> {
     const result = await this.db.sql.execute(
       `UPDATE ${TABLE} SET status = ?, active_task = NULL, updated_at = ${this.nextUpdatedAt()} WHERE occurrence_id = ? AND status = ? AND updated_at = ?`,
-      [status, id, 'unknown', expectedUpdatedAt],
+      [
+        status,
+        id,
+        'unknown',
+        expectedUpdatedAt,
+      ],
     )
-    return result.success && result.data.changes === 1 ? ok(undefined) : failed()
+    return result.success && result.data.changes === 1
+      ? ok(undefined)
+      : failed()
   }
 }

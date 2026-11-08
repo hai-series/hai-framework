@@ -3,13 +3,26 @@ import { describe, expect, it } from 'vitest'
 import { ChunkOptionsSchema, datapipe, HaiDatapipeError } from '../src/index.js'
 
 function reconstruct(chunks: DataChunk[], overlap: number): string {
-  return chunks.map((chunk, index) => Array.from(chunk.content).slice(index === 0 ? 0 : overlap).join('')).join('')
+  return chunks.map((chunk, index) => Array.from(chunk.content).slice(index === 0
+    ? 0
+    : overlap).join('')).join('')
 }
 
 describe('chunk exact bounds and source preservation', () => {
-  it.each<ChunkMode>(['sentence', 'paragraph', 'character', 'page', 'custom'])('%s 包含 overlap/分隔符的长度始终有界且可还原全部原文', (mode) => {
+  it.each<ChunkMode>([
+    'sentence',
+    'paragraph',
+    'character',
+    'page',
+    'custom',
+  ])('%s 包含 overlap/分隔符的长度始终有界且可还原全部原文', (mode) => {
     const text = '  甲😀。\n\n乙𠮷！\fAAA|||BBB\t\r\n末尾  '
-    const result = datapipe.chunk(text, { mode, maxSize: 6, overlap: 2, separator: '(\\|\\|\\|)' })
+    const result = datapipe.chunk(text, {
+      mode,
+      maxSize: 6,
+      overlap: 2,
+      separator: '(\\|\\|\\|)',
+    })
     if (!result.success)
       throw new Error(result.error.message)
     expect(result.data.length).toBeGreaterThan(1)
@@ -37,11 +50,15 @@ describe('chunk exact bounds and source preservation', () => {
     const result = datapipe.chunk(text, { mode: 'word', maxSize: 3, overlap: 1 })
     if (!result.success)
       throw new Error(result.error.message)
-    expect(result.data.every(chunk => [...chunk.content.matchAll(/\S+/gu)].length <= 3)).toBe(true)
+    expect(result.data.every(chunk => [
+      ...chunk.content.matchAll(/\S+/gu),
+    ].length <= 3)).toBe(true)
     const restored = result.data.map((chunk, index) => {
       if (index === 0)
         return chunk.content
-      const matches = [...chunk.content.matchAll(/\S+/gu)]
+      const matches = [
+        ...chunk.content.matchAll(/\S+/gu),
+      ]
       return chunk.content.slice(matches[1]!.index)
     }).join('')
     expect(restored).toBe(text)
@@ -62,13 +79,31 @@ describe('chunk exact bounds and source preservation', () => {
   })
 
   it('markdown 可显式只移除标题行，其他空白与正文不变', () => {
-    const result = datapipe.chunk('## Title\r\n\r\n  Body\t\r\n', { mode: 'markdown', maxSize: 100, overlap: 0, markdownKeepTitle: false })
-    expect(result).toMatchObject({ success: true, data: [{ content: '\r\n  Body\t\r\n', metadata: { title: 'Title', level: 2 } }] })
+    const result = datapipe.chunk('## Title\r\n\r\n  Body\t\r\n', {
+      mode: 'markdown',
+      maxSize: 100,
+      overlap: 0,
+      markdownKeepTitle: false,
+    })
+    expect(result).toMatchObject({
+      success: true,
+      data: [
+        {
+          content: '\r\n  Body\t\r\n',
+          metadata: { title: 'Title', level: 2 },
+        },
+      ],
+    })
   })
 
   it.each([0, 1, 2])('custom 零宽/捕获分隔符在 maxSize=%s 的合法部分不死循环或复制文本', (index) => {
     const separator = ['(?=.)', '(\\|+)', '$'][index]!
-    const result = datapipe.chunk('😀A|||B  ', { mode: 'custom', maxSize: 2, overlap: 0, separator })
+    const result = datapipe.chunk('😀A|||B  ', {
+      mode: 'custom',
+      maxSize: 2,
+      overlap: 0,
+      separator,
+    })
     if (!result.success)
       throw new Error(result.error.message)
     expect(reconstruct(result.data, 0)).toBe('😀A|||B  ')
@@ -77,7 +112,17 @@ describe('chunk exact bounds and source preservation', () => {
 
   it('缺省 overlap=0，显式 overlap 必须严格小于 maxSize', () => {
     expect(ChunkOptionsSchema.parse({ mode: 'character', maxSize: 1 }).overlap).toBe(0)
-    for (const overlap of [4, 5, -1, 0.5, Number.POSITIVE_INFINITY])
-      expect(datapipe.chunk('content', { mode: 'character', maxSize: 4, overlap })).toMatchObject({ success: false, error: { code: HaiDatapipeError.CONFIG_ERROR.code } })
+    for (const overlap of [
+      4,
+      5,
+      -1,
+      0.5,
+      Number.POSITIVE_INFINITY,
+    ]) {
+      expect(datapipe.chunk('content', { mode: 'character', maxSize: 4, overlap })).toMatchObject({
+        success: false,
+        error: { code: HaiDatapipeError.CONFIG_ERROR.code },
+      })
+    }
   })
 })

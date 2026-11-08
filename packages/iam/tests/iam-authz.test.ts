@@ -435,13 +435,19 @@ describe('iam.authz', () => {
         expect((await api.authz.assignRole(users[0], ids[2])).success).toBe(true)
         const counts = await api.authz.getRoleUserCounts([...ids, ids[2]])
         expect(counts.success).toBe(true)
-        if (counts.success)
-          expect([...counts.data.values()]).toEqual([0, 1, 2])
+        if (counts.success) {
+          expect([
+            ...counts.data.values(),
+          ]).toEqual([0, 1, 2])
+        }
         expect((await api.authz.removeRole(users[0], ids[2])).success).toBe(true)
         const updated = await api.authz.getRoleUserCounts(ids)
         expect(updated.success).toBe(true)
-        if (updated.success)
-          expect([...updated.data.values()]).toEqual([0, 1, 1])
+        if (updated.success) {
+          expect([
+            ...updated.data.values(),
+          ]).toEqual([0, 1, 1])
+        }
         const empty = await api.authz.getRoleUserCounts([])
         expect(empty.success).toBe(true)
         if (empty.success)

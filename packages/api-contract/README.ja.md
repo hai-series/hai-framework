@@ -45,8 +45,15 @@ import { z } from 'zod'
 
 export const appContract = {
   ping: apiContract
-    .route({ method: 'POST', path: '/app/ping', operationId: 'app.ping', tags: ['app'] })
-    .output(apiContract.haiResultSchema(z.object({ pong: z.boolean() }))),
+    .route({
+      method: 'POST',
+      path: '/app/ping',
+      operationId: 'app.ping',
+      tags: ['app']
+    })
+    .output(apiContract.haiResultSchema(z.object({
+      pong: z.boolean()
+    }))),
 }
 ```
 

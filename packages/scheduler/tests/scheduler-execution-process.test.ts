@@ -51,7 +51,10 @@ function call<T = unknown>(child: ChildProcess, command: string, args: unknown =
 }
 
 async function initializeNode(): Promise<ChildProcess> {
-  const child = fork(fileURLToPath(new URL('./fixtures/scheduler-node.mjs', import.meta.url)), [], { stdio: ['ignore', 'ignore', 'inherit', 'ipc'], execArgv: [] })
+  const child = fork(fileURLToPath(new URL('./fixtures/scheduler-node.mjs', import.meta.url)), [], {
+    stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
+    execArgv: [],
+  })
   children.push(child)
   expect(await call(child, 'init', { entry: pathToFileURL(join(directory, 'index.js')).href, database, leaseMs: 1000 })).toMatchObject({ success: true })
   return child
@@ -93,13 +96,21 @@ beforeAll(async () => {
   const root = fileURLToPath(new URL('../', import.meta.url))
   await build({
     config: false,
-    entry: { 'index': join(root, 'src/index.ts'), 'scheduler-js-worker': join(root, 'src/scheduler-js-worker.js') },
+    entry: {
+      'index': join(root, 'src/index.ts'),
+      'scheduler-js-worker': join(root, 'src/scheduler-js-worker.js'),
+    },
     outDir: directory,
     format: ['esm'],
     target: 'node22',
     dts: false,
     silent: true,
-    external: ['@h-ai/core', '@h-ai/reldb', 'croner', 'zod'],
+    external: [
+      '@h-ai/core',
+      '@h-ai/reldb',
+      'croner',
+      'zod',
+    ],
   })
 })
 
@@ -115,7 +126,11 @@ beforeEach(async () => {
   server = createServer(async (request, response) => {
     const index = ++requestIndex
     const receipt = String(request.headers['idempotency-key'])
-    requests.push({ receipt, sequence: Number(request.headers['x-scheduler-sequence']), attempt: Number(request.headers['x-scheduler-attempt']) })
+    requests.push({
+      receipt,
+      sequence: Number(request.headers['x-scheduler-sequence']),
+      attempt: Number(request.headers['x-scheduler-attempt']),
+    })
     const tx = await reldb.tx.begin()
     if (!tx.success) {
       response.writeHead(503).end()
@@ -163,8 +178,11 @@ afterEach(async () => {
   }
   finally {
     server?.closeAllConnections()
-    if (server?.listening)
-      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+    if (server?.listening) {
+      await new Promise<void>((resolve, reject) => server.close(error => error
+        ? reject(error)
+        : resolve()))
+    }
     await reldb.close()
   }
 }, 20_000)
@@ -175,9 +193,14 @@ afterAll(async () => {
     await rm(directory, { recursive: true, force: true })
 })
 
-describe.sequential('durable execution across actual processes', () => {
+describe('durable execution across actual processes', { concurrent: false }, () => {
   it('同分钟竞争、跨真实分钟长任务和手动入口共用串行槽，续租不依赖cache', async () => {
-    const task = { id: 'long-global', name: 'long-global', cron: '* * * * *', handler: { kind: 'api', url, timeout: 90_000 } }
+    const task = {
+      id: 'long-global',
+      name: 'long-global',
+      cron: '* * * * *',
+      handler: { kind: 'api', url, timeout: 90_000 },
+    }
     expect(await call(nodeA, 'register', [task])).toMatchObject({ success: true })
     expect(await call(nodeA, 'start')).toMatchObject({ success: true })
     expect(await call(nodeB, 'start')).toMatchObject({ success: true })
@@ -206,10 +229,18 @@ describe.sequential('durable execution across actual processes', () => {
       cron: '0 0 1 1 *',
       idempotent: true,
       retry: { maxAttempts: 3 },
-      handler: { kind: 'api', url, timeout: 15_000, headers: { 'idempotency-key': 'spoofed', 'X-Scheduler-Attempt': '0' } },
+      handler: {
+        kind: 'api',
+        url,
+        timeout: 15_000,
+        headers: { 'idempotency-key': 'spoofed', 'X-Scheduler-Attempt': '0' },
+      },
     }
     expect(await call(nodeA, 'register', [task])).toMatchObject({ success: true })
-    const oldRun = call<HaiResult<TaskExecutionLog>>(nodeA, 'trigger', [task.id, { idempotencyKey: 'one-business-operation' }], 16_000)
+    const oldRun = call<HaiResult<TaskExecutionLog>>(nodeA, 'trigger', [
+      task.id,
+      { idempotencyKey: 'one-business-operation' },
+    ], 16_000)
     void oldRun.catch(() => {})
     await vi.waitFor(() => expect(heldResponses).toHaveLength(1))
     const receipt = requests[0].receipt
@@ -225,39 +256,77 @@ describe.sequential('durable execution across actual processes', () => {
     expect(requests[0].sequence).toBeGreaterThan(0)
     expect(requests[0].sequence).toBe(requests[1].sequence)
     expect(await effects()).toBe(1)
-    expect(await oldRun).toMatchObject({ success: true, data: { status: 'unknown' } })
+    expect(await oldRun).toMatchObject({
+      success: true,
+      data: { status: 'unknown' },
+    })
     expect(await state(nodeB, receipt)).toMatchObject({ status: 'success', attemptCount: 2 })
     await stopNode(nodeA)
     nodeA = await initializeNode()
-    expect(await call(nodeA, 'trigger', [task.id, { idempotencyKey: 'one-business-operation' }])).toMatchObject({ success: true, data: { status: 'success', occurrenceId: receipt } })
+    expect(await call(nodeA, 'trigger', [
+      task.id,
+      { idempotencyKey: 'one-business-operation' },
+    ])).toMatchObject({
+      success: true,
+      data: { status: 'success', occurrenceId: receipt },
+    })
     expect(requests).toHaveLength(2)
     expect(await effects()).toBe(1)
   }, 20_000)
 
   it('非幂等已开始的旧进程过期后转unknown并阻止cron/manual；先终止旧进程再条件裁定', async () => {
-    const task = { id: 'unsafe', name: 'unsafe', cron: '* * * * *', handler: { kind: 'api', url, timeout: 15_000 } }
+    const task = {
+      id: 'unsafe',
+      name: 'unsafe',
+      cron: '* * * * *',
+      handler: { kind: 'api', url, timeout: 15_000 },
+    }
     expect(await call(nodeA, 'register', [task])).toMatchObject({ success: true })
-    const oldRun = call<HaiResult<TaskExecutionLog>>(nodeA, 'trigger', [task.id, { idempotencyKey: 'unsafe-operation' }], 16_000)
+    const oldRun = call<HaiResult<TaskExecutionLog>>(nodeA, 'trigger', [
+      task.id,
+      { idempotencyKey: 'unsafe-operation' },
+    ], 16_000)
     void oldRun.catch(() => {})
     await vi.waitFor(() => expect(heldResponses).toHaveLength(1))
     const receipt = requests[0].receipt
     expect(await call(nodeA, 'pause', { milliseconds: 2600 })).toMatchObject({ success: true })
     expect(await call(nodeB, 'start')).toMatchObject({ success: true })
     await vi.waitFor(async () => expect(await state(nodeB, receipt)).toMatchObject({ status: 'unknown' }), { timeout: 5000 })
-    expect(await call(nodeB, 'trigger', [task.id])).toMatchObject({ success: true, data: { status: 'interrupted' } })
+    expect(await call(nodeB, 'trigger', [task.id])).toMatchObject({
+      success: true,
+      data: { status: 'interrupted' },
+    })
     expect(requests).toHaveLength(1)
     expect(await effects()).toBe(1)
-    expect(await oldRun).toMatchObject({ success: true, data: { status: 'unknown' } })
+    expect(await oldRun).toMatchObject({
+      success: true,
+      data: { status: 'unknown' },
+    })
     await stopNode(nodeA)
     expect(await call(nodeB, 'stop')).toMatchObject({ success: true })
     const unknown = await state(nodeB, receipt)
-    expect(await call(nodeB, 'executionResolve', [receipt, { status: 'pending', expectedUpdatedAt: unknown.updatedAt }])).toMatchObject({ success: false })
+    expect(await call(nodeB, 'executionResolve', [
+      receipt,
+      { status: 'pending', expectedUpdatedAt: unknown.updatedAt },
+    ])).toMatchObject({ success: false })
     const resolved = await Promise.all([
-      call<HaiResult<void>>(nodeB, 'executionResolve', [receipt, { status: 'success', expectedUpdatedAt: unknown.updatedAt }]),
-      call<HaiResult<void>>(nodeB, 'executionResolve', [receipt, { status: 'discarded', expectedUpdatedAt: unknown.updatedAt }]),
+      call<HaiResult<void>>(nodeB, 'executionResolve', [
+        receipt,
+        { status: 'success', expectedUpdatedAt: unknown.updatedAt },
+      ]),
+      call<HaiResult<void>>(nodeB, 'executionResolve', [
+        receipt,
+        { status: 'discarded', expectedUpdatedAt: unknown.updatedAt },
+      ]),
     ])
     expect(resolved.filter(result => result.success)).toHaveLength(1)
-    expect(await call(nodeB, 'trigger', [task.id, { idempotencyKey: 'new-explicit-operation' }])).toMatchObject({ success: true, data: { status: 'success' } })
+    expect(await call(nodeB, 'trigger', [
+      task.id,
+      { idempotencyKey: 'new-explicit-operation' },
+    ])).toMatchObject({
+      success: true,
+      data: { status: 'success' },
+    })
     expect(requests).toHaveLength(2)
     expect(await effects()).toBe(2)
   }, 20_000)

@@ -100,7 +100,7 @@ function receivedHtml(message: string): string {
   throw new Error('SMTP fixture received an unsupported transfer encoding')
 }
 
-describe.sequential('真实数据库 / S3 / SMTP 反馈闭环', () => {
+describe('真实数据库 / S3 / SMTP 反馈闭环', { concurrent: false }, () => {
   const smtp = smtpFixture()
   let s3: StorageTestEnv | undefined
   let port: number
@@ -122,9 +122,27 @@ describe.sequential('真实数据库 / S3 / SMTP 反馈闭环', () => {
   }, 60000)
 
   it.each([
-    { locale: 'zh-CN', submittedLabel: '反馈时间（UTC）', materialLabel: '材料状态', completeLabel: '完整', failedLabel: '采集失败' },
-    { locale: 'en-US', submittedLabel: 'Submitted at (UTC)', materialLabel: 'Material status', completeLabel: 'Complete', failedLabel: 'Collection failed' },
-    { locale: 'ja-JP', submittedLabel: '報告日時（UTC）', materialLabel: '資料の状態', completeLabel: '完全', failedLabel: '収集失敗' },
+    {
+      locale: 'zh-CN',
+      submittedLabel: '反馈时间（UTC）',
+      materialLabel: '材料状态',
+      completeLabel: '完整',
+      failedLabel: '采集失败',
+    },
+    {
+      locale: 'en-US',
+      submittedLabel: 'Submitted at (UTC)',
+      materialLabel: 'Material status',
+      completeLabel: 'Complete',
+      failedLabel: 'Collection failed',
+    },
+    {
+      locale: 'ja-JP',
+      submittedLabel: '報告日時（UTC）',
+      materialLabel: '資料の状態',
+      completeLabel: '完全',
+      failedLabel: '収集失敗',
+    },
   ].flatMap(locale => (['complete', 'failed'] as const).map(status => ({ ...locale, status }))))('真实SMTP正文包含反馈时间及发送时材料状态 ($locale/$status)', async ({ locale, submittedLabel, materialLabel, completeLabel, failedLabel, status }) => {
     const previousLocale = core.i18n.getGlobalLocale()
     let db: DbTestEnv | undefined
@@ -133,10 +151,34 @@ describe.sequential('真实数据库 / S3 / SMTP 反馈闭环', () => {
       db = sqliteMemoryEnv()
       expect((await reldb.init(db.config)).success).toBe(true)
       expect((await storage.init(s3!.config)).success).toBe(true)
-      expect((await reach.init({ providers: [{ name: 'email', type: 'smtp', host: '127.0.0.1', port, secure: false, from: 'feedback@example.test' }] })).success).toBe(true)
+      expect((await reach.init({
+        providers: [
+          {
+            name: 'email',
+            type: 'smtp',
+            host: '127.0.0.1',
+            port,
+            secure: false,
+            from: 'feedback@example.test',
+          },
+        ],
+      })).success).toBe(true)
       const appId = `mail-content-${locale}-${status}`
-      expect((await feedback.init({ appId, recipients: ['administrator@example.test'], adminUrl: 'http://localhost/admin/feedback', workerIntervalMs: 0, maxAttempts: 1, maxEvidenceCount: status === 'failed' ? 1 : 2000 })).success).toBe(true)
-      const actor = { scopeId: 'mail-content-scope', userId: 'mail-content-user', permissions: ['feedback:*'] }
+      expect((await feedback.init({
+        appId,
+        recipients: ['administrator@example.test'],
+        adminUrl: 'http://localhost/admin/feedback',
+        workerIntervalMs: 0,
+        maxAttempts: 1,
+        maxEvidenceCount: status === 'failed'
+          ? 1
+          : 2000,
+      })).success).toBe(true)
+      const actor = {
+        scopeId: 'mail-content-scope',
+        userId: 'mail-content-user',
+        permissions: ['feedback:*'],
+      }
       const logger = core.logger.create({ name: 'mail-content-fixture', level: 'error', format: 'json' })
       core.context.run({ scopeId: actor.scopeId, userId: actor.userId, requestId: `mail-${status}` }, () => logger.error('Correlated server evidence for the SMTP fixture'))
       const report = await feedback.submit({ appId, submissionId: `mail-${status}`, description: 'SMTP content fixture' }, actor)
@@ -154,7 +196,9 @@ describe.sequential('真实数据库 / S3 / SMTP 反馈闭环', () => {
       if (collected.success) {
         expect(collected.data.report.collectionStatus).toBe(status)
         const collectionJob = collected.data.jobs.find(job => job.type === 'collect')
-        expect(collectionJob?.status).toBe(status === 'failed' ? 'failed' : 'succeeded')
+        expect(collectionJob?.status).toBe(status === 'failed'
+          ? 'failed'
+          : 'succeeded')
         if (status === 'failed')
           expect(collectionJob?.lastError).toBe(HaiFeedbackError.LIMIT_EXCEEDED.code)
       }
@@ -163,7 +207,9 @@ describe.sequential('真实数据库 / S3 / SMTP 反馈闭环', () => {
       expect(smtp.messages.length).toBe(previousMailCount + 1)
       const html = receivedHtml(smtp.messages.at(-1)!)
       expect(html).toContain(`${submittedLabel}: ${new Date(report.data.createdAt).toISOString()}`)
-      expect(html).toContain(`${materialLabel}: ${status === 'complete' ? completeLabel : failedLabel}`)
+      expect(html).toContain(`${materialLabel}: ${status === 'complete'
+        ? completeLabel
+        : failedLabel}`)
       expect(html).toContain(report.data.number)
       expect(html).toContain('SMTP content fixture')
       expect(html).toContain(`http://localhost/admin/feedback?feedback=${report.data.id}`)
@@ -184,24 +230,65 @@ describe.sequential('真实数据库 / S3 / SMTP 反馈闭环', () => {
     }
   }, 180000)
 
-  for (const [label, setup] of [['sqlite', sqliteMemoryEnv], ['postgresql', postgresEnv], ['mysql', mysqlEnv]] as const) {
+  for (const [label, setup] of [
+    ['sqlite', sqliteMemoryEnv],
+    ['postgresql', postgresEnv],
+    ['mysql', mysqlEnv],
+  ] as const) {
     it(`${label}: 保存长说明、上传私有截图、SMTP通知、处理与校验离线包`, async () => {
       let db: DbTestEnv | undefined
       try {
         db = await setup()
         expect((await reldb.init(db.config)).success).toBe(true)
         expect((await storage.init(s3!.config)).success).toBe(true)
-        expect((await reach.init({ providers: [{ name: 'email', type: 'smtp', host: '127.0.0.1', port, secure: false, from: 'feedback@example.test' }] })).success).toBe(true)
-        const config = { appId: `providers-${label}`, recipients: ['administrator@example.test'], adminUrl: 'http://localhost/admin/feedback', workerIntervalMs: 0 }
+        expect((await reach.init({
+          providers: [
+            {
+              name: 'email',
+              type: 'smtp',
+              host: '127.0.0.1',
+              port,
+              secure: false,
+              from: 'feedback@example.test',
+            },
+          ],
+        })).success).toBe(true)
+        const config = {
+          appId: `providers-${label}`,
+          recipients: ['administrator@example.test'],
+          adminUrl: 'http://localhost/admin/feedback',
+          workerIntervalMs: 0,
+        }
         const initialized = await feedback.init(config)
         expect(initialized.success, JSON.stringify(initialized)).toBe(true)
-        const actor = { scopeId: `tenant-${label}`, userId: 'user-1', permissions: ['feedback:*'] }
+        const actor = {
+          scopeId: `tenant-${label}`,
+          userId: 'user-1',
+          permissions: ['feedback:*'],
+        }
         const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/x9sAAAAASUVORK5CYII=', 'base64')
-        const submitted = await feedback.submit({ submissionId: 'provider-loop', appId: config.appId, description: 'A diagnostic description longer than VARCHAR(255). '.repeat(40), attachments: [{ id: 'screen', name: 'screen.png', contentType: 'image/png', size: png.length, checksum: createHash('sha256').update(png).digest('hex') }] }, actor)
+        const submitted = await feedback.submit({
+          submissionId: 'provider-loop',
+          appId: config.appId,
+          description: 'A diagnostic description longer than VARCHAR(255). '.repeat(40),
+          attachments: [
+            {
+              id: 'screen',
+              name: 'screen.png',
+              contentType: 'image/png',
+              size: png.length,
+              checksum: createHash('sha256').update(png).digest('hex'),
+            },
+          ],
+        }, actor)
         expect(submitted.success, JSON.stringify(submitted)).toBe(true)
         if (!submitted.success)
           return
-        const uploaded = await feedback.uploadAttachment({ id: submitted.data.id, attachmentId: 'screen', dataBase64: png.toString('base64') }, actor)
+        const uploaded = await feedback.uploadAttachment({
+          id: submitted.data.id,
+          attachmentId: 'screen',
+          dataBase64: png.toString('base64'),
+        }, actor)
         expect(uploaded.success, JSON.stringify(uploaded)).toBe(true)
         expect((await feedback.completeCollection({ id: submitted.data.id }, actor)).success).toBe(true)
         const previousMailCount = smtp.messages.length

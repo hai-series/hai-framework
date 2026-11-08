@@ -98,7 +98,9 @@ function createExecutionLog(
     startedAt,
     finishedAt,
     duration: finishedAt - startedAt,
-    ...(occurrenceId ? { occurrenceId } : {}),
+    ...(occurrenceId
+      ? { occurrenceId }
+      : {}),
   }
 
   return log
@@ -187,7 +189,9 @@ export async function executeJsTask(
   if (!handler || handler.kind !== 'js') {
     return err(
       HaiSchedulerError.EXECUTION_FAILED,
-      schedulerM('scheduler_invalidHandlerConfig', { params: { taskId: task.id } }),
+      schedulerM('scheduler_invalidHandlerConfig', {
+        params: { taskId: task.id },
+      }),
     )
   }
 
@@ -197,14 +201,20 @@ export async function executeJsTask(
 
   try {
     const result = await compileResult.data(context, signal)
-    return ok(result !== undefined ? JSON.stringify(result) : null)
+    return ok(result !== undefined
+      ? JSON.stringify(result)
+      : null)
   }
   catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = error instanceof Error
+      ? error.message
+      : String(error)
     logger.error('JS task execution failed', { taskId: task.id, error: message })
     return err(
       HaiSchedulerError.JS_EXECUTION_FAILED,
-      schedulerM('scheduler_jsExecutionFailed', { params: { error: message } }),
+      schedulerM('scheduler_jsExecutionFailed', {
+        params: { error: message },
+      }),
       error,
     )
   }
@@ -232,13 +242,18 @@ export async function executeApiTask(
   if (!handler || handler.kind !== 'api') {
     return err(
       HaiSchedulerError.EXECUTION_FAILED,
-      schedulerM('scheduler_invalidHandlerConfig', { params: { taskId: task.id } }),
+      schedulerM('scheduler_invalidHandlerConfig', {
+        params: { taskId: task.id },
+      }),
     )
   }
 
   const { url, method = 'GET', headers, body, timeout = 30000, maxResponseBytes = 1024 * 1024 } = handler
-  if (!Number.isSafeInteger(maxResponseBytes) || maxResponseBytes <= 0)
-    return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_invalidHandlerConfig', { params: { taskId: task.id } }))
+  if (!Number.isSafeInteger(maxResponseBytes) || maxResponseBytes <= 0) {
+    return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_invalidHandlerConfig', {
+      params: { taskId: task.id },
+    }))
+  }
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeout)
 
@@ -256,7 +271,11 @@ export async function executeApiTask(
       method,
       headers: requestHeaders,
       signal: AbortSignal.any([signal, controller.signal]),
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      ...(body !== undefined
+        ? {
+            body: JSON.stringify(body),
+          }
+        : {}),
     })
 
     // 超时覆盖响应体读取；按实际字节累计，避免信任 Content-Length。
@@ -273,7 +292,9 @@ export async function executeApiTask(
           receivedBytes += chunk.value.byteLength
           if (receivedBytes > maxResponseBytes) {
             controller.abort()
-            return err(HaiSchedulerError.API_EXECUTION_FAILED, schedulerM('scheduler_apiResponseTooLarge', { params: { maxResponseBytes } }))
+            return err(HaiSchedulerError.API_EXECUTION_FAILED, schedulerM('scheduler_apiResponseTooLarge', {
+              params: { maxResponseBytes },
+            }))
           }
           responseText += decoder.decode(chunk.value, { stream: true })
         }
@@ -301,11 +322,19 @@ export async function executeApiTask(
     return ok(responseText || null)
   }
   catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    logger.error('API task execution failed', { taskId: context.taskId, error: message, url: core.sanitize.sanitizeUrl(url) })
+    const message = error instanceof Error
+      ? error.message
+      : String(error)
+    logger.error('API task execution failed', {
+      taskId: context.taskId,
+      error: message,
+      url: core.sanitize.sanitizeUrl(url),
+    })
     return err(
       HaiSchedulerError.API_EXECUTION_FAILED,
-      schedulerM('scheduler_apiExecutionFailed', { params: { error: message } }),
+      schedulerM('scheduler_apiExecutionFailed', {
+        params: { error: message },
+      }),
       error,
     )
   }
@@ -324,7 +353,9 @@ async function executeHookTask(
   if (!hooks.onTaskExecute) {
     return err(
       HaiSchedulerError.EXECUTION_FAILED,
-      schedulerM('scheduler_taskHandlerMissing', { params: { taskId: task.id } }),
+      schedulerM('scheduler_taskHandlerMissing', {
+        params: { taskId: task.id },
+      }),
     )
   }
 
@@ -338,14 +369,20 @@ async function executeHookTask(
 
   try {
     const result = await waitWithSignal(() => hooks.onTaskExecute!(executeEvent), signal)
-    return ok(result !== undefined ? JSON.stringify(result) : null)
+    return ok(result !== undefined
+      ? JSON.stringify(result)
+      : null)
   }
   catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = error instanceof Error
+      ? error.message
+      : String(error)
     logger.error('Task execute hook failed', { taskId: task.id, error: message })
     return err(
       HaiSchedulerError.HOOK_EXECUTION_FAILED,
-      schedulerM('scheduler_hookExecutionFailed', { params: { error: message } }),
+      schedulerM('scheduler_hookExecutionFailed', {
+        params: { error: message },
+      }),
       error,
     )
   }
@@ -377,7 +414,13 @@ export async function executeTask(
   const taskType = resolveTaskType(task, hooks)
   const context = createTaskContext(task, trigger, execution)
 
-  await notifyTaskStart(hooks, { task, trigger, startedAt, signal, context })
+  await notifyTaskStart(hooks, {
+    task,
+    trigger,
+    startedAt,
+    signal,
+    context,
+  })
 
   let executionResult: HaiResult<string | null>
   let shouldNotifyInterrupted = false
@@ -429,8 +472,17 @@ export async function executeTask(
     })
   }
 
-  if (status !== 'interrupted' && !signal.aborted)
-    await notifyTaskFinish(hooks, { task, trigger, startedAt, finishedAt, log, signal, context })
+  if (status !== 'interrupted' && !signal.aborted) {
+    await notifyTaskFinish(hooks, {
+      task,
+      trigger,
+      startedAt,
+      finishedAt,
+      log,
+      signal,
+      context,
+    })
+  }
 
   return log
 }

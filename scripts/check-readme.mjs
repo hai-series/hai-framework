@@ -18,8 +18,12 @@ export function readmeIssues(content) {
         fence = undefined
       continue
     }
-    if (!fence && /^#{1,6}\s/.test(line))
-      headings.push({ title: line.trim(), index })
+    if (!fence && /^#{1,6}\s/.test(line)) {
+      headings.push({
+        title: line.trim(),
+        index,
+      })
+    }
   }
   const issues = []
   const licenses = headings.filter(({ title }) => /^#{1,6}\s+(?:📄\s*)?(?:许可证|License|ライセンス)\s*$/i.test(title))
@@ -49,9 +53,18 @@ export function readmeIssues(content) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const paths = [...new Set(execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { encoding: 'utf8' }).split(/\r?\n/))]
+  const paths = [
+    ...new Set(execFileSync('git', [
+      'ls-files',
+      '--cached',
+      '--others',
+      '--exclude-standard',
+    ], { encoding: 'utf8' }).split(/\r?\n/)),
+  ]
     .filter(path => /(?:^|\/)README(?:\.[\w-]+)?\.md(?:\.hbs)?$/i.test(path) && existsSync(path))
   const failures = paths.flatMap(path => readmeIssues(readFileSync(path, 'utf8')).map(issue => `${path}: ${issue}`))
-  process.stdout.write(failures.length ? `${failures.join('\n')}\n` : `README structure valid: ${paths.length} files\n`)
+  process.stdout.write(failures.length
+    ? `${failures.join('\n')}\n`
+    : `README structure valid: ${paths.length} files\n`)
   process.exitCode = failures.length ? 1 : 0
 }

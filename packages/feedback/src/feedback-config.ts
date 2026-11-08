@@ -74,8 +74,13 @@ export const FeedbackConfigSchema = z.strictObject({
   /** 单份反馈累计证据允许的最大条数。 */
   maxEvidenceCount: z.number().int().min(1).max(10000).default(2000),
 }).superRefine((config, context) => {
-  if (config.notificationMode === 'reach' && !config.recipients.length)
-    context.addIssue({ code: 'custom', path: ['recipients'], message: 'Reach recipients are required' })
+  if (config.notificationMode === 'reach' && !config.recipients.length) {
+    context.addIssue({
+      code: 'custom',
+      path: ['recipients'],
+      message: 'Reach recipients are required',
+    })
+  }
 })
 
 /**

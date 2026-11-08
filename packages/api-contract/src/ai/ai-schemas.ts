@@ -105,7 +105,10 @@ export const AiToolCallSchema = z.object({
 }).strict()
 
 /** system、assistant 和 tool 只接收文本，不把图片 URL 静默转换为文本。 */
-const AiTextMessageContentSchema = z.union([z.string(), z.array(AiTextContentSchema)])
+const AiTextMessageContentSchema = z.union([
+  z.string(),
+  z.array(AiTextContentSchema),
+])
 
 /**
  * 按角色校验聊天消息；工具结果必须携带非空 tool_call_id。
@@ -213,14 +216,27 @@ export const AiChatCompletionInputSchema = z.object({
     z.literal('auto'),
     z.literal('none'),
     z.literal('required'),
-    z.object({ type: z.literal('function'), function: z.object({ name: z.string().min(1) }).strict() }).strict(),
+    z.object({
+      type: z.literal('function'),
+      function: z.object({
+        name: z.string().min(1),
+      }).strict(),
+    }).strict(),
   ]).optional(),
 }).strict().superRefine((input, context) => {
   const choice = input.tool_choice
-  if (choice === 'required' && !input.tools?.length)
-    context.addIssue({ code: 'custom', path: ['tool_choice'] })
-  if (typeof choice === 'object' && !input.tools?.some(tool => tool.function.name === choice.function.name))
-    context.addIssue({ code: 'custom', path: ['tool_choice'] })
+  if (choice === 'required' && !input.tools?.length) {
+    context.addIssue({
+      code: 'custom',
+      path: ['tool_choice'],
+    })
+  }
+  if (typeof choice === 'object' && !input.tools?.some(tool => tool.function.name === choice.function.name)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['tool_choice'],
+    })
+  }
 })
 
 /**
@@ -282,7 +298,12 @@ export const AiAssistantMessageSchema = z.object({
 export const AiChatCompletionChoiceSchema = z.object({
   index: z.number(),
   message: AiAssistantMessageSchema,
-  finish_reason: z.enum(['stop', 'length', 'tool_calls', 'content_filter']),
+  finish_reason: z.enum([
+    'stop',
+    'length',
+    'tool_calls',
+    'content_filter',
+  ]),
 })
 
 /**
@@ -376,7 +397,13 @@ export const AiSendMessageDataSchema = z.object({
  * void value
  * ```
  */
-export const AiMemoryTypeSchema = z.enum(['fact', 'preference', 'event', 'entity', 'instruction'])
+export const AiMemoryTypeSchema = z.enum([
+  'fact',
+  'preference',
+  'event',
+  'entity',
+  'instruction',
+])
 
 /**
  * 记忆条目 Schema。

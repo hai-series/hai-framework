@@ -31,8 +31,13 @@ export function sanitizeFeedbackData(value: unknown): Record<string, unknown> {
       return sanitizeFeedbackText(input).slice(0, 8192)
     if (input instanceof Error)
       return visit({ name: input.name, message: input.message, stack: input.stack }, depth + 1)
-    if (!input || typeof input !== 'object')
-      return input === undefined || typeof input === 'function' || typeof input === 'symbol' ? null : typeof input === 'bigint' ? String(input) : input
+    if (!input || typeof input !== 'object') {
+      return input === undefined || typeof input === 'function' || typeof input === 'symbol'
+        ? null
+        : typeof input === 'bigint'
+          ? String(input)
+          : input
+    }
     if (seen.has(input))
       return '[CIRCULAR]'
     seen.add(input)
@@ -42,12 +47,16 @@ export function sanitizeFeedbackData(value: unknown): Record<string, unknown> {
     for (const [key, item] of Object.entries(input).slice(0, 100)) {
       if (['__proto__', 'constructor', 'prototype'].includes(key))
         continue
-      output[key] = CREDENTIAL_NAME.test(key) ? '[REDACTED]' : visit(item, depth + 1)
+      output[key] = CREDENTIAL_NAME.test(key)
+        ? '[REDACTED]'
+        : visit(item, depth + 1)
     }
     return output
   }
   const safe = core.sanitize.sanitizeSensitiveFields(visit(value, 0))
-  return safe && typeof safe === 'object' && !Array.isArray(safe) ? safe as Record<string, unknown> : { value: safe }
+  return safe && typeof safe === 'object' && !Array.isArray(safe)
+    ? safe as Record<string, unknown>
+    : { value: safe }
 }
 
 /**
@@ -96,7 +105,9 @@ export function sanitizeFeedbackReplay(value: unknown): Record<string, unknown> 
         output[key] = sanitizeFeedbackText(item).replace(/(?:url|@import)\s*\([^)]*\)|@import\s+["'][^"']+["']/gi, '')
       }
       else {
-        output[key] = CREDENTIAL_NAME.test(key) ? '[REDACTED]' : visit(item, depth + 1)
+        output[key] = CREDENTIAL_NAME.test(key)
+          ? '[REDACTED]'
+          : visit(item, depth + 1)
       }
     }
     return output

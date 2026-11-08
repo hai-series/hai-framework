@@ -34,7 +34,11 @@ const initialized = await feedback.init({
 if (!initialized.success)
   return initialized
 
-const context = { scopeId: 'tenant-1', userId: 'user-1', permissions: ['feedback:create'] }
+const context = {
+  scopeId: 'tenant-1',
+  userId: 'user-1',
+  permissions: ['feedback:create']
+}
 const submitted = await feedback.submit({ appId: 'orders', submissionId: 'stable-client-operation' }, context)
 if (!submitted.success)
   return submitted
@@ -112,12 +116,14 @@ async function startFeedback(config: FeedbackConfigInput) {
     collectEvidence: async ({ report, signal }) => ({
       text: `Diagnostics for ${report.number}`,
       data: { businessSystem: 'orders', scopeId: report.scopeId },
-      attachments: [{
-        id: 'business-logs',
-        name: 'business-logs.zip',
-        contentType: 'application/zip',
-        bytes: await readFile('diagnostics/sanitized-logs.zip', { signal }),
-      }],
+      attachments: [
+        {
+          id: 'business-logs',
+          name: 'business-logs.zip',
+          contentType: 'application/zip',
+          bytes: await readFile('diagnostics/sanitized-logs.zip', { signal }),
+        }
+      ],
     }),
   })
   if (!result.success)

@@ -147,7 +147,9 @@ function hasUpdateFields(data: Partial<User>): boolean {
 function mapRepositoryError(messageKey: Parameters<typeof iamM>[0], message: string) {
   return err(
     HaiIamError.REPOSITORY_ERROR,
-    iamM(messageKey, { params: { message } }),
+    iamM(messageKey, {
+      params: { message },
+    }),
   )
 }
 
@@ -422,7 +424,9 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
     async getUsers(userIds, options) {
       if (userIds.length > 1000 || userIds.some(id => typeof id !== 'string' || !id.trim()))
         return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_batchUserIdsInvalid'))
-      const ids = [...new Set(userIds)]
+      const ids = [
+        ...new Set(userIds),
+      ]
       const found = new Map<string, User>()
       // 小批次控制占位符数量，兼容数据库限制；不为每个用户发起查询。
       for (let offset = 0; offset < ids.length; offset += 500) {
@@ -433,7 +437,11 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
         for (const user of users.data)
           found.set(user.id, toUser(user))
       }
-      const items = ids.flatMap(id => found.has(id) ? [found.get(id)!] : [])
+      const items = ids.flatMap(id => found.has(id)
+        ? [
+            found.get(id)!,
+          ]
+        : [])
       if (options?.include?.includes('roles') && items.length) {
         const roles = await authzFunctions.getUserRolesForMany(items.map(user => user.id))
         if (!roles.success)
@@ -512,17 +520,25 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
         params.push(options.roleCode)
       }
 
-      const where = conditions.length > 0 ? conditions.join(' AND ') : undefined
+      const where = conditions.length > 0
+        ? conditions.join(' AND ')
+        : undefined
       /** 未指定排序时保持既有的创建时间倒序，避免改变调用方历史结果。 */
       const sortColumn = options?.sortBy ? USER_SORT_COLUMNS[options.sortBy] : USER_SORT_COLUMNS.createdAt
       /** 仅接受声明的 asc；其余情况均为默认 desc，防止将外部输入拼入 SQL。 */
-      const sortDirection = options?.sortBy && options.sortDirection === 'asc' ? 'ASC' : 'DESC'
+      const sortDirection = options?.sortBy && options.sortDirection === 'asc'
+        ? 'ASC'
+        : 'DESC'
 
       const usersResult = await userRepository.findPage({
         where,
-        params: params.length > 0 ? params : undefined,
+        params: params.length > 0
+          ? params
+          : undefined,
         orderBy: `${sortColumn} ${sortDirection}`,
-        pagination: options ? { page: options.page, pageSize: options.pageSize } : undefined,
+        pagination: options
+          ? { page: options.page, pageSize: options.pageSize }
+          : undefined,
       })
       if (!usersResult.success) {
         return mapRepositoryError('iam_queryUserListFailed', usersResult.error.message) as HaiResult<PaginatedResult<User>>
@@ -633,9 +649,15 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
         return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
       // 部分更新的 undefined 与持久化层一致，表示保留原值；null 才是显式清空到期时间。
       const accountPolicy = validateAccountPolicy({
-        accountType: data.accountType === undefined ? currentAccount.data.accountType : data.accountType,
-        accountStatus: data.accountStatus === undefined ? currentAccount.data.accountStatus : data.accountStatus,
-        accountExpiresAt: data.accountExpiresAt === undefined ? currentAccount.data.accountExpiresAt : data.accountExpiresAt,
+        accountType: data.accountType === undefined
+          ? currentAccount.data.accountType
+          : data.accountType,
+        accountStatus: data.accountStatus === undefined
+          ? currentAccount.data.accountStatus
+          : data.accountStatus,
+        accountExpiresAt: data.accountExpiresAt === undefined
+          ? currentAccount.data.accountExpiresAt
+          : data.accountExpiresAt,
       })
       if (!accountPolicy.success)
         return accountPolicy
@@ -662,7 +684,9 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
         || (data.accountType !== undefined && data.accountType !== currentAccount.data.accountType)
         || (data.accountExpiresAt !== undefined && (data.accountExpiresAt?.getTime() ?? null) !== (currentAccount.data.accountExpiresAt?.getTime() ?? null))
       // 状态变更与凭据代际同事务提交；重新激活也不能恢复旧会话，仅保存相同状态不撤销会话。
-      const transaction = changesSecurity ? await reldb.tx.begin() : undefined
+      const transaction = changesSecurity
+        ? await reldb.tx.begin()
+        : undefined
       if (transaction && !transaction.success)
         return transaction
       const tx = transaction?.success ? transaction.data : undefined
@@ -674,9 +698,17 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
         if (updateResult.data.changes === 0)
           return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
         if (tx) {
-          const advanced = await tx.execute('UPDATE hai_iam_users SET credential_version = ?, reset_version = ?, reset_hash = NULL, reset_expires_at = NULL WHERE id = ? AND credential_version = ?', [globalThis.crypto.randomUUID(), globalThis.crypto.randomUUID(), userId, currentAccount.data.credentialVersion ?? ''])
-          if (!advanced.success || advanced.data.changes !== 1)
-            return advanced.success ? err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict')) : advanced
+          const advanced = await tx.execute('UPDATE hai_iam_users SET credential_version = ?, reset_version = ?, reset_hash = NULL, reset_expires_at = NULL WHERE id = ? AND credential_version = ?', [
+            globalThis.crypto.randomUUID(),
+            globalThis.crypto.randomUUID(),
+            userId,
+            currentAccount.data.credentialVersion ?? '',
+          ])
+          if (!advanced.success || advanced.data.changes !== 1) {
+            return advanced.success
+              ? err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+              : advanced
+          }
           const committed = await tx.commit()
           if (!committed.success)
             return committed
@@ -755,7 +787,11 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
         await tx.rollback()
         return err(
           HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_deleteUserFailed', { params: { message: String(error) } }),
+          iamM('iam_deleteUserFailed', {
+            params: {
+              message: String(error),
+            },
+          }),
           error,
         )
       }
@@ -801,7 +837,12 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
       if (!hashResult.success)
         return hashResult as HaiResult<void>
 
-      const updateResult = await userRepository.setPassword({ userId, expectedVersion: userResult.data.credentialVersion ?? '', passwordHash: hashResult.data, mustChangePassword: ctx.config.password?.requireInitialChange === true })
+      const updateResult = await userRepository.setPassword({
+        userId,
+        expectedVersion: userResult.data.credentialVersion ?? '',
+        passwordHash: hashResult.data,
+        mustChangePassword: ctx.config.password?.requireInitialChange === true,
+      })
       if (!updateResult.success)
         return updateResult
       if (!updateResult.data)
@@ -1044,13 +1085,17 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
     ...passwordChanges,
     ...buildPasswordResetOps(ctx),
     async inviteUser(options) {
-      const destination = ctx.resetConfig.mode === 'phone' ? options.phone : options.email
+      const destination = ctx.resetConfig.mode === 'phone'
+        ? options.phone
+        : options.email
       if (!deps.config.initialCredentials?.enabled || !ctx.resetConfig.enabled || !ctx.onPasswordResetRequest || !destination)
         return err(HaiIamError.INVITATION_DISABLED, iamM('iam_invitationDisabled'))
       const policy = deps.passwordStrategyResult.passwordConfig
       const length = Math.min(policy.maxLength, Math.max(32, policy.minLength))
       // 初始秘密只用于内部独立散列，从不返回、投递或写入业务元数据。
-      const password = (`Aa1!${Array.from({ length: Math.ceil(length / 32) }, () => generateToken()).join('')}`).slice(0, length)
+      const password = (`Aa1!${Array.from({
+        length: Math.ceil(length / 32),
+      }, () => generateToken()).join('')}`).slice(0, length)
       const created = await registration.createUser({ ...options, password })
       if (!created.success)
         return created
