@@ -21,13 +21,10 @@ const logger = core.logger.child({ module: 'reach', scope: 'provider-smtp' })
 /**
  * 将异常包装为 ReachError
  */
-function toReachError(error: unknown): HaiError {
+function toReachError(): HaiError {
   return {
-    code: HaiReachError.SEND_FAILED.code,
-    message: reachM('reach_emailSendFailed', {
-      params: { error: error instanceof Error ? error.message : String(error) },
-    }),
-    cause: error,
+    ...HaiReachError.SEND_FAILED,
+    message: reachM('reach_emailSendFailed'),
   }
 }
 
@@ -58,7 +55,9 @@ export function createSmtpProvider(): ReachProvider {
       if (config.type !== 'smtp') {
         return err(
           HaiReachError.CONFIG_ERROR,
-          reachM('reach_unsupportedType', { params: { type: config.type } }),
+          reachM('reach_unsupportedType', {
+            params: { type: config.type },
+          }),
         )
       }
 
@@ -81,7 +80,7 @@ export function createSmtpProvider(): ReachProvider {
       }
       catch (error) {
         logger.error('SMTP connection failed', { error })
-        return err(toReachError(error))
+        return err(toReachError())
       }
     },
 
@@ -122,7 +121,7 @@ export function createSmtpProvider(): ReachProvider {
       }
       catch (error) {
         logger.error('Email send failed', { to: message.to, error })
-        return err(toReachError(error))
+        return err(toReachError())
       }
     },
   }

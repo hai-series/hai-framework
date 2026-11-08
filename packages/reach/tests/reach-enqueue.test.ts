@@ -7,8 +7,18 @@ import { executeSend } from '../src/reach-send.js'
 import { createTemplateRegistry } from '../src/reach-template.js'
 import { createSendLogRepository } from '../src/repositories/reach-repository-send-log.js'
 
-const dnd = { enabled: true, strategy: 'delay' as const, start: '22:00', end: '08:00' }
-const config = { providers: [{ name: 'email', type: 'console' as const }], dnd }
+const dnd = {
+  enabled: true,
+  strategy: 'delay' as const,
+  start: '22:00',
+  end: '08:00',
+}
+const config = {
+  providers: [
+    { name: 'email', type: 'console' as const },
+  ],
+  dnd,
+}
 const message = { provider: 'email', to: 'test@example.invalid', body: 'queued notification' }
 
 async function initializeQueue() {
@@ -25,7 +35,9 @@ async function initializeQueue() {
 }
 
 beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.useFakeTimers({
+    toFake: ['Date'],
+  })
   vi.setSystemTime(new Date('2026-01-01T23:00:00'))
 })
 
@@ -36,7 +48,7 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 
-describe.sequential('persistent DND enqueue', () => {
+describe('persistent DND enqueue', { concurrent: false }, () => {
   it('启用 delay 但数据库未初始化时拒绝启动', async () => {
     const result = await reach.init(config)
     expect(result.success).toBe(false)
@@ -53,7 +65,12 @@ describe.sequential('persistent DND enqueue', () => {
   })
 
   it('缺失持久化仓库不能伪装为 deferred', async () => {
-    const result = await executeSend(message, new Map([['email', createConsoleProvider()]]), createTemplateRegistry(), dnd, null)
+    const result = await executeSend(message, new Map([
+      [
+        'email',
+        createConsoleProvider(),
+      ],
+    ]), createTemplateRegistry(), dnd, null)
     expect(result.success).toBe(false)
   })
 
@@ -111,8 +128,16 @@ describe.sequential('persistent DND enqueue', () => {
     if (result.success) {
       expect(result.data.deferred).toBe(true)
       expect(result.data.queueId).toEqual(expect.any(String))
-      const record = await repository.findAll({ where: 'queue_id = ?', params: [result.data.queueId] })
-      expect(record).toMatchObject({ success: true, data: [{ queueId: result.data.queueId, status: 'pending', body: message.body }] })
+      const record = await repository.findAll({
+        where: 'queue_id = ?',
+        params: [result.data.queueId],
+      })
+      expect(record).toMatchObject({
+        success: true,
+        data: [
+          { queueId: result.data.queueId, status: 'pending', body: message.body },
+        ],
+      })
     }
   })
 
@@ -120,7 +145,10 @@ describe.sequential('persistent DND enqueue', () => {
     const initialized = await reach.init({ providers: config.providers })
     expect(initialized.success).toBe(true)
     const result = await reach.send(message)
-    expect(result).toMatchObject({ success: true, data: { success: true } })
+    expect(result).toMatchObject({
+      success: true,
+      data: { success: true },
+    })
   })
 
   it('即时发送后普通日志写入失败不使已发送消息返回失败', async () => {
@@ -128,7 +156,10 @@ describe.sequential('persistent DND enqueue', () => {
     vi.setSystemTime(new Date('2026-01-02T09:00:00'))
     vi.spyOn(repository, 'create').mockResolvedValueOnce(err(HaiReachError.SEND_FAILED, 'optional log unavailable'))
     const result = await reach.send(message)
-    expect(result).toMatchObject({ success: true, data: { success: true } })
+    expect(result).toMatchObject({
+      success: true,
+      data: { success: true },
+    })
     if (result.success)
       expect(result.data.deferred).not.toBe(true)
   })

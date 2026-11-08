@@ -56,7 +56,7 @@ describe('reach-repository-template: types', () => {
 
 // ─── SQLite 集成测试 ───
 
-describe.sequential('reach-repository-template: sqlite', () => {
+describe('reach-repository-template: sqlite', { concurrent: false }, () => {
   let repo: TemplateRepository
 
   beforeEach(async () => {
@@ -209,7 +209,12 @@ describe.sequential('reach-repository-template: sqlite', () => {
 
   it('listTemplates 应按名称排序返回所有模板（ReachTemplate 格式）', async () => {
     await repo.upsert({ name: 'beta', provider: 'sms', body: 'b' })
-    await repo.upsert({ name: 'alpha', provider: 'email', subject: 'a-sub', body: 'a' })
+    await repo.upsert({
+      name: 'alpha',
+      provider: 'email',
+      subject: 'a-sub',
+      body: 'a',
+    })
     await repo.upsert({ name: 'gamma', provider: 'api', body: 'g' })
 
     const result = await repo.listTemplates()

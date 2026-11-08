@@ -27,7 +27,11 @@ beforeEach(async () => {
     throw new Error('Missing test receiver')
   url = `http://127.0.0.1:${address.port}`
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
-  expect((await reach.init({ providers: [{ name: 'notify', type: 'api', url }] })).success).toBe(true)
+  expect((await reach.init({
+    providers: [
+      { name: 'notify', type: 'api', url },
+    ],
+  })).success).toBe(true)
 })
 afterEach(async () => {
   await reach.close()
@@ -37,7 +41,17 @@ afterEach(async () => {
     await new Promise<void>(resolve => server.close(() => resolve()))
   }
 })
-const notification = () => ({ provider: 'notify', to: 'user@example.invalid', body: 'Credential: CREDENTIAL_SENTINEL', vars: { verificationCode: 'CODE_SENTINEL', token: 'TOKEN_SENTINEL' }, sensitive: true, idempotencyKey: 'one-notification', expiresAt: Date.now() + 60_000 })
+function notification() {
+  return {
+    provider: 'notify',
+    to: 'user@example.invalid',
+    body: 'Credential: CREDENTIAL_SENTINEL',
+    vars: { verificationCode: 'CODE_SENTINEL', token: 'TOKEN_SENTINEL' },
+    sensitive: true,
+    idempotencyKey: 'one-notification',
+    expiresAt: Date.now() + 60_000,
+  }
+}
 
 describe('凭据通知的无载荷回执', () => {
   it('真实发送但不落正文/变量，跨重初始化和并发同键均不重复发送', async () => {
@@ -45,19 +59,29 @@ describe('凭据通知的无载荷回执', () => {
     const stop = core.logger.observe(entry => observations.push(entry))
     try {
       const message = notification()
-      const results = await Promise.all([reach.send(message), reach.send(message)])
+      const results = await Promise.all([
+        reach.send(message),
+        reach.send(message),
+      ])
       expect(results.some(result => result.success)).toBe(true)
       expect(received).toHaveLength(1)
       expect(received[0]).toMatchObject({ body: message.body, vars: message.vars, expiresAt: message.expiresAt })
       await reach.close()
-      expect((await reach.init({ providers: [{ name: 'notify', type: 'api', url }] })).success).toBe(true)
+      expect((await reach.init({
+        providers: [
+          { name: 'notify', type: 'api', url },
+        ],
+      })).success).toBe(true)
       const repeated = await reach.send(message)
       expect(repeated.success).toBe(true)
       expect(received).toHaveLength(1)
       if (!repeated.success)
         return
       const receipt = await reach.queue.get(repeated.data.receiptId!)
-      expect(receipt).toMatchObject({ success: true, data: { status: 'sent' } })
+      expect(receipt).toMatchObject({
+        success: true,
+        data: { status: 'sent' },
+      })
       const rows = await reldb.sql.query('SELECT * FROM hai_reach_send_log')
       expect(rows.success).toBe(true)
       const persisted = JSON.stringify({ rows, observations })
@@ -70,25 +94,58 @@ describe('凭据通知的无载荷回执', () => {
   })
 
   it('过期凭据不发送，免打扰不会把凭据写入延迟队列', async () => {
-    const expired = await reach.send({ ...notification(), expiresAt: Date.now() - 1 })
-    expect(expired).toMatchObject({ success: false, error: { code: HaiReachError.MESSAGE_EXPIRED.code } })
+    const expired = await reach.send({
+      ...notification(),
+      expiresAt: Date.now() - 1,
+    })
+    expect(expired).toMatchObject({
+      success: false,
+      error: { code: HaiReachError.MESSAGE_EXPIRED.code },
+    })
     await reach.close()
     const now = new Date()
     const start = `${String(now.getHours()).padStart(2, '0')}:00`
     const end = `${String((now.getHours() + 1) % 24).padStart(2, '0')}:00`
-    expect((await reach.init({ providers: [{ name: 'notify', type: 'api', url }], dnd: { enabled: true, strategy: 'delay', start, end } })).success).toBe(true)
+    expect((await reach.init({
+      providers: [
+        { name: 'notify', type: 'api', url },
+      ],
+      dnd: {
+        enabled: true,
+        strategy: 'delay',
+        start,
+        end,
+      },
+    })).success).toBe(true)
     const blocked = await reach.send(notification())
-    expect(blocked).toMatchObject({ success: false, error: { code: HaiReachError.DND_BLOCKED.code } })
+    expect(blocked).toMatchObject({
+      success: false,
+      error: { code: HaiReachError.DND_BLOCKED.code },
+    })
     expect(received).toHaveLength(0)
     const rows = await reldb.sql.query<{ status: string, body: string | null, vars_json: string | null }>('SELECT status,body,vars_json FROM hai_reach_send_log')
-    expect(rows).toMatchObject({ success: true, data: [{ status: 'discarded', body: null, vars_json: null }] })
+    expect(rows).toMatchObject({
+      success: true,
+      data: [
+        { status: 'discarded', body: null, vars_json: null },
+      ],
+    })
   })
 })
 
 it('provider 返回的消息标识不作为凭据回执保存或返回', async () => {
   const result = await reach.send(notification())
-  expect(result).toMatchObject({ success: true, data: { success: true, receiptId: expect.any(String) } })
+  expect(result).toMatchObject({
+    success: true,
+    data: {
+      success: true,
+      receiptId: expect.any(String),
+    },
+  })
   expect(result.success && result.data.messageId).toBeUndefined()
   const row = await reldb.sql.get('SELECT message_id FROM hai_reach_send_log')
-  expect(row).toMatchObject({ success: true, data: { message_id: null } })
+  expect(row).toMatchObject({
+    success: true,
+    data: { message_id: null },
+  })
 })

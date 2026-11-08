@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HaiReachError, reach } from '../src/index.js'
 import { resetTemplateRepoSingleton } from '../src/repositories/reach-repository-template.js'
 
-describe.sequential('reach.send (multi-provider)', () => {
+describe('reach.send (multi-provider)', { concurrent: false }, () => {
   beforeEach(async () => {
     resetTemplateRepoSingleton()
     await reldb.init({ type: 'sqlite', database: ':memory:' })
@@ -162,7 +162,11 @@ describe.sequential('reach.send (multi-provider)', () => {
     resetTemplateRepoSingleton()
     await reldb.close()
     await reldb.init({ type: 'sqlite', database: ':memory:' })
-    await reach.init({ providers: [{ name: 'email', type: 'console' }] })
+    await reach.init({
+      providers: [
+        { name: 'email', type: 'console' },
+      ],
+    })
 
     const after = await reach.template.resolve('temp')
     expect(after.success).toBe(false)
@@ -180,7 +184,7 @@ describe.sequential('reach.send (multi-provider)', () => {
   })
 })
 
-describe.sequential('reach.send (template from config)', () => {
+describe('reach.send (template from config)', { concurrent: false }, () => {
   beforeEach(async () => {
     resetTemplateRepoSingleton()
     await reldb.init({ type: 'sqlite', database: ':memory:' })
@@ -194,9 +198,16 @@ describe.sequential('reach.send (template from config)', () => {
 
   it('配置中的模板应自动注册', async () => {
     await reach.init({
-      providers: [{ name: 'email', type: 'console' }],
+      providers: [
+        { name: 'email', type: 'console' },
+      ],
       templates: [
-        { name: 'config_tpl', provider: 'email', subject: '来自配置 {name}', body: '内容 {name}' },
+        {
+          name: 'config_tpl',
+          provider: 'email',
+          subject: '来自配置 {name}',
+          body: '内容 {name}',
+        },
       ],
     })
 
@@ -221,7 +232,15 @@ describe('reach.send (Aliyun SMS)', () => {
 
   it('短信模板变量中的保留字符应按阿里云 RPC 规则编码和签名', async () => {
     const initialized = await reach.init({
-      providers: [{ name: 'sms', type: 'aliyun-sms', accessKeyId: 'test-ak', accessKeySecret: 'test-sk', signName: '测试签名' }],
+      providers: [
+        {
+          name: 'sms',
+          type: 'aliyun-sms',
+          accessKeyId: 'test-ak',
+          accessKeySecret: 'test-sk',
+          signName: '测试签名',
+        },
+      ],
     })
     expect(initialized.success).toBe(true)
 
@@ -235,7 +254,10 @@ describe('reach.send (Aliyun SMS)', () => {
       vars: { value: '!\'()*~' },
     })
 
-    expect(result).toMatchObject({ success: true, data: { messageId: 'biz-test' } })
+    expect(result).toMatchObject({
+      success: true,
+      data: { messageId: 'biz-test' },
+    })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const url = new URL(String(fetchMock.mock.calls[0][0]))
     expect(url.search).toContain('TemplateParam=%7B%22value%22%3A%22%21%27%28%29%2A~%22%7D')
@@ -249,9 +271,11 @@ describe('reach.send (Aliyun SMS)', () => {
   })
 })
 
-describe.sequential('reach.send (DND)', () => {
+describe('reach.send (DND)', { concurrent: false }, () => {
   beforeEach(async () => {
-    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
     vi.setSystemTime(new Date('2026-01-01T12:00:00'))
     const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' })
     if (!initialized.success)
@@ -266,7 +290,9 @@ describe.sequential('reach.send (DND)', () => {
 
   it('dnd 禁用时消息应正常发送', async () => {
     await reach.init({
-      providers: [{ name: 'email', type: 'console' }],
+      providers: [
+        { name: 'email', type: 'console' },
+      ],
       dnd: { enabled: false, start: '00:00', end: '23:59' },
     })
 
@@ -282,8 +308,15 @@ describe.sequential('reach.send (DND)', () => {
   it('dnd discard 策略应返回 DND_BLOCKED', async () => {
     // 设置一个全天的 DND（00:00 - 23:59），确保当前时间在 DND 内
     await reach.init({
-      providers: [{ name: 'email', type: 'console' }],
-      dnd: { enabled: true, strategy: 'discard', start: '00:00', end: '23:59' },
+      providers: [
+        { name: 'email', type: 'console' },
+      ],
+      dnd: {
+        enabled: true,
+        strategy: 'discard',
+        start: '00:00',
+        end: '23:59',
+      },
     })
 
     const result = await reach.send({
@@ -300,8 +333,15 @@ describe.sequential('reach.send (DND)', () => {
 
   it('dnd delay 策略应返回 deferred 结果', async () => {
     await reach.init({
-      providers: [{ name: 'email', type: 'console' }],
-      dnd: { enabled: true, strategy: 'delay', start: '00:00', end: '23:59' },
+      providers: [
+        { name: 'email', type: 'console' },
+      ],
+      dnd: {
+        enabled: true,
+        strategy: 'delay',
+        start: '00:00',
+        end: '23:59',
+      },
     })
 
     const result = await reach.send({
@@ -318,8 +358,15 @@ describe.sequential('reach.send (DND)', () => {
 
   it('dnd delay 策略下不存在的 provider 仍应返回 PROVIDER_NOT_FOUND', async () => {
     await reach.init({
-      providers: [{ name: 'email', type: 'console' }],
-      dnd: { enabled: true, strategy: 'delay', start: '00:00', end: '23:59' },
+      providers: [
+        { name: 'email', type: 'console' },
+      ],
+      dnd: {
+        enabled: true,
+        strategy: 'delay',
+        start: '00:00',
+        end: '23:59',
+      },
     })
 
     const result = await reach.send({

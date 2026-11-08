@@ -18,6 +18,7 @@ import { ReachQueueConfigSchema } from './reach-config.js'
 import { deliverClaimedMessage } from './reach-delivery.js'
 import { reachM } from './reach-i18n.js'
 import { sendSensitive } from './reach-send-sensitive.js'
+import { renderTemplate } from './reach-template.js'
 import {
   HaiReachError,
 
@@ -128,16 +129,18 @@ export async function preprocessMessage(
     return ok(message)
   }
 
-  const rendered = await templateRegistry.render(message.template, message.vars ?? {})
+  // 同一个持久模板快照决定内容和默认渠道，编辑模板不能拼出跨版本消息。
+  const template = await templateRegistry.resolve(message.template)
+  if (!template.success)
+    return template
+  const rendered = renderTemplate(template.data, message.vars ?? {})
   if (!rendered.success) {
     return rendered
   }
 
-  const template = await templateRegistry.resolve(message.template)
-
   const processed: ReachMessage = {
     ...message,
-    provider: message.provider || (template.success ? template.data.provider : '') || '',
+    provider: message.provider || template.data.provider || '',
     subject: message.subject ?? rendered.data.subject,
     body: message.body ?? rendered.data.body,
   }
@@ -184,8 +187,12 @@ async function saveSendRecord(
       subject: message.subject ?? null,
       body: message.body ?? null,
       template: message.template ?? null,
-      varsJson: message.vars ? JSON.stringify(message.vars) : null,
-      extraJson: message.extra ? JSON.stringify(message.extra) : null,
+      varsJson: message.vars
+        ? JSON.stringify(message.vars)
+        : null,
+      extraJson: message.extra
+        ? JSON.stringify(message.extra)
+        : null,
       status,
       ...queueConfig,
       messageId: messageId ?? null,
@@ -469,7 +476,9 @@ export async function executeSend(
   if (!message.to) {
     return err(
       HaiReachError.INVALID_RECIPIENT,
-      reachM('reach_invalidRecipient', { params: { recipient: '' } }),
+      reachM('reach_invalidRecipient', {
+        params: { recipient: '' },
+      }),
     )
   }
 
@@ -490,7 +499,9 @@ export async function executeSend(
   if (!providers.has(providerName)) {
     return err(
       HaiReachError.PROVIDER_NOT_FOUND,
-      reachM('reach_providerNotFound', { params: { provider: providerName } }),
+      reachM('reach_providerNotFound', {
+        params: { provider: providerName },
+      }),
     )
   }
 

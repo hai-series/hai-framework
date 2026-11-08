@@ -91,7 +91,7 @@ describe('reach-repository-send-log: types', () => {
 
 // ─── SQLite 集成测试 ───
 
-describe.sequential('reach-repository-send-log: sqlite', () => {
+describe('reach-repository-send-log: sqlite', { concurrent: false }, () => {
   let repo: SendLogRepository
 
   beforeEach(async () => {
@@ -216,9 +216,42 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
 
   it('findPending 应返回所有 pending 记录（按创建时间升序）', async () => {
     const now = Date.now()
-    await repo.create({ provider: 'a', toAddr: 'x', subject: null, body: 'first', template: null, varsJson: null, extraJson: null, status: 'pending', messageId: null, createdAt: now })
-    await repo.create({ provider: 'b', toAddr: 'y', subject: null, body: 'second', template: null, varsJson: null, extraJson: null, status: 'sent', messageId: 'done', createdAt: now + 1 })
-    await repo.create({ provider: 'c', toAddr: 'z', subject: null, body: 'third', template: null, varsJson: null, extraJson: null, status: 'pending', messageId: null, createdAt: now + 2 })
+    await repo.create({
+      provider: 'a',
+      toAddr: 'x',
+      subject: null,
+      body: 'first',
+      template: null,
+      varsJson: null,
+      extraJson: null,
+      status: 'pending',
+      messageId: null,
+      createdAt: now,
+    })
+    await repo.create({
+      provider: 'b',
+      toAddr: 'y',
+      subject: null,
+      body: 'second',
+      template: null,
+      varsJson: null,
+      extraJson: null,
+      status: 'sent',
+      messageId: 'done',
+      createdAt: now + 1,
+    })
+    await repo.create({
+      provider: 'c',
+      toAddr: 'z',
+      subject: null,
+      body: 'third',
+      template: null,
+      varsJson: null,
+      extraJson: null,
+      status: 'pending',
+      messageId: null,
+      createdAt: now + 2,
+    })
 
     const result = await repo.findPending()
     expect(result.success).toBe(true)
@@ -233,7 +266,18 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
   })
 
   it('findPending 无 pending 记录时应返回空数组', async () => {
-    await repo.create({ provider: 'a', toAddr: 'x', subject: null, body: null, template: null, varsJson: null, extraJson: null, status: 'sent', messageId: 'ok', createdAt: Date.now() })
+    await repo.create({
+      provider: 'a',
+      toAddr: 'x',
+      subject: null,
+      body: null,
+      template: null,
+      varsJson: null,
+      extraJson: null,
+      status: 'sent',
+      messageId: 'ok',
+      createdAt: Date.now(),
+    })
     const result = await repo.findPending()
     expect(result.success).toBe(true)
     if (result.success)
@@ -243,7 +287,18 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
   // ─── markSent ───
 
   it('markSent 应将有效 sending 记录标记为 sent', async () => {
-    const createResult = await repo.create({ provider: 'a', toAddr: 'x', subject: null, body: null, template: null, varsJson: null, extraJson: null, status: 'pending', messageId: null, createdAt: Date.now() })
+    const createResult = await repo.create({
+      provider: 'a',
+      toAddr: 'x',
+      subject: null,
+      body: null,
+      template: null,
+      varsJson: null,
+      extraJson: null,
+      status: 'pending',
+      messageId: null,
+      createdAt: Date.now(),
+    })
     expect(createResult.success).toBe(true)
     if (!createResult.success)
       return
@@ -263,7 +318,18 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
   })
 
   it('markSent 不传 messageId 时应将 messageId 置为 null', async () => {
-    const createResult = await repo.create({ provider: 'a', toAddr: 'x', subject: null, body: null, template: null, varsJson: null, extraJson: null, status: 'pending', messageId: null, createdAt: Date.now() })
+    const createResult = await repo.create({
+      provider: 'a',
+      toAddr: 'x',
+      subject: null,
+      body: null,
+      template: null,
+      varsJson: null,
+      extraJson: null,
+      status: 'pending',
+      messageId: null,
+      createdAt: Date.now(),
+    })
     expect(createResult.success).toBe(true)
     if (!createResult.success)
       return
@@ -284,7 +350,18 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
   })
 
   it('markSent 后 findPending 不应返回该记录', async () => {
-    const createResult = await repo.create({ provider: 'a', toAddr: 'x', subject: null, body: null, template: null, varsJson: null, extraJson: null, status: 'pending', messageId: null, createdAt: Date.now() })
+    const createResult = await repo.create({
+      provider: 'a',
+      toAddr: 'x',
+      subject: null,
+      body: null,
+      template: null,
+      varsJson: null,
+      extraJson: null,
+      status: 'pending',
+      messageId: null,
+      createdAt: Date.now(),
+    })
     expect(createResult.success).toBe(true)
     if (!createResult.success)
       return
@@ -302,8 +379,30 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
 
   it('claimPendingBatch 应按创建时间顺序 claim 待发送记录并写入 owner', async () => {
     const now = 1000
-    await repo.create({ provider: 'a', toAddr: 'x', subject: null, body: 'first', template: null, varsJson: null, extraJson: null, status: 'pending', messageId: null, createdAt: now })
-    await repo.create({ provider: 'b', toAddr: 'y', subject: null, body: 'second', template: null, varsJson: null, extraJson: null, status: 'pending', messageId: null, createdAt: now + 1 })
+    await repo.create({
+      provider: 'a',
+      toAddr: 'x',
+      subject: null,
+      body: 'first',
+      template: null,
+      varsJson: null,
+      extraJson: null,
+      status: 'pending',
+      messageId: null,
+      createdAt: now,
+    })
+    await repo.create({
+      provider: 'b',
+      toAddr: 'y',
+      subject: null,
+      body: 'second',
+      template: null,
+      varsJson: null,
+      extraJson: null,
+      status: 'pending',
+      messageId: null,
+      createdAt: now + 1,
+    })
 
     const claimResult = await repo.claimPendingBatch('worker-1', { now, limit: 1, lockMs: 5000 })
     expect(claimResult.success).toBe(true)
@@ -325,7 +424,18 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
   })
 
   it('claimPendingBatch 应接管已过期的 processing 记录', async () => {
-    const createResult = await repo.create({ provider: 'a', toAddr: 'x', subject: null, body: 'retry-me', template: null, varsJson: null, extraJson: null, status: 'pending', messageId: null, createdAt: 1000 })
+    const createResult = await repo.create({
+      provider: 'a',
+      toAddr: 'x',
+      subject: null,
+      body: 'retry-me',
+      template: null,
+      varsJson: null,
+      extraJson: null,
+      status: 'pending',
+      messageId: null,
+      createdAt: 1000,
+    })
     expect(createResult.success).toBe(true)
     if (!createResult.success)
       return
@@ -345,7 +455,18 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
   })
 
   it('releaseClaim 应恢复为 pending 并清空 claim 字段', async () => {
-    const createResult = await repo.create({ provider: 'a', toAddr: 'x', subject: null, body: 'release-me', template: null, varsJson: null, extraJson: null, status: 'pending', messageId: null, createdAt: Date.now() })
+    const createResult = await repo.create({
+      provider: 'a',
+      toAddr: 'x',
+      subject: null,
+      body: 'release-me',
+      template: null,
+      varsJson: null,
+      extraJson: null,
+      status: 'pending',
+      messageId: null,
+      createdAt: Date.now(),
+    })
     expect(createResult.success).toBe(true)
     if (!createResult.success)
       return
@@ -367,7 +488,18 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
   })
 
   it('releaseClaim 使用错误 owner 时应失败且保持原 claim', async () => {
-    const createResult = await repo.create({ provider: 'a', toAddr: 'x', subject: null, body: 'stay-claimed', template: null, varsJson: null, extraJson: null, status: 'pending', messageId: null, createdAt: Date.now() })
+    const createResult = await repo.create({
+      provider: 'a',
+      toAddr: 'x',
+      subject: null,
+      body: 'stay-claimed',
+      template: null,
+      varsJson: null,
+      extraJson: null,
+      status: 'pending',
+      messageId: null,
+      createdAt: Date.now(),
+    })
     expect(createResult.success).toBe(true)
     if (!createResult.success)
       return
@@ -391,7 +523,18 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
   })
 
   it('markSent 传入 owner 时应清空 claim 字段', async () => {
-    const createResult = await repo.create({ provider: 'a', toAddr: 'x', subject: null, body: 'done', template: null, varsJson: null, extraJson: null, status: 'pending', messageId: null, createdAt: Date.now() })
+    const createResult = await repo.create({
+      provider: 'a',
+      toAddr: 'x',
+      subject: null,
+      body: 'done',
+      template: null,
+      varsJson: null,
+      extraJson: null,
+      status: 'pending',
+      messageId: null,
+      createdAt: Date.now(),
+    })
     expect(createResult.success).toBe(true)
     if (!createResult.success)
       return
@@ -415,7 +558,18 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
   })
 
   it('markSent 使用错误 owner 时应失败且保持 processing 状态', async () => {
-    const createResult = await repo.create({ provider: 'a', toAddr: 'x', subject: null, body: 'wrong-owner', template: null, varsJson: null, extraJson: null, status: 'pending', messageId: null, createdAt: Date.now() })
+    const createResult = await repo.create({
+      provider: 'a',
+      toAddr: 'x',
+      subject: null,
+      body: 'wrong-owner',
+      template: null,
+      varsJson: null,
+      extraJson: null,
+      status: 'pending',
+      messageId: null,
+      createdAt: Date.now(),
+    })
     expect(createResult.success).toBe(true)
     if (!createResult.success)
       return
@@ -453,8 +607,30 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
   // ─── count / exists ───
 
   it('count 应返回总记录数', async () => {
-    await repo.create({ provider: 'a', toAddr: 'x', subject: null, body: null, template: null, varsJson: null, extraJson: null, status: 'pending', messageId: null, createdAt: Date.now() })
-    await repo.create({ provider: 'b', toAddr: 'y', subject: null, body: null, template: null, varsJson: null, extraJson: null, status: 'sent', messageId: null, createdAt: Date.now() })
+    await repo.create({
+      provider: 'a',
+      toAddr: 'x',
+      subject: null,
+      body: null,
+      template: null,
+      varsJson: null,
+      extraJson: null,
+      status: 'pending',
+      messageId: null,
+      createdAt: Date.now(),
+    })
+    await repo.create({
+      provider: 'b',
+      toAddr: 'y',
+      subject: null,
+      body: null,
+      template: null,
+      varsJson: null,
+      extraJson: null,
+      status: 'sent',
+      messageId: null,
+      createdAt: Date.now(),
+    })
 
     const countResult = await repo.count()
     expect(countResult.success).toBe(true)
@@ -463,7 +639,18 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
   })
 
   it('existsById 应正确判断记录存在性', async () => {
-    const createResult = await repo.create({ provider: 'a', toAddr: 'x', subject: null, body: null, template: null, varsJson: null, extraJson: null, status: 'sent', messageId: null, createdAt: Date.now() })
+    const createResult = await repo.create({
+      provider: 'a',
+      toAddr: 'x',
+      subject: null,
+      body: null,
+      template: null,
+      varsJson: null,
+      extraJson: null,
+      status: 'sent',
+      messageId: null,
+      createdAt: Date.now(),
+    })
     expect(createResult.success).toBe(true)
     if (!createResult.success)
       return

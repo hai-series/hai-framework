@@ -23,7 +23,7 @@
 
 ### 依赖
 
-- `@h-ai/reldb` — 数据库（发送日志与模板持久化）；启用 `dnd.enabled: true` 与 `strategy: delay` 时必须先初始化且队列表可用，否则 `reach.init()` 返回 `CONFIG_ERROR`。其他发送场景可选
+- `@h-ai/reldb` — 数据库（发送日志与模板持久化）；配置非空 `templates` 或启用 DND delay 时必须先初始化，模板保存或必需表准备失败时 `reach.init()` 返回 `CONFIG_ERROR` 并关闭候选 Provider。不使用模板/延迟队列的即时发送可选
 - `@h-ai/cache` — 缓存（DND delay 策略分布式锁），可选；已初始化时自动启用分布式锁
 
 ### 快速开始
@@ -39,31 +39,69 @@ pnpm add @h-ai/reach
 #### 多 Provider 初始化
 
 ```ts
+import { core } from '@h-ai/core'
 import { reach } from '@h-ai/reach'
+import { reldb } from '@h-ai/reldb'
 
-const initialized = await reach.init({
-  providers: [{ name: 'local', type: 'console' }],
-  templates: [{ name: 'welcome', provider: 'local', subject: 'Welcome', body: 'Hello {userName}' }],
-})
+const runtime = core.module.createRuntime([
+  {
+    name: 'reldb',
+    start: () => reldb.init({ type: 'sqlite', database: ':memory:' }),
+    close: () => reldb.close()
+  },
+  {
+    name: 'reach',
+    start: () => reach.init({
+      providers: [
+        { name: 'local', type: 'console' }
+      ],
+      templates: [
+        {
+          name: 'welcome',
+          provider: 'local',
+          subject: 'Welcome',
+          body: 'Hello {userName}'
+        }
+      ],
+    }),
+    close: () => reach.close()
+  },
+])
+const initialized = await runtime.start()
 if (!initialized.success)
   throw new Error(initialized.error.message)
+
+let result: Awaited<ReturnType<typeof reach.send>>
 try {
-  const result = await reach.send({
+  result = await reach.send({
     to: 'user@example.com',
     template: 'welcome',
-    vars: { userName: 'Alice' },
+    vars: { userName: 'Alice' }
   })
-  if (!result.success)
-    throw new Error(result.error.message)
 }
-finally {
-  await reach.close()
+catch (error) {
+  const closed = await runtime.close()
+  throw new AggregateError(closed.success
+    ? [error]
+    : [error, closed.error], 'Reach operation failed')
 }
+const closed = await runtime.close()
+if (!closed.success) {
+  throw new AggregateError(result.success
+    ? [closed.error]
+    : [result.error, closed.error], 'Reach cleanup failed')
+}
+if (!result.success)
+  throw new Error(result.error.message)
 ```
 
 以上示例使用开发 Console Provider，只记录发送元数据，不实际发邮件或短信。需要真实投递时，按下方配置 SMTP、短信或 API Provider；数据库持久化和共享缓存按需初始化。
 
-`reach.config` 返回的是**脱敏后的配置快照**：`api.url` / `endpoint` 的内嵌凭证，以及 `headers.Authorization`、SMTP `pass`、短信密钥等敏感值会自动隐藏。
+`reach.config` 返回的是**脱敏后的配置快照**：`api.url` / `endpoint` 的内嵌凭证、所有自定义请求头值、SMTP `pass` 和短信密钥都会隐藏。网关正文不进入快照；部署向导把 API 请求头整体保存到私有环境文件，不依赖头名猜测认证信息。
+
+Provider 失败保留完整模块错误定义（含 HTTP 状态），SMTP/短信原始响应不进入返回消息或 cause；前端使用本地化提示，服务端日志保留诊断上下文。
+
+一次模板发送使用同一个模板快照渲染主题、正文并选择默认 Provider，避免并发编辑时混用不同版本。显式 `provider` 仍可覆盖模板渠道。
 
 ### 配置
 

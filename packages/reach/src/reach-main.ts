@@ -52,7 +52,6 @@ let templateRegistry: ReachTemplateRegistry = createTemplateRegistry()
 let sendLogRepo: SendLogRepository | null = null
 
 /** 模板存储（db 可用时初始化） */
-let templateRepo: TemplateRepository | null = null
 
 /** 初始化进行中标志（防止并发调用） */
 let initInProgress = false
@@ -104,7 +103,11 @@ async function tryInitSendLogRepo(): Promise<SendLogRepository | null> {
     return result.data
   }
   catch (error) {
-    logger.debug('Send log repository not initialized', { error: error instanceof Error ? error.message : String(error) })
+    logger.debug('Send log repository not initialized', {
+      error: error instanceof Error
+        ? error.message
+        : String(error),
+    })
     return null
   }
 }
@@ -126,7 +129,11 @@ async function tryInitTemplateRepo(): Promise<TemplateRepository | null> {
     return result.data
   }
   catch (error) {
-    logger.debug('Template repository not initialized', { error: error instanceof Error ? error.message : String(error) })
+    logger.debug('Template repository not initialized', {
+      error: error instanceof Error
+        ? error.message
+        : String(error),
+    })
     return null
   }
 }
@@ -165,7 +172,6 @@ async function doClose(): Promise<void> {
   dndConfig = undefined
   templateRegistry = createTemplateRegistry()
   sendLogRepo = null
-  templateRepo = null
   resetSendLogRepoSingleton()
   resetTemplateRepoSingleton()
   resetSendState()
@@ -191,7 +197,9 @@ async function doInit(config: ReachConfigInput, options?: ReachInitOptions): Pro
     logger.error('Reach config validation failed', { error: parseResult.error.message })
     return err(
       HaiReachError.CONFIG_ERROR,
-      reachM('reach_configError', { params: { error: parseResult.error.message } }),
+      reachM('reach_configError', {
+        params: { error: parseResult.error.message },
+      }),
       parseResult.error,
     )
   }
@@ -205,6 +213,11 @@ async function doInit(config: ReachConfigInput, options?: ReachInitOptions): Pro
   if (core.module.requiresSharedState(process.env) && parsed.providers.some(provider => provider.type === 'console'))
     return err(HaiReachError.CONFIG_ERROR, reachM('reach_productionProviderRequired'))
 
+  if (parsed.templates?.length && !reldb.isInitialized)
+    return err(HaiReachError.CONFIG_ERROR, reachM('reach_templatePersistenceRequired'))
+
+  const newProviders = new Map<string, ReachProvider>()
+  let published = false
   try {
     // delay 队列是可靠发送前置；连接任何 Provider、发布模块状态前先确认表已就绪。
     let requiredQueue: SendLogRepository | null = null
@@ -217,10 +230,9 @@ async function doInit(config: ReachConfigInput, options?: ReachInitOptions): Pro
       requiredQueue = queue.data
     }
 
-    const newProviders = new Map<string, ReachProvider>()
-
     for (const providerConfig of parsed.providers) {
       const provider = createProvider(providerConfig, gatewayHooks.get(providerConfig.name))
+      newProviders.set(providerConfig.name, provider)
       const connectResult = await provider.connect(providerConfig)
       if (!connectResult.success) {
         logger.error('Provider initialization failed', {
@@ -229,40 +241,34 @@ async function doInit(config: ReachConfigInput, options?: ReachInitOptions): Pro
           code: connectResult.error.code,
           message: connectResult.error.message,
         })
-        logger.info('Rolling back connected providers', { count: newProviders.size })
-        for (const [name, p] of newProviders.entries()) {
-          try {
-            await p.close()
-          }
-          catch (rollbackError) {
-            logger.error('Provider rollback close failed', { name, error: rollbackError })
-          }
-        }
         return connectResult
       }
-      newProviders.set(providerConfig.name, provider)
     }
 
-    providers = newProviders
-    currentConfig = parsed
-    dndConfig = parsed.dnd
-
-    // 尝试初始化模板存储
-    templateRepo = await tryInitTemplateRepo()
-
-    // 创建模板注册表
-    templateRegistry = createTemplateRegistry(templateRepo)
+    // 显式模板属于就绪条件，不能把仓库/保存失败降级为可选日志。
+    const candidateTemplateRepo = await tryInitTemplateRepo()
+    if (parsed.templates?.length && !candidateTemplateRepo)
+      return err(HaiReachError.CONFIG_ERROR, reachM('reach_templatePersistenceRequired'))
+    const candidateRegistry = createTemplateRegistry(candidateTemplateRepo)
 
     // 配置文件中定义的模板写入数据库
-    if (parsed.templates && templateRepo) {
-      const saveResult = await templateRegistry.saveBatch(parsed.templates)
+    if (parsed.templates?.length) {
+      const saveResult = await candidateRegistry.saveBatch(parsed.templates)
       if (!saveResult.success) {
-        logger.warn('Failed to save config templates to database', { error: saveResult.error.message })
+        logger.warn('Failed to save config templates to database', { errorCode: saveResult.error.code })
+        return err(HaiReachError.CONFIG_ERROR, reachM('reach_templatePersistenceRequired'), saveResult.error)
       }
     }
 
     // delay 使用已验证的必需队列；即时发送的普通日志仍是可选能力。
-    sendLogRepo = requiredQueue ?? await tryInitSendLogRepo()
+    const candidateSendLogRepo = requiredQueue ?? await tryInitSendLogRepo()
+
+    providers = newProviders
+    currentConfig = parsed
+    dndConfig = parsed.dnd
+    templateRegistry = candidateRegistry
+    sendLogRepo = candidateSendLogRepo
+    published = true
 
     // 启动 DND 恢复定时器
     if (dndConfig) {
@@ -278,10 +284,26 @@ async function doInit(config: ReachConfigInput, options?: ReachInitOptions): Pro
     return err(
       HaiReachError.CONFIG_ERROR,
       reachM('reach_initFailed', {
-        params: { error: error instanceof Error ? error.message : String(error) },
+        params: {
+          error: error instanceof Error
+            ? error.message
+            : String(error),
+        },
       }),
       error,
     )
+  }
+  finally {
+    if (!published) {
+      for (const [name, provider] of newProviders) {
+        try {
+          await provider.close()
+        }
+        catch {
+          logger.error('Candidate provider cleanup failed', { name })
+        }
+      }
+    }
   }
 }
 
@@ -356,11 +378,17 @@ export const reach: ReachFunctions = {
         return err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
       if (!ReachQueueIdSchema.safeParse(queueId).success)
         return err(HaiReachError.CONFIG_ERROR, reachM('reach_queueInputInvalid'))
-      const rows = await sendLogRepo.findAll({ where: 'queue_id = ?', params: [queueId], limit: 1 })
+      const rows = await sendLogRepo.findAll({
+        where: 'queue_id = ?',
+        params: [queueId],
+        limit: 1,
+      })
       if (!rows.success)
         return rows
       const row = rows.data[0]
-      return ok(row ? queueEntry(row) : null)
+      return ok(row
+        ? queueEntry(row)
+        : null)
     },
     async list(options) {
       if (providers.size === 0)
@@ -377,7 +405,9 @@ export const reach: ReachFunctions = {
         limit: parsed.data.limit,
         offset: parsed.data.offset,
       })
-      return rows.success ? ok(rows.data.map(queueEntry)) : rows
+      return rows.success
+        ? ok(rows.data.map(queueEntry))
+        : rows
     },
     async requeueDead(queueId, options) {
       if (providers.size === 0)
@@ -405,7 +435,9 @@ export const reach: ReachFunctions = {
       logger.warn('Reach module init already in progress, skipping')
       return err(
         HaiReachError.CONFIG_ERROR,
-        reachM('reach_configError', { params: { error: 'init already in progress' } }),
+        reachM('reach_configError', {
+          params: { error: 'init already in progress' },
+        }),
       )
     }
 
@@ -426,7 +458,9 @@ export const reach: ReachFunctions = {
     }
 
     const send = () => executeSend(message, providers, templateRegistry, dndConfig, sendLogRepo, currentConfig!.queue)
-    return message.sensitive ? core.context.run({ suppressLogObservers: true }, send) : send()
+    return message.sensitive
+      ? core.context.run({ suppressLogObservers: true }, send)
+      : send()
   },
 
   get template(): ReachTemplateRegistry {
@@ -437,11 +471,20 @@ export const reach: ReachFunctions = {
     if (!currentConfig)
       return null
     const safeProviders = currentConfig.providers.map((provider) => {
+      if (provider.type === 'api' && provider.headers) {
+        return {
+          ...provider,
+          headers: Object.fromEntries(Object.keys(provider.headers).map(name => [name, core.sanitize.defaultSensitiveReplacement])),
+        }
+      }
       if (provider.type !== 'aliyun-sms' || !provider.gateway)
         return provider
       const { url, allowInsecureHttp } = provider.gateway
       // 自定义请求头和请求体可以使用任意字段名，诊断视图只保留路由配置。
-      return { ...provider, gateway: { url, allowInsecureHttp } }
+      return {
+        ...provider,
+        gateway: { url, allowInsecureHttp },
+      }
     })
     return core.sanitize.sanitizeSensitiveFields({ ...currentConfig, providers: safeProviders })
   },

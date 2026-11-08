@@ -43,9 +43,11 @@ function getSafeEndpoint(url: string): string {
  */
 function toReachError(): HaiError {
   return {
-    code: HaiReachError.SEND_FAILED.code,
+    ...HaiReachError.SEND_FAILED,
     message: reachM('reach_apiSendFailed', {
-      params: { error: reachM('reach_apiRequestFailed') },
+      params: {
+        error: reachM('reach_apiRequestFailed'),
+      },
     }),
   }
 }
@@ -76,10 +78,17 @@ async function readAcknowledgement(response: Response): Promise<HaiResult<SendRe
     const result: unknown = JSON.parse(text)
     if (!result || typeof result !== 'object' || Array.isArray(result))
       return err(HaiReachError.SEND_FAILED, reachM('reach_apiResponseInvalid'))
-    const messageId = 'messageId' in result ? result.messageId : undefined
+    const messageId = 'messageId' in result
+      ? result.messageId
+      : undefined
     if (messageId !== undefined && (typeof messageId !== 'string' || messageId.length > 255))
       return err(HaiReachError.SEND_FAILED, reachM('reach_apiResponseInvalid'))
-    return ok({ success: true, ...(messageId === undefined ? {} : { messageId }) })
+    return ok({
+      success: true,
+      ...(messageId === undefined
+        ? {}
+        : { messageId }),
+    })
   }
   catch {
     return err(HaiReachError.SEND_FAILED, reachM('reach_apiResponseInvalid'))
@@ -120,7 +129,9 @@ export function createApiProvider(): ReachProvider {
       if (config.type !== 'api') {
         return err(
           HaiReachError.CONFIG_ERROR,
-          reachM('reach_unsupportedType', { params: { type: config.type } }),
+          reachM('reach_unsupportedType', {
+            params: { type: config.type },
+          }),
         )
       }
 
@@ -129,7 +140,10 @@ export function createApiProvider(): ReachProvider {
         apiConfig = null
         return err(HaiReachError.CONFIG_ERROR, reachM('reach_apiHttpsRequired'))
       }
-      logger.info('API provider connected', { endpoint: getSafeEndpoint(config.url), method: config.method })
+      logger.info('API provider connected', {
+        endpoint: getSafeEndpoint(config.url),
+        method: config.method,
+      })
       return ok(undefined)
     },
 
@@ -150,7 +164,9 @@ export function createApiProvider(): ReachProvider {
         )
       }
 
-      logger.debug('Sending via API callback', { endpoint: getSafeEndpoint(apiConfig.url) })
+      logger.debug('Sending via API callback', {
+        endpoint: getSafeEndpoint(apiConfig.url),
+      })
 
       const requireHttps = apiConfig.requireHttps ?? (message.sensitive === true && core.module.requiresSharedState(process.env))
       if (requireHttps && new URL(apiConfig.url).protocol !== 'https:')
@@ -180,7 +196,9 @@ export function createApiProvider(): ReachProvider {
             headers,
             body: JSON.stringify(payload),
             signal: controller.signal,
-            redirect: message.sensitive || apiConfig.redirect !== 'follow' ? 'manual' : 'follow',
+            redirect: message.sensitive || apiConfig.redirect !== 'follow'
+              ? 'manual'
+              : 'follow',
           })
 
           if (!response.ok) {
@@ -190,7 +208,9 @@ export function createApiProvider(): ReachProvider {
             const rejected = (response.status >= 300 && response.status < 400) || (response.status >= 400 && response.status < 500 && ![408, 425, 429].includes(response.status))
             return err(
               rejected ? HaiReachError.DELIVERY_REJECTED : HaiReachError.SEND_FAILED,
-              reachM('reach_apiSendFailed', { params: { error: `HTTP ${response.status}` } }),
+              reachM('reach_apiSendFailed', {
+                params: { error: `HTTP ${response.status}` },
+              }),
             )
           }
 

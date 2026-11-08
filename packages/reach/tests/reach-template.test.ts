@@ -5,8 +5,9 @@
  */
 
 import { reldb } from '@h-ai/reldb'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HaiReachError } from '../src/index.js'
+import { preprocessMessage } from '../src/reach-send.js'
 import { createTemplateRegistry } from '../src/reach-template.js'
 import { createTemplateRepository, resetTemplateRepoSingleton } from '../src/repositories/reach-repository-template.js'
 
@@ -31,7 +32,9 @@ describe('reach template: no db', () => {
 
   it('saveBatch 应返回错误', async () => {
     const registry = createTemplateRegistry()
-    const result = await registry.saveBatch([{ name: 'x', provider: 'y', body: 'z' }])
+    const result = await registry.saveBatch([
+      { name: 'x', provider: 'y', body: 'z' },
+    ])
     expect(result.success).toBe(false)
   })
 
@@ -64,7 +67,7 @@ describe('reach template: no db', () => {
 
 // ─── 有 DB 的完整测试 ───
 
-describe.sequential('reach template: with db', () => {
+describe('reach template: with db', { concurrent: false }, () => {
   beforeEach(async () => {
     resetTemplateRepoSingleton()
     const initResult = await reldb.init({ type: 'sqlite', database: ':memory:' })
@@ -121,6 +124,35 @@ describe.sequential('reach template: with db', () => {
       return
     expect(result.data.subject).toBe('欢迎 张三')
     expect(result.data.body).toBe('亲爱的 张三，欢迎使用 Hai！')
+  })
+
+  it('同次发送的正文和 Provider 来自同一次模板读取', async () => {
+    const repository = await createTemplateRepository(reldb)
+    expect(repository.success).toBe(true)
+    if (!repository.success)
+      return
+    const registry = createTemplateRegistry(repository.data)
+    expect((await registry.save({ name: 'notice', provider: 'old-route', body: 'Old route: {value}' })).success).toBe(true)
+    const original = repository.data.findByName.bind(repository.data)
+    const reading = vi.spyOn(repository.data, 'findByName').mockImplementation(async (name) => {
+      const previous = await original(name)
+      expect((await reldb.sql.execute('UPDATE hai_reach_template SET provider = ?, body = ? WHERE name = ?', ['new-route', 'New route: {value}', name])).success).toBe(true)
+      return previous
+    })
+    try {
+      const result = await preprocessMessage({
+        template: 'notice',
+        to: 'receiver',
+        vars: { value: 'fixture' },
+      }, registry)
+      expect(result.success).toBe(true)
+      if (result.success)
+        expect(result.data).toMatchObject({ provider: 'old-route', body: 'Old route: fixture' })
+      expect(reading).toHaveBeenCalledOnce()
+    }
+    finally {
+      reading.mockRestore()
+    }
   })
 
   it('saveBatch 应批量保存模板', async () => {
@@ -207,7 +239,12 @@ describe.sequential('reach template: with db', () => {
     const registry = await createRegistry()
 
     await registry.save({ name: 'beta', provider: 'sms', body: 'b' })
-    await registry.save({ name: 'alpha', provider: 'email', subject: 'a-sub', body: 'a' })
+    await registry.save({
+      name: 'alpha',
+      provider: 'email',
+      subject: 'a-sub',
+      body: 'a',
+    })
     await registry.save({ name: 'gamma', provider: 'api', body: 'g' })
 
     const result = await registry.list()

@@ -7,7 +7,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { HaiReachError, reach } from '../src/index.js'
 
-describe.sequential('reach (not initialized)', () => {
+describe('reach (not initialized)', { concurrent: false }, () => {
   beforeEach(async () => {
     await reach.close()
   })

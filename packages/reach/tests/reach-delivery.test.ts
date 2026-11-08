@@ -63,7 +63,12 @@ async function receiver(handler: RequestListener): Promise<{ url: string, server
 async function api(url: string): Promise<ReachProvider> {
   const provider = createApiProvider()
   providers.push(provider)
-  const connected = await provider.connect(ApiProviderConfigSchema.parse({ name: 'job', type: 'api', url, idempotent: true }))
+  const connected = await provider.connect(ApiProviderConfigSchema.parse({
+    name: 'job',
+    type: 'api',
+    url,
+    idempotent: true,
+  }))
   if (!connected.success)
     throw new Error(connected.error.message)
   return provider
@@ -74,8 +79,15 @@ async function initializeServices() {
   if (!initialized.success)
     throw new Error(initialized.error.message)
   const initializedReach = await reach.init({
-    providers: [{ name: 'job', type: 'console' }],
-    dnd: { enabled: true, strategy: 'delay', start: '22:00', end: '08:00' },
+    providers: [
+      { name: 'job', type: 'console' },
+    ],
+    dnd: {
+      enabled: true,
+      strategy: 'delay',
+      start: '22:00',
+      end: '08:00',
+    },
   })
   if (!initializedReach.success)
     throw new Error(initializedReach.error.message)
@@ -106,7 +118,9 @@ afterEach(async () => {
   for (const server of servers.splice(0)) {
     if (server.listening) {
       server.closeAllConnections()
-      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+      await new Promise<void>((resolve, reject) => server.close(error => error
+        ? reject(error)
+        : resolve()))
     }
   }
   await reach.close()
@@ -116,8 +130,18 @@ afterEach(async () => {
   await rm(temporary, { recursive: true, force: true })
 })
 
-describe.sequential('delivery ownership and external effects', () => {
-  it.each([400, 401, 403, 404, 422, 408, 425, 429, 503])('真实 HTTP %i 的永久拒绝与暂时故障使用不同重试策略', async (status) => {
+describe('delivery ownership and external effects', { concurrent: false }, () => {
+  it.each([
+    400,
+    401,
+    403,
+    404,
+    422,
+    408,
+    425,
+    429,
+    503,
+  ])('真实 HTTP %i 的永久拒绝与暂时故障使用不同重试策略', async (status) => {
     const endpoint = await receiver((_request, response) => response.writeHead(status).end())
     const row = await queued('http-status')
     const provider = await api(endpoint.url)
@@ -125,7 +149,11 @@ describe.sequential('delivery ownership and external effects', () => {
     const permanent = [400, 401, 403, 404, 422].includes(status)
     expect(await reach.queue.get(row.queueId!)).toMatchObject({
       success: true,
-      data: { status: permanent ? 'dead' : 'pending', attemptCount: 1, lastFailure: permanent ? 'permanent_rejection' : 'transient_failure' },
+      data: {
+        status: permanent ? 'dead' : 'pending',
+        attemptCount: 1,
+        lastFailure: permanent ? 'permanent_rejection' : 'transient_failure',
+      },
     })
   })
 
@@ -134,18 +162,33 @@ describe.sequential('delivery ownership and external effects', () => {
     expect((await repository.beginDelivery(row.id, 'previous', true, 1000)).success).toBe(true)
     await reach.close()
     vi.mocked(Date.prototype.getHours).mockReturnValue(9)
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout'],
+    })
     try {
       const initialized = await reach.init({
-        providers: [{ name: 'job', type: 'console' }],
-        dnd: { enabled: true, strategy: 'delay', start: '22:00', end: '08:00' },
+        providers: [
+          { name: 'job', type: 'console' },
+        ],
+        dnd: {
+          enabled: true,
+          strategy: 'delay',
+          start: '22:00',
+          end: '08:00',
+        },
       })
       expect(initialized.success).toBe(true)
       await vi.advanceTimersByTimeAsync(0)
-      expect(await reach.queue.get(row.queueId!)).toMatchObject({ success: true, data: { status: 'sending' } })
+      expect(await reach.queue.get(row.queueId!)).toMatchObject({
+        success: true,
+        data: { status: 'sending' },
+      })
       vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_001)
       await vi.advanceTimersByTimeAsync(60_001)
-      expect(await reach.queue.get(row.queueId!)).toMatchObject({ success: true, data: { status: 'sent' } })
+      expect(await reach.queue.get(row.queueId!)).toMatchObject({
+        success: true,
+        data: { status: 'sent' },
+      })
     }
     finally {
       await reach.close()
@@ -256,8 +299,16 @@ describe.sequential('delivery ownership and external effects', () => {
     }
     expect(requests).toBe(2)
     const effects = await reldb.sql.query('SELECT receipt FROM test_receiver_effects')
-    expect(effects).toMatchObject({ success: true, data: [{ receipt: row.queueId }] })
-    expect(await reach.queue.get(row.queueId!)).toMatchObject({ success: true, data: { status: 'sent', messageId: 'one-durable-effect' } })
+    expect(effects).toMatchObject({
+      success: true,
+      data: [
+        { receipt: row.queueId },
+      ],
+    })
+    expect(await reach.queue.get(row.queueId!)).toMatchObject({
+      success: true,
+      data: { status: 'sent', messageId: 'one-durable-effect' },
+    })
   })
 
   it('http 副作用已提交但响应丢失后，用相同 queueId 重试不会重复副作用', async () => {
@@ -284,7 +335,9 @@ describe.sequential('delivery ownership and external effects', () => {
     expect((await deliverClaimedMessage(row, 'first', provider, repository)).success).toBe(false)
     // 关闭并重新打开 HTTP 接收端与数据库，去重记录来自文件，不依赖内存 Set/Map。
     endpoint.server.closeAllConnections()
-    await new Promise<void>((resolve, reject) => endpoint.server.close(error => error ? reject(error) : resolve()))
+    await new Promise<void>((resolve, reject) => endpoint.server.close(error => error
+      ? reject(error)
+      : resolve()))
     await reach.close()
     await reldb.close()
     await initializeServices()
@@ -296,8 +349,16 @@ describe.sequential('delivery ownership and external effects', () => {
     const recovered = await claimed('second')
     expect((await deliverClaimedMessage(recovered, 'second', restartedProvider, repository)).success).toBe(true)
     expect(requests).toBe(2)
-    expect(await reach.queue.get(row.queueId!)).toMatchObject({ success: true, data: { status: 'sent', nextAttemptAt: 0 } })
-    expect(await reldb.sql.query('SELECT receipt FROM test_receiver_effects')).toMatchObject({ success: true, data: [{ receipt: row.queueId }] })
+    expect(await reach.queue.get(row.queueId!)).toMatchObject({
+      success: true,
+      data: { status: 'sent', nextAttemptAt: 0 },
+    })
+    expect(await reldb.sql.query('SELECT receipt FROM test_receiver_effects')).toMatchObject({
+      success: true,
+      data: [
+        { receipt: row.queueId },
+      ],
+    })
   })
 
   it('非幂等发送已开始后旧节点暂停，新节点隔离为 unknown；旧节点恢复不能触发重发或覆盖人工裁定', async () => {
@@ -321,7 +382,10 @@ describe.sequential('delivery ownership and external effects', () => {
       await started.promise
       vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 20_000)
       expect(await repository.claimPendingBatch('new')).toMatchObject({ success: true, data: [] })
-      expect(await reach.queue.get(row.queueId!)).toMatchObject({ success: true, data: { status: 'unknown' } })
+      expect(await reach.queue.get(row.queueId!)).toMatchObject({
+        success: true,
+        data: { status: 'unknown' },
+      })
       // @ts-expect-error 验证可信管理 API 仍会拒绝来自 JS/HTTP 调用方的非法状态。
       expect((await reach.queue.resolveUnknown(row.queueId!, { status: 'pending' })).success).toBe(false)
       const resolutions = await Promise.all([
@@ -345,7 +409,10 @@ describe.sequential('delivery ownership and external effects', () => {
     const send = vi.spyOn(provider, 'send')
     expect((await deliverClaimedMessage(row, 'disconnected', provider, repository)).success).toBe(false)
     expect(send).not.toHaveBeenCalled()
-    expect(await reach.queue.get(row.queueId!)).toMatchObject({ success: true, data: { status: 'pending' } })
+    expect(await reach.queue.get(row.queueId!)).toMatchObject({
+      success: true,
+      data: { status: 'pending' },
+    })
   })
 
   it('曾开始的幂等投递不能被配置为非幂等的新消费者直接重发', async () => {
@@ -353,11 +420,18 @@ describe.sequential('delivery ownership and external effects', () => {
     expect((await repository.beginDelivery(row.id, 'old', true, 1000)).success).toBe(true)
     vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 1001)
     const recovered = await claimed('new')
-    const provider: ReachProvider = { ...createConsoleProvider(), supportsIdempotency: false, isConnected: () => true }
+    const provider: ReachProvider = {
+      ...createConsoleProvider(),
+      supportsIdempotency: false,
+      isConnected: () => true,
+    }
     const send = vi.spyOn(provider, 'send')
     expect((await deliverClaimedMessage(recovered, 'new', provider, repository)).success).toBe(false)
     expect(send).not.toHaveBeenCalled()
-    expect(await reach.queue.get(row.queueId!)).toMatchObject({ success: true, data: { status: 'unknown' } })
+    expect(await reach.queue.get(row.queueId!)).toMatchObject({
+      success: true,
+      data: { status: 'unknown' },
+    })
   })
 
   it('真实 SMTP 已接收 DATA 后断连，结果转 unknown 且第二消费者不重发', async () => {
@@ -411,12 +485,17 @@ describe.sequential('delivery ownership and external effects', () => {
       const row = await queued('smtp')
       expect((await deliverClaimedMessage(row, 'smtp', provider, repository)).success).toBe(false)
       expect(effects).toBe(1)
-      expect(await reach.queue.get(row.queueId!)).toMatchObject({ success: true, data: { status: 'unknown' } })
+      expect(await reach.queue.get(row.queueId!)).toMatchObject({
+        success: true,
+        data: { status: 'unknown' },
+      })
       expect(await repository.claimPendingBatch('other')).toMatchObject({ success: true, data: [] })
       expect(effects).toBe(1)
     }
     finally {
-      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+      await new Promise<void>((resolve, reject) => server.close(error => error
+        ? reject(error)
+        : resolve()))
     }
   })
 })

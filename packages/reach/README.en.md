@@ -23,7 +23,7 @@ Template sends need only `template`, `to` and `vars`; the provider comes from th
 
 ### Dependencies
 
-- `@h-ai/reldb`: persistence for delivery logs and templates. With `dnd.enabled: true` and `strategy: delay`, initialize it first and ensure the queue table is available; otherwise `reach.init()` returns `CONFIG_ERROR`. Optional for other sends.
+- `@h-ai/reldb`: persistence for delivery logs and templates. Initialize it before configuring nonempty `templates` or DND delay. Failed template persistence or required table preparation makes `reach.init()` return `CONFIG_ERROR` and close candidate providers. Optional for immediate sends without templates or delayed queues.
 - `@h-ai/cache`: optional distributed locks for DND delay; enabled automatically when initialized.
 
 ### Quick start
@@ -39,31 +39,69 @@ Install `nodemailer` for email delivery.
 #### Initialize multiple providers
 
 ```ts
+import { core } from '@h-ai/core'
 import { reach } from '@h-ai/reach'
+import { reldb } from '@h-ai/reldb'
 
-const initialized = await reach.init({
-  providers: [{ name: 'local', type: 'console' }],
-  templates: [{ name: 'welcome', provider: 'local', subject: 'Welcome', body: 'Hello {userName}' }],
-})
+const runtime = core.module.createRuntime([
+  {
+    name: 'reldb',
+    start: () => reldb.init({ type: 'sqlite', database: ':memory:' }),
+    close: () => reldb.close()
+  },
+  {
+    name: 'reach',
+    start: () => reach.init({
+      providers: [
+        { name: 'local', type: 'console' }
+      ],
+      templates: [
+        {
+          name: 'welcome',
+          provider: 'local',
+          subject: 'Welcome',
+          body: 'Hello {userName}'
+        }
+      ],
+    }),
+    close: () => reach.close()
+  },
+])
+const initialized = await runtime.start()
 if (!initialized.success)
   throw new Error(initialized.error.message)
+
+let result: Awaited<ReturnType<typeof reach.send>>
 try {
-  const result = await reach.send({
+  result = await reach.send({
     to: 'user@example.com',
     template: 'welcome',
-    vars: { userName: 'Alice' },
+    vars: { userName: 'Alice' }
   })
-  if (!result.success)
-    throw new Error(result.error.message)
 }
-finally {
-  await reach.close()
+catch (error) {
+  const closed = await runtime.close()
+  throw new AggregateError(closed.success
+    ? [error]
+    : [error, closed.error], 'Reach operation failed')
 }
+const closed = await runtime.close()
+if (!closed.success) {
+  throw new AggregateError(result.success
+    ? [closed.error]
+    : [result.error, closed.error], 'Reach cleanup failed')
+}
+if (!result.success)
+  throw new Error(result.error.message)
 ```
 
 This example uses the development Console provider. It records delivery metadata and does not send email or SMS. Configure SMTP, SMS or API providers below for real delivery; initialize optional persistence/shared cache when needed.
 
-`reach.config` returns a **redacted configuration snapshot**. Embedded credentials in `api.url` / `endpoint`, `headers.Authorization`, SMTP `pass`, SMS keys, and other secrets are hidden automatically.
+`reach.config` returns a **redacted configuration snapshot**. Embedded credentials in `api.url` / `endpoint`, every custom header value, SMTP `pass` and SMS keys are hidden. Gateway bodies are omitted. Deployment stores API headers entirely in private environment files, regardless of header names.
+
+Provider failures retain the complete module error definition, including HTTP status. Raw SMTP/SMS responses are excluded from returned messages and causes; clients receive localized guidance while server logs retain diagnostic context.
+
+Each template send uses one template snapshot for its subject, body and default provider, keeping concurrent edits from mixing versions. An explicit `provider` still overrides the template route.
 
 ### Configuration
 
