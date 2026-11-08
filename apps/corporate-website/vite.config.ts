@@ -36,8 +36,8 @@ export default defineConfig(({ mode, command }) => {
       browserStartupAssets(),
       sveltekit({
         preprocess: [
-          autoImportHaiUi(),
           vitePreprocess(),
+          autoImportHaiUi(),
         ],
         compilerOptions: {
           runes: true,

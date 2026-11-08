@@ -50,8 +50,8 @@ export default defineConfig(({ mode, command }) => {
       browserStartupAssets(),
       sveltekit({
         preprocess: [
-          autoImportHaiUi(),
           vitePreprocess(),
+          autoImportHaiUi(),
         ],
         compilerOptions: {
           // 强制使用 Svelte 5 Runes

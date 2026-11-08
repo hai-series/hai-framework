@@ -35,8 +35,8 @@ export default defineConfig(({ mode, command }) => {
       publicRuntimeConfig({ apiBase: process.env.PUBLIC_API_BASE, apiTransport: process.env.PUBLIC_API_TRANSPORT, apiKeyExchangePath: process.env.PUBLIC_API_KEY_EXCHANGE_PATH }),
       sveltekit({
         preprocess: [
-          autoImportHaiUi(),
           vitePreprocess(),
+          autoImportHaiUi(),
         ],
         compilerOptions: {
           runes: true,

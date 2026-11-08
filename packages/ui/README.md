@@ -42,6 +42,8 @@ Node 服务端工程将 UI 与 core 都列为生产依赖，确保适配器保�
 
 SvelteKit 3 的预处理、编译器与适配器都在 Vite 插件中配置；纯 Svelte/Vite 工程才保留 svelte.config.js。
 
+预处理顺序为 `vitePreprocess()` 或其他样式/模板语言转换在前、`autoImportHaiUi()` 在后。自动导入读取整份 Svelte AST，不直接接受尚未转换的 SCSS、Pug 等非标准语法；保留同步调用方式。
+
 ```ts
 import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
@@ -54,7 +56,7 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [
     sveltekit({
-      preprocess: [autoImportHaiUi(), vitePreprocess()],
+      preprocess: [vitePreprocess(), autoImportHaiUi()],
       compilerOptions: { runes: true },
       adapter: adapter(),
       paths: { relative: false },

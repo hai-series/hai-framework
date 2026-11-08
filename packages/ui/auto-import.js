@@ -130,9 +130,7 @@ const UI_COMPONENTS = new Set([
 ])
 
 const TAG_REGEX = /<([A-Z][A-Za-z0-9]*)\b/g
-const SCRIPT_REGEX = /<script\b([^>]*)>([\s\S]*?)<\/script>/g
 const WINDOWS_PATH_SEPARATOR_REGEX = /\\/g
-const MODULE_CONTEXT_ATTR_REGEX = /context\s*=\s*['"]module['"]/i
 
 function collectUsedComponents(content) {
   const used = new Set()
@@ -146,13 +144,11 @@ function collectUsedComponents(content) {
 }
 
 /** 一次解析同时提供运行时绑定与真实 import 范围，不再扫描字符串/注释中的伪 import。 */
-function analyzeScript(scriptContent) {
-  const prefix = '<script lang="ts">'
-  const ast = parse(`${prefix}${scriptContent}</script>`, { modern: true })
+function analyzeScript(script) {
   const imported = new Set()
   const externalTypeBindings = new Set()
   const declarations = []
-  for (const statement of ast.instance?.content.body ?? []) {
+  for (const statement of script?.content.body ?? []) {
     if (statement.type !== 'ImportDeclaration')
       continue
     for (const specifier of statement.specifiers) {
@@ -168,7 +164,7 @@ function analyzeScript(scriptContent) {
     imported,
     externalTypeBindings,
     declarations,
-    offset: prefix.length,
+    offset: script?.content.start ?? 0,
   }
 }
 
@@ -253,8 +249,11 @@ function mergeHaiUiImport(scriptContent, components, analysis) {
   return result
 }
 
-function updateScriptBlock(scriptContent, usedComponents, filename) {
-  const analysis = analyzeScript(scriptContent)
+function updateScriptBlock(scriptContent, usedComponents, filename, ast) {
+  const analysis = analyzeScript(ast.instance)
+  // 模块脚本的运行时 import 同样可供模板使用，但只向实例脚本注入缺失项。
+  for (const name of analyzeScript(ast.module).imported)
+    analysis.imported.add(name)
   const missing = [...usedComponents].filter(name => !analysis.imported.has(name))
   const conflicts = missing.filter(name => analysis.externalTypeBindings.has(name))
   if (conflicts.length > 0) {
@@ -282,35 +281,24 @@ function autoImportHaiUi() {
         return { code: content }
       }
 
-      let lastIndex = 0
-      let updated = ''
-      let applied = false
-
-      for (const match of content.matchAll(SCRIPT_REGEX)) {
-        const [fullMatch, attrs, scriptContent] = match
-        const isModule = MODULE_CONTEXT_ATTR_REGEX.test(attrs)
-        const start = match.index ?? 0
-
-        updated += content.slice(lastIndex, start)
-        lastIndex = start + fullMatch.length
-
-        if (!applied && !isModule) {
-          const newScript = updateScriptBlock(scriptContent, usedComponents, filename)
-          updated += `<script${attrs}>${newScript}</script>`
-          applied = true
-        }
-        else {
-          updated += fullMatch
-        }
+      // 先由语言预处理器转换样式/模板，再按整份 Svelte AST 选择真实实例脚本。
+      // Svelte parse 会移除 BOM；局部坐标基于去除 BOM 的源码，输出仍保留它。
+      const prefix = content.startsWith('\uFEFF')
+        ? '\uFEFF'
+        : ''
+      const source = content.slice(prefix.length)
+      const ast = parse(source, { modern: true })
+      const instance = ast.instance
+      if (!instance) {
+        const scriptContent = updateScriptBlock('', usedComponents, filename, ast)
+        if (!scriptContent)
+          return { code: content }
+        return { code: `${prefix}<script lang="ts">${scriptContent}</script>\n${source}` }
       }
 
-      if (!applied) {
-        const scriptBlock = `<script lang="ts">${updateScriptBlock('', usedComponents, filename)}</script>\n`
-        return { code: scriptBlock + content }
-      }
-
-      updated += content.slice(lastIndex)
-      return { code: updated }
+      const { start, end } = instance.content
+      const scriptContent = updateScriptBlock(source.slice(start, end), usedComponents, filename, ast)
+      return { code: prefix + source.slice(0, start) + scriptContent + source.slice(end) }
     },
   }
 }

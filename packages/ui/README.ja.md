@@ -42,6 +42,8 @@ Node サーバーでは UI と core の両方を本番依存に含め、ログ�
 
 SvelteKit 3 の前処理、コンパイラー、アダプターは Vite プラグインで設定します。通常の Svelte/Vite プロジェクトのみ svelte.config.js を保持します。
 
+`vitePreprocess()` などのスタイル・テンプレート言語変換を先に、`autoImportHaiUi()` を後に実行してください。自動 import は Svelte 全体の AST を読み取るため、変換前の SCSS・Pug などの非標準構文は受け付けません。直接の markup API は同期のままです。
+
 ```ts
 import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
@@ -54,7 +56,7 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [
     sveltekit({
-      preprocess: [autoImportHaiUi(), vitePreprocess()],
+      preprocess: [vitePreprocess(), autoImportHaiUi()],
       compilerOptions: { runes: true },
       adapter: adapter(),
       paths: { relative: false },

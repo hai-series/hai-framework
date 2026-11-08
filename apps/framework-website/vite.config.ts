@@ -65,8 +65,8 @@ export default defineConfig(({ mode, command }) => {
       screenshotAssets,
       sveltekit({
         preprocess: [
-          autoImportHaiUi(),
           vitePreprocess(),
+          autoImportHaiUi(),
         ],
         compilerOptions: { runes: true },
         files: { assets: 'public' },

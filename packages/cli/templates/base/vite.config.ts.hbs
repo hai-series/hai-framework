@@ -154,10 +154,10 @@ export default defineConfig(({ mode, command }) => {
 {{else}}
       sveltekit({
         preprocess: [
+          vitePreprocess(),
 {{#if hasUi}}
           autoImportHaiUi(),
 {{/if}}
-          vitePreprocess(),
         ],
         compilerOptions: { runes: true },
         // Core 统一加载环境文件；SSR 路径固定为绝对前缀供 HTTP/加密管道使用。

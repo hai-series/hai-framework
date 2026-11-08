@@ -13,7 +13,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parse } from 'svelte/compiler'
+import { compile, parse, preprocess } from 'svelte/compiler'
 import { describe, expect, it } from 'vitest'
 import { autoImportHaiUi } from '../auto-import.js'
 
@@ -290,6 +290,71 @@ describe('自动注入', () => {
     const result = process(`<script lang="ts">${script}</script><Button />`)
     expect(result.code).toContain(`const example = ${JSON.stringify(text)}`)
     expect(runtimeUiNames(result.code)).toEqual(['Card', 'Button'])
+  })
+
+  it.each([
+    '<!-- <script>fake</script> -->',
+    '<textarea><script>fake</script></textarea>',
+  ])('注释和原始文本中的伪脚本保持原样并注入真实实例：%s', (fragment) => {
+    const result = process(`${fragment}\n<Button />`)
+    expect(result.code).toContain(fragment)
+    expect(runtimeUiNames(result.code)).toEqual(['Button'])
+    expect(compile(result.code, { generate: 'server' }).js.code)
+      .toContain('import { Button } from \'@h-ai/ui\'')
+  })
+
+  it.each(['module', 'context="module"'])('保留%s脚本，识别真实实例已有绑定', (moduleAttribute) => {
+    const module = `<script ${moduleAttribute} lang="ts">export const metadata = 1</script>`
+    const input = `${module}\n<script lang="ts">import Button from './custom.svelte'</script>\n<Button />`
+    const result = process(input)
+    expect(result.code).toBe(input)
+    expect(runtimeUiNames(result.code)).toEqual([])
+    expect(compile(result.code, { generate: 'server' }).js.code).toContain('from \'./custom.svelte\'')
+  })
+
+  it.each(['module', 'context="module"'])('模板复用%s中的运行时组件绑定，不重复注入', (moduleAttribute) => {
+    const input = `<script ${moduleAttribute}>import { Button } from '@h-ai/ui'</script>\n<Button />`
+    const result = process(input)
+    expect(result.code).toBe(input)
+    expect(compile(result.code, { generate: 'server' }).js.code)
+      .toContain('import { Button } from \'@h-ai/ui\'')
+  })
+
+  it('泛型属性中的大于号不截断脚本，原属性及BOM保持原样', () => {
+    const opening = '<script lang="ts" generics="T extends Record<string, unknown>">'
+    const result = process(`\uFEFF${opening}const count = 1</script>\n<Button />`)
+    expect(result.code.startsWith(`\uFEFF${opening}`)).toBe(true)
+    expect(result.code).toContain('const count = 1')
+    expect(runtimeUiNames(result.code)).toEqual(['Button'])
+    expect(compile(result.code, { generate: 'server' }).js.code)
+      .toContain('import { Button } from \'@h-ai/ui\'')
+  })
+
+  it.each(['before', 'after'])('受控样式转换先执行，样式位于脚本%s且伪style文本保持有效', async (position) => {
+    const originalStyle = '<style lang="scss">$tone: red; .actual { color: $tone; }</style>'
+    const convertedStyle = '<style>.actual { color: red; }</style>'
+    const fragment = '<!-- <style>$fake</style> -->\n<textarea><style></textarea>'
+    const script = '<script lang="ts">const example = "<style>"</script>'
+    const body = `${fragment}\n${script}\n<Button class="actual" />`
+    const input = position === 'before'
+      ? originalStyle + body
+      : body + originalStyle
+    const result = await preprocess(input, [
+      {
+        // 受控语言转换器只处理本例已知的样式块，验证公开预处理顺序，不仿造通用 SCSS 引擎。
+        markup: ({ content }) => ({
+          code: content.replace(originalStyle, convertedStyle),
+        }),
+      },
+      preprocessor,
+    ], { filename: '/app/src/routes/styled/+page.svelte' })
+    expect(result.code).toContain(fragment)
+    expect(result.code).toContain(script.slice('<script lang="ts">'.length, -'</script>'.length))
+    expect(result.code).toContain(convertedStyle)
+    expect(runtimeUiNames(result.code)).toEqual(['Button'])
+    const compiled = compile(result.code, { generate: 'server' })
+    expect(compiled.js.code).toContain('import { Button } from \'@h-ai/ui\'')
+    expect(compiled.css?.code).toContain('color: red')
   })
 
   it('range 应保持显式导入，避免和 DOM Range 构造器冲突', () => {

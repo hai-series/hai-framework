@@ -42,6 +42,8 @@ For a Node server, declare both UI and core as production dependencies so the ad
 
 SvelteKit 3 configures preprocessing, the compiler and the adapter in the Vite plugin; only a plain Svelte/Vite project keeps svelte.config.js.
 
+Run `vitePreprocess()` or other style/template language transforms before `autoImportHaiUi()`. Auto-import reads the complete Svelte AST and does not accept unprocessed SCSS, Pug or other nonstandard syntax. Its direct markup API remains synchronous.
+
 ```ts
 import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
@@ -54,7 +56,7 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [
     sveltekit({
-      preprocess: [autoImportHaiUi(), vitePreprocess()],
+      preprocess: [vitePreprocess(), autoImportHaiUi()],
       compilerOptions: { runes: true },
       adapter: adapter(),
       paths: { relative: false },
