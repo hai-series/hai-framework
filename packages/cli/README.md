@@ -155,6 +155,8 @@ Nginx 通过动态上游跟随应用和存储容器的 DNS 地址变化。共用
 
 `pnpm build` 只编译源码。镜像使用 `images/` 中独立 Dockerfile，由项目根 `hai.json` 的 `build.images` 指定文件，部署参数放在同文件的 `deploy`；`--images` 决定构建哪些镜像，`--services` 决定更新哪些服务。容器引擎 auto 优先 Podman，再尝试 Docker。下载、安装和整理生产依赖共用包缓存与 SQLite 驱动缓存，避免重复下载。
 
+镜像构建只应使用可信且构建期间不会被其他主体替换的 context。CLI 在各 context 的 `images/dependencies/` 生成依赖缓存及 `.managed.json` 跟踪清单；缓存祖先目录不得是符号链接或 Windows junction，缓存文件不得是链接或多硬链接文件。更新通过独占临时文件原子替换，内容未变时保留时间戳；旧清单清理仅限该缓存树。若报缓存路径错误，按提示的原因和诊断码检查该路径，处理链接或访问权限后再重建。跟踪清单最多 16MiB，超限或 JSON 损坏时会给出诊断，且不会回显原文件内容。
+
 默认容器用于 CPU 运行或连接远程 AI 服务，不额外下载 GPU 运行库。需要使用部署机器上的 GPU 时，自行定制镜像和容器运行参数。
 
 CLI 在过滤调用者的 `HAI_/PUBLIC_/VITE_` 后，只注入内部生成的 `HAI_BUILD_ID/HAI_BUILD_COMMIT`，Docker 将同一镜像批次标识传入实际编译。生成应用的反馈分别读取前后端自己的 `appVersion/buildId/commit`，版本来自各自 manifest，同次 SSR 共用构建 ID；无所属 Git 提交时明确 `unknown`。三字段 `build-metadata.json` 与代码内联值一致，用于与 API/ZIP 实际证据核对。

@@ -438,5 +438,11 @@
   "cli_download_engine_proxy_configured": "Image pull preflight: Docker reports proxy settings; the actual pull still runs in the engine.",
   "cli_download_engine_proxy_local": "Image pull preflight: local Podman can inherit the process proxy; the build container is checked separately.",
   "cli_download_engine_proxy_hint": "Image pull preflight: build arguments cannot configure the remote {runtime} engine proxy. Configure Docker Desktop proxies or the Podman Machine/API service. The build container proxy is checked separately.",
-  "cli_download_template_required": "This Dockerfile does not support the selected source. Update HAI_NODE_IMAGE, HAI_NGINX_IMAGE, and HAI_NPM_REGISTRY from the current template: {path}"
+  "cli_download_template_required": "This Dockerfile does not support the selected source. Update HAI_NODE_IMAGE, HAI_NGINX_IMAGE, and HAI_NPM_REGISTRY from the current template: {path}",
+  "cli_build_dependency_context_unsafe": "Cannot safely update dependency build cache: {path}. Reason: {reason}; diagnostic: {diagnostic}. Check this path before retrying.",
+  "cli_build_dependency_reason_invalid": "The path contains a link or has an unsupported file type or size",
+  "cli_build_dependency_reason_changed": "The file or directory changed during validation",
+  "cli_build_dependency_reason_read": "Cannot read the cache; check access permissions and file locks",
+  "cli_build_dependency_reason_write": "Cannot write or publish the cache; check access permissions, disk space and file locks",
+  "cli_build_dependency_reason_tracking": "The cache tracking manifest is not valid JSON"
 }

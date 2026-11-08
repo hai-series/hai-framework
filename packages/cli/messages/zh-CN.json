@@ -438,5 +438,11 @@
   "cli_download_engine_proxy_configured": "镜像拉取预检：Docker 引擎已报告代理配置；实际拉取结果仍以引擎执行为准。",
   "cli_download_engine_proxy_local": "镜像拉取预检：本地 Podman 子进程可继承进程代理；构建容器代理单独检查。",
   "cli_download_engine_proxy_hint": "镜像拉取预检：{runtime} 的远程引擎代理无法由构建参数设置。请在 Docker Desktop 代理设置或 Podman Machine/API 服务中配置；构建容器代理将单独检查。",
-  "cli_download_template_required": "Dockerfile 尚未支持所选下载源，请同步新版模板中的 HAI_NODE_IMAGE、HAI_NGINX_IMAGE 和 HAI_NPM_REGISTRY 参数：{path}"
+  "cli_download_template_required": "Dockerfile 尚未支持所选下载源，请同步新版模板中的 HAI_NODE_IMAGE、HAI_NGINX_IMAGE 和 HAI_NPM_REGISTRY 参数：{path}",
+  "cli_build_dependency_context_unsafe": "依赖构建缓存无法安全更新：{path}。原因：{reason}；诊断码：{diagnostic}。请检查该路径后重试。",
+  "cli_build_dependency_reason_invalid": "路径包含链接，或文件类型、大小不符合要求",
+  "cli_build_dependency_reason_changed": "文件或目录在检查过程中发生变化",
+  "cli_build_dependency_reason_read": "无法读取缓存，请检查访问权限和文件占用",
+  "cli_build_dependency_reason_write": "无法写入或发布缓存，请检查访问权限、磁盘空间和文件占用",
+  "cli_build_dependency_reason_tracking": "缓存跟踪清单不是有效的JSON"
 }

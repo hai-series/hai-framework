@@ -81,6 +81,8 @@ HAI_REACH_PROVIDERS='[{"name":"email","type":"api","url":"https://mail.example.i
 
 ### 构建并发和缓存
 
+镜像构建仅使用可信且构建期间不会被其他主体替换的 context。各 context 的 `images/dependencies/` 是 CLI 管理的依赖缓存，`.managed.json` 跟踪清单读写上限为 16MiB。生成目录祖先不得使用符号链接或 Windows junction，文件不得是链接或多硬链接文件。归档按固定小块比较和复制，更新通过独占临时文件原子替换，未变化内容不重写；旧清单清理按实际规范路径限制在缓存树内，路径别名不会删除本次有效文件。错误消息区分路径类型、变化、读写失败和 JSON 损坏，并提供诊断码，不回显原文件内容。
+
 SQLite 13 的原生二进制随 npm 包交付。旧的 `--sqlite-prebuild-mirror`、`SQLITE_PREBUILD_MIRROR` 和独立安装器已经移除；升级既有工程时同步 Dockerfile，并删除旧命令参数。离线构建仍需缓存完整 npm 包，生成镜像会实际打开内存数据库验证原生依赖。
 
 `image` 目标默认最多并行两项镜像，资源紧张时用 `--concurrency 1`。Dockerfile 在源码 COPY 前安装依赖，前后端仅复制各自必要的源码，源码变化可复用下载与安装层。运行镜像移除应用自身的声明文件、源码映射与说明文件。打包按镜像内容 ID 在 `.hai/cache/images` 缓存中间件归档，复用前验证摘要，损坏则重新导出；应用镜像复制时同步计算摘要。速度取决于资源与缓存命中，不承诺固定比例。

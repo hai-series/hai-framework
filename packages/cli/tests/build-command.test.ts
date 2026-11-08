@@ -1,7 +1,8 @@
 import type { ExecFileSyncOptions, SpawnOptions } from 'node:child_process'
+import { Buffer } from 'node:buffer'
 import { execFileSync } from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, truncateSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -26,6 +27,9 @@ const state = vi.hoisted(() => ({
   shortPathAlias: false,
   blockedRemoval: '',
   removedPaths: [] as string[],
+  failDependencyPublish: '',
+  failDependencyCleanup: '',
+  afterDependencyLstat: undefined as ((file: string) => void) | undefined,
 }))
 vi.mock('node:fs', async (importOriginal) => {
   const original = await importOriginal<typeof import('node:fs')>()
@@ -42,6 +46,21 @@ vi.mock('node:fs', async (importOriginal) => {
       state.removedPaths.push(String(file))
       if (String(file) !== state.blockedRemoval)
         original.rmSync(file, options)
+    },
+    lstatSync: (file: Parameters<typeof original.lstatSync>[0], options?: Parameters<typeof original.lstatSync>[1]) => {
+      const metadata = original.lstatSync(file, options)
+      state.afterDependencyLstat?.(String(file))
+      return metadata
+    },
+    renameSync: (source: Parameters<typeof original.renameSync>[0], destination: Parameters<typeof original.renameSync>[1]) => {
+      if (String(destination) === state.failDependencyPublish)
+        throw Object.assign(new Error('Injected dependency publish failure'), { code: 'EACCES' })
+      original.renameSync(source, destination)
+    },
+    unlinkSync: (file: Parameters<typeof original.unlinkSync>[0]) => {
+      if (String(file) === state.failDependencyCleanup)
+        throw Object.assign(new Error('Injected dependency cleanup failure'), { code: 'EACCES' })
+      original.unlinkSync(file)
     },
   }
 })
@@ -125,6 +144,9 @@ beforeEach(() => {
   state.shortPathAlias = false
   state.blockedRemoval = ''
   state.removedPaths = []
+  state.failDependencyPublish = ''
+  state.failDependencyCleanup = ''
+  state.afterDependencyLstat = undefined
   vi.stubEnv('npm_execpath', '/tools/pnpm.cjs')
   // 本文件模拟构建器，不向真实引擎清理账本登记虚构镜像。
   vi.stubEnv('HAI_TEST_IMAGE_RUN', '')
@@ -795,6 +817,191 @@ it('依赖输入保留真实本地归档并忽略缓存，未变时保留时间�
   unlinkSync(manifest)
   await buildCommand({ cwd: root, target: 'image', images: 'serv' })
   expect(existsSync(cached)).toBe(false)
+})
+
+/** 另建真实 context，外部状态仍留在本轮拥有的根目录中供 finally 回收。 */
+function dependencyContext(): { context: string, destination: string } {
+  const context = join(root, 'context')
+  mkdirSync(context)
+  writeFileSync(join(context, 'package.json'), '{"name":"trusted-context"}')
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({
+    build: {
+      images: [
+        { name: 'serv', context: 'context', dockerfile: 'images/serv.Dockerfile' },
+      ],
+    },
+  }))
+  return {
+    context,
+    destination: join(context, 'images/dependencies'),
+  }
+}
+
+it.each(['tracking', 'copy-target'] as const)('依赖缓存安全：拒绝%s硬链接，外部JSON保持原样', async (kind) => {
+  const { destination } = dependencyContext()
+  mkdirSync(destination, { recursive: true })
+  const outside = join(root, 'host-state.json')
+  const original = '{"keep":"outside-context"}'
+  writeFileSync(outside, original)
+  linkSync(outside, join(destination, kind === 'tracking'
+    ? '.managed.json'
+    : 'package.json'))
+  await expect(buildCommand({ cwd: root, target: 'image', images: 'serv' })).rejects.toThrow()
+  expect(readFileSync(outside, 'utf8')).toBe(original)
+  expect(state.calls.some(call => call.args[0] === 'build')).toBe(false)
+})
+
+it.skipIf(process.platform === 'win32').each(['tracking', 'copy-target'] as const)('依赖缓存安全：拒绝%s文件符号链接', async (kind) => {
+  const { destination } = dependencyContext()
+  mkdirSync(destination, { recursive: true })
+  const outside = join(root, 'host-state.json')
+  writeFileSync(outside, '{"keep":true}')
+  symlinkSync(outside, join(destination, kind === 'tracking'
+    ? '.managed.json'
+    : 'package.json'), 'file')
+  await expect(buildCommand({ cwd: root, target: 'image', images: 'serv' })).rejects.toThrow()
+  expect(readFileSync(outside, 'utf8')).toBe('{"keep":true}')
+  expect(state.calls.some(call => call.args[0] === 'build')).toBe(false)
+})
+
+it.each(['images', 'images/dependencies', 'images/dependencies/packages'] as const)('依赖缓存安全：拒绝生成目录祖先%s链接', async (ancestor) => {
+  const { context } = dependencyContext()
+  const outside = join(root, 'host-directory')
+  mkdirSync(outside)
+  writeFileSync(join(outside, 'sentinel.txt'), 'owned-outside-state')
+  if (ancestor.endsWith('packages')) {
+    mkdirSync(join(context, 'packages/shared'), { recursive: true })
+    writeFileSync(join(context, 'packages/shared/package.json'), '{"name":"shared"}')
+  }
+  const linked = join(context, ancestor)
+  mkdirSync(join(linked, '..'), { recursive: true })
+  symlinkSync(outside, linked, process.platform === 'win32'
+    ? 'junction'
+    : 'dir')
+  await expect(buildCommand({ cwd: root, target: 'image', images: 'serv' })).rejects.toThrow()
+  expect(readdirSync(outside)).toEqual(['sentinel.txt'])
+  expect(state.calls.some(call => call.args[0] === 'build')).toBe(false)
+})
+
+it('依赖缓存安全：旧清单清理不穿过目录链接删除外部文件', async () => {
+  const { destination } = dependencyContext()
+  mkdirSync(destination, { recursive: true })
+  const outside = join(root, 'host-directory')
+  mkdirSync(outside)
+  writeFileSync(join(outside, 'item.json'), '{"keep":true}')
+  writeFileSync(join(destination, '.managed.json'), JSON.stringify(['stale/item.json']))
+  symlinkSync(outside, join(destination, 'stale'), process.platform === 'win32'
+    ? 'junction'
+    : 'dir')
+  await expect(buildCommand({ cwd: root, target: 'image', images: 'serv' })).rejects.toThrow()
+  expect(readFileSync(join(outside, 'item.json'), 'utf8')).toBe('{"keep":true}')
+})
+
+it('依赖缓存安全：tracking在检查后被硬链接替换时读取同一句柄并拒绝发布', async () => {
+  const { destination } = dependencyContext()
+  mkdirSync(destination, { recursive: true })
+  const tracking = join(destination, '.managed.json')
+  const outside = join(root, 'host-state.json')
+  writeFileSync(tracking, '[]')
+  writeFileSync(outside, '{"keep":true}')
+  state.afterDependencyLstat = (file) => {
+    if (file !== tracking)
+      return
+    state.afterDependencyLstat = undefined
+    unlinkSync(tracking)
+    linkSync(outside, tracking)
+  }
+  await expect(buildCommand({ cwd: root, target: 'image', images: 'serv' })).rejects.toThrow()
+  expect(readFileSync(outside, 'utf8')).toBe('{"keep":true}')
+})
+
+it('依赖缓存安全：发布失败保留原文件并清理自有临时文件，之后可恢复构建', async () => {
+  const { context, destination } = dependencyContext()
+  await buildCommand({ cwd: root, target: 'image', images: 'serv' })
+  const cached = join(destination, 'package.json')
+  const oldContent = readFileSync(cached, 'utf8')
+  writeFileSync(join(context, 'package.json'), '{"name":"changed-context"}')
+  state.failDependencyPublish = cached
+  await expect(buildCommand({ cwd: root, target: 'image', images: 'serv' })).rejects.toThrow(/EACCES/)
+  expect(readFileSync(cached, 'utf8')).toBe(oldContent)
+  expect(readdirSync(destination).sort()).toEqual(['.managed.json', 'package.json'])
+  state.failDependencyPublish = ''
+  await buildCommand({ cwd: root, target: 'image', images: 'serv' })
+  expect(readFileSync(cached, 'utf8')).toBe('{"name":"changed-context"}')
+})
+
+it.each(['./package.json', 'unused/../package.json'])('依赖缓存安全：旧清单别名%s不能删除本次有效文件', async (alias) => {
+  const { destination } = dependencyContext()
+  mkdirSync(destination, { recursive: true })
+  writeFileSync(join(destination, '.managed.json'), JSON.stringify([alias]))
+  await buildCommand({ cwd: root, target: 'image', images: 'serv' })
+  expect(readFileSync(join(destination, 'package.json'), 'utf8')).toBe('{"name":"trusted-context"}')
+  expect(JSON.parse(readFileSync(join(destination, '.managed.json'), 'utf8'))).toEqual(['package.json'])
+})
+
+it.skipIf(process.platform !== 'win32')('依赖缓存安全：Windows旧清单大小写别名不能删除本次有效文件', async () => {
+  const { destination } = dependencyContext()
+  mkdirSync(destination, { recursive: true })
+  writeFileSync(join(destination, '.managed.json'), JSON.stringify(['PACKAGE.JSON']))
+  await buildCommand({ cwd: root, target: 'image', images: 'serv' })
+  expect(readFileSync(join(destination, 'package.json'), 'utf8')).toBe('{"name":"trusted-context"}')
+})
+
+it('依赖缓存安全：跟踪清单超过16MiB时在解析和分配前明确拒绝', async () => {
+  const { destination } = dependencyContext()
+  mkdirSync(destination, { recursive: true })
+  const tracking = join(destination, '.managed.json')
+  writeFileSync(tracking, '[]')
+  truncateSync(tracking, 16 * 1024 * 1024 + 1)
+  await expect(buildCommand({ cwd: root, target: 'image', images: 'serv' })).rejects.toThrow(/CACHE_INVALID/)
+  expect(statSync(tracking).size).toBe(16 * 1024 * 1024 + 1)
+})
+
+it('依赖缓存安全：损坏JSON的诊断不回显原始文件内容', async () => {
+  const { destination } = dependencyContext()
+  mkdirSync(destination, { recursive: true })
+  writeFileSync(join(destination, '.managed.json'), 'private-fixture-content-not-json')
+  const failure = buildCommand({ cwd: root, target: 'image', images: 'serv' })
+  await expect(failure).rejects.toThrow(/CACHE_TRACKING/)
+  await expect(failure).rejects.not.toThrow(/private-fixture-content-not-json/)
+})
+
+it('依赖缓存安全：跨块归档首建、未变时间戳、内容变化与尺寸变化均正确', async () => {
+  const { context, destination } = dependencyContext()
+  const source = join(context, 'large-local.tgz')
+  const expected = Buffer.alloc(3 * 64 * 1024 + 13, 0x41)
+  writeFileSync(source, expected)
+  await buildCommand({ cwd: root, target: 'image', images: 'serv' })
+  const cached = join(destination, 'large-local.tgz')
+  expect(readFileSync(cached)).toEqual(expected)
+  const date = new Date('2020-01-01T00:00:00Z')
+  utimesSync(cached, date, date)
+  await buildCommand({ cwd: root, target: 'image', images: 'serv' })
+  expect(statSync(cached).mtimeMs).toBe(date.getTime())
+  expected[64 * 1024 + 7] = 0x42
+  writeFileSync(source, expected)
+  await buildCommand({ cwd: root, target: 'image', images: 'serv' })
+  expect(readFileSync(cached)).toEqual(expected)
+  truncateSync(cached, expected.length + 128)
+  await buildCommand({ cwd: root, target: 'image', images: 'serv' })
+  expect(readFileSync(cached)).toEqual(expected)
+})
+
+it('依赖缓存安全：旧文件删除失败有安全诊断，保留清单并允许下次恢复', async () => {
+  const { context, destination } = dependencyContext()
+  const source = join(context, 'stale.tgz')
+  writeFileSync(source, 'owned-cache-data')
+  await buildCommand({ cwd: root, target: 'image', images: 'serv' })
+  unlinkSync(source)
+  const cached = join(destination, 'stale.tgz')
+  state.failDependencyCleanup = cached
+  await expect(buildCommand({ cwd: root, target: 'image', images: 'serv' })).rejects.toThrow(/EACCES/)
+  expect(readFileSync(cached, 'utf8')).toBe('owned-cache-data')
+  expect(JSON.parse(readFileSync(join(destination, '.managed.json'), 'utf8'))).toContain('stale.tgz')
+  state.failDependencyCleanup = ''
+  await buildCommand({ cwd: root, target: 'image', images: 'serv' })
+  expect(existsSync(cached)).toBe(false)
+  expect(JSON.parse(readFileSync(join(destination, '.managed.json'), 'utf8'))).not.toContain('stale.tgz')
 })
 
 it('podman 不可达则用 Docker；显式 Docker 不探测 Podman', async () => {

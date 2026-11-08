@@ -46,6 +46,8 @@
 
 pnpm 专属配置放在 `pnpm-workspace.yaml`，`.npmrc` 仅用于注册表与认证。Docker 缓存层使用 `pnpm fetch` 读取锁文件；pnpm 12 的该命令不支持 `--frozen-lockfile`。后续仍通过 `pnpm install --offline --frozen-lockfile` 校验清单与锁文件一致。容器裁剪用 `pnpm pm deploy --filter <服务包> --prod <目标目录>`，确保执行内置命令，避免项目同名 `deploy` 脚本覆盖它。保留 `.gitattributes`，让 `.dockerignore`、Dockerfile 和 POSIX 脚本统一使用 LF，保持跨平台输入一致并确保 Linux 脚本可运行。
 
+镜像构建只应使用可信且构建期间不会被其他主体替换的 context。CLI 在各 context 的 `images/dependencies/` 生成依赖缓存及 `.managed.json` 跟踪清单；缓存祖先目录不得是符号链接或 Windows junction，缓存文件不得是链接或多硬链接文件。更新通过独占临时文件原子替换，内容未变时保留时间戳；旧清单清理仅限该缓存树。若报缓存路径错误，按提示的原因和诊断码检查该路径，处理链接或访问权限后再重建。跟踪清单最多 16MiB，超限或 JSON 损坏时会给出诊断，且不会回显原文件内容。
+
 ### 下载源与代理
 
 ```sh

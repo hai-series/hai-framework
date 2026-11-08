@@ -6,7 +6,7 @@ import type { BuildDownloadOptions } from './cli-build-downloads.js'
 import type { NativeArtifact } from './cli-build-native.js'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { appendFileSync, copyFileSync, createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, createReadStream, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import process from 'node:process'
 import { normalizeProjectName, resolveImageReference } from '@h-ai/deploy'
@@ -16,6 +16,7 @@ import { writeCliMessage } from '../cli-utils.js'
 import { buildContainerAndroid } from './cli-build-android-container.js'
 import { buildMobileApp, gradleCommand } from './cli-build-app.js'
 import { buildBatchName, createBuildId } from './cli-build-artifact.js'
+import { prepareDependencyInputs } from './cli-build-dependencies.js'
 import { buildProxyArguments, preflightDownloadProxy, resolveBuildDownloads, validateDownloadDockerfile } from './cli-build-downloads.js'
 import { nativeFiles, nativeProjectDirectory, publishNativeArtifacts } from './cli-build-native.js'
 import { forwardWindowsBuildOutput } from './cli-build-output.js'
@@ -632,62 +633,4 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   finally {
     rmSync(staging, { recursive: true, force: true })
   }
-}
-
-/** 生成稳定的依赖上下文；包配置、补丁和本地归档改变才使下载层失效。 */
-function prepareDependencyInputs(cwd: string): void {
-  const destination = join(cwd, 'images', 'dependencies')
-  mkdirSync(destination, { recursive: true })
-  const tracking = join(destination, '.managed.json')
-  const recorded: unknown = existsSync(tracking)
-    ? JSON.parse(readFileSync(tracking, 'utf8'))
-    : []
-  const previous = Array.isArray(recorded)
-    ? recorded.filter((file): file is string => typeof file === 'string')
-    : []
-  const files: string[] = []
-  const walk = (directory: string): void => {
-    for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      const source = join(directory, entry.name)
-      if (source === destination || [
-        'node_modules',
-        '.git',
-        '.hai',
-        '.turbo',
-        '.svelte-kit',
-        '.pnpm-store',
-        '.cache',
-        'dist',
-        'build',
-        'data',
-        'tmp',
-        'test-results',
-        'playwright-report',
-      ].includes(entry.name)) {
-        continue
-      }
-      if (entry.isDirectory()) {
-        walk(source)
-        continue
-      }
-      if (!entry.isFile() || !(entry.name === 'package.json' || entry.name === '.pnpmfile.cjs' || /\.(?:tgz|patch)$/.test(entry.name)))
-        continue
-      const file = relative(cwd, source)
-      mkdirSync(dirname(join(destination, file)), { recursive: true })
-      const target = join(destination, file)
-      if (!existsSync(target) || !readFileSync(source).equals(readFileSync(target)))
-        copyFileSync(source, target)
-      files.push(file)
-    }
-  }
-  walk(cwd)
-  for (const file of previous) {
-    const target = resolve(destination, file)
-    const offset = relative(destination, target)
-    if (!files.includes(file) && offset && !isAbsolute(offset) && offset !== '..' && !offset.startsWith(`..${sep}`))
-      rmSync(target, { force: true })
-  }
-  const content = `${JSON.stringify(files)}\n`
-  if (!existsSync(tracking) || readFileSync(tracking, 'utf8') !== content)
-    writeFileSync(tracking, content)
 }

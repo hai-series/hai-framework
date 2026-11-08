@@ -438,5 +438,11 @@
   "cli_download_engine_proxy_configured": "イメージ取得の事前確認：Docker のプロキシ設定を確認しました。実際の取得はエンジンで実行されます。",
   "cli_download_engine_proxy_local": "イメージ取得の事前確認：ローカル Podman はプロセスのプロキシを継承できます。ビルドコンテナは別途確認します。",
   "cli_download_engine_proxy_hint": "イメージ取得の事前確認：ビルド引数ではリモート {runtime} エンジンのプロキシを設定できません。Docker Desktop または Podman Machine/API サービスで設定してください。ビルドコンテナのプロキシは別途確認します。",
-  "cli_download_template_required": "Dockerfile が選択した取得元に対応していません。現行テンプレートの HAI_NODE_IMAGE、HAI_NGINX_IMAGE、HAI_NPM_REGISTRY を反映してください：{path}"
+  "cli_download_template_required": "Dockerfile が選択した取得元に対応していません。現行テンプレートの HAI_NODE_IMAGE、HAI_NGINX_IMAGE、HAI_NPM_REGISTRY を反映してください：{path}",
+  "cli_build_dependency_context_unsafe": "依存ビルドキャッシュを安全に更新できません: {path}。理由: {reason}、診断コード: {diagnostic}。パスを確認してから再試行してください。",
+  "cli_build_dependency_reason_invalid": "パスにリンクが含まれるか、ファイルの種類またはサイズが要件を満たしていません",
+  "cli_build_dependency_reason_changed": "検証中にファイルまたはディレクトリが変更されました",
+  "cli_build_dependency_reason_read": "キャッシュを読み取れません。アクセス権とファイルの使用状態を確認してください",
+  "cli_build_dependency_reason_write": "キャッシュの書き込みまたは公開に失敗しました。アクセス権、空き容量とファイルの使用状態を確認してください",
+  "cli_build_dependency_reason_tracking": "キャッシュの追跡マニフェストが有効なJSONではありません"
 }
