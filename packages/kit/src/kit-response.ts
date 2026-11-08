@@ -8,7 +8,7 @@
  * @module kit-response
  */
 
-import type { HaiError } from '@h-ai/core'
+import type { HaiError, HaiResult } from '@h-ai/core'
 import type { ApiResponse } from './kit-types.js'
 import { core, HaiCommonError } from '@h-ai/core'
 import { kitM } from './kit-i18n.js'
@@ -310,14 +310,18 @@ export function redirect(url: string, status: 301 | 302 | 303 | 307 | 308 = 302)
  * @returns 标准化 JSON Response
  * @example
  * ```ts
+ * import { err, HaiCommonError, type HaiResult } from '@h-ai/core'
  * import { kit } from '@h-ai/kit'
  *
- * const response = kit.response.fromResult({ success: true, data: { id: 'article_1' } })
+ * function respond(result: HaiResult<{ id: string }>): Response {
+ *   return kit.response.fromResult(result)
+ * }
+ * const response = kit.response.fromResult(err(HaiCommonError.NOT_FOUND, 'Article missing'))
  * void response.status
  * ```
  */
 export function fromResult<T>(
-  result: { success: true, data: T } | { success: false, error: { code: number | string, message: string, [key: string]: unknown } },
+  result: HaiResult<T>,
   httpStatusMap?: Record<number | string, number>,
   requestId?: string,
 ): Response {

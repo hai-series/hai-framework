@@ -568,7 +568,7 @@ export interface HandleConfig {
    *
    * 启用后 kit 自动在 Handle 中完成：
    * - 传输加密：请求体解密 / 响应体加密 / 密钥交换端点
-   * - Cookie 加密：对指定 Cookie 的 get/set 自动 AES 加解密
+   * - Cookie 加密：对指定 Cookie 的 get/set 使用 SM4-CBC 加解密并验证 HMAC-SHA256 认证
    */
   crypto?: HookCryptoConfig
   /** 自定义错误处理（不提供则使用内置的 500 JSON 响应） */

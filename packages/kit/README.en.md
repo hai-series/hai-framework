@@ -4,25 +4,11 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md) · [@h-ai/crypto](../crypto/README.en.md) · [@h-ai/iam](../iam/README.en.md)
 
-## Introduction
-
 `@h-ai/kit` integrates SvelteKit with hai-framework, providing a shared request pipeline and same-origin endpoint utilities:
 
 Use runtime operations through `kit.xx`. Public namespace types are `KitFunctions` on the server and `BrowserKitFunctions` in the browser. The browser condition exposes only clients, CRUD, page tokens, and default locale operations. `AuthCookieWriter` describes the current request's minimal server authentication cookie writer. Re-exported methods and namespaces support consumer declaration emission without importing internal helpers.
 
-## Core features
-
-- Handle hook composition (`createHandle` / `sequence`)
-- Authentication/role/permission guards (`guard.require` / `guard.check`)
-- Built-in Logging / RateLimit / CORS middleware, enabled through `createHandle` configuration
-- Shared API responses and request validation (Zod)
-- Bearer token utilities (server login/logout + browser token storage)
-- Browser client with automatic CSRF and transport encryption support
-- Declarative CRUD resources (`crud.define`)
-- A2A integration: discovery defaults to `/.well-known/agent-card.json`. With `authenticate` configured, null/undefined returns 401; anonymous access is allowed only without authentication configured. API Key parameters come from the complete Agent Card's `securitySchemes.apiKey`. Hooks and explicit A2A routes share JSON-RPC parse-error and SSE cancellation cleanup logic.
-- Dual build mode (`createAdapter()`)
-
-## Getting started
+## Quick Start
 
 `sequence` preserves SvelteKit resolve options: page transformations run from inner to outer, while the first preload and serialized-header filter win. This preserves the i18n HTML language replacement.
 
@@ -34,14 +20,7 @@ npm install svelte @sveltejs/kit zod
 npm install -D @sveltejs/vite-plugin-svelte vite
 ```
 
-### Dependencies
-
-- `@h-ai/iam`: optional authentication/authorization for A2A; initialize before using kit's A2A features.
-- `@h-ai/crypto`: optional transport/cookie encryption; initialize before using encryption in kit.
-
-### Quick start
-
-#### Project configuration
+### Project configuration
 
 **vite.config.ts**：
 
@@ -77,7 +56,72 @@ export default defineConfig({
 
 When using Crypto or Kit/IAM, include `sm-crypto@0.5.8` in application production dependencies. CLI projects already do this; for manual setup, run `pnpm add sm-crypto@0.5.8`. The external option alone is insufficient: adapter-node also uses direct production dependencies to preserve native package loading.
 
-#### Build the request pipeline
+## Features
+
+### Purpose, inputs and outputs
+
+Call fragments reuse the initialized service from this page. Named variables stand for application-provided requests, schemas, resource definitions or options. Follow the corresponding examples for setup and failure handling. Check HaiResult.success and await asynchronous calls.
+
+| Entry                                       | Use case                      | Input                                                              | Output                                                            | Call fragment                                                               |
+| ------------------------------------------- | ----------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `kit.createHandle`                          | Request pipeline              | `HandleConfig: auth/guards/logging/rateLimit/crypto/access`        | `SvelteKit Handle`                                                | `kit.createHandle({ logging: true })`                                       |
+| `kit.sequence`                              | Compose hooks                 | `...Handle`                                                        | `Handle preserving resolve options`                               | `kit.sequence(i18nHandle, authHandle)`                                      |
+| `kit.handler`                               | Endpoint boundary             | `(RequestEvent) => Response \| Promise<Response>`                  | `SvelteKit request handler`                                       | `kit.handler(async () => kit.response.ok({ ready: true }))`                 |
+| `kit.guard.check`                           | Check permission              | `session, permission`                                              | `boolean`                                                         | `kit.guard.check(session, "orders.read")`                                   |
+| `kit.guard.require`                         | Require permission            | `session, permission`                                              | `void; denied access throws Response`                             | `kit.guard.require(session, "orders.write")`                                |
+| `kit.guard.requireSensitive`                | Verify operation purpose      | `initialized IAM, current RequestEvent request/cookies, operation` | `Promise<void>; invalid proof throws Response`                    | `kit.guard.requireSensitive(iam, event, "orders.approve")`                  |
+| `kit.response.ok`                           | Success                       | `data, requestId?`                                                 | `Response with HTTP 200 and success data`                         | `kit.response.ok({ id: "o1" })`                                             |
+| `kit.response.created`                      | Created                       | `data, requestId?`                                                 | `Response with HTTP 201 and success data`                         | `kit.response.created({ id: "o1" })`                                        |
+| `kit.response.noContent`                    | No content                    | `none`                                                             | `Response with HTTP 204`                                          | `kit.response.noContent()`                                                  |
+| `kit.response.error`                        | Custom error                  | `code, message, status?, requestId?, public details?`              | `safe failure Response`                                           | `kit.response.error("app:orders:001", "请求无效", 400)`                     |
+| `kit.response.badRequest`                   | Bad request                   | `message?, requestId?`                                             | `HTTP 400 Response`                                               | `kit.response.badRequest("Invalid request")`                                |
+| `kit.response.unauthorized`                 | Unauthorized                  | `message?, requestId?`                                             | `HTTP 401 Response`                                               | `kit.response.unauthorized()`                                               |
+| `kit.response.forbidden`                    | Forbidden                     | `message?, requestId?`                                             | `HTTP 403 Response`                                               | `kit.response.forbidden()`                                                  |
+| `kit.response.notFound`                     | Not found                     | `message?, requestId?`                                             | `HTTP 404 Response`                                               | `kit.response.notFound()`                                                   |
+| `kit.response.conflict`                     | Conflict                      | `message, requestId?`                                              | `HTTP 409 Response`                                               | `kit.response.conflict("Data changed")`                                     |
+| `kit.response.validationError`              | Field validation              | `{ field, message }[], requestId?`                                 | `HTTP 422 Response; errors in safe error.cause`                   | `kit.response.validationError([{ field: "title", message: "请输入标题" }])` |
+| `kit.response.internalError`                | Internal failure              | `message?, requestId?`                                             | `HTTP 500 Response with safe message`                             | `kit.response.internalError()`                                              |
+| `kit.response.redirect`                     | Redirect                      | `location, status?`                                                | `redirect Response`                                               | `kit.response.redirect("/auth/login")`                                      |
+| `kit.response.fromResult`                   | Map domain result             | `HaiResult<T>, httpStatusMap?, requestId?`                         | `HTTP Response; preserves safe code/status/traceId`               | `kit.response.fromResult(result)`                                           |
+| `kit.response.fromError`                    | Map domain error              | `HaiError, requestId?`                                             | `safe HTTP failure Response`                                      | `kit.response.fromError(result.error)`                                      |
+| `kit.validate.body`                         | Body validation               | `Request, Zod schema`                                              | `Promise<schema data>; invalid input throws Response`             | `kit.validate.body(request, InputSchema)`                                   |
+| `kit.validate.query`                        | Query validation              | `URL, Zod schema`                                                  | `schema data; invalid input throws Response`                      | `kit.validate.query(url, QuerySchema)`                                      |
+| `kit.validate.params`                       | Route validation              | `Record<string,string>, Zod schema`                                | `schema data; invalid input throws Response`                      | `kit.validate.params(params, IdSchema)`                                     |
+| `kit.validate.IdParamSchema`                | Resource ID                   | `{ id: string }`                                                   | `Zod parsed ID object`                                            | `kit.validate.IdParamSchema.parse({ id: "o1" })`                            |
+| `kit.validate.PaginationQuerySchema`        | Pagination                    | `page/pageSize/search query`                                       | `normalized pagination object`                                    | `kit.validate.PaginationQuerySchema.parse({ page: "1" })`                   |
+| `kit.client.create`                         | Same-origin client            | `KitClientConfig: auth/transport/recoverSession?`                  | `KitClient { apiFetch, init, destroy, ready }`                    | `kit.client.create()`                                                       |
+| `kit.client.createAuthActions`              | Auth actions                  | `{ basePath?, ...auth client options }?`                           | `AuthPanel-compatible actions`                                    | `kit.client.createAuthActions({ basePath: "/api/auth" })`                   |
+| `kit.client.installBrowserTransport`        | Install transport             | `public KitConfig, { crypto, basePath? }`                          | `void; installs same-origin global fetch wrapper when enabled`    | `kit.client.installBrowserTransport(publicKitConfig, { crypto })`           |
+| `kit.client.installBrowserTransportFetch`   | Custom transport installation | `ClientTransportConfig`                                            | `void; installs browser global fetch wrapper`                     | `kit.client.installBrowserTransportFetch(transportOptions)`                 |
+| `kit.auth.publicPaths`                      | Anonymous endpoints           | `none`                                                             | `string[]; prepend the host base path when needed`                | `kit.auth.publicPaths`                                                      |
+| `kit.auth.createApi`                        | Auth handlers                 | `initialized IAM service`                                          | `RequestHandler map for login/OTP/reset/config/etc.`              | `kit.auth.createApi(iam)`                                                   |
+| `kit.auth.login`                            | Password login                | `Cookie writer, PasswordCredentials, request context?`             | `Promise<HaiResult<AuthResult>>; writes token cookies on success` | `kit.auth.login(cookies, { identifier: "alice", password })`                |
+| `kit.auth.loginWithOtp`                     | OTP login                     | `Cookie writer, OtpCredentials, request context?`                  | `Promise<HaiResult<AuthResult>>`                                  | `kit.auth.loginWithOtp(cookies, otpCredentials)`                            |
+| `kit.auth.loginWithLdap`                    | LDAP login                    | `Cookie writer, LdapCredentials, request context?`                 | `Promise<HaiResult<AuthResult>>`                                  | `kit.auth.loginWithLdap(cookies, ldapCredentials)`                          |
+| `kit.auth.loginWithApiKey`                  | API key login                 | `Cookie writer, ApiKeyCredentials, request context?`               | `Promise<HaiResult<AuthResult>>`                                  | `kit.auth.loginWithApiKey(cookies, apiKeyCredentials)`                      |
+| `kit.auth.registerAndLogin`                 | Register and login            | `Cookie writer, RegisterOptions, request context?`                 | `Promise<HaiResult<AuthResult>>`                                  | `kit.auth.registerAndLogin(cookies, registration)`                          |
+| `kit.auth.logout`                           | Logout                        | `Cookie writer, accessToken?`                                      | `Promise<HaiResult<void>>`                                        | `kit.auth.logout(cookies, accessToken)`                                     |
+| `kit.auth.setBrowserToken`                  | Page memory token             | `access token string`                                              | `void; no Web Storage persistence`                                | `kit.auth.setBrowserToken(accessToken)`                                     |
+| `kit.auth.clearBrowserToken`                | Clear page token              | `none`                                                             | `void`                                                            | `kit.auth.clearBrowserToken()`                                              |
+| `kit.crud.define`                           | Declare CRUD                  | `CrudResourceConfig`                                               | `resource operation object`                                       | `kit.crud.define(resourceDefinition)`                                       |
+| `kit.middleware.rateLimit`                  | Fixed-window limit            | `{ windowMs, maxRequests, store, ...options }`                     | `Middleware; 429 on quota and 503 on store failure`               | `kit.middleware.rateLimit({ windowMs: 60000, maxRequests: 100, store })`    |
+| `kit.middleware.createCacheRateLimitStore`  | Shared counter                | `initialized shared cache, { namespace, allowMemory? }`            | `RateLimitStore`                                                  | `kit.middleware.createCacheRateLimitStore(cache, { namespace: "orders" })`  |
+| `kit.middleware.createMemoryRateLimitStore` | Development counter           | `none; development or explicit test only`                          | `MemoryRateLimitStore`                                            | `kit.middleware.createMemoryRateLimitStore()`                               |
+| `kit.createFeedbackHandler`                 | Controlled feedback route     | `{ feedback, resolveContext, ...options }`                         | `catch-all RequestHandler`                                        | `kit.createFeedbackHandler({ feedback, resolveContext })`                   |
+| `kit.i18n.setLocale`                        | Startup locale                | `locale string`                                                    | `void; do not change process default per request`                 | `kit.i18n.setLocale("zh-CN")`                                               |
+| `kit.i18n.runWithLocale`                    | Request locale isolation      | `locale, callback; Node server only`                               | `same callback return value`                                      | `kit.i18n.runWithLocale("en-US", () => resolve(event))`                     |
+
+- Handle hook composition (`createHandle` / `sequence`)
+- Authentication/role/permission guards (`guard.require` / `guard.check`)
+- Built-in Logging / RateLimit / CORS middleware, enabled through `createHandle` configuration
+- Shared API responses and request validation (Zod)
+- Bearer token utilities (server login/logout + browser token storage)
+- Browser client with automatic CSRF and transport encryption support
+- Declarative CRUD resources (`crud.define`)
+- A2A integration: discovery defaults to `/.well-known/agent-card.json`. With `authenticate` configured, null/undefined returns 401; anonymous access is allowed only without authentication configured. API Key parameters come from the complete Agent Card's `securitySchemes.apiKey`. Hooks and explicit A2A routes share JSON-RPC parse-error and SSE cancellation cleanup logic.
+- Dual build mode (`createAdapter()`)
+
+### Build the request pipeline
 
 When mounting an application under `/yyy/`, keep SvelteKit's `paths.base` and the actual URLs used by guards consistent. Prefix `protectedPaths`, `publicPaths` and `loginUrl` with `resolve('/').replace(/\/$/, '')` from `$app/paths` with `paths.relative: false`, for example `${base}/api/*`. Authentication pages use ``kit.client.createAuthActions({ basePath: `${base}/api/auth` })``. Kit recognizes application `/api/*` routes through route groups and mount prefixes: unauthenticated APIs return 401, while pages follow the configured login redirect. Generated templates include this wiring.
 
@@ -86,7 +130,7 @@ The Hook examples assume the application has initialized its database, shared ca
 **src/hooks.server.ts**：
 
 ```typescript
-import type { Handle } from '@sveltejs/kit'
+import type { Handle } from '@sveltejs/kit/hooks'
 import { cache } from '@h-ai/cache'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
@@ -114,7 +158,7 @@ export const handle: Handle = haiHandle
 
 Rate limits use fixed windows beginning at the first successful commit; later requests preserve the TTL. A store is required. Initialize shared Redis and check its result before serving; all nodes use the same namespace/windowMs/maxRequests. Cache read/commit failure or exhausted contention returns 503, while exceeding the limit returns 429, without get+set or local fallback. createMemoryRateLimitStore is for development or explicit HAI_E2E/HAI_E2E_MOCK tests; it has no timer and can be garbage collected when released; each request scans at most 64 entries, capacity is 10000 windows, new keys receive 503 at capacity without evicting active counts, and external stores remain owned by their creators. Never enable test flags in production. Reset headers estimate node time; Redis TTL controls the actual window, so synchronize clocks. The default key uses the trusted adapter getClientAddress, normalizes equivalent IPv6/mapped IPv4 addresses and ignores raw forwarded headers; configure proxy trust in the deployment adapter.
 
-#### API endpoints
+### API endpoints
 
 ```typescript
 import { kit } from '@h-ai/kit'
@@ -132,7 +176,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 })
 ```
 
-#### Browser client
+### Browser client
 
 `kit.client.create()` targets SvelteKit same-origin endpoints. Use `@h-ai/api-client` for cross-origin access to public APIs from Web, apps, or mini programs.
 
@@ -156,7 +200,7 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 >
 > Use httpOnly cookies for same-origin SvelteKit endpoints and verify them on the server. For browser Bearer headers, set an in-memory token with `kit.auth.setBrowserToken()` before `kit.client.create({ auth: true })`. Custom `BrowserTokenStore` implementations must use memory or platform secure storage; never persist sensitive credentials in Web Storage.
 
-#### Same-origin transport encryption
+### Same-origin transport encryption
 
 kit delegates transport encryption to `@h-ai/crypto`. The server creates a manager with `crypto.transport.createServer({ serverKeyRing, keyStore })`; the browser installs a same-origin fetch wrapper with one call to `kit.client.installBrowserTransport(kitConfig, { crypto })`. Servers must also inject a managed key ring and shared registry.
 
@@ -242,9 +286,7 @@ Servers must explicitly inject the same managed `serverKeyRing` and a shared `ke
 
 Transport applies by default to same-origin `/api/*` endpoints, SvelteKit `__data.json` page data, and key exchange itself. Page documents and static assets remain plaintext and do not require `X-Client-Id`. `multipart/form-data` requests such as uploads are sent unchanged; explicitly allow their paths through server `excludePaths`.
 
-Only authenticated protocol v2 is accepted. Independent random SM4-CBC and HMAC-SM3 keys are wrapped with SM2; verify the sender signature and MAC before CBC decryption. Clients sign requests and the selected server key version signs responses. Authentication covers version, direction, serverKeyId, clientId, a random 128-bit requestId acting as the nonce, issuedAt, HTTP method, the SM3 pathHash of pathname plus the original search, and response status. By default, requests expire after five minutes and client timestamps may be up to 30 seconds ahead. Set `maxRequestAgeSeconds` (1–600) and `maxFutureSkewSeconds` (0–300) on the server to adjust these limits in whole seconds. The shared registry atomically consumes (clientId, requestId) and retains the nonce until issuedAt plus 11 minutes, covering the longest configurable window and server clock differences. Storage failures reject requests. Synchronize node clocks and use a Redis noeviction/durable policy that preserves live nonces. Transport replay prevention does not replace business idempotency keys.
-
-Empty POSTs still send an authenticated envelope for empty plaintext. GET/HEAD carry it in X-Hai-Transport; bodyless responses such as 204/304/HEAD use the same header. Other requests/responses carry a JSON envelope and X-Encrypted: true. The client must match the original request context and HTTP status; missing markers, old formats and authentication failures reject. Serv/Kit hosts explicitly allow plaintext through `encryption: disabled` path rules or host `excludePaths`. Callers must select ordinary requests; API Client/Kit wrappers use their own `excludePaths`. CORS must allow and expose X-Hai-Transport. TLS authenticates handshake keys; this protocol does not replace IAM authorization.
+Transport uses authenticated v2 envelopes, verifying signature/MAC before decryption and binding method, path, time and response status. The shared registry atomically consumes nonces. The host still owns TLS, trusted proxies, authorization and idempotency. Custom CORS hosts must allow and expose X-Hai-Transport. See the [Transport protocol](../crypto/TRANSPORT-PROTOCOL.md) for fields, bodyless responses, clock windows and replay protection.
 
 Set `transport.maxPlaintextBytes` for both request and response JSON plaintext, measured in UTF-8 bytes: default 1 MiB, integer range 1 KiB–64 MiB. Clients learn the server limit during key exchange. `resolveTransportBodyLimits()` derives encrypted/proxy bytes as twice the plaintext limit plus 32 KiB. Handshake, public-key, header and replay constraints remain independent. Oversized streams are cancelled and readers released: requests return 413; oversized responses return an encrypted 500 capacity error, recognized as `TransportBodyTooLargeError` / `hai:crypto:070`. [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
 
@@ -252,7 +294,7 @@ Ordinary routes retain `transport.maxPlaintextBytes` (auto/omitted: 1 MiB). Decl
 
 Serv/Kit return an encrypted HTTP 400 for an out-of-window request after validating request binding, signature and MAC. The client throws `TransportTimeError` (`hai:crypto:071`), displays the server’s UTC time at validation, and asks the user to enable automatic synchronization or set the device time manually before refreshing. `serverTime` is Unix milliseconds. Clients still show synchronization guidance when an older server omits it. `api-client` maps the error to `VALIDATION_FAILED` and preserves `cause.transportCode` and `cause.serverTime`. Standard authentication actions convert authenticated transport time errors to `HaiResult` with the server time and synchronization guidance for AuthPanel.
 
-#### Shared transport configuration with `_kit.yml`
+### Shared transport configuration with `_kit.yml`
 
 `@h-ai/kit` provides `KitConfigSchema` / `resolveKitConfig()` so a single `_kit.yml`
 can drive both `hooks.server.ts` and browser `kit.client.installBrowserTransport()`:
@@ -296,32 +338,10 @@ export function load() {
 For server-only configuration, use `core.config.validate('kit', KitConfigSchema)` as well.
 Read the complete `_kit.yml` on the server; it can contain private proxy networks and policy-file paths. Return only an explicit public projection such as `{ kitConfig: publicKitConfig }` from `+layout.server.ts`, and consume its transport fields in the browser. Never bundle the full configuration or policy file with `?raw`, and keep secrets outside these files.
 
-### Configuration
+### Dependencies
 
-`kit.createHandle()` options:
-
-| Field        | Type                                     | Description                                                            |
-| ------------ | ---------------------------------------- | ---------------------------------------------------------------------- |
-| `auth`       | `HandleAuthConfig`                       | Authentication (verifyToken / protectedPaths / publicPaths / loginUrl) |
-| `rateLimit`  | `object \| false`                        | Rate limiting (windowMs / maxRequests)                                 |
-| `logging`    | `boolean \| object`                      | Request logging (default `true`; `{ logBody: true }` logs the body)    |
-| `crypto`     | `HookCryptoConfig`                       | Transport + cookie encryption                                          |
-| `guards`     | `GuardConfig[]`                          | Custom guards (after automatic auth guards)                            |
-| `middleware` | `Middleware[]`                           | Custom middleware (after built-in middleware)                          |
-| `a2a`        | `HandleA2AOperations \| HandleA2AConfig` | A2A integration (Agent Card + JSON-RPC)                                |
-| `onError`    | `function`                               | Custom error handling                                                  |
-
-Request/response summaries use the `trace` level. Logging is enabled by default and `logBody` defaults to false. Query values come from the original `request.url`, while the path remains SvelteKit's current `event.url.pathname`. Logging does not access the tracked `event.url.search/searchParams`, so static pages can prerender with logging enabled. Password/token/secret, authorization and API-key fields are redacted in queries and optional JSON-body logs. The body is read from a clone and remains available to application code.
-
-Automatic request auditing runs only when `audit.isInitialized`. Static sites and applications without Audit need not initialize it for this handle. State is checked per request, so modules may initialize after the handle is created. Applications selecting Audit must still check `audit.init()` and stop startup on failure. Explicit `audit.log/capture` calls retain their uninitialized errors, and initialized modules still report actual write failures as `Request audit failed`. Mandatory business auditing must check explicit results and enforce the application's transaction rules.
-
-With `crypto.encryptedCookies`, also provide `crypto.cookieEncryptionKey` or `HAI_KIT_COOKIE_KEY`. Missing keys fail immediately in `createHandle()`. Plaintext, damaged ciphertext, or decryption failures for protected cookies are treated as absent; encryption failures never fall back to writing plaintext.
-
-The key must contain 32 hexadecimal characters. Cookies use separately derived SM4-CBC and HMAC-SHA256 keys, authenticating the version, cookie name, IV, and ciphertext before decryption to reject tampering and cross-name substitution. Legacy unauthenticated cookies become invalid after upgrading and require signing in again; there is no legacy fallback.
-
-Unused Crypto Helpers without a runtime entry or real consumers have been removed, along with the `CryptoServiceLike`, `EncryptedCookieConfig`, `CryptoCsrfConfig`, and `WebhookVerifyConfig` type exports. Protect cookies through the `kit.createHandle` configuration above; use the actual public `@h-ai/crypto` contract for other cryptographic operations.
-
-Authentication cookies default to `Secure` when either `NODE_ENV` or `HAI_CORE_ENV` is `production`; `HAI_E2E` / `HAI_E2E_MOCK` do not relax cookie security. Production rate limiting recognizes both flags; only explicit test switches permit memory counters.
+- `@h-ai/iam`: optional authentication/authorization for A2A; initialize before using kit's A2A features.
+- `@h-ai/crypto`: optional transport/cookie encryption; initialize before using encryption in kit.
 
 ### Export paths
 
@@ -345,12 +365,6 @@ Export standard handlers from kit.auth.createApi(iam), use kit.auth.publicPaths 
 
 `kit.auth.logout(cookies, accessToken)` returns `Promise<HaiResult<void>>`. Without a token it only clears cookies and succeeds; with a token but no configured auth operations it fails. Local cookies are cleared for every server outcome. Callers must preserve failed results in their HTTP response or UI; local clearing does not confirm server revocation. Underlying control-flow exceptions still propagate.
 
-### Error handling
-
-- Wrap API endpoints with `kit.handler()`.
-- `kit.validate.body` / `kit.guard.require` throw `Response`, handled by `kit.handler` as API control flow. Page `load` uses `kit.guard.check` with SvelteKit `error`; parse query schemas with `safeParse` and raise native page errors instead of throwing API responses.
-- `kit.handler()` converts non-control-flow exceptions into `500 INTERNAL_ERROR` responses.
-
 ### CRUD fields
 
 Declarative CRUD fields support `colSpan: 'auto' | 1 | 2` for UI form widths. `validation.message` accepts a string or `() => string` for current-locale validation messages. Configure layout through `CrudPage.form`; validate independently on the server.
@@ -369,7 +383,7 @@ Wrap Node requests and SSR in `core.i18n.runWithLocale(locale, () => handleReque
 
 Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During SSR, UI store initialization and setters only update the store; messages read the request scope. `runWithLocale` requires the Node entry; browser translations use explicit locale options or application state.
 
-## Feedback endpoint and request correlation
+### Feedback endpoint and request correlation
 
 `kit.createFeedbackHandler` can serve GET/POST/PATCH in `/api/feedback/[...path]/+server.ts`. It reuses the same api-contract schemas as serv, bounds the input stream, and rejects client identity/scope fields. resolveContext maps an already verified locals.session to server-controlled scope and permissions; null denies access. Keep the existing createHandle authentication, CSRF, and transport encryption.
 
@@ -394,7 +408,81 @@ export const POST = handler
 export const PATCH = handler
 ```
 
-## Error messages and correlated logs
+### Optional interactive challenges
+
+Export kit.auth.createApi(iam).createCaptcha as POST /api/auth/captcha; kit.auth.publicPaths includes it. kit.client.createAuthActions preserves captcha and supplies createCaptcha for automatic AuthPanel solving. Export /api/auth/password/renew for initial/expired password changes. IAM enforces proofs server-side.
+
+See policy, defaults and recovery boundaries in [IAM](../iam/README.en.md).
+
+### Recovering an expired session in place
+
+Set `kit.client.create({ recoverSession })` to sign in again without discarding the current page. Use UI `createSessionRecovery` / `SessionRecoveryDialog`: configure the public policy and original user in the root layout, pass `recovery.recover` as the callback, provide standard authentication actions, and cancel on teardown. IAM checks login `expectedUserId` before issuing a session; captcha, lockout, password renewal and access rules remain active. Only an explicitly authentication-rejected request is retried once. Cancellation, 5xx, timeouts and ambiguous writes are not replayed. Sensitive-operation proofs from an old session may need a new confirmation. Standard authentication actions disable recovery for their own calls. Custom authentication requests should pass `{ recoverSession: false }` as the third apiFetch argument to avoid recursive dialogs. terminalType (web/app/desktop/api; default web) selects a session group and does not attest hardware identity.
+
+### Page exit session policy
+
+`session.endOnPageHide` defaults to `false`. Hosts call `actions.bindPageExit({ enabled: config.session.endOnPageHide })` and invoke its returned cleanup on unmount; standard admin/H5/fullstack templates already bind it. A non-BFCache `pagehide` (including reload and full document navigation) makes a best effort POST to `/auth/session/close`, revoking the held access and related refresh through the existing CSRF/encrypted transport with `keepalive` and no automatic refresh. This response does not clear cookies/local credentials, avoiding a late old response overwriting a new login. Explicit logout still revokes and clears current credentials normally. Browsers may omit page exit requests; configure server `idleTimeout`/`absoluteTimeout` as appropriate. Immediate revocation on browser close is not guaranteed.
+
+### Access checks on every request
+
+Path rules accept `encryption: required` or `disabled`; omission inherits the host. Disabled endpoints skip application encryption while retaining access and identity checks, and reject framework envelopes. Required mode can protect custom JSON endpoints and overrides `excludePaths`; Crypto, a managed key ring and a registry are required. Conflicting modes fail when creating the Handle. Crypto-enabled CLI templates install both server and browser transport; use db and a shared database in production. Private policy and proxy configuration remain server-side; plaintext callers select their protocol using the public transport exclusions.
+
+Pass server-side `_kit.yml` fields `trustedProxies` and `access` explicitly to `kit.createHandle`. Examples and generated templates create one Handle after application initialization. `access` defaults to `false`. Inline `{ rules: [{ id: 'external', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.0/24'] }] }` restricts matching endpoints only; `global` applies to all host-handled requests. Paths include the deployment prefix. Assets served directly by static hosting do not pass through Handle.
+
+Use `access: { file: './config/security/request-access.yml' }` for a separate YAML file. It resolves from the working directory and is read once at startup, up to 1 MiB; changes require a new Handle. Global conditions and all matching rules must pass. Empty lists leave their dimension unrestricted; the default timezone is UTC. Existing sessions are denied after an allowed time window ends. Preflight and key exchange also follow policy; ordinary transport requests preserve encrypted HTTP 403 / `hai:common:104` responses.
+
+Default `trustedProxies: auto` ignores forwarded headers on ordinary hosts and adopts container networks only for private managed Compose proxy topologies. Custom ingress uses explicit proxy IPs/CIDRs; `[]` disables trust. Resolved `event.getClientAddress()`, policy, IAM and audit share the same address. See the [request access handbook](../../docs/usage/configuration/request-access.md) for edge proxies, lost source addresses, environment overrides and rollback.
+
+## Configuration
+
+### Choose configuration by task
+
+| Configuration entry                       | Scenario                     | Input                                                            | Effect                                                        | Example                                         |
+| ----------------------------------------- | ---------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------- |
+| `server.host / server.port`               | Server listener              | host string, port integer; HOST/PORT override                    | resolved Kit server config; default 127.0.0.1:3000            | `server: { host: 127.0.0.1, port: 3000 }`       |
+| `transport`                               | Same-origin transport        | false or keyExchangePath/excludePaths/byte/time/route budgets    | public transport config for hook and browser; no private keys | `transport: { maxPlaintextBytes: auto }`        |
+| `trustedProxies`                          | Trusted peer                 | auto or explicit IP/CIDR list; [] disables forwarded headers     | normalized client address for access policy                   | `trustedProxies: []`                            |
+| `access`                                  | Request access policy        | false or independent policy configuration                        | per-request IP/time/path checks; not business ownership       | `access: false`                                 |
+| `createHandle.auth / guards / middleware` | Host authentication pipeline | verifyToken/operations, paths and guard/middleware callbacks     | RequestEvent locals/session and rejection Response            | `kit.createHandle({ auth: authOptions })`       |
+| `createHandle.rateLimit`                  | Shared rate limit            | windowMs, maxRequests and explicit atomic store                  | fixed window; 429 over quota, 503 on unavailable storage      | `kit.createHandle({ rateLimit: limitOptions })` |
+| `createHandle.crypto`                     | Inject private dependencies  | initialized crypto, serverKeyRing/keyStore, encryptedCookies/key | authenticated payload/cookies; ring stays server-only         | `kit.createHandle({ crypto: cryptoOptions })`   |
+| `client.create`                           | Browser request options      | auth memory store, CSRF names, transport, recoverSession         | same-origin apiFetch plus init/destroy/ready                  | `kit.client.create({ auth: true })`             |
+
+When building Svelte applications with pnpm, register the `deepmerge@4.3.1` patch in the project's `patchedDependencies` and keep the patch file. Retain the DaisyUI style patch when that package is used. CLI-generated projects include applicable entries. Installing a framework npm package does not propagate this repository's pnpm patch configuration; manual integrations must copy the relevant [patch files](../../patches/) and registrations before reinstalling dependencies.
+
+`kit.createHandle()` options:
+
+| Field        | Type                                     | Description                                                            |
+| ------------ | ---------------------------------------- | ---------------------------------------------------------------------- |
+| `auth`       | `HandleAuthConfig`                       | Authentication (verifyToken / protectedPaths / publicPaths / loginUrl) |
+| `rateLimit`  | `object \| false`                        | Rate limiting (windowMs / maxRequests)                                 |
+| `logging`    | `boolean \| object`                      | Request logging (default `true`; `{ logBody: true }` logs the body)    |
+| `crypto`     | `HookCryptoConfig`                       | Transport + cookie encryption                                          |
+| `guards`     | `GuardConfig[]`                          | Custom guards (after automatic auth guards)                            |
+| `middleware` | `Middleware[]`                           | Custom middleware (after built-in middleware)                          |
+| `a2a`        | `HandleA2AOperations \| HandleA2AConfig` | A2A integration (Agent Card + JSON-RPC)                                |
+| `onError`    | `function`                               | Custom error handling                                                  |
+
+Request/response summaries use the `trace` level. Logging is enabled by default and `logBody` defaults to false. Query values come from the original `request.url`, while the path remains SvelteKit's current `event.url.pathname`. Logging does not access the tracked `event.url.search/searchParams`, so static pages can prerender with logging enabled. Password/token/secret, authorization and API-key fields are redacted in queries and optional JSON-body logs. The body is read from a clone and remains available to application code.
+
+Automatic request auditing runs only when `audit.isInitialized`. Static sites and applications without Audit need not initialize it for this handle. State is checked per request, so modules may initialize after the handle is created. Applications selecting Audit must still check `audit.init()` and stop startup on failure. Explicit `audit.log/capture` calls retain their uninitialized errors, and initialized modules still report actual write failures as `Request audit failed`. Mandatory business auditing must check explicit results and enforce the application's transaction rules.
+
+With `crypto.encryptedCookies`, also provide `crypto.cookieEncryptionKey` or `HAI_KIT_COOKIE_KEY`. Missing keys fail immediately in `createHandle()`. Plaintext, damaged ciphertext, or decryption failures for protected cookies are treated as absent; encryption failures never fall back to writing plaintext.
+
+The key must contain 32 hexadecimal characters. Cookies use separately derived SM4-CBC and HMAC-SHA256 keys, authenticating the version, cookie name, IV, and ciphertext before decryption to reject tampering and cross-name substitution. Legacy unauthenticated cookies become invalid after upgrading and require signing in again; there is no legacy fallback.
+
+Authentication cookies default to `Secure` when either `NODE_ENV` or `HAI_CORE_ENV` is `production`; `HAI_E2E` / `HAI_E2E_MOCK` do not relax cookie security. Production rate limiting recognizes both flags; only explicit test switches permit memory counters.
+
+### Transport capacity and module budgets
+
+For a sensitive call, supply `reauthorize: () => sensitiveActions.authorize(operation)` in the third Kit apiFetch argument or typed-client options.context. After session rotation/recovery or an explicit proof rejection, obtain a new purpose-bound proof before one retry. Cancellation sends no further write; without a callback, an old proof is never replayed.
+
+## Error Handling
+
+- Wrap API endpoints with `kit.handler()`.
+- `kit.validate.body` / `kit.guard.require` throw `Response`, handled by `kit.handler` as API control flow. Page `load` uses `kit.guard.check` with SvelteKit `error`; parse query schemas with `safeParse` and raise native page errors instead of throwing API responses.
+- `kit.handler()` converts non-control-flow exceptions into `500 INTERNAL_ERROR` responses.
+
+### Error messages and correlated logs
 
 `kit.response.fromError/fromResult` preserve safe field-validation `cause`, explicitly public `publicExt` (mapped to `ext`), and `httpStatus`. Internal causes and extensions remain private. Each module failure produces one correlated log entry.
 
@@ -409,35 +497,7 @@ Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error
 
 When audit is initialized, createHandle binds verified session identity/roles, the platform getClientAddress result and request ID for domain audit.log calls. Automatic request.execute events contain the route template, method, status and success/failure/denial, including guard redirects and SvelteKit HTTP control flow. Bodies and error details are not copied. capture.enabled controls automatic capture; capture.includeReads enables successful reads. Failed reads remain recorded by default. Applications still explicitly record domain completion/failure events; disabling automatic capture does not disable domain logs.
 
-## Optional interactive challenges
-
-Export kit.auth.createApi(iam).createCaptcha as POST /api/auth/captcha; kit.auth.publicPaths includes it. kit.client.createAuthActions preserves captcha and supplies createCaptcha for automatic AuthPanel solving. Export /api/auth/password/renew for initial/expired password changes. IAM enforces proofs server-side.
-
-See policy, defaults and recovery boundaries in [IAM](../iam/README.en.md).
-
-## Recovering an expired session in place
-
-Set `kit.client.create({ recoverSession })` to sign in again without discarding the current page. Use UI `createSessionRecovery` / `SessionRecoveryDialog`: configure the public policy and original user in the root layout, pass `recovery.recover` as the callback, provide standard authentication actions, and cancel on teardown. IAM checks login `expectedUserId` before issuing a session; captcha, lockout, password renewal and access rules remain active. Only an explicitly authentication-rejected request is retried once. Cancellation, 5xx, timeouts and ambiguous writes are not replayed. Sensitive-operation proofs from an old session may need a new confirmation. Standard authentication actions disable recovery for their own calls. Custom authentication requests should pass `{ recoverSession: false }` as the third apiFetch argument to avoid recursive dialogs. terminalType (web/app/desktop/api; default web) selects a session group and does not attest hardware identity.
-
-## Page exit session policy
-
-`session.endOnPageHide` defaults to `false`. Hosts call `actions.bindPageExit({ enabled: config.session.endOnPageHide })` and invoke its returned cleanup on unmount; standard admin/H5/fullstack templates already bind it. A non-BFCache `pagehide` (including reload and full document navigation) makes a best effort POST to `/auth/session/close`, revoking the held access and related refresh through the existing CSRF/encrypted transport with `keepalive` and no automatic refresh. This response does not clear cookies/local credentials, avoiding a late old response overwriting a new login. Explicit logout still revokes and clears current credentials normally. Browsers may omit page exit requests; configure server `idleTimeout`/`absoluteTimeout` as appropriate. Immediate revocation on browser close is not guaranteed.
-
-## Transport capacity and module budgets
-
-For a sensitive call, supply `reauthorize: () => sensitiveActions.authorize(operation)` in the third Kit apiFetch argument or typed-client options.context. After session rotation/recovery or an explicit proof rejection, obtain a new purpose-bound proof before one retry. Cancellation sends no further write; without a callback, an old proof is never replayed.
-
-## Access checks on every request
-
-Path rules accept `encryption: required` or `disabled`; omission inherits the host. Disabled endpoints skip application encryption while retaining access and identity checks, and reject framework envelopes. Required mode can protect custom JSON endpoints and overrides `excludePaths`; Crypto, a managed key ring and a registry are required. Conflicting modes fail when creating the Handle. Crypto-enabled CLI templates install both server and browser transport; use db and a shared database in production. Private policy and proxy configuration remain server-side; plaintext callers select their protocol using the public transport exclusions.
-
-Pass server-side `_kit.yml` fields `trustedProxies` and `access` explicitly to `kit.createHandle`. Examples and generated templates create one Handle after application initialization. `access` defaults to `false`. Inline `{ rules: [{ id: 'external', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.0/24'] }] }` restricts matching endpoints only; `global` applies to all host-handled requests. Paths include the deployment prefix. Assets served directly by static hosting do not pass through Handle.
-
-Use `access: { file: './config/security/request-access.yml' }` for a separate YAML file. It resolves from the working directory and is read once at startup, up to 1 MiB; changes require a new Handle. Global conditions and all matching rules must pass. Empty lists leave their dimension unrestricted; the default timezone is UTC. Existing sessions are denied after an allowed time window ends. Preflight and key exchange also follow policy; ordinary transport requests preserve encrypted HTTP 403 / `hai:common:104` responses.
-
-Default `trustedProxies: auto` ignores forwarded headers on ordinary hosts and adopts container networks only for private managed Compose proxy topologies. Custom ingress uses explicit proxy IPs/CIDRs; `[]` disables trust. Resolved `event.getClientAddress()`, policy, IAM and audit share the same address. See the [request access handbook](../../docs/usage/configuration/request-access.md) for edge proxies, lost source addresses, environment overrides and rollback.
-
-## Development and testing
+## Development
 
 ```bash
 pnpm --filter @h-ai/kit test
