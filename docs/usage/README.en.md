@@ -2,7 +2,7 @@
 
 [简体中文](README.md) · [English](README.en.md) · [日本語](README.ja.md)
 
-Start with the work you need to complete. New users can follow the [English creation-to-delivery workflow](getting-started/workflow.en.md). The new domain handbook and role-based reading paths are currently in Chinese; this entry does not imply that every chapter has been translated.
+Start with the work you need to complete. New users can follow the [English creation-to-delivery workflow](getting-started/workflow.en.md). The domain handbook and role-based reading paths are in Chinese; chapter links identify the shared reference content.
 
 ## Chapters
 

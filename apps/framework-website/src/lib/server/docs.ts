@@ -93,7 +93,7 @@ export async function documentFiles(directory = usageRoot): Promise<string[]> {
   return nested.flat().sort()
 }
 
-/** 平铺兼容入口与新目录入口重名时，路由只保留目录中的正式章节。 */
+/** 每个文档 slug 生成一个静态入口，同名目录由其 README 承接。 */
 export async function routeDocuments(): Promise<string[]> {
   const routes = new Map<string, string>()
   for (const file of await documentFiles()) {

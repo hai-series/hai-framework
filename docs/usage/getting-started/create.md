@@ -50,7 +50,7 @@ pnpm dev
 
 ## 理解目录再改代码
 
-各模板只安装实际使用的模块：admin/h5 使用认证、验证码/找回密码通知及其 DB/cache/crypto 依赖，website 使用 Core/Kit/UI，API 使用认证、通知、上传和反馈，fullstack 使用管理后台的认证、审计、存储、通知、调度和反馈，mobile-app 只使用客户端能力。AI、payment、vecdb、datapipe 不默认安装。所有项目保留完整模块 YAML 和 `.env.example`；未启用项以注释提供，不进入公共环境默认值，也不触发部署中间件提示。新增功能时添加依赖、取消所需配置注释，再接入初始化、关闭和业务代码；依赖安装不自动启用功能。`--template`、`--features`、`--examples/--no-examples` 已删除，`create --yes/-y` 改为 `--defaults`，旧参数明确报错；`deploy --yes` 保持原义。已有工程不会自动裁剪依赖。
+各模板只安装实际使用的模块：admin/h5 使用认证、验证码/找回密码通知及其 DB/cache/crypto 依赖，website 使用 Core/Kit/UI，API 使用认证、通知、上传和反馈，fullstack 使用管理后台的认证、审计、存储、通知、调度和反馈，mobile-app 只使用客户端能力。AI、payment、vecdb、datapipe 按业务需要添加。所有项目保留完整模块 YAML 和 `.env.example`；未启用项以注释提供，不进入公共环境默认值，也不触发部署中间件提示。添加功能时安装依赖、启用所需配置，再接入初始化、关闭和业务代码；依赖安装本身不启用功能。
 
 新建 website 默认 Node SSR，只安装 Core/Kit/UI，可直接按[静态构建配置](../configuration/delivery.md#静态website与github-pages)发布。后续接入的服务端业务依赖、初始化、API/`actions` 需要在静态发布前移除；注释配置和环境变量参考不影响静态构建。
 

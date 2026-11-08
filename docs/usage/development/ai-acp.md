@@ -75,7 +75,7 @@ async function inspectProject() {
 
 ## 按用途配置凭据
 
-将 Git 凭据从 workspace 的共用 `environmentRefs` 迁入 `gitEnvironmentRefs`，Agent 自用变量放在 agent 的 `environmentRefs`。例如 HTTPS Git Worker 可以配置以下引用，并由服务端为 `ACP_GIT_CONFIG_COUNT` 提供 `1`，为 `ACP_GIT_HEADER_KEY` 提供绑定到登记地址的 Git `http.<url>.extraHeader` 配置键。认证头的值由密钥服务注入 `ACP_GIT_HEADER_VALUE`。
+工作区的 `gitEnvironmentRefs` 只提供给受管 Git 操作，Agent 自用变量放在 Agent 的 `environmentRefs`。例如 HTTPS Git Worker 可以配置以下引用，并由服务端为 `ACP_GIT_CONFIG_COUNT` 提供 `1`，为 `ACP_GIT_HEADER_KEY` 提供绑定到登记地址的 Git `http.<url>.extraHeader` 配置键。认证头的值由密钥服务注入 `ACP_GIT_HEADER_VALUE`。
 
 ```yaml
 gitEnvironmentRefs:

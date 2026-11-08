@@ -29,9 +29,9 @@ AiDocumentEditor检查Mermaid节点文字、箭头、预览与代码切换。渲
 
 ![实际Mermaid预览](../images/ai-mermaid-zh-CN.png)
 
-![同一次浏览器渲染SVG的完整图](../images/ai-mermaid-diagram.png)
+![Mermaid流程图完整预览](../images/ai-mermaid-diagram.png)
 
-完整图单独截图避免固定高度阅读区裁切，没有改图形内容。切深色确认工具栏、下载菜单和表格背景/对比度；切三语确认正文和复制可访问名称同步。
+打开完整预览检查阅读区以外的节点和连线。切深色确认工具栏、下载菜单和表格背景/对比度；切三语确认正文和复制按钮的可访问名称同步。
 
 ![深色工具栏与内容](../images/ai-document-dark.png)
 
@@ -39,7 +39,7 @@ AiDocumentEditor检查Mermaid节点文字、箭头、预览与代码切换。渲
 
 按[模型配置](../configuration/ai.md#模型协议与场景路由)注入真实测试模型和私有密钥，初始化依赖及AI后检查success，再发送一条无敏感信息的请求。检查实际模型id、协议、场景路由与输出，不把应用注册id和厂商`model`混为一谈。
 
-用无效密钥、未知模型、取消和超时验证安全错误与资源释放，日志保留`traceId`。模型失败不能当作聊天正文返回。Schema图不证明供应商可用，本手册没有为截图调用付费模型。
+用无效密钥、未知模型、取消和超时验证安全错误与资源释放，日志保留 `traceId`。模型失败应作为请求失败展示。真实模型接入还须检查供应商响应，配置校验和界面示例只验证各自边界。
 
 ## 临时 Store 与共享持久化
 
@@ -47,7 +47,7 @@ AiDocumentEditor检查Mermaid节点文字、箭头、预览与代码切换。渲
 
 按[存储与记忆配置](../configuration/ai.md#会话记忆压缩与检索)先初始化共享RelDB/网络VecDB或显式StoreProvider，再AI。开发临时Store在关闭/换进程后丢失，生产拒绝以临时Store、SQLite和本地向量冒充共享持久化。
 
-用可信用户绑定`objectId`/`sessionId`写入，重启后由另一实例读取，再试跨用户不可见；客户端自报ID不能决定授权。关闭先等待在途任务并处理flush失败，再反序关依赖。本页没有把配置通过称为真实共享服务验收。
+用可信用户绑定 `objectId`/`sessionId` 写入，重启后由另一实例读取，再试跨用户不可见；客户端自报 ID 不能决定授权。关闭先等待在途任务并处理 flush 失败，再反序关依赖。
 
 ## 知识分块与检索
 
@@ -59,7 +59,7 @@ AiDocumentEditor检查Mermaid节点文字、箭头、预览与代码切换。渲
 
 按[工具和执行配置](../configuration/ai.md#mcp和a2a)先校验工具schema、用途授权、期限和副作用；工具内容和模型输出不扩大权限。HTTP completion默认非流式，流式需独立`endpoint`；业务授权后才执行工具并按tool_call_id回传结果。
 
-音频/图片先测试大小与时间预算拒绝，再用合法测试材料连接真实Provider并验证取消。A2A按任务ID订阅/取消，unknown先查副作用，不能自动重放。完整Provider方法见[AI参考](../../../packages/ai/REFERENCE.md)；本轮未为手册调用真实音视频/图片模型或跨进程A2A服务。
+音频/图片先测试大小与时间预算拒绝，再用合法测试材料连接真实 Provider 并验证取消。A2A 按任务 ID 订阅/取消，unknown 先查副作用，不能自动重放。完整 Provider 方法见[AI参考](../../../packages/ai/REFERENCE.md)。
 
 ## ACP 智能体与工程会话
 
