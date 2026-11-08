@@ -2,7 +2,7 @@ import type { ExecFileSyncOptions, SpawnOptions } from 'node:child_process'
 import { Buffer } from 'node:buffer'
 import { execFileSync } from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, truncateSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, truncateSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -29,6 +29,9 @@ const state = vi.hoisted(() => ({
   removedPaths: [] as string[],
   failDependencyPublish: '',
   failDependencyCleanup: '',
+  dependencyPublishFailures: 0,
+  dependencyCleanupFailures: 0,
+  dependencyLstatReplacements: 0,
   afterDependencyLstat: undefined as ((file: string) => void) | undefined,
 }))
 vi.mock('node:fs', async (importOriginal) => {
@@ -53,13 +56,17 @@ vi.mock('node:fs', async (importOriginal) => {
       return metadata
     },
     renameSync: (source: Parameters<typeof original.renameSync>[0], destination: Parameters<typeof original.renameSync>[1]) => {
-      if (String(destination) === state.failDependencyPublish)
+      if (String(destination) === state.failDependencyPublish) {
+        state.dependencyPublishFailures++
         throw Object.assign(new Error('Injected dependency publish failure'), { code: 'EACCES' })
+      }
       original.renameSync(source, destination)
     },
     unlinkSync: (file: Parameters<typeof original.unlinkSync>[0]) => {
-      if (String(file) === state.failDependencyCleanup)
+      if (String(file) === state.failDependencyCleanup) {
+        state.dependencyCleanupFailures++
         throw Object.assign(new Error('Injected dependency cleanup failure'), { code: 'EACCES' })
+      }
       original.unlinkSync(file)
     },
   }
@@ -146,6 +153,9 @@ beforeEach(() => {
   state.removedPaths = []
   state.failDependencyPublish = ''
   state.failDependencyCleanup = ''
+  state.dependencyPublishFailures = 0
+  state.dependencyCleanupFailures = 0
+  state.dependencyLstatReplacements = 0
   state.afterDependencyLstat = undefined
   vi.stubEnv('npm_execpath', '/tools/pnpm.cjs')
   // 本文件模拟构建器，不向真实引擎清理账本登记虚构镜像。
@@ -820,9 +830,10 @@ it('依赖输入保留真实本地归档并忽略缓存，未变时保留时间�
 })
 
 /** 另建真实 context，外部状态仍留在本轮拥有的根目录中供 finally 回收。 */
-function dependencyContext(): { context: string, destination: string } {
-  const context = join(root, 'context')
-  mkdirSync(context)
+function dependencyContext(contextRoot = root): { context: string, destination: string } {
+  const requestedContext = join(contextRoot, 'context')
+  mkdirSync(requestedContext)
+  const context = realpathSync.native(requestedContext)
   writeFileSync(join(context, 'package.json'), '{"name":"trusted-context"}')
   writeFileSync(join(root, 'hai.json'), JSON.stringify({
     build: {
@@ -898,7 +909,10 @@ it('依赖缓存安全：旧清单清理不穿过目录链接删除外部文件'
 })
 
 it('依赖缓存安全：tracking在检查后被硬链接替换时读取同一句柄并拒绝发布', async () => {
-  const { destination } = dependencyContext()
+  // Windows大小写别名可受控复现canonical路径与调用拼写不同，不依赖8.3配置。
+  const { destination } = dependencyContext(process.platform === 'win32'
+    ? root.toUpperCase()
+    : root)
   mkdirSync(destination, { recursive: true })
   const tracking = join(destination, '.managed.json')
   const outside = join(root, 'host-state.json')
@@ -908,21 +922,26 @@ it('依赖缓存安全：tracking在检查后被硬链接替换时读取同一�
     if (file !== tracking)
       return
     state.afterDependencyLstat = undefined
+    state.dependencyLstatReplacements++
     unlinkSync(tracking)
     linkSync(outside, tracking)
   }
   await expect(buildCommand({ cwd: root, target: 'image', images: 'serv' })).rejects.toThrow()
+  expect(state.dependencyLstatReplacements).toBe(1)
   expect(readFileSync(outside, 'utf8')).toBe('{"keep":true}')
 })
 
 it('依赖缓存安全：发布失败保留原文件并清理自有临时文件，之后可恢复构建', async () => {
-  const { context, destination } = dependencyContext()
+  const { context, destination } = dependencyContext(process.platform === 'win32'
+    ? root.toUpperCase()
+    : root)
   await buildCommand({ cwd: root, target: 'image', images: 'serv' })
   const cached = join(destination, 'package.json')
   const oldContent = readFileSync(cached, 'utf8')
   writeFileSync(join(context, 'package.json'), '{"name":"changed-context"}')
   state.failDependencyPublish = cached
   await expect(buildCommand({ cwd: root, target: 'image', images: 'serv' })).rejects.toThrow(/EACCES/)
+  expect(state.dependencyPublishFailures).toBe(1)
   expect(readFileSync(cached, 'utf8')).toBe(oldContent)
   expect(readdirSync(destination).sort()).toEqual(['.managed.json', 'package.json'])
   state.failDependencyPublish = ''
@@ -988,7 +1007,9 @@ it('依赖缓存安全：跨块归档首建、未变时间戳、内容变化与�
 })
 
 it('依赖缓存安全：旧文件删除失败有安全诊断，保留清单并允许下次恢复', async () => {
-  const { context, destination } = dependencyContext()
+  const { context, destination } = dependencyContext(process.platform === 'win32'
+    ? root.toUpperCase()
+    : root)
   const source = join(context, 'stale.tgz')
   writeFileSync(source, 'owned-cache-data')
   await buildCommand({ cwd: root, target: 'image', images: 'serv' })
@@ -996,6 +1017,7 @@ it('依赖缓存安全：旧文件删除失败有安全诊断，保留清单并�
   const cached = join(destination, 'stale.tgz')
   state.failDependencyCleanup = cached
   await expect(buildCommand({ cwd: root, target: 'image', images: 'serv' })).rejects.toThrow(/EACCES/)
+  expect(state.dependencyCleanupFailures).toBe(1)
   expect(readFileSync(cached, 'utf8')).toBe('owned-cache-data')
   expect(JSON.parse(readFileSync(join(destination, '.managed.json'), 'utf8'))).toContain('stale.tgz')
   state.failDependencyCleanup = ''
