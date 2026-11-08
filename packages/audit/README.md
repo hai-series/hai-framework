@@ -4,32 +4,13 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md) · [@h-ai/reldb](../reldb/README.md)
 
-## 简介
-
 统一审计日志模块，通过 `audit` 对象提供审计日志的记录、查询、清理与统计功能，基于 `@h-ai/reldb` 实现持久化。
 
-SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 `Date`，`details` 为 JSON 字符串或 `null`，缺失的可空字段返回 `null`。日期筛选与写入使用相同的驱动日期转换；统计数量为安全整数，超出范围返回 `STATS_FAILED`。
-
-## 核心功能清单
-
-- 记录用户操作与安全事件，支持按用户、时间和操作筛选。
-- 查询分页日志与操作统计，并按保留天数清理。
-- 使用关系数据库持久化，写入前隐藏凭证类字段。
-
-## 使用入门
+## 快速开始
 
 ### 依赖
 
 - `@h-ai/reldb` — 数据库（审计日志持久化），**需在 audit.init() 前初始化**
-
-### 适用场景
-
-- 用户操作审计（登录、登出、注册、密码重置等）
-- CRUD 操作审计（创建、读取、更新、删除资源）
-- 安全事件追踪与合规审计
-- 运营数据统计（操作频次、活跃用户等）
-
-### 快速开始
 
 ```ts
 import { audit } from '@h-ai/audit'
@@ -78,21 +59,75 @@ if (!closeResult.success) {
 }
 ```
 
-### 初始化配置
+## 功能
 
-```ts
-// 默认配置（无需传参）
-await audit.init()
+SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 `Date`，`details` 为 JSON 字符串或 `null`，缺失的可空字段返回 `null`。日期筛选与写入使用相同的驱动日期转换；统计数量为安全整数，超出范围返回 `STATS_FAILED`。
 
-// 自定义用户表映射
-await audit.init({
-  userTable: 'hai_iam_users', // 用户表名（默认 'hai_iam_users'）
-  userIdColumn: 'id', // 用户表主键列名（默认 'id'）
-  userNameColumn: 'username', // 用户表用户名列名（默认 'username'）
-})
-```
+### 功能输入输出
 
-审计日志固定存储在 `hai_audit_logs` 表中，依赖 `@h-ai/reldb` 已初始化。
+以下片段依赖本节完整初始化流程。示例中的业务值由宿主校验和授权后传入；异步领域结果先判断 success，再读取 data。表中 void 表示操作已完成且没有返回数据，null 表示不存在；同步工厂/工具直接返回表中类型。
+
+#### audit
+
+记录结构化事件。log 输入事件及可选 tx 返回已保存记录；capture 按读写策略返回 void；withContext 输入可信关联信息及回调，直接返回回调值并隔离上下文。
+
+| 入口                | 输入参数           | 成功结果   | 调用示例                                                    |
+| ------------------- | ------------------ | ---------- | ----------------------------------------------------------- |
+| `audit.log`         | input, tx          | `AuditLog` | `await audit.log(event)`                                    |
+| `audit.capture`     | input, options     | `void`     | `await audit.capture(event)`                                |
+| `audit.withContext` | context, operation | `T`        | `audit.withContext(trustedAuditContext, () => saveOrder())` |
+
+#### audit
+
+检索/保留：过滤分页返回带用户信息的页，用户 ID/limit 返回近期数组，days/filters 返回统计数组，cleanup 保留天数返回删除数。
+
+| 入口                  | 输入参数      | 成功结果                            | 调用示例                                      |
+| --------------------- | ------------- | ----------------------------------- | --------------------------------------------- |
+| `audit.list`          | options       | `PaginatedResult<AuditLogWithUser>` | `await audit.list({ page: 1, pageSize: 20 })` |
+| `audit.getUserRecent` | userId, limit | `AuditLog[]`                        | `await audit.getUserRecent(userId, 20)`       |
+| `audit.getStats`      | days, filters | `AuditStatItem[]`                   | `await audit.getStats(7)`                     |
+| `audit.cleanup`       | olderThanDays | `number`                            | `await audit.cleanup(90)`                     |
+
+#### audit.helper
+
+常见事件封装。用户 ID（重置请求为 email）及可选 IP/UA，或 CRUD 事件输入，返回 void HaiResult；敏感字段仍脱敏。
+
+| 入口                                 | 输入参数       | 成功结果 | 调用示例                                           |
+| ------------------------------------ | -------------- | -------- | -------------------------------------------------- |
+| `audit.helper.login`                 | userId, ip, ua | `void`   | `await audit.helper.login(userId)`                 |
+| `audit.helper.logout`                | userId, ip, ua | `void`   | `await audit.helper.logout(userId)`                |
+| `audit.helper.register`              | userId, ip, ua | `void`   | `await audit.helper.register(userId)`              |
+| `audit.helper.passwordResetRequest`  | email, ip, ua  | `void`   | `await audit.helper.passwordResetRequest(email)`   |
+| `audit.helper.passwordResetComplete` | userId, ip, ua | `void`   | `await audit.helper.passwordResetComplete(userId)` |
+| `audit.helper.crud`                  | input          | `void`   | `await audit.helper.crud(crudEvent)`               |
+
+#### audit.backup
+
+私有归档。run 接收筛选/期限/取消选项，verify 接收对象 key；返回归档信息并校验内容完整性，不公开对象。
+
+| 入口                  | 输入参数     | 成功结果          | 调用示例                                |
+| --------------------- | ------------ | ----------------- | --------------------------------------- |
+| `audit.backup.run`    | options      | `AuditBackupInfo` | `await audit.backup.run()`              |
+| `audit.backup.verify` | key, options | `AuditBackupInfo` | `await audit.backup.verify(archiveKey)` |
+
+#### audit
+
+定时检查异常，输入可选 signal，返回规则命中及通知结果；交由 scheduler 编排而非自行假设后台已启动。
+
+| 入口                | 输入参数 | 成功结果           | 调用示例                    |
+| ------------------- | -------- | ------------------ | --------------------------- |
+| `audit.checkAlerts` | options  | `AuditAlertReport` | `await audit.checkAlerts()` |
+
+- 记录用户操作与安全事件，支持按用户、时间和操作筛选。
+- 查询分页日志与操作统计，并按保留天数清理。
+- 使用关系数据库持久化，写入前隐藏凭证类字段。
+
+### 适用场景
+
+- 用户操作审计（登录、登出、注册、密码重置等）
+- CRUD 操作审计（创建、读取、更新、删除资源）
+- 安全事件追踪与合规审计
+- 运营数据统计（操作频次、活跃用户等）
 
 ### API 概览
 
@@ -116,31 +151,7 @@ await audit.init({
 - `audit.cleanup(days)`：`days`（如传入）必须为非负整数。
 - `audit.getStats(days)`：`days`（如传入）必须为非负整数。
 
-### 错误码
-
-业务数据操作返回 `HaiResult<T>`，常用错误码如下：
-
-| 错误码                           | code            | 说明                   |
-| -------------------------------- | --------------- | ---------------------- |
-| `HaiAuditError.LOG_FAILED`       | `hai:audit:001` | 记录失败               |
-| `HaiAuditError.QUERY_FAILED`     | `hai:audit:002` | 查询失败               |
-| `HaiAuditError.CLEANUP_FAILED`   | `hai:audit:003` | 清理失败               |
-| `HaiAuditError.STATS_FAILED`     | `hai:audit:004` | 统计失败               |
-| `HaiAuditError.INIT_IN_PROGRESS` | `hai:audit:005` | 初始化进行中           |
-| `HaiAuditError.NOT_INITIALIZED`  | `hai:audit:010` | 模块未初始化           |
-| `HaiAuditError.CONFIG_ERROR`     | `hai:audit:012` | 配置错误               |
-| `HaiAuditError.BACKUP_DISABLED`  | `hai:audit:020` | 备份未启用             |
-| `HaiAuditError.BACKUP_FAILED`    | `hai:audit:021` | 备份或校验失败         |
-| `HaiAuditError.BACKUP_INVALID`   | `hai:audit:022` | 备份输入无效           |
-| `HaiAuditError.BACKUP_CONFLICT`  | `hai:audit:023` | 备份编号与导出条件冲突 |
-| `HaiAuditError.ALERTS_DISABLED`  | `hai:audit:024` | 告警未启用             |
-| `HaiAuditError.ALERTS_FAILED`    | `hai:audit:025` | 告警检查或通知失败     |
-
-> 说明：`audit.close()` 也返回 `HaiResult<void>`；`audit.helper.passwordResetRequest()` 的邮箱详情默认经过业务隐私脱敏。
-
-`audit.init()` 会等待自动建表和仓库就绪才返回成功；DDL 失败保持 `isInitialized=false`，修正数据库后可重试。自定义 JOIN、统计和清理也使用同一就绪屏障；初始化期间关闭会使迟到结果失效。先检查 init 的 HaiResult，再立即记录或查询；audit 不拥有共享 RelDB 的连接，关闭 audit 后再关闭数据库。
-
-## 事件上下文、隐私与保留
+### 事件上下文、隐私与保留
 
 审计 createdAt、告警窗口与归档截止共用数据库时钟，不以各节点系统钟作为共享真值。备份与告警调度任务使用已验证的持久去重保障声明幂等；失败不会被错误地当作非幂等未知任务而阻塞后续调度。
 
@@ -158,7 +169,7 @@ await audit.init({
 
 脱敏匹配整个字段：对象、数组以及自定义 JSON 投影内的敏感值同样隐藏。关闭或尚未初始化 Audit 时，capture 返回未初始化失败；只有已初始化模块的关闭采集配置才跳过自动事件。
 
-## 私有备份与定时归档
+### 私有备份与定时归档
 
 `backup.enabled` 默认关闭。开启时向 `audit.init({ storage, backup: { enabled: true } })` 注入已经初始化的 `StorageFunctions`；数据库仍先初始化。`backup.batchSize` 控制扫描批量（默认200），`maxRecordBytes` 限制单条 UTF-8 记录（默认1 MiB），超限返回失败并保留原始审计，不截断证据。
 
@@ -185,7 +196,7 @@ if (plan) {
 
 上例由宿主导入 `audit`、`scheduler` 并提供已校验的 schedulerSettings，Audit/Storage/RelDB 已初始化。归档使用私有存储，开启备份时拒绝配置了公开 publicUrl 的 S3；部署仍须限制桶/CDN访问。公开静态文件入口应仅开放指定资源；管理示例与 fullstack 仅公开规范头像路径，如提供归档下载，须通过审计授权接口处理，关闭备份也不改变已有文件的私有边界。
 
-## 分级异常告警
+### 分级异常告警
 
 `alerts.enabled` 默认关闭。开启时注入已初始化的 Reach：`audit.init({ reach, alerts: { enabled: true, rules: [...] } })`。规则通过稳定 id、actions（精确事件名）、可选 resource、outcomes、minimumSeverity 筛选事件，threshold/windowSeconds 指定固定窗口阈值，severity 指定通知等级，targets 中的 id/provider/to 指定人员或目标。默认窗口300秒，范围60–86400秒；默认仅失败/拒绝，空 outcomes 表示所有结果。规则和目标 id 必须各自唯一；provider 须已在 Reach 注册。不将具体业务角色写入框架。
 
@@ -195,13 +206,61 @@ if (plan) {
 
 `alerts.schedule` 可独立启用，默认每分钟、UTC。`audit.schedulerPlan` 合并已启用的备份和告警任务，由宿主显式交给 Scheduler；计划没有自动任务时为 null。调度回调在检查失败或 failed>0 时准确失败。先关闭 Scheduler，再关闭 Audit 和 Reach；关闭 Audit 取消后续领取并等待在途通知完成（受 Reach Provider 超时约束），不关闭宿主 Reach。数据库查询/审计失败返回失败；通知业务失败在成功检查报告的 failed 字段体现，调用方必须检查。
 
+## 配置
+
+生命周期：init 输入后端/业务配置，成功后才能使用；close 在释放借用依赖前等待完成。返回值以快速开始示例和公开签名为准。
+
+```ts
+// 默认配置（无需传参）
+await audit.init()
+
+// 自定义用户表映射
+await audit.init({
+  userTable: 'hai_iam_users', // 用户表名（默认 'hai_iam_users'）
+  userIdColumn: 'id', // 用户表主键列名（默认 'id'）
+  userNameColumn: 'username', // 用户表用户名列名（默认 'username'）
+})
+```
+
+审计日志固定存储在 `hai_audit_logs` 表中，依赖 `@h-ai/reldb` 已初始化。
+
+配置由宿主加载和校验，再传入本模块；私密值放服务端私有环境，不传到浏览器。按实际使用场景逐项选择后端、容量、期限和日志策略，修改后重新初始化并核验成功结果。
+
+[逐项配置说明、适用场景和示例](../../docs/usage/configuration/operations.md).
+
+## 错误处理
+
+领域操作先判断 `result.success`，失败按本模块错误定义与安全提示处理，服务端保留错误码、关联编号和脱敏原因。同步工具、工厂、流迭代及生命周期按各自签名处理，不把 Promise 完成视为业务成功。具体失败与恢复边界见对应功能。
+
+业务数据操作返回 `HaiResult<T>`，常用错误码如下：
+
+| 错误码                           | code            | 说明                   |
+| -------------------------------- | --------------- | ---------------------- |
+| `HaiAuditError.LOG_FAILED`       | `hai:audit:001` | 记录失败               |
+| `HaiAuditError.QUERY_FAILED`     | `hai:audit:002` | 查询失败               |
+| `HaiAuditError.CLEANUP_FAILED`   | `hai:audit:003` | 清理失败               |
+| `HaiAuditError.STATS_FAILED`     | `hai:audit:004` | 统计失败               |
+| `HaiAuditError.INIT_IN_PROGRESS` | `hai:audit:005` | 初始化进行中           |
+| `HaiAuditError.NOT_INITIALIZED`  | `hai:audit:010` | 模块未初始化           |
+| `HaiAuditError.CONFIG_ERROR`     | `hai:audit:012` | 配置错误               |
+| `HaiAuditError.BACKUP_DISABLED`  | `hai:audit:020` | 备份未启用             |
+| `HaiAuditError.BACKUP_FAILED`    | `hai:audit:021` | 备份或校验失败         |
+| `HaiAuditError.BACKUP_INVALID`   | `hai:audit:022` | 备份输入无效           |
+| `HaiAuditError.BACKUP_CONFLICT`  | `hai:audit:023` | 备份编号与导出条件冲突 |
+| `HaiAuditError.ALERTS_DISABLED`  | `hai:audit:024` | 告警未启用             |
+| `HaiAuditError.ALERTS_FAILED`    | `hai:audit:025` | 告警检查或通知失败     |
+
+> 说明：`audit.close()` 也返回 `HaiResult<void>`；`audit.helper.passwordResetRequest()` 的邮箱详情默认经过业务隐私脱敏。
+
+`audit.init()` 会等待自动建表和仓库就绪才返回成功；DDL 失败保持 `isInitialized=false`，修正数据库后可重试。自定义 JOIN、统计和清理也使用同一就绪屏障；初始化期间关闭会使迟到结果失效。先检查 init 的 HaiResult，再立即记录或查询；audit 不拥有共享 RelDB 的连接，关闭 audit 后再关闭数据库。
+
 ## 开发测试
 
 ```bash
 pnpm --filter @h-ai/audit test
 ```
 
-审计源码示例明确先初始化 RelDB、检查审计写入结果，再按依赖反序检查关闭结果；参见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)。
+审计源码示例明确先初始化 RelDB、检查审计写入结果，再按依赖反序检查关闭结果；参见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证).
 
 ## 许可证
 

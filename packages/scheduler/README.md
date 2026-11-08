@@ -4,23 +4,13 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md) · [@h-ai/reldb](../reldb/README.md)
 
-## 简介
-
 定时任务调度模块，支持统一任务模型、cron 调度、JS 函数字符串 / HTTP API 执行、任务持久化、执行日志查询，以及全局任务生命周期回调。
 
-## 核心功能清单
-
-- 按 cron 定时执行，也可从业务代码手动触发。
-- 支持 HTTP、受信任的 JavaScript 和应用 Hook，提供重试与取消。
-- 共享数据库持久化任务、执行状态与可续期租约，支持未知结果隔离。
-
-## 使用入门
+## 快速开始
 
 ### 依赖
 
 - `@h-ai/reldb` — 必须先初始化共享数据库，保存任务、执行 journal 与自动续租；`enableDb` 只能为 true。
-
-### 快速开始
 
 ```ts
 import { reldb } from '@h-ai/reldb'
@@ -78,6 +68,59 @@ const logs = await scheduler.getLogs({
 scheduler.stop()
 await scheduler.close()
 ```
+
+## 功能
+
+- 按 cron 定时执行，也可从业务代码手动触发。
+- 支持 HTTP、受信任的 JavaScript 和应用 Hook，提供重试与取消。
+- 共享数据库持久化任务、执行状态与可续期租约，支持未知结果隔离。
+
+### 功能输入输出
+
+以下片段依赖本节完整初始化流程。示例中的业务值由宿主校验和授权后传入；异步领域结果先判断 success，再读取 data。表中 void 表示操作已完成且没有返回数据，null 表示不存在；同步工厂/工具直接返回表中类型。
+
+#### scheduler
+
+任务定义管理：完整任务、ID、ID+补丁或无参数刷新，分别返回 void HaiResult。tasks 是最近成功只读快照，不是权限或实时数据库依据。
+
+| 入口                     | 输入参数        | 成功结果 | 调用示例                                                                                       |
+| ------------------------ | --------------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `scheduler.register`     | task            | `void`   | `await scheduler.register({ id: 'daily', name: 'Daily', cron: '0 2 * * *', timezone: 'UTC' })` |
+| `scheduler.unregister`   | taskId          | `void`   | `await scheduler.unregister('daily')`                                                          |
+| `scheduler.updateTask`   | taskId, updates | `void`   | `await scheduler.updateTask('daily', { enabled: false })`                                      |
+| `scheduler.refreshTasks` | 无参数          | `void`   | `await scheduler.refreshTasks()`                                                               |
+
+#### scheduler
+
+start/stop 无参数返回同步 HaiResult；trigger 输入任务 ID/参数返回一次执行日志；getLogs 输入过滤/分页返回日志页。stop 不代表在途副作用已撤销。
+
+| 入口                | 输入参数        | 成功结果                            | 调用示例                                             |
+| ------------------- | --------------- | ----------------------------------- | ---------------------------------------------------- |
+| `scheduler.start`   | 无参数          | `void`                              | `scheduler.start()`                                  |
+| `scheduler.stop`    | 无参数          | `void`                              | `scheduler.stop()`                                   |
+| `scheduler.trigger` | taskId, options | `TaskExecutionLog`                  | `await scheduler.trigger('daily')`                   |
+| `scheduler.getLogs` | options         | `PaginatedResult<TaskExecutionLog>` | `await scheduler.getLogs({ page: 1, pageSize: 20 })` |
+
+#### scheduler
+
+接入业务执行/事件，输入回调集合或无参清除，返回同步 HaiResult。Hook 必须响应 signal 并保证外部效果幂等。
+
+| 入口                   | 输入参数 | 成功结果 | 调用示例                        |
+| ---------------------- | -------- | -------- | ------------------------------- |
+| `scheduler.setHooks`   | hooks    | `void`   | `scheduler.setHooks(taskHooks)` |
+| `scheduler.clearHooks` | 无参数   | `void`   | `scheduler.clearHooks()`        |
+
+#### scheduler.execution
+
+权威执行账本。get 输入 occurrenceId 返回项/null；两种 list 输入 limit/offset 返回数组；repairLog 输入 ID 幂等补日志；resolveUnknown 输入 ID、人工终态及 expectedUpdatedAt 条件释放槽位，返回 void。
+
+| 入口                                  | 输入参数                 | 成功结果                          | 调用示例                                                                                           |
+| ------------------------------------- | ------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `scheduler.execution.get`             | occurrenceId             | `SchedulerExecutionEntry \| null` | `await scheduler.execution.get(occurrenceId)`                                                      |
+| `scheduler.execution.listUnknown`     | options                  | `SchedulerExecutionEntry[]`       | `await scheduler.execution.listUnknown({ limit: 20, offset: 0 })`                                  |
+| `scheduler.execution.listLogFailures` | options                  | `SchedulerExecutionEntry[]`       | `await scheduler.execution.listLogFailures({ limit: 20, offset: 0 })`                              |
+| `scheduler.execution.repairLog`       | occurrenceId             | `void`                            | `await scheduler.execution.repairLog(occurrenceId)`                                                |
+| `scheduler.execution.resolveUnknown`  | occurrenceId, resolution | `void`                            | `await scheduler.execution.resolveUnknown(occurrenceId, { status: 'success', expectedUpdatedAt })` |
 
 ### 统一任务模型
 
@@ -184,30 +227,6 @@ const logs = await scheduler.getLogs({
 - `tasks` / `hooks` / `config` / `isInitialized` / `isRunning`
 - `close()`
 
-### 错误处理
-
-所有公共 API（除 `close()`）返回 `HaiResult<T>`。
-
-常用错误码：
-
-| 错误码                                    | code                | 说明             |
-| ----------------------------------------- | ------------------- | ---------------- |
-| `HaiSchedulerError.NOT_INITIALIZED`       | `hai:scheduler:010` | 未初始化         |
-| `HaiSchedulerError.INIT_FAILED`           | `hai:scheduler:011` | 初始化失败       |
-| `HaiSchedulerError.CONFIG_ERROR`          | `hai:scheduler:012` | 配置错误         |
-| `HaiSchedulerError.TASK_NOT_FOUND`        | `hai:scheduler:020` | 任务不存在       |
-| `HaiSchedulerError.TASK_ALREADY_EXISTS`   | `hai:scheduler:021` | 任务已存在       |
-| `HaiSchedulerError.INVALID_CRON`          | `hai:scheduler:022` | Cron 表达式无效  |
-| `HaiSchedulerError.EXECUTION_FAILED`      | `hai:scheduler:023` | 执行失败         |
-| `HaiSchedulerError.JS_EXECUTION_FAILED`   | `hai:scheduler:024` | JS 执行失败      |
-| `HaiSchedulerError.API_EXECUTION_FAILED`  | `hai:scheduler:025` | API 执行失败     |
-| `HaiSchedulerError.DB_SAVE_FAILED`        | `hai:scheduler:026` | DB 保存失败      |
-| `HaiSchedulerError.ALREADY_RUNNING`       | `hai:scheduler:027` | 已在运行         |
-| `HaiSchedulerError.NOT_RUNNING`           | `hai:scheduler:028` | 未在运行         |
-| `HaiSchedulerError.JS_COMPILE_FAILED`     | `hai:scheduler:030` | JS 编译失败      |
-| `HaiSchedulerError.HOOK_EXECUTION_FAILED` | `hai:scheduler:031` | Hook 执行失败    |
-| `HaiSchedulerError.LOG_PERSIST_FAILED`    | `hai:scheduler:032` | 日志持久化未确认 |
-
 ### 运行行为与边界
 
 所有节点必须先初始化同一共享 RelDB（跨主机生产使用 PostgreSQL/MySQL；SQLite 文件只适合可正确共享同一文件的本机进程）。数据库保存任务、执行 journal、全局任务占位和租约，`enableDb` 只能为 true；不再依赖缓存。`leaseMs` 默认 300000，范围 1000～86400000 毫秒，执行中自动续期。cron、手动和跨周期执行均争用同一任务槽，过期 owner 不能续活或提交。节点每个 `tickInterval` 刷新定义，`tasks` 只是最近成功快照；定义读取失败、删除、禁用、改期均中断旧尝试，已发生副作用不会回滚。
@@ -226,7 +245,7 @@ const logs = await scheduler.getLogs({
 
 可信服务端用 `execution.listLogFailures({ limit, offset })` 监控 pending（范围与 listUnknown 相同），用 `execution.repairLog(occurrenceId)` 从共享 journal 幂等补写；可跨节点、重启及并发调用。写入已提交但回执丢失时通过固定主键和完整内容核对去重。补写返回 `LOG_PERSIST_FAILED`（032）时继续保留 pending，并输出安全告警；全部数据库不可用且终态未提交时仍按 unknown 核对外部效果，不能假定存在可恢复结果。补写与日志保留均不调用业务 Hook。保留策略失败仅告警，不撤销已保存日志。`onTaskFinish` 是本地业务完成通知，其 unconfirmed 状态不是持久化确认；以 trigger 返回值及 execution.get 的 logPersistence 为准。
 
-领取前竞争/跳过的 interrupted 仅为观测日志，没有可补写的终态；其写入未确认时返回 unconfirmed。JSON 大载荷保存完整结果和全部重试记录，避免 MySQL 的 255 字符截断；支持的旧日志由模块版本迁移归档并复制；执行账本保持独立。关闭会等待在途补写，先关闭 scheduler 再关闭数据库。
+领取前竞争/跳过的 interrupted 仅为观测日志，没有可补写的终态；其写入未确认时返回 unconfirmed。JSON 大载荷保存完整结果和全部重试记录，避免 MySQL 的 255 字符截断；执行账本保持独立。关闭会等待在途补写，先关闭 scheduler 再关闭数据库。
 
 ```ts
 const result = await scheduler.trigger('cleanup', { idempotencyKey: 'cleanup-2026-10-23' })
@@ -256,11 +275,45 @@ API 任务的 `timeout`（默认 30000 毫秒）覆盖请求和完整响应体�
 
 调度任务触发 Reach 通知时，调度锁或任务完成不等于外部消息只投递一次。按 [Reach 队列语义](../reach/README.md) 使用持久 queueId；HTTP 接收端须原子持久去重，SMTP/短信等在途未知结果须人工核对，不能由调度重试直接重发。
 
-## 旧库升级
+### 定义一致性与持久化准备
 
 任务定义的刷新、注册、更新和删除在同一进程内按接收顺序协调，包含写操作所需的刷新与提交。合法并发注册不会仅因快照交错而失败；真实数据库故障仍返回失败。close 先停止入口和 runner，取消只读等待和尚未开始写入的操作，再等待已开始的持久写入；迟到快照不发布，避免关闭后旧操作重新填充任务表。执行回调不占用这条队列；跨节点仍依靠共享数据库、版本与租约，不把进程内协调当分布式锁。
 
-RelDB 初始化后调用 `migrateScheduler({ dryRun: true })` 查看变化，scheduler.init 在创建仓库前执行支持的版本迁移。旧任务保留，补 idempotent=false；旧日志表归档为 hai_scheduler_logs_alpha65，按稳定 legacy:<id> 幂等复制完整快照，超过一批和中断重试不重复历史，也不执行旧任务。SQLite/PostgreSQL 事务回滚；MySQL 按真实结构继续，需保持旧写入停止。升级前备份，回退恢复匹配数据库与代码，执行账本与旧历史不混为同一发生记录。
+RelDB 初始化后可调用 `migrateScheduler({ dryRun: true })` 预检持久化结构；scheduler.init 在创建仓储前执行支持的结构准备。应用负责备份与独占变更窗口，结构准备失败时停止启动，不把执行账本与观测日志混为一体。
+
+## 配置
+
+生命周期：init 输入后端/业务配置，成功后才能使用；close 在释放借用依赖前等待完成。返回值以快速开始示例和公开签名为准。
+
+配置由宿主加载和校验，再传入本模块；私密值放服务端私有环境，不传到浏览器。按实际使用场景逐项选择后端、容量、期限和日志策略，修改后重新初始化并核验成功结果。
+
+[逐项配置说明、适用场景和示例](../../docs/usage/configuration/operations.md).
+
+## 错误处理
+
+领域操作先判断 `result.success`，失败按本模块错误定义与安全提示处理，服务端保留错误码、关联编号和脱敏原因。同步工具、工厂、流迭代及生命周期按各自签名处理，不把 Promise 完成视为业务成功。具体失败与恢复边界见对应功能。
+
+所有公共 API（除 `close()`）返回 `HaiResult<T>`。
+
+常用错误码：
+
+| 错误码                                    | code                | 说明             |
+| ----------------------------------------- | ------------------- | ---------------- |
+| `HaiSchedulerError.NOT_INITIALIZED`       | `hai:scheduler:010` | 未初始化         |
+| `HaiSchedulerError.INIT_FAILED`           | `hai:scheduler:011` | 初始化失败       |
+| `HaiSchedulerError.CONFIG_ERROR`          | `hai:scheduler:012` | 配置错误         |
+| `HaiSchedulerError.TASK_NOT_FOUND`        | `hai:scheduler:020` | 任务不存在       |
+| `HaiSchedulerError.TASK_ALREADY_EXISTS`   | `hai:scheduler:021` | 任务已存在       |
+| `HaiSchedulerError.INVALID_CRON`          | `hai:scheduler:022` | Cron 表达式无效  |
+| `HaiSchedulerError.EXECUTION_FAILED`      | `hai:scheduler:023` | 执行失败         |
+| `HaiSchedulerError.JS_EXECUTION_FAILED`   | `hai:scheduler:024` | JS 执行失败      |
+| `HaiSchedulerError.API_EXECUTION_FAILED`  | `hai:scheduler:025` | API 执行失败     |
+| `HaiSchedulerError.DB_SAVE_FAILED`        | `hai:scheduler:026` | DB 保存失败      |
+| `HaiSchedulerError.ALREADY_RUNNING`       | `hai:scheduler:027` | 已在运行         |
+| `HaiSchedulerError.NOT_RUNNING`           | `hai:scheduler:028` | 未在运行         |
+| `HaiSchedulerError.JS_COMPILE_FAILED`     | `hai:scheduler:030` | JS 编译失败      |
+| `HaiSchedulerError.HOOK_EXECUTION_FAILED` | `hai:scheduler:031` | Hook 执行失败    |
+| `HaiSchedulerError.LOG_PERSIST_FAILED`    | `hai:scheduler:032` | 日志持久化未确认 |
 
 ## 开发测试
 

@@ -4,19 +4,9 @@
 
 [フレームワーク](../../README.ja.md)
 
-## 概要
-
 ユーザーの問題報告と診断情報の収集、管理者への通知、一覧処理、オフライン問題パッケージの出力を提供します。説明は任意です。報告と構造化された証拠は関係データベースに、スクリーンショットなどは非公開オブジェクトストレージに保存します。別の telemetry サービスは不要です。
 
-## 主な機能
-
-- ブラウザーとサーバーのログ、リクエスト、操作、バージョン、許可された環境情報を上限付きで収集します。既定ではエラーの前後それぞれ最大100件です。
-- トランザクションによる受理、提出と証拠の冪等性、checksum 検証、処理・収集・通知状態の分離、永続ジョブとリース回復。
-- `notificationMode` は独立して選択できます。`disabled` は通知ジョブなし、`console` は本番でも既定でメタデータだけを出力し Reach/メール不要（consoleContent: summary で一般的なマスキング済み概要を明示）、`reach` は任意の Provider と宛先を使い、このモードのみ recipients が必要です。既定の `reach` は既存設定を維持し、生成プロジェクトは `console` を明示します。Reach DND 中は feedback 自身の outbox で待機し、二重の遅延キューや他通知の方針変更を行いません。本番 Reach Console の制限は維持します。sent はチャネル受付であり受信完了を意味しません。
-- スクリーンショット、復元不能なマスク、注釈、任意の rrweb 記録、再試行とローカル出力。UI は `FeedbackModal`、`FeedbackList`、`FeedbackDetail` を提供します。
-- 自己完結 ZIP、SHA-256 検証、オフライン表示、証拠のページ検索。運用認証情報は含めません。
-
-## はじめに
+## クイックスタート
 
 ブラウザーとサーバーには各実成果物の `appVersion/buildId/commit` を渡します。フロント側は自分の識別情報を保持し、同じ SSR ビルドの client/server 出力は buildId を共有します。管理画面と base/API/fullstack テンプレートにはコンパイル時の識別情報を組み込んでいます。`hai build` は内部で識別情報を生成し、Docker のビルド引数にも渡します。バージョンは各対象の package.json から取得し、所属する Git コミットがない場合は `unknown` を記録します。テンプレートの `build-metadata.json` には同じ三つの非機密項目のみを保存します。
 
@@ -79,6 +69,61 @@ return submitted
 受理後、SDK は添付ファイルと後続の証拠をバックグラウンド送信します。通信障害、5xx、408、429 は 1、2、4、8、16 秒後に再試行し、連続六回の失敗で停止します。それ以外の 4xx は直ちに停止します。下書きと添付ファイルを保持するため、接続や認証を復旧してから `flush()` または再度の準備操作で再試行できます。未送信の下書きと収集完了後はバックグラウンド送信しません。`close({ discard: true })` は開始済みの要求を待ち、旧下書きの後続要求を開始しません。終了を待ってから次のユーザーを初期化してください。
 
 自動撮影は html2canvas で機密部分を隠したクローン DOM を描画します。クロスオリジン画像、iframe/video、未準備のネットワークフォントは欠落する場合があります。ブラウザーや CSP 制限による失敗は missing として記録され、画像の手動添付も利用できます。
+
+## 機能
+
+- ブラウザーとサーバーのログ、リクエスト、操作、バージョン、許可された環境情報を上限付きで収集します。既定ではエラーの前後それぞれ最大100件です。
+- トランザクションによる受理、提出と証拠の冪等性、checksum 検証、処理・収集・通知状態の分離、永続ジョブとリース回復。
+- `notificationMode` は独立して選択できます。`disabled` は通知ジョブなし、`console` は本番でも既定でメタデータだけを出力し Reach/メール不要（consoleContent: summary で一般的なマスキング済み概要を明示）、`reach` は任意の Provider と宛先を使い、このモードのみ recipients が必要です。既定は `reach`、生成プロジェクトは `console` を明示します。Reach DND 中は feedback 自身の outbox で待機し、二重の遅延キューや他通知の方針変更を行いません。本番 Reach Console の制限は維持します。sent はチャネル受付であり受信完了を意味しません。
+- スクリーンショット、復元不能なマスク、注釈、任意の rrweb 記録、再試行とローカル出力。UI は `FeedbackModal`、`FeedbackList`、`FeedbackDetail` を提供します。
+- 自己完結 ZIP、SHA-256 検証、オフライン表示、証拠のページ検索。運用認証情報は含めません。
+
+### 操作と入出力
+
+本節の完全な初期化手順を先に実行します。例の業務値はホストが検証・認可し、非同期領域結果は success を確認してから data を読みます。void はデータなし完了、null は不存在、同期ファクトリー/ツールは表の型を直接返します。
+
+input.id は報告 ID、attachmentId/jobId は同じ報告に所属。context は信頼する認証の主体/範囲/権限。証拠・提出・base64 にも容量/所有権検査が適用。
+
+#### feedback
+
+受付と権限付き照会。入力と信頼する context から報告、list は条件/ページから一覧、get は ID から詳細、getEvidence は ID/条件から証拠ページ。
+
+| 入口                   | 入力引数       | 成功結果                   | 呼出し例                                                                       |
+| ---------------------- | -------------- | -------------------------- | ------------------------------------------------------------------------------ |
+| `feedback.submit`      | input, context | `報告`                     | `await feedback.submit(submission, context)`                                   |
+| `feedback.list`        | input, context | `報告ページ`               | `await feedback.list({ page: 1, pageSize: 20 }, context)`                      |
+| `feedback.get`         | id, context    | `報告・添付・履歴・ジョブ` | `await feedback.get(reportId, context)`                                        |
+| `feedback.getEvidence` | input, context | `証拠ページ`               | `await feedback.getEvidence({ id: reportId, page: 1, pageSize: 20 }, context)` |
+
+#### feedback
+
+管理処理は ID・状態/expectedVersion または retry target と信頼する context から報告/void。先に認可し、競合時は版を再取得。
+
+| 入口                 | 入力引数       | 成功結果   | 呼出し例                                                                                           |
+| -------------------- | -------------- | ---------- | -------------------------------------------------------------------------------------------------- |
+| `feedback.setStatus` | input, context | `更新報告` | `await feedback.setStatus({ id: reportId, status: 'handled', expectedVersion: version }, context)` |
+| `feedback.retry`     | input, context | `void`     | `await feedback.retry({ id: reportId, target: 'collect' }, context)`                               |
+
+#### feedback
+
+追加収集は報告 ID と証拠・missing・添付 ID/base64 を入力し、確認 ID/改訂・報告・メタデータ・base64 を返す。信頼する context と容量/所有権制限が必須。
+
+| 入口                          | 入力引数       | 成功結果                 | 呼出し例                                                                               |
+| ----------------------------- | -------------- | ------------------------ | -------------------------------------------------------------------------------------- |
+| `feedback.appendEvidence`     | input, context | `確認 ID 配列と証拠改訂` | `await feedback.appendEvidence({ id: reportId, evidence }, context)`                   |
+| `feedback.completeCollection` | input, context | `報告`                   | `await feedback.completeCollection({ id: reportId }, context)`                         |
+| `feedback.uploadAttachment`   | input, context | `添付メタデータ`         | `await feedback.uploadAttachment({ id: reportId, attachmentId, dataBase64 }, context)` |
+| `feedback.getAttachment`      | input, context | `名前・種類・base64`     | `await feedback.getAttachment({ id: reportId, attachmentId }, context)`                |
+
+#### feedback
+
+export は報告 ID/改訂からジョブ、getExport は報告/ジョブ ID から ZIP/base64。生成中だけ有限ポーリング。runJobs は期限到来分を処理し processed 件数。
+
+| 入口                 | 入力引数       | 成功結果                   | 呼出し例                                                     |
+| -------------------- | -------------- | -------------------------- | ------------------------------------------------------------ |
+| `feedback.export`    | input, context | `出力ジョブ`               | `await feedback.export({ id: reportId }, context)`           |
+| `feedback.getExport` | input, context | `ZIP の名前・種類・base64` | `await feedback.getExport({ id: reportId, jobId }, context)` |
+| `feedback.runJobs`   | 引数なし       | `processed 件数`           | `await feedback.runJobs()`                                   |
 
 ### フィードバック収集と配布確認
 
@@ -186,9 +231,21 @@ hai feedback view feedback-FB-1.zip
 
 ### console 通知のプライバシー境界
 
-`consoleContent` の既定は `metadata` で、報告番号、アプリ・バージョン・ビルド情報と収集状態だけを記録します。説明・概要・添付・証拠・通知本文・宛先は含みません。一般的なマスキング済み概要が必要な場合のみ `summary` を明示します。一般的なマスキングでは全業務機密を検出できません。Reach は不要で disabled/reach の意味は変わりません。更新後の既存 console 設定も既定でメタデータだけになります。
+`consoleContent` の既定は `metadata` で、報告番号、アプリ・バージョン・ビルド情報と収集状態だけを記録します。説明・概要・添付・証拠・通知本文・宛先は含みません。一般的なマスキング済み概要が必要な場合のみ `summary` を明示します。一般的なマスキングでは全業務機密を検出できません。Reach は不要で disabled/reach の意味は変わりません。
 
 サーバー環境証拠は受付トランザクションで同時に保存します。環境保存失敗時は不完全な受付を残さず、同じ submissionId で再試行できます。管理画面は `createFeedbackReview(...).retryReport(id)` を使い、復旧可能な収集と通知/Webhook失敗を再試行します。対象を重複排除し失敗を伝播し、close後は後続処理を止めます。
+
+## 設定
+
+ライフサイクル。init にバックエンド/業務設定を渡し成功後に使用します。借用依存先の解放前に close の完了を待ち、正確な戻り値は例と公開署名に従います。
+
+設定はホストが読込・検証してから渡します。秘密はサーバーの非公開環境に保存し、利用場面に応じてバックエンド・容量・期限・ログを選びます。変更後は再初期化の結果を確認してください。
+
+[項目別の用途・適用場面・例](../../docs/usage/configuration/operations.md).
+
+## エラー処理
+
+領域操作は result.success を確認し、失敗時はモジュールのエラー定義と安全な説明を使います。コード・関連 ID・秘匿した原因をサーバーログに残します。同期ツール・ファクトリー・ストリーム反復・ライフサイクルは各署名に従い、Promise 完了だけで成功と判断しません。回復条件は各機能を参照してください。
 
 ## 開発とテスト
 

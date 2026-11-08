@@ -4,34 +4,11 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md)
 
-## 概要
-
 共通の `storage` 入口で S3 互換ストレージとローカルファイルシステムを操作するオブジェクトストレージモジュールです。
 
-接続はヘルスチェック成功後に公開します。初期化失敗時は候補リソースを解放し、解放にも失敗した場合は初期化エラーの `error.ext.cleanupPending` が `true` になります。`storage.close()` は `Promise<HaiResult<void>>` を返し、初期化を待機して並行する終了処理をまとめます。解放開始後は `isInitialized` が `false` となり、設定と操作は利用できません。解放に失敗したリソースは保持され、次の `close()` または `init()` で再試行します。解放が成功するまで代替接続は作成しません。終了結果を必ず確認してください。
+## クイックスタート
 
-```ts
-const closed = await storage.close()
-if (!closed.success) {
-  // 障害への対処後に一度再試行し、再失敗はアプリへ報告します。
-  const retried = await storage.close()
-  if (!retried.success)
-    throw new Error(retried.error.message)
-}
-```
-
-S3 の通常クライアントと、リクエスト再試行を無効化した一括削除クライアントは個別に解放します。一方の失敗でも他方は解放し、解放済みクライアントは再度破棄しません。
-
-## 主な機能
-
-- S3 プロトコル（AWS S3 / MinIO / RustFS / OSS など）
-- ローカルファイルシステム
-
-## 使い始める
-
-### クイックスタート
-
-#### Node.js サーバー
+### Node.js サーバー
 
 ```ts
 import { storage } from '@h-ai/storage'
@@ -83,6 +60,72 @@ await uploadWithPresignedUrl(signed.data.url, file)
 
 > 注：`@h-ai/storage` に HTTP ルートは組み込まれていません。署名付き URL API はアプリケーション層で実装してください。
 
+## 機能
+
+接続はヘルスチェック成功後に公開します。初期化失敗時は候補リソースを解放し、解放にも失敗した場合は初期化エラーの `error.ext.cleanupPending` が `true` になります。`storage.close()` は `Promise<HaiResult<void>>` を返し、初期化を待機して並行する終了処理をまとめます。解放開始後は `isInitialized` が `false` となり、設定と操作は利用できません。解放に失敗したリソースは保持され、次の `close()` または `init()` で再試行します。解放が成功するまで代替接続は作成しません。終了結果を必ず確認してください。
+
+```ts
+const closed = await storage.close()
+if (!closed.success) {
+  // 障害への対処後に一度再試行し、再失敗はアプリへ報告します。
+  const retried = await storage.close()
+  if (!retried.success)
+    throw new Error(retried.error.message)
+}
+```
+
+S3 の通常クライアントと、リクエスト再試行を無効化した一括削除クライアントは個別に解放します。一方の失敗でも他方は解放し、解放済みクライアントは再度破棄しません。
+
+### 操作と入出力
+
+本節の完全な初期化手順を先に実行します。例の業務値はホストが検証・認可し、非同期領域結果は success を確認してから data を読みます。void はデータなし完了、null は不存在、同期ファクトリー/ツールは表の型を直接返します。
+
+#### storage.file
+
+元のキー・バイト/ストリーム・オプションで操作。put/copy/head はメタデータ、get は Buffer、getStream は非同期バイト列、exists は boolean、delete は void、deleteMany は項目別進捗。
+
+| 入口                      | 入力引数                    | 成功結果                                     | 呼出し例                                                                      |
+| ------------------------- | --------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------- |
+| `storage.file.put`        | key, data, options          | `FileMetadata`                               | `await storage.file.put('report.txt', 'text', { contentType: 'text/plain' })` |
+| `storage.file.get`        | key, options                | `Buffer<ArrayBufferLike>`                    | `await storage.file.get('report.txt')`                                        |
+| `storage.file.getStream`  | key, options                | `AsyncIterable<Uint8Array<ArrayBufferLike>>` | `await storage.file.getStream('report.txt')`                                  |
+| `storage.file.head`       | key                         | `FileMetadata`                               | `await storage.file.head('report.txt')`                                       |
+| `storage.file.exists`     | key                         | `boolean`                                    | `await storage.file.exists('report.txt')`                                     |
+| `storage.file.copy`       | sourceKey, destKey, options | `FileMetadata`                               | `await storage.file.copy('report.txt', 'archive/report.txt')`                 |
+| `storage.file.delete`     | key                         | `void`                                       | `await storage.file.delete('report.txt')`                                     |
+| `storage.file.deleteMany` | keys                        | `StorageDeleteResult`                        | `await storage.file.deleteMany(['report.txt', 'archive/report.txt'])`         |
+
+#### storage.dir
+
+接頭辞で一覧/削除。list は prefix とページ指定からファイル/継続情報、delete は prefix から void。同時追加は防がない。
+
+| 入口                 | 入力引数 | 成功結果     | 呼出し例                                                      |
+| -------------------- | -------- | ------------ | ------------------------------------------------------------- |
+| `storage.dir.list`   | options  | `ListResult` | `await storage.dir.list({ prefix: 'reports/', maxKeys: 20 })` |
+| `storage.dir.delete` | prefix   | `void`       | `await storage.dir.delete('reports/')`                        |
+
+#### storage.presign
+
+S3 直接転送。キーと期限/応答指定から URL HaiResult、publicUrl は同期 URL/null を返しアクセス権は付与しない。
+
+| 入口                        | 入力引数     | 成功結果         | 呼出し例                                                                                    |
+| --------------------------- | ------------ | ---------------- | ------------------------------------------------------------------------------------------- |
+| `storage.presign.getUrl`    | key, options | `string`         | `await storage.presign.getUrl('report.txt', { expiresIn: 300 })`                            |
+| `storage.presign.putUrl`    | key, options | `string`         | `await storage.presign.putUrl('report.txt', { expiresIn: 300, contentType: 'text/plain' })` |
+| `storage.presign.publicUrl` | key          | `string \| null` | `storage.presign.publicUrl('report.txt')`                                                   |
+
+#### storage.checksum
+
+初期化不要の完全性確認。データとアルゴリズム/符号化から摘要、expected との比較は boolean。ストリームは一度消費。
+
+| 入口                        | 入力引数                | 成功結果  | 呼出し例                                               |
+| --------------------------- | ----------------------- | --------- | ------------------------------------------------------ |
+| `storage.checksum.generate` | data, options           | `string`  | `await storage.checksum.generate('text')`              |
+| `storage.checksum.verify`   | data, expected, options | `boolean` | `await storage.checksum.verify(bytes, expectedDigest)` |
+
+- S3 プロトコル（AWS S3 / MinIO / RustFS / OSS など）
+- ローカルファイルシステム
+
 ### HTTP API 契約
 
 公開 HTTP API は `@h-ai/api-contract` で定義し、`@h-ai/serv` の `createStorageProcedures({ storage, authorize })` で本モジュールの機能に接続します。
@@ -112,7 +155,7 @@ if (!result.success)
 
 `{ ifNoneMatch: '*' }` は標準 S3 条件付き書き込み、またはローカルの原子的公開で上書きを拒否し、競合時に `ALREADY_EXISTS` を返します。非対応の S3 サービスではエラーとし、上書きに切り替えません。失敗・中止時は一時ファイルや未完了パートを削除しますが、公開済みオブジェクトは中止で取り消せません。
 
-Local はファイル横の予約ディレクトリ `.hai-storage-meta/` に内容の識別情報と結び付いた世代メタデータを準備し、内容ファイルの原子的公開をコミット点にします。準備失敗時は内容を作成・上書きしません。既定値にも空の記録を保存し、古いオブジェクトの属性を継承しません。公開後の既知の旧世代の削除失敗は診断だけに記録します。並行書き込みやクラッシュで安全な回収を確認できない内部記録が残る場合があり、推測で削除しません。各パス要素で `.meta.json`、`.upload.tmp`、`.hai-storage-meta` を予約します。世代記録が唯一のメタデータ形式で、旧 `<key>.meta.json` は読みません。現世代の記録がなければ明示的に失敗します。既存データはオフラインで移行するか `file.put()` で再アップロードしてください。内容と内部記録を一緒にバックアップし、旧プログラムからの書き込みを混在させないでください。
+Local はファイル横の予約ディレクトリ `.hai-storage-meta/` に内容の識別情報と結び付いた世代メタデータを準備し、内容ファイルの原子的公開をコミット点にします。準備失敗時は内容を作成・上書きしません。既定値にも空の記録を保存し、古いオブジェクトの属性を継承しません。公開後の既知の旧世代の削除失敗は診断だけに記録します。並行書き込みやクラッシュで安全な回収を確認できない内部記録が残る場合があり、推測で削除しません。各パス要素で `.meta.json`、`.upload.tmp`、`.hai-storage-meta` を予約します。世代記録が唯一のメタデータ形式で、有効な記録がなければ明示的に失敗します。再構築時は信頼する内容と業務メタデータを `file.put()` で保存します。内容と内部記録を一緒にバックアップし、この形式を迂回した直接書込を混在させないでください。
 
 S3 `file.copy()` はコピー元の各パス要素をエンコードし、日本語・空白・URL 区切り文字をオブジェクトキーの一部として保持します。呼び出し側では事前エンコードせず元の key を渡します。
 
@@ -150,7 +193,21 @@ checksum の中止時は次のチャンクを待つ処理を終了し、入力�
 - `getMimeType(extension)`
 - `formatFileSize(bytes)`
 
-### 設定
+### 本番の共有状態
+
+本番は共有 S3 または互換サービスを使います。local は開発・明示的テスト用です。オブジェクト認可と読取後更新の条件付きコミットはアプリが担当します。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../.agents/instructions/distributed-state.md).
+
+### 入力制約と HTTP 機能
+
+キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](README.md#存储输入约束与跨端能力)を参照してください。
+
+### ブラウザーアップロードのキャンセル
+
+`uploadWithPresignedUrl(url, data, { onProgress, abortController })` は進捗通知にネイティブXHRを使用し、`onProgress` を省略するとfetchを使用します。事前にキャンセルされた場合は送信しません。準備中・送信中のキャンセル、外部からのXHR abort、通信・タイムアウト、進捗コールバックの例外は一度だけ失敗として確定し、この操作のリスナーを解除します。完了後のキャンセルは古いXHRを操作しません。キャンセルはローカル要求の停止であり、リモートに保存済みのオブジェクトを取り消せません。状態を確認してから、別途認可して削除してください。
+
+## 設定
+
+ライフサイクル。init にバックエンド/業務設定を渡し成功後に使用します。借用依存先の解放前に close の完了を待ち、正確な戻り値は例と公開署名に従います。
 
 Local は key 内のシンボリックリンクと junction を拒否し、予約拡張子 `.meta.json` / `.upload.tmp` は大文字小文字を区別せず保護します。put 上書きは旧メタデータを置換し、copy は既定で元を継承します。ブラウザー入口にサーバー単一インスタンスは含まれません。
 
@@ -183,7 +240,7 @@ if (!initResult.success) {
 }
 ```
 
-#### 内部接続とブラウザーからの直接アクセス
+### 内部接続とブラウザーからの直接アクセス
 
 `endpoint` はサーバーの CRUD、バケット作成、接続確認に使います。`publicEndpoint` は `presign.getUrl/putUrl` の外部アドレスで既定値はなく、省略時は endpoint を使います。`https://app.example.com/delivery/files` のようなプロキシパスを指定できます。パスには英数字、アンダースコア、ドット、ハイフンを使用でき、`.`/`..`、連続スラッシュ、符号化された区切りは使用できません。バケット、認証情報、クエリ、フラグメントは含めません。`publicUrl` は公開 URL の組み立て用で、私有オブジェクトを認可しません。
 
@@ -238,7 +295,13 @@ do {
 } while (continuationToken)
 ```
 
-### エラー処理
+設定はホストが読込・検証してから渡します。秘密はサーバーの非公開環境に保存し、利用場面に応じてバックエンド・容量・期限・ログを選びます。変更後は再初期化の結果を確認してください。
+
+[項目別の用途・適用場面・例](../../docs/usage/configuration/data.md).
+
+## エラー処理
+
+領域操作は result.success を確認し、失敗時はモジュールのエラー定義と安全な説明を使います。コード・関連 ID・秘匿した原因をサーバーログに残します。同期ツール・ファクトリー・ストリーム反復・ライフサイクルは各署名に従い、Promise 完了だけで成功と判断しません。回復条件は各機能を参照してください。
 
 ```ts
 import { HaiStorageError, storage } from '@h-ai/storage'
@@ -262,18 +325,6 @@ if (!result.success && result.error.code === HaiStorageError.NOT_INITIALIZED.cod
 | `HaiStorageError.UNSUPPORTED_OPERATION` | `hai:storage:018` | Provider が操作をサポートしない（local の署名付き URL など） |
 | `HaiStorageError.INVALID_LIST_OPTIONS`  | `hai:storage:019` | ローカル一覧の引数・カーソルが不正、または検索範囲が不一致   |
 | `HaiStorageError.CONFIG_ERROR`          | `hai:storage:012` | 設定エラー                                                   |
-
-## 本番の共有状態
-
-本番は共有 S3 または互換サービスを使います。local は開発・明示的テスト用です。オブジェクト認可と読取後更新の条件付きコミットはアプリが担当します。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../.agents/instructions/distributed-state.md)。
-
-## 入力制約と HTTP 機能
-
-キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](README.md#存储输入约束与跨端能力)を参照してください。
-
-## ブラウザーアップロードのキャンセル
-
-`uploadWithPresignedUrl(url, data, { onProgress, abortController })` は進捗通知にネイティブXHRを使用し、`onProgress` を省略するとfetchを使用します。事前にキャンセルされた場合は送信しません。準備中・送信中のキャンセル、外部からのXHR abort、通信・タイムアウト、進捗コールバックの例外は一度だけ失敗として確定し、この操作のリスナーを解除します。完了後のキャンセルは古いXHRを操作しません。キャンセルはローカル要求の停止であり、リモートに保存済みのオブジェクトを取り消せません。状態を確認してから、別途認可して削除してください。
 
 ## 開発とテスト
 

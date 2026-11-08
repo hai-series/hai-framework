@@ -4,23 +4,13 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md) · [@h-ai/reldb](../reldb/README.ja.md)
 
-## 概要
-
 共通のタスクモデル、cron スケジュール、JS 関数文字列・HTTP API の実行、永続化、実行ログ検索、全体のライフサイクル Hook を提供するスケジューラーモジュールです。
 
-## 主な機能
-
-- cron による定期実行とアプリケーションからの手動実行。
-- HTTP、信頼できる JavaScript、アプリ Hook に対応し、再試行とキャンセルを提供。
-- 共有 DB による定義・実行状態・更新可能リースの永続化と結果不明の隔離。
-
-## 使い始める
+## クイックスタート
 
 ### 依存関係
 
 - `@h-ai/reldb`：先に共有 DB を初期化し、タスク・journal・リースを保存します。`enableDb` は true のみです。
-
-### クイックスタート
 
 ```ts
 import { reldb } from '@h-ai/reldb'
@@ -78,6 +68,59 @@ const logs = await scheduler.getLogs({
 scheduler.stop()
 await scheduler.close()
 ```
+
+## 機能
+
+- cron による定期実行とアプリケーションからの手動実行。
+- HTTP、信頼できる JavaScript、アプリ Hook に対応し、再試行とキャンセルを提供。
+- 共有 DB による定義・実行状態・更新可能リースの永続化と結果不明の隔離。
+
+### 操作と入出力
+
+本節の完全な初期化手順を先に実行します。例の業務値はホストが検証・認可し、非同期領域結果は success を確認してから data を読みます。void はデータなし完了、null は不存在、同期ファクトリー/ツールは表の型を直接返します。
+
+#### scheduler
+
+定義管理はタスク・ID・ID+差分・引数なし再読込から void HaiResult。tasks は最終成功の読取専用像で、認可や DB の現在値ではない。
+
+| 入口                     | 入力引数        | 成功結果 | 呼出し例                                                                                       |
+| ------------------------ | --------------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `scheduler.register`     | task            | `void`   | `await scheduler.register({ id: 'daily', name: 'Daily', cron: '0 2 * * *', timezone: 'UTC' })` |
+| `scheduler.unregister`   | taskId          | `void`   | `await scheduler.unregister('daily')`                                                          |
+| `scheduler.updateTask`   | taskId, updates | `void`   | `await scheduler.updateTask('daily', { enabled: false })`                                      |
+| `scheduler.refreshTasks` | 引数なし        | `void`   | `await scheduler.refreshTasks()`                                                               |
+
+#### scheduler
+
+start/stop は同期 HaiResult、trigger は ID/パラメーターから試行ログ、getLogs は条件/ページから一覧。stop は進行中副作用を取り消さない。
+
+| 入口                | 入力引数        | 成功結果                            | 呼出し例                                             |
+| ------------------- | --------------- | ----------------------------------- | ---------------------------------------------------- |
+| `scheduler.start`   | 引数なし        | `void`                              | `scheduler.start()`                                  |
+| `scheduler.stop`    | 引数なし        | `void`                              | `scheduler.stop()`                                   |
+| `scheduler.trigger` | taskId, options | `TaskExecutionLog`                  | `await scheduler.trigger('daily')`                   |
+| `scheduler.getLogs` | options         | `PaginatedResult<TaskExecutionLog>` | `await scheduler.getLogs({ page: 1, pageSize: 20 })` |
+
+#### scheduler
+
+業務/イベント callback の設定・引数なし解除は同期 HaiResult。Hook は signal と外部効果の冪等性を守る。
+
+| 入口                   | 入力引数 | 成功結果 | 呼出し例                        |
+| ---------------------- | -------- | -------- | ------------------------------- |
+| `scheduler.setHooks`   | hooks    | `void`   | `scheduler.setHooks(taskHooks)` |
+| `scheduler.clearHooks` | 引数なし | `void`   | `scheduler.clearHooks()`        |
+
+#### scheduler.execution
+
+実行台帳。get は occurrenceId から項目/null、list は limit/offset から配列、repairLog は ID でログを冪等補修、resolveUnknown は ID・裁定・expectedUpdatedAt で条件付き解放し void。
+
+| 入口                                  | 入力引数                 | 成功結果                          | 呼出し例                                                                                           |
+| ------------------------------------- | ------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `scheduler.execution.get`             | occurrenceId             | `SchedulerExecutionEntry \| null` | `await scheduler.execution.get(occurrenceId)`                                                      |
+| `scheduler.execution.listUnknown`     | options                  | `SchedulerExecutionEntry[]`       | `await scheduler.execution.listUnknown({ limit: 20, offset: 0 })`                                  |
+| `scheduler.execution.listLogFailures` | options                  | `SchedulerExecutionEntry[]`       | `await scheduler.execution.listLogFailures({ limit: 20, offset: 0 })`                              |
+| `scheduler.execution.repairLog`       | occurrenceId             | `void`                            | `await scheduler.execution.repairLog(occurrenceId)`                                                |
+| `scheduler.execution.resolveUnknown`  | occurrenceId, resolution | `void`                            | `await scheduler.execution.resolveUnknown(occurrenceId, { status: 'success', expectedUpdatedAt })` |
 
 ### 共通タスクモデル
 
@@ -184,30 +227,6 @@ const logs = await scheduler.getLogs({
 - `tasks` / `hooks` / `config` / `isInitialized` / `isRunning`
 - `close()`
 
-### エラー処理
-
-`close()` を除くすべての公開 API は `HaiResult<T>` を返します。
-
-主なエラーコード：
-
-| エラーコード                              | code                | 説明                 |
-| ----------------------------------------- | ------------------- | -------------------- |
-| `HaiSchedulerError.NOT_INITIALIZED`       | `hai:scheduler:010` | 未初期化             |
-| `HaiSchedulerError.INIT_FAILED`           | `hai:scheduler:011` | 初期化に失敗         |
-| `HaiSchedulerError.CONFIG_ERROR`          | `hai:scheduler:012` | 設定エラー           |
-| `HaiSchedulerError.TASK_NOT_FOUND`        | `hai:scheduler:020` | タスクが存在しない   |
-| `HaiSchedulerError.TASK_ALREADY_EXISTS`   | `hai:scheduler:021` | タスクが既に存在する |
-| `HaiSchedulerError.INVALID_CRON`          | `hai:scheduler:022` | 無効な Cron 式       |
-| `HaiSchedulerError.EXECUTION_FAILED`      | `hai:scheduler:023` | 実行に失敗           |
-| `HaiSchedulerError.JS_EXECUTION_FAILED`   | `hai:scheduler:024` | JS 実行に失敗        |
-| `HaiSchedulerError.API_EXECUTION_FAILED`  | `hai:scheduler:025` | API 実行に失敗       |
-| `HaiSchedulerError.DB_SAVE_FAILED`        | `hai:scheduler:026` | DB 保存に失敗        |
-| `HaiSchedulerError.ALREADY_RUNNING`       | `hai:scheduler:027` | 実行中               |
-| `HaiSchedulerError.NOT_RUNNING`           | `hai:scheduler:028` | 実行していない       |
-| `HaiSchedulerError.JS_COMPILE_FAILED`     | `hai:scheduler:030` | JS コンパイルに失敗  |
-| `HaiSchedulerError.HOOK_EXECUTION_FAILED` | `hai:scheduler:031` | Hook 実行に失敗      |
-| `HaiSchedulerError.LOG_PERSIST_FAILED`    | `hai:scheduler:032` | ログ保存未確認       |
-
 ### 実行時の動作と制約
 
 各ノードは同じ共有 RelDB を先に初期化します。ホスト間の本番運用は PostgreSQL/MySQL、SQLite は同じファイルを正しく共有するローカルプロセス向けです。定義、実行 journal、タスク占有、リースを永続化し、`enableDb` は true のみです。キャッシュは不要です。`leaseMs` は既定 300000、範囲 1000～86400000 ミリ秒で実行中に更新します。cron、手動、次周期は同じタスク枠を使い、期限切れ owner は復活・コミットできません。`tasks` は最後に成功した定義スナップショットで、読取失敗や削除・無効化・変更は旧試行を中断します。外部副作用は自動で戻りません。
@@ -226,7 +245,7 @@ PostgreSQL では、同じ分内の再起動や複数ノードでの同時取得
 
 信頼されたサーバーは `execution.listLogFailures({ limit, offset })`（listUnknown と同じ上限）で pending を監視し、`execution.repairLog(occurrenceId)` で共有 journal から補完します。別ノード・再起動後・同時呼び出しも可能で、固定主キーと全内容の照合によりコミット後の応答消失を排除します。`LOG_PERSIST_FAILED`（032）は pending を維持して安全な警告を出します。終態の保存前に DB 全体が停止した場合は unknown の外部効果を照合し、復元可能な結果があると仮定しないでください。補完と保持処理は業務 Hook を呼ばず、保持失敗は警告のみです。`onTaskFinish` は未確定のローカル業務終了通知で、保存確認は trigger の戻り値と execution.get.logPersistence を使います。
 
-取得前の競合・スキップの interrupted は観測ログで、補完できる確定終態はありません。応答が確認できなければ unconfirmed です。JSON 列で MySQL の 255 文字制限を避け、完全な結果と全再試行を保持します。対応する旧ログはモジュール移行で保存・コピーし、実行台帳は独立します。終了は補完処理を待つため、DB より先に scheduler を終了してください。
+取得前の競合・スキップの interrupted は観測ログで、補完できる確定終態はありません。応答が確認できなければ unconfirmed です。JSON 列で MySQL の 255 文字制限を避け、完全な結果と全再試行を保持します。実行台帳は観測ログから独立します。終了は補完処理を待つため、DB より先に scheduler を終了してください。
 
 ```ts
 const result = await scheduler.trigger('cleanup', { idempotencyKey: 'cleanup-2026-10-23' })
@@ -256,11 +275,45 @@ cron は分単位で照合し、同じ分から永続 occurrenceId を生成し�
 
 Reach 通知を実行するタスクでは、調度ロックやタスク完了だけで外部配信の一意性は保証できません。[Reach キューの意味](../reach/README.ja.md) に従い、永続化された queueId を使ってください。HTTP 受信側は副作用と重複排除を原子的に保存し、SMTP/SMS の配信中の結果不明は手動照合します。スケジューラーの再試行で無条件に再送しないでください。
 
-## 旧データベースの更新
+### 定義の整合性と永続化の準備
 
 定義の更新読込、登録、変更、削除は、変更に必要な読込と保存を含めプロセス内で受付順に調整します。正当な並行登録はスナップショットの交錯だけでは失敗せず、実際の DB 障害は失敗として返します。close は入口と runner を停止し、読取待機と未着手の書込を中止して、開始済みの永続書込を待ってから状態を解放します。遅延スナップショットは反映しません。業務コールバックはこのキューを占有しません。ノード間の整合性は引き続き共有 DB、バージョンとリースで保証し、この調整を分散ロックの代替にしません。
 
-RelDB 初期化後に `migrateScheduler({ dryRun: true })` で確認し、scheduler.init がリポジトリー前に対応する移行を実行します。旧タスクを保持し idempotent=false を追加します。旧ログを hai_scheduler_logs_alpha65 に保存し、安定した legacy:<id> で完全なスナップショットを冪等コピーします。中断後も履歴を重複せず旧タスクを実行しません。SQLite/PostgreSQL はロールバック、MySQL は旧書込停止下で実構造から再開します。事前バックアップと互換 DB/コードによる復旧が必要です。
+RelDB 初期化後の `migrateScheduler({ dryRun: true })` で永続構造を事前確認し、scheduler.init はリポジトリ作成前に対応する準備を実行します。バックアップと排他変更時間を確保し、失敗時は起動を止め、実行台帳と観測ログを区別してください。
+
+## 設定
+
+ライフサイクル。init にバックエンド/業務設定を渡し成功後に使用します。借用依存先の解放前に close の完了を待ち、正確な戻り値は例と公開署名に従います。
+
+設定はホストが読込・検証してから渡します。秘密はサーバーの非公開環境に保存し、利用場面に応じてバックエンド・容量・期限・ログを選びます。変更後は再初期化の結果を確認してください。
+
+[項目別の用途・適用場面・例](../../docs/usage/configuration/operations.md).
+
+## エラー処理
+
+領域操作は result.success を確認し、失敗時はモジュールのエラー定義と安全な説明を使います。コード・関連 ID・秘匿した原因をサーバーログに残します。同期ツール・ファクトリー・ストリーム反復・ライフサイクルは各署名に従い、Promise 完了だけで成功と判断しません。回復条件は各機能を参照してください。
+
+`close()` を除くすべての公開 API は `HaiResult<T>` を返します。
+
+主なエラーコード：
+
+| エラーコード                              | code                | 説明                 |
+| ----------------------------------------- | ------------------- | -------------------- |
+| `HaiSchedulerError.NOT_INITIALIZED`       | `hai:scheduler:010` | 未初期化             |
+| `HaiSchedulerError.INIT_FAILED`           | `hai:scheduler:011` | 初期化に失敗         |
+| `HaiSchedulerError.CONFIG_ERROR`          | `hai:scheduler:012` | 設定エラー           |
+| `HaiSchedulerError.TASK_NOT_FOUND`        | `hai:scheduler:020` | タスクが存在しない   |
+| `HaiSchedulerError.TASK_ALREADY_EXISTS`   | `hai:scheduler:021` | タスクが既に存在する |
+| `HaiSchedulerError.INVALID_CRON`          | `hai:scheduler:022` | 無効な Cron 式       |
+| `HaiSchedulerError.EXECUTION_FAILED`      | `hai:scheduler:023` | 実行に失敗           |
+| `HaiSchedulerError.JS_EXECUTION_FAILED`   | `hai:scheduler:024` | JS 実行に失敗        |
+| `HaiSchedulerError.API_EXECUTION_FAILED`  | `hai:scheduler:025` | API 実行に失敗       |
+| `HaiSchedulerError.DB_SAVE_FAILED`        | `hai:scheduler:026` | DB 保存に失敗        |
+| `HaiSchedulerError.ALREADY_RUNNING`       | `hai:scheduler:027` | 実行中               |
+| `HaiSchedulerError.NOT_RUNNING`           | `hai:scheduler:028` | 実行していない       |
+| `HaiSchedulerError.JS_COMPILE_FAILED`     | `hai:scheduler:030` | JS コンパイルに失敗  |
+| `HaiSchedulerError.HOOK_EXECUTION_FAILED` | `hai:scheduler:031` | Hook 実行に失敗      |
+| `HaiSchedulerError.LOG_PERSIST_FAILED`    | `hai:scheduler:032` | ログ保存未確認       |
 
 ## 開発とテスト
 

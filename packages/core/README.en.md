@@ -4,36 +4,9 @@
 
 [Framework home](../../README.en.md)
 
-## Introduction
-
 `@h-ai/core` is the shared foundation of Hai Framework. It gives applications and framework modules consistent configuration, errors, logging, and internationalization. Utilities work directly; call `core.init()` when a Node application needs file configuration.
 
-## Core capabilities
-
-| Capability                                   | Purpose                                                                                                                                     | Main entry points                                       |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Configuration and startup                    | Load YAML, merge environment overrides, validate settings, and orchestrate module startup and shutdown                                      | `core.config`, `core.init`, `core.module.createRuntime` |
-| Results and errors                           | Express business success/failure, define error codes, and produce safe messages at API boundaries                                           | `HaiResult`, `ok` / `err`, `core.error`                 |
-| Logging and diagnostics                      | Structured logs, request correlation, credential masking, and log observation                                                               | `core.logger`, `core.context`, `core.sanitize`          |
-| Internationalization and validation messages | Manage message languages, isolate concurrent request locales, and localize Zod field errors                                                 | `core.i18n`, `core.zodValidation`                       |
-| Request access control                       | Resolve trusted client addresses and check paths, methods, IPs, and time windows                                                            | `core.access` (Node only)                               |
-| General utilities                            | Generate identifiers and reuse type, object, string, array, async, and time operations, plus consistent errors before module initialization | `core.id`, `core.typeUtils`, `core.object`, and others  |
-
-### Node and browser boundaries
-
-Both environments use `import { core } from '@h-ai/core'`; the bundler selects the code for the target environment.
-
-| Capability                                                                        | Node.js                                                                                           | Browser                                                                                        |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Logging, results/errors, messages, utilities, and ordered module startup/shutdown | Supported                                                                                         | Supported                                                                                      |
-| YAML, dotenv, environment mapping, file watching                                  | Reads and watches local configuration files                                                       | Cannot read or watch local files; loading methods return failure                               |
-| Request correlation with `core.context.run`                                       | Each request retains its own IDs after asynchronous work, without mixing them with other requests | Values exist only during synchronous callback code and are no longer available after `await`   |
-| Request locale with `core.i18n.runWithLocale`                                     | Each request keeps its chosen language after asynchronous work; other requests do not change it   | Throws; set the page language with `setGlobalLocale()` or pass a locale when getting a message |
-| Request policies with `core.access`                                               | Checks request addresses, paths, and time windows                                                 | This tool is unavailable                                                                       |
-
-`core.init()` configures Core settings and logging synchronously, returns `void`, and Core provides no `close()` method. Applications starting databases, caches, or other modules can manage them with `core.module.createRuntime()`: its returned object's `start()` initializes them in order, and `close()` cleans them up in reverse. A complete example follows under “Application startup and shutdown”.
-
-## Getting started
+## Quick Start
 
 Each Core feature below has a purpose, examples, and relevant limits. Start with initialization when loading configuration; logging, messages, and general utilities work directly.
 
@@ -106,6 +79,31 @@ core.logger.warn('Request needs attention', { requestId }) // 返回 undefined�
 ```
 
 The host supplies public configuration fields; never send complete server settings or secrets. Browser `core.config.get()` / `has()` / `keys()` return `undefined` / `false` / `[]`. `loadEnvFiles()`, `load()`, `validate()`, and `reload()` return `SERVICE_UNAVAILABLE`; `getOrThrow()` throws. `watch()` immediately calls back with the same unavailable error and returns a no-op unsubscribe function.
+
+## Features
+
+| Capability                                   | Purpose                                                                                                                                     | Main entry points                                       |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Configuration and startup                    | Load YAML, merge environment overrides, validate settings, and orchestrate module startup and shutdown                                      | `core.config`, `core.init`, `core.module.createRuntime` |
+| Results and errors                           | Express business success/failure, define error codes, and produce safe messages at API boundaries                                           | `HaiResult`, `ok` / `err`, `core.error`                 |
+| Logging and diagnostics                      | Structured logs, request correlation, credential masking, and log observation                                                               | `core.logger`, `core.context`, `core.sanitize`          |
+| Internationalization and validation messages | Manage message languages, isolate concurrent request locales, and localize Zod field errors                                                 | `core.i18n`, `core.zodValidation`                       |
+| Request access control                       | Resolve trusted client addresses and check paths, methods, IPs, and time windows                                                            | `core.access` (Node only)                               |
+| General utilities                            | Generate identifiers and reuse type, object, string, array, async, and time operations, plus consistent errors before module initialization | `core.id`, `core.typeUtils`, `core.object`, and others  |
+
+### Node and browser boundaries
+
+Both environments use `import { core } from '@h-ai/core'`; the bundler selects the code for the target environment.
+
+| Capability                                                                        | Node.js                                                                                           | Browser                                                                                        |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Logging, results/errors, messages, utilities, and ordered module startup/shutdown | Supported                                                                                         | Supported                                                                                      |
+| YAML, dotenv, environment mapping, file watching                                  | Reads and watches local configuration files                                                       | Cannot read or watch local files; loading methods return failure                               |
+| Request correlation with `core.context.run`                                       | Each request retains its own IDs after asynchronous work, without mixing them with other requests | Values exist only during synchronous callback code and are no longer available after `await`   |
+| Request locale with `core.i18n.runWithLocale`                                     | Each request keeps its chosen language after asynchronous work; other requests do not change it   | Throws; set the page language with `setGlobalLocale()` or pass a locale when getting a message |
+| Request policies with `core.access`                                               | Checks request addresses, paths, and time windows                                                 | This tool is unavailable                                                                       |
+
+`core.init()` configures Core settings and logging synchronously, returns `void`, and Core provides no `close()` method. Applications starting databases, caches, or other modules can manage them with `core.module.createRuntime()`: its returned object's `start()` initializes them in order, and `close()` cleans them up in reverse. A complete example follows under “Application startup and shutdown”.
 
 ### Files and environment settings: `core.config`
 
@@ -868,7 +866,17 @@ formatDate supports YYYY/MM/DD/HH/mm/ss tokens and defaults to YYYY-MM-DD. Date 
 
 See the [Core reference](../cli/templates/skills/hai-core/reference.md) for complete parameters and less common options. Current published declarations define the contract.
 
-## Development and testing
+## Configuration
+
+core.init takes configuration directory, schemas and logging options, returns void synchronously and has no close. See Quick Start and core.config for file loading, environment precedence and field examples; init completing does not prove all business configuration is valid.
+
+[Per-option purpose, use cases and examples](../../docs/usage/configuration/runtime.md).
+
+## Error Handling
+
+Check result.success for domain operations. Handle failures with the module error definitions and safe messages; retain codes, correlation IDs and sanitized causes in server logs. Synchronous tools, factories, stream iteration and lifecycle calls follow their own signatures. A completed Promise alone is not business success. See each feature for recovery limits.
+
+## Development
 
 Run from the repository root (use `pnpm.cmd` in PowerShell):
 

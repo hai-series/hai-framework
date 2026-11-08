@@ -4,36 +4,9 @@
 
 [框架首页](../../README.md)
 
-## 简介
-
 `@h-ai/core` 是 Hai Framework 的公共基础层，为应用和其他框架模块提供一致的配置、错误、日志和国际化能力。常用工具可直接使用；Node 应用需要加载配置时再调用 `core.init()`。
 
-## 核心能力
-
-| 能力             | 解决的问题                                                                                   | 主要入口                                                |
-| ---------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| 配置与启动       | 加载 YAML、合并环境覆盖、校验配置，按依赖顺序编排模块启动与关闭                              | `core.config`、`core.init`、`core.module.createRuntime` |
-| 结果与错误       | 用统一结果表达业务成败，定义错误码，在接口边界生成安全提示                                   | `HaiResult`、`ok` / `err`、`core.error`                 |
-| 日志与诊断       | 结构化日志、请求关联、凭据脱敏及日志观察                                                     | `core.logger`、`core.context`、`core.sanitize`          |
-| 国际化与校验提示 | 管理消息语言，隔离并发请求语言，把 Zod 错误转换为本地化字段提示                              | `core.i18n`、`core.zodValidation`                       |
-| 请求访问控制     | 解析可信客户端地址，按路径、方法、IP 和时段检查请求                                          | `core.access`（Node 专属）                              |
-| 通用工具         | 复用标识生成、类型检查、对象、字符串、数组、异步和时间操作，以及模块未初始化时的统一错误返回 | `core.id`、`core.typeUtils`、`core.object` 等           |
-
-### Node 与浏览器的边界
-
-两端都通过 `import { core } from '@h-ai/core'` 使用，由打包工具选择对应环境的代码。
-
-| 能力                                                      | Node.js                                                        | 浏览器                                                                   |
-| --------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| 日志、结果/错误、消息、通用工具，以及模块的顺序启动与关闭 | 支持                                                           | 支持                                                                     |
-| YAML、dotenv、环境映射与文件监听                          | 可以读取和监听本地配置文件                                     | 不能读取或监听本地文件；调用加载方法会返回失败                           |
-| 请求关联 `core.context.run`                               | 每个请求保留自己的编号等信息，等待异步操作后仍能读取，互不串用 | 只在回调的同步代码中保留信息，`await` 后不再保留                         |
-| 请求语言 `core.i18n.runWithLocale`                        | 请求使用自己的语言，等待异步操作后也不会受其他请求影响         | 调用会抛错；用 `setGlobalLocale()` 设置页面语言，或在取消息时指定 locale |
-| 请求策略 `core.access`                                    | 可以检查请求地址、路径和时段                                   | 不提供此工具                                                             |
-
-`core.init()` 只负责 Core 的配置和日志设置，同步返回 `void`，Core 没有 `close()` 方法。应用如果还需要启动数据库、缓存等模块，可用 `core.module.createRuntime()` 集中管理它们：调用返回对象的 `start()` 依次初始化，调用 `close()` 按相反顺序清理。下方“应用启动与关闭”给出完整示例。
-
-## 使用入门
+## 快速开始
 
 下面按 `core` 对象上的全部子功能介绍用途、示例与必要限制。需要加载配置时先看初始化；日志、消息和通用工具可直接使用。
 
@@ -106,6 +79,31 @@ core.logger.warn('Request needs attention', { requestId }) // 返回 undefined�
 ```
 
 浏览器配置由宿主通过公开字段下发，不传完整服务端配置或密钥。`core.config.get()` / `has()` / `keys()` 分别返回 `undefined` / `false` / `[]`；`loadEnvFiles()`、`load()`、`validate()`、`reload()` 返回 `SERVICE_UNAVAILABLE`，`getOrThrow()` 抛错。`watch()` 立即回调同一不可用错误并返回空取消函数。
+
+## 功能
+
+| 能力             | 解决的问题                                                                                   | 主要入口                                                |
+| ---------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| 配置与启动       | 加载 YAML、合并环境覆盖、校验配置，按依赖顺序编排模块启动与关闭                              | `core.config`、`core.init`、`core.module.createRuntime` |
+| 结果与错误       | 用统一结果表达业务成败，定义错误码，在接口边界生成安全提示                                   | `HaiResult`、`ok` / `err`、`core.error`                 |
+| 日志与诊断       | 结构化日志、请求关联、凭据脱敏及日志观察                                                     | `core.logger`、`core.context`、`core.sanitize`          |
+| 国际化与校验提示 | 管理消息语言，隔离并发请求语言，把 Zod 错误转换为本地化字段提示                              | `core.i18n`、`core.zodValidation`                       |
+| 请求访问控制     | 解析可信客户端地址，按路径、方法、IP 和时段检查请求                                          | `core.access`（Node 专属）                              |
+| 通用工具         | 复用标识生成、类型检查、对象、字符串、数组、异步和时间操作，以及模块未初始化时的统一错误返回 | `core.id`、`core.typeUtils`、`core.object` 等           |
+
+### Node 与浏览器的边界
+
+两端都通过 `import { core } from '@h-ai/core'` 使用，由打包工具选择对应环境的代码。
+
+| 能力                                                      | Node.js                                                        | 浏览器                                                                   |
+| --------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| 日志、结果/错误、消息、通用工具，以及模块的顺序启动与关闭 | 支持                                                           | 支持                                                                     |
+| YAML、dotenv、环境映射与文件监听                          | 可以读取和监听本地配置文件                                     | 不能读取或监听本地文件；调用加载方法会返回失败                           |
+| 请求关联 `core.context.run`                               | 每个请求保留自己的编号等信息，等待异步操作后仍能读取，互不串用 | 只在回调的同步代码中保留信息，`await` 后不再保留                         |
+| 请求语言 `core.i18n.runWithLocale`                        | 请求使用自己的语言，等待异步操作后也不会受其他请求影响         | 调用会抛错；用 `setGlobalLocale()` 设置页面语言，或在取消息时指定 locale |
+| 请求策略 `core.access`                                    | 可以检查请求地址、路径和时段                                   | 不提供此工具                                                             |
+
+`core.init()` 只负责 Core 的配置和日志设置，同步返回 `void`，Core 没有 `close()` 方法。应用如果还需要启动数据库、缓存等模块，可用 `core.module.createRuntime()` 集中管理它们：调用返回对象的 `start()` 依次初始化，调用 `close()` 按相反顺序清理。下方“应用启动与关闭”给出完整示例。
 
 ### 文件与环境配置：`core.config`
 
@@ -305,7 +303,7 @@ const restored = core.config.parseEnv(text) // 解析回字面字符串，不执
 core.logger.info('Generated config verified', { port: restored.HAI_APP_PORT })
 ```
 
-普通对象默认展开；数组、动态字典和空对象保留 JSON。整体替换对象的生成规则、完整来源优先级与应用接入见[基础配置手册](../../docs/usage/configuration/runtime.md)。
+普通对象默认展开；数组、动态字典和空对象保留 JSON。整体替换对象的生成规则、完整来源优先级与应用接入见[基础配置手册](../../docs/usage/configuration/runtime.md).
 
 ### 记录日志：`core.logger`
 
@@ -705,7 +703,7 @@ core.logger.info('Request access checked', { allowed: decision.allowed })
 - `createClientIpResolver()` 默认 `auto` 在普通宿主忽略转发头，仅受管私有 Compose 采用容器网段。`[]` 关闭代理信任，自管入口明确填写代理 IP/CIDR；对端地址必须来自 socket 或可信平台。
 - 路径 `encryption` 可为 `required` / `disabled`，省略沿用宿主；重叠路径和方法的相反声明在创建时失败。`check.encryption()` / `requiresEncryption` 供宿主装配传输模式，Core 不持有密钥或执行加解密，仍需 HTTPS 和身份鉴别。
 
-完整默认值、独立文件、代理拓扑及部署步骤见[请求访问控制手册](../../docs/usage/configuration/request-access.md)。
+完整默认值、独立文件、代理拓扑及部署步骤见[请求访问控制手册](../../docs/usage/configuration/request-access.md).
 
 ### 生成与校验标识：`core.id`
 
@@ -868,6 +866,16 @@ formatDate 支持 YYYY/MM/DD/HH/mm/ss 占位符，默认 YYYY-MM-DD；日期运�
 
 更完整的参数与少见选项见[Core 使用参考](../cli/templates/skills/hai-core/reference.md)；公开契约以当前包声明为准。
 
+## 配置
+
+core.init 接收配置目录、配置 Schema 和日志选项，同步返回 void，没有 close。文件加载、环境来源合并和配置字段的具体示例见快速开始与 core.config；不能把 init 返回视为所有业务配置校验成功。
+
+[逐项配置说明、适用场景和示例](../../docs/usage/configuration/runtime.md).
+
+## 错误处理
+
+领域操作先判断 `result.success`，失败按本模块错误定义与安全提示处理，服务端保留错误码、关联编号和脱敏原因。同步工具、工厂、流迭代及生命周期按各自签名处理，不把 Promise 完成视为业务成功。具体失败与恢复边界见对应功能。
+
 ## 开发测试
 
 在仓库根目录执行（PowerShell 使用 `pnpm.cmd`）：
@@ -879,7 +887,7 @@ pnpm --filter @h-ai/core build
 pnpm --filter @h-ai/core test
 ```
 
-公开声明与示例检查见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)。
+公开声明与示例检查见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证).
 
 ## 许可证
 

@@ -4,29 +4,14 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/cache](../cache/README.ja.md) · [@h-ai/core](../core/README.ja.md) · [@h-ai/reldb](../reldb/README.ja.md)
 
-## 概要
-
 メール・SMS・API 通知など複数の Provider を同時登録できる通知モジュールです。テンプレートと Provider の対応で用途に応じて配信します。通知抑制（DND）と設定ファイルによるテンプレート定義を備えます。
 
-テンプレート送信は `template`、`to`、`vars` のみで利用でき、Provider はテンプレートから選ばれます。明示した `provider` は優先されます。直接送信は Provider が必須で、省略すると失敗 HaiResult を返します。
-
-## 主な機能
-
-| Provider     | チャネル | 説明                                               |
-| ------------ | -------- | -------------------------------------------------- |
-| `console`    | 汎用     | コンソール出力（開発・テスト用）                   |
-| `smtp`       | メール   | SMTP メール（nodemailer が必要）                   |
-| `aliyun-sms` | SMS      | Alibaba Cloud SMS（HTTP API を直接使用、SDK 不要） |
-| `api`        | 汎用     | HTTP API 通知（汎用 webhook）                      |
-
-## 使い始める
+## クイックスタート
 
 ### 依存関係
 
 - `@h-ai/reldb`：送信ログ・テンプレートの永続化。空でない `templates` または DND delay を設定する前に初期化します。テンプレートの保存や必須テーブルの準備に失敗した場合、`reach.init()` は候補 Provider を閉じて `CONFIG_ERROR` を返します。テンプレート・延期キューを使わない即時送信では任意です。
 - `@h-ai/cache`：DND delay 用の分散ロック（任意）。初期化済みなら自動有効化。
-
-### クイックスタート
 
 #### インストール
 
@@ -103,11 +88,110 @@ Provider の失敗では HTTP ステータスを含む完全なモジュール�
 
 テンプレート送信は一つのスナップショットから件名・本文・既定 Provider を決め、並行編集による異なる版の混在を防ぎます。明示的な `provider` は従来どおり優先します。
 
-### 設定
+## 機能
+
+テンプレート送信は `template`、`to`、`vars` のみで利用でき、Provider はテンプレートから選ばれます。明示した `provider` は優先されます。直接送信は Provider が必須で、省略すると失敗 HaiResult を返します。
+
+### 操作と入出力
+
+本節の完全な初期化手順を先に実行します。例の業務値はホストが検証・認可し、非同期領域結果は success を確認してから data を読みます。void はデータなし完了、null は不存在、同期ファクトリー/ツールは表の型を直接返します。
+
+name はテンプレート名、vars は置換値、template は provider/body/subject の定義。queueId は永続 UUID、回復/裁定には取得版と確認済み判断を使い、外部申告を信頼しない。
+
+#### reach
+
+provider/template・宛先・変数から sent/queued 等の SendResult。受理は最終到達ではなく、不明結果は先に照合。
+
+| 入口         | 入力引数 | 成功結果     | 呼出し例                                                                                     |
+| ------------ | -------- | ------------ | -------------------------------------------------------------------------------------------- |
+| `reach.send` | message  | `SendResult` | `await reach.send({ template: 'welcome', to: 'user@example.com', vars: { name: 'Alice' } })` |
+
+#### reach.template
+
+テンプレート。resolve は名前から定義、保存は定義/配列・削除は名前から void、list は配列、render は名前/vars から body・subject・provider。
+
+| 入口                       | 入力引数   | 成功結果           | 呼出し例                                                                                                       |
+| -------------------------- | ---------- | ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `reach.template.resolve`   | name       | `ReachTemplate`    | `await reach.template.resolve('welcome')`                                                                      |
+| `reach.template.save`      | template   | `void`             | `await reach.template.save({ name: 'welcome', provider: 'mail', body: 'Hello {{name}}', subject: 'Welcome' })` |
+| `reach.template.saveBatch` | templates  | `void`             | `await reach.template.saveBatch([{ name: 'welcome', provider: 'mail', body: 'Hello {{name}}' }])`              |
+| `reach.template.remove`    | name       | `void`             | `await reach.template.remove('welcome')`                                                                       |
+| `reach.template.list`      | 引数なし   | `ReachTemplate[]`  | `await reach.template.list()`                                                                                  |
+| `reach.template.render`    | name, vars | `RenderedTemplate` | `await reach.template.render('welcome', { name: 'Alice' })`                                                    |
+
+#### reach.queue
+
+運用は queueId または状態条件で項目/null・配列を照会。dead の再投入には期待版/方針、unknown の裁定には確認証拠が必要で成功は void。無条件再送しない。
+
+| 入口                         | 入力引数            | 成功結果                  | 呼出し例                                                      |
+| ---------------------------- | ------------------- | ------------------------- | ------------------------------------------------------------- |
+| `reach.queue.get`            | queueId             | `ReachQueueEntry \| null` | `await reach.queue.get(queueId)`                              |
+| `reach.queue.list`           | options             | `ReachQueueEntry[]`       | `await reach.queue.list({ status: 'dead', limit: 20 })`       |
+| `reach.queue.requeueDead`    | queueId, options    | `void`                    | `await reach.queue.requeueDead(queueId, requeueDecision)`     |
+| `reach.queue.resolveUnknown` | queueId, resolution | `void`                    | `await reach.queue.resolveUnknown(queueId, verifiedDecision)` |
+
+### 分散ロック
+
+任意のキャッシュロックは重複走査を減らすためのもので、300 秒後には複数ノードが走査できます。正しさはデータベースの配信状態で保証します。1 回に最大 100 件を 1 件ずつ取得し、外部呼び出し前に有効な owner/lease を原子的に確認して sending を保存します。配信中はリース期間の 3 分の 1 ごとに更新し、期限切れ owner の復活・再送・結果確定を拒否します。DND 時間外は毎分復旧を試みます。
+
+- 状態は `pending → processing → sending → sent`。期限切れ processing は安全に再取得できます。
+- `idempotent: true` の API のみ配信中リクエストを自動再試行します。これは受信側の能力宣言です。各試行の `Idempotency-Key` ヘッダーと `idempotencyKey` 本文は永続化された queueId を使い、受信側が重複排除と副作用を原子的に確定する必要があります。古い worker の遅延復帰も保持期間に含め、最大遅延を限定できない場合は重複排除レコードを失効させないでください。同名 Provider は同じ送信先と重複排除ストアを使います。
+- SMTP、Aliyun SMS、既定の API には外部冪等性の保証がありません。sending 開始後の失敗・例外・リース喪失は結果不明として扱い、期限切れは unknown に隔離して自動再送しません。未接続 Provider は保存済み退避設定に従い、不正な保存 JSON は外部呼び出し前に dead へ移します。Console は開発用メタデータのみを出力します。
+- リース更新、owner 条件、キャンセルでは既に開始した外部副作用を取り消せません。汎用の exactly-once は保証しません。
+
+### 結果不明の手動確認
+
+信頼されたサーバー管理処理で `reach.queue.get(queueId)` を使い、宛先や本文を含まない `pending / processing / sending / unknown / sent / discarded / dead` 状態を確認します。unknown は古い worker を停止・隔離し、外部の配信記録と照合してから sent または discarded に裁定します。UUID・状態の検証と条件付き更新により並行裁定は 1 件だけ成功し、再送はしません。discarded は開始済みリクエストを取り消しません。補充送信は古いリクエストが今後作用しないことを確認した後だけ行ってください。
+
+```ts
+const state = await reach.queue.get(queueId)
+const resolved = await reach.queue.resolveUnknown(queueId, { status: 'sent', messageId: verifiedMessageId })
+if (!resolved.success)
+  throw new Error(resolved.error.message)
+```
+
+### デッドレターの照会と復元
+
+信頼されたサーバー管理処理で `reach.queue.list({ status: 'dead', limit: 50, offset: 0 })` を使用します。unknown も照会でき、1 ページ最大 100 件、offset 上限は 1000000 です。get/list は status、attemptCount、maxAttempts、nextAttemptAt、lastFailure、updatedAt のみを返し、宛先・本文・owner 資格情報は含みません。原因を修復後、最新 dead を読み直して条件付きで復元します。
+
+```ts
+const state = await reach.queue.get(queueId)
+if (!state.success)
+  throw new Error(state.error.message)
+if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
+  const restored = await reach.queue.requeueDead(queueId, { expectedUpdatedAt: state.data.updatedAt })
+  if (!restored.success)
+    throw new Error(restored.error.message)
+}
+```
+
+一致する dead バージョンのみ復元し、並行・古い要求は失敗、unknown は復元できません。回数をリセットしますが queueId・保存済み設定・受信側の冪等性要件は保持します。dead は自動処理の停止を意味し、副作用がなかった証明にはなりません。古い冪等 API 要求が遅れて届く可能性があるため、復元前にも受信側の永続的な重複排除を確認してください。修復不能なペイロードは dead に残して調査し、復元だけで内容が直るとは考えないでください。
+
+### 本番の共有状態
+
+本番は console を拒否し、実際の SMTP・SMS・API サービスを必要とします。ログ書込は配信完了ではありません。冪等でないサービスの未知結果は照合が必要で、exactly-once は保証しません。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../.agents/instructions/distributed-state.md).
+
+### 認証情報の通知と永続化の準備
+
+パスワード、OTP、リセットトークンは `reach.send({ ..., sensitive: true, expiresAt, idempotencyKey })` を使います。expiresAt は Unix ミリ秒、操作キーに秘密値を含めません。共有台帳は本文・変数・認証値のハッシュを保存せず、脱機密化した宛先と受領状態のみを保持します。遅延キューに入れず、DND/期限切れは送信せず、不明な配信を自動再送しません。成功時は receiptId を返します。明示した開発用コンソール出力は永続観測から分離し、本番 Console 制限は維持します。通常通知は deferPolicy: reject で二重キューを防げます。
+
+`migrateReach({ dryRun: true })` で永続構造を確認し、リポジトリ初期化で準備します。失敗時は停止し、事前バックアップと競合書込の停止を行い、送信台帳を保持します。構造準備を資格情報の再送許可と解釈しないでください。
+
+### API 応答と送信先の境界
+
+204/205 を含む空の成功 2xx は受付成功を表し、messageId は任意で、最終配信の証明ではありません。本文がある場合は JSON オブジェクトとし、messageId は255文字以下の任意文字列です。応答上限は64 KiBです。不正応答・タイムアウト・通信失敗を成功扱いにせず、応答本文をログへ出しません。
+
+API の `redirect` は既定で `error`、通常通知のみ明示的に `follow` を選択できます。sensitive は常に転送を拒否し、本文や独自ヘッダーを転送しません。`requireHttps:true` は開始URLの HTTPS を必須とし follow と併用できません。省略時は本番の機密通知に HTTPS を要求し、明示 false は運用者が確認した信頼できる内部接続専用です。元の送信先での副作用が不明なら確認が必要で、機密通知は自動再送しません。アプリの許可リストとネットワーク出口制御は引き続き必要です。
+
+PostgreSQL/MySQLの取得・更新・最終確認はSQL実行時のDB時計を使い、走査期限もDBから取得します。ノード時差や行ロック待機で期限切れ所有者を復活させません。SQLiteの制御可能な時計は開発・テスト専用です。
+
+## 設定
+
+ライフサイクル。init にバックエンド/業務設定を渡し成功後に使用します。借用依存先の解放前に close の完了を待ち、正確な戻り値は例と公開署名に従います。
 
 Provider 名は一意である必要があり、重複は接続前に CONFIG_ERROR を返します。`close()` は初期化を待って Provider を解放し、終了後の状態やタイマーの再公開を防ぎます。
 
-#### Console（開発・テスト用）
+### Console（開発・テスト用）
 
 ```ts
 const config = { name: 'dev', type: 'console' }
@@ -189,7 +273,7 @@ if (result.data.deferred) {
 }
 ```
 
-キューの `created_at`、`updated_at`、`locked_until`、`next_attempt_at` は Unix ミリ秒を `BIGINT`（SQLite では 64 ビット `INTEGER`）として保存します。Reach リポジトリーは PostgreSQL などのドライバーが返す整数文字列を安全な整数の `number` に変換します。負数、小数、JS の安全整数範囲外の保存値は丸めずに `SEND_FAILED` を返します。テンプレートの作成・更新 `TIMESTAMP` は `Date` に対応します。デプロイ時に試行回数・退避設定・失敗分類を含むテーブル構造も更新してください。対応する旧表はモジュール所有のバージョン移行で更新します（下記）。
+キューの `created_at`、`updated_at`、`locked_until`、`next_attempt_at` は Unix ミリ秒を `BIGINT`（SQLite では 64 ビット `INTEGER`）として保存します。Reach リポジトリーは PostgreSQL などのドライバーが返す整数文字列を安全な整数の `number` に変換します。負数、小数、JS の安全整数範囲外の保存値は丸めずに `SEND_FAILED` を返します。テンプレートの作成・更新 `TIMESTAMP` は `Date` に対応します。デプロイ時に試行回数・退避設定・失敗分類を含むテーブル構造も更新してください。構造はモジュールの永続化準備処理が管理します（下記）。
 
 #### 永続化された再試行設定
 
@@ -203,7 +287,13 @@ if (result.data.deferred) {
 
 取得ごとに保存済み `attemptCount` を原子的に増やします。一時的失敗は `now + min(maxRetryDelayMs, retryDelayMs × 2^(attemptCount−1))` 以降に再取得でき、DND 外の毎分走査によって実際の送信はさらに遅れる場合があります。1 回の走査は最大 100 件で取得資格の時刻を固定するため、失敗したメッセージが同じ回を繰り返し占有しません。Provider 未設定・未接続、ネットワーク障害、HTTP 408/425/429/5xx は有限回再試行します。不正な保存 JSON と冪等 API の他の HTTP 4xx は直ちに `dead`、上限到達や最後の取得後のクラッシュも dead になります。冪等性のない配信中リクエストは残り回数によらず `unknown` に隔離します。
 
-### エラー処理
+設定はホストが読込・検証してから渡します。秘密はサーバーの非公開環境に保存し、利用場面に応じてバックエンド・容量・期限・ログを選びます。変更後は再初期化の結果を確認してください。
+
+[項目別の用途・適用場面・例](../../docs/usage/configuration/operations.md).
+
+## エラー処理
+
+領域操作は result.success を確認し、失敗時はモジュールのエラー定義と安全な説明を使います。コード・関連 ID・秘匿した原因をサーバーログに残します。同期ツール・ファクトリー・ストリーム反復・ライフサイクルは各署名に従い、Promise 完了だけで成功と判断しません。回復条件は各機能を参照してください。
 
 すべての操作は `HaiResult<T>` を返します。エラーコードは `HaiReachError` で定義します：
 
@@ -226,61 +316,6 @@ if (!result.success) {
   // result.error.code / result.error.message
 }
 ```
-
-### 分散ロック
-
-任意のキャッシュロックは重複走査を減らすためのもので、300 秒後には複数ノードが走査できます。正しさはデータベースの配信状態で保証します。1 回に最大 100 件を 1 件ずつ取得し、外部呼び出し前に有効な owner/lease を原子的に確認して sending を保存します。配信中はリース期間の 3 分の 1 ごとに更新し、期限切れ owner の復活・再送・結果確定を拒否します。DND 時間外は毎分復旧を試みます。
-
-- 状態は `pending → processing → sending → sent`。期限切れ processing は安全に再取得できます。
-- `idempotent: true` の API のみ配信中リクエストを自動再試行します。これは受信側の能力宣言です。各試行の `Idempotency-Key` ヘッダーと `idempotencyKey` 本文は永続化された queueId を使い、受信側が重複排除と副作用を原子的に確定する必要があります。古い worker の遅延復帰も保持期間に含め、最大遅延を限定できない場合は重複排除レコードを失効させないでください。同名 Provider は同じ送信先と重複排除ストアを使います。
-- SMTP、Aliyun SMS、既定の API には外部冪等性の保証がありません。sending 開始後の失敗・例外・リース喪失は結果不明として扱い、期限切れは unknown に隔離して自動再送しません。未接続 Provider は保存済み退避設定に従い、不正な保存 JSON は外部呼び出し前に dead へ移します。Console は開発用メタデータのみを出力します。
-- リース更新、owner 条件、キャンセルでは既に開始した外部副作用を取り消せません。汎用の exactly-once は保証しません。
-
-### 結果不明の手動確認
-
-信頼されたサーバー管理処理で `reach.queue.get(queueId)` を使い、宛先や本文を含まない `pending / processing / sending / unknown / sent / discarded / dead` 状態を確認します。unknown は古い worker を停止・隔離し、外部の配信記録と照合してから sent または discarded に裁定します。UUID・状態の検証と条件付き更新により並行裁定は 1 件だけ成功し、再送はしません。discarded は開始済みリクエストを取り消しません。補充送信は古いリクエストが今後作用しないことを確認した後だけ行ってください。
-
-```ts
-const state = await reach.queue.get(queueId)
-const resolved = await reach.queue.resolveUnknown(queueId, { status: 'sent', messageId: verifiedMessageId })
-if (!resolved.success)
-  throw new Error(resolved.error.message)
-```
-
-### デッドレターの照会と復元
-
-信頼されたサーバー管理処理で `reach.queue.list({ status: 'dead', limit: 50, offset: 0 })` を使用します。unknown も照会でき、1 ページ最大 100 件、offset 上限は 1000000 です。get/list は status、attemptCount、maxAttempts、nextAttemptAt、lastFailure、updatedAt のみを返し、宛先・本文・owner 資格情報は含みません。原因を修復後、最新 dead を読み直して条件付きで復元します。
-
-```ts
-const state = await reach.queue.get(queueId)
-if (!state.success)
-  throw new Error(state.error.message)
-if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
-  const restored = await reach.queue.requeueDead(queueId, { expectedUpdatedAt: state.data.updatedAt })
-  if (!restored.success)
-    throw new Error(restored.error.message)
-}
-```
-
-一致する dead バージョンのみ復元し、並行・古い要求は失敗、unknown は復元できません。回数をリセットしますが queueId・保存済み設定・受信側の冪等性要件は保持します。dead は自動処理の停止を意味し、副作用がなかった証明にはなりません。古い冪等 API 要求が遅れて届く可能性があるため、復元前にも受信側の永続的な重複排除を確認してください。修復不能なペイロードは dead に残して調査し、復元だけで内容が直るとは考えないでください。
-
-## 本番の共有状態
-
-本番は console を拒否し、実際の SMTP・SMS・API サービスを必要とします。ログ書込は配信完了ではありません。冪等でないサービスの未知結果は照合が必要で、exactly-once は保証しません。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../.agents/instructions/distributed-state.md)。
-
-## 認証情報の通知と更新
-
-パスワード、OTP、リセットトークンは `reach.send({ ..., sensitive: true, expiresAt, idempotencyKey })` を使います。expiresAt は Unix ミリ秒、操作キーに秘密値を含めません。共有台帳は本文・変数・認証値のハッシュを保存せず、脱機密化した宛先と受領状態のみを保持します。遅延キューに入れず、DND/期限切れは送信せず、不明な配信を自動再送しません。成功時は receiptId を返します。明示した開発用コンソール出力は永続観測から分離し、本番 Console 制限は維持します。通常通知は deferPolicy: reject で二重キューを防げます。
-
-`migrateReach({ dryRun: true })` で事前確認し、リポジトリー初期化で対応する移行を実行します。状態と識別子を保持し、旧処理中は unknown、旧ペイロードは一度廃棄し、旧待機ペイロードは discarded にします。更新前は旧書込を停止しバックアップし、古い認証情報を再送しないでください。
-
-## API 応答と送信先の境界
-
-204/205 を含む空の成功 2xx は受付成功を表し、messageId は任意で、最終配信の証明ではありません。本文がある場合は JSON オブジェクトとし、messageId は255文字以下の任意文字列です。応答上限は64 KiBです。不正応答・タイムアウト・通信失敗を成功扱いにせず、応答本文をログへ出しません。
-
-API の `redirect` は既定で `error`、通常通知のみ明示的に `follow` を選択できます。sensitive は常に転送を拒否し、本文や独自ヘッダーを転送しません。`requireHttps:true` は開始URLの HTTPS を必須とし follow と併用できません。省略時は本番の機密通知に HTTPS を要求し、明示 false は運用者が確認した信頼できる内部接続専用です。元の送信先での副作用が不明なら確認が必要で、機密通知は自動再送しません。アプリの許可リストとネットワーク出口制御は引き続き必要です。
-
-PostgreSQL/MySQLの取得・更新・最終確認はSQL実行時のDB時計を使い、走査期限もDBから取得します。ノード時差や行ロック待機で期限切れ所有者を復活させません。SQLiteの制御可能な時計は開発・テスト専用です。
 
 ## 開発とテスト
 

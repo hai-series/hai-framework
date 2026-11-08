@@ -98,6 +98,20 @@ pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
 
 完整参数、缓存、版本与恢复说明见[使用指南](../../docs/usage/README.md#4-编译源码与打包产物)。移动端和桌面端的原生安装包仍需在对应系统另行构建；容器部署交付的是 Web 页面。
 
+## 框架能力导航
+
+本应用的启动、页面和业务操作按上文执行；各框架模块的完整用途、输入输出、配置和错误处理见下表。不要从应用示例推断模块全部能力；服务端与浏览器入口按对应模块契约选择。
+
+| 模块                                          | 本应用相关能力                 |
+| --------------------------------------------- | ------------------------------ |
+| [@h-ai/ai](../../packages/ai/README.md)       | 模型、记忆与工具流程           |
+| [@h-ai/cache](../../packages/cache/README.md) | 共享缓存与会话状态             |
+| [@h-ai/core](../../packages/core/README.md)   | 配置、日志、结果与国际化       |
+| [@h-ai/kit](../../packages/kit/README.md)     | SvelteKit 路由、请求与页面集成 |
+| [@h-ai/reldb](../../packages/reldb/README.md) | 关系型数据库与事务             |
+| [@h-ai/ui](../../packages/ui/README.md)       | 页面、表单和交互组件           |
+| [@h-ai/vecdb](../../packages/vecdb/README.md) | 向量集合与检索                 |
+
 ## 开发测试
 
 默认 E2E 拦截外部 AI 请求，只验证完整 UI 交互，稳定且不消耗额度：

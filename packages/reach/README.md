@@ -4,29 +4,14 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/cache](../cache/README.md) · [@h-ai/core](../core/README.md) · [@h-ai/reldb](../reldb/README.md)
 
-## 简介
-
 用户触达模块，支持同时注册多个 Provider（邮件、短信、API 回调等），通过模板绑定 Provider 实现按场景路由发送。内置免打扰（DND）机制，支持通过配置文件定义模板。
 
-模板发送只需 `template`、`to` 和 `vars`，Provider 默认来自模板；显式 `provider` 仍可覆盖。无模板的直接发送必须提供 Provider，缺少时返回失败 HaiResult。
-
-## 核心功能清单
-
-| Provider     | 渠道 | 说明                                        |
-| ------------ | ---- | ------------------------------------------- |
-| `console`    | 通用 | 控制台输出（开发/测试用）                   |
-| `smtp`       | 邮件 | SMTP 协议发送邮件（需安装 nodemailer）      |
-| `aliyun-sms` | 短信 | 阿里云短信服务（直接调用 HTTP API，无 SDK） |
-| `api`        | 通用 | HTTP API 回调（通用 webhook）               |
-
-## 使用入门
+## 快速开始
 
 ### 依赖
 
 - `@h-ai/reldb` — 数据库（发送日志与模板持久化）；配置非空 `templates` 或启用 DND delay 时必须先初始化，模板保存或必需表准备失败时 `reach.init()` 返回 `CONFIG_ERROR` 并关闭候选 Provider。不使用模板/延迟队列的即时发送可选
 - `@h-ai/cache` — 缓存（DND delay 策略分布式锁），可选；已初始化时自动启用分布式锁
-
-### 快速开始
 
 #### 安装
 
@@ -103,11 +88,110 @@ Provider 失败保留完整模块错误定义（含 HTTP 状态），SMTP/短信
 
 一次模板发送使用同一个模板快照渲染主题、正文并选择默认 Provider，避免并发编辑时混用不同版本。显式 `provider` 仍可覆盖模板渠道。
 
-### 配置
+## 功能
+
+模板发送只需 `template`、`to` 和 `vars`，Provider 默认来自模板；显式 `provider` 仍可覆盖。无模板的直接发送必须提供 Provider，缺少时返回失败 HaiResult。
+
+### 功能输入输出
+
+以下片段依赖本节完整初始化流程。示例中的业务值由宿主校验和授权后传入；异步领域结果先判断 success，再读取 data。表中 void 表示操作已完成且没有返回数据，null 表示不存在；同步工厂/工具直接返回表中类型。
+
+name 是模板名称，vars 是替换变量，template 是包含 provider/body/subject 的定义；queueId 使用持久化 UUID，恢复/裁定输入包含已查询版本与人工决定，不得由外部请求自报。
+
+#### reach
+
+通知输入 provider 或 template、接收方及变量，返回 sent/queued 等 SendResult；受理不等于最终送达，未知结果先核对。
+
+| 入口         | 输入参数 | 成功结果     | 调用示例                                                                                     |
+| ------------ | -------- | ------------ | -------------------------------------------------------------------------------------------- |
+| `reach.send` | message  | `SendResult` | `await reach.send({ template: 'welcome', to: 'user@example.com', vars: { name: 'Alice' } })` |
+
+#### reach.template
+
+模板管理：name 得到模板，模板对象/数组保存或名称删除返回 void，list 返回模板数组，render 输入 name/vars 返回 body、subject 和 provider。
+
+| 入口                       | 输入参数   | 成功结果           | 调用示例                                                                                                       |
+| -------------------------- | ---------- | ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `reach.template.resolve`   | name       | `ReachTemplate`    | `await reach.template.resolve('welcome')`                                                                      |
+| `reach.template.save`      | template   | `void`             | `await reach.template.save({ name: 'welcome', provider: 'mail', body: 'Hello {{name}}', subject: 'Welcome' })` |
+| `reach.template.saveBatch` | templates  | `void`             | `await reach.template.saveBatch([{ name: 'welcome', provider: 'mail', body: 'Hello {{name}}' }])`              |
+| `reach.template.remove`    | name       | `void`             | `await reach.template.remove('welcome')`                                                                       |
+| `reach.template.list`      | 无参数     | `ReachTemplate[]`  | `await reach.template.list()`                                                                                  |
+| `reach.template.render`    | name, vars | `RenderedTemplate` | `await reach.template.render('welcome', { name: 'Alice' })`                                                    |
+
+#### reach.queue
+
+运维按 queueId 查询或筛选状态列表；get 返回项/null，list 返回数组。恢复 dead 需期望版本/策略，unknown 需人工证据裁定，成功 void；不能用重试抹去未知副作用。
+
+| 入口                         | 输入参数            | 成功结果                  | 调用示例                                                      |
+| ---------------------------- | ------------------- | ------------------------- | ------------------------------------------------------------- |
+| `reach.queue.get`            | queueId             | `ReachQueueEntry \| null` | `await reach.queue.get(queueId)`                              |
+| `reach.queue.list`           | options             | `ReachQueueEntry[]`       | `await reach.queue.list({ status: 'dead', limit: 20 })`       |
+| `reach.queue.requeueDead`    | queueId, options    | `void`                    | `await reach.queue.requeueDead(queueId, requeueDecision)`     |
+| `reach.queue.resolveUnknown` | queueId, resolution | `void`                    | `await reach.queue.resolveUnknown(queueId, verifiedDecision)` |
+
+### 分布式锁
+
+缓存锁只减少重复扫描，300 秒后可能有多个节点同时扫描；正确性由数据库投递状态保证。每轮最多逐条领取 100 条，实际发送前原子校验有效 owner 并写入 `sending`，在途每隔租约的三分之一续租。过期 owner 不能复活租约、开始新投递或提交结果。DND 时段外每分钟继续恢复遗留队列。
+
+- 状态为 `pending → processing → sending → sent`；`processing` 过期可安全重领。
+- API 只有配置 `idempotent: true` 才允许重领在途消息。这是对接收端能力的声明，不会凭空实现幂等。每次请求的 `Idempotency-Key` 请求头和 `idempotencyKey` 正文字段均固定为持久化 `queueId`；接收端必须把去重记录和副作用原子提交。去重记录必须覆盖所有迟到请求，包括暂停后恢复的旧节点；无法界定最长迟到时间时不能过期删除。各节点同名 Provider 必须连接同一目标和幂等存储。
+- SMTP、阿里云短信、默认 API 没有外部幂等保证。已经进入 `sending` 后的失败、异常或租约丢失按未知结果处理，过期后转为 `unknown`，新消费者不会自动重发。未连接 Provider 按持久策略退避；发送前解析失败直接进入 dead。Console 仅输出开发元数据，不产生真实投递。
+- 续租、数据库 owner 条件和取消信号都不能撤销已发出的邮件、短信或 HTTP 副作用；模块不提供通用 exactly-once 保证。
+
+### 未知结果人工核对
+
+可信服务端管理流程使用 `reach.queue.get(queueId)` 查询 `pending / processing / sending / unknown / sent / discarded / dead`；结果不含正文或收件人。出现 unknown 时先停止或隔离旧 worker，按 queueId、Provider 日志和第三方投递记录核对，再调用以下裁定接口。接口校验 UUID 和状态，只能把 unknown 条件更新为 sent 或 discarded，并发裁定仅一个成功；不会重新发送。discarded 只终止后续处理，不能撤销已经开始的请求。如需补发，须先确认旧请求不可能继续生效，再显式创建新消息。
+
+```ts
+const state = await reach.queue.get(queueId)
+const resolved = await reach.queue.resolveUnknown(queueId, { status: 'sent', messageId: verifiedMessageId })
+if (!resolved.success)
+  throw new Error(resolved.error.message)
+```
+
+### 死信查询与恢复
+
+可信服务端可用 `reach.queue.list({ status: 'dead', limit: 50, offset: 0 })` 查询死信，也可查询 `unknown`；每页最多 100 条，offset 上限 1000000。get/list 返回状态、attemptCount、maxAttempts、nextAttemptAt、lastFailure 和 updatedAt，不含正文、收件人及 owner。修复 Provider 配置或消息根因后，查询最新 dead 版本再恢复：
+
+```ts
+const state = await reach.queue.get(queueId)
+if (!state.success)
+  throw new Error(state.error.message)
+if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
+  const restored = await reach.queue.requeueDead(queueId, { expectedUpdatedAt: state.data.updatedAt })
+  if (!restored.success)
+    throw new Error(restored.error.message)
+}
+```
+
+恢复仅条件更新同一版本的 dead；并发/过时请求失败，unknown 无法恢复。它重置领取次数并保留 queueId、原退避策略及接收端幂等要求。dead 仅表示停止自动处理，不证明外部副作用未发生；曾开始的幂等 API 可能仍有旧请求迟到，恢复前仍须确认接收端持久去重有效。不可修复的坏载荷应保留死信并人工排查，重复恢复不会修复内容。
+
+### 生产共享状态
+
+生产拒绝 console Provider，须配置真实 SMTP/短信/API 服务。console 的日志成功不是外部投递成功；非幂等服务的未知结果必须核对，不能自动重发证明 exactly-once。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../.agents/instructions/distributed-state.md).
+
+### 凭据通知与持久化准备
+
+发送密码、OTP 或重置令牌时使用 `reach.send({ ..., sensitive: true, expiresAt, idempotencyKey })`。expiresAt 是 Unix 毫秒，稳定操作键不可包含凭据。必须有共享发送账本：只持久化无载荷回执/状态，接收方脱敏，不存正文、变量或低熵凭据摘要，也不进入延迟队列。发送成功返回 receiptId；DND/过期不投递，异常或不明状态不自动重投。明确启用的开发控制台仍可显示业务允许的通知，持久采集观察器被隔离；生产 Console Provider 限制不变。普通通知可用 deferPolicy: reject 阻止二次排队。
+
+`migrateReach({ dryRun: true })` 预检持久结构，仓储初始化执行支持的准备步骤；失败时停止初始化。执行前备份并停止冲突写入，保留发送账本，不把结构准备作为重新发送凭据的理由。
+
+### API 回执与目标边界
+
+空正文的成功 2xx（含 204/205）表示接收端受理，messageId 可缺省，不代表最终送达。非空正文须为 JSON 对象，messageId 若存在须为不超过 255 字符的字符串；响应最多 64 KiB，非法响应、超时和网络失败不会假装成功或输出第三方正文。
+
+API Provider 的 `redirect` 默认为 `error`；只有普通消息可显式设为 `follow`。`sensitive:true` 始终拒绝跳转，不转发正文和私有头。`requireHttps:true` 强制初始 HTTPS 且与 follow 互斥；省略时生产敏感消息要求 HTTPS，显式 false 仅适用于操作者确认的受信内网。超时或源端已产生的未知副作用仍须核对，敏感消息不自动重投。域名授权、内网地址限制和出口策略由应用及部署环境负责。
+
+PostgreSQL/MySQL 队列的领取、续租和最终确认使用 SQL 执行时的数据库时钟；扫描截止也从数据库读取。节点时差及行锁等待跨过期限后不能续活旧 owner。本地 SQLite 只用于开发/测试，可控制测试时钟，不作为生产共享状态。
+
+## 配置
+
+生命周期：init 输入后端/业务配置，成功后才能使用；close 在释放借用依赖前等待完成。返回值以快速开始示例和公开签名为准。
 
 Provider 名称必须唯一，重复配置在连接前返回 CONFIG_ERROR。`close()` 等待在途初始化并回收其 Provider；关闭返回后不会迟到发布模块或定时器。
 
-#### Console（开发/测试）
+### Console（开发/测试）
 
 ```ts
 const config = { name: 'dev', type: 'console' }
@@ -189,7 +273,7 @@ if (result.data.deferred) {
 }
 ```
 
-队列的 `created_at`、`updated_at`、`locked_until`、`next_attempt_at` 统一保存 Unix 毫秒，列类型为 `BIGINT`（SQLite 映射为 64 位 `INTEGER`）。Reach 仓库将 PostgreSQL 等驱动返回的整数字符串归一化为安全整数 `number`；负数、非整数及超出 JS 安全整数范围的存储值返回 `SEND_FAILED`，不会静默舍入。模板仓库的 `TIMESTAMP` 创建/更新时间映射为 `Date`。部署时须同步表结构，包括次数、退避策略和失败分类列；旧表升级由模块维护的版本迁移负责，见下文。
+队列的 `created_at`、`updated_at`、`locked_until`、`next_attempt_at` 统一保存 Unix 毫秒，列类型为 `BIGINT`（SQLite 映射为 64 位 `INTEGER`）。Reach 仓库将 PostgreSQL 等驱动返回的整数字符串归一化为安全整数 `number`；负数、非整数及超出 JS 安全整数范围的存储值返回 `SEND_FAILED`，不会静默舍入。模板仓库的 `TIMESTAMP` 创建/更新时间映射为 `Date`。部署时须同步表结构，包括次数、退避策略和失败分类列；结构准备由模块维护，见下文持久化准备。
 
 #### 可靠队列重试
 
@@ -203,7 +287,13 @@ if (result.data.deferred) {
 
 每次领取在数据库原子递增 `attemptCount`。暂时失败在 `now + min(maxRetryDelayMs, retryDelayMs × 2^(attemptCount−1))` 之后才有资格再次领取；DND 外每分钟扫描，因此实际发送可能更晚。一轮最多处理 100 条，并固定本轮资格时间；失败的消息在该轮不会重新入选。未连接/缺失 Provider、网络错误、HTTP 408/425/429/5xx 可以有限重试；持久化载荷解析失败、幂等 API 的其他 HTTP 4xx 直接进入 `dead`。超出次数或最后一次领取后崩溃也进入 `dead`。非幂等在途请求仍优先进入 `unknown`，不因剩余预算而重发。
 
-### 错误处理
+配置由宿主加载和校验，再传入本模块；私密值放服务端私有环境，不传到浏览器。按实际使用场景逐项选择后端、容量、期限和日志策略，修改后重新初始化并核验成功结果。
+
+[逐项配置说明、适用场景和示例](../../docs/usage/configuration/operations.md).
+
+## 错误处理
+
+领域操作先判断 `result.success`，失败按本模块错误定义与安全提示处理，服务端保留错误码、关联编号和脱敏原因。同步工具、工厂、流迭代及生命周期按各自签名处理，不把 Promise 完成视为业务成功。具体失败与恢复边界见对应功能。
 
 所有操作返回 `HaiResult<T>`，错误码定义在 `HaiReachError`：
 
@@ -226,61 +316,6 @@ if (!result.success) {
   // result.error.code / result.error.message
 }
 ```
-
-### 分布式锁
-
-缓存锁只减少重复扫描，300 秒后可能有多个节点同时扫描；正确性由数据库投递状态保证。每轮最多逐条领取 100 条，实际发送前原子校验有效 owner 并写入 `sending`，在途每隔租约的三分之一续租。过期 owner 不能复活租约、开始新投递或提交结果。DND 时段外每分钟继续恢复遗留队列。
-
-- 状态为 `pending → processing → sending → sent`；`processing` 过期可安全重领。
-- API 只有配置 `idempotent: true` 才允许重领在途消息。这是对接收端能力的声明，不会凭空实现幂等。每次请求的 `Idempotency-Key` 请求头和 `idempotencyKey` 正文字段均固定为持久化 `queueId`；接收端必须把去重记录和副作用原子提交。去重记录必须覆盖所有迟到请求，包括暂停后恢复的旧节点；无法界定最长迟到时间时不能过期删除。各节点同名 Provider 必须连接同一目标和幂等存储。
-- SMTP、阿里云短信、默认 API 没有外部幂等保证。已经进入 `sending` 后的失败、异常或租约丢失按未知结果处理，过期后转为 `unknown`，新消费者不会自动重发。未连接 Provider 按持久策略退避；发送前解析失败直接进入 dead。Console 仅输出开发元数据，不产生真实投递。
-- 续租、数据库 owner 条件和取消信号都不能撤销已发出的邮件、短信或 HTTP 副作用；模块不提供通用 exactly-once 保证。
-
-### 未知结果人工核对
-
-可信服务端管理流程使用 `reach.queue.get(queueId)` 查询 `pending / processing / sending / unknown / sent / discarded / dead`；结果不含正文或收件人。出现 unknown 时先停止或隔离旧 worker，按 queueId、Provider 日志和第三方投递记录核对，再调用以下裁定接口。接口校验 UUID 和状态，只能把 unknown 条件更新为 sent 或 discarded，并发裁定仅一个成功；不会重新发送。discarded 只终止后续处理，不能撤销已经开始的请求。如需补发，须先确认旧请求不可能继续生效，再显式创建新消息。
-
-```ts
-const state = await reach.queue.get(queueId)
-const resolved = await reach.queue.resolveUnknown(queueId, { status: 'sent', messageId: verifiedMessageId })
-if (!resolved.success)
-  throw new Error(resolved.error.message)
-```
-
-### 死信查询与恢复
-
-可信服务端可用 `reach.queue.list({ status: 'dead', limit: 50, offset: 0 })` 查询死信，也可查询 `unknown`；每页最多 100 条，offset 上限 1000000。get/list 返回状态、attemptCount、maxAttempts、nextAttemptAt、lastFailure 和 updatedAt，不含正文、收件人及 owner。修复 Provider 配置或消息根因后，查询最新 dead 版本再恢复：
-
-```ts
-const state = await reach.queue.get(queueId)
-if (!state.success)
-  throw new Error(state.error.message)
-if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
-  const restored = await reach.queue.requeueDead(queueId, { expectedUpdatedAt: state.data.updatedAt })
-  if (!restored.success)
-    throw new Error(restored.error.message)
-}
-```
-
-恢复仅条件更新同一版本的 dead；并发/过时请求失败，unknown 无法恢复。它重置领取次数并保留 queueId、原退避策略及接收端幂等要求。dead 仅表示停止自动处理，不证明外部副作用未发生；曾开始的幂等 API 可能仍有旧请求迟到，恢复前仍须确认接收端持久去重有效。不可修复的坏载荷应保留死信并人工排查，重复恢复不会修复内容。
-
-## 生产共享状态
-
-生产拒绝 console Provider，须配置真实 SMTP/短信/API 服务。console 的日志成功不是外部投递成功；非幂等服务的未知结果必须核对，不能自动重发证明 exactly-once。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../.agents/instructions/distributed-state.md)。
-
-## 凭据通知与旧库升级
-
-发送密码、OTP 或重置令牌时使用 `reach.send({ ..., sensitive: true, expiresAt, idempotencyKey })`。expiresAt 是 Unix 毫秒，稳定操作键不可包含凭据。必须有共享发送账本：只持久化无载荷回执/状态，接收方脱敏，不存正文、变量或低熵凭据摘要，也不进入延迟队列。发送成功返回 receiptId；DND/过期不投递，异常或不明状态不自动重投。明确启用的开发控制台仍可显示业务允许的通知，持久采集观察器被隔离；生产 Console Provider 限制不变。普通通知可用 deferPolicy: reject 阻止二次排队。
-
-`migrateReach({ dryRun: true })` 预检；仓库初始化自动执行受支持步骤。升级保留发送状态与标识，旧在途转 unknown；旧正文/主题/模板变量/extra 一次性退役，待发旧载荷 discarded。生产需先备份停旧写入，不能恢复旧凭据重新投递。
-
-## API 回执与目标边界
-
-空正文的成功 2xx（含 204/205）表示接收端受理，messageId 可缺省，不代表最终送达。非空正文须为 JSON 对象，messageId 若存在须为不超过 255 字符的字符串；响应最多 64 KiB，非法响应、超时和网络失败不会假装成功或输出第三方正文。
-
-API Provider 的 `redirect` 默认为 `error`；只有普通消息可显式设为 `follow`。`sensitive:true` 始终拒绝跳转，不转发正文和私有头。`requireHttps:true` 强制初始 HTTPS 且与 follow 互斥；省略时生产敏感消息要求 HTTPS，显式 false 仅适用于操作者确认的受信内网。超时或源端已产生的未知副作用仍须核对，敏感消息不自动重投。域名授权、内网地址限制和出口策略由应用及部署环境负责。
-
-PostgreSQL/MySQL 队列的领取、续租和最终确认使用 SQL 执行时的数据库时钟；扫描截止也从数据库读取。节点时差及行锁等待跨过期限后不能续活旧 owner。本地 SQLite 只用于开发/测试，可控制测试时钟，不作为生产共享状态。
 
 ## 开发测试
 

@@ -147,18 +147,21 @@ pnpm --filter corporate-website test:e2e         # 运行 E2E 测试（Playwrigh
 pnpm --filter corporate-website paraglide:compile # 编译 i18n 翻译文件
 ```
 
-### 📦 框架依赖
+## 框架能力导航
 
-- `@h-ai/core`：配置管理、日志、HaiResult 模式、错误处理
-- `@h-ai/reldb`：数据库抽象（SQLite / PostgreSQL / MySQL）
-- `@h-ai/cache`：缓存（Memory / Redis）
-- `@h-ai/storage`：文件存储（Local / S3）
-- `@h-ai/ai`：AI 集成（智能客服）
-- `@h-ai/reach`：消息触达（邮件 / 短信）
-- `@h-ai/kit`：SvelteKit hooks、guards、中间件、校验
-- `@h-ai/ui`：UI 组件库（场景组件、自动导入）
+本应用的启动、页面和业务操作按上文执行；各框架模块的完整用途、输入输出、配置和错误处理见下表。不要从应用示例推断模块全部能力；服务端与浏览器入口按对应模块契约选择。
 
-失败与降级提示也必须国际化：官网 API 按请求 locale 生成 AI 降级/邮件送达状态；未送达不能称为已接收。CLI 部署状态使用 cliM，Gallery 加密能力限制使用三语消息。中文、英文与日语分别验证未配置、失败和成功路径，无需调用付费服务。
+| 模块                                              | 本应用相关能力                 |
+| ------------------------------------------------- | ------------------------------ |
+| [@h-ai/ai](../../packages/ai/README.md)           | 模型、记忆与工具流程           |
+| [@h-ai/cache](../../packages/cache/README.md)     | 共享缓存与会话状态             |
+| [@h-ai/core](../../packages/core/README.md)       | 配置、日志、结果与国际化       |
+| [@h-ai/kit](../../packages/kit/README.md)         | SvelteKit 路由、请求与页面集成 |
+| [@h-ai/reach](../../packages/reach/README.md)     | 邮件、短信与通知               |
+| [@h-ai/reldb](../../packages/reldb/README.md)     | 关系型数据库与事务             |
+| [@h-ai/storage](../../packages/storage/README.md) | 私有文件与对象存储             |
+| [@h-ai/ui](../../packages/ui/README.md)           | 页面、表单和交互组件           |
+| [@h-ai/vecdb](../../packages/vecdb/README.md)     | 向量集合与检索                 |
 
 ## 开发测试
 

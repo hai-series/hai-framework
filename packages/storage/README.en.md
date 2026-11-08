@@ -4,34 +4,11 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
 
-## Introduction
-
 An object storage module with a unified `storage` entry point for S3-compatible storage and local filesystems.
 
-Connections become available only after a successful health check. Failed initialization disposes its candidate; `error.ext.cleanupPending === true` identifies cleanup that still needs retry. `storage.close()` returns `Promise<HaiResult<void>>`, waits for initialization, and coalesces concurrent close calls. Once cleanup starts, `isInitialized` is false and configuration/operations are unavailable. A failed cleanup retains the resource: the next `close()` or `init()` retries disposal before allocating a replacement. Always inspect the close result.
+## Quick Start
 
-```ts
-const closed = await storage.close()
-if (!closed.success) {
-  // Retry once after addressing the cleanup failure; report another failure.
-  const retried = await storage.close()
-  if (!retried.success)
-    throw new Error(retried.error.message)
-}
-```
-
-S3 disposes its normal client and its separate batch-delete client (SDK request retries disabled) independently. One failure does not prevent the other cleanup; successfully disposed clients are not destroyed again.
-
-## Core features
-
-- S3 protocol (AWS S3 / MinIO / RustFS / OSS, etc.)
-- Local filesystem
-
-## Getting started
-
-### Quick start
-
-#### Node.js server
+### Node.js server
 
 ```ts
 import { storage } from '@h-ai/storage'
@@ -83,6 +60,72 @@ await uploadWithPresignedUrl(signed.data.url, file)
 
 > Note: `@h-ai/storage` does not include HTTP routes. Implement the signed URL API in the application layer.
 
+## Features
+
+Connections become available only after a successful health check. Failed initialization disposes its candidate; `error.ext.cleanupPending === true` identifies cleanup that still needs retry. `storage.close()` returns `Promise<HaiResult<void>>`, waits for initialization, and coalesces concurrent close calls. Once cleanup starts, `isInitialized` is false and configuration/operations are unavailable. A failed cleanup retains the resource: the next `close()` or `init()` retries disposal before allocating a replacement. Always inspect the close result.
+
+```ts
+const closed = await storage.close()
+if (!closed.success) {
+  // Retry once after addressing the cleanup failure; report another failure.
+  const retried = await storage.close()
+  if (!retried.success)
+    throw new Error(retried.error.message)
+}
+```
+
+S3 disposes its normal client and its separate batch-delete client (SDK request retries disabled) independently. One failure does not prevent the other cleanup; successfully disposed clients are not destroyed again.
+
+### Operations and results
+
+Use the complete initialization flow in this section first. The host validates and authorizes example business values; check success before reading data from asynchronous domain results. Here void means completion without data, null means absent; synchronous factories/tools return the listed type directly.
+
+#### storage.file
+
+Object lifecycle uses raw keys, bytes/streams and options: put/copy/head yield metadata, get Buffer, getStream an async byte stream, exists boolean, delete void; deleteMany reports per-key confirmed progress.
+
+| Entry                     | Input parameters            | Successful result                            | Call example                                                                  |
+| ------------------------- | --------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------- |
+| `storage.file.put`        | key, data, options          | `FileMetadata`                               | `await storage.file.put('report.txt', 'text', { contentType: 'text/plain' })` |
+| `storage.file.get`        | key, options                | `Buffer<ArrayBufferLike>`                    | `await storage.file.get('report.txt')`                                        |
+| `storage.file.getStream`  | key, options                | `AsyncIterable<Uint8Array<ArrayBufferLike>>` | `await storage.file.getStream('report.txt')`                                  |
+| `storage.file.head`       | key                         | `FileMetadata`                               | `await storage.file.head('report.txt')`                                       |
+| `storage.file.exists`     | key                         | `boolean`                                    | `await storage.file.exists('report.txt')`                                     |
+| `storage.file.copy`       | sourceKey, destKey, options | `FileMetadata`                               | `await storage.file.copy('report.txt', 'archive/report.txt')`                 |
+| `storage.file.delete`     | key                         | `void`                                       | `await storage.file.delete('report.txt')`                                     |
+| `storage.file.deleteMany` | keys                        | `StorageDeleteResult`                        | `await storage.file.deleteMany(['report.txt', 'archive/report.txt'])`         |
+
+#### storage.dir
+
+Browse/clean by prefix: list takes prefix/pagination and returns files with continuation; delete takes a prefix and yields void without preventing concurrent new objects.
+
+| Entry                | Input parameters | Successful result | Call example                                                  |
+| -------------------- | ---------------- | ----------------- | ------------------------------------------------------------- |
+| `storage.dir.list`   | options          | `ListResult`      | `await storage.dir.list({ prefix: 'reports/', maxKeys: 20 })` |
+| `storage.dir.delete` | prefix           | `void`            | `await storage.dir.delete('reports/')`                        |
+
+#### storage.presign
+
+Direct S3 upload/download: key plus expiry/response options yield a URL HaiResult; publicUrl synchronously yields a URL/null and grants no authorization.
+
+| Entry                       | Input parameters | Successful result | Call example                                                                                |
+| --------------------------- | ---------------- | ----------------- | ------------------------------------------------------------------------------------------- |
+| `storage.presign.getUrl`    | key, options     | `string`          | `await storage.presign.getUrl('report.txt', { expiresIn: 300 })`                            |
+| `storage.presign.putUrl`    | key, options     | `string`          | `await storage.presign.putUrl('report.txt', { expiresIn: 300, contentType: 'text/plain' })` |
+| `storage.presign.publicUrl` | key              | `string \| null`  | `storage.presign.publicUrl('report.txt')`                                                   |
+
+#### storage.checksum
+
+Stateless integrity: data plus algorithm/encoding yields a digest, expected digest yields matching boolean; a stream is consumed once.
+
+| Entry                       | Input parameters        | Successful result | Call example                                           |
+| --------------------------- | ----------------------- | ----------------- | ------------------------------------------------------ |
+| `storage.checksum.generate` | data, options           | `string`          | `await storage.checksum.generate('text')`              |
+| `storage.checksum.verify`   | data, expected, options | `boolean`         | `await storage.checksum.verify(bytes, expectedDigest)` |
+
+- S3 protocol (AWS S3 / MinIO / RustFS / OSS, etc.)
+- Local filesystem
+
 ### HTTP API contracts
 
 Public HTTP contracts come from `@h-ai/api-contract`; `createStorageProcedures({ storage, authorize })` in `@h-ai/serv` binds them to this module.
@@ -112,7 +155,7 @@ Presigning requires S3. Local `getUrl()` / `putUrl()` return `HaiStorageError.UN
 
 `{ ifNoneMatch: '*' }` uses standard S3 conditional writes or atomic local publication to reject overwrites with `ALREADY_EXISTS`. Unsupported S3 conditions fail without falling back to an overwrite. Failed/cancelled uploads clean temporary files or unfinished parts; cancellation cannot undo an already published object.
 
-Local prepares metadata bound to the content file identity in the reserved `.hai-storage-meta/` directory beside the file, then atomically publishes the content as the commit point. Metadata preparation failure cannot create or overwrite content. Default metadata has an explicit empty record and never inherits old object fields. Failure to clean a known old generation after publication is diagnostic only; concurrent writes or crashes may leave internal records that cannot safely be reclaimed, which are not deleted speculatively. Every path segment reserves `.meta.json`, `.upload.tmp` and `.hai-storage-meta`. Generation records are the only metadata format; legacy `<key>.meta.json` is not read. A missing current record returns an explicit error. Existing data requires offline migration or a new `file.put()` upload. Back up content together with internal records and do not mix older writers with this format.
+Local prepares metadata bound to the content file identity in the reserved `.hai-storage-meta/` directory beside the file, then atomically publishes the content as the commit point. Metadata preparation failure cannot create or overwrite content. Default metadata has an explicit empty record and never inherits old object fields. Failure to clean a known old generation after publication is diagnostic only; concurrent writes or crashes may leave internal records that cannot safely be reclaimed, which are not deleted speculatively. Every path segment reserves `.meta.json`, `.upload.tmp` and `.hai-storage-meta`. Generation records are the only metadata format; a missing valid record returns an explicit error. Rebuild objects through `file.put()` with trusted content and business metadata. Back up content together with internal records and prohibit direct writes that bypass this format.
 
 S3 `file.copy()` encodes each source path segment, preserving Unicode, spaces and URL delimiters as part of the object key. Pass raw keys without pre-encoding.
 
@@ -150,7 +193,21 @@ Cancelling a checksum stops waiting for the next chunk and requests closure of t
 - `getMimeType(extension)`
 - `formatFileSize(bytes)`
 
-### Configuration
+### Production shared state
+
+Production requires shared S3 or a compatible service; local is for development/explicit tests. Applications own object authorization and conditional read-modify-write commits. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../.agents/instructions/distributed-state.md).
+
+### Input limits and HTTP capabilities
+
+Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](README.md#存储输入约束与跨端能力).
+
+### Browser upload cancellation
+
+`uploadWithPresignedUrl(url, data, { onProgress, abortController })` uses native XHR for progress and fetch when `onProgress` is omitted. An already aborted controller sends no request. Cancellation during setup or upload, external XHR abort, network/timeout errors, and progress callback exceptions settle once with a failure and remove this operation's listeners. Aborting after completion does not touch the old XHR. Cancellation only stops the local request; it cannot roll back an object already written remotely. Check the object state and authorize deletion separately.
+
+## Configuration
+
+Lifecycle: init takes backend/business configuration; use the module only after success. Await close before releasing borrowed dependencies. Follow the quick-start example and public signatures for exact return values.
 
 Local storage rejects file symlinks and directory junctions in key paths; reserved `.meta.json` / `.upload.tmp` suffixes are case insensitive. Overwrite put replaces old metadata, while copy inherits source metadata by default. The browser root exports schemas, types and client helpers, without the server singleton.
 
@@ -183,7 +240,7 @@ if (!initResult.success) {
 }
 ```
 
-#### Internal connections and browser access
+### Internal connections and browser access
 
 `endpoint` handles server-side CRUD, bucket creation and health checks. Optional `publicEndpoint` selects the external address for `presign.getUrl/putUrl`; omission preserves endpoint-based signing. It accepts a proxy directory such as `https://app.example.com/delivery/files`. Path segments allow letters, numbers, underscores, dots and hyphens, excluding dot segments, repeated slashes and encoded separators. Do not include the bucket, credentials, query or fragment. `publicUrl` constructs public-resource URLs without authorizing private objects.
 
@@ -238,7 +295,13 @@ do {
 } while (continuationToken)
 ```
 
-### Error handling
+The host loads and validates configuration before passing it to this module. Keep secrets in private server environment files. Select the backend, capacity, deadlines and logging for the actual use case; reinitialize and check the result after changes.
+
+[Per-option purpose, use cases and examples](../../docs/usage/configuration/data.md).
+
+## Error Handling
+
+Check result.success for domain operations. Handle failures with the module error definitions and safe messages; retain codes, correlation IDs and sanitized causes in server logs. Synchronous tools, factories, stream iteration and lifecycle calls follow their own signatures. A completed Promise alone is not business success. See each feature for recovery limits.
 
 ```ts
 import { HaiStorageError, storage } from '@h-ai/storage'
@@ -263,19 +326,7 @@ Common error codes:
 | `HaiStorageError.INVALID_LIST_OPTIONS`  | `hai:storage:019` | Invalid local list options or cursor, including mismatched query scope |
 | `HaiStorageError.CONFIG_ERROR`          | `hai:storage:012` | Invalid configuration                                                  |
 
-## Production shared state
-
-Production requires shared S3 or a compatible service; local is for development/explicit tests. Applications own object authorization and conditional read-modify-write commits. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../.agents/instructions/distributed-state.md)。
-
-## Input limits and HTTP capabilities
-
-Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](README.md#存储输入约束与跨端能力).
-
-## Browser upload cancellation
-
-`uploadWithPresignedUrl(url, data, { onProgress, abortController })` uses native XHR for progress and fetch when `onProgress` is omitted. An already aborted controller sends no request. Cancellation during setup or upload, external XHR abort, network/timeout errors, and progress callback exceptions settle once with a failure and remove this operation's listeners. Aborting after completion does not touch the old XHR. Cancellation only stops the local request; it cannot roll back an object already written remotely. Check the object state and authorize deletion separately.
-
-## Development and testing
+## Development
 
 ```bash
 pnpm --filter @h-ai/storage test

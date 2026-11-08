@@ -4,23 +4,13 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md) · [@h-ai/reldb](../reldb/README.en.md)
 
-## Introduction
-
 A scheduled task module with a unified task model, cron scheduling, JS function strings / HTTP API execution, persistence, execution log queries, and global task lifecycle hooks.
 
-## Core features
-
-- Run tasks on a cron schedule or trigger them from application code.
-- Execute HTTP requests, trusted JavaScript and application hooks, with retry and cancellation.
-- Persist tasks, execution journals and renewable leases in a shared database, with unknown-outcome isolation.
-
-## Getting started
+## Quick Start
 
 ### Dependencies
 
 - `@h-ai/reldb`: initialize the shared database first; tasks, execution journals and leases are mandatory, and `enableDb` accepts only true.
-
-### Quick start
 
 ```ts
 import { reldb } from '@h-ai/reldb'
@@ -78,6 +68,59 @@ const logs = await scheduler.getLogs({
 scheduler.stop()
 await scheduler.close()
 ```
+
+## Features
+
+- Run tasks on a cron schedule or trigger them from application code.
+- Execute HTTP requests, trusted JavaScript and application hooks, with retry and cancellation.
+- Persist tasks, execution journals and renewable leases in a shared database, with unknown-outcome isolation.
+
+### Operations and results
+
+Use the complete initialization flow in this section first. The host validates and authorizes example business values; check success before reading data from asynchronous domain results. Here void means completion without data, null means absent; synchronous factories/tools return the listed type directly.
+
+#### scheduler
+
+Definitions take task, ID, ID+patch or no-arg refresh and yield void HaiResult. tasks is the last successful read-only snapshot, not authorization or live DB state.
+
+| Entry                    | Input parameters | Successful result | Call example                                                                                   |
+| ------------------------ | ---------------- | ----------------- | ---------------------------------------------------------------------------------------------- |
+| `scheduler.register`     | task             | `void`            | `await scheduler.register({ id: 'daily', name: 'Daily', cron: '0 2 * * *', timezone: 'UTC' })` |
+| `scheduler.unregister`   | taskId           | `void`            | `await scheduler.unregister('daily')`                                                          |
+| `scheduler.updateTask`   | taskId, updates  | `void`            | `await scheduler.updateTask('daily', { enabled: false })`                                      |
+| `scheduler.refreshTasks` | No arguments     | `void`            | `await scheduler.refreshTasks()`                                                               |
+
+#### scheduler
+
+start/stop return synchronous HaiResult; trigger takes task ID/params and yields an attempt log; getLogs filters/page yield a log page. Stop does not undo in-flight effects.
+
+| Entry               | Input parameters | Successful result                   | Call example                                         |
+| ------------------- | ---------------- | ----------------------------------- | ---------------------------------------------------- |
+| `scheduler.start`   | No arguments     | `void`                              | `scheduler.start()`                                  |
+| `scheduler.stop`    | No arguments     | `void`                              | `scheduler.stop()`                                   |
+| `scheduler.trigger` | taskId, options  | `TaskExecutionLog`                  | `await scheduler.trigger('daily')`                   |
+| `scheduler.getLogs` | options          | `PaginatedResult<TaskExecutionLog>` | `await scheduler.getLogs({ page: 1, pageSize: 20 })` |
+
+#### scheduler
+
+Install/clear business/event callbacks, returning synchronous HaiResult. Hooks must honor signal and external-effect idempotency.
+
+| Entry                  | Input parameters | Successful result | Call example                    |
+| ---------------------- | ---------------- | ----------------- | ------------------------------- |
+| `scheduler.setHooks`   | hooks            | `void`            | `scheduler.setHooks(taskHooks)` |
+| `scheduler.clearHooks` | No arguments     | `void`            | `scheduler.clearHooks()`        |
+
+#### scheduler.execution
+
+Authoritative journal: get occurrenceId yields entry/null, lists take limit/offset and yield arrays, repairLog ID idempotently repairs logs, resolveUnknown ID/decision/expectedUpdatedAt conditionally releases the slot and yields void.
+
+| Entry                                 | Input parameters         | Successful result                 | Call example                                                                                       |
+| ------------------------------------- | ------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `scheduler.execution.get`             | occurrenceId             | `SchedulerExecutionEntry \| null` | `await scheduler.execution.get(occurrenceId)`                                                      |
+| `scheduler.execution.listUnknown`     | options                  | `SchedulerExecutionEntry[]`       | `await scheduler.execution.listUnknown({ limit: 20, offset: 0 })`                                  |
+| `scheduler.execution.listLogFailures` | options                  | `SchedulerExecutionEntry[]`       | `await scheduler.execution.listLogFailures({ limit: 20, offset: 0 })`                              |
+| `scheduler.execution.repairLog`       | occurrenceId             | `void`                            | `await scheduler.execution.repairLog(occurrenceId)`                                                |
+| `scheduler.execution.resolveUnknown`  | occurrenceId, resolution | `void`                            | `await scheduler.execution.resolveUnknown(occurrenceId, { status: 'success', expectedUpdatedAt })` |
 
 ### Unified task model
 
@@ -184,30 +227,6 @@ Execution logs support automatic cleanup policies configured at initialization:
 - `tasks` / `hooks` / `config` / `isInitialized` / `isRunning`
 - `close()`
 
-### Error handling
-
-All public APIs except `close()` return `HaiResult<T>`.
-
-Common error codes:
-
-| Error code                                | code                | Description                   |
-| ----------------------------------------- | ------------------- | ----------------------------- |
-| `HaiSchedulerError.NOT_INITIALIZED`       | `hai:scheduler:010` | Not initialized               |
-| `HaiSchedulerError.INIT_FAILED`           | `hai:scheduler:011` | Initialization failed         |
-| `HaiSchedulerError.CONFIG_ERROR`          | `hai:scheduler:012` | Invalid configuration         |
-| `HaiSchedulerError.TASK_NOT_FOUND`        | `hai:scheduler:020` | Task not found                |
-| `HaiSchedulerError.TASK_ALREADY_EXISTS`   | `hai:scheduler:021` | Task already exists           |
-| `HaiSchedulerError.INVALID_CRON`          | `hai:scheduler:022` | Invalid cron expression       |
-| `HaiSchedulerError.EXECUTION_FAILED`      | `hai:scheduler:023` | Execution failed              |
-| `HaiSchedulerError.JS_EXECUTION_FAILED`   | `hai:scheduler:024` | JS execution failed           |
-| `HaiSchedulerError.API_EXECUTION_FAILED`  | `hai:scheduler:025` | API execution failed          |
-| `HaiSchedulerError.DB_SAVE_FAILED`        | `hai:scheduler:026` | Database save failed          |
-| `HaiSchedulerError.ALREADY_RUNNING`       | `hai:scheduler:027` | Already running               |
-| `HaiSchedulerError.NOT_RUNNING`           | `hai:scheduler:028` | Not running                   |
-| `HaiSchedulerError.JS_COMPILE_FAILED`     | `hai:scheduler:030` | JS compilation failed         |
-| `HaiSchedulerError.HOOK_EXECUTION_FAILED` | `hai:scheduler:031` | Hook execution failed         |
-| `HaiSchedulerError.LOG_PERSIST_FAILED`    | `hai:scheduler:032` | Log persistence not confirmed |
-
 ### Runtime behavior and limits
 
 All nodes must initialize the same shared RelDB first (PostgreSQL/MySQL for production across hosts; SQLite only for local processes that correctly share the same file). Task definitions, execution journals, active task slots and leases are persisted; `enableDb` accepts only true. Cache is no longer required. `leaseMs` defaults to 300000 and accepts 1000–86400000 milliseconds, with renewal during execution. Cron, manual and later periods share one active task slot; an expired owner cannot revive or commit. Nodes refresh definitions every `tickInterval`; `tasks` is the last successful snapshot. Failed reads, deletion, disabling or rescheduling interrupt stale attempts, without rolling back external effects.
@@ -226,7 +245,7 @@ Repair shrinks the pending list. Drain batches repeatedly at offset=0 instead of
 
 Trusted server operators monitor `execution.listLogFailures({ limit, offset })` with the same bounds as listUnknown and call `execution.repairLog(occurrenceId)` to replay logs from the shared journal across nodes, restarts, or concurrent calls. Stable primary keys and complete payload comparison handle committed writes with lost acknowledgements. `LOG_PERSIST_FAILED` (032) retains pending state and emits a safe warning. If the entire database is unavailable before the terminal commit, reconcile unknown effects; do not assume a recoverable outcome exists. Repair and retention never call business hooks. Retention failure only warns. `onTaskFinish` reports local business completion with unconfirmed persistence; use the trigger result and execution.get.logPersistence for confirmation.
 
-Pre-claim interrupted events are observational logs without a committed outcome to repair; unacknowledged writes remain unconfirmed. JSON payloads preserve full results and all retries beyond MySQL's 255-character text mapping. Supported old logs are archived and copied by module migrations; execution ledgers remain separate. Closing waits for in-flight repairs; close scheduler before the database.
+Pre-claim interrupted events are observational logs without a committed outcome to repair; unacknowledged writes remain unconfirmed. JSON payloads preserve full results and all retries beyond MySQL's 255-character text mapping; execution ledgers remain separate. Closing waits for in-flight repairs; close scheduler before the database.
 
 ```ts
 const result = await scheduler.trigger('cleanup', { idempotencyKey: 'cleanup-2026-10-23' })
@@ -256,13 +275,47 @@ Claim, begin, renewal, completion, expiration scans and isolation calculate/chec
 
 When a scheduled task sends Reach notifications, a scheduler lock or task completion does not guarantee one external delivery. Follow [Reach queue semantics](../reach/README.en.md) with persistent queueId keys. HTTP receivers must atomically persist deduplication with their side effects. Review unknown in-flight SMTP/SMS outcomes manually; scheduler retries must not blindly send them again.
 
-## Legacy database upgrades
+### Definition consistency and persistence setup
 
 Definition refresh, registration, update and deletion are coordinated in arrival order within each process, including a mutation's refresh and commit. Valid concurrent registrations no longer fail merely because snapshots interleave; actual database failures still return errors. close stops entry points and the runner, cancels read waits and operations that have not started writing, then drains active persistent writes. Late snapshots cannot publish or repopulate state afterward. Business callbacks do not hold this queue. Nodes still rely on the shared database, versions and leases; local coordination is not a distributed lock.
 
-After RelDB init, `migrateScheduler({ dryRun: true })` previews changes; scheduler.init applies supported migrations before repositories. Existing tasks retain data with idempotent=false. Legacy logs are archived as hai_scheduler_logs_alpha65 and copied with stable legacy:<id> keys, preserving complete snapshots without re-executing tasks or duplicating history after interruption. SQLite/PostgreSQL roll back transactions; MySQL resumes from actual structure with old writers stopped. Back up first and restore matching database/binaries for rollback.
+After RelDB initialization, `migrateScheduler({ dryRun: true })` previews persistence preparation; scheduler.init performs supported setup before creating repositories. Back up and use an exclusive change window, stop startup on failure and keep the execution journal distinct from observation logs.
 
-## Development and testing
+## Configuration
+
+Lifecycle: init takes backend/business configuration; use the module only after success. Await close before releasing borrowed dependencies. Follow the quick-start example and public signatures for exact return values.
+
+The host loads and validates configuration before passing it to this module. Keep secrets in private server environment files. Select the backend, capacity, deadlines and logging for the actual use case; reinitialize and check the result after changes.
+
+[Per-option purpose, use cases and examples](../../docs/usage/configuration/operations.md).
+
+## Error Handling
+
+Check result.success for domain operations. Handle failures with the module error definitions and safe messages; retain codes, correlation IDs and sanitized causes in server logs. Synchronous tools, factories, stream iteration and lifecycle calls follow their own signatures. A completed Promise alone is not business success. See each feature for recovery limits.
+
+All public APIs except `close()` return `HaiResult<T>`.
+
+Common error codes:
+
+| Error code                                | code                | Description                   |
+| ----------------------------------------- | ------------------- | ----------------------------- |
+| `HaiSchedulerError.NOT_INITIALIZED`       | `hai:scheduler:010` | Not initialized               |
+| `HaiSchedulerError.INIT_FAILED`           | `hai:scheduler:011` | Initialization failed         |
+| `HaiSchedulerError.CONFIG_ERROR`          | `hai:scheduler:012` | Invalid configuration         |
+| `HaiSchedulerError.TASK_NOT_FOUND`        | `hai:scheduler:020` | Task not found                |
+| `HaiSchedulerError.TASK_ALREADY_EXISTS`   | `hai:scheduler:021` | Task already exists           |
+| `HaiSchedulerError.INVALID_CRON`          | `hai:scheduler:022` | Invalid cron expression       |
+| `HaiSchedulerError.EXECUTION_FAILED`      | `hai:scheduler:023` | Execution failed              |
+| `HaiSchedulerError.JS_EXECUTION_FAILED`   | `hai:scheduler:024` | JS execution failed           |
+| `HaiSchedulerError.API_EXECUTION_FAILED`  | `hai:scheduler:025` | API execution failed          |
+| `HaiSchedulerError.DB_SAVE_FAILED`        | `hai:scheduler:026` | Database save failed          |
+| `HaiSchedulerError.ALREADY_RUNNING`       | `hai:scheduler:027` | Already running               |
+| `HaiSchedulerError.NOT_RUNNING`           | `hai:scheduler:028` | Not running                   |
+| `HaiSchedulerError.JS_COMPILE_FAILED`     | `hai:scheduler:030` | JS compilation failed         |
+| `HaiSchedulerError.HOOK_EXECUTION_FAILED` | `hai:scheduler:031` | Hook execution failed         |
+| `HaiSchedulerError.LOG_PERSIST_FAILED`    | `hai:scheduler:032` | Log persistence not confirmed |
+
+## Development
 
 ```bash
 pnpm --filter @h-ai/scheduler test

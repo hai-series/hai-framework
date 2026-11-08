@@ -4,21 +4,11 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md)
 
-## 概要
-
 共通の `vecdb` オブジェクトで LanceDB、pgvector、Qdrant、Chroma を操作するベクトルデータベースモジュールです。
 
-## 主な機能
-
-- ベクトル次元を指定したコレクションの作成・管理。
-- 文書ベクトルの保存、類似検索、メタデータ条件の絞り込み。
-- LanceDB・pgvector・Qdrant・Chroma に対応。準備方法は下記設定を参照。
-
-## 使い始める
+## クイックスタート
 
 すべての Provider の `score` は 0–1 で、高いほど類似し、`minScore` は変換後に適用します。cosine は `(1 + cosine) / 2`、dot は `sigmoid(dotProduct)`、euclidean は `1 / (1 + distance)` です。LanceDB/Chroma はネイティブの squared L2、他のバックエンドはネイティブ L2 を使います。閾値は metric・バックエンドごとに業務で校正し、score を確率とは扱いません。Qdrant は公開 minScore をネイティブ距離の閾値として直接送信しません。
-
-### クイックスタート
 
 ```ts
 import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
@@ -56,7 +46,51 @@ if (!closeResult.success) {
 }
 ```
 
-### 設定
+## 機能
+
+- ベクトル次元を指定したコレクションの作成・管理。
+- 文書ベクトルの保存、類似検索、メタデータ条件の絞り込み。
+- LanceDB・pgvector・Qdrant・Chroma に対応。準備方法は下記設定を参照。
+
+### 操作と入出力
+
+本節の完全な初期化手順を先に実行します。例の業務値はホストが検証・認可し、非同期領域結果は success を確認してから data を読みます。void はデータなし完了、null は不存在、同期ファクトリー/ツールは表の型を直接返します。
+
+#### vecdb.collection
+
+ベクトル集合を管理。create は名前/次元等、drop は名前から void。exists は boolean、info は次元等、list は引数なしで名前配列。
+
+| 入口                      | 入力引数      | 成功結果         | 呼出し例                                                          |
+| ------------------------- | ------------- | ---------------- | ----------------------------------------------------------------- |
+| `vecdb.collection.create` | name, options | `void`           | `await vecdb.collection.create('documents', { dimension: 1536 })` |
+| `vecdb.collection.drop`   | name          | `void`           | `await vecdb.collection.drop('documents')`                        |
+| `vecdb.collection.exists` | name          | `boolean`        | `await vecdb.collection.exists('documents')`                      |
+| `vecdb.collection.info`   | name          | `CollectionInfo` | `await vecdb.collection.info('documents')`                        |
+| `vecdb.collection.list`   | 引数なし      | `string[]`       | `await vecdb.collection.list()`                                   |
+
+#### vecdb.vector
+
+insert/upsert は集合と文書配列、delete は ID 配列から void。search はベクトルと filter/topK からヒット配列、count は件数。点数は類似度で確率ではない。
+
+| 入口                  | 入力引数                    | 成功結果               | 呼出し例                                                           |
+| --------------------- | --------------------------- | ---------------------- | ------------------------------------------------------------------ |
+| `vecdb.vector.insert` | collection, documents       | `void`                 | `await vecdb.vector.insert('documents', vectorDocuments)`          |
+| `vecdb.vector.upsert` | collection, documents       | `void`                 | `await vecdb.vector.upsert('documents', vectorDocuments)`          |
+| `vecdb.vector.delete` | collection, ids             | `void`                 | `await vecdb.vector.delete('documents', ['doc-1'])`                |
+| `vecdb.vector.search` | collection, vector, options | `VectorSearchResult[]` | `await vecdb.vector.search('documents', queryVector, { topK: 5 })` |
+| `vecdb.vector.count`  | collection                  | `number`               | `await vecdb.vector.count('documents')`                            |
+
+### 本番の共有状態
+
+本番は Qdrant・pgvector・リモート Chroma を使います。LanceDB と組み込み Chroma は開発・明示的テスト用です。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../.agents/instructions/distributed-state.md).
+
+### 終了と失敗からの回復
+
+close は取得済みの操作参照も含めて業務処理を停止します。初期化や終了に失敗したリソースは後処理の所有権だけを保持します。同時 close は統合し、実行中の init の所有権確定を待ちます。error.ext.cleanupPending があれば同じモジュールの close を再試行し、後処理が成功するまで init は代替リソースを作成しません。内嵌 Chroma は実際の spawn と直接子プロセスの exit を確認します。通常終了から1.5秒後に強制終了へ進み、さらに1.5秒待っても確認できなければハンドルを保持して失敗を返します。直接子プロセスの検証はプロセスツリー全体や実際の Chroma CLI 起動の証明ではありません。
+
+## 設定
+
+ライフサイクル。init にバックエンド/業務設定を渡し成功後に使用します。借用依存先の解放前に close の完了を待ち、正確な戻り値は例と公開署名に従います。
 
 pgvector は距離尺度を vector 列コメントに保存し、索引・info・検索で共有します。接続の既定値変更は既存集合に影響しません。旧集合は実際の索引から復元し、索引と有効なメタデータが両方ない場合は CONFIG_ERROR を返します。
 
@@ -111,15 +145,15 @@ LanceDB はローカルファイルを使う組み込みバックエンドです
 
 検索は集合の metric を使い、`euclidean` を LanceDB の `l2` に対応させます。score は公開 API の 0–1、高いほど類似する契約に従い、cosine は `clamp(1 - distance / 2, 0, 1)`、euclidean は `1 / (1 + squaredL2)`、dot は順位を保つ `sigmoid(dotProduct)` を使います（確率ではありません）。`minScore` は変換後に適用し、異なる metric・バックエンド間で閾値が共通に校正されているとは扱いません。
 
-原子書き込みの検証対象は `@lancedb/lancedb 0.40.0 / Lance 13` です。新規集合は初期 Arrow schema で id を非 null 主キーにし、insert/upsert は id を使う原生 merge の厳密なキー競合検出を使用します。根拠：[Lance 13 table format](https://github.com/lance-format/lance/blob/v13.0.0/docs/src/format/table/index.md#unenforced-primary-key)、[Lance 13 transaction](https://github.com/lance-format/lance/blob/v13.0.0/protos/transaction.proto)、[Node binding 0.40.0](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/table.ts)。
+原子書き込みの検証対象は `@lancedb/lancedb 0.40.0 / Lance 13` です。新規集合は初期 Arrow schema で id を非 null 主キーにし、insert/upsert は id を使う原生 merge の厳密なキー競合検出を使用します。根拠：[Lance 13 table format](https://github.com/lance-format/lance/blob/v13.0.0/docs/src/format/table/index.md#unenforced-primary-key)、[Lance 13 transaction](https://github.com/lance-format/lance/blob/v13.0.0/protos/transaction.proto)、[Node binding 0.40.0](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/table.ts).
 
 LanceDB の `insert` は既存 ID を上書きせず、`upsert` は追加または行全体を置換します。バッチ内の重複 ID、merge 能力・永続主キーの欠落は書き込み前に `CONFIG_ERROR` を返します。旧形式の集合は再作成が必要で、自動移行や削除はしません。原子性は各 merge に限られ、並行処理の勝者はコミット順で決まります。複数 merge や reldb/vecdb 間の共通トランザクションはありません。delete/add への切り替えはなく、不明な結果は ID で照合します。外部の原生 add はこの保護を迂回します。
 
 LanceDB の `metadata` はネイティブ JSON フィールドです。入れ子の JSON を保存でき、検索結果ではオブジェクトに復元します。insert/upsert とも明示的な Arrow JSON schema で JSONB に変換します。旧 Utf8 metadata テーブルへの書き込み・フィルターは `CONFIG_ERROR` を返し、再作成が必要です。自動移行はしません。
 
-LanceDB の `filter` は最上位のリテラルキーを AND で完全一致させます。例：`{ tenant: 'acme', page: 1, active: true, removedAt: null }`。値は文字列・有限数値・真偽値・null のみで、`1` と `'1'`、`true` と `'true'` を区別します。null は明示的な JSON null のみに一致し、欠落キーには一致しません。点や括弧はパスではなくキー文字です。引用符・バックスラッシュ・`%`・`_` に SQL/ワイルドカードの意味はありません。空オブジェクトは制限なしです。オブジェクト・配列・undefined・非有限数値は `CONFIG_ERROR` を返し、無条件検索に変更しません。フィルターはベクトル topK の前、minScore はその後に適用します。他の Provider の null・複合値・パスの意味は同一とは保証しません。バックエンド変更時は固有の制約を確認してください。根拠：[Lance 13 JSON UDF](https://github.com/lance-format/lance/blob/v13.0.0/rust/lance-datafusion/src/udf/json.rs)、[Node 0.40.0 JSON field](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/arrow.ts)。
+LanceDB の `filter` は最上位のリテラルキーを AND で完全一致させます。例：`{ tenant: 'acme', page: 1, active: true, removedAt: null }`。値は文字列・有限数値・真偽値・null のみで、`1` と `'1'`、`true` と `'true'` を区別します。null は明示的な JSON null のみに一致し、欠落キーには一致しません。点や括弧はパスではなくキー文字です。引用符・バックスラッシュ・`%`・`_` に SQL/ワイルドカードの意味はありません。空オブジェクトは制限なしです。オブジェクト・配列・undefined・非有限数値は `CONFIG_ERROR` を返し、無条件検索に変更しません。フィルターはベクトル topK の前、minScore はその後に適用します。他の Provider の null・複合値・パスの意味は同一とは保証しません。バックエンド変更時は固有の制約を確認してください。根拠：[Lance 13 JSON UDF](https://github.com/lance-format/lance/blob/v13.0.0/rust/lance-datafusion/src/udf/json.rs)、[Node 0.40.0 JSON field](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/arrow.ts).
 
-#### 操作ログ
+### 操作ログ
 
 ベクトルデータベース設定の `operationLog` で操作ログを有効にできます。ログはコレクション・ベクトル操作が実際の Provider に渡る前に出力され、`vecdb-main.ts` で一括ラップはしません。
 
@@ -153,7 +187,13 @@ await vecdb.init({
 
 Qdrant は追加 SDK なしでネイティブ HTTP の固定 REST エンドポイントを使い、名前のない cosine/euclidean/dot ベクトルに対応します。30 秒のタイムアウトは本文全体を含み、16 MiB 超の応答は明示的に失敗します。パスをエンコードし、書き込み・削除は適用完了を待ちます。named-vector・Manhattan は `CONFIG_ERROR`、存在しないと判断するのは HTTP 404 のみです。ログは core のマスク処理を使います。
 
-### エラー処理
+設定はホストが読込・検証してから渡します。秘密はサーバーの非公開環境に保存し、利用場面に応じてバックエンド・容量・期限・ログを選びます。変更後は再初期化の結果を確認してください。
+
+[項目別の用途・適用場面・例](../../docs/usage/configuration/data.md).
+
+## エラー処理
+
+領域操作は result.success を確認し、失敗時はモジュールのエラー定義と安全な説明を使います。コード・関連 ID・秘匿した原因をサーバーログに残します。同期ツール・ファクトリー・ストリーム反復・ライフサイクルは各署名に従い、Promise 完了だけで成功と判断しません。回復条件は各機能を参照してください。
 
 すべての操作は `HaiResult<T>` を返し、`result.success` で成功・失敗を判定します。
 
@@ -173,14 +213,6 @@ if (!result.success) {
   }
 }
 ```
-
-## 本番の共有状態
-
-本番は Qdrant・pgvector・リモート Chroma を使います。LanceDB と組み込み Chroma は開発・明示的テスト用です。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../.agents/instructions/distributed-state.md)。
-
-## 終了と失敗からの回復
-
-close は取得済みの操作参照も含めて業務処理を停止します。初期化や終了に失敗したリソースは後処理の所有権だけを保持します。同時 close は統合し、実行中の init の所有権確定を待ちます。error.ext.cleanupPending があれば同じモジュールの close を再試行し、後処理が成功するまで init は代替リソースを作成しません。内嵌 Chroma は実際の spawn と直接子プロセスの exit を確認します。通常終了から1.5秒後に強制終了へ進み、さらに1.5秒待っても確認できなければハンドルを保持して失敗を返します。直接子プロセスの検証はプロセスツリー全体や実際の Chroma CLI 起動の証明ではありません。
 
 ## 開発とテスト
 

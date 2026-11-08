@@ -4,32 +4,13 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md) · [@h-ai/reldb](../reldb/README.ja.md)
 
-## 概要
-
 統一された監査ログモジュールです。`audit` オブジェクトで記録、検索、削除、集計を行い、`@h-ai/reldb` で永続化します。
 
-SQLite、PostgreSQL、MySQL で読み取り契約は共通です。`createdAt` は `Date`、`details` は JSON 文字列または `null`、値のない nullable フィールドは `null` を返します。日時フィルターは書き込みと同じドライバー変換を使用します。件数は安全な整数とし、範囲外では `STATS_FAILED` を返します。
-
-## 主な機能
-
-- ユーザー操作やセキュリティイベントを記録し、ユーザー・日時・操作で検索。
-- ログのページ取得、統計、保存期間に応じた削除。
-- 関係データベースに保存し、認証情報を記録前にマスク。
-
-## 使い始める
+## クイックスタート
 
 ### 依存関係
 
 - `@h-ai/reldb`：監査ログを永続化するデータベース。**audit.init() より先に初期化してください**。
-
-### 用途
-
-- ユーザー操作の監査（ログイン、ログアウト、登録、パスワードリセットなど）
-- CRUD 操作の監査（リソースの作成、参照、更新、削除）
-- セキュリティイベントの追跡とコンプライアンス監査
-- 運用統計（操作頻度、アクティブユーザーなど）
-
-### クイックスタート
 
 ```ts
 import { audit } from '@h-ai/audit'
@@ -78,21 +59,75 @@ if (!closeResult.success) {
 }
 ```
 
-### 初期化設定
+## 機能
 
-```ts
-// 默认配置（无需传参）
-await audit.init()
+SQLite、PostgreSQL、MySQL で読み取り契約は共通です。`createdAt` は `Date`、`details` は JSON 文字列または `null`、値のない nullable フィールドは `null` を返します。日時フィルターは書き込みと同じドライバー変換を使用します。件数は安全な整数とし、範囲外では `STATS_FAILED` を返します。
 
-// 自定义用户表映射
-await audit.init({
-  userTable: 'hai_iam_users', // 用户表名（默认 'hai_iam_users'）
-  userIdColumn: 'id', // 用户表主键列名（默认 'id'）
-  userNameColumn: 'username', // 用户表用户名列名（默认 'username'）
-})
-```
+### 操作と入出力
 
-監査ログは固定の `hai_audit_logs` テーブルに保存され、初期化済みの `@h-ai/reldb` が必要です。
+本節の完全な初期化手順を先に実行します。例の業務値はホストが検証・認可し、非同期領域結果は success を確認してから data を読みます。void はデータなし完了、null は不存在、同期ファクトリー/ツールは表の型を直接返します。
+
+#### audit
+
+構造化イベント。log はイベント/任意 tx から記録、capture は読書方針に従い void、withContext は信頼する関連情報とコールバックからその値を直接返す。
+
+| 入口                | 入力引数           | 成功結果   | 呼出し例                                                    |
+| ------------------- | ------------------ | ---------- | ----------------------------------------------------------- |
+| `audit.log`         | input, tx          | `AuditLog` | `await audit.log(event)`                                    |
+| `audit.capture`     | input, options     | `void`     | `await audit.capture(event)`                                |
+| `audit.withContext` | context, operation | `T`        | `audit.withContext(trustedAuditContext, () => saveOrder())` |
+
+#### audit
+
+検索/保持。条件/ページから利用者付き一覧、ユーザー ID/limit から直近配列、days/filters から統計、cleanup は保持日数から削除数。
+
+| 入口                  | 入力引数      | 成功結果                            | 呼出し例                                      |
+| --------------------- | ------------- | ----------------------------------- | --------------------------------------------- |
+| `audit.list`          | options       | `PaginatedResult<AuditLogWithUser>` | `await audit.list({ page: 1, pageSize: 20 })` |
+| `audit.getUserRecent` | userId, limit | `AuditLog[]`                        | `await audit.getUserRecent(userId, 20)`       |
+| `audit.getStats`      | days, filters | `AuditStatItem[]`                   | `await audit.getStats(7)`                     |
+| `audit.cleanup`       | olderThanDays | `number`                            | `await audit.cleanup(90)`                     |
+
+#### audit.helper
+
+共通イベントはユーザー ID（リセット要求は email）・任意 IP/UA または CRUD 入力から void HaiResult。機密値は引き続き秘匿。
+
+| 入口                                 | 入力引数       | 成功結果 | 呼出し例                                           |
+| ------------------------------------ | -------------- | -------- | -------------------------------------------------- |
+| `audit.helper.login`                 | userId, ip, ua | `void`   | `await audit.helper.login(userId)`                 |
+| `audit.helper.logout`                | userId, ip, ua | `void`   | `await audit.helper.logout(userId)`                |
+| `audit.helper.register`              | userId, ip, ua | `void`   | `await audit.helper.register(userId)`              |
+| `audit.helper.passwordResetRequest`  | email, ip, ua  | `void`   | `await audit.helper.passwordResetRequest(email)`   |
+| `audit.helper.passwordResetComplete` | userId, ip, ua | `void`   | `await audit.helper.passwordResetComplete(userId)` |
+| `audit.helper.crud`                  | input          | `void`   | `await audit.helper.crud(crudEvent)`               |
+
+#### audit.backup
+
+非公開アーカイブ。run は条件/期限/取消、verify はオブジェクト key から完全性を確認した情報を返す。公開しない。
+
+| 入口                  | 入力引数     | 成功結果          | 呼出し例                                |
+| --------------------- | ------------ | ----------------- | --------------------------------------- |
+| `audit.backup.run`    | options      | `AuditBackupInfo` | `await audit.backup.run()`              |
+| `audit.backup.verify` | key, options | `AuditBackupInfo` | `await audit.backup.verify(archiveKey)` |
+
+#### audit
+
+異常検査は任意 signal から該当規則と通知結果。暗黙ワーカーを仮定せず scheduler で調整。
+
+| 入口                | 入力引数 | 成功結果           | 呼出し例                    |
+| ------------------- | -------- | ------------------ | --------------------------- |
+| `audit.checkAlerts` | options  | `AuditAlertReport` | `await audit.checkAlerts()` |
+
+- ユーザー操作やセキュリティイベントを記録し、ユーザー・日時・操作で検索。
+- ログのページ取得、統計、保存期間に応じた削除。
+- 関係データベースに保存し、認証情報を記録前にマスク。
+
+### 用途
+
+- ユーザー操作の監査（ログイン、ログアウト、登録、パスワードリセットなど）
+- CRUD 操作の監査（リソースの作成、参照、更新、削除）
+- セキュリティイベントの追跡とコンプライアンス監査
+- 運用統計（操作頻度、アクティブユーザーなど）
 
 ### API 一覧
 
@@ -116,31 +151,7 @@ await audit.init({
 - `audit.cleanup(days)`：`days` を指定する場合は 0 以上の整数。
 - `audit.getStats(days)`：`days` を指定する場合は 0 以上の整数。
 
-### エラーコード
-
-業務データ操作は `HaiResult<T>` を返します。主なエラーコード：
-
-| エラーコード                     | code            | 説明                       |
-| -------------------------------- | --------------- | -------------------------- |
-| `HaiAuditError.LOG_FAILED`       | `hai:audit:001` | 記録に失敗                 |
-| `HaiAuditError.QUERY_FAILED`     | `hai:audit:002` | 検索に失敗                 |
-| `HaiAuditError.CLEANUP_FAILED`   | `hai:audit:003` | 削除に失敗                 |
-| `HaiAuditError.STATS_FAILED`     | `hai:audit:004` | 集計に失敗                 |
-| `HaiAuditError.INIT_IN_PROGRESS` | `hai:audit:005` | 初期化中                   |
-| `HaiAuditError.NOT_INITIALIZED`  | `hai:audit:010` | モジュールが未初期化       |
-| `HaiAuditError.CONFIG_ERROR`     | `hai:audit:012` | 設定エラー                 |
-| `HaiAuditError.BACKUP_DISABLED`  | `hai:audit:020` | バックアップ無効           |
-| `HaiAuditError.BACKUP_FAILED`    | `hai:audit:021` | バックアップ/検証失敗      |
-| `HaiAuditError.BACKUP_INVALID`   | `hai:audit:022` | バックアップ入力が無効     |
-| `HaiAuditError.BACKUP_CONFLICT`  | `hai:audit:023` | IDとエクスポート条件が衝突 |
-| `HaiAuditError.ALERTS_DISABLED`  | `hai:audit:024` | アラート無効               |
-| `HaiAuditError.ALERTS_FAILED`    | `hai:audit:025` | アラート検査・通知失敗     |
-
-> 注：`audit.close()` も `HaiResult<void>` を返します。`audit.helper.passwordResetRequest()` のメール情報は既定の業務個人情報設定でマスクされます。
-
-`audit.init()` は自動建表とリポジトリーの準備完了を待って成功します。DDL 失敗時は `isInitialized=false` のままで、DB を修正後に再試行できます。独自 JOIN・統計・削除も同じ準備完了を待ちます。初期化中の close は遅れた公開を無効化します。init の HaiResult を確認後に記録・検索し、共有 DB の接続は所有しないため audit の終了後に DB を終了します。
-
-## イベント文脈、個人情報と保持
+### イベント文脈、個人情報と保持
 
 監査 createdAt、アラート窓、アーカイブ終了時刻はノード時刻ではなく DB 時刻を共用します。バックアップ/アラート定時タスクは永続的な重複排除の保証により冪等を宣言し、失敗を非冪等の不明タスクとして後続スケジュールを阻止しません。
 
@@ -158,7 +169,7 @@ await audit.init({
 
 マスキングは項目全体に適用し、オブジェクト、配列、独自 JSON 変換の機密値も隠します。未初期化または close 後の capture は未初期化エラーを返し、初期化済みモジュールで capture を無効にした場合だけ自動イベントを省略します。
 
-## 非公開バックアップと定時アーカイブ
+### 非公開バックアップと定時アーカイブ
 
 `backup.enabled` は既定で無効です。RelDB を先に初期化し、初期化済み StorageFunctions を `audit.init({ storage, backup: { enabled: true } })` に渡します。batchSize は走査件数（既定200）、maxRecordBytes は UTF-8 一行の上限（既定1 MiB）です。上限超過は失敗し、元の監査証拠は切り詰めません。
 
@@ -185,7 +196,7 @@ if (plan) {
 
 ホストが audit/scheduler と検証済み schedulerSettings を提供し、Audit/Storage/RelDB を初期化済みとします。非公開ストレージを使い、バックアップ有効時は S3 publicUrl 設定を拒否します。バケット/CDN のアクセス制限も必要です。公開ファイル入口は指定資源のみを許可し、example/fullstack は正規のアバターパスだけを公開します。アーカイブの取得には監査の認可入口を使い、無効化後も既存ファイルは非公開のままです。
 
-## 等級別の異常アラート
+### 等級別の異常アラート
 
 `alerts.enabled` は既定で false。有効化時は初期化済み Reach を `audit.init({ reach, alerts: { enabled: true, rules: [...] } })` に渡します。ルールは一意な id、完全一致の actions、任意の resource、outcomes、minimumSeverity、threshold/windowSeconds、通知 severity、id/provider/to を持つ targets で指定します。既定の窓は300秒（60–86400秒）、結果は failure/denied、空の outcomes は全結果です。通知 Provider は Reach に登録済みである必要があります。業務ロールはアプリ側で決定します。
 
@@ -194,6 +205,54 @@ if (plan) {
 通知はルール/対象 ID、等級、件数、期間のみで、イベント詳細や資格情報を複製しません。submitted は Provider の受付、queued は Reach の永続キュー登録であり、到達や既読を保証しません。queueId で照会できます。失敗・中断・クラッシュは unknown/sending/claimed 結果記録を残し、不確定な外部効果を自動再送しません。audit.alert と hai_audit_alert_claims を確認し、通知先と照合して対処します。Reach 登録済みキューは Reach の復旧規則に従います。取得表は宛先/本文を保存せず、確認範囲外の受付/キュー登録済み取得のみ清掃し、未決は運用確認まで保持し、通知イベントは監査保留に従います。
 
 alerts.schedule は独立して有効化でき、既定は毎分・UTC。audit.schedulerPlan は有効なバックアップ/アラートをまとめ、ホストが Scheduler に明示的に渡します。自動タスクがなければ null。検査失敗または report.failed>0 はタスク失敗です。Scheduler を先に停止し、次に Audit/Reach を閉じます。Audit は新規取得を取消し、Reach の Provider タイムアウト内で実行中通知を待機し、ホスト Reach は閉じません。DB/監査失敗は HaiResult の失敗、通知失敗は成功レポートの failed に現れるため、呼出側で確認します。
+
+## 設定
+
+ライフサイクル。init にバックエンド/業務設定を渡し成功後に使用します。借用依存先の解放前に close の完了を待ち、正確な戻り値は例と公開署名に従います。
+
+```ts
+// 默认配置（无需传参）
+await audit.init()
+
+// 自定义用户表映射
+await audit.init({
+  userTable: 'hai_iam_users', // 用户表名（默认 'hai_iam_users'）
+  userIdColumn: 'id', // 用户表主键列名（默认 'id'）
+  userNameColumn: 'username', // 用户表用户名列名（默认 'username'）
+})
+```
+
+監査ログは固定の `hai_audit_logs` テーブルに保存され、初期化済みの `@h-ai/reldb` が必要です。
+
+設定はホストが読込・検証してから渡します。秘密はサーバーの非公開環境に保存し、利用場面に応じてバックエンド・容量・期限・ログを選びます。変更後は再初期化の結果を確認してください。
+
+[項目別の用途・適用場面・例](../../docs/usage/configuration/operations.md).
+
+## エラー処理
+
+領域操作は result.success を確認し、失敗時はモジュールのエラー定義と安全な説明を使います。コード・関連 ID・秘匿した原因をサーバーログに残します。同期ツール・ファクトリー・ストリーム反復・ライフサイクルは各署名に従い、Promise 完了だけで成功と判断しません。回復条件は各機能を参照してください。
+
+業務データ操作は `HaiResult<T>` を返します。主なエラーコード：
+
+| エラーコード                     | code            | 説明                       |
+| -------------------------------- | --------------- | -------------------------- |
+| `HaiAuditError.LOG_FAILED`       | `hai:audit:001` | 記録に失敗                 |
+| `HaiAuditError.QUERY_FAILED`     | `hai:audit:002` | 検索に失敗                 |
+| `HaiAuditError.CLEANUP_FAILED`   | `hai:audit:003` | 削除に失敗                 |
+| `HaiAuditError.STATS_FAILED`     | `hai:audit:004` | 集計に失敗                 |
+| `HaiAuditError.INIT_IN_PROGRESS` | `hai:audit:005` | 初期化中                   |
+| `HaiAuditError.NOT_INITIALIZED`  | `hai:audit:010` | モジュールが未初期化       |
+| `HaiAuditError.CONFIG_ERROR`     | `hai:audit:012` | 設定エラー                 |
+| `HaiAuditError.BACKUP_DISABLED`  | `hai:audit:020` | バックアップ無効           |
+| `HaiAuditError.BACKUP_FAILED`    | `hai:audit:021` | バックアップ/検証失敗      |
+| `HaiAuditError.BACKUP_INVALID`   | `hai:audit:022` | バックアップ入力が無効     |
+| `HaiAuditError.BACKUP_CONFLICT`  | `hai:audit:023` | IDとエクスポート条件が衝突 |
+| `HaiAuditError.ALERTS_DISABLED`  | `hai:audit:024` | アラート無効               |
+| `HaiAuditError.ALERTS_FAILED`    | `hai:audit:025` | アラート検査・通知失敗     |
+
+> 注：`audit.close()` も `HaiResult<void>` を返します。`audit.helper.passwordResetRequest()` のメール情報は既定の業務個人情報設定でマスクされます。
+
+`audit.init()` は自動建表とリポジトリーの準備完了を待って成功します。DDL 失敗時は `isInitialized=false` のままで、DB を修正後に再試行できます。独自 JOIN・統計・削除も同じ準備完了を待ちます。初期化中の close は遅れた公開を無効化します。init の HaiResult を確認後に記録・検索し、共有 DB の接続は所有しないため audit の終了後に DB を終了します。
 
 ## 開発とテスト
 

@@ -4,23 +4,9 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/audit](../audit/README.ja.md) · [@h-ai/cache](../cache/README.ja.md) · [@h-ai/core](../core/README.ja.md) · [@h-ai/crypto](../crypto/README.ja.md) · [@h-ai/reldb](../reldb/README.ja.md) · [@h-ai/reach](../reach/README.ja.md)
 
-## 概要
-
 共通の `iam` オブジェクトで認証、セッション、認可、ユーザー管理を提供する Identity and Access Management モジュールです。
 
-## 主な機能
-
-| 機能                           | 説明                                                                                      |
-| ------------------------------ | ----------------------------------------------------------------------------------------- |
-| **認証**                       | パスワード、OTP（メール・SMS コード）、LDAP、API Key の認証方式                           |
-| **セッション**                 | 状態を持つセッション（ランダム access token + キャッシュ、任意の自動延長）                |
-| **認可**                       | RBAC のロール・権限管理（DB 一括検索、ワイルドカード照合）                                |
-| **ユーザー管理**               | 登録、検索、更新、パスワードリセット、管理者によるリセット                                |
-| **API Key**                    | scope・期限付き API Key の作成、失効、検証                                                |
-| **一度限りのチケット**         | Bearer Token を付けられない WebSocket などのための短期チケット（発行 / アトミックな消費） |
-| **フロントエンドクライアント** | 独立フロントエンド向けの HTTP API 契約                                                    |
-
-## 使い始める
+## クイックスタート
 
 ### インストール
 
@@ -37,6 +23,223 @@ pnpm add @h-ai/iam
 
 - `@h-ai/reach`：**任意**。アプリがインストール、初期化、注入して通知テンプレートを使用します。独自送信コールバックでは不要です。
 - `ldapts`：**任意**。LDAP を明示的に有効化し、`ldapClientFactory` がない場合だけ読み込みます。
+
+```ts
+import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
+import { reldb } from '@h-ai/reldb'
+
+// 基础密码认证不需要安装 Reach 或 ldapts。
+async function example() {
+  try {
+    const db = await reldb.init({ type: 'sqlite', database: './data.db' })
+    if (!db.success)
+      return db
+    const cached = await cache.init({ type: 'memory' })
+    if (!cached.success)
+      return cached
+    const initialized = await iam.init({})
+    if (!initialized.success)
+      return initialized
+    const registered = await iam.user.register({ username: 'demo', password: 'Password123' })
+    if (!registered.success)
+      return registered
+    const login = await iam.auth.login({ identifier: 'demo', password: 'Password123' })
+    if (!login.success)
+      return login
+    return await iam.auth.verifyToken(login.data.tokens.accessToken)
+  }
+  finally {
+    // 应用关闭时按依赖的反向顺序释放。
+    await iam.close()
+    await cache.close()
+    await reldb.close()
+  }
+}
+
+const result = await example()
+if (!result.success)
+  core.logger.error('Authentication example failed', { code: result.error.code })
+```
+
+LDAP は既定で無効です。公開 OTP は `otp` 設定と送信コールバック、パスワードリセットは通知コールバックが必要です。
+
+`iam.config` は**機密情報をマスクした設定スナップショット**を返します。LDAP の `url` / `bindPassword` などは自動的に非表示になります。状態確認用で、元の設定の代わりにはなりません。
+
+## 機能
+
+| 機能                           | 説明                                                                                      |
+| ------------------------------ | ----------------------------------------------------------------------------------------- |
+| **認証**                       | パスワード、OTP（メール・SMS コード）、LDAP、API Key の認証方式                           |
+| **セッション**                 | 状態を持つセッション（ランダム access token + キャッシュ、任意の自動延長）                |
+| **認可**                       | RBAC のロール・権限管理（DB 一括検索、ワイルドカード照合）                                |
+| **ユーザー管理**               | 登録、検索、更新、パスワードリセット、管理者によるリセット                                |
+| **API Key**                    | scope・期限付き API Key の作成、失効、検証                                                |
+| **一度限りのチケット**         | Bearer Token を付けられない WebSocket などのための短期チケット（発行 / アトミックな消費） |
+| **フロントエンドクライアント** | 独立フロントエンド向けの HTTP API 契約                                                    |
+
+### 操作と入出力
+
+本節の完全な初期化手順を先に実行します。例の業務値はホストが検証・認可し、非同期領域結果は success を確認してから data を読みます。void はデータなし完了、null は不存在、同期ファクトリー/ツールは表の型を直接返します。
+
+ID/code は認可済み業務から取得。トークン/票は利用者 ID ではない。options/data は操作別公開型、expectedVersion は取得版、tx は同一開始済みトランザクション。低層更新の管理認可はホストが担う。
+
+#### iam.auth
+
+認証は方式別資格情報と信頼する要求 context、登録ログインは登録入力。成功は利用者・トークン・役割/権限、失敗時はセッションを作らない。
+
+| 入口                        | 入力引数             | 成功結果     | 呼出し例                                                  |
+| --------------------------- | -------------------- | ------------ | --------------------------------------------------------- |
+| `iam.auth.login`            | credentials, context | `AuthResult` | `await iam.auth.login({ identifier, password })`          |
+| `iam.auth.loginWithOtp`     | credentials, context | `AuthResult` | `await iam.auth.loginWithOtp({ identifier, code })`       |
+| `iam.auth.loginWithLdap`    | credentials, context | `AuthResult` | `await iam.auth.loginWithLdap({ username, password })`    |
+| `iam.auth.loginWithApiKey`  | credentials, context | `AuthResult` | `await iam.auth.loginWithApiKey({ key: rawKey })`         |
+| `iam.auth.registerAndLogin` | options, context     | `AuthResult` | `await iam.auth.registerAndLogin({ username, password })` |
+
+#### iam.auth
+
+挑戦は operation、OTP は識別子/挑戦を入力。トークン確認は現在 Session、ログアウトは void。再認証は token/パスワード/操作から用途票、機密操作確認は token/操作/票から void。
+
+| 入口                               | 入力引数                         | 成功結果               | 呼出し例                                                                               |
+| ---------------------------------- | -------------------------------- | ---------------------- | -------------------------------------------------------------------------------------- |
+| `iam.auth.createCaptcha`           | input                            | `IamCaptchaChallenge`  | `await iam.auth.createCaptcha({ operation: 'login' })`                                 |
+| `iam.auth.sendOtp`                 | identifier, options              | `{ expiresAt: Date; }` | `await iam.auth.sendOtp(identifier)`                                                   |
+| `iam.auth.verifyToken`             | accessToken                      | `Session`              | `await iam.auth.verifyToken(accessToken)`                                              |
+| `iam.auth.logout`                  | accessToken                      | `void`                 | `await iam.auth.logout(accessToken)`                                                   |
+| `iam.auth.reauthenticate`          | accessToken, password, operation | `IssuedTicket`         | `await iam.auth.reauthenticate(accessToken, password, 'users:delete')`                 |
+| `iam.auth.checkSensitiveOperation` | accessToken, operation, ticket   | `void`                 | `await iam.auth.checkSensitiveOperation(accessToken, 'users:delete', operationTicket)` |
+
+#### iam.user
+
+登録入力・信頼する ID/配列・条件/ページ・token/差分から登録結果、利用者/null、配列、ページ、更新利用者。削除は void。管理認可は入口で行う。
+
+| 入口                         | 入力引数          | 成功結果                | 呼出し例                                                                  |
+| ---------------------------- | ----------------- | ----------------------- | ------------------------------------------------------------------------- |
+| `iam.user.createUser`        | options           | `RegisterResult`        | `await iam.user.createUser({ username, password })`                       |
+| `iam.user.register`          | options           | `RegisterResult`        | `await iam.user.register({ username, password })`                         |
+| `iam.user.inviteUser`        | options           | `RegisterResult`        | `await iam.user.inviteUser({ username, email })`                          |
+| `iam.user.getUser`           | userId, options   | `User \| null`          | `await iam.user.getUser(userId)`                                          |
+| `iam.user.getUsers`          | userIds, options  | `User[]`                | `await iam.user.getUsers([userId], { include: ['roles'] })`               |
+| `iam.user.listUsers`         | options           | `PaginatedResult<User>` | `await iam.user.listUsers({ page: 1, pageSize: 20 })`                     |
+| `iam.user.getCurrentUser`    | accessToken       | `User`                  | `await iam.user.getCurrentUser(accessToken)`                              |
+| `iam.user.updateCurrentUser` | accessToken, data | `User`                  | `await iam.user.updateCurrentUser(accessToken, { displayName: 'Alice' })` |
+| `iam.user.updateUser`        | userId, data      | `User`                  | `await iam.user.updateUser(userId, { displayName: 'Alice' })`             |
+| `iam.user.deleteUser`        | userId            | `void`                  | `await iam.user.deleteUser(userId)`                                       |
+
+#### iam.user
+
+パスワード処理は ID・旧新パスワード・更新情報・識別子・用途 token から void。validatePassword は同期方針検査、scanInactiveAccounts は停止件数。
+
+| 入口                                 | 入力引数                              | 成功結果 | 呼出し例                                                                          |
+| ------------------------------------ | ------------------------------------- | -------- | --------------------------------------------------------------------------------- |
+| `iam.user.adminResetPassword`        | userId, newPassword                   | `void`   | `await iam.user.adminResetPassword(userId, newPassword)`                          |
+| `iam.user.renewPassword`             | input                                 | `void`   | `await iam.user.renewPassword({ identifier, password, newPassword })`             |
+| `iam.user.changePassword`            | userId, oldPassword, newPassword      | `void`   | `await iam.user.changePassword(userId, oldPassword, newPassword)`                 |
+| `iam.user.changeCurrentUserPassword` | accessToken, oldPassword, newPassword | `void`   | `await iam.user.changeCurrentUserPassword(accessToken, oldPassword, newPassword)` |
+| `iam.user.requestPasswordReset`      | identifier, options                   | `void`   | `await iam.user.requestPasswordReset(identifier)`                                 |
+| `iam.user.confirmPasswordReset`      | token, newPassword                    | `void`   | `await iam.user.confirmPasswordReset(resetToken, newPassword)`                    |
+| `iam.user.validatePassword`          | password                              | `void`   | `iam.user.validatePassword(newPassword)`                                          |
+| `iam.user.scanInactiveAccounts`      | 引数なし                              | `number` | `await iam.user.scanInactiveAccounts()`                                           |
+
+#### iam.authz
+
+認可照会は信頼する利用者 ID/配列・権限 code から役割/権限・boolean・配列・ID別 Map。クライアントの役割申告は信頼しない。
+
+| 入口                                  | 入力引数           | 成功結果                                  | 呼出し例                                                 |
+| ------------------------------------- | ------------------ | ----------------------------------------- | -------------------------------------------------------- |
+| `iam.authz.getUserAuthorization`      | userId             | `Pick<Session, "roles" \| "permissions">` | `await iam.authz.getUserAuthorization(userId)`           |
+| `iam.authz.checkPermission`           | userId, permission | `boolean`                                 | `await iam.authz.checkPermission(userId, 'orders:read')` |
+| `iam.authz.getUserPermissions`        | userId             | `Permission[]`                            | `await iam.authz.getUserPermissions(userId)`             |
+| `iam.authz.getUserRoles`              | userId             | `Role[]`                                  | `await iam.authz.getUserRoles(userId)`                   |
+| `iam.authz.getUserRolesForMany`       | userIds            | `Map<string, Role[]>`                     | `await iam.authz.getUserRolesForMany([userId])`          |
+| `iam.authz.getRolePermissionsForMany` | roleIds            | `Map<string, Permission[]>`               | `await iam.authz.getRolePermissionsForMany([roleId])`    |
+
+#### iam.authz
+
+関連更新は利用者/役割/権限 ID と任意 tx から void、共有認可キャッシュを失効。syncRoles は期待する全体集合を指定。
+
+| 入口                                 | 入力引数                 | 成功結果 | 呼出し例                                                         |
+| ------------------------------------ | ------------------------ | -------- | ---------------------------------------------------------------- |
+| `iam.authz.assignRole`               | userId, roleId, tx       | `void`   | `await iam.authz.assignRole(userId, roleId)`                     |
+| `iam.authz.removeRole`               | userId, roleId, tx       | `void`   | `await iam.authz.removeRole(userId, roleId)`                     |
+| `iam.authz.syncRoles`                | userId, roleIds, tx      | `void`   | `await iam.authz.syncRoles(userId, [roleId])`                    |
+| `iam.authz.assignPermissionToRole`   | roleId, permissionId, tx | `void`   | `await iam.authz.assignPermissionToRole(roleId, permissionId)`   |
+| `iam.authz.removePermissionFromRole` | roleId, permissionId, tx | `void`   | `await iam.authz.removePermissionFromRole(roleId, permissionId)` |
+
+#### iam.authz
+
+RBAC 管理は定義・ID/code・ページ・差分を入力。作成/更新は実体、単一照会は実体/null、全一覧はページ、役割権限は配列、人数は Map、削除は void。
+
+| 入口                            | 入力引数         | 成功結果                      | 呼出し例                                                                                             |
+| ------------------------------- | ---------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `iam.authz.createRole`          | role, tx         | `Role`                        | `await iam.authz.createRole({ code: 'editor', name: 'Editor', description: null, isSystem: false })` |
+| `iam.authz.getRole`             | roleId           | `Role \| null`                | `await iam.authz.getRole(roleId)`                                                                    |
+| `iam.authz.getRoleByCode`       | code             | `Role \| null`                | `await iam.authz.getRoleByCode('editor')`                                                            |
+| `iam.authz.getAllRoles`         | options          | `PaginatedResult<Role>`       | `await iam.authz.getAllRoles({ page: 1, pageSize: 20 })`                                             |
+| `iam.authz.getRoleUserCounts`   | roleIds          | `Map<string, number>`         | `await iam.authz.getRoleUserCounts([roleId])`                                                        |
+| `iam.authz.updateRole`          | roleId, data, tx | `Role`                        | `await iam.authz.updateRole(roleId, { name: 'Editor' })`                                             |
+| `iam.authz.deleteRole`          | roleId, tx       | `void`                        | `await iam.authz.deleteRole(roleId)`                                                                 |
+| `iam.authz.createPermission`    | permission, tx   | `Permission`                  | `await iam.authz.createPermission({ code: 'orders:read', name: 'Read orders', type: 'api' })`        |
+| `iam.authz.getPermission`       | permissionId     | `Permission \| null`          | `await iam.authz.getPermission(permissionId)`                                                        |
+| `iam.authz.getPermissionByCode` | code             | `Permission \| null`          | `await iam.authz.getPermissionByCode('orders:read')`                                                 |
+| `iam.authz.getAllPermissions`   | options          | `PaginatedResult<Permission>` | `await iam.authz.getAllPermissions({ page: 1, pageSize: 20 })`                                       |
+| `iam.authz.deletePermission`    | permissionId, tx | `void`                        | `await iam.authz.deletePermission(permissionId)`                                                     |
+| `iam.authz.getRolePermissions`  | roleId           | `Permission[]`                | `await iam.authz.getRolePermissions(roleId)`                                                         |
+
+#### iam.authz
+
+再認証用途を権限に関連付け。任意 operation から機密操作名配列、permissionId と operations の保存は void。
+
+| 入口                                         | 入力引数                 | 成功結果   | 呼出し例                                                                           |
+| -------------------------------------------- | ------------------------ | ---------- | ---------------------------------------------------------------------------------- |
+| `iam.authz.getSensitiveOperations`           | operation                | `string[]` | `await iam.authz.getSensitiveOperations('users:delete')`                           |
+| `iam.authz.setPermissionSensitiveOperations` | permissionId, operations | `void`     | `await iam.authz.setPermissionSensitiveOperations(permissionId, ['users:delete'])` |
+
+#### iam.session
+
+低層セッション。信頼する作成入力は Session、token get は Session/null・verify は Session。更新は expectedVersion 必須、利用者削除は件数、refresh は TokenPair、他は void。保護要求は auth.verifyToken。
+
+| 入口                            | 入力引数                           | 成功結果          | 呼出し例                                                               |
+| ------------------------------- | ---------------------------------- | ----------------- | ---------------------------------------------------------------------- |
+| `iam.session.create`            | options                            | `Session`         | `await iam.session.create(trustedSessionInput)`                        |
+| `iam.session.get`               | accessToken                        | `Session \| null` | `await iam.session.get(accessToken)`                                   |
+| `iam.session.verifyToken`       | accessToken                        | `Session`         | `await iam.session.verifyToken(accessToken)`                           |
+| `iam.session.update`            | accessToken, data, expectedVersion | `void`            | `await iam.session.update(accessToken, sessionPatch, expectedVersion)` |
+| `iam.session.delete`            | accessToken                        | `void`            | `await iam.session.delete(accessToken)`                                |
+| `iam.session.deleteByUserId`    | userId                             | `number`          | `await iam.session.deleteByUserId(userId)`                             |
+| `iam.session.refresh`           | refreshToken                       | `TokenPair`       | `await iam.session.refresh(refreshToken)`                              |
+| `iam.session.revokeRefresh`     | refreshToken                       | `void`            | `await iam.session.revokeRefresh(refreshToken)`                        |
+| `iam.session.patchUserSessions` | userId, updates                    | `void`            | `await iam.session.patchUserSessions(userId, sessionFieldUpdates)`     |
+
+#### iam.apiKey
+
+API 資格情報。ユーザー/指定で作成時のみ rawKey を返す。一覧はユーザー/ページから一覧、ID 照会は項目/null、失効は void、平文検証は安全な ApiKey DTO。
+
+| 入口                      | 入力引数        | 成功結果                  | 呼出し例                                                                                |
+| ------------------------- | --------------- | ------------------------- | --------------------------------------------------------------------------------------- |
+| `iam.apiKey.createApiKey` | userId, options | `CreateApiKeyResult`      | `await iam.apiKey.createApiKey(userId, { name: 'reporting', scopes: ['orders:read'] })` |
+| `iam.apiKey.listApiKeys`  | userId, options | `PaginatedResult<ApiKey>` | `await iam.apiKey.listApiKeys(userId, { page: 1, pageSize: 20 })`                       |
+| `iam.apiKey.getApiKey`    | keyId           | `ApiKey \| null`          | `await iam.apiKey.getApiKey(keyId)`                                                     |
+| `iam.apiKey.revokeApiKey` | keyId           | `void`                    | `await iam.apiKey.revokeApiKey(keyId)`                                                  |
+| `iam.apiKey.verifyApiKey` | rawKey          | `ApiKey`                  | `await iam.apiKey.verifyApiKey(rawKey)`                                                 |
+
+#### iam.ticket
+
+一回用途票は主体・用途・期限から発行。消費は票と用途対応から消費済み情報を返す。通常 token で用途資格を代用しない。
+
+| 入口                 | 入力引数        | 成功結果         | 呼出し例                                                   |
+| -------------------- | --------------- | ---------------- | ---------------------------------------------------------- |
+| `iam.ticket.issue`   | options         | `IssuedTicket`   | `await iam.ticket.issue(ticketInput)`                      |
+| `iam.ticket.consume` | ticket, options | `ConsumedTicket` | `await iam.ticket.consume(operationTicket, ticketBinding)` |
+
+#### iam
+
+引数なしで公開可能方針 IamPublicConfig を取得。ディレクトリー・通知・DB 資格情報は公開しない。
+
+| 入口                  | 入力引数 | 成功結果          | 呼出し例                      |
+| --------------------- | -------- | ----------------- | ----------------------------- |
+| `iam.getPublicConfig` | 引数なし | `IamPublicConfig` | `await iam.getPublicConfig()` |
 
 ### 任意の LDAP と通知連携
 
@@ -178,51 +381,6 @@ const initialized = await iam.init({
 if (!initialized.success)
   return initialized
 ```
-
-### クイックスタート
-
-```ts
-import { cache } from '@h-ai/cache'
-import { core } from '@h-ai/core'
-import { iam } from '@h-ai/iam'
-import { reldb } from '@h-ai/reldb'
-
-// 基础密码认证不需要安装 Reach 或 ldapts。
-async function example() {
-  try {
-    const db = await reldb.init({ type: 'sqlite', database: './data.db' })
-    if (!db.success)
-      return db
-    const cached = await cache.init({ type: 'memory' })
-    if (!cached.success)
-      return cached
-    const initialized = await iam.init({})
-    if (!initialized.success)
-      return initialized
-    const registered = await iam.user.register({ username: 'demo', password: 'Password123' })
-    if (!registered.success)
-      return registered
-    const login = await iam.auth.login({ identifier: 'demo', password: 'Password123' })
-    if (!login.success)
-      return login
-    return await iam.auth.verifyToken(login.data.tokens.accessToken)
-  }
-  finally {
-    // 应用关闭时按依赖的反向顺序释放。
-    await iam.close()
-    await cache.close()
-    await reldb.close()
-  }
-}
-
-const result = await example()
-if (!result.success)
-  core.logger.error('Authentication example failed', { code: result.error.code })
-```
-
-LDAP は既定で無効です。公開 OTP は `otp` 設定と送信コールバック、パスワードリセットは通知コールバックが必要です。
-
-`iam.config` は**機密情報をマスクした設定スナップショット**を返します。LDAP の `url` / `bindPassword` などは自動的に非表示になります。状態確認用で、元の設定の代わりにはなりません。
 
 ### 設計
 
@@ -872,32 +1030,13 @@ agreements:
   # privacyPolicyUrl: https://example.com/privacy
 ```
 
-### エラー処理
-
-すべての操作は `HaiResult<T>` を返し、`HaiIamError` で分岐します：
-
-```ts
-import { HaiIamError, iam } from '@h-ai/iam'
-
-const result = await iam.auth.login({ identifier: 'admin', password: 'wrong' })
-if (!result.success) {
-  if (result.error.code === HaiIamError.INVALID_CREDENTIALS.code) {
-    // 用户名或密码错误
-  }
-}
-```
-
-会話と refresh 消費状態を `hai:iam:sessions:{SHA256(userId)}` のバージョン付き文書にまとめ、独立した対応キーと索引を廃止します。Bearer Token は認証には使えない分区ヒントと256ビットの乱数を含み、クライアントは不透明な文字列として扱います。更新時は Session.version を再検証します。Memory は単一プロセスのテスト用で、本番は全ノードが Redis（Cluster 対応）を共有します。競合は最新状態から再試行し、上限で CONFLICT を返します。応答喪失で結果が不明なら認証を拒否し再ログインします。すべての会話は同じユーザー索引で管理されます。
-
-`iam.session.update(token, patch, expectedVersion)` は読み取った Session.version が必須です。旧版は CONFLICT、失効 Token は SESSION_NOT_FOUND を返し、新しい状態を上書きしません。自動延長の時刻だけの更新は内容版を変更せず、通常の並行リクエストを許容します。権限一括更新は最初の Token/版集合に限定し、後続ログインに古い値を適用しません。
-
 ### 共有認可キャッシュ
 
 Redisは秘密を含まないアカウント/資格情報の状態、ロール・権限、機密操作、検証済みAPI Key DTOを60秒保存します。キャッシュ値にはDBのパスワード/Key検証ハッシュ、平文Key、再設定トークンを保存しません。API Keyのキャッシュアドレスには平文Keyの一方向SHA-256指紋を使います。期限は毎回現在時刻で検証し、認可のコールド読込は単一JOINです。IAM書込はDB更新前に共有dirtyマーカーを登録し、外部トランザクションもcommit/rollback完了後に世代を更新します。競合したコールド読込は古い値を公開しません。通常の高頻度チェックはPGを照会せず、更新中・無効化未確認・キャッシュ読込障害時はDBを参照します。セッションRedis自体の障害は認証を拒否します。
 
 無効化登録に失敗した書込はDB更新前に拒否します。commit後の無効化失敗は成功済み更新を取り消した扱いにせず、永続dirtyマーカーでDB参照を継続します。プロセスクラッシュやcommit結果不明をTTLで解除せず、IAM書込がない保守時間帯に確認して修復してください。全ノード同時更新とIAM API経由の書込が必要です。直接SQL、旧版ノード、外部テーブル更新は書込停止とIAMキャッシュ全体の無効化が必要です。平文Key検証のヒットは高負荷ハッシュを省略し、lastUsedAtはコールド検証時に記録するため最大約1分遅れます。
 
-## 自己ホスト型の対話チャレンジ
+### 自己ホスト型の対話チャレンジ
 
 captcha.enabled は既定で false。ALTCHA の計算チャレンジを自己ホストし、ttlSeconds（既定120、1–600秒）、cost（既定5000、100–50000）、maxCounter（既定100、1–2000）で期限と計算量を指定します。外部 CAPTCHA アカウントは不要で、HMAC 秘密と一度限りの状態は既存の共有 Cache にのみ保存します。本番では共有バックエンドが必要です。計算量は自動化のコストを増やしますが、利用者が人間であることは保証しません。
 
@@ -905,7 +1044,7 @@ iam.auth.createCaptcha({operation}) は {id,challenge} を返します。operati
 
 Kit/Serv の標準入口は POST /auth/captcha（Kit は同一生成元の /api 接頭辞）。captcha を保持し、iam.publicConfig.captcha は enabled のみ公開します。AuthPanel/createAuthActions は有効時に送信操作で自動生成・非同期求解し、無効時には求解器を読み込みません。独自フォームも同じ手順を使えます。有効設定で createCaptcha がなければ送信を拒否し、取消/破棄後にログインしません。証明は資格情報として常に秘匿し、ブラウザーに永続保存しません。030/031/032/033 は確認必須・無効/使用済/期限切れ・無効設定・一時利用不可です。
 
-## 任意のパスワード・ログイン保護
+### 任意のパスワード・ログイン保護
 
 公開ログインと `renewPassword` は、存在しない・パスワード未設定・休止・終了・期限切れ・ロック中のアカウントに `INVALID_CREDENTIALS`（「ユーザー名またはパスワードが正しくありません。」）を返します。制限中はパスワードの推測を照合せず、正誤によらず同じ応答とし、既存の失敗回数を変更しません。認証済み管理画面では具体的な状態を確認できます。パスワード計算や保存の障害は基盤エラーとして扱い、入力失敗として加算しません。
 
@@ -923,17 +1062,17 @@ Kit/Serv の標準入口は POST /auth/captcha（Kit は同一生成元の /api 
 
 `reauthentication.enabled/operations` で対象操作、`ttlSeconds` で証明期限を選びます。`reauthenticate(token, password, operation)` は単回証明を発行し、入口は権限・資源検証後に `checkSensitiveOperation(token, operation, ticket)` を呼びます。主体・現在セッション・操作に結びつけ、権限を増やしません。Serv IAM 更新操作と admin 守衛は `x-hai-reauthentication`、Kit は固有 ID と `kit.guard.requireSensitive(iam, event, operation)` を使います。証明は短時間メモリに保持し、公開設定は開閉・操作リストのみです。admin/fullstack標準UIでは、ログイン済み利用者が機密操作を選ぶと、現在のアカウントのパスワード確認ダイアログを表示します。取消時は送信せず、誤りなら操作を止め、成功時だけ元の操作を続けます。別のログインセッションは作成しません。
 
-RBAC 権限は `sensitiveOperations: string[]` を持ち、可空 JSON 列 `sensitive_operations` に保存します。管理側は `iam.authz.setPermissionSensitiveOperations(permissionId, operations)` の `success` を確認します。空配列はその権限の追加規則だけを削除します。`reauthentication.enabled` が有効なら全権限の規則とファイルの `operations` を和集合にして即時検証します。ID は実際の業務ガードと一致させ、既存の認可を省略しません。非同期 `iam.getPublicConfig()` は統合した公開方針を返し、DB 読取障害時は失敗します。同期 `iam.publicConfig` はファイルのスナップショットのみです。RBAC 無効時は DB 規則を無視し、移行は既存の認可関係を保持します。
+RBAC 権限は `sensitiveOperations: string[]` を持ち、可空 JSON 列 `sensitive_operations` に保存します。管理側は `iam.authz.setPermissionSensitiveOperations(permissionId, operations)` の `success` を確認します。空配列はその権限の追加規則だけを削除します。`reauthentication.enabled` が有効なら全権限の規則とファイルの `operations` を和集合にして即時検証します。ID は実際の業務ガードと一致させ、既存の認可を省略しません。非同期 `iam.getPublicConfig()` は統合した公開方針を返し、DB 読取障害時は失敗します。同期 `iam.publicConfig` はファイルのスナップショットのみです。RBAC 無効時は DB 規則を無視します。
 
-## アカウント種別とライフサイクル
+### アカウント種別とライフサイクル
 
 既定は `accountType: 'permanent'` と `accountStatus: 'active'` です。管理側は `accountExpiresAt` を指定して `temporary` アカウントを作成し、`updateUser` で `dormant` または `closed` に変更できます。状態と認証世代を同じトランザクションで更新し、期限切れまたは非アクティブなアカウントはすべてのログイン、access 検証、refresh で拒否します。管理者が明示的に再有効化しても旧トークンは復活せず、再ログインが必要です。`accountStatus` だけでライフサイクルを表し、独立した有効/無効スイッチはありません。`closed` は記録を保持し、物理削除は `deleteUser` が行います。個人データの保持と退会手順はアプリが決定します。
 
-beta.1 への更新前に旧バージョンの書き込みを停止し、DB をバックアップしてください。移行 v6 は旧 enabled が false/NULL で active のアカウントを dormant に変更し、既存の dormant/closed を保持したうえで列を削除します。影響する資格情報も無効になります。入力、絞り込み、並び替えは accountStatus に統一します。旧イメージへの切り戻しだけでは DB スキーマは戻らず、検証済みバックアップの復元が必要です。権限のある管理者はどの状態のパスワードもリセットできますが、状態は変わりません。初回変更の要否は password.requireInitialChange で決まります。
+権限のある管理者はどの accountStatus でもパスワードをリセットできますが、dormant/closed を active に戻さず、失効した資格情報も復活しません。次回初回変更は `password.requireInitialChange` に従い、一覧の絞込・並替も同じ accountStatus を使います。
 
 `accounts.dormantAfterDays` の既定値 `0` は自動休止を無効にします。`90` にすると、最後のログイン成功から90日間使用していない有効なアカウントを `accounts.scanIntervalSeconds` ごと（既定3600秒）に確認します。未使用のアカウントは作成時刻から計算し、成功した認証だけが `lastLoginAt` を更新します。条件付きSQLのため複数ノードで繰り返しても重複変更しません。信頼された処理や既存スケジューラーから `iam.user.scanInactiveAccounts()` を呼び出すこともできます。`close()` はタイマーを停止して実行中の処理を待ちます。公開登録APIに管理用の項目を公開しないでください。
 
-## 任意のセッションセキュリティ設定
+### 任意のセッションセキュリティ設定
 
 `session.idleTimeout: 1800` は認証済みリクエストが30分間ない場合に再ログインを要求します。`0` は無効です。access の読み取り、活動の保存、refresh の更新で同じ期限を確認し、長期 refresh でも休止したセッションを復活できません。自動 refresh は休止期限を延長しません。バックグラウンド業務のポーリングは認証活動になるため、アプリは利用者の操作方針に合わせて設計してください。
 
@@ -941,9 +1080,9 @@ beta.1 への更新前に旧バージョンの書き込みを停止し、DB を�
 
 期限を無効にした場合、access と refresh は独立した有効期間を保ちます。ログイン成功ごとに新しいランダムな認証情報を生成します。`SESSION_LIMIT_EXCEEDED` は設定されたセッション数の上限を示します。
 
-## スキーマと認証情報の通知
+### スキーマと認証情報の通知
 
-RelDB 初期化後の `migrateIam({ dryRun: true })` は読み取り専用です。iam.init は対応する認証・リセット列を補い、ユーザー、パスワードと権限を保持します。事前に旧書込を停止しバックアップしてください。安全世代のない旧セッションは再ログインが必要で、認可復元のため世代を戻してはいけません。既定 Reach 通知は sensitive/expiresAt/idempotencyKey で平文保存や遅延再送を防ぎます。独自コールバックも同じ期限と保護を守ってください。
+RelDB 初期化後の `migrateIam({ dryRun: true })` は読み取り専用です。iam.init は永続構造と認証・リセット項目を準備し、利用者・パスワード・権限を保持します。構造変更前に競合書込を停止しバックアップしてください。セッションは現在の資格世代と一致する必要があり、不一致なら再ログインします。認可復元のため世代を戻してはいけません。既定 Reach 通知は sensitive/expiresAt/idempotencyKey で平文保存や遅延再送を防ぎます。独自コールバックも同じ期限と保護を守ってください。
 
 audit が初期化済みで capture.enabled が有効なら、IAM はアカウント・認証・パスワード・権限・API Key・セッションの重要イベントと失敗/拒否の安全な理由コードを記録します。audit を IAM より先に初期化し、逆順に終了してください。パスワード・単回証明・トークンは記録しません。ログイン成功後に主体を確定し、信頼できるサービス/CLI は audit.withContext で操作者と関連文脈を設定します。外部権限トランザクション内のイベントは一緒にコミット/ロールバックされ、失敗試行はロールバック後に呼出境界で記録します。監査失敗は診断を出し、反映済み業務を危険な再試行に変えません。
 
@@ -951,11 +1090,40 @@ audit が初期化済みで capture.enabled が有効なら、IAM はアカウ�
 
 画面内の復帰は UI の `createSessionRecovery` / `SessionRecoveryDialog` と SDK `recoverSession` を組み合わせます。通常のパスワード・OTP・LDAP 方針を適用し、`expectedUserId` で元の本人に限定してからセッションを発行します。認証拒否が明確な要求だけ1回再送でき、結果不明のネットワーク障害は再送しません。画面再読込や終了で失われたメモリの入力は復元できません。
 
-## ページ離脱時のセッション方針
+### ページ離脱時のセッション方針
 
 `session.endOnPageHide` の既定値は `false` です。ホストは `actions.bindPageExit({ enabled: config.session.endOnPageHide })` を呼び、破棄時に戻り値の解除関数を実行します。標準 admin/H5/fullstack テンプレートは接続済みです。BFCache 以外の `pagehide`（再読み込み、文書全体の移動を含む）で POST `/auth/session/close` を最善努力で送信し、保持する access と関連 refresh を失効します。既存の CSRF/暗号化転送を使用し、`keepalive` を付け、自動更新しません。古い応答が新しいログインを上書きしないよう Cookie/ローカル資格情報を消去しません。明示的ログアウトは通常どおり失効と消去を行います。ブラウザーが離脱要求を送らない場合もあるため、業務に応じてサーバーの `idleTimeout`/`absoluteTimeout` を併用してください。閉じた瞬間の失効は保証できません。
 
 標準 `/auth/me` も `iam.profile.update` / `iam.profile.avatar` を検査します。複合更新では有効な資料変更規則を優先し、それ以外は画像規則を使います。`authz.getSensitiveOperations(operation?)` は単一操作だけ照会でき、省略時はDB規則一覧を返します。超管理者の役割は共有DBから毎回取得し、種子の並行作成競合は再読込、権限割当失敗は上位へ返します。
+
+## 設定
+
+ライフサイクル。init にバックエンド/業務設定を渡し成功後に使用します。借用依存先の解放前に close の完了を待ち、正確な戻り値は例と公開署名に従います。
+
+設定はホストが読込・検証してから渡します。秘密はサーバーの非公開環境に保存し、利用場面に応じてバックエンド・容量・期限・ログを選びます。変更後は再初期化の結果を確認してください。
+
+[項目別の用途・適用場面・例](../../docs/usage/configuration/identity.md).
+
+## エラー処理
+
+領域操作は result.success を確認し、失敗時はモジュールのエラー定義と安全な説明を使います。コード・関連 ID・秘匿した原因をサーバーログに残します。同期ツール・ファクトリー・ストリーム反復・ライフサイクルは各署名に従い、Promise 完了だけで成功と判断しません。回復条件は各機能を参照してください。
+
+すべての操作は `HaiResult<T>` を返し、`HaiIamError` で分岐します：
+
+```ts
+import { HaiIamError, iam } from '@h-ai/iam'
+
+const result = await iam.auth.login({ identifier: 'admin', password: 'wrong' })
+if (!result.success) {
+  if (result.error.code === HaiIamError.INVALID_CREDENTIALS.code) {
+    // 用户名或密码错误
+  }
+}
+```
+
+会話と refresh 消費状態を `hai:iam:sessions:{SHA256(userId)}` のバージョン付き文書にまとめ、独立した対応キーと索引を廃止します。Bearer Token は認証には使えない分区ヒントと256ビットの乱数を含み、クライアントは不透明な文字列として扱います。更新時は Session.version を再検証します。Memory は単一プロセスのテスト用で、本番は全ノードが Redis（Cluster 対応）を共有します。競合は最新状態から再試行し、上限で CONFLICT を返します。応答喪失で結果が不明なら認証を拒否し再ログインします。すべての会話は同じユーザー索引で管理されます。
+
+`iam.session.update(token, patch, expectedVersion)` は読み取った Session.version が必須です。旧版は CONFLICT、失効 Token は SESSION_NOT_FOUND を返し、新しい状態を上書きしません。自動延長の時刻だけの更新は内容版を変更せず、通常の並行リクエストを許容します。権限一括更新は最初の Token/版集合に限定し、後続ログインに古い値を適用しません。
 
 ## 開発とテスト
 

@@ -4,19 +4,9 @@
 
 [Framework](../../README.en.md)
 
-## Introduction
-
 Collect user feedback and diagnostic evidence, notify administrators, review reports and export offline bundles. Descriptions are optional. Reports and structured evidence use a relational database; screenshots and binary attachments use private object storage. A separate telemetry service is not required.
 
-## Features
-
-- Bounded browser/server logs, requests, errors, interactions, versions and allowed environment fields; up to 100 log records before and after an error by default.
-- Transactional intake, stable submission/evidence identifiers, checksum validation, independent processing/collection/notification state and durable leased jobs.
-- `notificationMode` independently selects `disabled` (no notification jobs), `console` (metadata only by default, including production, without Reach/email; consoleContent: summary explicitly enables sanitized summaries), or `reach` (any configured provider and destinations; only this mode requires recipients). The default remains `reach` for existing configurations; generated projects explicitly select `console`. During Reach DND, the feedback outbox waits without adding a second delayed queue or changing other notification policy. Production Reach Console restrictions remain enforced. Sent means channel acceptance, not inbox delivery.
-- Browser screenshots, irreversible masking, annotations, optional rrweb recording, retries and local fallback export; `FeedbackModal`, `FeedbackList` and `FeedbackDetail` in `@h-ai/ui`.
-- Self-contained ZIP files, SHA-256 validation, an offline viewer and paginated evidence queries without production credentials.
-
-## Getting started
+## Quick Start
 
 Supply `appVersion/buildId/commit` from each actual browser or server artifact. A browser must retain its own identity; one SSR build shares its buildId across client and server output. Admin Console and generated base/API/fullstack projects inline these values. `hai build` creates internal metadata and passes it through Docker build arguments. Each target reads its own package.json version; a missing owning Git commit is `unknown`. Template `build-metadata.json` contains only these three nonsecret fields and matches the inlined values.
 
@@ -79,6 +69,61 @@ Ordinary routes retain `transport.maxPlaintextBytes` (auto/omitted: 1 MiB). Decl
 After acceptance, the SDK uploads attachments and subsequent evidence in the background. Network, 5xx, 408 and 429 failures retry after 1, 2, 4, 8 and 16 seconds, then pause after six consecutive failures. Other 4xx responses pause immediately. Drafts and attachments remain available; call `flush()` or prepare feedback again after connectivity or authentication recovers. Unsubmitted drafts and completed collections do not generate background uploads. `close({ discard: true })` waits for requests already in flight and starts no further requests for the old draft. Await it before initializing another identity.
 
 Automatic screenshots use html2canvas to render a redacted DOM clone. Cross-origin images, iframe/video content and network fonts that are not ready may be missing. Browser or CSP failures are recorded as missing, and users can still attach images manually.
+
+## Features
+
+- Bounded browser/server logs, requests, errors, interactions, versions and allowed environment fields; up to 100 log records before and after an error by default.
+- Transactional intake, stable submission/evidence identifiers, checksum validation, independent processing/collection/notification state and durable leased jobs.
+- `notificationMode` independently selects `disabled` (no notification jobs), `console` (metadata only by default, including production, without Reach/email; consoleContent: summary explicitly enables sanitized summaries), or `reach` (any configured provider and destinations; only this mode requires recipients). The default remains `reach` for existing configurations; generated projects explicitly select `console`. During Reach DND, the feedback outbox waits without adding a second delayed queue or changing other notification policy. Production Reach Console restrictions remain enforced. Sent means channel acceptance, not inbox delivery.
+- Browser screenshots, irreversible masking, annotations, optional rrweb recording, retries and local fallback export; `FeedbackModal`, `FeedbackList` and `FeedbackDetail` in `@h-ai/ui`.
+- Self-contained ZIP files, SHA-256 validation, an offline viewer and paginated evidence queries without production credentials.
+
+### Operations and results
+
+Use the complete initialization flow in this section first. The host validates and authorizes example business values; check success before reading data from asynchronous domain results. Here void means completion without data, null means absent; synchronous factories/tools return the listed type directly.
+
+input.id is a report ID; attachmentId/jobId must belong to it. context comes from trusted authentication with subject/scope/permissions. Evidence, submission and base64 remain bounded and ownership-checked.
+
+#### feedback
+
+Accept/authorize reports: input plus trusted context yields a report; list filters/page yield a page, get ID yields details, getEvidence ID/filters yield evidence pages.
+
+| Entry                  | Input parameters | Successful result                       | Call example                                                                   |
+| ---------------------- | ---------------- | --------------------------------------- | ------------------------------------------------------------------------------ |
+| `feedback.submit`      | input, context   | `Report`                                | `await feedback.submit(submission, context)`                                   |
+| `feedback.list`        | input, context   | `Report page`                           | `await feedback.list({ page: 1, pageSize: 20 }, context)`                      |
+| `feedback.get`         | id, context      | `Report, attachments, history and jobs` | `await feedback.get(reportId, context)`                                        |
+| `feedback.getEvidence` | input, context   | `Evidence page`                         | `await feedback.getEvidence({ id: reportId, page: 1, pageSize: 20 }, context)` |
+
+#### feedback
+
+Admin handling takes ID, status/expectedVersion or retry target and trusted context; returns the report or void. Authorize first and refresh versions on conflict.
+
+| Entry                | Input parameters | Successful result | Call example                                                                                       |
+| -------------------- | ---------------- | ----------------- | -------------------------------------------------------------------------------------------------- |
+| `feedback.setStatus` | input, context   | `Updated report`  | `await feedback.setStatus({ id: reportId, status: 'handled', expectedVersion: version }, context)` |
+| `feedback.retry`     | input, context   | `void`            | `await feedback.retry({ id: reportId, target: 'collect' }, context)`                               |
+
+#### feedback
+
+Collection takes report ID with evidence, missing markers or attachment ID/base64; returns acknowledgements/revision, report, metadata or base64. All require trusted context and the same quota/ownership rules.
+
+| Entry                         | Input parameters | Successful result                        | Call example                                                                           |
+| ----------------------------- | ---------------- | ---------------------------------------- | -------------------------------------------------------------------------------------- |
+| `feedback.appendEvidence`     | input, context   | `Acknowledged IDs and evidence revision` | `await feedback.appendEvidence({ id: reportId, evidence }, context)`                   |
+| `feedback.completeCollection` | input, context   | `Report`                                 | `await feedback.completeCollection({ id: reportId }, context)`                         |
+| `feedback.uploadAttachment`   | input, context   | `Attachment metadata`                    | `await feedback.uploadAttachment({ id: reportId, attachmentId, dataBase64 }, context)` |
+| `feedback.getAttachment`      | input, context   | `Name, type and base64`                  | `await feedback.getAttachment({ id: reportId, attachmentId }, context)`                |
+
+#### feedback
+
+Export takes report ID/revision and yields a job; getExport takes report/job IDs and yields ZIP/base64, polling only bounded pending states; runJobs processes due jobs and yields processed count.
+
+| Entry                | Input parameters | Successful result           | Call example                                                 |
+| -------------------- | ---------------- | --------------------------- | ------------------------------------------------------------ |
+| `feedback.export`    | input, context   | `Export job`                | `await feedback.export({ id: reportId }, context)`           |
+| `feedback.getExport` | input, context   | `ZIP name, type and base64` | `await feedback.getExport({ id: reportId, jobId }, context)` |
+| `feedback.runJobs`   | No arguments     | `processed count`           | `await feedback.runJobs()`                                   |
 
 ### Feedback capture and delivery checks
 
@@ -186,11 +231,23 @@ Reference admin/fullstack feedback startup failures leave required business modu
 
 ### Privacy boundary of console notifications
 
-`consoleContent` defaults to `metadata`: report number, application/version/build identity and collection status only. Descriptions, summaries, attachments, evidence, notification bodies and destinations are excluded. Explicit `summary` enables a generically sanitized summary; generic redaction cannot identify every business secret. Reach is not required and disabled/reach channel semantics are unchanged. Existing console configurations become metadata-only by default on upgrade.
+`consoleContent` defaults to `metadata`: report number, application/version/build identity and collection status only. Descriptions, summaries, attachments, evidence, notification bodies and destinations are excluded. Explicit `summary` enables a generically sanitized summary; generic redaction cannot identify every business secret. Reach is not required and disabled/reach channel semantics are unchanged.
 
 Server environment evidence commits in the intake transaction. A failed environment write leaves no accepted partial report; retry with the same submissionId. Management screens use `createFeedbackReview(...).retryReport(id)` for recoverable collection and failed notification/Webhook jobs. It deduplicates targets, propagates failures, and stops further orchestration after close.
 
-## Development and testing
+## Configuration
+
+Lifecycle: init takes backend/business configuration; use the module only after success. Await close before releasing borrowed dependencies. Follow the quick-start example and public signatures for exact return values.
+
+The host loads and validates configuration before passing it to this module. Keep secrets in private server environment files. Select the backend, capacity, deadlines and logging for the actual use case; reinitialize and check the result after changes.
+
+[Per-option purpose, use cases and examples](../../docs/usage/configuration/operations.md).
+
+## Error Handling
+
+Check result.success for domain operations. Handle failures with the module error definitions and safe messages; retain codes, correlation IDs and sanitized causes in server logs. Synchronous tools, factories, stream iteration and lifecycle calls follow their own signatures. A completed Promise alone is not business success. See each feature for recovery limits.
+
+## Development
 
 ```sh
 pnpm --filter @h-ai/feedback typecheck

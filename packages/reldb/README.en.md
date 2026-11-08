@@ -4,33 +4,9 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
 
-## Introduction
-
 A relational database module with a unified `reldb` object for SQLite, PostgreSQL, and MySQL.
 
-Connections become available only after a successful health check. Failed initialization disposes its candidate; `error.ext.cleanupPending === true` identifies cleanup that still needs retry. `reldb.close()` returns `Promise<HaiResult<void>>`, waits for initialization, and coalesces concurrent close calls. Once cleanup starts, `isInitialized` is false and configuration/operations are unavailable. A failed cleanup retains the resource: the next `close()` or `init()` retries disposal before allocating a replacement. Always inspect the close result.
-
-```ts
-const closed = await reldb.close()
-if (!closed.success) {
-  // Retry once after addressing the cleanup failure; report another failure.
-  const retried = await reldb.close()
-  if (!retried.success)
-    throw new Error(retried.error.message)
-}
-```
-
-Close waits for borrowed transactions to commit/roll back and release their handles; applications must finish transactions for shutdown to complete. SQLite WAL setup and worker handshakes are part of the owned initialization chain. PostgreSQL removes disconnected idle clients and replaces them on later queries without terminating the process; logs contain safe error identifiers rather than raw driver errors.
-
-## Core features
-
-- Connect to SQLite, PostgreSQL and MySQL through one API.
-- Run parameterized SQL, manage tables/indexes and read paginated results.
-- Organize application reads and writes with transactions, CRUD and repositories.
-
-## Getting started
-
-### Quick start
+## Quick Start
 
 ```ts
 import { HaiReldbError, reldb } from '@h-ai/reldb'
@@ -75,141 +51,105 @@ await reldb.close()
 
 `reldb.config` returns a **redacted configuration snapshot**. Database `password`, URL credentials and the TLS client private key `ssl.key` are hidden. Use it to inspect state, not to replay connection details.
 
-### Configuration
+## Features
 
-`@h-ai/reldb/schemas` exports the same configuration schemas and types with only Zod, without loading the database singleton or drivers. CLI and browser code can validate configuration through this entry. MySQL TLS accepts `false` or a strict object; `{}` verifies the certificate chain and DNS identity by default. PostgreSQL retains its boolean, string mode and object contract.
-
-```ts
-import { ReldbConfigSchema } from '@h-ai/reldb/schemas'
-
-const checked = ReldbConfigSchema.safeParse({ type: 'mysql', database: 'shop', ssl: {} })
-if (!checked.success)
-  throw new Error('Invalid database configuration')
-// checked.data.ssl: { rejectUnauthorized: true, verifyIdentity: true }
-```
-
-Use either a connection string (`url`) or separate fields (`host/port/database/user/password`).
+Connections become available only after a successful health check. Failed initialization disposes its candidate; `error.ext.cleanupPending === true` identifies cleanup that still needs retry. `reldb.close()` returns `Promise<HaiResult<void>>`, waits for initialization, and coalesces concurrent close calls. Once cleanup starts, `isInitialized` is false and configuration/operations are unavailable. A failed cleanup retains the resource: the next `close()` or `init()` retries disposal before allocating a replacement. Always inspect the close result.
 
 ```ts
-// SQLite
-await reldb.init({ type: 'sqlite', database: './data.db' })
-
-// PostgreSQL
-await reldb.init({ type: 'postgresql', url: 'postgres://user:pass@localhost:5432/mydb', database: 'mydb' })
-
-// MySQL
-await reldb.init({
-  type: 'mysql',
-  host: 'localhost',
-  port: 3306,
-  database: 'mydb',
-  user: 'admin',
-  password: 'secret',
-  mysql: { charset: 'utf8mb4' },
-  pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 },
-})
+const closed = await reldb.close()
+if (!closed.success) {
+  // Retry once after addressing the cleanup failure; report another failure.
+  const retried = await reldb.close()
+  if (!retried.success)
+    throw new Error(retried.error.message)
+}
 ```
 
-#### Connection pools and MySQL URLs
+Close waits for borrowed transactions to commit/roll back and release their handles; applications must finish transactions for shutdown to complete. SQLite WAL setup and worker handshakes are part of the owned initialization chain. PostgreSQL removes disconnected idle clients and replaces them on later queries without terminating the process; logs contain safe error identifiers rather than raw driver errors.
 
-MySQL `pool` accepts only `max`, `acquireTimeout` and `queueLimit`, defaulting to 10, 10000 milliseconds and 1000 even when omitted. Unsupported pool fields such as `min` and `idleTimeout`, and the unimplemented `mysql.timezone`, fail configuration validation. Idle connections remain subject to mysql2/server disconnection and `close()`; the module promises no MySQL minimum retention or configurable idle expiry. [mysql2 3.24.5 options](https://github.com/sidorares/node-mysql2/blob/v3.24.5/typings/mysql/lib/Pool.d.ts) differ from PostgreSQL.
+### Operations and results
 
-| Field            | PostgreSQL (defaults when `pool` is provided)                 | MySQL                                               |
-| ---------------- | ------------------------------------------------------------- | --------------------------------------------------- |
-| `max`            | 10                                                            | 10, counting borrowed and connecting slots together |
-| `min`            | 1, retention floor for established connections; no prewarming | Unsupported; rejected                               |
-| `idleTimeout`    | 30000 ms; 0 disables                                          | Unsupported; rejected                               |
-| `acquireTimeout` | 10000 ms; 0 disables                                          | 10000 ms; integer from 1 to 2147483647              |
-| `queueLimit`     | Unsupported                                                   | 1000; positive integer limiting queued requests     |
+Use the complete initialization flow in this section first. The host validates and authorizes example business values; check success before reading data from asynchronous domain results. Here void means completion without data, null means absent; synchronous factories/tools return the listed type directly.
 
-PostgreSQL uses pg defaults when `pool` is omitted; see [pg.Pool](https://node-postgres.com/apis/pool) for retention semantics. All MySQL SQL, DDL, CRUD, batch and transaction entry points use a bounded FIFO acquisition queue. Waiting and establishment share one deadline: expiry returns `TIMEOUT`, and a full queue returns `POOL_EXHAUSTED`. Expired waiters are removed; late connections are released without executing SQL and retain their capacity slot until settled. The deadline is checked on delivery and before starting work. It does not limit SQL or transactions that have already started.
+Table/column/index names and SQL come from trusted code; params bind business values, steps define module migrations and options control preview/pagination.
 
-MySQL `close()` rejects new and queued requests immediately, then waits for borrowed connections, transactions and pending establishment before ending the pool. The driver uses the same value for `connectTimeout`; shutdown may wait for that timeout or existing work to finish. Applications must finish transactions. Environment variables use `HAI_DB_POOL_*`: `MIN` and `IDLETIMEOUT` apply only to PostgreSQL; MySQL `QUEUELIMIT` bounds queued requests.
+#### reldb.ddl
 
-MySQL accepts a `mysql://` URL without split connection fields; `database` is required without a URL. URL host/port/database/user/password take precedence over conflicting split fields. `pool`, `mysql.charset`, `ssl` and `operationLog` remain independent options. Query strings and fragments are rejected, so hidden URL parameters cannot change TLS or pool policy. Connection logs sanitize URLs. This example assumes `HAI_DB_URL` is set:
+Maintain tables, columns and indexes. Supply trusted identifiers, column/index definitions or DDL; success contains void, invalid changes fail.
 
-```ts
-const initialized = await reldb.init({
-  type: 'mysql',
-  url: process.env.HAI_DB_URL,
-  pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 }
-})
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-```
+| Entry                   | Input parameters                 | Successful result | Call example                                                                         |
+| ----------------------- | -------------------------------- | ----------------- | ------------------------------------------------------------------------------------ |
+| `reldb.ddl.createTable` | tableName, columns, ifNotExists  | `void`            | `await reldb.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } })`  |
+| `reldb.ddl.dropTable`   | tableName, ifExists              | `void`            | `await reldb.ddl.dropTable('orders_archive', true)`                                  |
+| `reldb.ddl.addColumn`   | tableName, columnName, columnDef | `void`            | `await reldb.ddl.addColumn('orders', 'note', { type: 'TEXT' })`                      |
+| `reldb.ddl.dropColumn`  | tableName, columnName            | `void`            | `await reldb.ddl.dropColumn('orders', 'note')`                                       |
+| `reldb.ddl.renameTable` | oldName, newName                 | `void`            | `await reldb.ddl.renameTable('orders_draft', 'orders')`                              |
+| `reldb.ddl.createIndex` | tableName, indexName, indexDef   | `void`            | `await reldb.ddl.createIndex('orders', 'orders_status', { columns: ['status'] })`    |
+| `reldb.ddl.dropIndex`   | indexName, ifExists              | `void`            | `await reldb.ddl.dropIndex('orders_status', true)`                                   |
+| `reldb.ddl.raw`         | sql                              | `void`            | `await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS app_marker (id TEXT PRIMARY KEY)')` |
 
-An empty MySQL `url` (including an empty environment placeholder) selects host/port/database/user/password; nonempty URLs remain strictly validated.
+#### reldb.sql
 
-#### MySQL TLS
+Read/write business data with bound params: rows, first row/null, write result, void or a page respectively; batch takes statement objects.
 
-Omitting `ssl` or using `false` disables TLS. Enabling it requires a strict object; an empty object defaults to `{ rejectUnauthorized: true, verifyIdentity: true }`. `ca` contains trusted CA PEM text, or Node's trust store is used when omitted. Optional client `cert` and `key` must contain PEM text and be provided together. Unknown TLS fields, `true` and PostgreSQL string modes are rejected; arbitrary options and callbacks are not forwarded.
+| Entry                 | Input parameters | Successful result    | Call example                                                                                                     |
+| --------------------- | ---------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `reldb.sql.query`     | sql, params      | `T[]`                | `await reldb.sql.query('SELECT id FROM orders WHERE status = ?', ['pending'])`                                   |
+| `reldb.sql.get`       | sql, params      | `T \| null`          | `await reldb.sql.get('SELECT id FROM orders WHERE id = ?', ['o1'])`                                              |
+| `reldb.sql.execute`   | sql, params      | `ExecuteResult`      | `await reldb.sql.execute('UPDATE orders SET status = ? WHERE id = ?', ['paid', 'o1'])`                           |
+| `reldb.sql.batch`     | statements       | `void`               | `await reldb.sql.batch([{ sql: 'DELETE FROM orders WHERE id = ?', params: ['o1'] }])`                            |
+| `reldb.sql.queryPage` | options          | `PaginatedResult<T>` | `await reldb.sql.queryPage({ sql: 'SELECT id FROM orders ORDER BY id', pagination: { page: 1, pageSize: 20 } })` |
 
-[mysql2 3.24.5 identity checks](https://github.com/sidorares/node-mysql2/blob/v3.24.5/lib/base/connection.js) depend on a DNS servername. With both certificate and identity checks enabled, IP targets return `CONFIG_ERROR`; use a hostname matching the certificate DNS SAN. Explicit `verifyIdentity: false` retains only chain verification. `rejectUnauthorized: false` abandons server authentication; encryption alone does not authenticate the server. Disabling either check emits a fixed risk warning and is not reported as a secure configuration.
+#### reldb.pagination
 
-```ts
-// Supply trustedCaPem from deployment trust configuration, not an arbitrary peer certificate.
-const initialized = await reldb.init({
-  type: 'mysql',
-  host: 'db.example.com',
-  database: 'app',
-  ssl: { ca: trustedCaPem }
-})
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-```
+Pagination: normalize accepts page options and limits and returns normalized options; build accepts items, total and paging and returns the page object directly.
 
-TLS tests require OpenSSL (Git for Windows includes one) and local container port forwarding. Each run generates and removes its own CA/private keys and checks trusted DNS, wrong CA/hostname rejection, `REQUIRE X509` client authentication and actual session `Ssl_cipher`. Disabling verification is not accepted as proof of authenticated TLS.
+| Entry                        | Input parameters         | Successful result      | Call example                                               |
+| ---------------------------- | ------------------------ | ---------------------- | ---------------------------------------------------------- |
+| `reldb.pagination.normalize` | options, overrides       | `NormalizedPagination` | `reldb.pagination.normalize({ page: 1, pageSize: 20 })`    |
+| `reldb.pagination.build`     | items, total, pagination | `PaginatedResult<T>`   | `reldb.pagination.build([], 0, { page: 1, pageSize: 20 })` |
 
-#### SQLite execution (asynchronous worker)
+#### reldb
 
-better-sqlite3 is synchronous, so queries block Node's main event loop. WAL improves database lock concurrency but cannot remove this blocking. To offload it, opt in to a dedicated SQLite worker thread (single connection; defaults to `sync`):
+Prepare module persistence: table name returns columns; module name, steps and dryRun return a migration plan. Back up and stop conflicting writers before applying.
 
-```ts
-await reldb.init({
-  type: 'sqlite',
-  database: './data.db',
-  sqlite: {
-    executor: 'worker', // 'sync'（默认）| 'worker'
-    walMode: true, // 默认 true
-    workerConnectTimeoutMs: 10000, // worker 打开连接超时，默认 10000
-  },
-})
-```
+| Entry                 | Input parameters       | Successful result     | Call example                                                            |
+| --------------------- | ---------------------- | --------------------- | ----------------------------------------------------------------------- |
+| `reldb.schemaColumns` | table, sql             | `string[]`            | `await reldb.schemaColumns('orders')`                                   |
+| `reldb.migrateSchema` | module, steps, options | `SchemaMigrationPlan` | `await reldb.migrateSchema('orders', migrationSteps, { dryRun: true })` |
 
-In worker mode, queries, writes, and transactions run serially on the worker thread. Public APIs and return values remain identical to synchronous mode.
+#### reldb.tx
 
-#### Operation logging
+Atomic writes: begin yields a transaction with query/get/execute/batch/queryPage/commit/rollback; wrap runs a callback and returns its value. A failed HaiResult must explicitly trigger rollback.
 
-Enable SQL operation logs with `operationLog` in the database configuration. Logs are emitted at the DML layer of reldb provider-base, without duplicate wrappers in `reldb-main.ts` or raw providers.
+| Entry            | Input parameters | Successful result     | Call example                                                                                                                                                        |
+| ---------------- | ---------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reldb.tx.begin` | No arguments     | `DmlWithTxOperations` | `await reldb.tx.begin()`                                                                                                                                            |
+| `reldb.tx.wrap`  | fn               | `T`                   | `await reldb.tx.wrap(async tx => { const found = await tx.get('SELECT 1 AS value'); if (!found.success) throw new Error(found.error.message); return found.data })` |
 
-```yaml
-# config/_db.yml
-type: sqlite
-database: ./data/app.db
-operationLog:
-  read: false # query / get / queryPage
-  write: false # DDL, execute / batch, tx.begin / tx.commit / tx.rollback
-  maxLength: 1000 # maximum numeric summary length; 0 omits the summary, SQL text and values are never logged
-  level: debug # info | debug | trace，默认 debug
-```
+#### reldb.crud
 
-When loading through `core.config.load('db', ...)`, convention-based variables such as `HAI_DB_TYPE`,
-`HAI_DB_DATABASE`, and `HAI_DB_OPERATIONLOG_LEVEL` override YAML values.
+Supply table/field mappings for a business entity; obtain a repository directly for CRUD and pagination without exposing a database connection.
 
-```ts
-await reldb.init({
-  type: 'sqlite',
-  database: './data.db',
-  operationLog: {
-    read: true,
-    write: true,
-    maxLength: 500,
-    level: 'debug',
-  },
-})
-```
+| Entry              | Input parameters | Successful result            | Call example                              |
+| ------------------ | ---------------- | ---------------------------- | ----------------------------------------- |
+| `reldb.crud.table` | config           | `ReldbCrudRepository<TItem>` | `reldb.crud.table(orderRepositoryConfig)` |
 
-Operation logs contain fixed operation names and SQL length, parameter count, and batch count. Failure logs also retain error codes, traceId, and allowlisted, sanitized driver messages and stacks for diagnosis. Full SQL, bound parameters, and connection configuration are not logged directly.
+#### reldb.json
+
+Cross-dialect JSON expressions: trusted column, JSON path and value/patch return SQL plus bound params directly, without executing a query.
+
+| Entry                | Input parameters    | Successful result | Call example                                        |
+| -------------------- | ------------------- | ----------------- | --------------------------------------------------- |
+| `reldb.json.extract` | column, path        | `JsonSqlExpr`     | `reldb.json.extract('payload', '$.status')`         |
+| `reldb.json.set`     | column, path, value | `JsonSqlExpr`     | `reldb.json.set('payload', '$.status', 'paid')`     |
+| `reldb.json.insert`  | column, path, value | `JsonSqlExpr`     | `reldb.json.insert('payload', '$.note', 'checked')` |
+| `reldb.json.remove`  | column, path        | `JsonSqlExpr`     | `reldb.json.remove('payload', '$.note')`            |
+| `reldb.json.merge`   | column, patch       | `JsonSqlExpr`     | `reldb.json.merge('payload', { status: 'paid' })`   |
+
+- Connect to SQLite, PostgreSQL and MySQL through one API.
+- Run parameterized SQL, manage tables/indexes and read paginated results.
+- Organize application reads and writes with transactions, CRUD and repositories.
 
 ### Transactions
 
@@ -659,7 +599,159 @@ const { sql: rmSql, params: rmParams } = reldb.json.remove('meta', '$.reviewer')
 await reldb.sql.execute(`UPDATE products SET meta = ${rmSql} WHERE id = ?`, [...rmParams, 1])
 ```
 
-### Error handling
+### Production shared state
+
+Production requires PostgreSQL/MySQL. SQLite, including disk files, is for development/explicit tests and does not provide cross-host shared state. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../.agents/instructions/distributed-state.md).
+
+### Module schema migrations
+
+`reldb.schemaColumns(table, sql?)` inspects real columns. `reldb.migrateSchema(module, steps, { dryRun: true })` creates no ledger. Modules own their steps. Execution journals versions in `hai_schema_migrations`; SQLite/PostgreSQL are transactional, while MySQL implicit DDL commits require reentrant steps. Failures do not advance versions; retries inspect real state. Older code rejects newer ledgers. Stop old writers and back up DB/session cache first. Rollback restores compatible database and binaries together. See the [upgrade guide](../../docs/usage/README.en.md).
+
+## Configuration
+
+Lifecycle: init takes backend/business configuration; use the module only after success. Await close before releasing borrowed dependencies. Follow the quick-start example and public signatures for exact return values.
+
+`@h-ai/reldb/schemas` exports the same configuration schemas and types with only Zod, without loading the database singleton or drivers. CLI and browser code can validate configuration through this entry. MySQL TLS accepts `false` or a strict object; `{}` verifies the certificate chain and DNS identity by default. PostgreSQL retains its boolean, string mode and object contract.
+
+```ts
+import { ReldbConfigSchema } from '@h-ai/reldb/schemas'
+
+const checked = ReldbConfigSchema.safeParse({ type: 'mysql', database: 'shop', ssl: {} })
+if (!checked.success)
+  throw new Error('Invalid database configuration')
+// checked.data.ssl: { rejectUnauthorized: true, verifyIdentity: true }
+```
+
+Use either a connection string (`url`) or separate fields (`host/port/database/user/password`).
+
+```ts
+// SQLite
+await reldb.init({ type: 'sqlite', database: './data.db' })
+
+// PostgreSQL
+await reldb.init({ type: 'postgresql', url: 'postgres://user:pass@localhost:5432/mydb', database: 'mydb' })
+
+// MySQL
+await reldb.init({
+  type: 'mysql',
+  host: 'localhost',
+  port: 3306,
+  database: 'mydb',
+  user: 'admin',
+  password: 'secret',
+  mysql: { charset: 'utf8mb4' },
+  pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 },
+})
+```
+
+### Connection pools and MySQL URLs
+
+MySQL `pool` accepts only `max`, `acquireTimeout` and `queueLimit`, defaulting to 10, 10000 milliseconds and 1000 even when omitted. Unsupported pool fields such as `min` and `idleTimeout`, and the unimplemented `mysql.timezone`, fail configuration validation. Idle connections remain subject to mysql2/server disconnection and `close()`; the module promises no MySQL minimum retention or configurable idle expiry. [mysql2 3.24.5 options](https://github.com/sidorares/node-mysql2/blob/v3.24.5/typings/mysql/lib/Pool.d.ts) differ from PostgreSQL.
+
+| Field            | PostgreSQL (defaults when `pool` is provided)                 | MySQL                                               |
+| ---------------- | ------------------------------------------------------------- | --------------------------------------------------- |
+| `max`            | 10                                                            | 10, counting borrowed and connecting slots together |
+| `min`            | 1, retention floor for established connections; no prewarming | Unsupported; rejected                               |
+| `idleTimeout`    | 30000 ms; 0 disables                                          | Unsupported; rejected                               |
+| `acquireTimeout` | 10000 ms; 0 disables                                          | 10000 ms; integer from 1 to 2147483647              |
+| `queueLimit`     | Unsupported                                                   | 1000; positive integer limiting queued requests     |
+
+PostgreSQL uses pg defaults when `pool` is omitted; see [pg.Pool](https://node-postgres.com/apis/pool) for retention semantics. All MySQL SQL, DDL, CRUD, batch and transaction entry points use a bounded FIFO acquisition queue. Waiting and establishment share one deadline: expiry returns `TIMEOUT`, and a full queue returns `POOL_EXHAUSTED`. Expired waiters are removed; late connections are released without executing SQL and retain their capacity slot until settled. The deadline is checked on delivery and before starting work. It does not limit SQL or transactions that have already started.
+
+MySQL `close()` rejects new and queued requests immediately, then waits for borrowed connections, transactions and pending establishment before ending the pool. The driver uses the same value for `connectTimeout`; shutdown may wait for that timeout or existing work to finish. Applications must finish transactions. Environment variables use `HAI_DB_POOL_*`: `MIN` and `IDLETIMEOUT` apply only to PostgreSQL; MySQL `QUEUELIMIT` bounds queued requests.
+
+MySQL accepts a `mysql://` URL without split connection fields; `database` is required without a URL. URL host/port/database/user/password take precedence over conflicting split fields. `pool`, `mysql.charset`, `ssl` and `operationLog` remain independent options. Query strings and fragments are rejected, so hidden URL parameters cannot change TLS or pool policy. Connection logs sanitize URLs. This example assumes `HAI_DB_URL` is set:
+
+```ts
+const initialized = await reldb.init({
+  type: 'mysql',
+  url: process.env.HAI_DB_URL,
+  pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 }
+})
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+```
+
+An empty MySQL `url` (including an empty environment placeholder) selects host/port/database/user/password; nonempty URLs remain strictly validated.
+
+#### MySQL TLS
+
+Omitting `ssl` or using `false` disables TLS. Enabling it requires a strict object; an empty object defaults to `{ rejectUnauthorized: true, verifyIdentity: true }`. `ca` contains trusted CA PEM text, or Node's trust store is used when omitted. Optional client `cert` and `key` must contain PEM text and be provided together. Unknown TLS fields, `true` and PostgreSQL string modes are rejected; arbitrary options and callbacks are not forwarded.
+
+[mysql2 3.24.5 identity checks](https://github.com/sidorares/node-mysql2/blob/v3.24.5/lib/base/connection.js) depend on a DNS servername. With both certificate and identity checks enabled, IP targets return `CONFIG_ERROR`; use a hostname matching the certificate DNS SAN. Explicit `verifyIdentity: false` retains only chain verification. `rejectUnauthorized: false` abandons server authentication; encryption alone does not authenticate the server. Disabling either check emits a fixed risk warning and is not reported as a secure configuration.
+
+```ts
+// Supply trustedCaPem from deployment trust configuration, not an arbitrary peer certificate.
+const initialized = await reldb.init({
+  type: 'mysql',
+  host: 'db.example.com',
+  database: 'app',
+  ssl: { ca: trustedCaPem }
+})
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+```
+
+TLS tests require OpenSSL (Git for Windows includes one) and local container port forwarding. Each run generates and removes its own CA/private keys and checks trusted DNS, wrong CA/hostname rejection, `REQUIRE X509` client authentication and actual session `Ssl_cipher`. Disabling verification is not accepted as proof of authenticated TLS.
+
+#### SQLite execution (asynchronous worker)
+
+better-sqlite3 is synchronous, so queries block Node's main event loop. WAL improves database lock concurrency but cannot remove this blocking. To offload it, opt in to a dedicated SQLite worker thread (single connection; defaults to `sync`):
+
+```ts
+await reldb.init({
+  type: 'sqlite',
+  database: './data.db',
+  sqlite: {
+    executor: 'worker', // 'sync'（默认）| 'worker'
+    walMode: true, // 默认 true
+    workerConnectTimeoutMs: 10000, // worker 打开连接超时，默认 10000
+  },
+})
+```
+
+In worker mode, queries, writes, and transactions run serially on the worker thread. Public APIs and return values remain identical to synchronous mode.
+
+#### Operation logging
+
+Enable SQL operation logs with `operationLog` in the database configuration. Logs are emitted at the DML layer of reldb provider-base, without duplicate wrappers in `reldb-main.ts` or raw providers.
+
+```yaml
+# config/_db.yml
+type: sqlite
+database: ./data/app.db
+operationLog:
+  read: false # query / get / queryPage
+  write: false # DDL, execute / batch, tx.begin / tx.commit / tx.rollback
+  maxLength: 1000 # maximum numeric summary length; 0 omits the summary, SQL text and values are never logged
+  level: debug # info | debug | trace，默认 debug
+```
+
+When loading through `core.config.load('db', ...)`, convention-based variables such as `HAI_DB_TYPE`,
+`HAI_DB_DATABASE`, and `HAI_DB_OPERATIONLOG_LEVEL` override YAML values.
+
+```ts
+await reldb.init({
+  type: 'sqlite',
+  database: './data.db',
+  operationLog: {
+    read: true,
+    write: true,
+    maxLength: 500,
+    level: 'debug',
+  },
+})
+```
+
+Operation logs contain fixed operation names and SQL length, parameter count, and batch count. Failure logs also retain error codes, traceId, and allowlisted, sanitized driver messages and stacks for diagnosis. Full SQL, bound parameters, and connection configuration are not logged directly.
+
+The host loads and validates configuration before passing it to this module. Keep secrets in private server environment files. Select the backend, capacity, deadlines and logging for the actual use case; reinitialize and check the result after changes.
+
+[Per-option purpose, use cases and examples](../../docs/usage/configuration/data.md).
+
+## Error Handling
+
+Check result.success for domain operations. Handle failures with the module error definitions and safe messages; retain codes, correlation IDs and sanitized causes in server logs. Synchronous tools, factories, stream iteration and lifecycle calls follow their own signatures. A completed Promise alone is not business success. See each feature for recovery limits.
 
 All operations return `HaiResult<T>`; check `result.success` for success or failure.
 
@@ -698,15 +790,7 @@ Common error codes:
 
 Custom SQL methods in `BaseReldbCrudRepository` subclasses must check `await this.ensureReady()`. Construction starts table creation; service init must await candidate readiness before publication. PostgreSQL retries a single autocommit `CREATE TABLE/INDEX IF NOT EXISTS` once only for `23505/pg_class_relname_nsp_index` catalog contention (also `pg_type_typname_nsp_index` for tables), or a table row-type race reported as `42710` with server routine `heap_create_with_catalog` / `TypeCreate`, consistently through DDL and SQL entry points. A failed retry remains an error. Transactions, business uniqueness errors and other failures are not retried. Initial connection probing attempts temporary DNS `EAI_AGAIN` failures at most three times, with 250/500 ms delays; business SQL is never replayed.
 
-## Production shared state
-
-Production requires PostgreSQL/MySQL. SQLite, including disk files, is for development/explicit tests and does not provide cross-host shared state. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../.agents/instructions/distributed-state.md)。
-
-## Module schema migrations
-
-`reldb.schemaColumns(table, sql?)` inspects real columns. `reldb.migrateSchema(module, steps, { dryRun: true })` creates no ledger. Modules own their steps. Execution journals versions in `hai_schema_migrations`; SQLite/PostgreSQL are transactional, while MySQL implicit DDL commits require reentrant steps. Failures do not advance versions; retries inspect real state. Older code rejects newer ledgers. Stop old writers and back up DB/session cache first. Rollback restores compatible database and binaries together. See the [upgrade guide](../../docs/usage/README.en.md).
-
-## Error messages and correlated logs
+### Error messages and correlated logs
 
 Unique constraint violations return `HaiReldbError.DUPLICATE_ENTRY` (409); timeout, pool exhaustion and other existing error codes remain intact. Branch on error codes rather than localized messages or driver text. Logs preserve driver code/schema/routine/constraint and stack line numbers; numeric bound values do not obscure these diagnostic identifiers.
 
@@ -714,7 +798,7 @@ HTTP errors carry safe localized messages and a reference ID. ToastContainer hid
 
 Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
 
-## Development and testing
+## Development
 
 ```bash
 pnpm --filter @h-ai/reldb test

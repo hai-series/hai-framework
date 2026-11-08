@@ -4,30 +4,14 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/audit](../audit/README.ja.md) · [@h-ai/core](../core/README.ja.md)
 
-## 概要
-
 WeChat Pay、Alipay、Stripe に対応する統一決済モジュールです。Provider によるサーバー側の決済処理と、複数プラットフォームからの決済開始を提供します。
 
-## 主な機能
-
-| Provider   | 決済方式                                         |
-| ---------- | ------------------------------------------------ |
-| WeChat Pay | `jsapi`：WeChat 公式アカウント内ブラウザー       |
-| Alipay     | `h5`：署名済み WAP フォーム POST                 |
-| Stripe     | h5：ホスト型 Checkout ページへの遷移（国際決済） |
-
-組み込み作成処理は上記の組み合わせに限定されます。公開 `TradeType` は `jsapi | h5` で、App・Native・ミニプログラムなどは通信前に `UNSUPPORTED_TRADE_TYPE` を返します。WeChat の `userId` は現在の公式アカウントの openid が必須で、WeChat/Alipay は CNY のみ受け付けます。有効な `prepay_id` の欠落もエラーです。Alipay の `createOrder` は署名済みページパラメーターを生成する処理で、チャネル受付や支払い完了を意味しません。返された `{ gateway, fields }` の全署名フィールドを固定の本番/サンドボックスゲートウェイへ POST します。HTML の解析や任意 action は許可しません。信頼する HTTPS の `alipay.returnUrl` が必須で、`HAI_PAYMENT_ALIPAY_RETURNURL` でも設定できます。戻り先への遷移は支払証明になりません。`success` と `data.invoked` の両方を確認してください。WeChat ブリッジの準備を待ち、キャンセルのクライアント応答を支払いと解釈しないでください。
-
-仕様：[WeChat JSAPI 注文](https://pay.wechatpay.cn/doc/v3/merchant/4012791897)、[クライアント呼び出し](https://pay.wechatpay.cn/doc/v3/merchant/4012791857)、[Alipay 公式 Node SDK pageExecute](https://github.com/alipay/alipay-sdk-nodejs-all#pageexecute-示例代码)。定向テストはプロトコル形状、実際の RSA 検証、jsdom 処理、テストで通信を遮断した Chrome の POSTを確認します。実加盟店の認証情報、チャネルのサンドボックスアカウント、実端末を使った決済検証は行っていません。
-
-## 使い始める
+## クイックスタート
 
 ### 依存関係
 
 - `@h-ai/audit`：任意の監査ログ。初期化済みの場合、決済操作を自動記録します。
 - `@h-ai/reldb`：Stripe 有効時は必須です。共有データベースを先に初期化し、チャネル識別子と冪等結果を永続化します。WeChat/Alipay のみなら必須ではありません。
-
-### クイックスタート
 
 並行する `close()` は未完了の `init()` を無効にし、遅い初期化がモジュールを再開しないようにします。その初期化の完了を待ってから再初期化できます。
 
@@ -78,6 +62,50 @@ if (!invoked.data.invoked)
   throw new Error(invoked.data.message)
 ```
 
+## 機能
+
+| Provider   | 決済方式                                         |
+| ---------- | ------------------------------------------------ |
+| WeChat Pay | `jsapi`：WeChat 公式アカウント内ブラウザー       |
+| Alipay     | `h5`：署名済み WAP フォーム POST                 |
+| Stripe     | h5：ホスト型 Checkout ページへの遷移（国際決済） |
+
+組み込み作成処理は上記の組み合わせに限定されます。公開 `TradeType` は `jsapi | h5` で、App・Native・ミニプログラムなどは通信前に `UNSUPPORTED_TRADE_TYPE` を返します。WeChat の `userId` は現在の公式アカウントの openid が必須で、WeChat/Alipay は CNY のみ受け付けます。有効な `prepay_id` の欠落もエラーです。Alipay の `createOrder` は署名済みページパラメーターを生成する処理で、チャネル受付や支払い完了を意味しません。返された `{ gateway, fields }` の全署名フィールドを固定の本番/サンドボックスゲートウェイへ POST します。HTML の解析や任意 action は許可しません。信頼する HTTPS の `alipay.returnUrl` が必須で、`HAI_PAYMENT_ALIPAY_RETURNURL` でも設定できます。戻り先への遷移は支払証明になりません。`success` と `data.invoked` の両方を確認してください。WeChat ブリッジの準備を待ち、キャンセルのクライアント応答を支払いと解釈しないでください。
+
+仕様：[WeChat JSAPI 注文](https://pay.wechatpay.cn/doc/v3/merchant/4012791897)、[クライアント呼び出し](https://pay.wechatpay.cn/doc/v3/merchant/4012791857)、[Alipay 公式 Node SDK pageExecute](https://github.com/alipay/alipay-sdk-nodejs-all#pageexecute-示例代码)。定向テストはプロトコル形状、実際の RSA 検証、jsdom 処理、テストで通信を遮断した Chrome の POSTを確認します。実加盟店の認証情報、チャネルのサンドボックスアカウント、実端末を使った決済検証は行っていません。
+
+### 操作と入出力
+
+本節の完全な初期化手順を先に実行します。例の業務値はホストが検証・認可し、非同期領域結果は success を確認してから data を読みます。void はデータなし完了、null は不存在、同期ファクトリー/ツールは表の型を直接返します。
+
+#### payment
+
+providerName と注文入力/業務番号/返金入力から開始パラメーター・状態・返金結果・void。画面遷移/開始成功は入金ではない。
+
+| 入口                  | 入力引数              | 成功結果       | 呼出し例                                              |
+| --------------------- | --------------------- | -------------- | ----------------------------------------------------- |
+| `payment.createOrder` | providerName, input   | `PaymentOrder` | `await payment.createOrder(providerName, orderInput)` |
+| `payment.queryOrder`  | providerName, orderNo | `OrderStatus`  | `await payment.queryOrder(providerName, orderNo)`     |
+| `payment.refund`      | providerName, input   | `RefundResult` | `await payment.refund(providerName, refundInput)`     |
+| `payment.closeOrder`  | providerName, orderNo | `void`         | `await payment.closeOrder(providerName, orderNo)`     |
+
+#### payment
+
+通知は生本文と署名用ヘッダー/パラメーターから検証済み業務結果。注文更新と重複排除の原子性はアプリが担う。
+
+| 入口                   | 入力引数              | 成功結果              | 呼出し例                                                                |
+| ---------------------- | --------------------- | --------------------- | ----------------------------------------------------------------------- |
+| `payment.handleNotify` | providerName, request | `PaymentNotifyResult` | `await payment.handleNotify(providerName, verifiedNotificationRequest)` |
+
+#### payment
+
+信頼するサーバー拡張。名前から Provider/undefined、実際の PaymentProvider 登録は同期 void。通常の注文は門面 API を使用。
+
+| 入口                       | 入力引数 | 成功結果                       | 呼出し例                                    |
+| -------------------------- | -------- | ------------------------------ | ------------------------------------------- |
+| `payment.getProvider`      | name     | `PaymentProvider \| undefined` | `payment.getProvider(providerName)`         |
+| `payment.registerProvider` | provider | `void`                         | `payment.registerProvider(paymentProvider)` |
+
 ### HTTP API 契約
 
 決済 HTTP API は `@h-ai/api-contract` の `apiContract.payment` で定義します。アプリケーション contract に組み込むと、型付きクライアントで呼び出せます：
@@ -92,7 +120,68 @@ const order = await api.payment.orders.create({
 })
 ```
 
-### 設定
+### 通知の識別・時刻・業務上の冪等性
+
+WeChat は `platformKeys` が必須です。信頼する証明書シリアル番号または公開鍵 ID と PEM を登録し、`Wechatpay-Serial` で一件を選択します。不明な ID は拒否し、証明書のシリアル番号と有効期間も検証します。鍵の更新中は全ノードに新旧の鍵を設定してください。通知から鍵を自動取得しません。署名時刻は厳密な整数で、同期したノード時刻との差が 300 秒以内である必要があります。`TRANSACTION.SUCCESS` の transaction 通知のみ受け付け、復号後の `appid/mchid` も照合します。
+
+Alipay は `sellerId` を必須とし、署名検証後に `app_id/seller_id` と設定済みの RSA2/RSA を照合します。重複パラメータ、不明な状態、不正な暦日は拒否します。リクエスト時刻には Asia/Shanghai を明示し、署名と注文情報は URL ではなく POST form body に送ります。通知・支払日時も北京時間として解釈します。日をまたぐ正規の再送を許可し、元の日時に五分制限は適用しません。Stripe は厳密な署名時刻、更新中の複数 v1 署名、test/live を検証します。Connect・組織コンテキストのイベントは未対応で、現在のアカウント用 Webhook secret が必要です。
+
+組み込み・カスタム Provider は必須の `eventId` と大文字 `currency` を返します。ID は WeChat id・Alipay notify_id・Stripe event.id です。業務側は共有 DB でチャネル・注文・金額・通貨を照合し、商戸単位の重複排除と状態の逆戻り防止を行います。注文番号は削除後も再利用しません。[実行可能な消費者例](examples/payment-notify-consumer.ts) は注文 CAS、通知記録、履行 outbox を同一トランザクションで保存し、コミット後にのみ成功応答します。外部配送には固定 ID による冪等処理が必要で、DB だけで外部副作用の厳密な一回実行は保証できません。二つの実 Node プロセスと共有 SQLite で重複・再起動後も outbox が一件であることを検証します。複数ホストの本番では共有 PostgreSQL/MySQL を使用してください。
+
+参照：[WeChat 証明書と時刻](https://pay.wechatpay.cn/doc/v3/merchant/4013053420)、[公開鍵更新](https://pay.wechatpay.cn/doc/v3/merchant/4012154180)、[Alipay 通知の照合と再送](https://developer.alibaba.com/docs/doc.htm?articleId=103296&docType=1&treeId=346).
+
+### Alipay の業務レスポンスと返金状態
+
+照会・返金・終了は、メソッドごとの応答 envelope、文字列の `code=10000`、必須フィールド、返却注文番号を検証します。HTTP 200、envelope の欠落、成功コードだけでは成功としません。取引不存在・権限不足・残高不足などは対応する `QUERY_ORDER_FAILED` / `REFUND_FAILED` / `CLOSE_ORDER_FAILED` を返します。cause には長さを制限したエラー識別子だけを残し、生レスポンスと `msg/sub_msg` を公開しません。不明な状態や不正な金額を pending・ゼロ金額に置き換えません。
+
+返金は `success: true` でも `data.status` を確認してください。`fund_change=Y` のみ `success`、`N` または欠落は `processing` とし、Alipay の返金照会で確認が必要です（本モジュールには返金照会 API はありません）。`refund_fee` は累計返金額のため今回の返金額と直接比較できません。Alipay の `refundId` は元取引番号であり、個々の返金は `refundNo` で識別し、再試行でも番号とパラメータを保持してください。業務注文の更新前に `closeOrder` の成功と返金状態を確認します。
+
+参照：[Alipay 返金成功の判定](https://aipay.alipay.com/docs/subscribe/api-list/other-basic-interfaces/alipay-trade-refund.html).
+
+### Stripe ホスト型 Checkout と注文終了
+
+`mode=payment`、`ui_mode=hosted_page`、`tradeType=h5` のみ実装し、API は `Stripe-Version: 2026-09-30.endive` に固定します。embedded/elements、JSAPI、App、Native、小程序は Provider・HTTP schema・ブラウザー入口で拒否します。サーバー設定の `successUrl` は必須、`cancelUrl` は任意で、HTTP(S) のみ使用できます。成功 URL には `{CHECKOUT_SESSION_ID}` を含められます。クライアントから変更できず、同じ注文の再試行でも作成パラメータを変更できません。
+
+`closeOrder('stripe', orderNo)` は保存済み Session を照会し、open/unpaid の場合のみ expire を呼びます。expired 確認済みなら冪等に成功し、complete/paid は失敗します。同時終了や応答喪失時は再照会で過期を確認してから成功を返します。成功・キャンセル画面への遷移は支払完了や注文終了の証明ではありません。
+
+参照：[Checkout Session 作成](https://docs.stripe.com/api/checkout/sessions/create)、[Session の終了](https://docs.stripe.com/api/checkout/sessions/expire).
+
+### Stripe 通知の状態
+
+Stripe Provider は `mode=payment` の `checkout.session.completed`、`checkout.session.async_payment_succeeded`、`checkout.session.async_payment_failed`、`checkout.session.expired` のみ処理します。Webhook はこれらのイベントのみ購読してください。他のリソースイベントや不完全な Session は `NOTIFY_PARSE_FAILED` となり、仮の pending 注文を生成しません。
+
+`completed` でも `payment_status=unpaid` なら `pending` であり、履行できません。`paid` / `no_payment_required` のみ `paid`、非同期決済失敗は `failed`、期限切れは `closed` です。`paidAt` は paid の場合のみ返り、成功イベントの `created` を使用するため再配信でも変わりません。
+
+結果には `eventId` と大文字の `currency` が含まれ、`transactionId` は Checkout Session ID です。アプリケーションは共有データベースで注文・金額・通貨を照合し、通知の重複排除と状態の逆戻り防止を行う必要があります。署名検証と解析は業務トランザクションの代わりにはなりません。`success` だけでなく `status === 'paid'` を確認して履行してください。
+
+参照：[Stripe イベント種類](https://docs.stripe.com/api/events/types)、[Checkout Session のフィールド](https://docs.stripe.com/api/checkout/sessions/object).
+
+### Stripe の永続化と冪等性
+
+Stripe を有効にする前に reldb を初期化して success を確認し、その後 payment を初期化してください。終了は payment、reldb の順です。初期化は `hai_payment_stripe_operations` の作成を待ち、失敗時は Provider を公開しません。複数ノードは同一の PostgreSQL/MySQL を使用します。SQLite は開発または同一ホストで明示的に共有するファイル用で、別ホストのローカルファイルを共有状態として扱えません。
+
+注文マッピングを必要とする最初の操作は `/v1/account` を読みます。アカウント ID とキーの test/live モードで記録を分離し、同アカウントのキー更新後もマッピングを維持します。キーは `sk_test_`、`sk_live_`、`rk_test_`、`rk_live_` のいずれかで始まり、制限付きキーにはアカウント読取権限も必要です。
+
+注文作成はアカウント・モード・orderNo から安定した `Idempotency-Key` を生成し、DB の一意な記録で正規化リクエストと Session ID を結びます。metadata.orderNo の上書きは禁止です。照会・返金はその Session ID のみを読み、注文番号・金額・通貨を照合し、PaymentIntent を保存します。不明な注文は失敗します。返金は refundNo ごとに結果を保持し、同じ識別子でのパラメータ変更を拒否します。自由記述 reason は metadata に保存し、Stripe reason は requested_by_customer を使用します。
+
+応答喪失や DB 保存失敗でも予約を削除せず、成功扱いにしません。結果不明の操作は DB 時刻による 23 時間の範囲内だけ同一キーで再試行できます。それ以降は Stripe と照合して記録を修復し、記録を削除して無条件に再送してはいけません。確定結果はキャッシュ TTL で削除しません。返金の processing は着金完了を示しません。参照：[Stripe の冪等性保持期間](https://docs.stripe.com/api/idempotent_requests).
+
+### 監査ログ
+
+主要な決済操作が成功すると、追加設定なしで `@h-ai/audit` に監査ログを自動記録します。監査記録の失敗は warn ログのみを出力し、決済操作に影響しません。
+
+| 操作       | `action`         | 記録内容                                |
+| ---------- | ---------------- | --------------------------------------- |
+| 注文作成   | `create_order`   | provider、amount、tradeType             |
+| 決済通知   | `payment_notify` | provider、transactionId、status、amount |
+| 返金       | `refund`         | provider、refundNo、amount              |
+| 注文の終了 | `close_order`    | provider                                |
+
+> 注文照会（`queryOrder`）は読み取り専用で、監査ログを記録しません。
+
+## 設定
+
+ライフサイクル。init にバックエンド/業務設定を渡し成功後に使用します。借用依存先の解放前に close の完了を待ち、正確な戻り値は例と公開署名に従います。
 
 ```typescript
 import type { PaymentConfigInput } from '@h-ai/payment'
@@ -137,66 +226,13 @@ if (!parsed.success)
 
 すべての組み込み Provider の HTTP リクエストには既定で 15 秒のタイムアウトがあり、ネットワーク障害による長時間の待機を防ぎます。
 
-### 通知の識別・時刻・業務上の冪等性
+設定はホストが読込・検証してから渡します。秘密はサーバーの非公開環境に保存し、利用場面に応じてバックエンド・容量・期限・ログを選びます。変更後は再初期化の結果を確認してください。
 
-WeChat は `platformKeys` が必須です。信頼する証明書シリアル番号または公開鍵 ID と PEM を登録し、`Wechatpay-Serial` で一件を選択します。不明な ID は拒否し、証明書のシリアル番号と有効期間も検証します。鍵の更新中は全ノードに新旧の鍵を設定してください。通知から鍵を自動取得しません。署名時刻は厳密な整数で、同期したノード時刻との差が 300 秒以内である必要があります。`TRANSACTION.SUCCESS` の transaction 通知のみ受け付け、復号後の `appid/mchid` も照合します。
+[項目別の用途・適用場面・例](../../docs/usage/configuration/operations.md).
 
-Alipay は `sellerId` を必須とし、署名検証後に `app_id/seller_id` と設定済みの RSA2/RSA を照合します。重複パラメータ、不明な状態、不正な暦日は拒否します。リクエスト時刻には Asia/Shanghai を明示し、署名と注文情報は URL ではなく POST form body に送ります。通知・支払日時も北京時間として解釈します。日をまたぐ正規の再送を許可し、元の日時に五分制限は適用しません。Stripe は厳密な署名時刻、更新中の複数 v1 署名、test/live を検証します。Connect・組織コンテキストのイベントは未対応で、現在のアカウント用 Webhook secret が必要です。
+## エラー処理
 
-組み込み・カスタム Provider は必須の `eventId` と大文字 `currency` を返します。ID は WeChat id・Alipay notify_id・Stripe event.id です。業務側は共有 DB でチャネル・注文・金額・通貨を照合し、商戸単位の重複排除と状態の逆戻り防止を行います。注文番号は削除後も再利用しません。[実行可能な消費者例](examples/payment-notify-consumer.ts) は注文 CAS、通知記録、履行 outbox を同一トランザクションで保存し、コミット後にのみ成功応答します。外部配送には固定 ID による冪等処理が必要で、DB だけで外部副作用の厳密な一回実行は保証できません。二つの実 Node プロセスと共有 SQLite で重複・再起動後も outbox が一件であることを検証します。複数ホストの本番では共有 PostgreSQL/MySQL を使用してください。
-
-参照：[WeChat 証明書と時刻](https://pay.wechatpay.cn/doc/v3/merchant/4013053420)、[公開鍵更新](https://pay.wechatpay.cn/doc/v3/merchant/4012154180)、[Alipay 通知の照合と再送](https://developer.alibaba.com/docs/doc.htm?articleId=103296&docType=1&treeId=346)。
-
-### Alipay の業務レスポンスと返金状態
-
-照会・返金・終了は、メソッドごとの応答 envelope、文字列の `code=10000`、必須フィールド、返却注文番号を検証します。HTTP 200、envelope の欠落、成功コードだけでは成功としません。取引不存在・権限不足・残高不足などは対応する `QUERY_ORDER_FAILED` / `REFUND_FAILED` / `CLOSE_ORDER_FAILED` を返します。cause には長さを制限したエラー識別子だけを残し、生レスポンスと `msg/sub_msg` を公開しません。不明な状態や不正な金額を pending・ゼロ金額に置き換えません。
-
-返金は `success: true` でも `data.status` を確認してください。`fund_change=Y` のみ `success`、`N` または欠落は `processing` とし、Alipay の返金照会で確認が必要です（本モジュールには返金照会 API はありません）。`refund_fee` は累計返金額のため今回の返金額と直接比較できません。Alipay の `refundId` は元取引番号であり、個々の返金は `refundNo` で識別し、再試行でも番号とパラメータを保持してください。業務注文の更新前に `closeOrder` の成功と返金状態を確認します。
-
-参照：[Alipay 返金成功の判定](https://aipay.alipay.com/docs/subscribe/api-list/other-basic-interfaces/alipay-trade-refund.html)。
-
-### Stripe ホスト型 Checkout と注文終了
-
-`mode=payment`、`ui_mode=hosted_page`、`tradeType=h5` のみ実装し、API は `Stripe-Version: 2026-09-30.endive` に固定します。embedded/elements、JSAPI、App、Native、小程序は Provider・HTTP schema・ブラウザー入口で拒否します。サーバー設定の `successUrl` は必須、`cancelUrl` は任意で、HTTP(S) のみ使用できます。成功 URL には `{CHECKOUT_SESSION_ID}` を含められます。クライアントから変更できず、同じ注文の再試行でも作成パラメータを変更できません。
-
-`closeOrder('stripe', orderNo)` は保存済み Session を照会し、open/unpaid の場合のみ expire を呼びます。expired 確認済みなら冪等に成功し、complete/paid は失敗します。同時終了や応答喪失時は再照会で過期を確認してから成功を返します。成功・キャンセル画面への遷移は支払完了や注文終了の証明ではありません。
-
-参照：[Checkout Session 作成](https://docs.stripe.com/api/checkout/sessions/create)、[Session の終了](https://docs.stripe.com/api/checkout/sessions/expire)。
-
-### Stripe 通知の状態
-
-Stripe Provider は `mode=payment` の `checkout.session.completed`、`checkout.session.async_payment_succeeded`、`checkout.session.async_payment_failed`、`checkout.session.expired` のみ処理します。Webhook はこれらのイベントのみ購読してください。他のリソースイベントや不完全な Session は `NOTIFY_PARSE_FAILED` となり、仮の pending 注文を生成しません。
-
-`completed` でも `payment_status=unpaid` なら `pending` であり、履行できません。`paid` / `no_payment_required` のみ `paid`、非同期決済失敗は `failed`、期限切れは `closed` です。`paidAt` は paid の場合のみ返り、成功イベントの `created` を使用するため再配信でも変わりません。
-
-結果には `eventId` と大文字の `currency` が含まれ、`transactionId` は Checkout Session ID です。アプリケーションは共有データベースで注文・金額・通貨を照合し、通知の重複排除と状態の逆戻り防止を行う必要があります。署名検証と解析は業務トランザクションの代わりにはなりません。`success` だけでなく `status === 'paid'` を確認して履行してください。
-
-参照：[Stripe イベント種類](https://docs.stripe.com/api/events/types)、[Checkout Session のフィールド](https://docs.stripe.com/api/checkout/sessions/object)。
-
-### Stripe の永続化と冪等性
-
-Stripe を有効にする前に reldb を初期化して success を確認し、その後 payment を初期化してください。終了は payment、reldb の順です。初期化は `hai_payment_stripe_operations` の作成を待ち、失敗時は Provider を公開しません。複数ノードは同一の PostgreSQL/MySQL を使用します。SQLite は開発または同一ホストで明示的に共有するファイル用で、別ホストのローカルファイルを共有状態として扱えません。
-
-注文マッピングを必要とする最初の操作は `/v1/account` を読みます。アカウント ID とキーの test/live モードで記録を分離し、同アカウントのキー更新後もマッピングを維持します。キーは `sk_test_`、`sk_live_`、`rk_test_`、`rk_live_` のいずれかで始まり、制限付きキーにはアカウント読取権限も必要です。
-
-注文作成はアカウント・モード・orderNo から安定した `Idempotency-Key` を生成し、DB の一意な記録で正規化リクエストと Session ID を結びます。metadata.orderNo の上書きは禁止です。照会・返金はその Session ID のみを読み、注文番号・金額・通貨を照合し、PaymentIntent を保存します。不明な注文は失敗します。返金は refundNo ごとに結果を保持し、同じ識別子でのパラメータ変更を拒否します。自由記述 reason は metadata に保存し、Stripe reason は requested_by_customer を使用します。
-
-応答喪失や DB 保存失敗でも予約を削除せず、成功扱いにしません。結果不明の操作は DB 時刻による 23 時間の範囲内だけ同一キーで再試行できます。それ以降は Stripe と照合して記録を修復し、記録を削除して無条件に再送してはいけません。確定結果はキャッシュ TTL で削除しません。返金の processing は着金完了を示しません。参照：[Stripe の冪等性保持期間](https://docs.stripe.com/api/idempotent_requests)。
-
-### 監査ログ
-
-主要な決済操作が成功すると、追加設定なしで `@h-ai/audit` に監査ログを自動記録します。監査記録の失敗は warn ログのみを出力し、決済操作に影響しません。
-
-| 操作       | `action`         | 記録内容                                |
-| ---------- | ---------------- | --------------------------------------- |
-| 注文作成   | `create_order`   | provider、amount、tradeType             |
-| 決済通知   | `payment_notify` | provider、transactionId、status、amount |
-| 返金       | `refund`         | provider、refundNo、amount              |
-| 注文の終了 | `close_order`    | provider                                |
-
-> 注文照会（`queryOrder`）は読み取り専用で、監査ログを記録しません。
-
-### エラー処理
+領域操作は result.success を確認し、失敗時はモジュールのエラー定義と安全な説明を使います。コード・関連 ID・秘匿した原因をサーバーログに残します。同期ツール・ファクトリー・ストリーム反復・ライフサイクルは各署名に従い、Promise 完了だけで成功と判断しません。回復条件は各機能を参照してください。
 
 ```typescript
 const result = await payment.createOrder('wechat', orderInput)

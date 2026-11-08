@@ -4,30 +4,14 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/audit](../audit/README.en.md) · [@h-ai/core](../core/README.en.md)
 
-## Introduction
-
 A unified payment module for WeChat Pay, Alipay, and Stripe, with provider-based server processing and payment initiation across clients.
 
-## Core features
-
-| Provider   | Payment scenarios                                          |
-| ---------- | ---------------------------------------------------------- |
-| WeChat Pay | `jsapi`: WeChat public-account browser                     |
-| Alipay     | `h5`: signed WAP form POST                                 |
-| Stripe     | h5: hosted Checkout page redirect (international payments) |
-
-Built-in creation accepts only the combinations above. Public `TradeType` is `jsapi | h5`; App, Native, mini-program, and other combinations fail with `UNSUPPORTED_TRADE_TYPE` before contacting the channel. WeChat requires the current public account’s openid in `userId`; WeChat and Alipay accept CNY only. Missing WeChat `prepay_id` is a failure. Alipay `createOrder` creates signed page parameters, without claiming channel acceptance or payment. Its `{ gateway, fields }` payload is submitted as a complete POST form to the fixed production/sandbox gateway. The client never parses HTML or accepts arbitrary actions. Required `alipay.returnUrl` is a trusted HTTPS URL, configurable through `HAI_PAYMENT_ALIPAY_RETURNURL`; returning there is not payment proof. Check both `success` and `data.invoked`. Wait for the WeChat bridge before invoking; even a cancellation callback can follow a successful invocation.
-
-Protocol references: [WeChat JSAPI creation](https://pay.wechatpay.cn/doc/v3/merchant/4012791897), [client invocation](https://pay.wechatpay.cn/doc/v3/merchant/4012791857), and the [official Alipay Node SDK pageExecute contract](https://github.com/alipay/alipay-sdk-nodejs-all#pageexecute-示例代码). Targeted checks cover protocol shapes, actual RSA verification, jsdom consumption, and a real Chrome POST intercepted by the test. Merchant credentials, channel sandbox accounts, and phone devices were unavailable; these checks do not establish real payment acceptance.
-
-## Getting started
+## Quick Start
 
 ### Dependencies
 
 - `@h-ai/audit`: optional audit logging; payment operations are recorded automatically when audit is initialized.
 - `@h-ai/reldb`: required when Stripe is enabled. Initialize a shared database first for durable provider mappings and idempotent outcomes. WeChat/Alipay alone do not require it.
-
-### Quick start
 
 Concurrent `close()` invalidates an unfinished `init()`, so late initialization cannot reopen the module. Wait for that initialization to settle before initializing again.
 
@@ -78,6 +62,50 @@ if (!invoked.data.invoked)
   throw new Error(invoked.data.message)
 ```
 
+## Features
+
+| Provider   | Payment scenarios                                          |
+| ---------- | ---------------------------------------------------------- |
+| WeChat Pay | `jsapi`: WeChat public-account browser                     |
+| Alipay     | `h5`: signed WAP form POST                                 |
+| Stripe     | h5: hosted Checkout page redirect (international payments) |
+
+Built-in creation accepts only the combinations above. Public `TradeType` is `jsapi | h5`; App, Native, mini-program, and other combinations fail with `UNSUPPORTED_TRADE_TYPE` before contacting the channel. WeChat requires the current public account’s openid in `userId`; WeChat and Alipay accept CNY only. Missing WeChat `prepay_id` is a failure. Alipay `createOrder` creates signed page parameters, without claiming channel acceptance or payment. Its `{ gateway, fields }` payload is submitted as a complete POST form to the fixed production/sandbox gateway. The client never parses HTML or accepts arbitrary actions. Required `alipay.returnUrl` is a trusted HTTPS URL, configurable through `HAI_PAYMENT_ALIPAY_RETURNURL`; returning there is not payment proof. Check both `success` and `data.invoked`. Wait for the WeChat bridge before invoking; even a cancellation callback can follow a successful invocation.
+
+Protocol references: [WeChat JSAPI creation](https://pay.wechatpay.cn/doc/v3/merchant/4012791897), [client invocation](https://pay.wechatpay.cn/doc/v3/merchant/4012791857), and the [official Alipay Node SDK pageExecute contract](https://github.com/alipay/alipay-sdk-nodejs-all#pageexecute-示例代码). Targeted checks cover protocol shapes, actual RSA verification, jsdom consumption, and a real Chrome POST intercepted by the test. Merchant credentials, channel sandbox accounts, and phone devices were unavailable; these checks do not establish real payment acceptance.
+
+### Operations and results
+
+Use the complete initialization flow in this section first. The host validates and authorizes example business values; check success before reading data from asynchronous domain results. Here void means completion without data, null means absent; synchronous factories/tools return the listed type directly.
+
+#### payment
+
+Orders use providerName plus order input/business number/refund input and yield initiation data, channel status, refund result or void. Redirect/initiation success is not settlement.
+
+| Entry                 | Input parameters      | Successful result | Call example                                          |
+| --------------------- | --------------------- | ----------------- | ----------------------------------------------------- |
+| `payment.createOrder` | providerName, input   | `PaymentOrder`    | `await payment.createOrder(providerName, orderInput)` |
+| `payment.queryOrder`  | providerName, orderNo | `OrderStatus`     | `await payment.queryOrder(providerName, orderNo)`     |
+| `payment.refund`      | providerName, input   | `RefundResult`    | `await payment.refund(providerName, refundInput)`     |
+| `payment.closeOrder`  | providerName, orderNo | `void`            | `await payment.closeOrder(providerName, orderNo)`     |
+
+#### payment
+
+Channel notification takes raw body and signature headers/params and yields verified business notification data; the app must atomically update/deduplicate orders.
+
+| Entry                  | Input parameters      | Successful result     | Call example                                                            |
+| ---------------------- | --------------------- | --------------------- | ----------------------------------------------------------------------- |
+| `payment.handleNotify` | providerName, request | `PaymentNotifyResult` | `await payment.handleNotify(providerName, verifiedNotificationRequest)` |
+
+#### payment
+
+Trusted server extension: name returns Provider/undefined, registration takes a real PaymentProvider and returns void synchronously; ordinary order callers use the facade.
+
+| Entry                      | Input parameters | Successful result              | Call example                                |
+| -------------------------- | ---------------- | ------------------------------ | ------------------------------------------- |
+| `payment.getProvider`      | name             | `PaymentProvider \| undefined` | `payment.getProvider(providerName)`         |
+| `payment.registerProvider` | provider         | `void`                         | `payment.registerProvider(paymentProvider)` |
+
 ### HTTP API contracts
 
 Payment HTTP APIs are defined by `apiContract.payment` in `@h-ai/api-contract`. After composing them into the application contract, call them through the typed client:
@@ -91,51 +119,6 @@ const order = await api.payment.orders.create({
   userId: 'trusted-public-account-openid',
 })
 ```
-
-### Configuration
-
-```typescript
-import type { PaymentConfigInput } from '@h-ai/payment'
-import { PaymentConfigSchema } from '@h-ai/payment'
-
-// 仅为配置字段示意；真实密钥、证书和商户身份由私有部署注入。
-const input: PaymentConfigInput = {
-  wechat: {
-    mchId: '商户号',
-    apiV3Key: 'API v3 密钥',
-    serialNo: '证书序列号',
-    privateKey: '私钥内容',
-    appId: '应用 ID',
-    platformKeys: { PUB_KEY_ID_123: '平台公钥 PEM', CERT_SERIAL: '平台证书 PEM' },
-  },
-  alipay: {
-    appId: '应用 ID',
-    sellerId: '卖家支付宝用户 ID',
-    privateKey: '私钥',
-    alipayPublicKey: '支付宝公钥',
-    returnUrl: 'https://app.example/payment/return', // 必填 HTTPS
-    signType: 'RSA2', // 可选，默认 RSA2
-    sandbox: false, // 可选，默认 false
-  },
-  stripe: {
-    secretKey: 'sk_test_xxx',
-    webhookSecret: 'whsec_xxx',
-    successUrl: 'https://app.example/payment/success?session_id={CHECKOUT_SESSION_ID}', // Required
-    cancelUrl: 'https://app.example/payment/cancel', // Optional
-    webhookToleranceSeconds: 300, // 可选，默认 300 秒
-  },
-}
-const parsed = PaymentConfigSchema.safeParse(input)
-if (!parsed.success)
-  throw new Error('Payment configuration is invalid')
-// 使用 parsed.data；启用 Stripe 前须先初始化共享 reldb。
-```
-
-Configure only the providers you need; unconfigured providers are not registered.
-
-Amounts use minor currency units (cents) and must be positive integers. `amount` / `totalAmount` are validated before calling a provider, so invalid amounts never reach the payment platform.
-
-All built-in provider HTTP requests have a default 15-second timeout to avoid long hangs on network failures.
 
 ### Notification identity, clocks, and business idempotency
 
@@ -196,7 +179,60 @@ Successful key payment operations automatically write audit logs through `@h-ai/
 
 > Order queries (`queryOrder`) are read-only and do not write audit logs.
 
-### Error handling
+## Configuration
+
+Lifecycle: init takes backend/business configuration; use the module only after success. Await close before releasing borrowed dependencies. Follow the quick-start example and public signatures for exact return values.
+
+```typescript
+import type { PaymentConfigInput } from '@h-ai/payment'
+import { PaymentConfigSchema } from '@h-ai/payment'
+
+// 仅为配置字段示意；真实密钥、证书和商户身份由私有部署注入。
+const input: PaymentConfigInput = {
+  wechat: {
+    mchId: '商户号',
+    apiV3Key: 'API v3 密钥',
+    serialNo: '证书序列号',
+    privateKey: '私钥内容',
+    appId: '应用 ID',
+    platformKeys: { PUB_KEY_ID_123: '平台公钥 PEM', CERT_SERIAL: '平台证书 PEM' },
+  },
+  alipay: {
+    appId: '应用 ID',
+    sellerId: '卖家支付宝用户 ID',
+    privateKey: '私钥',
+    alipayPublicKey: '支付宝公钥',
+    returnUrl: 'https://app.example/payment/return', // 必填 HTTPS
+    signType: 'RSA2', // 可选，默认 RSA2
+    sandbox: false, // 可选，默认 false
+  },
+  stripe: {
+    secretKey: 'sk_test_xxx',
+    webhookSecret: 'whsec_xxx',
+    successUrl: 'https://app.example/payment/success?session_id={CHECKOUT_SESSION_ID}', // Required
+    cancelUrl: 'https://app.example/payment/cancel', // Optional
+    webhookToleranceSeconds: 300, // 可选，默认 300 秒
+  },
+}
+const parsed = PaymentConfigSchema.safeParse(input)
+if (!parsed.success)
+  throw new Error('Payment configuration is invalid')
+// 使用 parsed.data；启用 Stripe 前须先初始化共享 reldb。
+```
+
+Configure only the providers you need; unconfigured providers are not registered.
+
+Amounts use minor currency units (cents) and must be positive integers. `amount` / `totalAmount` are validated before calling a provider, so invalid amounts never reach the payment platform.
+
+All built-in provider HTTP requests have a default 15-second timeout to avoid long hangs on network failures.
+
+The host loads and validates configuration before passing it to this module. Keep secrets in private server environment files. Select the backend, capacity, deadlines and logging for the actual use case; reinitialize and check the result after changes.
+
+[Per-option purpose, use cases and examples](../../docs/usage/configuration/operations.md).
+
+## Error Handling
+
+Check result.success for domain operations. Handle failures with the module error definitions and safe messages; retain codes, correlation IDs and sanitized causes in server logs. Synchronous tools, factories, stream iteration and lifecycle calls follow their own signatures. A completed Promise alone is not business success. See each feature for recovery limits.
 
 ```typescript
 const result = await payment.createOrder('wechat', orderInput)
@@ -228,7 +264,7 @@ Common error codes:
 | `HaiPaymentError.NOTIFY_PARSE_FAILED`    | `hai:payment:051` | Callback parsing failed                |
 | `HaiPaymentError.CONFIG_ERROR`           | `hai:payment:070` | Invalid configuration                  |
 
-## Development and testing
+## Development
 
 ```bash
 pnpm --filter @h-ai/payment typecheck

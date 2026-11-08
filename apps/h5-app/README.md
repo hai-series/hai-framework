@@ -148,18 +148,22 @@ pnpm --filter h5-app test:e2e         # 运行 E2E 测试（Playwright）
 pnpm --filter h5-app paraglide:compile # 编译 i18n 翻译文件
 ```
 
-### 📦 框架依赖
+## 框架能力导航
 
-- `@h-ai/core`：配置管理、日志、HaiResult 模式、错误处理
-- `@h-ai/reldb`：数据库抽象（SQLite / PostgreSQL / MySQL）
-- `@h-ai/iam`：用户认证（登录 / 注册 / Session）
-- `@h-ai/cache`：缓存（Memory / Redis）
-- `@h-ai/storage`：文件存储（Local / S3）
-- `@h-ai/ai`：AI 集成（多模态识别）
-- `@h-ai/kit`：SvelteKit hooks、guards、中间件、校验
-- `@h-ai/ui`：UI 组件库（场景组件、自动导入）
+本应用的启动、页面和业务操作按上文执行；各框架模块的完整用途、输入输出、配置和错误处理见下表。不要从应用示例推断模块全部能力；服务端与浏览器入口按对应模块契约选择。
 
-LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 的服务端 workspace 安装 ldapts，设置 `login.ldap: true` 与 LDAP 连接配置；也可注入自定义工厂。邮件/短信可以选择 Reach 标准模板，或直接注入 `onOtpSendEmail/onOtpSendSms/onPasswordResetRequest` 回调，投递失败须拒绝 Promise；回调第三参数 context 提供 expiresAt/idempotencyKey，发送服务按稳定键持久化去重，异常/超时为结果未知且不自动重发。协议在弹窗内展示；LoginForm/RegisterForm 的 `header/extraFields/footer` 和 AuthPanel 的 `login*/register*` snippet 可用于应用扩展。完整配置与自定义发送示例见 [IAM 用法](../../packages/iam/README.md#可选-ldap-与通知接入)。
+| 模块                                              | 本应用相关能力                 |
+| ------------------------------------------------- | ------------------------------ |
+| [@h-ai/ai](../../packages/ai/README.md)           | 模型、记忆与工具流程           |
+| [@h-ai/cache](../../packages/cache/README.md)     | 共享缓存与会话状态             |
+| [@h-ai/core](../../packages/core/README.md)       | 配置、日志、结果与国际化       |
+| [@h-ai/iam](../../packages/iam/README.md)         | 身份、会话与权限               |
+| [@h-ai/kit](../../packages/kit/README.md)         | SvelteKit 路由、请求与页面集成 |
+| [@h-ai/reach](../../packages/reach/README.md)     | 邮件、短信与通知               |
+| [@h-ai/reldb](../../packages/reldb/README.md)     | 关系型数据库与事务             |
+| [@h-ai/storage](../../packages/storage/README.md) | 私有文件与对象存储             |
+| [@h-ai/ui](../../packages/ui/README.md)           | 页面、表单和交互组件           |
+| [@h-ai/vecdb](../../packages/vecdb/README.md)     | 向量集合与检索                 |
 
 ## 开发测试
 

@@ -4,33 +4,9 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md)
 
-## 简介
-
 关系型数据库访问模块，通过统一的 `reldb` 对象访问 SQLite、PostgreSQL、MySQL。
 
-初始化只在健康检查成功后发布连接；失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`reldb.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作不再可用；清理失败仍保留资源，后续 `close()` 或 `init()` 先重试释放，成功前不会创建替代连接。调用方必须检查关闭结果。
-
-```ts
-const closed = await reldb.close()
-if (!closed.success) {
-  // 处理清理故障后有限重试；再次失败应向应用报告。
-  const retried = await reldb.close()
-  if (!retried.success)
-    throw new Error(retried.error.message)
-}
-```
-
-关闭会等待已借出的事务提交/回滚并释放句柄；应用必须结束事务才能完成关闭。SQLite 的 WAL 配置与 worker 握手也属于初始化资源链。PostgreSQL 空闲连接断开由连接池移除并在后续查询时替换，不使进程退出；日志仅记录安全错误标识，不输出驱动错误原文。
-
-## 核心功能清单
-
-- 用同一套 API 连接 SQLite、PostgreSQL 和 MySQL。
-- 执行参数化 SQL，创建表和索引，读取分页结果。
-- 使用事务、CRUD 与 Repository 组织业务读写。
-
-## 使用入门
-
-### 快速开始
+## 快速开始
 
 ```ts
 import { HaiReldbError, reldb } from '@h-ai/reldb'
@@ -75,141 +51,105 @@ await reldb.close()
 
 `reldb.config` 返回的是**脱敏后的配置快照**：数据库 `password`、URL 内嵌凭证和 TLS 客户端私钥 `ssl.key` 会自动隐藏，便于排查状态但不应用于回放原始连接信息。
 
-### 配置
+## 功能
 
-`@h-ai/reldb/schemas` 直接导出同一组配置 Schema 和类型，只依赖 Zod，不加载数据库实例或驱动，可用于 CLI 或浏览器的配置校验。MySQL TLS 仅接受 `false` 或严格对象，`{}` 默认校验证书链和 DNS 身份；PostgreSQL 保留其布尔值、字符串模式及对象契约。
-
-```ts
-import { ReldbConfigSchema } from '@h-ai/reldb/schemas'
-
-const checked = ReldbConfigSchema.safeParse({ type: 'mysql', database: 'shop', ssl: {} })
-if (!checked.success)
-  throw new Error('Invalid database configuration')
-// checked.data.ssl: { rejectUnauthorized: true, verifyIdentity: true }
-```
-
-支持连接字符串（`url`）或分字段（`host/port/database/user/password`）。
+初始化只在健康检查成功后发布连接；失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`reldb.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作不再可用；清理失败仍保留资源，后续 `close()` 或 `init()` 先重试释放，成功前不会创建替代连接。调用方必须检查关闭结果。
 
 ```ts
-// SQLite
-await reldb.init({ type: 'sqlite', database: './data.db' })
-
-// PostgreSQL
-await reldb.init({ type: 'postgresql', url: 'postgres://user:pass@localhost:5432/mydb', database: 'mydb' })
-
-// MySQL
-await reldb.init({
-  type: 'mysql',
-  host: 'localhost',
-  port: 3306,
-  database: 'mydb',
-  user: 'admin',
-  password: 'secret',
-  mysql: { charset: 'utf8mb4' },
-  pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 },
-})
+const closed = await reldb.close()
+if (!closed.success) {
+  // 处理清理故障后有限重试；再次失败应向应用报告。
+  const retried = await reldb.close()
+  if (!retried.success)
+    throw new Error(retried.error.message)
+}
 ```
 
-#### 连接池与 MySQL URL
+关闭会等待已借出的事务提交/回滚并释放句柄；应用必须结束事务才能完成关闭。SQLite 的 WAL 配置与 worker 握手也属于初始化资源链。PostgreSQL 空闲连接断开由连接池移除并在后续查询时替换，不使进程退出；日志仅记录安全错误标识，不输出驱动错误原文。
 
-MySQL 的 `pool` 只接受 `max`、`acquireTimeout`、`queueLimit`，省略时默认分别为 10、10000 毫秒、1000。其他池字段（包括 `min`、`idleTimeout`）以及未实现的 `mysql.timezone` 会在配置校验时失败。空闲连接由 mysql2/服务端断开或 `close()` 释放，本模块不承诺 MySQL 的最小保留数或可配置的空闲回收期限；[mysql2 3.24.5 的真实选项](https://github.com/sidorares/node-mysql2/blob/v3.24.5/typings/mysql/lib/Pool.d.ts)与 PostgreSQL 不同。
+### 功能输入输出
 
-| 字段             | PostgreSQL（显式提供 `pool` 时的默认值） | MySQL                                  |
-| ---------------- | ---------------------------------------- | -------------------------------------- |
-| `max`            | 10                                       | 10，借用和正在建连合计不超过此值       |
-| `min`            | 1，已建立连接的保留下限，不主动预建      | 不支持，明确拒绝                       |
-| `idleTimeout`    | 30000 毫秒，0 禁用                       | 不支持，明确拒绝                       |
-| `acquireTimeout` | 10000 毫秒，0 禁用                       | 10000 毫秒，必须为 1–2147483647 的整数 |
-| `queueLimit`     | 不支持                                   | 1000，等待请求上限，必须为正整数       |
+以下片段依赖本节完整初始化流程。示例中的业务值由宿主校验和授权后传入；异步领域结果先判断 success，再读取 data。表中 void 表示操作已完成且没有返回数据，null 表示不存在；同步工厂/工具直接返回表中类型。
 
-PostgreSQL 未提供 `pool` 时沿用 pg 驱动默认值；保留与空闲回收语义见 [pg.Pool](https://node-postgres.com/apis/pool)。MySQL 所有 SQL、DDL、CRUD、批量和事务入口共用有界 FIFO 借用队列：排队与建立连接共用一个 `acquireTimeout` 截止期限，超时返回 `TIMEOUT`，队列满返回 `POOL_EXHAUSTED`。超时排队请求会移除；已开始但迟到的建连只释放连接，不启动 SQL，结算前仍占容量槽位。取得连接及业务执行前再次校验期限；它不限制已启动 SQL 或事务的执行时长。
+table/column/index 名必须来自可信代码；sql 是可信语句，params 绑定业务值；steps 是模块迁移步骤，options 控制预检和分页。
 
-MySQL `close()` 立即拒绝新请求并结束排队等待，随后等待已借出连接、事务及在途建连结算再关闭池。驱动 `connectTimeout` 使用相同超时值；关闭可能等到该建连时限或现有 SQL/事务结束，应用仍须主动结束事务。环境变量使用 `HAI_DB_POOL_*`，`HAI_DB_POOL_MIN` / `HAI_DB_POOL_IDLETIMEOUT` 仅用于 PostgreSQL，MySQL 的 `HAI_DB_POOL_QUEUELIMIT` 控制等待总量。
+#### reldb.ddl
 
-MySQL 支持仅传 `url`（`mysql://`），未给 URL 时 `database` 必填。URL 中的 host/port/database/user/password 优先，冲突的分字段不参与连接；`pool`、`mysql.charset`、`ssl` 和 `operationLog` 独立适用。URL 仅接受连接地址，query/fragment 会被拒绝，不能用隐藏 URL 参数改变 TLS 或池策略。URL 模式的连接日志会脱敏。以下示例假定已设置 `HAI_DB_URL`：
+维护表、列和索引。输入可信标识符、列/索引定义或 DDL；成功返回 void，结构错误返回失败。
 
-```ts
-const initialized = await reldb.init({
-  type: 'mysql',
-  url: process.env.HAI_DB_URL,
-  pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 }
-})
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-```
+| 入口                    | 输入参数                         | 成功结果 | 调用示例                                                                             |
+| ----------------------- | -------------------------------- | -------- | ------------------------------------------------------------------------------------ |
+| `reldb.ddl.createTable` | tableName, columns, ifNotExists  | `void`   | `await reldb.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } })`  |
+| `reldb.ddl.dropTable`   | tableName, ifExists              | `void`   | `await reldb.ddl.dropTable('orders_archive', true)`                                  |
+| `reldb.ddl.addColumn`   | tableName, columnName, columnDef | `void`   | `await reldb.ddl.addColumn('orders', 'note', { type: 'TEXT' })`                      |
+| `reldb.ddl.dropColumn`  | tableName, columnName            | `void`   | `await reldb.ddl.dropColumn('orders', 'note')`                                       |
+| `reldb.ddl.renameTable` | oldName, newName                 | `void`   | `await reldb.ddl.renameTable('orders_draft', 'orders')`                              |
+| `reldb.ddl.createIndex` | tableName, indexName, indexDef   | `void`   | `await reldb.ddl.createIndex('orders', 'orders_status', { columns: ['status'] })`    |
+| `reldb.ddl.dropIndex`   | indexName, ifExists              | `void`   | `await reldb.ddl.dropIndex('orders_status', true)`                                   |
+| `reldb.ddl.raw`         | sql                              | `void`   | `await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS app_marker (id TEXT PRIMARY KEY)')` |
 
-MySQL 的空 `url`（例如空环境变量占位）表示使用 host/port/database/user/password；非空 URL 仍严格校验。
+#### reldb.sql
 
-#### MySQL TLS
+业务查询/写入。SQL 值通过 params 绑定；分别返回行数组、首行/null、写入结果、void 或分页结果。batch 接收语句数组。
 
-`ssl` 省略或为 `false` 时不启用 TLS；启用时只能传严格对象，空对象默认 `{ rejectUnauthorized: true, verifyIdentity: true }`。`ca` 是受信 CA 的 PEM 内容，省略时使用 Node 信任库；可选客户端 `cert` / `key` 也必须是 PEM 内容且成对提供。未知 TLS 字段、`true` 和 PostgreSQL 字符串模式明确拒绝，不提供任意参数/回调透传。
+| 入口                  | 输入参数    | 成功结果             | 调用示例                                                                                                         |
+| --------------------- | ----------- | -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `reldb.sql.query`     | sql, params | `T[]`                | `await reldb.sql.query('SELECT id FROM orders WHERE status = ?', ['pending'])`                                   |
+| `reldb.sql.get`       | sql, params | `T \| null`          | `await reldb.sql.get('SELECT id FROM orders WHERE id = ?', ['o1'])`                                              |
+| `reldb.sql.execute`   | sql, params | `ExecuteResult`      | `await reldb.sql.execute('UPDATE orders SET status = ? WHERE id = ?', ['paid', 'o1'])`                           |
+| `reldb.sql.batch`     | statements  | `void`               | `await reldb.sql.batch([{ sql: 'DELETE FROM orders WHERE id = ?', params: ['o1'] }])`                            |
+| `reldb.sql.queryPage` | options     | `PaginatedResult<T>` | `await reldb.sql.queryPage({ sql: 'SELECT id FROM orders ORDER BY id', pagination: { page: 1, pageSize: 20 } })` |
 
-当前 [mysql2 3.24.5 的主机身份校验](https://github.com/sidorares/node-mysql2/blob/v3.24.5/lib/base/connection.js)依赖 DNS servername。因此在证书链及身份校验均开启时，IP 目标返回 `CONFIG_ERROR`，须使用与证书 DNS SAN 匹配的主机名。显式 `verifyIdentity: false` 只保留证书链校验；`rejectUnauthorized: false` 放弃服务端认证，即使存在加密也不能确认服务端身份。关闭任一验证会输出固定风险日志，不会称为安全连接。
+#### reldb.pagination
 
-```ts
-// trustedCaPem 由部署时的受信 CA 提供，不是任意远端返回的证书。
-const initialized = await reldb.init({
-  type: 'mysql',
-  host: 'db.example.com',
-  database: 'app',
-  ssl: { ca: trustedCaPem }
-})
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-```
+界面分页。normalize 接收页码/页大小及上限，返回规范化参数；build 接收 items、total、分页参数，直接返回分页对象。
 
-TLS 定向测试需要 OpenSSL（Windows 可使用 Git 附带版本）及本机容器端口转发；每轮生成并销毁 CA/私钥，通过真实 MySQL 验证受信 DNS、错误 CA/主机名拒绝、`REQUIRE X509` 客户端认证和会话 `Ssl_cipher`，不使用关闭验证替代认证成功证据。
+| 入口                         | 输入参数                 | 成功结果               | 调用示例                                                   |
+| ---------------------------- | ------------------------ | ---------------------- | ---------------------------------------------------------- |
+| `reldb.pagination.normalize` | options, overrides       | `NormalizedPagination` | `reldb.pagination.normalize({ page: 1, pageSize: 20 })`    |
+| `reldb.pagination.build`     | items, total, pagination | `PaginatedResult<T>`   | `reldb.pagination.build([], 0, { page: 1, pageSize: 20 })` |
 
-#### SQLite 执行方式（worker 异步）
+#### reldb
 
-better-sqlite3 是同步驱动，查询会阻塞 Node 主线程事件循环。WAL 只能改善数据库锁并发，无法避免同步调用占用主线程。需要卸载这一阻塞时，可把 SQLite 切到专用 worker 线程执行（单连接，opt-in，默认 `sync`）：
+模块持久化准备。输入表名得到列名数组；输入模块名、迁移步骤和 dryRun 得到迁移计划。执行前备份并停止冲突写入。
 
-```ts
-await reldb.init({
-  type: 'sqlite',
-  database: './data.db',
-  sqlite: {
-    executor: 'worker', // 'sync'（默认）| 'worker'
-    walMode: true, // 默认 true
-    workerConnectTimeoutMs: 10000, // worker 打开连接超时，默认 10000
-  },
-})
-```
+| 入口                  | 输入参数               | 成功结果              | 调用示例                                                                |
+| --------------------- | ---------------------- | --------------------- | ----------------------------------------------------------------------- |
+| `reldb.schemaColumns` | table, sql             | `string[]`            | `await reldb.schemaColumns('orders')`                                   |
+| `reldb.migrateSchema` | module, steps, options | `SchemaMigrationPlan` | `await reldb.migrateSchema('orders', migrationSteps, { dryRun: true })` |
 
-worker 模式下查询、写入与事务均在 worker 线程串行执行；公共 API 与返回值与同步模式完全一致。
+#### reldb.tx
 
-#### 操作日志
+原子业务写入。begin 返回检查结果后的事务句柄，具备 query/get/execute/batch/queryPage/commit/rollback；wrap 接收回调并返回其结果。失败 HaiResult 必须显式触发回滚。
 
-可在数据库配置中通过 `operationLog` 开启 SQL 操作日志。日志在 reldb provider-base 的 DML 操作层统一输出，不在 `reldb-main.ts` 或各 raw provider 中重复包装。
+| 入口             | 输入参数 | 成功结果              | 调用示例                                                                                                                                                            |
+| ---------------- | -------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reldb.tx.begin` | 无参数   | `DmlWithTxOperations` | `await reldb.tx.begin()`                                                                                                                                            |
+| `reldb.tx.wrap`  | fn       | `T`                   | `await reldb.tx.wrap(async tx => { const found = await tx.get('SELECT 1 AS value'); if (!found.success) throw new Error(found.error.message); return found.data })` |
 
-```yaml
-# config/_db.yml
-type: sqlite
-database: ./data/app.db
-operationLog:
-  read: false # query / get / queryPage
-  write: false # DDL, execute / batch, tx.begin / tx.commit / tx.rollback
-  maxLength: 1000 # 安全数量摘要的最大字符数，0省略摘要；不记录SQL原文/参数值
-  level: debug # info | debug | trace，默认 debug
-```
+#### reldb.crud
 
-通过 `core.config.load('db', ...)` 加载时，`HAI_DB_TYPE`、
-`HAI_DB_DATABASE`、`HAI_DB_OPERATIONLOG_LEVEL` 等约定变量优先于 YAML。
+为业务实体配置 table/字段映射，直接取得仓储；后续通过仓储执行 CRUD 和分页，不暴露数据库连接。
 
-```ts
-await reldb.init({
-  type: 'sqlite',
-  database: './data.db',
-  operationLog: {
-    read: true,
-    write: true,
-    maxLength: 500,
-    level: 'debug',
-  },
-})
-```
+| 入口               | 输入参数 | 成功结果                     | 调用示例                                  |
+| ------------------ | -------- | ---------------------------- | ----------------------------------------- |
+| `reldb.crud.table` | config   | `ReldbCrudRepository<TItem>` | `reldb.crud.table(orderRepositoryConfig)` |
 
-操作日志记录固定操作名、SQL 长度、参数数量和批量数量等摘要。失败日志额外保留错误码、traceId 以及白名单内的脱敏驱动消息和堆栈，便于定位；不会直接记录整份 SQL、绑定参数或连接配置。
+#### reldb.json
+
+跨方言 JSON 表达式。输入可信列名、JSON 路径及值/patch，直接返回 SQL 表达式和绑定参数；不是立即执行 SQL。
+
+| 入口                 | 输入参数            | 成功结果      | 调用示例                                            |
+| -------------------- | ------------------- | ------------- | --------------------------------------------------- |
+| `reldb.json.extract` | column, path        | `JsonSqlExpr` | `reldb.json.extract('payload', '$.status')`         |
+| `reldb.json.set`     | column, path, value | `JsonSqlExpr` | `reldb.json.set('payload', '$.status', 'paid')`     |
+| `reldb.json.insert`  | column, path, value | `JsonSqlExpr` | `reldb.json.insert('payload', '$.note', 'checked')` |
+| `reldb.json.remove`  | column, path        | `JsonSqlExpr` | `reldb.json.remove('payload', '$.note')`            |
+| `reldb.json.merge`   | column, patch       | `JsonSqlExpr` | `reldb.json.merge('payload', { status: 'paid' })`   |
+
+- 用同一套 API 连接 SQLite、PostgreSQL 和 MySQL。
+- 执行参数化 SQL，创建表和索引，读取分页结果。
+- 使用事务、CRUD 与 Repository 组织业务读写。
 
 ### 事务
 
@@ -616,7 +556,7 @@ await reldb.sql.execute(
 )
 ```
 
-`json.merge(column, patch)` 在三种后端均实现 RFC 7396 的对象补丁：递归保留未改键，补丁 null 删除指定键，数组整体替换。PostgreSQL 用参数化递归 CTE 在单次 SQL 中修改当前行，不要求预装函数，也不先在应用读取再写回。补丁根必须是可 JSON 序列化的对象；此契约不扩展为任意 JSON 根补丁。列表达式由开发者静态提供，动态路径和值全部作为参数。参见 [RFC 7396](https://www.rfc-editor.org/rfc/rfc7396) 和 [PostgreSQL JSON 运算](https://www.postgresql.org/docs/16/functions-json.html)。
+`json.merge(column, patch)` 在三种后端均实现 RFC 7396 的对象补丁：递归保留未改键，补丁 null 删除指定键，数组整体替换。PostgreSQL 用参数化递归 CTE 在单次 SQL 中修改当前行，不要求预装函数，也不先在应用读取再写回。补丁根必须是可 JSON 序列化的对象；此契约不扩展为任意 JSON 根补丁。列表达式由开发者静态提供，动态路径和值全部作为参数。参见 [RFC 7396](https://www.rfc-editor.org/rfc/rfc7396) 和 [PostgreSQL JSON 运算](https://www.postgresql.org/docs/16/functions-json.html).
 
 #### 完整示例
 
@@ -659,7 +599,159 @@ const { sql: rmSql, params: rmParams } = reldb.json.remove('meta', '$.reviewer')
 await reldb.sql.execute(`UPDATE products SET meta = ${rmSql} WHERE id = ?`, [...rmParams, 1])
 ```
 
-### 错误处理
+### 生产共享状态
+
+生产仅使用 PostgreSQL/MySQL；SQLite（含磁盘文件）只用于开发/明确测试，不能作为跨主机共享状态。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../.agents/instructions/distributed-state.md).
+
+### 模块架构迁移
+
+`reldb.schemaColumns(table, sql?)` 只读检查真实结构；`reldb.migrateSchema(module, steps, { dryRun: true })` 不创建账本。版本步骤由所属模块维护，业务不修改框架内部表。执行使用 `hai_schema_migrations`，SQLite/PostgreSQL 整体事务，MySQL DDL 隐式提交因此步骤必须可重入；失败不推进版本，重新检查真实结构后续做，拒绝向低版本降级。升级前停止所有旧写入并备份 DB/会话缓存；回退需恢复兼容数据库与旧代码，不能只换二进制。详见 [升级指南](../../docs/usage/README.md).
+
+## 配置
+
+生命周期：init 输入后端/业务配置，成功后才能使用；close 在释放借用依赖前等待完成。返回值以快速开始示例和公开签名为准。
+
+`@h-ai/reldb/schemas` 直接导出同一组配置 Schema 和类型，只依赖 Zod，不加载数据库实例或驱动，可用于 CLI 或浏览器的配置校验。MySQL TLS 仅接受 `false` 或严格对象，`{}` 默认校验证书链和 DNS 身份；PostgreSQL 保留其布尔值、字符串模式及对象契约。
+
+```ts
+import { ReldbConfigSchema } from '@h-ai/reldb/schemas'
+
+const checked = ReldbConfigSchema.safeParse({ type: 'mysql', database: 'shop', ssl: {} })
+if (!checked.success)
+  throw new Error('Invalid database configuration')
+// checked.data.ssl: { rejectUnauthorized: true, verifyIdentity: true }
+```
+
+支持连接字符串（`url`）或分字段（`host/port/database/user/password`）。
+
+```ts
+// SQLite
+await reldb.init({ type: 'sqlite', database: './data.db' })
+
+// PostgreSQL
+await reldb.init({ type: 'postgresql', url: 'postgres://user:pass@localhost:5432/mydb', database: 'mydb' })
+
+// MySQL
+await reldb.init({
+  type: 'mysql',
+  host: 'localhost',
+  port: 3306,
+  database: 'mydb',
+  user: 'admin',
+  password: 'secret',
+  mysql: { charset: 'utf8mb4' },
+  pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 },
+})
+```
+
+### 连接池与 MySQL URL
+
+MySQL 的 `pool` 只接受 `max`、`acquireTimeout`、`queueLimit`，省略时默认分别为 10、10000 毫秒、1000。其他池字段（包括 `min`、`idleTimeout`）以及未实现的 `mysql.timezone` 会在配置校验时失败。空闲连接由 mysql2/服务端断开或 `close()` 释放，本模块不承诺 MySQL 的最小保留数或可配置的空闲回收期限；[mysql2 3.24.5 的真实选项](https://github.com/sidorares/node-mysql2/blob/v3.24.5/typings/mysql/lib/Pool.d.ts)与 PostgreSQL 不同。
+
+| 字段             | PostgreSQL（显式提供 `pool` 时的默认值） | MySQL                                  |
+| ---------------- | ---------------------------------------- | -------------------------------------- |
+| `max`            | 10                                       | 10，借用和正在建连合计不超过此值       |
+| `min`            | 1，已建立连接的保留下限，不主动预建      | 不支持，明确拒绝                       |
+| `idleTimeout`    | 30000 毫秒，0 禁用                       | 不支持，明确拒绝                       |
+| `acquireTimeout` | 10000 毫秒，0 禁用                       | 10000 毫秒，必须为 1–2147483647 的整数 |
+| `queueLimit`     | 不支持                                   | 1000，等待请求上限，必须为正整数       |
+
+PostgreSQL 未提供 `pool` 时沿用 pg 驱动默认值；保留与空闲回收语义见 [pg.Pool](https://node-postgres.com/apis/pool)。MySQL 所有 SQL、DDL、CRUD、批量和事务入口共用有界 FIFO 借用队列：排队与建立连接共用一个 `acquireTimeout` 截止期限，超时返回 `TIMEOUT`，队列满返回 `POOL_EXHAUSTED`。超时排队请求会移除；已开始但迟到的建连只释放连接，不启动 SQL，结算前仍占容量槽位。取得连接及业务执行前再次校验期限；它不限制已启动 SQL 或事务的执行时长。
+
+MySQL `close()` 立即拒绝新请求并结束排队等待，随后等待已借出连接、事务及在途建连结算再关闭池。驱动 `connectTimeout` 使用相同超时值；关闭可能等到该建连时限或现有 SQL/事务结束，应用仍须主动结束事务。环境变量使用 `HAI_DB_POOL_*`，`HAI_DB_POOL_MIN` / `HAI_DB_POOL_IDLETIMEOUT` 仅用于 PostgreSQL，MySQL 的 `HAI_DB_POOL_QUEUELIMIT` 控制等待总量。
+
+MySQL 支持仅传 `url`（`mysql://`），未给 URL 时 `database` 必填。URL 中的 host/port/database/user/password 优先，冲突的分字段不参与连接；`pool`、`mysql.charset`、`ssl` 和 `operationLog` 独立适用。URL 仅接受连接地址，query/fragment 会被拒绝，不能用隐藏 URL 参数改变 TLS 或池策略。URL 模式的连接日志会脱敏。以下示例假定已设置 `HAI_DB_URL`：
+
+```ts
+const initialized = await reldb.init({
+  type: 'mysql',
+  url: process.env.HAI_DB_URL,
+  pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 }
+})
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+```
+
+MySQL 的空 `url`（例如空环境变量占位）表示使用 host/port/database/user/password；非空 URL 仍严格校验。
+
+#### MySQL TLS
+
+`ssl` 省略或为 `false` 时不启用 TLS；启用时只能传严格对象，空对象默认 `{ rejectUnauthorized: true, verifyIdentity: true }`。`ca` 是受信 CA 的 PEM 内容，省略时使用 Node 信任库；可选客户端 `cert` / `key` 也必须是 PEM 内容且成对提供。未知 TLS 字段、`true` 和 PostgreSQL 字符串模式明确拒绝，不提供任意参数/回调透传。
+
+当前 [mysql2 3.24.5 的主机身份校验](https://github.com/sidorares/node-mysql2/blob/v3.24.5/lib/base/connection.js)依赖 DNS servername。因此在证书链及身份校验均开启时，IP 目标返回 `CONFIG_ERROR`，须使用与证书 DNS SAN 匹配的主机名。显式 `verifyIdentity: false` 只保留证书链校验；`rejectUnauthorized: false` 放弃服务端认证，即使存在加密也不能确认服务端身份。关闭任一验证会输出固定风险日志，不会称为安全连接。
+
+```ts
+// trustedCaPem 由部署时的受信 CA 提供，不是任意远端返回的证书。
+const initialized = await reldb.init({
+  type: 'mysql',
+  host: 'db.example.com',
+  database: 'app',
+  ssl: { ca: trustedCaPem }
+})
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+```
+
+TLS 定向测试需要 OpenSSL（Windows 可使用 Git 附带版本）及本机容器端口转发；每轮生成并销毁 CA/私钥，通过真实 MySQL 验证受信 DNS、错误 CA/主机名拒绝、`REQUIRE X509` 客户端认证和会话 `Ssl_cipher`，不使用关闭验证替代认证成功证据。
+
+#### SQLite 执行方式（worker 异步）
+
+better-sqlite3 是同步驱动，查询会阻塞 Node 主线程事件循环。WAL 只能改善数据库锁并发，无法避免同步调用占用主线程。需要卸载这一阻塞时，可把 SQLite 切到专用 worker 线程执行（单连接，opt-in，默认 `sync`）：
+
+```ts
+await reldb.init({
+  type: 'sqlite',
+  database: './data.db',
+  sqlite: {
+    executor: 'worker', // 'sync'（默认）| 'worker'
+    walMode: true, // 默认 true
+    workerConnectTimeoutMs: 10000, // worker 打开连接超时，默认 10000
+  },
+})
+```
+
+worker 模式下查询、写入与事务均在 worker 线程串行执行；公共 API 与返回值与同步模式完全一致。
+
+#### 操作日志
+
+可在数据库配置中通过 `operationLog` 开启 SQL 操作日志。日志在 reldb provider-base 的 DML 操作层统一输出，不在 `reldb-main.ts` 或各 raw provider 中重复包装。
+
+```yaml
+# config/_db.yml
+type: sqlite
+database: ./data/app.db
+operationLog:
+  read: false # query / get / queryPage
+  write: false # DDL, execute / batch, tx.begin / tx.commit / tx.rollback
+  maxLength: 1000 # 安全数量摘要的最大字符数，0省略摘要；不记录SQL原文/参数值
+  level: debug # info | debug | trace，默认 debug
+```
+
+通过 `core.config.load('db', ...)` 加载时，`HAI_DB_TYPE`、
+`HAI_DB_DATABASE`、`HAI_DB_OPERATIONLOG_LEVEL` 等约定变量优先于 YAML。
+
+```ts
+await reldb.init({
+  type: 'sqlite',
+  database: './data.db',
+  operationLog: {
+    read: true,
+    write: true,
+    maxLength: 500,
+    level: 'debug',
+  },
+})
+```
+
+操作日志记录固定操作名、SQL 长度、参数数量和批量数量等摘要。失败日志额外保留错误码、traceId 以及白名单内的脱敏驱动消息和堆栈，便于定位；不会直接记录整份 SQL、绑定参数或连接配置。
+
+配置由宿主加载和校验，再传入本模块；私密值放服务端私有环境，不传到浏览器。按实际使用场景逐项选择后端、容量、期限和日志策略，修改后重新初始化并核验成功结果。
+
+[逐项配置说明、适用场景和示例](../../docs/usage/configuration/data.md).
+
+## 错误处理
+
+领域操作先判断 `result.success`，失败按本模块错误定义与安全提示处理，服务端保留错误码、关联编号和脱敏原因。同步工具、工厂、流迭代及生命周期按各自签名处理，不把 Promise 完成视为业务成功。具体失败与恢复边界见对应功能。
 
 所有操作返回 `HaiResult<T>`，通过 `result.success` 判断成功或失败。
 
@@ -698,15 +790,7 @@ if (!result.success) {
 
 派生 `BaseReldbCrudRepository` 的自定义 SQL 方法先检查 `await this.ensureReady()`；构造函数启动自动建表不等于仓库就绪，服务 init 必须等待候选仓库的就绪入口再发布。PostgreSQL 自动提交的单条 `CREATE TABLE/INDEX IF NOT EXISTS` 仅对 `23505/pg_class_relname_nsp_index`（建表还包括 `pg_type_typname_nsp_index`）目录竞争，或建表时 `42710` 且服务端 routine 为 `heap_create_with_catalog` / `TypeCreate` 的行类型竞争重执行一次；重试仍失败则保留错误，DDL 与 SQL 入口一致；事务、业务唯一约束及其他错误不自动重试。初始化连接探测仅对临时 DNS 错误 `EAI_AGAIN` 最多尝试三次，间隔 250/500 ms；不重放业务 SQL。
 
-## 生产共享状态
-
-生产仅使用 PostgreSQL/MySQL；SQLite（含磁盘文件）只用于开发/明确测试，不能作为跨主机共享状态。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../.agents/instructions/distributed-state.md)。
-
-## 模块架构迁移
-
-`reldb.schemaColumns(table, sql?)` 只读检查真实结构；`reldb.migrateSchema(module, steps, { dryRun: true })` 不创建账本。版本步骤由所属模块维护，业务不修改框架内部表。执行使用 `hai_schema_migrations`，SQLite/PostgreSQL 整体事务，MySQL DDL 隐式提交因此步骤必须可重入；失败不推进版本，重新检查真实结构后续做，拒绝向低版本降级。升级前停止所有旧写入并备份 DB/会话缓存；回退需恢复兼容数据库与旧代码，不能只换二进制。详见 [升级指南](../../docs/usage/README.md)。
-
-## 错误提示与关联日志
+### 错误提示与关联日志
 
 唯一约束冲突统一返回 `HaiReldbError.DUPLICATE_ENTRY`（409）；超时、队列已满等已有错误码保持不变。业务按错误码分支，不解析本地化消息或驱动错误文本。日志保留驱动 code/schema/routine/constraint 和堆栈行号；数字绑定值不会误遮蔽这些诊断标识。
 

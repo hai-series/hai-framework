@@ -260,18 +260,6 @@ pnpm paraglide:compile # 编译 i18n 翻译文件
 - **i18n**：Paraglide
 - **包管理**：pnpm
 
-### 📦 框架依赖
-
-- `@h-ai/core`：配置管理、日志、HaiResult 模式、错误处理
-- `@h-ai/reldb`：数据库抽象（SQLite / PostgreSQL / MySQL）
-- `@h-ai/iam`：用户、角色、权限、认证、RBAC
-- `@h-ai/cache`：缓存（Memory / Redis）
-- `@h-ai/storage`：文件存储（Local / S3）
-- `@h-ai/crypto`：加密（非对称 / 哈希 / 对称 / 密码哈希）
-- `@h-ai/ai`：AI 集成
-- `@h-ai/kit`：SvelteKit hooks、guards、中间件、校验
-- `@h-ai/ui`：UI 组件库（组件、场景组件、自动导入）
-
 ## 反馈现场与交付检查
 
 反馈入口默认预览当前页面，支持换页补图、拖选标注与无声短录屏（60秒/5 MiB，原始录屏需自行避开敏感信息）。展开“收集材料”查看日志和实际环境；“保存反馈到本地”下载ZIP。管理员在详情的“页面回放”播放页面操作，在“操作现场”查看录屏。离线分析运行 `hai feedback view <zip>`。
@@ -281,6 +269,30 @@ pnpm paraglide:compile # 编译 i18n 翻译文件
 ## 界面设计与交互示例
 
 `/admin/ui-gallery/compounds` 的列表状态示例展示加载、空态、错误恢复、筛选、排序、分页与键盘操作。页面沿 [共享设计约定](../../.agents/instructions/ui-design.md) 和 hai-ui-design → hai-ui → hai-ui-review 工作流维护；浏览器测试覆盖实际渲染与交互，外部服务和原生平台另行验收。
+
+## 框架能力导航
+
+本应用的启动、页面和业务操作按上文执行；各框架模块的完整用途、输入输出、配置和错误处理见下表。不要从应用示例推断模块全部能力；服务端与浏览器入口按对应模块契约选择。
+
+| 模块                                                        | 本应用相关能力                 |
+| ----------------------------------------------------------- | ------------------------------ |
+| [@h-ai/ai](../../packages/ai/README.md)                     | 模型、记忆与工具流程           |
+| [@h-ai/api-client](../../packages/api-client/README.md)     | 类型安全的客户端调用           |
+| [@h-ai/api-contract](../../packages/api-contract/README.md) | 共享接口与输入输出定义         |
+| [@h-ai/audit](../../packages/audit/README.md)               | 审计事件与查询                 |
+| [@h-ai/cache](../../packages/cache/README.md)               | 共享缓存与会话状态             |
+| [@h-ai/core](../../packages/core/README.md)                 | 配置、日志、结果与国际化       |
+| [@h-ai/crypto](../../packages/crypto/README.md)             | 认证加密传输和密码能力         |
+| [@h-ai/datapipe](../../packages/datapipe/README.md)         | 文本清洗、分块与管线           |
+| [@h-ai/feedback](../../packages/feedback/README.md)         | 反馈、现场材料和离线包         |
+| [@h-ai/iam](../../packages/iam/README.md)                   | 身份、会话与权限               |
+| [@h-ai/kit](../../packages/kit/README.md)                   | SvelteKit 路由、请求与页面集成 |
+| [@h-ai/reach](../../packages/reach/README.md)               | 邮件、短信与通知               |
+| [@h-ai/reldb](../../packages/reldb/README.md)               | 关系型数据库与事务             |
+| [@h-ai/scheduler](../../packages/scheduler/README.md)       | 定时任务与执行恢复             |
+| [@h-ai/storage](../../packages/storage/README.md)           | 私有文件与对象存储             |
+| [@h-ai/ui](../../packages/ui/README.md)                     | 页面、表单和交互组件           |
+| [@h-ai/vecdb](../../packages/vecdb/README.md)               | 向量集合与检索                 |
 
 ## 开发测试
 

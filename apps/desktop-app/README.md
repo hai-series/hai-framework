@@ -192,6 +192,18 @@ LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 
 
 原生安装包不烘焙环境地址；启动前设置进程 `PUBLIC_API_BASE=https://server.example/api/v1`，Rust 校验后注入页面并将该 Origin 加入 CSP，缺省为 http://localhost:3000/api/v1。
 
+## 框架能力导航
+
+本应用的启动、页面和业务操作按上文执行；各框架模块的完整用途、输入输出、配置和错误处理见下表。不要从应用示例推断模块全部能力；服务端与浏览器入口按对应模块契约选择。
+
+| 模块                                                        | 本应用相关能力                       |
+| ----------------------------------------------------------- | ------------------------------------ |
+| [@h-ai/api-client](../../packages/api-client/README.md)     | 类型安全的客户端调用                 |
+| [@h-ai/api-contract](../../packages/api-contract/README.md) | 共享接口与输入输出定义               |
+| [API 服务契约](../api-service-contract/README.md)           | 本应用与独立 API 共用的业务 contract |
+| [@h-ai/crypto](../../packages/crypto/README.md)             | 认证加密传输和密码能力               |
+| [@h-ai/ui](../../packages/ui/README.md)                     | 页面、表单和交互组件                 |
+
 ## 开发测试
 
 桌面 Web 预览的跨端浏览器验证由 `pnpm --filter mobile-app test:e2e` 托管，显式使用本轮 loopback API、可信 transport 与独立数据目录。`HAI_E2E=1` 时预览不读取用户 `.env.local`；普通开发、生产启动的 dotenv 规则保持不变。浏览器结果不能代替桌面安装包和原生设备验收。

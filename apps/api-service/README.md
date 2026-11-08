@@ -353,6 +353,25 @@ pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
 
 LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 的服务端 workspace 安装 ldapts，设置 `login.ldap: true` 与 LDAP 连接配置；也可注入自定义工厂。邮件/短信可以选择 Reach 标准模板，或直接注入 `onOtpSendEmail/onOtpSendSms/onPasswordResetRequest` 回调，投递失败须拒绝 Promise；回调第三参数 context 提供 expiresAt/idempotencyKey，发送服务按稳定键持久化去重，异常/超时为结果未知且不自动重发。协议在弹窗内展示；LoginForm/RegisterForm 的 `header/extraFields/footer` 和 AuthPanel 的 `login*/register*` snippet 可用于应用扩展。完整配置与自定义发送示例见 [IAM 用法](../../packages/iam/README.md#可选-ldap-与通知接入)。
 
+## 框架能力导航
+
+本应用的启动、页面和业务操作按上文执行；各框架模块的完整用途、输入输出、配置和错误处理见下表。不要从应用示例推断模块全部能力；服务端与浏览器入口按对应模块契约选择。
+
+| 模块                                                        | 本应用相关能力                       |
+| ----------------------------------------------------------- | ------------------------------------ |
+| [@h-ai/ai](../../packages/ai/README.md)                     | 模型、记忆与工具流程                 |
+| [@h-ai/api-contract](../../packages/api-contract/README.md) | 共享接口与输入输出定义               |
+| [API 服务契约](../api-service-contract/README.md)           | 本应用与独立 API 共用的业务 contract |
+| [@h-ai/cache](../../packages/cache/README.md)               | 共享缓存与会话状态                   |
+| [@h-ai/core](../../packages/core/README.md)                 | 配置、日志、结果与国际化             |
+| [@h-ai/crypto](../../packages/crypto/README.md)             | 认证加密传输和密码能力               |
+| [@h-ai/iam](../../packages/iam/README.md)                   | 身份、会话与权限                     |
+| [@h-ai/reach](../../packages/reach/README.md)               | 邮件、短信与通知                     |
+| [@h-ai/reldb](../../packages/reldb/README.md)               | 关系型数据库与事务                   |
+| [@h-ai/serv](../../packages/serv/README.md)                 | 独立 API 服务装配                    |
+| [@h-ai/storage](../../packages/storage/README.md)           | 私有文件与对象存储                   |
+| [@h-ai/vecdb](../../packages/vecdb/README.md)               | 向量集合与检索                       |
+
 ## 开发测试
 
 ```bash

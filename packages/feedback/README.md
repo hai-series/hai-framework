@@ -4,19 +4,9 @@
 
 [框架首页](../../README.md)
 
-## 简介
-
 提供用户反馈、诊断现场、管理员处理与离线问题包。用户可以不填说明直接提交；反馈和结构化证据保存到关系型数据库，截图等附件进入私有对象存储，管理员通过邮件和管理界面处理。它不依赖通用 telemetry 服务。
 
-## 核心功能清单
-
-- 有界采集前后端日志、请求、错误、操作、版本与白名单环境信息；默认错误前后各最多 100 条。
-- 数据库事务受理、提交/证据幂等、附件校验、独立的处理/采集/通知状态、持久化任务与租约恢复。
-- 通知由 `notificationMode` 独立选择：`disabled` 不创建通知任务；`console` 默认仅输出定位与采集状态元数据（consoleContent: metadata）；显式 consoleContent: summary 才加入通用脱敏摘要，不依赖 Reach 或邮箱；`reach` 使用任意已配置 Provider 与接收方，仅此模式要求 recipients。默认 `reach` 保持旧配置兼容，新生成工程显式使用 `console`。Reach 免打扰期间由反馈自己的 outbox 等待，不进入 Reach 延迟队列，也不修改其他通知策略。Reach 的生产 Console Provider 限制保持不变；sent 仅表示选定通道受理，不能证明收信。
-- 浏览器截图、遮挡/标注、可选 rrweb 回放、失败重试与本地导出；`@h-ai/ui` 提供 `FeedbackModal`、`FeedbackList` 和 `FeedbackDetail`。
-- 自包含 ZIP、SHA-256 校验、离线查看与按请求/错误/时间分页读取，不包含生产凭据。
-
-## 使用入门
+## 快速开始
 
 服务端先初始化 core、reldb 和私有 storage，再初始化 feedback；仅 reach 通知模式需先初始化 Reach。生产使用共享数据库和私有对象存储，连接凭据由宿主管理。
 
@@ -85,6 +75,61 @@ return submitted
 `saveDraft(input?)` 统一本地导出与保存：Web 下载、Tauri 原生保存对话框、Capacitor 缓存文件原生分享。取消返回 `status: 'cancelled'`；错误仍返回失败。原生插件为可选 peer，生成 App/Desktop 已配置依赖与 Tauri 权限；自定义宿主需安装对应插件。`createFeedbackReview(typedClient.feedback.reports)` 提供 `loadReplay(id)` 与可取消的 `exportReport(id)`，不再由应用分页和轮询。退出身份调用 `review.close()` 与 `client.close({ discard: true })`，停止采集、轮询，清理预览和持久草稿。
 
 Web 客户端不解析或安装原生插件。自定义 Tauri/Capacitor 宿主分别从 @h-ai/feedback/tauri 或 @h-ai/feedback/capacitor 导入 saveTauriFeedbackFile/saveCapacitorFeedbackFile，并在启动时调用 configureFeedbackSaving(saver)；生成工程已接入，业务无需处理原生文件生命周期。
+
+## 功能
+
+- 有界采集前后端日志、请求、错误、操作、版本与白名单环境信息；默认错误前后各最多 100 条。
+- 数据库事务受理、提交/证据幂等、附件校验、独立的处理/采集/通知状态、持久化任务与租约恢复。
+- 通知由 `notificationMode` 独立选择：`disabled` 不创建通知任务；`console` 默认仅输出定位与采集状态元数据（consoleContent: metadata）；显式 consoleContent: summary 才加入通用脱敏摘要，不依赖 Reach 或邮箱；`reach` 使用任意已配置 Provider 与接收方，仅此模式要求 recipients。默认 `reach`，生成工程显式使用 `console`。Reach 免打扰期间由反馈自己的 outbox 等待，不进入 Reach 延迟队列，也不修改其他通知策略。Reach 的生产 Console Provider 限制保持不变；sent 仅表示选定通道受理，不能证明收信。
+- 浏览器截图、遮挡/标注、可选 rrweb 回放、失败重试与本地导出；`@h-ai/ui` 提供 `FeedbackModal`、`FeedbackList` 和 `FeedbackDetail`。
+- 自包含 ZIP、SHA-256 校验、离线查看与按请求/错误/时间分页读取，不包含生产凭据。
+
+### 功能输入输出
+
+以下片段依赖本节完整初始化流程。示例中的业务值由宿主校验和授权后传入；异步领域结果先判断 success，再读取 data。表中 void 表示操作已完成且没有返回数据，null 表示不存在；同步工厂/工具直接返回表中类型。
+
+input 中的 id 是反馈 ID，attachmentId/jobId 指向同一反馈；context 来自可信认证，包含当前主体/范围/权限。evidence、submission 和 base64 均受容量及归属检查。
+
+#### feedback
+
+受理/受权查询：提交结构和可信 context 返回报告；list 输入筛选/页码返回分页；get 输入 ID 返回详情；getEvidence 输入 ID/筛选返回分页证据。
+
+| 入口                   | 输入参数       | 成功结果                 | 调用示例                                                                       |
+| ---------------------- | -------------- | ------------------------ | ------------------------------------------------------------------------------ |
+| `feedback.submit`      | input, context | `報告`                   | `await feedback.submit(submission, context)`                                   |
+| `feedback.list`        | input, context | `报告分页`               | `await feedback.list({ page: 1, pageSize: 20 }, context)`                      |
+| `feedback.get`         | id, context    | `报告、附件、历史、任务` | `await feedback.get(reportId, context)`                                        |
+| `feedback.getEvidence` | input, context | `证据分页`               | `await feedback.getEvidence({ id: reportId, page: 1, pageSize: 20 }, context)` |
+
+#### feedback
+
+管理员处理输入 ID、状态/expectedVersion 或重试 target，并传可信 context；分别返回更新报告或 void。只有明确授权后调用，冲突先刷新版本。
+
+| 入口                 | 输入参数       | 成功结果       | 调用示例                                                                                           |
+| -------------------- | -------------- | -------------- | -------------------------------------------------------------------------------------------------- |
+| `feedback.setStatus` | input, context | `更新后的报告` | `await feedback.setStatus({ id: reportId, status: 'handled', expectedVersion: version }, context)` |
+| `feedback.retry`     | input, context | `void`         | `await feedback.retry({ id: reportId, target: 'collect' }, context)`                               |
+
+#### feedback
+
+补采输入报告 ID 与证据、missing 或附件 ID/base64；返回确认 ID/修订、报告、附件元数据或附件 base64。所有调用携带可信 context，并受同一容量/归属限制。
+
+| 入口                          | 输入参数       | 成功结果                 | 调用示例                                                                               |
+| ----------------------------- | -------------- | ------------------------ | -------------------------------------------------------------------------------------- |
+| `feedback.appendEvidence`     | input, context | `确认 ID 数组与证据修订` | `await feedback.appendEvidence({ id: reportId, evidence }, context)`                   |
+| `feedback.completeCollection` | input, context | `报告`                   | `await feedback.completeCollection({ id: reportId }, context)`                         |
+| `feedback.uploadAttachment`   | input, context | `附件元数据`             | `await feedback.uploadAttachment({ id: reportId, attachmentId, dataBase64 }, context)` |
+| `feedback.getAttachment`      | input, context | `文件名、类型与 base64`  | `await feedback.getAttachment({ id: reportId, attachmentId }, context)`                |
+
+#### feedback
+
+导出输入报告 ID/证据修订返回任务；getExport 输入报告与任务 ID 返回 ZIP/base64，仅对生成中有界轮询；runJobs 无参数处理到期任务返回 processed 数。
+
+| 入口                 | 输入参数       | 成功结果                    | 调用示例                                                     |
+| -------------------- | -------------- | --------------------------- | ------------------------------------------------------------ |
+| `feedback.export`    | input, context | `导出任务`                  | `await feedback.export({ id: reportId }, context)`           |
+| `feedback.getExport` | input, context | `ZIP 文件名、类型与 base64` | `await feedback.getExport({ id: reportId, jobId }, context)` |
+| `feedback.runJobs`   | 无参数         | `processed 处理数`          | `await feedback.runJobs()`                                   |
 
 ### 反馈现场与交付检查
 
@@ -188,9 +233,21 @@ hai feedback view feedback-FB-1.zip
 
 ### console 通知的隐私边界
 
-`consoleContent` 默认为 `metadata`：仅记录反馈编号、应用/版本/构建定位与采集状态，不输出说明、summary、附件、证据、通知正文或接收地址。需要通用脱敏摘要时显式设为 `summary`；通用脱敏不能识别所有业务秘密。该选项不需要 Reach，也不改变 disabled/reach 的通道语义。旧配置的 console 日志默认随本次升级收紧。
+`consoleContent` 默认为 `metadata`：仅记录反馈编号、应用/版本/构建定位与采集状态，不输出说明、summary、附件、证据、通知正文或接收地址。需要通用脱敏摘要时显式设为 `summary`；通用脱敏不能识别所有业务秘密。该选项不需要 Reach，也不改变 disabled/reach 的通道语义。
 
 服务端环境证据与反馈受理共同提交；环境写入失败不留下已受理但缺失环境的半成品，相同 submissionId 可安全重试。管理界面用 `createFeedbackReview(...).retryReport(id)` 重试可恢复材料与失败通知/Webhook，控制器去重目标并传播失败，退出调用 close 阻止迟到请求继续编排。
+
+## 配置
+
+生命周期：init 输入后端/业务配置，成功后才能使用；close 在释放借用依赖前等待完成。返回值以快速开始示例和公开签名为准。
+
+配置由宿主加载和校验，再传入本模块；私密值放服务端私有环境，不传到浏览器。按实际使用场景逐项选择后端、容量、期限和日志策略，修改后重新初始化并核验成功结果。
+
+[逐项配置说明、适用场景和示例](../../docs/usage/configuration/operations.md).
+
+## 错误处理
+
+领域操作先判断 `result.success`，失败按本模块错误定义与安全提示处理，服务端保留错误码、关联编号和脱敏原因。同步工具、工厂、流迭代及生命周期按各自签名处理，不把 Promise 完成视为业务成功。具体失败与恢复边界见对应功能。
 
 ## 开发测试
 
@@ -204,7 +261,7 @@ pnpm --filter @h-ai/cli test:scaffold-gates
 node packages/cli/tests/feedback-offline-browser.mjs
 ```
 
-验收需分别核对单元/浏览器、SQLite/PG/MySQL、真实 S3 与 SMTP、多节点恢复和断网离线查看；构建或 mock 通过不能代替真实 Provider 和用户流程。应用接入与部署流程见[使用指南](../../docs/usage/README.md)。
+验收需分别核对单元/浏览器、SQLite/PG/MySQL、真实 S3 与 SMTP、多节点恢复和断网离线查看；构建或 mock 通过不能代替真实 Provider 和用户流程。应用接入与部署流程见[使用指南](../../docs/usage/README.md).
 
 ## 许可证
 

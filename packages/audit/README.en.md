@@ -4,32 +4,13 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md) · [@h-ai/reldb](../reldb/README.en.md)
 
-## Introduction
-
 A unified audit logging module. The `audit` object records, queries, cleans up, and aggregates audit logs, with persistence provided by `@h-ai/reldb`.
 
-SQLite, PostgreSQL and MySQL share the same read contract: `createdAt` is a `Date`, `details` is a JSON string or `null`, and absent nullable fields return `null`. Date filters use the same driver conversion as writes. Counts are safe integers; out-of-range counts return `STATS_FAILED`.
-
-## Core features
-
-- Record user actions and security events; filter by user, date and action.
-- Query paginated logs and statistics, and clean up by retention period.
-- Persist through the relational database and redact credential fields before writing.
-
-## Getting started
+## Quick Start
 
 ### Dependencies
 
 - `@h-ai/reldb`: database for audit log persistence; **initialize it before audit.init()**.
-
-### Use cases
-
-- User activity auditing (login, logout, registration, password reset, etc.)
-- CRUD auditing (resource creation, reads, updates, and deletion)
-- Security event tracking and compliance auditing
-- Operational statistics (operation frequency, active users, etc.)
-
-### Quick start
 
 ```ts
 import { audit } from '@h-ai/audit'
@@ -78,6 +59,76 @@ if (!closeResult.success) {
 }
 ```
 
+## Features
+
+SQLite, PostgreSQL and MySQL share the same read contract: `createdAt` is a `Date`, `details` is a JSON string or `null`, and absent nullable fields return `null`. Date filters use the same driver conversion as writes. Counts are safe integers; out-of-range counts return `STATS_FAILED`.
+
+### Operations and results
+
+Use the complete initialization flow in this section first. The host validates and authorizes example business values; check success before reading data from asynchronous domain results. Here void means completion without data, null means absent; synchronous factories/tools return the listed type directly.
+
+#### audit
+
+Structured events: log takes event/optional tx and yields the record, capture yields void under read/write policy, withContext takes trusted correlation plus callback and returns its value.
+
+| Entry               | Input parameters   | Successful result | Call example                                                |
+| ------------------- | ------------------ | ----------------- | ----------------------------------------------------------- |
+| `audit.log`         | input, tx          | `AuditLog`        | `await audit.log(event)`                                    |
+| `audit.capture`     | input, options     | `void`            | `await audit.capture(event)`                                |
+| `audit.withContext` | context, operation | `T`               | `audit.withContext(trustedAuditContext, () => saveOrder())` |
+
+#### audit
+
+Query/retention: filters/page yield a page with users, user ID/limit recent events, days/filters statistics, cleanup retention days a deleted count.
+
+| Entry                 | Input parameters | Successful result                   | Call example                                  |
+| --------------------- | ---------------- | ----------------------------------- | --------------------------------------------- |
+| `audit.list`          | options          | `PaginatedResult<AuditLogWithUser>` | `await audit.list({ page: 1, pageSize: 20 })` |
+| `audit.getUserRecent` | userId, limit    | `AuditLog[]`                        | `await audit.getUserRecent(userId, 20)`       |
+| `audit.getStats`      | days, filters    | `AuditStatItem[]`                   | `await audit.getStats(7)`                     |
+| `audit.cleanup`       | olderThanDays    | `number`                            | `await audit.cleanup(90)`                     |
+
+#### audit.helper
+
+Common events accept user ID (email for reset request), optional IP/UA or a CRUD event and yield void HaiResult; privacy filtering still applies.
+
+| Entry                                | Input parameters | Successful result | Call example                                       |
+| ------------------------------------ | ---------------- | ----------------- | -------------------------------------------------- |
+| `audit.helper.login`                 | userId, ip, ua   | `void`            | `await audit.helper.login(userId)`                 |
+| `audit.helper.logout`                | userId, ip, ua   | `void`            | `await audit.helper.logout(userId)`                |
+| `audit.helper.register`              | userId, ip, ua   | `void`            | `await audit.helper.register(userId)`              |
+| `audit.helper.passwordResetRequest`  | email, ip, ua    | `void`            | `await audit.helper.passwordResetRequest(email)`   |
+| `audit.helper.passwordResetComplete` | userId, ip, ua   | `void`            | `await audit.helper.passwordResetComplete(userId)` |
+| `audit.helper.crud`                  | input            | `void`            | `await audit.helper.crud(crudEvent)`               |
+
+#### audit.backup
+
+Private archive: run takes filters/deadline/cancellation, verify an object key; both yield verified archive information without publishing objects.
+
+| Entry                 | Input parameters | Successful result | Call example                            |
+| --------------------- | ---------------- | ----------------- | --------------------------------------- |
+| `audit.backup.run`    | options          | `AuditBackupInfo` | `await audit.backup.run()`              |
+| `audit.backup.verify` | key, options     | `AuditBackupInfo` | `await audit.backup.verify(archiveKey)` |
+
+#### audit
+
+Scheduled anomaly check takes optional signal and yields matched rules/notification results; orchestrate via scheduler rather than assuming a worker started.
+
+| Entry               | Input parameters | Successful result  | Call example                |
+| ------------------- | ---------------- | ------------------ | --------------------------- |
+| `audit.checkAlerts` | options          | `AuditAlertReport` | `await audit.checkAlerts()` |
+
+- Record user actions and security events; filter by user, date and action.
+- Query paginated logs and statistics, and clean up by retention period.
+- Persist through the relational database and redact credential fields before writing.
+
+### Use cases
+
+- User activity auditing (login, logout, registration, password reset, etc.)
+- CRUD auditing (resource creation, reads, updates, and deletion)
+- Security event tracking and compliance auditing
+- Operational statistics (operation frequency, active users, etc.)
+
 ### Initialization options
 
 ```ts
@@ -116,31 +167,7 @@ Record common events through `audit.helper`, with the public `AuditHelper` type.
 - `audit.cleanup(days)`: `days`, if provided, must be a nonnegative integer.
 - `audit.getStats(days)`: `days`, if provided, must be a nonnegative integer.
 
-### Error codes
-
-Business data operations return `HaiResult<T>`. Common error codes:
-
-| Error code                       | code            | Description                          |
-| -------------------------------- | --------------- | ------------------------------------ |
-| `HaiAuditError.LOG_FAILED`       | `hai:audit:001` | Recording failed                     |
-| `HaiAuditError.QUERY_FAILED`     | `hai:audit:002` | Query failed                         |
-| `HaiAuditError.CLEANUP_FAILED`   | `hai:audit:003` | Cleanup failed                       |
-| `HaiAuditError.STATS_FAILED`     | `hai:audit:004` | Aggregation failed                   |
-| `HaiAuditError.INIT_IN_PROGRESS` | `hai:audit:005` | Initialization in progress           |
-| `HaiAuditError.NOT_INITIALIZED`  | `hai:audit:010` | Module not initialized               |
-| `HaiAuditError.CONFIG_ERROR`     | `hai:audit:012` | Invalid configuration                |
-| `HaiAuditError.BACKUP_DISABLED`  | `hai:audit:020` | Backup disabled                      |
-| `HaiAuditError.BACKUP_FAILED`    | `hai:audit:021` | Backup or verification failed        |
-| `HaiAuditError.BACKUP_INVALID`   | `hai:audit:022` | Invalid backup input                 |
-| `HaiAuditError.BACKUP_CONFLICT`  | `hai:audit:023` | Backup ID/export conditions conflict |
-| `HaiAuditError.ALERTS_DISABLED`  | `hai:audit:024` | Alerts disabled                      |
-| `HaiAuditError.ALERTS_FAILED`    | `hai:audit:025` | Alert check or notification failed   |
-
-> Note: `audit.close()` also returns `HaiResult<void>`. Email details in `audit.helper.passwordResetRequest()` are hidden by the default business privacy settings.
-
-`audit.init()` awaits automatic table creation and repository readiness before success. DDL failures leave `isInitialized=false`; correct the database and retry. Custom joins, statistics and cleanup share the same barrier. Closing during initialization invalidates late publication. Check the init HaiResult before recording or querying. Audit does not own the shared RelDB connection; close audit before the database.
-
-## Event context, privacy and retention
+### Event context, privacy and retention
 
 Audit createdAt, alert windows and archive cutoffs share the database clock rather than individual node clocks. Scheduled backup/alert tasks declare idempotency based on their persistent deduplication guarantees; failures do not incorrectly block subsequent schedules as non-idempotent unknown tasks.
 
@@ -158,7 +185,7 @@ Stop old writers and back up before upgrading. `migrateAudit({ dryRun: true })` 
 
 Redaction matches whole fields, including objects, arrays and sensitive values produced by custom JSON projections. capture returns not-initialized failure before initialization or after close; only an initialized module with capture disabled skips automatic events.
 
-## Private backups and scheduled archives
+### Private backups and scheduled archives
 
 `backup.enabled` is off by default. Inject initialized `StorageFunctions` with `audit.init({ storage, backup: { enabled: true } })`; initialize RelDB first. `backup.batchSize` controls scan batches (default200), while `maxRecordBytes` bounds each UTF-8 record (default1 MiB). Oversized records fail the archive without truncating stored evidence.
 
@@ -185,7 +212,7 @@ if (plan) {
 
 The host imports audit/scheduler and supplies validated schedulerSettings, with Audit/Storage/RelDB initialized. Use private archive storage: enabling backups rejects an S3 publicUrl setting, and deployment must restrict bucket/CDN access. Public asset endpoints should expose designated resources only. The example/fullstack runtimes expose canonical avatar paths; archives require an authorized audit download endpoint. Disabling backups preserves the private boundary of existing files.
 
-## Graded anomaly alerts
+### Graded anomaly alerts
 
 `alerts.enabled` defaults to false. Inject initialized Reach when enabling it: `audit.init({ reach, alerts: { enabled: true, rules: [...] } })`. Each rule has a stable id, exact actions, optional resource, outcomes and minimumSeverity filters, threshold/windowSeconds, notification severity, and targets containing id/provider/to. Windows default to 300 seconds (60–86400); default outcomes are failure/denied, while an empty outcomes list matches all. Rule and target IDs must be unique; providers must exist in Reach. Business roles remain application choices.
 
@@ -195,7 +222,41 @@ Messages include only rule/target IDs, level, count and window, without event de
 
 alerts.schedule defaults to disabled, once per minute in UTC. audit.schedulerPlan composes enabled backup and alert tasks for explicit host Scheduler initialization; it is null without automatic tasks. Scheduler callbacks fail when checking fails or report.failed>0. Close Scheduler before Audit/Reach. Audit cancels further claims and drains in-flight sends within Reach provider timeouts without closing host Reach. Query/audit failures return a failed HaiResult; notification failures appear in a successful report.failed and must be checked by callers.
 
-## Development and testing
+## Configuration
+
+Lifecycle: init takes backend/business configuration; use the module only after success. Await close before releasing borrowed dependencies. Follow the quick-start example and public signatures for exact return values.
+
+The host loads and validates configuration before passing it to this module. Keep secrets in private server environment files. Select the backend, capacity, deadlines and logging for the actual use case; reinitialize and check the result after changes.
+
+[Per-option purpose, use cases and examples](../../docs/usage/configuration/operations.md).
+
+## Error Handling
+
+Check result.success for domain operations. Handle failures with the module error definitions and safe messages; retain codes, correlation IDs and sanitized causes in server logs. Synchronous tools, factories, stream iteration and lifecycle calls follow their own signatures. A completed Promise alone is not business success. See each feature for recovery limits.
+
+Business data operations return `HaiResult<T>`. Common error codes:
+
+| Error code                       | code            | Description                          |
+| -------------------------------- | --------------- | ------------------------------------ |
+| `HaiAuditError.LOG_FAILED`       | `hai:audit:001` | Recording failed                     |
+| `HaiAuditError.QUERY_FAILED`     | `hai:audit:002` | Query failed                         |
+| `HaiAuditError.CLEANUP_FAILED`   | `hai:audit:003` | Cleanup failed                       |
+| `HaiAuditError.STATS_FAILED`     | `hai:audit:004` | Aggregation failed                   |
+| `HaiAuditError.INIT_IN_PROGRESS` | `hai:audit:005` | Initialization in progress           |
+| `HaiAuditError.NOT_INITIALIZED`  | `hai:audit:010` | Module not initialized               |
+| `HaiAuditError.CONFIG_ERROR`     | `hai:audit:012` | Invalid configuration                |
+| `HaiAuditError.BACKUP_DISABLED`  | `hai:audit:020` | Backup disabled                      |
+| `HaiAuditError.BACKUP_FAILED`    | `hai:audit:021` | Backup or verification failed        |
+| `HaiAuditError.BACKUP_INVALID`   | `hai:audit:022` | Invalid backup input                 |
+| `HaiAuditError.BACKUP_CONFLICT`  | `hai:audit:023` | Backup ID/export conditions conflict |
+| `HaiAuditError.ALERTS_DISABLED`  | `hai:audit:024` | Alerts disabled                      |
+| `HaiAuditError.ALERTS_FAILED`    | `hai:audit:025` | Alert check or notification failed   |
+
+> Note: `audit.close()` also returns `HaiResult<void>`. Email details in `audit.helper.passwordResetRequest()` are hidden by the default business privacy settings.
+
+`audit.init()` awaits automatic table creation and repository readiness before success. DDL failures leave `isInitialized=false`; correct the database and retry. Custom joins, statistics and cleanup share the same barrier. Closing during initialization invalidates late publication. Check the init HaiResult before recording or querying. Audit does not own the shared RelDB connection; close audit before the database.
+
+## Development
 
 ```bash
 pnpm --filter @h-ai/audit test

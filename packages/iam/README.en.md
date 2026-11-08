@@ -4,23 +4,9 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/audit](../audit/README.en.md) · [@h-ai/cache](../cache/README.en.md) · [@h-ai/core](../core/README.en.md) · [@h-ai/crypto](../crypto/README.en.md) · [@h-ai/reldb](../reldb/README.en.md) · [@h-ai/reach](../reach/README.en.md)
 
-## Introduction
-
 Identity and access management through a unified `iam` object for authentication, sessions, authorization, and user management.
 
-## Core features
-
-| Feature              | Description                                                                                                            |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **Authentication**   | Password, OTP (email/SMS codes), LDAP, and API Key strategies                                                          |
-| **Sessions**         | Stateful sessions (random access tokens + cache, optional sliding renewal)                                             |
-| **Authorization**    | RBAC roles and permissions (batched DB reads, wildcard matching)                                                       |
-| **User management**  | Registration, queries, updates, password reset, and admin password reset                                               |
-| **API Key**          | Create, revoke, and verify API keys with scopes and expiration                                                         |
-| **One-time tickets** | Short-lived capability tickets (issue / atomic consume) for channels such as WebSocket that cannot carry Bearer tokens |
-| **Frontend client**  | HTTP API contracts for independent frontends                                                                           |
-
-## Getting started
+## Quick Start
 
 ### Installation
 
@@ -37,6 +23,223 @@ pnpm add @h-ai/iam
 
 - `@h-ai/reach`: **optional**, installed, initialized and injected by the application for standard notifications; custom callbacks do not require Reach.
 - `ldapts`: **optional**, loaded only when LDAP is explicitly enabled without an injected `ldapClientFactory`.
+
+```ts
+import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
+import { reldb } from '@h-ai/reldb'
+
+// 基础密码认证不需要安装 Reach 或 ldapts。
+async function example() {
+  try {
+    const db = await reldb.init({ type: 'sqlite', database: './data.db' })
+    if (!db.success)
+      return db
+    const cached = await cache.init({ type: 'memory' })
+    if (!cached.success)
+      return cached
+    const initialized = await iam.init({})
+    if (!initialized.success)
+      return initialized
+    const registered = await iam.user.register({ username: 'demo', password: 'Password123' })
+    if (!registered.success)
+      return registered
+    const login = await iam.auth.login({ identifier: 'demo', password: 'Password123' })
+    if (!login.success)
+      return login
+    return await iam.auth.verifyToken(login.data.tokens.accessToken)
+  }
+  finally {
+    // 应用关闭时按依赖的反向顺序释放。
+    await iam.close()
+    await cache.close()
+    await reldb.close()
+  }
+}
+
+const result = await example()
+if (!result.success)
+  core.logger.error('Authentication example failed', { code: result.error.code })
+```
+
+LDAP is disabled by default. Public OTP methods require `otp` settings and send callbacks; password reset requires a notification callback.
+
+`iam.config` returns a **redacted configuration snapshot**. Sensitive LDAP `url` / `bindPassword` and similar fields are hidden automatically. Use it to inspect state, not as the original configuration source.
+
+## Features
+
+| Feature              | Description                                                                                                            |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Authentication**   | Password, OTP (email/SMS codes), LDAP, and API Key strategies                                                          |
+| **Sessions**         | Stateful sessions (random access tokens + cache, optional sliding renewal)                                             |
+| **Authorization**    | RBAC roles and permissions (batched DB reads, wildcard matching)                                                       |
+| **User management**  | Registration, queries, updates, password reset, and admin password reset                                               |
+| **API Key**          | Create, revoke, and verify API keys with scopes and expiration                                                         |
+| **One-time tickets** | Short-lived capability tickets (issue / atomic consume) for channels such as WebSocket that cannot carry Bearer tokens |
+| **Frontend client**  | HTTP API contracts for independent frontends                                                                           |
+
+### Operations and results
+
+Use the complete initialization flow in this section first. The host validates and authorizes example business values; check success before reading data from asynchronous domain results. Here void means completion without data, null means absent; synchronous factories/tools return the listed type directly.
+
+IDs/codes must come from authorized business flows. Tokens/tickets are not user IDs. options/data follow the operation input type, expectedVersion comes from the read and tx from the active transaction. Low-level writes do not authorize administrators for the host.
+
+#### iam.auth
+
+Authentication takes strategy credentials and trusted request context; registerAndLogin takes registration input. Success yields user, tokens and roles/permissions; failure creates no session.
+
+| Entry                       | Input parameters     | Successful result | Call example                                              |
+| --------------------------- | -------------------- | ----------------- | --------------------------------------------------------- |
+| `iam.auth.login`            | credentials, context | `AuthResult`      | `await iam.auth.login({ identifier, password })`          |
+| `iam.auth.loginWithOtp`     | credentials, context | `AuthResult`      | `await iam.auth.loginWithOtp({ identifier, code })`       |
+| `iam.auth.loginWithLdap`    | credentials, context | `AuthResult`      | `await iam.auth.loginWithLdap({ username, password })`    |
+| `iam.auth.loginWithApiKey`  | credentials, context | `AuthResult`      | `await iam.auth.loginWithApiKey({ key: rawKey })`         |
+| `iam.auth.registerAndLogin` | options, context     | `AuthResult`      | `await iam.auth.registerAndLogin({ username, password })` |
+
+#### iam.auth
+
+Challenge takes operation, OTP identifier/challenge; token verification yields current Session, logout void. Reauthentication takes token/password/operation and yields a bound ticket; sensitive check takes token/operation/ticket and yields void.
+
+| Entry                              | Input parameters                 | Successful result      | Call example                                                                           |
+| ---------------------------------- | -------------------------------- | ---------------------- | -------------------------------------------------------------------------------------- |
+| `iam.auth.createCaptcha`           | input                            | `IamCaptchaChallenge`  | `await iam.auth.createCaptcha({ operation: 'login' })`                                 |
+| `iam.auth.sendOtp`                 | identifier, options              | `{ expiresAt: Date; }` | `await iam.auth.sendOtp(identifier)`                                                   |
+| `iam.auth.verifyToken`             | accessToken                      | `Session`              | `await iam.auth.verifyToken(accessToken)`                                              |
+| `iam.auth.logout`                  | accessToken                      | `void`                 | `await iam.auth.logout(accessToken)`                                                   |
+| `iam.auth.reauthenticate`          | accessToken, password, operation | `IssuedTicket`         | `await iam.auth.reauthenticate(accessToken, password, 'users:delete')`                 |
+| `iam.auth.checkSensitiveOperation` | accessToken, operation, ticket   | `void`                 | `await iam.auth.checkSensitiveOperation(accessToken, 'users:delete', operationTicket)` |
+
+#### iam.user
+
+Users take registration input, trusted IDs, filters/page or token/patch: return registration result, user/null, users, page or updated user; delete yields void. Authorize admin actions at the entry.
+
+| Entry                        | Input parameters  | Successful result       | Call example                                                              |
+| ---------------------------- | ----------------- | ----------------------- | ------------------------------------------------------------------------- |
+| `iam.user.createUser`        | options           | `RegisterResult`        | `await iam.user.createUser({ username, password })`                       |
+| `iam.user.register`          | options           | `RegisterResult`        | `await iam.user.register({ username, password })`                         |
+| `iam.user.inviteUser`        | options           | `RegisterResult`        | `await iam.user.inviteUser({ username, email })`                          |
+| `iam.user.getUser`           | userId, options   | `User \| null`          | `await iam.user.getUser(userId)`                                          |
+| `iam.user.getUsers`          | userIds, options  | `User[]`                | `await iam.user.getUsers([userId], { include: ['roles'] })`               |
+| `iam.user.listUsers`         | options           | `PaginatedResult<User>` | `await iam.user.listUsers({ page: 1, pageSize: 20 })`                     |
+| `iam.user.getCurrentUser`    | accessToken       | `User`                  | `await iam.user.getCurrentUser(accessToken)`                              |
+| `iam.user.updateCurrentUser` | accessToken, data | `User`                  | `await iam.user.updateCurrentUser(accessToken, { displayName: 'Alice' })` |
+| `iam.user.updateUser`        | userId, data      | `User`                  | `await iam.user.updateUser(userId, { displayName: 'Alice' })`             |
+| `iam.user.deleteUser`        | userId            | `void`                  | `await iam.user.deleteUser(userId)`                                       |
+
+#### iam.user
+
+Password flows take user ID/old+new passwords, renewal input, reset identifier or purpose token and yield void. validatePassword synchronously checks policy; scanInactiveAccounts returns the suspended count.
+
+| Entry                                | Input parameters                      | Successful result | Call example                                                                      |
+| ------------------------------------ | ------------------------------------- | ----------------- | --------------------------------------------------------------------------------- |
+| `iam.user.adminResetPassword`        | userId, newPassword                   | `void`            | `await iam.user.adminResetPassword(userId, newPassword)`                          |
+| `iam.user.renewPassword`             | input                                 | `void`            | `await iam.user.renewPassword({ identifier, password, newPassword })`             |
+| `iam.user.changePassword`            | userId, oldPassword, newPassword      | `void`            | `await iam.user.changePassword(userId, oldPassword, newPassword)`                 |
+| `iam.user.changeCurrentUserPassword` | accessToken, oldPassword, newPassword | `void`            | `await iam.user.changeCurrentUserPassword(accessToken, oldPassword, newPassword)` |
+| `iam.user.requestPasswordReset`      | identifier, options                   | `void`            | `await iam.user.requestPasswordReset(identifier)`                                 |
+| `iam.user.confirmPasswordReset`      | token, newPassword                    | `void`            | `await iam.user.confirmPasswordReset(resetToken, newPassword)`                    |
+| `iam.user.validatePassword`          | password                              | `void`            | `iam.user.validatePassword(newPassword)`                                          |
+| `iam.user.scanInactiveAccounts`      | No arguments                          | `number`          | `await iam.user.scanInactiveAccounts()`                                           |
+
+#### iam.authz
+
+Authorization takes trusted user IDs and permission code and yields roles/permissions, boolean, permission/role arrays or ID-keyed Maps. Never trust client-declared roles.
+
+| Entry                                 | Input parameters   | Successful result                         | Call example                                             |
+| ------------------------------------- | ------------------ | ----------------------------------------- | -------------------------------------------------------- |
+| `iam.authz.getUserAuthorization`      | userId             | `Pick<Session, "roles" \| "permissions">` | `await iam.authz.getUserAuthorization(userId)`           |
+| `iam.authz.checkPermission`           | userId, permission | `boolean`                                 | `await iam.authz.checkPermission(userId, 'orders:read')` |
+| `iam.authz.getUserPermissions`        | userId             | `Permission[]`                            | `await iam.authz.getUserPermissions(userId)`             |
+| `iam.authz.getUserRoles`              | userId             | `Role[]`                                  | `await iam.authz.getUserRoles(userId)`                   |
+| `iam.authz.getUserRolesForMany`       | userIds            | `Map<string, Role[]>`                     | `await iam.authz.getUserRolesForMany([userId])`          |
+| `iam.authz.getRolePermissionsForMany` | roleIds            | `Map<string, Permission[]>`               | `await iam.authz.getRolePermissionsForMany([roleId])`    |
+
+#### iam.authz
+
+Assignment takes user/role/permission IDs with optional tx and yields void while invalidating shared authorization caches. syncRoles supplies the complete desired set.
+
+| Entry                                | Input parameters         | Successful result | Call example                                                     |
+| ------------------------------------ | ------------------------ | ----------------- | ---------------------------------------------------------------- |
+| `iam.authz.assignRole`               | userId, roleId, tx       | `void`            | `await iam.authz.assignRole(userId, roleId)`                     |
+| `iam.authz.removeRole`               | userId, roleId, tx       | `void`            | `await iam.authz.removeRole(userId, roleId)`                     |
+| `iam.authz.syncRoles`                | userId, roleIds, tx      | `void`            | `await iam.authz.syncRoles(userId, [roleId])`                    |
+| `iam.authz.assignPermissionToRole`   | roleId, permissionId, tx | `void`            | `await iam.authz.assignPermissionToRole(roleId, permissionId)`   |
+| `iam.authz.removePermissionFromRole` | roleId, permissionId, tx | `void`            | `await iam.authz.removePermissionFromRole(roleId, permissionId)` |
+
+#### iam.authz
+
+RBAC administration takes entity input, ID/code, pagination or patch. Create/update yield entity, lookup entity/null, full listing a page, role permissions an array, user counts a Map, deletion void.
+
+| Entry                           | Input parameters | Successful result             | Call example                                                                                         |
+| ------------------------------- | ---------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `iam.authz.createRole`          | role, tx         | `Role`                        | `await iam.authz.createRole({ code: 'editor', name: 'Editor', description: null, isSystem: false })` |
+| `iam.authz.getRole`             | roleId           | `Role \| null`                | `await iam.authz.getRole(roleId)`                                                                    |
+| `iam.authz.getRoleByCode`       | code             | `Role \| null`                | `await iam.authz.getRoleByCode('editor')`                                                            |
+| `iam.authz.getAllRoles`         | options          | `PaginatedResult<Role>`       | `await iam.authz.getAllRoles({ page: 1, pageSize: 20 })`                                             |
+| `iam.authz.getRoleUserCounts`   | roleIds          | `Map<string, number>`         | `await iam.authz.getRoleUserCounts([roleId])`                                                        |
+| `iam.authz.updateRole`          | roleId, data, tx | `Role`                        | `await iam.authz.updateRole(roleId, { name: 'Editor' })`                                             |
+| `iam.authz.deleteRole`          | roleId, tx       | `void`                        | `await iam.authz.deleteRole(roleId)`                                                                 |
+| `iam.authz.createPermission`    | permission, tx   | `Permission`                  | `await iam.authz.createPermission({ code: 'orders:read', name: 'Read orders', type: 'api' })`        |
+| `iam.authz.getPermission`       | permissionId     | `Permission \| null`          | `await iam.authz.getPermission(permissionId)`                                                        |
+| `iam.authz.getPermissionByCode` | code             | `Permission \| null`          | `await iam.authz.getPermissionByCode('orders:read')`                                                 |
+| `iam.authz.getAllPermissions`   | options          | `PaginatedResult<Permission>` | `await iam.authz.getAllPermissions({ page: 1, pageSize: 20 })`                                       |
+| `iam.authz.deletePermission`    | permissionId, tx | `void`                        | `await iam.authz.deletePermission(permissionId)`                                                     |
+| `iam.authz.getRolePermissions`  | roleId           | `Permission[]`                | `await iam.authz.getRolePermissions(roleId)`                                                         |
+
+#### iam.authz
+
+Bind reauthentication purposes: optional operation yields sensitive operation names; permissionId plus operations saves the mapping and yields void.
+
+| Entry                                        | Input parameters         | Successful result | Call example                                                                       |
+| -------------------------------------------- | ------------------------ | ----------------- | ---------------------------------------------------------------------------------- |
+| `iam.authz.getSensitiveOperations`           | operation                | `string[]`        | `await iam.authz.getSensitiveOperations('users:delete')`                           |
+| `iam.authz.setPermissionSensitiveOperations` | permissionId, operations | `void`            | `await iam.authz.setPermissionSensitiveOperations(permissionId, ['users:delete'])` |
+
+#### iam.session
+
+Low-level sessions: trusted creation yields Session, token get Session/null and verification Session; update requires expectedVersion, user deletion yields count, refresh TokenPair, other mutations void. Protected requests use auth.verifyToken.
+
+| Entry                           | Input parameters                   | Successful result | Call example                                                           |
+| ------------------------------- | ---------------------------------- | ----------------- | ---------------------------------------------------------------------- |
+| `iam.session.create`            | options                            | `Session`         | `await iam.session.create(trustedSessionInput)`                        |
+| `iam.session.get`               | accessToken                        | `Session \| null` | `await iam.session.get(accessToken)`                                   |
+| `iam.session.verifyToken`       | accessToken                        | `Session`         | `await iam.session.verifyToken(accessToken)`                           |
+| `iam.session.update`            | accessToken, data, expectedVersion | `void`            | `await iam.session.update(accessToken, sessionPatch, expectedVersion)` |
+| `iam.session.delete`            | accessToken                        | `void`            | `await iam.session.delete(accessToken)`                                |
+| `iam.session.deleteByUserId`    | userId                             | `number`          | `await iam.session.deleteByUserId(userId)`                             |
+| `iam.session.refresh`           | refreshToken                       | `TokenPair`       | `await iam.session.refresh(refreshToken)`                              |
+| `iam.session.revokeRefresh`     | refreshToken                       | `void`            | `await iam.session.revokeRefresh(refreshToken)`                        |
+| `iam.session.patchUserSessions` | userId, updates                    | `void`            | `await iam.session.patchUserSessions(userId, sessionFieldUpdates)`     |
+
+#### iam.apiKey
+
+API credentials: user/options return rawKey only at creation; user/page listing yields a page, ID lookup entry/null, revoke void, raw verification a safe ApiKey DTO.
+
+| Entry                     | Input parameters | Successful result         | Call example                                                                            |
+| ------------------------- | ---------------- | ------------------------- | --------------------------------------------------------------------------------------- |
+| `iam.apiKey.createApiKey` | userId, options  | `CreateApiKeyResult`      | `await iam.apiKey.createApiKey(userId, { name: 'reporting', scopes: ['orders:read'] })` |
+| `iam.apiKey.listApiKeys`  | userId, options  | `PaginatedResult<ApiKey>` | `await iam.apiKey.listApiKeys(userId, { page: 1, pageSize: 20 })`                       |
+| `iam.apiKey.getApiKey`    | keyId            | `ApiKey \| null`          | `await iam.apiKey.getApiKey(keyId)`                                                     |
+| `iam.apiKey.revokeApiKey` | keyId            | `void`                    | `await iam.apiKey.revokeApiKey(keyId)`                                                  |
+| `iam.apiKey.verifyApiKey` | rawKey           | `ApiKey`                  | `await iam.apiKey.verifyApiKey(rawKey)`                                                 |
+
+#### iam.ticket
+
+One-use purpose tickets take subject/purpose/TTL and yield a ticket; consume takes ticket/binding and yields consumed claims. An ordinary token is not a purpose credential.
+
+| Entry                | Input parameters | Successful result | Call example                                               |
+| -------------------- | ---------------- | ----------------- | ---------------------------------------------------------- |
+| `iam.ticket.issue`   | options          | `IssuedTicket`    | `await iam.ticket.issue(ticketInput)`                      |
+| `iam.ticket.consume` | ticket, options  | `ConsumedTicket`  | `await iam.ticket.consume(operationTicket, ticketBinding)` |
+
+#### iam
+
+No-arg public policy lookup yields IamPublicConfig without directory, notification or database credentials.
+
+| Entry                 | Input parameters | Successful result | Call example                  |
+| --------------------- | ---------------- | ----------------- | ----------------------------- |
+| `iam.getPublicConfig` | No arguments     | `IamPublicConfig` | `await iam.getPublicConfig()` |
 
 ### Optional LDAP and notifications
 
@@ -178,51 +381,6 @@ const initialized = await iam.init({
 if (!initialized.success)
   return initialized
 ```
-
-### Quick start
-
-```ts
-import { cache } from '@h-ai/cache'
-import { core } from '@h-ai/core'
-import { iam } from '@h-ai/iam'
-import { reldb } from '@h-ai/reldb'
-
-// 基础密码认证不需要安装 Reach 或 ldapts。
-async function example() {
-  try {
-    const db = await reldb.init({ type: 'sqlite', database: './data.db' })
-    if (!db.success)
-      return db
-    const cached = await cache.init({ type: 'memory' })
-    if (!cached.success)
-      return cached
-    const initialized = await iam.init({})
-    if (!initialized.success)
-      return initialized
-    const registered = await iam.user.register({ username: 'demo', password: 'Password123' })
-    if (!registered.success)
-      return registered
-    const login = await iam.auth.login({ identifier: 'demo', password: 'Password123' })
-    if (!login.success)
-      return login
-    return await iam.auth.verifyToken(login.data.tokens.accessToken)
-  }
-  finally {
-    // 应用关闭时按依赖的反向顺序释放。
-    await iam.close()
-    await cache.close()
-    await reldb.close()
-  }
-}
-
-const result = await example()
-if (!result.success)
-  core.logger.error('Authentication example failed', { code: result.error.code })
-```
-
-LDAP is disabled by default. Public OTP methods require `otp` settings and send callbacks; password reset requires a notification callback.
-
-`iam.config` returns a **redacted configuration snapshot**. Sensitive LDAP `url` / `bindPassword` and similar fields are hidden automatically. Use it to inspect state, not as the original configuration source.
 
 ### Design
 
@@ -872,21 +1030,6 @@ agreements:
   # privacyPolicyUrl: https://example.com/privacy
 ```
 
-### Error handling
-
-All operations return `HaiResult<T>`; branch on `HaiIamError`:
-
-```ts
-import { HaiIamError, iam } from '@h-ai/iam'
-
-const result = await iam.auth.login({ identifier: 'admin', password: 'wrong' })
-if (!result.success) {
-  if (result.error.code === HaiIamError.INVALID_CREDENTIALS.code) {
-    // 用户名或密码错误
-  }
-}
-```
-
 ### Optional integrations
 
 Role lists aggregate actual member counts for the current page with one `iam.authz.getRoleUserCounts(roleIds)` call, returning `HaiResult<Map<string, number>>`. Unassigned roles get 0; failed queries show loading errors rather than fabricated zero counts.
@@ -901,7 +1044,7 @@ Redis caches nonsecret account/credential state, role/permission summaries, sens
 
 Failure to register invalidation rejects a write before mutation. Failed invalidation after commit preserves the successful mutation and persistent dirty marker, so later checks keep using DB. Crashed writers or unknown commit results never expire that marker by TTL; alert and repair cache state in a maintenance window after confirming no IAM write transaction remains. All nodes must upgrade together and write via IAM APIs. Raw SQL, old writers and independent table edits require quiesced writes and full IAM cache invalidation. Verified raw Key cache hits avoid repeated expensive hashes; lastUsedAt is sampled during cold verification, with up to about one minute lag.
 
-## Self-hosted interactive challenges
+### Self-hosted interactive challenges
 
 captcha.enabled defaults to false. Enable self-hosted ALTCHA proof of work with ttlSeconds (default120, 1–600 seconds), cost (default5000, 100–50000) and maxCounter (default100, 1–2000). No external CAPTCHA account is needed. HMAC secrets and one-use state remain in the existing shared Cache; production still requires a shared backend. Computational challenges increase automation cost and do not guarantee a human requester.
 
@@ -909,7 +1052,7 @@ captcha.enabled defaults to false. Enable self-hosted ALTCHA proof of work with 
 
 Standard Kit/Serv expose POST /auth/captcha (Kit same-origin /api prefix) and preserve captcha. iam.publicConfig.captcha exposes only enabled. AuthPanel/createAuthActions automatically create, asynchronously solve and submit a fresh proof when enabled, and do not load the solver when disabled. Custom forms can reuse the protocol. Enabled UI configuration without createCaptcha fails closed; cancellation/unmount stops subsequent login. Proofs are always redacted as credentials and are not persisted in browser storage. Errors030/031/032/033 mean required, invalid/consumed/expired, disabled and unavailable respectively.
 
-## Optional password and login protection
+### Optional password and login protection
 
 Public login and `renewPassword` return `INVALID_CREDENTIALS` (“Username or password is incorrect.”) for missing, passwordless, dormant, closed, expired and locked accounts. Restricted accounts do not verify further password guesses: correct and incorrect passwords receive the same response without changing the existing lock counters. Authenticated administration can still inspect the account state. Password computation or storage faults remain infrastructure failures and do not count as incorrect passwords.
 
@@ -927,17 +1070,17 @@ Reusing the current password returns `HaiIamError.PASSWORD_REUSE_NOT_ALLOWED` (`
 
 `reauthentication.enabled/operations` select sensitive operations; `ttlSeconds` bounds proof lifetime. `reauthenticate(token, password, operation)` issues a single-use proof; authorized handlers call `checkSensitiveOperation(token, operation, ticket)` after permission/resource checks. Proofs bind subject/session/operation and grant no extra permissions. Serv IAM writes/admin guards read `x-hai-reauthentication`; Kit business handlers use `kit.guard.requireSensitive(iam, event, operation)` with project-defined IDs. Keep proof tickets briefly in memory. Public configuration exposes switches/operation IDs only. In the standard admin/fullstack UI, an already signed-in user who selects a sensitive action confirms their current account password in a dialog. Cancel does not submit, an incorrect password stops the action, and success continues the original action without creating another login session.
 
-RBAC permissions accept `sensitiveOperations: string[]`, persisted as nullable `sensitive_operations`. Trusted management code can call `iam.authz.setPermissionSensitiveOperations(permissionId, operations)` and must check `success`. An empty array removes only that permission's additions. With `reauthentication.enabled`, rules from all permission records are combined with file `operations` and enforced live. IDs must match actual business guards; they grant no permissions. Async `iam.getPublicConfig()` returns the combined public policy and fails on database read errors; synchronous `iam.publicConfig` retains the file snapshot only. Disabling RBAC ignores database rules. Migration adds a nullable JSON column while preserving authorization relationships.
+RBAC permissions accept `sensitiveOperations: string[]`, persisted as nullable `sensitive_operations`. Trusted management code can call `iam.authz.setPermissionSensitiveOperations(permissionId, operations)` and must check `success`. An empty array removes only that permission's additions. With `reauthentication.enabled`, rules from all permission records are combined with file `operations` and enforced live. IDs must match actual business guards; they grant no permissions. Async `iam.getPublicConfig()` returns the combined public policy and fails on database read errors; synchronous `iam.publicConfig` retains the file snapshot only. Disabling RBAC ignores database rules.
 
-## Account type and lifecycle
+### Account type and lifecycle
 
 Users default to `accountType: 'permanent'` and `accountStatus: 'active'`. Administrative code can create a `temporary` account with `accountExpiresAt`, or use `updateUser` to set `dormant` or `closed`. State and credential generation change in one transaction. Expired or inactive accounts are rejected by every login method, access verification, and refresh. Explicit reactivation requires a new login; old tokens do not revive. `accountStatus` is the sole lifecycle field; there is no separate user enable/disable switch. `closed` retains the record; `deleteUser` still physically removes it, while the application owns personal-data retention and cancellation workflows.
 
-Before beta.1, stop older writers and back up the database. Migration v6 converts an old false/NULL `enabled` value with active status to dormant, retains dormant/closed states, invalidates affected credentials, and drops the column. User inputs, filters and sorting now use only `accountStatus`. An image rollback does not restore the old schema; restoring an older version also requires a verified database backup. Authorized administrators can reset passwords in any account state without changing that state. `password.requireInitialChange` controls the subsequent password-change requirement.
+Authorized administrators may reset passwords in any accountStatus, without changing dormant/closed to active or reviving invalidated credentials. `password.requireInitialChange` controls the next password-change requirement. User filters and sorting use that same accountStatus field.
 
 `accounts.dormantAfterDays` defaults to `0`, disabling automatic dormancy. With `90`, IAM scans active accounts with no successful login in 90 days at `accounts.scanIntervalSeconds` intervals (3600 seconds by default); accounts never used start at creation. Only successful authentication updates `lastLoginAt`. Conditional database updates make repeated scans across nodes idempotent. Trusted code or an existing scheduler may also call `iam.user.scanInactiveAccounts()`. `close()` stops the timer and waits for its in-flight scan. Public registration must not expose administrative lifecycle fields.
 
-## Optional session security policies
+### Optional session security policies
 
 Set `session.idleTimeout: 1800` to require a new login after 30 minutes without a successful authenticated request; `0` disables it. Access reads, activity commits, and refresh rotation all enforce this limit. A long-lived refresh token cannot revive an idle session. Automatic refresh does not extend the idle deadline. Background business polling also counts as authenticated activity, so applications must choose polling behavior that matches their user activity policy.
 
@@ -945,9 +1088,9 @@ Set `session.idleTimeout: 1800` to require a new login after 30 minutes without 
 
 When these deadlines are disabled, access and refresh retain their independent lifetimes. Every successful login creates new random credentials. `SESSION_LIMIT_EXCEEDED` reports the configured session quota.
 
-## Schema and credential notifications
+### Schema and credential notifications
 
-After RelDB initialization, `migrateIam({ dryRun: true })` previews changes without writes. iam.init upgrades supported credential/reset columns, retaining users/passwords and permissions. Back up and stop old writers first. Legacy sessions without credential versions must sign in again; never roll back credential generations to restore authorization. Default Reach notifications use sensitive/expiresAt/idempotencyKey without plaintext persistence or delayed replay. Custom callbacks must enforce the same expiry and credential protection.
+After RelDB initialization, `migrateIam({ dryRun: true })` previews persistence preparation without writes. iam.init prepares persistence and credential/reset fields while retaining users, passwords and permissions. Back up and stop conflicting writes before structural changes. Sessions must match the current credential generation; mismatches require login, never lowering the stored generation. Default Reach notifications use sensitive/expiresAt/idempotencyKey without plaintext persistence or delayed replay. Custom callbacks must enforce the same expiry and credential protection.
 
 When audit is initialized and capture.enabled is on, IAM records important account, authentication, password, authorization, API Key and session events, including failed/denied outcomes and safe reason codes. Initialize audit before IAM and close in reverse order. Passwords, one-time proofs and tokens are never copied into events. Only successful login establishes an actor; trusted service/CLI callers supply actor/correlation through audit.withContext. Events inside an external authorization transaction commit or roll back with that transaction; record failed attempts after rollback at the caller boundary. Audit failures emit diagnostics without converting an applied business result into an unsafe retry.
 
@@ -955,13 +1098,38 @@ When audit is initialized and capture.enabled is on, IAM records important accou
 
 For in-place recovery, use UI `createSessionRecovery` / `SessionRecoveryDialog` with SDK `recoverSession`. Normal password/OTP/LDAP login policies still apply; `expectedUserId` restricts session issuance to the original principal. Only an explicitly authentication-rejected request may be retried once. Ambiguous network failures are not replayed. In-memory drafts lost through document reload/closure cannot be restored.
 
-## Page exit session policy
+### Page exit session policy
 
 `session.endOnPageHide` defaults to `false`. Hosts call `actions.bindPageExit({ enabled: config.session.endOnPageHide })` and invoke its returned cleanup on unmount; standard admin/H5/fullstack templates already bind it. A non-BFCache `pagehide` (including reload and full document navigation) makes a best effort POST to `/auth/session/close`, revoking the held access and related refresh through the existing CSRF/encrypted transport with `keepalive` and no automatic refresh. This response does not clear cookies/local credentials, avoiding a late old response overwriting a new login. Explicit logout still revokes and clears current credentials normally. Browsers may omit page exit requests; configure server `idleTimeout`/`absoluteTimeout` as appropriate. Immediate revocation on browser close is not guaranteed.
 
 The standard `/auth/me` endpoint also checks `iam.profile.update` / `iam.profile.avatar`. Mixed updates prefer an enabled profile rule, otherwise the avatar rule. `authz.getSensitiveOperations(operation?)` can query one operation; omit it to list database rules. Super-administrator identity is read from shared roles on every check. Default seeding rereads concurrent unique conflicts and propagates permission-assignment failures.
 
-## Development and testing
+## Configuration
+
+Lifecycle: init takes backend/business configuration; use the module only after success. Await close before releasing borrowed dependencies. Follow the quick-start example and public signatures for exact return values.
+
+The host loads and validates configuration before passing it to this module. Keep secrets in private server environment files. Select the backend, capacity, deadlines and logging for the actual use case; reinitialize and check the result after changes.
+
+[Per-option purpose, use cases and examples](../../docs/usage/configuration/identity.md).
+
+## Error Handling
+
+Check result.success for domain operations. Handle failures with the module error definitions and safe messages; retain codes, correlation IDs and sanitized causes in server logs. Synchronous tools, factories, stream iteration and lifecycle calls follow their own signatures. A completed Promise alone is not business success. See each feature for recovery limits.
+
+All operations return `HaiResult<T>`; branch on `HaiIamError`:
+
+```ts
+import { HaiIamError, iam } from '@h-ai/iam'
+
+const result = await iam.auth.login({ identifier: 'admin', password: 'wrong' })
+if (!result.success) {
+  if (result.error.code === HaiIamError.INVALID_CREDENTIALS.code) {
+    // 用户名或密码错误
+  }
+}
+```
+
+## Development
 
 Public examples import from `@h-ai/iam` and distinguish defaultable `IamConfigInput` from parsed `IamConfig`. Initialize server dependencies, check `HaiResult.success`, update sessions with their observed `version`, and reuse persistent notification idempotency keys. Strategy/repository examples marked as internal context do not define application deep imports. The checker verifies types only; Redis/database, LDAP and delivery behavior still require their integration tests. See the [JSDoc conventions (Chinese)](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证).
 
