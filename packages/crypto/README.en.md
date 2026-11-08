@@ -27,6 +27,8 @@ A cryptography module for asymmetric encryption, hashing, symmetric encryption, 
 
 ### Quick start
 
+Concurrent `close()` invalidates an unfinished `init()`, so late initialization cannot reopen the module. Wait for that initialization to settle before initializing again.
+
 ```ts
 import { crypto } from '@h-ai/crypto'
 

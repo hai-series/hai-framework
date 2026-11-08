@@ -28,6 +28,20 @@ describe('crypto.init', () => {
       expect(failed.error.code).toBe(HaiCryptoError.INIT_FAILED.code)
   })
 
+  it.each([false, true])('close cancels pending initialization (reinitializing=%s)', async (reinitializing) => {
+    if (reinitializing)
+      expect((await crypto.init()).success).toBe(true)
+    const pending = crypto.init()
+    await crypto.close()
+    const result = await pending
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe(HaiCryptoError.NOT_INITIALIZED.code)
+    expect(crypto.isInitialized).toBe(false)
+    expect(crypto.hash.hash('after-close').success).toBe(false)
+    expect((await crypto.init()).success).toBe(true)
+  })
+
   it('should close and reset state', async () => {
     await crypto.init()
     expect(crypto.isInitialized).toBe(true)

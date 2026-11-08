@@ -32,6 +32,8 @@ const logger = core.logger.child({ module: 'crypto', scope: 'main' })
 let initialized = false
 /** 并发初始化防护标志 */
 let initInProgress = false
+/** 关闭后拒绝尚未完成的初始化重新发布操作域。 */
+let lifecycleGeneration = 0
 /** 当前非对称加密操作实例 */
 let currentAsymmetric: AsymmetricOperations | null = null
 /** 当前哈希操作实例 */
@@ -63,8 +65,13 @@ function getCrypto(): CryptoFunctions {
   return crypto
 }
 const transportOperations: TransportOperations = {
-  createServer: options => getCrypto().isInitialized ? createTransportEncryption(getCrypto(), options) : notInitialized.result(),
-  createClient: options => createTransportClient({ crypto: getCrypto(), ...options }),
+  createServer: options => getCrypto().isInitialized
+    ? createTransportEncryption(getCrypto(), options)
+    : notInitialized.result(),
+  createClient: options => createTransportClient({
+    crypto: getCrypto(),
+    ...options,
+  }),
   protocol: TRANSPORT_PROTOCOL,
 }
 
@@ -105,18 +112,28 @@ export const crypto: CryptoFunctions = {
       logger.warn('Crypto init already in progress, skipping concurrent call')
       return err(
         HaiCryptoError.INIT_FAILED,
-        cryptoM('crypto_initFailed', { params: { error: 'Concurrent initialization detected' } }),
+        cryptoM('crypto_initFailed', {
+          params: { error: 'Concurrent initialization detected' },
+        }),
       )
     }
     initInProgress = true
+    const generation = ++lifecycleGeneration
 
     try {
       // 让并发调用有机会观察到 initInProgress，确保防护逻辑真实生效。
       await Promise.resolve()
+      if (generation !== lifecycleGeneration)
+        return notInitialized.result()
 
       if (initialized) {
         logger.warn('Crypto module is already initialized, reinitializing')
-        await crypto.close()
+        // 内部重建不调用公开 close，避免把本次初始化也标记为失效。
+        currentAsymmetric = null
+        currentHash = null
+        currentSymmetric = null
+        currentPassword = null
+        initialized = false
       }
 
       logger.info('Initializing crypto module')
@@ -140,7 +157,11 @@ export const crypto: CryptoFunctions = {
       return err(
         HaiCryptoError.INIT_FAILED,
         cryptoM('crypto_initFailed', {
-          params: { error: error instanceof Error ? error.message : String(error) },
+          params: {
+            error: error instanceof Error
+              ? error.message
+              : String(error),
+          },
         }),
         error,
       )
@@ -173,6 +194,7 @@ export const crypto: CryptoFunctions = {
    * 关闭后访问 asymmetric/hash/symmetric/password 会返回 NOT_INITIALIZED 错误。
    */
   async close() {
+    lifecycleGeneration++
     if (!initialized) {
       logger.info('Crypto module already closed, skipping')
       return

@@ -81,8 +81,11 @@ export function resolveTransportBodyLimits(maxPlaintextBytes?: number, options: 
     maxPlaintextBytes = required ?? TRANSPORT_BODY_LIMITS.plaintextBytes
   if (!Number.isSafeInteger(maxPlaintextBytes) || maxPlaintextBytes < TRANSPORT_PLAINTEXT_RANGE.min || maxPlaintextBytes > TRANSPORT_PLAINTEXT_RANGE.max)
     throw new RangeError(cryptoM('crypto_transportBodyLimitInvalid'))
-  if (required !== undefined && maxPlaintextBytes < required)
-    throw new RangeError(cryptoM('crypto_transportBodyLimitConflict', { params: { limit: maxPlaintextBytes, required } }))
+  if (required !== undefined && maxPlaintextBytes < required) {
+    throw new RangeError(cryptoM('crypto_transportBodyLimitConflict', {
+      params: { limit: maxPlaintextBytes, required },
+    }))
+  }
   return Object.freeze({ ...TRANSPORT_BODY_LIMITS, plaintextBytes: maxPlaintextBytes, encryptedPayloadBytes: 2 * maxPlaintextBytes + 32_768 })
 }
 
@@ -178,7 +181,9 @@ export async function readTransportBody(
     let text = ''
     while (true) {
       const next = reader.read()
-      const chunk = await (aborted ? Promise.race([next, aborted]) : next)
+      const chunk = await (aborted
+        ? Promise.race([next, aborted])
+        : next)
       if (chunk.done) {
         completed = true
         return text + decoder.decode()
@@ -228,7 +233,10 @@ export function createTransportBodyPolicy(maxPlaintextBytes?: number, routes: Re
   const entries = Object.entries(routes)
   if (entries.length > 100 || entries.some(([path]) => !path.startsWith('/') || path.includes('?') || path.includes('#') || path.split('/').some(part => part.includes('*') && part !== '*')))
     throw new RangeError(cryptoM('crypto_transportBodyLimitInvalid'))
-  const configured = entries.map(([path, bytes]) => ({ parts: path.split('/'), limits: resolveTransportBodyLimits(bytes) }))
+  const configured = entries.map(([path, bytes]) => ({
+    parts: path.split('/'),
+    limits: resolveTransportBodyLimits(bytes),
+  }))
   const maximum = resolveTransportBodyLimits(Math.max(ordinary.plaintextBytes, ...configured.map(route => route.limits.plaintextBytes)))
   let small = 0
   let large = 0
@@ -238,24 +246,34 @@ export function createTransportBodyPolicy(maxPlaintextBytes?: number, routes: Re
       const parts = pathname.split('/')
       const matching = configured.filter(route => route.parts.length === parts.length && route.parts.every((part, index) => part === '*' || part === parts[index]))
       // 重叠路由采用更严格容量；既定配置不会因记录顺序改变安全边界。
-      const limits = matching.length ? matching.reduce((left, right) => left.limits.plaintextBytes < right.limits.plaintextBytes ? left : right).limits : ordinary
+      const limits = matching.length
+        ? matching.reduce((left, right) => left.limits.plaintextBytes < right.limits.plaintextBytes
+          ? left
+          : right).limits
+        : ordinary
       const heavy = matching.length > 0 && limits.plaintextBytes > TRANSPORT_BODY_LIMITS.plaintextBytes
-      if (heavy ? large >= 2 : small >= 16)
+      if (heavy
+        ? large >= 2
+        : small >= 16) {
         return null
+      }
       if (heavy)
         large++
       else
         small++
       let released = false
-      return { limits, release() {
-        if (released)
-          return
-        released = true
-        if (heavy)
-          large--
-        else
-          small--
-      } }
+      return {
+        limits,
+        release() {
+          if (released)
+            return
+          released = true
+          if (heavy)
+            large--
+          else
+            small--
+        },
+      }
     },
   }
 }
