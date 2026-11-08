@@ -69,6 +69,8 @@ it('stripe 两个独立进程共享映射和退款幂等，后续新进程可查
     }
     catch (error) {
       response.statusCode = 500
+      response.setHeader('Content-Type', 'application/json')
+      response.setHeader('X-Content-Type-Options', 'nosniff')
       response.end(JSON.stringify({
         error: String(error),
       }))

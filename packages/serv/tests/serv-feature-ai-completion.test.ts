@@ -145,7 +145,7 @@ describe('ai completion HTTP protocol', () => {
           usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6 },
         }))
       })().catch((error: unknown) => {
-        response.writeHead(500)
+        response.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8', 'X-Content-Type-Options': 'nosniff' })
         response.end(error instanceof Error
           ? error.message
           : 'Provider test failed')
