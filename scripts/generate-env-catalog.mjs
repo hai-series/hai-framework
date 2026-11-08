@@ -64,23 +64,67 @@ function fieldDescription(module, segments) {
   }
   if (module === 'payment' && segments.length === 1)
     return `${({ alipay: '支付宝', stripe: 'Stripe', wechat: '微信支付' })[key]}渠道的商户配置与验签参数`
-  if (field.includes('operationLog.'))
-    return ({ level: '操作日志的输出级别', maxLength: '操作日志字段的最大字符数，0 表示不截断', read: '是否记录读取操作', write: '是否记录写入操作' })[key]
+  if (field.includes('operationLog.')) {
+    return ({
+      level: '操作日志的输出级别',
+      maxLength: '操作日志字段的最大字符数，0 表示不截断',
+      read: '是否记录读取操作',
+      write: '是否记录写入操作',
+    })[key]
+  }
   if (module === 'ai' && field.startsWith('llm.scenarios.'))
     return `场景 ${key} 使用的模型 ID，须与 llm.models 中的 ID 一致`
   if (module === 'deploy') {
-    const scope = segments.includes('services') ? `自动开通 ${segments[1]} 服务` : '应用部署'
-    const detail = { type: '平台/暴露方式，按所在节点的枚举选择', token: '部署平台访问令牌', apiKey: '服务商 API 密钥', email: '服务商账号邮箱', provisioner: '资源开通服务商', from: '已验证域名的发件邮箱', accessKeyId: '服务商访问密钥 ID', accessKeySecret: '服务商访问密钥 Secret', secretAccessKey: '对象存储访问密钥 Secret', signName: '短信服务审核通过的签名', accountId: 'Cloudflare 账号 ID', apiToken: 'Cloudflare API 令牌' }[key]
+    const scope = segments.includes('services')
+      ? `自动开通 ${segments[1]} 服务`
+      : '应用部署'
+    const detail = {
+      type: '平台/暴露方式，按所在节点的枚举选择',
+      token: '部署平台访问令牌',
+      apiKey: '服务商 API 密钥',
+      email: '服务商账号邮箱',
+      provisioner: '资源开通服务商',
+      from: '已验证域名的发件邮箱',
+      accessKeyId: '服务商访问密钥 ID',
+      accessKeySecret: '服务商访问密钥 Secret',
+      secretAccessKey: '对象存储访问密钥 Secret',
+      signName: '短信服务审核通过的签名',
+      accountId: 'Cloudflare 账号 ID',
+      apiToken: 'Cloudflare API 令牌',
+    }[key]
     if (detail)
       return `${scope}：${detail}`
   }
   if (module === 'payment') {
-    const detail = { alipayPublicKey: '支付宝平台公钥，用于验签', appId: '商户应用 ID', sellerId: '支付宝卖家 ID，通知 seller_id 必须与之匹配', privateKey: '商户签名私钥（PEM）', sandbox: '是否使用沙箱网关', signType: '请求和通知允许的签名算法', secretKey: 'Stripe 服务端密钥', webhookSecret: 'Stripe Webhook 验签密钥', webhookToleranceSeconds: 'Webhook 时间戳允许偏差，单位秒', apiV3Key: '微信支付 API v3 密钥', mchId: '微信支付商户号', platformKeys: '按 Wechatpay-Serial 映射的受信平台证书或公钥 PEM，轮换时保留新旧项', serialNo: '商户 API 证书序列号' }[key]
+    const detail = {
+      alipayPublicKey: '支付宝平台公钥，用于验签',
+      appId: '商户应用 ID',
+      sellerId: '支付宝卖家 ID，通知 seller_id 必须与之匹配',
+      privateKey: '商户签名私钥（PEM）',
+      sandbox: '是否使用沙箱网关',
+      signType: '请求和通知允许的签名算法',
+      secretKey: 'Stripe 服务端密钥',
+      webhookSecret: 'Stripe Webhook 验签密钥',
+      webhookToleranceSeconds: 'Webhook 时间戳允许偏差，单位秒',
+      apiV3Key: '微信支付 API v3 密钥',
+      mchId: '微信支付商户号',
+      platformKeys: '按 Wechatpay-Serial 映射的受信平台证书或公钥 PEM，轮换时保留新旧项',
+      serialNo: '商户 API 证书序列号',
+    }[key]
     if (detail)
       return `${segments[0]}：${detail}`
   }
-  if (module === 'iam' && segments[0] === 'ui')
-    return ({ brandText: '认证页品牌介绍正文', brandTitle: '认证页品牌区域标题', illustrationUrl: '认证页插图 URL', logoUrl: '认证页品牌 Logo URL', subtitle: '认证面板副标题', title: '认证面板标题', variant: '认证页布局样式' })[key]
+  if (module === 'iam' && segments[0] === 'ui') {
+    return ({
+      brandText: '认证页品牌介绍正文',
+      brandTitle: '认证页品牌区域标题',
+      illustrationUrl: '认证页插图 URL',
+      logoUrl: '认证页品牌 Logo URL',
+      subtitle: '认证面板副标题',
+      title: '认证面板标题',
+      variant: '认证页布局样式',
+    })[key]
+  }
   return ({
     type: '后端或功能类型，按枚举选择',
     server: 'HTTP 服务监听地址与端口',
@@ -114,14 +158,30 @@ function fieldDescription(module, segments) {
     health: 'HTTP 健康检查开关或检查配置',
     openapi: 'OpenAPI 端点开关或端点配置',
     trustedProxies: '可信代理的 IP/CIDR，只有这些代理的转发头会被信任',
-  })[key === '0' ? segments.at(-2) : key]
+  })[key === '0'
+    ? segments.at(-2)
+    : key]
 }
 
 /** 合并不同 Provider 对同一变量的枚举、约束与来源。 */
 function add(name, entry) {
   const previous = variables.get(name)
   variables.set(name, previous
-    ? { ...previous, enums: [...new Set([...previous.enums, ...entry.enums])], constraints: [...new Set([...previous.constraints, ...entry.constraints])] }
+    ? {
+        ...previous,
+        enums: [
+          ...new Set([
+            ...previous.enums,
+            ...entry.enums,
+          ]),
+        ],
+        constraints: [
+          ...new Set([
+            ...previous.constraints,
+            ...entry.constraints,
+          ]),
+        ],
+      }
     : { name, ...entry })
 }
 
@@ -176,7 +236,9 @@ function schemaDocumentation(sources, exported) {
         visit(node.arguments[0], [...segments, '0'], seen)
       }
       else if (method === 'union' || method === 'discriminatedUnion') {
-        const branches = node.arguments[method === 'union' ? 0 : 1]
+        const branches = node.arguments[method === 'union'
+          ? 0
+          : 1]
         if (branches && ts.isArrayLiteralExpression(branches)) {
           for (const branch of branches.elements)
             visit(branch, segments, seen)
@@ -201,21 +263,49 @@ function walkSchema(node, segments, context, ancestors = new Set(), inheritedDef
     if (ancestors.has(node.$ref))
       return
     const target = node.$ref.split('/').slice(1).reduce((value, key) => value?.[key.replaceAll('~1', '/').replaceAll('~0', '~')], context.schema)
-    walkSchema(target, segments, context, new Set([...ancestors, node.$ref]), inheritedDefault === undefined ? node.default : inheritedDefault, node.description || inheritedDescription)
+    walkSchema(target, segments, context, new Set([...ancestors, node.$ref]), inheritedDefault === undefined
+      ? node.default
+      : inheritedDefault, node.description || inheritedDescription)
     return
   }
   // 父对象的显式默认值优先于复用 schema 的字段默认值，例如 AI Knowledge 的 overlap=200。
-  const effectiveDefault = inheritedDefault === undefined ? node.default : inheritedDefault
+  const effectiveDefault = inheritedDefault === undefined
+    ? node.default
+    : inheritedDefault
   const name = ['HAI', context.name, ...segments].map(segment => segment.replace(/[^a-z0-9]+/gi, '_').toUpperCase()).join('_')
   const constraints = []
   // 网关正文是整体替换的 HTTP 载荷，数组元素不是独立配置字段。
   const gatewayBody = context.name === 'reach' && segments.join('.') === 'providers.0.gateway.body'
   if (gatewayBody)
     constraints.push('JSON 对象、数组或原始文本')
-  const enums = node.enum ?? ('const' in node ? [node.const] : [])
-  if (node.type)
-    constraints.push(node.type === 'boolean' && enums.length ? enums.map(String).join(' | ') : { string: '字符串', boolean: 'true | false', number: '数字', integer: '整数', object: 'JSON 对象；整体覆盖时替换该节点', array: 'JSON 数组；索引可按 0、1、2 扩展', null: 'null' }[node.type] ?? String(node.type))
-  for (const [key, label] of [['minimum', '>='], ['maximum', '<='], ['exclusiveMinimum', '>'], ['exclusiveMaximum', '<'], ['minLength', '最小字符数'], ['maxLength', '最大字符数'], ['minItems', '最少项数'], ['maxItems', '最多项数'], ['format', '格式'], ['pattern', '正则']]) {
+  const enums = node.enum ?? ('const' in node
+    ? [node.const]
+    : [])
+  if (node.type) {
+    constraints.push(node.type === 'boolean' && enums.length
+      ? enums.map(String).join(' | ')
+      : {
+          string: '字符串',
+          boolean: 'true | false',
+          number: '数字',
+          integer: '整数',
+          object: 'JSON 对象；整体覆盖时替换该节点',
+          array: 'JSON 数组；索引可按 0、1、2 扩展',
+          null: 'null',
+        }[node.type] ?? String(node.type))
+  }
+  for (const [key, label] of [
+    ['minimum', '>='],
+    ['maximum', '<='],
+    ['exclusiveMinimum', '>'],
+    ['exclusiveMaximum', '<'],
+    ['minLength', '最小字符数'],
+    ['maxLength', '最大字符数'],
+    ['minItems', '最少项数'],
+    ['maxItems', '最多项数'],
+    ['format', '格式'],
+    ['pattern', '正则'],
+  ]) {
     if (key in node)
       constraints.push(`${label} ${node[key]}`)
   }
@@ -229,7 +319,15 @@ function walkSchema(node, segments, context, ancestors = new Set(), inheritedDef
   }
   if (!constraints.length && !enums.length && effectiveDefault !== undefined) {
     const type = typeof effectiveDefault
-    constraints.push(type === 'string' ? '字符串' : type === 'boolean' ? 'true | false' : type === 'number' ? '数字' : Array.isArray(effectiveDefault) ? 'JSON 数组' : 'JSON 对象')
+    constraints.push(type === 'string'
+      ? '字符串'
+      : type === 'boolean'
+        ? 'true | false'
+        : type === 'number'
+          ? '数字'
+          : Array.isArray(effectiveDefault)
+            ? 'JSON 数组'
+            : 'JSON 对象')
   }
   if (!constraints.length && !enums.length && !Object.keys(node).length && segments.length)
     constraints.push('JSON/YAML 值；格式及范围由对应模块 Schema 校验')
@@ -244,7 +342,9 @@ function walkSchema(node, segments, context, ancestors = new Set(), inheritedDef
     constraints.push('以 / 开头的路径字符串')
   }
   if (constraints.length || enums.length) {
-    const parentDoc = segments.at(-1) === '0' ? context.docs.get(segments.slice(0, -1).join('.')) : undefined
+    const parentDoc = segments.at(-1) === '0'
+      ? context.docs.get(segments.slice(0, -1).join('.'))
+      : undefined
     const providerDescription = context.name === 'vecdb' && ({
       apiKey: 'Qdrant：API key；Chroma：Authorization Bearer token，用于同协议的自托管服务/网关，不提供 Chroma Cloud 契约',
       url: 'pgvector：连接串；Qdrant：HTTP(S) 服务地址；Chroma：HTTP(S) 根端点，优先于 host/port，不允许凭据、路径前缀、query 或 fragment',
@@ -252,16 +352,34 @@ function walkSchema(node, segments, context, ancestors = new Set(), inheritedDef
     const description = providerDescription || node.description || inheritedDescription || context.docs.get(segments.join('.')) || (parentDoc && `${parentDoc}；此变量整体替换单个数组项`) || fieldDescription(context.name, segments)
     if (!description)
       throw new Error(`Missing configuration purpose: ${context.name}.${segments.join('.')}; document the Schema field before generating examples`)
-    const value = effectiveDefault === undefined ? '' : typeof effectiveDefault === 'object' ? JSON.stringify(effectiveDefault) : String(effectiveDefault)
-    add(name, { module: context.name, path: [context.name, ...segments].join('.'), description, constraints, enums, value })
+    const value = effectiveDefault === undefined
+      ? ''
+      : typeof effectiveDefault === 'object'
+        ? JSON.stringify(effectiveDefault)
+        : String(effectiveDefault)
+    add(name, {
+      module: context.name,
+      path: [context.name, ...segments].join('.'),
+      description,
+      constraints,
+      enums,
+      value,
+    })
   }
   if (gatewayBody)
     return
   // 联合分支仍表示同一个字段，应继承字段用途；对象子字段不得继承父节点的笼统说明。
-  for (const branch of [...(node.anyOf ?? []), ...(node.oneOf ?? []), ...(node.allOf ?? [])])
+  for (const branch of [
+    ...(node.anyOf ?? []),
+    ...(node.oneOf ?? []),
+    ...(node.allOf ?? []),
+  ])
     walkSchema(branch, segments, context, ancestors, effectiveDefault, node.description || inheritedDescription)
-  for (const [key, property] of Object.entries(node.properties ?? {}))
-    walkSchema(property, [...segments, key], context, ancestors, effectiveDefault && typeof effectiveDefault === 'object' && !Array.isArray(effectiveDefault) ? effectiveDefault[key] : undefined)
+  for (const [key, property] of Object.entries(node.properties ?? {})) {
+    walkSchema(property, [...segments, key], context, ancestors, effectiveDefault && typeof effectiveDefault === 'object' && !Array.isArray(effectiveDefault)
+      ? effectiveDefault[key]
+      : undefined)
+  }
   if (node.items)
     walkSchema(node.items, [...segments, '0'], context, ancestors)
 }
@@ -273,15 +391,32 @@ for (const [name, pkg, exported] of modules) {
     throw new Error(`Missing public schema: @h-ai/${pkg}.${exported}`)
   configurationShapes[name] = schema
   // 复用的 datapipe/transport/访问策略配置，字段说明来自实际拥有 Schema 的包。
-  const sources = [path.join(root, 'packages', pkg, 'src', `${pkg}-config.ts`)]
-  for (const sourcePackage of [...new Set([pkg, ...(pkg === 'ai' ? ['datapipe'] : []), ...(['kit', 'serv'].includes(pkg) ? ['crypto'] : []), ...(['iam', 'kit', 'serv', 'deploy'].includes(pkg) ? ['core'] : [])])]) {
+  const sources = [
+    path.join(root, 'packages', pkg, 'src', `${pkg}-config.ts`),
+  ]
+  for (const sourcePackage of [
+    ...new Set([
+      pkg,
+      ...(pkg === 'ai'
+        ? ['datapipe']
+        : []),
+      ...(['kit', 'serv'].includes(pkg)
+        ? ['crypto']
+        : []),
+      ...(['iam', 'kit', 'serv', 'deploy'].includes(pkg)
+        ? ['core']
+        : []),
+    ]),
+  ]) {
     const directory = path.join(root, 'packages', sourcePackage, 'src')
     for (const file of await readdir(directory, { recursive: true })) {
       if (/(?:config|types)\.ts$/.test(file) && !file.endsWith('.d.ts'))
         sources.push(path.join(directory, file))
     }
   }
-  const sourceContents = await Promise.all([...new Set(sources)].map(async file => [file, await readFile(file, 'utf8')]))
+  const sourceContents = await Promise.all([
+    ...new Set(sources),
+  ].map(async file => [file, await readFile(file, 'utf8')]))
   const docs = schemaDocumentation(sourceContents, exported)
   walkSchema(schema, [], { name, schema, docs })
 }
@@ -291,8 +426,20 @@ async function scan(directory) {
   for (const item of await readdir(directory, { withFileTypes: true })) {
     if (item.isDirectory() && item.name.startsWith('.'))
       continue
-    if (['node_modules', 'dist', 'build', '.svelte-kit', 'paraglide', '.turbo', 'test-results', 'target', 'tests', '__tests__'].includes(item.name))
+    if ([
+      'node_modules',
+      'dist',
+      'build',
+      '.svelte-kit',
+      'paraglide',
+      '.turbo',
+      'test-results',
+      'target',
+      'tests',
+      '__tests__',
+    ].includes(item.name)) {
       continue
+    }
     const file = path.join(directory, item.name)
     if (item.isDirectory()) {
       await scan(file)
@@ -305,13 +452,28 @@ async function scan(directory) {
     if (/\/config\/[^/]+\.ya?ml(?:\.hbs)?$/.test(location)) {
       const configName = item.name.replace(/^_/, '').replace(/\.ya?ml(?:\.hbs)?$/, '')
       const name = `HAI_${configName.toUpperCase()}`
-      if (!variables.has(name))
-        add(name, { module: configName, path: configName, description: fieldDescription(configName, []) ?? `应用自定义的 ${configName} 参数集合；字段由该应用配置声明，不会自动启用框架模块`, constraints: ['JSON 对象；整体替换该配置'], enums: [], value: '' })
+      if (!variables.has(name)) {
+        add(name, {
+          module: configName,
+          path: configName,
+          description: fieldDescription(configName, []) ?? `应用自定义的 ${configName} 参数集合；字段由该应用配置声明，不会自动启用框架模块`,
+          constraints: ['JSON 对象；整体替换该配置'],
+          enums: [],
+          value: '',
+        })
+      }
     }
     for (const match of content.matchAll(/(?:process\.env|import\.meta\.env)(?:\?\.)?\.?(?:([A-Z][A-Z0-9_]+)|\[['"]([A-Z][A-Z0-9_]+)['"]\])|\$\{((?:HAI_|PUBLIC_|VITE_)[A-Z0-9_]+)(?::([^}]*))?\}/g)) {
       const name = match[1] ?? match[2] ?? match[3]
-      if (name.endsWith('_') || (match[0].startsWith('import.meta.env') && ['SSR', 'MODE', 'DEV', 'PROD', 'BASE_URL'].includes(name)))
+      if (name.endsWith('_') || (match[0].startsWith('import.meta.env') && [
+        'SSR',
+        'MODE',
+        'DEV',
+        'PROD',
+        'BASE_URL',
+      ].includes(name))) {
         continue
+      }
       if (!explicit.has(name))
         explicit.set(name, { source: location, value: match[4] ?? '' })
     }
@@ -442,9 +604,15 @@ for (const [name, entry] of explicit) {
   const sensitive = /(?:KEY|TOKEN|PASSWORD|SECRET|PASS|AUTHORIZATION)(?:_|$)/.test(name)
   const providerKey = /^(?:(?:HAI_AI_(?:AUDIO|IMAGE)_)?[A-Z0-9]+_APIKEY|[A-Z0-9]+_(?:API_KEY|ACCESS_KEY|APP_KEY))$/.test(name)
   const meta = extraDescriptions[name]
-    ?? (providerKey ? [`${name.replace(/^HAI_AI_(?:AUDIO|IMAGE)_/, '').replace(/_APIKEY$|_(?:API_KEY|ACCESS_KEY|APP_KEY)$/, '')} 厂商凭据回退；优先在模型项配置 apiKey`, '敏感字符串，启用对应厂商时注入'] : undefined)
-    ?? (name.endsWith('_BASE_URL') ? ['厂商 SDK 服务基础地址回退', '有效 HTTP(S) URL'] : undefined)
-    ?? (name === 'DASHSCOPE_WORKSPACE_ID' ? ['DashScope 厂商工作空间标识', '字符串，由厂商控制台提供'] : undefined)
+    ?? (providerKey
+      ? [`${name.replace(/^HAI_AI_(?:AUDIO|IMAGE)_/, '').replace(/_APIKEY$|_(?:API_KEY|ACCESS_KEY|APP_KEY)$/, '')} 厂商凭据回退；优先在模型项配置 apiKey`, '敏感字符串，启用对应厂商时注入']
+      : undefined)
+    ?? (name.endsWith('_BASE_URL')
+      ? ['厂商 SDK 服务基础地址回退', '有效 HTTP(S) URL']
+      : undefined)
+    ?? (name === 'DASHSCOPE_WORKSPACE_ID'
+      ? ['DashScope 厂商工作空间标识', '字符串，由厂商控制台提供']
+      : undefined)
   const inferred = entry.value === 'true' || entry.value === 'false'
     ? 'true | false'
     : /^\d+$/.test(entry.value)
@@ -454,7 +622,18 @@ for (const [name, entry] of explicit) {
         : '字符串；按使用位置的校验规则填写'
   add(name, {
     // 宿主凭据只属于实际读取入口，不能随名称相似的模块 Schema 自动推荐。
-    module: ['HAI_CRYPTO_TRANSPORT_SERVERKEYRING', 'HAI_AUDIT_ADMIN_PASSWORD', 'HAI_CONFIG_ADMIN_PASSWORD', 'HAI_BUSINESS_OPERATOR_PASSWORD', 'HAI_NODE_IMAGE', 'HAI_NGINX_IMAGE'].includes(name) ? 'runtime' : name.startsWith('HAI_') ? name.split('_')[1].toLowerCase() : 'runtime',
+    module: [
+      'HAI_CRYPTO_TRANSPORT_SERVERKEYRING',
+      'HAI_AUDIT_ADMIN_PASSWORD',
+      'HAI_CONFIG_ADMIN_PASSWORD',
+      'HAI_BUSINESS_OPERATOR_PASSWORD',
+      'HAI_NODE_IMAGE',
+      'HAI_NGINX_IMAGE',
+    ].includes(name)
+      ? 'runtime'
+      : name.startsWith('HAI_')
+        ? name.split('_')[1].toLowerCase()
+        : 'runtime',
     path: name,
     description: meta?.[0] ?? `${sensitive ? '凭据输入' : '环境入口'}；使用位置 ${entry.source}`,
     constraints: [meta?.[1] ?? (sensitive ? '敏感字符串；启用相应功能时必填，不得提交真实值' : inferred)],
@@ -473,10 +652,19 @@ for (const [name, entry] of variables) {
     entry.value = explicit.get(name)?.value ?? ''
 }
 
-const catalog = [...variables.values()].sort((a, b) => a.module.localeCompare(b.module) || a.name.localeCompare(b.name))
+const catalog = [
+  ...variables.values(),
+].sort((a, b) => a.module.localeCompare(b.module) || a.name.localeCompare(b.name))
 const catalogText = `${JSON.stringify(catalog.map(({ constraints, enums, ...entry }) => ({
   ...entry,
-  constraint: entry.name === 'HAI_DB_SSL' ? 'MySQL：false 或严格 TLS 对象（{} 默认校验证书链和 DNS 身份）；PostgreSQL：布尔值、require/prefer/allow/disable 或 TLS 对象' : [...constraints, ...(enums.length ? [`取值：${enums.map(value => String(value)).join(' | ')}`] : [])].join('；'),
+  constraint: entry.name === 'HAI_DB_SSL'
+    ? 'MySQL：false 或严格 TLS 对象（{} 默认校验证书链和 DNS 身份）；PostgreSQL：布尔值、require/prefer/allow/disable 或 TLS 对象'
+    : [
+        ...constraints,
+        ...(enums.length
+          ? [`取值：${enums.map(value => String(value)).join(' | ')}`]
+          : []),
+      ].join('；'),
 })), null, 2)}\n`
 const catalogFile = path.join(root, 'packages/cli/src/commands/cli-config-catalog.json')
 const shapesFile = path.join(root, 'packages/deploy/src/deploy-config-shapes.json')

@@ -10,8 +10,15 @@ const byName = new Map(catalog.map(entry => [entry.name, entry]))
 async function yamlFiles(directory) {
   const files = []
   for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (['node_modules', '.svelte-kit', 'dist', 'build', 'target'].includes(entry.name))
+    if ([
+      'node_modules',
+      '.svelte-kit',
+      'dist',
+      'build',
+      'target',
+    ].includes(entry.name)) {
       continue
+    }
     const file = path.join(directory, entry.name)
     if (entry.isDirectory())
       files.push(...await yamlFiles(file))
@@ -24,7 +31,9 @@ async function yamlFiles(directory) {
 describe('environment catalog', () => {
   it('根示例优先列细项，每项都有用途和约束且不含冗余父对象', async () => {
     const example = await readFile(path.join(root, '.env.example'), 'utf8')
-    const names = [...example.matchAll(/^# ([A-Z][A-Z0-9_]*)=/gm)].map(match => match[1])
+    const names = [
+      ...example.matchAll(/^# ([A-Z][A-Z0-9_]*)=/gm),
+    ].map(match => match[1])
     expect(new Set(names).size).toBe(names.length)
     expect(names.every(name => byName.has(name))).toBe(true)
     expect(names).not.toContain('HAI_AI')
@@ -37,10 +46,27 @@ describe('environment catalog', () => {
       expect(entry.constraint).toBeTruthy()
     }
     for (const [name, values] of [
-      ['HAI_DB_TYPE', ['sqlite', 'postgresql', 'mysql']],
-      ['HAI_CACHE_TYPE', ['memory', 'redis']],
-      ['HAI_CORE_ENV', ['development', 'production', 'test', 'staging']],
-      ['HAI_AI_LLM_PROTOCOL', ['chat', 'responses', 'anthropic']],
+      [
+        'HAI_DB_TYPE',
+        ['sqlite', 'postgresql', 'mysql'],
+      ],
+      [
+        'HAI_CACHE_TYPE',
+        ['memory', 'redis'],
+      ],
+      [
+        'HAI_CORE_ENV',
+        [
+          'development',
+          'production',
+          'test',
+          'staging',
+        ],
+      ],
+      [
+        'HAI_AI_LLM_PROTOCOL',
+        ['chat', 'responses', 'anthropic'],
+      ],
     ]) {
       for (const value of values)
         expect(byName.get(name)?.constraint).toContain(value)
@@ -51,7 +77,10 @@ describe('environment catalog', () => {
   })
 
   it('所有 apps 配置及 CLI 模板的显式 HAI 引用均能在总表定位', async () => {
-    const files = [...await yamlFiles(path.join(root, 'apps')), ...await yamlFiles(path.join(root, 'packages/cli/templates/apps'))]
+    const files = [
+      ...await yamlFiles(path.join(root, 'apps')),
+      ...await yamlFiles(path.join(root, 'packages/cli/templates/apps')),
+    ]
     const missing = []
     for (const file of files) {
       const content = await readFile(file, 'utf8')
@@ -65,7 +94,15 @@ describe('environment catalog', () => {
   })
 
   it('本地模型服务的 Python 环境入口也有说明及约束', () => {
-    for (const name of ['HAI_MODEL_API_KEY', 'HAI_MODEL_REVISION', 'HAI_MODELSCOPE_REVISION', 'MODEL_PATH', 'DEVICE', 'COMPUTE_TYPE', 'VLLM_USE_MODELSCOPE']) {
+    for (const name of [
+      'HAI_MODEL_API_KEY',
+      'HAI_MODEL_REVISION',
+      'HAI_MODELSCOPE_REVISION',
+      'MODEL_PATH',
+      'DEVICE',
+      'COMPUTE_TYPE',
+      'VLLM_USE_MODELSCOPE',
+    ]) {
       expect(byName.get(name)?.description, name).toBeTruthy()
       expect(byName.get(name)?.constraint, name).toBeTruthy()
     }
@@ -77,7 +114,14 @@ describe('environment catalog', () => {
     for (const app of await readdir(path.join(root, 'apps'))) {
       const manifest = JSON.parse(await readFile(path.join(root, 'apps', app, 'package.json'), 'utf8'))
       expect(manifest.scripts, app).toMatchObject({ check: 'pnpm typecheck' })
-      for (const key of ['typecheck', 'lint', 'lint:fix', 'build', 'test', 'test:watch'])
+      for (const key of [
+        'typecheck',
+        'lint',
+        'lint:fix',
+        'build',
+        'test',
+        'test:watch',
+      ])
         expect(manifest.scripts[key], `${app}: ${key}`).toBeTruthy()
       if (manifest.scripts['dev:test']) {
         for (const key of ['dev:test', 'dev:prod', 'compile'])

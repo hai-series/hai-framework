@@ -15,13 +15,20 @@ const slash = value => value.replaceAll('\\', '/')
 function files(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => entry.isDirectory()
     ? files(join(directory, entry.name))
-    : entry.isFile() ? [join(directory, entry.name)] : [])
+    : entry.isFile()
+      ? [
+          join(directory, entry.name),
+        ]
+      : [])
 }
 
 /** 收集 export 条件叶子；保留条件顺序，不能把 browser 与默认入口合并。 */
 function leaves(target, conditions = []) {
-  if (typeof target === 'string')
-    return [{ target, conditions }]
+  if (typeof target === 'string') {
+    return [
+      { target, conditions },
+    ]
+  }
   if (target === null)
     return []
   if (Array.isArray(target))
@@ -44,13 +51,21 @@ export function expandPackageExports(directory, exports) {
       if (!leaf.target.startsWith('./') || leaf.target.split('/').includes('..'))
         throw new Error(`Invalid export target: ${subpath}`)
       if (!leaf.target.includes('*')) {
-        entries.push({ subpath, ...leaf, file: resolve(directory, leaf.target) })
+        entries.push({
+          subpath,
+          ...leaf,
+          file: resolve(directory, leaf.target),
+        })
         continue
       }
       const [prefix, suffix] = leaf.target.split('*')
       const base = resolve(directory, dirname(prefix))
       if (!existsSync(base)) {
-        entries.push({ subpath, ...leaf, file: resolve(directory, leaf.target) })
+        entries.push({
+          subpath,
+          ...leaf,
+          file: resolve(directory, leaf.target),
+        })
         continue
       }
       let count = 0
@@ -60,10 +75,20 @@ export function expandPackageExports(directory, exports) {
           continue
         const captured = candidate.slice(prefix.length, candidate.length - suffix.length || undefined)
         count++
-        entries.push({ subpath: subpath.replaceAll('*', captured), target: candidate, conditions: leaf.conditions, file })
+        entries.push({
+          subpath: subpath.replaceAll('*', captured),
+          target: candidate,
+          conditions: leaf.conditions,
+          file,
+        })
       }
-      if (count === 0)
-        entries.push({ subpath, ...leaf, file: resolve(directory, leaf.target) })
+      if (count === 0) {
+        entries.push({
+          subpath,
+          ...leaf,
+          file: resolve(directory, leaf.target),
+        })
+      }
     }
   }
   return entries
@@ -91,8 +116,12 @@ function runtimeSymbols(file, cache = new Map()) {
   }
   for (const statement of source.statements) {
     if (ts.isExportDeclaration(statement) && !statement.isTypeOnly) {
-      const child = statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier) ? origin(statement.moduleSpecifier.text) : undefined
-      const exported = child ? runtimeSymbols(child, cache) : undefined
+      const child = statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
+        ? origin(statement.moduleSpecifier.text)
+        : undefined
+      const exported = child
+        ? runtimeSymbols(child, cache)
+        : undefined
       if (statement.exportClause && ts.isNamedExports(statement.exportClause)) {
         for (const item of statement.exportClause.elements) {
           if (!item.isTypeOnly)
@@ -143,13 +172,17 @@ function exportedSymbols(checker, source, runtime) {
   if (!module)
     return []
   return checker.getExportsOfModule(module).map((symbol) => {
-    const actual = symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol
+    const actual = symbol.flags & ts.SymbolFlags.Alias
+      ? checker.getAliasedSymbol(symbol)
+      : symbol
     const declaration = actual.declarations?.[0]
     const value = runtime.has(symbol.getName())
     const type = Boolean(actual.flags & ts.SymbolFlags.Type)
     return {
       name: symbol.getName(),
-      kind: value ? type ? 'value+type' : 'value' : 'type',
+      kind: value
+        ? type ? 'value+type' : 'value'
+        : 'type',
       declaration: actual.getName(),
       declarationKind: declaration ? ts.SyntaxKind[declaration.kind] : 'Unresolved',
     }
@@ -160,8 +193,12 @@ function exportedSymbols(checker, source, runtime) {
 function declarationFile(entry) {
   if (entry.file.endsWith('.d.ts'))
     return entry.file
-  const candidate = entry.file.endsWith('.js') ? `${entry.file.slice(0, -3)}.d.ts` : `${entry.file}.d.ts`
-  return existsSync(candidate) ? candidate : undefined
+  const candidate = entry.file.endsWith('.js')
+    ? `${entry.file.slice(0, -3)}.d.ts`
+    : `${entry.file}.d.ts`
+  return existsSync(candidate)
+    ? candidate
+    : undefined
 }
 
 /**
@@ -174,10 +211,16 @@ export function inspectModuleApi(repository) {
     .map((entry) => {
       const directory = join(repository, 'packages', entry.name)
       const manifest = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8'))
-      return { name: manifest.name, directory, entries: expandPackageExports(directory, manifest.exports ?? {}) }
+      return {
+        name: manifest.name,
+        directory,
+        entries: expandPackageExports(directory, manifest.exports ?? {}),
+      }
     })
     .sort((a, b) => a.name.localeCompare(b.name, 'en'))
-  const declarations = [...new Set(packages.flatMap(pkg => pkg.entries.map(declarationFile).filter(Boolean)))]
+  const declarations = [
+    ...new Set(packages.flatMap(pkg => pkg.entries.map(declarationFile).filter(Boolean))),
+  ]
   const program = ts.createProgram(declarations, {
     target: ts.ScriptTarget.ES2022,
     module: ts.ModuleKind.ESNext,
@@ -203,12 +246,22 @@ export function inspectModuleApi(repository) {
         if (!cache.has(declaration)) {
           const source = program.getSourceFile(declaration)
           const plain = declaration.replace(/\.d\.ts$/, '')
-          const runtime = existsSync(`${plain}.js`) ? `${plain}.js` : plain
-          cache.set(declaration, source ? exportedSymbols(checker, source, runtimeSymbols(runtime, runtimeCache)) : [])
+          const runtime = existsSync(`${plain}.js`)
+            ? `${plain}.js`
+            : plain
+          cache.set(declaration, source
+            ? exportedSymbols(checker, source, runtimeSymbols(runtime, runtimeCache))
+            : [])
         }
         symbols = cache.get(declaration)
       }
-      return { subpath: entry.subpath, conditions: entry.conditions, target: entry.target, exists, symbols }
+      return {
+        subpath: entry.subpath,
+        conditions: entry.conditions,
+        target: entry.target,
+        exists,
+        symbols,
+      }
     }).sort((a, b) => a.subpath.localeCompare(b.subpath, 'en') || a.conditions.join('/').localeCompare(b.conditions.join('/'), 'en')),
   }))
   return { packages: result, errors }
@@ -234,8 +287,11 @@ function markdown(inventory) {
     }
     for (const prefix of ['./components/', './styles/']) {
       const expanded = pkg.entries.filter(entry => entry.subpath.startsWith(prefix))
-      if (expanded.length)
-        groups.set(`${prefix === './components/' ? './components/ 下的显式入口' : './styles/*'}（${new Set(expanded.map(entry => entry.subpath)).size} 个真实子路径，见 JSON）`, '逐项记录')
+      if (expanded.length) {
+        groups.set(`${prefix === './components/'
+          ? './components/ 下的显式入口'
+          : './styles/*'}（${new Set(expanded.map(entry => entry.subpath)).size} 个真实子路径，见 JSON）`, '逐项记录')
+      }
     }
     for (const [entry, count] of groups)
       lines.push(`| ${pkg.package} | \`${entry}\` | ${count} |`)
@@ -249,7 +305,10 @@ function main() {
   const inventory = inspectModuleApi(root)
   const outputs = [
     ['scripts/generated/module-api-inventory.json', `${JSON.stringify(inventory, null, 2)}\n`],
-    ['scripts/generated/module-api-inventory.md', markdown(inventory)],
+    [
+      'scripts/generated/module-api-inventory.md',
+      markdown(inventory),
+    ],
   ]
   const errors = [...inventory.errors]
   for (const [path, content] of outputs) {

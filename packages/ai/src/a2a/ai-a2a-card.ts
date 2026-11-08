@@ -31,7 +31,15 @@ export function buildAgentCard(config: A2AAgentCardConfig): AgentCard {
   return AgentCard.fromJSON(buildAgentCardDocument(config))
 }
 
-/** 构建标准发现文档，HTTP 调用方无需了解 SDK 编解码器。 */
+/**
+ * 构建标准发现文档，HTTP 调用方无需了解 SDK 编解码器。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const document = buildAgentCardDocument({ name: 'my-agent', url: 'https://example.com/a2a' })
+ * const response = Response.json(document)
+ * ```
+ */
 export function buildAgentCardDocument(config: A2AAgentCardConfig): A2AAgentCardDocument {
   const card: A2AAgentCardDocument = {
     name: config.name,

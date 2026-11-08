@@ -56,7 +56,7 @@ hai build --target image --json
 
 直接调用已安装的 `hai`，命令在成功时向 stdout 写一行 JSON，构建进度和失败信息写到 stderr。机器调用读取 `schemaVersion: 1`、绝对路径 `artifactDir` 和 `manifestPath`，并用 `manifest.images[].file` 定位该目录内的归档。并发任务各自保存返回的结果。交付时将 `artifactDir` 传给 `hai deploy --artifact-dir`，或调用 `readDeploymentArtifact(artifactDir)` 校验归档和 SHA-256。
 
-`manifest.source` 记录启动时观察到的 Git 提交和工程目录是否有未提交改动。无法识别提交时为 `unknown`，无法检查改动时 `dirty` 为 `null`。`manifest.images[].platform` 来自实际镜像，例如 `linux/arm64`。需要可追溯的发布时，构建 Worker 应从固定提交的干净检出启动。旧镜像清单可以省略来源和平台。
+`manifest.source` 记录启动时观察到的 Git 提交，以及工程目录、所选镜像构建上下文和 Dockerfile 是否有未提交改动。例如应用使用仓库根作为 context 时，兄弟包的修改也会令 `dirty` 为 true。无法识别提交时为 `unknown`；输入跨越所属仓库或无法完整检查时，`dirty` 为 `null`。检查沿用 Git 对未忽略文件的状态，不是构建输入的内容证明。`manifest.images[].platform` 来自实际镜像，例如 `linux/arm64`。需要可追溯的发布时，构建 Worker 应从固定提交的干净检出启动。旧镜像清单可以省略来源和平台。
 
 ### 统一命名
 

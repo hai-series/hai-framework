@@ -19,6 +19,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "A2AAgentCardDocument",
+              "kind": "type",
+              "declaration": "A2AAgentCardDocument",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "A2AApiKeySecurity",
               "kind": "type",
               "declaration": "A2AApiKeySecurity",
@@ -202,13 +208,13 @@
               "name": "AgentCapabilities",
               "kind": "type",
               "declaration": "AgentCapabilities",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AgentCard",
               "kind": "type",
               "declaration": "AgentCard",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AgentExecutor",
@@ -220,13 +226,13 @@
               "name": "AgentProvider",
               "kind": "type",
               "declaration": "AgentProvider",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AgentSkill",
               "kind": "type",
               "declaration": "AgentSkill",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AIConfig",
@@ -328,7 +334,7 @@
               "name": "Artifact",
               "kind": "type",
               "declaration": "Artifact",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AskOptions",
@@ -559,6 +565,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "CancelTaskRequest",
+              "kind": "type",
+              "declaration": "CancelTaskRequest",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ChatCompletionChoice",
               "kind": "type",
               "declaration": "ChatCompletionChoice",
@@ -733,12 +745,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "DataPart",
-              "kind": "type",
-              "declaration": "DataPart",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "DefineToolOptions",
               "kind": "type",
               "declaration": "DefineToolOptions",
@@ -877,24 +883,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "FilePart",
-              "kind": "type",
-              "declaration": "FilePart",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FileWithBytes",
-              "kind": "type",
-              "declaration": "FileWithBytes",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FileWithUri",
-              "kind": "type",
-              "declaration": "FileWithUri",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "GeneratedImage",
               "kind": "type",
               "declaration": "GeneratedImage",
@@ -917,6 +905,12 @@
               "kind": "type",
               "declaration": "GenerateObjectRequest",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "GetTaskRequest",
+              "kind": "type",
+              "declaration": "GetTaskRequest",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "HaiAIError",
@@ -1402,7 +1396,7 @@
               "name": "Message",
               "kind": "type",
               "declaration": "Message",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "MessageContent",
@@ -1415,12 +1409,6 @@
               "kind": "type",
               "declaration": "MessageRole",
               "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "MessageSendParams",
-              "kind": "type",
-              "declaration": "MessageSendParams",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ModelCapabilitiesSchema",
@@ -1510,12 +1498,6 @@
               "name": "PlayableAudio",
               "kind": "type",
               "declaration": "PlayableAudio",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "PushNotificationConfig",
-              "kind": "type",
-              "declaration": "PushNotificationConfig",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -1741,6 +1723,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "SendMessageRequest",
+              "kind": "type",
+              "declaration": "SendMessageRequest",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "serializePlayableAudio",
               "kind": "value",
               "declaration": "serializePlayableAudio",
@@ -1795,10 +1783,22 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "StreamResponse",
+              "kind": "type",
+              "declaration": "StreamResponse",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "StreamResult",
               "kind": "type",
               "declaration": "StreamResult",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SubscribeToTaskRequest",
+              "kind": "type",
+              "declaration": "SubscribeToTaskRequest",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "SummaryConfig",
@@ -1876,43 +1876,37 @@
               "name": "Task",
               "kind": "type",
               "declaration": "Task",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "TaskArtifactUpdateEvent",
               "kind": "type",
               "declaration": "TaskArtifactUpdateEvent",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "TaskIdParams",
+              "name": "TaskPushNotificationConfig",
               "kind": "type",
-              "declaration": "TaskIdParams",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TaskQueryParams",
-              "kind": "type",
-              "declaration": "TaskQueryParams",
-              "declarationKind": "InterfaceDeclaration"
+              "declaration": "TaskPushNotificationConfig",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "TaskState",
               "kind": "type",
               "declaration": "TaskState",
-              "declarationKind": "TypeAliasDeclaration"
+              "declarationKind": "EnumDeclaration"
             },
             {
               "name": "TaskStatus",
               "kind": "type",
               "declaration": "TaskStatus",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "TaskStatusUpdateEvent",
               "kind": "type",
               "declaration": "TaskStatusUpdateEvent",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "TempModelConfig",
@@ -1925,12 +1919,6 @@
               "kind": "type",
               "declaration": "TextContent",
               "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "TextPart",
-              "kind": "type",
-              "declaration": "TextPart",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "TokenConfig",
@@ -2118,6 +2106,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "A2AAgentCardDocument",
+              "kind": "type",
+              "declaration": "A2AAgentCardDocument",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "A2AApiKeySecurity",
               "kind": "type",
               "declaration": "A2AApiKeySecurity",
@@ -2301,13 +2295,13 @@
               "name": "AgentCapabilities",
               "kind": "type",
               "declaration": "AgentCapabilities",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AgentCard",
               "kind": "type",
               "declaration": "AgentCard",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AgentExecutor",
@@ -2319,13 +2313,13 @@
               "name": "AgentProvider",
               "kind": "type",
               "declaration": "AgentProvider",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AgentSkill",
               "kind": "type",
               "declaration": "AgentSkill",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AIConfig",
@@ -2427,7 +2421,7 @@
               "name": "Artifact",
               "kind": "type",
               "declaration": "Artifact",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AskOptions",
@@ -2658,6 +2652,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "CancelTaskRequest",
+              "kind": "type",
+              "declaration": "CancelTaskRequest",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ChatCompletionChoice",
               "kind": "type",
               "declaration": "ChatCompletionChoice",
@@ -2832,12 +2832,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "DataPart",
-              "kind": "type",
-              "declaration": "DataPart",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "DefineToolOptions",
               "kind": "type",
               "declaration": "DefineToolOptions",
@@ -2976,24 +2970,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "FilePart",
-              "kind": "type",
-              "declaration": "FilePart",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FileWithBytes",
-              "kind": "type",
-              "declaration": "FileWithBytes",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FileWithUri",
-              "kind": "type",
-              "declaration": "FileWithUri",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "GeneratedImage",
               "kind": "type",
               "declaration": "GeneratedImage",
@@ -3016,6 +2992,12 @@
               "kind": "type",
               "declaration": "GenerateObjectRequest",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "GetTaskRequest",
+              "kind": "type",
+              "declaration": "GetTaskRequest",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "HaiAIError",
@@ -3501,7 +3483,7 @@
               "name": "Message",
               "kind": "type",
               "declaration": "Message",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "MessageContent",
@@ -3514,12 +3496,6 @@
               "kind": "type",
               "declaration": "MessageRole",
               "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "MessageSendParams",
-              "kind": "type",
-              "declaration": "MessageSendParams",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ModelCapabilitiesSchema",
@@ -3609,12 +3585,6 @@
               "name": "PlayableAudio",
               "kind": "type",
               "declaration": "PlayableAudio",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "PushNotificationConfig",
-              "kind": "type",
-              "declaration": "PushNotificationConfig",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -3840,6 +3810,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "SendMessageRequest",
+              "kind": "type",
+              "declaration": "SendMessageRequest",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "serializePlayableAudio",
               "kind": "value",
               "declaration": "serializePlayableAudio",
@@ -3894,10 +3870,22 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "StreamResponse",
+              "kind": "type",
+              "declaration": "StreamResponse",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "StreamResult",
               "kind": "type",
               "declaration": "StreamResult",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SubscribeToTaskRequest",
+              "kind": "type",
+              "declaration": "SubscribeToTaskRequest",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "SummaryConfig",
@@ -3975,43 +3963,37 @@
               "name": "Task",
               "kind": "type",
               "declaration": "Task",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "TaskArtifactUpdateEvent",
               "kind": "type",
               "declaration": "TaskArtifactUpdateEvent",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "TaskIdParams",
+              "name": "TaskPushNotificationConfig",
               "kind": "type",
-              "declaration": "TaskIdParams",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TaskQueryParams",
-              "kind": "type",
-              "declaration": "TaskQueryParams",
-              "declarationKind": "InterfaceDeclaration"
+              "declaration": "TaskPushNotificationConfig",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "TaskState",
               "kind": "type",
               "declaration": "TaskState",
-              "declarationKind": "TypeAliasDeclaration"
+              "declarationKind": "EnumDeclaration"
             },
             {
               "name": "TaskStatus",
               "kind": "type",
               "declaration": "TaskStatus",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "TaskStatusUpdateEvent",
               "kind": "type",
               "declaration": "TaskStatusUpdateEvent",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "TempModelConfig",
@@ -4024,12 +4006,6 @@
               "kind": "type",
               "declaration": "TextContent",
               "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "TextPart",
-              "kind": "type",
-              "declaration": "TextPart",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "TokenConfig",
@@ -4216,6 +4192,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "A2AAgentCardDocument",
+              "kind": "type",
+              "declaration": "A2AAgentCardDocument",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "A2AApiKeySecurity",
               "kind": "type",
               "declaration": "A2AApiKeySecurity",
@@ -4405,13 +4387,19 @@
               "name": "AgentCapabilities",
               "kind": "type",
               "declaration": "AgentCapabilities",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AgentCard",
               "kind": "type",
               "declaration": "AgentCard",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AgentEvent",
+              "kind": "value",
+              "declaration": "AgentEvent",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "AgentExecutor",
@@ -4420,16 +4408,22 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AgentInterface",
+              "kind": "type",
+              "declaration": "AgentInterface",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "AgentProvider",
               "kind": "type",
               "declaration": "AgentProvider",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AgentSkill",
               "kind": "type",
               "declaration": "AgentSkill",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ai",
@@ -4537,7 +4531,7 @@
               "name": "Artifact",
               "kind": "type",
               "declaration": "Artifact",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AskOptions",
@@ -4750,6 +4744,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "CancelTaskRequest",
+              "kind": "type",
+              "declaration": "CancelTaskRequest",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ChatCompletionChoice",
               "kind": "type",
               "declaration": "ChatCompletionChoice",
@@ -4924,12 +4924,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "DataPart",
-              "kind": "type",
-              "declaration": "DataPart",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "DefineToolOptions",
               "kind": "type",
               "declaration": "DefineToolOptions",
@@ -5068,24 +5062,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "FilePart",
-              "kind": "type",
-              "declaration": "FilePart",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FileWithBytes",
-              "kind": "type",
-              "declaration": "FileWithBytes",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FileWithUri",
-              "kind": "type",
-              "declaration": "FileWithUri",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "GeneratedImage",
               "kind": "type",
               "declaration": "GeneratedImage",
@@ -5108,6 +5084,12 @@
               "kind": "type",
               "declaration": "GenerateObjectRequest",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "GetTaskRequest",
+              "kind": "type",
+              "declaration": "GetTaskRequest",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "HaiAIError",
@@ -5597,9 +5579,9 @@
             },
             {
               "name": "Message",
-              "kind": "type",
+              "kind": "value+type",
               "declaration": "Message",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "MessageContent",
@@ -5612,12 +5594,6 @@
               "kind": "type",
               "declaration": "MessageRole",
               "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "MessageSendParams",
-              "kind": "type",
-              "declaration": "MessageSendParams",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ModelCapabilitiesSchema",
@@ -5669,7 +5645,7 @@
             },
             {
               "name": "Part",
-              "kind": "type",
+              "kind": "value+type",
               "declaration": "Part",
               "declarationKind": "TypeAliasDeclaration"
             },
@@ -5707,12 +5683,6 @@
               "name": "PlayableAudio",
               "kind": "type",
               "declaration": "PlayableAudio",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "PushNotificationConfig",
-              "kind": "type",
-              "declaration": "PushNotificationConfig",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -5932,6 +5902,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "Role",
+              "kind": "value+type",
+              "declaration": "Role",
+              "declarationKind": "EnumDeclaration"
+            },
+            {
               "name": "ScopedMemoryBinding",
               "kind": "type",
               "declaration": "ScopedMemoryBinding",
@@ -5942,6 +5918,12 @@
               "kind": "type",
               "declaration": "ScopedMemoryOperations",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SendMessageRequest",
+              "kind": "value+type",
+              "declaration": "SendMessageRequest",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "serializePlayableAudio",
@@ -6022,10 +6004,22 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "StreamResponse",
+              "kind": "type",
+              "declaration": "StreamResponse",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "StreamResult",
               "kind": "type",
               "declaration": "StreamResult",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SubscribeToTaskRequest",
+              "kind": "type",
+              "declaration": "SubscribeToTaskRequest",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "SummaryConfig",
@@ -6101,45 +6095,39 @@
             },
             {
               "name": "Task",
-              "kind": "type",
+              "kind": "value+type",
               "declaration": "Task",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TaskArtifactUpdateEvent",
-              "kind": "type",
-              "declaration": "TaskArtifactUpdateEvent",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TaskIdParams",
-              "kind": "type",
-              "declaration": "TaskIdParams",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TaskQueryParams",
-              "kind": "type",
-              "declaration": "TaskQueryParams",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TaskState",
-              "kind": "type",
-              "declaration": "TaskState",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "TaskStatus",
+              "name": "TaskArtifactUpdateEvent",
+              "kind": "value+type",
+              "declaration": "TaskArtifactUpdateEvent",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TaskPushNotificationConfig",
               "kind": "type",
+              "declaration": "TaskPushNotificationConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TaskState",
+              "kind": "value+type",
+              "declaration": "TaskState",
+              "declarationKind": "EnumDeclaration"
+            },
+            {
+              "name": "TaskStatus",
+              "kind": "value+type",
               "declaration": "TaskStatus",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "TaskStatusUpdateEvent",
-              "kind": "type",
+              "kind": "value+type",
               "declaration": "TaskStatusUpdateEvent",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "TempModelConfig",
@@ -6152,12 +6140,6 @@
               "kind": "type",
               "declaration": "TextContent",
               "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "TextPart",
-              "kind": "type",
-              "declaration": "TextPart",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "TokenConfig",
@@ -6344,6 +6326,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "A2AAgentCardDocument",
+              "kind": "type",
+              "declaration": "A2AAgentCardDocument",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "A2AApiKeySecurity",
               "kind": "type",
               "declaration": "A2AApiKeySecurity",
@@ -6533,13 +6521,19 @@
               "name": "AgentCapabilities",
               "kind": "type",
               "declaration": "AgentCapabilities",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AgentCard",
               "kind": "type",
               "declaration": "AgentCard",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AgentEvent",
+              "kind": "value",
+              "declaration": "AgentEvent",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "AgentExecutor",
@@ -6548,16 +6542,22 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AgentInterface",
+              "kind": "type",
+              "declaration": "AgentInterface",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "AgentProvider",
               "kind": "type",
               "declaration": "AgentProvider",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AgentSkill",
               "kind": "type",
               "declaration": "AgentSkill",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ai",
@@ -6665,7 +6665,7 @@
               "name": "Artifact",
               "kind": "type",
               "declaration": "Artifact",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AskOptions",
@@ -6878,6 +6878,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "CancelTaskRequest",
+              "kind": "type",
+              "declaration": "CancelTaskRequest",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ChatCompletionChoice",
               "kind": "type",
               "declaration": "ChatCompletionChoice",
@@ -7052,12 +7058,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "DataPart",
-              "kind": "type",
-              "declaration": "DataPart",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "DefineToolOptions",
               "kind": "type",
               "declaration": "DefineToolOptions",
@@ -7196,24 +7196,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "FilePart",
-              "kind": "type",
-              "declaration": "FilePart",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FileWithBytes",
-              "kind": "type",
-              "declaration": "FileWithBytes",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FileWithUri",
-              "kind": "type",
-              "declaration": "FileWithUri",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "GeneratedImage",
               "kind": "type",
               "declaration": "GeneratedImage",
@@ -7236,6 +7218,12 @@
               "kind": "type",
               "declaration": "GenerateObjectRequest",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "GetTaskRequest",
+              "kind": "type",
+              "declaration": "GetTaskRequest",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "HaiAIError",
@@ -7725,9 +7713,9 @@
             },
             {
               "name": "Message",
-              "kind": "type",
+              "kind": "value+type",
               "declaration": "Message",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "MessageContent",
@@ -7740,12 +7728,6 @@
               "kind": "type",
               "declaration": "MessageRole",
               "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "MessageSendParams",
-              "kind": "type",
-              "declaration": "MessageSendParams",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ModelCapabilitiesSchema",
@@ -7797,7 +7779,7 @@
             },
             {
               "name": "Part",
-              "kind": "type",
+              "kind": "value+type",
               "declaration": "Part",
               "declarationKind": "TypeAliasDeclaration"
             },
@@ -7835,12 +7817,6 @@
               "name": "PlayableAudio",
               "kind": "type",
               "declaration": "PlayableAudio",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "PushNotificationConfig",
-              "kind": "type",
-              "declaration": "PushNotificationConfig",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -8060,6 +8036,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "Role",
+              "kind": "value+type",
+              "declaration": "Role",
+              "declarationKind": "EnumDeclaration"
+            },
+            {
               "name": "ScopedMemoryBinding",
               "kind": "type",
               "declaration": "ScopedMemoryBinding",
@@ -8070,6 +8052,12 @@
               "kind": "type",
               "declaration": "ScopedMemoryOperations",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SendMessageRequest",
+              "kind": "value+type",
+              "declaration": "SendMessageRequest",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "serializePlayableAudio",
@@ -8150,10 +8138,22 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "StreamResponse",
+              "kind": "type",
+              "declaration": "StreamResponse",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "StreamResult",
               "kind": "type",
               "declaration": "StreamResult",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SubscribeToTaskRequest",
+              "kind": "type",
+              "declaration": "SubscribeToTaskRequest",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "SummaryConfig",
@@ -8229,45 +8229,39 @@
             },
             {
               "name": "Task",
-              "kind": "type",
+              "kind": "value+type",
               "declaration": "Task",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TaskArtifactUpdateEvent",
-              "kind": "type",
-              "declaration": "TaskArtifactUpdateEvent",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TaskIdParams",
-              "kind": "type",
-              "declaration": "TaskIdParams",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TaskQueryParams",
-              "kind": "type",
-              "declaration": "TaskQueryParams",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TaskState",
-              "kind": "type",
-              "declaration": "TaskState",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "TaskStatus",
+              "name": "TaskArtifactUpdateEvent",
+              "kind": "value+type",
+              "declaration": "TaskArtifactUpdateEvent",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TaskPushNotificationConfig",
               "kind": "type",
+              "declaration": "TaskPushNotificationConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TaskState",
+              "kind": "value+type",
+              "declaration": "TaskState",
+              "declarationKind": "EnumDeclaration"
+            },
+            {
+              "name": "TaskStatus",
+              "kind": "value+type",
               "declaration": "TaskStatus",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "TaskStatusUpdateEvent",
-              "kind": "type",
+              "kind": "value+type",
               "declaration": "TaskStatusUpdateEvent",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "TempModelConfig",
@@ -8280,12 +8274,6 @@
               "kind": "type",
               "declaration": "TextContent",
               "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "TextPart",
-              "kind": "type",
-              "declaration": "TextPart",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "TokenConfig",
@@ -8472,6 +8460,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "A2AAgentCardDocument",
+              "kind": "type",
+              "declaration": "A2AAgentCardDocument",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "A2AApiKeySecurity",
               "kind": "type",
               "declaration": "A2AApiKeySecurity",
@@ -8661,13 +8655,19 @@
               "name": "AgentCapabilities",
               "kind": "type",
               "declaration": "AgentCapabilities",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AgentCard",
               "kind": "type",
               "declaration": "AgentCard",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AgentEvent",
+              "kind": "value",
+              "declaration": "AgentEvent",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "AgentExecutor",
@@ -8676,16 +8676,22 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AgentInterface",
+              "kind": "type",
+              "declaration": "AgentInterface",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "AgentProvider",
               "kind": "type",
               "declaration": "AgentProvider",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AgentSkill",
               "kind": "type",
               "declaration": "AgentSkill",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ai",
@@ -8793,7 +8799,7 @@
               "name": "Artifact",
               "kind": "type",
               "declaration": "Artifact",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "AskOptions",
@@ -9006,6 +9012,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "CancelTaskRequest",
+              "kind": "type",
+              "declaration": "CancelTaskRequest",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ChatCompletionChoice",
               "kind": "type",
               "declaration": "ChatCompletionChoice",
@@ -9180,12 +9192,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "DataPart",
-              "kind": "type",
-              "declaration": "DataPart",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "DefineToolOptions",
               "kind": "type",
               "declaration": "DefineToolOptions",
@@ -9324,24 +9330,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "FilePart",
-              "kind": "type",
-              "declaration": "FilePart",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FileWithBytes",
-              "kind": "type",
-              "declaration": "FileWithBytes",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FileWithUri",
-              "kind": "type",
-              "declaration": "FileWithUri",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "GeneratedImage",
               "kind": "type",
               "declaration": "GeneratedImage",
@@ -9364,6 +9352,12 @@
               "kind": "type",
               "declaration": "GenerateObjectRequest",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "GetTaskRequest",
+              "kind": "type",
+              "declaration": "GetTaskRequest",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "HaiAIError",
@@ -9853,9 +9847,9 @@
             },
             {
               "name": "Message",
-              "kind": "type",
+              "kind": "value+type",
               "declaration": "Message",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "MessageContent",
@@ -9868,12 +9862,6 @@
               "kind": "type",
               "declaration": "MessageRole",
               "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "MessageSendParams",
-              "kind": "type",
-              "declaration": "MessageSendParams",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ModelCapabilitiesSchema",
@@ -9925,7 +9913,7 @@
             },
             {
               "name": "Part",
-              "kind": "type",
+              "kind": "value+type",
               "declaration": "Part",
               "declarationKind": "TypeAliasDeclaration"
             },
@@ -9963,12 +9951,6 @@
               "name": "PlayableAudio",
               "kind": "type",
               "declaration": "PlayableAudio",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "PushNotificationConfig",
-              "kind": "type",
-              "declaration": "PushNotificationConfig",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -10188,6 +10170,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "Role",
+              "kind": "value+type",
+              "declaration": "Role",
+              "declarationKind": "EnumDeclaration"
+            },
+            {
               "name": "ScopedMemoryBinding",
               "kind": "type",
               "declaration": "ScopedMemoryBinding",
@@ -10198,6 +10186,12 @@
               "kind": "type",
               "declaration": "ScopedMemoryOperations",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SendMessageRequest",
+              "kind": "value+type",
+              "declaration": "SendMessageRequest",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "serializePlayableAudio",
@@ -10278,10 +10272,22 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "StreamResponse",
+              "kind": "type",
+              "declaration": "StreamResponse",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "StreamResult",
               "kind": "type",
               "declaration": "StreamResult",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SubscribeToTaskRequest",
+              "kind": "type",
+              "declaration": "SubscribeToTaskRequest",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "SummaryConfig",
@@ -10357,45 +10363,39 @@
             },
             {
               "name": "Task",
-              "kind": "type",
+              "kind": "value+type",
               "declaration": "Task",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TaskArtifactUpdateEvent",
-              "kind": "type",
-              "declaration": "TaskArtifactUpdateEvent",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TaskIdParams",
-              "kind": "type",
-              "declaration": "TaskIdParams",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TaskQueryParams",
-              "kind": "type",
-              "declaration": "TaskQueryParams",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TaskState",
-              "kind": "type",
-              "declaration": "TaskState",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "TaskStatus",
+              "name": "TaskArtifactUpdateEvent",
+              "kind": "value+type",
+              "declaration": "TaskArtifactUpdateEvent",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TaskPushNotificationConfig",
               "kind": "type",
+              "declaration": "TaskPushNotificationConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TaskState",
+              "kind": "value+type",
+              "declaration": "TaskState",
+              "declarationKind": "EnumDeclaration"
+            },
+            {
+              "name": "TaskStatus",
+              "kind": "value+type",
               "declaration": "TaskStatus",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "TaskStatusUpdateEvent",
-              "kind": "type",
+              "kind": "value+type",
               "declaration": "TaskStatusUpdateEvent",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "TempModelConfig",
@@ -10408,12 +10408,6 @@
               "kind": "type",
               "declaration": "TextContent",
               "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "TextPart",
-              "kind": "type",
-              "declaration": "TextPart",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "TokenConfig",
@@ -26210,6 +26204,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "BrowserKitFunctions",
+              "kind": "type",
+              "declaration": "BrowserKitFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ClientTransportConfig",
               "kind": "type",
               "declaration": "ClientTransportConfig",
@@ -26431,6 +26431,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "BrowserKitFunctions",
+              "kind": "type",
+              "declaration": "BrowserKitFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ClientTransportConfig",
               "kind": "type",
               "declaration": "ClientTransportConfig",
@@ -26645,6 +26651,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AuthCookieWriter",
+              "kind": "type",
+              "declaration": "AuthCookieWriter",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AuthGuardConfig",
               "kind": "type",
               "declaration": "AuthGuardConfig",
@@ -26661,6 +26673,12 @@
               "kind": "type",
               "declaration": "AuthOperationsProvider",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BrowserKitFunctions",
+              "kind": "type",
+              "declaration": "BrowserKitFunctions",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ClientTransportConfig",
@@ -26759,28 +26777,10 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "CryptoCsrfConfig",
-              "kind": "type",
-              "declaration": "CryptoCsrfConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "CryptoServiceLike",
-              "kind": "type",
-              "declaration": "CryptoServiceLike",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "defineCrud",
               "kind": "value",
               "declaration": "defineCrud",
               "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "EncryptedCookieConfig",
-              "kind": "type",
-              "declaration": "EncryptedCookieConfig",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "EncryptedPayload",
@@ -26901,6 +26901,12 @@
               "kind": "value",
               "declaration": "KitConfigSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "KitFunctions",
+              "kind": "type",
+              "declaration": "KitFunctions",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "KitPublicConfig",
@@ -27080,12 +27086,6 @@
               "name": "TransportKeyPair",
               "kind": "type",
               "declaration": "TransportKeyPair",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "WebhookVerifyConfig",
-              "kind": "type",
-              "declaration": "WebhookVerifyConfig",
               "declarationKind": "InterfaceDeclaration"
             }
           ]
@@ -27111,6 +27111,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AuthCookieWriter",
+              "kind": "type",
+              "declaration": "AuthCookieWriter",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AuthGuardConfig",
               "kind": "type",
               "declaration": "AuthGuardConfig",
@@ -27127,6 +27133,12 @@
               "kind": "type",
               "declaration": "AuthOperationsProvider",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BrowserKitFunctions",
+              "kind": "type",
+              "declaration": "BrowserKitFunctions",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ClientTransportConfig",
@@ -27225,28 +27237,10 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "CryptoCsrfConfig",
-              "kind": "type",
-              "declaration": "CryptoCsrfConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "CryptoServiceLike",
-              "kind": "type",
-              "declaration": "CryptoServiceLike",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "defineCrud",
               "kind": "value",
               "declaration": "defineCrud",
               "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "EncryptedCookieConfig",
-              "kind": "type",
-              "declaration": "EncryptedCookieConfig",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "EncryptedPayload",
@@ -27367,6 +27361,12 @@
               "kind": "value",
               "declaration": "KitConfigSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "KitFunctions",
+              "kind": "type",
+              "declaration": "KitFunctions",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "KitPublicConfig",
@@ -27546,12 +27546,6 @@
               "name": "TransportKeyPair",
               "kind": "type",
               "declaration": "TransportKeyPair",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "WebhookVerifyConfig",
-              "kind": "type",
-              "declaration": "WebhookVerifyConfig",
               "declarationKind": "InterfaceDeclaration"
             }
           ]
@@ -27841,46 +27835,10 @@
           "exists": true,
           "symbols": [
             {
-              "name": "createCsrfManager",
-              "kind": "value",
-              "declaration": "createCsrfManager",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "createEncryptedCookie",
-              "kind": "value",
-              "declaration": "createEncryptedCookie",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "CryptoCsrfConfig",
-              "kind": "type",
-              "declaration": "CryptoCsrfConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "CryptoServiceLike",
-              "kind": "type",
-              "declaration": "CryptoServiceLike",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "EncryptedCookieConfig",
-              "kind": "type",
-              "declaration": "EncryptedCookieConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "EncryptedPayload",
               "kind": "type",
               "declaration": "EncryptedPayload",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "signRequest",
-              "kind": "value",
-              "declaration": "signRequest",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "TransportEncryptionConfig",
@@ -27904,18 +27862,6 @@
               "name": "TransportKeyPair",
               "kind": "type",
               "declaration": "TransportKeyPair",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "verifyWebhookSignature",
-              "kind": "value",
-              "declaration": "verifyWebhookSignature",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "WebhookVerifyConfig",
-              "kind": "type",
-              "declaration": "WebhookVerifyConfig",
               "declarationKind": "InterfaceDeclaration"
             }
           ]
@@ -27929,46 +27875,10 @@
           "exists": true,
           "symbols": [
             {
-              "name": "createCsrfManager",
-              "kind": "value",
-              "declaration": "createCsrfManager",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "createEncryptedCookie",
-              "kind": "value",
-              "declaration": "createEncryptedCookie",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "CryptoCsrfConfig",
-              "kind": "type",
-              "declaration": "CryptoCsrfConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "CryptoServiceLike",
-              "kind": "type",
-              "declaration": "CryptoServiceLike",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "EncryptedCookieConfig",
-              "kind": "type",
-              "declaration": "EncryptedCookieConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "EncryptedPayload",
               "kind": "type",
               "declaration": "EncryptedPayload",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "signRequest",
-              "kind": "value",
-              "declaration": "signRequest",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "TransportEncryptionConfig",
@@ -27992,18 +27902,6 @@
               "name": "TransportKeyPair",
               "kind": "type",
               "declaration": "TransportKeyPair",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "verifyWebhookSignature",
-              "kind": "value",
-              "declaration": "verifyWebhookSignature",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "WebhookVerifyConfig",
-              "kind": "type",
-              "declaration": "WebhookVerifyConfig",
               "declarationKind": "InterfaceDeclaration"
             }
           ]
@@ -29260,12 +29158,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "migrateSchema",
-              "kind": "value",
-              "declaration": "migrateSchema",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "MysqlConfig",
               "kind": "type",
               "declaration": "MysqlConfig",
@@ -29450,12 +29342,6 @@
               "kind": "value",
               "declaration": "ReldbTypeSchema",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "schemaColumns",
-              "kind": "value",
-              "declaration": "schemaColumns",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "SchemaMigration",
@@ -29630,12 +29516,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "migrateSchema",
-              "kind": "value",
-              "declaration": "migrateSchema",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "MysqlConfig",
               "kind": "type",
               "declaration": "MysqlConfig",
@@ -29820,12 +29700,6 @@
               "kind": "value",
               "declaration": "ReldbTypeSchema",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "schemaColumns",
-              "kind": "value",
-              "declaration": "schemaColumns",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "SchemaMigration",
@@ -30000,12 +29874,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "migrateSchema",
-              "kind": "value",
-              "declaration": "migrateSchema",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "MysqlConfig",
               "kind": "type",
               "declaration": "MysqlConfig",
@@ -30190,12 +30058,6 @@
               "kind": "value",
               "declaration": "ReldbTypeSchema",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "schemaColumns",
-              "kind": "value",
-              "declaration": "schemaColumns",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "SchemaMigration",
@@ -31538,6 +31400,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ServFunctions",
+              "kind": "type",
+              "declaration": "ServFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ServHealthHttpConfig",
               "kind": "type",
               "declaration": "ServHealthHttpConfig",
@@ -31848,6 +31716,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ServFunctions",
+              "kind": "type",
+              "declaration": "ServFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ServHealthHttpConfig",
               "kind": "type",
               "declaration": "ServHealthHttpConfig",
@@ -32156,6 +32030,12 @@
               "kind": "type",
               "declaration": "ServFetchHandler",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ServFunctions",
+              "kind": "type",
+              "declaration": "ServFunctions",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ServHealthHttpConfig",

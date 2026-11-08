@@ -86,7 +86,7 @@ HAI_REACH_PROVIDERS='[{"name":"email","type":"api","url":"https://mail.example.i
 
 旧 `--target docker` 已改为 `--target image`；`--runtime docker|podman` 继续表示引擎，现有 `.hai/build/docker` 制品目录保持可用。
 
-后端探针、模板镜像和 Fullstack 同源代理按最终健康路径生成，支持 `HAI_SERV_HTTP_HEALTH_PATH=/status`；整段 `HAI_SERV` 仍优先于叶字段。已启用的文档页面、OpenAPI JSON 与本地 Scalar 脚本会转发至后端，保留生产关闭与认证限制。路径和路由变更需要重新部署，同步 Nginx 与发布探针。
+后端探针、模板镜像和 Fullstack 同源代理按最终健康路径生成，支持 `HAI_SERV_HTTP_HEALTH_PATH=/status`。同一来源先应用 `HAI_SERV` 父 JSON，再由叶字段覆盖；更高来源的父对象才会清除低来源细项，完整顺序见[运行时配置](runtime.md)。已启用的文档页面、OpenAPI JSON 与本地 Scalar 脚本会转发至后端，保留生产关闭与认证限制。路径和路由变更需要重新部署，同步 Nginx 与发布探针。
 
 ### 下载源和代理
 
@@ -230,6 +230,10 @@ http:
 
 ### 容器、增量部署与反向代理
 
+SvelteKit SSR 的 HTTP/HTTPS 部署统一通过独立 `gateway`，SSR 容器不映射公开端口。网关以实际连接覆盖 Host 和标准转发头，Compose 固定 `PROTOCOL_HEADER=x-forwarded-proto`、`HOST_HEADER=host`、`ADDRESS_HEADER=x-forwarded-for` 与 `XFF_DEPTH=1`，不信任客户端提供的转发值；`PORT_HEADER` 为空，端口保留在 Host 中。这些项由部署装配提供，不能在业务 `.env.runtime` 中覆盖。adapter-node 6 不再读取运行期 `ORIGIN`；应用默认不固定构建期 `paths.origin`，同一镜像可跨环境复用。旧直接公开 SSR 的部署需要用当前工具重新生成并执行全量交付包，不能只改环境变量或复用旧增量基线。
+
+外层负载均衡终止 TLS 时，将其实际来源 IP/CIDR 填入 `trustedEdgeProxies`，并由它覆盖 `Host`、`X-Forwarded-For` 与单值 `X-Forwarded-Proto`。独立 gateway 只从白名单真实对端接受 `http` / `https`；其他对端、重复/组合协议值仍使用网关自身连接协议。不要把所有公网或不受控共享网段列为可信上游。
+
 CLI 与 Deploy 使用匹配版本。即使只构建后端，也要传入与既有网站一致的公开目录，让增量包保留完整的网站信息：
 
 ```powershell
@@ -285,7 +289,7 @@ location /api/v1/ {
 }
 ```
 
-这些是已有网关`server`中的片段，替换为实际上游，并按[HTTP配置](http.md)设置HTTPS、公开源和可信代理。SvelteKit adapter-node的ORIGIN使用公网源，不把路径附在`origin`中。Vite剥离模式与SDK保留模式分别使用，不能叠加两次剥离。
+这些是已有网关`server`中的片段，替换为实际上游，并按[HTTP配置](http.md)设置HTTPS、公开源和可信代理。SvelteKit adapter-node 6 使用受信网关的协议和 Host；如需固定构建期 `paths.origin`，只填公网源，不附带路径。Vite剥离模式与SDK保留模式分别使用，不能叠加两次剥离。
 
 ![子目录SvelteKit手机布局](../images/subpath-sveltekit-mobile.png)
 
@@ -522,7 +526,7 @@ Certbot 每 12 小时检查续期，成功后发布新的证书对，Nginx 检�
 
 两种模式在 Nginx 容器内都挂载为 `/etc/nginx/tls/`。域名只填 `app.example.com`，不含协议、端口和 context path。交互全量部署选择 HTTPS 后收集域名、端口，并按模式收集证书路径或邮箱/条款确认；`--yes`、增量部署沿用配置。修改本地所选私有环境中的 `HAI_DEPLOY_PROVIDER.expose.https`，或未被覆盖的 `hai.json.deploy.provider.expose.https` 后生成新全量部署包。单改服务器 `.env.runtime` 并重启，不能开启 HTTPS 或给新域名申请证书。
 
-HTTP 默认 308 跳转至 HTTPS，健康检查及 ACME 挑战保留 HTTP 路由。SDK 与服务器验证实际 HTTPS；SSR 默认 ORIGIN、未明确指定的 API CORS `origin` 使用配置的 HTTPS 域名，已有显式值保持优先。自建 S3 的公开地址仍须配置为实际 HTTPS `origin`。首次启用/关闭 HTTPS、更改模式/域名/端口/本地证书需全量部署。证书状态不随应用版本回退，旧域名发布继续引用自己的证书目录。
+HTTP 默认 308 跳转至 HTTPS，健康检查及 ACME 挑战保留 HTTP 路由。SDK 与服务器验证实际 HTTPS；SSR 从网关覆盖的协议和 Host 还原公开源，未明确指定的 API CORS `origin` 使用配置的 HTTPS 域名。自建 S3 的公开地址仍须配置为实际 HTTPS `origin`。首次启用/关闭 HTTPS、更改模式/域名/端口/本地证书需全量部署。证书状态不随应用版本回退，旧域名发布继续引用自己的证书目录。
 
 ![已有证书与 Certbot 两种 HTTPS 配置的部署关系](../images/deployment-https.svg)
 

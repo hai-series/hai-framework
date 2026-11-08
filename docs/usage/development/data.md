@@ -14,6 +14,8 @@
 
 ## 两次写入必须一起成功时
 
+一个事务只允许一个结束操作。`commit()` 或 `rollback()` 开始后，新查询、重复提交和并发回滚立即返回 TRANSACTION_FAILED；连接只归还一次。调用方仍须等待首次结束结果，不能把并发结束当作故障恢复。
+
 例如创建订单和扣减库存同属事务。`reldb.tx.wrap`回调抛出才回滚，正常返回失败HaiResult仍会提交，这是事务回调的明确例外。
 
 ```ts
@@ -42,9 +44,13 @@ SQLite通过不能证明网络库/TLS通过。迁移前备份，MySQL DDL可隐�
 
 ## Redis 与 S3
 
+Memory 的 KV、Hash、List、Set、ZSet 共用 key 命名空间。`exists/expire/expireAt/ttl/persist/keys/scan/del/type` 覆盖全部结构，期限到达后结构操作也立即视为不存在；del 按实际删除的逻辑 key 计数，错误类型的结构操作返回失败。
+
 按[Redis](../configuration/data.md#缓存与共享状态)与[私有文件](../configuration/data.md#文件存储与临时签名)准备真实依赖，测试TTL、条件拒绝、并发锁、写读删、无权签名和过期下载。Cluster多键需同slot，单实例通过不代表集群行为。
 
 批量删除即使HTTP200也可能部分失败，检查逐项回执；unknown先查对象真实状态再补偿。`publicUrl`不是访问控制；服务端先检查私有文件的访问权限，再提供短期签名。
+
+开发/测试的 Local 文件与代际元数据一起备份；`.hai-storage-meta/` 是保留目录，不能作为业务 key。当前格式不读取旧 `<key>.meta.json`，旧对象须离线迁移或重新上传，缺少当前记录时会明确失败。写入先准备元数据再发布内容，具体提交和清理边界见 [Storage](../../../packages/storage/README.md#api-概览)。
 
 ## 清洗和分块
 

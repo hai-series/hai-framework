@@ -315,7 +315,7 @@ Windowsは `deploy.ps1`、Linux/`macOS`は `deploy.sh` を実行します。ど�
 
 `pnpm build --target app --platform android --runtime auto --debug` でコンテナ内にデバッグ APK を生成します。`--debug` を省略すると署名付きリリースになります。iOS の IPA には macOS/Xcode を使用します。App とデスクトップの成果物はそれぞれ `.hai/build/app/<platform>/<variant>/<buildId>/` と `.hai/build/desktop/<platform>/<variant>/<buildId>/` に格納します。[ネイティブビルドと署名](build.md#原生和离线条件)を参照してください。
 
-`schemaColumns(reldb, table, sql?)` は実際の列を読み取ります。`migrateSchema(reldb, module, steps, { dryRun: true })` は台帳を作成しません。各モジュールが手順を所有し、`hai_schema_migrations` に版を記録します。SQLite/PostgreSQL はトランザクション、MySQL の暗黙 DDL コミットには再入可能な手順が必要です。失敗時は版を進めず、実構造を再確認して再試行します。新しい台帳へのダウングレードは拒否します。旧書込を停止し DB/セッションキャッシュをバックアップしてください。復旧は互換 DB とバイナリを一緒に戻します。[更新ガイド](workflow.ja.md)を参照。
+`reldb.schemaColumns(table, sql?)` は実際の列を読み取ります。`reldb.migrateSchema(module, steps, { dryRun: true })` は台帳を作成しません。各モジュールが手順を所有し、`hai_schema_migrations` に版を記録します。SQLite/PostgreSQL はトランザクション、MySQL の暗黙 DDL コミットには再入可能な手順が必要です。失敗時は版を進めず、実構造を再確認して再試行します。新しい台帳へのダウングレードは拒否します。旧書込を停止し DB/セッションキャッシュをバックアップしてください。復旧は互換 DB とバイナリを一緒に戻します。[更新ガイド](workflow.ja.md)を参照。
 
 ## 開発とテスト
 

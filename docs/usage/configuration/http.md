@@ -79,7 +79,7 @@ HAI_SERV_REFRESH_COOKIE_SECURE=false
 
 `config/_kit.yml` 的 `server` 默认同Serv，`transport` 默认 `false`；默认协商路径为 `/api/_hai/key-exchange`，与Serv默认不同。Kit 没有 `close()`，认证、Cookie、限流和请求处理由 hooks 工厂参数装配，不能把Serv 整个 `http` 对象放入Kit。
 
-SvelteKit 部署在 `/yyy` 等目录时，读取 `$app/paths` 的 `base`，在服务端 `crypto.transport` 传入 `basePath: base`，浏览器使用 `kit.client.installBrowserTransport(公开配置, { crypto, basePath: base })`。独立 Kit client 的 `transport.basePath` 采用同一个值。默认空字符串表示根目录；它是宿主构建参数，不在 YAML 重复配置。这样 `/yyy/api/*` 的默认加密范围与页面目录保持一致，交换路径和排除列表仍填写完整请求路径。CLI 模板已装配，已有应用升级时需核对两端。
+SvelteKit 部署在 `/yyy` 等目录时，在 Vite 的 sveltekit 配置设置 `paths.relative: false`，从 `$app/paths` 用 `resolve('/').replace(/\/$/, '')` 读取构建挂载目录 `base`，在服务端 `crypto.transport` 传入 `basePath: base`，浏览器使用 `kit.client.installBrowserTransport(公开配置, { crypto, basePath: base })`。独立 Kit client 的 `transport.basePath` 采用同一个值。默认空字符串表示根目录；它是宿主构建参数，不在 YAML 重复配置。这样 `/yyy/api/*` 的默认加密范围与页面目录保持一致，交换路径和排除列表仍填写完整请求路径。CLI 模板已装配，已有应用升级时需核对两端。
 
 ```yaml schema=@h-ai/kit:KitConfigSchema
 server: { host: 127.0.0.1, port: 3000 }
@@ -118,6 +118,8 @@ if (!started.success) throw new Error(started.error.message)
 ```
 
 示例显式15秒是业务选择。按真实流程验证请求、401单次恢复、二次认证取消、退出与失败；跨身份请求不能复用旧刷新结果。非 2xx 合法 `HaiResult`保留业务码和`traceId`，5xx仍由实际HTTP状态执行安全隐藏。提示通过`notifyError` / `ToastContainer`，默认不展示编号。
+
+Kit 的 `kit.response.validationError(errors)` 与 `fromError` 使用同一字段白名单，响应 `error.cause` 只含本地化的 `field/message`；rejectedValue、SQL 和其他诊断字段不公开，不再从 `details.errors` 读取。
 
 ## 加密传输与容量
 

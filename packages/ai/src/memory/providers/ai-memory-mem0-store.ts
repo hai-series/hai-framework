@@ -12,8 +12,32 @@ const pointSchema = z.object({
   vector: z.array(z.number()).optional(),
   score: z.number().optional(),
 })
+/**
+ * 后端响应经校验后的内部向量点；业务主体与内容保存在 payload 中。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const point: Point = {
+ *   id: '00000000-0000-4000-8000-000000000001',
+ *   payload: { user_id: 'user-1', data: '偏好中文回复' },
+ *   vector: [1, 0],
+ * }
+ * ```
+ */
 type Point = z.infer<typeof pointSchema>
 
+/**
+ * 从后端数据格式投影的记忆条目；metadata 保留主体与范围供调用方核验。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const memory: Mem0Item = {
+ *   id: '00000000-0000-4000-8000-000000000001',
+ *   memory: '偏好中文回复',
+ *   metadata: { user_id: 'user-1' },
+ * }
+ * ```
+ */
 export interface Mem0Item {
   id: string
   memory: string
