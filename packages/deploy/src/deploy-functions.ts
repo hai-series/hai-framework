@@ -22,7 +22,14 @@ import { deployM } from './deploy-i18n.js'
  * ```
  */
 export function normalizeProjectName(name: string): string {
-  const normalized = name.trim().replace(/^@[^/]+\//, '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')
+  const replaced = name.trim().replace(/^@[^/]+\//, '').toLowerCase().replace(/[^a-z0-9-]+/g, '-')
+  let start = 0
+  let end = replaced.length
+  while (start < end && replaced[start] === '-')
+    start++
+  while (end > start && replaced[end - 1] === '-')
+    end--
+  const normalized = replaced.slice(start, end)
   if (!normalized)
     throw new Error(deployM('deploy_projectNameRequired'))
   return normalized

@@ -33,7 +33,7 @@ function object(value: unknown): Shape | undefined {
 
 /** camelCase 保持连写；实际字段名来自结构或 Schema，不从大写变量猜测。 */
 function segment(value: string): string {
-  return value.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toUpperCase()
+  return value.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '').toUpperCase()
 }
 
 /** JSON Schema 的本地引用与联合分支只提供结构提示，最终仍由原始 Zod 校验。 */
@@ -285,14 +285,40 @@ export function resolveEnvironment(options: { name: string, value: unknown, envi
     }
     if (typeof value !== 'string' || fromEnvironment)
       return value
-    const full = /^\$\{[^}:]+(?::[^}]*)?\}$/.test(value)
-    const resolved = value.replace(/\$\{([^}:]+)(?::([^}]*))?\}/g, (_match, key: string, fallback?: string) => {
+    // 按占位符边界单次扫描；缺失结束符时不从每个 ${ 起点重复回溯。
+    const parts: string[] = []
+    let consumed = 0
+    let search = 0
+    let full = false
+    while (search < value.length) {
+      const start = value.indexOf('${', search)
+      if (start < 0)
+        break
+      if (value[start + 2] === ':' || value[start + 2] === '}') {
+        search = start + 2
+        continue
+      }
+      const end = value.indexOf('}', start + 2)
+      if (end < 0)
+        break
+      const expression = value.slice(start + 2, end)
+      const separator = expression.indexOf(':')
+      const key = separator < 0
+        ? expression
+        : expression.slice(0, separator)
+      const fallback = separator < 0
+        ? undefined
+        : expression.slice(separator + 1)
       if (environment[key] === undefined && fallback === undefined && options.missing !== 'empty') {
         missingNames.add(key)
         throw new Error(key)
       }
-      return environment[key] ?? fallback ?? ''
-    })
+      parts.push(value.slice(consumed, start), environment[key] ?? fallback ?? '')
+      consumed = end + 1
+      search = consumed
+      full = start === 0 && consumed === value.length
+    }
+    const resolved = parts.join('') + value.slice(consumed)
     return full
       ? scalar(resolved, node, root)
       : resolved

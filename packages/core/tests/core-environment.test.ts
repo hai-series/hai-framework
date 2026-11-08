@@ -8,6 +8,51 @@ import { z } from 'zod'
 import { core } from '../src/index.js'
 
 const directories: string[] = []
+
+it('占位符保留空表达式、嵌套字面量和完整标量的既有含义', () => {
+  const value = {
+    text: '${:fallback}${}${NAME}:${MISSING:fallback}',
+    nested: '${MISSING:${NAME}}',
+    count: '${COUNT:0}',
+    enabled: '${ENABLED:false}',
+  }
+  expect(core.config.resolve({
+    name: 'example',
+    value,
+    schema: z.object({
+      text: z.string(),
+      nested: z.string(),
+      count: z.number(),
+      enabled: z.boolean(),
+    }),
+    environment: { NAME: 'Ada', COUNT: '42' },
+  })).toMatchObject({
+    success: true,
+    data: {
+      text: '${:fallback}${}Ada:fallback',
+      nested: '${NAME}',
+      count: 42,
+      enabled: false,
+    },
+  })
+})
+
+it('大量未闭合占位符保持字面量且不会反复扫描同一后缀', () => {
+  const value = '${'.repeat(120_000)
+  const started = performance.now()
+  const result = core.config.resolve({
+    name: 'example',
+    value: { text: value },
+    environment: {},
+  })
+  expect(result).toMatchObject({
+    success: true,
+    data: { text: value },
+  })
+  // 正常扫描只需毫秒；保留宽裕预算，捕获旧算法随输入增长到数秒的退化。
+  expect(performance.now() - started).toBeLessThan(2000)
+})
+
 afterEach(() => {
   vi.unstubAllEnvs()
   core.config.clear()

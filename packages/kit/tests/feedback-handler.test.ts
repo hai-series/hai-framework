@@ -59,6 +59,26 @@ function fixture() {
 }
 
 describe('kit feedback catch-all', () => {
+  it('挂载目录只裁去尾部斜杠，中间连续斜杠保持字面路径', async () => {
+    const f = fixture()
+    const path = `/feedback/${'/'.repeat(120_000)}tenant`
+    const started = performance.now()
+    const handler = kit.createFeedbackHandler({
+      feedback: f.feedback,
+      resolveContext: () => f.actor,
+      basePath: `${path}///`,
+    })
+    expect(performance.now() - started).toBeLessThan(2000)
+    const url = new URL(`https://app.test${path}/policy`)
+    const response = await handler({
+      request: new Request(url),
+      url,
+      locals: {},
+    } as RequestEvent)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ success: true, data: f.feedback.budget })
+  })
+
   it('可选反馈未就绪时端点明确503，不把默认策略当作就绪', async () => {
     const f = fixture()
     Object.defineProperty(f.feedback, 'isInitialized', { value: false })

@@ -50,7 +50,11 @@ export interface FeedbackHandlerOptions {
  * ```
  */
 export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestHandler {
-  const basePath = (options.basePath ?? '/api/feedback').replace(/\/+$/, '')
+  const configuredPath = options.basePath ?? '/api/feedback'
+  let pathEnd = configuredPath.length
+  while (pathEnd > 0 && configuredPath[pathEnd - 1] === '/')
+    pathEnd--
+  const basePath = configuredPath.slice(0, pathEnd)
   return async (event) => {
     let actor: FeedbackContext | null
     try {

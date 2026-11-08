@@ -1752,12 +1752,16 @@ export function resolveImageModel(imageConfig: ImageConfig, explicit?: string): 
       params: { provider: entry.provider },
     }))
   }
+  const configuredUrl = entry.baseUrl ?? IMAGE_PROVIDER_DEFAULT_BASE_URL[entry.provider]
+  let urlEnd = configuredUrl.length
+  while (urlEnd > 0 && configuredUrl[urlEnd - 1] === '/')
+    urlEnd--
   return ok({
     id: entry.id,
     provider: entry.provider,
     model: entry.model,
     apiKey,
-    baseUrl: (entry.baseUrl ?? IMAGE_PROVIDER_DEFAULT_BASE_URL[entry.provider]).replace(/\/+$/, ''),
+    baseUrl: configuredUrl.slice(0, urlEnd),
     workspaceId: entry.workspaceId,
     timeout: entry.timeout,
   })
