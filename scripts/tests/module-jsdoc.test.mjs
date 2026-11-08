@@ -14,6 +14,28 @@ it('公开声明、内部类型与 Svelte Props 均参与覆盖检查，模块�
   assert.equal(collectDeclarations('fixture.svelte', '<script lang="ts">interface Props { value: string }</script>')[0].names[0], 'Props')
 })
 
+it('svelte 声明只来自真实脚本，保留泛型属性、模块脚本与 BOM 的原始坐标', () => {
+  const source = [
+    '\uFEFF<!-- <script>export const fakeComment = 1</script> -->',
+    '<textarea><script>export const fakeTextarea = 2</script></textarea>',
+    '<script module lang="ts">/** 模块。 */ export const shared = 3</script>',
+    '<script lang="ts" generics="T extends Record<string, unknown>">',
+    '/** 输入。 */ interface Props { input: T }',
+    '</script>',
+  ].join('\n')
+  const records = collectDeclarations('fixture.svelte', source)
+  assert.deepEqual(records.map(record => record.names[0]), ['shared', 'Props'])
+  for (const record of records) {
+    assert.equal(record.line, source.slice(0, source.indexOf(record.names[0])).split('\n').length)
+    assert.equal(source.slice(0, record.end).endsWith(record.names[0] === 'Props'
+      ? 'interface Props { input: T }'
+      : 'export const shared = 3'), true)
+    assert.ok(record.doc.includes(record.names[0] === 'Props'
+      ? '输入'
+      : '模块'))
+  }
+})
+
 it('内部上下文和 fenced 示例须显式声明，不能用自然语言代替可编译代码', () => {
   assert.deepEqual(extractExamples('@example 模块内部上下文\n```ts\nconst input: Input = { value: "x" }\n```'), [
     {

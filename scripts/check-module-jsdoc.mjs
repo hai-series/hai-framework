@@ -7,6 +7,7 @@ import { basename, dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
+import { svelteSourceScripts } from './svelte-source-scripts.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const slash = value => value.replaceAll('\\', '/')
@@ -37,9 +38,10 @@ function declarationDoc(node, source) {
 /** 收集公开声明、全部 type/interface；Svelte 的脚本按真实偏移保留来源位置。 */
 export function collectDeclarations(file, source) {
   const scripts = file.endsWith('.svelte')
-    ? [
-        ...source.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g),
-      ].map(match => ({ source: match[1], offset: match.index + match[0].indexOf('>') + 1 }))
+    ? svelteSourceScripts(source, file).map(script => ({
+        source: source.slice(script.start, script.end),
+        offset: script.start,
+      }))
     : [
         { source, offset: 0 },
       ]

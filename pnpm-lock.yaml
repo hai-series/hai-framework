@@ -583,6 +583,9 @@ importers:
       rimraf:
         specifier: 'catalog:'
         version: 6.1.4
+      svelte:
+        specifier: 'catalog:'
+        version: 5.57.3(@typescript-eslint/types@8.71.1)
       svelte-eslint-parser:
         specifier: 'catalog:'
         version: 1.10.1(svelte@5.57.3(@typescript-eslint/types@8.71.1))
@@ -14781,7 +14784,7 @@ snapshots:
 
   is-reference@3.0.3:
     dependencies:
-      '@types/estree': 1.0.9
+      '@types/estree': 1.0.10
 
   is-stream@2.0.1: {}
 
@@ -16799,7 +16802,7 @@ snapshots:
       '@jridgewell/remapping': 2.3.5
       '@jridgewell/sourcemap-codec': 1.6.0
       '@sveltejs/acorn-typescript': 1.0.13(acorn@8.19.0)
-      '@types/estree': 1.0.9
+      '@types/estree': 1.0.10
       acorn: 8.19.0
       aria-query: 5.3.1
       axobject-query: 4.1.0

@@ -1,5 +1,6 @@
 /** 环境目录只把真实源码与模板引用作为入口，JSDoc 的配置说明仍由 Schema 文档提取器读取。 */
 import ts from 'typescript'
+import { svelteSourceScripts } from './svelte-source-scripts.mjs'
 
 /** 只处理 AST 节点边界上的真实 JSDoc，不把字符串、正则或模板文本中的注释标记当注释。 */
 function withoutJsdoc(content, fileName) {
@@ -40,13 +41,9 @@ export function environmentReferenceSource(content, fileName) {
   if (/\.(?:ts|js|mjs)$/.test(fileName))
     return withoutJsdoc(content, fileName)
   if (fileName.endsWith('.svelte')) {
-    // 保留模板标记与属性原文，只有真实 JS/TS script 内的 JSDoc 被排除。
-    return content.replace(/(<script\b(?:"[^"]*"|'[^']*'|[^'">])*>)([\s\S]*?)(<\/script\s*>)/gi, (whole, opening, script, closing) => {
-      const lang = /\blang\s*=\s*["']([^"']+)["']/i.exec(opening)?.[1]
-      if (lang && !['ts', 'js', 'typescript', 'javascript'].includes(lang))
-        return whole
-      return `${opening}${withoutJsdoc(script, `${fileName}.ts`)}${closing}`
-    })
+    // 只改真实脚本内容；从后向前处理，模板示例、属性及换行坐标均不变。
+    return svelteSourceScripts(content, fileName).reverse().reduce((source, script) =>
+      source.slice(0, script.start) + withoutJsdoc(source.slice(script.start, script.end), `${fileName}.ts`) + source.slice(script.end), content)
   }
   return content
 }

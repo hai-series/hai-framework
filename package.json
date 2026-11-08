@@ -49,6 +49,7 @@
     "husky": "catalog:",
     "lint-staged": "catalog:",
     "rimraf": "catalog:",
+    "svelte": "catalog:",
     "svelte-eslint-parser": "catalog:",
     "turbo": "catalog:",
     "typescript": "catalog:",
