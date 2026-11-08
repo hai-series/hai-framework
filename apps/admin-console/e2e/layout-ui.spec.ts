@@ -6,6 +6,9 @@ test('侧栏导航、别名重定向和环境标记反映真实页面', async ({
   const sidebar = page.locator('aside').first()
   await expect(sidebar.locator('a[href="/admin"]').first()).toHaveClass(/bg-primary/)
   await expect(page.getByTestId('app-environment-badge')).toHaveCount(0)
+  const galleryAlias = await page.request.get('/admin/ui-gallery', { maxRedirects: 0 })
+  expect(galleryAlias.status()).toBe(302)
+  expect(galleryAlias.headers().location).toBe('/admin/ui-gallery/primitives')
   for (const [target, destination] of [
     ['/admin/iam/users', '/admin/iam/users'],
     ['/admin/iam/roles', '/admin/iam/roles'],
@@ -16,6 +19,11 @@ test('侧栏导航、别名重定向和环境标记反映真实页面', async ({
     await sidebar.locator(`a[href="${target}"]`).click()
     await expect(page).toHaveURL(new RegExp(`${destination}$`))
     await expect(page.locator('h1').first()).toBeVisible()
+    if (target === '/admin/ui-gallery') {
+      await page.reload()
+      await expect(page).toHaveURL(/\/admin\/ui-gallery\/primitives$/)
+      await expect(page.locator('h1').first()).toBeVisible()
+    }
   }
   for (const alias of ['/admin/iam', '/admin/users']) {
     await page.goto(alias)
