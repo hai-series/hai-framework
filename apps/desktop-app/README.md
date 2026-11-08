@@ -91,7 +91,7 @@ apps/desktop-app/
 ├── src-tauri/                 # Tauri Rust 端（v2）
 ├── tests/                     # vitest（jsdom）
 ├── vite.config.ts             # vite + tailwind + svelte
-├── svelte.config.js           # autoImportHaiUi + vitePreprocess
+├── svelte.config.js           # vitePreprocess → autoImportHaiUi
 └── package.json
 ```
 

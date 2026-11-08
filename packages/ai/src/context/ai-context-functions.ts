@@ -77,8 +77,14 @@ const GENERATION_LEASE_MS = 30_000
 
 /** 将存储/冲突错误转换为公开业务结果。 */
 function contextFailure(error: unknown): HaiResult<never> {
-  const code = error instanceof ContextStateError ? error.definition : HaiAIError.STORE_FAILED
-  return err(code, aiM('ai_sessionFailed', { params: { error: String(error) } }), error)
+  const code = error instanceof ContextStateError
+    ? error.definition
+    : HaiAIError.STORE_FAILED
+  return err(code, aiM('ai_sessionFailed', {
+    params: {
+      error: String(error),
+    },
+  }), error)
 }
 
 /**
@@ -122,7 +128,9 @@ export function createContextOperations(
     const fromOption = optionMaxTokens ?? compressConfig.defaultMaxTokens
     if (fromOption > 0)
       return fromOption
-    return compressConfig.defaultMaxTokens > 0 ? compressConfig.defaultMaxTokens : 4096
+    return compressConfig.defaultMaxTokens > 0
+      ? compressConfig.defaultMaxTokens
+      : 4096
   }
 
   /**
@@ -144,7 +152,11 @@ export function createContextOperations(
     const summaryModel = compress?.summaryModel
 
     const fresh: PersistedContextState = initial ?? {
-      messages: options.systemPrompt ? [{ role: 'system', content: options.systemPrompt }] : [],
+      messages: options.systemPrompt
+        ? [
+            { role: 'system', content: options.systemPrompt },
+          ]
+        : [],
       scope,
       summaries: [],
       turns: [],
@@ -174,7 +186,11 @@ export function createContextOperations(
           : HaiAIError.CONTEXT_COMPRESS_FAILED, result.error.message)
       }
       if (result.data.summary) {
-        candidate.summaries.push({ summary: result.data.summary, tokenCount: tokenOps.estimateText(result.data.summary), coveredMessages: result.data.removedCount })
+        candidate.summaries.push({
+          summary: result.data.summary,
+          tokenCount: tokenOps.estimateText(result.data.summary),
+          coveredMessages: result.data.removedCount,
+        })
       }
       candidate.messages = result.data.messages
     }
@@ -299,9 +315,23 @@ export function createContextOperations(
             recoverExpired(candidate, now)
             if (candidate.active)
               return { value: undefined, write: false }
-            const active: ContextGeneration = { epoch: candidate.epoch, id: crypto.randomUUID(), owner: crypto.randomUUID(), phase: 'generating', expiresAt: now + GENERATION_LEASE_MS, userMessage: message }
+            const active: ContextGeneration = {
+              epoch: candidate.epoch,
+              id: crypto.randomUUID(),
+              owner: crypto.randomUUID(),
+              phase: 'generating',
+              expiresAt: now + GENERATION_LEASE_MS,
+              userMessage: message,
+            }
             candidate.active = active
-            candidate.turns.push({ id: active.id, speaker: 'assistant', generated: '', committed: '', status: 'generating', createdAt: now })
+            candidate.turns.push({
+              id: active.id,
+              speaker: 'assistant',
+              generated: '',
+              committed: '',
+              status: 'generating',
+              createdAt: now,
+            })
             await append(candidate, { role: 'user', content: message })
             return { value: active, notAfter: active.expiresAt }
           })
@@ -312,7 +342,9 @@ export function createContextOperations(
             continue
           }
           const abort = new AbortController()
-          const signal = caller ? AbortSignal.any([caller, abort.signal]) : abort.signal
+          const signal = caller
+            ? AbortSignal.any([caller, abort.signal])
+            : abort.signal
           const acquired = generation
           let renewing = false
           const timer = setInterval(() => {
@@ -446,7 +478,9 @@ export function createContextOperations(
           await access.mutate((candidate) => {
             candidate.epoch = crypto.randomUUID()
             candidate.messages = resetOpts?.preserveSystemPrompt !== false && systemPromptText
-              ? [{ role: 'system', content: systemPromptText }]
+              ? [
+                  { role: 'system', content: systemPromptText },
+                ]
               : []
             candidate.summaries = []
             candidate.turns = []
@@ -476,7 +510,12 @@ export function createContextOperations(
             if (active.phase === 'generating' && active.expiresAt <= now)
               throw new ContextStateError(HaiAIError.CONTEXT_TURN_INVALID_STATE, 'Generation expired')
             turn.status = 'speaking'
-            return { value: undefined, notAfter: active.phase === 'generating' ? active.expiresAt : undefined }
+            return {
+              value: undefined,
+              notAfter: active.phase === 'generating'
+                ? active.expiresAt
+                : undefined,
+            }
           })
           return ok(undefined)
         }
@@ -493,7 +532,9 @@ export function createContextOperations(
 
       async consolidate(consolidateOpts?: ConsolidateOptions): Promise<HaiResult<ConsolidateResult>> {
         if (!deps?.summary || !deps?.memory) {
-          return err(HaiAIError.MEMORY_PROMOTE_FAILED, aiM('ai_memoryPromoteFailed', { params: { error: 'summary/memory deps unavailable' } }))
+          return err(HaiAIError.MEMORY_PROMOTE_FAILED, aiM('ai_memoryPromoteFailed', {
+            params: { error: 'summary/memory deps unavailable' },
+          }))
         }
 
         // 先等待后台记忆提取完成，避免固化时短期记忆尚未落库
@@ -520,7 +561,9 @@ export function createContextOperations(
           // 2) 从摘要中提取长期记忆，写入持久作用域（默认取管理器 memory.scope，通常不含 sessionId）
           const durableScope = consolidateOpts?.scope ?? options.memory?.scope
           const extracted = await deps.memory.extract(
-            [{ role: 'user', content: summaryText }],
+            [
+              { role: 'user', content: summaryText },
+            ],
             {
               objectId: scope?.objectId,
               scope: durableScope,
@@ -536,7 +579,11 @@ export function createContextOperations(
         }
         catch (error) {
           logger.error('Context consolidate failed', { error })
-          return err(HaiAIError.MEMORY_PROMOTE_FAILED, aiM('ai_memoryPromoteFailed', { params: { error: String(error) } }), error)
+          return err(HaiAIError.MEMORY_PROMOTE_FAILED, aiM('ai_memoryPromoteFailed', {
+            params: {
+              error: String(error),
+            },
+          }), error)
         }
       },
 
@@ -552,7 +599,9 @@ export function createContextOperations(
           const failed = failedMemoryTasks
           failedMemoryTasks = 0
           return failed > 0
-            ? err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_contextMemoryTasksFailed', { params: { count: failed } }))
+            ? err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_contextMemoryTasksFailed', {
+                params: { count: failed },
+              }))
             : ok(undefined)
         })().finally(() => { memoryFlush = undefined })
         return memoryFlush
@@ -632,7 +681,12 @@ export function createContextOperations(
               const reply = reasonResult.data.answer
               turnId = await finalizeAssistantReply(generation, reply)
 
-              return ok({ reply, model: chatOpts?.model ?? options.model ?? '', turnId, usage: undefined })
+              return ok({
+                reply,
+                model: chatOpts?.model ?? options.model ?? '',
+                turnId,
+                usage: undefined,
+              })
             }
           }
 
@@ -698,12 +752,19 @@ export function createContextOperations(
             }
 
             // 无工具调用：提取文本回复
-            const reply = typeof assistantMessage.content === 'string' ? assistantMessage.content : ''
+            const reply = typeof assistantMessage.content === 'string'
+              ? assistantMessage.content
+              : ''
 
             // 完成本轮生成：auto 直接提交完整文本，manual 登记待提交轮次
             turnId = await finalizeAssistantReply(generation, reply)
 
-            return ok({ reply, model: lastModel, turnId, usage: lastUsage })
+            return ok({
+              reply,
+              model: lastModel,
+              turnId,
+              usage: lastUsage,
+            })
           }
 
           // 达到最大工具调用轮次，返回最后可用的回复
@@ -712,7 +773,12 @@ export function createContextOperations(
             ? lastAssistantMsg.content
             : ''
           turnId = await finalizeAssistantReply(generation, fallbackReply)
-          return ok({ reply: fallbackReply, model: lastModel, turnId, usage: lastUsage })
+          return ok({
+            reply: fallbackReply,
+            model: lastModel,
+            turnId,
+            usage: lastUsage,
+          })
         }
         catch (error) {
           logger.error('Context chat failed', { error })
@@ -790,8 +856,15 @@ export function createContextOperations(
               }
 
               // 轮次若已被 interruptTurn 打断进入终态，则不得再产出 `done`，避免业务层误判为正常完成。
-              if (await completeStreamTurn(generation, fullReply))
-                yield { type: 'done', reply: fullReply, model, turnId: turn.id, usage }
+              if (await completeStreamTurn(generation, fullReply)) {
+                yield {
+                  type: 'done',
+                  reply: fullReply,
+                  model,
+                  turnId: turn.id,
+                  usage,
+                }
+              }
               return
             }
 
@@ -820,8 +893,15 @@ export function createContextOperations(
               }
 
               // 轮次若已被 interruptTurn 打断进入终态，则不得再产出 `done`，避免业务层误判为正常完成。
-              if (await completeStreamTurn(generation, fullReply))
-                yield { type: 'done', reply: fullReply, model: chatOpts?.model ?? options.model ?? '', turnId: turn.id, usage: undefined }
+              if (await completeStreamTurn(generation, fullReply)) {
+                yield {
+                  type: 'done',
+                  reply: fullReply,
+                  model: chatOpts?.model ?? options.model ?? '',
+                  turnId: turn.id,
+                  usage: undefined,
+                }
+              }
               return
             }
 
@@ -888,7 +968,12 @@ export function createContextOperations(
                     ? rawContent
                     : (rawContent as Array<{ text?: string }>).map(p => p.text ?? '').join(' ')
 
-                  yield { type: 'tool_result', name: toolCall.function.name, content: toolContent, success: toolResult.success }
+                  yield {
+                    type: 'tool_result',
+                    name: toolCall.function.name,
+                    content: toolContent,
+                    success: toolResult.success,
+                  }
 
                   messages.push({
                     role: 'tool',
@@ -909,8 +994,15 @@ export function createContextOperations(
             }
 
             // 轮次若已被 interruptTurn 打断进入终态，则不得再产出 `done`，避免业务层误判为正常完成。
-            if (await completeStreamTurn(generation, fullReply))
-              yield { type: 'done', reply: fullReply, model, turnId: turn.id, usage }
+            if (await completeStreamTurn(generation, fullReply)) {
+              yield {
+                type: 'done',
+                reply: fullReply,
+                model,
+                turnId: turn.id,
+                usage,
+              }
+            }
           }
           catch (error) {
             // 上游取消后将已持久化的轮次转为 pending，供其他节点按实际表达内容提交；
@@ -974,7 +1066,9 @@ export function createContextOperations(
           const turn = candidate.turns.find(item => item.id === turnId)
           if (!turn)
             throw new ContextStateError(HaiAIError.CONTEXT_TURN_NOT_FOUND, 'Turn not found')
-          const committed = text ?? (status === 'completed' ? turn.generated : '')
+          const committed = text ?? (status === 'completed'
+            ? turn.generated
+            : '')
           if (turn.status === 'completed' || turn.status === 'interrupted') {
             if (turn.status === status && turn.committed === committed)
               return { value: undefined, write: false }
@@ -983,7 +1077,9 @@ export function createContextOperations(
           const active = candidate.active
           if (!active || active.id !== turnId || (active.phase === 'generating' && active.expiresAt <= now))
             throw new ContextStateError(HaiAIError.CONTEXT_TURN_INVALID_STATE, 'Generation expired or changed')
-          const deadline = active.phase === 'generating' ? active.expiresAt : undefined
+          const deadline = active.phase === 'generating'
+            ? active.expiresAt
+            : undefined
           const pair = { user: active.userMessage, reply: committed }
           turn.committed = committed
           turn.status = status
@@ -1048,7 +1144,10 @@ export function createContextOperations(
       if (!sessionStore)
         return ok([])
       try {
-        const sessions = await sessionStore.query({ objectId, orderBy: { field: 'updatedAt', direction: 'desc' } })
+        const sessions = await sessionStore.query({
+          objectId,
+          orderBy: { field: 'updatedAt', direction: 'desc' },
+        })
         const contexts = await contextStore.query({ objectId })
         // 一次批量读，避免目录同步失败后重新展示已删除正文；不做逐会话 N+1 查询。
         const deleted = new Set(contexts.filter(item => item.deleted).map(item => sessionStoreKey(item.scope)))
@@ -1074,7 +1173,14 @@ export function createContextOperations(
     },
     async removeSession(scope: InteractionScope): Promise<HaiResult<void>> {
       try {
-        const initial: PersistedContextState = { scope, messages: [], summaries: [], turns: [], epoch: crypto.randomUUID(), updatedAt: 0 }
+        const initial: PersistedContextState = {
+          scope,
+          messages: [],
+          summaries: [],
+          turns: [],
+          epoch: crypto.randomUUID(),
+          updatedAt: 0,
+        }
         const access = createContextStateAccess(contextStore, scope, initial, () => {})
         await access.mutate((candidate) => {
           candidate.deleted = true
@@ -1086,7 +1192,13 @@ export function createContextOperations(
           return { value: undefined }
         }, true)
         if (sessionStore) {
-          await updateSessionInfo(sessionStore, scope, (existing, now) => ({ ...existing, ...scope, createdAt: existing?.createdAt ?? now, updatedAt: now, deleted: true }))
+          await updateSessionInfo(sessionStore, scope, (existing, now) => ({
+            ...existing,
+            ...scope,
+            createdAt: existing?.createdAt ?? now,
+            updatedAt: now,
+            deleted: true,
+          }))
         }
         return ok(undefined)
       }

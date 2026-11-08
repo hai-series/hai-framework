@@ -13,8 +13,14 @@ async function main() {
   if (!['auto', 'podman', 'docker'].includes(selected))
     throw new Error('Invalid container engine')
   for (const option of options) {
-    if (!['--java', '--rust', '--go', `--engine=${selected}`].includes(option))
+    if (![
+      '--java',
+      '--rust',
+      '--go',
+      `--engine=${selected}`,
+    ].includes(option)) {
       throw new Error(`Unknown option: ${option}`)
+    }
   }
   async function run(command, args) {
     await new Promise((resolve, reject) => {
@@ -25,7 +31,9 @@ async function main() {
       })
       child.on('error', reject)
       child.on('close', code =>
-        code === 0 ? resolve() : reject(new Error('Container command failed')))
+        code === 0
+          ? resolve()
+          : reject(new Error('Container command failed')))
     })
   }
   let engine

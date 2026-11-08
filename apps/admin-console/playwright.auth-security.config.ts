@@ -7,7 +7,9 @@ export default defineConfig({
   ...transportConfig,
   testMatch: '**/auth-error-security.spec.ts',
   workers: 1,
-  webServer: (Array.isArray(transportConfig.webServer) ? transportConfig.webServer : []).map((server) => {
+  webServer: (Array.isArray(transportConfig.webServer)
+    ? transportConfig.webServer
+    : []).map((server) => {
     if (!server.env?.HAI_IAM)
       return server
     return {

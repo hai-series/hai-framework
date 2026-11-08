@@ -53,7 +53,15 @@ export interface ExtractedEntity {
  * const valid = allowed.has('project')
  * ```
  */
-export const DEFAULT_ENTITY_TYPES = ['person', 'project', 'concept', 'organization', 'location', 'event', 'other']
+export const DEFAULT_ENTITY_TYPES = [
+  'person',
+  'project',
+  'concept',
+  'organization',
+  'location',
+  'event',
+  'other',
+]
 
 /**
  * 根据实体类型列表生成实体提取系统提示词
@@ -125,7 +133,11 @@ export async function extractEntities(
 
     if (!chatResult.success) {
       logger.warn('Entity extraction LLM call failed', { error: chatResult.error })
-      return err(HaiAIError.KNOWLEDGE_ENTITY_EXTRACT_FAILED, aiM('ai_knowledgeEntityExtractFailed', { params: { error: String(chatResult.error.message) } }), chatResult.error)
+      return err(HaiAIError.KNOWLEDGE_ENTITY_EXTRACT_FAILED, aiM('ai_knowledgeEntityExtractFailed', {
+        params: {
+          error: String(chatResult.error.message),
+        },
+      }), chatResult.error)
     }
 
     const content = chatResult.data.choices[0]?.message?.content ?? ''
@@ -139,7 +151,11 @@ export async function extractEntities(
   }
   catch (error) {
     logger.error('Entity extraction failed', { error })
-    return err(HaiAIError.KNOWLEDGE_ENTITY_EXTRACT_FAILED, aiM('ai_knowledgeEntityExtractFailed', { params: { error: String(error) } }), error)
+    return err(HaiAIError.KNOWLEDGE_ENTITY_EXTRACT_FAILED, aiM('ai_knowledgeEntityExtractFailed', {
+      params: {
+        error: String(error),
+      },
+    }), error)
   }
 }
 
@@ -174,11 +190,15 @@ function parseEntityResponse(content: string, validTypes: Set<string>): Extracte
       }
     }
 
-    logger.warn('Entity extraction returned unexpected format', { content: content.slice(0, 200) })
+    logger.warn('Entity extraction returned unexpected format', {
+      content: content.slice(0, 200),
+    })
     return []
   }
   catch {
-    logger.warn('Entity extraction returned invalid JSON', { content: content.slice(0, 200) })
+    logger.warn('Entity extraction returned invalid JSON', {
+      content: content.slice(0, 200),
+    })
     return []
   }
 }
@@ -201,13 +221,19 @@ function isValidEntity(item: unknown): item is Record<string, unknown> {
  * @param validTypes - 合法类型集合（不在集合内的归为 'other'）
  */
 function normalizeEntity(item: Record<string, unknown>, validTypes: Set<string>): ExtractedEntity {
-  const type = validTypes.has(item.type as string) ? item.type as string : 'other'
+  const type = validTypes.has(item.type as string)
+    ? item.type as string
+    : 'other'
 
   return {
     name: (item.name as string).trim(),
     type,
-    aliases: Array.isArray(item.aliases) ? (item.aliases as string[]).map(String) : undefined,
-    description: typeof item.description === 'string' ? item.description.trim() : undefined,
+    aliases: Array.isArray(item.aliases)
+      ? (item.aliases as string[]).map(String)
+      : undefined,
+    description: typeof item.description === 'string'
+      ? item.description.trim()
+      : undefined,
   }
 }
 
@@ -284,7 +310,10 @@ export async function extractEntitiesBatch(
       }
     }
     else {
-      entityMap.set(key, { ...entity, chunkIds: [chunkId] })
+      entityMap.set(key, {
+        ...entity,
+        chunkIds: [chunkId],
+      })
     }
   }
 

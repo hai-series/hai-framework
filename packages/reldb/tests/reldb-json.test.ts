@@ -171,19 +171,25 @@ describe('createJsonOps(postgresql)', () => {
     it('生成 #> 表达式（单层路径）', () => {
       const { sql, params } = json.extract('data', '$.status')
       expect(sql).toBe('data #> ?::text[]')
-      expect(params).toEqual([['status']])
+      expect(params).toEqual([
+        ['status'],
+      ])
     })
 
     it('生成 #> 表达式（多层路径）', () => {
       const { sql, params } = json.extract('data', '$.user.name')
       expect(sql).toBe('data #> ?::text[]')
-      expect(params).toEqual([['user', 'name']])
+      expect(params).toEqual([
+        ['user', 'name'],
+      ])
     })
 
     it('支持数组索引路径', () => {
       const { sql, params } = json.extract('data', '$.items[0]')
       expect(sql).toBe('data #> ?::text[]')
-      expect(params).toEqual([['items', '0']])
+      expect(params).toEqual([
+        ['items', '0'],
+      ])
     })
   })
 
@@ -191,19 +197,28 @@ describe('createJsonOps(postgresql)', () => {
     it('生成 jsonb_set 表达式（字符串值）', () => {
       const { sql, params } = json.set('settings', '$.theme', 'dark')
       expect(sql).toBe('jsonb_set(settings, ?::text[], ?::jsonb)')
-      expect(params).toEqual([['theme'], '"dark"'])
+      expect(params).toEqual([
+        ['theme'],
+        '"dark"',
+      ])
     })
 
     it('生成 jsonb_set 表达式（多层路径）', () => {
       const { sql, params } = json.set('data', '$.user.age', 30)
       expect(sql).toBe('jsonb_set(data, ?::text[], ?::jsonb)')
-      expect(params).toEqual([['user', 'age'], '30'])
+      expect(params).toEqual([
+        ['user', 'age'],
+        '30',
+      ])
     })
 
     it('生成 jsonb_set 表达式（对象值）', () => {
       const { sql, params } = json.set('data', '$.meta', { k: 'v' })
       expect(sql).toBe('jsonb_set(data, ?::text[], ?::jsonb)')
-      expect(params).toEqual([['meta'], '{"k":"v"}'])
+      expect(params).toEqual([
+        ['meta'],
+        '{"k":"v"}',
+      ])
     })
   })
 
@@ -211,7 +226,10 @@ describe('createJsonOps(postgresql)', () => {
     it('生成 jsonb_insert 表达式', () => {
       const { sql, params } = json.insert('data', '$.newKey', 'value')
       expect(sql).toBe('jsonb_insert(data, ?::text[], ?::jsonb)')
-      expect(params).toEqual([['newKey'], '"value"'])
+      expect(params).toEqual([
+        ['newKey'],
+        '"value"',
+      ])
     })
   })
 
@@ -219,13 +237,17 @@ describe('createJsonOps(postgresql)', () => {
     it('生成 #- 表达式（单层路径）', () => {
       const { sql, params } = json.remove('settings', '$.deprecated')
       expect(sql).toBe('settings #- ?::text[]')
-      expect(params).toEqual([['deprecated']])
+      expect(params).toEqual([
+        ['deprecated'],
+      ])
     })
 
     it('生成 #- 表达式（多层路径）', () => {
       const { sql, params } = json.remove('data', '$.user.avatar')
       expect(sql).toBe('data #- ?::text[]')
-      expect(params).toEqual([['user', 'avatar']])
+      expect(params).toEqual([
+        ['user', 'avatar'],
+      ])
     })
   })
 
@@ -314,7 +336,14 @@ describe('reldb.json 集成测试（SQLite）', () => {
     })
     await reldb.sql.execute(
       `INSERT INTO items (data) VALUES (json(?))`,
-      [JSON.stringify({ status: 'active', count: 5, tags: ['a', 'b'], meta: { v: 1 } })],
+      [
+        JSON.stringify({
+          status: 'active',
+          count: 5,
+          tags: ['a', 'b'],
+          meta: { v: 1 },
+        }),
+      ],
     )
   })
 

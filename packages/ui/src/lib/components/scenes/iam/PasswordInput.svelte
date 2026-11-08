@@ -102,7 +102,13 @@
 
   const dataAttributes = $derived(getDataAttributes(restProps))
   const field = getFormFieldContext()
-  const validation = createControlValidation(undefined, () => [value, required, readonly, disabled, minLength])
+  const validation = createControlValidation(undefined, () => [
+    value,
+    required,
+    readonly,
+    disabled,
+    minLength,
+  ])
   const uniqueId = $props.id()
   const messageId = `${uniqueId}-error`
   const localError = $derived(resolveFormText(error) || validation.message)
@@ -150,13 +156,32 @@
       score += 1
 
     // 返回强度等级
-    if (score <= 2)
-      return { score: 1, label: uiM('password_strength_weak'), color: 'bg-error' }
-    if (score <= 4)
-      return { score: 2, label: uiM('password_strength_fair'), color: 'bg-warning' }
-    if (score <= 5)
-      return { score: 3, label: uiM('password_strength_good'), color: 'bg-success' }
-    return { score: 4, label: uiM('password_strength_strong'), color: 'bg-primary' }
+    if (score <= 2) {
+      return {
+        score: 1,
+        label: uiM('password_strength_weak'),
+        color: 'bg-error',
+      }
+    }
+    if (score <= 4) {
+      return {
+        score: 2,
+        label: uiM('password_strength_fair'),
+        color: 'bg-warning',
+      }
+    }
+    if (score <= 5) {
+      return {
+        score: 3,
+        label: uiM('password_strength_good'),
+        color: 'bg-success',
+      }
+    }
+    return {
+      score: 4,
+      label: uiM('password_strength_strong'),
+      color: 'bg-primary',
+    }
   })
 
   function handleInput(e: Event & { currentTarget: HTMLInputElement }) {
@@ -199,7 +224,12 @@
       {required}
       minlength={minLength}
       ariaInvalid={effectiveError ? true : undefined}
-      ariaDescribedby={[field?.messageId, localError && !field?.error ? messageId : ''].filter(Boolean).join(' ') || undefined}
+      ariaDescribedby={[
+        field?.messageId,
+        localError && !field?.error
+          ? messageId
+          : '',
+      ].filter(Boolean).join(' ') || undefined}
       oninput={handleInput}
       onchange={handleChange}
       onblur={e => validation.blur(e.currentTarget)}
@@ -220,7 +250,9 @@
         onclick={togglePassword}
         tabindex={-1}
         {disabled}
-        ariaLabel={showPassword ? uiM('password_hide') : uiM('password_show')}
+        ariaLabel={showPassword
+          ? uiM('password_hide')
+          : uiM('password_show')}
       >
         <span class={cn(
           showPassword ? 'icon-[tabler--eye-off]' : 'icon-[tabler--eye]',
@@ -236,7 +268,13 @@
         value={strength.score}
         max={4}
         size='xs'
-        variant={strength.score <= 1 ? 'error' : strength.score <= 2 ? 'warning' : strength.score <= 3 ? 'success' : 'primary'}
+        variant={strength.score <= 1
+          ? 'error'
+          : strength.score <= 2
+          ? 'warning'
+          : strength.score <= 3
+          ? 'success'
+          : 'primary'}
       />
       <span class='text-xs text-base-content/40 mt-1 block'>
         {uiM('password_strength_label')} {strength.label}

@@ -14,7 +14,17 @@ import { core } from '@h-ai/core'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
 
-const DEFAULT_TTS_VOICES = ['mimo_default', '冰糖', '茉莉', '苏打', '白桦', 'Mia', 'Chloe', 'Milo', 'Dean']
+const DEFAULT_TTS_VOICES = [
+  'mimo_default',
+  '冰糖',
+  '茉莉',
+  '苏打',
+  '白桦',
+  'Mia',
+  'Chloe',
+  'Milo',
+  'Dean',
+]
 
 /** 首页状态卡片所需的非敏感配置摘要。 */
 export interface AIPlaygroundMetadata {
@@ -25,6 +35,7 @@ export interface AIPlaygroundMetadata {
   imageProvider: ImageProviderName
   imageModel: string
   ttsVoices: string[]
+  memoryMode: 'persistent' | 'ephemeral'
 }
 
 let initPromise: Promise<void> | undefined
@@ -49,7 +60,7 @@ async function cleanup(): Promise<void> {
   cleanupPending = false
 }
 
-function createMetadata(config: AIConfig): AIPlaygroundMetadata {
+function createMetadata(config: AIConfig, memoryMode: AIPlaygroundMetadata['memoryMode']): AIPlaygroundMetadata {
   const transcribe = config.audio?.models?.find(model => model.id === config.audio?.transcribeModel)
   const synthesize = config.audio?.models?.find(model => model.id === config.audio?.synthesizeModel)
   const image = config.image?.models?.find(model => model.id === config.image?.generateModel)
@@ -63,7 +74,10 @@ function createMetadata(config: AIConfig): AIPlaygroundMetadata {
     asrModel: transcribe.model,
     imageProvider: image.provider,
     imageModel: image.model,
-    ttsVoices: synthesize.provider === 'mimo' ? DEFAULT_TTS_VOICES : [],
+    ttsVoices: synthesize.provider === 'mimo'
+      ? DEFAULT_TTS_VOICES
+      : [],
+    memoryMode,
   }
 }
 
@@ -79,7 +93,15 @@ async function initialize(): Promise<void> {
   if (cleanupPending)
     await cleanup()
   // 不传 logging，确保 config/_core.yml 中的日志配置拥有最终决定权。
-  core.init({ configDir: './config', configSchemas: { ai: AIConfigSchema, cache: CacheConfigSchema, db: ReldbConfigSchema, vecdb: VecdbConfigSchema } })
+  core.init({
+    configDir: './config',
+    configSchemas: {
+      ai: AIConfigSchema,
+      cache: CacheConfigSchema,
+      db: ReldbConfigSchema,
+      vecdb: VecdbConfigSchema,
+    },
+  })
 
   const validated = core.config.validate('ai', AIConfigSchema)
   if (!validated.success) {
@@ -91,7 +113,11 @@ async function initialize(): Promise<void> {
   const vectorConfig = core.config.validate('vecdb', VecdbConfigSchema)
   if (!dbConfig.success || !vectorConfig.success)
     throw new Error('AI Playground database or vector configuration is invalid')
-  const nextMetadata = createMetadata(validated.data)
+  // 本应用先初始化 RelDB/VecDB，AI 自动选择数据库 Store；只有显式 SQLite 内存库不跨重启保留记录。
+  const memoryMode = dbConfig.data.type === 'sqlite' && dbConfig.data.database === ':memory:'
+    ? 'ephemeral'
+    : 'persistent'
+  const nextMetadata = createMetadata(validated.data, memoryMode)
   const config = core.config.getOrThrow<AIConfigInput>('ai')
   if (dbConfig.data.type === 'sqlite' && dbConfig.data.database !== ':memory:')
     await mkdir(dirname(dbConfig.data.database), { recursive: true })

@@ -9,7 +9,10 @@ import { waitForHydration } from './helpers'
 const evidence = process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve('test-results/auth-screenshots')
 async function screenshot(page: Page, name: string) {
   await mkdir(evidence, { recursive: true })
-  await page.screenshot({ path: path.join(evidence, `${name}.png`), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, `${name}.png`),
+    fullPage: true,
+  })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 }
 async function open(page: Page, url = '/auth/login') {

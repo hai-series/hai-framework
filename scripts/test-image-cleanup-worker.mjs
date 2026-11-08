@@ -6,10 +6,18 @@ if (!parentPort)
   throw new Error('Test image cleanup requires a worker parent')
 
 try {
-  parentPort.postMessage({ success: true, report: cleanupTestImages(workerData) })
+  parentPort.postMessage({
+    success: true,
+    report: cleanupTestImages(workerData),
+  })
 }
 catch (error) {
-  parentPort.postMessage({ success: false, error: error instanceof Error ? error.message : 'Test image cleanup failed' })
+  parentPort.postMessage({
+    success: false,
+    error: error instanceof Error
+      ? error.message
+      : 'Test image cleanup failed',
+  })
 }
 finally {
   parentPort.close()

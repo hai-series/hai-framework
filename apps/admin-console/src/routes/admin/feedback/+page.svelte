@@ -3,21 +3,32 @@
   import type { FeedbackDetail as FeedbackDetailData } from '@h-ai/api-contract/feedback'
   import type { FeedbackAttachmentView, FeedbackEvidenceQuery, FeedbackEvidenceView, FeedbackListQuery, FeedbackPage, FeedbackReportView, FeedbackStatusChange } from '@h-ai/ui/components/scenes/app/index'
   import type { PageData } from './$types'
-  import { goto, invalidateAll } from '$app/navigation'
+  import { goto, refreshAll } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import * as m from '$lib/paraglide/messages.js'
-  import { exportFeedback, feedbackApi, feedbackListParameters, initFeedbackBrowser, loadFeedbackReplay, retryFeedback } from '$lib/services/feedback.js'
-  import { downloadFeedbackBytes, feedbackBase64Bytes, feedbackBlobUrl } from '$lib/utils/feedback-browser.js'
   import { FeedbackDetail, FeedbackList, usePermission } from '@h-ai/ui'
   import { errorMessage } from '@h-ai/ui/toast'
   import { onDestroy, untrack } from 'svelte'
   import { SvelteURLSearchParams } from 'svelte/reactivity'
+  import * as m from '#lib/paraglide/messages.js'
+  import { exportFeedback, feedbackApi, feedbackListParameters, initFeedbackBrowser, loadFeedbackReplay, retryFeedback } from '#lib/services/feedback.js'
+  import { downloadFeedbackBytes, feedbackBase64Bytes, feedbackBlobUrl } from '#lib/utils/feedback-browser.js'
 
   const { data }: { data: PageData } = $props()
   const { hasPerm } = usePermission()
-  const permissions = $derived({ read: hasPerm('feedback:read'), process: hasPerm('feedback:process'), reopen: hasPerm('feedback:reopen'), export: hasPerm('feedback:export'), retry: hasPerm('feedback:process') })
+  const permissions = $derived({
+    read: hasPerm('feedback:read'),
+    process: hasPerm('feedback:process'),
+    reopen: hasPerm('feedback:reopen'),
+    export: hasPerm('feedback:export'),
+    retry: hasPerm('feedback:process'),
+  })
   let detail = $state<FeedbackDetailData>()
-  let evidence = $state<FeedbackPage<FeedbackEvidenceView>>({ items: [], total: 0, page: 1, pageSize: 20 })
+  let evidence = $state<FeedbackPage<FeedbackEvidenceView>>({
+    items: [],
+    total: 0,
+    page: 1,
+    pageSize: 20,
+  })
   let evidenceQuery = $state<FeedbackEvidenceQuery>({ page: 1, pageSize: 20 })
   let attachments = $state<FeedbackAttachmentView[]>([])
   let loading = $state(false)
@@ -26,8 +37,18 @@
   let evidenceGeneration = 0
   const query = $derived({ ...data.query })
   const selectedFeedbackId = $derived(data.feedbackId)
-  const reportRows = $derived({ ...data.reports, items: data.reports.items.map(reportView) })
-  const history = $derived(detail?.history.map(item => ({ id: item.id, actorId: item.userId, fromStatus: item.from, toStatus: item.to, createdAt: item.timestamp, note: item.note })) ?? [])
+  const reportRows = $derived({
+    ...data.reports,
+    items: data.reports.items.map(reportView),
+  })
+  const history = $derived(detail?.history.map(item => ({
+    id: item.id,
+    actorId: item.userId,
+    fromStatus: item.from,
+    toStatus: item.to,
+    createdAt: item.timestamp,
+    note: item.note,
+  })) ?? [])
 
   $effect(() => {
     const id = selectedFeedbackId
@@ -46,7 +67,7 @@
       if (value !== undefined && value !== '')
         search.set(key, String(value))
     }
-    await goto(resolve(`/admin/feedback?${search}`, {}), { keepFocus: true, noScroll: true, invalidateAll: true })
+    await goto(resolve(`admin/feedback?${search}`), { reset: false, refreshAll: true })
   }
 
   async function view(report: Pick<FeedbackReportView, 'id'>) {
@@ -62,7 +83,15 @@
         return
       detail = loaded.data
       releaseUrls()
-      attachments = loaded.data.attachments.map(item => ({ id: item.id, name: item.name, mimeType: item.contentType, size: item.size, missingReason: item.missingReason ?? (item.status === 'available' ? undefined : m.feedback_attachment_pending()) }))
+      attachments = loaded.data.attachments.map(item => ({
+        id: item.id,
+        name: item.name,
+        mimeType: item.contentType,
+        size: item.size,
+        missingReason: item.missingReason ?? (item.status === 'available'
+          ? undefined
+          : m.feedback_attachment_pending()),
+      }))
       evidenceQuery = { page: 1, pageSize: 20 }
       await loadEvidence(evidenceQuery)
     }
@@ -81,7 +110,14 @@
       return
     const id = detail.report.id
     const generation = ++evidenceGeneration
-    const result = await feedbackApi.feedback.reports.getEvidence({ id, page: next.page, pageSize: next.pageSize, requestId: next.requestId || undefined, errorId: next.errorId || undefined, kind: next.kind as Parameters<typeof feedbackApi.feedback.reports.getEvidence>[0]['kind'] })
+    const result = await feedbackApi.feedback.reports.getEvidence({
+      id,
+      page: next.page,
+      pageSize: next.pageSize,
+      requestId: next.requestId || undefined,
+      errorId: next.errorId || undefined,
+      kind: next.kind as Parameters<typeof feedbackApi.feedback.reports.getEvidence>[0]['kind'],
+    })
     if (!result.success)
       throw new Error(result.error.message, { cause: result.error })
     if (generation === evidenceGeneration && detail?.report.id === id)
@@ -95,14 +131,14 @@
       throw new Error(changed.error.message, { cause: changed.error })
     if (detail?.report.id === input.id)
       await view(reportView(changed.data))
-    await invalidateAll()
+    await refreshAll()
   }
 
   async function retry(report: FeedbackReportView) {
     await initFeedbackBrowser()
     await retryFeedback(report.id)
     await view(report)
-    await invalidateAll()
+    await refreshAll()
   }
 
   async function attachment(item: FeedbackAttachmentView) {
@@ -112,9 +148,17 @@
     if (!result.success)
       throw new Error(result.error.message, { cause: result.error })
     const bytes = feedbackBase64Bytes(result.data.dataBase64)
-    if (['image/png', 'image/jpeg', 'image/webp', 'video/webm', 'video/mp4'].includes(result.data.contentType)) {
+    if ([
+      'image/png',
+      'image/jpeg',
+      'image/webp',
+      'video/webm',
+      'video/mp4',
+    ].includes(result.data.contentType)) {
       const url = feedbackBlobUrl(bytes, result.data.contentType)
-      attachments = attachments.map(value => value.id === item.id ? { ...value, url } : value)
+      attachments = attachments.map(value => value.id === item.id
+        ? { ...value, url }
+        : value)
       return
     }
     downloadFeedbackBytes(result.data.name, bytes, result.data.contentType)

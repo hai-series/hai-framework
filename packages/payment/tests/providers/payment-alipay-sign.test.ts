@@ -101,7 +101,9 @@ describe('verifyAlipayNotify', () => {
       .map(k => `${k}=${data[k]}`)
       .join('&')
 
-    const algorithm = signType === 'RSA2' ? 'RSA-SHA256' : 'RSA-SHA1'
+    const algorithm = signType === 'RSA2'
+      ? 'RSA-SHA256'
+      : 'RSA-SHA1'
     const sign = createSign(algorithm)
     sign.update(sorted)
     const sig = sign.sign(appPrivateKey, 'base64')

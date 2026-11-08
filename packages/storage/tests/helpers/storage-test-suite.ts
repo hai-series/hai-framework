@@ -27,7 +27,7 @@ export function defineStorageSuite(
   setup: () => Promise<StorageTestEnv> | StorageTestEnv,
   defineTests: () => void,
 ): void {
-  describe.sequential(`storage (${label})`, () => {
+  describe(`storage (${label})`, { concurrent: false }, () => {
     let env: StorageTestEnv | null = null
 
     beforeAll(async () => {
@@ -72,7 +72,9 @@ export function localStorageEnv(): StorageTestEnv {
  * 创建 S3（MinIO / RustFS）存储测试环境
  */
 export async function s3Env(backend: 'minio' | 'rustfs'): Promise<StorageTestEnv> {
-  const lease = await (backend === 'minio' ? acquireMinioContainer() : acquireRustfsContainer())
+  const lease = await (backend === 'minio'
+    ? acquireMinioContainer()
+    : acquireRustfsContainer())
   return {
     config: {
       type: 's3',
@@ -90,6 +92,8 @@ export async function s3Env(backend: 'minio' | 'rustfs'): Promise<StorageTestEnv
 /** 在 MinIO 和 RustFS 上执行相同的 S3 协议用例 */
 export function defineS3StorageSuites(defineTests: () => void, suffix = ''): void {
   for (const backend of ['minio', 'rustfs'] as const) {
-    defineStorageSuite(`s3-${backend}${suffix ? `-${suffix}` : ''}`, () => s3Env(backend), defineTests)
+    defineStorageSuite(`s3-${backend}${suffix
+      ? `-${suffix}`
+      : ''}`, () => s3Env(backend), defineTests)
   }
 }

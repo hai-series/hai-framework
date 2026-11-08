@@ -67,7 +67,11 @@ export function permissionGuard(config: PermissionGuardConfig): RouteGuard {
       if (apiMode) {
         return {
           allowed: false,
-          message: kitM('kit_requiredPermissions', { params: { permissions: permissions.join(', ') } }),
+          message: kitM('kit_requiredPermissions', {
+            params: {
+              permissions: permissions.join(', '),
+            },
+          }),
           status: 403,
         }
       }
@@ -170,15 +174,29 @@ export function assertPermission(
 ): Response | undefined {
   if (!session) {
     return new Response(
-      JSON.stringify({ success: false, error: kitM('kit_unauthorized') }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } },
+      JSON.stringify({
+        success: false,
+        error: kitM('kit_unauthorized'),
+      }),
+      {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      },
     )
   }
 
   if (!matchPermission(permission, session.permissions ?? [])) {
     return new Response(
-      JSON.stringify({ success: false, error: kitM('kit_forbidden', { params: { permission } }) }),
-      { status: 403, headers: { 'Content-Type': 'application/json' } },
+      JSON.stringify({
+        success: false,
+        error: kitM('kit_forbidden', {
+          params: { permission },
+        }),
+      }),
+      {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      },
     )
   }
 

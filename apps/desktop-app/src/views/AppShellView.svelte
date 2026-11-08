@@ -18,12 +18,21 @@
 
   const navItems = $derived.by(() => {
     const items = [
-      { path: '/dashboard', label: m('nav_dashboard') },
-      { path: '/profile', label: m('nav_profile') },
+      {
+        path: '/dashboard',
+        label: m('nav_dashboard'),
+      },
+      {
+        path: '/profile',
+        label: m('nav_profile'),
+      },
     ]
 
     if (hasPermission('user:list')) {
-      items.splice(1, 0, { path: '/users', label: m('nav_users') })
+      items.splice(1, 0, {
+        path: '/users',
+        label: m('nav_users'),
+      })
     }
 
     return items
@@ -55,7 +64,9 @@
     <aside class='bg-base-200 border-base-300 flex w-full shrink-0 flex-row gap-1 overflow-x-auto border-b p-2 sm:w-56 sm:flex-col sm:border-r sm:border-b-0 sm:p-3'>
       {#each navItems as item (item.path)}
         <Button
-          variant={currentPathname() === item.path ? 'primary' : 'ghost'}
+          variant={currentPathname() === item.path
+            ? 'primary'
+            : 'ghost'}
           size='sm'
           class='shrink-0 justify-start'
           onclick={() => navigate(item.path)}

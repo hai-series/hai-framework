@@ -22,8 +22,9 @@
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'
   import type { UserProfileField, UserProfileProps, UserProfileSubmitData } from '../types.js'
+  import { tick } from 'svelte'
   import { uiM } from '../../../messages.js'
-  import { useToastFeedback } from '../../../toast.svelte.js'
+  import { toast, useToastFeedback } from '../../../toast.svelte.js'
   import { cn, getDataAttributes } from '../../../utils.js'
   import FormField from '../../compounds/FormField.svelte'
   import FormLayout from '../../compounds/FormLayout.svelte'
@@ -41,7 +42,13 @@
     columns = 1,
     labelPosition = 'top',
     labelWidth = '8rem',
-    fields = ['avatar', 'username', 'email', 'displayName', 'phone'],
+    fields = [
+      'avatar',
+      'username',
+      'email',
+      'displayName',
+      'phone',
+    ],
     fieldConstraints = {},
     avatarAccept = 'image/*',
     avatarHint,
@@ -55,6 +62,8 @@
   const dataAttributes = $derived(getDataAttributes(restProps))
   const avatarInputId = $props.id()
   let editMode = $state(false)
+  let submitting = $state(false)
+  const busy = $derived(loading || submitting)
   let formData = $state<UserProfileSubmitData>({
     username: '',
     email: '',
@@ -151,11 +160,23 @@
    */
   async function handleSubmit(e: SubmitEvent) {
     e.preventDefault()
-    if (loading)
+    if (busy)
       return
 
-    await onsubmit?.(formData)
-    editMode = false
+    submitting = true
+    try {
+      const saved = await onsubmit?.(formData)
+      await tick()
+      if (saved === true)
+        editMode = false
+    }
+    catch {
+      // 回调抛错时保留草稿，统一用 Toast 提供可重试的失败说明。
+      toast.error(uiM('crud_submit_failed'))
+    }
+    finally {
+      submitting = false
+    }
   }
 
   /**
@@ -196,10 +217,10 @@
                   type='file'
                   class='hidden'
                   accept={avatarAccept}
-                  disabled={loading}
+                  disabled={busy}
                   onchange={handleAvatarChange}
                 />
-                <Button type='button' variant='outline' size='sm' disabled={loading} onclick={() => document.getElementById(avatarInputId)?.click()}>{uiM('user_profile_upload_avatar')}</Button>
+                <Button type='button' variant='outline' size='sm' disabled={busy} onclick={() => document.getElementById(avatarInputId)?.click()}>{uiM('user_profile_upload_avatar')}</Button>
                 {#if !errors.avatar}
                   <p class='text-xs text-base-content/60 mt-1'>{avatarHint ?? uiM('user_profile_avatar_hint')}</p>
                 {/if}
@@ -208,7 +229,9 @@
           </div>
         {:else}
           <!-- 其他字段 -->
-          <FormField label={getFieldLabel(field)} required={fieldConstraints[field]?.required} colSpan={field === 'bio' ? 2 : 'auto'}>
+          <FormField label={getFieldLabel(field)} required={fieldConstraints[field]?.required} colSpan={field === 'bio'
+            ? 2
+            : 'auto'}>
             {#if editable && (editMode || alwaysEditable)}
               {#if field === 'bio'}
                 <Textarea
@@ -216,16 +239,20 @@
                   name={modelKey}
                   rows={3}
                   bind:value={formData[modelKey]}
-                  disabled={loading}
+                  disabled={busy}
                   error={errors[field]}
                 />
               {:else}
                 <Input
                   {...fieldConstraints[field]}
-                  type={field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text'}
+                  type={field === 'email'
+                    ? 'email'
+                    : field === 'phone'
+                    ? 'tel'
+                    : 'text'}
                   name={modelKey}
                   bind:value={formData[modelKey]}
-                  disabled={loading}
+                  disabled={busy}
                   error={errors[field]}
                 />
               {/if}
@@ -247,8 +274,8 @@
             <Button
               type='submit'
               variant='primary'
-              {loading}
-              disabled={loading}
+              loading={busy}
+              disabled={busy}
             >
               {uiM('user_profile_save')}
             </Button>
@@ -256,7 +283,7 @@
               type='button'
               variant='ghost'
               onclick={cancelEdit}
-              disabled={loading}
+              disabled={busy}
             >
               {uiM('user_profile_cancel')}
             </Button>

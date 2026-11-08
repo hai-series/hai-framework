@@ -51,7 +51,13 @@ export const TtsRequestSchema = z.object({
 })
 
 /** 记忆类型枚举（事实 / 偏好 / 事件 / 实体 / 指令） */
-export const MemoryTypeInputSchema = z.enum(['fact', 'preference', 'event', 'entity', 'instruction'])
+export const MemoryTypeInputSchema = z.enum([
+  'fact',
+  'preference',
+  'event',
+  'entity',
+  'instruction',
+])
 
 /** 手动添加记忆请求 */
 export const MemoryAddRequestSchema = z.object({
@@ -93,7 +99,7 @@ export interface LabStatus {
   imageProvider: string
   imageModel: string
   ttsVoices: string[]
-  memoryMode: 'ephemeral'
+  memoryMode: 'persistent' | 'ephemeral'
 }
 
 /** 记忆视图（暴露给前端的记忆条目子集） */

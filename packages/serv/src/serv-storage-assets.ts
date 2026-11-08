@@ -73,7 +73,9 @@ export interface ServStorageAssetsConfig {
  * ```
  */
 export function storageAssets(config: ServStorageAssetsConfig): ServMiddleware {
-  const pathPrefix = config.pathPrefix.endsWith('/') ? config.pathPrefix : `${config.pathPrefix}/`
+  const pathPrefix = config.pathPrefix.endsWith('/')
+    ? config.pathPrefix
+    : `${config.pathPrefix}/`
   const allowedKeyPattern = new RegExp(config.keyPattern.source, config.keyPattern.flags.replace(/[gy]/g, ''))
   const allowedContentTypes = new Set(config.allowedContentTypes)
 
@@ -100,7 +102,9 @@ export function storageAssets(config: ServStorageAssetsConfig): ServMiddleware {
       ...(config.crossOriginResourcePolicy
         ? { 'Cross-Origin-Resource-Policy': config.crossOriginResourcePolicy }
         : {}),
-      ...(metadata.data.etag ? { ETag: metadata.data.etag } : {}),
+      ...(metadata.data.etag
+        ? { ETag: metadata.data.etag }
+        : {}),
     }
     if (metadata.data.etag && matchesEtag(request.headers.get('if-none-match'), metadata.data.etag))
       return c.body(null, 304, headers)
@@ -129,7 +133,9 @@ function decodeStorageAssetKey(value: string, allowedKeyPattern: RegExp): string
       return undefined
     }
     const match = allowedKeyPattern.exec(key)
-    return match?.[0] === key ? key : undefined
+    return match?.[0] === key
+      ? key
+      : undefined
   }
   catch {
     return undefined

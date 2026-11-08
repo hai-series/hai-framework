@@ -25,7 +25,9 @@ async function cleanupWindowsJob(child: ChildProcess, name: string, closed: bool
     await stopProcess(child, { ownedTree: true, closeObserved: closed, windowsJob: name })
   }
   catch (error) {
-    throw primaryFailure ? new AggregateError([primaryFailure, error], 'Windows Job assertion and cleanup failed') : error
+    throw primaryFailure
+      ? new AggregateError([primaryFailure, error], 'Windows Job assertion and cleanup failed')
+      : error
   }
 }
 
@@ -72,8 +74,21 @@ describe('aCP owned process cleanup', () => {
     // https://github.com/libuv/libuv/blob/v1.x/src/win/process.c
     const intermediate = 'process.stderr.write("intermediate-started\\n");const c=require("node:child_process").spawn(process.execPath,["-e",process.argv[1],process.argv[2]],{stdio:["ignore","ignore","inherit"],windowsHide:true,detached:true});c.unref()'
     const root = `process.stderr.write("root-started\\n");const c=require("node:child_process").spawn(process.execPath,["-e",process.argv[1],process.argv[2],process.argv[3]],{stdio:["ignore","ignore","inherit"],windowsHide:true,detached:true});c.unref();${rootExits ? '' : 'setInterval(()=>{},1000)'}`
-    const job = windowsACPCommand(process.execPath, ['-e', root, intermediate, writer, heartbeat])
-    const child = spawn('powershell.exe', job.args, { env: { ...baseEnvironment(), ...job.env }, shell: false, windowsHide: true })
+    const job = windowsACPCommand(process.execPath, [
+      '-e',
+      root,
+      intermediate,
+      writer,
+      heartbeat,
+    ])
+    const child = spawn('powershell.exe', job.args, {
+      env: {
+        ...baseEnvironment(),
+        ...job.env,
+      },
+      shell: false,
+      windowsHide: true,
+    })
     let stderr = ''
     child.stderr.on('data', (chunk: Buffer) => {
       stderr = `${stderr}${chunk.toString('utf8')}`.slice(-4000)
@@ -89,7 +104,9 @@ describe('aCP owned process cleanup', () => {
           return ''
         throw error
       })
-      return /^\d+$/.test(value) ? Number(value) : undefined
+      return /^\d+$/.test(value)
+        ? Number(value)
+        : undefined
     }
     let cleaned = false
     try {
@@ -121,7 +138,14 @@ describe('aCP owned process cleanup', () => {
     const argument = '中文 $() ; "quoted" C:\\tail\\'
     const code = 'process.stdout.write(JSON.stringify({arg:process.argv[1],privatePayload:Object.keys(process.env).some(name=>name.startsWith("__HAI_AI_ACP_JOB_"))})+"\\n");process.stdin.on("data",data=>process.stdout.write(data))'
     const job = windowsACPCommand(process.execPath, ['-e', code, argument])
-    const child = spawn('powershell.exe', job.args, { env: { ...baseEnvironment(), ...job.env }, shell: false, windowsHide: true })
+    const child = spawn('powershell.exe', job.args, {
+      env: {
+        ...baseEnvironment(),
+        ...job.env,
+      },
+      shell: false,
+      windowsHide: true,
+    })
     let stderr = ''
     child.stderr.on('data', (chunk: Buffer) => {
       stderr = `${stderr}${chunk.toString('utf8')}`.slice(-4000)
@@ -138,7 +162,9 @@ describe('aCP owned process cleanup', () => {
       child.stdin.write(content)
       const text = await waitForWindowsFixture(child, () => {
         const output = Buffer.concat(chunks).toString('utf8')
-        return output.includes('你好 ACP 🧪\n') ? output : undefined
+        return output.includes('你好 ACP 🧪\n')
+          ? output
+          : undefined
       }, () => stderr)
       const lines = text.split('\n')
       expect(JSON.parse(lines[0]!)).toEqual({ arg: argument, privatePayload: false })
@@ -176,7 +202,13 @@ describe('aCP owned process cleanup', () => {
     const pidFile = join(directory, 'writer.pid')
     const writer = 'const fs=require("node:fs");fs.writeFileSync(process.argv[2],String(process.pid));setInterval(()=>fs.writeFileSync(process.argv[1],String(Date.now())),10)'
     const source = 'const {spawn}=require("node:child_process");const child=spawn(process.execPath,["-e",process.argv[1],process.argv[2],process.argv[3]],{stdio:"ignore"});child.unref()'
-    const leader = spawn(process.execPath, ['-e', source, writer, heartbeat, pidFile], { detached: true, stdio: 'ignore' })
+    const leader = spawn(process.execPath, [
+      '-e',
+      source,
+      writer,
+      heartbeat,
+      pidFile,
+    ], { detached: true, stdio: 'ignore' })
     let writerPid: number | undefined
     try {
       await new Promise<void>((done, fail) => {

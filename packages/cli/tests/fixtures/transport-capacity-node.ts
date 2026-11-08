@@ -21,7 +21,14 @@ async function serveTransportBackend(): Promise<void> {
   const pair = crypto.asymmetric.generateKeyPair()
   if (!pair.success)
     throw new Error(pair.error.message)
-  const created = crypto.transport.createServer({ keyStore: createInMemoryKeyStore(), serverKeyRing: { activeKeyId: 'v1', keys: { v1: pair.data } }, maxPlaintextBytes })
+  const created = crypto.transport.createServer({
+    keyStore: createInMemoryKeyStore(),
+    serverKeyRing: {
+      activeKeyId: 'v1',
+      keys: { v1: pair.data },
+    },
+    maxPlaintextBytes,
+  })
   if (!created.success)
     throw new Error(created.error.message)
   const manager = created.data
@@ -30,16 +37,31 @@ async function serveTransportBackend(): Promise<void> {
     try {
       const headers = new Headers()
       for (const [name, value] of Object.entries(incoming.headers)) {
-        if (value !== undefined)
-          headers.set(name, Array.isArray(value) ? value.join(', ') : value)
+        if (value !== undefined) {
+          headers.set(name, Array.isArray(value)
+            ? value.join(', ')
+            : value)
+        }
       }
-      const request = new Request(`http://localhost${incoming.url}`, { method: incoming.method, headers, body: incoming.method === 'GET' ? undefined : Readable.toWeb(incoming) as ReadableStream<Uint8Array>, duplex: 'half' } as RequestInit)
+      const request = new Request(`http://localhost${incoming.url}`, {
+        method: incoming.method,
+        headers,
+        body: incoming.method === 'GET'
+          ? undefined
+          : Readable.toWeb(incoming) as ReadableStream<Uint8Array>,
+        duplex: 'half',
+      } as RequestInit)
       if (incoming.url?.endsWith('/_hai/key-exchange')) {
         stage = 'key-exchange'
         const input = JSON.parse(await readTransportBody(request.body, { maxBytes: TRANSPORT_BODY_LIMITS.keyExchangeBytes })) as { clientPublicKey: string }
         const clientId = await manager.registerClientKey(input.clientPublicKey)
         outgoing.setHeader('Content-Type', 'application/json')
-        outgoing.end(JSON.stringify({ clientId, serverKeyId: manager.getServerKeyId(), serverPublicKey: manager.getServerPublicKey(), maxPlaintextBytes }))
+        outgoing.end(JSON.stringify({
+          clientId,
+          serverKeyId: manager.getServerKeyId(),
+          serverPublicKey: manager.getServerPublicKey(),
+          maxPlaintextBytes,
+        }))
         return
       }
       Atomics.add(requestCounts, 0, 1)
@@ -67,7 +89,9 @@ async function serveTransportBackend(): Promise<void> {
     }
     catch (cause) {
       // 仅记录夹具阶段和错误类型，不输出请求、密钥或响应内容。
-      process.stderr.write(`Transport capacity backend failed: stage=${stage} kind=${cause instanceof Error ? cause.name : typeof cause}\n`)
+      process.stderr.write(`Transport capacity backend failed: stage=${stage} kind=${cause instanceof Error
+        ? cause.name
+        : typeof cause}\n`)
       outgoing.statusCode = 500
       outgoing.end('Proxy fixture backend failed')
     }
@@ -99,7 +123,10 @@ async function verifyTransportCapacity(): Promise<void> {
   const backend = new Worker(new URL(import.meta.url), { workerData: requestCounts })
   const finished = once(backend, 'exit')
   try {
-    const [ready] = await Promise.race([once(backend, 'message'), finished])
+    const [ready] = await Promise.race([
+      once(backend, 'message'),
+      finished,
+    ])
     assert.equal(ready, 'ready')
     const client = crypto.transport.createClient({
       keyExchangeUrl: 'http://127.0.0.1:18080/api/v1/_hai/key-exchange',
@@ -111,13 +138,21 @@ async function verifyTransportCapacity(): Promise<void> {
       },
     })
     try {
-      const response = await client.encryptedFetch('http://127.0.0.1:18080/api/v1/import', { method: 'POST', body: JSON.stringify({ name: 'capacity.xlsx', file: workbook.toString('base64') }) })
+      const response = await client.encryptedFetch('http://127.0.0.1:18080/api/v1/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'capacity.xlsx',
+          file: workbook.toString('base64'),
+        }),
+      })
       assert.deepEqual(await response.json(), { result })
       let expectedRequests = 1
       for (const bytes of [12 * 1048576, 24 * 1048576]) {
         if (bytes > maxPlaintextBytes)
           continue
-        const body = JSON.stringify({ payload: 'x'.repeat(bytes - 14) })
+        const body = JSON.stringify({
+          payload: 'x'.repeat(bytes - 14),
+        })
         assert.equal(Buffer.byteLength(body), bytes)
         process.stdout.write(`TRANSPORT_CAPACITY_BODY_START:${bytes}\n`)
         const ordinary = await client.encryptedFetch('http://127.0.0.1:18080/api/v1/import', { method: 'POST', body })
@@ -125,7 +160,10 @@ async function verifyTransportCapacity(): Promise<void> {
         process.stdout.write(`TRANSPORT_CAPACITY_BODY_PASS:${bytes}\n`)
         expectedRequests++
       }
-      const rejected = await fetch('http://127.0.0.1:18080/api/v1/import', { method: 'POST', body: Buffer.alloc(resolveTransportBodyLimits(maxPlaintextBytes).encryptedPayloadBytes + 1) })
+      const rejected = await fetch('http://127.0.0.1:18080/api/v1/import', {
+        method: 'POST',
+        body: Buffer.alloc(resolveTransportBodyLimits(maxPlaintextBytes).encryptedPayloadBytes + 1),
+      })
       assert.equal(rejected.status, 413)
       assert.match(await rejected.text(), /nginx/)
       assert.equal(Atomics.load(requestCounts, 0), expectedRequests)

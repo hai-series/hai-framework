@@ -17,7 +17,14 @@ import { escapeSqlString, HaiReldbError, validateIdentifier, validateIdentifiers
 
 describe('validateIdentifier', () => {
   it('应通过合法的标识符', () => {
-    const cases = ['users', 'user_name', '_private', 'T1', 'a', 'A_B_C_123']
+    const cases = [
+      'users',
+      'user_name',
+      '_private',
+      'T1',
+      'a',
+      'A_B_C_123',
+    ]
     for (const name of cases) {
       const result = validateIdentifier(name)
       expect(result.success, `expected "${name}" to pass`).toBe(true)

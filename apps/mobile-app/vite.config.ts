@@ -6,15 +6,23 @@
 
 import process from 'node:process'
 import { core } from '@h-ai/core'
+import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 import { paraglideVitePlugin } from '@inlang/paraglide-js'
+import adapter from '@sveltejs/adapter-static'
 import { sveltekit } from '@sveltejs/kit/vite'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 import { publicRuntimeConfig } from '../../scripts/vite-runtime-config.js'
 
 export default defineConfig(({ mode, command }) => {
-  const envResult = command === 'build' || process.env.HAI_E2E === '1' ? { success: true as const, data: {} as Record<string, string> } : core.config.loadEnvFiles({ mode, envDir: process.cwd() })
+  const envResult = command === 'build' || process.env.HAI_E2E === '1'
+    ? { success: true as const, data: {} as Record<string, string> }
+    : core.config.loadEnvFiles({
+        mode,
+        envDir: process.cwd(),
+      })
   if (!envResult.success)
     throw new Error(envResult.error.message)
   const env = envResult.data
@@ -25,9 +33,26 @@ export default defineConfig(({ mode, command }) => {
     envPrefix: ['VITE_', 'PUBLIC_'],
     plugins: [
       publicRuntimeConfig({ apiBase: process.env.PUBLIC_API_BASE, apiTransport: process.env.PUBLIC_API_TRANSPORT, apiKeyExchangePath: process.env.PUBLIC_API_KEY_EXCHANGE_PATH }),
-      sveltekit(),
+      sveltekit({
+        preprocess: [
+          vitePreprocess(),
+          autoImportHaiUi(),
+        ],
+        compilerOptions: {
+          runes: true,
+        },
+        env: { dir: './.svelte-kit' },
+        adapter: adapter({
+          pages: 'build',
+          assets: 'build',
+          fallback: 'index.html',
+        }),
+        paths: { relative: false },
+      }),
       tailwindcss(),
       paraglideVitePlugin({
+        // 共享物理消息产物供独立 Vitest/Node 工具读取。
+        outputStructure: 'message-modules',
         project: './project.inlang',
         outdir: './src/lib/paraglide',
         strategy: ['cookie', 'baseLocale'],

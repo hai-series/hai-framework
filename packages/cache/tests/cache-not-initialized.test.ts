@@ -7,7 +7,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { cache, HaiCacheError } from '../src/index.js'
 
-describe.sequential('cache (not initialized)', () => {
+describe('cache (not initialized)', { concurrent: false }, () => {
   beforeEach(async () => {
     await cache.close()
   })
@@ -63,7 +63,9 @@ describe.sequential('cache (not initialized)', () => {
   })
 
   it('kv.mset 应返回 NOT_INITIALIZED', async () => {
-    const result = await cache.kv.mset([['k1', 'v1']])
+    const result = await cache.kv.mset([
+      ['k1', 'v1'],
+    ])
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)

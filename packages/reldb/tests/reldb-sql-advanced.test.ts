@@ -138,9 +138,18 @@ describe('reldb.sql advanced', () => {
 
       // batch: 插入 + 更新 + 删除
       const result = await reldb.sql.batch([
-        { sql: 'INSERT INTO items (title, status) VALUES (?, ?)', params: ['Gamma', 'published'] },
-        { sql: 'UPDATE items SET status = ? WHERE title = ?', params: ['archived', 'Alpha'] },
-        { sql: 'DELETE FROM items WHERE title = ?', params: ['Beta'] },
+        {
+          sql: 'INSERT INTO items (title, status) VALUES (?, ?)',
+          params: ['Gamma', 'published'],
+        },
+        {
+          sql: 'UPDATE items SET status = ? WHERE title = ?',
+          params: ['archived', 'Alpha'],
+        },
+        {
+          sql: 'DELETE FROM items WHERE title = ?',
+          params: ['Beta'],
+        },
       ])
       expect(result.success).toBe(true)
 
@@ -165,8 +174,14 @@ describe('reldb.sql advanced', () => {
       await reldb.sql.execute('INSERT INTO items (title) VALUES (?)', ['Original'])
 
       const result = await reldb.sql.batch([
-        { sql: 'INSERT INTO items (title) VALUES (?)', params: ['Valid'] },
-        { sql: 'INSERT INTO nonexistent_table_xyz (col) VALUES (?)', params: ['Invalid'] },
+        {
+          sql: 'INSERT INTO items (title) VALUES (?)',
+          params: ['Valid'],
+        },
+        {
+          sql: 'INSERT INTO nonexistent_table_xyz (col) VALUES (?)',
+          params: ['Invalid'],
+        },
       ])
       expect(result.success).toBe(false)
 
@@ -256,7 +271,9 @@ describe('reldb.sql advanced', () => {
         active: { type: 'BOOLEAN' },
       })
 
-      const activeVal = label === 'postgresql' ? true : 1
+      const activeVal = label === 'postgresql'
+        ? true
+        : 1
       await reldb.sql.execute(
         'INSERT INTO products (name, price, active) VALUES (?, ?, ?)',
         ['Widget', 9.99, activeVal],

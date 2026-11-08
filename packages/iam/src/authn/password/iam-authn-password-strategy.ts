@@ -93,7 +93,12 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
 
   const maxLoginAttempts = config.maxLoginAttempts ?? 5
   const lockoutDuration = config.lockoutDuration ?? 900
-  const failurePolicy = { maxLoginAttempts, lockoutDuration, lockoutEnabled: config.lockoutEnabled ?? true, failureWindow: config.failureWindow ?? 86400 }
+  const failurePolicy = {
+    maxLoginAttempts,
+    lockoutDuration,
+    lockoutEnabled: config.lockoutEnabled ?? true,
+    failureWindow: config.failureWindow ?? 86400,
+  }
   const passwordOps = haiCrypto.password
 
   function mapPasswordError(message: string): HaiResult<never> {
@@ -110,14 +115,18 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
     if (password.length < passwordConfig.minLength) {
       return err(
         HaiIamError.PASSWORD_POLICY_VIOLATION,
-        iamM('iam_passwordMinLength', { params: { minLength: passwordConfig.minLength } }),
+        iamM('iam_passwordMinLength', {
+          params: { minLength: passwordConfig.minLength },
+        }),
       )
     }
 
     if (password.length > passwordConfig.maxLength) {
       return err(
         HaiIamError.PASSWORD_POLICY_VIOLATION,
-        iamM('iam_passwordMaxLength', { params: { maxLength: passwordConfig.maxLength } }),
+        iamM('iam_passwordMaxLength', {
+          params: { maxLength: passwordConfig.maxLength },
+        }),
       )
     }
 
@@ -149,9 +158,17 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
       )
     }
 
-    const classes = [PASSWORD_UPPERCASE_REGEX, PASSWORD_LOWERCASE_REGEX, PASSWORD_DIGIT_REGEX, PASSWORD_SPECIAL_CHAR_REGEX].filter(pattern => pattern.test(password)).length
-    if (classes < passwordConfig.minCharacterClasses)
-      return err(HaiIamError.PASSWORD_POLICY_VIOLATION, iamM('iam_passwordCharacterClasses', { params: { count: passwordConfig.minCharacterClasses } }))
+    const classes = [
+      PASSWORD_UPPERCASE_REGEX,
+      PASSWORD_LOWERCASE_REGEX,
+      PASSWORD_DIGIT_REGEX,
+      PASSWORD_SPECIAL_CHAR_REGEX,
+    ].filter(pattern => pattern.test(password)).length
+    if (classes < passwordConfig.minCharacterClasses) {
+      return err(HaiIamError.PASSWORD_POLICY_VIOLATION, iamM('iam_passwordCharacterClasses', {
+        params: { count: passwordConfig.minCharacterClasses },
+      }))
+    }
 
     return ok(undefined)
   }
@@ -231,7 +248,10 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
         return resetResult
       logger.debug('Password authentication succeeded', { userId: storedUser.id })
 
-      return ok({ ...toUser(storedUser), credentialVersion: storedUser.credentialVersion ?? '' })
+      return ok({
+        ...toUser(storedUser),
+        credentialVersion: storedUser.credentialVersion ?? '',
+      })
     },
   }
 

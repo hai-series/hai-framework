@@ -78,7 +78,12 @@ export function createFeedbackReview(actions: FeedbackReviewActions) {
       const events: FeedbackEvidence[] = []
       try {
         for (let page = 1; page <= 100; page++) {
-          const result = await actions.getEvidence({ id, kind: 'replay', page, pageSize: 100 })
+          const result = await actions.getEvidence({
+            id,
+            kind: 'replay',
+            page,
+            pageSize: 100,
+          })
           if (signal.aborted)
             return failed()
           if (!result.success)
@@ -114,7 +119,9 @@ export function createFeedbackReview(actions: FeedbackReviewActions) {
             const file = await actions.getExport({ id, jobId: job.id })
             if (signal.aborted)
               return failed()
-            return file.success ? saveFeedbackFile(feedbackDataBytes(file.data), file.data.name, file.data.contentType, signal) : file
+            return file.success
+              ? saveFeedbackFile(feedbackDataBytes(file.data), file.data.name, file.data.contentType, signal)
+              : file
           }
           await new Promise<void>((resolve) => {
             let timer: ReturnType<typeof setTimeout>

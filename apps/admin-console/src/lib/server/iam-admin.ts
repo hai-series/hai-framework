@@ -6,10 +6,10 @@
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { Permission, PermissionQueryOptions, PermissionType, Role, User } from '@h-ai/iam'
-import * as m from '$lib/paraglide/messages.js'
 import { core, err, ok } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { error } from '@sveltejs/kit'
+import * as m from '#lib/paraglide/messages.js'
 
 interface IamProfileInput {
   id: string
@@ -95,7 +95,7 @@ const SEED_PERMISSION_CODES = new Set([
 export function requireAdminData<T>(result: HaiResult<T>): T {
   if (!result.success) {
     core.logger.error('Admin data read failed', { error: result.error })
-    throw error(503, { message: m.common_network_error() })
+    error(503, m.common_network_error())
   }
   return result.data
 }
@@ -130,7 +130,7 @@ export async function resolvePermissionIds(codes: string[] | undefined): Promise
   const permissions = await Promise.all(codes.map(code => getAdminPermissionByCode(code)))
   return permissions.map((permission) => {
     if (!permission)
-      throw error(400, { message: m.api_iam_permissions_not_found() })
+      error(400, m.api_iam_permissions_not_found())
     return permission.id
   })
 }
@@ -145,12 +145,17 @@ export async function createAdminRole(input: CreateRoleInput): Promise<HaiResult
   })
 
   if (!createResult.success) {
-    return err({ code: 'iam.role.create_failed', message: m.api_iam_roles_create_failed(), httpStatus: createResult.error.httpStatus ?? 500, cause: createResult.error })
+    return err({
+      code: 'iam.role.create_failed',
+      message: m.api_iam_roles_create_failed(),
+      httpStatus: createResult.error.httpStatus ?? 500,
+      cause: createResult.error,
+    })
   }
 
   const role = await getAdminRole(createResult.data.id)
   if (!role)
-    throw error(503, { message: m.common_network_error() })
+    error(503, m.common_network_error())
   return ok(role)
 }
 
@@ -188,7 +193,9 @@ export async function updateAdminRole(id: string, input: UpdateRoleInput): Promi
   if (!existing)
     return ok(null)
 
-  const editableInput = existing.isSystem ? { description: input.description } : input
+  const editableInput = existing.isSystem
+    ? { description: input.description }
+    : input
   const updateData: Partial<Pick<Role, 'name' | 'description'>> = {}
   if (editableInput.name !== undefined)
     updateData.name = editableInput.name
@@ -196,8 +203,14 @@ export async function updateAdminRole(id: string, input: UpdateRoleInput): Promi
     updateData.description = editableInput.description
 
   const updateResult = await iam.authz.updateRole(id, { ...updateData, permissionIds: editableInput.permissions })
-  if (!updateResult.success)
-    return err({ code: 'iam.role.update_failed', message: m.api_iam_roles_update_failed(), httpStatus: updateResult.error.httpStatus ?? 500, cause: updateResult.error })
+  if (!updateResult.success) {
+    return err({
+      code: 'iam.role.update_failed',
+      message: m.api_iam_roles_update_failed(),
+      httpStatus: updateResult.error.httpStatus ?? 500,
+      cause: updateResult.error,
+    })
+  }
 
   return ok(await getAdminRole(id))
 }
@@ -208,12 +221,20 @@ export async function deleteAdminRole(id: string): Promise<HaiResult<boolean>> {
   if (!existing)
     return ok(false)
   if (existing.isSystem) {
-    return err({ code: 'iam.role.system_cannot_delete', message: m.api_iam_roles_system_cannot_delete() })
+    return err({
+      code: 'iam.role.system_cannot_delete',
+      message: m.api_iam_roles_system_cannot_delete(),
+    })
   }
 
   const deleteResult = await iam.authz.deleteRole(id)
   if (!deleteResult.success) {
-    return err({ code: 'iam.role.delete_failed', message: m.api_iam_roles_delete_failed(), httpStatus: deleteResult.error.httpStatus ?? 500, cause: deleteResult.error })
+    return err({
+      code: 'iam.role.delete_failed',
+      message: m.api_iam_roles_delete_failed(),
+      httpStatus: deleteResult.error.httpStatus ?? 500,
+      cause: deleteResult.error,
+    })
   }
 
   return ok(true)
@@ -223,7 +244,12 @@ export async function deleteAdminRole(id: string): Promise<HaiResult<boolean>> {
 export async function createAdminPermission(input: CreatePermissionInput): Promise<HaiResult<PermissionWithSystem>> {
   const result = await iam.authz.createPermission(input)
   if (!result.success) {
-    return err({ code: 'iam.permission.create_failed', message: m.api_iam_permissions_create_failed(), httpStatus: result.error.httpStatus ?? 500, cause: result.error })
+    return err({
+      code: 'iam.permission.create_failed',
+      message: m.api_iam_permissions_create_failed(),
+      httpStatus: result.error.httpStatus ?? 500,
+      cause: result.error,
+    })
   }
 
   return ok(toPermissionWithSystem(result.data))
@@ -283,7 +309,12 @@ export async function listPermissionsGroupedByResource(): Promise<Record<string,
 export async function deleteAdminPermission(id: string): Promise<HaiResult<void>> {
   const result = await iam.authz.deletePermission(id)
   if (!result.success) {
-    return err({ code: 'iam.permission.delete_failed', message: m.api_iam_permissions_delete_failed(), httpStatus: result.error.httpStatus ?? 500, cause: result.error })
+    return err({
+      code: 'iam.permission.delete_failed',
+      message: m.api_iam_permissions_delete_failed(),
+      httpStatus: result.error.httpStatus ?? 500,
+      cause: result.error,
+    })
   }
   return ok(undefined)
 }
@@ -299,9 +330,13 @@ export function normalizeUniqueConstraintError(message: string | undefined, fall
 
 /** IAM 用户对象转后台用户列表响应格式（含角色 code）。 */
 export async function toIamUserResponse(user: User) {
-  const loaded = user.roles ? user : requireAdminData(await iam.user.getUser(user.id, { include: ['roles'] }))
+  const loaded = user.roles
+    ? user
+    : requireAdminData(await iam.user.getUser(user.id, {
+        include: ['roles'],
+      }))
   if (!loaded)
-    throw error(503, { message: m.common_network_error() })
+    error(503, m.common_network_error())
   const roles = loaded.roles?.map(role => role.code) ?? []
 
   return {
@@ -322,10 +357,12 @@ export async function toIamUserResponse(user: User) {
 
 /** IAM 用户对象转当前用户资料响应格式。 */
 export async function toIamProfileResponse(user: IamProfileInput) {
-  const userResult = await iam.user.getUser(user.id, { include: ['roles'] })
+  const userResult = await iam.user.getUser(user.id, {
+    include: ['roles'],
+  })
   const loaded = requireAdminData(userResult)
   if (!loaded)
-    throw error(503, { message: m.common_network_error() })
+    error(503, m.common_network_error())
   const roles = loaded.roles?.map(role => role.code) ?? []
 
   return {

@@ -1,9 +1,9 @@
-/** 管理端一次性设密邀请；投递后发生配置失败时保留账号供修复。 */
-import { toIamUserResponse } from '$lib/server/iam-admin.js'
-import { createInviteUserSchema } from '$lib/server/schemas/index.js'
-import { requireAssignableRoles } from '$lib/server/security-roles.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+/** 管理端一次性设密邀请；投递后发生配置失败时保留账号供修复。 */
+import { toIamUserResponse } from '#lib/server/iam-admin.js'
+import { createInviteUserSchema } from '#lib/server/schemas/index.js'
+import { requireAssignableRoles } from '#lib/server/security-roles.js'
 
 export const POST = kit.handler(async (event) => {
   kit.guard.require(event.locals.session, 'user:api:create')

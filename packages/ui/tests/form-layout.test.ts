@@ -31,7 +31,10 @@ function input(element: HTMLInputElement | HTMLTextAreaElement, value: string) {
 describe('form layout and accessible errors', () => {
   it.each([Input, Textarea, PasswordInput])('关闭字段提示后再次无效提交仍显示错误', async (Control) => {
     const element = target()
-    const component = mount(Control, { target: element, props: { required: true } })
+    const component = mount(Control, {
+      target: element,
+      props: { required: true },
+    })
     try {
       flushSync()
       const control = element.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea')!
@@ -53,7 +56,15 @@ describe('form layout and accessible errors', () => {
 
   it('关闭选择框提示后再次无效提交仍显示错误，修正后清除', async () => {
     const element = target()
-    const component = mount(Select, { target: element, props: { required: true, options: [{ value: 'admin', label: 'Admin' }] } })
+    const component = mount(Select, {
+      target: element,
+      props: {
+        required: true,
+        options: [
+          { value: 'admin', label: 'Admin' },
+        ],
+      },
+    })
     try {
       flushSync()
       const control = element.querySelector('select')!
@@ -80,7 +91,10 @@ describe('form layout and accessible errors', () => {
 
   it.each([false, true])('关闭保留子树的容器后清除校验，重开保持未访问状态：drawer=%s', async (drawer) => {
     const element = target()
-    const component = mount(FormVisibilityHarness, { target: element, props: { drawer } })
+    const component = mount(FormVisibilityHarness, {
+      target: element,
+      props: { drawer },
+    })
     try {
       flushSync()
       const control = element.querySelector<HTMLInputElement>('input[required]')!
@@ -104,13 +118,21 @@ describe('form layout and accessible errors', () => {
 
   it('资料表单的业务约束在失焦时显示，取消后恢复有效数据', async () => {
     const element = target()
-    const component = mount(UserProfile, { target: element, props: {
-      user: { username: 'original' },
-      editable: true,
-      alwaysEditable: true,
-      fields: ['username'],
-      fieldConstraints: { username: { pattern: '\\w{3,20}', validationMessage: () => 'Use 3 to 20 letters or digits' } },
-    } })
+    const component = mount(UserProfile, {
+      target: element,
+      props: {
+        user: { username: 'original' },
+        editable: true,
+        alwaysEditable: true,
+        fields: ['username'],
+        fieldConstraints: {
+          username: {
+            pattern: '\\w{3,20}',
+            validationMessage: () => 'Use 3 to 20 letters or digits',
+          },
+        },
+      },
+    })
     try {
       flushSync()
       const control = element.querySelector<HTMLInputElement>('input[name="username"]')!
@@ -133,7 +155,10 @@ describe('form layout and accessible errors', () => {
   it.each([Input, Textarea, PasswordInput])('未输入空字段失焦不挤动操作，输入后失焦或提交仍校验必填', async (Control) => {
     setUILocale('en-US')
     const element = target()
-    const component = mount(Control, { target: element, props: { required: true } })
+    const component = mount(Control, {
+      target: element,
+      props: { required: true },
+    })
     try {
       flushSync()
       const control = element.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea')!
@@ -163,7 +188,10 @@ describe('form layout and accessible errors', () => {
 
   it.each([undefined, 8])('密码长度仅在明确声明约束时校验：minLength=%s', async (minLength) => {
     const element = target()
-    const component = mount(PasswordInput, { target: element, props: { minLength } })
+    const component = mount(PasswordInput, {
+      target: element,
+      props: { minLength },
+    })
     try {
       flushSync()
       const control = element.querySelector('input')!
@@ -182,7 +210,15 @@ describe('form layout and accessible errors', () => {
 
   it('选择框离开整个控件后显示错误，进入选项时不提前提示', async () => {
     const element = target()
-    const component = mount(Select, { target: element, props: { required: true, options: [{ value: 'admin', label: 'Admin' }] } })
+    const component = mount(Select, {
+      target: element,
+      props: {
+        required: true,
+        options: [
+          { value: 'admin', label: 'Admin' },
+        ],
+      },
+    })
     try {
       flushSync()
       const control = element.querySelector<HTMLInputElement>('input')!
@@ -210,7 +246,10 @@ describe('form layout and accessible errors', () => {
 
   it.each([false, true])('受控字段回填后清除旧的错误：multiline=%s', async (multiline) => {
     const element = target()
-    const component = mount(ControlledValidationHarness, { target: element, props: { multiline } })
+    const component = mount(ControlledValidationHarness, {
+      target: element,
+      props: { multiline },
+    })
     try {
       flushSync()
       const control = element.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea')!
@@ -231,7 +270,10 @@ describe('form layout and accessible errors', () => {
 
   it('字段继承标签配置，自动关联控件和提示，显式跨度保留', async () => {
     const element = target()
-    const component = mount(FormLayoutHarness, { target: element, props: { columns: 2, labelPosition: 'left', error: 'Invalid email' } })
+    const component = mount(FormLayoutHarness, {
+      target: element,
+      props: { columns: 2, labelPosition: 'left', error: 'Invalid email' },
+    })
     try {
       flushSync()
       expect(element.querySelector('.hai-form-grid')?.getAttribute('data-columns')).toBe('2')
@@ -258,7 +300,10 @@ describe('form layout and accessible errors', () => {
   it.each([Input, Textarea])('自定义提示仅在无效时生效，修正后能够提交', async (Control) => {
     setUILocale('en-US')
     const element = target()
-    const component = mount(Control, { target: element, props: { required: true, validationMessage: 'Please fill this in' } })
+    const component = mount(Control, {
+      target: element,
+      props: { required: true, validationMessage: 'Please fill this in' },
+    })
     try {
       flushSync()
       const control = element.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea')!
@@ -283,7 +328,10 @@ describe('form layout and accessible errors', () => {
     setUILocale('en-US')
     const onreset = vi.fn()
     const element = target()
-    const component = mount(FormLayoutHarness, { target: element, props: { onreset } })
+    const component = mount(FormLayoutHarness, {
+      target: element,
+      props: { onreset },
+    })
     try {
       flushSync()
       const control = element.querySelector<HTMLInputElement>('input[name="name"]')!
@@ -308,7 +356,17 @@ describe('form layout and accessible errors', () => {
 
   it.each([0, false])('选择值 %s 不被当作空值，必填与表单序列化正常', async (value) => {
     const element = target()
-    const component = mount(Select, { target: element, props: { value, required: true, name: 'choice', options: [{ value, label: 'Chosen' }] } })
+    const component = mount(Select, {
+      target: element,
+      props: {
+        value,
+        required: true,
+        name: 'choice',
+        options: [
+          { value, label: 'Chosen' },
+        ],
+      },
+    })
     try {
       flushSync()
       expect(element.querySelector<HTMLInputElement>('input')?.value).toBe('Chosen')
@@ -327,14 +385,31 @@ describe('crud create and edit validation', () => {
   it.each(['create', 'edit'] as const)('%s 仅在访问字段失焦后校验，修正后清除错误', async (mode) => {
     setUILocale('en-US')
     const element = target()
-    const component = mount(CrudEditPanel, { target: element, props: {
-      open: true,
-      mode,
-      fields: [
-        { id: 'name', label: 'Name', type: 'string', validation: { min: 3, required: true, message: () => 'Name needs 3 characters' } },
-        { id: 'email', label: 'Email', type: 'email', validation: { required: true } },
-      ],
-    } })
+    const component = mount(CrudEditPanel, {
+      target: element,
+      props: {
+        open: true,
+        mode,
+        fields: [
+          {
+            id: 'name',
+            label: 'Name',
+            type: 'string',
+            validation: {
+              min: 3,
+              required: true,
+              message: () => 'Name needs 3 characters',
+            },
+          },
+          {
+            id: 'email',
+            label: 'Email',
+            type: 'email',
+            validation: { required: true },
+          },
+        ],
+      },
+    })
     try {
       flushSync()
       const control = element.querySelector<HTMLInputElement>('input[name="name"]')!
@@ -358,23 +433,75 @@ describe('crud create and edit validation', () => {
   })
 
   it.each([
-    { type: 'number', validation: { min: 1 }, bad: 0, good: 1, message: 'at least 1' },
-    { type: 'number', validation: { max: 10 }, bad: 11, good: 10, message: 'no greater than 10' },
-    { type: 'string', validation: { min: 3 }, bad: 'ab', good: 'abc', message: 'at least 3 characters' },
-    { type: 'textarea', validation: { max: 3 }, bad: 'abcd', good: 'abc', message: 'no more than 3 characters' },
-    { type: 'string', validation: { pattern: '[A-Z]+' }, bad: 'abc', good: 'ABC', message: 'required format' },
-    { type: 'email', validation: {}, bad: 'bad', good: 'ada@example.com', message: 'valid email' },
-    { type: 'url', validation: {}, bad: 'bad', good: 'https://example.com', message: 'valid URL' },
+    {
+      type: 'number',
+      validation: { min: 1 },
+      bad: 0,
+      good: 1,
+      message: 'at least 1',
+    },
+    {
+      type: 'number',
+      validation: { max: 10 },
+      bad: 11,
+      good: 10,
+      message: 'no greater than 10',
+    },
+    {
+      type: 'string',
+      validation: { min: 3 },
+      bad: 'ab',
+      good: 'abc',
+      message: 'at least 3 characters',
+    },
+    {
+      type: 'textarea',
+      validation: { max: 3 },
+      bad: 'abcd',
+      good: 'abc',
+      message: 'no more than 3 characters',
+    },
+    {
+      type: 'string',
+      validation: { pattern: '[A-Z]+' },
+      bad: 'abc',
+      good: 'ABC',
+      message: 'required format',
+    },
+    {
+      type: 'email',
+      validation: {},
+      bad: 'bad',
+      good: 'ada@example.com',
+      message: 'valid email',
+    },
+    {
+      type: 'url',
+      validation: {},
+      bad: 'bad',
+      good: 'https://example.com',
+      message: 'valid URL',
+    },
   ] satisfies Array<{ type: CrudFieldDef['type'], validation: CrudFieldDef['validation'], bad: string | number, good: string | number, message: string }>)('$type 的 $validation 校验允许修正后提交', async ({ type, validation, bad, good, message }) => {
     setUILocale('en-US')
     const onsubmit = vi.fn()
     const element = target()
-    const component = mount(CrudEditPanel, { target: element, props: {
-      open: true,
-      fields: [{ id: 'value', label: 'Value', type, validation }],
-      formData: { value: bad },
-      onsubmit,
-    } })
+    const component = mount(CrudEditPanel, {
+      target: element,
+      props: {
+        open: true,
+        fields: [
+          {
+            id: 'value',
+            label: 'Value',
+            type,
+            validation,
+          },
+        ],
+        formData: { value: bad },
+        onsubmit,
+      },
+    })
     try {
       flushSync()
       const form = element.querySelector('form')!
@@ -397,22 +524,45 @@ describe('crud create and edit validation', () => {
     setUILocale('en-US')
     const onsubmit = vi.fn()
     const element = target()
-    const component = mount(CrudEditPanel, { target: element, props: {
-      open: true,
-      variant,
-      columns: 2,
-      labelPosition: 'left',
-      formData: { amount: '', name: '', roles: [] },
-      fields: [
-        { id: 'name', label: 'Name', type: 'string', validation: { required: true, min: 3 } },
-        { id: 'amount', label: 'Amount', type: 'number', validation: { required: true, min: 1 } },
-        { id: 'roles', label: 'Roles', type: 'multi-select', validation: { required: true }, options: [{ value: 'admin', label: 'Admin' }] },
-      ],
-      onsubmit,
-    } })
+    const component = mount(CrudEditPanel, {
+      target: element,
+      props: {
+        open: true,
+        variant,
+        columns: 2,
+        labelPosition: 'left',
+        formData: { amount: '', name: '', roles: [] },
+        fields: [
+          {
+            id: 'name',
+            label: 'Name',
+            type: 'string',
+            validation: { required: true, min: 3 },
+          },
+          {
+            id: 'amount',
+            label: 'Amount',
+            type: 'number',
+            validation: { required: true, min: 1 },
+          },
+          {
+            id: 'roles',
+            label: 'Roles',
+            type: 'multi-select',
+            validation: { required: true },
+            options: [
+              { value: 'admin', label: 'Admin' },
+            ],
+          },
+        ],
+        onsubmit,
+      },
+    })
     try {
       flushSync()
-      const save = [...element.querySelectorAll('button')].find(button => button.textContent?.includes('Create'))!
+      const save = [
+        ...element.querySelectorAll('button'),
+      ].find(button => button.textContent?.includes('Create'))!
       save.click()
       flushSync()
       expect(onsubmit).not.toHaveBeenCalled()
@@ -429,7 +579,11 @@ describe('crud create and edit validation', () => {
       expect(element.querySelectorAll('[aria-invalid="true"]')).toHaveLength(0)
       element.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
       flushSync()
-      expect(onsubmit).toHaveBeenCalledExactlyOnceWith({ name: 'Ada', amount: 2, roles: ['admin'] })
+      expect(onsubmit).toHaveBeenCalledExactlyOnceWith({
+        name: 'Ada',
+        amount: 2,
+        roles: ['admin'],
+      })
     }
     finally {
       await unmount(component)
@@ -440,15 +594,32 @@ describe('crud create and edit validation', () => {
   it('编辑跳过只读字段，支持延迟翻译的自定义校验文案', async () => {
     const onsubmit = vi.fn()
     const element = target()
-    const component = mount(CrudEditPanel, { target: element, props: {
-      open: true,
-      mode: 'edit',
-      fields: [
-        { id: 'id', label: 'ID', type: 'string', readonly: true, validation: { required: true } },
-        { id: 'email', label: 'Email', type: 'email', validation: { required: true, message: () => 'Custom email error' } },
-      ],
-      onsubmit,
-    } })
+    const component = mount(CrudEditPanel, {
+      target: element,
+      props: {
+        open: true,
+        mode: 'edit',
+        fields: [
+          {
+            id: 'id',
+            label: 'ID',
+            type: 'string',
+            readonly: true,
+            validation: { required: true },
+          },
+          {
+            id: 'email',
+            label: 'Email',
+            type: 'email',
+            validation: {
+              required: true,
+              message: () => 'Custom email error',
+            },
+          },
+        ],
+        onsubmit,
+      },
+    })
     try {
       flushSync()
       element.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))

@@ -52,7 +52,7 @@ description: "构建或排查 hai 应用的源码、静态网站、容器镜像�
 - 静态客户端通过 runtime-config.js 或原生宿主初始化脚本获取公开地址与元数据；仅投影公开白名单，禁止将完整 process.env、服务配置或密钥序列化到浏览器。预览与容器启动均须验证真实登录，不能依赖构建期 API 地址让 E2E 通过。
 - Fullstack Capacitor App 在 `public/runtime-config.js` 提供公开 API 地址，再编译并同步原生资源；Tauri 从启动进程的 PUBLIC_API_BASE 注入。不能把开发代理的 .env 配置当作已安装原生包的运行配置。
 - `pnpm build --target desktop --platform windows|linux|macos --arch x64|arm64` 调用对应工程的 Tauri build。要求在目标系统准备 Rust target、SDK 和打包工具，不假定跨系统编译。原生安装包必须按目标系统实测。
-- deploy 默认消费已有产物，--build 显式先构建，详见 [hai-deploy](../hai-deploy/SKILL.md)。网络不通时 --bundle-only 默认生成 tar.gz（显式--output release.tar保留未压缩格式），按说明手工搬运；packaged 不代表部署已运行。
+- deploy 默认消费已有产物，--build 显式先构建。工程已交付 `hai-deploy` 时按需读取该技能；已有工程的通用 AI 支持不假定已安装部署工具，先核对实际 scripts 与依赖。网络不通时 --bundle-only 默认生成 tar.gz（显式--output release.tar保留未压缩格式），按说明手工搬运；packaged 不代表部署已运行。
 - 测试临时工程、镜像、容器、辅助进程和数据必须在 finally/teardown 自动清理，失败/取消也清理；日志、截图和报告保留到分析和交付结束再清理，不得提交测试产物或删除用户既有资源。
 - 浏览器测试的数据放入本轮独立临时目录；Windows 等子进程与服务退出后再删除数据库和上传文件，不依赖下一轮测试补清理。
 
@@ -73,4 +73,4 @@ Windows 构建子进程使用追加式 pnpm 日志并规范 CRLF，等待输出�
 - 统一编码规范
 - 标准工作流
 
-`pnpm build --target app --platform android --runtime auto --debug` 容器打调试 APK，省略 `--debug` 使用发布签名；`--runtime` 可选 auto/docker/podman，省略时使用本机工具链。iOS 在 macOS/Xcode 上签名导出 IPA。原生打包拒绝同步后的 `CAPACITOR_SERVER_URL`，成功后按平台、构建类型和批次归档到 `.hai/build/app/` 或 `.hai/build/desktop/`，更新对应的 `latest`。Android 签名配置见 [hai-capacitor](../hai-capacitor/reference.md#android-容器打包)。构建身份统一 128 字符，显式非法 `HAI_BUILD_ID`/`HAI_BUILD_COMMIT` 报错且不回显原值。
+`pnpm build --target app --platform android --runtime auto --debug` 容器打调试 APK，省略 `--debug` 使用发布签名；`--runtime` 可选 auto/docker/podman，省略时使用本机工具链。iOS 在 macOS/Xcode 上签名导出 IPA。原生打包拒绝同步后的 `CAPACITOR_SERVER_URL`，成功后按平台、构建类型和批次归档到 `.hai/build/app/` 或 `.hai/build/desktop/`，更新对应的 `latest`。只有工程已交付 `hai-capacitor` 时，才按需读取该技能 `reference.md` 的“Android 容器打包”小节；纯 API 工程不交付原生技能，新增原生端时先补当前版本的能力与技能。构建身份统一 128 字符，显式非法 `HAI_BUILD_ID`/`HAI_BUILD_COMMIT` 报错且不回显原值。

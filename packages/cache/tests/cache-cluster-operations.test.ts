@@ -41,9 +41,16 @@ it('rejects invalid scan inputs for memory without treating zero count as defaul
   const memory = createMemoryProvider()
   await memory.connect({ type: 'memory' })
   try {
-    for (const cursor of ['-1', '18446744073709551616', 'c1.invalid'])
-      expect(await memory.kv.scan(cursor)).toMatchObject({ success: false, error: { code: HaiCacheError.INVALID_SCAN.code } })
-    expect(await memory.kv.scan('0', { count: 0 })).toMatchObject({ success: false, error: { code: HaiCacheError.INVALID_SCAN.code } })
+    for (const cursor of ['-1', '18446744073709551616', 'c1.invalid']) {
+      expect(await memory.kv.scan(cursor)).toMatchObject({
+        success: false,
+        error: { code: HaiCacheError.INVALID_SCAN.code },
+      })
+    }
+    expect(await memory.kv.scan('0', { count: 0 })).toMatchObject({
+      success: false,
+      error: { code: HaiCacheError.INVALID_SCAN.code },
+    })
   }
   finally {
     await memory.close()
@@ -82,14 +89,29 @@ done
     if (host !== '127.0.0.1')
       throw new Error('This local Cluster fixture requires loopback port publishing')
     for (const port of ports) {
-      const client = new Redis({ host, port, lazyConnect: true, retryStrategy: () => null, connectTimeout: 1000, commandTimeout: 1000 })
+      const client = new Redis({
+        host,
+        port,
+        lazyConnect: true,
+        retryStrategy: () => null,
+        connectTimeout: 1000,
+        commandTimeout: 1000,
+      })
       clients.push(client)
       await client.connect()
     }
     for (const [index, client] of clients.entries()) {
       await client.call('CLUSTER', 'SET-CONFIG-EPOCH', String(index + 1))
-      const first = index === 0 ? 0 : index === 1 ? 5461 : 10923
-      const last = index === 0 ? 5460 : index === 1 ? 10922 : 16383
+      const first = index === 0
+        ? 0
+        : index === 1
+          ? 5461
+          : 10923
+      const last = index === 0
+        ? 5460
+        : index === 1
+          ? 10922
+          : 16383
       await client.call('CLUSTER', 'ADDSLOTSRANGE', String(first), String(last))
       if (index > 0)
         await clients[0]!.call('CLUSTER', 'MEET', '127.0.0.1', String(ports[index]))
@@ -100,7 +122,16 @@ done
         throw new Error('Three-master Cluster did not become ready')
       await new Promise(resolve => setTimeout(resolve, 100))
     }
-    const config = CacheConfigSchema.parse({ type: 'redis', cluster: [{ host, port: ports[0] }], keyPrefix: 'ns[*]:', maxRetries: 0, connectTimeout: 1000, commandTimeout: 1000 })
+    const config = CacheConfigSchema.parse({
+      type: 'redis',
+      cluster: [
+        { host, port: ports[0] },
+      ],
+      keyPrefix: 'ns[*]:',
+      maxRetries: 0,
+      connectTimeout: 1000,
+      commandTimeout: 1000,
+    })
     expect((await left.connect(config)).success).toBe(true)
     expect((await right.connect(config)).success).toBe(true)
     expect(await left.kv.compareAndSwap('state', undefined, { version: 1 })).toEqual({ success: true, data: true })
@@ -110,39 +141,70 @@ done
     for (const [index, key] of expected.entries())
       expect((await left.kv.set(key, index)).success).toBe(true)
     // 相似但不同的前缀应被排除，[*] 必须按字面量匹配。
-    rawCluster = new Redis.Cluster([{ host, port: ports[0]! }], { lazyConnect: true })
+    rawCluster = new Redis.Cluster([
+      { host, port: ports[0]! },
+    ], { lazyConnect: true })
     await rawCluster.connect()
     await rawCluster.set('nsx:other', 'unrelated')
     const found = new Set<string>()
     let cursor = '0'
     let pageCount = 0
     do {
-      const provider = pageCount++ % 2 ? left : right
+      const provider = pageCount++ % 2
+        ? left
+        : right
       const page = await provider.kv.scan(cursor, { match: 'item:*', count: 2 })
       if (!page.success)
         throw new Error(page.error.message)
       cursor = page.data[0]
       for (const key of page.data[1]) found.add(key)
       if (cursor !== '0') {
-        expect(await provider.kv.scan(cursor, { match: 'other:*' })).toMatchObject({ success: false, error: { code: HaiCacheError.SCAN_TOPOLOGY_CHANGED.code } })
+        expect(await provider.kv.scan(cursor, { match: 'other:*' })).toMatchObject({
+          success: false,
+          error: { code: HaiCacheError.SCAN_TOPOLOGY_CHANGED.code },
+        })
       }
     } while (cursor !== '0')
     expect([...found].sort()).toEqual(expected.sort())
     const all = await left.kv.keys('item:*')
     expect(all.success && all.data.sort()).toEqual(expected.sort())
-    expect(await left.kv.mget('item:1', 'missing', 'item:70')).toEqual({ success: true, data: [1, null, 70] })
+    expect(await left.kv.mget('item:1', 'missing', 'item:70')).toEqual({
+      success: true,
+      data: [1, null, 70],
+    })
     expect(await left.kv.exists('item:1', 'missing', 'item:70')).toEqual({ success: true, data: 2 })
-    expect((await left.kv.mset([['{atomic}:a', 1], ['{atomic}:b', 2]])).success).toBe(true)
-    expect(await left.kv.mset([['cross:a', 1], ['cross:b', 2]])).toMatchObject({ success: false, error: { code: HaiCacheError.CROSS_SLOT.code } })
-    expect(await left.kv.mget('cross:a', 'cross:b')).toEqual({ success: true, data: [null, null] })
-    expect(await left.set_.sinter('cross:a', 'cross:b')).toMatchObject({ success: false, error: { code: HaiCacheError.CROSS_SLOT.code } })
+    expect((await left.kv.mset([
+      ['{atomic}:a', 1],
+      ['{atomic}:b', 2],
+    ])).success).toBe(true)
+    expect(await left.kv.mset([
+      ['cross:a', 1],
+      ['cross:b', 2],
+    ])).toMatchObject({
+      success: false,
+      error: { code: HaiCacheError.CROSS_SLOT.code },
+    })
+    expect(await left.kv.mget('cross:a', 'cross:b')).toEqual({
+      success: true,
+      data: [null, null],
+    })
+    expect(await left.set_.sinter('cross:a', 'cross:b')).toMatchObject({
+      success: false,
+      error: { code: HaiCacheError.CROSS_SLOT.code },
+    })
     expect(await left.kv.del('item:1', 'item:70')).toEqual({ success: true, data: 2 })
-    expect(await left.kv.scan('invalid')).toMatchObject({ success: false, error: { code: HaiCacheError.INVALID_SCAN.code } })
+    expect(await left.kv.scan('invalid')).toMatchObject({
+      success: false,
+      error: { code: HaiCacheError.INVALID_SCAN.code },
+    })
   }
   finally {
     rawCluster?.disconnect()
     for (const client of clients) client.disconnect()
     await container.stop()
-    await Promise.allSettled([left.close(), right.close()])
+    await Promise.allSettled([
+      left.close(),
+      right.close(),
+    ])
   }
 }, 120000)

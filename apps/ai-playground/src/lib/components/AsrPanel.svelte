@@ -1,9 +1,9 @@
 <script lang='ts'>
-  // 文件语音识别面板：上传 WAV/MP3 一次性转写为文本
-  import * as m from '$lib/paraglide/messages.js'
-  import { transcribe } from '$lib/services/ai-lab.js'
   import { Button, Card } from '@h-ai/ui'
   import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  // 文件语音识别面板：上传 WAV/MP3 一次性转写为文本
+  import * as m from '#lib/paraglide/messages.js'
+  import { transcribe } from '#lib/services/ai-lab.js'
 
   let file = $state<File | undefined>()
   let language = $state<'auto' | 'zh' | 'en' | 'ja'>('auto')
@@ -69,6 +69,8 @@
 
   <Button class='mt-4 w-full' variant='default' onclick={run} disabled={busy || !file} data-testid='asr-run'>
     {#if busy}<span class='loading loading-spinner loading-sm'></span>{/if}
-    {busy ? m.asr_running() : m.asr_run()}
+    {busy
+      ? m.asr_running()
+      : m.asr_run()}
   </Button>
 </Card>

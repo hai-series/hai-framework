@@ -32,7 +32,10 @@ let taskRepo: SchedulerTaskRepository | null = null
 let logRepo: SchedulerLogRepository | null = null
 let executionRepo: SchedulerExecutionRepository | null = null
 const executionIdSchema = z.string().regex(/^[a-f\d]{64}$/)
-const executionListSchema = z.object({ limit: z.number().int().min(1).max(100).default(50), offset: z.number().int().min(0).max(1_000_000).default(0) })
+const executionListSchema = z.object({
+  limit: z.number().int().min(1).max(100).default(50),
+  offset: z.number().int().min(0).max(1_000_000).default(0),
+})
 
 const notInitialized = core.module.createNotInitializedKit(
   HaiSchedulerError.NOT_INITIALIZED,
@@ -114,7 +117,11 @@ export const scheduler: SchedulerFunctions = {
       if (!executionIdSchema.safeParse(id).success)
         return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
       const row = await executionRepo.byOccurrence(id)
-      return row.success ? ok(row.data ? executionEntry(row.data) : null) : row
+      return row.success
+        ? ok(row.data
+            ? executionEntry(row.data)
+            : null)
+        : row
     },
     async listUnknown(options) {
       if (!currentConfig || !executionRepo)
@@ -123,7 +130,9 @@ export const scheduler: SchedulerFunctions = {
       if (!parsed.success)
         return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
       const rows = await executionRepo.unknown(parsed.data.limit, parsed.data.offset)
-      return rows.success ? ok(rows.data.map(executionEntry)) : rows
+      return rows.success
+        ? ok(rows.data.map(executionEntry))
+        : rows
     },
     async listLogFailures(options) {
       if (!currentConfig || !executionRepo)
@@ -132,7 +141,9 @@ export const scheduler: SchedulerFunctions = {
       if (!parsed.success)
         return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
       const rows = await executionRepo.pendingLogs(parsed.data.limit, parsed.data.offset)
-      return rows.success ? ok(rows.data.map(executionEntry)) : rows
+      return rows.success
+        ? ok(rows.data.map(executionEntry))
+        : rows
     },
     async repairLog(id) {
       if (!currentConfig || !executionRepo || closeInProgress)
@@ -155,7 +166,9 @@ export const scheduler: SchedulerFunctions = {
       logger.warn('Scheduler init already in progress, skipping concurrent call')
       return err(
         HaiSchedulerError.INIT_FAILED,
-        schedulerM('scheduler_initFailed', { params: { error: 'Concurrent initialization detected' } }),
+        schedulerM('scheduler_initFailed', {
+          params: { error: 'Concurrent initialization detected' },
+        }),
       )
     }
 
@@ -176,7 +189,9 @@ export const scheduler: SchedulerFunctions = {
         logger.error('Scheduler config validation failed', { error: parseResult.error.message })
         return err(
           HaiSchedulerError.CONFIG_ERROR,
-          schedulerM('scheduler_configError', { params: { error: parseResult.error.message } }),
+          schedulerM('scheduler_configError', {
+            params: { error: parseResult.error.message },
+          }),
           parseResult.error,
         )
       }
@@ -205,7 +220,11 @@ export const scheduler: SchedulerFunctions = {
         return err(
           HaiSchedulerError.INIT_FAILED,
           schedulerM('scheduler_initFailed', {
-            params: { error: error instanceof Error ? error.message : String(error) },
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
           }),
           error,
         )
@@ -250,8 +269,12 @@ export const scheduler: SchedulerFunctions = {
       return notInitialized.result()
 
     const updateResult = await updateRegisteredTask(taskId, updates, taskRepo)
-    if (updateResult.success)
-      logger.info('Task updated', { taskId, updates: Object.keys(updates) })
+    if (updateResult.success) {
+      logger.info('Task updated', {
+        taskId,
+        updates: Object.keys(updates),
+      })
+    }
 
     return updateResult
   },
@@ -306,7 +329,9 @@ export const scheduler: SchedulerFunctions = {
     if (!task) {
       return err(
         HaiSchedulerError.TASK_NOT_FOUND,
-        schedulerM('scheduler_taskNotFound', { params: { taskId } }),
+        schedulerM('scheduler_taskNotFound', {
+          params: { taskId },
+        }),
       )
     }
 

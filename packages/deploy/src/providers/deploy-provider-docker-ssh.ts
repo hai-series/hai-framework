@@ -51,12 +51,21 @@ const HEALTH_POLL_INTERVAL = 3000
 
 /** 只处理本次选中的应用配置；文件按应用目录读取，运行期路径不回写调用方环境。 */
 function prepareRequestAccess(options: { settings: Record<string, unknown>, module: 'serv' | 'kit', directory: string }): HaiResult<{ settings: Record<string, unknown>, snapshot?: string }> {
-  const scope = options.module === 'serv' ? options.settings.http : options.settings
+  const scope = options.module === 'serv'
+    ? options.settings.http
+    : options.settings
   if (!scope || typeof scope !== 'object' || !('access' in scope))
     return ok({ settings: options.settings })
   const configured = RequestAccessConfigSchema.safeParse(scope.access)
-  if (!configured.success)
-    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_requestAccessInvalid', { params: { field: options.module === 'serv' ? 'serv.http.access' : 'kit.access' } }))
+  if (!configured.success) {
+    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_requestAccessInvalid', {
+      params: {
+        field: options.module === 'serv'
+          ? 'serv.http.access'
+          : 'kit.access',
+      },
+    }))
+  }
   try {
     const policy = core.access.loadPolicy(configured.data, options.directory)
     const check = core.access.createRequestCheck(policy)
@@ -66,12 +75,24 @@ function prepareRequestAccess(options: { settings: Record<string, unknown>, modu
       return ok({ settings: options.settings })
     const access = { file: '/run/hai/request-access.yml' }
     const settings = options.module === 'serv'
-      ? { ...options.settings, http: { ...scope, access } }
+      ? {
+          ...options.settings,
+          http: { ...scope, access },
+        }
       : { ...options.settings, access }
-    return ok({ settings, snapshot: stringify(policy, { aliasDuplicateObjects: false }) })
+    return ok({
+      settings,
+      snapshot: stringify(policy, { aliasDuplicateObjects: false }),
+    })
   }
   catch {
-    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_requestAccessInvalid', { params: { field: options.module === 'serv' ? 'serv.http.access' : 'kit.access' } }))
+    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_requestAccessInvalid', {
+      params: {
+        field: options.module === 'serv'
+          ? 'serv.http.access'
+          : 'kit.access',
+      },
+    }))
   }
 }
 
@@ -98,10 +119,25 @@ function endpointSettings(value: unknown): Record<string, unknown> {
 /** 只接收服务器脚本原子发布的终态；匹配 ID 后才能确认本次执行完成。 */
 const ServerResultSchema = z.object({
   deploymentId: z.string(),
-  stage: z.enum(['preflight', 'credentials', 'recover', 'images', 'dependencies', 'start', 'https', 'health', 'complete']),
+  stage: z.enum([
+    'preflight',
+    'credentials',
+    'recover',
+    'images',
+    'dependencies',
+    'start',
+    'https',
+    'health',
+    'complete',
+  ]),
   exitCode: z.number().int().min(0).max(255),
   durationSeconds: z.number().int().nonnegative(),
-  recoveryStatus: z.enum(['not-needed', 'passed', 'failed', 'stopped']).optional(),
+  recoveryStatus: z.enum([
+    'not-needed',
+    'passed',
+    'failed',
+    'stopped',
+  ]).optional(),
 })
 
 /** 生成不可变部署 ID：`YYYYMMDD-HHmmss-<random>`。 */
@@ -129,7 +165,9 @@ export function createDockerSshProvider(
   config: DockerSshProviderConfig,
   container?: DeployConfig['container'],
 ): ContainerDeployProvider {
-  const ssh = config.ssh ? createSshExecutor(config.ssh) : undefined
+  const ssh = config.ssh
+    ? createSshExecutor(config.ssh)
+    : undefined
   const baseDir = config.remote.baseDir
 
   /** 探测远程容器运行时与 compose 可用性。 */
@@ -152,7 +190,11 @@ export function createDockerSshProvider(
     }
     return err(
       HaiDeployError.REMOTE_COMMAND_FAILED,
-      deployM('deploy_remoteRuntimeMissing', { params: { runtime: candidates.join(' / ') } }),
+      deployM('deploy_remoteRuntimeMissing', {
+        params: {
+          runtime: candidates.join(' / '),
+        },
+      }),
     )
   }
 
@@ -162,7 +204,10 @@ export function createDockerSshProvider(
       try {
         if (certificate) {
           const healthy = await new Promise<boolean>((resolve) => {
-            const request = requestHttps(url, { ca: [...rootCertificates, certificate], timeout: 5000 }, (response) => {
+            const request = requestHttps(url, {
+              ca: [...rootCertificates, certificate],
+              timeout: 5000,
+            }, (response) => {
               response.resume()
               resolve(response.statusCode !== undefined && response.statusCode >= 200 && response.statusCode < 300)
             })
@@ -175,7 +220,9 @@ export function createDockerSshProvider(
             return true
         }
         else {
-          const response = await fetch(url, { signal: AbortSignal.timeout(5000) })
+          const response = await fetch(url, {
+            signal: AbortSignal.timeout(5000),
+          })
           // 健康检查只消费状态码，主动释放响应体和连接，避免失败轮询积压未读数据。
           await response.body?.cancel()
           if (response.ok)
@@ -195,7 +242,9 @@ export function createDockerSshProvider(
     const deploymentId = makeDeploymentId()
     const hostPort = config.expose.hostPort
     const https = config.expose.https
-    const httpsAssets = https ? createHttpsAssets(https, resolveProjectDirectory(appDir)) : undefined
+    const httpsAssets = https
+      ? createHttpsAssets(https, resolveProjectDirectory(appDir))
+      : undefined
     const deploymentRoot = join(resolveProjectDirectory(appDir), '.hai', 'deploy', options?.environment ?? 'prod')
     const artifact = context.artifact
     const resolvedBuildDir = context.artifactDir
@@ -204,35 +253,61 @@ export function createDockerSshProvider(
     const primaryService = artifact.primaryService
     const app = images.find(image => image.name === primaryService)
     if (options?.selectedServices) {
-      const available: string[] = [...images.map(image => image.name), ...scan.requiredServices]
+      const available: string[] = [
+        ...images.map(image => image.name),
+        ...scan.requiredServices,
+      ]
       const invalid = options.selectedServices.find(name => !available.includes(name))
-      if (!options.selectedServices.length || new Set(options.selectedServices).size !== options.selectedServices.length || invalid)
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', { params: { service: invalid ?? options.selectedServices.join(', ') } }))
+      if (!options.selectedServices.length || new Set(options.selectedServices).size !== options.selectedServices.length || invalid) {
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', {
+          params: { service: invalid ?? options.selectedServices.join(', ') },
+        }))
+      }
     }
     const hasWebProxy = primaryService === 'serv' && artifact.hasWeb
     const partial = artifact.partial || options?.selectedServices !== undefined
-    const containerPort = app?.containerPort ?? (primaryService === 'serv' ? artifact.servContainerPort : artifact.webContainerPort) ?? config.expose.containerPort
+    const containerPort = app?.containerPort ?? (primaryService === 'serv'
+      ? artifact.servContainerPort
+      : artifact.webContainerPort) ?? config.expose.containerPort
     const webContainerPort = web?.containerPort ?? artifact.webContainerPort ?? 8080
     const host = config.ssh?.host
-    const url = https ? `https://${https.domain}${https.port === 443 ? '' : `:${https.port}`}` : host ? `http://${host.includes(':') ? `[${host}]` : host}:${hostPort}` : `http://SERVER_HOST:${hostPort}`
+    const url = https
+      ? `https://${https.domain}${https.port === 443
+        ? ''
+        : `:${https.port}`}`
+      : host
+        ? `http://${host.includes(':')
+          ? `[${host}]`
+          : host}:${hostPort}`
+        : `http://SERVER_HOST:${hostPort}`
     const webBasePath = artifact.webBasePath ?? ''
-    const applicationUrl = `${url}${webBasePath ? `${webBasePath}/` : ''}`
+    const applicationUrl = `${url}${webBasePath
+      ? `${webBasePath}/`
+      : ''}`
     const standaloneWebConfig = primaryService === 'web' && !scan.isSvelteKit && (!!webBasePath || !!https)
-    const healthPaths = hasWebProxy ? ['/_hai/web-health', `${webBasePath}/`] : scan.isSvelteKit ? [`${webBasePath}/`] : primaryService === 'serv' ? [] : standaloneWebConfig ? ['/health', `${webBasePath}/`] : ['/health']
+    const healthPaths = hasWebProxy
+      ? ['/_hai/web-health', `${webBasePath}/`]
+      : scan.isSvelteKit
+        ? [`${webBasePath}/`]
+        : primaryService === 'serv'
+          ? []
+          : standaloneWebConfig
+            ? ['/health', `${webBasePath}/`]
+            : ['/health']
 
     // 先保存开通结果和 sidecar 凭据，传输失败后仍可检查与复用配置。
     const plannedRuntime = buildRuntimeEnv(appDir, projectName, scan, provisionEnv, containerPort, options, appEnv, container?.s3Engine)
     const { sidecar } = plannedRuntime
     let { env } = plannedRuntime
-    if (https && scan.isSvelteKit && !env.ORIGIN)
-      env.ORIGIN = url
-    const managedStorage = sidecar.services.includes('storage') ? JSON.parse(sidecar.env.HAI_STORAGE) as { bucket: string, secretAccessKey: string, publicEndpoint?: unknown } : undefined
+    const managedStorage = sidecar.services.includes('storage')
+      ? JSON.parse(sidecar.env.HAI_STORAGE) as { bucket: string, secretAccessKey: string, publicEndpoint?: unknown }
+      : undefined
     let storageBasePath = ''
     if (managedStorage?.publicEndpoint !== undefined) {
       // 与 Storage 的公开端点约束一致，在归档/上传前报告错误，不输出配置中的 URL 或秘密。
       try {
         if (typeof managedStorage.publicEndpoint !== 'string')
-          throw new Error('Invalid public endpoint type')
+          throw new TypeError('Invalid public endpoint type')
         // eslint-disable-next-line no-control-regex -- 在 URL 标准化前拒绝控制字符及编码目录。
         const unsafeCharacters = /[\u0000-\u0020\u007F\\%]/.test(managedStorage.publicEndpoint)
         const endpoint = new URL(managedStorage.publicEndpoint)
@@ -248,15 +323,19 @@ export function createDockerSshProvider(
       }
     }
     // 应用增量继承已安装连接配置；对外地址或桶等配置改变须全量切换，不能静默沿用旧值。
-    const storageRouting = managedStorage ? createHash('sha256').update(JSON.stringify({ ...managedStorage, secretAccessKey: undefined })).digest('hex') : ''
-    // SSR/API 没有现成 Web Nginx 时追加网关；静态客户端不能持有存储服务端凭据。
-    const gateway = !hasWebProxy && (!!managedStorage || (!!https && !standaloneWebConfig))
+    const storageRouting = managedStorage
+      ? createHash('sha256').update(JSON.stringify({ ...managedStorage, secretAccessKey: undefined })).digest('hex')
+      : ''
+    // SSR 始终通过私有网关确定真实协议；API 仅在存储或 HTTPS 需要时追加网关。
+    const gateway = !hasWebProxy && (scan.isSvelteKit || !!managedStorage || (!!https && !standaloneWebConfig))
     if (gateway && primaryService === 'web' && !scan.isSvelteKit)
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageBackendRequired'))
     const proxyService = gateway ? 'gateway' : 'web'
     if (gateway)
       healthPaths.push('/_hai/gateway-health')
-    const updatesApp = options?.selectedServices ? options.selectedServices.includes(primaryService) : !!app
+    const updatesApp = options?.selectedServices
+      ? options.selectedServices.includes(primaryService)
+      : !!app
     const cookieSecure = env.HAI_SERV_REFRESH_COOKIE_SECURE
     if (updatesApp && cookieSecure && cookieSecure !== 'true' && cookieSecure !== 'false')
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_refreshCookieSecureInvalid'))
@@ -275,7 +354,9 @@ export function createDockerSshProvider(
       }
     }
     const serverPath = join(appDir, 'config', '_serv.yml')
-    const server = existsSync(serverPath) || hasWebProxy ? loadDeploymentConfig('serv', serverPath, env) : ok<Record<string, unknown>>({})
+    const server = existsSync(serverPath) || hasWebProxy
+      ? loadDeploymentConfig('serv', serverPath, env)
+      : ok<Record<string, unknown>>({})
     if (!server.success)
       return server
     const backendPaths: string[] = []
@@ -290,7 +371,11 @@ export function createDockerSshProvider(
       if (hasWebProxy) {
         // 生成应用按 Core 环境关闭生产文档，不能用部署目标名或 NODE_ENV 猜测启用状态。
         const corePath = join(appDir, 'config', '_core.yml')
-        const settings = existsSync(corePath) ? loadDeploymentConfig('core', corePath, env) : ok(env.HAI_CORE ? JSON.parse(env.HAI_CORE) : { env: env.HAI_CORE_ENV })
+        const settings = existsSync(corePath)
+          ? loadDeploymentConfig('core', corePath, env)
+          : ok(env.HAI_CORE
+              ? JSON.parse(env.HAI_CORE)
+              : { env: env.HAI_CORE_ENV })
         if (!settings.success)
           return settings
         const application = CoreConfigSchema.safeParse(settings.data)
@@ -316,8 +401,14 @@ export function createDockerSshProvider(
         return prepared
       Object.assign(server.data, prepared.data.settings)
       requestAccessSnapshot = prepared.data.snapshot
-      if (requestAccessSnapshot)
-        env = mergeEnvironmentLayers([env, { HAI_SERV: JSON.stringify(server.data) }])
+      if (requestAccessSnapshot) {
+        env = mergeEnvironmentLayers([
+          env,
+          {
+            HAI_SERV: JSON.stringify(server.data),
+          },
+        ])
+      }
     }
     let feedbackTransportBytes: number | undefined
     if (scan.haiModules?.includes('@h-ai/feedback')) {
@@ -335,7 +426,9 @@ export function createDockerSshProvider(
     let applicationPlaintextBytes: number | undefined
     if (scan.isSvelteKit) {
       const kitPath = join(appDir, 'config', '_kit.yml')
-      const kit = existsSync(kitPath) ? loadDeploymentConfig('kit', kitPath, env) : ok({})
+      const kit = existsSync(kitPath)
+        ? loadDeploymentConfig('kit', kitPath, env)
+        : ok({})
       if (!kit.success)
         return kit
       if (updatesApp) {
@@ -344,8 +437,14 @@ export function createDockerSshProvider(
           return prepared
         Object.assign(kit.data, prepared.data.settings)
         requestAccessSnapshot = prepared.data.snapshot
-        if (requestAccessSnapshot)
-          env = mergeEnvironmentLayers([env, { HAI_KIT: JSON.stringify(kit.data) }])
+        if (requestAccessSnapshot) {
+          env = mergeEnvironmentLayers([
+            env,
+            {
+              HAI_KIT: JSON.stringify(kit.data),
+            },
+          ])
+        }
       }
       const transport = (kit.data as Record<string, unknown>).transport
       if (transport && typeof transport === 'object') {
@@ -353,18 +452,27 @@ export function createDockerSshProvider(
         try {
           const configured = (transport as { maxPlaintextBytes?: number | 'auto' }).maxPlaintextBytes
           const routes = (transport as { routePlaintextBytes?: Record<string, number> }).routePlaintextBytes
-          const limits = resolveTransportBodyLimits(Math.max(createTransportBodyPolicy(configured === 'auto' ? undefined : configured, routes).maximum.plaintextBytes, feedbackTransportBytes ?? 0))
+          const limits = resolveTransportBodyLimits(Math.max(createTransportBodyPolicy(configured === 'auto'
+            ? undefined
+            : configured, routes).maximum.plaintextBytes, feedbackTransportBytes ?? 0))
           // adapter-node 默认容量比 transport 小；正式部署必须使用同一派生密文预算。
           env.BODY_SIZE_LIMIT = String(limits.encryptedPayloadBytes)
           applicationPlaintextBytes = limits.plaintextBytes
         }
         catch (error) {
-          return err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError ? error.message : deployM('deploy_transportBodyLimitInvalid'))
+          return err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError
+            ? error.message
+            : deployM('deploy_transportBodyLimitInvalid'))
         }
       }
     }
-    if (updatesApp && protectedTransport && scan.haiModules?.includes('@h-ai/crypto') && !parseTransportServerKeyRing(env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING).success)
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportKeyRingInvalid', { params: { path: join(scan.envDir ?? appDir, `.env.${options?.environment ?? 'prod'}.local`) } }))
+    if (updatesApp && protectedTransport && scan.haiModules?.includes('@h-ai/crypto') && !parseTransportServerKeyRing(env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING).success) {
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportKeyRingInvalid', {
+        params: {
+          path: join(scan.envDir ?? appDir, `.env.${options?.environment ?? 'prod'}.local`),
+        },
+      }))
+    }
     let webProxy: string | undefined
     if (hasWebProxy) {
       // 路由取当前服务的真实配置，不扫描相邻应用或猜测 fullstack 布局。
@@ -379,23 +487,63 @@ export function createDockerSshProvider(
       const transport = server.data.transport as { maxPlaintextBytes?: number | 'auto', routePlaintextBytes?: Record<string, number> } | false | undefined
       try {
         const configured = transport ? transport.maxPlaintextBytes : undefined
-        const limits = resolveTransportBodyLimits(Math.max(createTransportBodyPolicy(configured === 'auto' ? undefined : configured, transport ? transport.routePlaintextBytes : undefined).maximum.plaintextBytes, feedbackTransportBytes ?? 0))
-        webProxy = generateWebProxyConfig(containerPort, apiPrefix, { webPort: webContainerPort, maxPlaintextBytes: limits.plaintextBytes, webBasePath, backendPaths, storageBucket: managedStorage?.bucket, storageBasePath, trustedEdgeProxies: config.trustedEdgeProxies })
+        const limits = resolveTransportBodyLimits(Math.max(createTransportBodyPolicy(configured === 'auto'
+          ? undefined
+          : configured, transport ? transport.routePlaintextBytes : undefined).maximum.plaintextBytes, feedbackTransportBytes ?? 0))
+        webProxy = generateWebProxyConfig(containerPort, apiPrefix, {
+          webPort: webContainerPort,
+          maxPlaintextBytes: limits.plaintextBytes,
+          webBasePath,
+          backendPaths,
+          storageBucket: managedStorage?.bucket,
+          storageBasePath,
+          trustedEdgeProxies: config.trustedEdgeProxies,
+        })
       }
       catch (error) {
-        return err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError ? error.message : deployM(managedStorage ? 'deploy_storageProxyInvalid' : 'deploy_transportBodyLimitInvalid'))
+        return err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError
+          ? error.message
+          : deployM(managedStorage ? 'deploy_storageProxyInvalid' : 'deploy_transportBodyLimitInvalid'))
       }
       // 每次从当前配置生成，避免上次运行环境里的父对象遮蔽新修改；保留明确 Origin。
-      env = mergeEnvironmentLayers([env, { HAI_SERV: JSON.stringify({ ...server.data, cors: { ...cors, origin: (!cors?.origin || cors.origin === '*') && (config.ssh || https) ? url : cors?.origin ?? '*' } }) }])
+      env = mergeEnvironmentLayers([
+        env,
+        {
+          HAI_SERV: JSON.stringify({
+            ...server.data,
+            cors: {
+              ...cors,
+              origin: (!cors?.origin || cors.origin === '*') && (config.ssh || https)
+                ? url
+                : cors?.origin ?? '*',
+            },
+          }),
+        },
+      ])
     }
     else if (gateway) {
       try {
         const http = server.data.http as { apiPrefix?: string } | undefined
         if (primaryService === 'serv') {
           const transport = server.data.transport as { maxPlaintextBytes?: number | 'auto', routePlaintextBytes?: Record<string, number> } | undefined
-          applicationPlaintextBytes = Math.max(createTransportBodyPolicy(transport?.maxPlaintextBytes === 'auto' ? undefined : transport?.maxPlaintextBytes, transport?.routePlaintextBytes).maximum.plaintextBytes, feedbackTransportBytes ?? 0)
+          applicationPlaintextBytes = Math.max(createTransportBodyPolicy(transport?.maxPlaintextBytes === 'auto'
+            ? undefined
+            : transport?.maxPlaintextBytes, transport?.routePlaintextBytes).maximum.plaintextBytes, feedbackTransportBytes ?? 0)
         }
-        webProxy = generateApplicationProxyConfig({ primaryService, port: containerPort, bucket: managedStorage?.bucket, storageBasePath, reservedPaths: [http?.apiPrefix ?? '/api/v1', ...(storageBasePath ? [`${webBasePath}/_app`, `${webBasePath}/assets`, `${webBasePath}/runtime-config.js`] : [webBasePath])], maxPlaintextBytes: applicationPlaintextBytes, trustedEdgeProxies: config.trustedEdgeProxies })
+        webProxy = generateApplicationProxyConfig({
+          primaryService,
+          port: containerPort,
+          bucket: managedStorage?.bucket,
+          storageBasePath,
+          reservedPaths: [
+            http?.apiPrefix ?? '/api/v1',
+            ...(storageBasePath
+              ? [`${webBasePath}/_app`, `${webBasePath}/assets`, `${webBasePath}/runtime-config.js`]
+              : [webBasePath]),
+          ],
+          maxPlaintextBytes: applicationPlaintextBytes,
+          trustedEdgeProxies: config.trustedEdgeProxies,
+        })
       }
       catch {
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageProxyInvalid'))
@@ -406,35 +554,85 @@ export function createDockerSshProvider(
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webBaseConflict'))
       webProxy = generateStaticWebConfig(containerPort, webBasePath)
     }
-    if (https && webProxy)
-      webProxy = renderHttpsProxy(webProxy, https, hasWebProxy ? webContainerPort : gateway ? 8080 : containerPort)
+    if (https && webProxy) {
+      webProxy = renderHttpsProxy(webProxy, https, hasWebProxy
+        ? webContainerPort
+        : gateway ? 8080 : containerPort)
+    }
     if (https && primaryService === 'serv' && !hasWebProxy) {
       const cors = server.data.cors as { origin?: string } | undefined
-      env = mergeEnvironmentLayers([env, { HAI_SERV: JSON.stringify({ ...server.data, cors: { ...cors, origin: !cors?.origin || cors.origin === '*' ? url : cors.origin } }) }])
+      env = mergeEnvironmentLayers([
+        env,
+        {
+          HAI_SERV: JSON.stringify({
+            ...server.data,
+            cors: {
+              ...cors,
+              origin: !cors?.origin || cors.origin === '*'
+                ? url
+                : cors.origin,
+            },
+          }),
+        },
+      ])
     }
     // 一次交付对应一个目录；自定义同名输出也不覆盖已经可复制的旧包。
     const requestedOutput = options?.output ?? join(deploymentRoot, `bundle-${projectName}-${deploymentId}-${artifact.appVersion}.tar.gz`)
     const compressed = requestedOutput.endsWith('.tar.gz')
     const stem = basename(requestedOutput).replace(/\.tar(?:\.gz)?$/i, '')
     const suffix = `-${artifact.appVersion}`
-    const name = stem.endsWith(suffix) ? stem : `${stem}${suffix}`
+    const name = stem.endsWith(suffix)
+      ? stem
+      : `${stem}${suffix}`
     if (!/^[\w.+-]+$/.test(name))
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_bundleNameInvalid'))
     const artifactDir = resolve(dirname(requestedOutput), name)
-    if (existsSync(artifactDir))
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_bundleDirectoryExists', { params: { path: artifactDir } }))
+    if (existsSync(artifactDir)) {
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_bundleDirectoryExists', {
+        params: { path: artifactDir },
+      }))
+    }
     mkdirSync(dirname(artifactDir), { recursive: true, mode: 0o700 })
     mkdirSync(artifactDir, { mode: 0o700 })
     chmodSync(artifactDir, 0o700)
     const envPath = join(artifactDir, '.env.runtime')
     const nodeRuntime = primaryService === 'serv' || scan.isSvelteKit
-    const startupOverrides: Record<string, string> = nodeRuntime ? { NODE_OPTIONS: '', HAI_DEPLOY_PRIVATE_PROXY: '' } : {}
+    const startupOverrides: Record<string, string> = nodeRuntime
+      ? { NODE_OPTIONS: '', HAI_DEPLOY_PRIVATE_PROXY: '' }
+      : {}
+    if (scan.isSvelteKit) {
+      // adapter-node 6 不读取 ORIGIN；转发信任是部署拓扑，不能由运行配置覆盖。
+      for (const name of [
+        'ORIGIN',
+        'PROTOCOL_HEADER',
+        'HOST_HEADER',
+        'PORT_HEADER',
+        'ADDRESS_HEADER',
+        'XFF_DEPTH',
+      ])
+        startupOverrides[name] = ''
+    }
     const runtimeEnvironment = serializeEnvFile(env, startupOverrides, nodeRuntime ? 'node' : 'compose')
-    const envVarsSet = [...new Set([
-      ...Object.keys(parseEnv(runtimeEnvironment)),
-      ...(nodeRuntime ? ['NODE_OPTIONS'] : []),
-      ...(hasWebProxy || gateway ? ['HAI_DEPLOY_PRIVATE_PROXY'] : []),
-    ])]
+    const envVarsSet = [
+      ...new Set([
+        ...Object.keys(parseEnv(runtimeEnvironment)),
+        ...(nodeRuntime
+          ? ['NODE_OPTIONS']
+          : []),
+        ...(hasWebProxy || gateway
+          ? ['HAI_DEPLOY_PRIVATE_PROXY']
+          : []),
+        ...(scan.isSvelteKit
+          ? [
+              'PROTOCOL_HEADER',
+              'HOST_HEADER',
+              'PORT_HEADER',
+              'ADDRESS_HEADER',
+              'XFF_DEPTH',
+            ]
+          : []),
+      ]),
+    ]
     writeFileSync(envPath, runtimeEnvironment, { mode: 0o600 })
     if (requestAccessSnapshot)
       writeFileSync(join(artifactDir, 'request-access.yml'), requestAccessSnapshot, { mode: 0o600 })
@@ -443,7 +641,12 @@ export function createDockerSshProvider(
       const environment = loadDeploymentEnvironment({ environment: options.environment, envDir: options.envDir ?? scan.envDir ?? appDir })
       if (!environment.success)
         return environment
-      const saved = saveDeploymentEnvironment(environment.data, { HAI_DEPLOY_ENVIRONMENT: environment.data.environment, HAI_CORE_ENV: environment.data.values.HAI_CORE_ENV, ...sidecar.env, ...provisionEnv })
+      const saved = saveDeploymentEnvironment(environment.data, {
+        HAI_DEPLOY_ENVIRONMENT: environment.data.environment,
+        HAI_CORE_ENV: environment.data.values.HAI_CORE_ENV,
+        ...sidecar.env,
+        ...provisionEnv,
+      })
       if (!saved.success)
         return saved
     }
@@ -460,7 +663,9 @@ export function createDockerSshProvider(
       nodeRuntime,
       nodeOptions: env.NODE_OPTIONS,
       sidecar,
-      web: hasWebProxy ? { imageRef: web?.imageRef ?? 'localhost/hai-unselected:0', containerPort: webContainerPort } : undefined,
+      web: hasWebProxy
+        ? { imageRef: web?.imageRef ?? 'localhost/hai-unselected:0', containerPort: webContainerPort }
+        : undefined,
       mountWebConfig: standaloneWebConfig,
       gateway,
       https,
@@ -470,16 +675,31 @@ export function createDockerSshProvider(
     writeFileSync(composePath, composeContent)
     if (webProxy)
       writeFileSync(join(artifactDir, 'web.conf'), webProxy)
-    const selected = options?.selectedServices ? [...options.selectedServices] : artifact.partial ? images.map(image => image.name) : [...images.map(image => image.name), ...Object.keys(sidecar.composeServices)]
+    const selected = options?.selectedServices
+      ? [...options.selectedServices]
+      : artifact.partial
+        ? images.map(image => image.name)
+        : [
+            ...images.map(image => image.name),
+            ...Object.keys(sidecar.composeServices),
+          ]
     if (gateway && !partial)
       selected.push('gateway')
     if (https?.type === 'letsencrypt' && !partial)
       selected.push('certbot')
-    if (!selected.length || selected.some(name => !/^[a-z][a-z0-9-]*$/.test(name)) || new Set(selected).size !== selected.length)
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', { params: { service: selected.join(', ') } }))
+    if (!selected.length || selected.some(name => !/^[a-z][a-z0-9-]*$/.test(name)) || new Set(selected).size !== selected.length) {
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', {
+        params: {
+          service: selected.join(', '),
+        },
+      }))
+    }
     for (const name of selected) {
-      if (['serv', 'web'].includes(name) && !images.some(image => image.name === name))
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', { params: { service: name } }))
+      if (['serv', 'web'].includes(name) && !images.some(image => image.name === name)) {
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', {
+          params: { service: name },
+        }))
+      }
     }
     options?.onProgress?.('packaging')
     const bundle = await createDeploymentBundle({
@@ -501,14 +721,28 @@ export function createDockerSshProvider(
       containerPort,
       managedAppKeys: Object.keys(sidecar.env),
       unmanagedAppKeys: scan.middlewares?.filter(item => !Object.hasOwn(sidecar.env, item.envPrefix)).map(item => item.envPrefix),
-      accountSources: describeDeploymentVariableSources(options?.envDir ?? scan.envDir ?? appDir, options?.environment ?? 'prod', env, ['HAI_ADMIN_DEFAULT_PASSWORD', 'HAI_AUDIT_ADMIN_PASSWORD', 'HAI_CONFIG_ADMIN_PASSWORD', 'HAI_BUSINESS_OPERATOR_PASSWORD']),
+      accountSources: describeDeploymentVariableSources(options?.envDir ?? scan.envDir ?? appDir, options?.environment ?? 'prod', env, [
+        'HAI_ADMIN_DEFAULT_PASSWORD',
+        'HAI_AUDIT_ADMIN_PASSWORD',
+        'HAI_CONFIG_ADMIN_PASSWORD',
+        'HAI_BUSINESS_OPERATOR_PASSWORD',
+      ]),
       healthPaths,
       httpsAssets,
       output: join(artifactDir, `${name}.tar${compressed ? '.gz' : ''}`),
       cacheDirectory: join(resolveProjectDirectory(appDir), '.hai', 'cache', 'images'),
     })
-    if (options?.bundleOnly)
-      return ok({ url: '', deploymentId, status: 'packaged', provider: 'docker-ssh', healthCheck: 'skipped', envVarsSet, ...bundle })
+    if (options?.bundleOnly) {
+      return ok({
+        url: '',
+        deploymentId,
+        status: 'packaged',
+        provider: 'docker-ssh',
+        healthCheck: 'skipped',
+        envVarsSet,
+        ...bundle,
+      })
+    }
     if (!ssh)
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_sshRequired'))
     const ping = await ssh.ping()
@@ -528,20 +762,24 @@ export function createDockerSshProvider(
     let pendingOutput = ''
     const started = await ssh.exec(
       `mkdir -p ${shellArgument(`${remoteTar}.contents`)} && chmod 600 ${shellArgument(remoteTar)} && tar -xf ${shellArgument(remoteTar)} -C ${shellArgument(`${remoteTar}.contents`)} && sh ${shellArgument(`${remoteTar}.contents/${bundle.startName}`)} ${shellArgument(remoteDir)} && { rm -rf -- ${shellArgument(`${remoteTar}.contents`)} && rm -f -- ${shellArgument(remoteTar)} || printf '[WARN] Deployment passed; incoming archive cleanup failed\\n' >&2; }`,
-      { timeoutMs: 600_000, secrets: sidecar.secrets, onOutput: (output) => {
-        const parts = output.split('\n')
-        for (let index = 0; index < parts.length; index++) {
+      {
+        timeoutMs: 600_000,
+        secrets: sidecar.secrets,
+        onOutput: (output) => {
+          const parts = output.split('\n')
+          for (let index = 0; index < parts.length; index++) {
           // 进度仅解析行首标签，不保留无限长的构建日志行。
-          pendingOutput += parts[index]!.slice(0, 512 - pendingOutput.length)
-          if (index === parts.length - 1)
-            break
-          const line = pendingOutput
-          pendingOutput = ''
-          const stage = /^\[(preflight|images|dependencies|start|https|health|complete)\]/.exec(line)?.[1]
-          if (stage)
-            options?.onProgress?.(stage as 'preflight' | 'images' | 'dependencies' | 'start' | 'https' | 'health' | 'complete')
-        }
-      } },
+            pendingOutput += parts[index]!.slice(0, 512 - pendingOutput.length)
+            if (index === parts.length - 1)
+              break
+            const line = pendingOutput
+            pendingOutput = ''
+            const stage = /^\[(preflight|images|dependencies|start|https|health|complete)\]/.exec(line)?.[1]
+            if (stage)
+              options?.onProgress?.(stage as 'preflight' | 'images' | 'dependencies' | 'start' | 'https' | 'health' | 'complete')
+          }
+        },
+      },
     )
     if (!started.success) {
       const resultFile = `${remoteDir}/result-${deploymentId}.json`
@@ -559,15 +797,39 @@ export function createDockerSshProvider(
           // 缺失、损坏、超限或不匹配的记录都不能证明远端已停止。
         }
       }
-      return err({ ...started.error, message: `${started.error.message}\n${terminal ? deployM('deploy_remoteFinished', { params: { stage: terminal.stage, code: String(terminal.exitCode) } }) : deployM('deploy_remoteUnknown')}`, suggestion: terminal ? deployM('deploy_remoteFinished', { params: { stage: terminal.stage, code: String(terminal.exitCode) } }) : deployM('deploy_remoteUnknown'), ext: { ...started.error.ext, commandExecution: {
-        ...state,
-        reason: state?.reason ?? 'exit',
-        localTermination: state?.localTermination ?? 'unknown',
-        remoteExecution: terminal ? 'finished' : 'unknown',
-        deploymentId,
-        resultFile,
-        ...(terminal ? { remoteExitCode: terminal.exitCode, remoteStage: terminal.stage, remoteRecovery: terminal.recoveryStatus } : {}),
-      } } })
+      return err({
+        ...started.error,
+        message: `${started.error.message}\n${terminal
+          ? deployM('deploy_remoteFinished', {
+              params: {
+                stage: terminal.stage,
+                code: String(terminal.exitCode),
+              },
+            })
+          : deployM('deploy_remoteUnknown')}`,
+        suggestion: terminal
+          ? deployM('deploy_remoteFinished', {
+              params: {
+                stage: terminal.stage,
+                code: String(terminal.exitCode),
+              },
+            })
+          : deployM('deploy_remoteUnknown'),
+        ext: {
+          ...started.error.ext,
+          commandExecution: {
+            ...state,
+            reason: state?.reason ?? 'exit',
+            localTermination: state?.localTermination ?? 'unknown',
+            remoteExecution: terminal ? 'finished' : 'unknown',
+            deploymentId,
+            resultFile,
+            ...(terminal
+              ? { remoteExitCode: terminal.exitCode, remoteStage: terminal.stage, remoteRecovery: terminal.recoveryStatus }
+              : {}),
+          },
+        },
+      })
     }
 
     // 在线部署完成后检查实际公开入口。
@@ -581,16 +843,24 @@ export function createDockerSshProvider(
     }
     if (!healthy) {
       return err(
-        { ...HaiDeployError.HEALTH_CHECK_FAILED, message: deployM('deploy_healthCheckFailed', { params: { url: applicationUrl } }), ext: { commandExecution: {
-          reason: 'exit',
-          localTermination: 'confirmed',
-          remoteExecution: 'finished',
-          deploymentId,
-          resultFile: `${remoteDir}/result-${deploymentId}.json`,
-          remoteExitCode: 0,
-          remoteStage: 'complete',
-          remoteRecovery: 'not-needed',
-        } } },
+        {
+          ...HaiDeployError.HEALTH_CHECK_FAILED,
+          message: deployM('deploy_healthCheckFailed', {
+            params: { url: applicationUrl },
+          }),
+          ext: {
+            commandExecution: {
+              reason: 'exit',
+              localTermination: 'confirmed',
+              remoteExecution: 'finished',
+              deploymentId,
+              resultFile: `${remoteDir}/result-${deploymentId}.json`,
+              remoteExitCode: 0,
+              remoteStage: 'complete',
+              remoteRecovery: 'not-needed',
+            },
+          },
+        },
       )
     }
 
@@ -612,16 +882,23 @@ export function createDockerSshProvider(
       return await deploy(context)
     }
     catch (error) {
-      const reason = error instanceof Error ? error.message : String(error)
+      const reason = error instanceof Error
+        ? error.message
+        : String(error)
       let safeReason = 'Deployment bundle failed'
       try {
-        safeReason = maskSecrets(reason, [...Object.values(context.appEnv ?? {}), config.ssh?.password ?? ''].filter(Boolean))
+        safeReason = maskSecrets(reason, [
+          ...Object.values(context.appEnv ?? {}),
+          config.ssh?.password ?? '',
+        ].filter(Boolean))
       }
       catch {
         // 脱敏配置无效时保留固定诊断，不重新暴露原异常。
       }
       logger.error('Deployment bundle failed', { reason: safeReason })
-      return err(HaiDeployError.DEPLOY_FAILED, deployM('deploy_bundleFailed', { params: { reason: safeReason } }))
+      return err(HaiDeployError.DEPLOY_FAILED, deployM('deploy_bundleFailed', {
+        params: { reason: safeReason },
+      }))
     }
   }
   return { name: 'docker-ssh', deploy: deploySafely }

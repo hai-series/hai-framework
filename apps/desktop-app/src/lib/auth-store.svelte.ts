@@ -51,7 +51,12 @@ function resolveHaiResultFailure(
     return { success: false, message: fallback }
 
   const error = HaiErrorSchema.safeParse(maybeResult.error)
-  return { success: false, message: error.success ? authErrorMessage(error.data) : fallback }
+  return {
+    success: false,
+    message: error.success
+      ? authErrorMessage(error.data)
+      : fallback,
+  }
 }
 
 function isSuccessResult<TData>(result: unknown): result is { success: true, data: TData } {
@@ -131,8 +136,12 @@ export async function login(input: IamLoginInput): Promise<string | null> {
     if (!isSuccessResult<LoginSuccessResult['data']>(result))
       return authMessage('auth_login_response_invalid')
 
-    const nextRoles = Array.isArray(result.data.roles) ? result.data.roles : []
-    const nextPermissions = Array.isArray(result.data.permissions) ? result.data.permissions : []
+    const nextRoles = Array.isArray(result.data.roles)
+      ? result.data.roles
+      : []
+    const nextPermissions = Array.isArray(result.data.permissions)
+      ? result.data.permissions
+      : []
     await desktopApiClient.auth.setTokens(result.data.tokens)
     user = result.data.user
     setAccessScope(nextRoles, nextPermissions)
@@ -158,8 +167,12 @@ export async function register(input: IamRegisterInput): Promise<string | null> 
     if (!isSuccessResult<RegisterSuccessResult['data']>(result))
       return authMessage('auth_register_response_invalid')
 
-    const nextRoles = Array.isArray(result.data.roles) ? result.data.roles : []
-    const nextPermissions = Array.isArray(result.data.permissions) ? result.data.permissions : []
+    const nextRoles = Array.isArray(result.data.roles)
+      ? result.data.roles
+      : []
+    const nextPermissions = Array.isArray(result.data.permissions)
+      ? result.data.permissions
+      : []
     await desktopApiClient.auth.setTokens(result.data.tokens)
     user = result.data.user
     setAccessScope(nextRoles, nextPermissions)

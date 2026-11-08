@@ -33,7 +33,9 @@ export default defineConfig({
     command: `pnpm build && pnpm exec vite preview --host ${previewHost} --port ${previewPort} --strictPort`,
     env: createE2eServerEnv({
       // 实际商业模型仅在调用方显式选择 live 并注入该前缀时启用。
-      ...(live ? Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[0].startsWith('HAI_AI_') && entry[1] !== undefined)) : {}),
+      ...(live
+        ? Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[0].startsWith('HAI_AI_') && entry[1] !== undefined))
+        : {}),
       HAI_CORE_ENV: 'test',
       HAI_CACHE: JSON.stringify({ type: 'memory' }),
       HAI_DB: JSON.stringify({ type: 'sqlite', database: `${process.env.HAI_E2E_DATA_ROOT}/ai-playground.db` }),

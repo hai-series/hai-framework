@@ -34,6 +34,8 @@ For the full method list, error codes, and longer examples, see [REFERENCE.md (C
 
 ## Getting started
 
+`ai.close()` waits for an initialization already in progress and then cleans up; concurrent closes share one operation. Reinitialization first cleans up the previous instance, and new initialization is rejected while closing.
+
 ### Quick start
 
 #### Development LLM-only (no database dependencies)
@@ -51,7 +53,9 @@ if (!init.success)
   return init
 
 const result = await ai.llm.chat({
-  messages: [{ role: 'user', content: '你好！' }],
+  messages: [
+    { role: 'user', content: '你好！' }
+  ],
 })
 
 await ai.close()
@@ -80,7 +84,11 @@ try {
   })
   if (!initialized.success)
     throw new Error(initialized.error.message)
-  const result = await ai.llm.chat({ messages: [{ role: 'user', content: 'Hello!' }] })
+  const result = await ai.llm.chat({
+    messages: [
+      { role: 'user', content: 'Hello!' }
+    ]
+  })
   if (!result.success)
     throw new Error(result.error.message)
   const reply = result.data.choices[0]?.message.content ?? ''
@@ -111,7 +119,9 @@ import { ai } from '@h-ai/ai'
 const storeProvider: AIStoreProvider = createMyStoreProvider()
 
 await ai.init(
-  { llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY } },
+  {
+    llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY }
+  },
   { storeProvider },
 )
 
@@ -174,7 +184,9 @@ const registry = ai.tools.createRegistry({
 const registered = registry.register(ai.tools.define({
   name: 'get_weather',
   description: '获取天气',
-  parameters: z.object({ city: z.string() }),
+  parameters: z.object({
+    city: z.string()
+  }),
   // handler 第二参为执行上下文：可响应取消（打断/超时）、感知截止时间与交互主体
   handler: async ({ city }, { signal }) => {
     const res = await fetch(`https://api.example.com/weather?city=${city}`, { signal })
@@ -191,7 +203,10 @@ const result = await registry.execute(toolCall, { signal: controller.signal, obj
 // 批量调用默认串行，避免副作用工具并发启动；纯读取且确认安全时才显式并行
 const batch = await registry.executeAll(toolCalls)
 
-const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
+const chat = await ai.llm.chat({
+  messages,
+  tools: registry.getDefinitions()
+})
 ```
 
 #### ACP agents, workspaces and sessions
@@ -223,7 +238,9 @@ Managed Git rejects submodules and Git LFS attributes with ACP_UNSUPPORTED inste
 
 #### A2A protocol boundaries
 
-`ai.a2a.getAgentCard()` returns a complete A2A 0.3 Agent Card with `protocolVersion`, MIME, and streaming capabilities. Kit discovery defaults to `/.well-known/agent-card.json`. `handleRequest()` always returns JSON-RPC/SSE results; uninitialized calls return JSON-RPC errors. Trusted HTTP `agentId` maps to executor `context.user.userName`. JSON-RPC/SSE are supported; push notifications, gRPC, and REST are not claimed. Applications remain responsible for business resource authorization.
+Remote-call headers override existing fields case-insensitively. Fixed JSON-RPC endpoints reject HTTP redirects, preventing authentication headers from reaching redirect targets.
+
+`ai.a2a.getAgentCard()` returns standard A2A 1.0 ProtoJSON ready for an HTTP discovery response, with `supportedInterfaces`, MIME, and streaming capabilities. Kit discovery defaults to `/.well-known/agent-card.json`. `handleRequest()` always returns JSON-RPC/SSE results; uninitialized calls return JSON-RPC errors. Trusted HTTP `agentId` maps to executor `context.user.userName`. JSON-RPC/SSE are supported; push notifications, gRPC, and REST are not claimed. Applications remain responsible for business resource authorization.
 
 A2A journal, context ownership and message tables initialize during `ai.init()`. Tasks use trusted `agentId` scopes for get/cancel/continuation. Anonymous requests share one principal; authenticate at the trusted transport boundary in production. `listMessages` is a server administration API with `callerId`, `contextId`, and `since`; never expose it to unauthorized clients.
 
@@ -244,14 +261,24 @@ import { z } from 'zod'
 const server = createMcpServer({ name: 'my-server', version: '1.0.0' })
 server.registerTool('search', {
   description: '搜索',
-  inputSchema: { query: z.string() },
+  inputSchema: {
+    query: z.string()
+  },
 }, async ({ query }) => ({
-  content: [{ type: 'text', text: `Results for ${query}` }],
+  content: [
+    { type: 'text', text: `Results for ${query}` }
+  ],
 }))
-await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: () => globalThis.crypto.randomUUID() }))
+await server.connect(new StreamableHTTPServerTransport({
+  sessionIdGenerator: () => globalThis.crypto.randomUUID()
+}))
 ```
 
 #### Memory / RAG / Knowledge
+
+Native memory deletion, including administrator clear-all, cleans vectors before removing authoritative records. Failed vector cleanup retains records for retry. SQL and vector storage do not share a transaction; a later failure still requires checking current state.
+
+`ai.memory.scoped({ objectId })` requires a nonempty, non-whitespace subject ID; invalid input immediately throws `TypeError` from the factory instead of creating an unbound instance. Empty public clearing ranges such as `clear({ scope: {} })` fail; cross-subject clearing requires the explicit administrator API. Native memory access statistics and updates use version CAS, so delayed reads cannot resurrect deleted entries. Database and vector cleanup failures return failed HaiResult values.
 
 Each Knowledge ingestion creates a unique `revision` and chunk IDs. It prepares all chunks, embeddings and entities, persists a staging manifest, writes vectors, then publishes the complete document and entity snapshot with shared Store CAS. Only one writer can rebuild a document at a time. Failure preserves the complete old version; shorter replacements cannot expose old trailing chunks. Retrieval filters unpublished revisions and retries around publication; sustained contention returns an error. Candidate expansion and cleanup backlogs can increase query cost.
 
@@ -270,15 +297,23 @@ if (!enriched.success) {
 }
 
 // 多租户推荐入口：scoped() 绑定主体与作用域，所有操作自动携带 objectId / scope（含归属校验），杜绝「忘记传 objectId」越权
-const memory = ai.memory.scoped({ objectId: 'user-001', scope: { topicId: 't-1', personaId: 'p-1' } })
+const memory = ai.memory.scoped({
+  objectId: 'user-001',
+  scope: { topicId: 't-1', personaId: 'p-1' }
+})
 await memory.add({ content: '用户偏好中文', type: 'preference' })
 const recalled = await memory.recall('语言偏好')
 
 // clear 拒绝空过滤（防误清全局）；全局清空只能显式走管理接口
-await memory.clear({ types: ['event'] }) // 仅清该作用域内的 event
+await memory.clear({
+  types: ['event']
+}) // 仅清该作用域内的 event
 await ai.memory.admin.clearAll({ confirm: true }) // 危险：清空整个记忆后端，需显式确认
 
-const rag = await ai.rag.query('核心架构是什么？', { sources: ['docs'], topK: 5 })
+const rag = await ai.rag.query('核心架构是什么？', {
+  sources: ['docs'],
+  topK: 5
+})
 
 const setup = await ai.knowledge.setup()
 if (setup.success) {
@@ -309,11 +344,33 @@ await ai.init({
   audio: {
     inheritLlmApiKey: true,
     models: [
-      { id: 'asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime', operations: ['transcribe'] },
-      { id: 'tts', provider: 'qwen', model: 'qwen3-tts-flash-realtime', operations: ['synthesize'] },
+      {
+        id: 'asr',
+        provider: 'qwen',
+        model: 'qwen3-asr-flash-realtime',
+        operations: ['transcribe']
+      },
+      {
+        id: 'tts',
+        provider: 'qwen',
+        model: 'qwen3-tts-flash-realtime',
+        operations: ['synthesize']
+      },
       // 自托管：whisper / indextts 必须显式配置 baseUrl
-      { id: 'whisper', provider: 'whisper', model: 'faster-whisper-large-v3', operations: ['transcribe'], baseUrl: 'http://127.0.0.1:8101/v1' },
-      { id: 'indextts', provider: 'indextts', model: 'indextts-2.5', operations: ['synthesize'], baseUrl: 'http://127.0.0.1:8102/v1' },
+      {
+        id: 'whisper',
+        provider: 'whisper',
+        model: 'faster-whisper-large-v3',
+        operations: ['transcribe'],
+        baseUrl: 'http://127.0.0.1:8101/v1'
+      },
+      {
+        id: 'indextts',
+        provider: 'indextts',
+        model: 'indextts-2.5',
+        operations: ['synthesize'],
+        baseUrl: 'http://127.0.0.1:8102/v1'
+      },
     ],
     transcribeModel: 'asr',
     synthesizeModel: 'tts',
@@ -440,6 +497,12 @@ Downloads require public HTTPS on default port 443 without URL credentials. Sock
 
 `image.maxImageBytes` defaults to 20971520 (20 MiB; maximum 100 MiB) per output/reference image. `image.maxImages` defaults to 4 (maximum 16) for output/reference counts, with sequential URL downloads. Actual streamed bytes, including decompressed bytes, are bounded and excess responses are cancelled. JSON responses are limited to `max(64 KiB, 2 × maxImageBytes)` and error bodies to 64 KiB. Model `timeout` defaults to 120000ms for the entire vendor request, redirects, and downloads; `signal` cancels the whole process. Outputs require matching PNG/JPEG/GIF/WebP MIME and magic bytes; SVG is rejected. Magic checks do not decode complete images or verify dimensions. Address rejection, limits, and deadlines return `IMAGE_DOWNLOAD_BLOCKED`, `IMAGE_TOO_LARGE`, and `IMAGE_TIMEOUT`; check success before use.
 
+#### File parsing
+
+Pass the business file content and filename to `ai.file.parse({ content, filename, options: { outputFormat: 'markdown' } })`. Check `success` before reading `data.text`; use `outputFormat: 'text'` for plain text. HTML uses parse5 and iterative traversal, omits script/style content, and preserves common Markdown headings, lists, links, images, quotations, code and tables. Normal documents are not truncated to avoid malformed-tag regex backtracking.
+
+The result is text or Markdown, not trusted HTML. Render it with text bindings or the framework's `MarkdownRenderer`. Configuration, parameters and error codes retain their existing contract.
+
 #### Context manager
 
 Automatic memory extraction runs locally in the background; `pendingMemoryTasks=0` does not imply success. `flush()` waits for the batch and returns `MEMORY_EXTRACT_FAILED` with a count for thrown errors or failed HaiResults. Concurrent observers share that result. Returning acknowledges the report; later flushes observe new tasks without replaying partially completed effects. `save()`, `reset({ waitForMemoryTasks: true })`, and `consolidate()` return that failure before subsequent writes. Reconcile external effects after a process crash.
@@ -472,7 +535,10 @@ With `turnCommit: 'manual'`, results are not stored automatically. A `turnId` is
 `chatStream` registers a turn and emits `turn_started` **before calling the model** (`turn_started → delta* → done`, or `turn_started → delta* → cancelled` on cancellation). Even if `AbortSignal` cancels generation midway, the caller gets `turnId` and generated text for committing actual content:
 
 ```ts
-const created = ai.context.createManager({ scope: { objectId: 'user-001', sessionId: 'sess-001' }, turnCommit: 'manual' })
+const created = ai.context.createManager({
+  scope: { objectId: 'user-001', sessionId: 'sess-001' },
+  turnCommit: 'manual'
+})
 if (!created.success)
   return created
 const m = created.data
@@ -510,7 +576,9 @@ turns short-term memory + summaries into **cross-session long-term memory**, com
 
 ```ts
 // 会话结束时固化：整合摘要 → 提取长期记忆（写入不含 sessionId 的持久作用域）
-const result = await manager.consolidate({ scope: { userId: 'user-001', personaId: 'xiaoq' } })
+const result = await manager.consolidate({
+  scope: { userId: 'user-001', personaId: 'xiaoq' }
+})
 if (result.success) {
   // result.data.summary  —— 本次会话整合摘要
   // result.data.memories —— 固化到长期记忆的条目
@@ -535,11 +603,15 @@ const composed = await ai.persona.compose('xiaoq')
 const manager = ai.context.createManager({
   scope: { objectId: 'user-001', sessionId: 'persona-session' },
   systemPrompt: composed.data,
-  memory: { enable: true, enableExtract: true, scope: { personaId: 'xiaoq' } },
+  memory: {
+    enable: true,
+    enableExtract: true,
+    scope: { personaId: 'xiaoq' }
+  },
 })
 ```
 
-`ai.persona` exposes `save` / `get` / `update` / `remove` / `list` / `compose`. Profiles are shared globally, not isolated by `objectId`.
+`ai.persona` exposes `save` / `get` / `update` / `remove` / `list` / `compose`, with profiles isolated by `[objectId, id]`. Supply `objectId` when saving and `{ objectId }` for other operations; omission selects the `system` platform profile. Bind tenant operations to a trusted authenticated subject; a client-provided profile ID does not authorize access.
 
 ### Configuration
 
@@ -593,7 +665,7 @@ memory:
 When loading through `core.config.load('ai', ...)`, convention-based environment variables override YAML:
 for example `HAI_AI_LLM_APIKEY`, `HAI_AI_LLM_BASEURL`, and `HAI_AI_LLM_MODEL`.
 
-Enable mem0 (the embedded mem0ai/oss engine):
+Enable the Mem0 data-format adapter:
 
 ```yaml
 memory:
@@ -602,15 +674,13 @@ memory:
 ```
 
 - **`native` (default, recommended)**: HAI's native engine reuses vecdb, reldb, LLM, and Embedding. `extract` uses **Mem0-style batch merging**: one LLM call decides ADD / UPDATE / DELETE / NONE for extracted facts and related existing memories, providing incremental updates, deduplication, contradiction removal, and `category` labels. `maxEntriesPerObject`, `maxEntriesGlobal`, `recencyDecay`, `embeddingEnabled`, and `writebackRelatedTopK` apply. Eviction is partitioned by `objectId`, so heavy writes by one subject do not evict others' memories. `scope` candidates are narrowed by `objectId` (≤ `maxEntriesPerObject`); PostgreSQL also pushes scope into a JSONB containment query using a **GIN index**. SQLite/MySQL fall back to equivalent in-memory matching.
-- **`mem0` (mem0ai/oss)**: directly embeds the `mem0ai/oss` `Memory` engine without cloud services. LLM/Embedder come from `llm` configuration; `qdrant` can reuse vecdb. The adapter maps only Qdrant with complete connection settings. Production (`NODE_ENV` or `HAI_CORE_ENV=production`) rejects actual ephemeral fallback even when `memory.allowEphemeralFallback: true`; missing backends also fail. Explicit fallback is limited to development or `HAI_E2E=1` / `HAI_E2E_MOCK=1`. History is disabled by default.
+- **`mem0` (data-format adapter)**: Hai performs extraction and Embedding, then uses native HTTP to read and write the Mem0 UUID/payload format in Qdrant, including existing data. It does not run the full upstream engine, telemetry, or a history database. Only Qdrant with complete connection settings is supported. Production (`NODE_ENV` or `HAI_CORE_ENV=production`) rejects ephemeral fallback; development or explicit E2E may set `memory.allowEphemeralFallback: true`. Use `native` for other persistent backends.
 
-Both providers share `ai.memory.*` (`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`) with `objectId` isolation and key-value `scope` filters such as `{ topicId, personaId }`. `recall` / `list` / `listPage` / `clear` strictly filter scope; `clear` with `types` / `scope` deletes only jointly matching entries. mem0 `extract` uses the shared extractor for classification/scoring (`types` / `model` / `minImportance` / `systemPrompt`), then writes with `infer:false`, preserving `hai_type` / `hai_importance`. Its `recall` supports `types` and `recencyWeight` decay, matching native behavior. Mem0 updates text and metadata in place, preserving `id` and creation time. SDK queries use `filters.user_id`; writes and whole-subject deletion use `userId`. With no SDK list cursor, `list`, `listPage`, and filtered `clear` support at most 1000 raw subject candidates, including expired records. One extra candidate detects truncation; exceeding the bound returns `MEMORY_LIST_INCOMPLETE` (906), without a fabricated total or partial filtered deletion. Complete candidates are filtered by UTC expiration date, type and scope before pagination. Whole-subject `deleteAll` is independent of this listing limit. Public empty-filter clear is rejected; only trusted administration may explicitly call `admin.clearAll({ confirm: true })`.
+Both providers share `ai.memory.*` (`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`) with `objectId` isolation and key-value `scope` filters such as `{ topicId, personaId }`. `recall` / `list` / `listPage` / `clear` strictly filter scope; `clear` with `types` / `scope` deletes only jointly matching entries. mem0 `extract` uses the shared extractor for classification/scoring (`types` / `model` / `minImportance` / `systemPrompt`), then writes directly, preserving `hai_type` / `hai_importance`. Its `recall` supports `types` and `recencyWeight` decay, matching native behavior. Mem0 updates text and metadata in place, preserving `id` and creation time. With bounded candidate scanning, `list`, `listPage`, and filtered `clear` support at most 1000 raw subject candidates, including expired records. One extra candidate detects truncation; exceeding the bound returns `MEMORY_LIST_INCOMPLETE` (906), without a fabricated total or partial filtered deletion. Complete candidates are filtered by UTC expiration date, type and scope before pagination. Whole-subject deletion is independent of this listing limit. Public empty-filter clear is rejected; only trusted administration may explicitly call `admin.clearAll({ confirm: true })`.
 
-Mem0 3.3.1 still calls `QdrantClient.search`. The catalog and AI optional peer pin the tested `@qdrant/js-client-rest` version `1.18.0`; startup checks this public method and rejects incompatible installations. Do not override it with 1.19, which removed that method.
+Mem0 storage and the VecDB Qdrant provider use native HTTP without an extra SDK. Fixed REST requests use `query` and encoded path segments. A 30-second timeout covers the complete response body; responses over 16 MiB fail explicitly. Writes and deletes await the completed `wait=true` receipt. Lists and filtered deletion validate at most 1000 raw candidates per subject, including expired rows; overflow returns `MEMORY_LIST_INCOMPLETE` and performs no partial filtered deletion. Whole-subject deletion is independent of this list limit.
 
-The adapter injects a dedicated client through the SDK's public `client` configuration. Mem0 Qdrant upserts and deletes use `wait: true`, awaiting server application before readback or the next deletion batch.
-
-Mem0 with pgvector is rejected in every environment: the SDK privately owns a PostgreSQL connection without a public close API, so the framework cannot manage its lifecycle. Use `memory.provider: native` for pgvector; native support is retained. `disableHistory: true` selects a resource-free history implementation and creates no history SQLite file. The factory awaits backend readiness through one bounded public read before reporting success.
+The Qdrant format backend requires version 1.19 or newer and rejects HTTP redirects. Updates use server-side `update_only` with subject/revision conditions in one atomic write, rejecting deleted or concurrently changed rows. Late updates cannot recreate deleted records. Failed post-write revision verification still requires reconciliation of actual effects.
 
 SDK add receipts omit full business fields, so `add` / `extract` read the stored record before returning. Extraction waits for all pending writes. A write or readback failure sets `error.ext.requiresEffectReconciliation=true` and retains known IDs in `memoryIds` (possibly empty if receipts were lost). Reconcile subject records before recovery; blindly repeating add/extract can duplicate committed writes. The framework does not replay automatically.
 

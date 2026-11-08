@@ -31,9 +31,11 @@ Automation can select the exact build using `artifactDir` from `hai build --targ
 
 #### Build options
 
-`--target` selects compile (default), image, app or desktop. `--images serv|web|serv,web` selects images. `--runtime auto|podman|docker` selects the local engine; auto prefers reachable Podman. `--network` overrides build networking, `--no-http-proxy` disables this build proxy (same as --proxy-mode none), and `--sqlite-prebuild-mirror` selects a trusted HTTP(S) binary mirror. Native `--platform` and `--arch` require the matching host SDK and Rust toolchain. Builds do not load deployment environments or runtime secrets.
+`--target` selects compile (default), image, app or desktop. `--images serv|web|serv,web` selects images. `--runtime auto|podman|docker` selects the local engine; auto prefers reachable Podman. `--network` overrides build networking, `--no-http-proxy` disables this build proxy (same as --proxy-mode none). SQLite 13 includes native binaries in its npm package and uses the configured npm registry. Native `--platform` and `--arch` require the matching host SDK and Rust toolchain. Builds do not load deployment environments or runtime secrets.
 
 #### Download sources and proxies
+
+Existing projects should remove the old SQLite mirror option and update their Dockerfiles. Image builds open an in-memory database to verify that the bundled native binary loads on the target platform.
 
 `--image-source official|cn|custom` covers application base images and missing middleware images during packaging. `--npm-source` requires `--build` and controls Corepack/pnpm. The China preset uses 1ms for Docker Hub/GHCR and npmmirror for npm. First interactive choices are saved in `hai.json.build.sources`; flags override one invocation. Set `--proxy-mode inherit|system|custom|none`, `--proxy-url`, and `--proxy-bypass`; `--no-http-proxy` means none. Docker/remote Podman image pulls require engine-side proxy settings; build containers check connectivity separately. See [sources and proxies](../../docs/usage/configuration/delivery.md#下载源和代理) for custom sources, supported platforms and old-template updates.
 
@@ -116,6 +118,8 @@ The deployment SDK uses these priorities, highest first:
 All `HAI_*` settings use process > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML. Within one source, fields override base JSON. Replacing a whole node from a higher source clears lower-source fields. Node/Vite and deployment share Core resolution.
 
 Public settings live in `.env` and `.env.<mode>`; SSH settings and credentials go to Git-ignored `.env.<mode>.local`. `.env.local` contains shared machine-private settings. Builds do not read deployment secrets.
+
+All custom HTTP API headers are treated as private values regardless of header names. Saving an existing environment also moves indented, `export` and multiline quoted entries out of the same-mode public file, so their previous values are not left behind.
 
 For existing projects, move the previous build object into `hai.json.build`, convert deployment YAML into `hai.json.deploy`, remove the old files and retain `HAI_DEPLOY_*` variables. Existing self-hosted S3 installations must use a full deployment for this upgrade: their old baseline contains an exited initialization service, which fails the dependency checks of new incremental packages. The full deployment also refreshes the `createBucket` middleware setting; subsequent incremental updates work normally.
 
@@ -215,6 +219,8 @@ Image builds run at most two images concurrently by default; use `--concurrency 
 
 `pnpm run deploy` offers no HTTPS, existing PEM certificate/key paths, or Let’s Encrypt for every container template. Relative paths resolve from the project root. Certificates are checked for domain, validity and key matching, then copied into private releases. A pinned official Certbot image handles issuance and renewal checks every 12 hours, with automatic Nginx reload. It requires terms acceptance, a real email, public DNS, port 80 and CA connectivity. Isolated servers use existing certificates. Certificate state stays on the server; keys stay out of application images. `--yes` reuses saved settings.
 
+Supply regular PEM files of at most 1 MiB each; final-component symbolic links and hard links are rejected, and parent directories must remain trusted. Securely copy Certbot `live/` symlink targets to regular files in a controlled directory, or use the framework `letsencrypt` mode.
+
 Configure `hai.json.deploy.provider.expose.https` or private environment overrides. Defaults are HTTPS 443 and HTTP redirection; omission retains HTTP. Enabling/disabling HTTPS or changing mode, domain, ports or supplied certificates requires a full deployment. See the [HTTPS guide](../../docs/usage/configuration/delivery.md#可选https证书). Plans use `root` for the project and `serviceDir` for the service source/configuration directory, exposing only public certificate metadata.
 
 ### SDK
@@ -222,7 +228,12 @@ Configure `hai.json.deploy.provider.expose.https` or private environment overrid
 ```ts
 import { deploy } from '@h-ai/deploy'
 
-const initialized = await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 18080 } } })
+const initialized = await deploy.init({
+  provider: {
+    type: 'docker-ssh',
+    expose: { hostPort: 18080 }
+  }
+})
 if (!initialized.success)
   throw new Error(initialized.error.message)
 try {
@@ -253,6 +264,10 @@ Command deadlines include helper startup and output handling. Timeouts, input/ou
 SSH interruptions initially report `remoteExecution: 'unknown'`. The docker-ssh SDK reconnects read-only to inspect `result-<deploymentId>.json`. Only a complete, untruncated terminal record with the matching ID confirms `finished`, with the actual stage and exit code. Finished scripts do not imply stopped containers. Even exit code 0 preserves the original SSH/output failure. CLI shows local and remote states separately with the result path. Missing, stale, damaged or unreadable records remain unknown; deployment and rollback are never retried automatically. Manual upload scripts conservatively report unknown on SSH failure with the inspection directory; find the deployment ID in the bundle manifest. Inspect steps, `current`, actual services and data before recovery.
 
 ### Runtime environment files and repeated deployments
+
+SvelteKit SSR uses a separate `gateway` for HTTP and HTTPS, without publishing the backend port. The gateway overwrites standard forwarding headers, and Compose fixes the adapter's protocol, Host and client address trust settings; the application runtime file cannot override them. adapter-node 6 no longer reads runtime `ORIGIN`, and applications leave build-time `paths.origin` unset by default. Replace an older directly exposed SSR deployment with a new full bundle generated by the current tools.
+
+For upstream TLS termination, list the load balancer's actual IPs/CIDRs in `trustedEdgeProxies`. The separate gateway accepts a single `http` or `https` protocol only from those actual peers; other sources and combined values use its own connection scheme. External `Forwarded` and forwarded host/port values are overwritten.
 
 Environment flags, initial account passwords and the transport key ring are also read directly by startup code. They remain available even when a similarly named configuration parent exists.
 

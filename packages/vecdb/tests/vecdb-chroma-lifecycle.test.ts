@@ -8,25 +8,30 @@ import { createChromaProvider } from '../src/providers/vecdb-provider-chroma.js'
 const control = vi.hoisted(() => ({ mode: 'normal', failHeartbeat: false, children: [] as { child: ChildProcess, kill: ChildProcess['kill'] }[] }))
 vi.mock('node:child_process', async () => {
   const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process')
-  return { ...actual, spawn: () => {
-    const child = actual.spawn(control.mode === 'spawn-error' ? `${process.execPath}.missing-chroma-executable` : process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
-    const kill = child.kill.bind(child)
-    control.children.push({ child, kill })
-    child.kill = (signal) => {
-      const mode = control.mode
-      control.mode = 'normal'
-      if (mode === 'false')
-        return false
-      if (mode === 'throw')
-        throw new Error('Controlled signal rejection')
-      if (mode === 'delayed') {
-        setTimeout(kill, 60, signal)
-        return true
+  return {
+    ...actual,
+    spawn: () => {
+      const child = actual.spawn(control.mode === 'spawn-error'
+        ? `${process.execPath}.missing-chroma-executable`
+        : process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+      const kill = child.kill.bind(child)
+      control.children.push({ child, kill })
+      child.kill = (signal) => {
+        const mode = control.mode
+        control.mode = 'normal'
+        if (mode === 'false')
+          return false
+        if (mode === 'throw')
+          throw new Error('Controlled signal rejection')
+        if (mode === 'delayed') {
+          setTimeout(kill, 60, signal)
+          return true
+        }
+        return kill(signal)
       }
-      return kill(signal)
-    }
-    return child
-  } }
+      return child
+    },
+  }
 })
 vi.mock('chromadb', () => ({ ChromaClient: class {
   async heartbeat() {
@@ -37,7 +42,14 @@ vi.mock('chromadb', () => ({ ChromaClient: class {
 
   async countCollections() { return 0 }
 } }))
-const config = { type: 'chroma', path: './test-data/controlled-child', host: 'localhost', port: 8000, serverCommand: 'controlled-child', startupTimeout: 30 } as const
+const config = {
+  type: 'chroma',
+  path: './test-data/controlled-child',
+  host: 'localhost',
+  port: 8000,
+  serverCommand: 'controlled-child',
+  startupTimeout: 30,
+} as const
 beforeEach(() => {
   control.mode = 'normal'
   control.failHeartbeat = false

@@ -52,11 +52,20 @@
   // 计算总页数（至少 1 页，保证分页栏在空数据时仍可渲染）
   const totalPages = $derived(Math.max(1, Math.ceil(total / pageSize)))
 
-  const controlSize = $derived(size === 'xs' ? 'xs' : 'sm')
+  const controlSize = $derived(size === 'xs'
+    ? 'xs'
+    : 'sm')
   const jumperControlSize = 'xs'
-  const sizeChangerClass = $derived(size === 'xs' ? 'w-17 shrink-0' : 'w-18 shrink-0')
-  const pageSizeSelectOptions = $derived(pageSizeOptions.map(opt => ({ value: String(opt), label: String(opt) })))
-  const jumperWrapClass = $derived(size === 'xs' ? 'flex min-w-fit items-center gap-1.5 whitespace-nowrap' : 'flex min-w-fit items-center gap-2 whitespace-nowrap')
+  const sizeChangerClass = $derived(size === 'xs'
+    ? 'w-17 shrink-0'
+    : 'w-18 shrink-0')
+  const pageSizeSelectOptions = $derived(pageSizeOptions.map(opt => ({
+    value: String(opt),
+    label: String(opt),
+  })))
+  const jumperWrapClass = $derived(size === 'xs'
+    ? 'flex min-w-fit items-center gap-1.5 whitespace-nowrap'
+    : 'flex min-w-fit items-center gap-2 whitespace-nowrap')
   const jumperInputClass = $derived(
     size === 'xs'
       ? 'w-[2.25rem] shrink-0 [&>.fieldset]:m-0 [&>.fieldset]:min-w-0'
@@ -99,9 +108,15 @@
       ? 'inline-flex h-6 w-6 items-center justify-center rounded-md border border-base-content/12 text-base-content/55 transition-colors hover:bg-base-content/5 hover:text-base-content disabled:pointer-events-none disabled:opacity-40'
       : 'inline-flex h-7 w-7 items-center justify-center rounded-md border border-base-content/12 text-base-content/55 transition-colors hover:bg-base-content/5 hover:text-base-content disabled:pointer-events-none disabled:opacity-40',
   )
-  const navIconClass = $derived(size === 'xs' ? 'size-3.5' : 'size-3.5')
-  const tableTextClass = $derived(size === 'xs' ? 'text-xs text-base-content/60' : 'text-sm text-base-content/60')
-  const rowGapClass = $derived(size === 'xs' ? 'flex flex-wrap items-center gap-3 sm:gap-4' : 'flex flex-wrap items-center gap-4 sm:gap-6')
+  const navIconClass = $derived(size === 'xs'
+    ? 'size-3.5'
+    : 'size-3.5')
+  const tableTextClass = $derived(size === 'xs'
+    ? 'text-xs text-base-content/60'
+    : 'text-sm text-base-content/60')
+  const rowGapClass = $derived(size === 'xs'
+    ? 'flex flex-wrap items-center gap-3 sm:gap-4'
+    : 'flex flex-wrap items-center gap-4 sm:gap-6')
   const pageInfoText = $derived(
     (labels.pageInfo ?? uiM('pagination_page_info'))
       .replace('{page}', String(page))

@@ -14,9 +14,15 @@ describe('core.logger (node)', () => {
     const { input, serialize, readAccessor } = createSerializationFixture()
     const output: string[] = []
     const observed: string[] = []
-    core.logger.configure({ level: 'info', format: 'json', redact: ['payload.plain.customerId'] })
+    core.logger.configure({
+      level: 'info',
+      format: 'json',
+      redact: ['payload.plain.customerId'],
+    })
     const write = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: string | Uint8Array) => {
-      output.push(typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk))
+      output.push(typeof chunk === 'string'
+        ? chunk
+        : new TextDecoder().decode(chunk))
       return true
     }) as typeof process.stdout.write)
     const stop = core.logger.observe(record => observed.push(JSON.stringify(record)))
@@ -30,10 +36,18 @@ describe('core.logger (node)', () => {
       core.logger.configure({ format: 'pretty', redact: [] })
     }
     expect(observed).toHaveLength(1)
-    for (const value of [output.join(''), observed.join('')]) {
+    for (const value of [
+      output.join(''),
+      observed.join(''),
+    ]) {
       expect(value).toContain('sdk-visible')
       expect(value).toContain('2026-01-01T00:00:00.000Z')
-      for (const secret of ['serialized-only-secret', 'class-only-secret', 'plain-only-secret', 'customer-private'])
+      for (const secret of [
+        'serialized-only-secret',
+        'class-only-secret',
+        'plain-only-secret',
+        'customer-private',
+      ])
         expect(value).not.toContain(secret)
     }
     expect(serialize).not.toHaveBeenCalled()
@@ -68,7 +82,10 @@ describe('core.logger (node)', () => {
   })
 
   it('createLogger 应该支持带上下文的日志', () => {
-    const logger = core.logger.create({ name: 'ctx-test', context: { service: 'api' } })
+    const logger = core.logger.create({
+      name: 'ctx-test',
+      context: { service: 'api' },
+    })
     expect(() => logger.info('with context', { requestId: 'req-123' })).not.toThrow()
   })
 
@@ -99,7 +116,10 @@ describe('core.logger (node)', () => {
   })
 
   it('configureLogger 应该支持设置 format 和 context', () => {
-    core.logger.configure({ format: 'json', context: { env: 'test' } })
+    core.logger.configure({
+      format: 'json',
+      context: { env: 'test' },
+    })
     expect(core.logger.getLevel()).toBe('info') // level 未变
 
     // 恢复
@@ -107,7 +127,9 @@ describe('core.logger (node)', () => {
   })
 
   it('configureLogger 应该支持 redact 配置', () => {
-    core.logger.configure({ redact: ['password', 'secret'] })
+    core.logger.configure({
+      redact: ['password', 'secret'],
+    })
     const logger = core.logger.create({ name: 'redact-test' })
     expect(() => logger.info('test', { password: '123', data: 'ok' })).not.toThrow()
 
@@ -118,7 +140,9 @@ describe('core.logger (node)', () => {
   it('logger 默认应脱敏敏感字段与 URL 凭证', async () => {
     const writes: string[] = []
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: string | Uint8Array) => {
-      writes.push(typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk))
+      writes.push(typeof chunk === 'string'
+        ? chunk
+        : new TextDecoder().decode(chunk))
       return true
     }) as typeof process.stdout.write)
 
@@ -177,12 +201,22 @@ describe('core.logger (node)', () => {
     })
     cause.cause = error
     const descriptors = Object.getOwnPropertyDescriptors(error)
-    const redact = redactDiagnostic ? ['error.message', 'error.stack', 'error.cause.message', 'error.errors[0].message', 'error.context.customerId'] : []
+    const redact = redactDiagnostic
+      ? [
+          'error.message',
+          'error.stack',
+          'error.cause.message',
+          'error.errors[0].message',
+          'error.context.customerId',
+        ]
+      : []
 
     const writes: string[] = []
     core.logger.configure({ level: 'info', format: 'json', redact })
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: string | Uint8Array) => {
-      writes.push(typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk))
+      writes.push(typeof chunk === 'string'
+        ? chunk
+        : new TextDecoder().decode(chunk))
       return true
     }) as typeof process.stdout.write)
     try {
@@ -206,16 +240,44 @@ describe('core.logger (node)', () => {
         name: 'AggregateError',
         message: redactDiagnostic ? '[REDACTED]' : 'Startup failed',
         stack: redactDiagnostic ? '[REDACTED]' : error.stack,
-        cause: { name: 'Error', message: redactDiagnostic ? '[REDACTED]' : 'Connection lost', stack: cause.stack, privateKey: '[REDACTED]', cause: '[Circular]' },
-        errors: [{ name: 'TypeError', message: redactDiagnostic ? '[REDACTED]' : 'Provider rejected', stack: child.stack, endpoint: 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]' }],
+        cause: {
+          name: 'Error',
+          message: redactDiagnostic ? '[REDACTED]' : 'Connection lost',
+          stack: cause.stack,
+          privateKey: '[REDACTED]',
+          cause: '[Circular]',
+        },
+        errors: [
+          {
+            name: 'TypeError',
+            message: redactDiagnostic ? '[REDACTED]' : 'Provider rejected',
+            stack: child.stack,
+            endpoint: 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]',
+          },
+        ],
         password: '[REDACTED]',
         token: '[REDACTED]',
         authorization: '[REDACTED]',
         apiKey: '[REDACTED]',
-        context: { customerId: redactDiagnostic ? '[REDACTED]' : 'customer-private', requestId: 'request-1', endpoint: 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]#access_token=[REDACTED]' },
+        context: {
+          customerId: redactDiagnostic ? '[REDACTED]' : 'customer-private',
+          requestId: 'request-1',
+          endpoint: 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]#access_token=[REDACTED]',
+        },
       },
     })
-    for (const secret of ['own-password', 'own-token', 'own-authorization', 'own-api-key', 'cause-private-key', 'child-user', 'child-pass', 'child-token', 'query-token', 'fragment-token'])
+    for (const secret of [
+      'own-password',
+      'own-token',
+      'own-authorization',
+      'own-api-key',
+      'cause-private-key',
+      'child-user',
+      'child-pass',
+      'child-token',
+      'query-token',
+      'fragment-token',
+    ])
       expect(output).not.toContain(secret)
     if (redactDiagnostic)
       expect(output).not.toContain('customer-private')

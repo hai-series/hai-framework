@@ -7,8 +7,12 @@ describe('data table 列宽', () => {
   it('显式 4rem 宽度不应被默认最小列宽覆盖', () => {
     const { body } = render(DataTable, {
       props: {
-        data: [{ id: 'asset_1', name: 'this-is-a-very-long-asset-file-name.png' }],
-        columns: [{ key: 'name', label: '名称', width: '4rem' }],
+        data: [
+          { id: 'asset_1', name: 'this-is-a-very-long-asset-file-name.png' },
+        ],
+        columns: [
+          { key: 'name', label: '名称', width: '4rem' },
+        ],
         keyField: 'id',
       },
     })
@@ -21,8 +25,16 @@ describe('data table 列宽', () => {
   it('配置列点击回调时应渲染可访问的单元格按钮', () => {
     const { body } = render(DataTable, {
       props: {
-        data: [{ id: 'asset_1', title: '安全公告' }],
-        columns: [{ key: 'title', label: '标题', onclick: () => undefined }],
+        data: [
+          { id: 'asset_1', title: '安全公告' },
+        ],
+        columns: [
+          {
+            key: 'title',
+            label: '标题',
+            onclick: () => undefined,
+          },
+        ],
         keyField: 'id',
       },
     })

@@ -77,11 +77,15 @@ export function createRetrievalOperations(
     async addSource(source: RetrievalSource): Promise<HaiResult<void>> {
       if (registry) {
         const result = await registry.operations.register(source)
-        return result.success ? ok(undefined) : result
+        return result.success
+          ? ok(undefined)
+          : result
       }
       const existing = await sourceStore.get(source.id)
       if (existing) {
-        return err(HaiAIError.RETRIEVAL_FAILED, aiM('ai_internalError', { params: { error: `Source '${source.id}' already exists` } }))
+        return err(HaiAIError.RETRIEVAL_FAILED, aiM('ai_internalError', {
+          params: { error: `Source '${source.id}' already exists` },
+        }))
       }
       await sourceStore.save(source.id, source)
       logger.debug('Retrieval source added', { sourceId: source.id, collection: source.collection })
@@ -101,7 +105,9 @@ export function createRetrievalOperations(
         return registry.operations.remove(sourceId)
       const existing = await sourceStore.get(sourceId)
       if (!existing) {
-        return err(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND, aiM('ai_internalError', { params: { error: `Source '${sourceId}' not found` } }))
+        return err(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND, aiM('ai_internalError', {
+          params: { error: `Source '${sourceId}' not found` },
+        }))
       }
       await sourceStore.remove(sourceId)
       logger.debug('Retrieval source removed', { sourceId })
@@ -114,7 +120,9 @@ export function createRetrievalOperations(
      * @returns 全部检索源数组（无源时返回空数组）
      */
     async listSources(): Promise<RetrievalSource[]> {
-      return registry ? registry.values() : sourceStore.query({})
+      return registry
+        ? registry.values()
+        : sourceStore.query({})
     },
 
     /**
@@ -137,17 +145,25 @@ export function createRetrievalOperations(
           ? (await registry.values()).filter(source => !request.sources?.length || request.sources.includes(source.id))
           : await sourceStore.query(
               request.sources?.length
-                ? { where: { id: { $in: request.sources } } }
+                ? {
+                    where: {
+                      id: { $in: request.sources },
+                    },
+                  }
                 : {},
             )
         if (targetSources.length === 0) {
-          return err(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND, aiM('ai_internalError', { params: { error: 'No retrieval sources configured' } }))
+          return err(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND, aiM('ai_internalError', {
+            params: { error: 'No retrieval sources configured' },
+          }))
         }
 
         // 向量化查询文本
         const embedResult = await embeddingOps.embedText(request.query)
         if (!embedResult.success) {
-          return err(HaiAIError.RETRIEVAL_FAILED, aiM('ai_internalError', { params: { error: 'Failed to embed query' } }), embedResult.error)
+          return err(HaiAIError.RETRIEVAL_FAILED, aiM('ai_internalError', {
+            params: { error: 'Failed to embed query' },
+          }), embedResult.error)
         }
 
         const queryVector = embedResult.data
@@ -228,7 +244,11 @@ export function createRetrievalOperations(
       }
       catch (error) {
         logger.error('Retrieval failed', { error })
-        return err(HaiAIError.RETRIEVAL_FAILED, aiM('ai_internalError', { params: { error: String(error) } }), error)
+        return err(HaiAIError.RETRIEVAL_FAILED, aiM('ai_internalError', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     },
   }

@@ -52,13 +52,24 @@ const publishedLogSchema = z.object({
   taskType: z.enum(['api', 'js', 'hook']),
   triggerType: z.enum(['manual', 'scheduled']),
   triggerSource: z.string().nullable(),
-  status: z.enum(['success', 'failed', 'interrupted', 'unknown']),
+  status: z.enum([
+    'success',
+    'failed',
+    'interrupted',
+    'unknown',
+  ]),
   result: z.string().nullable(),
   error: z.string().nullable(),
   startedAt: z.number().safe(),
   finishedAt: z.number().safe(),
   duration: z.number().safe(),
-  persistence: z.object({ status: z.enum(['pending', 'persisted', 'unconfirmed']), error: z.object({ code: z.string(), message: z.string() }).optional() }),
+  persistence: z.object({
+    status: z.enum(['pending', 'persisted', 'unconfirmed']),
+    error: z.object({
+      code: z.string(),
+      message: z.string(),
+    }).optional(),
+  }),
 })
 
 /**
@@ -207,7 +218,9 @@ export async function drainRunner(): Promise<void> {
   stopTimer()
   for (const controller of activeRuns.values())
     controller.abort(new Error(schedulerM('scheduler_closing')))
-  await Promise.allSettled([...activeRuns.keys()])
+  await Promise.allSettled([
+    ...activeRuns.keys(),
+  ])
   await Promise.allSettled([...activeRepairs])
 }
 
@@ -308,23 +321,44 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
   const logRepository = currentLogRepo
   const hooks = getHooks()
   const leaseMs = currentLeaseMs
-  const occurrenceId = recovery?.occurrenceId ?? executionId(task.id, trigger.type, minute === undefined ? options?.idempotencyKey ?? randomUUID() : String(minute))
+  const occurrenceId = recovery?.occurrenceId ?? executionId(task.id, trigger.type, minute === undefined
+    ? options?.idempotencyKey ?? randomUUID()
+    : String(minute))
   const interrupted = async (reason: string, observationOnly = false): Promise<TaskExecutionLog> => {
-    const log = { ...await interruptTask(task, trigger, reason, {}, controller.signal), occurrenceId }
+    const log = {
+      ...await interruptTask(task, trigger, reason, {}, controller.signal),
+      occurrenceId,
+    }
     // 领取前的竞争/跳过只是一条观测事件，不代表 owner 已提交业务终态。
     if (observationOnly && logRepository) {
       const saved = await logRepository.saveLog(log)
-      log.persistence = saved.success ? { status: 'persisted' } : { status: 'unconfirmed', error: { code: String(saved.error.code), message: saved.error.message } }
+      log.persistence = saved.success
+        ? { status: 'persisted' }
+        : {
+            status: 'unconfirmed',
+            error: {
+              code: String(saved.error.code),
+              message: saved.error.message,
+            },
+          }
     }
     return log
   }
   if (!executionRepo)
     return interrupted(schedulerM('scheduler_executionStateFailed'), true)
-  const claimed = await executionRepo.claim(task, occurrenceId, { ...trigger, ...(minute !== undefined ? { minute } : {}) }, currentNodeId, leaseMs)
+  const claimed = await executionRepo.claim(task, occurrenceId, {
+    ...trigger,
+    ...(minute !== undefined
+      ? { minute }
+      : {}),
+  }, currentNodeId, leaseMs)
   if (!claimed.success)
     return interrupted(claimed.error.message, true)
-  if (!claimed.data)
-    return interrupted(schedulerM('scheduler_taskRunning', { params: { taskId: task.id } }), true)
+  if (!claimed.data) {
+    return interrupted(schedulerM('scheduler_taskRunning', {
+      params: { taskId: task.id },
+    }), true)
+  }
   const row = claimed.data
   if (!['claimed', 'running'].includes(row.status)) {
     if (minute === undefined) {
@@ -347,14 +381,25 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
               finishedAt: row.updatedAt,
               duration: row.updatedAt - row.createdAt,
             }
-        const status = row.status === 'discarded' ? 'interrupted' : row.status as TaskExecutionLog['status']
-        return { ...log, status, error: status === 'success' ? null : log.error, occurrenceId }
+        const status = row.status === 'discarded'
+          ? 'interrupted'
+          : row.status as TaskExecutionLog['status']
+        return {
+          ...log,
+          status,
+          error: status === 'success'
+            ? null
+            : log.error,
+          occurrenceId,
+        }
       }
       catch {
         return interrupted(schedulerM('scheduler_executionStateFailed'))
       }
     }
-    return interrupted(schedulerM('scheduler_occurrenceHandled', { params: { taskId: task.id } }), true)
+    return interrupted(schedulerM('scheduler_occurrenceHandled', {
+      params: { taskId: task.id },
+    }), true)
   }
   runningTasks.add(task.id)
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -396,7 +441,9 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
       }
       catch {}
       if (!refreshed.success || !latest || latest.enabled === false || !unchanged) {
-        log = await interrupted(schedulerM('scheduler_taskNoLongerDue', { params: { taskId: task.id } }))
+        log = await interrupted(schedulerM('scheduler_taskNoLongerDue', {
+          params: { taskId: task.id },
+        }))
         // 曾开始的任务不能靠配置编辑抹去未知副作用；保留串行槽直到人工核对。
         if (row.attemptCount > 0)
           log.status = 'unknown'
@@ -404,7 +451,12 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
       }
       task = latest
       if (!task.handler && !hooks.onTaskExecute) {
-        log = { ...await interruptTask(task, trigger, schedulerM('scheduler_taskHandlerMissing', { params: { taskId: task.id } }), hooks, controller.signal), occurrenceId }
+        log = {
+          ...await interruptTask(task, trigger, schedulerM('scheduler_taskHandlerMissing', {
+            params: { taskId: task.id },
+          }), hooks, controller.signal),
+          occurrenceId,
+        }
         break
       }
       const begun = await executionRepo.begin(row, leaseMs)
@@ -412,7 +464,12 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
         lost = true
         break
       }
-      log = await executeTask(task, trigger, hooks, controller.signal, { occurrenceId, executionToken: row.owner, sequence: row.sequence, attempt: row.attemptCount })
+      log = await executeTask(task, trigger, hooks, controller.signal, {
+        occurrenceId,
+        executionToken: row.owner,
+        sequence: row.sequence,
+        attempt: row.attemptCount,
+      })
       log.occurrenceId = occurrenceId
       attempts.push(log)
       if (log.status !== 'failed' || !row.idempotent || row.attemptCount >= row.maxAttempts)
@@ -425,22 +482,54 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
       log = await interrupted(schedulerM('scheduler_executionStateFailed'))
     if (lost) {
       // 取消和失租不是外部回滚；旧 owner 只返回 unknown，不能覆盖新节点的共享结果。
-      return { ...log, status: 'unknown', persistence: { status: 'unconfirmed' }, error: schedulerM('scheduler_executionUnknown'), occurrenceId }
+      return {
+        ...log,
+        status: 'unknown',
+        persistence: { status: 'unconfirmed' },
+        error: schedulerM('scheduler_executionUnknown'),
+        occurrenceId,
+      }
     }
-    if (controller.signal.aborted && row.attemptCount > 0)
-      log = { ...log, status: 'unknown', error: schedulerM('scheduler_executionUnknown') }
+    if (controller.signal.aborted && row.attemptCount > 0) {
+      log = {
+        ...log,
+        status: 'unknown',
+        error: schedulerM('scheduler_executionUnknown'),
+      }
+    }
     const currentAttempt = attempts.findIndex(attempt => attempt.id === log.id)
     if (currentAttempt >= 0)
       attempts[currentAttempt] = log
     else
       attempts.push(log)
-    const published = attempts.map(attempt => ({ ...attempt, persistence: { status: 'pending' as const } }))
-    const finished = await executionRepo.finish(row, { ...log, persistence: { status: 'pending' } }, published)
-    if (!finished.success)
-      return { ...log, status: 'unknown', persistence: { status: 'unconfirmed' }, error: finished.error.message, occurrenceId }
+    const published = attempts.map(attempt => ({
+      ...attempt,
+      persistence: { status: 'pending' as const },
+    }))
+    const finished = await executionRepo.finish(row, {
+      ...log,
+      persistence: { status: 'pending' },
+    }, published)
+    if (!finished.success) {
+      return {
+        ...log,
+        status: 'unknown',
+        persistence: { status: 'unconfirmed' },
+        error: finished.error.message,
+        occurrenceId,
+      }
+    }
     // 终态已确认，后续日志故障只能留下 pending，不能改写业务结果或重新执行。
     const projected = await repairExecutionLogs(occurrenceId)
-    log.persistence = projected.success ? { status: 'persisted' } : { status: 'pending', error: { code: String(projected.error.code), message: projected.error.message } }
+    log.persistence = projected.success
+      ? { status: 'persisted' }
+      : {
+          status: 'pending',
+          error: {
+            code: String(projected.error.code),
+            message: projected.error.message,
+          },
+        }
     if (!projected.success)
       logger.warn('Execution completed with pending log persistence', { taskId: task.id, occurrenceId, errorCode: projected.error.code })
     if (task.deleteAfterRun && log.status === 'success') {

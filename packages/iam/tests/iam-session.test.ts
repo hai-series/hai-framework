@@ -139,7 +139,9 @@ describe('iam.session', () => {
 
         const updateResult = await getIam().session.update(
           createResult.data.accessToken,
-          { data: { theme: 'dark' } },
+          {
+            data: { theme: 'dark' },
+          },
           createResult.data.version,
         )
         expect(updateResult.success).toBe(true)
@@ -154,7 +156,9 @@ describe('iam.session', () => {
       it('更新不存在的令牌应返回 SESSION_NOT_FOUND', async () => {
         const result = await getIam().session.update(
           'non-existent-token-for-update',
-          { data: { foo: 'bar' } },
+          {
+            data: { foo: 'bar' },
+          },
           'missing-version',
         )
         expect(result.success).toBe(false)
@@ -297,7 +301,9 @@ describe('iam.session', () => {
 
         const originalLastActive = createResult.data.lastActiveAt.getTime()
 
-        vi.useFakeTimers({ toFake: ['Date'] })
+        vi.useFakeTimers({
+          toFake: ['Date'],
+        })
         vi.setSystemTime(originalLastActive + 50)
 
         const getResult = await slidingIam.session.get(createResult.data.accessToken)
@@ -322,7 +328,9 @@ describe('iam.session', () => {
           return
 
         // access 到期由持久记录判定；真实 Redis TTL 另有集成回归。
-        vi.useFakeTimers({ toFake: ['Date'] })
+        vi.useFakeTimers({
+          toFake: ['Date'],
+        })
         vi.setSystemTime(createResult.data.expiresAt.getTime())
 
         const getResult = await getIam().session.get(createResult.data.accessToken)
@@ -340,7 +348,9 @@ describe('iam.session', () => {
         if (!createResult.success)
           return
 
-        vi.useFakeTimers({ toFake: ['Date'] })
+        vi.useFakeTimers({
+          toFake: ['Date'],
+        })
         vi.setSystemTime(createResult.data.expiresAt.getTime())
 
         const result = await getIam().session.verifyToken(createResult.data.accessToken)

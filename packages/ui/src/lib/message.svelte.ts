@@ -34,7 +34,9 @@ class MessageState {
     return toast.items.map(item => ({
       id: item.id,
       message: item.message,
-      type: item.variant === 'success' || item.variant === 'warning' || item.variant === 'error' ? item.variant : 'info',
+      type: item.variant === 'success' || item.variant === 'warning' || item.variant === 'error'
+        ? item.variant
+        : 'info',
       duration: item.duration ?? 3000,
       closable: item.dismissible ?? true,
     }))
@@ -53,7 +55,9 @@ class MessageState {
    * ```
    */
   add(options: MessageOptions | string): string {
-    const opts = typeof options === 'string' ? { message: options } : options
+    const opts = typeof options === 'string'
+      ? { message: options }
+      : options
     return toast.add({
       message: opts.message,
       variant: opts.type ?? 'info',

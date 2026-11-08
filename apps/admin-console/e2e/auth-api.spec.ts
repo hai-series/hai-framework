@@ -59,11 +59,21 @@ test.describe('POST /api/auth/register', () => {
     const u = uniqueUser()
     // 先注册一次
     await request.post('/api/auth/register', {
-      data: { username: u.username, email: u.email, password: u.password, confirmPassword: u.password },
+      data: {
+        username: u.username,
+        email: u.email,
+        password: u.password,
+        confirmPassword: u.password,
+      },
     })
     // 再次注册相同用户名
     const res = await request.post('/api/auth/register', {
-      data: { username: u.username, email: `dup_${u.email}`, password: u.password, confirmPassword: u.password },
+      data: {
+        username: u.username,
+        email: `dup_${u.email}`,
+        password: u.password,
+        confirmPassword: u.password,
+      },
     })
     expect(res.status()).toBe(409)
     const body = await res.json()
@@ -99,7 +109,12 @@ test.describe('POST /api/auth/login', () => {
 
   test.beforeAll(async ({ request }) => {
     await request.post('/api/auth/register', {
-      data: { username: user.username, email: user.email, password: user.password, confirmPassword: user.password },
+      data: {
+        username: user.username,
+        email: user.email,
+        password: user.password,
+        confirmPassword: user.password,
+      },
     })
   })
 
@@ -179,7 +194,12 @@ test.describe('GET /api/auth/me', () => {
   test('登录后返回用户信息', async ({ request }) => {
     const u = uniqueUser()
     const registerRes = await request.post('/api/auth/register', {
-      data: { username: u.username, email: u.email, password: u.password, confirmPassword: u.password },
+      data: {
+        username: u.username,
+        email: u.email,
+        password: u.password,
+        confirmPassword: u.password,
+      },
     })
     expect(registerRes.ok()).toBeTruthy()
 

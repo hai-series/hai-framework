@@ -6,8 +6,8 @@ import type { BuildDownloadOptions } from './cli-build-downloads.js'
 import type { NativeArtifact } from './cli-build-native.js'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { appendFileSync, copyFileSync, createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { appendFileSync, copyFileSync, createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import process from 'node:process'
 import { normalizeProjectName, resolveImageReference } from '@h-ai/deploy'
 import { nativeNameEnvironment } from '../../templates/shared/native-name.mjs'
@@ -48,8 +48,6 @@ export interface BuildCommandOptions extends GlobalOptions, BuildDownloadOptions
   arch?: 'x64' | 'arm64'
   /** 原生安装包使用 Debug 构建类型；默认 Release。 */
   debug?: boolean
-  /** 可信 SQLite 预编译包根地址，不包含凭据。 */
-  sqlitePrebuildMirror?: string
   /** Podman 是否继承代理。 */
   httpProxy?: boolean
 }
@@ -86,11 +84,26 @@ async function run(command: string, args: string[], cwd: string, quiet = false, 
     }
     delete env.CAPACITOR_SERVER_URL
     // Tauri 的 CI 参数只接受 true/false，兼容 CI 平台常用的 1/0 写法。
-    if (env.CI === '1' || env.CI === '0')
-      env.CI = env.CI === '1' ? 'true' : 'false'
+    if (env.CI === '1' || env.CI === '0') {
+      env.CI = env.CI === '1'
+        ? 'true'
+        : 'false'
+    }
     const windowsOutput = !quiet && process.platform === 'win32'
-    const stdio: StdioOptions = quiet ? 'ignore' : windowsOutput ? ['inherit', 'pipe', 'pipe'] : progressOnStderr ? ['inherit', process.stderr, 'inherit'] : 'inherit'
-    const child = spawn(command, args, { cwd, env, windowsHide: true, stdio, shell: false })
+    const stdio: StdioOptions = quiet
+      ? 'ignore'
+      : windowsOutput
+        ? ['inherit', 'pipe', 'pipe']
+        : progressOnStderr
+          ? ['inherit', process.stderr, 'inherit']
+          : 'inherit'
+    const child = spawn(command, args, {
+      cwd,
+      env,
+      windowsHide: true,
+      stdio,
+      shell: false,
+    })
     let output = Promise.resolve()
     if (windowsOutput && child.stdout && child.stderr) {
       output = Promise.all([
@@ -101,8 +114,17 @@ async function run(command: string, args: string[], cwd: string, quiet = false, 
       void output.catch(() => child.kill())
     }
     child.once('error', reject)
-    child.once(windowsOutput && child.stdout && child.stderr ? 'close' : 'exit', (code) => {
-      void output.then(() => code === 0 ? resolve() : reject(new Error(cliM('cli_build_failed', { params: { command, code: String(code) } }))), reject)
+    child.once(windowsOutput && child.stdout && child.stderr
+      ? 'close'
+      : 'exit', (code) => {
+      void output.then(() => code === 0
+        ? resolve()
+        : reject(new Error(cliM('cli_build_failed', {
+            params: {
+              command,
+              code: String(code),
+            },
+          }))), reject)
     })
   })
 }
@@ -110,8 +132,11 @@ async function run(command: string, args: string[], cwd: string, quiet = false, 
 /** 使用已安装的 pnpm，不通过 Corepack 下载另一套工具链。 */
 async function pnpm(args: string[], cwd: string, identity: { buildId: string, commit: string }, compileEnvironment?: Record<string, string>): Promise<void> {
   const entry = process.env.npm_execpath
-  if (entry && /(?:^|[/\\])pnpm(?:-native)?(?:\.exe|\.[cm]?js)?$/i.test(entry))
-    return /\.[cm]?js$/i.test(entry) ? run(process.execPath, [entry, ...args], cwd, false, identity, compileEnvironment) : run(entry, args, cwd, false, identity, compileEnvironment)
+  if (entry && /(?:^|[/\\])pnpm(?:-native)?(?:\.exe|\.[cm]?js)?$/i.test(entry)) {
+    return /\.[cm]?js$/i.test(entry)
+      ? run(process.execPath, [entry, ...args], cwd, false, identity, compileEnvironment)
+      : run(entry, args, cwd, false, identity, compileEnvironment)
+  }
   // CLI 直接调用时从 PATH 定位原生或 JS 入口；Windows 的 .cmd 不能由无 shell spawn 执行。
   if (process.platform === 'win32') {
     const directories = (process.env.PATH ?? '').split(';')
@@ -141,32 +166,89 @@ function staticCompileEnvironment(target: string): Record<string, string> {
   if (target !== 'compile') {
     if (flag === '1' || (base && target !== 'image'))
       throw new Error(cliM('cli_build_static_target'))
-    return target === 'image' && base ? { PUBLIC_BASE_PATH: base } : {}
+    return target === 'image' && base
+      ? { PUBLIC_BASE_PATH: base }
+      : {}
   }
-  return { ...(flag ? { HAI_BUILD_STATIC: flag } : {}), ...(base ? { PUBLIC_BASE_PATH: base } : {}) }
+  return {
+    ...(flag
+      ? { HAI_BUILD_STATIC: flag }
+      : {}),
+    ...(base
+      ? { PUBLIC_BASE_PATH: base }
+      : {}),
+  }
 }
 
 /** 只有工程 manifest 受当前仓库管理时，才将其 HEAD 作为源码事实。 */
 function sourceCommit(cwd: string): string {
   try {
-    const options = { cwd, encoding: 'utf8' as const, stdio: 'pipe' as const, windowsHide: true }
+    const options = {
+      cwd,
+      encoding: 'utf8' as const,
+      stdio: 'pipe' as const,
+      windowsHide: true,
+    }
     // 由 Git 在当前目录解释路径，避免 Windows 8.3 短名、长名和 junction 别名之间的字符串误判。
-    execFileSync('git', ['--literal-pathspecs', 'ls-files', '--error-unmatch', '--', 'package.json'], options)
+    execFileSync('git', [
+      '--literal-pathspecs',
+      'ls-files',
+      '--error-unmatch',
+      '--',
+      'package.json',
+    ], options)
     const commit = execFileSync('git', ['rev-parse', 'HEAD'], options).trim()
-    return /^(?:[a-f\d]{40}|[a-f\d]{64})$/i.test(commit) ? commit.toLowerCase() : 'unknown'
+    return /^(?:[a-f\d]{40}|[a-f\d]{64})$/i.test(commit)
+      ? commit.toLowerCase()
+      : 'unknown'
   }
   catch {
     return 'unknown'
   }
 }
 
-/** 状态只检查当前工程目录，保留未跟踪、但未忽略的输入。 */
-function sourceDirty(cwd: string, commit: string): boolean | null {
+/** 检查本次镜像的工程、上下文和构建定义；跨仓库或无法确认的输入不能标为干净。 */
+function sourceDirty(cwd: string, commit: string, inputs: readonly string[]): boolean | null {
   if (commit === 'unknown')
     return null
   try {
-    const status = execFileSync('git', ['--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v2', '--branch', '--untracked-files=normal', '--', '.'], {
+    const options = {
       cwd,
+      encoding: 'utf8' as const,
+      stdio: 'pipe' as const,
+      windowsHide: true,
+      timeout: 15000,
+    }
+    const gitRoot = realpathSync.native(execFileSync('git', ['rev-parse', '--show-toplevel'], options).trim())
+    const paths: string[] = []
+    for (const input of [cwd, ...inputs]) {
+      const actual = realpathSync.native(input)
+      const path = relative(gitRoot, actual)
+      if (isAbsolute(path) || path === '..' || path.startsWith(`..${sep}`))
+        return null
+      const owner = realpathSync.native(execFileSync('git', ['rev-parse', '--show-toplevel'], {
+        ...options,
+        cwd: statSync(actual).isDirectory()
+          ? actual
+          : dirname(actual),
+      }).trim())
+      if (owner !== gitRoot)
+        return null
+      paths.push(path.split(sep).join('/') || '.')
+    }
+    const status = execFileSync('git', [
+      '--literal-pathspecs',
+      '--no-optional-locks',
+      '-c',
+      'core.fsmonitor=false',
+      'status',
+      '--porcelain=v2',
+      '--branch',
+      '--untracked-files=normal',
+      '--',
+      ...new Set(paths),
+    ], {
+      cwd: gitRoot,
       encoding: 'utf8',
       stdio: 'pipe',
       windowsHide: true,
@@ -184,7 +266,13 @@ function sourceDirty(cwd: string, commit: string): boolean | null {
 /** 架构取自本次引擎产物，远程引擎或模拟架构下可能与 CLI 宿主不同。 */
 function imagePlatform(runtime: string, image: string, cwd: string): string {
   try {
-    const platform = execFileSync(runtime, ['image', 'inspect', '--format', '{{.Os}}/{{.Architecture}}', image], {
+    const platform = execFileSync(runtime, [
+      'image',
+      'inspect',
+      '--format',
+      '{{.Os}}/{{.Architecture}}',
+      image,
+    ], {
       cwd,
       encoding: 'utf8',
       stdio: 'pipe',
@@ -200,7 +288,9 @@ function imagePlatform(runtime: string, image: string, cwd: string): string {
 
 /** 复用镜像与 Android 的引擎选择顺序。 */
 async function buildRuntime(cwd: string, choice?: BuildCommandOptions['runtime']): Promise<string> {
-  const candidates = choice && choice !== 'auto' ? [choice] : ['podman', 'docker']
+  const candidates = choice && choice !== 'auto'
+    ? [choice]
+    : ['podman', 'docker']
   if (candidates.every(candidate => candidate === 'podman' || candidate === 'docker')) {
     for (const candidate of candidates) {
       try {
@@ -232,20 +322,25 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   const concurrency = Number(options.concurrency ?? 2)
   if (![1, 2].includes(concurrency))
     throw new Error(cliM('cli_build_concurrency_invalid'))
-  const cwd = target === 'compile' ? directory : dirname(projectConfigPath(directory))
+  const cwd = target === 'compile'
+    ? directory
+    : dirname(projectConfigPath(directory))
   if (!['compile', 'image', 'desktop', 'app'].includes(target))
     throw new Error(cliM('cli_build_target_invalid'))
   const compileEnvironment = staticCompileEnvironment(target)
   const containerAndroid = target === 'app' && options.platform === 'android' && options.runtime !== undefined
   if (target === 'app' && options.platform === 'ios' && options.runtime !== undefined)
     throw new Error(cliM('cli_build_ios_runtime'))
-  if ((target !== 'image' && (options.images !== undefined || options.concurrency !== undefined || options.sqlitePrebuildMirror !== undefined || options.json))
+  if ((target !== 'image' && (options.images !== undefined || options.concurrency !== undefined || options.json))
     || (target !== 'image' && !containerAndroid && (options.runtime !== undefined || options.network !== undefined || options.httpProxy === false || options.imageSource !== undefined || options.imageMirrors !== undefined || options.npmSource !== undefined || options.npmRegistry !== undefined || options.proxyMode !== undefined || options.proxyUrl !== undefined || options.proxyBypass !== undefined))
     || (!['desktop', 'app'].includes(target) && (options.platform !== undefined || options.debug !== undefined)) || (target !== 'desktop' && options.arch !== undefined)) {
     throw new Error(cliM('cli_build_options_invalid'))
   }
   if (target === 'compile') {
-    await pnpm(['run', 'compile'], cwd, { buildId: randomUUID(), commit: sourceCommit(cwd) }, compileEnvironment)
+    await pnpm(['run', 'compile'], cwd, {
+      buildId: randomUUID(),
+      commit: sourceCommit(cwd),
+    }, compileEnvironment)
     return
   }
   const metadata: { name?: unknown, version?: unknown } = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'))
@@ -259,7 +354,11 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     throw new Error(cliM('cli_build_project_name_required'))
   const projectName = normalizeProjectName(metadata.name)
   const debug = options.debug === true
-  const identity = { buildId: createBuildId(appVersion), commit: sourceCommit(cwd), appVersion }
+  const identity = {
+    buildId: createBuildId(appVersion),
+    commit: sourceCommit(cwd),
+    appVersion,
+  }
   if (target === 'app') {
     const platform = options.platform
     if (platform !== 'android' && platform !== 'ios')
@@ -296,8 +395,18 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
       throw new Error(cliM('cli_build_native_host'))
     if (!config.desktop?.length)
       throw new Error(cliM('cli_build_desktop_missing'))
-    const rustTarget = `${arch === 'x64' ? 'x86_64' : 'aarch64'}-${platform === 'windows' ? 'pc-windows-msvc' : platform === 'macos' ? 'apple-darwin' : 'unknown-linux-gnu'}`
-    const bundles = platform === 'windows' ? 'nsis' : platform === 'macos' ? 'app,dmg' : 'deb,appimage'
+    const rustTarget = `${arch === 'x64'
+      ? 'x86_64'
+      : 'aarch64'}-${platform === 'windows'
+      ? 'pc-windows-msvc'
+      : platform === 'macos'
+        ? 'apple-darwin'
+        : 'unknown-linux-gnu'}`
+    const bundles = platform === 'windows'
+      ? 'nsis'
+      : platform === 'macos'
+        ? 'app,dmg'
+        : 'deb,appimage'
     const artifacts: NativeArtifact[] = []
     const nativeEnvironment = nativeNameEnvironment(cwd)
     for (const item of config.desktop) {
@@ -306,16 +415,40 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
       const output = join(cargo, rustTarget, debug ? 'debug' : 'release', 'bundle')
       const bundlesOnDisk = (): Map<string, string> => nativeFiles(output, (path, isDirectory) => isDirectory
         ? platform === 'macos' && path.endsWith('.app')
-        : platform === 'windows' ? path.endsWith('.exe') : platform === 'macos' ? path.endsWith('.dmg') : /\.(?:deb|AppImage)$/.test(path))
+        : platform === 'windows'
+          ? path.endsWith('.exe')
+          : platform === 'macos'
+            ? path.endsWith('.dmg')
+            : /\.(?:deb|AppImage)$/.test(path))
       const before = bundlesOnDisk()
       const manifestFile = join(directory, 'package.json')
-      const manifest: { scripts?: { tauri?: string } } = existsSync(manifestFile) ? JSON.parse(readFileSync(manifestFile, 'utf8')) : {}
+      const manifest: { scripts?: { tauri?: string } } = existsSync(manifestFile)
+        ? JSON.parse(readFileSync(manifestFile, 'utf8'))
+        : {}
       const entry = manifest.scripts?.tauri ? 'run' : 'exec'
-      await pnpm([entry, 'tauri', 'build', '--target', rustTarget, '--bundles', bundles, ...(debug ? ['--debug'] : []), '--config', JSON.stringify({ version: appVersion })], directory, identity, nativeEnvironment)
-      const files = [...bundlesOnDisk()].filter(([file, stamp]) => before.get(file) !== stamp)
+      await pnpm([
+        entry,
+        'tauri',
+        'build',
+        '--target',
+        rustTarget,
+        '--bundles',
+        bundles,
+        ...(debug
+          ? ['--debug']
+          : []),
+        '--config',
+        JSON.stringify({ version: appVersion }),
+      ], directory, identity, nativeEnvironment)
+      const files = [
+        ...bundlesOnDisk(),
+      ].filter(([file, stamp]) => before.get(file) !== stamp)
       if (!files.length)
         throw new Error(cliM('cli_build_desktop_artifact'))
-      artifacts.push(...files.map(([source]) => ({ source, file: join(relative(cwd, directory), relative(output, source)) })))
+      artifacts.push(...files.map(([source]) => ({
+        source,
+        file: join(relative(cwd, directory), relative(output, source)),
+      })))
     }
     for (const file of await publishNativeArtifacts(cwd, projectName, 'desktop', platform, debug, identity, artifacts, arch))
       writeCliMessage(file)
@@ -333,28 +466,51 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   if (webBasePath && !config.images.some(image => image.name === 'web'))
     throw new Error(cliM('cli_build_base_requires_web'))
   for (const image of images) {
-    if (!existsSync(resolve(cwd, image.dockerfile)))
-      throw new Error(cliM('cli_build_dockerfile_missing', { params: { path: image.dockerfile } }))
+    if (!existsSync(resolve(cwd, image.dockerfile))) {
+      throw new Error(cliM('cli_build_dockerfile_missing', {
+        params: { path: image.dockerfile },
+      }))
+    }
   }
   const { buildId, commit } = identity
-  const artifact: DeploymentArtifact = { version: 4, primaryService: config.images.some(image => image.name === 'serv') ? 'serv' : 'web', appVersion, buildId, source: { commit, dirty: sourceDirty(cwd, commit) }, partial: images.length !== config.images.length, hasWeb: config.images.some(image => image.name === 'web'), images: [] }
-  const downloads = await resolveBuildDownloads(cwd, options.json ? { ...options, yes: true } : options)
+  const inputs = images.flatMap(image => [
+    resolve(cwd, image.context ?? '.'),
+    resolve(cwd, image.dockerfile),
+  ])
+  const artifact: DeploymentArtifact = {
+    version: 4,
+    primaryService: config.images.some(image => image.name === 'serv')
+      ? 'serv'
+      : 'web',
+    appVersion,
+    buildId,
+    source: {
+      commit,
+      dirty: sourceDirty(cwd, commit, inputs),
+    },
+    partial: images.length !== config.images.length,
+    hasWeb: config.images.some(image => image.name === 'web'),
+    images: [],
+  }
+  const downloads = await resolveBuildDownloads(cwd, options.json
+    ? { ...options, yes: true }
+    : options)
   for (const image of images) validateDownloadDockerfile(resolve(cwd, image.dockerfile), downloads)
   const runtime = await buildRuntime(cwd, options.runtime)
-  await preflightDownloadProxy(runtime, downloads.proxy, options.json ? message => process.stderr.write(`${message}\n`) : undefined)
-  if (options.sqlitePrebuildMirror) {
-    const url = new URL(options.sqlitePrebuildMirror)
-    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)
-      throw new Error(cliM('cli_build_mirror_invalid'))
-  }
+  await preflightDownloadProxy(runtime, downloads.proxy, options.json
+    ? message => process.stderr.write(`${message}\n`)
+    : undefined)
   if (webBasePath) {
     artifact.version = 5
     artifact.webBasePath = webBasePath
   }
   // 部分构建仍保留工程显式声明的端口，不用构建默认值覆盖部署配置。
   for (const image of config.images) {
-    if (image.containerPort !== undefined)
-      artifact[image.name === 'serv' ? 'servContainerPort' : 'webContainerPort'] = image.containerPort
+    if (image.containerPort !== undefined) {
+      artifact[image.name === 'serv'
+        ? 'servContainerPort'
+        : 'webContainerPort'] = image.containerPort
+    }
   }
   const parent = join(cwd, '.hai/build/docker')
   mkdirSync(parent, { recursive: true })
@@ -369,7 +525,13 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
         throw new Error(cliM('cli_build_images_missing'))
       const context = resolve(cwd, image.context ?? '.')
       const imageRef = `localhost/hai-${projectName}-${image.name}:${buildId.toLowerCase().replaceAll('+', '_')}`
-      const args = ['build', '-f', resolve(cwd, image.dockerfile), '-t', imageRef]
+      const args = [
+        'build',
+        '-f',
+        resolve(cwd, image.dockerfile),
+        '-t',
+        imageRef,
+      ]
       // 仅仓库 Vitest 托管构建使用这对内部变量；正常构建保留缓存与镜像。
       const testRun = process.env.HAI_TEST_IMAGE_RUN
       const testLedger = process.env.HAI_TEST_IMAGE_LEDGER
@@ -394,21 +556,38 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
       if (runtime === 'podman' && existsSync(ignore))
         args.push('--ignorefile', ignore)
       if (runtime === 'podman') {
-        args.push('--format', 'docker', '--jobs', '1', ...(downloads.proxy.mode === 'none' ? ['--http-proxy=false'] : []))
+        args.push('--format', 'docker', '--jobs', '1', ...(downloads.proxy.mode === 'none'
+          ? ['--http-proxy=false']
+          : []))
       }
-      if (options.sqlitePrebuildMirror)
-        args.push('--build-arg', `SQLITE_PREBUILD_MIRROR=${options.sqlitePrebuildMirror}`)
       if (image.name === 'web' && compileEnvironment.PUBLIC_BASE_PATH)
         args.push('--build-arg', `PUBLIC_BASE_PATH=${compileEnvironment.PUBLIC_BASE_PATH}`)
       built.push(imageRef)
       await runImage([...args, context])
       const platform = imagePlatform(runtime, imageRef, cwd)
       const file = `${image.name}-${appVersion}.tar`
-      await runImage(['save', ...(runtime === 'podman' ? ['--format', 'docker-archive'] : []), '-o', join(staging, file), imageRef])
+      await runImage([
+        'save',
+        ...(runtime === 'podman'
+          ? ['--format', 'docker-archive']
+          : []),
+        '-o',
+        join(staging, file),
+        imageRef,
+      ])
       const hash = createHash('sha256')
       for await (const chunk of createReadStream(join(staging, file)))
         hash.update(chunk)
-      return { name: image.name, file, imageRef, sha256: hash.digest('hex'), platform, ...(image.containerPort ? { containerPort: image.containerPort } : {}) }
+      return {
+        name: image.name,
+        file,
+        imageRef,
+        sha256: hash.digest('hex'),
+        platform,
+        ...(image.containerPort
+          ? { containerPort: image.containerPort }
+          : {}),
+      }
     }
     for (let offset = 0; offset < images.length; offset += concurrency) {
       // 等待同批任务全部退出后再处理失败，避免清理仍在写入的归档或镜像。
@@ -428,10 +607,17 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     writeFileSync(join(parent, `latest-${buildId}`), `${batch}\n`)
     renameSync(join(parent, `latest-${buildId}`), join(parent, 'latest'))
     if (options.json) {
-      process.stdout.write(`${JSON.stringify({ schemaVersion: 1, artifactDir: output, manifestPath: join(output, 'manifest.json'), manifest: artifact })}\n`)
+      process.stdout.write(`${JSON.stringify({
+        schemaVersion: 1,
+        artifactDir: output,
+        manifestPath: join(output, 'manifest.json'),
+        manifest: artifact,
+      })}\n`)
     }
     else {
-      writeCliMessage(cliM('cli_build_ready', { params: { path: output, runtime } }))
+      writeCliMessage(cliM('cli_build_ready', {
+        params: { path: output, runtime },
+      }))
     }
   }
   catch (error) {
@@ -453,13 +639,33 @@ function prepareDependencyInputs(cwd: string): void {
   const destination = join(cwd, 'images', 'dependencies')
   mkdirSync(destination, { recursive: true })
   const tracking = join(destination, '.managed.json')
-  const previous: string[] = existsSync(tracking) ? JSON.parse(readFileSync(tracking, 'utf8')) : []
+  const recorded: unknown = existsSync(tracking)
+    ? JSON.parse(readFileSync(tracking, 'utf8'))
+    : []
+  const previous = Array.isArray(recorded)
+    ? recorded.filter((file): file is string => typeof file === 'string')
+    : []
   const files: string[] = []
   const walk = (directory: string): void => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const source = join(directory, entry.name)
-      if (source === destination || ['node_modules', '.git', '.hai', '.turbo', '.svelte-kit', '.pnpm-store', '.cache', 'dist', 'build', 'data', 'tmp', 'test-results', 'playwright-report'].includes(entry.name))
+      if (source === destination || [
+        'node_modules',
+        '.git',
+        '.hai',
+        '.turbo',
+        '.svelte-kit',
+        '.pnpm-store',
+        '.cache',
+        'dist',
+        'build',
+        'data',
+        'tmp',
+        'test-results',
+        'playwright-report',
+      ].includes(entry.name)) {
         continue
+      }
       if (entry.isDirectory()) {
         walk(source)
         continue
@@ -477,7 +683,8 @@ function prepareDependencyInputs(cwd: string): void {
   walk(cwd)
   for (const file of previous) {
     const target = resolve(destination, file)
-    if (!files.includes(file) && !relative(destination, target).startsWith('..'))
+    const offset = relative(destination, target)
+    if (!files.includes(file) && offset && !isAbsolute(offset) && offset !== '..' && !offset.startsWith(`..${sep}`))
       rmSync(target, { force: true })
   }
   const content = `${JSON.stringify(files)}\n`

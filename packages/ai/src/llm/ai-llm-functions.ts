@@ -145,7 +145,9 @@ export function createAILLMFunctions(
                 .filter(c => c.type === 'text')
                 .map(c => c.text)
                 .join(' ')
-        return text.length > 50 ? `${text.slice(0, 50)}...` : text
+        return text.length > 50
+          ? `${text.slice(0, 50)}...`
+          : text
       }
     }
     return 'New Session'
@@ -377,7 +379,9 @@ export function createAILLMFunctions(
           response: {
             content,
             toolCalls:
-              toolCalls.length > 0 ? toolCalls.filter(Boolean) : undefined,
+              toolCalls.length > 0
+                ? toolCalls.filter(Boolean)
+                : undefined,
             finishReason: finishReason ?? 'stop',
             usage,
           },
@@ -416,7 +420,9 @@ export function createAILLMFunctions(
         HaiAIError.LLM_HISTORY_FAILED,
         aiM('ai_llmHistoryFailed', {
           params: {
-            error: error instanceof Error ? error.message : String(error),
+            error: error instanceof Error
+              ? error.message
+              : String(error),
           },
         }),
         error,
@@ -445,7 +451,9 @@ export function createAILLMFunctions(
         HaiAIError.LLM_HISTORY_FAILED,
         aiM('ai_llmHistoryFailed', {
           params: {
-            error: error instanceof Error ? error.message : String(error),
+            error: error instanceof Error
+              ? error.message
+              : String(error),
           },
         }),
         error,
@@ -561,7 +569,9 @@ export function createAILLMFunctions(
           return result as HaiResult<never>
 
         const content = result.data.choices[0]?.message?.content
-        const text = typeof content === 'string' ? content : ''
+        const text = typeof content === 'string'
+          ? content
+          : ''
         let parsed: unknown
         try {
           parsed = JSON.parse(text)

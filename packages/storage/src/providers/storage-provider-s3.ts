@@ -46,7 +46,12 @@ const LEADING_SLASHES_REGEX = /^\/+/
 /** S3 单次 DeleteObjects 最多接受 1000 项；不并发放大删除请求。 */
 const DELETE_BATCH_SIZE = 1000
 /** 只重试服务明确报告的瞬时逐项错误，最多三次，不重发已成功或权限失败项。 */
-const RETRYABLE_DELETE_CODES = new Set(['InternalError', 'ServiceUnavailable', 'SlowDown', 'RequestTimeout'])
+const RETRYABLE_DELETE_CODES = new Set([
+  'InternalError',
+  'ServiceUnavailable',
+  'SlowDown',
+  'RequestTimeout',
+])
 
 // ─── 辅助函数 ───
 
@@ -67,8 +72,15 @@ const RETRYABLE_DELETE_CODES = new Set(['InternalError', 'ServiceUnavailable', '
 function toStorageError(error: unknown, key?: string): HaiError {
   const e = error as { name?: string, message?: string, Code?: string }
 
-  if (e.name === 'PreconditionFailed' || (e as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 412)
-    return { ...HaiStorageError.ALREADY_EXISTS, message: storageM('storage_fileAlreadyExists', { params: { key: key ?? '' } }), cause: error }
+  if (e.name === 'PreconditionFailed' || (e as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 412) {
+    return {
+      ...HaiStorageError.ALREADY_EXISTS,
+      message: storageM('storage_fileAlreadyExists', {
+        params: { key: key ?? '' },
+      }),
+      cause: error,
+    }
+  }
 
   // S3 特定错误处理
   if (e.name === 'NoSuchKey' || e.Code === 'NoSuchKey'
@@ -76,7 +88,9 @@ function toStorageError(error: unknown, key?: string): HaiError {
     || e.name === '404' || (e as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) {
     return {
       ...HaiStorageError.NOT_FOUND,
-      message: storageM('storage_fileNotFound', { params: { key: key ?? '' } }),
+      message: storageM('storage_fileNotFound', {
+        params: { key: key ?? '' },
+      }),
       cause: error,
     }
   }
@@ -84,7 +98,9 @@ function toStorageError(error: unknown, key?: string): HaiError {
   if (e.name === 'AccessDenied' || e.Code === 'AccessDenied') {
     return {
       ...HaiStorageError.PERMISSION_DENIED,
-      message: storageM('storage_permissionDenied', { params: { key: key ?? '' } }),
+      message: storageM('storage_permissionDenied', {
+        params: { key: key ?? '' },
+      }),
       cause: error,
     }
   }
@@ -108,7 +124,9 @@ function toStorageError(error: unknown, key?: string): HaiError {
 
   return {
     ...HaiStorageError.OPERATION_FAILED,
-    message: storageM('storage_operationFailed', { params: { error: e.message ?? '' } }),
+    message: storageM('storage_operationFailed', {
+      params: { error: e.message ?? '' },
+    }),
     cause: error,
   }
 }
@@ -183,7 +201,11 @@ export function createS3Provider(): StorageProvider {
     closing = Promise.resolve().then(() => {
       const failures: unknown[] = []
       for (const kind of ['normal', 'delete', 'presign'] as const) {
-        const owned = kind === 'normal' ? client : kind === 'delete' ? deleteClient : presignClient
+        const owned = kind === 'normal'
+          ? client
+          : kind === 'delete'
+            ? deleteClient
+            : presignClient
         if (!owned)
           continue
         try {
@@ -210,7 +232,11 @@ export function createS3Provider(): StorageProvider {
 
   /** 预签名仅使用外部端点；CRUD 与健康检查仍使用内部端点，批量删除禁用 SDK 重试。 */
   function getClient(operation?: 'deleteMany' | 'presign'): S3Client {
-    const selected = operation === 'deleteMany' ? deleteClient : operation === 'presign' ? presignClient ?? client : client
+    const selected = operation === 'deleteMany'
+      ? deleteClient
+      : operation === 'presign'
+        ? presignClient ?? client
+        : client
     if (!ready || !selected) {
       throw new Error(storageM('storage_s3ClientNotInitialized'))
     }
@@ -264,7 +290,9 @@ export function createS3Provider(): StorageProvider {
         const fullPath = fullKey(key)
 
         options.signal?.throwIfAborted()
-        const body = typeof data === 'string' ? Buffer.from(data) : data
+        const body = typeof data === 'string'
+          ? Buffer.from(data)
+          : data
         const buffered = body instanceof Uint8Array
         let size = buffered ? body.byteLength : 0
         const params = {
@@ -276,7 +304,12 @@ export function createS3Provider(): StorageProvider {
           ContentDisposition: options.contentDisposition,
           IfNoneMatch: options.ifNoneMatch,
         }
-        logOperation('write', 'file.put', { key, fullPath, byteLength: buffered ? size : undefined, options })
+        logOperation('write', 'file.put', {
+          key,
+          fullPath,
+          byteLength: buffered ? size : undefined,
+          options,
+        })
         if (buffered) {
           await s3Client.send(new PutObjectCommand({ ...params, Body: body }), { abortSignal: options.signal })
         }
@@ -296,7 +329,13 @@ export function createS3Provider(): StorageProvider {
               abort()
             // 标准 S3 multipart；SDK 管理分片与失败清理，最多缓冲两片。
             const { Upload } = await import('@aws-sdk/lib-storage')
-            await new Upload({ client: s3Client, params: { ...params, Body: stream }, queueSize: 2, leavePartsOnError: false, abortController: controller }).done()
+            await new Upload({
+              client: s3Client,
+              params: { ...params, Body: stream },
+              queueSize: 2,
+              leavePartsOnError: false,
+              abortController: controller,
+            }).done()
           }
           finally {
             options.signal?.removeEventListener('abort', abort)
@@ -348,7 +387,9 @@ export function createS3Provider(): StorageProvider {
         let Range: string | undefined
         if (options.rangeStart !== undefined || options.rangeEnd !== undefined) {
           const start = options.rangeStart ?? 0
-          const end = options.rangeEnd !== undefined ? options.rangeEnd : ''
+          const end = options.rangeEnd !== undefined
+            ? options.rangeEnd
+            : ''
           Range = `bytes=${start}-${end}`
         }
 
@@ -436,7 +477,9 @@ export function createS3Provider(): StorageProvider {
         const s3Client = getClient('deleteMany')
         const s3Config = getConfig()
         logOperation('write', 'file.deleteMany', { count: keys.length, keys })
-        const uniqueKeys = [...new Set(keys)]
+        const uniqueKeys = [
+          ...new Set(keys),
+        ]
         const summary: StorageDeleteSummary = { deletedKeys: [], failures: [] }
         for (let offset = 0; offset < uniqueKeys.length; offset += DELETE_BATCH_SIZE) {
           let pending = uniqueKeys.slice(offset, offset + DELETE_BATCH_SIZE)
@@ -445,18 +488,34 @@ export function createS3Provider(): StorageProvider {
             try {
               response = await s3Client.send(new DeleteObjectsCommand({
                 Bucket: s3Config.bucket,
-                Delete: { Objects: [...new Set(pending.map(fullKey))].map(Key => ({ Key })), Quiet: false },
+                Delete: {
+                  Objects: [
+                    ...new Set(pending.map(fullKey)),
+                  ].map(Key => ({ Key })),
+                  Quiet: false,
+                },
               }))
             }
             catch (cause) {
               // 已发送请求的结果可能未知，尚未发送的后续批次不能被标记为已删除。
-              const failure = (cause && typeof cause === 'object' ? cause : {}) as { name?: string, $metadata?: { httpStatusCode?: number } }
+              const failure = (cause && typeof cause === 'object'
+                ? cause
+                : {}) as { name?: string, $metadata?: { httpStatusCode?: number } }
               const status = failure.$metadata?.httpStatusCode
-              const code = failure.name && /^[\w.-]{1,80}$/.test(failure.name) ? failure.name : 'RequestFailed'
+              const code = failure.name && /^[\w.-]{1,80}$/.test(failure.name)
+                ? failure.name
+                : 'RequestFailed'
               const retryable = status === undefined || status === 408 || status === 429 || status >= 500
-              const outcome: StorageDeleteFailure['outcome'] = status !== undefined && status >= 400 && status < 500 && status !== 408 ? 'failed' : 'unknown'
+              const outcome: StorageDeleteFailure['outcome'] = status !== undefined && status >= 400 && status < 500 && status !== 408
+                ? 'failed'
+                : 'unknown'
               summary.failures.push(...pending.map(key => ({ key, code, retryable, outcome })))
-              summary.failures.push(...uniqueKeys.slice(offset + DELETE_BATCH_SIZE).map(key => ({ key, code, retryable, outcome: 'notAttempted' as const })))
+              summary.failures.push(...uniqueKeys.slice(offset + DELETE_BATCH_SIZE).map(key => ({
+                key,
+                code,
+                retryable,
+                outcome: 'notAttempted' as const,
+              })))
               return toStorageDeleteResult(summary)
             }
             const outcomes = new Map<string, string | null>()
@@ -465,7 +524,12 @@ export function createS3Provider(): StorageProvider {
             // 非 quiet 响应中每个请求键必须恰好出现一次；遗漏、重复和越界都不能宣称成功。
             const items = [
               ...(response.Deleted ?? []).map(item => ({ key: item.Key, code: null })),
-              ...(response.Errors ?? []).map(item => ({ key: item.Key, code: item.Code && /^[\w.-]{1,80}$/.test(item.Code) ? item.Code : 'UnknownError' })),
+              ...(response.Errors ?? []).map(item => ({
+                key: item.Key,
+                code: item.Code && /^[\w.-]{1,80}$/.test(item.Code)
+                  ? item.Code
+                  : 'UnknownError',
+              })),
             ]
             for (const item of items) {
               if (!item.key || !requested.has(item.key) || outcomes.has(item.key)) {
@@ -475,19 +539,37 @@ export function createS3Provider(): StorageProvider {
               outcomes.set(item.key, item.code)
             }
             if (malformed || outcomes.size !== requested.size) {
-              summary.failures.push(...pending.map(key => ({ key, code: 'InvalidDeleteResponse', retryable: false, outcome: 'unknown' as const })))
-              summary.failures.push(...uniqueKeys.slice(offset + DELETE_BATCH_SIZE).map(key => ({ key, code: 'InvalidDeleteResponse', retryable: false, outcome: 'notAttempted' as const })))
+              summary.failures.push(...pending.map(key => ({
+                key,
+                code: 'InvalidDeleteResponse',
+                retryable: false,
+                outcome: 'unknown' as const,
+              })))
+              summary.failures.push(...uniqueKeys.slice(offset + DELETE_BATCH_SIZE).map(key => ({
+                key,
+                code: 'InvalidDeleteResponse',
+                retryable: false,
+                outcome: 'notAttempted' as const,
+              })))
               return toStorageDeleteResult(summary)
             }
             const retry: string[] = []
             for (const key of pending) {
               const code = outcomes.get(fullKey(key))
-              if (code === null)
+              if (code === null) {
                 summary.deletedKeys.push(key)
-              else if (code && RETRYABLE_DELETE_CODES.has(code) && attempt < 2)
+              }
+              else if (code && RETRYABLE_DELETE_CODES.has(code) && attempt < 2) {
                 retry.push(key)
-              else
-                summary.failures.push({ key, code: code ?? 'UnknownError', retryable: !!code && RETRYABLE_DELETE_CODES.has(code), outcome: 'failed' })
+              }
+              else {
+                summary.failures.push({
+                  key,
+                  code: code ?? 'UnknownError',
+                  retryable: !!code && RETRYABLE_DELETE_CODES.has(code),
+                  outcome: 'failed',
+                })
+              }
             }
             pending = retry
             if (pending.length > 0)
@@ -507,15 +589,30 @@ export function createS3Provider(): StorageProvider {
         const s3Config = getConfig()
         const sourceFullPath = fullKey(sourceKey)
         const destFullPath = fullKey(destKey)
-        logOperation('write', 'file.copy', { sourceKey, destKey, sourceFullPath, destFullPath, options })
+        // CopySource 是 HTTP 头而非 SDK 自动编码的对象路径；逐段编码并保留层级分隔符。
+        const copySource = [
+          s3Config.bucket,
+          ...sourceFullPath.split('/'),
+        ]
+          .map(part => encodeURIComponent(part).replace(/[!'()*]/g, character => `%${character.charCodeAt(0).toString(16).toUpperCase()}`))
+          .join('/')
+        logOperation('write', 'file.copy', {
+          sourceKey,
+          destKey,
+          sourceFullPath,
+          destFullPath,
+          options,
+        })
 
         await s3Client.send(new CopyObjectCommand({
           Bucket: s3Config.bucket,
-          CopySource: `${s3Config.bucket}/${sourceFullPath}`,
+          CopySource: copySource,
           Key: destFullPath,
           ContentType: options.contentType,
           Metadata: options.metadata,
-          MetadataDirective: (options.metadata || options.contentType) ? 'REPLACE' : 'COPY',
+          MetadataDirective: (options.metadata || options.contentType)
+            ? 'REPLACE'
+            : 'COPY',
         }))
 
         return file.head(destKey)
@@ -708,7 +805,9 @@ export function createS3Provider(): StorageProvider {
         logger.info('Connecting S3 provider', {
           bucket: cfg.bucket,
           region: cfg.region,
-          endpoint: cfg.endpoint ? core.sanitize.sanitizeUrl(cfg.endpoint) : undefined,
+          endpoint: cfg.endpoint
+            ? core.sanitize.sanitizeUrl(cfg.endpoint)
+            : undefined,
         })
 
         const clientConfig: S3ClientConfig = {
@@ -731,7 +830,11 @@ export function createS3Provider(): StorageProvider {
           const endpoint = new URL(cfg.publicEndpoint)
           publicBasePath = endpoint.pathname.replace(TRAILING_SLASHES_REGEX, '')
           // 含目录的网关使用桶路径；签名针对网关还原后的 S3 URI，而非入口前缀。
-          presignClient = new S3Client({ ...clientConfig, endpoint: endpoint.origin, forcePathStyle: publicBasePath ? true : cfg.forcePathStyle })
+          presignClient = new S3Client({
+            ...clientConfig,
+            endpoint: endpoint.origin,
+            forcePathStyle: publicBasePath ? true : cfg.forcePathStyle,
+          })
         }
 
         if (cfg.createBucket) {
@@ -749,7 +852,11 @@ export function createS3Provider(): StorageProvider {
               await client.send(new CreateBucketCommand({
                 Bucket: cfg.bucket,
                 // AWS us-east-1 要省略 LocationConstraint；兼容服务可使用自定义区域名。
-                ...(cfg.region === 'us-east-1' ? {} : { CreateBucketConfiguration: { LocationConstraint: cfg.region as BucketLocationConstraint } }),
+                ...(cfg.region === 'us-east-1'
+                  ? {}
+                  : {
+                      CreateBucketConfiguration: { LocationConstraint: cfg.region as BucketLocationConstraint },
+                    }),
               }))
               logger.info('S3 bucket created', { bucket: cfg.bucket })
             }
@@ -782,7 +889,10 @@ export function createS3Provider(): StorageProvider {
           return err(original)
         }
         catch (cleanupError) {
-          return err({ ...original, ext: { ...original.ext, cleanupPending: true, cleanupError } })
+          return err({
+            ...original,
+            ext: { ...original.ext, cleanupPending: true, cleanupError },
+          })
         }
       }
     },

@@ -34,13 +34,21 @@ async function dispatch({ command, args }: Command): Promise<unknown> {
     return reldb.close()
   }
   if (command === 'initScheduler') {
-    return scheduler.init({ tickInterval: 100, leaseMs: 1000, hooks: { onTaskExecute: async ({ context }) => {
-      const suffix = reldb.config?.type === 'mysql' ? ' ON DUPLICATE KEY UPDATE call_count = call_count + 1' : ' ON CONFLICT(receipt) DO UPDATE SET call_count = scheduler_clock_effects.call_count + 1'
-      const result = await reldb.sql.execute(`INSERT INTO scheduler_clock_effects (receipt, call_count) VALUES (?, 1)${suffix}`, [context.occurrenceId])
-      if (!result.success)
-        throw new Error('Durable clock effect failed')
-      return 'done'
-    } } })
+    return scheduler.init({
+      tickInterval: 100,
+      leaseMs: 1000,
+      hooks: {
+        onTaskExecute: async ({ context }) => {
+          const suffix = reldb.config?.type === 'mysql'
+            ? ' ON DUPLICATE KEY UPDATE call_count = call_count + 1'
+            : ' ON CONFLICT(receipt) DO UPDATE SET call_count = scheduler_clock_effects.call_count + 1'
+          const result = await reldb.sql.execute(`INSERT INTO scheduler_clock_effects (receipt, call_count) VALUES (?, 1)${suffix}`, [context.occurrenceId])
+          if (!result.success)
+            throw new Error('Durable clock effect failed')
+          return 'done'
+        },
+      },
+    })
   }
   if (command === 'register') {
     if (!args.task)
@@ -82,7 +90,22 @@ async function dispatch({ command, args }: Command): Promise<unknown> {
   if (command === 'renew')
     return repository.renew(row, leaseMs)
   if (command === 'finish') {
-    const log: TaskExecutionLog = { id: crypto.randomUUID(), occurrenceId: receipt, persistence: { status: 'pending' }, taskId: row.taskId, taskName: row.taskId, taskType: 'hook', triggerType: 'manual', triggerSource: null, status: 'success', result: 'committed', error: null, startedAt: Date.now(), finishedAt: Date.now(), duration: 0 }
+    const log: TaskExecutionLog = {
+      id: crypto.randomUUID(),
+      occurrenceId: receipt,
+      persistence: { status: 'pending' },
+      taskId: row.taskId,
+      taskName: row.taskId,
+      taskType: 'hook',
+      triggerType: 'manual',
+      triggerSource: null,
+      status: 'success',
+      result: 'committed',
+      error: null,
+      startedAt: Date.now(),
+      finishedAt: Date.now(),
+      duration: 0,
+    }
     return repository.finish(row, log)
   }
   throw new Error('Unknown command')
@@ -92,6 +115,11 @@ process.on('message', (message: Command) => {
   process.send?.({ id: message.id, started: true })
   void dispatch(message).then(
     data => process.send?.({ id: message.id, data }),
-    error => process.send?.({ id: message.id, error: error instanceof Error ? error.message : String(error) }),
+    error => process.send?.({
+      id: message.id,
+      error: error instanceof Error
+        ? error.message
+        : String(error),
+    }),
   )
 })

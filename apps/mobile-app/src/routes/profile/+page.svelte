@@ -2,7 +2,9 @@
   import type { UserProfileSubmitData } from '@h-ai/ui'
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import * as m from '$lib/paraglide/messages.js'
+  import { applyTheme, getSavedTheme, toast } from '@h-ai/ui'
+  import { onMount } from 'svelte'
+  import * as m from '#lib/paraglide/messages.js'
   import {
     currentPermissions,
     currentRoles,
@@ -11,10 +13,8 @@
     logout,
     refreshCurrentUser,
     updateProfile,
-  } from '$lib/stores/auth-store.svelte.js'
-  import { changeLocale, localeStore } from '$lib/stores/locale-store.svelte.js'
-  import { applyTheme, getSavedTheme, toast } from '@h-ai/ui'
-  import { onMount } from 'svelte'
+  } from '#lib/stores/auth-store.svelte.js'
+  import { changeLocale, localeStore } from '#lib/stores/locale-store.svelte.js'
 
   const me = $derived(currentUser())
   let currentTheme = $state('light')
@@ -38,18 +38,22 @@
     changeLocale(language)
   }
 
-  async function handleSave(data: UserProfileSubmitData): Promise<void> {
+  /** 保存用户资料；只有服务端确认成功才返回 true，失败保留编辑草稿。 */
+  async function handleSave(data: UserProfileSubmitData): Promise<boolean> {
     errors = {}
     const error = await updateProfile({
       username: data.username,
       email: data.email,
     })
     if (error) {
-      errors = { general: m.profile_update_failed({ message: error }) }
-      return
+      errors = {
+        general: m.profile_update_failed({ message: error }),
+      }
+      return false
     }
 
     toast.success(m.profile_update_success())
+    return true
   }
 
   async function handleLogout(): Promise<void> {
@@ -60,7 +64,7 @@
       toast.error(m.profile_logout_failed())
     }
     finally {
-      await goto(resolve('/auth/login', {}))
+      await goto(resolve('auth/login'))
     }
   }
 </script>

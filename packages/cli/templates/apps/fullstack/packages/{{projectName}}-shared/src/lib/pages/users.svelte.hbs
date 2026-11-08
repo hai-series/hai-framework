@@ -27,14 +27,53 @@
   let accountStatus = $state<'active' | 'dormant' | 'closed'>('active')
   let expiresAt = $state('')
   const columns = $derived([
-    { key: 'username', sortable: true, label: m.user_account() },
-    { key: 'email', sortable: true, label: m.user_email() },
-    { key: 'roles', label: m.user_role() },
-    { key: 'accountStatus', sortable: true, label: m.account_state() },
-    { key: 'createdAt', sortable: true, label: m.created_at() },
+    {
+      key: 'username',
+      sortable: true,
+      label: m.user_account(),
+    },
+    {
+      key: 'email',
+      sortable: true,
+      label: m.user_email(),
+    },
+    {
+      key: 'roles',
+      label: m.user_role(),
+    },
+    {
+      key: 'accountStatus',
+      sortable: true,
+      label: m.account_state(),
+    },
+    {
+      key: 'createdAt',
+      sortable: true,
+      label: m.created_at(),
+    },
   ])
-  const roleOptions = $derived(AdminRoleCodeSchema.options.map(value => ({ value, label: roleLabel(value) })))
-  const statusOptions = $derived([{ value: 'all', label: m.all_statuses() }, { value: 'active', label: m.account_active() }, { value: 'dormant', label: m.account_dormant() }, { value: 'closed', label: m.account_closed() }])
+  const roleOptions = $derived(AdminRoleCodeSchema.options.map(value => ({
+    value,
+    label: roleLabel(value),
+  })))
+  const statusOptions = $derived([
+    {
+      value: 'all',
+      label: m.all_statuses(),
+    },
+    {
+      value: 'active',
+      label: m.account_active(),
+    },
+    {
+      value: 'dormant',
+      label: m.account_dormant(),
+    },
+    {
+      value: 'closed',
+      label: m.account_closed(),
+    },
+  ])
 
   function openEditor(user: AdminUser | null, useInvitation = false) {
     editing = user
@@ -47,17 +86,44 @@
     role = user?.roles[0] ?? 'user'
     accountType = user?.accountType ?? 'permanent'
     accountStatus = user?.accountStatus ?? 'active'
-    expiresAt = user?.accountExpiresAt ? store.localDateTime(user.accountExpiresAt) : ''
+    expiresAt = user?.accountExpiresAt
+      ? store.localDateTime(user.accountExpiresAt)
+      : ''
     store.error = ''
     editorOpen = true
   }
 
   async function submit(event: SubmitEvent) {
     event.preventDefault()
-    const fields = { displayName: displayName.trim(), role, accountType, accountStatus, accountExpiresAt: expiresAt ? new Date(expiresAt).toISOString() : null }
+    const fields = {
+      displayName: displayName.trim(),
+      role,
+      accountType,
+      accountStatus,
+      accountExpiresAt: expiresAt
+        ? new Date(expiresAt).toISOString()
+        : null,
+    }
     const saved = invitation && !editing
-      ? await store.inviteUser({ username: username.trim(), email: email.trim() || undefined, phone: phone.trim() || undefined, ...fields, accountStatus: 'active' })
-      : await store.saveUser(editing ? { id: editing.id, email: email.trim(), ...fields } : { username: username.trim(), password, email: email.trim() || undefined, ...fields })
+      ? await store.inviteUser({
+        username: username.trim(),
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
+        ...fields,
+        accountStatus: 'active',
+      })
+      : await store.saveUser(editing
+        ? {
+          id: editing.id,
+          email: email.trim(),
+          ...fields,
+        }
+        : {
+          username: username.trim(),
+          password,
+          email: email.trim() || undefined,
+          ...fields,
+        })
     if (saved) {
       editorOpen = false
       password = ''
@@ -94,7 +160,9 @@
       event.preventDefault()
       void store.queryUsers()
     }}>
-      <FilterBar activeCount={store.usersStatus === 'all' ? 0 : 1} onreset={() => {
+      <FilterBar activeCount={store.usersStatus === 'all'
+? 0
+: 1} onreset={() => {
         store.usersSearch = ''
         store.usersStatus = 'all'
         store.usersSortBy = 'createdAt'
@@ -115,9 +183,19 @@
               <div><p class='font-medium'>{user.displayName || user.username}</p><p class='text-xs text-base-content/45'>@{user.username}</p></div>
             </div>
           {:else if key === 'roles'}
-            <Badge variant={user.roles.includes('admin') ? 'primary' : 'ghost'}>{user.roles.map(roleLabel).join(', ')}</Badge>
+            <Badge variant={user.roles.includes('admin')
+? 'primary'
+: 'ghost'}>{user.roles.map(roleLabel).join(', ')}</Badge>
           {:else if key === 'accountStatus'}
-            <Badge variant={user.accountStatus === 'active' ? 'success' : user.accountStatus === 'dormant' ? 'warning' : 'ghost'}>{user.accountStatus === 'active' ? m.account_active() : user.accountStatus === 'dormant' ? m.account_dormant() : m.account_closed()}</Badge>
+            <Badge variant={user.accountStatus === 'active'
+? 'success'
+: user.accountStatus === 'dormant'
+? 'warning'
+: 'ghost'}>{user.accountStatus === 'active'
+? m.account_active()
+: user.accountStatus === 'dormant'
+? m.account_dormant()
+: m.account_closed()}</Badge>
           {:else if key === 'createdAt'}
             <span class='whitespace-nowrap text-xs text-base-content/60'>{store.formatDate(user.createdAt)}</span>
           {:else if key === 'email'}
@@ -140,11 +218,21 @@
             <div class='flex items-center gap-3'>
               <Avatar name={user.displayName || user.username} src={user.avatarUrl} size='sm' />
               <div class='min-w-0 flex-1'><p class='truncate font-medium'>{user.displayName || user.username}</p><p class='truncate text-xs text-base-content/45'>@{user.username}</p></div>
-              <Badge size='sm' variant={user.accountStatus === 'active' ? 'success' : user.accountStatus === 'dormant' ? 'warning' : 'ghost'}>{user.accountStatus === 'active' ? m.account_active() : user.accountStatus === 'dormant' ? m.account_dormant() : m.account_closed()}</Badge>
+              <Badge size='sm' variant={user.accountStatus === 'active'
+? 'success'
+: user.accountStatus === 'dormant'
+? 'warning'
+: 'ghost'}>{user.accountStatus === 'active'
+? m.account_active()
+: user.accountStatus === 'dormant'
+? m.account_dormant()
+: m.account_closed()}</Badge>
             </div>
             <p class='mt-3 truncate text-xs text-base-content/60' title={user.email}>{user.email || '—'}</p>
             <div class='mt-3 flex flex-wrap items-center justify-between gap-2'>
-              <Badge size='sm' variant={user.roles.includes('admin') ? 'primary' : 'ghost'}>{user.roles.map(roleLabel).join(', ')}</Badge>
+              <Badge size='sm' variant={user.roles.includes('admin')
+? 'primary'
+: 'ghost'}>{user.roles.map(roleLabel).join(', ')}</Badge>
               {@render userActions(user)}
             </div>
           </Card>
@@ -157,7 +245,11 @@
   </div>
 </section>
 
-<Modal bind:open={editorOpen} title={editing ? m.user_edit() : invitation ? m.invitation_title() : m.user_create()} closeOnBackdrop={!store.saving} closeOnEscape={!store.saving} size='3xl' data-testid='user-editor'>
+<Modal bind:open={editorOpen} title={editing
+? m.user_edit()
+: invitation
+? m.invitation_title()
+: m.user_create()} closeOnBackdrop={!store.saving} closeOnEscape={!store.saving} size='3xl' data-testid='user-editor'>
   <form onsubmit={submit}>
     {#if invitation}<p class='mb-4 text-sm text-base-content/60'>{m.invitation_hint()}</p>{/if}
     <FormLayout columns={2} labelPosition='left' labelWidth='6rem'>
@@ -170,8 +262,30 @@
         <FormField label={m.user_password()} hint={m.initial_password_rules({ min: store.authConfig?.password.minLength ?? 8 })} required><PasswordInput required bind:value={password} autocomplete='new-password' minLength={store.authConfig?.password.minLength ?? 8} data-testid='user-password' /></FormField>
       {/if}
       {#if invitation && store.authConfig?.passwordReset.mode === 'phone'}<FormField label={m.invitation_phone()} required><Input type='tel' bind:value={phone} required maxlength={32} data-testid='invite-phone' /></FormField>{/if}
-      <FormField label={m.account_type()}><Select bind:value={accountType} options={[{ value: 'permanent', label: m.account_permanent() }, { value: 'temporary', label: m.account_temporary() }]} data-testid='account-type' /></FormField>
-      <FormField label={m.account_state()}><Select bind:value={accountStatus} disabled={invitation || editing?.id === store.user?.id} options={[{ value: 'active', label: m.account_active() }, { value: 'dormant', label: m.account_dormant() }, { value: 'closed', label: m.account_closed() }]} data-testid='account-state' /></FormField>
+      <FormField label={m.account_type()}><Select bind:value={accountType} options={[
+{
+value: 'permanent',
+label: m.account_permanent(),
+},
+{
+value: 'temporary',
+label: m.account_temporary(),
+},
+]} data-testid='account-type' /></FormField>
+      <FormField label={m.account_state()}><Select bind:value={accountStatus} disabled={invitation || editing?.id === store.user?.id} options={[
+{
+value: 'active',
+label: m.account_active(),
+},
+{
+value: 'dormant',
+label: m.account_dormant(),
+},
+{
+value: 'closed',
+label: m.account_closed(),
+},
+]} data-testid='account-state' /></FormField>
       <FormField label={m.account_expires()} required={accountType === 'temporary'}><Input type='datetime-local' bind:value={expiresAt} required={accountType === 'temporary'} data-testid='account-expires' /></FormField>
       <FormField label={m.user_role()}><Select bind:value={role} options={roleOptions} disabled={editing?.id === store.user?.id} data-testid='user-role' /></FormField>
       <div class='flex justify-end gap-2 border-t border-base-content/8 pt-4'>

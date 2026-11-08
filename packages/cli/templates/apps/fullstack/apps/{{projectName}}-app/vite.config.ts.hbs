@@ -14,7 +14,9 @@ import { resolveBuildMetadata } from '../../scripts/build-metadata.js'
 const envDir = fileURLToPath(new URL('../../', import.meta.url))
 
 export default defineConfig(({ mode, command }) => {
-  const envResult = command === 'build' || process.env.HAI_E2E === '1' ? { success: true as const, data: {} as Record<string, string> } : core.config.loadEnvFiles({ mode, envDir })
+  const envResult = command === 'build' || process.env.HAI_E2E === '1'
+    ? { success: true as const, data: {} as Record<string, string> }
+    : core.config.loadEnvFiles({ mode, envDir })
   if (!envResult.success)
     throw new Error(envResult.error.message)
   const env = envResult.data
@@ -23,15 +25,23 @@ export default defineConfig(({ mode, command }) => {
   const metadataAsset: Plugin = {
     name: 'hai-build-metadata',
     generateBundle() {
-      this.emitFile({ type: 'asset', fileName: 'build-metadata.json', source: JSON.stringify(buildMetadata) })
+      this.emitFile({
+        type: 'asset',
+        fileName: 'build-metadata.json',
+        source: JSON.stringify(buildMetadata),
+      })
     },
   }
   const target = (env.PUBLIC_API_BASE || process.env.SERVICE_BASE_URL || 'http://127.0.0.1:3000').replace(/\/api\/v1\/?$/, '')
-  const proxy = { '/api': { target, changeOrigin: true } }
+  const proxy = {
+    '/api': { target, changeOrigin: true },
+  }
   return {
     base: './',
     envDir: false,
-    define: { __HAI_BUILD_METADATA__: JSON.stringify(buildMetadata) },
+    define: {
+      __HAI_BUILD_METADATA__: JSON.stringify(buildMetadata),
+    },
     server: { proxy },
     preview: { proxy },
     build: {
@@ -51,6 +61,8 @@ export default defineConfig(({ mode, command }) => {
       metadataAsset,
       svelte(),
       paraglideVitePlugin({
+        // 共享物理消息产物供独立 Vitest/Node 工具读取。
+        outputStructure: 'message-modules',
         project: './project.inlang',
         outdir: './src/lib/paraglide',
         strategy: ['cookie', 'baseLocale'],

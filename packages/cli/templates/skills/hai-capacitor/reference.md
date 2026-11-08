@@ -84,6 +84,8 @@ await apiClient.init({
 
 任一 key 写入失败也会屏蔽整对凭据，避免 access 已落盘而 refresh 保存失败后的半完成登录。登录/注册保存失败后尝试 `auth.clear()` 清理部分数据；清理失败继续显示未确认删除的错误，不能只清界面身份或宣称持久删除成功。
 
+同一模块内全部 TokenStorage 共享原生写入/删除队列；clear 等待此前写入再删除，后续显式写入才可建立新凭据。该顺序覆盖同模块多适配器，不跨独立 WebView/JavaScript 运行环境提供进程间协调。
+
 #### Preferences 子操作
 
 ```typescript

@@ -11,9 +11,19 @@ export function createSerializationFixture() {
   }
   const sdk = new SdkPayload()
   Object.defineProperty(sdk, 'detail', { get: readAccessor, enumerable: true })
-  const plain = { password: 'plain-only-secret', customerId: 'customer-private', label: 'plain-visible', toJSON: serialize }
+  const plain = {
+    password: 'plain-only-secret',
+    customerId: 'customer-private',
+    label: 'plain-visible',
+    toJSON: serialize,
+  }
   const timestamp = new Date('2026-01-01T00:00:00Z')
   Object.defineProperty(timestamp, 'toJSON', { value: serialize, configurable: true })
-  const input = { plain, sdk, timestamp, items: [sdk, plain] }
+  const input = {
+    plain,
+    sdk,
+    timestamp,
+    items: [sdk, plain],
+  }
   return { input, serialize, readAccessor }
 }

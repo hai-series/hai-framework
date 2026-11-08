@@ -93,7 +93,12 @@ export async function validateForm<T extends z.ZodType>(
     else {
       return {
         valid: false,
-        errors: [{ field: '_', message: kitM('kit_unsupportedContentType') }],
+        errors: [
+          {
+            field: '_',
+            message: kitM('kit_unsupportedContentType'),
+          },
+        ],
       }
     }
 
@@ -102,7 +107,12 @@ export async function validateForm<T extends z.ZodType>(
   catch {
     return {
       valid: false,
-      errors: [{ field: '_', message: kitM('kit_parseBodyFailed') }],
+      errors: [
+        {
+          field: '_',
+          message: kitM('kit_parseBodyFailed'),
+        },
+      ],
     }
   }
 }

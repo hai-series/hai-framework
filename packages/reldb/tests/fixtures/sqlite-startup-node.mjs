@@ -5,7 +5,9 @@ import { reldb } from '@h-ai/reldb'
 
 async function main() {
   const config = JSON.parse(process.argv[2])
-  core.init({ logging: { level: 'fatal' } })
+  core.init({
+    logging: { level: 'fatal' },
+  })
   const released = new Promise(resolve => process.once('message', resolve))
   process.send({ phase: 'ready' })
   await released
@@ -21,11 +23,21 @@ async function main() {
     outcome = { success: true, mode: mode.data?.journal_mode, timeout: budget.data?.timeout }
   }
   catch (error) {
-    outcome = { success: false, error: error instanceof Error ? error.message : String(error) }
+    outcome = {
+      success: false,
+      error: error instanceof Error
+        ? error.message
+        : String(error),
+    }
   }
   finally {
     const closed = await reldb.close()
-    process.send({ phase: 'result', ...outcome, closed: closed.success, initialized: reldb.isInitialized })
+    process.send({
+      phase: 'result',
+      ...outcome,
+      closed: closed.success,
+      initialized: reldb.isInitialized,
+    })
     process.disconnect()
   }
 }

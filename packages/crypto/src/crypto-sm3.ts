@@ -82,7 +82,13 @@ export function createSM3(): HashOperations {
       catch (error) {
         return err(
           HaiCryptoError.HASH_FAILED,
-          cryptoM('crypto_sm3HashFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          cryptoM('crypto_sm3HashFailed', {
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
+          }),
           error,
         )
       }
@@ -135,7 +141,13 @@ export function createSM3(): HashOperations {
       catch (error) {
         return err(
           HaiCryptoError.HMAC_FAILED,
-          cryptoM('crypto_sm3HmacFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          cryptoM('crypto_sm3HmacFailed', {
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
+          }),
           error,
         )
       }
@@ -158,7 +170,13 @@ export function createSM3(): HashOperations {
       catch (error) {
         return err(
           HaiCryptoError.HASH_FAILED,
-          cryptoM('crypto_sm3VerifyFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          cryptoM('crypto_sm3VerifyFailed', {
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
+          }),
           error,
         )
       }

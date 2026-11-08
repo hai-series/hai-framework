@@ -25,7 +25,13 @@ import { extractMemories } from './ai-memory-extractor.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'memory-consolidation' })
 const DEFAULT_IMPORTANCE = 0.5
-const MEMORY_TYPES = new Set<MemoryType>(['fact', 'preference', 'event', 'entity', 'instruction'])
+const MEMORY_TYPES = new Set<MemoryType>([
+  'fact',
+  'preference',
+  'event',
+  'entity',
+  'instruction',
+])
 const LEADING_CODE_FENCE_REGEX = /^```(?:json)?\n?/
 const TRAILING_CODE_FENCE_REGEX = /\n?```$/
 
@@ -135,7 +141,9 @@ async function collectRelated(
     for (const entry of result.data)
       related.set(entry.id, entry)
   }
-  return ok([...related.values()])
+  return ok([
+    ...related.values(),
+  ])
 }
 
 /**
@@ -156,14 +164,19 @@ function parseConsolidationOps(
       ? (parsed as { memory: unknown[] }).memory
       : []
 
-  const candidateByText = new Map(candidates.map(candidate => [normalizeText(candidate.content), candidate]))
+  const candidateByText = new Map(candidates.map(candidate => [
+    normalizeText(candidate.content),
+    candidate,
+  ]))
   const ops: ConsolidationOp[] = []
 
   for (const item of list) {
     if (typeof item !== 'object' || item === null)
       continue
     const record = item as Record<string, unknown>
-    const text = typeof record.text === 'string' ? record.text.trim() : ''
+    const text = typeof record.text === 'string'
+      ? record.text.trim()
+      : ''
     if (!text)
       continue
 
@@ -174,20 +187,41 @@ function parseConsolidationOps(
     const category = typeof record.category === 'string' && record.category.trim().length > 0
       ? record.category.trim()
       : readCategory(fallback?.metadata)
-    const id = typeof record.id === 'string' ? record.id : undefined
+    const id = typeof record.id === 'string'
+      ? record.id
+      : undefined
 
     if (event === 'UPDATE' && id && relatedIds.has(id)) {
-      ops.push({ event: 'UPDATE', id, text, type, importance, category })
+      ops.push({
+        event: 'UPDATE',
+        id,
+        text,
+        type,
+        importance,
+        category,
+      })
     }
     else if (event === 'DELETE' && id && relatedIds.has(id)) {
-      ops.push({ event: 'DELETE', id, text, type, importance })
+      ops.push({
+        event: 'DELETE',
+        id,
+        text,
+        type,
+        importance,
+      })
     }
     else if (event === 'NONE') {
       // 已被既有记忆覆盖，无需写入
       continue
     }
     else {
-      ops.push({ event: 'ADD', text, type, importance, category })
+      ops.push({
+        event: 'ADD',
+        text,
+        type,
+        importance,
+        category,
+      })
     }
   }
 
@@ -197,7 +231,9 @@ function parseConsolidationOps(
 /** 从元数据中读取 category（若有） */
 function readCategory(metadata: Record<string, unknown> | undefined): string | undefined {
   const value = metadata?.category
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
+  return typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : undefined
 }
 
 /** 合并 category 到元数据 */
@@ -233,7 +269,9 @@ async function applyConsolidationOps(
         content: op.text,
         type: op.type,
         importance: op.importance,
-        metadata: op.category ? { category: op.category } : undefined,
+        metadata: op.category
+          ? { category: op.category }
+          : undefined,
       })
       if (!updateResult.success)
         return updateResult
@@ -307,7 +345,9 @@ export async function extractAndConsolidate(
 
   const consolidationResult = await deps.llm.chat({
     model: options?.model,
-    ...(options?.tempModel ? { tempModel: options.tempModel } : {}),
+    ...(options?.tempModel
+      ? { tempModel: options.tempModel }
+      : {}),
     messages: [
       { role: 'system', content: MEMORY_CONSOLIDATION_SYSTEM_PROMPT },
       {
@@ -332,7 +372,11 @@ export async function extractAndConsolidate(
     signal: options?.signal,
   })
   if (!consolidationResult.success) {
-    return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', { params: { error: String(consolidationResult.error.message) } }), consolidationResult.error)
+    return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', {
+      params: {
+        error: String(consolidationResult.error.message),
+      },
+    }), consolidationResult.error)
   }
 
   const rawContent = consolidationResult.data.choices[0]?.message?.content ?? ''
@@ -343,7 +387,9 @@ export async function extractAndConsolidate(
   }
   catch {
     // 解析失败时退化为直接新增全部候选事实，保证抽取结果不丢失
-    logger.warn('Consolidation returned invalid JSON, falling back to ADD-all', { content: rawContent.slice(0, 200) })
+    logger.warn('Consolidation returned invalid JSON, falling back to ADD-all', {
+      content: rawContent.slice(0, 200),
+    })
     ops = candidates.map(candidate => ({
       event: 'ADD' as const,
       text: candidate.content,
@@ -356,6 +402,11 @@ export async function extractAndConsolidate(
   if (!applyResult.success)
     return applyResult
 
-  logger.trace('Consolidation completed', { candidates: candidates.length, related: related.length, ops: ops.length, written: applyResult.data.length })
+  logger.trace('Consolidation completed', {
+    candidates: candidates.length,
+    related: related.length,
+    ops: ops.length,
+    written: applyResult.data.length,
+  })
   return ok(applyResult.data)
 }

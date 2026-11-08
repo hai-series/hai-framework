@@ -7,7 +7,10 @@
   const confirmation = untrack(() => createSensitiveActions(actions))
   let result = $state<string | null | undefined>()
   $effect(() => {
-    confirmation.configure({ enabled: true, operations: ['orders.approve'] })
+    confirmation.configure({
+      enabled: true,
+      operations: ['orders.approve'],
+    })
     return () => confirmation.cancel()
   })
 </script>

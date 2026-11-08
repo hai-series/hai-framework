@@ -1,9 +1,9 @@
 <script lang='ts'>
   // 全局布局：主题（深/浅）与语言（中/英/日）切换，并在挂载时恢复用户偏好
-  import { browser } from '$app/environment'
-  import * as m from '$lib/paraglide/messages.js'
-  import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
+  import { browser } from '$app/env'
   import { applyTheme, getSavedTheme, LanguageSwitch, setGlobalLocale, ThemeSelector, ToastContainer } from '@h-ai/ui'
+  import * as m from '#lib/paraglide/messages.js'
+  import { getLocale, setLocale } from '#lib/paraglide/runtime.js'
   import '../app.css'
 
   interface Props {

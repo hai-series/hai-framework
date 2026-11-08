@@ -5,13 +5,13 @@ import type { User } from '@h-ai/iam'
  * =============================================================================
  */
 
-import * as m from '$lib/paraglide/messages.js'
-import { toIamUserResponse } from '$lib/server/iam-admin.js'
-import { createUpdateUserSchema, IdParamSchema } from '$lib/server/schemas/index.js'
-import { requireAssignableRoles } from '$lib/server/security-roles.js'
 import { audit } from '@h-ai/audit'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+import * as m from '#lib/paraglide/messages.js'
+import { toIamUserResponse } from '#lib/server/iam-admin.js'
+import { createUpdateUserSchema, IdParamSchema } from '#lib/server/schemas/index.js'
+import { requireAssignableRoles, requireManageableAccount } from '#lib/server/security-roles.js'
 
 /**
  * GET /api/iam/users/[id] - 获取单个用户
@@ -19,7 +19,11 @@ import { kit } from '@h-ai/kit'
  * 需要权限：user:list
  */
 export const GET = kit.handler(async ({ params, locals }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   kit.guard.require(locals.session, 'user:list')
 
   const { id } = kit.validate.params(params, IdParamSchema)
@@ -38,16 +42,23 @@ export const GET = kit.handler(async ({ params, locals }) => {
  * 需要权限：user:api:update
  */
 export const PUT = kit.handler(async ({ params, request, locals, getClientAddress, cookies }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   kit.guard.require(locals.session, 'user:api:update')
   await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.users.update')
 
   const { id: userId } = kit.validate.params(params, IdParamSchema)
+  await requireManageableAccount(userId)
   const { username, email, password, display_name, roles, accountType, accountStatus, accountExpiresAt } = await kit.validate.body(request, createUpdateUserSchema())
   await requireAssignableRoles(locals.session, roles)
 
   if (userId === locals.session!.userId) {
-    const adminRole = roles !== undefined ? await iam.authz.getRoleByCode('admin') : undefined
+    const adminRole = roles !== undefined
+      ? await iam.authz.getRoleByCode('admin')
+      : undefined
     if (adminRole && !adminRole.success)
       return kit.response.fromError(adminRole.error)
     if ((accountStatus !== undefined && accountStatus !== 'active') || accountType === 'temporary' || accountExpiresAt != null || (roles !== undefined && (!adminRole?.success || !adminRole.data || !roles.includes(adminRole.data.id))))
@@ -106,7 +117,14 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
     action: 'update',
     resource: 'user',
     resourceId: userId,
-    details: { username, email, accountType, accountStatus, roles, passwordReset: !!password },
+    details: {
+      username,
+      email,
+      accountType,
+      accountStatus,
+      roles,
+      passwordReset: !!password,
+    },
     ip,
     ua,
   })
@@ -126,13 +144,18 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
  * 需要权限：user:api:delete
  */
 export const DELETE = kit.handler(async ({ params, locals, request, getClientAddress, cookies }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   kit.guard.require(locals.session, 'user:api:delete')
   await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.users.delete')
 
   const { id: userId } = kit.validate.params(params, IdParamSchema)
 
   // 检查用户是否存在
+  await requireManageableAccount(userId)
   const existingResult = await iam.user.getUser(userId)
   if (!existingResult.success || !existingResult.data) {
     return kit.response.notFound(m.api_iam_users_not_found({}, { locale }))

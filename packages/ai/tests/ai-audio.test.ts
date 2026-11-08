@@ -70,10 +70,19 @@ const { mockTranscribe, mockSpeech, mockChatCreate, mockToFile, MockWebSocket } 
 vi.mock('openai', () => {
   function MockOpenAI() {
     return {
-      chat: { completions: { create: mockChatCreate } },
-      responses: { create: vi.fn() },
-      models: { list: vi.fn() },
-      audio: { transcriptions: { create: mockTranscribe }, speech: { create: mockSpeech } },
+      chat: {
+        completions: { create: mockChatCreate },
+      },
+      responses: {
+        create: vi.fn(),
+      },
+      models: {
+        list: vi.fn(),
+      },
+      audio: {
+        transcriptions: { create: mockTranscribe },
+        speech: { create: mockSpeech },
+      },
     }
   }
   return {
@@ -90,18 +99,69 @@ import { ai, HaiAIError } from '../src/index.js'
 // ─── 公共测试数据 ───
 
 const AUDIO_MODELS: AudioModelEntry[] = [
-  { id: 'oa-asr', provider: 'openai', model: 'gpt-4o-transcribe', operations: ['transcribe'], apiKey: 'sk-oa' },
-  { id: 'oa-tts', provider: 'openai', model: 'gpt-4o-mini-tts', operations: ['synthesize'], apiKey: 'sk-oa' },
-  { id: 'mimo-asr', provider: 'mimo', model: 'mimo-v2.5-asr', operations: ['transcribe'], apiKey: 'mk' },
-  { id: 'mimo-tts', provider: 'mimo', model: 'mimo-v2.5-tts', operations: ['synthesize'], apiKey: 'mk' },
-  { id: 'qwen-asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime', operations: ['transcribe'], apiKey: 'qk' },
-  { id: 'qwen-tts', provider: 'qwen', model: 'qwen3-tts-flash-realtime', operations: ['synthesize'], apiKey: 'qk' },
-  { id: 'doubao-asr', provider: 'doubao', model: 'bigmodel', operations: ['transcribe'], apiKey: 'dk' },
-  { id: 'doubao-tts', provider: 'doubao', model: 'seed-tts-2.0', operations: ['synthesize'], apiKey: 'dk' },
+  {
+    id: 'oa-asr',
+    provider: 'openai',
+    model: 'gpt-4o-transcribe',
+    operations: ['transcribe'],
+    apiKey: 'sk-oa',
+  },
+  {
+    id: 'oa-tts',
+    provider: 'openai',
+    model: 'gpt-4o-mini-tts',
+    operations: ['synthesize'],
+    apiKey: 'sk-oa',
+  },
+  {
+    id: 'mimo-asr',
+    provider: 'mimo',
+    model: 'mimo-v2.5-asr',
+    operations: ['transcribe'],
+    apiKey: 'mk',
+  },
+  {
+    id: 'mimo-tts',
+    provider: 'mimo',
+    model: 'mimo-v2.5-tts',
+    operations: ['synthesize'],
+    apiKey: 'mk',
+  },
+  {
+    id: 'qwen-asr',
+    provider: 'qwen',
+    model: 'qwen3-asr-flash-realtime',
+    operations: ['transcribe'],
+    apiKey: 'qk',
+  },
+  {
+    id: 'qwen-tts',
+    provider: 'qwen',
+    model: 'qwen3-tts-flash-realtime',
+    operations: ['synthesize'],
+    apiKey: 'qk',
+  },
+  {
+    id: 'doubao-asr',
+    provider: 'doubao',
+    model: 'bigmodel',
+    operations: ['transcribe'],
+    apiKey: 'dk',
+  },
+  {
+    id: 'doubao-tts',
+    provider: 'doubao',
+    model: 'seed-tts-2.0',
+    operations: ['synthesize'],
+    apiKey: 'dk',
+  },
 ]
 
 function wavAudio(bytes = 16): { data: Uint8Array, format: 'wav' } {
-  return { data: new Uint8Array(bytes).fill(1), format: 'wav' }
+  return {
+    data: new Uint8Array(bytes).fill(1),
+    format: 'wav',
+  }
 }
 
 async function initAudio(overrides?: Record<string, unknown>): Promise<void> {
@@ -122,7 +182,9 @@ describe('ai.audio 未初始化', () => {
   })
 
   it('transcribe / synthesize 返回 NOT_INITIALIZED', async () => {
-    const t = await ai.audio.transcribe({ audio: wavAudio() })
+    const t = await ai.audio.transcribe({
+      audio: wavAudio(),
+    })
     expect(t.success).toBe(false)
     if (!t.success)
       expect(t.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
@@ -133,7 +195,9 @@ describe('ai.audio 未初始化', () => {
 
   it('transcribeStream 在迭代时抛出未初始化错误', async () => {
     await expect(async () => {
-      for await (const _ of ai.audio.transcribeStream({ audio: wavAudio() }))
+      for await (const _ of ai.audio.transcribeStream({
+        audio: wavAudio(),
+      }))
         void _
     }).rejects.toThrow()
   })
@@ -152,7 +216,13 @@ describe('ai.audio 校验与路由', () => {
   })
 
   it('空音频返回 AUDIO_INVALID_REQUEST', async () => {
-    const r = await ai.audio.transcribe({ audio: { data: new Uint8Array(0), format: 'wav' }, model: 'oa-asr' })
+    const r = await ai.audio.transcribe({
+      audio: {
+        data: new Uint8Array(0),
+        format: 'wav',
+      },
+      model: 'oa-asr',
+    })
     expect(r.success).toBe(false)
     if (!r.success)
       expect(r.error.code).toBe(HaiAIError.AUDIO_INVALID_REQUEST.code)
@@ -166,21 +236,29 @@ describe('ai.audio 校验与路由', () => {
   })
 
   it('未知模型返回 AUDIO_MODEL_NOT_FOUND', async () => {
-    const r = await ai.audio.transcribe({ audio: wavAudio(), model: 'does-not-exist' })
+    const r = await ai.audio.transcribe({
+      audio: wavAudio(),
+      model: 'does-not-exist',
+    })
     expect(r.success).toBe(false)
     if (!r.success)
       expect(r.error.code).toBe(HaiAIError.AUDIO_MODEL_NOT_FOUND.code)
   })
 
   it('未指定默认识别模型时返回 AUDIO_MODEL_NOT_FOUND', async () => {
-    const r = await ai.audio.transcribe({ audio: wavAudio() })
+    const r = await ai.audio.transcribe({
+      audio: wavAudio(),
+    })
     expect(r.success).toBe(false)
     if (!r.success)
       expect(r.error.code).toBe(HaiAIError.AUDIO_MODEL_NOT_FOUND.code)
   })
 
   it('在调用厂商前拒绝 ASR/TTS 模型混用', async () => {
-    const transcribe = await ai.audio.transcribe({ audio: wavAudio(), model: 'qwen-tts' })
+    const transcribe = await ai.audio.transcribe({
+      audio: wavAudio(),
+      model: 'qwen-tts',
+    })
     expect(transcribe.success).toBe(false)
     if (!transcribe.success)
       expect(transcribe.error.code).toBe(HaiAIError.AUDIO_UNSUPPORTED_INPUT.code)
@@ -200,7 +278,10 @@ describe('ai.audio 资源上限与缺失凭据', () => {
 
   it('超过 maxAudioBytes 返回 AUDIO_INPUT_TOO_LARGE', async () => {
     await initAudio({ maxAudioBytes: 8 })
-    const r = await ai.audio.transcribe({ audio: wavAudio(64), model: 'oa-asr' })
+    const r = await ai.audio.transcribe({
+      audio: wavAudio(64),
+      model: 'oa-asr',
+    })
     expect(r.success).toBe(false)
     if (!r.success)
       expect(r.error.code).toBe(HaiAIError.AUDIO_INPUT_TOO_LARGE.code)
@@ -211,9 +292,21 @@ describe('ai.audio 资源上限与缺失凭据', () => {
     delete process.env.VOLC_API_KEY
     await ai.init({
       llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' },
-      audio: { models: [{ id: 'db', provider: 'doubao', model: 'bigmodel', operations: ['transcribe'] }] },
+      audio: {
+        models: [
+          {
+            id: 'db',
+            provider: 'doubao',
+            model: 'bigmodel',
+            operations: ['transcribe'],
+          },
+        ],
+      },
     })
-    const r = await ai.audio.transcribe({ audio: wavAudio(), model: 'db' })
+    const r = await ai.audio.transcribe({
+      audio: wavAudio(),
+      model: 'db',
+    })
     expect(r.success).toBe(false)
     if (!r.success)
       expect(r.error.code).toBe(HaiAIError.CONFIGURATION_ERROR.code)
@@ -228,18 +321,23 @@ describe('ai.audio 资源上限与缺失凭据', () => {
       llm: { apiKey: 'sk-shared', model: 'gpt-4o-mini' },
       audio: {
         inheritLlmApiKey: true,
-        models: [{
-          id: 'oa',
-          provider: 'openai',
-          model: 'gpt-4o-transcribe',
-          operations: ['transcribe'],
-          apiKey: null,
-        }],
+        models: [
+          {
+            id: 'oa',
+            provider: 'openai',
+            model: 'gpt-4o-transcribe',
+            operations: ['transcribe'],
+            apiKey: null,
+          },
+        ],
       },
     })
     expect(initResult.success).toBe(true)
 
-    const result = await ai.audio.transcribe({ audio: wavAudio(), model: 'oa' })
+    const result = await ai.audio.transcribe({
+      audio: wavAudio(),
+      model: 'oa',
+    })
     expect(result.success).toBe(true)
     expect(mockTranscribe).toHaveBeenCalledTimes(1)
   })
@@ -260,7 +358,9 @@ describe('ai.audio OpenAI Provider', () => {
 
   it('transcribe 返回识别文本', async () => {
     mockTranscribe.mockResolvedValue({ text: '你好世界' })
-    const r = await ai.audio.transcribe({ audio: wavAudio() })
+    const r = await ai.audio.transcribe({
+      audio: wavAudio(),
+    })
     expect(r.success).toBe(true)
     if (r.success)
       expect(r.data.text).toBe('你好世界')
@@ -269,7 +369,10 @@ describe('ai.audio OpenAI Provider', () => {
 
   it('synthesize 返回音频字节', async () => {
     const audioBytes = new Uint8Array([1, 2, 3, 4])
-    mockSpeech.mockResolvedValue({ arrayBuffer: async () => audioBytes.buffer.slice(0), body: null })
+    mockSpeech.mockResolvedValue({
+      arrayBuffer: async () => audioBytes.buffer.slice(0),
+      body: null,
+    })
     const r = await ai.audio.synthesize({ text: '欢迎', format: 'mp3' })
     expect(r.success).toBe(true)
     if (r.success) {
@@ -283,7 +386,14 @@ describe('ai.audio OpenAI Provider', () => {
       yield new Uint8Array([1])
     }
     await expect(async () => {
-      for await (const _ of ai.audio.transcribeStream({ audio: { chunks: chunks(), format: 'pcm16', sampleRate: 16000 }, model: 'oa-asr' }))
+      for await (const _ of ai.audio.transcribeStream({
+        audio: {
+          chunks: chunks(),
+          format: 'pcm16',
+          sampleRate: 16000,
+        },
+        model: 'oa-asr',
+      }))
         void _
     }).rejects.toThrow()
   })
@@ -304,10 +414,19 @@ describe('ai.audio MiMo Provider', () => {
   })
 
   it('transcribe 请求格式符合 MiMo 契约并返回文本', async () => {
-    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ choices: [{ message: { content: '识别结果' } }] }), { status: 200 }))
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      choices: [
+        {
+          message: { content: '识别结果' },
+        },
+      ],
+    }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
-    const r = await ai.audio.transcribe({ audio: wavAudio(), language: 'zh' })
+    const r = await ai.audio.transcribe({
+      audio: wavAudio(),
+      language: 'zh',
+    })
     expect(r.success).toBe(true)
     if (r.success)
       expect(r.data.text).toBe('识别结果')
@@ -326,7 +445,15 @@ describe('ai.audio MiMo Provider', () => {
   it('synthesize 将 assistant 文本合成为音频并解码 Base64', async () => {
     const pcm = new Uint8Array([9, 8, 7, 6])
     const base64 = Buffer.from(pcm).toString('base64')
-    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ choices: [{ message: { audio: { data: base64 } } }] }), { status: 200 }))
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      choices: [
+        {
+          message: {
+            audio: { data: base64 },
+          },
+        },
+      ],
+    }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
     const r = await ai.audio.synthesize({ text: '欢迎参加访谈', voice: 'Chloe', format: 'wav' })
@@ -343,7 +470,15 @@ describe('ai.audio MiMo Provider', () => {
   it('完整合成对 mp3 使用与流式一致的输出格式（issue #10：mp3 → pcm16，不再退回 wav）', async () => {
     const pcm = new Uint8Array([1, 2, 3, 4])
     const base64 = Buffer.from(pcm).toString('base64')
-    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ choices: [{ message: { audio: { data: base64 } } }] }), { status: 200 }))
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      choices: [
+        {
+          message: {
+            audio: { data: base64 },
+          },
+        },
+      ],
+    }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
     const r = await ai.audio.synthesize({ text: '一致性', format: 'mp3' })
@@ -382,7 +517,13 @@ describe('ai.audio Qwen Provider', () => {
       }
     }
 
-    const r = await ai.audio.transcribe({ audio: { data: new Uint8Array([1, 2, 3]), format: 'pcm16', sampleRate: 16000 } })
+    const r = await ai.audio.transcribe({
+      audio: {
+        data: new Uint8Array([1, 2, 3]),
+        format: 'pcm16',
+        sampleRate: 16000,
+      },
+    })
     expect(r.success).toBe(true)
     if (r.success)
       expect(r.data.text).toBe('人工智能')
@@ -399,8 +540,14 @@ describe('ai.audio Qwen Provider', () => {
   it('synthesize 流式音频分片拼接为完整音频', async () => {
     MockWebSocket.script = (data, ws) => {
       if (typeof data === 'string' && data.includes('session.finish')) {
-        ws.serverText(JSON.stringify({ type: 'response.audio.delta', audio: Buffer.from([1, 2]).toString('base64') }))
-        ws.serverText(JSON.stringify({ type: 'response.audio.delta', audio: Buffer.from([3, 4]).toString('base64') }))
+        ws.serverText(JSON.stringify({
+          type: 'response.audio.delta',
+          audio: Buffer.from([1, 2]).toString('base64'),
+        }))
+        ws.serverText(JSON.stringify({
+          type: 'response.audio.delta',
+          audio: Buffer.from([3, 4]).toString('base64'),
+        }))
         ws.serverText(JSON.stringify({ type: 'session.finished' }))
       }
     }
@@ -419,7 +566,10 @@ describe('ai.audio Qwen Provider', () => {
   it('synthesizeStream 按文本段产出可关联的结构化事件', async () => {
     MockWebSocket.script = (data, ws) => {
       if (typeof data === 'string' && data.includes('session.finish')) {
-        ws.serverText(JSON.stringify({ type: 'response.audio.delta', audio: Buffer.from([1, 2]).toString('base64') }))
+        ws.serverText(JSON.stringify({
+          type: 'response.audio.delta',
+          audio: Buffer.from([1, 2]).toString('base64'),
+        }))
         ws.serverText(JSON.stringify({ type: 'session.finished' }))
       }
     }
@@ -429,7 +579,9 @@ describe('ai.audio Qwen Provider', () => {
     }
 
     const events = []
-    for await (const event of ai.audio.synthesizeStream({ text: segments() }))
+    for await (const event of ai.audio.synthesizeStream({
+      text: segments(),
+    }))
       events.push(event)
 
     expect(events.map(event => [event.type, event.segmentId])).toEqual([
@@ -466,11 +618,19 @@ describe('ai.audio 豆包 Provider', () => {
     MockWebSocket.script = (data, ws) => {
       if (data instanceof Uint8Array && data[1] >> 4 === 0b0010) {
         // 收到 audio-only 帧后返回最终识别结果
-        ws.serverBinary(buildDoubaoAsrResponse({ result: { text: '字节跳动' } }, -1))
+        ws.serverBinary(buildDoubaoAsrResponse({
+          result: { text: '字节跳动' },
+        }, -1))
       }
     }
 
-    const r = await ai.audio.transcribe({ audio: { data: new Uint8Array([1, 2, 3, 4]), format: 'pcm16', sampleRate: 16000 } })
+    const r = await ai.audio.transcribe({
+      audio: {
+        data: new Uint8Array([1, 2, 3, 4]),
+        format: 'pcm16',
+        sampleRate: 16000,
+      },
+    })
     expect(r.success).toBe(true)
     if (r.success)
       expect(r.data.text).toBe('字节跳动')
@@ -588,7 +748,13 @@ describe('ai.audio 领域事件与取消语义', () => {
       yield new Uint8Array([1, 2, 3])
     }
     const events: string[] = []
-    for await (const event of ai.audio.transcribeStream({ audio: { chunks: chunks(), format: 'pcm16', sampleRate: 16000 } }))
+    for await (const event of ai.audio.transcribeStream({
+      audio: {
+        chunks: chunks(),
+        format: 'pcm16',
+        sampleRate: 16000,
+      },
+    }))
       events.push(event.type)
 
     expect(events).toContain('speech_started')
@@ -618,7 +784,15 @@ describe('ai.audio 提示词 / 风格指令 / pcm→wav', () => {
     vi.clearAllMocks()
     await initAudio({ synthesizeModel: 'mimo-tts' })
     const base64 = Buffer.from(new Uint8Array([1, 2])).toString('base64')
-    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ choices: [{ message: { audio: { data: base64 } } }] }), { status: 200 }))
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      choices: [
+        {
+          message: {
+            audio: { data: base64 },
+          },
+        },
+      ],
+    }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
     await ai.audio.synthesize({ text: '欢迎', instruction: '用轻快的语气', format: 'wav' })
@@ -631,18 +805,31 @@ describe('ai.audio 提示词 / 风格指令 / pcm→wav', () => {
     vi.clearAllMocks()
     MockWebSocket.instances.length = 0
     MockWebSocket.script = (data, ws) => {
-      if (data instanceof Uint8Array && data[1] >> 4 === 0b0010)
-        ws.serverBinary(buildDoubaoAsrResponse({ result: { text: '字节跳动' } }, -1))
+      if (data instanceof Uint8Array && data[1] >> 4 === 0b0010) {
+        ws.serverBinary(buildDoubaoAsrResponse({
+          result: { text: '字节跳动' },
+        }, -1))
+      }
     }
     await initAudio({ transcribeModel: 'doubao-asr' })
-    const r = await ai.audio.transcribe({ audio: { data: new Uint8Array([1, 2, 3, 4]), format: 'pcm16', sampleRate: 16000 }, contextHints: ['字节跳动', '火山引擎'] })
+    const r = await ai.audio.transcribe({
+      audio: {
+        data: new Uint8Array([1, 2, 3, 4]),
+        format: 'pcm16',
+        sampleRate: 16000,
+      },
+      contextHints: ['字节跳动', '火山引擎'],
+    })
     expect(r.success).toBe(true)
 
     const ws = MockWebSocket.instances[0]
     const firstFrame = ws.sent[0] as Uint8Array
     const payload = JSON.parse(Buffer.from(firstFrame.slice(8)).toString('utf8'))
     const context = JSON.parse(payload.request.context)
-    expect(context.hotwords).toEqual([{ word: '字节跳动' }, { word: '火山引擎' }])
+    expect(context.hotwords).toEqual([
+      { word: '字节跳动' },
+      { word: '火山引擎' },
+    ])
     MockWebSocket.script = null
   })
 
@@ -650,7 +837,13 @@ describe('ai.audio 提示词 / 风格指令 / pcm→wav', () => {
     vi.clearAllMocks()
     await initAudio({ transcribeModel: 'oa-asr' })
     mockTranscribe.mockResolvedValue({ text: 'ok' })
-    await ai.audio.transcribe({ audio: { data: new Uint8Array([0, 0, 0, 0]), format: 'pcm16', sampleRate: 16000 } })
+    await ai.audio.transcribe({
+      audio: {
+        data: new Uint8Array([0, 0, 0, 0]),
+        format: 'pcm16',
+        sampleRate: 16000,
+      },
+    })
 
     const uploaded = mockToFile.mock.calls[0][0] as Uint8Array
     const magic = Buffer.from(uploaded.slice(0, 4)).toString('ascii')
@@ -662,7 +855,12 @@ describe('ai.audio 提示词 / 风格指令 / pcm→wav', () => {
 
 /** 构造豆包 ASR full server response 帧（header + seq + size + JSON） */
 function buildDoubaoAsrResponse(json: object, seq: number): Uint8Array {
-  const header = Buffer.from([0x11, (0b1001 << 4) | 0b0000, (0b0001 << 4) | 0b0000, 0x00])
+  const header = Buffer.from([
+    0x11,
+    (0b1001 << 4) | 0b0000,
+    (0b0001 << 4) | 0b0000,
+    0x00,
+  ])
   const seqBuf = Buffer.alloc(4)
   seqBuf.writeInt32BE(seq)
   const payload = Buffer.from(JSON.stringify(json), 'utf8')
@@ -678,7 +876,12 @@ function readEvent(frame: Uint8Array): number {
 
 /** 构造豆包 TTS 事件帧（会话级事件携带 session_id） */
 function buildDoubaoTtsEvent(event: number): Uint8Array {
-  const header = Buffer.from([0x11, (0b1001 << 4) | 0b0100, (0b0001 << 4) | 0b0000, 0x00])
+  const header = Buffer.from([
+    0x11,
+    (0b1001 << 4) | 0b0100,
+    (0b0001 << 4) | 0b0000,
+    0x00,
+  ])
   const eventBuf = Buffer.alloc(4)
   eventBuf.writeInt32BE(event)
   const sid = Buffer.from('s', 'utf8')
@@ -687,12 +890,24 @@ function buildDoubaoTtsEvent(event: number): Uint8Array {
   const payload = Buffer.from('{}', 'utf8')
   const size = Buffer.alloc(4)
   size.writeUInt32BE(payload.length)
-  return new Uint8Array(Buffer.concat([header, eventBuf, sidSize, sid, size, payload]))
+  return new Uint8Array(Buffer.concat([
+    header,
+    eventBuf,
+    sidSize,
+    sid,
+    size,
+    payload,
+  ]))
 }
 
 /** 构造豆包 TTS AudioOnlyServer 音频帧（TTSResponse=352，携带 session_id） */
 function buildDoubaoTtsAudio(audio: Uint8Array): Uint8Array {
-  const header = Buffer.from([0x11, (0b1011 << 4) | 0b0100, (0b0000 << 4) | 0b0000, 0x00])
+  const header = Buffer.from([
+    0x11,
+    (0b1011 << 4) | 0b0100,
+    (0b0000 << 4) | 0b0000,
+    0x00,
+  ])
   const eventBuf = Buffer.alloc(4)
   eventBuf.writeInt32BE(352)
   const sid = Buffer.from('s', 'utf8')
@@ -700,7 +915,14 @@ function buildDoubaoTtsAudio(audio: Uint8Array): Uint8Array {
   sidSize.writeUInt32BE(sid.length)
   const size = Buffer.alloc(4)
   size.writeUInt32BE(audio.length)
-  return new Uint8Array(Buffer.concat([header, eventBuf, sidSize, sid, size, Buffer.from(audio)]))
+  return new Uint8Array(Buffer.concat([
+    header,
+    eventBuf,
+    sidSize,
+    sid,
+    size,
+    Buffer.from(audio),
+  ]))
 }
 
 // =============================================================================
@@ -717,7 +939,12 @@ describe('ai.audio 能力校验与参数校验', () => {
   })
 
   it('严格模式请求 word 时间戳但模型不支持时前置失败', async () => {
-    const r = await ai.audio.transcribe({ audio: wavAudio(), model: 'oa-asr', timestampGranularities: ['word'], strictCapabilities: true })
+    const r = await ai.audio.transcribe({
+      audio: wavAudio(),
+      model: 'oa-asr',
+      timestampGranularities: ['word'],
+      strictCapabilities: true,
+    })
     expect(r.success).toBe(false)
     if (!r.success)
       expect(r.error.code).toBe(HaiAIError.AUDIO_UNSUPPORTED_INPUT.code)
@@ -726,13 +953,24 @@ describe('ai.audio 能力校验与参数校验', () => {
 
   it('非严格模式下不支持的高级能力被忽略（best effort）', async () => {
     mockTranscribe.mockResolvedValue({ text: 'ok' })
-    const r = await ai.audio.transcribe({ audio: wavAudio(), model: 'oa-asr', timestampGranularities: ['word'] })
+    const r = await ai.audio.transcribe({
+      audio: wavAudio(),
+      model: 'oa-asr',
+      timestampGranularities: ['word'],
+    })
     expect(r.success).toBe(true)
     expect(mockTranscribe).toHaveBeenCalledTimes(1)
   })
 
   it('严格模式请求说话人参考但模型不支持时前置失败', async () => {
-    const r = await ai.audio.synthesize({ text: 'hi', model: 'oa-tts', speakerReference: { audio: wavAudio() }, strictCapabilities: true })
+    const r = await ai.audio.synthesize({
+      text: 'hi',
+      model: 'oa-tts',
+      speakerReference: {
+        audio: wavAudio(),
+      },
+      strictCapabilities: true,
+    })
     expect(r.success).toBe(false)
     if (!r.success)
       expect(r.error.code).toBe(HaiAIError.AUDIO_UNSUPPORTED_INPUT.code)
@@ -740,7 +978,14 @@ describe('ai.audio 能力校验与参数校验', () => {
   })
 
   it('styleStrength 超出 [0,1] 返回 AUDIO_INVALID_REQUEST', async () => {
-    const r = await ai.audio.synthesize({ text: 'hi', model: 'oa-tts', styleReference: { audio: wavAudio() }, styleStrength: 2 })
+    const r = await ai.audio.synthesize({
+      text: 'hi',
+      model: 'oa-tts',
+      styleReference: {
+        audio: wavAudio(),
+      },
+      styleStrength: 2,
+    })
     expect(r.success).toBe(false)
     if (!r.success)
       expect(r.error.code).toBe(HaiAIError.AUDIO_INVALID_REQUEST.code)
@@ -761,7 +1006,12 @@ describe('ai.audio 能力校验与参数校验', () => {
   })
 
   it('speed 与 targetDurationMs 冲突返回 AUDIO_INVALID_REQUEST', async () => {
-    const r = await ai.audio.synthesize({ text: 'hi', model: 'oa-tts', speed: 1.2, targetDurationMs: 3000 })
+    const r = await ai.audio.synthesize({
+      text: 'hi',
+      model: 'oa-tts',
+      speed: 1.2,
+      targetDurationMs: 3000,
+    })
     expect(r.success).toBe(false)
     if (!r.success)
       expect(r.error.code).toBe(HaiAIError.AUDIO_INVALID_REQUEST.code)

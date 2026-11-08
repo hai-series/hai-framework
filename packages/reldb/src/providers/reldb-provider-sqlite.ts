@@ -78,7 +78,11 @@ export function createSqliteProvider(): ReldbProvider {
         return ok(undefined)
       }
       catch (error) {
-        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_sqliteConnectionFailed', { params: { error: String(error) } }), error)
+        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_sqliteConnectionFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     })().finally(() => { closing = null })
     return closing
@@ -170,7 +174,9 @@ export function createSqliteProvider(): ReldbProvider {
 
   /** 事务错误消息生成 */
   function sqliteTxErrorMessage(detail: string): string {
-    return reldbM('reldb_sqliteTxFailed', { params: { error: detail } })
+    return reldbM('reldb_sqliteTxFailed', {
+      params: { error: detail },
+    })
   }
 
   // ─── DDL 操作 ───
@@ -239,7 +245,11 @@ export function createSqliteProvider(): ReldbProvider {
         return ok(undefined)
       }
       catch (error) {
-        return err(HaiReldbError.QUERY_FAILED, reldbM('reldb_sqliteBatchFailed', { params: { error: String(error) } }), error)
+        return err(HaiReldbError.QUERY_FAILED, reldbM('reldb_sqliteBatchFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
       finally {
         releaseTxLock()
@@ -306,7 +316,10 @@ export function createSqliteProvider(): ReldbProvider {
     }
 
     const txDmlOps = createSqliteTxDmlOps(txEngine)
-    const guardedTxDmlOps = createBaseDmlOps({ ...ctx, isConnected: () => txEngine.isOpen() }, txDmlOps)
+    const guardedTxDmlOps = createBaseDmlOps({
+      ...ctx,
+      isConnected: () => txEngine.isOpen(),
+    }, txDmlOps)
     return ok(createTxHandle(guardedTxDmlOps, {
       commit: async () => { await txEngine.exec('COMMIT') },
       rollback: async () => { await txEngine.exec('ROLLBACK') },
@@ -359,8 +372,17 @@ export function createSqliteProvider(): ReldbProvider {
       }
       catch (error) {
         const cleanup = await closeResource()
-        const result = err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_sqliteConnectionFailed', { params: { error: String(error) } }), error)
-        return cleanup.success || result.success ? result : err({ ...result.error, ext: { cleanupPending: true, cleanupError: cleanup.error } })
+        const result = err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_sqliteConnectionFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
+        return cleanup.success || result.success
+          ? result
+          : err({
+              ...result.error,
+              ext: { cleanupPending: true, cleanupError: cleanup.error },
+            })
       }
     },
 

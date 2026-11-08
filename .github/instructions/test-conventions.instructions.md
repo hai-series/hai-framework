@@ -1,5 +1,5 @@
 ---
-applyTo: "**/tests/**"
+applyTo: "**/tests/**,**/*.test.*,**/*.spec.*"
 ---
 
 # Copilot 路径指引

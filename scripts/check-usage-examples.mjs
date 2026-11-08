@@ -6,12 +6,19 @@ import process from 'node:process'
 import { parse } from 'yaml'
 
 function placeholders(value) {
-  if (typeof value === 'string' && /^\$\{[A-Z\d_]+\}$/.test(value))
-    return value.slice(2, -1) === 'STRIPE_SECRET_KEY' ? 'sk_test_documentation_placeholder' : 'documentation-placeholder'
+  if (typeof value === 'string' && /^\$\{[A-Z\d_]+\}$/.test(value)) {
+    return value.slice(2, -1) === 'STRIPE_SECRET_KEY'
+      ? 'sk_test_documentation_placeholder'
+      : 'documentation-placeholder'
+  }
   if (Array.isArray(value))
     return value.map(placeholders)
-  if (value && typeof value === 'object')
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, placeholders(item)]))
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+      key,
+      placeholders(item),
+    ]))
+  }
   return value
 }
 
@@ -46,16 +53,27 @@ for (const file of await markdownFiles()) {
     const [, format, module, name, body] = match
     const location = `${file} example ${++index}`
     try {
-      const input = placeholders(format === 'json' ? JSON.parse(body) : parse(body))
+      const input = placeholders(format === 'json'
+        ? JSON.parse(body)
+        : parse(body))
       const schema = (await import(module))[name]
       const checked = schema.safeParse(input)
-      assert.ok(checked.success, `${location}: ${checked.success ? '' : checked.error.issues.map(issue => `${issue.path.join('.')}: ${issue.code}`).join('; ')}`)
+      assert.ok(checked.success, `${location}: ${checked.success
+        ? ''
+        : checked.error.issues.map(issue => `${issue.path.join('.')}: ${issue.code}`).join('; ')}`)
       verifyConsumed(input, checked.data, location)
       results.push({ location, schema: name, status: 'passed' })
     }
     catch (error) {
       failed = true
-      results.push({ location, schema: name, status: 'failed', reason: error instanceof Error ? error.message : 'Validation failed' })
+      results.push({
+        location,
+        schema: name,
+        status: 'failed',
+        reason: error instanceof Error
+          ? error.message
+          : 'Validation failed',
+      })
     }
   }
 }

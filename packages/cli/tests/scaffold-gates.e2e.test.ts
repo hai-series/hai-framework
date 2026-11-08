@@ -11,6 +11,7 @@ import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:f
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import ts from 'typescript'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse, stringify } from 'yaml'
 import { createE2eServerEnv, createE2eTransportRing } from '../../../scripts/e2e-env.js'
@@ -19,7 +20,9 @@ import { withDatabaseIsolation } from './fixtures/e2e-db-isolation.js'
 
 const runScaffoldGates = process.env.HAI_CLI_RUN_SCAFFOLD_GATES === '1'
 const cliBin = path.resolve(process.cwd(), 'dist/index.js')
-const pnpmBin = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+const pnpmBin = process.platform === 'win32'
+  ? 'pnpm.cmd'
+  : 'pnpm'
 const tempRoots = new Set<string>()
 const localPackageSpecifiers = parseLocalPackageSpecifiers(process.env.HAI_CLI_PACKAGE_SPECIFIERS)
 let notificationUrl = ''
@@ -44,43 +47,108 @@ const scaffoldGateCases: readonly ScaffoldGateCase[] = [
   {
     title: 'api-feedback',
     projectName: 'sample-api-feedback',
-    createArgs: ['--type', 'api', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
-    expectedFiles: ['apps/sample-api-feedback-serv/config/_feedback.yml', 'apps/sample-api-feedback-serv/config/_iam.yml', 'apps/sample-api-feedback-serv/config/_serv.yml', 'e2e/api-serv.spec.ts'],
+    createArgs: [
+      '--type',
+      'api',
+      '--defaults',
+      '--no-install',
+      '--no-git',
+      '--package-manager',
+      'pnpm',
+    ],
+    expectedFiles: [
+      'apps/sample-api-feedback-serv/config/_feedback.yml',
+      'apps/sample-api-feedback-serv/config/_iam.yml',
+      'apps/sample-api-feedback-serv/config/_serv.yml',
+      'e2e/api-serv.spec.ts',
+    ],
   },
   {
     title: 'fullstack-feedback',
     projectName: 'sample-fullstack-feedback',
-    createArgs: ['--type', 'fullstack', '--frontends', 'web', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
+    createArgs: [
+      '--type',
+      'fullstack',
+      '--frontends',
+      'web',
+      '--defaults',
+      '--no-install',
+      '--no-git',
+      '--package-manager',
+      'pnpm',
+    ],
     expectedFiles: ['packages/sample-fullstack-feedback-shared/src/lib/pages/feedback.svelte', 'packages/sample-fullstack-feedback-serv/config/_feedback.yml'],
   },
   {
     title: 'admin',
     projectName: 'sample-admin',
-    createArgs: ['--type', 'admin', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
+    createArgs: [
+      '--type',
+      'admin',
+      '--defaults',
+      '--no-install',
+      '--no-git',
+      '--package-manager',
+      'pnpm',
+    ],
     expectedFiles: ['e2e/app.spec.ts', 'src/routes/api/auth/login/+server.ts'],
   },
   {
     title: 'website',
     projectName: 'sample-website',
-    createArgs: ['--type', 'website', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
+    createArgs: [
+      '--type',
+      'website',
+      '--defaults',
+      '--no-install',
+      '--no-git',
+      '--package-manager',
+      'pnpm',
+    ],
     expectedFiles: ['e2e/app.spec.ts'],
   },
   {
     title: 'h5',
     projectName: 'sample-h5',
-    createArgs: ['--type', 'h5', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
+    createArgs: [
+      '--type',
+      'h5',
+      '--defaults',
+      '--no-install',
+      '--no-git',
+      '--package-manager',
+      'pnpm',
+    ],
     expectedFiles: ['e2e/app.spec.ts'],
   },
   {
     title: 'mobile-app',
     projectName: 'sample-mobile',
-    createArgs: ['--type', 'mobile-app', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
+    createArgs: [
+      '--type',
+      'mobile-app',
+      '--defaults',
+      '--no-install',
+      '--no-git',
+      '--package-manager',
+      'pnpm',
+    ],
     expectedFiles: ['e2e/app.spec.ts', 'src/App.svelte'],
   },
   {
     title: 'fullstack',
     projectName: 'sample-fullstack',
-    createArgs: ['--type', 'fullstack', '--frontends', 'web,app,miniapp,desktop', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
+    createArgs: [
+      '--type',
+      'fullstack',
+      '--frontends',
+      'web,app,miniapp,desktop',
+      '--defaults',
+      '--no-install',
+      '--no-git',
+      '--package-manager',
+      'pnpm',
+    ],
     expectedFiles: ['e2e/fullstack.spec.ts', 'packages/sample-fullstack-serv/package.json'],
   },
 ] as const
@@ -89,7 +157,9 @@ beforeAll(async () => {
   if (!runScaffoldGates)
     return
   notificationUrl = await allocateBaseUrl()
-  const fixture = spawn(process.execPath, [path.resolve(process.cwd(), '../../apps/admin-console/e2e/notification-fixture.mjs')], {
+  const fixture = spawn(process.execPath, [
+    path.resolve(process.cwd(), '../../apps/admin-console/e2e/notification-fixture.mjs'),
+  ], {
     windowsHide: true,
     stdio: 'ignore',
     env: { ...process.env, IAM_NOTIFICATION_PORT: new URL(notificationUrl).port, IAM_FIXTURE_LDAP: '0' },
@@ -127,7 +197,15 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
     const basePath = '/scaffold-static'
     const baseUrl = `${await allocateBaseUrl()}${basePath}/`
     // 实际 create 默认只安装网站所需依赖，完整注释配置不能妨碍静态发布。
-    await createProject({ name: 'sample-static-website', appType: 'website', defaults: true, install: false, git: false, packageManager: 'pnpm', cwd: root })
+    await createProject({
+      name: 'sample-static-website',
+      appType: 'website',
+      defaults: true,
+      install: false,
+      git: false,
+      packageManager: 'pnpm',
+      cwd: root,
+    })
     // 新增的图表参考必须随实际生成工程交付，且不经过模板插值改写。
     expect(await readFile(path.join(projectPath, '.agents/skills/hai-ui/charts.md'), 'utf8'))
       .toBe(await readFile(path.resolve(process.cwd(), 'templates/skills/hai-ui/charts.md'), 'utf8'))
@@ -146,9 +224,21 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
     const sentinel = 'static-private-env-must-not-be-published-1793205000'
     appendFileSync(path.join(projectPath, '.env.local'), `\nPUBLIC_BUILD_ISOLATION_PROBE='${sentinel}'\nHAI_PRIVATE_TOKEN='${sentinel}'\n`)
     await writeFile(path.join(projectPath, 'static/public-probe.svg'), '<svg xmlns="http://www.w3.org/2000/svg"><title>Public static asset</title></svg>\n')
-    runGate(pnpmBin, ['build'], projectPath, { ...buildChildEnv({}, 'production'), HAI_BUILD_STATIC: '1', PUBLIC_BASE_PATH: basePath }, true)
+    runGate(pnpmBin, ['build'], projectPath, {
+      ...buildChildEnv({}, 'production'),
+      HAI_BUILD_STATIC: '1',
+      PUBLIC_BASE_PATH: basePath,
+    }, true)
     const output = path.join(projectPath, 'build')
-    for (const file of ['index.html', 'about/index.html', 'services/index.html', 'contact/index.html', '.nojekyll', 'favicon.png', 'public-probe.svg'])
+    for (const file of [
+      'index.html',
+      'about/index.html',
+      'services/index.html',
+      'contact/index.html',
+      '.nojekyll',
+      'favicon.png',
+      'public-probe.svg',
+    ])
       expect(await fileExists(path.join(output, file)), `Static output missing ${file}`).toBe(true)
     for (const file of ['api', 'index.js', 'handler.js'])
       expect(await fileExists(path.join(output, file)), `Static output contains a dynamic entry: ${file}`).toBe(false)
@@ -164,16 +254,28 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
     await writeFile(path.join(projectPath, 'scripts/static-gate-server.mjs'), `import { readFile, stat } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import path from 'node:path'
+import process from 'node:process'
+
 const root = path.resolve('build')
-const base = ${JSON.stringify(basePath)}
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json' }
+const base = ${jsStringLiteral(basePath)}
+const types = {
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.css': 'text/css',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.json': 'application/json',
+}
 const server = createServer(async (request, response) => {
   const pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname)
-  if (!pathname.startsWith(base + '/')) return response.writeHead(404).end()
-  let file = path.resolve(root, '.' + pathname.slice(base.length))
-  if (file !== root && !file.startsWith(root + path.sep)) return response.writeHead(403).end()
+  if (!pathname.startsWith(\`\${base}/\`))
+    return response.writeHead(404).end()
+  let file = path.resolve(root, \`.\${pathname.slice(base.length)}\`)
+  if (file !== root && !file.startsWith(root + path.sep))
+    return response.writeHead(403).end()
   try {
-    if ((await stat(file)).isDirectory()) file = path.join(file, 'index.html')
+    if ((await stat(file)).isDirectory())
+      file = path.join(file, 'index.html')
     response.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' }).end(await readFile(file))
   }
   catch { response.writeHead(404).end() }
@@ -182,42 +284,61 @@ server.listen(${Number(new URL(baseUrl).port)}, '127.0.0.1')
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => server.close())
 `)
     await writeFile(path.join(projectPath, 'playwright.static.config.ts'), `import { defineConfig } from '@playwright/test'
+
 export default defineConfig({
-  testDir: './e2e', testMatch: 'static-website.spec.ts', workers: 1, retries: 0, timeout: 45000,
-  use: { baseURL: ${JSON.stringify(baseUrl)}, channel: 'chrome', trace: 'retain-on-failure', screenshot: 'only-on-failure' },
-  webServer: { command: 'node scripts/static-gate-server.mjs', url: ${JSON.stringify(baseUrl)}, reuseExistingServer: false },
+  testDir: './e2e',
+  testMatch: 'static-website.spec.ts',
+  workers: 1,
+  retries: 0,
+  timeout: 45000,
+  use: {
+    baseURL: ${jsStringLiteral(baseUrl)},
+    channel: 'chrome',
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+  },
+  webServer: { command: 'node scripts/static-gate-server.mjs', url: ${jsStringLiteral(baseUrl)}, reuseExistingServer: false },
 })
 `)
     await writeFile(path.join(projectPath, 'e2e/static-website.spec.ts'), `import { expect, test } from '@playwright/test'
+
 test('static Pages deep links, public assets and honest contact feedback', async ({ page, request }, testInfo) => {
   const errors: string[] = []
   const failed: string[] = []
   const posts: string[] = []
   page.on('pageerror', error => errors.push(error.message))
-  page.on('response', response => { if (response.status() >= 400) failed.push(response.url()) })
-  page.on('request', request => { if (request.method() === 'POST') posts.push(request.url()) })
+  page.on('response', (response) => {
+    if (response.status() >= 400)
+      failed.push(response.url())
+  })
+  page.on('request', (request) => {
+    if (request.method() === 'POST')
+      posts.push(request.url())
+  })
   for (const route of ['', 'about/', 'services/', 'contact/']) {
-    const response = await page.goto(${JSON.stringify(baseUrl)} + route)
+    const response = await page.goto(\`${jsTemplateFragment(baseUrl)}\${route}\`)
     expect(response?.status()).toBe(200)
     await expect(page.locator('header')).toBeVisible()
     await expect(page.locator('main')).toBeVisible()
     await expect(page.locator('footer')).toBeVisible()
     expect((await page.reload())?.status()).toBe(200)
-    await expect(page).toHaveURL(${JSON.stringify(baseUrl)} + route)
+    await expect(page).toHaveURL(\`${jsTemplateFragment(baseUrl)}\${route}\`)
   }
-  const home = await (await request.get(${JSON.stringify(baseUrl)})).text()
-  const assets = [...home.matchAll(/["']([^"']+\\.(?:js|css|png))["']/g)].map(match => match[1])
+  const home = await (await request.get(${jsStringLiteral(baseUrl)})).text()
+  const assets = [
+    ...home.matchAll(/["']([^"']+\\.(?:js|css|png))["']/g),
+  ].map(match => match[1])
   expect(assets.some(value => value.endsWith('.js'))).toBe(true)
   expect(assets.some(value => value.endsWith('.css'))).toBe(true)
   for (const asset of assets) {
-    const resolved = new URL(asset, ${JSON.stringify(baseUrl)})
-    expect(resolved.origin).toBe(new URL(${JSON.stringify(baseUrl)}).origin)
-    expect(resolved.pathname.startsWith(${JSON.stringify(`${basePath}/`)})).toBe(true)
+    const resolved = new URL(asset, ${jsStringLiteral(baseUrl)})
+    expect(resolved.origin).toBe(new URL(${jsStringLiteral(baseUrl)}).origin)
+    expect(resolved.pathname.startsWith(${jsStringLiteral(`${basePath}/`)})).toBe(true)
     expect((await request.get(resolved.href)).status(), asset).toBe(200)
   }
-  expect(await (await request.get(${JSON.stringify(`${baseUrl}public-probe.svg`)})).text()).toContain('Public static asset')
+  expect(await (await request.get(${jsStringLiteral(`${baseUrl}public-probe.svg`)})).text()).toContain('Public static asset')
   for (const route of ['api/health', 'api/not-present', 'not-a-page/'])
-    expect((await request.get(${JSON.stringify(baseUrl)} + route)).status()).toBe(404)
+    expect((await request.get(\`${jsTemplateFragment(baseUrl)}\${route}\`)).status()).toBe(404)
   await page.locator('#name').fill('Static visitor')
   await page.locator('#email').fill('visitor@example.invalid')
   await page.locator('#message').fill('Contact input should remain available.')
@@ -226,10 +347,16 @@ test('static Pages deep links, public assets and honest contact feedback', async
   await expect(page.locator('#name')).toHaveValue('Static visitor')
   await expect(page.locator('#email')).toHaveValue('visitor@example.invalid')
   await expect(page.locator('#message')).toHaveValue('Contact input should remain available.')
-  await page.screenshot({ path: testInfo.outputPath('static-website-contact-warning.png'), fullPage: true })
+  await page.screenshot({
+    path: testInfo.outputPath('static-website-contact-warning.png'),
+    fullPage: true,
+  })
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: testInfo.outputPath('static-website-mobile.png'), fullPage: true })
+  await page.screenshot({
+    path: testInfo.outputPath('static-website-mobile.png'),
+    fullPage: true,
+  })
   expect(posts).toEqual([])
   expect(errors).toEqual([])
   expect(failed).toEqual([])
@@ -260,7 +387,14 @@ test('static Pages deep links, public assets and honest contact feedback', async
         ...scenario.createArgs,
       ])
       if (scenario.title === 'website') {
-        runNode([cliBin, '--cwd', projectPath, 'add', 'payment', '--no-install'])
+        runNode([
+          cliBin,
+          '--cwd',
+          projectPath,
+          'add',
+          'payment',
+          '--no-install',
+        ])
         const manifest = JSON.parse(await readFile(path.join(projectPath, 'package.json'), 'utf8'))
         const workspace = parse(await readFile(path.join(projectPath, 'pnpm-workspace.yaml'), 'utf8'))
         for (const name of ['@h-ai/payment', '@h-ai/reldb']) {
@@ -269,7 +403,9 @@ test('static Pages deep links, public assets and honest contact feedback', async
         }
       }
       if (scenario.title === 'mobile-app' || scenario.title === 'fullstack') {
-        const appRoot = scenario.title === 'mobile-app' ? projectPath : path.join(projectPath, `apps/${scenario.projectName}-app`)
+        const appRoot = scenario.title === 'mobile-app'
+          ? projectPath
+          : path.join(projectPath, `apps/${scenario.projectName}-app`)
         const manifest = JSON.parse(await readFile(path.join(appRoot, 'package.json'), 'utf8'))
         expect(manifest.scripts.clean).not.toMatch(/(?:^|\s)(android|ios)(?:\s|$)/)
         const ignored = (await readFile(path.join(projectPath, '.gitignore'), 'utf8')).split('\n')
@@ -286,7 +422,9 @@ test('static Pages deep links, public assets and honest contact feedback', async
         // 生成后只新增页面文件，禁止修改路由器或菜单，验证页面目录自动发现。
         await writeFile(path.join(projectPath, pageRoot, 'auto-discovered.svelte'), '<section data-testid=\'route-probe\'>Scaffold discovered page</section>\n')
         const discovery = await readFile(path.resolve(process.cwd(), 'tests/fixtures/hash-discovery.ts'), 'utf8')
-        await writeFile(path.join(projectPath, 'e2e/hash-discovery.spec.ts'), discovery.replaceAll('SCAFFOLD_HASH_APP_TYPE', scenario.title.startsWith('fullstack') ? 'fullstack' : scenario.title))
+        await writeFile(path.join(projectPath, 'e2e/hash-discovery.spec.ts'), discovery.replaceAll('SCAFFOLD_HASH_APP_TYPE', scenario.title.startsWith('fullstack')
+          ? 'fullstack'
+          : scenario.title))
       }
       if (scenario.title === 'admin' || scenario.title.startsWith('fullstack')) {
         // 验证实际安装的 tarball 公共类型与运行行为，不能只靠框架源码别名。
@@ -302,7 +440,9 @@ test('static Pages deep links, public assets and honest contact feedback', async
           }
           await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
         }
-        const moduleRoot = scenario.title.startsWith('fullstack') ? `packages/${scenario.projectName}-serv` : '.'
+        const moduleRoot = scenario.title.startsWith('fullstack')
+          ? `packages/${scenario.projectName}-serv`
+          : '.'
         const testsRoot = path.join(projectPath, moduleRoot, 'tests')
         const fixtures = path.resolve(process.cwd(), 'tests/fixtures')
         await writeFile(path.join(testsRoot, 'public-capabilities.test.ts'), await readFile(path.join(fixtures, 'public-capabilities.ts')))
@@ -313,26 +453,60 @@ test('static Pages deep links, public assets and honest contact feedback', async
         }
         await writeFile(path.join(projectPath, 'tsconfig.capabilities.json'), `${JSON.stringify({
           extends: `./${moduleRoot}/tsconfig.json`,
-          compilerOptions: { types: ['node'], noEmit: true },
+          compilerOptions: {
+            types: ['node'],
+            noEmit: true,
+          },
           include,
           exclude: ['node_modules'],
         }, null, 2)}\n`)
       }
       if (scenario.title === 'admin') {
         // 用生成应用的真实 SvelteKit Handle 验证独立策略生效；规则只限制专用夹具路径。
-        const policies = { rules: [
-          { id: 'scaffold-private-probe', paths: ['/api/public/request-denied', '/yyy/api/public/request-denied'], denyIps: ['0.0.0.0/0', '::/0'], encryption: 'disabled' },
-          { id: 'scaffold-plain', paths: ['/api/public/request-open', '/yyy/api/public/request-open', '/api/prefix-probe', '/yyy/api/prefix-probe'], encryption: 'disabled' },
-          { id: 'scaffold-encrypted', paths: ['/api/public/request-required', '/yyy/api/public/request-required'], encryption: 'required' },
-        ] }
+        const policies = {
+          rules: [
+            {
+              id: 'scaffold-private-probe',
+              paths: ['/api/public/request-denied', '/yyy/api/public/request-denied'],
+              denyIps: ['0.0.0.0/0', '::/0'],
+              encryption: 'disabled',
+            },
+            {
+              id: 'scaffold-plain',
+              paths: [
+                '/api/public/request-open',
+                '/yyy/api/public/request-open',
+                '/api/prefix-probe',
+                '/yyy/api/prefix-probe',
+              ],
+              encryption: 'disabled',
+            },
+            {
+              id: 'scaffold-encrypted',
+              paths: ['/api/public/request-required', '/yyy/api/public/request-required'],
+              encryption: 'required',
+            },
+          ],
+        }
         await mkdir(path.join(projectPath, 'config/security'), { recursive: true })
         await writeFile(path.join(projectPath, 'config/security/request-access.yml'), stringify(policies))
         const kitConfig = path.join(projectPath, 'config/_kit.yml')
-        await writeFile(kitConfig, stringify({ ...parse(await readFile(kitConfig, 'utf8')), access: { file: './config/security/request-access.yml' }, transport: { excludePaths: ['/api/public/request-open', '/api/public/request-denied', '/api/prefix-probe'] } }))
+        await writeFile(kitConfig, stringify({
+          ...parse(await readFile(kitConfig, 'utf8')),
+          access: { file: './config/security/request-access.yml' },
+          transport: {
+            excludePaths: ['/api/public/request-open', '/api/public/request-denied', '/api/prefix-probe'],
+          },
+        }))
         for (const name of ['request-open', 'request-denied', 'request-required']) {
           const route = path.join(projectPath, 'src/routes/api/public', name)
           await mkdir(route, { recursive: true })
-          await writeFile(path.join(route, '+server.ts'), `import type { RequestHandler } from './$types'\n\nexport const GET: RequestHandler = ({ getClientAddress }) => Response.json({ ip: getClientAddress() })\n`)
+          await writeFile(path.join(route, '+server.ts'), `import type { RequestHandler } from './$types'
+
+export const GET: RequestHandler = ({ getClientAddress }) => Response.json({
+  ip: getClientAddress(),
+})
+`)
         }
         await writeFile(path.join(projectPath, 'e2e/request-policy.spec.ts'), `import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -343,15 +517,26 @@ test('generated SvelteKit applies file policies, trusted socket identity and pat
   const baseURL = testInfo.project.use.baseURL
   if (!baseURL)
     throw new Error('The generated-project policy gate requires baseURL')
-  const open = await request.get('./api/public/request-open', { headers: { 'x-forwarded-for': '203.0.113.9' } })
+  const open = await request.get('./api/public/request-open', {
+    headers: { 'x-forwarded-for': '203.0.113.9' },
+  })
   expect(open.status()).toBe(200)
-  expect(await open.json()).toMatchObject({ ip: expect.stringMatching(/^(127\\.0\\.0\\.1|::1)$/) })
-  const denied = await request.get('./api/public/request-denied', { headers: { 'x-request-id': 'scaffold-policy-probe' } })
+  expect(await open.json()).toMatchObject({
+    ip: expect.stringMatching(/^(127\\.0\\.0\\.1|::1)$/),
+  })
+  const denied = await request.get('./api/public/request-denied', {
+    headers: { 'x-request-id': 'scaffold-policy-probe' },
+  })
   expect(denied.status()).toBe(403)
-  expect(await denied.json()).toMatchObject({ success: false, error: { code: 'hai:common:104', traceId: 'scaffold-policy-probe' } })
+  expect(await denied.json()).toMatchObject({
+    success: false,
+    error: { code: 'hai:common:104', traceId: 'scaffold-policy-probe' },
+  })
   const requiredWithoutProtocol = await request.get('./api/public/request-required')
   expect(requiredWithoutProtocol.status()).toBe(400)
-  const modeMismatch = await request.get('./api/public/request-open', { headers: { 'x-encrypted': 'true' } })
+  const modeMismatch = await request.get('./api/public/request-open', {
+    headers: { 'x-encrypted': 'true' },
+  })
   expect(modeMismatch.status()).toBe(400)
   let encrypted = false
   page.on('response', (response) => {
@@ -366,12 +551,37 @@ test('generated SvelteKit applies file policies, trusted socket identity and pat
     return { status: response.status, body: await response.json() }
   }, new URL('api/public/request-required', baseURL).href)
   expect(protectedReply.status).toBe(200)
-  expect(protectedReply.body).toMatchObject({ ip: expect.stringMatching(/^(127\\.0\\.0\\.1|::1)$/) })
+  expect(protectedReply.body).toMatchObject({
+    ip: expect.stringMatching(/^(127\\.0\\.0\\.1|::1)$/),
+  })
   expect(encrypted).toBe(true)
   const directory = process.env.HAI_AUTH_EVIDENCE_DIR || testInfo.outputDir
   await mkdir(directory, { recursive: true })
-  const receiptName = new URL(baseURL).pathname === '/yyy/' ? 'request-encryption-kit-prefix.json' : 'request-encryption-kit.json'
-  await writeFile(path.join(directory, receiptName), JSON.stringify({ checkedAt: new Date().toISOString(), host: 'generated SvelteKit / Admin', baseURL, plain: { status: open.status(), body: await open.json(), encrypted: false }, denied: { status: denied.status(), body: await denied.json() }, requiredWithoutProtocol: { status: requiredWithoutProtocol.status() }, encryptedEnvelopeOnPlainEndpoint: { status: modeMismatch.status(), body: await modeMismatch.json() }, requiredWithProtocol: { ...protectedReply, encrypted } }, null, 2))
+  const receiptName = new URL(baseURL).pathname === '/yyy/'
+    ? 'request-encryption-kit-prefix.json'
+    : 'request-encryption-kit.json'
+  await writeFile(path.join(directory, receiptName), JSON.stringify({
+    checkedAt: new Date().toISOString(),
+    host: 'generated SvelteKit / Admin',
+    baseURL,
+    plain: {
+      status: open.status(),
+      body: await open.json(),
+      encrypted: false,
+    },
+    denied: {
+      status: denied.status(),
+      body: await denied.json(),
+    },
+    requiredWithoutProtocol: {
+      status: requiredWithoutProtocol.status(),
+    },
+    encryptedEnvelopeOnPlainEndpoint: {
+      status: modeMismatch.status(),
+      body: await modeMismatch.json(),
+    },
+    requiredWithProtocol: { ...protectedReply, encrypted },
+  }, null, 2))
 })
 `)
         // 不只验证 create：增量生成的文件必须进入实际项目的编译、lint 与运行测试。
@@ -382,7 +592,16 @@ test('generated SvelteKit applies file policies, trusted socket identity and pat
           ['model', 'review-model', 'src/lib/models'],
           ['migration', 'review-records', 'src/lib/server/migrations'],
         ]) {
-          runNode([cliBin, '--cwd', projectPath, 'generate', type, name, '--output', output])
+          runNode([
+            cliBin,
+            '--cwd',
+            projectPath,
+            'generate',
+            type,
+            name,
+            '--output',
+            output,
+          ])
         }
         const migrationDir = path.join(projectPath, 'src/lib/server/migrations')
         const migration = (await readdir(migrationDir)).find(name => name.endsWith('_review_records.ts'))!
@@ -408,38 +627,63 @@ it('generated migration executes up and down with HaiResult', async () => {
         const servDirectory = path.join(projectPath, 'packages', `${scenario.projectName}-serv`)
         const policyFile = path.join(servDirectory, 'config/security/request-access.yml')
         await mkdir(path.dirname(policyFile), { recursive: true })
-        await writeFile(policyFile, stringify({ rules: [
-          { id: 'external-plain', paths: ['/api/v1/policy-plain'], allowIps: ['127.0.0.1', '::1'], encryption: 'disabled' },
-          { id: 'external-denied', paths: ['/api/v1/policy-denied'], denyIps: ['0.0.0.0/0', '::/0'], encryption: 'disabled' },
-          { id: 'internal-encrypted', paths: ['/api/v1/policy-required'], encryption: 'required' },
-        ] }))
+        await writeFile(policyFile, stringify({
+          rules: [
+            {
+              id: 'external-plain',
+              paths: ['/api/v1/policy-plain'],
+              allowIps: ['127.0.0.1', '::1'],
+              encryption: 'disabled',
+            },
+            {
+              id: 'external-denied',
+              paths: ['/api/v1/policy-denied'],
+              denyIps: ['0.0.0.0/0', '::/0'],
+              encryption: 'disabled',
+            },
+            {
+              id: 'internal-encrypted',
+              paths: ['/api/v1/policy-required'],
+              encryption: 'required',
+            },
+          ],
+        }))
         const configFile = path.join(servDirectory, 'config/_serv.yml')
         const settings = parse(await readFile(configFile, 'utf8'))
-        await writeFile(configFile, stringify({ ...settings, http: { ...settings.http, access: { file: './config/security/request-access.yml' } } }))
+        await writeFile(configFile, stringify({
+          ...settings,
+          http: {
+            ...settings.http,
+            access: { file: './config/security/request-access.yml' },
+          },
+        }))
         const appFile = path.join(servDirectory, 'src/app-server.ts')
         const source = await readFile(appFile, 'utf8')
-        if (!source.includes('middlewares: [{'))
-          throw new Error('The actual Fullstack middleware assembly must be available to add the external-endpoint fixture')
-        await writeFile(appFile, source.replace('middlewares: [{', `middlewares: [{
-      path: '/api/v1/policy-plain',
-      middleware: async c => c.json({ kind: 'plain-external' }),
-    }, {
-      path: '/api/v1/policy-denied',
-      middleware: async c => c.json({ kind: 'must-not-run' }),
-    }, {
-      path: '/api/v1/policy-required',
-      middleware: async c => c.json({ kind: 'encrypted-internal' }),
-    }, {`))
+        await writeFile(appFile, injectRequestPolicyEndpoints(source))
         await writeFile(path.join(projectPath, 'e2e/request-policy.spec.ts'), await readFile(path.resolve(process.cwd(), 'tests/fixtures/request-encryption.ts'), 'utf8'))
         // 前后端与 core 展示版本故意不同；提交仅属于本轮临时生成工程。
-        for (const [target, version] of [['apps/sample-fullstack-feedback-web', '2.4.6-frontend'], ['packages/sample-fullstack-feedback-serv', '7.8.9-serv']]) {
+        for (const [target, version] of [
+          ['apps/sample-fullstack-feedback-web', '2.4.6-frontend'],
+          ['packages/sample-fullstack-feedback-serv', '7.8.9-serv'],
+        ]) {
           const manifestPath = path.join(projectPath, target, 'package.json')
           const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
           await writeFile(manifestPath, `${JSON.stringify({ ...manifest, version }, null, 2)}\n`)
         }
         runGate('git', ['init', '--quiet'], projectPath, process.env, false)
         runGate('git', ['add', '--all'], projectPath, process.env, false)
-        runGate('git', ['-c', 'core.hooksPath=.git/empty-hooks', '-c', 'user.name=Scaffold metadata', '-c', 'user.email=scaffold@example.invalid', 'commit', '--quiet', '-m', 'metadata acceptance fixture'], projectPath, process.env, false)
+        runGate('git', [
+          '-c',
+          'core.hooksPath=.git/empty-hooks',
+          '-c',
+          'user.name=Scaffold metadata',
+          '-c',
+          'user.email=scaffold@example.invalid',
+          'commit',
+          '--quiet',
+          '-m',
+          'metadata acceptance fixture',
+        ], projectPath, process.env, false)
         const committed = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: projectPath, encoding: 'utf8', windowsHide: true })
         if (committed.status !== 0 || !/^[a-f\d]{40,64}$/i.test(committed.stdout.trim()))
           throw new Error('The metadata fixture must have its own exact Git commit')
@@ -458,11 +702,16 @@ it('generated migration executes up and down with HaiResult', async () => {
         await runQualityGates(projectPath, envOptions)
       }
 
-      if (scenario.title === 'admin' || scenario.title === 'fullstack-feedback')
-        await runPrefixBrowserGates(projectPath, scenario.title === 'admin' ? 'sveltekit' : 'vite', envOptions)
+      if (scenario.title === 'admin' || scenario.title === 'fullstack-feedback') {
+        await runPrefixBrowserGates(projectPath, scenario.title === 'admin'
+          ? 'sveltekit'
+          : 'vite', envOptions)
+      }
 
       if (scenario.title === 'mobile-app' || scenario.title === 'fullstack') {
-        const appRoot = scenario.title === 'mobile-app' ? projectPath : path.join(projectPath, `apps/${scenario.projectName}-app`)
+        const appRoot = scenario.title === 'mobile-app'
+          ? projectPath
+          : path.join(projectPath, `apps/${scenario.projectName}-app`)
         for (const platform of ['android', 'ios']) {
           await mkdir(path.join(appRoot, platform), { recursive: true })
           await writeFile(path.join(appRoot, platform, 'native-source.txt'), 'Keep native project sources\n')
@@ -479,7 +728,15 @@ it('generated migration executes up and down with HaiResult', async () => {
         const applicationManifest = path.join(projectPath, 'package.json')
         const metadata = JSON.parse(await readFile(applicationManifest, 'utf8'))
         await writeFile(applicationManifest, `${JSON.stringify({ ...metadata, version: '2.4.6' }, null, 2)}\n`)
-        await runPnpm(projectPath, ['build', '--target', 'desktop', '--platform', 'windows', '--arch', 'x64'])
+        await runPnpm(projectPath, [
+          'build',
+          '--target',
+          'desktop',
+          '--platform',
+          'windows',
+          '--arch',
+          'x64',
+        ])
         const output = path.join(projectPath, '.hai/build/desktop/windows/release')
         const batch = path.join(output, (await readFile(path.join(output, 'latest'), 'utf8')).trim())
         const manifest = JSON.parse(await readFile(path.join(batch, 'manifest.json'), 'utf8')) as { files: Array<{ file: string }> }
@@ -490,13 +747,23 @@ it('generated migration executes up and down with HaiResult', async () => {
       for (const relativePath of scenario.expectedFiles) {
         expect(await fileExists(path.join(projectPath, relativePath))).toBe(true)
       }
-      for (const resource of ['SKILL.md', 'workflow.md', 'templates.md', 'changes.md', 'handoff.md', 'evaluation.md']) {
+      for (const resource of [
+        'SKILL.md',
+        'workflow.md',
+        'templates.md',
+        'changes.md',
+        'handoff.md',
+        'evaluation.md',
+      ]) {
         // 从实际 CLI 构建生成，工作流入口及其按需范本必须完整且未被模板渲染改写。
         expect(await readFile(path.join(projectPath, '.agents/skills/hai-spec-implement', resource), 'utf8'))
           .toBe(await readFile(path.resolve(process.cwd(), 'templates/skills/hai-spec-implement', resource), 'utf8'))
       }
       if (scenario.title.startsWith('fullstack')) {
-        for (const [skill, resource] of [['hai-ui-design', 'patterns.md'], ['hai-ui-review', 'checklist.md']]) {
+        for (const [skill, resource] of [
+          ['hai-ui-design', 'patterns.md'],
+          ['hai-ui-review', 'checklist.md'],
+        ]) {
           expect(await readFile(path.join(projectPath, '.agents/skills', skill, resource), 'utf8'))
             .toBe(await readFile(path.resolve(process.cwd(), 'templates/skills', skill, resource), 'utf8'))
         }
@@ -505,7 +772,13 @@ it('generated migration executes up and down with HaiResult', async () => {
         // API 样板验收实际接入的认证、通知、上传、反馈和加密，保留未接入模块的配置参考。
         const servicePath = path.join(projectPath, 'apps/sample-api-feedback-serv')
         const manifest: { dependencies?: Record<string, string> } = JSON.parse(await readFile(path.join(servicePath, 'package.json'), 'utf8'))
-        for (const name of ['iam', 'reach', 'feedback', 'crypto', 'storage'])
+        for (const name of [
+          'iam',
+          'reach',
+          'feedback',
+          'crypto',
+          'storage',
+        ])
           expect(manifest.dependencies).toHaveProperty(`@h-ai/${name}`)
         for (const name of ['ai', 'vecdb', 'payment', 'datapipe'])
           expect(manifest.dependencies).not.toHaveProperty(`@h-ai/${name}`)
@@ -528,7 +801,12 @@ async function removeTempRoot(root: string): Promise<void> {
   const target = path.resolve(root)
   if (path.dirname(target) !== path.resolve(tmpdir()) || !path.basename(target).startsWith('hai-cli-scaffold-gates-'))
     throw new Error('Unexpected scaffold cleanup directory')
-  await rm(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+  await rm(target, {
+    recursive: true,
+    force: true,
+    maxRetries: 3,
+    retryDelay: 100,
+  })
   tempRoots.delete(root)
 }
 
@@ -548,10 +826,19 @@ async function startNativeApiService(root: string, baseUrl: string): Promise<() 
         HAI_CORE_ENV: 'test',
         HAI_CORE_LOGGING_LEVEL: 'error',
         HAI_SERV_SERVER_PORT: new URL(baseUrl).port,
-        HAI_DB: JSON.stringify({ type: 'sqlite', database: path.join(root, 'api-data/app.db') }),
+        HAI_DB: JSON.stringify({
+          type: 'sqlite',
+          database: path.join(root, 'api-data/app.db'),
+        }),
         HAI_CACHE: JSON.stringify({ type: 'memory' }),
-        HAI_VECDB: JSON.stringify({ type: 'lancedb', path: path.join(root, 'api-data/vecdb') }),
-        HAI_STORAGE: JSON.stringify({ type: 'local', root: path.join(root, 'api-data/uploads') }),
+        HAI_VECDB: JSON.stringify({
+          type: 'lancedb',
+          path: path.join(root, 'api-data/vecdb'),
+        }),
+        HAI_STORAGE: JSON.stringify({
+          type: 'local',
+          root: path.join(root, 'api-data/uploads'),
+        }),
         HAI_CRYPTO_TRANSPORT_SERVERKEYRING: createE2eTransportRing(),
         HAI_IAM_REGISTER_ENABLED: 'true',
       }),
@@ -617,18 +904,80 @@ async function getFreePort(): Promise<number> {
   })
 }
 
+/** 动态地址作为 JS 字符串编码；单引号输出与生成工程的 lint 规则一致。 */
+function jsStringLiteral(value: string): string {
+  return `'${JSON.stringify(value).slice(1, -1).replace(/\\"/g, '"').replace(/'/g, '\\\'')}'`
+}
+
+/** 地址嵌入模板字符串的文本段时，保留内容并阻止反引号或插值被当成代码。 */
+function jsTemplateFragment(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${').replace(/\r/g, '\\r').replace(/\n/g, '\\n')
+}
+
+/** 只在真实 App 的唯一中间件数组插入夹具，避免依赖源码单行/多行格式。 */
+function injectRequestPolicyEndpoints(source: string): string {
+  const file = ts.createSourceFile('app-server.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const arrays: ts.ArrayLiteralExpression[] = []
+  function visit(node: ts.Node): void {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+      && ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'serv'
+      && node.expression.name.text === 'createApp') {
+      const options = node.arguments[0]
+      if (options && ts.isObjectLiteralExpression(options)) {
+        for (const property of options.properties) {
+          if (ts.isPropertyAssignment(property) && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+            && property.name.text === 'middlewares' && ts.isArrayLiteralExpression(property.initializer)) {
+            arrays.push(property.initializer)
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  const [middlewareArray] = arrays
+  if (arrays.length !== 1 || !middlewareArray)
+    throw new Error('The actual Fullstack App must have exactly one middleware array for the external-endpoint fixture')
+  const opening = middlewareArray.getStart(file)
+  if (source[opening] !== '[')
+    throw new Error('The actual Fullstack middleware array opening is invalid')
+  const endpoints = `
+      {
+        path: '/api/v1/policy-plain',
+        middleware: async c => c.json({ kind: 'plain-external' }),
+      },
+      {
+        path: '/api/v1/policy-denied',
+        middleware: async c => c.json({ kind: 'must-not-run' }),
+      },
+      {
+        path: '/api/v1/policy-required',
+        middleware: async c => c.json({ kind: 'encrypted-internal' }),
+      },`
+  return source.slice(0, opening + 1) + endpoints + source.slice(opening + 1)
+}
+
 /** 复用本轮安装与构建，额外验收真实生成工程的目录挂载和认证边界。 */
 async function runPrefixBrowserGates(projectPath: string, kind: 'sveltekit' | 'vite', envOptions: GateEnvOptions): Promise<void> {
   const fixtures = path.resolve(process.cwd(), 'tests/fixtures')
   const spec = (await readFile(path.join(fixtures, 'prefix-browser.ts'), 'utf8')).replace('SCAFFOLD_KIND', kind)
   await writeFile(path.join(projectPath, 'e2e/prefix-browser.spec.ts'), spec)
-  const proxyUrl = kind === 'vite' ? await allocateBaseUrl() : undefined
+  const proxyUrl = kind === 'vite'
+    ? await allocateBaseUrl()
+    : undefined
   const rootUrl = envOptions.baseUrl!
   const prefixUrl = `${proxyUrl ?? rootUrl}/yyy/`
   if (kind === 'sveltekit') {
     const route = path.join(projectPath, 'src/routes/api/prefix-probe')
     await mkdir(route, { recursive: true })
-    await writeFile(path.join(route, '+server.ts'), `/** 专用于验证全局认证守卫，处理器自身不重复实现认证。 */\nexport const GET = () => Response.json({ success: true, data: { private: true } })\n`)
+    await writeFile(path.join(route, '+server.ts'), `/** 专用于验证全局认证守卫，处理器自身不重复实现认证。 */
+export function GET() {
+  return Response.json({
+    success: true,
+    data: { private: true },
+  })
+}
+`)
   }
   else {
     await writeFile(path.join(projectPath, 'scripts/prefix-proxy.mjs'), await readFile(path.join(fixtures, 'prefix-proxy.mjs')))
@@ -647,7 +996,9 @@ export default defineConfig({
   ...original,
   workers: 1,
   fullyParallel: false,
-  testMatch: ${JSON.stringify(kind === 'vite' ? ['fullstack.spec.ts', 'prefix-browser.spec.ts'] : ['prefix-browser.spec.ts', 'request-policy.spec.ts'])},
+  testMatch: ${JSON.stringify(kind === 'vite'
+    ? ['fullstack.spec.ts', 'prefix-browser.spec.ts']
+    : ['prefix-browser.spec.ts', 'request-policy.spec.ts'])},
   use: { ...original.use, baseURL: ${JSON.stringify(prefixUrl)} },
   webServer: ${kind === 'sveltekit'
     ? `servers.map(server => ({ ...server, env: { ...server.env, PUBLIC_BASE_PATH: '/yyy' }, url: ${JSON.stringify(prefixUrl)} }))`
@@ -673,20 +1024,46 @@ export default defineConfig({
 `
   await writeFile(path.join(projectPath, 'playwright.prefix.config.ts'), config)
   // 测试夹具使用JSON编码安全嵌入地址；统一为项目风格后，再执行完整lint。
-  await runPnpm(projectPath, ['exec', 'eslint', 'playwright.prefix.config.ts', '--fix'], envOptions)
+  await runPnpm(projectPath, [
+    'exec',
+    'eslint',
+    'playwright.prefix.config.ts',
+    '--fix',
+  ], envOptions)
   await runPnpm(projectPath, ['lint'], envOptions)
-  await runPnpm(projectPath, ['exec', 'node', 'scripts/run-e2e.mjs', '--config', 'playwright.prefix.config.ts'], { ...envOptions, baseUrl: prefixUrl, ...(kind === 'vite' ? { frontendUrls: { ...envOptions.frontendUrls, web: prefixUrl } } : {}) })
+  await runPnpm(projectPath, [
+    'exec',
+    'node',
+    'scripts/run-e2e.mjs',
+    '--config',
+    'playwright.prefix.config.ts',
+  ], {
+    ...envOptions,
+    baseUrl: prefixUrl,
+    ...(kind === 'vite'
+      ? {
+          frontendUrls: { ...envOptions.frontendUrls, web: prefixUrl },
+        }
+      : {}),
+  })
 }
 
 async function runQualityGates(projectPath: string, envOptions: GateEnvOptions = {}): Promise<void> {
   await runPnpm(projectPath, ['install', '--prefer-offline'], envOptions)
   await runPnpm(projectPath, ['typecheck'], envOptions)
-  if (existsSync(path.join(projectPath, 'tsconfig.capabilities.json')))
-    await runPnpm(projectPath, ['exec', 'tsc', '--noEmit', '-p', 'tsconfig.capabilities.json'], envOptions)
+  if (existsSync(path.join(projectPath, 'tsconfig.capabilities.json'))) {
+    await runPnpm(projectPath, [
+      'exec',
+      'tsc',
+      '--noEmit',
+      '-p',
+      'tsconfig.capabilities.json',
+    ], envOptions)
+  }
   await runPnpm(projectPath, ['lint'], envOptions)
   // 注入仅属于构建机器的公开值，确认 Vite 和 Kit 都不会将 .env.local 固化进交付包。
   const sentinel = 'hai-build-must-ignore-local-1792584600'
-  const checksBuildIsolation = existsSync(path.join(projectPath, 'svelte.config.js'))
+  const checksBuildIsolation = existsSync(path.join(projectPath, 'vite.config.ts'))
   if (checksBuildIsolation)
     appendFileSync(path.join(projectPath, '.env.local'), `\nPUBLIC_BUILD_ISOLATION_PROBE='${sentinel}'\n`)
   await runPnpm(projectPath, ['test'], envOptions)
@@ -727,7 +1104,9 @@ function runNode(args: string[]): void {
  */
 async function runPnpm(cwd: string, args: string[], envOptions: GateEnvOptions = {}): Promise<void> {
   const isBrowser = args[0] === 'test:e2e' || (args[0] === 'exec' && args[1] === 'node' && args[2] === 'scripts/run-e2e.mjs')
-  const nodeEnv = args[0] === 'build' || isBrowser ? 'production' : 'test'
+  const nodeEnv = args[0] === 'build' || isBrowser
+    ? 'production'
+    : 'test'
   const env = buildChildEnv(envOptions, nodeEnv)
   if (isBrowser) {
     // 只持久保留浏览器产物，临时工程及私有环境仍由 removeTempRoot 回收。
@@ -796,8 +1175,12 @@ function describeHaiModules(cwd: string): string {
       const directory = path.join(haiDir, name)
       try {
         const manifest = JSON.parse(readFileSync(path.join(directory, 'package.json'), 'utf8'))
-        const declared = typeof manifest.types === 'string' ? manifest.types : undefined
-        return `${name}(types=${declared ? existsSync(path.resolve(directory, declared)) : 'unspecified'})`
+        const declared = typeof manifest.types === 'string'
+          ? manifest.types
+          : undefined
+        return `${name}(types=${declared
+          ? existsSync(path.resolve(directory, declared))
+          : 'unspecified'})`
       }
       catch {
         return `${name}(manifest=unreadable)`
@@ -810,7 +1193,9 @@ function buildChildEnv(envOptions: GateEnvOptions = {}, nodeEnv: 'test' | 'produ
   return {
     ...process.env,
     ...authFixtureEnv(),
-    ...(envOptions.baseUrl ? { BASE_URL: envOptions.baseUrl } : {}),
+    ...(envOptions.baseUrl
+      ? { BASE_URL: envOptions.baseUrl }
+      : {}),
     ...(envOptions.serviceBaseUrl
       ? {
           PUBLIC_API_BASE: envOptions.publicApiBase ?? envOptions.serviceBaseUrl,
@@ -818,7 +1203,9 @@ function buildChildEnv(envOptions: GateEnvOptions = {}, nodeEnv: 'test' | 'produ
         }
       : {}),
     ...Object.fromEntries(Object.entries(envOptions.frontendUrls ?? {}).map(([target, url]) => [`HAI_E2E_${target.toUpperCase()}_URL`, url])),
-    ...(envOptions.expectedBuildCommit ? { E2E_BUILD_COMMIT: envOptions.expectedBuildCommit } : {}),
+    ...(envOptions.expectedBuildCommit
+      ? { E2E_BUILD_COMMIT: envOptions.expectedBuildCommit }
+      : {}),
     CI: '1',
     // 产物按生产模式构建，业务环境独立使用 core 覆盖值，避免继承 Vitest 的开发编译模式。
     NODE_ENV: nodeEnv,
@@ -846,7 +1233,13 @@ function authFixtureEnv(): NodeJS.ProcessEnv {
       { name: 'password_reset', provider: 'email', body: 'Reset: {token}' },
       { name: 'password_reset_sms', provider: 'sms', body: 'Reset: {token}' },
     ]),
-    HAI_IAM_AGREEMENTS: JSON.stringify({ showOnRegister: true, showOnLogin: true, userAgreementMarkdown: '# Configured registration agreement\n\n**Registration terms**\n\n- Keep your account credentials secure.', userAgreementUrl: `${notificationUrl}/terms`, privacyPolicyUrl: `${notificationUrl}/privacy` }),
+    HAI_IAM_AGREEMENTS: JSON.stringify({
+      showOnRegister: true,
+      showOnLogin: true,
+      userAgreementMarkdown: '# Configured registration agreement\n\n**Registration terms**\n\n- Keep your account credentials secure.',
+      userAgreementUrl: `${notificationUrl}/terms`,
+      privacyPolicyUrl: `${notificationUrl}/privacy`,
+    }),
   }
 }
 
@@ -875,7 +1268,12 @@ async function replaceHaiPackageSpecifiers(directory: string): Promise<void> {
 
     const manifest = JSON.parse(await readFile(entryPath, 'utf8')) as Record<string, unknown>
     let changed = false
-    for (const sectionName of ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']) {
+    for (const sectionName of [
+      'dependencies',
+      'devDependencies',
+      'optionalDependencies',
+      'peerDependencies',
+    ]) {
       const section = manifest[sectionName]
       if (!section || typeof section !== 'object' || Array.isArray(section))
         continue
@@ -900,7 +1298,10 @@ async function addLocalHaiOverrides(projectPath: string): Promise<void> {
   const workspacePath = path.join(projectPath, 'pnpm-workspace.yaml')
   const workspace = parse(await readFile(workspacePath, 'utf8')) as Record<string, unknown>
   const overrides = JSON.parse(process.env.HAI_CLI_PACKAGE_OVERRIDES ?? '{}') as Record<string, string>
-  workspace.overrides = { ...(workspace.overrides as Record<string, unknown> | undefined), ...overrides }
+  workspace.overrides = {
+    ...(workspace.overrides as Record<string, unknown> | undefined),
+    ...overrides,
+  }
   await writeFile(workspacePath, stringify(workspace))
 }
 

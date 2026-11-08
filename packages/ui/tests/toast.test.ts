@@ -67,7 +67,12 @@ describe('toastState', () => {
   it.each(['success', 'error', 'warning', 'info'] as const)('快捷方法 %s 保留消息、类型和停留时间', (variant) => {
     const id = toast[variant]('操作结果', 4500)
     expect(id).toEqual(expect.any(String))
-    expect(toast.items[0]).toMatchObject({ id, message: '操作结果', variant, duration: 4500 })
+    expect(toast.items[0]).toMatchObject({
+      id,
+      message: '操作结果',
+      variant,
+      duration: 4500,
+    })
   })
 
   it('应该自动关闭 Toast', () => {
@@ -145,7 +150,12 @@ describe('toastState', () => {
   })
 
   it('兼容已有格式且保留恢复建议，显式编号优先且拒绝非法编号', () => {
-    toast.add({ message: '提交失败 (traceId: request-1)；请稍后重试', traceId: 'request-2', variant: 'warning', duration: 0 })
+    toast.add({
+      message: '提交失败 (traceId: request-1)；请稍后重试',
+      traceId: 'request-2',
+      variant: 'warning',
+      duration: 0,
+    })
     expect(toast.items[0]).toMatchObject({ message: '提交失败；请稍后重试', traceId: 'request-2' })
     toast.add({ message: '请求失败', traceId: '<script>private</script>' })
     expect(toast.items[1].traceId).toBeUndefined()
@@ -203,14 +213,33 @@ describe('toast notify helpers', () => {
     expect(mod.toast.items[0].message).toBe('未知错误')
   })
 
+  it('未分类的结构化错误隐藏内部消息，明确的业务错误保留提示', () => {
+    mod.notifyError({ code: 'app:unknown', message: 'SQL private details' }, '保存失败')
+    expect(mod.toast.items[0].message).not.toContain('SQL')
+    mod.notifyError({ code: 'app:invalid', message: '请填写名称', httpStatus: 400 }, '保存失败')
+    expect(mod.toast.items[1].message).toBe('请填写名称')
+  })
+
   it('保留异常 cause 中的业务原因和服务端追踪标识', () => {
-    const cause = { code: 'hai:feedback:004', message: '反馈已更新，请刷新后重试', httpStatus: 409, traceId: 'request-feedback-1' }
+    const cause = {
+      code: 'hai:feedback:004',
+      message: '反馈已更新，请刷新后重试',
+      httpStatus: 409,
+      traceId: 'request-feedback-1',
+    }
     mod.notifyError(new Error('Feedback callback failed', { cause }), '操作失败')
     expect(mod.toast.items[0]).toMatchObject({ message: '反馈已更新，请刷新后重试', traceId: 'request-feedback-1' })
   })
 
   it('包装后的服务端异常仍隐藏内部细节，循环 cause 不会阻塞提示', () => {
-    mod.notifyError(new Error('Internal wrapper', { cause: { code: 'app:db', message: 'SQL private statement', httpStatus: 500, traceId: 'request-db-1' } }), '操作失败')
+    mod.notifyError(new Error('Internal wrapper', {
+      cause: {
+        code: 'app:db',
+        message: 'SQL private statement',
+        httpStatus: 500,
+        traceId: 'request-db-1',
+      },
+    }), '操作失败')
     expect(mod.toast.items[0].message).not.toContain('SQL')
     expect(mod.toast.items[0].traceId).toBe('request-db-1')
     const circular = new Error('Private detail')

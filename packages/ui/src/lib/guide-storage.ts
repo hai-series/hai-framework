@@ -27,7 +27,9 @@ export function createGuideStorage(options: GuideOptions) {
       if (persistence === 'cookie' && typeof document !== 'undefined') {
         const prefix = `${encodeURIComponent(key)}=`
         const value = document.cookie.split('; ').find(item => item.startsWith(prefix))
-        return value ? decodeURIComponent(value.slice(prefix.length)) : memory.get(key) ?? null
+        return value
+          ? decodeURIComponent(value.slice(prefix.length))
+          : memory.get(key) ?? null
       }
     }
     catch {
@@ -49,9 +51,13 @@ export function createGuideStorage(options: GuideOptions) {
         }
       }
       else if (persistence === 'cookie' && typeof document !== 'undefined') {
-        const secure = globalThis.location?.protocol === 'https:' ? '; Secure' : ''
+        const secure = globalThis.location?.protocol === 'https:'
+          ? '; Secure'
+          : ''
         document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(value ?? '')
-        }; Path=/; SameSite=Lax; Max-Age=${value === null ? '0' : '31536000'}${secure}`
+        }; Path=/; SameSite=Lax; Max-Age=${value === null
+          ? '0'
+          : '31536000'}${secure}`
       }
     }
     catch {
@@ -79,7 +85,9 @@ export function createGuideStorage(options: GuideOptions) {
       return null
     },
     set(key: string, progress: GuideProgress | null) {
-      write(key, progress ? JSON.stringify(progress) : null)
+      write(key, progress
+        ? JSON.stringify(progress)
+        : null)
     },
   }
 }

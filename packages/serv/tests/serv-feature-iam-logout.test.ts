@@ -24,10 +24,18 @@ async function permit(command: 'get' | 'eval', allowed: boolean): Promise<void> 
   const endpoint = redis
   if (!endpoint)
     throw new Error('Redis fixture not initialized')
-  const args = ['ACL', 'SETUSER', 'default', `${allowed ? '+' : '-'}${command}`]
+  const args = [
+    'ACL',
+    'SETUSER',
+    'default',
+    `${allowed ? '+' : '-'}${command}`,
+  ]
   const request = `*${args.length}\r\n${args.map(value => `$${Buffer.byteLength(value)}\r\n${value}\r\n`).join('')}`
   await new Promise<void>((resolve, reject) => {
-    const socket = createConnection({ host: endpoint.getHost(), port: endpoint.getMappedPort(6379) })
+    const socket = createConnection({
+      host: endpoint.getHost(),
+      port: endpoint.getMappedPort(6379),
+    })
     socket.setTimeout(5000)
     socket.once('connect', () => socket.write(request))
     socket.once('timeout', () => socket.destroy(new Error('Redis ACL fixture timed out')))
@@ -63,16 +71,36 @@ beforeAll(async () => {
     .withWaitStrategy(Wait.forLogMessage(/Ready to accept connections/))
     .start()
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
-  expect((await cache.init({ type: 'redis', host: redis.getHost(), port: redis.getMappedPort(6379) })).success).toBe(true)
-  expect((await iam.init({ seedDefaultData: false, rbac: { enabled: false }, session: { sliding: false } })).success).toBe(true)
-  const app = serv.createApp({ contract, procedures: { iam: createIamProcedures({ iam }) }, iam, refreshCookie: { secure: false } })
+  expect((await cache.init({
+    type: 'redis',
+    host: redis.getHost(),
+    port: redis.getMappedPort(6379),
+  })).success).toBe(true)
+  expect((await iam.init({
+    seedDefaultData: false,
+    rbac: { enabled: false },
+    session: { sliding: false },
+  })).success).toBe(true)
+  const app = serv.createApp({
+    contract,
+    procedures: {
+      iam: createIamProcedures({ iam }),
+    },
+    iam,
+    refreshCookie: { secure: false },
+  })
   node = serv.listen(app, { host: '127.0.0.1', port: 0 })
   await once(node.server, 'listening')
   const address = node.server.address()
   if (!address || typeof address === 'string')
     throw new Error('Logout HTTP fixture did not start')
   baseUrl = `http://127.0.0.1:${address.port}/api/v1`
-  expect((await client.init({ baseUrl, auth: { storage: apiClient.tokenStorage.memory() } })).success).toBe(true)
+  expect((await client.init({
+    baseUrl,
+    auth: {
+      storage: apiClient.tokenStorage.memory(),
+    },
+  })).success).toBe(true)
 }, 120000)
 
 afterAll(async () => {
@@ -114,7 +142,9 @@ it('过期Bearer可撤销仍有效refresh，不需要先通过auth guard', async
   const found = await iam.session.get(tokens.accessToken)
   if (!found.success || !found.data)
     throw new Error('Missing issued session')
-  expect((await iam.session.update(tokens.accessToken, { expiresAt: new Date(Date.now() - 1) }, found.data.version)).success).toBe(true)
+  expect((await iam.session.update(tokens.accessToken, {
+    expiresAt: new Date(Date.now() - 1),
+  }, found.data.version)).success).toBe(true)
   expect((await iam.auth.verifyToken(tokens.accessToken)).success).toBe(false)
   const response = await fetch(`${baseUrl}/auth/logout`, {
     method: 'POST',
@@ -147,7 +177,9 @@ it('页面离开撤销旧会话和refresh但不清除Cookie，迟到请求不影
   const found = await iam.session.get(tokens.accessToken)
   if (!found.success || !found.data)
     throw new Error('Missing old session')
-  expect((await iam.session.update(tokens.accessToken, { expiresAt: new Date(Date.now() - 1) }, found.data.version)).success).toBe(true)
+  expect((await iam.session.update(tokens.accessToken, {
+    expiresAt: new Date(Date.now() - 1),
+  }, found.data.version)).success).toBe(true)
   const response = await fetch(`${baseUrl}/auth/session/close`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'authorization': `Bearer ${tokens.accessToken}` },

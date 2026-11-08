@@ -41,7 +41,11 @@ function feedbackFileContentType(file: File): string | undefined {
     ['application/x-gzip', 'application/gzip'],
   ])
   const normalized = aliases.get(type) ?? type
-  return [...extensions.values()].includes(normalized) ? normalized : undefined
+  return [
+    ...extensions.values(),
+  ].includes(normalized)
+    ? normalized
+    : undefined
 }
 
 /**
@@ -78,14 +82,28 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         previews.delete(id)
       }
     }
-    return { attachments: files.map((file) => {
-      let preview = previews.get(file.id)
-      if (!preview) {
-        preview = { checksum: file.checksum, url: URL.createObjectURL(new Blob([new Uint8Array(file.bytes).buffer], { type: file.contentType })) }
-        previews.set(file.id, preview)
-      }
-      return { id: file.id, name: file.name, size: file.size, mimeType: file.contentType, url: preview.url }
-    }), evidence: draft?.evidence ?? [], missing: draft?.missing ?? [], budget: { ...budget } }
+    return {
+      attachments: files.map((file) => {
+        let preview = previews.get(file.id)
+        if (!preview) {
+          preview = {
+            checksum: file.checksum,
+            url: URL.createObjectURL(new Blob([new Uint8Array(file.bytes).buffer], { type: file.contentType })),
+          }
+          previews.set(file.id, preview)
+        }
+        return {
+          id: file.id,
+          name: file.name,
+          size: file.size,
+          mimeType: file.contentType,
+          url: preview.url,
+        }
+      }),
+      evidence: draft?.evidence ?? [],
+      missing: draft?.missing ?? [],
+      budget: { ...budget },
+    }
   }
   let initializing = false
   let sequence = 0
@@ -124,16 +142,39 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   let replayChunks: FeedbackEvidenceInput[][] = []
 
   function failure(code: keyof typeof HaiFeedbackError = 'OPERATION_FAILED', cause?: unknown, message?: string) {
-    const key = code === 'NOT_INITIALIZED' ? 'feedback_notInitialized' : code === 'LIMIT_EXCEEDED' ? 'feedback_limitExceeded' : code === 'INVALID_INPUT' ? 'feedback_invalidInput' : 'feedback_operationFailed'
+    const key = code === 'NOT_INITIALIZED'
+      ? 'feedback_notInitialized'
+      : code === 'LIMIT_EXCEEDED'
+        ? 'feedback_limitExceeded'
+        : code === 'INVALID_INPUT'
+          ? 'feedback_invalidInput'
+          : 'feedback_operationFailed'
     const traceId = core.context.get().traceId ?? core.context.get().requestId ?? core.id.uuid()
-    const error = { ...HaiFeedbackError[code], traceId, message: message ?? feedbackM(key), cause }
-    if (!(closing && code === 'NOT_INITIALIZED'))
-      core.logger[cause === undefined ? 'warn' : 'error']('Feedback client operation failed', { module: 'feedback', traceId, error })
-    return err({ ...error, message: core.error.formatMessage(error) })
+    const error = {
+      ...HaiFeedbackError[code],
+      traceId,
+      message: message ?? feedbackM(key),
+      cause,
+    }
+    if (!(closing && code === 'NOT_INITIALIZED')) {
+      core.logger[cause === undefined
+        ? 'warn'
+        : 'error']('Feedback client operation failed', { module: 'feedback', traceId, error })
+    }
+    return err({
+      ...error,
+      message: core.error.formatMessage(error),
+    })
   }
 
   function limits() {
-    return { events: Math.min(config?.maxEvents ?? 1000, budget.maxEvidenceCount), bytes: Math.min(config?.maxBytes ?? 2 * 1024 * 1024, budget.maxEvidenceBytes), age: config?.maxAgeMs ?? 300_000, before: config?.beforeCount ?? 100, after: config?.afterCount ?? 100 }
+    return {
+      events: Math.min(config?.maxEvents ?? 1000, budget.maxEvidenceCount),
+      bytes: Math.min(config?.maxBytes ?? 2 * 1024 * 1024, budget.maxEvidenceBytes),
+      age: config?.maxAgeMs ?? 300_000,
+      before: config?.beforeCount ?? 100,
+      after: config?.afterCount ?? 100,
+    }
   }
 
   function schedulePersist() {
@@ -158,7 +199,9 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       kind: event.kind,
       timestamp: Date.now(),
       requestId: event.requestId,
-      errorId: event.kind === 'error' || (event.kind === 'request' && event.data.success === false) ? event.errorId ?? core.id.uuid() : event.errorId,
+      errorId: event.kind === 'error' || (event.kind === 'request' && event.data.success === false)
+        ? event.errorId ?? core.id.uuid()
+        : event.errorId,
       data: sanitizeFeedbackData(event.data),
     })
     if (!entry.success)
@@ -191,8 +234,17 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     if (item.kind === 'error' || (item.kind === 'request' && item.data.success === false)) {
       lastError = item
       const before = buffer.filter(entry => (entry.kind === 'log' || entry.kind === 'error') && entry.id !== item.id)
-      const evidence = [...before.slice(Math.max(0, before.length - bounds.before)), item]
-      errorWindows.push({ anchor: item, evidence, after: 0, deadline: item.timestamp + (config.afterTimeoutMs ?? 30_000), bytes: new TextEncoder().encode(JSON.stringify(evidence)).byteLength })
+      const evidence = [
+        ...before.slice(Math.max(0, before.length - bounds.before)),
+        item,
+      ]
+      errorWindows.push({
+        anchor: item,
+        evidence,
+        after: 0,
+        deadline: item.timestamp + (config.afterTimeoutMs ?? 30_000),
+        bytes: new TextEncoder().encode(JSON.stringify(evidence)).byteLength,
+      })
       void captureKeyScreenshot()
     }
     errorWindows = errorWindows.filter(window => window.anchor.timestamp >= Date.now() - bounds.age)
@@ -227,21 +279,52 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     try {
       if (config || closePromise)
         await close()
-      if (typeof window === 'undefined' || !input.appId || !input.actions || ['submit', 'appendEvidence', 'completeCollection', 'upload'].some(key => typeof input.actions[key as keyof typeof input.actions] !== 'function'))
+      if (typeof window === 'undefined' || !input.appId || !input.actions || [
+        'submit',
+        'appendEvidence',
+        'completeCollection',
+        'upload',
+      ].some(key => typeof input.actions[key as keyof typeof input.actions] !== 'function')) {
         return failure('INVALID_INPUT')
-      const numeric = [input.maxEvents, input.maxBytes, input.maxAgeMs, input.beforeCount, input.afterCount, input.afterTimeoutMs, input.screenshotTimeoutMs, input.maxKeyScreenshots, input.keyScreenshotThrottleMs]
+      }
+      const numeric = [
+        input.maxEvents,
+        input.maxBytes,
+        input.maxAgeMs,
+        input.beforeCount,
+        input.afterCount,
+        input.afterTimeoutMs,
+        input.screenshotTimeoutMs,
+        input.maxKeyScreenshots,
+        input.keyScreenshotThrottleMs,
+      ]
       if (numeric.some(value => value !== undefined && (!Number.isSafeInteger(value) || value < 0)) || (input.persistDraft && !input.persistenceKey))
         return failure('INVALID_INPUT')
       if (input.replayStart !== undefined && !['init', 'prepare'].includes(input.replayStart))
         return failure('INVALID_INPUT')
-      if (!FeedbackSubmitInputSchema.pick({ appId: true, appVersion: true, buildId: true, commit: true }).safeParse({ appId: input.appId, appVersion: input.appVersion, buildId: input.buildId, commit: input.commit }).success)
+      if (!FeedbackSubmitInputSchema.pick({
+        appId: true,
+        appVersion: true,
+        buildId: true,
+        commit: true,
+      }).safeParse({
+        appId: input.appId,
+        appVersion: input.appVersion,
+        buildId: input.buildId,
+        commit: input.commit,
+      }).success) {
         return failure('INVALID_INPUT')
+      }
       const initVersion = sessionVersion
-      const policy = input.actions.policy ? await input.actions.policy().catch(() => failure('OPERATION_FAILED')) : ok(input.budget ?? resolveFeedbackBudget())
+      const policy = input.actions.policy
+        ? await input.actions.policy().catch(() => failure('OPERATION_FAILED'))
+        : ok(input.budget ?? resolveFeedbackBudget())
       if (initVersion !== sessionVersion)
         return failure('NOT_INITIALIZED')
       policyVerified = policy.success
-      budget = FeedbackBudgetSchema.parse(policy.success ? policy.data : input.budget ?? resolveFeedbackBudget())
+      budget = FeedbackBudgetSchema.parse(policy.success
+        ? policy.data
+        : input.budget ?? resolveFeedbackBudget())
       if (!policy.success)
         missing.add('server-policy-unavailable')
       config = input
@@ -287,16 +370,43 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       unsubscribeLogger = core.logger.observe((entry) => {
         if (entry.context.module === 'feedback' || entry.context.feedback === true)
           return
-        record({ kind: ['error', 'fatal'].includes(entry.level) ? 'error' : 'log', requestId: typeof entry.context.requestId === 'string' ? entry.context.requestId : typeof entry.context.traceId === 'string' ? entry.context.traceId : undefined, data: { level: entry.level, message: entry.message, context: entry.context } })
+        record({
+          kind: ['error', 'fatal'].includes(entry.level)
+            ? 'error'
+            : 'log',
+          requestId: typeof entry.context.requestId === 'string'
+            ? entry.context.requestId
+            : typeof entry.context.traceId === 'string'
+              ? entry.context.traceId
+              : undefined,
+          data: { level: entry.level, message: entry.message, context: entry.context },
+        })
       })
-      listen('error', event => record({ kind: 'error', data: { message: event.message, stack: event.error instanceof Error ? event.error.stack : undefined, filename: feedbackPageUrl(event.filename || location.href), line: event.lineno, column: event.colno } }))
-      listen('unhandledrejection', event => record({ kind: 'error', data: { reason: event.reason } }))
+      listen('error', event => record({
+        kind: 'error',
+        data: {
+          message: event.message,
+          stack: event.error instanceof Error
+            ? event.error.stack
+            : undefined,
+          filename: feedbackPageUrl(event.filename || location.href),
+          line: event.lineno,
+          column: event.colno,
+        },
+      }))
+      listen('unhandledrejection', event => record({
+        kind: 'error',
+        data: { reason: event.reason },
+      }))
       const click = (event: MouseEvent) => {
         if (!(event.target instanceof Element) || event.target.closest('[data-feedback-ignore]'))
           return
         const target = event.target.closest('[data-feedback-action],button,a')
         if (target && !target.closest('[data-feedback-private]')) {
-          record({ kind: 'interaction', data: { action: target.getAttribute('data-feedback-action') ?? target.tagName.toLowerCase(), route: location.pathname } })
+          record({
+            kind: 'interaction',
+            data: { action: target.getAttribute('data-feedback-action') ?? target.tagName.toLowerCase(), route: location.pathname },
+          })
           if (target.hasAttribute('data-feedback-action'))
             void captureKeyScreenshot()
         }
@@ -307,7 +417,12 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         for (const level of ['debug', 'info', 'warn', 'error'] as const) {
           const original = globalThis.console[level]
           const wrapper: typeof original = (...args) => {
-            record({ kind: level === 'error' ? 'error' : 'log', data: { channel: 'console', level, arguments: args } })
+            record({
+              kind: level === 'error'
+                ? 'error'
+                : 'log',
+              data: { channel: 'console', level, arguments: args },
+            })
             original.apply(globalThis.console, args)
           }
           globalThis.console[level] = wrapper
@@ -381,7 +496,14 @@ export function createFeedbackClient(): FeedbackBrowserClient {
             missing.add('replay-snapshot-truncated')
             return
           }
-          const safe = FeedbackEvidenceInputSchema.safeParse({ id: core.id.uuid(), source, sequence: ++sequence, kind: 'replay', timestamp: Date.now(), data: { event: payload } })
+          const safe = FeedbackEvidenceInputSchema.safeParse({
+            id: core.id.uuid(),
+            source,
+            sequence: ++sequence,
+            kind: 'replay',
+            timestamp: Date.now(),
+            data: { event: payload },
+          })
           if (!safe.success)
             return
           replayChunks.at(-1)?.push(safe.data)
@@ -508,13 +630,23 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     bufferBytes = new TextEncoder().encode(JSON.stringify(buffer)).byteLength
     errorWindows = errorWindows.filter(window => window.anchor.timestamp >= now - limits().age)
     const frozenWindow = errorWindows.at(-1)
-    const anchor = frozenWindow?.anchor ?? (lastError && lastError.timestamp >= now - limits().age && buffer.some(item => item.id === lastError?.id) ? lastError : undefined)
+    const anchor = frozenWindow?.anchor ?? (lastError && lastError.timestamp >= now - limits().age && buffer.some(item => item.id === lastError?.id)
+      ? lastError
+      : undefined)
     const logs = buffer.filter(item => item.kind === 'log' || item.kind === 'error')
-    const anchorIndex = anchor ? logs.findIndex(item => item.id === anchor.id) : logs.length
-    const anchorIndexes = anchor ? logs.map((item, index) => item.kind === 'error' ? index : -1).filter(index => index >= 0).slice(-10) : []
+    const anchorIndex = anchor
+      ? logs.findIndex(item => item.id === anchor.id)
+      : logs.length
+    const anchorIndexes = anchor
+      ? logs.map((item, index) => item.kind === 'error'
+          ? index
+          : -1).filter(index => index >= 0).slice(-10)
+      : []
     const selectedIds = new Set<string>()
     const selected = anchor
-      ? (errorWindows.length ? errorWindows.flatMap(window => window.evidence) : anchorIndexes.flatMap(index => logs.slice(Math.max(0, index - limits().before), index + 1 + limits().after))).filter((item) => {
+      ? (errorWindows.length
+          ? errorWindows.flatMap(window => window.evidence)
+          : anchorIndexes.flatMap(index => logs.slice(Math.max(0, index - limits().before), index + 1 + limits().after))).filter((item) => {
           if (selectedIds.has(item.id))
             return false
           selectedIds.add(item.id)
@@ -527,7 +659,20 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     if (closing || config !== activeConfig)
       return failure('NOT_INITIALIZED')
     keyScreenshots = keyScreenshots.filter(item => item.timestamp >= now - limits().age)
-    draft = { submissionId: core.id.uuid(), anchorTime: anchor?.timestamp ?? now, anchorKind: anchor ? 'error' : 'feedback', errorId: anchor?.errorId, evidence: [...selected, ...other, ...replayChunks.flat()].sort((a, b) => a.sequence - b.sequence), attachments: [], missing: [...missing], expiresAt: now + 86_400_000 }
+    draft = {
+      submissionId: core.id.uuid(),
+      anchorTime: anchor?.timestamp ?? now,
+      anchorKind: anchor ? 'error' : 'feedback',
+      errorId: anchor?.errorId,
+      evidence: [
+        ...selected,
+        ...other,
+        ...replayChunks.flat(),
+      ].sort((a, b) => a.sequence - b.sequence),
+      attachments: [],
+      missing: [...missing],
+      expiresAt: now + 86_400_000,
+    }
     while (draft.evidence.length > limits().events || new TextEncoder().encode(JSON.stringify(draft.evidence)).byteLength > limits().bytes) {
       draft.evidence.shift()
       missing.add('browser-draft-truncated')
@@ -535,7 +680,9 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     draftBytes = new TextEncoder().encode(JSON.stringify(draft.evidence)).byteLength
     if (dropped)
       draft.missing.push(`browser-buffer-truncated:${dropped}`)
-    afterCount = frozenWindow?.after ?? (anchor ? Math.max(0, logs.length - anchorIndex - 1) : 0)
+    afterCount = frozenWindow?.after ?? (anchor
+      ? Math.max(0, logs.length - anchorIndex - 1)
+      : 0)
     deadline = (anchor?.timestamp ?? now) + (config.afterTimeoutMs ?? 30_000)
     recordEnvironment()
     if (config.screenshot !== false) {
@@ -544,7 +691,9 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       if (closing || config !== activeConfig || draft !== current)
         return failure('NOT_INITIALIZED')
       if (!captured.success) {
-        current.missing.push(captured.error.code === HaiFeedbackError.LIMIT_EXCEEDED.code ? 'screenshot-size-limit-exceeded' : 'screenshot-unavailable')
+        current.missing.push(captured.error.code === HaiFeedbackError.LIMIT_EXCEEDED.code
+          ? 'screenshot-size-limit-exceeded'
+          : 'screenshot-unavailable')
         current.missing.push(`screenshot-error:${captured.error.message.slice(0, 300)}`)
       }
     }
@@ -572,12 +721,29 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   function recordEnvironment() {
     if (!config)
       return
-    record({ kind: 'environment', data: { appId: config.appId, appVersion: config.appVersion, buildId: config.buildId, commit: config.commit, url: feedbackPageUrl(location.href), browser: navigator.userAgent, language: navigator.language, timezone: new Intl.DateTimeFormat().resolvedOptions().timeZone, viewport: { width: innerWidth, height: innerHeight, pixelRatio: devicePixelRatio }, online: navigator.onLine, cookies: collectFeedbackCookies(document.cookie, config.cookieAllowlist ?? []) } })
+    record({
+      kind: 'environment',
+      data: {
+        appId: config.appId,
+        appVersion: config.appVersion,
+        buildId: config.buildId,
+        commit: config.commit,
+        url: feedbackPageUrl(location.href),
+        browser: navigator.userAgent,
+        language: navigator.language,
+        timezone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
+        viewport: { width: innerWidth, height: innerHeight, pixelRatio: devicePixelRatio },
+        online: navigator.onLine,
+        cookies: collectFeedbackCookies(document.cookie, config.cookieAllowlist ?? []),
+      },
+    })
   }
 
   /** Hash 路由只在会话内用于换页识别，不把片段中的参数写入诊断材料。 */
   function pageIdentity() {
-    return `${location.origin}${location.pathname}${location.hash.startsWith('#/') ? location.hash.split('?')[0] : ''}`
+    return `${location.origin}${location.pathname}${location.hash.startsWith('#/')
+      ? location.hash.split('?')[0]
+      : ''}`
   }
 
   async function captureScreenshot(attachmentId?: string, name?: string): Promise<HaiResult<void>> {
@@ -585,7 +751,9 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       return failure('NOT_INITIALIZED')
     const current = draft
     const activeConfig = config
-    const previous = attachmentId ? current.attachments.find(item => item.id === attachmentId) : undefined
+    const previous = attachmentId
+      ? current.attachments.find(item => item.id === attachmentId)
+      : undefined
     const previousChecksum = previous?.checksum
     if (current.submission)
       return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
@@ -597,18 +765,28 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       const bytes = await takeScreenshot(activeConfig)
       if (bytes.byteLength > budget.maxAttachmentBytes)
         return failure('LIMIT_EXCEEDED')
-      const previousName = previous && (/\.[^.]+$/.test(previous.name) ? previous.name.replace(/\.[^.]+$/, '.png') : `${previous.name}.png`)
+      const previousName = previous && (/\.[^.]+$/.test(previous.name)
+        ? previous.name.replace(/\.[^.]+$/, '.png')
+        : `${previous.name}.png`)
       const image = await attachment(name ?? previousName ?? `screenshot-${core.id.uuid()}.png`, 'image/png', bytes)
       if (closing || config !== activeConfig || draft !== current || current.submission || (previous && (!current.attachments.includes(previous) || previous.checksum !== previousChecksum)))
         return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
-      if (current.attachments.reduce((total, item) => total + (item === previous ? 0 : item.size), image.size) > budget.maxAttachmentsBytes)
+      if (current.attachments.reduce((total, item) => total + (item === previous
+        ? 0
+        : item.size), image.size) > budget.maxAttachmentsBytes) {
         return failure('LIMIT_EXCEEDED')
-      if (previous)
-        current.attachments = current.attachments.map(item => item === previous ? { ...image, id: previous.id } : item)
-      else if (current.attachments.length < budget.maxAttachmentCount)
+      }
+      if (previous) {
+        current.attachments = current.attachments.map(item => item === previous
+          ? { ...image, id: previous.id }
+          : item)
+      }
+      else if (current.attachments.length < budget.maxAttachmentCount) {
         current.attachments.unshift(image)
-      else
+      }
+      else {
         return failure('LIMIT_EXCEEDED')
+      }
       if (!name)
         recordEnvironment()
       preparedPage = pageIdentity()
@@ -624,7 +802,11 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     if (!config || closing)
       return failure('NOT_INITIALIZED')
     const activeConfig = config
-    const prepared = preparePromise ? await preparePromise : draft ? ok(draft) : await prepare()
+    const prepared = preparePromise
+      ? await preparePromise
+      : draft
+        ? ok(draft)
+        : await prepare()
     if (!prepared.success)
       return prepared
     const current = prepared.data
@@ -646,7 +828,15 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         }
         draftBytes = new TextEncoder().encode(JSON.stringify(current.evidence)).byteLength
       }
-      const fingerprint = await digestHex(new TextEncoder().encode(JSON.stringify({ description: sanitizeFeedbackData({ text: input.description ?? '' }).text, category: input.category ?? '', contact: sanitizeFeedbackData({ text: input.contact ?? '' }).text, files: (input.files ?? []).map(item => ({ name: item.name, size: item.size, lastModified: item.lastModified })), removed: [...(input.removedAttachmentIds ?? [])].sort() })))
+      const fingerprint = await digestHex(new TextEncoder().encode(JSON.stringify({
+        description: sanitizeFeedbackData({ text: input.description ?? '' }).text,
+        category: input.category ?? '',
+        contact: sanitizeFeedbackData({ text: input.contact ?? '' }).text,
+        files: (input.files ?? []).map(item => ({ name: item.name, size: item.size, lastModified: item.lastModified })),
+        removed: [
+          ...(input.removedAttachmentIds ?? []),
+        ].sort(),
+      })))
       if (closing || config !== activeConfig || draft !== current)
         return failure('NOT_INITIALIZED')
       if (current.submission && current.userInputFingerprint && fingerprint !== current.userInputFingerprint)
@@ -660,7 +850,22 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       }
       if (closing || config !== activeConfig || draft !== current)
         return failure('NOT_INITIALIZED')
-      current.submission ??= FeedbackSubmitInputSchema.parse({ submissionId: current.submissionId, appId: config.appId, appVersion: config.appVersion, buildId: config.buildId, commit: config.commit, description: typeof input.description === 'string' ? String(sanitizeFeedbackData({ text: input.description }).text) : undefined, category: input.category, contact: input.contact, url: feedbackPageUrl(location.href), anchor: { kind: current.anchorKind, timestamp: current.anchorTime, errorId: current.errorId }, evidence: current.evidence, attachments: current.attachments.map(({ bytes: _bytes, ...metadata }) => metadata) })
+      current.submission ??= FeedbackSubmitInputSchema.parse({
+        submissionId: current.submissionId,
+        appId: config.appId,
+        appVersion: config.appVersion,
+        buildId: config.buildId,
+        commit: config.commit,
+        description: typeof input.description === 'string'
+          ? String(sanitizeFeedbackData({ text: input.description }).text)
+          : undefined,
+        category: input.category,
+        contact: input.contact,
+        url: feedbackPageUrl(location.href),
+        anchor: { kind: current.anchorKind, timestamp: current.anchorTime, errorId: current.errorId },
+        evidence: current.evidence,
+        attachments: current.attachments.map(({ bytes: _bytes, ...metadata }) => metadata),
+      })
       current.userInputFingerprint = fingerprint
       schedulePersist()
       const result = await activeConfig.actions.submit(current.submission)
@@ -691,7 +896,11 @@ export function createFeedbackClient(): FeedbackBrowserClient {
           return ok(undefined)
         if (uploadedIds.has(item.id))
           continue
-        const result = await config.actions.upload({ id: draft.report.id, attachmentId: item.id, dataBase64: base64(item.bytes) })
+        const result = await config.actions.upload({
+          id: draft.report.id,
+          attachmentId: item.id,
+          dataBase64: base64(item.bytes),
+        })
         if (!result.success)
           return result
         uploadedIds.add(item.id)
@@ -717,7 +926,15 @@ export function createFeedbackClient(): FeedbackBrowserClient {
           return ok(undefined)
       }
       if (collectionSealed && !discardOnClose) {
-        const result = await config.actions.completeCollection({ id: draft.report.id, missing: [...new Set([...draft.missing, ...missing])] })
+        const result = await config.actions.completeCollection({
+          id: draft.report.id,
+          missing: [
+            ...new Set([
+              ...draft.missing,
+              ...missing,
+            ]),
+          ],
+        })
         if (!result.success)
           return result
         collectionFinished = true
@@ -755,7 +972,9 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         const status = result.error.httpStatus
         // 权限/输入/资源拒绝等待用户处理；临时故障最多再试五次，避免闲置页面持续刷错。
         const rejected = status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429
-        nextBackgroundFlush = rejected || flushFailures >= 6 ? Number.POSITIVE_INFINITY : Date.now() + 1000 * 2 ** (flushFailures - 1)
+        nextBackgroundFlush = rejected || flushFailures >= 6
+          ? Number.POSITIVE_INFINITY
+          : Date.now() + 1000 * 2 ** (flushFailures - 1)
       }
       return result
     }).finally(() => {
@@ -774,10 +993,15 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     const originalBytes = item.bytes
     try {
       const bytes = await annotateFeedbackImage(originalBytes, mark)
-      const name = /\.[^.]+$/.test(item.name) ? item.name.replace(/\.[^.]+$/, '.png') : `${item.name}.png`
+      const name = /\.[^.]+$/.test(item.name)
+        ? item.name.replace(/\.[^.]+$/, '.png')
+        : `${item.name}.png`
       const updated = await attachment(name, 'image/png', bytes)
-      if (updated.size > budget.maxAttachmentBytes || current.attachments.reduce((sum, file) => sum + (file === item ? 0 : file.size), updated.size) > budget.maxAttachmentsBytes)
+      if (updated.size > budget.maxAttachmentBytes || current.attachments.reduce((sum, file) => sum + (file === item
+        ? 0
+        : file.size), updated.size) > budget.maxAttachmentsBytes) {
         return failure('LIMIT_EXCEEDED')
+      }
       // 渲染/摘要结束后再原子替换；提交、关闭、删除或另一标注不能被旧异步结果覆盖。
       if (closing || draft !== current || current.submission || !current.attachments.includes(item) || item.bytes !== originalBytes)
         return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
@@ -868,7 +1092,9 @@ export function createFeedbackClient(): FeedbackBrowserClient {
             return failure('INVALID_INPUT', undefined, feedbackM('feedback_unsupportedAttachmentType'))
           const bytes = contentType === 'application/json'
             ? new TextEncoder().encode(JSON.stringify(sanitizeFeedbackData(JSON.parse(await file.text()))))
-            : contentType.startsWith('text/') ? new TextEncoder().encode(sanitizeFeedbackText(await file.text())) : new Uint8Array(await file.arrayBuffer())
+            : contentType.startsWith('text/')
+              ? new TextEncoder().encode(sanitizeFeedbackText(await file.text()))
+              : new Uint8Array(await file.arrayBuffer())
           if (bytes.byteLength > budget.maxAttachmentBytes)
             return failure('LIMIT_EXCEEDED')
           const item = await attachment(file.name, contentType, bytes)
@@ -876,7 +1102,33 @@ export function createFeedbackClient(): FeedbackBrowserClient {
             attachments.push(item)
         }
       }
-      return createFeedbackBundle({ maxBytes: budget.maxTotalBytes, report: { ...(draft.report ?? { id: draft.submissionId, appId: config?.appId, appVersion: config?.appVersion, buildId: config?.buildId, commit: config?.commit, url: draft.evidence.filter(item => item.kind === 'environment').at(-1)?.data.url, anchor: { kind: draft.anchorKind, timestamp: draft.anchorTime }, evidenceRevision: 1 }), ...sanitizeFeedbackData({ description: input.description ?? draft.report?.description ?? '', category: input.category, contact: input.contact }) }, evidence: draft.evidence, attachments: attachments.filter(item => !input.removedAttachmentIds?.includes(item.id)), missing: [...new Set([...draft.missing, ...missing, ...(!draft.report ? ['server-evidence-not-obtained', 'feedback-not-yet-accepted'] : [])])] })
+      return createFeedbackBundle({
+        maxBytes: budget.maxTotalBytes,
+        report: {
+          ...(draft.report ?? {
+            id: draft.submissionId,
+            appId: config?.appId,
+            appVersion: config?.appVersion,
+            buildId: config?.buildId,
+            commit: config?.commit,
+            url: draft.evidence.filter(item => item.kind === 'environment').at(-1)?.data.url,
+            anchor: { kind: draft.anchorKind, timestamp: draft.anchorTime },
+            evidenceRevision: 1,
+          }),
+          ...sanitizeFeedbackData({ description: input.description ?? draft.report?.description ?? '', category: input.category, contact: input.contact }),
+        },
+        evidence: draft.evidence,
+        attachments: attachments.filter(item => !input.removedAttachmentIds?.includes(item.id)),
+        missing: [
+          ...new Set([
+            ...draft.missing,
+            ...missing,
+            ...(!draft.report
+              ? ['server-evidence-not-obtained', 'feedback-not-yet-accepted']
+              : []),
+          ]),
+        ],
+      })
     }
     catch (cause) {
       return failure('OPERATION_FAILED', cause)
@@ -950,17 +1202,34 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     nextBackgroundFlush = 0
   }
 
-  return { init, prepare, pause, captureScreenshot, submit, flush, record, getDraft: () => draft, getView, releasePreviews, annotate, addFiles, exportDraft, async saveDraft(input) {
-    const session = config
-    const exported = await exportDraft(input)
-    if (!exported.success)
-      return exported
-    if (closing || !session || session !== config)
-      return failure('NOT_INITIALIZED')
-    return saveFeedbackFile(exported.data, `feedback-${draft?.submissionId ?? 'local'}.zip`, 'application/zip', saveController.signal)
-  }, close, get budget() {
-    return { ...budget }
-  } }
+  return {
+    init,
+    prepare,
+    pause,
+    captureScreenshot,
+    submit,
+    flush,
+    record,
+    getDraft: () => draft,
+    getView,
+    releasePreviews,
+    annotate,
+    addFiles,
+    exportDraft,
+    async saveDraft(input) {
+      const session = config
+      const exported = await exportDraft(input)
+      if (!exported.success)
+        return exported
+      if (closing || !session || session !== config)
+        return failure('NOT_INITIALIZED')
+      return saveFeedbackFile(exported.data, `feedback-${draft?.submissionId ?? 'local'}.zip`, 'application/zip', saveController.signal)
+    },
+    close,
+    get budget() {
+      return { ...budget }
+    },
+  }
 }
 
 /**
@@ -977,16 +1246,19 @@ async function bounded<T>(promise: Promise<T>, ms: number, controller: AbortCont
   let timer: ReturnType<typeof setTimeout> | undefined
   let aborted: (() => void) | undefined
   try {
-    return await Promise.race([promise, new Promise<never>((_resolve, reject) => {
-      aborted = () => reject(new Error('Capture cancelled'))
-      if (controller.signal.aborted)
-        aborted()
-      else controller.signal.addEventListener('abort', aborted, { once: true })
-      timer = setTimeout(() => {
-        reject(new Error('Capture timed out'))
-        controller.abort()
-      }, ms)
-    })])
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        aborted = () => reject(new Error('Capture cancelled'))
+        if (controller.signal.aborted)
+          aborted()
+        else controller.signal.addEventListener('abort', aborted, { once: true })
+        timer = setTimeout(() => {
+          reject(new Error('Capture timed out'))
+          controller.abort()
+        }, ms)
+      }),
+    ])
   }
   finally {
     clearTimeout(timer)
@@ -997,12 +1269,21 @@ async function bounded<T>(promise: Promise<T>, ms: number, controller: AbortCont
 
 async function attachment(name: string, contentType: string, bytes: Uint8Array): Promise<FeedbackClientAttachment> {
   const checksum = await digestHex(bytes)
-  return { id: core.id.uuid(), name: String(sanitizeFeedbackData({ text: name }).text).slice(0, 255), contentType, size: bytes.byteLength, checksum, bytes }
+  return {
+    id: core.id.uuid(),
+    name: String(sanitizeFeedbackData({ text: name }).text).slice(0, 255),
+    contentType,
+    size: bytes.byteLength,
+    checksum,
+    bytes,
+  }
 }
 
 async function digestHex(bytes: Uint8Array): Promise<string> {
   const digest = await globalThis.crypto.subtle.digest('SHA-256', new Uint8Array(bytes))
-  return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('')
+  return [
+    ...new Uint8Array(digest),
+  ].map(value => value.toString(16).padStart(2, '0')).join('')
 }
 
 function base64(bytes: Uint8Array): string {

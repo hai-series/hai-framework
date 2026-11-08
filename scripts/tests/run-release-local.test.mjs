@@ -34,12 +34,30 @@ afterEach(() => {
 
 function run(extraEnv = {}) {
   // Windows可同时出现NPM_EXECPATH/npm_execpath，先按大小写无关删除全部受控键，再注入唯一夹具值。
-  const controlled = new Set(['npm_execpath', 'ci', 'hai_release_test_log', 'hai_release_test_inherited', 'hai_release_test_fail_index'])
+  const controlled = new Set([
+    'npm_execpath',
+    'ci',
+    'hai_release_test_log',
+    'hai_release_test_inherited',
+    'hai_release_test_fail_index',
+  ])
   const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !controlled.has(key.toLowerCase())))
-  const overrides = new Map(Object.entries({ NPM_EXECPATH: fixture, CI: 'false', HAI_RELEASE_TEST_LOG: log, HAI_RELEASE_TEST_INHERITED: 'preserved', ...extraEnv }).map(([key, value]) => [key.toLowerCase(), [key, value]]))
+  const overrides = new Map(Object.entries({
+    NPM_EXECPATH: fixture,
+    CI: 'false',
+    HAI_RELEASE_TEST_LOG: log,
+    HAI_RELEASE_TEST_INHERITED: 'preserved',
+    ...extraEnv,
+  }).map(([key, value]) => [
+    key.toLowerCase(),
+    [key, value],
+  ]))
   return spawnSync(process.execPath, [runner], {
     encoding: 'utf8',
-    env: { ...inherited, ...Object.fromEntries(overrides.values()) },
+    env: {
+      ...inherited,
+      ...Object.fromEntries(overrides.values()),
+    },
     windowsHide: true,
     timeout: 30_000,
   })
@@ -56,7 +74,14 @@ describe('cross-platform local release acceptance', () => {
       ['lint'],
       ['build'],
       ['test'],
-      ['--filter', 'admin-console', 'exec', 'playwright', 'install', 'chrome'],
+      [
+        '--filter',
+        'admin-console',
+        'exec',
+        'playwright',
+        'install',
+        'chrome',
+      ],
       ['e2e'],
       ['--filter', '@h-ai/cli', 'test:deploy-gates'],
     ])
@@ -64,14 +89,18 @@ describe('cross-platform local release acceptance', () => {
   })
 
   it.each([0, 3, 7])('preserves the first failure code and never starts later gates when step %i fails', (index) => {
-    const result = run({ HAI_RELEASE_TEST_FAIL_INDEX: String(index) })
+    const result = run({
+      HAI_RELEASE_TEST_FAIL_INDEX: String(index),
+    })
     expect(result.status).toBe(23)
     expect(result.stderr).toContain('Fixture failure before later gates')
     expect(readFileSync(log, 'utf8').trim().split('\n')).toHaveLength(index + 1)
   })
 
   it('reports a missing pnpm executable as failure without advancing to later gates', () => {
-    const result = run({ npm_execpath: path.join(directory, 'missing-pnpm.exe') })
+    const result = run({
+      npm_execpath: path.join(directory, 'missing-pnpm.exe'),
+    })
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('Failed to start pnpm')
   })

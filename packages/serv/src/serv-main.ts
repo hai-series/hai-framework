@@ -8,6 +8,7 @@
  *
  */
 
+import type { ServFunctions } from './serv-types.js'
 import { toFetch } from './adapters/serv-adapter-fetch.js'
 import { listen } from './adapters/serv-adapter-node.js'
 import {
@@ -54,7 +55,7 @@ export type {
  * if (!response.ok) throw new Error('Health request failed')
  * ```
  */
-export const serv = {
+export const serv: ServFunctions = {
   // 应用与上下文
   createApp,
   parseRequestContext,

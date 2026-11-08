@@ -54,7 +54,13 @@ await audit.log({
 
 // 4. 使用便捷方法
 await audit.helper.login('user_1', '127.0.0.1')
-await audit.helper.crud({ userId: 'user_1', action: 'create', resource: 'users', resourceId: 'user_2', details: { name: '张三' } })
+await audit.helper.crud({
+  userId: 'user_1',
+  action: 'create',
+  resource: 'users',
+  resourceId: 'user_2',
+  details: { name: '张三' }
+})
 
 // 5. 查询日志
 const logs = await audit.list({ pageSize: 20, action: 'login' })
@@ -165,7 +171,10 @@ backup.schedule は enabled、5項目 cron（既定 `0 2 * * *`）、IANA timezo
 ```ts
 const plan = audit.schedulerPlan
 if (plan) {
-  const initialized = await scheduler.init({ ...schedulerSettings, ...plan })
+  const initialized = await scheduler.init({
+    ...schedulerSettings,
+    ...plan
+  })
   if (!initialized.success)
     throw new Error(initialized.error.message)
   const started = scheduler.start()

@@ -23,5 +23,7 @@ const getMessage = core.i18n.createMessageGetter(messages)
  * ```
  */
 export function authMessage(key: keyof typeof messages['en-US']): string {
-  return getMessage(key, { locale: getGlobalLocale() })
+  return getMessage(key, {
+    locale: getGlobalLocale(),
+  })
 }

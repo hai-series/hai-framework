@@ -28,7 +28,10 @@ export async function fetchWithTimeout(input: string, init: RequestInit, timeout
   return fetch(input, {
     ...init,
     signal: init.signal
-      ? AbortSignal.any([init.signal, AbortSignal.timeout(timeoutMs)])
+      ? AbortSignal.any([
+          init.signal,
+          AbortSignal.timeout(timeoutMs),
+        ])
       : AbortSignal.timeout(timeoutMs),
   })
 }

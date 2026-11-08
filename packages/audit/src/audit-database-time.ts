@@ -18,7 +18,9 @@ import { HaiAuditError } from './audit-types.js'
 export function auditClockSql(): string {
   return reldb.config?.type === 'sqlite'
     ? 'CAST(ROUND((julianday(\'now\')-2440587.5)*86400000) AS INTEGER)'
-    : reldb.config?.type === 'postgresql' ? 'CAST(EXTRACT(EPOCH FROM clock_timestamp())*1000 AS BIGINT)' : 'CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS SIGNED)'
+    : reldb.config?.type === 'postgresql'
+      ? 'CAST(EXTRACT(EPOCH FROM clock_timestamp())*1000 AS BIGINT)'
+      : 'CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS SIGNED)'
 }
 
 /**

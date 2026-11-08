@@ -1,7 +1,7 @@
 {
   "name": "desktop-app",
   "type": "module",
-  "version": "1.0.0-beta.18",
+  "version": "1.0.0-beta.19",
   "private": true,
   "description": "hai Agent Framework - 桌面应用示例（Tauri v2 + Svelte 5 + Vite + @h-ai/api-client）",
   "keywords": [
@@ -12,6 +12,9 @@
     "vite",
     "api-client"
   ],
+  "imports": {
+    "#lib/*": "./src/lib/*"
+  },
   "engines": {
     "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
   },

@@ -7,7 +7,10 @@ describe('serv transport time config', () => {
     expect(ServConfigSchema.parse({ transport }).transport).toMatchObject(transport)
   })
 
-  it.each([{ maxFutureSkewSeconds: -1 }, { maxRequestAgeSeconds: 601 }])('拒绝非法传输时间范围 %j', (transport) => {
+  it.each([
+    { maxFutureSkewSeconds: -1 },
+    { maxRequestAgeSeconds: 601 },
+  ])('拒绝非法传输时间范围 %j', (transport) => {
     expect(ServConfigSchema.safeParse({ transport }).success).toBe(false)
   })
 })
@@ -50,7 +53,9 @@ describe('resolveServServerConfig', () => {
   })
 
   it('parses server from _serv.yml style config', () => {
-    expect(resolveServConfig({ server: { host: '0.0.0.0', port: 4000 } }).server).toEqual({ host: '0.0.0.0', port: 4000 })
+    expect(resolveServConfig({
+      server: { host: '0.0.0.0', port: 4000 },
+    }).server).toEqual({ host: '0.0.0.0', port: 4000 })
   })
 })
 
@@ -79,12 +84,33 @@ describe('resolveServHttpConfig', () => {
     expect(config.health).toBe(false)
   })
 
-  it.each(['/api/v1', '/v1', '/somepath/api/v1', '/some.path/api/v1'])('接受完整 API 前缀 %s', (apiPrefix) => {
-    expect(ServConfigSchema.parse({ http: { apiPrefix } }).http.apiPrefix).toBe(apiPrefix)
+  it.each([
+    '/api/v1',
+    '/v1',
+    '/somepath/api/v1',
+    '/some.path/api/v1',
+  ])('接受完整 API 前缀 %s', (apiPrefix) => {
+    expect(ServConfigSchema.parse({
+      http: { apiPrefix },
+    }).http.apiPrefix).toBe(apiPrefix)
   })
 
-  it.each(['api/v1', '//host/api', '/x//api', '/x/../api', '/x/./api', '/x/%2e%2e/api', '/x?query', '/x#fragment', '/x y', '/', '/somepath/api/v1/'])('拒绝不合法 API 前缀 %s', (apiPrefix) => {
-    expect(ServConfigSchema.safeParse({ http: { apiPrefix } }).success).toBe(false)
+  it.each([
+    'api/v1',
+    '//host/api',
+    '/x//api',
+    '/x/../api',
+    '/x/./api',
+    '/x/%2e%2e/api',
+    '/x?query',
+    '/x#fragment',
+    '/x y',
+    '/',
+    '/somepath/api/v1/',
+  ])('拒绝不合法 API 前缀 %s', (apiPrefix) => {
+    expect(ServConfigSchema.safeParse({
+      http: { apiPrefix },
+    }).success).toBe(false)
   })
 
   it('parses _serv.yml style config and fills top-level defaults', () => {
@@ -98,7 +124,13 @@ describe('resolveServHttpConfig', () => {
     expect(config.http.docs).toEqual({ path: '/docs' })
     expect(config.http.health).toEqual({ path: '/health', readyPath: '/ready' })
     expect(config.cors).toEqual({
-      allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Hai-Reauthentication', 'X-Hai-Terminal'],
+      allowedHeaders: [
+        'Authorization',
+        'Content-Type',
+        'X-Requested-With',
+        'X-Hai-Reauthentication',
+        'X-Hai-Terminal',
+      ],
       exposedHeaders: [],
       credentials: false,
     })

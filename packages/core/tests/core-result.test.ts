@@ -25,7 +25,10 @@ describe('core.result', () => {
   })
 
   it('ok 数据应该能正确读取', () => {
-    const obj = { name: 'test', items: [1, 2] }
+    const obj = {
+      name: 'test',
+      items: [1, 2],
+    }
     const result = ok(obj)
     if (result.success) {
       expect(result.data).toBe(obj) // 同引用

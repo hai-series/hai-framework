@@ -75,11 +75,15 @@ describe('core.i18n (node)', () => {
     expect(core.i18n.DEFAULT_LOCALES).toContainEqual({ code: 'ja-JP', label: '日本語' })
     core.i18n.setGlobalLocale('ja')
     expect(core.i18n.coreM('core_errorTimeout')).toBe('リクエストがタイムアウトしました')
-    expect(core.i18n.coreM('core_validationMinLength', { params: { field: '名前', min: 3 } }))
+    expect(core.i18n.coreM('core_validationMinLength', {
+      params: { field: '名前', min: 3 },
+    }))
       .toBe('名前は3文字以上で入力してください')
     expect(core.i18n.coreM('core_errorTimeout', { locale: 'en-US' })).toBe('Request timeout')
     expect(core.i18n.getGlobalLocale()).toBe('ja-JP')
-    expect(core.i18n.createMessageGetter({ 'zh-CN': { hello: '你好' } })('hello')).toBe('你好')
+    expect(core.i18n.createMessageGetter({
+      'zh-CN': { hello: '你好' },
+    })('hello')).toBe('你好')
   })
 
   it('createMessageGetter 应该处理 locale 回退与占位符保留', () => {
@@ -90,7 +94,9 @@ describe('core.i18n (node)', () => {
 
     // 全局 locale 不存在时应回退到默认语言
     core.i18n.setGlobalLocale('fr-FR')
-    expect(getMessage('greet', { params: { name: 'World' } })).toBe('你好 World，欢迎 {place}')
+    expect(getMessage('greet', {
+      params: { name: 'World' },
+    })).toBe('你好 World，欢迎 {place}')
   })
 
   it('createMessageGetter 应该读取全局 locale 并支持插值', () => {
@@ -100,10 +106,14 @@ describe('core.i18n (node)', () => {
     })
 
     core.i18n.setGlobalLocale('en-US')
-    expect(getMessage('hello', { params: { name: 'World' } })).toBe('Hello World')
+    expect(getMessage('hello', {
+      params: { name: 'World' },
+    })).toBe('Hello World')
 
     core.i18n.setGlobalLocale('zh-CN')
-    expect(getMessage('hello', { params: { name: '世界' } })).toBe('你好 世界')
+    expect(getMessage('hello', {
+      params: { name: '世界' },
+    })).toBe('你好 世界')
   })
 
   it('createMessageGetter 应该支持 locale 覆盖', () => {
@@ -144,7 +154,9 @@ describe('core.i18n (node)', () => {
 
   it('coreM 应该支持插值', () => {
     core.i18n.setGlobalLocale('zh-CN')
-    const msg = core.i18n.coreM('core_validationRequired', { params: { field: '用户名' } })
+    const msg = core.i18n.coreM('core_validationRequired', {
+      params: { field: '用户名' },
+    })
     expect(msg).toBe('用户名 不能为空')
   })
 })

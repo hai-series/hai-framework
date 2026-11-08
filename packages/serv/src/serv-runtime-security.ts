@@ -73,7 +73,9 @@ export function createRuntimeSecurityPolicy(
   if (production && (allowsEveryOrigin || configuredOrigins.length === 0))
     throw new Error('serv.cors.origin must contain explicit HTTP(S) origins in production')
 
-  const allowedOrigins = allowsEveryOrigin ? undefined : new Set(configuredOrigins)
+  const allowedOrigins = allowsEveryOrigin
+    ? undefined
+    : new Set(configuredOrigins)
   const allowedNativeOrigins = new Set(configuredNativeOrigins)
   return {
     allowOrigin: (origin) => {
@@ -154,7 +156,15 @@ function tryNormalizeNativeOrigin(value: string): string | undefined {
   catch {
     return undefined
   }
-  if (!['http:', 'https:', 'capacitor:', 'tauri:'].includes(url.protocol) || !url.hostname || url.username || url.password || !['', '/'].includes(url.pathname) || url.search || url.hash)
+  if (![
+    'http:',
+    'https:',
+    'capacitor:',
+    'tauri:',
+  ].includes(url.protocol) || !url.hostname || url.username || url.password || !['', '/'].includes(url.pathname) || url.search || url.hash) {
     return undefined
-  return ['capacitor:', 'tauri:'].includes(url.protocol) ? `${url.protocol}//${url.host}` : url.origin
+  }
+  return ['capacitor:', 'tauri:'].includes(url.protocol)
+    ? `${url.protocol}//${url.host}`
+    : url.origin
 }

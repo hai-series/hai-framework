@@ -195,11 +195,21 @@ describe('alipayConfigSchema', () => {
 })
 
 describe('stripeConfigSchema', () => {
-  it.each(['sk_test_key', 'sk_live_key', 'rk_test_key', 'rk_live_key'])('接受具有明确模式的服务端密钥 %s', (secretKey) => {
+  it.each([
+    'sk_test_key',
+    'sk_live_key',
+    'rk_test_key',
+    'rk_live_key',
+  ])('接受具有明确模式的服务端密钥 %s', (secretKey) => {
     expect(StripeConfigSchema.safeParse({ secretKey, successUrl: 'https://example.invalid/payment/success', webhookSecret: 'whsec_key' }).success).toBe(true)
   })
 
-  it.each(['pk_test_key', 'sk_unknown_key', 'sk_test_', 'sk_test_key with space'])('拒绝无法安全区分服务端模式的密钥 %s', (secretKey) => {
+  it.each([
+    'pk_test_key',
+    'sk_unknown_key',
+    'sk_test_',
+    'sk_test_key with space',
+  ])('拒绝无法安全区分服务端模式的密钥 %s', (secretKey) => {
     expect(StripeConfigSchema.safeParse({ secretKey, successUrl: 'https://example.invalid/payment/success', webhookSecret: 'whsec_key' }).success).toBe(false)
   })
 

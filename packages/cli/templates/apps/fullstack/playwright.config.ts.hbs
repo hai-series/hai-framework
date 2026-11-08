@@ -44,7 +44,9 @@ function resolvePortFromBaseUrl(urlString: string, fallbackPort: string): string
       return url.port
     }
 
-    return url.protocol === 'https:' ? '443' : '80'
+    return url.protocol === 'https:'
+      ? '443'
+      : '80'
   }
   catch {
     return fallbackPort
@@ -54,7 +56,9 @@ function resolvePortFromBaseUrl(urlString: string, fallbackPort: string): string
 export default defineConfig({
   testDir: './e2e',
 {{#if fullstack.e2eFrontend}}
-  ...(sessionClose ? { testMatch: '**/session-close.spec.ts' } : { testIgnore: '**/session-close.spec.ts' }),
+  ...(sessionClose
+    ? { testMatch: '**/session-close.spec.ts' }
+    : { testIgnore: '**/session-close.spec.ts' }),
 {{/if}}
   // 多个界面验收共用管理员资料与引导状态，保留串行以免互相覆盖。
   fullyParallel: false,
@@ -116,7 +120,9 @@ export default defineConfig({
       timeout: 120_000,
     },
     ...frontends.map((frontend) => {
-      const url = frontend.target === primaryFrontend ? baseURL : frontend.url
+      const url = frontend.target === primaryFrontend
+        ? baseURL
+        : frontend.url
       return {
         name: frontend.name,
         command: `pnpm --filter ${frontend.name} exec vite preview --host ${resolveHostFromBaseUrl(url, '127.0.0.1')} --port ${resolvePortFromBaseUrl(url, '3000')} --strictPort`,

@@ -33,7 +33,10 @@ describe('storage.init', () => {
       expect(storage.isInitialized).toBe(false)
       expect(storage.config).toBeNull()
       const result = await storage.file.put('test.txt', 'hello')
-      expect(result).toMatchObject({ success: false, error: { code: HaiStorageError.NOT_INITIALIZED.code } })
+      expect(result).toMatchObject({
+        success: false,
+        error: { code: HaiStorageError.NOT_INITIALIZED.code },
+      })
       expect((await storage.close()).success).toBe(true)
       expect(storage.isInitialized).toBe(false)
     })

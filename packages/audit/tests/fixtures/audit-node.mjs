@@ -4,7 +4,9 @@ import { audit } from '@h-ai/audit'
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 
-core.init({ logging: { level: 'fatal' } })
+core.init({
+  logging: { level: 'fatal' },
+})
 /** 执行独立节点并在退出前关闭自身依赖。 */
 async function main() {
   try {
@@ -19,7 +21,12 @@ async function main() {
     const initialized = await audit.init()
     if (!initialized.success)
       throw new Error('Audit init failed', { cause: initialized.error })
-    for (const result of [await audit.log({ action: 'worker', resource: 'readiness' }), await audit.list(), await audit.getStats(), await audit.cleanup(90)]) {
+    for (const result of [
+      await audit.log({ action: 'worker', resource: 'readiness' }),
+      await audit.list(),
+      await audit.getStats(),
+      await audit.cleanup(90),
+    ]) {
       if (!result.success)
         throw new Error('Immediate operation failed', { cause: result.error })
     }

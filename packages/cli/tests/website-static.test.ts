@@ -22,7 +22,14 @@ afterEach(async () => {
 
 describe('网站创建默认', () => {
   it('website 只安装展示功能依赖，已移除的功能参数在写文件前拒绝', async () => {
-    const options = { appType: 'website' as const, defaults: true, install: false, git: false, packageManager: 'pnpm' as const, cwd: root }
+    const options = {
+      appType: 'website' as const,
+      defaults: true,
+      install: false,
+      git: false,
+      packageManager: 'pnpm' as const,
+      cwd: root,
+    }
     await createProject({ ...options, name: 'complete-site' })
     const pkg = JSON.parse(await readFile(path.join(root, 'complete-site/package.json'), 'utf8'))
     expect(pkg.dependencies).toMatchObject({ '@h-ai/core': 'catalog:', '@h-ai/kit': 'catalog:', '@h-ai/ui': 'catalog:' })
@@ -35,14 +42,29 @@ describe('网站创建默认', () => {
 
 async function staticScript(features: Parameters<typeof buildTemplateContext>[0]['features'] = []) {
   const project = path.join(root, 'site')
-  await generateFromTemplates(project, buildTemplateContext({ name: 'site', appType: 'website', features, packageManager: 'pnpm' }))
+  await generateFromTemplates(project, buildTemplateContext({
+    name: 'site',
+    appType: 'website',
+    features,
+    packageManager: 'pnpm',
+  }))
   const helper = await readFile(path.join(project, 'scripts/public-base-path.mjs'), 'utf8')
   const website = await readFile(path.join(project, 'scripts/static-website.mjs'), 'utf8')
   return `${helper}\n${website}`.replace(/^import[^\n]*\n/gm, '').replace(/^export /gm, '')
 }
 
 function scriptContext(env: Record<string, string> = {}) {
-  return { core, path, existsSync, lstatSync, readdirSync, process: { env, cwd: () => path.join(root, 'site') } }
+  return {
+    core,
+    path,
+    existsSync,
+    lstatSync,
+    readdirSync,
+    process: {
+      env,
+      cwd: () => path.join(root, 'site'),
+    },
+  }
 }
 
 describe('website静态构建边界', () => {
@@ -50,7 +72,13 @@ describe('website静态构建边界', () => {
     const source = await staticScript()
     expect(runInNewContext(`${source}\nresolveStaticWebsite()`, scriptContext())).toMatchObject({ enabled: false, base: '' })
     expect(runInNewContext(`${source}\nresolveStaticWebsite()`, scriptContext({ HAI_BUILD_STATIC: '1', PUBLIC_BASE_PATH: '/hai-framework' }))).toMatchObject({ enabled: true, base: '/hai-framework' })
-    for (const base of ['//host', '/a/../b', '/a/', '/a?b=1', '/a%2fb'])
+    for (const base of [
+      '//host',
+      '/a/../b',
+      '/a/',
+      '/a?b=1',
+      '/a%2fb',
+    ])
       expect(() => runInNewContext(`${source}\nresolveStaticWebsite()`, scriptContext({ HAI_BUILD_STATIC: '1', PUBLIC_BASE_PATH: base }))).toThrow('PUBLIC_BASE_PATH')
     const dynamic = await staticScript(['db'])
     expect(() => runInNewContext(`${dynamic}\nresolveStaticWebsite()`, scriptContext({ HAI_BUILD_STATIC: '1' }))).toThrow('服务端')
@@ -58,19 +86,73 @@ describe('website静态构建边界', () => {
 
   it('只省略模板健康端点，拒绝自定义API、actions与未预渲染页面', async () => {
     const source = await staticScript()
-    const evaluate = (routes: unknown[]) => runInNewContext(`${source}\nvalidateStaticRoutes(routes)`, { core, routes, process: { env: {} } })
+    const evaluate = (routes: unknown[]) => runInNewContext(`${source}\nvalidateStaticRoutes(routes)`, {
+      core,
+      routes,
+      process: { env: {} },
+    })
     // 保留当前SvelteKit RouteDefinition的真实必填形状；普通页面也有api/page对象。
-    const page = { id: '/', api: { methods: [] }, page: { methods: ['GET'] }, pattern: /^\/$/, prerender: true, segments: [], methods: ['GET'], config: {} }
-    const health = { ...page, id: '/api/health', api: { methods: ['GET', 'HEAD'] }, page: { methods: [] }, prerender: false, methods: ['GET', 'HEAD'] }
+    const page = {
+      id: '/',
+      api: { methods: [] },
+      page: {
+        methods: ['GET'],
+      },
+      pattern: /^\/$/,
+      prerender: true,
+      segments: [],
+      methods: ['GET'],
+      config: {},
+    }
+    const health = {
+      ...page,
+      id: '/api/health',
+      api: {
+        methods: ['GET', 'HEAD'],
+      },
+      page: { methods: [] },
+      prerender: false,
+      methods: ['GET', 'HEAD'],
+    }
     expect(() => evaluate([page, health])).not.toThrow()
     for (const route of [
-      { ...page, id: '/api/orders', api: { methods: ['GET'] }, page: { methods: [] } },
+      {
+        ...page,
+        id: '/api/orders',
+        api: {
+          methods: ['GET'],
+        },
+        page: { methods: [] },
+      },
       { ...page, id: '/dashboard', prerender: false },
       { ...page, id: '/partial', prerender: 'auto' },
-      { ...page, id: '/contact', page: { methods: ['GET', 'POST'] } },
-      { ...health, api: { methods: ['GET', 'POST'] }, methods: ['GET', 'POST'] },
-      { ...health, page: { methods: ['GET', 'POST'] } },
-      { ...health, api: { methods: ['*'] }, methods: ['*'] },
+      {
+        ...page,
+        id: '/contact',
+        page: {
+          methods: ['GET', 'POST'],
+        },
+      },
+      {
+        ...health,
+        api: {
+          methods: ['GET', 'POST'],
+        },
+        methods: ['GET', 'POST'],
+      },
+      {
+        ...health,
+        page: {
+          methods: ['GET', 'POST'],
+        },
+      },
+      {
+        ...health,
+        api: {
+          methods: ['*'],
+        },
+        methods: ['*'],
+      },
     ])
       expect(() => evaluate([route])).toThrow()
   })
@@ -78,10 +160,9 @@ describe('website静态构建边界', () => {
   it('生成配置连接静态适配器和无回退路由预检，保留公开资产契约', async () => {
     await staticScript()
     const project = path.join(root, 'site')
-    const svelte = await readFile(path.join(project, 'svelte.config.js'), 'utf8')
     const vite = await readFile(path.join(project, 'vite.config.ts'), 'utf8')
-    expect(svelte).toContain('validateStaticRoutes(builder.routes)')
-    expect(svelte).not.toContain('fallback: \'index.html\'')
+    expect(vite).toContain('validateStaticRoutes(builder.routes)')
+    expect(vite).not.toContain('fallback: \'index.html\'')
     expect(vite).toContain('envDir: false')
     expect(vite).not.toContain('publicDir:')
     expect(vite).toContain('fileName: \'.nojekyll\'')

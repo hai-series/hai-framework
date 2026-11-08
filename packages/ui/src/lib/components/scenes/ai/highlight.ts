@@ -136,7 +136,9 @@ function resolveLang(lang: string): string | null {
 
   const resolved = LANG_ALIASES[normalized] ?? normalized
   const loaded = highlighter.getLoadedLanguages()
-  return loaded.includes(resolved) ? resolved : null
+  return loaded.includes(resolved)
+    ? resolved
+    : null
 }
 
 /**

@@ -8,14 +8,20 @@ import { apiClient, HaiApiClientError } from '../src/index.js'
 const testContract = {
   echo: apiContract
     .route({ method: 'POST', path: '/echo' })
-    .input(z.object({ msg: z.string() }))
-    .output(apiContract.haiResultSchema(z.object({ echoed: z.unknown() }))),
+    .input(z.object({
+      msg: z.string(),
+    }))
+    .output(apiContract.haiResultSchema(z.object({
+      echoed: z.unknown(),
+    }))),
 }
 
 const protectedContract = {
   protected: apiContract
     .route({ method: 'GET', path: '/protected' })
-    .output(apiContract.haiResultSchema(z.object({ ok: z.boolean() }))),
+    .output(apiContract.haiResultSchema(z.object({
+      ok: z.boolean(),
+    }))),
 }
 
 /**
@@ -26,19 +32,33 @@ function makeServerFetch(clockOffset = 0, legacyTimeError = false): typeof fetch
   const key = crypto.asymmetric.generateKeyPair()
   if (!key.success)
     throw new Error(key.error.message)
-  const mgrResult = crypto.transport.createServer({ keyStore: createInMemoryKeyStore(), serverKeyRing: { activeKeyId: 'test-v1', keys: { 'test-v1': key.data } } })
+  const mgrResult = crypto.transport.createServer({
+    keyStore: createInMemoryKeyStore(),
+    serverKeyRing: {
+      activeKeyId: 'test-v1',
+      keys: { 'test-v1': key.data },
+    },
+  })
   if (!mgrResult.success)
     throw new Error('createServer failed')
   const mgr = mgrResult.data
 
   return (async (input, init) => {
-    const req = input instanceof Request ? input : new Request(typeof input === 'string' ? input : input.toString(), init)
+    const req = input instanceof Request
+      ? input
+      : new Request(typeof input === 'string'
+          ? input
+          : input.toString(), init)
     const url = new URL(req.url)
 
     if (url.pathname === '/api/v1/_hai/key-exchange') {
       const body = await req.json() as { clientPublicKey: string }
       const clientId = await mgr.registerClientKey(body.clientPublicKey)
-      return new Response(JSON.stringify({ serverPublicKey: mgr.getServerPublicKey(), serverKeyId: mgr.getServerKeyId(), clientId }), {
+      return new Response(JSON.stringify({
+        serverPublicKey: mgr.getServerPublicKey(),
+        serverKeyId: mgr.getServerKeyId(),
+        clientId,
+      }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -47,16 +67,24 @@ function makeServerFetch(clockOffset = 0, legacyTimeError = false): typeof fetch
     // 解密 → 业务回显 → 加密
     const clientId = req.headers.get('X-Client-Id')
     expect(clientId).toBeTruthy()
-    const clock = clockOffset ? vi.spyOn(Date, 'now').mockReturnValue(Date.now() + clockOffset) : undefined
+    const clock = clockOffset
+      ? vi.spyOn(Date, 'now').mockReturnValue(Date.now() + clockOffset)
+      : undefined
     const verified = await authenticateTransportRequest(mgr, req).finally(() => clock?.mockRestore())
     if (!verified.success) {
       const time = verified.error.cause
-      if (time instanceof TransportTimeError && time.context)
-        return createTransportErrorResponse(legacyTimeError ? new TransportTimeError() : time, { manager: mgr, context: time.context })
+      if (time instanceof TransportTimeError && time.context) {
+        return createTransportErrorResponse(legacyTimeError
+          ? new TransportTimeError()
+          : time, { manager: mgr, context: time.context })
+      }
       throw new Error(verified.error.message)
     }
     const input2 = JSON.parse(verified.data.plaintext) as { msg: string }
-    const respPlain = JSON.stringify({ success: true, data: { echoed: input2 } })
+    const respPlain = JSON.stringify({
+      success: true,
+      data: { echoed: input2 },
+    })
     const enc = await mgr.encryptResponse(verified.data.context, respPlain, 200)
     if (!enc.success)
       throw new Error(enc.error.message)
@@ -71,7 +99,13 @@ function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fet
   const key = crypto.asymmetric.generateKeyPair()
   if (!key.success)
     throw new Error(key.error.message)
-  const mgrResult = crypto.transport.createServer({ keyStore: createInMemoryKeyStore(), serverKeyRing: { activeKeyId: 'test-v1', keys: { 'test-v1': key.data } } })
+  const mgrResult = crypto.transport.createServer({
+    keyStore: createInMemoryKeyStore(),
+    serverKeyRing: {
+      activeKeyId: 'test-v1',
+      keys: { 'test-v1': key.data },
+    },
+  })
   if (!mgrResult.success)
     throw new Error('createServer failed')
   const mgr = mgrResult.data
@@ -91,14 +125,22 @@ function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fet
   }
 
   const fetchImpl = (async (input, init) => {
-    const req = input instanceof Request ? input : new Request(typeof input === 'string' ? input : input.toString(), init)
+    const req = input instanceof Request
+      ? input
+      : new Request(typeof input === 'string'
+          ? input
+          : input.toString(), init)
     const url = new URL(req.url)
     calls.push(`${req.method} ${url.pathname} auth=${req.headers.get('authorization') ?? ''} client=${req.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER) ?? ''} credentials=${req.credentials}`)
 
     if (url.pathname === '/api/v1/_hai/key-exchange') {
       const body = await req.json() as { clientPublicKey: string }
       const clientId = await mgr.registerClientKey(body.clientPublicKey)
-      return new Response(JSON.stringify({ serverPublicKey: mgr.getServerPublicKey(), serverKeyId: mgr.getServerKeyId(), clientId }), {
+      return new Response(JSON.stringify({
+        serverPublicKey: mgr.getServerPublicKey(),
+        serverKeyId: mgr.getServerKeyId(),
+        clientId,
+      }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -129,12 +171,22 @@ function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fet
     if (url.pathname === '/api/v1/protected') {
       const authorization = req.headers.get('authorization')
       if (authorization === 'Bearer old-access') {
-        if (domainUnauthorized)
-          return encryptedJson(verified.data.context, { success: false, error: { code: 'hai:serv:401', message: 'Expired', httpStatus: 401 } })
-        return encryptedJson(verified.data.context, { success: false, error: { message: 'expired' } }, 401)
+        if (domainUnauthorized) {
+          return encryptedJson(verified.data.context, {
+            success: false,
+            error: { code: 'hai:serv:401', message: 'Expired', httpStatus: 401 },
+          })
+        }
+        return encryptedJson(verified.data.context, {
+          success: false,
+          error: { message: 'expired' },
+        }, 401)
       }
       expect(authorization).toBe('Bearer new-access')
-      return encryptedJson(verified.data.context, { success: true, data: { ok: true } })
+      return encryptedJson(verified.data.context, {
+        success: true,
+        data: { ok: true },
+      })
     }
 
     return new Response(null, { status: 404 })
@@ -146,10 +198,23 @@ describe('api-client transport', () => {
   it.each([600_000, -600_000])('服务端时钟偏差 %s 经真实加密链路映射为校时提示，业务不执行', async (offset) => {
     const client = apiClient.create(testContract)
     const fetch = vi.fn(makeServerFetch(offset))
-    expect((await client.init({ baseUrl: 'https://test.local/api/v1', fetch, transport: { crypto } })).success).toBe(true)
+    expect((await client.init({
+      baseUrl: 'https://test.local/api/v1',
+      fetch,
+      transport: { crypto },
+    })).success).toBe(true)
     try {
       const result = await client.echo({ msg: 'pending business request' })
-      expect(result).toMatchObject({ success: false, error: { code: HaiApiClientError.VALIDATION_FAILED.code, cause: { transportCode: HaiCryptoError.TRANSPORT_TIME_INVALID.code, serverTime: expect.any(Number) } } })
+      expect(result).toMatchObject({
+        success: false,
+        error: {
+          code: HaiApiClientError.VALIDATION_FAILED.code,
+          cause: {
+            transportCode: HaiCryptoError.TRANSPORT_TIME_INVALID.code,
+            serverTime: expect.any(Number),
+          },
+        },
+      })
       if (!result.success) {
         const { cause } = result.error
         if (!cause || typeof cause !== 'object' || !('serverTime' in cause) || typeof cause.serverTime !== 'number')
@@ -157,7 +222,9 @@ describe('api-client transport', () => {
         const timestamp = new Date(cause.serverTime).toISOString()
         expect(result.error.message).toContain(`${timestamp.slice(0, 10)} ${timestamp.slice(11, 19)} UTC`)
       }
-      expect(fetch.mock.calls.filter(([request]) => new URL(request instanceof Request ? request.url : String(request)).pathname.endsWith('/echo'))).toHaveLength(1)
+      expect(fetch.mock.calls.filter(([request]) => new URL(request instanceof Request
+        ? request.url
+        : String(request)).pathname.endsWith('/echo'))).toHaveLength(1)
     }
     finally { await client.close() }
   })
@@ -165,10 +232,21 @@ describe('api-client transport', () => {
   it('旧服务端缺少校验时间时仍保留校时提示', async () => {
     const client = apiClient.create(testContract)
     const fetch = makeServerFetch(600_000, true)
-    expect((await client.init({ baseUrl: 'https://test.local/api/v1', fetch, transport: { crypto } })).success).toBe(true)
+    expect((await client.init({
+      baseUrl: 'https://test.local/api/v1',
+      fetch,
+      transport: { crypto },
+    })).success).toBe(true)
     try {
       const result = await client.echo({ msg: 'pending business request' })
-      expect(result).toMatchObject({ success: false, error: { code: HaiApiClientError.VALIDATION_FAILED.code, message: expect.stringContaining(new TransportTimeError().message), cause: { transportCode: HaiCryptoError.TRANSPORT_TIME_INVALID.code } } })
+      expect(result).toMatchObject({
+        success: false,
+        error: {
+          code: HaiApiClientError.VALIDATION_FAILED.code,
+          message: expect.stringContaining(new TransportTimeError().message),
+          cause: { transportCode: HaiCryptoError.TRANSPORT_TIME_INVALID.code },
+        },
+      })
       if (!result.success)
         expect(result.error.cause).not.toHaveProperty('serverTime')
     }
@@ -176,10 +254,23 @@ describe('api-client transport', () => {
   })
   it('客户端容量超限映射为稳定 HaiResult 错误，保留字节诊断', async () => {
     const client = apiClient.create(testContract)
-    expect((await client.init({ baseUrl: 'https://test.local/api/v1', fetch: makeServerFetch(), transport: { crypto, maxPlaintextBytes: 1024 } })).success).toBe(true)
+    expect((await client.init({
+      baseUrl: 'https://test.local/api/v1',
+      fetch: makeServerFetch(),
+      transport: { crypto, maxPlaintextBytes: 1024 },
+    })).success).toBe(true)
     try {
-      const result = await client.echo({ msg: 'a'.repeat(1024) })
-      expect(result).toMatchObject({ success: false, error: { code: HaiApiClientError.PAYLOAD_TOO_LARGE.code, httpStatus: 413, cause: { direction: 'request', limitBytes: 1024 } } })
+      const result = await client.echo({
+        msg: 'a'.repeat(1024),
+      })
+      expect(result).toMatchObject({
+        success: false,
+        error: {
+          code: HaiApiClientError.PAYLOAD_TOO_LARGE.code,
+          httpStatus: 413,
+          cause: { direction: 'request', limitBytes: 1024 },
+        },
+      })
     }
     finally { await client.close() }
   })

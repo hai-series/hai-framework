@@ -71,8 +71,12 @@ test.describe('IAM Users UI', () => {
         const content = await table.locator('..').boundingBox()
         expect(content!.width).toBeGreaterThan(main!.width - 100)
       }
-      if (width === 1920)
-        await page.screenshot({ path: testInfo.outputPath('admin-1920.png'), animations: 'disabled' })
+      if (width === 1920) {
+        await page.screenshot({
+          path: testInfo.outputPath('admin-1920.png'),
+          animations: 'disabled',
+        })
+      }
     }
   })
 
@@ -267,7 +271,13 @@ test.describe('IAM Users UI', () => {
     for (let index = 0; index < 3; index++) {
       const user = uniqueUser('rolepage')
       const created = await request.post('/api/iam/users', {
-        data: { ...user, username: `${prefix}${index}`, roles: index < 2 ? [role.id] : [] },
+        data: {
+          ...user,
+          username: `${prefix}${index}`,
+          roles: index < 2
+            ? [role.id]
+            : [],
+        },
       })
       expect(created.ok()).toBe(true)
     }
@@ -288,7 +298,10 @@ test.describe('IAM Users UI', () => {
     await expect(page.locator('tbody')).toContainText(`${prefix}1`)
     await expect(page.locator('tbody')).not.toContainText(`${prefix}2`)
     await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeDisabled()
-    await page.screenshot({ path: testInfo.outputPath('iam-role-pagination.png'), fullPage: true })
+    await page.screenshot({
+      path: testInfo.outputPath('iam-role-pagination.png'),
+      fullPage: true,
+    })
   })
 
   test('新建用户提交空表单显示验证', async ({ page, request }) => {
@@ -320,7 +333,10 @@ test.describe('IAM Users UI', () => {
       },
     })
     expect(createTargetRes.ok()).toBeTruthy()
-    expect(await createTargetRes.json()).toMatchObject({ success: true, data: { accountStatus: 'active' } })
+    expect(await createTargetRes.json()).toMatchObject({
+      success: true,
+      data: { accountStatus: 'active' },
+    })
 
     await page.goto(`/admin/iam/users?search=${encodeURIComponent(targetUser.username)}`)
     await page.waitForLoadState('domcontentloaded')
@@ -359,7 +375,10 @@ test.describe('IAM Users UI', () => {
       },
     })
     expect(created.ok()).toBe(true)
-    expect(await created.json()).toMatchObject({ success: true, data: { accountStatus: 'active' } })
+    expect(await created.json()).toMatchObject({
+      success: true,
+      data: { accountStatus: 'active' },
+    })
 
     await page.goto(`/admin/iam/users?search=${encodeURIComponent(victim.username)}`)
     await page.waitForLoadState('domcontentloaded')

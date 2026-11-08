@@ -70,7 +70,6 @@ HAI_REACH_PROVIDERS='[{"name":"email","type":"api","url":"https://mail.example.i
 | `--concurrency` | 2；仅`image` | 同时构建的镜像数，只接受1或2；`deploy` `--build`也可使用 |
 | `--runtime` | `image` 默认 `auto`；Android 省略时使用本机工具链 | `auto` 优先 Podman，显式 `docker` 或 `podman` 选择容器引擎 |
 | `--network`/`--no-http-proxy` | 默认引擎网络/默认继承规则 | 按网络环境明确设置，完全离线还需基础镜像和依赖缓存 |
-| `--sqlite-prebuild-mirror` | 无通用镜像地址默认 | 可信HTTP(S)预编译根地址，需匹配ABI/架构/libc |
 | `--platform`/`--arch` | 按目标工具链 | 原生包需对应OS/SDK/签名；同步资源不等于生成安装包 |
 | `--debug` | app/desktop 默认 release | 生成对应平台的调试安装包 |
 
@@ -82,11 +81,13 @@ HAI_REACH_PROVIDERS='[{"name":"email","type":"api","url":"https://mail.example.i
 
 ### 构建并发和缓存
 
+SQLite 13 的原生二进制随 npm 包交付。旧的 `--sqlite-prebuild-mirror`、`SQLITE_PREBUILD_MIRROR` 和独立安装器已经移除；升级既有工程时同步 Dockerfile，并删除旧命令参数。离线构建仍需缓存完整 npm 包，生成镜像会实际打开内存数据库验证原生依赖。
+
 `image` 目标默认最多并行两项镜像，资源紧张时用 `--concurrency 1`。Dockerfile 在源码 COPY 前安装依赖，前后端仅复制各自必要的源码，源码变化可复用下载与安装层。运行镜像移除应用自身的声明文件、源码映射与说明文件。打包按镜像内容 ID 在 `.hai/cache/images` 缓存中间件归档，复用前验证摘要，损坏则重新导出；应用镜像复制时同步计算摘要。速度取决于资源与缓存命中，不承诺固定比例。
 
 旧 `--target docker` 已改为 `--target image`；`--runtime docker|podman` 继续表示引擎，现有 `.hai/build/docker` 制品目录保持可用。
 
-后端探针、模板镜像和 Fullstack 同源代理按最终健康路径生成，支持 `HAI_SERV_HTTP_HEALTH_PATH=/status`；整段 `HAI_SERV` 仍优先于叶字段。已启用的文档页面、OpenAPI JSON 与本地 Scalar 脚本会转发至后端，保留生产关闭与认证限制。路径和路由变更需要重新部署，同步 Nginx 与发布探针。
+后端探针、模板镜像和 Fullstack 同源代理按最终健康路径生成，支持 `HAI_SERV_HTTP_HEALTH_PATH=/status`。同一来源先应用 `HAI_SERV` 父 JSON，再由叶字段覆盖；更高来源的父对象才会清除低来源细项，完整顺序见[运行时配置](runtime.md)。已启用的文档页面、OpenAPI JSON 与本地 Scalar 脚本会转发至后端，保留生产关闭与认证限制。路径和路由变更需要重新部署，同步 Nginx 与发布探针。
 
 ### 下载源和代理
 
@@ -123,7 +124,7 @@ pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source 
 pnpm build --target image --image-source custom --image-mirrors "docker.io=mirror.example.com/docker.io,ghcr.io=mirror.example.com/ghcr.io" --npm-source custom --npm-registry https://npm.example.com/registry
 ```
 
-对应配置为 `image: { "type": "custom", "registries": { "docker.io": "mirror.example.com/docker.io", "ghcr.io": "mirror.example.com/ghcr.io" } }`、`npm: { "type": "custom", "registry": "https://npm.example.com/registry" }`。所需原仓库缺少映射时明确失败。镜像映射采用 HTTPS，npm registry 支持 HTTP(S)，地址不包含认证信息、查询或片段。registry 同时供 Corepack 下载 pnpm、pnpm 获取依赖使用；lockfile 中显式的 tarball、Git URL 和原生预编译包仍按各自地址下载，SQLite 继续使用 `--sqlite-prebuild-mirror`。
+对应配置为 `image: { "type": "custom", "registries": { "docker.io": "mirror.example.com/docker.io", "ghcr.io": "mirror.example.com/ghcr.io" } }`、`npm: { "type": "custom", "registry": "https://npm.example.com/registry" }`。所需原仓库缺少映射时明确失败。镜像映射采用 HTTPS，npm registry 支持 HTTP(S)，地址不包含认证信息、查询或片段。registry 同时供 Corepack 下载 pnpm、pnpm 获取依赖使用；lockfile 中显式的 tarball、Git URL 和原生预编译包仍按各自地址下载。SQLite 13 的原生二进制随 npm 包提供，使用同一 npm 源，不再单独下载。
 
 代理单独选择，不随下载源自动改变：
 
@@ -230,6 +231,10 @@ http:
 
 ### 容器、增量部署与反向代理
 
+SvelteKit SSR 的 HTTP/HTTPS 部署统一通过独立 `gateway`，SSR 容器不映射公开端口。网关以实际连接覆盖 Host 和标准转发头，Compose 固定 `PROTOCOL_HEADER=x-forwarded-proto`、`HOST_HEADER=host`、`ADDRESS_HEADER=x-forwarded-for` 与 `XFF_DEPTH=1`，不信任客户端提供的转发值；`PORT_HEADER` 为空，端口保留在 Host 中。这些项由部署装配提供，不能在业务 `.env.runtime` 中覆盖。adapter-node 6 不再读取运行期 `ORIGIN`；应用默认不固定构建期 `paths.origin`，同一镜像可跨环境复用。旧直接公开 SSR 的部署需要用当前工具重新生成并执行全量交付包，不能只改环境变量或复用旧增量基线。
+
+外层负载均衡终止 TLS 时，将其实际来源 IP/CIDR 填入 `trustedEdgeProxies`，并由它覆盖 `Host`、`X-Forwarded-For` 与单值 `X-Forwarded-Proto`。独立 gateway 只从白名单真实对端接受 `http` / `https`；其他对端、重复/组合协议值仍使用网关自身连接协议。不要把所有公网或不受控共享网段列为可信上游。
+
 CLI 与 Deploy 使用匹配版本。即使只构建后端，也要传入与既有网站一致的公开目录，让增量包保留完整的网站信息：
 
 ```powershell
@@ -285,7 +290,7 @@ location /api/v1/ {
 }
 ```
 
-这些是已有网关`server`中的片段，替换为实际上游，并按[HTTP配置](http.md)设置HTTPS、公开源和可信代理。SvelteKit adapter-node的ORIGIN使用公网源，不把路径附在`origin`中。Vite剥离模式与SDK保留模式分别使用，不能叠加两次剥离。
+这些是已有网关`server`中的片段，替换为实际上游，并按[HTTP配置](http.md)设置HTTPS、公开源和可信代理。SvelteKit adapter-node 6 使用受信网关的协议和 Host；如需固定构建期 `paths.origin`，只填公网源，不附带路径。Vite剥离模式与SDK保留模式分别使用，不能叠加两次剥离。
 
 ![子目录SvelteKit手机布局](../images/subpath-sveltekit-mobile.png)
 
@@ -489,6 +494,8 @@ docker exec hai-orders-prod-serv node -e 'require("node:dns").lookup("db.intrane
 
 相对路径以工程根为基准。打包校验证书域名、有效期和私钥匹配，并将证书与私钥复制到私有发布包，只读挂载给 Nginx。模板构建上下文排除证书和私钥，运行镜像不含它们。证书源文件变化后生成新的全量发布，不修改旧包或旧发布快照。使用私有 CA 时，访问客户端也须信任该 CA。
 
+提供末级无软链接或硬链接的普通 PEM 文件，每份最多 1 MiB；父目录仍须可信。Certbot `live/` 的软链需安全复制为受控目录中的普通文件，或使用下述框架 `letsencrypt` 模式。
+
 Let’s Encrypt 使用同一配置位置：
 
 ```json schema=@h-ai/deploy:DeployConfigSchema
@@ -522,7 +529,7 @@ Certbot 每 12 小时检查续期，成功后发布新的证书对，Nginx 检�
 
 两种模式在 Nginx 容器内都挂载为 `/etc/nginx/tls/`。域名只填 `app.example.com`，不含协议、端口和 context path。交互全量部署选择 HTTPS 后收集域名、端口，并按模式收集证书路径或邮箱/条款确认；`--yes`、增量部署沿用配置。修改本地所选私有环境中的 `HAI_DEPLOY_PROVIDER.expose.https`，或未被覆盖的 `hai.json.deploy.provider.expose.https` 后生成新全量部署包。单改服务器 `.env.runtime` 并重启，不能开启 HTTPS 或给新域名申请证书。
 
-HTTP 默认 308 跳转至 HTTPS，健康检查及 ACME 挑战保留 HTTP 路由。SDK 与服务器验证实际 HTTPS；SSR 默认 ORIGIN、未明确指定的 API CORS `origin` 使用配置的 HTTPS 域名，已有显式值保持优先。自建 S3 的公开地址仍须配置为实际 HTTPS `origin`。首次启用/关闭 HTTPS、更改模式/域名/端口/本地证书需全量部署。证书状态不随应用版本回退，旧域名发布继续引用自己的证书目录。
+HTTP 默认 308 跳转至 HTTPS，健康检查及 ACME 挑战保留 HTTP 路由。SDK 与服务器验证实际 HTTPS；SSR 从网关覆盖的协议和 Host 还原公开源，未明确指定的 API CORS `origin` 使用配置的 HTTPS 域名。自建 S3 的公开地址仍须配置为实际 HTTPS `origin`。首次启用/关闭 HTTPS、更改模式/域名/端口/本地证书需全量部署。证书状态不随应用版本回退，旧域名发布继续引用自己的证书目录。
 
 ![已有证书与 Certbot 两种 HTTPS 配置的部署关系](../images/deployment-https.svg)
 

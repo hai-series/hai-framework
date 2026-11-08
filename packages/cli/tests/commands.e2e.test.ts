@@ -45,11 +45,37 @@ const HAI_DEP_SPECIFIER = CATALOG_DEP_SPECIFIER
 const skillTemplatesDir = fileURLToPath(new URL('../templates/skills', import.meta.url))
 
 const SKILL_EXCLUSIONS_BY_APP_TYPE: Record<AppType, string[]> = {
-  'admin': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
-  'website': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
-  'h5': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
-  'api': ['hai-ui', 'hai-ui-design', 'hai-ui-review', 'hai-kit', 'hai-capacitor'],
-  'mobile-app': ['hai-core', 'hai-kit', 'hai-serv', 'hai-api-contract'],
+  'admin': [
+    'hai-serv',
+    'hai-api-contract',
+    'hai-api-client',
+    'hai-capacitor',
+  ],
+  'website': [
+    'hai-serv',
+    'hai-api-contract',
+    'hai-api-client',
+    'hai-capacitor',
+  ],
+  'h5': [
+    'hai-serv',
+    'hai-api-contract',
+    'hai-api-client',
+    'hai-capacitor',
+  ],
+  'api': [
+    'hai-ui',
+    'hai-ui-design',
+    'hai-ui-review',
+    'hai-kit',
+    'hai-capacitor',
+  ],
+  'mobile-app': [
+    'hai-core',
+    'hai-kit',
+    'hai-serv',
+    'hai-api-contract',
+  ],
   'fullstack': ['hai-kit'],
 }
 
@@ -96,16 +122,16 @@ function expectNonWorkspaceDepsUseCatalog(pkg: {
 }
 
 function expectHaiCatalogEntries(workspaceYaml: string, packageNames: readonly string[]) {
-  expect(workspaceYaml).toContain('catalog:')
+  const workspace = parse(workspaceYaml) as { catalog?: Record<string, string> }
   for (const packageName of packageNames) {
-    expect(workspaceYaml).toContain(`'${packageName}': ${HAI_DEP_VERSION}`)
+    expect(workspace.catalog?.[packageName]).toBe(HAI_DEP_VERSION)
   }
 }
 
 function expectCatalogPackageNames(workspaceYaml: string, packageNames: readonly string[]) {
-  expect(workspaceYaml).toContain('catalog:')
+  const workspace = parse(workspaceYaml) as { catalog?: Record<string, string> }
   for (const packageName of packageNames) {
-    expect(workspaceYaml).toContain(`'${packageName}':`)
+    expect(workspace.catalog?.[packageName]).toEqual(expect.any(String))
   }
 }
 
@@ -175,7 +201,12 @@ afterAll(async () => {
   // 每次运行独享目录；只清理本轮创建的根目录，并重试 Windows 短暂文件锁。
   if (path.dirname(tmpRoot) !== path.resolve(tmpdir()) || !path.basename(tmpRoot).startsWith('hai-cli-commands-e2e-'))
     throw new Error('Unexpected CLI command test cleanup directory')
-  await rm(tmpRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 250 })
+  await rm(tmpRoot, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 250,
+  })
 })
 
 // =============================================================================
@@ -210,7 +241,18 @@ describe('createProject — api 类型', () => {
   it('aPI仅选crypto时生成私有密钥环并补充RelDB registry依赖', async () => {
     const name = 'proj-api-crypto-only'
     const directory = path.join(tmpRoot, name)
-    await createProject({ name, appType: 'api', moduleConfigs: { core: { name, defaultLocale: 'zh-CN' } }, defaults: true, install: false, git: false, packageManager: 'pnpm', cwd: tmpRoot })
+    await createProject({
+      name,
+      appType: 'api',
+      moduleConfigs: {
+        core: { name, defaultLocale: 'zh-CN' },
+      },
+      defaults: true,
+      install: false,
+      git: false,
+      packageManager: 'pnpm',
+      cwd: tmpRoot,
+    })
     const prefix = `apps/${name}-serv`
     const ring = parseTransportServerKeyRing(parseEnv(await readText(directory, `${prefix}/.env.dev.local`)).HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     expect(ring.success).toBe(true)
@@ -250,7 +292,14 @@ describe('createProject — api 类型', () => {
 
     const workspace = await readText(projectPath, 'pnpm-workspace.yaml')
     expect(workspace).toContain('apps/*')
-    expectHaiCatalogEntries(workspace, ['@h-ai/api-client', '@h-ai/api-contract', '@h-ai/core', '@h-ai/serv', '@h-ai/reldb', '@h-ai/cache'])
+    expectHaiCatalogEntries(workspace, [
+      '@h-ai/api-client',
+      '@h-ai/api-contract',
+      '@h-ai/core',
+      '@h-ai/serv',
+      '@h-ai/reldb',
+      '@h-ai/cache',
+    ])
   })
 
   it('应生成可执行质量门禁脚本', async () => {
@@ -311,7 +360,9 @@ describe('createProject — api 类型', () => {
     expect(dockerfile).not.toContain('pnpm fetch --frozen-lockfile')
     expect(dockerfile.indexOf('pnpm fetch')).toBeGreaterThanOrEqual(0)
     expect(dockerfile.indexOf('COPY images/dependencies/ ./')).toBeLessThan(dockerfile.indexOf('pnpm fetch'))
-    expect(dockerfile.indexOf('pnpm install --offline --frozen-lockfile --ignore-scripts')).toBeLessThan(dockerfile.indexOf(dockerfile.includes('COPY packages/') ? 'COPY packages/' : 'COPY . .'))
+    expect(dockerfile.indexOf('pnpm install --offline --frozen-lockfile --ignore-scripts')).toBeLessThan(dockerfile.indexOf(dockerfile.includes('COPY packages/')
+      ? 'COPY packages/'
+      : 'COPY . .'))
     expect(dockerfile).toContain('USER node')
     expect(await exists(projectPath, '.dockerignore')).toBe(true)
     // Docker 与 Git 一致：排除本机私有文件，避免 .env.local 的密钥进入构建上下文。
@@ -475,7 +526,15 @@ describe('createProject — admin 类型 + iam', () => {
     expectQualityGateScripts(pkg)
 
     const workspace = await readText(projectPath, 'pnpm-workspace.yaml')
-    expectHaiCatalogEntries(workspace, ['@h-ai/core', '@h-ai/kit', '@h-ai/ui', '@h-ai/iam', '@h-ai/reldb', '@h-ai/cache', '@h-ai/crypto'])
+    expectHaiCatalogEntries(workspace, [
+      '@h-ai/core',
+      '@h-ai/kit',
+      '@h-ai/ui',
+      '@h-ai/iam',
+      '@h-ai/reldb',
+      '@h-ai/cache',
+      '@h-ai/crypto',
+    ])
   })
 
   it('package.json 包含 paraglide devDep（i18n）', async () => {
@@ -510,7 +569,8 @@ describe('createProject — admin 类型 + iam', () => {
     const content = await readText(projectPath, 'src/routes/(auth)/auth/login/+page.svelte')
     expect(content).toContain('AuthPanel')
     expect(content).toContain('page.data.iamPublicConfig')
-    expect(content).toContain('kit.client.createAuthActions({ basePath: `$' + '{base}/api/auth` })')
+    // eslint-disable-next-line no-template-curly-in-string -- 静态核对生成代码，插值必须保留到目标应用执行。
+    expect(content).toContain('kit.client.createAuthActions({ basePath: `${resolve(\'/\').replace(/\\/$/, \'\')}/api/auth` })')
   })
 
   it('iam API 路由存在', async () => {
@@ -684,17 +744,19 @@ describe('createProject — website 类型', () => {
 
   it('应生成 SvelteKit Node 容器交付文件', async () => {
     const pkg = await readJson(projectPath, 'package.json')
-    const svelteConfig = await readText(projectPath, 'svelte.config.js')
+    const svelteConfig = await readText(projectPath, 'vite.config.ts')
     const dockerfile = await readText(projectPath, 'images/web.Dockerfile')
 
-    expect(pkg.devDependencies['@sveltejs/adapter-node']).toBe('5.5.7')
+    expect(pkg.devDependencies['@sveltejs/adapter-node']).toBe('6.0.1')
     expect(pkg.devDependencies['@sveltejs/adapter-auto']).toBeUndefined()
     expect(svelteConfig).toContain('from \'@sveltejs/adapter-node\'')
     expect(dockerfile).toContain('CMD ["node", "build"]')
     expect(dockerfile).not.toContain('pnpm fetch --frozen-lockfile')
     expect(dockerfile.indexOf('pnpm fetch')).toBeGreaterThanOrEqual(0)
     expect(dockerfile.indexOf('COPY images/dependencies/ ./')).toBeLessThan(dockerfile.indexOf('pnpm fetch'))
-    expect(dockerfile.indexOf('pnpm install --offline --frozen-lockfile --ignore-scripts')).toBeLessThan(dockerfile.indexOf(dockerfile.includes('COPY packages/') ? 'COPY packages/' : 'COPY . .'))
+    expect(dockerfile.indexOf('pnpm install --offline --frozen-lockfile --ignore-scripts')).toBeLessThan(dockerfile.indexOf(dockerfile.includes('COPY packages/')
+      ? 'COPY packages/'
+      : 'COPY . .'))
 
     const readme = await readText(projectPath, 'README.md')
     expect(readme).toContain('## 构建与部署')
@@ -798,10 +860,14 @@ describe('createProject — mobile-app 类型', () => {
     expect(pkg.dependencies.zod).toBeUndefined()
     expect(pkg.devDependencies['@sveltejs/kit']).toBeUndefined()
     expect(pkg.devDependencies['@sveltejs/adapter-static']).toBeUndefined()
-    expect(pkg.devDependencies['@capacitor/app']).toBe('8.1.2')
-    expect(pkg.devDependencies['@capacitor/camera']).toBe('8.2.5')
-    expect(pkg.devDependencies['@capacitor/device']).toBe('8.0.3')
-    expect(pkg.devDependencies['@capacitor/push-notifications']).toBe('8.1.3')
+    const sourceWorkspace = parse(await readText(path.resolve(import.meta.dirname, '../../..'), 'pnpm-workspace.yaml')) as { catalog: Record<string, string> }
+    for (const dependency of [
+      '@capacitor/app',
+      '@capacitor/camera',
+      '@capacitor/device',
+      '@capacitor/push-notifications',
+    ])
+      expect(pkg.devDependencies[dependency]).toBe(sourceWorkspace.catalog[dependency]?.replace(/^[~^]/, ''))
     expect(pkg.scripts.typecheck).not.toContain('svelte-kit sync')
     expect(pkg.scripts.compile).toContain('pnpm paraglide:compile')
 
@@ -835,9 +901,17 @@ describe('createProject — mobile-app 类型', () => {
   it('客户端只安装浏览器依赖，服务端配置以注释保留且不进入公共环境', async () => {
     const pkg = await readJson(projectPath, 'package.json')
     expect(pkg.dependencies['@h-ai/crypto']).toBe(HAI_DEP_SPECIFIER)
-    for (const name of ['ai', 'reldb', 'cache', 'storage', 'iam']) {
+    for (const name of [
+      'ai',
+      'reldb',
+      'cache',
+      'storage',
+      'iam',
+    ]) {
       expect(pkg.dependencies).not.toHaveProperty(`@h-ai/${name}`)
-      expect(parse(await readText(projectPath, `config/_${name === 'reldb' ? 'db' : name}.yml`))).toBeNull()
+      expect(parse(await readText(projectPath, `config/_${name === 'reldb'
+        ? 'db'
+        : name}.yml`))).toBeNull()
     }
     for (const file of ['.env', '.env.prod']) {
       const environment = await readText(projectPath, file)
@@ -891,7 +965,10 @@ describe('createProject — fullstack 类型', () => {
     expect(await readText(projectPath, '.env.example')).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
     try {
       expect((await crypto.init()).success).toBe(true)
-      expect(crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: createInMemoryKeyStore() }).success).toBe(true)
+      expect(crypto.transport.createServer({
+        serverKeyRing: ring.data,
+        keyStore: createInMemoryKeyStore(),
+      }).success).toBe(true)
     }
     finally {
       await crypto.close()
@@ -909,7 +986,12 @@ describe('createProject — fullstack 类型', () => {
       if (!parsed.success)
         throw new Error(parsed.error.message)
       expect(values.HAI_ADMIN_DEFAULT_PASSWORD).toMatch(/^Aa1!.{24,}$/)
-      for (const name of ['HAI_ADMIN_DEFAULT_PASSWORD', 'HAI_AUDIT_ADMIN_PASSWORD', 'HAI_CONFIG_ADMIN_PASSWORD', 'HAI_BUSINESS_OPERATOR_PASSWORD']) {
+      for (const name of [
+        'HAI_ADMIN_DEFAULT_PASSWORD',
+        'HAI_AUDIT_ADMIN_PASSWORD',
+        'HAI_CONFIG_ADMIN_PASSWORD',
+        'HAI_BUSINESS_OPERATOR_PASSWORD',
+      ]) {
         const credential = values[name]
         expect(credential).toMatch(/^Aa1!.{24,}$/)
         bootstrapPasswords.add(credential!)
@@ -935,7 +1017,16 @@ describe('createProject — fullstack 类型', () => {
     expect(dockerignoreLines).toContain('**/.hai')
     expect(dockerignoreLines).not.toContain('.env')
     expect(dockerignoreLines).not.toContain('.env.*')
-    await createProject({ name: 'proj-fullstack-env-other', appType: 'fullstack', frontends: ['web'], defaults: true, install: false, git: false, cwd: tmpRoot, packageManager: 'pnpm' })
+    await createProject({
+      name: 'proj-fullstack-env-other',
+      appType: 'fullstack',
+      frontends: ['web'],
+      defaults: true,
+      install: false,
+      git: false,
+      cwd: tmpRoot,
+      packageManager: 'pnpm',
+    })
     expect(await readText(path.join(tmpRoot, 'proj-fullstack-env-other'), '.env.dev')).not.toContain(password)
     expect(await readText(path.join(tmpRoot, 'proj-fullstack-env-other'), '.env.dev')).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
   }, 30_000)
@@ -944,8 +1035,22 @@ describe('createProject — fullstack 类型', () => {
     const workspace = await readText(projectPath, 'pnpm-workspace.yaml')
     expect(workspace).toContain('packages/*')
     expect(workspace).toContain('apps/*')
-    expectHaiCatalogEntries(workspace, ['@h-ai/api-contract', '@h-ai/api-client', '@h-ai/capacitor', '@h-ai/core', '@h-ai/serv', '@h-ai/ui'])
-    expectCatalogPackageNames(workspace, ['@playwright/test', '@tauri-apps/cli', '@types/node', 'daisyui', 'tsup', 'zod'])
+    expectHaiCatalogEntries(workspace, [
+      '@h-ai/api-contract',
+      '@h-ai/api-client',
+      '@h-ai/capacitor',
+      '@h-ai/core',
+      '@h-ai/serv',
+      '@h-ai/ui',
+    ])
+    expectCatalogPackageNames(workspace, [
+      '@playwright/test',
+      '@tauri-apps/cli',
+      '@types/node',
+      'daisyui',
+      'tsup',
+      'zod',
+    ])
 
     const pkg = await readJson(projectPath, 'package.json')
     expectNonWorkspaceDepsUseCatalog(pkg)
@@ -1031,15 +1136,32 @@ describe('createProject — fullstack 类型', () => {
     expect(audit.alerts.enabled).toBe('$' + '{HAI_AUDIT_ALERTS_ENABLED:false}')
     expect(audit.alerts.schedule.enabled).toBe('$' + '{HAI_AUDIT_ALERTS_SCHEDULE_ENABLED:false}')
     const reach = parse(await readText(projectPath, 'packages/proj-fullstack-serv/config/_reach.yml'))
-    expect(reach.templates.map((template: { name: string }) => template.name)).toEqual(['otp_email', 'otp_sms', 'password_reset', 'password_reset_sms'])
+    expect(reach.templates.map((template: { name: string }) => template.name)).toEqual([
+      'otp_email',
+      'otp_sms',
+      'password_reset',
+      'password_reset_sms',
+    ])
     expect(await readText(projectPath, '.env.example')).toContain('\n# HAI_AI_LLM_APIKEY=')
     // 公共 .env 提供基础参数，私有值仅放 .env.local。
     const envDefaults = (await readText(projectPath, '.env.example')).split('\n').filter(line => /^HAI_(?:CORE|DB|CACHE|STORAGE)_/.test(line))
     expect(envDefaults).toContain('HAI_DB_TYPE=\'sqlite\'')
-    for (const file of ['.env', '.env.dev', '.env.test', '.env.prod'])
+    for (const file of [
+      '.env',
+      '.env.dev',
+      '.env.test',
+      '.env.prod',
+    ])
       expect(await exists(projectPath, file)).toBe(true)
     const activeEnvNames = (await readText(projectPath, '.env')).split('\n').filter(line => /^[A-Z_]+=/.test(line)).map(line => line.slice(0, line.indexOf('=')))
-    expect(activeEnvNames).toEqual(expect.arrayContaining(['HAI_CORE_NAME', 'HAI_DB_TYPE', 'HAI_CACHE_TYPE', 'HAI_STORAGE_TYPE', 'HAI_ADMIN_DEFAULT_PASSWORD', 'PUBLIC_API_BASE']))
+    expect(activeEnvNames).toEqual(expect.arrayContaining([
+      'HAI_CORE_NAME',
+      'HAI_DB_TYPE',
+      'HAI_CACHE_TYPE',
+      'HAI_STORAGE_TYPE',
+      'HAI_ADMIN_DEFAULT_PASSWORD',
+      'PUBLIC_API_BASE',
+    ]))
 
     const servConfig = await readText(projectPath, 'packages/proj-fullstack-serv/config/_serv.yml')
     expect(servConfig).toContain('origin: $' + '{HAI_SERV_CORS_ORIGIN:*}')
@@ -1070,17 +1192,40 @@ describe('createProject — fullstack 类型', () => {
     const testFile = await readText(projectPath, 'packages/proj-fullstack-serv/tests/app-server.test.ts')
     expect(testFile).toContain('mini administration')
     expect(testFile).toContain('crypto.transport.createClient')
-    for (const moduleName of ['iam', 'reldb', 'cache', 'crypto', 'storage', 'audit']) {
+    for (const moduleName of [
+      'iam',
+      'reldb',
+      'cache',
+      'crypto',
+      'storage',
+      'audit',
+    ]) {
       expect(pkg.dependencies[`@h-ai/${moduleName}`]).toBe(HAI_DEP_SPECIFIER)
     }
-    for (const configKey of ['core', 'db', 'cache', 'storage', 'iam', 'audit']) {
+    for (const configKey of [
+      'core',
+      'db',
+      'cache',
+      'storage',
+      'iam',
+      'audit',
+    ]) {
       expect(await exists(projectPath, `packages/proj-fullstack-serv/config/_${configKey}.yml`)).toBe(true)
     }
     const iamConfig = await readText(projectPath, 'packages/proj-fullstack-serv/config/_iam.yml')
     expect(iamConfig).toContain('seedDefaultData: $' + '{HAI_IAM_SEEDDEFAULTDATA:false}')
     expect(iamConfig).toContain('variant: split')
     const envExample = await readText(projectPath, '.env.example')
-    for (const name of ['BASE_URL', 'HAI_E2E_WEB_URL', 'HAI_E2E_APP_URL', 'HAI_E2E_DESKTOP_URL', 'E2E_ADMIN_PASSWORD', 'E2E_AUDIT_ADMIN_PASSWORD', 'E2E_CONFIG_ADMIN_PASSWORD', 'E2E_BUSINESS_OPERATOR_PASSWORD'])
+    for (const name of [
+      'BASE_URL',
+      'HAI_E2E_WEB_URL',
+      'HAI_E2E_APP_URL',
+      'HAI_E2E_DESKTOP_URL',
+      'E2E_ADMIN_PASSWORD',
+      'E2E_AUDIT_ADMIN_PASSWORD',
+      'E2E_CONFIG_ADMIN_PASSWORD',
+      'E2E_BUSINESS_OPERATOR_PASSWORD',
+    ])
       expect(envExample).toContain(`# ${name}=`)
     expect(envExample).toContain('HAI_ADMIN_DEFAULT_PASSWORD=')
     expect(envExample).toContain('PUBLIC_API_BASE=http://127.0.0.1:3000')
@@ -1103,7 +1248,9 @@ describe('createProject — fullstack 类型', () => {
     expect(dockerfile.indexOf('pnpm fetch')).toBeGreaterThanOrEqual(0)
     // file: 包归档是离线交付材料，fetch 前必须已在构建上下文内。
     expect(dockerfile.indexOf('COPY images/dependencies/ ./')).toBeLessThan(dockerfile.indexOf('pnpm fetch'))
-    expect(dockerfile.indexOf('pnpm install --offline --frozen-lockfile --ignore-scripts')).toBeLessThan(dockerfile.indexOf(dockerfile.includes('COPY packages/') ? 'COPY packages/' : 'COPY . .'))
+    expect(dockerfile.indexOf('pnpm install --offline --frozen-lockfile --ignore-scripts')).toBeLessThan(dockerfile.indexOf(dockerfile.includes('COPY packages/')
+      ? 'COPY packages/'
+      : 'COPY . .'))
     expect(dockerfile).not.toContain('ARG PUBLIC_API_BASE')
     const webDockerfile = await readText(projectPath, 'images/web.Dockerfile')
     expect(webDockerfile).toContain('NGINX_ENVSUBST_OUTPUT_DIR=/tmp/hai-runtime-config')
@@ -1140,7 +1287,9 @@ describe('createProject — fullstack 类型', () => {
       expect(pkg.dependencies['proj-fullstack-shared']).toBe('workspace:*')
       expect(pkg.scripts['paraglide:compile']).toContain('paraglide-js compile')
       expect(pkg.scripts.typecheck).toContain('pnpm paraglide:compile')
-      expect(pkg.scripts.package).toBe(target === 'app' ? 'pnpm package:android' : 'pnpm build')
+      expect(pkg.scripts.package).toBe(target === 'app'
+        ? 'pnpm package:android'
+        : 'pnpm build')
       expect(pkg.scripts.typecheck).not.toContain('svelte-kit sync')
       expect(await exists(projectPath, `apps/proj-fullstack-${target}/index.html`)).toBe(true)
       expect(await exists(projectPath, `apps/proj-fullstack-${target}/src/main.ts`)).toBe(true)
@@ -1376,7 +1525,12 @@ describe('createProject — fullstack 前端条件生成', () => {
     expect(await exists(projectPath, 'apps/proj-fullstack-web-only-miniapp/README.md')).toBe(false)
 
     const workspace = await readText(projectPath, 'pnpm-workspace.yaml')
-    expectCatalogPackageNames(workspace, ['@playwright/test', '@types/node', 'daisyui', 'zod'])
+    expectCatalogPackageNames(workspace, [
+      '@playwright/test',
+      '@types/node',
+      'daisyui',
+      'zod',
+    ])
     expect(workspace).not.toContain('\'@capacitor/core\':')
     expect(workspace).not.toContain('\'@tauri-apps/cli\':')
   })
@@ -1464,11 +1618,18 @@ describe('ai 支持交付与回填', () => {
   it.each(['init', 'add'] as const)('旧项目 %s 应补齐框架升级流程并保留自定义规则', async (command) => {
     const dir = path.join(tmpRoot, `framework-upgrade-backfill-${command}`)
     const customAgents = '# custom project rules\n'
-    const customUpgradeSkill = command === 'add' ? '# custom framework upgrade rules\n' : undefined
+    const customUpgradeSkill = command === 'add'
+      ? '# custom framework upgrade rules\n'
+      : undefined
     const originalPackage = {
       name: `legacy-framework-${command}`,
       version: '0.1.0',
-      dependencies: { '@h-ai/core': HAI_DEP_VERSION, '@h-ai/ai': HAI_DEP_VERSION, '@h-ai/reldb': HAI_DEP_VERSION, '@h-ai/vecdb': HAI_DEP_VERSION },
+      dependencies: {
+        '@h-ai/core': HAI_DEP_VERSION,
+        '@h-ai/ai': HAI_DEP_VERSION,
+        '@h-ai/reldb': HAI_DEP_VERSION,
+        '@h-ai/vecdb': HAI_DEP_VERSION,
+      },
     }
     await fse.outputJson(path.join(dir, 'package.json'), originalPackage)
     await fse.outputFile(path.join(dir, 'AGENTS.md'), customAgents)
@@ -1480,10 +1641,20 @@ describe('ai 支持交付与回填', () => {
       await initProject({ cwd: dir, force: true, verbose: false })
     }
     else {
-      await addModule({ module: 'ai', install: false, cwd: dir, verbose: false })
+      await addModule({
+        module: 'ai',
+        install: false,
+        cwd: dir,
+        verbose: false,
+      })
     }
 
-    for (const resource of ['hai-framework-sync/SKILL.md', 'hai-framework-sync/sync.md', 'hai-ci/SKILL.md', 'hai-pr-review/SKILL.md']) {
+    for (const resource of [
+      'hai-framework-sync/SKILL.md',
+      'hai-framework-sync/sync.md',
+      'hai-ci/SKILL.md',
+      'hai-pr-review/SKILL.md',
+    ]) {
       expect(await exists(dir, `.agents/skills/${resource}`), resource).toBe(true)
       const expected = resource === 'hai-framework-sync/SKILL.md' && customUpgradeSkill !== undefined
         ? customUpgradeSkill
@@ -1508,7 +1679,14 @@ describe('ai 支持交付与回填', () => {
     expect(copied).toContain('.agents/skills/hai-app-create/collaboration.md')
     expect(await readText(dir, '.agents/skills/hai-app-create/collaboration.md'))
       .toBe(await fse.readFile(path.join(skillTemplatesDir, 'hai-app-create/collaboration.md'), 'utf8'))
-    for (const skillName of ['hai-build', 'hai-spec-review', 'hai-spec-implement', 'hai-app-review', 'hai-app-tests', 'hai-ai']) {
+    for (const skillName of [
+      'hai-build',
+      'hai-spec-review',
+      'hai-spec-implement',
+      'hai-app-review',
+      'hai-app-tests',
+      'hai-ai',
+    ]) {
       expect(await exists(dir, `.agents/skills/${skillName}/SKILL.md`)).toBe(true)
     }
     expect(await generateModuleSkillFile(dir, 'ai')).toBeNull()
@@ -1523,7 +1701,13 @@ describe('ai 支持交付与回填', () => {
     const copied = await generateProjectAiSupport(dir, [], { overwriteSkills: false, overwriteBridgeFiles: false })
 
     expect(await readText(dir, `${skillRoot}/SKILL.md`)).toBe(customSkill)
-    for (const resource of ['workflow.md', 'templates.md', 'changes.md', 'handoff.md', 'evaluation.md']) {
+    for (const resource of [
+      'workflow.md',
+      'templates.md',
+      'changes.md',
+      'handoff.md',
+      'evaluation.md',
+    ]) {
       expect(copied).toContain(`${skillRoot}/${resource}`)
       expect(await readText(dir, `${skillRoot}/${resource}`))
         .toBe(await fse.readFile(path.join(skillTemplatesDir, 'hai-spec-implement', resource), 'utf8'))
@@ -1537,7 +1721,11 @@ describe('ai 支持交付与回填', () => {
     await fse.outputFile(path.join(dir, '.agents/skills/hai-ui-design/SKILL.md'), custom)
     await generateModuleSkillFile(dir, 'ui')
     expect(await readText(dir, '.agents/skills/hai-ui-design/SKILL.md')).toBe(custom)
-    for (const [skill, resource] of [['hai-ui-design', 'patterns.md'], ['hai-ui-review', 'checklist.md'], ['hai-ui-review', 'SKILL.md']]) {
+    for (const [skill, resource] of [
+      ['hai-ui-design', 'patterns.md'],
+      ['hai-ui-review', 'checklist.md'],
+      ['hai-ui-review', 'SKILL.md'],
+    ]) {
       expect(await readText(dir, `.agents/skills/${skill}/${resource}`))
         .toBe(await fse.readFile(path.join(skillTemplatesDir, skill, resource), 'utf8'))
     }
@@ -1559,9 +1747,24 @@ describe('ai 支持交付与回填', () => {
     await expectCompatibleSkills(dir, 'fullstack')
   })
 
+  it('api 回填识别当前契约与 serv 目录并恢复专属入口', async () => {
+    const dir = path.join(tmpRoot, 'skill-api-backfill')
+    await fse.outputJson(path.join(dir, 'package.json'), { name: 'actual-api', private: true })
+    for (const suffix of ['contract', 'serv'])
+      await fse.outputJson(path.join(dir, `apps/actual-api-${suffix}/package.json`), { name: `actual-api-${suffix}` })
+    await generateProjectAiSupport(dir, [])
+    const agents = await readText(dir, 'AGENTS.md')
+    expect(agents).toContain('API workspace')
+    expect(agents).toContain('apps/*-serv/src/**')
+    await expectCompatibleSkills(dir, 'api')
+  })
+
   it('单应用回填应使用 package.json 中已有的模板标识', async () => {
     const dir = path.join(tmpRoot, 'skill-admin-backfill')
-    await fse.outputJson(path.join(dir, 'package.json'), { name: 'actual-admin', keywords: ['hai', 'sveltekit', 'admin'] })
+    await fse.outputJson(path.join(dir, 'package.json'), {
+      name: 'actual-admin',
+      keywords: ['hai', 'sveltekit', 'admin'],
+    })
 
     await generateProjectAiSupport(dir, [])
 
@@ -1571,12 +1774,17 @@ describe('ai 支持交付与回填', () => {
 
   it('无法确认实际布局时应保留通用入口且仍交付普通开发工作流', async () => {
     const dir = path.join(tmpRoot, 'skill-unknown-project')
-    await fse.outputJson(path.join(dir, 'package.json'), { name: 'unknown-project', keywords: ['fullstack'] })
+    await fse.outputJson(path.join(dir, 'package.json'), {
+      name: 'unknown-project',
+      keywords: ['fullstack'],
+    })
 
     await generateProjectAiSupport(dir, [])
 
     expect(await readText(dir, 'AGENTS.md')).toContain('通用 AI 编程助手入口')
     expect(await exists(dir, '.agents/skills/hai-app-create/development.md')).toBe(true)
+    expect(await readText(dir, '.agents/skills/hai-app-create/project.md')).toContain('../hai-change-plan/SKILL.md')
+    expect(await exists(dir, '.agents/skills/hai-change-plan/SKILL.md')).toBe(true)
   })
 })
 
@@ -1584,16 +1792,45 @@ describe('addModule', () => {
   it('adds and repairs root deployment configuration while preserving build and custom fields', async () => {
     const dir = path.join(tmpRoot, 'add-deploy-config')
     await fse.ensureDir(dir)
-    await fse.writeJson(path.join(dir, 'package.json'), { name: 'add-deploy-config', version: '0.1.0', dependencies: { '@h-ai/core': 'workspace:*' } })
-    const build = { images: [{ name: 'serv', dockerfile: 'images/serv.Dockerfile' }] }
-    await fse.writeJson(path.join(dir, 'hai.json'), { build, custom: { enabled: true } })
-    await addModule({ module: 'deploy', install: false, cwd: dir, verbose: false })
+    await fse.writeJson(path.join(dir, 'package.json'), {
+      name: 'add-deploy-config',
+      version: '0.1.0',
+      dependencies: { '@h-ai/core': 'workspace:*' },
+    })
+    const build = {
+      images: [
+        { name: 'serv', dockerfile: 'images/serv.Dockerfile' },
+      ],
+    }
+    await fse.writeJson(path.join(dir, 'hai.json'), {
+      build,
+      custom: { enabled: true },
+    })
+    await addModule({
+      module: 'deploy',
+      install: false,
+      cwd: dir,
+      verbose: false,
+    })
     const project = await fse.readJson(path.join(dir, 'hai.json'))
-    expect(project).toMatchObject({ build, custom: { enabled: true }, deploy: { provider: { type: expect.stringContaining('docker-ssh') } } })
+    expect(project).toMatchObject({
+      build,
+      custom: { enabled: true },
+      deploy: {
+        provider: {
+          type: expect.stringContaining('docker-ssh'),
+        },
+      },
+    })
     expect(await fse.pathExists(path.join(dir, 'config/_deploy.yml'))).toBe(false)
     project.deploy.container = { s3Engine: 'minio' }
     await fse.writeJson(path.join(dir, 'hai.json'), project)
-    await addModule({ module: 'deploy', install: false, cwd: dir, verbose: false })
+    await addModule({
+      module: 'deploy',
+      install: false,
+      cwd: dir,
+      verbose: false,
+    })
     expect(await fse.readJson(path.join(dir, 'hai.json'))).toEqual(project)
   })
   it('已有 catalog: 风格时新增模块应继续使用 catalog:', async () => {
@@ -1605,12 +1842,22 @@ describe('addModule', () => {
       dependencies: { '@h-ai/core': 'catalog:' },
     }, { spaces: 2 })
 
-    await addModule({ module: 'ai', install: false, cwd: dir, verbose: false })
+    await addModule({
+      module: 'ai',
+      install: false,
+      cwd: dir,
+      verbose: false,
+    })
 
     const pkg = await fse.readJson(path.join(dir, 'package.json'))
     expect(pkg.dependencies['@h-ai/ai']).toBe('catalog:')
     const workspace = parse(await readText(dir, 'pnpm-workspace.yaml'))
-    for (const name of ['@h-ai/core', '@h-ai/ai', '@h-ai/reldb', '@h-ai/vecdb'])
+    for (const name of [
+      '@h-ai/core',
+      '@h-ai/ai',
+      '@h-ai/reldb',
+      '@h-ai/vecdb',
+    ])
       expect(workspace.catalog[name]).toBe(getCliVersion())
   })
 
@@ -1619,7 +1866,11 @@ describe('addModule', () => {
     const dir = path.join(root, 'apps/service')
     await fse.ensureDir(dir)
     await fse.writeFile(path.join(root, 'pnpm-workspace.yaml'), '# Keep workspace comments\npackages: [\'apps/*\']\ncatalog:\n  \'@h-ai/core\': 1.0.0-beta.6\n')
-    await fse.writeJson(path.join(dir, 'package.json'), { name: 'payment-service', version: '0.1.0', dependencies: { '@h-ai/core': 'catalog:' } })
+    await fse.writeJson(path.join(dir, 'package.json'), {
+      name: 'payment-service',
+      version: '0.1.0',
+      dependencies: { '@h-ai/core': 'catalog:' },
+    })
     await addModule({ module: 'payment', install: false, cwd: dir })
     const pkg = await fse.readJson(path.join(dir, 'package.json'))
     const workspaceText = await fse.readFile(path.join(root, 'pnpm-workspace.yaml'), 'utf8')
@@ -1639,7 +1890,14 @@ describe('addModule', () => {
     await fse.writeJson(path.join(dir, 'package.json'), {
       name: 'recover-add',
       version: '0.1.0',
-      dependencies: { '@h-ai/core': 'catalog:', '@h-ai/ai': 'catalog:', 'zod': 'catalog:', ...(dependenciesWritten ? { '@h-ai/reldb': 'catalog:', '@h-ai/vecdb': 'catalog:' } : {}) },
+      dependencies: {
+        '@h-ai/core': 'catalog:',
+        '@h-ai/ai': 'catalog:',
+        'zod': 'catalog:',
+        ...(dependenciesWritten
+          ? { '@h-ai/reldb': 'catalog:', '@h-ai/vecdb': 'catalog:' }
+          : {}),
+      },
     })
     await fse.writeFile(path.join(dir, 'pnpm-workspace.yaml'), '# Existing version\npackages: []\ncatalog:\n  \'@h-ai/core\': 1.0.0-beta.6\n')
     await addModule({ module: 'ai', install: false, cwd: dir })
@@ -1666,7 +1924,12 @@ describe('addModule', () => {
       dependencies: { '@h-ai/core': 'workspace:*' },
     }, { spaces: 2 })
 
-    await addModule({ module: 'ai', install: false, cwd: dir, verbose: false })
+    await addModule({
+      module: 'ai',
+      install: false,
+      cwd: dir,
+      verbose: false,
+    })
 
     const pkg = await fse.readJson(path.join(dir, 'package.json'))
     expect(pkg.dependencies['@h-ai/ai']).toBeDefined()
@@ -1700,7 +1963,12 @@ describe('addModule', () => {
       dependencies: { '@h-ai/core': 'workspace:*' },
     }, { spaces: 2 })
 
-    await addModule({ module: 'storage', install: false, cwd: dir, verbose: false })
+    await addModule({
+      module: 'storage',
+      install: false,
+      cwd: dir,
+      verbose: false,
+    })
 
     const pkg = await fse.readJson(path.join(dir, 'package.json'))
     expect(pkg.dependencies['@h-ai/storage']).toBeDefined()
@@ -1720,7 +1988,12 @@ describe('addModule', () => {
       },
     }, { spaces: 2 })
 
-    await addModule({ module: 'iam', install: false, cwd: dir, verbose: false })
+    await addModule({
+      module: 'iam',
+      install: false,
+      cwd: dir,
+      verbose: false,
+    })
 
     const pkg = await fse.readJson(path.join(dir, 'package.json'))
     expect(pkg.dependencies['@h-ai/iam']).toBeDefined()
@@ -1739,7 +2012,12 @@ describe('addModule', () => {
       },
     }, { spaces: 2 })
 
-    await addModule({ module: 'ai', install: false, cwd: dir, verbose: false })
+    await addModule({
+      module: 'ai',
+      install: false,
+      cwd: dir,
+      verbose: false,
+    })
 
     expect(await fse.pathExists(path.join(dir, '.github/copilot-instructions.md'))).toBe(true)
     expect(await fse.pathExists(path.join(dir, 'AGENTS.md'))).toBe(true)
@@ -1776,11 +2054,18 @@ describe('addModule', () => {
     await fse.writeFile(path.join(dir, '.github', 'copilot-instructions.md'), '# custom copilot\n')
     await fse.writeJson(path.join(dir, 'opencode.json'), {
       instructions: ['CUSTOM.md'],
-      skills: { paths: ['legacy-skills'] },
+      skills: {
+        paths: ['legacy-skills'],
+      },
     }, { spaces: 2 })
     await fse.writeFile(path.join(dir, '.github', 'skills', 'hai-ai', 'SKILL.md'), 'legacy skill\n')
 
-    await addModule({ module: 'ai', install: false, cwd: dir, verbose: false })
+    await addModule({
+      module: 'ai',
+      install: false,
+      cwd: dir,
+      verbose: false,
+    })
 
     expect(await fse.readFile(path.join(dir, 'AGENTS.md'), 'utf8')).toBe('# custom agents\n')
     expect(await fse.readFile(path.join(dir, 'CLAUDE.md'), 'utf8')).toBe('# custom claude\n')
@@ -1810,7 +2095,12 @@ describe('addModule', () => {
     await fse.writeJson(path.join(dir, 'package.json'), originalPkg, { spaces: 2 })
 
     // db 已安装，addModule 应静默退出
-    await addModule({ module: 'db', install: false, cwd: dir, verbose: false })
+    await addModule({
+      module: 'db',
+      install: false,
+      cwd: dir,
+      verbose: false,
+    })
 
     const pkg = await fse.readJson(path.join(dir, 'package.json'))
     // 版本号不应被更改
@@ -2002,7 +2292,13 @@ describe('generate', () => {
     await fse.writeJson(path.join(projectDir, 'package.json'), {
       name: 'gen-test',
       version: '0.1.0',
-      dependencies: { '@h-ai/core': 'workspace:*', '@h-ai/kit': 'workspace:*', '@sveltejs/kit': '^2', 'svelte': '^5', 'zod': '*' },
+      dependencies: {
+        '@h-ai/core': 'workspace:*',
+        '@h-ai/kit': 'workspace:*',
+        '@sveltejs/kit': '^2',
+        'svelte': '^5',
+        'zod': '*',
+      },
     })
   })
 
@@ -2011,19 +2307,41 @@ describe('generate', () => {
       const output = path.join(projectDir, 'src/routes/safe-pages')
       const serverPath = path.join(output, 'kept', '+page.server.ts')
       await fse.outputFile(serverPath, '// user implementation')
-      await expect(generate({ type: 'page', name: 'kept', output, cwd: projectDir })).rejects.toThrow()
+      await expect(generate({
+        type: 'page',
+        name: 'kept',
+        output,
+        cwd: projectDir,
+      })).rejects.toThrow()
       expect(await fse.readFile(serverPath, 'utf8')).toBe('// user implementation')
       expect(await fse.pathExists(path.join(output, 'kept', '+page.svelte'))).toBe(false)
-      await generate({ type: 'page', name: 'kept', output, cwd: projectDir, force: true })
+      await generate({
+        type: 'page',
+        name: 'kept',
+        output,
+        cwd: projectDir,
+        force: true,
+      })
       expect(await fse.readFile(serverPath, 'utf8')).toContain('PageServerLoad')
     })
 
-    it.each(['../escape', 'nested/name', 'nested\\name', 'bad\';code', '123name'])('拒绝不安全生成名称 %s', async (name) => {
+    it.each([
+      '../escape',
+      'nested/name',
+      'nested\\name',
+      'bad\';code',
+      '123name',
+    ])('拒绝不安全生成名称 %s', async (name) => {
       await expect(generate({ type: 'page', name, cwd: projectDir })).rejects.toThrow()
     })
 
     it('输出路径越界时抛错，使 CLI 返回非零退出码', async () => {
-      await expect(generate({ type: 'model', name: 'escape', output: '../outside', cwd: projectDir })).rejects.toThrow()
+      await expect(generate({
+        type: 'model',
+        name: 'escape',
+        output: '../outside',
+        cwd: projectDir,
+      })).rejects.toThrow()
     })
     it('应生成 +page.svelte 和 +page.server.ts', async () => {
       await generate({

@@ -7,11 +7,11 @@
   采用分类（DemoSection）+ 可折叠示例卡片（DemoCard，含效果与可复制源码）。
 -->
 <script lang='ts'>
-  // Range 与 DOM 全局类型同名，必须显式导入
-  import DemoCard from '$lib/components/gallery/DemoCard.svelte'
-  import DemoSection from '$lib/components/gallery/DemoSection.svelte'
-  import * as m from '$lib/paraglide/messages.js'
   import { Range, toast } from '@h-ai/ui'
+  // Range 与 DOM 全局类型同名，必须显式导入
+  import DemoCard from '#lib/components/gallery/DemoCard.svelte'
+  import DemoSection from '#lib/components/gallery/DemoSection.svelte'
+  import * as m from '#lib/paraglide/messages.js'
 
   // === 表单状态 ===
   let inputVal = $state('')
@@ -256,8 +256,12 @@
           </div>
           <div>
             <label class='text-sm font-medium mb-1 block' for='g-input-err'>{m.gallery_demo_error_state()}</label>
-            <Button size='sm' class='mb-2' data-testid='input-error-demo' onclick={() => showInputError = !showInputError}>{showInputError ? m.gallery_demo_clear_validation_feedback() : m.gallery_demo_show_validation_feedback()}</Button>
-            <Input id='g-input-err' value={m.gallery_demo_invalid_content()} error={showInputError ? m.gallery_demo_enter_a_valid_value() : undefined} />
+            <Button size='sm' class='mb-2' data-testid='input-error-demo' onclick={() => showInputError = !showInputError}>{showInputError
+              ? m.gallery_demo_clear_validation_feedback()
+              : m.gallery_demo_show_validation_feedback()}</Button>
+            <Input id='g-input-err' value={m.gallery_demo_invalid_content()} error={showInputError
+              ? m.gallery_demo_enter_a_valid_value()
+              : undefined} />
           </div>
           <div>
             <label class='text-sm font-medium mb-1 block' for='g-input-dis'>{m.gallery_crypto_disabled()}</label>
@@ -316,7 +320,9 @@
             <Switch checked={false} disabled label={m.gallery_demo_disabled()} />
             <Switch checked disabled label={m.gallery_demo_disabled_on()} />
           </div>
-          <p class='text-xs text-base-content/50 mt-2'>{m.gallery_demo_notifications_2()} {switchVal ? m.gallery_demo_on() : m.gallery_demo_off()}</p>
+          <p class='text-xs text-base-content/50 mt-2'>{m.gallery_demo_notifications_2()} {switchVal
+            ? m.gallery_demo_on()
+            : m.gallery_demo_off()}</p>
         </fieldset>
         <fieldset>
           <legend class='text-sm font-medium mb-3'>{m.gallery_demo_radio_buttons()}</legend>
@@ -346,8 +352,12 @@
         </div>
         <div>
           <label class='text-sm font-medium mb-1 block' for='g-sel-err'>{m.gallery_demo_error_state()}</label>
-          <Button size='sm' class='mb-2' data-testid='select-error-demo' onclick={() => showSelectError = !showSelectError}>{showSelectError ? m.gallery_demo_clear_validation_feedback() : m.gallery_demo_show_validation_feedback()}</Button>
-          <Select id='g-sel-err' options={selectOpts} placeholder={m.gallery_demo_select_an_option()} error={showSelectError ? m.gallery_demo_select_an_option_2() : undefined} />
+          <Button size='sm' class='mb-2' data-testid='select-error-demo' onclick={() => showSelectError = !showSelectError}>{showSelectError
+            ? m.gallery_demo_clear_validation_feedback()
+            : m.gallery_demo_show_validation_feedback()}</Button>
+          <Select id='g-sel-err' options={selectOpts} placeholder={m.gallery_demo_select_an_option()} error={showSelectError
+            ? m.gallery_demo_select_an_option_2()
+            : undefined} />
         </div>
       </div>
     </DemoCard>
@@ -421,15 +431,21 @@
         <div class='flex flex-wrap items-center gap-8'>
           <label class='flex items-center gap-2 cursor-pointer'>
             <ToggleCheckbox bind:checked={toggleCheck} />
-            <span class='text-sm'>ToggleCheckbox: {toggleCheck ? m.gallery_demo_on() : m.gallery_demo_off()}</span>
+            <span class='text-sm'>ToggleCheckbox: {toggleCheck
+              ? m.gallery_demo_on()
+              : m.gallery_demo_off()}</span>
           </label>
           <label class='flex items-center gap-2 cursor-pointer'>
             <ToggleInput bind:checked={toggleInput} />
-            <span class='text-sm'>ToggleInput: {toggleInput ? m.gallery_demo_on() : m.gallery_demo_off()}</span>
+            <span class='text-sm'>ToggleInput: {toggleInput
+              ? m.gallery_demo_on()
+              : m.gallery_demo_off()}</span>
           </label>
           <label class='flex items-center gap-2 cursor-pointer'>
             <ToggleRadio bind:checked={toggleRadio} />
-            <span class='text-sm'>ToggleRadio: {toggleRadio ? m.gallery_demo_on() : m.gallery_demo_off()}</span>
+            <span class='text-sm'>ToggleRadio: {toggleRadio
+              ? m.gallery_demo_on()
+              : m.gallery_demo_off()}</span>
           </label>
         </div>
         <div class='flex flex-wrap items-center gap-8'>

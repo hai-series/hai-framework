@@ -28,7 +28,7 @@
 }
 {{else}}
 {
-  "extends": "./.svelte-kit/tsconfig.json",
+  "extends": "$app/tsconfig",
   "compilerOptions": {
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
@@ -39,12 +39,15 @@
     "skipLibCheck": true
   },
   "include": [
-    "src/**/*",
-    "src/**/*.svelte"
+    "src",
+    "tests",
+    "*.ts",
+    "*.js"
   ],
   "exclude": [
     "node_modules",
-    ".svelte-kit"
+    "build",
+    "src/service-worker"
   ]
 }
 {{/if}}

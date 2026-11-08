@@ -8,6 +8,8 @@
 
 `@h-ai/kit` 是 hai-framework 的 SvelteKit 集成模块，提供统一的请求管道与同源 endpoint 工具：
 
+运行时统一通过 `kit.xx` 使用。根入口公开 `KitFunctions`（服务端）和 `BrowserKitFunctions`（浏览器）命名空间类型，浏览器条件入口的 `kit` 仅包含客户端、CRUD、页面 Token 与默认语言操作。`AuthCookieWriter` 是服务端认证对当前请求 Cookie 的最小写入契约。导出这些方法或命名空间时，可直接生成消费者声明，无需导入内部 helper。
+
 - `kit.createHandle()`：会话解析、路由守卫、中间件链、可选传输加密与 Cookie 加密
 - `kit.handler()`：API 端点异常边界
 - `kit.guard` / `kit.response` / `kit.validate` / `kit.auth` / `kit.client` / `kit.crud`
@@ -33,7 +35,7 @@
 ### 安装
 
 ```bash
-npm install @h-ai/kit @h-ai/core sm-crypto@0.5.7
+npm install @h-ai/kit @h-ai/core sm-crypto@0.5.8
 npm install svelte @sveltejs/kit zod
 npm install -D @sveltejs/vite-plugin-svelte vite
 ```
@@ -47,44 +49,43 @@ npm install -D @sveltejs/vite-plugin-svelte vite
 
 #### 项目配置
 
-**svelte.config.js**：
-
-```js
-import adapter from '@sveltejs/adapter-node'
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
-
-const config = {
-  preprocess: [vitePreprocess()],
-  compilerOptions: { runes: true },
-  kit: {
-    adapter: adapter(),
-    // 双构建模式：import { createAdapter } from '@h-ai/kit/adapter'
-    // adapter: await createAdapter(),
-  },
-}
-
-export default config
-```
-
 **vite.config.ts**：
 
 ```ts
+import adapter from '@sveltejs/adapter-node'
 import { sveltekit } from '@sveltejs/kit/vite'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [sveltekit(), tailwindcss()],
-  optimizeDeps: { exclude: ['bits-ui'] },
-  ssr: { noExternal: ['@h-ai/ui', '@h-ai/kit'], external: ['@h-ai/core', 'sm-crypto'] },
+  plugins: [
+    sveltekit({
+      adapter: adapter(),
+      preprocess: [
+        vitePreprocess()
+      ],
+      compilerOptions: { runes: true },
+      // 绝对路径保持 SSR 与浏览器端认证、加密路径一致。
+      paths: { base: '', relative: false },
+    }),
+    tailwindcss(),
+  ],
+  optimizeDeps: {
+    exclude: ['bits-ui']
+  },
+  ssr: {
+    noExternal: ['@h-ai/ui', '@h-ai/kit'],
+    external: ['@h-ai/core', 'sm-crypto']
+  },
 })
 ```
 
-使用 Crypto 或依赖它的 Kit/IAM 时，应用生产依赖需包含 `sm-crypto@0.5.7`。CLI 已配好这一项；手工接入时运行 `pnpm add sm-crypto@0.5.7`。仅设置 external 不够，adapter-node 还需要这项直接依赖声明才能保留原包加载。
+使用 Crypto 或依赖它的 Kit/IAM 时，应用生产依赖需包含 `sm-crypto@0.5.8`。CLI 已配好这一项；手工接入时运行 `pnpm add sm-crypto@0.5.8`。仅设置 external 不够，adapter-node 还需要这项直接依赖声明才能保留原包加载。
 
 #### 搭建请求管道
 
-应用部署在 `/yyy/` 等子目录时，SvelteKit 的 `kit.paths.base` 与守卫使用的实际 URL 应保持一致：将 `$app/paths` 的 `base` 加到 `protectedPaths`、`publicPaths` 和 `loginUrl`，例如 `${base}/api/*`。认证页面使用 ``kit.client.createAuthActions({ basePath: `${base}/api/auth` })``。Kit 根据应用路由识别 `/api/*`，包括路由分组和挂载前缀；未认证的 API 返回 401，页面按配置跳转登录。生成模板已处理这些路径。
+应用部署在 `/yyy/` 等子目录时，SvelteKit 的 `paths.base` 与守卫使用的实际 URL 应保持一致：将 `resolve('/').replace(/\/$/, '')`（配置 `paths.relative: false`） 加到 `protectedPaths`、`publicPaths` 和 `loginUrl`，例如 `${base}/api/*`。认证页面使用 ``kit.client.createAuthActions({ basePath: `${base}/api/auth` })``。Kit 根据应用路由识别 `/api/*`，包括路由分组和挂载前缀；未认证的 API 返回 401，页面按配置跳转登录。生成模板已处理这些路径。
 
 以下 Hook 片段假设应用已完成数据库、共享缓存和 IAM 初始化，并检查每项初始化结果。关闭资源由应用统一负责；不在每个请求中初始化模块。
 
@@ -106,7 +107,11 @@ const haiHandle = kit.createHandle({
     protectedPaths: ['/admin/*', '/api/*'],
     publicPaths: ['/api/auth/*', '/api/public/*'],
   },
-  rateLimit: { windowMs: 60_000, maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' }) },
+  rateLimit: {
+    windowMs: 60_000,
+    maxRequests: 100,
+    store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' })
+  },
   logging: true,
 })
 
@@ -147,7 +152,7 @@ export const { apiFetch } = client
 
 ```typescript
 // 使用
-import { apiFetch } from '$lib/utils/api'
+import { apiFetch } from '#lib/utils/api.js'
 
 const response = await apiFetch('/api/users', { method: 'GET' })
 ```
@@ -161,17 +166,19 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 kit 的传输加密也统一委托 `@h-ai/crypto`：服务端通过 `crypto.transport.createServer({ serverKeyRing, keyStore })` 创建管理器，浏览器端通过 `kit.client.installBrowserTransport(kitConfig, { crypto })` 一行安装同源 fetch 包装。服务端还须注入受管密钥环和共享 registry。
 
-部署到子目录时，从 `$app/paths` 读取 `base`：服务端 `crypto.transport` 传入 `basePath: base`，浏览器调用 `installBrowserTransport(kitConfig, { crypto, basePath: base })`；独立 `kit.client.create` 的 `transport.basePath` 采用同一值。默认空字符串表示域名根目录。这个运行时参数来自宿主的构建目录，不在 YAML 另设一份，也不从转发头推断。`keyExchangePath`、`excludePaths` 和路由容量仍使用完整请求路径。CLI 的 SSR 模板已同步装配。
+部署到子目录时，配置 `paths.relative: false`，从 `$app/paths` 以 `resolve('/').replace(/\/$/, '')` 得到 `base`：服务端 `crypto.transport` 传入 `basePath: base`，浏览器调用 `installBrowserTransport(kitConfig, { crypto, basePath: base })`；独立 `kit.client.create` 的 `transport.basePath` 采用同一值。默认空字符串表示域名根目录。这个运行时参数来自宿主的构建目录，不在 YAML 另设一份，也不从转发头推断。`keyExchangePath`、`excludePaths` 和路由容量仍使用完整请求路径。CLI 的 SSR 模板已同步装配。
 
 **src/hooks.server.ts**：
 
 ```ts
-import { base } from '$app/paths'
-import { appKitConfig } from '$lib/server/kit-config'
+import { resolve } from '$app/paths'
 import { cache } from '@h-ai/cache'
 import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+import { appKitConfig } from '#lib/server/kit-config.js'
+
+const base = resolve('/').replace(/\/$/, '')
 
 const cryptoReady = await crypto.init()
 if (!cryptoReady.success)
@@ -209,12 +216,14 @@ export const handle = kit.createHandle({
 
 ```svelte
 <script lang='ts'>
-  import { browser } from '$app/environment'
-  import { base } from '$app/paths'
+  import { browser } from '$app/env'
+  import { resolve } from '$app/paths'
   import { page } from '$app/state'
   import { crypto } from '@h-ai/crypto'
   import { kit } from '@h-ai/kit'
   import { untrack } from 'svelte'
+
+  const base = resolve('/').replace(/\/$/, '')
 
   // 一次性安装：内部按 _kit.yml 决定是否启用 transport，并预热 crypto
   if (browser) {
@@ -282,7 +291,7 @@ export const publicKitConfig = { transport: appKitConfig.transport }
 在 `src/routes/+layout.server.ts` 将公共投影交给上述浏览器布局，不导入服务端配置文件：
 
 ```ts
-import { publicKitConfig } from '$lib/server/kit-config'
+import { publicKitConfig } from '#lib/server/kit-config.js'
 
 export function load() {
   return { kitConfig: publicKitConfig }
@@ -315,6 +324,10 @@ export function load() {
 请求自动审计仅在 `audit.isInitialized` 时执行，纯静态站点或未选 Audit 的应用无需为 handle 初始化它。该状态在每个请求中判断，因此 handle 可先创建、模块随后初始化。选择了 Audit 的应用仍必须检查 `audit.init()` 结果并在失败时停止启动；业务显式 `audit.log/capture` 的未初始化错误不变，已初始化模块的真实写入失败仍记录 `Request audit failed`。需要强制审计的业务应检查显式审计结果，并按业务事务约束提交。
 
 配置 `crypto.encryptedCookies` 时必须同时提供 `crypto.cookieEncryptionKey`，或设置 `HAI_KIT_COOKIE_KEY`。缺少密钥会在 `createHandle()` 时立即报错；受保护 Cookie 的明文、损坏密文或解密失败都按不存在处理，加密失败也不会回退写入明文。
+
+密钥必须是 32 位十六进制字符串。Cookie 使用独立派生的 SM4-CBC/HMAC-SHA256 密钥，认证版本、Cookie 名、IV 与密文后才解密，防止修改或跨名称替换。升级后旧版无认证 Cookie 被视为无效，用户需重新登录；不回退接受旧格式。
+
+原先没有运行入口和真实消费者的 Crypto Helpers 已删除，`CryptoServiceLike`、`EncryptedCookieConfig`、`CryptoCsrfConfig`、`WebhookVerifyConfig` 类型也不再导出。Cookie 保护通过上述 `kit.createHandle` 配置接入；其他加密操作使用 `@h-ai/crypto` 的真实公开契约。
 
 认证 Cookie 的 `Secure` 默认值在 `NODE_ENV` 或 `HAI_CORE_ENV` 为 `production` 时开启，`HAI_E2E` / `HAI_E2E_MOCK` 不降低 Cookie 安全要求。生产限流同样识别这两个环境标志；仅显式测试开关可放宽内存计数器限制。
 
@@ -382,6 +395,14 @@ export const PATCH = handler
 ```
 
 ## 错误提示与关联日志
+
+`kit.response.fromError/fromResult` 保留安全的字段校验 `cause`、显式公开的 `publicExt`（映射为 `ext`）和 `httpStatus`；任意内部 cause/ext 不公开。每次模块失败只写一条关联日志。
+
+HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 `httpStatus` 或状态非法时按 500 返回安全提示。手写业务错误须提供完整错误定义或显式状态，不能依赖缺省状态展示原文。
+
+`kit.response.validationError(errors)` 也沿用同一白名单：响应 `error.cause` 只含本地化的 `field/message`，不回显 rejectedValue、SQL 或其他额外字段，不再使用 `details.errors`。
+
+快捷响应、认证守卫和限流均使用 `HaiCommonError` 标准错误码，附带 `httpStatus`、`traceId` 与 `X-Trace-Id`。未认证返回 `UNAUTHORIZED.code`，无权限返回 `FORBIDDEN.code`，限流返回 `RATE_LIMIT_EXCEEDED.code`（429）；限流存储故障返回安全的 503，原始原因只记服务端日志。
 
 HTTP 错误返回本地化安全文案及追踪编号；ToastContainer 默认隐藏编号，由排查信息图标展开和复制。响应同时包含 `error.traceId` 和 `X-Trace-Id`。框架复用本次 requestId 作为 traceId，前后端日志自动关联。底层异常、堆栈和操作上下文经凭据脱敏后写入日志，不通过 cause/ext 向用户公开。字段校验只返回本地化的字段名和错误。
 

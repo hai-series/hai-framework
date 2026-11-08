@@ -8,13 +8,20 @@ process.once('message', async ({ root, options }) => {
     const initialized = await storage.init({ type: 'local', root })
     if (initialized.success) {
       const result = await storage.dir.list(options)
-      if (result.success)
-        reply = { success: true, keys: result.data.files.map(file => file.key), isTruncated: result.data.isTruncated }
+      if (result.success) {
+        reply = {
+          success: true,
+          keys: result.data.files.map(file => file.key),
+          isTruncated: result.data.isTruncated,
+        }
+      }
     }
   }
   finally {
     const closed = await storage.close()
-    process.send?.(closed.success ? reply : { success: false })
+    process.send?.(closed.success
+      ? reply
+      : { success: false })
     process.disconnect()
   }
 })

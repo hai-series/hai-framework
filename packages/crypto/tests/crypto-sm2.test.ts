@@ -56,7 +56,9 @@ describe('crypto.asymmetric', () => {
       return
 
     const publicKey = result.data.publicKey
-    const trimmed = publicKey.startsWith('04') ? publicKey.slice(2) : publicKey
+    const trimmed = publicKey.startsWith('04')
+      ? publicKey.slice(2)
+      : publicKey
     expect(crypto.asymmetric.isValidPublicKey(trimmed)).toBe(true)
   })
 

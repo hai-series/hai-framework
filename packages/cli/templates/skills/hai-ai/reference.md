@@ -111,16 +111,13 @@ Embedding OpenAI 客户端按 `apiKey + baseURL + timeout` 缓存；同一 key �
 Memory 后端通过 `memory.provider` 选择：
 
 - `native`（默认）：HAI 原生引擎，复用 vecdb/reldb/LLM/Embedding。`extract` 采用 Mem0 式批量合并（ADD/UPDATE/DELETE/NONE + `category`）；`maxEntriesPerObject`（单主体配额）/`maxEntriesGlobal`（全局上限）/`recencyDecay`/`embeddingEnabled`/`writebackRelatedTopK` 作用于此后端；淘汰按 `objectId` 分区。
-- `mem0`：直接使用 `mem0ai/oss` 的 `Memory` 引擎（嵌入式）。LLM/Embedder 从 `llm` 配置提取（OpenAI 兼容，场景模型 `extraction` / `embedding`）；向量库从底层 vecdb 后端提取（`storeProvider.getVectorBackend()`），qdrant 复用同一后端；当前适配仅映射带完整连接参数的 `qdrant`；生产环境（`NODE_ENV` 或 `HAI_CORE_ENV` 为 `production`）即使设置 `memory.allowEphemeralFallback: true` 也拒绝实际内存回退。临时回退仅限开发或明确的 `HAI_E2E=1` / `HAI_E2E_MOCK=1`；缺少后端同样不能在生产启动。历史默认禁用。
-- 两者对外 API（extract/recall/injectMemories/add/update/get/remove/list/listPage/clear）完全一致；`objectId` 隔离不同主体的记忆，`scope`（key-value）用于业务作用域隔离（recall/list/listPage/clear 均严格过滤）。mem0 后端 `extract` 在框架层分类打分后以 `infer:false` 写入（保留 `hai_type`/`hai_importance`），`recall` 支持 `types`/`recencyWeight`，与 native 一致；Mem0 的 `update` 使用 SDK 原地修改文本与元数据，保持 `id` 和创建时间。SDK 查询使用 `filters.user_id`，写入和整主体删除使用 `userId`。SDK 无列表游标：`list` / `listPage` / 条件 `clear` 最多支持每主体 1000 条原始候选（含过期条目），多取一条探测完整性；超限返回 `MEMORY_LIST_INCOMPLETE`（906），不会伪造 total 或执行部分条件删除。候选完整时按 UTC 日期剔除过期项，再按类型/scope 过滤和分页；仅 `objectId` 的清理使用 SDK `deleteAll`，不受列表上限限制。公共空条件清理被拒绝；跨主体全清仅限受信管理员显式 `admin.clearAll({ confirm: true })`。
+- **`mem0`（数据格式适配）**：框架负责提取与 Embedding，通过原生 HTTP 读写 Qdrant 的 Mem0 UUID/payload 格式，可读取既有数据；不运行完整上游引擎、遥测或历史数据库。仅映射带完整连接参数的 Qdrant。生产（`NODE_ENV` 或 `HAI_CORE_ENV=production`）拒绝临时回退；开发或明确 E2E 可显式使用 `memory.allowEphemeralFallback: true`。其它持久化后端选择 `native`。
+- 两者对外 API（extract/recall/injectMemories/add/update/get/remove/list/listPage/clear）完全一致；`objectId` 隔离不同主体的记忆，`scope`（key-value）用于业务作用域隔离（recall/list/listPage/clear 均严格过滤）。mem0 后端 `extract` 在框架层分类打分后直接写入格式存储（保留 `hai_type`/`hai_importance`），`recall` 支持 `types`/`recencyWeight`，与 native 一致；Mem0 的 `update` 原地修改文本与元数据，保持 `id` 和创建时间。候选扫描有界：`list` / `listPage` / 条件 `clear` 最多支持每主体 1000 条原始候选（含过期条目），多取一条探测完整性；超限返回 `MEMORY_LIST_INCOMPLETE`（906），不会伪造 total 或执行部分条件删除。候选完整时按 UTC 日期剔除过期项，再按类型/scope 过滤和分页；仅 `objectId` 的清理使用后端过滤删除，不受列表上限限制。公共空条件清理被拒绝；跨主体全清仅限受信管理员显式 `admin.clearAll({ confirm: true })`。
 
-Mem0 3.3.1 的 Qdrant 适配仍依赖 `QdrantClient.search`；项目将 `@qdrant/js-client-rest` 精确锁定为受测的 `1.18.0`，AI 的可选 peer 也声明此版本。启动会检查该公开方法，缺失时明确配置失败；不要覆盖为已移除此方法的 1.19。
 
-适配器通过 SDK 公开的 `client` 配置注入独享客户端；Mem0 的 Qdrant 写入与删除均使用 `wait: true`，等待服务端应用完成后才继续写后读或分批清理。
 
-Mem0 的 pgvector 组合在所有环境拒绝启动：当前 SDK 将 PostgreSQL 连接保存在私有对象中，未提供公开关闭入口，框架无法履行资源清理契约。需要 pgvector 时选择 `memory.provider: native`；该原生后端保持支持。`disableHistory: true` 使用 SDK 无资源的历史占位实现，不创建历史 SQLite 文件。工厂通过公开的一条有界只读查询等待实际后端 ready 后才发布成功。
 
-`add` / `extract` 的 SDK 回执不含完整业务字段，框架写后读取权威记录再返回；并发提取等待全部在途写入结束。若写入或写后读失败，`error.ext.requiresEffectReconciliation=true`，`memoryIds` 保存已知写入 ID（回执丢失时可能为空）。应按主体核对实际记忆后决定恢复，不能盲目重做 add/extract；框架不自动重放。
+`add` / `extract` 的写入回执不含完整业务字段，框架写后读取权威记录再返回；并发提取等待全部在途写入结束。若写入或写后读失败，`error.ext.requiresEffectReconciliation=true`，`memoryIds` 保存已知写入 ID（回执丢失时可能为空）。应按主体核对实际记忆后决定恢复，不能盲目重做 add/extract；框架不自动重放。
 
 ## Retrieval / RAG
 
@@ -209,12 +206,18 @@ IndexTTS 的 Node HTTP 请求使用同版本 Undici fetch/Agent/FormData；模�
 | `getCapabilities({ operation, model? })` | `HaiResult<AudioModelCapabilities>` | 按模型与操作查询 `transcribe` / `synthesize` 能力分支，并拒绝操作不匹配模型 |
 
 - 音频类型：`AudioContent { data: Uint8Array, format: 'pcm16'|'wav'|'mp3'|'opus', sampleRate?, channels? }`；`pcm16` 等裸音频必须传 `sampleRate`。
-- 播放负载：`serializePlayableAudio(audio)` 返回 `HaiResult<PlayableAudio>`；`PlayableAudio` 为 `{ audioBase64, format: 'wav'|'mp3', mimeType }`。该函数将 `pcm16` 封装为 WAV，透传 WAV/MP3；`opus` 不支持转换。
-- 请求可选：识别 `contextHints?: string[]`（热词/提示）；合成 `instruction?: string`（自然语言风格指令）；均支持 `signal: AbortSignal`。
-- 模型配置：`audio.models: [{ id, provider: 'openai'|'mimo'|'qwen'|'doubao', model, operations, apiKey?, baseUrl?, appKey?, accessKey?, resourceId?, workspaceId? }]`；`operations` 必须明确为识别、合成或两者。确认 LLM 与语音模型共用凭据时，可设置 `audio.inheritLlmApiKey: true`，默认关闭。
-- 凭据优先级：模型条目 `apiKey` → 显式启用继承后的 LLM `apiKey` → `HAI_AI_AUDIO_<PROVIDER>_APIKEY` 或 `OPENAI_API_KEY` / `MIMO_API_KEY` / `DASHSCOPE_API_KEY` / `VOLC_API_KEY`（豆包旧版控制台额外 `VOLC_APP_KEY` / `VOLC_ACCESS_KEY`）。可选密钥中的 YAML `null`、空字符串和纯空白字符串都会规范化为未配置。
-- 资源上限：`audio.maxAudioBytes`（默 10 MiB）、`audio.maxStreamDurationMs`（默 5 分钟）；所有请求支持 `signal: AbortSignal` 打断。
+- 请求可选（识别）：`contextHints?`（热词）/ `timestampGranularities?: ('segment'|'word')[]` / `vad?` / `strictCapabilities?`；结果 `TranscriptionResult { text, language?, durationMs?, segments?[{ id?, text, startMs, endMs, words?, speakerId? }] }`（词级时间戳在 `segments[].words`，毫秒整数）。
+- 请求可选（合成）：`instruction?` / `language?` / `speakerReference?: { audio, transcript?, language? }`（谁在说）/ `styleReference?`（怎么说）/ `styleStrength?`（`[0,1]`）/ `speed?`（>1 更快，与 `targetDurationMs` 互斥）/ `targetDurationMs?` + `durationToleranceMs?` / `strictCapabilities?`；结果 `SynthesisResult extends AudioContent { durationMs?, metadata?: { durationMatched?, speed? } }`。均支持 `signal`。
+- `strictCapabilities` 为真时请求的高级能力若模型不支持 → 调 Provider 前 `AUDIO_UNSUPPORTED_INPUT`；参数非法（风格强度越界、语速非正、speed 与 targetDurationMs 冲突、durationTolerance 缺 target 等）→ `AUDIO_INVALID_REQUEST`。
+- 模型配置：`audio.models: [{ id, provider: 'openai'|'mimo'|'qwen'|'doubao'|'whisper'|'indextts', model, operations: ('transcribe'|'synthesize')[]（至少一项、不重复）, apiKey?, baseUrl?, appKey?, accessKey?, resourceId?, workspaceId? }]`。`provider` 表示调用协议而非部署位置；`whisper`（ASR）/ `indextts`（TTS）可自托管，无 canonical 端点，必须显式配置 `baseUrl`（缺失 → `CONFIGURATION_ERROR`），可无凭据（配 `apiKey` 后按 `Authorization: Bearer` 发送）；云平台缺凭据 → `CONFIGURATION_ERROR`。
+- 无原生流式的平台：`whisper` 完整音频降级为最终 `transcript`、持续音频输入 → `AUDIO_UNSUPPORTED_INPUT`；`indextts` 按段完整合成降级、`streamingAudioOutput` 保持 `false`。自托管部署参考框架同版本的 `packages/ai/models/`（优先 ModelScope 下载）。
+- 凭据优先级：模型条目 `apiKey` → 显式启用 `audio.inheritLlmApiKey` 后的 LLM `apiKey` → `HAI_AI_AUDIO_<PROVIDER>_APIKEY` 或 `OPENAI_API_KEY` / `MIMO_API_KEY` / `DASHSCOPE_API_KEY` / `VOLC_API_KEY`（豆包旧版控制台额外 `VOLC_APP_KEY` / `VOLC_ACCESS_KEY`）。
+- 资源上限：`audio.maxAudioBytes`（默 10 MiB，同时保护说话人/风格参考）、`audio.maxStreamDurationMs`（默 5 分钟）；所有请求支持 `signal: AbortSignal` 打断。
 - Provider 为内部实现，不从根入口导出；不支持的输入方式招 `AUDIO_UNSUPPORTED_INPUT`，不伪装实时。取消 → `AUDIO_CANCELLED`，超时 → `AUDIO_TIMEOUT`，连接失败或 `end` 前异常断连 → `AUDIO_CONNECTION_FAILED`。浏览器客户端（`@h-ai/ai/client`）严格区分正常结束 / 取消 / 异常断连：取消招 `AUDIO_CANCELLED`、`end` 前断连招 `AUDIO_CONNECTION_FAILED`、服务端 error 帧保留其领域错误码，`synthesize` 不把未完成的部分音频当作成功返回。
+
+- 播放负载：`serializePlayableAudio(audio)` 返回 `HaiResult<PlayableAudio>`；`PlayableAudio` 为 `{ audioBase64, format: 'wav'|'mp3', mimeType }`。该函数将 `pcm16` 封装为 WAV，透传 WAV/MP3；`opus` 不支持转换。
+
+能力快照 `getCapabilities` 为同步读取；跨节点更新模型后，先调用异步 `ai.audio.models.get/list` 或音频操作刷新本节点，再据能力决定参数。
 
 ## Image
 
@@ -246,7 +249,7 @@ IndexTTS 的 Node HTTP 请求使用同版本 Undici fetch/Agent/FormData；模�
 | `listMessages(filter)` | 查询 A2A 消息记录 |
 | `callRemoteAgent(remoteUrl, message, options?)` | 调用远端 Agent；只依赖 `ai.init()`，不要求本地 executor |
 
-A2A 服务端 SDK handler 在注册 executor 时延迟创建；远端客户端调用不依赖服务端配置。getAgentCard 返回完整 A2A 0.3 Card（MIME、streaming、安全方案）；Kit 默认发现路径为 `/.well-known/agent-card.json`。handleRequest 在未初始化时也返回 JSON-RPC 错误；可信 context.agentId 映射 SDK user.userName。Kit 配置 authenticate 后空身份返回 401；不声明 push notifications、gRPC、REST 支持。
+A2A 服务端 SDK handler 在注册 executor 时延迟创建；远端客户端调用不依赖服务端配置。getAgentCard 返回可直接 HTTP 输出的标准 A2A 1.0 ProtoJSON Card（supportedInterfaces、MIME、streaming、安全方案）；Kit 默认发现路径为 `/.well-known/agent-card.json`。handleRequest 在未初始化时也返回 JSON-RPC 错误；可信 context.agentId 映射 SDK user.userName。Kit 配置 authenticate 后空身份返回 401；不声明 push notifications、gRPC、REST 支持。
 
 A2A journal、context 归属和消息表在 `ai.init()` 阶段初始化；可信 agentId 是身份来源，匿名共用主体，生产须认证。Task 与事件一次 CAS 发布，支持任意节点订阅、真实 owner 取消和 input-required 跨节点续接。同 message ID/内容重试复用同一轮，内容改变或旧轮重试拒绝；取消未确认时同一 Task 拒绝新消息，防止迟到回调影响新一代；失租、绝对期限或 working 状态退出标记 failed/interrupted 与 metadata.haiExecution.requiresEffectReconciliation=true，不自动重放未知副作用。a2a.execution 默认 leaseMs=30000、pollIntervalMs=250、maxExecutionMs=300000；单消息1MiB、journal8MiB、每轮2048事件、每Task256回执、32个reference tasks。listMessages 是服务端管理接口，callerId/contextId/since 不能替代调用授权。外部工具须使用稳定业务幂等键并核对未知结果，SDK异常不向用户暴露驱动凭据。
 
@@ -290,3 +293,9 @@ Knowledge 分块直接遵循 datapipe 的单位与硬上限：word 为词，其�
 JSDoc 公开示例使用真实包入口，内部工厂示例标记“模块内部上下文”；应用使用所安装版本的公开类型，并通过本应用已有的类型检查验证使用示例。调用示例须保留 HaiResult 成功检查、受信主体范围、共享 CAS 版本与存储端期限，不将后台 flush 失败或未知外部效果当作成功重试。
 
 SSE：Node 的 ai.stream 解码器支持跨片 LF/CRLF/CR、多行 data，只去冒号后一个空格；无 data 块不派发，空或缺省事件名按 message，id/retry 继承最近有效值，reset 清空连接状态，EOF 不补空行。encodeSSE 允许合法 data 换行并规范化，id/event 换行、id 的 NUL、非负安全整数以外的 retry 显式抛 TypeError/RangeError。真实 Anthropic/MiMo 使用同一内部 UTF-8 reader，退出/取消/协议结束/错误均取消正文并释放 reader；无自动重连/副作用重放。Anthropic 总 timeout 覆盖正文，MiMo 保留每请求独立 timeout。
+
+A2A 使用原生 1.0 协议：JSON-RPC 方法为 `SendMessage` / `SendStreamingMessage` / `GetTask` / `CancelTask` / `SubscribeToTask`，不接收旧版方法名。请求的消息 role 使用 `ROLE_USER`；执行器通过 `AgentEvent.message(Message.fromJSON(...))` 或 `AgentEvent.task(Task.fromJSON(...))` 发布事件（构建器与枚举从 `@h-ai/ai` 导入），文本 Part 的 ProtoJSON 为 `{ text: '...' }`，解码后的 SDK Part 从 `content.$case/value` 读取。SDK 的 `Role` / `TaskState` 为数值枚举，远端调用的 `taskState` 同样返回该枚举；直接 HTTP 响应由 `getAgentCard` / `handleRequest` 完成标准 ProtoJSON 编码，无需调用方了解 SDK oneof。
+
+Mem0 格式存储与 VecDB 的 Qdrant Provider 均使用原生 HTTP，无需额外 SDK。固定 REST 请求使用 `query`，路径段编码；30 秒超时覆盖完整响应体，响应超过 16 MiB 明确失败。写入和删除等待 `wait=true` 的实际完成回执。列表和条件清理最多核对每主体 1000 条原始候选（包括过期项），超限返回 `MEMORY_LIST_INCOMPLETE`，不执行部分条件删除；仅按主体清理不受此列表上限限制。
+
+Qdrant 格式后端要求 1.19 或更新版本，并拒绝 HTTP 重定向。更新使用服务端 `update_only` 与主体/版本条件，同一次原子写入拒绝已删除或已被其它写入更新的条目；迟到更新不会复活删除记录。写后版本核对失败仍需按已有回执核对实际效果。

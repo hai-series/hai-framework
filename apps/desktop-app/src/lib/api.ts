@@ -53,15 +53,21 @@ export async function initApi(): Promise<void> {
     const initResult = await desktopApiClient.init({
       baseUrl,
       clientName: 'hai-desktop-app',
-      headers: native ? { 'x-hai-token-transport': 'body' } : {},
+      headers: native
+        ? { 'x-hai-token-transport': 'body' }
+        : {},
       auth: {
-        storage: native ? apiClient.tokenStorage.memory() : apiClient.tokenStorage.httpOnlyCookie(),
+        storage: native
+          ? apiClient.tokenStorage.memory()
+          : apiClient.tokenStorage.httpOnlyCookie(),
         onRefreshFailed: () => {
           // refresh token 失效 → 强制回登录页
           navigate('/login')
         },
       },
-      ...(transport ? { transport } : {}),
+      ...(transport
+        ? { transport }
+        : {}),
     })
     if (!initResult.success)
       throw new Error(initResult.error.message)

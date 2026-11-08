@@ -29,6 +29,8 @@ Protocol references: [WeChat JSAPI creation](https://pay.wechatpay.cn/doc/v3/mer
 
 ### Quick start
 
+Concurrent `close()` invalidates an unfinished `init()`, so late initialization cannot reopen the module. Wait for that initialization to settle before initializing again.
+
 #### Node.js server
 
 ```typescript

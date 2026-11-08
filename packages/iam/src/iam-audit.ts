@@ -14,7 +14,9 @@ async function observe<T>(operation: () => Promise<HaiResult<T>>, event: CreateA
   // 自动审计仅在宿主已启用该模块时装配；未选用的辅助能力不产生逐操作错误。
   if (!audit.isInitialized)
     return result
-  const fields = typeof event === 'function' ? event(result) : event
+  const fields = typeof event === 'function'
+    ? event(result)
+    : event
   if (!fields)
     return result
   if (tx && !result.success) {
@@ -25,8 +27,17 @@ async function observe<T>(operation: () => Promise<HaiResult<T>>, event: CreateA
   const recorded = await audit.capture({
     ...fields,
     category: 'system',
-    outcome: result.success ? 'success' : [401, 403, 409, 423, 429].includes(result.error.httpStatus ?? 500) ? 'denied' : 'failure',
-    details: { ...fields.details, ...(!result.success ? { reasonCode: result.error.code } : {}) },
+    outcome: result.success
+      ? 'success'
+      : [401, 403, 409, 423, 429].includes(result.error.httpStatus ?? 500)
+          ? 'denied'
+          : 'failure',
+    details: {
+      ...fields.details,
+      ...(!result.success
+        ? { reasonCode: result.error.code }
+        : {}),
+    },
   }, { tx })
   if (!recorded.success) {
     logger.error('IAM event audit failed', { action: fields.action, resource: fields.resource, error: recorded.error })
@@ -44,7 +55,14 @@ function loginEvent(method: string, result: HaiResult<AuthResult>, context?: Aut
     details: { method },
     // 登录结果本身已完成鉴别，不把客户端提交的标识声明当成已验证主体。
     userId: result.success ? result.data.user.id : null,
-    actorSnapshot: result.success ? { id: result.data.user.id, username: result.data.user.username, displayName: result.data.user.displayName, roles: result.data.roles } : null,
+    actorSnapshot: result.success
+      ? {
+          id: result.data.user.id,
+          username: result.data.user.username,
+          displayName: result.data.user.displayName,
+          roles: result.data.roles,
+        }
+      : null,
     ipAddress: context?.ip,
     userAgent: context?.userAgent?.slice(0, 4096),
     requestId: context?.requestId,
@@ -68,8 +86,18 @@ export function observeAuth(operations: AuthnOperations): AuthnOperations {
     registerAndLogin: (options, context) => observe(() => operations.registerAndLogin(options, context), result => loginEvent('registration', result, context)),
     logout: token => observe(() => operations.logout(token), { action: 'auth.logout', resource: 'iam.auth' }),
     sendOtp: (identifier, options) => observe(() => operations.sendOtp(identifier, options), { action: 'otp.send', resource: 'iam.auth' }),
-    reauthenticate: (token, password, operation) => observe(() => operations.reauthenticate(token, password, operation), { action: 'auth.reauthenticate', resource: 'iam.auth', details: { operation } }),
-    checkSensitiveOperation: (token, operation, ticket) => observe(() => operations.checkSensitiveOperation(token, operation, ticket), result => !result.success ? { action: 'auth.sensitive-denied', resource: 'iam.auth', details: { operation } } : undefined),
+    reauthenticate: (token, password, operation) => observe(() => operations.reauthenticate(token, password, operation), {
+      action: 'auth.reauthenticate',
+      resource: 'iam.auth',
+      details: { operation },
+    }),
+    checkSensitiveOperation: (token, operation, ticket) => observe(() => operations.checkSensitiveOperation(token, operation, ticket), result => !result.success
+      ? {
+          action: 'auth.sensitive-denied',
+          resource: 'iam.auth',
+          details: { operation },
+        }
+      : undefined),
   }
 }
 
@@ -83,11 +111,43 @@ export function observeAuth(operations: AuthnOperations): AuthnOperations {
 export function observeUsers(operations: UserOperations): UserOperations {
   return {
     ...operations,
-    register: options => observe(() => operations.register(options), result => ({ action: 'user.register', resource: 'iam.users', resourceId: result.success ? result.data.user.id : undefined })),
-    createUser: options => observe(() => operations.createUser(options), result => ({ action: 'user.create', resource: 'iam.users', resourceId: result.success ? result.data.user.id : undefined })),
-    inviteUser: options => observe(() => operations.inviteUser(options), result => ({ action: 'user.invite', resource: 'iam.users', resourceId: result.success ? result.data.user.id : undefined })),
-    updateUser: (id, data) => observe(() => operations.updateUser(id, data), { action: 'user.update', resource: 'iam.users', resourceId: id, details: { fields: Object.keys(data), ...(data.accountStatus ? { accountStatus: data.accountStatus } : {}), ...(data.accountType ? { accountType: data.accountType } : {}) } }),
-    updateCurrentUser: (token, data) => observe(() => operations.updateCurrentUser(token, data), result => ({ action: 'user.profile', resource: 'iam.users', resourceId: result.success ? result.data.id : undefined, details: { fields: Object.keys(data) } })),
+    register: options => observe(() => operations.register(options), result => ({
+      action: 'user.register',
+      resource: 'iam.users',
+      resourceId: result.success ? result.data.user.id : undefined,
+    })),
+    createUser: options => observe(() => operations.createUser(options), result => ({
+      action: 'user.create',
+      resource: 'iam.users',
+      resourceId: result.success ? result.data.user.id : undefined,
+    })),
+    inviteUser: options => observe(() => operations.inviteUser(options), result => ({
+      action: 'user.invite',
+      resource: 'iam.users',
+      resourceId: result.success ? result.data.user.id : undefined,
+    })),
+    updateUser: (id, data) => observe(() => operations.updateUser(id, data), {
+      action: 'user.update',
+      resource: 'iam.users',
+      resourceId: id,
+      details: {
+        fields: Object.keys(data),
+        ...(data.accountStatus
+          ? { accountStatus: data.accountStatus }
+          : {}),
+        ...(data.accountType
+          ? { accountType: data.accountType }
+          : {}),
+      },
+    }),
+    updateCurrentUser: (token, data) => observe(() => operations.updateCurrentUser(token, data), result => ({
+      action: 'user.profile',
+      resource: 'iam.users',
+      resourceId: result.success ? result.data.id : undefined,
+      details: {
+        fields: Object.keys(data),
+      },
+    })),
     deleteUser: id => observe(() => operations.deleteUser(id), { action: 'user.delete', resource: 'iam.users', resourceId: id }),
     adminResetPassword: (id, password) => observe(() => operations.adminResetPassword(id, password), { action: 'password.admin-reset', resource: 'iam.users', resourceId: id }),
     changePassword: (id, previous, next) => observe(() => operations.changePassword(id, previous, next), { action: 'password.change', resource: 'iam.users', resourceId: id }),
@@ -95,7 +155,15 @@ export function observeUsers(operations: UserOperations): UserOperations {
     renewPassword: input => observe(() => operations.renewPassword(input), { action: 'password.renew', resource: 'iam.users' }),
     requestPasswordReset: (identifier, options) => observe(() => operations.requestPasswordReset(identifier, options), { action: 'password.reset-request', resource: 'iam.users' }),
     confirmPasswordReset: (token, password) => observe(() => operations.confirmPasswordReset(token, password), { action: 'password.reset-complete', resource: 'iam.users' }),
-    scanInactiveAccounts: () => observe(() => operations.scanInactiveAccounts(), result => result.success && result.data === 0 ? undefined : { action: 'account.inactivity-scan', resource: 'iam.users', details: result.success ? { count: result.data } : {} }),
+    scanInactiveAccounts: () => observe(() => operations.scanInactiveAccounts(), result => result.success && result.data === 0
+      ? undefined
+      : {
+          action: 'account.inactivity-scan',
+          resource: 'iam.users',
+          details: result.success
+            ? { count: result.data }
+            : {},
+        }),
   }
 }
 
@@ -109,17 +177,65 @@ export function observeUsers(operations: UserOperations): UserOperations {
 export function observeAuthorization(operations: AuthzOperations): AuthzOperations {
   return {
     ...operations,
-    assignRole: (id, roleId, tx) => observe(() => operations.assignRole(id, roleId, tx), { action: 'role.assign', resource: 'iam.user-roles', resourceId: id, details: { roleId } }, tx),
-    removeRole: (id, roleId, tx) => observe(() => operations.removeRole(id, roleId, tx), { action: 'role.remove', resource: 'iam.user-roles', resourceId: id, details: { roleId } }, tx),
-    syncRoles: (id, roleIds, tx) => observe(() => operations.syncRoles(id, roleIds, tx), { action: 'role.sync', resource: 'iam.user-roles', resourceId: id, details: { roleIds } }, tx),
-    createRole: (input, tx) => observe(() => operations.createRole(input, tx), result => ({ action: 'role.create', resource: 'iam.roles', resourceId: result.success ? result.data.id : undefined, details: { code: input.code } }), tx),
-    updateRole: (id, data, tx) => observe(() => operations.updateRole(id, data, tx), { action: 'role.update', resource: 'iam.roles', resourceId: id, details: { fields: Object.keys(data), permissionIds: data.permissionIds } }, tx),
+    assignRole: (id, roleId, tx) => observe(() => operations.assignRole(id, roleId, tx), {
+      action: 'role.assign',
+      resource: 'iam.user-roles',
+      resourceId: id,
+      details: { roleId },
+    }, tx),
+    removeRole: (id, roleId, tx) => observe(() => operations.removeRole(id, roleId, tx), {
+      action: 'role.remove',
+      resource: 'iam.user-roles',
+      resourceId: id,
+      details: { roleId },
+    }, tx),
+    syncRoles: (id, roleIds, tx) => observe(() => operations.syncRoles(id, roleIds, tx), {
+      action: 'role.sync',
+      resource: 'iam.user-roles',
+      resourceId: id,
+      details: { roleIds },
+    }, tx),
+    createRole: (input, tx) => observe(() => operations.createRole(input, tx), result => ({
+      action: 'role.create',
+      resource: 'iam.roles',
+      resourceId: result.success ? result.data.id : undefined,
+      details: { code: input.code },
+    }), tx),
+    updateRole: (id, data, tx) => observe(() => operations.updateRole(id, data, tx), {
+      action: 'role.update',
+      resource: 'iam.roles',
+      resourceId: id,
+      details: {
+        fields: Object.keys(data),
+        permissionIds: data.permissionIds,
+      },
+    }, tx),
     deleteRole: (id, tx) => observe(() => operations.deleteRole(id, tx), { action: 'role.delete', resource: 'iam.roles', resourceId: id }, tx),
-    createPermission: (input, tx) => observe(() => operations.createPermission(input, tx), result => ({ action: 'permission.create', resource: 'iam.permissions', resourceId: result.success ? result.data.id : undefined, details: { code: input.code } }), tx),
-    setPermissionSensitiveOperations: (id, operationIds) => observe(() => operations.setPermissionSensitiveOperations(id, operationIds), { action: 'permission.sensitive-operations', resource: 'iam.permissions', resourceId: id, details: { operations: operationIds } }),
+    createPermission: (input, tx) => observe(() => operations.createPermission(input, tx), result => ({
+      action: 'permission.create',
+      resource: 'iam.permissions',
+      resourceId: result.success ? result.data.id : undefined,
+      details: { code: input.code },
+    }), tx),
+    setPermissionSensitiveOperations: (id, operationIds) => observe(() => operations.setPermissionSensitiveOperations(id, operationIds), {
+      action: 'permission.sensitive-operations',
+      resource: 'iam.permissions',
+      resourceId: id,
+      details: { operations: operationIds },
+    }),
     deletePermission: (id, tx) => observe(() => operations.deletePermission(id, tx), { action: 'permission.delete', resource: 'iam.permissions', resourceId: id }, tx),
-    assignPermissionToRole: (id, permissionId, tx) => observe(() => operations.assignPermissionToRole(id, permissionId, tx), { action: 'permission.assign', resource: 'iam.role-permissions', resourceId: id, details: { permissionId } }, tx),
-    removePermissionFromRole: (id, permissionId, tx) => observe(() => operations.removePermissionFromRole(id, permissionId, tx), { action: 'permission.remove', resource: 'iam.role-permissions', resourceId: id, details: { permissionId } }, tx),
+    assignPermissionToRole: (id, permissionId, tx) => observe(() => operations.assignPermissionToRole(id, permissionId, tx), {
+      action: 'permission.assign',
+      resource: 'iam.role-permissions',
+      resourceId: id,
+      details: { permissionId },
+    }, tx),
+    removePermissionFromRole: (id, permissionId, tx) => observe(() => operations.removePermissionFromRole(id, permissionId, tx), {
+      action: 'permission.remove',
+      resource: 'iam.role-permissions',
+      resourceId: id,
+      details: { permissionId },
+    }, tx),
   }
 }
 
@@ -133,9 +249,20 @@ export function observeAuthorization(operations: AuthzOperations): AuthzOperatio
 export function observeSessions(operations: SessionOperations): SessionOperations {
   return {
     ...operations,
-    create: options => observe(() => operations.create(options), result => ({ action: 'session.create', resource: 'iam.sessions', resourceId: result.success ? result.data.version : options.userId })),
+    create: options => observe(() => operations.create(options), result => ({
+      action: 'session.create',
+      resource: 'iam.sessions',
+      resourceId: result.success ? result.data.version : options.userId,
+    })),
     delete: token => observe(() => operations.delete(token), { action: 'session.delete', resource: 'iam.sessions' }),
-    deleteByUserId: id => observe(() => operations.deleteByUserId(id), result => ({ action: 'session.revoke-user', resource: 'iam.sessions', resourceId: id, details: result.success ? { count: result.data } : {} })),
+    deleteByUserId: id => observe(() => operations.deleteByUserId(id), result => ({
+      action: 'session.revoke-user',
+      resource: 'iam.sessions',
+      resourceId: id,
+      details: result.success
+        ? { count: result.data }
+        : {},
+    })),
     refresh: token => observe(() => operations.refresh(token), { action: 'session.refresh', resource: 'iam.sessions' }),
     revokeRefresh: token => observe(() => operations.revokeRefresh(token), { action: 'session.revoke-refresh', resource: 'iam.sessions' }),
   }
@@ -151,7 +278,12 @@ export function observeSessions(operations: SessionOperations): SessionOperation
 export function observeApiKeys(operations: ApiKeyOperations): ApiKeyOperations {
   return {
     ...operations,
-    createApiKey: (userId, options) => observe(() => operations.createApiKey(userId, options), result => ({ action: 'apikey.create', resource: 'iam.apikeys', resourceId: result.success ? result.data.apiKey.id : undefined, details: { subjectId: userId, scopes: options.scopes } })),
+    createApiKey: (userId, options) => observe(() => operations.createApiKey(userId, options), result => ({
+      action: 'apikey.create',
+      resource: 'iam.apikeys',
+      resourceId: result.success ? result.data.apiKey.id : undefined,
+      details: { subjectId: userId, scopes: options.scopes },
+    })),
     revokeApiKey: id => observe(() => operations.revokeApiKey(id), { action: 'apikey.revoke', resource: 'iam.apikeys', resourceId: id }),
   }
 }

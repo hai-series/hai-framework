@@ -49,14 +49,21 @@ export function createResendProvisioner(): ServiceProvisioner {
       try {
         const apiToken = credentials.apiKey ?? credentials.api_key ?? credentials.token ?? ''
         if (!apiToken || !credentials.from) {
-          throw new Error(deployM('deploy_credentialMissing', { params: { fields: 'apiKey, from' } }))
+          throw new Error(deployM('deploy_credentialMissing', {
+            params: { fields: 'apiKey, from' },
+          }))
         }
 
         const res = await fetch(`${RESEND_API}/domains`, {
           headers: { Authorization: `Bearer ${apiToken}` },
         })
         if (!res.ok) {
-          throw new Error(deployM('deploy_apiError', { params: { service: 'Resend', status: String(res.status) } }))
+          throw new Error(deployM('deploy_apiError', {
+            params: {
+              service: 'Resend',
+              status: String(res.status),
+            },
+          }))
         }
         token = apiToken
         from = credentials.from
@@ -68,7 +75,11 @@ export function createResendProvisioner(): ServiceProvisioner {
         return err(
           HaiDeployError.AUTH_FAILED,
           deployM('deploy_authFailed', {
-            params: { error: error instanceof Error ? error.message : String(error) },
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
           }),
           error,
         )
@@ -91,7 +102,18 @@ export function createResendProvisioner(): ServiceProvisioner {
         provisionerName: 'resend',
         resourceStatus: 'reused',
         envVars: {
-          HAI_REACH_PROVIDERS: JSON.stringify([{ name: 'email', type: 'smtp', host: 'smtp.resend.com', port: 465, secure: true, user: 'resend', pass: token, from }]),
+          HAI_REACH_PROVIDERS: JSON.stringify([
+            {
+              name: 'email',
+              type: 'smtp',
+              host: 'smtp.resend.com',
+              port: 465,
+              secure: true,
+              user: 'resend',
+              pass: token,
+              from,
+            },
+          ]),
         },
         resourceInfo: 'resend:verify-only',
       })

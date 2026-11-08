@@ -160,7 +160,10 @@ export async function createDbRoleRepository(): Promise<RoleRepository> {
  */
 class DbRoleRepository extends BaseReldbCrudRepository<Role> implements RoleRepository {
   async touch(roleId: string, tx: DmlWithTxOperations): Promise<HaiResult<ExecuteResult>> {
-    return tx.execute(`UPDATE ${TABLE_NAME} SET updated_at = ? WHERE id = ?`, [new Date().toISOString(), roleId])
+    return tx.execute(`UPDATE ${TABLE_NAME} SET updated_at = ? WHERE id = ?`, [
+      new Date().toISOString(),
+      roleId,
+    ])
   }
 
   constructor() {
@@ -178,7 +181,9 @@ class DbRoleRepository extends BaseReldbCrudRepository<Role> implements RoleRepo
   private buildQueryError(error: { message: string }, cause: unknown): HaiResult<never> {
     return err(
       HaiIamError.REPOSITORY_ERROR,
-      iamM('iam_queryRoleFailed', { params: { message: error.message } }),
+      iamM('iam_queryRoleFailed', {
+        params: { message: error.message },
+      }),
       cause,
     )
   }

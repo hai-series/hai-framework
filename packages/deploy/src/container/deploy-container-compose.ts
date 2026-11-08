@@ -147,7 +147,21 @@ function planPostgresDb(plan: SidecarPlan, projectName: string, password: string
     restart: 'unless-stopped',
     env_file: ['middleware-runtime.env'],
     volumes: [`${projectName}-db-data:/var/lib/postgresql/data`],
-    healthcheck: { test: ['CMD', 'pg_isready', '-h', '127.0.0.1', '-U', 'hai', '-d', 'hai'], interval: '2s', timeout: '5s', retries: 60 },
+    healthcheck: {
+      test: [
+        'CMD',
+        'pg_isready',
+        '-h',
+        '127.0.0.1',
+        '-U',
+        'hai',
+        '-d',
+        'hai',
+      ],
+      interval: '2s',
+      timeout: '5s',
+      retries: 60,
+    },
     networks: net,
   }
   plan.volumes[`${projectName}-db-data`] = null
@@ -168,7 +182,12 @@ function planMysqlDb(plan: SidecarPlan, projectName: string, password: string, n
     restart: 'unless-stopped',
     env_file: ['middleware-runtime.env'],
     volumes: [`${projectName}-db-data:/var/lib/mysql`],
-    healthcheck: { test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 --silent'], interval: '2s', timeout: '5s', retries: 60 },
+    healthcheck: {
+      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 --silent'],
+      interval: '2s',
+      timeout: '5s',
+      retries: 60,
+    },
     networks: net,
   }
   plan.volumes[`${projectName}-db-data`] = null
@@ -188,7 +207,12 @@ function planRedisCache(plan: SidecarPlan, projectName: string, net: string[]): 
     image: IMAGES.redis,
     container_name: `hai-${projectName}-cache`,
     restart: 'unless-stopped',
-    healthcheck: { test: ['CMD', 'redis-cli', 'ping'], interval: '2s', timeout: '5s', retries: 60 },
+    healthcheck: {
+      test: ['CMD', 'redis-cli', 'ping'],
+      interval: '2s',
+      timeout: '5s',
+      retries: 60,
+    },
     networks: net,
   }
   plan.env.HAI_CACHE = JSON.stringify({ type: 'redis', url: 'redis://cache:6379' })
@@ -202,15 +226,44 @@ function planS3Storage(plan: SidecarPlan, projectName: string, password: string,
     image: IMAGES[engine],
     container_name: `hai-${projectName}-storage`,
     restart: 'unless-stopped',
-    ...(engine === 'minio' ? { command: ['server', '/data'] } : {}),
-    healthcheck: { test: engine === 'rustfs' ? ['CMD', 'curl', '--noproxy', '*', '-fsS', 'http://127.0.0.1:9000/minio/health/ready'] : ['CMD', 'mc', 'ready', 'http://127.0.0.1:9000'], interval: '2s', timeout: '5s', retries: 60 },
+    ...(engine === 'minio'
+      ? {
+          command: ['server', '/data'],
+        }
+      : {}),
+    healthcheck: {
+      test: engine === 'rustfs'
+        ? [
+            'CMD',
+            'curl',
+            '--noproxy',
+            '*',
+            '-fsS',
+            'http://127.0.0.1:9000/minio/health/ready',
+          ]
+        : [
+            'CMD',
+            'mc',
+            'ready',
+            'http://127.0.0.1:9000',
+          ],
+      interval: '2s',
+      timeout: '5s',
+      retries: 60,
+    },
     env_file: ['middleware-runtime.env'],
     volumes: [`${projectName}-storage-data:/data`],
     networks: net,
   }
   plan.volumes[`${projectName}-storage-data`] = null
   if (engine === 'rustfs') {
-    Object.assign(plan.containerEnv, { RUSTFS_ACCESS_KEY: 'hai-storage', RUSTFS_SECRET_KEY: password, RUSTFS_ADDRESS: '0.0.0.0:9000', RUSTFS_VOLUMES: '/data', RUSTFS_CONSOLE_ENABLE: 'false' })
+    Object.assign(plan.containerEnv, {
+      RUSTFS_ACCESS_KEY: 'hai-storage',
+      RUSTFS_SECRET_KEY: password,
+      RUSTFS_ADDRESS: '0.0.0.0:9000',
+      RUSTFS_VOLUMES: '/data',
+      RUSTFS_CONSOLE_ENABLE: 'false',
+    })
   }
   else {
     Object.assign(plan.containerEnv, { MINIO_ROOT_USER: 'hai-storage', MINIO_ROOT_PASSWORD: password })
@@ -221,7 +274,12 @@ function planS3Storage(plan: SidecarPlan, projectName: string, password: string,
     bucket: configured.bucket || 'hai',
     region: configured.region || 'us-east-1',
     // 自建只替换连接和托管凭据，不能丢失对象前缀、外部签名地址或操作日志策略。
-    ...Object.fromEntries(['prefix', 'publicEndpoint', 'publicUrl', 'operationLog'].filter(name => configured[name] !== undefined).map(name => [name, configured[name]])),
+    ...Object.fromEntries([
+      'prefix',
+      'publicEndpoint',
+      'publicUrl',
+      'operationLog',
+    ].filter(name => configured[name] !== undefined).map(name => [name, configured[name]])),
     accessKeyId: 'hai-storage',
     secretAccessKey: password,
     forcePathStyle: true,
@@ -404,24 +462,60 @@ export function planSidecars(
       const password = secrets.ldapPassword ?? secrets.dbPassword
       plan.services.push('ldap')
       plan.dependsOn.push('ldap')
-      plan.composeServices.ldap = { image: IMAGES.ldap, restart: 'unless-stopped', env_file: ['middleware-runtime.env'], networks: net, volumes: [`${projectName}-ldap-data:/var/lib/ldap`, `${projectName}-ldap-config:/etc/ldap/slapd.d`] }
+      plan.composeServices.ldap = {
+        image: IMAGES.ldap,
+        restart: 'unless-stopped',
+        env_file: ['middleware-runtime.env'],
+        networks: net,
+        volumes: [`${projectName}-ldap-data:/var/lib/ldap`, `${projectName}-ldap-config:/etc/ldap/slapd.d`],
+      }
       plan.volumes[`${projectName}-ldap-data`] = null
       plan.volumes[`${projectName}-ldap-config`] = null
-      Object.assign(plan.containerEnv, { LDAP_DOMAIN: 'example.org', LDAP_ORGANISATION: 'HAI', LDAP_ADMIN_PASSWORD: password, LDAP_TLS: 'false' })
-      Object.assign(plan.env, { HAI_IAM_LOGIN_LDAP: 'true', HAI_IAM_LDAP: JSON.stringify({ url: 'ldap://ldap:389', bindDn: 'cn=admin,dc=example,dc=org', bindPassword: password, searchBase: 'dc=example,dc=org' }) })
+      Object.assign(plan.containerEnv, {
+        LDAP_DOMAIN: 'example.org',
+        LDAP_ORGANISATION: 'HAI',
+        LDAP_ADMIN_PASSWORD: password,
+        LDAP_TLS: 'false',
+      })
+      Object.assign(plan.env, {
+        HAI_IAM_LOGIN_LDAP: 'true',
+        HAI_IAM_LDAP: JSON.stringify({
+          url: 'ldap://ldap:389',
+          bindDn: 'cn=admin,dc=example,dc=org',
+          bindPassword: password,
+          searchBase: 'dc=example,dc=org',
+        }),
+      })
       plan.secrets.push(password)
     }
-    else if (service === 'email' && (scan.middlewares ? scan.middlewares.some(item => item.service === 'email' && item.backend === 'smtp' && (options?.serviceModes?.[item.envPrefix] ?? options?.serviceModes?.email ?? 'default') === 'default') : backends.email === 'smtp') && !provisionEnv.HAI_REACH_PROVIDERS) {
+    else if (service === 'email' && (scan.middlewares
+      ? scan.middlewares.some(item => item.service === 'email' && item.backend === 'smtp' && (options?.serviceModes?.[item.envPrefix] ?? options?.serviceModes?.email ?? 'default') === 'default')
+      : backends.email === 'smtp') && !provisionEnv.HAI_REACH_PROVIDERS) {
       plan.services.push('email')
       plan.dependsOn.push('email')
       plan.composeServices.email = { image: IMAGES.smtp, restart: 'unless-stopped', networks: net }
       const requirements = scan.middlewares?.filter(item => item.service === 'email' && item.backend === 'smtp' && ['default', undefined].includes(options?.serviceModes?.[item.envPrefix] ?? options?.serviceModes?.email))
       if (requirements?.length) {
-        for (const requirement of requirements)
-          plan.env[requirement.envPrefix] = JSON.stringify({ name: requirement.config.name ?? 'email', type: 'smtp', host: 'email', port: 1025, secure: false, from: requirement.config.from || 'noreply@example.com' })
+        for (const requirement of requirements) {
+          plan.env[requirement.envPrefix] = JSON.stringify({
+            name: requirement.config.name ?? 'email',
+            type: 'smtp',
+            host: 'email',
+            port: 1025,
+            secure: false,
+            from: requirement.config.from || 'noreply@example.com',
+          })
+        }
       }
       else if (!scan.middlewares) {
-        plan.env.HAI_REACH_PROVIDERS_0 = JSON.stringify({ name: 'email', type: 'smtp', host: 'email', port: 1025, secure: false, from: 'noreply@example.com' })
+        plan.env.HAI_REACH_PROVIDERS_0 = JSON.stringify({
+          name: 'email',
+          type: 'smtp',
+          host: 'email',
+          port: 1025,
+          secure: false,
+          from: 'noreply@example.com',
+        })
       }
     }
   }
@@ -469,16 +563,26 @@ export function buildRuntimeEnv(
 ): RuntimeEnvPlan {
   const sidecar = planSidecars(appDir, projectName, scan, provisionEnv, options, s3Engine)
   const environment = options?.environment ?? appEnv.HAI_DEPLOY_ENVIRONMENT ?? 'prod'
-  const nodeEnv = environment === 'dev' || environment === 'development' ? 'development' : environment === 'test' ? 'test' : 'production'
-  const env = mergeEnvironmentLayers([{
-    NODE_ENV: nodeEnv,
-  }, Object.fromEntries(Object.entries(appEnv).filter(([name]) => !CONTAINER_ENV_KEYS.has(name))), sidecar.env, provisionEnv, {
+  const nodeEnv = environment === 'dev' || environment === 'development'
+    ? 'development'
+    : environment === 'test'
+      ? 'test'
+      : 'production'
+  const env = mergeEnvironmentLayers([
+    {
+      NODE_ENV: nodeEnv,
+    },
+    Object.fromEntries(Object.entries(appEnv).filter(([name]) => !CONTAINER_ENV_KEYS.has(name))),
+    sidecar.env,
+    provisionEnv,
+    {
     // 容器监听由本次制品决定，本机回环地址和开发端口不能覆盖部署拓扑。
-    HOST: '0.0.0.0',
-    PORT: String(containerPort),
-    HAI_SERV_SERVER_HOST: '0.0.0.0',
-    HAI_SERV_SERVER_PORT: String(containerPort),
-  }])
+      HOST: '0.0.0.0',
+      PORT: String(containerPort),
+      HAI_SERV_SERVER_HOST: '0.0.0.0',
+      HAI_SERV_SERVER_PORT: String(containerPort),
+    },
+  ])
   return { env, sidecar }
 }
 
@@ -497,7 +601,7 @@ export function buildRuntimeEnv(
  * @param options.web.imageRef - Web 镜像引用
  * @param options.web.containerPort - Web 容器监听端口
  * @param options.mountWebConfig - 独立Vite站点是否挂载公开的目录路由配置，默认不挂载。
- * @param options.gateway - SSR/API 自建对象存储的公开 Nginx 入口；只在没有现成 Web 代理时启用。
+ * @param options.gateway - SSR 必需的可信 Nginx 入口，或 API 自建存储/HTTPS 的入口。
  * @param options.requestAccessPolicy - 是否为本次更新的后端挂载只读请求策略快照。
  * @param options.nodeRuntime - Node 后端默认重读运行文件；SSR web 显式标识。
  * @param options.nodeOptions - 打包时保留的 Node 启动参数，更新需重新部署。
@@ -550,7 +654,12 @@ export function generateComposeFile(options: {
   if (primaryService === 'serv') {
     // 与应用相同的公开 Schema 和环境解析；不传 --input-type，避免预加载时传给日志 worker。
     app.healthcheck = {
-      test: ['CMD', 'node', '-e', '(async () => { try { const { core } = await import(\'@h-ai/core\'); const { ServConfigSchema } = await import(\'@h-ai/serv\'); core.init({ configDir: \'./config\', configSchemas: { serv: ServConfigSchema } }); const { server, http } = ServConfigSchema.parse(core.config.getOrThrow(\'serv\')); if (http.health === false) process.exit(0); const response = await fetch(\'http://127.0.0.1:\' + server.port + http.health.path, { signal: AbortSignal.timeout(4000) }); process.exit(response.ok ? 0 : 1); } catch { process.exit(1); } })()'],
+      test: [
+        'CMD',
+        'node',
+        '-e',
+        '(async () => { try { const { core } = await import(\'@h-ai/core\'); const { ServConfigSchema } = await import(\'@h-ai/serv\'); core.init({ configDir: \'./config\', configSchemas: { serv: ServConfigSchema } }); const { server, http } = ServConfigSchema.parse(core.config.getOrThrow(\'serv\')); if (http.health === false) process.exit(0); const response = await fetch(\'http://127.0.0.1:\' + server.port + http.health.path, { signal: AbortSignal.timeout(4000) }); process.exit(response.ok ? 0 : 1); } catch { process.exit(1); } })()',
+      ],
       interval: '30s',
       timeout: '5s',
       start_period: '15s',
@@ -562,20 +671,40 @@ export function generateComposeFile(options: {
   if (nodeRuntime) {
     delete app.env_file
     appVolumes.push('./config:/run/hai/config:ro', './runtime-env.mjs:/run/hai/runtime-env.mjs:ro')
-    appEnvironment.NODE_OPTIONS = (`--import /run/hai/runtime-env.mjs${options.nodeOptions ? ` ${options.nodeOptions}` : ''}`).replaceAll('$', () => '$$')
+    appEnvironment.NODE_OPTIONS = (`--import /run/hai/runtime-env.mjs${options.nodeOptions
+      ? ` ${options.nodeOptions}`
+      : ''}`).replaceAll('$', () => '$$')
   }
   if (options.requestAccessPolicy)
     appVolumes.push('./request-access.yml:/run/hai/request-access.yml:ro')
   if (options.web || options.gateway)
     appEnvironment.HAI_DEPLOY_PRIVATE_PROXY = '1'
+  if (nodeRuntime && primaryService === 'web') {
+    if (!options.gateway)
+      throw new Error('SvelteKit SSR requires a private gateway')
+    // 标准转发头由本编排唯一公开的网关覆盖；后端不映射宿主机端口。
+    Object.assign(appEnvironment, {
+      PROTOCOL_HEADER: 'x-forwarded-proto',
+      HOST_HEADER: 'host',
+      PORT_HEADER: '',
+      ADDRESS_HEADER: 'x-forwarded-for',
+      XFF_DEPTH: '1',
+    })
+  }
   if (Object.keys(appEnvironment).length)
     app.environment = appEnvironment
   if (options.mountWebConfig)
     appVolumes.push('./web.conf:/etc/nginx/conf.d/default.conf:ro')
   if (appVolumes.length)
     app.volumes = appVolumes
-  if (sidecar.dependsOn.length > 0)
-    app.depends_on = Object.fromEntries(sidecar.dependsOn.map(name => [name, { condition: sidecar.composeServices[name]?.healthcheck ? 'service_healthy' : 'service_started' }]))
+  if (sidecar.dependsOn.length > 0) {
+    app.depends_on = Object.fromEntries(sidecar.dependsOn.map(name => [
+      name,
+      {
+        condition: sidecar.composeServices[name]?.healthcheck ? 'service_healthy' : 'service_started',
+      },
+    ]))
+  }
 
   const services: Record<string, ComposeService> = { [primaryService]: app, ...sidecar.composeServices }
   if (options.web) {
@@ -588,9 +717,25 @@ export function generateComposeFile(options: {
       pull_policy: 'never',
       ports: [`${hostPort}:${options.web.containerPort}`],
       environment: { PUBLIC_API_BASE: '' },
-      healthcheck: { test: ['CMD', 'wget', '-Y', 'off', '-q', '-O', '/dev/null', `http://127.0.0.1:${options.web.containerPort}/_hai/web-health`], interval: '30s', timeout: '5s', retries: 3 },
+      healthcheck: {
+        test: [
+          'CMD',
+          'wget',
+          '-Y',
+          'off',
+          '-q',
+          '-O',
+          '/dev/null',
+          `http://127.0.0.1:${options.web.containerPort}/_hai/web-health`,
+        ],
+        interval: '30s',
+        timeout: '5s',
+        retries: 3,
+      },
       volumes: ['./web.conf:/etc/nginx/conf.d/default.conf:ro'],
-      depends_on: sidecar.services.includes('storage') ? ['serv', 'storage'] : ['serv'],
+      depends_on: sidecar.services.includes('storage')
+        ? ['serv', 'storage']
+        : ['serv'],
       networks: ['hai-app'],
     }
   }
@@ -601,26 +746,57 @@ export function generateComposeFile(options: {
       container_name: `hai-${projectName}-gateway`,
       restart: 'unless-stopped',
       ports: [`${hostPort}:8080`],
-      healthcheck: { test: ['CMD', 'wget', '-Y', 'off', '-q', '-O', '/dev/null', 'http://127.0.0.1:8080/_hai/gateway-health'], interval: '30s', timeout: '5s', retries: 3 },
+      healthcheck: {
+        test: [
+          'CMD',
+          'wget',
+          '-Y',
+          'off',
+          '-q',
+          '-O',
+          '/dev/null',
+          'http://127.0.0.1:8080/_hai/gateway-health',
+        ],
+        interval: '30s',
+        timeout: '5s',
+        retries: 3,
+      },
       volumes: ['./web.conf:/etc/nginx/conf.d/default.conf:ro'],
-      depends_on: [primaryService, ...(sidecar.services.includes('storage') ? ['storage'] : [])],
+      depends_on: [
+        primaryService,
+        ...(sidecar.services.includes('storage')
+          ? ['storage']
+          : []),
+      ],
       networks: ['hai-app'],
     }
   }
   if (options.web || options.gateway || options.mountWebConfig) {
-    const proxy = services[options.gateway ? 'gateway' : options.web ? 'web' : primaryService]!
+    const proxy = services[options.gateway
+      ? 'gateway'
+      : options.web ? 'web' : primaryService]!
     proxy.volumes = [...proxy.volumes as string[], './proxy-start.sh:/docker-entrypoint.d/18-hai-proxy-start.sh:ro']
   }
   if (options.https) {
-    const proxy = services[options.gateway ? 'gateway' : options.web ? 'web' : primaryService]!
+    const proxy = services[options.gateway
+      ? 'gateway'
+      : options.web ? 'web' : primaryService]!
     const https = options.https
-    const httpPort = options.gateway ? 8080 : options.web?.containerPort ?? containerPort
-    proxy.ports = [...proxy.ports as string[], `${https.port}:${httpPort === 8443 ? 8444 : 8443}`]
-    const certificates = https.type === 'files' ? './tls' : `../../https/certificates/${https.domain}`
+    const httpPort = options.gateway
+      ? 8080
+      : options.web?.containerPort ?? containerPort
+    proxy.ports = [...proxy.ports as string[], `${https.port}:${httpPort === 8443
+      ? 8444
+      : 8443}`]
+    const certificates = https.type === 'files'
+      ? './tls'
+      : `../../https/certificates/${https.domain}`
     proxy.volumes = [
       ...proxy.volumes as string[],
       `${certificates}:/etc/nginx/tls:ro`,
-      ...(https.type === 'letsencrypt' ? ['../../https/webroot:/var/www/certbot:ro'] : []),
+      ...(https.type === 'letsencrypt'
+        ? ['../../https/webroot:/var/www/certbot:ro']
+        : []),
     ]
     if (https.type === 'letsencrypt') {
       services.certbot = {
@@ -647,7 +823,12 @@ export function generateComposeFile(options: {
   if (Object.keys(sidecar.volumes).length > 0)
     compose.volumes = sidecar.volumes
 
-  for (const role of [primaryService, ...(options.web ? ['web'] as const : [])]) {
+  for (const role of [
+    primaryService,
+    ...(options.web
+      ? ['web'] as const
+      : []),
+  ]) {
     const hosts = Object.entries(options.compose?.services[role]?.extra_hosts ?? {})
     if (hosts.length)
       services[role]!.extra_hosts = hosts.map(([host, ip]) => `${host}:${ip}`)
@@ -682,7 +863,9 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, options:
   const webPort = options.webPort ?? 8080
   const webBasePath = options.webBasePath ?? ''
   const apiPath = apiPrefix.replace(/\/+$/, '')
-  const backendPaths = [...new Set(options.backendPaths ?? ['/health'])]
+  const backendPaths = [
+    ...new Set(options.backendPaths ?? ['/health']),
+  ]
   if (!/^\/[\w.-]+(?:\/[\w.-]+)*$/.test(apiPrefix) || apiPrefix.split('/').some(part => part === '.' || part === '..') || ![port, webPort].every(value => Number.isInteger(value) && value >= 1 && value <= 65535)
     || backendPaths.includes(`${webBasePath}/`)
     || backendPaths.some(path => !/^\/[\w./-]*$/.test(path) || path.includes('//') || path.split('/').some(part => part === '.' || part === '..') || path === `${webBasePath}/runtime-config.js` || path === '/_hai/web-health')
@@ -690,7 +873,15 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, options:
     throw new Error('Invalid web proxy target')
   }
   const webLocation = renderWebLocation(webBasePath)
-  const storageLocation = options.storageBucket ? renderStorageLocation(options.storageBucket, [apiPath, ...backendPaths, ...(options.storageBasePath ? [`${webBasePath}/_app`, `${webBasePath}/assets`, `${webBasePath}/runtime-config.js`] : [webBasePath])], options.storageBasePath) : ''
+  const storageLocation = options.storageBucket
+    ? renderStorageLocation(options.storageBucket, [
+        apiPath,
+        ...backendPaths,
+        ...(options.storageBasePath
+          ? [`${webBasePath}/_app`, `${webBasePath}/assets`, `${webBasePath}/runtime-config.js`]
+          : [webBasePath]),
+      ], options.storageBasePath)
+    : ''
   const backendLocations = backendPaths.map(path => `  location = ${path} {
     proxy_pass http://hai_serv_backend;
     proxy_http_version 1.1;
@@ -701,7 +892,9 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, options:
   }
 `).join('')
   return `include /tmp/hai-dns.conf;
-${renderResolvedUpstream('hai_serv_backend', 'serv', port)}${options.storageBucket ? renderStorageUpstream(options.storageBucket, options.storageBasePath) : ''}server {
+${renderResolvedUpstream('hai_serv_backend', 'serv', port)}${options.storageBucket
+  ? renderStorageUpstream(options.storageBucket, options.storageBasePath)
+  : ''}server {
   listen ${webPort};
   server_name _;
 ${renderTrustedEdgeProxies(options.trustedEdgeProxies)}  root /usr/share/nginx/html;
@@ -831,12 +1024,18 @@ export function generateApplicationProxyConfig(options: { primaryService: 'serv'
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error('Invalid application proxy target')
   const bodyLimits = resolveTransportBodyLimits(maxPlaintextBytes)
+  const trustedEdges = renderTrustedEdgeProxies(options.trustedEdgeProxies)
+  const forwardedProtocol = options.trustedEdgeProxies?.length ? '$hai_request_scheme' : '$scheme'
   return `include /tmp/hai-dns.conf;
-${renderResolvedUpstream('hai_application_backend', primaryService, port)}${bucket ? renderStorageUpstream(bucket, options.storageBasePath) : ''}server {
+${renderResolvedUpstream('hai_application_backend', primaryService, port)}${renderTrustedEdgeProtocol(options.trustedEdgeProxies)}${bucket
+  ? renderStorageUpstream(bucket, options.storageBasePath)
+  : ''}server {
   listen 8080;
   server_name _;
-${renderTrustedEdgeProxies(options.trustedEdgeProxies)}  large_client_header_buffers 4 32k;
-${bucket ? renderStorageLocation(bucket, reservedPaths, options.storageBasePath) : ''}  location = /_hai/gateway-health {
+${trustedEdges}  large_client_header_buffers 4 32k;
+${bucket
+  ? renderStorageLocation(bucket, reservedPaths, options.storageBasePath)
+  : ''}  location = /_hai/gateway-health {
     access_log off;
     return 200 'ok';
   }
@@ -845,8 +1044,11 @@ ${bucket ? renderStorageLocation(bucket, reservedPaths, options.storageBasePath)
     proxy_pass http://hai_application_backend;
     proxy_http_version 1.1;
     proxy_set_header Host $http_host;
-    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Proto ${forwardedProtocol};
     proxy_set_header Connection "";
+    proxy_set_header X-Forwarded-Host $http_host;
+    proxy_set_header X-Forwarded-Port "";
+    proxy_set_header Forwarded "";
     proxy_set_header X-Forwarded-For $remote_addr;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_request_buffering off;
@@ -874,6 +1076,22 @@ function renderTrustedEdgeProxies(entries: string[] = []): string {
   if (!entries.length)
     return ''
   return `${entries.map(entry => `  set_real_ip_from ${entry};`).join('\n')}\n  real_ip_header X-Forwarded-For;\n  real_ip_recursive on;\n`
+}
+
+/** 只读取已校验真实对端的单值协议头；realip_remote_addr 不受客户端 XFF 伪造影响。 */
+function renderTrustedEdgeProtocol(entries: string[] = []): string {
+  if (!entries.length)
+    return ''
+  return `geo $realip_remote_addr $hai_trusted_edge {
+  default 0;
+${entries.map(entry => `  ${entry} 1;`).join('\n')}
+}
+map "$hai_trusted_edge:$http_x_forwarded_proto" $hai_request_scheme {
+  default $scheme;
+  "1:http" http;
+  "1:https" https;
+}
+`
 }
 
 /**

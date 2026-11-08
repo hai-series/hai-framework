@@ -38,7 +38,10 @@ export function createResourceRegistry<T extends { id: string }, Input = T>(
   isOpen: () => boolean,
 ) {
   const config = new Map(
-    configured.map(item => [item.id, structuredClone(item)]),
+    configured.map(item => [
+      item.id,
+      structuredClone(item),
+    ]),
   )
   if (config.size !== configured.length)
     throw new Error('Duplicate configuration resource ID')
@@ -54,24 +57,37 @@ export function createResourceRegistry<T extends { id: string }, Input = T>(
   async function read(id: string): Promise<AIResourceEntry<T> | undefined> {
     ensure()
     const fixed = config.get(id)
-    if (fixed)
-      return { value: structuredClone(fixed), source: 'config' }
+    if (fixed) {
+      return {
+        value: structuredClone(fixed),
+        source: 'config',
+      }
+    }
     const saved = await store.readVersioned(id)
     return saved && !saved.data.__deleted
-      ? { value: copy(saved.data), source: 'database', version: saved.version }
+      ? {
+          value: copy(saved.data),
+          source: 'database',
+          version: saved.version,
+        }
       : undefined
   }
   async function entries(): Promise<AIResourceEntry<T>[]> {
     ensure()
     const saved = await store.query({})
     return [
-      ...[...config.values()].map(value => ({
+      ...[
+        ...config.values(),
+      ].map(value => ({
         value: structuredClone(value),
         source: 'config' as const,
       })),
       ...saved
         .filter(item => !item.__deleted && !config.has(item.id))
-        .map(item => ({ value: copy(item), source: 'database' as const })),
+        .map(item => ({
+          value: copy(item),
+          source: 'database' as const,
+        })),
     ]
   }
   async function protect<R>(operation: () => Promise<R>) {

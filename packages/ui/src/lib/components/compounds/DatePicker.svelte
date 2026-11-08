@@ -103,7 +103,12 @@
   >
     <BitsDatePicker.Input
       aria-labelledby={field?.labelId}
-      aria-describedby={[field?.messageId, localError && !field?.error ? messageId : ''].filter(Boolean).join(' ') || undefined}
+      aria-describedby={[
+        field?.messageId,
+        localError && !field?.error
+          ? messageId
+          : '',
+      ].filter(Boolean).join(' ') || undefined}
       class={cn(
         'flex w-full items-center gap-0.5 rounded-lg border bg-base-100 pr-2 transition-[border-color,box-shadow] duration-150',
         sizeClasses.control,

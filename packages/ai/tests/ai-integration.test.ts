@@ -22,7 +22,9 @@ const { mockCreate, mockEmbeddingCreate, mockListModels } = vi.hoisted(() => ({
 vi.mock('openai', () => {
   function MockOpenAI() {
     return {
-      chat: { completions: { create: mockCreate } },
+      chat: {
+        completions: { create: mockCreate },
+      },
       embeddings: { create: mockEmbeddingCreate },
       models: { list: mockListModels },
     }
@@ -48,11 +50,13 @@ function chatResponse(content: string) {
     object: 'chat.completion',
     created: Date.now(),
     model: 'gpt-4o-mini',
-    choices: [{
-      index: 0,
-      message: { role: 'assistant', content },
-      finish_reason: 'stop',
-    }],
+    choices: [
+      {
+        index: 0,
+        message: { role: 'assistant', content },
+        finish_reason: 'stop',
+      },
+    ],
     usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
   }
 }
@@ -78,7 +82,11 @@ describe('ai 全流程集成', () => {
     vi.clearAllMocks()
     await ai.init({
       // API key and default model belong to the LLM config; embedding model is mapped via scenarios.
-      llm: { model: 'gpt-4o-mini', apiKey: 'sk-test', scenarios: { embedding: 'text-embedding-3-small' } },
+      llm: {
+        model: 'gpt-4o-mini',
+        apiKey: 'sk-test',
+        scenarios: { embedding: 'text-embedding-3-small' },
+      },
       // embedding config should only contain embedding-specific options (dimensions, batchSize),
       // the model/apiKey are resolved from llm.scenarios / llm.apiKey.
       embedding: {},
@@ -114,7 +122,9 @@ describe('ai 全流程集成', () => {
     const calculator = ai.tools.define({
       name: 'calculate',
       description: '计算数学表达式',
-      parameters: z.object({ expression: z.string() }),
+      parameters: z.object({
+        expression: z.string(),
+      }),
       handler: ({ expression }) => {
         return String(expression)
       },
@@ -130,7 +140,9 @@ describe('ai 全流程集成', () => {
     // LLM chat 正常使用
     mockCreate.mockResolvedValueOnce(chatResponse('The answer is 5'))
     const chatResult = await ai.llm.chat({
-      messages: [{ role: 'user', content: 'What is 2+3?' }],
+      messages: [
+        { role: 'user', content: 'What is 2+3?' },
+      ],
     })
     expect(chatResult.success).toBe(true)
     if (chatResult.success) {
@@ -144,7 +156,9 @@ describe('ai 全流程集成', () => {
     // LLM chat
     mockCreate.mockResolvedValueOnce(chatResponse('AI is amazing'))
     const chatResult = await ai.llm.chat({
-      messages: [{ role: 'user', content: 'Tell me about AI' }],
+      messages: [
+        { role: 'user', content: 'Tell me about AI' },
+      ],
     })
     expect(chatResult.success).toBe(true)
 
@@ -178,14 +192,19 @@ describe('ai 全流程集成', () => {
     const tool1 = ai.tools.define({
       name: 'search',
       description: '搜索',
-      parameters: z.object({ query: z.string() }),
+      parameters: z.object({
+        query: z.string(),
+      }),
       handler: ({ query }) => `results for ${query}`,
     })
 
     const tool2 = ai.tools.define({
       name: 'translate',
       description: '翻译',
-      parameters: z.object({ text: z.string(), lang: z.string() }),
+      parameters: z.object({
+        text: z.string(),
+        lang: z.string(),
+      }),
       handler: ({ text }) => text,
     })
 
@@ -203,7 +222,11 @@ describe('ai 全流程集成', () => {
   it('mCP 工具注册 + LLM chat 在初始化后均可用', async () => {
     // MCP 注册
     const regResult = ai.mcp.registerTool(
-      { name: 'echo', description: 'Echo', inputSchema: { type: 'object' } },
+      {
+        name: 'echo',
+        description: 'Echo',
+        inputSchema: { type: 'object' },
+      },
       async (input: unknown) => input,
     )
     expect(regResult.success).toBe(true)
@@ -218,7 +241,9 @@ describe('ai 全流程集成', () => {
     // LLM 同时可用
     mockCreate.mockResolvedValueOnce(chatResponse('ok'))
     const chatResult = await ai.llm.chat({
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
     })
     expect(chatResult.success).toBe(true)
   })
@@ -259,7 +284,11 @@ describe('ai 全流程集成', () => {
   it('重新初始化后子模块状态重置', async () => {
     // 注册 MCP 工具
     ai.mcp.registerTool(
-      { name: 'temp-tool', description: 'Test', inputSchema: { type: 'object' } },
+      {
+        name: 'temp-tool',
+        description: 'Test',
+        inputSchema: { type: 'object' },
+      },
       async () => 'ok',
     )
 
@@ -268,7 +297,11 @@ describe('ai 全流程集成', () => {
 
     // 重新初始化
     const result = await ai.init({
-      llm: { model: 'gpt-4o', apiKey: 'sk-new', scenarios: { embedding: 'text-embedding-3-small' } },
+      llm: {
+        model: 'gpt-4o',
+        apiKey: 'sk-new',
+        scenarios: { embedding: 'text-embedding-3-small' },
+      },
       embedding: {},
     })
     expect(result.success).toBe(true)
@@ -289,7 +322,11 @@ describe('ai 全流程集成', () => {
     expect(ai.isInitialized).toBe(false)
 
     // LLM
-    const chatResult = await ai.llm.chat({ messages: [{ role: 'user', content: 'test' }] })
+    const chatResult = await ai.llm.chat({
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
+    })
     expect(chatResult.success).toBe(false)
     if (!chatResult.success) {
       expect(chatResult.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)

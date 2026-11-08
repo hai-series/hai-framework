@@ -21,5 +21,9 @@ export function desktopBuildConfig(mode?: string): string {
   if (!result.success)
     throw new Error(result.error.message)
   const transport = result.data.transport
-  return JSON.stringify({ transport: transport ? { keyExchangePath: transport.keyExchangePath } : false })
+  return JSON.stringify({
+    transport: transport
+      ? { keyExchangePath: transport.keyExchangePath }
+      : false,
+  })
 }

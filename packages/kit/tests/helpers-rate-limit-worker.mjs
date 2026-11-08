@@ -11,10 +11,19 @@ async function main() {
     throw new Error('Cache initialization failed')
   const actualNow = Date.now.bind(Date)
   Date.now = () => actualNow() + config.clockSkew
-  const middleware = kit.middleware.rateLimit({ windowMs: 3000, maxRequests: 5, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: config.namespace }) })
+  const middleware = kit.middleware.rateLimit({
+    windowMs: 3000,
+    maxRequests: 5,
+    store: kit.middleware.createCacheRateLimitStore(cache, { namespace: config.namespace }),
+  })
   const server = createServer(async (request, response) => {
     try {
-      const result = await middleware({ event: { getClientAddress: () => request.socket.remoteAddress }, requestId: 'process-request' }, async () => new Response('allowed'))
+      const result = await middleware({
+        event: {
+          getClientAddress: () => request.socket.remoteAddress,
+        },
+        requestId: 'process-request',
+      }, async () => new Response('allowed'))
       response.writeHead(result.status, Object.fromEntries(result.headers))
       response.end(await result.text())
     }

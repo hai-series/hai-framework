@@ -8,14 +8,24 @@ const kind: string = 'SCAFFOLD_KIND'
 const prefix = '/yyy'
 
 test('挂载目录下资源、运行配置、认证和刷新保持有效', async ({ page, request, context }, testInfo) => {
-  const screenshot = (name: string) => process.env.HAI_AUTH_EVIDENCE_DIR ? path.join(process.env.HAI_AUTH_EVIDENCE_DIR, name) : testInfo.outputPath(name)
+  const screenshot = (name: string) => process.env.HAI_AUTH_EVIDENCE_DIR
+    ? path.join(process.env.HAI_AUTH_EVIDENCE_DIR, name)
+    : testInfo.outputPath(name)
   const invalidAssets: string[] = []
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
   page.on('request', (entry) => {
     const url = new URL(entry.url())
-    if (['script', 'stylesheet', 'image', 'font', 'fetch', 'xhr'].includes(entry.resourceType()) && url.origin === new URL(page.url()).origin && !url.pathname.startsWith(`${prefix}/`))
+    if ([
+      'script',
+      'stylesheet',
+      'image',
+      'font',
+      'fetch',
+      'xhr',
+    ].includes(entry.resourceType()) && url.origin === new URL(page.url()).origin && !url.pathname.startsWith(`${prefix}/`)) {
       invalidAssets.push(url.pathname)
+    }
   })
   if (kind === 'sveltekit') {
     const denied = await request.get(`${prefix}/api/prefix-probe`, { maxRedirects: 0 })
@@ -24,7 +34,9 @@ test('挂载目录下资源、运行配置、认证和刷新保持有效', async
     const diagnostic = await context.newPage()
     try {
       expect((await diagnostic.goto(`${prefix}/api/prefix-probe`))?.status()).toBe(401)
-      await diagnostic.screenshot({ path: screenshot('sveltekit-prefix-api-401.png') })
+      await diagnostic.screenshot({
+        path: screenshot('sveltekit-prefix-api-401.png'),
+      })
     }
     finally { await diagnostic.close() }
     const protectedPage = await request.get(`${prefix}/admin`, { maxRedirects: 0 })
@@ -33,7 +45,10 @@ test('挂载目录下资源、运行配置、认证和刷新保持有效', async
     expect((await page.goto(`${prefix}/auth/login`))?.status()).toBe(200)
     await expect(page.locator('#login-username')).toBeVisible()
     expect((await page.reload())?.status()).toBe(200)
-    await page.screenshot({ path: screenshot('sveltekit-prefix-login.png'), fullPage: true })
+    await page.screenshot({
+      path: screenshot('sveltekit-prefix-login.png'),
+      fullPage: true,
+    })
     await page.getByRole('link', { name: /立即注册|Register now/i }).click()
     await expect(page).toHaveURL(/\/yyy\/auth\/register(?:\?|$)/)
     const form = page.locator('.register-form')
@@ -68,11 +83,16 @@ test('挂载目录下资源、运行配置、认证和刷新保持有效', async
     expect((await request.get('/health')).status()).toBe(404)
     expect((await page.reload())?.status()).toBe(200)
     await expect(page.getByTestId('login-form')).toBeVisible()
-    await page.screenshot({ path: screenshot('vite-prefix-login.png'), fullPage: true })
+    await page.screenshot({
+      path: screenshot('vite-prefix-login.png'),
+      fullPage: true,
+    })
     const configuration = await context.newPage()
     try {
       expect((await configuration.goto(`${prefix}/runtime-config.js`))?.status()).toBe(200)
-      await configuration.screenshot({ path: screenshot('vite-prefix-runtime-config.png') })
+      await configuration.screenshot({
+        path: screenshot('vite-prefix-runtime-config.png'),
+      })
     }
     finally { await configuration.close() }
   }
@@ -95,7 +115,10 @@ test('挂载目录下资源、运行配置、认证和刷新保持有效', async
     })
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true)
-  await page.screenshot({ path: screenshot(`${kind}-prefix-mobile.png`), fullPage: true })
+  await page.screenshot({
+    path: screenshot(`${kind}-prefix-mobile.png`),
+    fullPage: true,
+  })
   expect(invalidAssets).toEqual([])
   expect(errors).toEqual([])
 })

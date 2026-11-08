@@ -34,6 +34,8 @@ pnpm dev
 
 应用先初始化 `reldb → vecdb → ai`，并发请求共用一次启动；失败按 `ai → vecdb → reldb` 关闭，关闭失败保留重试义务。API 路由使用 `ai.llm` / `ai.image` / `ai.memory` / `ai.audio`。开发默认 SQLite 与 LanceDB，状态持久化到 data；生产 `.env.prod` 选择共享 PostgreSQL、Qdrant，限流使用 Redis。数据库/缓存密码、受保护 Qdrant 密钥及模型密钥由 Secret/进程环境或忽略的 `.env.local` 注入。Compose 服务名为 `db/cache/vecdb`，容器外运行需覆盖地址；缺少共享依赖时启动失败，不会降级为内存 Store。
 
+首页与 Memory 面板从已初始化的数据库配置显示存储模式：文件 SQLite 和网络数据库属于持久存储，记忆在重启后仍保留；只有显式 SQLite `:memory:` 显示临时存储。测试主体 ID 只是选择记忆范围，不是用户认证；共享实验台中的测试记忆需主动删除。
+
 ### API 契约
 
 | Endpoint                        | 用途                                                   |

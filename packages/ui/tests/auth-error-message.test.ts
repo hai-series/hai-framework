@@ -21,11 +21,22 @@ describe('authentication error localization', () => {
     expect(authErrorMessage({ code: 'hai:iam:301', message: 'Internal directory detail' })).not.toContain('Internal directory detail')
   })
 
-  it.each(['hai:iam:9999', 'app:account:001', 'constructor', '__proto__', 400])('未知错误不把内部消息带入认证界面：%s', (code) => {
+  it.each([
+    'hai:iam:9999',
+    'app:account:001',
+    'constructor',
+    '__proto__',
+    400,
+  ])('未知错误不把内部消息带入认证界面：%s', (code) => {
     expect(authErrorMessage({ code, message: 'Private database or account detail' })).toBe('暂时无法完成认证请求，请稍后重试')
   })
 
-  it.each(['hai:iam:001', 'hai:iam:002', 'hai:iam:003', 'hai:iam:302'])('凭据错误不能说明用户名或密码哪个错误：%s', (code) => {
+  it.each([
+    'hai:iam:001',
+    'hai:iam:002',
+    'hai:iam:003',
+    'hai:iam:302',
+  ])('凭据错误不能说明用户名或密码哪个错误：%s', (code) => {
     expect(authErrorMessage({ code, message: 'This account has no password' })).toBe('用户名或密码不正确')
   })
 
@@ -42,7 +53,12 @@ describe('authentication error localization', () => {
 
   it.each(['hai:crypto:071', 'hai:api-client:007'])('显示标准客户端的校时提示和服务器时间：%s', (code) => {
     const message = '服务器时间为 2026-11-06 07:30:00 UTC。请开启设备的自动校时或手工修改时间。'
-    expect(authErrorMessage({ code, message, httpStatus: 400, cause: { transportCode: 'hai:crypto:071' } })).toBe(message)
+    expect(authErrorMessage({
+      code,
+      message,
+      httpStatus: 400,
+      cause: { transportCode: 'hai:crypto:071' },
+    })).toBe(message)
     expect(authErrorMessage({ code, message, httpStatus: 400 })).toBe('暂时无法完成认证请求，请稍后重试')
   })
 

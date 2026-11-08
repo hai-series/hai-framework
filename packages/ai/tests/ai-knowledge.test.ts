@@ -30,14 +30,16 @@ function createMockLLM(entityJson?: string): LLMOperations {
             object: 'chat.completion' as const,
             created: Date.now(),
             model: 'test-model',
-            choices: [{
-              index: 0,
-              message: {
-                role: 'assistant' as const,
-                content: entityJson ?? '[]',
+            choices: [
+              {
+                index: 0,
+                message: {
+                  role: 'assistant' as const,
+                  content: entityJson ?? '[]',
+                },
+                finish_reason: 'stop' as const,
               },
-              finish_reason: 'stop' as const,
-            }],
+            ],
             usage: { prompt_tokens: 50, completion_tokens: 30, total_tokens: 80 },
           },
         }
@@ -51,11 +53,13 @@ function createMockLLM(entityJson?: string): LLMOperations {
           object: 'chat.completion' as const,
           created: Date.now(),
           model: 'gpt-4o-mini',
-          choices: [{
-            index: 0,
-            message: { role: 'assistant' as const, content: 'This is the answer based on the context.' },
-            finish_reason: 'stop' as const,
-          }],
+          choices: [
+            {
+              index: 0,
+              message: { role: 'assistant' as const, content: 'This is the answer based on the context.' },
+              finish_reason: 'stop' as const,
+            },
+          ],
           usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
         },
       }
@@ -68,7 +72,16 @@ function createMockEmbedding(): EmbeddingOperations {
   return {
     embed: vi.fn(async () => ({
       success: true as const,
-      data: { model: 'test', data: [{ index: 0, embedding: [0.1, 0.2, 0.3] }], usage: { prompt_tokens: 1, total_tokens: 1 } },
+      data: {
+        model: 'test',
+        data: [
+          {
+            index: 0,
+            embedding: [0.1, 0.2, 0.3],
+          },
+        ],
+        usage: { prompt_tokens: 1, total_tokens: 1 },
+      },
     })),
     embedText: vi.fn(async () => ({
       success: true as const,
@@ -92,7 +105,13 @@ function createMockKnowledgeStore() {
     initialize: vi.fn(async () => {}),
     replaceDocument: vi.fn(async (doc: KnowledgeDocumentRevision) => {
       vectors.push(...doc.chunks)
-      documents.set(`${doc.documentId}:${doc.collection}`, { ...doc, title: doc.title ?? null, url: doc.url ?? null, chunkCount: doc.chunks.length, entityCount: doc.entities.length })
+      documents.set(`${doc.documentId}:${doc.collection}`, {
+        ...doc,
+        title: doc.title ?? null,
+        url: doc.url ?? null,
+        chunkCount: doc.chunks.length,
+        entityCount: doc.entities.length,
+      })
       doc.entities.forEach(entity => entities.set(entity.id, entity))
       return { cleanupPending: false }
     }),
@@ -130,17 +149,34 @@ function createMockKnowledgeStore() {
     }),
   }
 
-  return { store, _vectors: vectors, _documents: documents, _entities: entities, _entityDocs: entityDocs }
+  return {
+    store,
+    _vectors: vectors,
+    _documents: documents,
+    _entities: entities,
+    _entityDocs: entityDocs,
+  }
 }
 
 function createMockDatapipe() {
   return {
-    clean: vi.fn((text: string) => ({ success: true as const, data: text.trim() })),
+    clean: vi.fn((text: string) => ({
+      success: true as const,
+      data: text.trim(),
+    })),
     chunk: vi.fn((text: string, _options: Record<string, unknown>) => ({
       success: true as const,
       data: [
-        { index: 0, content: text.slice(0, Math.floor(text.length / 2)), metadata: {} },
-        { index: 1, content: text.slice(Math.floor(text.length / 2)), metadata: {} },
+        {
+          index: 0,
+          content: text.slice(0, Math.floor(text.length / 2)),
+          metadata: {},
+        },
+        {
+          index: 1,
+          content: text.slice(Math.floor(text.length / 2)),
+          metadata: {},
+        },
       ],
     })),
     pipeline: vi.fn(),
@@ -272,7 +308,14 @@ describe('knowledge ingest', () => {
     // 先 setup
     await ops.setup()
 
-    return { ops, store, datapipe, embedding, llm, _vectors }
+    return {
+      ops,
+      store,
+      datapipe,
+      embedding,
+      llm,
+      _vectors,
+    }
   }
 
   it('未 setup 时 ingest 返回错误', async () => {
@@ -356,13 +399,21 @@ describe('knowledge ingest', () => {
     // embedding.embedBatch 应被调用（2 个 chunk）
     expect(embedding.embedBatch).toHaveBeenCalled()
     // 完整版本统一交由 Store 暂存和发布。
-    expect(store.replaceDocument).toHaveBeenCalledWith(expect.objectContaining({ collection: 'hai_ai_knowledge1', chunks: expect.any(Array) }))
+    expect(store.replaceDocument).toHaveBeenCalledWith(expect.objectContaining({
+      collection: 'hai_ai_knowledge1',
+      chunks: expect.any(Array),
+    }))
   })
 
   it.each([
     { mode: 'paragraph', maxSize: 0, overlap: 0 },
     { mode: 'paragraph', maxSize: 4, overlap: 4 },
-    { mode: 'custom', maxSize: 6, overlap: 0, separator: '[' },
+    {
+      mode: 'custom',
+      maxSize: 6,
+      overlap: 0,
+      separator: '[',
+    },
   ] as const)('分块配置或表达式失败在 embedding/发布前返回错误，不绕过预算 %j', async (chunkOptions) => {
     const { ops, embedding, store } = await setupOps({ datapipe: realDatapipe })
 
@@ -372,7 +423,10 @@ describe('knowledge ingest', () => {
       chunkOptions,
     })
 
-    expect(result).toMatchObject({ success: false, error: { code: HaiAIError.KNOWLEDGE_INGEST_FAILED.code } })
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.KNOWLEDGE_INGEST_FAILED.code },
+    })
     expect(embedding.embedBatch).not.toHaveBeenCalled()
     expect(store.replaceDocument).not.toHaveBeenCalled()
   })
@@ -390,7 +444,9 @@ describe('knowledge ingest', () => {
     expect(embedding.embedBatch).toHaveBeenCalledOnce()
     const texts = vi.mocked(embedding.embedBatch).mock.calls[0]![0]
     expect(texts.every(text => Array.from(text).length <= 6)).toBe(true)
-    expect(texts.map((text, index) => Array.from(text).slice(index === 0 ? 0 : 2).join('')).join('')).toBe(content)
+    expect(texts.map((text, index) => Array.from(text).slice(index === 0
+      ? 0
+      : 2).join('')).join('')).toBe(content)
     const published = vi.mocked(store.replaceDocument).mock.calls[0]![0]
     expect(published.chunks.map(chunk => chunk.content)).toEqual(texts)
   })
@@ -448,7 +504,11 @@ describe('knowledge ingest', () => {
       expect(result.data.entities[0].type).toBe('person')
     }
 
-    expect(store.replaceDocument).toHaveBeenCalledWith(expect.objectContaining({ entities: expect.arrayContaining([expect.objectContaining({ name: 'Alice' })]) }))
+    expect(store.replaceDocument).toHaveBeenCalledWith(expect.objectContaining({
+      entities: expect.arrayContaining([
+        expect.objectContaining({ name: 'Alice' }),
+      ]),
+    }))
   })
 
   it('store.replaceDocument 抛出时 ingest 返回错误', async () => {
@@ -546,7 +606,9 @@ describe('knowledge retrieve', () => {
     store.searchVectors = vi.fn(async () => {
       throw failure
     })
-    const filter = { owner: { name: 'alice' } }
+    const filter = {
+      owner: { name: 'alice' },
+    }
     const result = await ops.retrieve('AI', { filter, topK: 1 })
     expect(result.success).toBe(false)
     if (!result.success) {
@@ -697,12 +759,22 @@ describe('knowledge 实体查询', () => {
       store,
     )
 
-    const result = await ops.listEntities({ collection: 'col-a', type: 'person', keyword: 'Alice', limit: 5 })
+    const result = await ops.listEntities({
+      collection: 'col-a',
+      type: 'person',
+      keyword: 'Alice',
+      limit: 5,
+    })
     expect(result.success).toBe(true)
 
     // 验证 store.listEntities 被正确调用并传递过滤参数
     expect(store.listEntities).toHaveBeenCalledWith(
-      expect.objectContaining({ collection: 'col-a', type: 'person', keyword: 'Alice', limit: 5 }),
+      expect.objectContaining({
+        collection: 'col-a',
+        type: 'person',
+        keyword: 'Alice',
+        limit: 5,
+      }),
     )
   })
 })
@@ -855,9 +927,16 @@ describe('knowledge ingestBatch', () => {
     let callCount = 0
     embedding.embedBatch = vi.fn(async (texts: string[]) => {
       callCount++
-      if (callCount === 1)
-        return { success: false, error: { message: 'embedding failed' } } as unknown as Awaited<ReturnType<EmbeddingOperations['embedBatch']>>
-      return { success: true, data: texts.map(() => [0.1, 0.2, 0.3]) } as unknown as Awaited<ReturnType<EmbeddingOperations['embedBatch']>>
+      if (callCount === 1) {
+        return {
+          success: false,
+          error: { message: 'embedding failed' },
+        } as unknown as Awaited<ReturnType<EmbeddingOperations['embedBatch']>>
+      }
+      return {
+        success: true,
+        data: texts.map(() => [0.1, 0.2, 0.3]),
+      } as unknown as Awaited<ReturnType<EmbeddingOperations['embedBatch']>>
     }) as unknown as EmbeddingOperations['embedBatch']
 
     const ops = createKnowledgeOperations(

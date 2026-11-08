@@ -32,10 +32,19 @@ afterEach(async () => {
 
 function generatedClient(baseUrl: string, encrypted: boolean): MobileClient {
   const source = Handlebars.compile(readFileSync(new URL('../templates/apps/mobile-app/src/lib/api.ts.hbs', import.meta.url), 'utf8'))(
-    buildTemplateContext({ name: 'mobile-http', appType: 'mobile-app', features: encrypted ? ['iam'] : ['api-client', 'capacitor'], packageManager: 'pnpm' }),
+    buildTemplateContext({
+      name: 'mobile-http',
+      appType: 'mobile-app',
+      features: encrypted
+        ? ['iam']
+        : ['api-client', 'capacitor'],
+      packageManager: 'pnpm',
+    }),
   )
   const exported: Partial<MobileClient> = {}
-  runInNewContext(ts.transpileModule(source.replaceAll('import.meta.env', 'runtimeEnv'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
+  runInNewContext(ts.transpileModule(source.replaceAll('import.meta.env', 'runtimeEnv'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText, {
     exports: exported,
     runtimeEnv: {},
     __HAI_PUBLIC_CONFIG__: { apiBase: baseUrl, apiKeyExchangePath: '/custom/key-exchange' },
@@ -44,10 +53,18 @@ function generatedClient(baseUrl: string, encrypted: boolean): MobileClient {
         return { apiClient }
       if (name === '@h-ai/crypto')
         return { crypto }
-      if (name === '@h-ai/capacitor')
-        return { createCapacitorTokenStorage: () => apiClient.tokenStorage.memory() }
-      if (name === '@capacitor/core')
-        return { Capacitor: { isNativePlatform: () => false } }
+      if (name === '@h-ai/capacitor') {
+        return {
+          createCapacitorTokenStorage: () => apiClient.tokenStorage.memory(),
+        }
+      }
+      if (name === '@capacitor/core') {
+        return {
+          Capacitor: {
+            isNativePlatform: () => false,
+          },
+        }
+      }
       throw new Error(`Unexpected generated mobile import: ${name}`)
     },
   })
@@ -65,19 +82,29 @@ it.each(['encrypted', 'rejected-handshake', 'explicit-plaintext'] as const)('真
   if (!pair.success)
     throw new Error(pair.error.message)
   const manager = crypto.transport.createServer({
-    serverKeyRing: { activeKeyId: 'fixture-v1', keys: { 'fixture-v1': pair.data } },
+    serverKeyRing: {
+      activeKeyId: 'fixture-v1',
+      keys: { 'fixture-v1': pair.data },
+    },
     keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 60 }),
   })
   if (!manager.success)
     throw new Error(manager.error.message)
-  const observed = { handshakes: 0, authenticated: 0, plaintext: 0, login: '' }
+  const observed = {
+    handshakes: 0,
+    authenticated: 0,
+    plaintext: 0,
+    login: '',
+  }
   let base = ''
   const server = createServer(async (incoming, outgoing) => {
     try {
       const chunks: Buffer[] = []
       let bytes = 0
       for await (const chunk of incoming) {
-        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+        const buffer = Buffer.isBuffer(chunk)
+          ? chunk
+          : Buffer.from(chunk)
         bytes += buffer.length
         if (bytes > 2 * 1024 * 1024)
           throw new Error('Fixture request too large')
@@ -100,10 +127,17 @@ it.each(['encrypted', 'rejected-handshake', 'explicit-plaintext'] as const)('真
         }
         const body = JSON.parse(wire) as { clientPublicKey: string }
         const clientId = await manager.data.registerClientKey(body.clientPublicKey)
-        outgoing.end(JSON.stringify({ serverPublicKey: manager.data.getServerPublicKey(), serverKeyId: manager.data.getServerKeyId(), clientId }))
+        outgoing.end(JSON.stringify({
+          serverPublicKey: manager.data.getServerPublicKey(),
+          serverKeyId: manager.data.getServerKeyId(),
+          clientId,
+        }))
         return
       }
-      const payload = { success: false, error: { code: 'hai:iam:301', message: 'Fixture rejected credentials' } }
+      const payload = {
+        success: false,
+        error: { code: 'hai:iam:301', message: 'Fixture rejected credentials' },
+      }
       if (mode === 'explicit-plaintext') {
         observed.plaintext++
         observed.login = wire
@@ -117,7 +151,13 @@ it.each(['encrypted', 'rejected-handshake', 'explicit-plaintext'] as const)('真
       }
       expect(wire).not.toContain('fixture-customer')
       expect(wire).not.toContain('Fixture-only-Password1!')
-      const request = new Request(`${base}${incoming.url}`, { method: incoming.method, headers, ...(wire ? { body: wire } : {}) })
+      const request = new Request(`${base}${incoming.url}`, {
+        method: incoming.method,
+        headers,
+        ...(wire
+          ? { body: wire }
+          : {}),
+      })
       const verified = await authenticateTransportRequest(manager.data, request)
       if (!verified.success)
         throw new Error(verified.error.message)
@@ -169,7 +209,9 @@ it.each(['encrypted', 'rejected-handshake', 'explicit-plaintext'] as const)('真
     }
     finally {
       server.closeAllConnections()
-      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+      await new Promise<void>((resolve, reject) => server.close(error => error
+        ? reject(error)
+        : resolve()))
     }
   }
 })

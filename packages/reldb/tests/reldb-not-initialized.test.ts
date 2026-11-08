@@ -7,7 +7,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { HaiReldbError, reldb } from '../src/index.js'
 
-describe.sequential('db (not initialized)', () => {
+describe('db (not initialized)', { concurrent: false }, () => {
   beforeEach(async () => {
     await reldb.close()
   })
@@ -48,7 +48,9 @@ describe.sequential('db (not initialized)', () => {
   })
 
   it('sql.batch 应返回 NOT_INITIALIZED', async () => {
-    const result = await reldb.sql.batch([{ sql: 'SELECT 1' }])
+    const result = await reldb.sql.batch([
+      { sql: 'SELECT 1' },
+    ])
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toBe(HaiReldbError.NOT_INITIALIZED.code)

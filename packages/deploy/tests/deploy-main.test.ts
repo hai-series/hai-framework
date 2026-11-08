@@ -50,7 +50,9 @@ describe('deploy singleton', () => {
     it('应使用 camelCase 凭证完成 Provider + Provisioner 初始化', async () => {
       // Vercel authenticate
       mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ user: { username: 'testuser', email: 'test@example.com' } }),
+        mockJsonResponse({
+          user: { username: 'testuser', email: 'test@example.com' },
+        }),
       )
       // Neon authenticate
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ projects: [] }))
@@ -107,7 +109,9 @@ describe('deploy singleton', () => {
     it('应返回 AUTH_FAILED 当已配置的 provisioner 认证失败时', async () => {
       // Vercel authenticate succeeds
       mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ user: { username: 'u', email: 'e' } }),
+        mockJsonResponse({
+          user: { username: 'u', email: 'e' },
+        }),
       )
       // Neon authenticate fails
       mockFetch.mockResolvedValueOnce(
@@ -133,9 +137,13 @@ describe('deploy singleton', () => {
     it('关闭后 isInitialized 应为 false', async () => {
       // 初始化
       mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ user: { username: 'u', email: 'e' } }),
+        mockJsonResponse({
+          user: { username: 'u', email: 'e' },
+        }),
       )
-      await deploy.init({ provider: { type: 'vercel', token: 'vel_t' } })
+      await deploy.init({
+        provider: { type: 'vercel', token: 'vel_t' },
+      })
       expect(deploy.isInitialized).toBe(true)
 
       await deploy.close()
@@ -161,7 +169,9 @@ describe('deploy singleton', () => {
     it('初始化后应成功开通所有服务', async () => {
       // init: Vercel auth + Neon auth
       mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ user: { username: 'u', email: 'e' } }),
+        mockJsonResponse({
+          user: { username: 'u', email: 'e' },
+        }),
       )
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ projects: [] }))
       await deploy.init({
@@ -174,7 +184,9 @@ describe('deploy singleton', () => {
       // provision: Neon list existing -> create
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ projects: [] }))
       mockFetch.mockResolvedValueOnce(mockJsonResponse({
-        connection_uris: [{ connection_uri: 'postgres://u:p@h/d' }],
+        connection_uris: [
+          { connection_uri: 'postgres://u:p@h/d' },
+        ],
         project: { id: 'prj_1' },
       }))
 
@@ -201,9 +213,20 @@ describe('deploy singleton', () => {
 
   describe('deployApp', () => {
     it('拒绝旧 projectName 覆盖参数，提示以根包名维护身份', async () => {
-      expect(await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 8080 } } })).toMatchObject({ success: true })
+      expect(await deploy.init({
+        provider: {
+          type: 'docker-ssh',
+          expose: { hostPort: 8080 },
+        },
+      })).toMatchObject({ success: true })
       const legacyOptions = { environment: 'test', bundleOnly: true, projectName: 'legacy-override' }
-      expect(await deploy.deployApp('/not-read-before-option-validation', legacyOptions)).toMatchObject({ success: false, error: { code: HaiDeployError.CONFIG_ERROR.code, message: expect.stringContaining('projectName') } })
+      expect(await deploy.deployApp('/not-read-before-option-validation', legacyOptions)).toMatchObject({
+        success: false,
+        error: {
+          code: HaiDeployError.CONFIG_ERROR.code,
+          message: expect.stringContaining('projectName'),
+        },
+      })
     })
 
     it('平台 Provider 同样使用工程名，并去除 npm scope', async () => {
@@ -213,13 +236,20 @@ describe('deploy singleton', () => {
         mkdirSync(join(service, '.vercel/output'), { recursive: true })
         writeFileSync(join(root, 'package.json'), '{"name":"@example/orders"}')
         writeFileSync(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: \'9.0\'\nimporters:\n  .: {}\n  packages/orders-serv: {}\n')
-        mockFetch.mockResolvedValueOnce(mockJsonResponse({ user: { username: 'testuser' } }))
-        expect(await deploy.init({ provider: { type: 'vercel', token: 'test-token' } })).toMatchObject({ success: true })
+        mockFetch.mockResolvedValueOnce(mockJsonResponse({
+          user: { username: 'testuser' },
+        }))
+        expect(await deploy.init({
+          provider: { type: 'vercel', token: 'test-token' },
+        })).toMatchObject({ success: true })
         mockFetch.mockResolvedValueOnce(mockJsonResponse({ id: 'project-id' }))
         mockFetch.mockResolvedValueOnce(mockJsonResponse({}))
         // 不提供构建配置，确认解析项目后在制品校验处结束，不向平台发布。
         const result = await deploy.deployApp(service, { skipMiddleware: true })
-        expect(result).toMatchObject({ success: false, error: { code: HaiDeployError.UPLOAD_FAILED.code } })
+        expect(result).toMatchObject({
+          success: false,
+          error: { code: HaiDeployError.UPLOAD_FAILED.code },
+        })
         expect(mockFetch.mock.calls.some(([url]) => String(url).endsWith('/v10/projects/orders'))).toBe(true)
       }
       finally { rmSync(root, { recursive: true, force: true }) }

@@ -40,7 +40,9 @@ function defaultFormatContext(items: RagContextItem[]): string {
   return items
     .map((item, i) => {
       const sourceLabel = item.citation?.title ?? item.citation?.url ?? item.sourceId
-      const urlPart = item.citation?.url ? ` (${item.citation.url})` : ''
+      const urlPart = item.citation?.url
+        ? ` (${item.citation.url})`
+        : ''
       return `[${i + 1}] Source: ${sourceLabel}${urlPart}\n${item.content}`
     })
     .join('\n\n')
@@ -79,7 +81,9 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
      * @returns `ok(RagResult)` 含 answer、context 列表与引用信源；检索或生成失败时返回错误
      */
     async query(query: string, options?: RagOptions): Promise<HaiResult<RagResult>> {
-      logger.trace('Starting RAG query', { query: query.slice(0, 100) })
+      logger.trace('Starting RAG query', {
+        query: query.slice(0, 100),
+      })
 
       try {
         // 阶段1：检索相关上下文
@@ -93,7 +97,9 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
         })
 
         if (!retrieveResult.success) {
-          return err(HaiAIError.RAG_CONTEXT_BUILD_FAILED, aiM('ai_internalError', { params: { error: 'Failed to retrieve context' } }), retrieveResult.error)
+          return err(HaiAIError.RAG_CONTEXT_BUILD_FAILED, aiM('ai_internalError', {
+            params: { error: 'Failed to retrieve context' },
+          }), retrieveResult.error)
         }
 
         // 构建上下文
@@ -137,7 +143,9 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
         })
 
         if (!chatResult.success) {
-          return err(HaiAIError.RAG_FAILED, aiM('ai_internalError', { params: { error: 'LLM generation failed' } }), chatResult.error)
+          return err(HaiAIError.RAG_FAILED, aiM('ai_internalError', {
+            params: { error: 'LLM generation failed' },
+          }), chatResult.error)
         }
 
         const choice = chatResult.data.choices[0]
@@ -177,7 +185,11 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
       }
       catch (error) {
         logger.error('RAG query failed', { error })
-        return err(HaiAIError.RAG_FAILED, aiM('ai_internalError', { params: { error: String(error) } }), error)
+        return err(HaiAIError.RAG_FAILED, aiM('ai_internalError', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     },
 
@@ -185,7 +197,9 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
      * 流式 RAG 查询：先产出 context，再逐 chunk 产出 delta，最后 done
      */
     async* queryStream(query: string, options?: RagOptions): AsyncIterable<RagStreamEvent> {
-      logger.trace('Starting RAG stream', { query: query.slice(0, 100) })
+      logger.trace('Starting RAG stream', {
+        query: query.slice(0, 100),
+      })
 
       // 阶段1：检索
       const retrieveResult = await retrieval.retrieve({
@@ -269,7 +283,12 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
         }
       }
 
-      yield { type: 'done', answer: fullAnswer, model, usage }
+      yield {
+        type: 'done',
+        answer: fullAnswer,
+        model,
+        usage,
+      }
     },
   }
 }

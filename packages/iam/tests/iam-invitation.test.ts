@@ -10,16 +10,22 @@ function tests() {
     const iam = await initIam()
     const username = `off-${crypto.randomUUID()}`
     expect((await iam.user.inviteUser({ username, email: 'alice@example.com' })).success).toBe(false)
-    await initIam({ initialCredentials: { enabled: true } })
+    await initIam({
+      initialCredentials: { enabled: true },
+    })
     expect((await iam.user.inviteUser({ username, email: 'alice@example.com' })).success).toBe(false)
     expect(await (await createDbUserRepository()).findByUsername(username)).toMatchObject({ success: true, data: null })
   })
 
   it('每个邀请独立且短期单用，接收人选好密码后才能登录', async () => {
     const delivered: { user: User, token: string }[] = []
-    const iam = await initIam({ initialCredentials: { enabled: true }, passwordReset: { tokenExpiresIn: 300 }, onPasswordResetRequest: async (user, token) => {
-      delivered.push({ user, token })
-    } })
+    const iam = await initIam({
+      initialCredentials: { enabled: true },
+      passwordReset: { tokenExpiresIn: 300 },
+      onPasswordResetRequest: async (user, token) => {
+        delivered.push({ user, token })
+      },
+    })
     for (let index = 0; index < 2; index++) {
       const created = await iam.user.inviteUser({ username: `invite-${crypto.randomUUID()}`, email: `alice-${index}@example.com` })
       expect(created.success).toBe(true)
@@ -45,9 +51,12 @@ function tests() {
   })
 
   it('投递未知明确返回失败并保留已创建账号，不能回滚可能已送达的凭据', async () => {
-    const iam = await initIam({ initialCredentials: { enabled: true }, onPasswordResetRequest: async () => {
-      throw new Error('Provider timeout')
-    } })
+    const iam = await initIam({
+      initialCredentials: { enabled: true },
+      onPasswordResetRequest: async () => {
+        throw new Error('Provider timeout')
+      },
+    })
     const username = `unknown-${crypto.randomUUID()}`
     expect((await iam.user.inviteUser({ username, email: 'unknown@example.com' })).success).toBe(false)
     const existing = await (await createDbUserRepository()).findByUsername(username)

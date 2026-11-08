@@ -24,8 +24,17 @@ function createAiMock(): AiProcedureDeps['ai'] {
       id: `record-${records.length}`,
       objectId: objectId ?? 'unscoped',
       sessionId: sessionId ?? 'default',
-      request: { model: 'mock', messages: [{ role: 'user', content: `${objectId}-private` }] },
-      response: { content: `${objectId}-reply`, finishReason: 'stop', usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } },
+      request: {
+        model: 'mock',
+        messages: [
+          { role: 'user', content: `${objectId}-private` },
+        ],
+      },
+      response: {
+        content: `${objectId}-reply`,
+        finishReason: 'stop',
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      },
       createdAt: 1,
       duration: 1,
     })
@@ -40,7 +49,14 @@ function createAiMock(): AiProcedureDeps['ai'] {
           object: 'chat.completion',
           created: 1,
           model: 'mock',
-          choices: [{ index: 0, finish_reason: 'stop', logprobs: null, message: { role: 'assistant', content: 'reply', refusal: null } }],
+          choices: [
+            {
+              index: 0,
+              finish_reason: 'stop',
+              logprobs: null,
+              message: { role: 'assistant', content: 'reply', refusal: null },
+            },
+          ],
         })
       }),
       ask: vi.fn<AiProcedureDeps['ai']['llm']['ask']>(async (_message, options) => {
@@ -74,7 +90,13 @@ function createApp(ai: AiProcedureDeps['ai'], userId = 'user-a', authorizeObject
       locale: 'en-US',
       request,
       logger: core.logger.child({ module: 'serv-test' }),
-      session: { userId, roles: [], permissions: userId === 'admin' ? ['ai.manage'] : [] },
+      session: {
+        userId,
+        roles: [],
+        permissions: userId === 'admin'
+          ? ['ai.manage']
+          : [],
+      },
     }),
   })
 }
@@ -91,36 +113,111 @@ describe('serv feature AI resource authorization', () => {
   it.each(['auto', 'none', 'required'] as const)('工具选择 %s 与完整定义传递到 AI', async (toolChoice) => {
     const ai = createAiMock()
     const app = createApp(ai)
-    const tools = [{ type: 'function', function: { name: 'lookup', strict: true, parameters: { type: 'object', additionalProperties: false } } }]
-    const response = await request(app, 'chats/completions', { messages: [{ role: 'user', name: 'alice', content: 'hello' }], tools, tool_choice: toolChoice })
+    const tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'lookup',
+          strict: true,
+          parameters: { type: 'object', additionalProperties: false },
+        },
+      },
+    ]
+    const response = await request(app, 'chats/completions', {
+      messages: [
+        { role: 'user', name: 'alice', content: 'hello' },
+      ],
+      tools,
+      tool_choice: toolChoice,
+    })
     const result = await response.json()
     expect(result.success).toBe(true)
-    expect(ai.llm.chat).toHaveBeenCalledWith(expect.objectContaining({ tools, tool_choice: toolChoice, messages: [{ role: 'user', name: 'alice', content: 'hello' }] }))
+    expect(ai.llm.chat).toHaveBeenCalledWith(expect.objectContaining({
+      tools,
+      tool_choice: toolChoice,
+      messages: [
+        { role: 'user', name: 'alice', content: 'hello' },
+      ],
+    }))
   })
 
   it.each([
     { stream: true },
     { stream: false },
     { tool_choice: 'required' },
-    { tool_choice: { type: 'function', function: { name: 'missing' } } },
-    { messages: [{ role: 'tool', content: 'result' }] },
-    { messages: [{ role: 'tool', tool_call_id: '', content: 'result' }] },
-    { messages: [{ role: 'assistant' }] },
-    { messages: [{ role: 'user', content: 'hello', tool_call_id: 'wrong-role' }] },
-    { messages: [{ role: 'system', content: [{ type: 'image_url', image_url: { url: 'https://example.com/image.png' } }] }] },
+    {
+      tool_choice: {
+        type: 'function',
+        function: { name: 'missing' },
+      },
+    },
+    {
+      messages: [
+        { role: 'tool', content: 'result' },
+      ],
+    },
+    {
+      messages: [
+        { role: 'tool', tool_call_id: '', content: 'result' },
+      ],
+    },
+    {
+      messages: [
+        { role: 'assistant' },
+      ],
+    },
+    {
+      messages: [
+        { role: 'user', content: 'hello', tool_call_id: 'wrong-role' },
+      ],
+    },
+    {
+      messages: [
+        {
+          role: 'system',
+          content: [
+            {
+              type: 'image_url',
+              image_url: { url: 'https://example.com/image.png' },
+            },
+          ],
+        },
+      ],
+    },
   ])('不支持或不完整的补全请求在 HTTP 边界失败：%j', async (invalid) => {
     const ai = createAiMock()
     const app = createApp(ai)
-    const response = await request(app, 'chats/completions', { messages: [{ role: 'user', content: 'hello' }], ...invalid })
+    const response = await request(app, 'chats/completions', {
+      messages: [
+        { role: 'user', content: 'hello' },
+      ],
+      ...invalid,
+    })
     expect(response.status).toBe(400)
     expect(ai.llm.chat).not.toHaveBeenCalled()
   })
 
   it.each([
-    { path: 'chats/completions', input: { messages: [{ role: 'user', content: 'hello' }] } },
-    { path: 'chats/messages', input: { message: 'hello' } },
-    { path: 'chats/history', input: { sessionId: 'shared-name' } },
-    { path: 'memories/recall', input: { query: 'private' } },
+    {
+      path: 'chats/completions',
+      input: {
+        messages: [
+          { role: 'user', content: 'hello' },
+        ],
+      },
+    },
+    {
+      path: 'chats/messages',
+      input: { message: 'hello' },
+    },
+    {
+      path: 'chats/history',
+      input: { sessionId: 'shared-name' },
+    },
+    {
+      path: 'memories/recall',
+      input: { query: 'private' },
+    },
     { path: 'memories/list', input: {} },
     { path: 'sessions/list', input: {} },
   ])('$path 拒绝伪造的其它主体且不调用 AI', async ({ path, input }) => {
@@ -130,7 +227,10 @@ describe('serv feature AI resource authorization', () => {
     const result = await response.json()
     expect(result.success).toBe(false)
     expect(result.error.code).toBe(HaiCommonError.FORBIDDEN.code)
-    for (const call of [...Object.values(ai.llm), ...Object.values(ai.memory)])
+    for (const call of [
+      ...Object.values(ai.llm),
+      ...Object.values(ai.memory),
+    ])
       expect(call).not.toHaveBeenCalled()
   })
 
@@ -140,18 +240,29 @@ describe('serv feature AI resource authorization', () => {
     const appB = createApp(ai, 'user-b')
     const sessionId = 'shared-name'
     expect((await (await request(appA, 'chats/messages', { message: 'a', sessionId })).json()).success).toBe(true)
-    expect((await (await request(appB, 'chats/completions', { messages: [{ role: 'user', content: 'b' }], sessionId })).json()).success).toBe(true)
+    expect((await (await request(appB, 'chats/completions', {
+      messages: [
+        { role: 'user', content: 'b' },
+      ],
+      sessionId,
+    })).json()).success).toBe(true)
     expect(ai.llm.ask).toHaveBeenCalledWith('a', expect.objectContaining({ objectId: 'user-a', sessionId }))
     expect(ai.llm.chat).toHaveBeenCalledWith(expect.objectContaining({ objectId: 'user-b', sessionId }))
 
-    for (const [app, objectId] of [[appA, 'user-a'], [appB, 'user-b']] as const) {
+    for (const [app, objectId] of [
+      [appA, 'user-a'],
+      [appB, 'user-b'],
+    ] as const) {
       const history = await (await request(app, 'chats/history', { sessionId })).json()
       expect(history.success).toBe(true)
       expect(history.data.items).toHaveLength(1)
       expect(history.data.items[0].objectId).toBe(objectId)
       const sessions = await (await request(app, 'sessions/list', {})).json()
       expect(sessions.data.items.every((item: { objectId: string }) => item.objectId === objectId)).toBe(true)
-      const recalled = await (await request(app, 'memories/recall', { query: 'private', scope: { objectId: 'admin' } })).json()
+      const recalled = await (await request(app, 'memories/recall', {
+        query: 'private',
+        scope: { objectId: 'admin' },
+      })).json()
       expect(recalled.data.items).toHaveLength(1)
       expect(recalled.data.items[0].objectId).toBe(objectId)
       const listed = await (await request(app, 'memories/list', {})).json()

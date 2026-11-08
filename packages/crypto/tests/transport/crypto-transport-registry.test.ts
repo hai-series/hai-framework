@@ -27,7 +27,20 @@ describe('transport registry input boundaries', () => {
     expect(isValidSM2PublicKey(publicKey.toUpperCase())).toBe(true)
     expect(isValidSM2PublicKey(`${publicKey}\n`)).toBe(false)
     expect(isValidSM2PublicKey(`${publicKey.slice(2)}\n`)).toBe(false)
-    for (const invalid of [null, undefined, 10, '', 'key', '00', '00'.repeat(65), `04${'0'.repeat(128)}`, `04${'f'.repeat(128)}`, `02${publicKey.slice(2, 66)}`, `${publicKey}00`, '你'.repeat(2000)]) {
+    for (const invalid of [
+      null,
+      undefined,
+      10,
+      '',
+      'key',
+      '00',
+      '00'.repeat(65),
+      `04${'0'.repeat(128)}`,
+      `04${'f'.repeat(128)}`,
+      `02${publicKey.slice(2, 66)}`,
+      `${publicKey}00`,
+      '你'.repeat(2000),
+    ]) {
       expect(isValidSM2PublicKey(invalid)).toBe(false)
       if (typeof invalid === 'string')
         expect(crypto.asymmetric.isValidPublicKey(invalid)).toBe(false)
@@ -39,7 +52,11 @@ describe('transport registry input boundaries', () => {
     expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
     const write = vi.spyOn(cache.kv, 'set')
     const ddl = vi.spyOn(reldb.ddl, 'createTable')
-    const stores = [createInMemoryKeyStore(), createRedisTransportKeyStore({ cache }), createReldbTransportKeyStore({ reldb })]
+    const stores = [
+      createInMemoryKeyStore(),
+      createRedisTransportKeyStore({ cache }),
+      createReldbTransportKeyStore({ reldb }),
+    ]
     for (const store of stores)
       await expect(store.register(`04${'0'.repeat(128)}`)).rejects.toBeInstanceOf(TypeError)
     expect(write).not.toHaveBeenCalled()
@@ -52,7 +69,13 @@ describe('transport registry input boundaries', () => {
       throw new Error(keyPair.error.message)
     const store = createInMemoryKeyStore()
     const register = vi.spyOn(store, 'register')
-    const server = crypto.transport.createServer({ serverKeyRing: { activeKeyId: 'v1', keys: { v1: keyPair.data } }, keyStore: store })
+    const server = crypto.transport.createServer({
+      serverKeyRing: {
+        activeKeyId: 'v1',
+        keys: { v1: keyPair.data },
+      },
+      keyStore: store,
+    })
     expect(server.success).toBe(true)
     if (!server.success)
       return
@@ -60,12 +83,26 @@ describe('transport registry input boundaries', () => {
     expect(register).not.toHaveBeenCalled()
   })
 
-  it.each([0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648])('rejects invalid TTL %s rather than retaining the key forever', (ttlSeconds) => {
+  it.each([
+    0,
+    -1,
+    0.5,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    2_147_483_648,
+  ])('rejects invalid TTL %s rather than retaining the key forever', (ttlSeconds) => {
     expect(() => createRedisTransportKeyStore({ cache, ttlSeconds })).toThrow(TypeError)
     expect(() => createReldbTransportKeyStore({ reldb, ttlSeconds })).toThrow(TypeError)
   })
 
-  it.each([0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1])('rejects invalid shared capacity %s', (maxClients) => {
+  it.each([
+    0,
+    -1,
+    0.5,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.MAX_SAFE_INTEGER + 1,
+  ])('rejects invalid shared capacity %s', (maxClients) => {
     expect(() => createReldbTransportKeyStore({ reldb, maxClients })).toThrow(TypeError)
   })
 })
@@ -120,7 +157,9 @@ describe('real SQLite registry recovery and maintenance', () => {
     const second = createReldbTransportKeyStore({ reldb, maxClients: 2 })
     await first.get('missing')
     await second.get('missing')
-    const registrations = await Promise.allSettled(Array.from({ length: 12 }, (_, index) => (index % 2 ? first : second).register(publicKey)))
+    const registrations = await Promise.allSettled(Array.from({ length: 12 }, (_, index) => (index % 2
+      ? first
+      : second).register(publicKey)))
     const accepted = registrations.filter(result => result.status === 'fulfilled')
     expect(accepted).toHaveLength(2)
     for (const result of accepted) {
@@ -151,7 +190,10 @@ describe('real SQLite registry recovery and maintenance', () => {
     )
     expect(nonces.success).toBe(true)
     expect(await second.get('expired-0')).toBeUndefined()
-    const batches = await Promise.all([first.pruneExpired(), second.pruneExpired()])
+    const batches = await Promise.all([
+      first.pruneExpired(),
+      second.pruneExpired(),
+    ])
     expect(batches.every(count => count <= 200)).toBe(true)
     let removed = batches.reduce((sum, count) => sum + count, 0)
     for (let batch = 0; batch < 4; batch++)

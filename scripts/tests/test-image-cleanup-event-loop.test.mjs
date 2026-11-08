@@ -52,10 +52,16 @@ syncBuiltinESMExports()
     // preload 是本轮隔离的 Node 环境选项，文件 Worker 不继承宿主的 eval/入口 argv。
     const preload = `--import=${pathToFileURL(join(directory, 'engine-preload.mjs')).href}`
     const args = [vitest, 'run']
-    const job = process.platform === 'win32' ? windowsTestCommand(process.execPath, args) : undefined
+    const job = process.platform === 'win32'
+      ? windowsTestCommand(process.execPath, args)
+      : undefined
     const result = spawnSync(job ? 'powershell.exe' : process.execPath, job?.args ?? args, {
       cwd: directory,
-      env: { ...process.env, ...job?.env, NODE_OPTIONS: [process.env.NODE_OPTIONS, preload].filter(Boolean).join(' ') },
+      env: {
+        ...process.env,
+        ...job?.env,
+        NODE_OPTIONS: [process.env.NODE_OPTIONS, preload].filter(Boolean).join(' '),
+      },
       encoding: 'utf8',
       windowsHide: true,
       timeout: 35_000,

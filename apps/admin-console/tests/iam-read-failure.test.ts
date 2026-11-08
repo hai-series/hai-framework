@@ -6,6 +6,7 @@ import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAdminRole, getAdminRole, listAdminPermissionsPage, listAdminRoles, normalizeUniqueConstraintError, resolvePermissionIds, updateAdminRole } from '../src/lib/server/iam-admin.js'
 import { load as loadDashboard } from '../src/routes/admin/+page.server.js'
+import { createRequestEvent } from './fixtures/request-event.js'
 
 describe('admin read failures', () => {
   it('keeps database failure status and hides internal details at the HTTP boundary', async () => {
@@ -49,7 +50,12 @@ describe('admin read failures', () => {
 
   it('rejects the entire list when a later page fails', async () => {
     const pages = vi.spyOn(iam.authz, 'getAllRoles')
-      .mockResolvedValueOnce(ok({ items: [], total: 201, page: 1, pageSize: 200 }))
+      .mockResolvedValueOnce(ok({
+        items: [],
+        total: 201,
+        page: 1,
+        pageSize: 200,
+      }))
       .mockResolvedValueOnce(err({ code: 'test.read_failed', message: 'injected failure' }))
     await expect(listAdminRoles()).rejects.toMatchObject({ status: 503 })
     expect(pages).toHaveBeenCalledTimes(2)
@@ -64,7 +70,10 @@ describe('admin read failures', () => {
     await expect(getAdminRole(role.data.id)).rejects.toMatchObject({ status: 503 })
     await expect(listAdminRoles()).rejects.toMatchObject({ status: 503 })
     await expect(updateAdminRole(role.data.id, { name: 'after', permissions: [] })).rejects.toMatchObject({ status: 503 })
-    expect(await iam.authz.getRole(role.data.id)).toMatchObject({ success: true, data: { name: 'before' } })
+    expect(await iam.authz.getRole(role.data.id)).toMatchObject({
+      success: true,
+      data: { name: 'before' },
+    })
   })
 
   it('rejects unknown permission codes and propagates lookup outages', async () => {
@@ -76,7 +85,15 @@ describe('admin read failures', () => {
 
   it('fails dashboard loading rather than displaying zero statistics during an outage', async () => {
     await reldb.close()
-    // 具备读取权限时，数据库故障仍应中止统计，不能被职责过滤伪装为空数据。
-    await expect(loadDashboard({ locals: { session: { userId: 'test', roles: [], permissions: ['dashboard:view', 'user:list'] } } } as Parameters<typeof loadDashboard>[0])).rejects.toMatchObject({ status: 503 })
+    // 具备读取权限时，数据库故障仍应中止统计。load 仅使用事件的 locals；其余 load 生命周期由 Kit 宿主/E2E 验证。
+    await expect(loadDashboard(createRequestEvent({
+      locals: {
+        session: {
+          userId: 'test',
+          roles: [],
+          permissions: ['dashboard:view', 'user:list'],
+        },
+      },
+    }) as Parameters<typeof loadDashboard>[0])).rejects.toMatchObject({ status: 503 })
   })
 })

@@ -18,7 +18,9 @@ export function projectConfigPath(directory: string): string {
   let current = start
   while (!existsSync(join(current, 'hai.json')) && dirname(current) !== current)
     current = dirname(current)
-  return join(existsSync(join(current, 'hai.json')) ? current : start, 'hai.json')
+  return join(existsSync(join(current, 'hai.json'))
+    ? current
+    : start, 'hai.json')
 }
 
 /**
@@ -39,5 +41,7 @@ export function readProjectConfig(path: string): Record<string, unknown> {
       return config as Record<string, unknown>
   }
   catch { /* 统一返回脱敏诊断，不能输出配置片段。 */ }
-  throw new Error(cliM('cli_project_config_invalid', { params: { path } }))
+  throw new Error(cliM('cli_project_config_invalid', {
+    params: { path },
+  }))
 }

@@ -29,11 +29,13 @@ function createMockLLM(responses: Array<{ content: string | null }>): LLMOperati
           object: 'chat.completion' as const,
           created: Date.now(),
           model: 'test-model',
-          choices: [{
-            index: 0,
-            message: { role: 'assistant' as const, content: resp.content },
-            finish_reason: 'stop' as const,
-          }],
+          choices: [
+            {
+              index: 0,
+              message: { role: 'assistant' as const, content: resp.content },
+              finish_reason: 'stop' as const,
+            },
+          ],
           usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
         },
       }
@@ -76,7 +78,9 @@ function createOps(
 function generateMessages(count: number, msgLength = 200): ChatMessage[] {
   const messages: ChatMessage[] = []
   for (let i = 0; i < count; i++) {
-    const role = i % 2 === 0 ? 'user' : 'assistant'
+    const role = i % 2 === 0
+      ? 'user'
+      : 'assistant'
     const content = `Message ${i}: ${'x'.repeat(msgLength)}`
     if (role === 'user') {
       messages.push({ role: 'user', content })
@@ -248,9 +252,11 @@ describe('compress tryCompress', () => {
   })
 
   it('summary 策略生成摘要替换旧消息', async () => {
-    const llm = createMockLLM([{
-      content: 'Summary: The user asked about TypeScript and received explanations.',
-    }])
+    const llm = createMockLLM([
+      {
+        content: 'Summary: The user asked about TypeScript and received explanations.',
+      },
+    ])
     const ops = createOps(defaultCompressConfig, llm, 8000)
 
     const messages = generateMessages(20, 500)
@@ -273,13 +279,18 @@ describe('compress tryCompress', () => {
   })
 
   it('summary 保留内容以摘要前缀开头的调用方 system 消息', async () => {
-    const llm = createMockLLM([{ content: 'Compressed conversation.' }])
+    const llm = createMockLLM([
+      { content: 'Compressed conversation.' },
+    ])
     const ops = createOps(defaultCompressConfig, llm, 8000)
     const callerSystemMessage: ChatMessage = {
       role: 'system',
       content: '[Conversation Summary]\nThis is a permanent caller instruction.',
     }
-    const messages: ChatMessage[] = [callerSystemMessage, ...generateMessages(20, 500)]
+    const messages: ChatMessage[] = [
+      callerSystemMessage,
+      ...generateMessages(20, 500),
+    ]
 
     const result = await ops.tryCompress(messages, {
       strategy: 'summary',
@@ -295,14 +306,19 @@ describe('compress tryCompress', () => {
   })
 
   it('summary 仅按框架 name 标记替换旧摘要', async () => {
-    const llm = createMockLLM([{ content: 'Replacement summary.' }])
+    const llm = createMockLLM([
+      { content: 'Replacement summary.' },
+    ])
     const ops = createOps(defaultCompressConfig, llm, 8000)
     const existingSummary: ChatMessage = {
       role: 'system',
       name: 'hai_internal_conversation_summary_v1',
       content: 'Existing framework summary without a display prefix.',
     }
-    const messages: ChatMessage[] = [existingSummary, ...generateMessages(20, 500)]
+    const messages: ChatMessage[] = [
+      existingSummary,
+      ...generateMessages(20, 500),
+    ]
 
     const result = await ops.tryCompress(messages, {
       strategy: 'summary',
@@ -337,7 +353,10 @@ describe('compress tryCompress', () => {
       return
 
     const secondResult = await ops.tryCompress(
-      [...firstResult.data.messages, ...generateMessages(20, 500)],
+      [
+        ...firstResult.data.messages,
+        ...generateMessages(20, 500),
+      ],
       {
         strategy: 'summary',
         maxTokens: 800,
@@ -356,7 +375,9 @@ describe('compress tryCompress', () => {
   })
 
   it('hybrid 摘要降级保留与摘要前缀冲突的调用方 system 消息', async () => {
-    const llm = createMockLLM([{ content: 'Replacement summary.' }])
+    const llm = createMockLLM([
+      { content: 'Replacement summary.' },
+    ])
     const ops = createOps(defaultCompressConfig, llm, 8000)
     const callerSystemMessage: ChatMessage = {
       role: 'system',
@@ -369,7 +390,11 @@ describe('compress tryCompress', () => {
     }
 
     const result = await ops.tryCompress(
-      [callerSystemMessage, existingSummary, ...generateMessages(6, 50)],
+      [
+        callerSystemMessage,
+        existingSummary,
+        ...generateMessages(6, 50),
+      ],
       {
         strategy: 'hybrid',
         maxTokens: 300,
@@ -388,9 +413,11 @@ describe('compress tryCompress', () => {
   })
 
   it('hybrid 策略先窗口后摘要', async () => {
-    const llm = createMockLLM([{
-      content: 'Hybrid summary of older messages.',
-    }])
+    const llm = createMockLLM([
+      {
+        content: 'Hybrid summary of older messages.',
+      },
+    ])
     const ops = createOps(defaultCompressConfig, llm, 8000)
 
     const messages = generateMessages(30, 500)

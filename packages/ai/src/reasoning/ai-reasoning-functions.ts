@@ -111,7 +111,9 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
 
       const choice = chatResult.data.choices[0]
       if (!choice) {
-        return err(HaiAIError.REASONING_FAILED, aiM('ai_internalError', { params: { error: 'No response from LLM' } }))
+        return err(HaiAIError.REASONING_FAILED, aiM('ai_internalError', {
+          params: { error: 'No response from LLM' },
+        }))
       }
 
       const assistantMessage = choice.message
@@ -120,7 +122,9 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
       if (assistantMessage.content) {
         steps.push({
           type: 'thought',
-          content: typeof assistantMessage.content === 'string' ? assistantMessage.content : '',
+          content: typeof assistantMessage.content === 'string'
+            ? assistantMessage.content
+            : '',
           index: stepIndex++,
         })
       }
@@ -172,7 +176,9 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
 
       // 完成推理
       if (choice.finish_reason === 'stop') {
-        const answer = typeof assistantMessage.content === 'string' ? assistantMessage.content : ''
+        const answer = typeof assistantMessage.content === 'string'
+          ? assistantMessage.content
+          : ''
         steps.push({ type: 'answer', content: answer, index: stepIndex })
 
         return ok({
@@ -186,7 +192,9 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
     }
 
     // 达到最大轮次
-    return err(HaiAIError.REASONING_MAX_ROUNDS, aiM('ai_internalError', { params: { error: `Max rounds (${maxRounds}) reached` } }))
+    return err(HaiAIError.REASONING_MAX_ROUNDS, aiM('ai_internalError', {
+      params: { error: `Max rounds (${maxRounds}) reached` },
+    }))
   }
 
   /**
@@ -316,7 +324,13 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
       const msg = choice.message
 
       if (msg.content) {
-        steps.push({ type: 'thought', content: typeof msg.content === 'string' ? msg.content : '', index: stepIndex++ })
+        steps.push({
+          type: 'thought',
+          content: typeof msg.content === 'string'
+            ? msg.content
+            : '',
+          index: stepIndex++,
+        })
       }
 
       executeMessages.push(msg)
@@ -352,7 +366,9 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
 
       // 完成
       if (choice.finish_reason === 'stop') {
-        const answer = typeof msg.content === 'string' ? msg.content : ''
+        const answer = typeof msg.content === 'string'
+          ? msg.content
+          : ''
         steps.push({ type: 'answer', content: answer, index: stepIndex })
         return ok({
           answer,
@@ -364,7 +380,9 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
       }
     }
 
-    return err(HaiAIError.REASONING_MAX_ROUNDS, aiM('ai_internalError', { params: { error: `Max rounds (${maxRounds}) reached` } }))
+    return err(HaiAIError.REASONING_MAX_ROUNDS, aiM('ai_internalError', {
+      params: { error: `Max rounds (${maxRounds}) reached` },
+    }))
   }
 
   return {
@@ -381,12 +399,18 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
           case 'plan-execute':
             return await runPlanExecute(query, options ?? {})
           default:
-            return err(HaiAIError.REASONING_STRATEGY_NOT_FOUND, aiM('ai_internalError', { params: { error: `Unknown strategy: ${strategy}` } }))
+            return err(HaiAIError.REASONING_STRATEGY_NOT_FOUND, aiM('ai_internalError', {
+              params: { error: `Unknown strategy: ${strategy}` },
+            }))
         }
       }
       catch (error) {
         logger.error('Reasoning failed', { error })
-        return err(HaiAIError.REASONING_FAILED, aiM('ai_internalError', { params: { error: String(error) } }), error)
+        return err(HaiAIError.REASONING_FAILED, aiM('ai_internalError', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     },
 

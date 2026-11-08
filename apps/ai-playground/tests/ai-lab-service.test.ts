@@ -11,7 +11,9 @@ import { generateImage, rememberExchange, sendChat } from '../src/lib/services/a
 const request = {
   profileId: 'demo-user',
   sessionId: 'session-1',
-  messages: [{ role: 'user' as const, content: '你好' }],
+  messages: [
+    { role: 'user' as const, content: '你好' },
+  ],
   useMemory: false,
 }
 
@@ -94,8 +96,15 @@ describe('aI Playground client service', () => {
     }))
     vi.stubGlobal('fetch', fetchMock)
 
-    const reference = new File([new Uint8Array([137, 80, 78, 71])], 'reference.png', { type: 'image/png' })
-    const result = await generateImage({ prompt: 'A fox', width: 1024, height: 1024, referenceImages: [reference] })
+    const reference = new File([
+      new Uint8Array([137, 80, 78, 71]),
+    ], 'reference.png', { type: 'image/png' })
+    const result = await generateImage({
+      prompt: 'A fox',
+      width: 1024,
+      height: 1024,
+      referenceImages: [reference],
+    })
 
     expect(result.type).toBe('image/png')
     expect(new Uint8Array(await result.arrayBuffer())).toEqual(bytes)

@@ -46,12 +46,22 @@ vi.mock('chromadb', () => {
         ids.forEach(id => col.records.delete(id))
       },
       async query({ nResults }: { nResults?: number }) {
-        const entries = [...col.records.entries()].slice(0, nResults ?? 10)
+        const entries = [
+          ...col.records.entries(),
+        ].slice(0, nResults ?? 10)
         return {
-          ids: [entries.map(([id]) => id)],
-          distances: [entries.map(() => 0)],
-          metadatas: [entries.map(([, record]) => record.metadata)],
-          documents: [entries.map(([, record]) => record.document)],
+          ids: [
+            entries.map(([id]) => id),
+          ],
+          distances: [
+            entries.map(() => 0),
+          ],
+          metadatas: [
+            entries.map(([, record]) => record.metadata),
+          ],
+          documents: [
+            entries.map(([, record]) => record.document),
+          ],
         }
       },
       async count() {
@@ -71,8 +81,12 @@ vi.mock('chromadb', () => {
     }
 
     async getOrCreateCollection({ name, metadata }: { name: string, metadata?: Record<string, unknown> }) {
-      if (!chroma.store.has(name))
-        chroma.store.set(name, { metadata: metadata ?? {}, records: new Map() })
+      if (!chroma.store.has(name)) {
+        chroma.store.set(name, {
+          metadata: metadata ?? {},
+          records: new Map(),
+        })
+      }
       return makeCollection(name)
     }
 
@@ -87,7 +101,9 @@ vi.mock('chromadb', () => {
     }
 
     async listCollections() {
-      return [...chroma.store.keys()].map(name => ({ name }))
+      return [
+        ...chroma.store.keys(),
+      ].map(name => ({ name }))
     }
   }
 
@@ -96,7 +112,14 @@ vi.mock('chromadb', () => {
 
 async function connectDirect() {
   const provider = createChromaProvider()
-  const result = await provider.connect({ type: 'chroma', url: 'http://localhost:8000', host: 'localhost', port: 8000, serverCommand: 'chroma', startupTimeout: 30_000 })
+  const result = await provider.connect({
+    type: 'chroma',
+    url: 'http://localhost:8000',
+    host: 'localhost',
+    port: 8000,
+    serverCommand: 'chroma',
+    startupTimeout: 30_000,
+  })
   expect(result.success).toBe(true)
   return provider
 }
@@ -104,11 +127,16 @@ async function connectDirect() {
 beforeEach(() => {
   vi.clearAllMocks()
   spawnMock.mockImplementation(() => {
-    const child = Object.assign(new EventEmitter(), { pid: 123, exitCode: null as number | null, signalCode: null as NodeJS.Signals | null, kill: vi.fn(() => {
-      child.signalCode = 'SIGTERM'
-      queueMicrotask(() => child.emit('exit', null, 'SIGTERM'))
-      return true
-    }) })
+    const child = Object.assign(new EventEmitter(), {
+      pid: 123,
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill: vi.fn(() => {
+        child.signalCode = 'SIGTERM'
+        queueMicrotask(() => child.emit('exit', null, 'SIGTERM'))
+        return true
+      }),
+    })
     queueMicrotask(() => child.emit('spawn'))
     return child
   })
@@ -121,27 +149,72 @@ describe('createChromaProvider', () => {
     const provider = await connectDirect()
     expect(provider.isConnected()).toBe(true)
     expect(spawnMock).not.toHaveBeenCalled()
-    expect(chroma.ctorMock).toHaveBeenCalledWith({ host: 'localhost', port: 8000, ssl: false, fetchOptions: { signal: expect.any(AbortSignal) } })
+    expect(chroma.ctorMock).toHaveBeenCalledWith({
+      host: 'localhost',
+      port: 8000,
+      ssl: false,
+      fetchOptions: {
+        signal: expect.any(AbortSignal),
+      },
+    })
   })
 
   it('嵌入式模式（有 path 无 url）拉起本地服务', async () => {
     const provider = createChromaProvider()
-    const result = await provider.connect({ type: 'chroma', path: './data/chroma', host: 'localhost', port: 8000, serverCommand: 'chroma', startupTimeout: 30_000 })
+    const result = await provider.connect({
+      type: 'chroma',
+      path: './data/chroma',
+      host: 'localhost',
+      port: 8000,
+      serverCommand: 'chroma',
+      startupTimeout: 30_000,
+    })
     expect(result.success).toBe(true)
     expect(spawnMock).toHaveBeenCalledWith('chroma', expect.arrayContaining(['run', '--path', './data/chroma']), expect.any(Object))
     await provider.close()
   })
 
   it.each([
-    ['https://chroma.example.test', 'chroma.example.test', 443, true],
-    ['http://chroma.example.test', 'chroma.example.test', 80, false],
-    ['https://chroma.example.test:8443/', 'chroma.example.test', 8443, true],
+    [
+      'https://chroma.example.test',
+      'chroma.example.test',
+      443,
+      true,
+    ],
+    [
+      'http://chroma.example.test',
+      'chroma.example.test',
+      80,
+      false,
+    ],
+    [
+      'https://chroma.example.test:8443/',
+      'chroma.example.test',
+      8443,
+      true,
+    ],
   ] as const)('uRL %s 完整传入实际 SDK 参数并优先于分字段', async (url, host, port, ssl) => {
     const provider = createChromaProvider()
     try {
-      const result = await provider.connect({ type: 'chroma', url, host: 'ignored.invalid', port: 9999, apiKey: 'fixture-token', serverCommand: 'chroma', startupTimeout: 30_000 })
+      const result = await provider.connect({
+        type: 'chroma',
+        url,
+        host: 'ignored.invalid',
+        port: 9999,
+        apiKey: 'fixture-token',
+        serverCommand: 'chroma',
+        startupTimeout: 30_000,
+      })
       expect(result.success).toBe(true)
-      expect(chroma.ctorMock).toHaveBeenCalledWith({ host, port, ssl, headers: { Authorization: 'Bearer fixture-token' }, fetchOptions: { signal: expect.any(AbortSignal) } })
+      expect(chroma.ctorMock).toHaveBeenCalledWith({
+        host,
+        port,
+        ssl,
+        headers: { Authorization: 'Bearer fixture-token' },
+        fetchOptions: {
+          signal: expect.any(AbortSignal),
+        },
+      })
     }
     finally {
       await provider.close()
@@ -151,7 +224,14 @@ describe('createChromaProvider', () => {
   it('心跳超时时返回连接失败', async () => {
     chroma.heartbeatMock.mockRejectedValue(new Error('refused'))
     const provider = createChromaProvider()
-    const result = await provider.connect({ type: 'chroma', path: './data/chroma', host: 'localhost', port: 8000, serverCommand: 'chroma', startupTimeout: 200 })
+    const result = await provider.connect({
+      type: 'chroma',
+      path: './data/chroma',
+      host: 'localhost',
+      port: 8000,
+      serverCommand: 'chroma',
+      startupTimeout: 200,
+    })
     expect(result.success).toBe(false)
     if (!result.success)
       expect(result.error.code).toBe('hai:vecdb:001')
@@ -179,8 +259,18 @@ describe('createChromaProvider', () => {
     await provider.collection.create('docs', { dimension: 3 })
 
     const upsertResult = await provider.vector.upsert('docs', [
-      { id: 'd1', vector: [0.1, 0.2, 0.3], content: '文档一', metadata: { objectId: 'u1' } },
-      { id: 'd2', vector: [0.4, 0.5, 0.6], content: '文档二', metadata: { objectId: 'u1' } },
+      {
+        id: 'd1',
+        vector: [0.1, 0.2, 0.3],
+        content: '文档一',
+        metadata: { objectId: 'u1' },
+      },
+      {
+        id: 'd2',
+        vector: [0.4, 0.5, 0.6],
+        content: '文档二',
+        metadata: { objectId: 'u1' },
+      },
     ])
     expect(upsertResult.success).toBe(true)
 
@@ -202,7 +292,11 @@ describe('createChromaProvider', () => {
     await provider.collection.create('docs', { dimension: 3 })
 
     const result = await provider.vector.insert('docs', [
-      { id: 'd1', vector: [0.1, 0.2], content: 'x' },
+      {
+        id: 'd1',
+        vector: [0.1, 0.2],
+        content: 'x',
+      },
     ])
     expect(result.success).toBe(false)
     if (!result.success)
@@ -212,7 +306,12 @@ describe('createChromaProvider', () => {
   it('删除向量与删除集合', async () => {
     const provider = await connectDirect()
     await provider.collection.create('docs', { dimension: 3 })
-    await provider.vector.upsert('docs', [{ id: 'd1', vector: [0.1, 0.2, 0.3] }])
+    await provider.vector.upsert('docs', [
+      {
+        id: 'd1',
+        vector: [0.1, 0.2, 0.3],
+      },
+    ])
 
     const delVec = await provider.vector.delete('docs', ['d1'])
     expect(delVec.success).toBe(true)

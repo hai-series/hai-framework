@@ -73,7 +73,12 @@ export interface MiddlewareBackend {
 }
 
 const field = (name: string, defaultValue?: string, kind?: MiddlewareField['kind'], secret = false): MiddlewareField => ({ name, defaultValue, kind, secret })
-const required = (name: string, defaultValue?: string, kind?: MiddlewareField['kind']): MiddlewareField => ({ ...field(name, defaultValue, kind), required: true })
+function required(name: string, defaultValue?: string, kind?: MiddlewareField['kind']): MiddlewareField {
+  return {
+    ...field(name, defaultValue, kind),
+    required: true,
+  }
+}
 
 /**
  * 所有可部署中间件的连接目录。
@@ -87,43 +92,253 @@ const required = (name: string, defaultValue?: string, kind?: MiddlewareField['k
  */
 export const DEPLOY_MIDDLEWARE: Record<ServiceType, MiddlewareBackend[]> = {
   db: [
-    { backend: 'sqlite', label: 'SQLite', purpose: 'deploy_purposeSqlite', fields: [required('database', './data/app.db')] },
+    {
+      backend: 'sqlite',
+      label: 'SQLite',
+      purpose: 'deploy_purposeSqlite',
+      fields: [
+        required('database', './data/app.db'),
+      ],
+    },
     ...(['postgresql', 'mysql'] as const).map(backend => ({
       backend,
-      label: backend === 'mysql' ? 'MySQL' : 'PostgreSQL',
+      label: backend === 'mysql'
+        ? 'MySQL'
+        : 'PostgreSQL',
       purpose: 'deploy_purposeDatabase' as const,
-      provisioner: backend === 'postgresql' ? 'neon' as const : undefined,
-      cloudFields: backend === 'postgresql' ? provisionerFields('neon') : undefined,
-      fields: [field('url', '', 'url', true), required('host', 'localhost'), required('port', backend === 'mysql' ? '3306' : '5432', 'port'), required('database', 'hai'), field('user', 'hai'), field('password', '', undefined, true), field('ssl', 'false')],
+      provisioner: backend === 'postgresql'
+        ? 'neon' as const
+        : undefined,
+      cloudFields: backend === 'postgresql'
+        ? provisionerFields('neon')
+        : undefined,
+      fields: [
+        field('url', '', 'url', true),
+        required('host', 'localhost'),
+        required('port', backend === 'mysql'
+          ? '3306'
+          : '5432', 'port'),
+        required('database', 'hai'),
+        field('user', 'hai'),
+        field('password', '', undefined, true),
+        field('ssl', 'false'),
+      ],
     })),
   ],
   cache: [
-    { backend: 'memory', label: 'Memory', purpose: 'deploy_purposeMemory', fields: [] },
-    { backend: 'redis', label: 'Redis', purpose: 'deploy_purposeCache', provisioner: 'upstash', cloudFields: provisionerFields('upstash'), fields: [field('url', '', 'url', true), required('host', 'localhost'), required('port', '6379', 'port'), field('password', '', undefined, true), { ...field('db', '0', 'number'), maximum: 15 }, field('tls', 'false', 'boolean'), field('keyPrefix'), field('connectTimeout', '10000', 'number'), field('commandTimeout', '5000', 'number')] },
+    {
+      backend: 'memory',
+      label: 'Memory',
+      purpose: 'deploy_purposeMemory',
+      fields: [],
+    },
+    {
+      backend: 'redis',
+      label: 'Redis',
+      purpose: 'deploy_purposeCache',
+      provisioner: 'upstash',
+      cloudFields: provisionerFields('upstash'),
+      fields: [
+        field('url', '', 'url', true),
+        required('host', 'localhost'),
+        required('port', '6379', 'port'),
+        field('password', '', undefined, true),
+        {
+          ...field('db', '0', 'number'),
+          maximum: 15,
+        },
+        field('tls', 'false', 'boolean'),
+        field('keyPrefix'),
+        field('connectTimeout', '10000', 'number'),
+        field('commandTimeout', '5000', 'number'),
+      ],
+    },
   ],
   storage: [
-    { backend: 'local', label: 'Local filesystem', purpose: 'deploy_purposeLocal', fields: [required('root', './data/storage')] },
-    { backend: 's3', label: 'S3 / RustFS / MinIO / Cloudflare R2', purpose: 'deploy_purposeStorage', provisioner: 'cloudflare-r2', cloudFields: provisionerFields('cloudflare-r2'), containerOptions: [{ field: 's3Engine', variable: 'HAI_DEPLOY_CONTAINER_S3ENGINE', purpose: 'deploy_s3Engine', defaultValue: 'rustfs', choices: [{ label: 'RustFS', value: 'rustfs' }, { label: 'MinIO', value: 'minio' }] }], fields: [field('endpoint', '', 'url'), required('bucket', 'hai'), required('region', 'us-east-1'), { ...required('accessKeyId'), managed: true }, { ...required('secretAccessKey'), secret: true }, field('forcePathStyle', 'true', 'boolean')] },
+    {
+      backend: 'local',
+      label: 'Local filesystem',
+      purpose: 'deploy_purposeLocal',
+      fields: [
+        required('root', './data/storage'),
+      ],
+    },
+    {
+      backend: 's3',
+      label: 'S3 / RustFS / MinIO / Cloudflare R2',
+      purpose: 'deploy_purposeStorage',
+      provisioner: 'cloudflare-r2',
+      cloudFields: provisionerFields('cloudflare-r2'),
+      containerOptions: [
+        {
+          field: 's3Engine',
+          variable: 'HAI_DEPLOY_CONTAINER_S3ENGINE',
+          purpose: 'deploy_s3Engine',
+          defaultValue: 'rustfs',
+          choices: [
+            { label: 'RustFS', value: 'rustfs' },
+            { label: 'MinIO', value: 'minio' },
+          ],
+        },
+      ],
+      fields: [
+        field('endpoint', '', 'url'),
+        required('bucket', 'hai'),
+        required('region', 'us-east-1'),
+        {
+          ...required('accessKeyId'),
+          managed: true,
+        },
+        {
+          ...required('secretAccessKey'),
+          secret: true,
+        },
+        field('forcePathStyle', 'true', 'boolean'),
+      ],
+    },
   ],
   vecdb: [
-    { backend: 'lancedb', label: 'LanceDB', purpose: 'deploy_purposeLocal', fields: [required('path', './data/vectors')] },
-    { backend: 'qdrant', label: 'Qdrant', purpose: 'deploy_purposeVector', fields: [required('url', 'http://localhost:6333', 'url'), field('apiKey', '', undefined, true)] },
-    { backend: 'pgvector', label: 'PostgreSQL / pgvector', purpose: 'deploy_purposeVector', fields: [field('url', '', 'url', true), required('host', 'localhost'), required('port', '5432', 'port'), required('database', 'hai'), field('user', 'hai'), field('password', '', undefined, true)] },
-    { backend: 'chroma', label: 'Chroma', purpose: 'deploy_purposeVector', fields: [required('url', 'http://localhost:8000', 'url')] },
+    {
+      backend: 'lancedb',
+      label: 'LanceDB',
+      purpose: 'deploy_purposeLocal',
+      fields: [
+        required('path', './data/vectors'),
+      ],
+    },
+    {
+      backend: 'qdrant',
+      label: 'Qdrant',
+      purpose: 'deploy_purposeVector',
+      fields: [
+        required('url', 'http://localhost:6333', 'url'),
+        field('apiKey', '', undefined, true),
+      ],
+    },
+    {
+      backend: 'pgvector',
+      label: 'PostgreSQL / pgvector',
+      purpose: 'deploy_purposeVector',
+      fields: [
+        field('url', '', 'url', true),
+        required('host', 'localhost'),
+        required('port', '5432', 'port'),
+        required('database', 'hai'),
+        field('user', 'hai'),
+        field('password', '', undefined, true),
+      ],
+    },
+    {
+      backend: 'chroma',
+      label: 'Chroma',
+      purpose: 'deploy_purposeVector',
+      fields: [
+        required('url', 'http://localhost:8000', 'url'),
+      ],
+    },
   ],
   ldap: [
-    { backend: 'disabled', label: 'Disabled', purpose: 'deploy_purposeDisabled', fields: [] },
-    { backend: 'ldap', label: 'LDAP / OpenLDAP', purpose: 'deploy_purposeLdap', fields: [required('url', 'ldap://localhost:389', 'url'), required('bindDn', 'cn=admin,dc=example,dc=org'), { ...required('bindPassword'), secret: true }, required('searchBase', 'dc=example,dc=org'), field('searchFilter', '(uid={{username}})'), field('usernameAttribute', 'uid'), field('emailAttribute', 'mail'), field('displayNameAttribute', 'cn'), field('useTls', 'false', 'boolean'), { ...field('connectTimeout', '5000', 'number'), minimum: 1000 }] },
+    {
+      backend: 'disabled',
+      label: 'Disabled',
+      purpose: 'deploy_purposeDisabled',
+      fields: [],
+    },
+    {
+      backend: 'ldap',
+      label: 'LDAP / OpenLDAP',
+      purpose: 'deploy_purposeLdap',
+      fields: [
+        required('url', 'ldap://localhost:389', 'url'),
+        required('bindDn', 'cn=admin,dc=example,dc=org'),
+        {
+          ...required('bindPassword'),
+          secret: true,
+        },
+        required('searchBase', 'dc=example,dc=org'),
+        field('searchFilter', '(uid={{username}})'),
+        field('usernameAttribute', 'uid'),
+        field('emailAttribute', 'mail'),
+        field('displayNameAttribute', 'cn'),
+        field('useTls', 'false', 'boolean'),
+        {
+          ...field('connectTimeout', '5000', 'number'),
+          minimum: 1000,
+        },
+      ],
+    },
   ],
   email: [
-    { backend: 'console', label: 'Console', purpose: 'deploy_purposeConsole', fields: [] },
-    { backend: 'smtp', label: 'SMTP', purpose: 'deploy_purposeEmail', provisioner: 'resend', cloudFields: provisionerFields('resend'), fields: [required('host', 'localhost'), required('port', '465', 'port'), field('secure', 'true', 'boolean'), field('user'), field('pass', '', undefined, true), required('from', 'noreply@example.com')] },
-    { backend: 'api', containerSupported: false, label: 'HTTP notification API', purpose: 'deploy_purposeEmail', fields: [required('url', '', 'url'), field('method', 'POST'), field('headers', '', undefined, true), field('timeout', '10000', 'number')] },
+    {
+      backend: 'console',
+      label: 'Console',
+      purpose: 'deploy_purposeConsole',
+      fields: [],
+    },
+    {
+      backend: 'smtp',
+      label: 'SMTP',
+      purpose: 'deploy_purposeEmail',
+      provisioner: 'resend',
+      cloudFields: provisionerFields('resend'),
+      fields: [
+        required('host', 'localhost'),
+        required('port', '465', 'port'),
+        field('secure', 'true', 'boolean'),
+        field('user'),
+        field('pass', '', undefined, true),
+        required('from', 'noreply@example.com'),
+      ],
+    },
+    {
+      backend: 'api',
+      containerSupported: false,
+      label: 'HTTP notification API',
+      purpose: 'deploy_purposeEmail',
+      fields: [
+        required('url', '', 'url'),
+        field('method', 'POST'),
+        field('headers', '', undefined, true),
+        field('timeout', '10000', 'number'),
+      ],
+    },
   ],
   sms: [
-    { backend: 'console', label: 'Console', purpose: 'deploy_purposeConsole', fields: [] },
-    { backend: 'aliyun-sms', containerSupported: false, label: 'Aliyun SMS', purpose: 'deploy_purposeSms', provisioner: 'aliyun', cloudFields: provisionerFields('aliyun'), fields: [required('accessKeyId'), { ...required('accessKeySecret'), secret: true }, required('signName'), field('endpoint', 'dysmsapi.aliyuncs.com')] },
-    { backend: 'api', containerSupported: false, label: 'HTTP notification API', purpose: 'deploy_purposeSms', fields: [required('url', '', 'url'), field('method', 'POST'), field('headers', '', undefined, true), field('timeout', '10000', 'number')] },
+    {
+      backend: 'console',
+      label: 'Console',
+      purpose: 'deploy_purposeConsole',
+      fields: [],
+    },
+    {
+      backend: 'aliyun-sms',
+      containerSupported: false,
+      label: 'Aliyun SMS',
+      purpose: 'deploy_purposeSms',
+      provisioner: 'aliyun',
+      cloudFields: provisionerFields('aliyun'),
+      fields: [
+        required('accessKeyId'),
+        {
+          ...required('accessKeySecret'),
+          secret: true,
+        },
+        required('signName'),
+        field('endpoint', 'dysmsapi.aliyuncs.com'),
+      ],
+    },
+    {
+      backend: 'api',
+      containerSupported: false,
+      label: 'HTTP notification API',
+      purpose: 'deploy_purposeSms',
+      fields: [
+        required('url', '', 'url'),
+        field('method', 'POST'),
+        field('headers', '', undefined, true),
+        field('timeout', '10000', 'number'),
+      ],
+    },
   ],
 }
 

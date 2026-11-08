@@ -12,8 +12,12 @@ const state = vi.hoisted(() => {
       get isInitialized() { return initialized.has(name) || borrowed.has(name) },
       init: vi.fn(async () => {
         calls.push(`${name}.init`)
-        if (settings.failInit === name)
-          return { success: false, error: { code: 'test:init', message: 'unavailable' } }
+        if (settings.failInit === name) {
+          return {
+            success: false,
+            error: { code: 'test:init', message: 'unavailable' },
+          }
+        }
         initialized.add(name)
         return { success: true, data: undefined }
       }),
@@ -21,7 +25,10 @@ const state = vi.hoisted(() => {
         calls.push(`${name}.close`)
         if (settings.failClose === name) {
           settings.failClose = ''
-          return { success: false, error: { code: 'test:close', message: 'close failed' } }
+          return {
+            success: false,
+            error: { code: 'test:close', message: 'close failed' },
+          }
         }
         initialized.delete(name)
         return { success: true, data: undefined }
@@ -29,7 +36,13 @@ const state = vi.hoisted(() => {
     }
   }
   const modules = {
-    reldb: { ...lifecycle('reldb'), ddl: { createTable: vi.fn(async () => ({ success: true })), createIndex: vi.fn(async () => ({ success: true })) } },
+    reldb: {
+      ...lifecycle('reldb'),
+      ddl: {
+        createTable: vi.fn(async () => ({ success: true })),
+        createIndex: vi.fn(async () => ({ success: true })),
+      },
+    },
     cache: lifecycle('cache'),
     iam: lifecycle('iam'),
     reach: lifecycle('reach'),
@@ -38,32 +51,60 @@ const state = vi.hoisted(() => {
     ai: lifecycle('ai'),
   }
   // spread 会求值 getter；reldb 也显式使用实时实例状态。
-  Object.defineProperty(modules.reldb, 'isInitialized', { get: () => initialized.has('reldb') || borrowed.has('reldb') })
-  return { calls, initialized, borrowed, settings, config, modules }
+  Object.defineProperty(modules.reldb, 'isInitialized', {
+    get: () => initialized.has('reldb') || borrowed.has('reldb'),
+  })
+  return {
+    calls,
+    initialized,
+    borrowed,
+    settings,
+    config,
+    modules,
+  }
 })
 
 vi.mock('@h-ai/ai', () => ({ ai: state.modules.ai, AIConfigSchema: {} }))
 vi.mock('@h-ai/cache', () => ({ cache: state.modules.cache, CacheConfigSchema: {} }))
 vi.mock('@h-ai/iam', () => ({ iam: state.modules.iam, IamConfigSchema: {} }))
-vi.mock('@h-ai/reach', () => ({ reach: state.modules.reach, ReachConfigSchema: { parse: (value: unknown) => value } }))
+vi.mock('@h-ai/reach', () => ({
+  reach: state.modules.reach,
+  ReachConfigSchema: {
+    parse: (value: unknown) => value,
+  },
+}))
 vi.mock('@h-ai/reldb', () => ({ reldb: state.modules.reldb, ReldbConfigSchema: {} }))
 vi.mock('@h-ai/storage', () => ({ storage: state.modules.storage, StorageConfigSchema: {} }))
 vi.mock('@h-ai/vecdb', () => ({ vecdb: state.modules.vecdb, VecdbConfigSchema: {} }))
-vi.mock('@h-ai/core', () => ({ core: {
-  init: vi.fn(),
-  logger: { info: vi.fn(), warn: vi.fn() },
-  config: {
-    get: (name: string) => state.config[name],
-    getOrThrow: (name: string) => state.config[name],
-    validate: (name: string) => name === state.settings.invalid
-      ? { success: false, error: { message: 'invalid configuration' } }
-      : { success: true, data: state.config[name] },
-    load: (name: string) => name === state.settings.invalid
-      ? { success: false, error: { message: 'invalid configuration' } }
-      : { success: true, data: state.config[name] },
+vi.mock('@h-ai/core', () => ({
+  core: {
+    init: vi.fn(),
+    logger: {
+      info: vi.fn(),
+      warn: vi.fn(),
+    },
+    config: {
+      get: (name: string) => state.config[name],
+      getOrThrow: (name: string) => state.config[name],
+      validate: (name: string) => name === state.settings.invalid
+        ? {
+            success: false,
+            error: { message: 'invalid configuration' },
+          }
+        : { success: true, data: state.config[name] },
+      load: (name: string) => name === state.settings.invalid
+        ? {
+            success: false,
+            error: { message: 'invalid configuration' },
+          }
+        : { success: true, data: state.config[name] },
+    },
   },
-} }))
-vi.mock('./partner-service.js', () => ({ PartnerAdminConfigSchema: {}, ensurePartnerTables: vi.fn(async () => {}) }))
+}))
+vi.mock('./partner-service.js', () => ({
+  PartnerAdminConfigSchema: {},
+  ensurePartnerTables: vi.fn(async () => {}),
+}))
 
 beforeEach(() => {
   vi.resetModules()
@@ -77,7 +118,9 @@ beforeEach(() => {
     db: { type: 'postgresql', database: 'test' },
     cache: { type: 'redis' },
     iam: {},
-    ai: { llm: { apiKey: 'test-key' } },
+    ai: {
+      llm: { apiKey: 'test-key' },
+    },
     vecdb: { type: 'qdrant', url: 'http://unused.test:6333' },
     partner: { username: 'test', password: 'test-only-password' },
   })
@@ -129,7 +172,9 @@ describe('corporate-website application startup', () => {
   })
 
   it.each([undefined, '', '   '])('未配置有效Key %s 时不初始化AI和vecdb', async (apiKey) => {
-    state.config.ai = { llm: { apiKey } }
+    state.config.ai = {
+      llm: { apiKey },
+    }
     const { initApp } = await import('./init.js')
     await initApp()
     expect(state.modules.vecdb.init).not.toHaveBeenCalled()
@@ -137,7 +182,13 @@ describe('corporate-website application startup', () => {
   })
 
   it('模型池中的API Key也启用AI，不要求重复配置全局Key', async () => {
-    state.config.ai = { llm: { models: [{ id: 'one', model: 'test', apiKey: 'test-only' }] } }
+    state.config.ai = {
+      llm: {
+        models: [
+          { id: 'one', model: 'test', apiKey: 'test-only' },
+        ],
+      },
+    }
     const { initApp } = await import('./init.js')
     await initApp()
     expect(state.modules.ai.init).toHaveBeenCalledOnce()
@@ -156,8 +207,15 @@ describe('corporate-website application startup', () => {
     const { initApp } = await import('./init.js')
     await expect(initApp()).rejects.toThrow('initialization failed')
     expect(state.calls.filter(call => call.endsWith('.close'))).toEqual(name === 'ai'
-      ? ['ai.close', 'vecdb.close', ...['cache.close', 'reldb.close']]
-      : ['vecdb.close', ...['cache.close', 'reldb.close']])
+      ? [
+          'ai.close',
+          'vecdb.close',
+          ...['cache.close', 'reldb.close'],
+        ]
+      : [
+          'vecdb.close',
+          ...['cache.close', 'reldb.close'],
+        ])
     if (name === 'vecdb')
       expect(state.modules.ai.init).not.toHaveBeenCalled()
     state.settings.failInit = ''

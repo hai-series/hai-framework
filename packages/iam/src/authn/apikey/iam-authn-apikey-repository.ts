@@ -185,7 +185,9 @@ export async function createDbApiKeyRepository(): Promise<ApiKeyRepository> {
   repo.removeById = guardIamMutation(repo.removeById.bind(repo), 1)
   const update = repo.updateFields.bind(repo)
   const protectedUpdate = guardIamMutation(update, 2)
-  repo.updateFields = (id, data, tx) => Object.keys(data).every(key => key === 'lastUsedAt') ? update(id, data, tx) : protectedUpdate(id, data, tx)
+  repo.updateFields = (id, data, tx) => Object.keys(data).every(key => key === 'lastUsedAt')
+    ? update(id, data, tx)
+    : protectedUpdate(id, data, tx)
   apiKeyRepoInstance = repo
   apiKeyRepoSqlOps = reldb.sql
   return repo
@@ -206,7 +208,9 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
     if (!result.success) {
       return err(
         HaiIamError.REPOSITORY_ERROR,
-        iamM('iam_apikeyCreateFailed', { params: { message: result.error.message } }),
+        iamM('iam_apikeyCreateFailed', {
+          params: { message: result.error.message },
+        }),
         result.error,
       )
     }
@@ -222,7 +226,10 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
   }
 
   async findByKeyPrefix(prefix: string, tx?: DmlWithTxOperations): Promise<HaiResult<StoredApiKey[]>> {
-    const result = await this.findAll({ where: 'key_prefix = ?', params: [prefix] }, tx)
+    const result = await this.findAll({
+      where: 'key_prefix = ?',
+      params: [prefix],
+    }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error)
     }
@@ -247,7 +254,9 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
     }
 
     const sortColumn = options.sortBy ? API_KEY_SORT_COLUMNS[options.sortBy] : API_KEY_SORT_COLUMNS.createdAt
-    const sortDirection = options.sortBy && options.sortDirection === 'asc' ? 'ASC' : 'DESC'
+    const sortDirection = options.sortBy && options.sortDirection === 'asc'
+      ? 'ASC'
+      : 'DESC'
 
     const result = await this.findPage({
       where: conditions.join(' AND '),
@@ -262,7 +271,10 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
   }
 
   async countByUserId(userId: string, tx?: DmlWithTxOperations): Promise<HaiResult<number>> {
-    const result = await this.count({ where: 'user_id = ?', params: [userId] }, tx)
+    const result = await this.count({
+      where: 'user_id = ?',
+      params: [userId],
+    }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error)
     }
@@ -274,7 +286,9 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
     if (!result.success) {
       return err(
         HaiIamError.REPOSITORY_ERROR,
-        iamM('iam_apikeyUpdateFailed', { params: { message: result.error.message } }),
+        iamM('iam_apikeyUpdateFailed', {
+          params: { message: result.error.message },
+        }),
         result.error,
       )
     }
@@ -286,7 +300,9 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
     if (!result.success) {
       return err(
         HaiIamError.REPOSITORY_ERROR,
-        iamM('iam_apikeyDeleteFailed', { params: { message: result.error.message } }),
+        iamM('iam_apikeyDeleteFailed', {
+          params: { message: result.error.message },
+        }),
         result.error,
       )
     }
@@ -296,7 +312,9 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
   private buildQueryError(error: { message: string }): HaiResult<never> {
     return err(
       HaiIamError.REPOSITORY_ERROR,
-      iamM('iam_apikeyQueryFailed', { params: { message: error.message } }),
+      iamM('iam_apikeyQueryFailed', {
+        params: { message: error.message },
+      }),
       error,
     )
   }

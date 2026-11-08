@@ -10,7 +10,15 @@ it('cluster password reaches discovered data nodes and wrong passwords fail', as
   const password = 'test-only-cluster-password'
   const container = await new GenericContainer('docker.io/library/redis:7.4.11-alpine')
     .withExposedPorts(6379)
-    .withCommand(['redis-server', '--cluster-enabled', 'yes', '--cluster-config-file', 'nodes.conf', '--requirepass', password])
+    .withCommand([
+      'redis-server',
+      '--cluster-enabled',
+      'yes',
+      '--cluster-config-file',
+      'nodes.conf',
+      '--requirepass',
+      password,
+    ])
     .withWaitStrategy(Wait.forLogMessage(/Ready to accept connections/))
     .start()
   const good = createRedisProvider()
@@ -22,7 +30,15 @@ it('cluster password reaches discovered data nodes and wrong passwords fail', as
     const port = container.getMappedPort(6379)
     const address = (await lookup(host, { family: 4 })).address
     // 通过真实网络配置节点；避免 Podman Docker API 的 exec 流等待影响测试结束。
-    setupClient = new Redis({ host, port, password, lazyConnect: true, retryStrategy: () => null, connectTimeout: 1000, commandTimeout: 1000 })
+    setupClient = new Redis({
+      host,
+      port,
+      password,
+      lazyConnect: true,
+      retryStrategy: () => null,
+      connectTimeout: 1000,
+      commandTimeout: 1000,
+    })
     await setupClient.connect()
     const command = async (...args: string[]) => {
       const [name, ...parameters] = args
@@ -38,7 +54,16 @@ it('cluster password reaches discovered data nodes and wrong passwords fail', as
       await new Promise(resolve => setTimeout(resolve, 100))
     }
     // Podman 仅发布 IPv4；避免 localhost 的 IPv6 解析把测试变成不可达地址验证。
-    const config = CacheConfigSchema.parse({ type: 'redis', cluster: [{ host: address, port }], password, maxRetries: 0, connectTimeout: 1000, commandTimeout: 1000 })
+    const config = CacheConfigSchema.parse({
+      type: 'redis',
+      cluster: [
+        { host: address, port },
+      ],
+      password,
+      maxRetries: 0,
+      connectTimeout: 1000,
+      commandTimeout: 1000,
+    })
     expect(await good.connect(config)).toEqual({ success: true, data: undefined })
     expect((await good.kv.set('auth-probe', 'value')).success).toBe(true)
     expect(await good.kv.get('auth-probe')).toEqual({ success: true, data: 'value' })
@@ -51,7 +76,11 @@ it('cluster password reaches discovered data nodes and wrong passwords fail', as
       await container.stop()
     }
     finally {
-      await Promise.allSettled([good.close(), bad.close(), urlProvider.close()])
+      await Promise.allSettled([
+        good.close(),
+        bad.close(),
+        urlProvider.close(),
+      ])
     }
   }
 }, 120000)

@@ -28,7 +28,9 @@ describe('core.typeUtils', () => {
 
   it('isPromise 应该识别 Promise 与 thenable', () => {
     expect(core.typeUtils.isPromise(Promise.resolve(1))).toBe(true)
-    expect(core.typeUtils.isPromise({ then: () => null })).toBe(true)
+    expect(core.typeUtils.isPromise({
+      then: () => null,
+    })).toBe(true)
     expect(core.typeUtils.isPromise({})).toBe(false)
   })
 

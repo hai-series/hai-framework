@@ -9,7 +9,10 @@ import { kit } from '../src/kit-main.js'
 beforeAll(async () => {
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
   expect((await cache.init({ type: 'memory' })).success).toBe(true)
-  expect((await iam.init({ seedDefaultData: false, rbac: { enabled: false } })).success).toBe(true)
+  expect((await iam.init({
+    seedDefaultData: false,
+    rbac: { enabled: false },
+  })).success).toBe(true)
 })
 afterAll(async () => {
   await iam.close()
@@ -26,11 +29,21 @@ it('使用旧Cookie撤销过期access关联的refresh；不发送清理Cookie命
   const session = await iam.session.get(old.data.tokens.accessToken)
   if (!session.success || !session.data)
     throw new Error('Missing old session')
-  expect((await iam.session.update(old.data.tokens.accessToken, { expiresAt: new Date(Date.now() - 1) }, session.data.version)).success).toBe(true)
-  const cookies = { get: () => old.data.tokens.accessToken, set: vi.fn(), delete: vi.fn() }
+  expect((await iam.session.update(old.data.tokens.accessToken, {
+    expiresAt: new Date(Date.now() - 1),
+  }, session.data.version)).success).toBe(true)
+  const cookies = {
+    get: () => old.data.tokens.accessToken,
+    set: vi.fn(),
+    delete: vi.fn(),
+  }
   // 平台 RequestEvent 只提供本 handler 使用的字段；IAM 与持久化为真实实现。
   const event = {
-    request: new Request('https://app.test/api/auth/session/close', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }),
+    request: new Request('https://app.test/api/auth/session/close', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    }),
     cookies,
     locals: {},
   } as RequestEvent

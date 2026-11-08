@@ -7,7 +7,16 @@ describe('mysql TLS configuration', () => {
   it('defaults an empty TLS object to certificate and hostname checks and rejects unsupported flags', () => {
     const parsed = ReldbConfigSchema.parse({ type: 'mysql', database: 'test', ssl: {} })
     expect(parsed.type === 'mysql' && parsed.ssl).toEqual({ rejectUnauthorized: true, verifyIdentity: true })
-    for (const ssl of [true, 'require', 'prefer', 'allow', 'disable', { unknown: true }, { cert: 'cert-only' }, { key: 'key-only' }])
+    for (const ssl of [
+      true,
+      'require',
+      'prefer',
+      'allow',
+      'disable',
+      { unknown: true },
+      { cert: 'cert-only' },
+      { key: 'key-only' },
+    ])
       expect(ReldbConfigSchema.safeParse({ type: 'mysql', database: 'test', ssl }).success).toBe(false)
     for (const url of ['mysql://localhost/test?ssl=false', 'mysql://localhost/test#ssl'])
       expect(ReldbConfigSchema.safeParse({ type: 'mysql', url }).success).toBe(false)
@@ -42,7 +51,10 @@ describe('mysql real TLS', () => {
   })
 
   it('rejects a wrong CA before publishing the pool', async () => {
-    const result = await reldb.init({ ...fixture.config, ssl: { ca: fixture.wrongCa } })
+    const result = await reldb.init({
+      ...fixture.config,
+      ssl: { ca: fixture.wrongCa },
+    })
     expect(result.success).toBe(false)
     if (!result.success)
       expect(result.error.code).toBe(HaiReldbError.CONNECTION_FAILED.code)
@@ -70,7 +82,11 @@ describe('mysql real TLS', () => {
     expect(verified.success).toBe(false)
     if (!verified.success)
       expect(verified.error.code).toBe(HaiReldbError.CONFIG_ERROR.code)
-    expect((await reldb.init({ ...fixture.config, host: '127.0.0.1', ssl: { rejectUnauthorized: false } })).success).toBe(true)
+    expect((await reldb.init({
+      ...fixture.config,
+      host: '127.0.0.1',
+      ssl: { rejectUnauthorized: false },
+    })).success).toBe(true)
     await expectEncrypted()
   })
 })

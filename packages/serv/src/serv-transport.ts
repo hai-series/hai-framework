@@ -116,8 +116,13 @@ export function createTransportMiddleware(
     const mode = encryption?.(pathname, c.req.method)
     if (mode === 'disabled') {
       // 明文端点拒绝传输信封，防止把密文当业务数据处理或返回无法解密的成功响应。
-      if (c.req.raw.headers.has(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) || c.req.raw.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER))
-        return Response.json(err({ ...HaiCommonError.VALIDATION_ERROR, message: servM('serv_transportPlaintextRequired'), traceId: core.context.get().traceId ?? core.context.get().requestId }), { status: 400 })
+      if (c.req.raw.headers.has(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) || c.req.raw.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)) {
+        return Response.json(err({
+          ...HaiCommonError.VALIDATION_ERROR,
+          message: servM('serv_transportPlaintextRequired'),
+          traceId: core.context.get().traceId ?? core.context.get().requestId,
+        }), { status: 400 })
+      }
       return next()
     }
     // Step 2：未显式要求加密时，健康检查 / 文档页等宿主排除路径保持透传。
@@ -148,7 +153,9 @@ export function createTransportMiddleware(
       catch (error) {
         if (error instanceof TransportBodyTooLargeError)
           return createTransportErrorResponse(error)
-        return jsonError(servM('serv_transportInvalidPayload'), error instanceof RangeError ? 413 : 400)
+        return jsonError(servM('serv_transportInvalidPayload'), error instanceof RangeError
+          ? 413
+          : 400)
       }
 
       // Step 5：明文请求进入后续 Hono / oRPC 流程。
@@ -207,7 +214,9 @@ export function createTransportMiddleware(
       headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
       if (bodyless)
         headers.set(TRANSPORT_PROTOCOL.ENVELOPE_HEADER, JSON.stringify(encResult.data))
-      c.res = new Response(bodyless ? null : JSON.stringify(encResult.data), {
+      c.res = new Response(bodyless
+        ? null
+        : JSON.stringify(encResult.data), {
         status: response.status,
         statusText: response.statusText,
         headers,
@@ -229,7 +238,9 @@ async function handleKeyExchange(request: Request, manager: TransportEncryptionM
     }))
   }
   catch (error) {
-    return jsonError(servM('serv_transportInvalidPayload'), error instanceof RangeError ? 413 : 400)
+    return jsonError(servM('serv_transportInvalidPayload'), error instanceof RangeError
+      ? 413
+      : 400)
   }
   if (!body || typeof body !== 'object' || !('clientPublicKey' in body)
     || !isValidSM2PublicKey(body.clientPublicKey)
@@ -243,7 +254,12 @@ async function handleKeyExchange(request: Request, manager: TransportEncryptionM
     if (new TextEncoder().encode(serverPublicKey).byteLength > TRANSPORT_BODY_LIMITS.publicKeyBytes)
       return jsonError(servM('serv_transportKeyExchangeFailed'), 500)
     const clientId = await manager.registerClientKey(body.clientPublicKey)
-    return new Response(JSON.stringify({ serverKeyId: manager.getServerKeyId(), serverPublicKey, clientId, maxPlaintextBytes: manager.bodyLimits.plaintextBytes }), {
+    return new Response(JSON.stringify({
+      serverKeyId: manager.getServerKeyId(),
+      serverPublicKey,
+      clientId,
+      maxPlaintextBytes: manager.bodyLimits.plaintextBytes,
+    }), {
       status: 200,
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
     })

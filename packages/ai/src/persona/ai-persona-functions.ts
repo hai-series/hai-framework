@@ -56,7 +56,18 @@ function composeSystemPrompt(profile: PersonaProfile): string {
  * ```
  */
 export function createPersonaOperations(store: AIRelStore<PersonaProfile>): PersonaOperations {
-  return {
+  async function protect<T>(operation: () => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
+    try {
+      return await operation()
+    }
+    catch (error) {
+      logger.error('Persona storage operation failed', {
+        error: core.sanitize.sanitizeSensitiveFields(error),
+      })
+      return err(HaiAIError.PERSONA_SAVE_FAILED, aiM('ai_personaOperationFailed'))
+    }
+  }
+  const operations: PersonaOperations = {
     async save(input: PersonaProfileInput): Promise<HaiResult<PersonaProfile>> {
       try {
         const now = Date.now()
@@ -78,15 +89,21 @@ export function createPersonaOperations(store: AIRelStore<PersonaProfile>): Pers
         return ok(profile)
       }
       catch (error) {
-        return err(HaiAIError.PERSONA_SAVE_FAILED, aiM('ai_personaSaveFailed', { params: { error: String(error) } }), error)
+        logger.error('Persona save failed', {
+          error: core.sanitize.sanitizeSensitiveFields(error),
+        })
+        return err(HaiAIError.PERSONA_SAVE_FAILED, aiM('ai_personaOperationFailed'))
       }
     },
 
     async get(id: string, options?: PersonaScopeOptions): Promise<HaiResult<PersonaProfile>> {
       const objectId = options?.objectId ?? DEFAULT_OBJECT_ID
       const profile = await store.get(personaKey(objectId, id))
-      if (!profile)
-        return err(HaiAIError.PERSONA_NOT_FOUND, aiM('ai_personaNotFound', { params: { id } }))
+      if (!profile) {
+        return err(HaiAIError.PERSONA_NOT_FOUND, aiM('ai_personaNotFound', {
+          params: { id },
+        }))
+      }
       return ok(profile)
     },
 
@@ -94,8 +111,11 @@ export function createPersonaOperations(store: AIRelStore<PersonaProfile>): Pers
       const objectId = options?.objectId ?? DEFAULT_OBJECT_ID
       const key = personaKey(objectId, id)
       const existing = await store.get(key)
-      if (!existing)
-        return err(HaiAIError.PERSONA_NOT_FOUND, aiM('ai_personaNotFound', { params: { id } }))
+      if (!existing) {
+        return err(HaiAIError.PERSONA_NOT_FOUND, aiM('ai_personaNotFound', {
+          params: { id },
+        }))
+      }
       try {
         const profile: PersonaProfile = {
           ...existing,
@@ -109,7 +129,10 @@ export function createPersonaOperations(store: AIRelStore<PersonaProfile>): Pers
         return ok(profile)
       }
       catch (error) {
-        return err(HaiAIError.PERSONA_SAVE_FAILED, aiM('ai_personaSaveFailed', { params: { error: String(error) } }), error)
+        logger.error('Persona update failed', {
+          error: core.sanitize.sanitizeSensitiveFields(error),
+        })
+        return err(HaiAIError.PERSONA_SAVE_FAILED, aiM('ai_personaOperationFailed'))
       }
     },
 
@@ -121,16 +144,30 @@ export function createPersonaOperations(store: AIRelStore<PersonaProfile>): Pers
 
     async list(options?: PersonaScopeOptions): Promise<HaiResult<PersonaProfile[]>> {
       const objectId = options?.objectId ?? DEFAULT_OBJECT_ID
-      const profiles = await store.query({ objectId, orderBy: { field: 'createdAt', direction: 'asc' } })
+      const profiles = await store.query({
+        objectId,
+        orderBy: { field: 'createdAt', direction: 'asc' },
+      })
       return ok(profiles)
     },
 
     async compose(id: string, options?: PersonaScopeOptions): Promise<HaiResult<string>> {
       const objectId = options?.objectId ?? DEFAULT_OBJECT_ID
       const profile = await store.get(personaKey(objectId, id))
-      if (!profile)
-        return err(HaiAIError.PERSONA_NOT_FOUND, aiM('ai_personaNotFound', { params: { id } }))
+      if (!profile) {
+        return err(HaiAIError.PERSONA_NOT_FOUND, aiM('ai_personaNotFound', {
+          params: { id },
+        }))
+      }
       return ok(composeSystemPrompt(profile))
     },
+  }
+  return {
+    ...operations,
+    get: (id, options) => protect(() => operations.get(id, options)),
+    update: (id, updates, options) => protect(() => operations.update(id, updates, options)),
+    remove: (id, options) => protect(() => operations.remove(id, options)),
+    list: options => protect(() => operations.list(options)),
+    compose: (id, options) => protect(() => operations.compose(id, options)),
   }
 }

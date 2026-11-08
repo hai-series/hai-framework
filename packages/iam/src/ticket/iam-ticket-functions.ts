@@ -72,7 +72,9 @@ function buildTicketKey(ticket: string): string {
 export function createTicketOperations(): TicketOperations {
   return {
     async issue(options: IssueTicketOptions): Promise<HaiResult<IssuedTicket>> {
-      const ttlMs = options.ttlMs !== undefined && options.ttlMs > 0 ? options.ttlMs : DEFAULT_TICKET_TTL_MS
+      const ttlMs = options.ttlMs !== undefined && options.ttlMs > 0
+        ? options.ttlMs
+        : DEFAULT_TICKET_TTL_MS
       const ticket = generateToken()
       const expiresAt = Date.now() + ttlMs
       const record: StoredTicket = {

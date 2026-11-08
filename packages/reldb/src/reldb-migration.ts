@@ -38,8 +38,8 @@ export interface SchemaMigrationPlan {
  * 查询真实列名；不创建表，不把查询错误当成新安装。
  * @example
  * ```ts
- * import { reldb, schemaColumns } from '@h-ai/reldb'
- * const columns = await schemaColumns(reldb, 'hai_iam_users')
+ * import { reldb } from '@h-ai/reldb'
+ * const columns = await reldb.schemaColumns('hai_iam_users')
  * ```
  */
 export async function schemaColumns(db: ReldbFunctions, table: string, sql: DmlOperations = db.sql): Promise<HaiResult<string[]>> {
@@ -48,8 +48,12 @@ export async function schemaColumns(db: ReldbFunctions, table: string, sql: DmlO
   const type = db.config?.type
   const found = type === 'sqlite'
     ? await sql.query<{ name: string }>(`PRAGMA table_info(${table})`)
-    : await sql.query<{ name: string }>(`SELECT column_name AS name FROM information_schema.columns WHERE table_schema=${type === 'mysql' ? 'DATABASE()' : 'current_schema()'} AND table_name=?`, [table])
-  return found.success ? ok(found.data.map(row => row.name)) : found
+    : await sql.query<{ name: string }>(`SELECT column_name AS name FROM information_schema.columns WHERE table_schema=${type === 'mysql'
+        ? 'DATABASE()'
+        : 'current_schema()'} AND table_name=?`, [table])
+  return found.success
+    ? ok(found.data.map(row => row.name))
+    : found
 }
 
 /**
@@ -57,8 +61,8 @@ export async function schemaColumns(db: ReldbFunctions, table: string, sql: DmlO
  * 失败不记录目标版本；重启重新检查真实结构。新版本账本拒绝旧代码向下迁移。
  * @example
  * ```ts
- * import { reldb, migrateSchema } from '@h-ai/reldb'
- * const plan = await migrateSchema(reldb, 'example', [], { dryRun: true })
+ * import { reldb } from '@h-ai/reldb'
+ * const plan = await reldb.migrateSchema('example', [], { dryRun: true })
  * ```
  */
 export async function migrateSchema(db: ReldbFunctions, module: string, steps: readonly SchemaMigration[], options: { dryRun?: boolean } = {}): Promise<HaiResult<SchemaMigrationPlan>> {
@@ -66,12 +70,21 @@ export async function migrateSchema(db: ReldbFunctions, module: string, steps: r
     return err(HaiCommonError.VALIDATION_ERROR, core.i18n.coreM('core_errorValidation'))
   const table = 'hai_schema_migrations'
   const targetVersion = steps.length
-  const failed = (cause?: unknown) => err({ ...HaiCommonError.INIT_FAILED, message: core.i18n.coreM('core_runtimeStartFailed', { params: { module } }), ext: { module, phase: 'migration' }, cause })
+  const failed = (cause?: unknown) => err({
+    ...HaiCommonError.INIT_FAILED,
+    message: core.i18n.coreM('core_runtimeStartFailed', {
+      params: { module },
+    }),
+    ext: { module, phase: 'migration' },
+    cause,
+  })
   async function inspect(sql: DmlOperations): Promise<HaiResult<SchemaMigrationPlan>> {
     const columns = await schemaColumns(db, table, sql)
     if (!columns.success)
       return failed(columns.error)
-    const row = columns.data.length ? await sql.get<{ version: number }>(`SELECT version FROM ${table} WHERE module=?`, [module]) : ok(null)
+    const row = columns.data.length
+      ? await sql.get<{ version: number }>(`SELECT version FROM ${table} WHERE module=?`, [module])
+      : ok(null)
     if (!row.success)
       return failed(row.error)
     const currentVersion = Number(row.data?.version ?? 0)
@@ -85,7 +98,13 @@ export async function migrateSchema(db: ReldbFunctions, module: string, steps: r
       if (needed.data)
         changes.push(step.name)
     }
-    return ok({ module, currentVersion, targetVersion, changes, requiresExclusiveAccess: changes.length > 0 })
+    return ok({
+      module,
+      currentVersion,
+      targetVersion,
+      changes,
+      requiresExclusiveAccess: changes.length > 0,
+    })
   }
   if (options.dryRun)
     return inspect(db.sql)
@@ -107,8 +126,11 @@ export async function migrateSchema(db: ReldbFunctions, module: string, steps: r
     // MySQL DDL 会释放事务行锁，使用同一连接的命名锁覆盖整次升级。
     if (db.config?.type === 'mysql') {
       const lock = await tx.get<{ acquired: number }>('SELECT GET_LOCK(?,30) AS acquired', [`hai-schema:${module}`])
-      if (!lock.success || Number(lock.data?.acquired) !== 1)
-        return failed(lock.success ? new Error('Migration lock unavailable') : lock.error)
+      if (!lock.success || Number(lock.data?.acquired) !== 1) {
+        return failed(lock.success
+          ? new Error('Migration lock unavailable')
+          : lock.error)
+      }
       mysqlLock = true
     }
     const locked = await tx.execute(`UPDATE ${table} SET version=version WHERE module=?`, [module])
@@ -126,8 +148,11 @@ export async function migrateSchema(db: ReldbFunctions, module: string, steps: r
         if (!applied.success)
           return failed(applied.error)
         const remaining = await step.needed(tx)
-        if (!remaining.success || remaining.data)
-          return failed(remaining.success ? new Error('Migration step did not converge') : remaining.error)
+        if (!remaining.success || remaining.data) {
+          return failed(remaining.success
+            ? new Error('Migration step did not converge')
+            : remaining.error)
+        }
       }
     }
     const recorded = await tx.execute(`UPDATE ${table} SET version=? WHERE module=?`, [targetVersion, module])
@@ -139,7 +164,9 @@ export async function migrateSchema(db: ReldbFunctions, module: string, steps: r
     }
     const result = await tx.commit()
     committed = result.success
-    return result.success ? plan : failed(result.error)
+    return result.success
+      ? plan
+      : failed(result.error)
   }
   catch (error) {
     return failed(error)

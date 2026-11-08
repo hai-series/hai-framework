@@ -155,7 +155,10 @@ export function getSessionTtl(session: Session, now = Date.now()): number {
 export function applySessionPatch(session: Session, patch: Partial<Session>): Session {
   const nextSession = { ...session }
   if (patch.data !== undefined) {
-    nextSession.data = { ...nextSession.data, ...patch.data }
+    nextSession.data = {
+      ...nextSession.data,
+      ...patch.data,
+    }
   }
   if (patch.roles !== undefined) {
     nextSession.roles = patch.roles
@@ -177,6 +180,8 @@ export function applySessionPatch(session: Session, patch: Partial<Session>): Se
   }
   if (patch.expiresAt !== undefined)
     nextSession.expiresAt = new Date(patch.expiresAt)
-  nextSession.lastActiveAt = patch.lastActiveAt !== undefined ? new Date(patch.lastActiveAt) : new Date()
+  nextSession.lastActiveAt = patch.lastActiveAt !== undefined
+    ? new Date(patch.lastActiveAt)
+    : new Date()
   return nextSession
 }

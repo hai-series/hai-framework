@@ -39,7 +39,7 @@ export function defineDbSuite(
   options: { resetConnection?: boolean, database?: ReldbFunctions } = {},
 ): void {
   const database = options.database ?? reldb
-  describe.sequential(`db (${label})`, () => {
+  describe(`db (${label})`, { concurrent: false }, () => {
     let env: DbTestEnv | null = null
 
     beforeAll(async () => {
@@ -78,7 +78,9 @@ export function defineDbSuite(
 }
 
 export function sqliteMemoryEnv(): DbTestEnv {
-  return { config: { type: 'sqlite', database: ':memory:' } }
+  return {
+    config: { type: 'sqlite', database: ':memory:' },
+  }
 }
 
 export async function postgresEnv(): Promise<DbTestEnv> {

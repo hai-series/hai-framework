@@ -44,8 +44,13 @@ const SshConfigSchema = z.object({
   // 未启用的旧密码不影响显式 key；空串不改变省略 auth 时的原有默认行为。
   if (ssh.auth === 'key' || (ssh.auth === undefined && !ssh.password))
     return
-  if (!ssh.password || /[\r\n\0]/.test(ssh.password) || new TextEncoder().encode(ssh.password).length > 1023)
-    context.addIssue({ code: 'custom', path: ['password'], message: deployM('deploy_sshPasswordInvalid') })
+  if (!ssh.password || /[\r\n\0]/.test(ssh.password) || new TextEncoder().encode(ssh.password).length > 1023) {
+    context.addIssue({
+      code: 'custom',
+      path: ['password'],
+      message: deployM('deploy_sshPasswordInvalid'),
+    })
+  }
 })
 
 /** 入口域名同时用于证书校验、Nginx 与公开 URL，禁止配置指令或路径。 */
@@ -86,8 +91,13 @@ const PortExposeSchema = z.object({
   /** 可选 HTTPS：已有 PEM 文件或官方 Certbot 自动申请续期；省略保留 HTTP。 */
   https: HttpsConfigSchema.optional().describe('可选 HTTPS 入口；files 使用已有证书，letsencrypt 使用官方 Certbot 申请续期，省略保持 HTTP'),
 }).superRefine((expose, context) => {
-  if (expose.https && (expose.https.port === expose.hostPort || (expose.https.type === 'letsencrypt' && expose.hostPort !== 80)))
-    context.addIssue({ code: 'custom', path: ['https'], message: deployM('deploy_httpsPortsInvalid') })
+  if (expose.https && (expose.https.port === expose.hostPort || (expose.https.type === 'letsencrypt' && expose.hostPort !== 80))) {
+    context.addIssue({
+      code: 'custom',
+      path: ['https'],
+      message: deployM('deploy_httpsPortsInvalid'),
+    })
+  }
 })
 
 /** 应用入口：HTTP 及统一的可选 HTTPS。 */
@@ -108,7 +118,12 @@ const DockerSshProviderConfigSchema = z.object({
   /** 应用暴露方式 */
   expose: ExposeSchema,
   /** Nginx 前方可信负载均衡的 IP/CIDR；省略时不接受外部转发头。 */
-  trustedEdgeProxies: z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()])).max(1000).optional(),
+  trustedEdgeProxies: z.array(z.union([
+    z.ipv4(),
+    z.ipv6(),
+    z.cidrv4(),
+    z.cidrv6(),
+  ])).max(1000).optional(),
 })
 
 /**
@@ -217,29 +232,60 @@ const ServicesConfigSchema = z.object({
  * ```
  */
 export function provisionerFields(provisioner: string): string[] {
-  const schema = [NeonServiceSchema, UpstashServiceSchema, R2ServiceSchema, ResendServiceSchema, AliyunSmsServiceSchema].find(item => item.shape.provisioner.value === provisioner)
-  return schema ? Object.keys(schema.shape).filter(name => name !== 'provisioner') : []
+  const schema = [
+    NeonServiceSchema,
+    UpstashServiceSchema,
+    R2ServiceSchema,
+    ResendServiceSchema,
+    AliyunSmsServiceSchema,
+  ].find(item => item.shape.provisioner.value === provisioner)
+  return schema
+    ? Object.keys(schema.shape).filter(name => name !== 'provisioner')
+    : []
 }
 
 // ─── 完整配置 Schema ───
 
-const reservedComposeHosts = new Set(['localhost', 'serv', 'web', 'gateway', 'certbot', 'db', 'cache', 'storage', 'vecdb', 'ldap', 'email', 'sms'])
+const reservedComposeHosts = new Set([
+  'localhost',
+  'serv',
+  'web',
+  'gateway',
+  'certbot',
+  'db',
+  'cache',
+  'storage',
+  'vecdb',
+  'ldap',
+  'email',
+  'sms',
+])
 const composeHostname = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i
 
 /** 仅开放逐项验证过的 Compose 服务字段，部署仍负责服务拓扑及镜像身份。 */
 const ComposeServiceConfigSchema = z.strictObject({
   /** 容器内的主机名到 IPv4 或 IPv6 地址映射，不能覆盖框架内部服务名。 */
-  extra_hosts: z.record(z.string(), z.union([z.ipv4(), z.ipv6()], {
+  extra_hosts: z.record(z.string(), z.union([
+    z.ipv4(),
+    z.ipv6(),
+  ], {
     error: () => deployM('deploy_composeHostAddressInvalid'),
   })).superRefine((hosts, ctx) => {
     const seen = new Set<string>()
     for (const host of Object.keys(hosts)) {
       const key = host.toLowerCase()
       if (host.length > 253 || !composeHostname.test(host)) {
-        ctx.addIssue({ code: 'custom', message: deployM('deploy_composeHostnameInvalid') })
+        ctx.addIssue({
+          code: 'custom',
+          message: deployM('deploy_composeHostnameInvalid'),
+        })
       }
       else if (reservedComposeHosts.has(key) || seen.has(key)) {
-        ctx.addIssue({ code: 'custom', path: [host], message: deployM('deploy_composeHostnameConflict') })
+        ctx.addIssue({
+          code: 'custom',
+          path: [host],
+          message: deployM('deploy_composeHostnameConflict'),
+        })
       }
       seen.add(key)
     }
@@ -297,14 +343,20 @@ export function validateComposeServices(container: DeployConfig['container'], ar
   const services = container?.compose?.services
   const unavailable = services?.serv && artifact.primaryService !== 'serv'
     ? 'serv'
-    : services?.web && !artifact.hasWeb ? 'web' : undefined
+    : services?.web && !artifact.hasWeb
+      ? 'web'
+      : undefined
   if (!unavailable)
     return ok(undefined)
   const field = `deploy.container.compose.services.${unavailable}`
   return err({
     ...HaiDeployError.CONFIG_ERROR,
-    message: deployM('deploy_composeServiceUnavailable', { params: { field } }),
-    ext: { fields: [field] },
+    message: deployM('deploy_composeServiceUnavailable', {
+      params: { field },
+    }),
+    ext: {
+      fields: [field],
+    },
   })
 }
 

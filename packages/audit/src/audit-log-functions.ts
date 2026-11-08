@@ -9,7 +9,12 @@ import { auditM } from './audit-i18n.js'
 import { HaiAuditError } from './audit-types.js'
 
 const logger = core.logger.child({ module: 'audit', scope: 'writer' })
-const actorSchema = z.object({ id: z.string().min(1).max(256), username: z.string().max(256).optional(), displayName: z.string().max(256).optional(), roles: z.array(z.string().max(256)).max(1000).optional() })
+const actorSchema = z.object({
+  id: z.string().min(1).max(256),
+  username: z.string().max(256).optional(),
+  displayName: z.string().max(256).optional(),
+  roles: z.array(z.string().max(256)).max(1000).optional(),
+})
 const detailsSchema = z.record(z.string(), z.unknown())
 const inputSchema = z.object({
   userId: z.string().min(1).max(256).nullable().optional(),
@@ -37,7 +42,14 @@ const querySchema = z.object({
   category: z.enum(['system', 'business']).optional(),
   outcome: z.enum(['success', 'failure', 'denied']).optional(),
   severity: z.enum(['info', 'warning', 'error', 'critical']).optional(),
-  sortBy: z.enum(['createdAt', 'action', 'resource', 'category', 'outcome', 'severity']).optional(),
+  sortBy: z.enum([
+    'createdAt',
+    'action',
+    'resource',
+    'category',
+    'outcome',
+    'severity',
+  ]).optional(),
   sortDirection: z.enum(['asc', 'desc']).optional(),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
@@ -66,7 +78,9 @@ export function validAuditQuery(options: unknown): boolean {
 export function readAuditActor(value: unknown): AuditActorSnapshot | null {
   if (value == null)
     return null
-  const parsed = actorSchema.safeParse(typeof value === 'string' ? JSON.parse(value) : value)
+  const parsed = actorSchema.safeParse(typeof value === 'string'
+    ? JSON.parse(value)
+    : value)
   if (!parsed.success)
     throw new Error('Invalid audit actor snapshot')
   return parsed.data
@@ -89,19 +103,41 @@ export function createAuditWriter(repository: AuditLogRepository, config: AuditI
     try {
       const parsed = inputSchema.safeParse(input)
       if (!parsed.success) {
-        logger.error('Audit input rejected', { issues: parsed.error.issues.map(issue => issue.path.join('.')) })
-        return err(HaiAuditError.LOG_FAILED, auditM('audit_invalidInput', { params: { field: 'event', reason: auditM('audit_eventFieldsInvalid') } }))
+        logger.error('Audit input rejected', {
+          issues: parsed.error.issues.map(issue => issue.path.join('.')),
+        })
+        return err(HaiAuditError.LOG_FAILED, auditM('audit_invalidInput', {
+          params: {
+            field: 'event',
+            reason: auditM('audit_eventFieldsInvalid'),
+          },
+        }))
       }
       const value = parsed.data
       const context = getAuditContext()
       const correlation = core.context.get()
-      const actor = Object.hasOwn(value, 'actorSnapshot') ? value.actorSnapshot : context.actor
-      const userId = value.userId !== undefined ? value.userId : actor?.id ?? correlation.userId ?? null
+      const actor = Object.hasOwn(value, 'actorSnapshot')
+        ? value.actorSnapshot
+        : context.actor
+      const userId = value.userId !== undefined
+        ? value.userId
+        : actor?.id ?? correlation.userId ?? null
       if (value.actorSnapshot && value.actorSnapshot.id !== userId) {
-        logger.error('Audit actor snapshot rejected', { reason: auditM('audit_identityMismatch') })
-        return err(HaiAuditError.LOG_FAILED, auditM('audit_invalidInput', { params: { field: 'actorSnapshot', reason: auditM('audit_identityMismatch') } }))
+        logger.error('Audit actor snapshot rejected', {
+          reason: auditM('audit_identityMismatch'),
+        })
+        return err(HaiAuditError.LOG_FAILED, auditM('audit_invalidInput', {
+          params: {
+            field: 'actorSnapshot',
+            reason: auditM('audit_identityMismatch'),
+          },
+        }))
       }
-      const snapshot = actor?.id === userId ? readAuditActor(actor) : userId ? await repository.captureActor(userId, tx) : null
+      const snapshot = actor?.id === userId
+        ? readAuditActor(actor)
+        : userId
+          ? await repository.captureActor(userId, tx)
+          : null
       const outcome = value.outcome ?? 'success'
       // 先获得最终 JSON 形态，类实例和 toJSON 生成的凭据字段也必须经过脱敏。
       const jsonDetails: unknown = value.details == null
@@ -111,8 +147,12 @@ export function createAuditWriter(repository: AuditLogRepository, config: AuditI
             const sensitive = core.sanitize.isSensitiveKey(key) || (config.privacy.enabled && (businessPrivacy.test(key) || fields.has(key.toLowerCase())))
             return sensitive ? '[REDACTED]' : entry
           }))
-      const normalizedDetails = jsonDetails == null ? null : detailsSchema.parse(jsonDetails)
-      const credentialSafe = normalizedDetails == null ? null : core.sanitize.sanitizeSensitiveFields(normalizedDetails, { replacement: '[REDACTED]' })
+      const normalizedDetails = jsonDetails == null
+        ? null
+        : detailsSchema.parse(jsonDetails)
+      const credentialSafe = normalizedDetails == null
+        ? null
+        : core.sanitize.sanitizeSensitiveFields(normalizedDetails, { replacement: '[REDACTED]' })
       const details = !config.privacy.enabled || credentialSafe == null
         ? credentialSafe
         : core.sanitize.sanitizeSensitiveFields(credentialSafe, {
@@ -123,7 +163,11 @@ export function createAuditWriter(repository: AuditLogRepository, config: AuditI
         ...value,
         category: value.category ?? context.category ?? 'business',
         outcome,
-        severity: value.severity ?? (outcome === 'denied' ? 'warning' : outcome === 'failure' ? 'error' : 'info'),
+        severity: value.severity ?? (outcome === 'denied'
+          ? 'warning'
+          : outcome === 'failure'
+            ? 'error'
+            : 'info'),
         userId,
         actorSnapshot: snapshot,
         requestId: value.requestId ?? context.requestId ?? correlation.requestId ?? null,
@@ -133,13 +177,23 @@ export function createAuditWriter(repository: AuditLogRepository, config: AuditI
         userAgent: value.userAgent ?? context.userAgent ?? null,
         details,
       }, tx)
-      if (!result.success)
-        logger.error('Audit event persistence failed', { action: value.action, resource: value.resource, requestId: value.requestId ?? context.requestId, error: result.error })
+      if (!result.success) {
+        logger.error('Audit event persistence failed', {
+          action: value.action,
+          resource: value.resource,
+          requestId: value.requestId ?? context.requestId,
+          error: result.error,
+        })
+      }
       return result
     }
     catch (error) {
       logger.error('Audit event processing failed', { requestId: getAuditContext().requestId, error })
-      return err(HaiAuditError.LOG_FAILED, auditM('audit_logFailed', { params: { error: auditM('audit_eventProcessingFailed') } }), error)
+      return err(HaiAuditError.LOG_FAILED, auditM('audit_logFailed', {
+        params: {
+          error: auditM('audit_eventProcessingFailed'),
+        },
+      }), error)
     }
   }
 }

@@ -96,8 +96,11 @@ export async function generateServApi(context: TemplateContext, target: Generate
   const domainProperty = new RegExp(`^\\s*(?:${context.camelCase}|['"]${context.camelCase}['"]):`, 'm')
   if (domainProperty.test(aggregator.content) || domainProperty.test(procedureSource)) {
     for (const file of [contractFile, procedureFile]) {
-      if (!await fse.pathExists(file) || !(await fse.readFile(file, 'utf8')).includes(domainMarker))
-        throw new Error(cliM('cli_generateDomainExists', { params: { name: context.camelCase } }))
+      if (!await fse.pathExists(file) || !(await fse.readFile(file, 'utf8')).includes(domainMarker)) {
+        throw new Error(cliM('cli_generateDomainExists', {
+          params: { name: context.camelCase },
+        }))
+      }
     }
   }
   const contractContent = `${domainMarker}
@@ -110,12 +113,30 @@ import { z } from 'zod'
  */
 export const ${contractName} = {
   list: apiContract
-    .route({ method: 'GET', path: '/${context.kebabCase}', operationId: '${context.camelCase}.list', tags: ['${context.kebabCase}'] })
-    .output(apiContract.haiResultSchema(z.object({ items: z.array(z.object({ name: z.string() })) }))),
+    .route({
+      method: 'GET',
+      path: '/${context.kebabCase}',
+      operationId: '${context.camelCase}.list',
+      tags: ['${context.kebabCase}'],
+    })
+    .output(apiContract.haiResultSchema(z.object({
+      items: z.array(z.object({
+        name: z.string(),
+      })),
+    }))),
   create: apiContract
-    .route({ method: 'POST', path: '/${context.kebabCase}', operationId: '${context.camelCase}.create', tags: ['${context.kebabCase}'] })
-    .input(z.object({ name: z.string().min(1) }))
-    .output(apiContract.haiResultSchema(z.object({ name: z.string() }))),
+    .route({
+      method: 'POST',
+      path: '/${context.kebabCase}',
+      operationId: '${context.camelCase}.create',
+      tags: ['${context.kebabCase}'],
+    })
+    .input(z.object({
+      name: z.string().min(1),
+    }))
+    .output(apiContract.haiResultSchema(z.object({
+      name: z.string(),
+    }))),
 }
 `
   const procedureContent = `${domainMarker}
@@ -141,8 +162,20 @@ export function ${factoryName}() {
   return [
     { path: contractFile, content: contractContent },
     { path: procedureFile, content: procedureContent },
-    { path: aggregator.path, previousContent: aggregator.content, content: appendAt(appendAt(aggregator.content, '// @hai-generator:contracts:imports', importLine), '  // @hai-generator:contracts:entries', entryLine) },
-    { path: contractIndex, previousContent: indexSource, content: appendAt(indexSource, '// @hai-generator:contracts:exports', `export * from './${context.kebabCase}-contract.js'`) },
-    { path: procedureIndex, previousContent: procedureSource, content: appendAt(appendAt(procedureSource, '// @hai-generator:procedures:imports', factoryImport), '    // @hai-generator:procedures:entries', `    ${context.camelCase}: ${factoryName}(),`) },
+    {
+      path: aggregator.path,
+      previousContent: aggregator.content,
+      content: appendAt(appendAt(aggregator.content, '// @hai-generator:contracts:imports', importLine), '  // @hai-generator:contracts:entries', entryLine),
+    },
+    {
+      path: contractIndex,
+      previousContent: indexSource,
+      content: appendAt(indexSource, '// @hai-generator:contracts:exports', `export * from './${context.kebabCase}-contract.js'`),
+    },
+    {
+      path: procedureIndex,
+      previousContent: procedureSource,
+      content: appendAt(appendAt(procedureSource, '// @hai-generator:procedures:imports', factoryImport), '    // @hai-generator:procedures:entries', `    ${context.camelCase}: ${factoryName}(),`),
+    },
   ]
 }

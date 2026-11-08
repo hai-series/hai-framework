@@ -142,7 +142,10 @@ export const nativeAdapters: Record<string, ACPAgentAdapter> = {
         }
       }
       const patch = [
-        { id: 'llm-pi-ai', config: { providers } },
+        {
+          id: 'llm-pi-ai',
+          config: { providers },
+        },
         {
           id: 'acp',
           config: {
@@ -153,17 +156,23 @@ export const nativeAdapters: Record<string, ACPAgentAdapter> = {
       ]
       return {
         command:
-          agent.mode === 'custom-service' ? 'dsh' : (agent.command ?? 'dsh'),
+          agent.mode === 'custom-service'
+            ? 'dsh'
+            : (agent.command ?? 'dsh'),
         args: [
           // 自定义命令可能是 node + JS 入口，入口参数必须先于 dsh 的原生选项。
-          ...(agent.mode === 'custom-service' ? [] : (agent.args ?? [])),
+          ...(agent.mode === 'custom-service'
+            ? []
+            : (agent.args ?? [])),
           '--profile',
           'acp',
           '--patch',
           `${statePath}/hai-config.json`,
         ],
         env,
-        files: { 'hai-config.json': JSON.stringify(patch) },
+        files: {
+          'hai-config.json': JSON.stringify(patch),
+        },
       }
     },
   },
@@ -185,7 +194,9 @@ export const nativeAdapters: Record<string, ACPAgentAdapter> = {
           agent.mode === 'custom-service'
             ? 'codex-acp'
             : (agent.command ?? 'codex-acp'),
-        args: agent.mode === 'custom-service' ? [] : (agent.args ?? []),
+        args: agent.mode === 'custom-service'
+          ? []
+          : (agent.args ?? []),
         env: {
           CODEX_HOME: statePath,
           CODEX_API_KEY: model.apiKey!,

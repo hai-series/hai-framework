@@ -10,6 +10,8 @@ Built-in messages support `zh-CN`, `en-US` and `ja-JP`; the language selector of
 
 A cross-platform Svelte 5 Runes component library with DaisyUI v5 + Tailwind CSS v4 styling and Bits UI v2 headless interactions. Includes built-in i18n (zh-CN / en-US / ja-JP) and 15 curated DaisyUI themes plus high contrast, square business and eye-care themes.
 
+
+HTTP/UI boundaries expose business messages only for explicit valid 4xx statuses. Missing or invalid `httpStatus` is treated as 500 with a safe message. Custom business errors must carry a complete error definition or an explicit status.
 ## Core features
 
 - Forms, tables, dialogs, navigation, charts and application components.
@@ -30,48 +32,45 @@ For a Node server, declare both UI and core as production dependencies so the ad
 
 ### Quick start
 
-#### 1. Configure svelte.config.js
+#### 1. Configure application imports in package.json
 
-```js
-import { autoImportHaiUi } from '@h-ai/ui/auto-import'
-import adapter from '@sveltejs/adapter-node'
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
-
-/** @type {import('@sveltejs/kit').Config} */
-const config = {
-  preprocess: [autoImportHaiUi(), vitePreprocess()],
-  compilerOptions: { runes: true },
-  kit: { adapter: adapter() },
-}
-
-export default config
+```json
+{ "imports": { "#lib/*": "./src/lib/*" } }
 ```
 
 #### 2. Configure vite.config.ts
 
+SvelteKit 3 configures preprocessing, the compiler and the adapter in the Vite plugin; only a plain Svelte/Vite project keeps svelte.config.js.
+
+Run `vitePreprocess()` or other style/template language transforms before `autoImportHaiUi()`. Auto-import reads the complete Svelte AST and does not accept unprocessed SCSS, Pug or other nonstandard syntax. Its direct markup API remains synchronous.
+
 ```ts
+import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
+import adapter from '@sveltejs/adapter-node'
 import { sveltekit } from '@sveltejs/kit/vite'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [sveltekit(), tailwindcss()],
-  optimizeDeps: {
-    // bits-ui 含 .svelte 源码须 exclude；@internationalized/date 须与 bits-ui 同为原始副本，
-    // 否则日期组件会因双实例 instanceof 失败抛 "Unknown date type"
-    exclude: [...haiOptimizeExclude],
-    // 预打包 @h-ai/ui 的重型纯 JS 依赖（语法高亮 / Mermaid / PDF 等），
-    // 避免首次进入业务路由时触发依赖再优化与整页刷新
-    include: [...haiPrebundledDeps],
-  },
+  plugins: [
+    sveltekit({
+      preprocess: [vitePreprocess(), autoImportHaiUi()],
+      compilerOptions: { runes: true },
+      adapter: adapter(),
+      paths: { relative: false },
+    }),
+    tailwindcss(),
+  ],
+  optimizeDeps: { exclude: [...haiOptimizeExclude], include: [...haiPrebundledDeps] },
   ssr: { noExternal: ['@h-ai/ui', '@h-ai/kit'], external: ['@h-ai/core', 'sm-crypto'] },
 })
 ```
 
-When using Crypto or Kit/IAM, include `sm-crypto@0.5.7` in application production dependencies. CLI projects already do this; for manual setup, run `pnpm add sm-crypto@0.5.7`. The external option alone is insufficient: adapter-node also uses direct production dependencies to preserve native package loading.
-
 #### 3. Configure src/app.css
+
+When using Crypto or Kit/IAM, include `sm-crypto@0.5.8` in application production dependencies. CLI projects already do this; for manual setup, run `pnpm add sm-crypto@0.5.8`. The external option alone is insufficient: adapter-node also uses direct production dependencies to preserve native package loading.
 
 ```css
 @import 'tailwindcss';
@@ -116,7 +115,7 @@ With auto-import enabled, use components directly in templates without individua
 
 Pages using a subset of components, such as administration screens, can import public component-directory entry points directly. Import theme utilities from the lightweight `@h-ai/ui/theme` entry so theme consumers do not load the root entry's AI and chart components. Use `@h-ai/ui/i18n` for locale utilities in stores without loading components or tour CSS. Check the installed package's exports; do not import its internal `src/` or `dist/` paths.
 
-The preprocessor recognizes semicolon-free, multiline and aliased imports without injecting components already bound locally. Type-only imports do not replace runtime components.
+The preprocessor uses the syntax tree to recognize real semicolon-free, multiline and aliased imports, preserving examples in strings and comments and existing runtime bindings. Type-only component bindings from the root `@h-ai/ui` entry are promoted to values when needed. A conflicting type-only import from another module causes a build error naming the file and component; alias the type, or explicitly import the component under another local name.
 
 ```ts
 import { Card } from '@h-ai/ui/components/compounds/index'
@@ -211,6 +210,8 @@ Text controls validate on blur after input and update errors as input is correct
 
 `UserProfile.fieldConstraints` accepts per-field `required`, `minlength`, `maxlength`, `pattern` and `validationMessage` (`pattern` applies to single-line inputs), so application rules such as username formats share blur validation. `validationMessage` also accepts a deferred translation function.
 
+`UserProfile.onsubmit` must return `true` to confirm a successful save, or `false` to keep the editor and draft. Thrown errors also keep editing open and use the shared Toast feedback. Cancel restores the saved values from `user`.
+
 `CrudEditPanel.onsubmit` receives only writable fields declared by the form. Fields marked `readonly` are omitted when editing and remain available when creating. Primary keys, related display values and audit timestamps are not copied from the entire row. Null values, `false` and `0` are preserved. Keep strict schema validation on the server.
 
 `LoginForm`, `RegisterForm`, `ChangePasswordForm`, `ForgotPasswordForm`, `ResetPasswordForm`, `AuthPanel`, `UserProfile` and `FeedbackModal` accept the same layout options. Pass them through `CrudPage.form` or directly to `CrudEditPanel`. CRUD fields support `colSpan` and deferred `validation.message`. Buttons and Enter both validate before submission; corrections clear errors. Server validation remains required.
@@ -245,6 +246,8 @@ Text controls validate on blur after input and update errors as input is correct
 | `Popover` | Popover             | `open`, `position`, `trigger`, `offset`, `portal`                            |
 
 `Popover` renders in `body` by default. In `click` mode, Enter or Space opens the panel and moves focus into it. Escape closes the panel and returns focus to the trigger. Use `portal={false}` to render inline.
+
+Inside a Modal or Drawer, portal controls participate in the owning dialog's Tab and Shift+Tab order. Closing the Popover removes that registration and restores focus to its trigger.
 
 ##### Data display
 
@@ -811,7 +814,7 @@ Client locale state management, automatically synchronized with the `@h-ai/core`
 ```svelte
 <script>
   import { createLocaleStore, setGlobalLocale } from '@h-ai/ui/i18n'
-  import { setLocale } from '$lib/paraglide/runtime'
+  import { setLocale } from '#lib/paraglide/runtime.js'
 
   const localeStore = createLocaleStore()
 

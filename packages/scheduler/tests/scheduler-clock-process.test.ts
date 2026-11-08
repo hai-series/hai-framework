@@ -26,7 +26,9 @@ async function databaseNow(): Promise<number> {
   const type = reldb.config?.type
   const expression = type === 'postgresql'
     ? 'FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)'
-    : type === 'mysql' ? 'UNIX_TIMESTAMP(SYSDATE(3)) * 1000' : '(julianday(\'now\') - 2440587.5) * 86400000'
+    : type === 'mysql'
+      ? 'UNIX_TIMESTAMP(SYSDATE(3)) * 1000'
+      : '(julianday(\'now\') - 2440587.5) * 86400000'
   const result = await reldb.sql.get<{ now: number | string }>(`SELECT ${expression} AS now`)
   if (!result.success || !result.data)
     throw new Error('Database clock unavailable')
@@ -78,7 +80,19 @@ beforeAll(async () => {
   await mkdir(temporaryRoot, { recursive: true })
   directory = await mkdtemp(join(temporaryRoot, 'clock-process-'))
   // 只将真实内部仓库作为定向测试入口打包，生产 package.exports 不增加测试后门。
-  await build({ config: false, entry: { 'clock-node': join(root, 'tests/fixtures/scheduler-clock-node.ts') }, outDir: directory, format: ['esm'], target: 'node22', dts: false, clean: false, silent: true, external: ['@h-ai/core', '@h-ai/reldb'] })
+  await build({
+    config: false,
+    entry: {
+      'clock-node': join(root, 'tests/fixtures/scheduler-clock-node.ts'),
+    },
+    outDir: directory,
+    format: ['esm'],
+    target: 'node22',
+    dts: false,
+    clean: false,
+    silent: true,
+    external: ['@h-ai/core', '@h-ai/reldb'],
+  })
 }, 60000)
 
 afterAll(async () => {
@@ -90,7 +104,7 @@ afterAll(async () => {
 })
 
 for (const backend of ['sqlite', 'postgresql', 'mysql'] as const) {
-  describe.sequential(`${backend} real clock fencing`, () => {
+  describe(`${backend} real clock fencing`, { concurrent: false }, () => {
     let config: ReldbConfigInput
     let release: (() => Promise<void>) | undefined
     let a: ChildProcess
@@ -98,15 +112,33 @@ for (const backend of ['sqlite', 'postgresql', 'mysql'] as const) {
     const task = { id: `clock-${backend}`, name: 'Clock test', cron: '* * * * *' }
 
     beforeAll(async () => {
-      const env = backend === 'sqlite' ? undefined : await (backend === 'mysql' ? mysqlEnv() : postgresEnv())
-      config = env?.config ?? { type: 'sqlite', database: join(directory, `${backend}.sqlite`) }
+      const env = backend === 'sqlite'
+        ? undefined
+        : await (backend === 'mysql'
+            ? mysqlEnv()
+            : postgresEnv())
+      config = env?.config ?? {
+        type: 'sqlite',
+        database: join(directory, `${backend}.sqlite`),
+      }
       release = env?.release
       expect((await reldb.init(config)).success).toBe(true)
       expect((await reldb.ddl.dropTable('hai_scheduler_executions', true)).success).toBe(true)
       const children: ChildProcess[] = []
       try {
         for (let index = 0; index < 2; index++) {
-          const child = fork(join(directory, 'clock-node.js'), [], { windowsHide: true, execArgv: [], stdio: ['ignore', 'ignore', 'inherit', 'ipc'], env: { ...process.env, NODE_ENV: 'test', TZ: index === 0 ? 'Pacific/Honolulu' : 'Asia/Tokyo' } })
+          const child = fork(join(directory, 'clock-node.js'), [], {
+            windowsHide: true,
+            execArgv: [],
+            stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
+            env: {
+              ...process.env,
+              NODE_ENV: 'test',
+              TZ: index === 0
+                ? 'Pacific/Honolulu'
+                : 'Asia/Tokyo',
+            },
+          })
           children.push(child)
           expect(await call(child, 'init', { config })).toMatchObject({ success: true })
         }
@@ -164,7 +196,10 @@ for (const backend of ['sqlite', 'postgresql', 'mysql'] as const) {
       expect(await call(a, 'renew', { receipt })).toMatchObject({ success: false })
       expect(await call(a, 'finish', { receipt })).toMatchObject({ success: false })
       expect(await call(b, 'isolate', { row: claimed.data })).toMatchObject({ success: true })
-      expect(await call(b, 'get', { receipt })).toMatchObject({ success: true, data: { status: 'unknown' } })
+      expect(await call(b, 'get', { receipt })).toMatchObject({
+        success: true,
+        data: { status: 'unknown' },
+      })
     })
 
     it('expired claimed owner is replaced by the fast-clock node and the old handle stays fenced', async () => {
@@ -210,9 +245,12 @@ for (const backend of ['sqlite', 'postgresql', 'mysql'] as const) {
         return undefined
       })
       try {
-        await Promise.race([ready, transaction.then(() => {
-          throw new Error('Lock transaction ended before the hold was released')
-        })])
+        await Promise.race([
+          ready,
+          transaction.then(() => {
+            throw new Error('Lock transaction ended before the hold was released')
+          }),
+        ])
         let requested!: () => void
         const attempted = new Promise<void>((resolveAttempt) => {
           requested = resolveAttempt
@@ -228,7 +266,10 @@ for (const backend of ['sqlite', 'postgresql', 'mysql'] as const) {
         unlock()
         await transaction
       }
-      expect(await call(b, 'get', { receipt })).toMatchObject({ success: true, data: { status: 'running', logPersistence: 'unconfirmed' } })
+      expect(await call(b, 'get', { receipt })).toMatchObject({
+        success: true,
+        data: { status: 'running', logPersistence: 'unconfirmed' },
+      })
     })
 
     it('public cron uses one DB minute and UTC across opposite clocks and different process TZ', async () => {
@@ -254,13 +295,23 @@ for (const backend of ['sqlite', 'postgresql', 'mysql'] as const) {
           if (!found.success)
             throw new Error(found.error.message)
           return found.data
-        }).toEqual([{ receipt: expected, call_count: 1 }])
+        }).toEqual([
+          { receipt: expected, call_count: 1 },
+        ])
         await delay(300)
         const result = await reldb.sql.query<{ receipt: string, call_count: number }>('SELECT receipt, call_count FROM scheduler_clock_effects')
-        expect(result).toMatchObject({ success: true, data: [{ receipt: expected, call_count: 1 }] })
+        expect(result).toMatchObject({
+          success: true,
+          data: [
+            { receipt: expected, call_count: 1 },
+          ],
+        })
       }
       finally {
-        await Promise.all([call(a, 'stop'), call(b, 'stop')])
+        await Promise.all([
+          call(a, 'stop'),
+          call(b, 'stop'),
+        ])
       }
     })
   })

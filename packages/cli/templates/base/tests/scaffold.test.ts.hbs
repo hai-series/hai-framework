@@ -39,7 +39,6 @@ describe('generated scaffold', () => {
     expect(pkg.scripts.test).toBeDefined()
     expect(pkg.scripts['test:e2e']).toBeDefined()
   })
-
 {{#if isSvelteOnlyApp}}
   it('renders the Vite app shell entry', async () => {
     const indexHtml = await readFile(join(rootDir, 'index.html'), 'utf-8')
@@ -83,7 +82,12 @@ describe('generated scaffold', () => {
       expect(await load()).toEqual({
         kitConfig: { transport: getKitConfig().transport },
         iamPublicConfig: publicConfig.data,
-        appConfig: { name: config.name, version: config.version, env: config.env, defaultLocale: config.defaultLocale },
+        appConfig: {
+          name: config.name,
+          version: config.version,
+          env: config.env,
+          defaultLocale: config.defaultLocale,
+        },
       })
     }
     finally {
@@ -94,7 +98,12 @@ describe('generated scaffold', () => {
 {{else}}
     expect(await load()).toEqual({
       kitConfig: { transport: getKitConfig().transport },
-      appConfig: { name: config.name, version: config.version, env: config.env, defaultLocale: config.defaultLocale },
+      appConfig: {
+        name: config.name,
+        version: config.version,
+        env: config.env,
+        defaultLocale: config.defaultLocale,
+      },
     })
 {{/if}}
   })

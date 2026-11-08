@@ -11,13 +11,20 @@ import { createManagedSecretAssets } from '../src/container/deploy-managed-secre
 const { parseEnv } = core.config
 
 const roots: string[] = []
-const shell = process.platform === 'win32' ? 'C:/Program Files/Git/usr/bin/bash.exe' : '/bin/sh'
+const shell = process.platform === 'win32'
+  ? 'C:/Program Files/Git/usr/bin/bash.exe'
+  : '/bin/sh'
 
 afterEach(() => {
   for (const root of roots.splice(0)) {
     expect(dirname(resolve(root))).toBe(resolve(tmpdir()))
     expect(root).toContain('hai-managed-secrets-')
-    rmSync(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+    rmSync(root, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 100,
+    })
   }
 })
 
@@ -34,7 +41,15 @@ function fixture() {
     const directory = join(root, `computer-${sequence++}`)
     mkdirSync(directory)
     const native = `POSTGRES_PASSWORD=${password}\n`
-    const assets = createManagedSecretAssets('demo-test', native, { services: { db: { env_file: ['middleware-runtime.env'], volumes: ['db-data:/data'] } }, volumes: { 'db-data': null } })
+    const assets = createManagedSecretAssets('demo-test', native, {
+      services: {
+        db: {
+          env_file: ['middleware-runtime.env'],
+          volumes: ['db-data:/data'],
+        },
+      },
+      volumes: { 'db-data': null },
+    })
     mkdirSync(join(directory, '.hai'))
     mkdirSync(join(directory, 'config'))
     const metadata = Object.fromEntries(Object.entries(assets).filter(([name]) => !name.endsWith('.sh') && name !== 'managed-candidates.env'))
@@ -42,8 +57,22 @@ function fixture() {
     writeFileSync(join(directory, 'resolve-managed-secrets.sh'), assets['resolve-managed-secrets.sh']!)
     writeFileSync(join(directory, '.hai/managed-candidates.env'), assets['managed-candidates.env']!)
     writeFileSync(join(directory, '.hai/middleware-runtime.env'), native)
-    writeFileSync(join(directory, 'config/.env.runtime'), core.config.stringifyEnv({ HAI_DB_URL: `postgresql://hai:${password}@db:5432/hai`, HAI_DB_PASSWORD: password, HAI_ADMIN_DEFAULT_PASSWORD: password, CUSTOM_REFERENCE: password }))
-    const run = () => spawnSync(shell, [join(directory, 'resolve-managed-secrets.sh'), server, directory, runtime].map(value => value.replaceAll('\\', '/')), { encoding: 'utf8', windowsHide: true, env: { ...process.env, PATH: `${dirname(shell)}${delimiter}${process.env.PATH ?? ''}` } })
+    writeFileSync(join(directory, 'config/.env.runtime'), core.config.stringifyEnv({
+      HAI_DB_URL: `postgresql://hai:${password}@db:5432/hai`,
+      HAI_DB_PASSWORD: password,
+      HAI_ADMIN_DEFAULT_PASSWORD: password,
+      CUSTOM_REFERENCE: password,
+    }))
+    const run = () => spawnSync(shell, [
+      join(directory, 'resolve-managed-secrets.sh'),
+      server,
+      directory,
+      runtime,
+    ].map(value => value.replaceAll('\\', '/')), {
+      encoding: 'utf8',
+      windowsHide: true,
+      env: { ...process.env, PATH: `${dirname(shell)}${delimiter}${process.env.PATH ?? ''}` },
+    })
     return { directory, run }
   }
   return { root, server, bundle }
@@ -104,18 +133,39 @@ it('声明实际原生凭据、应用范围和卷身份，不把外部配置加�
   const password = 'F'.repeat(32)
   const assets = createManagedSecretAssets('demo-test', `MYSQL_PASSWORD=${password}\nMYSQL_ROOT_PASSWORD=${password}\nPOSTGRES_PASSWORD=${password}\nMINIO_ROOT_PASSWORD=${password}\nLDAP_ADMIN_PASSWORD=${password}\n`, {
     services: {
-      db: { env_file: ['middleware-runtime.env'], volumes: ['db-data:/data'] },
-      vecdb: { env_file: ['middleware-runtime.env'], volumes: ['vector-data:/data'] },
-      storage: { env_file: ['middleware-runtime.env'], volumes: ['storage-data:/data'] },
-      ldap: { env_file: ['middleware-runtime.env'], volumes: ['ldap-data:/data'] },
+      db: {
+        env_file: ['middleware-runtime.env'],
+        volumes: ['db-data:/data'],
+      },
+      vecdb: {
+        env_file: ['middleware-runtime.env'],
+        volumes: ['vector-data:/data'],
+      },
+      storage: {
+        env_file: ['middleware-runtime.env'],
+        volumes: ['storage-data:/data'],
+      },
+      ldap: {
+        env_file: ['middleware-runtime.env'],
+        volumes: ['ldap-data:/data'],
+      },
     },
-    volumes: { 'db-data': null, 'vector-data': { name: 'explicit-vector-volume' }, 'storage-data': { external: true }, 'ldap-data': null },
+    volumes: {
+      'db-data': null,
+      'vector-data': { name: 'explicit-vector-volume' },
+      'storage-data': { external: true },
+      'ldap-data': null,
+    },
   })
   expect(Object.keys(parseEnv(assets['managed-candidates.env']!)).sort()).toEqual(['DB_PASSWORD', 'LDAP_PASSWORD', 'STORAGE_PASSWORD'])
   expect(assets['managed-bindings']).toContain('DB_PASSWORD HAI_VECDB prefix')
   expect(assets['managed-bindings']).toContain('LDAP_PASSWORD HAI_IAM_LDAP prefix')
   expect(assets['managed-volumes']).toBe('DB_PASSWORD hai-demo-test_db-data\nDB_PASSWORD explicit-vector-volume\nSTORAGE_PASSWORD storage-data\nLDAP_PASSWORD hai-demo-test_ldap-data\n')
-  const external = createManagedSecretAssets('demo-test', `POSTGRES_PASSWORD=${password}\n`, { services: { db: { image: 'external-only' } } })
+  const external = createManagedSecretAssets('demo-test', `POSTGRES_PASSWORD=${password}\n`, {
+    services: {
+      db: { image: 'external-only' },
+    },
+  })
   expect(external['managed-bindings']).not.toContain('HAI_DB')
   expect(external['managed-volumes']).toBe('')
 })

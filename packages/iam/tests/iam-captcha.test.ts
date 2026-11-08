@@ -26,7 +26,10 @@ function tests() {
     const iam = await initIam()
     const username = `off-${crypto.randomUUID()}`
     expect((await iam.user.createUser({ username, password: TEST_PASSWORD })).success).toBe(true)
-    expect(await iam.auth.createCaptcha({ operation: 'login' })).toMatchObject({ success: false, error: { code: 'hai:iam:032' } })
+    expect(await iam.auth.createCaptcha({ operation: 'login' })).toMatchObject({
+      success: false,
+      error: { code: 'hai:iam:032' },
+    })
     expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).success).toBe(true)
     expect(iam.publicConfig?.captcha).toEqual({ enabled: false })
   })
@@ -34,7 +37,10 @@ function tests() {
   it('启用后服务端要求有效证明；正确求解可登录，秘密不进入公开配置/挑战', async () => {
     const { iam, username } = await createUser()
     expect(iam.publicConfig?.captcha).toEqual({ enabled: true })
-    expect(await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).toMatchObject({ success: false, error: { code: 'hai:iam:030' } })
+    expect(await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).toMatchObject({
+      success: false,
+      error: { code: 'hai:iam:030' },
+    })
     const created = await iam.auth.createCaptcha({ operation: 'login' })
     expect(created.success).toBe(true)
     if (created.success) {
@@ -43,7 +49,10 @@ function tests() {
     }
     const valid = await proof(iam)
     expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD, captcha: valid })).success).toBe(true)
-    expect(await iam.auth.login({ identifier: username, password: TEST_PASSWORD, captcha: valid })).toMatchObject({ success: false, error: { code: 'hai:iam:031' } })
+    expect(await iam.auth.login({ identifier: username, password: TEST_PASSWORD, captcha: valid })).toMatchObject({
+      success: false,
+      error: { code: 'hai:iam:031' },
+    })
   })
 
   it('并发共享同一证明只允许一次鉴别尝试，密码错误也不能重用已消费挑战', async () => {
@@ -53,30 +62,49 @@ function tests() {
     expect(results.filter(result => result.success)).toHaveLength(1)
     const next = await proof(iam)
     expect((await iam.auth.login({ identifier: username, password: 'WrongPassword123', captcha: next })).success).toBe(false)
-    expect(await iam.auth.login({ identifier: username, password: TEST_PASSWORD, captcha: next })).toMatchObject({ success: false, error: { code: 'hai:iam:031' } })
+    expect(await iam.auth.login({ identifier: username, password: TEST_PASSWORD, captcha: next })).toMatchObject({
+      success: false,
+      error: { code: 'hai:iam:031' },
+    })
   })
 
   it('用途、解答篡改和输入边界不绕过检查，不提前消耗合法证明', async () => {
     const { iam, username } = await createUser()
     const wrongPurpose = await proof(iam, 'register')
-    expect(await iam.auth.login({ identifier: username, password: TEST_PASSWORD, captcha: wrongPurpose })).toMatchObject({ success: false, error: { code: 'hai:iam:031' } })
+    expect(await iam.auth.login({ identifier: username, password: TEST_PASSWORD, captcha: wrongPurpose })).toMatchObject({
+      success: false,
+      error: { code: 'hai:iam:031' },
+    })
     const valid = await proof(iam)
     const parsed = JSON.parse(valid)
     parsed.solution.derivedKey = '00'.repeat(32)
-    expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD, captcha: JSON.stringify(parsed) })).success).toBe(false)
+    expect((await iam.auth.login({
+      identifier: username,
+      password: TEST_PASSWORD,
+      captcha: JSON.stringify(parsed),
+    })).success).toBe(false)
     expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD, captcha: valid })).success).toBe(true)
-    for (const malformed of ['not-json', '{}', 'x'.repeat(10000)])
+    for (const malformed of [
+      'not-json',
+      '{}',
+      'x'.repeat(10000),
+    ])
       expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD, captcha: malformed })).success).toBe(false)
     expect((await iam.auth.createCaptcha({ operation: 'other' } as never)).success).toBe(false)
   })
 
   it('缓存有效期到达后拒绝证明，不能通过重初始化延长它', async () => {
     const { iam, username } = await createUser()
-    await initIam({ captcha: { ...captcha, ttlSeconds: 1 } })
+    await initIam({
+      captcha: { ...captcha, ttlSeconds: 1 },
+    })
     const valid = await proof(iam)
     await initIam({ captcha })
     await setTimeout(1100)
-    expect(await iam.auth.login({ identifier: username, password: TEST_PASSWORD, captcha: valid })).toMatchObject({ success: false, error: { code: 'hai:iam:031' } })
+    expect(await iam.auth.login({ identifier: username, password: TEST_PASSWORD, captcha: valid })).toMatchObject({
+      success: false,
+      error: { code: 'hai:iam:031' },
+    })
   })
 
   it('oTP/LDAP、注册、通知请求和匿名原密码续期均在各服务端入口执行证明检查', async () => {
@@ -90,19 +118,34 @@ function tests() {
       iam.user.requestPasswordReset('alice@example.com'),
       iam.user.renewPassword({ identifier: username, password: TEST_PASSWORD, newPassword: 'NewPassword123!' }),
     ]
-    for (const result of await Promise.all(calls))
-      expect(result).toMatchObject({ success: false, error: { code: 'hai:iam:030' } })
-    expect((await iam.user.renewPassword({ identifier: username, password: TEST_PASSWORD, newPassword: 'NewPassword123!', captcha: await proof(iam, 'renewPassword') })).success).toBe(true)
+    for (const result of await Promise.all(calls)) {
+      expect(result).toMatchObject({
+        success: false,
+        error: { code: 'hai:iam:030' },
+      })
+    }
+    expect((await iam.user.renewPassword({
+      identifier: username,
+      password: TEST_PASSWORD,
+      newPassword: 'NewPassword123!',
+      captcha: await proof(iam, 'renewPassword'),
+    })).success).toBe(true)
     expect((await iam.auth.registerAndLogin({ username: `proved-${crypto.randomUUID()}`, password: TEST_PASSWORD, captcha: await proof(iam, 'register') })).success).toBe(true)
   })
   it('通知请求保留证明，OTP 完成登录使用另一个单用证明', async () => {
     let otp = ''
     let resets = 0
-    const iam = await initIam({ captcha, login: { otp: true }, otp: { email: true }, onOtpSendEmail: async (_email, code) => {
-      otp = code
-    }, onPasswordResetRequest: async () => {
-      resets++
-    } })
+    const iam = await initIam({
+      captcha,
+      login: { otp: true },
+      otp: { email: true },
+      onOtpSendEmail: async (_email, code) => {
+        otp = code
+      },
+      onPasswordResetRequest: async () => {
+        resets++
+      },
+    })
     const email = `captcha-${crypto.randomUUID()}@example.invalid`
     expect((await iam.user.createUser({ username: `notify-${crypto.randomUUID()}`, password: TEST_PASSWORD, email })).success).toBe(true)
     expect((await iam.auth.sendOtp(email, { captcha: await proof(iam, 'sendOtp') })).success).toBe(true)
@@ -113,7 +156,10 @@ function tests() {
   })
 
   it('aPI Key 机器鉴别保持原有授权语义，不要求交互证明', async () => {
-    const iam = await initIam({ captcha, login: { apikey: true } })
+    const iam = await initIam({
+      captcha,
+      login: { apikey: true },
+    })
     const user = await iam.user.createUser({ username: `machine-${crypto.randomUUID()}`, password: TEST_PASSWORD })
     if (!user.success)
       throw new Error(user.error.message)

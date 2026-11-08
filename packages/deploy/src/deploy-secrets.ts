@@ -3,13 +3,14 @@ import type { HaiResult } from '@h-ai/core'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs'
+import { existsSync, lstatSync, realpathSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { err, ok } from '@h-ai/core'
 import { z } from 'zod'
 import { runCommand } from './container/deploy-command.js'
 import { deployM } from './deploy-i18n.js'
+import { readLocalFile } from './deploy-local-file.js'
 import { HaiDeployError } from './deploy-types.js'
 
 const nameSchema = z.string().regex(/^[a-z0-9][\w.-]{0,127}$/i)
@@ -17,7 +18,11 @@ const passwordSchema = z.string().min(1).max(1024).refine(value => Buffer.from(v
 const importSchema = z.strictObject({
   version: z.literal(1),
   projectName: nameSchema,
-  credentials: z.strictObject({ DB_PASSWORD: passwordSchema.optional(), STORAGE_PASSWORD: passwordSchema.optional(), LDAP_PASSWORD: passwordSchema.optional() }),
+  credentials: z.strictObject({
+    DB_PASSWORD: passwordSchema.optional(),
+    STORAGE_PASSWORD: passwordSchema.optional(),
+    LDAP_PASSWORD: passwordSchema.optional(),
+  }),
   services: z.array(z.strictObject({
     service: z.enum(['db', 'vecdb', 'storage', 'ldap']),
     container: nameSchema,
@@ -31,7 +36,12 @@ const importSchema = z.strictObject({
     bindDn: z.string().min(1).max(512).default('cn=admin,dc=example,dc=org'),
   })).min(1).max(4),
 })
-const groups = { db: 'DB_PASSWORD', vecdb: 'DB_PASSWORD', storage: 'STORAGE_PASSWORD', ldap: 'LDAP_PASSWORD' } as const
+const groups = {
+  db: 'DB_PASSWORD',
+  vecdb: 'DB_PASSWORD',
+  storage: 'STORAGE_PASSWORD',
+  ldap: 'LDAP_PASSWORD',
+} as const
 
 /** 独立持锁进程只接受完整状态，原子发布并同步目录；中断时留下的私有 next 文件不被后续导入信任。 */
 const importCommitScript = String.raw`(async()=>{const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');const root=process.argv[1];let temporary;
@@ -90,11 +100,24 @@ export async function importDeploymentSecrets(options: {
       throw new Error('input')
     const input = privateFile(resolve(options.inputFile))
     const parsed = importSchema.safeParse(JSON.parse(input))
-    if (!parsed.success)
-      return err({ ...HaiDeployError.CONFIG_ERROR, message: deployM('deploy_secretImportFailed', { params: { phase } }), ext: { phase, state: 'unchanged', fields: parsed.error.issues.map(issue => issue.path.join('.')) } })
+    if (!parsed.success) {
+      return err({
+        ...HaiDeployError.CONFIG_ERROR,
+        message: deployM('deploy_secretImportFailed', {
+          params: { phase },
+        }),
+        ext: {
+          phase,
+          state: 'unchanged',
+          fields: parsed.error.issues.map(issue => issue.path.join('.')),
+        },
+      })
+    }
     const config = parsed.data
     const project = `hai-${config.projectName}`
-    const selectedGroups = [...new Set(config.services.map(service => groups[service.service]))].sort()
+    const selectedGroups = [
+      ...new Set(config.services.map(service => groups[service.service])),
+    ].sort()
     if (new Set(config.services.map(service => service.service)).size !== config.services.length
       || Object.keys(config.credentials).some(group => !selectedGroups.includes(group as typeof selectedGroups[number]))
       || selectedGroups.some(group => !config.credentials[group])) {
@@ -114,7 +137,11 @@ export async function importDeploymentSecrets(options: {
     phase = 'identity'
     const volumes: Array<{ group: string, name: string }> = []
     for (const service of config.services) {
-      const kindValid = service.service === 'storage' ? service.kind === 's3' : service.service === 'ldap' ? service.kind === 'ldap' : ['postgresql', 'mysql'].includes(service.kind)
+      const kindValid = service.service === 'storage'
+        ? service.kind === 's3'
+        : service.service === 'ldap'
+          ? service.kind === 'ldap'
+          : ['postgresql', 'mysql'].includes(service.kind)
       if (!kindValid)
         throw new Error('identity')
       // 受管 sidecar 固定账户/库/桶身份；不能只导入密码后让后续部署悄悄切换身份。
@@ -139,27 +166,97 @@ export async function importDeploymentSecrets(options: {
         const application = await inspectContainer(options.runtime, helper, secrets)
         if (application.project !== project || application.service !== 'app' || !application.running || !application.networks.some(network => identity.networks.includes(network)))
           throw new Error('identity')
-        const result = await runCommand(options.runtime, ['exec', '-i', helper, 'node', '-e', s3VerificationScript], { input: JSON.stringify({ endpoint: `http://${service.container}:9000`, bucket: service.bucket, accessKeyId: service.accessKeyId, secret: password, region: service.region }), secrets, timeoutMs: 15000, maxCaptureChars: 1024 })
+        const result = await runCommand(options.runtime, [
+          'exec',
+          '-i',
+          helper,
+          'node',
+          '-e',
+          s3VerificationScript,
+        ], {
+          input: JSON.stringify({
+            endpoint: `http://${service.container}:9000`,
+            bucket: service.bucket,
+            accessKeyId: service.accessKeyId,
+            secret: password,
+            region: service.region,
+          }),
+          secrets,
+          timeoutMs: 15000,
+          maxCaptureChars: 1024,
+        })
         verified = result.success && result.data.stdout.trim() === 'VERIFIED'
       }
       else {
         const args = service.kind === 'ldap'
-          ? ['exec', '-i', service.container, 'ldapwhoami', '-x', '-H', 'ldap://127.0.0.1:389', '-D', service.bindDn, '-y', '/dev/stdin']
-          : ['exec', '-i', service.container, 'sh', '-c', service.kind === 'postgresql'
-              ? 'IFS= read -r PGPASSWORD; export PGPASSWORD; exec psql --no-psqlrc -h "$3" -U "$1" -d "dbname=$2 require_auth=scram-sha-256,md5,password" -Atc "SELECT 1"'
-              : 'IFS= read -r MYSQL_PWD; export MYSQL_PWD; exec mysql -h 127.0.0.1 -u "$1" "$2" -Nse "SELECT 1"', 'hai-secret-check', service.username, service.database, service.container]
+          ? [
+              'exec',
+              '-i',
+              service.container,
+              'ldapwhoami',
+              '-x',
+              '-H',
+              'ldap://127.0.0.1:389',
+              '-D',
+              service.bindDn,
+              '-y',
+              '/dev/stdin',
+            ]
+          : [
+              'exec',
+              '-i',
+              service.container,
+              'sh',
+              '-c',
+              service.kind === 'postgresql'
+                ? 'IFS= read -r PGPASSWORD; export PGPASSWORD; exec psql --no-psqlrc -h "$3" -U "$1" -d "dbname=$2 require_auth=scram-sha-256,md5,password" -Atc "SELECT 1"'
+                : 'IFS= read -r MYSQL_PWD; export MYSQL_PWD; exec mysql -h 127.0.0.1 -u "$1" "$2" -Nse "SELECT 1"',
+              'hai-secret-check',
+              service.username,
+              service.database,
+              service.container,
+            ]
         // LDAP -y 按文件字节读取密码，不能附加 shell read 使用的行尾。
-        const result = await runCommand(options.runtime, args, { input: service.kind === 'ldap' ? password : `${password}\n`, secrets, timeoutMs: 15000, maxCaptureChars: 1024 })
-        verified = result.success && !result.data.stdoutTruncated && (service.kind === 'ldap' ? result.data.stdout.trim().startsWith('dn:') : result.data.stdout.trim() === '1')
+        const result = await runCommand(options.runtime, args, {
+          input: service.kind === 'ldap'
+            ? password
+            : `${password}\n`,
+          secrets,
+          timeoutMs: 15000,
+          maxCaptureChars: 1024,
+        })
+        verified = result.success && !result.data.stdoutTruncated && (service.kind === 'ldap'
+          ? result.data.stdout.trim().startsWith('dn:')
+          : result.data.stdout.trim() === '1')
         if (verified && service.kind === 'mysql') {
-          const rootCheck = await runCommand(options.runtime, [...args.slice(0, -3), 'root', service.database, service.container], { input: `${password}\n`, secrets, timeoutMs: 15000, maxCaptureChars: 1024 })
+          const rootCheck = await runCommand(options.runtime, [
+            ...args.slice(0, -3),
+            'root',
+            service.database,
+            service.container,
+          ], {
+            input: `${password}\n`,
+            secrets,
+            timeoutMs: 15000,
+            maxCaptureChars: 1024,
+          })
           verified = rootCheck.success && !rootCheck.data.stdoutTruncated && rootCheck.data.stdout.trim() === '1'
           // MySQL 的各版本不统一暴露 skip_grant_tables；实际错误密码必须收到认证拒绝。
           const invalidPassword = `hai-import-invalid-${randomUUID()}`
           for (const username of [service.username, 'root']) {
             if (!verified)
               break
-            const negative = await runCommand(options.runtime, [...args.slice(0, -3), username, service.database, service.container], { input: `${invalidPassword}\n`, secrets: [...secrets, invalidPassword], timeoutMs: 15000, maxCaptureChars: 1024 })
+            const negative = await runCommand(options.runtime, [
+              ...args.slice(0, -3),
+              username,
+              service.database,
+              service.container,
+            ], {
+              input: `${invalidPassword}\n`,
+              secrets: [...secrets, invalidPassword],
+              timeoutMs: 15000,
+              maxCaptureChars: 1024,
+            })
             verified = !negative.success && /ERROR 1045 \(28000\)/.test(negative.error.message)
           }
         }
@@ -169,8 +266,15 @@ export async function importDeploymentSecrets(options: {
       phase = 'identity'
     }
     phase = 'state'
-    const uniqueVolumes = [...new Map(volumes.map(volume => [`${volume.group}:${volume.name}`, volume])).values()].sort((a, b) => `${a.group}:${a.name}`.localeCompare(`${b.group}:${b.name}`))
-    const lines = ['FORMAT_VERSION=2', `PROJECT=${project}`, ...selectedGroups.map(group => `${group}=${Buffer.from(config.credentials[group]!, 'utf8').toString('hex')}`), ...uniqueVolumes.map((volume, index) => `VOLUME_${index + 1}=${volume.group}:${volume.name}`)]
+    const uniqueVolumes = [
+      ...new Map(volumes.map(volume => [`${volume.group}:${volume.name}`, volume])).values(),
+    ].sort((a, b) => `${a.group}:${a.name}`.localeCompare(`${b.group}:${b.name}`))
+    const lines = [
+      'FORMAT_VERSION=2',
+      `PROJECT=${project}`,
+      ...selectedGroups.map(group => `${group}=${Buffer.from(config.credentials[group]!, 'utf8').toString('hex')}`),
+      ...uniqueVolumes.map((volume, index) => `VOLUME_${index + 1}=${volume.group}:${volume.name}`),
+    ]
     let changed = false
     if (existsSync(stateFile) || isSymbolicLink(stateFile)) {
       const existing = readImportedState(privateFile(stateFile))
@@ -183,10 +287,25 @@ export async function importDeploymentSecrets(options: {
         throw new Error('lock')
       changed = true
     }
-    return ok({ projectName: config.projectName, stateVersion: 2, groups: selectedGroups, volumes: uniqueVolumes.map(volume => volume.name), changed })
+    return ok({
+      projectName: config.projectName,
+      stateVersion: 2,
+      groups: selectedGroups,
+      volumes: uniqueVolumes.map(volume => volume.name),
+      changed,
+    })
   }
   catch {
-    return err({ ...HaiDeployError.CONFIG_ERROR, message: deployM('deploy_secretImportFailed', { params: { phase } }), ext: { phase, state: commitAttempted ? 'unknown' : 'unchanged' } })
+    return err({
+      ...HaiDeployError.CONFIG_ERROR,
+      message: deployM('deploy_secretImportFailed', {
+        params: { phase },
+      }),
+      ext: {
+        phase,
+        state: commitAttempted ? 'unknown' : 'unchanged',
+      },
+    })
   }
   finally {
     await lock?.release()
@@ -228,21 +347,28 @@ function isSymbolicLink(path: string): boolean {
 }
 
 function privateFile(path: string): string {
-  const stat = lstatSync(path)
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > 65536 || (process.platform !== 'win32' && ((stat.mode & 0o077) || (process.getuid?.() !== 0 && stat.uid !== process.getuid?.()))))
-    throw new Error('private-file')
-  return readFileSync(path, 'utf8')
+  return readLocalFile(path, { maxBytes: 65536, private: true }).toString('utf8')
 }
 
 async function inspectContainer(runtime: string, container: string, secrets: string[]) {
-  const result = await runCommand(runtime, ['inspect', '--format', '{{json .Config.Labels}}\n{{json .Mounts}}\n{{json .State.Running}}\n{{json .NetworkSettings.Networks}}', container], { secrets, timeoutMs: 10000, maxCaptureChars: 32768 })
+  const result = await runCommand(runtime, [
+    'inspect',
+    '--format',
+    '{{json .Config.Labels}}\n{{json .Mounts}}\n{{json .State.Running}}\n{{json .NetworkSettings.Networks}}',
+    container,
+  ], { secrets, timeoutMs: 10000, maxCaptureChars: 32768 })
   if (!result.success || result.data.stdoutTruncated)
     throw new Error('identity')
   const [labelsText, mountsText, runningText, networksText] = result.data.stdout.trim().split('\n')
   const labels = z.record(z.string(), z.string()).parse(JSON.parse(labelsText!))
-  const mounts = z.array(z.object({ Type: z.string(), Name: z.string().optional() })).parse(JSON.parse(mountsText!))
+  const mounts = z.array(z.object({
+    Type: z.string(),
+    Name: z.string().optional(),
+  })).parse(JSON.parse(mountsText!))
   // Podman 的默认 pasta/slirp 网络可返回 null；原生 DB/LDAP 验证不要求命名网络。
-  const networks = z.record(z.string(), z.object({ NetworkID: z.string() })).parse(JSON.parse(networksText!) ?? {})
+  const networks = z.record(z.string(), z.object({
+    NetworkID: z.string(),
+  })).parse(JSON.parse(networksText!) ?? {})
   // 每种已声明的标准标签必须完整，两个命名空间同时声明时保持一致，禁止混拼身份。
   const dockerProject = labels['com.docker.compose.project'] || undefined
   const podmanProject = labels['io.podman.compose.project'] || undefined
@@ -252,14 +378,32 @@ async function inspectContainer(runtime: string, container: string, secrets: str
     || (dockerProject && podmanProject && dockerProject !== podmanProject) || (dockerService && podmanService && dockerService !== podmanService)) {
     throw new Error('identity')
   }
-  return { project: dockerProject ?? podmanProject, service: dockerService ?? podmanService, running: runningText === 'true', volumes: mounts.flatMap(mount => mount.Type === 'volume' && mount.Name ? [mount.Name] : []), networks: Object.values(networks).map(network => network.NetworkID) }
+  return {
+    project: dockerProject ?? podmanProject,
+    service: dockerService ?? podmanService,
+    running: runningText === 'true',
+    volumes: mounts.flatMap(mount => mount.Type === 'volume' && mount.Name
+      ? [mount.Name]
+      : []),
+    networks: Object.values(networks).map(network => network.NetworkID),
+  }
 }
 
 /** flock 子进程持有同一个固定锁文件；父进程消失后 stdin 关闭，自然释放锁。 */
 async function acquireImportLock(path: string, root: string): Promise<{ commit: (content: string) => Promise<boolean>, release: () => Promise<void> }> {
   return new Promise((resolveLock, reject) => {
     // 最终写入也由持锁进程完成；锁 helper 意外退出时父进程无法越过锁提交。
-    const child = spawn('flock', ['-n', path, process.execPath, '-e', importCommitScript, root], { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true })
+    const child = spawn('flock', [
+      '-n',
+      path,
+      process.execPath,
+      '-e',
+      importCommitScript,
+      root,
+    ], {
+      stdio: ['pipe', 'pipe', 'ignore'],
+      windowsHide: true,
+    })
     let acquired = false
     let exited = false
     let output = ''

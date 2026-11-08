@@ -7,7 +7,7 @@ export const load: LayoutServerLoad = async () => {
   const publicConfig = await iam.getPublicConfig()
   if (!publicConfig.success) {
     core.logger.error('Failed to load public authentication configuration', { error: publicConfig.error })
-    error(503, { message: core.error.toPublic(publicConfig.error).message })
+    error(503, core.error.toPublic(publicConfig.error).message)
   }
   return { iamPublicConfig: publicConfig.data }
 }

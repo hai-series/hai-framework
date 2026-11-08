@@ -93,7 +93,9 @@
       return
     swiping = false
     // 超过一半则展开，否则收回
-    offsetX = offsetX > totalActionWidth / 2 ? totalActionWidth : 0
+    offsetX = offsetX > totalActionWidth / 2
+      ? totalActionWidth
+      : 0
   }
 
   function handleAction(id: string) {

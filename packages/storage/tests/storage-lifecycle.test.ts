@@ -8,7 +8,14 @@ import { storage } from '../src/index.js'
 const root = mkdtempSync(join(tmpdir(), 'hai-lifecycle-'))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
-const faults = vi.hoisted(() => ({ connect: 0, close: 0, allocated: 0, closed: 0, healthStarted: false, wait: null as Promise<void> | null }))
+const faults = vi.hoisted(() => ({
+  connect: 0,
+  close: 0,
+  allocated: 0,
+  closed: 0,
+  healthStarted: false,
+  wait: null as Promise<void> | null,
+}))
 
 vi.mock('../src/providers/storage-provider-local.js', async (importOriginal) => {
   const original = await importOriginal<typeof import('../src/providers/storage-provider-local.js')>()
@@ -41,10 +48,17 @@ vi.mock('../src/providers/storage-provider-local.js', async (importOriginal) => 
 afterEach(async () => {
   faults.close = 0
   await storage.close()
-  Object.assign(faults, { connect: 0, close: 0, allocated: 0, closed: 0, healthStarted: false, wait: null })
+  Object.assign(faults, {
+    connect: 0,
+    close: 0,
+    allocated: 0,
+    closed: 0,
+    healthStarted: false,
+    wait: null,
+  })
 })
 
-describe.sequential('storage lifecycle ownership', () => {
+describe('storage lifecycle ownership', { concurrent: false }, () => {
   it('failed health closes the candidate and allows a clean retry', async () => {
     faults.connect = 1
     expect((await storage.init({ type: 'local', root })).success).toBe(false)
@@ -69,7 +83,11 @@ describe.sequential('storage lifecycle ownership', () => {
 
   it('concurrent close calls release one resource once', async () => {
     expect((await storage.init({ type: 'local', root })).success).toBe(true)
-    const results = await Promise.all([storage.close(), storage.close(), storage.close()])
+    const results = await Promise.all([
+      storage.close(),
+      storage.close(),
+      storage.close(),
+    ])
     expect(results.every(result => result?.success)).toBe(true)
     expect(faults.closed).toBe(1)
     expect((await storage.close())?.success).toBe(true)

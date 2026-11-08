@@ -48,7 +48,9 @@ export function notificationLabel(status: FeedbackReportView['notificationStatus
  * ```
  */
 export function feedbackTime(timestamp: number): string {
-  return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString(getUILocale()) : '—'
+  return Number.isFinite(timestamp)
+    ? new Date(timestamp).toLocaleString(getUILocale())
+    : '—'
 }
 
 /**
@@ -81,7 +83,9 @@ export function feedbackDayBoundary(value: unknown, boundary: 'start' | 'end'): 
     return undefined
   if (boundary === 'end')
     date.setDate(date.getDate() + 1)
-  return date.getTime() - (boundary === 'end' ? 1 : 0)
+  return date.getTime() - (boundary === 'end'
+    ? 1
+    : 0)
 }
 
 /**

@@ -30,12 +30,33 @@ async function s3Provider() {
 describe('s3 deleteMany', () => {
   it('hTTP 200 的 AccessDenied 仍返回失败，并保留不含 prefix/原始 Message 的部分进度', async () => {
     const { provider, send } = await s3Provider()
-    send.mockResolvedValue({ Deleted: [{ Key: 'tenant/a' }], Errors: [{ Key: 'tenant/b', Code: 'AccessDenied', Message: 'sensitive upstream details' }] })
+    send.mockResolvedValue({
+      Deleted: [
+        { Key: 'tenant/a' },
+      ],
+      Errors: [
+        { Key: 'tenant/b', Code: 'AccessDenied', Message: 'sensitive upstream details' },
+      ],
+    })
     const result = await provider.file.deleteMany(['a', 'b'])
-    expect(result).toMatchObject({ success: false, error: { ext: { deleteMany: {
-      deletedKeys: ['a'],
-      failures: [{ key: 'b', code: 'AccessDenied', retryable: false, outcome: 'failed' }],
-    } } } })
+    expect(result).toMatchObject({
+      success: false,
+      error: {
+        ext: {
+          deleteMany: {
+            deletedKeys: ['a'],
+            failures: [
+              {
+                key: 'b',
+                code: 'AccessDenied',
+                retryable: false,
+                outcome: 'failed',
+              },
+            ],
+          },
+        },
+      },
+    })
     expect(send).toHaveBeenCalledOnce()
     expect(JSON.stringify(result)).not.toContain('sensitive upstream details')
     expect(JSON.stringify(result)).not.toContain('tenant/')
@@ -46,33 +67,88 @@ describe('s3 deleteMany', () => {
     const { provider, send } = await s3Provider()
     send.mockImplementation(async (command) => {
       if (!(command instanceof DeleteObjectsCommand))
-        throw new Error('Unexpected command')
-      return { Deleted: command.input.Delete?.Objects?.map(item => ({ Key: item.Key })) }
+        throw new TypeError('Unexpected command')
+      return {
+        Deleted: command.input.Delete?.Objects?.map(item => ({ Key: item.Key })),
+      }
     })
     const keys = Array.from({ length: 1001 }, (_, index) => `key-${index}`)
     const result = await provider.file.deleteMany([...keys, keys[0]])
-    expect(result).toEqual({ success: true, data: { deletedKeys: keys, failures: [] } })
-    expect(send.mock.calls.map(([command]) => command instanceof DeleteObjectsCommand ? command.input.Delete?.Objects?.length : 0)).toEqual([1000, 1])
+    expect(result).toEqual({
+      success: true,
+      data: { deletedKeys: keys, failures: [] },
+    })
+    expect(send.mock.calls.map(([command]) => command instanceof DeleteObjectsCommand
+      ? command.input.Delete?.Objects?.length
+      : 0)).toEqual([1000, 1])
     await provider.close()
   })
 
   it('只重试 SlowDown 项，成功与 AccessDenied 项不再发送', async () => {
     const { provider, send } = await s3Provider()
-    send.mockResolvedValueOnce({ Deleted: [{ Key: 'tenant/a' }], Errors: [{ Key: 'tenant/b', Code: 'AccessDenied' }, { Key: 'tenant/c', Code: 'SlowDown' }] })
-      .mockResolvedValueOnce({ Deleted: [{ Key: 'tenant/c' }] })
+    send.mockResolvedValueOnce({
+      Deleted: [
+        { Key: 'tenant/a' },
+      ],
+      Errors: [
+        { Key: 'tenant/b', Code: 'AccessDenied' },
+        { Key: 'tenant/c', Code: 'SlowDown' },
+      ],
+    })
+      .mockResolvedValueOnce({
+        Deleted: [
+          { Key: 'tenant/c' },
+        ],
+      })
     const result = await provider.file.deleteMany(['a', 'b', 'c'])
-    expect(result).toMatchObject({ success: false, error: { ext: { deleteMany: { deletedKeys: ['a', 'c'], failures: [{ key: 'b', retryable: false }] } } } })
-    expect(send.mock.calls.map(([command]) => command instanceof DeleteObjectsCommand ? command.input.Delete?.Objects : [])).toEqual([
-      [{ Key: 'tenant/a' }, { Key: 'tenant/b' }, { Key: 'tenant/c' }],
-      [{ Key: 'tenant/c' }],
+    expect(result).toMatchObject({
+      success: false,
+      error: {
+        ext: {
+          deleteMany: {
+            deletedKeys: ['a', 'c'],
+            failures: [
+              { key: 'b', retryable: false },
+            ],
+          },
+        },
+      },
+    })
+    expect(send.mock.calls.map(([command]) => command instanceof DeleteObjectsCommand
+      ? command.input.Delete?.Objects
+      : [])).toEqual([
+      [
+        { Key: 'tenant/a' },
+        { Key: 'tenant/b' },
+        { Key: 'tenant/c' },
+      ],
+      [
+        { Key: 'tenant/c' },
+      ],
     ])
     await provider.close()
   })
 
   it('瞬时失败最多尝试三次，耗尽后保留可重试失败项', async () => {
     const { provider, send } = await s3Provider()
-    send.mockResolvedValue({ Errors: [{ Key: 'tenant/a', Code: 'InternalError' }] })
-    expect(await provider.file.deleteMany(['a'])).toMatchObject({ success: false, error: { ext: { deleteMany: { deletedKeys: [], failures: [{ key: 'a', code: 'InternalError', retryable: true }] } } } })
+    send.mockResolvedValue({
+      Errors: [
+        { Key: 'tenant/a', Code: 'InternalError' },
+      ],
+    })
+    expect(await provider.file.deleteMany(['a'])).toMatchObject({
+      success: false,
+      error: {
+        ext: {
+          deleteMany: {
+            deletedKeys: [],
+            failures: [
+              { key: 'a', code: 'InternalError', retryable: true },
+            ],
+          },
+        },
+      },
+    })
     expect(send).toHaveBeenCalledTimes(3)
     await provider.close()
   })
@@ -81,8 +157,10 @@ describe('s3 deleteMany', () => {
     const { provider, send } = await s3Provider()
     send.mockImplementationOnce(async (command) => {
       if (!(command instanceof DeleteObjectsCommand))
-        throw new Error('Unexpected command')
-      return { Deleted: command.input.Delete?.Objects?.map(item => ({ Key: item.Key })) }
+        throw new TypeError('Unexpected command')
+      return {
+        Deleted: command.input.Delete?.Objects?.map(item => ({ Key: item.Key })),
+      }
     }).mockRejectedValueOnce(Object.assign(new Error('sensitive network payload'), { name: 'NetworkError' }))
     const result = await provider.file.deleteMany(Array.from({ length: 2001 }, (_, index) => `key-${index}`))
     expect(result.success).toBe(false)
@@ -98,15 +176,56 @@ describe('s3 deleteMany', () => {
   })
 
   it.each([
-    { Deleted: [{ Key: 'tenant/a' }] },
-    { Deleted: [{ Key: 'tenant/a' }, { Key: 'tenant/a' }] },
-    { Deleted: [{ Key: 'tenant/a' }, { Key: 'outside/b' }] },
-    { Deleted: [{ Key: 'tenant/a' }], Errors: [{ Key: 'tenant/a', Code: 'AccessDenied' }] },
-    { Deleted: [{ Key: 'tenant/a' }], Errors: [{ Code: 'AccessDenied' }] },
+    {
+      Deleted: [
+        { Key: 'tenant/a' },
+      ],
+    },
+    {
+      Deleted: [
+        { Key: 'tenant/a' },
+        { Key: 'tenant/a' },
+      ],
+    },
+    {
+      Deleted: [
+        { Key: 'tenant/a' },
+        { Key: 'outside/b' },
+      ],
+    },
+    {
+      Deleted: [
+        { Key: 'tenant/a' },
+      ],
+      Errors: [
+        { Key: 'tenant/a', Code: 'AccessDenied' },
+      ],
+    },
+    {
+      Deleted: [
+        { Key: 'tenant/a' },
+      ],
+      Errors: [
+        { Code: 'AccessDenied' },
+      ],
+    },
   ])('遗漏、重复或未知回执键不能伪成功：%j', async (response) => {
     const { provider, send } = await s3Provider()
     send.mockResolvedValue(response)
-    expect(await provider.file.deleteMany(['a', 'b'])).toMatchObject({ success: false, error: { ext: { deleteMany: { deletedKeys: [], failures: [{ key: 'a', outcome: 'unknown' }, { key: 'b', outcome: 'unknown' }] } } } })
+    expect(await provider.file.deleteMany(['a', 'b'])).toMatchObject({
+      success: false,
+      error: {
+        ext: {
+          deleteMany: {
+            deletedKeys: [],
+            failures: [
+              { key: 'a', outcome: 'unknown' },
+              { key: 'b', outcome: 'unknown' },
+            ],
+          },
+        },
+      },
+    })
     expect(send).toHaveBeenCalledOnce()
     await provider.close()
   })
@@ -114,9 +233,18 @@ describe('s3 deleteMany', () => {
   it('目录删除传播逐项失败，不宣称目录已清空', async () => {
     const { provider, send } = await s3Provider()
     send.mockImplementation(async (command) => {
-      if (command instanceof ListObjectsV2Command)
-        return { Contents: [{ Key: 'tenant/dir/a', Size: 1 }] }
-      return { Errors: [{ Key: 'tenant/dir/a', Code: 'AccessDenied' }] }
+      if (command instanceof ListObjectsV2Command) {
+        return {
+          Contents: [
+            { Key: 'tenant/dir/a', Size: 1 },
+          ],
+        }
+      }
+      return {
+        Errors: [
+          { Key: 'tenant/dir/a', Code: 'AccessDenied' },
+        ],
+      }
     })
     expect((await provider.dir.delete('dir/')).success).toBe(false)
     await provider.close()
@@ -133,7 +261,10 @@ describe('local deleteMany', () => {
     const provider = storage
     try {
       expect((await provider.init({ type: 'local', root: directory })).success).toBe(true)
-      expect(await provider.file.deleteMany([])).toEqual({ success: true, data: { deletedKeys: [], failures: [] } })
+      expect(await provider.file.deleteMany([])).toEqual({
+        success: true,
+        data: { deletedKeys: [], failures: [] },
+      })
       let active = 0
       let peak = 0
       vi.spyOn(provider.file, 'delete').mockImplementation(async (key) => {
@@ -145,8 +276,22 @@ describe('local deleteMany', () => {
         active--
         return ok(undefined)
       })
-      const result = await provider.file.deleteMany(['bad', ...Array.from({ length: 100 }, (_, index) => `key-${index}`)])
-      expect(result).toMatchObject({ success: false, error: { ext: { deleteMany: { failures: [{ key: 'bad', outcome: 'failed' }] } } } })
+      const result = await provider.file.deleteMany([
+        'bad',
+        ...Array.from({ length: 100 }, (_, index) => `key-${index}`),
+      ])
+      expect(result).toMatchObject({
+        success: false,
+        error: {
+          ext: {
+            deleteMany: {
+              failures: [
+                { key: 'bad', outcome: 'failed' },
+              ],
+            },
+          },
+        },
+      })
       expect(peak).toBeLessThanOrEqual(32)
       if (!result.success)
         expect(result.error.ext?.deleteMany?.deletedKeys).toHaveLength(100)

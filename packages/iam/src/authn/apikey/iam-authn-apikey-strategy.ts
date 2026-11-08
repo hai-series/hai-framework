@@ -159,7 +159,9 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       }
 
       // 更新最后使用时间（异步，不阻塞认证）
-      apiKeyRepository.updateFields(candidate.id, { lastUsedAt: new Date() }).catch(() => {
+      apiKeyRepository.updateFields(candidate.id, {
+        lastUsedAt: new Date(),
+      }).catch(() => {
         logger.warn('Failed to update API Key lastUsedAt', { keyId: candidate.id })
       })
 
@@ -173,7 +175,14 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
     const fingerprint = createHash('sha256').update(rawKey).digest('hex')
     const result = await readIamCache(`verified_apikey:${fingerprint}`, async () => {
       const verified = await loadRawKey(rawKey)
-      return verified.success ? ok({ ...verified.data, expiresAt: verified.data.expiresAt?.getTime() ?? null, createdAt: verified.data.createdAt.getTime(), lastUsedAt: verified.data.lastUsedAt?.getTime() ?? null }) : verified
+      return verified.success
+        ? ok({
+            ...verified.data,
+            expiresAt: verified.data.expiresAt?.getTime() ?? null,
+            createdAt: verified.data.createdAt.getTime(),
+            lastUsedAt: verified.data.lastUsedAt?.getTime() ?? null,
+          })
+        : verified
     })
     if (!result.success)
       return result
@@ -181,7 +190,16 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       return err(HaiIamError.APIKEY_DISABLED, iamM('iam_apikeyDisabled'))
     if (result.data.expiresAt !== null && result.data.expiresAt <= Date.now())
       return err(HaiIamError.APIKEY_EXPIRED, iamM('iam_apikeyExpired'))
-    return ok({ ...result.data, expiresAt: result.data.expiresAt === null ? null : new Date(result.data.expiresAt), createdAt: new Date(result.data.createdAt), lastUsedAt: result.data.lastUsedAt === null ? null : new Date(result.data.lastUsedAt) })
+    return ok({
+      ...result.data,
+      expiresAt: result.data.expiresAt === null
+        ? null
+        : new Date(result.data.expiresAt),
+      createdAt: new Date(result.data.createdAt),
+      lastUsedAt: result.data.lastUsedAt === null
+        ? null
+        : new Date(result.data.lastUsedAt),
+    })
   }
 
   // ─── AuthStrategy 实现 ───
@@ -219,7 +237,13 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       }
 
       logger.debug('API Key authentication succeeded', { userId: userResult.data.id, keyId: apiKey.id })
-      return ok({ user: { ...toUser(userResult.data), credentialVersion: userResult.data.credentialVersion ?? '' }, apiKey })
+      return ok({
+        user: {
+          ...toUser(userResult.data),
+          credentialVersion: userResult.data.credentialVersion ?? '',
+        },
+        apiKey,
+      })
     },
   }
 
@@ -234,7 +258,9 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
           return countResult as HaiResult<CreateApiKeyResult>
 
         if (countResult.data >= apikeyConfig.maxKeysPerUser) {
-          return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_apikeyMaxKeysReached', { params: { max: apikeyConfig.maxKeysPerUser } }))
+          return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_apikeyMaxKeysReached', {
+            params: { max: apikeyConfig.maxKeysPerUser },
+          }))
         }
 
         // 生成明文密钥和哈希
@@ -271,10 +297,17 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
           return insertResult as HaiResult<CreateApiKeyResult>
 
         logger.info('API Key created', { userId, keyId: id, name: options.name })
-        return ok({ apiKey: toApiKey(storedApiKey), rawKey })
+        return ok({
+          apiKey: toApiKey(storedApiKey),
+          rawKey,
+        })
       }
       catch (error) {
-        return err(HaiIamError.INTERNAL_ERROR, iamM('iam_apikeyCreateFailed', { params: { message: String(error) } }), error)
+        return err(HaiIamError.INTERNAL_ERROR, iamM('iam_apikeyCreateFailed', {
+          params: {
+            message: String(error),
+          },
+        }), error)
       }
     },
 
@@ -282,14 +315,19 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       const result = await apiKeyRepository.findPageByUserId(userId, options ?? {})
       if (!result.success)
         return result as HaiResult<PaginatedResult<ApiKey>>
-      return ok({ ...result.data, items: result.data.items.map(toApiKey) })
+      return ok({
+        ...result.data,
+        items: result.data.items.map(toApiKey),
+      })
     },
 
     async getApiKey(keyId: string): Promise<HaiResult<ApiKey | null>> {
       const result = await apiKeyRepository.findOneById(keyId)
       if (!result.success)
         return result as HaiResult<ApiKey | null>
-      return ok(result.data ? toApiKey(result.data) : null)
+      return ok(result.data
+        ? toApiKey(result.data)
+        : null)
     },
 
     async revokeApiKey(keyId: string): Promise<HaiResult<void>> {

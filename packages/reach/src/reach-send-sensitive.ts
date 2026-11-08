@@ -24,7 +24,14 @@ function previousResult(row: StoredSendLog): HaiResult<SendResult> {
 }
 
 function unconfirmed(receiptId: string): HaiResult<SendResult> {
-  return { success: false, error: { ...HaiReachError.SEND_FAILED, message: reachM('reach_sensitiveDeliveryUnconfirmed'), ext: { receiptId } } }
+  return {
+    success: false,
+    error: {
+      ...HaiReachError.SEND_FAILED,
+      message: reachM('reach_sensitiveDeliveryUnconfirmed'),
+      ext: { receiptId },
+    },
+  }
 }
 
 /**
@@ -44,7 +51,11 @@ export async function sendSensitive(message: ReachMessage, provider: ReachProvid
   const hash = createHash('sha256').update(JSON.stringify([message.provider, message.to, message.idempotencyKey])).digest('hex')
   // 固定 UUID 保持既有回执查询契约；只散列随机操作键与路由，不散列低熵密码或验证码。
   const queueId = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`
-  const find = () => repo.findAll({ where: 'queue_id = ?', params: [queueId], limit: 1 })
+  const find = () => repo.findAll({
+    where: 'queue_id = ?',
+    params: [queueId],
+    limit: 1,
+  })
   const existing = await find()
   if (!existing.success)
     return existing

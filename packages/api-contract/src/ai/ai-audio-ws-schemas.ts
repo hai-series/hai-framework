@@ -62,7 +62,10 @@ export const AudioWsStartMessageSchema = z.object({
   instruction: z.string().max(MAX_CONTROL_FIELD_LEN).optional(),
   format: AudioFormatSchema.optional(),
   sampleRate: z.number().int().min(MIN_SAMPLE_RATE).max(MAX_SAMPLE_RATE).optional(),
-  channels: z.union([z.literal(1), z.literal(2)]).optional(),
+  channels: z.union([
+    z.literal(1),
+    z.literal(2),
+  ]).optional(),
 })
 
 /**

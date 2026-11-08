@@ -5,23 +5,11 @@
  */
 
 import type { RequestEvent } from '@sveltejs/kit'
+import { core } from '@h-ai/core'
+import { error as httpError, redirect } from '@sveltejs/kit'
 import { describe, expect, it, vi } from 'vitest'
 
 import { handler } from '../src/kit-handler.js'
-
-// mock @h-ai/core 的 logger 和 i18n
-vi.mock('@h-ai/core', () => ({
-  core: {
-    logger: {
-      error: vi.fn(),
-    },
-    i18n: {
-      createMessageGetter: (messages: Record<string, Record<string, string>>) => {
-        return (key: string) => messages['zh-CN']?.[key] ?? key
-      },
-    },
-  },
-}))
 
 /**
  * 创建最小的模拟 RequestEvent
@@ -44,6 +32,26 @@ function createMockEvent(path = '/api/test', method = 'GET') {
 }
 
 describe('handler', () => {
+  it('完整驱动异常仅写一次关联日志，响应不携带诊断内容', async () => {
+    const logged = vi.spyOn(core.logger, 'error').mockImplementation(() => {})
+    try {
+      const cause = new AggregateError([
+        Object.assign(new Error('private driver detail'), { code: 'DB_DOWN' }),
+      ], 'private aggregate failure')
+      const handle = handler(() => {
+        throw cause
+      })
+      const response = await handle(createMockEvent())
+      expect(logged).toHaveBeenCalledOnce()
+      expect(logged).toHaveBeenCalledWith('API operation failed', expect.objectContaining({
+        error: expect.objectContaining({ cause }),
+      }))
+      const body = await response.text()
+      expect(body).not.toContain('private')
+      expect(body).not.toContain('DB_DOWN')
+    }
+    finally { logged.mockRestore() }
+  })
   it('正常返回 Response', async () => {
     const h = handler(async () => {
       return new Response(JSON.stringify({ ok: true }), { status: 200 })
@@ -80,27 +88,30 @@ describe('handler', () => {
   })
 
   it('re-throw SvelteKit redirect 控制流', async () => {
-    // 模拟 SvelteKit redirect 对象
-    const redirectObj = { status: 302, location: '/login' }
-
     const h = handler(async () => {
-      throw redirectObj
+      redirect(302, '/login')
     })
 
     const event = createMockEvent()
-    await expect(h(event)).rejects.toBe(redirectObj)
+    await expect(h(event)).rejects.toMatchObject({ status: 302, location: '/login' })
   })
 
   it('re-throw SvelteKit error 控制流', async () => {
-    // 模拟 SvelteKit error 对象
-    const errorObj = { status: 404, body: { message: 'Not found' } }
-
     const h = handler(async () => {
-      throw errorObj
+      httpError(404, 'Not found')
     })
 
     const event = createMockEvent()
-    await expect(h(event)).rejects.toBe(errorObj)
+    await expect(h(event)).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('带 status 的外部 SDK 异常仍转换为安全 500', async () => {
+    const h = handler(async () => {
+      throw Object.assign(new Error('private upstream credentials'), { status: 401 })
+    })
+    const response = await h(createMockEvent())
+    expect(response.status).toBe(500)
+    expect(await response.text()).not.toContain('private upstream')
   })
 
   it('传递完整的 RequestEvent 给处理函数', async () => {

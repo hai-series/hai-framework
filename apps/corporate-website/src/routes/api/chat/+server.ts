@@ -1,14 +1,14 @@
-import * as m from '$lib/paraglide/messages.js'
+import { ai } from '@h-ai/ai'
 /**
  * =============================================================================
  * AI Assistant API — 使用 @h-ai/ai 提供智能问答
  * =============================================================================
  */
 
-import { ai } from '@h-ai/ai'
 import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
 import { z } from 'zod'
+import * as m from '#lib/paraglide/messages.js'
 
 const ChatSchema = z.object({
   message: z.string().min(1).max(1000),
@@ -20,7 +20,11 @@ Keep responses concise, professional, and in the same language as the user's que
 If you don't know something specific about the company, provide a helpful general response.`
 
 export const POST = kit.handler(async ({ request, locals }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   const { message } = await kit.validate.body(request, ChatSchema)
 
   if (!ai.isInitialized) {

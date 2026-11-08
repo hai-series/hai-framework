@@ -25,12 +25,23 @@ let sequence = 0
 
 /** 只运行本次专用容器中的命令，不连接用户部署目录或实际容器服务。 */
 function execute(script: string): string {
-  return execFileSync(runtime, ['exec', container, 'sh', '-c', script], { encoding: 'utf8', timeout: 20_000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+  return execFileSync(runtime, ['exec', container, 'sh', '-c', script], {
+    encoding: 'utf8',
+    timeout: 20_000,
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim()
 }
 
 /** 原封不动运行生成的服务器脚本，保留其真实退出码。 */
 function apply(bundle: { directory: string }) {
-  return spawnSync(runtime, ['exec', container, 'sh', '-c', `export PATH=/fixture/bin:$PATH; sh /fixture/${bundle.directory}/apply.sh /fixture/server`], { encoding: 'utf8', timeout: 20_000, windowsHide: true })
+  return spawnSync(runtime, [
+    'exec',
+    container,
+    'sh',
+    '-c',
+    `export PATH=/fixture/bin:$PATH; sh /fixture/${bundle.directory}/apply.sh /fixture/server`,
+  ], { encoding: 'utf8', timeout: 20_000, windowsHide: true })
 }
 
 /** 夹具只修改新清单的非敏感元数据，包内修改同时重算完整性摘要。 */
@@ -56,7 +67,14 @@ function declareDatabaseBackend(bundle: { directory: string }, backend: 'postgre
   const project = metadata(bundle.directory, 'managed-project').trim()
   const volume = `${project}_${project.slice('hai-'.length)}-db-data`
   updateMetadata(bundle.directory, { 'state-backends': `db ${backend} ${volume}\n` })
-  declareService(bundle.directory, 'db', { image: backend === 'postgresql' ? 'docker.io/library/postgres:16.15-alpine' : 'docker.io/library/mysql:8.4', volumes: [`${volume}:/data`] }, { [volume]: { name: volume } })
+  declareService(bundle.directory, 'db', {
+    image: backend === 'postgresql'
+      ? 'docker.io/library/postgres:16.15-alpine'
+      : 'docker.io/library/mysql:8.4',
+    volumes: [`${volume}:/data`],
+  }, {
+    [volume]: { name: volume },
+  })
   execute(`printf '${volume}\\n' > /fixture/volume-to-create`)
   return volume
 }
@@ -69,15 +87,23 @@ function declareWebBase(bundle: { directory: string }, base: '/yyy' | '/other') 
 /** 确定性 Compose 夹具仅声明代理身份；真实 shell 必须按该元数据刷新并恢复保留代理。 */
 function declareProxyIdentity(bundle: { directory: string }, proxy: 'web' | 'gateway'): void {
   const layout = metadata(bundle.directory, 'layout').trim().split(':')
-  layout[2] = proxy === 'web' ? 'true' : 'gateway'
+  layout[2] = proxy === 'web'
+    ? 'true'
+    : 'gateway'
   updateMetadata(bundle.directory, { 'proxy-service': proxy, 'layout': `${layout.join(':')}\n` })
   declareService(bundle.directory, proxy, { image: 'localhost/proxy-test:1' })
 }
 
 /** 只调整非敏感配置摘要并重算真实交付校验和，验证更新前的增量拒绝。 */
 function declareStorageRouting(bundle: { directory: string }, value: string | undefined): void {
-  const digest = value === undefined ? undefined : createHash('sha256').update(value).digest('hex')
-  updateMetadata(bundle.directory, { 'storage-routing': digest ? `${digest}\n` : '' })
+  const digest = value === undefined
+    ? undefined
+    : createHash('sha256').update(value).digest('hex')
+  updateMetadata(bundle.directory, {
+    'storage-routing': digest
+      ? `${digest}\n`
+      : '',
+  })
 }
 
 /** 只写入公开导入工具会生成的受控 v2 状态；实际容器身份仍由脚本重新核对。 */
@@ -110,7 +136,12 @@ async function pack(selectedServices?: string[]): Promise<{ id: string, director
   const directory = `package-${sequence++}`
   const extracted = join(root, directory)
   mkdirSync(extracted)
-  execFileSync('tar', ['-xf', result.data.bundlePath, '-C', extracted], { windowsHide: true })
+  execFileSync('tar', [
+    '-xf',
+    result.data.bundlePath,
+    '-C',
+    extracted,
+  ], { windowsHide: true })
   execFileSync(runtime, ['cp', extracted, `${container}:/fixture/${directory}`], { windowsHide: true })
   const packed = { id: result.data.deploymentId, directory }
   if (execute('if [ -f /fixture/has-db ]; then printf yes; fi') === 'yes')
@@ -125,7 +156,9 @@ describe.skipIf(!enabled)('linux deployment process locks', () => {
       throw new Error('Deployment lock gate requires a reachable Podman or Docker engine')
     runtime = candidate
     root = mkdtempSync(join(tmpdir(), 'hai-deploy-lock-'))
-    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: basename(root) }))
+    writeFileSync(join(root, 'package.json'), JSON.stringify({
+      name: basename(root),
+    }))
     const containerName = `hai-deploy-lock-${randomUUID()}`
     container = ''
     const artifacts = join(root, '.hai/build/docker/release-1')
@@ -135,7 +168,21 @@ describe.skipIf(!enabled)('linux deployment process locks', () => {
     writeFileSync(join(root, '.env.test'), 'HAI_CORE_ENV=test\n')
     writeFileSync(join(root, '.hai/build/docker/latest'), 'release-1\n')
     writeFileSync(join(artifacts, 'serv-1.2.3.tar'), 'prebuilt-image')
-    writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'release-1', images: [{ name: 'serv', file: 'serv-1.2.3.tar', imageRef: 'localhost/lock-test:1', sha256: createHash('sha256').update('prebuilt-image').digest('hex'), containerPort: 3000 }] }))
+    writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({
+      version: 4,
+      primaryService: 'serv',
+      appVersion: '1.2.3',
+      buildId: 'release-1',
+      images: [
+        {
+          name: 'serv',
+          file: 'serv-1.2.3.tar',
+          imageRef: 'localhost/lock-test:1',
+          sha256: createHash('sha256').update('prebuilt-image').digest('hex'),
+          containerPort: 3000,
+        },
+      ],
+    }))
     // 锁门禁的引擎替身只转交配置编译给真实 Linux Node；真正的容器隔离由 CLI 部署门禁验证。
     writeFileSync(join(root, 'bin/runtime-preparation.mjs'), readFileSync(new URL('./fixtures/runtime-preparation.mjs', import.meta.url)))
     writeFileSync(join(root, 'bin/docker'), `#!/bin/sh
@@ -226,21 +273,50 @@ if [ -f /fixture/background-service ]; then
 fi
 `)
     writeFileSync(join(root, 'bin/curl'), '#!/bin/sh\ntest ! -f /fixture/fail-health && test ! -f /fixture/dependency-removed\n')
-    const created = execFileSync(runtime, ['run', '-d', '--name', containerName, '--entrypoint', 'node', 'docker.io/library/node:24.22.1-bookworm-slim', '-e', 'setInterval(() => {}, 1000)'], { windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+    const created = execFileSync(runtime, [
+      'run',
+      '-d',
+      '--name',
+      containerName,
+      '--entrypoint',
+      'node',
+      'docker.io/library/node:24.22.1-bookworm-slim',
+      '-e',
+      'setInterval(() => {}, 1000)',
+    ], {
+      windowsHide: true,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim()
     if (!/^[a-f0-9]{64}$/.test(created))
       throw new Error('Expected an owned deployment fixture container ID')
     container = created
     execFileSync(runtime, ['cp', root, `${container}:/fixture`], { windowsHide: true })
     execute('chmod 700 /fixture/bin/*; command -v flock; mkdir -p /fixture/server/.deploy-lock')
-    expect(await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime: 'docker' }, expose: { hostPort: 18080 } } })).toMatchObject({ success: true })
+    expect(await deploy.init({
+      provider: {
+        type: 'docker-ssh',
+        remote: { runtime: 'docker' },
+        expose: { hostPort: 18080 },
+      },
+    })).toMatchObject({ success: true })
   }, 60_000)
 
-  it.each(['matching', 'missing', 'different', 'symlink'] as const)('真实 shell 在更新前核对自建 Storage 配置摘要：%s', async (scenario) => {
+  it.each([
+    'matching',
+    'missing',
+    'different',
+    'symlink',
+  ] as const)('真实 shell 在更新前核对自建 Storage 配置摘要：%s', async (scenario) => {
     const installed = await pack()
     declareStorageRouting(installed, 'https://files.example.com')
     expect(apply(installed).status).toBe(0)
     const candidate = await pack(['serv'])
-    declareStorageRouting(candidate, scenario === 'missing' ? undefined : scenario === 'different' ? 'https://other.example.com' : 'https://files.example.com')
+    declareStorageRouting(candidate, scenario === 'missing'
+      ? undefined
+      : scenario === 'different'
+        ? 'https://other.example.com'
+        : 'https://files.example.com')
     if (scenario === 'symlink')
       execute(`cp /fixture/server/releases/${installed.id}/manifest.json /fixture/old-manifest; rm /fixture/server/releases/${installed.id}/manifest.json; ln -s /fixture/old-manifest /fixture/server/releases/${installed.id}/manifest.json`)
     execute(': > /fixture/commands.log')
@@ -251,7 +327,9 @@ fi
     }
     else {
       expectPreflightRefusal(candidate, outcome)
-      expect(outcome.stderr).toContain(scenario === 'symlink' ? 'metadata must be a regular file' : 'Managed storage configuration changed')
+      expect(outcome.stderr).toContain(scenario === 'symlink'
+        ? 'metadata must be a regular file'
+        : 'Managed storage configuration changed')
       expect(execute('cat /fixture/server/current')).toBe(installed.id)
     }
   }, 30_000)
@@ -279,13 +357,21 @@ fi
     expect(execute('cat /fixture/commands.log').match(new RegExp(`exec -T ${proxy} nginx -s reload`, 'g'))).toHaveLength(2)
   }, 30_000)
 
-  it.each(['matching', 'missing', 'different', 'symlink'] as const)('真实shell保持Web前缀的增量边界：%s', async (scenario) => {
+  it.each([
+    'matching',
+    'missing',
+    'different',
+    'symlink',
+  ] as const)('真实shell保持Web前缀的增量边界：%s', async (scenario) => {
     const installed = await pack()
     declareWebBase(installed, '/yyy')
     expect(apply(installed).status).toBe(0)
     const candidate = await pack(['serv'])
-    if (scenario !== 'missing')
-      declareWebBase(candidate, scenario === 'different' ? '/other' : '/yyy')
+    if (scenario !== 'missing') {
+      declareWebBase(candidate, scenario === 'different'
+        ? '/other'
+        : '/yyy')
+    }
     if (scenario === 'symlink')
       execute(`cp /fixture/server/releases/${installed.id}/manifest.json /fixture/old-manifest; rm /fixture/server/releases/${installed.id}/manifest.json; ln -s /fixture/old-manifest /fixture/server/releases/${installed.id}/manifest.json`)
     execute(': > /fixture/commands.log')
@@ -297,7 +383,9 @@ fi
     else {
       expectPreflightRefusal(candidate, outcome)
       expect(execute('cat /fixture/server/current')).toBe(installed.id)
-      expect(outcome.stderr).toContain(scenario === 'symlink' ? 'metadata must be a regular file' : 'Web base path changed')
+      expect(outcome.stderr).toContain(scenario === 'symlink'
+        ? 'metadata must be a regular file'
+        : 'Web base path changed')
     }
   }, 30_000)
 
@@ -309,17 +397,29 @@ fi
     writeFileSync(curl, `#!/bin/sh
 printf '%s\\n' "$*" >> /fixture/http-requests
 test ! -f /fixture/fail-health && exit 0
-${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-command`}
+${recoveryFails
+  ? 'exit 22'
+  : `grep -q '/releases/${full.id}/' /fixture/active-command`}
 `)
     execFileSync(runtime, ['cp', curl, `${container}:/fixture/bin/curl`], { windowsHide: true })
     execute('chmod 700 /fixture/bin/curl; touch /fixture/fail-health')
     await deploy.close()
-    expect(await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime: 'docker' }, expose: { hostPort: 18081 } } })).toMatchObject({ success: true })
+    expect(await deploy.init({
+      provider: {
+        type: 'docker-ssh',
+        remote: { runtime: 'docker' },
+        expose: { hostPort: 18081 },
+      },
+    })).toMatchObject({ success: true })
     const failed = await pack()
     const applied = apply(failed)
     expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(1)
     expect(execute('cat /fixture/server/current')).toBe(full.id)
-    expect(JSON.parse(execute(`cat /fixture/server/result-${failed.id}.json`))).toMatchObject({ stage: 'health', exitCode: 1, recoveryStatus: recoveryFails ? 'failed' : 'passed' })
+    expect(JSON.parse(execute(`cat /fixture/server/result-${failed.id}.json`))).toMatchObject({
+      stage: 'health',
+      exitCode: 1,
+      recoveryStatus: recoveryFails ? 'failed' : 'passed',
+    })
     const requests = execute('cat /fixture/http-requests')
     expect(requests).toContain('http://127.0.0.1:18081/health')
     expect(requests).toContain('http://127.0.0.1:18080/health')
@@ -336,7 +436,13 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'))
     const webFile = 'web-1.2.3.tar'
     writeFileSync(join(artifacts, webFile), 'prebuilt-web')
-    manifest.images.push({ name: 'web', file: webFile, imageRef: 'localhost/policy-web:1', sha256: createHash('sha256').update('prebuilt-web').digest('hex'), containerPort: 8080 })
+    manifest.images.push({
+      name: 'web',
+      file: webFile,
+      imageRef: 'localhost/policy-web:1',
+      sha256: createHash('sha256').update('prebuilt-web').digest('hex'),
+      containerPort: 8080,
+    })
     writeFileSync(manifestFile, JSON.stringify({ ...manifest, hasWeb: true }))
     execute('touch /fixture/has-web; printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep')
     writePolicy('192.0.2.10')
@@ -385,7 +491,22 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     expect(execute('cat /fixture/active-command')).not.toContain(`/releases/${failed.id}/`)
     if (process.env.HAI_AUTH_EVIDENCE_DIR) {
       mkdirSync(process.env.HAI_AUTH_EVIDENCE_DIR, { recursive: true })
-      writeFileSync(join(process.env.HAI_AUTH_EVIDENCE_DIR, 'request-access-policy-recovery.json'), JSON.stringify({ verifiedAt: new Date().toISOString(), fixture: 'Original apply.sh in Linux; deterministic Compose and HTTP failure injection', full: 'passed', frontendOnly: 'backend policy retained', backendIncrement: 'new snapshot selected', fileMode: '444', mount: '/run/hai/request-access.yml:ro', tampered: { stage: 'preflight', startedServices: false }, failedUpdate: { stage: 'health', recoveryStatus: 'passed', current: incremental.id, policyIp: '198.51.100.20' } }, null, 2))
+      writeFileSync(join(process.env.HAI_AUTH_EVIDENCE_DIR, 'request-access-policy-recovery.json'), JSON.stringify({
+        verifiedAt: new Date().toISOString(),
+        fixture: 'Original apply.sh in Linux; deterministic Compose and HTTP failure injection',
+        full: 'passed',
+        frontendOnly: 'backend policy retained',
+        backendIncrement: 'new snapshot selected',
+        fileMode: '444',
+        mount: '/run/hai/request-access.yml:ro',
+        tampered: { stage: 'preflight', startedServices: false },
+        failedUpdate: {
+          stage: 'health',
+          recoveryStatus: 'passed',
+          current: incremental.id,
+          policyIp: '198.51.100.20',
+        },
+      }, null, 2))
     }
   }, 60_000)
 
@@ -421,7 +542,9 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/has-db')
     const full = await pack()
     expect(apply(full).status).toBe(0)
-    const candidate = await pack(partial ? ['serv'] : undefined)
+    const candidate = await pack(partial
+      ? ['serv']
+      : undefined)
     declareDatabaseBackend(candidate, 'mysql')
     execute(': > /fixture/commands.log')
     const result = apply(candidate)
@@ -447,7 +570,9 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     expect(declareDatabaseBackend(next, backend)).toBe(volume)
     execute(': > /fixture/commands.log')
     const applied = apply(next)
-    expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(backend === 'postgresql' ? 0 : 1)
+    expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(backend === 'postgresql'
+      ? 0
+      : 1)
     if (backend === 'mysql') {
       expect(applied.stderr).toMatch(/backend.*changed|incompatible backend/i)
       expect(execute('cat /fixture/server/current')).toBe(withoutDatabase.id)
@@ -510,7 +635,13 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     if (identity === 'runtime') {
       execute('cp /fixture/bin/docker /fixture/bin/podman')
       await deploy.close()
-      expect(await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime: 'podman' }, expose: { hostPort: 18080 } } })).toMatchObject({ success: true })
+      expect(await deploy.init({
+        provider: {
+          type: 'docker-ssh',
+          remote: { runtime: 'podman' },
+          expose: { hostPort: 18080 },
+        },
+      })).toMatchObject({ success: true })
     }
     else {
       execute('printf \'different-daemon|/fixture/docker-store|overlay\\n\' > /fixture/daemon-identity')
@@ -526,7 +657,13 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     if (endpoint === 'remote-podman') {
       execute('cp /fixture/bin/docker /fixture/bin/podman; touch /fixture/remote-podman')
       await deploy.close()
-      expect(await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime: 'podman' }, expose: { hostPort: 18080 } } })).toMatchObject({ success: true })
+      expect(await deploy.init({
+        provider: {
+          type: 'docker-ssh',
+          remote: { runtime: 'podman' },
+          expose: { hostPort: 18080 },
+        },
+      })).toMatchObject({ success: true })
     }
     else {
       execute('printf \'other-context\\n\' > /fixture/docker-context')
@@ -537,7 +674,12 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     expect(execute('test ! -e /fixture/server/current && echo no-current')).toBe('no-current')
   }, 60_000)
 
-  it.each(['matching', 'different-mount', 'different-image', 'removed'] as const)('持久账本缺失时必须证明当前格式基线的实际卷与引擎：%s', async (legacy) => {
+  it.each([
+    'matching',
+    'different-mount',
+    'different-image',
+    'removed',
+  ] as const)('持久账本缺失时必须证明当前格式基线的实际卷与引擎：%s', async (legacy) => {
     execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/has-db')
     const first = await pack()
     const volume = declareDatabaseBackend(first, 'postgresql')
@@ -570,12 +712,24 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     }
   }, 60_000)
 
-  it.each(['matching', 'io-only', 'wrong-project', 'wrong-volume', 'wrong-image', 'stopped', 'conflicting-labels'] as const)('受控导入无 current 时用实际运行原容器补证首次全量：%s', async (scenario) => {
+  it.each([
+    'matching',
+    'io-only',
+    'wrong-project',
+    'wrong-volume',
+    'wrong-image',
+    'stopped',
+    'conflicting-labels',
+  ] as const)('受控导入无 current 时用实际运行原容器补证首次全量：%s', async (scenario) => {
     execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/has-db')
     const full = await pack()
     const volume = declareDatabaseBackend(full, 'postgresql')
     execute(`printf '${volume}\\n' > /fixture/persistent-volumes`)
-    const project = seedImportedDatabase(full, scenario === 'wrong-volume' ? `${volume}-other` : volume, scenario === 'wrong-project' ? 'hai-other' : undefined)
+    const project = seedImportedDatabase(full, scenario === 'wrong-volume'
+      ? `${volume}-other`
+      : volume, scenario === 'wrong-project'
+      ? 'hai-other'
+      : undefined)
     if (scenario === 'io-only')
       execute(`printf '<no value>|<no value>|${project}|db\\n' > /fixture/container-labels; touch /fixture/io-only`)
     if (scenario === 'conflicting-labels')
@@ -692,8 +846,16 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
   }, 60_000)
 
   it.each([
-    { from: 'external', installed: { 'unmanaged-app-keys': 'HAI_DB\n' }, incoming: { 'managed-app-keys': 'HAI_DB\n' } },
-    { from: 'bundled', installed: { 'managed-app-keys': 'HAI_DB\n' }, incoming: { 'unmanaged-app-keys': 'HAI_DB\n' } },
+    {
+      from: 'external',
+      installed: { 'unmanaged-app-keys': 'HAI_DB\n' },
+      incoming: { 'managed-app-keys': 'HAI_DB\n' },
+    },
+    {
+      from: 'bundled',
+      installed: { 'managed-app-keys': 'HAI_DB\n' },
+      incoming: { 'unmanaged-app-keys': 'HAI_DB\n' },
+    },
   ])('真实 Linux 增量拒绝从 $from 切换数据库归属，保持当前配置和成功基线', async ({ installed, incoming }) => {
     const full = await pack()
     updateMetadata(full.directory, Object.fromEntries(Object.entries(installed).filter(([, value]) => value !== undefined)))
@@ -730,7 +892,17 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     expect(execute('cat /fixture/server/config/.env.runtime')).toBe(before)
   }, 60_000)
 
-  it.each([{ selected: ['serv'] }, { selected: ['serv', 'web'] }, { selected: ['web', 'serv'] }])('真实 Linux 执行 $selected 增量容量更新并恢复失败配置', async ({ selected }) => {
+  it.each([
+    {
+      selected: ['serv'],
+    },
+    {
+      selected: ['serv', 'web'],
+    },
+    {
+      selected: ['web', 'serv'],
+    },
+  ])('真实 Linux 执行 $selected 增量容量更新并恢复失败配置', async ({ selected }) => {
     const artifacts = join(root, '.hai/build/docker/release-1')
     mkdirSync(join(root, 'config'))
     writeFileSync(join(root, 'config/_serv.yml'), 'transport:\n  maxPlaintextBytes: 1048576\n')
@@ -738,9 +910,24 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
       const file = `${name}-1.2.3.tar`
       const content = `prebuilt-${name}`
       writeFileSync(join(artifacts, file), content)
-      return { name, file, imageRef: `localhost/capacity-${name}:1`, sha256: createHash('sha256').update(content).digest('hex'), containerPort: name === 'web' ? 8080 : 3000 }
+      return {
+        name,
+        file,
+        imageRef: `localhost/capacity-${name}:1`,
+        sha256: createHash('sha256').update(content).digest('hex'),
+        containerPort: name === 'web'
+          ? 8080
+          : 3000,
+      }
     })
-    writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'release-1', hasWeb: true, images }))
+    writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({
+      version: 4,
+      primaryService: 'serv',
+      appVersion: '1.2.3',
+      buildId: 'release-1',
+      hasWeb: true,
+      images,
+    }))
     execute('touch /fixture/has-web')
     const full = await pack()
     expect(apply(full).status).toBe(0)
@@ -777,7 +964,17 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     async function readinessBundle(selectedServices?: string[]) {
       const bundle = await pack(selectedServices)
       const file = join(root, 'readiness.sh')
-      writeFileSync(file, createApplyScript({ deploymentId: bundle.id, projectName: 'readiness-test', environment: 'test', directory: '/fixture/server', runtime: remoteRuntime, partial: !!selectedServices, selected: selectedServices ?? ['serv', 'db'], hostPort: 18080, healthPaths: ['/health'] }))
+      writeFileSync(file, createApplyScript({
+        deploymentId: bundle.id,
+        projectName: 'readiness-test',
+        environment: 'test',
+        directory: '/fixture/server',
+        runtime: remoteRuntime,
+        partial: !!selectedServices,
+        selected: selectedServices ?? ['serv', 'db'],
+        hostPort: 18080,
+        healthPaths: ['/health'],
+      }))
       execFileSync(runtime, ['cp', file, `${container}:/fixture/${bundle.directory}/apply.sh`], { windowsHide: true })
       execute(`cd /fixture/${bundle.directory}; sed '/  apply.sh$/d' .hai/SHA256SUMS > .hai/SHA256SUMS.next; sha256sum apply.sh >> .hai/SHA256SUMS.next; mv .hai/SHA256SUMS.next .hai/SHA256SUMS`)
       return bundle
@@ -916,9 +1113,24 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
       const file = `${name}-1.2.3.tar`
       const content = `prebuilt-${name}`
       writeFileSync(join(artifacts, file), content)
-      return { name, file, imageRef: `localhost/recovery-${name}:1`, sha256: createHash('sha256').update(content).digest('hex'), containerPort: name === 'web' ? 8080 : 3000 }
+      return {
+        name,
+        file,
+        imageRef: `localhost/recovery-${name}:1`,
+        sha256: createHash('sha256').update(content).digest('hex'),
+        containerPort: name === 'web'
+          ? 8080
+          : 3000,
+      }
     })
-    writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'release-1', hasWeb: true, images }))
+    writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({
+      version: 4,
+      primaryService: 'serv',
+      appVersion: '1.2.3',
+      buildId: 'release-1',
+      hasWeb: true,
+      images,
+    }))
     execute('touch /fixture/has-web')
     const full = await pack()
     expect(apply(full).status).toBe(0)
@@ -950,7 +1162,11 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     expect(result.success).toBe(true)
     if (!result.success || !result.data.bundlePath)
       throw new Error('Expected a deployment bundle')
-    execFileSync(runtime, ['cp', dirname(result.data.bundlePath), `${container}:/fixture/local package`], { windowsHide: true })
+    execFileSync(runtime, [
+      'cp',
+      dirname(result.data.bundlePath),
+      `${container}:/fixture/local package`,
+    ], { windowsHide: true })
     execute('export PATH=/fixture/bin:$PATH; cd /; sh \'/fixture/local package/deploy-local.sh\' /fixture/server')
     expect(execute('cat /fixture/server/current')).toBe(result.data.deploymentId)
     expect(execute('find \'/fixture/local package\' -maxdepth 1 -name \'deploy-local-*.log\' | wc -l')).toBe('1')

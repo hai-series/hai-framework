@@ -7,7 +7,7 @@
   import { page } from '$app/state'
   import { ErrorPage } from '@h-ai/ui'
 
-  const homeUrl = resolve('/', {})
+  const homeUrl = resolve('/')
 </script>
 
 <svelte:head>

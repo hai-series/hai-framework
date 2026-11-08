@@ -185,7 +185,10 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @returns 表结构定义
    */
   private buildReldbTableDef(fields: ReldbCrudFieldDefinition[]): ReldbTableDef {
-    const entries = fields.map(field => [field.columnName, this.normalizeReldbColumnDef(field.def)] as const)
+    const entries = fields.map(field => [
+      field.columnName,
+      this.normalizeReldbColumnDef(field.def),
+    ] as const)
     return Object.fromEntries(entries)
   }
 
@@ -254,7 +257,9 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
       }
       // 尝试解析字符串时间
       const parsed = Date.parse(String(value))
-      return Number.isNaN(parsed) ? undefined : new Date(parsed)
+      return Number.isNaN(parsed)
+        ? undefined
+        : new Date(parsed)
     }
     if (def.type === 'JSON') {
       if (typeof value === 'string') {
@@ -305,7 +310,9 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
         }
         // SQLite 以毫秒时间戳存储
         const parsed = Date.parse(String(value))
-        return Number.isNaN(parsed) ? value : parsed
+        return Number.isNaN(parsed)
+          ? value
+          : parsed
       }
       if (value instanceof Date) {
         return value
@@ -613,7 +620,10 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
     }
 
     // 参数顺序：先 INSERT 值，再 UPDATE 值（两组独立）
-    return this.sql(tx).execute(sql, [...insertValues, ...updateValues])
+    return this.sql(tx).execute(sql, [
+      ...insertValues,
+      ...updateValues,
+    ])
   }
 
   /**

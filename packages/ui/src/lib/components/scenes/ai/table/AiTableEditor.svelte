@@ -230,7 +230,9 @@
   }
 
   function normalizeColumnType(value: unknown): AiTableColumnType {
-    return value === 'number' || value === 'tag' ? value : 'text'
+    return value === 'number' || value === 'tag'
+      ? value
+      : 'text'
   }
 
   function serializeTableDataForComparison(
@@ -265,7 +267,9 @@
 
       const key = typeof item.key === 'string' && item.key.trim()
         ? item.key.trim()
-        : (typeof item.name === 'string' ? item.name.trim() : '')
+        : (typeof item.name === 'string'
+        ? item.name.trim()
+        : '')
       if (!key || usedKeys.has(key)) {
         continue
       }
@@ -515,10 +519,14 @@
     if (isRecord(parsedWhole)) {
       const columns = Array.isArray(parsedWhole.table_columns)
         ? normalizeTableColumns(parsedWhole.table_columns)
-        : (Array.isArray(parsedWhole.columns) ? normalizeTableColumns(parsedWhole.columns) : [])
+        : (Array.isArray(parsedWhole.columns)
+        ? normalizeTableColumns(parsedWhole.columns)
+        : [])
       const rows = Array.isArray(parsedWhole.table_rows)
         ? normalizeTableRows(parsedWhole.table_rows)
-        : (Array.isArray(parsedWhole.rows) ? normalizeTableRows(parsedWhole.rows) : [])
+        : (Array.isArray(parsedWhole.rows)
+        ? normalizeTableRows(parsedWhole.rows)
+        : [])
 
       if (columns.length > 0 || rows.length > 0) {
         return {
@@ -540,8 +548,12 @@
       return null
     }
 
-    const columns = columnsChunk ? parseTableColumnsFromChunk(columnsChunk) : []
-    const rows = rowsChunk ? parseTableRowsFromChunk(rowsChunk) : []
+    const columns = columnsChunk
+      ? parseTableColumnsFromChunk(columnsChunk)
+      : []
+    const rows = rowsChunk
+      ? parseTableRowsFromChunk(rowsChunk)
+      : []
     if (columns.length === 0 && rows.length === 0) {
       return null
     }
@@ -781,7 +793,9 @@
     }
 
     const rowBounds = currentTarget.getBoundingClientRect()
-    return event.clientY < rowBounds.top + rowBounds.height / 2 ? 'before' : 'after'
+    return event.clientY < rowBounds.top + rowBounds.height / 2
+      ? 'before'
+      : 'after'
   }
 
   function updateRowDropHint(rowId: string, event: DragEvent): void {
@@ -1067,7 +1081,9 @@
   function resolveBodyRowClass(rowId: string): string {
     return cn(
       'hai-ai-table-body-row',
-      draggingRowId === rowId ? 'hai-ai-table-body-row--dragging' : '',
+      draggingRowId === rowId
+        ? 'hai-ai-table-body-row--dragging'
+        : '',
       isDropIndicatorVisible(rowId, 'before')
         ? 'hai-ai-table-body-row--drop-before'
         : '',
@@ -1175,7 +1191,9 @@
                 <td>
                   <input
                     class={resolveCellInputClass(column.type)}
-                    type={column.type === 'number' ? 'number' : 'text'}
+                    type={column.type === 'number'
+                      ? 'number'
+                      : 'text'}
                     value={cellInputValue}
                     title={cellInputValue}
                     disabled={!editable}

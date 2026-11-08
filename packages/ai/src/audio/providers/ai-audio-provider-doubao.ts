@@ -35,7 +35,12 @@ const logger = core.logger.child({ module: 'ai', scope: 'audio-doubao' })
 
 /** 豆包实时平台能力：WebSocket 实时识别（不产出服务端 VAD 起止事件）+ 实时合成（支持增量文本输入） */
 const DOUBAO_CAPABILITIES: AudioModelCapabilities = {
-  transcribe: { supported: true, realtimeAudioInput: true, speechBoundaryEvents: false, streamingTranscriptOutput: true },
+  transcribe: {
+    supported: true,
+    realtimeAudioInput: true,
+    speechBoundaryEvents: false,
+    streamingTranscriptOutput: true,
+  },
   synthesize: { supported: true, incrementalTextInput: true, streamingAudioOutput: true },
 }
 
@@ -180,7 +185,9 @@ interface DecodedFrame {
 
 /** 解压 payload（依据 compression 位） */
 function maybeGunzip(payload: Buffer, compression: number): Buffer {
-  return compression === COMPRESS_GZIP ? gunzipSync(payload) : payload
+  return compression === COMPRESS_GZIP
+    ? gunzipSync(payload)
+    : payload
 }
 
 /** 解析服务端二进制帧 */
@@ -223,19 +230,34 @@ function decodeFrame(data: Uint8Array): DecodedFrame {
   offset += 4
   const payload = buf.subarray(offset, offset + size)
 
-  if (messageType === MSG_AUDIO_ONLY_SERVER)
-    return { messageType, event, audio: new Uint8Array(payload) }
+  if (messageType === MSG_AUDIO_ONLY_SERVER) {
+    return {
+      messageType,
+      event,
+      audio: new Uint8Array(payload),
+    }
+  }
 
   const decompressed = maybeGunzip(payload, compression)
   if (serialization === SERIAL_JSON) {
     try {
-      return { messageType, event, sequence, json: JSON.parse(decompressed.toString('utf8')) as Record<string, unknown> }
+      return {
+        messageType,
+        event,
+        sequence,
+        json: JSON.parse(decompressed.toString('utf8')) as Record<string, unknown>,
+      }
     }
     catch {
       return { messageType, event, sequence }
     }
   }
-  return { messageType, event, sequence, audio: new Uint8Array(decompressed) }
+  return {
+    messageType,
+    event,
+    sequence,
+    audio: new Uint8Array(decompressed),
+  }
 }
 
 // ─── Provider 实现 ───
@@ -279,14 +301,22 @@ export function createDoubaoAudioProvider(): AudioProvider {
   async function transcribe(request: ProviderTranscriptionRequest): Promise<HaiResult<TranscriptionResult>> {
     try {
       let finalText = ''
-      for await (const event of transcribeStream({ model: request.model, audio: request.audio, language: request.language, contextHints: request.contextHints, signal: request.signal })) {
+      for await (const event of transcribeStream({
+        model: request.model,
+        audio: request.audio,
+        language: request.language,
+        contextHints: request.contextHints,
+        signal: request.signal,
+      })) {
         if (event.type === 'transcript' && event.final)
           finalText = event.text
       }
       return ok({ text: finalText })
     }
     catch (error) {
-      logger.debug('Doubao transcribe failed', { error: errorMessage(error) })
+      logger.debug('Doubao transcribe failed', {
+        error: errorMessage(error),
+      })
       return toAudioErrorResult(error)
     }
   }
@@ -305,7 +335,9 @@ export function createDoubaoAudioProvider(): AudioProvider {
           rate: sampleRate,
           bits: 16,
           channel: channels,
-          ...(language ? { language } : {}),
+          ...(language
+            ? { language }
+            : {}),
         },
         request: {
           model_name: 'bigmodel',
@@ -313,7 +345,13 @@ export function createDoubaoAudioProvider(): AudioProvider {
           enable_punc: true,
           result_type: 'full',
           // 领域提示词 → 热词（直传 context）
-          ...(contextHints?.length ? { context: JSON.stringify({ hotwords: contextHints.map(word => ({ word })) }) } : {}),
+          ...(contextHints?.length
+            ? {
+                context: JSON.stringify({
+                  hotwords: contextHints.map(word => ({ word })),
+                }),
+              }
+            : {}),
         },
       }))
 
@@ -341,8 +379,13 @@ export function createDoubaoAudioProvider(): AudioProvider {
         if (!message.isBinary || !message.binary)
           continue
         const frame = decodeFrame(message.binary)
-        if (frame.messageType === MSG_SERVER_ERROR)
-          throw audioError(HaiAIError.AUDIO_PROTOCOL_ERROR, aiM('ai_audioProtocolError', { params: { error: `${frame.errorCode} ${frame.errorMessage ?? ''}`.trim() } }))
+        if (frame.messageType === MSG_SERVER_ERROR) {
+          throw audioError(HaiAIError.AUDIO_PROTOCOL_ERROR, aiM('ai_audioProtocolError', {
+            params: {
+              error: `${frame.errorCode} ${frame.errorMessage ?? ''}`.trim(),
+            },
+          }))
+        }
 
         const text = extractAsrText(frame.json)
         const isLast = frame.sequence !== undefined && frame.sequence < 0
@@ -368,12 +411,26 @@ export function createDoubaoAudioProvider(): AudioProvider {
     const out = resolveSynthesisOutput({ format: request.format, sampleRate: request.sampleRate })
     try {
       const chunks: Uint8Array[] = []
-      for await (const audio of synthesizeStream({ model: request.model, text: request.text, voice: request.voice, format: out.format, sampleRate: request.sampleRate, signal: request.signal }))
+      for await (const audio of synthesizeStream({
+        model: request.model,
+        text: request.text,
+        voice: request.voice,
+        format: out.format,
+        sampleRate: request.sampleRate,
+        signal: request.signal,
+      }))
         chunks.push(audio)
-      return ok({ data: concatChunks(chunks), format: out.format, sampleRate: out.sampleRate, channels: out.channels })
+      return ok({
+        data: concatChunks(chunks),
+        format: out.format,
+        sampleRate: out.sampleRate,
+        channels: out.channels,
+      })
     }
     catch (error) {
-      logger.debug('Doubao synthesize failed', { error: errorMessage(error) })
+      logger.debug('Doubao synthesize failed', {
+        error: errorMessage(error),
+      })
       return toAudioErrorResult(error)
     }
   }
@@ -396,11 +453,18 @@ export function createDoubaoAudioProvider(): AudioProvider {
 
       const sendText = (async () => {
         if (typeof text === 'string') {
-          conn.send(encodeTtsEvent(EVENT_TASK_REQUEST, { event: EVENT_TASK_REQUEST, req_params: { ...reqParams, text } }, sessionId))
+          conn.send(encodeTtsEvent(EVENT_TASK_REQUEST, {
+            event: EVENT_TASK_REQUEST,
+            req_params: { ...reqParams, text },
+          }, sessionId))
         }
         else {
-          for await (const part of text)
-            conn.send(encodeTtsEvent(EVENT_TASK_REQUEST, { event: EVENT_TASK_REQUEST, req_params: { ...reqParams, text: part } }, sessionId))
+          for await (const part of text) {
+            conn.send(encodeTtsEvent(EVENT_TASK_REQUEST, {
+              event: EVENT_TASK_REQUEST,
+              req_params: { ...reqParams, text: part },
+            }, sessionId))
+          }
         }
         conn.send(encodeTtsEvent(EVENT_FINISH_SESSION, { event: EVENT_FINISH_SESSION }, sessionId))
         conn.send(encodeTtsEvent(EVENT_FINISH_CONNECTION, { event: EVENT_FINISH_CONNECTION }))
@@ -414,8 +478,13 @@ export function createDoubaoAudioProvider(): AudioProvider {
         const frame = decodeBinaryMessage(message)
         if (!frame)
           continue
-        if (frame.messageType === MSG_SERVER_ERROR || frame.event === EVENT_SESSION_FAILED || frame.event === EVENT_CONNECTION_FAILED)
-          throw audioError(HaiAIError.AUDIO_PROTOCOL_ERROR, aiM('ai_audioProtocolError', { params: { error: `${frame.errorCode ?? frame.event} ${frame.errorMessage ?? ''}`.trim() } }))
+        if (frame.messageType === MSG_SERVER_ERROR || frame.event === EVENT_SESSION_FAILED || frame.event === EVENT_CONNECTION_FAILED) {
+          throw audioError(HaiAIError.AUDIO_PROTOCOL_ERROR, aiM('ai_audioProtocolError', {
+            params: {
+              error: `${frame.errorCode ?? frame.event} ${frame.errorMessage ?? ''}`.trim(),
+            },
+          }))
+        }
 
         if (frame.event === EVENT_TTS_RESPONSE && frame.audio) {
           yield frame.audio
@@ -444,7 +513,13 @@ export function createDoubaoAudioProvider(): AudioProvider {
 /** 豆包未指定格式时默认 pcm16；pcm16 时补默认采样率 24000。 */
 function resolveSynthesisOutput(request: { format?: AudioFormat, sampleRate?: number }): SynthesisOutputMeta {
   const format: AudioFormat = request.format ?? 'pcm16'
-  return { format, sampleRate: format === 'pcm16' ? (request.sampleRate ?? 24000) : undefined, channels: 1 }
+  return {
+    format,
+    sampleRate: format === 'pcm16'
+      ? (request.sampleRate ?? 24000)
+      : undefined,
+    channels: 1,
+  }
 }
 
 // ─── 内部辅助 ───

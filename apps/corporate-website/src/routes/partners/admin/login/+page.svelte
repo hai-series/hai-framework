@@ -1,13 +1,19 @@
 <script lang='ts'>
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import * as m from '$lib/paraglide/messages.js'
   import { Button, Card, FormField, Input, PasswordInput } from '@h-ai/ui'
   import { authErrorMessage } from '@h-ai/ui/i18n'
   import { useToastFeedback } from '@h-ai/ui/toast'
   import { z } from 'zod'
+  import * as m from '#lib/paraglide/messages.js'
 
-  const loginResultSchema = z.object({ success: z.boolean(), error: z.object({ code: z.string().optional(), traceId: z.string().optional() }).optional() })
+  const loginResultSchema = z.object({
+    success: z.boolean(),
+    error: z.object({
+      code: z.string().optional(),
+      traceId: z.string().optional(),
+    }).optional(),
+  })
 
   let username = $state('')
   let password = $state('')
@@ -31,11 +37,18 @@
       const data = loginResultSchema.parse(await response.json())
 
       if (!data.success) {
-        error = authErrorMessage({ code: data.error?.code === 'AUTH_FAILED' ? 'hai:iam:003' : 'hai:iam:999', message: '', httpStatus: response.status, traceId: data.error?.traceId })
+        error = authErrorMessage({
+          code: data.error?.code === 'AUTH_FAILED'
+            ? 'hai:iam:003'
+            : 'hai:iam:999',
+          message: '',
+          httpStatus: response.status,
+          traceId: data.error?.traceId,
+        })
         return
       }
 
-      const adminHref = resolve('/partners/admin', {})
+      const adminHref = resolve('partners/admin')
       await goto(adminHref)
     }
     catch {

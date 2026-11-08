@@ -8,7 +8,12 @@ import { windowsACPJobProbe } from './ai-acp-process-windows.js'
 /** 探测只返回退出码，不捕获私有参数；超过剩余期限按未确认处理。 */
 async function jobProbe(name: string, timeout: number): Promise<number> {
   return new Promise((resolve) => {
-    const probe = spawn('powershell.exe', windowsACPJobProbe(name), { shell: false, windowsHide: true, stdio: 'ignore', env: baseEnvironment() })
+    const probe = spawn('powershell.exe', windowsACPJobProbe(name), {
+      shell: false,
+      windowsHide: true,
+      stdio: 'ignore',
+      env: baseEnvironment(),
+    })
     let settled = false
     let timer: ReturnType<typeof setTimeout> | undefined
     const finish = (code: number) => {
@@ -91,7 +96,12 @@ export async function stopProcess(
     await new Promise<void>((resolve, reject) => {
       const killer = spawn(
         'taskkill',
-        ['/PID', String(child.pid), '/T', '/F'],
+        [
+          '/PID',
+          String(child.pid),
+          '/T',
+          '/F',
+        ],
         { windowsHide: true, stdio: 'ignore' },
       )
       killer.once('error', reject)
@@ -213,7 +223,9 @@ export async function execute(
     child.stderr.resume()
     child.once('error', (error: NodeJS.ErrnoException) => {
       failure = new ACPFailure(
-        command === 'git' && error.code === 'ENOENT' ? 'gitMissing' : 'runtime',
+        command === 'git' && error.code === 'ENOENT'
+          ? 'gitMissing'
+          : 'runtime',
       )
     })
     child.once('close', (code) => {

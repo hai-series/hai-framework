@@ -46,7 +46,10 @@
 
   const presetConfig = $derived(resolveChartPreset(preset))
   const type = $derived(requestedType ?? presetConfig.type ?? 'line')
-  const nativeProps = $derived({ ...presetConfig.props, ...restProps })
+  const nativeProps = $derived({
+    ...presetConfig.props,
+    ...restProps,
+  })
   const dataAttributes = $derived(getDataAttributes(restProps))
 
   // 仅浏览器挂载且确有数据时加载对应图形；Svelte await 自动丢弃过期 Promise 的结果。
@@ -72,11 +75,15 @@
 
   /** 图表可视高度优先尊重 LayerChart 原生 height，未传时使用 @h-ai/ui 的 size 预设。 */
   const chartHeight = $derived(
-    typeof nativeProps.height === 'number' ? nativeProps.height : chartSizeHeights[size],
+    typeof nativeProps.height === 'number'
+      ? nativeProps.height
+      : chartSizeHeights[size],
   )
 
   const isEmpty = $derived(empty || data.length === 0)
-  const rendererPromise = $derived(mounted && !loading && !isEmpty ? renderers[type]() : undefined)
+  const rendererPromise = $derived(mounted && !loading && !isEmpty
+    ? renderers[type]()
+    : undefined)
   const hasHeader = $derived(Boolean(title || description))
 
   const rootClass = $derived(
@@ -121,7 +128,9 @@
   const resolvedSeries = $derived(resolveChartColors(normalizedSeries))
 
   /** 饼图使用统一 x/y API 时，将 x 映射为 key/label，y 的第一项映射为 value。 */
-  const pieValue = $derived(Array.isArray(y) ? y[0] : y)
+  const pieValue = $derived(Array.isArray(y)
+    ? y[0]
+    : y)
 
   const cartesianLayerProps = $derived({
     data,
@@ -175,7 +184,9 @@
       {:then renderer}
         {#if renderer}
           {@const Renderer = renderer.default}
-          <Renderer {...(type === 'pie' ? pieLayerProps : cartesianLayerProps)} />
+          <Renderer {...(type === 'pie'
+            ? pieLayerProps
+            : cartesianLayerProps)} />
         {/if}
       {:catch}
         <!-- 浏览器可能缓存失败的模块请求；刷新文档后才能可靠重试同一资源。 -->

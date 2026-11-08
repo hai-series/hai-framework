@@ -88,7 +88,10 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
     }
     if (typeof documents[0] === 'string') {
       const strs = documents as string[]
-      return { texts: strs, ids: strs.map(() => undefined) }
+      return {
+        texts: strs,
+        ids: strs.map(() => undefined),
+      }
     }
     const docs = documents as RerankDocument[]
     return {
@@ -102,7 +105,9 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
    */
   async function callRerankAPI(request: RerankRequest): Promise<HaiResult<RerankResponse>> {
     const resolvedResult = resolveModelEntry(config.llm, 'rerank', request.model, {
-      missingApiKeyMessage: aiM('ai_configError', { params: { error: 'API Key is required for rerank' } }),
+      missingApiKeyMessage: aiM('ai_configError', {
+        params: { error: 'API Key is required for rerank' },
+      }),
     })
     if (!resolvedResult.success)
       return resolvedResult
@@ -110,7 +115,9 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
 
     const { texts, ids } = normalizeDocuments(request.documents)
     if (texts.length === 0) {
-      return err(HaiAIError.RERANK_INVALID_REQUEST, aiM('ai_rerankInvalidRequest', { params: { reason: 'documents cannot be empty' } }))
+      return err(HaiAIError.RERANK_INVALID_REQUEST, aiM('ai_rerankInvalidRequest', {
+        params: { reason: 'documents cannot be empty' },
+      }))
     }
 
     const body: Record<string, unknown> = {
@@ -141,7 +148,9 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
       if (!response.ok) {
         const errorText = await response.text().catch(() => response.statusText)
         logger.error('Rerank API request failed', { status: response.status, error: errorText })
-        return err(HaiAIError.RERANK_API_ERROR, aiM('ai_rerankApiFailed', { params: { error: `HTTP ${response.status}: ${errorText}` } }))
+        return err(HaiAIError.RERANK_API_ERROR, aiM('ai_rerankApiFailed', {
+          params: { error: `HTTP ${response.status}: ${errorText}` },
+        }))
       }
 
       const data = await response.json() as CohereRerankResponse
@@ -159,7 +168,11 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
     }
     catch (error) {
       logger.error('Rerank API call failed', { error })
-      return err(HaiAIError.RERANK_API_ERROR, aiM('ai_rerankApiFailed', { params: { error: String(error) } }), error)
+      return err(HaiAIError.RERANK_API_ERROR, aiM('ai_rerankApiFailed', {
+        params: {
+          error: String(error),
+        },
+      }), error)
     }
   }
 

@@ -210,10 +210,15 @@ function openBrowserWs(url: string, signal?: AbortSignal): Promise<BrowserWsConn
     }
 
     ws.onmessage = (event: MessageEvent): void => {
-      if (typeof event.data === 'string')
+      if (typeof event.data === 'string') {
         push({ isBinary: false, text: event.data })
-      else
-        push({ isBinary: true, binary: new Uint8Array(event.data as ArrayBuffer) })
+      }
+      else {
+        push({
+          isBinary: true,
+          binary: new Uint8Array(event.data as ArrayBuffer),
+        })
+      }
     }
     // 连接建立前后的错误都记录：建立前直接拒绝，建立后由迭代器在关闭时抛出 AUDIO_CONNECTION_FAILED
     ws.onerror = (): void => {
@@ -281,7 +286,9 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
     const ticket = await config.getTicket(request)
     if (!ticket)
       throw new Error('Audio WebSocket ticket is required')
-    const separator = config.url.includes('?') ? '&' : '?'
+    const separator = config.url.includes('?')
+      ? '&'
+      : '?'
     return `${config.url}${separator}ticket=${encodeURIComponent(ticket)}`
   }
 
@@ -294,7 +301,15 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
     try {
       const format = request.audio.format
       const sampleRate = request.audio.sampleRate
-      conn.send(startMessage('transcribe', { stream: true, model: request.model, language: request.language, contextHints: request.contextHints, format, sampleRate, channels: request.audio.channels }))
+      conn.send(startMessage('transcribe', {
+        stream: true,
+        model: request.model,
+        language: request.language,
+        contextHints: request.contextHints,
+        format,
+        sampleRate,
+        channels: request.audio.channels,
+      }))
 
       const sendAudio = (async () => {
         if ('chunks' in request.audio) {
@@ -338,7 +353,15 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
     // 完整识别：服务端缓冲全部音频后返回单条最终结果
     const conn = await openBrowserWs(await buildUrl({ operation: 'transcribe', model: request.model }), request.signal)
     try {
-      conn.send(startMessage('transcribe', { stream: false, model: request.model, language: request.language, contextHints: request.contextHints, format: request.audio.format, sampleRate: request.audio.sampleRate, channels: request.audio.channels }))
+      conn.send(startMessage('transcribe', {
+        stream: false,
+        model: request.model,
+        language: request.language,
+        contextHints: request.contextHints,
+        format: request.audio.format,
+        sampleRate: request.audio.sampleRate,
+        channels: request.audio.channels,
+      }))
       conn.send(request.audio.data)
       conn.send(JSON.stringify({ type: 'done' }))
 
@@ -364,10 +387,18 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
   async function* synthesizeStream(request: SynthesisStreamRequest): AsyncIterable<SynthesisEvent> {
     const conn = await openBrowserWs(await buildUrl({ operation: 'synthesize', model: request.model }), request.signal)
     try {
-      conn.send(startMessage('synthesize', { model: request.model, voice: request.voice, instruction: request.instruction, format: request.format, sampleRate: request.sampleRate }))
+      conn.send(startMessage('synthesize', {
+        model: request.model,
+        voice: request.voice,
+        instruction: request.instruction,
+        format: request.format,
+        sampleRate: request.sampleRate,
+      }))
 
       const sendText = (async () => {
-        const segments = isSynthesisTextSegment(request.text) ? singleSegment(request.text) : request.text
+        const segments = isSynthesisTextSegment(request.text)
+          ? singleSegment(request.text)
+          : request.text
         for await (const segment of segments)
           conn.send(JSON.stringify({ type: 'text', segmentId: segment.id, text: segment.text }))
         conn.send(JSON.stringify({ type: 'done' }))
@@ -421,7 +452,10 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
   async function synthesize(request: SynthesisRequest): Promise<SynthesisResult> {
     const chunks: Uint8Array[] = []
     let meta: { format: SynthesisResult['format'], sampleRate?: number, channels?: 1 | 2 } | undefined
-    for await (const event of synthesizeStream({ ...request, text: { id: 'synthesis', text: request.text } })) {
+    for await (const event of synthesizeStream({
+      ...request,
+      text: { id: 'synthesis', text: request.text },
+    })) {
       if (event.type === 'segment_started')
         meta = { format: event.format, sampleRate: event.sampleRate, channels: event.channels }
       else if (event.type === 'audio')
@@ -437,10 +471,20 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
       data.set(chunk, offset)
       offset += chunk.length
     }
-    return { data, format: meta.format, sampleRate: meta.sampleRate, channels: meta.channels ?? 1 }
+    return {
+      data,
+      format: meta.format,
+      sampleRate: meta.sampleRate,
+      channels: meta.channels ?? 1,
+    }
   }
 
-  return { transcribe, transcribeStream, synthesize, synthesizeStream }
+  return {
+    transcribe,
+    transcribeStream,
+    synthesize,
+    synthesizeStream,
+  }
 }
 
 function isSynthesisTextSegment(value: SynthesisStreamRequest['text']): value is SynthesisTextSegment {

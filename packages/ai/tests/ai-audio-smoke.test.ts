@@ -28,7 +28,14 @@ describe.skipIf(!enabled || !provider || !ttsModel)('ai.audio smoke（真实接�
   it('synthesize 返回非空音频', async () => {
     const init = await ai.init({
       audio: {
-        models: [{ id: 'tts', provider: provider!, model: ttsModel!, operations: ['synthesize'] }],
+        models: [
+          {
+            id: 'tts',
+            provider: provider!,
+            model: ttsModel!,
+            operations: ['synthesize'],
+          },
+        ],
         synthesizeModel: 'tts',
       },
     })

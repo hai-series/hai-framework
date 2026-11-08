@@ -12,7 +12,10 @@ describe('encryptedInput', () => {
     const onencrypt = () => new Promise<string>((resolve, reject) => pending.push({ resolve, reject }))
     const target = document.createElement('div')
     document.body.append(target)
-    const component = mount(EncryptedInput, { target, props: { showEncrypted: true, onencrypt } })
+    const component = mount(EncryptedInput, {
+      target,
+      props: { showEncrypted: true, onencrypt },
+    })
     let unmounted = false
     async function input(value: string) {
       const element = target.querySelector('input')!
@@ -60,7 +63,10 @@ describe('encryptedInput', () => {
   it('未配置加密时中文输入不会产生伪密文', async () => {
     const target = document.createElement('div')
     document.body.append(target)
-    const component = mount(EncryptedInput, { target, props: { showEncrypted: true } })
+    const component = mount(EncryptedInput, {
+      target,
+      props: { showEncrypted: true },
+    })
     try {
       flushSync()
       const input = target.querySelector('input')!

@@ -121,7 +121,10 @@ function createPushScope(options?: PushOptions): PushScope {
         controller.signal.addEventListener('abort', interrupt, { once: true })
       })
       try {
-        return await Promise.race([Promise.resolve().then(operation), aborted])
+        return await Promise.race([
+          Promise.resolve().then(operation),
+          aborted,
+        ])
       }
       finally {
         if (interrupt)
@@ -216,7 +219,10 @@ export async function registerPush(options?: PushOptions): Promise<HaiResult<Pus
         scope.assertOpen()
         await push.register()
       }
-      return (await Promise.all([setup(), tokenResult]))[1]
+      return (await Promise.all([
+        setup(),
+        tokenResult,
+      ]))[1]
     })
     await scope.dispose()
     return ok({ token })
@@ -257,14 +263,26 @@ export async function listenPush(callbacks: PushNotificationCallbacks, options?:
       scope.assertOpen()
       if (callbacks.onReceived) {
         await scope.attach(() => push.addListener('pushNotificationReceived', (notification) => {
-          if (!scope.signal.aborted)
-            callbacks.onReceived?.({ id: notification.id, title: notification.title, body: notification.body, data: notification.data as Record<string, unknown> })
+          if (!scope.signal.aborted) {
+            callbacks.onReceived?.({
+              id: notification.id,
+              title: notification.title,
+              body: notification.body,
+              data: notification.data as Record<string, unknown>,
+            })
+          }
         }))
       }
       if (callbacks.onActionPerformed) {
         await scope.attach(() => push.addListener('pushNotificationActionPerformed', (action) => {
-          if (!scope.signal.aborted)
-            callbacks.onActionPerformed?.({ id: action.notification.id, title: action.notification.title, body: action.notification.body, data: action.notification.data as Record<string, unknown> })
+          if (!scope.signal.aborted) {
+            callbacks.onActionPerformed?.({
+              id: action.notification.id,
+              title: action.notification.title,
+              body: action.notification.body,
+              data: action.notification.data as Record<string, unknown>,
+            })
+          }
         }))
       }
     })

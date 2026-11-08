@@ -30,8 +30,14 @@ let rebind = false
 /** 最小 DER 仅用于每次测试生成临时证书，避免硬编码私钥和 openssl 前置。 */
 function der(tag: number, ...parts: Buffer[]): Buffer {
   const bytes = Buffer.concat(parts)
-  const length = bytes.length < 128 ? Buffer.from([bytes.length]) : Buffer.from([0x82, bytes.length >> 8, bytes.length & 255])
-  return Buffer.concat([Buffer.from([tag]), length, bytes])
+  const length = bytes.length < 128
+    ? Buffer.from([bytes.length])
+    : Buffer.from([0x82, bytes.length >> 8, bytes.length & 255])
+  return Buffer.concat([
+    Buffer.from([tag]),
+    length,
+    bytes,
+  ])
 }
 const pair = generateKeyPairSync('rsa', { modulusLength: 2048 })
 const algorithm = Buffer.from('300d06092a864886f70d01010b0500', 'hex')
@@ -52,10 +58,19 @@ function endless(response: ServerResponse, chunk: Uint8Array) {
   })
 }
 
-const server = https.createServer({ key: pair.privateKey.export({ type: 'pkcs8', format: 'pem' }), cert: certificate }, (request, response) => {
+const server = https.createServer({
+  key: pair.privateKey.export({ type: 'pkcs8', format: 'pem' }),
+  cert: certificate,
+}, (request, response) => {
   received.push({ path: request.url ?? '', authorization: request.headers.authorization })
   if (request.url === '/redirect' || request.url === '/internal' || request.url === '/loop') {
-    response.writeHead(302, { location: request.url === '/internal' ? 'https://127.0.0.1/secret' : request.url === '/loop' ? '/loop' : 'https://cdn.image.test/ok' }).end()
+    response.writeHead(302, {
+      location: request.url === '/internal'
+        ? 'https://127.0.0.1/secret'
+        : request.url === '/loop'
+          ? '/loop'
+          : 'https://cdn.image.test/ok',
+    }).end()
     return
   }
   if (request.url === '/error') {
@@ -65,10 +80,17 @@ const server = https.createServer({ key: pair.privateKey.export({ type: 'pkcs8',
   }
   if (request.url === '/gzip') {
     response.writeHead(200, { 'content-type': 'image/png', 'content-encoding': 'gzip' })
-    response.end(gzipSync(Buffer.concat([png, new Uint8Array(1024 * 1024)])))
+    response.end(gzipSync(Buffer.concat([
+      png,
+      new Uint8Array(1024 * 1024),
+    ])))
     return
   }
-  response.writeHead(200, { 'content-type': request.url === '/svg' ? 'image/svg+xml' : 'image/png' })
+  response.writeHead(200, {
+    'content-type': request.url === '/svg'
+      ? 'image/svg+xml'
+      : 'image/png',
+  })
   if (request.url === '/wrong-magic') {
     response.end('<html>not an image</html>')
     return
@@ -101,34 +123,70 @@ beforeEach(() => {
   lookupCalls = 0
   streamedBytes = 0
   imageUrl = 'https://public.image.test/ok'
-  addresses = [{ address: '8.8.8.8', family: 4 }]
+  addresses = [
+    { address: '8.8.8.8', family: 4 },
+  ]
   apiResponse = undefined
   rebind = false
-  Object.defineProperty(dns, 'lookup', { ...originalLookup, value: (_hostname: string, _options: object, callback: (error: Error | null, addresses: LookupAddress[]) => void) => {
-    lookupCalls++
-    callback(null, addresses)
-    if (rebind)
-      addresses = [{ address: '127.0.0.1', family: 4 }]
-  } })
+  Object.defineProperty(dns, 'lookup', {
+    ...originalLookup,
+    value: (_hostname: string, _options: object, callback: (error: Error | null, addresses: LookupAddress[]) => void) => {
+      lookupCalls++
+      callback(null, addresses)
+      if (rebind) {
+        addresses = [
+          { address: '127.0.0.1', family: 4 },
+        ]
+      }
+    },
+  })
   // Undici 的实际 TLS connect 只使用 options 形式。先运行生产 lookup 校验，再将已验证地址路由至隔离本地 fixture。
   // 只覆盖路由与测试 CA，不关闭 TLS 证书/主机名验证；不可将此路由方式用于生产。
-  Object.defineProperty(tls, 'connect', { ...originalConnect, value: (options: ConnectionOptions) => {
-    if (!options.host?.endsWith('.image.test') || !options.lookup)
-      throw new Error('Unexpected TLS fixture target')
-    const lookup: LookupFunction = (hostname, lookupOptions, callback) => options.lookup!(hostname, lookupOptions, (error, value, family) => {
-      if (error)
-        return callback(error, value, family)
-      validatedAddresses.push(...(Array.isArray(value) ? value.map(item => item.address) : [value]))
-      if (lookupOptions.all)
-        callback(null, [{ address: '127.0.0.1', family: 4 }])
-      else
-        callback(null, '127.0.0.1', 4)
-    })
-    return connect({ ...options, port, ca: certificate, lookup })
-  } })
+  Object.defineProperty(tls, 'connect', {
+    ...originalConnect,
+    value: (options: ConnectionOptions) => {
+      if (!options.host?.endsWith('.image.test') || !options.lookup)
+        throw new Error('Unexpected TLS fixture target')
+      const lookup: LookupFunction = (hostname, lookupOptions, callback) => options.lookup!(hostname, lookupOptions, (error, value, family) => {
+        if (error)
+          return callback(error, value, family)
+        validatedAddresses.push(...(Array.isArray(value)
+          ? value.map(item => item.address)
+          : [value]))
+        if (lookupOptions.all) {
+          callback(null, [
+            { address: '127.0.0.1', family: 4 },
+          ])
+        }
+        else {
+          callback(null, '127.0.0.1', 4)
+        }
+      })
+      return connect({
+        ...options,
+        port,
+        ca: certificate,
+        lookup,
+      })
+    },
+  })
   vi.stubGlobal('fetch', vi.fn<typeof fetch>(async (input, options) => {
     if (String(input).startsWith('https://upstream.example/')) {
-      return apiResponse?.() ?? new Response(JSON.stringify({ output: { choices: [{ message: { content: [{ image: imageUrl }] } }] } }), { headers: { 'content-type': 'application/json' } })
+      return apiResponse?.() ?? new Response(JSON.stringify({
+        output: {
+          choices: [
+            {
+              message: {
+                content: [
+                  { image: imageUrl },
+                ],
+              },
+            },
+          ],
+        },
+      }), {
+        headers: { 'content-type': 'application/json' },
+      })
     }
     throw new Error(`Unexpected upstream request method: ${options?.method}`)
   }))
@@ -150,14 +208,30 @@ afterAll(async () => {
   for (const socket of sockets)
     socket.destroy()
   await new Promise<void>((resolve, reject) => {
-    server.close(error => error ? reject(error) : resolve())
+    server.close(error => error
+      ? reject(error)
+      : resolve())
   })
 })
 
 /** 通过公共生命周期传入资源限制，厂商响应和真实下载链路在此连接。 */
 async function generate(options: { maxImageBytes?: number, maxImages?: number, timeout?: number, signal?: AbortSignal } = {}) {
   expect((await ai.init({
-    image: { maxImageBytes: options.maxImageBytes, maxImages: options.maxImages, generateModel: 'qwen', models: [{ id: 'qwen', provider: 'qwen', model: 'qwen-image', apiKey: 'test-key', baseUrl: 'https://upstream.example', timeout: options.timeout ?? 1000 }] },
+    image: {
+      maxImageBytes: options.maxImageBytes,
+      maxImages: options.maxImages,
+      generateModel: 'qwen',
+      models: [
+        {
+          id: 'qwen',
+          provider: 'qwen',
+          model: 'qwen-image',
+          apiKey: 'test-key',
+          baseUrl: 'https://upstream.example',
+          timeout: options.timeout ?? 1000,
+        },
+      ],
+    },
   })).success).toBe(true)
   return ai.image.generate({ prompt: 'test', signal: options.signal })
 }
@@ -189,14 +263,33 @@ describe('ai.image download security', () => {
     'https://224.0.0.1/a',
   ])('拒绝不可信地址 %s，不连接目标', async (url) => {
     imageUrl = url
-    expect(await generate()).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_DOWNLOAD_BLOCKED.code } })
+    expect(await generate()).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_DOWNLOAD_BLOCKED.code },
+    })
     expect(received).toHaveLength(0)
     expect(lookupCalls).toBe(0)
   })
 
-  it.each(['127.0.0.1', '10.0.0.1', '169.254.169.254', '::1', '::ffff:127.0.0.1', 'fe80::1', '2001:db8::1'])('解析后地址 %s 或混合记录不允许建连', async (address) => {
-    addresses.push({ address, family: address.includes(':') ? 6 : 4 })
-    expect(await generate()).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_DOWNLOAD_BLOCKED.code } })
+  it.each([
+    '127.0.0.1',
+    '10.0.0.1',
+    '169.254.169.254',
+    '::1',
+    '::ffff:127.0.0.1',
+    'fe80::1',
+    '2001:db8::1',
+  ])('解析后地址 %s 或混合记录不允许建连', async (address) => {
+    addresses.push({
+      address,
+      family: address.includes(':')
+        ? 6
+        : 4,
+    })
+    expect(await generate()).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_DOWNLOAD_BLOCKED.code },
+    })
     expect(lookupCalls).toBe(1)
     expect(received).toHaveLength(0)
   })
@@ -204,15 +297,30 @@ describe('ai.image download security', () => {
   it('合法临时 URL 经受控真实 TLS 下载，固定已校验 DNS，不转发认证头', async () => {
     rebind = true
     const result = await generate()
-    expect(result.success, result.success ? undefined : String(result.error.cause instanceof Error ? result.error.cause.cause : result.error.cause)).toBe(true)
-    expect(result).toMatchObject({ success: true, data: { images: [{ data: png, mimeType: 'image/png' }] } })
+    expect(result.success, result.success
+      ? undefined
+      : String(result.error.cause instanceof Error
+          ? result.error.cause.cause
+          : result.error.cause)).toBe(true)
+    expect(result).toMatchObject({
+      success: true,
+      data: {
+        images: [
+          { data: png, mimeType: 'image/png' },
+        ],
+      },
+    })
     expect(lookupCalls).toBe(1)
     expect(validatedAddresses).toEqual(['8.8.8.8'])
-    expect(received).toEqual([{ path: '/ok', authorization: undefined }])
+    expect(received).toEqual([
+      { path: '/ok', authorization: undefined },
+    ])
   })
 
   it('合法公网 IPv6 DNS 候选可用，未把全体 IPv6 一律拒绝', async () => {
-    addresses = [{ address: '2001:4860:4860::8888', family: 6 }]
+    addresses = [
+      { address: '2001:4860:4860::8888', family: 6 },
+    ]
     expect((await generate()).success).toBe(true)
     expect(validatedAddresses).toEqual(['2001:4860:4860::8888'])
   })
@@ -220,7 +328,10 @@ describe('ai.image download security', () => {
   it('重定向的新域名解析到私网时拒绝，不把前一跳的校验结果当作新目标许可', async () => {
     rebind = true
     imageUrl = 'https://public.image.test/redirect'
-    expect(await generate()).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_DOWNLOAD_BLOCKED.code } })
+    expect(await generate()).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_DOWNLOAD_BLOCKED.code },
+    })
     expect(lookupCalls).toBe(2)
     expect(received.map(item => item.path)).toEqual(['/redirect'])
   })
@@ -232,47 +343,71 @@ describe('ai.image download security', () => {
     await ai.close()
     received.length = 0
     imageUrl = 'https://public.image.test/internal'
-    expect(await generate()).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_DOWNLOAD_BLOCKED.code } })
+    expect(await generate()).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_DOWNLOAD_BLOCKED.code },
+    })
     expect(received.map(item => item.path)).toEqual(['/internal'])
   })
 
   it('重定向次数有界，超限停止并释放连接', async () => {
     imageUrl = 'https://public.image.test/loop'
-    expect(await generate()).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_PROTOCOL_ERROR.code } })
+    expect(await generate()).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_PROTOCOL_ERROR.code },
+    })
     expect(received).toHaveLength(4)
   })
 
   it('chunked 响应越限提前中止，未完整读入无限流并释放真实连接', async () => {
     imageUrl = 'https://public.image.test/large'
-    expect(await generate({ maxImageBytes: 16 })).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_TOO_LARGE.code } })
+    expect(await generate({ maxImageBytes: 16 })).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_TOO_LARGE.code },
+    })
     await expect.poll(() => sockets.size).toBe(0)
     expect(streamedBytes).toBeLessThan(1024)
   })
 
   it('压缩响应按实际解压后字节计数，不以很小的压缩包大小绕过限制', async () => {
     imageUrl = 'https://public.image.test/gzip'
-    expect(await generate({ maxImageBytes: 4096 })).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_TOO_LARGE.code } })
+    expect(await generate({ maxImageBytes: 4096 })).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_TOO_LARGE.code },
+    })
   })
 
   it('总 deadline 覆盖流读取停滞，调用方取消单独返回取消错误', async () => {
     imageUrl = 'https://public.image.test/stall'
-    expect(await generate({ timeout: 150 })).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_TIMEOUT.code } })
+    expect(await generate({ timeout: 150 })).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_TIMEOUT.code },
+    })
     await ai.close()
     const controller = new AbortController()
     const pending = generate({ signal: controller.signal })
     await expect.poll(() => received.length).toBe(2)
     controller.abort('caller cancelled')
-    expect(await pending).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_CANCELLED.code } })
+    expect(await pending).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_CANCELLED.code },
+    })
   })
 
   it.each(['/wrong-magic', '/svg'])('拒绝 MIME/魔数不符或主动内容 %s', async (pathname) => {
     imageUrl = `https://public.image.test${pathname}`
-    expect(await generate()).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_PROTOCOL_ERROR.code } })
+    expect(await generate()).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_PROTOCOL_ERROR.code },
+    })
   })
 
   it('错误正文同样有界，保留 HTTP 错误且释放连接', async () => {
     imageUrl = 'https://public.image.test/error'
-    expect(await generate()).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_UPSTREAM_ERROR.code } })
+    expect(await generate()).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_UPSTREAM_ERROR.code },
+    })
     expect(streamedBytes).toBeLessThan(256 * 1024)
   })
 
@@ -283,15 +418,38 @@ describe('ai.image download security', () => {
         controller.enqueue(new Uint8Array(16 * 1024).fill(65))
       },
       cancel: cancelled,
-    }), { headers: { 'content-type': 'application/json' } })
-    expect(await generate({ maxImageBytes: 16 })).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_TOO_LARGE.code } })
+    }), {
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(await generate({ maxImageBytes: 16 })).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_TOO_LARGE.code },
+    })
     expect(cancelled).toHaveBeenCalledOnce()
     expect(received).toHaveLength(0)
   })
 
   it('超出图片数量限制的 URL 数组在下载前失败', async () => {
-    apiResponse = () => new Response(JSON.stringify({ output: { choices: [{ message: { content: [{ image: imageUrl }, { image: imageUrl }] } }] } }), { headers: { 'content-type': 'application/json' } })
-    expect(await generate({ maxImages: 1 })).toMatchObject({ success: false, error: { code: HaiAIError.IMAGE_TOO_LARGE.code } })
+    apiResponse = () => new Response(JSON.stringify({
+      output: {
+        choices: [
+          {
+            message: {
+              content: [
+                { image: imageUrl },
+                { image: imageUrl },
+              ],
+            },
+          },
+        ],
+      },
+    }), {
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(await generate({ maxImages: 1 })).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.IMAGE_TOO_LARGE.code },
+    })
     expect(received).toHaveLength(0)
   })
 })

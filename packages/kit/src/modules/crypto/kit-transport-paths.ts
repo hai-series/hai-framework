@@ -23,7 +23,9 @@ const ROOT_DATA_PATH = '/__data.json'
 const DATA_SUFFIX = '/__data.json'
 
 function normalizePath(pathname: string): string {
-  return pathname.startsWith('/') ? pathname : `/${pathname}`
+  return pathname.startsWith('/')
+    ? pathname
+    : `/${pathname}`
 }
 
 /**
@@ -166,7 +168,9 @@ export function shouldUseTransportForUrl(
   } = {},
 ): boolean {
   const baseOrigin = options.origin ?? 'http://localhost'
-  const requestUrl = url instanceof URL ? url : new URL(url, baseOrigin)
+  const requestUrl = url instanceof URL
+    ? url
+    : new URL(url, baseOrigin)
 
   if (options.origin && requestUrl.origin !== options.origin)
     return false

@@ -55,14 +55,21 @@ export function createR2Provisioner(): ServiceProvisioner {
         const acctId = credentials.accountId ?? credentials.account_id ?? ''
         const apiTok = credentials.apiToken ?? credentials.api_token ?? credentials.token ?? ''
         if (!acctId || !apiTok || !credentials.accessKeyId || !credentials.secretAccessKey) {
-          throw new Error(deployM('deploy_credentialMissing', { params: { fields: 'accountId, apiToken, accessKeyId, secretAccessKey' } }))
+          throw new Error(deployM('deploy_credentialMissing', {
+            params: { fields: 'accountId, apiToken, accessKeyId, secretAccessKey' },
+          }))
         }
 
         const res = await fetch(`${CF_API}/accounts/${acctId}/r2/buckets`, {
           headers: { Authorization: `Bearer ${apiTok}` },
         })
         if (!res.ok) {
-          throw new Error(deployM('deploy_apiError', { params: { service: 'Cloudflare', status: String(res.status) } }))
+          throw new Error(deployM('deploy_apiError', {
+            params: {
+              service: 'Cloudflare',
+              status: String(res.status),
+            },
+          }))
         }
 
         accountId = acctId
@@ -77,7 +84,11 @@ export function createR2Provisioner(): ServiceProvisioner {
         return err(
           HaiDeployError.AUTH_FAILED,
           deployM('deploy_authFailed', {
-            params: { error: error instanceof Error ? error.message : String(error) },
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
           }),
           error,
         )
@@ -111,7 +122,12 @@ export function createR2Provisioner(): ServiceProvisioner {
 
         // 409 表示桶已存在，可继续
         if (!createRes.ok && createRes.status !== 409) {
-          throw new Error(deployM('deploy_apiError', { params: { service: 'Cloudflare', status: String(createRes.status) } }))
+          throw new Error(deployM('deploy_apiError', {
+            params: {
+              service: 'Cloudflare',
+              status: String(createRes.status),
+            },
+          }))
         }
 
         logger.info('R2 bucket provisioned', { bucketName })
@@ -119,7 +135,9 @@ export function createR2Provisioner(): ServiceProvisioner {
         return ok({
           serviceType: 'storage',
           provisionerName: 'r2',
-          resourceStatus: createRes.status === 409 ? 'reused' : 'created',
+          resourceStatus: createRes.status === 409
+            ? 'reused'
+            : 'created',
           envVars: {
             HAI_STORAGE: JSON.stringify({
               type: 's3',
@@ -140,7 +158,9 @@ export function createR2Provisioner(): ServiceProvisioner {
           deployM('deploy_provisionFailed', {
             params: {
               service: 'r2',
-              error: error instanceof Error ? error.message : String(error),
+              error: error instanceof Error
+                ? error.message
+                : String(error),
             },
           }),
           error,

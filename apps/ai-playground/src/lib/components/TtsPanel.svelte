@@ -1,9 +1,9 @@
 <script lang='ts'>
-  // 语音合成面板：将文本合成为可播放的 WAV，音色列表由服务端配置注入
-  import * as m from '$lib/paraglide/messages.js'
-  import { synthesize } from '$lib/services/ai-lab.js'
   import { Button, Card } from '@h-ai/ui'
   import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  // 语音合成面板：将文本合成为可播放的 WAV，音色列表由服务端配置注入
+  import * as m from '#lib/paraglide/messages.js'
+  import { synthesize } from '#lib/services/ai-lab.js'
 
   interface Props {
     voices?: string[]
@@ -85,6 +85,8 @@
 
   <Button class='mt-4 w-full' variant='secondary' onclick={run} disabled={busy || !text.trim()} data-testid='tts-run'>
     {#if busy}<span class='loading loading-spinner loading-sm'></span>{/if}
-    {busy ? m.tts_running() : m.tts_run()}
+    {busy
+      ? m.tts_running()
+      : m.tts_run()}
   </Button>
 </Card>

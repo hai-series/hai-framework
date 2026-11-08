@@ -112,7 +112,13 @@ for (const [address, prefix] of [
   ['224.0.0.0', 4],
   ['240.0.0.0', 4],
 ] as const) blockedAddresses.addSubnet(address, prefix, 'ipv4')
-for (const [address, prefix] of [['2001::', 23], ['2001:db8::', 32], ['2002::', 16], ['3ffe::', 16], ['3fff::', 20]] as const)
+for (const [address, prefix] of [
+  ['2001::', 23],
+  ['2001:db8::', 32],
+  ['2002::', 16],
+  ['3ffe::', 16],
+  ['3fff::', 20],
+] as const)
   blockedAddresses.addSubnet(address, prefix, 'ipv6')
 const globalIpv6 = new BlockList()
 globalIpv6.addSubnet('2000::', 3, 'ipv6')
@@ -132,7 +138,9 @@ const imageLookup: LookupFunction = (hostname, options, callback) => {
       return callback(error, '')
     if (!addresses.length || addresses.some(item => !isPublicImageAddress(item.address)))
       return callback(new ImageDownloadBlockedError('Image download address is blocked'), '')
-    const candidates = options.family ? addresses.filter(item => item.family === options.family) : addresses
+    const candidates = options.family
+      ? addresses.filter(item => item.family === options.family)
+      : addresses
     if (!candidates.length)
       return callback(new ImageDownloadBlockedError('Image download address is blocked'), '')
     if (options.all)
@@ -212,7 +220,9 @@ export function validateImageOutput(image: GeneratedImage, maxBytes: number): Ha
   if (image.data.byteLength > maxBytes)
     return err(HaiAIError.IMAGE_TOO_LARGE, aiM('ai_imageTooLarge'))
   const bytes = image.data
-  const mime = image.mimeType.toLowerCase() === 'image/jpg' ? 'image/jpeg' : image.mimeType.toLowerCase()
+  const mime = image.mimeType.toLowerCase() === 'image/jpg'
+    ? 'image/jpeg'
+    : image.mimeType.toLowerCase()
   const prefix = (value: number[]) => value.every((byte, index) => bytes[index] === byte)
   const valid = mime === 'image/png'
     ? prefix([137, 80, 78, 71, 13, 10, 26, 10])
@@ -221,7 +231,9 @@ export function validateImageOutput(image: GeneratedImage, maxBytes: number): Ha
       : mime === 'image/gif'
         ? ['GIF87a', 'GIF89a'].includes(Buffer.from(bytes.subarray(0, 6)).toString('ascii'))
         : mime === 'image/webp' && Buffer.from(bytes.subarray(0, 4)).toString('ascii') === 'RIFF' && Buffer.from(bytes.subarray(8, 12)).toString('ascii') === 'WEBP'
-  return valid ? ok({ ...image, mimeType: mime }) : imageProtocolError()
+  return valid
+    ? ok({ ...image, mimeType: mime })
+    : imageProtocolError()
 }
 
 /**
@@ -336,7 +348,10 @@ export async function readJson(response: ImageHttpResponse, request: Pick<Provid
  * ```
  */
 export async function downloadImage(url: string, request: ProviderGenerateImageRequest): Promise<HaiResult<GeneratedImage>> {
-  const dispatcher = new Agent({ connect: { lookup: imageLookup }, connections: 1 })
+  const dispatcher = new Agent({
+    connect: { lookup: imageLookup },
+    connections: 1,
+  })
   try {
     let target = checkedImageUrl(url)
     for (let redirect = 0; redirect <= 3; redirect++) {
@@ -401,7 +416,13 @@ export async function readImageResponse(response: ImageHttpResponse, request: Pr
   if (!response.ok)
     return imageUpstreamError(response, request.signal)
   const contentType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase()
-  if (!contentType || !['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'].includes(contentType)) {
+  if (!contentType || ![
+    'image/png',
+    'image/jpeg',
+    'image/jpg',
+    'image/gif',
+    'image/webp',
+  ].includes(contentType)) {
     await response.body?.cancel()
     return imageProtocolError()
   }
@@ -468,9 +489,13 @@ async function imageUpstreamError(response: ImageHttpResponse, signal?: AbortSig
       message?: unknown
       error?: { code?: unknown, message?: unknown, requestId?: unknown } | string
     }
-    const nested = typeof body.error === 'object' && body.error ? body.error : undefined
+    const nested = typeof body.error === 'object' && body.error
+      ? body.error
+      : undefined
     const code = nested?.code ?? body.code
-    const message = nested?.message ?? body.message ?? (typeof body.error === 'string' ? body.error : undefined)
+    const message = nested?.message ?? body.message ?? (typeof body.error === 'string'
+      ? body.error
+      : undefined)
     if (typeof code === 'string')
       details.upstreamCode = code.slice(0, 120)
     if (typeof message === 'string')
@@ -489,6 +514,8 @@ async function imageUpstreamError(response: ImageHttpResponse, signal?: AbortSig
       ? aiM('ai_imagePaymentRequired')
       : response.status === 403
         ? aiM('ai_imageAccessDenied')
-        : aiM('ai_imageUpstreamError', { params: { status: response.status } })
+        : aiM('ai_imageUpstreamError', {
+            params: { status: response.status },
+          })
   return err(HaiAIError.IMAGE_UPSTREAM_ERROR, message, details)
 }

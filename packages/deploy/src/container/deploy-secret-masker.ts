@@ -28,17 +28,23 @@ export interface SecretMasker {
  * ```
  */
 export function createSecretMasker(secrets: readonly string[] = []): SecretMasker {
-  const values = [...new Set(secrets.filter(Boolean))].sort((a, b) => b.length - a.length)
+  const values = [
+    ...new Set(secrets.filter(Boolean)),
+  ].sort((a, b) => b.length - a.length)
   if (values.reduce((total, value) => total + value.length, 0) > 1048576)
     throw new RangeError('Secret redaction input is too large')
-  const pattern = values.length ? new RegExp(values.map(value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g') : undefined
+  const pattern = values.length
+    ? new RegExp(values.map(value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g')
+    : undefined
   const tailLength = Math.max(0, (values[0]?.length ?? 1) - 1)
   let pending = ''
   let ended = false
 
   /** 在原文边界上计算释放位置；不能从掩码中间切分后再释放其原文尾部。 */
   function drain(final: boolean): string {
-    let end = final ? pending.length : Math.max(0, pending.length - tailLength)
+    let end = final
+      ? pending.length
+      : Math.max(0, pending.length - tailLength)
     // 避免向分别编码/显示回调片段的消费者交付半个Unicode代理对。
     if (end > 0 && end < pending.length && /[\uD800-\uDBFF]/.test(pending[end - 1]!) && /[\uDC00-\uDFFF]/.test(pending[end]!))
       end--

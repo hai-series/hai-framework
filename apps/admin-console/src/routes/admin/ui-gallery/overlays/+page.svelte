@@ -8,18 +8,36 @@
 -->
 <script lang='ts'>
   import type { ToastProps } from '@h-ai/ui'
-  import DemoCard from '$lib/components/gallery/DemoCard.svelte'
-  import DemoSection from '$lib/components/gallery/DemoSection.svelte'
-  import * as m from '$lib/paraglide/messages.js'
   import { messageBox, toast } from '@h-ai/ui'
+  import DemoCard from '#lib/components/gallery/DemoCard.svelte'
+  import DemoSection from '#lib/components/gallery/DemoSection.svelte'
+  import * as m from '#lib/paraglide/messages.js'
 
   const toastPositions = $derived<{ value: NonNullable<ToastProps['position']>, label: string }[]>([
-    { value: 'bottom-right', label: m.gallery_toast_bottom_right() },
-    { value: 'top-right', label: m.gallery_toast_top_right() },
-    { value: 'bottom-center', label: m.gallery_toast_bottom_center() },
-    { value: 'top-center', label: m.gallery_toast_top_center() },
-    { value: 'bottom-left', label: m.gallery_toast_bottom_left() },
-    { value: 'top-left', label: m.gallery_toast_top_left() },
+    {
+      value: 'bottom-right',
+      label: m.gallery_toast_bottom_right(),
+    },
+    {
+      value: 'top-right',
+      label: m.gallery_toast_top_right(),
+    },
+    {
+      value: 'bottom-center',
+      label: m.gallery_toast_bottom_center(),
+    },
+    {
+      value: 'top-center',
+      label: m.gallery_toast_top_center(),
+    },
+    {
+      value: 'bottom-left',
+      label: m.gallery_toast_bottom_left(),
+    },
+    {
+      value: 'top-left',
+      label: m.gallery_toast_top_left(),
+    },
   ])
 
   function showToastQueue() {
@@ -43,9 +61,21 @@
   let themeColor = $state('#4f46e5')
   let settingsActive = $state('appearance')
   const settingsSections = [
-    { id: 'appearance', label: m.settings_appearance(), icon: 'icon-[tabler--palette]' },
-    { id: 'account', label: m.gallery_demo_account(), icon: 'icon-[tabler--user]' },
-    { id: 'notifications', label: m.gallery_demo_notifications(), icon: 'icon-[tabler--bell]' },
+    {
+      id: 'appearance',
+      label: m.settings_appearance(),
+      icon: 'icon-[tabler--palette]',
+    },
+    {
+      id: 'account',
+      label: m.gallery_demo_account(),
+      icon: 'icon-[tabler--user]',
+    },
+    {
+      id: 'notifications',
+      label: m.gallery_demo_notifications(),
+      icon: 'icon-[tabler--bell]',
+    },
   ]
 
   // === 示例源码 ===
@@ -179,7 +209,16 @@ await messageBox.alert('这是一条提示信息')
 
     <DemoCard title={m.gallery_demo_modal_sizes()} description='sm / md / lg / xl / 2xl / 3xl / 4xl / full' code={codeModalSize}>
       <div class='flex flex-wrap gap-2'>
-        {#each ['sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', 'full'] as size (size)}
+        {#each [
+          'sm',
+          'md',
+          'lg',
+          'xl',
+          '2xl',
+          '3xl',
+          '4xl',
+          'full',
+        ] as size (size)}
           <Button
             variant='secondary'
             outline
@@ -232,7 +271,13 @@ await messageBox.alert('这是一条提示信息')
 
       <Drawer open={drawerLeftOpen} position='left' title={m.gallery_demo_left_navigation()} onclose={() => drawerLeftOpen = false}>
         <nav class='space-y-2'>
-          {#each [m.dashboard_title(), m.iam_users_title(), m.gallery_demo_content_management(), m.settings_title(), m.gallery_demo_activity_log()] as item (item)}
+          {#each [
+            m.dashboard_title(),
+            m.iam_users_title(),
+            m.gallery_demo_content_management(),
+            m.settings_title(),
+            m.gallery_demo_activity_log(),
+          ] as item (item)}
             <button
               class='w-full text-left px-4 py-2 rounded-lg hover:bg-base-200 transition-colors text-sm'
               onclick={() => {
@@ -355,8 +400,14 @@ await messageBox.alert('这是一条提示信息')
         <Button
           variant='primary'
           onclick={async () => {
-            const ok = await messageBox.confirm({ title: m.gallery_demo_confirm_action(), message: m.gallery_demo_continue(), confirmText: m.gallery_demo_ok() })
-            toast[ok ? 'success' : 'info'](ok ? m.gallery_demo_confirmed() : m.gallery_demo_canceled())
+            const ok = await messageBox.confirm({
+              title: m.gallery_demo_confirm_action(),
+              message: m.gallery_demo_continue(),
+              confirmText: m.gallery_demo_ok(),
+            })
+            toast[ok ? 'success' : 'info'](ok
+              ? m.gallery_demo_confirmed()
+              : m.gallery_demo_canceled())
           }}
         >
           {m.gallery_demo_confirm_dialog()}
@@ -364,7 +415,12 @@ await messageBox.alert('这是一条提示信息')
         <Button
           variant='error'
           onclick={async () => {
-            const ok = await messageBox.confirm({ title: m.gallery_demo_delete_confirmation(), message: m.gallery_demo_delete_this_item_this_cannot_be_undone(), confirmText: m.modules_vecdb_op_delete(), confirmVariant: 'error' })
+            const ok = await messageBox.confirm({
+              title: m.gallery_demo_delete_confirmation(),
+              message: m.gallery_demo_delete_this_item_this_cannot_be_undone(),
+              confirmText: m.modules_vecdb_op_delete(),
+              confirmVariant: 'error',
+            })
             if (ok)
               toast.success(m.gallery_demo_deleted())
           }}

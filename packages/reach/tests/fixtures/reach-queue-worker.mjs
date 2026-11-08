@@ -14,7 +14,9 @@ async function main() {
   const ActualDate = Date
   globalThis.Date = class extends ActualDate {
     getHours() {
-      return phase === 'enqueue' ? 23 : 9
+      return phase === 'enqueue'
+        ? 23
+        : 9
     }
 
     getMinutes() {
@@ -27,8 +29,15 @@ async function main() {
     if (!db.success)
       throw new Error(db.error.message)
     const initialized = await reach.init({
-      providers: [{ name: 'callback', type: 'api', url }],
-      dnd: { enabled: true, strategy: 'delay', start: '22:00', end: '08:00' },
+      providers: [
+        { name: 'callback', type: 'api', url },
+      ],
+      dnd: {
+        enabled: true,
+        strategy: 'delay',
+        start: '22:00',
+        end: '08:00',
+      },
     })
     if (!initialized.success)
       throw new Error(initialized.error.message)

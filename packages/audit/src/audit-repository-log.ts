@@ -44,10 +44,16 @@ function normalizeAuditLog(row: AuditReadRow): AuditLog {
     actorSnapshot: readAuditActor(row.actorSnapshot),
     userId: row.userId ?? null,
     resourceId: row.resourceId ?? null,
-    details: row.details == null ? null : typeof row.details === 'string' ? row.details : JSON.stringify(row.details) ?? null,
+    details: row.details == null
+      ? null
+      : typeof row.details === 'string'
+        ? row.details
+        : JSON.stringify(row.details) ?? null,
     ipAddress: row.ipAddress ?? null,
     userAgent: row.userAgent ?? null,
-    createdAt: row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt),
+    createdAt: row.createdAt instanceof Date
+      ? row.createdAt
+      : new Date(row.createdAt),
   }
 }
 
@@ -101,22 +107,134 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       idColumn: 'id',
       generateId: () => core.id.withPrefix('audit_'),
       fields: [
-        { fieldName: 'id', columnName: 'id', def: { type: 'TEXT', primaryKey: true }, select: true, create: true, update: false },
-        { fieldName: 'userId', columnName: 'user_id', def: { type: 'TEXT' }, select: true, create: true, update: false },
-        { fieldName: 'action', columnName: 'action', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: false },
-        { fieldName: 'resource', columnName: 'resource', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: false },
-        { fieldName: 'resourceId', columnName: 'resource_id', def: { type: 'TEXT' }, select: true, create: true, update: false },
-        { fieldName: 'details', columnName: 'details', def: { type: 'JSON' }, select: true, create: true, update: false },
-        { fieldName: 'ipAddress', columnName: 'ip_address', def: { type: 'TEXT' }, select: true, create: true, update: false },
-        { fieldName: 'userAgent', columnName: 'user_agent', def: { type: 'TEXT' }, select: true, create: true, update: false },
-        { fieldName: 'category', columnName: 'category', def: { type: 'TEXT' }, select: true, create: true, update: false },
-        { fieldName: 'outcome', columnName: 'outcome', def: { type: 'TEXT' }, select: true, create: true, update: false },
-        { fieldName: 'severity', columnName: 'severity', def: { type: 'TEXT' }, select: true, create: true, update: false },
-        { fieldName: 'requestId', columnName: 'request_id', def: { type: 'TEXT' }, select: true, create: true, update: false },
-        { fieldName: 'traceId', columnName: 'trace_id', def: { type: 'TEXT' }, select: true, create: true, update: false },
-        { fieldName: 'scopeId', columnName: 'scope_id', def: { type: 'TEXT' }, select: true, create: true, update: false },
-        { fieldName: 'actorSnapshot', columnName: 'actor_snapshot', def: { type: 'JSON' }, select: true, create: true, update: false },
-        { fieldName: 'createdAt', columnName: 'created_at', def: { type: 'TIMESTAMP' }, select: true, create: true, update: false },
+        {
+          fieldName: 'id',
+          columnName: 'id',
+          def: { type: 'TEXT', primaryKey: true },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'userId',
+          columnName: 'user_id',
+          def: { type: 'TEXT' },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'action',
+          columnName: 'action',
+          def: { type: 'TEXT', notNull: true },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'resource',
+          columnName: 'resource',
+          def: { type: 'TEXT', notNull: true },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'resourceId',
+          columnName: 'resource_id',
+          def: { type: 'TEXT' },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'details',
+          columnName: 'details',
+          def: { type: 'JSON' },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'ipAddress',
+          columnName: 'ip_address',
+          def: { type: 'TEXT' },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'userAgent',
+          columnName: 'user_agent',
+          def: { type: 'TEXT' },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'category',
+          columnName: 'category',
+          def: { type: 'TEXT' },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'outcome',
+          columnName: 'outcome',
+          def: { type: 'TEXT' },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'severity',
+          columnName: 'severity',
+          def: { type: 'TEXT' },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'requestId',
+          columnName: 'request_id',
+          def: { type: 'TEXT' },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'traceId',
+          columnName: 'trace_id',
+          def: { type: 'TEXT' },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'scopeId',
+          columnName: 'scope_id',
+          def: { type: 'TEXT' },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'actorSnapshot',
+          columnName: 'actor_snapshot',
+          def: { type: 'JSON' },
+          select: true,
+          create: true,
+          update: false,
+        },
+        {
+          fieldName: 'createdAt',
+          columnName: 'created_at',
+          def: { type: 'TIMESTAMP' },
+          select: true,
+          create: true,
+          update: false,
+        },
       ],
     })
     this.repoConfig = config
@@ -141,12 +259,16 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
    * @returns SQLite 返回毫秒时间戳，其他返回 Date
    */
   private toDateParam(date: Date): number | Date {
-    return this.isSqlite ? date.getTime() : date
+    return this.isSqlite
+      ? date.getTime()
+      : date
   }
 
   /** 身份映射可选；名称读失败仍写入明确缺少名称的身份，并留下可观察诊断。 */
   async captureActor(userId: string, tx?: DmlWithTxOperations): Promise<AuditActorSnapshot> {
-    const quote = this.db.config?.type === 'mysql' ? '`' : '"'
+    const quote = this.db.config?.type === 'mysql'
+      ? '`'
+      : '"'
     const identifier = (name: string) => `${quote}${name}${quote}`
     const { userTable, userIdColumn, userNameColumn } = this.repoConfig
     const result = await this.sql(tx).get<{ username: string | null }>(`SELECT ${identifier(userNameColumn)} AS username FROM ${identifier(userTable)} WHERE ${identifier(userIdColumn)}=?`, [userId])
@@ -154,13 +276,28 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       logger.warn('Audit actor name unavailable', { userId, error: result.error })
       return { id: userId }
     }
-    return { id: userId, ...(result.data?.username ? { username: result.data.username } : {}) }
+    return {
+      id: userId,
+      ...(result.data?.username
+        ? { username: result.data.username }
+        : {}),
+    }
   }
 
   private filters(options: ListAuditLogsOptions): { conditions: string[], params: unknown[] } {
     const conditions: string[] = []
     const params: unknown[] = []
-    for (const [field, column] of [['userId', 'user_id'], ['action', 'action'], ['resource', 'resource'], ['category', 'category'], ['outcome', 'outcome'], ['severity', 'severity'], ['scopeId', 'scope_id'], ['requestId', 'request_id'], ['traceId', 'trace_id']] as const) {
+    for (const [field, column] of [
+      ['userId', 'user_id'],
+      ['action', 'action'],
+      ['resource', 'resource'],
+      ['category', 'category'],
+      ['outcome', 'outcome'],
+      ['severity', 'severity'],
+      ['scopeId', 'scope_id'],
+      ['requestId', 'request_id'],
+      ['traceId', 'trace_id'],
+    ] as const) {
       if (options[field] !== undefined) {
         conditions.push(`a.${column} = ?`)
         params.push(options[field])
@@ -198,7 +335,15 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     if (!time.success)
       return time
     const now = time.data
-    const context = { category: input.category ?? null, outcome: input.outcome ?? null, severity: input.severity ?? null, requestId: input.requestId ?? null, traceId: input.traceId ?? null, scopeId: input.scopeId ?? null, actorSnapshot: input.actorSnapshot ?? null }
+    const context = {
+      category: input.category ?? null,
+      outcome: input.outcome ?? null,
+      severity: input.severity ?? null,
+      requestId: input.requestId ?? null,
+      traceId: input.traceId ?? null,
+      scopeId: input.scopeId ?? null,
+      actorSnapshot: input.actorSnapshot ?? null,
+    }
     const data: Record<string, unknown> = {
       ...context,
       id,
@@ -218,7 +363,9 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         logger.error('Failed to record audit log', { action: input.action, error: createResult.error.message })
         return err(
           HaiAuditError.LOG_FAILED,
-          auditM('audit_logFailed', { params: { error: createResult.error.message } }),
+          auditM('audit_logFailed', {
+            params: { error: createResult.error.message },
+          }),
           createResult.error,
         )
       }
@@ -230,7 +377,9 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         action: input.action,
         resource: input.resource,
         resourceId: input.resourceId ?? null,
-        details: input.details ? JSON.stringify(input.details) : null,
+        details: input.details
+          ? JSON.stringify(input.details)
+          : null,
         ipAddress: input.ipAddress ?? null,
         userAgent: input.userAgent ?? null,
         createdAt: now,
@@ -243,7 +392,13 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       logger.error('Failed to record audit log', { action: input.action, error })
       return err(
         HaiAuditError.LOG_FAILED,
-        auditM('audit_logFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        auditM('audit_logFailed', {
+          params: {
+            error: error instanceof Error
+              ? error.message
+              : String(error),
+          },
+        }),
         error,
       )
     }
@@ -264,15 +419,32 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     const { conditions, params } = this.filters(options)
     const { userTable, userIdColumn, userNameColumn } = this.repoConfig
     // 配置标识符已由 init 校验；别名加引号防止 PostgreSQL 折叠大小写。
-    const quote = this.db.config?.type === 'mysql' ? '`' : '"'
+    const quote = this.db.config?.type === 'mysql'
+      ? '`'
+      : '"'
     const identifier = (name: string) => `${quote}${name.replaceAll(quote, quote + quote)}${quote}`
 
-    const sortColumns = { createdAt: 'created_at', action: 'action', resource: 'resource', category: 'category', outcome: 'outcome', severity: 'severity' }
+    const sortColumns = {
+      createdAt: 'created_at',
+      action: 'action',
+      resource: 'resource',
+      category: 'category',
+      outcome: 'outcome',
+      severity: 'severity',
+    }
     const sortBy = options.sortBy ?? 'createdAt'
     const direction = options.sortDirection ?? 'desc'
-    if (!Object.hasOwn(sortColumns, sortBy) || !['asc', 'desc'].includes(direction))
-      return err(HaiAuditError.QUERY_FAILED, auditM('audit_invalidInput', { params: { field: 'sort', reason: auditM('audit_sortInvalid') } }))
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+    if (!Object.hasOwn(sortColumns, sortBy) || !['asc', 'desc'].includes(direction)) {
+      return err(HaiAuditError.QUERY_FAILED, auditM('audit_invalidInput', {
+        params: {
+          field: 'sort',
+          reason: auditM('audit_sortInvalid'),
+        },
+      }))
+    }
+    const whereClause = conditions.length > 0
+      ? `WHERE ${conditions.join(' AND ')}`
+      : ''
 
     try {
       const result = await this.sql().queryPage<AuditReadRow & { username: string | null }>({
@@ -293,18 +465,34 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         logger.error('Failed to query audit logs', { error: result.error.message })
         return err(
           HaiAuditError.QUERY_FAILED,
-          auditM('audit_queryFailed', { params: { error: result.error.message } }),
+          auditM('audit_queryFailed', {
+            params: { error: result.error.message },
+          }),
           result.error,
         )
       }
 
-      return ok({ ...result.data, items: result.data.items.map(row => ({ ...normalizeAuditLog(row), username: readAuditActor(row.actorSnapshot)?.username ?? (row.actorSnapshot == null ? row.username ?? null : null) })) })
+      return ok({
+        ...result.data,
+        items: result.data.items.map(row => ({
+          ...normalizeAuditLog(row),
+          username: readAuditActor(row.actorSnapshot)?.username ?? (row.actorSnapshot == null
+            ? row.username ?? null
+            : null),
+        })),
+      })
     }
     catch (error) {
       logger.error('Failed to query audit logs', { error })
       return err(
         HaiAuditError.QUERY_FAILED,
-        auditM('audit_queryFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        auditM('audit_queryFailed', {
+          params: {
+            error: error instanceof Error
+              ? error.message
+              : String(error),
+          },
+        }),
         error,
       )
     }
@@ -315,7 +503,9 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     const ready = await this.ready()
     if (!ready.success)
       return ready
-    const quote = this.db.config?.type === 'mysql' ? '`' : '"'
+    const quote = this.db.config?.type === 'mysql'
+      ? '`'
+      : '"'
     const fields = [
       ['id', 'id'],
       ['user_id', 'userId'],
@@ -335,7 +525,9 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       ['actor_snapshot', 'actorSnapshot'],
     ].map(([column, alias]) => `${column} AS ${quote}${alias}${quote}`).join(', ')
     const conditions = ['created_at <= ?']
-    const params: unknown[] = [this.toDateParam(options.cutoff)]
+    const params: unknown[] = [
+      this.toDateParam(options.cutoff),
+    ]
     if (options.from) {
       conditions.push('created_at >= ?')
       params.push(this.toDateParam(options.from))
@@ -377,7 +569,9 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       if (!result.success) {
         return err(
           HaiAuditError.QUERY_FAILED,
-          auditM('audit_queryFailed', { params: { error: result.error.message } }),
+          auditM('audit_queryFailed', {
+            params: { error: result.error.message },
+          }),
           result.error,
         )
       }
@@ -387,7 +581,13 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     catch (error) {
       return err(
         HaiAuditError.QUERY_FAILED,
-        auditM('audit_queryFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        auditM('audit_queryFailed', {
+          params: {
+            error: error instanceof Error
+              ? error.message
+              : String(error),
+          },
+        }),
         error,
       )
     }
@@ -415,14 +615,18 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     try {
       const result = await this.sql().execute(
         `DELETE FROM ${AUDIT_TABLE} WHERE created_at < ?`,
-        [this.toDateParam(cutoff)],
+        [
+          this.toDateParam(cutoff),
+        ],
       )
 
       if (!result.success) {
         logger.error('Failed to cleanup audit logs', { error: result.error.message })
         return err(
           HaiAuditError.CLEANUP_FAILED,
-          auditM('audit_cleanupFailed', { params: { error: result.error.message } }),
+          auditM('audit_cleanupFailed', {
+            params: { error: result.error.message },
+          }),
           result.error,
         )
       }
@@ -438,7 +642,13 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       logger.error('Failed to cleanup audit logs', { error })
       return err(
         HaiAuditError.CLEANUP_FAILED,
-        auditM('audit_cleanupFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        auditM('audit_cleanupFailed', {
+          params: {
+            error: error instanceof Error
+              ? error.message
+              : String(error),
+          },
+        }),
         error,
       )
     }
@@ -474,12 +684,17 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         logger.error('Failed to query audit statistics', { error: result.error.message })
         return err(
           HaiAuditError.STATS_FAILED,
-          auditM('audit_statsFailed', { params: { error: result.error.message } }),
+          auditM('audit_statsFailed', {
+            params: { error: result.error.message },
+          }),
           result.error,
         )
       }
 
-      const statistics = result.data.map(item => ({ action: item.action, count: Number(item.count) }))
+      const statistics = result.data.map(item => ({
+        action: item.action,
+        count: Number(item.count),
+      }))
       if (statistics.some(item => !Number.isSafeInteger(item.count) || item.count < 0))
         return err(HaiAuditError.STATS_FAILED, auditM('audit_invalidStatCount'))
       return ok(statistics)
@@ -488,7 +703,13 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       logger.error('Failed to query audit statistics', { error })
       return err(
         HaiAuditError.STATS_FAILED,
-        auditM('audit_statsFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        auditM('audit_statsFailed', {
+          params: {
+            error: error instanceof Error
+              ? error.message
+              : String(error),
+          },
+        }),
         error,
       )
     }

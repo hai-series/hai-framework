@@ -62,13 +62,26 @@ export function buildIamPublicConfig(config: IamConfig, runtime: IamConfigInput)
     captcha: { enabled: config.captcha.enabled },
     password: PasswordConfigSchema.parse(config.password ?? {}),
     register: { enabled: config.register.enabled },
-    login: { password: config.login.password, otp: email || sms, ldap: config.login.ldap && !!config.ldap, email, sms },
+    login: {
+      password: config.login.password,
+      otp: email || sms,
+      ldap: config.login.ldap && !!config.ldap,
+      email,
+      sms,
+    },
     passwordReset: { enabled: config.passwordReset?.enabled !== false && !!runtime.onPasswordResetRequest, mode: config.passwordReset?.mode ?? 'email' },
     otp: { length: otp.length, resendInterval: otp.resendInterval },
     agreements: { ...config.agreements },
     ui: AuthUiConfigSchema.parse(config.ui ?? {}),
     session: { maxAge: session.maxAge, endOnPageHide: session.endOnPageHide },
-    reauthentication: { enabled: config.reauthentication?.enabled ?? false, operations: [...config.reauthentication?.operations ?? []] },
-    initialCredentials: { enabled: Boolean(config.initialCredentials?.enabled && config.passwordReset?.enabled !== false && runtime.onPasswordResetRequest) },
+    reauthentication: {
+      enabled: config.reauthentication?.enabled ?? false,
+      operations: [
+        ...config.reauthentication?.operations ?? [],
+      ],
+    },
+    initialCredentials: {
+      enabled: Boolean(config.initialCredentials?.enabled && config.passwordReset?.enabled !== false && runtime.onPasswordResetRequest),
+    },
   }
 }

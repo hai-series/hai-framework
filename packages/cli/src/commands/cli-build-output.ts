@@ -18,7 +18,11 @@ function createWindowsBuildOutput(): Transform {
   const decoder = new StringDecoder('utf8')
   let previousCarriageReturn = false
   const normalize = (value: string): string => {
-    const result = value.replace(/\n/g, (newline, offset: number) => (offset === 0 ? previousCarriageReturn : value[offset - 1] === '\r') ? newline : '\r\n')
+    const result = value.replace(/\n/g, (newline, offset: number) => (offset === 0
+      ? previousCarriageReturn
+      : value[offset - 1] === '\r')
+      ? newline
+      : '\r\n')
     if (value.length)
       previousCarriageReturn = value.endsWith('\r')
     return result

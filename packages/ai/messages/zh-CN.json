@@ -44,13 +44,13 @@
   "ai_knowledgeCollectionNotFound": "知识集合 '{collection}' 不存在",
   "ai_memoryExtractFailed": "记忆提取失败：{error}",
   "ai_memoryStoreFailed": "记忆存储失败：{error}",
+  "ai_memoryOperationFailed": "记忆操作失败，请重试或联系管理员。",
+  "ai_memoryScopeInvalid": "记忆主体标识不能为空或仅包含空白。",
   "ai_memoryRecallFailed": "记忆召回失败：{error}",
   "ai_memoryNotFound": "记忆条目 '{id}' 不存在",
   "ai_memoryEphemeralFallbackDenied": "记忆 provider 'mem0' 无法将向量后端 '{backend}' 映射为持久化存储。请改用 qdrant；显式临时回退仅限开发或 E2E。",
   "ai_memorySharedBackendRequired": "生产 Mem0 记忆必须连接实际持久化的 qdrant 后端；临时内存回退仅限开发或明确的 E2E 环境。",
-  "ai_memoryBackendLifecycleUnsupported": "不支持 Mem0 pgvector：SDK 私有持有 PostgreSQL 连接且没有公开关闭 API。请改用 Mem0 Qdrant 或 native 记忆搭配 pgvector。",
   "ai_memoryBackendConnectionRequired": "Mem0 后端 '{backend}' 必须提供完整连接配置，才能视为持久化后端。",
-  "ai_memoryBackendSdkIncompatible": "Mem0 Qdrant 需要提供公开 search 方法的 @qdrant/js-client-rest 1.18.0，请安装受测 peer 版本后启动。",
   "ai_memoryListIncomplete": "Mem0 无法完整列出超过 {limit} 条的主体候选，已拒绝列表和按条件删除，不会返回部分结果或执行部分删除。",
   "ai_memoryClearRequiresFilter": "clear() 至少需传入一个过滤条件（objectId / types / scope）；要清空全部记忆请使用 ai.memory.admin.clearAll({ confirm: true })",
   "ai_memoryClearAllUnconfirmed": "admin.clearAll() 需要显式确认：请传入 { confirm: true }",
@@ -58,6 +58,7 @@
   "ai_memoryPromoteFailed": "记忆固化（长期化）失败：{error}",
   "ai_personaNotFound": "角色 '{id}' 不存在",
   "ai_personaSaveFailed": "角色保存失败：{error}",
+  "ai_personaOperationFailed": "角色操作失败，请重试或联系管理员。",
   "ai_contextCompressFailed": "上下文压缩失败：{error}",
   "ai_contextBudgetExceeded": "受保护上下文占用 {tokens} 个 Token，无法压缩到 {budget} Token 的预算内。",
   "ai_contextSummarizeFailed": "上下文总结失败：{error}",
@@ -154,5 +155,6 @@
   "ai_resourceNotFound": "资源不存在。",
   "ai_resourceConflict": "资源已存在或版本发生变化。",
   "ai_resourceInvalid": "资源配置无效。",
-  "ai_resourceOperationFailed": "资源清单操作失败。"
+  "ai_resourceOperationFailed": "资源清单操作失败。",
+  "ai_memoryBackendUnsupported": "Mem0 数据格式适配仅支持 Qdrant。其它持久化后端请使用 native 记忆 Provider。"
 }

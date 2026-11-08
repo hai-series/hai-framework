@@ -13,16 +13,32 @@
   import * as m from '../paraglide/messages.js'
 
   const { store }: { store: ManagementStore } = $props()
-  let page = $state({ items: [] as FeedbackReportView[], total: 0, page: 1, pageSize: 20 })
+  let page = $state({
+    items: [] as FeedbackReportView[],
+    total: 0,
+    page: 1,
+    pageSize: 20,
+  })
   let query = $state<FeedbackListQuery>({ page: 1, pageSize: 20 })
   let selected = $state<Detail>()
-  let evidence = $state({ items: [] as FeedbackEvidenceInput[], total: 0, page: 1, pageSize: 20 })
+  let evidence = $state({
+    items: [] as FeedbackEvidenceInput[],
+    total: 0,
+    page: 1,
+    pageSize: 20,
+  })
   let loading = $state(false)
   let error = $state('')
   let requestVersion = 0
   let detailVersion = 0
   let imageUrls = $state<Record<string, string>>({})
-  const permissions = $derived({ read: store.hasPermission('feedback:read'), process: store.hasPermission('feedback:process'), reopen: store.hasPermission('feedback:reopen'), export: store.hasPermission('feedback:export'), retry: store.hasPermission('feedback:process') })
+  const permissions = $derived({
+    read: store.hasPermission('feedback:read'),
+    process: store.hasPermission('feedback:process'),
+    reopen: store.hasPermission('feedback:reopen'),
+    export: store.hasPermission('feedback:export'),
+    retry: store.hasPermission('feedback:process'),
+  })
   function view(report: FeedbackReport): FeedbackReportView {
     return { ...report, description: report.description || report.summary || '', appVersion: report.appVersion || '' }
   }
@@ -35,8 +51,12 @@
       const result = await managementApi.feedback.reports.list(next)
       if (!result.success)
         throw new Error(result.error.message, { cause: result.error })
-      if (version === requestVersion)
-        page = { ...result.data, items: result.data.items.map(view) }
+      if (version === requestVersion) {
+        page = {
+          ...result.data,
+          items: result.data.items.map(view),
+        }
+      }
     }
     catch (cause) {
       if (version === requestVersion)
@@ -114,7 +134,10 @@
     if (result.data.contentType.startsWith('image/') || result.data.contentType.startsWith('video/')) {
       if (imageUrls[id])
         URL.revokeObjectURL(imageUrls[id])
-      imageUrls = { ...imageUrls, [id]: URL.createObjectURL(new Blob([new Uint8Array(feedbackDataBytes(result.data)).buffer], { type: result.data.contentType })) }
+      imageUrls = {
+        ...imageUrls,
+        [id]: URL.createObjectURL(new Blob([new Uint8Array(feedbackDataBytes(result.data)).buffer], { type: result.data.contentType })),
+      }
     }
     else {
       await downloadFeedback(feedbackDataBytes(result.data), result.data.name, result.data.contentType)
@@ -146,7 +169,14 @@
 <section data-testid='feedback-page' class='flex min-h-0 flex-1 flex-col gap-3'>
   <PageHeader title={m.nav_feedback()} class='mb-0' />
   {#if selected}
-    <FeedbackDetail report={view(selected.report)} webhook={selected.jobs.find(job => job.type === 'webhook')} {evidence} history={selected.history.map(item => ({ id: item.id, actorId: item.userId, fromStatus: item.from, toStatus: item.to, createdAt: item.timestamp, note: item.note }))} {permissions}
+    <FeedbackDetail report={view(selected.report)} webhook={selected.jobs.find(job => job.type === 'webhook')} {evidence} history={selected.history.map(item => ({
+id: item.id,
+actorId: item.userId,
+fromStatus: item.from,
+toStatus: item.to,
+createdAt: item.timestamp,
+note: item.note,
+}))} {permissions}
       attachments={selected.attachments.map(item => ({ ...item, mimeType: item.contentType, url: imageUrls[item.id] }))}
       onevidencequery={loadEvidence} onreplay={loadReplay} onstatus={status} onexport={exportBundle} onretry={retry}
       onattachment={item => attachment(item.id)} onclose={closeDetail} />

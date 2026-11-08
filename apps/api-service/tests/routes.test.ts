@@ -93,7 +93,10 @@ beforeAll(async () => {
   const transportKey = crypto.asymmetric.generateKeyPair()
   if (!transportKey.success)
     throw new Error(transportKey.error.message)
-  vi.stubEnv('HAI_CRYPTO_TRANSPORT_SERVERKEYRING', JSON.stringify({ activeKeyId: 'test-v1', keys: { 'test-v1': transportKey.data } }))
+  vi.stubEnv('HAI_CRYPTO_TRANSPORT_SERVERKEYRING', JSON.stringify({
+    activeKeyId: 'test-v1',
+    keys: { 'test-v1': transportKey.data },
+  }))
 
   const dbResult = await reldb.init({ type: 'sqlite', database: ':memory:' })
   if (!dbResult.success)
@@ -141,7 +144,9 @@ beforeAll(async () => {
   const encInit = await encryptedClient.init({
     baseUrl: apiBaseUrl,
     transport: { crypto, keyExchangePath: transportKeyExchangePath },
-    auth: { storage: apiClient.tokenStorage.memory() },
+    auth: {
+      storage: apiClient.tokenStorage.memory(),
+    },
   })
   if (!encInit.success)
     throw new Error(`encryptedClient.init: ${encInit.error.message}`)
@@ -150,7 +155,9 @@ beforeAll(async () => {
   plainClient = apiClient.create(apiServiceContract)
   const plainInit = await plainClient.init({
     baseUrl: `${plainBase}${apiPrefix}`,
-    auth: { storage: apiClient.tokenStorage.memory() },
+    auth: {
+      storage: apiClient.tokenStorage.memory(),
+    },
   })
   if (!plainInit.success)
     throw new Error(`plainClient.init: ${plainInit.error.message}`)
@@ -247,11 +254,14 @@ describe('api-service 基础设施端点', () => {
   it('transport 响应会暴露认证协议头给浏览器读取', async () => {
     const origin = 'http://localhost:5176'
     let wire: Response | undefined
-    const client = crypto.transport.createClient({ keyExchangeUrl: `${encryptedBase}${keyExchangePath}`, fetch: async (input, init) => {
-      const response = await fetch(input, init)
-      wire = response.clone()
-      return response
-    } })
+    const client = crypto.transport.createClient({
+      keyExchangeUrl: `${encryptedBase}${keyExchangePath}`,
+      fetch: async (input, init) => {
+        const response = await fetch(input, init)
+        wire = response.clone()
+        return response
+      },
+    })
     const response = await client.encryptedFetch(`${encryptedBase}${apiPrefix}${apiContract.pathOf(apiServiceContract.app.info)}`, {
       method: 'POST',
       headers: { origin },
@@ -388,12 +398,21 @@ describe('independent native refresh integration', () => {
     const storage = apiClient.tokenStorage.memory()
     let refreshes = 0
     const nativeFetch: typeof fetch = async (input, init) => {
-      if ((input instanceof Request ? input.url : String(input)).endsWith('/auth/refresh'))
+      if ((input instanceof Request
+        ? input.url
+        : String(input)).endsWith('/auth/refresh')) {
         refreshes++
+      }
       return fetch(input, init)
     }
     try {
-      expect((await native.init({ baseUrl: `${plainBase}${apiPrefix}`, clientName, headers: { origin, 'x-hai-token-transport': 'body' }, auth: { storage }, fetch: nativeFetch })).success).toBe(true)
+      expect((await native.init({
+        baseUrl: `${plainBase}${apiPrefix}`,
+        clientName,
+        headers: { origin, 'x-hai-token-transport': 'body' },
+        auth: { storage },
+        fetch: nativeFetch,
+      })).success).toBe(true)
       const user = uniqueUser('native')
       const registered = await apiClient.createAuthActions(native).register(user)
       expect(registered.success).toBe(true)
@@ -417,7 +436,14 @@ describe('independent native refresh integration', () => {
   ])('an undeclared native channel does not receive a body refresh token (%s, %s, %s)', async (origin, clientName, marker) => {
     const untrusted = apiClient.create(apiServiceContract)
     try {
-      expect((await untrusted.init({ baseUrl: `${plainBase}${apiPrefix}`, clientName, headers: { origin, 'x-hai-token-transport': marker }, auth: { storage: apiClient.tokenStorage.memory() } })).success).toBe(true)
+      expect((await untrusted.init({
+        baseUrl: `${plainBase}${apiPrefix}`,
+        clientName,
+        headers: { origin, 'x-hai-token-transport': marker },
+        auth: {
+          storage: apiClient.tokenStorage.memory(),
+        },
+      })).success).toBe(true)
       const registered = await untrusted.iam.auth.register(uniqueUser('untrusted'))
       expect(registered.success).toBe(true)
       if (registered.success)

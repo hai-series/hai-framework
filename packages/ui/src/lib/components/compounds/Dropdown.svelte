@@ -34,7 +34,12 @@
   const dataAttributes = $derived(getDataAttributes(restProps))
   const manualClass = $derived(cn(
     'dropdown',
-    { top: 'dropdown-top', right: 'dropdown-right', bottom: 'dropdown-bottom', left: 'dropdown-left' }[position],
+    {
+      top: 'dropdown-top',
+      right: 'dropdown-right',
+      bottom: 'dropdown-bottom',
+      left: 'dropdown-left',
+    }[position],
     { start: 'dropdown-start', center: '', end: 'dropdown-end' }[align],
   ))
   let open = $state(false)
@@ -105,7 +110,9 @@
 
 <div
   {...dataAttributes}
-  class={cn(trigger === 'manual' ? manualClass : 'relative inline-block', className)}
+  class={cn(trigger === 'manual'
+    ? manualClass
+    : 'relative inline-block', className)}
   onpointerenter={scheduleOpen}
   onpointerleave={handleWrapperLeave}
 >

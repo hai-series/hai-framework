@@ -15,7 +15,12 @@ function deferred<T>() {
 }
 
 function tokenPair(name: string) {
-  return { accessToken: `${name}-access`, refreshToken: `${name}-refresh`, expiresIn: 3600, tokenType: 'Bearer' as const }
+  return {
+    accessToken: `${name}-access`,
+    refreshToken: `${name}-refresh`,
+    expiresIn: 3600,
+    tokenType: 'Bearer' as const,
+  }
 }
 
 describe('apiClient.tokenStorage.memory', () => {
@@ -68,7 +73,9 @@ describe('createTokenManager', () => {
     await manager.clear()
     expect(mockFetch.mock.calls[0]?.[1]?.signal?.aborted).toBe(true)
     // 自定义 fetch 即使忽略取消，迟到响应也不能恢复会话。
-    response.resolve(Response.json({ data: tokenPair('old') }))
+    response.resolve(Response.json({
+      data: tokenPair('old'),
+    }))
 
     expect(await pending).toBeNull()
     expect(await storage.getAccessToken()).toBeNull()
@@ -90,7 +97,11 @@ describe('createTokenManager', () => {
     const pending = manager.refresh()
     await vi.waitFor(() => expect(mockFetch).toHaveBeenCalledOnce())
     await manager.setTokens(tokenPair('new-account'))
-    response.resolve(status === 200 ? Response.json({ data: tokenPair('old') }) : new Response(null, { status }))
+    response.resolve(status === 200
+      ? Response.json({
+          data: tokenPair('old'),
+        })
+      : new Response(null, { status }))
 
     expect(await pending).toBeNull()
     expect(await storage.getAccessToken()).toBe('new-account-access')
@@ -114,20 +125,28 @@ describe('createTokenManager', () => {
         await memory.setAccessToken(token)
       },
     }
-    const mockFetch = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ data: tokenPair('old') }))
+    const mockFetch = vi.fn<typeof fetch>().mockResolvedValue(Response.json({
+      data: tokenPair('old'),
+    }))
     const onRefreshed = vi.fn()
     const manager = createTokenManager(storage, 'https://api.test.com/auth/refresh', mockFetch)
     manager.onTokenRefreshed(onRefreshed)
 
     const pending = manager.refresh()
     await writeStarted.promise
-    const mutation = operation === 'clear' ? manager.clear() : manager.setTokens(tokenPair('new-account'))
+    const mutation = operation === 'clear'
+      ? manager.clear()
+      : manager.setTokens(tokenPair('new-account'))
     releaseWrite.resolve()
     await mutation
 
     expect(await pending).toBeNull()
-    expect(await memory.getAccessToken()).toBe(operation === 'clear' ? null : 'new-account-access')
-    expect(await memory.getRefreshToken()).toBe(operation === 'clear' ? null : 'new-account-refresh')
+    expect(await memory.getAccessToken()).toBe(operation === 'clear'
+      ? null
+      : 'new-account-access')
+    expect(await memory.getRefreshToken()).toBe(operation === 'clear'
+      ? null
+      : 'new-account-refresh')
     expect(onRefreshed).not.toHaveBeenCalled()
   })
 
@@ -146,10 +165,14 @@ describe('createTokenManager', () => {
     await manager.setTokens(tokenPair('new-account'))
     const newRefresh = manager.refresh()
     await vi.waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2))
-    oldResponse.resolve(Response.json({ data: tokenPair('old') }))
+    oldResponse.resolve(Response.json({
+      data: tokenPair('old'),
+    }))
     expect(await oldRefresh).toBeNull()
     const duplicateRefresh = manager.refresh()
-    newResponse.resolve(Response.json({ data: tokenPair('new-refreshed') }))
+    newResponse.resolve(Response.json({
+      data: tokenPair('new-refreshed'),
+    }))
 
     expect(await newRefresh).toEqual(tokenPair('new-refreshed'))
     expect(await duplicateRefresh).toEqual(tokenPair('new-refreshed'))
@@ -198,7 +221,10 @@ describe('createTokenManager', () => {
     }
 
     const mockFetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ success: true, data: { tokens: newTokens } }), {
+      new Response(JSON.stringify({
+        success: true,
+        data: { tokens: newTokens },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
@@ -314,7 +340,9 @@ describe('createTokenManager', () => {
 
     // 响应缺少 refreshToken
     const mockFetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ data: { accessToken: 'a' } }), {
+      new Response(JSON.stringify({
+        data: { accessToken: 'a' },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
@@ -335,7 +363,9 @@ describe('createTokenManager', () => {
     await storage.setRefreshToken('rt')
 
     const mockFetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ data: { accessToken: '', refreshToken: 'r' } }), {
+      new Response(JSON.stringify({
+        data: { accessToken: '', refreshToken: 'r' },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),

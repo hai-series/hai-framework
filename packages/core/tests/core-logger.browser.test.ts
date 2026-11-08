@@ -14,7 +14,11 @@ describe('core.logger (browser)', () => {
     const { input, serialize, readAccessor } = createSerializationFixture()
     const output: string[] = []
     const observed: string[] = []
-    core.logger.configure({ level: 'info', format: 'json', redact: ['payload.plain.customerId'] })
+    core.logger.configure({
+      level: 'info',
+      format: 'json',
+      redact: ['payload.plain.customerId'],
+    })
     const logger = core.logger.create({ name: 'browser-serialization-regression', format: 'json' })
     const raw = log.getLogger('browser-serialization-regression')
     const previous = raw.info
@@ -32,10 +36,18 @@ describe('core.logger (browser)', () => {
     }
     expect(output).toHaveLength(1)
     expect(observed).toHaveLength(1)
-    for (const value of [...output, ...observed]) {
+    for (const value of [
+      ...output,
+      ...observed,
+    ]) {
       expect(value).toContain('sdk-visible')
       expect(value).toContain('2026-01-01T00:00:00.000Z')
-      for (const secret of ['serialized-only-secret', 'class-only-secret', 'plain-only-secret', 'customer-private'])
+      for (const secret of [
+        'serialized-only-secret',
+        'class-only-secret',
+        'plain-only-secret',
+        'customer-private',
+      ])
         expect(value).not.toContain(secret)
     }
     expect(serialize).not.toHaveBeenCalled()
@@ -50,7 +62,10 @@ describe('core.logger (browser)', () => {
       logger.debug('Not collected')
       logger.error('Browser error', { authorization: 'Bearer private-token' })
       expect(records).toHaveLength(1)
-      expect(records[0]).toMatchObject({ level: 'error', context: { authorization: '[REDACTED]' } })
+      expect(records[0]).toMatchObject({
+        level: 'error',
+        context: { authorization: '[REDACTED]' },
+      })
       stop()
       logger.error('After stop')
       expect(records).toHaveLength(1)
@@ -104,7 +119,10 @@ describe('core.logger (browser)', () => {
   })
 
   it('configureLogger 应该设置级别和上下文', () => {
-    core.logger.configure({ level: 'debug', context: { app: 'test' } })
+    core.logger.configure({
+      level: 'debug',
+      context: { app: 'test' },
+    })
     expect(core.logger.getLevel()).toBe('debug')
 
     // 恢复
@@ -159,7 +177,15 @@ describe('core.logger (browser)', () => {
     })
     cause.cause = error
     const descriptors = Object.getOwnPropertyDescriptors(error)
-    const redact = redactDiagnostic ? ['error.message', 'error.stack', 'error.cause.message', 'error.errors[0].message', 'error.context.customerId'] : []
+    const redact = redactDiagnostic
+      ? [
+          'error.message',
+          'error.stack',
+          'error.cause.message',
+          'error.errors[0].message',
+          'error.context.customerId',
+        ]
+      : []
 
     const writes: string[] = []
     core.logger.configure({ level: 'info', format: 'json', redact })
@@ -184,16 +210,44 @@ describe('core.logger (browser)', () => {
         name: 'AggregateError',
         message: redactDiagnostic ? '[REDACTED]' : 'Startup failed',
         stack: redactDiagnostic ? '[REDACTED]' : error.stack,
-        cause: { name: 'Error', message: redactDiagnostic ? '[REDACTED]' : 'Connection lost', stack: cause.stack, privateKey: '[REDACTED]', cause: '[Circular]' },
-        errors: [{ name: 'TypeError', message: redactDiagnostic ? '[REDACTED]' : 'Provider rejected', stack: child.stack, endpoint: 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]' }],
+        cause: {
+          name: 'Error',
+          message: redactDiagnostic ? '[REDACTED]' : 'Connection lost',
+          stack: cause.stack,
+          privateKey: '[REDACTED]',
+          cause: '[Circular]',
+        },
+        errors: [
+          {
+            name: 'TypeError',
+            message: redactDiagnostic ? '[REDACTED]' : 'Provider rejected',
+            stack: child.stack,
+            endpoint: 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]',
+          },
+        ],
         password: '[REDACTED]',
         token: '[REDACTED]',
         authorization: '[REDACTED]',
         apiKey: '[REDACTED]',
-        context: { customerId: redactDiagnostic ? '[REDACTED]' : 'customer-private', requestId: 'request-1', endpoint: 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]#access_token=[REDACTED]' },
+        context: {
+          customerId: redactDiagnostic ? '[REDACTED]' : 'customer-private',
+          requestId: 'request-1',
+          endpoint: 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]#access_token=[REDACTED]',
+        },
       },
     })
-    for (const secret of ['own-password', 'own-token', 'own-authorization', 'own-api-key', 'cause-private-key', 'child-user', 'child-pass', 'child-token', 'query-token', 'fragment-token'])
+    for (const secret of [
+      'own-password',
+      'own-token',
+      'own-authorization',
+      'own-api-key',
+      'cause-private-key',
+      'child-user',
+      'child-pass',
+      'child-token',
+      'query-token',
+      'fragment-token',
+    ])
       expect(output).not.toContain(secret)
     if (redactDiagnostic)
       expect(output).not.toContain('customer-private')

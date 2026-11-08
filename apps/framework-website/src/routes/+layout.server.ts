@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { getNavigation } from '$lib/server/docs.js'
+import { getNavigation } from '#lib/server/docs.js'
 
 /** 只提供人工维护的公开导航；不向静态页面序列化服务端配置。 */
 export async function load() {

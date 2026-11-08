@@ -89,7 +89,9 @@
 
   function toggleItem(itemId: string) {
     if (multiple) {
-      const current = Array.isArray(value) ? value : []
+      const current = Array.isArray(value)
+        ? value
+        : []
       const newValue = current.includes(itemId)
         ? current.filter(id => id !== itemId)
         : [...current, itemId]
@@ -97,7 +99,9 @@
       onchange?.(newValue)
     }
     else {
-      const newValue = value === itemId ? undefined : itemId
+      const newValue = value === itemId
+        ? undefined
+        : itemId
       value = newValue as string
       onchange?.(newValue as string)
     }

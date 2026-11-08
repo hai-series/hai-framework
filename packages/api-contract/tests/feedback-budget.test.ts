@@ -10,8 +10,16 @@ describe('反馈容量与构建身份统一边界', () => {
     expect(budget.maxTransportBytes).toBeLessThanOrEqual(64 * 1048576)
   })
   it('128 字符构建身份可提交，129 字符被同一公共契约拒绝', () => {
-    expect(FeedbackSubmitInputSchema.safeParse({ appId: 'orders', submissionId: 'one', buildId: 'a'.repeat(128) }).success).toBe(true)
-    expect(FeedbackSubmitInputSchema.safeParse({ appId: 'orders', submissionId: 'one', buildId: 'a'.repeat(129) }).success).toBe(false)
+    expect(FeedbackSubmitInputSchema.safeParse({
+      appId: 'orders',
+      submissionId: 'one',
+      buildId: 'a'.repeat(128),
+    }).success).toBe(true)
+    expect(FeedbackSubmitInputSchema.safeParse({
+      appId: 'orders',
+      submissionId: 'one',
+      buildId: 'a'.repeat(129),
+    }).success).toBe(false)
     expect(() => resolveFeedbackBudget({ maxTotalBytes: 41 * 1048576 })).toThrow()
   })
 })

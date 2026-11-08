@@ -106,6 +106,8 @@ Podman 不自动继承远程服务的代理变量。需要代理时，使用 Age
 
 ## 工程和 Git
 
+相对 Git 地址固定相对于工作区根目录解析，clone/fetch/push 使用相同目标。协议取消因断连失败后，close 仍尝试核验拥有的进程/容器已退出；无法确认退出时保留锁。删除与同 ID 重建争用同一会话锁，忙碌失败不会建立 opening 记录。
+
 每个 Git 工程必须写明 `mainBranch`，remote 默认为 origin。`prepare` 只克隆缺失工程并校验既有工程；不自动 pull、不重置脏目录。`workspaces.importFiles(id, [{ path, content }])` 添加普通文件，拒绝路径逃逸、链接和覆盖；没有 Git 工程的工作区无需安装 Git。涉及 Git 而命令缺失返回 `ACP_GIT_NOT_FOUND`。
 
 当前托管 Git 面向普通仓库；发现子模块或 Git LFS 属性时返回 `ACP_UNSUPPORTED`，不把未拉取的子模块或 LFS 指针当作完整工程。需要这些能力的应用可自行准备环境并使用低层 `connect`，其 Git 生命周期由应用负责。

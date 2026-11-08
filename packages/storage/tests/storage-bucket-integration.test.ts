@@ -5,8 +5,11 @@ import { storage } from '../src/index.js'
 import { acquireMinioContainer } from './helpers/minio-container.js'
 import { acquireRustfsContainer } from './helpers/rustfs-container.js'
 
-for (const [name, acquire] of [['MinIO', acquireMinioContainer], ['RustFS', acquireRustfsContainer]] as const) {
-  describe.sequential(`${name} bucket initialization`, () => {
+for (const [name, acquire] of [
+  ['MinIO', acquireMinioContainer],
+  ['RustFS', acquireRustfsContainer],
+] as const) {
+  describe(`${name} bucket initialization`, { concurrent: false }, () => {
     let lease: Awaited<ReturnType<typeof acquire>> | undefined
     beforeAll(async () => {
       lease = await acquire()

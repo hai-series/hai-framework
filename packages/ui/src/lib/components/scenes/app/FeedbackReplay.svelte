@@ -38,7 +38,12 @@
       return
     const Player = player.constructor as typeof Replayer
     player.destroy()
-    player = new Player(events, { root: target, showWarning: false, showDebug: false, loadTimeout: 1000 })
+    player = new Player(events, {
+      root: target,
+      showWarning: false,
+      showDebug: false,
+      loadTimeout: 1000,
+    })
   }
   function seek(value: number) {
     playing = false
@@ -100,7 +105,12 @@
           return
         duration = Math.max(0, events.at(-1)!.timestamp - events[0]!.timestamp)
         snapshotOffset = Math.max(0, snapshot.timestamp - events[0]!.timestamp)
-        player = new Player(events, { root, showWarning: false, showDebug: false, loadTimeout: 1000 })
+        player = new Player(events, {
+          root,
+          showWarning: false,
+          showDebug: false,
+          loadTimeout: 1000,
+        })
         player.pause(snapshotOffset + 1)
         observer.observe(container)
       }
@@ -128,7 +138,9 @@
   <p class='text-sm text-base-content/65'>{uiM('feedback_replay_hint')}</p>
   {#if loading}<p role='status'>{uiM('feedback_loading')}</p>
   {:else if !player}<p class='rounded bg-base-200 p-4 text-sm'>{uiM('feedback_replay_empty')}</p>{/if}
-  <div bind:this={viewport} class='relative w-full overflow-hidden rounded-lg bg-base-200' style:height={player ? `${height}px` : '0'}>
+  <div bind:this={viewport} class='relative w-full overflow-hidden rounded-lg bg-base-200' style:height={player
+    ? `${height}px`
+    : '0'}>
     <div bind:this={target} class='origin-top-left' style:transform={`scale(${scale})`}></div>
   </div>
   {#if player}

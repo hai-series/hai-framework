@@ -18,7 +18,9 @@ import type {
  * 解析 CrudText 为字符串
  */
 function resolveText(text: CrudText): string {
-  return typeof text === 'function' ? text() : text
+  return typeof text === 'function'
+    ? text()
+    : text
 }
 
 /**
@@ -34,7 +36,9 @@ function sortFields(fields: CrudFieldDef[]): CrudFieldDef[] {
 function resolveOptions(options: CrudFieldOptions | undefined): Array<{ label: string, value: string | number | boolean }> {
   if (!options)
     return []
-  return typeof options === 'function' ? options() : options
+  return typeof options === 'function'
+    ? options()
+    : options
 }
 
 /**

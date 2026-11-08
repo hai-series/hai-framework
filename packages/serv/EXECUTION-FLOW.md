@@ -57,7 +57,10 @@ const app = serv.createApp({
   contract,
   procedures,
   iam,
-  http: { apiPrefix: '/api/v1', openapi: { path: '/openapi.json' } },
+  http: {
+    apiPrefix: '/api/v1',
+    openapi: { path: '/openapi.json' }
+  },
 })
 
 serv.listen(app, { onClose: closeApp })

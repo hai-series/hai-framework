@@ -27,7 +27,9 @@ const pageErrors = []
 
 try {
   browser = await chromium.launch({ channel: 'chrome', headless: true })
-  const recording = await browser.newPage({ viewport: { width: 1000, height: 700 } })
+  const recording = await browser.newPage({
+    viewport: { width: 1000, height: 700 },
+  })
   await recording.route('https://feedback-assets.invalid/**', route => route.abort())
   await recording.setContent('<!doctype html><html><head><style>body{font:20px sans-serif;background:#eef2ff}button{padding:20px}</style></head><body><h1>Recorded feedback page</h1><p id="state">Before interaction</p><button id="change">Change state</button><input value="private-input"><img src="https://feedback-assets.invalid/unavailable.png" alt="Unavailable external asset"><script>window.__ORIGINAL_APP_SCRIPT__=true;document.querySelector("#change").onclick=()=>{document.querySelector("#state").textContent="After interaction";setTimeout(()=>document.querySelector("#state").textContent="Final interaction",1200);};</script></body></html>')
   const recorder = await build({
@@ -64,7 +66,9 @@ try {
     const chunks = []
     let frame = 0
     const draw = () => {
-      context.fillStyle = frame++ % 2 ? '#2563eb' : '#16a34a'
+      context.fillStyle = frame++ % 2
+        ? '#2563eb'
+        : '#16a34a'
       context.fillRect(0, 0, canvas.width, canvas.height)
       context.fillStyle = '#ffffff'
       context.fillText(`Frame ${frame}`, 20, 80)
@@ -96,12 +100,43 @@ try {
   const screenshot = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aSxkAAAAASUVORK5CYII=', 'base64')
   const description = '<img src=x onerror="globalThis.__USER_SCRIPT__=true"> user-provided text'
   const created = await createFeedbackBundle({
-    report: { id: 'offline-browser', number: 'FB-OFFLINE-BROWSER', description, evidenceRevision: 7 },
+    report: {
+      id: 'offline-browser',
+      number: 'FB-OFFLINE-BROWSER',
+      description,
+      evidenceRevision: 7,
+    },
     evidence: [
-      ...events.map((event, index) => ({ id: `replay-${index}`, source: 'browser', kind: 'replay', sequence: index + 1, timestamp: event.timestamp, data: { event } })),
-      ...Array.from({ length: 25 }, (_, index) => ({ source: 'server', kind: 'log', timestamp: index, requestId: `req-${index}`, data: { index } })),
+      ...events.map((event, index) => ({
+        id: `replay-${index}`,
+        source: 'browser',
+        kind: 'replay',
+        sequence: index + 1,
+        timestamp: event.timestamp,
+        data: { event },
+      })),
+      ...Array.from({ length: 25 }, (_, index) => ({
+        source: 'server',
+        kind: 'log',
+        timestamp: index,
+        requestId: `req-${index}`,
+        data: { index },
+      })),
     ],
-    attachments: [{ id: 'screenshot', name: 'screenshot.png', contentType: 'image/png', bytes: screenshot }, { id: 'recording', name: 'recording.webm', contentType: 'video/webm', bytes: new Uint8Array(videoBytes) }],
+    attachments: [
+      {
+        id: 'screenshot',
+        name: 'screenshot.png',
+        contentType: 'image/png',
+        bytes: screenshot,
+      },
+      {
+        id: 'recording',
+        name: 'recording.webm',
+        contentType: 'video/webm',
+        bytes: new Uint8Array(videoBytes),
+      },
+    ],
     missing: ['External application assets are not retained in this offline fixture'],
   })
   assert(created.success, 'Built feedback package must generate a bundle')
@@ -110,8 +145,19 @@ try {
   assert(read.data.files['viewer/replay.js'].byteLength > 10000, 'Built viewer must embed its replay engine')
   const archive = path.join(evidenceDirectory, 'feedback.zip')
   await writeFile(archive, created.data)
-  const environment = Object.fromEntries(['PATH', 'SystemRoot', 'ComSpec', 'TEMP', 'TMP'].filter(key => process.env[key]).map(key => [key, process.env[key]]))
-  cliProcess = spawn(process.execPath, [path.join(repository, 'packages/cli/dist/index.js'), 'feedback', 'view', archive], {
+  const environment = Object.fromEntries([
+    'PATH',
+    'SystemRoot',
+    'ComSpec',
+    'TEMP',
+    'TMP',
+  ].filter(key => process.env[key]).map(key => [key, process.env[key]]))
+  cliProcess = spawn(process.execPath, [
+    path.join(repository, 'packages/cli/dist/index.js'),
+    'feedback',
+    'view',
+    archive,
+  ], {
     cwd: evidenceDirectory,
     env: { ...environment, HAI_CORE_DEFAULTLOCALE: 'en-US' },
     windowsHide: true,
@@ -143,7 +189,10 @@ try {
   assert(servedReplay.includes('__HAI_FEEDBACK_REPLAY__'), 'Published CLI must provide its built replay engine')
   assert(servedReplay.includes('.replayer-wrapper'), 'Published CLI must include its built replay CSS')
   const viewerOrigin = new URL(viewerUrl).origin
-  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 1200, height: 900 } })
+  const page = await browser.newPage({
+    locale: 'en-US',
+    viewport: { width: 1200, height: 900 },
+  })
   await page.route('**/*', async (route) => {
     if (new URL(route.request().url()).origin !== viewerOrigin) {
       externalNetworkRequests.push(route.request().url())
@@ -204,11 +253,25 @@ try {
   assert.equal(await replayFrame.evaluate(() => globalThis.__ORIGINAL_APP_SCRIPT__), undefined)
   assert.equal(await page.evaluate(() => globalThis.__USER_SCRIPT__), undefined)
   await page.getByRole('textbox', { name: 'requestId', exact: true }).fill('req-23')
-  await expect(page.locator('section').filter({ has: page.getByRole('heading', { name: 'Evidence', exact: true }) }).locator('pre')).toContainText('req-23')
+  await expect(page.locator('section').filter({
+    has: page.getByRole('heading', { name: 'Evidence', exact: true }),
+  }).locator('pre')).toContainText('req-23')
   assert.deepEqual(externalNetworkRequests, [], 'CSP must block external resources before network dispatch')
   assert.deepEqual(pageErrors, [])
-  await page.screenshot({ path: path.join(evidenceDirectory, 'viewer.png'), fullPage: true })
-  await writeFile(path.join(evidenceDirectory, 'result.json'), JSON.stringify({ success: true, revision: read.data.manifest.evidenceRevision, recordedEvents: events.length, replayEngineBytes: read.data.files['viewer/replay.js'].byteLength, requests: observedRequests.length, externalNetworkRequests: externalNetworkRequests.length, unavailableExternalAssetPreserved: true, applicationScriptsExecuted: false }, null, 2))
+  await page.screenshot({
+    path: path.join(evidenceDirectory, 'viewer.png'),
+    fullPage: true,
+  })
+  await writeFile(path.join(evidenceDirectory, 'result.json'), JSON.stringify({
+    success: true,
+    revision: read.data.manifest.evidenceRevision,
+    recordedEvents: events.length,
+    replayEngineBytes: read.data.files['viewer/replay.js'].byteLength,
+    requests: observedRequests.length,
+    externalNetworkRequests: externalNetworkRequests.length,
+    unavailableExternalAssetPreserved: true,
+    applicationScriptsExecuted: false,
+  }, null, 2))
   process.stdout.write(`Feedback offline browser acceptance passed: ${evidenceDirectory}\n`)
 }
 finally {

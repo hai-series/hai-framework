@@ -23,11 +23,19 @@ it('a killed idle PG backend cannot crash the application; a later query opens a
   try {
     await build({
       config: false,
-      entry: { index: path.resolve(import.meta.dirname, '../src/index.ts') },
+      entry: {
+        index: path.resolve(import.meta.dirname, '../src/index.ts'),
+      },
       outDir: path.join(directory, 'bundle'),
       format: ['esm'],
       platform: 'node',
-      external: ['@h-ai/core', 'better-sqlite3', 'pg', 'mysql2', 'zod'],
+      external: [
+        '@h-ai/core',
+        'better-sqlite3',
+        'pg',
+        'mysql2',
+        'zod',
+      ],
       silent: true,
     })
     const script = path.join(directory, 'application.mjs')
@@ -55,9 +63,18 @@ process.on('message', async message => {
 process.send({ stage: 'ready', pid: process.pid, backend: first.data.pid })
 `)
     lease = await acquirePostgresContainer()
-    const config = { type: 'postgresql', host: lease.host, port: lease.port, database: lease.database, user: lease.user, password: lease.password }
+    const config = {
+      type: 'postgresql',
+      host: lease.host,
+      port: lease.port,
+      database: lease.database,
+      user: lease.user,
+      password: lease.password,
+    }
     observer = new Pool(config)
-    child = fork(script, [JSON.stringify(config)], { windowsHide: true, silent: true })
+    child = fork(script, [
+      JSON.stringify(config),
+    ], { windowsHide: true, silent: true })
     let output = ''
     child.stdout?.on('data', chunk => output += chunk.toString())
     child.stderr?.on('data', chunk => output += chunk.toString())
@@ -89,8 +106,16 @@ process.send({ stage: 'ready', pid: process.pid, backend: first.data.pid })
     }, { timeout: 5_000 })
     child.send({ action: 'probe' })
     await vi.waitFor(() => expect(reports.has('probed'), output).toBe(true), { timeout: 5_000 })
-    expect(reports.get('probed')!.result).toEqual({ success: true, data: { pid: expect.any(Number) } })
-    expect(reports.get('probed')!.result).not.toEqual({ success: true, data: { pid: oldBackend } })
+    expect(reports.get('probed')!.result).toEqual({
+      success: true,
+      data: {
+        pid: expect.any(Number),
+      },
+    })
+    expect(reports.get('probed')!.result).not.toEqual({
+      success: true,
+      data: { pid: oldBackend },
+    })
     expect(output).not.toContain(lease.password)
     expect(output).not.toContain('terminating connection due to administrator command')
     child.send({ action: 'close' })

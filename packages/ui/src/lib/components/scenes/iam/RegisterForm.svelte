@@ -61,7 +61,9 @@
   let confirmPassword = $state('')
   let nickname = $state('')
 
-  const policyError = $derived(passwordPolicy && password ? passwordPolicyError(password, passwordPolicy) : '')
+  const policyError = $derived(passwordPolicy && password
+    ? passwordPolicyError(password, passwordPolicy)
+    : '')
 
   const formClass = $derived(
     cn(
@@ -123,7 +125,9 @@
 
   function getSubmittedValue(formData: FormData, key: string, fallback = ''): string | undefined {
     const submitted = formData.get(key)
-    const value = typeof submitted === 'string' ? submitted : fallback
+    const value = typeof submitted === 'string'
+      ? submitted
+      : fallback
     const trimmed = value.trim()
     return trimmed || undefined
   }
@@ -241,7 +245,11 @@
             oninput={(e: Event & { currentTarget: HTMLInputElement }) => setFieldValue(field, e.currentTarget.value)}
             {disabled}
             required={field === 'username' || field === 'email'}
-            autocomplete={field === 'username' ? 'username' : field === 'email' ? 'email' : undefined}
+            autocomplete={field === 'username'
+              ? 'username'
+              : field === 'email'
+              ? 'email'
+              : undefined}
             error={errors[field]}
           />
         </FormField>

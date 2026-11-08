@@ -24,12 +24,19 @@ it.each(['avatar', 'image', 'file'])('%s 上传失败统一 Toast，隐藏原始
   })
   const onerror = vi.fn()
   const props = { uploadHandler, onerror }
-  const component = kind === 'avatar' ? mount(AvatarUpload, { target, props }) : kind === 'image' ? mount(ImageUpload, { target, props }) : mount(FileUpload, { target, props })
+  const component = kind === 'avatar'
+    ? mount(AvatarUpload, { target, props })
+    : kind === 'image'
+      ? mount(ImageUpload, { target, props })
+      : mount(FileUpload, { target, props })
   try {
     flushSync()
     const input = target.querySelector<HTMLInputElement>('input[type=file]')!
     const file = new File(['example'], 'example.png', { type: 'image/png' })
-    Object.defineProperty(input, 'files', { value: [file], configurable: true })
+    Object.defineProperty(input, 'files', {
+      value: [file],
+      configurable: true,
+    })
     input.dispatchEvent(new Event('change', { bubbles: true }))
     await vi.waitFor(() => expect(toast.items.at(-1)).toMatchObject({ message: '上传失败', traceId: 'upload-request' }))
     expect(toast.items).toHaveLength(1)
@@ -63,11 +70,18 @@ it('移除在途文件后，即使上传器以普通异常结束也不误报失�
   })
   const onerror = vi.fn()
   const target = document.body.appendChild(document.createElement('div'))
-  const component = mount(FileUpload, { target, props: { uploadHandler, onerror } })
+  const component = mount(FileUpload, {
+    target,
+    props: { uploadHandler, onerror },
+  })
   try {
     flushSync()
     const input = target.querySelector<HTMLInputElement>('input[type=file]')!
-    Object.defineProperty(input, 'files', { value: [new File(['example'], 'example.txt')] })
+    Object.defineProperty(input, 'files', {
+      value: [
+        new File(['example'], 'example.txt'),
+      ],
+    })
     input.dispatchEvent(new Event('change', { bubbles: true }))
     await vi.waitFor(() => expect(uploadHandler).toHaveBeenCalledOnce())
     flushSync()

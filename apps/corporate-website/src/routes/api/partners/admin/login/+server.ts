@@ -1,15 +1,19 @@
 import process from 'node:process'
-import * as m from '$lib/paraglide/messages.js'
+import { kit } from '@h-ai/kit'
+import * as m from '#lib/paraglide/messages.js'
 import {
   createPartnerAdminSession,
   getPartnerAdminConfig,
   PartnerAdminLoginSchema,
   verifyPartnerAdminCredential,
-} from '$lib/server/partner-service.js'
-import { kit } from '@h-ai/kit'
+} from '#lib/server/partner-service.js'
 
 export const POST = kit.handler(async ({ request, cookies, locals }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   const { username, password } = await kit.validate.body(request, PartnerAdminLoginSchema)
 
   if (!verifyPartnerAdminCredential(username, password)) {

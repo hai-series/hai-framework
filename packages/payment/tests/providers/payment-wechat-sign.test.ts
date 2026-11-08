@@ -172,7 +172,10 @@ describe('decryptResource', () => {
   function encryptResource(plaintext: string, nonce: string, aad: string): string {
     const cipher = createCipheriv('aes-256-gcm', apiV3Key, nonce)
     cipher.setAAD(Buffer.from(aad))
-    const encrypted = Buffer.concat([cipher.update(plaintext, 'utf-8'), cipher.final()])
+    const encrypted = Buffer.concat([
+      cipher.update(plaintext, 'utf-8'),
+      cipher.final(),
+    ])
     const tag = cipher.getAuthTag()
     return Buffer.concat([encrypted, tag]).toString('base64')
   }

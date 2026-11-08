@@ -28,7 +28,9 @@ function errorCodes(error) {
       codes.push(code)
     current = current.cause
   }
-  return [...new Set(codes)]
+  return [
+    ...new Set(codes),
+  ]
 }
 
 async function main() {
@@ -68,8 +70,15 @@ async function main() {
   }
   catch (error) {
   // 初始化错误与操作错误仅发送稳定代码，不复制 SDK 异常或配置。
-    const code = error instanceof Error && /^hai:[\w-]+:\d{3}$/.test(error.message) ? error.message : 'fixture:worker-failed'
-    process.send?.({ phase: 'failed', stage, code, causes: errorCodes(error) })
+    const code = error instanceof Error && /^hai:[\w-]+:\d{3}$/.test(error.message)
+      ? error.message
+      : 'fixture:worker-failed'
+    process.send?.({
+      phase: 'failed',
+      stage,
+      code,
+      causes: errorCodes(error),
+    })
     process.exitCode = 1
   }
   finally {

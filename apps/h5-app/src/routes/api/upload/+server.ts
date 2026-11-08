@@ -8,6 +8,7 @@ import { Buffer } from 'node:buffer'
 import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
 import { storage } from '@h-ai/storage'
+import { ownedImageKey } from '#lib/server/storage-access.js'
 
 const MAX_UPLOAD_SIZE = 5 * 1024 * 1024
 const ALLOWED_UPLOAD_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
@@ -17,7 +18,10 @@ const EXT_MAP: Record<string, string> = {
   'image/webp': 'webp',
 }
 
-export const POST = kit.handler(async ({ request }) => {
+export const POST = kit.handler(async ({ request, locals }) => {
+  const userId = locals.session?.userId
+  if (!userId)
+    return kit.response.unauthorized()
   if (!storage.isInitialized) {
     return kit.response.error('STORAGE_UNAVAILABLE', 'File storage is not configured', 503)
   }
@@ -39,7 +43,7 @@ export const POST = kit.handler(async ({ request }) => {
   }
 
   const ext = EXT_MAP[file.type]
-  const key = `uploads/${core.id.generate()}.${ext}`
+  const key = ownedImageKey(userId, 'uploads', `${core.id.generate()}.${ext}`)
   const buffer = Buffer.from(await file.arrayBuffer())
 
   const result = await storage.file.put(key, buffer, {
@@ -51,5 +55,10 @@ export const POST = kit.handler(async ({ request }) => {
     return kit.response.internalError('Upload failed')
   }
 
-  return kit.response.ok({ key, name: file.name, size: file.size, type: file.type })
+  return kit.response.ok({
+    key,
+    name: file.name,
+    size: file.size,
+    type: file.type,
+  })
 })

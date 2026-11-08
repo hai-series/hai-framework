@@ -291,7 +291,11 @@ class AudioConnection {
     this.queue = this.queue
       .then(() => task())
       .catch((error: unknown) => {
-        logger.debug('audio ws task failed', { error: error instanceof Error ? error.message : String(error) })
+        logger.debug('audio ws task failed', {
+          error: error instanceof Error
+            ? error.message
+            : String(error),
+        })
         if (!this.closed)
           this.failFromError(ws, error)
       })
@@ -477,7 +481,9 @@ class AudioConnection {
     this.start = confirmed
     this.authorizedRequest = authorized.data
     // 进入业务态并清除预鉴权超时
-    this.state = confirmed.operation === 'synthesize' ? 'synthesizing' : 'transcribing'
+    this.state = confirmed.operation === 'synthesize'
+      ? 'synthesizing'
+      : 'transcribing'
     if (this.preAuthTimer) {
       clearTimeout(this.preAuthTimer)
       this.preAuthTimer = undefined
@@ -616,7 +622,13 @@ class AudioConnection {
       return
     logger.warn('Audio WebSocket operation failed', { error })
     const hai: HaiError = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' && 'message' in error && typeof error.message === 'string'
-      ? { code: error.code, message: error.message, httpStatus: 'httpStatus' in error && typeof error.httpStatus === 'number' ? error.httpStatus : 500 }
+      ? {
+          code: error.code,
+          message: error.message,
+          httpStatus: 'httpStatus' in error && typeof error.httpStatus === 'number'
+            ? error.httpStatus
+            : 500,
+        }
       : { code: HaiCommonError.INTERNAL_ERROR.code, message: '', httpStatus: 500 }
     const safe = core.error.toPublic(hai)
     this.fail(ws, String(safe.code), safe.message)
@@ -652,7 +664,11 @@ class AudioConnection {
     this.controller.abort()
     if (this.session && this.authorizedRequest && this.deps.onSessionEnd) {
       void Promise.resolve(this.deps.onSessionEnd(this.session, this.authorizedRequest)).catch((error: unknown) => {
-        logger.warn('audio ws session end hook failed', { error: error instanceof Error ? error.message : String(error) })
+        logger.warn('audio ws session end hook failed', {
+          error: error instanceof Error
+            ? error.message
+            : String(error),
+        })
       })
     }
   }
@@ -661,7 +677,9 @@ class AudioConnection {
 /** 读取 WebSocket 底层发送缓冲字节数（不可用时返回 0）。 */
 function sendBufferedAmount(ws: WSContext): number {
   const raw = (ws as { raw?: { bufferedAmount?: number } }).raw
-  return typeof raw?.bufferedAmount === 'number' ? raw.bufferedAmount : 0
+  return typeof raw?.bufferedAmount === 'number'
+    ? raw.bufferedAmount
+    : 0
 }
 
 /** 将 WebSocket 消息数据转换为二进制字节（非二进制返回 undefined）。 */

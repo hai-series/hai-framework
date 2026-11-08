@@ -436,6 +436,13 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_DIST_TAG: ${{ needs.quality.outputs.npm_tag }}
 
+      - name: Verify default release source ordering
+        id: default_promotion
+        run: node scripts/promote-npm-latest.mjs "$RELEASE_VERSION" --check-automatic
+        env:
+          RELEASE_VERSION: ${{ needs.quality.outputs.version }}
+          GITHUB_TOKEN: ${{ github.token }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3.0.3
         with:
@@ -445,13 +452,15 @@ jobs:
           draft: false
           # GitHub 默认展示 Latest；npm 的 alpha/beta/rc 标签独立按版本选择。
           prerelease: false
-          make_latest: 'true'
+          make_latest: ${{ steps.default_promotion.outputs.promote }}
 
       - name: Promote verified release to npm latest
-        run: node scripts/promote-npm-latest.mjs "$RELEASE_VERSION"
+        if: steps.default_promotion.outputs.promote == 'true'
+        run: node scripts/promote-npm-latest.mjs "$RELEASE_VERSION" --automatic
         env:
           RELEASE_VERSION: ${{ needs.quality.outputs.version }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
 
   sync_versions:
     name: Commit versions after release

@@ -129,7 +129,13 @@ public static class HaiCommandJob {
 `
 
 function powershell(script: string): string[] {
-  return ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')]
+  return [
+    '-NoLogo',
+    '-NoProfile',
+    '-NonInteractive',
+    '-EncodedCommand',
+    Buffer.from(script, 'utf16le').toString('base64'),
+  ]
 }
 
 // 测试与生产包没有共用的公开进程控制入口；保留必需的原生结构/argv 编码，不跨包导入私有源码。
@@ -145,7 +151,13 @@ try {
   [Environment]::SetEnvironmentVariable('${key}', $null)
   exit ([HaiCommandJob]::Run([string]$config.name, [string]$config.command, [string[]]$config.args))
 } catch { [Console]::Error.WriteLine('Windows deployment test command job failed'); exit 125 }`
-  return { name, args: powershell(script), env: { [key]: JSON.stringify({ name, command, args }) } }
+  return {
+    name,
+    args: powershell(script),
+    env: {
+      [key]: JSON.stringify({ name, command, args }),
+    },
+  }
 }
 
 export function windowsTestJobProbe(name: string): string[] {

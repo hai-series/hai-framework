@@ -660,8 +660,8 @@ export interface UserProfileProps extends FormLayoutOptions, DataAttributes {
   class?: string
   /** 错误信息 */
   errors?: Record<string, string>
-  /** 保存事件 */
-  onsubmit?: (data: UserProfileSubmitData) => void | Promise<void>
+  /** 保存事件；只有 true 表示成功并退出编辑，false 保留编辑器与草稿。 */
+  onsubmit?: (data: UserProfileSubmitData) => boolean | Promise<boolean>
   /** 头像变更事件 */
   onavatarchange?: (file: File) => void | Promise<void>
 }

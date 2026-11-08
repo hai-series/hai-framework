@@ -28,7 +28,12 @@ it('生产敏感发送默认在请求前拒绝 HTTP，显式内网豁免才允�
   expect((await initialize(url)).success).toBe(true)
   // 只验证 API 传输策略；生产共享数据库要求由独立状态测试覆盖。
   const production = vi.spyOn(core.module, 'requiresSharedState').mockReturnValue(true)
-  const sensitive = { ...message, sensitive: true, expiresAt: Date.now() + 60000, idempotencyKey: 'https-required' }
+  const sensitive = {
+    ...message,
+    sensitive: true,
+    expiresAt: Date.now() + 60000,
+    idempotencyKey: 'https-required',
+  }
   expect((await reach.send(sensitive)).success).toBe(false)
   expect(received).toBe(0)
   await reach.close()
@@ -52,7 +57,18 @@ async function receiver(listener: RequestListener) {
 
 async function initialize(url: string, options: { redirect?: 'error' | 'follow', requireHttps?: boolean } = {}) {
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
-  return reach.init({ providers: [{ name: 'notify', type: 'api', url, headers: { 'X-Private-Fixture': 'SYNTHETIC_PRIVATE_HEADER' }, ...options }], dnd: { enabled: false } })
+  return reach.init({
+    providers: [
+      {
+        name: 'notify',
+        type: 'api',
+        url,
+        headers: { 'X-Private-Fixture': 'SYNTHETIC_PRIVATE_HEADER' },
+        ...options,
+      },
+    ],
+    dnd: { enabled: false },
+  })
 }
 
 it.each([
@@ -65,7 +81,11 @@ it.each([
   [200, 'null', false],
   [200, '[]', false],
   [200, '{"messageId":42}', false],
-  [200, 'x'.repeat(65537), false],
+  [
+    200,
+    'x'.repeat(65537),
+    false,
+  ],
   [400, 'private rejection', false],
   [500, 'private failure', false],
 ])('hTTP 回执校验用例 %#', async (status, body, success) => {
@@ -82,8 +102,12 @@ it.each([
   expect(result.success).toBe(success)
   expect(received).toBe(1)
   expect(JSON.stringify(result)).not.toMatch(/SYNTHETIC_RESPONSE|private rejection|private failure/)
-  if (body.includes('accepted-1'))
-    expect(result).toMatchObject({ success: true, data: { messageId: 'accepted-1' } })
+  if (body.includes('accepted-1')) {
+    expect(result).toMatchObject({
+      success: true,
+      data: { messageId: 'accepted-1' },
+    })
+  }
 })
 
 it.each([301, 302, 303, 307, 308])('默认拒绝 %i，敏感发送即使配置 follow 也不转发正文和私有头', async (status) => {
@@ -102,7 +126,12 @@ it.each([301, 302, 303, 307, 308])('默认拒绝 %i，敏感发送即使配置 f
   expect(forwarded).toBe(0)
   await reach.close()
   expect((await initialize(source, { redirect: 'follow' })).success).toBe(true)
-  const sensitive = { ...message, sensitive: true, idempotencyKey: `sensitive-${status}`, expiresAt: Date.now() + 60000 }
+  const sensitive = {
+    ...message,
+    sensitive: true,
+    idempotencyKey: `sensitive-${status}`,
+    expiresAt: Date.now() + 60000,
+  }
   expect((await reach.send(sensitive)).success).toBe(false)
   expect((await reach.send(sensitive)).success).toBe(false)
   expect(forwarded).toBe(0)

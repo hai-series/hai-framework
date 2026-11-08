@@ -10,14 +10,25 @@ function tests() {
     const iam = await initIam()
     const username = `access-${crypto.randomUUID()}`
     await iam.user.register({ username, password: TEST_PASSWORD })
-    await initIam({ loginAccess: { enabled: true, allowIps: ['192.0.2.0/24', '2001:db8::/32'], denyIps: ['192.0.2.7'] } })
+    await initIam({
+      loginAccess: {
+        enabled: true,
+        allowIps: ['192.0.2.0/24', '2001:db8::/32'],
+        denyIps: ['192.0.2.7'],
+      },
+    })
     const credentials = { identifier: username, password: TEST_PASSWORD, ip: '192.0.2.8' }
     expect((await iam.auth.login(credentials)).success).toBe(false)
     expect((await iam.auth.login(credentials, { ip: '192.0.2.7' })).success).toBe(false)
     expect((await iam.auth.login(credentials, { ip: '198.51.100.1' })).success).toBe(false)
     expect((await iam.auth.login(credentials, { ip: '::ffff:192.0.2.8' })).success).toBe(true)
     expect((await iam.auth.login(credentials, { ip: '2001:db8::42' })).success).toBe(true)
-    await initIam({ loginAccess: { enabled: false, allowIps: ['192.0.2.0/24'] } })
+    await initIam({
+      loginAccess: {
+        enabled: false,
+        allowIps: ['192.0.2.0/24'],
+      },
+    })
     expect((await iam.auth.login(credentials)).success).toBe(true)
   })
 
@@ -25,8 +36,22 @@ function tests() {
     const iam = await initIam()
     const username = `time-${crypto.randomUUID()}`
     await iam.user.register({ username, password: TEST_PASSWORD })
-    await initIam({ loginAccess: { enabled: true, timezone: 'Asia/Shanghai', windows: [{ days: [1], start: '22:00', end: '02:00' }] } })
-    vi.useFakeTimers({ toFake: ['Date'] })
+    await initIam({
+      loginAccess: {
+        enabled: true,
+        timezone: 'Asia/Shanghai',
+        windows: [
+          {
+            days: [1],
+            start: '22:00',
+            end: '02:00',
+          },
+        ],
+      },
+    })
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
     const credentials = { identifier: username, password: TEST_PASSWORD }
     vi.setSystemTime(new Date('2026-10-26T14:00:00Z')) // 周一22点
     expect((await iam.auth.login(credentials)).success).toBe(true)
@@ -39,7 +64,12 @@ function tests() {
   })
 
   it('注册自动登录也不绕过限制，普通注册与登录许可分离', async () => {
-    const iam = await initIam({ loginAccess: { enabled: true, allowIps: ['192.0.2.0/24'] } })
+    const iam = await initIam({
+      loginAccess: {
+        enabled: true,
+        allowIps: ['192.0.2.0/24'],
+      },
+    })
     const username = `registered-${crypto.randomUUID()}`
     expect((await iam.auth.registerAndLogin({ username, password: TEST_PASSWORD }, { ip: '198.51.100.1' })).success).toBe(false)
     expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD }, { ip: '192.0.2.8' })).success).toBe(true)
@@ -47,11 +77,31 @@ function tests() {
 }
 
 it.each([
-  { allowIps: ['192.0.2.0/99'] },
-  { allowIps: ['example.com'] },
+  {
+    allowIps: ['192.0.2.0/99'],
+  },
+  {
+    allowIps: ['example.com'],
+  },
   { timezone: 'Not/AZone' },
-  { windows: [{ days: [0], start: '22:00', end: '02:00' }] },
-  { windows: [{ days: [1], start: '24:00', end: '02:00' }] },
+  {
+    windows: [
+      {
+        days: [0],
+        start: '22:00',
+        end: '02:00',
+      },
+    ],
+  },
+  {
+    windows: [
+      {
+        days: [1],
+        start: '24:00',
+        end: '02:00',
+      },
+    ],
+  },
 ])('无效策略不能静默失效：%j', (loginAccess) => {
   expect(IamConfigSchema.safeParse({ loginAccess }).success).toBe(false)
 })

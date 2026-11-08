@@ -16,19 +16,37 @@ import { feedback } from '../src/index.js'
 async function checkpoint(promise: Promise<unknown>): Promise<void> {
   const controller = new AbortController()
   try {
-    await Promise.race([promise, delay(10000, undefined, { signal: controller.signal }).then(() => {
-      throw new Error('Database checkpoint timed out')
-    })])
+    await Promise.race([
+      promise,
+      delay(10000, undefined, { signal: controller.signal }).then(() => {
+        throw new Error('Database checkpoint timed out')
+      }),
+    ])
   }
   finally { controller.abort() }
 }
 
-for (const [label, setup] of [['postgresql', postgresEnv], ['mysql', mysqlEnv]] as const) {
-  describe.sequential(`feedback ${label} database locking`, () => {
+for (const [label, setup] of [
+  ['postgresql', postgresEnv],
+  ['mysql', mysqlEnv],
+] as const) {
+  describe(`feedback ${label} database locking`, { concurrent: false }, () => {
     let environment: DbTestEnv | undefined
     let directory: string | undefined
-    const actor = { scopeId: 'lock-scope', userId: 'lock-user', permissions: ['feedback:*'] }
-    const config = { appId: `lock-wait-${label}`, recipients: ['admin@example.test'], notificationProvider: 'email', adminUrl: 'http://localhost/admin/feedback', workerIntervalMs: 0, collectionTimeoutMs: 60000, leaseMs: 1000 }
+    const actor = {
+      scopeId: 'lock-scope',
+      userId: 'lock-user',
+      permissions: ['feedback:*'],
+    }
+    const config = {
+      appId: `lock-wait-${label}`,
+      recipients: ['admin@example.test'],
+      notificationProvider: 'email',
+      adminUrl: 'http://localhost/admin/feedback',
+      workerIntervalMs: 0,
+      collectionTimeoutMs: 60000,
+      leaseMs: 1000,
+    }
     let previousLevel = core.logger.getLevel()
 
     beforeAll(async () => {
@@ -38,7 +56,11 @@ for (const [label, setup] of [['postgresql', postgresEnv], ['mysql', mysqlEnv]] 
       directory = await mkdtemp(join(tmpdir(), `hai-feedback-${label}-locks-`))
       expect((await reldb.init(environment.config)).success).toBe(true)
       expect((await storage.init({ type: 'local', root: directory })).success).toBe(true)
-      expect((await reach.init({ providers: [{ name: 'email', type: 'console' }] })).success).toBe(true)
+      expect((await reach.init({
+        providers: [
+          { name: 'email', type: 'console' },
+        ],
+      })).success).toBe(true)
       expect((await feedback.init(config)).success).toBe(true)
     }, 180000)
 
@@ -88,7 +110,9 @@ for (const [label, setup] of [['postgresql', postgresEnv], ['mysql', mysqlEnv]] 
           return
         held = started.data
         expect((await held.get('SELECT id FROM hai_feedback_jobs WHERE id = ? FOR UPDATE', [job.data.id])).success).toBe(true)
-        const now = label === 'postgresql' ? '(FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint)' : '(CAST(UNIX_TIMESTAMP(SYSDATE(3)) * 1000 AS UNSIGNED))'
+        const now = label === 'postgresql'
+          ? '(FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint)'
+          : '(CAST(UNIX_TIMESTAMP(SYSDATE(3)) * 1000 AS UNSIGNED))'
         expect((await held.execute(`UPDATE hai_feedback_jobs SET lease_until = ${now} + 300 WHERE id = ?`, [job.data.id])).success).toBe(true)
         const execute = reldb.sql.execute
         vi.spyOn(reldb.sql, 'execute').mockImplementation((sql, params) => {

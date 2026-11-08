@@ -115,7 +115,9 @@
         class={cn(
           'flex flex-col items-center justify-center flex-1 h-full relative transition-colors',
           'hai-no-select',
-          item.id === active ? 'text-primary' : 'text-base-content/60',
+          item.id === active
+            ? 'text-primary'
+            : 'text-base-content/60',
         )}
         onclick={() => onchange?.(item.id)}
       >
@@ -128,7 +130,9 @@
           {/if}
           {#if item.badge && item.badge > 0}
             <span class='absolute -top-1 -right-2 badge badge-error badge-xs text-[10px] min-w-4 h-4'>
-              {item.badge > 99 ? '99+' : item.badge}
+              {item.badge > 99
+                ? '99+'
+                : item.badge}
             </span>
           {/if}
         </div>

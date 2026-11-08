@@ -12,7 +12,15 @@ import { createCacheRateLimitStore, createMemoryRateLimitStore, MemoryRateLimitS
 
 /** 仅创建该中间件实际访问的RequestEvent字段，不模拟SvelteKit路由实现。 */
 function context(address = '127.0.0.1'): MiddlewareContext {
-  return { event: { getClientAddress: () => address, request: new Request('https://app.test', { headers: { 'x-forwarded-for': 'attacker-controlled' } }) } as RequestEvent, requestId: 'test-rate-limit' }
+  return {
+    event: {
+      getClientAddress: () => address,
+      request: new Request('https://app.test', {
+        headers: { 'x-forwarded-for': 'attacker-controlled' },
+      }),
+    } as RequestEvent,
+    requestId: 'test-rate-limit',
+  }
 }
 
 afterEach(async () => {
@@ -43,9 +51,16 @@ it.each(['NODE_ENV', 'HAI_CORE_ENV'])('%s 生产环境拒绝内存，存储故�
   vi.stubEnv('NODE_ENV', 'development')
   vi.stubEnv('HAI_CORE_ENV', 'development')
   const next = vi.fn(async () => new Response('OK'))
-  const failed = rateLimitMiddleware({ windowMs: 1000, maxRequests: 1, store: { scope: 'shared', increment: async () => {
-    throw new Error('offline')
-  } } })
+  const failed = rateLimitMiddleware({
+    windowMs: 1000,
+    maxRequests: 1,
+    store: {
+      scope: 'shared',
+      increment: async () => {
+        throw new Error('offline')
+      },
+    },
+  })
   expect((await failed(context(), next)).status).toBe(503)
   expect(next).not.toHaveBeenCalled()
   await cache.init({ type: 'memory' })
@@ -53,15 +68,27 @@ it.each(['NODE_ENV', 'HAI_CORE_ENV'])('%s 生产环境拒绝内存，存储故�
   vi.stubEnv('HAI_E2E', '0')
   vi.stubEnv('HAI_E2E_MOCK', '0')
   expect(() => createMemoryRateLimitStore()).toThrow('Memory')
-  expect(() => rateLimitMiddleware({ windowMs: 1000, maxRequests: 1, store: new MemoryRateLimitStore() })).toThrow('Memory')
-  const shared = rateLimitMiddleware({ windowMs: 1000, maxRequests: 1, store: createCacheRateLimitStore(cache, { namespace: 'production', allowMemory: true }) })
+  expect(() => rateLimitMiddleware({
+    windowMs: 1000,
+    maxRequests: 1,
+    store: new MemoryRateLimitStore(),
+  })).toThrow('Memory')
+  const shared = rateLimitMiddleware({
+    windowMs: 1000,
+    maxRequests: 1,
+    store: createCacheRateLimitStore(cache, { namespace: 'production', allowMemory: true }),
+  })
   expect((await shared(context(), next)).status).toBe(503)
   vi.stubEnv('HAI_E2E', '1')
   expect((await shared(context(), next)).status).toBe(200)
 })
 
 it('等价IPv6/IPv4映射地址共享计数，不采信任意代理请求头', async () => {
-  const limited = rateLimitMiddleware({ windowMs: 1000, maxRequests: 1, store: new MemoryRateLimitStore() })
+  const limited = rateLimitMiddleware({
+    windowMs: 1000,
+    maxRequests: 1,
+    store: new MemoryRateLimitStore(),
+  })
   const next = async () => new Response('OK')
   expect((await limited(context('2001:0db8:0000:0000:0000:0000:0000:0001'), next)).status).toBe(200)
   expect((await limited(context('2001:db8::1'), next)).status).toBe(429)
@@ -77,11 +104,23 @@ it('两个独立HTTP进程共享Redis总放行5次，节点时钟差异不提前
     await cache.init(config)
     const namespace = `process-${crypto.randomUUID()}`
     const urls = await Promise.all([0, 7200000].map(async (clockSkew) => {
-      const child = spawn(process.execPath, [fileURLToPath(new URL('./helpers-rate-limit-worker.mjs', import.meta.url))], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe', 'ipc'], env: { ...process.env, KIT_RATE_LIMIT_WORKER: JSON.stringify({ cache: config, namespace, clockSkew }) } })
+      const child = spawn(process.execPath, [
+        fileURLToPath(new URL('./helpers-rate-limit-worker.mjs', import.meta.url)),
+      ], {
+        windowsHide: true,
+        stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+        env: {
+          ...process.env,
+          KIT_RATE_LIMIT_WORKER: JSON.stringify({ cache: config, namespace, clockSkew }),
+        },
+      })
       children.push(child)
-      const ready = await Promise.race([once(child, 'message'), once(child, 'exit').then(() => {
-        throw new Error('Worker exited before listening')
-      })])
+      const ready = await Promise.race([
+        once(child, 'message'),
+        once(child, 'exit').then(() => {
+          throw new Error('Worker exited before listening')
+        }),
+      ])
       const message = ready[0] as { port: number }
       return `http://127.0.0.1:${message.port}`
     }))

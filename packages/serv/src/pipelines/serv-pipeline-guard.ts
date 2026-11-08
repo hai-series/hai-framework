@@ -98,7 +98,8 @@ export function applyServGuards<
       if (requirements.permissions?.length) {
         const allowed = session.permissions.includes(WILDCARD_PERMISSION)
           || requirements.permissions.every(
-            permission => session.permissions.includes(permission),
+            permission => session.permissions.some(granted => granted === permission
+              || (granted.endsWith(':*') && permission.startsWith(granted.slice(0, -1)))),
           )
         if (!allowed) {
           return err(

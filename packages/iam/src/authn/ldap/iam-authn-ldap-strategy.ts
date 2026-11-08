@@ -169,7 +169,12 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
     maxLoginAttempts = 5,
     lockoutDuration = 900,
   } = config
-  const failurePolicy = { maxLoginAttempts, lockoutDuration, lockoutEnabled: config.lockoutEnabled ?? true, failureWindow: config.failureWindow ?? 86400 }
+  const failurePolicy = {
+    maxLoginAttempts,
+    lockoutDuration,
+    lockoutEnabled: config.lockoutEnabled ?? true,
+    failureWindow: config.failureWindow ?? 86400,
+  }
 
   /**
    * 获取 LDAP 搜索结果中的属性值
@@ -312,7 +317,9 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
           if (!createResult.success) {
             return err(
               HaiIamError.REPOSITORY_ERROR,
-              iamM('iam_createUserFailed', { params: { message: createResult.error.message } }),
+              iamM('iam_createUserFailed', {
+                params: { message: createResult.error.message },
+              }),
               createResult.error,
             )
           }
@@ -364,7 +371,10 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
           return resetResult
         logger.debug('LDAP authentication succeeded', { userId: storedUser.id })
 
-        return ok({ ...toUser(storedUser), credentialVersion: storedUser.credentialVersion ?? '' })
+        return ok({
+          ...toUser(storedUser),
+          credentialVersion: storedUser.credentialVersion ?? '',
+        })
       }
       finally {
         // 确保解除绑定

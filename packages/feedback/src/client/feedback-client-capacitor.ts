@@ -14,7 +14,11 @@ import { Share } from '@capacitor/share'
  */
 export const saveCapacitorFeedbackFile: FeedbackFileSaver = async (bytes, filename, _contentType, signal) => {
   const path = `feedback/${globalThis.crypto.randomUUID()}/${filename}`
-  const cleanup = () => Filesystem.rmdir({ path: path.slice(0, path.lastIndexOf('/')), directory: Directory.Cache, recursive: true }).catch(() => undefined)
+  const cleanup = () => Filesystem.rmdir({
+    path: path.slice(0, path.lastIndexOf('/')),
+    directory: Directory.Cache,
+    recursive: true,
+  }).catch(() => undefined)
   const abort = () => {
     void cleanup()
   }
@@ -24,12 +28,22 @@ export const saveCapacitorFeedbackFile: FeedbackFileSaver = async (bytes, filena
   try {
     if (signal?.aborted)
       return { status: 'cancelled' }
-    const file = await Filesystem.writeFile({ path, data: btoa(raw), directory: Directory.Cache, recursive: true })
+    const file = await Filesystem.writeFile({
+      path,
+      data: btoa(raw),
+      directory: Directory.Cache,
+      recursive: true,
+    })
     if (signal?.aborted)
       return { status: 'cancelled' }
     signal?.addEventListener('abort', abort, { once: true })
-    await Share.share({ files: [file.uri], dialogTitle: filename })
-    return { status: signal?.aborted ? 'cancelled' : 'shared' }
+    await Share.share({
+      files: [file.uri],
+      dialogTitle: filename,
+    })
+    return {
+      status: signal?.aborted ? 'cancelled' : 'shared',
+    }
   }
   catch (cause) {
     // 原生插件以固定消息表示主动取消；其余异常交给统一保存边界记录并返回失败。

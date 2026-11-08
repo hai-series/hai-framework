@@ -108,7 +108,9 @@
   })
 </script>
 
-<div {...dataAttributes} bind:this={containerRef} class='dropdown {align === 'end' ? 'dropdown-end' : ''} {open ? 'dropdown-open' : ''} {className}'>
+<div {...dataAttributes} bind:this={containerRef} class='dropdown {align === 'end'
+  ? 'dropdown-end'
+  : ''} {open ? 'dropdown-open' : ''} {className}'>
   <BareButton
     type='button'
     class='btn btn-ghost {compact ? 'btn-sm btn-square' : 'btn-sm gap-2 min-w-fit'}'
@@ -134,7 +136,9 @@
       {#each languages as lang (lang.value)}
         <BareButton
           type='button'
-          class='flex items-center gap-2 w-full px-3 py-2 rounded-lg text-left transition-colors whitespace-nowrap {lang.value === currentLanguage ? 'bg-primary/10 text-primary' : 'hover:bg-base-200'}'
+          class='flex items-center gap-2 w-full px-3 py-2 rounded-lg text-left transition-colors whitespace-nowrap {lang.value === currentLanguage
+            ? 'bg-primary/10 text-primary'
+            : 'hover:bg-base-200'}'
           onclick={() => selectLanguage(lang.value)}
         >
           {#if lang.flag}

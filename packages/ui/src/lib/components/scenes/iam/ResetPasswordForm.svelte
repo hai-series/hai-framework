@@ -51,7 +51,9 @@
   let newPassword = $state('')
   let confirmPassword = $state('')
 
-  const policyError = $derived(passwordPolicy && newPassword ? passwordPolicyError(newPassword, passwordPolicy) : '')
+  const policyError = $derived(passwordPolicy && newPassword
+    ? passwordPolicyError(newPassword, passwordPolicy)
+    : '')
 
   const formClass = $derived(
     cn(
@@ -136,7 +138,9 @@
         bind:value={confirmPassword}
         placeholder={uiM('reset_password_confirm_placeholder')}
         {disabled}
-        error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? uiM('reset_password_mismatch') : '')}
+        error={errors.confirmPassword || (!passwordsMatch && confirmPassword
+          ? uiM('reset_password_mismatch')
+          : '')}
         showStrength={false}
       />
     </FormField>

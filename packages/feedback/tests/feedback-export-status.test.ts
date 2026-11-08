@@ -11,8 +11,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFeedbackBundle } from '../src/bundle/index.js'
 import { feedback, HaiFeedbackError } from '../src/index.js'
 
-const actor = { scopeId: 'export-status-scope', userId: 'owner', permissions: ['feedback:*'] }
-const config = { appId: 'export-status', recipients: ['admin@example.test'], adminUrl: 'http://localhost/admin/feedback', workerIntervalMs: 0, maxAttempts: 1 }
+const actor = {
+  scopeId: 'export-status-scope',
+  userId: 'owner',
+  permissions: ['feedback:*'],
+}
+const config = {
+  appId: 'export-status',
+  recipients: ['admin@example.test'],
+  adminUrl: 'http://localhost/admin/feedback',
+  workerIntervalMs: 0,
+  maxAttempts: 1,
+}
 let directory: string | undefined
 let previousLevel = core.logger.getLevel()
 
@@ -22,7 +32,11 @@ beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'hai-feedback-export-status-'))
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
   expect((await storage.init({ type: 'local', root: directory })).success).toBe(true)
-  expect((await reach.init({ providers: [{ name: 'email', type: 'console' }] })).success).toBe(true)
+  expect((await reach.init({
+    providers: [
+      { name: 'email', type: 'console' },
+    ],
+  })).success).toBe(true)
   expect((await feedback.init(config)).success).toBe(true)
 })
 
@@ -50,7 +64,7 @@ async function startExport(submissionId: string) {
   return { report: report.data, job: job.data }
 }
 
-describe.sequential('导出下载的状态与受权边界', () => {
+describe('导出下载的状态与受权边界', { concurrent: false }, () => {
   it('调高运行期导出数量不能突破报告受理时已预留的数量', async () => {
     await feedback.close()
     expect((await feedback.init({ ...config, maxExportsPerReport: 1 })).success).toBe(true)
@@ -58,7 +72,10 @@ describe.sequential('导出下载的状态与受权边界', () => {
     await feedback.close()
     expect((await feedback.init({ ...config, maxExportsPerReport: 20 })).success).toBe(true)
     expect((await feedback.setStatus({ id: report.id, status: 'handled', expectedVersion: 1 }, actor)).success).toBe(true)
-    expect(await feedback.export({ id: report.id }, actor)).toMatchObject({ success: false, error: { code: HaiFeedbackError.QUOTA_EXCEEDED.code } })
+    expect(await feedback.export({ id: report.id }, actor)).toMatchObject({
+      success: false,
+      error: { code: HaiFeedbackError.QUOTA_EXCEEDED.code },
+    })
   })
 
   it('已完成导出到期禁止下载并删除 ZIP；到期仍计入报告历史导出上限', async () => {
@@ -71,18 +88,26 @@ describe.sequential('导出下载的状态与受权边界', () => {
     expect(stored.success && stored.data).toBeTruthy()
     if (!stored.success || !stored.data)
       return
-    const metadata: unknown = typeof stored.data.result === 'string' ? JSON.parse(stored.data.result) : stored.data.result
+    const metadata: unknown = typeof stored.data.result === 'string'
+      ? JSON.parse(stored.data.result)
+      : stored.data.result
     if (!metadata || typeof metadata !== 'object' || !('key' in metadata) || typeof metadata.key !== 'string')
       throw new Error('Missing completed ZIP fixture')
     expect((await reldb.sql.execute('UPDATE hai_feedback_jobs SET created_at = 1 WHERE id = ?', [job.id])).success).toBe(true)
-    expect(await feedback.getExport({ id: report.id, jobId: job.id }, actor)).toMatchObject({ success: false, error: { code: HaiFeedbackError.NOT_FOUND.code } })
+    expect(await feedback.getExport({ id: report.id, jobId: job.id }, actor)).toMatchObject({
+      success: false,
+      error: { code: HaiFeedbackError.NOT_FOUND.code },
+    })
     const time = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 31000)
     try {
       expect((await feedback.runJobs()).success).toBe(true)
     }
     finally { time.mockRestore() }
     expect((await storage.file.get(metadata.key)).success).toBe(false)
-    expect(await feedback.export({ id: report.id }, actor)).toMatchObject({ success: false, error: { code: HaiFeedbackError.QUOTA_EXCEEDED.code } })
+    expect(await feedback.export({ id: report.id }, actor)).toMatchObject({
+      success: false,
+      error: { code: HaiFeedbackError.QUOTA_EXCEEDED.code },
+    })
   })
 
   it('刚受理的pending导出返回409，允许调用方继续等待', async () => {
@@ -112,9 +137,12 @@ describe.sequential('导出下载的状态与受权边界', () => {
     })
     const worker = feedback.runJobs()
     try {
-      await Promise.race([entered.promise, worker.then(() => {
-        throw new Error('Worker finished before export storage checkpoint')
-      })])
+      await Promise.race([
+        entered.promise,
+        worker.then(() => {
+          throw new Error('Worker finished before export storage checkpoint')
+        }),
+      ])
       const detail = await feedback.get(report.id, actor)
       expect(detail.success).toBe(true)
       if (detail.success)
@@ -160,7 +188,12 @@ describe.sequential('导出下载的状态与受权边界', () => {
     }
   })
 
-  it.each(['missing', 'foreign-report', 'non-export', 'foreign-scope'] as const)('%s任务返回404，不暴露其它任务状态', async (mode) => {
+  it.each([
+    'missing',
+    'foreign-report',
+    'non-export',
+    'foreign-scope',
+  ] as const)('%s任务返回404，不暴露其它任务状态', async (mode) => {
     const { report, job } = await startExport(`not-found-${mode}`)
     let jobId = job.id
     if (mode === 'missing')
@@ -178,7 +211,9 @@ describe.sequential('导出下载的状态与受权边界', () => {
         return
       jobId = collection.id
     }
-    const result = await feedback.getExport({ id: report.id, jobId }, mode === 'foreign-scope' ? { ...actor, scopeId: 'another-scope' } : actor)
+    const result = await feedback.getExport({ id: report.id, jobId }, mode === 'foreign-scope'
+      ? { ...actor, scopeId: 'another-scope' }
+      : actor)
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toBe(HaiFeedbackError.NOT_FOUND.code)
@@ -204,10 +239,15 @@ describe.sequential('导出下载的状态与受权边界', () => {
     expect(stored.success && stored.data).toBeTruthy()
     if (!stored.success || !stored.data)
       return
-    const payload: unknown = typeof stored.data.payload === 'string' ? JSON.parse(stored.data.payload) : stored.data.payload
+    const payload: unknown = typeof stored.data.payload === 'string'
+      ? JSON.parse(stored.data.payload)
+      : stored.data.payload
     if (!payload || typeof payload !== 'object')
       throw new Error('Export fixture snapshot unavailable')
-    expect((await reldb.sql.execute('UPDATE hai_feedback_jobs SET payload = ? WHERE id = ?', [JSON.stringify({ ...payload, snapshotExpiresAt: 0 }), job.id])).success).toBe(true)
+    expect((await reldb.sql.execute('UPDATE hai_feedback_jobs SET payload = ? WHERE id = ?', [
+      JSON.stringify({ ...payload, snapshotExpiresAt: 0 }),
+      job.id,
+    ])).success).toBe(true)
     const expired = await feedback.getExport({ id: report.id, jobId: job.id }, actor)
     expect(expired.success).toBe(false)
     if (!expired.success) {
@@ -228,7 +268,9 @@ describe.sequential('导出下载的状态与受权边界', () => {
   it('查询任务时数据库错误保持原错误，不变成等待或找不到', async () => {
     const { report, job } = await startExport('database-export-query')
     const get = reldb.sql.get
-    vi.spyOn(reldb.sql, 'get').mockImplementation(async <T = QueryRow>(sql: string, parameters?: unknown[]) => sql.includes('FROM hai_feedback_jobs') ? err(HaiReldbError.QUERY_FAILED, 'Export database unavailable') : get<T>(sql, parameters))
+    vi.spyOn(reldb.sql, 'get').mockImplementation(async <T = QueryRow>(sql: string, parameters?: unknown[]) => sql.includes('FROM hai_feedback_jobs')
+      ? err(HaiReldbError.QUERY_FAILED, 'Export database unavailable')
+      : get<T>(sql, parameters))
     const result = await feedback.getExport({ id: report.id, jobId: job.id }, actor)
     expect(result.success).toBe(false)
     if (!result.success)

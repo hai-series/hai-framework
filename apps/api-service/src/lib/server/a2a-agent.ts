@@ -9,22 +9,25 @@
  */
 
 import type { AgentExecutor } from '@h-ai/ai'
+import { AgentEvent, Message } from '@h-ai/ai'
 
 /** 回声执行器：将用户消息原样返回 */
 export const echoExecutor: AgentExecutor = {
   async execute(context, eventBus) {
     const parts = context.userMessage.parts ?? []
     const textParts = parts
-      .filter((p): p is { kind: 'text', text: string } => p.kind === 'text')
-      .map(p => p.text)
+      .flatMap(part => part.content?.$case === 'text'
+        ? [part.content.value]
+        : [])
     const userText = textParts.join(' ') || '(empty message)'
 
-    eventBus.publish({
-      kind: 'message',
+    eventBus.publish(AgentEvent.message(Message.fromJSON({
       messageId: `echo_${Date.now()}`,
-      role: 'agent',
-      parts: [{ kind: 'text', text: `Echo: ${userText}` }],
-    })
+      role: 'ROLE_AGENT',
+      parts: [
+        { text: `Echo: ${userText}` },
+      ],
+    })))
     eventBus.finished()
   },
 

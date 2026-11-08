@@ -21,7 +21,11 @@ if (!parentPort) {
 
 /** 归一化错误为可结构化克隆的对象。 */
 function serializeError(error) {
-  return { message: error instanceof Error ? error.message : String(error) }
+  return {
+    message: error instanceof Error
+      ? error.message
+      : String(error),
+  }
 }
 
 /** 打开当前线程拥有的数据库连接；WAL 在初始化阶段单独配置。 */
@@ -68,7 +72,10 @@ async function initialize() {
     parentPort.postMessage({ type: 'ready' })
   }
   catch (error) {
-    parentPort.postMessage({ type: 'init-error', error: serializeError(error) })
+    parentPort.postMessage({
+      type: 'init-error',
+      error: serializeError(error),
+    })
   }
 
   parentPort.on('message', (msg) => {
@@ -95,17 +102,23 @@ async function initialize() {
       switch (op) {
         case 'all': {
           const stmt = db.prepare(sql)
-          result = params ? stmt.all(...params) : stmt.all()
+          result = params
+            ? stmt.all(...params)
+            : stmt.all()
           break
         }
         case 'get': {
           const stmt = db.prepare(sql)
-          result = (params ? stmt.get(...params) : stmt.get()) ?? null
+          result = (params
+            ? stmt.get(...params)
+            : stmt.get()) ?? null
           break
         }
         case 'run': {
           const stmt = db.prepare(sql)
-          const runResult = params ? stmt.run(...params) : stmt.run()
+          const runResult = params
+            ? stmt.run(...params)
+            : stmt.run()
           result = { changes: runResult.changes, lastInsertRowid: runResult.lastInsertRowid }
           break
         }
@@ -135,7 +148,11 @@ async function initialize() {
       parentPort.postMessage({ id, ok: true, result })
     }
     catch (error) {
-      parentPort.postMessage({ id, ok: false, error: serializeError(error) })
+      parentPort.postMessage({
+        id,
+        ok: false,
+        error: serializeError(error),
+      })
     }
   })
 }

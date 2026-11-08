@@ -1085,7 +1085,7 @@
   "gallery_demo_combobox_searchable_select_bits_ui": "Combobox 可搜索选择（Bits UI）",
   "gallery_demo_confirm_dialog": "Confirm 确认框",
   "gallery_demo_crud_components": "CRUD 场景组件",
-  "gallery_demo_iam_user_role_and_permission_pages_use_these": "CRUD 场景组件已经在 IAM 用户、角色、权限页面中真实接入，使用 @h-ai/kit/client 的 SvelteKit 导航适配器完成 URL 同步与 invalidateAll 刷新。",
+  "gallery_demo_iam_user_role_and_permission_pages_use_these": "CRUD 场景组件已经在 IAM 用户、角色、权限页面中真实接入，使用 @h-ai/kit/client 的 SvelteKit 导航适配器完成 URL 同步与 refreshAll 刷新。",
   "gallery_demo_crud_pages": "CRUD 业务页面",
   "gallery_demo_datatable": "DataTable 数据表格",
   "gallery_demo_drawer": "Drawer 抽屉",

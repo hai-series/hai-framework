@@ -24,6 +24,14 @@
 
 ## 生产发布与回退
 
+### 依赖与发布包
+
+仓库依赖覆盖不会自动传递给安装框架 npm 包的应用。生产 Provider 使用框架已测试的实际依赖，不依赖接入方复制仓库 overrides 才能消除漏洞；Mem0 数据格式与 Qdrant 使用框架内部有超时、响应大小和 Schema 校验的固定 REST 适配。
+
+构建链 `deepmerge@4.3.1` 的 [GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4) 尚无上游修复版。本仓库及 CLI 生成应用通过 `patchedDependencies` 拒绝合并两侧的 `__proto__` 属性，并验证正常嵌套配置行为。版本审计仍会报告该低危项，不应忽略告警。手工接入现有应用时，若构建依赖树包含此版本，须采用仓库 `patches/deepmerge-4.3.1.patch` 并在应用的 pnpm 配置中注册；有正式修复版后移除补丁并回归验证。
+
+更新依赖时同时核对 catalog、CLI 生成版本、模板 overrides/patches 和锁文件，执行实际生成应用安装及门禁。安全扫描通过不能替代发布产物和运行路径验证。
+
 按[部署恢复](../configuration/delivery.md)检查受管凭据和卷成套备份、旧完整制品、匹配配置与数据兼容。拒绝在原卷原地切DB/存储/向量引擎，缺状态不随机换密。自动旧容器启动后仍验旧端口/健康，不能只凭compose成功。
 
 容器/配置回退不恢复业务数据、Schema或已完成的外部动作；零停机/蓝绿也不属于当前Compose承诺。强杀、断电和远端unknown需人工核对真实状态。

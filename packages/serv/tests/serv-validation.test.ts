@@ -8,10 +8,14 @@ describe('serv-validation', () => {
     ['en-US', 'The submitted data contains unsupported fields. Refresh the page and try again.'],
     ['ja-JP', '送信データにこの操作で使用できない項目が含まれています。ページを更新して再度お試しください。'],
   ] as const)('严格 schema 的未知字段提示遵循 %s，不暴露内部字段名', (locale, message) => {
-    const result = z.strictObject({ name: z.string() }).safeParse({ name: 'Name', internalField: true })
+    const result = z.strictObject({
+      name: z.string(),
+    }).safeParse({ name: 'Name', internalField: true })
     if (result.success)
       throw new Error('Expected strict schema rejection')
-    expect(localizeZodError(result.error, locale)).toEqual([{ field: '_', message }])
+    expect(localizeZodError(result.error, locale)).toEqual([
+      { field: '_', message },
+    ])
   })
   it('resolveRequestLocale 应该优先使用 x-hai-locale', () => {
     const locale = resolveRequestLocale({
@@ -31,7 +35,9 @@ describe('serv-validation', () => {
   })
 
   it('localizeZodError 应该本地化 Zod 默认英文错误', () => {
-    const result = z.object({ email: z.string().email() }).safeParse({ email: 'bad' })
+    const result = z.object({
+      email: z.string().email(),
+    }).safeParse({ email: 'bad' })
 
     expect(result.success).toBe(false)
     if (result.success)
@@ -43,16 +49,24 @@ describe('serv-validation', () => {
   })
 
   it('没有业务消息的 refine 使用请求 locale，不保留 Zod 默认英文', () => {
-    const result = z.object({ key: z.string().refine(() => false) }).safeParse({ key: '../private' })
+    const result = z.object({
+      key: z.string().refine(() => false),
+    }).safeParse({ key: '../private' })
     if (result.success)
       throw new Error('Expected default refinement failure')
-    expect(localizeZodError(result.error, 'zh-CN')).toEqual([{ field: 'key', message: '输入格式无效' }])
-    expect(localizeZodError(result.error, 'en-US')).toEqual([{ field: 'key', message: 'Invalid input format' }])
+    expect(localizeZodError(result.error, 'zh-CN')).toEqual([
+      { field: 'key', message: '输入格式无效' },
+    ])
+    expect(localizeZodError(result.error, 'en-US')).toEqual([
+      { field: 'key', message: 'Invalid input format' },
+    ])
   })
 
   it('validateInputOrFail 应该保留 schema 自定义错误消息', () => {
     const result = validateInputOrFail(
-      z.object({ name: z.string().min(3, '名字太短') }),
+      z.object({
+        name: z.string().min(3, '名字太短'),
+      }),
       { name: 'a' },
       'zh-CN',
     )

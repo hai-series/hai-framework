@@ -8,6 +8,7 @@
  */
 
 import type { StartedTestContainer } from 'testcontainers'
+import process from 'node:process'
 import { GenericContainer, Wait } from 'testcontainers'
 
 let containerPromise: Promise<StartedTestContainer> | null = null
@@ -32,7 +33,7 @@ export async function acquireQdrantContainer(): Promise<QdrantContainerLease> {
   refCount += 1
 
   if (!containerPromise) {
-    containerPromise = new GenericContainer('docker.io/qdrant/qdrant:v1.19.2')
+    containerPromise = new GenericContainer(process.env.HAI_QDRANT_TEST_IMAGE ?? 'docker.io/qdrant/qdrant:v1.20.0')
       .withExposedPorts(6333, 6334)
       .withWaitStrategy(Wait.forLogMessage('Qdrant HTTP listening'))
       .start()

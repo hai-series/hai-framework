@@ -1,6 +1,8 @@
+import { core } from '@h-ai/core'
 import { Hono } from 'hono'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mountRefreshCookieRoutes } from '../src/serv-cookie-auth.js'
+import { serv } from '../src/serv-main.js'
 
 const API_PREFIX = '/api/v1'
 const COOKIE_NAME = 'hai_refresh_token'
@@ -8,14 +10,146 @@ const REFRESH_PATH = `${API_PREFIX}/auth/refresh`
 // OTP 登录的实际路径（与 apiContract.iam 对齐）
 const LOGIN_WITH_OTP_PATH = `${API_PREFIX}/auth/login/otp`
 
-afterEach(() => vi.unstubAllEnvs())
-
 const MOCK_TOKENS = {
   accessToken: 'new-access-token',
   refreshToken: 'new-refresh-token',
   expiresIn: 3600,
   tokenType: 'Bearer',
 }
+
+describe('refresh HTTP error boundary', () => {
+  it('后端暂时失败后允许使用原 Cookie 重试并轮换', async () => {
+    const refresh = vi.fn()
+      .mockResolvedValueOnce({
+        success: false,
+        error: { code: 'test:temporary', message: 'Temporary failure', httpStatus: 503 },
+      })
+      .mockResolvedValueOnce({ success: true, data: MOCK_TOKENS })
+    const app = serv.createApp({
+      contract: {},
+      procedures: {},
+      http: { access: false },
+      refreshCookie: { onRefresh: refresh },
+    })
+    const request = () => app.request(REFRESH_PATH, {
+      method: 'POST',
+      headers: { cookie: `${COOKIE_NAME}=original-refresh` },
+    })
+    const failed = await request()
+    expect(failed.status).toBe(503)
+    expect(failed.headers.get('set-cookie')).toBeNull()
+    const retried = await request()
+    expect(retried.status).toBe(200)
+    expect(retried.headers.get('set-cookie')).toContain(MOCK_TOKENS.refreshToken)
+    expect(await retried.json()).toMatchObject({
+      success: true,
+      data: {
+        tokens: { accessToken: MOCK_TOKENS.accessToken },
+      },
+    })
+    expect(refresh).toHaveBeenNthCalledWith(1, 'original-refresh')
+    expect(refresh).toHaveBeenNthCalledWith(2, 'original-refresh')
+  })
+
+  it('原生刷新失败同样隐藏内部异常详情', async () => {
+    const app = serv.createApp({
+      contract: {},
+      procedures: {},
+      http: { access: false },
+      refreshCookie: {
+        nativeTokenTransport: {
+          isRequest: request => request.headers.get('origin') === 'capacitor://localhost',
+        },
+        onRefresh: async () => ({
+          success: false,
+          error: {
+            code: 'test:backend',
+            message: 'Private database failed',
+            httpStatus: 503,
+            cause: { password: 'fake-secret' },
+          },
+        }),
+      },
+    })
+    const response = await app.request(REFRESH_PATH, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'origin': 'capacitor://localhost' },
+      body: JSON.stringify({ refreshToken: 'native-refresh' }),
+    })
+    expect(response.status).toBe(503)
+    expect(response.headers.get('set-cookie')).toBeNull()
+    expect(await response.text()).not.toMatch(/Private database|fake-secret/)
+  })
+
+  it.each([
+    undefined,
+    200,
+    600,
+    Number.NaN,
+    500,
+    503,
+  ])('归一化失败 %s 并保留可重试 Cookie，不公开内部详情', async (httpStatus) => {
+    const internal = {
+      code: 'test:backend',
+      message: 'Private database failed',
+      httpStatus,
+      cause: { password: 'fake-secret', sql: 'SELECT private' },
+      ext: { connection: 'fake-credential' },
+    }
+    const app = serv.createApp({
+      contract: {},
+      procedures: {},
+      http: { access: false },
+      refreshCookie: {
+        onRefresh: async () => ({ success: false, error: internal }),
+      },
+    })
+    const response = await app.request(REFRESH_PATH, {
+      method: 'POST',
+      headers: { 'cookie': `${COOKIE_NAME}=valid-refresh`, 'x-request-id': 'refresh-probe' },
+    })
+    expect(response.status).toBe(httpStatus === 503
+      ? 503
+      : 500)
+    expect(response.headers.get('set-cookie')).toBeNull()
+    const body = await response.json()
+    expect(body).toMatchObject({
+      success: false,
+      error: { traceId: 'refresh-probe', httpStatus: response.status },
+    })
+    expect(JSON.stringify(body)).not.toMatch(/Private database|fake-secret|SELECT private|fake-credential/)
+  })
+
+  it('上游抛错时返回安全 JSON 和关联日志，保留刷新凭据', async () => {
+    const logged = vi.spyOn(core.logger, 'error').mockImplementation(() => {})
+    try {
+      const app = serv.createApp({
+        contract: {},
+        procedures: {},
+        http: { access: false },
+        refreshCookie: {
+          onRefresh: async () => { throw new Error('Private backend exception') },
+        },
+      })
+      const response = await app.request(REFRESH_PATH, {
+        method: 'POST',
+        headers: { 'cookie': `${COOKIE_NAME}=valid-refresh`, 'x-request-id': 'refresh-throw' },
+      })
+      expect(response.status).toBe(500)
+      expect(response.headers.get('set-cookie')).toBeNull()
+      const body = await response.json()
+      expect(body).toMatchObject({
+        success: false,
+        error: { traceId: 'refresh-throw', httpStatus: 500 },
+      })
+      expect(JSON.stringify(body)).not.toContain('Private backend exception')
+      expect(logged).toHaveBeenCalledWith('Refresh token request failed', expect.objectContaining({ traceId: 'refresh-throw' }))
+    }
+    finally { logged.mockRestore() }
+  })
+})
+
+afterEach(() => vi.unstubAllEnvs())
 
 const MOCK_AUTH_RESULT = {
   tokens: MOCK_TOKENS,
@@ -30,7 +164,12 @@ function createTestApp(
 ): { app: Hono, refreshFn: ReturnType<typeof vi.fn> } {
   const app = new Hono()
 
-  const iam = { session: { verifyToken: vi.fn(), refresh: refreshFn } }
+  const iam = {
+    session: {
+      verifyToken: vi.fn(),
+      refresh: refreshFn,
+    },
+  }
   mountRefreshCookieRoutes(app, API_PREFIX, { secure: false }, iam)
 
   // 模拟 oRPC 处理器（在 cookie 路由之后注册，由 next() 触发）
@@ -51,7 +190,12 @@ function createNativeTestApp(
   refreshFn = vi.fn().mockResolvedValue({ success: true, data: MOCK_TOKENS }),
 ): { app: Hono, refreshFn: ReturnType<typeof vi.fn> } {
   const app = new Hono()
-  const iam = { session: { verifyToken: vi.fn(), refresh: refreshFn } }
+  const iam = {
+    session: {
+      verifyToken: vi.fn(),
+      refresh: refreshFn,
+    },
+  }
   mountRefreshCookieRoutes(app, API_PREFIX, {
     secure: false,
     nativeTokenTransport: {
@@ -89,10 +233,18 @@ describe('mountRefreshCookieRoutes', () => {
 
     it('登录失败时（oRPC 返回 success:false），不设置 cookie', async () => {
       const app = new Hono()
-      const iam = { session: { verifyToken: vi.fn(), refresh: vi.fn() } }
+      const iam = {
+        session: {
+          verifyToken: vi.fn(),
+          refresh: vi.fn(),
+        },
+      }
       mountRefreshCookieRoutes(app, API_PREFIX, { secure: false }, iam)
       app.post(`${API_PREFIX}/auth/login`, c =>
-        c.json({ success: false, error: { code: 'INVALID_CREDENTIALS', message: 'Bad credentials' } }))
+        c.json({
+          success: false,
+          error: { code: 'INVALID_CREDENTIALS', message: 'Bad credentials' },
+        }))
 
       const res = await app.request(`${API_PREFIX}/auth/login`, {
         method: 'POST',
@@ -213,7 +365,12 @@ describe('mountRefreshCookieRoutes', () => {
         success: false,
         error: { code: 'SESSION_EXPIRED', message: 'Session expired', httpStatus: 401 },
       })
-      const iam = { session: { verifyToken: vi.fn(), refresh: failFn } }
+      const iam = {
+        session: {
+          verifyToken: vi.fn(),
+          refresh: failFn,
+        },
+      }
       const app = new Hono()
       mountRefreshCookieRoutes(app, API_PREFIX, { secure: false }, iam)
 
@@ -321,7 +478,11 @@ describe('mountRefreshCookieRoutes', () => {
       vi.stubEnv('HAI_E2E', '1')
       vi.stubEnv('HAI_SERV_REFRESH_COOKIE_SECURE', undefined)
       const app = new Hono()
-      mountRefreshCookieRoutes(app, API_PREFIX, {}, { session: { refresh: vi.fn() } })
+      mountRefreshCookieRoutes(app, API_PREFIX, {}, {
+        session: {
+          refresh: vi.fn(),
+        },
+      })
       app.post(`${API_PREFIX}/auth/login`, c => c.json({ success: true, data: MOCK_AUTH_RESULT }))
       const response = await app.request(`${API_PREFIX}/auth/login`, { method: 'POST' })
       const refreshCookie = response.headers.getSetCookie().find(cookie => cookie.startsWith(COOKIE_NAME))
@@ -334,7 +495,9 @@ describe('mountRefreshCookieRoutes', () => {
       const app = new Hono()
       const rotatedTokens = { ...MOCK_TOKENS, refreshToken: 'rotated-refresh-token' }
       const refresh = vi.fn().mockResolvedValue({ success: true, data: rotatedTokens })
-      mountRefreshCookieRoutes(app, API_PREFIX, {}, { session: { refresh } })
+      mountRefreshCookieRoutes(app, API_PREFIX, {}, {
+        session: { refresh },
+      })
       app.post(`${API_PREFIX}/auth/login`, c => c.json({ success: true, data: MOCK_AUTH_RESULT }))
 
       const login = await app.request(`${API_PREFIX}/auth/login`, { method: 'POST' })
@@ -373,7 +536,12 @@ describe('mountRefreshCookieRoutes', () => {
     it('secure: true 时，cookie 包含 Secure 属性', async () => {
       vi.stubEnv('HAI_SERV_REFRESH_COOKIE_SECURE', 'false')
       const app = new Hono()
-      const iam = { session: { verifyToken: vi.fn(), refresh: vi.fn().mockResolvedValue({ success: true, data: MOCK_TOKENS }) } }
+      const iam = {
+        session: {
+          verifyToken: vi.fn(),
+          refresh: vi.fn().mockResolvedValue({ success: true, data: MOCK_TOKENS }),
+        },
+      }
       mountRefreshCookieRoutes(app, API_PREFIX, { secure: true }, iam)
       app.post(`${API_PREFIX}/auth/login`, c => c.json({ success: true, data: MOCK_AUTH_RESULT }))
 
@@ -405,7 +573,12 @@ describe('mountRefreshCookieRoutes', () => {
     it('自定义 cookieName 时使用指定名称', async () => {
       const customName = 'my_refresh_token'
       const app = new Hono()
-      const iam = { session: { verifyToken: vi.fn(), refresh: vi.fn().mockResolvedValue({ success: true, data: MOCK_TOKENS }) } }
+      const iam = {
+        session: {
+          verifyToken: vi.fn(),
+          refresh: vi.fn().mockResolvedValue({ success: true, data: MOCK_TOKENS }),
+        },
+      }
       mountRefreshCookieRoutes(app, API_PREFIX, { cookieName: customName, secure: false }, iam)
       app.post(`${API_PREFIX}/auth/login`, c => c.json({ success: true, data: MOCK_AUTH_RESULT }))
 

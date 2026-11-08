@@ -103,7 +103,11 @@ export function createRedisTransportKeyStore(options: CreateRedisTransportKeySto
   }
 
   return {
-    get stateScope() { return options.cache.config?.type === 'redis' ? 'shared' : 'local' },
+    get stateScope() {
+      return options.cache.config?.type === 'redis'
+        ? 'shared'
+        : 'local'
+    },
     async register(publicKey) {
       if (!isValidSM2PublicKey(publicKey))
         throw new TypeError(cryptoM('crypto_sm2PublicKeyInvalid'))
@@ -113,7 +117,9 @@ export function createRedisTransportKeyStore(options: CreateRedisTransportKeySto
         await options.cache.kv.set(
           buildCacheKey(clientId),
           publicKey,
-          ttlSeconds === undefined ? undefined : { ex: ttlSeconds },
+          ttlSeconds === undefined
+            ? undefined
+            : { ex: ttlSeconds },
         ),
       )
       if (!applied)

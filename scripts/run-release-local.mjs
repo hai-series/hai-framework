@@ -13,22 +13,36 @@ else {
   // pnpm提供当前运行入口：JS入口经Node启动，原生可执行文件直接启动；不经过cmd/sh解析。
   const isNodeEntry = /\.(?:c|m)?js$/i.test(pnpm)
   const command = isNodeEntry ? process.execPath : pnpm
-  const prefix = isNodeEntry ? [pnpm] : []
-  const environment = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'ci')), CI: 'true' }
+  const prefix = isNodeEntry
+    ? [pnpm]
+    : []
+  const environment = {
+    ...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'ci')),
+    CI: 'true',
+  }
   const steps = [
     ['install', '--frozen-lockfile'],
     ['typecheck'],
     ['lint'],
     ['build'],
     ['test'],
-    ['--filter', 'admin-console', 'exec', 'playwright', 'install', 'chrome'],
+    [
+      '--filter',
+      'admin-console',
+      'exec',
+      'playwright',
+      'install',
+      'chrome',
+    ],
     ['e2e'],
     ['--filter', '@h-ai/cli', 'test:deploy-gates'],
   ]
   let child
   let interruptedCode = 0
   const interrupt = (signal) => {
-    interruptedCode ||= signal === 'SIGTERM' ? 143 : 130
+    interruptedCode ||= signal === 'SIGTERM'
+      ? 143
+      : 130
     // Windows终端取消也会通知同一控制台的子进程；等待其清理，不强杀测试teardown。
     if (process.platform !== 'win32')
       child?.kill(signal)
@@ -43,7 +57,10 @@ else {
         break
       process.stdout.write(`[release-local] pnpm ${args.join(' ')}\n`)
       const code = await new Promise((resolve) => {
-        child = spawn(command, [...prefix, ...args], {
+        child = spawn(command, [
+          ...prefix,
+          ...args,
+        ], {
           cwd: root,
           env: environment,
           shell: false,
@@ -54,7 +71,11 @@ else {
           process.stderr.write(`Failed to start pnpm: ${error.message}\n`)
           resolve(1)
         })
-        child.once('close', (status, signal) => resolve(status ?? (signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : 1)))
+        child.once('close', (status, signal) => resolve(status ?? (signal === 'SIGINT'
+          ? 130
+          : signal === 'SIGTERM'
+            ? 143
+            : 1)))
       })
       if (code !== 0) {
         process.exitCode = code

@@ -62,10 +62,16 @@ export async function connectACP(
   let stop: () => Promise<void> = async () => {}
   let stream: Stream
   if (transport.type === 'stdio') {
-    const job = process.platform === 'win32' ? windowsACPCommand(transport.command, transport.args ?? []) : undefined
+    const job = process.platform === 'win32'
+      ? windowsACPCommand(transport.command, transport.args ?? [])
+      : undefined
     const child = spawn(job ? 'powershell.exe' : transport.command, job?.args ?? transport.args ?? [], {
       cwd: transport.cwd,
-      env: { ...baseEnvironment(), ...transport.env, ...job?.env },
+      env: {
+        ...baseEnvironment(),
+        ...transport.env,
+        ...job?.env,
+      },
       detached: process.platform !== 'win32',
       shell: false,
       windowsHide: true,
@@ -173,8 +179,11 @@ export async function connectACP(
   app.onRequest(methods.client.session.requestPermission, async (context) => {
     owned(context.params.sessionId)
     const handler = handlers['session/request_permission']
-    if (!handler)
-      return { outcome: { outcome: 'cancelled' } }
+    if (!handler) {
+      return {
+        outcome: { outcome: 'cancelled' },
+      }
+    }
     return handler(context)
   })
   app.onRequest(methods.client.fs.readTextFile, async (context) => {
@@ -306,7 +315,10 @@ export async function connectACP(
       signal?.addEventListener('abort', abort, { once: true })
     })
     try {
-      const output = await Promise.race([operation(), deadline])
+      const output = await Promise.race([
+        operation(),
+        deadline,
+      ])
       if (failure)
         throw failure
       if (reason) {

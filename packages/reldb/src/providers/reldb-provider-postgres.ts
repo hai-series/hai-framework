@@ -126,7 +126,11 @@ export function createPostgresProvider(): ReldbProvider {
         return ok(undefined)
       }
       catch (error) {
-        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_postgresConnectionFailed', { params: { error: String(error) } }), error)
+        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_postgresConnectionFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     })().finally(() => { closing = null })
     return closing
@@ -259,7 +263,9 @@ export function createPostgresProvider(): ReldbProvider {
 
   /** 事务错误消息生成 */
   function pgTxErrorMessage(detail: string): string {
-    return reldbM('reldb_postgresTxFailed', { params: { error: detail } })
+    return reldbM('reldb_postgresTxFailed', {
+      params: { error: detail },
+    })
   }
 
   // ─── PostgreSQL 方言辅助 ───
@@ -411,7 +417,11 @@ export function createPostgresProvider(): ReldbProvider {
         if (client) {
           await client.query('ROLLBACK').catch(() => { })
         }
-        return err(HaiReldbError.QUERY_FAILED, reldbM('reldb_batchFailed', { params: { error: String(error) } }), error)
+        return err(HaiReldbError.QUERY_FAILED, reldbM('reldb_batchFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
       finally {
         if (client) {
@@ -485,7 +495,10 @@ export function createPostgresProvider(): ReldbProvider {
     }
 
     const txDmlOps = createPgTxDmlOps(client)
-    const guardedTxDmlOps = createBaseDmlOps({ ...ctx, isConnected: () => client !== null }, txDmlOps)
+    const guardedTxDmlOps = createBaseDmlOps({
+      ...ctx,
+      isConnected: () => client !== null,
+    }, txDmlOps)
     return ok(createTxHandle(guardedTxDmlOps, {
       commit: async () => { await client!.query('COMMIT') },
       rollback: async () => { await client!.query('ROLLBACK') },
@@ -541,7 +554,9 @@ export function createPostgresProvider(): ReldbProvider {
             : undefined
           logger.warn('PostgreSQL idle connection error; pool will replace connection', {
             code,
-            name: error instanceof Error ? 'Error' : 'UnknownError',
+            name: error instanceof Error
+              ? 'Error'
+              : 'UnknownError',
           })
         })
 
@@ -565,8 +580,17 @@ export function createPostgresProvider(): ReldbProvider {
       }
       catch (error) {
         const cleanup = await closeResource()
-        const result = err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_postgresConnectionFailed', { params: { error: String(error) } }), error)
-        return cleanup.success || result.success ? result : err({ ...result.error, ext: { cleanupPending: true, cleanupError: cleanup.error } })
+        const result = err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_postgresConnectionFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
+        return cleanup.success || result.success
+          ? result
+          : err({
+              ...result.error,
+              ext: { cleanupPending: true, cleanupError: cleanup.error },
+            })
       }
     },
 

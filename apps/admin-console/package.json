@@ -1,7 +1,7 @@
 {
   "name": "admin-console",
   "type": "module",
-  "version": "1.0.0-beta.18",
+  "version": "1.0.0-beta.19",
   "private": true,
   "description": "hai Agent Framework - 管理控制台示例应用",
   "keywords": [
@@ -10,6 +10,9 @@
     "sveltekit",
     "svelte5"
   ],
+  "imports": {
+    "#lib/*": "./src/lib/*"
+  },
   "engines": {
     "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
   },
@@ -25,10 +28,10 @@
     "start:prod": "pnpm start",
     "check": "pnpm typecheck",
     "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "lint": "eslint src tests e2e playwright.config.ts playwright.transport-on.config.ts playwright.auth-security.config.ts svelte.config.js vite.config.ts",
-    "lint:fix": "eslint src tests e2e playwright.config.ts playwright.transport-on.config.ts playwright.auth-security.config.ts svelte.config.js vite.config.ts --fix",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "lint": "eslint src tests e2e playwright.config.ts playwright.transport-on.config.ts playwright.auth-security.config.ts vite.config.ts",
+    "lint:fix": "eslint src tests e2e playwright.config.ts playwright.transport-on.config.ts playwright.auth-security.config.ts vite.config.ts --fix",
+    "test": "pnpm paraglide:compile && svelte-kit sync && vitest run",
+    "test:watch": "pnpm paraglide:compile && svelte-kit sync && vitest",
     "test:e2e": "node ../../scripts/run-e2e.mjs --next --config playwright.transport-on.config.ts --next --config playwright.auth-security.config.ts",
     "clean": "rimraf .svelte-kit build .turbo",
     "compile": "vite build",

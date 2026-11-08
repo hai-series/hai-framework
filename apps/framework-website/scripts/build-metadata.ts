@@ -7,7 +7,9 @@ import process from 'node:process'
 /** 官网公开产物身份，版本只读取框架根manifest的version，同一构建重入复用身份。 */
 export function resolveBuildMetadata(directory: string): { appVersion: string, buildId: string, commit: string } {
   const manifest: { version?: unknown } = JSON.parse(readFileSync(join(directory, '../../package.json'), 'utf8'))
-  const appVersion = typeof manifest.version === 'string' && manifest.version.trim() ? manifest.version.trim() : 'unknown'
+  const appVersion = typeof manifest.version === 'string' && manifest.version.trim()
+    ? manifest.version.trim()
+    : 'unknown'
   if (appVersion.length > 128)
     throw new Error('Invalid package.json version: maximum length is 128')
   const suppliedId = process.env.HAI_BUILD_ID?.trim()
@@ -27,14 +29,26 @@ export function resolveBuildMetadata(directory: string): { appVersion: string, b
 /** 未跟踪的生成工程不能把临时目录的父框架提交冒充自身源码。 */
 function sourceCommit(directory: string): string {
   try {
-    const options = { cwd: directory, encoding: 'utf8' as const, stdio: 'pipe' as const, windowsHide: true }
+    const options = {
+      cwd: directory,
+      encoding: 'utf8' as const,
+      stdio: 'pipe' as const,
+      windowsHide: true,
+    }
     const root = execFileSync('git', ['rev-parse', '--show-toplevel'], options).trim()
     const manifest = relative(root, join(directory, 'package.json')).replaceAll('\\', '/')
     if (manifest.startsWith('../'))
       return 'unknown'
-    execFileSync('git', ['ls-files', '--error-unmatch', '--', manifest], { ...options, cwd: root })
+    execFileSync('git', [
+      'ls-files',
+      '--error-unmatch',
+      '--',
+      manifest,
+    ], { ...options, cwd: root })
     const commit = execFileSync('git', ['rev-parse', 'HEAD'], options).trim()
-    return /^(?:[a-f\d]{40}|[a-f\d]{64})$/i.test(commit) ? commit : 'unknown'
+    return /^(?:[a-f\d]{40}|[a-f\d]{64})$/i.test(commit)
+      ? commit
+      : 'unknown'
   }
   catch {
     return 'unknown'

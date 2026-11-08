@@ -15,7 +15,10 @@ function tests() {
   }
 
   it('web与App分别限制且共享全局额度，刷新保留终端分组', async () => {
-    const { iam, username } = await account({ maxSessions: 3, terminalLimits: { web: 2, app: 1 } })
+    const { iam, username } = await account({
+      maxSessions: 3,
+      terminalLimits: { web: 2, app: 1 },
+    })
     const login = (terminalType: 'web' | 'app' | 'desktop') => iam.auth.login({ identifier: username, password: TEST_PASSWORD }, { terminalType })
     const first = await login('web')
     const second = await login('web')
@@ -37,7 +40,10 @@ function tests() {
   })
 
   it('同类终端替换不踢掉其他终端，全局单会话仍优先', async () => {
-    const { iam, username } = await account({ terminalLimits: { web: 2, app: 1 }, terminalLimitMode: 'replace' })
+    const { iam, username } = await account({
+      terminalLimits: { web: 2, app: 1 },
+      terminalLimitMode: 'replace',
+    })
     const login = (terminalType: 'web' | 'app') => iam.auth.login({ identifier: username, password: TEST_PASSWORD }, { terminalType })
     const web = await login('web')
     const old = await login('app')
@@ -48,16 +54,31 @@ function tests() {
     expect((await iam.auth.verifyToken(web.data.tokens.accessToken)).success).toBe(true)
     expect((await iam.auth.verifyToken(old.data.tokens.accessToken)).success).toBe(false)
     expect((await iam.session.refresh(old.data.tokens.refreshToken)).success).toBe(false)
-    const only = await account({ maxSessions: 1, terminalLimits: { web: 2, app: 1 }, terminalLimitMode: 'replace' })
+    const only = await account({
+      maxSessions: 1,
+      terminalLimits: { web: 2, app: 1 },
+      terminalLimitMode: 'replace',
+    })
     expect((await only.iam.auth.login({ identifier: only.username, password: TEST_PASSWORD }, { terminalType: 'web' })).success).toBe(true)
     expect((await only.iam.auth.login({ identifier: only.username, password: TEST_PASSWORD }, { terminalType: 'app' })).success).toBe(false)
   })
 
   it('多并发签发不能突破各终端及全局上限', async () => {
-    const { iam, username } = await account({ maxSessions: 3, terminalLimits: { web: 2, app: 1 } })
-    const logins = await Promise.all(Array.from({ length: 12 }, (_, index) => iam.auth.login({ identifier: username, password: TEST_PASSWORD }, { terminalType: index % 2 ? 'app' : 'web' })))
+    const { iam, username } = await account({
+      maxSessions: 3,
+      terminalLimits: { web: 2, app: 1 },
+    })
+    const logins = await Promise.all(Array.from({ length: 12 }, (_, index) => iam.auth.login({ identifier: username, password: TEST_PASSWORD }, {
+      terminalType: index % 2
+        ? 'app'
+        : 'web',
+    })))
     expect(logins.filter(result => result.success)).toHaveLength(3)
-    const active = await Promise.all(logins.flatMap(result => result.success ? [iam.auth.verifyToken(result.data.tokens.accessToken)] : []))
+    const active = await Promise.all(logins.flatMap(result => result.success
+      ? [
+          iam.auth.verifyToken(result.data.tokens.accessToken),
+        ]
+      : []))
     expect(active.filter(result => result.success && result.data.terminalType === 'web')).toHaveLength(2)
     expect(active.filter(result => result.success && result.data.terminalType === 'app')).toHaveLength(1)
   })
@@ -67,7 +88,9 @@ function tests() {
     const login = await iam.auth.login({ identifier: username, password: TEST_PASSWORD })
     if (!login.success)
       throw new Error(login.error.message)
-    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
     vi.setSystemTime(Date.now() + 61_000)
     expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(false)
     expect((await iam.session.refresh(login.data.tokens.refreshToken)).success).toBe(true)
@@ -78,7 +101,9 @@ function tests() {
     const login = await iam.auth.login({ identifier: username, password: TEST_PASSWORD })
     if (!login.success)
       throw new Error(login.error.message)
-    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
     vi.setSystemTime(Date.now() + 120_001)
     const refreshes = await Promise.all(Array.from({ length: 4 }, () => iam.session.refresh(login.data.tokens.refreshToken)))
     expect(refreshes.every(result => !result.success)).toBe(true)
@@ -86,11 +111,18 @@ function tests() {
   })
 
   it('access 到期但未闲置时可以刷新，活动与绝对期限分别执行', async () => {
-    const { iam, username } = await account({ maxAge: 60, sliding: false, idleTimeout: 120, absoluteTimeout: 180 })
+    const { iam, username } = await account({
+      maxAge: 60,
+      sliding: false,
+      idleTimeout: 120,
+      absoluteTimeout: 180,
+    })
     const login = await iam.auth.login({ identifier: username, password: TEST_PASSWORD })
     if (!login.success)
       throw new Error(login.error.message)
-    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
     const start = Date.now()
     vi.setSystemTime(start + 61_000)
     const first = await iam.session.refresh(login.data.tokens.refreshToken)
@@ -111,7 +143,9 @@ function tests() {
     const login = await iam.auth.login({ identifier: username, password: TEST_PASSWORD })
     if (!login.success)
       throw new Error(login.error.message)
-    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
     const start = Date.now()
     vi.setSystemTime(start + 100_000)
     const refreshed = await iam.session.refresh(login.data.tokens.refreshToken)
@@ -127,7 +161,9 @@ function tests() {
     const login = await iam.auth.login({ identifier: username, password: TEST_PASSWORD })
     if (!login.success)
       throw new Error(login.error.message)
-    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
     const start = Date.now()
     vi.setSystemTime(start + 100_000)
     expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(true)
@@ -142,7 +178,9 @@ function tests() {
     const login = await iam.auth.login({ identifier: username, password: TEST_PASSWORD })
     if (!login.success)
       throw new Error(login.error.message)
-    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
     const start = Date.now()
     vi.setSystemTime(start + 100_000)
     expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(true)
@@ -169,7 +207,9 @@ function tests() {
     const first = await iam.auth.login({ identifier: username, password: TEST_PASSWORD })
     if (!first.success)
       throw new Error(first.error.message)
-    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
     vi.setSystemTime(Date.now() + 60_001)
     expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).success).toBe(true)
     expect((await iam.session.refresh(first.data.tokens.refreshToken)).success).toBe(false)
@@ -182,7 +222,9 @@ function tests() {
       throw new Error(first.error.message)
     expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).success).toBe(false)
     expect((await iam.auth.verifyToken(first.data.tokens.accessToken)).success).toBe(true)
-    await initIam({ session: { singleDevice: true } })
+    await initIam({
+      session: { singleDevice: true },
+    })
     const replacement = await iam.auth.login({ identifier: username, password: TEST_PASSWORD })
     expect(replacement.success).toBe(true)
     expect((await iam.auth.verifyToken(first.data.tokens.accessToken)).success).toBe(false)
@@ -192,7 +234,9 @@ function tests() {
     const { iam, username } = await account({ maxSessions: 0, singleDevice: false })
     const logins = await Promise.all(Array.from({ length: 4 }, () => iam.auth.login({ identifier: username, password: TEST_PASSWORD })))
     expect(logins.every(result => result.success)).toBe(true)
-    const tokens = logins.flatMap(result => result.success ? [result.data.tokens.accessToken, result.data.tokens.refreshToken] : [])
+    const tokens = logins.flatMap(result => result.success
+      ? [result.data.tokens.accessToken, result.data.tokens.refreshToken]
+      : [])
     expect(new Set(tokens).size).toBe(8)
   })
 }

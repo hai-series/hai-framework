@@ -14,11 +14,28 @@ async function main() {
   mkdirSync(directory, { mode: 0o700 })
   writeFileSync(path.join(directory, 'current'), 'original-release\n')
   const inputFile = path.join(root, `${fixture.scenario}.json`)
-  const group = fixture.service === 'db' ? 'DB_PASSWORD' : 'LDAP_PASSWORD'
-  const input = { version: 1, projectName: fixture.projectName, credentials: { [group]: fixture.password }, services: [{ service: fixture.service, kind: fixture.kind, container: fixture.container, volumes: fixture.volumes }] }
+  const group = fixture.service === 'db'
+    ? 'DB_PASSWORD'
+    : 'LDAP_PASSWORD'
+  const input = {
+    version: 1,
+    projectName: fixture.projectName,
+    credentials: { [group]: fixture.password },
+    services: [
+      {
+        service: fixture.service,
+        kind: fixture.kind,
+        container: fixture.container,
+        volumes: fixture.volumes,
+      },
+    ],
+  }
   const save = value => writeFileSync(inputFile, JSON.stringify(value), { mode: 0o600 })
   const options = { directory, inputFile, runtime: 'podman' }
-  save({ ...input, credentials: { [group]: 'WRONG_SYNTHETIC_PASSWORD' } })
+  save({
+    ...input,
+    credentials: { [group]: 'WRONG_SYNTHETIC_PASSWORD' },
+  })
   assert.equal((await api.importDeploymentSecrets(options)).success, false)
   save(input)
   const plan = await api.importDeploymentSecrets(options)

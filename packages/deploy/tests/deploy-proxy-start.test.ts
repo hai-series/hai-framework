@@ -7,7 +7,9 @@ import process from 'node:process'
 import { describe, expect, it } from 'vitest'
 import { createProxyStartupScript } from '../src/container/deploy-proxy-start.js'
 
-const shell = process.platform === 'win32' ? 'C:/Program Files/Git/bin/bash.exe' : '/bin/sh'
+const shell = process.platform === 'win32'
+  ? 'C:/Program Files/Git/bin/bash.exe'
+  : '/bin/sh'
 
 describe.skipIf(!existsSync(shell))('proxy startup resolver preparation', () => {
   it.each([
@@ -27,7 +29,13 @@ describe.skipIf(!existsSync(shell))('proxy startup resolver preparation', () => 
       const preparation = createProxyStartupScript(false)
         .replace('/etc/resolv.conf', '"$1"')
         .replace('/tmp/hai-dns.conf', '"$2"')
-      const result = spawnSync(shell, ['-c', preparation, 'hai-proxy-dns', input.replaceAll('\\', '/'), output.replaceAll('\\', '/')], { encoding: 'utf8', windowsHide: true, timeout: 10_000 })
+      const result = spawnSync(shell, [
+        '-c',
+        preparation,
+        'hai-proxy-dns',
+        input.replaceAll('\\', '/'),
+        output.replaceAll('\\', '/'),
+      ], { encoding: 'utf8', windowsHide: true, timeout: 10_000 })
       expect(result.error).toBeUndefined()
       if (expected === undefined) {
         expect(result.status).not.toBe(0)

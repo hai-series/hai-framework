@@ -32,7 +32,9 @@ describe('jsonViewer', () => {
   })
 
   it('渲染顶层对象的键与标量值', async () => {
-    const { target } = await mountViewer({ value: { name: 'wf', count: 3, enabled: true } })
+    const { target } = await mountViewer({
+      value: { name: 'wf', count: 3, enabled: true },
+    })
     try {
       expect(target.textContent).toContain('name')
       expect(target.textContent).toContain('"wf"')
@@ -45,7 +47,9 @@ describe('jsonViewer', () => {
   })
 
   it('undefined 值渲染为字面 undefined 而不是丢失', async () => {
-    const { target } = await mountViewer({ value: { input: undefined } })
+    const { target } = await mountViewer({
+      value: { input: undefined },
+    })
     try {
       expect(target.textContent).toContain('input')
       expect(target.textContent).toContain('undefined')
@@ -56,7 +60,11 @@ describe('jsonViewer', () => {
   })
 
   it('对象与数组默认折叠，open 属性驱动展开状态', async () => {
-    const { target } = await mountViewer({ value: { nested: { leaf: 'x' } } })
+    const { target } = await mountViewer({
+      value: {
+        nested: { leaf: 'x' },
+      },
+    })
     try {
       const details = target.querySelector<HTMLDetailsElement>('details')
       expect(details).not.toBeNull()
@@ -75,11 +83,17 @@ describe('jsonViewer', () => {
 
   it('指定 defaultExpandedDepth 时按深度展开', async () => {
     const { target } = await mountViewer({
-      value: { a: { b: { c: 1 } } },
+      value: {
+        a: {
+          b: { c: 1 },
+        },
+      },
       defaultExpandedDepth: 1,
     })
     try {
-      const rootDetails = [...target.querySelectorAll<HTMLDetailsElement>('details')]
+      const rootDetails = [
+        ...target.querySelectorAll<HTMLDetailsElement>('details'),
+      ]
       expect(rootDetails.length).toBeGreaterThan(0)
       // depth 1 展开意味着最外层 details 为 open
       const opened = rootDetails.some(details => details.open && details.textContent?.includes('b'))
@@ -92,9 +106,14 @@ describe('jsonViewer', () => {
 
   it('点击复制按钮复制格式化 JSON 并回调 onCopy', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
-    Object.assign(navigator, { clipboard: { writeText } })
+    Object.assign(navigator, {
+      clipboard: { writeText },
+    })
     const onCopy = vi.fn()
-    const { target } = await mountViewer({ value: { k: 'v' }, onCopy })
+    const { target } = await mountViewer({
+      value: { k: 'v' },
+      onCopy,
+    })
     try {
       const button = target.querySelector<HTMLButtonElement>('[data-testid="json-viewer-copy"]')
       expect(button).not.toBeNull()

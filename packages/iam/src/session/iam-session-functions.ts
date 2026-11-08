@@ -32,7 +32,10 @@ function stripInternalSessionFields(session: Session): Session {
   const { _tokenPair, ...rest } = session.data as { _tokenPair?: unknown, [key: string]: unknown }
   void _tokenPair
   const hasExtraKeys = Object.keys(rest).length > 0
-  return { ...session, data: hasExtraKeys ? rest : undefined }
+  return {
+    ...session,
+    data: hasExtraKeys ? rest : undefined,
+  }
 }
 
 const logger = core.logger.child({ module: 'iam', scope: 'session' })
@@ -89,7 +92,9 @@ export async function createSessionOperations(deps: SessionOperationsDeps): Prom
       singleDevice: sessionConfig.singleDevice,
       idleTimeout: sessionConfig.idleTimeout,
       sessionRepository,
-      apiKeyRepository: config.login.apikey ? await createDbApiKeyRepository() : undefined,
+      apiKeyRepository: config.login.apikey
+        ? await createDbApiKeyRepository()
+        : undefined,
     })
 
     logger.info('Session sub-feature initialized')
@@ -150,7 +155,12 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
     if (!Number.isSafeInteger(ttl) || ttl <= 0 || !Number.isFinite(new Date(now.getTime() + ttl * 1000).getTime()))
       return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sessionMaxAgeInvalid'))
     const accessToken = generateSessionToken(options.userId)
-    const tokens: TokenPair = { accessToken, refreshToken: generateSessionToken(options.userId), expiresIn: ttl, tokenType: 'Bearer' }
+    const tokens: TokenPair = {
+      accessToken,
+      refreshToken: generateSessionToken(options.userId),
+      expiresIn: ttl,
+      tokenType: 'Bearer',
+    }
     const session = buildSession(options, now, ttl, accessToken, credentialVersion)
     session.data = { ...session.data, _tokenPair: tokens }
     return ok({ session, tokens })
@@ -184,7 +194,16 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       return err(HaiIamError.APIKEY_INVALID, iamM('iam_apikeyInvalid'))
     const found = await readIamCache(`apikey:${session.apiKeyId}`, async () => {
       const row = await config.apiKeyRepository!.findOneById(session.apiKeyId!)
-      return row.success ? ok(row.data ? { userId: row.data.userId, enabled: row.data.enabled, expiresAt: row.data.expiresAt?.getTime() ?? null, scopes: row.data.scopes } : null) : row
+      return row.success
+        ? ok(row.data
+            ? {
+                userId: row.data.userId,
+                enabled: row.data.enabled,
+                expiresAt: row.data.expiresAt?.getTime() ?? null,
+                scopes: row.data.scopes,
+              }
+            : null)
+        : row
     })
     if (!found.success)
       return found
@@ -249,7 +268,10 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       const bound = await credential(session.userId, session.credentialVersion)
       if (!bound.success)
         return bound
-      const validated = await validateApiKey({ ...session, ...bound.data.profile })
+      const validated = await validateApiKey({
+        ...session,
+        ...bound.data.profile,
+      })
       if (!validated.success)
         return validated
       let output = validated.data
@@ -341,7 +363,9 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
           source: oldSession.source,
           terminalType: oldSession.terminalType ?? 'web',
           maxAge: oldSession.maxAge,
-          data: oldSession.data ? { ...oldSession.data, _tokenPair: undefined } : undefined,
+          data: oldSession.data
+            ? { ...oldSession.data, _tokenPair: undefined }
+            : undefined,
         }, oldSession.credentialVersion)
 
         if (!next.success)

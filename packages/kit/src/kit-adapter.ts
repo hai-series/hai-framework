@@ -6,14 +6,14 @@
  *
  * @example
  * ```js
- * // svelte.config.js
+ * // vite.config.ts
  * import { createAdapter } from '@h-ai/kit/adapter'
+ * import { sveltekit } from '@sveltejs/kit/vite'
+ * import { defineConfig } from 'vite'
  *
- * export default {
- *   kit: {
- *     adapter: await createAdapter(),
- *   },
- * }
+ * export default defineConfig({
+ *   plugins: [sveltekit({ adapter: await createAdapter() })],
+ * })
  * ```
  *
  * @module kit-adapter

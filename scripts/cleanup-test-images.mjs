@@ -9,7 +9,13 @@ import { Worker } from 'node:worker_threads'
 export const TEST_IMAGE_OWNER_LABEL = 'org.h-ai.test.image-run'
 
 function command(runtime, args) {
-  return execFileSync(runtime, args, { encoding: 'utf8', windowsHide: true, timeout: 120_000, maxBuffer: 32 * 1024 ** 2, stdio: ['ignore', 'pipe', 'pipe'] })
+  return execFileSync(runtime, args, {
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 120_000,
+    maxBuffer: 32 * 1024 ** 2,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
 }
 
 /** 全局 teardown 不能阻塞 Vitest 主循环；保持原同步算法，在独立 Worker 中执行并等待退出。 */
@@ -40,18 +46,36 @@ export function cleanupTestImagesAsync(options) {
 
 /** 使用 inspect 的真实 tag；Podman ls 的 RepoTags 可能为空，且每个 alias 会重复一行。 */
 export function inspectImages(runtime, run = command, owner) {
-  const filter = owner ? ['--filter', `label=${TEST_IMAGE_OWNER_LABEL}=${owner}`] : []
-  const ids = [...new Set(run(runtime, ['image', 'ls', '--all', '--quiet', '--no-trunc', ...filter]).trim().split(/\s+/).filter(Boolean))]
+  const filter = owner
+    ? ['--filter', `label=${TEST_IMAGE_OWNER_LABEL}=${owner}`]
+    : []
+  const ids = [
+    ...new Set(run(runtime, [
+      'image',
+      'ls',
+      '--all',
+      '--quiet',
+      '--no-trunc',
+      ...filter,
+    ]).trim().split(/\s+/).filter(Boolean)),
+  ]
   const images = []
   for (let index = 0; index < ids.length; index += 64) {
-    images.push(...JSON.parse(run(runtime, ['image', 'inspect', ...ids.slice(index, index + 64)])))
+    images.push(...JSON.parse(run(runtime, [
+      'image',
+      'inspect',
+      ...ids.slice(index, index + 64),
+    ])))
   }
   return images
 }
 
 /** 子镜像先于父镜像处理，--no-prune 保证不顺带删除账本外的父镜像。 */
 export function imageRemovalOrder(images) {
-  const byId = new Map(images.map(image => [image.Id.replace(/^sha256:/, ''), image]))
+  const byId = new Map(images.map(image => [
+    image.Id.replace(/^sha256:/, ''),
+    image,
+  ]))
   const result = []
   const seen = new Set()
   function visit(image) {
@@ -79,7 +103,17 @@ export function cleanupTestImages({ runtime = 'podman', owner, imageRefs = [], l
     throw new Error('Historical and current-run cleanup must be separate')
   if (!Number.isFinite(minAgeHours) || minAgeHours < 0)
     throw new Error('Image minimum age must be a non-negative number')
-  const report = { runtime, owner, legacy, apply, startedAt: new Date().toISOString(), candidates: [], removed: [], preserved: [], failures: [] }
+  const report = {
+    runtime,
+    owner,
+    legacy,
+    apply,
+    startedAt: new Date().toISOString(),
+    candidates: [],
+    removed: [],
+    preserved: [],
+    failures: [],
+  }
   const cutoff = Date.now() - minAgeHours * 3600_000
   const refs = new Set(imageRefs)
   const images = inspectImages(runtime, run, owner)
@@ -93,58 +127,105 @@ export function cleanupTestImages({ runtime = 'podman', owner, imageRefs = [], l
       && (!tags.length || tags.some(tag => refs.has(tag)))
   })
   const ordered = imageRemovalOrder(candidates)
-  const entryFor = image => ({ id: image.Id, tags: image.RepoTags ?? [], history: image.NamesHistory ?? [], size: image.Size, reason: legacy ? 'untagged-build-intermediate' : 'current-test-run' })
+  const entryFor = image => ({
+    id: image.Id,
+    tags: image.RepoTags ?? [],
+    history: image.NamesHistory ?? [],
+    size: image.Size,
+    reason: legacy ? 'untagged-build-intermediate' : 'current-test-run',
+  })
   report.candidates = ordered.map(entryFor)
   onProgress?.(report)
-  const removals = apply ? ordered : []
+  const removals = apply
+    ? ordered
+    : []
   for (let index = 0; index < removals.length; index += 32) {
     const batch = removals.slice(index, index + 32)
     try {
       // 小批量复核与删除，避免 Windows 远程引擎为每个历史层启动两次客户端。
-      const current = JSON.parse(run(runtime, ['image', 'inspect', ...batch.map(image => image.Id)]))
+      const current = JSON.parse(run(runtime, [
+        'image',
+        'inspect',
+        ...batch.map(image => image.Id),
+      ]))
       const plans = []
       for (const image of batch) {
         const found = current.find(item => item.Id === image.Id)
         const tags = found?.RepoTags ?? []
-        if (!found || (legacy ? tags.length > 0 : (found.Config?.Labels ?? found.Labels)?.[TEST_IMAGE_OWNER_LABEL] !== owner)
-          || (!image.RepoTags?.length && tags.length)) {
-          report.preserved.push({ ...entryFor(image), reason: 'ownership-changed' })
+        if (!found || (legacy
+          ? tags.length > 0
+          : (found.Config?.Labels ?? found.Labels)?.[TEST_IMAGE_OWNER_LABEL] !== owner)
+        || (!image.RepoTags?.length && tags.length)) {
+          report.preserved.push({
+            ...entryFor(image),
+            reason: 'ownership-changed',
+          })
           continue
         }
-        const targets = image.RepoTags?.length ? image.RepoTags.filter(tag => refs.has(tag) && tags.includes(tag)) : [image.Id]
-        if (targets.length)
-          plans.push({ ...entryFor(image), targets })
+        const targets = image.RepoTags?.length
+          ? image.RepoTags.filter(tag => refs.has(tag) && tags.includes(tag))
+          : [image.Id]
+        if (targets.length) {
+          plans.push({
+            ...entryFor(image),
+            targets,
+          })
+        }
       }
       if (!plans.length)
         continue
       let detail
       try {
         // 仅显式 ID/tag；不强删、不隐式删父镜像。单项被占用不会阻止同批其他项。
-        run(runtime, ['image', 'rm', '--no-prune', ...plans.flatMap(plan => plan.targets)])
+        run(runtime, [
+          'image',
+          'rm',
+          '--no-prune',
+          ...plans.flatMap(plan => plan.targets),
+        ])
       }
       catch (error) {
         detail = String(error.stderr ?? error.message ?? error).trim()
       }
       // 即使引擎返回非零也逐项核验，报告不把部分成功误写成全部失败。
-      const remainingIds = new Set(run(runtime, ['image', 'ls', '--all', '--quiet', '--no-trunc']).trim().split(/\s+/).filter(Boolean).map(id => id.replace(/^sha256:/, '')))
+      const remainingIds = new Set(run(runtime, [
+        'image',
+        'ls',
+        '--all',
+        '--quiet',
+        '--no-trunc',
+      ]).trim().split(/\s+/).filter(Boolean).map(id => id.replace(/^sha256:/, '')))
       const survivors = plans.filter(plan => remainingIds.has(plan.id.replace(/^sha256:/, '')))
-      const remaining = survivors.length ? JSON.parse(run(runtime, ['image', 'inspect', ...survivors.map(plan => plan.id)])) : []
+      const remaining = survivors.length
+        ? JSON.parse(run(runtime, [
+            'image',
+            'inspect',
+            ...survivors.map(plan => plan.id),
+          ]))
+        : []
       for (const plan of plans) {
         const found = remaining.find(image => image.Id === plan.id)
-        if (plan.targets.every(target => target === plan.id ? !found : !found?.RepoTags?.includes(target))) {
+        if (plan.targets.every(target => target === plan.id
+          ? !found
+          : !found?.RepoTags?.includes(target))) {
           report.removed.push(plan)
         }
         else {
           const error = detail ?? 'Image removal was not confirmed'
           // 历史层仍被镜像、容器或 Buildah 引用时保留；自动清理的失败必须阻断门禁。
-          const destination = legacy && /in use|used by|dependent|child images|referenced/i.test(error) ? report.preserved : report.failures
+          const destination = legacy && /in use|used by|dependent|child images|referenced/i.test(error)
+            ? report.preserved
+            : report.failures
           destination.push({ ...plan, error })
         }
       }
     }
     catch (error) {
       const detail = String(error.stderr ?? error.message ?? error).trim()
-      report.failures.push(...batch.map(image => ({ ...entryFor(image), error: detail })))
+      report.failures.push(...batch.map(image => ({
+        ...entryFor(image),
+        error: detail,
+      })))
     }
     finally {
       onProgress?.(report)

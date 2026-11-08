@@ -8,10 +8,23 @@ export default defineConfig({
   testMatch: '**/auth-error-security.spec.ts',
   testIgnore: [],
   workers: 1,
-  webServer: (Array.isArray(base.webServer) ? base.webServer : base.webServer ? [base.webServer] : []).map(server => ({
+  webServer: (Array.isArray(base.webServer)
+    ? base.webServer
+    : base.webServer
+      ? [base.webServer]
+      : []).map(server => ({
     ...server,
     env: server.env?.HAI_ADMIN_DEFAULT_PASSWORD
-      ? { ...server.env, HAI_CONFIG_ADMIN_PASSWORD: dutyAccounts.config.password, HAI_IAM: JSON.stringify({ rbac: { defaultRole: 'admin' }, password: { requireInitialChange: true, preventSamePassword: true }, passwordReset: { enabled: true }, security: { lockoutEnabled: true, maxLoginAttempts: 5 } }) }
+      ? {
+          ...server.env,
+          HAI_CONFIG_ADMIN_PASSWORD: dutyAccounts.config.password,
+          HAI_IAM: JSON.stringify({
+            rbac: { defaultRole: 'admin' },
+            password: { requireInitialChange: true, preventSamePassword: true },
+            passwordReset: { enabled: true },
+            security: { lockoutEnabled: true, maxLoginAttempts: 5 },
+          }),
+        }
       : server.env,
   })),
 })

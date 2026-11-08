@@ -8,9 +8,9 @@
  * =============================================================================
  */
 
-import { toIamUserResponse } from '$lib/server/iam-admin.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+import { toIamUserResponse } from '#lib/server/iam-admin.js'
 
 export const GET = kit.handler(async ({ locals }) => {
   if (!locals.accessToken) {

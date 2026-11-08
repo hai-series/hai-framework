@@ -123,7 +123,9 @@ export function resolveDocumentMarkdownContent(
   )
   const fence = '`'.repeat(fenceLength)
   const normalizedLanguage = language?.trim() ?? ''
-  const suffix = value.endsWith('\n') ? '' : '\n'
+  const suffix = value.endsWith('\n')
+    ? ''
+    : '\n'
   return `${fence}${normalizedLanguage}\n${value}${suffix}${fence}`
 }
 
@@ -442,7 +444,9 @@ function buildDocumentExportHtml(title: string, bodyHtml: string): string {
 }
 
 function htmlToPdfFilename(title: string): string {
-  return title.endsWith('.pdf') ? title : `${title}.pdf`
+  return title.endsWith('.pdf')
+    ? title
+    : `${title}.pdf`
 }
 
 /**

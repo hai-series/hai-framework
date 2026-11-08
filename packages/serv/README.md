@@ -8,6 +8,8 @@
 
 hai-framework 的 API 服务运行时：对外暴露稳定的 HTTP App 抽象，把 `@h-ai/api-contract` 契约挂载为跨端可访问的 HTTP API；Hono 仅作为内部运行时实现。
 
+运行时统一通过 `serv.xx` 使用。需要标注或转导出整个命名空间时，从根入口导入 `ServFunctions`；上下文工厂与泛型 `implement` 的公开签名可直接用于消费者声明生成，无需引用内部构建文件或独立 helper。
+
 ## 核心功能清单
 
 - 一行启动：`serv.createApp(...)` → `serv.listen(app, { port })`，应用代码不需要 import Hono
@@ -22,7 +24,9 @@ hai-framework 的 API 服务运行时：对外暴露稳定的 HTTP App 抽象，
 - 可选传输加密：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` 自动挂载密钥协商与请求/响应加解密
 - 可选语音入口：`serv.createApp({ audio: { ai, verifyTicket, authorize } })` 挂载统一语音 WebSocket；连接建立即用一次性 ticket 鉴权（返回 `{ session, grant? }`，独立预鉴权超时），每帧运行时 Zod 校验 + 严格状态机，输入/积压/发送缓冲背压与级联取消；授权回调负责服务端确认操作、模型、音色、配额与并发占用
 
-> 生命周期说明：`@h-ai/serv` 本身是无状态 HTTP App 装配器，不需要 `init()` / `close()`；请在创建 app 前初始化 `iam` / `storage` / `ai` / `crypto` 等依赖，并在 `serv.listen(..., { onClose })` 中反向释放它们。`serv.createApp()` 遇到启动期配置错误（例如 transport manager 创建失败）会 fail-fast 抛出，便于进程启动阶段暴露问题。 onClose 是 SIGINT/SIGTERM 的关闭回调；主动调用返回句柄的 close 仅关闭 HTTP，业务模块由宿主另行反序释放。
+> 生命周期说明：`@h-ai/serv` 本身是无状态 HTTP App 装配器，不需要 `init()` / `close()`；请在创建 app 前初始化 `iam` / `storage` / `ai` / `crypto` 等依赖，并在 `serv.listen(..., { onClose })` 中反向释放它们。`serv.createApp()` 遇到启动期配置错误（例如 transport manager 创建失败）会 fail-fast 抛出，便于进程启动阶段暴露问题。 onClose 是 SIGINT/SIGTERM 的关闭回调；主动调用返回句柄的 close 关闭 HTTP 监听与语音连接，业务模块由宿主另行反序释放。
+
+监听句柄可在启动后立即关闭，以取消尚未完成的绑定；重复关闭复用同一结果。地址占用等真实监听失败仍会拒绝关闭结果，不会当作正常退出。
 
 ## 使用入门
 
@@ -53,6 +57,7 @@ const procedures = {
 const app = serv.createApp({
   contract,
   procedures,
+  iam,
   http: {
     apiPrefix: '/api/v1',
     openapi: { path: '/openapi.json' },
@@ -199,14 +204,16 @@ const app = serv.createApp({
   contract,
   procedures,
   http: servConfig.http,
-  middlewares: [{
-    middleware: serv.cors({
-      origin: servConfig.cors.origin,
-      credentials: servConfig.cors.credentials,
-      allowedHeaders: [...servConfig.cors.allowedHeaders],
-      exposedHeaders: [...servConfig.cors.exposedHeaders],
-    }),
-  }],
+  middlewares: [
+    {
+      middleware: serv.cors({
+        origin: servConfig.cors.origin,
+        credentials: servConfig.cors.credentials,
+        allowedHeaders: [...servConfig.cors.allowedHeaders],
+        exposedHeaders: [...servConfig.cors.exposedHeaders],
+      }),
+    }
+  ],
   transport: servConfig.transport === false
     ? undefined
     : {
@@ -419,6 +426,7 @@ const procedures = serv
 
 - `.permission()` 与 `.role()` 自动要求认证；未登录/授权不足返回失败 HaiResult，`error.httpStatus` 分别为 401/403；普通 procedure 的 HTTP 响应默认仍为 200。
 - 同一路由声明多个 permission/role 时必须全部满足；`serv.WILDCARD_PERMISSION` / `serv.WILDCARD_ROLE` 可放行对应类别。
+- 权限还支持 IAM/Kit 一致的冒号前缀授权：`users:*` 匹配 `users:read`，不匹配 `users2:read` 或点号权限。
 - handler 抛出的未处理异常统一转成 INTERNAL_ERROR HaiResult；预期业务失败仍应直接返回 `err(...)`。
 - 路径、input、output 从 contract 推导；重复或未知路径会被拒绝，未实现完整 contract 时不能调用 `.build()`。
 
@@ -487,11 +495,14 @@ await apiClient.init({
 
 > 刷新 Cookie 带有 `HttpOnly` 和 `SameSite=Strict`，路径限制为 `{apiPrefix}/auth/refresh`。生产默认还会设置 `Secure`。
 
+刷新失败也经过统一公开错误投影：5xx 和缺失或非法状态返回安全提示与 traceId，内部原因只写入服务端日志。只有 401 认证失效会清除刷新 Cookie；限流和后端故障保留凭据，允许稍后重试。自动审计使用同一归一化状态记录失败。
+
 ### API 概览
 
 - `serv.createApp(options)`：创建 HTTP App 抽象，挂载自定义 `middlewares`、健康检查、OpenAPI handler 与可选文档
 - `serv.parseRequestContext({ request })`：默认上下文解析（提取 Bearer token + requestId，不填充 session）
 - `serv.listen(app, options)`：在 Node.js 启动 HTTP 服务，返回 `{ server, address, close }`
+  返回句柄的 `close()` 可重复调用：停止接入并关闭 Audio WebSocket，1 秒后强制终止未配合的音频连接，随后等待 HTTP 关闭。主动关闭也移除进程信号监听器；业务模块仍由宿主反序释放。
 - `serv.toFetch(app)`：包装为标准 `fetch(Request)` handler
 - `serv.generateSpec(contract, options)`：由 contract 生成 OpenAPI 3.1 spec
 - `serv.storageAssets(config)`：创建只读 Storage 资源 middleware，内置 key/MIME 白名单、GET/HEAD 与 ETag
@@ -626,15 +637,18 @@ const app = serv.createApp({
     openapi: security.exposeApiDocs ? servConfig.http.openapi : false,
     docs: security.exposeApiDocs ? servConfig.http.docs : false,
   },
+  iam,
   refreshCookie: { secure: security.secureRefreshCookie },
-  middlewares: [{
-    middleware: serv.cors({
-      origin: security.allowOrigin,
-      credentials: servConfig.cors.credentials,
-      allowedHeaders: [...servConfig.cors.allowedHeaders],
-      exposedHeaders: [...servConfig.cors.exposedHeaders],
-    }),
-  }],
+  middlewares: [
+    {
+      middleware: serv.cors({
+        origin: security.allowOrigin,
+        credentials: servConfig.cors.credentials,
+        allowedHeaders: [...servConfig.cors.allowedHeaders],
+        exposedHeaders: [...servConfig.cors.exposedHeaders],
+      }),
+    }
+  ],
 })
 ```
 
@@ -699,7 +713,7 @@ const procedures = serv
   .build()
 ```
 
-> 如果错误来自下游业务模块（如 `iam.user.xxx()`）且该模块已经直接返回 `HaiResult`，serv 会原样透传它的 `error.message`。当前 `HaiError` 只携带最终 `message`，不携带 `messageKey/params`，因此 **serv 边界无法对任意下游错误再做一次通用 i18n 重翻译**；要支持请求级 i18n，必须在创建该错误消息的模块里就拿到 locale。
+> 下游 `HaiResult` 的 4xx 消息经脱敏后公开；5xx 和缺失或非法状态统一为安全内部错误，保留 traceId，完整原因只记录到服务端日志。`HaiError` 不携带 `messageKey/params`，领域消息的请求级 i18n 仍由创建消息的模块接收 locale 后完成。
 
 ### 请求语言隔离
 
@@ -737,7 +751,10 @@ const procedures = {
 const app = serv.createApp({
   contract,
   procedures,
-  createContext: async input => ({ ...await authenticate(input), scopeId: 'configured-product' }),
+  createContext: async input => ({
+    ...await authenticate(input),
+    scopeId: 'configured-product'
+  }),
 })
 ```
 

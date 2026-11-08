@@ -33,7 +33,9 @@ describe('ai Playground YAML config', () => {
     expect(core.logger.getLevel()).toBe('debug')
     const validated = core.config.validate('ai', AIConfigSchema)
     const parsed = AIConfigSchema.safeParse(core.config.getOrThrow('ai'))
-    expect(validated.success, parsed.success ? undefined : JSON.stringify(parsed.error.issues)).toBe(true)
+    expect(validated.success, parsed.success
+      ? undefined
+      : JSON.stringify(parsed.error.issues)).toBe(true)
     if (validated.success) {
       expect(validated.data.image?.generateModel).toBe('image')
       expect(validated.data.image).toMatchObject({ maxImageBytes: 1024, maxImages: 2 })
@@ -51,8 +53,17 @@ describe('ai Playground YAML config', () => {
     for (const [name, value] of Object.entries(profile))
       vi.stubEnv(name, value)
     core.init({ configDir: './config' })
-    expect(core.config.validate('db', ReldbConfigSchema)).toMatchObject({ success: true, data: { type: 'postgresql', host: 'db' } })
-    expect(core.config.validate('cache', CacheConfigSchema)).toMatchObject({ success: true, data: { type: 'redis', host: 'cache' } })
-    expect(core.config.validate('vecdb', VecdbConfigSchema)).toMatchObject({ success: true, data: { type: 'qdrant', url: 'http://vecdb:6333' } })
+    expect(core.config.validate('db', ReldbConfigSchema)).toMatchObject({
+      success: true,
+      data: { type: 'postgresql', host: 'db' },
+    })
+    expect(core.config.validate('cache', CacheConfigSchema)).toMatchObject({
+      success: true,
+      data: { type: 'redis', host: 'cache' },
+    })
+    expect(core.config.validate('vecdb', VecdbConfigSchema)).toMatchObject({
+      success: true,
+      data: { type: 'qdrant', url: 'http://vecdb:6333' },
+    })
   })
 })

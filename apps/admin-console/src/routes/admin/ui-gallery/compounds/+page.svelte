@@ -9,21 +9,37 @@
 <script lang='ts'>
   import type { FormLabelPosition } from '@h-ai/ui'
   import type { DateValue } from '@internationalized/date'
-  import DemoCard from '$lib/components/gallery/DemoCard.svelte'
-  import DemoSection from '$lib/components/gallery/DemoSection.svelte'
-  import InteractionPatterns from '$lib/components/gallery/InteractionPatterns.svelte'
-  import * as m from '$lib/paraglide/messages'
   import { ActionSheet, AppBar, BottomNav, InfiniteScroll, PullRefresh, SafeArea, SwipeCell, toast } from '@h-ai/ui'
   import { CalendarDate } from '@internationalized/date'
+  import DemoCard from '#lib/components/gallery/DemoCard.svelte'
+  import DemoSection from '#lib/components/gallery/DemoSection.svelte'
+  import InteractionPatterns from '#lib/components/gallery/InteractionPatterns.svelte'
+  import * as m from '#lib/paraglide/messages.js'
 
   // === 状态 ===
   let galleryFilterSearch = $state('')
   let galleryFilterValues = $state<Record<string, unknown>>({})
   const galleryFilterFields = $derived([
-    { id: 'role', label: m.gallery_filter_role(), type: 'text' },
-    { id: 'department', label: m.gallery_filter_department(), type: 'text' },
-    { id: 'enabled', label: m.gallery_filter_status(), type: 'boolean' },
-    { id: 'created', label: m.gallery_filter_date(), type: 'date-range' },
+    {
+      id: 'role',
+      label: m.gallery_filter_role(),
+      type: 'text',
+    },
+    {
+      id: 'department',
+      label: m.gallery_filter_department(),
+      type: 'text',
+    },
+    {
+      id: 'enabled',
+      label: m.gallery_filter_status(),
+      type: 'boolean',
+    },
+    {
+      id: 'created',
+      label: m.gallery_filter_date(),
+      type: 'date-range',
+    },
   ])
   const codeFilterBar = '<CrudFilterBar filterFields={filterFields} bind:searchValue bind:filterValues />'
 
@@ -48,94 +64,268 @@
   let refreshCount = $state(0)
   let mobileFeedHasMore = $state(true)
   let mobileFeedItems = $state([
-    { id: 'm1', title: m.gallery_demo_order_issue_alerts(), desc: m.gallery_demo_3_orders_need_manual_review() },
-    { id: 'm2', title: m.gallery_demo_restock_recommendations(), desc: m.gallery_demo_a_popular_sku_is_below_its_safety_stock() },
-    { id: 'm3', title: m.gallery_demo_support_conversation_summary(), desc: m.gallery_demo_ai_has_summarized_today_s_common_questions() },
+    {
+      id: 'm1',
+      title: m.gallery_demo_order_issue_alerts(),
+      desc: m.gallery_demo_3_orders_need_manual_review(),
+    },
+    {
+      id: 'm2',
+      title: m.gallery_demo_restock_recommendations(),
+      desc: m.gallery_demo_a_popular_sku_is_below_its_safety_stock(),
+    },
+    {
+      id: 'm3',
+      title: m.gallery_demo_support_conversation_summary(),
+      desc: m.gallery_demo_ai_has_summarized_today_s_common_questions(),
+    },
   ])
 
   // === 示例数据 ===
   const breadcrumbItems = [
-    { label: m.nav_home(), href: '/' },
-    { label: m.gallery_demo_manage(), href: '/admin' },
-    { label: m.gallery_title() },
+    {
+      label: m.nav_home(),
+      href: '/',
+    },
+    {
+      label: m.gallery_demo_manage(),
+      href: '/admin',
+    },
+    {
+      label: m.gallery_title(),
+    },
   ]
 
   const tableData = [
-    { id: 1, name: m.gallery_demo_zhang_san(), role: m.gallery_form_admin(), status: m.gallery_demo_active() },
-    { id: 2, name: m.gallery_demo_li_si(), role: m.action_edit(), status: m.gallery_demo_active() },
-    { id: 3, name: m.gallery_demo_wang_wu(), role: m.common_guest(), status: m.gallery_demo_inactive() },
+    {
+      id: 1,
+      name: m.gallery_demo_zhang_san(),
+      role: m.gallery_form_admin(),
+      status: m.gallery_demo_active(),
+    },
+    {
+      id: 2,
+      name: m.gallery_demo_li_si(),
+      role: m.action_edit(),
+      status: m.gallery_demo_active(),
+    },
+    {
+      id: 3,
+      name: m.gallery_demo_wang_wu(),
+      role: m.common_guest(),
+      status: m.gallery_demo_inactive(),
+    },
   ]
 
   const timelineItems = [
-    { id: '1', title: m.gallery_demo_create_project(), description: m.gallery_demo_project_and_environment_setup_complete(), time: '2026-01-01', color: 'primary' as const, completed: true },
-    { id: '2', title: m.gallery_demo_core_development(), description: m.gallery_demo_complete_core_modules_and_unit_tests(), time: '2026-02-15', color: 'info' as const, completed: true },
-    { id: '3', title: m.gallery_demo_integration_testing(), description: m.gallery_demo_run_end_to_end_tests_and_optimize_performance(), time: '2026-03-20', color: 'warning' as const },
-    { id: '4', title: m.gallery_demo_release(), description: m.gallery_demo_release_and_publish_documentation(), time: '2026-04-01', color: 'success' as const },
+    {
+      id: '1',
+      title: m.gallery_demo_create_project(),
+      description: m.gallery_demo_project_and_environment_setup_complete(),
+      time: '2026-01-01',
+      color: 'primary' as const,
+      completed: true,
+    },
+    {
+      id: '2',
+      title: m.gallery_demo_core_development(),
+      description: m.gallery_demo_complete_core_modules_and_unit_tests(),
+      time: '2026-02-15',
+      color: 'info' as const,
+      completed: true,
+    },
+    {
+      id: '3',
+      title: m.gallery_demo_integration_testing(),
+      description: m.gallery_demo_run_end_to_end_tests_and_optimize_performance(),
+      time: '2026-03-20',
+      color: 'warning' as const,
+    },
+    {
+      id: '4',
+      title: m.gallery_demo_release(),
+      description: m.gallery_demo_release_and_publish_documentation(),
+      time: '2026-04-01',
+      color: 'success' as const,
+    },
   ]
 
   const stepsItems = [
-    { title: m.gallery_demo_enter_information(), description: m.gallery_demo_enter_basic_information() },
-    { title: m.gallery_demo_authentication(), description: m.gallery_demo_email_verification() },
-    { title: m.gallery_demo_set_password(), description: m.gallery_demo_create_a_strong_password() },
-    { title: m.gallery_demo_complete_registration() },
+    {
+      title: m.gallery_demo_enter_information(),
+      description: m.gallery_demo_enter_basic_information(),
+    },
+    {
+      title: m.gallery_demo_authentication(),
+      description: m.gallery_demo_email_verification(),
+    },
+    {
+      title: m.gallery_demo_set_password(),
+      description: m.gallery_demo_create_a_strong_password(),
+    },
+    {
+      title: m.gallery_demo_complete_registration(),
+    },
   ]
 
   const accordionItems = [
-    { id: 'q1', title: m.gallery_demo_how_do_i_create_an_account(), content: m.gallery_demo_select_register_at_the_top_right_then_enter() },
-    { id: 'q2', title: m.gallery_demo_how_do_i_reset_my_password(), content: m.gallery_demo_select_forgot_password_on_the_login_page_enter() },
-    { id: 'q3', title: m.gallery_demo_which_browsers_are_supported(), content: m.gallery_demo_use_a_current_browser_confirm_compatibility_against_your() },
-    { id: 'q4', title: m.gallery_demo_how_do_i_contact_support(), content: m.gallery_demo_for_this_example_contact_support_example_com_on() },
+    {
+      id: 'q1',
+      title: m.gallery_demo_how_do_i_create_an_account(),
+      content: m.gallery_demo_select_register_at_the_top_right_then_enter(),
+    },
+    {
+      id: 'q2',
+      title: m.gallery_demo_how_do_i_reset_my_password(),
+      content: m.gallery_demo_select_forgot_password_on_the_login_page_enter(),
+    },
+    {
+      id: 'q3',
+      title: m.gallery_demo_which_browsers_are_supported(),
+      content: m.gallery_demo_use_a_current_browser_confirm_compatibility_against_your(),
+    },
+    {
+      id: 'q4',
+      title: m.gallery_demo_how_do_i_contact_support(),
+      content: m.gallery_demo_for_this_example_contact_support_example_com_on(),
+    },
   ]
 
   const dropdownItems = [
-    { label: m.action_edit(), key: 'edit' },
-    { label: m.gallery_demo_copy(), key: 'copy' },
-    { label: m.gallery_demo_move(), key: 'move' },
+    {
+      label: m.action_edit(),
+      key: 'edit',
+    },
+    {
+      label: m.gallery_demo_copy(),
+      key: 'copy',
+    },
+    {
+      label: m.gallery_demo_move(),
+      key: 'move',
+    },
     { divider: true, key: 'divider-1', label: '' },
-    { label: m.modules_vecdb_op_delete(), key: 'delete' },
+    {
+      label: m.modules_vecdb_op_delete(),
+      key: 'delete',
+    },
   ]
 
   const comboboxOpts = [
-    { value: 'svelte', label: 'Svelte', description: m.gallery_demo_compile_time_framework() },
-    { value: 'react', label: 'React', description: m.gallery_demo_by_meta() },
-    { value: 'vue', label: 'Vue', description: m.gallery_demo_progressive_framework() },
-    { value: 'angular', label: 'Angular', description: m.gallery_demo_by_google() },
-    { value: 'solid', label: 'SolidJS', description: m.gallery_demo_fine_grained_reactivity() },
-    { value: 'qwik', label: 'Qwik', description: m.gallery_demo_resumable_framework() },
+    {
+      value: 'svelte',
+      label: 'Svelte',
+      description: m.gallery_demo_compile_time_framework(),
+    },
+    {
+      value: 'react',
+      label: 'React',
+      description: m.gallery_demo_by_meta(),
+    },
+    {
+      value: 'vue',
+      label: 'Vue',
+      description: m.gallery_demo_progressive_framework(),
+    },
+    {
+      value: 'angular',
+      label: 'Angular',
+      description: m.gallery_demo_by_google(),
+    },
+    {
+      value: 'solid',
+      label: 'SolidJS',
+      description: m.gallery_demo_fine_grained_reactivity(),
+    },
+    {
+      value: 'qwik',
+      label: 'Qwik',
+      description: m.gallery_demo_resumable_framework(),
+    },
   ]
 
   const multiOpts = [
-    { value: 'fe', label: m.gallery_demo_frontend_developer() },
-    { value: 'be', label: m.gallery_demo_backend_developer() },
+    {
+      value: 'fe',
+      label: m.gallery_demo_frontend_developer(),
+    },
+    {
+      value: 'be',
+      label: m.gallery_demo_backend_developer(),
+    },
     { value: 'devops', label: 'DevOps' },
-    { value: 'design', label: m.gallery_demo_design() },
-    { value: 'pm', label: m.gallery_demo_product_management() },
-    { value: 'qa', label: m.gallery_demo_quality_assurance() },
+    {
+      value: 'design',
+      label: m.gallery_demo_design(),
+    },
+    {
+      value: 'pm',
+      label: m.gallery_demo_product_management(),
+    },
+    {
+      value: 'qa',
+      label: m.gallery_demo_quality_assurance(),
+    },
   ]
 
   const alignedControlSizes = ['xs', 'sm', 'md', 'lg', 'xl'] as const
 
   const actionSheetItems = [
-    { id: 'share', label: m.gallery_demo_share_report() },
-    { id: 'archive', label: m.gallery_demo_archive_notification() },
-    { id: 'delete', label: m.gallery_demo_delete_record(), destructive: true },
+    {
+      id: 'share',
+      label: m.gallery_demo_share_report(),
+    },
+    {
+      id: 'archive',
+      label: m.gallery_demo_archive_notification(),
+    },
+    {
+      id: 'delete',
+      label: m.gallery_demo_delete_record(),
+      destructive: true,
+    },
   ]
 
   const bottomNavItems = [
-    { id: 'home', label: m.nav_home(), iconClass: 'icon-[tabler--home]' },
-    { id: 'tasks', label: m.gallery_demo_tasks(), iconClass: 'icon-[tabler--checklist]', badge: 3 },
-    { id: 'profile', label: m.gallery_demo_my_account(), iconClass: 'icon-[tabler--user]' },
+    {
+      id: 'home',
+      label: m.nav_home(),
+      iconClass: 'icon-[tabler--home]',
+    },
+    {
+      id: 'tasks',
+      label: m.gallery_demo_tasks(),
+      iconClass: 'icon-[tabler--checklist]',
+      badge: 3,
+    },
+    {
+      id: 'profile',
+      label: m.gallery_demo_my_account(),
+      iconClass: 'icon-[tabler--user]',
+    },
   ]
 
   const swipeActions = [
-    { id: 'done', label: m.gallery_demo_complete(), variant: 'primary' as const },
-    { id: 'delete', label: m.modules_vecdb_op_delete(), variant: 'error' as const },
+    {
+      id: 'done',
+      label: m.gallery_demo_complete(),
+      variant: 'primary' as const,
+    },
+    {
+      id: 'delete',
+      label: m.modules_vecdb_op_delete(),
+      variant: 'error' as const,
+    },
   ]
 
   async function refreshMobileDemo() {
     refreshCount += 1
     mobileFeedItems = [
-      { id: `refresh-${refreshCount}`, title: m.gallery_demo_refreshed(), desc: m.gallery_demo_refresh_count({ value: refreshCount + 1 }) },
+      {
+        id: `refresh-${refreshCount}`,
+        title: m.gallery_demo_refreshed(),
+        desc: m.gallery_demo_refresh_count({ value: refreshCount + 1 }),
+      },
       ...mobileFeedItems.slice(0, 4),
     ]
     toast.success(m.gallery_demo_mobile_list_refreshed())
@@ -148,7 +338,11 @@
     const nextIndex = mobileFeedItems.length + 1
     mobileFeedItems = [
       ...mobileFeedItems,
-      { id: `m${nextIndex}`, title: m.gallery_demo_more_item({ value: nextIndex }), desc: m.gallery_demo_items_are_added_automatically_when_you_reach_the() },
+      {
+        id: `m${nextIndex}`,
+        title: m.gallery_demo_more_item({ value: nextIndex }),
+        desc: m.gallery_demo_items_are_added_automatically_when_you_reach_the(),
+      },
     ]
     mobileFeedHasMore = mobileFeedItems.length < 6
   }
@@ -303,11 +497,25 @@
         <div>
           <p class='text-sm font-medium mb-2'>{m.gallery_demo_long_path()}</p>
           <Breadcrumb items={[
-            { label: m.nav_home(), href: '/' },
-            { label: m.gallery_demo_system_management(), href: '/admin' },
-            { label: m.iam_users_title(), href: '/admin/users' },
-            { label: m.gallery_demo_user_details(), href: '/admin/users/1' },
-            { label: m.action_edit() },
+            {
+              label: m.nav_home(),
+              href: '/',
+            },
+            {
+              label: m.gallery_demo_system_management(),
+              href: '/admin',
+            },
+            {
+              label: m.iam_users_title(),
+              href: '/admin/users',
+            },
+            {
+              label: m.gallery_demo_user_details(),
+              href: '/admin/users/1',
+            },
+            {
+              label: m.action_edit(),
+            },
           ]} />
         </div>
       </div>
@@ -319,9 +527,18 @@
           <p class='text-sm font-medium mb-2'>{m.gallery_demo_line_style_line()}</p>
           <Tabs
             items={[
-              { key: 'info', label: m.gallery_demo_basic_information() },
-              { key: 'security', label: m.gallery_demo_security_settings() },
-              { key: 'notify', label: m.gallery_demo_notification_preferences() },
+              {
+                key: 'info',
+                label: m.gallery_demo_basic_information(),
+              },
+              {
+                key: 'security',
+                label: m.gallery_demo_security_settings(),
+              },
+              {
+                key: 'notify',
+                label: m.gallery_demo_notification_preferences(),
+              },
             ]}
             bind:active={subTab}
             type='line'
@@ -332,9 +549,18 @@
           <p class='text-sm font-medium mb-2'>{m.gallery_demo_card_style_card()}</p>
           <Tabs
             items={[
-              { key: 'all', label: m.audit_all() },
-              { key: 'active', label: m.gallery_demo_in_progress() },
-              { key: 'done', label: m.gallery_demo_completed() },
+              {
+                key: 'all',
+                label: m.audit_all(),
+              },
+              {
+                key: 'active',
+                label: m.gallery_demo_in_progress(),
+              },
+              {
+                key: 'done',
+                label: m.gallery_demo_completed(),
+              },
             ]}
             active='all'
             type='card'
@@ -344,10 +570,22 @@
           <p class='text-sm font-medium mb-2'>{m.gallery_demo_pill_style_pills()}</p>
           <Tabs
             items={[
-              { key: 'day', label: m.gallery_demo_days() },
-              { key: 'week', label: m.gallery_demo_weeks() },
-              { key: 'month', label: m.gallery_demo_months() },
-              { key: 'year', label: m.gallery_demo_years() },
+              {
+                key: 'day',
+                label: m.gallery_demo_days(),
+              },
+              {
+                key: 'week',
+                label: m.gallery_demo_weeks(),
+              },
+              {
+                key: 'month',
+                label: m.gallery_demo_months(),
+              },
+              {
+                key: 'year',
+                label: m.gallery_demo_years(),
+              },
             ]}
             active='month'
             type='pills'
@@ -489,9 +727,18 @@
           <DataTable
             data={tableData}
             columns={[
-              { key: 'name', label: m.gallery_form_name() },
-              { key: 'role', label: m.gallery_filter_role() },
-              { key: 'status', label: m.iam_users_form_status() },
+              {
+                key: 'name',
+                label: m.gallery_form_name(),
+              },
+              {
+                key: 'role',
+                label: m.gallery_filter_role(),
+              },
+              {
+                key: 'status',
+                label: m.iam_users_form_status(),
+              },
             ]}
             keyField='id'
           >
@@ -506,8 +753,14 @@
           <DataTable
             data={[]}
             columns={[
-              { key: 'name', label: m.gallery_form_name() },
-              { key: 'role', label: m.gallery_filter_role() },
+              {
+                key: 'name',
+                label: m.gallery_form_name(),
+              },
+              {
+                key: 'role',
+                label: m.gallery_filter_role(),
+              },
             ]}
             keyField='id'
           />
@@ -517,8 +770,14 @@
           <DataTable
             data={[]}
             columns={[
-              { key: 'name', label: m.gallery_form_name() },
-              { key: 'role', label: m.gallery_filter_role() },
+              {
+                key: 'name',
+                label: m.gallery_form_name(),
+              },
+              {
+                key: 'role',
+                label: m.gallery_filter_role(),
+              },
             ]}
             keyField='id'
             loading
@@ -702,10 +961,18 @@
   >
     <DemoCard title={m.gallery_form_title()} description={m.gallery_form_description()} code={codeForm}>
       <div class='mb-5 flex flex-wrap gap-2'>
-        <Button size='sm' variant={formColumns === 1 ? 'primary' : 'outline'} onclick={() => formColumns = 1} data-testid='form-columns-1'>{m.gallery_form_single()}</Button>
-        <Button size='sm' variant={formColumns === 2 ? 'primary' : 'outline'} onclick={() => formColumns = 2} data-testid='form-columns-2'>{m.gallery_form_double()}</Button>
-        <Button size='sm' variant={formLabelPosition === 'top' ? 'primary' : 'outline'} onclick={() => formLabelPosition = 'top'} data-testid='form-label-top'>{m.gallery_form_label_top()}</Button>
-        <Button size='sm' variant={formLabelPosition === 'left' ? 'primary' : 'outline'} onclick={() => formLabelPosition = 'left'} data-testid='form-label-left'>{m.gallery_form_label_left()}</Button>
+        <Button size='sm' variant={formColumns === 1
+          ? 'primary'
+          : 'outline'} onclick={() => formColumns = 1} data-testid='form-columns-1'>{m.gallery_form_single()}</Button>
+        <Button size='sm' variant={formColumns === 2
+          ? 'primary'
+          : 'outline'} onclick={() => formColumns = 2} data-testid='form-columns-2'>{m.gallery_form_double()}</Button>
+        <Button size='sm' variant={formLabelPosition === 'top'
+          ? 'primary'
+          : 'outline'} onclick={() => formLabelPosition = 'top'} data-testid='form-label-top'>{m.gallery_form_label_top()}</Button>
+        <Button size='sm' variant={formLabelPosition === 'left'
+          ? 'primary'
+          : 'outline'} onclick={() => formLabelPosition = 'left'} data-testid='form-label-left'>{m.gallery_form_label_left()}</Button>
       </div>
       <Form columns={formColumns} labelPosition={formLabelPosition} labelWidth='6rem' onsubmit={() => { toast.success(m.gallery_form_saved()) }} data-testid='form-layout-demo'>
         <FormField label={m.gallery_form_name()} required data-testid='form-name-field'>
@@ -716,8 +983,14 @@
         </FormField>
         <FormField label={m.iam_users_col_roles()}>
           <Select name='role' options={[
-            { value: 'admin', label: m.gallery_form_admin() },
-            { value: 'user', label: m.gallery_form_user() },
+            {
+              value: 'admin',
+              label: m.gallery_form_admin(),
+            },
+            {
+              value: 'user',
+              label: m.gallery_form_user(),
+            },
           ]} />
         </FormField>
         <FormField label={m.gallery_form_short_notes()} colSpan={1} data-testid='form-short-notes-field'>
@@ -744,8 +1017,12 @@
         </div>
         <div>
           <p class='text-sm font-medium mb-2'>{m.gallery_demo_radio_error_state()}</p>
-          <Button size='sm' class='mb-2' data-testid='combobox-error-demo' onclick={() => showComboboxError = !showComboboxError}>{showComboboxError ? m.gallery_demo_clear_validation_feedback() : m.gallery_demo_show_validation_feedback()}</Button>
-          <Combobox options={comboboxOpts} placeholder={m.gallery_demo_search_frameworks()} error={showComboboxError ? m.gallery_demo_select_a_framework_2() : undefined} />
+          <Button size='sm' class='mb-2' data-testid='combobox-error-demo' onclick={() => showComboboxError = !showComboboxError}>{showComboboxError
+            ? m.gallery_demo_clear_validation_feedback()
+            : m.gallery_demo_show_validation_feedback()}</Button>
+          <Combobox options={comboboxOpts} placeholder={m.gallery_demo_search_frameworks()} error={showComboboxError
+            ? m.gallery_demo_select_a_framework_2()
+            : undefined} />
         </div>
         <div>
           <p class='text-sm font-medium mb-2'>{m.gallery_demo_disabled_radio()}</p>
@@ -798,7 +1075,10 @@
         </div>
         <div>
           <p class='text-sm font-medium mb-2'>{m.gallery_demo_up_to_5_tags()}</p>
-          <TagInput tags={[m.gallery_demo_tag_a(), m.gallery_demo_tag_b()]} maxTags={5} placeholder={m.gallery_demo_up_to_5()} />
+          <TagInput tags={[
+            m.gallery_demo_tag_a(),
+            m.gallery_demo_tag_b(),
+          ]} maxTags={5} placeholder={m.gallery_demo_up_to_5()} />
         </div>
         <div>
           <p class='text-sm font-medium mb-2'>{m.gallery_demo_allow_duplicates()}</p>
@@ -806,7 +1086,10 @@
         </div>
         <div>
           <p class='text-sm font-medium mb-2'>{m.gallery_crypto_disabled()}</p>
-          <TagInput tags={[m.gallery_demo_read_only_a(), m.gallery_demo_read_only_b()]} disabled />
+          <TagInput tags={[
+            m.gallery_demo_read_only_a(),
+            m.gallery_demo_read_only_b(),
+          ]} disabled />
         </div>
       </div>
     </DemoCard>
@@ -826,8 +1109,12 @@
           </div>
           <div>
             <p class='text-sm font-medium mb-2'>{m.gallery_demo_error_state()}</p>
-            <Button size='sm' class='mb-2' data-testid='datepicker-error-demo' onclick={() => showDatePickerError = !showDatePickerError}>{showDatePickerError ? m.gallery_demo_clear_validation_feedback() : m.gallery_demo_show_validation_feedback()}</Button>
-            <DatePicker error={showDatePickerError ? m.gallery_demo_select_a_valid_date() : undefined} />
+            <Button size='sm' class='mb-2' data-testid='datepicker-error-demo' onclick={() => showDatePickerError = !showDatePickerError}>{showDatePickerError
+              ? m.gallery_demo_clear_validation_feedback()
+              : m.gallery_demo_show_validation_feedback()}</Button>
+            <DatePicker error={showDatePickerError
+              ? m.gallery_demo_select_a_valid_date()
+              : undefined} />
           </div>
           <div>
             <p class='text-sm font-medium mb-2'>{m.gallery_crypto_disabled()}</p>

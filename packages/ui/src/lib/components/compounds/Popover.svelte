@@ -21,6 +21,8 @@
 <script lang='ts'>
   import type { DataAttributes, PopoverProps } from '../../types.js'
   import { onDestroy, tick } from 'svelte'
+  import { findDialogOwner, handleDialogKeydown, registerDialogPortal } from '../../internal/dialog-focus.js'
+  import { getFormVisibilityContext } from '../../internal/form-context.js'
   import { cn, getDataAttributes, portal as portalAction } from '../../utils.js'
 
   let {
@@ -38,6 +40,7 @@
   }: PopoverProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const hostVisibility = getFormVisibilityContext()
   let triggerElement = $state<HTMLDivElement | null>(null)
   let popoverElement = $state<HTMLDivElement | null>(null)
   /** portal 模式下的 fixed 坐标；每次滚动或缩放后重新计算。 */
@@ -129,7 +132,9 @@
     }
 
     const active = document.activeElement
-    returnFocus = active instanceof HTMLElement && triggerElement?.contains(active) ? active : triggerElement
+    returnFocus = active instanceof HTMLElement && triggerElement?.contains(active)
+      ? active
+      : triggerElement
     handleOpen()
     await tick()
     if (open)
@@ -152,6 +157,15 @@
       void handleTriggerClick()
     }
     handleEscape(event)
+  }
+
+  function handlePanelKeydown(event: KeyboardEvent): void {
+    handleEscape(event)
+    if (event.key === 'Tab' && triggerElement) {
+      const owner = findDialogOwner(triggerElement)
+      if (owner)
+        handleDialogKeydown(event, owner)
+    }
   }
 
   function handleMouseEnter() {
@@ -192,6 +206,17 @@
       handleClose()
     }
   }
+
+  $effect(() => {
+    // 宿主关闭后 body 中的 portal 也必须关闭，避免留下可聚焦的脱离内容。
+    if (hostVisibility?.open === false && open)
+      handleClose()
+  })
+
+  $effect(() => {
+    if (open && portal && triggerElement && popoverElement)
+      return registerDialogPortal(triggerElement, popoverElement)
+  })
 
   $effect(() => {
     if (open) {
@@ -256,7 +281,7 @@
         style={portalStyle}
         role='dialog'
         tabindex='-1'
-        onkeydown={handleEscape}
+        onkeydown={handlePanelKeydown}
         onmouseenter={cancelClose}
         onmouseleave={handleMouseLeave}
       >
@@ -276,7 +301,7 @@
         style='--offset: {offset}px'
         role='dialog'
         tabindex='-1'
-        onkeydown={handleEscape}
+        onkeydown={handlePanelKeydown}
         onmouseenter={cancelClose}
         onmouseleave={handleMouseLeave}
       >

@@ -8,8 +8,8 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
-  import * as m from '$lib/paraglide/messages'
   import { toast } from '@h-ai/ui'
+  import * as m from '#lib/paraglide/messages.js'
 
   interface Props {
     /** 示例标题 */
@@ -83,7 +83,9 @@
               onclick={() => (codeVisible = !codeVisible)}
             >
               <span class='icon-[tabler--code] size-4'></span>
-              {codeVisible ? m.gallery_hide_code() : m.gallery_show_code()}
+              {codeVisible
+                ? m.gallery_hide_code()
+                : m.gallery_show_code()}
             </button>
             <button
               type='button'

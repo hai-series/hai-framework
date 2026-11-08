@@ -19,7 +19,7 @@ export function defineCacheSuite(
   setup: () => Promise<CacheTestEnv> | CacheTestEnv,
   defineTests: () => void,
 ): void {
-  describe.sequential(`cache (${label})`, () => {
+  describe(`cache (${label})`, { concurrent: false }, () => {
     let env: CacheTestEnv | null = null
 
     beforeAll(async () => {
@@ -60,7 +60,9 @@ export function defineCacheSuite(
 }
 
 export function memoryEnv(): CacheTestEnv {
-  return { config: { type: 'memory' } }
+  return {
+    config: { type: 'memory' },
+  }
 }
 
 export async function redisEnv(): Promise<CacheTestEnv> {

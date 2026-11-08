@@ -79,7 +79,9 @@
     return gradientPairs[hash % gradientPairs.length]
   })
 
-  const sizeValue = $derived(typeof size === 'number' ? `${size}px` : undefined)
+  const sizeValue = $derived(typeof size === 'number'
+    ? `${size}px`
+    : undefined)
 
   const containerClass = $derived(
     cn(
@@ -92,7 +94,9 @@
     cn(
       'flex items-center justify-center font-semibold',
       typeof size === 'string' && sizeMap[size],
-      shape === 'circle' ? 'rounded-full' : 'rounded-lg',
+      shape === 'circle'
+        ? 'rounded-full'
+        : 'rounded-lg',
       !src && `bg-gradient-to-br ${colorPair()[0]} ${colorPair()[1]}`,
       className,
     ),
@@ -108,7 +112,9 @@
     {#if src}
       <img {src} {alt} />
     {:else}
-      <span class={typeof size === 'string' ? textSizeMap[size] : 'text-lg'}>
+      <span class={typeof size === 'string'
+        ? textSizeMap[size]
+        : 'text-lg'}>
         {initials()}
       </span>
     {/if}

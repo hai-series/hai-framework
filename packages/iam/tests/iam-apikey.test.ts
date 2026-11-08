@@ -271,12 +271,19 @@ describe('iam.apiKey（启用）', () => {
         expect(read.success && write.success).toBe(true)
         if (!read.success || !write.success)
           return
-        const role = await getIam().authz.createRole({ code: 'scoped-role', name: 'Scoped', permissionIds: [read.data.id, write.data.id] })
+        const role = await getIam().authz.createRole({
+          code: 'scoped-role',
+          name: 'Scoped',
+          permissionIds: [read.data.id, write.data.id],
+        })
         expect(role.success).toBe(true)
         if (!role.success)
           return
         expect((await getIam().authz.assignRole(subject.id, role.data.id)).success).toBe(true)
-        const key = await getIam().apiKey.createApiKey(subject.id, { name: 'read-only', scopes: ['sample:read', 'other:write'] })
+        const key = await getIam().apiKey.createApiKey(subject.id, {
+          name: 'read-only',
+          scopes: ['sample:read', 'other:write'],
+        })
         expect(key.success).toBe(true)
         if (!key.success)
           return
@@ -287,7 +294,10 @@ describe('iam.apiKey（启用）', () => {
         expect(login.data.permissions).toEqual(['sample:read'])
         expect(login.data.roles).toEqual([])
         // 模拟角色同步把完整授权写回缓存，读取时仍须受 key 约束。
-        expect((await getIam().session.patchUserSessions(subject.id, { roles: ['*'], permissions: ['sample:read', 'sample:write'] })).success).toBe(true)
+        expect((await getIam().session.patchUserSessions(subject.id, {
+          roles: ['*'],
+          permissions: ['sample:read', 'sample:write'],
+        })).success).toBe(true)
         const verified = await getIam().session.verifyToken(login.data.tokens.accessToken)
         expect(verified.success).toBe(true)
         if (verified.success) {
@@ -317,7 +327,10 @@ describe('iam.apiKey（启用）', () => {
 
       it('显式 * key 仍不超出主体权限，撤销使已签发 access 和 refresh 失效', async () => {
         const subject = await registerUser('apikey_bound_user')
-        const key = await getIam().apiKey.createApiKey(subject.id, { name: 'bound', scopes: ['*'] })
+        const key = await getIam().apiKey.createApiKey(subject.id, {
+          name: 'bound',
+          scopes: ['*'],
+        })
         expect(key.success).toBe(true)
         if (!key.success)
           return
@@ -390,7 +403,9 @@ describe('iam.apiKey（启用）', () => {
         expect(created.success).toBe(true)
         if (!created.success || !created.data.apiKey.expiresAt)
           throw new Error('Missing expiring API key')
-        vi.useFakeTimers({ toFake: ['Date'] })
+        vi.useFakeTimers({
+          toFake: ['Date'],
+        })
         try {
           vi.setSystemTime(created.data.apiKey.expiresAt.getTime() - 1000)
           const login = await getIam().auth.loginWithApiKey({ key: created.data.rawKey })
@@ -404,7 +419,10 @@ describe('iam.apiKey（启用）', () => {
             getIam().session.verifyToken(login.data.tokens.accessToken),
             getIam().session.refresh(login.data.tokens.refreshToken),
           ])) {
-            expect(result).toMatchObject({ success: false, error: { code: HaiIamError.APIKEY_EXPIRED.code } })
+            expect(result).toMatchObject({
+              success: false,
+              error: { code: HaiIamError.APIKEY_EXPIRED.code },
+            })
           }
         }
         finally {
@@ -441,7 +459,12 @@ describe('iam.apiKey（启用）', () => {
   }
 
   defineIamSuite('sqlite+memory', sqliteMemoryEnv(), defineCommon, () => ({
-    login: { password: true, otp: false, ldap: false, apikey: true },
+    login: {
+      password: true,
+      otp: false,
+      ldap: false,
+      apikey: true,
+    },
     apikey: { maxKeysPerUser: 2, defaultExpirationDays: 0, prefix: 'hai_' },
   }))
 })

@@ -52,7 +52,14 @@ import { createTransportMiddleware } from './serv-transport.js'
 import { localizeZodError, resolveRequestLocale } from './serv-validation.js'
 
 /** 允许通过 oRPC OpenAPIHandler 转发的 HTTP 方法。 */
-const API_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const
+const API_METHODS = [
+  'GET',
+  'POST',
+  'PUT',
+  'PATCH',
+  'DELETE',
+  'OPTIONS',
+] as const
 
 /**
  * `serv.createApp()` 的自定义 middleware 挂载项。
@@ -366,7 +373,12 @@ export function createApp<
   // 请求的语言沿异步处理链传递，模块错误消息不依赖共享的进程默认语言。
   app.use('*', async (c, next) => {
     const requestId = resolveRequestId(c.req.header('x-request-id') ?? null)
-    await core.context.run({ requestId, userId: undefined, scopeId: undefined, jobId: undefined }, () => core.i18n.runWithLocale(resolveRequestLocale(c.req.raw.headers), () => audit.withContext({
+    await core.context.run({
+      requestId,
+      userId: undefined,
+      scopeId: undefined,
+      jobId: undefined,
+    }, () => core.i18n.runWithLocale(resolveRequestLocale(c.req.raw.headers), () => audit.withContext({
       actor: null,
       requestId,
       traceId: requestId,
@@ -385,7 +397,9 @@ export function createApp<
           actorSnapshot: trusted?.actor ?? null,
           userId: trusted?.actor?.id ?? null,
           scopeId: trusted?.scopeId,
-          outcome: [401, 403, 423, 429].includes(c.res.status) ? 'denied' : 'failure',
+          outcome: [401, 403, 423, 429].includes(c.res.status)
+            ? 'denied'
+            : 'failure',
           details: { method: c.req.method, status: c.res.status },
         })
         if (!recorded.success)
@@ -398,7 +412,9 @@ export function createApp<
   // 缺失路由也返回标准 JSON，保持 404 并允许统一传输加密。
   app.notFound(c => c.json(buildHaiErrorBody(
     HaiCommonError.NOT_FOUND,
-    core.i18n.coreM('core_errorNotFound', { locale: resolveRequestLocale(c.req.raw.headers) }),
+    core.i18n.coreM('core_errorNotFound', {
+      locale: resolveRequestLocale(c.req.raw.headers),
+    }),
   ), 404))
 
   // Step 3：决定请求上下文工厂。这个选择直接决定后续 procedure 是否能拿到 `context.session`。
@@ -413,12 +429,28 @@ export function createApp<
   //    用闭包函数延迟到请求处理时再读取，确保始终调用最新实现。
   const iamRef = options.iam
   const verifyToken = options.verifyToken
-    ?? (iamRef ? (token: string) => iamRef.auth.verifyToken(token) : undefined)
+    ?? (iamRef
+      ? (token: string) => iamRef.auth.verifyToken(token)
+      : undefined)
   const contextFactory: CreateServContext = options.createContext
-    ?? (verifyToken ? buildAuthContextFactory(verifyToken) : parseRequestContext)
+    ?? (verifyToken
+      ? buildAuthContextFactory(verifyToken)
+      : parseRequestContext)
   const createContext: CreateServContext = async (input) => {
-    const context = await contextFactory({ ...input, ip: resolveIp(input.request, input.remoteAddress) })
-    requestAuditContexts.set(input.request, { actor: context.session ? { id: context.session.userId, username: context.session.username, roles: [...context.session.roles] } : null, scopeId: context.scopeId })
+    const context = await contextFactory({
+      ...input,
+      ip: resolveIp(input.request, input.remoteAddress),
+    })
+    requestAuditContexts.set(input.request, {
+      actor: context.session
+        ? {
+            id: context.session.userId,
+            username: context.session.username,
+            roles: [...context.session.roles],
+          }
+        : null,
+      scopeId: context.scopeId,
+    })
     return context
   }
 
@@ -444,7 +476,12 @@ export function createApp<
       }
       return undefined
     }
-    core.logger.info('Request access policy denied', { ruleId: decision.ruleId, reason: decision.reason, method: c.req.method, ipAddress })
+    core.logger.info('Request access policy denied', {
+      ruleId: decision.ruleId,
+      reason: decision.reason,
+      method: c.req.method,
+      ipAddress,
+    })
     return c.json(buildHaiErrorBody(HaiCommonError.REQUEST_ACCESS_DENIED, core.i18n.coreM('core_requestAccessDenied')), 403)
   }
   // CORS 保持在加密外层，为策略拒绝也补齐响应头；预检只执行策略，不执行业务处理器。
@@ -470,9 +507,13 @@ export function createApp<
       return rejected
     })
   }
-  const keyExchangePath = options.transport ? `${http.apiPrefix}${options.transport.keyExchangePath ?? '/_hai/key-exchange'}` : undefined
+  const keyExchangePath = options.transport
+    ? `${http.apiPrefix}${options.transport.keyExchangePath ?? '/_hai/key-exchange'}`
+    : undefined
   if (http.access !== false && keyExchangePath) {
-    app.use('*', async (c, next) => c.req.path === keyExchangePath && c.req.method === 'POST' ? accessDenied(c) ?? next() : next())
+    app.use('*', async (c, next) => c.req.path === keyExchangePath && c.req.method === 'POST'
+      ? accessDenied(c) ?? next()
+      : next())
   }
 
   // Step 7：若启用传输加密，必须在业务路由之前挂载。
@@ -558,14 +599,25 @@ export function createApp<
 
     app.get(docs.path, async (c) => {
       if (docs.requireAuth) {
-        const context = await createContext({ request: c.req.raw, remoteAddress: readRemoteAddress(c.env) })
+        const context = await createContext({
+          request: c.req.raw,
+          remoteAddress: readRemoteAddress(c.env),
+        })
         // 与 procedure 层 `.auth()` 语义保持一致：必须是已验证 session，
         // 不能只检查 Bearer 字符串是否存在，避免任意伪造 Token 访问受保护文档。
-        if (!context.session)
-          return c.json(buildHaiErrorBody(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: resolveRequestLocale(c.req.raw.headers) })), 401)
+        if (!context.session) {
+          return c.json(buildHaiErrorBody(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', {
+            locale: resolveRequestLocale(c.req.raw.headers),
+          })), 401)
+        }
       }
-      const specUrl = http.openapi === false ? undefined : posix.relative(docsDirectory, http.openapi.path) || '.'
-      return c.html(createDocsPage(await getSpec(), { specUrl, scriptUrl: SCALAR_ROUTE.slice(1) }))
+      const specUrl = http.openapi === false
+        ? undefined
+        : posix.relative(docsDirectory, http.openapi.path) || '.'
+      return c.html(createDocsPage(await getSpec(), {
+        specUrl,
+        scriptUrl: SCALAR_ROUTE.slice(1),
+      }))
     })
   }
 
@@ -605,7 +657,10 @@ async function handleORPC(
   createContext: CreateServContext,
 ): Promise<Response | void> {
   // Step A：为本次请求创建 ServContext（可能只含元数据，也可能已带 session）。
-  const context = await createContext({ request: c.req.raw, remoteAddress: readRemoteAddress(c.env) })
+  const context = await createContext({
+    request: c.req.raw,
+    remoteAddress: readRemoteAddress(c.env),
+  })
   // Step B：交给 oRPC handler 做 contract 匹配 + procedure 执行。
   const { matched, response } = await core.context.run({ requestId: context.requestId, userId: context.session?.userId, scopeId: context.scopeId }, () => handler.handle(c.req.raw, { prefix, context }))
   if (!matched) {
@@ -657,7 +712,10 @@ async function localizeValidationResponse(response: Response, requestHeaders: He
     error: {
       code: HaiCommonError.VALIDATION_ERROR.code,
       traceId: core.context.get().traceId ?? core.context.get().requestId,
-      message: core.error.formatMessage({ message: servM('serv_validationFailed', { locale }), traceId: core.context.get().traceId ?? core.context.get().requestId }),
+      message: core.error.formatMessage({
+        message: servM('serv_validationFailed', { locale }),
+        traceId: core.context.get().traceId ?? core.context.get().requestId,
+      }),
       httpStatus: HaiCommonError.VALIDATION_ERROR.httpStatus,
       system: HaiCommonError.VALIDATION_ERROR.system,
       module: HaiCommonError.VALIDATION_ERROR.module,

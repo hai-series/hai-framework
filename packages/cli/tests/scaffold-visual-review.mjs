@@ -34,10 +34,17 @@ function observe(page) {
       expectedAuthResponses.add(response.url())
   })
   page.on('console', (message) => {
-    if (message.type() === 'error')
-      consoleErrors.push({ message: message.text(), url: message.location().url })
+    if (message.type() === 'error') {
+      consoleErrors.push({
+        message: message.text(),
+        url: message.location().url,
+      })
+    }
   })
-  page.on('requestfailed', request => requestFailures.push({ url: request.url(), error: request.failure()?.errorText }))
+  page.on('requestfailed', request => requestFailures.push({
+    url: request.url(),
+    error: request.failure()?.errorText,
+  }))
 }
 
 async function login(page, username, secret) {
@@ -56,8 +63,19 @@ async function snapshot(page, name, { fullPage = false } = {}) {
     await expect(page.getByTestId('audit-page').locator('.loading-spinner, .animate-spin')).toHaveCount(0)
   }
   await page.evaluate(() => document.fonts.ready)
-  await page.screenshot({ path: path.join(outputDirectory, `${name}.png`), fullPage, animations: 'disabled' })
-  const overflow = await page.evaluate(() => [...document.querySelectorAll('main *, header *')].map(element => ({ tag: element.tagName, class: element.className, right: element.getBoundingClientRect().right, width: element.getBoundingClientRect().width })).filter(element => element.right > innerWidth + 1).slice(0, 12))
+  await page.screenshot({
+    path: path.join(outputDirectory, `${name}.png`),
+    fullPage,
+    animations: 'disabled',
+  })
+  const overflow = await page.evaluate(() => [
+    ...document.querySelectorAll('main *, header *'),
+  ].map(element => ({
+    tag: element.tagName,
+    class: element.className,
+    right: element.getBoundingClientRect().right,
+    width: element.getBoundingClientRect().width,
+  })).filter(element => element.right > innerWidth + 1).slice(0, 12))
   if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth))
     process.stdout.write(`Overflow ${name}: ${JSON.stringify(overflow)}\n`)
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -80,7 +98,14 @@ async function snapshot(page, name, { fullPage = false } = {}) {
     if (page.viewportSize().width >= 1280)
       assert(Math.max(...auditControls.map(control => control.top)) - Math.min(...auditControls.map(control => control.top)) < 1, 'Desktop audit controls must align')
   }
-  screenshots.push({ name, viewport: page.viewportSize(), fullPage, title: await page.title(), documentWidth: await page.evaluate(() => document.documentElement.scrollWidth), auditControls })
+  screenshots.push({
+    name,
+    viewport: page.viewportSize(),
+    fullPage,
+    title: await page.title(),
+    documentWidth: await page.evaluate(() => document.documentElement.scrollWidth),
+    auditControls,
+  })
   process.stdout.write(`Captured ${name}\n`)
 }
 
@@ -96,7 +121,9 @@ async function createUser(page, username, displayName, email) {
 }
 
 try {
-  const adminContext = await browser.newContext({ viewport: { width: 1440, height: 960 } })
+  const adminContext = await browser.newContext({
+    viewport: { width: 1440, height: 960 },
+  })
   const page = await adminContext.newPage()
   observe(page)
   await page.goto(webUrl)
@@ -182,7 +209,9 @@ try {
   await snapshot(page, '15-delete-confirmation')
   await page.getByRole('dialog').getByRole('button', { name: /取消|Cancel/, exact: true }).click()
 
-  const userContext = await browser.newContext({ viewport: { width: 1440, height: 960 } })
+  const userContext = await browser.newContext({
+    viewport: { width: 1440, height: 960 },
+  })
   const userPage = await userContext.newPage()
   observe(userPage)
   await userPage.goto(webUrl)
@@ -193,7 +222,11 @@ try {
   await snapshot(userPage, '16-settings-desktop', { fullPage: true })
   const fileChooser = userPage.waitForEvent('filechooser')
   await userPage.getByTestId('profile-form').getByRole('button', { name: /上传头像|Upload avatar/ }).click()
-  await (await fileChooser).setFiles({ name: 'invalid.txt', mimeType: 'text/plain', buffer: Buffer.from('invalid avatar') })
+  await (await fileChooser).setFiles({
+    name: 'invalid.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('invalid avatar'),
+  })
   await expect(userPage.getByTestId('error')).toContainText(/PNG/)
   await snapshot(userPage, '17-avatar-validation')
   await userPage.getByTestId('profile-form').locator('input[name="displayName"]').fill('林晓 · Workspace')
@@ -217,7 +250,18 @@ try {
   await userContext.close()
   await adminContext.close()
 
-  for (const [platform, url, viewport] of [['app', appUrl, { width: 390, height: 844 }], ['desktop', desktopUrl, { width: 1280, height: 800 }]]) {
+  for (const [platform, url, viewport] of [
+    [
+      'app',
+      appUrl,
+      { width: 390, height: 844 },
+    ],
+    [
+      'desktop',
+      desktopUrl,
+      { width: 1280, height: 800 },
+    ],
+  ]) {
     const context = await browser.newContext({ viewport })
     const hostPage = await context.newPage()
     observe(hostPage)
@@ -235,7 +279,13 @@ try {
   assert.deepEqual(requestFailures, [], 'All reviewed pages must remain free of failed network requests')
 }
 finally {
-  await writeFile(path.join(outputDirectory, 'evidence.json'), `${JSON.stringify({ screenshots, pageErrors, consoleErrors, expectedAuthResponses: [...expectedAuthResponses], requestFailures }, null, 2)}\n`)
+  await writeFile(path.join(outputDirectory, 'evidence.json'), `${JSON.stringify({
+    screenshots,
+    pageErrors,
+    consoleErrors,
+    expectedAuthResponses: [...expectedAuthResponses],
+    requestFailures,
+  }, null, 2)}\n`)
   await browser.close()
 }
 process.stdout.write(`Visual interaction verification passed: ${screenshots.length} screenshots\n`)

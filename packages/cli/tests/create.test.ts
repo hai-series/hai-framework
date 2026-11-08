@@ -23,12 +23,29 @@ describe('detectProject', () => {
 /* ---------- buildTemplateContext 验证 ---------- */
 
 describe('buildTemplateContext', () => {
-  it.each(['admin', 'website', 'h5', 'api', 'mobile-app', 'fullstack'] as const)('%s 固定框架版本，避免旧 alpha9 被范围解析选中', (appType) => {
-    const context = buildTemplateContext({ name: 'version-test', appType, features: [], packageManager: 'pnpm' })
+  it.each([
+    'admin',
+    'website',
+    'h5',
+    'api',
+    'mobile-app',
+    'fullstack',
+  ] as const)('%s 固定框架版本，避免旧 alpha9 被范围解析选中', (appType) => {
+    const context = buildTemplateContext({
+      name: 'version-test',
+      appType,
+      features: [],
+      packageManager: 'pnpm',
+    })
     const haiVersions = Object.entries(context.haiCatalogPackages).filter(([name]) => name.startsWith('@h-ai/'))
     expect(haiVersions.length).toBeGreaterThan(0)
     expect(context.haiPackageVersion).toBe(getCliVersion())
-    const npmContext = buildTemplateContext({ name: 'version-test', appType, features: [], packageManager: 'npm' })
+    const npmContext = buildTemplateContext({
+      name: 'version-test',
+      appType,
+      features: [],
+      packageManager: 'npm',
+    })
     expect(npmContext.haiPackageSpecifier).toBe(getCliVersion())
     for (const [, version] of haiVersions) expect(version).toBe(getCliVersion())
   })
@@ -107,7 +124,9 @@ describe('buildTemplateContext', () => {
       name: 'test',
       appType: 'admin' as AppType,
       features: [],
-      moduleConfigs: { core: { defaultLocale: 'en-US' } },
+      moduleConfigs: {
+        core: { defaultLocale: 'en-US' },
+      },
       packageManager: 'pnpm',
     })
     expect(ctx.defaultLocale).toBe('en-US')
@@ -117,14 +136,46 @@ describe('buildTemplateContext', () => {
 /* ---------- buildFullstackProjectContext 验证 ---------- */
 
 describe('fullstack TemplateContext', () => {
-  it.each([{ features: [] as FeatureId[] }, { features: ['crypto'] as FeatureId[] }])('fullstack 不允许 $features 移除管理后台必需模块', ({ features }) => {
-    const context = buildTemplateContext({ name: 'mini-admin', appType: 'fullstack', features, packageManager: 'pnpm' })
-    for (const feature of ['iam', 'db', 'cache', 'crypto', 'audit', 'storage']) expect(context.features[feature]).toBe(true)
-    for (const name of ['iam', 'reldb', 'cache', 'crypto', 'audit', 'storage']) expect(context.haiCatalogPackages[`@h-ai/${name}`]).toBeDefined()
+  it.each([
+    { features: [] as FeatureId[] },
+    {
+      features: ['crypto'] as FeatureId[],
+    },
+  ])('fullstack 不允许 $features 移除管理后台必需模块', ({ features }) => {
+    const context = buildTemplateContext({
+      name: 'mini-admin',
+      appType: 'fullstack',
+      features,
+      packageManager: 'pnpm',
+    })
+    for (const feature of [
+      'iam',
+      'db',
+      'cache',
+      'crypto',
+      'audit',
+      'storage',
+    ]) expect(context.features[feature]).toBe(true)
+    for (const name of [
+      'iam',
+      'reldb',
+      'cache',
+      'crypto',
+      'audit',
+      'storage',
+    ]) expect(context.haiCatalogPackages[`@h-ai/${name}`]).toBeDefined()
   })
 
   it('fullstack 显示名称采用 core 配置，不采用 serv 包名', () => {
-    const context = buildTemplateContext({ name: 'mini-admin', appType: 'fullstack', features: [], moduleConfigs: { core: { name: 'Configured app' } }, packageManager: 'pnpm' })
+    const context = buildTemplateContext({
+      name: 'mini-admin',
+      appType: 'fullstack',
+      features: [],
+      moduleConfigs: {
+        core: { name: 'Configured app' },
+      },
+      packageManager: 'pnpm',
+    })
     expect(context.fullstack?.appName).toBe('Configured app')
   })
   it('应生成 contract / serv 包名和 E2E 默认前端', () => {

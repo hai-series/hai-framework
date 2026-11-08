@@ -26,12 +26,14 @@ type Environment = Record<string, string | undefined>
 
 /** 只接受普通数据对象，路径写入不经过对象原型。 */
 function object(value: unknown): Shape | undefined {
-  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Shape : undefined
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Shape
+    : undefined
 }
 
 /** camelCase 保持连写；实际字段名来自结构或 Schema，不从大写变量猜测。 */
 function segment(value: string): string {
-  return value.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toUpperCase()
+  return value.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '').toUpperCase()
 }
 
 /** JSON Schema 的本地引用与联合分支只提供结构提示，最终仍由原始 Zod 校验。 */
@@ -66,18 +68,26 @@ function shapes(node: Shape, root: Shape, value?: unknown, depth = 0): Shape[] {
 /** 合并同一路径的结构提示，保持 Provider 的联合定义。 */
 function combined(nodes: unknown[]): Shape {
   const entries = nodes.map(object).filter((item): item is Shape => item !== undefined)
-  return entries.length === 1 ? entries[0]! : { anyOf: entries }
+  return entries.length === 1
+    ? entries[0]!
+    : { anyOf: entries }
 }
 
 /** 字符串字段保留前导零等字面内容，其余值沿用 YAML 类型还原。 */
 function scalar(text: string, node: Shape, root: Shape): unknown {
-  const types = new Set(shapes(node, root).flatMap(item => Array.isArray(item.type) ? item.type : typeof item.type === 'string' ? [item.type] : []))
+  const types = new Set(shapes(node, root).flatMap(item => Array.isArray(item.type)
+    ? item.type
+    : typeof item.type === 'string'
+      ? [item.type]
+      : []))
   if (types.has('string') && [...types].every(type => type === 'string' || type === 'null') && !(text === 'null' && types.has('null')))
     return text
   if (text === '')
     return ''
   try {
-    return parse(text) ?? (text === 'null' ? null : text)
+    return parse(text) ?? (text === 'null'
+      ? null
+      : text)
   }
   catch { return text }
 }
@@ -168,7 +178,9 @@ export function resolveEnvironment(options: { name: string, value: unknown, envi
   const missingNames = new Set<string>()
   let root: Shape
   try {
-    root = options.schema ? options.schema.toJSONSchema({ io: 'input', unrepresentable: 'any' }) : options.shape ?? {}
+    root = options.schema
+      ? options.schema.toJSONSchema({ io: 'input', unrepresentable: 'any' })
+      : options.shape ?? {}
   }
   catch { root = {} }
   const prefix = `HAI_${segment(options.name)}`
@@ -186,23 +198,34 @@ export function resolveEnvironment(options: { name: string, value: unknown, envi
     const discriminators = new Map<string, unknown[]>()
     for (const candidate of alternatives) {
       for (const [key, field] of Object.entries(object(candidate.properties) ?? {})) {
-        if (shapes(object(field) ?? {}, root).some(item => Object.hasOwn(item, 'const')))
-          discriminators.set(key, [...discriminators.get(key) ?? [], field])
+        if (shapes(object(field) ?? {}, root).some(item => Object.hasOwn(item, 'const'))) {
+          discriminators.set(key, [
+            ...discriminators.get(key) ?? [],
+            field,
+          ])
+        }
       }
     }
-    const selection = { ...object(value) }
+    const selection = {
+      ...object(value),
+    }
     for (const [key, fields] of discriminators) {
       const text = environment[`${name}_${segment(key)}`]
       if (text !== undefined)
         selection[key] = scalar(text, combined(fields), root)
     }
-    const candidates = shapes(node, root, Object.keys(selection).length ? selection : value)
+    const candidates = shapes(node, root, Object.keys(selection).length
+      ? selection
+      : value)
     const synthesized = value === undefined
     // 更细字段可替换粗粒度的 false/标量节点；来源合并已先清除低来源细项。
     const valueType: string = typeof value
     const primitiveOverride = value === undefined || candidates.some(candidate => (value !== null && candidate.type === valueType) || candidate.const === value || (value === null && candidate.type === 'null'))
     if (primitiveOverride && !object(value) && !Array.isArray(value)) {
-      const declared = new Set([...Object.keys(object(declaration) ?? {}), ...candidates.flatMap(candidate => Object.keys(object(candidate.properties) ?? {}))])
+      const declared = new Set([
+        ...Object.keys(object(declaration) ?? {}),
+        ...candidates.flatMap(candidate => Object.keys(object(candidate.properties) ?? {})),
+      ])
       const specified = [...declared].filter(key => Object.keys(environment).some(candidate => environment[candidate] !== undefined && (candidate === `${name}_${segment(key)}` || candidate.startsWith(`${name}_${segment(key)}_`))))
       if (specified.length)
         value = Object.fromEntries(specified.map(key => [key, undefined]))
@@ -215,7 +238,7 @@ export function resolveEnvironment(options: { name: string, value: unknown, envi
     if (value === undefined && indexed.length && candidates.some(candidate => candidate.type === 'array')) {
       const defaults = candidates.find(candidate => Array.isArray(candidate.default))?.default
       if (!Array.isArray(defaults))
-        throw new Error(indexed[0])
+        throw new TypeError(indexed[0])
       value = structuredClone(defaults)
     }
     if (Array.isArray(value)) {
@@ -225,44 +248,96 @@ export function resolveEnvironment(options: { name: string, value: unknown, envi
         if (/^\d+$/.test(index) && (String(Number(index)) !== index || Number(index) >= value.length))
           throw new Error(key)
       }
-      return value.map((item, index) => visit(item, `${name}_${index}`, itemShape, fromEnvironment, depth + 1, Array.isArray(declaration) ? declaration[index] : undefined))
+      return value.map((item, index) => visit(item, `${name}_${index}`, itemShape, fromEnvironment, depth + 1, Array.isArray(declaration)
+        ? declaration[index]
+        : undefined))
     }
     const input = object(value)
     if (input) {
       const properties = new Map<string, unknown[]>()
       for (const candidate of candidates) {
-        for (const [key, field] of Object.entries(object(candidate.properties) ?? {}))
-          properties.set(key, [...properties.get(key) ?? [], field])
+        for (const [key, field] of Object.entries(object(candidate.properties) ?? {})) {
+          properties.set(key, [
+            ...properties.get(key) ?? [],
+            field,
+          ])
+        }
       }
-      const declaredKeys = new Set([...Object.keys(object(declaration) ?? {}), ...properties.keys()])
-      const keys = new Set([...Object.keys(input), ...[...declaredKeys].filter(key => Object.keys(environment).some(nameInEnv => environment[nameInEnv] !== undefined && (nameInEnv === `${name}_${segment(key)}` || nameInEnv.startsWith(`${name}_${segment(key)}_`))))])
+      const declaredKeys = new Set([
+        ...Object.keys(object(declaration) ?? {}),
+        ...properties.keys(),
+      ])
+      const keys = new Set([
+        ...Object.keys(input),
+        ...[...declaredKeys].filter(key => Object.keys(environment).some(nameInEnv => environment[nameInEnv] !== undefined && (nameInEnv === `${name}_${segment(key)}` || nameInEnv.startsWith(`${name}_${segment(key)}_`)))),
+      ])
       const entries = [...keys].map((key) => {
         if (['__proto__', 'prototype', 'constructor'].includes(key))
           throw new Error(name)
-        return [key, visit(input[key], `${name}_${segment(key)}`, combined(properties.get(key) ?? candidates.map(candidate => candidate.additionalProperties)), fromEnvironment, depth + 1, object(declaration)?.[key])]
+        return [
+          key,
+          visit(input[key], `${name}_${segment(key)}`, combined(properties.get(key) ?? candidates.map(candidate => candidate.additionalProperties)), fromEnvironment, depth + 1, object(declaration)?.[key]),
+        ]
       }).filter(([, child]) => child !== undefined)
-      return synthesized && !entries.length ? undefined : Object.fromEntries(entries)
+      return synthesized && !entries.length
+        ? undefined
+        : Object.fromEntries(entries)
     }
     if (typeof value !== 'string' || fromEnvironment)
       return value
-    const full = /^\$\{[^}:]+(?::[^}]*)?\}$/.test(value)
-    const resolved = value.replace(/\$\{([^}:]+)(?::([^}]*))?\}/g, (_match, key: string, fallback?: string) => {
+    // 按占位符边界单次扫描；缺失结束符时不从每个 ${ 起点重复回溯。
+    const parts: string[] = []
+    let consumed = 0
+    let search = 0
+    let full = false
+    while (search < value.length) {
+      const start = value.indexOf('${', search)
+      if (start < 0)
+        break
+      if (value[start + 2] === ':' || value[start + 2] === '}') {
+        search = start + 2
+        continue
+      }
+      const end = value.indexOf('}', start + 2)
+      if (end < 0)
+        break
+      const expression = value.slice(start + 2, end)
+      const separator = expression.indexOf(':')
+      const key = separator < 0
+        ? expression
+        : expression.slice(0, separator)
+      const fallback = separator < 0
+        ? undefined
+        : expression.slice(separator + 1)
       if (environment[key] === undefined && fallback === undefined && options.missing !== 'empty') {
         missingNames.add(key)
         throw new Error(key)
       }
-      return environment[key] ?? fallback ?? ''
-    })
-    return full ? scalar(resolved, node, root) : resolved
+      parts.push(value.slice(consumed, start), environment[key] ?? fallback ?? '')
+      consumed = end + 1
+      search = consumed
+      full = start === 0 && consumed === value.length
+    }
+    const resolved = parts.join('') + value.slice(consumed)
+    return full
+      ? scalar(resolved, node, root)
+      : resolved
   }
   try {
     return ok(visit(options.value, prefix, root, literal, 0))
   }
   catch (failure) {
-    const name = failure instanceof Error && /^[A-Z_]\w*$/i.test(failure.message) ? failure.message : prefix
-    if (!missingNames.has(name))
-      return err(HaiConfigError.CONFIG_VALIDATION_ERROR, i18n.coreM('core_configValidationFailed'), { fields: [name] })
-    return err(HaiConfigError.CONFIG_ENV_VAR_MISSING, i18n.coreM('core_configEnvVarMissing', { params: { varName: name } }))
+    const name = failure instanceof Error && /^[A-Z_]\w*$/i.test(failure.message)
+      ? failure.message
+      : prefix
+    if (!missingNames.has(name)) {
+      return err(HaiConfigError.CONFIG_VALIDATION_ERROR, i18n.coreM('core_configValidationFailed'), {
+        fields: [name],
+      })
+    }
+    return err(HaiConfigError.CONFIG_ENV_VAR_MISSING, i18n.coreM('core_configEnvVarMissing', {
+      params: { varName: name },
+    }))
   }
 }
 
@@ -275,7 +350,9 @@ export function resolveEnvironment(options: { name: string, value: unknown, envi
  */
 export function toEnv(options: { prefix: string, value: unknown, schema?: ZodType, shape?: Readonly<Record<string, unknown>> }): Record<string, string> {
   const result: Record<string, string> = {}
-  const root: Shape = options.schema ? options.schema.toJSONSchema({ io: 'input', unrepresentable: 'any' }) : options.shape ?? {}
+  const root: Shape = options.schema
+    ? options.schema.toJSONSchema({ io: 'input', unrepresentable: 'any' })
+    : options.shape ?? {}
   function visit(value: unknown, name: string, node: Shape): void {
     if (!/^[A-Z][A-Z0-9_]*$/.test(name))
       throw new Error('Invalid environment variable name')
@@ -290,7 +367,9 @@ export function toEnv(options: { prefix: string, value: unknown, schema?: ZodTyp
         visit(item, `${name}_${segment(key)}`, object(properties[key]) ?? {})
     }
     else {
-      result[name] = value === null || typeof value === 'object' ? JSON.stringify(value) : String(value)
+      result[name] = value === null || typeof value === 'object'
+        ? JSON.stringify(value)
+        : String(value)
     }
   }
   visit(options.value, options.prefix, root)

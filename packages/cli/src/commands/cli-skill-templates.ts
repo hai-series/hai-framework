@@ -44,16 +44,43 @@ const MODULE_SKILL_MAP: Record<string, string> = {
  * 仅排除与当前样板技术栈明显冲突的少数 Skill。
  */
 const SKILL_EXCLUSIONS_BY_APP_TYPE: Partial<Record<AppType, string[]>> = {
-  'admin': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
-  'website': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
-  'h5': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
-  'api': ['hai-ui', 'hai-ui-design', 'hai-ui-review', 'hai-kit', 'hai-capacitor'],
-  'mobile-app': ['hai-core', 'hai-kit', 'hai-serv', 'hai-api-contract'],
+  'admin': [
+    'hai-serv',
+    'hai-api-contract',
+    'hai-api-client',
+    'hai-capacitor',
+  ],
+  'website': [
+    'hai-serv',
+    'hai-api-contract',
+    'hai-api-client',
+    'hai-capacitor',
+  ],
+  'h5': [
+    'hai-serv',
+    'hai-api-contract',
+    'hai-api-client',
+    'hai-capacitor',
+  ],
+  'api': [
+    'hai-ui',
+    'hai-ui-design',
+    'hai-ui-review',
+    'hai-kit',
+    'hai-capacitor',
+  ],
+  'mobile-app': [
+    'hai-core',
+    'hai-kit',
+    'hai-serv',
+    'hai-api-contract',
+  ],
   'fullstack': ['hai-kit'],
 }
 
 const WORKFLOW_SKILLS = [
   'hai-build',
+  'hai-change-plan',
   'hai-spec-review',
   'hai-spec-implement',
   'hai-app-create',
@@ -132,8 +159,16 @@ async function detectBridgeContext(projectPath: string): Promise<{ appType?: App
 
   const projectName = metadata.name
   for (const [appType, directory, suffixes] of [
-    ['fullstack', 'packages', ['contract', 'serv', 'shared']],
-    ['api', 'apps', ['contract', 'service']],
+    [
+      'fullstack',
+      'packages',
+      ['contract', 'serv', 'shared'],
+    ],
+    [
+      'api',
+      'apps',
+      ['contract', 'serv'],
+    ],
   ] as const) {
     const manifests = await Promise.all(suffixes.map(suffix => fse.pathExists(
       path.join(projectPath, directory, `${projectName}-${suffix}`, 'package.json'),
@@ -185,7 +220,9 @@ export function resolveCompatibleSkillNames(
   skillNames: string[],
   appType?: AppType,
 ): string[] {
-  const excludedSkills = new Set(appType ? SKILL_EXCLUSIONS_BY_APP_TYPE[appType] ?? [] : [])
+  const excludedSkills = new Set(appType
+    ? SKILL_EXCLUSIONS_BY_APP_TYPE[appType] ?? []
+    : [])
   return skillNames.filter(skillName => !excludedSkills.has(skillName))
 }
 
@@ -354,9 +391,15 @@ async function resolveBridgeSource(
   appType?: string,
   allowTemplate = false,
 ): Promise<string | null> {
-  const profile = appType && BRIDGE_PROFILE_REGEX.test(appType) ? appType : 'generic'
+  const profile = appType && BRIDGE_PROFILE_REGEX.test(appType)
+    ? appType
+    : 'generic'
   const candidates = [
-    ...(allowTemplate ? [path.join(templatesDir, 'bridges', profile, `${source}.hbs`)] : []),
+    ...(allowTemplate
+      ? [
+          path.join(templatesDir, 'bridges', profile, `${source}.hbs`),
+        ]
+      : []),
     path.join(templatesDir, 'bridges', profile, source),
     path.join(templatesDir, 'bridges', 'generic', source),
     path.join(templatesDir, source),
@@ -443,7 +486,9 @@ export async function generateModuleSkillFile(
     overwriteSkills: false,
     overwriteBridgeFiles: false,
   })
-  return copiedFiles.length > 0 ? copiedFiles : null
+  return copiedFiles.length > 0
+    ? copiedFiles
+    : null
 }
 
 /**
@@ -468,7 +513,9 @@ export function resolveSkillNamesForPackages(packageNames: string[]): string[] {
   if (skillNames.includes('hai-ui'))
     skillNames.push('hai-ui-design', 'hai-ui-review')
 
-  return [...new Set(skillNames)]
+  return [
+    ...new Set(skillNames),
+  ]
 }
 
 /**
@@ -514,8 +561,15 @@ export async function generateProjectAiSupport(
   const projectName = options.projectName ?? detected.projectName
   // 已确认的样板补全整个兼容目录；其它项目只补工作流与明确请求的模块。
   const requestedSkillNames = appType
-    ? [...resolveCompatibleSkillNames(await listTemplateSkillNames(templatesDir), appType as AppType), ...WORKFLOW_SKILLS, ...skillNames]
-    : [...WORKFLOW_SKILLS, ...skillNames]
+    ? [
+        ...resolveCompatibleSkillNames(await listTemplateSkillNames(templatesDir), appType as AppType),
+        ...WORKFLOW_SKILLS,
+        ...skillNames,
+      ]
+    : [
+        ...WORKFLOW_SKILLS,
+        ...skillNames,
+      ]
   const selectedSkillNames = resolveCompatibleSkillNames(requestedSkillNames, appType as AppType | undefined)
   const copiedFiles: string[] = []
   copiedFiles.push(...await copySkills(templatesDir, selectedSkillNames, projectPath, SKILL_TARGET_DIRS, overwriteSkills))

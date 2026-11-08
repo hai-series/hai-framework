@@ -89,12 +89,20 @@ const APP_TYPES: Record<AppType, { name: string, description: string }> = {
 }
 
 const FRONTEND_TARGETS: Record<FrontendTarget, { name: string, description: string, implemented: boolean }> = {
-  web: { name: 'Web', get description() {
-    return cliM('cli_frontendWebDescription')
-  }, implemented: true },
-  app: { name: 'App', get description() {
-    return cliM('cli_frontendAppDescription')
-  }, implemented: true },
+  web: {
+    name: 'Web',
+    get description() {
+      return cliM('cli_frontendWebDescription')
+    },
+    implemented: true,
+  },
+  app: {
+    name: 'App',
+    get description() {
+      return cliM('cli_frontendAppDescription')
+    },
+    implemented: true,
+  },
   miniapp: {
     get name() {
       return cliM('cli_frontendMiniappName')
@@ -300,8 +308,20 @@ const TEMPLATE_FEATURES: Record<AppType, FeatureId[]> = {
   'website': [],
   'h5': ['iam', 'reach'],
   'api': ['iam', 'reach', 'storage', 'feedback'],
-  'mobile-app': ['iam', 'crypto', 'api-client', 'capacitor'],
-  'fullstack': ['iam', 'storage', 'audit', 'reach', 'scheduler', 'feedback'],
+  'mobile-app': [
+    'iam',
+    'crypto',
+    'api-client',
+    'capacitor',
+  ],
+  'fullstack': [
+    'iam',
+    'storage',
+    'audit',
+    'reach',
+    'scheduler',
+    'feedback',
+  ],
 }
 const PROJECT_NAME_REGEX = /^[a-z0-9-]+$/
 
@@ -322,14 +342,23 @@ export async function createProject(options: CreateProjectOptions): Promise<void
   const spinner = ora()
 
   try {
-    if (['template', 'features', 'examples', 'yes'].some(key => Object.hasOwn(options, key)))
+    if ([
+      'template',
+      'features',
+      'examples',
+      'yes',
+    ].some(key => Object.hasOwn(options, key))) {
       throw new Error(cliM('cli_createOptionsRemoved'))
+    }
     // 交互式获取选项
     const resolvedOptions = await resolveOptions(options)
 
     // 安全校验：项目名必须仅含小写字母、数字和连字符，防止路径遍历
-    if (!PROJECT_NAME_REGEX.test(resolvedOptions.name))
-      throw new Error(cliM('cli_createInvalidName', { params: { name: resolvedOptions.name } }))
+    if (!PROJECT_NAME_REGEX.test(resolvedOptions.name)) {
+      throw new Error(cliM('cli_createInvalidName', {
+        params: { name: resolvedOptions.name },
+      }))
+    }
 
     const projectPath = path.resolve(resolvedOptions.cwd ?? '.', resolvedOptions.name)
 
@@ -342,7 +371,9 @@ export async function createProject(options: CreateProjectOptions): Promise<void
         active: cliM('cli_yes'),
         inactive: cliM('cli_no'),
         name: 'overwrite',
-        message: cliM('cli_createOverwrite', { params: { name: resolvedOptions.name } }),
+        message: cliM('cli_createOverwrite', {
+          params: { name: resolvedOptions.name },
+        }),
         initial: false,
       })
 
@@ -389,18 +420,40 @@ export async function createProject(options: CreateProjectOptions): Promise<void
         ? path.join(projectPath, 'apps', `${resolvedOptions.name}-serv`, '.env.example')
         : path.join(projectPath, '.env.example')
 
-      const enabledConfigs = new Set(['core', ...(context.isSvelteOnlyApp ? [] : resolvedOptions.features.map(getFeatureConfigKey).filter(Boolean))])
+      const enabledConfigs = new Set([
+        'core',
+        ...(context.isSvelteOnlyApp
+          ? []
+          : resolvedOptions.features.map(getFeatureConfigKey).filter(Boolean)),
+      ])
       if (isApiWorkspace || isFullstack)
         enabledConfigs.add('serv')
       else if (!context.isSvelteOnlyApp)
         enabledConfigs.add('kit')
-      for (const configKey of ['core', 'serv', 'kit', 'db', 'cache', 'iam', 'storage', 'audit', 'reach', 'ai', 'vecdb', 'payment', 'scheduler', 'feedback']) {
+      for (const configKey of [
+        'core',
+        'serv',
+        'kit',
+        'db',
+        'cache',
+        'iam',
+        'storage',
+        'audit',
+        'reach',
+        'ai',
+        'vecdb',
+        'payment',
+        'scheduler',
+        'feedback',
+      ]) {
         const configPath = path.join(configDir, `_${configKey}.yml`)
         // workspace 模板已渲染其入口及应用默认值，不能覆盖 Reach 通知模板等配置。
         if ((isApiWorkspace || isFullstack) && await fse.pathExists(configPath))
           continue
         const content = generateConfigFile(configKey, configs, enabledConfigs.has(configKey))
-        await writeFile(configPath, configKey === 'feedback' ? content.replace('HAI_FEEDBACK_APPID:my-app', `HAI_FEEDBACK_APPID:${resolvedOptions.name}`) : content)
+        await writeFile(configPath, configKey === 'feedback'
+          ? content.replace('HAI_FEEDBACK_APPID:my-app', `HAI_FEEDBACK_APPID:${resolvedOptions.name}`)
+          : content)
       }
 
       const configContents: Record<string, string> = {}
@@ -408,7 +461,13 @@ export async function createProject(options: CreateProjectOptions): Promise<void
         if (/^_.*\.yml$/.test(file))
           configContents[file.slice(1, -4)] = await fse.readFile(path.join(configDir, file), 'utf8')
       }
-      const envFeatures: FeatureId[] = context.isSvelteOnlyApp ? [] : isFullstack ? [...new Set<FeatureId>([...resolvedOptions.features, 'reach'])] : resolvedOptions.features
+      const envFeatures: FeatureId[] = context.isSvelteOnlyApp
+        ? []
+        : isFullstack
+          ? [
+              ...new Set<FeatureId>([...resolvedOptions.features, 'reach']),
+            ]
+          : resolvedOptions.features
       const envContents = generateEnvExample(envFeatures, configs, true, configContents)
       let envExample = isApiWorkspace
         ? envContents
@@ -425,23 +484,41 @@ export async function createProject(options: CreateProjectOptions): Promise<void
         for (const variable of runtimeEnvironmentVariables(await fse.readFile(path.join(projectPath, file), 'utf8')))
           runtimeVariables.set(variable.name, variable)
       }
-      const existingNames = new Set([...envExample.matchAll(/^(?:#\s*)?([A-Z][A-Z0-9_]*)=/gm)].map(match => match[1]))
-      const runtimeExample = renderEnvironment([...runtimeVariables.values()].filter(variable => !existingNames.has(variable.name)))
-      if (runtimeExample)
-        envExample += `\n# 可选运行入口（按用途注入，不进入公共默认值）：\n${runtimeExample.split('\n').map(line => line && !line.startsWith('#') ? `# ${line}` : line).join('\n')}\n`
+      const existingNames = new Set([
+        ...envExample.matchAll(/^(?:#\s*)?([A-Z][A-Z0-9_]*)=/gm),
+      ].map(match => match[1]))
+      const runtimeExample = renderEnvironment([
+        ...runtimeVariables.values(),
+      ].filter(variable => !existingNames.has(variable.name)))
+      if (runtimeExample) {
+        envExample += `\n# 可选运行入口（按用途注入，不进入公共默认值）：\n${runtimeExample.split('\n').map(line => line && !line.startsWith('#')
+          ? `# ${line}`
+          : line).join('\n')}\n`
+      }
 
       await writeFile(envExamplePath, envExample)
       const envDirectory = path.dirname(envExamplePath)
       const sharedVariables = envExample.split('\n').filter(line => /^[A-Z][A-Z0-9_]*=/.test(line))
       await writeFile(path.join(envDirectory, '.env'), `# 公共基础配置（可提交）；完整字段说明见 .env.example。\n${sharedVariables.join('\n')}\n`)
-      for (const [mode, environment] of [['dev', 'development'], ['test', 'test'], ['prod', 'production']] as const) {
+      for (const [mode, environment] of [
+        ['dev', 'development'],
+        ['test', 'test'],
+        ['prod', 'production'],
+      ] as const) {
         let privateValues = '# 模式私有配置，不提交 Git；各节点通过受管配置共享对应秘密。\n'
         const values = mode === 'prod'
           ? generateProductionEnvironment(envFeatures, configs)
-          : `# 公共 ${mode} 环境配置；本机私有值放 .env.local，进程环境变量优先。\nHAI_CORE_ENV=${environment}\nHAI_CORE_LOGGING_LEVEL=${mode === 'test' ? 'warn' : 'debug'}\n`
+          : `# 公共 ${mode} 环境配置；本机私有值放 .env.local，进程环境变量优先。\nHAI_CORE_ENV=${environment}\nHAI_CORE_LOGGING_LEVEL=${mode === 'test'
+            ? 'warn'
+            : 'debug'}\n`
         if (isFullstack) {
           // 各职责账号分别生成初始密码，仅写入模式私有文件。
-          for (const name of ['HAI_ADMIN_DEFAULT_PASSWORD', 'HAI_AUDIT_ADMIN_PASSWORD', 'HAI_CONFIG_ADMIN_PASSWORD', 'HAI_BUSINESS_OPERATOR_PASSWORD'])
+          for (const name of [
+            'HAI_ADMIN_DEFAULT_PASSWORD',
+            'HAI_AUDIT_ADMIN_PASSWORD',
+            'HAI_CONFIG_ADMIN_PASSWORD',
+            'HAI_BUSINESS_OPERATOR_PASSWORD',
+          ])
             privateValues += `\n${name}=Aa1!${randomBytes(24).toString('base64url')}\n`
         }
         if (isFullstack || (!context.isSvelteOnlyApp && resolvedOptions.features.includes('crypto'))) {
@@ -449,7 +526,15 @@ export async function createProject(options: CreateProjectOptions): Promise<void
           const key = createECDH('SM2')
           key.generateKeys()
           const id = `${mode}-${randomBytes(6).toString('hex')}`
-          const ring = { activeKeyId: id, keys: { [id]: { publicKey: key.getPublicKey('hex'), privateKey: key.getPrivateKey('hex').padStart(64, '0') } } }
+          const ring = {
+            activeKeyId: id,
+            keys: {
+              [id]: {
+                publicKey: key.getPublicKey('hex'),
+                privateKey: key.getPrivateKey('hex').padStart(64, '0'),
+              },
+            },
+          }
           privateValues += `\nHAI_CRYPTO_TRANSPORT_SERVERKEYRING='${JSON.stringify(ring)}'\n`
         }
         await writeFile(path.join(envDirectory, `.env.${mode}`), values)
@@ -468,7 +553,14 @@ export async function createProject(options: CreateProjectOptions): Promise<void
     )
 
     // 生成 README
-    const appTypeLabel = cliM(`cli_app${({ 'admin': 'Admin', 'website': 'Website', 'h5': 'H5', 'api': 'Api', 'mobile-app': 'Mobile', 'fullstack': 'Fullstack' } as const)[resolvedOptions.appType]}Name`, { locale: 'zh-CN' })
+    const appTypeLabel = cliM(`cli_app${({
+      'admin': 'Admin',
+      'website': 'Website',
+      'h5': 'H5',
+      'api': 'Api',
+      'mobile-app': 'Mobile',
+      'fullstack': 'Fullstack',
+    } as const)[resolvedOptions.appType]}Name`, { locale: 'zh-CN' })
     const readmeContent = resolvedOptions.appType === 'fullstack'
       ? generateFullstackReadme(resolvedOptions.name, resolvedOptions.packageManager!, resolvedOptions.frontends, resolvedOptions.features.includes('feedback'))
       : resolvedOptions.appType === 'api'
@@ -493,7 +585,9 @@ export async function createProject(options: CreateProjectOptions): Promise<void
         const gitRemote = resolvedOptions.gitRemote
         if (!RE_HTTPS_URL.test(gitRemote) && !RE_GIT_SSH_URL.test(gitRemote)) {
           spinner.fail()
-          throw new Error(cliM('cli_createRemoteFailure', { params: { remote: gitRemote } }))
+          throw new Error(cliM('cli_createRemoteFailure', {
+            params: { remote: gitRemote },
+          }))
         }
         execFileSync('git', ['remote', 'add', 'origin', gitRemote], { cwd: projectPath, stdio: 'ignore' })
       }
@@ -502,7 +596,9 @@ export async function createProject(options: CreateProjectOptions): Promise<void
 
     // 安装依赖
     if (resolvedOptions.install) {
-      spinner.start(cliM('cli_createInstall', { params: { manager: resolvedOptions.packageManager } }))
+      spinner.start(cliM('cli_createInstall', {
+        params: { manager: resolvedOptions.packageManager },
+      }))
       installDependencies(projectPath, resolvedOptions.packageManager!)
       spinner.succeed()
     }
@@ -597,7 +693,10 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
 
   // 模块配置
   const moduleConfigs = selectedAppType === 'fullstack' || selectedAppType === 'mobile-app'
-    ? { ...buildDefaultModuleConfigs(selectedFeatures, projectName!), ...options.moduleConfigs }
+    ? {
+        ...buildDefaultModuleConfigs(selectedFeatures, projectName!),
+        ...options.moduleConfigs,
+      }
     : options.moduleConfigs ?? (useDefaults
       ? buildDefaultModuleConfigs(selectedFeatures, projectName!)
       : await promptModuleConfigs(selectedFeatures, projectName!))
@@ -617,11 +716,18 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
       name: 'pm',
       message: cliM('cli_createManagerPrompt'),
       choices: [
-        { title: cliM('cli_createPnpmRecommended'), value: 'pnpm' },
+        {
+          title: cliM('cli_createPnpmRecommended'),
+          value: 'pnpm',
+        },
         { title: 'npm', value: 'npm' },
         { title: 'yarn', value: 'yarn' },
       ],
-      initial: detected === 'pnpm' ? 0 : detected === 'npm' ? 1 : 2,
+      initial: detected === 'pnpm'
+        ? 0
+        : detected === 'npm'
+          ? 1
+          : 2,
     }, { onCancel })
     packageManager = pm
   }
@@ -756,7 +862,11 @@ async function resolveFrontendTargets(
 function normalizeFrontendTargets(frontends: FrontendTarget[]): FrontendTarget[] {
   const validTargets = new Set(Object.keys(FRONTEND_TARGETS))
   const result = frontends.filter(target => validTargets.has(target))
-  return [...new Set(result.length > 0 ? result : DEFAULT_FULLSTACK_FRONTENDS)]
+  return [
+    ...new Set(result.length > 0
+      ? result
+      : DEFAULT_FULLSTACK_FRONTENDS),
+  ]
 }
 
 // =============================================================================
@@ -847,9 +957,18 @@ async function promptCoreConfig(projectName: string, onCancel: () => void): Prom
     name: 'defaultLocale',
     message: cliM('cli_createLocalePrompt'),
     choices: [
-      { title: cliM('cli_createChineseLocale'), value: 'zh-CN' },
-      { title: cliM('cli_createEnglishLocale'), value: 'en-US' },
-      { title: cliM('cli_createJapaneseLocale'), value: 'ja-JP' },
+      {
+        title: cliM('cli_createChineseLocale'),
+        value: 'zh-CN',
+      },
+      {
+        title: cliM('cli_createEnglishLocale'),
+        value: 'en-US',
+      },
+      {
+        title: cliM('cli_createJapaneseLocale'),
+        value: 'ja-JP',
+      },
     ],
     initial: 0,
   }, { onCancel })
@@ -867,7 +986,10 @@ async function promptDbConfig(projectName: string, onCancel: () => void): Promis
     name: 'type',
     message: cliM('cli_createDbTypePrompt'),
     choices: [
-      { title: cliM('cli_createSqliteOption'), value: 'sqlite' },
+      {
+        title: cliM('cli_createSqliteOption'),
+        value: 'sqlite',
+      },
       { title: 'PostgreSQL', value: 'postgresql' },
       { title: 'MySQL', value: 'mysql' },
     ],
@@ -885,12 +1007,40 @@ async function promptDbConfig(projectName: string, onCancel: () => void): Promis
   }
 
   const answers = await prompts([
-    { type: 'text', name: 'host', message: cliM('cli_createDbHostPrompt', { params: { backend: type === 'postgresql' ? 'PostgreSQL' : 'MySQL' } }), initial: 'localhost' },
-    { type: 'number', name: 'port', message: cliM('cli_createPortPrompt'), initial: type === 'postgresql' ? 5432 : 3306 },
-    { type: 'text', name: 'database', message: cliM('cli_createDatabasePrompt'), initial: projectName },
+    {
+      type: 'text',
+      name: 'host',
+      message: cliM('cli_createDbHostPrompt', {
+        params: {
+          backend: type === 'postgresql'
+            ? 'PostgreSQL'
+            : 'MySQL',
+        },
+      }),
+      initial: 'localhost',
+    },
+    {
+      type: 'number',
+      name: 'port',
+      message: cliM('cli_createPortPrompt'),
+      initial: type === 'postgresql'
+        ? 5432
+        : 3306,
+    },
+    {
+      type: 'text',
+      name: 'database',
+      message: cliM('cli_createDatabasePrompt'),
+      initial: projectName,
+    },
   ], { onCancel })
 
-  return { type, host: answers.host, port: answers.port, database: answers.database }
+  return {
+    type,
+    host: answers.host,
+    port: answers.port,
+    database: answers.database,
+  }
 }
 
 /**
@@ -904,7 +1054,10 @@ async function promptCacheConfig(onCancel: () => void): Promise<ModuleConfigs['c
     name: 'type',
     message: cliM('cli_createCacheTypePrompt'),
     choices: [
-      { title: cliM('cli_createMemoryOption'), value: 'memory' },
+      {
+        title: cliM('cli_createMemoryOption'),
+        value: 'memory',
+      },
       { title: 'Redis', value: 'redis' },
     ],
     initial: 0,
@@ -914,8 +1067,18 @@ async function promptCacheConfig(onCancel: () => void): Promise<ModuleConfigs['c
     return { type }
 
   const answers = await prompts([
-    { type: 'text', name: 'host', message: cliM('cli_createRedisHostPrompt'), initial: 'localhost' },
-    { type: 'number', name: 'port', message: cliM('cli_createRedisPortPrompt'), initial: 6379 },
+    {
+      type: 'text',
+      name: 'host',
+      message: cliM('cli_createRedisHostPrompt'),
+      initial: 'localhost',
+    },
+    {
+      type: 'number',
+      name: 'port',
+      message: cliM('cli_createRedisPortPrompt'),
+      initial: 6379,
+    },
   ], { onCancel })
 
   return { type, host: answers.host, port: answers.port }
@@ -927,8 +1090,22 @@ async function promptCacheConfig(onCancel: () => void): Promise<ModuleConfigs['c
 async function promptIamConfig(onCancel: () => void): Promise<ModuleConfigs['iam']> {
   writeCliMessage(chalk.cyan(cliM('cli_createIamConfig')))
   const answers = await prompts([
-    { type: 'confirm', active: cliM('cli_yes'), inactive: cliM('cli_no'), name: 'loginPassword', message: cliM('cli_createPasswordPrompt'), initial: true },
-    { type: 'confirm', active: cliM('cli_yes'), inactive: cliM('cli_no'), name: 'loginOtp', message: cliM('cli_createOtpPrompt'), initial: false },
+    {
+      type: 'confirm',
+      active: cliM('cli_yes'),
+      inactive: cliM('cli_no'),
+      name: 'loginPassword',
+      message: cliM('cli_createPasswordPrompt'),
+      initial: true,
+    },
+    {
+      type: 'confirm',
+      active: cliM('cli_yes'),
+      inactive: cliM('cli_no'),
+      name: 'loginOtp',
+      message: cliM('cli_createOtpPrompt'),
+      initial: false,
+    },
   ], { onCancel })
   return { loginPassword: answers.loginPassword, loginOtp: answers.loginOtp }
 }
@@ -944,7 +1121,10 @@ async function promptStorageConfig(onCancel: () => void): Promise<ModuleConfigs[
     name: 'type',
     message: cliM('cli_createStorageTypePrompt'),
     choices: [
-      { title: cliM('cli_createLocalStorageOption'), value: 'local' },
+      {
+        title: cliM('cli_createLocalStorageOption'),
+        value: 'local',
+      },
       { title: 'S3 / MinIO / OSS', value: 's3' },
     ],
     initial: 0,
@@ -976,7 +1156,10 @@ async function promptAiConfig(onCancel: () => void): Promise<ModuleConfigs['ai']
     choices: [
       { title: 'OpenAI', value: 'openai' },
       { title: 'Anthropic (Claude)', value: 'anthropic' },
-      { title: cliM('cli_createCompatibleAiOption'), value: 'custom' },
+      {
+        title: cliM('cli_createCompatibleAiOption'),
+        value: 'custom',
+      },
     ],
     initial: 0,
   }, { onCancel })
@@ -1039,7 +1222,9 @@ function getInstallCommand(pm: 'pnpm' | 'npm' | 'yarn'): string {
  * npm 需要 `npm run <script>`（lifecycle 脚本除外），pnpm / yarn 可直接 `<pm> <script>`。
  */
 function getRunCommand(pm: 'pnpm' | 'npm' | 'yarn', script: string): string {
-  return pm === 'npm' ? `npm run ${script}` : `${pm} ${script}`
+  return pm === 'npm'
+    ? `npm run ${script}`
+    : `${pm} ${script}`
 }
 
 function installDependencies(projectPath: string, pm: 'pnpm' | 'npm' | 'yarn'): void {
@@ -1054,7 +1239,9 @@ function installDependencies(projectPath: string, pm: 'pnpm' | 'npm' | 'yarn'): 
   }
   catch (error) {
     const details = formatCommandFailure(installCmd, error)
-    throw new Error(`${cliM('cli_installFailed', { params: { pm } })}\n${details}`)
+    throw new Error(`${cliM('cli_installFailed', {
+      params: { pm },
+    })}\n${details}`)
   }
 }
 
@@ -1075,20 +1262,36 @@ interface CommandFailureLike {
 
 function formatCommandFailure(command: string, error: unknown): string {
   if (!error || typeof error !== 'object') {
-    return cliM('cli_commandLabel', { params: { command } })
+    return cliM('cli_commandLabel', {
+      params: { command },
+    })
   }
 
   const failure = error as CommandFailureLike
   const stdout = normalizeChildOutput(failure.stdout)
   const stderr = normalizeChildOutput(failure.stderr)
-  const status = typeof failure.status === 'number' ? cliM('cli_exitCode', { params: { code: failure.status } }) : ''
-  const signal = typeof failure.signal === 'string' ? cliM('cli_signal', { params: { signal: failure.signal } }) : ''
+  const status = typeof failure.status === 'number'
+    ? cliM('cli_exitCode', {
+        params: { code: failure.status },
+      })
+    : ''
+  const signal = typeof failure.signal === 'string'
+    ? cliM('cli_signal', {
+        params: { signal: failure.signal },
+      })
+    : ''
   const output = [
-    cliM('cli_commandLabel', { params: { command } }),
+    cliM('cli_commandLabel', {
+      params: { command },
+    }),
     status,
     signal,
-    stderr ? `stderr:\n${stderr}` : '',
-    stdout ? `stdout:\n${stdout}` : '',
+    stderr
+      ? `stderr:\n${stderr}`
+      : '',
+    stdout
+      ? `stdout:\n${stdout}`
+      : '',
   ].filter(Boolean)
 
   return output.join('\n\n')
@@ -1220,7 +1423,11 @@ GitHub Pages选择Actions发布静态build目录；上传步骤显式include-hid
 
 ### 页面布局与路由
 
-页面统一继承根布局的 header/footer。${appType === 'mobile-app' ? '页面放 src/lib/pages/**/*.svelte，hash 路由自动发现，刷新与前进后退恢复当前页。' : '使用 SvelteKit 自动文件路由，新增 +page.svelte 无需维护路由表；刷新定位与服务端鉴权保持一致。'}${appType === 'mobile-app' ? '\n\n选择 IAM 或 crypto 的移动客户端默认启用加密 transport，先初始化 crypto，再初始化 typed API client；结束时按相反顺序关闭。仅明确连接匹配的明文 API 时设置 PUBLIC_API_TRANSPORT=off；PUBLIC_API_KEY_EXCHANGE_PATH 仅覆盖公开协商子路径。握手失败不会退回明文，服务端私钥不进入客户端。未选择 crypto 的客户端保留明文 API 模式。' : ''}
+页面统一继承根布局的 header/footer。${appType === 'mobile-app'
+  ? '页面放 src/lib/pages/**/*.svelte，hash 路由自动发现，刷新与前进后退恢复当前页。'
+  : '使用 SvelteKit 自动文件路由，新增 +page.svelte 无需维护路由表；刷新定位与服务端鉴权保持一致。'}${appType === 'mobile-app'
+  ? '\n\n选择 IAM 或 crypto 的移动客户端默认启用加密 transport，先初始化 crypto，再初始化 typed API client；结束时按相反顺序关闭。仅明确连接匹配的明文 API 时设置 PUBLIC_API_TRANSPORT=off；PUBLIC_API_KEY_EXCHANGE_PATH 仅覆盖公开协商子路径。握手失败不会退回明文，服务端私钥不进入客户端。未选择 crypto 的客户端保留明文 API 模式。'
+  : ''}
 
 ### 开发
 
@@ -1345,10 +1552,18 @@ function generateFullstackReadme(name: string, pm: string, frontends: FrontendTa
 - \`packages/${name}-contract\`：前后端共享 API 契约、Zod Schema 与类型
 - \`packages/${name}-serv\`：后端 API Service（通过 \`@h-ai/serv\` 暴露最小 HTTP App 抽象，不直接暴露 Hono）
 - \`packages/${name}-shared\`：跨端共享 Shell、主题、语言切换、API client 与共享 messages
-- \`apps/${name}-web\`：Web 前端${frontends.includes('web') ? '' : '（未启用）'}
-- \`apps/${name}-app\`：移动端 App/H5 前端${frontends.includes('app') ? '' : '（未启用）'}
-- \`apps/${name}-desktop\`：桌面端前端${frontends.includes('desktop') ? '' : '（未启用）'}
-- \`apps/${name}-miniapp\`：小程序预留说明与本端 inlang messages${frontends.includes('miniapp') ? '（占位，不参与构建）' : '（未启用）'}
+- \`apps/${name}-web\`：Web 前端${frontends.includes('web')
+  ? ''
+  : '（未启用）'}
+- \`apps/${name}-app\`：移动端 App/H5 前端${frontends.includes('app')
+  ? ''
+  : '（未启用）'}
+- \`apps/${name}-desktop\`：桌面端前端${frontends.includes('desktop')
+  ? ''
+  : '（未启用）'}
+- \`apps/${name}-miniapp\`：小程序预留说明与本端 inlang messages${frontends.includes('miniapp')
+  ? '（占位，不参与构建）'
+  : '（未启用）'}
 
 已启用前端：${enabledFrontends || 'Web / App / Desktop'}
 
@@ -1399,7 +1614,9 @@ ${pm} typecheck
 ${pm} build
 ${pm} test
 ${pm} test:e2e
-${frontends.includes('desktop') ? `${pm} build --target desktop --platform windows # Windows 主机；Linux/macOS 在对应主机构建` : ''}
+${frontends.includes('desktop')
+  ? `${pm} build --target desktop --platform windows # Windows 主机；Linux/macOS 在对应主机构建`
+  : ''}
 \`\`\`
 
 Tauri 需要目标系统的 Rust target、SDK 和打包工具。测试产生的临时工程、截图、报告、容器、镜像与进程应在 finally/teardown 中自动清理，失败也执行。
@@ -1506,7 +1723,10 @@ export async function detectProject(cwd: string): Promise<ProjectInfo | null> {
 
   try {
     const pkg = await fse.readJson(pkgPath)
-    const deps = { ...pkg.dependencies, ...pkg.devDependencies }
+    const deps = {
+      ...pkg.dependencies,
+      ...pkg.devDependencies,
+    }
 
     const haiPackages = Object.keys(deps).filter(name => name.startsWith('@h-ai/'))
 

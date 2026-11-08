@@ -173,6 +173,9 @@ export function decryptResource(
   decipher.setAuthTag(authTag)
   decipher.setAAD(Buffer.from(associatedData))
 
-  const decrypted = Buffer.concat([decipher.update(data), decipher.final()])
+  const decrypted = Buffer.concat([
+    decipher.update(data),
+    decipher.final(),
+  ])
   return decrypted.toString('utf-8')
 }

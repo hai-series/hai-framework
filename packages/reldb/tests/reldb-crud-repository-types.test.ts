@@ -238,7 +238,11 @@ describe('db.BaseReldbCrudRepository types', () => {
       await reldb.ddl.dropTable('articles', true)
       const repo = new ArticleRepository()
 
-      const metadata = { author: 'Alice', priority: 1, nested: { key: 'value' } }
+      const metadata = {
+        author: 'Alice',
+        priority: 1,
+        nested: { key: 'value' },
+      }
       await repo.create({ title: '有元数据的文章', metadata })
 
       const result = await repo.findById(1)
@@ -266,9 +270,14 @@ describe('db.BaseReldbCrudRepository types', () => {
       await reldb.ddl.dropTable('articles', true)
       const repo = new ArticleRepository()
 
-      await repo.create({ title: '文章', metadata: { v: 1 } })
+      await repo.create({
+        title: '文章',
+        metadata: { v: 1 },
+      })
 
-      await repo.updateById(1, { metadata: { v: 2, extra: 'field' } })
+      await repo.updateById(1, {
+        metadata: { v: 2, extra: 'field' },
+      })
 
       const result = await repo.findById(1)
       expect(result.success).toBe(true)
@@ -541,8 +550,22 @@ describe('db.BaseReldbCrudRepository types', () => {
             table: 'manual_table',
             idColumn: 'id',
             fields: [
-              { fieldName: 'id', columnName: 'id', def: { type: 'INTEGER', primaryKey: true, autoIncrement: true }, select: true, create: false, update: false },
-              { fieldName: 'val', columnName: 'val', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: true },
+              {
+                fieldName: 'id',
+                columnName: 'id',
+                def: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+                select: true,
+                create: false,
+                update: false,
+              },
+              {
+                fieldName: 'val',
+                columnName: 'val',
+                def: { type: 'TEXT', notNull: true },
+                select: true,
+                create: true,
+                update: true,
+              },
             ],
             createTableIfNotExists: false,
           })

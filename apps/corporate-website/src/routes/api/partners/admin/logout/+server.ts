@@ -1,5 +1,5 @@
-import { clearPartnerAdminSession } from '$lib/server/partner-service.js'
 import { kit } from '@h-ai/kit'
+import { clearPartnerAdminSession } from '#lib/server/partner-service.js'
 
 export const POST = kit.handler(async ({ cookies }) => {
   const token = cookies.get('corp_partner_access_token')

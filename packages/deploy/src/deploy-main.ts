@@ -78,7 +78,9 @@ function createProviderByType(type: string): DeployProvider {
     case 'vercel':
       return createVercelProvider()
     default:
-      throw new Error(deployM('deploy_unsupportedProviderType', { params: { type } }))
+      throw new Error(deployM('deploy_unsupportedProviderType', {
+        params: { type },
+      }))
   }
 }
 
@@ -103,7 +105,9 @@ function createProvisionerByName(provisioner: string): ServiceProvisioner {
     case 'aliyun':
       return createAliyunProvisioner()
     default:
-      throw new Error(deployM('deploy_unsupportedProvisionerType', { params: { type: provisioner } }))
+      throw new Error(deployM('deploy_unsupportedProvisionerType', {
+        params: { type: provisioner },
+      }))
   }
 }
 
@@ -152,8 +156,12 @@ function mergeProvisionEnv(results: ProvisionResult[], scan?: ScanResult, option
           return item.service === prov.serviceType && (!mode || mode === 'default')
         })
         if (targets.length) {
-          for (const target of targets)
-            reachProviders[reachRequirements.indexOf(target)] = { ...mergeManagedMiddlewareConfig(target, provider), name: target.config.name ?? provider.name }
+          for (const target of targets) {
+            reachProviders[reachRequirements.indexOf(target)] = {
+              ...mergeManagedMiddlewareConfig(target, provider),
+              name: target.config.name ?? provider.name,
+            }
+          }
         }
         else {
           reachProviders.push(provider)
@@ -162,7 +170,9 @@ function mergeProvisionEnv(results: ProvisionResult[], scan?: ScanResult, option
     }
     for (const [name, value] of Object.entries(prov.envVars)) {
       const requirement = scan?.middlewares?.find(item => item.envPrefix === name)
-      env[name] = requirement ? JSON.stringify(mergeManagedMiddlewareConfig(requirement, JSON.parse(value))) : value
+      env[name] = requirement
+        ? JSON.stringify(mergeManagedMiddlewareConfig(requirement, JSON.parse(value)))
+        : value
     }
   }
   if (hasReachOutput)
@@ -208,7 +218,9 @@ export const deploy: DeployFunctions = {
       logger.warn('Deploy init already in progress, skipping concurrent call')
       return err(
         HaiDeployError.CONFIG_ERROR,
-        deployM('deploy_configError', { params: { error: 'init already in progress' } }),
+        deployM('deploy_configError', {
+          params: { error: 'init already in progress' },
+        }),
       )
     }
     initInProgress = true
@@ -226,7 +238,9 @@ export const deploy: DeployFunctions = {
         logger.error('Deploy config validation failed', { error: parseResult.error.message })
         return err(
           HaiDeployError.CONFIG_ERROR,
-          deployM('deploy_configError', { params: { error: parseResult.error.message } }),
+          deployM('deploy_configError', {
+            params: { error: parseResult.error.message },
+          }),
           parseResult.error,
         )
       }
@@ -281,7 +295,9 @@ export const deploy: DeployFunctions = {
         currentConfig = parsed
         logger.info('Deploy module initialized', {
           provider: parsed.provider.type,
-          provisioners: [...currentProvisioners.keys()],
+          provisioners: [
+            ...currentProvisioners.keys(),
+          ],
         })
         return ok(undefined)
       }
@@ -295,7 +311,11 @@ export const deploy: DeployFunctions = {
         return err(
           HaiDeployError.CONFIG_ERROR,
           deployM('deploy_configError', {
-            params: { error: error instanceof Error ? error.message : String(error) },
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
           }),
           error,
         )
@@ -359,7 +379,12 @@ export const deploy: DeployFunctions = {
           resources: [
             ...results.map(({ envVars: _envVars, ...resource }) => resource),
             ...(getDeployRecovery(provResult.error)?.resources ?? [
-              { serviceType, provisionerName: provisioner.name, resourceInfo: projectName, resourceStatus: 'unknown' as const },
+              {
+                serviceType,
+                provisionerName: provisioner.name,
+                resourceInfo: projectName,
+                resourceStatus: 'unknown' as const,
+              },
             ]),
           ],
         })
@@ -408,15 +433,25 @@ export const deploy: DeployFunctions = {
         }
       }
       catch {
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path: projectFile, line: '1' } }))
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
+          params: { path: projectFile, line: '1' },
+        }))
       }
     }
     const appEnv = Object.fromEntries(Object.entries(environment.data.values).filter(([key]) => key !== 'HAI_DEPLOY' && !connectionVariables.has(key) && !key.startsWith('HAI_CLI_') && (!key.startsWith('HAI_DEPLOY_') || key === 'HAI_DEPLOY_ENVIRONMENT')))
-    const projectName = `${normalizeProjectName(scan.appName)}${scanOptions.environment ? `-${environment.data.environment}` : ''}`
+    const projectName = `${normalizeProjectName(scan.appName)}${scanOptions.environment
+      ? `-${environment.data.environment}`
+      : ''}`
     options = {
       ...options,
-      ...(scanOptions.environment ? { environment: environment.data.environment } : {}),
-      ...(options?.skipMiddleware ? { serviceModes: Object.fromEntries(scan.requiredServices.map(service => [service, 'keep' as const])) } : {}),
+      ...(scanOptions.environment
+        ? { environment: environment.data.environment }
+        : {}),
+      ...(options?.skipMiddleware
+        ? {
+            serviceModes: Object.fromEntries(scan.requiredServices.map(service => [service, 'keep' as const])),
+          }
+        : {}),
     }
     if (options.selectedServices) {
       options.serviceModes = {
@@ -457,12 +492,17 @@ export const deploy: DeployFunctions = {
     let allEnvVars: Record<string, string> = appEnv
     const recovery: DeployRecoveryInfo = { projectName, stage: 'provision', resources: [] }
     if (!options?.skipMiddleware) {
-      const provResults = await deploy.provisionAll(projectName, options?.serviceModes ? scan.requiredServices.filter(service => usesDefaultMiddleware(scan, service, options)) : undefined)
+      const provResults = await deploy.provisionAll(projectName, options?.serviceModes
+        ? scan.requiredServices.filter(service => usesDefaultMiddleware(scan, service, options))
+        : undefined)
       if (!provResults.success) {
         return err(provResults.error)
       }
       recovery.resources = provResults.data.map(({ envVars: _envVars, ...resource }) => resource)
-      allEnvVars = { ...allEnvVars, ...mergeProvisionEnv(provResults.data, scan, options) }
+      allEnvVars = {
+        ...allEnvVars,
+        ...mergeProvisionEnv(provResults.data, scan, options),
+      }
       if (options?.environment) {
         const saved = saveDeploymentEnvironment(environment.data, mergeProvisionEnv(provResults.data, scan, options))
         if (!saved.success)
@@ -566,12 +606,23 @@ async function deployContainerApp(
 
   let provisionEnv: Record<string, string> = {}
   if (!options?.skipMiddleware) {
-    const provResults = await deploy.provisionAll(projectName, options?.serviceModes ? scan.requiredServices.filter(service => usesDefaultMiddleware(scan, service, options)) : undefined)
+    const provResults = await deploy.provisionAll(projectName, options?.serviceModes
+      ? scan.requiredServices.filter(service => usesDefaultMiddleware(scan, service, options))
+      : undefined)
     if (!provResults.success) {
       return err(provResults.error)
     }
     provisionEnv = mergeProvisionEnv(provResults.data, scan, options)
   }
 
-  return provider.deploy({ appDir, artifact, artifactDir, projectName, scan, provisionEnv, appEnv, options })
+  return provider.deploy({
+    appDir,
+    artifact,
+    artifactDir,
+    projectName,
+    scan,
+    provisionEnv,
+    appEnv,
+    options,
+  })
 }

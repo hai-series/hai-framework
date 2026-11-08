@@ -80,7 +80,9 @@ function matchesRecord<T>(record: StoredValue, filter: StoreFilter<T>): boolean 
   if (filter.refId !== undefined && record.scope?.refId !== filter.refId)
     return false
   if (filter.status !== undefined) {
-    const statuses = Array.isArray(filter.status) ? filter.status : [filter.status]
+    const statuses = Array.isArray(filter.status)
+      ? filter.status
+      : [filter.status]
     if (!record.scope?.status || !statuses.includes(record.scope.status))
       return false
   }
@@ -120,7 +122,9 @@ function createRelStore<T>(records: Map<string, StoredValue>): AIRelStore<T> {
 
     if (filter.orderBy) {
       const { field, direction } = filter.orderBy
-      const multiplier = direction === 'asc' ? 1 : -1
+      const multiplier = direction === 'asc'
+        ? 1
+        : -1
       values = values.sort((left, right) => compare(left[field], right[field]) * multiplier)
     }
     if (filter.limit !== undefined)
@@ -134,7 +138,12 @@ function createRelStore<T>(records: Map<string, StoredValue>): AIRelStore<T> {
     },
     async readVersioned(id) {
       const record = records.get(id)
-      return record ? { version: record.version, data: structuredClone(record.data) as T } : undefined
+      return record
+        ? {
+            version: record.version,
+            data: structuredClone(record.data) as T,
+          }
+        : undefined
     },
     async compareAndSwap(id, input) {
       if (input.notAfter !== undefined && !Number.isSafeInteger(input.notAfter))
@@ -143,15 +152,28 @@ function createRelStore<T>(records: Map<string, StoredValue>): AIRelStore<T> {
       if (record?.version !== input.expectedVersion || (input.notAfter !== undefined && Date.now() >= input.notAfter))
         return undefined
       const version = crypto.randomUUID()
-      records.set(id, { version, data: structuredClone(input.data), scope: structuredClone(input.scope ?? record?.scope) })
+      records.set(id, {
+        version,
+        data: structuredClone(input.data),
+        scope: structuredClone(input.scope ?? record?.scope),
+      })
       return version
     },
     async save(id, data, scope) {
-      records.set(id, { version: crypto.randomUUID(), data: structuredClone(data), scope: structuredClone(scope) })
+      records.set(id, {
+        version: crypto.randomUUID(),
+        data: structuredClone(data),
+        scope: structuredClone(scope),
+      })
     },
     async saveMany(items) {
-      for (const item of items)
-        records.set(item.id, { version: crypto.randomUUID(), data: structuredClone(item.data), scope: structuredClone(item.scope) })
+      for (const item of items) {
+        records.set(item.id, {
+          version: crypto.randomUUID(),
+          data: structuredClone(item.data),
+          scope: structuredClone(item.scope),
+        })
+      }
     },
     async get(id) {
       return structuredClone(records.get(id)?.data) as T | undefined
@@ -213,7 +235,10 @@ function cosineSimilarity(left: number[], right: number[]): number {
 function createVectorStore(vectors: Map<string, StoredVector>): AIVectorStore {
   return {
     async upsert(id, vector, metadata) {
-      vectors.set(id, { vector: [...vector], metadata })
+      vectors.set(id, {
+        vector: [...vector],
+        metadata,
+      })
     },
     async search(vector, options = {}) {
       const matches = Array.from(vectors.entries())
@@ -223,7 +248,9 @@ function createVectorStore(vectors: Map<string, StoredVector>): AIVectorStore {
         .map(([id, item]) => ({
           id,
           score: cosineSimilarity(vector, item.vector),
-          content: typeof item.metadata?.content === 'string' ? item.metadata.content : undefined,
+          content: typeof item.metadata?.content === 'string'
+            ? item.metadata.content
+            : undefined,
           metadata: item.metadata,
         }))
         .filter(item => item.score >= (options.minScore ?? 0))

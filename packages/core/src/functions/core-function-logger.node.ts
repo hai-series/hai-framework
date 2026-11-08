@@ -76,8 +76,12 @@ function configureLogger(config: Partial<LoggingConfig>): void {
     globalFormat = config.format
     outputRevision++
   }
-  if (config.context)
-    globalContext = { ...globalContext, ...config.context }
+  if (config.context) {
+    globalContext = {
+      ...globalContext,
+      ...config.context,
+    }
+  }
   if (config.redact) {
     globalRedact = [...config.redact]
     outputRevision++
@@ -134,11 +138,21 @@ function wrapPino(resolvePino: () => pino.Logger, resolveContext: () => Record<s
     const output = resolvePino()
     if (!output.isLevelEnabled(level))
       return
-    const context = sanitizeLogContext({ ...resolveContext(), ...ctx, ...requestContext.get() }) ?? {}
+    const context = sanitizeLogContext({
+      ...resolveContext(),
+      ...ctx,
+      ...requestContext.get(),
+    }) ?? {}
     message = sanitize.sanitizeText(message)
     output[level](context, message)
-    if (!requestContext.get().suppressLogObservers)
-      emitLogRecord({ timestamp: Date.now(), level, message, context })
+    if (!requestContext.get().suppressLogObservers) {
+      emitLogRecord({
+        timestamp: Date.now(),
+        level,
+        message,
+        context,
+      })
+    }
   }
   return {
     trace(message: string, ctx?: LogContext) {
@@ -161,7 +175,10 @@ function wrapPino(resolvePino: () => pino.Logger, resolveContext: () => Record<s
     },
     child(childContext: Record<string, unknown>): Logger {
       // 只保存本地上下文，输出时继承父级的当前配置；不绑定旧 pino child。
-      return wrapPino(resolvePino, () => ({ ...resolveContext(), ...childContext }))
+      return wrapPino(resolvePino, () => ({
+        ...resolveContext(),
+        ...childContext,
+      }))
     },
   }
 }
@@ -179,7 +196,10 @@ function wrapPino(resolvePino: () => pino.Logger, resolveContext: () => Record<s
  * ```
  */
 function createLogger(options: LoggerOptions = {}): Logger {
-  const localOptions = { ...options, context: { ...options.context } }
+  const localOptions = {
+    ...options,
+    context: { ...options.context },
+  }
   let revision = outputRevision
   let output = createPinoOutput(localOptions)
   const resolvePino = (): pino.Logger => {
@@ -194,7 +214,10 @@ function createLogger(options: LoggerOptions = {}): Logger {
       output.instance.level = level
     return output.instance
   }
-  return wrapPino(resolvePino, () => ({ ...globalContext, ...localOptions.context }))
+  return wrapPino(resolvePino, () => ({
+    ...globalContext,
+    ...localOptions.context,
+  }))
 }
 
 /** 底层输出只负责格式和脱敏；已有包装在输出时应用当前全局配置。 */
@@ -253,7 +276,10 @@ function createPinoOutput(options: LoggerOptions): { instance: pino.Logger, clos
     pinoInstance = pino(pinoOptions)
   }
 
-  return { instance: pinoInstance, close: () => transport?.end() }
+  return {
+    instance: pinoInstance,
+    close: () => transport?.end(),
+  }
 }
 
 function isPrettyTransportAvailable(): boolean {

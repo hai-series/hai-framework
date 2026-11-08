@@ -7,18 +7,21 @@
  */
 
 import type { TransportEncryptionOptions } from '@h-ai/kit'
-import type { Handle } from '@sveltejs/kit'
+import type { Handle } from '@sveltejs/kit/hooks'
 import process from 'node:process'
-import { base } from '$app/paths'
-import { paraglideMiddleware } from '$lib/paraglide/server.js'
-import { initApp } from '$lib/server/init.js'
-import { getAdminKitConfig } from '$lib/server/kit-config.js'
+import { resolve } from '$app/paths'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { createReldbTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { reldb } from '@h-ai/reldb'
+import { paraglideMiddleware } from '#lib/paraglide/server.js'
+import { initApp } from '#lib/server/init.js'
+import { getAdminKitConfig } from '#lib/server/kit-config.js'
+
+// Vite 配置固定 paths.relative=false，HTTP 前缀不会随 SSR 页面深度改变。
+const base = resolve('/').replace(/\/$/, '')
 
 // 初始化应用（包含数据库、缓存、IAM 等模块）
 let appInitPromise: Promise<void> | null = null
@@ -106,7 +109,9 @@ async function createHaiHandle(): Promise<Handle> {
         routePlaintextBytes: kitTransportConfig.routePlaintextBytes,
         excludePaths: [...kitTransportConfig.excludePaths],
       }
-  const transportPublicPaths = kitTransportConfig === false ? [] : [kitTransportConfig.keyExchangePath]
+  const transportPublicPaths = kitTransportConfig === false
+    ? []
+    : [kitTransportConfig.keyExchangePath]
   let managedTransport: TransportEncryptionOptions | undefined
   if (handleTransportConfig !== false) {
     if (!crypto.isInitialized) {
@@ -117,13 +122,20 @@ async function createHaiHandle(): Promise<Handle> {
     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     if (!ring.success)
       throw new Error(ring.error.message)
-    managedTransport = { ...handleTransportConfig, basePath: base, serverKeyRing: ring.data, keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }) }
+    managedTransport = {
+      ...handleTransportConfig,
+      basePath: base,
+      serverKeyRing: ring.data,
+      keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),
+    }
   }
 
   return kit.createHandle({
     trustedProxies: kitConfig.trustedProxies,
     access: kitConfig.access,
-    middleware: [(_context, next) => core.context.run({ scopeId: 'admin-console' }, next)],
+    middleware: [
+      (_context, next) => core.context.run({ scopeId: 'admin-console' }, next),
+    ],
     auth: {
       verifyToken: validateSession,
       loginUrl: '/auth/login',
@@ -143,7 +155,9 @@ async function createHaiHandle(): Promise<Handle> {
     rateLimit: {
       store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'admin-console', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1' }),
       windowMs: 60000,
-      maxRequests: process.env.HAI_E2E === '1' ? 5000 : 100,
+      maxRequests: process.env.HAI_E2E === '1'
+        ? 5000
+        : 100,
     },
     crypto: managedTransport === undefined
       ? undefined

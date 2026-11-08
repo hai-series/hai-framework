@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { cache } from '../src/index.js'
 import { acquireRedisContainer } from './helpers/redis-container.js'
 
-describe.sequential('redis lifecycle ownership', () => {
+describe('redis lifecycle ownership', { concurrent: false }, () => {
   let lease: Awaited<ReturnType<typeof acquireRedisContainer>> | undefined
   let observer: Redis | undefined
   beforeAll(async () => {

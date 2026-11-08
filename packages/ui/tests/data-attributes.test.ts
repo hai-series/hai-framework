@@ -29,7 +29,9 @@ const COMPONENT_INDEX_FILES = [
 function readExportedSvelteComponents(): string[] {
   return COMPONENT_INDEX_FILES.flatMap((indexFile) => {
     const source = readFileSync(indexFile, 'utf8')
-    return [...source.matchAll(/export\s+\{\s+default\s+as\s+\w+\s+\}\s+from\s+'(?<path>[^']+\.svelte)'/g)]
+    return [
+      ...source.matchAll(/export\s+\{\s+default\s+as\s+\w+\s+\}\s+from\s+'(?<path>[^']+\.svelte)'/g),
+    ]
       .map((match) => {
         const componentPath = match.groups?.path
         if (!componentPath)
@@ -74,7 +76,10 @@ describe('公开 Svelte 组件 data-* 透传', () => {
 
   it('纯组件包装的CrudFilterBar仍将data-*传到真实工具栏宿主', async () => {
     const target = document.body.appendChild(document.createElement('div'))
-    const component = mount(CrudFilterBar, { target, props: { 'data-testid': 'orders-filters', 'data-loading': false, 'data-count': 0 } })
+    const component = mount(CrudFilterBar, {
+      target,
+      props: { 'data-testid': 'orders-filters', 'data-loading': false, 'data-count': 0 },
+    })
     try {
       flushSync()
       const host = target.querySelector('[data-testid="orders-filters"]')

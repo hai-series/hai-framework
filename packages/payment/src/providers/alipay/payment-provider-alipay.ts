@@ -156,7 +156,9 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
     if (common.data.code !== '10000') {
       // 仅保留有界的渠道错误标识；msg/sub_msg 可能含订单、买家信息，不得透传。
       const subCode = common.data.sub_code
-      const suffix = subCode && /^[\w.-]{1,80}$/.test(subCode) ? `, sub_code=${subCode}` : ''
+      const suffix = subCode && /^[\w.-]{1,80}$/.test(subCode)
+        ? `, sub_code=${subCode}`
+        : ''
       throw new Error(`Alipay business request failed (code=${common.data.code}${suffix})`)
     }
 
@@ -185,7 +187,9 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
             total_amount: formatFenAmount(input.amount),
             subject: input.description,
             product_code: 'QUICK_WAP_WAY',
-            passback_params: input.metadata ? encodeURIComponent(JSON.stringify(input.metadata)) : undefined,
+            passback_params: input.metadata
+              ? encodeURIComponent(JSON.stringify(input.metadata))
+              : undefined,
           }),
         }
         return ok({
@@ -193,7 +197,10 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
           tradeType: 'h5',
           clientParams: {
             gateway,
-            fields: { ...fields, sign: signAlipayParams(fields, config.privateKey, signType) },
+            fields: {
+              ...fields,
+              sign: signAlipayParams(fields, config.privateKey, signType),
+            },
           },
         })
       }
@@ -223,7 +230,9 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         }
         // 允许渠道跨日重试；重放靠持久 eventId 和订单状态 CAS，不套用微信的五分钟窗口。
         const notifiedAt = parseAlipayTime(params.notify_time)!
-        const paidAt = params.gmt_payment ? parseAlipayTime(params.gmt_payment) : undefined
+        const paidAt = params.gmt_payment
+          ? parseAlipayTime(params.gmt_payment)
+          : undefined
         if (notifiedAt.getTime() > Date.now() + 300_000
           || (paidAt && paidAt.getTime() > notifiedAt.getTime() + 300_000)) {
           throw new Error('Invalid Alipay notification time')
@@ -243,7 +252,9 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
           amount: parseAlipayAmount(params.total_amount),
           currency: 'CNY',
           status: statusMap[params.trade_status],
-          paidAt: ['TRADE_SUCCESS', 'TRADE_FINISHED'].includes(params.trade_status) ? paidAt : undefined,
+          paidAt: ['TRADE_SUCCESS', 'TRADE_FINISHED'].includes(params.trade_status)
+            ? paidAt
+            : undefined,
           raw: params,
         })
       }
@@ -282,7 +293,9 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
           status: statusMap[data.trade_status],
           amount: parseAlipayAmount(data.total_amount),
           // 支付宝时间为北京时间，不能依赖节点的本地时区解释。
-          paidAt: data.send_pay_date ? parseAlipayTime(data.send_pay_date) : undefined,
+          paidAt: data.send_pay_date
+            ? parseAlipayTime(data.send_pay_date)
+            : undefined,
         })
       }
       catch (cause) {
@@ -317,7 +330,9 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         return ok({
           refundNo: input.refundNo,
           refundId: data.trade_no,
-          status: data.fund_change === 'Y' ? 'success' : 'processing',
+          status: data.fund_change === 'Y'
+            ? 'success'
+            : 'processing',
         })
       }
       catch (cause) {

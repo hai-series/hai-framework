@@ -88,7 +88,9 @@ describe('readTransportBody', () => {
 
   it('空流和零预算只允许实际空正文', async () => {
     await expect(readTransportBody(null, { maxBytes: 0 })).resolves.toBe('')
-    const stream = new ReadableStream<Uint8Array>({ start: controller => controller.close() })
+    const stream = new ReadableStream<Uint8Array>({
+      start: controller => controller.close(),
+    })
     await expect(readTransportBody(stream, { maxBytes: 0 })).resolves.toBe('')
   })
 })

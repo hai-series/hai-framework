@@ -10,7 +10,11 @@ async function capture(page: Page, name: string) {
   const directory = process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve('test-results/auth-errors')
   await mkdir(directory, { recursive: true })
   await page.evaluate(() => document.fonts.ready)
-  await page.screenshot({ path: path.join(directory, `${name}.png`), fullPage: true, animations: 'disabled' })
+  await page.screenshot({
+    path: path.join(directory, `${name}.png`),
+    fullPage: true,
+    animations: 'disabled',
+  })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 }
 

@@ -1085,7 +1085,7 @@
   "gallery_demo_combobox_searchable_select_bits_ui": "Combobox · searchable select (Bits UI)",
   "gallery_demo_confirm_dialog": "Confirm dialog",
   "gallery_demo_crud_components": "CRUD components",
-  "gallery_demo_iam_user_role_and_permission_pages_use_these": "IAM user, role, and permission pages use these CRUD components with the @h-ai/kit/client navigation adapter for URL synchronization and invalidateAll refreshes.",
+  "gallery_demo_iam_user_role_and_permission_pages_use_these": "IAM user, role, and permission pages use these CRUD components with the @h-ai/kit/client navigation adapter for URL synchronization and refreshAll refreshes.",
   "gallery_demo_crud_pages": "CRUD pages",
   "gallery_demo_datatable": "DataTable",
   "gallery_demo_drawer": "Drawer",

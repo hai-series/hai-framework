@@ -33,17 +33,18 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### build 的可选参数
 
-| 参数                       | 用途                                      |
-| -------------------------- | ----------------------------------------- |
-| `--target`                 | compile（默认）、image、app、desktop      |
-| `--images`                 | serv、web 或 serv,web；只构建导出所选镜像 |
-| `--runtime`                | auto（优先 Podman）、podman、docker       |
-| `--network`                | 容器构建网络，默认引擎设置                |
-| `--no-http-proxy`          | 禁用本次构建代理（等价 none）             |
-| `--sqlite-prebuild-mirror` | SQLite 预编译包的可信 HTTP(S) 根地址      |
-| `--platform` / `--arch`    | 原生安装包的系统与架构                    |
+| 参数                    | 用途                                      |
+| ----------------------- | ----------------------------------------- |
+| `--target`              | compile（默认）、image、app、desktop      |
+| `--images`              | serv、web 或 serv,web；只构建导出所选镜像 |
+| `--runtime`             | auto（优先 Podman）、podman、docker       |
+| `--network`             | 容器构建网络，默认引擎设置                |
+| `--no-http-proxy`       | 禁用本次构建代理（等价 none）             |
+| `--platform` / `--arch` | 原生安装包的系统与架构                    |
 
 #### 下载源和代理
+
+SQLite 13 的原生二进制随 npm 包交付，使用同一 npm 源，无须额外下载器。已有工程升级时删除旧 SQLite 镜像参数并同步 Dockerfile；构建会实际打开内存数据库，确认目标平台的二进制可加载。
 
 `--image-source official|cn|custom` 同时作用于应用基础镜像和打包时缺少的中间件镜像。`--npm-source` 随 `--build` 控制 Corepack/pnpm；cn 使用毫秒镜像的 Docker Hub/GHCR 通道和 npmmirror。首次交互保存 `hai.json.build.sources`，命令覆盖只作用本次。代理使用 `--proxy-mode inherit|system|custom|none`、`--proxy-url` 与 `--proxy-bypass`；`--no-http-proxy` 等价 none。Docker/远程 Podman 的镜像拉取代理须在引擎侧设置，构建容器另做可达性检查。自定义源、平台范围及旧模板迁移见[下载源和代理](../../docs/usage/configuration/delivery.md#下载源和代理)。
 
@@ -129,6 +130,8 @@ CLI 的 --project-name 与 SDK 的 DeployAppOptions.projectName 覆盖入口已�
 所有 `HAI_*` 统一使用：进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML。同来源 JSON 为基础，细项继续覆盖；高来源整段替换先清掉低来源细项。Node/Vite 与部署共用 Core 合并，不维护模块专用顺序。
 
 公共配置保存在 `.env` 和 `.env.<mode>`，连接凭据与 SSH 配置保存在忽略 Git 的 `.env.<mode>.local`，`.env.local` 用于本机共享私有值。构建不读取部署秘密。
+
+HTTP API 的自定义请求头整体视为秘密，不按头名猜测是否包含凭据。保存已有环境时，缩进、`export` 与多行引号的旧项也会从同模式公共文件移入私有文件，避免原值残留。
 
 已有项目需把原构建对象移入 `hai.json.build`，把原部署 YAML 转成 JSON 放入 `hai.json.deploy`，删除原文件并保留现有 `HAI_DEPLOY_*` 变量。已有自建 S3 的项目首次升级必须全量部署：旧成功基线仍含已退出的一次性初始化服务，直接使用新增量包会被依赖存活检查拒绝；全量部署同时刷新中间件环境中的 `createBucket`，之后即可继续增量更新。
 
@@ -239,6 +242,8 @@ SDK 在服务器本地健康通过并提交 `current` 后，还从操作机检�
 
 `pnpm run deploy` 为所有容器模板统一提供“不启用 / 已有 PEM 证书和私钥路径 / Let’s Encrypt”。相对路径以工程根为基准，已有证书校验域名、有效期和密钥匹配后复制到私有发布包。Let’s Encrypt 使用固定版本官方 Certbot 镜像申请，每 12 小时检查续期，Nginx 自动重载。需要确认服务条款、真实邮箱、公网 DNS、80 端口和 CA 网络；隔离环境使用已有证书。证书状态保留在服务器，私钥不进入应用镜像。`--yes` 复用保存配置。
 
+只接受末级无软链接或硬链接的普通 PEM 文件，每份不超过 1 MiB；父目录仍须可信。Certbot `live/` 的软链接需安全复制为受控目录中的普通文件，或使用框架 `letsencrypt` 模式。
+
 配置为 `hai.json.deploy.provider.expose.https`，也可用环境私有文件覆盖。默认 HTTPS 443、HTTP 跳转开启，未配置保持 HTTP；启停或更改模式、域名、端口、本地证书需全量部署。配置和续期边界见[HTTPS 手册](../../docs/usage/configuration/delivery.md#可选https证书)。`--plan` 的 `root` 表示工程根，`serviceDir` 表示部署服务源码与配置目录，仅显示公开证书元数据。
 
 ### SDK
@@ -246,7 +251,12 @@ SDK 在服务器本地健康通过并提交 `current` 后，还从操作机检�
 ```ts
 import { deploy } from '@h-ai/deploy'
 
-const initialized = await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 18080 } } })
+const initialized = await deploy.init({
+  provider: {
+    type: 'docker-ssh',
+    expose: { hostPort: 18080 }
+  }
+})
 if (!initialized.success)
   throw new Error(initialized.error.message)
 try {
@@ -277,6 +287,10 @@ finally {
 SSH 中断始终先记 `remoteExecution: 'unknown'`。docker-ssh SDK 用新连接只读核对 `result-<deploymentId>.json`，仅完整、未截断且 ID 匹配的终态记录可确认 `finished`，同时给出真实阶段及退出码；脚本结束不表示容器停止。即使终态退出码为 0，原 SSH/输出失败仍保留为失败，避免丢失回执被伪装成成功。CLI 分别显示本地和远端状态及结果路径；缺结果、旧 ID、损坏内容或重连失败均保持未知，不自动重跑发布或回滚。手工上传脚本在 SSH 失败时保守提示未知和核对目录，部署 ID 见包内 manifest。先核对步骤文件、`current`、真实服务与数据，再决定恢复。
 
 ### 运行环境文件与重复部署
+
+SvelteKit SSR 的 HTTP/HTTPS 均使用独立 `gateway`，后端不公开端口。网关覆盖标准转发头，Compose 固定 adapter 的协议/Host/客户端地址信任；这些值不接受业务运行文件覆盖。adapter-node 6 不再读取运行期 `ORIGIN`，应用默认不固定构建期 `paths.origin`；旧直接公开 SSR 的部署须用当前工具重新生成全量交付包。
+
+外层 TLS 终止须将负载均衡真实 IP/CIDR 加入 `trustedEdgeProxies`；独立 gateway 仅对白名单真实对端接受单值 `http` / `https`，其他来源和组合值使用本连接协议，外部 `Forwarded` 与主机/端口转发头不直接透传。
 
 Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>/config/.env.runtime`。应用配置与托管连接在此合并，修改 `HAI_STORAGE_PUBLICENDPOINT` 等细项后重启对应后端即可；同一来源的细项覆盖父 JSON。配置目录只读挂载到 `/run/hai/config`，编辑器原子替换文件也会被下一次启动读取。私有代理标记和 Node 启动参数由部署装配管理；静态 Web、中间件原生环境、端口/挂载、Nginx 路由与限额变更仍需部署。仅更新 Web/中间件保留当前应用配置；后端局部更新保留服务器托管连接，其余值来自新包，全量更新采用新包并按已有凭据状态定稿。手工修改先备份，长期配置同步回源环境。
 

@@ -3,10 +3,10 @@ import process from 'node:process'
  * Contact Form API — 使用 @h-ai/reach 发送邮件通知
  */
 
-import * as m from '$lib/paraglide/messages.js'
 import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
 import { z } from 'zod'
+import * as m from '#lib/paraglide/messages.js'
 
 const ContactSchema = z.object({
   name: z.string().min(1).max(50),
@@ -15,7 +15,11 @@ const ContactSchema = z.object({
 })
 
 export const POST = kit.handler(async ({ request, locals }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   const { name, email, message } = await kit.validate.body(request, ContactSchema)
 
   const reachModule = await import('@h-ai/reach')
@@ -28,7 +32,10 @@ export const POST = kit.handler(async ({ request, locals }) => {
       emailDomain: email.split('@')[1] ?? 'unknown',
       messageLength: message.length,
     })
-    return kit.response.ok({ sent: false, message: m.api_contact_unconfigured({}, { locale }) })
+    return kit.response.ok({
+      sent: false,
+      message: m.api_contact_unconfigured({}, { locale }),
+    })
   }
 
   const recipient = process.env.HAI_CONTACT_RECIPIENT?.trim()
@@ -37,7 +44,10 @@ export const POST = kit.handler(async ({ request, locals }) => {
       emailDomain: email.split('@')[1] ?? 'unknown',
       messageLength: message.length,
     })
-    return kit.response.ok({ sent: false, message: m.api_contact_unconfigured({}, { locale }) })
+    return kit.response.ok({
+      sent: false,
+      message: m.api_contact_unconfigured({}, { locale }),
+    })
   }
 
   const result = await reachModule.send({
@@ -49,8 +59,14 @@ export const POST = kit.handler(async ({ request, locals }) => {
 
   if (!result.success) {
     core.logger.error('Failed to send contact email', { error: result.error?.message ?? 'unknown error' })
-    return kit.response.ok({ sent: false, message: m.api_contact_failed({}, { locale }) })
+    return kit.response.ok({
+      sent: false,
+      message: m.api_contact_failed({}, { locale }),
+    })
   }
 
-  return kit.response.ok({ sent: true, message: m.api_contact_sent({}, { locale }) })
+  return kit.response.ok({
+    sent: true,
+    message: m.api_contact_sent({}, { locale }),
+  })
 })

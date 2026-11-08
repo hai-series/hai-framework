@@ -22,16 +22,43 @@ describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage clie
   async function removeFixture(root: string): Promise<void> {
     if (path.dirname(root) !== path.resolve(tmpdir()) || !path.basename(root).startsWith('hai-storage-browser-'))
       throw new Error('Unexpected browser fixture cleanup directory')
-    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    await rm(root, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    })
   }
 
   beforeAll(async () => {
     temporary = await mkdtemp(path.join(tmpdir(), 'hai-storage-browser-'))
     const browserConfig = path.join(temporary, 'tsconfig.json')
     // 不继承源码开发别名，才能让真实package.exports按browser条件选择Core入口。
-    await writeFile(browserConfig, JSON.stringify({ compilerOptions: { noEmit: true, target: 'ES2022', module: 'ESNext', moduleResolution: 'bundler' } }))
+    await writeFile(browserConfig, JSON.stringify({
+      compilerOptions: {
+        noEmit: true,
+        target: 'ES2022',
+        module: 'ESNext',
+        moduleResolution: 'bundler',
+      },
+    }))
     // 已有构建器打包真实源码与 Core browser 入口，不使用另一个上传实现。
-    await build({ config: false, tsconfig: browserConfig, entry: { client: fileURLToPath(new URL('../src/client/index.ts', import.meta.url)) }, outDir: temporary, format: ['iife'], globalName: 'storageClientFixture', platform: 'browser', target: 'es2022', dts: false, splitting: false, noExternal: [/.*/], silent: true })
+    await build({
+      config: false,
+      tsconfig: browserConfig,
+      entry: {
+        client: fileURLToPath(new URL('../src/client/index.ts', import.meta.url)),
+      },
+      outDir: temporary,
+      format: ['iife'],
+      globalName: 'storageClientFixture',
+      platform: 'browser',
+      target: 'es2022',
+      dts: false,
+      splitting: false,
+      noExternal: [/.*/],
+      silent: true,
+    })
     const bundle = await readFile(path.join(temporary, 'client.global.js'), 'utf8')
     server = createServer((request, response) => {
       const url = new URL(request.url ?? '/', 'http://127.0.0.1')
@@ -50,9 +77,17 @@ describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage clie
         request.resume()
         request.on('end', () => {
           // 进行中取消用例保持真实请求等待响应，由浏览器实际 abort 终止连接。
-          if (['during', 'external', 'timeout', 'callback'].includes(scenario))
+          if ([
+            'during',
+            'external',
+            'timeout',
+            'callback',
+          ].includes(scenario)) {
             return
-          response.writeHead(scenario === 'http' ? 403 : 204)
+          }
+          response.writeHead(scenario === 'http'
+            ? 403
+            : 204)
           response.end()
         })
         return
@@ -80,7 +115,9 @@ describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage clie
       try {
         if (server) {
           server.closeAllConnections()
-          await new Promise<void>((resolve, reject) => server?.close(error => error ? reject(error) : resolve()))
+          await new Promise<void>((resolve, reject) => server?.close(error => error
+            ? reject(error)
+            : resolve()))
         }
       }
       finally {
@@ -90,7 +127,18 @@ describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage clie
     }
   })
 
-  it.each(['pre', 'open-race', 'during', 'external', 'success', 'http', 'bad-url', 'network', 'timeout', 'callback'] as const)('%s 上传只结算一次并移除所有本次监听', async (scenario) => {
+  it.each([
+    'pre',
+    'open-race',
+    'during',
+    'external',
+    'success',
+    'http',
+    'bad-url',
+    'network',
+    'timeout',
+    'callback',
+  ] as const)('%s 上传只结算一次并移除所有本次监听', async (scenario) => {
     if (!browser)
       throw new Error('Real browser was not started')
     const context = await browser.newContext()
@@ -163,8 +211,12 @@ describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage clie
         if (scenario === 'pre')
           controller.abort()
         try {
-          const url = scenario === 'bad-url' ? 'http://[invalid' : `${origin}/upload?scenario=${scenario}`
-          const data = new Blob([new Uint8Array(8 * 1024 * 1024)])
+          const url = scenario === 'bad-url'
+            ? 'http://[invalid'
+            : `${origin}/upload?scenario=${scenario}`
+          const data = new Blob([
+            new Uint8Array(8 * 1024 * 1024),
+          ])
           const pending = client.uploadWithPresignedUrl(url, data, {
             abortController: controller,
             contentType: 'application/octet-stream',
@@ -187,13 +239,26 @@ describe.skipIf(process.env.HAI_STORAGE_RUN_BROWSER_GATES !== '1')('storage clie
             settlements++
             return result
           })
-          const result = await Promise.race([pending, new Promise<never>((_resolve, reject) => {
-            timeout = setTimeout(() => reject(new Error('XHR upload did not settle')), 4_000)
-          })])
+          const result = await Promise.race([
+            pending,
+            new Promise<never>((_resolve, reject) => {
+              timeout = setTimeout(() => reject(new Error('XHR upload did not settle')), 4_000)
+            }),
+          ])
           const abortsBeforeFinalSignal = aborts
           controller.abort()
           await new Promise(resolve => setTimeout(resolve, 30))
-          return { result, sends, aborts, abortsBeforeFinalSignal, progress, settlements, activeListeners: [...listeners.values()].reduce((sum, active) => sum + active.size, 0) }
+          return {
+            result,
+            sends,
+            aborts,
+            abortsBeforeFinalSignal,
+            progress,
+            settlements,
+            activeListeners: [
+              ...listeners.values(),
+            ].reduce((sum, active) => sum + active.size, 0),
+          }
         }
         finally {
           if (timeout)

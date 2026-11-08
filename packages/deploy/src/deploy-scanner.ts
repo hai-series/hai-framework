@@ -14,7 +14,9 @@ const logger = core.logger.child({ module: 'deploy', scope: 'scanner' })
 
 /** 安全缩窄 YAML/JSON 对象；数组与 null 不作为配置对象。 */
 function record(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
 }
 
 /**
@@ -46,14 +48,21 @@ function runtimeDependencies(appDir: string): { runtime: Set<string>, build: Set
     if (visited.has(id))
       return
     visited.add(id)
-    const metadata = importer === undefined ? record(packages[id.split('(')[0]]) : {}
+    const metadata = importer === undefined
+      ? record(packages[id.split('(')[0]])
+      : {}
     const peers = record(metadata.peerDependencies)
-    for (const [name, reference] of Object.entries({ ...record(node.dependencies), ...record(node.optionalDependencies) })) {
+    for (const [name, reference] of Object.entries({
+      ...record(node.dependencies),
+      ...record(node.optionalDependencies),
+    })) {
       if (name in peers)
         continue
-      const version = typeof reference === 'string' ? reference : record(reference).version
+      const version = typeof reference === 'string'
+        ? reference
+        : record(reference).version
       if (typeof version !== 'string')
-        throw new Error('Invalid pnpm dependency reference')
+        throw new TypeError('Invalid pnpm dependency reference')
       if (version.startsWith('link:')) {
         if (importer === undefined)
           throw new Error('Invalid workspace dependency')
@@ -66,7 +75,9 @@ function runtimeDependencies(appDir: string): { runtime: Set<string>, build: Set
         continue
       }
       // npm alias 的引用已包含真实包名，不能再拼接别名。
-      const key = version in snapshots || version in packages ? version : `${name}@${version}`
+      const key = version in snapshots || version in packages
+        ? version
+        : `${name}@${version}`
       names.add(key.match(/^(@[^/]+\/[^@]+|[^@]+)@/)?.[1] ?? name)
       const snapshot = record(snapshots[key] ?? packages[key])
       if (!Object.keys(snapshot).length && !(key in snapshots) && !(key in packages))
@@ -75,7 +86,14 @@ function runtimeDependencies(appDir: string): { runtime: Set<string>, build: Set
     }
   }
   visit(`workspace:${importerKey}`, record(importers[importerKey]), importerKey)
-  return { runtime: names, build: new Set([...names, ...Object.keys(record(record(importers[importerKey]).devDependencies))]), root }
+  return {
+    runtime: names,
+    build: new Set([
+      ...names,
+      ...Object.keys(record(record(importers[importerKey]).devDependencies)),
+    ]),
+    root,
+  }
 }
 
 /**
@@ -99,13 +117,19 @@ export async function scanApp(inputDir: string, options?: DeployScanOptions): Pr
     // 服务目录只决定依赖和配置；资源属于工程，不能把 -serv 等工作区后缀带入部署名。
     const projectDir = resolveProjectDirectory(appDir)
     const packageFile = join(projectDir, 'package.json')
-    const project = existsSync(packageFile) ? record(JSON.parse(readFileSync(packageFile, 'utf8'))) : {}
+    const project = existsSync(packageFile)
+      ? record(JSON.parse(readFileSync(packageFile, 'utf8')))
+      : {}
     if (typeof project.name !== 'string' || !project.name.trim())
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_projectNameRequired'))
     const appName = project.name.trim()
     if (!appName.replace(/^@[^/]+\//, '').replace(/[^a-z0-9]/gi, ''))
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_projectNameRequired'))
-    const envDir = options?.envDir ? resolve(options.envDir) : existsSync(join(appDir, '.env')) ? appDir : graph.root
+    const envDir = options?.envDir
+      ? resolve(options.envDir)
+      : existsSync(join(appDir, '.env'))
+        ? appDir
+        : graph.root
     const loaded = loadDeploymentEnvironment({ environment: options?.environment ?? 'prod', envDir, requireFile: options?.environment !== undefined })
     if (!loaded.success)
       return loaded
@@ -113,12 +137,21 @@ export async function scanApp(inputDir: string, options?: DeployScanOptions): Pr
     const deps = graph.runtime
     const configs: Record<string, Record<string, unknown>> = {}
     const enabledConfigs = new Set<string>()
-    for (const [name, owner] of Object.entries({ db: 'reldb', cache: 'cache', storage: 'storage', vecdb: 'vecdb', iam: 'iam', reach: 'reach' })) {
+    for (const [name, owner] of Object.entries({
+      db: 'reldb',
+      cache: 'cache',
+      storage: 'storage',
+      vecdb: 'vecdb',
+      iam: 'iam',
+      reach: 'reach',
+    })) {
       configs[name] = {}
       if (!deps.has(`@h-ai/${owner}`))
         continue
       const configFile = ['yml', 'yaml'].map(ext => join(appDir, 'config', `_${name}.${ext}`)).find(existsSync)
-      const config = configFile ? loadDeploymentConfig(name, configFile, env) : undefined
+      const config = configFile
+        ? loadDeploymentConfig(name, configFile, env)
+        : undefined
       if (config && !config.success)
         return config
       configs[name] = config?.data ?? {}
@@ -129,7 +162,15 @@ export async function scanApp(inputDir: string, options?: DeployScanOptions): Pr
     }
     const middlewares: MiddlewareRequirement[] = []
     const add = (service: ServiceType, backend: string, configName = service as string, configPath: string[] = [], config = configs[configName] ?? {}, source = `_${configName}.yml`) => {
-      middlewares.push({ service, backend, source, configName, configPath, envPrefix: ['HAI', configName, ...configPath].map(part => part.toUpperCase()).join('_'), config })
+      middlewares.push({
+        service,
+        backend,
+        source,
+        configName,
+        configPath,
+        envPrefix: ['HAI', configName, ...configPath].map(part => part.toUpperCase()).join('_'),
+        config,
+      })
     }
     const iam = enabledConfigs.has('iam')
     if (enabledConfigs.has('db'))
@@ -150,9 +191,17 @@ export async function scanApp(inputDir: string, options?: DeployScanOptions): Pr
         const provider = record(item)
         const type = String(provider.type ?? '')
         // Console/API 没有渠道字段，沿用生成应用的 sms Provider 名称识别短信。
-        const service = type === 'aliyun-sms' || (['console', 'api'].includes(type) && provider.name === 'sms') ? 'sms' : ['smtp', 'api', 'console'].includes(type) ? 'email' : undefined
-        if (service)
-          add(service, type, 'reach', ['providers', String(index)], provider, '@h-ai/reach')
+        const service = type === 'aliyun-sms' || (['console', 'api'].includes(type) && provider.name === 'sms')
+          ? 'sms'
+          : ['smtp', 'api', 'console'].includes(type)
+              ? 'email'
+              : undefined
+        if (service) {
+          add(service, type, 'reach', [
+            'providers',
+            String(index),
+          ], provider, '@h-ai/reach')
+        }
       }
     }
     // 显式空列表会覆盖 YAML 默认项，不能为不存在的索引生成部署配置。
@@ -168,14 +217,23 @@ export async function scanApp(inputDir: string, options?: DeployScanOptions): Pr
       isSvelteKit,
       adapterInstalled: graph.build.has('@sveltejs/adapter-vercel'),
       nodeAdapterInstalled: graph.build.has('@sveltejs/adapter-node'),
-      requiredServices: [...new Set(middlewares.map(item => item.service))],
+      requiredServices: [
+        ...new Set(middlewares.map(item => item.service)),
+      ],
       serviceBackends: Object.fromEntries(middlewares.map(item => [item.service, item.backend])),
     }
-    logger.info('Application scanned', { appName: scan.appName, haiModules: scan.haiModules, requiredServices: scan.requiredServices, serviceBackends: scan.serviceBackends })
+    logger.info('Application scanned', {
+      appName: scan.appName,
+      haiModules: scan.haiModules,
+      requiredServices: scan.requiredServices,
+      serviceBackends: scan.serviceBackends,
+    })
     return ok(scan)
   }
   catch {
     // JSON/YAML 异常可能带有凭据行，不把原异常暴露到日志或用户错误。
-    return err(HaiDeployError.SCAN_FAILED, deployM('deploy_scanFailed', { params: { error: 'Invalid or ambiguous application/configuration/lockfile; specify the application directory and run pnpm install' } }))
+    return err(HaiDeployError.SCAN_FAILED, deployM('deploy_scanFailed', {
+      params: { error: 'Invalid or ambiguous application/configuration/lockfile; specify the application directory and run pnpm install' },
+    }))
   }
 }

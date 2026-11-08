@@ -46,7 +46,12 @@ const mockConfigWithRerank: AIConfig = {
     model: 'gpt-4o-mini',
     scenarios: { rerank: 'rerank-english-v3.0' },
     models: [
-      { id: 'rerank-english-v3.0', model: 'rerank-english-v3.0', apiKey: 'co-rerank-key', baseUrl: 'https://api.cohere.com' },
+      {
+        id: 'rerank-english-v3.0',
+        model: 'rerank-english-v3.0',
+        apiKey: 'co-rerank-key',
+        baseUrl: 'https://api.cohere.com',
+      },
     ],
   },
 } as unknown as AIConfig
@@ -128,7 +133,11 @@ describe('rerank operations', () => {
 
     it('returnDocuments=true 时转发 return_documents 参数', async () => {
       mockFetch.mockResolvedValueOnce(makeRerankResponse([
-        { index: 0, relevance_score: 0.9, document: { text: '文档 A' } },
+        {
+          index: 0,
+          relevance_score: 0.9,
+          document: { text: '文档 A' },
+        },
       ]))
 
       const ops = createRerankOperations(mockConfig)
@@ -146,10 +155,15 @@ describe('rerank operations', () => {
     })
 
     it('使用 rerank 专属 apiKey 和 baseUrl', async () => {
-      mockFetch.mockResolvedValueOnce(makeRerankResponse([{ index: 0, relevance_score: 0.9 }]))
+      mockFetch.mockResolvedValueOnce(makeRerankResponse([
+        { index: 0, relevance_score: 0.9 },
+      ]))
 
       const ops = createRerankOperations(mockConfigWithRerank)
-      await ops.rerank({ query: '测试', documents: ['文档'] })
+      await ops.rerank({
+        query: '测试',
+        documents: ['文档'],
+      })
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.cohere.com/v1/rerank',
@@ -162,10 +176,15 @@ describe('rerank operations', () => {
     })
 
     it('回退到 LLM apiKey（无 rerank 专属配置）', async () => {
-      mockFetch.mockResolvedValueOnce(makeRerankResponse([{ index: 0, relevance_score: 0.9 }]))
+      mockFetch.mockResolvedValueOnce(makeRerankResponse([
+        { index: 0, relevance_score: 0.9 },
+      ]))
 
       const ops = createRerankOperations(mockConfig)
-      await ops.rerank({ query: '测试', documents: ['文档'] })
+      await ops.rerank({
+        query: '测试',
+        documents: ['文档'],
+      })
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.any(String),
@@ -178,7 +197,9 @@ describe('rerank operations', () => {
     })
 
     it('无 API Key 时返回 CONFIGURATION_ERROR', async () => {
-      const noKeyConfig = { llm: { model: 'gpt-4o-mini' } } as unknown as AIConfig
+      const noKeyConfig = {
+        llm: { model: 'gpt-4o-mini' },
+      } as unknown as AIConfig
       const origKeys = {
         HAI_AI_LLM_APIKEY: process.env.HAI_AI_LLM_APIKEY,
         OPENAI_API_KEY: process.env.OPENAI_API_KEY,
@@ -188,7 +209,10 @@ describe('rerank operations', () => {
 
       try {
         const ops = createRerankOperations(noKeyConfig)
-        const result = await ops.rerank({ query: '测试', documents: ['文档'] })
+        const result = await ops.rerank({
+          query: '测试',
+          documents: ['文档'],
+        })
         expect(result.success).toBe(false)
         if (!result.success) {
           expect(result.error.code).toBe(HaiAIError.CONFIGURATION_ERROR.code)
@@ -215,7 +239,10 @@ describe('rerank operations', () => {
       mockFetch.mockResolvedValueOnce(makeErrorResponse(429, 'Rate limit exceeded'))
 
       const ops = createRerankOperations(mockConfig)
-      const result = await ops.rerank({ query: '测试', documents: ['文档'] })
+      const result = await ops.rerank({
+        query: '测试',
+        documents: ['文档'],
+      })
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.code).toBe(HaiAIError.RERANK_API_ERROR.code)
@@ -226,8 +253,20 @@ describe('rerank operations', () => {
       mockFetch.mockImplementationOnce((_url, init: RequestInit) => new Promise((_resolve, reject) => {
         init.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true })
       }))
-      const config = { ...mockConfigWithRerank, llm: { ...mockConfigWithRerank.llm, models: [{ id: 'timed', model: 'timed', timeout: 5 }], scenarios: { rerank: 'timed' } } }
-      const result = await createRerankOperations(config).rerank({ query: 'test', documents: ['one'] })
+      const config = {
+        ...mockConfigWithRerank,
+        llm: {
+          ...mockConfigWithRerank.llm,
+          models: [
+            { id: 'timed', model: 'timed', timeout: 5 },
+          ],
+          scenarios: { rerank: 'timed' },
+        },
+      }
+      const result = await createRerankOperations(config).rerank({
+        query: 'test',
+        documents: ['one'],
+      })
       expect(result.success).toBe(false)
       if (!result.success)
         expect(result.error.code).toBe(HaiAIError.RERANK_API_ERROR.code)
@@ -238,7 +277,10 @@ describe('rerank operations', () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'))
 
       const ops = createRerankOperations(mockConfig)
-      const result = await ops.rerank({ query: '测试', documents: ['文档'] })
+      const result = await ops.rerank({
+        query: '测试',
+        documents: ['文档'],
+      })
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.code).toBe(HaiAIError.RERANK_API_ERROR.code)
@@ -246,7 +288,9 @@ describe('rerank operations', () => {
     })
 
     it('使用请求级 model 覆盖默认模型', async () => {
-      mockFetch.mockResolvedValueOnce(makeRerankResponse([{ index: 0, relevance_score: 0.9 }]))
+      mockFetch.mockResolvedValueOnce(makeRerankResponse([
+        { index: 0, relevance_score: 0.9 },
+      ]))
 
       const ops = createRerankOperations(mockConfig)
       const result = await ops.rerank({

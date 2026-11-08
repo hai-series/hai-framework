@@ -16,11 +16,19 @@ export async function createLancedbNodeFactory(directory: string) {
   const output = path.join(directory, 'bundle')
   await build({
     config: false,
-    entry: { index: path.resolve(import.meta.dirname, '../../src/index.ts') },
+    entry: {
+      index: path.resolve(import.meta.dirname, '../../src/index.ts'),
+    },
     outDir: output,
     format: ['esm'],
     platform: 'node',
-    external: ['@h-ai/core', '@lancedb/lancedb', '@qdrant/js-client-rest', 'chromadb', 'pg', 'zod'],
+    external: [
+      '@h-ai/core',
+      '@lancedb/lancedb',
+      'chromadb',
+      'pg',
+      'zod',
+    ],
     silent: true,
   })
   const workerFile = path.join(directory, 'worker.mjs')

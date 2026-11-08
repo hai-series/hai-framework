@@ -11,7 +11,15 @@ import { describe, expect, it } from 'vitest'
 import { arePasswordsEqual, passwordPolicyError, passwordPolicyHint } from '../src/lib/components/scenes/iam/password-utils.js'
 
 describe('可配置密码类别', () => {
-  const policy = { minLength: 8, maxLength: 128, requireUppercase: false, requireLowercase: false, requireNumber: false, requireSpecialChar: false, minCharacterClasses: 3 }
+  const policy = {
+    minLength: 8,
+    maxLength: 128,
+    requireUppercase: false,
+    requireLowercase: false,
+    requireNumber: false,
+    requireSpecialChar: false,
+    minCharacterClasses: 3,
+  }
   it('允许任意三类组合并拒绝只有两类的密码', () => {
     expect(passwordPolicyError('Password1', policy)).toBe('')
     expect(passwordPolicyError('password1!', policy)).toBe('')

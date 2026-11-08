@@ -108,7 +108,11 @@ cli
         type: type as GeneratorType,
         name: name ?? '',
         output: options.output as string,
-        ...(options.workspace ? { workspace: String(options.workspace) } : {}),
+        ...(options.workspace
+          ? {
+              workspace: String(options.workspace),
+            }
+          : {}),
         force: options.force as boolean,
         verbose: options.verbose as boolean,
         cwd: options.cwd as string,
@@ -131,7 +135,6 @@ cli
   .option('--platform <platform>', cliM('cli_help_platform'))
   .option('--arch <arch>', cliM('cli_help_arch'))
   .option('--debug', cliM('cli_help_buildDebug'))
-  .option('--sqlite-prebuild-mirror <url>', cliM('cli_help_sqliteMirror'))
   .option('--no-http-proxy', cliM('cli_help_noHttpProxy'))
   .option('-y, --yes', cliM('cli_help_deployYes'))
   .option('--image-source <source>', cliM('cli_help_imageSource'))
@@ -146,7 +149,9 @@ cli
       await buildCommand(options)
     }
     catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = error instanceof Error
+        ? error.message
+        : String(error)
       if (options.json)
         writeCliError(message)
       else
@@ -161,7 +166,9 @@ cli.command('upgrade <version>', cliM('cli_help_upgrade')).action(async (version
     await upgradeCommand(version, options)
   }
   catch (error) {
-    writeCliMessage(error instanceof Error ? error.message : String(error))
+    writeCliMessage(error instanceof Error
+      ? error.message
+      : String(error))
     process.exitCode = 1
   }
 })
@@ -180,7 +187,6 @@ cli
   .option('--build', cliM('cli_help_deployBuild'))
   .option('--concurrency <count>', cliM('cli_help_buildConcurrency'))
   .option('--network <network>', cliM('cli_help_deployNetwork'))
-  .option('--sqlite-prebuild-mirror <url>', cliM('cli_help_deploySqliteMirror'))
   .option('--no-http-proxy', cliM('cli_help_deployNoProxy'))
   .option('--image-source <source>', cliM('cli_help_imageSource'))
   .option('--image-mirrors <mappings>', cliM('cli_help_imageMirrors'))
@@ -207,7 +213,6 @@ cli
         build: options.build as boolean,
         concurrency: options.concurrency as number,
         network: options.network as string,
-        sqlitePrebuildMirror: options.sqlitePrebuildMirror as string,
         httpProxy: options.httpProxy as boolean,
         imageSource: options.imageSource as 'official' | 'cn' | 'custom',
         imageMirrors: options.imageMirrors as string,
@@ -238,7 +243,9 @@ cli.command('deploy-secrets <directory>', cliM('cli_help_deploySecrets'))
       await deploySecretsCommand(directory, options)
     }
     catch (error) {
-      writeCliMessage(error instanceof Error ? error.message : String(error))
+      writeCliMessage(error instanceof Error
+        ? error.message
+        : String(error))
       process.exitCode = 1
     }
   })
@@ -256,7 +263,9 @@ cli
   .option('--port <number>', cliM('cli_feedback_port'))
   .action(async (action: string, bundle: string, options: Record<string, unknown>) => {
     try {
-      const numberOption = (value: unknown) => value === undefined ? undefined : Number(value)
+      const numberOption = (value: unknown) => value === undefined
+        ? undefined
+        : Number(value)
       await feedbackCommand(action, bundle, {
         cwd: options.cwd as string,
         page: numberOption(options.page),
@@ -270,7 +279,9 @@ cli
       })
     }
     catch (error) {
-      writeCliMessage(error instanceof Error ? error.message : String(error))
+      writeCliMessage(error instanceof Error
+        ? error.message
+        : String(error))
       process.exitCode = 1
     }
   })
@@ -280,28 +291,64 @@ cli
   .command('g:page <name>', cliM('cli_help_generatePage'))
   .option('-w, --workspace <name>', cliM('cli_help_workspace'))
   .action(async (name: string, options: Record<string, unknown>) => {
-    await generate({ type: 'page', name, cwd: options.cwd as string, ...(options.workspace ? { workspace: String(options.workspace) } : {}) })
+    await generate({
+      type: 'page',
+      name,
+      cwd: options.cwd as string,
+      ...(options.workspace
+        ? {
+            workspace: String(options.workspace),
+          }
+        : {}),
+    })
   })
 
 cli
   .command('g:component <name>', cliM('cli_help_generateComponent'))
   .option('-w, --workspace <name>', cliM('cli_help_workspace'))
   .action(async (name: string, options: Record<string, unknown>) => {
-    await generate({ type: 'component', name, cwd: options.cwd as string, ...(options.workspace ? { workspace: String(options.workspace) } : {}) })
+    await generate({
+      type: 'component',
+      name,
+      cwd: options.cwd as string,
+      ...(options.workspace
+        ? {
+            workspace: String(options.workspace),
+          }
+        : {}),
+    })
   })
 
 cli
   .command('g:api <name>', cliM('cli_help_generateApi'))
   .option('-w, --workspace <name>', cliM('cli_help_workspace'))
   .action(async (name: string, options: Record<string, unknown>) => {
-    await generate({ type: 'api', name, cwd: options.cwd as string, ...(options.workspace ? { workspace: String(options.workspace) } : {}) })
+    await generate({
+      type: 'api',
+      name,
+      cwd: options.cwd as string,
+      ...(options.workspace
+        ? {
+            workspace: String(options.workspace),
+          }
+        : {}),
+    })
   })
 
 cli
   .command('g:model <name>', cliM('cli_help_generateModel'))
   .option('-w, --workspace <name>', cliM('cli_help_workspace'))
   .action(async (name: string, options: Record<string, unknown>) => {
-    await generate({ type: 'model', name, cwd: options.cwd as string, ...(options.workspace ? { workspace: String(options.workspace) } : {}) })
+    await generate({
+      type: 'model',
+      name,
+      cwd: options.cwd as string,
+      ...(options.workspace
+        ? {
+            workspace: String(options.workspace),
+          }
+        : {}),
+    })
   })
 
 // 版本和帮助

@@ -31,9 +31,11 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### build のオプション
 
-`--target` は compile（既定）、image、app、desktop を選択します。`--images serv|web|serv,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は 今回のビルドのプロキシ無効（none と同じ）、`--sqlite-prebuild-mirror` は信頼できる HTTP(S) バイナリ配布元です。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
+`--target` は compile（既定）、image、app、desktop を選択します。`--images serv|web|serv,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は 今回のビルドのプロキシ無効（none と同じ）です。SQLite 13 のネイティブバイナリーは npm パッケージに同梱され、設定済みの npm レジストリーを使用します。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
 
 #### 取得元とプロキシ
+
+既存プロジェクトでは旧 SQLite ミラー引数を削除し、Dockerfile を更新してください。イメージ構築時にインメモリデータベースを開き、同梱されたネイティブバイナリーが対象環境で読み込めることを検証します。
 
 `--image-source official|cn|custom` はアプリのベースと梱包時に不足したミドルウェアイメージに適用します。`--npm-source` は `--build` と併用し Corepack/pnpm を制御します。中国本土は毫秒镜像の Docker Hub/GHCR 通道と npmmirror を使用します。初回対話で `hai.json.build.sources` に保存し、引数は今回のみ上書きします。プロキシは `--proxy-mode inherit|system|custom|none`、`--proxy-url`、`--proxy-bypass` で指定し、`--no-http-proxy` は none と同じです。Docker／リモート Podman の取得はエンジン側の設定が必要で、ビルドコンテナの接続は別途確認します。カスタム設定、対応 OS、旧テンプレートの更新は[取得元とプロキシ](../../docs/usage/configuration/delivery.md#下载源和代理)を参照してください。
 
@@ -117,6 +119,8 @@ CLI の --project-name と SDK の DeployAppOptions.projectName 上書きは廃�
 
 公開設定は `.env` と `.env.<mode>`、SSH と資格情報は Git 対象外の `.env.<mode>.local`、マシン共通の秘密値は `.env.local` に保存します。構築時には配備の秘密値を読みません。
 
+HTTP API のカスタムヘッダーは名前にかかわらず全体を秘密値として扱います。既存環境の保存時は、インデント、`export`、複数行の引用値も同じモードの公開ファイルから非公開ファイルへ移し、以前の値を残しません。
+
 既存プロジェクトは旧構築オブジェクトを `hai.json.build`、旧配置 YAML を JSON に変換して `hai.json.deploy` に移し、元のファイルを削除します。`HAI_DEPLOY_*` は継続利用できます。既存の自前 S3 は今回の初回更新で全量配置が必要です。旧基準には終了済みの初期化サービスが残っており、新しい増分パッケージの依存稼働チェックで拒否されます。全量配置で `createBucket` 設定も更新した後は増分更新を継続できます。
 
 直接デプロイでは、サーバー、SSH ユーザー、認証方式、ポートなどの不足項目を説明付きで質問します。有効で完全な設定は `--yes` でも再利用し、再入力を求めません。SSH は `auth: key`（秘密鍵/agent）と `auth: password` に対応します。`auth` を省略した場合、空でない `password` があるときだけパスワード認証を使い、それ以外は key/agent を維持します。明示した `key` は残存パスワードを無視します。パスワード入力は非表示で、前後の空白と先頭のゼロを保持します。有効なパスワードは CR/LF/NUL を含まず、UTF-8 で 1023 バイト以内である必要があります。秘密鍵はパスのみ参照し、内容を読み取り・コピーしません。
@@ -139,7 +143,7 @@ SSH 設定は選択環境の `.env.<環境>.local` に保存します。`--bundl
 
 #### deploy のオプション
 
---env/--env-dir は環境、--build は先行する選択イメージ構築、--services は更新対象、--artifact-dir は既存成果物を指定します。--bundle-only は SSH 接続なしで tar と OS 別スクリプトを生成します。--runtime はローカル構築・イメージ出力エンジンです。--output はコマンドの作業ディレクトリを基準とする出力先を指定し、アプリ版を末尾に付けます。--yes は有効な設定を非対話で使い、不足値はエラーで示します。一体化構築でも --network、--no-http-proxy、--sqlite-prebuild-mirror を指定できます。
+--env/--env-dir は環境、--build は先行する選択イメージ構築、--services は更新対象、--artifact-dir は既存成果物を指定します。--bundle-only は SSH 接続なしで tar と OS 別スクリプトを生成します。--runtime はローカル構築・イメージ出力エンジンです。--output はコマンドの作業ディレクトリを基準とする出力先を指定し、アプリ版を末尾に付けます。--yes は有効な設定を非対話で使い、不足値はエラーで示します。一体化構築でも --network、--no-http-proxy を指定できます。
 
 #### マシン同士が接続できる場合：自動デプロイ
 
@@ -213,6 +217,8 @@ SDK はサーバー内の正常性確認と `current` 更新後、操作端末�
 
 `pnpm run deploy` は全コンテナーテンプレートで HTTPS なし、既存 PEM 証明書・秘密鍵、Let’s Encrypt を選択できます。相対パスは工程ルート基準です。ドメイン・期限・鍵一致を検証して配布物にコピーします。版を固定した公式 Certbot イメージで申請し、12 時間ごとに更新を確認して Nginx を再読み込みします。利用規約の承認、実際のメール、公的 DNS、80 番ポート、CA 接続が必要です。隔離環境では既存証明書を使います。状態はサーバーに保持し、秘密鍵をアプリイメージに含めません。`--yes` は保存設定を使います。
 
+PEM は各 1 MiB 以下の通常ファイルを指定してください。末尾要素のシンボリックリンクとハードリンクは拒否し、親ディレクトリーも信頼できる必要があります。Certbot `live/` のリンク先を管理下のディレクトリーへ通常ファイルとして安全にコピーするか、フレームワークの `letsencrypt` モードを使ってください。
+
 `hai.json.deploy.provider.expose.https` または環境別秘密設定で指定します。既定は HTTPS 443 と HTTP リダイレクト、省略時は HTTP です。有効/無効・モード・ドメイン・ポート・持込証明書の変更は完全デプロイが必要です。[HTTPS 設定](../../docs/usage/configuration/delivery.md#可选https证书)を参照してください。計画では `root` が工程ルート、`serviceDir` がサービスのソース・設定ディレクトリです。
 
 ### SDK
@@ -220,7 +226,12 @@ SDK はサーバー内の正常性確認と `current` 更新後、操作端末�
 ```ts
 import { deploy } from '@h-ai/deploy'
 
-const initialized = await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 18080 } } })
+const initialized = await deploy.init({
+  provider: {
+    type: 'docker-ssh',
+    expose: { hostPort: 18080 }
+  }
+})
 if (!initialized.success)
   throw new Error(initialized.error.message)
 try {
@@ -251,6 +262,10 @@ finally {
 SSH 中断は最初に `remoteExecution: 'unknown'` とし、docker-ssh SDK は別接続で `result-<deploymentId>.json` を読みます。完全で未切断、ID が一致する終端結果だけ `finished` と実際の段階・終了値を確認できます。script 終了はコンテナー停止を意味しません。終了値が 0 でも元の SSH/出力失敗は失敗として残します。CLI はローカルと遠隔の状態と結果パスを別々に表示します。欠落・旧 ID・破損・再接続失敗は不明のまま、配置や rollback を自動再実行しません。手動アップロード script は SSH 失敗を不明と表示し、確認先を示します。配置 ID はパッケージの manifest で確認します。手順、`current`、実サービスとデータを確認して復旧してください。
 
 ### 実行環境ファイルと設定の再利用
+
+SvelteKit SSR は HTTP/HTTPS ともに独立した `gateway` を使用し、バックエンドのポートを公開しません。ゲートウェイが標準の転送ヘッダーを上書きし、Compose が adapter のプロトコル、Host、クライアントアドレスの信頼設定を固定します。業務の実行環境ファイルでは変更できません。adapter-node 6 は実行時の `ORIGIN` を読み取らず、アプリは既定で構築時の `paths.origin` を固定しません。直接公開していた古い SSR 配置は、現在のツールで新しい完全配布物を作成して更新してください。
+
+上位で TLS を終端する場合は、ロードバランサーの実際の IP/CIDR を `trustedEdgeProxies` に指定します。独立 gateway は許可した実際の接続元の単一 `http` / `https` だけを採用し、その他の接続元や複合値では自身の接続プロトコルを使います。外部の `Forwarded`、ホスト/ポート転送値は上書きします。
 
 環境フラグ・初期アカウントパスワード・転送キーリングは起動コードも直接読み取るため、同じ接頭辞の親設定があっても保持します。
 

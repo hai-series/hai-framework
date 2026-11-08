@@ -15,20 +15,39 @@ function tests() {
   it('默认长期账号激活，临时账号必须有有效的到期时间', async () => {
     const iam = await initIam()
     const permanent = await iam.user.createUser({ username: `permanent-${crypto.randomUUID()}`, password: TEST_PASSWORD })
-    expect(permanent).toMatchObject({ success: true, data: { user: { accountType: 'permanent', accountStatus: 'active' } } })
+    expect(permanent).toMatchObject({
+      success: true,
+      data: {
+        user: { accountType: 'permanent', accountStatus: 'active' },
+      },
+    })
     expect((await iam.user.createUser({ username: `invalid-${crypto.randomUUID()}`, password: TEST_PASSWORD, accountType: 'temporary' })).success).toBe(false)
   })
 
-  it.each(['dormant', 'closed', 'expired', 'locked', 'passwordless'] as const)('公开凭据反馈不暴露 %s 账号状态，登录与公开改密不改变受限账号的失败计数', async (state) => {
-    const iam = await initIam({ security: { maxLoginAttempts: 1, lockoutDuration: 1200 } })
+  it.each([
+    'dormant',
+    'closed',
+    'expired',
+    'locked',
+    'passwordless',
+  ] as const)('公开凭据反馈不暴露 %s 账号状态，登录与公开改密不改变受限账号的失败计数', async (state) => {
+    const iam = await initIam({
+      security: { maxLoginAttempts: 1, lockoutDuration: 1200 },
+    })
     const username = `privacy-${crypto.randomUUID()}`
     const missing = `missing-${crypto.randomUUID()}`
     const created = await iam.user.createUser({
       username,
       password: TEST_PASSWORD,
-      accountStatus: state === 'dormant' || state === 'closed' ? state : 'active',
-      accountType: state === 'expired' ? 'temporary' : 'permanent',
-      accountExpiresAt: state === 'expired' ? new Date(Date.now() + 60_000) : undefined,
+      accountStatus: state === 'dormant' || state === 'closed'
+        ? state
+        : 'active',
+      accountType: state === 'expired'
+        ? 'temporary'
+        : 'permanent',
+      accountExpiresAt: state === 'expired'
+        ? new Date(Date.now() + 60_000)
+        : undefined,
     })
     expect(created.success).toBe(true)
     if (!created.success)
@@ -40,7 +59,9 @@ function tests() {
     if (state === 'locked')
       await iam.auth.login({ identifier: username, password: 'WrongPassword123!' })
     if (state === 'expired') {
-      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.useFakeTimers({
+        toFake: ['Date'],
+      })
       vi.setSystemTime(Date.now() + 60_001)
     }
     const query = () => reldb.sql.get('SELECT login_failed_count, locked_until FROM hai_iam_users WHERE id = ?', [created.data.user.id])
@@ -48,11 +69,17 @@ function tests() {
     expect(before.success).toBe(true)
     const unknown = await iam.auth.login({ identifier: missing, password: 'WrongPassword123!' })
     const login = await iam.auth.login({ identifier: username, password: 'WrongPassword123!' })
-    expect(unknown).toMatchObject({ success: false, error: { code: HaiIamError.INVALID_CREDENTIALS.code } })
+    expect(unknown).toMatchObject({
+      success: false,
+      error: { code: HaiIamError.INVALID_CREDENTIALS.code },
+    })
     expect(login).toEqual(unknown)
     const unknownRenewal = await iam.user.renewPassword({ identifier: missing, password: 'WrongPassword123!', newPassword: 'NewPassword456!' })
     const renewal = await iam.user.renewPassword({ identifier: username, password: 'WrongPassword123!', newPassword: 'NewPassword456!' })
-    expect(unknownRenewal).toMatchObject({ success: false, error: { code: HaiIamError.INVALID_CREDENTIALS.code } })
+    expect(unknownRenewal).toMatchObject({
+      success: false,
+      error: { code: HaiIamError.INVALID_CREDENTIALS.code },
+    })
     expect(renewal).toEqual(unknownRenewal)
     expect(await query()).toEqual(before)
     // 即使密码正确也给相同反馈，不能在锁定/休眠期间继续验证猜测是否命中。
@@ -62,7 +89,9 @@ function tests() {
   })
 
   it('密码计算故障不计为用户输错密码，依赖恢复后原密码仍可登录', async () => {
-    const iam = await initIam({ security: { maxLoginAttempts: 1, lockoutDuration: 1200 } })
+    const iam = await initIam({
+      security: { maxLoginAttempts: 1, lockoutDuration: 1200 },
+    })
     const username = `crypto-fault-${crypto.randomUUID()}`
     const created = await iam.user.createUser({ username, password: TEST_PASSWORD })
     if (!created.success)
@@ -72,20 +101,35 @@ function tests() {
     expect(before.success).toBe(true)
     const verify = vi.spyOn(haiCrypto.password, 'verify').mockReturnValueOnce(err(HaiCryptoError.VERIFY_FAILED, 'Simulated password computation failure'))
     const changed = await iam.user.renewPassword({ identifier: username, password: TEST_PASSWORD, newPassword: 'NewPassword456!' })
-    expect(changed).toMatchObject({ success: false, error: { code: HaiIamError.INTERNAL_ERROR.code } })
+    expect(changed).toMatchObject({
+      success: false,
+      error: { code: HaiIamError.INTERNAL_ERROR.code },
+    })
     expect(await query()).toEqual(before)
     verify.mockRestore()
     expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).success).toBe(true)
   })
 
   it('注册默认休眠由服务端决定，管理员创建不受该默认状态影响', async () => {
-    const iam = await initIam({ register: { enabled: true, defaultAccountStatus: 'dormant' } })
+    const iam = await initIam({
+      register: { enabled: true, defaultAccountStatus: 'dormant' },
+    })
     const username = `pending-${crypto.randomUUID()}`
     const pending = await iam.user.register({ username, password: TEST_PASSWORD, accountStatus: 'active' })
-    expect(pending).toMatchObject({ success: true, data: { user: { accountStatus: 'dormant' } } })
+    expect(pending).toMatchObject({
+      success: true,
+      data: {
+        user: { accountStatus: 'dormant' },
+      },
+    })
     expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).success).toBe(false)
     const managed = await iam.user.createUser({ username: `managed-${crypto.randomUUID()}`, password: TEST_PASSWORD })
-    expect(managed).toMatchObject({ success: true, data: { user: { accountStatus: 'active' } } })
+    expect(managed).toMatchObject({
+      success: true,
+      data: {
+        user: { accountStatus: 'active' },
+      },
+    })
     if (!pending.success)
       throw new Error(pending.error.message)
     expect((await iam.user.updateUser(pending.data.user.id, { accountStatus: 'active' })).success).toBe(true)
@@ -98,20 +142,30 @@ function tests() {
     if (!login.success)
       throw new Error(login.error.message)
     const version = await reldb.sql.get('SELECT credential_version FROM hai_iam_users WHERE id = ?', [login.data.user.id])
-    expect((await iam.user.updateUser(login.data.user.id, { displayName: 'Updated profile', accountStatus: 'active', accountType: 'permanent', accountExpiresAt: null })).success).toBe(true)
+    expect((await iam.user.updateUser(login.data.user.id, {
+      displayName: 'Updated profile',
+      accountStatus: 'active',
+      accountType: 'permanent',
+      accountExpiresAt: null,
+    })).success).toBe(true)
     expect(await reldb.sql.get('SELECT credential_version FROM hai_iam_users WHERE id = ?', [login.data.user.id])).toEqual(version)
     expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(true)
   })
 
   it.each(['active', 'dormant', 'closed'] as const)('管理员可重置 %s 账号密码，保留状态并要求修改临时密码', async (accountStatus) => {
-    const iam = await initIam({ password: { requireInitialChange: true } })
+    const iam = await initIam({
+      password: { requireInitialChange: true },
+    })
     const username = `reset-${crypto.randomUUID()}`
     const created = await iam.user.createUser({ username, password: TEST_PASSWORD, accountStatus })
     if (!created.success)
       throw new Error(created.error.message)
     const temporaryPassword = `Reset-Aa1!${crypto.randomUUID()}`
     expect((await iam.user.adminResetPassword(created.data.user.id, temporaryPassword)).success).toBe(true)
-    expect(await iam.user.getUser(created.data.user.id)).toMatchObject({ success: true, data: { accountStatus, mustChangePassword: true } })
+    expect(await iam.user.getUser(created.data.user.id)).toMatchObject({
+      success: true,
+      data: { accountStatus, mustChangePassword: true },
+    })
     expect((await iam.auth.login({ identifier: username, password: temporaryPassword })).success).toBe(false)
     expect((await iam.user.updateUser(created.data.user.id, { accountStatus: 'active' })).success).toBe(true)
     const login = await iam.auth.login({ identifier: username, password: temporaryPassword })
@@ -123,24 +177,42 @@ function tests() {
   it('部分更新的 undefined 保留临时到期时间，显式 null 仍不能取消临时账号到期', async () => {
     const iam = await initIam()
     const expiry = new Date(Date.now() + 3600000)
-    const created = await iam.user.createUser({ username: `partial-${crypto.randomUUID()}`, password: TEST_PASSWORD, accountType: 'temporary', accountExpiresAt: expiry })
+    const created = await iam.user.createUser({
+      username: `partial-${crypto.randomUUID()}`,
+      password: TEST_PASSWORD,
+      accountType: 'temporary',
+      accountExpiresAt: expiry,
+    })
     if (!created.success)
       throw new Error(created.error.message)
-    expect(await iam.user.updateUser(created.data.user.id, { accountStatus: 'dormant', accountExpiresAt: undefined })).toMatchObject({ success: true, data: { accountType: 'temporary', accountStatus: 'dormant', accountExpiresAt: expiry } })
+    expect(await iam.user.updateUser(created.data.user.id, { accountStatus: 'dormant', accountExpiresAt: undefined })).toMatchObject({
+      success: true,
+      data: { accountType: 'temporary', accountStatus: 'dormant', accountExpiresAt: expiry },
+    })
     expect((await iam.user.updateUser(created.data.user.id, { accountExpiresAt: null })).success).toBe(false)
     expect((await iam.user.updateUser(created.data.user.id, { accountType: undefined, accountExpiresAt: null })).success).toBe(false)
-    expect(await iam.user.getUser(created.data.user.id)).toMatchObject({ success: true, data: { accountType: 'temporary', accountStatus: 'dormant', accountExpiresAt: expiry } })
+    expect(await iam.user.getUser(created.data.user.id)).toMatchObject({
+      success: true,
+      data: { accountType: 'temporary', accountStatus: 'dormant', accountExpiresAt: expiry },
+    })
   })
 
   it('临时账号到期后不能登录、验证旧会话或刷新', async () => {
     const iam = await initIam()
     const username = `temporary-${crypto.randomUUID()}`
-    const created = await iam.user.createUser({ username, password: TEST_PASSWORD, accountType: 'temporary', accountExpiresAt: new Date(Date.now() + 60_000) })
+    const created = await iam.user.createUser({
+      username,
+      password: TEST_PASSWORD,
+      accountType: 'temporary',
+      accountExpiresAt: new Date(Date.now() + 60_000),
+    })
     expect(created.success).toBe(true)
     const login = await iam.auth.login({ identifier: username, password: TEST_PASSWORD })
     if (!login.success)
       throw new Error(login.error.message)
-    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
     vi.setSystemTime(Date.now() + 60_001)
     expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).success).toBe(false)
     expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(false)
@@ -154,7 +226,10 @@ function tests() {
     if (!login.success)
       throw new Error(login.error.message)
     const changed = await iam.user.updateUser(login.data.user.id, { accountStatus })
-    expect(changed).toMatchObject({ success: true, data: { accountStatus } })
+    expect(changed).toMatchObject({
+      success: true,
+      data: { accountStatus },
+    })
     expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(false)
     expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).success).toBe(false)
     expect((await iam.user.updateUser(login.data.user.id, { accountStatus: 'active' })).success).toBe(true)
@@ -168,23 +243,39 @@ function tests() {
     const login = await iam.auth.registerAndLogin({ username, password: TEST_PASSWORD })
     if (!login.success)
       throw new Error(login.error.message)
-    expect((await iam.user.getUser(login.data.user.id))).toMatchObject({ success: true, data: { lastLoginAt: expect.any(Date) } })
-    vi.useFakeTimers({ toFake: ['Date'] })
+    expect((await iam.user.getUser(login.data.user.id))).toMatchObject({
+      success: true,
+      data: {
+        lastLoginAt: expect.any(Date),
+      },
+    })
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
     vi.setSystemTime(Date.now() + 91 * 86400_000)
     expect(await iam.user.scanInactiveAccounts()).toEqual({ success: true, data: 0 })
-    await initIam({ accounts: { dormantAfterDays: 90, scanIntervalSeconds: 3600 } })
+    await initIam({
+      accounts: { dormantAfterDays: 90, scanIntervalSeconds: 3600 },
+    })
     const scanned = await iam.user.scanInactiveAccounts()
     expect(scanned.success && scanned.data).toBeGreaterThanOrEqual(1)
-    expect(await iam.user.getUser(login.data.user.id)).toMatchObject({ success: true, data: { accountStatus: 'dormant' } })
+    expect(await iam.user.getUser(login.data.user.id)).toMatchObject({
+      success: true,
+      data: { accountStatus: 'dormant' },
+    })
     expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).success).toBe(false)
   })
 
   it('成功登录更新时间，未使用阈值不受单次失败登录影响', async () => {
-    const iam = await initIam({ accounts: { dormantAfterDays: 90 } })
+    const iam = await initIam({
+      accounts: { dormantAfterDays: 90 },
+    })
     const username = `recent-${crypto.randomUUID()}`
     const created = await iam.user.register({ username, password: TEST_PASSWORD })
     expect(created.success).toBe(true)
-    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
     vi.setSystemTime(Date.now() + 89 * 86400_000)
     expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).success).toBe(true)
     vi.setSystemTime(Date.now() + 2 * 86400_000)
@@ -213,30 +304,50 @@ function tests() {
       return result
     })
     expect((await iam.user.updateUser(created.data.user.id, { accountStatus: 'dormant' })).success).toBe(false)
-    expect(await iam.user.getUser(created.data.user.id)).toMatchObject({ success: true, data: { accountStatus: 'active' } })
+    expect(await iam.user.getUser(created.data.user.id)).toMatchObject({
+      success: true,
+      data: { accountStatus: 'active' },
+    })
     expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).success).toBe(true)
   })
 
   it('配额拒绝的登录不更新成功登录时间，也不能推迟自动休眠', async () => {
-    const iam = await initIam({ accounts: { dormantAfterDays: 90 }, session: { maxSessions: 1 } })
+    const iam = await initIam({
+      accounts: { dormantAfterDays: 90 },
+      session: { maxSessions: 1 },
+    })
     const username = `quota-inactivity-${crypto.randomUUID()}`
     const login = await iam.auth.registerAndLogin({ username, password: TEST_PASSWORD })
     if (!login.success)
       throw new Error(login.error.message)
     const past = new Date(Date.now() - 89 * 86400_000)
-    expect((await reldb.sql.execute('UPDATE hai_iam_users SET last_login_at = ? WHERE id = ?', [reldb.config?.type === 'sqlite' ? past.getTime() : past, login.data.user.id])).success).toBe(true)
+    expect((await reldb.sql.execute('UPDATE hai_iam_users SET last_login_at = ? WHERE id = ?', [
+      reldb.config?.type === 'sqlite'
+        ? past.getTime()
+        : past,
+      login.data.user.id,
+    ])).success).toBe(true)
     expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).success).toBe(false)
-    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
     vi.setSystemTime(Date.now() + 2 * 86400_000)
     expect((await iam.user.scanInactiveAccounts()).success).toBe(true)
-    expect(await iam.user.getUser(login.data.user.id)).toMatchObject({ success: true, data: { accountStatus: 'dormant' } })
+    expect(await iam.user.getUser(login.data.user.id)).toMatchObject({
+      success: true,
+      data: { accountStatus: 'dormant' },
+    })
   })
 
   it('自动扫描按配置周期执行，close 后不再扫描', async () => {
-    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+    })
     const now = Date.now()
     vi.setSystemTime(now - 91 * 86400_000)
-    const iam = await initIam({ accounts: { dormantAfterDays: 90, scanIntervalSeconds: 60 } })
+    const iam = await initIam({
+      accounts: { dormantAfterDays: 90, scanIntervalSeconds: 60 },
+    })
     const created = await iam.user.register({ username: `automatic-${crypto.randomUUID()}`, password: TEST_PASSWORD })
     if (!created.success)
       throw new Error(created.error.message)
@@ -245,7 +356,10 @@ function tests() {
     await vi.advanceTimersByTimeAsync(60_000)
     expect(scan).toHaveBeenCalledOnce()
     await scan.mock.results[0]!.value
-    expect(await iam.user.getUser(created.data.user.id)).toMatchObject({ success: true, data: { accountStatus: 'dormant' } })
+    expect(await iam.user.getUser(created.data.user.id)).toMatchObject({
+      success: true,
+      data: { accountStatus: 'dormant' },
+    })
     await iam.close()
     await vi.advanceTimersByTimeAsync(120_000)
     expect(scan).toHaveBeenCalledOnce()

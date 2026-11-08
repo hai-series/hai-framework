@@ -7,7 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStripeProvider } from '../src/providers/stripe/payment-provider-stripe'
 import { StripeOperationRepository } from '../src/providers/stripe/payment-stripe-repository-operation'
 
-const config = { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'whsec_key', webhookToleranceSeconds: 300 }
+const config = {
+  successUrl: 'https://example.invalid/payment/success',
+  secretKey: 'sk_test_key',
+  webhookSecret: 'whsec_key',
+  webhookToleranceSeconds: 300,
+}
 const orderInput: CreateOrderInput = {
   orderNo: 'ORDER-1',
   amount: 100,
@@ -83,7 +88,9 @@ describe('stripe persistent operations', () => {
       if (!key || typeof options.body !== 'string')
         throw new Error('POST must carry an idempotency key and form body')
       const body = new URLSearchParams(options.body)
-      const kind = pathname === '/v1/refunds' ? 'refund' : 'order'
+      const kind = pathname === '/v1/refunds'
+        ? 'refund'
+        : 'order'
       if (!outcomes.has(key)) {
         if (kind === 'order') {
           const id = `cs_${++createdOrders}`
@@ -190,7 +197,10 @@ describe('stripe persistent operations', () => {
   })
 
   it('metadata 不得覆盖订单号', async () => {
-    const result = await createStripeProvider(config, repository).createOrder({ ...orderInput, metadata: { orderNo: 'OTHER' } })
+    const result = await createStripeProvider(config, repository).createOrder({
+      ...orderInput,
+      metadata: { orderNo: 'OTHER' },
+    })
     expect(result.success).toBe(false)
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -231,7 +241,12 @@ describe('stripe persistent operations', () => {
   it('退款响应丢失可在新实例安全恢复，参数改变被拒绝', async () => {
     await paidOrder()
     loseResponse.add('refund')
-    const refund = { orderNo: orderInput.orderNo, refundNo: 'REFUND-1', amount: 50, reason: 'Test refund' }
+    const refund = {
+      orderNo: orderInput.orderNo,
+      refundNo: 'REFUND-1',
+      amount: 50,
+      reason: 'Test refund',
+    }
     expect((await createStripeProvider(config, repository).refund(refund)).success).toBe(false)
     expect((await createStripeProvider(config, repository).refund(refund)).success).toBe(true)
     expect((await createStripeProvider(config, repository).refund({ ...refund, amount: 60 })).success).toBe(false)

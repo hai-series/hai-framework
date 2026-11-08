@@ -24,7 +24,9 @@ export function useControlFeedback(message: () => string, label?: () => string |
     if (!value || field?.error || visibility?.open === false)
       return ''
     const name = label?.() || field?.label
-    return name ? uiM('form_field_error', { label: name, message: value }) : value
+    return name
+      ? uiM('form_field_error', { label: name, message: value })
+      : value
   })
 }
 
@@ -75,21 +77,46 @@ function readIssue(control: FormControl): FormValidationIssue | undefined {
   const validity = control.validity
   if (validity.valueMissing)
     return { key: 'form_required' }
-  if (validity.typeMismatch)
-    return { key: control.getAttribute('type') === 'email' ? 'form_email' : 'form_url' }
+  if (validity.typeMismatch) {
+    return {
+      key: control.getAttribute('type') === 'email'
+        ? 'form_email'
+        : 'form_url',
+    }
+  }
   // 程序回填的值也需校验长度，原生 tooShort/tooLong 只覆盖用户输入。
   const minLength = control.getAttribute('minlength')
   const maxLength = control.getAttribute('maxlength')
-  if (validity.tooShort || (control.value && minLength !== null && control.value.length < Number(minLength)))
-    return { key: 'form_min_length', params: { min: control.getAttribute('minlength') ?? '' } }
-  if (validity.tooLong || (control.value && maxLength !== null && control.value.length > Number(maxLength)))
-    return { key: 'form_max_length', params: { max: control.getAttribute('maxlength') ?? '' } }
-  if (validity.rangeUnderflow)
-    return { key: 'form_min', params: { min: control.getAttribute('min') ?? '' } }
-  if (validity.rangeOverflow)
-    return { key: 'form_max', params: { max: control.getAttribute('max') ?? '' } }
-  if (validity.stepMismatch)
-    return { key: 'form_step', params: { step: control.getAttribute('step') ?? '1' } }
+  if (validity.tooShort || (control.value && minLength !== null && control.value.length < Number(minLength))) {
+    return {
+      key: 'form_min_length',
+      params: { min: control.getAttribute('minlength') ?? '' },
+    }
+  }
+  if (validity.tooLong || (control.value && maxLength !== null && control.value.length > Number(maxLength))) {
+    return {
+      key: 'form_max_length',
+      params: { max: control.getAttribute('maxlength') ?? '' },
+    }
+  }
+  if (validity.rangeUnderflow) {
+    return {
+      key: 'form_min',
+      params: { min: control.getAttribute('min') ?? '' },
+    }
+  }
+  if (validity.rangeOverflow) {
+    return {
+      key: 'form_max',
+      params: { max: control.getAttribute('max') ?? '' },
+    }
+  }
+  if (validity.stepMismatch) {
+    return {
+      key: 'form_step',
+      params: { step: control.getAttribute('step') ?? '1' },
+    }
+  }
   if (validity.badInput)
     return { key: 'form_number' }
   if (validity.patternMismatch)
@@ -147,13 +174,17 @@ export function createControlValidation(getOverride: () => FormText | undefined 
   })
   return {
     get message() {
-      return issue ? resolveFormText(getOverride()) || uiM(issue.key, issue.params) : ''
+      return issue
+        ? resolveFormText(getOverride()) || uiM(issue.key, issue.params)
+        : ''
     },
     validate(control: FormControl) {
       currentControl = control
       control.setCustomValidity('')
       issue = readIssue(control)
-      control.setCustomValidity(issue ? resolveFormText(getOverride()) || uiM(issue.key, issue.params) : '')
+      control.setCustomValidity(issue
+        ? resolveFormText(getOverride()) || uiM(issue.key, issue.params)
+        : '')
     },
     blur(control: FormControl) {
       // 默认焦点离开未输入的空字段时不挤动按钮/链接；提交仍由原生 invalid 校验。

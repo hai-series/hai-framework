@@ -58,28 +58,47 @@ test.describe('UI Gallery Charts', () => {
     for (const width of [390, 1440, 1920, 2560, 3840]) {
       await page.setViewportSize({ width, height: 1100 })
       // 等待侧栏断点动画结束，并复位实际滚动容器，避免把中间帧当作截图验收。
-      await expect.poll(() => page.locator('aside').evaluate(element => element.getBoundingClientRect().right)).toBe(width === 390 ? 0 : 240)
+      await expect.poll(() => page.locator('aside').evaluate(element => element.getBoundingClientRect().right)).toBe(width === 390
+        ? 0
+        : 240)
       await page.getByRole('main').evaluate((element) => {
         element.scrollTop = 0
       })
       await expect(page.getByTestId('revenue-metric')).toBeInViewport()
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
       const columns = await page.getByTestId('dashboard-metrics').locator('.hai-dashboard-grid__items').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)
-      expect(columns).toBe(width === 390 ? 1 : 4)
+      expect(columns).toBe(width === 390
+        ? 1
+        : 4)
       const cardBounds = await page.locator('.hai-metric-card, .hai-report-card').evaluateAll(elements => elements.map((element) => {
         const rect = element.getBoundingClientRect()
         return { left: rect.left, right: rect.right }
       }))
       expect(cardBounds.every(bounds => bounds.left >= 0 && bounds.right <= width + 1)).toBe(true)
-      await page.screenshot({ path: testInfo.outputPath(`dashboard-light-${width}.png`), animations: 'disabled' })
+      await page.screenshot({
+        path: testInfo.outputPath(`dashboard-light-${width}.png`),
+        animations: 'disabled',
+      })
       if (width === 390) {
-        await page.getByTestId('dashboard-reports').locator('.hai-report-card').nth(0).screenshot({ path: testInfo.outputPath('dashboard-mobile-bars.png'), animations: 'disabled' })
-        await page.getByTestId('dashboard-reports').locator('.hai-report-card').nth(1).screenshot({ path: testInfo.outputPath('dashboard-mobile-donut.png'), animations: 'disabled' })
+        await page.getByTestId('dashboard-reports').locator('.hai-report-card').nth(0).screenshot({
+          path: testInfo.outputPath('dashboard-mobile-bars.png'),
+          animations: 'disabled',
+        })
+        await page.getByTestId('dashboard-reports').locator('.hai-report-card').nth(1).screenshot({
+          path: testInfo.outputPath('dashboard-mobile-donut.png'),
+          animations: 'disabled',
+        })
       }
     }
     await page.setViewportSize({ width: 1440, height: 1100 })
-    for (const [locale, title] of [['en-US', 'Business overview'], ['ja-JP', '経営概況'], ['zh-CN', '经营概览']]) {
-      await page.context().addCookies([{ name: 'PARAGLIDE_LOCALE', value: locale!, url: new URL(page.url()).origin }])
+    for (const [locale, title] of [
+      ['en-US', 'Business overview'],
+      ['ja-JP', '経営概況'],
+      ['zh-CN', '经营概览'],
+    ]) {
+      await page.context().addCookies([
+        { name: 'PARAGLIDE_LOCALE', value: locale!, url: new URL(page.url()).origin },
+      ])
       await page.reload()
       await page.getByRole('main').evaluate((element) => {
         element.scrollTop = 0
@@ -89,11 +108,17 @@ test.describe('UI Gallery Charts', () => {
       await page.locator('[data-guide="admin-theme"] button').first().click()
       await page.locator('[data-theme-option="dark"]').click()
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
-      await page.screenshot({ path: testInfo.outputPath(`dashboard-dark-${locale}.png`), animations: 'disabled' })
+      await page.screenshot({
+        path: testInfo.outputPath(`dashboard-dark-${locale}.png`),
+        animations: 'disabled',
+      })
     }
     await page.getByTestId('load-native-chart').click()
     await expect(page.getByTestId('native-gauge').getByRole('figure')).toBeVisible()
-    await page.getByTestId('native-gauge').screenshot({ path: testInfo.outputPath('native-layerchart-gauge.png'), animations: 'disabled' })
+    await page.getByTestId('native-gauge').screenshot({
+      path: testInfo.outputPath('native-layerchart-gauge.png'),
+      animations: 'disabled',
+    })
   })
 
   test('分段折线图首次移入点间区域时显示最近点 tooltip 和竖线', async ({ page, request }) => {

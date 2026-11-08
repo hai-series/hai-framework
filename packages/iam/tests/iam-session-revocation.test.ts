@@ -5,7 +5,15 @@ import { IamConfigSchema } from '../src/iam-config.js'
 import { createSessionOperations } from '../src/session/iam-session-functions.js'
 
 async function operations(sliding = false) {
-  const result = await createSessionOperations({ readCredential: async () => ({ success: true, data: { version: '', available: true } }), config: IamConfigSchema.parse({ session: { sliding } }) })
+  const result = await createSessionOperations({
+    readCredential: async () => ({
+      success: true,
+      data: { version: '', available: true },
+    }),
+    config: IamConfigSchema.parse({
+      session: { sliding },
+    }),
+  })
   if (!result.success)
     throw new Error(result.error.message)
   return result.data
@@ -25,7 +33,10 @@ function pauseNextCommit() {
     }
     return commit(...args)
   })
-  return { captured: captured.promise, resume: () => resume.resolve() }
+  return {
+    captured: captured.promise,
+    resume: () => resume.resolve(),
+  }
 }
 
 beforeEach(async () => {
@@ -43,7 +54,9 @@ it.each(['logout', 'logoutAll', 'refresh'] as const)('%s 后迟到的更新不�
     throw new Error(created.error.message)
   const original = created.data
   const gate = pauseNextCommit()
-  const pending = ops.update(original.accessToken, { roles: ['late-admin'] }, original.version)
+  const pending = ops.update(original.accessToken, {
+    roles: ['late-admin'],
+  }, original.version)
   await gate.captured
   if (action === 'logout')
     await ops.delete(original.accessToken)
@@ -61,10 +74,17 @@ it('旧内容版本不能覆盖新资料，并行滑动读取不制造内容冲�
   if (!created.success)
     throw new Error(created.error.message)
   const { accessToken, version } = created.data
-  const reads = await Promise.all([ops.get(accessToken), ops.get(accessToken)])
+  const reads = await Promise.all([
+    ops.get(accessToken),
+    ops.get(accessToken),
+  ])
   expect(reads.every(result => result.success && result.data?.version === version)).toBe(true)
-  expect((await ops.update(accessToken, { data: { theme: 'dark' } }, version)).success).toBe(true)
-  expect((await ops.update(accessToken, { data: { theme: 'stale' } }, version)).success).toBe(false)
+  expect((await ops.update(accessToken, {
+    data: { theme: 'dark' },
+  }, version)).success).toBe(true)
+  expect((await ops.update(accessToken, {
+    data: { theme: 'stale' },
+  }, version)).success).toBe(false)
   const latest = await ops.get(accessToken)
   expect(latest.success && latest.data?.data?.theme).toBe('dark')
   expect(latest.success && latest.data?.version).not.toBe(version)
@@ -72,12 +92,20 @@ it('旧内容版本不能覆盖新资料，并行滑动读取不制造内容冲�
 
 it('迟到批量权限不能覆盖后续登录的会话', async () => {
   const ops = await operations()
-  await ops.create({ userId: 'new-generation', roles: ['old'] })
+  await ops.create({
+    userId: 'new-generation',
+    roles: ['old'],
+  })
   const gate = pauseNextCommit()
-  const pending = ops.patchUserSessions('new-generation', { roles: ['stale-admin'] })
+  const pending = ops.patchUserSessions('new-generation', {
+    roles: ['stale-admin'],
+  })
   await gate.captured
   await ops.deleteByUserId('new-generation')
-  const fresh = await ops.create({ userId: 'new-generation', roles: ['new-user'] })
+  const fresh = await ops.create({
+    userId: 'new-generation',
+    roles: ['new-user'],
+  })
   if (!fresh.success)
     throw new Error(fresh.error.message)
   gate.resume()
@@ -88,13 +116,20 @@ it('迟到批量权限不能覆盖后续登录的会话', async () => {
 
 it('迟到批量权限不能覆盖较新的会话内容版本', async () => {
   const ops = await operations()
-  const created = await ops.create({ userId: 'permission-version', roles: ['old'] })
+  const created = await ops.create({
+    userId: 'permission-version',
+    roles: ['old'],
+  })
   if (!created.success)
     throw new Error(created.error.message)
   const gate = pauseNextCommit()
-  const pending = ops.patchUserSessions('permission-version', { roles: ['stale-admin'] })
+  const pending = ops.patchUserSessions('permission-version', {
+    roles: ['stale-admin'],
+  })
   await gate.captured
-  expect((await ops.patchUserSessions('permission-version', { roles: ['current'] })).success).toBe(true)
+  expect((await ops.patchUserSessions('permission-version', {
+    roles: ['current'],
+  })).success).toBe(true)
   gate.resume()
   expect((await pending).success).toBe(false)
   const latest = await ops.get(created.data.accessToken)

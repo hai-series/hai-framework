@@ -252,7 +252,10 @@ export function createReldbTransportKeyStore(options: CreateReldbTransportKeySto
    */
   async function pruneRows(tx: DmlWithTxOperations): Promise<number> {
     let removed = 0
-    for (const [table, id, expiry] of [[TRANSPORT_KEY_TABLE, 'client_id', 'expires_at_ms'], [TRANSPORT_REQUEST_TABLE, 'request_key', 'expires_at']]) {
+    for (const [table, id, expiry] of [
+      [TRANSPORT_KEY_TABLE, 'client_id', 'expires_at_ms'],
+      [TRANSPORT_REQUEST_TABLE, 'request_key', 'expires_at'],
+    ]) {
       // 内外层都检查过期条件；派生表兼容 MySQL 同表删除，并发维护不按旧快照删除有效行。
       removed += unwrapResult('tx.execute', await tx.execute(
         `DELETE FROM ${table} WHERE ${expiry} <= ${nowSql()} AND ${id} IN (SELECT ${id} FROM (SELECT ${id} FROM ${table} WHERE ${expiry} <= ${nowSql()} LIMIT ${PRUNE_BATCH_SIZE}) AS expired)`,
@@ -275,7 +278,11 @@ export function createReldbTransportKeyStore(options: CreateReldbTransportKeySto
   }
 
   return {
-    get stateScope() { return options.reldb.config?.type && options.reldb.config.type !== 'sqlite' ? 'shared' : 'local' },
+    get stateScope() {
+      return options.reldb.config?.type && options.reldb.config.type !== 'sqlite'
+        ? 'shared'
+        : 'local'
+    },
     async register(publicKey) {
       if (!isValidSM2PublicKey(publicKey))
         throw new TypeError(cryptoM('crypto_sm2PublicKeyInvalid'))
@@ -291,8 +298,12 @@ export function createReldbTransportKeyStore(options: CreateReldbTransportKeySto
         if (total >= maxClients)
           throw new Error(cryptoM('crypto_transportKeyStoreCapacityReached'))
         const inserted = unwrapResult('tx.execute', await tx.execute(
-          `INSERT INTO ${TRANSPORT_KEY_TABLE} (client_id, public_key, created_at_ms, expires_at_ms) VALUES (?, ?, ${nowSql()}, ${ttlSeconds === undefined ? 'NULL' : `${nowSql()} + ?`})`,
-          ttlSeconds === undefined ? [clientId, publicKey] : [clientId, publicKey, ttlSeconds * 1000],
+          `INSERT INTO ${TRANSPORT_KEY_TABLE} (client_id, public_key, created_at_ms, expires_at_ms) VALUES (?, ?, ${nowSql()}, ${ttlSeconds === undefined
+            ? 'NULL'
+            : `${nowSql()} + ?`})`,
+          ttlSeconds === undefined
+            ? [clientId, publicKey]
+            : [clientId, publicKey, ttlSeconds * 1000],
         ))
         if (inserted.changes !== 1)
           throw new Error(cryptoM('crypto_transportClientNotRegistered'))
@@ -323,7 +334,10 @@ export function createReldbTransportKeyStore(options: CreateReldbTransportKeySto
         : `INSERT INTO ${TRANSPORT_REQUEST_TABLE} (request_key, expires_at) VALUES (?, ?) ON CONFLICT (request_key) DO NOTHING`
       const inserted = unwrapResult('reldb.sql.execute', await options.reldb.sql.execute(
         insertSql,
-        [JSON.stringify([clientId, requestId]), expiresAt],
+        [
+          JSON.stringify([clientId, requestId]),
+          expiresAt,
+        ],
       ))
       // 唯一主键约束决定胜者；连接、权限和其它 SQL 故障必须 fail-closed。
       return inserted.changes === 1

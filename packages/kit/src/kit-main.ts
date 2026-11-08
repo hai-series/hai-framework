@@ -5,6 +5,7 @@
  * @module kit-main
  */
 
+import type { KitFunctions } from './kit-types.js'
 import { core } from '@h-ai/core'
 import { createKitAuthActions } from './client/kit-client-auth.js'
 import { createKitClient, installBrowserTransport, installBrowserTransportFetch } from './client/kit-client.js'
@@ -46,7 +47,7 @@ export { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig }
  * void handle
  * ```
  */
-export const kit = {
+export const kit: KitFunctions = {
   /** 创建反馈的受控 catch-all HTTP handler，身份范围由宿主解析。 */
   createFeedbackHandler,
   /** 原子限流工厂；共享store生命周期由应用管理。 */
@@ -163,7 +164,6 @@ export const kit = {
     setBrowserToken,
     /** 清除浏览器端 Access Token（客户端 logout 用） */
     clearBrowserToken,
-    /** 创建浏览器端 Token 存储器（自定义 key 时使用） */
   },
 
   // ─── CRUD ───

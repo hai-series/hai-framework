@@ -5,15 +5,15 @@
  */
 
 import type { PageServerLoad } from './$types'
-import { listAdminRoles, listPermissionsGroupedByResource, requireAdminData } from '$lib/server/iam-admin.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { error } from '@sveltejs/kit'
+import { listAdminRoles, listPermissionsGroupedByResource, requireAdminData } from '#lib/server/iam-admin.js'
 
 export const load: PageServerLoad = async ({ url, locals }) => {
   // 权限检查：role:read
   if (!kit.guard.check(locals.session, 'role:read')) {
-    throw error(403, { message: 'Forbidden' })
+    error(403, 'Forbidden')
   }
 
   const page = Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1

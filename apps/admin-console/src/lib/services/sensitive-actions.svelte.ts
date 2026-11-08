@@ -1,7 +1,7 @@
-/** 再鉴别只保存当前页面待确认动作；密码与单次凭据不进入持久存储。 */
-import * as m from '$lib/paraglide/messages.js'
-import { apiFetch } from '$lib/utils/api'
 import { createSensitiveActions } from '@h-ai/ui/components/scenes/iam/index'
+/** 再鉴别只保存当前页面待确认动作；密码与单次凭据不进入持久存储。 */
+import * as m from '#lib/paraglide/messages.js'
+import { apiFetch } from '#lib/utils/api.js'
 import { authActions } from './auth.js'
 
 export const sensitiveActions = createSensitiveActions(authActions)
@@ -14,5 +14,7 @@ export async function sensitiveFetch(operation: string, input: RequestInfo | URL
   const headers = new Headers(init?.headers)
   if (ticket)
     headers.set('x-hai-reauthentication', ticket)
-  return apiFetch(input, { ...init, headers }, { reauthorize: () => sensitiveActions.authorize(operation) })
+  return apiFetch(input, { ...init, headers }, {
+    reauthorize: () => sensitiveActions.authorize(operation),
+  })
 }

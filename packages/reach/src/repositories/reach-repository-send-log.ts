@@ -351,13 +351,22 @@ function claimableWhere(clock: string): string {
  * ```
  */
 function claimableParams(eligibleBefore: number): unknown[] {
-  return ['pending', eligibleBefore, 'processing', eligibleBefore, 'sending', eligibleBefore]
+  return [
+    'pending',
+    eligibleBefore,
+    'processing',
+    eligibleBefore,
+    'sending',
+    eligibleBefore,
+  ]
 }
 
 function buildSendLogError<T>(detail: string, cause?: unknown): HaiResult<T> {
   return err(
     HaiReachError.SEND_FAILED,
-    reachM('reach_sendFailed', { params: { error: detail } }),
+    reachM('reach_sendFailed', {
+      params: { error: detail },
+    }),
     cause,
   )
 }
@@ -378,15 +387,30 @@ function buildSendLogError<T>(detail: string, cause?: unknown): HaiResult<T> {
  */
 function normalizeSendLog(row: StoredSendLog): HaiResult<StoredSendLog> {
   const normalized = { ...row }
-  for (const field of ['id', 'createdAt', 'updatedAt', 'lockedUntil', 'nextAttemptAt', 'attemptCount', 'maxAttempts', 'retryDelayMs', 'maxRetryDelayMs'] as const) {
+  for (const field of [
+    'id',
+    'createdAt',
+    'updatedAt',
+    'lockedUntil',
+    'nextAttemptAt',
+    'attemptCount',
+    'maxAttempts',
+    'retryDelayMs',
+    'maxRetryDelayMs',
+  ] as const) {
     const value: unknown = row[field]
     if (value === undefined && (field === 'updatedAt' || field === 'lockedUntil'))
       continue
     const validType = typeof value === 'number' || typeof value === 'bigint'
       || (typeof value === 'string' && /^\d+$/.test(value))
-    const integer = validType ? Number(value) : Number.NaN
-    if (!Number.isSafeInteger(integer) || integer < 0)
-      return buildSendLogError(reachM('reach_invalidStoredInteger', { params: { field } }))
+    const integer = validType
+      ? Number(value)
+      : Number.NaN
+    if (!Number.isSafeInteger(integer) || integer < 0) {
+      return buildSendLogError(reachM('reach_invalidStoredInteger', {
+        params: { field },
+      }))
+    }
     Object.assign(normalized, { [field]: integer })
   }
   return ok(normalized)
@@ -625,7 +649,9 @@ export async function createSendLogRepository(db: ReldbFunctions): Promise<HaiRe
   if (!initResult.success) {
     return err(
       HaiReachError.SEND_FAILED,
-      reachM('reach_sendFailed', { params: { error: initResult.error.message } }),
+      reachM('reach_sendFailed', {
+        params: { error: initResult.error.message },
+      }),
       initResult.error,
     )
   }
@@ -657,11 +683,18 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
   async settleSensitive(queueId: string, status: 'sent' | 'unknown' | 'discarded', messageId?: string): Promise<HaiResult<void>> {
     const settled = await this.sql().execute(
       `UPDATE ${TABLE_NAME} SET status = ?, message_id = ?, locked_until = NULL, updated_at = ? WHERE queue_id = ? AND status = 'sending' AND body IS NULL AND vars_json IS NULL AND retry_safe = FALSE`,
-      [status, messageId ?? null, Date.now(), queueId],
+      [
+        status,
+        messageId ?? null,
+        Date.now(),
+        queueId,
+      ],
     )
     if (!settled.success)
       return settled
-    return settled.data.changes === 1 ? ok(undefined) : buildSendLogError(reachM('reach_sensitiveDeliveryUnconfirmed'))
+    return settled.data.changes === 1
+      ? ok(undefined)
+      : buildSendLogError(reachM('reach_sensitiveDeliveryUnconfirmed'))
   }
 
   constructor(db: ReldbFunctions) {
@@ -685,13 +718,17 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
   /** 单条必需查询统一返回经过校验的毫秒 number。 */
   override async getById(id: unknown, tx?: DmlWithTxOperations): Promise<HaiResult<StoredSendLog>> {
     const result = await super.getById(id, tx)
-    return result.success ? normalizeSendLog(result.data) : result
+    return result.success
+      ? normalizeSendLog(result.data)
+      : result
   }
 
   /** 普通列表与 claim 回读共用同一 BIGINT 转换边界。 */
   override async findAll(options?: CrudQueryOptions, tx?: DmlWithTxOperations): Promise<HaiResult<StoredSendLog[]>> {
     const result = await super.findAll(options, tx)
-    return result.success ? normalizeSendLogs(result.data) : result
+    return result.success
+      ? normalizeSendLogs(result.data)
+      : result
   }
 
   /** 分页结果同样拒绝不安全的时间值，不返回经过舍入的毫秒数。 */
@@ -700,12 +737,18 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     if (!result.success)
       return result
     const rows = normalizeSendLogs(result.data.items)
-    return rows.success ? ok({ ...result.data, items: rows.data }) : rows
+    return rows.success
+      ? ok({ ...result.data, items: rows.data })
+      : rows
   }
 
   /** 获取所有待发送记录 */
   async findPending(tx?: DmlWithTxOperations): Promise<HaiResult<StoredSendLog[]>> {
-    const result = await this.findAll({ where: 'status = ?', params: ['pending'], orderBy: 'created_at ASC' }, tx)
+    const result = await this.findAll({
+      where: 'status = ?',
+      params: ['pending'],
+      orderBy: 'created_at ASC',
+    }, tx)
     if (!result.success) {
       return result
     }
@@ -735,14 +778,19 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
        ORDER BY created_at ASC
        LIMIT ?
        FOR UPDATE SKIP LOCKED`,
-      [...claimableParams(eligibleBefore), limit],
+      [
+        ...claimableParams(eligibleBefore),
+        limit,
+      ],
     )
     if (!lockedRowsResult.success) {
       throw lockedRowsResult.error
     }
 
     const claimedIds = lockedRowsResult.data.map((row) => {
-      const id = typeof row.id === 'number' ? row.id : Number(row.id)
+      const id = typeof row.id === 'number'
+        ? row.id
+        : Number(row.id)
       if (!Number.isSafeInteger(id)) {
         throw new TypeError(`Invalid send log id returned when claiming pending batch: ${String(row.id)}`)
       }
@@ -757,7 +805,12 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
       `UPDATE ${TABLE_NAME}
        SET status = ?, processing_owner = ?, locked_until = ${clock} + ?, updated_at = ${clock}, attempt_count = attempt_count + 1
        WHERE id IN (${placeholders})`,
-      ['processing', owner, lockMs, ...claimedIds],
+      [
+        'processing',
+        owner,
+        lockMs,
+        ...claimedIds,
+      ],
     )
     if (!updateResult.success) {
       throw updateResult.error
@@ -797,7 +850,13 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
         `UPDATE ${TABLE_NAME}
          SET status = ?, processing_owner = ?, locked_until = ${clock} + ?, updated_at = ${clock}, attempt_count = attempt_count + 1
          WHERE id = ? AND ${claimableWhere(clock)}`,
-        ['processing', owner, lockMs, row.id, ...claimableParams(eligibleBefore)],
+        [
+          'processing',
+          owner,
+          lockMs,
+          row.id,
+          ...claimableParams(eligibleBefore),
+        ],
       )
       if (!updateResult.success) {
         throw updateResult.error
@@ -829,7 +888,9 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     const time = await this.currentTime()
     if (!time.success)
       return time
-    const now = this.db.config?.type === 'sqlite' ? options?.now ?? time.data : time.data
+    const now = this.db.config?.type === 'sqlite'
+      ? options?.now ?? time.data
+      : time.data
     const clock = this.clockSql(now)
     const limit = options?.limit ?? DEFAULT_CLAIM_BATCH_SIZE
     const lockMs = options?.lockMs ?? DEFAULT_CLAIM_LOCK_MS
@@ -859,7 +920,13 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
          WHERE attempt_count >= max_attempts
            AND (status = ? OR (status = ? AND (locked_until IS NULL OR locked_until <= ${clock}))
              OR (status = ? AND retry_safe = TRUE AND locked_until <= ${clock}))`,
-        ['dead', 'attempts_exhausted', 'pending', 'processing', 'sending'],
+        [
+          'dead',
+          'attempts_exhausted',
+          'pending',
+          'processing',
+          'sending',
+        ],
       )
       if (!exhausted.success)
         throw exhausted.error
@@ -886,7 +953,9 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     }
     catch (error) {
       await tx.rollback()
-      return buildSendLogError(error instanceof Error ? error.message : String(error), error)
+      return buildSendLogError(error instanceof Error
+        ? error.message
+        : String(error), error)
     }
   }
 
@@ -905,10 +974,23 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     const delay = Math.min(row.maxRetryDelayMs, row.retryDelayMs * 2 ** Math.min(row.attemptCount - 1, 30))
     const result = await this.sql(tx).execute(
       `UPDATE ${TABLE_NAME}
-       SET status = ?, last_failure = ?, next_attempt_at = ${dead ? '0' : `${clock} + ?`}, processing_owner = NULL, locked_until = NULL, updated_at = ${clock}
+       SET status = ?, last_failure = ?, next_attempt_at = ${dead
+          ? '0'
+          : `${clock} + ?`}, processing_owner = NULL, locked_until = NULL, updated_at = ${clock}
        WHERE id = ? AND processing_owner = ? AND locked_until > ${clock} AND attempt_count = ?
          AND (status = ? OR (status = ? AND retry_safe = TRUE))`,
-      [dead ? 'dead' : 'pending', reason, ...dead ? [] : [delay], row.id, owner, row.attemptCount, 'processing', 'sending'],
+      [
+        dead ? 'dead' : 'pending',
+        reason,
+        ...dead
+          ? []
+          : [delay],
+        row.id,
+        owner,
+        row.attemptCount,
+        'processing',
+        'sending',
+      ],
     )
     if (!result.success) {
       return buildSendLogError(result.error.message, result.error)
@@ -925,21 +1007,39 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     const result = await this.sql().execute(
       `UPDATE ${TABLE_NAME} SET status = ?, attempt_count = 0, next_attempt_at = ${clock}, last_failure = NULL, updated_at = CASE WHEN updated_at >= ${clock} THEN updated_at + 1 ELSE ${clock} END
        WHERE queue_id = ? AND status = ? AND updated_at = ?`,
-      ['pending', queueId, 'dead', expectedUpdatedAt],
+      [
+        'pending',
+        queueId,
+        'dead',
+        expectedUpdatedAt,
+      ],
     )
-    return result.success && result.data.changes === 1 ? ok(undefined) : buildSendLogError(reachM('reach_deadRequeueFailed'))
+    return result.success && result.data.changes === 1
+      ? ok(undefined)
+      : buildSendLogError(reachM('reach_deadRequeueFailed'))
   }
 
   /** 发送前持久化门闩；仅有效租约可从 processing 进入 sending。 */
   async beginDelivery(id: number, owner: string, retrySafe: boolean, lockMs = DEFAULT_CLAIM_LOCK_MS): Promise<HaiResult<void>> {
     const clock = this.clockSql()
-    const flag = this.db.config?.type === 'postgresql' ? retrySafe : Number(retrySafe)
+    const flag = this.db.config?.type === 'postgresql'
+      ? retrySafe
+      : Number(retrySafe)
     const result = await this.sql().execute(
       `UPDATE ${TABLE_NAME} SET status = ?, retry_safe = ?, locked_until = ${clock} + ?, updated_at = ${clock}
        WHERE id = ? AND status = ? AND processing_owner = ? AND locked_until > ${clock}`,
-      ['sending', flag, lockMs, id, 'processing', owner],
+      [
+        'sending',
+        flag,
+        lockMs,
+        id,
+        'processing',
+        owner,
+      ],
     )
-    return result.success && result.data.changes === 1 ? ok(undefined) : buildSendLogError(reachM('reach_claimLost'))
+    return result.success && result.data.changes === 1
+      ? ok(undefined)
+      : buildSendLogError(reachM('reach_claimLost'))
   }
 
   /** 续租不接受已经过期的 owner，防止暂停的旧进程恢复后重新取得发送权。 */
@@ -948,9 +1048,17 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     const result = await this.sql().execute(
       `UPDATE ${TABLE_NAME} SET locked_until = ${clock} + ?, updated_at = ${clock}
        WHERE id = ? AND processing_owner = ? AND status IN (?, ?) AND locked_until > ${clock}`,
-      [lockMs, id, owner, 'processing', 'sending'],
+      [
+        lockMs,
+        id,
+        owner,
+        'processing',
+        'sending',
+      ],
     )
-    return result.success && result.data.changes === 1 ? ok(undefined) : buildSendLogError(reachM('reach_claimLost'))
+    return result.success && result.data.changes === 1
+      ? ok(undefined)
+      : buildSendLogError(reachM('reach_claimLost'))
   }
 
   /** 未知结果只能停止自动处理，不推断外部副作用已撤销。 */
@@ -958,18 +1066,33 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     const result = await this.sql().execute(
       `UPDATE ${TABLE_NAME} SET status = ?, processing_owner = NULL, locked_until = NULL, next_attempt_at = 0, updated_at = ${this.clockSql()}
        WHERE id = ? AND processing_owner = ? AND status IN (?, ?)`,
-      ['unknown', id, owner, 'processing', 'sending'],
+      [
+        'unknown',
+        id,
+        owner,
+        'processing',
+        'sending',
+      ],
     )
-    return result.success && result.data.changes === 1 ? ok(undefined) : buildSendLogError(reachM('reach_claimLost'))
+    return result.success && result.data.changes === 1
+      ? ok(undefined)
+      : buildSendLogError(reachM('reach_claimLost'))
   }
 
   /** 人工裁定的条件提交，不提供重新排队或重新发送操作。 */
   async resolveUnknown(queueId: string, resolution: ReachUnknownResolution): Promise<HaiResult<void>> {
     const result = await this.sql().execute(
       `UPDATE ${TABLE_NAME} SET status = ?, message_id = ?, next_attempt_at = 0, updated_at = ${this.clockSql()} WHERE queue_id = ? AND status = ?`,
-      [resolution.status, resolution.messageId ?? null, queueId, 'unknown'],
+      [
+        resolution.status,
+        resolution.messageId ?? null,
+        queueId,
+        'unknown',
+      ],
     )
-    return result.success && result.data.changes === 1 ? ok(undefined) : buildSendLogError(reachM('reach_unknownResolutionFailed'))
+    return result.success && result.data.changes === 1
+      ? ok(undefined)
+      : buildSendLogError(reachM('reach_unknownResolutionFailed'))
   }
 
   /** 只有仍持有 sending 有效租约的 owner 可以确认投递。 */
@@ -979,7 +1102,13 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
       `UPDATE ${TABLE_NAME}
        SET status = ?, message_id = ?, processing_owner = NULL, locked_until = NULL, next_attempt_at = 0, updated_at = ${clock}
        WHERE id = ? AND status = ? AND processing_owner = ? AND locked_until > ${clock}`,
-      ['sent', messageId ?? null, id, 'sending', owner],
+      [
+        'sent',
+        messageId ?? null,
+        id,
+        'sending',
+        owner,
+      ],
     )
     if (!result.success) {
       return buildSendLogError(result.error.message, result.error)

@@ -3,12 +3,59 @@ import type { MiddlewareRequirement, ServiceType } from './deploy-types.js'
 
 /** 旧地址、认证与连接模式不能覆盖新服务；其余同后端配置继续生效。 */
 const connectionFields: Partial<Record<ServiceType, readonly string[]>> = {
-  db: ['url', 'host', 'port', 'database', 'user', 'password', 'ssl'],
-  cache: ['url', 'host', 'port', 'password', 'cluster', 'sentinel', 'tls'],
-  storage: ['endpoint', 'bucket', 'region', 'accessKeyId', 'secretAccessKey', 'forcePathStyle', 'createBucket'],
-  vecdb: ['url', 'host', 'port', 'database', 'user', 'password', 'apiKey', 'path', 'serverCommand', 'startupTimeout'],
-  ldap: ['url', 'bindDn', 'bindPassword', 'searchBase', 'useTls'],
-  email: ['host', 'port', 'secure', 'user', 'pass'],
+  db: [
+    'url',
+    'host',
+    'port',
+    'database',
+    'user',
+    'password',
+    'ssl',
+  ],
+  cache: [
+    'url',
+    'host',
+    'port',
+    'password',
+    'cluster',
+    'sentinel',
+    'tls',
+  ],
+  storage: [
+    'endpoint',
+    'bucket',
+    'region',
+    'accessKeyId',
+    'secretAccessKey',
+    'forcePathStyle',
+    'createBucket',
+  ],
+  vecdb: [
+    'url',
+    'host',
+    'port',
+    'database',
+    'user',
+    'password',
+    'apiKey',
+    'path',
+    'serverCommand',
+    'startupTimeout',
+  ],
+  ldap: [
+    'url',
+    'bindDn',
+    'bindPassword',
+    'searchBase',
+    'useTls',
+  ],
+  email: [
+    'host',
+    'port',
+    'secure',
+    'user',
+    'pass',
+  ],
 }
 
 /**
@@ -28,7 +75,10 @@ export function mergeManagedMiddlewareConfig(requirement: MiddlewareRequirement 
   const configured = { ...requirement.config }
   for (const field of connectionFields[requirement.service] ?? [])
     delete configured[field]
-  const merged = { ...configured, ...supplied }
+  const merged = {
+    ...configured,
+    ...supplied,
+  }
   // Redis URL 的数据库编号优先于独立 db 字段；保留选项时必须同步真实连接地址。
   if (requirement.service === 'cache' && typeof configured.db === 'number' && typeof supplied.url === 'string') {
     const url = new URL(supplied.url)

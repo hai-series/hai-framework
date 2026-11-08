@@ -8,12 +8,25 @@ const basePathMessage = core.i18n.createMessageGetter({
   'ja-JP': { invalid: 'PUBLIC_BASE_PATHは空、または/で始まるサイト内ディレクトリーです。外部URL、末尾の/、クエリー、フラグメント、パス逸脱は使えません。' },
 })
 
-/** @param {string} [value] - 无末尾斜杠的公开目录；空字符串表示域名根目录。 */
+/**
+ * @param {string} [value] - 无末尾斜杠的公开目录；空字符串表示域名根目录。
+ * @returns {'' | `/${string}`} 经校验的站内挂载目录，可直接用于 SvelteKit paths.base。
+ */
 export function resolvePublicBasePath(value = process.env.PUBLIC_BASE_PATH ?? '') {
   if (value && (!/^\/[\w.-]+(?:\/[\w.-]+)*$/.test(value) || value.split('/').some(segment => segment === '.' || segment === '..'))) {
-    const language = [process.env.HAI_CORE_DEFAULTLOCALE, process.env.LC_ALL, process.env.LC_MESSAGES, process.env.LANG].find(item => item?.trim())?.split(/[_.-]/)[0]?.toLowerCase()
-    const locale = language === 'en' || language === 'c' || language === 'posix' ? 'en-US' : language === 'ja' ? 'ja-JP' : 'zh-CN'
+    const language = [
+      process.env.HAI_CORE_DEFAULTLOCALE,
+      process.env.LC_ALL,
+      process.env.LC_MESSAGES,
+      process.env.LANG,
+    ].find(item => item?.trim())?.split(/[_.-]/)[0]?.toLowerCase()
+    const locale = language === 'en' || language === 'c' || language === 'posix'
+      ? 'en-US'
+      : language === 'ja'
+        ? 'ja-JP'
+        : 'zh-CN'
     throw new Error(basePathMessage('invalid', { locale }))
   }
-  return value
+  // 已排除不以 / 开头的非空字符串；正则校验无法自动收窄 TypeScript 字符串类型。
+  return /** @type {'' | `/${string}`} */ (value)
 }

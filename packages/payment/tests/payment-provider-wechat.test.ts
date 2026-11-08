@@ -30,7 +30,10 @@ const testConfig = {
 function encryptNotifyResource(plaintext: string, nonce: string, associatedData: string, key: string): string {
   const cipher = createCipheriv('aes-256-gcm', key, nonce)
   cipher.setAAD(Buffer.from(associatedData))
-  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf-8'), cipher.final()])
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, 'utf-8'),
+    cipher.final(),
+  ])
   const authTag = cipher.getAuthTag()
   return Buffer.concat([encrypted, authTag]).toString('base64')
 }
@@ -101,12 +104,28 @@ describe('payment-provider-wechat', () => {
       expect(body.payer.openid).toBe('openid-user-001')
     })
 
-    it.each(['h5', 'native', 'app', 'mini_program', 'unknown'])('拒绝未实现的 %s，不能回落到 JSAPI', async (tradeType) => {
-      const input = { orderNo: 'ORD002', amount: 100, description: '不支持的模式', tradeType: 'jsapi' as const, userId: 'openid-test', notifyUrl: 'https://example.com/notify' }
+    it.each([
+      'h5',
+      'native',
+      'app',
+      'mini_program',
+      'unknown',
+    ])('拒绝未实现的 %s，不能回落到 JSAPI', async (tradeType) => {
+      const input = {
+        orderNo: 'ORD002',
+        amount: 100,
+        description: '不支持的模式',
+        tradeType: 'jsapi' as const,
+        userId: 'openid-test',
+        notifyUrl: 'https://example.com/notify',
+      }
       // 模拟越过 TypeScript 的运行时输入，公共类型已经删除这些模式。
       Reflect.set(input, 'tradeType', tradeType)
       const result = await createWechatPayProvider(testConfig).createOrder(input)
-      expect(result).toMatchObject({ success: false, error: { code: HaiPaymentError.UNSUPPORTED_TRADE_TYPE.code } })
+      expect(result).toMatchObject({
+        success: false,
+        error: { code: HaiPaymentError.UNSUPPORTED_TRADE_TYPE.code },
+      })
       expect(fetchSpy).not.toHaveBeenCalled()
     })
 
@@ -119,12 +138,23 @@ describe('payment-provider-wechat', () => {
         userId,
         notifyUrl: 'https://example.com/notify',
       })
-      expect(result).toMatchObject({ success: false, error: { code: HaiPaymentError.INVALID_INPUT.code } })
+      expect(result).toMatchObject({
+        success: false,
+        error: { code: HaiPaymentError.INVALID_INPUT.code },
+      })
       expect(fetchSpy).not.toHaveBeenCalled()
     })
 
-    it.each([{}, { prepay_id: '' }, { prepay_id: 42 }, { h5_url: 'https://example.com' }])('拒绝不能调起的预支付响应 %j', async (response) => {
-      fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => response })
+    it.each([
+      {},
+      { prepay_id: '' },
+      { prepay_id: 42 },
+      { h5_url: 'https://example.com' },
+    ])('拒绝不能调起的预支付响应 %j', async (response) => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: async () => response,
+      })
       const result = await createWechatPayProvider(testConfig).createOrder({
         orderNo: 'ORD-PREPAY',
         amount: 100,
@@ -133,7 +163,10 @@ describe('payment-provider-wechat', () => {
         userId: 'openid-test',
         notifyUrl: 'https://example.com/notify',
       })
-      expect(result).toMatchObject({ success: false, error: { code: HaiPaymentError.CREATE_ORDER_FAILED.code } })
+      expect(result).toMatchObject({
+        success: false,
+        error: { code: HaiPaymentError.CREATE_ORDER_FAILED.code },
+      })
     })
 
     it('附带 metadata 会包含在请求 body 中', async () => {
@@ -169,7 +202,10 @@ describe('payment-provider-wechat', () => {
         currency: 'USD',
         notifyUrl: 'https://example.com/notify',
       })
-      expect(result).toMatchObject({ success: false, error: { code: HaiPaymentError.INVALID_INPUT.code } })
+      expect(result).toMatchObject({
+        success: false,
+        error: { code: HaiPaymentError.INVALID_INPUT.code },
+      })
       expect(fetchSpy).not.toHaveBeenCalled()
     })
 
@@ -238,7 +274,13 @@ describe('payment-provider-wechat', () => {
         create_time: '2024-01-01T12:00:00+08:00',
         event_type: 'TRANSACTION.SUCCESS',
         resource_type: 'encrypt-resource',
-        resource: { algorithm: 'AEAD_AES_256_GCM', original_type: 'transaction', ciphertext, nonce, associated_data: associatedData },
+        resource: {
+          algorithm: 'AEAD_AES_256_GCM',
+          original_type: 'transaction',
+          ciphertext,
+          nonce,
+          associated_data: associatedData,
+        },
       })
 
       const timestamp = String(Math.floor(Date.now() / 1000))
@@ -286,7 +328,13 @@ describe('payment-provider-wechat', () => {
         create_time: '2024-01-01T12:00:00+08:00',
         event_type: 'TRANSACTION.SUCCESS',
         resource_type: 'encrypt-resource',
-        resource: { algorithm: 'AEAD_AES_256_GCM', original_type: 'transaction', ciphertext, nonce, associated_data: associatedData },
+        resource: {
+          algorithm: 'AEAD_AES_256_GCM',
+          original_type: 'transaction',
+          ciphertext,
+          nonce,
+          associated_data: associatedData,
+        },
       })
 
       const timestamp = String(Math.floor(Date.now() / 1000))

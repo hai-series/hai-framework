@@ -3,8 +3,8 @@
    * 个人中心页 — 集成 @h-ai/iam 用户认证、@h-ai/storage 头像上传、ActionSheet 操作菜单
    */
   import { resolve } from '$app/paths'
-  import * as m from '$lib/paraglide/messages.js'
   import { ActionSheet, Avatar, Badge, Button, Card, Skeleton, Spinner } from '@h-ai/ui'
+  import * as m from '#lib/paraglide/messages.js'
 
   let user = $state<{ id: string, username: string, displayName?: string, avatarUrl?: string, email?: string } | null>(null)
   let loading = $state(true)
@@ -12,12 +12,42 @@
   let showActions = $state(false)
 
   const menuItems = [
-    { id: 'orders', icon: 'icon-[tabler--package]', label: m.profile_menu_orders, badge: '3' },
-    { id: 'wallet', icon: 'icon-[tabler--wallet]', label: m.profile_menu_wallet, badge: '' },
-    { id: 'address', icon: 'icon-[tabler--map-pin]', label: m.profile_menu_address, badge: '' },
-    { id: 'favorites', icon: 'icon-[tabler--star]', label: m.profile_menu_favorites, badge: '12' },
-    { id: 'coupon', icon: 'icon-[tabler--ticket]', label: m.profile_menu_coupon, badge: '5' },
-    { id: 'settings', icon: 'icon-[tabler--settings]', label: m.profile_menu_settings, badge: '' },
+    {
+      id: 'orders',
+      icon: 'icon-[tabler--package]',
+      label: m.profile_menu_orders,
+      badge: '3',
+    },
+    {
+      id: 'wallet',
+      icon: 'icon-[tabler--wallet]',
+      label: m.profile_menu_wallet,
+      badge: '',
+    },
+    {
+      id: 'address',
+      icon: 'icon-[tabler--map-pin]',
+      label: m.profile_menu_address,
+      badge: '',
+    },
+    {
+      id: 'favorites',
+      icon: 'icon-[tabler--star]',
+      label: m.profile_menu_favorites,
+      badge: '12',
+    },
+    {
+      id: 'coupon',
+      icon: 'icon-[tabler--ticket]',
+      label: m.profile_menu_coupon,
+      badge: '5',
+    },
+    {
+      id: 'settings',
+      icon: 'icon-[tabler--settings]',
+      label: m.profile_menu_settings,
+      badge: '',
+    },
   ]
 
   $effect(() => {
@@ -126,7 +156,7 @@
         <Avatar name='?' size='xl' class='opacity-60' />
         <div>
           <h2 class='text-lg font-bold'>{m.profile_guest_title()}</h2>
-          <a href={resolve('/auth/login', {})} class='text-sm opacity-80 underline'>{m.profile_guest_login_hint()}</a>
+          <a href={resolve('auth/login')} class='text-sm opacity-80 underline'>{m.profile_guest_login_hint()}</a>
         </div>
       </div>
     {/if}
@@ -200,9 +230,19 @@
   title={m.action_more()}
   cancelText={m.action_cancel()}
   items={[
-    { id: 'share', label: m.action_share() },
-    { id: 'edit', label: m.action_edit_profile() },
-    { id: 'clear', label: m.action_clear_cache(), destructive: true },
+    {
+      id: 'share',
+      label: m.action_share(),
+    },
+    {
+      id: 'edit',
+      label: m.action_edit_profile(),
+    },
+    {
+      id: 'clear',
+      label: m.action_clear_cache(),
+      destructive: true,
+    },
   ]}
   onselect={handleActionSelect}
   onclose={() => showActions = false}

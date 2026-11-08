@@ -11,7 +11,10 @@ test('弹窗中的提示可通过键盘关闭并恢复操作焦点', async ({ pa
   const notification = page.locator('.hai-toast-item')
   await page.keyboard.press('F8')
   await expect(notification.getByRole('button', { name: '关闭', exact: true })).toBeFocused()
-  await page.screenshot({ path: testInfo.outputPath('toast-modal-keyboard.png'), animations: 'disabled' })
+  await page.screenshot({
+    path: testInfo.outputPath('toast-modal-keyboard.png'),
+    animations: 'disabled',
+  })
   await page.keyboard.press('Escape')
   await expect(notification).toHaveCount(0)
   await expect(dialog).toBeVisible()
@@ -43,16 +46,25 @@ test('浮动提示支持方位、逐条展示、关闭和自动消失，不改�
           const bounds = target.getBoundingClientRect()
           return bounds.y + bounds.height / 2
         }
-        return [element.querySelector(':scope > span[aria-hidden="true"]')!, element.querySelector('.hai-toast-message')!, element.querySelector('button')!].map(center)
+        return [
+          element.querySelector(':scope > span[aria-hidden="true"]')!,
+          element.querySelector('.hai-toast-message')!,
+          element.querySelector('button')!,
+        ].map(center)
       })
       expect(Math.max(...centers) - Math.min(...centers)).toBeLessThan(1)
       expect(box.height).toBeLessThanOrEqual(52)
       expect(box.x).toBeGreaterThanOrEqual(0)
       expect(box.x + box.width).toBeLessThanOrEqual(width)
-      expect(position.startsWith('top') ? box.y : 960 - box.y - box.height).toBeLessThan(40)
+      expect(position.startsWith('top')
+        ? box.y
+        : 960 - box.y - box.height).toBeLessThan(40)
       const after = (await trigger.boundingBox())!
       expect(Math.abs(after.y - before.y)).toBeLessThan(1)
-      await page.screenshot({ path: testInfo.outputPath(`toast-${width}-${position}.png`), animations: 'disabled' })
+      await page.screenshot({
+        path: testInfo.outputPath(`toast-${width}-${position}.png`),
+        animations: 'disabled',
+      })
       await notification.getByRole('button', { name: '关闭', exact: true }).click()
       await expect(notification).toHaveCount(0)
     }
@@ -79,7 +91,10 @@ test('浮动提示支持方位、逐条展示、关闭和自动消失，不改�
   await page.getByTestId('toast-position-bottom-right').click()
   await expect(notification).toBeVisible()
   expect(await notification.evaluate(element => getComputedStyle(element).animationName)).toBe('none')
-  await page.screenshot({ path: testInfo.outputPath('toast-dark-reduced-motion.png'), animations: 'disabled' })
+  await page.screenshot({
+    path: testInfo.outputPath('toast-dark-reduced-motion.png'),
+    animations: 'disabled',
+  })
   await notification.getByRole('button', { name: '关闭', exact: true }).focus()
   await page.keyboard.press('Enter')
   await expect(notification).toHaveCount(0)
@@ -118,7 +133,9 @@ test('浮动提示支持方位、逐条展示、关闭和自动消失，不改�
       await page.getByTestId(`toast-type-${variant}`).click()
       await expect(notification).toHaveAttribute('data-variant', variant)
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
-      await expect(notification).toHaveAttribute('role', variant === 'error' ? 'alert' : 'status')
+      await expect(notification).toHaveAttribute('role', variant === 'error'
+        ? 'alert'
+        : 'status')
       const colors = await notification.evaluate((element) => {
         const style = getComputedStyle(element)
         return { border: style.borderInlineStartColor, background: style.backgroundColor, width: style.borderInlineStartWidth }
@@ -126,9 +143,16 @@ test('浮动提示支持方位、逐条展示、关闭和自动消失，不改�
       expect(colors.width).toBe('3px')
       borders.add(colors.border)
       backgrounds.add(colors.background)
-      await page.screenshot({ path: testInfo.outputPath(`toast-type-${theme}-${variant}.png`), animations: 'disabled' })
-      if (theme === 'light' && variant === 'error')
-        await notification.screenshot({ path: testInfo.outputPath('toast-error-compact.png'), animations: 'disabled' })
+      await page.screenshot({
+        path: testInfo.outputPath(`toast-type-${theme}-${variant}.png`),
+        animations: 'disabled',
+      })
+      if (theme === 'light' && variant === 'error') {
+        await notification.screenshot({
+          path: testInfo.outputPath('toast-error-compact.png'),
+          animations: 'disabled',
+        })
+      }
       await notification.getByRole('button', { name: '关闭', exact: true }).click()
       await expect(notification).toHaveCount(0)
     }

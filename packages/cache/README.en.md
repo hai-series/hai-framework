@@ -10,6 +10,8 @@ A unified cache module. The `cache` object provides KV / Hash / List / Set / ZSe
 
 Memory KV entries expire at their expiration time. `incr/decr/incrBy/decrBy` accept only safe integers or integer strings; invalid increments and overflow return `OPERATION_FAILED` without changing the original value. Hash names such as `__proto__` / `constructor` remain ordinary fields and do not change the returned object's prototype.
 
+Memory KV, Hash, List, Set, and ZSet share one key namespace. `exists/expire/expireAt/ttl/persist/keys/scan/del/type` cover every structure; structure operations also treat expired keys as absent. del counts logical keys actually removed, and structure operations on another key type fail.
+
 Connections become available only after a successful health check. Failed initialization disposes its candidate; `error.ext.cleanupPending === true` identifies cleanup that still needs retry. `cache.close()` returns `Promise<HaiResult<void>>`, waits for initialization, and coalesces concurrent close calls. Once cleanup starts, `isInitialized` is false and configuration/operations are unavailable. A failed cleanup retains the resource: the next `close()` or `init()` retries disposal before allocating a replacement. Always inspect the close result.
 
 ```ts
@@ -95,7 +97,9 @@ await cache.init({
 await cache.init({
   type: 'redis',
   sentinel: {
-    sentinels: [{ host: 'sentinel1', port: 26379 }],
+    sentinels: [
+      { host: 'sentinel1', port: 26379 }
+    ],
     name: 'mymaster',
   },
 })

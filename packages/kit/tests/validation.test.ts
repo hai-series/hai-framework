@@ -20,9 +20,20 @@ describe('validateForm', () => {
     ['ja-JP', '送信データにこの操作で使用できない項目が含まれています。ページを更新して再度お試しください。'],
   ] as const)('严格表单的未知字段提示遵循 %s，不暴露内部字段名', async (locale, message) => {
     setAllModulesLocale(locale)
-    const request = new Request('http://localhost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Name', internalField: true }) })
-    const result = await validateForm(request, z.strictObject({ name: z.string() }))
-    expect(result).toEqual({ valid: false, errors: [{ field: '_', message }] })
+    const request = new Request('http://localhost', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Name', internalField: true }),
+    })
+    const result = await validateForm(request, z.strictObject({
+      name: z.string(),
+    }))
+    expect(result).toEqual({
+      valid: false,
+      errors: [
+        { field: '_', message },
+      ],
+    })
   })
 
   const userSchema = z.object({
@@ -61,7 +72,9 @@ describe('validateForm', () => {
 
   it('应该将 Zod 默认英文错误本地化', async () => {
     setAllModulesLocale('zh-CN')
-    const schema = z.object({ password: z.string().min(8) })
+    const schema = z.object({
+      password: z.string().min(8),
+    })
     const request = new Request('http://localhost', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -79,7 +92,9 @@ describe('validateForm', () => {
 
   it('应该保留 Schema 自定义错误消息', async () => {
     setAllModulesLocale('zh-CN')
-    const schema = z.object({ username: z.string().min(3, '用户名太短') })
+    const schema = z.object({
+      username: z.string().min(3, '用户名太短'),
+    })
     const request = new Request('http://localhost', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

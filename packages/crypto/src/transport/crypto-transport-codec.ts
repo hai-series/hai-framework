@@ -70,7 +70,9 @@ export function hashTransportPath(service: TransportCryptoServiceLike, path: str
     if (!path.startsWith('/') || new TextEncoder().encode(path).byteLength > 8192)
       return transportAuthenticationFailure()
     const digest = service.hash.hash(path)
-    return digest.success && /^[a-f0-9]{64}$/.test(digest.data) ? digest : transportAuthenticationFailure()
+    return digest.success && /^[a-f0-9]{64}$/.test(digest.data)
+      ? digest
+      : transportAuthenticationFailure()
   }
   catch {
     return transportAuthenticationFailure()
@@ -128,7 +130,14 @@ export function sealTransportPayload(
     const wrapped = service.asymmetric.encrypt(JSON.stringify([encryptionKey, authenticationKey]), recipientPublicKey)
     if (!encrypted.success || !wrapped.success)
       return transportAuthenticationFailure()
-    const payload = { context: { ...context }, direction, status, encryptedKey: wrapped.data, ciphertext: encrypted.data.ciphertext, iv: encrypted.data.iv }
+    const payload = {
+      context: { ...context },
+      direction,
+      status,
+      encryptedKey: wrapped.data,
+      ciphertext: encrypted.data.ciphertext,
+      iv: encrypted.data.iv,
+    }
     const text = authenticatedText(payload)
     const tag = service.hash.hmac(text, authenticationKey)
     if (!tag.success)
@@ -137,7 +146,9 @@ export function sealTransportPayload(
     if (!signature.success)
       return transportAuthenticationFailure()
     const authenticated = { ...payload, tag: tag.data, signature: signature.data }
-    return isValidEncryptedPayload(authenticated, limits) ? ok(authenticated) : transportAuthenticationFailure()
+    return isValidEncryptedPayload(authenticated, limits)
+      ? ok(authenticated)
+      : transportAuthenticationFailure()
   }
   catch {
     return transportAuthenticationFailure()
@@ -248,13 +259,15 @@ export function isValidEncryptedPayload(value: unknown, limits: TransportBodyLim
     && typeof c.method === 'string' && /^[A-Z]{1,16}$/.test(c.method)
     && typeof c.pathHash === 'string' && /^[a-f0-9]{64}$/.test(c.pathHash)
     && (p.direction === 'request' || p.direction === 'response')
-    && Number.isInteger(p.status) && (p.direction === 'request' ? p.status === 0 : Number(p.status) >= 100 && Number(p.status) <= 599)
-    && typeof p.encryptedKey === 'string' && /^[a-f0-9]{1,8192}$/i.test(p.encryptedKey)
-    && typeof p.ciphertext === 'string' && p.ciphertext.length <= limits.encryptedPayloadBytes
-    && p.ciphertext.length > 0 && p.ciphertext.length % 32 === 0 && /^[a-f0-9]+$/i.test(p.ciphertext)
-    && typeof p.iv === 'string' && /^[a-f0-9]{32}$/i.test(p.iv)
-    && typeof p.tag === 'string' && /^[a-f0-9]{64}$/.test(p.tag)
-    && typeof p.signature === 'string' && /^[a-f0-9]{128}$/i.test(p.signature)
+    && Number.isInteger(p.status) && (p.direction === 'request'
+    ? p.status === 0
+    : Number(p.status) >= 100 && Number(p.status) <= 599)
+  && typeof p.encryptedKey === 'string' && /^[a-f0-9]{1,8192}$/i.test(p.encryptedKey)
+  && typeof p.ciphertext === 'string' && p.ciphertext.length <= limits.encryptedPayloadBytes
+  && p.ciphertext.length > 0 && p.ciphertext.length % 32 === 0 && /^[a-f0-9]+$/i.test(p.ciphertext)
+  && typeof p.iv === 'string' && /^[a-f0-9]{32}$/i.test(p.iv)
+  && typeof p.tag === 'string' && /^[a-f0-9]{64}$/.test(p.tag)
+  && typeof p.signature === 'string' && /^[a-f0-9]{128}$/i.test(p.signature)
 }
 
 /**

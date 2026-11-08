@@ -23,9 +23,24 @@ const logger = core.logger.child({ module: 'iam', scope: 'seed' })
 
 /** 默认角色（名称通过 i18n 获取） */
 const DEFAULT_ROLES = [
-  { code: 'admin', name: () => iamM('iam_seedRoleAdminName'), description: () => iamM('iam_seedRoleAdminDesc'), isSystem: true },
-  { code: 'user', name: () => iamM('iam_seedRoleUserName'), description: () => iamM('iam_seedRoleUserDesc'), isSystem: true },
-  { code: 'guest', name: () => iamM('iam_seedRoleGuestName'), description: () => iamM('iam_seedRoleGuestDesc'), isSystem: true },
+  {
+    code: 'admin',
+    name: () => iamM('iam_seedRoleAdminName'),
+    description: () => iamM('iam_seedRoleAdminDesc'),
+    isSystem: true,
+  },
+  {
+    code: 'user',
+    name: () => iamM('iam_seedRoleUserName'),
+    description: () => iamM('iam_seedRoleUserDesc'),
+    isSystem: true,
+  },
+  {
+    code: 'guest',
+    name: () => iamM('iam_seedRoleGuestName'),
+    description: () => iamM('iam_seedRoleGuestDesc'),
+    isSystem: true,
+  },
 ]
 
 /** 默认权限（名称通过 i18n 获取），按类型分组 */
@@ -37,39 +52,213 @@ const DEFAULT_PERMISSIONS: Array<{
   action: string
 }> = [
   // ─── 菜单权限 ───
-  { code: 'dashboard:view', name: () => iamM('iam_seedPermDashboardView'), type: 'menu', resource: 'dashboard', action: 'view' },
-  { code: 'user:read', name: () => iamM('iam_seedPermUserRead'), type: 'menu', resource: 'user', action: 'read' },
-  { code: 'role:read', name: () => iamM('iam_seedPermRoleRead'), type: 'menu', resource: 'role', action: 'read' },
-  { code: 'permission:read', name: () => iamM('iam_seedPermPermRead'), type: 'menu', resource: 'permission', action: 'read' },
-  { code: 'system:logs', name: () => iamM('iam_seedPermSystemLogs'), type: 'menu', resource: 'system', action: 'logs' },
-  { code: 'system:settings', name: () => iamM('iam_seedPermSystemSettings'), type: 'menu', resource: 'system', action: 'settings' },
-  { code: 'system:modules', name: () => iamM('iam_seedPermSystemModules'), type: 'menu', resource: 'system', action: 'modules' },
-  { code: 'profile:read', name: () => iamM('iam_seedPermProfileRead'), type: 'menu', resource: 'profile', action: 'read' },
+  {
+    code: 'dashboard:view',
+    name: () => iamM('iam_seedPermDashboardView'),
+    type: 'menu',
+    resource: 'dashboard',
+    action: 'view',
+  },
+  {
+    code: 'user:read',
+    name: () => iamM('iam_seedPermUserRead'),
+    type: 'menu',
+    resource: 'user',
+    action: 'read',
+  },
+  {
+    code: 'role:read',
+    name: () => iamM('iam_seedPermRoleRead'),
+    type: 'menu',
+    resource: 'role',
+    action: 'read',
+  },
+  {
+    code: 'permission:read',
+    name: () => iamM('iam_seedPermPermRead'),
+    type: 'menu',
+    resource: 'permission',
+    action: 'read',
+  },
+  {
+    code: 'system:logs',
+    name: () => iamM('iam_seedPermSystemLogs'),
+    type: 'menu',
+    resource: 'system',
+    action: 'logs',
+  },
+  {
+    code: 'system:settings',
+    name: () => iamM('iam_seedPermSystemSettings'),
+    type: 'menu',
+    resource: 'system',
+    action: 'settings',
+  },
+  {
+    code: 'system:modules',
+    name: () => iamM('iam_seedPermSystemModules'),
+    type: 'menu',
+    resource: 'system',
+    action: 'modules',
+  },
+  {
+    code: 'profile:read',
+    name: () => iamM('iam_seedPermProfileRead'),
+    type: 'menu',
+    resource: 'profile',
+    action: 'read',
+  },
 
   // ─── API 权限 ───
-  { code: 'user:list', name: () => iamM('iam_seedPermUserList'), type: 'api', resource: 'user', action: 'list' },
-  { code: 'user:api:create', name: () => iamM('iam_seedPermUserApiCreate'), type: 'api', resource: 'user', action: 'api:create' },
-  { code: 'user:api:update', name: () => iamM('iam_seedPermUserApiUpdate'), type: 'api', resource: 'user', action: 'api:update' },
-  { code: 'user:api:delete', name: () => iamM('iam_seedPermUserApiDelete'), type: 'api', resource: 'user', action: 'api:delete' },
-  { code: 'role:list', name: () => iamM('iam_seedPermRoleList'), type: 'api', resource: 'role', action: 'list' },
-  { code: 'role:api:create', name: () => iamM('iam_seedPermRoleApiCreate'), type: 'api', resource: 'role', action: 'api:create' },
-  { code: 'role:api:update', name: () => iamM('iam_seedPermRoleApiUpdate'), type: 'api', resource: 'role', action: 'api:update' },
-  { code: 'role:api:delete', name: () => iamM('iam_seedPermRoleApiDelete'), type: 'api', resource: 'role', action: 'api:delete' },
-  { code: 'permission:list', name: () => iamM('iam_seedPermPermList'), type: 'api', resource: 'permission', action: 'list' },
-  { code: 'permission:manage', name: () => iamM('iam_seedPermPermManage'), type: 'api', resource: 'permission', action: 'manage' },
-  { code: 'permission:api:create', name: () => iamM('iam_seedPermPermApiCreate'), type: 'api', resource: 'permission', action: 'api:create' },
-  { code: 'permission:api:delete', name: () => iamM('iam_seedPermPermApiDelete'), type: 'api', resource: 'permission', action: 'api:delete' },
-  { code: 'audit:read', name: () => iamM('iam_seedPermAuditRead'), type: 'api', resource: 'audit', action: 'read' },
+  {
+    code: 'user:list',
+    name: () => iamM('iam_seedPermUserList'),
+    type: 'api',
+    resource: 'user',
+    action: 'list',
+  },
+  {
+    code: 'user:api:create',
+    name: () => iamM('iam_seedPermUserApiCreate'),
+    type: 'api',
+    resource: 'user',
+    action: 'api:create',
+  },
+  {
+    code: 'user:api:update',
+    name: () => iamM('iam_seedPermUserApiUpdate'),
+    type: 'api',
+    resource: 'user',
+    action: 'api:update',
+  },
+  {
+    code: 'user:api:delete',
+    name: () => iamM('iam_seedPermUserApiDelete'),
+    type: 'api',
+    resource: 'user',
+    action: 'api:delete',
+  },
+  {
+    code: 'role:list',
+    name: () => iamM('iam_seedPermRoleList'),
+    type: 'api',
+    resource: 'role',
+    action: 'list',
+  },
+  {
+    code: 'role:api:create',
+    name: () => iamM('iam_seedPermRoleApiCreate'),
+    type: 'api',
+    resource: 'role',
+    action: 'api:create',
+  },
+  {
+    code: 'role:api:update',
+    name: () => iamM('iam_seedPermRoleApiUpdate'),
+    type: 'api',
+    resource: 'role',
+    action: 'api:update',
+  },
+  {
+    code: 'role:api:delete',
+    name: () => iamM('iam_seedPermRoleApiDelete'),
+    type: 'api',
+    resource: 'role',
+    action: 'api:delete',
+  },
+  {
+    code: 'permission:list',
+    name: () => iamM('iam_seedPermPermList'),
+    type: 'api',
+    resource: 'permission',
+    action: 'list',
+  },
+  {
+    code: 'permission:manage',
+    name: () => iamM('iam_seedPermPermManage'),
+    type: 'api',
+    resource: 'permission',
+    action: 'manage',
+  },
+  {
+    code: 'permission:api:create',
+    name: () => iamM('iam_seedPermPermApiCreate'),
+    type: 'api',
+    resource: 'permission',
+    action: 'api:create',
+  },
+  {
+    code: 'permission:api:delete',
+    name: () => iamM('iam_seedPermPermApiDelete'),
+    type: 'api',
+    resource: 'permission',
+    action: 'api:delete',
+  },
+  {
+    code: 'audit:read',
+    name: () => iamM('iam_seedPermAuditRead'),
+    type: 'api',
+    resource: 'audit',
+    action: 'read',
+  },
 
   // ─── 按钮权限 ───
-  { code: 'user:create', name: () => iamM('iam_seedPermUserCreate'), type: 'button', resource: 'user', action: 'create' },
-  { code: 'user:update', name: () => iamM('iam_seedPermUserUpdate'), type: 'button', resource: 'user', action: 'update' },
-  { code: 'user:delete', name: () => iamM('iam_seedPermUserDelete'), type: 'button', resource: 'user', action: 'delete' },
-  { code: 'role:create', name: () => iamM('iam_seedPermRoleCreate'), type: 'button', resource: 'role', action: 'create' },
-  { code: 'role:update', name: () => iamM('iam_seedPermRoleUpdate'), type: 'button', resource: 'role', action: 'update' },
-  { code: 'role:delete', name: () => iamM('iam_seedPermRoleDelete'), type: 'button', resource: 'role', action: 'delete' },
-  { code: 'permission:create', name: () => iamM('iam_seedPermPermCreate'), type: 'button', resource: 'permission', action: 'create' },
-  { code: 'permission:delete', name: () => iamM('iam_seedPermPermDelete'), type: 'button', resource: 'permission', action: 'delete' },
+  {
+    code: 'user:create',
+    name: () => iamM('iam_seedPermUserCreate'),
+    type: 'button',
+    resource: 'user',
+    action: 'create',
+  },
+  {
+    code: 'user:update',
+    name: () => iamM('iam_seedPermUserUpdate'),
+    type: 'button',
+    resource: 'user',
+    action: 'update',
+  },
+  {
+    code: 'user:delete',
+    name: () => iamM('iam_seedPermUserDelete'),
+    type: 'button',
+    resource: 'user',
+    action: 'delete',
+  },
+  {
+    code: 'role:create',
+    name: () => iamM('iam_seedPermRoleCreate'),
+    type: 'button',
+    resource: 'role',
+    action: 'create',
+  },
+  {
+    code: 'role:update',
+    name: () => iamM('iam_seedPermRoleUpdate'),
+    type: 'button',
+    resource: 'role',
+    action: 'update',
+  },
+  {
+    code: 'role:delete',
+    name: () => iamM('iam_seedPermRoleDelete'),
+    type: 'button',
+    resource: 'role',
+    action: 'delete',
+  },
+  {
+    code: 'permission:create',
+    name: () => iamM('iam_seedPermPermCreate'),
+    type: 'button',
+    resource: 'permission',
+    action: 'create',
+  },
+  {
+    code: 'permission:delete',
+    name: () => iamM('iam_seedPermPermDelete'),
+    type: 'button',
+    resource: 'permission',
+    action: 'delete',
+  },
 ]
 
 /** 普通用户（user）角色默认权限代码列表 */
@@ -115,7 +304,12 @@ export async function seedIamData(
         roleMap.set(role.code, existingId)
         continue
       }
-      const result = await authz.createRole({ code: role.code, name: role.name(), description: role.description(), isSystem: role.isSystem })
+      const result = await authz.createRole({
+        code: role.code,
+        name: role.name(),
+        description: role.description(),
+        isSystem: role.isSystem,
+      })
       if (result.success) {
         roleMap.set(role.code, result.data.id)
       }
@@ -148,7 +342,13 @@ export async function seedIamData(
         permMap.set(perm.code, existingId)
         continue
       }
-      const result = await authz.createPermission({ code: perm.code, name: perm.name(), type: perm.type, resource: perm.resource, action: perm.action })
+      const result = await authz.createPermission({
+        code: perm.code,
+        name: perm.name(),
+        type: perm.type,
+        resource: perm.resource,
+        action: perm.action,
+      })
       if (result.success) {
         permMap.set(perm.code, result.data.id)
       }

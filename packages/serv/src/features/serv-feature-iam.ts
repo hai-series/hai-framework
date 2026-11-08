@@ -145,8 +145,12 @@ export function createIamProcedures(deps: IamProcedureDeps) {
         return policy
       // 标准资料入口与独立资料/头像入口共用策略；混合更新优先使用资料用途。
       const operations = [
-        ...(Object.keys(input).some(key => key !== 'avatarUrl') ? ['iam.profile.update'] : []),
-        ...(input.avatarUrl !== undefined ? ['iam.profile.avatar'] : []),
+        ...(Object.keys(input).some(key => key !== 'avatarUrl')
+          ? ['iam.profile.update']
+          : []),
+        ...(input.avatarUrl !== undefined
+          ? ['iam.profile.avatar']
+          : []),
       ]
       const operation = operations.find(value => policy.data.reauthentication.operations.includes(value)) ?? operations[0] ?? 'iam.profile.update'
       return sensitive(context, operation, () => iam.user.updateCurrentUser(token, input))
@@ -158,7 +162,9 @@ export function createIamProcedures(deps: IamProcedureDeps) {
 
     .route('users.get')
     .permission('iam.users.read')
-    .handle(({ input }) => iam.user.getUser(input.id, { include: ['roles'] }))
+    .handle(({ input }) => iam.user.getUser(input.id, {
+      include: ['roles'],
+    }))
 
     .route('users.create')
     .permission('iam.users.write')
@@ -233,7 +239,9 @@ export function createIamProcedures(deps: IamProcedureDeps) {
 
 async function createUser(iam: IamFunctions, input: IamAdminCreateUserInput | IamInviteUserInput): Promise<HaiResult<User>> {
   const invited = !('password' in input)
-  const registerResult = 'password' in input ? await iam.user.createUser(input) : await iam.user.inviteUser(input)
+  const registerResult = 'password' in input
+    ? await iam.user.createUser(input)
+    : await iam.user.inviteUser(input)
   if (!registerResult.success)
     return registerResult
 

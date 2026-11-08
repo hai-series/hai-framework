@@ -21,7 +21,7 @@ import { DistanceMetricSchema } from '../vecdb-config.js'
 import { vecdbM } from '../vecdb-i18n.js'
 import { HaiVecdbError } from '../vecdb-types.js'
 
-import { createBaseCollectionOps, createBaseVectorOps } from './vecdb-provider-base.js'
+import { createBaseCollectionOps, createBaseVectorOps, vectorScoreFromDistance } from './vecdb-provider-base.js'
 
 // @lancedb/lancedb 为可选原生依赖，用 require 运行时加载（见 loadLancedb）
 const require = createRequire(import.meta.url)
@@ -116,14 +116,19 @@ export function createLancedbProvider(): VecdbProvider {
     }
     catch (error) {
       logger.error('Failed to load @lancedb/lancedb', { error })
-      return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', { params: { driver: '@lancedb/lancedb' } }), error)
+      return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', {
+        params: { driver: '@lancedb/lancedb' },
+      }), error)
     }
   }
 
   /** 每次读取最新表定义；空表、外部重建与其它连接写入都不依赖进程缓存。 */
   async function withCollection<T>(name: string, action: (table: Table, meta: CollectionMeta) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
-    if (!(await connection!.tableNames()).includes(name))
-      return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
+    if (!(await connection!.tableNames()).includes(name)) {
+      return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+        params: { name },
+      }))
+    }
     const table = await connection!.openTable(name)
     try {
       const schema = await table.schema()
@@ -131,7 +136,9 @@ export function createLancedbProvider(): VecdbProvider {
       const metric = DistanceMetricSchema.safeParse(schema.metadata.get(COLLECTION_METRIC_KEY) ?? null)
       if (!vectorType || !('listSize' in vectorType) || typeof vectorType.listSize !== 'number'
         || !Number.isInteger(vectorType.listSize) || vectorType.listSize <= 0 || !metric.success) {
-        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', { params: { name } }))
+        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', {
+          params: { name },
+        }))
       }
       const primaryKeys = schema.fields.filter(field => field.metadata.has(PRIMARY_KEY_POSITION)
         || ['true', '1', 'yes'].includes(field.metadata.get(PRIMARY_KEY_FLAG)?.toLowerCase() ?? ''))
@@ -144,8 +151,17 @@ export function createLancedbProvider(): VecdbProvider {
       if (!driver.success)
         return driver
       const jsonMetadata = schema.fields.find(field => field.name === 'metadata')?.metadata.get('ARROW:extension:name') === 'lance.json'
-      const inputSchema = jsonMetadata ? schema.assign([driver.data.makeJsonField('metadata', false)]) : undefined
-      return await action(table, { dimension: vectorType.listSize, metric: metric.data, atomicWrites, inputSchema })
+      const inputSchema = jsonMetadata
+        ? schema.assign([
+            driver.data.makeJsonField('metadata', false),
+          ])
+        : undefined
+      return await action(table, {
+        dimension: vectorType.listSize,
+        metric: metric.data,
+        atomicWrites,
+        inputSchema,
+      })
     }
     finally {
       table.close()
@@ -157,7 +173,10 @@ export function createLancedbProvider(): VecdbProvider {
     return err(
       HaiVecdbError.DIMENSION_MISMATCH,
       vecdbM('vecdb_dimensionMismatch', {
-        params: { expected: String(expected), actual: String(actual) },
+        params: {
+          expected: String(expected),
+          actual: String(actual),
+        },
       }),
     )
   }
@@ -195,7 +214,11 @@ export function createLancedbProvider(): VecdbProvider {
 
   // ─── 操作上下文 ───
 
-  const ctx = { isConnected: () => connection !== null, logger, operationLog: () => config?.operationLog }
+  const ctx = {
+    isConnected: () => connection !== null,
+    logger,
+    operationLog: () => config?.operationLog,
+  }
 
   // ─── 集合操作适配器 ───
 
@@ -205,28 +228,46 @@ export function createLancedbProvider(): VecdbProvider {
 
       const tableNames = await connection!.tableNames()
       if (tableNames.includes(name)) {
-        return err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', { params: { name } }))
+        return err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', {
+          params: { name },
+        }))
       }
 
       const dimension = options.dimension
       const parsedMetric = DistanceMetricSchema.safeParse(options.metric ?? config?.metric)
-      if (!parsedMetric.success)
-        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', { params: { name } }))
+      if (!parsedMetric.success) {
+        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', {
+          params: { name },
+        }))
+      }
       const metric = parsedMetric.data
       const driver = loadLancedb()
       if (!driver.success)
         return driver
       // 仅在内存推导 Arrow 字段；空表与 metric 一次创建，没有占位记录可见窗口。
-      const inferred = driver.data.makeArrowTable([{
-        id: '',
-        vector: Array.from({ length: dimension }).fill(0),
-        content: '',
-        metadata: '{}',
-      }], {}, new Map([[COLLECTION_METRIC_KEY, metric]])).schema
+      const inferred = driver.data.makeArrowTable([
+        {
+          id: '',
+          vector: Array.from({ length: dimension }).fill(0),
+          content: '',
+          metadata: '{}',
+        },
+      ], {}, new Map([
+        [COLLECTION_METRIC_KEY, metric],
+      ])).schema
       // 官方 Arrow 字段 metadata 可在初始 manifest 声明主键，避免 create/setPK 的可见窗口。
       const schema = inferred.assign(inferred.fields.map(field => field.name === 'id'
-        ? field.clone({ nullable: false, metadata: new Map([...field.metadata, [PRIMARY_KEY_FLAG, 'true'], [PRIMARY_KEY_POSITION, '1']]) })
-        : field.name === 'metadata' ? driver.data.makeJsonField('metadata', false) : field))
+        ? field.clone({
+            nullable: false,
+            metadata: new Map([
+              ...field.metadata,
+              [PRIMARY_KEY_FLAG, 'true'],
+              [PRIMARY_KEY_POSITION, '1'],
+            ]),
+          })
+        : field.name === 'metadata'
+          ? driver.data.makeJsonField('metadata', false)
+          : field))
       const table = await connection!.createEmptyTable(name, schema)
       table.close()
 
@@ -239,7 +280,9 @@ export function createLancedbProvider(): VecdbProvider {
 
       const tableNames = await connection!.tableNames()
       if (!tableNames.includes(name)) {
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+          params: { name },
+        }))
       }
 
       await connection!.dropTable(name)
@@ -258,7 +301,12 @@ export function createLancedbProvider(): VecdbProvider {
     async info(name) {
       logger.debug('Getting collection info', { name })
 
-      return withCollection(name, async (table, meta) => ok({ name, dimension: meta.dimension, metric: meta.metric, count: await table.countRows() }))
+      return withCollection(name, async (table, meta) => ok({
+        name,
+        dimension: meta.dimension,
+        metric: meta.metric,
+        count: await table.countRows(),
+      }))
     },
 
     async list() {
@@ -359,7 +407,9 @@ export function createLancedbProvider(): VecdbProvider {
         const topK = options?.topK ?? 10
         const minScore = options?.minScore ?? 0
 
-        let query = table.vectorSearch(vector).distanceType(meta.metric === 'euclidean' ? 'l2' : meta.metric).limit(topK)
+        let query = table.vectorSearch(vector).distanceType(meta.metric === 'euclidean'
+          ? 'l2'
+          : meta.metric).limit(topK)
 
         if (options?.filter !== undefined) {
           if (!meta.inputSchema)
@@ -378,15 +428,17 @@ export function createLancedbProvider(): VecdbProvider {
           .map((row: Record<string, unknown>) => {
             // 距离按集合 metric 解释；dot 距离为 1 - 内积，不能套用 L2 公式。
             const distance = (row._distance as number) ?? 0
-            const score = meta.metric === 'cosine'
-              ? Math.max(0, Math.min(1, 1 - distance / 2))
-              : meta.metric === 'dot' ? 1 / (1 + Math.exp(distance - 1)) : 1 / (1 + Math.max(0, distance))
+            const score = vectorScoreFromDistance(meta.metric === 'dot'
+              ? distance - 1
+              : distance, meta.metric)
 
             return {
               id: row.id as string,
               score,
               content: (row.content as string) || undefined,
-              metadata: row.metadata ? JSON.parse(row.metadata as string) as Record<string, unknown> : undefined,
+              metadata: row.metadata
+                ? JSON.parse(row.metadata as string) as Record<string, unknown>
+                : undefined,
             }
           })
           .filter((r: VectorSearchResult) => r.score >= minScore)
@@ -412,7 +464,9 @@ export function createLancedbProvider(): VecdbProvider {
 
     async connect(cfg): Promise<HaiResult<void>> {
       if (cfg.type !== 'lancedb') {
-        return err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', { params: { type: cfg.type } }))
+        return err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', {
+          params: { type: cfg.type },
+        }))
       }
 
       const lanceConfig = cfg
@@ -435,7 +489,11 @@ export function createLancedbProvider(): VecdbProvider {
         connection = null
         config = null
         logger.error('Failed to connect to LanceDB', { error })
-        return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', { params: { error: String(error) } }), error)
+        return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     },
 

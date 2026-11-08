@@ -211,7 +211,10 @@ describe('iam.auth', () => {
         expect(logoutResult.success).toBe(true)
 
         const verifyResult = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
-        expect(verifyResult).toMatchObject({ success: false, error: { code: HaiIamError.SESSION_INVALID.code } })
+        expect(verifyResult).toMatchObject({
+          success: false,
+          error: { code: HaiIamError.SESSION_INVALID.code },
+        })
         expect((await getIam().auth.logout(loginResult.data.tokens.accessToken)).success).toBe(true)
       })
 

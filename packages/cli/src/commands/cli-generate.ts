@@ -95,7 +95,11 @@ export async function generate(options: GenerateOptions): Promise<void> {
       projectName: target.target.name,
     })
 
-    spinner.start(cliM('cli_generateProgress', { params: { description: generator.description() } }))
+    spinner.start(cliM('cli_generateProgress', {
+      params: {
+        description: generator.description(),
+      },
+    }))
 
     const files = resolvedOptions.type === 'api' && architecture === 'serv'
       ? await generateServApi(context, target)
@@ -154,12 +158,23 @@ async function resolveGenerateOptions(options: GenerateOptions): Promise<Require
   }
 
   const answers = questions.length > 0
-    ? await prompts<'type' | 'name'>(questions, { onCancel: () => { throw new Error(cliM('cli_generateCancelled')) } })
+    ? await prompts<'type' | 'name'>(questions, {
+        onCancel: () => { throw new Error(cliM('cli_generateCancelled')) },
+      })
     : {}
-  const type: unknown = options.type || ('type' in answers ? answers.type : undefined)
-  const name: unknown = options.name || ('name' in answers ? answers.name : undefined)
-  if (!isGeneratorType(type))
-    throw new Error(cliM('cli_generateUnknownType', { params: { type: String(type ?? '') } }))
+  const type: unknown = options.type || ('type' in answers
+    ? answers.type
+    : undefined)
+  const name: unknown = options.name || ('name' in answers
+    ? answers.name
+    : undefined)
+  if (!isGeneratorType(type)) {
+    throw new Error(cliM('cli_generateUnknownType', {
+      params: {
+        type: String(type ?? ''),
+      },
+    }))
+  }
   if (typeof name !== 'string' || !name.trim())
     throw new Error(cliM('cli_generateNameRequired'))
 
@@ -209,9 +224,16 @@ async function writeGeneratedFiles(files: GeneratedFile[], root: string, force: 
     const relative = path.relative(root, await fse.realpath(ancestor))
     if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
       throw new Error(cliM('cli_generateOutsideWorkspace'))
-    const content = await fse.pathExists(file.path) ? await fse.readFile(file.path, 'utf8') : undefined
-    if (file.previousContent !== undefined ? content !== file.previousContent : content !== undefined && !force)
-      throw new Error(cliM('cli_generateExists', { params: { path: file.path } }))
+    const content = await fse.pathExists(file.path)
+      ? await fse.readFile(file.path, 'utf8')
+      : undefined
+    if (file.previousContent !== undefined
+      ? content !== file.previousContent
+      : content !== undefined && !force) {
+      throw new Error(cliM('cli_generateExists', {
+        params: { path: file.path },
+      }))
+    }
     previous.set(file.path, content)
   }
   try {
@@ -222,9 +244,14 @@ async function writeGeneratedFiles(files: GeneratedFile[], root: string, force: 
       await fse.writeFile(stage, file.content, { encoding: 'utf8', flag: 'wx' })
     }
     for (const file of files) {
-      const current = await fse.pathExists(file.path) ? await fse.readFile(file.path, 'utf8') : undefined
-      if (current !== previous.get(file.path))
-        throw new Error(cliM('cli_generateExists', { params: { path: file.path } }))
+      const current = await fse.pathExists(file.path)
+        ? await fse.readFile(file.path, 'utf8')
+        : undefined
+      if (current !== previous.get(file.path)) {
+        throw new Error(cliM('cli_generateExists', {
+          params: { path: file.path },
+        }))
+      }
       await fse.rename(stages.get(file.path)!, file.path)
       written.push(file)
     }
@@ -233,8 +260,11 @@ async function writeGeneratedFiles(files: GeneratedFile[], root: string, force: 
     failures.push(error)
     for (const file of written.reverse()) {
       try {
-        if (await fse.readFile(file.path, 'utf8') !== file.content)
-          throw new Error(cliM('cli_generateExists', { params: { path: file.path } }))
+        if (await fse.readFile(file.path, 'utf8') !== file.content) {
+          throw new Error(cliM('cli_generateExists', {
+            params: { path: file.path },
+          }))
+        }
         const original = previous.get(file.path)
         if (original === undefined)
           await fse.unlink(file.path)

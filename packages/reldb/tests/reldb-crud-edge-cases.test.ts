@@ -226,7 +226,10 @@ describe('reldb.crud edge cases', () => {
 
       await crud.create({ name: '用户1', email: 'u1@test.com' })
 
-      const result = await crud.exists({ where: 'email = ?', params: ['u1@test.com'] })
+      const result = await crud.exists({
+        where: 'email = ?',
+        params: ['u1@test.com'],
+      })
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data).toBe(true)
@@ -245,7 +248,10 @@ describe('reldb.crud edge cases', () => {
 
       await crud.create({ name: '用户1', email: 'u1@test.com' })
 
-      const result = await crud.exists({ where: 'email = ?', params: ['nobody@test.com'] })
+      const result = await crud.exists({
+        where: 'email = ?',
+        params: ['nobody@test.com'],
+      })
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data).toBe(false)

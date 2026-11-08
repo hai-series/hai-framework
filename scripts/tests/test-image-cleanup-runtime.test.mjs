@@ -13,22 +13,51 @@ const runtime = process.env.HAI_TEST_IMAGE_RUNTIME ?? 'podman'
 const vitest = join(dirname(fileURLToPath(import.meta.resolve('vitest/package.json'))), 'vitest.mjs')
 const setup = resolve('scripts/test-image-cleanup-setup.mjs')
 
-it.skipIf(!enabled).each(['success', 'assertion-failure', 'build-failure', 'cleanup-failure', 'cancel', 'cancel-sigterm'])('真实引擎 %s 后执行全局 teardown，保留外部镜像', async (mode) => {
+it.skipIf(!enabled).each([
+  'success',
+  'assertion-failure',
+  'build-failure',
+  'cleanup-failure',
+  'cancel',
+  'cancel-sigterm',
+])('真实引擎 %s 后执行全局 teardown，保留外部镜像', async (mode) => {
   const parent = resolve('tmp')
   mkdirSync(parent, { recursive: true })
   const control = `localhost/hai-cleanup-control:${randomUUID()}`
   const evidence = createRuntimeEvidence(mode, control)
   const directory = mkdtempSync(join(parent, 'image-cleanup-runtime-'))
-  const run = args => execFileSync(runtime, args, { encoding: 'utf8', windowsHide: true, timeout: 60_000, stdio: ['ignore', 'pipe', 'pipe'] })
+  const run = args => execFileSync(runtime, args, {
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 60_000,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
   let controlCreated = false
   try {
     writeFileSync(join(directory, 'Containerfile'), 'FROM scratch\nLABEL test.control=true\n')
-    run(['build', '--pull=never', '-t', control, directory])
+    run([
+      'build',
+      '--pull=never',
+      '-t',
+      control,
+      directory,
+    ])
     controlCreated = true
     const controlId = JSON.parse(run(['image', 'inspect', control]))[0].Id
-    appendFileSync(evidence.ledger, `${JSON.stringify({ mode, runtime, role: 'control', stage: 'built', owner: null, imageRef: control, imageId: controlId, recordedAt: new Date().toISOString() })}\n`)
+    appendFileSync(evidence.ledger, `${JSON.stringify({
+      mode,
+      runtime,
+      role: 'control',
+      stage: 'built',
+      owner: null,
+      imageRef: control,
+      imageId: controlId,
+      recordedAt: new Date().toISOString(),
+    })}\n`)
     writeFileSync(join(directory, 'payload'), 'test data')
-    writeFileSync(join(directory, 'Containerfile'), `FROM scratch AS builder\nCOPY payload /payload\nFROM scratch\nCOPY --from=builder /payload /payload\n${mode === 'build-failure' ? 'COPY missing /missing\n' : ''}`)
+    writeFileSync(join(directory, 'Containerfile'), `FROM scratch AS builder\nCOPY payload /payload\nFROM scratch\nCOPY --from=builder /payload /payload\n${mode === 'build-failure'
+      ? 'COPY missing /missing\n'
+      : ''}`)
     writeFileSync(join(directory, 'vitest.config.mjs'), `export default { test: { include: ['probe.test.mjs'], maxWorkers: 1, globalSetup: [${JSON.stringify(setup)}] } }`)
     writeFileSync(join(directory, 'probe.test.mjs'), `
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -68,16 +97,27 @@ it('owned image build', async () => {
 })
 `)
     const result = mode.startsWith('cancel')
-      ? await cancelVitest(directory, mode === 'cancel-sigterm' ? 'SIGTERM' : 'SIGINT')
-      : spawnSync(process.execPath, [vitest, 'run'], { cwd: directory, encoding: 'utf8', windowsHide: true, timeout: 120_000 })
+      ? await cancelVitest(directory, mode === 'cancel-sigterm'
+          ? 'SIGTERM'
+          : 'SIGINT')
+      : spawnSync(process.execPath, [vitest, 'run'], {
+          cwd: directory,
+          encoding: 'utf8',
+          windowsHide: true,
+          timeout: 120_000,
+        })
     writeFileSync(join(evidence.directory, 'child-result.json'), `${JSON.stringify({ status: result.status, signal: result.signal ?? null, error: result.error?.message ?? null }, null, 2)}\n`)
     writeFileSync(join(evidence.directory, 'stdout.log'), result.stdout ?? '')
     writeFileSync(join(evidence.directory, 'stderr.log'), result.stderr ?? '')
     expect(result.error, result.stderr).toBeUndefined()
-    if (mode.startsWith('cancel'))
+    if (mode.startsWith('cancel')) {
       expect(result.status, result.stdout + result.stderr).not.toBe(0)
-    else
-      expect(result.status, result.stdout + result.stderr).toBe(mode === 'success' ? 0 : 1)
+    }
+    else {
+      expect(result.status, result.stdout + result.stderr).toBe(mode === 'success'
+        ? 0
+        : 1)
+    }
     const owner = readFileSync(join(directory, 'owner.txt'), 'utf8')
     const reports = readdirSync(join(directory, 'test-results'))
     const report = JSON.parse(readFileSync(join(directory, 'test-results', reports[0]), 'utf8'))
@@ -85,7 +125,14 @@ it('owned image build', async () => {
     if (mode === 'cleanup-failure')
       expect(report.reports[1].failures).toHaveLength(1)
     expect(report.reports[0].removed.length).toBeGreaterThan(0)
-    expect(run(['image', 'ls', '--all', '--quiet', '--filter', `label=org.h-ai.test.image-run=${owner}`]).trim()).toBe('')
+    expect(run([
+      'image',
+      'ls',
+      '--all',
+      '--quiet',
+      '--filter',
+      `label=org.h-ai.test.image-run=${owner}`,
+    ]).trim()).toBe('')
     expect(JSON.parse(run(['image', 'inspect', control]))[0].Id).toBe(controlId)
   }
   catch (error) {
@@ -115,9 +162,28 @@ it('镜像身份与原始报告在本轮临时目录删除后仍可定位，不�
   const imageRef = `localhost/hai-cleanup-probe:${owner}`
   const imageId = `sha256:${'a'.repeat(64)}`
   const evidence = createRuntimeEvidence('metadata-unit', imageRef)
-  const report = { owner, builds: [{ runtime, imageRef }], reports: [{ failures: [{ error: 'synthetic cleanup failure' }] }] }
+  const report = {
+    owner,
+    builds: [
+      { runtime, imageRef },
+    ],
+    reports: [
+      {
+        failures: [
+          { error: 'synthetic cleanup failure' },
+        ],
+      },
+    ],
+  }
   try {
-    appendFileSync(evidence.ledger, `${JSON.stringify({ mode: 'metadata-unit', runtime, role: 'owned', owner, imageRef, imageId })}\n`)
+    appendFileSync(evidence.ledger, `${JSON.stringify({
+      mode: 'metadata-unit',
+      runtime,
+      role: 'owned',
+      owner,
+      imageRef,
+      imageId,
+    })}\n`)
     writeFileSync(join(directory, 'owner.txt'), owner)
     mkdirSync(join(directory, 'test-results'))
     writeFileSync(join(directory, 'test-results', `image-cleanup-${owner}.json`), JSON.stringify(report))
@@ -125,8 +191,18 @@ it('镜像身份与原始报告在本轮临时目录删除后仍可定位，不�
     rmSync(directory, { recursive: true, force: true })
     expect(existsSync(directory)).toBe(false)
     const events = readFileSync(evidence.ledger, 'utf8').trim().split('\n').map(line => JSON.parse(line))
-    expect(events[0]).toMatchObject({ mode: 'metadata-unit', role: 'control', imageRef, imageId: null })
-    expect(events[1]).toMatchObject({ mode: 'metadata-unit', owner, imageRef, imageId })
+    expect(events[0]).toMatchObject({
+      mode: 'metadata-unit',
+      role: 'control',
+      imageRef,
+      imageId: null,
+    })
+    expect(events[1]).toMatchObject({
+      mode: 'metadata-unit',
+      owner,
+      imageRef,
+      imageId,
+    })
     expect(readFileSync(join(evidence.directory, 'owner.txt'), 'utf8')).toBe(owner)
     expect(JSON.parse(readFileSync(join(evidence.directory, 'test-results', `image-cleanup-${owner}.json`), 'utf8'))).toEqual(report)
   }
@@ -143,7 +219,16 @@ function createRuntimeEvidence(mode, imageRef) {
   const directory = join(parent, `${mode}-${randomUUID()}`)
   mkdirSync(directory, { mode: 0o700 })
   const ledger = join(directory, 'images.jsonl')
-  writeFileSync(ledger, `${JSON.stringify({ mode, runtime, role: 'control', stage: 'before-build', owner: null, imageRef, imageId: null, recordedAt: new Date().toISOString() })}\n`, { mode: 0o600 })
+  writeFileSync(ledger, `${JSON.stringify({
+    mode,
+    runtime,
+    role: 'control',
+    stage: 'before-build',
+    owner: null,
+    imageRef,
+    imageId: null,
+    recordedAt: new Date().toISOString(),
+  })}\n`, { mode: 0o600 })
   return { directory, ledger }
 }
 
@@ -203,8 +288,18 @@ it('取消宿主忽略通知时按持有句柄结束并等待退出，不依赖�
 async function cancelVitest(directory, signal, entry = vitest, timeoutMs = 120_000) {
   const script = `process.argv = [process.execPath, ${JSON.stringify(entry)}, 'run']; process.stdin.once('data', () => { process.emit(${JSON.stringify(signal)}); process.stdin.destroy() }); await import(${JSON.stringify(pathToFileURL(entry).href)})`
   const args = ['--input-type=module', '-e', script]
-  const job = process.platform === 'win32' ? windowsTestCommand(process.execPath, args) : undefined
-  const child = spawn(job ? 'powershell.exe' : process.execPath, job?.args ?? args, { cwd: directory, env: { ...process.env, ...job?.env }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
+  const job = process.platform === 'win32'
+    ? windowsTestCommand(process.execPath, args)
+    : undefined
+  const child = spawn(job ? 'powershell.exe' : process.execPath, job?.args ?? args, {
+    cwd: directory,
+    env: {
+      ...process.env,
+      ...job?.env,
+    },
+    windowsHide: true,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  })
   const deadline = performance.now() + timeoutMs
   let stdout = ''
   let stderr = ''
@@ -239,9 +334,12 @@ async function cancelVitest(directory, signal, entry = vitest, timeoutMs = 120_0
   let failure
   try {
     // 从原总期限中预留退出核验时间，不能增加取消场景的工作期限。
-    const status = await Promise.race([completion, new Promise((resolve, reject) => {
-      timer = setTimeout(() => reject(new Error('Cancelled Vitest did not exit')), Math.max(1, timeoutMs - Math.min(10_000, timeoutMs / 2)))
-    })])
+    const status = await Promise.race([
+      completion,
+      new Promise((resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('Cancelled Vitest did not exit')), Math.max(1, timeoutMs - Math.min(10_000, timeoutMs / 2)))
+      }),
+    ])
     if (spawnError || inputError)
       throw spawnError ?? inputError
     result = { status, stdout, stderr }
@@ -257,15 +355,22 @@ async function cancelVitest(directory, signal, entry = vitest, timeoutMs = 120_0
       child.kill('SIGKILL')
     let closeTimer
     try {
-      await Promise.race([completion, new Promise((resolve, reject) => {
-        closeTimer = setTimeout(() => reject(new Error('Cancelled Vitest process exit was not confirmed')), Math.max(1, cleanupDeadline - performance.now()))
-      })])
+      await Promise.race([
+        completion,
+        new Promise((resolve, reject) => {
+          closeTimer = setTimeout(() => reject(new Error('Cancelled Vitest process exit was not confirmed')), Math.max(1, cleanupDeadline - performance.now()))
+        }),
+      ])
     }
     finally {
       clearTimeout(closeTimer)
     }
     if (job) {
-      const probe = spawnSync('powershell.exe', windowsTestJobProbe(job.name), { windowsHide: true, stdio: 'ignore', timeout: Math.max(1, Math.floor(cleanupDeadline - performance.now())) })
+      const probe = spawnSync('powershell.exe', windowsTestJobProbe(job.name), {
+        windowsHide: true,
+        stdio: 'ignore',
+        timeout: Math.max(1, Math.floor(cleanupDeadline - performance.now())),
+      })
       if (probe.error || probe.status !== 0)
         throw new Error('Cancelled Vitest job exit was not confirmed', { cause: probe.error })
     }

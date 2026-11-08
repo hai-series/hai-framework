@@ -5,15 +5,22 @@ import { err, HaiCommonError, ok } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { z } from 'zod'
 
-export const BusinessSettingsSchema = z.object({ notice: z.string().trim().max(200) }).strict()
+export const BusinessSettingsSchema = z.object({
+  notice: z.string().trim().max(200),
+}).strict()
 
 export function initBusinessSettings(): Promise<HaiResult<void>> {
-  return reldb.ddl.createTable('app_business_settings', { id: { type: 'TEXT', primaryKey: true }, notice: { type: 'TEXT', notNull: true } })
+  return reldb.ddl.createTable('app_business_settings', {
+    id: { type: 'TEXT', primaryKey: true },
+    notice: { type: 'TEXT', notNull: true },
+  })
 }
 
 export async function readBusinessSettings(): Promise<HaiResult<{ notice: string }>> {
   const row = await reldb.sql.get<{ notice: string }>('SELECT notice FROM app_business_settings WHERE id = ?', ['public'])
-  return row.success ? ok({ notice: row.data?.notice ?? '' }) : row
+  return row.success
+    ? ok({ notice: row.data?.notice ?? '' })
+    : row
 }
 
 export async function saveBusinessSettings(input: { notice: string }): Promise<HaiResult<{ notice: string }>> {
@@ -33,7 +40,14 @@ export async function saveBusinessSettings(input: { notice: string }): Promise<H
       await tx.rollback()
       return saved
     }
-    const logged = await audit.capture({ action: 'business.configuration.update', resource: 'business-settings', category: 'business', details: { fields: ['notice'] } }, { tx })
+    const logged = await audit.capture({
+      action: 'business.configuration.update',
+      resource: 'business-settings',
+      category: 'business',
+      details: {
+        fields: ['notice'],
+      },
+    }, { tx })
     if (!logged.success) {
       await tx.rollback()
       return logged
@@ -41,7 +55,9 @@ export async function saveBusinessSettings(input: { notice: string }): Promise<H
     const committed = await tx.commit()
     if (!committed.success)
       await tx.rollback()
-    return committed.success ? ok(parsed.data) : committed
+    return committed.success
+      ? ok(parsed.data)
+      : committed
   }
   catch (error) {
     await tx.rollback()

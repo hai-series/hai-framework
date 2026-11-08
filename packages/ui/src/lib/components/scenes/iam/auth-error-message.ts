@@ -68,8 +68,16 @@ export function authErrorMessage(error: Pick<HaiError, 'code' | 'message' | 'tra
   const { cause } = error
   if (error.httpStatus === 400 && (error.code === 'hai:crypto:071' || error.code === 'hai:api-client:007')
     && cause && typeof cause === 'object' && 'transportCode' in cause && cause.transportCode === 'hai:crypto:071') {
-    return core.error.formatMessage({ message: core.sanitize.sanitizeText(error.message), traceId: error.traceId })
+    return core.error.formatMessage({
+      message: core.sanitize.sanitizeText(error.message),
+      traceId: error.traceId,
+    })
   }
-  const key = (error.httpStatus ?? 400) >= 500 || !Object.hasOwn(messages, error.code) ? 'auth_error_service' : messages[error.code] ?? 'auth_error_service'
-  return core.error.formatMessage({ message: uiM(key), traceId: error.traceId })
+  const key = (error.httpStatus ?? 400) >= 500 || !Object.hasOwn(messages, error.code)
+    ? 'auth_error_service'
+    : messages[error.code] ?? 'auth_error_service'
+  return core.error.formatMessage({
+    message: uiM(key),
+    traceId: error.traceId,
+  })
 }

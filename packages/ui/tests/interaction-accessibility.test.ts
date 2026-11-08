@@ -21,13 +21,22 @@ describe('shared interaction accessibility', () => {
   it('页签默认跳过禁用项，方向键、Home/End 和单一 Tab 入口一致', async () => {
     const target = host()
     const onchange = vi.fn()
-    const component = mount(Tabs, { target, props: {
-      items: [{ key: 'disabled', label: 'Disabled', disabled: true }, { key: 'first', label: 'First' }, { key: 'last', label: 'Last' }],
-      onchange,
-    } })
+    const component = mount(Tabs, {
+      target,
+      props: {
+        items: [
+          { key: 'disabled', label: 'Disabled', disabled: true },
+          { key: 'first', label: 'First' },
+          { key: 'last', label: 'Last' },
+        ],
+        onchange,
+      },
+    })
     try {
       flushSync()
-      const tabs = [...target.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+      const tabs = [
+        ...target.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+      ]
       expect(tabs[0].getAttribute('aria-selected')).toBe('false')
       expect(tabs[1].getAttribute('aria-selected')).toBe('true')
       expect(tabs.map(tab => tab.tabIndex)).toEqual([-1, 0, -1])
@@ -81,8 +90,13 @@ describe('shared interaction accessibility', () => {
     const Table = DataTable<{ id: string, name: string }>
     const props: ComponentProps<typeof Table> = {
       keyField: 'id',
-      columns: [{ key: 'name', label: 'Name', sortable: true }],
-      data: [{ id: '1', name: 'Beta' }, { id: '2', name: 'Alpha' }],
+      columns: [
+        { key: 'name', label: 'Name', sortable: true },
+      ],
+      data: [
+        { id: '1', name: 'Beta' },
+        { id: '2', name: 'Alpha' },
+      ],
       onrowclick,
     }
     const component = mount(Table, { target, props })
@@ -104,7 +118,15 @@ describe('shared interaction accessibility', () => {
       await unmount(component)
       target.remove()
     }
-    const loading = mount(Table, { target, props: { keyField: 'id', columns: props.columns, data: [], loading: true } })
+    const loading = mount(Table, {
+      target,
+      props: {
+        keyField: 'id',
+        columns: props.columns,
+        data: [],
+        loading: true,
+      },
+    })
     try {
       flushSync()
       expect(target.querySelector('table')!.getAttribute('aria-busy')).toBe('true')
@@ -118,10 +140,15 @@ describe('shared interaction accessibility', () => {
 
   it('筛选按文档顺序展开、收起保留草稿，视图切换反映当前状态', async () => {
     const target = host()
-    const component = mount(TableToolbar, { target, props: {
-      filterFields: [{ id: 'active', label: '状态', type: 'boolean' }],
-      showViewSwitch: true,
-    } })
+    const component = mount(TableToolbar, {
+      target,
+      props: {
+        filterFields: [
+          { id: 'active', label: '状态', type: 'boolean' },
+        ],
+        showViewSwitch: true,
+      },
+    })
     try {
       flushSync()
       const trigger = target.querySelector<HTMLButtonElement>('[aria-controls]')!
@@ -158,7 +185,10 @@ describe('shared interaction accessibility', () => {
     setUILocale('en-US')
     const target = host()
     const onchange = vi.fn()
-    const component = mount(Pagination, { target, props: { page: 1, total: 50, onchange } })
+    const component = mount(Pagination, {
+      target,
+      props: { page: 1, total: 50, onchange },
+    })
     try {
       flushSync()
       target.querySelector<HTMLButtonElement>('[aria-label="Next page"]')!.click()

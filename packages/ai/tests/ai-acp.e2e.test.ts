@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
+import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { ai } from '../src/index.js'
@@ -64,15 +65,100 @@ async function workspace(
   value(
     await ai.acp.workspaces.register({
       id: 'project',
-      storage: { type: 'directory', path: join(temporary, 'workspace') },
+      storage: {
+        type: 'directory',
+        path: join(temporary, 'workspace'),
+      },
       repositories,
     }),
   )
   value(await ai.acp.workspaces.prepare('project'))
 }
-const prompt = (text: string) => [{ type: 'text' as const, text }]
+function prompt(text: string) {
+  return [
+    { type: 'text' as const, text },
+  ]
+}
 const author = { name: 'ACP test', email: 'test@example.invalid' }
 describe('aCP managed session E2E', () => {
+  it('agent 自行退出后仍能关闭并重新占用共享工作区', async () => {
+    await workspace()
+    const session = value(await ai.acp.sessions.create({ agentId: 'fixture', workspaceId: 'project' }))
+    expect((await session.prompt(prompt('exit'))).success).toBe(false)
+    expect((await session.close()).success).toBe(true)
+    expect(value(await session.info()).status).toBe('closed')
+    expect((await ai.acp.sessions.create({ agentId: 'fixture', workspaceId: 'project' })).success).toBe(true)
+  }, 20000)
+
+  it('删除会话尚未释放锁时重建失败但不残留 opening，之后可以重试', async () => {
+    await workspace()
+    const options = { id: 'same-task', agentId: 'fixture', workspaceId: 'project' }
+    const first = value(await ai.acp.sessions.create(options))
+    value(await first.close())
+    let release!: () => void
+    let reached!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const blocked = new Promise<void>((resolve) => {
+      reached = resolve
+    })
+    const execute = reldb.sql.execute.bind(reldb.sql)
+    const intercepted = vi.spyOn(reldb.sql, 'execute').mockImplementation(async (sql, params) => {
+      const result = await execute(sql, params)
+      if (sql === 'DELETE FROM hai_ai_acp_sessions WHERE id = ?') {
+        reached()
+        await gate
+      }
+      return result
+    })
+    try {
+      const removing = ai.acp.sessions.remove(options.id)
+      await blocked
+      expect(await ai.acp.sessions.create(options)).toMatchObject({
+        success: false,
+        error: { code: 'hai:ai:074' },
+      })
+      release()
+      value(await removing)
+      expect(value(await ai.acp.sessions.list())).toEqual([])
+      expect((await ai.acp.sessions.create(options)).success).toBe(true)
+    }
+    finally {
+      release()
+      intercepted.mockRestore()
+    }
+  }, 20000)
+
+  it.each([false, true])('相对 Git 地址在准备、更新和发布时使用相同根目录，私有远程=%s', async (scoped) => {
+    const repository = await seed('relative', 'main')
+    vi.stubEnv('ACP_TEST_REMOTE', 'fixture')
+    value(await ai.acp.workspaces.register({
+      id: 'project',
+      storage: {
+        type: 'directory',
+        path: join(temporary, 'workspace'),
+      },
+      repositories: [
+        { id: 'code', url: '../relative.git', mainBranch: 'main' },
+      ],
+      ...(scoped
+        ? {
+            gitEnvironmentRefs: { ACP_TEST: 'ACP_TEST_REMOTE' },
+          }
+        : {}),
+    }))
+    value(await ai.acp.workspaces.prepare('project'))
+    const session = value(await ai.acp.sessions.create({
+      id: 'relative',
+      agentId: 'fixture',
+      workspaceId: 'project',
+      newWorktree: true,
+    }))
+    value(await session.updateMain())
+    value(await session.publish({ mode: 'push-branch', message: 'relative branch', author }))
+    expect(await git(repository.remote, ['rev-parse', 'refs/heads/acp/relative'])).toMatch(/^[a-f0-9]{40}$/)
+  }, 30000)
   it.each([false, true])('从已登记仓库启动和恢复，独立工作树=%s', async (newWorktree) => {
     const api = await seed('api', 'trunk')
     const web = await seed('web', 'trunk')
@@ -82,9 +168,17 @@ describe('aCP managed session E2E', () => {
     await git(web.source, ['add', '.'])
     await git(web.source, ['commit', '-m', 'instructions and skill'])
     await git(web.source, ['push', 'origin', 'trunk'])
-    await workspace([{ id: 'api', url: api.remote, mainBranch: 'trunk' }, { id: 'web', url: web.remote, mainBranch: 'trunk' }])
+    await workspace([
+      { id: 'api', url: api.remote, mainBranch: 'trunk' },
+      { id: 'web', url: web.remote, mainBranch: 'trunk' },
+    ])
 
-    const options = { id: 'selected', agentId: 'fixture', workspaceId: 'project', newWorktree }
+    const options = {
+      id: 'selected',
+      agentId: 'fixture',
+      workspaceId: 'project',
+      newWorktree,
+    }
     for (const repositoryId of ['missing', '../web']) {
       expect((await ai.acp.sessions.create({ ...options, repositoryId })).success).toBe(false)
     }
@@ -92,9 +186,16 @@ describe('aCP managed session E2E', () => {
     const session = value(await ai.acp.sessions.create({ ...options, repositoryId: 'web' }))
     const info = value(await session.info())
     expect(info.repositoryId).toBe('web')
-    const directory = newWorktree ? join('sessions', 'selected') : 'main'
+    const directory = newWorktree
+      ? join('sessions', 'selected')
+      : 'main'
     expect(info.cwd).toBe(await realpath(join(temporary, 'workspace', directory, 'web')))
-    const expected = { cwd: info.cwd, processCwd: info.cwd, instructions: 'web instructions', skill: 'web skill v2' }
+    const expected = {
+      cwd: info.cwd,
+      processCwd: info.cwd,
+      instructions: 'web instructions',
+      skill: 'web skill v2',
+    }
     expect(JSON.parse(value(await session.prompt(prompt('inspect-repo'))).text)).toEqual(expected)
     value(await session.close())
     const resumed = value(await ai.acp.sessions.resume(session.id))
@@ -104,8 +205,16 @@ describe('aCP managed session E2E', () => {
   it('只回收停止且干净的目标工作树，保留其他会话和 Git 分支', async () => {
     const api = await seed('api', 'trunk')
     const web = await seed('web', 'trunk')
-    await workspace([{ id: 'api', url: api.remote, mainBranch: 'trunk' }, { id: 'web', url: web.remote, mainBranch: 'trunk' }])
-    const options = { agentId: 'fixture', workspaceId: 'project', repositoryId: 'web', newWorktree: true }
+    await workspace([
+      { id: 'api', url: api.remote, mainBranch: 'trunk' },
+      { id: 'web', url: web.remote, mainBranch: 'trunk' },
+    ])
+    const options = {
+      agentId: 'fixture',
+      workspaceId: 'project',
+      repositoryId: 'web',
+      newWorktree: true,
+    }
     const target = value(await ai.acp.sessions.create({ ...options, id: 'target' }))
     const other = value(await ai.acp.sessions.create({ ...options, id: 'other' }))
     const targetInfo = value(await target.info())
@@ -115,12 +224,21 @@ describe('aCP managed session E2E', () => {
     expect(targetInfo.workspace).toEqual({
       storage: { type: 'directory', path: root },
       path: targetDir,
-      repositories: ['api', 'web'].map(id => ({ id, path: join(targetDir, id) })),
+      repositories: ['api', 'web'].map(id => ({
+        id,
+        path: join(targetDir, id),
+      })),
     })
-    expect(await ai.acp.sessions.reclaimWorktree(target.id)).toMatchObject({ success: false, error: { code: 'hai:ai:074' } })
+    expect(await ai.acp.sessions.reclaimWorktree(target.id)).toMatchObject({
+      success: false,
+      error: { code: 'hai:ai:074' },
+    })
     value(await target.close())
     await writeFile(join(targetInfo.cwd, 'unfinished.txt'), 'draft')
-    expect(await ai.acp.sessions.reclaimWorktree(target.id)).toMatchObject({ success: false, error: { code: 'hai:ai:079' } })
+    expect(await ai.acp.sessions.reclaimWorktree(target.id)).toMatchObject({
+      success: false,
+      error: { code: 'hai:ai:079' },
+    })
     expect(await readFile(join(targetDir, 'api', 'hello.txt'), 'utf8')).toBe('base')
     expect(value(await target.info()).worktreeStatus).toBeUndefined()
     value(await target.publish({ mode: 'push-branch', message: 'save draft', author }))
@@ -197,11 +315,22 @@ describe('aCP managed session E2E', () => {
       }))
       value(await ai.acp.workspaces.register({
         id: 'project',
-        storage: { type: 'directory', path: join(temporary, 'workspace') },
-        repositories: [{ id: 'api', url: `http://127.0.0.1:${address.port}/authenticated.git`, mainBranch: 'trunk' }],
+        storage: {
+          type: 'directory',
+          path: join(temporary, 'workspace'),
+        },
+        repositories: [
+          { id: 'api', url: `http://127.0.0.1:${address.port}/authenticated.git`, mainBranch: 'trunk' },
+        ],
         gitEnvironmentRefs: { GIT_CONFIG_COUNT: 'ACP_FIXTURE_GIT_COUNT', GIT_CONFIG_KEY_0: 'ACP_FIXTURE_GIT_KEY', GIT_CONFIG_VALUE_0: 'ACP_FIXTURE_GIT_HEADER' },
       }))
-      const session = value(await ai.acp.sessions.create({ agentId: 'scoped', workspaceId: 'project', repositoryId: 'api', id: 'scoped', newWorktree: true }))
+      const session = value(await ai.acp.sessions.create({
+        agentId: 'scoped',
+        workspaceId: 'project',
+        repositoryId: 'api',
+        id: 'scoped',
+        newWorktree: true,
+      }))
       const info = value(await session.info())
       expect(JSON.parse(value(await session.prompt(prompt('credential-boundary'))).text)).toEqual({ agent: true, git: false })
       await writeFile(join(info.cwd, 'hello.txt'), 'authenticated change')
@@ -214,22 +343,37 @@ describe('aCP managed session E2E', () => {
       value(await session.publish({ mode: 'push-branch', message: 'authenticated change', author }))
       expect(await git(origin.remote, ['show', 'acp/scoped:hello.txt'])).toBe('authenticated change')
       expect(await git(decoy.remote, ['branch', '--list', 'acp/scoped'])).toBe('')
-      await git(origin.source, ['commit', '--allow-empty', '-m', 'new base'])
+      await git(origin.source, [
+        'commit',
+        '--allow-empty',
+        '-m',
+        'new base',
+      ])
       await git(origin.source, ['push', 'origin', 'trunk'])
       expect(value(await session.updateMain())[0]?.commit).toBe(await git(origin.source, ['rev-parse', 'HEAD']))
       expect(requests).toContain('/authenticated.git/git-receive-pack')
       expect(requests.filter(path => path === '/authenticated.git/git-upload-pack').length).toBeGreaterThan(1)
     }
     finally {
-      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+      await new Promise<void>((resolve, reject) => server.close(error => error
+        ? reject(error)
+        : resolve()))
     }
   }, 30000)
 
   it.each(['signal', 'api'] as const)('cooperative cancellation via %s 保留不可恢复 Agent 的同一会话和进程', async (method) => {
     await ai.close()
-    value(await ai.init({ acp: { promptTimeout: 5000, cancelTimeout: 1000 } }))
+    value(await ai.init({
+      acp: { promptTimeout: 5000, cancelTimeout: 1000 },
+    }))
     await workspace()
-    value(await ai.acp.agents.register({ id: 'no-resume', name: 'No resume', mode: 'embedded', command: process.execPath, args: [fixture, '--no-resume'] }))
+    value(await ai.acp.agents.register({
+      id: 'no-resume',
+      name: 'No resume',
+      mode: 'embedded',
+      command: process.execPath,
+      args: [fixture, '--no-resume'],
+    }))
     const checked = value(await ai.acp.agents.check('no-resume', { workspaceId: 'project' }))
     expect(checked.agentCapabilities?.loadSession).toBe(false)
     expect(checked.agentCapabilities?.sessionCapabilities?.resume).toBeUndefined()
@@ -303,7 +447,12 @@ describe('aCP managed session E2E', () => {
   }, 20000)
 
   it.skipIf(process.platform === 'win32')('进程清理失败保留连接，显式重试可以再次清理', async () => {
-    const connection = value(await ai.acp.connect({ type: 'stdio', command: process.execPath, args: [fixture], env: { HOME: temporary } }))
+    const connection = value(await ai.acp.connect({
+      type: 'stdio',
+      command: process.execPath,
+      args: [fixture],
+      env: { HOME: temporary },
+    }))
     const kill = vi.spyOn(process, 'kill').mockImplementationOnce(() => {
       throw Object.assign(new Error('Controlled kill failure'), { code: 'EACCES' })
     })
@@ -322,8 +471,16 @@ describe('aCP managed session E2E', () => {
   it('同一原生连接并发建会话只发送一次 session/new', async () => {
     const counter = join(temporary, 'native-count.txt')
     const source = `import fs from 'node:fs'; let count = 0; const output = process.stdout.write.bind(process.stdout); process.stdout.write = (chunk) => { const message = JSON.parse(chunk); if (message.result?.sessionId) fs.writeFileSync(${JSON.stringify(counter)}, String(++count)); return output(chunk) };\n${await readFile(fixture, 'utf8')}`
-    const connection = value(await ai.acp.connect({ type: 'stdio', command: process.execPath, args: ['--input-type=module', '-e', source], env: { HOME: temporary } }))
-    const created = await Promise.all([connection.createSession(temporary), connection.createSession(temporary)])
+    const connection = value(await ai.acp.connect({
+      type: 'stdio',
+      command: process.execPath,
+      args: ['--input-type=module', '-e', source],
+      env: { HOME: temporary },
+    }))
+    const created = await Promise.all([
+      connection.createSession(temporary),
+      connection.createSession(temporary),
+    ])
     expect(created.filter(result => result.success)).toHaveLength(1)
     const failed = created.find(result => !result.success)
     expect(failed?.success).toBe(false)
@@ -335,7 +492,14 @@ describe('aCP managed session E2E', () => {
 
   it('禁用智能体不遗留无法移除的 opening 会话', async () => {
     await workspace()
-    value(await ai.acp.agents.register({ id: 'disabled', name: 'Disabled', mode: 'embedded', command: process.execPath, args: [fixture], enabled: false }))
+    value(await ai.acp.agents.register({
+      id: 'disabled',
+      name: 'Disabled',
+      mode: 'embedded',
+      command: process.execPath,
+      args: [fixture],
+      enabled: false,
+    }))
     const created = await ai.acp.sessions.create({ id: 'disabled-session', agentId: 'disabled', workspaceId: 'project' })
     expect(created.success).toBe(false)
     if (!created.success)
@@ -375,12 +539,22 @@ describe('aCP managed session E2E', () => {
         configuration: {
           configure(input) {
             statePath = input.statePath
-            return { command: process.execPath, args: [fixture], env: {}, files: { 'native.json': '{"ok":true}' } }
+            return {
+              command: process.execPath,
+              args: [fixture],
+              env: {},
+              files: { 'native.json': '{"ok":true}' },
+            }
           },
         },
       },
     }))
-    value(await ai.acp.agents.register({ id: 'configured', name: 'Configured', mode: 'embedded', adapter: 'configuration' }))
+    value(await ai.acp.agents.register({
+      id: 'configured',
+      name: 'Configured',
+      mode: 'embedded',
+      adapter: 'configuration',
+    }))
     await workspace()
     const session = value(await ai.acp.sessions.create({ id: 'linked', agentId: 'configured', workspaceId: 'project' }))
     value(await session.close())
@@ -401,7 +575,12 @@ describe('aCP managed session E2E', () => {
     const repo = await seed('unsupported', 'trunk')
     if (kind === 'submodule') {
       const commit = await git(repo.source, ['rev-parse', 'HEAD'])
-      await git(repo.source, ['update-index', '--add', '--cacheinfo', `160000,${commit},vendor`])
+      await git(repo.source, [
+        'update-index',
+        '--add',
+        '--cacheinfo',
+        `160000,${commit},vendor`,
+      ])
     }
     else {
       await writeFile(join(repo.source, '.gitattributes'), '*.bin filter=lfs diff=lfs merge=lfs -text\n')
@@ -409,7 +588,16 @@ describe('aCP managed session E2E', () => {
     }
     await git(repo.source, ['commit', '-m', 'unsupported content'])
     await git(repo.source, ['push', 'origin', 'trunk'])
-    value(await ai.acp.workspaces.register({ id: 'project', storage: { type: 'directory', path: join(temporary, 'workspace') }, repositories: [{ id: 'code', url: repo.remote, mainBranch: 'trunk' }] }))
+    value(await ai.acp.workspaces.register({
+      id: 'project',
+      storage: {
+        type: 'directory',
+        path: join(temporary, 'workspace'),
+      },
+      repositories: [
+        { id: 'code', url: repo.remote, mainBranch: 'trunk' },
+      ],
+    }))
     const prepared = await ai.acp.workspaces.prepare('project')
     expect(prepared.success).toBe(false)
     if (!prepared.success)
@@ -453,7 +641,9 @@ describe('aCP managed session E2E', () => {
       value(
         await session.promptStructured(
           prompt('json'),
-          z.object({ answer: z.number() }),
+          z.object({
+            answer: z.number(),
+          }),
         ),
       ).answer,
     ).toBe(42)
@@ -461,7 +651,9 @@ describe('aCP managed session E2E', () => {
       (
         await session.promptStructured(
           prompt('bad-json'),
-          z.object({ answer: z.number() }),
+          z.object({
+            answer: z.number(),
+          }),
         )
       ).success,
     ).toBe(false)
@@ -632,7 +824,9 @@ describe('aCP managed session E2E', () => {
   }, 30000)
   it('更新主分支不改 session；脏目录报告部分失败', async () => {
     const api = await seed('api', 'trunk')
-    await workspace([{ id: 'api', url: api.remote, mainBranch: 'trunk' }])
+    await workspace([
+      { id: 'api', url: api.remote, mainBranch: 'trunk' },
+    ])
     const session = value(
       await ai.acp.sessions.create({
         id: 'one',
@@ -685,13 +879,11 @@ describe('aCP managed session E2E', () => {
         'partial',
       )
     }
-    await git(join(temporary, 'workspace/main/web'), [
-      'remote',
-      'set-url',
-      '--push',
-      'origin',
-      join(temporary, 'unavailable.git'),
-    ])
+    // 注册远端始终由工作区契约决定；在真实远端拒绝创建分支来模拟部分失败。
+    await git(web.remote, ['config', 'receive.denyCurrentBranch', 'refuse'])
+    await git(web.remote, ['config', 'receive.denyNonFastForwards', 'true'])
+    // Git 在 POSIX 上忽略不可执行的 hook；夹具必须真实拒绝推送，而非依赖平台默认权限。
+    await writeFile(join(web.remote, 'hooks/pre-receive'), '#!/bin/sh\nexit 1\n', { mode: 0o700 })
     const result = await session.publish({
       mode: 'push-branch',
       message: 'partial',
@@ -708,13 +900,7 @@ describe('aCP managed session E2E', () => {
       })
     }
     const commit = await git(api.remote, ['rev-parse', 'task/partial'])
-    await git(join(temporary, 'workspace/main/web'), [
-      'remote',
-      'set-url',
-      '--push',
-      'origin',
-      web.remote,
-    ])
+    await writeFile(join(web.remote, 'hooks/pre-receive'), '#!/bin/sh\nexit 0\n')
     value(
       await session.publish({ mode: 'push-branch', message: 'retry', author }),
     )
@@ -763,8 +949,13 @@ describe('aCP managed session E2E', () => {
       value(
         await ai.acp.workspaces.register({
           id: 'git',
-          storage: { type: 'directory', path: join(temporary, 'git') },
-          repositories: [{ id: 'code', url: 'unused', mainBranch: 'main' }],
+          storage: {
+            type: 'directory',
+            path: join(temporary, 'git'),
+          },
+          repositories: [
+            { id: 'code', url: 'unused', mainBranch: 'main' },
+          ],
         }),
       )
       const result = await ai.acp.workspaces.prepare('git')

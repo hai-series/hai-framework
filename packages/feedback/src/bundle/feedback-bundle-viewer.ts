@@ -83,6 +83,8 @@ export function feedbackViewerFiles(): Record<string, Uint8Array> {
     'viewer/index.html': strToU8(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self'; frame-src 'self' about: blob:; font-src 'self' data:; base-uri 'none'; form-action 'none'"><title>Feedback</title><link rel="stylesheet" href="style.css"></head><body><header></header><main></main><script type="module" src="app.js"></script></body></html>`),
     'viewer/style.css': strToU8('body{font:15px system-ui,sans-serif;line-height:1.6;margin:0;background:#f5f6f8;color:#172033}header,main{max-width:1080px;margin:auto;padding:24px}section{background:white;padding:24px;margin-bottom:20px;border:1px solid #dce1e8;border-radius:12px}h1{font-size:26px}h2{font-size:19px;margin-top:0}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.6 ui-monospace,monospace}img{max-width:100%;height:auto;border:1px solid #dce1e8}figure{margin:16px 0}input,select,button{font:inherit;padding:8px;margin:4px;border:1px solid #ccd2dc;border-radius:6px}button{cursor:pointer}a{display:block;color:#215dc0}'),
     'viewer/app.js': strToU8(VIEWER_SCRIPT),
-    'viewer/replay.js': strToU8(typeof __FEEDBACK_REPLAY_SCRIPT__ === 'string' ? __FEEDBACK_REPLAY_SCRIPT__ : '/* Replay is available in built package artifacts. */'),
+    'viewer/replay.js': strToU8(typeof __FEEDBACK_REPLAY_SCRIPT__ === 'string'
+      ? __FEEDBACK_REPLAY_SCRIPT__
+      : '/* Replay is available in built package artifacts. */'),
   }
 }

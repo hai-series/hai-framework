@@ -9,10 +9,22 @@ import { toast } from '../src/lib/toast.svelte.js'
 afterEach(() => toast.clear())
 
 const config: AuthPanelConfig = {
-  login: { password: true, ldap: false, email: false, sms: false },
+  login: {
+    password: true,
+    ldap: false,
+    email: false,
+    sms: false,
+  },
   register: { enabled: true },
   passwordReset: { enabled: false },
-  password: { minLength: 8, maxLength: 128, requireUppercase: false, requireLowercase: false, requireNumber: false, requireSpecialChar: false },
+  password: {
+    minLength: 8,
+    maxLength: 128,
+    requireUppercase: false,
+    requireLowercase: false,
+    requireNumber: false,
+    requireSpecialChar: false,
+  },
   otp: { length: 6, resendInterval: 60 },
   agreements: { showOnLogin: false, showOnRegister: false },
   ui: { variant: 'card' },
@@ -25,8 +37,30 @@ it('安全场景组件将宿主的data属性传到实际弹窗和表单', async 
   const target = document.createElement('div')
   document.body.append(target)
   const action = async () => ok(undefined)
-  const dialog = mount(SessionRecoveryDialog, { target, props: { recovery, 'actions': { login: action, register: action, sendOtp: action, requestPasswordReset: action, confirmPasswordReset: action }, 'data-testid': 'recovery-host', 'data-business': 'orders' } })
-  const form = mount(SensitiveOperationsForm, { target, props: { 'operations': [], 'onsubmit': action, 'data-testid': 'sensitive-host', 'data-business': 'orders' } })
+  const dialog = mount(SessionRecoveryDialog, {
+    target,
+    props: {
+      recovery,
+      'actions': {
+        login: action,
+        register: action,
+        sendOtp: action,
+        requestPasswordReset: action,
+        confirmPasswordReset: action,
+      },
+      'data-testid': 'recovery-host',
+      'data-business': 'orders',
+    },
+  })
+  const form = mount(SensitiveOperationsForm, {
+    target,
+    props: {
+      'operations': [],
+      'onsubmit': action,
+      'data-testid': 'sensitive-host',
+      'data-business': 'orders',
+    },
+  })
   try {
     flushSync()
     expect(document.querySelector('[data-testid="recovery-host"]')?.getAttribute('data-business')).toBe('orders')
@@ -82,14 +116,28 @@ it('原地登录复用正常表单，验证错误保留弹窗和页面输入，�
   const pending = recovery.recover()
   const login = vi.fn<AuthPanelActions['login']>()
     .mockResolvedValueOnce(err({ code: 'hai:iam:002', message: 'Incorrect password', httpStatus: 401 }))
-    .mockResolvedValueOnce(ok({ user: { id: 'original' } }))
+    .mockResolvedValueOnce(ok({
+      user: { id: 'original' },
+    }))
   const action = async () => ok(undefined)
   const target = document.createElement('div')
   const draft = document.createElement('textarea')
   draft.value = 'Unsaved business draft'
   target.append(draft)
   document.body.append(target)
-  const component = mount(SessionRecoveryDialog, { target, props: { recovery, actions: { login, register: action, sendOtp: action, requestPasswordReset: action, confirmPasswordReset: action } } })
+  const component = mount(SessionRecoveryDialog, {
+    target,
+    props: {
+      recovery,
+      actions: {
+        login,
+        register: action,
+        sendOtp: action,
+        requestPasswordReset: action,
+        confirmPasswordReset: action,
+      },
+    },
+  })
   try {
     flushSync()
     const username = document.querySelector<HTMLInputElement>('[data-testid="session-recovery-dialog"] input[name=username]')!

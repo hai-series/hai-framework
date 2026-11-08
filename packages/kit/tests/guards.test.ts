@@ -152,7 +152,9 @@ describe('roleGuard', () => {
   }
 
   it('应该允许具有所需角色的用户', () => {
-    const guard = roleGuard({ roles: ['admin'] })
+    const guard = roleGuard({
+      roles: ['admin'],
+    })
 
     const result = guard(createMockEvent(), adminSession)
 
@@ -160,7 +162,9 @@ describe('roleGuard', () => {
   })
 
   it('应该拒绝没有所需角色的用户', () => {
-    const guard = roleGuard({ roles: ['admin'] })
+    const guard = roleGuard({
+      roles: ['admin'],
+    })
 
     const result = guard(createMockEvent(), userSession)
 
@@ -168,7 +172,10 @@ describe('roleGuard', () => {
   })
 
   it('应该支持 requireAll 选项', () => {
-    const guard = roleGuard({ roles: ['admin', 'superadmin'], requireAll: true })
+    const guard = roleGuard({
+      roles: ['admin', 'superadmin'],
+      requireAll: true,
+    })
 
     const result = guard(createMockEvent(), adminSession)
 
@@ -176,7 +183,9 @@ describe('roleGuard', () => {
   })
 
   it('应该支持任意角色匹配', () => {
-    const guard = roleGuard({ roles: ['admin', 'moderator'] })
+    const guard = roleGuard({
+      roles: ['admin', 'moderator'],
+    })
 
     const result = guard(createMockEvent(), adminSession)
 
@@ -192,7 +201,9 @@ describe('permissionGuard', () => {
   }
 
   it('应该允许具有所需权限的用户', () => {
-    const guard = permissionGuard({ permissions: ['users:read'] })
+    const guard = permissionGuard({
+      permissions: ['users:read'],
+    })
 
     const result = guard(createMockEvent(), session)
 
@@ -200,7 +211,9 @@ describe('permissionGuard', () => {
   })
 
   it('应该拒绝没有所需权限的用户', () => {
-    const guard = permissionGuard({ permissions: ['system:delete'] })
+    const guard = permissionGuard({
+      permissions: ['system:delete'],
+    })
 
     const result = guard(createMockEvent(), session)
 
@@ -208,7 +221,9 @@ describe('permissionGuard', () => {
   })
 
   it('应该支持通配符权限', () => {
-    const guard = permissionGuard({ permissions: ['admin:dashboard'] })
+    const guard = permissionGuard({
+      permissions: ['admin:dashboard'],
+    })
 
     const result = guard(createMockEvent(), session)
 
@@ -222,7 +237,9 @@ describe('permissionGuard', () => {
       permissions: ['*'],
     }
 
-    const guard = permissionGuard({ permissions: ['anything:anywhere'] })
+    const guard = permissionGuard({
+      permissions: ['anything:anywhere'],
+    })
 
     const result = guard(createMockEvent(), superSession)
 
@@ -373,17 +390,29 @@ describe('hasPermission', () => {
   })
 
   it('有对应权限时返回 true', () => {
-    const session: SessionData = { userId: 'u1', roles: [], permissions: ['user:read', 'role:read'] }
+    const session: SessionData = {
+      userId: 'u1',
+      roles: [],
+      permissions: ['user:read', 'role:read'],
+    }
     expect(hasPermission(session, 'user:read')).toBe(true)
   })
 
   it('无对应权限时返回 false', () => {
-    const session: SessionData = { userId: 'u1', roles: [], permissions: ['user:read'] }
+    const session: SessionData = {
+      userId: 'u1',
+      roles: [],
+      permissions: ['user:read'],
+    }
     expect(hasPermission(session, 'user:delete')).toBe(false)
   })
 
   it('支持通配符', () => {
-    const session: SessionData = { userId: 'u1', roles: [], permissions: ['user:*'] }
+    const session: SessionData = {
+      userId: 'u1',
+      roles: [],
+      permissions: ['user:*'],
+    }
     expect(hasPermission(session, 'user:read')).toBe(true)
     expect(hasPermission(session, 'user:delete')).toBe(true)
     expect(hasPermission(session, 'role:read')).toBe(false)
@@ -404,7 +433,11 @@ describe('assertPermission', () => {
   })
 
   it('权限不足时返回 403 Response', async () => {
-    const session: SessionData = { userId: 'u1', roles: [], permissions: ['user:read'] }
+    const session: SessionData = {
+      userId: 'u1',
+      roles: [],
+      permissions: ['user:read'],
+    }
     const result = assertPermission(session, 'user:delete')
     expect(result).toBeInstanceOf(Response)
     expect(result!.status).toBe(403)
@@ -413,13 +446,21 @@ describe('assertPermission', () => {
   })
 
   it('有权限时返回 undefined', () => {
-    const session: SessionData = { userId: 'u1', roles: [], permissions: ['user:read'] }
+    const session: SessionData = {
+      userId: 'u1',
+      roles: [],
+      permissions: ['user:read'],
+    }
     const result = assertPermission(session, 'user:read')
     expect(result).toBeUndefined()
   })
 
   it('通配符权限时返回 undefined', () => {
-    const session: SessionData = { userId: 'u1', roles: [], permissions: ['*'] }
+    const session: SessionData = {
+      userId: 'u1',
+      roles: [],
+      permissions: ['*'],
+    }
     const result = assertPermission(session, 'user:delete')
     expect(result).toBeUndefined()
   })
@@ -449,7 +490,11 @@ describe('requirePermission', () => {
   })
 
   it('权限不足时 throw 403 Response', async () => {
-    const session: SessionData = { userId: 'u1', roles: [], permissions: ['user:read'] }
+    const session: SessionData = {
+      userId: 'u1',
+      roles: [],
+      permissions: ['user:read'],
+    }
     try {
       requirePermission(session, 'user:delete')
       expect.fail('Should have thrown')
@@ -463,12 +508,20 @@ describe('requirePermission', () => {
   })
 
   it('有权限时不 throw', () => {
-    const session: SessionData = { userId: 'u1', roles: [], permissions: ['user:read'] }
+    const session: SessionData = {
+      userId: 'u1',
+      roles: [],
+      permissions: ['user:read'],
+    }
     expect(() => requirePermission(session, 'user:read')).not.toThrow()
   })
 
   it('通配符权限时不 throw', () => {
-    const session: SessionData = { userId: 'u1', roles: [], permissions: ['*'] }
+    const session: SessionData = {
+      userId: 'u1',
+      roles: [],
+      permissions: ['*'],
+    }
     expect(() => requirePermission(session, 'user:delete')).not.toThrow()
   })
 })

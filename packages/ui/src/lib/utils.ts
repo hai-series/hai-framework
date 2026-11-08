@@ -151,7 +151,9 @@ export function getVariantClass(variant: Variant, prefix = 'btn'): string {
   if (map)
     return map[variant] ?? map.default
   // 未预置的前缀回退为动态拼接（调用方需自行确保 Tailwind 可扫描）
-  return `${prefix}-${variant === 'default' ? 'neutral' : variant}`
+  return `${prefix}-${variant === 'default'
+    ? 'neutral'
+    : variant}`
 }
 
 /**
@@ -309,7 +311,9 @@ export function generateId(prefix = 'hai'): string {
  */
 export function portal(node: HTMLElement, target: HTMLElement | string = 'body') {
   function mount(to: HTMLElement | string) {
-    const targetEl = typeof to === 'string' ? document.querySelector<HTMLElement>(to) : to
+    const targetEl = typeof to === 'string'
+      ? document.querySelector<HTMLElement>(to)
+      : to
     targetEl?.appendChild(node)
   }
   mount(target)

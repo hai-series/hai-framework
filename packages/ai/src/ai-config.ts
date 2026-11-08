@@ -36,7 +36,9 @@ import { CompressionStrategySchema } from './compress/ai-compress-types.js'
  * ```
  */
 export const OptionalSecretSchema = z.string().nullable().transform(value =>
-  value === null || value.trim() === '' ? undefined : value,
+  value === null || value.trim() === ''
+    ? undefined
+    : value,
 ).optional()
 
 // ─── LLM 配置 Schema ───
@@ -73,7 +75,19 @@ export const OptionalSecretSchema = z.string().nullable().transform(value =>
  * }
  * ```
  */
-export const ModelScenarioSchema = z.enum(['default', 'chat', 'reasoning', 'plan', 'execute', 'extraction', 'summary', 'embedding', 'rerank', 'ocr', 'fast'])
+export const ModelScenarioSchema = z.enum([
+  'default',
+  'chat',
+  'reasoning',
+  'plan',
+  'execute',
+  'extraction',
+  'summary',
+  'embedding',
+  'rerank',
+  'ocr',
+  'fast',
+])
 
 /**
  * 模型场景类型
@@ -150,8 +164,12 @@ export const ModelCapabilitiesSchema = z.strictObject({
     supported: z.boolean(),
     /** 已确认可选择的推理级别。 */
     efforts: z.array(z.string().min(1)).min(1).optional(),
-  }).refine(value => value.supported || !value.efforts, { message: aiM('ai_modelCapabilitiesInvalid') }).optional(),
-}).refine(value => !value.contextWindow || !value.maxOutputTokens || value.maxOutputTokens <= value.contextWindow, { message: aiM('ai_modelCapabilitiesInvalid') })
+  }).refine(value => value.supported || !value.efforts, {
+    message: aiM('ai_modelCapabilitiesInvalid'),
+  }).optional(),
+}).refine(value => !value.contextWindow || !value.maxOutputTokens || value.maxOutputTokens <= value.contextWindow, {
+  message: aiM('ai_modelCapabilitiesInvalid'),
+})
 
 /**
  * 模型条目 Schema
@@ -190,7 +208,11 @@ export const ModelEntrySchema = z.strictObject({
   temperature: z.number().min(0).max(2).optional(),
   /** 超时覆盖（可选，毫秒） */
   timeout: z.number().positive().optional(),
-}, { error: issue => issue.code === 'unrecognized_keys' && issue.keys.includes('api') ? aiM('ai_llmProtocolRenamed') : undefined })
+}, {
+  error: issue => issue.code === 'unrecognized_keys' && issue.keys.includes('api')
+    ? aiM('ai_llmProtocolRenamed')
+    : undefined,
+})
 
 /**
  * 模型条目类型
@@ -248,8 +270,15 @@ export const LLMConfigSchema = z.strictObject({
   /** 多模型配置列表（各字段可选，未指定时回退到全局默认值） */
   models: z.array(ModelEntrySchema).optional(),
   /** 场景模型映射（场景名 → 模型 ID 或直接模型名称，各场景均可选） */
-  scenarios: z.object(Object.fromEntries(ModelScenarioSchema.options.map(k => [k, z.string().optional()])) as Record<ModelScenario, z.ZodOptional<z.ZodString>>).optional(),
-}, { error: issue => issue.code === 'unrecognized_keys' && issue.keys.includes('api') ? aiM('ai_llmProtocolRenamed') : undefined })
+  scenarios: z.object(Object.fromEntries(ModelScenarioSchema.options.map(k => [
+    k,
+    z.string().optional(),
+  ])) as Record<ModelScenario, z.ZodOptional<z.ZodString>>).optional(),
+}, {
+  error: issue => issue.code === 'unrecognized_keys' && issue.keys.includes('api')
+    ? aiM('ai_llmProtocolRenamed')
+    : undefined,
+})
 
 /**
  * LLM 配置类型
@@ -374,7 +403,9 @@ export function resolveModelEntry(
   }
 
   if (!resolved.apiKey) {
-    return err(HaiAIError.CONFIGURATION_ERROR, options?.missingApiKeyMessage ?? aiM('ai_configMissingApiKey', { params: { scenario } }))
+    return err(HaiAIError.CONFIGURATION_ERROR, options?.missingApiKeyMessage ?? aiM('ai_configMissingApiKey', {
+      params: { scenario },
+    }))
   }
 
   return ok(resolved)
@@ -511,7 +542,9 @@ export const MCPExternalServerSchema = z.strictObject({
   environmentRefs: z.record(z.string(), z.string()).default({}),
   /** 认证 Header 名到宿主凭据变量名的映射。 */
   headerEnv: z.record(z.string(), z.string()).default({}),
-}).refine(value => value.transport === 'stdio' ? Boolean(value.command) : Boolean(value.url && /^https?:/.test(value.url)))
+}).refine(value => value.transport === 'stdio'
+  ? Boolean(value.command)
+  : Boolean(value.url && /^https?:/.test(value.url)))
 
 /**
  * 外部 MCP 服务配置。
@@ -703,12 +736,12 @@ export type { EntityType } from './knowledge/ai-knowledge-types.js'
  * ```
  */
 export const MemoryConfigSchema = z.object({
-  /** 记忆后端：native 使用框架原生存储与批量合并；mem0 将框架提取结果写入受支持的嵌入式 SDK 后端 */
+  /** 记忆后端：native 使用框架原生存储与批量合并；mem0 将框架提取结果以 Mem0 数据格式写入 Qdrant */
   provider: z.enum(['native', 'mem0']).default('native'),
   /**
    * 是否允许在配置了持久化向量后端但 mem0 无法映射时退回内存存储（默认 false）
    *
-   * 仅影响 `provider='mem0'`：当前框架适配仅映射 qdrant；pgvector 的 SDK 连接无法公开关闭，所有环境拒绝。底层 vecdb 是
+   * 仅影响 `provider='mem0'`：当前框架适配仅映射 qdrant；其它持久化后端使用 native Provider。底层 vecdb 是
    * lancedb / chroma / 未知后端时，默认 fail-fast（初始化失败），避免服务重启后记忆静默丢失；
    * 仅当显式设为 true 时才在开发或明确 E2E 环境退回内存存储（数据不持久）。
    * 生产始终要求实际持久化连接，不能通过此开关绕过共享状态要求。
@@ -746,7 +779,7 @@ export const MemoryConfigSchema = z.object({
    * scope，必须依赖更大的候选池才能保证 scope 内记忆被召回。
    */
   candidateMultiplier: z.number().int().positive().default(5),
-  /** 写回 / 合并时检索相关记忆的数量（native 与 mem0 共用，默认 20） */
+  /** 写回 / 合并时检索相关记忆的数量（仅 native，默认 20） */
   writebackRelatedTopK: z.number().int().positive().default(20),
 })
 
@@ -1129,7 +1162,14 @@ export type A2AConfig = z.infer<typeof A2AConfigSchema>
  * }
  * ```
  */
-export const AudioProviderSchema = z.enum(['openai', 'mimo', 'qwen', 'doubao', 'whisper', 'indextts'])
+export const AudioProviderSchema = z.enum([
+  'openai',
+  'mimo',
+  'qwen',
+  'doubao',
+  'whisper',
+  'indextts',
+])
 
 /**
  * 语音平台类型
@@ -1359,7 +1399,9 @@ const AUDIO_PROVIDER_CREDENTIAL_OPTIONAL = new Set<AudioProviderName>(['whisper'
 
 /** 火山引擎默认资源 ID（按操作类型区分 ASR / TTS） */
 function doubaoDefaultResourceId(operation: 'transcribe' | 'synthesize'): string {
-  return operation === 'transcribe' ? 'volc.bigasr.sauc.duration' : 'seed-tts-2.0'
+  return operation === 'transcribe'
+    ? 'volc.bigasr.sauc.duration'
+    : 'seed-tts-2.0'
 }
 
 /** 读取指定平台的 API Key 环境变量（凭据未在配置中提供时的回退） */
@@ -1408,19 +1450,29 @@ export function resolveAudioModel(
   explicit?: string,
   llmApiKey?: string,
 ): HaiResult<ResolvedAudioModel> {
-  const targetId = explicit ?? (operation === 'transcribe' ? audioConfig.transcribeModel : audioConfig.synthesizeModel)
-  if (!targetId)
-    return err(HaiAIError.AUDIO_MODEL_NOT_FOUND, aiM('ai_audioModelNotFound', { params: { model: `<${operation}>` } }))
+  const targetId = explicit ?? (operation === 'transcribe'
+    ? audioConfig.transcribeModel
+    : audioConfig.synthesizeModel)
+  if (!targetId) {
+    return err(HaiAIError.AUDIO_MODEL_NOT_FOUND, aiM('ai_audioModelNotFound', {
+      params: { model: `<${operation}>` },
+    }))
+  }
 
   const entry = audioConfig.models?.find(m => m.id === targetId || m.model === targetId)
-  if (!entry)
-    return err(HaiAIError.AUDIO_MODEL_NOT_FOUND, aiM('ai_audioModelNotFound', { params: { model: targetId } }))
+  if (!entry) {
+    return err(HaiAIError.AUDIO_MODEL_NOT_FOUND, aiM('ai_audioModelNotFound', {
+      params: { model: targetId },
+    }))
+  }
 
   const operations: readonly string[] = entry.operations
   if (!operations.includes(operation)) {
     return err(
       HaiAIError.AUDIO_UNSUPPORTED_INPUT,
-      aiM('ai_audioUnsupportedInput', { params: { provider: entry.provider, reason: `model ${entry.id} does not support ${operation}` } }),
+      aiM('ai_audioUnsupportedInput', {
+        params: { provider: entry.provider, reason: `model ${entry.id} does not support ${operation}` },
+      }),
     )
   }
 
@@ -1430,8 +1482,11 @@ export function resolveAudioModel(
 
   // 端点：模型条目优先，其次平台 canonical 默认；无 canonical 的自托管平台必须显式配置
   const baseUrl = entry.baseUrl ?? AUDIO_PROVIDER_DEFAULT_BASE_URL[entry.provider]
-  if (!baseUrl)
-    return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingBaseUrl', { params: { provider: entry.provider } }))
+  if (!baseUrl) {
+    return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingBaseUrl', {
+      params: { provider: entry.provider },
+    }))
+  }
 
   return ok({
     id: entry.id,
@@ -1441,7 +1496,9 @@ export function resolveAudioModel(
     baseUrl,
     appKey: entry.appKey ?? process.env.VOLC_APP_KEY,
     accessKey: entry.accessKey ?? process.env.VOLC_ACCESS_KEY,
-    resourceId: entry.resourceId ?? (entry.provider === 'doubao' ? doubaoDefaultResourceId(operation) : ''),
+    resourceId: entry.resourceId ?? (entry.provider === 'doubao'
+      ? doubaoDefaultResourceId(operation)
+      : ''),
     workspaceId: entry.workspaceId,
     timeout: entry.timeout ?? 60000,
   })
@@ -1477,7 +1534,9 @@ export function ensureAudioCredential(model: ResolvedAudioModel): HaiError | nul
   const hasDoubaoLegacy = model.provider === 'doubao' && Boolean(model.appKey && model.accessKey)
   if (model.apiKey || hasDoubaoLegacy)
     return null
-  return core.error.buildHaiErrorInst(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', { params: { provider: model.provider } }))
+  return core.error.buildHaiErrorInst(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', {
+    params: { provider: model.provider },
+  }))
 }
 
 // ─── Image 配置 Schema ───
@@ -1504,7 +1563,13 @@ export function ensureAudioCredential(model: ResolvedAudioModel): HaiError | nul
  * }
  * ```
  */
-export const ImageProviderSchema = z.enum(['openai', 'google', 'qwen', 'seedream', 'pollinations'])
+export const ImageProviderSchema = z.enum([
+  'openai',
+  'google',
+  'qwen',
+  'seedream',
+  'pollinations',
+])
 
 /**
  * 文生图平台类型
@@ -1670,20 +1735,33 @@ function imageProviderEnvApiKey(provider: ImageProviderName): string | undefined
  */
 export function resolveImageModel(imageConfig: ImageConfig, explicit?: string): HaiResult<ResolvedImageModel> {
   const target = explicit ?? imageConfig.generateModel
-  if (!target)
-    return err(HaiAIError.IMAGE_MODEL_NOT_FOUND, aiM('ai_imageModelNotFound', { params: { model: '<generate>' } }))
+  if (!target) {
+    return err(HaiAIError.IMAGE_MODEL_NOT_FOUND, aiM('ai_imageModelNotFound', {
+      params: { model: '<generate>' },
+    }))
+  }
   const entry = imageConfig.models?.find(model => model.id === target || model.model === target)
-  if (!entry)
-    return err(HaiAIError.IMAGE_MODEL_NOT_FOUND, aiM('ai_imageModelNotFound', { params: { model: target } }))
+  if (!entry) {
+    return err(HaiAIError.IMAGE_MODEL_NOT_FOUND, aiM('ai_imageModelNotFound', {
+      params: { model: target },
+    }))
+  }
   const apiKey = entry.apiKey ?? imageProviderEnvApiKey(entry.provider)
-  if (!apiKey)
-    return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_imageMissingApiKey', { params: { provider: entry.provider } }))
+  if (!apiKey) {
+    return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_imageMissingApiKey', {
+      params: { provider: entry.provider },
+    }))
+  }
+  const configuredUrl = entry.baseUrl ?? IMAGE_PROVIDER_DEFAULT_BASE_URL[entry.provider]
+  let urlEnd = configuredUrl.length
+  while (urlEnd > 0 && configuredUrl[urlEnd - 1] === '/')
+    urlEnd--
   return ok({
     id: entry.id,
     provider: entry.provider,
     model: entry.model,
     apiKey,
-    baseUrl: (entry.baseUrl ?? IMAGE_PROVIDER_DEFAULT_BASE_URL[entry.provider]).replace(/\/+$/, ''),
+    baseUrl: configuredUrl.slice(0, urlEnd),
     workspaceId: entry.workspaceId,
     timeout: entry.timeout,
   })

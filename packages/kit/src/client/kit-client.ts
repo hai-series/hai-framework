@@ -30,7 +30,7 @@ const DEFAULT_KEY_EXCHANGE_URL = `/api${TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_
  * ```
  */
 export interface ClientTransportConfig {
-  /** 宿主构建挂载目录，默认空字符串；SvelteKit 使用 $app/paths.base。 */
+  /** 宿主构建挂载目录，默认空字符串；SvelteKit 使用 paths.relative=false 时的 resolve('/').replace(/\/$/, '')。 */
   basePath?: string
   /** 可选本地明文上限；缺省跟随服务端握手。 */
   maxPlaintextBytes?: number
@@ -164,8 +164,11 @@ function getCurrentOrigin(): string {
 }
 
 function toRequest(input: RequestInfo | URL, init?: RequestInit): Request {
-  if (input instanceof Request)
-    return init ? new Request(input, init) : input
+  if (input instanceof Request) {
+    return init
+      ? new Request(input, init)
+      : input
+  }
 
   return new Request(input, init)
 }
@@ -262,7 +265,7 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
  * @param config 已解析的 kit 公共传输配置
  * @param deps  外部依赖
  * @param deps.crypto `@h-ai/crypto` 模块实例
- * @param deps.basePath 宿主构建挂载目录，默认空字符串；SvelteKit 使用 $app/paths.base。
+ * @param deps.basePath 宿主构建挂载目录，默认空字符串；SvelteKit 使用 paths.relative=false 时的 resolve('/').replace(/\/$/, '')。
  * @example
  * ```ts
  * import { kit } from '@h-ai/kit'
@@ -331,7 +334,9 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
   // ── Auth token store ──
   // 安全默认：auth:true 只读取页面内存 token，避免隐式 localStorage 持久化敏感凭证。
   const authStore: BrowserTokenStore | null = authConfig
-    ? (authConfig === true ? getDefaultBrowserTokenStore() : authConfig)
+    ? (authConfig === true
+        ? getDefaultBrowserTokenStore()
+        : authConfig)
     : null
 
   // ── 传输加密状态 ──
@@ -353,13 +358,17 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
    * 统一 API fetch
    */
   async function performFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
-    const request = input instanceof Request ? input : undefined
+    const request = input instanceof Request
+      ? input
+      : undefined
     const method = (init.method ?? request?.method ?? 'GET').toUpperCase()
     const isWriteMethod = !['GET', 'HEAD', 'OPTIONS'].includes(method)
     const headers = new Headers(init.headers ?? request?.headers)
     headers.set('x-hai-terminal', config.terminalType ?? 'web')
     const suppliedId = headers.get('x-request-id')
-    const traceId = suppliedId && /^[\w.:-]{1,128}$/.test(suppliedId) ? suppliedId : core.id.uuid()
+    const traceId = suppliedId && /^[\w.:-]{1,128}$/.test(suppliedId)
+      ? suppliedId
+      : core.id.uuid()
     headers.set('x-request-id', traceId)
     // 仅检查元数据，不构建/读取 Request，确保透传上传的流与浏览器边界保持可用。
     const canUseTransport = request && init.body === undefined
@@ -386,7 +395,9 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
     if (
       transportClient
       && canUseTransport
-      && shouldUseTransportForUrl(request?.url ?? (input instanceof URL ? input : String(input)), {
+      && shouldUseTransportForUrl(request?.url ?? (input instanceof URL
+        ? input
+        : String(input)), {
         origin: transportOrigin,
         keyExchangePath: transportKeyExchangePath,
         excludePaths: transportConfig?.excludePaths,
@@ -416,9 +427,15 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
   return {
     async apiFetch(input, init = {}, options) {
       const enabled = config.recoverSession && options?.recoverSession !== false
-      const original = enabled || options?.reauthorize ? new Request(input instanceof Request ? input : new URL(String(input), getCurrentOrigin()), init) : undefined
+      const original = enabled || options?.reauthorize
+        ? new Request(input instanceof Request
+            ? input
+            : new URL(String(input), getCurrentOrigin()), init)
+        : undefined
       const retry = original?.clone()
-      const response = await performFetch(original ?? input, original ? {} : init)
+      const response = await performFetch(original ?? input, original
+        ? {}
+        : init)
       if (!retry || retry.signal.aborted || new URL(retry.url).origin !== getCurrentOrigin())
         return response
       if (response.status !== 401 && !options?.reauthorize)
@@ -426,7 +443,9 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
       if (response.status !== 401 && !response.headers.get('content-type')?.includes('application/json'))
         return response
       const failure: unknown = await response.clone().json().catch(() => undefined)
-      const code = failure && typeof failure === 'object' && 'success' in failure && failure.success === false && 'error' in failure && failure.error && typeof failure.error === 'object' && 'code' in failure.error ? failure.error.code : undefined
+      const code = failure && typeof failure === 'object' && 'success' in failure && failure.success === false && 'error' in failure && failure.error && typeof failure.error === 'object' && 'code' in failure.error
+        ? failure.error.code
+        : undefined
       const proofRejected = code === 'hai:iam:027' && options?.reauthorize
       if (!proofRejected && (!enabled || response.status !== 401 || (typeof code === 'string' && code.startsWith('hai:iam:') && !IamSessionErrorCodeSchema.safeParse(code).success)))
         return response

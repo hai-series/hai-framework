@@ -1,9 +1,9 @@
 import { Buffer } from 'node:buffer'
 import { randomBytes } from 'node:crypto'
-import * as m from '$lib/paraglide/messages.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { storage } from '@h-ai/storage'
+import * as m from '#lib/paraglide/messages.js'
 
 /** 头像上传大小上限：2MB */
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024
@@ -36,7 +36,11 @@ const EXT_MAP: Record<string, string> = {
  */
 export const POST = kit.handler(async ({ request, locals, cookies }) => {
   await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.profile.avatar')
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   if (!locals.accessToken) {
     return kit.response.unauthorized(m.common_error({}, { locale }))
   }

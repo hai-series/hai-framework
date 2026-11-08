@@ -26,11 +26,13 @@ function createMockLLM(responses: Array<{ content: string | null }>): LLMOperati
           object: 'chat.completion' as const,
           created: Date.now(),
           model: 'test-model',
-          choices: [{
-            index: 0,
-            message: { role: 'assistant' as const, content: resp.content },
-            finish_reason: 'stop' as const,
-          }],
+          choices: [
+            {
+              index: 0,
+              message: { role: 'assistant' as const, content: resp.content },
+              finish_reason: 'stop' as const,
+            },
+          ],
           usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
         },
       }
@@ -64,9 +66,11 @@ function createOps(
 
 describe('summary summarize', () => {
   it('生成消息摘要', async () => {
-    const llm = createMockLLM([{
-      content: 'The user discussed project architecture and testing strategies.',
-    }])
+    const llm = createMockLLM([
+      {
+        content: 'The user discussed project architecture and testing strategies.',
+      },
+    ])
     const ops = createOps(llm)
 
     const messages: ChatMessage[] = [
@@ -85,13 +89,17 @@ describe('summary summarize', () => {
   })
 
   it('增量摘要传入 previousSummary', async () => {
-    const llm = createMockLLM([{
-      content: 'Updated summary including previous context and new topics.',
-    }])
+    const llm = createMockLLM([
+      {
+        content: 'Updated summary including previous context and new topics.',
+      },
+    ])
     const ops = createOps(llm)
 
     const result = await ops.summarize(
-      [{ role: 'user', content: 'New topic about deployment.' }],
+      [
+        { role: 'user', content: 'New topic about deployment.' },
+      ],
       { previousSummary: 'Previously discussed testing.' },
     )
     expect(result.success).toBe(true)
@@ -101,13 +109,17 @@ describe('summary summarize', () => {
   })
 
   it('支持通过 options.systemPrompt 自定义摘要提示词', async () => {
-    const llm = createMockLLM([{
-      content: 'Custom prompt summary.',
-    }])
+    const llm = createMockLLM([
+      {
+        content: 'Custom prompt summary.',
+      },
+    ])
     const ops = createOps(llm, { systemPrompt: 'Use configured summary prompt.' })
 
     const result = await ops.summarize(
-      [{ role: 'user', content: 'Please summarize only key decisions.' }],
+      [
+        { role: 'user', content: 'Please summarize only key decisions.' },
+      ],
       {
         systemPrompt: 'Focus on product decisions and pending action items.',
         previousSummary: 'Earlier discussion covered the release scope.',
@@ -136,7 +148,9 @@ describe('summary summarize', () => {
     } as unknown as LLMOperations
 
     const ops = createOps(failingLLM)
-    const result = await ops.summarize([{ role: 'user', content: 'test' }])
+    const result = await ops.summarize([
+      { role: 'user', content: 'test' },
+    ])
     expect(result.success).toBe(false)
   })
 })
@@ -145,12 +159,16 @@ describe('summary summarize', () => {
 
 describe('summary generate', () => {
   it('仅生成摘要文本', async () => {
-    const llm = createMockLLM([{
-      content: 'Summary text only.',
-    }])
+    const llm = createMockLLM([
+      {
+        content: 'Summary text only.',
+      },
+    ])
     const ops = createOps(llm)
 
-    const result = await ops.generate([{ role: 'user', content: 'Hello' }])
+    const result = await ops.generate([
+      { role: 'user', content: 'Hello' },
+    ])
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data).toBe('Summary text only.')
@@ -158,13 +176,17 @@ describe('summary generate', () => {
   })
 
   it('generate 支持覆盖默认 systemPrompt', async () => {
-    const llm = createMockLLM([{
-      content: 'Summary text only.',
-    }])
+    const llm = createMockLLM([
+      {
+        content: 'Summary text only.',
+      },
+    ])
     const ops = createOps(llm, { systemPrompt: 'Use configured summary prompt.' })
 
     const result = await ops.generate(
-      [{ role: 'user', content: 'Hello' }],
+      [
+        { role: 'user', content: 'Hello' },
+      ],
       { systemPrompt: 'Summarize in one short paragraph.' },
     )
 

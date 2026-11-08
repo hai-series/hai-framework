@@ -138,7 +138,9 @@ export function createMysqlProvider(): ReldbProvider {
         cancel: () => finish(err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized'))),
         start: () => {
           if (!ready || performance.now() >= deadline) {
-            finish(ready ? timeoutResult() : err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized')))
+            finish(ready
+              ? timeoutResult()
+              : err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized')))
             return
           }
           if (activeSlots++ === 0)
@@ -150,7 +152,9 @@ export function createMysqlProvider(): ReldbProvider {
                 connection.release()
               }
               finally { releaseSlot() }
-              finish(ready ? timeoutResult() : err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized')))
+              finish(ready
+                ? timeoutResult()
+                : err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized')))
               return
             }
             let released = false
@@ -169,11 +173,19 @@ export function createMysqlProvider(): ReldbProvider {
             }))
           }, (error) => {
             releaseSlot()
-            finish(err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', { params: { error: String(error) } }), error))
+            finish(err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', {
+              params: {
+                error: String(error),
+              },
+            }), error))
           }).catch((error) => {
             // 迟到连接清理异常时停止新业务，保留池供 close 重试，不泄露驱动错误。
             ready = false
-            finish(err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', { params: { error: reldbM('reldb_mysqlPoolReleaseFailed') } }), error))
+            finish(err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', {
+              params: {
+                error: reldbM('reldb_mysqlPoolReleaseFailed'),
+              },
+            }), error))
             logger.warn('MySQL connection release failed; pool requires cleanup')
           })
         },
@@ -226,7 +238,11 @@ export function createMysqlProvider(): ReldbProvider {
         return ok(undefined)
       }
       catch (error) {
-        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', { params: { error: String(error) } }), error)
+        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     })().finally(() => { closing = null })
     return closing
@@ -249,7 +265,9 @@ export function createMysqlProvider(): ReldbProvider {
 
   /** 事务错误消息生成 */
   function mysqlTxErrorMessage(detail: string): string {
-    return reldbM('reldb_mysqlTxFailed', { params: { error: detail } })
+    return reldbM('reldb_mysqlTxFailed', {
+      params: { error: detail },
+    })
   }
 
   /**
@@ -406,7 +424,9 @@ export function createMysqlProvider(): ReldbProvider {
       if (!tableResult.data) {
         if (ifExists)
           return ok(undefined)
-        return err(HaiReldbError.DDL_FAILED, reldbM('reldb_ddlFailed', { params: { error: `index not found: ${index}` } }))
+        return err(HaiReldbError.DDL_FAILED, reldbM('reldb_ddlFailed', {
+          params: { error: `index not found: ${index}` },
+        }))
       }
 
       return executeDdl(`DROP INDEX ${mysqlQuoteId(index)} ON ${mysqlQuoteId(tableResult.data)}`)
@@ -449,7 +469,11 @@ export function createMysqlProvider(): ReldbProvider {
         }
         catch (error) {
           await connection.rollback().catch(() => { })
-          return err(HaiReldbError.QUERY_FAILED, reldbM('reldb_batchFailed', { params: { error: String(error) } }), error)
+          return err(HaiReldbError.QUERY_FAILED, reldbM('reldb_batchFailed', {
+            params: {
+              error: String(error),
+            },
+          }), error)
         }
       })
     },
@@ -523,7 +547,10 @@ export function createMysqlProvider(): ReldbProvider {
     }
 
     const txDmlOps = createMysqlTxDmlOps(connection)
-    const guardedTxDmlOps = createBaseDmlOps({ ...ctx, isConnected: () => connection !== null }, txDmlOps)
+    const guardedTxDmlOps = createBaseDmlOps({
+      ...ctx,
+      isConnected: () => connection !== null,
+    }, txDmlOps)
     return ok(createTxHandle(guardedTxDmlOps, {
       commit: async () => { await connection!.commit() },
       rollback: async () => { await connection!.rollback() },
@@ -551,7 +578,9 @@ export function createMysqlProvider(): ReldbProvider {
       const previousCleanup = await closeResource()
       if (!previousCleanup.success)
         return previousCleanup
-      const host = config.url ? new URL(config.url).hostname : config.host
+      const host = config.url
+        ? new URL(config.url).hostname
+        : config.host
       if (config.ssl && config.ssl.rejectUnauthorized && config.ssl.verifyIdentity && isIP(host.replace(/^\[|\]$/g, ''))) {
         return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_mysqlTlsDnsRequired'))
       }
@@ -570,7 +599,13 @@ export function createMysqlProvider(): ReldbProvider {
           // mysql2 会用非空的分字段覆盖 URI；URL 模式不能传 schema 默认 host 或冲突字段。
           ...(config.url
             ? { uri: config.url }
-            : { host: config.host, port: config.port, database: config.database, user: config.user, password: config.password }),
+            : {
+                host: config.host,
+                port: config.port,
+                database: config.database,
+                user: config.user,
+                password: config.password,
+              }),
           ssl: config.ssl,
           connectionLimit: poolConfig.max,
           // 排队由本 Provider 管理，超时项可直接移除；驱动绝不保留取消后的等待者。
@@ -585,14 +620,25 @@ export function createMysqlProvider(): ReldbProvider {
         ready = true
         currentConfig = config
         logger.info('Connected to MySQL', config.url
-          ? { target: core.sanitize.sanitizeUrl(config.url) }
+          ? {
+              target: core.sanitize.sanitizeUrl(config.url),
+            }
           : { host: config.host, port: config.port, database: config.database })
         return ok(undefined)
       }
       catch (error) {
         const cleanup = await closeResource()
-        const result = err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', { params: { error: String(error) } }), error)
-        return cleanup.success || result.success ? result : err({ ...result.error, ext: { cleanupPending: true, cleanupError: cleanup.error } })
+        const result = err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
+        return cleanup.success || result.success
+          ? result
+          : err({
+              ...result.error,
+              ext: { cleanupPending: true, cleanupError: cleanup.error },
+            })
       }
     },
 

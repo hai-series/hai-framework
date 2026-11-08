@@ -326,7 +326,7 @@ export interface VecdbFunctions {
   /**
    * 获取底层后端的原始连接信息（含凭证，未初始化时为 null）
    *
-   * 供需要直连同一向量库的外部引擎（如 mem0 OSS）复用后端。返回值包含未脱敏的凭证，
+   * 供需要直连同一向量库的格式适配器（如 Mem0 数据格式存储）复用后端。返回值包含未脱敏的凭证，
    * 仅供同进程内集成使用，禁止写入日志或返回给外部调用方。
    */
   readonly rawConnection: VecdbConnection | null

@@ -51,14 +51,22 @@
   const resolvedLabel = $derived(resolveFormText(label))
   const resolvedError = $derived(resolveFormText(error))
   const resolvedHint = $derived(resolveFormText(hint))
-  useToastFeedback(() => resolvedError && visibility?.open !== false ? (resolvedLabel ? uiM('form_field_error', { label: resolvedLabel, message: resolvedError }) : resolvedError) : '')
+  useToastFeedback(() => resolvedError && visibility?.open !== false
+    ? (resolvedLabel
+      ? uiM('form_field_error', { label: resolvedLabel, message: resolvedError })
+      : resolvedError)
+    : '')
   const position = $derived(labelPosition ?? layout?.labelPosition ?? 'top')
   const width = $derived(labelWidth ?? layout?.labelWidth ?? '8rem')
   setContext(FORM_FIELD_CONTEXT, {
     get label() { return resolvedLabel },
     get controlId() { return controlId },
     get labelId() { return labelId },
-    get messageId() { return resolvedError || resolvedHint ? messageId : undefined },
+    get messageId() {
+      return resolvedError || resolvedHint
+        ? messageId
+        : undefined
+    },
     get error() { return resolvedError },
   })
   const fieldClass = $derived(

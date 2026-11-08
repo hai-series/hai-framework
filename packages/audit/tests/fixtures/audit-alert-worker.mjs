@@ -15,7 +15,16 @@ async function main() {
     const connected = await reldb.init(config.database)
     if (!connected.success)
       throw new Error(connected.error.message)
-    const notified = await reach.init({ providers: [{ name: 'notify', type: 'api', url: config.url, timeout: 5000 }] })
+    const notified = await reach.init({
+      providers: [
+        {
+          name: 'notify',
+          type: 'api',
+          url: config.url,
+          timeout: 5000,
+        },
+      ],
+    })
     if (!notified.success)
       throw new Error(notified.error.message)
     const initialized = await audit.init({ reach, alerts: config.alerts })
@@ -27,7 +36,9 @@ async function main() {
     process.send({ result })
   }
   catch (error) {
-    process.stderr.write(`${error instanceof Error ? error.message : 'Alert worker failed'}\n`)
+    process.stderr.write(`${error instanceof Error
+      ? error.message
+      : 'Alert worker failed'}\n`)
     process.exitCode = 1
   }
   finally {

@@ -12,20 +12,30 @@
   } = $props()
 
   let mode = $state<'mask' | 'outline'>('outline')
-  let rect = $state({ x: 0.1, y: 0.1, width: 0.2, height: 0.2 })
+  let rect = $state({
+    x: 0.1,
+    y: 0.1,
+    width: 0.2,
+    height: 0.2,
+  })
   let start = $state<{ x: number, y: number } | null>(null)
   let selected = $state(false)
   let loading = $state(false)
   let error = $state('')
   let imageFailed = $state(false)
-  useToastFeedback(() => imageFailed ? uiM('feedback_preview_failed') : '', 'warning')
+  useToastFeedback(() => imageFailed
+    ? uiM('feedback_preview_failed')
+    : '', 'warning')
   const url = $derived(imagePreviewUrl(attachment.url))
 
   function point(event: PointerEvent & { currentTarget: HTMLDivElement }) {
     const bounds = (event.currentTarget.querySelector('img') ?? event.currentTarget).getBoundingClientRect()
     if (!bounds.width || !bounds.height)
       return { x: 0, y: 0 }
-    return { x: Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)), y: Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)) }
+    return {
+      x: Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)),
+      y: Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)),
+    }
   }
   function begin(event: PointerEvent & { currentTarget: HTMLDivElement }) {
     if (!onannotate || loading)
@@ -40,7 +50,12 @@
     if (!start)
       return
     const end = point(event)
-    rect = { x: Math.min(start.x, end.x), y: Math.min(start.y, end.y), width: Math.abs(end.x - start.x), height: Math.abs(end.y - start.y) }
+    rect = {
+      x: Math.min(start.x, end.x),
+      y: Math.min(start.y, end.y),
+      width: Math.abs(end.x - start.x),
+      height: Math.abs(end.y - start.y),
+    }
   }
   function keydown(event: KeyboardEvent) {
     if (!onannotate || loading)
@@ -50,15 +65,37 @@
       selected = true
       return
     }
-    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key))
+    if (![
+      'ArrowLeft',
+      'ArrowRight',
+      'ArrowUp',
+      'ArrowDown',
+    ].includes(event.key)) {
       return
+    }
     event.preventDefault()
     selected = true
-    const dx = event.key === 'ArrowLeft' ? -0.01 : event.key === 'ArrowRight' ? 0.01 : 0
-    const dy = event.key === 'ArrowUp' ? -0.01 : event.key === 'ArrowDown' ? 0.01 : 0
+    const dx = event.key === 'ArrowLeft'
+      ? -0.01
+      : event.key === 'ArrowRight'
+      ? 0.01
+      : 0
+    const dy = event.key === 'ArrowUp'
+      ? -0.01
+      : event.key === 'ArrowDown'
+      ? 0.01
+      : 0
     rect = event.shiftKey
-      ? { ...rect, width: Math.max(0.01, Math.min(1 - rect.x, rect.width + dx)), height: Math.max(0.01, Math.min(1 - rect.y, rect.height + dy)) }
-      : { ...rect, x: Math.max(0, Math.min(1 - rect.width, rect.x + dx)), y: Math.max(0, Math.min(1 - rect.height, rect.y + dy)) }
+      ? {
+        ...rect,
+        width: Math.max(0.01, Math.min(1 - rect.x, rect.width + dx)),
+        height: Math.max(0.01, Math.min(1 - rect.y, rect.height + dy)),
+      }
+      : {
+        ...rect,
+        x: Math.max(0, Math.min(1 - rect.width, rect.x + dx)),
+        y: Math.max(0, Math.min(1 - rect.height, rect.y + dy)),
+      }
   }
   function end(event: PointerEvent & { currentTarget: HTMLDivElement }) {
     move(event)
@@ -74,7 +111,15 @@
     loading = true
     error = ''
     try {
-      await onannotate({ id: attachment.id, mode, rect: { ...rect, width: Math.min(rect.width, 1 - rect.x), height: Math.min(rect.height, 1 - rect.y) } })
+      await onannotate({
+        id: attachment.id,
+        mode,
+        rect: {
+          ...rect,
+          width: Math.min(rect.width, 1 - rect.x),
+          height: Math.min(rect.height, 1 - rect.y),
+        },
+      })
       selected = false
     }
     catch (cause) {
@@ -89,7 +134,9 @@
 
 {#if url}
   <div class='space-y-3 min-w-0'>
-    <div class='relative w-fit max-w-full overflow-hidden rounded-lg border border-base-content/10 select-none' role='button' aria-label={attachment.name} aria-disabled={!onannotate} tabindex={onannotate ? 0 : -1} onkeydown={keydown} style:touch-action={onannotate ? 'none' : 'auto'} onpointerdown={begin} onpointermove={move} onpointerup={end} onpointercancel={cancel}>
+    <div class='relative w-fit max-w-full overflow-hidden rounded-lg border border-base-content/10 select-none' role='button' aria-label={attachment.name} aria-disabled={!onannotate} tabindex={onannotate
+      ? 0
+      : -1} onkeydown={keydown} style:touch-action={onannotate ? 'none' : 'auto'} onpointerdown={begin} onpointermove={move} onpointerup={end} onpointercancel={cancel}>
       <img src={url} alt={attachment.name} class='block max-w-full h-auto' draggable='false' referrerpolicy='no-referrer' onerror={() => imageFailed = true} onload={() => imageFailed = false} />
       {#if selected}
         <div class:mask-preview={mode === 'mask'} class='pointer-events-none absolute border-2 border-error' style:left={`${rect.x * 100}%`} style:top={`${rect.y * 100}%`} style:width={`${rect.width * 100}%`} style:height={`${rect.height * 100}%`}></div>
@@ -97,11 +144,15 @@
     </div>
     {#if onannotate && !imageFailed}
       <div class='flex flex-wrap gap-2'>
-        <Button size='xs' variant={mode === 'outline' ? 'primary' : 'ghost'} onclick={() => {
+        <Button size='xs' variant={mode === 'outline'
+          ? 'primary'
+          : 'ghost'} onclick={() => {
           mode = 'outline'
           selected = true
         }}>{uiM('feedback_mark_outline')}</Button>
-        <Button size='xs' variant={mode === 'mask' ? 'primary' : 'ghost'} onclick={() => {
+        <Button size='xs' variant={mode === 'mask'
+          ? 'primary'
+          : 'ghost'} onclick={() => {
           mode = 'mask'
           selected = true
         }}>{uiM('feedback_mark_mask')}</Button>

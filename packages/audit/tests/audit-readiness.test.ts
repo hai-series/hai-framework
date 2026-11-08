@@ -7,7 +7,10 @@ import { audit, migrateAudit } from '../src/index.js'
 
 beforeEach(async () => {
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
-  expect((await reldb.ddl.createTable('hai_iam_users', { id: { type: 'TEXT', primaryKey: true }, username: { type: 'TEXT' } }, true)).success).toBe(true)
+  expect((await reldb.ddl.createTable('hai_iam_users', {
+    id: { type: 'TEXT', primaryKey: true },
+    username: { type: 'TEXT' },
+  }, true)).success).toBe(true)
 })
 afterEach(async () => {
   vi.restoreAllMocks()
@@ -49,7 +52,10 @@ it('close等待已开始的审计写入，并拒绝关闭后的新写入', async
     expect((await pending).success).toBe(true)
     await closing
   }
-  expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM hai_audit_logs')).toMatchObject({ success: true, data: { count: 1 } })
+  expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM hai_audit_logs')).toMatchObject({
+    success: true,
+    data: { count: 1 },
+  })
   expect((await audit.capture({ action: 'closed-module-capture', resource: 'orders' })).success).toBe(false)
 })
 
@@ -89,7 +95,11 @@ it('自定义查询全部等待基类DDL，失败不会提前执行SQL', async (
   const release = delayDdl()
   const repo = new AuditLogRepository({ userTable: 'hai_iam_users', userIdColumn: 'id', userNameColumn: 'username' })
   let finished = 0
-  const tasks = [repo.listWithUser(), repo.cleanupOld(), repo.getStats()].map(p => p.then((result) => {
+  const tasks = [
+    repo.listWithUser(),
+    repo.cleanupOld(),
+    repo.getStats(),
+  ].map(p => p.then((result) => {
     finished++
     return result
   }))

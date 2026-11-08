@@ -74,8 +74,12 @@ export function getStorageKeyIssue(key: string, allowEmpty = false): StorageKeyI
 function keySchema(allowEmpty: boolean) {
   return z.string().superRefine((key, context) => {
     const issue = getStorageKeyIssue(key, allowEmpty)
-    if (issue)
-      context.addIssue({ code: 'custom', params: { storageKeyIssue: issue } })
+    if (issue) {
+      context.addIssue({
+        code: 'custom',
+        params: { storageKeyIssue: issue },
+      })
+    }
   })
 }
 

@@ -57,7 +57,9 @@ function normalizeCredentialEntries(entries: Record<string, unknown>): Record<st
 /** 在写入前校验单个凭证键名。 */
 function assertAllowedCredentialKey(key: string): void {
   if (!isAllowedCredentialKey(key)) {
-    throw new Error(deployM('deploy_credentialInvalidKey', { params: { key } }))
+    throw new Error(deployM('deploy_credentialInvalidKey', {
+      params: { key },
+    }))
   }
 }
 
@@ -156,7 +158,11 @@ export function loadCredentials(): HaiResult<string[]> {
     return err(
       HaiDeployError.CREDENTIAL_ERROR,
       deployM('deploy_credentialError', {
-        params: { error: error instanceof Error ? error.message : String(error) },
+        params: {
+          error: error instanceof Error
+            ? error.message
+            : String(error),
+        },
       }),
       error,
     )
@@ -194,7 +200,11 @@ export function saveCredential(key: string, value: string): HaiResult<void> {
     return err(
       HaiDeployError.CREDENTIAL_ERROR,
       deployM('deploy_credentialError', {
-        params: { error: error instanceof Error ? error.message : String(error) },
+        params: {
+          error: error instanceof Error
+            ? error.message
+            : String(error),
+        },
       }),
       error,
     )
@@ -230,7 +240,11 @@ export function saveCredentials(entries: Record<string, string>): HaiResult<void
     return err(
       HaiDeployError.CREDENTIAL_ERROR,
       deployM('deploy_credentialError', {
-        params: { error: error instanceof Error ? error.message : String(error) },
+        params: {
+          error: error instanceof Error
+            ? error.message
+            : String(error),
+        },
       }),
       error,
     )

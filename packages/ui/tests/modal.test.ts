@@ -28,7 +28,9 @@ describe('modal keyboard interaction', () => {
         open: true,
         title: 'Edit account',
         onclose,
-        children: createRawSnippet(() => ({ render: () => '<div><input aria-label="Account" /><button>Save</button></div>' })),
+        children: createRawSnippet(() => ({
+          render: () => '<div><input aria-label="Account" /><button>Save</button></div>',
+        })),
       },
     })
     try {
@@ -42,7 +44,12 @@ describe('modal keyboard interaction', () => {
       buttons[1]!.focus()
       buttons[1]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
       expect(document.activeElement).toBe(buttons[0])
-      buttons[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }))
+      buttons[0]!.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Tab',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }))
       expect(document.activeElement).toBe(buttons[1])
       buttons[1]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
       flushSync()
@@ -62,7 +69,15 @@ describe('modal keyboard interaction', () => {
     const target = document.createElement('div')
     document.body.append(target)
     const onclose = vi.fn()
-    const component = mount(Modal, { target, props: { open: true, showClose: false, closeOnEscape: false, onclose } })
+    const component = mount(Modal, {
+      target,
+      props: {
+        open: true,
+        showClose: false,
+        closeOnEscape: false,
+        onclose,
+      },
+    })
     try {
       flushSync()
       const dialog = target.querySelector<HTMLElement>('[role="dialog"]')!

@@ -7,6 +7,7 @@
 import type { AIConfig } from '../src/ai-config.js'
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import { Buffer } from 'node:buffer'
+import { Worker } from 'node:worker_threads'
 import { describe, expect, it, vi } from 'vitest'
 import { HaiAIError } from '../src/ai-types.js'
 import { createFileOperations } from '../src/file/ai-file-functions.js'
@@ -25,7 +26,11 @@ const mockConfig: AIConfig = {
 
 /** 构造有 OCR 场景模型映射的 AI 配置 */
 const mockConfigWithOcrScenario: AIConfig = {
-  llm: { apiKey: 'sk-test', model: 'gpt-4o-mini', scenarios: { ocr: 'gpt-4o' } },
+  llm: {
+    apiKey: 'sk-test',
+    model: 'gpt-4o-mini',
+    scenarios: { ocr: 'gpt-4o' },
+  },
 } as unknown as AIConfig
 
 /** 构造 mock LLM，OCR 调用返回指定文本 */
@@ -34,7 +39,11 @@ function makeMockLLM(ocrText: string): LLMOperations {
     chat: vi.fn(async () => ({
       success: true as const,
       data: {
-        choices: [{ message: { content: ocrText, role: 'assistant' } }],
+        choices: [
+          {
+            message: { content: ocrText, role: 'assistant' },
+          },
+        ],
         model: 'gpt-4o',
         usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
         id: 'test-id',
@@ -122,6 +131,81 @@ describe('file operations — text formats', () => {
 // ─── HTML 解析测试 ───
 
 describe('file operations — HTML', () => {
+  it.each(['text', 'markdown'] as const)('畸形 HTML 的 %s 提取在独立线程期限内保留全部文本', async (outputFormat) => {
+    const size = 1024 * 1024
+    const worker = new Worker(`
+      const { parentPort, workerData } = require('node:worker_threads')
+      import(workerData.module).then(({ parseHtmlFile }) => {
+        const value = parseHtmlFile('<'.repeat(workerData.size) + ' END', workerData.outputFormat)
+        parentPort.postMessage({ length: value.length, suffix: value.slice(-3) })
+      }).catch(error => { throw error })
+    `, {
+      eval: true,
+      execArgv: ['--experimental-strip-types'],
+      workerData: { module: new URL('../src/file/ai-file-html.ts', import.meta.url).href, size, outputFormat },
+    })
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    try {
+      const result = await new Promise<{ length: number, suffix: string }>((resolve, reject) => {
+        deadline = setTimeout(() => reject(new Error('HTML extraction exceeded the worker deadline')), 3000)
+        worker.once('message', resolve)
+        worker.once('error', reject)
+        worker.once('exit', code => code === 0
+          ? undefined
+          : reject(new Error(`HTML worker exited (${code})`)))
+      })
+      expect(result).toEqual({ length: size + 4, suffix: 'END' })
+    }
+    finally {
+      clearTimeout(deadline)
+      await worker.terminate()
+    }
+  }, 10_000)
+
+  it.each(['text', 'markdown'] as const)('大型正常文档的 %s 提取不截断正文', async (outputFormat) => {
+    const ops = createFileOperations(mockConfig, makeMockLLM(''))
+    const rows = Array.from({ length: 10_000 }, (_, index) => `row-${index}`)
+    const result = await ops.parse({
+      content: rows.map(row => `<p>${row}</p>`).join(''),
+      filename: 'large.html',
+      options: { outputFormat },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.text).toBe(rows.join(outputFormat === 'text'
+        ? ' '
+        : '\n\n'))
+    }
+  })
+
+  it('markdown 提取保留引用、代码、图片、表格和链接，并忽略脚本样式', async () => {
+    const ops = createFileOperations(mockConfig, makeMockLLM(''))
+    const result = await ops.parse({
+      filename: 'structures.html',
+      content: '<blockquote>first\nsecond</blockquote><p><code>x &lt; y</code></p><img src="https://example.com/a.png" alt="caption"><hr><table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table><a href="https://example.com/?a=1&amp;b=2">link</a><script data-marker=">">hiddenScript()</script><style>.hidden{}</style>',
+      options: { outputFormat: 'markdown' },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.text).toContain('> first\n> second')
+      expect(result.data.text).toContain('`x < y`')
+      expect(result.data.text).toContain('![caption](https://example.com/a.png)')
+      expect(result.data.text).toContain('| A | B |\n| 1 | 2 |')
+      expect(result.data.text).toContain('[link](https://example.com/?a=1&b=2)')
+      expect(result.data.text).toContain('---')
+      expect(result.data.text).not.toContain('hiddenScript')
+      expect(result.data.text).not.toContain('.hidden')
+    }
+  })
+
+  it('完整解码非 BMP 实体，深层结构不依赖递归调用栈', async () => {
+    const ops = createFileOperations(mockConfig, makeMockLLM(''))
+    const result = await ops.parse({ filename: 'deep.html', content: `${'<div>'.repeat(2048)}&#x1F600;${'</div>'.repeat(2048)}` })
+    expect(result.success).toBe(true)
+    if (result.success)
+      expect(result.data.text).toBe('😀')
+  })
+
   it('剥除 HTML 标签提取文本', async () => {
     const ops = createFileOperations(mockConfig, makeMockLLM(''))
     const html = '<html><body><h1>标题</h1><p>内容段落</p></body></html>'
@@ -162,7 +246,10 @@ describe('file operations — HTML', () => {
   it('通过 mimeType 覆盖强制 HTML 解析', async () => {
     const ops = createFileOperations(mockConfig, makeMockLLM(''))
     const html = '<p>Hello</p>'
-    const result = await ops.parse({ content: html, options: { mimeType: 'text/html' } })
+    const result = await ops.parse({
+      content: html,
+      options: { mimeType: 'text/html' },
+    })
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.method).toBe('html')
@@ -205,7 +292,17 @@ describe('file operations — image OCR', () => {
     const ops = createFileOperations(mockConfig, mockLLM)
 
     // PNG magic bytes: \x89PNG
-    const fakePng = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, ...Buffer.from('fake png data')])
+    const fakePng = Buffer.from([
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      0x0D,
+      0x0A,
+      0x1A,
+      0x0A,
+      ...Buffer.from('fake png data'),
+    ])
     const result = await ops.parse({ content: fakePng })
 
     expect(result.success).toBe(true)
@@ -221,7 +318,13 @@ describe('file operations — image OCR', () => {
     const ops = createFileOperations(mockConfig, mockLLM)
 
     // JPEG magic bytes: \xFF\xD8
-    const fakeJpeg = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, ...Buffer.from('fake jpeg')])
+    const fakeJpeg = Buffer.from([
+      0xFF,
+      0xD8,
+      0xFF,
+      0xE0,
+      ...Buffer.from('fake jpeg'),
+    ])
     const result = await ops.parse({ content: fakeJpeg, filename: 'photo.jpg' })
 
     expect(result.success).toBe(true)
@@ -234,7 +337,13 @@ describe('file operations — image OCR', () => {
     const mockLLM = makeMockLLM('OCR with model')
     const ops = createFileOperations(mockConfigWithOcrScenario, mockLLM)
 
-    const fakePng = Buffer.from([0x89, 0x50, 0x4E, 0x47, ...Buffer.from('png')])
+    const fakePng = Buffer.from([
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      ...Buffer.from('png'),
+    ])
     await ops.parse({ content: fakePng })
 
     // 验证 chat 被调用（OCR 是通过 chat 实现的）
@@ -247,7 +356,13 @@ describe('file operations — image OCR', () => {
     const mockLLM = makeMockLLMError()
     const ops = createFileOperations(mockConfig, mockLLM)
 
-    const fakePng = Buffer.from([0x89, 0x50, 0x4E, 0x47, ...Buffer.from('png')])
+    const fakePng = Buffer.from([
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      ...Buffer.from('png'),
+    ])
     const result = await ops.parse({ content: fakePng })
 
     expect(result.success).toBe(false)
@@ -334,7 +449,13 @@ describe('file operations — MIME type detection', () => {
     const ops = createFileOperations(mockConfig, mockLLM)
 
     // PNG magic bytes
-    const fakePng = Buffer.from([0x89, 0x50, 0x4E, 0x47, ...Buffer.from('data')])
+    const fakePng = Buffer.from([
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      ...Buffer.from('data'),
+    ])
     const result = await ops.parse({ content: fakePng }) // 无文件名
 
     expect(result.success).toBe(true)
@@ -450,7 +571,13 @@ describe('file operations — outputFormat: markdown', () => {
   it('oCR 强制模式 + markdown：请求中包含 Markdown 指令', async () => {
     const mockLLM = makeMockLLM('# 标题\n\n正文内容')
     const ops = createFileOperations(mockConfig, mockLLM)
-    const fakeImage = Buffer.from([0x89, 0x50, 0x4E, 0x47, ...Buffer.from('png')])
+    const fakeImage = Buffer.from([
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      ...Buffer.from('png'),
+    ])
     const result = await ops.parse({
       content: fakeImage,
       filename: 'screenshot.png',

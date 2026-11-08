@@ -14,7 +14,7 @@ Provider 名称必须唯一，重名在连接前返回 CONFIG_ERROR。close 等�
 
 | 模块 | 用途 | 是否必需 | 初始化要求 |
 | --- | --- | --- | --- |
-| `@h-ai/reldb` | 数据库（发送日志与模板持久化） | DND delay 必需；其他场景可选 | 启用 delay 前先初始化，队列表不可用则 reach.init 返回 CONFIG_ERROR |
+| `@h-ai/reldb` | 数据库（发送日志与模板持久化） | 模板与 DND delay 必需；其他即时发送可选 | 先初始化；非空配置模板保存或必需表准备失败则 reach.init 返回 CONFIG_ERROR 并关闭候选 Provider |
 | `@h-ai/cache` | 缓存（DND delay 策略分布式锁） | 可选 | 已初始化时自动启用分布式锁 |
 
 ## 适用场景

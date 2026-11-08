@@ -60,7 +60,9 @@
     if (!id)
       return
     const paused = expandedId === id || hoveredId === id || focusedId === id
-    untrack(() => paused ? toast.pause(id) : toast.resume(id))
+    untrack(() => paused
+      ? toast.pause(id)
+      : toast.resume(id))
     return () => untrack(() => toast.resume(id))
   })
 
@@ -100,7 +102,9 @@
         restoreFocus()
       }
       else {
-        previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+        previousFocus = document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null
         const target = layerElement?.querySelector<HTMLElement>('button, .hai-toast-item')
         // 优先聚焦排查或关闭按钮；没有按钮的提示仍可聚焦阅读，再按 F8 返回。
         const button = layerElement?.querySelector<HTMLButtonElement>('button')
@@ -176,7 +180,9 @@
       return
     }
 
-    const modal = hasItems ? findTopModalDialog() : null
+    const modal = hasItems
+      ? findTopModalDialog()
+      : null
 
     if (modal) {
       // 寄宿到 dialog：popover 元素未显示时会 display:none，故先移除 popover 属性。
@@ -214,7 +220,11 @@
 
     // dialog 通过 showModal()/close() 切换 `open` 属性；据此重新寄宿 Toast 层。
     const observer = new MutationObserver(() => relocate())
-    observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] })
+    observer.observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['open'],
+    })
 
     return () => {
       observer.disconnect()
@@ -238,7 +248,11 @@
 <div {...dataAttributes} bind:this={layerElement} popover='manual' class='hai-toast-layer'>
   {#each currentItems as item (item.id)}
     <div class='hai-toast-position' data-position={item.position ?? 'bottom-right'}>
-      <div {...getDataAttributes(item)} class='hai-toast-item text-base-content' role={item.variant === 'error' ? 'alert' : 'status'} aria-live={item.variant === 'error' ? 'assertive' : 'polite'} aria-atomic='true' aria-keyshortcuts='F8' tabindex='-1' data-variant={item.variant ?? 'info'}
+      <div {...getDataAttributes(item)} class='hai-toast-item text-base-content' role={item.variant === 'error'
+        ? 'alert'
+        : 'status'} aria-live={item.variant === 'error'
+        ? 'assertive'
+        : 'polite'} aria-atomic='true' aria-keyshortcuts='F8' tabindex='-1' data-variant={item.variant ?? 'info'}
            onpointerenter={(event) => {
              if (event.pointerType !== 'touch')
                hoveredId = item.id
@@ -263,7 +277,9 @@
                 {uiM('toast_copyTraceId')}
               </button>
               {#if copyResult?.id === item.id}
-                <p class='mt-1' role='status'>{copyResult.success ? uiM('toast_traceCopied') : uiM('toast_traceCopyFailed')}</p>
+                <p class='mt-1' role='status'>{copyResult.success
+                  ? uiM('toast_traceCopied')
+                  : uiM('toast_traceCopyFailed')}</p>
               {/if}
             </div>
           {/if}
@@ -273,7 +289,11 @@
           <button type='button' class='btn btn-ghost btn-sm btn-square hai-toast-details-toggle'
                   aria-label={uiM('toast_diagnostics')} title={uiM('toast_diagnostics')}
                   aria-expanded={expandedId === item.id} aria-controls={`toast-details-${item.id}`}
-                  onclick={() => { expandedId = expandedId === item.id ? undefined : item.id }}
+                  onclick={() => {
+                    expandedId = expandedId === item.id
+                      ? undefined
+                      : item.id
+                  }}
           ><span aria-hidden='true' class='icon-[tabler--info-circle] size-4'></span></button>
         {/if}
         {#if item.dismissible}

@@ -20,11 +20,13 @@ function createMockLLM(content: string): LLMOperations {
         object: 'chat.completion' as const,
         created: Date.now(),
         model: 'test-model',
-        choices: [{
-          index: 0,
-          message: { role: 'assistant' as const, content },
-          finish_reason: 'stop' as const,
-        }],
+        choices: [
+          {
+            index: 0,
+            message: { role: 'assistant' as const, content },
+            finish_reason: 'stop' as const,
+          },
+        ],
         usage: { prompt_tokens: 50, completion_tokens: 30, total_tokens: 80 },
       },
     })),
@@ -47,7 +49,12 @@ function createFailLLM(): LLMOperations {
 describe('knowledge 实体提取（extractEntities）', () => {
   it('正常提取：JSON 数组格式', async () => {
     const llm = createMockLLM(JSON.stringify([
-      { name: 'Alice', type: 'person', aliases: ['Alice Wang'], description: 'A researcher' },
+      {
+        name: 'Alice',
+        type: 'person',
+        aliases: ['Alice Wang'],
+        description: 'A researcher',
+      },
       { name: 'GPT-4', type: 'project', description: 'Large language model' },
     ]))
 
@@ -173,8 +180,21 @@ describe('knowledge 批量实体提取（extractEntitiesBatch）', () => {
         callCount++
         // 两个 chunk 都提到 "Alice"，第二个也提到 "Bob"
         const entities = callCount === 1
-          ? [{ name: 'Alice', type: 'person', aliases: ['Alice W'] }]
-          : [{ name: 'Alice', type: 'person', aliases: ['Dr. Alice'] }, { name: 'Bob', type: 'person' }]
+          ? [
+              {
+                name: 'Alice',
+                type: 'person',
+                aliases: ['Alice W'],
+              },
+            ]
+          : [
+              {
+                name: 'Alice',
+                type: 'person',
+                aliases: ['Dr. Alice'],
+              },
+              { name: 'Bob', type: 'person' },
+            ]
 
         return {
           success: true as const,
@@ -183,11 +203,16 @@ describe('knowledge 批量实体提取（extractEntitiesBatch）', () => {
             object: 'chat.completion' as const,
             created: Date.now(),
             model: 'test-model',
-            choices: [{
-              index: 0,
-              message: { role: 'assistant' as const, content: JSON.stringify(entities) },
-              finish_reason: 'stop' as const,
-            }],
+            choices: [
+              {
+                index: 0,
+                message: {
+                  role: 'assistant' as const,
+                  content: JSON.stringify(entities),
+                },
+                finish_reason: 'stop' as const,
+              },
+            ],
             usage: { prompt_tokens: 50, completion_tokens: 30, total_tokens: 80 },
           },
         }
@@ -247,11 +272,18 @@ describe('knowledge 批量实体提取（extractEntitiesBatch）', () => {
             object: 'chat.completion' as const,
             created: Date.now(),
             model: 'test-model',
-            choices: [{
-              index: 0,
-              message: { role: 'assistant' as const, content: JSON.stringify([{ name: 'Entity1', type: 'concept' }]) },
-              finish_reason: 'stop' as const,
-            }],
+            choices: [
+              {
+                index: 0,
+                message: {
+                  role: 'assistant' as const,
+                  content: JSON.stringify([
+                    { name: 'Entity1', type: 'concept' },
+                  ]),
+                },
+                finish_reason: 'stop' as const,
+              },
+            ],
             usage: { prompt_tokens: 50, completion_tokens: 30, total_tokens: 80 },
           },
         }
@@ -274,8 +306,12 @@ describe('knowledge 批量实体提取（extractEntitiesBatch）', () => {
       chat: vi.fn(async () => {
         callCount++
         const entities = callCount === 1
-          ? [{ name: 'React', type: 'project', description: 'A library' }]
-          : [{ name: 'React', type: 'project', description: 'A JavaScript library for building UIs' }]
+          ? [
+              { name: 'React', type: 'project', description: 'A library' },
+            ]
+          : [
+              { name: 'React', type: 'project', description: 'A JavaScript library for building UIs' },
+            ]
 
         return {
           success: true as const,
@@ -284,11 +320,16 @@ describe('knowledge 批量实体提取（extractEntitiesBatch）', () => {
             object: 'chat.completion' as const,
             created: Date.now(),
             model: 'test-model',
-            choices: [{
-              index: 0,
-              message: { role: 'assistant' as const, content: JSON.stringify(entities) },
-              finish_reason: 'stop' as const,
-            }],
+            choices: [
+              {
+                index: 0,
+                message: {
+                  role: 'assistant' as const,
+                  content: JSON.stringify(entities),
+                },
+                finish_reason: 'stop' as const,
+              },
+            ],
             usage: { prompt_tokens: 50, completion_tokens: 30, total_tokens: 80 },
           },
         }

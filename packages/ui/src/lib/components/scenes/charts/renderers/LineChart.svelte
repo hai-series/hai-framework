@@ -216,9 +216,13 @@
    * @returns 有限数字，无法转换时返回 0
    */
   function toFiniteNumber(value: unknown): number {
-    const numberValue = typeof value === 'number' ? value : Number(value)
+    const numberValue = typeof value === 'number'
+      ? value
+      : Number(value)
 
-    return Number.isFinite(numberValue) ? numberValue : 0
+    return Number.isFinite(numberValue)
+      ? numberValue
+      : 0
   }
 
   /**
@@ -248,7 +252,15 @@
    * @returns CSS 颜色值或变量
    */
   function getSeriesColor(item: ChartSeries, index: number): string {
-    return item.color ?? `var(--color-${['primary', 'secondary', 'accent', 'success', 'warning', 'error', 'info'][index % 7]})`
+    return item.color ?? `var(--color-${[
+      'primary',
+      'secondary',
+      'accent',
+      'success',
+      'warning',
+      'error',
+      'info',
+    ][index % 7]})`
   }
 
   /**
@@ -275,17 +287,27 @@
 
     if (Array.isArray(yAccessor)) {
       return yAccessor.map((accessor, index) => ({
-        key: typeof accessor === 'string' ? accessor : `series-${index}`,
-        label: typeof accessor === 'string' ? accessor : `series-${index + 1}`,
+        key: typeof accessor === 'string'
+          ? accessor
+          : `series-${index}`,
+        label: typeof accessor === 'string'
+          ? accessor
+          : `series-${index + 1}`,
         value: accessor,
       }))
     }
 
-    return [{
-      key: typeof yAccessor === 'string' ? yAccessor : 'value',
-      label: typeof yAccessor === 'string' ? yAccessor : 'value',
-      value: yAccessor,
-    }]
+    return [
+      {
+        key: typeof yAccessor === 'string'
+          ? yAccessor
+          : 'value',
+        label: typeof yAccessor === 'string'
+          ? yAccessor
+          : 'value',
+        value: yAccessor,
+      },
+    ]
   }
 
   /**
@@ -323,7 +345,9 @@
   function getSegmentedLineMax(items: SegmentedLineSeries[]): number {
     const maxValue = Math.max(...items.flatMap(item => item.points.map(point => point.value)))
 
-    return maxValue > 0 ? maxValue : 1
+    return maxValue > 0
+      ? maxValue
+      : 1
   }
 
   /**
@@ -406,7 +430,9 @@
       const currentDistance = Math.abs(point.x - pointerX)
       const bestDistance = Math.abs((primaryCoordinates[bestIndex]?.x ?? point.x) - pointerX)
 
-      return currentDistance < bestDistance ? index : bestIndex
+      return currentDistance < bestDistance
+        ? index
+        : bestIndex
     }, 0)
     const nearestPoint = primaryCoordinates[nearestIndex]
     if (nearestPoint)

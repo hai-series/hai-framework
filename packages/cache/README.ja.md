@@ -10,6 +10,8 @@
 
 メモリー KV は有効期限に達した時点で無効になります。`incr/decr/incrBy/decrBy` は安全な整数値または整数文字列のみを受け付け、不正な増分やオーバーフローでは元の値を保持して `OPERATION_FAILED` を返します。Hash の `__proto__` / `constructor` などは通常のフィールドとして保持され、戻り値のオブジェクトのプロトタイプを変更しません。
 
+Memory の KV・Hash・List・Set・ZSet は一つの key 名前空間を共有します。`exists/expire/expireAt/ttl/persist/keys/scan/del/type` は全構造を対象とし、期限切れ key は構造操作でも直ちに存在しないものとして扱います。del は実際に削除した論理 key を数え、異なる型の構造操作は失敗します。
+
 接続はヘルスチェック成功後に公開します。初期化失敗時は候補リソースを解放し、解放にも失敗した場合は初期化エラーの `error.ext.cleanupPending` が `true` になります。`cache.close()` は `Promise<HaiResult<void>>` を返し、初期化を待機して並行する終了処理をまとめます。解放開始後は `isInitialized` が `false` となり、設定と操作は利用できません。解放に失敗したリソースは保持され、次の `close()` または `init()` で再試行します。解放が成功するまで代替接続は作成しません。終了結果を必ず確認してください。
 
 ```ts
@@ -95,7 +97,9 @@ await cache.init({
 await cache.init({
   type: 'redis',
   sentinel: {
-    sentinels: [{ host: 'sentinel1', port: 26379 }],
+    sentinels: [
+      { host: 'sentinel1', port: 26379 }
+    ],
     name: 'mymaster',
   },
 })

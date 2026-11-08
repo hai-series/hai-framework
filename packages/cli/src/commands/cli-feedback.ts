@@ -1,7 +1,8 @@
 import type { FeedbackBundle } from '@h-ai/feedback/bundle'
 import type { GlobalOptions } from '../cli-types.js'
+import { Buffer } from 'node:buffer'
 import { randomBytes } from 'node:crypto'
-import { readFile, stat } from 'node:fs/promises'
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from 'node:fs'
 import { createServer } from 'node:http'
 import path from 'node:path'
 import process from 'node:process'
@@ -70,7 +71,9 @@ export async function startFeedbackViewer(bundle: FeedbackBundle, options: { por
     response.setHeader('Cross-Origin-Resource-Policy', 'same-origin')
     response.setHeader('Content-Security-Policy', 'default-src \'none\'; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; img-src \'self\' blob: data:; media-src \'self\' blob:; connect-src \'self\'; frame-src \'self\' about: blob:; font-src \'self\' data:; base-uri \'none\'; form-action \'none\'; frame-ancestors \'none\'')
     const address = server.address()
-    const host = address && typeof address === 'object' ? `127.0.0.1:${address.port}` : ''
+    const host = address && typeof address === 'object'
+      ? `127.0.0.1:${address.port}`
+      : ''
     if (request.headers.host !== host || request.method !== 'GET' || !request.url?.startsWith(prefix)) {
       response.writeHead(404).end()
       return
@@ -81,15 +84,32 @@ export async function startFeedbackViewer(bundle: FeedbackBundle, options: { por
       return
     }
     // 包内同名 JS 即使重算 checksum 也不能替换框架内置查看器。
-    const bytes = requested.startsWith('viewer/') ? trustedViewer[requested] : bundle.files[requested]
+    const bytes = requested.startsWith('viewer/')
+      ? trustedViewer[requested]
+      : bundle.files[requested]
     if (!bytes || requested.includes('%') || requested.includes('..') || requested.includes('\\')) {
       response.writeHead(404).end()
       return
     }
-    const viewerTypes: Record<string, string> = { 'viewer/index.html': 'text/html; charset=utf-8', 'viewer/app.js': 'text/javascript; charset=utf-8', 'viewer/replay.js': 'text/javascript; charset=utf-8', 'viewer/style.css': 'text/css; charset=utf-8' }
+    const viewerTypes: Record<string, string> = {
+      'viewer/index.html': 'text/html; charset=utf-8',
+      'viewer/app.js': 'text/javascript; charset=utf-8',
+      'viewer/replay.js': 'text/javascript; charset=utf-8',
+      'viewer/style.css': 'text/css; charset=utf-8',
+    }
     const attachment = bundle.manifest.files.find(file => file.path === requested && file.kind === 'attachment')
-    const mediaType = attachment && ['image/png', 'image/jpeg', 'image/webp', 'video/webm', 'video/mp4'].includes(attachment.contentType ?? '') ? attachment.contentType : undefined
-    const contentType = viewerTypes[requested] ?? mediaType ?? (requested.endsWith('.json') ? 'application/json; charset=utf-8' : 'text/plain; charset=utf-8')
+    const mediaType = attachment && [
+      'image/png',
+      'image/jpeg',
+      'image/webp',
+      'video/webm',
+      'video/mp4',
+    ].includes(attachment.contentType ?? '')
+      ? attachment.contentType
+      : undefined
+    const contentType = viewerTypes[requested] ?? mediaType ?? (requested.endsWith('.json')
+      ? 'application/json; charset=utf-8'
+      : 'text/plain; charset=utf-8')
     response.setHeader('Content-Type', contentType)
     if (requested.startsWith('attachments/') && !mediaType)
       response.setHeader('Content-Disposition', 'attachment')
@@ -108,9 +128,49 @@ export async function startFeedbackViewer(bundle: FeedbackBundle, options: { por
   return {
     url: `http://127.0.0.1:${address.port}${prefix}viewer/index.html`,
     close: () => new Promise<void>((resolve, reject) => {
-      server.close(error => error ? reject(error) : resolve())
+      server.close(error => error
+        ? reject(error)
+        : resolve())
       server.closeAllConnections()
     }),
+  }
+}
+
+/** 本地包只读取已检查的同一普通文件；增长和替换不能突破64MiB限制。 */
+function readBundleFile(filePath: string): Buffer {
+  let fd: number | undefined
+  try {
+    const before = lstatSync(filePath, { bigint: true })
+    if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1n || before.size > 64n * 1024n * 1024n)
+      throw new Error('Invalid local bundle metadata')
+    fd = openSync(filePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0))
+    const opened = fstatSync(fd, { bigint: true })
+    if (!opened.isFile() || opened.nlink !== 1n || opened.dev !== before.dev || opened.ino !== before.ino
+      || opened.size > 64n * 1024n * 1024n) {
+      throw new Error('Local bundle changed before opening')
+    }
+    const size = Number(opened.size)
+    const bytes = Buffer.alloc(size + 1)
+    let length = 0
+    while (length < bytes.length) {
+      const read = readSync(fd, bytes, length, bytes.length - length, null)
+      if (!read)
+        break
+      length += read
+    }
+    const after = fstatSync(fd, { bigint: true })
+    if (length !== size || after.nlink !== 1n || after.size !== opened.size
+      || after.mtimeNs !== opened.mtimeNs || after.ctimeNs !== opened.ctimeNs) {
+      throw new Error('Local bundle changed while reading')
+    }
+    return bytes.subarray(0, length)
+  }
+  catch {
+    throw new Error(cliM('cli_feedback_invalidBundle'))
+  }
+  finally {
+    if (fd !== undefined)
+      closeSync(fd)
   }
 }
 
@@ -124,13 +184,16 @@ export async function startFeedbackViewer(bundle: FeedbackBundle, options: { por
  * ```
  */
 export async function feedbackCommand(action: string, bundlePath: string, options: FeedbackCommandOptions = {}): Promise<void> {
-  if (!['inspect', 'summary', 'evidence', 'view'].includes(action))
+  if (![
+    'inspect',
+    'summary',
+    'evidence',
+    'view',
+  ].includes(action)) {
     throw new Error(cliM('cli_feedback_invalidAction'))
+  }
   const filePath = path.resolve(options.cwd ?? process.cwd(), bundlePath)
-  const metadata = await stat(filePath)
-  if (!metadata.isFile() || metadata.size > 64 * 1024 * 1024)
-    throw new Error(cliM('cli_feedback_invalidBundle'))
-  const result = await readFeedbackBundle(await readFile(filePath))
+  const result = await readFeedbackBundle(readBundleFile(filePath))
   if (!result.success)
     throw new Error(result.error.message)
   const bundle = result.data
@@ -157,7 +220,9 @@ export async function feedbackCommand(action: string, bundlePath: string, option
     return
   }
   const viewer = await startFeedbackViewer(bundle, options)
-  writeCliMessage(cliM('cli_feedback_viewerStarted', { params: { url: viewer.url } }))
+  writeCliMessage(cliM('cli_feedback_viewerStarted', {
+    params: { url: viewer.url },
+  }))
   await new Promise<void>((resolve, reject) => {
     const stop = () => {
       process.off('SIGINT', stop)

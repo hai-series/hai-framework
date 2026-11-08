@@ -50,13 +50,22 @@ function imageDimensions() {
       const height = Number(/\bheight="([1-9]\d{0,4})"/.exec(root)?.[1])
       if (!width || !height)
         throw new Error(`Invalid documentation image dimensions: ${file}`)
-      return [file, { width, height }] as const
+      return [
+        file,
+        { width, height },
+      ] as const
     }
     const handle = await open(path.join(usageRoot, 'images', file), 'r')
     try {
       const header = Buffer.alloc(24)
       await handle.read(header, 0, header.length, 0)
-      return [file, { width: header.readUInt32BE(16), height: header.readUInt32BE(20) }] as const
+      return [
+        file,
+        {
+          width: header.readUInt32BE(16),
+          height: header.readUInt32BE(20),
+        },
+      ] as const
     }
     finally {
       await handle.close()
@@ -75,7 +84,11 @@ export async function documentFiles(directory = usageRoot): Promise<string[]> {
     const file = path.join(directory, entry.name)
     if (entry.isDirectory() && entry.name !== 'images' && entry.name !== 'examples')
       return documentFiles(file)
-    return entry.isFile() && entry.name.endsWith('.md') ? [path.relative(usageRoot, file).split(path.sep).join('/')] : []
+    return entry.isFile() && entry.name.endsWith('.md')
+      ? [
+          path.relative(usageRoot, file).split(path.sep).join('/'),
+        ]
+      : []
   }))
   return nested.flat().sort()
 }
@@ -88,7 +101,9 @@ export async function routeDocuments(): Promise<string[]> {
     if (!routes.has(slug) || file.endsWith('/README.md'))
       routes.set(slug, file)
   }
-  return [...routes.values()]
+  return [
+    ...routes.values(),
+  ]
 }
 
 export async function getDocument(file: string, base: string) {
@@ -99,56 +114,91 @@ export async function getDocument(file: string, base: string) {
   const dimensions = await imageDimensions()
   const headings: { id: string, title: string, depth: number }[] = []
   const used = new Map<string, number>()
-  const parser = new Marked({ renderer: {
-    code({ text, lang }) {
+  const parser = new Marked({
+    renderer: {
+      code({ text, lang }) {
       // 公共 MarkdownRenderer 按语言安全重建代码高亮；校验元数据不进入语言名。
-      const language = lang?.split(/\s+/)[0] ?? 'text'
-      return `<pre><code class="language-${escapeAttribute(language)}">${escapeAttribute(text)}</code></pre>`
+        const language = lang?.split(/\s+/)[0] ?? 'text'
+        return `<pre><code class="language-${escapeAttribute(language)}">${escapeAttribute(text)}</code></pre>`
+      },
+      heading({ tokens, depth }) {
+        const text = this.parser.parseInline(tokens)
+        const root = headingSlug(text)
+        const previous = used.get(root) ?? 0
+        used.set(root, previous + 1)
+        const id = previous
+          ? `${root}-${previous}`
+          : root
+        headings.push({
+          id,
+          title: plainText(text),
+          depth,
+        })
+        return `<h${depth} id="${escapeAttribute(id)}">${text}</h${depth}>`
+      },
+      link({ href, title, tokens }) {
+        const target = contentHref(href, file, base)
+        const external = /^https?:/.test(target)
+        return `<a href="${escapeAttribute(target)}"${title
+          ? ` title="${escapeAttribute(title)}"`
+          : ''}${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>${this.parser.parseInline(tokens)}</a>`
+      },
+      image({ href, text }) {
+        const target = contentHref(href, file, base)
+        const size = dimensions.get(decodeURIComponent(target.slice(`${base}/guide-images/`.length)))
+        return `<a href="${escapeAttribute(target)}"><img src="${escapeAttribute(target)}" alt="${escapeAttribute(text)}" loading="lazy"${size
+          ? ` width="${size.width}" height="${size.height}"`
+          : ''} /></a>`
+      },
     },
-    heading({ tokens, depth }) {
-      const text = this.parser.parseInline(tokens)
-      const root = headingSlug(text)
-      const previous = used.get(root) ?? 0
-      used.set(root, previous + 1)
-      const id = previous ? `${root}-${previous}` : root
-      headings.push({ id, title: plainText(text), depth })
-      return `<h${depth} id="${escapeAttribute(id)}">${text}</h${depth}>`
-    },
-    link({ href, title, tokens }) {
-      const target = contentHref(href, file, base)
-      const external = /^https?:/.test(target)
-      return `<a href="${escapeAttribute(target)}"${title ? ` title="${escapeAttribute(title)}"` : ''}${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>${this.parser.parseInline(tokens)}</a>`
-    },
-    image({ href, text }) {
-      const target = contentHref(href, file, base)
-      const size = dimensions.get(decodeURIComponent(target.slice(`${base}/guide-images/`.length)))
-      return `<a href="${escapeAttribute(target)}"><img src="${escapeAttribute(target)}" alt="${escapeAttribute(text)}" loading="lazy"${size ? ` width="${size.width}" height="${size.height}"` : ''} /></a>`
-    },
-  } })
+  })
   // 最终显示仍使用公共 MarkdownRenderer 的 HTML 消毒边界。
   const html = await parser.parse(content)
   // 公共HTML消毒器不允许任意id；可信文档锚点由Svelte section属性承接，不放宽消毒边界。
   const sectionIds = new Set<string>()
   const sections = html.split(/(?=<h[1-6] id="|<a\s+id=["'])/).map((part) => {
     const candidate = /^(?:<h[1-6]|<a)\s+id=["']([^"']+)["']/.exec(part)?.[1]
-    const id = candidate && /^[\p{L}\p{N}_:.\-]+$/u.test(candidate) && !sectionIds.has(candidate) ? candidate : undefined
+    const id = candidate && /^[\p{L}\p{N}_:.\-]+$/u.test(candidate) && !sectionIds.has(candidate)
+      ? candidate
+      : undefined
     if (id)
       sectionIds.add(id)
     return { id, html: part }
   }).filter(section => section.html.trim())
   const title = headings.find(heading => heading.depth === 1)?.title ?? file
   const description = plainText(content.replace(/^#.*$/gm, '').replace(/!\[[^\]]*\]\([^)]*\)/g, '')).replace(/\s+/g, ' ').slice(0, 160)
-  return { file, title, description, sections, headings: headings.filter(heading => heading.depth === 2 || heading.depth === 3), sourceUrl: `${repository}/blob/main/docs/usage/${file}` }
+  return {
+    file,
+    title,
+    description,
+    sections,
+    headings: headings.filter(heading => heading.depth === 2 || heading.depth === 3),
+    sourceUrl: `${repository}/blob/main/docs/usage/${file}`,
+  }
 }
 
 export async function searchIndex(base: string): Promise<SearchEntry[]> {
   const navigation = await getNavigation()
   function collect(nodes: DocNode[]): string[] {
-    return nodes.flatMap(node => [node.path, ...collect(node.children ?? [])])
+    return nodes.flatMap(node => [
+      node.path,
+      ...collect(node.children ?? []),
+    ])
   }
-  const files = [...new Set([...collect(navigation.sections), ...Object.values(navigation.locales).map(locale => locale.path), 'getting-started/workflow.en.md', 'getting-started/workflow.ja.md'])]
+  const files = [
+    ...new Set([
+      ...collect(navigation.sections),
+      ...Object.values(navigation.locales).map(locale => locale.path),
+      'getting-started/workflow.en.md',
+      'getting-started/workflow.ja.md',
+    ]),
+  ]
   return Promise.all(files.map(async (file) => {
     const content = await readFile(path.join(usageRoot, file), 'utf8')
-    return { title: content.split('\n').find(line => line.startsWith('# '))?.slice(2).trim() ?? file, href: docLink(file, base), text: content.replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/[#`*_>|]/g, ' ').replace(/\s+/g, ' ').trim() }
+    return {
+      title: content.split('\n').find(line => line.startsWith('# '))?.slice(2).trim() ?? file,
+      href: docLink(file, base),
+      text: content.replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/[#`*_>|]/g, ' ').replace(/\s+/g, ' ').trim(),
+    }
   }))
 }

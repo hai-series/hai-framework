@@ -24,7 +24,10 @@ async function recordedPids(): Promise<number[]> {
   const value: unknown = JSON.parse(await readFile(path.join(directory, 'pids.json'), 'utf8'))
   if (!value || typeof value !== 'object')
     throw new Error('Missing command tree identity')
-  const pids = [Reflect.get(value, 'parent'), Reflect.get(value, 'child')]
+  const pids = [
+    Reflect.get(value, 'parent'),
+    Reflect.get(value, 'child'),
+  ]
   if (pids.some(pid => typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 1))
     throw new Error('Invalid command tree identity')
   return pids as number[]
@@ -32,13 +35,20 @@ async function recordedPids(): Promise<number[]> {
 
 async function tree(earlyExit?: number): Promise<{ command: string, args: string[] }> {
   const filename = path.join(directory, 'child.cjs')
-  const record = process.platform === 'win32' ? '' : `fs.writeFileSync(${JSON.stringify(path.join(directory, 'pids.json'))},JSON.stringify({parent:process.ppid,child:process.pid}));`
+  const record = process.platform === 'win32'
+    ? ''
+    : `fs.writeFileSync(${JSON.stringify(path.join(directory, 'pids.json'))},JSON.stringify({parent:process.ppid,child:process.pid}));`
   await writeFile(filename, `const fs=require('node:fs');${record}setInterval(()=>fs.appendFileSync(${JSON.stringify(path.join(directory, 'heartbeat'))},'x'),25)`)
   if (process.platform === 'win32') {
     return windowsTreeFixture(filename, path.join(directory, 'pids.json'), path.join(directory, 'heartbeat'), earlyExit)
   }
-  const wait = earlyExit === undefined ? 'setInterval(()=>{},1000)' : `setInterval(()=>{if(require('node:fs').existsSync(${JSON.stringify(path.join(directory, 'pids.json'))}))process.exit(${earlyExit})},10)`
-  return { command: process.execPath, args: ['-e', `require('node:child_process').spawn(process.execPath,[${JSON.stringify(filename)}],{stdio:'ignore'});${wait}`] }
+  const wait = earlyExit === undefined
+    ? 'setInterval(()=>{},1000)'
+    : `setInterval(()=>{if(require('node:fs').existsSync(${JSON.stringify(path.join(directory, 'pids.json'))}))process.exit(${earlyExit})},10)`
+  return {
+    command: process.execPath,
+    args: ['-e', `require('node:child_process').spawn(process.execPath,[${JSON.stringify(filename)}],{stdio:'ignore'});${wait}`],
+  }
 }
 
 async function assertStopped(): Promise<void> {
@@ -66,7 +76,9 @@ afterEach(async () => {
     })
     expect(await windowsFixtureProcessesStopped(identities, true)).toBe(true)
   }
-  const pids = process.platform === 'win32' ? [] : await recordedPids().catch(() => [])
+  const pids = process.platform === 'win32'
+    ? []
+    : await recordedPids().catch(() => [])
   for (const pid of pids) {
     if (exited(pid))
       continue
@@ -84,9 +96,16 @@ it('超时先回收仍存活父进程的整棵树，返回后后代心跳停止'
 }, 20_000)
 
 it('普通成功保留工作目录、环境与输出；非零退出保留原始诊断', async () => {
-  const output = await runDeployTestCommand(process.execPath, ['-e', 'process.stdout.write(JSON.stringify({cwd:process.cwd(),env:process.env.HAI_TEST_COMMAND}))'], { cwd: directory, env: { HAI_TEST_COMMAND: '中文 fixture' } })
+  const output = await runDeployTestCommand(process.execPath, ['-e', 'process.stdout.write(JSON.stringify({cwd:process.cwd(),env:process.env.HAI_TEST_COMMAND}))'], {
+    cwd: directory,
+    env: { HAI_TEST_COMMAND: '中文 fixture' },
+  })
   expect(JSON.parse(output)).toEqual({ cwd: directory, env: '中文 fixture' })
-  await expect(runDeployTestCommand(process.execPath, ['-e', 'process.stdout.write("build stdout");process.stderr.write("build stderr");process.exit(7)'])).rejects.toMatchObject({ reason: 'exit', localTermination: 'confirmed', message: expect.stringMatching(/build stdout\s+build stderr/) })
+  await expect(runDeployTestCommand(process.execPath, ['-e', 'process.stdout.write("build stdout");process.stderr.write("build stderr");process.exit(7)'])).rejects.toMatchObject({
+    reason: 'exit',
+    localTermination: 'confirmed',
+    message: expect.stringMatching(/build stdout\s+build stderr/),
+  })
   await expect(runDeployTestCommand(path.join(directory, 'missing-executable'), [])).rejects.toThrow(/Windows deployment test command job failed|ENOENT/)
 })
 

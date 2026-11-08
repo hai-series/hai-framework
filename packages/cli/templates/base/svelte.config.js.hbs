@@ -1,109 +1,19 @@
-/**
- * Svelte 配置
- */
-{{#unless isSvelteOnlyApp}}
-import process from 'node:process'
-{{/unless}}
+{{! @skipIfEmpty }}
+{{#if isSvelteOnlyApp}}
+/** Svelte + Vite 客户端的预处理配置；SvelteKit 配置统一在 vite.config.ts。 */
 {{#if hasUi}}
 import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 {{/if}}
-{{#unless isSvelteOnlyApp}}
-import adapter from '@sveltejs/adapter-node'
-{{#if_eq appType 'website'}}
-import staticAdapter from '@sveltejs/adapter-static'
-{{/if_eq}}
-{{/unless}}
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
-{{#unless isSvelteOnlyApp}}
-import { resolvePublicBasePath } from './scripts/public-base-path.mjs'
-{{/unless}}
-{{#if_eq appType 'website'}}
-import { resolveStaticWebsite, validateStaticRoutes } from './scripts/static-website.mjs'
 
-const website = resolveStaticWebsite()
-const staticOutput = staticAdapter({ strict: false })
-{{/if_eq}}
-
-{{#if isSvelteOnlyApp}}
 /** @type {import('@sveltejs/vite-plugin-svelte').SvelteConfig} */
-const config = {
-  preprocess: [{{#if hasUi}}autoImportHaiUi(), {{/if}}vitePreprocess()],
-  compilerOptions: {
-    runes: true,
-  },
-}
-{{else}}
-const DEFAULT_E2E_ORIGINS = ['http://localhost:4173', 'http://127.0.0.1:4173']
-
-function resolveTrustedOrigins() {
-  if (process.env.HAI_E2E !== '1')
-    return []
-
-  const rawBaseUrl = process.env.BASE_URL ?? DEFAULT_E2E_ORIGINS[0]
-
-  try {
-    const url = new URL(rawBaseUrl)
-    const origins = new Set([url.origin])
-
-    if (url.hostname === 'localhost') {
-      url.hostname = '127.0.0.1'
-      origins.add(url.origin)
-    }
-    else if (url.hostname === '127.0.0.1') {
-      url.hostname = 'localhost'
-      origins.add(url.origin)
-    }
-
-    return [...origins]
-  }
-  catch {
-    return DEFAULT_E2E_ORIGINS
-  }
-}
-
-/** @type {import('@sveltejs/kit').Config} */
-const config = {
-  preprocess: [{{#if hasUi}}autoImportHaiUi(), {{/if}}vitePreprocess()],
-  compilerOptions: {
-    runes: true,
-  },
-  kit: {
-    // 环境文件由 Vite 的 core loader 统一加载；Kit 不再二次读取根目录私有配置。
-    env: { dir: './.svelte-kit' },
-    paths: { base: resolvePublicBasePath() },
-{{#if isCapacitorApp}}
-    adapter: adapter({
-      pages: 'build',
-      assets: 'build',
-      fallback: 'index.html',
-    }),
-{{else}}
-{{#if_eq appType 'website'}}
-    adapter: website.enabled
-      ? {
-          ...staticOutput,
-          name: 'hai-static-website',
-          async adapt(builder) {
-            // 仅省略模板健康端点；自定义API或未预渲染页面明确失败，不用SPA回退掩盖。
-            validateStaticRoutes(builder.routes)
-            await staticOutput.adapt(builder)
-          },
-        }
-      : adapter(),
-{{else}}
-    adapter: adapter(),
-{{/if_eq}}
+export default {
+  preprocess: [
+    vitePreprocess(),
+{{#if hasUi}}
+    autoImportHaiUi(),
 {{/if}}
-    csrf: {
-      trustedOrigins: resolveTrustedOrigins(),
-    },
-    alias: {
-      $components: './src/lib/components',
-      $stores: './src/lib/stores',
-      $utils: './src/lib/utils',
-    },
-  },
+  ],
+  compilerOptions: { runes: true },
 }
 {{/if}}
-
-export default config

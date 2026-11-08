@@ -10,6 +10,9 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { core } from '@h-ai/core'
 {{#if hasUi}}
+{{#unless isSvelteOnlyApp}}
+import { autoImportHaiUi } from '@h-ai/ui/auto-import'
+{{/unless}}
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 {{/if}}
 {{#if hasI18n}}
@@ -18,26 +21,66 @@ import { paraglideVitePlugin } from '@inlang/paraglide-js'
 {{#if isSvelteOnlyApp}}
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 {{else}}
+import adapter from '@sveltejs/adapter-node'
+{{#if_eq appType 'website'}}
+import staticAdapter from '@sveltejs/adapter-static'
+{{/if_eq}}
 import { sveltekit } from '@sveltejs/kit/vite'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 {{/if}}
 {{#if hasUi}}
 import tailwindcss from '@tailwindcss/vite'
 {{/if}}
 import { defineConfig } from 'vite'
 import { resolveBuildMetadata } from './scripts/build-metadata.js'
+import { resolvePublicBasePath } from './scripts/public-base-path.mjs'
 {{#if_eq appType 'website'}}
-import { resolveStaticWebsite } from './scripts/static-website.mjs'
+import { resolveStaticWebsite, validateStaticRoutes } from './scripts/static-website.mjs'
 {{/if_eq}}
 {{#if isSvelteOnlyApp}}
-import { resolvePublicBasePath } from './scripts/public-base-path.mjs'
 import { publicRuntimeConfig } from './scripts/vite-runtime-config.js'
 {{/if}}
 
+{{#unless isSvelteOnlyApp}}
+const DEFAULT_E2E_ORIGINS = ['http://localhost:4173', 'http://127.0.0.1:4173']
+
+function resolveTrustedOrigins() {
+  if (process.env.HAI_E2E !== '1')
+    return []
+
+  const rawBaseUrl = process.env.BASE_URL ?? DEFAULT_E2E_ORIGINS[0]
+
+  try {
+    const url = new URL(rawBaseUrl)
+    const origins = new Set([url.origin])
+
+    if (url.hostname === 'localhost') {
+      url.hostname = '127.0.0.1'
+      origins.add(url.origin)
+    }
+    else if (url.hostname === '127.0.0.1') {
+      url.hostname = 'localhost'
+      origins.add(url.origin)
+    }
+
+    return [...origins]
+  }
+  catch {
+    return DEFAULT_E2E_ORIGINS
+  }
+}
+{{/unless}}
 export default defineConfig(({ mode, command }) => {
 {{#if_eq appType 'website'}}
   const website = resolveStaticWebsite()
+  const staticOutput = staticAdapter({ strict: false })
 {{/if_eq}}
-  const envResult = command === 'build' || process.env.HAI_E2E === '1'{{#if_eq appType 'website'}} || website.enabled{{/if_eq}} ? { success: true as const, data: {} as Record<string, string> } : core.config.loadEnvFiles({ mode, envDir: process.cwd() })
+  const envResult = command === 'build' || process.env.HAI_E2E === '1'{{#if_eq appType 'website'}} || website.enabled{{/if_eq}}
+    ? { success: true as const, data: {} as Record<string, string> }
+    : core.config.loadEnvFiles({
+        mode,
+        envDir: process.cwd(),
+      })
   if (!envResult.success)
     throw new Error(envResult.error.message)
   const env = envResult.data
@@ -46,7 +89,11 @@ export default defineConfig(({ mode, command }) => {
   const metadataAsset: Plugin = {
     name: 'hai-build-metadata',
     generateBundle() {
-      this.emitFile({ type: 'asset', fileName: 'build-metadata.json', source: JSON.stringify(buildMetadata) })
+      this.emitFile({
+        type: 'asset',
+        fileName: 'build-metadata.json',
+        source: JSON.stringify(buildMetadata),
+      })
     },
   }
 {{#if isSvelteOnlyApp}}
@@ -58,14 +105,18 @@ export default defineConfig(({ mode, command }) => {
     version: config.version,
     env: config.env,
     defaultLocale: config.defaultLocale,
-    logging: config.logging ? { level: config.logging.level, format: config.logging.format } : undefined,
+    logging: config.logging
+      ? { level: config.logging.level, format: config.logging.format }
+      : undefined,
   }
   const publicBase = resolvePublicBasePath()
 {{/if}}
 
   return {
 {{#if isSvelteOnlyApp}}
-    base: publicBase ? `${publicBase}/` : './',
+    base: publicBase
+      ? `${publicBase}/`
+      : './',
 {{/if}}
     envDir: false,
     envPrefix: ['VITE_', 'PUBLIC_'],
@@ -90,17 +141,58 @@ export default defineConfig(({ mode, command }) => {
         },
       },
 {{/if_eq}}
-  {{#if isSvelteOnlyApp}}
-      publicRuntimeConfig({ apiBase: process.env.PUBLIC_API_BASE, {{#if features.crypto}}apiTransport: process.env.PUBLIC_API_TRANSPORT, apiKeyExchangePath: process.env.PUBLIC_API_KEY_EXCHANGE_PATH, {{/if}}core: appConfig }),
+{{#if isSvelteOnlyApp}}
+      publicRuntimeConfig({
+        apiBase: process.env.PUBLIC_API_BASE,
+{{#if features.crypto}}
+        apiTransport: process.env.PUBLIC_API_TRANSPORT,
+        apiKeyExchangePath: process.env.PUBLIC_API_KEY_EXCHANGE_PATH,
+{{/if}}
+        core: appConfig,
+      }),
       svelte(),
-  {{else}}
-      sveltekit(),
-  {{/if}}
+{{else}}
+      sveltekit({
+        preprocess: [
+          vitePreprocess(),
+{{#if hasUi}}
+          autoImportHaiUi(),
+{{/if}}
+        ],
+        compilerOptions: { runes: true },
+        // Core 统一加载环境文件；SSR 路径固定为绝对前缀供 HTTP/加密管道使用。
+        env: { dir: './.svelte-kit' },
+        paths: {
+          base: resolvePublicBasePath(),
+          relative: false,
+        },
+{{#if_eq appType 'website'}}
+        adapter: website.enabled
+          ? {
+              ...staticOutput,
+              name: 'hai-static-website',
+              async adapt(builder) {
+                // 仅省略模板健康端点，自定义 API 或未预渲染页面仍须明确失败。
+                validateStaticRoutes(builder.routes)
+                await staticOutput.adapt(builder)
+              },
+            }
+          : adapter(),
+{{else}}
+        adapter: adapter(),
+{{/if_eq}}
+        csrf: {
+          trustedOrigins: resolveTrustedOrigins(),
+        },
+      }),
+{{/if}}
 {{#if hasUi}}
       tailwindcss(),
 {{/if}}
 {{#if hasI18n}}
       paraglideVitePlugin({
+      // 共享物理消息产物供独立 Vitest/Node 工具读取。
+        outputStructure: 'message-modules',
         project: './project.inlang',
         outdir: './src/lib/paraglide',
         strategy: ['cookie', 'baseLocale'],
@@ -109,8 +201,8 @@ export default defineConfig(({ mode, command }) => {
     ],
 {{#if hasUi}}
     optimizeDeps: {
-      // bits-ui 含 .svelte 源码须 exclude；@internationalized/date 须与 bits-ui 同为原始副本，
-      // 避免日期类型 instanceof 失败（"Unknown date type"）。
+    // bits-ui 含 .svelte 源码须 exclude；@internationalized/date 须与 bits-ui 同为原始副本，
+    // 避免日期类型 instanceof 失败（"Unknown date type"）。
       exclude: [...haiOptimizeExclude],
       // 预打包 @h-ai/ui 的重型纯 JS 依赖，避免首次进入业务路由触发依赖再优化与整页刷新
       include: [...haiPrebundledDeps],
@@ -125,7 +217,9 @@ export default defineConfig(({ mode, command }) => {
 {{/unless}}
     server: {
       fs: {
-        allow: [path.resolve(process.cwd())],
+        allow: [
+          path.resolve(process.cwd()),
+        ],
       },
     },
   }

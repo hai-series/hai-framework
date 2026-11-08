@@ -35,17 +35,24 @@ function normalizeClientIp(value?: string): string | undefined {
 
 function addAddress(list: BlockList, entry: string): void {
   const [address, prefix, extra] = entry.split('/')
-  const family = address ? isIP(address) : 0
+  const family = address
+    ? isIP(address)
+    : 0
   if (!family || address?.includes('%') || extra !== undefined)
     throw new Error('Expected an IP address or CIDR')
-  const type = family === 4 ? 'ipv4' : 'ipv6'
+  const type = family === 4
+    ? 'ipv4'
+    : 'ipv6'
   if (prefix === undefined) {
     list.addAddress(address!, type)
     return
   }
   const bits = Number(prefix)
-  if (!/^\d+$/.test(prefix) || bits < 0 || bits > (family === 4 ? 32 : 128))
+  if (!/^\d+$/.test(prefix) || bits < 0 || bits > (family === 4
+    ? 32
+    : 128)) {
     throw new Error('Invalid CIDR prefix')
+  }
   list.addSubnet(address!, bits, type)
 }
 
@@ -71,7 +78,9 @@ function createClientIpResolver(trustedProxies: TrustedProxies | readonly string
   const proxies = new BlockList()
   for (const entry of entries)
     addAddress(proxies, entry)
-  const trusted = (address: string): boolean => proxies.check(address, isIP(address) === 4 ? 'ipv4' : 'ipv6')
+  const trusted = (address: string): boolean => proxies.check(address, isIP(address) === 4
+    ? 'ipv4'
+    : 'ipv6')
   return (request, remoteAddress) => {
     const peer = normalizeClientIp(remoteAddress)
     if (!peer || !entries.length || !trusted(peer))
@@ -79,7 +88,9 @@ function createClientIpResolver(trustedProxies: TrustedProxies | readonly string
     const forwarded = request.headers.get('x-forwarded-for')
     if (forwarded === null) {
       const realIp = request.headers.get('x-real-ip')
-      return realIp === null ? peer : normalizeClientIp(realIp)
+      return realIp === null
+        ? peer
+        : normalizeClientIp(realIp)
     }
     if (forwarded.length > 2048)
       return undefined
@@ -117,8 +128,22 @@ interface LocalMinute { day: number, time: string }
 type TimeReader = (now: number) => LocalMinute
 
 function timeReader(timezone: string): TimeReader {
-  const formatter = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
-  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+  const weekdays = [
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+    'Sun',
+  ]
   let lastMinute = Number.NaN
   let local: LocalMinute
   return (now) => {
@@ -147,13 +172,17 @@ function compileCondition(condition: AccessCondition, readTime?: TimeReader, rul
       const address = normalizeClientIp(ip)
       if (!address)
         return addressDenied
-      const family = isIP(address) === 4 ? 'ipv4' : 'ipv6'
+      const family = isIP(address) === 4
+        ? 'ipv4'
+        : 'ipv6'
       if (deny.check(address, family) || (condition.allowIps.length && !allow.check(address, family)))
         return addressDenied
     }
     if (readTime) {
       const { day, time } = readTime(Date.now())
-      const previous = day === 1 ? 7 : day - 1
+      const previous = day === 1
+        ? 7
+        : day - 1
       if (!condition.windows.some(window => window.start < window.end
         ? window.days.includes(day) && time >= window.start && time < window.end
         : (window.days.includes(day) && time >= window.start) || (window.days.includes(previous) && time < window.end))) {
@@ -175,7 +204,9 @@ function compileCondition(condition: AccessCondition, readTime?: TimeReader, rul
  */
 function createConditionCheck(input: AccessCondition): (ip?: string) => AccessDecision {
   const condition = AccessConditionSchema.parse(input)
-  return compileCondition(condition, condition.windows.length ? timeReader(condition.timezone) : undefined)
+  return compileCondition(condition, condition.windows.length
+    ? timeReader(condition.timezone)
+    : undefined)
 }
 
 /**
@@ -275,7 +306,9 @@ function normalizeRequestPath(value: string): string | undefined {
     return undefined
   if (/(?:^|\/)\.\.?(?:\/|$)/.test(decoded))
     return undefined
-  return decoded.length > 1 && decoded.endsWith('/') ? decoded.slice(0, -1) : decoded
+  return decoded.length > 1 && decoded.endsWith('/')
+    ? decoded.slice(0, -1)
+    : decoded
 }
 
 /**
@@ -291,8 +324,12 @@ function normalizeRequestPath(value: string): string | undefined {
  */
 function createRequestCheck(input: RequestAccessConfigInput = false): RequestAccessCheck {
   const policy = loadPolicy(input)
-  if (policy === false)
-    return Object.assign(() => allowed, { encryption: () => undefined, requiresEncryption: false })
+  if (policy === false) {
+    return Object.assign(() => allowed, {
+      encryption: () => undefined,
+      requiresEncryption: false,
+    })
+  }
   const clocks = new Map<string, TimeReader>()
   const compile = (condition: AccessCondition, id?: string) => {
     let readTime: TimeReader | undefined
@@ -302,14 +339,33 @@ function createRequestCheck(input: RequestAccessConfigInput = false): RequestAcc
     }
     return compileCondition(condition, readTime, id)
   }
-  const globalCheck = policy.global ? compile(policy.global) : () => allowed
+  const globalCheck = policy.global
+    ? compile(policy.global)
+    : () => allowed
   const exact = new Map<string, CompiledRule[]>()
-  const prefixes: PathNode = { children: new Map(), rules: [] }
-  const allMethods = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'CONNECT', 'TRACE', '*']
+  const prefixes: PathNode = {
+    children: new Map(),
+    rules: [],
+  }
+  const allMethods = [
+    'GET',
+    'HEAD',
+    'POST',
+    'PUT',
+    'PATCH',
+    'DELETE',
+    'OPTIONS',
+    'CONNECT',
+    'TRACE',
+    '*',
+  ]
   let requiresEncryption = false
   let hasEncryption = false
   for (const rule of policy.rules) {
-    const compiled = { methods: new Set(rule.methods), check: compile(rule, rule.id) }
+    const compiled = {
+      methods: new Set(rule.methods),
+      check: compile(rule, rule.id),
+    }
     for (const pattern of new Set(rule.paths)) {
       if (rule.encryption) {
         hasEncryption = true
@@ -317,26 +373,39 @@ function createRequestCheck(input: RequestAccessConfigInput = false): RequestAcc
         const prefix = pattern.endsWith('/**')
         const nodes = [prefixes]
         let node = prefixes
-        const path = normalizeRequestPath(prefix ? pattern.slice(0, -3) || '/' : pattern)!
+        const path = normalizeRequestPath(prefix
+          ? pattern.slice(0, -3) || '/'
+          : pattern)!
         for (const segment of path.split('/').filter(Boolean)) {
           let child = node.children.get(segment)
           if (!child) {
-            child = { children: new Map(), rules: [] }
+            child = {
+              children: new Map(),
+              rules: [],
+            }
             node.children.set(segment, child)
           }
           node = child
           nodes.push(node)
         }
-        const bit = rule.encryption === 'required' ? 1 : 2
-        const opposite = bit === 1 ? 2 : 1
+        const bit = rule.encryption === 'required'
+          ? 1
+          : 2
+        const opposite = bit === 1
+          ? 2
+          : 1
         const methods = rule.methods.length ? rule.methods : allMethods
         for (const method of methods) {
           // 冲突与声明顺序无关；不以时间/IP 不同为由接受含糊的传输协议。
           if (nodes.some(parent => parent.encryption?.has(method) && parent.encryption.get(method) !== rule.encryption)
-            || (prefix ? (node.encryptionBelow?.get(method) ?? 0) & opposite : node.exactEncryption?.has(method) && node.exactEncryption.get(method) !== rule.encryption)) {
+            || (prefix
+              ? (node.encryptionBelow?.get(method) ?? 0) & opposite
+              : node.exactEncryption?.has(method) && node.exactEncryption.get(method) !== rule.encryption)) {
             throw new Error(`Request access encryption conflicts at rule ${rule.id}`)
           }
-          const modes = prefix ? node.encryption ??= new Map() : node.exactEncryption ??= new Map()
+          const modes = prefix
+            ? node.encryption ??= new Map()
+            : node.exactEncryption ??= new Map()
           modes.set(method, rule.encryption)
           for (const parent of nodes) {
             parent.encryptionBelow ??= new Map()
@@ -349,7 +418,10 @@ function createRequestCheck(input: RequestAccessConfigInput = false): RequestAcc
         for (const segment of pattern.slice(0, -3).split('/').filter(Boolean)) {
           let child = node.children.get(segment)
           if (!child) {
-            child = { children: new Map(), rules: [] }
+            child = {
+              children: new Map(),
+              rules: [],
+            }
             node.children.set(segment, child)
           }
           node = child
@@ -416,7 +488,12 @@ function createRequestCheck(input: RequestAccessConfigInput = false): RequestAcc
     }
     return mode ?? node?.exactEncryption?.get(method) ?? node?.exactEncryption?.get('*')
   }
-  return Object.assign(check, { encryption: hasEncryption ? encryption : () => undefined, requiresEncryption })
+  return Object.assign(check, {
+    encryption: hasEncryption
+      ? encryption
+      : () => undefined,
+    requiresEncryption,
+  })
 }
 
 /**
@@ -427,4 +504,10 @@ function createRequestCheck(input: RequestAccessConfigInput = false): RequestAcc
  * const decision = core.access.createRequestCheck(false)('/api/v1/example', 'GET')
  * ```
  */
-export const access: AccessFunctions = { normalizeClientIp, createClientIpResolver, createConditionCheck, createRequestCheck, loadPolicy }
+export const access: AccessFunctions = {
+  normalizeClientIp,
+  createClientIpResolver,
+  createConditionCheck,
+  createRequestCheck,
+  loadPolicy,
+}

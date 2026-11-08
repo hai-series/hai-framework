@@ -361,7 +361,9 @@
 
   /** 解析静态或延迟读取的显示文案。 */
   function resolveText(text: string | (() => string)): string {
-    return typeof text === 'function' ? text() : text
+    return typeof text === 'function'
+      ? text()
+      : text
   }
 
   // 同步 data.filters → 本地过滤/排序状态；没有 filters 时也要清空旧状态。
@@ -369,7 +371,9 @@
     const filters = data.filters ?? {}
     searchValue = String(filters.search ?? '')
     sortBy = String(filters.sortBy ?? '')
-    sortDirection = filters.sortDirection === 'asc' ? 'asc' : 'desc'
+    sortDirection = filters.sortDirection === 'asc'
+      ? 'asc'
+      : 'desc'
     const fv: Record<string, unknown> = {}
     for (const f of crud.getFilterFields()) {
       if (filters[f.id] !== undefined) {
@@ -405,9 +409,18 @@
       sortBy,
       sortDirection,
       ...Object.fromEntries(
-        Object.entries(conditions).filter(([key]) => !['search', 'sortBy', 'sortDirection', 'page', 'pageSize'].includes(key))
+        Object.entries(conditions).filter(([key]) => ![
+          'search',
+          'sortBy',
+          'sortDirection',
+          'page',
+          'pageSize',
+        ].includes(key))
           .filter(([, v]) => v !== undefined && v !== '')
-          .map(([k, v]) => [k, String(v)]),
+          .map(([k, v]) => [
+            k,
+            String(v),
+          ]),
       ),
       ...overrides,
     }
@@ -423,7 +436,9 @@
     /** 序列化后的查询字符串。 */
     const qs = params.toString()
     /** 交给宿主路由的目标 URL。 */
-    const url = `${currentBasePath}${qs ? `?${qs}` : ''}`
+    const url = `${currentBasePath}${qs
+      ? `?${qs}`
+      : ''}`
     void Promise.resolve(nav.navigate(url)).then(() => nav.refresh?.())
   }
 
@@ -469,7 +484,9 @@
   /** 打开新建面板并填充默认值。 */
   function openCreate() {
     selectedItem = null
-    formData = { ...crud.getDefaultValues() }
+    formData = {
+      ...crud.getDefaultValues(),
+    }
     formError = ''
     panelMode = 'create'
   }
@@ -644,7 +661,11 @@
         : undefined,
     })),
   )
-  useToastFeedback(() => error ? typeof error === 'string' ? error : uiM('crud_load_failed') : '')
+  useToastFeedback(() => error
+    ? typeof error === 'string'
+      ? error
+      : uiM('crud_load_failed')
+    : '')
   useToastFeedback(() => deleteError)
 </script>
 
@@ -845,8 +866,12 @@
 <!-- 编辑/新建：抽屉或弹窗 -->
 <CrudEditPanel
   open={editOpen}
-  mode={panelMode === 'create' ? 'create' : 'edit'}
-  fields={panelMode === 'create' ? createFields : editFields}
+  mode={panelMode === 'create'
+    ? 'create'
+    : 'edit'}
+  fields={panelMode === 'create'
+    ? createFields
+    : editFields}
   {density}
   bind:formData
   title={panelTitle}

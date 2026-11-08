@@ -225,13 +225,17 @@ const ChromaConfigSchema = z.object({
     catch {
       return false
     }
-  }, { error: () => vecdbM('vecdb_chromaEndpointInvalid') }).optional(),
+  }, {
+    error: () => vecdbM('vecdb_chromaEndpointInvalid'),
+  }).optional(),
   /** 主机（默认 localhost） */
   host: z.string().default('localhost'),
   /** 端口（默认 8000） */
   port: z.number().int().min(1).max(65535).default(8000),
   /** 可选 Bearer token，发送 Authorization 请求头；用于采用此协议的自托管服务/网关，不是 Chroma Cloud 配置。空串表示未配置。 */
-  apiKey: z.string().regex(/^[\x21-\x7E]*$/, { error: () => vecdbM('vecdb_chromaTokenInvalid') }).optional(),
+  apiKey: z.string().regex(/^[\x21-\x7E]*$/, {
+    error: () => vecdbM('vecdb_chromaTokenInvalid'),
+  }).optional(),
   /** 拉起本地服务的可执行命令（默认 'chroma'，可指定绝对路径） */
   serverCommand: z.string().default('chroma'),
   /** 拉起本地服务的就绪等待超时（毫秒，默认 30000） */

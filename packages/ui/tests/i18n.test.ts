@@ -33,13 +33,20 @@ describe('japanese locale', () => {
     const target = document.createElement('div')
     document.body.append(target)
     const store = createLocaleStore({ detectBrowser: false })
-    const menu = mount(LanguageSwitch, { target, props: { onchange: language => store.set(language) } })
+    const menu = mount(LanguageSwitch, {
+      target,
+      props: {
+        onchange: language => store.set(language),
+      },
+    })
     const password = mount(PasswordInput, { target })
     try {
       flushSync()
       target.querySelector<HTMLButtonElement>('[aria-label="切换语言"]')!.click()
       flushSync()
-      const japanese = [...target.querySelectorAll('button')].find(button => button.textContent?.includes('日本語'))!
+      const japanese = [
+        ...target.querySelectorAll('button'),
+      ].find(button => button.textContent?.includes('日本語'))!
       expect(japanese).toBeDefined()
       japanese.click()
       flushSync()

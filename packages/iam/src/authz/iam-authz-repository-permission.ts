@@ -44,7 +44,14 @@ export interface PermissionRepository extends ReldbCrudRepository<Permission> {
 const TABLE_NAME = 'hai_iam_permissions'
 
 const PERMISSION_FIELDS: ReldbCrudFieldDefinition[] = [
-  { fieldName: 'sensitiveOperations', columnName: 'sensitive_operations', def: { type: 'JSON' }, select: true, create: true, update: true },
+  {
+    fieldName: 'sensitiveOperations',
+    columnName: 'sensitive_operations',
+    def: { type: 'JSON' },
+    select: true,
+    create: true,
+    update: true,
+  },
   {
     fieldName: 'id',
     columnName: 'id',
@@ -183,14 +190,24 @@ class DbPermissionRepository extends BaseReldbCrudRepository<Permission> impleme
       : reldb.config?.type === 'mysql'
         ? 'JSON_CONTAINS(sensitive_operations, JSON_QUOTE(?))'
         : 'EXISTS (SELECT 1 FROM json_each(sensitive_operations) WHERE type = \'text\' AND value = ?)'
-    const params = operation === undefined ? [] : [reldb.config?.type === 'postgresql' ? JSON.stringify([operation]) : operation]
-    const result = await reldb.sql.query<{ sensitive_operations: unknown }>(`SELECT sensitive_operations FROM hai_iam_permissions WHERE sensitive_operations IS NOT NULL${operation === undefined ? '' : ` AND ${match} LIMIT 1`}`, params)
+    const params = operation === undefined
+      ? []
+      : [
+          reldb.config?.type === 'postgresql'
+            ? JSON.stringify([operation])
+            : operation,
+        ]
+    const result = await reldb.sql.query<{ sensitive_operations: unknown }>(`SELECT sensitive_operations FROM hai_iam_permissions WHERE sensitive_operations IS NOT NULL${operation === undefined
+      ? ''
+      : ` AND ${match} LIMIT 1`}`, params)
     if (!result.success)
       return result
     const operations = new Set<string>()
     try {
       for (const row of result.data) {
-        const values: unknown = typeof row.sensitive_operations === 'string' ? JSON.parse(row.sensitive_operations) : row.sensitive_operations
+        const values: unknown = typeof row.sensitive_operations === 'string'
+          ? JSON.parse(row.sensitive_operations)
+          : row.sensitive_operations
         if (!Array.isArray(values) || values.length > 1000)
           return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_reauthenticationRequired'))
         for (const value of values as unknown[]) {
@@ -222,7 +239,9 @@ class DbPermissionRepository extends BaseReldbCrudRepository<Permission> impleme
   private buildQueryError(error: { message: string }, cause: unknown): HaiResult<never> {
     return err(
       HaiIamError.REPOSITORY_ERROR,
-      iamM('iam_queryPermissionFailed', { params: { message: error.message } }),
+      iamM('iam_queryPermissionFailed', {
+        params: { message: error.message },
+      }),
       cause,
     )
   }

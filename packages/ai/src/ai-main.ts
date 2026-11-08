@@ -48,6 +48,9 @@ const logger = core.logger.child({ module: 'ai', scope: 'main' })
 
 /** 并发初始化防护 */
 let initInProgress = false
+/** 关闭等待已开始的初始化；重初始化直接清理旧实例，避免等待自身。 */
+let initCompletion: Promise<void> | null = null
+let closingPromise: Promise<void> | null = null
 /** 当前配置（`null` 表示未初始化） */
 let currentConfig: AIConfig | null = null
 /** 当前 LLM 操作实例 */
@@ -330,11 +333,15 @@ export const ai: AIFunctions = {
     if (Object.keys(process.env).some(name => /^HAI_AI_LLM_(?:MODELS_\d+_)?API$/.test(name)))
       return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_llmProtocolRenamed'))
     // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
-    if (initInProgress) {
+    if (initInProgress || closingPromise) {
       logger.warn('AI init already in progress, skipping concurrent call')
       return err(HaiAIError.INIT_IN_PROGRESS, aiM('ai_initInProgress'))
     }
     initInProgress = true
+    let resolveInit!: () => void
+    initCompletion = new Promise<void>((resolve) => {
+      resolveInit = resolve
+    })
     let closingPrevious = false
 
     try {
@@ -342,7 +349,7 @@ export const ai: AIFunctions = {
       if (currentConfig) {
         logger.warn('AI module is already initialized, reinitializing')
         closingPrevious = true
-        await ai.close()
+        await resetAllState()
         closingPrevious = false
       }
 
@@ -353,7 +360,9 @@ export const ai: AIFunctions = {
         logger.error('AI config validation failed', { error: parseResult.error.message })
         return err(
           HaiAIError.CONFIGURATION_ERROR,
-          aiM('ai_configError', { params: { error: parseResult.error.message } }),
+          aiM('ai_configError', {
+            params: { error: parseResult.error.message },
+          }),
           parseResult.error,
         )
       }
@@ -424,13 +433,17 @@ export const ai: AIFunctions = {
       return err(
         HaiAIError.CONFIGURATION_ERROR,
         aiM('ai_initFailed', {
-          params: { error: String(error) },
+          params: {
+            error: String(error),
+          },
         }),
         error,
       )
     }
     finally {
       initInProgress = false
+      initCompletion = null
+      resolveInit()
     }
   },
 
@@ -457,17 +470,23 @@ export const ai: AIFunctions = {
   get audio(): ManagedAudioOperations { return currentAudio ?? notInitializedAudio },
   get image(): ManagedImageOperations { return currentImage ?? notInitializedImage },
   get a2a(): A2AOperations { return a2aLazyOperations },
-  get config() { return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null },
+  get config() {
+    return currentConfig
+      ? core.sanitize.sanitizeSensitiveFields(currentConfig)
+      : null
+  },
   get isInitialized() { return currentConfig !== null },
 
   async close(): Promise<void> {
-    if (!currentConfig) {
-      logger.info('AI module already closed, skipping')
-      return
+    if (!closingPromise) {
+      closingPromise = (async () => {
+        if (initCompletion)
+          await initCompletion
+        logger.info('Closing AI module')
+        await resetAllState()
+        logger.info('AI module closed')
+      })().finally(() => { closingPromise = null })
     }
-
-    logger.info('Closing AI module')
-    await resetAllState()
-    logger.info('AI module closed')
+    return closingPromise
   },
 }

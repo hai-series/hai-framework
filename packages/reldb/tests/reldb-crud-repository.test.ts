@@ -140,7 +140,11 @@ class UserRepository extends BaseReldbCrudRepository<UserRow> {
   }
 
   async findByEmail(email: string) {
-    return this.findAll({ where: 'email = ?', params: [email], limit: 1 })
+    return this.findAll({
+      where: 'email = ?',
+      params: [email],
+      limit: 1,
+    })
   }
 
   async insertRaw(data: { name: string, email: string, enabled?: boolean }, tx?: import('../src/index.js').DmlWithTxOperations) {
@@ -149,12 +153,22 @@ class UserRepository extends BaseReldbCrudRepository<UserRow> {
     if (!ready.success)
       return ready
     const isSqlite = reldb.config?.type === 'sqlite'
-    const now = isSqlite ? Date.now() : new Date()
+    const now = isSqlite
+      ? Date.now()
+      : new Date()
     const enabledValue = data.enabled ?? true
-    const normalizedEnabled = isSqlite ? (enabledValue ? 1 : 0) : enabledValue
+    const normalizedEnabled = isSqlite
+      ? (enabledValue ? 1 : 0)
+      : enabledValue
     return this.sql(tx).execute(
       'INSERT INTO users (name, email, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-      [data.name, data.email, normalizedEnabled, now, now],
+      [
+        data.name,
+        data.email,
+        normalizedEnabled,
+        now,
+        now,
+      ],
     )
   }
 }
@@ -409,7 +423,10 @@ describe('db.BaseReldbCrudRepository', () => {
       await repo.create({ name: '用户B', email: 'b@test.com' })
       await repo.create({ name: '用户C', email: 'c@test.com' })
 
-      const result = await repo.count({ where: 'email LIKE ?', params: ['%b@%'] })
+      const result = await repo.count({
+        where: 'email LIKE ?',
+        params: ['%b@%'],
+      })
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data).toBe(1)
@@ -424,7 +441,11 @@ describe('db.BaseReldbCrudRepository', () => {
       await repo.create({ name: '用户A', email: 'a@test.com' })
       await repo.create({ name: '用户B', email: 'b@test.com' })
 
-      const result = await repo.findAll({ where: 'name LIKE ?', params: ['用户%'], orderBy: 'email ASC' })
+      const result = await repo.findAll({
+        where: 'name LIKE ?',
+        params: ['用户%'],
+        orderBy: 'email ASC',
+      })
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data).toHaveLength(3)

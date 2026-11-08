@@ -50,10 +50,21 @@ interface SessionState {
 
 /** 恢复私有 JSON 日期，拒绝损坏的授权数据；错误不包含认证快照。 */
 function restoreSession(session: Session): Session {
-  const result = { ...session, createdAt: new Date(session.createdAt), startedAt: new Date(session.startedAt ?? session.createdAt), lastActiveAt: new Date(session.lastActiveAt), expiresAt: new Date(session.expiresAt) }
+  const result = {
+    ...session,
+    createdAt: new Date(session.createdAt),
+    startedAt: new Date(session.startedAt ?? session.createdAt),
+    lastActiveAt: new Date(session.lastActiveAt),
+    expiresAt: new Date(session.expiresAt),
+  }
   if ((result.terminalType !== undefined && !['web', 'app', 'desktop', 'api'].includes(result.terminalType)) || typeof result.credentialVersion !== 'string' || !result.version || !Number.isSafeInteger(result.maxAge) || result.maxAge <= 0 || !Array.isArray(result.roles) || !result.roles.every(role => typeof role === 'string')
     || !Array.isArray(result.permissions) || !result.permissions.every(permission => typeof permission === 'string')
-    || ![result.createdAt, result.startedAt, result.lastActiveAt, result.expiresAt].every(date => Number.isFinite(date.getTime()))) {
+    || ![
+      result.createdAt,
+      result.startedAt,
+      result.lastActiveAt,
+      result.expiresAt,
+    ].every(date => Number.isFinite(date.getTime()))) {
     throw new TypeError('Invalid session state')
   }
   return result
@@ -182,7 +193,9 @@ export function createCacheSessionRepository(
         if (!current.success)
           return current
         // 私有快照由本仓库生成并经 read 校验；复制后修改，避免 Memory 引用别名。
-        const next: SessionState = current.data ? JSON.parse(JSON.stringify(current.data)) : { revision: '', sessions: {} }
+        const next: SessionState = current.data
+          ? JSON.parse(JSON.stringify(current.data))
+          : { revision: '', sessions: {} }
         for (const [token, entry] of Object.entries(next.sessions)) {
           if (retainedUntil(entry) <= Date.now() || policyExpired(entry.session))
             delete next.sessions[token]
@@ -269,7 +282,9 @@ export function createCacheSessionRepository(
       if (!record)
         return ok(null)
       const session = restoreSession(record.session)
-      return ok(session.expiresAt.getTime() <= Date.now() || policyExpired(session) ? null : session)
+      return ok(session.expiresAt.getTime() <= Date.now() || policyExpired(session)
+        ? null
+        : session)
     },
     async getByRefreshToken(token) {
       const scope = getTokenSessionScope(token)
@@ -282,7 +297,9 @@ export function createCacheSessionRepository(
       if (!record)
         return ok(null)
       const session = restoreSession(record.session)
-      return ok(policyExpired(session) ? null : session)
+      return ok(policyExpired(session)
+        ? null
+        : session)
     },
     async updateByAccessToken(token, patch, expectedVersion) {
       const scope = getTokenSessionScope(token)
@@ -299,7 +316,10 @@ export function createCacheSessionRepository(
         const updated = applySessionPatch(restoreSession(entry.session), patch)
         if (![updated.expiresAt, updated.lastActiveAt].every(date => Number.isFinite(date.getTime())))
           return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sessionMaxAgeInvalid'))
-        entry.session = { ...updated, version: crypto.randomUUID() }
+        entry.session = {
+          ...updated,
+          version: crypto.randomUUID(),
+        }
         return ok(undefined)
       })
     },
@@ -318,7 +338,9 @@ export function createCacheSessionRepository(
         const next = {
           ...current,
           lastActiveAt: new Date(Math.max(current.lastActiveAt.getTime(), now.getTime())),
-          expiresAt: policy.sliding === false ? current.expiresAt : new Date(Math.max(current.expiresAt.getTime(), now.getTime() + current.maxAge * 1000)),
+          expiresAt: policy.sliding === false
+            ? current.expiresAt
+            : new Date(Math.max(current.expiresAt.getTime(), now.getTime() + current.maxAge * 1000)),
         }
         entry.session = next
         return ok(next)
@@ -361,7 +383,10 @@ export function createCacheSessionRepository(
             continue
           if (entry.session.version !== version)
             return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
-          entry.session = { ...applySessionPatch(restoreSession(entry.session), patch), version: crypto.randomUUID() }
+          entry.session = {
+            ...applySessionPatch(restoreSession(entry.session), patch),
+            version: crypto.randomUUID(),
+          }
         }
         return ok(undefined)
       })

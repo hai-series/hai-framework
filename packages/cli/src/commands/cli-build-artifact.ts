@@ -39,6 +39,8 @@ export function nativePackageFile(project: string, platform: string, debug: bool
     ? basename(file, extension).replace(/^app(?:-|$)/, '').replace(/(?:^|-)(?:debug|release)(?:-unsigned)?$/, '').replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '')
     : ''
   const target = [platform, arch, qualifier, variant].filter(Boolean).join('-')
-  const installer = platform === 'windows' && extension.toLowerCase() === '.exe' ? '-setup' : ''
+  const installer = platform === 'windows' && extension.toLowerCase() === '.exe'
+    ? '-setup'
+    : ''
   return `${project}-${target}-${version}${installer}${extension}`
 }

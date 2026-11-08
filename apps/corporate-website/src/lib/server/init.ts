@@ -70,7 +70,14 @@ export async function initApp(): Promise<void> {
     // 1. 加载配置
     core.init({
       configDir: './config',
-      configSchemas: { ai: AIConfigSchema, cache: CacheConfigSchema, db: ReldbConfigSchema, partner: PartnerAdminConfigSchema, storage: StorageConfigSchema, vecdb: VecdbConfigSchema },
+      configSchemas: {
+        ai: AIConfigSchema,
+        cache: CacheConfigSchema,
+        db: ReldbConfigSchema,
+        partner: PartnerAdminConfigSchema,
+        storage: StorageConfigSchema,
+        vecdb: VecdbConfigSchema,
+      },
       logging: { level: 'info' },
     })
 

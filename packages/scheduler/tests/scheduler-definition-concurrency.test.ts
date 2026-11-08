@@ -57,8 +57,13 @@ it('合法写入与持久快照交错时，刷新和其他注册均成功且定�
     expect((await refresh).success).toBe(true)
     expect((await second).success).toBe(true)
     expect((await scheduler.refreshTasks()).success).toBe(true)
-    expect([...scheduler.tasks.keys()].sort()).toEqual(['first', 'second'])
-    expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM hai_scheduler_tasks')).toMatchObject({ success: true, data: { count: 2 } })
+    expect([
+      ...scheduler.tasks.keys(),
+    ].sort()).toEqual(['first', 'second'])
+    expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM hai_scheduler_tasks')).toMatchObject({
+      success: true,
+      data: { count: 2 },
+    })
   }
   finally {
     releaseInsert.release()
@@ -97,7 +102,9 @@ it('close 排空已经开始的定义写入，返回后任务投影为空且重�
     await closing
     expect(scheduler.tasks.size).toBe(0)
     expect((await scheduler.init()).success).toBe(true)
-    expect([...scheduler.tasks.keys()]).toEqual(['closing'])
+    expect([
+      ...scheduler.tasks.keys(),
+    ]).toEqual(['closing'])
   }
   finally {
     release.release()
@@ -127,7 +134,10 @@ it('close 可结束只读等待并取消尚未写入的注册，迟到快照不�
     release.release()
     await setImmediate()
     expect(scheduler.tasks.size).toBe(0)
-    expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM hai_scheduler_tasks')).toMatchObject({ success: true, data: { count: 0 } })
+    expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM hai_scheduler_tasks')).toMatchObject({
+      success: true,
+      data: { count: 0 },
+    })
   }
   finally {
     release.release()

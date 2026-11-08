@@ -4,11 +4,28 @@ import { deployM } from '../deploy-i18n.js'
 import { createDeploymentManifestFunctions } from './deploy-manifest.js'
 
 const groups = [
-  { name: 'DB_PASSWORD', keys: ['POSTGRES_PASSWORD', 'MYSQL_PASSWORD', 'MYSQL_ROOT_PASSWORD'], services: ['db', 'vecdb'] },
-  { name: 'STORAGE_PASSWORD', keys: ['RUSTFS_SECRET_KEY', 'MINIO_ROOT_PASSWORD'], services: ['storage'] },
-  { name: 'LDAP_PASSWORD', keys: ['LDAP_ADMIN_PASSWORD'], services: ['ldap'] },
+  {
+    name: 'DB_PASSWORD',
+    keys: ['POSTGRES_PASSWORD', 'MYSQL_PASSWORD', 'MYSQL_ROOT_PASSWORD'],
+    services: ['db', 'vecdb'],
+  },
+  {
+    name: 'STORAGE_PASSWORD',
+    keys: ['RUSTFS_SECRET_KEY', 'MINIO_ROOT_PASSWORD'],
+    services: ['storage'],
+  },
+  {
+    name: 'LDAP_PASSWORD',
+    keys: ['LDAP_ADMIN_PASSWORD'],
+    services: ['ldap'],
+  },
 ]
-const appPrefixes: Record<string, string> = { db: 'HAI_DB', vecdb: 'HAI_VECDB', storage: 'HAI_STORAGE', ldap: 'HAI_IAM_LDAP' }
+const appPrefixes: Record<string, string> = {
+  db: 'HAI_DB',
+  vecdb: 'HAI_VECDB',
+  storage: 'HAI_STORAGE',
+  ldap: 'HAI_IAM_LDAP',
+}
 
 /**
  * 按实际 Compose 声明解析命名卷，供凭据与后端身份清单共用。
@@ -33,10 +50,14 @@ export function resolveComposeNamedVolumes(projectName: string, mounts: unknown,
     if (!Object.hasOwn(declarations, source))
       continue
     const declaration = declarations[source]
-    const details = declaration && typeof declaration === 'object' ? declaration : {}
+    const details = declaration && typeof declaration === 'object'
+      ? declaration
+      : {}
     const volume = 'name' in details && typeof details.name === 'string'
       ? details.name
-      : 'external' in details && details.external === true ? source : `hai-${projectName}_${source}`
+      : 'external' in details && details.external === true
+        ? source
+        : `hai-${projectName}_${source}`
     if (!/^\w[\w.-]*$/.test(volume))
       throw new Error(deployM('deploy_managedSecretsInvalid'))
     volumes.add(volume)
@@ -68,7 +89,11 @@ export function createManagedSecretAssets(projectName: string, nativeEnvironment
   const bindings = new Set<string>()
   const volumes = new Set<string>()
   for (const group of groups) {
-    const values = [...new Set(group.keys.flatMap(key => native[key] === undefined ? [] : [native[key]!]))]
+    const values = [
+      ...new Set(group.keys.flatMap(key => native[key] === undefined
+        ? []
+        : [native[key]!])),
+    ]
     if (!values.length)
       continue
     if (values.length !== 1 || !/^[\w-]{32}$/.test(values[0]!))
@@ -87,9 +112,15 @@ export function createManagedSecretAssets(projectName: string, nativeEnvironment
   }
   return {
     'managed-project': `hai-${projectName}\n`,
-    'managed-candidates.env': candidates.length ? `${candidates.join('\n')}\n` : '',
-    'managed-bindings': bindings.size ? `${[...bindings].join('\n')}\n` : '',
-    'managed-volumes': volumes.size ? `${[...volumes].join('\n')}\n` : '',
+    'managed-candidates.env': candidates.length
+      ? `${candidates.join('\n')}\n`
+      : '',
+    'managed-bindings': bindings.size
+      ? `${[...bindings].join('\n')}\n`
+      : '',
+    'managed-volumes': volumes.size
+      ? `${[...volumes].join('\n')}\n`
+      : '',
     'resolve-managed-secrets.sh': createManagedSecretScript(),
   }
 }

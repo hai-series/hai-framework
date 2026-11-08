@@ -1,15 +1,15 @@
 <script lang='ts'>
   // AI 实验台首页：加载能力状态，编排对话、记忆、语音合成、麦克风实时转写与文件转写面板
-  import type { LabStatus } from '$lib/ai-lab-types.js'
-  import AsrPanel from '$lib/components/AsrPanel.svelte'
-  import ChatPanel from '$lib/components/ChatPanel.svelte'
-  import ImagePanel from '$lib/components/ImagePanel.svelte'
-  import MemoryPanel from '$lib/components/MemoryPanel.svelte'
-  import MicAsrPanel from '$lib/components/MicAsrPanel.svelte'
-  import TtsPanel from '$lib/components/TtsPanel.svelte'
-  import * as m from '$lib/paraglide/messages.js'
-  import { loadStatus } from '$lib/services/ai-lab.js'
+  import type { LabStatus } from '#lib/ai-lab-types.js'
   import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  import AsrPanel from '#lib/components/AsrPanel.svelte'
+  import ChatPanel from '#lib/components/ChatPanel.svelte'
+  import ImagePanel from '#lib/components/ImagePanel.svelte'
+  import MemoryPanel from '#lib/components/MemoryPanel.svelte'
+  import MicAsrPanel from '#lib/components/MicAsrPanel.svelte'
+  import TtsPanel from '#lib/components/TtsPanel.svelte'
+  import * as m from '#lib/paraglide/messages.js'
+  import { loadStatus } from '#lib/services/ai-lab.js'
 
   let profileId = $state('demo-user')
   let status = $state<LabStatus | undefined>()
@@ -49,7 +49,11 @@
     <div class='flex min-w-72 flex-col gap-2 rounded-2xl border border-base-content/8 bg-base-100/75 p-4 shadow-sm'>
       <label class='text-xs font-semibold uppercase tracking-wider text-base-content/45' for='profile-id'>{m.profile_label()}</label>
       <input id='profile-id' class='input input-bordered input-sm w-full bg-base-100' bind:value={profileId} maxlength='64' />
-      <p class='text-xs text-base-content/45'>{m.profile_hint()}</p>
+      <p class='text-xs text-base-content/45'>{m.profile_hint()} {status?.memoryMode === 'persistent'
+        ? m.memory_persistent_hint()
+        : status?.memoryMode === 'ephemeral'
+        ? m.memory_ephemeral_hint()
+        : ''}</p>
     </div>
   </section>
 
@@ -58,7 +62,9 @@
       <div class='text-xs text-base-content/45'>{m.status_connection()}</div>
       <div class='mt-2 flex items-center gap-2 font-semibold' data-testid='connection-status'>
         <span class='size-2 rounded-full' class:bg-success={status?.ready} class:bg-error={!status?.ready}></span>
-        {status?.ready ? m.status_ready() : m.status_loading()}
+        {status?.ready
+          ? m.status_ready()
+          : m.status_loading()}
       </div>
     </div>
     <div class='rounded-2xl border border-base-content/8 bg-base-100/80 p-4'>
@@ -75,7 +81,11 @@
     </div>
     <div class='rounded-2xl border border-base-content/8 bg-base-100/80 p-4'>
       <div class='text-xs text-base-content/45'>{m.status_memory()}</div>
-      <div class='mt-2 font-semibold'>{m.status_memory_ephemeral()}</div>
+      <div class='mt-2 font-semibold'>{status?.memoryMode === 'persistent'
+        ? m.memory_persistent()
+        : status?.memoryMode === 'ephemeral'
+        ? m.status_memory_ephemeral()
+        : '—'}</div>
     </div>
     <div class='rounded-2xl border border-base-content/8 bg-base-100/80 p-4'>
       <div class='text-xs text-base-content/45'>{m.status_image()}</div>
@@ -86,7 +96,7 @@
   <div class='lab-grid'>
     <ChatPanel {profileId} onmemorychange={() => memoryRefreshToken += 1} />
     <aside class='space-y-5'>
-      <MemoryPanel {profileId} refreshToken={memoryRefreshToken} />
+      <MemoryPanel {profileId} refreshToken={memoryRefreshToken} memoryMode={status?.memoryMode} />
       <ImagePanel />
       <TtsPanel voices={status?.ttsVoices ?? []} />
       <MicAsrPanel />

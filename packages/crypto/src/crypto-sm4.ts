@@ -82,7 +82,9 @@ export function createSM4(): SymmetricOperations {
         iv,
         outputFormat = 'hex',
       } = options
-      const actualIv = mode === 'cbc' ? iv ?? this.generateIV() : undefined
+      const actualIv = mode === 'cbc'
+        ? iv ?? this.generateIV()
+        : undefined
 
       if (!this.isValidKey(key)) {
         return err(
@@ -122,14 +124,22 @@ export function createSM4(): SymmetricOperations {
         return ok({
           mode,
           ciphertext: encodeCiphertext(encrypted, outputFormat),
-          ...(actualIv ? { iv: actualIv } : {}),
+          ...(actualIv
+            ? { iv: actualIv }
+            : {}),
           encoding: outputFormat,
         })
       }
       catch (error) {
         return err(
           HaiCryptoError.ENCRYPTION_FAILED,
-          cryptoM('crypto_sm4EncryptFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          cryptoM('crypto_sm4EncryptFailed', {
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
+          }),
           error,
         )
       }
@@ -190,7 +200,13 @@ export function createSM4(): SymmetricOperations {
       catch (error) {
         return err(
           HaiCryptoError.DECRYPTION_FAILED,
-          cryptoM('crypto_sm4DecryptFailedWithError', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          cryptoM('crypto_sm4DecryptFailedWithError', {
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
+          }),
           error,
         )
       }
@@ -237,7 +253,12 @@ export function createSM4(): SymmetricOperations {
       key: string,
       iv: string,
     ): HaiResult<string> {
-      return this.decrypt({ mode: 'cbc', ciphertext, iv, encoding: 'hex' }, key)
+      return this.decrypt({
+        mode: 'cbc',
+        ciphertext,
+        iv,
+        encoding: 'hex',
+      }, key)
     },
 
     /** 校验密钥格式是否合法（32 字符十六进制） */
@@ -276,7 +297,9 @@ function generateRandomHex(byteLength: number): string {
 
 /** 按输出编码转换 SM4 hex 密文。 */
 function encodeCiphertext(ciphertext: string, encoding: SymmetricCiphertextEncoding): string {
-  return encoding === 'base64' ? hexToBase64(ciphertext) : ciphertext
+  return encoding === 'base64'
+    ? hexToBase64(ciphertext)
+    : ciphertext
 }
 
 /**
@@ -292,5 +315,7 @@ function encodeCiphertext(ciphertext: string, encoding: SymmetricCiphertextEncod
  * ```
  */
 function decodeCiphertext(payload: SymmetricDecryptInput): string {
-  return payload.encoding === 'base64' ? base64ToHex(payload.ciphertext) : payload.ciphertext
+  return payload.encoding === 'base64'
+    ? base64ToHex(payload.ciphertext)
+    : payload.ciphertext
 }

@@ -6,14 +6,24 @@ import { createSessionOperations } from '../src/session/iam-session-functions.js
 import { acquireRedisContainer } from './helpers/redis-container.js'
 
 async function operations(sliding = true) {
-  const result = await createSessionOperations({ readCredential: async () => ({ success: true, data: { version: '', available: true } }), config: IamConfigSchema.parse({ session: { sliding, maxAge: 60 } }) })
+  const result = await createSessionOperations({
+    readCredential: async () => ({
+      success: true,
+      data: { version: '', available: true },
+    }),
+    config: IamConfigSchema.parse({
+      session: { sliding, maxAge: 60 },
+    }),
+  })
   if (!result.success)
     throw new Error(result.error.message)
   return result.data
 }
 
 function useClock() {
-  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.useFakeTimers({
+    toFake: ['Date'],
+  })
   vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
   return (seconds: number) => vi.setSystemTime(new Date(Date.UTC(2026, 0, 1) + seconds * 1000))
 }
@@ -78,7 +88,9 @@ it('显式lastActiveAt/expiresAt补丁被完整应用，非法时间不落盘', 
     throw new Error('No updated session')
   expect(latest.data.lastActiveAt.toISOString()).toBe('2026-01-01T00:00:02.000Z')
   expect(latest.data.expiresAt.toISOString()).toBe('2026-01-01T00:00:04.000Z')
-  expect((await ops.update(created.data.accessToken, { expiresAt: new Date(Number.NaN) }, latest.data.version)).success).toBe(false)
+  expect((await ops.update(created.data.accessToken, {
+    expiresAt: new Date(Number.NaN),
+  }, latest.data.version)).success).toBe(false)
   expect((await ops.get(created.data.accessToken)).success).toBe(true)
 })
 
@@ -112,7 +124,13 @@ it('旧滑动请求迟到重试不会缩短新请求提交的时间', async () =
   expect(old.success && old.data?.lastActiveAt.toISOString()).toBe('2026-01-01T00:00:06.000Z')
 })
 
-it.each([0, -1, 1.5, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER])('非法maxAge %s 返回业务失败且不写会话', async (maxAge) => {
+it.each([
+  0,
+  -1,
+  1.5,
+  Number.POSITIVE_INFINITY,
+  Number.MAX_SAFE_INTEGER,
+])('非法maxAge %s 返回业务失败且不写会话', async (maxAge) => {
   const ops = await operations()
   expect((await ops.create({ userId: 'invalid-age', maxAge })).success).toBe(false)
   expect(await cache.kv.keys('hai:iam:sessions:*')).toEqual({ success: true, data: [] })

@@ -39,9 +39,11 @@ export function createBackendStateAssets(projectName: string, compose: {
     const service = compose.services[serviceName]
     const image = service?.image
     if (typeof image !== 'string')
-      throw new Error(deployM('deploy_artifactInvalid'))
+      throw new TypeError(deployM('deploy_artifactInvalid'))
     const imageFamily = image.slice(image.lastIndexOf('/') + 1).split(':')[0]!
-    const family = imageFamily === 'postgres' ? 'postgresql' : imageFamily
+    const family = imageFamily === 'postgres'
+      ? 'postgresql'
+      : imageFamily
     const namedVolumes = resolveComposeNamedVolumes(projectName, service.volumes, compose.volumes)
     if (!families.includes(family) || namedVolumes.length !== 1 || volumes.has(namedVolumes[0]!))
       throw new Error(deployM('deploy_artifactInvalid'))
@@ -50,7 +52,9 @@ export function createBackendStateAssets(projectName: string, compose: {
     tuples.push(`${serviceName} ${family} ${volume}`)
   }
   return {
-    'state-backends': tuples.length ? `${tuples.join('\n')}\n` : '',
+    'state-backends': tuples.length
+      ? `${tuples.join('\n')}\n`
+      : '',
     'resolve-backend-state.sh': createBackendStateScript(projectName),
   }
 }

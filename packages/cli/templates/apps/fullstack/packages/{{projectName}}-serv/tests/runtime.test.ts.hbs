@@ -15,7 +15,6 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { closeModules, initializeModules } from '../src/server/runtime.js'
 
 let storageRoot: string
-
 beforeEach(async () => {
   storageRoot = await mkdtemp(path.join(os.tmpdir(), '{{projectName}}-bootstrap-'))
   vi.stubEnv('HAI_DB_DATABASE', '":memory:"')
@@ -23,22 +22,33 @@ beforeEach(async () => {
   vi.stubEnv('HAI_IAM_PASSWORD_REQUIREUPPERCASE', 'true')
   core.init({ configDir: './config' })
 })
-
 afterEach(async () => {
   await closeModules()
   vi.unstubAllEnvs()
   await rm(storageRoot, { recursive: true, force: true })
 })
-
 it.each([
   { password: 'abc' },
   { password: 'lowercase123!' },
 ])('startup explains the failed password policy and permits a clean retry: $password', async ({ password }) => {
   vi.stubEnv('HAI_ADMIN_DEFAULT_PASSWORD', password)
-  await expect(initializeModules()).rejects.toMatchObject({ cause: { ext: { module: 'bootstrap', fields: ['HAI_ADMIN_DEFAULT_PASSWORD'] } } })
-  for (const module of [audit, iam, storage, crypto, cache, reldb])
+  await expect(initializeModules()).rejects.toMatchObject({
+    cause: {
+      ext: {
+        module: 'bootstrap',
+        fields: ['HAI_ADMIN_DEFAULT_PASSWORD'],
+      },
+    },
+  })
+  for (const module of [
+    audit,
+    iam,
+    storage,
+    crypto,
+    cache,
+    reldb,
+  ])
     expect(module.isInitialized).toBe(false)
-
   // 失败后再次初始化，确认未保留半成品管理员或未释放的模块。
   vi.stubEnv('HAI_ADMIN_DEFAULT_PASSWORD', 'Bootstrap-retry-Admin123!')
   await initializeModules()
@@ -49,14 +59,27 @@ it.each([
     expect(users.data.items[0]?.username).toBe('admin')
   }
 })
-
 it.each(['', '   '])('startup identifies an unset administrator password without exposing its value', async (password) => {
   vi.stubEnv('HAI_ADMIN_DEFAULT_PASSWORD', password)
-  await expect(initializeModules()).rejects.toMatchObject({ cause: { ext: { module: 'bootstrap', code: HaiConfigError.CONFIG_ENV_VAR_MISSING.code, fields: ['HAI_ADMIN_DEFAULT_PASSWORD'] } } })
-  for (const module of [audit, iam, storage, crypto, cache, reldb])
+  await expect(initializeModules()).rejects.toMatchObject({
+    cause: {
+      ext: {
+        module: 'bootstrap',
+        code: HaiConfigError.CONFIG_ENV_VAR_MISSING.code,
+        fields: ['HAI_ADMIN_DEFAULT_PASSWORD'],
+      },
+    },
+  })
+  for (const module of [
+    audit,
+    iam,
+    storage,
+    crypto,
+    cache,
+    reldb,
+  ])
     expect(module.isInitialized).toBe(false)
 })
-
 {{#if features.feedback}}
 it('optional feedback failure does not roll back authentication and business modules', async () => {
   vi.stubEnv('HAI_ADMIN_DEFAULT_PASSWORD', 'Bootstrap-retry-Admin123!')

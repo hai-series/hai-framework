@@ -33,16 +33,28 @@ describe('standalone AudioClient actual WebSocket', () => {
   afterEach(async () => {
     for (const socket of server.clients)
       socket.terminate()
-    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+    await new Promise<void>((resolve, reject) => server.close(error => error
+      ? reject(error)
+      : resolve()))
   })
 
   function segment(socket: ServerWebSocket): void {
-    socket.send(JSON.stringify({ type: 'segment_started', segmentId: 'synthesis', text: '中文', format: 'mp3' }))
+    socket.send(JSON.stringify({
+      type: 'segment_started',
+      segmentId: 'synthesis',
+      text: '中文',
+      format: 'mp3',
+    }))
   }
 
   it('assembles fragmented UTF-8 text and binary frames and uses a per-operation ticket', async () => {
     onDone = (socket) => {
-      const text = Buffer.from(JSON.stringify({ type: 'segment_started', segmentId: 'synthesis', text: '中文', format: 'mp3' }))
+      const text = Buffer.from(JSON.stringify({
+        type: 'segment_started',
+        segmentId: 'synthesis',
+        text: '中文',
+        format: 'mp3',
+      }))
       const split = text.indexOf(Buffer.from('中')) + 1
       socket.send(text.subarray(0, split), { binary: false, fin: false })
       socket.send(text.subarray(split), { binary: false, fin: true })
@@ -64,8 +76,14 @@ describe('standalone AudioClient actual WebSocket', () => {
     onDone = segment
     const closed = new Promise<void>(resolve => server.once('connection', socket => socket.once('close', () => resolve())))
     const controller = new AbortController()
-    const client = createAudioClient({ url, getTicket: () => 'test-only-ticket' })
-    const stream = client.synthesizeStream({ text: { id: 'synthesis', text: '中文' }, signal: controller.signal })
+    const client = createAudioClient({
+      url,
+      getTicket: () => 'test-only-ticket',
+    })
+    const stream = client.synthesizeStream({
+      text: { id: 'synthesis', text: '中文' },
+      signal: controller.signal,
+    })
     const iterator = stream[Symbol.asyncIterator]()
     const first = await iterator.next()
     expect(first.value.type).toBe('segment_started')
@@ -86,7 +104,10 @@ describe('standalone AudioClient actual WebSocket', () => {
       socket.send(Buffer.from([1, 2]))
       socket.close()
     }
-    const client = createAudioClient({ url, getTicket: () => 'test-only-ticket' })
+    const client = createAudioClient({
+      url,
+      getTicket: () => 'test-only-ticket',
+    })
     await expect(client.synthesize({ text: '中文' })).rejects.toMatchObject({ code: HaiAIError.AUDIO_CONNECTION_FAILED.code })
   })
 })

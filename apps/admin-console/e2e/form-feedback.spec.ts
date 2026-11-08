@@ -10,7 +10,13 @@ async function capture(page: Page, name: string, testInfo: TestInfo) {
   if (evidence)
     await mkdir(evidence, { recursive: true })
   await page.evaluate(() => document.fonts.ready)
-  await page.screenshot({ path: evidence ? path.join(evidence, name) : testInfo.outputPath(name), fullPage: true, animations: 'disabled' })
+  await page.screenshot({
+    path: evidence
+      ? path.join(evidence, name)
+      : testInfo.outputPath(name),
+    fullPage: true,
+    animations: 'disabled',
+  })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 }
 
@@ -66,7 +72,10 @@ test('CRUD 新建和编辑失焦后提示，关闭重开清除错误', async ({ 
   await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
   const editUser = uniqueUser('ablur')
   // 使用真实分页让待编辑用户离开当前页，避免依赖全量测试的数据量与执行顺序。
-  for (const user of [editUser, uniqueUser('zzblur')]) {
+  for (const user of [
+    editUser,
+    uniqueUser('zzblur'),
+  ]) {
     const created = await page.request.post('/api/iam/users', { data: user })
     await expect(created).toBeOK()
     expect((await created.json()).success).toBe(true)
@@ -74,7 +83,9 @@ test('CRUD 新建和编辑失焦后提示，关闭重开清除错误', async ({ 
   await page.goto('/admin/iam/users?pageSize=1&sortBy=username&sortDirection=desc')
   await waitForHydration(page)
   await expect(page.locator('tbody tr')).toHaveCount(1)
-  const editRow = page.getByRole('row').filter({ has: page.getByRole('button', { name: editUser.username, exact: true }) })
+  const editRow = page.getByRole('row').filter({
+    has: page.getByRole('button', { name: editUser.username, exact: true }),
+  })
   await expect(editRow).toHaveCount(0)
   await page.locator('main').getByRole('button', { name: /新建|创建|添加/ }).first().click()
   const username = page.locator('input[name="username"]:visible').last()

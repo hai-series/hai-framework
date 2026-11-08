@@ -5,9 +5,9 @@
  * @module ai-a2a-card
  */
 
-import type { AgentCard } from '@a2a-js/sdk'
+import type { A2AAgentCardConfig, A2AAgentCardDocument } from './ai-a2a-types.js'
 
-import type { A2AAgentCardConfig } from './ai-a2a-types.js'
+import { AgentCard } from '@a2a-js/sdk'
 
 // ─── 便捷工厂 ───
 
@@ -28,12 +28,26 @@ import type { A2AAgentCardConfig } from './ai-a2a-types.js'
  * ```
  */
 export function buildAgentCard(config: A2AAgentCardConfig): AgentCard {
-  const card: AgentCard = {
+  return AgentCard.fromJSON(buildAgentCardDocument(config))
+}
+
+/**
+ * 构建标准发现文档，HTTP 调用方无需了解 SDK 编解码器。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const document = buildAgentCardDocument({ name: 'my-agent', url: 'https://example.com/a2a' })
+ * const response = Response.json(document)
+ * ```
+ */
+export function buildAgentCardDocument(config: A2AAgentCardConfig): A2AAgentCardDocument {
+  const card: A2AAgentCardDocument = {
     name: config.name,
     description: config.description ?? '',
-    url: config.url,
+    supportedInterfaces: [
+      { url: config.url, protocolBinding: 'JSONRPC', protocolVersion: '1.0' },
+    ],
     version: config.version ?? '1.0.0',
-    protocolVersion: '0.3.0',
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],
     capabilities: { streaming: true, pushNotifications: false },
@@ -49,9 +63,17 @@ export function buildAgentCard(config: A2AAgentCardConfig): AgentCard {
   if (config.security?.apiKey) {
     const { in: location, name } = config.security.apiKey
     card.securitySchemes = {
-      apiKey: { type: 'apiKey', in: location, name },
+      apiKey: {
+        apiKeySecurityScheme: { location, name },
+      },
     }
-    card.security = [{ apiKey: [] }]
+    card.securityRequirements = [
+      {
+        schemes: {
+          apiKey: { list: [] },
+        },
+      },
+    ]
   }
 
   return card

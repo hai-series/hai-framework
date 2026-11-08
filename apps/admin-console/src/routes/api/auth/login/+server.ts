@@ -4,9 +4,9 @@
  * =============================================================================
  */
 
-import { LoginSchema } from '$lib/server/schemas/index.js'
 import { audit } from '@h-ai/audit'
 import { kit } from '@h-ai/kit'
+import { LoginSchema } from '#lib/server/schemas/index.js'
 
 export const POST = kit.handler(async ({ request, cookies, getClientAddress }) => {
   const { identifier, password } = await kit.validate.body(request, LoginSchema)

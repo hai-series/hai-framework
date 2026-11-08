@@ -1,13 +1,13 @@
-import { CreateApiKeySchema, ListApiKeysQuerySchema } from '$lib/server/schemas/index.js'
+import { iam } from '@h-ai/iam'
 /**
  * =============================================================================
  * Admin Console - API Key 管理 API（列表 / 创建）
  * =============================================================================
  */
 
-import { requireGrantablePermissions, requireManageableApiKeyOwner } from '$lib/server/security-roles.js'
-import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+import { CreateApiKeySchema, ListApiKeysQuerySchema } from '#lib/server/schemas/index.js'
+import { requireGrantablePermissions, requireManageableApiKeyOwner } from '#lib/server/security-roles.js'
 
 /**
  * GET /api/iam/apikeys - 列出指定用户的 API Key
@@ -26,7 +26,14 @@ export const GET = kit.handler(async ({ url, locals }) => {
 
   const { userId, page, pageSize, search, enabled, sortBy, sortDirection } = kit.validate.query(url, ListApiKeysQuerySchema)
 
-  const result = await iam.apiKey.listApiKeys(userId, { page, pageSize, search, enabled, sortBy, sortDirection })
+  const result = await iam.apiKey.listApiKeys(userId, {
+    page,
+    pageSize,
+    search,
+    enabled,
+    sortBy,
+    sortDirection,
+  })
   if (!result.success) {
     return kit.response.internalError(result.error.message)
   }

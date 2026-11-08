@@ -90,9 +90,27 @@ export function createFeedbackCapture(appId: string, envAllowlist: string[], ser
         if (additions.length) {
           const params = additions.flatMap(([key, item]) => {
             const event = item.event
-            return [key, null, item.scopeId, item.userId, appId, event.source, event.sequence, event.kind, event.timestamp, event.requestId ?? null, event.errorId ?? null, 1, item.bytes, event.timestamp + 5 * 60000, JSON.stringify(event)]
+            return [
+              key,
+              null,
+              item.scopeId,
+              item.userId,
+              appId,
+              event.source,
+              event.sequence,
+              event.kind,
+              event.timestamp,
+              event.requestId ?? null,
+              event.errorId ?? null,
+              1,
+              item.bytes,
+              event.timestamp + 5 * 60000,
+              JSON.stringify(event),
+            ]
           })
-          const duplicate = reldb.config?.type === 'mysql' ? 'ON DUPLICATE KEY UPDATE id = id' : 'ON CONFLICT (id) DO NOTHING'
+          const duplicate = reldb.config?.type === 'mysql'
+            ? 'ON DUPLICATE KEY UPDATE id = id'
+            : 'ON CONFLICT (id) DO NOTHING'
           const result = await reldb.sql.execute(`INSERT INTO hai_feedback_evidence (id, report_id, scope_id, user_id, app_id, source, sequence, kind, timestamp, request_id, error_id, revision, bytes, expires_at, payload) VALUES ${additions.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(',')} ${duplicate}`, params)
           if (!result.success) {
             for (const [, item] of batch) rememberLoss(item, 'server_temporary_evidence_write_failed')
@@ -120,16 +138,35 @@ export function createFeedbackCapture(appId: string, envAllowlist: string[], ser
     if (capacityLoss && capacityLoss.timestamp < Date.now() - 5 * 60000)
       capacityLoss = undefined
     const requestId = item.requestId ?? item.event?.requestId
-    const key = JSON.stringify([item.scopeId, item.userId, requestId, reason])
+    const key = JSON.stringify([
+      item.scopeId,
+      item.userId,
+      requestId,
+      reason,
+    ])
     if (losses.has(key))
       return
-    const event: FeedbackEvidenceInput = { id: randomUUID(), source, sequence: sequence++, kind: 'missing', timestamp: Date.now(), requestId, data: { source: 'server_logs' }, missingReason: reason }
+    const event: FeedbackEvidenceInput = {
+      id: randomUUID(),
+      source,
+      sequence: sequence++,
+      kind: 'missing',
+      timestamp: Date.now(),
+      requestId,
+      data: { source: 'server_logs' },
+      missingReason: reason,
+    }
     if (losses.size >= 200) {
       // 元数据容量耗尽时保留一个不含身份信息的稳定降级标记。
       capacityLoss ??= { ...event, requestId: undefined, missingReason: 'server_capture_capacity_exceeded' }
       return
     }
-    const entry = { event, scopeId: item.scopeId, userId: item.userId, bytes: Buffer.byteLength(JSON.stringify(event)) }
+    const entry = {
+      event,
+      scopeId: item.scopeId,
+      userId: item.userId,
+      bytes: Buffer.byteLength(JSON.stringify(event)),
+    }
     losses.set(key, entry)
     if (pendingBytes + entry.bytes <= 8 * 1024 * 1024) {
       pending.set(createHash('sha256').update(`${source}:${event.sequence}`).digest('hex'), entry)
@@ -173,7 +210,17 @@ export function createFeedbackCapture(appId: string, envAllowlist: string[], ser
     if (typeof scopeId !== 'string' || typeof userId !== 'string' || typeof requestId !== 'string')
       return
     const value = sanitizeFeedbackValue({ message: record.message, level: record.level, context: record.context })
-    const event = FeedbackEvidenceInputSchema.parse({ id: randomUUID(), source, sequence: sequence++, kind: record.level === 'error' || record.level === 'fatal' ? 'error' : 'log', timestamp: record.timestamp, requestId, data: value })
+    const event = FeedbackEvidenceInputSchema.parse({
+      id: randomUUID(),
+      source,
+      sequence: sequence++,
+      kind: record.level === 'error' || record.level === 'fatal'
+        ? 'error'
+        : 'log',
+      timestamp: record.timestamp,
+      requestId,
+      data: value,
+    })
     const bytes = Buffer.byteLength(JSON.stringify(event))
     if (bytes > 65536) {
       rememberLoss({ scopeId, userId, requestId }, 'server_log_record_too_large')
@@ -248,14 +295,22 @@ export function createFeedbackCapture(appId: string, envAllowlist: string[], ser
         : []
       for (const event of saved) {
         const key = `${event.source}:${event.sequence}`
-        if (!events.has(key))
-          events.set(key, event.kind === 'error' ? { ...event, errorId: event.id } : event)
+        if (!events.has(key)) {
+          events.set(key, event.kind === 'error'
+            ? { ...event, errorId: event.id }
+            : event)
+        }
       }
-      const pinnedRequests = new Set([...events.values()].filter(item => item.errorId).map(item => item.requestId))
+      const pinnedRequests = new Set([
+        ...events.values(),
+      ].filter(item => item.errorId).map(item => item.requestId))
       const local = buffer.filter(item => item.scopeId === scopeId && item.userId === userId && item.event.timestamp >= anchor - 5 * 60000 && item.event.timestamp <= anchor + 30000)
       const before = local.filter(item => item.event.timestamp <= anchor).slice(-100)
       const after = local.filter(item => item.event.timestamp > anchor).slice(0, 100)
-      for (const item of [...before, ...after]) {
+      for (const item of [
+        ...before,
+        ...after,
+      ]) {
         if (!pinnedRequests.has(item.event.requestId))
           events.set(`${item.event.source}:${item.event.sequence}`, item.event)
       }
@@ -271,18 +326,55 @@ export function createFeedbackCapture(appId: string, envAllowlist: string[], ser
         events.set(`${capacityLoss.source}:${capacityLoss.sequence}`, capacityLoss)
       if (events.size > 1000) {
         rememberLoss({ scopeId, userId }, 'server_evidence_truncated')
-        const marker = losses.get(JSON.stringify([scopeId, userId, undefined, 'server_evidence_truncated']))?.event
+        const marker = losses.get(JSON.stringify([
+          scopeId,
+          userId,
+          undefined,
+          'server_evidence_truncated',
+        ]))?.event
         if (marker)
           events.set(`${marker.source}:${marker.sequence}`, marker)
       }
-      const missing = [...events.values()].filter(item => item.kind === 'missing').slice(-1000)
-      const logs = [...events.values()].filter(item => item.kind !== 'missing').sort((a, b) => a.timestamp - b.timestamp)
+      const missing = [
+        ...events.values(),
+      ].filter(item => item.kind === 'missing').slice(-1000)
+      const logs = [
+        ...events.values(),
+      ].filter(item => item.kind !== 'missing').sort((a, b) => a.timestamp - b.timestamp)
       const allowance = 1000 - missing.length
-      return [...allowance > 0 ? logs.slice(-allowance) : [], ...missing].sort((a, b) => a.timestamp - b.timestamp)
+      return [
+        ...allowance > 0
+          ? logs.slice(-allowance)
+          : [],
+        ...missing,
+      ].sort((a, b) => a.timestamp - b.timestamp)
     },
     environment(): FeedbackEvidenceInput {
       const env = Object.fromEntries(envAllowlist.filter(key => !core.sanitize.defaultSensitiveKeyRegex.test(key.replace(/([a-z])([A-Z])/g, '$1_$2'))).map(key => [key, process.env[key] ?? null]))
-      return FeedbackEvidenceInputSchema.parse({ id: randomUUID(), source, sequence: sequence++, kind: 'environment', timestamp: Date.now(), data: sanitizeFeedbackValue({ appId, service, os: { platform: platform(), release: release(), arch: arch() }, runtime: { name: 'node', version: process.version, uptimeSeconds: Math.floor(process.uptime()), memoryBytes: process.memoryUsage().rss, totalMemoryBytes: totalmem() }, environment: env }) })
+      return FeedbackEvidenceInputSchema.parse({
+        id: randomUUID(),
+        source,
+        sequence: sequence++,
+        kind: 'environment',
+        timestamp: Date.now(),
+        data: sanitizeFeedbackValue({
+          appId,
+          service,
+          os: {
+            platform: platform(),
+            release: release(),
+            arch: arch(),
+          },
+          runtime: {
+            name: 'node',
+            version: process.version,
+            uptimeSeconds: Math.floor(process.uptime()),
+            memoryBytes: process.memoryUsage().rss,
+            totalMemoryBytes: totalmem(),
+          },
+          environment: env,
+        }),
+      })
     },
     async close() {
       stopped = true

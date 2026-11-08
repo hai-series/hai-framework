@@ -47,11 +47,17 @@ description: "构建并发布或交付已有镜像：完整离线包、按服务
 
 所有容器模板共用deploy.provider.expose.https，省略时HTTP。files指定domain、certificateFile、privateKeyFile（相对工程根），校验域名/期限/密钥并复制到私有包。letsencrypt指定domain、email、acceptTerms:true，HTTP hostPort必须80，公网DNS、80入站及CA出站须可达。固定版本官方Certbot申请并每12小时检查续期，Nginx自动重载。仅单域名HTTP-01，无DNS/通配符。HTTPS默认443、redirectHttp默认true；--yes复用配置。启停或改模式/域名/端口/本地证书需全量。状态在服务器https/acme及按域名隔离的https/certificates目录，需备份；续期失败保留旧证书并须及时处理，隔离目标用已有证书。打包/plan不申请证书。
 
+files 只接收末级无软链接或硬链接的普通 PEM 文件，每份最多 1 MiB，父目录仍须可信。Certbot `live/` 软链需安全复制为受控目录中的普通文件，或使用框架 `letsencrypt` 模式。
+
 默认.tar.gz，显式--output release.tar为未压缩，README仅外层。镜像从解包目录导入，release只留配置/恢复状态；成功后清理本次incoming，失败保留诊断。中间件归档按镜像内容ID缓存且复用前验摘要。
 
-Serv 生产登录的刷新 Cookie 默认带 `Secure`。受控内网或 VPN 的 HTTP 部署可在所选 `.env.prod.local` 配置 `HAI_SERV_REFRESH_COOKIE_SECURE=false` 和实际 `HAI_SERV_CORS_ORIGIN`，再重新部署后端。详见 [Serv Cookie 配置](../hai-serv/reference.md#cookie-规格)。
+Serv 生产登录的刷新 Cookie 默认带 `Secure`。受控内网或 VPN 的 HTTP 部署可在所选 `.env.prod.local` 配置 `HAI_SERV_REFRESH_COOKIE_SECURE=false` 和实际 `HAI_SERV_CORS_ORIGIN`，再重新部署后端。仅在工程使用 Serv 且已交付 `hai-serv` 时读取该技能 `reference.md` 的“Cookie 规格”；Kit 应用按自己的 `hai-kit` 认证契约处理，不加载未交付的 Serv 技能。
 
 ## 后端运行配置重载
+
+SvelteKit SSR 的 HTTP/HTTPS 部署均通过独立 `gateway`，SSR 容器不映射公开端口。网关覆盖 Host 与标准转发头；Compose 固定 adapter-node 的协议/主机/客户端地址信任，业务 `.env.runtime` 不能覆盖。adapter-node 6 不再读取运行期 `ORIGIN`，旧直接公开 SSR 的部署必须重新生成全量交付包；源应用默认不固定 `paths.origin`，保持镜像跨环境复用。
+
+外层 TLS 终止时，独立 gateway 只接受 `trustedEdgeProxies` 白名单真实对端的单值 `http` / `https` 协议；外层必须覆盖 Host/XFF/协议头。未授权来源或组合值使用 gateway 自身协议，不直接透传外部 Forwarded、主机/端口转发值。
 
 交付 README 仅列初始账号变量名及所选环境文件或 `process.env` 来源，不打印密码。Fullstack 初始密码在创建工程时生成，部署带入已有值；已有账号不因环境变量变更重置密码或恢复旧职责，自定义应用以实际引导逻辑为准。
 

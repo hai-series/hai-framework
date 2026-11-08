@@ -50,12 +50,22 @@ test('可在一个页面操作 LLM、文生图、Memory、TTS 与 ASR', async ({
     }
 
     if (url.pathname === '/api/chat') {
-      await route.fulfill({ json: { success: true, data: { reply: '这是 AI 的测试回复。' } } })
+      await route.fulfill({
+        json: {
+          success: true,
+          data: { reply: '这是 AI 的测试回复。' },
+        },
+      })
       return
     }
 
     if (url.pathname === '/api/chat/remember') {
-      await route.fulfill({ json: { success: true, data: { remembered: 1 } } })
+      await route.fulfill({
+        json: {
+          success: true,
+          data: { remembered: 1 },
+        },
+      })
       return
     }
 
@@ -78,32 +88,49 @@ test('可在一个页面操作 LLM、文生图、Memory、TTS 与 ASR', async ({
     }
 
     if (url.pathname === '/api/asr') {
-      await route.fulfill({ json: { success: true, data: { text: '这是语音识别测试。' } } })
+      await route.fulfill({
+        json: {
+          success: true,
+          data: { text: '这是语音识别测试。' },
+        },
+      })
       return
     }
 
     if (url.pathname === '/api/memories' && method === 'GET') {
-      await route.fulfill({ json: { success: true, data: memories } })
+      await route.fulfill({
+        json: { success: true, data: memories },
+      })
       return
     }
 
     if (url.pathname === '/api/memories' && method === 'POST') {
       const body = request.postDataJSON() as Omit<MemoryMock, 'id' | 'createdAt'>
-      const memory: MemoryMock = { ...body, id: 'memory-1', createdAt: Date.now() }
+      const memory: MemoryMock = {
+        ...body,
+        id: 'memory-1',
+        createdAt: Date.now(),
+      }
       memories.unshift(memory)
-      await route.fulfill({ json: { success: true, data: memory } })
+      await route.fulfill({
+        json: { success: true, data: memory },
+      })
       return
     }
 
     if (url.pathname === '/api/memories' && method === 'DELETE') {
       memories.splice(0)
-      await route.fulfill({ json: { success: true } })
+      await route.fulfill({
+        json: { success: true },
+      })
       return
     }
 
     if (url.pathname.startsWith('/api/memories/') && method === 'DELETE') {
       memories.splice(0)
-      await route.fulfill({ json: { success: true } })
+      await route.fulfill({
+        json: { success: true },
+      })
       return
     }
 
@@ -158,7 +185,13 @@ test('可在一个页面操作 LLM、文生图、Memory、TTS 与 ASR', async ({
   const dismiss = page.locator('.hai-toast-layer').getByRole('button', { name: /^(关闭|Dismiss|閉じる)$/ })
   for (let count = 0; count < 10 && await dismiss.count(); count++)
     await dismiss.click()
-  await page.route('**/api/image', route => route.fulfill({ status: 500, json: { success: false, error: { code: 'PROVIDER_ERROR', message: 'Private provider details (traceId: ai-request)' } } }))
+  await page.route('**/api/image', route => route.fulfill({
+    status: 500,
+    json: {
+      success: false,
+      error: { code: 'PROVIDER_ERROR', message: 'Private provider details (traceId: ai-request)' },
+    },
+  }))
   await page.getByTestId('image-run').click()
   const notification = page.locator('.hai-toast-item[data-variant=error]')
   await expect(notification).toBeVisible()
@@ -172,7 +205,10 @@ test('可在一个页面操作 LLM、文生图、Memory、TTS 与 ASR', async ({
   await expect(notification).not.toContainText('Private provider')
   await page.setViewportSize({ width: 390, height: 960 })
   await expect(notification).toBeInViewport({ ratio: 1 })
-  await page.screenshot({ path: testInfo.outputPath('ai-error-toast-390.png'), fullPage: true })
+  await page.screenshot({
+    path: testInfo.outputPath('ai-error-toast-390.png'),
+    fullPage: true,
+  })
 })
 
 for (const secondUseMemory of [true, false]) {
@@ -212,13 +248,17 @@ for (const secondUseMemory of [true, false]) {
       }
 
       if (url.pathname === '/api/memories' && request.method() === 'GET') {
-        await route.fulfill({ json: { success: true, data: [] } })
+        await route.fulfill({
+          json: { success: true, data: [] },
+        })
         return
       }
 
       if (url.pathname === '/api/chat/stream') {
         chatCount++
-        const reply = chatCount === 1 ? '第一轮回复。' : '第二轮回复。'
+        const reply = chatCount === 1
+          ? '第一轮回复。'
+          : '第二轮回复。'
         await route.fulfill({
           contentType: 'application/x-ndjson',
           body: `${JSON.stringify({ text: reply, final: true })}\n`,
@@ -229,7 +269,12 @@ for (const secondUseMemory of [true, false]) {
       if (url.pathname === '/api/chat/remember') {
         markRememberStarted?.()
         await rememberReleased
-        await route.fulfill({ json: { success: true, data: { remembered: 1 } } }).catch(() => {})
+        await route.fulfill({
+          json: {
+            success: true,
+            data: { remembered: 1 },
+          },
+        }).catch(() => {})
         return
       }
 

@@ -1,8 +1,8 @@
 import type { CrudFieldDef, CrudResourceDef } from '@h-ai/kit'
-import * as m from '$lib/paraglide/messages'
-import { getLocale } from '$lib/paraglide/runtime'
-import { sensitiveFetch } from '$lib/services/sensitive-actions.svelte.js'
 import { kit } from '@h-ai/kit'
+import * as m from '#lib/paraglide/messages.js'
+import { getLocale } from '#lib/paraglide/runtime.js'
+import { sensitiveFetch } from '#lib/services/sensitive-actions.svelte.js'
 
 type ApiResult<T>
   = | { success: true, data: T }
@@ -15,7 +15,14 @@ interface PermissionOptionItem {
 
 type PermissionsByResource = Record<string, PermissionOptionItem[]>
 
-const emptyList = async () => ({ items: [], total: 0, page: 1, pageSize: 20 })
+async function emptyList() {
+  return {
+    items: [],
+    total: 0,
+    page: 1,
+    pageSize: 20,
+  }
+}
 
 async function requestJson<T>(url: string, init: RequestInit, fallbackMessage: string, operation: string): Promise<T> {
   const response = await sensitiveFetch(operation, url, init)
@@ -84,7 +91,14 @@ function translateAuditAction(action: string): string {
 
 function normalizeAccountInput(data: Record<string, unknown>): Record<string, unknown> {
   const value = data.accountExpiresAt
-  return { ...data, accountExpiresAt: value instanceof Date ? value.toISOString() : typeof value === 'string' && value ? new Date(value).toISOString() : null }
+  return {
+    ...data,
+    accountExpiresAt: value instanceof Date
+      ? value.toISOString()
+      : typeof value === 'string' && value
+        ? new Date(value).toISOString()
+        : null,
+  }
 }
 
 /** 创建用户管理 CRUD 定义。 */
@@ -92,10 +106,59 @@ export function createUserCrud(roles: Array<{ id: string, code: string, name: st
   const roleOptions = () => roles.map(r => ({ label: r.name, value: r.id }))
 
   const fields: CrudFieldDef[] = [
-    { id: 'accountType', label: () => m.account_type(), type: 'select', defaultValue: 'permanent', options: () => [{ value: 'permanent', label: m.account_permanent() }, { value: 'temporary', label: m.account_temporary() }], order: 4 },
-    { id: 'accountStatus', label: () => m.account_state(), type: 'select', filterable: true, defaultValue: 'active', options: () => [{ value: 'active', label: m.account_active() }, { value: 'dormant', label: m.account_dormant() }, { value: 'closed', label: m.account_closed() }], order: 5 },
-    { id: 'accountExpiresAt', label: () => m.account_expires(), type: 'datetime', order: 6 },
-    { id: 'lastLoginAt', label: () => m.account_last_login(), type: 'datetime', inCreate: false, inEdit: false, order: 8 },
+    {
+      id: 'accountType',
+      label: () => m.account_type(),
+      type: 'select',
+      defaultValue: 'permanent',
+      options: () => [
+        {
+          value: 'permanent',
+          label: m.account_permanent(),
+        },
+        {
+          value: 'temporary',
+          label: m.account_temporary(),
+        },
+      ],
+      order: 4,
+    },
+    {
+      id: 'accountStatus',
+      label: () => m.account_state(),
+      type: 'select',
+      filterable: true,
+      defaultValue: 'active',
+      options: () => [
+        {
+          value: 'active',
+          label: m.account_active(),
+        },
+        {
+          value: 'dormant',
+          label: m.account_dormant(),
+        },
+        {
+          value: 'closed',
+          label: m.account_closed(),
+        },
+      ],
+      order: 5,
+    },
+    {
+      id: 'accountExpiresAt',
+      label: () => m.account_expires(),
+      type: 'datetime',
+      order: 6,
+    },
+    {
+      id: 'lastLoginAt',
+      label: () => m.account_last_login(),
+      type: 'datetime',
+      inCreate: false,
+      inEdit: false,
+      order: 8,
+    },
     {
       id: 'username',
       label: () => m.iam_users_col_username(),
@@ -159,7 +222,9 @@ export function createUserCrud(roles: Array<{ id: string, code: string, name: st
       type: 'datetime',
       inCreate: false,
       inEdit: false,
-      render: value => value ? new Date(value as string).toLocaleDateString(getLocale()) : '-',
+      render: value => value
+        ? new Date(value as string).toLocaleDateString(getLocale())
+        : '-',
       order: 7,
     },
   ]
@@ -202,7 +267,9 @@ export function createRoleCrud(permissions: PermissionsByResource = {}) {
       type: 'textarea',
       placeholder: () => m.iam_roles_form_description_placeholder(),
       inList: true,
-      render: value => value ? String(value) : '-',
+      render: value => value
+        ? String(value)
+        : '-',
       order: 2,
     },
     {
@@ -224,7 +291,9 @@ export function createRoleCrud(permissions: PermissionsByResource = {}) {
         const perms = value as string[] ?? []
         if (perms.length === 0)
           return '-'
-        return perms.length <= 3 ? perms.join(', ') : `${perms.slice(0, 3).join(', ')} +${perms.length - 3}`
+        return perms.length <= 3
+          ? perms.join(', ')
+          : `${perms.slice(0, 3).join(', ')} +${perms.length - 3}`
       },
       order: 4,
     },
@@ -235,7 +304,9 @@ export function createRoleCrud(permissions: PermissionsByResource = {}) {
       inList: true,
       inCreate: false,
       inEdit: false,
-      render: value => value ? m.iam_roles_type_system() : '-',
+      render: value => value
+        ? m.iam_roles_type_system()
+        : '-',
       order: 5,
     },
   ]
@@ -286,7 +357,9 @@ export function createPermissionCrud(permissionRolesMap: Record<string, string[]
       validation: { required: true },
       placeholder: () => m.iam_permissions_form_action_placeholder(),
       inList: true,
-      render: value => value ? String(value) : '-',
+      render: value => value
+        ? String(value)
+        : '-',
       order: 3,
     },
     {
@@ -294,7 +367,9 @@ export function createPermissionCrud(permissionRolesMap: Record<string, string[]
       label: () => m.iam_permissions_col_description(),
       type: 'string',
       width: '200px',
-      render: value => value ? String(value) : '-',
+      render: value => value
+        ? String(value)
+        : '-',
       order: 4,
     },
     {
@@ -303,9 +378,18 @@ export function createPermissionCrud(permissionRolesMap: Record<string, string[]
       type: 'select',
       filterable: true,
       options: () => [
-        { label: m.iam_permissions_type_menu(), value: 'menu' },
-        { label: m.iam_permissions_type_button(), value: 'button' },
-        { label: m.iam_permissions_type_api(), value: 'api' },
+        {
+          label: m.iam_permissions_type_menu(),
+          value: 'menu',
+        },
+        {
+          label: m.iam_permissions_type_button(),
+          value: 'button',
+        },
+        {
+          label: m.iam_permissions_type_api(),
+          value: 'api',
+        },
       ],
       defaultValue: 'api',
       render: (value) => {
@@ -328,7 +412,11 @@ export function createPermissionCrud(permissionRolesMap: Record<string, string[]
       render: (_value, item) => {
         const code = String(item.code ?? '')
         const roles = permissionRolesMap[code] ?? []
-        return roles.length > 0 ? roles.slice(0, 3).join(', ') + (roles.length > 3 ? ` +${roles.length - 3}` : '') : '-'
+        return roles.length > 0
+          ? roles.slice(0, 3).join(', ') + (roles.length > 3
+            ? ` +${roles.length - 3}`
+            : '')
+          : '-'
       },
       order: 6,
     },
@@ -368,15 +456,133 @@ export function createPermissionCrud(permissionRolesMap: Record<string, string[]
 }
 
 const auditLogFields: CrudFieldDef[] = [
-  { id: 'category', label: () => m.audit_category(), type: 'select', filterable: true, inCreate: false, inEdit: false, options: () => [{ value: 'system', label: m.audit_category_system() }, { value: 'business', label: m.audit_category_business() }], order: 2 },
-  { id: 'outcome', label: () => m.audit_outcome(), type: 'select', filterable: true, inCreate: false, inEdit: false, options: () => [{ value: 'success', label: m.audit_success() }, { value: 'failure', label: m.audit_failure() }, { value: 'denied', label: m.audit_denied() }], order: 3 },
-  { id: 'severity', label: () => m.audit_severity(), type: 'select', filterable: true, inCreate: false, inEdit: false, options: () => [{ value: 'info', label: m.audit_info() }, { value: 'warning', label: m.audit_warning() }, { value: 'error', label: m.audit_error() }, { value: 'critical', label: m.audit_critical() }], order: 4 },
-  { id: 'requestId', label: () => m.audit_request_id(), type: 'string', filterable: true, inList: false, inCreate: false, inEdit: false },
-  { id: 'traceId', label: () => m.audit_trace_id(), type: 'string', filterable: true, inList: false, inCreate: false, inEdit: false },
-  { id: 'scopeId', label: () => m.audit_scope(), type: 'string', filterable: true, inList: false, inCreate: false, inEdit: false },
-  { id: 'actorSnapshot', label: () => m.audit_actor_snapshot(), type: 'textarea', inList: false, inCreate: false, inEdit: false, render: value => value ? JSON.stringify(value) : '—' },
-  { id: 'startDate', label: () => m.audit_start(), type: 'datetime', filterable: true, inList: false, inDetail: false, inCreate: false, inEdit: false },
-  { id: 'endDate', label: () => m.audit_end(), type: 'datetime', filterable: true, inList: false, inDetail: false, inCreate: false, inEdit: false },
+  {
+    id: 'category',
+    label: () => m.audit_category(),
+    type: 'select',
+    filterable: true,
+    inCreate: false,
+    inEdit: false,
+    options: () => [
+      {
+        value: 'system',
+        label: m.audit_category_system(),
+      },
+      {
+        value: 'business',
+        label: m.audit_category_business(),
+      },
+    ],
+    order: 2,
+  },
+  {
+    id: 'outcome',
+    label: () => m.audit_outcome(),
+    type: 'select',
+    filterable: true,
+    inCreate: false,
+    inEdit: false,
+    options: () => [
+      {
+        value: 'success',
+        label: m.audit_success(),
+      },
+      {
+        value: 'failure',
+        label: m.audit_failure(),
+      },
+      {
+        value: 'denied',
+        label: m.audit_denied(),
+      },
+    ],
+    order: 3,
+  },
+  {
+    id: 'severity',
+    label: () => m.audit_severity(),
+    type: 'select',
+    filterable: true,
+    inCreate: false,
+    inEdit: false,
+    options: () => [
+      {
+        value: 'info',
+        label: m.audit_info(),
+      },
+      {
+        value: 'warning',
+        label: m.audit_warning(),
+      },
+      {
+        value: 'error',
+        label: m.audit_error(),
+      },
+      {
+        value: 'critical',
+        label: m.audit_critical(),
+      },
+    ],
+    order: 4,
+  },
+  {
+    id: 'requestId',
+    label: () => m.audit_request_id(),
+    type: 'string',
+    filterable: true,
+    inList: false,
+    inCreate: false,
+    inEdit: false,
+  },
+  {
+    id: 'traceId',
+    label: () => m.audit_trace_id(),
+    type: 'string',
+    filterable: true,
+    inList: false,
+    inCreate: false,
+    inEdit: false,
+  },
+  {
+    id: 'scopeId',
+    label: () => m.audit_scope(),
+    type: 'string',
+    filterable: true,
+    inList: false,
+    inCreate: false,
+    inEdit: false,
+  },
+  {
+    id: 'actorSnapshot',
+    label: () => m.audit_actor_snapshot(),
+    type: 'textarea',
+    inList: false,
+    inCreate: false,
+    inEdit: false,
+    render: value => value
+      ? JSON.stringify(value)
+      : '—',
+  },
+  {
+    id: 'startDate',
+    label: () => m.audit_start(),
+    type: 'datetime',
+    filterable: true,
+    inList: false,
+    inDetail: false,
+    inCreate: false,
+    inEdit: false,
+  },
+  {
+    id: 'endDate',
+    label: () => m.audit_end(),
+    type: 'datetime',
+    filterable: true,
+    inList: false,
+    inDetail: false,
+    inCreate: false,
+    inEdit: false,
+  },
   {
     id: 'createdAt',
     label: () => m.logs_col_time(),
@@ -420,7 +626,9 @@ const auditLogFields: CrudFieldDef[] = [
     type: 'string',
     inCreate: false,
     inEdit: false,
-    render: value => value ? String(value) : '-',
+    render: value => value
+      ? String(value)
+      : '-',
     width: '200px',
     order: 5,
   },

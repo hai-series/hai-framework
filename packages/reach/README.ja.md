@@ -23,7 +23,7 @@
 
 ### 依存関係
 
-- `@h-ai/reldb`：送信ログ・テンプレートの永続化。`dnd.enabled: true` と `strategy: delay` を使う場合は事前初期化とキューテーブルが必須で、利用できなければ `reach.init()` は `CONFIG_ERROR` を返します。それ以外の送信では任意です。
+- `@h-ai/reldb`：送信ログ・テンプレートの永続化。空でない `templates` または DND delay を設定する前に初期化します。テンプレートの保存や必須テーブルの準備に失敗した場合、`reach.init()` は候補 Provider を閉じて `CONFIG_ERROR` を返します。テンプレート・延期キューを使わない即時送信では任意です。
 - `@h-ai/cache`：DND delay 用の分散ロック（任意）。初期化済みなら自動有効化。
 
 ### クイックスタート
@@ -39,31 +39,69 @@ pnpm add @h-ai/reach
 #### 複数 Provider の初期化
 
 ```ts
+import { core } from '@h-ai/core'
 import { reach } from '@h-ai/reach'
+import { reldb } from '@h-ai/reldb'
 
-const initialized = await reach.init({
-  providers: [{ name: 'local', type: 'console' }],
-  templates: [{ name: 'welcome', provider: 'local', subject: 'Welcome', body: 'Hello {userName}' }],
-})
+const runtime = core.module.createRuntime([
+  {
+    name: 'reldb',
+    start: () => reldb.init({ type: 'sqlite', database: ':memory:' }),
+    close: () => reldb.close()
+  },
+  {
+    name: 'reach',
+    start: () => reach.init({
+      providers: [
+        { name: 'local', type: 'console' }
+      ],
+      templates: [
+        {
+          name: 'welcome',
+          provider: 'local',
+          subject: 'Welcome',
+          body: 'Hello {userName}'
+        }
+      ],
+    }),
+    close: () => reach.close()
+  },
+])
+const initialized = await runtime.start()
 if (!initialized.success)
   throw new Error(initialized.error.message)
+
+let result: Awaited<ReturnType<typeof reach.send>>
 try {
-  const result = await reach.send({
+  result = await reach.send({
     to: 'user@example.com',
     template: 'welcome',
-    vars: { userName: 'Alice' },
+    vars: { userName: 'Alice' }
   })
-  if (!result.success)
-    throw new Error(result.error.message)
 }
-finally {
-  await reach.close()
+catch (error) {
+  const closed = await runtime.close()
+  throw new AggregateError(closed.success
+    ? [error]
+    : [error, closed.error], 'Reach operation failed')
 }
+const closed = await runtime.close()
+if (!closed.success) {
+  throw new AggregateError(result.success
+    ? [closed.error]
+    : [result.error, closed.error], 'Reach cleanup failed')
+}
+if (!result.success)
+  throw new Error(result.error.message)
 ```
 
 この例は開発用 Console Provider で送信メタデータを記録し、実メールや SMS は送りません。実送信には下記の SMTP・SMS・API を設定し、必要に応じて永続化と共有キャッシュを初期化してください。
 
-`reach.config` は**機密情報をマスクした設定スナップショット**を返します。`api.url` / `endpoint` 内の認証情報、`headers.Authorization`、SMTP の `pass`、SMS の鍵などは自動的に非表示になります。
+`reach.config` は**機密情報をマスクした設定スナップショット**を返します。`api.url` / `endpoint` 内の認証情報、すべてのカスタムヘッダー値、SMTP の `pass` と SMS の鍵を隠します。ゲートウェイ本文は含めません。デプロイはヘッダー名に依存せず、API ヘッダー全体を非公開の環境ファイルに保存します。
+
+Provider の失敗では HTTP ステータスを含む完全なモジュールエラー定義を保持します。SMTP/SMS の生の応答は返却メッセージや cause に含めず、利用者には翻訳済みの案内、サーバーログには診断情報を残します。
+
+テンプレート送信は一つのスナップショットから件名・本文・既定 Provider を決め、並行編集による異なる版の混在を防ぎます。明示的な `provider` は従来どおり優先します。
 
 ### 設定
 

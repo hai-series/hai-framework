@@ -16,7 +16,16 @@ import { acquireRedisContainer } from './helpers/redis-container.js'
 
 function worker(configuration: object) {
   const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(?:HAI_|PUBLIC_|VITE_)/i.test(key)))
-  const child = fork(fileURLToPath(new URL('./helpers/iam-policy-worker.mjs', import.meta.url)), { env: { ...environment, NODE_ENV: 'production', HAI_CORE_ENV: 'production', IAM_POLICY_FIXTURE: JSON.stringify(configuration) }, windowsHide: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] })
+  const child = fork(fileURLToPath(new URL('./helpers/iam-policy-worker.mjs', import.meta.url)), {
+    env: {
+      ...environment,
+      NODE_ENV: 'production',
+      HAI_CORE_ENV: 'production',
+      IAM_POLICY_FIXTURE: JSON.stringify(configuration),
+    },
+    windowsHide: true,
+    stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+  })
   let sequence = 0
   const pending = new Map<number, { resolve: (value: unknown) => void, reject: (cause: Error) => void }>()
   const seed = Promise.withResolvers<void>()
@@ -33,9 +42,15 @@ function worker(configuration: object) {
       if (message.phase === 'ready')
         ready.resolve()
       if (message.phase === 'failed') {
-        const stage = 'stage' in message && typeof message.stage === 'string' ? message.stage : 'startup'
-        const code = 'code' in message && typeof message.code === 'string' ? message.code : 'fixture:failed'
-        const sqlState = 'sqlState' in message && typeof message.sqlState === 'string' ? `, SQLSTATE ${message.sqlState}` : ''
+        const stage = 'stage' in message && typeof message.stage === 'string'
+          ? message.stage
+          : 'startup'
+        const code = 'code' in message && typeof message.code === 'string'
+          ? message.code
+          : 'fixture:failed'
+        const sqlState = 'sqlState' in message && typeof message.sqlState === 'string'
+          ? `, SQLSTATE ${message.sqlState}`
+          : ''
         const failure = new Error(`Policy worker initialization failed at ${stage} (${code}${sqlState})`)
         ready.reject(failure)
         seed.reject(failure)
@@ -64,9 +79,12 @@ function worker(configuration: object) {
   async function deadline<T>(operation: Promise<T>): Promise<T> {
     let timer: ReturnType<typeof setTimeout> | undefined
     try {
-      return await Promise.race([operation, new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error('Policy worker timed out')), 30000)
-      })])
+      return await Promise.race([
+        operation,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('Policy worker timed out')), 30000)
+        }),
+      ])
     }
     finally {
       clearTimeout(timer)
@@ -89,21 +107,39 @@ function worker(configuration: object) {
   }
 }
 
-describe.sequential('生产 PG+Redis 独立策略节点', () => {
+describe('生产 PG+Redis 独立策略节点', { concurrent: false }, () => {
   let pg: Awaited<ReturnType<typeof acquirePostgresContainer>> | undefined
   let redis: Awaited<ReturnType<typeof acquireRedisContainer>> | undefined
   const nodes: ReturnType<typeof worker>[] = []
-  const settings: IamConfigInput = { reauthentication: { enabled: true, operations: ['orders.approve'] }, rbac: { defaultRole: '' } }
+  const settings: IamConfigInput = {
+    reauthentication: {
+      enabled: true,
+      operations: ['orders.approve'],
+    },
+    rbac: { defaultRole: '' },
+  }
   const previousLevel = core.logger.getLevel()
   beforeAll(async () => {
     core.logger.setLevel('fatal')
     pg = await acquirePostgresContainer()
     redis = await acquireRedisContainer()
-    const db = { type: 'postgresql' as const, host: pg.host, port: pg.port, database: pg.database, user: pg.user, password: pg.password }
+    const db = {
+      type: 'postgresql' as const,
+      host: pg.host,
+      port: pg.port,
+      database: pg.database,
+      user: pg.user,
+      password: pg.password,
+    }
     const sharedCache = { type: 'redis' as const, host: redis.host, port: redis.port }
     expect((await reldb.init(db)).success).toBe(true)
     expect((await cache.init(sharedCache)).success).toBe(true)
-    const configuration = { db, cache: sharedCache, iam: settings, seedBarrier: true }
+    const configuration = {
+      db,
+      cache: sharedCache,
+      iam: settings,
+      seedBarrier: true,
+    }
     nodes.push(worker(configuration), worker(configuration))
     await Promise.all(nodes.map(node => node.seed()))
     for (const node of nodes) node.releaseSeed()
@@ -175,12 +211,24 @@ describe.sequential('生产 PG+Redis 独立策略节点', () => {
     const permission = await iam.authz.createPermission({ code: 'process:policy', name: 'Process policy' })
     if (!user.success || !permission.success)
       throw new Error('Policy fixture failed')
-    const logged = await nodes[0]!.call<AuthResult>('login', { credentials: { identifier: user.data.user.username, password: TEST_PASSWORD } })
+    const logged = await nodes[0]!.call<AuthResult>('login', {
+      credentials: { identifier: user.data.user.username, password: TEST_PASSWORD },
+    })
     if (!logged.success)
       throw new Error('Policy login failed')
     const token = logged.data.tokens.accessToken
-    expect((await nodes[1]!.call('setRules', { id: permission.data.id, operations: ['db.approve'] })).success).toBe(true)
-    expect(await nodes[0]!.call<IamPublicConfig>('publicConfig')).toMatchObject({ success: true, data: { reauthentication: { operations: ['db.approve', 'orders.approve'] } } })
+    expect((await nodes[1]!.call('setRules', {
+      id: permission.data.id,
+      operations: ['db.approve'],
+    })).success).toBe(true)
+    expect(await nodes[0]!.call<IamPublicConfig>('publicConfig')).toMatchObject({
+      success: true,
+      data: {
+        reauthentication: {
+          operations: ['db.approve', 'orders.approve'],
+        },
+      },
+    })
     expect((await nodes[0]!.call('checkSensitive', { token, operation: 'db.approve' })).success).toBe(false)
     const proof = await nodes[0]!.call<{ ticket: string }>('reauthenticate', { token, password: TEST_PASSWORD, operation: 'db.approve' })
     if (!proof.success)
@@ -194,17 +242,29 @@ describe.sequential('生产 PG+Redis 独立策略节点', () => {
     expect((await nodes[1]!.call('disconnectDatabase')).success).toBe(true)
     expect((await nodes[1]!.call('verify', { token })).success).toBe(true)
     // 另一节点的安全写入推进代际；数据库不可用时不能沿用旧代的授权。
-    expect((await nodes[0]!.call('setRules', { id: permission.data.id, operations: ['db.approve'] })).success).toBe(true)
+    expect((await nodes[0]!.call('setRules', {
+      id: permission.data.id,
+      operations: ['db.approve'],
+    })).success).toBe(true)
     expect((await nodes[1]!.call('verify', { token })).success).toBe(false)
     expect((await nodes[1]!.call('reconnectDatabase')).success).toBe(true)
     expect((await nodes[1]!.call('verify', { token })).success).toBe(true)
-    expect((await nodes[1]!.call('updateUser', { id: user.data.user.id, data: { accountStatus: 'dormant' } })).success).toBe(true)
+    expect((await nodes[1]!.call('updateUser', {
+      id: user.data.user.id,
+      data: { accountStatus: 'dormant' },
+    })).success).toBe(true)
     expect((await nodes[0]!.call('verify', { token })).success).toBe(false)
     expect((await nodes[0]!.call('refresh', { token: logged.data.tokens.refreshToken })).success).toBe(false)
   })
 
   it('验证码在另一进程可鉴别且仅消费一次，真实PG凭据校验下App额度不超配', async () => {
-    const configuration = { captcha: { enabled: true, cost: 100, maxCounter: 2 }, session: { maxSessions: 2, terminalLimits: { app: 1, web: 1 } } }
+    const configuration = {
+      captcha: { enabled: true, cost: 100, maxCounter: 2 },
+      session: {
+        maxSessions: 2,
+        terminalLimits: { app: 1, web: 1 },
+      },
+    }
     for (const node of nodes) expect((await node.call('configure', configuration)).success).toBe(true)
     const user = await iam.user.createUser({ username: 'process-captcha-user', password: TEST_PASSWORD })
     if (!user.success)
@@ -213,11 +273,29 @@ describe.sequential('生产 PG+Redis 独立策略节点', () => {
     if (!challenge.success)
       throw new Error('Challenge fixture failed')
     const solution = await solveChallenge({ challenge: challenge.data.challenge, deriveKey: pbkdf2.deriveKey })
-    const credentials = { identifier: user.data.user.username, password: TEST_PASSWORD, captcha: JSON.stringify({ id: challenge.data.id, solution }) }
-    expect((await nodes[1]!.call('login', { credentials, context: { terminalType: 'web' } })).success).toBe(true)
-    expect((await nodes[0]!.call('login', { credentials, context: { terminalType: 'web' } })).success).toBe(false)
-    for (const node of nodes) expect((await node.call('configure', { ...configuration, captcha: { enabled: false } })).success).toBe(true)
-    const raced = await Promise.all(nodes.map(node => node.call('login', { credentials: { identifier: user.data.user.username, password: TEST_PASSWORD }, context: { terminalType: 'app' } })))
+    const credentials = {
+      identifier: user.data.user.username,
+      password: TEST_PASSWORD,
+      captcha: JSON.stringify({ id: challenge.data.id, solution }),
+    }
+    expect((await nodes[1]!.call('login', {
+      credentials,
+      context: { terminalType: 'web' },
+    })).success).toBe(true)
+    expect((await nodes[0]!.call('login', {
+      credentials,
+      context: { terminalType: 'web' },
+    })).success).toBe(false)
+    for (const node of nodes) {
+      expect((await node.call('configure', {
+        ...configuration,
+        captcha: { enabled: false },
+      })).success).toBe(true)
+    }
+    const raced = await Promise.all(nodes.map(node => node.call('login', {
+      credentials: { identifier: user.data.user.username, password: TEST_PASSWORD },
+      context: { terminalType: 'app' },
+    })))
     expect(raced.filter(result => result.success)).toHaveLength(1)
   })
 })

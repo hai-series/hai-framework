@@ -8,7 +8,12 @@ import { core, CoreConfigSchema } from '@h-ai/core'
  * @returns {Record<string, unknown>} Core 环境覆盖值。
  */
 function resolveCoreInputs(environment) {
-  const resolved = core.config.resolve({ name: 'core', value: {}, schema: CoreConfigSchema, environment })
+  const resolved = core.config.resolve({
+    name: 'core',
+    value: {},
+    schema: CoreConfigSchema,
+    environment,
+  })
   if (!resolved.success)
     throw new Error(resolved.error.message)
   const { data } = resolved
@@ -42,7 +47,9 @@ export function nativeNameEnvironment(envDir) {
   for (const key of ['name', 'env']) {
     if (value[key] === undefined)
       continue
-    const schema = key === 'name' ? CoreConfigSchema.shape.name : CoreConfigSchema.shape.env
+    const schema = key === 'name'
+      ? CoreConfigSchema.shape.name
+      : CoreConfigSchema.shape.env
     const parsed = schema.safeParse(value[key])
     if (!parsed.success)
       throw new Error(`Invalid HAI_CORE_${key.toUpperCase()}`)

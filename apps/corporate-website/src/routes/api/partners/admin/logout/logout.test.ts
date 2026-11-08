@@ -1,7 +1,7 @@
-import { getPartnerAdminSessionByToken } from '$lib/server/partner-service.js'
 import { cache } from '@h-ai/cache'
 import { err, HaiCommonError } from '@h-ai/core'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { getPartnerAdminSessionByToken } from '#lib/server/partner-service.js'
 import { POST } from './+server.js'
 
 beforeEach(async () => {
@@ -21,7 +21,14 @@ it('a failed revocation is reported and the cookie remains available for retry',
   const event: Pick<RequestEvent, 'request' | 'locals' | 'cookies'> = {
     request: new Request('http://localhost/logout', { method: 'POST' }),
     locals: { locale: 'en-US', requestId: 'logout-retry-test' },
-    cookies: { get: () => token, getAll: () => [], set: vi.fn(), delete: removeCookie, serialize: () => '' },
+    cookies: {
+      get: () => token,
+      getAll: () => [],
+      set: vi.fn(),
+      delete: removeCookie,
+      serialize: () => '',
+      parse: () => { throw new Error('Cookie parsing is not configured by this fixture') },
+    },
   }
   vi.spyOn(cache.kv, 'del').mockResolvedValueOnce(err(HaiCommonError.INTERNAL_ERROR, 'Cache unavailable'))
   expect((await POST(event as RequestEvent)).status).toBe(500)

@@ -7,16 +7,24 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { core } from '@h-ai/core'
+import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 import { paraglideVitePlugin } from '@inlang/paraglide-js'
+import adapter from '@sveltejs/adapter-static'
 import { sveltekit } from '@sveltejs/kit/vite'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 import { browserStartupAssets } from '../../scripts/vite-browser-startup.js'
 import { resolveBuildMetadata } from './scripts/build-metadata.js'
 
 export default defineConfig(({ mode, command }) => {
-  const envResult = command === 'build' || process.env.HAI_E2E === '1' ? { success: true as const, data: {} as Record<string, string> } : core.config.loadEnvFiles({ mode, envDir: process.cwd() })
+  const envResult = command === 'build' || process.env.HAI_E2E === '1'
+    ? { success: true as const, data: {} as Record<string, string> }
+    : core.config.loadEnvFiles({
+        mode,
+        envDir: process.cwd(),
+      })
   if (!envResult.success)
     throw new Error(envResult.error.message)
   const env = envResult.data
@@ -25,7 +33,11 @@ export default defineConfig(({ mode, command }) => {
   const metadataAsset: Plugin = {
     name: 'hai-build-metadata',
     generateBundle() {
-      this.emitFile({ type: 'asset', fileName: 'build-metadata.json', source: JSON.stringify(buildMetadata) })
+      this.emitFile({
+        type: 'asset',
+        fileName: 'build-metadata.json',
+        source: JSON.stringify(buildMetadata),
+      })
     },
   }
   const screenshotAssets: Plugin = {
@@ -51,9 +63,21 @@ export default defineConfig(({ mode, command }) => {
       browserStartupAssets(),
       metadataAsset,
       screenshotAssets,
-      sveltekit(),
+      sveltekit({
+        preprocess: [
+          vitePreprocess(),
+          autoImportHaiUi(),
+        ],
+        compilerOptions: { runes: true },
+        files: { assets: 'public' },
+        env: { dir: './.svelte-kit' },
+        adapter: adapter({ pages: 'build', assets: 'build', strict: true }),
+        paths: { base: '/hai-framework', relative: false },
+      }),
       tailwindcss(),
       paraglideVitePlugin({
+        // 共享物理消息产物供独立 Vitest/Node 工具读取。
+        outputStructure: 'message-modules',
         project: './project.inlang',
         outdir: './src/lib/paraglide',
         strategy: ['cookie', 'baseLocale'],
@@ -73,7 +97,9 @@ export default defineConfig(({ mode, command }) => {
     },
     server: {
       fs: {
-        allow: [path.resolve(process.cwd())],
+        allow: [
+          path.resolve(process.cwd()),
+        ],
       },
     },
   }

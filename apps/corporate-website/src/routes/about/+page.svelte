@@ -1,9 +1,9 @@
 <script lang='ts'>
-  import * as m from '$lib/paraglide/messages.js'
   /**
    * 关于我们
    */
   import { Badge } from '@h-ai/ui'
+  import * as m from '#lib/paraglide/messages.js'
 
   const teamMembers = $derived([
     {

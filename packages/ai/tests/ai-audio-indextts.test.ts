@@ -14,7 +14,10 @@ import { ai, HaiAIError } from '../src/index.js'
 
 vi.mock('undici', async (importOriginal) => {
   const original = await importOriginal<typeof import('undici')>()
-  return { ...original, fetch: vi.fn() }
+  return {
+    ...original,
+    fetch: vi.fn(),
+  }
 })
 
 beforeEach(() => {
@@ -24,15 +27,29 @@ beforeEach(() => {
 const INDEXTTS_BASE = 'http://127.0.0.1:8102/v1'
 
 async function initIndexTts(): Promise<void> {
-  const result = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' }, audio: {
-    models: [{ id: 'indextts', provider: 'indextts', model: 'indextts-2.5', operations: ['synthesize'], baseUrl: INDEXTTS_BASE }],
-    synthesizeModel: 'indextts',
-  } })
+  const result = await ai.init({
+    llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' },
+    audio: {
+      models: [
+        {
+          id: 'indextts',
+          provider: 'indextts',
+          model: 'indextts-2.5',
+          operations: ['synthesize'],
+          baseUrl: INDEXTTS_BASE,
+        },
+      ],
+      synthesizeModel: 'indextts',
+    },
+  })
   expect(result.success).toBe(true)
 }
 
 function wav(bytes = 16): { data: Uint8Array, format: 'wav' } {
-  return { data: new Uint8Array(bytes).fill(1), format: 'wav' }
+  return {
+    data: new Uint8Array(bytes).fill(1),
+    format: 'wav',
+  }
 }
 
 function audioResponse(bytes: Uint8Array, headers: Record<string, string> = {}): Response {
@@ -59,8 +76,14 @@ describe('ai.audio IndexTTS Provider', () => {
     const r = await ai.audio.synthesize({
       text: '我们下午三点出发。',
       language: 'zh',
-      speakerReference: { audio: wav(), language: 'ja' },
-      styleReference: { audio: wav(), language: 'ja' },
+      speakerReference: {
+        audio: wav(),
+        language: 'ja',
+      },
+      styleReference: {
+        audio: wav(),
+        language: 'ja',
+      },
       styleStrength: 0.8,
       targetDurationMs: 3280,
       durationToleranceMs: 120,
@@ -95,7 +118,13 @@ describe('ai.audio IndexTTS Provider', () => {
     vi.mocked(fetchAudio).mockImplementation(fetchMock)
     await initIndexTts()
 
-    const r = await ai.audio.synthesize({ text: '快一点', speakerReference: { audio: wav() }, speed: 1.2 })
+    const r = await ai.audio.synthesize({
+      text: '快一点',
+      speakerReference: {
+        audio: wav(),
+      },
+      speed: 1.2,
+    })
     expect(r.success).toBe(true)
     if (r.success) {
       expect(r.data.metadata?.speed).toBe(1.2)
@@ -139,7 +168,14 @@ describe('ai.audio IndexTTS Provider', () => {
     vi.mocked(fetchAudio).mockImplementation(fetchMock)
     await initIndexTts()
 
-    const r = await ai.audio.synthesize({ text: '你好', speakerReference: { audio: wav() }, instruction: '开心地说', strictCapabilities: true })
+    const r = await ai.audio.synthesize({
+      text: '你好',
+      speakerReference: {
+        audio: wav(),
+      },
+      instruction: '开心地说',
+      strictCapabilities: true,
+    })
     expect(r.success).toBe(false)
     if (!r.success)
       expect(r.error.code).toBe(HaiAIError.AUDIO_UNSUPPORTED_INPUT.code)
@@ -152,7 +188,13 @@ describe('ai.audio IndexTTS Provider', () => {
     await initIndexTts()
 
     const events = []
-    for await (const event of ai.audio.synthesizeStream({ text: { id: 's1', text: '你好' }, speakerReference: { audio: wav() }, model: 'indextts' }))
+    for await (const event of ai.audio.synthesizeStream({
+      text: { id: 's1', text: '你好' },
+      speakerReference: {
+        audio: wav(),
+      },
+      model: 'indextts',
+    }))
       events.push(event)
 
     expect(events[0]?.type).toBe('segment_started')

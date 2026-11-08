@@ -25,40 +25,127 @@ const roots: string[] = []
 function runtimeHarness(source: string) {
   const calls: string[] = []
   const state = { vectorFailure: false, cleanupFailure: false }
-  const modules = Object.fromEntries(['ai', 'audit', 'cache', 'crypto', 'feedback', 'iam', 'reach', 'reldb', 'scheduler', 'storage', 'vecdb'].map(name => [name, {
-    init: async () => {
-      calls.push(`${name}.init`)
-      return state.vectorFailure && name === 'vecdb' ? { success: false, error: { message: 'Vector unavailable' } } : { success: true }
+  const modules = Object.fromEntries([
+    'ai',
+    'audit',
+    'cache',
+    'crypto',
+    'feedback',
+    'iam',
+    'reach',
+    'reldb',
+    'scheduler',
+    'storage',
+    'vecdb',
+  ].map(name => [
+    name,
+    {
+      init: async () => {
+        calls.push(`${name}.init`)
+        return state.vectorFailure && name === 'vecdb'
+          ? {
+              success: false,
+              error: { message: 'Vector unavailable' },
+            }
+          : { success: true }
+      },
+      close: async () => {
+        calls.push(`${name}.close`)
+        return state.cleanupFailure && name === 'vecdb'
+          ? {
+              success: false,
+              error: { message: 'Cleanup unavailable' },
+            }
+          : { success: true }
+      },
+      authz: {
+        getRoleByCode: async () => ({
+          success: true,
+          data: { id: 'existing-role' },
+        }),
+      },
+      user: {
+        listUsers: async () => ({
+          success: true,
+          data: { total: 1 },
+        }),
+      },
     },
-    close: async () => {
-      calls.push(`${name}.close`)
-      return state.cleanupFailure && name === 'vecdb' ? { success: false, error: { message: 'Cleanup unavailable' } } : { success: true }
+  ]))
+  const configs: Record<string, unknown> = {
+    db: { type: 'postgresql', database: 'hai' },
+    vecdb: { type: 'qdrant', url: 'http://vecdb:6333' },
+    core: { name: 'test' },
+    serv: { transport: false },
+    ai: {
+      llm: { apiKey: 'test-only' },
     },
-    authz: { getRoleByCode: async () => ({ success: true, data: { id: 'existing-role' } }) },
-    user: { listUsers: async () => ({ success: true, data: { total: 1 } }) },
-  }]))
-  const configs: Record<string, unknown> = { db: { type: 'postgresql', database: 'hai' }, vecdb: { type: 'qdrant', url: 'http://vecdb:6333' }, core: { name: 'test' }, serv: { transport: false }, ai: { llm: { apiKey: 'test-only' } } }
-  const schema = { parse: (value: unknown) => value }
+  }
+  const schema = {
+    parse: (value: unknown) => value,
+  }
   const exported: { initApp?: () => Promise<void>, initializeModules?: () => Promise<void>, closeApp?: () => Promise<void>, closeModules?: () => Promise<void> } = {}
   const nativeRequire = createRequire(import.meta.url)
-  runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
+  runInNewContext(ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText, {
     exports: exported,
     module: { exports: exported },
     require: (name: string) => {
       if (name.startsWith('node:'))
         return nativeRequire(name)
-      if (name === './business-settings.js')
-        return { initBusinessSettings: async () => ({ success: true, data: undefined }) }
-      if (name === './security-roles.js')
-        return { seedAppDuties: async () => ({ success: true, data: undefined }), bootstrapDutyAccount: async () => ({ success: true, data: undefined }) }
-      if (name === './audit-jobs.js')
-        return { startAuditJobs: async () => ({ success: true, data: undefined }) }
-      if (name === './messages.js')
-        return { serverM: () => 'test' }
-      if (name === '@h-ai/core')
-        return { core: { module: core.module, init: () => undefined, config: { get: (key: string) => configs[key] ?? {}, getOrThrow: (key: string) => configs[key] ?? {}, validate: (key: string) => ({ success: true, data: configs[key] ?? {} }) }, logger: { info: () => undefined, error: () => undefined, warn: () => undefined } } }
+      if (name === './business-settings.js') {
+        return {
+          initBusinessSettings: async () => ({ success: true, data: undefined }),
+        }
+      }
+      if (name === './security-roles.js') {
+        return {
+          seedAppDuties: async () => ({ success: true, data: undefined }),
+          bootstrapDutyAccount: async () => ({ success: true, data: undefined }),
+        }
+      }
+      if (name === './audit-jobs.js') {
+        return {
+          startAuditJobs: async () => ({ success: true, data: undefined }),
+        }
+      }
+      if (name === './messages.js') {
+        return {
+          serverM: () => 'test',
+        }
+      }
+      if (name === '@h-ai/core') {
+        return {
+          core: {
+            module: core.module,
+            init: () => undefined,
+            config: {
+              get: (key: string) => configs[key] ?? {},
+              getOrThrow: (key: string) => configs[key] ?? {},
+              validate: (key: string) => ({ success: true, data: configs[key] ?? {} }),
+            },
+            logger: {
+              info: () => undefined,
+              error: () => undefined,
+              warn: () => undefined,
+            },
+          },
+        }
+      }
       const moduleName = name.slice('@h-ai/'.length)
-      return { [moduleName]: modules[moduleName], AIConfigSchema: schema, VecdbConfigSchema: schema, ReldbConfigSchema: schema, CacheConfigSchema: schema, StorageConfigSchema: schema, IamConfigSchema: schema, AuditInitConfigSchema: schema, ServConfigSchema: schema, ReachConfigSchema: schema }
+      return {
+        [moduleName]: modules[moduleName],
+        AIConfigSchema: schema,
+        VecdbConfigSchema: schema,
+        ReldbConfigSchema: schema,
+        CacheConfigSchema: schema,
+        StorageConfigSchema: schema,
+        IamConfigSchema: schema,
+        AuditInitConfigSchema: schema,
+        ServConfigSchema: schema,
+        ReachConfigSchema: schema,
+      }
     },
   })
   const initialize = exported.initApp ?? exported.initializeModules
@@ -72,16 +159,37 @@ function runtimeHarness(source: string) {
 async function expectEntrypointCleanup(source: string): Promise<void> {
   const calls: string[] = []
   const processState = { exitCode: 0 }
-  const logger = { error: vi.fn(), info: vi.fn(), child: () => logger }
-  await runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText, {
+  const logger = {
+    error: vi.fn(),
+    info: vi.fn(),
+    child: () => logger,
+  }
+  await runInNewContext(ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
+  }).outputText, {
     exports: {},
     require: (name: string) => {
       if (name === 'node:process')
         return processState
-      if (name === '@h-ai/core')
-        return { core: { logger, config: { getOrThrow: () => ({ server: { host: '127.0.0.1', port: 0 } }) } } }
-      if (name === '@h-ai/serv')
-        return { serv: { listen: vi.fn() } }
+      if (name === '@h-ai/core') {
+        return {
+          core: {
+            logger,
+            config: {
+              getOrThrow: () => ({
+                server: { host: '127.0.0.1', port: 0 },
+              }),
+            },
+          },
+        }
+      }
+      if (name === '@h-ai/serv') {
+        return {
+          serv: {
+            listen: vi.fn(),
+          },
+        }
+      }
       if (name === './lib/server/init.js') {
         return {
           initApp: async () => { calls.push('init') },
@@ -92,10 +200,12 @@ async function expectEntrypointCleanup(source: string): Promise<void> {
         }
       }
       if (name === './app.js') {
-        return new Proxy({}, { get: () => () => {
-          calls.push('create')
-          throw new Error('Transport credentials invalid')
-        } })
+        return new Proxy({}, {
+          get: () => () => {
+            calls.push('create')
+            throw new Error('Transport credentials invalid')
+          },
+        })
       }
       throw new Error(`Unexpected entrypoint import: ${name}`)
     },
@@ -111,7 +221,13 @@ afterEach(async () => {
 })
 
 describe('shared production configuration', () => {
-  it.each(['admin-console', 'api-service', 'corporate-website', 'h5-app', 'ai-playground'])('%s实际生产文件通过core插值和模块Schema消费', async (appName) => {
+  it.each([
+    'admin-console',
+    'api-service',
+    'corporate-website',
+    'h5-app',
+    'ai-playground',
+  ])('%s实际生产文件通过core插值和模块Schema消费', async (appName) => {
     const app = path.resolve('..', '..', 'apps', appName)
     const values = parseEnv(await readFile(path.join(app, '.env.prod'), 'utf8'))
     for (const [key, value] of Object.entries(values))
@@ -128,7 +244,14 @@ describe('shared production configuration', () => {
   })
 
   it('实际生成的生产环境可直接消费全部共享连接分支，公开文件不保存凭据', () => {
-    const production = generateProductionEnvironment(['db', 'cache', 'storage', 'ai', 'vecdb', 'reach'])
+    const production = generateProductionEnvironment([
+      'db',
+      'cache',
+      'storage',
+      'ai',
+      'vecdb',
+      'reach',
+    ])
     const values = parseEnv(production)
     expect(values).not.toHaveProperty('HAI_DB_PASSWORD')
     expect(values).not.toHaveProperty('HAI_STORAGE_SECRETACCESSKEY')
@@ -137,11 +260,18 @@ describe('shared production configuration', () => {
       vi.stubEnv(key, value)
     vi.stubEnv('HAI_STORAGE_ACCESSKEYID', 'test-only-key')
     vi.stubEnv('HAI_STORAGE_SECRETACCESSKEY', 'test-only-secret')
-    expect(ReldbConfigSchema.parse(loadConfigText('db', generateConfigFile('db')))).toMatchObject({ type: 'postgresql', host: 'db', database: 'hai', port: 5432 })
+    expect(ReldbConfigSchema.parse(loadConfigText('db', generateConfigFile('db')))).toMatchObject({
+      type: 'postgresql',
+      host: 'db',
+      database: 'hai',
+      port: 5432,
+    })
     expect(CacheConfigSchema.parse(loadConfigText('cache', generateConfigFile('cache')))).toMatchObject({ type: 'redis', host: 'cache' })
     expect(StorageConfigSchema.parse(loadConfigText('storage', generateConfigFile('storage')))).toMatchObject({ type: 's3', endpoint: 'http://storage:9000', forcePathStyle: true })
     expect(VecdbConfigSchema.parse(loadConfigText('vecdb', generateConfigFile('vecdb')))).toMatchObject({ type: 'qdrant', url: 'http://vecdb:6333' })
-    expect(parseEnv(generateProductionEnvironment(['db'], { db: { type: 'mysql', database: 'business' } }))).toMatchObject({ HAI_DB_TYPE: 'mysql', HAI_DB_PORT: '3306', HAI_DB_DATABASE: 'business' })
+    expect(parseEnv(generateProductionEnvironment(['db'], {
+      db: { type: 'mysql', database: 'business' },
+    }))).toMatchObject({ HAI_DB_TYPE: 'mysql', HAI_DB_PORT: '3306', HAI_DB_DATABASE: 'business' })
     expect(parseEnv(generateProductionEnvironment([]))).not.toHaveProperty('HAI_DB_TYPE')
   })
 
@@ -151,15 +281,38 @@ describe('shared production configuration', () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hai-production-create-'))
     roots.push(root)
     const name = `production-${appType}`
-    await createProject({ name, appType, defaults: true, install: false, git: false, deploy: false, packageManager: 'pnpm', frontends: ['web'], cwd: root })
+    await createProject({
+      name,
+      appType,
+      defaults: true,
+      install: false,
+      git: false,
+      deploy: false,
+      packageManager: 'pnpm',
+      frontends: ['web'],
+      cwd: root,
+    })
     const project = path.join(root, name)
-    const service = appType === 'api' ? path.join(project, 'apps', `${name}-serv`) : appType === 'fullstack' ? path.join(project, 'packages', `${name}-serv`) : project
+    const service = appType === 'api'
+      ? path.join(project, 'apps', `${name}-serv`)
+      : appType === 'fullstack'
+        ? path.join(project, 'packages', `${name}-serv`)
+        : project
     // 默认工程不预装 AI；这里显式生成接入后的工程，保留 AI 生命周期的独立覆盖。
-    const context = buildTemplateContext({ name, appType, features: ['ai', 'cache'], packageManager: 'pnpm', frontends: ['web'], deploy: false })
+    const context = buildTemplateContext({
+      name,
+      appType,
+      features: ['ai', 'cache'],
+      packageManager: 'pnpm',
+      frontends: ['web'],
+      deploy: false,
+    })
     await generateFromTemplates(project, context)
     for (const module of ['db', 'cache', 'ai', 'vecdb'])
       await writeFile(path.join(service, 'config', `_${module}.yml`), generateConfigFile(module))
-    const envRoot = appType === 'api' ? service : project
+    const envRoot = appType === 'api'
+      ? service
+      : project
     await writeFile(path.join(envRoot, '.env.prod'), generateProductionEnvironment(['ai', 'cache']))
     const pkg = JSON.parse(await readFile(path.join(service, 'package.json'), 'utf8')) as { dependencies: Record<string, string> }
     expect(pkg.dependencies).toHaveProperty('@h-ai/ai')
@@ -169,9 +322,13 @@ describe('shared production configuration', () => {
     expect(parseEnv(await readFile(path.join(envRoot, '.env.prod'), 'utf8'))).toMatchObject({ HAI_DB_TYPE: 'postgresql', HAI_VECDB_TYPE: 'qdrant' })
     expect(context.features).toMatchObject({ ai: true, db: true, vecdb: true })
     expect(context.haiCatalogPackages).toHaveProperty('@h-ai/vecdb')
-    const runtimeFile = appType === 'fullstack' ? 'src/server/runtime.ts' : 'src/lib/server/init.ts'
+    const runtimeFile = appType === 'fullstack'
+      ? 'src/server/runtime.ts'
+      : 'src/lib/server/init.ts'
     const workspace = path.resolve('..', '..')
-    const program = ts.createProgram([path.join(service, runtimeFile)], {
+    const program = ts.createProgram([
+      path.join(service, runtimeFile),
+    ], {
       target: ts.ScriptTarget.ES2022,
       module: ts.ModuleKind.NodeNext,
       moduleResolution: ts.ModuleResolutionKind.NodeNext,
@@ -179,12 +336,22 @@ describe('shared production configuration', () => {
       noEmit: true,
       skipLibCheck: true,
       types: ['node'],
-      typeRoots: [path.join(workspace, 'node_modules', '@types')],
+      typeRoots: [
+        path.join(workspace, 'node_modules', '@types'),
+      ],
       paths: {
-        'zod': [path.join(workspace, 'node_modules/zod/index.d.ts')],
-        '@h-ai/core': [path.join(workspace, 'packages/core/dist/node.d.ts')],
-        '@h-ai/storage': [path.join(workspace, 'packages/storage/dist/node.d.ts')],
-        '@h-ai/*': [path.join(workspace, 'packages', '*', 'dist', 'index.d.ts')],
+        'zod': [
+          path.join(workspace, 'node_modules/zod/index.d.ts'),
+        ],
+        '@h-ai/core': [
+          path.join(workspace, 'packages/core/dist/node.d.ts'),
+        ],
+        '@h-ai/storage': [
+          path.join(workspace, 'packages/storage/dist/node.d.ts'),
+        ],
+        '@h-ai/*': [
+          path.join(workspace, 'packages', '*', 'dist', 'index.d.ts'),
+        ],
       },
     })
     const diagnostics = ts.getPreEmitDiagnostics(program)
@@ -192,16 +359,30 @@ describe('shared production configuration', () => {
     const runtime = runtimeHarness(await readFile(path.join(service, runtimeFile), 'utf8'))
     runtime.state.vectorFailure = true
     runtime.state.cleanupFailure = true
-    await expect(runtime.initialize()).rejects.toMatchObject({ cause: { ext: { module: 'vecdb', phase: 'start', cleanup: { module: 'vecdb', phase: 'close' } } } })
+    await expect(runtime.initialize()).rejects.toMatchObject({
+      cause: {
+        ext: {
+          module: 'vecdb',
+          phase: 'start',
+          cleanup: { module: 'vecdb', phase: 'close' },
+        },
+      },
+    })
     expect(runtime.calls).not.toContain('reldb.close')
     expect(runtime.calls).not.toContain('ai.init')
     runtime.state.vectorFailure = false
     runtime.state.cleanupFailure = false
-    await Promise.all([runtime.initialize(), runtime.initialize()])
+    await Promise.all([
+      runtime.initialize(),
+      runtime.initialize(),
+    ])
     expect(runtime.calls.indexOf('vecdb.init')).toBeGreaterThan(runtime.calls.indexOf('reldb.init'))
     expect(runtime.calls.lastIndexOf('ai.init')).toBeGreaterThan(runtime.calls.lastIndexOf('vecdb.init'))
     const closedBefore = runtime.calls.filter(call => call === 'ai.close').length
-    await Promise.all([runtime.close(), runtime.close()])
+    await Promise.all([
+      runtime.close(),
+      runtime.close(),
+    ])
     expect(runtime.calls.filter(call => call === 'ai.close')).toHaveLength(closedBefore + 1)
     if (appType === 'api')
       await expectEntrypointCleanup(await readFile(path.join(service, 'src/index.ts'), 'utf8'))
@@ -216,7 +397,10 @@ describe('shared production configuration', () => {
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     const root = await mkdtemp(path.join(tmpdir(), 'hai-production-add-'))
     roots.push(root)
-    await writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'existing', dependencies: { '@h-ai/core': '0.1.0-test' } }))
+    await writeFile(path.join(root, 'package.json'), JSON.stringify({
+      name: 'existing',
+      dependencies: { '@h-ai/core': '0.1.0-test' },
+    }))
     await writeFile(path.join(root, '.env.prod'), 'HAI_DB_HOST=private-db.internal\n')
     await addModule({ module: 'ai', install: false, cwd: root })
     const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8')) as { dependencies: Record<string, string> }
@@ -231,12 +415,26 @@ describe('shared production configuration', () => {
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     const root = await mkdtemp(path.join(tmpdir(), 'hai-production-crypto-'))
     roots.push(root)
-    await createProject({ name: 'crypto-api', appType: 'api', defaults: true, install: false, git: false, deploy: false, packageManager: 'pnpm', cwd: root })
+    await createProject({
+      name: 'crypto-api',
+      appType: 'api',
+      defaults: true,
+      install: false,
+      git: false,
+      deploy: false,
+      packageManager: 'pnpm',
+      cwd: root,
+    })
     const service = path.join(root, 'crypto-api', 'apps', 'crypto-api-serv')
     const app = await readFile(path.join(service, 'src', 'app.ts'), 'utf8')
     expect(app).toContain('createReldbTransportKeyStore')
     expect(app).not.toContain('createInMemoryKeyStore')
-    const context = buildTemplateContext({ name: 'crypto-api', appType: 'api', features: ['crypto'], packageManager: 'pnpm' })
+    const context = buildTemplateContext({
+      name: 'crypto-api',
+      appType: 'api',
+      features: ['crypto'],
+      packageManager: 'pnpm',
+    })
     expect(context.features.db).toBe(true)
   })
 })

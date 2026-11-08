@@ -6,9 +6,9 @@
  * @module server/ai-lab
  */
 
-import type { ChatReply, LabMessage, LabStatus, RememberResult } from '$lib/ai-lab-types.js'
 import type { ChatCompletionChunk, ChatMessage, MemoryEntry, MemoryType, ReferenceImage, TranscriptionEvent } from '@h-ai/ai'
 import type { HaiResult } from '@h-ai/core'
+import type { ChatReply, LabMessage, LabStatus, RememberResult } from '#lib/ai-lab-types.js'
 import { ai } from '@h-ai/ai'
 import { core, ok } from '@h-ai/core'
 import { getAIPlaygroundMetadata } from './init.js'
@@ -68,7 +68,7 @@ export function getLabStatus(): LabStatus {
     imageProvider: metadata.imageProvider,
     imageModel: metadata.imageModel,
     ttsVoices: metadata.ttsVoices,
-    memoryMode: 'ephemeral',
+    memoryMode: metadata.memoryMode,
   }
 }
 
@@ -102,7 +102,9 @@ export async function chatWithMemory(input: ChatInput): Promise<HaiResult<ChatRe
     return completion
 
   const content = completion.data.choices[0]?.message.content
-  const reply = typeof content === 'string' ? content.trim() : ''
+  const reply = typeof content === 'string'
+    ? content.trim()
+    : ''
   return ok({ reply })
 }
 

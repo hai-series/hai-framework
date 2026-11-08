@@ -10,7 +10,12 @@
  * ```
  */
 export function createComposeContainerLookupScript(): string {
-  const labelFormat = ['com.docker.compose.project', 'com.docker.compose.service', 'io.podman.compose.project', 'io.podman.compose.service']
+  const labelFormat = [
+    'com.docker.compose.project',
+    'com.docker.compose.service',
+    'io.podman.compose.project',
+    'io.podman.compose.service',
+  ]
     .map(key => `{{index .Config.Labels \`${key}\`}}`)
     .join('|')
   return String.raw`compose_container_ids() (

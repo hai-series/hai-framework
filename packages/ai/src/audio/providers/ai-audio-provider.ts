@@ -355,10 +355,20 @@ export function concatChunks(chunks: Uint8Array[]): Uint8Array {
 // ─── 音频上传辅助 ───
 
 /** 音频格式 → 上传文件扩展名（文件型服务依据扩展名识别容器） */
-const AUDIO_UPLOAD_EXT: Record<AudioFormat, string> = { pcm16: 'wav', wav: 'wav', mp3: 'mp3', opus: 'ogg' }
+const AUDIO_UPLOAD_EXT: Record<AudioFormat, string> = {
+  pcm16: 'wav',
+  wav: 'wav',
+  mp3: 'mp3',
+  opus: 'ogg',
+}
 
 /** 音频格式 → MIME 类型 */
-const AUDIO_UPLOAD_MIME: Record<AudioFormat, string> = { pcm16: 'audio/wav', wav: 'audio/wav', mp3: 'audio/mpeg', opus: 'audio/opus' }
+const AUDIO_UPLOAD_MIME: Record<AudioFormat, string> = {
+  pcm16: 'audio/wav',
+  wav: 'audio/wav',
+  mp3: 'audio/mpeg',
+  opus: 'audio/opus',
+}
 
 /**
  * 可上传的音频分片（真实字节 + 与内容一致的文件名 / MIME）
@@ -420,7 +430,9 @@ export function toAudioUploadPart(audio: AudioContent, baseName = 'audio'): Audi
  * ```
  */
 export function toAudioBlob(part: AudioUploadPart): Blob {
-  return new Blob([new Uint8Array(part.data)], { type: part.mimeType })
+  return new Blob([
+    new Uint8Array(part.data),
+  ], { type: part.mimeType })
 }
 
 /**
@@ -469,7 +481,9 @@ export function wrapPcm16ToWav(pcm: Uint8Array, sampleRate: number, channels: 1 
  * ```
  */
 export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return error instanceof Error
+    ? error.message
+    : String(error)
 }
 
 /**
@@ -537,7 +551,11 @@ export function mapStreamError(error: unknown, signal?: AbortSignal): HaiError {
     return audioError(HaiAIError.AUDIO_TIMEOUT, aiM('ai_audioTimeout'))
   if (maybe.name === 'AbortError')
     return audioAbortError(signal)
-  return audioError(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: errorMessage(error) } }), error)
+  return audioError(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
+    params: {
+      error: errorMessage(error),
+    },
+  }), error)
 }
 
 /**
@@ -555,7 +573,10 @@ export function mapStreamError(error: unknown, signal?: AbortSignal): HaiError {
  * ```
  */
 export function toAudioErrorResult<T>(error: unknown, signal?: AbortSignal): HaiResult<T> {
-  return { success: false, error: mapStreamError(error, signal) }
+  return {
+    success: false,
+    error: mapStreamError(error, signal),
+  }
 }
 
 // ─── HTTP 辅助 ───
@@ -574,7 +595,9 @@ export function toAudioErrorResult<T>(error: unknown, signal?: AbortSignal): Hai
  */
 export function combineSignal(signal: AbortSignal | undefined, timeout: number): AbortSignal {
   const timeoutSignal = AbortSignal.timeout(timeout)
-  return signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
+  return signal
+    ? AbortSignal.any([signal, timeoutSignal])
+    : timeoutSignal
 }
 
 /**
@@ -715,11 +738,18 @@ export function openAudioWebSocket(
 
     ws.on('message', (data: ArrayBuffer | Buffer, isBinary: boolean) => {
       if (isBinary) {
-        const buf = Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer)
-        pushMessage({ isBinary: true, binary: new Uint8Array(buf) })
+        const buf = Buffer.isBuffer(data)
+          ? data
+          : Buffer.from(data as ArrayBuffer)
+        pushMessage({
+          isBinary: true,
+          binary: new Uint8Array(buf),
+        })
       }
       else {
-        const text = Buffer.isBuffer(data) ? data.toString('utf8') : Buffer.from(data as ArrayBuffer).toString('utf8')
+        const text = Buffer.isBuffer(data)
+          ? data.toString('utf8')
+          : Buffer.from(data as ArrayBuffer).toString('utf8')
         pushMessage({ isBinary: false, text })
       }
     })
@@ -728,7 +758,9 @@ export function openAudioWebSocket(
       // open 之前出错视为连接建立失败，映射为 AUDIO_CONNECTION_FAILED
       if (!opened) {
         settleClosed()
-        reject(audioError(HaiAIError.AUDIO_CONNECTION_FAILED, aiM('ai_audioConnectionFailed', { params: { error: error.message } }), error))
+        reject(audioError(HaiAIError.AUDIO_CONNECTION_FAILED, aiM('ai_audioConnectionFailed', {
+          params: { error: error.message },
+        }), error))
         return
       }
       failure = error
@@ -762,8 +794,11 @@ export function openAudioWebSocket(
             if (closed) {
               if (aborted)
                 throw audioAbortError(options?.signal)
-              if (failure)
-                throw audioError(HaiAIError.AUDIO_CONNECTION_FAILED, aiM('ai_audioConnectionFailed', { params: { error: failure.message } }), failure)
+              if (failure) {
+                throw audioError(HaiAIError.AUDIO_CONNECTION_FAILED, aiM('ai_audioConnectionFailed', {
+                  params: { error: failure.message },
+                }), failure)
+              }
               return
             }
             const next = await new Promise<IteratorResult<AudioWsMessage>>((res) => {
@@ -772,8 +807,11 @@ export function openAudioWebSocket(
             if (next.done) {
               if (aborted)
                 throw audioAbortError(options?.signal)
-              if (failure)
-                throw audioError(HaiAIError.AUDIO_CONNECTION_FAILED, aiM('ai_audioConnectionFailed', { params: { error: failure.message } }), failure)
+              if (failure) {
+                throw audioError(HaiAIError.AUDIO_CONNECTION_FAILED, aiM('ai_audioConnectionFailed', {
+                  params: { error: failure.message },
+                }), failure)
+              }
               return
             }
             yield next.value

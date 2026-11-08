@@ -13,7 +13,9 @@ test('真实 LLM、Memory、TTS、ASR 链路可用', async ({ request }) => {
     data: {
       profileId,
       sessionId: `${profileId}-session`,
-      messages: [{ role: 'user', content: 'AI live test passed' }],
+      messages: [
+        { role: 'user', content: 'AI live test passed' },
+      ],
       useMemory: false,
     },
   })
@@ -46,7 +48,9 @@ test('真实 LLM、Memory、TTS、ASR 链路可用', async ({ request }) => {
     data: {
       profileId,
       sessionId: `${profileId}-memory-session`,
-      messages: [{ role: 'user', content: 'According to memory, what answer style does Live E2E prefer?' }],
+      messages: [
+        { role: 'user', content: 'According to memory, what answer style does Live E2E prefer?' },
+      ],
       useMemory: true,
     },
   })

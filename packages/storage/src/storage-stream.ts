@@ -23,7 +23,9 @@ import { storageM } from './storage-i18n.js'
 export async function* toByteStream(data: StorageData, signal?: AbortSignal): AsyncIterable<Uint8Array> {
   signal?.throwIfAborted()
   if (typeof data === 'string' || data instanceof Uint8Array) {
-    yield typeof data === 'string' ? Buffer.from(data) : data
+    yield typeof data === 'string'
+      ? Buffer.from(data)
+      : data
     return
   }
   const iterator = data[Symbol.asyncIterator]()
@@ -42,7 +44,9 @@ export async function* toByteStream(data: StorageData, signal?: AbortSignal): As
             })
           : undefined
         const next = iterator.next()
-        result = await (cancelled ? Promise.race([next, cancelled]) : next)
+        result = await (cancelled
+          ? Promise.race([next, cancelled])
+          : next)
       }
       finally {
         if (onAbort)

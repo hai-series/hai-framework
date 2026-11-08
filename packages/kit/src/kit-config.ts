@@ -19,7 +19,12 @@ const AbsolutePathSchema = z.custom<`/${string}`>(
 const KitTransportConfigInputSchema = z.union([
   z.literal(false),
   z.object({
-    maxPlaintextBytes: z.union([z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max), z.literal('auto')]).transform(value => value === 'auto' ? undefined : value).optional().describe('普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明').meta({ default: 'auto' }),
+    maxPlaintextBytes: z.union([
+      z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max),
+      z.literal('auto'),
+    ]).transform(value => value === 'auto'
+      ? undefined
+      : value).optional().describe('普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明').meta({ default: 'auto' }),
     maxFutureSkewSeconds: z.number().int().min(0).max(TRANSPORT_TIME_LIMITS.maxFutureSkewSeconds).optional().describe('允许客户端请求时间领先服务器的秒数').meta({ default: TRANSPORT_PROTOCOL.CLOCK_SKEW_MS / 1000 }),
     maxRequestAgeSeconds: z.number().int().min(TRANSPORT_TIME_LIMITS.minRequestAgeSeconds).max(TRANSPORT_TIME_LIMITS.maxRequestAgeSeconds).optional().describe('请求从签发起的有效秒数').meta({ default: TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS / 1000 }),
     routePlaintextBytes: z.record(AbsolutePathSchema, z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max)).optional().describe('完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量'),
@@ -61,8 +66,8 @@ export const KitConfigSchema = z.object({
  * 浏览器端 `process` 不存在时安全回退为空；`PORT` 仅采纳 1-65535 的整数。
  */
 function readServerEnvOverride(): KitServerConfigInput {
-  // eslint-disable-next-line node/prefer-global/process
-  const env = typeof process !== 'undefined' ? process.env : undefined
+  // eslint-disable-next-line node/prefer-global/process -- 共享配置在浏览器也会加载，不能静态引入 Node 模块。
+  const env = globalThis.process?.env
   const override: { host?: string, port?: number } = {}
   const host = env?.HOST
   if (host)
@@ -91,7 +96,10 @@ function readServerEnvOverride(): KitServerConfigInput {
  * ```
  */
 export function resolveKitServerConfig(input: KitServerConfigInput = {}): KitServerConfig {
-  return { ...ServerConfigInputSchema.parse(input), ...readServerEnvOverride() }
+  return {
+    ...ServerConfigInputSchema.parse(input),
+    ...readServerEnvOverride(),
+  }
 }
 
 /**

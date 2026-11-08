@@ -3,7 +3,7 @@
  * @module routes/api/status/+server
  */
 
-import { getLabStatus } from '$lib/server/ai-lab.js'
 import { kit } from '@h-ai/kit'
+import { getLabStatus } from '#lib/server/ai-lab.js'
 
 export const GET = kit.handler(() => kit.response.ok(getLabStatus()))

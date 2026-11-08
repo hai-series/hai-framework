@@ -11,8 +11,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFeedbackBundle } from '../src/bundle/index.js'
 import { feedback } from '../src/index.js'
 
-const actor = { scopeId: 'privacy-scope', userId: 'privacy-owner', permissions: ['feedback:*'] }
-const config = { appId: 'server-privacy', recipients: ['admin@example.test'], adminUrl: 'http://localhost/admin/feedback', workerIntervalMs: 0 }
+const actor = {
+  scopeId: 'privacy-scope',
+  userId: 'privacy-owner',
+  permissions: ['feedback:*'],
+}
+const config = {
+  appId: 'server-privacy',
+  recipients: ['admin@example.test'],
+  adminUrl: 'http://localhost/admin/feedback',
+  workerIntervalMs: 0,
+}
 let directory: string | undefined
 let previousLevel = core.logger.getLevel()
 
@@ -24,7 +33,11 @@ beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'hai-feedback-server-privacy-'))
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
   expect((await storage.init({ type: 'local', root: directory })).success).toBe(true)
-  expect((await reach.init({ providers: [{ name: 'email', type: 'console' }] })).success).toBe(true)
+  expect((await reach.init({
+    providers: [
+      { name: 'email', type: 'console' },
+    ],
+  })).success).toBe(true)
   expect((await feedback.init(config)).success).toBe(true)
 })
 
@@ -47,7 +60,10 @@ describe('服务端自由文本隐私边界', () => {
     vi.stubEnv('FEEDBACK_SECRET', 'secret-sentinel')
     vi.stubEnv('FEEDBACK_OTHER', 'other-sentinel')
     await feedback.close()
-    expect((await feedback.init({ ...config, envAllowlist: ['FEEDBACK_REGION', 'FEEDBACK_ABSENT', 'FEEDBACK_SECRET'] })).success).toBe(true)
+    expect((await feedback.init({
+      ...config,
+      envAllowlist: ['FEEDBACK_REGION', 'FEEDBACK_ABSENT', 'FEEDBACK_SECRET'],
+    })).success).toBe(true)
     const report = await feedback.submit({ appId: config.appId, submissionId: 'env-allowlist' }, actor)
     expect(report.success).toBe(true)
     if (!report.success)
@@ -79,15 +95,42 @@ describe('服务端自由文本隐私边界', () => {
       'sessionId=PRIVACY_SESSION_ID_SENTINEL',
       'Bearer PRIVACY_BEARER_SENTINEL',
       '{"token":"PRIVACY_MULTIPLE_ONE","session":"PRIVACY_MULTIPLE_TWO"}',
-      JSON.stringify({ body: JSON.stringify({ password: 'escaped-key-sentinel', token: 'nested-token-sentinel' }) }),
-      JSON.stringify({ body: JSON.stringify({ password: 'prefix " PRIVACY_NESTED_QUOTE_SENTINEL and PRIVACY_NESTED_TAIL_SENTINEL' }) }),
+      JSON.stringify({
+        body: JSON.stringify({ password: 'escaped-key-sentinel', token: 'nested-token-sentinel' }),
+      }),
+      JSON.stringify({
+        body: JSON.stringify({ password: 'prefix " PRIVACY_NESTED_QUOTE_SENTINEL and PRIVACY_NESTED_TAIL_SENTINEL' }),
+      }),
     ]
-    const sentinels = ['PRIVACY_JSON_SENTINEL', 'PRIVACY_TOKEN_SENTINEL', 'PRIVACY_SESSION_SENTINEL', 'PRIVACY_ID_TOKEN_SENTINEL', basic, 'PRIVACY_ESCAPED_SENTINEL', 'PRIVACY_SINGLE_QUOTED_SENTINEL', 'PRIVACY_SESSION_ID_SENTINEL', 'PRIVACY_BEARER_SENTINEL', 'PRIVACY_MULTIPLE_ONE', 'PRIVACY_MULTIPLE_TWO', 'PRIVACY_STRUCTURED_SENTINEL', 'PRIVACY_URL_SENTINEL', 'escaped-key-sentinel', 'nested-token-sentinel', 'PRIVACY_NESTED_QUOTE_SENTINEL', 'PRIVACY_NESTED_TAIL_SENTINEL']
+    const sentinels = [
+      'PRIVACY_JSON_SENTINEL',
+      'PRIVACY_TOKEN_SENTINEL',
+      'PRIVACY_SESSION_SENTINEL',
+      'PRIVACY_ID_TOKEN_SENTINEL',
+      basic,
+      'PRIVACY_ESCAPED_SENTINEL',
+      'PRIVACY_SINGLE_QUOTED_SENTINEL',
+      'PRIVACY_SESSION_ID_SENTINEL',
+      'PRIVACY_BEARER_SENTINEL',
+      'PRIVACY_MULTIPLE_ONE',
+      'PRIVACY_MULTIPLE_TWO',
+      'PRIVACY_STRUCTURED_SENTINEL',
+      'PRIVACY_URL_SENTINEL',
+      'escaped-key-sentinel',
+      'nested-token-sentinel',
+      'PRIVACY_NESTED_QUOTE_SENTINEL',
+      'PRIVACY_NESTED_TAIL_SENTINEL',
+    ]
     sentinels.push('PRIVACY_VERIFICATION_SENTINEL')
     const logger = core.logger.create({ name: 'server-privacy', level: 'error', format: 'json' })
     core.context.run({ scopeId: actor.scopeId, userId: actor.userId, requestId: 'privacy-request' }, () => {
-      for (const message of messages)
-        logger.error(`Diagnostic state ${message}`, { profile: { password: 'PRIVACY_STRUCTURED_SENTINEL' }, url: 'https://example.test/path?token=PRIVACY_URL_SENTINEL&visible=ok', diagnostic: 'KEEP_VISIBLE_FACT' })
+      for (const message of messages) {
+        logger.error(`Diagnostic state ${message}`, {
+          profile: { password: 'PRIVACY_STRUCTURED_SENTINEL' },
+          url: 'https://example.test/path?token=PRIVACY_URL_SENTINEL&visible=ok',
+          diagnostic: 'KEEP_VISIBLE_FACT',
+        })
+      }
     })
     const report = await feedback.submit({ appId: config.appId, submissionId: 'private-logger-text' }, actor)
     expect(report.success).toBe(true)
@@ -115,7 +158,10 @@ describe('服务端自由文本隐私边界', () => {
     expect(bundle.success).toBe(true)
     if (!bundle.success)
       return
-    const zipContents = Object.fromEntries(Object.entries(bundle.data.files).map(([name, bytes]) => [name, new TextDecoder().decode(bytes)]))
+    const zipContents = Object.fromEntries(Object.entries(bundle.data.files).map(([name, bytes]) => [
+      name,
+      new TextDecoder().decode(bytes),
+    ]))
     for (const result of [database.data, api.data, zipContents]) {
       const serialized = JSON.stringify(result)
       for (const sentinel of sentinels)

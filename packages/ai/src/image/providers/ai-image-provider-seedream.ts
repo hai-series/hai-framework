@@ -45,9 +45,13 @@ export function createSeedreamImageProvider(): ImageProvider {
             model: request.model.model,
             prompt: request.prompt,
             ...(request.referenceImages.length
-              ? { image: request.referenceImages.map(image => referenceImageDataUrl(image)) }
+              ? {
+                  image: request.referenceImages.map(image => referenceImageDataUrl(image)),
+                }
               : {}),
-            ...(request.size ? { size: `${request.size.width}x${request.size.height}` } : {}),
+            ...(request.size
+              ? { size: `${request.size.width}x${request.size.height}` }
+              : {}),
             response_format: 'b64_json',
             sequential_image_generation: 'disabled',
             watermark: false,
@@ -62,16 +66,25 @@ export function createSeedreamImageProvider(): ImageProvider {
         if ((body.data?.length ?? 0) > request.maxImages)
           throw new RangeError('Image count exceeds limit')
         const base64Images = body.data?.flatMap(item => item.b64_json
-          ? [imageFromBase64(item.b64_json, 'image/png', request)]
+          ? [
+              imageFromBase64(item.b64_json, 'image/png', request),
+            ]
           : []) ?? []
-        const urls = body.data?.flatMap(item => item.url ? [item.url] : []) ?? []
+        const urls = body.data?.flatMap(item => item.url
+          ? [item.url]
+          : []) ?? []
         if (base64Images.length + urls.length > request.maxImages)
           throw new RangeError('Image count exceeds limit')
         const downloaded = await downloadImages(urls, request)
         if (!downloaded.success)
           return downloaded
-        const images = [...base64Images, ...downloaded.data]
-        return images.length ? { success: true, data: images } : imageProtocolError()
+        const images = [
+          ...base64Images,
+          ...downloaded.data,
+        ]
+        return images.length
+          ? { success: true, data: images }
+          : imageProtocolError()
       }
       catch (error) {
         return imageProviderFailure(error)

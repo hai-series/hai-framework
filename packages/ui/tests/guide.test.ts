@@ -9,12 +9,16 @@ const controllers: GuideController[] = []
 function makeGuide(options: Partial<GuideOptions> = {}) {
   const guide = createGuide({
     persistence: 'memory',
-    tours: [{
-      id: 'intro',
-      title: 'Introduction',
-      description: 'A short tour',
-      steps: [{ target: 'first', title: 'First step', description: 'Use this button' }],
-    }],
+    tours: [
+      {
+        id: 'intro',
+        title: 'Introduction',
+        description: 'A short tour',
+        steps: [
+          { target: 'first', title: 'First step', description: 'Use this button' },
+        ],
+      },
+    ],
     ...options,
   })
   controllers.push(guide)
@@ -87,7 +91,17 @@ describe('guide first-use preferences', () => {
     expect(guide.startIfNeeded('intro')).toBe(true)
     guide.setScope('alice')
     expect(guide.startIfNeeded('intro')).toBe(false)
-    const updated = makeGuide({ persistence: 'localStorage', tours: [{ id: 'intro', version: 2, title: 'Updated', steps: [] }] })
+    const updated = makeGuide({
+      persistence: 'localStorage',
+      tours: [
+        {
+          id: 'intro',
+          version: 2,
+          title: 'Updated',
+          steps: [],
+        },
+      ],
+    })
     updated.setScope('alice')
     expect(updated.startIfNeeded('intro')).toBe(true)
     guide.reset('intro')
@@ -151,8 +165,18 @@ describe('guide tour behavior', () => {
 
   it('目标页面首次装配用户范围时保留并恢复完整导航的待启动记录', async () => {
     target()
-    const guide = makeGuide({ nav: { pathname: '/new', navigate: () => {} } })
-    sessionStorage.setItem('hai-guide-pending', JSON.stringify({ id: 'intro', scope: 'alice', route: '/new', createdAt: Date.now() }))
+    const guide = makeGuide({
+      nav: {
+        pathname: '/new',
+        navigate: () => {},
+      },
+    })
+    sessionStorage.setItem('hai-guide-pending', JSON.stringify({
+      id: 'intro',
+      scope: 'alice',
+      route: '/new',
+      createdAt: Date.now(),
+    }))
     guide.setScope('alice')
     expect(await guide.resume()).toBe(true)
     expect(guide.activeTourId).toBe('intro')
@@ -169,7 +193,16 @@ describe('guide tour behavior', () => {
           setTimeout(target, 20)
         },
       },
-      tours: [{ id: 'intro', title: 'Tour', route: '/new', steps: [{ target: 'first', title: 'Loaded', description: 'Ready' }] }],
+      tours: [
+        {
+          id: 'intro',
+          title: 'Tour',
+          route: '/new',
+          steps: [
+            { target: 'first', title: 'Loaded', description: 'Ready' },
+          ],
+        },
+      ],
     })
     expect(await guide.start('intro')).toBe(true)
     expect(pathname).toBe('/new')
@@ -179,14 +212,24 @@ describe('guide tour behavior', () => {
 
   it('必要元素缺失不误记完成，可选元素跳过', async () => {
     target()
-    const guide = makeGuide({ waitTimeout: 10, tours: [{
-      id: 'intro',
-      title: 'Tour',
-      steps: [
-        { target: 'missing', title: 'Optional', description: '', optional: true },
-        { target: 'first', title: 'Required', description: '' },
+    const guide = makeGuide({
+      waitTimeout: 10,
+      tours: [
+        {
+          id: 'intro',
+          title: 'Tour',
+          steps: [
+            {
+              target: 'missing',
+              title: 'Optional',
+              description: '',
+              optional: true,
+            },
+            { target: 'first', title: 'Required', description: '' },
+          ],
+        },
       ],
-    }] })
+    })
     expect(await guide.start('intro')).toBe(true)
     expect(document.querySelector('.driver-popover-title')?.textContent).toBe('Required')
     expect(document.querySelector<HTMLButtonElement>('.driver-popover-prev-btn')?.disabled).toBe(true)
@@ -204,7 +247,12 @@ describe('guide tour behavior', () => {
 
   it('退出、路由变化和目标卸载都会清理遮罩且不标记完成', async () => {
     const element = target()
-    const guide = makeGuide({ nav: { pathname: '/current', navigate: () => {} } })
+    const guide = makeGuide({
+      nav: {
+        pathname: '/current',
+        navigate: () => {},
+      },
+    })
     await guide.start('intro')
     guide.handleNavigation('/other')
     expect(document.querySelector('.driver-overlay')).toBeNull()
@@ -218,10 +266,25 @@ describe('guide tour behavior', () => {
 
   it('取消等待或开始另一导览后，旧的异步结果不会重新打开浮层', async () => {
     target('second')
-    const guide = makeGuide({ waitTimeout: 10000, tours: [
-      { id: 'intro', title: 'Tour', steps: [{ target: 'missing', title: '', description: '' }] },
-      { id: 'second', title: 'Second', steps: [{ target: 'second', title: 'Second step', description: '' }] },
-    ] })
+    const guide = makeGuide({
+      waitTimeout: 10000,
+      tours: [
+        {
+          id: 'intro',
+          title: 'Tour',
+          steps: [
+            { target: 'missing', title: '', description: '' },
+          ],
+        },
+        {
+          id: 'second',
+          title: 'Second',
+          steps: [
+            { target: 'second', title: 'Second step', description: '' },
+          ],
+        },
+      ],
+    })
     const pending = guide.start('intro')
     await vi.waitFor(() => expect(guide.activeTourId).toBe('intro'))
     expect(await guide.start('second')).toBe(true)
@@ -236,10 +299,23 @@ describe('guide tour behavior', () => {
     const before = vi.fn(() => {
       target('second')
     })
-    const guide = makeGuide({ tours: [{ id: 'intro', title: 'Tour', steps: [
-      { target: 'first', title: 'First', description: '' },
-      { target: 'second', title: 'Second', description: '', before },
-    ] }] })
+    const guide = makeGuide({
+      tours: [
+        {
+          id: 'intro',
+          title: 'Tour',
+          steps: [
+            { target: 'first', title: 'First', description: '' },
+            {
+              target: 'second',
+              title: 'Second',
+              description: '',
+              before,
+            },
+          ],
+        },
+      ],
+    })
     await guide.start('intro')
     window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }))
     await vi.waitFor(() => expect(document.querySelector('.driver-popover-title')?.textContent).toBe('Second'))
@@ -252,11 +328,25 @@ describe('guide tour behavior', () => {
   it('业务翻译按纯文本显示，切换语言即时刷新按钮和当前步骤', async () => {
     target()
     let language = 'zh'
-    const guide = makeGuide({ tours: [{ id: 'intro', title: 'Tour', steps: [{
-      target: 'first',
-      title: () => language === 'zh' ? '<img src=x onerror=alert(1)>' : 'English title',
-      description: () => language === 'zh' ? '中文说明' : 'English description',
-    }] }] })
+    const guide = makeGuide({
+      tours: [
+        {
+          id: 'intro',
+          title: 'Tour',
+          steps: [
+            {
+              target: 'first',
+              title: () => language === 'zh'
+                ? '<img src=x onerror=alert(1)>'
+                : 'English title',
+              description: () => language === 'zh'
+                ? '中文说明'
+                : 'English description',
+            },
+          ],
+        },
+      ],
+    })
     await guide.start('intro')
     expect(document.querySelector('.driver-popover-title img')).toBeNull()
     expect(document.querySelector('.driver-popover-title')?.textContent).toContain('<img')
@@ -269,8 +359,22 @@ describe('guide tour behavior', () => {
 
   it('权限不可用的导览和文章不会出现在帮助中心', async () => {
     const guide = makeGuide({
-      tours: [{ id: 'admin', title: 'Admin', enabled: () => false, steps: [] }],
-      articles: [{ id: 'private', title: 'Private', content: '', enabled: () => false }],
+      tours: [
+        {
+          id: 'admin',
+          title: 'Admin',
+          enabled: () => false,
+          steps: [],
+        },
+      ],
+      articles: [
+        {
+          id: 'private',
+          title: 'Private',
+          content: '',
+          enabled: () => false,
+        },
+      ],
     })
     expect(guide.tours).toEqual([])
     expect(guide.articles).toEqual([])
@@ -284,13 +388,25 @@ describe('guide Svelte integration', () => {
     const root = document.createElement('div')
     document.body.append(root)
     const onstart = vi.fn()
-    const component = mount(HelpCenter, { target: root, props: {
-      'locale': 'en-US',
-      'data-tracking': 'help',
-      'articles': [{ id: 'profile', title: 'Profile', content: 'Update your avatar', tourId: 'profile' }],
-      'tours': [{ id: 'profile', title: 'Profile tour', steps: [] }],
-      onstart,
-    } })
+    const component = mount(HelpCenter, {
+      target: root,
+      props: {
+        'locale': 'en-US',
+        'data-tracking': 'help',
+        'articles': [
+          {
+            id: 'profile',
+            title: 'Profile',
+            content: 'Update your avatar',
+            tourId: 'profile',
+          },
+        ],
+        'tours': [
+          { id: 'profile', title: 'Profile tour', steps: [] },
+        ],
+        onstart,
+      },
+    })
     try {
       flushSync()
       expect(root.querySelector('[data-tracking="help"]')).not.toBeNull()
@@ -317,7 +433,16 @@ describe('guide Svelte integration', () => {
     const root = document.createElement('div')
     document.body.append(root)
     const guide = makeGuide()
-    const component = mount(GuideHost, { target: root, props: { guide, 'autoStart': 'intro', 'scope': 'alice', 'locale': 'en-US', 'data-tracking': 'guide' } })
+    const component = mount(GuideHost, {
+      target: root,
+      props: {
+        guide,
+        'autoStart': 'intro',
+        'scope': 'alice',
+        'locale': 'en-US',
+        'data-tracking': 'guide',
+      },
+    })
     flushSync()
     await vi.waitFor(() => expect(root.querySelector('[data-testid="guide-offer"]')).not.toBeNull())
     expect(root.querySelector('[data-tracking="guide"]')).not.toBeNull()
@@ -335,9 +460,21 @@ it('坏文章回调仅禁用帮助内容，业务按钮仍可使用', async () =
   const saved = vi.fn()
   const button = document.body.appendChild(document.createElement('button'))
   button.addEventListener('click', saved)
-  const component = mount(HelpCenter, { target, props: { articles: [{ id: 'broken', title: 'Broken', content: () => {
-    throw new Error('Article unavailable')
-  } }, { id: 'good', title: 'Still available', content: 'Help text' }] } })
+  const component = mount(HelpCenter, {
+    target,
+    props: {
+      articles: [
+        {
+          id: 'broken',
+          title: 'Broken',
+          content: () => {
+            throw new Error('Article unavailable')
+          },
+        },
+        { id: 'good', title: 'Still available', content: 'Help text' },
+      ],
+    },
+  })
   try {
     flushSync()
     expect(toast.items.some(item => item.variant === 'warning')).toBe(true)
@@ -354,12 +491,24 @@ it('坏文章回调仅禁用帮助内容，业务按钮仍可使用', async () =
 })
 
 it('帮助宿主局部边界释放错误文章的遮罩，业务兄弟节点不卸载', async () => {
-  const guide = makeGuide({ articles: [{ id: 'bad', title: 'Bad', content: 'x', enabled: () => {
-    throw new Error('Unavailable help provider')
-  } }] })
+  const guide = makeGuide({
+    articles: [
+      {
+        id: 'bad',
+        title: 'Bad',
+        content: 'x',
+        enabled: () => {
+          throw new Error('Unavailable help provider')
+        },
+      },
+    ],
+  })
   const target = document.body.appendChild(document.createElement('div'))
   const business = document.body.appendChild(document.createElement('button'))
-  const component = mount(GuideHost, { target, props: { guide } })
+  const component = mount(GuideHost, {
+    target,
+    props: { guide },
+  })
   try {
     await vi.waitFor(() => expect(guide.locale).toBeTruthy())
     guide.openHelp()
@@ -377,13 +526,39 @@ it('帮助宿主局部边界释放错误文章的遮罩，业务兄弟节点不�
 })
 
 it('导览启用/目标回调抛错不会产生未处理拒绝，业务仍可交互', async () => {
-  const disabled = makeGuide({ tours: [{ id: 'bad-enabled', title: 'Bad', enabled: () => {
-    throw new Error('Bad predicate')
-  }, steps: [{ target: 'first', title: 'First', description: '' }] }] })
+  const disabled = makeGuide({
+    tours: [
+      {
+        id: 'bad-enabled',
+        title: 'Bad',
+        enabled: () => {
+          throw new Error('Bad predicate')
+        },
+        steps: [
+          { target: 'first', title: 'First', description: '' },
+        ],
+      },
+    ],
+  })
   await expect(disabled.start('bad-enabled')).resolves.toBe(false)
-  const missing = makeGuide({ waitTimeout: 1, tours: [{ id: 'bad-target', title: 'Bad', steps: [{ target: () => {
-    throw new Error('Bad target')
-  }, title: 'First', description: '' }] }] })
+  const missing = makeGuide({
+    waitTimeout: 1,
+    tours: [
+      {
+        id: 'bad-target',
+        title: 'Bad',
+        steps: [
+          {
+            target: () => {
+              throw new Error('Bad target')
+            },
+            title: 'First',
+            description: '',
+          },
+        ],
+      },
+    ],
+  })
   await expect(missing.start('bad-target')).resolves.toBe(false)
   expect(document.querySelector('.driver-overlay')).toBeNull()
 })

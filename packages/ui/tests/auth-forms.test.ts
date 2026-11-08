@@ -10,17 +10,36 @@ import { toast } from '../src/lib/toast.svelte.js'
 afterEach(() => toast.clear())
 
 const config: AuthPanelConfig = {
-  login: { password: true, ldap: false, email: false, sms: false },
+  login: {
+    password: true,
+    ldap: false,
+    email: false,
+    sms: false,
+  },
   register: { enabled: true },
   passwordReset: { enabled: false },
-  password: { minLength: 8, maxLength: 128, requireUppercase: true, requireLowercase: true, requireNumber: true, requireSpecialChar: false },
+  password: {
+    minLength: 8,
+    maxLength: 128,
+    requireUppercase: true,
+    requireLowercase: true,
+    requireNumber: true,
+    requireSpecialChar: false,
+  },
   otp: { length: 6, resendInterval: 60 },
-  agreements: { showOnLogin: true, showOnRegister: true, userAgreementUrl: 'https://example.com/terms', privacyPolicyUrl: 'https://example.com/privacy' },
+  agreements: {
+    showOnLogin: true,
+    showOnRegister: true,
+    userAgreementUrl: 'https://example.com/terms',
+    privacyPolicyUrl: 'https://example.com/privacy',
+  },
   ui: { variant: 'card' },
 }
 
 function snippet(text: string) {
-  return createRawSnippet(() => ({ render: () => `<p>${text}</p>` }))
+  return createRawSnippet(() => ({
+    render: () => `<p>${text}</p>`,
+  }))
 }
 
 describe('authentication form extensions and agreements', () => {
@@ -28,7 +47,10 @@ describe('authentication form extensions and agreements', () => {
     const target = document.createElement('div')
     document.body.append(target)
     const onsubmit = vi.fn()
-    const component = mount(ChangePasswordForm, { target, props: { onsubmit } })
+    const component = mount(ChangePasswordForm, {
+      target,
+      props: { onsubmit },
+    })
     function input(id: string, value: string) {
       const element = target.querySelector<HTMLInputElement>(id)!
       element.value = value
@@ -58,14 +80,37 @@ describe('authentication form extensions and agreements', () => {
     document.body.append(target)
     const action = async () => ok(undefined)
     const renewPassword = vi.fn<NonNullable<AuthPanelActions['renewPassword']>>(action)
-      .mockResolvedValueOnce(err({ code: 'hai:iam:034', message: 'Private policy detail', httpStatus: 400, traceId: 'renew-same' }))
-      .mockResolvedValueOnce(err({ code: 'hai:iam:002', message: 'Original password wrong', httpStatus: 401, traceId: 'renew-credentials' }))
+      .mockResolvedValueOnce(err({
+        code: 'hai:iam:034',
+        message: 'Private policy detail',
+        httpStatus: 400,
+        traceId: 'renew-same',
+      }))
+      .mockResolvedValueOnce(err({
+        code: 'hai:iam:002',
+        message: 'Original password wrong',
+        httpStatus: 401,
+        traceId: 'renew-credentials',
+      }))
     const onauthenticated = vi.fn()
-    const component = mount(AuthPanel, { target, props: {
-      config: { ...config, agreements: { showOnLogin: false, showOnRegister: false } },
-      actions: { login: async () => err({ code: 'hai:iam:025', message: 'Private initial detail', httpStatus: 401 }), register: action, sendOtp: action, requestPasswordReset: action, confirmPasswordReset: action, renewPassword },
-      onauthenticated,
-    } })
+    const component = mount(AuthPanel, {
+      target,
+      props: {
+        config: {
+          ...config,
+          agreements: { showOnLogin: false, showOnRegister: false },
+        },
+        actions: {
+          login: async () => err({ code: 'hai:iam:025', message: 'Private initial detail', httpStatus: 401 }),
+          register: action,
+          sendOtp: action,
+          requestPasswordReset: action,
+          confirmPasswordReset: action,
+          renewPassword,
+        },
+        onauthenticated,
+      },
+    })
     function input(selector: string, value: string) {
       const element = target.querySelector<HTMLInputElement>(selector)!
       element.value = value
@@ -112,11 +157,24 @@ describe('authentication form extensions and agreements', () => {
     const action = async () => ok(undefined)
     const renewPassword = vi.fn(action)
     const onauthenticated = vi.fn()
-    const component = mount(AuthPanel, { target, props: {
-      config: { ...config, agreements: { showOnLogin: false, showOnRegister: false } },
-      actions: { login: async () => err({ code, message: 'Update password', httpStatus: 401 }), register: action, sendOtp: action, requestPasswordReset: action, confirmPasswordReset: action, renewPassword },
-      onauthenticated,
-    } })
+    const component = mount(AuthPanel, {
+      target,
+      props: {
+        config: {
+          ...config,
+          agreements: { showOnLogin: false, showOnRegister: false },
+        },
+        actions: {
+          login: async () => err({ code, message: 'Update password', httpStatus: 401 }),
+          register: action,
+          sendOtp: action,
+          requestPasswordReset: action,
+          confirmPasswordReset: action,
+          renewPassword,
+        },
+        onauthenticated,
+      },
+    })
     function input(selector: string, value: string) {
       const element = target.querySelector<HTMLInputElement>(selector)!
       element.value = value
@@ -151,26 +209,44 @@ describe('authentication form extensions and agreements', () => {
     const target = document.createElement('div')
     document.body.append(target)
     const onsubmit = vi.fn()
-    const component = mount(LoginForm, { target, props: { methods: [method], onsubmit } })
+    const component = mount(LoginForm, {
+      target,
+      props: {
+        methods: [method],
+        onsubmit,
+      },
+    })
     try {
       flushSync()
       expect(target.querySelector('input[type="checkbox"]')).toBeNull()
       expectTypeOf<Extract<'rememberMe', keyof LoginFormData>>().toEqualTypeOf<never>()
       expectTypeOf<Extract<'showRememberMe', keyof LoginFormProps>>().toEqualTypeOf<never>()
       const username = target.querySelector<HTMLInputElement>('input[name="username"]')!
-      username.value = method === 'email' ? 'alice@example.com' : method === 'sms' ? '13900000000' : 'alice'
+      username.value = method === 'email'
+        ? 'alice@example.com'
+        : method === 'sms'
+          ? '13900000000'
+          : 'alice'
       username.dispatchEvent(new Event('input', { bubbles: true }))
-      const credential = target.querySelector<HTMLInputElement>(method === 'password' ? 'input[type="password"]' : 'input[name="code"]')!
-      credential.value = method === 'password' ? 'ExamplePassword123' : '123456'
+      const credential = target.querySelector<HTMLInputElement>(method === 'password'
+        ? 'input[type="password"]'
+        : 'input[name="code"]')!
+      credential.value = method === 'password'
+        ? 'ExamplePassword123'
+        : '123456'
       credential.dispatchEvent(new Event('input', { bubbles: true }))
       flushSync()
       target.querySelector('form')!.requestSubmit()
       expect(onsubmit).toHaveBeenCalledOnce()
       expect(onsubmit.mock.calls[0]?.[0]).toEqual({
         username: username.value,
-        password: method === 'password' ? 'ExamplePassword123' : '',
+        password: method === 'password'
+          ? 'ExamplePassword123'
+          : '',
         method,
-        code: method === 'password' ? undefined : '123456',
+        code: method === 'password'
+          ? undefined
+          : '123456',
       })
     }
     finally {
@@ -184,11 +260,23 @@ describe('authentication form extensions and agreements', () => {
     const target = document.createElement('div')
     document.body.append(target)
     const action = async () => ok(undefined)
-    const component = mount(AuthPanel, { target, props: {
-      config: { ...config, passwordReset: { enabled: true } },
-      initialMode: 'forgot',
-      actions: { login: action, register: action, sendOtp: action, requestPasswordReset: action, confirmPasswordReset: action },
-    } })
+    const component = mount(AuthPanel, {
+      target,
+      props: {
+        config: {
+          ...config,
+          passwordReset: { enabled: true },
+        },
+        initialMode: 'forgot',
+        actions: {
+          login: action,
+          register: action,
+          sendOtp: action,
+          requestPasswordReset: action,
+          confirmPasswordReset: action,
+        },
+      },
+    })
     try {
       flushSync()
       target.querySelector('form')!.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
@@ -197,7 +285,9 @@ describe('authentication form extensions and agreements', () => {
       expect(target.querySelector('.forgot-password-form')).not.toBeNull()
       setUILocale('en-US')
       flushSync()
-      const reset = [...target.querySelectorAll('button')].find(button => button.textContent === 'I have a reset token')!
+      const reset = [
+        ...target.querySelectorAll('button'),
+      ].find(button => button.textContent === 'I have a reset token')!
       expect(reset).toBeDefined()
       reset.click()
       flushSync()
@@ -215,7 +305,13 @@ describe('authentication form extensions and agreements', () => {
     const target = document.createElement('div')
     document.body.append(target)
     const onsubmit = vi.fn()
-    const component = mount(LoginForm, { target, props: { methods: ['ldap'], onsubmit } })
+    const component = mount(LoginForm, {
+      target,
+      props: {
+        methods: ['ldap'],
+        onsubmit,
+      },
+    })
     try {
       flushSync()
       const username = target.querySelector<HTMLInputElement>('input[name="username"]')!
@@ -238,13 +334,27 @@ describe('authentication form extensions and agreements', () => {
     setUILocale('en-US')
     const target = document.createElement('div')
     document.body.append(target)
-    const action = async () => err({ code: 'hai:iam:001', httpStatus: 401, system: 'hai', module: 'iam' }, 'Server language')
-    const component = mount(AuthPanel, { target, props: {
-      config,
-      columns: 2,
-      labelPosition: 'left',
-      actions: { login: action, register: action, sendOtp: action, requestPasswordReset: action, confirmPasswordReset: action },
-    } })
+    const action = async () => err({
+      code: 'hai:iam:001',
+      httpStatus: 401,
+      system: 'hai',
+      module: 'iam',
+    }, 'Server language')
+    const component = mount(AuthPanel, {
+      target,
+      props: {
+        config,
+        columns: 2,
+        labelPosition: 'left',
+        actions: {
+          login: action,
+          register: action,
+          sendOtp: action,
+          requestPasswordReset: action,
+          confirmPasswordReset: action,
+        },
+      },
+    })
     try {
       flushSync()
       target.querySelector('form')!.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
@@ -267,11 +377,23 @@ describe('authentication form extensions and agreements', () => {
     const target = document.createElement('div')
     document.body.append(target)
     const action = async () => ok(undefined)
-    const component = mount(AuthPanel, { target, props: {
-      config: { ...config, passwordReset: { enabled: true } },
-      initialMode,
-      actions: { login: action, register: action, sendOtp: action, requestPasswordReset: action, confirmPasswordReset: action },
-    } })
+    const component = mount(AuthPanel, {
+      target,
+      props: {
+        config: {
+          ...config,
+          passwordReset: { enabled: true },
+        },
+        initialMode,
+        actions: {
+          login: action,
+          register: action,
+          sendOtp: action,
+          requestPasswordReset: action,
+          confirmPasswordReset: action,
+        },
+      },
+    })
     try {
       const input = target.querySelector<HTMLInputElement>('form input')!
       expect(input.matches(':disabled')).toBe(true)
@@ -291,8 +413,18 @@ describe('authentication form extensions and agreements', () => {
     { pathname: '/#/login', loginUrl: '#/login', staysReset: false },
     { pathname: '/auth/login?next=profile', loginUrl: '/auth/login?next=profile', staysReset: false },
     { pathname: '/auth/login?next=profile', loginUrl: '/auth/login', staysReset: true },
-    { pathname: '/auth/login', loginUrl: '/auth/login', staysReset: true, ctrlKey: true },
-    { pathname: '/auth/login', loginUrl: '/auth/login', staysReset: true, metaKey: true },
+    {
+      pathname: '/auth/login',
+      loginUrl: '/auth/login',
+      staysReset: true,
+      ctrlKey: true,
+    },
+    {
+      pathname: '/auth/login',
+      loginUrl: '/auth/login',
+      staysReset: true,
+      metaKey: true,
+    },
   ])('登录链接跨路由等待导航，当前路由切换场景：$pathname ($loginUrl)', async ({ pathname, loginUrl, staysReset, ...modifiers }) => {
     setUILocale('zh-CN')
     const originalUrl = window.location.href
@@ -300,12 +432,24 @@ describe('authentication form extensions and agreements', () => {
     const target = document.createElement('div')
     document.body.append(target)
     const action = async () => ok(undefined)
-    const component = mount(AuthPanel, { target, props: {
-      config: { ...config, passwordReset: { enabled: true } },
-      initialMode: 'reset',
-      loginUrl,
-      actions: { login: action, register: action, sendOtp: action, requestPasswordReset: action, confirmPasswordReset: action },
-    } })
+    const component = mount(AuthPanel, {
+      target,
+      props: {
+        config: {
+          ...config,
+          passwordReset: { enabled: true },
+        },
+        initialMode: 'reset',
+        loginUrl,
+        actions: {
+          login: action,
+          register: action,
+          sendOtp: action,
+          requestPasswordReset: action,
+          confirmPasswordReset: action,
+        },
+      },
+    })
     let preventedByPanel: boolean | undefined
     const observeNavigation = (event: MouseEvent) => {
       preventedByPanel = event.defaultPrevented
@@ -334,14 +478,21 @@ describe('authentication form extensions and agreements', () => {
     setUILocale('zh-CN')
     const target = document.createElement('div')
     document.body.append(target)
-    const component = mount(Form, { target, props: { agreements: {
-      userAgreementUrl: 'https://example.com/terms',
-      userAgreementMarkdown: '# 配置协议\n\n**重要条款**\n\n[unsafe](javascript:alert(1))\n\n<script>window.__agreementExecuted = true</script>',
-      privacyPolicyMarkdown: '## 配置隐私\n\n- 仅使用必要资料',
-    } } })
+    const component = mount(Form, {
+      target,
+      props: {
+        agreements: {
+          userAgreementUrl: 'https://example.com/terms',
+          userAgreementMarkdown: '# 配置协议\n\n**重要条款**\n\n[unsafe](javascript:alert(1))\n\n<script>window.__agreementExecuted = true</script>',
+          privacyPolicyMarkdown: '## 配置隐私\n\n- 仅使用必要资料',
+        },
+      },
+    })
     try {
       flushSync()
-      const terms = [...target.querySelectorAll('button')].find(button => button.textContent === '用户协议')!
+      const terms = [
+        ...target.querySelectorAll('button'),
+      ].find(button => button.textContent === '用户协议')!
       terms.click()
       flushSync()
       expect(target.querySelector('[role="dialog"] h1')?.textContent).toBe('配置协议')
@@ -351,7 +502,9 @@ describe('authentication form extensions and agreements', () => {
       expect(target.querySelector('[href^="javascript:"]')).toBeNull()
       target.querySelector('[role="dialog"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
       flushSync()
-      const privacy = [...target.querySelectorAll('button')].find(button => button.textContent === '隐私政策')!
+      const privacy = [
+        ...target.querySelectorAll('button'),
+      ].find(button => button.textContent === '隐私政策')!
       privacy.click()
       flushSync()
       expect(target.querySelector('[role="dialog"] h2')?.textContent).toBe('配置隐私')
@@ -369,13 +522,18 @@ describe('authentication form extensions and agreements', () => {
     const target = document.createElement('div')
     document.body.append(target)
     const onsubmit = vi.fn()
-    const component = mount(Form, { target, props: { agreements: config.agreements, onsubmit } })
+    const component = mount(Form, {
+      target,
+      props: { agreements: config.agreements, onsubmit },
+    })
     try {
       flushSync()
       const input = target.querySelector<HTMLInputElement>('input[type="text"]')!
       input.value = 'preserved-user'
       input.dispatchEvent(new Event('input', { bubbles: true }))
-      const terms = [...target.querySelectorAll('button')].find(button => button.textContent === '用户协议')!
+      const terms = [
+        ...target.querySelectorAll('button'),
+      ].find(button => button.textContent === '用户协议')!
       terms.click()
       flushSync()
       expect(target.querySelector('[role="dialog"]')?.textContent).toContain('用户协议')
@@ -386,7 +544,9 @@ describe('authentication form extensions and agreements', () => {
       expect(target.querySelector('iframe')).toBeNull()
       expect(input.value).toBe('preserved-user')
       expect(onsubmit).not.toHaveBeenCalled()
-      const privacy = [...target.querySelectorAll('button')].find(button => button.textContent === '隐私政策')!
+      const privacy = [
+        ...target.querySelectorAll('button'),
+      ].find(button => button.textContent === '隐私政策')!
       privacy.click()
       flushSync()
       expect(target.querySelector('iframe')?.getAttribute('src')).toBe('https://example.com/privacy')
@@ -401,22 +561,33 @@ describe('authentication form extensions and agreements', () => {
     const target = document.createElement('div')
     document.body.append(target)
     const action = async () => ok(undefined)
-    const component = mount(AuthPanel, { target, props: {
-      config,
-      actions: { login: action, register: action, sendOtp: action, requestPasswordReset: action, confirmPasswordReset: action },
-      loginHeader: snippet('Login heading'),
-      loginFields: snippet('Login field'),
-      loginFooter: snippet('Login footer'),
-      registerHeader: snippet('Register heading'),
-      registerFields: snippet('Register field'),
-      registerFooter: snippet('Register footer'),
-    } })
+    const component = mount(AuthPanel, {
+      target,
+      props: {
+        config,
+        actions: {
+          login: action,
+          register: action,
+          sendOtp: action,
+          requestPasswordReset: action,
+          confirmPasswordReset: action,
+        },
+        loginHeader: snippet('Login heading'),
+        loginFields: snippet('Login field'),
+        loginFooter: snippet('Login footer'),
+        registerHeader: snippet('Register heading'),
+        registerFields: snippet('Register field'),
+        registerFooter: snippet('Register footer'),
+      },
+    })
     try {
       flushSync()
       expect(target.querySelector('.login-form-header')?.textContent).toBe('Login heading')
       expect(target.querySelector('.login-form-extra-fields')?.textContent).toBe('Login field')
       expect(target.querySelector('.login-form-footer')?.textContent).toContain('Login footer')
-      const register = [...target.querySelectorAll('button')].find(button => button.textContent === '立即注册')!
+      const register = [
+        ...target.querySelectorAll('button'),
+      ].find(button => button.textContent === '立即注册')!
       register.click()
       flushSync()
       expect(target.querySelector('.register-form-header')?.textContent).toBe('Register heading')

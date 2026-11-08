@@ -18,29 +18,101 @@ const require = createRequire(join(root, 'packages/ai/package.json'))
 const { build } = createRequire(require.resolve('tsup'))('esbuild')
 const { compile, compileModule } = createRequire(join(root, 'packages/ui/package.json'))('svelte/compiler')
 const browsers = new Map([
-  ['core', ['.']],
-  ['iam', ['.']],
-  ['kit', ['.', './client']],
-  ['ai', ['.', './client']],
-  ['crypto', ['.']],
-  ['api-client', ['.']],
-  ['api-contract', ['.']],
-  ['feedback', ['./client', './bundle']],
-  ['capacitor', ['.']],
-  ['datapipe', ['.']],
-  ['storage', ['.', './client', './schemas']],
-  ['reldb', ['./schemas']],
+  [
+    'core',
+    ['.'],
+  ],
+  [
+    'iam',
+    ['.'],
+  ],
+  [
+    'kit',
+    ['.', './client'],
+  ],
+  [
+    'ai',
+    ['.', './client'],
+  ],
+  [
+    'crypto',
+    ['.'],
+  ],
+  [
+    'api-client',
+    ['.'],
+  ],
+  [
+    'api-contract',
+    ['.'],
+  ],
+  [
+    'feedback',
+    ['./client', './bundle'],
+  ],
+  [
+    'capacitor',
+    ['.'],
+  ],
+  [
+    'datapipe',
+    ['.'],
+  ],
+  [
+    'storage',
+    ['.', './client', './schemas'],
+  ],
+  [
+    'reldb',
+    ['./schemas'],
+  ],
 ])
 
 const hidden = new Map([
-  ['ai', ['LLMProvider', 'AILLMFunctionsDeps', 'ContextDeps', 'EmbeddingProvider', 'sessionStoreKey', 'A2ATaskStore']],
-  ['audit', ['createHelper']],
-  ['cache', ['CacheProvider']],
-  ['storage', ['StorageProvider']],
-  ['reldb', ['ReldbProvider']],
-  ['reach', ['ReachProvider']],
-  ['feedback', ['FeedbackReportRepository', 'FeedbackRuntime', 'FeedbackCapture', 'createFeedbackOperations']],
-  ['ui', ['readStoredValue', 'writeStoredValue']],
+  [
+    'ai',
+    [
+      'LLMProvider',
+      'AILLMFunctionsDeps',
+      'ContextDeps',
+      'EmbeddingProvider',
+      'sessionStoreKey',
+      'A2ATaskStore',
+    ],
+  ],
+  [
+    'audit',
+    ['createHelper'],
+  ],
+  [
+    'cache',
+    ['CacheProvider'],
+  ],
+  [
+    'storage',
+    ['StorageProvider'],
+  ],
+  [
+    'reldb',
+    ['ReldbProvider'],
+  ],
+  [
+    'reach',
+    ['ReachProvider'],
+  ],
+  [
+    'feedback',
+    [
+      'FeedbackReportRepository',
+      'FeedbackRuntime',
+      'FeedbackCapture',
+      'createFeedbackOperations',
+    ],
+  ],
+  [
+    'ui',
+    ['readStoredValue', 'writeStoredValue'],
+  ],
 ])
 
 /** 真实自引用消费已发布声明；负例防止内部类型或浏览器服务器实例重新泄漏。 */
@@ -53,7 +125,19 @@ function typeSmoke(directories, suffix, browser, generated) {
       source.push('import type { AIStoreProvider, AskOptions, ChatHistoryOptions, ChatRecord } from \'@h-ai/ai\'', 'export type Extensions = [AIStoreProvider, AskOptions, ChatHistoryOptions, ChatRecord]')
     if (directory === 'ai') {
       source.push('import { createAudioClient } from \'@h-ai/ai/client\'', 'export type AudioFactory = typeof createAudioClient')
-      for (const name of ['AIClient', 'AIClientConfig', 'AIApiAdapter', 'A2AClientOperations', 'StreamProgress', 'StreamOptions', 'createAIClient', 'createA2AClient', 'parseSSE', 'collectStreamContent', 'createUnconfiguredAudioClient'])
+      for (const name of [
+        'AIClient',
+        'AIClientConfig',
+        'AIApiAdapter',
+        'A2AClientOperations',
+        'StreamProgress',
+        'StreamOptions',
+        'createAIClient',
+        'createA2AClient',
+        'parseSSE',
+        'collectStreamContent',
+        'createUnconfiguredAudioClient',
+      ])
         source.push('// @ts-expect-error Removed redundant legacy client binding', `import type { ${name} } from '@h-ai/ai/client'`)
     }
     if (directory === 'reldb') {
@@ -99,17 +183,40 @@ function typeSmoke(directories, suffix, browser, generated) {
     writeFileSync(file, `${source.join('\n')}\n`)
     return file
   })
-  const program = ts.createProgram(sources, { noEmit: true, strict: true, skipLibCheck: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, customConditions: browser ? ['browser'] : [], allowArbitraryExtensions: true, types: [] })
+  const program = ts.createProgram(sources, {
+    noEmit: true,
+    strict: true,
+    skipLibCheck: true,
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    customConditions: browser
+      ? ['browser']
+      : [],
+    allowArbitraryExtensions: true,
+    types: [],
+  })
   const diagnostics = ts.getPreEmitDiagnostics(program)
-  if (diagnostics.length)
-    throw new Error(ts.formatDiagnostics(diagnostics, { getCanonicalFileName: value => value, getCurrentDirectory: () => root, getNewLine: () => '\n' }))
+  if (diagnostics.length) {
+    throw new Error(ts.formatDiagnostics(diagnostics, {
+      getCanonicalFileName: value => value,
+      getCurrentDirectory: () => root,
+      getNewLine: () => '\n',
+    }))
+  }
 }
 
 /** 按 Node 条件顺序选取 import/default；browser/svelte 仅由对应构建器选择。 */
 function select(entries, subpath, browser = false) {
   return entries.find(entry => entry.subpath === subpath
     && !entry.conditions.includes('types')
-    && entry.conditions.every(condition => ['import', 'default', ...(browser ? ['browser', 'svelte'] : ['node'])].includes(condition)))
+    && entry.conditions.every(condition => [
+      'import',
+      'default',
+      ...(browser
+        ? ['browser', 'svelte']
+        : ['node']),
+    ].includes(condition)))
 }
 
 /** Svelte 的组件和 Rune 模块先经真实编译器转换，不把内部模块外置来伪装浏览器兼容。 */
@@ -122,7 +229,11 @@ function sveltePlugin(generate) {
         const result = path.endsWith('.svelte')
           ? compile(source, { filename: path, generate, css: 'injected' })
           : compileModule(source, { filename: path, generate })
-        return { contents: result.js.code, loader: 'js', resolveDir: dirname(path) }
+        return {
+          contents: result.js.code,
+          loader: 'js',
+          resolveDir: dirname(path),
+        }
       })
     },
   }
@@ -137,7 +248,12 @@ function child(directory, args) {
 
 const temporary = mkdtempSync(join(tmpdir(), 'hai-api-smoke-'))
 const generated = []
-const generatedDirectories = [{ directory: temporary, parent: tmpdir() }]
+const generatedDirectories = [
+  {
+    directory: temporary,
+    parent: tmpdir(),
+  },
+]
 const failures = []
 let imports = 0
 let bundles = 0
@@ -174,13 +290,29 @@ try {
         const outputDirectory = mkdtempSync(join(base, `${basename(temporary)}-`))
         generatedDirectories.push({ directory: outputDirectory, parent: base })
         const outfile = join(outputDirectory, 'index.mjs')
-        await build({ entryPoints: [select(entries, '.').file], outfile, bundle: true, format: 'esm', platform: 'node', conditions: ['svelte'], tsconfigRaw: {}, banner: { js: 'import { createRequire as createSmokeRequire } from \'node:module\'; const require = createSmokeRequire(import.meta.url);' }, plugins: [sveltePlugin('server')], loader: { '.css': 'empty' }, logLevel: 'silent' })
+        await build({
+          entryPoints: [select(entries, '.').file],
+          outfile,
+          bundle: true,
+          format: 'esm',
+          platform: 'node',
+          conditions: ['svelte'],
+          tsconfigRaw: {},
+          banner: { js: 'import { createRequire as createSmokeRequire } from \'node:module\'; const require = createSmokeRequire(import.meta.url);' },
+          plugins: [
+            sveltePlugin('server'),
+          ],
+          loader: { '.css': 'empty' },
+          logLevel: 'silent',
+        })
         child(base, [outfile])
         child(base, ['--input-type=module', '--eval', 'await import(\'@h-ai/ui/auto-import\'); await import(\'@h-ai/ui/vite\')'])
       }
       else {
-        const paths = [...new Set(entries.filter(entry => select(entries, entry.subpath) === entry
-          && entry.target.endsWith('.js') && !(directory === 'kit' && entry.subpath === './client')).map(entry => `${manifest.name}${entry.subpath.slice(1)}`))]
+        const paths = [
+          ...new Set(entries.filter(entry => select(entries, entry.subpath) === entry
+            && entry.target.endsWith('.js') && !(directory === 'kit' && entry.subpath === './client')).map(entry => `${manifest.name}${entry.subpath.slice(1)}`)),
+        ]
         child(base, ['--input-type=module', '--eval', `for (const name of ${JSON.stringify(paths)}) await import(name)`])
         if (directory === 'core')
           child(base, ['--input-type=module', '--eval', 'const api = await import(\'@h-ai/core\'); if (\'createRequestCheck\' in api || !api.core.access.createRequestCheck(false)(\'/api/example\', \'GET\').allowed) throw new Error(\'Core access registration mismatch\')'])
@@ -191,16 +323,32 @@ try {
       failures.push(`${manifest.name} Node import: ${error.message}`)
     }
     const paths = directory === 'ui'
-      ? [...new Set(entries.filter(entry => !entry.subpath.startsWith('./styles/') && !['./auto-import', './vite'].includes(entry.subpath)).map(entry => entry.subpath))]
+      ? [
+          ...new Set(entries.filter(entry => !entry.subpath.startsWith('./styles/') && !['./auto-import', './vite'].includes(entry.subpath)).map(entry => entry.subpath)),
+        ]
       : browsers.get(directory) ?? []
     for (const subpath of paths) {
       try {
         const entry = select(entries, subpath, true)
         if (!entry)
           throw new Error('No browser import target')
-        const result = await build({ entryPoints: [entry.file], bundle: true, write: false, format: 'esm', platform: 'browser', conditions: ['browser', 'svelte'], tsconfigRaw: {}, metafile: true, plugins: [sveltePlugin('client')], logLevel: 'silent',
+        const result = await build({
+          entryPoints: [entry.file],
+          bundle: true,
+          write: false,
+          format: 'esm',
+          platform: 'browser',
+          conditions: ['browser', 'svelte'],
+          tsconfigRaw: {},
+          metafile: true,
+          plugins: [
+            sveltePlugin('client'),
+          ],
+          logLevel: 'silent',
           // $app 由 SvelteKit 提供，不能当作 Node polyfill；全部普通依赖仍完整打包。
-          external: ['$app/navigation', '$app/state'], loader: { '.css': 'empty' } })
+          external: ['$app/navigation', '$app/state'],
+          loader: { '.css': 'empty' },
+        })
         const builtins = Object.keys(result.metafile.inputs).filter(path => path.startsWith('node:'))
         if (builtins.length)
           throw new Error(`Node builtins in browser graph: ${builtins.join(', ')}`)
@@ -228,7 +376,12 @@ finally {
         failures.push(`Temporary directory cleanup ${directory}: Unexpected temporary directory`)
         continue
       }
-      rmSync(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+      rmSync(target, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+        retryDelay: 100,
+      })
     }
     catch (error) {
       // 继续清理其余资源，同时保留前面的导入/构建错误。

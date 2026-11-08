@@ -1085,7 +1085,7 @@
   "gallery_demo_combobox_searchable_select_bits_ui": "Combobox · 検索可能な選択欄（Bits UI）",
   "gallery_demo_confirm_dialog": "確認ダイアログ（Confirm）",
   "gallery_demo_crud_components": "CRUD コンポーネント",
-  "gallery_demo_iam_user_role_and_permission_pages_use_these": "IAM のユーザー・ロール・権限ページは、この CRUD コンポーネントと @h-ai/kit/client のナビゲーションアダプターで URL 同期と invalidateAll 更新を行います。",
+  "gallery_demo_iam_user_role_and_permission_pages_use_these": "IAM のユーザー・ロール・権限ページは、この CRUD コンポーネントと @h-ai/kit/client のナビゲーションアダプターで URL 同期と refreshAll 更新を行います。",
   "gallery_demo_crud_pages": "CRUD ページ",
   "gallery_demo_datatable": "データテーブル（DataTable）",
   "gallery_demo_drawer": "ドロワー（Drawer）",

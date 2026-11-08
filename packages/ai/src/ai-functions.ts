@@ -75,7 +75,7 @@ import { createKnowledgeOperations } from './knowledge/ai-knowledge-functions.js
 import { createAILLMFunctions } from './llm/ai-llm-functions.js'
 import { createAIMCPFunctions } from './mcp/ai-mcp-functions.js'
 import { createMemoryOperations } from './memory/ai-memory-facade.js'
-import { createMem0OssMemoryOperations } from './memory/providers/ai-memory-provider-mem0-oss.js'
+import { createMem0MemoryOperations } from './memory/providers/ai-memory-provider-mem0.js'
 import { createNativeMemoryOperations } from './memory/providers/ai-memory-provider-native.js'
 import { createPersonaOperations } from './persona/ai-persona-functions.js'
 import { createRagOperations } from './rag/ai-rag-functions.js'
@@ -165,7 +165,7 @@ export async function createAISubsystems(
 ): Promise<AISubsystems> {
   const { storeProvider, datapipe: datapipeDep } = deps
 
-  // 记忆后端：mem0 OSS 自管理存储，无需 hai 的 memoryStore / memoryVectorStore
+  // 记忆后端：Mem0 数据格式适配自管理存储，无需 hai 的 memoryStore / memoryVectorStore
   const memoryParsed = MemoryConfigSchema.parse(config.memory ?? {})
   const useMem0Oss = memoryParsed.provider === 'mem0'
 
@@ -195,7 +195,9 @@ export async function createAISubsystems(
     'hai_ai_persona',
     { hasObjectId: true },
   )
-  const a2aStores = config.a2a ? createA2AStores(storeProvider) : null
+  const a2aStores = config.a2a
+    ? createA2AStores(storeProvider)
+    : null
 
   // 向量存储
   const memoryVectorStore = useMem0Oss
@@ -404,9 +406,9 @@ export async function createAISubsystems(
           memoryStore,
           memoryVectorStore,
         )
-      : await createMem0OssMemoryOperations({
+      : await createMem0MemoryOperations({
           config: memoryParsed,
-          aiConfig: await llmConfig(),
+          embedding,
           llm,
           collectionName: 'hai_ai_memory',
           embeddingDims: config.embedding?.dimensions,

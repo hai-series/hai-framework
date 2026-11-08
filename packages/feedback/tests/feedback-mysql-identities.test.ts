@@ -17,10 +17,19 @@ import { mysqlEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
 import { readFeedbackBundle } from '../src/bundle/index.js'
 import { feedback, HaiFeedbackError } from '../src/index.js'
 
-const owner: FeedbackContext = { scopeId: 'tenant-A', userId: 'user-A', permissions: ['feedback:*'] }
-const settings = { recipients: ['admin@example.test'], adminUrl: 'http://localhost/admin/feedback', workerIntervalMs: 0, collectionTimeoutMs: 60000 }
+const owner: FeedbackContext = {
+  scopeId: 'tenant-A',
+  userId: 'user-A',
+  permissions: ['feedback:*'],
+}
+const settings = {
+  recipients: ['admin@example.test'],
+  adminUrl: 'http://localhost/admin/feedback',
+  workerIntervalMs: 0,
+  collectionTimeoutMs: 60000,
+}
 
-describe.sequential('mysql反馈身份字节精确隔离', () => {
+describe('mysql反馈身份字节精确隔离', { concurrent: false }, () => {
   let environment: DbTestEnv | undefined
   let directory: string | undefined
   let previousLevel = core.logger.getLevel()
@@ -38,10 +47,20 @@ describe.sequential('mysql反馈身份字节精确隔离', () => {
     directory = await mkdtemp(join(tmpdir(), 'hai-feedback-mysql-identity-'))
     expect((await reldb.init(environment.config)).success).toBe(true)
     expect((await storage.init({ type: 'local', root: directory })).success).toBe(true)
-    expect((await reach.init({ providers: [{ name: 'email', type: 'console' }] })).success).toBe(true)
+    expect((await reach.init({
+      providers: [
+        { name: 'email', type: 'console' },
+      ],
+    })).success).toBe(true)
     await configure('identity-bootstrap')
     // 显式采用大小写/重音折叠且忽略尾空格的排序规则，不依赖测试镜像默认值。
-    for (const table of ['hai_feedback_reports', 'hai_feedback_evidence', 'hai_feedback_attachments', 'hai_feedback_history', 'hai_feedback_jobs']) {
+    for (const table of [
+      'hai_feedback_reports',
+      'hai_feedback_evidence',
+      'hai_feedback_attachments',
+      'hai_feedback_history',
+      'hai_feedback_jobs',
+    ]) {
       expect((await reldb.ddl.raw(`ALTER TABLE ${table} CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`)).success).toBe(true)
     }
     await feedback.close()
@@ -94,9 +113,18 @@ describe.sequential('mysql反馈身份字节精确隔离', () => {
       expect(listed.data.items.map(item => item.id)).toEqual([local.data.id])
     }
     for (const id of foreignIds) {
-      expect(await feedback.get(id, owner)).toMatchObject({ success: false, error: { code: HaiFeedbackError.NOT_FOUND.code } })
-      expect(await feedback.setStatus({ id, status: 'handled', expectedVersion: 1 }, owner)).toMatchObject({ success: false, error: { code: HaiFeedbackError.NOT_FOUND.code } })
-      expect(await feedback.export({ id }, owner)).toMatchObject({ success: false, error: { code: HaiFeedbackError.NOT_FOUND.code } })
+      expect(await feedback.get(id, owner)).toMatchObject({
+        success: false,
+        error: { code: HaiFeedbackError.NOT_FOUND.code },
+      })
+      expect(await feedback.setStatus({ id, status: 'handled', expectedVersion: 1 }, owner)).toMatchObject({
+        success: false,
+        error: { code: HaiFeedbackError.NOT_FOUND.code },
+      })
+      expect(await feedback.export({ id }, owner)).toMatchObject({
+        success: false,
+        error: { code: HaiFeedbackError.NOT_FOUND.code },
+      })
     }
   })
 
@@ -154,14 +182,47 @@ describe.sequential('mysql反馈身份字节精确隔离', () => {
 
   it('来源、请求和错误锚点保持精确匹配，错误窗口不被CI别名混合', async () => {
     const window = (source: string, requestId: string, errorId: string, offset: number): FeedbackEvidenceInput[] => [
-      { id: `${errorId}-before`, source, requestId, sequence: offset, kind: 'log', timestamp: Date.now(), data: { marker: `${errorId}-before` } },
-      { id: errorId, source, requestId, errorId, sequence: offset + 1, kind: 'error', timestamp: Date.now(), data: { marker: errorId } },
-      { id: `${errorId}-after`, source, requestId, sequence: offset + 2, kind: 'log', timestamp: Date.now(), data: { marker: `${errorId}-after` } },
+      {
+        id: `${errorId}-before`,
+        source,
+        requestId,
+        sequence: offset,
+        kind: 'log',
+        timestamp: Date.now(),
+        data: { marker: `${errorId}-before` },
+      },
+      {
+        id: errorId,
+        source,
+        requestId,
+        errorId,
+        sequence: offset + 1,
+        kind: 'error',
+        timestamp: Date.now(),
+        data: { marker: errorId },
+      },
+      {
+        id: `${errorId}-after`,
+        source,
+        requestId,
+        sequence: offset + 2,
+        kind: 'log',
+        timestamp: Date.now(),
+        data: { marker: `${errorId}-after` },
+      },
     ]
     const first = window('browser:Source', 'Request-A', 'Error-A', 0)
     const otherSource = window('browser:source', 'Request-A', 'Other-Source', 0)
     const otherRequest = window('browser:Source', 'request-a', 'error-a', 10)
-    const report = await feedback.submit({ appId, submissionId: 'source-request-error', evidence: [...first, ...otherSource, ...otherRequest] }, owner)
+    const report = await feedback.submit({
+      appId,
+      submissionId: 'source-request-error',
+      evidence: [
+        ...first,
+        ...otherSource,
+        ...otherRequest,
+      ],
+    }, owner)
     expect(report.success).toBe(true)
     if (!report.success)
       return
@@ -180,14 +241,35 @@ describe.sequential('mysql反馈身份字节精确隔离', () => {
   it('同反馈A/a附件分别上传、读取、重试及导出，不相互替换', async () => {
     const upper = Buffer.from('UPPER-ATTACHMENT')
     const lower = Buffer.from('lower-attachment')
-    const metadata = (id: string, bytes: Buffer) => ({ id, name: `${id}.txt`, contentType: 'text/plain', size: bytes.length, checksum: createHash('sha256').update(bytes).digest('hex') })
-    const report = await feedback.submit({ appId, submissionId: 'attachment-case', attachments: [metadata('A', upper), metadata('a', lower)] }, owner)
+    const metadata = (id: string, bytes: Buffer) => ({
+      id,
+      name: `${id}.txt`,
+      contentType: 'text/plain',
+      size: bytes.length,
+      checksum: createHash('sha256').update(bytes).digest('hex'),
+    })
+    const report = await feedback.submit({
+      appId,
+      submissionId: 'attachment-case',
+      attachments: [
+        metadata('A', upper),
+        metadata('a', lower),
+      ],
+    }, owner)
     expect(report.success).toBe(true)
     if (!report.success)
       return
-    expect((await feedback.uploadAttachment({ id: report.data.id, attachmentId: 'A', dataBase64: upper.toString('base64') }, owner)).success).toBe(true)
+    expect((await feedback.uploadAttachment({
+      id: report.data.id,
+      attachmentId: 'A',
+      dataBase64: upper.toString('base64'),
+    }, owner)).success).toBe(true)
     const put = vi.spyOn(storage.file, 'put').mockResolvedValueOnce(err(HaiStorageError.OPERATION_FAILED, 'Fixture unavailable'))
-    const failed = await feedback.uploadAttachment({ id: report.data.id, attachmentId: 'a', dataBase64: lower.toString('base64') }, owner)
+    const failed = await feedback.uploadAttachment({
+      id: report.data.id,
+      attachmentId: 'a',
+      dataBase64: lower.toString('base64'),
+    }, owner)
     expect(failed.success).toBe(false)
     put.mockRestore()
     expect((await feedback.retry({ id: report.data.id, target: 'attachment', targetId: 'A' }, owner)).success).toBe(true)
@@ -197,8 +279,15 @@ describe.sequential('mysql反馈身份字节精确隔离', () => {
       expect(detail.data.attachments.find(item => item.id === 'A')?.status).toBe('available')
       expect(detail.data.attachments.find(item => item.id === 'a')?.status).toBe('failed')
     }
-    expect((await feedback.uploadAttachment({ id: report.data.id, attachmentId: 'a', dataBase64: lower.toString('base64') }, owner)).success).toBe(true)
-    for (const [attachmentId, bytes] of [['A', upper], ['a', lower]] as const) {
+    expect((await feedback.uploadAttachment({
+      id: report.data.id,
+      attachmentId: 'a',
+      dataBase64: lower.toString('base64'),
+    }, owner)).success).toBe(true)
+    for (const [attachmentId, bytes] of [
+      ['A', upper],
+      ['a', lower],
+    ] as const) {
       const downloaded = await feedback.getAttachment({ id: report.data.id, attachmentId }, owner)
       expect(downloaded.success).toBe(true)
       if (downloaded.success)
@@ -217,7 +306,10 @@ describe.sequential('mysql反馈身份字节精确隔离', () => {
     const bundle = await readFeedbackBundle(Buffer.from(downloaded.data.dataBase64, 'base64'))
     expect(bundle.success).toBe(true)
     if (bundle.success) {
-      for (const [id, bytes] of [['A', upper], ['a', lower]] as const) {
+      for (const [id, bytes] of [
+        ['A', upper],
+        ['a', lower],
+      ] as const) {
         const file = bundle.data.manifest.files.find(item => item.attachmentId === id)
         expect(file).toBeDefined()
         if (file)

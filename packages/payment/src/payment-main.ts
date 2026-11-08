@@ -43,6 +43,8 @@ const logger = core.logger.child({ module: 'payment', scope: 'main' })
 
 let currentConfig: PaymentConfig | null = null
 let initInProgress = false
+/** 关闭会使尚未完成的初始化失效，禁止迟到发布。 */
+let lifecycleGeneration = 0
 
 // ─── 未初始化占位 ───
 
@@ -87,16 +89,24 @@ export const payment: PaymentFunctions = {
       logger.warn('Payment module init already in progress, skipping')
       return err(
         HaiPaymentError.CONFIG_ERROR,
-        paymentM('payment_configError', { params: { error: 'init already in progress' } }),
+        paymentM('payment_configError', {
+          params: { error: 'init already in progress' },
+        }),
       )
     }
 
     initInProgress = true
+    const generation = ++lifecycleGeneration
 
     try {
+      // 保留并发初始化守卫，并允许同轮 close 使本次初始化失效。
+      await Promise.resolve()
+      if (generation !== lifecycleGeneration)
+        return notInitialized.result()
       if (currentConfig !== null) {
         logger.warn('Payment module is already initialized, reinitializing')
-        await payment.close()
+        clearProviders()
+        currentConfig = null
       }
 
       logger.info('Initializing payment module')
@@ -105,7 +115,9 @@ export const payment: PaymentFunctions = {
         logger.error('Payment config validation failed', { error: parseResult.error.message })
         return err(
           HaiPaymentError.CONFIG_ERROR,
-          paymentM('payment_configError', { params: { error: parseResult.error.message } }),
+          paymentM('payment_configError', {
+            params: { error: parseResult.error.message },
+          }),
           parseResult.error,
         )
       }
@@ -118,6 +130,8 @@ export const payment: PaymentFunctions = {
           return err(HaiPaymentError.CONFIG_ERROR, paymentM('payment_stripeDatabaseRequired'))
         const repository = new StripeOperationRepository(reldb)
         const ready = await repository.initialize()
+        if (generation !== lifecycleGeneration)
+          return notInitialized.result()
         if (!ready.success)
           return err(HaiPaymentError.CONFIG_ERROR, paymentM('payment_stripeStoreInitFailed'), ready.error)
         stripeProvider = createStripeProvider(parsed.stripe, repository)
@@ -151,7 +165,11 @@ export const payment: PaymentFunctions = {
       return err(
         HaiPaymentError.CONFIG_ERROR,
         paymentM('payment_initFailed', {
-          params: { error: error instanceof Error ? error.message : String(error) },
+          params: {
+            error: error instanceof Error
+              ? error.message
+              : String(error),
+          },
         }),
         error,
       )
@@ -165,6 +183,7 @@ export const payment: PaymentFunctions = {
    * 关闭模块、清除所有 Provider
    */
   async close(): Promise<void> {
+    lifecycleGeneration++
     if (!currentConfig) {
       logger.info('Payment module already closed, skipping')
       return
@@ -180,23 +199,33 @@ export const payment: PaymentFunctions = {
 
   /** 创建支付订单 */
   createOrder: (...args: Parameters<typeof createOrder>) =>
-    currentConfig ? createOrder(...args) : Promise.resolve(notInitialized.result<PaymentOrder>()),
+    currentConfig
+      ? createOrder(...args)
+      : Promise.resolve(notInitialized.result<PaymentOrder>()),
 
   /** 处理异步回调通知 */
   handleNotify: (...args: Parameters<typeof handleNotify>) =>
-    currentConfig ? handleNotify(...args) : Promise.resolve(notInitialized.result<PaymentNotifyResult>()),
+    currentConfig
+      ? handleNotify(...args)
+      : Promise.resolve(notInitialized.result<PaymentNotifyResult>()),
 
   /** 查询订单状态 */
   queryOrder: (...args: Parameters<typeof queryOrder>) =>
-    currentConfig ? queryOrder(...args) : Promise.resolve(notInitialized.result<OrderStatus>()),
+    currentConfig
+      ? queryOrder(...args)
+      : Promise.resolve(notInitialized.result<OrderStatus>()),
 
   /** 发起退款 */
   refund: (...args: Parameters<typeof refund>) =>
-    currentConfig ? refund(...args) : Promise.resolve(notInitialized.result<RefundResult>()),
+    currentConfig
+      ? refund(...args)
+      : Promise.resolve(notInitialized.result<RefundResult>()),
 
   /** 关闭订单 */
   closeOrder: (...args: Parameters<typeof closeOrder>) =>
-    currentConfig ? closeOrder(...args) : Promise.resolve(notInitialized.result<void>()),
+    currentConfig
+      ? closeOrder(...args)
+      : Promise.resolve(notInitialized.result<void>()),
 
   /** 获取已注册的 Provider */
   getProvider,

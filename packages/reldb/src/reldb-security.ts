@@ -42,7 +42,9 @@ export function validateIdentifier(name: string): HaiResult<string> {
   if (VALID_IDENTIFIER_RE.test(name)) {
     return ok(name)
   }
-  return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_invalidIdentifier', { params: { name } }))
+  return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_invalidIdentifier', {
+    params: { name },
+  }))
 }
 
 /**

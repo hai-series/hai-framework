@@ -1,7 +1,7 @@
 import type { ServProcedureHandler } from '../src/pipelines/serv-pipeline-types.js'
 import type { ServContext } from '../src/serv-context.js'
 import { audit } from '@h-ai/audit'
-import { core, ok } from '@h-ai/core'
+import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
 import { mapHaiError } from '../src/pipelines/serv-pipeline-helper.js'
 
@@ -34,6 +34,47 @@ function callHandler<TInput, TOutput>(
 }
 
 describe('pipeline.orpc', () => {
+  it.each([
+    undefined,
+    200,
+    399,
+    600,
+    1.5,
+    Number.NaN,
+    401,
+    403,
+    500,
+  ])('审计使用归一化的失败状态 %s', async (httpStatus) => {
+    const initialized = vi.spyOn(audit, 'isInitialized', 'get').mockReturnValue(true)
+    const capture = vi.spyOn(audit, 'capture').mockResolvedValue(err(HaiCommonError.INTERNAL_ERROR))
+    const log = vi.spyOn(logger, 'error').mockImplementation(() => {})
+    try {
+      const handler = mapHaiError<unknown, never>(async () => ({
+        success: false,
+        error: { code: 'test:failure', message: 'Private failure', httpStatus },
+      }))
+      const result = await callHandler(handler, undefined)
+      expect(result.success).toBe(false)
+      if (result.success)
+        return
+      const status = httpStatus === 401 || httpStatus === 403
+        ? httpStatus
+        : 500
+      expect(result.error.httpStatus).toBe(status)
+      expect(capture).toHaveBeenCalledWith(expect.objectContaining({
+        outcome: status === 401 || status === 403
+          ? 'denied'
+          : 'failure',
+        details: expect.objectContaining({ status }),
+      }), expect.anything())
+    }
+    finally {
+      initialized.mockRestore()
+      capture.mockRestore()
+      log.mockRestore()
+    }
+  })
+
   it('未选用审计时业务正常执行且不调用未初始化的采集器', async () => {
     expect(audit.isInitialized).toBe(false)
     const capture = vi.spyOn(audit, 'capture')

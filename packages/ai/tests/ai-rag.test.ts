@@ -22,11 +22,13 @@ function createMockLLM(answer: string): LLMOperations {
         object: 'chat.completion' as const,
         created: Date.now(),
         model: 'test-model',
-        choices: [{
-          index: 0,
-          message: { role: 'assistant' as const, content: answer },
-          finish_reason: 'stop' as const,
-        }],
+        choices: [
+          {
+            index: 0,
+            message: { role: 'assistant' as const, content: answer },
+            finish_reason: 'stop' as const,
+          },
+        ],
         usage: { prompt_tokens: 50, completion_tokens: 20, total_tokens: 70 },
       },
     })),
@@ -71,8 +73,18 @@ function createFailRetrieval(): RetrievalOperations {
 describe('rAG operations', () => {
   it('基本 RAG 查询', async () => {
     const mockRetrieval = createMockRetrieval([
-      { id: 'doc-1', content: 'AI is artificial intelligence', score: 0.95, sourceId: 'wiki' },
-      { id: 'doc-2', content: 'Machine learning is a subset of AI', score: 0.85, sourceId: 'wiki' },
+      {
+        id: 'doc-1',
+        content: 'AI is artificial intelligence',
+        score: 0.95,
+        sourceId: 'wiki',
+      },
+      {
+        id: 'doc-2',
+        content: 'Machine learning is a subset of AI',
+        score: 0.85,
+        sourceId: 'wiki',
+      },
     ])
     const mockLLM = createMockLLM('AI stands for Artificial Intelligence.')
     const rag = createRagOperations(mockLLM, mockRetrieval)
@@ -88,7 +100,12 @@ describe('rAG operations', () => {
 
   it('rAG 传递 topK 和 model', async () => {
     const mockRetrieval = createMockRetrieval([
-      { id: 'doc-1', content: 'Content', score: 0.9, sourceId: 'kb' },
+      {
+        id: 'doc-1',
+        content: 'Content',
+        score: 0.9,
+        sourceId: 'kb',
+      },
     ])
     const mockLLM = createMockLLM('Answer')
     const rag = createRagOperations(mockLLM, mockRetrieval)
@@ -117,7 +134,12 @@ describe('rAG operations', () => {
 
   it('自定义 formatContext', async () => {
     const mockRetrieval = createMockRetrieval([
-      { id: 'doc-1', content: 'Test content', score: 0.9, sourceId: 'wiki' },
+      {
+        id: 'doc-1',
+        content: 'Test content',
+        score: 0.9,
+        sourceId: 'wiki',
+      },
     ])
     const mockLLM = createMockLLM('answer')
     const rag = createRagOperations(mockLLM, mockRetrieval)
@@ -135,7 +157,12 @@ describe('rAG operations', () => {
 
   it('多轮对话传入 messages', async () => {
     const mockRetrieval = createMockRetrieval([
-      { id: 'doc-1', content: 'Info', score: 0.8, sourceId: 'kb' },
+      {
+        id: 'doc-1',
+        content: 'Info',
+        score: 0.8,
+        sourceId: 'kb',
+      },
     ])
     const mockLLM = createMockLLM('Follow-up answer')
     const rag = createRagOperations(mockLLM, mockRetrieval)
@@ -167,7 +194,12 @@ describe('rAG operations', () => {
 
   it('lLM 失败时返回 RAG_FAILED', async () => {
     const mockRetrieval = createMockRetrieval([
-      { id: 'doc-1', content: 'content', score: 0.9, sourceId: 'wiki' },
+      {
+        id: 'doc-1',
+        content: 'content',
+        score: 0.9,
+        sourceId: 'wiki',
+      },
     ])
     const failLLM = {
       chat: vi.fn(async () => ({
@@ -193,7 +225,12 @@ describe('rAG operations', () => {
 describe('rAG queryStream', () => {
   it('流式查询产出 context → delta → done 事件', async () => {
     const mockRetrieval = createMockRetrieval([
-      { id: 'doc-1', content: 'AI knowledge', score: 0.9, sourceId: 'wiki' },
+      {
+        id: 'doc-1',
+        content: 'AI knowledge',
+        score: 0.9,
+        sourceId: 'wiki',
+      },
     ])
 
     const streamLLM: LLMOperations = {
@@ -204,14 +241,26 @@ describe('rAG queryStream', () => {
           object: 'chat.completion.chunk',
           created: Date.now(),
           model: 'gpt-4o-mini',
-          choices: [{ index: 0, delta: { content: 'Hello' }, finish_reason: null }],
+          choices: [
+            {
+              index: 0,
+              delta: { content: 'Hello' },
+              finish_reason: null,
+            },
+          ],
         }
         yield {
           id: 'chunk-2',
           object: 'chat.completion.chunk',
           created: Date.now(),
           model: 'gpt-4o-mini',
-          choices: [{ index: 0, delta: { content: ' World' }, finish_reason: 'stop' }],
+          choices: [
+            {
+              index: 0,
+              delta: { content: ' World' },
+              finish_reason: 'stop',
+            },
+          ],
           usage: { prompt_tokens: 30, completion_tokens: 10, total_tokens: 40 },
         }
       })()),

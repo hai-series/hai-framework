@@ -37,45 +37,123 @@ import {
  */
 export const feedbackContract = {
   reports: {
-    policy: route({ method: 'GET', path: '/feedback/policy', operationId: 'feedback.reports.policy', summary: 'Effective feedback capacity', tags: ['feedback'] })
+    policy: route({
+      method: 'GET',
+      path: '/feedback/policy',
+      operationId: 'feedback.reports.policy',
+      summary: 'Effective feedback capacity',
+      tags: ['feedback'],
+    })
       .input(z.object({}))
       .output(haiResultSchema(FeedbackBudgetSchema)),
-    submit: route({ method: 'POST', path: '/feedback/reports', operationId: 'feedback.reports.submit', summary: 'submit feedback', tags: ['feedback'] })
+    submit: route({
+      method: 'POST',
+      path: '/feedback/reports',
+      operationId: 'feedback.reports.submit',
+      summary: 'submit feedback',
+      tags: ['feedback'],
+    })
       .input(FeedbackSubmitInputSchema)
       .output(haiResultSchema(FeedbackReportSchema)),
-    list: route({ method: 'GET', path: '/feedback/reports', operationId: 'feedback.reports.list', summary: 'list feedback', tags: ['feedback'] })
+    list: route({
+      method: 'GET',
+      path: '/feedback/reports',
+      operationId: 'feedback.reports.list',
+      summary: 'list feedback',
+      tags: ['feedback'],
+    })
       .input(FeedbackListInputSchema)
       .output(haiResultSchema(paginatedSchema(FeedbackReportSchema))),
-    get: route({ method: 'GET', path: '/feedback/reports/{id}', operationId: 'feedback.reports.get', summary: 'get feedback', tags: ['feedback'] })
+    get: route({
+      method: 'GET',
+      path: '/feedback/reports/{id}',
+      operationId: 'feedback.reports.get',
+      summary: 'get feedback',
+      tags: ['feedback'],
+    })
       .input(FeedbackIdInputSchema)
       .output(haiResultSchema(FeedbackDetailSchema)),
-    getEvidence: route({ method: 'GET', path: '/feedback/reports/{id}/evidence', operationId: 'feedback.reports.getEvidence', summary: 'getEvidence feedback', tags: ['feedback'] })
+    getEvidence: route({
+      method: 'GET',
+      path: '/feedback/reports/{id}/evidence',
+      operationId: 'feedback.reports.getEvidence',
+      summary: 'getEvidence feedback',
+      tags: ['feedback'],
+    })
       .input(FeedbackEvidenceQuerySchema)
       .output(haiResultSchema(paginatedSchema(FeedbackEvidenceSchema))),
-    setStatus: route({ method: 'PATCH', path: '/feedback/reports/{id}/status', operationId: 'feedback.reports.setStatus', summary: 'setStatus feedback', tags: ['feedback'] })
+    setStatus: route({
+      method: 'PATCH',
+      path: '/feedback/reports/{id}/status',
+      operationId: 'feedback.reports.setStatus',
+      summary: 'setStatus feedback',
+      tags: ['feedback'],
+    })
       .input(FeedbackSetStatusInputSchema)
       .output(haiResultSchema(FeedbackReportSchema)),
-    retry: route({ method: 'POST', path: '/feedback/reports/{id}/retry', operationId: 'feedback.reports.retry', summary: 'retry feedback', tags: ['feedback'] })
+    retry: route({
+      method: 'POST',
+      path: '/feedback/reports/{id}/retry',
+      operationId: 'feedback.reports.retry',
+      summary: 'retry feedback',
+      tags: ['feedback'],
+    })
       .input(FeedbackRetryInputSchema)
       .output(HaiVoidResultSchema),
-    export: route({ method: 'POST', path: '/feedback/reports/{id}/exports', operationId: 'feedback.reports.export', summary: 'export feedback', tags: ['feedback'] })
+    export: route({
+      method: 'POST',
+      path: '/feedback/reports/{id}/exports',
+      operationId: 'feedback.reports.export',
+      summary: 'export feedback',
+      tags: ['feedback'],
+    })
       .input(FeedbackExportInputSchema)
       .output(haiResultSchema(FeedbackJobSchema)),
-    appendEvidence: route({ method: 'POST', path: '/feedback/reports/{id}/evidence', operationId: 'feedback.reports.appendEvidence', summary: 'appendEvidence feedback', tags: ['feedback'] })
+    appendEvidence: route({
+      method: 'POST',
+      path: '/feedback/reports/{id}/evidence',
+      operationId: 'feedback.reports.appendEvidence',
+      summary: 'appendEvidence feedback',
+      tags: ['feedback'],
+    })
       .input(FeedbackAppendEvidenceInputSchema)
       .output(haiResultSchema(FeedbackEvidenceAckSchema)),
-    getExport: route({ method: 'GET', path: '/feedback/reports/{id}/exports/{jobId}', operationId: 'feedback.reports.getExport', summary: 'Download feedback export', tags: ['feedback'] })
+    getExport: route({
+      method: 'GET',
+      path: '/feedback/reports/{id}/exports/{jobId}',
+      operationId: 'feedback.reports.getExport',
+      summary: 'Download feedback export',
+      tags: ['feedback'],
+    })
       .input(FeedbackExportQuerySchema)
       .output(haiResultSchema(FeedbackAttachmentDataSchema)),
-    completeCollection: route({ method: 'POST', path: '/feedback/reports/{id}/complete', operationId: 'feedback.reports.completeCollection', summary: 'completeCollection feedback', tags: ['feedback'] })
+    completeCollection: route({
+      method: 'POST',
+      path: '/feedback/reports/{id}/complete',
+      operationId: 'feedback.reports.completeCollection',
+      summary: 'completeCollection feedback',
+      tags: ['feedback'],
+    })
       .input(FeedbackCompleteInputSchema)
       .output(haiResultSchema(FeedbackReportSchema)),
   },
   attachments: {
-    upload: route({ method: 'POST', path: '/feedback/reports/{id}/attachments/{attachmentId}', operationId: 'feedback.attachments.upload', summary: 'Upload feedback attachment', tags: ['feedback'] })
+    upload: route({
+      method: 'POST',
+      path: '/feedback/reports/{id}/attachments/{attachmentId}',
+      operationId: 'feedback.attachments.upload',
+      summary: 'Upload feedback attachment',
+      tags: ['feedback'],
+    })
       .input(FeedbackUploadInputSchema)
       .output(haiResultSchema(FeedbackAttachmentSchema)),
-    get: route({ method: 'GET', path: '/feedback/reports/{id}/attachments/{attachmentId}', operationId: 'feedback.attachments.get', summary: 'Read feedback attachment', tags: ['feedback'] })
+    get: route({
+      method: 'GET',
+      path: '/feedback/reports/{id}/attachments/{attachmentId}',
+      operationId: 'feedback.attachments.get',
+      summary: 'Read feedback attachment',
+      tags: ['feedback'],
+    })
       .input(FeedbackAttachmentQuerySchema)
       .output(haiResultSchema(FeedbackAttachmentDataSchema)),
   },

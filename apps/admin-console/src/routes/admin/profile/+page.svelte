@@ -1,12 +1,12 @@
 <script lang='ts'>
   import type { ChangePasswordFormData, UserProfileSubmitData } from '@h-ai/ui'
   import type { PageData } from './$types'
-  import { invalidateAll } from '$app/navigation'
-  import * as m from '$lib/paraglide/messages.js'
-  import { changeProfilePassword, updateProfile, uploadProfileAvatar } from '$lib/services/profile-api'
+  import { refreshAll } from '$app/navigation'
   import { toast } from '@h-ai/ui'
   import { authErrorMessage } from '@h-ai/ui/i18n'
   import { errorMessage } from '@h-ai/ui/toast'
+  import * as m from '#lib/paraglide/messages.js'
+  import { changeProfilePassword, updateProfile, uploadProfileAvatar } from '#lib/services/profile-api.js'
 
   interface Props {
     data: PageData
@@ -104,7 +104,9 @@
       const uploadResponse = await uploadProfileAvatar(file)
       const uploadBody = await uploadResponse.json()
       if (!uploadResponse.ok || !uploadBody.success) {
-        profileErrors = { general: errorMessage(uploadBody.error, m.common_error()) }
+        profileErrors = {
+          general: errorMessage(uploadBody.error, m.common_error()),
+        }
         return
       }
 
@@ -112,7 +114,9 @@
         avatar: uploadBody.data?.avatar,
       })
       if (!response.ok || !body.success) {
-        profileErrors = { general: errorMessage(body.error, m.common_error()) }
+        profileErrors = {
+          general: errorMessage(body.error, m.common_error()),
+        }
         return
       }
 
@@ -120,11 +124,13 @@
         ...profileUser,
         avatarUrl: body.data?.user?.avatar ?? uploadBody.data?.avatar,
       }
-      await invalidateAll()
+      await refreshAll()
       toast.success(m.common_success())
     }
     catch {
-      profileErrors = { general: m.common_network_error() }
+      profileErrors = {
+        general: m.common_network_error(),
+      }
     }
     finally {
       profileLoading = false
@@ -135,11 +141,11 @@
    * 进行前端校验并提交资料表单。
    *
    * @param formData 资料表单数据
-   * @returns 无返回值
+   * @returns 保存成功为 true；失败或忙碌时为 false，并保留编辑草稿
    */
-  async function handleProfileSubmit(formData: UserProfileSubmitData) {
+  async function handleProfileSubmit(formData: UserProfileSubmitData): Promise<boolean> {
     if (profileLoading) {
-      return
+      return false
     }
 
     profileLoading = true
@@ -162,7 +168,7 @@
           ...normalizeProfileFieldErrors(body.error?.details?.fieldErrors),
           general: errorMessage(body.error, m.common_error()),
         }
-        return
+        return false
       }
 
       profileUser = {
@@ -173,11 +179,15 @@
         phone: body.data?.user?.phone ?? '',
         avatarUrl: body.data?.user?.avatar ?? '',
       }
-      await invalidateAll()
+      await refreshAll()
       toast.success(m.common_success())
+      return true
     }
     catch {
-      profileErrors = { general: m.common_network_error() }
+      profileErrors = {
+        general: m.common_network_error(),
+      }
+      return false
     }
     finally {
       profileLoading = false
@@ -199,19 +209,25 @@
     passwordErrors = {}
 
     if (!formData.oldPassword) {
-      passwordErrors = { oldPassword: m.api_common_required_fields() }
+      passwordErrors = {
+        oldPassword: m.api_common_required_fields(),
+      }
       passwordLoading = false
       return
     }
 
     if (formData.newPassword.length < MIN_PASSWORD_LENGTH) {
-      passwordErrors = { newPassword: m.api_auth_password_too_short() }
+      passwordErrors = {
+        newPassword: m.api_auth_password_too_short(),
+      }
       passwordLoading = false
       return
     }
 
     if (formData.newPassword !== formData.confirmPassword) {
-      passwordErrors = { confirmPassword: m.api_auth_password_mismatch() }
+      passwordErrors = {
+        confirmPassword: m.api_auth_password_mismatch(),
+      }
       passwordLoading = false
       return
     }
@@ -224,7 +240,9 @@
       })
 
       if (!result.success) {
-        passwordErrors = { general: authErrorMessage(result.error) }
+        passwordErrors = {
+          general: authErrorMessage(result.error),
+        }
         return
       }
 
@@ -236,7 +254,9 @@
       }
     }
     catch {
-      passwordErrors = { general: m.common_network_error() }
+      passwordErrors = {
+        general: m.common_network_error(),
+      }
     }
     finally {
       passwordLoading = false
@@ -298,10 +318,22 @@
           user={profileUser}
           editable
           alwaysEditable
-          fields={['avatar', 'username', 'email', 'displayName', 'phone']}
+          fields={[
+            'avatar',
+            'username',
+            'email',
+            'displayName',
+            'phone',
+          ]}
           fieldConstraints={{
-            username: { pattern: '\\w{3,20}', validationMessage: () => m.api_auth_username_format_invalid() },
-            email: { pattern: '[^\\s@]+@[^\\s@][^\\s.@]*\\.[^\\s@]+', validationMessage: () => m.api_auth_email_invalid() },
+            username: {
+              pattern: '\\w{3,20}',
+              validationMessage: () => m.api_auth_username_format_invalid(),
+            },
+            email: {
+              pattern: '[^\\s@]+@[^\\s@][^\\s.@]*\\.[^\\s@]+',
+              validationMessage: () => m.api_auth_email_invalid(),
+            },
           }}
           errors={profileErrors}
           loading={profileLoading}

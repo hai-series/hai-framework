@@ -13,7 +13,11 @@ function defineAuthorizationTests() {
     expect(user.success && permission.success).toBe(true)
     if (!user.success || !permission.success)
       return
-    const role = await iam.authz.createRole({ code: 'fresh-reader', name: 'Reader', permissionIds: [permission.data.id] })
+    const role = await iam.authz.createRole({
+      code: 'fresh-reader',
+      name: 'Reader',
+      permissionIds: [permission.data.id],
+    })
     expect(role.success).toBe(true)
     if (!role.success)
       return
@@ -71,8 +75,12 @@ function defineAuthorizationTests() {
     expect(current.success).toBe(false)
     if (!current.success)
       expect(current.error.code).toBe(HaiIamError.REPOSITORY_ERROR.code)
-    expect(get).toHaveBeenCalledTimes(failedRead === 'credential' ? 1 : 0)
-    expect(query).toHaveBeenCalledTimes(failedRead === 'authorization' ? 1 : 0)
+    expect(get).toHaveBeenCalledTimes(failedRead === 'credential'
+      ? 1
+      : 0)
+    expect(query).toHaveBeenCalledTimes(failedRead === 'authorization'
+      ? 1
+      : 0)
     get.mockRestore()
     query.mockRestore()
     // 暂时的持久读取故障不能删除仍有效的会话；恢复后同一令牌仍可验证。
@@ -113,7 +121,12 @@ function defineAuthorizationTests() {
       if (index < 2)
         expect((await iam.authz.assignRole(user.data.user.id, role.data.id)).success).toBe(true)
     }
-    const page = await iam.user.listUsers({ search: 'batch-user-', roleCode: 'batch-reader', page: 2, pageSize: 1 })
+    const page = await iam.user.listUsers({
+      search: 'batch-user-',
+      roleCode: 'batch-reader',
+      page: 2,
+      pageSize: 1,
+    })
     expect(page.success).toBe(true)
     if (page.success) {
       expect(page.data.total).toBe(2)
@@ -121,7 +134,9 @@ function defineAuthorizationTests() {
       expect(page.data.page).toBe(2)
     }
     const query = vi.spyOn(reldb.sql, 'query')
-    const users = await iam.user.getUsers([ids[1]!, ids[0]!, ids[1]!, 'missing'], { include: ['roles'] })
+    const users = await iam.user.getUsers([ids[1]!, ids[0]!, ids[1]!, 'missing'], {
+      include: ['roles'],
+    })
     expect(users.success).toBe(true)
     if (users.success) {
       expect(users.data.map(user => user.id)).toEqual([ids[1], ids[0]])

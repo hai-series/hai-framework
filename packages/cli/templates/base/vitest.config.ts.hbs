@@ -7,9 +7,13 @@ import { resolveBuildMetadata } from './scripts/build-metadata.js'
 
 export default defineConfig({
 {{#unless isSvelteOnlyApp}}
-  plugins: [sveltekit()],
+  plugins: [
+    sveltekit(),
+  ],
 {{/unless}}
-  define: { __HAI_BUILD_METADATA__: JSON.stringify(resolveBuildMetadata(fileURLToPath(new URL('.', import.meta.url)))) },
+  define: {
+    __HAI_BUILD_METADATA__: JSON.stringify(resolveBuildMetadata(fileURLToPath(new URL('.', import.meta.url)))),
+  },
   test: {
     globals: true,
     environment: 'node',

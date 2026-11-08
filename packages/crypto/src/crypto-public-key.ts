@@ -32,6 +32,8 @@ const SM2_PUBLIC_KEY_REGEX = /^(?:04)?[0-9a-f]{128}$/i
 export function isValidSM2PublicKey(publicKey: unknown): publicKey is string {
   if (typeof publicKey !== 'string' || (publicKey.length !== 128 && publicKey.length !== 130) || !SM2_PUBLIC_KEY_REGEX.test(publicKey))
     return false
-  const encoded = publicKey.length === 128 ? `04${publicKey}` : publicKey
+  const encoded = publicKey.length === 128
+    ? `04${publicKey}`
+    : publicKey
   return smCrypto.sm2.verifyPublicKey(encoded) === true
 }

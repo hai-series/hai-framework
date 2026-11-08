@@ -8,6 +8,8 @@
 
 hai-framework's API service runtime: a stable public HTTP App abstraction that mounts `@h-ai/api-contract` contracts as cross-platform HTTP APIs. Hono is an internal implementation detail.
 
+Use runtime operations through `serv.xx`. Import `ServFunctions` from the root entry when annotating or re-exporting the namespace. Context factories and generic `implement` signatures support downstream declaration emission through public entries; no internal build paths or standalone helpers are needed.
+
 ## Core features
 
 - Start with `serv.createApp(...)` → `serv.listen(app, { port })`; applications need not import Hono.
@@ -22,7 +24,9 @@ hai-framework's API service runtime: a stable public HTTP App abstraction that m
 - Optional transport encryption: `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` mounts key exchange and request/response encryption automatically.
 - Optional audio: `serv.createApp({ audio: { ai, verifyTicket, authorize } })` mounts a unified audio WebSocket. Connections authenticate immediately with one-time tickets (`{ session, grant? }`, separate pre-auth timeout). Every frame uses runtime Zod validation and a strict state machine, with input/queue/send-buffer backpressure and cascading cancellation. Authorization verifies operations, models, voices, quotas, and concurrency on the server.
 
-> Lifecycle: `@h-ai/serv` is a stateless HTTP App assembler and needs no `init()` / `close()`. Initialize `iam` / `storage` / `ai` / `crypto` before app creation, then release them in reverse order through `serv.listen(..., { onClose })`. `serv.createApp()` throws immediately on startup configuration errors such as transport manager creation failure. onClose is the SIGINT/SIGTERM shutdown callback. Calling the returned handle.close directly closes HTTP only; the host separately releases business modules in reverse order.
+> Lifecycle: `@h-ai/serv` is a stateless HTTP App assembler and needs no `init()` / `close()`. Initialize `iam` / `storage` / `ai` / `crypto` before app creation, then release them in reverse order through `serv.listen(..., { onClose })`. `serv.createApp()` throws immediately on startup configuration errors such as transport manager creation failure. onClose is the SIGINT/SIGTERM shutdown callback. Calling the returned handle.close directly closes the HTTP listener and audio connections; the host separately releases business modules in reverse order.
+
+The listener handle can close immediately after startup to cancel a pending bind; repeated closes share the same result. Actual listen failures, such as an occupied address, still reject the close result instead of reporting a normal shutdown.
 
 ## Getting started
 
@@ -53,6 +57,7 @@ const procedures = {
 const app = serv.createApp({
   contract,
   procedures,
+  iam,
   http: {
     apiPrefix: '/api/v1',
     openapi: { path: '/openapi.json' },
@@ -199,14 +204,16 @@ const app = serv.createApp({
   contract,
   procedures,
   http: servConfig.http,
-  middlewares: [{
-    middleware: serv.cors({
-      origin: servConfig.cors.origin,
-      credentials: servConfig.cors.credentials,
-      allowedHeaders: [...servConfig.cors.allowedHeaders],
-      exposedHeaders: [...servConfig.cors.exposedHeaders],
-    }),
-  }],
+  middlewares: [
+    {
+      middleware: serv.cors({
+        origin: servConfig.cors.origin,
+        credentials: servConfig.cors.credentials,
+        allowedHeaders: [...servConfig.cors.allowedHeaders],
+        exposedHeaders: [...servConfig.cors.exposedHeaders],
+      }),
+    }
+  ],
   transport: servConfig.transport === false
     ? undefined
     : {
@@ -419,6 +426,7 @@ Constraints:
 
 - `.permission()` and `.role()` require authentication automatically. Failures return HaiResult with `error.httpStatus` 401/403; ordinary procedure responses remain HTTP 200 by default.
 - Multiple permissions/roles on one route must all pass. `serv.WILDCARD_PERMISSION` / `serv.WILDCARD_ROLE` allow their respective categories.
+- Permissions also support the IAM/Kit colon-prefix rule: `users:*` matches `users:read`, but not `users2:read` or dot-separated permissions.
 - Unhandled handler exceptions become INTERNAL_ERROR HaiResult values; expected business failures should return `err(...)` directly.
 - Paths, input, and output come from the contract. Duplicate/unknown paths are rejected; `.build()` requires complete contract implementation.
 
@@ -487,11 +495,14 @@ await apiClient.init({
 
 > Refresh cookies use `HttpOnly` and `SameSite=Strict` and are scoped to `{apiPrefix}/auth/refresh`. Production adds `Secure` by default.
 
+Refresh failures use the public error boundary too: 5xx and missing or invalid statuses return a safe message and traceId, while internal causes stay in server logs. Only a 401 authentication failure clears the refresh cookie; rate limits and backend failures preserve credentials for retry. Automatic auditing uses the same normalized failure status.
+
 ### API overview
 
 - `serv.createApp(options)`: create the HTTP App with custom middleware, health checks, OpenAPI, optional docs.
 - `serv.parseRequestContext({ request })`: extract Bearer token + requestId without populating session.
 - `serv.listen(app, options)`: start Node.js HTTP service; return `{ server, address, close }`.
+  The returned `close()` is idempotent: it stops accepting connections, closes Audio WebSockets, terminates uncooperative audio clients after one second, and waits for HTTP shutdown. Manual close also removes process signal listeners; the host still releases business modules in reverse order.
 - `serv.toFetch(app)`: wrap as a standard `fetch(Request)` handler.
 - `serv.generateSpec(contract, options)`: generate an OpenAPI 3.1 spec from the contract.
 - `serv.storageAssets(config)`: read-only storage middleware with key/MIME allowlists, GET/HEAD, and ETags.
@@ -626,15 +637,18 @@ const app = serv.createApp({
     openapi: security.exposeApiDocs ? servConfig.http.openapi : false,
     docs: security.exposeApiDocs ? servConfig.http.docs : false,
   },
+  iam,
   refreshCookie: { secure: security.secureRefreshCookie },
-  middlewares: [{
-    middleware: serv.cors({
-      origin: security.allowOrigin,
-      credentials: servConfig.cors.credentials,
-      allowedHeaders: [...servConfig.cors.allowedHeaders],
-      exposedHeaders: [...servConfig.cors.exposedHeaders],
-    }),
-  }],
+  middlewares: [
+    {
+      middleware: serv.cors({
+        origin: security.allowOrigin,
+        credentials: servConfig.cors.credentials,
+        allowedHeaders: [...servConfig.cors.allowedHeaders],
+        exposedHeaders: [...servConfig.cors.exposedHeaders],
+      }),
+    }
+  ],
 })
 ```
 
@@ -699,7 +713,7 @@ const procedures = serv
   .build()
 ```
 
-> When downstream modules (such as `iam.user.xxx()`) return `HaiResult` directly, serv forwards `error.message` unchanged. `HaiError` holds only the final `message`, not `messageKey/params`, so **serv cannot generically retranslate arbitrary downstream errors**. Request-level localization must receive locale at the module that creates the error message.
+> Downstream 4xx messages are sanitized for public responses. 5xx and missing or invalid statuses use a safe internal-error message with a traceId; full causes remain in server logs. `HaiError` has no `messageKey/params`, so domain-message localization still belongs to the module that creates the message with the request locale.
 
 ### Request locale isolation
 
@@ -737,7 +751,10 @@ const procedures = {
 const app = serv.createApp({
   contract,
   procedures,
-  createContext: async input => ({ ...await authenticate(input), scopeId: 'configured-product' }),
+  createContext: async input => ({
+    ...await authenticate(input),
+    scopeId: 'configured-product'
+  }),
 })
 ```
 

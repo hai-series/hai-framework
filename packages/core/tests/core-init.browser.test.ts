@@ -9,7 +9,9 @@ import { core, HaiCommonError } from '../src/core-index.browser.js'
 
 describe('core.init (browser)', () => {
   it('init 应该可在浏览器环境调用', () => {
-    expect(() => core.init({ logging: { level: 'info' } })).not.toThrow()
+    expect(() => core.init({
+      logging: { level: 'info' },
+    })).not.toThrow()
   })
 
   it('init 不传参应正常执行', () => {
@@ -17,7 +19,9 @@ describe('core.init (browser)', () => {
   })
 
   it('init 带 logging 应该配置日志级别', () => {
-    core.init({ logging: { level: 'debug' } })
+    core.init({
+      logging: { level: 'debug' },
+    })
     expect(core.logger.getLevel()).toBe('debug')
 
     // 恢复

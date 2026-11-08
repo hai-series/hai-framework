@@ -4,11 +4,11 @@
 
 | 包 | 公开子路径/条件 | 命名 API 数 |
 | --- | --- | --- |
-| @h-ai/ai | `. (browser/default)` | 348 |
-| @h-ai/ai | `. (browser/types)` | 348 |
-| @h-ai/ai | `. (default)` | 353 |
-| @h-ai/ai | `. (import)` | 353 |
-| @h-ai/ai | `. (types)` | 353 |
+| @h-ai/ai | `. (browser/default)` | 346 |
+| @h-ai/ai | `. (browser/types)` | 346 |
+| @h-ai/ai | `. (default)` | 354 |
+| @h-ai/ai | `. (import)` | 354 |
+| @h-ai/ai | `. (types)` | 354 |
 | @h-ai/ai | `./client (import)` | 4 |
 | @h-ai/ai | `./client (types)` | 4 |
 | @h-ai/api-client | `. (default)` | 14 |
@@ -65,18 +65,18 @@
 | @h-ai/iam | `. (default)` | 85 |
 | @h-ai/iam | `. (import)` | 85 |
 | @h-ai/iam | `. (types)` | 85 |
-| @h-ai/kit | `. (browser/default)` | 35 |
-| @h-ai/kit | `. (browser/types)` | 35 |
-| @h-ai/kit | `. (import)` | 76 |
-| @h-ai/kit | `. (types)` | 76 |
+| @h-ai/kit | `. (browser/default)` | 36 |
+| @h-ai/kit | `. (browser/types)` | 36 |
+| @h-ai/kit | `. (import)` | 75 |
+| @h-ai/kit | `. (types)` | 75 |
 | @h-ai/kit | `./a2a (import)` | 8 |
 | @h-ai/kit | `./a2a (types)` | 8 |
 | @h-ai/kit | `./adapter (import)` | 2 |
 | @h-ai/kit | `./adapter (types)` | 2 |
 | @h-ai/kit | `./client (import)` | 8 |
 | @h-ai/kit | `./client (types)` | 8 |
-| @h-ai/kit | `./crypto (import)` | 13 |
-| @h-ai/kit | `./crypto (types)` | 13 |
+| @h-ai/kit | `./crypto (import)` | 5 |
+| @h-ai/kit | `./crypto (types)` | 5 |
 | @h-ai/payment | `. (import)` | 22 |
 | @h-ai/payment | `. (types)` | 22 |
 | @h-ai/payment | `./client (import)` | 2 |
@@ -84,18 +84,18 @@
 | @h-ai/reach | `. (default)` | 43 |
 | @h-ai/reach | `. (import)` | 43 |
 | @h-ai/reach | `. (types)` | 43 |
-| @h-ai/reldb | `. (default)` | 60 |
-| @h-ai/reldb | `. (import)` | 60 |
-| @h-ai/reldb | `. (types)` | 60 |
+| @h-ai/reldb | `. (default)` | 58 |
+| @h-ai/reldb | `. (import)` | 58 |
+| @h-ai/reldb | `. (types)` | 58 |
 | @h-ai/reldb | `./schemas (default)` | 22 |
 | @h-ai/reldb | `./schemas (import)` | 22 |
 | @h-ai/reldb | `./schemas (types)` | 22 |
 | @h-ai/scheduler | `. (default)` | 37 |
 | @h-ai/scheduler | `. (import)` | 37 |
 | @h-ai/scheduler | `. (types)` | 37 |
-| @h-ai/serv | `. (default)` | 50 |
-| @h-ai/serv | `. (import)` | 50 |
-| @h-ai/serv | `. (types)` | 50 |
+| @h-ai/serv | `. (default)` | 51 |
+| @h-ai/serv | `. (import)` | 51 |
+| @h-ai/serv | `. (types)` | 51 |
 | @h-ai/serv | `./features/ai (import)` | 3 |
 | @h-ai/serv | `./features/ai (types)` | 3 |
 | @h-ai/serv | `./features/feedback (import)` | 2 |

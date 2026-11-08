@@ -4,14 +4,18 @@
  * =============================================================================
  */
 
-import * as m from '$lib/paraglide/messages.js'
-import { createRegisterSchema } from '$lib/server/schemas/index.js'
 import { audit } from '@h-ai/audit'
 import { HaiIamError, iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+import * as m from '#lib/paraglide/messages.js'
+import { createRegisterSchema } from '#lib/server/schemas/index.js'
 
 export const POST = kit.handler(async ({ request, cookies, getClientAddress, locals }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   if (!iam.isRegisterEnabled) {
     return kit.response.forbidden(m.common_error({}, { locale }))
   }

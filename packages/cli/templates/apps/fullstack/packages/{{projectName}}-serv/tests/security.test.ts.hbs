@@ -29,11 +29,23 @@ beforeAll(async () => {
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
   expect((await cache.init({ type: 'memory' })).success).toBe(true)
   expect((await storage.init({ type: 'local', root: directory })).success).toBe(true)
-  expect((await audit.init({ storage, backup: { enabled: true } })).success).toBe(true)
+  expect((await audit.init({
+    storage,
+    backup: { enabled: true },
+  })).success).toBe(true)
   expect((await iam.init({
     initialCredentials: { enabled: true },
     passwordReset: { enabled: true, mode: 'email' },
-    reauthentication: { enabled: true, operations: ['iam.users.create', 'iam.users.invite', 'iam.users.resetPassword', 'audit.backup', 'business.settings.update'] },
+    reauthentication: {
+      enabled: true,
+      operations: [
+        'iam.users.create',
+        'iam.users.invite',
+        'iam.users.resetPassword',
+        'audit.backup',
+        'business.settings.update',
+      ],
+    },
     onPasswordResetRequest: async (user, token) => {
       invitations.set(user.username, token)
       if (deliveryUnknown)
@@ -56,7 +68,17 @@ beforeAll(async () => {
   }
   const app = serv.createApp({
     contract: {{fullstack.contractExportName}},
-    procedures: createServerProcedures({ app: { name: 'Security fixture', version: 'test', env: 'test', defaultLocale: 'en-US', supportedLocales: ['en-US'], startedAt: new Date().toISOString(), frontends: ['web'] } }),
+    procedures: createServerProcedures({
+      app: {
+        name: 'Security fixture',
+        version: 'test',
+        env: 'test',
+        defaultLocale: 'en-US',
+        supportedLocales: ['en-US'],
+        startedAt: new Date().toISOString(),
+        frontends: ['web'],
+      },
+    }),
     iam,
     http: { openapi: false, docs: false },
   })
@@ -100,23 +122,57 @@ async function proof(code: Duty, operation: string) {
 }
 
 function post(code: Duty, route: string, input: object = {}, ticket?: string) {
-  return fetch(`${base}${route}`, { method: 'POST', headers: { 'content-type': 'application/json', 'authorization': `Bearer ${actor(code).token}`, ...(ticket ? { 'x-hai-reauthentication': ticket } : {}) }, body: JSON.stringify(input) })
+  return fetch(`${base}${route}`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'authorization': `Bearer ${actor(code).token}`,
+      ...(ticket
+        ? { 'x-hai-reauthentication': ticket }
+        : {}),
+    },
+    body: JSON.stringify(input),
+  })
 }
 
 it('系统、审计、配置与业务职责的直接 HTTP 请求各有边界', async () => {
-  expect(await (await post('audit_admin', '/admin/users/list')).json()).toMatchObject({ success: false, error: { httpStatus: 403 } })
-  expect(await (await post('admin', '/admin/audit/list')).json()).toMatchObject({ success: false, error: { httpStatus: 403 } })
-  expect(await (await post('admin', '/admin/configuration/update', { notice: 'Rejected' })).json()).toMatchObject({ success: false, error: { httpStatus: 403 } })
-  expect(await (await post('business_operator', '/admin/users/list')).json()).toMatchObject({ success: false, error: { httpStatus: 403 } })
+  expect(await (await post('audit_admin', '/admin/users/list')).json()).toMatchObject({
+    success: false,
+    error: { httpStatus: 403 },
+  })
+  expect(await (await post('admin', '/admin/audit/list')).json()).toMatchObject({
+    success: false,
+    error: { httpStatus: 403 },
+  })
+  expect(await (await post('admin', '/admin/configuration/update', { notice: 'Rejected' })).json()).toMatchObject({
+    success: false,
+    error: { httpStatus: 403 },
+  })
+  expect(await (await post('business_operator', '/admin/users/list')).json()).toMatchObject({
+    success: false,
+    error: { httpStatus: 403 },
+  })
   const ticket = await proof('config_admin', 'business.settings.update')
   expect(await (await post('config_admin', '/admin/configuration/update', { notice: 'Authorized public notice' }, ticket)).json()).toMatchObject({ success: true })
   const info = await fetch(`${base}/app/info`, { method: 'POST' })
-  expect(await info.json()).toMatchObject({ success: true, data: { notice: 'Authorized public notice' } })
+  expect(await info.json()).toMatchObject({
+    success: true,
+    data: { notice: 'Authorized public notice' },
+  })
 })
 
 it('再鉴别按用途单次使用，临时账号状态变化立即阻止旧会话', async () => {
-  const input = { username: 'temporary-member', password: 'Temporary-example-123!', role: 'user', accountType: 'temporary', accountExpiresAt: new Date(Date.now() + 3600000).toISOString() }
-  expect(await (await post('admin', '/admin/users/create', input)).json()).toMatchObject({ success: false, error: { code: 'hai:iam:027' } })
+  const input = {
+    username: 'temporary-member',
+    password: 'Temporary-example-123!',
+    role: 'user',
+    accountType: 'temporary',
+    accountExpiresAt: new Date(Date.now() + 3600000).toISOString(),
+  }
+  expect(await (await post('admin', '/admin/users/create', input)).json()).toMatchObject({
+    success: false,
+    error: { code: 'hai:iam:027' },
+  })
   const ticket = await proof('admin', 'iam.users.create')
   const response = await post('admin', '/admin/users/create', input, ticket)
   const created = apiContract.haiResultSchema(AdminUserSchema).parse(await response.json())
@@ -135,7 +191,12 @@ it('再鉴别按用途单次使用，临时账号状态变化立即阻止旧会�
 
 it('设密邀请可完成，投递未知时保留账号；系统管理员可创建其他职责账号', async () => {
   const createdDuty = await post('admin', '/admin/users/create', { username: 'managed-auditor', password: 'Example-123!', role: 'audit_admin' }, await proof('admin', 'iam.users.create'))
-  expect(await createdDuty.json()).toMatchObject({ success: true, data: { roles: ['audit_admin'] } })
+  expect(await createdDuty.json()).toMatchObject({
+    success: true,
+    data: {
+      roles: ['audit_admin'],
+    },
+  })
   const invite = await post('admin', '/admin/users/invite', { username: 'invited-member', email: 'member@example.test' }, await proof('admin', 'iam.users.invite'))
   expect(await invite.json()).toMatchObject({ success: true })
   const token = invitations.get('invited-member')
@@ -145,39 +206,94 @@ it('设密邀请可完成，投递未知时保留账号；系统管理员可创�
   deliveryUnknown = true
   try {
     const unknown = await post('admin', '/admin/users/invite', { username: 'delivery-unknown-member', email: 'unknown@example.test' }, await proof('admin', 'iam.users.invite'))
-    expect(await unknown.json()).toMatchObject({ success: false, error: { code: 'hai:iam:028' } })
+    expect(await unknown.json()).toMatchObject({
+      success: false,
+      error: { code: 'hai:iam:028' },
+    })
     const found = await iam.user.listUsers({ search: 'delivery-unknown-member' })
-    expect(found).toMatchObject({ success: true, data: { total: 1 } })
+    expect(found).toMatchObject({
+      success: true,
+      data: { total: 1 },
+    })
   }
   finally { deliveryUnknown = false }
 })
 
 it('只有审计职责可手动备份且私有归档可验证', async () => {
   const id = crypto.randomUUID()
-  expect(await (await post('admin', '/admin/audit/backup', { id })).json()).toMatchObject({ success: false, error: { httpStatus: 403 } })
+  expect(await (await post('admin', '/admin/audit/backup', { id })).json()).toMatchObject({
+    success: false,
+    error: { httpStatus: 403 },
+  })
   const result = await post('audit_admin', '/admin/audit/backup', { id }, await proof('audit_admin', 'audit.backup'))
   const body: unknown = await result.json()
-  expect(body).toMatchObject({ success: true, data: { id, key: expect.stringContaining('hai-private/audit-backups/'), sha256: expect.stringMatching(/^[a-f\d]{64}$/) } })
+  expect(body).toMatchObject({
+    success: true,
+    data: {
+      id,
+      key: expect.stringContaining('hai-private/audit-backups/'),
+      sha256: expect.stringMatching(/^[a-f\d]{64}$/),
+    },
+  })
   const verified = await audit.backup.verify(`hai-private/audit-backups/${id}.jsonl`)
   expect(verified.success).toBe(true)
 })
 
-it.each(['admin', 'audit_admin', 'config_admin', 'business_operator', 'user'] as const)('系统管理员统一管理 %s 的资料、生命周期、角色和密码', async (role) => {
+it.each([
+  'admin',
+  'audit_admin',
+  'config_admin',
+  'business_operator',
+  'user',
+] as const)('系统管理员统一管理 %s 的资料、生命周期、角色和密码', async (role) => {
   const username = `managed-${role}`
   const created = apiContract.haiResultSchema(AdminUserSchema).parse(await (await post('admin', '/admin/users/create', { username, password: 'Managed-example-123!', role }, await proof('admin', 'iam.users.create'))).json())
-  expect(created).toMatchObject({ success: true, data: { roles: [role], accountStatus: 'active' } })
+  expect(created).toMatchObject({
+    success: true,
+    data: {
+      roles: [role],
+      accountStatus: 'active',
+    },
+  })
   if (!created.success)
     throw new Error('Managed account fixture failed')
-  const input = { id: created.data.id, displayName: 'Managed profile', accountStatus: 'dormant', role: 'user' }
-  expect(await (await post('admin', '/admin/users/update', input)).json()).toMatchObject({ success: true, data: { displayName: 'Managed profile', roles: ['user'], accountStatus: 'dormant' } })
+  const input = {
+    id: created.data.id,
+    displayName: 'Managed profile',
+    accountStatus: 'dormant',
+    role: 'user',
+  }
+  expect(await (await post('admin', '/admin/users/update', input)).json()).toMatchObject({
+    success: true,
+    data: {
+      displayName: 'Managed profile',
+      roles: ['user'],
+      accountStatus: 'dormant',
+    },
+  })
   const reset = { id: created.data.id, newPassword: 'Reset-example-456!' }
-  expect(await (await post('admin', '/admin/users/reset-password', reset)).json()).toMatchObject({ success: false, error: { code: 'hai:iam:027' } })
+  expect(await (await post('admin', '/admin/users/reset-password', reset)).json()).toMatchObject({
+    success: false,
+    error: { code: 'hai:iam:027' },
+  })
   const ticket = await proof('admin', 'iam.users.resetPassword')
-  expect(await (await post('admin', '/admin/users/reset-password', reset, ticket)).json()).toMatchObject({ success: true, data: { reset: true } })
+  expect(await (await post('admin', '/admin/users/reset-password', reset, ticket)).json()).toMatchObject({
+    success: true,
+    data: { reset: true },
+  })
   expect(await (await post('admin', '/admin/users/reset-password', reset, ticket)).json()).toMatchObject({ success: false })
-  expect(await iam.user.getUser(created.data.id)).toMatchObject({ success: true, data: { accountStatus: 'dormant' } })
-  expect(await iam.auth.login({ identifier: username, password: reset.newPassword })).toMatchObject({ success: false, error: { code: 'hai:iam:002' } })
+  expect(await iam.user.getUser(created.data.id)).toMatchObject({
+    success: true,
+    data: { accountStatus: 'dormant' },
+  })
+  expect(await iam.auth.login({ identifier: username, password: reset.newPassword })).toMatchObject({
+    success: false,
+    error: { code: 'hai:iam:002' },
+  })
   expect(await (await post('admin', '/admin/users/update', { id: created.data.id, accountStatus: 'active' })).json()).toMatchObject({ success: true })
   expect((await iam.auth.login({ identifier: username, password: reset.newPassword })).success).toBe(true)
-  expect(await (await post('audit_admin', '/admin/users/reset-password', reset)).json()).toMatchObject({ success: false, error: { httpStatus: 403 } })
+  expect(await (await post('audit_admin', '/admin/users/reset-password', reset)).json()).toMatchObject({
+    success: false,
+    error: { httpStatus: 403 },
+  })
 })

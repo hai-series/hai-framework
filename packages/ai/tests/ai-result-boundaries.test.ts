@@ -8,14 +8,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ai, HaiAIError } from '../src/index.js'
 
 beforeEach(async () => {
-  const initialized = await ai.init({ llm: { apiKey: 'test', model: 'controlled' } })
+  const initialized = await ai.init({
+    llm: { apiKey: 'test', model: 'controlled' },
+  })
   expect(initialized.success).toBe(true)
   vi.spyOn(ai.llm, 'chat').mockResolvedValue(ok({
     id: 'response',
     object: 'chat.completion',
     model: 'controlled',
     created: 0,
-    choices: [{ index: 0, finish_reason: 'stop', logprobs: null, message: { role: 'assistant', content: 'reply', refusal: null } }],
+    choices: [
+      {
+        index: 0,
+        finish_reason: 'stop',
+        logprobs: null,
+        message: { role: 'assistant', content: 'reply', refusal: null },
+      },
+    ],
   }))
 })
 afterEach(async () => {
@@ -25,7 +34,10 @@ afterEach(async () => {
 
 function manager(): ContextManager {
   const created = ai.context.createManager({
-    scope: { objectId: 'boundary-user', sessionId: crypto.randomUUID() },
+    scope: {
+      objectId: 'boundary-user',
+      sessionId: crypto.randomUUID(),
+    },
     compress: { auto: false },
     memory: { enableExtract: true },
   })
@@ -67,7 +79,13 @@ describe('background memory results', () => {
     const first = context.flush()
     const second = context.flush()
     expect(first).toBe(second)
-    const observing = [first, second, context.save(), context.reset({ waitForMemoryTasks: true }), context.consolidate()]
+    const observing = [
+      first,
+      second,
+      context.save(),
+      context.reset({ waitForMemoryTasks: true }),
+      context.consolidate(),
+    ]
     complete(err(HaiAIError.MEMORY_EXTRACT_FAILED, 'failed'))
     for (const result of await Promise.all(observing)) {
       expect(result.success).toBe(false)
@@ -75,7 +93,13 @@ describe('background memory results', () => {
         expect(result.error.code).toBe(HaiAIError.MEMORY_EXTRACT_FAILED.code)
     }
     expect(summary).not.toHaveBeenCalled()
-    expect(context.getMessages()).toMatchObject({ success: true, data: [{ role: 'user' }, { role: 'assistant' }] })
+    expect(context.getMessages()).toMatchObject({
+      success: true,
+      data: [
+        { role: 'user' },
+        { role: 'assistant' },
+      ],
+    })
     expect(extract).toHaveBeenCalledTimes(1)
     expect((await context.save()).success).toBe(true)
   })
@@ -97,7 +121,19 @@ describe('background memory results', () => {
   it('流式生成仍按流契约结束，后台失败必须通过 flush 观察', async () => {
     vi.spyOn(ai.memory, 'extract').mockRejectedValue(new Error('memory failed'))
     vi.spyOn(ai.llm, 'chatStream').mockImplementation(async function* () {
-      yield { id: 'stream', object: 'chat.completion.chunk', model: 'controlled', created: 0, choices: [{ index: 0, delta: { content: 'reply' }, finish_reason: 'stop' }] }
+      yield {
+        id: 'stream',
+        object: 'chat.completion.chunk',
+        model: 'controlled',
+        created: 0,
+        choices: [
+          {
+            index: 0,
+            delta: { content: 'reply' },
+            finish_reason: 'stop',
+          },
+        ],
+      }
     })
     const context = manager()
     const events = []
@@ -110,7 +146,10 @@ describe('background memory results', () => {
 describe('store HaiResult boundaries', () => {
   it('restoreManager 的实际 SQL 失败转换为 HaiResult', async () => {
     vi.spyOn(reldb.sql, 'get').mockResolvedValueOnce(err(HaiAIError.STORE_FAILED, 'database unavailable'))
-    await expect(ai.context.restoreManager({ objectId: 'user', sessionId: 'restore' })).resolves.toMatchObject({ success: false, error: { code: HaiAIError.STORE_FAILED.code } })
+    await expect(ai.context.restoreManager({ objectId: 'user', sessionId: 'restore' })).resolves.toMatchObject({
+      success: false,
+      error: { code: HaiAIError.STORE_FAILED.code },
+    })
   })
 
   it('knowledge 就绪查询的实际 SQL 失败由每个非流式入口转换', async () => {
@@ -128,8 +167,16 @@ describe('store HaiResult boundaries', () => {
   it('a2A listMessages SQL 失败使用领域错误码，不泄漏连接详情', async () => {
     // 当前初始化未配置 A2A，重新以同一个真实 SQLite/Vecdb 装配后注册公开 executor。
     await ai.close()
-    expect((await ai.init({ llm: { apiKey: 'test' }, a2a: { agentCard: { name: 'boundary', url: 'https://agent.example' } } })).success).toBe(true)
-    expect(ai.a2a.registerExecutor({ execute: async () => {}, cancelTask: async () => {} }).success).toBe(true)
+    expect((await ai.init({
+      llm: { apiKey: 'test' },
+      a2a: {
+        agentCard: { name: 'boundary', url: 'https://agent.example' },
+      },
+    })).success).toBe(true)
+    expect(ai.a2a.registerExecutor({
+      execute: async () => {},
+      cancelTask: async () => {},
+    }).success).toBe(true)
     vi.spyOn(reldb.sql, 'get').mockResolvedValue(err(HaiAIError.STORE_FAILED, 'postgres://user:private-db-password@internal/db'))
     const result = await ai.a2a.listMessages({ callerId: 'owner' })
     expect(result.success).toBe(false)

@@ -64,7 +64,9 @@
   let copyTimer: ReturnType<typeof setTimeout> | undefined
 
   function truncate(text: string): string {
-    return text.length > maxScalarLength ? `${text.slice(0, maxScalarLength)}…` : text
+    return text.length > maxScalarLength
+      ? `${text.slice(0, maxScalarLength)}…`
+      : text
   }
 
   async function copyValue(event: Event) {
@@ -100,12 +102,18 @@
   }
 
   function containerSize(v: Record<string, unknown> | unknown[]): number {
-    return Array.isArray(v) ? v.length : Object.keys(v).length
+    return Array.isArray(v)
+      ? v.length
+      : Object.keys(v).length
   }
 
   function containerEntries(v: Record<string, unknown> | unknown[]): Array<[string, unknown]> {
-    if (Array.isArray(v))
-      return v.map((item, index) => [String(index), item] as [string, unknown])
+    if (Array.isArray(v)) {
+      return v.map((item, index) => [
+        String(index),
+        item,
+      ] as [string, unknown])
+    }
     return Object.entries(v)
   }
 
@@ -133,7 +141,9 @@
 
   /** 大容器折叠可显著降低 DOM 数量，200 条以内保持完整交互。 */
   function childKeys(v: Record<string, unknown> | unknown[]): Array<[string, unknown]> {
-    return containerSize(v) > 200 ? containerEntries(v).slice(0, 200) : containerEntries(v)
+    return containerSize(v) > 200
+      ? containerEntries(v).slice(0, 200)
+      : containerEntries(v)
   }
 
   onDestroy(() => clearTimeout(copyTimer))
@@ -153,7 +163,9 @@
             <span class='text-base-content/40 hidden group-open:inline transition-transform' aria-hidden='true'>▼</span>
             <span class='font-mono text-xs font-medium'>{key}:</span>
             <span class='font-mono text-xs text-base-content/50'>
-              {Array.isArray(child) ? `Array(${containerSize(child)})` : `Object(${containerSize(child)})`}
+              {Array.isArray(child)
+                ? `Array(${containerSize(child)})`
+                : `Object(${containerSize(child)})`}
             </span>
           </summary>
           <div class='ml-3 border-l border-base-content/10 pl-3'>

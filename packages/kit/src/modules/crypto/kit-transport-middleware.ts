@@ -71,8 +71,13 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
 
     const mode = encryption?.(pathname, event.request.method)
     if (mode === 'disabled') {
-      if (event.request.headers.has(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) || event.request.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER))
-        return Response.json(err({ ...HaiCommonError.VALIDATION_ERROR, message: kitM('kit_transportPlaintextRequired'), traceId: context.requestId }), { status: 400 })
+      if (event.request.headers.has(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) || event.request.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)) {
+        return Response.json(err({
+          ...HaiCommonError.VALIDATION_ERROR,
+          message: kitM('kit_transportPlaintextRequired'),
+          traceId: context.requestId,
+        }), { status: 400 })
+      }
       return next()
     }
     // 仅对同源 API endpoint 与 SvelteKit __data 请求启用 transport；
@@ -112,7 +117,9 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
       catch (error) {
         if (error instanceof TransportBodyTooLargeError)
           return createTransportErrorResponse(error)
-        return jsonError(kitM('kit_transportInvalidPayload'), error instanceof RangeError ? 413 : 400)
+        return jsonError(kitM('kit_transportInvalidPayload'), error instanceof RangeError
+          ? 413
+          : 400)
       }
 
       // ── 执行后续中间件/端点 ──
@@ -151,7 +158,9 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
         headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
         if (bodyless)
           headers.set(TRANSPORT_PROTOCOL.ENVELOPE_HEADER, JSON.stringify(encryptedPayload.data))
-        return new Response(bodyless ? null : JSON.stringify(encryptedPayload.data), {
+        return new Response(bodyless
+          ? null
+          : JSON.stringify(encryptedPayload.data), {
           status: response.status,
           statusText: response.statusText,
           headers,
@@ -210,7 +219,9 @@ async function handleKeyExchange(
     }))
   }
   catch (error) {
-    return jsonError(kitM('kit_transportInvalidPayload'), error instanceof RangeError ? 413 : 400)
+    return jsonError(kitM('kit_transportInvalidPayload'), error instanceof RangeError
+      ? 413
+      : 400)
   }
   if (!body || typeof body !== 'object' || !('clientPublicKey' in body)
     || !isValidSM2PublicKey(body.clientPublicKey)
@@ -225,8 +236,16 @@ async function handleKeyExchange(
     const clientId = await manager.registerClientKey(body.clientPublicKey)
 
     return new Response(
-      JSON.stringify({ serverKeyId: manager.getServerKeyId(), serverPublicKey, clientId, maxPlaintextBytes: manager.bodyLimits.plaintextBytes }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } },
+      JSON.stringify({
+        serverKeyId: manager.getServerKeyId(),
+        serverPublicKey,
+        clientId,
+        maxPlaintextBytes: manager.bodyLimits.plaintextBytes,
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      },
     )
   }
   catch {

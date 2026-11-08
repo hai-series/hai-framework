@@ -25,7 +25,7 @@
  *
  * @example
  * ```ts
- * import { initApp, isAppInitialized } from '$lib/server/init.js'
+ * import { initApp, isAppInitialized } from '#lib/server/init.js'
  *
  * // 在 hooks.server.ts 中调用
  * await initApp()
@@ -41,12 +41,6 @@ import type { StorageConfigInput } from '@h-ai/storage'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
-import { adminBuildMetadata } from '$lib/build-metadata.js'
-import * as m from '$lib/paraglide/messages.js'
-import { startAuditJobs } from '$lib/server/audit-jobs.js'
-import { initBusinessSettings } from '$lib/server/business-settings.js'
-import { seedFeedbackPermissions } from '$lib/server/feedback.js'
-import { bootstrapDutyAccount, seedAdminDuties } from '$lib/server/security-roles.js'
 import { audit, AuditInitConfigSchema } from '@h-ai/audit'
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
@@ -57,6 +51,12 @@ import { reach, ReachConfigSchema } from '@h-ai/reach'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 import { scheduler, SchedulerConfigSchema } from '@h-ai/scheduler'
 import { storage, StorageConfigSchema } from '@h-ai/storage'
+import { adminBuildMetadata } from '#lib/build-metadata.js'
+import * as m from '#lib/paraglide/messages.js'
+import { startAuditJobs } from '#lib/server/audit-jobs.js'
+import { initBusinessSettings } from '#lib/server/business-settings.js'
+import { seedFeedbackPermissions } from '#lib/server/feedback.js'
+import { bootstrapDutyAccount, seedAdminDuties } from '#lib/server/security-roles.js'
 
 type DbConfigInput = Parameters<typeof reldb.init>[0]
 
@@ -73,7 +73,10 @@ function startFeedback(): Promise<void> {
   feedbackClosing = false
   feedbackStarting = (async () => {
     try {
-      const result = await feedback.init({ ...core.config.getOrThrow<FeedbackConfigInput>('feedback'), ...adminBuildMetadata })
+      const result = await feedback.init({
+        ...core.config.getOrThrow<FeedbackConfigInput>('feedback'),
+        ...adminBuildMetadata,
+      })
       if (!result.success) {
         if (feedbackFailure !== result.error.code)
           core.logger.warn('Optional feedback unavailable; business runtime remains ready', { module: 'feedback', code: result.error.code })
@@ -110,40 +113,117 @@ async function closeFeedback() {
 }
 
 const runtime = core.module.createRuntime([
-  { name: 'configuration', start: () => {
-    core.init({ configDir: './config', configSchemas: { audit: AuditInitConfigSchema, cache: CacheConfigSchema, feedback: FeedbackConfigSchema, iam: IamConfigSchema, reach: ReachConfigSchema, db: ReldbConfigSchema, scheduler: SchedulerConfigSchema, storage: StorageConfigSchema } })
-  }, close: () => {} },
-  { name: 'reldb', start: async () => {
-    const config = core.config.getOrThrow<DbConfigInput>('db')
-    if (config.type === 'sqlite' && config.database !== ':memory:')
-      await mkdir(path.dirname(config.database), { recursive: true })
-    return reldb.init(config)
-  }, close: () => reldb.close() },
-  { name: 'cache', start: () => cache.init(core.config.getOrThrow<CacheConfigInput>('cache')), close: () => cache.close() },
-  { name: 'crypto', start: () => crypto.init(), close: () => crypto.close() },
-  { name: 'storage', enabled: () => Boolean(core.config.get('storage')), start: () => storage.init(core.config.getOrThrow<StorageConfigInput>('storage')), close: () => storage.close() },
-  { name: 'reach', enabled: () => Boolean(core.config.get('reach')), start: () => reach.init(core.config.getOrThrow<ReachConfigInput>('reach')), close: () => reach.close() },
-  { name: 'audit', start: () => audit.init({ ...AuditInitConfigSchema.parse(core.config.get('audit') ?? {}), storage, reach }), close: () => audit.close() },
-  { name: 'iam', start: () => iam.init({ ...core.config.getOrThrow<IamConfigSettingsInput>('iam'), reach }), close: () => iam.close() },
-  { name: 'audit-jobs', enabled: () => Boolean(audit.schedulerPlan), start: startAuditJobs, close: () => scheduler.close() },
-  { name: 'feedback', enabled: () => Boolean(core.config.get('feedback')), start: startFeedback, close: closeFeedback },
-  { name: 'bootstrap', start: async () => {
-    const businessSettings = await initBusinessSettings()
-    if (!businessSettings.success)
-      return businessSettings
-    if (feedback.isInitialized)
-      await seedFeedbackPermissions()
-    const duties = await seedAdminDuties({ admin: m.security_role_system(), audit_admin: m.security_role_audit(), config_admin: m.security_role_config(), business_operator: m.security_role_operator(), user: m.security_role_member() })
-    if (!duties.success)
-      return duties
-    await ensureDefaultAdmin()
-    for (const [username, password] of [['audit_admin', process.env.HAI_AUDIT_ADMIN_PASSWORD], ['config_admin', process.env.HAI_CONFIG_ADMIN_PASSWORD], ['business_operator', process.env.HAI_BUSINESS_OPERATOR_PASSWORD]] as const) {
-      const created = await bootstrapDutyAccount(username, password)
-      if (!created.success)
-        return created
-    }
-    core.logger.info('Application initialized.')
-  }, close: () => {} },
+  {
+    name: 'configuration',
+    start: () => {
+      core.init({
+        configDir: './config',
+        configSchemas: {
+          audit: AuditInitConfigSchema,
+          cache: CacheConfigSchema,
+          feedback: FeedbackConfigSchema,
+          iam: IamConfigSchema,
+          reach: ReachConfigSchema,
+          db: ReldbConfigSchema,
+          scheduler: SchedulerConfigSchema,
+          storage: StorageConfigSchema,
+        },
+      })
+    },
+    close: () => {},
+  },
+  {
+    name: 'reldb',
+    start: async () => {
+      const config = core.config.getOrThrow<DbConfigInput>('db')
+      if (config.type === 'sqlite' && config.database !== ':memory:')
+        await mkdir(path.dirname(config.database), { recursive: true })
+      return reldb.init(config)
+    },
+    close: () => reldb.close(),
+  },
+  {
+    name: 'cache',
+    start: () => cache.init(core.config.getOrThrow<CacheConfigInput>('cache')),
+    close: () => cache.close(),
+  },
+  {
+    name: 'crypto',
+    start: () => crypto.init(),
+    close: () => crypto.close(),
+  },
+  {
+    name: 'storage',
+    enabled: () => Boolean(core.config.get('storage')),
+    start: () => storage.init(core.config.getOrThrow<StorageConfigInput>('storage')),
+    close: () => storage.close(),
+  },
+  {
+    name: 'reach',
+    enabled: () => Boolean(core.config.get('reach')),
+    start: () => reach.init(core.config.getOrThrow<ReachConfigInput>('reach')),
+    close: () => reach.close(),
+  },
+  {
+    name: 'audit',
+    start: () => audit.init({
+      ...AuditInitConfigSchema.parse(core.config.get('audit') ?? {}),
+      storage,
+      reach,
+    }),
+    close: () => audit.close(),
+  },
+  {
+    name: 'iam',
+    start: () => iam.init({
+      ...core.config.getOrThrow<IamConfigSettingsInput>('iam'),
+      reach,
+    }),
+    close: () => iam.close(),
+  },
+  {
+    name: 'audit-jobs',
+    enabled: () => Boolean(audit.schedulerPlan),
+    start: startAuditJobs,
+    close: () => scheduler.close(),
+  },
+  {
+    name: 'feedback',
+    enabled: () => Boolean(core.config.get('feedback')),
+    start: startFeedback,
+    close: closeFeedback,
+  },
+  {
+    name: 'bootstrap',
+    start: async () => {
+      const businessSettings = await initBusinessSettings()
+      if (!businessSettings.success)
+        return businessSettings
+      if (feedback.isInitialized)
+        await seedFeedbackPermissions()
+      const duties = await seedAdminDuties({
+        admin: m.security_role_system(),
+        audit_admin: m.security_role_audit(),
+        config_admin: m.security_role_config(),
+        business_operator: m.security_role_operator(),
+        user: m.security_role_member(),
+      })
+      if (!duties.success)
+        return duties
+      await ensureDefaultAdmin()
+      for (const [username, password] of [
+        ['audit_admin', process.env.HAI_AUDIT_ADMIN_PASSWORD],
+        ['config_admin', process.env.HAI_CONFIG_ADMIN_PASSWORD],
+        ['business_operator', process.env.HAI_BUSINESS_OPERATOR_PASSWORD],
+      ] as const) {
+        const created = await bootstrapDutyAccount(username, password)
+        if (!created.success)
+          return created
+      }
+      core.logger.info('Application initialized.')
+    },
+    close: () => {},
+  },
 ])
 
 /** 初始化真实依赖；失败只公开模块、配置字段路径及错误码。 */

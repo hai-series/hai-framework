@@ -23,10 +23,18 @@ export function parseVisionAnalysis(text: string): VisionAnalysis {
   try {
     const parsed = JSON.parse(text) as Partial<VisionAnalysis>
     return {
-      summary: typeof parsed.summary === 'string' && parsed.summary.length > 0 ? parsed.summary : fallback.summary,
-      details: Array.isArray(parsed.details) ? parsed.details.filter(v => typeof v === 'string') : [],
-      tags: Array.isArray(parsed.tags) ? parsed.tags.filter(v => typeof v === 'string') : [],
-      confidence: typeof parsed.confidence === 'number' ? Math.min(1, Math.max(0, parsed.confidence)) : 0.6,
+      summary: typeof parsed.summary === 'string' && parsed.summary.length > 0
+        ? parsed.summary
+        : fallback.summary,
+      details: Array.isArray(parsed.details)
+        ? parsed.details.filter(v => typeof v === 'string')
+        : [],
+      tags: Array.isArray(parsed.tags)
+        ? parsed.tags.filter(v => typeof v === 'string')
+        : [],
+      confidence: typeof parsed.confidence === 'number'
+        ? Math.min(1, Math.max(0, parsed.confidence))
+        : 0.6,
     }
   }
   catch {

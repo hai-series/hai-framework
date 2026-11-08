@@ -44,7 +44,10 @@ describe('loadCredentials', () => {
   it('全局默认不能覆盖选中模式/进程的同名值及父配置，缺项仍可补齐', () => {
     fs.mkdirSync(path.join(tmpHome, '.hai'))
     fs.writeFileSync(path.join(tmpHome, '.hai/credentials.yml'), 'HAI_DEPLOY_PROVIDER_SSH_HOST: old.example\nHAI_DEPLOY_PROVIDER_TOKEN: old-token\nHAI_DEPLOY_SERVICES_DB_APIKEY: fallback-key\n')
-    process.env.HAI_DEPLOY_PROVIDER = JSON.stringify({ type: 'docker-ssh', ssh: { host: 'selected.example' } })
+    process.env.HAI_DEPLOY_PROVIDER = JSON.stringify({
+      type: 'docker-ssh',
+      ssh: { host: 'selected.example' },
+    })
     process.env.HAI_DEPLOY_PROVIDER_TOKEN = 'selected-token'
     expect(deploy.credentials.load().success).toBe(true)
     expect(process.env.HAI_DEPLOY_PROVIDER_SSH_HOST).toBeUndefined()

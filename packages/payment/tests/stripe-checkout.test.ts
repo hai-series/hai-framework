@@ -29,7 +29,12 @@ describe('stripe hosted Checkout', () => {
     expect(StripeConfigSchema.safeParse({ ...config, uiMode: 'embedded_page' }).success).toBe(false)
   })
 
-  it.each(['jsapi', 'app', 'native', 'mini_program'] as const)('服务端拒绝不支持的 %s 且不请求渠道', async (tradeType) => {
+  it.each([
+    'jsapi',
+    'app',
+    'native',
+    'mini_program',
+  ] as const)('服务端拒绝不支持的 %s 且不请求渠道', async (tradeType) => {
     const fetch = vi.fn()
     vi.stubGlobal('fetch', fetch)
     const result = await createStripeProvider({ ...config, webhookToleranceSeconds: 300 }).createOrder({
@@ -49,7 +54,11 @@ describe('stripe hosted Checkout', () => {
   it('浏览器 h5 调起跳转到服务端返回的托管页', async () => {
     const location = { href: '' }
     vi.stubGlobal('window', { location })
-    const result = await invokePayment({ provider: 'stripe', tradeType: 'h5', clientParams: { checkoutUrl: 'https://checkout.stripe.com/pay/cs_test' } })
+    const result = await invokePayment({
+      provider: 'stripe',
+      tradeType: 'h5',
+      clientParams: { checkoutUrl: 'https://checkout.stripe.com/pay/cs_test' },
+    })
     expect(result.success && result.data.invoked).toBe(true)
     expect(location.href).toBe('https://checkout.stripe.com/pay/cs_test')
   })
@@ -57,7 +66,11 @@ describe('stripe hosted Checkout', () => {
   it('客户端拒绝 app 模式，不假装已调起', async () => {
     const location = { href: '' }
     vi.stubGlobal('window', { location })
-    const order = { provider: 'stripe', tradeType: 'h5' as const, clientParams: { checkoutUrl: 'https://checkout.stripe.com/pay/cs_test' } }
+    const order = {
+      provider: 'stripe',
+      tradeType: 'h5' as const,
+      clientParams: { checkoutUrl: 'https://checkout.stripe.com/pay/cs_test' },
+    }
     Reflect.set(order, 'tradeType', 'app')
     const result = await invokePayment(order)
     expect(result.success).toBe(false)

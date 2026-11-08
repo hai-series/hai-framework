@@ -13,7 +13,10 @@ import { createDbUserRepository } from '../src/user/iam-user-repository-user.js'
 beforeEach(async () => {
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
   expect((await cache.init({ type: 'memory' })).success).toBe(true)
-  expect((await iam.init({ seedDefaultData: false, rbac: { enabled: false } })).success).toBe(true)
+  expect((await iam.init({
+    seedDefaultData: false,
+    rbac: { enabled: false },
+  })).success).toBe(true)
 })
 afterEach(async () => {
   vi.restoreAllMocks()
@@ -92,7 +95,12 @@ it('旧密码已验证但尚未创建会话时改密，迟到策略不能用当�
 it('可信低层创建拒绝缺失/禁用/读取失败与不匹配代，刷新绝不升级旧代', async () => {
   let current: { version: string, available: boolean } | null = { version: 'v1', available: true }
   const read = vi.fn(async () => ok(current))
-  const built = await createSessionOperations({ config: IamConfigSchema.parse({ session: { sliding: false } }), readCredential: read })
+  const built = await createSessionOperations({
+    config: IamConfigSchema.parse({
+      session: { sliding: false },
+    }),
+    readCredential: read,
+  })
   if (!built.success)
     throw new Error(built.error.message)
   const ops = built.data
@@ -114,7 +122,12 @@ it('可信低层创建拒绝缺失/禁用/读取失败与不匹配代，刷新�
 
 it('refresh提交窗口发生改密，返回失败且后继仍带旧代而不可认证', async () => {
   let version = 'v1'
-  const built = await createSessionOperations({ config: IamConfigSchema.parse({ session: { sliding: false } }), readCredential: async () => ok({ version, available: true }) })
+  const built = await createSessionOperations({
+    config: IamConfigSchema.parse({
+      session: { sliding: false },
+    }),
+    readCredential: async () => ok({ version, available: true }),
+  })
   if (!built.success)
     throw new Error(built.error.message)
   const ops = built.data

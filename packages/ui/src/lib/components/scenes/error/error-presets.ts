@@ -49,11 +49,36 @@ export interface ErrorPresetInfo {
  * ```
  */
 export const ERROR_PRESETS: Record<ErrorPreset, ErrorPresetInfo> = {
-  401: { code: '401', titleKey: 'error_401_title', descKey: 'error_401_desc', icon: 'icon-[tabler--lock]' },
-  403: { code: '403', titleKey: 'error_403_title', descKey: 'error_403_desc', icon: 'icon-[tabler--shield-lock]' },
-  404: { code: '404', titleKey: 'error_404_title', descKey: 'error_404_desc', icon: 'icon-[tabler--map-search]' },
-  500: { code: '500', titleKey: 'error_500_title', descKey: 'error_500_desc', icon: 'icon-[tabler--server-off]' },
-  503: { code: '503', titleKey: 'error_503_title', descKey: 'error_503_desc', icon: 'icon-[tabler--tool]' },
+  401: {
+    code: '401',
+    titleKey: 'error_401_title',
+    descKey: 'error_401_desc',
+    icon: 'icon-[tabler--lock]',
+  },
+  403: {
+    code: '403',
+    titleKey: 'error_403_title',
+    descKey: 'error_403_desc',
+    icon: 'icon-[tabler--shield-lock]',
+  },
+  404: {
+    code: '404',
+    titleKey: 'error_404_title',
+    descKey: 'error_404_desc',
+    icon: 'icon-[tabler--map-search]',
+  },
+  500: {
+    code: '500',
+    titleKey: 'error_500_title',
+    descKey: 'error_500_desc',
+    icon: 'icon-[tabler--server-off]',
+  },
+  503: {
+    code: '503',
+    titleKey: 'error_503_title',
+    descKey: 'error_503_desc',
+    icon: 'icon-[tabler--tool]',
+  },
 }
 
 /**

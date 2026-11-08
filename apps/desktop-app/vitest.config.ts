@@ -7,8 +7,12 @@ import { defineConfig } from 'vitest/config'
 import { desktopBuildConfig } from './config-env.js'
 
 export default defineConfig({
-  define: { __DESKTOP_CRYPTO_CONFIG__: desktopBuildConfig('test') },
-  plugins: [svelte({ hot: !process.env.VITEST })],
+  define: {
+    __DESKTOP_CRYPTO_CONFIG__: desktopBuildConfig('test'),
+  },
+  plugins: [
+    svelte({ hot: !process.env.VITEST }),
+  ],
   test: {
     maxWorkers: 2,
     environment: 'jsdom',

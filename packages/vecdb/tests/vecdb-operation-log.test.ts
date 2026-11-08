@@ -5,7 +5,12 @@ import { logVecdbOperation } from '../src/providers/vecdb-provider-base.js'
 function createContext(): VecdbOpsContext {
   return {
     isConnected: () => true,
-    operationLog: () => ({ read: false, write: true, maxLength: 30, level: 'info' }),
+    operationLog: () => ({
+      read: false,
+      write: true,
+      maxLength: 30,
+      level: 'info',
+    }),
     logger: {
       error: vi.fn<(message: string, context?: Record<string, unknown>) => void>(),
       info: vi.fn<(message: string, context?: Record<string, unknown>) => void>(),
@@ -21,7 +26,13 @@ describe('vecdb operation log', () => {
 
     logVecdbOperation(ctx, 'write', 'vector.upsert', {
       collection: 'docs',
-      documents: [{ id: '1', vector: [0.1, 0.2, 0.3], content: 'long content value' }],
+      documents: [
+        {
+          id: '1',
+          vector: [0.1, 0.2, 0.3],
+          content: 'long content value',
+        },
+      ],
     })
 
     expect(ctx.logger.info).toHaveBeenCalledOnce()

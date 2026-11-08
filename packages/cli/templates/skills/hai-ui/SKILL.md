@@ -42,9 +42,10 @@ Toast 支持 F8 聚焦/返回、Escape 关闭可关闭提示并恢复焦点；Mo
 - 先检查组件导入、Tailwind @source 和主题 CSS，再选场景 → 组合 → 原子组件，缺能力才自定义。
 - 管理列表和工作台随可用宽度展开；flex/grid 子项设 min-width: 0，表格在自身容器滚动。阅读页与登录表单按内容约束宽度。实际检查 390、1440、1920、2560、3840px，避免宽屏仍挤在中央窄列，手机出现整页横向滚动。
 - 按安装版本的 exports 选择明确列出的 components barrel 入口（不开放任意内部文件）；主题工具使用 `@h-ai/ui/theme`，避免仅为主题加载根入口的 AI/图表组件。禁止导入内部 src/dist；例如原子组件使用 `@h-ai/ui/components/primitives/index`。
-- 自动导入识别无分号、跨行及别名的运行时 import；已绑定的本地组件名称不会重复注入。
+- 先执行 `vitePreprocess()` 或其他样式/模板语言转换，再执行 `autoImportHaiUi()`；自动导入读取整份 Svelte AST，不接受未转换的 SCSS/Pug，直接 markup API 保持同步。
+- 自动导入按语法树识别真实 import，保留字符串/注释、别名与已有运行时绑定；根入口 `@h-ai/ui` 的 type-only 组件按需提升。外部同名类型冲突会构建报错并列出文件/组件名，应为类型设置别名或以其他本地名显式导入组件，不重写业务类型引用。
 - 应用只提供页面级文案；组件内部中英日文由 @h-ai/ui 维护。
-- `UserProfile` 用 `avatarAccept` / `avatarHint` 对齐业务的头像格式与大小限制；文件最终校验和上传由业务回调完成。
+- `UserProfile` 用 `avatarAccept` / `avatarHint` 对齐业务的头像格式与大小限制；文件最终校验和上传由业务回调完成。`onsubmit` 必须返回 boolean，只有 `true` 退出编辑，`false` 或异常保留草稿与重试入口。
 - `BareInput type="file"` 通过 `onchange` 的 `currentTarget.files` 读取文件，不绑定文件路径 `value`；其他输入类型可 `bind:value`。
 - AI 文本视为不可信；Markdown/Mermaid 预览与允许执行 HTML/JS 的预览有不同边界。
 

@@ -23,19 +23,37 @@ export function getCrudValidationIssue(field: CrudFieldDef, value: unknown): For
     return undefined
 
   if (field.type === 'number') {
-    const number = typeof value === 'number' ? value : Number(value)
+    const number = typeof value === 'number'
+      ? value
+      : Number(value)
     if (!Number.isFinite(number))
       return { key: 'form_number' }
-    if (rules?.min !== undefined && number < rules.min)
-      return { key: 'form_min', params: { min: rules.min } }
-    if (rules?.max !== undefined && number > rules.max)
-      return { key: 'form_max', params: { max: rules.max } }
+    if (rules?.min !== undefined && number < rules.min) {
+      return {
+        key: 'form_min',
+        params: { min: rules.min },
+      }
+    }
+    if (rules?.max !== undefined && number > rules.max) {
+      return {
+        key: 'form_max',
+        params: { max: rules.max },
+      }
+    }
   }
   else if (typeof value === 'string') {
-    if (rules?.min !== undefined && value.length < rules.min)
-      return { key: 'form_min_length', params: { min: rules.min } }
-    if (rules?.max !== undefined && value.length > rules.max)
-      return { key: 'form_max_length', params: { max: rules.max } }
+    if (rules?.min !== undefined && value.length < rules.min) {
+      return {
+        key: 'form_min_length',
+        params: { min: rules.min },
+      }
+    }
+    if (rules?.max !== undefined && value.length > rules.max) {
+      return {
+        key: 'form_max_length',
+        params: { max: rules.max },
+      }
+    }
   }
 
   if (field.type === 'email' && !/^[\w.!#$%&'*+/=?^`{|}~-]+@[a-z\d](?:[a-z\d-]*[a-z\d])?(?:\.[a-z\d](?:[a-z\d-]*[a-z\d])?)*$/i.test(String(value)))

@@ -55,6 +55,21 @@ afterEach(async () => {
 })
 
 describe('payment.init', () => {
+  it('close 使尚未完成的初始化失效，不能在关闭后发布', async () => {
+    const pending = payment.init({})
+    await payment.close()
+    expect((await pending).success).toBe(false)
+    expect(payment.isInitialized).toBe(false)
+    expect((await payment.init({})).success).toBe(true)
+  })
+
+  it('重新初始化与 close 交错后保持关闭', async () => {
+    expect((await payment.init({})).success).toBe(true)
+    const pending = payment.init({})
+    await payment.close()
+    expect((await pending).success).toBe(false)
+    expect(payment.isInitialized).toBe(false)
+  })
   it('空配置初始化成功（无 Provider）', async () => {
     const result = await payment.init({})
     expect(result.success).toBe(true)
@@ -130,7 +145,9 @@ describe('payment.init', () => {
 
   it('stripe 未初始化数据库时拒绝初始化，且不发布任何 Provider', async () => {
     await reldb.close()
-    const result = await payment.init({ stripe: { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'whsec_key' } })
+    const result = await payment.init({
+      stripe: { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'whsec_key' },
+    })
     expect(result.success).toBe(false)
     expect(payment.isInitialized).toBe(false)
     expect(payment.getProvider('stripe')).toBeUndefined()
@@ -138,7 +155,9 @@ describe('payment.init', () => {
 
   it('stripe 建表失败时拒绝初始化', async () => {
     vi.spyOn(reldb.ddl, 'createTable').mockResolvedValueOnce(err(HaiCommonError.INTERNAL_ERROR, 'test DDL failure'))
-    const result = await payment.init({ stripe: { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'whsec_key' } })
+    const result = await payment.init({
+      stripe: { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'whsec_key' },
+    })
     expect(result.success).toBe(false)
     expect(payment.isInitialized).toBe(false)
     expect(payment.getProvider('stripe')).toBeUndefined()

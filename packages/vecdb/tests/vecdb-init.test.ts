@@ -17,7 +17,7 @@ import { acquireQdrantContainer } from './helpers/qdrant-container.js'
 
 // ─── LanceDB 初始化测试 ───
 
-describe.sequential('vecdb init — lancedb', () => {
+describe('vecdb init — lancedb', { concurrent: false }, () => {
   const LANCE_PATH = './test-data/init-lance-test'
 
   beforeEach(async () => {
@@ -63,7 +63,7 @@ describe.sequential('vecdb init — lancedb', () => {
 
 // ─── pgvector 初始化测试（需要 Docker） ───
 
-describe.sequential('vecdb init — pgvector', () => {
+describe('vecdb init — pgvector', { concurrent: false }, () => {
   let lease: PgvectorContainerLease
 
   beforeAll(async () => {
@@ -164,7 +164,7 @@ describe.sequential('vecdb init — pgvector', () => {
 
 // ─── Qdrant 初始化测试（需要 Docker） ───
 
-describe.sequential('vecdb init — qdrant', () => {
+describe('vecdb init — qdrant', { concurrent: false }, () => {
   let lease: QdrantContainerLease
 
   beforeAll(async () => {

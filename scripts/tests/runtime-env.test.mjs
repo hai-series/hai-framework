@@ -13,7 +13,21 @@ function fixture(run) {
   try {
     return run({
       envFile: join(directory, '.env.runtime'),
-      start: (env = {}) => spawnSync(process.execPath, ['--import', pathToFileURL(loader).href, '-e', 'process.stdout.write(JSON.stringify({value:process.env.HAI_RUNTIME_TEST,removed:process.env.HAI_RUNTIME_REMOVED}))'], { encoding: 'utf8', env: { ...process.env, HAI_RUNTIME_TEST: undefined, HAI_RUNTIME_REMOVED: undefined, ...env }, timeout: 5000 }),
+      start: (env = {}) => spawnSync(process.execPath, [
+        '--import',
+        pathToFileURL(loader).href,
+        '-e',
+        'process.stdout.write(JSON.stringify({value:process.env.HAI_RUNTIME_TEST,removed:process.env.HAI_RUNTIME_REMOVED}))',
+      ], {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          HAI_RUNTIME_TEST: undefined,
+          HAI_RUNTIME_REMOVED: undefined,
+          ...env,
+        },
+        timeout: 5000,
+      }),
     })
   }
   finally { rmSync(directory, { recursive: true, force: true }) }

@@ -8,12 +8,29 @@ describe('feedback 增量添加', () => {
   it('从仅有 core 的工程补齐 IAM 完整直接依赖、配置、环境与 skill，并对齐新通知 Provider', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'hai-add-feedback-'))
     try {
-      await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name: 'feedback-add-sample', version: '0.1.0', dependencies: { '@h-ai/core': 'catalog:' } }))
+      await writeFile(path.join(directory, 'package.json'), JSON.stringify({
+        name: 'feedback-add-sample',
+        version: '0.1.0',
+        dependencies: { '@h-ai/core': 'catalog:' },
+      }))
       await addModule({ module: 'feedback', install: false, cwd: directory })
       const manifest = JSON.parse(await readFile(path.join(directory, 'package.json'), 'utf8'))
-      for (const name of ['feedback', 'crypto', 'reldb', 'cache', 'storage', 'iam'])
+      for (const name of [
+        'feedback',
+        'crypto',
+        'reldb',
+        'cache',
+        'storage',
+        'iam',
+      ])
         expect(manifest.dependencies[`@h-ai/${name}`]).toBe('catalog:')
-      for (const module of ['feedback', 'db', 'cache', 'storage', 'iam'])
+      for (const module of [
+        'feedback',
+        'db',
+        'cache',
+        'storage',
+        'iam',
+      ])
         expect(await readFile(path.join(directory, 'config', `_${module}.yml`), 'utf8')).not.toBe('')
       expect(manifest.dependencies['@h-ai/reach']).toBeUndefined()
       await expect(readFile(path.join(directory, 'config/_reach.yml'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
@@ -31,7 +48,11 @@ describe('feedback 增量添加', () => {
   it('首次与重复添加均保留已有 Reach/feedback 私有配置及环境值', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'hai-add-feedback-private-'))
     try {
-      await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name: 'feedback-private-sample', version: '0.1.0', dependencies: { '@h-ai/core': 'catalog:' } }))
+      await writeFile(path.join(directory, 'package.json'), JSON.stringify({
+        name: 'feedback-private-sample',
+        version: '0.1.0',
+        dependencies: { '@h-ai/core': 'catalog:' },
+      }))
       await mkdir(path.join(directory, 'config'))
       const reach = '# Private provider mapping\nproviders:\n  - name: existing-email\n    type: console\n'
       const feedback = 'appId: private-app\nnotificationProvider: existing-email\n'

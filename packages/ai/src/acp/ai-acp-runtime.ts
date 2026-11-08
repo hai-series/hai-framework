@@ -110,7 +110,9 @@ export async function openRuntime(
     container = await execute(engine, [
       'create',
       // 远程 Podman 会从服务端继承代理，绕过最小环境白名单；只允许显式 environmentRefs 注入。
-      ...(engine === 'podman' ? ['--http-proxy=false'] : []),
+      ...(engine === 'podman'
+        ? ['--http-proxy=false']
+        : []),
       '--init',
       '--mount',
       `type=volume,src=${workspace.storage.name},dst=/workspace`,
@@ -150,7 +152,12 @@ export async function openRuntime(
     inheritWorkspaceEnvironment = true,
   ): ACPTransport {
     ensure()
-    const values = inheritWorkspaceEnvironment ? { ...environment, ...env } : env
+    const values = inheritWorkspaceEnvironment
+      ? {
+          ...environment,
+          ...env,
+        }
+      : env
     return engine && container
       ? {
           type: 'stdio',
@@ -170,9 +177,18 @@ export async function openRuntime(
             command,
             ...args,
           ],
-          env: { ...values, ...engineEnvironment() },
+          env: {
+            ...values,
+            ...engineEnvironment(),
+          },
         }
-      : { type: 'stdio', command, args, cwd, env: values }
+      : {
+          type: 'stdio',
+          command,
+          args,
+          cwd,
+          env: values,
+        }
   }
   async function run(
     command: string,
@@ -191,7 +207,9 @@ export async function openRuntime(
     path,
     transport,
     run,
-    resource: container ? { engine, container } : undefined,
+    resource: container
+      ? { engine, container }
+      : undefined,
     /**
      * 在运行端创建并回收私有临时目录，目录位于工作区挂载之外。
      * @param action - 在临时目录存在时执行的操作。
@@ -204,7 +222,9 @@ export async function openRuntime(
      */
     async withTemporaryDirectory<T>(action: (directory: string) => Promise<T>): Promise<T> {
       const node = engine ? 'node' : process.execPath
-      const directory = await run(node, ['-e', `
+      const directory = await run(node, [
+        '-e',
+        `
 const fs = require('node:fs');
 const path = require('node:path');
 const base = fs.realpathSync(process.argv[1] || require('node:os').tmpdir());
@@ -213,7 +233,11 @@ for (const mount of process.argv.slice(2)) {
   if (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative)) throw Error('scope');
 }
 process.stdout.write(fs.mkdtempSync(path.join(base, 'hai-acp-git-')));
-`, ...(engine ? ['/tmp', root, '/state'] : ['', root])], root, undefined, false)
+`,
+        ...(engine
+          ? ['/tmp', root, '/state']
+          : ['', root]),
+      ], root, undefined, false)
       try {
         return await action(directory)
       }
@@ -253,8 +277,17 @@ process.stdout.write(fs.mkdtempSync(path.join(base, 'hai-acp-git-')));
       content = '',
     ) {
       return run(
-        workspace.storage.type === 'volume' ? 'node' : process.execPath,
-        ['-e', fileProgram, root, op, name, content],
+        workspace.storage.type === 'volume'
+          ? 'node'
+          : process.execPath,
+        [
+          '-e',
+          fileProgram,
+          root,
+          op,
+          name,
+          content,
+        ],
       )
     },
     /**
@@ -277,7 +310,9 @@ process.stdout.write(fs.mkdtempSync(path.join(base, 'hai-acp-git-')));
           ? `/state/${sessionId}`
           : path(`.state/${sessionId}`)
       await run(
-        workspace.storage.type === 'volume' ? 'node' : process.execPath,
+        workspace.storage.type === 'volume'
+          ? 'node'
+          : process.execPath,
         [
           '-e',
           'const f=require("node:fs"),p=require("node:path");const d=process.argv[1];let c=p.parse(d).root;for(const part of d.slice(c.length).split(p.sep).filter(Boolean)){c=p.join(c,part);if(f.lstatSync(c).isSymbolicLink())process.exit(1)}const t=p.join(d,process.argv[2]);try{if(f.lstatSync(t).isSymbolicLink())process.exit(1)}catch(e){if(e.code!=="ENOENT")throw e}f.writeFileSync(t,process.argv[3],{mode:384})',
@@ -303,7 +338,9 @@ process.stdout.write(fs.mkdtempSync(path.join(base, 'hai-acp-git-')));
           ? `/state/${sessionId}`
           : path(`.state/${sessionId}`)
       await run(
-        workspace.storage.type === 'volume' ? 'node' : process.execPath,
+        workspace.storage.type === 'volume'
+          ? 'node'
+          : process.execPath,
         [
           '-e',
           'const f=require("node:fs"),p=require("node:path"),d=process.argv[1];let c=p.parse(d).root;for(const part of d.slice(c.length).split(p.sep).filter(Boolean)){c=p.join(c,part);try{if(f.lstatSync(c).isSymbolicLink())process.exit(1)}catch(e){if(e.code!=="ENOENT")throw e;f.mkdirSync(c,{mode:448})}}',

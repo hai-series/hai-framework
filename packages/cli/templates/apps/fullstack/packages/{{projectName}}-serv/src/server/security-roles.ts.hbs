@@ -8,14 +8,26 @@ export const APP_DUTIES = {
   admin: ['app.users.manage', 'app.roles.manage'],
   audit_admin: ['audit:read', 'audit:backup'],
   config_admin: ['app.config.manage'],
-  business_operator: ['feedback:create', 'feedback:read', 'feedback:process', 'feedback:reopen', 'feedback:export'],
+  business_operator: [
+    'feedback:create',
+    'feedback:read',
+    'feedback:process',
+    'feedback:reopen',
+    'feedback:export',
+  ],
   user: ['feedback:create'],
 } as const
 
 export async function seedAppDuties(): Promise<HaiResult<void>> {
   if (iam.config?.rbac.superAdminRole && iam.config.rbac.superAdminRole in APP_DUTIES)
     return err(HaiCommonError.VALIDATION_ERROR)
-  for (const code of ['admin', 'audit_admin', 'config_admin', 'business_operator', 'user'] as const) {
+  for (const code of [
+    'admin',
+    'audit_admin',
+    'config_admin',
+    'business_operator',
+    'user',
+  ] as const) {
     const permissionIds: string[] = []
     for (const permissionCode of APP_DUTIES[code]) {
       let permission = await iam.authz.getPermissionByCode(permissionCode)
@@ -25,8 +37,11 @@ export async function seedAppDuties(): Promise<HaiResult<void>> {
         permission = await iam.authz.createPermission({ code: permissionCode, name: permissionCode, type: 'api' })
         if (!permission.success) {
           permission = await iam.authz.getPermissionByCode(permissionCode)
-          if (!permission.success || !permission.data)
-            return permission.success ? err(HaiCommonError.INTERNAL_ERROR) : permission
+          if (!permission.success || !permission.data) {
+            return permission.success
+              ? err(HaiCommonError.INTERNAL_ERROR)
+              : permission
+          }
         }
       }
       if (permission.data)
@@ -36,16 +51,26 @@ export async function seedAppDuties(): Promise<HaiResult<void>> {
     if (!role.success)
       return role
     if (!role.data) {
-      role = await iam.authz.createRole({ code, name: serverM(code), isSystem: true })
+      role = await iam.authz.createRole({
+        code,
+        name: serverM(code),
+        isSystem: true,
+      })
       if (!role.success) {
         role = await iam.authz.getRoleByCode(code)
-        if (!role.success || !role.data)
-          return role.success ? err(HaiCommonError.INTERNAL_ERROR) : role
+        if (!role.success || !role.data) {
+          return role.success
+            ? err(HaiCommonError.INTERNAL_ERROR)
+            : role
+        }
       }
     }
     if (!role.data)
       return err(HaiCommonError.INTERNAL_ERROR)
-    const updated = await iam.authz.updateRole(role.data.id, { name: serverM(code), permissionIds })
+    const updated = await iam.authz.updateRole(role.data.id, {
+      name: serverM(code),
+      permissionIds,
+    })
     if (!updated.success)
       return updated
   }
@@ -58,11 +83,17 @@ export async function bootstrapDutyAccount(username: 'audit_admin' | 'config_adm
   if (!password)
     return ok(undefined)
   const created = await iam.user.createUser({ username, password })
-  if (!created.success)
-    return created.error.code === HaiIamError.USER_ALREADY_EXISTS.code ? ok(undefined) : created
+  if (!created.success) {
+    return created.error.code === HaiIamError.USER_ALREADY_EXISTS.code
+      ? ok(undefined)
+      : created
+  }
   const role = await iam.authz.getRoleByCode(username)
-  if (!role.success || !role.data)
-    return role.success ? err(HaiCommonError.INTERNAL_ERROR) : role
+  if (!role.success || !role.data) {
+    return role.success
+      ? err(HaiCommonError.INTERNAL_ERROR)
+      : role
+  }
   const assigned = await iam.authz.syncRoles(created.data.user.id, [role.data.id])
   if (!assigned.success) {
     const removed = await iam.user.deleteUser(created.data.user.id)

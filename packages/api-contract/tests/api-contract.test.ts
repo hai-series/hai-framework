@@ -89,8 +89,15 @@ describe('@h-ai/api-contract', () => {
 
   it('apiContract.route 可定义自定义 contract 路由', () => {
     const custom = apiContract
-      .route({ method: 'POST', path: '/custom/ping', operationId: 'custom.ping', tags: ['custom'] })
-      .output(apiContract.haiResultSchema(z.object({ pong: z.boolean() })))
+      .route({
+        method: 'POST',
+        path: '/custom/ping',
+        operationId: 'custom.ping',
+        tags: ['custom'],
+      })
+      .output(apiContract.haiResultSchema(z.object({
+        pong: z.boolean(),
+      })))
 
     expect(routeOf(custom)).toEqual({ method: 'POST', path: '/custom/ping' })
     expect(apiContract.pathOf(custom)).toBe('/custom/ping')
@@ -115,9 +122,14 @@ describe('@h-ai/api-contract', () => {
   })
 
   it('apiContract.haiResultSchema 形成 success/error 区分联合', () => {
-    const schema = apiContract.haiResultSchema(z.object({ id: z.string() }))
+    const schema = apiContract.haiResultSchema(z.object({
+      id: z.string(),
+    }))
 
-    expect(schema.safeParse({ success: true, data: { id: 'u1' } }).success).toBe(true)
+    expect(schema.safeParse({
+      success: true,
+      data: { id: 'u1' },
+    }).success).toBe(true)
     expect(schema.safeParse({
       success: false,
       error: { code: 'iam:001:401', message: 'unauthorized' },
@@ -125,7 +137,10 @@ describe('@h-ai/api-contract', () => {
 
     expect(schema.safeParse({ success: true }).success).toBe(false)
     expect(schema.safeParse({ success: false }).success).toBe(false)
-    expect(schema.safeParse({ success: true, data: { id: 1 } }).success).toBe(false)
+    expect(schema.safeParse({
+      success: true,
+      data: { id: 1 },
+    }).success).toBe(false)
   })
 
   it('apiContract.voidResultSchema 接受 success+undefined data', () => {
@@ -133,16 +148,22 @@ describe('@h-ai/api-contract', () => {
   })
 
   it('apiContract.paginatedSchema 校验列表结构与计数', () => {
-    const schema = apiContract.paginatedSchema(z.object({ id: z.string() }))
+    const schema = apiContract.paginatedSchema(z.object({
+      id: z.string(),
+    }))
     expect(schema.safeParse({
-      items: [{ id: 'a' }],
+      items: [
+        { id: 'a' },
+      ],
       total: 1,
       page: 1,
       pageSize: 20,
     }).success).toBe(true)
 
     expect(schema.safeParse({
-      items: [{ id: 1 }],
+      items: [
+        { id: 1 },
+      ],
       total: 1,
       page: 1,
       pageSize: 20,

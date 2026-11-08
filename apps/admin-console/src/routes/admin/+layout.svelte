@@ -5,24 +5,24 @@
 <script lang='ts'>
   import type { Snippet } from 'svelte'
   import type { LayoutData } from './$types'
-  import { browser } from '$app/environment'
+  import { browser } from '$app/env'
   import { beforeNavigate, goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
-  import { createAdminGuide } from '$lib/guide/admin-guide'
-  import * as m from '$lib/paraglide/messages'
-  import { getLocale } from '$lib/paraglide/runtime.js'
-  import { authActions } from '$lib/services/auth'
-  import { addFeedbackFiles, annotateFeedback, captureFeedbackPage, closeFeedbackBrowser, exportLocalFeedback, feedbackDraftId, initFeedbackBrowser, pauseFeedback, prepareFeedback, submitFeedback } from '$lib/services/feedback.js'
-  import { sensitiveActions } from '$lib/services/sensitive-actions.svelte.js'
-  import { sessionRecovery } from '$lib/services/session-recovery.svelte.js'
-  import { apiFetch } from '$lib/utils/api'
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
   import { applyTheme, FeedbackModal, getSavedTheme, ReauthenticationDialog, SessionRecoveryDialog, setPermissionContext, usePermission, WorkspaceLayout } from '@h-ai/ui'
   import { GuideHost } from '@h-ai/ui/guide'
   import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
   import { onMount } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
+  import { createAdminGuide } from '#lib/guide/admin-guide.js'
+  import * as m from '#lib/paraglide/messages.js'
+  import { getLocale } from '#lib/paraglide/runtime.js'
+  import { authActions } from '#lib/services/auth.js'
+  import { addFeedbackFiles, annotateFeedback, captureFeedbackPage, closeFeedbackBrowser, exportLocalFeedback, feedbackDraftId, initFeedbackBrowser, pauseFeedback, prepareFeedback, submitFeedback } from '#lib/services/feedback.js'
+  import { sensitiveActions } from '#lib/services/sensitive-actions.svelte.js'
+  import { sessionRecovery } from '#lib/services/session-recovery.svelte.js'
+  import { apiFetch } from '#lib/utils/api.js'
 
   interface Props {
     data: LayoutData
@@ -50,7 +50,7 @@
         approvedNavigation = target.href
         // target 来自 SvelteKit 导航目标，已包含部署 base，不能重复 resolve。
         // eslint-disable-next-line svelte/no-navigation-without-resolve
-        await goto(target, { replaceState: navigation.type === 'popstate' })
+        await goto(target, { replace: navigation.type === 'popstate' })
       }
     }).catch(() => { /* 网络故障不离开当前页面，用户可再次导航。 */ }).finally(() => { checkingNavigation = false })
   })
@@ -113,49 +113,86 @@
   }
 
   // 顶栏主题快速切换（亮/暗）
-  let currentTheme = $derived(browser ? getSavedTheme() : 'light')
+  let currentTheme = $derived(browser
+    ? getSavedTheme()
+    : 'light')
 
   function handleThemeChange(theme: string) {
     applyTheme(theme)
     currentTheme = theme
   }
 
-  type AdminResolvedPath = '/admin' | '/admin/iam/users' | '/admin/iam/roles' | '/admin/iam/permissions' | '/admin/ui-gallery' | '/admin/modules' | '/admin/logs' | '/admin/settings' | '/admin/profile' | '/admin/feedback'
-
-  type AdminNavPath = AdminResolvedPath | '/admin/iam'
-
-  const emptyRouteParams = {}
-  const authLoginPath = resolve('/auth/login', {})
-  const adminHomePath = resolve('/admin', emptyRouteParams)
-  const adminProfilePath = resolve('/admin/profile', emptyRouteParams)
-  const adminSettingsPath = resolve('/admin/settings', emptyRouteParams)
+  const authLoginPath = resolve('auth/login')
+  const adminHomePath = resolve('admin')
+  const adminProfilePath = resolve('admin/profile')
+  const adminSettingsPath = resolve('admin/settings')
 
   interface MenuItem {
     icon: string
     title: string
-    path: AdminNavPath
+    path: string
     requiredPermissions?: string[]
-    children?: { title: string, path: AdminResolvedPath, requiredPermissions?: string[] }[]
+    children?: { title: string, path: string, requiredPermissions?: string[] }[]
   }
 
   const allMenuItems: MenuItem[] = $derived([
-    { icon: 'icon-[tabler--layout-dashboard]', title: m.nav_dashboard(), path: '/admin' },
+    {
+      icon: 'icon-[tabler--layout-dashboard]',
+      title: m.nav_dashboard(),
+      path: resolve('admin'),
+    },
     {
       icon: 'icon-[tabler--shield-lock]',
       title: m.nav_iam(),
-      path: '/admin/iam',
+      path: resolve('admin/iam'),
       requiredPermissions: ['user:read', 'role:read', 'permission:read'],
       children: [
-        { title: m.nav_users(), path: '/admin/iam/users', requiredPermissions: ['user:read'] },
-        { title: m.nav_roles(), path: '/admin/iam/roles', requiredPermissions: ['role:read'] },
-        { title: m.nav_permissions(), path: '/admin/iam/permissions', requiredPermissions: ['permission:read'] },
+        {
+          title: m.nav_users(),
+          path: resolve('admin/iam/users'),
+          requiredPermissions: ['user:read'],
+        },
+        {
+          title: m.nav_roles(),
+          path: resolve('admin/iam/roles'),
+          requiredPermissions: ['role:read'],
+        },
+        {
+          title: m.nav_permissions(),
+          path: resolve('admin/iam/permissions'),
+          requiredPermissions: ['permission:read'],
+        },
       ],
     },
-    { icon: 'icon-[tabler--components]', title: m.nav_ui_gallery(), path: '/admin/ui-gallery' },
-    { icon: 'icon-[tabler--puzzle]', title: m.nav_modules(), path: '/admin/modules', requiredPermissions: ['system:modules'] },
-    { icon: 'icon-[tabler--file-text]', title: m.nav_logs(), path: '/admin/logs', requiredPermissions: ['system:logs'] },
-    { icon: 'icon-[tabler--messages]', title: m.feedback_title(), path: '/admin/feedback', requiredPermissions: ['feedback:read'] },
-    { icon: 'icon-[tabler--settings]', title: m.nav_settings(), path: '/admin/settings', requiredPermissions: ['system:settings'] },
+    {
+      icon: 'icon-[tabler--components]',
+      title: m.nav_ui_gallery(),
+      path: resolve('admin/ui-gallery'),
+    },
+    {
+      icon: 'icon-[tabler--puzzle]',
+      title: m.nav_modules(),
+      path: resolve('admin/modules'),
+      requiredPermissions: ['system:modules'],
+    },
+    {
+      icon: 'icon-[tabler--file-text]',
+      title: m.nav_logs(),
+      path: resolve('admin/logs'),
+      requiredPermissions: ['system:logs'],
+    },
+    {
+      icon: 'icon-[tabler--messages]',
+      title: m.feedback_title(),
+      path: resolve('admin/feedback'),
+      requiredPermissions: ['feedback:read'],
+    },
+    {
+      icon: 'icon-[tabler--settings]',
+      title: m.nav_settings(),
+      path: resolve('admin/settings'),
+      requiredPermissions: ['system:settings'],
+    },
   ])
 
   const menuItems = $derived(
@@ -181,7 +218,10 @@
   const currentPath = $derived(page.url.pathname)
   const pageTitle = $derived(currentPath.startsWith('/admin/profile')
     ? m.nav_profile()
-    : menuItems.flatMap(item => [...(item.children ?? []), item]).find(item => isActive(item.path))?.title ?? m.nav_page())
+    : menuItems.flatMap(item => [
+      ...(item.children ?? []),
+      item,
+    ]).find(item => isActive(item.path))?.title ?? m.nav_page())
 
   function isActive(path: string): boolean {
     if (path === '/admin')
@@ -292,7 +332,9 @@
                 {#if !sidebarCollapsed}
                   <span class='ml-2.5 flex-1 text-[13px] font-medium'>{item.title}</span>
                   <span class="icon-[tabler--chevron-down] size-3.5 transition-transform duration-200 opacity-40
-                    {expandedMenus.has(item.path) ? 'rotate-180' : ''}"></span>
+                    {expandedMenus.has(item.path)
+                      ? 'rotate-180'
+                      : ''}"></span>
                 {/if}
               </BareButton>
 
@@ -300,8 +342,9 @@
                 <ul class='mt-0.5 space-y-0.5 ml-4.5 pl-3 border-l border-base-content/8'>
                   {#each item.children as child (child.path)}
                     <li>
+                      <!-- eslint-disable svelte/no-navigation-without-resolve -- 菜单字段已由 resolve 生成完整挂载地址；规则无法追踪派生/筛选后的集合，不能二次添加前缀。 -->
                       <a
-                        href={resolve(child.path, emptyRouteParams)}
+                        href={child.path}
                         class="block rounded-md px-2.5 py-1.5 text-[13px] transition-colors duration-150
                           {currentPath === child.path
                             ? 'text-primary font-medium bg-primary/6'
@@ -310,13 +353,15 @@
                       >
                         {child.title}
                       </a>
+                      <!-- eslint-enable svelte/no-navigation-without-resolve -->
                     </li>
                   {/each}
                 </ul>
               {/if}
             {:else}
+              <!-- eslint-disable svelte/no-navigation-without-resolve -- 菜单字段已由 resolve 生成完整挂载地址；规则无法追踪派生/筛选后的集合，不能二次添加前缀。 -->
               <a
-                href={resolve(item.path as AdminResolvedPath, emptyRouteParams)}
+                href={item.path}
                 class="flex items-center rounded-lg px-2.5 py-2 transition-colors duration-150
                   {isActive(item.path)
                     ? 'text-primary bg-primary/6 font-medium'
@@ -328,6 +373,7 @@
                   <span class='ml-2.5 text-[13px] font-medium'>{item.title}</span>
                 {/if}
               </a>
+              <!-- eslint-enable svelte/no-navigation-without-resolve -->
             {/if}
           </li>
         {/each}

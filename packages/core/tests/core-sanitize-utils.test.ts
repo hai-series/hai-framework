@@ -16,7 +16,11 @@ describe('core.sanitize', () => {
     expect(output).not.toContain('serialized-only-secret')
     expect(output).not.toContain('class-only-secret')
     expect(output).not.toContain('plain-only-secret')
-    expect(snapshot).toMatchObject({ plain: { password: '[REDACTED]', customerId: 'customer-private' }, sdk: { token: '[REDACTED]', label: 'sdk-visible' }, timestamp: '2026-01-01T00:00:00.000Z' })
+    expect(snapshot).toMatchObject({
+      plain: { password: '[REDACTED]', customerId: 'customer-private' },
+      sdk: { token: '[REDACTED]', label: 'sdk-visible' },
+      timestamp: '2026-01-01T00:00:00.000Z',
+    })
     expect(serialize).not.toHaveBeenCalled()
     expect(readAccessor).not.toHaveBeenCalled()
     expect(input.sdk.token).toBe('class-only-secret')
@@ -24,15 +28,29 @@ describe('core.sanitize', () => {
   })
 
   it('序列化回归：原生 URL 仍显示脱敏地址，普通函数不进入诊断副本', () => {
-    const input = { address: new URL('https://user:private@example.test/path?token=credential'), callback: () => 'private-return' }
+    const input = {
+      address: new URL('https://user:private@example.test/path?token=credential'),
+      callback: () => 'private-return',
+    }
     const snapshot = core.sanitize.sanitizeSensitiveFields(input)
     expect(snapshot).toMatchObject({ address: 'https://[REDACTED]:[REDACTED]@example.test/path?token=[REDACTED]', callback: undefined })
     expect(input.address.password).toBe('private')
     expect(input.callback()).toBe('private-return')
   })
 
-  it.each(['secretKey', 'secret_key', 'passwordHash', 'password_hash', 'passwd'])('统一隐藏实际配置凭据 %s，普通字段保持可诊断', (key) => {
-    const input = { [key]: 'sensitive-sentinel', publicKey: 'public-material', passwordPolicy: 'strict', tokenCount: 12 }
+  it.each([
+    'secretKey',
+    'secret_key',
+    'passwordHash',
+    'password_hash',
+    'passwd',
+  ])('统一隐藏实际配置凭据 %s，普通字段保持可诊断', (key) => {
+    const input = {
+      [key]: 'sensitive-sentinel',
+      publicKey: 'public-material',
+      passwordPolicy: 'strict',
+      tokenCount: 12,
+    }
     expect(core.sanitize.sanitizeSensitiveFields(input)).toEqual({ ...input, [key]: '[REDACTED]' })
     expect(core.sanitize.sanitizeUrl(`https://example.test/?${key}=sensitive-sentinel&limit=10`)).not.toContain('sensitive-sentinel')
     expect(core.sanitize.sanitizeText(`${key}=sensitive-sentinel action=connect`)).toBe('[REDACTED] action=connect')
@@ -43,7 +61,10 @@ describe('core.sanitize', () => {
     const records: unknown[] = []
     const stop = core.logger.observe(record => records.push(record))
     try {
-      core.logger.error('Payment configuration rejected', { stripe: { secretKey: 'stripe-sentinel' }, error: new Error('passwordHash=hash-sentinel invalid') })
+      core.logger.error('Payment configuration rejected', {
+        stripe: { secretKey: 'stripe-sentinel' },
+        error: new Error('passwordHash=hash-sentinel invalid'),
+      })
     }
     finally { stop() }
     expect(records).toHaveLength(1)
@@ -53,8 +74,27 @@ describe('core.sanitize', () => {
     expect(output).toContain('Payment configuration rejected')
   })
 
-  it.each(['verificationCode', 'verification_code', 'verifyCode', 'otpCode', 'totpCode', 'smsCode', 'emailCode', 'captcha', 'captchaCode', 'oneTimeCode', 'twoFactorCode', 'reauthentication', 'x-hai-reauthentication', 'ticket'])('默认脱敏鉴别凭据字段 %s，保留普通业务code', (key) => {
-    expect(core.sanitize.sanitizeSensitiveFields({ nested: { [key]: 'credential-sentinel', code: 'ORDER_ACCEPTED' } })).toEqual({ nested: { [key]: '[REDACTED]', code: 'ORDER_ACCEPTED' } })
+  it.each([
+    'verificationCode',
+    'verification_code',
+    'verifyCode',
+    'otpCode',
+    'totpCode',
+    'smsCode',
+    'emailCode',
+    'captcha',
+    'captchaCode',
+    'oneTimeCode',
+    'twoFactorCode',
+    'reauthentication',
+    'x-hai-reauthentication',
+    'ticket',
+  ])('默认脱敏鉴别凭据字段 %s，保留普通业务code', (key) => {
+    expect(core.sanitize.sanitizeSensitiveFields({
+      nested: { [key]: 'credential-sentinel', code: 'ORDER_ACCEPTED' },
+    })).toEqual({
+      nested: { [key]: '[REDACTED]', code: 'ORDER_ACCEPTED' },
+    })
     expect(core.sanitize.sanitizeUrl(`https://example.test/verify?${key}=credential-sentinel&code=ORDER_ACCEPTED`)).not.toContain('credential-sentinel')
   })
 
@@ -66,7 +106,10 @@ describe('core.sanitize', () => {
   })
 
   it('uRL 自定义 matcher 与对象一致，非法地址不回显原值', () => {
-    expect(core.sanitize.sanitizeUrl('https://example.com/?mail=a&limit=10#section', { matcher: ['mail'], replacement: '***' }))
+    expect(core.sanitize.sanitizeUrl('https://example.com/?mail=a&limit=10#section', {
+      matcher: ['mail'],
+      replacement: '***',
+    }))
       .toBe('https://example.com/?mail=***&limit=10#section')
     expect(core.sanitize.sanitizeUrl('https://user:secret@[')).toBe('(invalid url)')
   })
@@ -232,8 +275,15 @@ describe('core.sanitize', () => {
       name: 'AggregateError',
       message: 'Startup failed',
       stack: failure.stack,
-      cause: { name: 'TypeError', message: 'Connection refused', stack: cause.stack, endpoint: 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]' },
-      errors: [{ name: 'TypeError', message: 'Connection refused' }],
+      cause: {
+        name: 'TypeError',
+        message: 'Connection refused',
+        stack: cause.stack,
+        endpoint: 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]',
+      },
+      errors: [
+        { name: 'TypeError', message: 'Connection refused' },
+      ],
       password: '[REDACTED]',
       token: '[REDACTED]',
       authorization: '[REDACTED]',
@@ -274,7 +324,10 @@ describe('core.sanitize', () => {
       ['mixed aggregate/cause', mixed],
       ['error-owned plain cycle', nestedError],
       ['plain ancestor', ancestor],
-      ['repeated reference', [self, self]],
+      [
+        'repeated reference',
+        [self, self],
+      ],
     ]
     for (const [name, value] of cases) {
       const sanitized = core.sanitize.sanitizeSensitiveValue(value, null)
@@ -318,7 +371,10 @@ describe('core.sanitize', () => {
     expect(serialized).not.toContain('prototype-private-value')
     expect(failure.count).toBe(123n)
     expect(Object.hasOwn(failure, '__proto__')).toBe(true)
-    expect(core.sanitize.sanitizeSensitiveValue(new Error('Private message'), null, { matcher: ['message'], replacement: '[HIDDEN]' }))
+    expect(core.sanitize.sanitizeSensitiveValue(new Error('Private message'), null, {
+      matcher: ['message'],
+      replacement: '[HIDDEN]',
+    }))
       .toMatchObject({ message: '[HIDDEN]' })
   })
 
@@ -330,7 +386,9 @@ describe('core.sanitize', () => {
     const replacement: { self?: unknown } = {}
     replacement.self = replacement
     const cyclic = core.sanitize.sanitizeSensitiveValue(failure, null, { replacement })
-    expect(cyclic).toMatchObject({ password: { self: '[Circular]' } })
+    expect(cyclic).toMatchObject({
+      password: { self: '[Circular]' },
+    })
     expect(() => JSON.stringify({ error: cyclic })).not.toThrow()
     expect(replacement.self).toBe(replacement)
     expect(failure.password).toBe('own-password')

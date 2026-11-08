@@ -25,7 +25,7 @@ A cross-platform oRPC/OpenAPI typed client for hai-framework, with consistent AP
 
 ### Quick start
 
-`close()` invalidates retired refreshes and drains credential writes while preserving external TokenStorage values. After close completes, the same storage may be reused. `timeout` covers headers and the complete JSON body. The built-in Cookie adapter includes credentials for login and refresh, requiring explicit credentialed CORS origins; memory and native storage preserve the original request credentials. Custom application streams remain incremental and their bodies use the caller signal for cancellation.
+`close()` invalidates retired refreshes and drains credential writes while preserving external TokenStorage values. After close completes, the same storage may be reused. `timeout` covers headers, the complete JSON body, and every unsuccessful response body, including HTML error pages. Timeout or cancellation prevents token refresh. The built-in Cookie adapter includes credentials for login and refresh, requiring explicit credentialed CORS origins; memory and native storage preserve the original request credentials. Custom application streams remain incremental and their bodies use the caller signal for cancellation.
 
 ```ts
 import { apiClient } from '@h-ai/api-client'

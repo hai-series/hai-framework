@@ -20,12 +20,19 @@ export function testGroups(directory) {
       const manifest = JSON.parse(readFileSync(join(directory, parent, entry.name, 'package.json'), 'utf8'))
       if (!manifest.scripts?.test)
         continue
-      const dependencies = { ...manifest.dependencies, ...manifest.devDependencies, ...manifest.optionalDependencies }
+      const dependencies = {
+        ...manifest.dependencies,
+        ...manifest.devDependencies,
+        ...manifest.optionalDependencies,
+      }
       const group = dependencies.testcontainers ? containers : parallel
       group.push(manifest.name)
     }
   }
-  return [{ names: parallel, concurrency: 4 }, { names: containers, concurrency: 1 }]
+  return [
+    { names: parallel, concurrency: 4 },
+    { names: containers, concurrency: 1 },
+  ]
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -34,7 +41,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const turboArgs = process.argv.slice(2)
   if (turboArgs.some(argument => /^(?:--(?:filter|concurrency)(?:=|$)|-[Fc])/.test(argument)))
     throw new Error('Use pnpm --filter <workspace> test for a scoped run; root test owns workspace selection and concurrency')
-  const continueArgs = turboArgs.some(argument => argument === '--continue' || argument.startsWith('--continue=')) ? [] : ['--continue=dependencies-successful']
+  const continueArgs = turboArgs.some(argument => argument === '--continue' || argument.startsWith('--continue='))
+    ? []
+    : ['--continue=dependencies-successful']
   let child
   let interrupted = false
   const stop = () => {
@@ -62,7 +71,15 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       const activeConcurrency = Math.max(1, Math.min(concurrency, Math.floor(freeMemory / (2 * 1024 ** 3)), Math.floor(cpuCount / 2)))
       process.stdout.write(`Test group: ${names.length} workspaces; concurrency ${activeConcurrency}/${concurrency}; available memory ${(freeMemory / 1024 ** 3).toFixed(1)} GiB; CPUs ${cpuCount}.\n`)
       const code = await new Promise((resolve, reject) => {
-        child = spawn(process.execPath, [turbo, 'run', 'test', ...names.map(name => `--filter=${name}`), ...continueArgs, `--concurrency=${activeConcurrency}`, ...turboArgs], {
+        child = spawn(process.execPath, [
+          turbo,
+          'run',
+          'test',
+          ...names.map(name => `--filter=${name}`),
+          ...continueArgs,
+          `--concurrency=${activeConcurrency}`,
+          ...turboArgs,
+        ], {
           cwd: root,
           stdio: 'inherit',
           windowsHide: true,
@@ -71,8 +88,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         child.once('exit', resolve)
       })
       // 普通失败继续收集另一组；任何失败仍阻断根门禁。
-      if (code !== 0)
-        process.exitCode = typeof code === 'number' && code !== 0 ? code : 1
+      if (code !== 0) {
+        process.exitCode = typeof code === 'number' && code !== 0
+          ? code
+          : 1
+      }
     }
     if (interrupted)
       process.exitCode ||= 1

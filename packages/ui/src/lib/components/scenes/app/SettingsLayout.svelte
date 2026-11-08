@@ -90,7 +90,9 @@
         <nav class='flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible'>
           {#each sections as section (section.id)}
             {#if section.href}
-              <a href={section.href} class={navItemClass(section.id)} aria-current={section.id === active ? 'page' : undefined}>
+              <a href={section.href} class={navItemClass(section.id)} aria-current={section.id === active
+                ? 'page'
+                : undefined}>
                 {#if section.icon}<span class='{section.icon} size-4 shrink-0'></span>{/if}
                 <span class='whitespace-nowrap'>{section.label}</span>
               </a>

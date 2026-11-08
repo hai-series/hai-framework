@@ -6,14 +6,20 @@ import { s3Env } from '../../storage/tests/helpers/storage-test-suite.js'
 import { audit, HaiAuditError } from '../src/index.js'
 
 for (const backend of ['minio', 'rustfs'] as const) {
-  describe.sequential(`audit backup S3 ${backend}`, () => {
+  describe(`audit backup S3 ${backend}`, { concurrent: false }, () => {
     let environment: Awaited<ReturnType<typeof s3Env>> | undefined
     beforeAll(async () => {
       environment = await s3Env(backend)
       expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
-      expect((await reldb.ddl.createTable('hai_iam_users', { id: { type: 'TEXT', primaryKey: true }, username: { type: 'TEXT' } })).success).toBe(true)
+      expect((await reldb.ddl.createTable('hai_iam_users', {
+        id: { type: 'TEXT', primaryKey: true },
+        username: { type: 'TEXT' },
+      })).success).toBe(true)
       expect((await storage.init(environment.config)).success).toBe(true)
-      expect((await audit.init({ storage, backup: { enabled: true, batchSize: 1, maxRecordBytes: 8 * 1024 * 1024 } })).success).toBe(true)
+      expect((await audit.init({
+        storage,
+        backup: { enabled: true, batchSize: 1, maxRecordBytes: 8 * 1024 * 1024 },
+      })).success).toBe(true)
     }, 300_000)
     afterAll(async () => {
       try {
@@ -27,9 +33,19 @@ for (const backend of ['minio', 'rustfs'] as const) {
     }, 300_000)
 
     it('真实大文件上传与并发创建只保留完整的一份，并可流式校验', async () => {
-      expect((await audit.log({ action: 'large-s3-backup', resource: 'orders', details: { notes: '界'.repeat(2 * 1024 * 1024), password: 'private-credential' } })).success).toBe(true)
+      expect((await audit.log({
+        action: 'large-s3-backup',
+        resource: 'orders',
+        details: {
+          notes: '界'.repeat(2 * 1024 * 1024),
+          password: 'private-credential',
+        },
+      })).success).toBe(true)
       const id = `s3-${backend}-${crypto.randomUUID()}`
-      const results = await Promise.all([audit.backup.run({ id }), audit.backup.run({ id })])
+      const results = await Promise.all([
+        audit.backup.run({ id }),
+        audit.backup.run({ id }),
+      ])
       expect(results[0].success).toBe(true)
       expect(results[1]).toEqual(results[0])
       if (!results[0].success)
@@ -56,7 +72,13 @@ for (const backend of ['minio', 'rustfs'] as const) {
       await audit.close()
       await storage.close()
       expect((await storage.init({ ...environment.config, publicUrl: 'https://public.example.test' })).success).toBe(true)
-      expect(await audit.init({ storage, backup: { enabled: true } })).toMatchObject({ success: false, error: { code: HaiAuditError.CONFIG_ERROR.code } })
+      expect(await audit.init({
+        storage,
+        backup: { enabled: true },
+      })).toMatchObject({
+        success: false,
+        error: { code: HaiAuditError.CONFIG_ERROR.code },
+      })
     })
   })
 }

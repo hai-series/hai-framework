@@ -25,12 +25,21 @@ it('缺平台工程时不执行同步；成功同步也不能当作 APK 打包�
   await expect(buildMobileApp(root!, ['apps/missing'], 'android', run)).rejects.toThrow()
   expect(run).not.toHaveBeenCalled()
   await expect(buildMobileApp(root!, ['apps/app'], 'android', run)).rejects.toThrow()
-  expect(run).toHaveBeenCalledWith(['exec', 'cap', 'build', 'android', '--androidreleasetype', 'APK'], directory)
+  expect(run).toHaveBeenCalledWith([
+    'exec',
+    'cap',
+    'build',
+    'android',
+    '--androidreleasetype',
+    'APK',
+  ], directory)
 })
 it('发布工程含热更新 URL 时拒绝原生打包；有效新 APK 返回实际文件', async () => {
   const directory = await project()
   const config = join(directory, 'android/app/src/main/assets/capacitor.config.json')
-  await writeFile(config, JSON.stringify({ server: { url: 'http://dev.example.test' } }))
+  await writeFile(config, JSON.stringify({
+    server: { url: 'http://dev.example.test' },
+  }))
   const run = vi.fn(async (_args: string[], _cwd: string) => {})
   await expect(buildMobileApp(root!, ['apps/app'], 'android', run)).rejects.toThrow()
   expect(run).toHaveBeenCalledTimes(2)
@@ -42,7 +51,12 @@ it('发布工程含热更新 URL 时拒绝原生打包；有效新 APK 返回实
       await writeFile(output, 'PK-test-artifact')
     }
   })
-  expect(await buildMobileApp(root!, ['apps/app'], 'android', run)).toEqual([{ source: output, file: join('apps/app', 'release', 'app-release.apk') }])
+  expect(await buildMobileApp(root!, ['apps/app'], 'android', run)).toEqual([
+    {
+      source: output,
+      file: join('apps/app', 'release', 'app-release.apk'),
+    },
+  ])
   run.mockImplementation(async () => {})
   await expect(buildMobileApp(root!, ['apps/app'], 'android', run)).rejects.toThrow()
 })
@@ -66,12 +80,24 @@ it('独立手机工程允许 build.app 指向工程根，拒绝越过工程根�
         writeFileSync(apk, 'PK-unit-apk')
       }
     }
-    expect(await buildMobileApp(root, ['.'], 'android', run)).toEqual([{ source: apk, file: join('release', 'app.apk') }])
+    expect(await buildMobileApp(root, ['.'], 'android', run)).toEqual([
+      {
+        source: apk,
+        file: join('release', 'app.apk'),
+      },
+    ])
     expect(calls.map(call => call.directory)).toEqual([root, root, root])
     expect(calls.map(call => call.args)).toEqual([
       ['run', 'build'],
       ['exec', 'cap', 'sync', 'android'],
-      ['exec', 'cap', 'build', 'android', '--androidreleasetype', 'APK'],
+      [
+        'exec',
+        'cap',
+        'build',
+        'android',
+        '--androidreleasetype',
+        'APK',
+      ],
     ])
     calls.length = 0
     const outside = join(fixture, 'outside')

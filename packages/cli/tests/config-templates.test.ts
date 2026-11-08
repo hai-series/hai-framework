@@ -105,19 +105,30 @@ describe('generateConfigFile', () => {
   // 自定义配置值测试
   describe('自定义配置值', () => {
     it('core: 应该使用自定义项目名和语言', () => {
-      const content = generateConfigFile('core', { core: { name: 'my-admin', defaultLocale: 'en-US' } })
+      const content = generateConfigFile('core', {
+        core: { name: 'my-admin', defaultLocale: 'en-US' },
+      })
       expect(content).toContain('name: $' + '{HAI_CORE_NAME:my-admin}')
       expect(content).toContain('defaultLocale: $' + '{HAI_CORE_DEFAULTLOCALE:en-US}')
     })
 
     it('core: 应用名称中的引号、冒号和换行应保持为完整配置值', () => {
       const name = 'Operations: "管理台"\n<Workspace>'
-      const config: { name: string } = loadConfigText('core', generateConfigFile('core', { core: { name } }))
+      const config: { name: string } = loadConfigText('core', generateConfigFile('core', {
+        core: { name },
+      }))
       expect(config.name).toBe(name)
     })
 
     it('db: 应该生成 PostgreSQL 配置', () => {
-      const content = generateConfigFile('db', { db: { type: 'postgresql', host: '10.0.0.1', port: 5432, database: 'mydb' } })
+      const content = generateConfigFile('db', {
+        db: {
+          type: 'postgresql',
+          host: '10.0.0.1',
+          port: 5432,
+          database: 'mydb',
+        },
+      })
       expect(content).toContain('type: $' + '{HAI_DB_TYPE:postgresql}')
       expect(content).toContain('host:')
       expect(content).toContain('10.0.0.1')
@@ -128,7 +139,9 @@ describe('generateConfigFile', () => {
     })
 
     it('db: 应该生成 MySQL 配置', () => {
-      const content = generateConfigFile('db', { db: { type: 'mysql', host: 'db.example.com', port: 3306 } })
+      const content = generateConfigFile('db', {
+        db: { type: 'mysql', host: 'db.example.com', port: 3306 },
+      })
       expect(content).toContain('type: $' + '{HAI_DB_TYPE:mysql}')
       expect(content).toContain('db.example.com')
       expect(content).toContain('3306')
@@ -136,7 +149,9 @@ describe('generateConfigFile', () => {
     })
 
     it('cache: 应该生成 Redis 配置', () => {
-      const content = generateConfigFile('cache', { cache: { type: 'redis', host: 'redis.local', port: 6380 } })
+      const content = generateConfigFile('cache', {
+        cache: { type: 'redis', host: 'redis.local', port: 6380 },
+      })
       expect(content).toContain('type: $' + '{HAI_CACHE_TYPE:redis}')
       expect(content).toContain('redis.local')
       expect(content).toContain('6380')
@@ -144,24 +159,32 @@ describe('generateConfigFile', () => {
     })
 
     it('iam: 应该使用自定义登录配置', () => {
-      const content = generateConfigFile('iam', { iam: { loginPassword: true, loginOtp: true } })
+      const content = generateConfigFile('iam', {
+        iam: { loginPassword: true, loginOtp: true },
+      })
       expect(content).toContain('password: $' + '{HAI_IAM_LOGIN_PASSWORD:true}')
       expect(content).toContain('otp: $' + '{HAI_IAM_LOGIN_OTP:true}')
     })
 
     it('storage: 应该生成 S3 配置', () => {
-      const content = generateConfigFile('storage', { storage: { type: 's3' } })
+      const content = generateConfigFile('storage', {
+        storage: { type: 's3' },
+      })
       expect(content).toContain('type: $' + '{HAI_STORAGE_TYPE:s3}')
       expect(content).not.toContain('type: $' + '{HAI_STORAGE_TYPE:local}')
     })
 
     it('ai: 应该生成 Anthropic 配置', () => {
-      const content = generateConfigFile('ai', { ai: { defaultProvider: 'anthropic', model: 'claude-3-opus' } })
+      const content = generateConfigFile('ai', {
+        ai: { defaultProvider: 'anthropic', model: 'claude-3-opus' },
+      })
       expect(content).toContain('model: $' + '{HAI_AI_LLM_MODEL:claude-3-opus}')
     })
 
     it('ai: 应该生成自定义 Provider 配置', () => {
-      const content = generateConfigFile('ai', { ai: { defaultProvider: 'deepseek', model: 'deepseek-chat' } })
+      const content = generateConfigFile('ai', {
+        ai: { defaultProvider: 'deepseek', model: 'deepseek-chat' },
+      })
       expect(content).toContain('model: $' + '{HAI_AI_LLM_MODEL:deepseek-chat}')
     })
   })
@@ -180,7 +203,9 @@ describe('generateEnvExample', () => {
   })
 
   it('redis 环境变量应与 camelCase 配置路径一致', () => {
-    const content = generateEnvExample(['cache'], { cache: { type: 'redis' } })
+    const content = generateEnvExample(['cache'], {
+      cache: { type: 'redis' },
+    })
     expect(content).toContain('HAI_CACHE_CONNECTTIMEOUT=')
     expect(content).toContain('HAI_CACHE_COMMANDTIMEOUT=')
     expect(content).toContain('HAI_CACHE_KEYPREFIX=')

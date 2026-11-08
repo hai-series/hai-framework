@@ -16,6 +16,8 @@ A vector database module with a unified `vecdb` object for LanceDB, pgvector, Qd
 
 ## Getting started
 
+Every provider returns `score` in 0–1, with larger values indicating greater similarity; `minScore` filters converted scores. Cosine uses `(1 + cosine) / 2`, dot uses `sigmoid(dotProduct)`, and Euclidean uses `1 / (1 + distance)`. LanceDB/Chroma use native squared L2 while other backends use native L2. Calibrate thresholds for each metric/backend; scores are not probabilities. Qdrant no longer treats the public minScore as a native distance threshold.
+
 ### Quick start
 
 ```ts
@@ -31,7 +33,12 @@ await vecdb.collection.create('docs', { dimension: 1536 })
 
 // 插入向量
 await vecdb.vector.insert('docs', [
-  { id: 'doc-1', vector: Array.from({ length: 1536 }).fill(0.1), content: '文档内容', metadata: { source: 'wiki' } },
+  {
+    id: 'doc-1',
+    vector: Array.from({ length: 1536 }).fill(0.1),
+    content: '文档内容',
+    metadata: { source: 'wiki' }
+  },
 ])
 
 // 搜索
@@ -92,7 +99,9 @@ For Chroma, this module sends the optional `apiKey` as `Authorization: Bearer <a
 
 Direct initialization has a total deadline of 5 seconds; local server startup uses `startupTimeout`. Expiry aborts candidate HTTP requests. Successful initialization clears the timer, so this deadline does not limit subsequent business requests.
 
-Qdrant uses the actual types and Query API of `@qdrant/js-client-rest 1.18.0`. It supports an unnamed vector field with cosine/euclidean/dot metrics. Info, writes and searches on external named-vector or Manhattan collections return `CONFIG_ERROR`, without guessing zero dimensions or a default cosine metric. Only HTTP 404 means a collection is absent. Provider URL logs use core's shared sanitizer.
+Qdrant uses fixed REST endpoints over native HTTP without an extra SDK. Unnamed cosine/euclidean/dot vectors are supported. The 30-second timeout covers the full response body; responses over 16 MiB fail explicitly. Path segments are encoded and writes/deletes await server application. External named-vector or Manhattan collections return `CONFIG_ERROR`; only HTTP 404 means absent. Logs use core sanitization.
+
+Fixed Qdrant requests reject HTTP redirects, preventing API Key forwarding to redirect targets.
 
 Chroma metadata/filter values follow native `chromadb 3.5.0` validation. Invalid values return operation errors without dropping filters or issuing unfiltered queries. Document content may be omitted and search still returns `undefined`; internal writes use the SDK's string field. Check each backend's null, complex-metadata and filter semantics separately.
 
@@ -142,7 +151,7 @@ await vecdb.init({
 
 > Behavior: empty batch `insert/upsert/delete` calls are no-ops. Writes and searches validate vector dimensions, returning `HaiVecdbError.DIMENSION_MISMATCH` on a mismatch; missing optional drivers return `HaiVecdbError.DRIVER_NOT_FOUND`.
 
-Qdrant `insert/upsert/delete` use `wait: true`, so success means the server applied that operation. `vector.count` requests an exact count rather than approximate collection statistics. Multiple operations do not form a transaction.
+Qdrant uses fixed REST endpoints over native HTTP without an extra SDK. Unnamed cosine/euclidean/dot vectors are supported. The 30-second timeout covers the full response body; responses over 16 MiB fail explicitly. Path segments are encoded and writes/deletes await server application. External named-vector or Manhattan collections return `CONFIG_ERROR`; only HTTP 404 means absent. Logs use core sanitization.
 
 ### Error handling
 

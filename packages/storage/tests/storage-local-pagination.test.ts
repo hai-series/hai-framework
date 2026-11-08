@@ -9,7 +9,10 @@ import { defineStorageSuite, localStorageEnv } from './helpers/storage-test-suit
 
 /** 只比较可见逻辑条目；files 与 commonPrefixes 分开存放，但共享页大小。 */
 function keys(files: Array<{ key: string }>, commonPrefixes: string[]): string[] {
-  return [...files.map(file => file.key), ...commonPrefixes]
+  return [
+    ...files.map(file => file.key),
+    ...commonPrefixes,
+  ]
     .sort((left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right)))
 }
 
@@ -30,7 +33,15 @@ defineStorageSuite('local-cursor', localStorageEnv, () => {
   })
 
   it('orders UTF-8 keys stably across files and directory traversal, and survives module reinitialization', async () => {
-    const expected = ['order/a.txt', 'order/a/child.txt', 'order/a0.txt', 'order/z.txt', 'order/中.txt', 'order/\uE000.txt', 'order/😀.txt']
+    const expected = [
+      'order/a.txt',
+      'order/a/child.txt',
+      'order/a0.txt',
+      'order/z.txt',
+      'order/中.txt',
+      'order/\uE000.txt',
+      'order/😀.txt',
+    ]
       .sort((left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right)))
     for (const key of [...expected].reverse())
       expect((await storage.file.put(key, key)).success).toBe(true)
@@ -61,16 +72,32 @@ defineStorageSuite('local-cursor', localStorageEnv, () => {
     const root = storage.config
     if (!root || root.type !== 'local')
       throw new Error('Expected local fixture')
-    for (const key of ['mixed/a.txt', 'mixed/b/1.txt', 'mixed/b/2.txt', 'mixed/c.txt', 'mixed/d/1.txt'])
+    for (const key of [
+      'mixed/a.txt',
+      'mixed/b/1.txt',
+      'mixed/b/2.txt',
+      'mixed/c.txt',
+      'mixed/d/1.txt',
+    ])
       expect((await storage.file.put(key, key)).success).toBe(true)
     await mkdir(join(root.root, 'mixed', 'empty'), { recursive: true })
     await writeFile(join(root.root, 'mixed', 'hidden.meta.json'), '{}')
     await writeFile(join(root.root, 'mixed', 'hidden.upload.tmp'), 'pending')
-    const expected = ['mixed/a.txt', 'mixed/b/', 'mixed/c.txt', 'mixed/d/']
+    const expected = [
+      'mixed/a.txt',
+      'mixed/b/',
+      'mixed/c.txt',
+      'mixed/d/',
+    ]
     const received: string[] = []
     let token: string | undefined
     for (let page = 0; page < 4; page++) {
-      const result = await storage.dir.list({ prefix: 'mixed/', delimiter: '/', maxKeys: 1, continuationToken: token })
+      const result = await storage.dir.list({
+        prefix: 'mixed/',
+        delimiter: '/',
+        maxKeys: 1,
+        continuationToken: token,
+      })
       expect(result.success).toBe(true)
       if (!result.success)
         return
@@ -105,8 +132,14 @@ defineStorageSuite('local-cursor', localStorageEnv, () => {
       { prefix: 'scope/', delimiter: '/', continuationToken: token },
       { prefix: 'scope/', continuationToken: '' },
       { prefix: 'scope/', continuationToken: 'not-json' },
-      { prefix: 'scope/', continuationToken: Buffer.from('[2,"scope","a"]').toString('base64url') },
-      { prefix: 'scope/', continuationToken: 'a'.repeat(20_000) },
+      {
+        prefix: 'scope/',
+        continuationToken: Buffer.from('[2,"scope","a"]').toString('base64url'),
+      },
+      {
+        prefix: 'scope/',
+        continuationToken: 'a'.repeat(20_000),
+      },
       { prefix: 'scope/', maxKeys: 0 },
       { prefix: 'scope/', maxKeys: -1 },
       { prefix: 'scope/', maxKeys: Number.NaN },
@@ -151,7 +184,9 @@ defineStorageSuite('local-cursor', localStorageEnv, () => {
     const root = storage.config
     if (!root || root.type !== 'local')
       throw new Error('Expected local fixture')
-    const worker = fork(new URL('./fixtures/storage-list-node.mjs', import.meta.url), { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] })
+    const worker = fork(new URL('./fixtures/storage-list-node.mjs', import.meta.url), {
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+    })
     const reply = await new Promise<{ success: boolean, keys?: string[], isTruncated?: boolean }>((resolveReply, reject) => {
       let result: { success: boolean, keys?: string[], isTruncated?: boolean } | undefined
       const timeout = setTimeout(() => worker.kill(), 10000)
@@ -170,8 +205,15 @@ defineStorageSuite('local-cursor', localStorageEnv, () => {
         else
           reject(new Error('Storage cursor worker failed'))
       })
-      worker.send({ root: root.root, options: { prefix: 'process/', maxKeys: 2, continuationToken: first.data.nextContinuationToken } })
+      worker.send({
+        root: root.root,
+        options: { prefix: 'process/', maxKeys: 2, continuationToken: first.data.nextContinuationToken },
+      })
     })
-    expect(reply).toEqual({ success: true, keys: ['process/b.txt', 'process/c.txt'], isTruncated: false })
+    expect(reply).toEqual({
+      success: true,
+      keys: ['process/b.txt', 'process/c.txt'],
+      isTruncated: false,
+    })
   })
 })

@@ -10,7 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { reldb } from '../src/index.js'
 
-describe.sequential('sqlite worker executor', () => {
+describe('sqlite worker executor', { concurrent: false }, () => {
   beforeEach(async () => {
     await reldb.close()
     const init = await reldb.init({
@@ -111,8 +111,14 @@ describe.sequential('sqlite worker executor', () => {
     })
 
     const batch = await reldb.sql.batch([
-      { sql: 'INSERT INTO hai_worker_batch (name) VALUES (?)', params: ['x'] },
-      { sql: 'INSERT INTO hai_worker_batch (name) VALUES (?)', params: ['y'] },
+      {
+        sql: 'INSERT INTO hai_worker_batch (name) VALUES (?)',
+        params: ['x'],
+      },
+      {
+        sql: 'INSERT INTO hai_worker_batch (name) VALUES (?)',
+        params: ['y'],
+      },
     ])
     expect(batch.success).toBe(true)
 

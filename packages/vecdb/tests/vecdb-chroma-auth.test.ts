@@ -38,7 +38,9 @@ describe('chroma HTTP authentication', () => {
     finally {
       await provider.close()
       server.closeAllConnections()
-      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+      await new Promise<void>((resolve, reject) => server.close(error => error
+        ? reject(error)
+        : resolve()))
     }
   }, 10_000)
 
@@ -52,7 +54,11 @@ describe('chroma HTTP authentication', () => {
         response.end(JSON.stringify({ error: 'Unauthorized', message: 'Authentication required' }))
         return
       }
-      response.end(JSON.stringify(request.url?.endsWith('/heartbeat') ? { 'nanosecond heartbeat': 1 } : request.url?.includes('/collections?') ? [] : 0))
+      response.end(JSON.stringify(request.url?.endsWith('/heartbeat')
+        ? { 'nanosecond heartbeat': 1 }
+        : request.url?.includes('/collections?')
+          ? []
+          : 0))
     })
     server.listen(0, '127.0.0.1')
     await once(server, 'listening')
@@ -74,7 +80,9 @@ describe('chroma HTTP authentication', () => {
     }
     finally {
       await provider.close()
-      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+      await new Promise<void>((resolve, reject) => server.close(error => error
+        ? reject(error)
+        : resolve()))
     }
   }, 15_000)
 
@@ -106,7 +114,9 @@ describe('chroma HTTP authentication', () => {
     }
     finally {
       await vecdb.close()
-      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+      await new Promise<void>((resolve, reject) => server.close(error => error
+        ? reject(error)
+        : resolve()))
     }
   })
 })

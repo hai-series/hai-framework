@@ -19,11 +19,28 @@ describe.each(['postgresql', 'mysql'] as const)('%s pool lifecycle', (backend) =
   let mysqlPrototype: MysqlPool
 
   beforeAll(async () => {
-    const lease = await (backend === 'postgresql' ? acquirePostgresContainer() : acquireMysqlContainer())
+    const lease = await (backend === 'postgresql'
+      ? acquirePostgresContainer()
+      : acquireMysqlContainer())
     release = lease.release
-    config = { type: backend, host: lease.host, port: lease.port, database: lease.database, user: lease.user, password: lease.password }
-    const connection = { host: lease.host, port: lease.port, database: lease.database, user: lease.user, password: lease.password }
-    observer = backend === 'postgresql' ? new pg.Pool(connection) : mysql.createPool(connection)
+    config = {
+      type: backend,
+      host: lease.host,
+      port: lease.port,
+      database: lease.database,
+      user: lease.user,
+      password: lease.password,
+    }
+    const connection = {
+      host: lease.host,
+      port: lease.port,
+      database: lease.database,
+      user: lease.user,
+      password: lease.password,
+    }
+    observer = backend === 'postgresql'
+      ? new pg.Pool(connection)
+      : mysql.createPool(connection)
     if (backend === 'mysql')
       mysqlPrototype = Object.getPrototypeOf(observer) as MysqlPool
     await observer.query('SELECT 1')

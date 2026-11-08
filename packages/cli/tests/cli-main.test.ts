@@ -101,14 +101,23 @@ afterEach(() => {
 
 describe('cli-main', () => {
   it('构建参数完整交给构建器，部署仅暴露一个跳过中间件选项', async () => {
-    const options = { cwd: 'C:/workspace', target: 'image', json: true, runtime: 'podman', network: 'pasta', httpProxy: false, sqlitePrebuildMirror: 'http://mirror.internal/sqlite' }
+    const options = {
+      cwd: 'C:/workspace',
+      target: 'image',
+      json: true,
+      runtime: 'podman',
+      network: 'pasta',
+      httpProxy: false,
+    }
     await getCommandAction('build')(options)
     expect(commandMocks.buildCommand).toHaveBeenCalledWith(options)
     expect(cliState.commands.get('build')!.options).toContain('--network <network>')
     expect(cliState.commands.get('build')!.options).toContain('--json')
+    expect(cliState.commands.get('build')!.options).not.toContain('--sqlite-prebuild-mirror <url>')
     const deployOptions = cliState.commands.get('deploy [appDir]')!.options
     expect(deployOptions).toContain('--skip-middleware')
     expect(deployOptions).not.toContain('--skip-provision')
+    expect(deployOptions).not.toContain('--sqlite-prebuild-mirror <url>')
   })
   it('镜像 JSON 构建失败时只在 stderr 写入错误', async () => {
     const previousExitCode = process.exitCode

@@ -42,5 +42,7 @@ export function parseAlipayTime(value: string): Date | undefined {
   if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value))
     return undefined
   const date = new Date(`${value.replace(' ', 'T')}+08:00`)
-  return Number.isFinite(date.getTime()) && formatAlipayTime(date) === value ? date : undefined
+  return Number.isFinite(date.getTime()) && formatAlipayTime(date) === value
+    ? date
+    : undefined
 }

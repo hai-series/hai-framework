@@ -7,8 +7,8 @@
  */
 
 import type { LayoutServerLoad } from './$types'
-import { requireAdminData } from '$lib/server/iam-admin.js'
 import { iam } from '@h-ai/iam'
+import { requireAdminData } from '#lib/server/iam-admin.js'
 
 export const load: LayoutServerLoad = async () => {
   return {

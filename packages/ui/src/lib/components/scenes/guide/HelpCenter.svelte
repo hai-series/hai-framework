@@ -56,7 +56,15 @@
       try {
         if (article.enabled && !article.enabled())
           return []
-        return [{ ...article, title: resolveGuideText(article.title), description: resolveGuideText(article.description), category: resolveGuideText(article.category), content: resolveGuideText(article.content) }]
+        return [
+          {
+            ...article,
+            title: resolveGuideText(article.title),
+            description: resolveGuideText(article.description),
+            category: resolveGuideText(article.category),
+            content: resolveGuideText(article.content),
+          },
+        ]
       }
       catch {
         failed = true
@@ -70,14 +78,23 @@
     void locale
     return tours.flatMap((tour) => {
       try {
-        return !tour.enabled || tour.enabled() ? [{ id: tour.id, title: resolveGuideText(tour.title) }] : []
+        return !tour.enabled || tour.enabled()
+          ? [
+            {
+              id: tour.id,
+              title: resolveGuideText(tour.title),
+            },
+          ]
+          : []
       }
       catch { return [] }
     })
   })
   const visible = $derived(localized.filter(article => (`${article.title} ${article.description} ${article.category} ${article.content}`).toLowerCase().includes(search.trim().toLowerCase())))
   const selected = $derived(visible.find(article => article.id === currentId) ?? visible[0])
-  const markdown = $derived(selected ? import('../ai/MarkdownRenderer.svelte') : null)
+  const markdown = $derived(selected
+    ? import('../ai/MarkdownRenderer.svelte')
+    : null)
   const text = $derived.by(() => ({
     search: uiM('guide_search', undefined, locale),
     empty: uiM('guide_empty', undefined, locale),
@@ -95,7 +112,9 @@
     <Input id={searchId} bind:value={search} placeholder={text.search} data-testid='guide-search' />
     <div class='mt-3 max-h-40 space-y-1 overflow-y-auto md:max-h-[50dvh]'>
       {#each visible as article (article.id)}
-        <BareButton class={`w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-base-content/5 ${selected?.id === article.id ? 'bg-primary/10 font-semibold text-primary' : ''}`} onclick={() => currentId = article.id} data-testid={`guide-article-${article.id}`}>
+        <BareButton class={`w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-base-content/5 ${selected?.id === article.id
+          ? 'bg-primary/10 font-semibold text-primary'
+          : ''}`} onclick={() => currentId = article.id} data-testid={`guide-article-${article.id}`}>
           {#if article.category}<span class='mb-1 block text-xs text-base-content/50'>{article.category}</span>{/if}
           <span class='block'>{article.title}</span>
         </BareButton>

@@ -8,14 +8,20 @@ const gatewayFields = {
   /** 网关自定义请求头；连接与消息长度相关的头由 HTTP 客户端管理。 */
   headers: z.record(z.string(), z.string()).refine((headers) => {
     try {
-      return [...new Headers(headers).keys()].every(name => !transportHeader.test(name))
+      return [
+        ...new Headers(headers).keys(),
+      ].every(name => !transportHeader.test(name))
     }
     catch {
       return false
     }
   }, reachM('reach_gatewayHeadersInvalid')).optional(),
   /** 网关请求体；对象和数组序列化为 JSON，字符串原样发送。省略时不发请求体。 */
-  body: z.union([z.string(), z.array(jsonValue), z.record(z.string(), jsonValue)], reachM('reach_gatewayBodyInvalid')).optional(),
+  body: z.union([
+    z.string(),
+    z.array(jsonValue),
+    z.record(z.string(), jsonValue),
+  ], reachM('reach_gatewayBodyInvalid')).optional(),
 }
 
 /**
@@ -45,4 +51,7 @@ export const ReachGatewayConfigSchema = z.strictObject({
   return target !== null && /^https?:\/\//i.test(url) && !/[?#]/.test(url)
     && !target.username && !target.password
     && (target.protocol === 'https:' || (target.protocol === 'http:' && allowInsecureHttp))
-}, { path: ['url'], message: reachM('reach_gatewayUrlInvalid') })
+}, {
+  path: ['url'],
+  message: reachM('reach_gatewayUrlInvalid'),
+})

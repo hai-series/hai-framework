@@ -12,7 +12,7 @@ import { expect, test } from '@playwright/test'
 {{#if_eq appType 'h5'}}
 /** 延迟客户端脚本，覆盖 SSR 已显示而事件尚未绑定的阶段。 */
 async function whileClientBootPaused(page: Page, inspect: () => Promise<void>) {
-  let resumeClient = () => {}
+  let resumeClient = () => { }
   const clientBoot = new Promise<void>((resolve) => {
     resumeClient = resolve
   })
@@ -29,7 +29,6 @@ async function whileClientBootPaused(page: Page, inspect: () => Promise<void>) {
     await page.unrouteAll({ behavior: 'wait' })
   }
 }
-
 {{/if_eq}}
 {{#if_eq appType 'admin'}}
 test('high contrast appearance is selectable and survives reload', async ({ page }) => {
@@ -51,7 +50,6 @@ test('high contrast appearance is selectable and survives reload', async ({ page
   expect(await header.locator('button').first().evaluate(element => getComputedStyle(element).borderTopLeftRadius)).toBe('0px')
 })
 {{/if_eq}}
-
 {{#if hasUi}}
 {{#unless isCapacitorApp}}
 test('eye care appearance is selectable and survives reload', async ({ page }, testInfo) => {
@@ -73,19 +71,28 @@ test('eye care appearance is selectable and survives reload', async ({ page }, t
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'eye-care')
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe('light')
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-base-100').trim())).toBe('#e8f0df')
-  await page.screenshot({ path: testInfo.outputPath('eye-care-desktop.png'), animations: 'disabled' })
+  await page.screenshot({
+    path: testInfo.outputPath('eye-care-desktop.png'),
+    animations: 'disabled',
+  })
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: testInfo.outputPath('eye-care-mobile.png'), animations: 'disabled' })
+  await page.screenshot({
+    path: testInfo.outputPath('eye-care-mobile.png'),
+    animations: 'disabled',
+  })
 })
 {{/unless}}
 {{/if}}
-
 {{#if_eq appType 'h5'}}
-test.use({ viewport: { width: 390, height: 844 } })
+test.use({
+  viewport: { width: 390, height: 844 },
+})
 {{/if_eq}}
 {{#if isCapacitorApp}}
-test.use({ viewport: { width: 390, height: 844 } })
+test.use({
+  viewport: { width: 390, height: 844 },
+})
 {{/if}}
 
 /** 首页从真实浏览器页面发起，覆盖基础渲染链路。 */
@@ -137,7 +144,11 @@ test('home page renders from browser', async ({ page }) => {
   const evidence = process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve('test-results/auth-screenshots')
   await mkdir(evidence, { recursive: true })
   await page.evaluate(() => document.fonts.ready)
-  await page.screenshot({ path: path.join(evidence, '{{projectName}}-home.png'), fullPage: true, animations: 'disabled' })
+  await page.screenshot({
+    path: path.join(evidence, '{{projectName}}-home.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
 })
 {{#if features.iam}}
 
@@ -156,21 +167,30 @@ test('configured IAM registration and password login', async ({ page, context })
   await expect(page.locator('#login-username')).toBeVisible()
   await expect(page.locator('header').first()).toBeVisible()
   await expect(page.locator('footer')).toBeVisible()
-  await page.screenshot({ path: path.join(evidence, '{{projectName}}-login.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, '{{projectName}}-login.png'),
+    fullPage: true,
+  })
   await page.getByRole('{{#if isCapacitorApp}}button{{else}}link{{/if}}', { name: /立即注册|Register now/i }).click()
 {{#unless isCapacitorApp}}
   await expect(page).toHaveURL(/\/auth\/register(?:\?|$)/)
 {{/unless}}
   const registerForm = page.locator('.register-form')
   await expect(registerForm.locator('#register-username')).toBeVisible()
-  await page.screenshot({ path: path.join(evidence, '{{projectName}}-register.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, '{{projectName}}-register.png'),
+    fullPage: true,
+  })
   if (process.env.IAM_NOTIFICATION_URL) {
     // 协议弹窗留在认证页，关闭后继续填写注册表单。
     await registerForm.getByRole('button', { name: /用户协议|Terms of Service/i, exact: true }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
     await expect(page.getByRole('dialog').getByRole('heading', { name: 'Configured registration agreement' })).toBeVisible()
     await expect(page.locator('iframe')).toHaveCount(0)
-    await page.screenshot({ path: path.join(evidence, '{{projectName}}-agreement.png'), fullPage: true })
+    await page.screenshot({
+      path: path.join(evidence, '{{projectName}}-agreement.png'),
+      fullPage: true,
+    })
     await page.keyboard.press('Escape')
     await expect(page.getByRole('dialog')).not.toBeVisible()
   }
@@ -193,7 +213,11 @@ test('configured IAM registration and password login', async ({ page, context })
   await expect(page.getByTestId('profile-theme')).toBeVisible()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'eye-care')
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-base-100').trim())).toBe('#e8f0df')
-  await page.screenshot({ path: path.join(evidence, '{{projectName}}-eye-care.png'), fullPage: true, animations: 'disabled' })
+  await page.screenshot({
+    path: path.join(evidence, '{{projectName}}-eye-care.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
 {{else}}
   // 通过页面 fetch 复用 Cookie 与已安装的传输加密，避免 HTTP 辅助客户端绕过浏览器协议。
   const me = await page.evaluate(async url => (await fetch(url)).status, new URL('./api/auth/me', test.info().project.use.baseURL).href)
@@ -215,7 +239,10 @@ test('configured IAM registration and password login', async ({ page, context })
   await page.reload()
   await page.goto(authUrl)
   await page.getByRole('button', { name: /邮件验证码|Email code/i, exact: true }).click()
-  await page.screenshot({ path: path.join(evidence, '{{projectName}}-email.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, '{{projectName}}-email.png'),
+    fullPage: true,
+  })
   const email = `${username}@example.com`
   await page.locator('#login-username').fill(email)
   await page.getByRole('button', { name: /发送验证码|Send code/i, exact: true }).click()
@@ -234,14 +261,20 @@ test('configured IAM registration and password login', async ({ page, context })
   await page.reload()
   await page.goto(authUrl)
   await page.getByRole('button', { name: /忘记密码|Forgot password/i }).click()
-  await page.screenshot({ path: path.join(evidence, '{{projectName}}-forgot.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, '{{projectName}}-forgot.png'),
+    fullPage: true,
+  })
   await page.locator('input[type="email"]').fill(email)
   await page.locator('button[type="submit"]').click()
   await expect(page.locator('.hai-toast-item[data-variant="success"]')).toBeVisible()
   const reset = await received('password_reset')
   expect(Boolean(reset?.token)).toBe(true)
   await page.getByRole('button', { name: /已有重置令牌|I have a reset token/i }).click()
-  await page.screenshot({ path: path.join(evidence, '{{projectName}}-reset.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, '{{projectName}}-reset.png'),
+    fullPage: true,
+  })
   const resetUrl = `{{#if isCapacitorApp}}/{{else}}/auth/reset-password{{/if}}?token=${encodeURIComponent(reset?.token ?? '')}`
 {{#if_eq appType 'h5'}}
   await whileClientBootPaused(page, async () => {

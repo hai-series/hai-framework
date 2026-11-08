@@ -51,7 +51,7 @@
 | `business_operator` | 反馈查看、处理、撤销和导出                        |
 | `user`              | 个人自助与提交本人反馈                            |
 
-职责在 `src/lib/server/security-roles.ts` 中配置，服务端逐请求检查当前权限，并限制角色授予和受保护账号管理。系统管理员可配置基础成员，不能通过改角色、重置密码或创建 API Key 接管其他职责账号。这些角色是应用示例，可按项目需求调整，不是框架 IAM 的固定角色模型。
+职责在 `src/lib/server/security-roles.ts` 中配置。系统管理员可创建、更新、重置密码和删除各类普通职责账号，因此账号管理权也能取得这些普通账号的身份；职责拆分不代表系统管理员与这些账号的凭据隔离。管理路由禁止授予 IAM `superAdminRole`，也禁止修改、重置密码或删除已拥有该超级角色的恢复账号。角色权限编辑和代发 API Key 仍受操作者自身权限范围限制，不能借此扩大委托权限。这些角色是应用示例，可按项目需求调整，不是框架 IAM 的固定角色模型。
 
 创建自定义权限定义不会自动授予该权限；角色授权仍限制在管理员当前可授予范围。未分配的自定义定义可以清理，其他职责角色正在使用的权限定义受保护。
 
@@ -184,7 +184,7 @@ LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 
 
 ### 🧩 @h-ai/ui 组件自动导入
 
-`svelte.config.js` 中启用了 `@h-ai/ui/auto-import` 预处理器：
+`vite.config.ts` 的 `sveltekit({...})` 中启用了 `@h-ai/ui/auto-import` 预处理器：
 
 - 所有 `.svelte` 文件中使用 @h-ai/ui 组件标签时，自动注入 import 语句
 - 无需手动编写 `import { Button } from '@h-ai/ui'`
@@ -197,14 +197,14 @@ LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 
 2. 页面可直接使用 @h-ai/ui 组件（自动导入）
 3. 如需服务端数据，添加 `+page.server.ts` 配合 load 函数
 4. 在 Sidebar 导航配置中添加菜单项
-5. 在 `messages/` 下的两个语言文件中添加相关翻译 key
+5. 在 `messages/` 下的中英日三个语言文件中添加相关翻译 key
 
 #### 添加新 API 端点
 
 1. 在 `src/routes/api/` 下创建 `+server.ts`
 2. 使用 @h-ai/kit 的 response helper 返回标准格式
 3. 如需认证保护，路由会自动走 `hooks.server.ts` 中的 guard 逻辑（`/api/auth/*` 和 `/api/public/*` 除外）
-4. 浏览器侧调用优先统一走 `$lib/utils/api.ts` 导出的 `apiFetch()`，以自动获得 CSRF + transport 加密
+4. 浏览器侧调用优先统一走 `#lib/utils/api.ts` 导出的 `apiFetch()`，以自动获得 CSRF + transport 加密
 5. 若端点必须支持浏览器原生明文请求（如 `multipart/form-data` 上传、`<img src>` 公开文件、外部探活），需同步加入 `config/_kit.yml` 的 `transport.excludePaths`
 
 #### 服务端错误处理

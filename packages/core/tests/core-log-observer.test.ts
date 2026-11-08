@@ -7,7 +7,9 @@ describe('structured log observations', () => {
   it('suppresses observations in internal collection paths while keeping normal output', () => {
     const output: string[] = []
     const write = vi.spyOn(process.stdout, 'write').mockImplementation(((value: string | Uint8Array) => {
-      output.push(typeof value === 'string' ? value : new TextDecoder().decode(value))
+      output.push(typeof value === 'string'
+        ? value
+        : new TextDecoder().decode(value))
       return true
     }) as typeof process.stdout.write)
     const records: LogRecord[] = []
@@ -29,7 +31,9 @@ describe('structured log observations', () => {
   it('observes existing child loggers after filtering and redaction, and cancels without recursion', () => {
     const logger = core.logger.create({ name: 'observer-test', level: 'warn', format: 'json' }).child({ module: 'orders' })
     const records: LogRecord[] = []
-    core.logger.configure({ redact: ['customer.email'] })
+    core.logger.configure({
+      redact: ['customer.email'],
+    })
     const stopBad = core.logger.observe(() => {
       throw new Error('observer failed')
     })
@@ -39,9 +43,20 @@ describe('structured log observations', () => {
     })
     try {
       logger.info('Ignored')
-      logger.error('Failed', { password: 'secret', customer: { email: 'private@example.com' } })
+      logger.error('Failed', {
+        password: 'secret',
+        customer: { email: 'private@example.com' },
+      })
       expect(records).toHaveLength(1)
-      expect(records[0]).toMatchObject({ level: 'error', message: 'Failed', context: { module: 'orders', password: '[REDACTED]', customer: { email: '[REDACTED]' } } })
+      expect(records[0]).toMatchObject({
+        level: 'error',
+        message: 'Failed',
+        context: {
+          module: 'orders',
+          password: '[REDACTED]',
+          customer: { email: '[REDACTED]' },
+        },
+      })
       stop()
       logger.warn('After cancellation')
       expect(records).toHaveLength(1)

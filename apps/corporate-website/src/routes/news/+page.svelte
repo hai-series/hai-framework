@@ -1,9 +1,9 @@
 <script lang='ts'>
-  import * as m from '$lib/paraglide/messages.js'
   /**
    * 新闻动态页面
    */
   import { Badge, Button } from '@h-ai/ui'
+  import * as m from '#lib/paraglide/messages.js'
 
   const tagVariantMap: Record<string, 'primary' | 'secondary' | 'success' | 'info'> = {
     award: 'primary',

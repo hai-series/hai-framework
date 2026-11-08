@@ -105,7 +105,11 @@ export async function runCommand(command: string, args: string[], options: Comma
   /** 失败状态只包含核验结论，不附加原始异常或可能携密的命令参数。 */
   const failure = (message: string, state: DeployCommandState): HaiResult<never> => err({
     ...HaiDeployError.REMOTE_COMMAND_FAILED,
-    message: `${message}\n${deployM(state.localTermination === 'confirmed' ? 'deploy_localStopped' : state.localTermination === 'not-started' ? 'deploy_localNotStarted' : 'deploy_localUnknown')}`,
+    message: `${message}\n${deployM(state.localTermination === 'confirmed'
+      ? 'deploy_localStopped'
+      : state.localTermination === 'not-started'
+        ? 'deploy_localNotStarted'
+        : 'deploy_localUnknown')}`,
     ext: { commandExecution: state },
   })
   try {
@@ -122,11 +126,21 @@ export async function runCommand(command: string, args: string[], options: Comma
         throw new RangeError('Invalid command termination timeout')
       if (options.timeoutMs !== undefined && (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs <= 0 || options.timeoutMs > 2147483647))
         throw new RangeError('Invalid command timeout')
-      const secrets = [...(options.secrets ?? [])]
+      const secrets = [
+        ...(options.secrets ?? []),
+      ]
       const safeCommand = maskSecrets(command, secrets)
       const outputMasker = createSecretMasker(secrets)
       const errorMasker = createSecretMasker(secrets)
-      const control = spawnCommand(command, args, { cwd: options.cwd, env: options.env ? { ...process.env, ...options.env } : process.env })
+      const control = spawnCommand(command, args, {
+        cwd: options.cwd,
+        env: options.env
+          ? {
+              ...process.env,
+              ...options.env,
+            }
+          : process.env,
+      })
       const child = control.child
       child.stdout.setEncoding('utf8')
       child.stderr.setEncoding('utf8')
@@ -152,7 +166,9 @@ export async function runCommand(command: string, args: string[], options: Comma
         interruption ??= (async () => {
           if (timer)
             clearTimeout(timer)
-          const localTermination = child.pid ? await control.terminate(terminationTimeout) : 'not-started'
+          const localTermination = child.pid
+            ? await control.terminate(terminationTimeout)
+            : 'not-started'
           logger.error('Command termination checked', { command: safeCommand, reason, localTermination })
           finish(failure(message, { reason, localTermination }))
         })()
@@ -168,7 +184,12 @@ export async function runCommand(command: string, args: string[], options: Comma
           await options.onOutput?.(text)
         }
         catch {
-          await interrupt('output', deployM('deploy_commandFailed', { params: { command: safeCommand, error: deployM('deploy_commandOutputFailed') } }))
+          await interrupt('output', deployM('deploy_commandFailed', {
+            params: {
+              command: safeCommand,
+              error: deployM('deploy_commandOutputFailed'),
+            },
+          }))
         }
       }
       const captureError = (text: string): void => {
@@ -179,7 +200,9 @@ export async function runCommand(command: string, args: string[], options: Comma
         timer = setTimeout(() => {
           logger.error('Command timed out', { command: safeCommand, timeoutMs: options.timeoutMs })
           // 异常结束不释放可能尚未完整的秘密尾部，也不再调用onOutput。
-          void interrupt('timeout', deployM('deploy_commandTimeout', { params: { command: safeCommand } }))
+          void interrupt('timeout', deployM('deploy_commandTimeout', {
+            params: { command: safeCommand },
+          }))
         }, options.timeoutMs)
       }
       // 异步迭代器在等待回调期间保留pipe背压，不创建无限增长的Promise/输出队列。
@@ -196,7 +219,12 @@ export async function runCommand(command: string, args: string[], options: Comma
             await publish(outputMasker.end())
         }
         catch {
-          await interrupt('output', deployM('deploy_commandFailed', { params: { command: safeCommand, error: deployM('deploy_commandOutputFailed') } }))
+          await interrupt('output', deployM('deploy_commandFailed', {
+            params: {
+              command: safeCommand,
+              error: deployM('deploy_commandOutputFailed'),
+            },
+          }))
         }
       })()
       const errorTask = (async () => {
@@ -212,16 +240,28 @@ export async function runCommand(command: string, args: string[], options: Comma
             captureError(errorMasker.end())
         }
         catch {
-          await interrupt('output', deployM('deploy_commandFailed', { params: { command: safeCommand, error: deployM('deploy_commandOutputFailed') } }))
+          await interrupt('output', deployM('deploy_commandFailed', {
+            params: {
+              command: safeCommand,
+              error: deployM('deploy_commandOutputFailed'),
+            },
+          }))
         }
       })()
       child.stdin.on('error', () => {
-        void interrupt('input', deployM('deploy_commandFailed', { params: { command: safeCommand, error: deployM('deploy_commandInputFailed') } }))
+        void interrupt('input', deployM('deploy_commandFailed', {
+          params: {
+            command: safeCommand,
+            error: deployM('deploy_commandInputFailed'),
+          },
+        }))
       })
       child.on('error', (error) => {
         const safeError = maskSecrets(error.message, secrets)
         logger.error('Command failed to start', { command: safeCommand, error: safeError })
-        void interrupt('spawn', deployM('deploy_commandFailed', { params: { command: safeCommand, error: safeError } }))
+        void interrupt('spawn', deployM('deploy_commandFailed', {
+          params: { command: safeCommand, error: safeError },
+        }))
       })
       child.on('close', async (code) => {
         await Promise.all([outputTask, errorTask])
@@ -230,16 +270,39 @@ export async function runCommand(command: string, args: string[], options: Comma
         if (timer)
           clearTimeout(timer)
         if (!(await control.treeExited())) {
-          await interrupt('exit', deployM('deploy_commandFailed', { params: { command: safeCommand, error: deployM('deploy_commandTreeActive') } }))
+          await interrupt('exit', deployM('deploy_commandFailed', {
+            params: {
+              command: safeCommand,
+              error: deployM('deploy_commandTreeActive'),
+            },
+          }))
           return
         }
         const exitCode = code ?? -1
         if (exitCode === 0) {
-          finish(ok({ code: exitCode, stdout, stderr, stdoutTruncated, stderrTruncated }))
+          finish(ok({
+            code: exitCode,
+            stdout,
+            stderr,
+            stdoutTruncated,
+            stderrTruncated,
+          }))
           return
         }
-        logger.error('Command exited with non-zero code', { command: safeCommand, code: exitCode, stderr: maskSecrets(stderr, secrets).slice(-500), stdout: maskSecrets(stdout, secrets).slice(-3000), stdoutTruncated, stderrTruncated })
-        finish(failure(deployM('deploy_commandFailed', { params: { command: safeCommand, error: maskSecrets(`${stdout.slice(-2500)}\n${stderr || `exit ${exitCode}`}`, secrets).slice(-3000) } }), { reason: 'exit', localTermination: 'confirmed' }))
+        logger.error('Command exited with non-zero code', {
+          command: safeCommand,
+          code: exitCode,
+          stderr: maskSecrets(stderr, secrets).slice(-500),
+          stdout: maskSecrets(stdout, secrets).slice(-3000),
+          stdoutTruncated,
+          stderrTruncated,
+        })
+        finish(failure(deployM('deploy_commandFailed', {
+          params: {
+            command: safeCommand,
+            error: maskSecrets(`${stdout.slice(-2500)}\n${stderr || `exit ${exitCode}`}`, secrets).slice(-3000),
+          },
+        }), { reason: 'exit', localTermination: 'confirmed' }))
       })
       if (options.input !== undefined)
         child.stdin.write(options.input)
@@ -248,6 +311,11 @@ export async function runCommand(command: string, args: string[], options: Comma
   }
   catch {
     // 参数/正则编译/spawn同步错误可能携带原秘密，使用无cause的固定诊断失败关闭。
-    return failure(deployM('deploy_commandFailed', { params: { command: '<command>', error: deployM('deploy_commandExecutionFailed') } }), { reason: 'configuration', localTermination: 'not-started' })
+    return failure(deployM('deploy_commandFailed', {
+      params: {
+        command: '<command>',
+        error: deployM('deploy_commandExecutionFailed'),
+      },
+    }), { reason: 'configuration', localTermination: 'not-started' })
   }
 }

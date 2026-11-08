@@ -24,7 +24,9 @@ export interface ToastItem extends ToastProps {
 
 /** 兼容安全错误消息中的追踪编号，将排查信息从用户说明中分离。 */
 function normalizeMessage(message: string, explicitTraceId?: string): Pick<ToastProps, 'message' | 'traceId'> {
-  let traceId = explicitTraceId && /^[\w.:-]{1,128}$/.test(explicitTraceId) ? explicitTraceId : undefined
+  let traceId = explicitTraceId && /^[\w.:-]{1,128}$/.test(explicitTraceId)
+    ? explicitTraceId
+    : undefined
   const parts: string[] = []
   let cursor = 0
   // 先找固定标记，再移除相邻空白；无标记的长空白不会从每个字符重新回溯。
@@ -352,7 +354,11 @@ export function errorMessage(error: unknown, fallback = ''): string {
   }
   if (candidate && typeof candidate === 'object' && !(candidate instanceof Error) && Object.hasOwn(candidate, 'code') && Object.hasOwn(candidate, 'message') && 'code' in candidate && typeof candidate.code === 'string' && 'message' in candidate && typeof candidate.message === 'string')
     known = candidate as Parameters<typeof core.error.toPublic>[0]
-  const receivedMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+  const receivedMessage = error instanceof Error
+    ? error.message
+    : typeof error === 'string'
+      ? error
+      : ''
   const embeddedTraceId = /\(traceId: ([\w.:-]{1,128})\)$/.exec(receivedMessage)?.[1]
   const traceId = known?.traceId ?? embeddedTraceId ?? core.context.get().traceId ?? core.context.get().requestId ?? core.id.uuid()
   core.logger.error('User operation failed', { traceId, error })
@@ -361,7 +367,12 @@ export function errorMessage(error: unknown, fallback = ''): string {
     message = core.error.toPublic(known, traceId).message
   else if (typeof error === 'string')
     message = receivedMessage
-  return core.error.formatMessage({ message, traceId: /\(traceId: [\w.:-]{1,128}\)$/.test(message) ? undefined : traceId })
+  return core.error.formatMessage({
+    message,
+    traceId: /\(traceId: [\w.:-]{1,128}\)$/.test(message)
+      ? undefined
+      : traceId,
+  })
 }
 
 /**

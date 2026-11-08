@@ -22,5 +22,7 @@ export function createLoginAccessCheck(policy: IamConfig['loginAccess']): (conte
     return () => ok(undefined)
   const { enabled: _enabled, ...condition } = policy
   const check = core.access.createConditionCheck(condition)
-  return context => check(context?.ip).allowed ? ok(undefined) : err(HaiIamError.LOGIN_ACCESS_DENIED, iamM('iam_loginAccessDenied'))
+  return context => check(context?.ip).allowed
+    ? ok(undefined)
+    : err(HaiIamError.LOGIN_ACCESS_DENIED, iamM('iam_loginAccessDenied'))
 }

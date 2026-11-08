@@ -22,8 +22,16 @@ const host = process.env.TAURI_DEV_HOST
 export default defineConfig(({ mode, command }) => ({
   base: './',
   envDir: false,
-  define: { __DESKTOP_CRYPTO_CONFIG__: desktopBuildConfig(command === 'build' || process.env.HAI_E2E === '1' ? undefined : mode) },
-  plugins: [publicRuntimeConfig({ apiBase: process.env.PUBLIC_API_BASE }), svelte(), tailwindcss()],
+  define: {
+    __DESKTOP_CRYPTO_CONFIG__: desktopBuildConfig(command === 'build' || process.env.HAI_E2E === '1'
+      ? undefined
+      : mode),
+  },
+  plugins: [
+    publicRuntimeConfig({ apiBase: process.env.PUBLIC_API_BASE }),
+    svelte(),
+    tailwindcss(),
+  ],
 
   // Vite 选项专为 Tauri 调整
   clearScreen: false,

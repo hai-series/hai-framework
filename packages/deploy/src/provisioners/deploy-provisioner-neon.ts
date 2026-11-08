@@ -86,7 +86,12 @@ async function neonFetch<T>(token: string, path: string, options?: RequestInit):
   })
 
   if (!response.ok) {
-    throw new Error(deployM('deploy_apiError', { params: { service: 'Neon', status: String(response.status) } }))
+    throw new Error(deployM('deploy_apiError', {
+      params: {
+        service: 'Neon',
+        status: String(response.status),
+      },
+    }))
   }
 
   return response.json() as Promise<T>
@@ -118,11 +123,15 @@ async function getNeonConnectionUri(token: string, projectId: string): Promise<s
   const data = await neonFetch<NeonConnectionUriResponse>(
     token,
     `/projects/${projectId}/connection_uri?${query.toString()}`,
-    { headers: { 'Content-Type': 'application/json' } },
+    {
+      headers: { 'Content-Type': 'application/json' },
+    },
   )
 
   if (!data.uri) {
-    throw new Error(deployM('deploy_provisionNoResult', { params: { service: 'Neon' } }))
+    throw new Error(deployM('deploy_provisionNoResult', {
+      params: { service: 'Neon' },
+    }))
   }
 
   return data.uri
@@ -135,7 +144,11 @@ function buildNeonProvisionResult(projectId: string, connectionUri: string, reso
     provisionerName: 'neon',
     resourceStatus,
     envVars: {
-      HAI_DB: JSON.stringify({ type: 'postgresql', url: connectionUri, database: decodeURIComponent(new URL(connectionUri).pathname.slice(1)) }),
+      HAI_DB: JSON.stringify({
+        type: 'postgresql',
+        url: connectionUri,
+        database: decodeURIComponent(new URL(connectionUri).pathname.slice(1)),
+      }),
     },
     resourceInfo: `neon-project:${projectId}`,
   }
@@ -169,7 +182,9 @@ export function createNeonProvisioner(): ServiceProvisioner {
       try {
         const apiToken = credentials.apiKey ?? credentials.token ?? credentials.api_key ?? ''
         if (!apiToken) {
-          throw new Error(deployM('deploy_credentialMissing', { params: { fields: 'token' } }))
+          throw new Error(deployM('deploy_credentialMissing', {
+            params: { fields: 'token' },
+          }))
         }
 
         await listNeonProjects(apiToken)
@@ -182,7 +197,11 @@ export function createNeonProvisioner(): ServiceProvisioner {
         return err(
           HaiDeployError.AUTH_FAILED,
           deployM('deploy_authFailed', {
-            params: { error: error instanceof Error ? error.message : String(error) },
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
           }),
           error,
         )
@@ -228,7 +247,9 @@ export function createNeonProvisioner(): ServiceProvisioner {
           resource = { resourceInfo: `neon-project:${projectId}`, resourceStatus: 'created' }
         const connectionUri = data.connection_uris?.[0]?.connection_uri ?? ''
         if (!projectId || !connectionUri) {
-          throw new Error(deployM('deploy_provisionNoResult', { params: { service: 'Neon' } }))
+          throw new Error(deployM('deploy_provisionNoResult', {
+            params: { service: 'Neon' },
+          }))
         }
 
         logger.info('Neon database provisioned', { projectId })
@@ -241,7 +262,9 @@ export function createNeonProvisioner(): ServiceProvisioner {
           return recoveryFailure({ ...HaiDeployError.PROVISION_FAILED, message: '' }, {
             projectName: appName,
             stage: 'provision:db',
-            resources: [{ serviceType: 'db', provisionerName: 'neon', ...resource }],
+            resources: [
+              { serviceType: 'db', provisionerName: 'neon', ...resource },
+            ],
           })
         }
         return err(
@@ -249,7 +272,9 @@ export function createNeonProvisioner(): ServiceProvisioner {
           deployM('deploy_provisionFailed', {
             params: {
               service: 'neon',
-              error: error instanceof Error ? error.message : String(error),
+              error: error instanceof Error
+                ? error.message
+                : String(error),
             },
           }),
           error,

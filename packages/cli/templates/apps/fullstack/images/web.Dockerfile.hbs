@@ -2,8 +2,6 @@ ARG HAI_NODE_IMAGE=node:24.22.1-bookworm-slim
 ARG HAI_NGINX_IMAGE=nginxinc/nginx-unprivileged:1.29.8-alpine
 {{#if fullstack.frontends.web}}
 FROM ${HAI_NODE_IMAGE} AS build
-ARG SQLITE_PREBUILD_MIRROR=
-ENV npm_config_better_sqlite3_binary_host_mirror=$SQLITE_PREBUILD_MIRROR
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH

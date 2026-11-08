@@ -41,21 +41,39 @@ describe('scheduler across real processes', () => {
     directory = await mkdtemp(path.join(root, '.cache/multinode-'))
     await build({
       config: false,
-      entry: { 'index': path.join(root, 'src/index.ts'), 'scheduler-js-worker': path.join(root, 'src/scheduler-js-worker.js') },
+      entry: {
+        'index': path.join(root, 'src/index.ts'),
+        'scheduler-js-worker': path.join(root, 'src/scheduler-js-worker.js'),
+      },
       outDir: directory,
       format: ['esm'],
       target: 'node22',
       dts: false,
       silent: true,
-      external: ['@h-ai/core', '@h-ai/reldb', 'croner', 'zod'],
+      external: [
+        '@h-ai/core',
+        '@h-ai/reldb',
+        'croner',
+        'zod',
+      ],
     })
     const initialize = async () => {
-      const child = fork(fileURLToPath(new URL('./fixtures/scheduler-node.mjs', import.meta.url)), [], { stdio: ['ignore', 'ignore', 'inherit', 'ipc'], execArgv: [] })
+      const child = fork(fileURLToPath(new URL('./fixtures/scheduler-node.mjs', import.meta.url)), [], {
+        stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
+        execArgv: [],
+      })
       children.push(child)
       expect(await call(child, 'init', {
         entry: pathToFileURL(path.join(directory, 'index.js')).href,
         database: path.join(directory, 'shared.db'),
-        dbConfig: process.env.HAI_SCHEDULER_TEST_POSTGRES ? { type: 'postgresql', url: process.env.HAI_SCHEDULER_TEST_POSTGRES, database: decodeURIComponent(new URL(process.env.HAI_SCHEDULER_TEST_POSTGRES).pathname.slice(1)), pool: { max: 8 } } : undefined,
+        dbConfig: process.env.HAI_SCHEDULER_TEST_POSTGRES
+          ? {
+              type: 'postgresql',
+              url: process.env.HAI_SCHEDULER_TEST_POSTGRES,
+              database: decodeURIComponent(new URL(process.env.HAI_SCHEDULER_TEST_POSTGRES).pathname.slice(1)),
+              pool: { max: 8 },
+            }
+          : undefined,
       })).toMatchObject({ success: true })
       return child
     }
@@ -83,27 +101,60 @@ describe('scheduler across real processes', () => {
   it('converges after register, update, disable, delete and one-time execution', async () => {
     expect(await call(nodeA, 'start')).toMatchObject({ success: true })
     expect(await call(nodeB, 'start')).toMatchObject({ success: true })
-    const task = { id: 'shared', name: 'shared', cron: '0 0 1 1 *', params: { version: 1 }, handler: { kind: 'js', code: 'context => context.params.version' } }
+    const task = {
+      id: 'shared',
+      name: 'shared',
+      cron: '0 0 1 1 *',
+      params: { version: 1 },
+      handler: { kind: 'js', code: 'context => context.params.version' },
+    }
     expect(await call(nodeA, 'register', [task])).toMatchObject({ success: true })
-    await vi.waitFor(async () => expect(await call(nodeB, 'tasks')).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'shared' })])), { timeout: 3000 })
-    expect(await call(nodeA, 'updateTask', ['shared', { params: { version: 2 } }])).toMatchObject({ success: true })
-    expect(await call(nodeB, 'trigger', ['shared'])).toMatchObject({ success: true, data: { status: 'success', result: '2' } })
-    expect(await call(nodeA, 'updateTask', ['shared', { enabled: false }])).toMatchObject({ success: true })
-    expect(await call(nodeB, 'trigger', ['shared'])).toMatchObject({ success: true, data: { status: 'interrupted' } })
-    await vi.waitFor(async () => expect(await call(nodeB, 'tasks')).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'shared', enabled: false })])), { timeout: 3000 })
+    await vi.waitFor(async () => expect(await call(nodeB, 'tasks')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'shared' }),
+    ])), { timeout: 3000 })
+    expect(await call(nodeA, 'updateTask', [
+      'shared',
+      {
+        params: { version: 2 },
+      },
+    ])).toMatchObject({ success: true })
+    expect(await call(nodeB, 'trigger', ['shared'])).toMatchObject({
+      success: true,
+      data: { status: 'success', result: '2' },
+    })
+    expect(await call(nodeA, 'updateTask', [
+      'shared',
+      { enabled: false },
+    ])).toMatchObject({ success: true })
+    expect(await call(nodeB, 'trigger', ['shared'])).toMatchObject({
+      success: true,
+      data: { status: 'interrupted' },
+    })
+    await vi.waitFor(async () => expect(await call(nodeB, 'tasks')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'shared', enabled: false }),
+    ])), { timeout: 3000 })
     expect(await call(nodeA, 'unregister', ['shared'])).toMatchObject({ success: true })
     await vi.waitFor(async () => expect(await call(nodeB, 'tasks')).toEqual([]), { timeout: 3000 })
     expect(await call(nodeB, 'trigger', ['shared'])).toMatchObject({ success: false })
-    expect(await call(nodeA, 'register', [{ ...task, id: 'once', deleteAfterRun: true }])).toMatchObject({ success: true })
-    expect(await call(nodeB, 'trigger', ['once'])).toMatchObject({ success: true, data: { status: 'success' } })
+    expect(await call(nodeA, 'register', [
+      { ...task, id: 'once', deleteAfterRun: true },
+    ])).toMatchObject({ success: true })
+    expect(await call(nodeB, 'trigger', ['once'])).toMatchObject({
+      success: true,
+      data: { status: 'success' },
+    })
     await vi.waitFor(async () => expect(await call(nodeA, 'tasks')).toEqual([]), { timeout: 3000 })
-    expect(await call(nodeA, 'register', [{ ...task, id: 'contended', cron: '* * * * *' }])).toMatchObject({ success: true })
+    expect(await call(nodeA, 'register', [
+      { ...task, id: 'contended', cron: '* * * * *' },
+    ])).toMatchObject({ success: true })
     expect(await call(nodeA, 'stop')).toMatchObject({ success: true })
     expect(await call(nodeB, 'stop')).toMatchObject({ success: true })
     expect(await call(nodeA, 'start')).toMatchObject({ success: true })
     expect(await call(nodeB, 'start')).toMatchObject({ success: true })
     await vi.waitFor(async () => {
-      const logs = await call(nodeA, 'getLogs', [{ taskId: 'contended' }]) as { success: boolean, data: { items: { status: string }[] } }
+      const logs = await call(nodeA, 'getLogs', [
+        { taskId: 'contended' },
+      ]) as { success: boolean, data: { items: { status: string }[] } }
       expect(logs.success).toBe(true)
       expect(logs.data.items.filter(log => log.status === 'success')).toHaveLength(1)
       expect(logs.data.items.some(log => log.status === 'interrupted')).toBe(true)

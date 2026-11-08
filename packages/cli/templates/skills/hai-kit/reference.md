@@ -1,6 +1,10 @@
 # hai-kit 参考
 
+HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 `httpStatus` 或状态非法时按 500 返回安全提示。手写业务错误须提供完整错误定义或显式状态，不能依赖缺省状态展示原文。
+
 > `@h-ai/kit` 只负责 SvelteKit 集成：`handle` hook、guard、response、validate、client、auth、crud、A2A。公共跨端 HTTP API 契约统一使用 `@h-ai/api-contract` + `@h-ai/serv`，不要在 kit 中定义业务 API contract。
+
+命名空间公开类型为 `KitFunctions`（服务端）与 `BrowserKitFunctions`（浏览器）。浏览器条件入口仅暴露 client、crud、页面 Token 与默认语言操作，不含服务端认证、Hook 或限流。服务端认证 Cookie 的最小写入依赖为根入口的 `AuthCookieWriter`。运行时仍使用 `kit.xx`，导出方法或命名空间的声明不需要内部 helper 或私有构建路径。
 
 认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求默认有效期为 5 分钟，客户端时间最多可领先服务器 30 秒。服务端可用 `maxRequestAgeSeconds`（1～600）和 `maxFutureSkewSeconds`（0～300）调整，单位为整数秒。共享 registry 原子消费 (clientId, requestId)，nonce 保留到 issuedAt + 11 分钟，覆盖最长可配窗口及节点时钟差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
 
@@ -10,10 +14,14 @@
 
 ## 使用步骤
 
+错误响应与 Serv 共用 `HaiCommonError`：未认证用 `UNAUTHORIZED.code`、无权限用 `FORBIDDEN.code`、限流用 `RATE_LIMIT_EXCEEDED.code`（429）；不要匹配旧的无命名空间字符串。`fromError/fromResult` 保留安全字段校验、`httpStatus` 和追踪编号，内部异常只记录日志。前端使用已本地化的安全消息，排查按 `traceId` 关联服务端原因。
+
+`kit.response.validationError(errors)` 同样经 `fromError` 过滤，响应 `error.cause` 只含本地化 `field/message`；不回显 rejectedValue、SQL 或其他字段，不再读取 `details.errors`。
+
 ### 1. 请求管道
 
 ```ts
-import type { Handle } from '@sveltejs/kit'
+import type { Handle } from '@sveltejs/kit/hooks'
 import { cache } from '@h-ai/cache'
 import { kit } from '@h-ai/kit'
 
@@ -33,6 +41,8 @@ export const handle: Handle = haiHandle
 限流采用首次成功提交为起点的固定窗口，后续请求不延长 TTL。必须显式传 store；应用先检查共享 Redis 初始化结果，所有节点使用相同 namespace/windowMs/maxRequests。缓存读取/条件提交失败或冲突耗尽返回503，超限429；不会回退 get+set 或本地计数。createMemoryRateLimitStore 仅开发或显式 HAI_E2E/HAI_E2E_MOCK 测试使用，无常驻定时器，丢弃引用即可回收；每次请求最多惰性扫描 64 项，最多保存 10000 个窗口，容量满时对新 key 返回503且不驱逐有效计数，外部 store 生命周期由创建者管理；生产不得设置测试开关。响应重置时间为节点时钟估算，实际窗口由 Redis TTL 决定，须同步时钟。默认键只读取可信 adapter 的 getClientAddress、规范化等价IPv6和IPv4映射地址，不采信原始转发头；代理信任通过部署adapter配置。
 
 ### 2. SvelteKit API endpoint
+
+业务失败用 `kit.response.fromResult/fromError`，保留安全字段错误、显式 `publicExt` 和 HTTP 状态，内部异常仅进入关联日志；不要在业务 endpoint 手工拼接原始异常。
 
 ```ts
 import { kit } from '@h-ai/kit'
@@ -91,12 +101,14 @@ export const handle = kit.createHandle({
 })
 ```
 
-需要保护会话 Cookie 时配置 `crypto.encryptedCookies`，并通过 `crypto.cookieEncryptionKey` 或 `HAI_KIT_COOKIE_KEY` 提供密钥。缺少密钥会在 `createHandle()` 时失败；加解密错误不会回退到明文 Cookie。
+需要保护会话 Cookie 时配置 `crypto.encryptedCookies`，并通过 `crypto.cookieEncryptionKey` 或 `HAI_KIT_COOKIE_KEY` 提供密钥。密钥必须为 32 位十六进制。Cookie 采用分离子密钥的 SM4-CBC/HMAC-SHA256，先验证版本、名称、IV 与密文，再解密；旧版无认证 Cookie 升级后失效，需重新登录。缺少或非法密钥会在 `createHandle()` 时失败；加解密错误不会回退到明文 Cookie。
+
+不再使用无运行入口的旧 Crypto Helpers 或其 `CryptoServiceLike`、`EncryptedCookieConfig`、`CryptoCsrfConfig`、`WebhookVerifyConfig` 类型；这些已删除。Cookie 通过上述 `kit.createHandle` 配置保护，其他加密能力使用 `@h-ai/crypto` 真实公开 API。
 
 ```svelte
 <!-- src/routes/+layout.svelte -->
 <script lang='ts'>
-  import { browser } from '$app/environment'
+  import { browser } from '$app/env'
   import type { LayoutData } from './$types'
   import { crypto } from '@h-ai/crypto'
   import { kit } from '@h-ai/kit'
@@ -164,7 +176,7 @@ export function load() {
 `resolveKitConfig()` 同时解析 `server`（host/port）与 `transport`；host/port 优先级为 `HOST` / `PORT` 环境变量 > `_kit.yml` 的 `server` > 默认 `127.0.0.1:3000`（与 `@h-ai/serv` 同构）。
 `_kit.yml` 在服务端读取，可包含 access 和 trustedProxies；layout data 只投影公开 transport，不通过 ?raw 导入完整文件到浏览器，也不放密钥。如自定义 `keyExchangePath`，浏览器端必须同步映射为 `keyExchangeUrl`。请求策略按[共享约定](../hai-core/request-access.md)装配与验证。
 
-子目录部署从 `$app/paths` 取 `base`，服务端 `crypto.transport.basePath` 与客户端 `installBrowserTransport(config, { crypto, basePath: base })` 同步；独立 client 的 `transport.basePath` 也用该值。默认空字符串为根目录，不能仅调整资源地址后把登录成功当作加密验证。交换/排除/容量路径保持完整请求路径，验证原始请求带加密标记、缺协议被拒绝、排除接口正常且不影响相邻目录。
+子目录部署在 Vite 的 sveltekit 配置设置 `paths.relative: false`，从 `$app/paths` 用 `resolve('/').replace(/\/$/, '')` 取构建挂载目录 `base`，服务端 `crypto.transport.basePath` 与客户端 `installBrowserTransport(config, { crypto, basePath: base })` 同步；独立 client 的 `transport.basePath` 也用该值。默认空字符串为根目录，不能仅调整资源地址后把登录成功当作加密验证。交换/排除/容量路径保持完整请求路径，验证原始请求带加密标记、缺协议被拒绝、排除接口正常且不影响相邻目录。
 
 ## 核心 API
 

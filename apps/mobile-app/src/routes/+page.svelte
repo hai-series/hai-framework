@@ -1,8 +1,10 @@
 <script lang='ts'>
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import * as m from '$lib/paraglide/messages.js'
-  import { currentUser, hasPermission } from '$lib/stores/auth-store.svelte.js'
+  import { useToastFeedback } from '@h-ai/ui/toast'
+  import { onMount } from 'svelte'
+  import * as m from '#lib/paraglide/messages.js'
+  import { currentUser, hasPermission } from '#lib/stores/auth-store.svelte.js'
   import {
     currentEchoError,
     currentEchoResult,
@@ -12,9 +14,7 @@
     isServiceInfoLoading,
     refreshServiceInfo,
     sendEcho,
-  } from '$lib/stores/service-status.svelte.js'
-  import { useToastFeedback } from '@h-ai/ui/toast'
-  import { onMount } from 'svelte'
+  } from '#lib/stores/service-status.svelte.js'
 
   const me = $derived(currentUser())
   let message = $state(m.dashboard_echo_default())
@@ -92,8 +92,12 @@
           </div>
           <div>
             <p class='text-base-content/50'>{m.service_transport_label()}</p>
-            <Badge variant={currentServiceInfo()?.transportEnabled ? 'success' : 'warning'} size='sm'>
-              {currentServiceInfo()?.transportEnabled ? m.common_enabled() : m.common_disabled()}
+            <Badge variant={currentServiceInfo()?.transportEnabled
+              ? 'success'
+              : 'warning'} size='sm'>
+              {currentServiceInfo()?.transportEnabled
+                ? m.common_enabled()
+                : m.common_disabled()}
             </Badge>
           </div>
           <div>
@@ -132,7 +136,7 @@
     </Card>
 
     {#if hasPermission('user:list')}
-      <Button variant='primary' outline class='w-full' onclick={() => goto(resolve('/users', {}))}>
+      <Button variant='primary' outline class='w-full' onclick={() => goto(resolve('users'))}>
         <span class='icon-[tabler--users] text-lg'></span>
         {m.dashboard_users_action()}
       </Button>

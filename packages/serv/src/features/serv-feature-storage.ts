@@ -33,7 +33,9 @@ function buildStorageKeyValidationFailure(
   return err(
     HaiCommonError.VALIDATION_ERROR,
     servM('serv_validationFailed', { locale }),
-    [{ field, message }],
+    [
+      { field, message },
+    ],
   )
 }
 
@@ -172,7 +174,11 @@ export function createStorageProcedures(deps: StorageProcedureDeps) {
       const keyResult = validateStorageKeyOrFail(input.key, context.locale)
       if (!keyResult.success)
         return keyResult
-      const access = await authorize({ context, operation: 'download', keys: [keyResult.data] })
+      const access = await authorize({
+        context,
+        operation: 'download',
+        keys: [keyResult.data],
+      })
       if (!access.success)
         return access
       const expiresIn = input.expiresIn ?? 900
@@ -189,7 +195,11 @@ export function createStorageProcedures(deps: StorageProcedureDeps) {
       const keyResult = validateStorageKeyOrFail(input.key, context.locale)
       if (!keyResult.success)
         return keyResult
-      const access = await authorize({ context, operation: 'upload', keys: [keyResult.data] })
+      const access = await authorize({
+        context,
+        operation: 'upload',
+        keys: [keyResult.data],
+      })
       if (!access.success)
         return access
       const expiresIn = input.expiresIn ?? 900
@@ -211,7 +221,11 @@ export function createStorageProcedures(deps: StorageProcedureDeps) {
         if (!prefixResult.success)
           return prefixResult
       }
-      const access = await authorize({ context, operation: 'list', keys: [prefix] })
+      const access = await authorize({
+        context,
+        operation: 'list',
+        keys: [prefix],
+      })
       if (!access.success)
         return access
       return storage.dir.list(input)
@@ -223,7 +237,11 @@ export function createStorageProcedures(deps: StorageProcedureDeps) {
       const keyResult = validateStorageKeyOrFail(input.key, context.locale)
       if (!keyResult.success)
         return keyResult
-      const access = await authorize({ context, operation: 'metadata', keys: [keyResult.data] })
+      const access = await authorize({
+        context,
+        operation: 'metadata',
+        keys: [keyResult.data],
+      })
       if (!access.success)
         return access
       return storage.file.head(keyResult.data)
@@ -235,7 +253,11 @@ export function createStorageProcedures(deps: StorageProcedureDeps) {
       const keyResult = validateStorageKeyOrFail(input.key, context.locale)
       if (!keyResult.success)
         return keyResult
-      const access = await authorize({ context, operation: 'delete', keys: [keyResult.data] })
+      const access = await authorize({
+        context,
+        operation: 'delete',
+        keys: [keyResult.data],
+      })
       if (!access.success)
         return access
       return storage.file.delete(keyResult.data)
@@ -254,7 +276,12 @@ export function createStorageProcedures(deps: StorageProcedureDeps) {
       if (result.success)
         return result
       const progress = StorageDeleteSummarySchema.safeParse(result.error.ext?.deleteMany)
-      return err({ ...result.error, publicExt: progress.success ? { deleteMany: progress.data } : undefined })
+      return err({
+        ...result.error,
+        publicExt: progress.success
+          ? { deleteMany: progress.data }
+          : undefined,
+      })
     })
 
     .build()
@@ -268,6 +295,8 @@ function toPresignedResult(
   return mapHaiResult(result, url => ({
     url,
     key,
-    expiresAt: expiresIn ? new Date(Date.now() + expiresIn * 1000) : undefined,
+    expiresAt: expiresIn
+      ? new Date(Date.now() + expiresIn * 1000)
+      : undefined,
   }))
 }

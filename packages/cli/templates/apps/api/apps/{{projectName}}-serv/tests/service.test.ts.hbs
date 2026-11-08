@@ -4,16 +4,28 @@ import type { AddressInfo } from 'node:net'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-{{#if features.ai}}import { ai } from '@h-ai/ai'
-{{/if}}import { apiClient } from '@h-ai/api-client'
-{{#if features.cache}}import { cache } from '@h-ai/cache'
-{{/if}}import { core } from '@h-ai/core'
-{{#if features.iam}}import { iam } from '@h-ai/iam'
-{{/if}}{{#if features.db}}import { reldb } from '@h-ai/reldb'
-{{/if}}import { serv } from '@h-ai/serv'
-{{#if features.storage}}import { storage } from '@h-ai/storage'
-{{/if}}{{#if features.vecdb}}import { vecdb } from '@h-ai/vecdb'
-{{/if}}import { {{api.contractExportName}} } from '{{api.contractPackageName}}'
+{{#if features.ai}}
+import { ai } from '@h-ai/ai'
+{{/if}}
+import { apiClient } from '@h-ai/api-client'
+{{#if features.cache}}
+import { cache } from '@h-ai/cache'
+{{/if}}
+import { core } from '@h-ai/core'
+{{#if features.iam}}
+import { iam } from '@h-ai/iam'
+{{/if}}
+{{#if features.db}}
+import { reldb } from '@h-ai/reldb'
+{{/if}}
+import { serv } from '@h-ai/serv'
+{{#if features.storage}}
+import { storage } from '@h-ai/storage'
+{{/if}}
+{{#if features.vecdb}}
+import { vecdb } from '@h-ai/vecdb'
+{{/if}}
+import { {{api.contractExportName}} } from '{{api.contractPackageName}}'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { {{api.serviceAppFactoryName}} } from '../src/app.js'
@@ -23,10 +35,12 @@ let baseUrl = ''
 let client: ReturnType<typeof apiClient.create<typeof {{api.contractExportName}}>>
 let server: ReturnType<typeof serv.listen>
 let servConfig: ServConfig
-{{#if features.storage}}let storageRoot = ''
-{{/if}}{{#if features.vecdb}}let vecdbRoot = ''
+{{#if features.storage}}
+let storageRoot = ''
 {{/if}}
-
+{{#if features.vecdb}}
+let vecdbRoot = ''
+{{/if}}
 {{#if features.iam}}
 function uniqueUser(prefix = 'api') {
   const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.slice(-8)
@@ -40,8 +54,11 @@ function uniqueUser(prefix = 'api') {
 
 beforeAll(async () => {
   tempRoot = mkdtempSync(join(tmpdir(), '{{projectName}}-service-test-'))
-{{#if features.storage}}  storageRoot = join(tempRoot, 'storage')
-{{/if}}{{#if features.vecdb}}  vecdbRoot = join(tempRoot, 'vecdb')
+{{#if features.storage}}
+  storageRoot = join(tempRoot, 'storage')
+{{/if}}
+{{#if features.vecdb}}
+  vecdbRoot = join(tempRoot, 'vecdb')
 {{/if}}
 
   vi.stubEnv('HAI_SERV_CORS_NATIVEORIGINS', undefined)
@@ -55,27 +72,32 @@ beforeAll(async () => {
   const dbResult = await reldb.init({ type: 'sqlite', database: ':memory:' })
   if (!dbResult.success)
     throw new Error(`reldb: ${dbResult.error.message}`)
-{{/if}}{{#if features.cache}}
+{{/if}}
+{{#if features.cache}}
 
   const cacheResult = await cache.init({ type: 'memory' })
   if (!cacheResult.success)
     throw new Error(`cache: ${cacheResult.error.message}`)
-{{/if}}{{#if features.vecdb}}
+{{/if}}
+{{#if features.vecdb}}
 
   const vecdbResult = await vecdb.init({ type: 'lancedb', path: vecdbRoot })
   if (!vecdbResult.success)
     throw new Error(`vecdb: ${vecdbResult.error.message}`)
-{{/if}}{{#if features.iam}}
+{{/if}}
+{{#if features.iam}}
 
   const iamResult = await iam.init({})
   if (!iamResult.success)
     throw new Error(`iam: ${iamResult.error.message}`)
-{{/if}}{{#if features.storage}}
+{{/if}}
+{{#if features.storage}}
 
   const storageResult = await storage.init({ type: 'local', root: storageRoot })
   if (!storageResult.success)
     throw new Error(`storage: ${storageResult.error.message}`)
-{{/if}}{{#if features.ai}}
+{{/if}}
+{{#if features.ai}}
 
   const aiResult = await ai.init({})
   if (!aiResult.success)
@@ -100,7 +122,9 @@ beforeAll(async () => {
     baseUrl: `${baseUrl}${servConfig.http.apiPrefix}`,
     clientName: 'hai-mobile-app',
     headers: { 'origin': 'capacitor://localhost', 'x-hai-token-transport': 'body' },
-    auth: { storage: apiClient.tokenStorage.memory() },
+    auth: {
+      storage: apiClient.tokenStorage.memory(),
+    },
   })
   if (!initResult.success)
     throw new Error(`client.init: ${initResult.error.message}`)
@@ -109,13 +133,25 @@ beforeAll(async () => {
 afterAll(async () => {
   await client?.close()
   await server?.close()
-{{#if features.ai}}  await ai.close()
-{{/if}}{{#if features.storage}}  await storage.close()
-{{/if}}{{#if features.iam}}  await iam.close()
-{{/if}}{{#if features.vecdb}}  await vecdb.close()
-{{/if}}{{#if features.cache}}  await cache.close()
-{{/if}}{{#if features.db}}  await reldb.close()
-{{/if}}  rmSync(tempRoot, { recursive: true, force: true })
+{{#if features.ai}}
+  await ai.close()
+{{/if}}
+{{#if features.storage}}
+  await storage.close()
+{{/if}}
+{{#if features.iam}}
+  await iam.close()
+{{/if}}
+{{#if features.vecdb}}
+  await vecdb.close()
+{{/if}}
+{{#if features.cache}}
+  await cache.close()
+{{/if}}
+{{#if features.db}}
+  await reldb.close()
+{{/if}}
+  rmSync(tempRoot, { recursive: true, force: true })
   vi.unstubAllEnvs()
 })
 
@@ -135,7 +171,12 @@ describe('{{api.servPackageName}}', () => {
     expect(result.success).toBe(true)
     if (result.success) {
       const config = core.config.getOrThrow<CoreConfig>('core')
-      expect(result.data).toMatchObject({ name: config.name, version: config.version, env: config.env, defaultLocale: config.defaultLocale })
+      expect(result.data).toMatchObject({
+        name: config.name,
+        version: config.version,
+        env: config.env,
+        defaultLocale: config.defaultLocale,
+      })
       expect(typeof result.data.transportEnabled).toBe('boolean')
     }
   })
@@ -145,7 +186,6 @@ describe('{{api.servPackageName}}', () => {
 
     expect(result.success).toBe(false)
   })
-
 {{#if features.iam}}
   it.each([
     ['capacitor://localhost', 'hai-mobile-app'],
@@ -156,7 +196,14 @@ describe('{{api.servPackageName}}', () => {
   ])('refreshes an expired access token at the default native Origin %s', async (origin, clientName) => {
     const native = apiClient.create({{api.contractExportName}})
     try {
-      expect((await native.init({ baseUrl: `${baseUrl}${servConfig.http.apiPrefix}`, clientName, headers: { 'origin': origin, 'x-hai-token-transport': 'body' }, auth: { storage: apiClient.tokenStorage.memory() } })).success).toBe(true)
+      expect((await native.init({
+        baseUrl: `${baseUrl}${servConfig.http.apiPrefix}`,
+        clientName,
+        headers: { 'origin': origin, 'x-hai-token-transport': 'body' },
+        auth: {
+          storage: apiClient.tokenStorage.memory(),
+        },
+      })).success).toBe(true)
       const registration = await apiClient.createAuthActions(native).register(uniqueUser('refresh'))
       expect(registration.success).toBe(true)
       if (!registration.success)

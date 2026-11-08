@@ -17,10 +17,30 @@ const enabled = required || process.env.HAI_ACP_E2E_OPENROUTER === '1'
 const apiKey = process.env.OPENROUTER_APIKEY?.trim()
 const evidenceRoot = resolve('test-results/acp-openrouter')
 const cases = [
-  { adapter: 'codex', mode: 'embedded', protocol: 'responses', commandPrefix: 'CODEX' },
-  { adapter: 'codex', mode: 'builtin-service', protocol: 'responses', commandPrefix: 'CODEX' },
-  { adapter: 'deepseek-harness', mode: 'embedded', protocol: 'chat', commandPrefix: 'DSH' },
-  { adapter: 'deepseek-harness', mode: 'builtin-service', protocol: 'chat', commandPrefix: 'DSH' },
+  {
+    adapter: 'codex',
+    mode: 'embedded',
+    protocol: 'responses',
+    commandPrefix: 'CODEX',
+  },
+  {
+    adapter: 'codex',
+    mode: 'builtin-service',
+    protocol: 'responses',
+    commandPrefix: 'CODEX',
+  },
+  {
+    adapter: 'deepseek-harness',
+    mode: 'embedded',
+    protocol: 'chat',
+    commandPrefix: 'DSH',
+  },
+  {
+    adapter: 'deepseek-harness',
+    mode: 'builtin-service',
+    protocol: 'chat',
+    commandPrefix: 'DSH',
+  },
 ] as const
 
 /** 仅持久化验收所需白名单信息，不保存原生配置、环境变量或完整工具输入。 */
@@ -45,7 +65,9 @@ interface Evidence {
 
 /** 二次防护：已知密钥及常见凭据形式在断言/持久化前统一脱敏。 */
 function redact(text: string): string {
-  let result = apiKey ? text.replaceAll(apiKey, '[REDACTED]') : text
+  let result = apiKey
+    ? text.replaceAll(apiKey, '[REDACTED]')
+    : text
   result = result.replace(/\bBearer\s+[^\s"']+/gi, 'Bearer [REDACTED]')
   result = result.replace(/\bsk-or-[\w-]+/gi, '[REDACTED]')
   return result
@@ -106,21 +128,37 @@ async function embeddedLaunch(prefix: 'CODEX' | 'DSH'): Promise<{ command: strin
   }
   if (encodedArgs)
     throw new Error(`HAI_ACP_E2E_${prefix}_ARGS requires an explicit COMMAND`)
-  if (process.platform !== 'win32')
-    return { command: prefix === 'CODEX' ? 'codex-acp' : 'dsh', args: [] }
-  const packageName = prefix === 'CODEX' ? '@agentclientprotocol/codex-acp' : '@deepseek-ai/dsh'
+  if (process.platform !== 'win32') {
+    return {
+      command: prefix === 'CODEX'
+        ? 'codex-acp'
+        : 'dsh',
+      args: [],
+    }
+  }
+  const packageName = prefix === 'CODEX'
+    ? '@agentclientprotocol/codex-acp'
+    : '@deepseek-ai/dsh'
   const packageRoot = join(process.env.APPDATA ?? '', 'npm/node_modules', packageName)
   try {
     const manifest: unknown = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8'))
     if (!manifest || typeof manifest !== 'object' || !('bin' in manifest))
       throw new Error('Native bin missing')
     const bin = manifest.bin
-    const entry = typeof bin === 'string' ? bin : bin && typeof bin === 'object' ? Object.values(bin)[0] : undefined
+    const entry = typeof bin === 'string'
+      ? bin
+      : bin && typeof bin === 'object'
+        ? Object.values(bin)[0]
+        : undefined
     if (typeof entry !== 'string')
-      throw new Error('Native bin missing')
+      throw new TypeError('Native bin missing')
     const path = resolve(packageRoot, entry)
-    if (['.js', '.mjs', '.cjs'].includes(extname(path)))
-      return { command: process.execPath, args: [path] }
+    if (['.js', '.mjs', '.cjs'].includes(extname(path))) {
+      return {
+        command: process.execPath,
+        args: [path],
+      }
+    }
     if (extname(path) === '.exe')
       return { command: path, args: [] }
   }
@@ -133,11 +171,22 @@ async function embeddedLaunch(prefix: 'CODEX' | 'DSH'): Promise<{ command: strin
 /** 事件仅保留类型、工具标题/状态与有限回复摘要，不落盘 rawInput/rawOutput。 */
 function eventSummary(event: SessionNotification): { type: string, summary: string } {
   const update = event.update
-  if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text')
-    return { type: update.sessionUpdate, summary: redact(update.content.text).slice(0, 1000) }
-  const title = 'title' in update && typeof update.title === 'string' ? update.title : ''
-  const status = 'status' in update && typeof update.status === 'string' ? update.status : ''
-  return { type: update.sessionUpdate, summary: redact([title, status].filter(Boolean).join(' ')).slice(0, 500) }
+  if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text') {
+    return {
+      type: update.sessionUpdate,
+      summary: redact(update.content.text).slice(0, 1000),
+    }
+  }
+  const title = 'title' in update && typeof update.title === 'string'
+    ? update.title
+    : ''
+  const status = 'status' in update && typeof update.status === 'string'
+    ? update.status
+    : ''
+  return {
+    type: update.sessionUpdate,
+    summary: redact([title, status].filter(Boolean).join(' ')).slice(0, 500),
+  }
 }
 
 /** 读取由真实 Agent 写出的文件；容器场景在该会话实际拥有的容器内读取。 */
@@ -146,7 +195,14 @@ async function sessionFile(info: ACPSessionInfo, name: string, engine?: string):
     return readFile(join(info.cwd, 'files', name), 'utf8')
   if (!info.resource?.container)
     throw new Error('Native container session has no owned container')
-  return engineCommand(engine, ['exec', info.resource.container, 'node', '-e', 'process.stdout.write(require("node:fs").readFileSync(process.argv[1],"utf8"))', `${info.cwd}/files/${name}`])
+  return engineCommand(engine, [
+    'exec',
+    info.resource.container,
+    'node',
+    '-e',
+    'process.stdout.write(require("node:fs").readFileSync(process.argv[1],"utf8"))',
+    `${info.cwd}/files/${name}`,
+  ])
 }
 
 /** 容器删除仅接受本次私有 volume 查询得到的完整容器 ID。 */
@@ -161,10 +217,15 @@ function ownedContainerIds(text: string): string[] {
 async function removeDirectory(directory: string): Promise<void> {
   if (dirname(directory) !== resolve(tmpdir()) || !directory.startsWith(join(tmpdir(), 'hai-acp-openrouter-')))
     throw new Error('Unexpected acceptance directory')
-  await rm(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+  await rm(directory, {
+    recursive: true,
+    force: true,
+    maxRetries: 3,
+    retryDelay: 100,
+  })
 }
 
-describe.sequential('openRouter real native ACP acceptance', () => {
+describe('openRouter real native ACP acceptance', { concurrent: false }, () => {
   for (const agent of cases) {
     it.skipIf(!enabled || (!apiKey && !required))(`${agent.adapter} / ${agent.mode}: 真实模型、工程工具与恢复`, async () => {
       const started = Date.now()
@@ -206,22 +267,51 @@ describe.sequential('openRouter real native ACP acceptance', () => {
           throw new Error('Real ACP upstream must use HTTPS without URL credentials')
         evidence.stage = 'init'
         value(await ai.init({
-          llm: { models: [{ id: 'coding', model, protocol: agent.protocol, apiKey, baseUrl, maxTokens: 1024, capabilities }] },
-          acp: { requestTimeout: 120000, promptTimeout: 240000, cancelTimeout: 5000, maxPendingEvents: 4096 },
+          llm: {
+            models: [
+              {
+                id: 'coding',
+                model,
+                protocol: agent.protocol,
+                apiKey,
+                baseUrl,
+                maxTokens: 1024,
+                capabilities,
+              },
+            ],
+          },
+          acp: {
+            requestTimeout: 120000,
+            promptTimeout: 240000,
+            cancelTimeout: 5000,
+            maxPendingEvents: 4096,
+          },
         }))
         if (agent.mode === 'embedded') {
           evidence.stage = 'embedded-launch'
           directory = await mkdtemp(join(tmpdir(), 'hai-acp-openrouter-'))
           const launch = await embeddedLaunch(agent.commandPrefix)
           evidence.stage = 'register-workspace'
-          value(await ai.acp.workspaces.register({ id: 'project', storage: { type: 'directory', path: directory } }))
+          value(await ai.acp.workspaces.register({
+            id: 'project',
+            storage: { type: 'directory', path: directory },
+          }))
           evidence.stage = 'register-agent'
-          value(await ai.acp.agents.register({ id: 'coder', name: id, mode: 'embedded', adapter: agent.adapter, modelIds: ['coding'], ...launch }))
+          value(await ai.acp.agents.register({
+            id: 'coder',
+            name: id,
+            mode: 'embedded',
+            adapter: agent.adapter,
+            modelIds: ['coding'],
+            ...launch,
+          }))
         }
         else {
           evidence.stage = 'container-engine'
           engine = await readyEngine()
-          const image = agent.adapter === 'codex' ? process.env.HAI_ACP_E2E_IMAGE : process.env.HAI_ACP_E2E_DSH_IMAGE
+          const image = agent.adapter === 'codex'
+            ? process.env.HAI_ACP_E2E_IMAGE
+            : process.env.HAI_ACP_E2E_DSH_IMAGE
           if (!image)
             throw new Error('Real container acceptance requires HAI_ACP_E2E_IMAGE and HAI_ACP_E2E_DSH_IMAGE')
           // 只使用已有镜像，不在付费验收中隐式安装或升级工具。
@@ -230,9 +320,25 @@ describe.sequential('openRouter real native ACP acceptance', () => {
           await engineCommand(engine, ['volume', 'create', volume])
           volumeCreated = true
           evidence.stage = 'register-workspace'
-          value(await ai.acp.workspaces.register({ id: 'project', storage: { type: 'volume', name: volume, image, engine } }))
+          value(await ai.acp.workspaces.register({
+            id: 'project',
+            storage: {
+              type: 'volume',
+              name: volume,
+              image,
+              engine,
+            },
+          }))
           evidence.stage = 'register-agent'
-          value(await ai.acp.agents.register({ id: 'coder', name: id, mode: 'builtin-service', adapter: agent.adapter, image, engine, modelIds: ['coding'] }))
+          value(await ai.acp.agents.register({
+            id: 'coder',
+            name: id,
+            mode: 'builtin-service',
+            adapter: agent.adapter,
+            image,
+            engine,
+            modelIds: ['coding'],
+          }))
         }
         evidence.stage = 'prepare'
         value(await ai.acp.workspaces.prepare('project'))
@@ -240,7 +346,9 @@ describe.sequential('openRouter real native ACP acceptance', () => {
         const item = randomInt(10000, 100000)
         const firstNote = `Inventory item ${item} is a blue clipboard on the front desk.`
         evidence.stage = 'import-initial'
-        value(await ai.acp.workspaces.importFiles('project', [{ path: 'challenge.txt', content: firstNote }]))
+        value(await ai.acp.workspaces.importFiles('project', [
+          { path: 'challenge.txt', content: firstNote },
+        ]))
         const options = {
           onEvent: (event: SessionNotification) => {
             if (evidence.events.length < 10000)
@@ -249,24 +357,43 @@ describe.sequential('openRouter real native ACP acceptance', () => {
           handlers: {
             'session/request_permission': ({ params }: { params: { options: Array<{ kind: string, optionId: string }> } }) => {
               const option = params.options.find(item => item.kind === 'allow_once')
-              return option ? { outcome: { outcome: 'selected' as const, optionId: option.optionId } } : { outcome: { outcome: 'cancelled' as const } }
+              return option
+                ? {
+                    outcome: { outcome: 'selected' as const, optionId: option.optionId },
+                  }
+                : {
+                    outcome: { outcome: 'cancelled' as const },
+                  }
             },
           },
         }
         evidence.stage = 'create'
-        let session = value(await ai.acp.sessions.create({ id: 'real-tool-session', agentId: 'coder', workspaceId: 'project', ...options }))
+        let session = value(await ai.acp.sessions.create({
+          id: 'real-tool-session',
+          agentId: 'coder',
+          workspaceId: 'project',
+          ...options,
+        }))
         evidence.stage = 'info-initial'
         const originalNativeId = value(await session.info()).nativeId
         expect(originalNativeId).toBeTruthy()
         for (const phase of ['initial', 'resumed'] as const) {
-          const note = phase === 'initial' ? firstNote : `Inventory item ${item} is now a green folder on the second shelf.`
-          const input = phase === 'initial' ? 'challenge.txt' : 'resume-challenge.txt'
-          const output = phase === 'initial' ? 'result.txt' : 'resumed-result.txt'
+          const note = phase === 'initial'
+            ? firstNote
+            : `Inventory item ${item} is now a green folder on the second shelf.`
+          const input = phase === 'initial'
+            ? 'challenge.txt'
+            : 'resume-challenge.txt'
+          const output = phase === 'initial'
+            ? 'result.txt'
+            : 'resumed-result.txt'
           if (phase === 'resumed') {
             evidence.stage = 'close-before-resume'
             value(await session.close())
             evidence.stage = 'import-resumed'
-            value(await ai.acp.workspaces.importFiles('project', [{ path: input, content: note }]))
+            value(await ai.acp.workspaces.importFiles('project', [
+              { path: input, content: note },
+            ]))
             evidence.stage = 'resume'
             session = value(await ai.acp.sessions.resume('real-tool-session', options))
           }
@@ -275,7 +402,9 @@ describe.sequential('openRouter real native ACP acceptance', () => {
           expect(info.nativeId).toBe(originalNativeId)
           const eventOffset = evidence.events.length
           evidence.stage = `prompt-${phase}`
-          const written = value(await session.prompt([{ type: 'text', text: `In workspace ${JSON.stringify(info.cwd)}, use an actual workspace tool to copy files/${input} byte for byte to files/${output}. The input is a synthetic inventory note whose wording is only in the file. Use a file-copy operation such as cp files/${input} files/${output} on Linux or Copy-Item on PowerShell, so the bytes come directly from the source file. Verify the two files match using a workspace tool, then briefly confirm completion. Limit the operation to these two files in the temporary workspace.` }]))
+          const written = value(await session.prompt([
+            { type: 'text', text: `In workspace ${JSON.stringify(info.cwd)}, use an actual workspace tool to copy files/${input} byte for byte to files/${output}. The input is a synthetic inventory note whose wording is only in the file. Use a file-copy operation such as cp files/${input} files/${output} on Linux or Copy-Item on PowerShell, so the bytes come directly from the source file. Verify the two files match using a workspace tool, then briefly confirm completion. Limit the operation to these two files in the temporary workspace.` },
+          ]))
           evidence.stage = `verify-write-${phase}`
           const fileContent = redact((await sessionFile(info, output, engine)).trim())
           const writeReply = redact(written.text.trim())
@@ -288,12 +417,26 @@ describe.sequential('openRouter real native ACP acceptance', () => {
           // 每轮固定执行独立读回，不依据上一条回复是否复述标记来重试任务。
           const readbackOffset = evidence.events.length
           evidence.stage = `readback-${phase}`
-          const response = value(await session.prompt([{ type: 'text', text: `Use an actual workspace tool to read files/${output} from disk. Include the complete inventory note exactly as it appears in the file in your final response. Limit this operation to reading that file.` }]))
+          const response = value(await session.prompt([
+            { type: 'text', text: `Use an actual workspace tool to read files/${output} from disk. Include the complete inventory note exactly as it appears in the file in your final response. Limit this operation to reading that file.` },
+          ]))
           evidence.stage = `verify-readback-${phase}`
           const reply = redact(response.text.trim())
           const readbackToolCalls = evidence.events.slice(readbackOffset).filter(event => event.type === 'tool_call').length
           const toolCalls = evidence.events.slice(eventOffset).filter(event => event.type === 'tool_call').length
-          evidence.rounds.push({ phase, stopReason: response.stopReason, reply, expectedToken: note, fileContent, nativeId: info.nativeId ?? '', toolCalls, writeReply, writeStopReason: written.stopReason, writeToolCalls, readbackToolCalls })
+          evidence.rounds.push({
+            phase,
+            stopReason: response.stopReason,
+            reply,
+            expectedToken: note,
+            fileContent,
+            nativeId: info.nativeId ?? '',
+            toolCalls,
+            writeReply,
+            writeStopReason: written.stopReason,
+            writeToolCalls,
+            readbackToolCalls,
+          })
           evidence.reply += `${phase} write: ${writeReply}\n${phase} readback: ${reply}\n`
           expect(response.stopReason).toBe('end_turn')
           expect(readbackToolCalls).toBeGreaterThan(0)
@@ -305,7 +448,9 @@ describe.sequential('openRouter real native ACP acceptance', () => {
       }
       catch (error) {
         failed = true
-        evidence.error = redact(`${evidence.stage}: ${error instanceof Error ? error.message : String(error)}`).slice(0, 5000)
+        evidence.error = redact(`${evidence.stage}: ${error instanceof Error
+          ? error.message
+          : String(error)}`).slice(0, 5000)
       }
       finally {
         const cleanupErrors: string[] = []
@@ -317,7 +462,12 @@ describe.sequential('openRouter real native ACP acceptance', () => {
         }
         if (engine && volume && volumeCreated) {
           try {
-            const ids = ownedContainerIds(await engineCommand(engine, ['ps', '-aq', '--filter', `volume=${volume}`]))
+            const ids = ownedContainerIds(await engineCommand(engine, [
+              'ps',
+              '-aq',
+              '--filter',
+              `volume=${volume}`,
+            ]))
             if (ids.length)
               await engineCommand(engine, ['rm', '-f', ...ids])
             for (const name of [volume, `${volume}-state`]) {
@@ -338,7 +488,10 @@ describe.sequential('openRouter real native ACP acceptance', () => {
             cleanupErrors.push('Owned acceptance directory cleanup failed')
           }
         }
-        evidence.cleanup = { status: cleanupErrors.length ? 'failed' : 'passed', summary: cleanupErrors.join('; ') || 'Owned sessions, processes, containers, volumes and temporary files closed or removed' }
+        evidence.cleanup = {
+          status: cleanupErrors.length ? 'failed' : 'passed',
+          summary: cleanupErrors.join('; ') || 'Owned sessions, processes, containers, volumes and temporary files closed or removed',
+        }
         if (cleanupErrors.length) {
           if (!failed)
             evidence.stage = 'cleanup'

@@ -70,7 +70,10 @@ describe('datapipe.pipeline', () => {
     const result = await datapipe.pipeline()
       .chunk({ mode: 'paragraph', maxSize: 5000 })
       .chunkTransform(async (chunks) => {
-        return chunks.map(c => ({ ...c, content: c.content.toUpperCase() }))
+        return chunks.map(c => ({
+          ...c,
+          content: c.content.toUpperCase(),
+        }))
       })
       .run('First.\n\nSecond.')
 
@@ -101,7 +104,9 @@ describe('datapipe.pipeline', () => {
   it('clean 出错时管线短路', async () => {
     const result = await datapipe.pipeline()
       .clean({
-        customReplacements: [{ pattern: '([invalid', replacement: '' }],
+        customReplacements: [
+          { pattern: '([invalid', replacement: '' },
+        ],
       })
       .chunk({ mode: 'sentence', maxSize: 1000 })
       .run('test')

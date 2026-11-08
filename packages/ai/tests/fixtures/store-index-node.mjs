@@ -6,13 +6,18 @@ import { reldb } from '@h-ai/reldb'
 import { vecdb } from '@h-ai/vecdb'
 
 async function send(value) {
-  if (process.connected)
-    await new Promise((resolve, reject) => process.send(value, error => error ? reject(error) : resolve()))
+  if (process.connected) {
+    await new Promise((resolve, reject) => process.send(value, error => error
+      ? reject(error)
+      : resolve()))
+  }
 }
 
 async function main() {
   const input = JSON.parse(process.env.AI_INDEX_NODE_INPUT)
-  core.init({ logging: { level: 'fatal' } })
+  core.init({
+    logging: { level: 'fatal' },
+  })
   let release
   let close
   let finish
@@ -35,7 +40,10 @@ async function main() {
   })
   let connectionId
   try {
-    for (const initialize of [() => reldb.init(input.dbConfig), () => vecdb.init(input.vecdbConfig)]) {
+    for (const initialize of [
+      () => reldb.init(input.dbConfig),
+      () => vecdb.init(input.vecdbConfig),
+    ]) {
       const result = await initialize()
       if (!result.success)
         throw new Error('Database dependency initialization failed')
@@ -67,7 +75,12 @@ async function main() {
         while (cause && typeof cause === 'object' && !seen.has(cause)) {
           seen.add(cause)
           if (typeof cause.code === 'string' && /^[A-Z_]+$/.test(cause.code) && typeof cause.errno === 'number') {
-            await send({ phase: 'ddl-error', code: cause.code, errno: cause.errno, index: /^CREATE INDEX (\w+)/i.exec(sql)?.[1] })
+            await send({
+              phase: 'ddl-error',
+              code: cause.code,
+              errno: cause.errno,
+              index: /^CREATE INDEX (\w+)/i.exec(sql)?.[1],
+            })
             break
           }
           cause = cause.cause
@@ -76,7 +89,13 @@ async function main() {
       return result
     }
     const initialized = await ai.init()
-    await send({ phase: 'result', success: initialized.success, code: initialized.success ? undefined : initialized.error.code, initialized: ai.isInitialized, connectionId })
+    await send({
+      phase: 'result',
+      success: initialized.success,
+      code: initialized.success ? undefined : initialized.error.code,
+      initialized: ai.isInitialized,
+      connectionId,
+    })
     await closing
   }
   catch {
@@ -104,7 +123,14 @@ async function main() {
     catch {
       cleanupSucceeded = false
     }
-    await send({ phase: 'closed', cleanupSucceeded, connectionId, aiInitialized: ai.isInitialized, vectorInitialized: vecdb.isInitialized, databaseInitialized: reldb.isInitialized })
+    await send({
+      phase: 'closed',
+      cleanupSucceeded,
+      connectionId,
+      aiInitialized: ai.isInitialized,
+      vectorInitialized: vecdb.isInitialized,
+      databaseInitialized: reldb.isInitialized,
+    })
     // 保持进程存活，供父测试在断开 IPC 前检查 MySQL PROCESSLIST，不能靠退出隐式释放连接。
     await finishing
     process.disconnect()

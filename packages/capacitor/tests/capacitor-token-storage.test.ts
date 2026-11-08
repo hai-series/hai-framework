@@ -146,7 +146,10 @@ describe('createCapacitorTokenStorage', () => {
     const { createCapacitorTokenStorage } = await import('../src/capacitor-token-storage.js')
     const storage = createCapacitorTokenStorage()
     const client = apiClient.create({})
-    const initialized = await client.init({ baseUrl: 'https://api.test.invalid', auth: { storage } })
+    const initialized = await client.init({
+      baseUrl: 'https://api.test.invalid',
+      auth: { storage },
+    })
     expect(initialized.success).toBe(true)
 
     try {
@@ -155,7 +158,12 @@ describe('createCapacitorTokenStorage', () => {
           throw new Error('refresh write failed')
         secureStore.set(key, value)
       })
-      await expect(client.auth.setTokens({ accessToken: 'partial-access', refreshToken: 'new-refresh', expiresIn: 3600, tokenType: 'Bearer' })).rejects.toThrow('refresh write failed')
+      await expect(client.auth.setTokens({
+        accessToken: 'partial-access',
+        refreshToken: 'new-refresh',
+        expiresIn: 3600,
+        tokenType: 'Bearer',
+      })).rejects.toThrow('refresh write failed')
       expect(secureStore.get('hai_access_token')).toBe('partial-access')
       expect(await storage.getAccessToken()).toBeNull()
       expect(await storage.getRefreshToken()).toBeNull()
@@ -240,6 +248,40 @@ describe('createCapacitorTokenStorage', () => {
     await storage.clear()
     finishRead('old-access')
     expect(await pending).toBeNull()
+  })
+
+  it.each([false, true])('clear 等待此前原生写入并删除迟到凭据（跨实例=%s）', async (separateInstance) => {
+    const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
+    const { createCapacitorTokenStorage } = await import('../src/capacitor-token-storage.js')
+    const writer = createCapacitorTokenStorage()
+    const clearer = separateInstance
+      ? createCapacitorTokenStorage()
+      : writer
+    let releaseWrite: () => void = () => {}
+    const delayed = new Promise<void>((resolve) => {
+      releaseWrite = resolve
+    })
+    vi.mocked(SecureStorage.setItem).mockImplementationOnce(async (key, value) => {
+      await delayed
+      secureStore.set(key, value)
+    })
+    const writing = writer.setAccessToken('old-access')
+    await vi.waitFor(() => expect(SecureStorage.setItem).toHaveBeenCalledOnce())
+    let cleared = false
+    const clearing = clearer.clear().then(() => {
+      cleared = true
+    })
+    try {
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(cleared).toBe(false)
+      expect(SecureStorage.removeItem).not.toHaveBeenCalled()
+    }
+    finally {
+      releaseWrite()
+      await Promise.all([writing, clearing])
+    }
+    expect(await createCapacitorTokenStorage().getAccessToken()).toBeNull()
+    expect(secureStore.size).toBe(0)
   })
 })
 

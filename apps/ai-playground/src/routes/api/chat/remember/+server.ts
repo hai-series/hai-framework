@@ -6,12 +6,14 @@
  * @module routes/api/chat/remember/+server
  */
 
-import { RememberRequestSchema } from '$lib/ai-lab-types.js'
-import { rememberExchange } from '$lib/server/ai-lab.js'
 import { kit } from '@h-ai/kit'
+import { RememberRequestSchema } from '#lib/ai-lab-types.js'
+import { rememberExchange } from '#lib/server/ai-lab.js'
 
 export const POST = kit.handler(async ({ request }) => {
   const input = await kit.validate.body(request, RememberRequestSchema)
   const result = await rememberExchange(input, request.signal)
-  return result.success ? kit.response.ok(result.data) : kit.response.fromError(result.error)
+  return result.success
+    ? kit.response.ok(result.data)
+    : kit.response.fromError(result.error)
 })

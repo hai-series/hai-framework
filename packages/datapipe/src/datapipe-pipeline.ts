@@ -104,7 +104,11 @@ async function runPipeline(
           currentText = await step.fn(currentText)
         }
         catch (error) {
-          return err(HaiDatapipeError.TRANSFORM_FAILED, datapipeM('datapipe_transformFailed', { params: { error: String(error) } }), error)
+          return err(HaiDatapipeError.TRANSFORM_FAILED, datapipeM('datapipe_transformFailed', {
+            params: {
+              error: String(error),
+            },
+          }), error)
         }
         break
       }
@@ -115,7 +119,11 @@ async function runPipeline(
             chunks = await step.fn(chunks)
           }
           catch (error) {
-            return err(HaiDatapipeError.PIPELINE_FAILED, datapipeM('datapipe_pipelineFailed', { params: { error: String(error) } }), error)
+            return err(HaiDatapipeError.PIPELINE_FAILED, datapipeM('datapipe_pipelineFailed', {
+              params: {
+                error: String(error),
+              },
+            }), error)
           }
         }
         break

@@ -57,9 +57,18 @@ async function closeOwnedProvider(): Promise<HaiResult<void>> {
   }
   catch (error) {
     logger.error('Provider cleanup failed; retaining resource for retry', { error })
-    return err({ ...HaiCacheError.CONNECTION_FAILED, message: cacheM('cache_operationFailed', {
-      params: { error: error instanceof Error ? error.message : String(error) },
-    }), cause: error, ext: { cleanupPending: true } })
+    return err({
+      ...HaiCacheError.CONNECTION_FAILED,
+      message: cacheM('cache_operationFailed', {
+        params: {
+          error: error instanceof Error
+            ? error.message
+            : String(error),
+        },
+      }),
+      cause: error,
+      ext: { cleanupPending: true },
+    })
   }
 }
 
@@ -72,9 +81,17 @@ async function failInitialization(result: HaiResult<void>): Promise<HaiResult<vo
     const ext = { ...result.error.ext }
     delete ext.cleanupPending
     delete ext.cleanupError
-    return err({ ...result.error, ext: Object.keys(ext).length > 0 ? ext : undefined })
+    return err({
+      ...result.error,
+      ext: Object.keys(ext).length > 0
+        ? ext
+        : undefined,
+    })
   }
-  return err({ ...result.error, ext: { ...result.error.ext, cleanupPending: true, cleanupError: cleanup.error } })
+  return err({
+    ...result.error,
+    ext: { ...result.error.ext, cleanupPending: true, cleanupError: cleanup.error },
+  })
 }
 
 // ─── Provider 工厂 ───
@@ -94,7 +111,9 @@ function createProvider(config: CacheConfig): HaiResult<CacheProvider> {
     default:
       return err(
         HaiCacheError.UNSUPPORTED_TYPE,
-        cacheM('cache_unsupportedType', { params: { type: (config as { type: string }).type } }),
+        cacheM('cache_unsupportedType', {
+          params: { type: (config as { type: string }).type },
+        }),
       )
   }
 }
@@ -163,7 +182,9 @@ export const cache: CacheFunctions = {
       logger.warn('Cache init already in progress, skipping concurrent call')
       return err(
         HaiCacheError.OPERATION_FAILED,
-        cacheM('cache_operationFailed', { params: { error: 'Concurrent initialization detected' } }),
+        cacheM('cache_operationFailed', {
+          params: { error: 'Concurrent initialization detected' },
+        }),
       )
     }
     initInProgress = true
@@ -184,7 +205,9 @@ export const cache: CacheFunctions = {
         logger.error('Cache config validation failed', { error: parseResult.error.message })
         return err(
           HaiCacheError.CONFIG_ERROR,
-          cacheM('cache_configError', { params: { error: parseResult.error.message } }),
+          cacheM('cache_configError', {
+            params: { error: parseResult.error.message },
+          }),
           parseResult.error,
         )
       }
@@ -218,7 +241,11 @@ export const cache: CacheFunctions = {
         return await failInitialization(err(
           HaiCacheError.CONNECTION_FAILED,
           cacheM('cache_initFailed', {
-            params: { error: error instanceof Error ? error.message : String(error) },
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
           }),
           error,
         ))
@@ -244,7 +271,11 @@ export const cache: CacheFunctions = {
   /** 分布式锁操作子接口 */
   get lock(): LockOperations { return currentProvider?.lock ?? notInitializedLock },
   /** 当前脱敏后的配置快照；未初始化时返回 null */
-  get config(): CacheConfig | null { return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null },
+  get config(): CacheConfig | null {
+    return currentConfig
+      ? core.sanitize.sanitizeSensitiveFields(currentConfig)
+      : null
+  },
   /** 是否已初始化并连接；Provider 不存在或未连接时返回 false */
   get isInitialized(): boolean { return currentProvider !== null && currentProvider.isConnected() },
 

@@ -34,8 +34,21 @@ export const backupHeaderSchema = z.object({
   from: z.iso.datetime().nullable(),
   requestHash: digestSchema,
 })
-const footerSchema = z.object({ type: z.literal('footer'), recordCount: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), sha256: digestSchema })
-const entrySchema = z.object({ type: z.literal('entry'), record: z.object({ id: z.string().min(1), action: z.string().min(1), resource: z.string().min(1), createdAt: z.iso.datetime(), actorSnapshot: z.unknown().optional() }).passthrough() })
+const footerSchema = z.object({
+  type: z.literal('footer'),
+  recordCount: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  sha256: digestSchema,
+})
+const entrySchema = z.object({
+  type: z.literal('entry'),
+  record: z.object({
+    id: z.string().min(1),
+    action: z.string().min(1),
+    resource: z.string().min(1),
+    createdAt: z.iso.datetime(),
+    actorSnapshot: z.unknown().optional(),
+  }).passthrough(),
+})
 
 /**
  * 按字节限制每条记录，包含换行；过大时拒绝归档，不截断审计证据。
@@ -62,7 +75,9 @@ async function* lines(source: AsyncIterable<Uint8Array>, maxBytes: number, signa
     let offset = 0
     while (offset < buffer.byteLength) {
       const newline = buffer.indexOf(10, offset)
-      const end = newline === -1 ? buffer.byteLength : newline + 1
+      const end = newline === -1
+        ? buffer.byteLength
+        : newline + 1
       const part = buffer.subarray(offset, end)
       length += part.byteLength
       if (length > maxBytes)
@@ -119,10 +134,20 @@ export async function verifyArchive(source: AsyncIterable<Uint8Array>, options: 
     const entry = entrySchema.parse(value)
     readAuditActor(entry.record.actorSnapshot)
     if (!Number.isSafeInteger(++count))
-      throw new Error('Audit archive record count exceeds safe range')
+      throw new TypeError('Audit archive record count exceeds safe range')
     hash.update(line)
   }
   if (!header || !footer)
     throw new Error('Audit archive is incomplete')
-  return { info: { id: header.id, key: options.key, recordCount: footer.recordCount, sha256: footer.sha256, createdAt: new Date(header.createdAt), cutoff: new Date(header.cutoff) }, requestHash: header.requestHash }
+  return {
+    info: {
+      id: header.id,
+      key: options.key,
+      recordCount: footer.recordCount,
+      sha256: footer.sha256,
+      createdAt: new Date(header.createdAt),
+      cutoff: new Date(header.cutoff),
+    },
+    requestHash: header.requestHash,
+  }
 }

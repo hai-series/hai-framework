@@ -29,13 +29,17 @@ test.describe('UI Gallery Compounds', () => {
     const emailBox = (await email.boundingBox())!
     expect(Math.abs(nameBox.y - emailBox.y)).toBeLessThan(1)
     expect(emailBox.x).toBeGreaterThan(nameBox.x + nameBox.width)
-    await demo.screenshot({ path: testInfo.outputPath('form-two-columns-top.png') })
+    await demo.screenshot({
+      path: testInfo.outputPath('form-two-columns-top.png'),
+    })
 
     await page.getByTestId('form-label-left').click()
     const labelBox = (await name.locator('label').boundingBox())!
     const inputBox = (await name.locator('input').boundingBox())!
     expect(inputBox.x).toBeGreaterThan(labelBox.x + labelBox.width)
-    await demo.screenshot({ path: testInfo.outputPath('form-two-columns-left.png') })
+    await demo.screenshot({
+      path: testInfo.outputPath('form-two-columns-left.png'),
+    })
     await page.getByTestId('form-columns-1').click()
     await expect.poll(async () => Math.abs(await width(notes) - await width(name))).toBeLessThan(1)
     await page.getByTestId('form-label-top').click()
@@ -64,7 +68,9 @@ test.describe('UI Gallery Compounds', () => {
     await page.getByTestId('form-save').click()
     await expect(page.getByText('表单已提交', { exact: true })).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    await demo.screenshot({ path: testInfo.outputPath('form-mobile.png') })
+    await demo.screenshot({
+      path: testInfo.outputPath('form-mobile.png'),
+    })
     expect(pageErrors).toEqual([])
   })
 
@@ -78,7 +84,12 @@ test.describe('UI Gallery Compounds', () => {
     for (const size of ['xs', 'sm', 'md', 'lg', 'xl']) {
       const inputHeight = await page.getByTestId(`aligned-input-${size}`).evaluate(element => element.getBoundingClientRect().height)
 
-      for (const component of ['select', 'combobox', 'datepicker', 'taginput']) {
+      for (const component of [
+        'select',
+        'combobox',
+        'datepicker',
+        'taginput',
+      ]) {
         const control = page.getByTestId(`aligned-${component}-${size}`)
         await expect(control).toBeVisible()
         await expect.poll(async () => control.evaluate(element => element.getBoundingClientRect().height)).toBe(inputHeight)

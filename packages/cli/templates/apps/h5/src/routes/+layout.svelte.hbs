@@ -5,14 +5,10 @@
    */
   import type { BottomNavItem } from '@h-ai/ui'
   import type { Snippet } from 'svelte'
-  import { browser } from '$app/environment'
+  import { browser } from '$app/env'
   import { goto } from '$app/navigation'
-  import { base, resolve } from '$app/paths'
+  import { resolve } from '$app/paths'
   import { page } from '$app/state'
-{{#if hasI18n}}
-  import * as m from '$lib/paraglide/messages'
-  import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
-{{/if}}
 {{#if features.crypto}}
   import { crypto } from '@h-ai/crypto'
   import { kit } from '@h-ai/kit'
@@ -30,6 +26,10 @@
 {{#if features.crypto}}
   import { untrack } from 'svelte'
 {{/if}}
+{{#if hasI18n}}
+  import * as m from '#lib/paraglide/messages.js'
+  import { getLocale, setLocale } from '#lib/paraglide/runtime.js'
+{{/if}}
   import '../app.css'
 
   interface Props {
@@ -37,7 +37,9 @@
   }
 
   const { children }: Props = $props()
-  const initialTheme = browser ? getSavedTheme() : 'light'
+  const initialTheme = browser
+    ? getSavedTheme()
+    : 'light'
   let currentTheme = $state(initialTheme)
   if (browser)
     applyTheme(initialTheme, false)
@@ -46,37 +48,71 @@
     currentTheme = theme
     applyTheme(theme)
   }
-
 {{#if features.crypto}}
-  if (browser)
-    kit.client.installBrowserTransport(untrack(() => page.data.kitConfig), { crypto, basePath: base })
+  if (browser) {
+    kit.client.installBrowserTransport(untrack(() => page.data.kitConfig), {
+      crypto,
+      basePath: resolve('/').replace(/\/$/, ''),
+    })
+  }
 {{/if}}
 {{#if features.iam}}
-  const authActions = kit.client.createAuthActions({ basePath: `${base}/api/auth` })
+  const authActions = kit.client.createAuthActions({ basePath: `${resolve('/').replace(/\/$/, '')}/api/auth` })
   $effect(() => authActions.bindPageExit({ enabled: page.data.iamPublicConfig?.session.endOnPageHide }))
 {{/if}}
 
-  const navItems: (BottomNavItem & { path: '/' | '/discover' | '/profile' })[] = [
+  const navItems: (BottomNavItem & { path: ReturnType<typeof resolve> })[] = [
 {{#if hasI18n}}
-    { id: 'home', path: '/', label: m.nav_home(), iconClass: 'icon-[tabler--home]' },
-    { id: 'discover', path: '/discover', label: m.nav_discover(), iconClass: 'icon-[tabler--compass]' },
-    { id: 'profile', path: '/profile', label: m.nav_profile(), iconClass: 'icon-[tabler--user]' },
+    {
+      id: 'home',
+      path: resolve('/'),
+      label: m.nav_home(),
+      iconClass: 'icon-[tabler--home]',
+    },
+    {
+      id: 'discover',
+      path: resolve('discover'),
+      label: m.nav_discover(),
+      iconClass: 'icon-[tabler--compass]',
+    },
+    {
+      id: 'profile',
+      path: resolve('profile'),
+      label: m.nav_profile(),
+      iconClass: 'icon-[tabler--user]',
+    },
 {{else}}
-    { id: 'home', path: '/', label: '首页', iconClass: 'icon-[tabler--home]' },
-    { id: 'discover', path: '/discover', label: '发现', iconClass: 'icon-[tabler--compass]' },
-    { id: 'profile', path: '/profile', label: '我的', iconClass: 'icon-[tabler--user]' },
+    {
+      id: 'home',
+      path: resolve('/'),
+      label: '首页',
+      iconClass: 'icon-[tabler--home]',
+    },
+    {
+      id: 'discover',
+      path: resolve('discover'),
+      label: '发现',
+      iconClass: 'icon-[tabler--compass]',
+    },
+    {
+      id: 'profile',
+      path: resolve('profile'),
+      label: '我的',
+      iconClass: 'icon-[tabler--user]',
+    },
 {{/if}}
   ]
 
-  const localPath = $derived(page.url.pathname.slice(base.length) || '/')
-  const activeNav = $derived(navItems.find(item => item.path === localPath)?.id)
+  const localPath = $derived(page.url.pathname.slice(resolve('/').replace(/\/$/, '').length) || '/')
+  const activeNav = $derived(navItems.find(item => item.path === page.url.pathname)?.id)
   // 所有页面共用页头页脚；仅业务页面显示底部导航。
   const isAuthPage = $derived(localPath.startsWith('/auth'))
 
   function handleNavigation(id: string) {
     const item = navItems.find(item => item.id === id)
     if (item)
-      void goto(resolve(item.path, {}))
+      // eslint-disable-next-line svelte/no-navigation-without-resolve -- path 仅来自上方 resolve 构造的导航表，不能二次添加挂载前缀。
+      void goto(item.path)
   }
 {{#if hasI18n}}
 

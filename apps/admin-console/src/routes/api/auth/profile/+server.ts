@@ -1,11 +1,15 @@
-import * as m from '$lib/paraglide/messages.js'
-import { normalizeUniqueConstraintError, toIamProfileResponse } from '$lib/server/iam-admin.js'
-import { UpdateProfileSchema } from '$lib/server/schemas/index.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+import * as m from '#lib/paraglide/messages.js'
+import { normalizeUniqueConstraintError, toIamProfileResponse } from '#lib/server/iam-admin.js'
+import { UpdateProfileSchema } from '#lib/server/schemas/index.js'
 
 export const GET = kit.handler(async ({ locals }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   if (!locals.accessToken) {
     return kit.response.unauthorized(m.common_error({}, { locale }))
   }
@@ -31,7 +35,11 @@ export const GET = kit.handler(async ({ locals }) => {
  */
 export const PUT = kit.handler(async ({ request, locals, cookies }) => {
   await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.profile.update')
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   if (!locals.accessToken) {
     return kit.response.unauthorized(m.common_error({}, { locale }))
   }
@@ -69,7 +77,9 @@ export const PUT = kit.handler(async ({ request, locals, cookies }) => {
       return kit.response.badRequest(
         normalizedError,
         undefined,
-        { fieldErrors: { general: normalizedError } },
+        {
+          fieldErrors: { general: normalizedError },
+        },
       )
     }
   }

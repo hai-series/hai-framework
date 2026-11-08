@@ -65,8 +65,12 @@
   let username = $state(untrack(() => initialIdentifier))
   let password = $state('')
   let selectedMethod = $state<AuthLoginMethod>('password')
-  const method = $derived(methods.includes(selectedMethod) ? selectedMethod : methods[0])
-  useToastFeedback(() => !method ? uiM('auth_unavailable') : '', 'warning')
+  const method = $derived(methods.includes(selectedMethod)
+    ? selectedMethod
+    : methods[0])
+  useToastFeedback(() => !method
+    ? uiM('auth_unavailable')
+    : '', 'warning')
   const isOtp = $derived(method === 'email' || method === 'sms')
   $effect(() => {
     if (!autoFocus || focusedInitially || disabled || loading || !method || !formElement)
@@ -90,7 +94,11 @@
   let code = $state('')
   let sending = $state(false)
   let sendFailure = $state<Pick<HaiError, 'code' | 'message' | 'traceId' | 'httpStatus'> | 'network'>()
-  const sendError = $derived(sendFailure === 'network' ? uiM('auth_network_error') : sendFailure ? authErrorMessage(sendFailure) : '')
+  const sendError = $derived(sendFailure === 'network'
+    ? uiM('auth_network_error')
+    : sendFailure
+    ? authErrorMessage(sendFailure)
+    : '')
   let resendAt = $state(0)
   let now = $state(Date.now())
   const remaining = $derived(Math.max(0, Math.ceil((resendAt - now) / 1000)))
@@ -182,7 +190,9 @@
     {#if methods.length > 1}
       <div class='grid grid-cols-2 gap-1 rounded-lg bg-base-200 p-1 sm:flex' aria-label={uiM('login_methods')}>
         {#each methods as value (value)}
-          <button type='button' class={cn('flex-1 rounded-md px-2 py-2 text-sm transition-colors', method === value ? 'bg-base-100 font-medium shadow-sm' : 'text-base-content/60')} aria-pressed={method === value} disabled={loading || disabled} onclick={() => {
+          <button type='button' class={cn('flex-1 rounded-md px-2 py-2 text-sm transition-colors', method === value
+            ? 'bg-base-100 font-medium shadow-sm'
+            : 'text-base-content/60')} aria-pressed={method === value} disabled={loading || disabled} onclick={() => {
             selectedMethod = value
             password = ''
             code = ''
@@ -195,12 +205,24 @@
     {/if}
     {#if method === 'ldap'}<p class='text-sm text-base-content/70'>{uiM('login_method_ldap_hint')}</p>{/if}
     {#if method}
-      <FormField for='login-username' label={method === 'email' ? uiM('register_email') : method === 'sms' ? uiM('register_phone') : uiM('login_username')}>
+      <FormField for='login-username' label={method === 'email'
+        ? uiM('register_email')
+        : method === 'sms'
+        ? uiM('register_phone')
+        : uiM('login_username')}>
         <Input
           id='login-username'
           name='username'
-          type={method === 'email' ? 'email' : method === 'sms' ? 'tel' : 'text'}
-          placeholder={method === 'email' ? uiM('register_email_placeholder') : method === 'sms' ? uiM('register_phone_placeholder') : uiM('login_username_placeholder')}
+          type={method === 'email'
+            ? 'email'
+            : method === 'sms'
+            ? 'tel'
+            : 'text'}
+          placeholder={method === 'email'
+            ? uiM('register_email_placeholder')
+            : method === 'sms'
+            ? uiM('register_phone_placeholder')
+            : uiM('login_username_placeholder')}
           bind:value={username}
           autocomplete='username'
           {disabled}
@@ -215,7 +237,9 @@
           <div class='flex items-start gap-2'>
             <Input id='login-code' name='code' bind:value={code} autocomplete='one-time-code' inputmode='numeric' maxlength={otpLength} pattern={`[0-9]{${otpLength}}`} placeholder={uiM('login_code_placeholder', { length: otpLength })} required {disabled} />
             <Button type='button' variant='outline' loading={sending} disabled={loading || disabled || !username.trim() || remaining > 0 || !onsendotp} onclick={sendOtp}>
-              {remaining ? uiM('login_resend_wait', { seconds: remaining }) : uiM('login_send_code')}
+              {remaining
+                ? uiM('login_resend_wait', { seconds: remaining })
+                : uiM('login_send_code')}
             </Button>
           </div>
         </FormField>

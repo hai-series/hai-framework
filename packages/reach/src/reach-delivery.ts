@@ -62,8 +62,12 @@ export async function deliverClaimedMessage(
       subject: row.subject ?? undefined,
       body: row.body ?? undefined,
       template: row.template ?? undefined,
-      vars: row.varsJson ? JSON.parse(row.varsJson) as Record<string, string> : undefined,
-      extra: row.extraJson ? JSON.parse(row.extraJson) as Record<string, unknown> : undefined,
+      vars: row.varsJson
+        ? JSON.parse(row.varsJson) as Record<string, string>
+        : undefined,
+      extra: row.extraJson
+        ? JSON.parse(row.extraJson) as Record<string, unknown>
+        : undefined,
       idempotencyKey: row.queueId,
     }
   }

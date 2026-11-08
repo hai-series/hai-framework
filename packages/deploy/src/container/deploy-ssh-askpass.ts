@@ -133,7 +133,13 @@ export interface SshAskpass {
 
 /** 不传播可能包含输入的异常；本地准备失败尚未开始 SSH 远端操作。 */
 function helperFailure(key: 'deploy_sshAskpassFailed' | 'deploy_sshAskpassCleanupFailed', reason: 'configuration' | 'timeout' = 'configuration'): HaiResult<never> {
-  return err({ ...HaiDeployError.REMOTE_COMMAND_FAILED, message: deployM(key), ext: { commandExecution: { reason, localTermination: 'not-started' } } })
+  return err({
+    ...HaiDeployError.REMOTE_COMMAND_FAILED,
+    message: deployM(key),
+    ext: {
+      commandExecution: { reason, localTermination: 'not-started' },
+    },
+  })
 }
 
 /**
@@ -182,7 +188,12 @@ export async function prepareSshAskpass(password: string, deadline: number, term
       const source = join(directory, 'askpass.cs')
       writeFileSync(source, windowsAskpassSource, { mode: 0o600 })
       const compiler = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
-      const compiled = await runCommand(compiler, ['-NoProfile', '-NonInteractive', '-Command', compileAskpassScript], {
+      const compiled = await runCommand(compiler, [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        compileAskpassScript,
+      ], {
         env: { HAI_DEPLOY_ASKPASS_SOURCE: source, HAI_DEPLOY_ASKPASS_OUTPUT: helper, HAI_DEPLOY_ASKPASS_PASSWORD: '' },
         timeoutMs: Math.max(1, Math.min(30_000, Math.ceil(deadline - performance.now()))),
         terminationTimeoutMs,
@@ -194,7 +205,9 @@ export async function prepareSshAskpass(password: string, deadline: number, term
       }
       if (!existsSync(helper)) {
         const removed = cleanup()
-        return removed.success ? helperFailure('deploy_sshAskpassFailed') : removed
+        return removed.success
+          ? helperFailure('deploy_sshAskpassFailed')
+          : removed
       }
     }
     else {
@@ -202,12 +215,25 @@ export async function prepareSshAskpass(password: string, deadline: number, term
     }
     if (deadline <= performance.now()) {
       const removed = cleanup()
-      return removed.success ? helperFailure('deploy_sshAskpassFailed', 'timeout') : removed
+      return removed.success
+        ? helperFailure('deploy_sshAskpassFailed', 'timeout')
+        : removed
     }
-    return ok({ env: { SSH_ASKPASS: helper, SSH_ASKPASS_REQUIRE: 'force', SSH_ASKPASS_PROMPT: '', DISPLAY: 'hai-deploy:0', HAI_DEPLOY_ASKPASS_PASSWORD: password }, cleanup })
+    return ok({
+      env: {
+        SSH_ASKPASS: helper,
+        SSH_ASKPASS_REQUIRE: 'force',
+        SSH_ASKPASS_PROMPT: '',
+        DISPLAY: 'hai-deploy:0',
+        HAI_DEPLOY_ASKPASS_PASSWORD: password,
+      },
+      cleanup,
+    })
   }
   catch {
     const removed = cleanup()
-    return removed.success ? helperFailure('deploy_sshAskpassFailed') : removed
+    return removed.success
+      ? helperFailure('deploy_sshAskpassFailed')
+      : removed
   }
 }

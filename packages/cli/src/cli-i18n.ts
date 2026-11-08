@@ -6,7 +6,12 @@ import jaJP from '../messages/ja-JP.json'
 import zhCN from '../messages/zh-CN.json'
 
 // 显式框架语言优先；终端地区变体映射到已有字典，不加载或生成另一套翻译。
-const environmentLocale = [process.env.HAI_CORE_DEFAULTLOCALE, process.env.LC_ALL, process.env.LC_MESSAGES, process.env.LANG].find(value => value?.trim())?.trim()
+const environmentLocale = [
+  process.env.HAI_CORE_DEFAULTLOCALE,
+  process.env.LC_ALL,
+  process.env.LC_MESSAGES,
+  process.env.LANG,
+].find(value => value?.trim())?.trim()
 const language = environmentLocale?.split(/[_.-]/)[0]?.toLowerCase()
 if (language === 'en' || language === 'c' || language === 'posix')
   core.i18n.setGlobalLocale('en-US')

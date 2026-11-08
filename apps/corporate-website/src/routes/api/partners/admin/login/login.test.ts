@@ -1,7 +1,7 @@
-import { getPartnerAdminSessionByToken } from '$lib/server/partner-service.js'
 import { cache } from '@h-ai/cache'
 import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getPartnerAdminSessionByToken } from '#lib/server/partner-service.js'
 import { POST } from './+server.js'
 
 beforeEach(async () => {
@@ -26,14 +26,19 @@ function loginEvent(): { event: Parameters<typeof POST>[0], setCookie: ReturnTyp
       }),
       locals: { locale: 'en-US', requestId: 'session-persistence-test' },
       // handler 只使用 set；保持标准函数类型，spy 留在外部用于断言。
-      cookies: { set: (...args: Parameters<Parameters<typeof POST>[0]['cookies']['set']>) => setCookie(...args) },
+      cookies: {
+        set: (...args: Parameters<Parameters<typeof POST>[0]['cookies']['set']>) => setCookie(...args),
+      },
     } as Parameters<typeof POST>[0],
     setCookie,
   }
 }
 
 describe('partner admin session persistence', () => {
-  it.each([ok(false), err(HaiCommonError.INTERNAL_ERROR, 'Cache unavailable')])('写入未生效或失败时返回 503 且不设置 cookie', async (failure) => {
+  it.each([
+    ok(false),
+    err(HaiCommonError.INTERNAL_ERROR, 'Cache unavailable'),
+  ])('写入未生效或失败时返回 503 且不设置 cookie', async (failure) => {
     vi.spyOn(cache.kv, 'set').mockResolvedValueOnce(failure)
     const { event, setCookie } = loginEvent()
     const response = await POST(event)

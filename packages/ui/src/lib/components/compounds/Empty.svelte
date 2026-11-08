@@ -47,11 +47,19 @@
   )
 
   const iconSize = $derived(
-    size === 'sm' ? 'w-12 h-12' : size === 'lg' ? 'w-24 h-24' : 'w-16 h-16',
+    size === 'sm'
+      ? 'w-12 h-12'
+      : size === 'lg'
+      ? 'w-24 h-24'
+      : 'w-16 h-16',
   )
 
   const titleSize = $derived(
-    size === 'sm' ? 'text-sm' : size === 'lg' ? 'text-xl' : 'text-base',
+    size === 'sm'
+      ? 'text-sm'
+      : size === 'lg'
+      ? 'text-xl'
+      : 'text-base',
   )
 </script>
 

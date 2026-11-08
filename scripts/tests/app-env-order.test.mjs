@@ -16,7 +16,9 @@ describe('应用环境说明跨文件系统一致性', () => {
         ...actual,
         readdir: async (...args) => {
           const entries = await actual.readdir(...args)
-          return order === 'reverse' ? entries.reverse() : entries
+          return order === 'reverse'
+            ? entries.reverse()
+            : entries
         },
         readFile: async (file, ...args) => {
           if (String(file).endsWith('.env.local'))

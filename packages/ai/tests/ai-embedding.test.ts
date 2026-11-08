@@ -19,7 +19,9 @@ vi.mock('openai', () => {
     default: class MockOpenAI {
       embeddings = {
         create: vi.fn(async (params: { input: string | string[], model?: string }) => {
-          const input = Array.isArray(params.input) ? params.input : [params.input]
+          const input = Array.isArray(params.input)
+            ? params.input
+            : [params.input]
           return {
             model: params.model ?? 'text-embedding-3-small',
             data: input.map((_text: string, i: number) => ({
@@ -72,7 +74,9 @@ describe('embedding operations', () => {
 
   it('embed 多个文本（不超过 batchSize）', async () => {
     const ops = createEmbeddingOperations(mockConfig)
-    const result = await ops.embed({ input: ['Text A', 'Text B'] })
+    const result = await ops.embed({
+      input: ['Text A', 'Text B'],
+    })
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.data.length).toBe(2)
@@ -82,7 +86,9 @@ describe('embedding operations', () => {
   it('embed 多个文本（超过 batchSize 自动分批）', async () => {
     const ops = createEmbeddingOperations(mockConfig)
     // batchSize=2，输入三个文本
-    const result = await ops.embed({ input: ['A', 'B', 'C'] })
+    const result = await ops.embed({
+      input: ['A', 'B', 'C'],
+    })
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.data.length).toBe(3)
@@ -161,8 +167,18 @@ describe('embedding operations', () => {
         apiKey: 'shared-key',
         model: 'gpt-4',
         models: [
-          { id: 'embed-a', model: 'text-embedding-3-small', apiKey: 'shared-key', baseUrl: 'https://a.example.com/v1' },
-          { id: 'embed-b', model: 'text-embedding-3-large', apiKey: 'shared-key', baseUrl: 'https://b.example.com/v1' },
+          {
+            id: 'embed-a',
+            model: 'text-embedding-3-small',
+            apiKey: 'shared-key',
+            baseUrl: 'https://a.example.com/v1',
+          },
+          {
+            id: 'embed-b',
+            model: 'text-embedding-3-large',
+            apiKey: 'shared-key',
+            baseUrl: 'https://b.example.com/v1',
+          },
         ],
       },
       embedding: { batchSize: 100 },

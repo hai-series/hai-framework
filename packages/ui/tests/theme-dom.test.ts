@@ -5,7 +5,10 @@ import { applyTheme, THEMES } from '../src/lib/theme-config.js'
 const originalTheme = document.documentElement.getAttribute('data-theme')
 const originalStyle = document.documentElement.getAttribute('style')
 afterEach(() => {
-  for (const [name, value] of [['data-theme', originalTheme], ['style', originalStyle]] as const) {
+  for (const [name, value] of [
+    ['data-theme', originalTheme],
+    ['style', originalStyle],
+  ] as const) {
     if (value === null)
       document.documentElement.removeAttribute(name)
     else

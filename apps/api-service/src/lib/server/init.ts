@@ -87,7 +87,16 @@ async function doInit(): Promise<void> {
   // 1. 加载配置
   core.init({
     configDir: './config',
-    configSchemas: { ai: AIConfigSchema, cache: CacheConfigSchema, iam: IamConfigSchema, reach: ReachConfigSchema, db: ReldbConfigSchema, storage: StorageConfigSchema, vecdb: VecdbConfigSchema, serv: ServConfigSchema },
+    configSchemas: {
+      ai: AIConfigSchema,
+      cache: CacheConfigSchema,
+      iam: IamConfigSchema,
+      reach: ReachConfigSchema,
+      db: ReldbConfigSchema,
+      storage: StorageConfigSchema,
+      vecdb: VecdbConfigSchema,
+      serv: ServConfigSchema,
+    },
     logging: { level: 'info' },
   })
 
@@ -234,21 +243,48 @@ async function doCloseApp(): Promise<void> {
 async function cleanupModules(): Promise<void> {
   const failures: unknown[] = []
   const closers: Array<readonly [string, () => unknown]> = [
-    ['ai', () => ai.close()],
-    ['storage', () => storage.close()],
-    ['iam', () => iam.close()],
-    ['reach', () => reach.close()],
-    ['vecdb', () => vecdb.close()],
-    ['cache', () => cache.close()],
-    ['reldb', () => reldb.close()],
+    [
+      'ai',
+      () => ai.close(),
+    ],
+    [
+      'storage',
+      () => storage.close(),
+    ],
+    [
+      'iam',
+      () => iam.close(),
+    ],
+    [
+      'reach',
+      () => reach.close(),
+    ],
+    [
+      'vecdb',
+      () => vecdb.close(),
+    ],
+    [
+      'cache',
+      () => cache.close(),
+    ],
+    [
+      'reldb',
+      () => reldb.close(),
+    ],
   ]
-  if (cryptoInitialized)
-    closers.push(['crypto', () => crypto.close()])
+  if (cryptoInitialized) {
+    closers.push([
+      'crypto',
+      () => crypto.close(),
+    ])
+  }
   for (const [name, close] of closers) {
     try {
       const result = await close()
       if (result && typeof result === 'object' && 'success' in result && result.success === false) {
-        failures.push('error' in result ? result.error : new Error('Module close failed'))
+        failures.push('error' in result
+          ? result.error
+          : new Error('Module close failed'))
         core.logger.warn(`Module close failed: ${name}`)
         continue
       }

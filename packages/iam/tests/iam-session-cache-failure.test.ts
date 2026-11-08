@@ -7,7 +7,15 @@ import { createSessionOperations } from '../src/session/iam-session-functions.js
 import { acquireRedisContainer } from './helpers/redis-container.js'
 
 async function operations() {
-  const result = await createSessionOperations({ readCredential: async () => ({ success: true, data: { version: '', available: true } }), config: IamConfigSchema.parse({ session: { sliding: false } }) })
+  const result = await createSessionOperations({
+    readCredential: async () => ({
+      success: true,
+      data: { version: '', available: true },
+    }),
+    config: IamConfigSchema.parse({
+      session: { sliding: false },
+    }),
+  })
   if (!result.success)
     throw new Error(result.error.message)
   return result.data
@@ -36,12 +44,16 @@ it.each(['read', 'commit'] as const)('真实Redis的%s故障保留完整用户�
     const spy = mode === 'read'
       ? vi.spyOn(cache.kv, 'get').mockResolvedValueOnce(failure)
       : vi.spyOn(cache.kv, 'compareAndSwap').mockResolvedValueOnce(failure)
-    expect((await ops.patchUserSessions(first.data.userId, { roles: ['changed'] })).success).toBe(false)
+    expect((await ops.patchUserSessions(first.data.userId, {
+      roles: ['changed'],
+    })).success).toBe(false)
     spy.mockRestore()
     expect(await cache.kv.get(key)).toEqual(before)
     expect((await ops.verifyToken(first.data.accessToken)).success).toBe(true)
     expect((await ops.verifyToken(second.data.accessToken)).success).toBe(true)
-    expect((await ops.patchUserSessions(first.data.userId, { roles: ['recovered'] })).success).toBe(true)
+    expect((await ops.patchUserSessions(first.data.userId, {
+      roles: ['recovered'],
+    })).success).toBe(true)
     const recovered = await ops.get(first.data.accessToken)
     expect(recovered.success && recovered.data?.roles).toEqual(['recovered'])
     expect(await ops.deleteByUserId(first.data.userId)).toEqual({ success: true, data: 2 })

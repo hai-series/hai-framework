@@ -13,10 +13,13 @@ const config = {
 }
 
 function sdkError(name: string, httpStatusCode: number): Error {
-  return Object.assign(new Error(name), { name, $metadata: { httpStatusCode } })
+  return Object.assign(new Error(name), {
+    name,
+    $metadata: { httpStatusCode },
+  })
 }
 
-describe.sequential('storage.init optional S3 bucket creation', () => {
+describe('storage.init optional S3 bucket creation', { concurrent: false }, () => {
   beforeEach(async () => {
     await storage.close()
     vi.spyOn(S3Client.prototype, 'send').mockResolvedValue({})
@@ -67,10 +70,17 @@ describe.sequential('storage.init optional S3 bucket creation', () => {
     expect(creation).toBeInstanceOf(CreateBucketCommand)
     expect(creation.input).toEqual(region === 'us-east-1'
       ? { Bucket: config.bucket }
-      : { Bucket: config.bucket, CreateBucketConfiguration: { LocationConstraint: region } })
+      : {
+          Bucket: config.bucket,
+          CreateBucketConfiguration: { LocationConstraint: region },
+        })
   })
 
-  it.each([sdkError('AccessDenied', 403), sdkError('ServiceUnavailable', 503), new Error('network interrupted')])('does not create on an uncertain or forbidden HeadBucket response: %s', async (error) => {
+  it.each([
+    sdkError('AccessDenied', 403),
+    sdkError('ServiceUnavailable', 503),
+    new Error('network interrupted'),
+  ])('does not create on an uncertain or forbidden HeadBucket response: %s', async (error) => {
     const send = vi.mocked(S3Client.prototype.send)
     send.mockRejectedValueOnce(error)
     const destroy = vi.spyOn(S3Client.prototype, 'destroy')
@@ -80,7 +90,10 @@ describe.sequential('storage.init optional S3 bucket creation', () => {
     expect(destroy).toHaveBeenCalledTimes(2)
     expect(storage.isInitialized).toBe(false)
     expect(storage.config).toBeNull()
-    expect(await storage.file.exists('a.txt')).toMatchObject({ success: false, error: { code: HaiStorageError.NOT_INITIALIZED.code } })
+    expect(await storage.file.exists('a.txt')).toMatchObject({
+      success: false,
+      error: { code: HaiStorageError.NOT_INITIALIZED.code },
+    })
   })
 
   it('releases both SDK clients when bucket creation fails', async () => {
@@ -88,7 +101,10 @@ describe.sequential('storage.init optional S3 bucket creation', () => {
     send.mockRejectedValueOnce(sdkError('NoSuchBucket', 404)).mockRejectedValueOnce(sdkError('AccessDenied', 403))
     const destroy = vi.spyOn(S3Client.prototype, 'destroy')
     const result = await storage.init({ ...config, createBucket: true })
-    expect(result).toMatchObject({ success: false, error: { code: HaiStorageError.PERMISSION_DENIED.code } })
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: HaiStorageError.PERMISSION_DENIED.code },
+    })
     expect(destroy).toHaveBeenCalledTimes(2)
     expect(storage.isInitialized).toBe(false)
     expect(send).toHaveBeenCalledTimes(2)
@@ -98,7 +114,12 @@ describe.sequential('storage.init optional S3 bucket creation', () => {
     const send = vi.mocked(S3Client.prototype.send)
     send.mockRejectedValueOnce(sdkError('NotFound', 404)).mockRejectedValueOnce(sdkError('BucketAlreadyOwnedByYou', 409))
     expect((await storage.init({ ...config, createBucket: true })).success).toBe(true)
-    expect(send.mock.calls.map(([command]) => command.constructor.name)).toEqual(['HeadBucketCommand', 'CreateBucketCommand', 'HeadBucketCommand', 'ListObjectsV2Command'])
+    expect(send.mock.calls.map(([command]) => command.constructor.name)).toEqual([
+      'HeadBucketCommand',
+      'CreateBucketCommand',
+      'HeadBucketCommand',
+      'ListObjectsV2Command',
+    ])
   })
 
   it.each(['BucketAlreadyExists', 'BucketAlreadyOwnedByYou'])('does not accept %s without access', async (name) => {

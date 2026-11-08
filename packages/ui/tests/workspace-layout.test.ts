@@ -9,7 +9,10 @@ import WorkspaceLayoutHarness from './fixtures/WorkspaceLayoutHarness.svelte'
 const closeDescriptor = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close')
 beforeEach(() => {
   // jsdom 尚未提供原生 dialog.close；本套件验证标题与工具栏，不验证弹窗宿主。
-  Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value: vi.fn() })
+  Object.defineProperty(HTMLDialogElement.prototype, 'close', {
+    configurable: true,
+    value: vi.fn(),
+  })
 })
 afterEach(() => {
   if (closeDescriptor)
@@ -23,15 +26,24 @@ afterEach(() => {
 it.each(['header', 'settings'] as const)('%s 导航保留单一页面标题，说明及操作保留，导航变化后独立标题恢复', async (mode) => {
   const target = document.createElement('div')
   document.body.append(target)
-  const component = mount(WorkspaceLayoutHarness, { target, props: { mode } })
+  const component = mount(WorkspaceLayoutHarness, {
+    target,
+    props: { mode },
+  })
   try {
     flushSync()
-    expect([...target.querySelectorAll('h1')].map(element => element.textContent)).toEqual(['Records'])
+    expect([
+      ...target.querySelectorAll('h1'),
+    ].map(element => element.textContent)).toEqual(['Records'])
     expect(target.textContent).toContain('Record details')
-    expect([...target.querySelectorAll('button')].some(button => button.textContent === 'Export')).toBe(true)
+    expect([
+      ...target.querySelectorAll('button'),
+    ].some(button => button.textContent === 'Export')).toBe(true)
     target.querySelector<HTMLButtonElement>('button')!.click()
     flushSync()
-    expect([...target.querySelectorAll('h1')].map(element => element.textContent)).toEqual(['Other', 'Records'])
+    expect([
+      ...target.querySelectorAll('h1'),
+    ].map(element => element.textContent)).toEqual(['Other', 'Records'])
   }
   finally {
     await unmount(component)
@@ -43,11 +55,18 @@ it('导航已承载CRUD标题时，未启用搜索也保留新建及自定义操
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
   const target = document.createElement('div')
   document.body.append(target)
-  const component = mount(WorkspaceLayoutHarness, { target, props: { mode: 'crud' } })
+  const component = mount(WorkspaceLayoutHarness, {
+    target,
+    props: { mode: 'crud' },
+  })
   try {
     flushSync()
-    expect([...target.querySelectorAll('h1')].map(element => element.textContent)).toEqual(['Records'])
-    const buttons = [...target.querySelectorAll('button')].map(button => button.textContent?.trim())
+    expect([
+      ...target.querySelectorAll('h1'),
+    ].map(element => element.textContent)).toEqual(['Records'])
+    const buttons = [
+      ...target.querySelectorAll('button'),
+    ].map(button => button.textContent?.trim())
     expect(buttons).toContain('Import')
     expect(buttons.some(label => label?.includes('新建'))).toBe(true)
   }
@@ -85,7 +104,9 @@ it('筛选收起不卸载或丢值，常驻搜索、重置和已选提示可用'
     expect(input.value).toBe('Changed')
     toggle.click()
     flushSync()
-    const reset = [...target.querySelectorAll('button')].find(button => button.textContent?.trim() === '重置')!
+    const reset = [
+      ...target.querySelectorAll('button'),
+    ].find(button => button.textContent?.trim() === '重置')!
     reset.click()
     flushSync()
     expect(input.value).toBe('')
@@ -104,7 +125,10 @@ it('搜索草稿输入后等待也不自动查询，显式提交才查询', asyn
   const target = document.createElement('div')
   document.body.append(target)
   const onsearch = vi.fn()
-  const component = mount(CrudFilterBar, { target, props: { onsearch } })
+  const component = mount(CrudFilterBar, {
+    target,
+    props: { onsearch },
+  })
   try {
     flushSync()
     const input = target.querySelector<HTMLInputElement>('input')!
@@ -125,7 +149,15 @@ it('搜索草稿输入后等待也不自动查询，显式提交才查询', asyn
 it('声明式筛选默认可收起，已有条件在收起时仍保留', async () => {
   const target = document.createElement('div')
   document.body.append(target)
-  const component = mount(CrudFilterBar, { target, props: { filterFields: [{ id: 'name', label: 'Name', type: 'text' }], filterValues: { name: 'Ada' } } })
+  const component = mount(CrudFilterBar, {
+    target,
+    props: {
+      filterFields: [
+        { id: 'name', label: 'Name', type: 'text' },
+      ],
+      filterValues: { name: 'Ada' },
+    },
+  })
   try {
     flushSync()
     const toggle = target.querySelector<HTMLButtonElement>('[aria-controls]')

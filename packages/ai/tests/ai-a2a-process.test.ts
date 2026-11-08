@@ -10,14 +10,18 @@ import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
+import { TaskState } from '@a2a-js/sdk'
 import { reldb } from '@h-ai/reldb'
 import { expect, it } from 'vitest'
 import { mysqlEnv, postgresEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
 import { acquireQdrantContainer } from '../../vecdb/tests/helpers/qdrant-container.js'
+import { decodeA2AResult } from './helpers/a2a-wire.js'
 
 interface Reply { id?: number, phase?: string, taskId?: string, body?: { result?: Task, error?: unknown }, event?: unknown, done?: boolean, failed?: boolean }
 async function start(dbConfig: ReldbConfigInput, vecdbConfig: VecdbConfigInput, production: boolean) {
-  const child = spawn(process.execPath, [fileURLToPath(new URL('./fixtures/a2a-node.mjs', import.meta.url))], {
+  const child = spawn(process.execPath, [
+    fileURLToPath(new URL('./fixtures/a2a-node.mjs', import.meta.url)),
+  ], {
     env: {
       ...process.env,
       NODE_ENV: production ? 'production' : 'test',
@@ -55,7 +59,10 @@ async function start(dbConfig: ReldbConfigInput, vecdbConfig: VecdbConfigInput, 
     wait,
     send(method: string, params: unknown) {
       const id = ++serial
-      child.send({ id, request: { jsonrpc: '2.0', id, method, params } })
+      child.send({
+        id,
+        request: { jsonrpc: '2.0', id, method, params },
+      })
       return id
     },
     async request(method: string, params: unknown) {
@@ -64,6 +71,12 @@ async function start(dbConfig: ReldbConfigInput, vecdbConfig: VecdbConfigInput, 
       expect(reply.failed).not.toBe(true)
       if (!reply.body)
         throw new Error('Missing response')
+      if (reply.body.result) {
+        const result = decodeA2AResult(reply.body.result)
+        if (!('id' in result))
+          throw new Error('Expected task result')
+        return { ...reply.body, result }
+      }
       return reply.body
     },
     async close() {
@@ -93,12 +106,29 @@ it.each(['sqlite', 'postgresql', 'mysql'] as const)('真实双Node %s 跨节点�
   const nodes: Awaited<ReturnType<typeof start>>[] = []
   let releaseDatabase: (() => Promise<void>) | undefined
   let releaseVectors: (() => Promise<void>) | undefined
-  const message = (id: string, text: string, taskId?: string) => ({ message: { kind: 'message', role: 'user', messageId: id, taskId, parts: [{ kind: 'text', text }] } })
+  const message = (id: string, text: string, taskId?: string) => ({
+    message: {
+      role: 'ROLE_USER',
+      messageId: id,
+      taskId,
+      parts: [
+        { text },
+      ],
+    },
+  })
   try {
-    let dbConfig: ReldbConfigInput = { type: 'sqlite', database: join(directory, 'shared.db') }
-    let vecdbConfig: VecdbConfigInput = { type: 'lancedb', path: join(directory, 'vectors') }
+    let dbConfig: ReldbConfigInput = {
+      type: 'sqlite',
+      database: join(directory, 'shared.db'),
+    }
+    let vecdbConfig: VecdbConfigInput = {
+      type: 'lancedb',
+      path: join(directory, 'vectors'),
+    }
     if (backend !== 'sqlite') {
-      const database = await (backend === 'postgresql' ? postgresEnv() : mysqlEnv())
+      const database = await (backend === 'postgresql'
+        ? postgresEnv()
+        : mysqlEnv())
       dbConfig = database.config
       releaseDatabase = database.release
       const vectors = await acquireQdrantContainer()
@@ -106,44 +136,57 @@ it.each(['sqlite', 'postgresql', 'mysql'] as const)('真实双Node %s 跨节点�
       releaseVectors = () => vectors.release()
     }
     expect((await reldb.init(dbConfig)).success).toBe(true)
-    expect((await reldb.ddl.createTable('a2a_test_effects', { id: { type: 'INTEGER', primaryKey: true, autoIncrement: true }, task_id: { type: 'TEXT' }, message_id: { type: 'TEXT' } }, true)).success).toBe(true)
-    expect((await reldb.ddl.createTable('a2a_test_cancels', { id: { type: 'INTEGER', primaryKey: true, autoIncrement: true }, task_id: { type: 'TEXT' } }, true)).success).toBe(true)
+    expect((await reldb.ddl.createTable('a2a_test_effects', {
+      id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+      task_id: { type: 'TEXT' },
+      message_id: { type: 'TEXT' },
+    }, true)).success).toBe(true)
+    expect((await reldb.ddl.createTable('a2a_test_cancels', {
+      id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+      task_id: { type: 'TEXT' },
+    }, true)).success).toBe(true)
     const a = await start(dbConfig, vecdbConfig, backend !== 'sqlite')
     nodes.push(a)
     const b = await start(dbConfig, vecdbConfig, backend !== 'sqlite')
     nodes.push(b)
-    const held = await a.request('message/send', { ...message('held', 'hold'), configuration: { blocking: false } })
+    const held = await a.request('SendMessage', {
+      ...message('held', 'hold'),
+      configuration: { returnImmediately: true },
+    })
     expect(held.error).toBeUndefined()
     const task = held.result!
-    const subscription = b.send('tasks/resubscribe', { id: task.id })
+    const subscription = b.send('SubscribeToTask', { id: task.id })
     expect((await b.wait(reply => reply.id === subscription && reply.event !== undefined)).event).toBeDefined()
-    const cancelled = await b.request('tasks/cancel', { id: task.id })
-    expect(cancelled.result?.status.state).toBe('canceled')
+    const cancelled = await b.request('CancelTask', { id: task.id })
+    expect(cancelled.result?.status.state).toBe(TaskState.TASK_STATE_CANCELED)
     await b.wait(reply => reply.id === subscription && reply.done === true)
     const count = await reldb.sql.get<{ total: number }>('SELECT COUNT(*) AS total FROM a2a_test_cancels WHERE task_id = ?', [task.id])
     expect(count.success && Number(count.data?.total)).toBe(1)
 
-    const awaiting = await a.request('message/send', message('first', 'input'))
-    expect(awaiting.result?.status.state).toBe('input-required')
+    const awaiting = await a.request('SendMessage', message('first', 'input'))
+    expect(awaiting.result?.status.state).toBe(TaskState.TASK_STATE_INPUT_REQUIRED)
     await a.close()
-    const resumed = await b.request('message/send', message('second', 'resume', awaiting.result!.id))
-    expect(resumed.result?.status.state).toBe('completed')
-    const replay = await b.request('message/send', message('second', 'resume', awaiting.result!.id))
-    expect(replay.result?.status.state).toBe('completed')
+    const resumed = await b.request('SendMessage', message('second', 'resume', awaiting.result!.id))
+    expect(resumed.result?.status.state).toBe(TaskState.TASK_STATE_COMPLETED)
+    const replay = await b.request('SendMessage', message('second', 'resume', awaiting.result!.id))
+    expect(replay.result?.status.state).toBe(TaskState.TASK_STATE_COMPLETED)
     const effects = await reldb.sql.get<{ total: number }>('SELECT COUNT(*) AS total FROM a2a_test_effects WHERE task_id = ? AND message_id = ?', [awaiting.result!.id, 'second'])
     expect(effects.success && Number(effects.data?.total)).toBe(1)
 
     const restarted = await start(dbConfig, vecdbConfig, backend !== 'sqlite')
     nodes.push(restarted)
-    const paused = await restarted.request('message/send', { ...message('paused', 'pause'), configuration: { blocking: false } })
+    const paused = await restarted.request('SendMessage', {
+      ...message('paused', 'pause'),
+      configuration: { returnImmediately: true },
+    })
     await restarted.wait(reply => reply.phase === 'paused')
     await delay(1200)
-    const interrupted = await b.request('tasks/get', { id: paused.result!.id })
-    expect(interrupted.result?.status.state).toBe('failed')
+    const interrupted = await b.request('GetTask', { id: paused.result!.id })
+    expect(interrupted.result?.status.state).toBe(TaskState.TASK_STATE_FAILED)
     await delay(1800)
-    const after = await b.request('tasks/get', { id: paused.result!.id })
-    expect(after.result?.status.state).toBe('failed')
-    const notReplayed = await b.request('message/send', message('attempt-recovery', 'resume', paused.result!.id))
+    const after = await b.request('GetTask', { id: paused.result!.id })
+    expect(after.result?.status.state).toBe(TaskState.TASK_STATE_FAILED)
+    const notReplayed = await b.request('SendMessage', message('attempt-recovery', 'resume', paused.result!.id))
     expect(notReplayed.error).toBeDefined()
     const once = await reldb.sql.get<{ total: number }>('SELECT COUNT(*) AS total FROM a2a_test_effects WHERE task_id = ?', [paused.result!.id])
     expect(once.success && Number(once.data?.total)).toBe(1)

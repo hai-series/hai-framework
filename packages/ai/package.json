@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/ai",
   "type": "module",
-  "version": "1.0.0-beta.18",
+  "version": "1.0.0-beta.19",
   "description": "Hai Framework AI module (LLM, MCP, tools, and clients).",
   "license": "Apache-2.0",
   "exports": {
@@ -50,14 +50,6 @@
     "agent:build": "node models/agents/build.mjs",
     "test:e2e": "vitest run tests/ai-acp.e2e.test.ts tests/ai-acp-transport.e2e.test.ts tests/ai-acp-container.e2e.test.ts tests/ai-acp-native.e2e.test.ts tests/ai-acp-openrouter.e2e.test.ts tests/ai-acp-goose.e2e.test.ts"
   },
-  "peerDependencies": {
-    "@qdrant/js-client-rest": "1.18.0"
-  },
-  "peerDependenciesMeta": {
-    "@qdrant/js-client-rest": {
-      "optional": true
-    }
-  },
   "dependencies": {
     "@a2a-js/sdk": "catalog:",
     "@agentclientprotocol/sdk": "catalog:",
@@ -67,15 +59,12 @@
     "@h-ai/reldb": "workspace:*",
     "@h-ai/vecdb": "workspace:*",
     "@modelcontextprotocol/sdk": "catalog:",
-    "mem0ai": "catalog:",
     "nanoid": "catalog:",
     "openai": "catalog:",
+    "parse5": "catalog:",
     "undici": "catalog:",
     "ws": "catalog:",
     "zod": "catalog:"
-  },
-  "optionalDependencies": {
-    "better-sqlite3": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -150,7 +150,12 @@ import { mailService, smsService } from './notifications.js'
 const initialized = await iam.init({
   otp: { email: true, sms: true },
   onOtpSendEmail: async (email, code, context) => {
-    await mailService.send({ to: email, subject: 'Verification code', text: code, idempotencyKey: context.idempotencyKey })
+    await mailService.send({
+      to: email,
+      subject: 'Verification code',
+      text: code,
+      idempotencyKey: context.idempotencyKey
+    })
   },
   onOtpSendSms: async (phone, code, context) => {
     await smsService.send({ to: phone, code, idempotencyKey: context.idempotencyKey })
@@ -161,7 +166,13 @@ const initialized = await iam.init({
       throw new Error('Reset recipient unavailable')
     const url = new URL('https://app.example.com/auth/reset-password')
     url.searchParams.set('token', token)
-    await mailService.send({ to: user.email, subject: 'Password reset', text: url.toString(), expiresAt: context.expiresAt, idempotencyKey: context.idempotencyKey })
+    await mailService.send({
+      to: user.email,
+      subject: 'Password reset',
+      text: url.toString(),
+      expiresAt: context.expiresAt,
+      idempotencyKey: context.idempotencyKey
+    })
   },
 })
 if (!initialized.success)
@@ -589,7 +600,9 @@ async function listReaders(page: number) {
 
 async function loadUsers(userIds: readonly string[]) {
   // 最多 1000 个输入 ID；去重保留输入顺序，缺失 ID 省略。
-  return iam.user.getUsers(userIds, { include: ['roles'] })
+  return iam.user.getUsers(userIds, {
+    include: ['roles']
+  })
 }
 
 async function makeUserDormant(userId: string) {

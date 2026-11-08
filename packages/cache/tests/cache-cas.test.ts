@@ -9,10 +9,16 @@ function tests() {
     await cache.kv.compareAndSwap('cas:snapshot', undefined, value)
     value.revision = 2
     const snapshot = await cache.kv.get<{ revision: number }>('cas:snapshot')
-    expect(snapshot).toEqual({ success: true, data: { revision: 1 } })
+    expect(snapshot).toEqual({
+      success: true,
+      data: { revision: 1 },
+    })
     if (snapshot.success && snapshot.data)
       snapshot.data.revision = 3
-    expect(await cache.kv.get('cas:snapshot')).toEqual({ success: true, data: { revision: 1 } })
+    expect(await cache.kv.get('cas:snapshot')).toEqual({
+      success: true,
+      data: { revision: 1 },
+    })
   })
   it('区分不存在与JSON null，条件失败不改变值', async () => {
     expect(await cache.kv.compareAndSwap('cas:null', undefined, null)).toEqual({ success: true, data: true })
@@ -26,7 +32,9 @@ function tests() {
     const results = await Promise.all(Array.from({ length: 16 }, (_, candidate) => cache.kv.compareAndSwap('cas:race', undefined, { candidate })))
     expect(results.filter(result => result.success && result.data)).toHaveLength(1)
     const latest = await cache.kv.get('cas:race')
-    expect(latest.success && latest.data).toMatchObject({ candidate: expect.any(Number) })
+    expect(latest.success && latest.data).toMatchObject({
+      candidate: expect.any(Number),
+    })
     expect(await cache.kv.compareAndSwap('cas:race', { candidate: -1 }, 'stale')).toEqual({ success: true, data: false })
   })
 
@@ -35,7 +43,12 @@ function tests() {
     expect(await cache.kv.compareAndSwap('cas:ttl', 'first', 'second', { keepTtl: true })).toEqual({ success: true, data: true })
     const ttl = await cache.kv.ttl('cas:ttl')
     expect(ttl.success && ttl.data).toBeGreaterThanOrEqual(58)
-    for (const options of [{ px: 0 }, { px: -1 }, { px: 1.5 }, { px: 1, keepTtl: true }]) {
+    for (const options of [
+      { px: 0 },
+      { px: -1 },
+      { px: 1.5 },
+      { px: 1, keepTtl: true },
+    ]) {
       expect((await cache.kv.compareAndSwap('cas:ttl', 'second', 'invalid', options)).success).toBe(false)
       expect(await cache.kv.get('cas:ttl')).toEqual({ success: true, data: 'second' })
     }

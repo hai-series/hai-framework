@@ -84,7 +84,9 @@
       styles.push('--hai-modal-panel-overflow: visible')
     }
 
-    return styles.length > 0 ? styles.join('; ') : undefined
+    return styles.length > 0
+      ? styles.join('; ')
+      : undefined
   })
 
   const modalBoxClass = $derived(
@@ -146,7 +148,11 @@
       <div class='hai-modal__backdrop' aria-hidden='true'></div>
     {/if}
 
-    <div bind:this={panel} class={modalBoxClass} style={panelStyle} role='dialog' aria-modal='true' aria-labelledby={title && !header ? titleId : undefined} aria-label={title && !header ? undefined : title || uiM('common_dialog')} tabindex='-1'>
+    <div bind:this={panel} class={modalBoxClass} style={panelStyle} role='dialog' aria-modal='true' aria-labelledby={title && !header
+      ? titleId
+      : undefined} aria-label={title && !header
+      ? undefined
+      : title || uiM('common_dialog')} tabindex='-1'>
       {#if hasFloatingClose}
         <button
           type='button'

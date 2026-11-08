@@ -22,7 +22,12 @@ export function createAppProcedures(options: CreateAppProceduresOptions) {
     .context<ServContext>()
     .route('info', async () => {
       const settings = await readBusinessSettings()
-      return settings.success ? ok({ ...createAppInfo(options), notice: settings.data.notice }) : settings
+      return settings.success
+        ? ok({
+            ...createAppInfo(options),
+            notice: settings.data.notice,
+          })
+        : settings
     })
     .route('echo', ({ input, context }) => {
       const data: AppEchoOutputData = {

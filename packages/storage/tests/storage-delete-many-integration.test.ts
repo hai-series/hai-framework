@@ -12,7 +12,10 @@ import { acquireRustfsContainer } from './helpers/rustfs-container'
 async function interruptDeleteResponses(endpoint: string) {
   let deleteRequests = 0
   const server = createServer((incoming, outgoing) => {
-    const target = new URL(incoming.url ?? '/', endpoint)
+    const requested = new URL(incoming.url ?? '/', 'http://fixture.invalid')
+    const target = new URL(endpoint)
+    target.pathname = requested.pathname
+    target.search = requested.search
     const isDelete = incoming.method === 'POST' && target.searchParams.has('delete')
     const forwarded = request(target, { method: incoming.method, headers: incoming.headers }, (response) => {
       if (isDelete) {
@@ -40,10 +43,57 @@ async function interruptDeleteResponses(endpoint: string) {
     get deleteRequests() { return deleteRequests },
     async close() {
       server.closeAllConnections()
-      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+      await new Promise<void>((resolve, reject) => server.close(error => error
+        ? reject(error)
+        : resolve()))
     },
   }
 }
+
+it('故障代理固定S3目标origin，不转发absolute-form请求到其他服务', async () => {
+  let unexpected = 0
+  const target = createServer((_request, response) => response.end('s3-origin'))
+  const attacker = createServer((_request, response) => {
+    unexpected++
+    response.end('unexpected-origin')
+  })
+  let proxy: Awaited<ReturnType<typeof interruptDeleteResponses>> | undefined
+  const listen = async (server: ReturnType<typeof createServer>) => {
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string')
+      throw new Error('Missing owned proxy target')
+    return `http://127.0.0.1:${address.port}`
+  }
+  try {
+    const trusted = await listen(target)
+    const untrusted = await listen(attacker)
+    proxy = await interruptDeleteResponses(trusted)
+    const address = new URL(proxy.endpoint)
+    const body = await new Promise<string>((resolve, reject) => {
+      const client = request({ hostname: address.hostname, port: address.port, path: `${untrusted}/probe?value=1` }, (response) => {
+        let value = ''
+        response.setEncoding('utf8')
+        response.on('data', chunk => value += chunk)
+        response.on('end', () => resolve(value))
+      })
+      client.setTimeout(3000, () => client.destroy(new Error('Proxy probe timeout')))
+      client.once('error', reject)
+      client.end()
+    })
+    expect(body).toBe('s3-origin')
+    expect(unexpected).toBe(0)
+  }
+  finally {
+    await proxy?.close()
+    for (const server of [target, attacker]) {
+      if (server.listening) {
+        server.closeAllConnections()
+        await new Promise<void>(resolve => server.close(() => resolve()))
+      }
+    }
+  }
+})
 
 describe.each([
   { backend: 'MinIO', acquire: acquireMinioContainer },
@@ -64,8 +114,18 @@ describe.each([
     if (!lease)
       throw new Error('Missing S3 lease')
     const prefix = `batch-${randomUUID()}`
-    const config = { type: 's3' as const, ...lease, prefix, forcePathStyle: true }
-    const s3 = new S3Client({ region: lease.region, endpoint: lease.endpoint, forcePathStyle: true, credentials: lease })
+    const config = {
+      type: 's3' as const,
+      ...lease,
+      prefix,
+      forcePathStyle: true,
+    }
+    const s3 = new S3Client({
+      region: lease.region,
+      endpoint: lease.endpoint,
+      forcePathStyle: true,
+      credentials: lease,
+    })
     try {
       expect((await storage.init(config)).success).toBe(true)
       const keys = Array.from({ length: 1001 }, (_, index) => `key-${index}`)
@@ -99,7 +159,12 @@ describe.each([
   it('真实后端已删除但所有响应中断时返回 unknown，不能伪装失败未执行或成功', async () => {
     if (!lease)
       throw new Error('Missing S3 lease')
-    const config = { type: 's3' as const, ...lease, prefix: `interrupt-${randomUUID()}`, forcePathStyle: true }
+    const config = {
+      type: 's3' as const,
+      ...lease,
+      prefix: `interrupt-${randomUUID()}`,
+      forcePathStyle: true,
+    }
     expect((await storage.init(config)).success).toBe(true)
     expect((await storage.file.put('a.txt', 'data')).success).toBe(true)
     await storage.close()
@@ -110,7 +175,17 @@ describe.each([
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.code).toBe('hai:storage:002')
-        expect(result.error.ext?.deleteMany).toEqual({ deletedKeys: [], failures: [{ key: 'a.txt', code: expect.any(String), retryable: true, outcome: 'unknown' }] })
+        expect(result.error.ext?.deleteMany).toEqual({
+          deletedKeys: [],
+          failures: [
+            {
+              key: 'a.txt',
+              code: expect.any(String),
+              retryable: true,
+              outcome: 'unknown',
+            },
+          ],
+        })
       }
       // SDK 与模块都不得重放未知结果；并发上传的新对象不能被第二次删除。
       expect(proxy.deleteRequests).toBe(1)

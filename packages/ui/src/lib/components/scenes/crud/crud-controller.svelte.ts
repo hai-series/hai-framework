@@ -302,7 +302,9 @@ export interface CrudControllerOptions {
  * 解析可能是 i18n 函数的文本。
  */
 function resolveText(text: CrudText): string {
-  return typeof text === 'function' ? text() : text
+  return typeof text === 'function'
+    ? text()
+    : text
 }
 
 /**
@@ -370,7 +372,9 @@ export function defineCrud<T extends Record<string, unknown>>(resource: CrudReso
         label: resolveText(f.label),
         width: f.width,
         align: f.align,
-        render: f.render ? (item: Record<string, unknown>) => f.render!(item[f.id], item) : undefined,
+        render: f.render
+          ? (item: Record<string, unknown>) => f.render!(item[f.id], item)
+          : undefined,
       })),
     getDefaultValues: () => Object.fromEntries(
       fields.filter(f => f.defaultValue !== undefined).map(f => [f.id, f.defaultValue]),
@@ -497,8 +501,11 @@ export function createCrudController<T extends Record<string, unknown>>(
           return
         // 列表加载失败（慢响应/重启/超时）时保留上一次结果，绝不用空列表覆盖，避免误显示“0 条记录”；
         // 同时暴露错误给页面：首次失败不能被当成一次成功的空结果。
-        if (requestSeq === listRequestSeq)
-          error = cause instanceof Error ? cause : new Error(String(cause))
+        if (requestSeq === listRequestSeq) {
+          error = cause instanceof Error
+            ? cause
+            : new Error(String(cause))
+        }
       }
       finally {
         if (requestSeq === listRequestSeq) {
@@ -516,12 +523,18 @@ export function createCrudController<T extends Record<string, unknown>>(
 
   /** 从 CrudPage 生成的 URL 中解析查询参数。 */
   function parseParams(url: string): Record<string, unknown> {
-    const qs = url.includes('?') ? url.slice(url.indexOf('?') + 1) : ''
+    const qs = url.includes('?')
+      ? url.slice(url.indexOf('?') + 1)
+      : ''
     const sp = new SvelteURLSearchParams(qs)
     const params: Record<string, unknown> = {
       search: sp.get('search') ?? '',
-      page: sp.get('page') ? Number(sp.get('page')) : 1,
-      pageSize: sp.get('pageSize') ? Number(sp.get('pageSize')) : defaultPageSize,
+      page: sp.get('page')
+        ? Number(sp.get('page'))
+        : 1,
+      pageSize: sp.get('pageSize')
+        ? Number(sp.get('pageSize'))
+        : defaultPageSize,
     }
     for (const key of ['sortBy', 'sortDirection']) {
       const v = sp.get(key)
@@ -544,7 +557,9 @@ export function createCrudController<T extends Record<string, unknown>>(
     const loc = globalThis.location
     if (!his?.replaceState || !loc)
       return
-    const qs = url.includes('?') ? url.slice(url.indexOf('?')) : ''
+    const qs = url.includes('?')
+      ? url.slice(url.indexOf('?'))
+      : ''
     try {
       his.replaceState(his.state, '', `${loc.pathname}${qs}${loc.hash}`)
     }

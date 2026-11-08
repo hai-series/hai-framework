@@ -14,7 +14,11 @@ const isDockerProdBuild = process.env.HAI_DOCKER_PROD_BUILD === 'true'
 export const baseConfig: Options = {
   format: ['esm'],
   // 声明构建仍使用 TypeScript 6 API，tsup 内部注入的 baseUrl 需明确兼容。
-  dts: isDockerProdBuild ? false : { compilerOptions: { ignoreDeprecations: '6.0' } },
+  dts: isDockerProdBuild
+    ? false
+    : {
+        compilerOptions: { ignoreDeprecations: '6.0' },
+      },
   clean: true,
   sourcemap: !isDockerProdBuild,
   treeshake: true,

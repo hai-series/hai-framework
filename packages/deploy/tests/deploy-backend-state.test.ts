@@ -6,7 +6,13 @@ type Compose = Parameters<typeof createBackendStateAssets>[1]
 
 function databaseCompose(service: Record<string, unknown> = {}, volumes: Record<string, unknown> = { data: null }): Compose {
   return {
-    services: { db: { image: 'postgres:16-alpine', volumes: ['data:/var/lib/postgresql/data'], ...service } },
+    services: {
+      db: {
+        image: 'postgres:16-alpine',
+        volumes: ['data:/var/lib/postgresql/data'],
+        ...service,
+      },
+    },
     volumes,
   }
 }
@@ -33,7 +39,10 @@ describe('部署包后端状态资产', () => {
           env_file: ['middleware-runtime.env'],
           volumes: ['vector-data:/qdrant/storage'],
         },
-        web: { image: 'example/web:test', environment: { PRIVATE_TOKEN: syntheticSecret } },
+        web: {
+          image: 'example/web:test',
+          environment: { PRIVATE_TOKEN: syntheticSecret },
+        },
       },
       volumes: {
         'db-data': null,
@@ -59,9 +68,18 @@ describe('部署包后端状态资产', () => {
   it('为 MySQL、RustFS 和 pgvector 组合保留各自后端家族', () => {
     const assets = createBackendStateAssets('shop-test', {
       services: {
-        db: { image: 'mysql:8.4', volumes: ['mysql-data:/var/lib/mysql'] },
-        storage: { image: 'rustfs/rustfs:1.0.0', volumes: ['objects:/data'] },
-        vecdb: { image: 'pgvector/pgvector:pg16', volumes: ['vectors:/var/lib/postgresql/data'] },
+        db: {
+          image: 'mysql:8.4',
+          volumes: ['mysql-data:/var/lib/mysql'],
+        },
+        storage: {
+          image: 'rustfs/rustfs:1.0.0',
+          volumes: ['objects:/data'],
+        },
+        vecdb: {
+          image: 'pgvector/pgvector:pg16',
+          volumes: ['vectors:/var/lib/postgresql/data'],
+        },
       },
       volumes: { 'mysql-data': null, 'objects': null, 'vectors': null },
     }, ['db', 'storage', 'vecdb'])
@@ -73,7 +91,10 @@ describe('部署包后端状态资产', () => {
       services: {
         db: { image: 'unsupported:latest' },
         storage: {},
-        vecdb: { image: 'chromadb/chroma:1.0.0', volumes: ['vectors:/data'] },
+        vecdb: {
+          image: 'chromadb/chroma:1.0.0',
+          volumes: ['vectors:/data'],
+        },
       },
       volumes: { vectors: null },
     }, ['vecdb', 'serv'])
@@ -81,17 +102,46 @@ describe('部署包后端状态资产', () => {
   })
 
   it('无状态增量包不生成后端身份行', () => {
-    const assets = createBackendStateAssets('shop-test', { services: { web: { image: 'example/web:test' } } }, ['web'])
+    const assets = createBackendStateAssets('shop-test', {
+      services: {
+        web: { image: 'example/web:test' },
+      },
+    }, ['web'])
     expect(assets['state-backends']).toBe('')
   })
 
   it.each([
-    { scenario: '只有绑定目录，无法确认实际命名卷', compose: databaseCompose({ volumes: ['./local:/var/lib/postgresql/data'] }) },
-    { scenario: '同一后端绑定两个不同命名卷', compose: databaseCompose({ volumes: ['data:/data', 'archive:/archive'] }, { data: null, archive: null }) },
-    { scenario: '选中后端的镜像家族未知', compose: databaseCompose({ image: 'example/mariadb:11' }) },
-    { scenario: '镜像家族与服务角色不匹配', compose: databaseCompose({ image: 'qdrant/qdrant:v1' }) },
-    { scenario: '选中服务没有镜像', compose: databaseCompose({ image: undefined }) },
-    { scenario: '选中服务不存在', compose: { services: {}, volumes: { data: null } } },
+    {
+      scenario: '只有绑定目录，无法确认实际命名卷',
+      compose: databaseCompose({
+        volumes: ['./local:/var/lib/postgresql/data'],
+      }),
+    },
+    {
+      scenario: '同一后端绑定两个不同命名卷',
+      compose: databaseCompose({
+        volumes: ['data:/data', 'archive:/archive'],
+      }, { data: null, archive: null }),
+    },
+    {
+      scenario: '选中后端的镜像家族未知',
+      compose: databaseCompose({ image: 'example/mariadb:11' }),
+    },
+    {
+      scenario: '镜像家族与服务角色不匹配',
+      compose: databaseCompose({ image: 'qdrant/qdrant:v1' }),
+    },
+    {
+      scenario: '选中服务没有镜像',
+      compose: databaseCompose({ image: undefined }),
+    },
+    {
+      scenario: '选中服务不存在',
+      compose: {
+        services: {},
+        volumes: { data: null },
+      },
+    },
   ])('$scenario 时拒绝生成资产', ({ compose }) => {
     expect(() => createBackendStateAssets('shop-test', compose, ['db'])).toThrow(Error)
   })
@@ -99,21 +149,43 @@ describe('部署包后端状态资产', () => {
   it('不同声明指向同一实际卷时拒绝让两个后端共用数据目录', () => {
     const compose: Compose = {
       services: {
-        db: { image: 'postgres:16', volumes: ['db-data:/var/lib/postgresql/data'] },
-        vecdb: { image: 'qdrant/qdrant:v1', volumes: ['vector-data:/qdrant/storage'] },
+        db: {
+          image: 'postgres:16',
+          volumes: ['db-data:/var/lib/postgresql/data'],
+        },
+        vecdb: {
+          image: 'qdrant/qdrant:v1',
+          volumes: ['vector-data:/qdrant/storage'],
+        },
       },
-      volumes: { 'db-data': { name: 'shared-real-volume' }, 'vector-data': { name: 'shared-real-volume' } },
+      volumes: {
+        'db-data': { name: 'shared-real-volume' },
+        'vector-data': { name: 'shared-real-volume' },
+      },
     }
     expect(() => createBackendStateAssets('shop-test', compose, ['db', 'vecdb'])).toThrow(Error)
   })
 
-  it.each(['shop prod', '../shop', 'shop\'; touch injected', 'shop\nprod', '商城-prod'])('项目名 %j 无法安全嵌入资产时拒绝生成', (projectName) => {
+  it.each([
+    'shop prod',
+    '../shop',
+    'shop\'; touch injected',
+    'shop\nprod',
+    '商城-prod',
+  ])('项目名 %j 无法安全嵌入资产时拒绝生成', (projectName) => {
     expect(() => createBackendStateAssets(projectName, databaseCompose(), ['db'])).toThrow(Error)
   })
 
   it('实际卷名不能含路径、空白或 shell 语法', () => {
-    for (const volumeName of ['../data', 'data volume', 'data;echo-injected', 'data\nother']) {
-      expect(() => createBackendStateAssets('shop-test', databaseCompose({}, { data: { name: volumeName } }), ['db'])).toThrow(Error)
+    for (const volumeName of [
+      '../data',
+      'data volume',
+      'data;echo-injected',
+      'data\nother',
+    ]) {
+      expect(() => createBackendStateAssets('shop-test', databaseCompose({}, {
+        data: { name: volumeName },
+      }), ['db'])).toThrow(Error)
     }
   })
 })

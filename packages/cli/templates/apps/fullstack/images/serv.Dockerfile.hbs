@@ -1,7 +1,5 @@
 ARG HAI_NODE_IMAGE=node:24.22.1-bookworm-slim
 FROM ${HAI_NODE_IMAGE} AS build
-ARG SQLITE_PREBUILD_MIRROR=
-ENV npm_config_better_sqlite3_binary_host_mirror=$SQLITE_PREBUILD_MIRROR
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
@@ -26,8 +24,9 @@ ARG HAI_BUILD_ID=
 ARG HAI_BUILD_COMMIT=unknown
 RUN HAI_BUILD_ID="$HAI_BUILD_ID" HAI_BUILD_COMMIT="$HAI_BUILD_COMMIT" pnpm --filter {{fullstack.servPackageName}}... --if-present build
 
-RUN --mount=type=cache,id={{projectName}}-sqlite,target=/root/.npm/_prebuilds if [ -d node_modules/better-sqlite3 ]; then cd node_modules/better-sqlite3; for attempt in 1 2 3; do node -e "require('node:child_process').execFileSync(process.execPath,[require.resolve('prebuild-install/bin.js'),'--verbose'],{stdio:'inherit'})" && break; [ "$attempt" = 3 ] && exit 1; sleep 3; done; fi
-RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store --mount=type=cache,id={{projectName}}-sqlite,target=/root/.npm/_prebuilds pnpm pm deploy --filter {{fullstack.servPackageName}} --prod /prod/service
+# SQLite 13 的原生二进制随 npm 包交付，在构建时验证实际加载。
+RUN if [ -d node_modules/better-sqlite3 ]; then node -e "const Database=require('better-sqlite3');const db=new Database(':memory:');db.prepare('SELECT 1').get();db.close()"; fi
+RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm pm deploy --filter {{fullstack.servPackageName}} --prod /prod/service
 RUN rm -f /prod/service/README* && find /prod/service/dist -type f \( -name '*.map' -o -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' \) -delete
 
 FROM ${HAI_NODE_IMAGE} AS service

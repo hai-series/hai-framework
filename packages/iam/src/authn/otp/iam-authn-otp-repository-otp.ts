@@ -59,7 +59,9 @@ export interface OtpRepository {
  */
 export function normalizeOtpIdentifier(identifier: string): string {
   const trimmed = identifier.trim()
-  return trimmed.includes('@') ? trimmed.toLowerCase() : trimmed.replace(/[\s-]/g, '')
+  return trimmed.includes('@')
+    ? trimmed.toLowerCase()
+    : trimmed.replace(/[\s-]/g, '')
 }
 
 let otpRepoInstance: OtpRepository | null = null
@@ -114,7 +116,11 @@ export function createCacheOtpRepository(): OtpRepository {
       if (!current.success)
         return failure()
       if (current.data && current.data.cooldownUntil > Date.now()) {
-        return err(HaiIamError.OTP_RESEND_TOO_FAST, iamM('iam_otpResendTooFast', { params: { seconds: Math.ceil((current.data.cooldownUntil - Date.now()) / 1000) } }))
+        return err(HaiIamError.OTP_RESEND_TOO_FAST, iamM('iam_otpResendTooFast', {
+          params: {
+            seconds: Math.ceil((current.data.cooldownUntil - Date.now()) / 1000),
+          },
+        }))
       }
       if (Date.now() >= state.expiresAt)
         return invalid()
@@ -125,7 +131,10 @@ export function createCacheOtpRepository(): OtpRepository {
         return err(HaiIamError.SECURITY_BUSY, iamM('iam_securityBusy'))
       if (Date.now() >= state.expiresAt)
         return invalid()
-      return ok({ idempotencyKey: `iam-otp:${state.version}`, expiresAt: new Date(state.expiresAt) })
+      return ok({
+        idempotencyKey: `iam-otp:${state.version}`,
+        expiresAt: new Date(state.expiresAt),
+      })
     },
 
     async consumeOtp(identifier, code, maxAttempts) {
@@ -141,7 +150,13 @@ export function createCacheOtpRepository(): OtpRepository {
         version = state.version
         const correct = core.string.constantTimeEqual(state.code, code)
         const attempts = state.attempts + 1
-        const next: OtpState = { ...state, attempts, code: correct || attempts >= maxAttempts ? null : state.code }
+        const next: OtpState = {
+          ...state,
+          attempts,
+          code: correct || attempts >= maxAttempts
+            ? null
+            : state.code,
+        }
         // TTL 包含发送冷却期；消费不能删除冷却状态，也不能重建已过期的 key。
         const committed = await cache.kv.compareAndSwap(key, state, next, { keepTtl: true })
         if (!committed.success)

@@ -13,16 +13,25 @@ test('H5 认证配置和完整恢复流程', async ({ page, context }) => {
   const email = `${username}@example.com`
   await page.goto('/auth/login')
   await expect(page.locator('#login-username')).toBeVisible()
-  await page.screenshot({ path: path.join(evidence, 'h5-login.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, 'h5-login.png'),
+    fullPage: true,
+  })
   await page.getByRole('link', { name: /立即注册|Register now/i }).click()
   await expect(page).toHaveURL(/\/auth\/register$/)
   const registration = page.locator('.register-form')
   await expect(registration.locator('#register-username')).toBeEditable()
-  await page.screenshot({ path: path.join(evidence, 'h5-register.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, 'h5-register.png'),
+    fullPage: true,
+  })
   await page.getByRole('button', { name: '用户协议', exact: true }).click()
   await expect(page.getByRole('dialog').getByRole('heading', { name: 'H5 配置协议' })).toBeVisible()
   await expect(page.locator('iframe')).toHaveCount(0)
-  await page.screenshot({ path: path.join(evidence, 'h5-agreement.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, 'h5-agreement.png'),
+    fullPage: true,
+  })
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).not.toBeVisible()
   await registration.locator('#register-username').fill(username)
@@ -34,7 +43,10 @@ test('H5 认证配置和完整恢复流程', async ({ page, context }) => {
   await context.clearCookies()
   await page.goto('/auth/login')
   await page.getByRole('button', { name: /邮件验证码|Email code/i, exact: true }).click()
-  await page.screenshot({ path: path.join(evidence, 'h5-email-code.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, 'h5-email-code.png'),
+    fullPage: true,
+  })
   await page.locator('#login-username').fill(email)
   await page.getByRole('button', { name: /发送验证码|Send code/i, exact: true }).click()
   await expect(page.getByRole('button', { name: /秒后重发|Resend in/ })).toBeDisabled()
@@ -51,14 +63,20 @@ test('H5 认证配置和完整恢复流程', async ({ page, context }) => {
   await context.clearCookies()
   await page.goto('/auth/login')
   await page.getByRole('button', { name: /忘记密码|Forgot password/i }).click()
-  await page.screenshot({ path: path.join(evidence, 'h5-forgot.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, 'h5-forgot.png'),
+    fullPage: true,
+  })
   await page.locator('input[type="email"]').fill(email)
   await page.locator('button[type="submit"]').click()
   await expect(page.locator('.hai-toast-item[data-variant="success"]')).toBeVisible()
   const reset = await received('password_reset')
   expect(Boolean(reset?.token)).toBe(true)
   await page.getByRole('button', { name: /已有重置令牌|I have a reset token/i }).click()
-  await page.screenshot({ path: path.join(evidence, 'h5-reset.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, 'h5-reset.png'),
+    fullPage: true,
+  })
   await page.locator('#reset-code').fill(reset?.token ?? '')
   await page.locator('input[type="password"]').nth(0).fill('H5NewPassword456')
   await page.locator('input[type="password"]').nth(1).fill('H5NewPassword456')

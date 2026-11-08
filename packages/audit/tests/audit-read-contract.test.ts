@@ -8,7 +8,7 @@ import { GenericContainer, Wait } from 'testcontainers'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { audit, HaiAuditError } from '../src/index.js'
 
-describe.sequential.each(['sqlite', 'postgresql', 'mysql'] as const)('audit 跨库读取契约：%s', (backend) => {
+describe.each(['sqlite', 'postgresql', 'mysql'] as const)('audit 跨库读取契约：%s', { concurrent: false }, (backend) => {
   let container: StartedTestContainer | undefined
   const originalTimezone = process.env.TZ
 
@@ -21,7 +21,9 @@ describe.sequential.each(['sqlite', 'postgresql', 'mysql'] as const)('audit 跨�
     else {
       const password = randomBytes(20).toString('hex')
       const database = 'audit_contract'
-      const port = backend === 'postgresql' ? 5432 : 3306
+      const port = backend === 'postgresql'
+        ? 5432
+        : 3306
       const candidate = backend === 'postgresql'
         ? new GenericContainer('docker.io/library/postgres:16.15-alpine')
             .withEnvironment({ POSTGRES_DB: database, POSTGRES_USER: 'db_user', POSTGRES_PASSWORD: password })
@@ -30,7 +32,12 @@ describe.sequential.each(['sqlite', 'postgresql', 'mysql'] as const)('audit 跨�
             .withEnvironment({ MYSQL_DATABASE: database, MYSQL_ROOT_PASSWORD: password })
             .withWaitStrategy(Wait.forLogMessage(/ready for connections\..*port: 3306/))
       container = await candidate.withExposedPorts(port).withStartupTimeout(120_000).start()
-      const connection = { host: container.getHost(), port: container.getMappedPort(port), database, password }
+      const connection = {
+        host: container.getHost(),
+        port: container.getMappedPort(port),
+        database,
+        password,
+      }
       const initialized = backend === 'postgresql'
         ? await reldb.init({ type: 'postgresql', ...connection, user: 'db_user' })
         : await reldb.init({ type: 'mysql', ...connection, user: 'root' })
@@ -64,7 +71,13 @@ describe.sequential.each(['sqlite', 'postgresql', 'mysql'] as const)('audit 跨�
 
   it('列表、最近活动和日期筛选返回完整字段、Date、JSON 字符串及显式空值', async () => {
     const startDate = new Date(Date.now() - 2000)
-    const written = await audit.log({ userId: 'actor_1', action: 'delete', resource: 'users', resourceId: 'target_1', details: { label: 'Example' } })
+    const written = await audit.log({
+      userId: 'actor_1',
+      action: 'delete',
+      resource: 'users',
+      resourceId: 'target_1',
+      details: { label: 'Example' },
+    })
     expect(written.success).toBe(true)
     expect((await audit.log({ action: 'startup', resource: 'system' })).success).toBe(true)
     const endDate = new Date(Date.now() + 2000)
@@ -75,7 +88,15 @@ describe.sequential.each(['sqlite', 'postgresql', 'mysql'] as const)('audit 跨�
       return
     expect(listed.data.total).toBe(1)
     const entry = listed.data.items[0]!
-    expect(entry).toMatchObject({ userId: 'actor_1', username: 'Operator', action: 'delete', resource: 'users', resourceId: 'target_1', ipAddress: null, userAgent: null })
+    expect(entry).toMatchObject({
+      userId: 'actor_1',
+      username: 'Operator',
+      action: 'delete',
+      resource: 'users',
+      resourceId: 'target_1',
+      ipAddress: null,
+      userAgent: null,
+    })
 
     const recent = await audit.getUserRecent('actor_1')
     expect(recent.success).toBe(true)
@@ -83,7 +104,12 @@ describe.sequential.each(['sqlite', 'postgresql', 'mysql'] as const)('audit 跨�
       return
     expect(recent.data).toHaveLength(1)
     for (const record of [entry, recent.data[0]!]) {
-      expect(record).toMatchObject({ userId: 'actor_1', resourceId: 'target_1', ipAddress: null, userAgent: null })
+      expect(record).toMatchObject({
+        userId: 'actor_1',
+        resourceId: 'target_1',
+        ipAddress: null,
+        userAgent: null,
+      })
       expect(record.createdAt).toBeInstanceOf(Date)
       expect(record.createdAt.getTime()).toBeGreaterThanOrEqual(startDate.getTime())
       expect(record.createdAt.getTime()).toBeLessThanOrEqual(endDate.getTime())
@@ -92,9 +118,26 @@ describe.sequential.each(['sqlite', 'postgresql', 'mysql'] as const)('audit 跨�
     }
 
     const filtered = await audit.list({ resource: 'users', startDate, endDate })
-    expect(filtered).toMatchObject({ success: true, data: { total: 1 } })
+    expect(filtered).toMatchObject({
+      success: true,
+      data: { total: 1 },
+    })
     const system = await audit.list({ resource: 'system' })
-    expect(system).toMatchObject({ success: true, data: { items: [{ userId: null, username: null, resourceId: null, details: null, ipAddress: null, userAgent: null }] } })
+    expect(system).toMatchObject({
+      success: true,
+      data: {
+        items: [
+          {
+            userId: null,
+            username: null,
+            resourceId: null,
+            details: null,
+            ipAddress: null,
+            userAgent: null,
+          },
+        ],
+      },
+    })
     const statistics = await audit.getStats()
     expect(statistics.success).toBe(true)
     if (statistics.success) {
@@ -105,9 +148,14 @@ describe.sequential.each(['sqlite', 'postgresql', 'mysql'] as const)('audit 跨�
 
   if (backend === 'sqlite') {
     it('拒绝驱动返回的超出安全整数范围的统计值', async () => {
-      const query = vi.spyOn(reldb.sql, 'query').mockResolvedValueOnce(ok([{ action: 'delete', count: '9007199254740993' }]))
+      const query = vi.spyOn(reldb.sql, 'query').mockResolvedValueOnce(ok([
+        { action: 'delete', count: '9007199254740993' },
+      ]))
       try {
-        expect(await audit.getStats()).toMatchObject({ success: false, error: { code: HaiAuditError.STATS_FAILED.code } })
+        expect(await audit.getStats()).toMatchObject({
+          success: false,
+          error: { code: HaiAuditError.STATS_FAILED.code },
+        })
       }
       finally {
         query.mockRestore()

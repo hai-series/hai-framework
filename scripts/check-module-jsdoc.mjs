@@ -15,23 +15,34 @@ const slash = value => value.replaceAll('\\', '/')
 function sourceFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const file = join(directory, entry.name)
-    if (entry.isDirectory())
-      return entry.name === 'paraglide' ? [] : sourceFiles(file)
-    return /\.(?:[cm]?[jt]s|svelte)$/.test(entry.name) && !entry.name.endsWith('.d.ts') ? [file] : []
+    if (entry.isDirectory()) {
+      return entry.name === 'paraglide'
+        ? []
+        : sourceFiles(file)
+    }
+    return /\.(?:[cm]?[jt]s|svelte)$/.test(entry.name) && !entry.name.endsWith('.d.ts')
+      ? [file]
+      : []
   })
 }
 
 /** 模块注释不能冒充紧邻声明的 JSDoc。 */
 function declarationDoc(node, source) {
   const doc = (node.jsDoc ?? []).filter(item => !(item.tags ?? []).some(tag => tag.tagName.text === 'module')).at(-1)
-  return doc ? source.slice(doc.pos, doc.end).replaceAll('\r\n', '\n').replace(/^[\t ]*\* ?/gm, '') : ''
+  return doc
+    ? source.slice(doc.pos, doc.end).replaceAll('\r\n', '\n').replace(/^[\t ]*\* ?/gm, '')
+    : ''
 }
 
 /** 收集公开声明、全部 type/interface；Svelte 的脚本按真实偏移保留来源位置。 */
 export function collectDeclarations(file, source) {
   const scripts = file.endsWith('.svelte')
-    ? [...source.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(match => ({ source: match[1], offset: match.index + match[0].indexOf('>') + 1 }))
-    : [{ source, offset: 0 }]
+    ? [
+        ...source.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g),
+      ].map(match => ({ source: match[1], offset: match.index + match[0].indexOf('>') + 1 }))
+    : [
+        { source, offset: 0 },
+      ]
   const records = []
   for (const script of scripts) {
     const parsed = ts.createSourceFile(file, script.source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
@@ -39,7 +50,9 @@ export function collectDeclarations(file, source) {
       const exported = node.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)
       const structure = ts.isTypeAliasDeclaration(node) || ts.isInterfaceDeclaration(node)
       if (structure || (exported && (ts.isFunctionDeclaration(node) || ts.isVariableStatement(node) || ts.isClassDeclaration(node) || ts.isEnumDeclaration(node)))) {
-        const names = ts.isVariableStatement(node) ? node.declarationList.declarations.map(item => item.name.getText(parsed)) : [node.name?.getText(parsed) ?? 'default']
+        const names = ts.isVariableStatement(node)
+          ? node.declarationList.declarations.map(item => item.name.getText(parsed))
+          : [node.name?.getText(parsed) ?? 'default']
         const position = script.offset + node.getStart(parsed)
         records.push({
           file,
@@ -60,13 +73,25 @@ export function collectDeclarations(file, source) {
 
 /** 每个示例必须明确语言；内部示例以标记选择声明所在作用域，不能跳过类型检查。 */
 export function extractExamples(doc) {
-  return [...doc.matchAll(/^[\t ]*@example\b/gm)].map((match) => {
+  return [
+    ...doc.matchAll(/^[\t ]*@example\b/gm),
+  ].map((match) => {
     const tail = doc.slice(match.index + match[0].length)
     const nextTag = /^[\t ]*@\w/m.exec(tail)?.index ?? tail.length
     const end = tail.indexOf('*/')
-    const block = tail.slice(0, Math.min(nextTag, end < 0 ? tail.length : end))
-    const fences = [...block.matchAll(/```(ts|typescript|svelte)[\t ]*\n([\s\S]*?)```/g)]
-    return { internal: block.includes('模块内部上下文'), blocks: fences.map(fence => ({ language: fence[1], code: fence[2].trim() })) }
+    const block = tail.slice(0, Math.min(nextTag, end < 0
+      ? tail.length
+      : end))
+    const fences = [
+      ...block.matchAll(/```(ts|typescript|svelte)[\t ]*\n([\s\S]*?)```/g),
+    ]
+    return {
+      internal: block.includes('模块内部上下文'),
+      blocks: fences.map(fence => ({
+        language: fence[1],
+        code: fence[2].trim(),
+      })),
+    }
   })
 }
 
@@ -86,7 +111,10 @@ export function typecheckVirtualFiles(virtualFiles, options = {}) {
     types: ['node'],
     ...options,
   }
-  const files = new Map([...virtualFiles].map(([file, source]) => [slash(resolve(file)), source]))
+  const files = new Map([...virtualFiles].map(([file, source]) => [
+    slash(resolve(file)),
+    source,
+  ]))
   const host = ts.createCompilerHost(compilerOptions)
   const readFile = host.readFile.bind(host)
   const fileExists = host.fileExists.bind(host)
@@ -94,7 +122,9 @@ export function typecheckVirtualFiles(virtualFiles, options = {}) {
   host.fileExists = file => files.has(slash(resolve(file))) || fileExists(file)
   host.getSourceFile = (file, languageVersion) => {
     const source = host.readFile(file)
-    return source === undefined ? undefined : ts.createSourceFile(file, source, languageVersion, true)
+    return source === undefined
+      ? undefined
+      : ts.createSourceFile(file, source, languageVersion, true)
   }
   host.resolveModuleNames = (names, containingFile) => names.map((name) => {
     if (name.startsWith('.') && name.endsWith('.svelte')) {
@@ -109,14 +139,22 @@ export function typecheckVirtualFiles(virtualFiles, options = {}) {
     }
     return ts.resolveModuleName(name, containingFile, compilerOptions, host).resolvedModule
   })
-  const program = ts.createProgram([...files.keys()], compilerOptions, host)
+  const program = ts.createProgram([
+    ...files.keys(),
+  ], compilerOptions, host)
   return ts.getPreEmitDiagnostics(program).filter(diagnostic => !diagnostic.file || files.has(slash(resolve(diagnostic.file.fileName))))
 }
 
 /** 从自有脚本提取错误来源；只打印诊断，不读取本地环境文件。 */
 function diagnosticText(diagnostic) {
-  const location = diagnostic.file && diagnostic.start !== undefined ? diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start) : undefined
-  const prefix = diagnostic.file ? `${slash(relative(root, diagnostic.file.fileName))}${location ? `:${location.line + 1}:${location.character + 1}` : ''}: ` : ''
+  const location = diagnostic.file && diagnostic.start !== undefined
+    ? diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start)
+    : undefined
+  const prefix = diagnostic.file
+    ? `${slash(relative(root, diagnostic.file.fileName))}${location
+      ? `:${location.line + 1}:${location.character + 1}`
+      : ''}: `
+    : ''
   return `${prefix}TS${diagnostic.code} ${ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`
 }
 
@@ -138,14 +176,19 @@ export async function checkPackages(packages, { examples = true } = {}) {
       svelte2tsx = imported.svelte2tsx
       for (const name of ['svelte-shims-v4.d.ts', 'svelte-jsx-v4.d.ts']) {
         const path = fileURLToPath(import.meta.resolve(`svelte2tsx/${name}`))
-        svelteShims.push([path, readFileSync(path, 'utf8')])
+        svelteShims.push([
+          path,
+          readFileSync(path, 'utf8'),
+        ])
       }
     }
     try {
       return svelte2tsx(source, { filename: file, isTsFile: true }).code
     }
     catch (error) {
-      failures.push(`${slash(relative(root, file))}: Svelte 示例解析失败：${error instanceof Error ? error.message : String(error)}`)
+      failures.push(`${slash(relative(root, file))}: Svelte 示例解析失败：${error instanceof Error
+        ? error.message
+        : String(error)}`)
       return 'export {}'
     }
   }
@@ -191,8 +234,12 @@ export async function checkPackages(packages, { examples = true } = {}) {
             }
             else {
               const name = `${basename(file).replace(/\W/g, '_')}_${record.names[0].replace(/\W/g, '_')}_${id}`
-              const exampleFile = join(dirname(file), `__hai_doc_${name}.${block.language === 'svelte' ? 'tsx' : 'ts'}`)
-              const exampleSource = block.language === 'svelte' ? await transformSvelte(exampleFile.replace(/\.tsx$/, '.svelte'), block.code) : `${block.code}\nexport {}\n`
+              const exampleFile = join(dirname(file), `__hai_doc_${name}.${block.language === 'svelte'
+                ? 'tsx'
+                : 'ts'}`)
+              const exampleSource = block.language === 'svelte'
+                ? await transformSvelte(exampleFile.replace(/\.tsx$/, '.svelte'), block.code)
+                : `${block.code}\nexport {}\n`
               virtualPublic.set(exampleFile, exampleSource)
             }
           }
@@ -200,7 +247,11 @@ export async function checkPackages(packages, { examples = true } = {}) {
       }
       if (edits.length) {
         const modified = edits.sort((a, b) => b.offset - a.offset).reduce((text, edit) => text.slice(0, edit.offset) + edit.code + text.slice(edit.offset), source)
-        internalEdits.set(file.endsWith('.svelte') ? `${file}.tsx` : file, file.endsWith('.svelte') ? await transformSvelte(file, modified) : modified)
+        internalEdits.set(file.endsWith('.svelte')
+          ? `${file}.tsx`
+          : file, file.endsWith('.svelte')
+          ? await transformSvelte(file, modified)
+          : modified)
       }
     }
     stats.push({ package: pkg, declarations, examples: exampleCount })
@@ -221,7 +272,13 @@ export async function checkPackages(packages, { examples = true } = {}) {
       }
       for (const [file, source] of svelteShims)
         internalEdits.set(file, source)
-      failures.push(...typecheckVirtualFiles(internalEdits, { ...parsed.options, noEmit: true, noUnusedLocals: false, noUnusedParameters: false, jsx: ts.JsxEmit.Preserve }).map(diagnosticText))
+      failures.push(...typecheckVirtualFiles(internalEdits, {
+        ...parsed.options,
+        noEmit: true,
+        noUnusedLocals: false,
+        noUnusedParameters: false,
+        jsx: ts.JsxEmit.Preserve,
+      }).map(diagnosticText))
     }
   }
   return { stats, failures }
@@ -235,7 +292,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       throw new Error(`Unknown option: ${process.argv[index]}`)
   }
   const selection = process.argv.indexOf('--package')
-  const packages = selection >= 0 ? process.argv[selection + 1]?.split(',') : readdirSync(join(root, 'packages')).filter(name => existsSync(join(root, 'packages', name, 'src')))
+  const packages = selection >= 0
+    ? process.argv[selection + 1]?.split(',')
+    : readdirSync(join(root, 'packages')).filter(name => existsSync(join(root, 'packages', name, 'src')))
   if (!packages?.length || packages.some(name => !/^[a-z][a-z0-9-]*$/.test(name) || !existsSync(join(root, 'packages', name, 'src'))))
     throw new Error('Unknown package selection')
   const result = await checkPackages(packages, { examples: !process.argv.includes('--coverage-only') })

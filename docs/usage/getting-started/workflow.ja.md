@@ -163,7 +163,7 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### build のオプション
 
-`--target` は compile（既定）、`image`、app、desktop を選択します。`--images serv|web|serv,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は Podman のプロキシ継承無効、`--sqlite-prebuild-mirror` は信頼できる HTTP(S) バイナリ配布元です。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
+`--target` は compile（既定）、`image`、app、desktop を選択します。`--images serv|web|serv,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は Podman のプロキシ継承無効です。SQLite 13 のネイティブバイナリーは npm パッケージに同梱され、設定済みの npm レジストリーを使用します。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
 
 #### `hai.json` でパッケージの構成を指定する
 
@@ -253,7 +253,7 @@ CLI の `--project-name` と SDK の `DeployAppOptions.projectName` 上書きは
 
 #### deploy のオプション
 
-`--env`/`--env-dir` は環境、`--build` は先行する選択イメージ構築、`--services` は更新対象、`--artifact-dir` は既存成果物を指定します。`--bundle-only` は SSH 接続なしで tar と OS 別スクリプトを生成します。`--runtime` はローカル構築・イメージ出力エンジンです。`--output` はコマンドの作業ディレクトリを基準とする出力先を指定し、アプリ版を末尾に付けます。`--yes` は有効な設定を非対話で使い、不足値はエラーで示します。一体化構築でも `--network`、`--no-http-proxy`、`--sqlite-prebuild-mirror` を指定できます。
+`--env`/`--env-dir` は環境、`--build` は先行する選択イメージ構築、`--services` は更新対象、`--artifact-dir` は既存成果物を指定します。`--bundle-only` は SSH 接続なしで tar と OS 別スクリプトを生成します。`--runtime` はローカル構築・イメージ出力エンジンです。`--output` はコマンドの作業ディレクトリを基準とする出力先を指定し、アプリ版を末尾に付けます。`--yes` は有効な設定を非対話で使い、不足値はエラーで示します。一体化構築でも `--network`、`--no-http-proxy` を指定できます。
 
 #### マシン同士が接続できる場合：自動デプロイ
 
@@ -315,7 +315,7 @@ Windowsは `deploy.ps1`、Linux/`macOS`は `deploy.sh` を実行します。ど�
 
 `pnpm build --target app --platform android --runtime auto --debug` でコンテナ内にデバッグ APK を生成します。`--debug` を省略すると署名付きリリースになります。iOS の IPA には macOS/Xcode を使用します。App とデスクトップの成果物はそれぞれ `.hai/build/app/<platform>/<variant>/<buildId>/` と `.hai/build/desktop/<platform>/<variant>/<buildId>/` に格納します。[ネイティブビルドと署名](build.md#原生和离线条件)を参照してください。
 
-`schemaColumns(reldb, table, sql?)` は実際の列を読み取ります。`migrateSchema(reldb, module, steps, { dryRun: true })` は台帳を作成しません。各モジュールが手順を所有し、`hai_schema_migrations` に版を記録します。SQLite/PostgreSQL はトランザクション、MySQL の暗黙 DDL コミットには再入可能な手順が必要です。失敗時は版を進めず、実構造を再確認して再試行します。新しい台帳へのダウングレードは拒否します。旧書込を停止し DB/セッションキャッシュをバックアップしてください。復旧は互換 DB とバイナリを一緒に戻します。[更新ガイド](workflow.ja.md)を参照。
+`reldb.schemaColumns(table, sql?)` は実際の列を読み取ります。`reldb.migrateSchema(module, steps, { dryRun: true })` は台帳を作成しません。各モジュールが手順を所有し、`hai_schema_migrations` に版を記録します。SQLite/PostgreSQL はトランザクション、MySQL の暗黙 DDL コミットには再入可能な手順が必要です。失敗時は版を進めず、実構造を再確認して再試行します。新しい台帳へのダウングレードは拒否します。旧書込を停止し DB/セッションキャッシュをバックアップしてください。復旧は互換 DB とバイナリを一緒に戻します。[更新ガイド](workflow.ja.md)を参照。
 
 ## 開発とテスト
 

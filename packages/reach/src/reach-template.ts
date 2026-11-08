@@ -30,7 +30,9 @@ import { HaiReachError } from './reach-types.js'
  */
 function renderString(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (match, key: string) => {
-    return Object.hasOwn(vars, key) ? vars[key] : match
+    return Object.hasOwn(vars, key)
+      ? vars[key]
+      : match
   })
 }
 
@@ -46,10 +48,12 @@ function renderString(template: string, vars: Record<string, string>): string {
  * if (!result.success) throw new Error(result.error.message)
  * ```
  */
-function renderTemplate(template: ReachTemplate, vars: Record<string, string>): HaiResult<RenderedTemplate> {
+export function renderTemplate(template: ReachTemplate, vars: Record<string, string>): HaiResult<RenderedTemplate> {
   try {
     const rendered: RenderedTemplate = {
-      subject: template.subject ? renderString(template.subject, vars) : undefined,
+      subject: template.subject
+        ? renderString(template.subject, vars)
+        : undefined,
       body: renderString(template.body, vars),
     }
     return ok(rendered)
@@ -58,7 +62,11 @@ function renderTemplate(template: ReachTemplate, vars: Record<string, string>): 
     return err(
       HaiReachError.TEMPLATE_RENDER_FAILED,
       reachM('reach_templateRenderFailed', {
-        params: { error: error instanceof Error ? error.message : String(error) },
+        params: {
+          error: error instanceof Error
+            ? error.message
+            : String(error),
+        },
       }),
       error,
     )
@@ -70,7 +78,9 @@ function renderTemplate(template: ReachTemplate, vars: Record<string, string>): 
 function noDbError(msgKey: 'reach_templateSaveFailed' | 'reach_templateDeleteFailed'): HaiResult<never> {
   return err(
     HaiReachError.SEND_FAILED,
-    reachM(msgKey, { params: { error: 'database not available' } }),
+    reachM(msgKey, {
+      params: { error: 'database not available' },
+    }),
   )
 }
 
@@ -95,7 +105,9 @@ export function createTemplateRegistry(repo?: TemplateRepository | null): ReachT
       if (!repo) {
         return err(
           HaiReachError.TEMPLATE_NOT_FOUND,
-          reachM('reach_templateNotFound', { params: { template: name } }),
+          reachM('reach_templateNotFound', {
+            params: { template: name },
+          }),
         )
       }
 
@@ -114,7 +126,9 @@ export function createTemplateRegistry(repo?: TemplateRepository | null): ReachT
 
       return err(
         HaiReachError.TEMPLATE_NOT_FOUND,
-        reachM('reach_templateNotFound', { params: { template: name } }),
+        reachM('reach_templateNotFound', {
+          params: { template: name },
+        }),
       )
     },
 

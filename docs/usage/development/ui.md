@@ -116,6 +116,8 @@ SSR 保留图表高度和加载占位，浏览器挂载且有数据后按类型�
 
 `Popover` 的 `click` 模式适合展示补充信息或表单。按 Enter 或空格打开时，焦点进入面板，可继续按 Tab 操作面板中的控件。按 Escape 关闭，焦点回到打开面板的控件。面板默认挂载到 `body`，需要留在局部布局中时设置 `portal={false}`。
 
+在 Modal 或 Drawer 中使用时，Popover 的 portal 控件会加入所属弹窗的 Tab/Shift+Tab 顺序，焦点不会进入背景页面。资料编辑使用 `UserProfile` 时，保存回调返回 `true` 确认成功，失败更新 `errors` 并返回 `false`，保留草稿供修正或重试；取消编辑恢复已保存的 `user`。
+
 ## 统一提示与问题追踪编号
 
 所有警告和错误均由 `ToastContainer` 展示，包括字段校验、权限不足和操作失败。保存成功等即时结果也使用同一容器。字段保留错误边框、`aria-invalid` 和读屏关联说明；重试、返回等恢复操作仍在原位置，用户能直接继续处理。`Alert` 仅用于 `info` / `success` 持续信息。只在根布局挂载一个 `ToastContainer`，避免重复显示。

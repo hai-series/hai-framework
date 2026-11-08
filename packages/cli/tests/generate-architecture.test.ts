@@ -26,7 +26,17 @@ afterEach(async () => {
 async function create(appType: 'api' | 'fullstack' | 'website') {
   const root = await mkdtemp(path.join(tmpdir(), 'hai-generate-'))
   roots.push(root)
-  await createProject({ name: 'generated', appType, frontends: ['web'], cwd: root, defaults: true, install: false, git: false, deploy: false, packageManager: 'pnpm' })
+  await createProject({
+    name: 'generated',
+    appType,
+    frontends: ['web'],
+    cwd: root,
+    defaults: true,
+    install: false,
+    git: false,
+    deploy: false,
+    packageManager: 'pnpm',
+  })
   return path.join(root, 'generated')
 }
 
@@ -38,13 +48,30 @@ describe('architecture-aware generation', () => {
     expect(await readFile(path.join(project, 'src/routes/reports/+page.svelte'), 'utf8')).toContain('Reports')
     expect(await readFile(path.join(project, 'src/routes/api/orders/+server.ts'), 'utf8')).toContain('kit.handler')
     await expect(generate({ type: 'page', name: 'reports', cwd: project })).rejects.toThrow()
-    await expect(generate({ type: 'api', name: 'outside', output: 'src/unused', cwd: project })).rejects.toThrow()
+    await expect(generate({
+      type: 'api',
+      name: 'outside',
+      output: 'src/unused',
+      cwd: project,
+    })).rejects.toThrow()
     expect(await fse.pathExists(path.join(project, 'src/unused'))).toBe(false)
   })
 
   it.each(['api', 'fullstack'] as const)('%s 根目录自动选择后端，真实 contract/procedure 入口均注册新领域', async (type) => {
     const project = await create(type)
-    const parent = type === 'api' ? 'apps' : 'packages'
+    const workspace = await readFile(path.join(project, 'pnpm-workspace.yaml'), 'utf8')
+    if (type === 'fullstack') {
+      expect(workspace).toContain('deepmerge@4.3.1: patches/deepmerge-4.3.1.patch')
+      expect(workspace).toContain('daisyui@5.7.50: patches/daisyui-5.7.50.patch')
+    }
+    else {
+      expect(workspace).not.toContain('patchedDependencies:')
+    }
+    expect(await readFile(path.join(project, 'patches/deepmerge-4.3.1.patch'), 'utf8')).toContain('key === \'__proto__\'')
+    expect(await readFile(path.join(project, 'patches/daisyui-5.7.50.patch'), 'utf8')).toContain(':where(:scope) > :where')
+    const parent = type === 'api'
+      ? 'apps'
+      : 'packages'
     const service = path.join(project, parent, 'generated-serv')
     const contract = path.join(project, parent, 'generated-contract')
     await generate({ type: 'api', name: 'purchase-orders', cwd: project })
@@ -54,30 +81,74 @@ describe('architecture-aware generation', () => {
     expect(index).toContain('purchaseOrders: createPurchaseOrdersProcedures()')
     expect(await fse.pathExists(path.join(project, 'src/routes'))).toBe(false)
     await expect(generate({ type: 'api', name: 'purchase-orders', cwd: project })).rejects.toThrow()
-    await generate({ type: 'api', name: 'purchase-orders', cwd: service, force: true })
+    await generate({
+      type: 'api',
+      name: 'purchase-orders',
+      cwd: service,
+      force: true,
+    })
     expect((await readFile(path.join(service, 'src/server/procedures/index.ts'), 'utf8')).match(/purchaseOrders: createPurchaseOrdersProcedures\(\)/g)).toHaveLength(1)
-    await expect(generate({ type: 'api', name: 'app', cwd: service, force: true })).rejects.toThrow()
+    await expect(generate({
+      type: 'api',
+      name: 'app',
+      cwd: service,
+      force: true,
+    })).rejects.toThrow()
     const originalContract = await readFile(path.join(contract, 'src/generated-contract.ts'), 'utf8')
-    await expect(generate({ type: 'api', name: 'generated', cwd: service, force: true })).rejects.toThrow()
+    await expect(generate({
+      type: 'api',
+      name: 'generated',
+      cwd: service,
+      force: true,
+    })).rejects.toThrow()
     expect(await readFile(path.join(contract, 'src/generated-contract.ts'), 'utf8')).toBe(originalContract)
     await expect(generate({ type: 'page', name: 'reports', cwd: service })).rejects.toThrow()
-    await expect(generate({ type: 'api', name: 'unused', output: 'src/routes', cwd: service })).rejects.toThrow()
-  })
+    await expect(generate({
+      type: 'api',
+      name: 'unused',
+      output: 'src/routes',
+      cwd: service,
+    })).rejects.toThrow()
+  }, 30_000)
 
   it('fullstack 的纯 Vite workspace 拒绝虚假的文件路由，不自动转写另一个应用', async () => {
     const project = await create('fullstack')
-    for (const type of ['page', 'api'] as const)
-      await expect(generate({ type, name: 'fake', cwd: project, workspace: 'generated-web' })).rejects.toThrow()
+    for (const type of ['page', 'api'] as const) {
+      await expect(generate({
+        type,
+        name: 'fake',
+        cwd: project,
+        workspace: 'generated-web',
+      })).rejects.toThrow()
+    }
     expect(await fse.pathExists(path.join(project, 'apps/generated-web/src/routes'))).toBe(false)
   })
 
   it('多个适用 workspace 必须显式选择，包名和相对路径均能定位', async () => {
     const project = await create('api')
-    await fse.outputJson(path.join(project, 'apps/website/package.json'), { name: 'website', dependencies: { '@h-ai/core': '*', '@sveltejs/kit': '*', '@h-ai/kit': '*', 'zod': '*' } })
+    await fse.outputJson(path.join(project, 'apps/website/package.json'), {
+      name: 'website',
+      dependencies: {
+        '@h-ai/core': '*',
+        '@sveltejs/kit': '*',
+        '@h-ai/kit': '*',
+        'zod': '*',
+      },
+    })
     await expect(generate({ type: 'api', name: 'ambiguous', cwd: project })).rejects.toThrow()
-    await generate({ type: 'api', name: 'selected', cwd: project, workspace: 'apps/website' })
+    await generate({
+      type: 'api',
+      name: 'selected',
+      cwd: project,
+      workspace: 'apps/website',
+    })
     expect(await fse.pathExists(path.join(project, 'apps/website/src/routes/api/selected/+server.ts'))).toBe(true)
-    await generate({ type: 'page', name: 'selected', cwd: project, workspace: 'website' })
+    await generate({
+      type: 'page',
+      name: 'selected',
+      cwd: project,
+      workspace: 'website',
+    })
     expect(await fse.pathExists(path.join(project, 'apps/website/src/routes/selected/+page.svelte'))).toBe(true)
   })
 
@@ -96,20 +167,28 @@ describe('architecture-aware generation', () => {
     const outside = path.join(path.dirname(project), 'outside')
     await fse.ensureDir(outside)
     await fse.ensureSymlink(outside, path.join(project, 'src/routes/linked'), 'junction')
-    await expect(generate({ type: 'api', name: 'escaped', cwd: project, output: 'src/routes/linked' })).rejects.toThrow()
+    await expect(generate({
+      type: 'api',
+      name: 'escaped',
+      cwd: project,
+      output: 'src/routes/linked',
+    })).rejects.toThrow()
     expect(await fse.readdir(outside)).toEqual([])
   })
 
-  it('svelteKit 自定义 kit.files 时明确拒绝猜测 src/routes', async () => {
+  it('svelteKit 3 在 Vite 自定义 files 时明确拒绝猜测 src/routes', async () => {
     const project = await create('website')
-    await fse.writeFile(path.join(project, 'svelte.config.js'), 'export default { kit: { files: { routes: \'custom/routes\' } } }')
+    await fse.writeFile(path.join(project, 'vite.config.ts'), 'import { sveltekit } from "@sveltejs/kit/vite"; export default { plugins: [sveltekit({ files: { routes: "custom/routes" } })] }')
     await expect(generate({ type: 'page', name: 'unconsumed', cwd: project })).rejects.toThrow()
     expect(await fse.pathExists(path.join(project, 'src/routes/unconsumed'))).toBe(false)
   })
 
   it('svelteKit API 缺少实际使用的 kit/zod 依赖时拒绝生成', async () => {
     const project = await create('website')
-    await fse.writeJson(path.join(project, 'package.json'), { name: 'plain-sveltekit', dependencies: { '@sveltejs/kit': '*' } })
+    await fse.writeJson(path.join(project, 'package.json'), {
+      name: 'plain-sveltekit',
+      dependencies: { '@sveltejs/kit': '*' },
+    })
     await expect(generate({ type: 'api', name: 'unavailable', cwd: project })).rejects.toThrow()
     expect(await fse.pathExists(path.join(project, 'src/routes/api/unavailable'))).toBe(false)
   })
@@ -145,7 +224,9 @@ describe('architecture-aware generation', () => {
     expect(error).toBeInstanceOf(AggregateError)
     if (!(error instanceof AggregateError))
       throw new Error('Expected combined generation errors')
-    expect(error.errors.map((cause: unknown) => cause instanceof Error ? cause.message : String(cause))).toEqual(['Primary commit failure', 'Stage cleanup failure 1', 'Stage cleanup failure 2'])
+    expect(error.errors.map((cause: unknown) => cause instanceof Error
+      ? cause.message
+      : String(cause))).toEqual(['Primary commit failure', 'Stage cleanup failure 1', 'Stage cleanup failure 2'])
     expect(attempts).toBe(5)
     expect(await fse.pathExists(path.join(project, 'apps/generated-contract/src/cleanup-contract.ts'))).toBe(false)
   })

@@ -8,7 +8,10 @@ import { expect, test } from '@playwright/test'
 const evidence = process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve('test-results/auth-screenshots')
 async function screenshot(page: Page, name: string) {
   await mkdir(evidence, { recursive: true })
-  await page.screenshot({ path: path.join(evidence, `${name}.png`), fullPage: true })
+  await page.screenshot({
+    path: path.join(evidence, `${name}.png`),
+    fullPage: true,
+  })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 }
 async function notification(page: Page, email: string, template: string) {
@@ -31,7 +34,9 @@ async function reloadAuthenticatedPage(page: Page, username: string) {
 for (const platform of ['mobile', 'desktop'] as const) {
   test(`${platform} 注册、邮件验证码登录、密码重置与布局`, async ({ page, context, baseURL }) => {
     test.setTimeout(90_000)
-    const url = platform === 'mobile' ? `${baseURL}/auth/login` : 'http://127.0.0.1:12582/#/login'
+    const url = platform === 'mobile'
+      ? `${baseURL}/auth/login`
+      : 'http://127.0.0.1:12582/#/login'
     if (platform === 'desktop')
       await page.setViewportSize({ width: 1280, height: 800 })
     const suffix = Date.now()
@@ -41,7 +46,9 @@ for (const platform of ['mobile', 'desktop'] as const) {
     await expect(page.locator('#login-username')).toBeVisible()
     await screenshot(page, `${platform}-login`)
     await page.getByRole('link', { name: /立即注册|Register now/i }).click()
-    await expect(page).toHaveURL(platform === 'mobile' ? /\/auth\/register$/ : /#\/register$/)
+    await expect(page).toHaveURL(platform === 'mobile'
+      ? /\/auth\/register$/
+      : /#\/register$/)
     const registration = page.locator('.register-form')
     await expect(registration.locator('#register-username')).toBeEditable()
     await screenshot(page, `${platform}-register`)
@@ -84,7 +91,9 @@ for (const platform of ['mobile', 'desktop'] as const) {
       await page.setViewportSize({ width, height: 960 })
       const availableWidth = await page.evaluate(() => document.documentElement.clientWidth)
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-      expect((await page.locator('main').boundingBox())!.width).toBeGreaterThan(availableWidth - (platform === 'desktop' ? 280 : 2))
+      expect((await page.locator('main').boundingBox())!.width).toBeGreaterThan(availableWidth - (platform === 'desktop'
+        ? 280
+        : 2))
     }
     await context.clearCookies()
     await page.reload()
@@ -120,7 +129,9 @@ for (const platform of ['mobile', 'desktop'] as const) {
       await page.setViewportSize({ width, height: 960 })
       const availableWidth = await page.evaluate(() => document.documentElement.clientWidth)
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-      expect((await page.locator('main').boundingBox())!.width).toBeGreaterThan(availableWidth - (platform === 'desktop' ? 280 : 2))
+      expect((await page.locator('main').boundingBox())!.width).toBeGreaterThan(availableWidth - (platform === 'desktop'
+        ? 280
+        : 2))
     }
     await reloadAuthenticatedPage(page, username)
   })

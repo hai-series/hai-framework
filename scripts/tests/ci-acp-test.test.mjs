@@ -68,7 +68,12 @@ describe('ci ACP 原生验收前置', () => {
     const calls = []
     await runACPContainerTests(async (command, args, environment) => {
       calls.push({ command, args, environment })
-    }, { ...trustedEnvironment, HAI_ACP_E2E_OPENROUTER: '1', HAI_ACP_E2E_REQUIRED: '1', HAI_ACP_E2E_GOOSE: '1' })
+    }, {
+      ...trustedEnvironment,
+      HAI_ACP_E2E_OPENROUTER: '1',
+      HAI_ACP_E2E_REQUIRED: '1',
+      HAI_ACP_E2E_GOOSE: '1',
+    })
     expect(calls.map(call => [call.command, call.args[0]])).toEqual([
       ['docker', 'info'],
       ['docker', 'build'],
@@ -89,7 +94,15 @@ describe('ci ACP 原生验收前置', () => {
     }
     const codex = JSON.parse(readFileSync(new URL('../../packages/ai/models/agents/codex-acp/agent.json', import.meta.url), 'utf8'))
     const dsh = JSON.parse(readFileSync(new URL('../../packages/ai/models/agents/deepseek-harness/agent.json', import.meta.url), 'utf8'))
-    expect(calls[5].args).toEqual(['install', '--global', '--no-audit', '--no-fund', `${codex.package}@${codex.version}`, `${codex.runtime.package}@${codex.runtime.version}`, `${dsh.package}@${dsh.version}`])
+    expect(calls[5].args).toEqual([
+      'install',
+      '--global',
+      '--no-audit',
+      '--no-fund',
+      `${codex.package}@${codex.version}`,
+      `${codex.runtime.package}@${codex.runtime.version}`,
+      `${dsh.package}@${dsh.version}`,
+    ])
     expect(calls.at(-1).args).toContain('tests/ai-acp-openrouter.e2e.test.ts')
     expect(calls.at(-1).args).toContain('tests/ai-acp-goose.e2e.test.ts')
     expect(calls.at(-1).environment).toMatchObject({
@@ -110,7 +123,10 @@ describe('ci ACP 原生验收前置', () => {
     const calls = []
     await runACPContainerTests(async (command, args, environment) => {
       calls.push({ command, args, environment })
-    }, { ...trustedEnvironment, ...identity })
+    }, {
+      ...trustedEnvironment,
+      ...identity,
+    })
     expect(calls).toHaveLength(5)
     expect(calls.every(call => !Object.hasOwn(call.environment, 'OPENROUTER_APIKEY'))).toBe(true)
   })
@@ -164,7 +180,14 @@ describe('ci ACP 原生验收前置', () => {
     expect(secret).toContain('github.ref == \'refs/heads/main\'')
     expect(workflow.jobs.unit.with.browser).toBe(true)
     expect(workflow.jobs.unit.with.openrouter_model).toBe('qwen/qwen3.7-flash')
-    expect(JSON.parse(workflow.jobs.unit.with.openrouter_capabilities)).toMatchObject({ contextWindow: 1000000, maxOutputTokens: 65536, reasoning: { supported: true, efforts: ['low', 'medium', 'high'] } })
+    expect(JSON.parse(workflow.jobs.unit.with.openrouter_capabilities)).toMatchObject({
+      contextWindow: 1000000,
+      maxOutputTokens: 65536,
+      reasoning: {
+        supported: true,
+        efforts: ['low', 'medium', 'high'],
+      },
+    })
     expect(stage.on.workflow_call.secrets.OPENROUTER_APIKEY.required).toBe(false)
     expect(stage.jobs.check.env).not.toHaveProperty('OPENROUTER_APIKEY')
     const steps = stage.jobs.check.steps

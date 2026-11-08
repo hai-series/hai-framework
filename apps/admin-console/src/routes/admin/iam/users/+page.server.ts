@@ -6,10 +6,10 @@
 
 import type { UserSortDirection, UserSortField } from '@h-ai/iam'
 import type { PageServerLoad } from './$types'
-import { listAdminRoles, requireAdminData } from '$lib/server/iam-admin.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { error } from '@sveltejs/kit'
+import { listAdminRoles, requireAdminData } from '#lib/server/iam-admin.js'
 
 interface UserData {
   id: string
@@ -78,12 +78,16 @@ function parseUserSort(url: URL): {
   /** URL 中请求的表格排序字段。 */
   const requestedSortBy = url.searchParams.get('sortBy') ?? ''
   /** URL 中请求的排序方向，仅 asc 有效，其余统一为 desc。 */
-  const requestedSortDirection = url.searchParams.get('sortDirection') === 'asc' ? 'asc' : 'desc'
+  const requestedSortDirection = url.searchParams.get('sortDirection') === 'asc'
+    ? 'asc'
+    : 'desc'
   /**
    * 已通过自有键存在性判断的前端排序字段。
    * 使用 Object.hasOwn 排除 Object 原型属性，避免 `toString` 等 URL 输入绕过字段白名单。
    */
-  const pageSortBy = Object.hasOwn(USER_PAGE_SORT_FIELDS, requestedSortBy) ? requestedSortBy as UserPageSortKey : ''
+  const pageSortBy = Object.hasOwn(USER_PAGE_SORT_FIELDS, requestedSortBy)
+    ? requestedSortBy as UserPageSortKey
+    : ''
 
   return {
     sortBy: pageSortBy ? USER_PAGE_SORT_FIELDS[pageSortBy] : undefined,
@@ -96,14 +100,16 @@ function parseUserSort(url: URL): {
 export const load: PageServerLoad = async ({ url, locals }) => {
   // 权限检查：user:read
   if (!kit.guard.check(locals.session, 'user:read')) {
-    throw error(403, { message: 'Forbidden' })
+    error(403, 'Forbidden')
   }
 
   const page = parsePositiveInt(url.searchParams.get('page'), 1)
   const pageSize = Math.min(parsePositiveInt(url.searchParams.get('pageSize'), 20), 100)
   const search = url.searchParams.get('search') || undefined
   const statusParam = url.searchParams.get('accountStatus')
-  const accountStatus = statusParam === 'active' || statusParam === 'dormant' || statusParam === 'closed' ? statusParam : undefined
+  const accountStatus = statusParam === 'active' || statusParam === 'dormant' || statusParam === 'closed'
+    ? statusParam
+    : undefined
   const roleFilter = url.searchParams.get('role') || undefined
   /** 校验后的服务端排序参数与客户端回填值。 */
   const userSort = parseUserSort(url)
@@ -111,7 +117,16 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   // 角色列表 + 用户列表（含角色）并行获取
   const [roles, usersResult] = await Promise.all([
     listAdminRoles(),
-    iam.user.listUsers({ page, pageSize, search, accountStatus, roleCode: roleFilter || undefined, include: ['roles'], sortBy: userSort.sortBy, sortDirection: userSort.sortDirection }),
+    iam.user.listUsers({
+      page,
+      pageSize,
+      search,
+      accountStatus,
+      roleCode: roleFilter || undefined,
+      include: ['roles'],
+      sortBy: userSort.sortBy,
+      sortDirection: userSort.sortDirection,
+    }),
   ])
   const data = requireAdminData(usersResult)
   const iamUsers = data.items

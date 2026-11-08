@@ -51,8 +51,13 @@ export const feedback: FeedbackFunctions = {
         return configFailure(parsed.error.issues.map(issue => issue.path.join('.')))
       if (options.collectEvidence !== undefined && typeof options.collectEvidence !== 'function')
         return configFailure(['collectEvidence'])
-      if (!reldb.isInitialized || !storage.isInitialized)
-        return configFailure([!reldb.isInitialized ? 'reldb' : 'storage'])
+      if (!reldb.isInitialized || !storage.isInitialized) {
+        return configFailure([
+          !reldb.isInitialized
+            ? 'reldb'
+            : 'storage',
+        ])
+      }
       if (parsed.data.notificationMode === 'reach') {
         const provider = await import('@h-ai/reach').catch(() => undefined)
         if (!provider)
@@ -117,7 +122,13 @@ export const feedback: FeedbackFunctions = {
     return current !== null
   },
   get config() {
-    return current ? { ...current.config, recipients: [...current.config.recipients], envAllowlist: [...current.config.envAllowlist] } : null
+    return current
+      ? {
+          ...current.config,
+          recipients: [...current.config.recipients],
+          envAllowlist: [...current.config.envAllowlist],
+        }
+      : null
   },
   get budget() {
     return resolveFeedbackBudget(current?.config)
@@ -138,7 +149,14 @@ export const feedback: FeedbackFunctions = {
 }
 
 function configFailure(fields: string[]) {
-  return { success: false as const, error: { ...HaiFeedbackError.CONFIG_ERROR, message: feedbackM('feedback_configError'), ext: { module: 'feedback', fields } } }
+  return {
+    success: false as const,
+    error: {
+      ...HaiFeedbackError.CONFIG_ERROR,
+      message: feedbackM('feedback_configError'),
+      ext: { module: 'feedback', fields },
+    },
+  }
 }
 
 async function guarded<T>(work: () => Promise<import('@h-ai/core').HaiResult<T>>) {

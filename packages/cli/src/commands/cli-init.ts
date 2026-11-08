@@ -30,19 +30,58 @@ export interface InitOptions extends GlobalOptions {
  * 模块到配置文件的映射
  */
 const MODULE_CONFIG_MAP: Record<string, { configKey: string, label: string }> = {
-  '@h-ai/core': { configKey: 'core', get label() { return cliM('cli_coreLabel') } },
-  '@h-ai/serv': { configKey: 'serv', get label() { return cliM('cli_serviceLabel') } },
-  '@h-ai/reldb': { configKey: 'db', get label() { return cliM('cli_featureDbName') } },
-  '@h-ai/cache': { configKey: 'cache', get label() { return cliM('cli_featureCacheName') } },
-  '@h-ai/iam': { configKey: 'iam', get label() { return cliM('cli_featureIamName') } },
-  '@h-ai/storage': { configKey: 'storage', get label() { return cliM('cli_featureStorageName') } },
-  '@h-ai/ai': { configKey: 'ai', get label() { return cliM('cli_featureAiName') } },
-  '@h-ai/vecdb': { configKey: 'vecdb', get label() { return cliM('cli_featureVecdbName') } },
-  '@h-ai/reach': { configKey: 'reach', get label() { return cliM('cli_featureReachName') } },
-  '@h-ai/scheduler': { configKey: 'scheduler', get label() { return cliM('cli_featureSchedulerName') } },
-  '@h-ai/audit': { configKey: 'audit', get label() { return cliM('cli_featureAuditName') } },
-  '@h-ai/payment': { configKey: 'payment', get label() { return cliM('cli_featurePaymentName') } },
-  '@h-ai/deploy': { configKey: 'deploy', get label() { return cliM('cli_featureDeployName') } },
+  '@h-ai/core': {
+    configKey: 'core',
+    get label() { return cliM('cli_coreLabel') },
+  },
+  '@h-ai/serv': {
+    configKey: 'serv',
+    get label() { return cliM('cli_serviceLabel') },
+  },
+  '@h-ai/reldb': {
+    configKey: 'db',
+    get label() { return cliM('cli_featureDbName') },
+  },
+  '@h-ai/cache': {
+    configKey: 'cache',
+    get label() { return cliM('cli_featureCacheName') },
+  },
+  '@h-ai/iam': {
+    configKey: 'iam',
+    get label() { return cliM('cli_featureIamName') },
+  },
+  '@h-ai/storage': {
+    configKey: 'storage',
+    get label() { return cliM('cli_featureStorageName') },
+  },
+  '@h-ai/ai': {
+    configKey: 'ai',
+    get label() { return cliM('cli_featureAiName') },
+  },
+  '@h-ai/vecdb': {
+    configKey: 'vecdb',
+    get label() { return cliM('cli_featureVecdbName') },
+  },
+  '@h-ai/reach': {
+    configKey: 'reach',
+    get label() { return cliM('cli_featureReachName') },
+  },
+  '@h-ai/scheduler': {
+    configKey: 'scheduler',
+    get label() { return cliM('cli_featureSchedulerName') },
+  },
+  '@h-ai/audit': {
+    configKey: 'audit',
+    get label() { return cliM('cli_featureAuditName') },
+  },
+  '@h-ai/payment': {
+    configKey: 'payment',
+    get label() { return cliM('cli_featurePaymentName') },
+  },
+  '@h-ai/deploy': {
+    configKey: 'deploy',
+    get label() { return cliM('cli_featureDeployName') },
+  },
 }
 
 /**
@@ -117,7 +156,11 @@ export async function initProject(options: InitOptions): Promise<void> {
     }
 
     const { project, existing, missing } = result
-    spinner.succeed(cliM('cli_initDetected', { params: { name: chalk.cyan(project.name) } }))
+    spinner.succeed(cliM('cli_initDetected', {
+      params: {
+        name: chalk.cyan(project.name),
+      },
+    }))
 
     // 即使配置齐备，也补全新增 AI 参考资源；已有项目规则与 Skill 不覆盖。
     if (project.isHaiProject) {
@@ -134,9 +177,21 @@ export async function initProject(options: InitOptions): Promise<void> {
     // 显示项目状态
     writeCliMessage('')
     writeCliMessage(chalk.bold(cliM('cli_initStatus')))
-    writeCliMessage(cliM('cli_initName', { params: { name: chalk.cyan(project.name) } }))
-    writeCliMessage(cliM('cli_initVersion', { params: { version: project.version } }))
-    writeCliMessage(cliM('cli_initModules', { params: { modules: project.haiPackages.length > 0 ? project.haiPackages.map(p => chalk.cyan(p)).join(', ') : chalk.gray(cliM('cli_none')) } }))
+    writeCliMessage(cliM('cli_initName', {
+      params: {
+        name: chalk.cyan(project.name),
+      },
+    }))
+    writeCliMessage(cliM('cli_initVersion', {
+      params: { version: project.version },
+    }))
+    writeCliMessage(cliM('cli_initModules', {
+      params: {
+        modules: project.haiPackages.length > 0
+          ? project.haiPackages.map(p => chalk.cyan(p)).join(', ')
+          : chalk.gray(cliM('cli_none')),
+      },
+    }))
     writeCliMessage('')
 
     // 显示配置状态
@@ -171,7 +226,9 @@ export async function initProject(options: InitOptions): Promise<void> {
         await writeFile(configPath, content)
         generated++
       }
-      spinner.succeed(cliM('cli_initGenerated', { params: { count: generated } }))
+      spinner.succeed(cliM('cli_initGenerated', {
+        params: { count: generated },
+      }))
     }
 
     // 强制模式：重新生成所有配置
@@ -188,7 +245,9 @@ export async function initProject(options: InitOptions): Promise<void> {
         await writeFile(configPath, content)
         regenerated++
       }
-      spinner.succeed(cliM('cli_initRegenerated', { params: { count: regenerated } }))
+      spinner.succeed(cliM('cli_initRegenerated', {
+        params: { count: regenerated },
+      }))
     }
 
     // 检查 core 配置（始终需要）

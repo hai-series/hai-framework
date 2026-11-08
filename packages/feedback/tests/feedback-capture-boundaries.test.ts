@@ -10,8 +10,17 @@ import { storage } from '@h-ai/storage'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { feedback } from '../src/index.js'
 
-const actor = { scopeId: 'capture-scope', userId: 'capture-user', permissions: ['feedback:*'] }
-const config = { appId: 'capture-boundaries', recipients: ['admin@example.test'], adminUrl: 'http://localhost/admin/feedback', workerIntervalMs: 0 }
+const actor = {
+  scopeId: 'capture-scope',
+  userId: 'capture-user',
+  permissions: ['feedback:*'],
+}
+const config = {
+  appId: 'capture-boundaries',
+  recipients: ['admin@example.test'],
+  adminUrl: 'http://localhost/admin/feedback',
+  workerIntervalMs: 0,
+}
 let directory: string | undefined
 let previousLevel = core.logger.getLevel()
 
@@ -22,7 +31,11 @@ beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'hai-feedback-capture-'))
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
   expect((await storage.init({ type: 'local', root: directory })).success).toBe(true)
-  expect((await reach.init({ providers: [{ name: 'email', type: 'console' }] })).success).toBe(true)
+  expect((await reach.init({
+    providers: [
+      { name: 'email', type: 'console' },
+    ],
+  })).success).toBe(true)
   expect((await feedback.init(config)).success).toBe(true)
 })
 
@@ -67,7 +80,7 @@ async function expectMissing(id: string, missingReason: string) {
   }
 }
 
-describe.sequential('服务端现场有界采集', () => {
+describe('服务端现场有界采集', { concurrent: false }, () => {
   it('错误窗口分批持久化，201条现场不逐条往返数据库', async () => {
     const reads = vi.spyOn(reldb.sql, 'get')
     const writes = vi.spyOn(reldb.sql, 'execute')

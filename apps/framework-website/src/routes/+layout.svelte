@@ -1,14 +1,17 @@
 <script lang='ts'>
   import type { LayoutProps } from './$types'
-  import { browser } from '$app/environment'
-  import { base, resolve } from '$app/paths'
+  import { browser } from '$app/env'
+  import { resolve } from '$app/paths'
   import { page } from '$app/state'
-  import SearchDialog from '$lib/components/SearchDialog.svelte'
-  import * as m from '$lib/paraglide/messages'
-  import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
   import { LanguageSwitch, setGlobalLocale, ThemeToggle, ToastContainer } from '@h-ai/ui'
   import { applyTheme, getSavedTheme } from '@h-ai/ui/theme'
   import { onMount } from 'svelte'
+  import SearchDialog from '#lib/components/SearchDialog.svelte'
+  import * as m from '#lib/paraglide/messages.js'
+  import { getLocale, setLocale } from '#lib/paraglide/runtime.js'
+
+  // Vite 配置固定 paths.relative=false，HTTP 前缀不会随 SSR 页面深度改变。
+  const base = resolve('/').replace(/\/$/, '')
   import '../app.css'
 
   const { children, data }: LayoutProps = $props()
@@ -18,7 +21,9 @@
   let interactive = $state(false)
 
   function changeLanguage(language: string) {
-    const next = language === 'en-US' || language === 'ja-JP' ? language : 'zh-CN'
+    const next = language === 'en-US' || language === 'ja-JP'
+      ? language
+      : 'zh-CN'
     locale = next
     setLocale(next, { reload: false })
     setGlobalLocale(next)
@@ -38,17 +43,21 @@
 </script>
 
 <svelte:head>
-  <meta name='theme-color' content={theme === 'dark' ? '#1d232a' : '#ffffff'} />
+  <meta name='theme-color' content={theme === 'dark'
+    ? '#1d232a'
+    : '#ffffff'} />
 </svelte:head>
 
 {#key locale}
   <a class='skip-link' href='#main-content'>{m.site_skip()}</a>
   <header class='site-header'>
     <div class='header-inner'>
-      <a class='brand' href={resolve('/', {})} aria-label='hai-framework'><span class='brand-mark' aria-hidden='true'>h</span><span>hai<span class='brand-light'>framework</span></span></a>
+      <a class='brand' href={resolve('/')} aria-label='hai-framework'><span class='brand-mark' aria-hidden='true'>h</span><span>hai<span class='brand-light'>framework</span></span></a>
       <span class='version-tag'>{data.version}</span>
       <nav class='main-nav' aria-label={m.site_navigation()}>
-        <a href={resolve('/', {})} aria-current={!docsActive ? 'page' : undefined}>{m.site_home()}</a>
+        <a href={resolve('/')} aria-current={!docsActive
+          ? 'page'
+          : undefined}>{m.site_home()}</a>
         <a href={resolve('/docs/[...slug]', { slug: 'getting-started/create' })}>{m.site_quickstart()}</a>
         <a href={resolve('/docs/[...slug]', { slug: '' })} aria-current={docsActive ? 'page' : undefined}>{m.site_docs()}</a>
         <a href='https://github.com/hai-series/hai-framework' target='_blank' rel='noopener noreferrer'>GitHub <span aria-hidden='true'>↗</span></a>
@@ -64,7 +73,7 @@
     {@render children()}
   </main>
   <footer class='site-footer'>
-    <div><a class='brand' href={resolve('/', {})}>hai<span class='brand-light'>framework</span></a><p>{m.site_footer()}</p></div>
+    <div><a class='brand' href={resolve('/')}>hai<span class='brand-light'>framework</span></a><p>{m.site_footer()}</p></div>
     <nav aria-label={m.site_resources()}><a href={resolve('/docs/[...slug]', { slug: 'README.en' })}>English guide</a><a href={resolve('/docs/[...slug]', { slug: 'README.ja' })}>日本語ガイド</a><a href='https://github.com/hai-series/hai-framework/blob/main/LICENSE'>Apache-2.0</a></nav>
   </footer>
   {#if browser}<SearchDialog bind:open={searchOpen} />{/if}

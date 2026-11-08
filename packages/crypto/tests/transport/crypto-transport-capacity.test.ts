@@ -13,7 +13,17 @@ describe('transport capacity configuration', () => {
     expect(Object.isFrozen(resolveTransportBodyLimits())).toBe(true)
   })
 
-  it.each([0, -1, 1023, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 64 * 1024 * 1024 + 1, '8388608', null])('拒绝无效容量 %s', (limit) => {
+  it.each([
+    0,
+    -1,
+    1023,
+    1.5,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    64 * 1024 * 1024 + 1,
+    '8388608',
+    null,
+  ])('拒绝无效容量 %s', (limit) => {
     // 未知配置入口须执行运行时校验，不能仅依赖静态类型。
     expect(() => resolveTransportBodyLimits(limit as number)).toThrow(RangeError)
   })

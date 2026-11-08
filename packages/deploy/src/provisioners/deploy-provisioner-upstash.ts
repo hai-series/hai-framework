@@ -58,7 +58,12 @@ async function upstashFetch<T>(
   })
 
   if (!response.ok) {
-    throw new Error(deployM('deploy_apiError', { params: { service: 'Upstash', status: String(response.status) } }))
+    throw new Error(deployM('deploy_apiError', {
+      params: {
+        service: 'Upstash',
+        status: String(response.status),
+      },
+    }))
   }
 
   return response.json() as Promise<T>
@@ -89,7 +94,9 @@ function buildUpstashProvisionResult(database: UpstashDatabase, resourceStatus: 
   const databaseId = database.database_id ?? ''
 
   if (!databaseId || !database.endpoint || !database.password || !database.port) {
-    throw new Error(deployM('deploy_provisionNoResult', { params: { service: 'Upstash' } }))
+    throw new Error(deployM('deploy_provisionNoResult', {
+      params: { service: 'Upstash' },
+    }))
   }
 
   return {
@@ -135,7 +142,9 @@ export function createUpstashProvisioner(): ServiceProvisioner {
         const userEmail = credentials.email ?? ''
         const userKey = credentials.apiKey ?? credentials.api_key ?? credentials.token ?? ''
         if (!userEmail || !userKey) {
-          throw new Error(deployM('deploy_credentialMissing', { params: { fields: 'email, api_key' } }))
+          throw new Error(deployM('deploy_credentialMissing', {
+            params: { fields: 'email, api_key' },
+          }))
         }
 
         await listUpstashDatabases(userEmail, userKey)
@@ -150,7 +159,11 @@ export function createUpstashProvisioner(): ServiceProvisioner {
         return err(
           HaiDeployError.AUTH_FAILED,
           deployM('deploy_authFailed', {
-            params: { error: error instanceof Error ? error.message : String(error) },
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
           }),
           error,
         )
@@ -174,13 +187,18 @@ export function createUpstashProvisioner(): ServiceProvisioner {
         if (existingDatabase !== null) {
           const databaseId = existingDatabase.database_id ?? ''
           if (!databaseId) {
-            throw new Error(deployM('deploy_provisionNoResult', { params: { service: 'Upstash' } }))
+            throw new Error(deployM('deploy_provisionNoResult', {
+              params: { service: 'Upstash' },
+            }))
           }
 
           resource = { resourceInfo: `upstash-db:${databaseId}`, resourceStatus: 'reused' }
           const detail = await getUpstashDatabase(email, apiKey, databaseId)
           logger.info('Upstash Redis reused', { databaseId, databaseName })
-          return ok(buildUpstashProvisionResult({ ...existingDatabase, ...detail }, 'reused'))
+          return ok(buildUpstashProvisionResult({
+            ...existingDatabase,
+            ...detail,
+          }, 'reused'))
         }
 
         const data = await upstashFetch<UpstashDatabase>(email, apiKey, '/v2/redis/database', {
@@ -204,7 +222,9 @@ export function createUpstashProvisioner(): ServiceProvisioner {
           return recoveryFailure({ ...HaiDeployError.PROVISION_FAILED, message: '' }, {
             projectName: appName,
             stage: 'provision:cache',
-            resources: [{ serviceType: 'cache', provisionerName: 'upstash', ...resource }],
+            resources: [
+              { serviceType: 'cache', provisionerName: 'upstash', ...resource },
+            ],
           })
         }
         return err(
@@ -212,7 +232,9 @@ export function createUpstashProvisioner(): ServiceProvisioner {
           deployM('deploy_provisionFailed', {
             params: {
               service: 'upstash',
-              error: error instanceof Error ? error.message : String(error),
+              error: error instanceof Error
+                ? error.message
+                : String(error),
             },
           }),
           error,

@@ -14,8 +14,12 @@ import type { NavAdapter } from '@h-ai/ui'
 /** 解析 `location.hash` 为 `{ pathname, search }`。 */
 function parseHash(hash: string): { pathname: string, search: string } {
   // 去掉前缀 '#'；空 hash 视为根路径 '/'。
-  const raw = hash.startsWith('#') ? hash.slice(1) : hash
-  const normalized = raw === '' || raw === '/' ? '/' : raw
+  const raw = hash.startsWith('#')
+    ? hash.slice(1)
+    : hash
+  const normalized = raw === '' || raw === '/'
+    ? '/'
+    : raw
 
   const queryIndex = normalized.indexOf('?')
   if (queryIndex === -1)
@@ -31,12 +35,16 @@ function parseHash(hash: string): { pathname: string, search: string } {
 function pathToHash(path: string): string {
   if (path === '' || path === '/')
     return '#/'
-  return path.startsWith('/') ? `#${path}` : `#/${path}`
+  return path.startsWith('/')
+    ? `#${path}`
+    : `#/${path}`
 }
 
 // ─── 响应式状态 ─────────────────────────────────────────────────────────────
 
-const initial = parseHash(typeof globalThis.location !== 'undefined' ? globalThis.location.hash : '')
+const initial = parseHash(typeof globalThis.location !== 'undefined'
+  ? globalThis.location.hash
+  : '')
 
 let pathnameState = $state(initial.pathname)
 let searchState = $state(initial.search)
@@ -59,7 +67,7 @@ export function currentSearch(): string {
 export function navigate(path: string): void {
   const targetHash = pathToHash(path)
   if (globalThis.location.hash === targetHash) {
-    // 主动同步状态：hash 没变时不会触发 hashchange，需要手动刷新（如 invalidateAll 场景）。
+    // 主动同步状态：hash 没变时不会触发 hashchange，需要手动刷新（如 refreshAll 场景）。
     syncFromHash()
     return
   }

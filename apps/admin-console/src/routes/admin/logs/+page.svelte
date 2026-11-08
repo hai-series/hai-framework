@@ -2,14 +2,14 @@
   Admin Console - 审计日志页面（使用 CrudPage）
 -->
 <script lang='ts'>
-  import type { AuditBackupReceipt } from '$lib/services/audit-backup.js'
+  import type { AuditBackupReceipt } from '#lib/services/audit-backup.js'
   import type { PageData } from './$types'
-  import { auditLogCrud } from '$lib/crud/admin-crud'
-  import * as m from '$lib/paraglide/messages'
-  import { newAuditBackupId, runAuditBackup } from '$lib/services/audit-backup.js'
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
   import { Badge, Button, CrudPage } from '@h-ai/ui'
   import { errorMessage as formatOperationError, useToastFeedback } from '@h-ai/ui/toast'
+  import { auditLogCrud } from '#lib/crud/admin-crud.js'
+  import * as m from '#lib/paraglide/messages.js'
+  import { newAuditBackupId, runAuditBackup } from '#lib/services/audit-backup.js'
 
   interface Props {
     data: PageData
@@ -49,7 +49,9 @@
     filters: data.filters,
   })
   useToastFeedback(() => backupError)
-  useToastFeedback(() => receipt ? m.audit_backup_private_hint() : '', 'success')
+  useToastFeedback(() => receipt
+    ? m.audit_backup_private_hint()
+    : '', 'success')
 </script>
 
 <svelte:head>
@@ -68,6 +70,31 @@
   data={crudData}
   permissions={{ create: false, update: false, delete: false }}
   rowClickDetail
-  sortableColumns={[{ key: 'createdAt', label: m.logs_col_time() }, { key: 'action', label: m.logs_col_action() }, { key: 'resource', label: m.logs_col_resource() }, { key: 'category', label: m.audit_category() }, { key: 'outcome', label: m.audit_outcome() }, { key: 'severity', label: m.audit_severity() }]}
+  sortableColumns={[
+    {
+      key: 'createdAt',
+      label: m.logs_col_time(),
+    },
+    {
+      key: 'action',
+      label: m.logs_col_action(),
+    },
+    {
+      key: 'resource',
+      label: m.logs_col_resource(),
+    },
+    {
+      key: 'category',
+      label: m.audit_category(),
+    },
+    {
+      key: 'outcome',
+      label: m.audit_outcome(),
+    },
+    {
+      key: 'severity',
+      label: m.audit_severity(),
+    },
+  ]}
   {nav}
 />

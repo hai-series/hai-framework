@@ -8,6 +8,8 @@
 
 `@h-ai/kit` は hai-framework の SvelteKit 統合モジュールで、共通のリクエストパイプラインと同一オリジンの endpoint ツールを提供します：
 
+実行時の操作は `kit.xx` を使います。公開名前空間の型はサーバー側の `KitFunctions` とブラウザー側の `BrowserKitFunctions` です。ブラウザー条件入口では client、CRUD、ページ内 Token、既定の言語操作だけを利用できます。`AuthCookieWriter` はサーバー認証が現在のリクエストの Cookie に書き込む最小契約です。内部 helper を import せずに、再エクスポートしたメソッドや名前空間の宣言を生成できます。
+
 - `kit.createHandle()`：セッション解析、ルートガード、middleware チェーン、任意の通信・Cookie 暗号化。
 - `kit.handler()`：API endpoint の例外処理境界。
 - `kit.guard` / `kit.response` / `kit.validate` / `kit.auth` / `kit.client` / `kit.crud`
@@ -33,7 +35,7 @@
 ### インストール
 
 ```bash
-npm install @h-ai/kit @h-ai/core sm-crypto@0.5.7
+npm install @h-ai/kit @h-ai/core sm-crypto@0.5.8
 npm install svelte @sveltejs/kit zod
 npm install -D @sveltejs/vite-plugin-svelte vite
 ```
@@ -47,44 +49,43 @@ npm install -D @sveltejs/vite-plugin-svelte vite
 
 #### プロジェクト設定
 
-**svelte.config.js**：
-
-```js
-import adapter from '@sveltejs/adapter-node'
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
-
-const config = {
-  preprocess: [vitePreprocess()],
-  compilerOptions: { runes: true },
-  kit: {
-    adapter: adapter(),
-    // 双构建模式：import { createAdapter } from '@h-ai/kit/adapter'
-    // adapter: await createAdapter(),
-  },
-}
-
-export default config
-```
-
 **vite.config.ts**：
 
 ```ts
+import adapter from '@sveltejs/adapter-node'
 import { sveltekit } from '@sveltejs/kit/vite'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [sveltekit(), tailwindcss()],
-  optimizeDeps: { exclude: ['bits-ui'] },
-  ssr: { noExternal: ['@h-ai/ui', '@h-ai/kit'], external: ['@h-ai/core', 'sm-crypto'] },
+  plugins: [
+    sveltekit({
+      adapter: adapter(),
+      preprocess: [
+        vitePreprocess()
+      ],
+      compilerOptions: { runes: true },
+      // 绝对路径保持 SSR 与浏览器端认证、加密路径一致。
+      paths: { base: '', relative: false },
+    }),
+    tailwindcss(),
+  ],
+  optimizeDeps: {
+    exclude: ['bits-ui']
+  },
+  ssr: {
+    noExternal: ['@h-ai/ui', '@h-ai/kit'],
+    external: ['@h-ai/core', 'sm-crypto']
+  },
 })
 ```
 
-Crypto または Kit/IAM を使う場合、アプリの本番依存に `sm-crypto@0.5.7` を含めます。CLI 生成済みのプロジェクトでは設定済みです。手動導入は `pnpm add sm-crypto@0.5.7` を実行してください。adapter-node は直接の本番依存も参照するため、external 指定だけでは不十分です。
+Crypto または Kit/IAM を使う場合、アプリの本番依存に `sm-crypto@0.5.8` を含めます。CLI 生成済みのプロジェクトでは設定済みです。手動導入は `pnpm add sm-crypto@0.5.8` を実行してください。adapter-node は直接の本番依存も参照するため、external 指定だけでは不十分です。
 
 #### リクエストパイプラインの構築
 
-`/yyy/`などの配下に配置する場合、SvelteKitの`kit.paths.base`とガードが参照する実際のURLを揃えます。`$app/paths`の`base`を`protectedPaths`、`publicPaths`、`loginUrl`に付け、`${base}/api/*`のように指定してください。認証画面は``kit.client.createAuthActions({ basePath: `${base}/api/auth` })``を使用します。Kitはルートグループや配置接頭辞を含むアプリ内`/api/*`を識別し、未認証APIは401、画面は設定したログイン先へ遷移します。生成テンプレートにはこの接続を含みます。
+`/yyy/`などの配下に配置する場合、SvelteKitの`paths.base`とガードが参照する実際のURLを揃えます。`$app/paths`の`resolve('/').replace(/\/$/, '')`（`paths.relative: false`を設定）を`protectedPaths`、`publicPaths`、`loginUrl`に付け、`${base}/api/*`のように指定してください。認証画面は``kit.client.createAuthActions({ basePath: `${base}/api/auth` })``を使用します。Kitはルートグループや配置接頭辞を含むアプリ内`/api/*`を識別し、未認証APIは401、画面は設定したログイン先へ遷移します。生成テンプレートにはこの接続を含みます。
 
 以下の Hook 例では、アプリがデータベース、共有キャッシュ、IAM を初期化し、各結果を確認済みとします。リソースの終了はアプリが管理し、リクエストごとに初期化しません。
 
@@ -106,7 +107,11 @@ const haiHandle = kit.createHandle({
     protectedPaths: ['/admin/*', '/api/*'],
     publicPaths: ['/api/auth/*', '/api/public/*'],
   },
-  rateLimit: { windowMs: 60_000, maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' }) },
+  rateLimit: {
+    windowMs: 60_000,
+    maxRequests: 100,
+    store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' })
+  },
   logging: true,
 })
 
@@ -147,7 +152,7 @@ export const { apiFetch } = client
 
 ```typescript
 // 使用
-import { apiFetch } from '$lib/utils/api'
+import { apiFetch } from '#lib/utils/api.js'
 
 const response = await apiFetch('/api/users', { method: 'GET' })
 ```
@@ -161,17 +166,19 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 kit の通信暗号化は `@h-ai/crypto` に委譲します。サーバーは `crypto.transport.createServer({ serverKeyRing, keyStore })` で管理器を作成し、ブラウザーは `kit.client.installBrowserTransport(kitConfig, { crypto })` の 1 行で同一オリジンの fetch ラッパーを導入します。サーバーには管理済み鍵環と共有 registry も渡します。
 
-サブディレクトリでは `$app/paths` の `base` を使用します。サーバーの `crypto.transport` に `basePath: base`、ブラウザーには `installBrowserTransport(kitConfig, { crypto, basePath: base })` を渡し、独立した `kit.client.create` の `transport.basePath` も同じ値にします。既定の空文字列はドメイン直下です。ホストのビルド時ディレクトリを使う実行時引数であり、YAML に重複して設定したり、転送ヘッダーから推測したりしません。鍵交換・除外・容量のパスは引き続き完全なリクエストパスです。CLI の SSR テンプレートは両側を設定します。
+サブディレクトリでは `$app/paths` の `resolve('/').replace(/\/$/, '')`（`paths.relative: false` を設定） を使用します。サーバーの `crypto.transport` に `basePath: base`、ブラウザーには `installBrowserTransport(kitConfig, { crypto, basePath: base })` を渡し、独立した `kit.client.create` の `transport.basePath` も同じ値にします。既定の空文字列はドメイン直下です。ホストのビルド時ディレクトリを使う実行時引数であり、YAML に重複して設定したり、転送ヘッダーから推測したりしません。鍵交換・除外・容量のパスは引き続き完全なリクエストパスです。CLI の SSR テンプレートは両側を設定します。
 
 **src/hooks.server.ts**：
 
 ```ts
-import { base } from '$app/paths'
-import { appKitConfig } from '$lib/server/kit-config'
+import { resolve } from '$app/paths'
 import { cache } from '@h-ai/cache'
 import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+import { appKitConfig } from '#lib/server/kit-config.js'
+
+const base = resolve('/').replace(/\/$/, '')
 
 const cryptoReady = await crypto.init()
 if (!cryptoReady.success)
@@ -209,12 +216,14 @@ export const handle = kit.createHandle({
 
 ```svelte
 <script lang='ts'>
-  import { browser } from '$app/environment'
-  import { base } from '$app/paths'
+  import { browser } from '$app/env'
+  import { resolve } from '$app/paths'
   import { page } from '$app/state'
   import { crypto } from '@h-ai/crypto'
   import { kit } from '@h-ai/kit'
   import { untrack } from 'svelte'
+
+  const base = resolve('/').replace(/\/$/, '')
 
   // 一次性安装：内部按 _kit.yml 决定是否启用 transport，并预热 crypto
   if (browser) {
@@ -282,7 +291,7 @@ export const publicKitConfig = { transport: appKitConfig.transport }
 `src/routes/+layout.server.ts` から上記ブラウザーレイアウトへ公開部分だけ渡します。ブラウザー側からサーバー設定をインポートしません。
 
 ```ts
-import { publicKitConfig } from '$lib/server/kit-config'
+import { publicKitConfig } from '#lib/server/kit-config.js'
 
 export function load() {
   return { kitConfig: publicKitConfig }
@@ -313,6 +322,10 @@ export function load() {
 リクエストの自動監査は `audit.isInitialized` の場合だけ実行します。静的サイトや Audit を選択しないアプリは handle のために初期化する必要がありません。各リクエストで確認するため、handle 作成後のモジュール初期化にも対応します。Audit を選択したアプリは `audit.init()` の結果を確認し、失敗時は起動を止めます。明示的な `audit.log/capture` の未初期化エラーは維持し、初期化済みモジュールの実際の書込み失敗は `Request audit failed` として記録します。必須の業務監査では明示的な結果を確認し、業務トランザクションの規則を適用してください。
 
 `crypto.encryptedCookies` を設定する場合、`crypto.cookieEncryptionKey` または `HAI_KIT_COOKIE_KEY` が必要です。鍵がなければ `createHandle()` ですぐエラーになります。保護対象 Cookie の平文・破損暗号文・復号失敗は未存在として扱い、暗号化失敗時も平文保存に切り替えません。
+
+鍵は 32 桁の16進文字列です。SM4-CBC と HMAC-SHA256 の鍵を別々に導出し、バージョン・Cookie 名・IV・暗号文を認証してから復号するため、改ざんや名前間の置換を拒否します。更新後は認証のない旧形式 Cookie が無効となり、再ログインが必要です。旧形式へのフォールバックはありません。
+
+実行入口と実際の利用者がない Crypto Helpers を削除し、`CryptoServiceLike`、`EncryptedCookieConfig`、`CryptoCsrfConfig`、`WebhookVerifyConfig` の型公開も廃止しました。Cookie の保護には上記の `kit.createHandle` 設定を使い、ほかの暗号操作には `@h-ai/crypto` の実際の公開契約を使用してください。
 
 認証 Cookie は `NODE_ENV` または `HAI_CORE_ENV` が `production` の場合に `Secure` を既定で有効にします。`HAI_E2E` / `HAI_E2E_MOCK` は Cookie の安全要件を緩和しません。本番のレート制限も両方の環境変数を認識し、明示的なテストフラグだけがメモリカウンターを許可します。
 
@@ -380,6 +393,13 @@ export const PATCH = handler
 ```
 
 ## エラー表示とログの関連付け
+
+`kit.response.fromError/fromResult` は安全なフィールド検証 `cause`、明示的な `publicExt`（`ext` に変換）、`httpStatus` を保持します。内部原因や拡張情報は公開せず、モジュール失敗ごとに関連ログを一度だけ記録します。
+
+HTTP/UI 境界で業務メッセージを公開するのは、明示された有効な4xx状態のみです。`httpStatus` が未指定または不正な場合は500として安全なメッセージを返します。独自の業務エラーには完全なエラー定義または明示的な状態を指定してください。
+
+`kit.response.validationError(errors)` も同じ許可リストを使い、`error.cause` に翻訳済みの `field/message` だけを返します。拒否された値、SQL、追加項目は公開せず、`details.errors` は使いません。
+応答ヘルパー、認証ガード、レート制限は `HaiCommonError` と `httpStatus`・`traceId`・`X-Trace-Id` を共用します。未認証は `UNAUTHORIZED.code`、権限不足は `FORBIDDEN.code`、頻度超過は `RATE_LIMIT_EXCEEDED.code`（429）。制限ストアの障害は安全な503応答を返し、原因はサーバーログに保持します。
 
 HTTP エラーには安全な翻訳文と追跡番号を含めます。ToastContainer は番号を既定で非表示にし、調査情報のアイコンから表示・コピーできます。同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
 

@@ -5,6 +5,9 @@
 
 ## 组件职责（Svelte 特有）
 
+- SvelteKit 3 的配置统一写入 `vite.config.ts` 的 `sveltekit({...})`；纯 Svelte/Vite 才保留 `svelte.config.js`。应用内部从 `package.json#imports` 声明的 `#lib/*` 导入，并写 `.js` / `.svelte` 扩展名；环境标记用 `$app/env`。
+- 路由/资产使用 `$app/paths` 的 `resolve` / `asset`。需要将构建前缀交给 HTTP、认证或加密管道时，宿主显式配置 `paths.relative: false`，再从 `resolve('/').replace(/\/$/, '')` 获取前缀；不能使用已移除的 `base` 或把 SSR 相对地址当服务前缀。
+
 - 组件只负责**渲染 + 用户交互**，禁止写业务逻辑（DB / 加密 / 支付 / 网络调用）。
 - 业务逻辑放在 `src/lib/services/` 或 `src/lib/stores/`，组件通过 import 调用。
 - `$state` 管理状态、`$derived` 计算派生值、`$effect` 管理副作用；禁止在模板求值期间执行副作用。

@@ -50,7 +50,9 @@ export function createFeedbackProcedures(deps: FeedbackProcedureDeps) {
       const actor = await contextFor(context)
       if (!actor.success)
         return actor
-      return deps.feedback.isInitialized === false ? err(HaiCommonError.SERVICE_UNAVAILABLE, servM('serv_feedbackUnavailable')) : ok(deps.feedback.budget)
+      return deps.feedback.isInitialized === false
+        ? err(HaiCommonError.SERVICE_UNAVAILABLE, servM('serv_feedbackUnavailable'))
+        : ok(deps.feedback.budget)
     })
     .route('reports.submit')
     .auth()

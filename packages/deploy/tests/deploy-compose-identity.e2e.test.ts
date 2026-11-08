@@ -12,7 +12,9 @@ import { createComposeContainerLookupScript } from '../src/container/deploy-comp
 
 const image = 'docker.io/library/node:24.22.1-bookworm-slim'
 const runId = randomUUID().replaceAll('-', '')
-const shell = process.platform === 'win32' ? 'C:/Program Files/Git/usr/bin/bash.exe' : '/bin/sh'
+const shell = process.platform === 'win32'
+  ? 'C:/Program Files/Git/usr/bin/bash.exe'
+  : '/bin/sh'
 let runtime: 'podman' | 'docker'
 let root: string | undefined
 let script: string
@@ -28,19 +30,43 @@ function command(binary: string, args: string[], signal?: AbortSignal, timeout =
       signal,
       windowsHide: true,
       maxBuffer: 1024 * 1024,
-      env: { ...process.env, PATH: `${dirname(shell)}${delimiter}${process.env.PATH ?? ''}`, MSYS_NO_PATHCONV: '1', MSYS2_ARG_CONV_EXCL: '*' },
-    }, (error, stdout, stderr) => resolveResult({ code: error ? typeof error.code === 'number' ? error.code : 1 : 0, stdout, stderr }))
+      env: {
+        ...process.env,
+        PATH: `${dirname(shell)}${delimiter}${process.env.PATH ?? ''}`,
+        MSYS_NO_PATHCONV: '1',
+        MSYS2_ARG_CONV_EXCL: '*',
+      },
+    }, (error, stdout, stderr) => resolveResult({
+      code: error
+        ? typeof error.code === 'number'
+          ? error.code
+          : 1
+        : 0,
+      stdout,
+      stderr,
+    }))
   })
 }
 
 function lookup(project: string, service = 'db', selector = '-q', signal?: AbortSignal): Promise<CommandResult> {
-  return command(shell, [script, runtime, project, service, selector], signal)
+  return command(shell, [
+    script,
+    runtime,
+    project,
+    service,
+    selector,
+  ], signal)
 }
 
 /** 引擎 ps 可返回短 ID；用真实 inspect 还原身份后与 create 的完整回执比较。 */
 async function resolvedIds(result: CommandResult, signal: AbortSignal): Promise<string[]> {
   const ids = result.stdout.trim().split('\n').filter(Boolean)
-  const inspected = await command(runtime, ['inspect', '--format', '{{.Id}}', ...ids], signal)
+  const inspected = await command(runtime, [
+    'inspect',
+    '--format',
+    '{{.Id}}',
+    ...ids,
+  ], signal)
   expect(inspected.code, inspected.stderr).toBe(0)
   return inspected.stdout.trim().split('\n')
 }
@@ -54,7 +80,17 @@ async function withContainers(context: TestContext, body: (create: (metadata: Re
   const owned: string[] = []
   const create = async (metadata: Record<string, string>, running = true): Promise<string> => {
     context.signal.throwIfAborted()
-    const args = ['create', '--pull', 'never', '--network', 'none', '--name', `hai-compose-identity-${runId}-${sequence++}`, '--label', `hai.test.compose-identity-owner=${runId}`]
+    const args = [
+      'create',
+      '--pull',
+      'never',
+      '--network',
+      'none',
+      '--name',
+      `hai-compose-identity-${runId}-${sequence++}`,
+      '--label',
+      `hai.test.compose-identity-owner=${runId}`,
+    ]
     for (const [key, value] of Object.entries(metadata))
       args.push('--label', `${key}=${value}`)
     args.push(image, 'node', '-e', 'setInterval(() => {}, 1000)')
@@ -84,8 +120,11 @@ async function withContainers(context: TestContext, body: (create: (metadata: Re
     if (removed.code !== 0 || remaining.code !== 0 || remaining.stdout.trim())
       cleanupFailures.push(new Error(`Owned Compose identity fixture cleanup was not confirmed: ${id}`))
   }
-  if (cleanupFailures.length)
-    throw new AggregateError(failure ? [failure, ...cleanupFailures] : cleanupFailures, 'Compose identity fixture cleanup failed')
+  if (cleanupFailures.length) {
+    throw new AggregateError(failure
+      ? [failure, ...cleanupFailures]
+      : cleanupFailures, 'Compose identity fixture cleanup failed')
+  }
   if (failure)
     throw failure
 }
@@ -138,7 +177,10 @@ describe.skipIf(process.env.HAI_DEPLOY_E2E !== '1')('compose identity lookup on 
   it('deduplicates one container that declares both matching namespaces', async (context) => {
     await withContainers(context, async (create) => {
       const project = `hai-identity-${runId}-${sequence++}`
-      const expected = await create({ ...labels('com.docker.compose', project), ...labels('io.podman.compose', project) })
+      const expected = await create({
+        ...labels('com.docker.compose', project),
+        ...labels('io.podman.compose', project),
+      })
       const found = await lookup(project, 'db', '-q', context.signal)
       expect(found.code, found.stderr).toBe(0)
       expect(await resolvedIds(found, context.signal)).toEqual([expected])
@@ -163,13 +205,23 @@ describe.skipIf(process.env.HAI_DEPLOY_E2E !== '1')('compose identity lookup on 
     it(`refuses ${conflict} labels without emitting IDs or changing containers`, async (context) => {
       await withContainers(context, async (create) => {
         const project = `hai-identity-${runId}-${sequence++}`
-        const docker = conflict === 'foreign-project' ? labels('com.docker.compose', `${project}-foreign`) : { 'com.docker.compose.project': project }
-        const id = await create({ ...docker, ...labels('io.podman.compose', project) })
+        const docker = conflict === 'foreign-project'
+          ? labels('com.docker.compose', `${project}-foreign`)
+          : { 'com.docker.compose.project': project }
+        const id = await create({
+          ...docker,
+          ...labels('io.podman.compose', project),
+        })
         const found = await lookup(project, 'db', '-q', context.signal)
         expect(found.code).not.toBe(0)
         expect(found.stdout).toBe('')
         expect(found.stderr).toContain('labels do not confirm')
-        const unchanged = await command(runtime, ['inspect', '--format', '{{.State.Running}}', id], context.signal)
+        const unchanged = await command(runtime, [
+          'inspect',
+          '--format',
+          '{{.State.Running}}',
+          id,
+        ], context.signal)
         expect(unchanged.code, unchanged.stderr).toBe(0)
         expect(unchanged.stdout.trim()).toBe('true')
       })

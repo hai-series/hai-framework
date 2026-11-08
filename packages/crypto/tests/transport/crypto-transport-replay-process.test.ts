@@ -47,21 +47,38 @@ it('两个独立进程使用实际 SQL 唯一键防重放；并发仅一次业�
     const client = crypto.asymmetric.generateKeyPair()
     if (!server.success || !client.success)
       throw new Error('Test key generation failed')
-    const serverKeyRing = { activeKeyId: 'v1', keys: { v1: server.data } }
+    const serverKeyRing = {
+      activeKeyId: 'v1',
+      keys: { v1: server.data },
+    }
     const store = createReldbTransportKeyStore({ reldb })
     const clientId = await store.register(client.data.publicKey)
     const requestPath = '/orders?currency=CNY'
     const digest = crypto.hash.hash(requestPath)
     if (!digest.success)
       throw new Error(digest.error.message)
-    const context = { version: 2 as const, serverKeyId: 'v1', clientId, requestId: crypto.symmetric.generateKey(), issuedAt: Date.now(), method: 'POST', pathHash: digest.data }
+    const context = {
+      version: 2 as const,
+      serverKeyId: 'v1',
+      clientId,
+      requestId: crypto.symmetric.generateKey(),
+      issuedAt: Date.now(),
+      method: 'POST',
+      pathHash: digest.data,
+    }
     const sealed = sealTransportPayload(crypto, '{"amount":10000}', context, 'request', 0, server.data.publicKey, client.data.privateKey)
     if (!sealed.success)
       throw new Error(sealed.error.message)
-    const init = { method: 'POST', headers: { 'X-Client-Id': clientId, 'X-Encrypted': 'true' }, body: JSON.stringify(sealed.data) }
+    const init = {
+      method: 'POST',
+      headers: { 'X-Client-Id': clientId, 'X-Encrypted': 'true' },
+      body: JSON.stringify(sealed.data),
+    }
     let nextId = 0
     async function startWorker() {
-      const worker = fork(new URL('./fixtures/crypto-transport-node.mjs', import.meta.url), { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] })
+      const worker = fork(new URL('./fixtures/crypto-transport-node.mjs', import.meta.url), {
+        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+      })
       workers.push(worker)
       await new Promise<void>((resolveReady, reject) => {
         const timeout = setTimeout(() => reject(new Error('Transport worker startup timed out')), 10_000)
@@ -75,7 +92,12 @@ it('两个独立进程使用实际 SQL 唯一键防重放；并发仅一次业�
           }
         })
         worker.once('error', reject)
-        worker.send({ type: 'init', database, clientId, serverKeyRing })
+        worker.send({
+          type: 'init',
+          database,
+          clientId,
+          serverKeyRing,
+        })
       })
       return worker
     }
@@ -94,13 +116,20 @@ it('两个独立进程使用实际 SQL 唯一键防重放；并发仅一次业�
           }
         }
         worker.on('message', onMessage)
-        worker.send({ type: 'request', id, url: `https://example.test${path}`, init })
+        worker.send({
+          type: 'request',
+          id,
+          url: `https://example.test${path}`,
+          init,
+        })
       })
     }
     const first = await startWorker()
     const second = await startWorker()
     expect(await send(second, '/another-path')).toMatchObject({ success: false, handled: 0 })
-    const replies = await Promise.all(Array.from({ length: 8 }, (_, i) => send(i % 2 ? first : second)))
+    const replies = await Promise.all(Array.from({ length: 8 }, (_, i) => send(i % 2
+      ? first
+      : second)))
     expect(replies.filter(r => r.success)).toHaveLength(1)
     expect(Math.max(...replies.filter((_, i) => i % 2 === 0).map(r => r.handled ?? 0))
       + Math.max(...replies.filter((_, i) => i % 2 === 1).map(r => r.handled ?? 0))).toBe(1)

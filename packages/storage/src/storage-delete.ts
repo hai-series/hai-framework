@@ -22,7 +22,9 @@ export function toStorageDeleteResult(summary: StorageDeleteSummary): StorageDel
     success: false,
     error: {
       ...HaiStorageError.OPERATION_FAILED,
-      message: storageM('storage_deleteManyFailed', { params: { count: summary.failures.length } }),
+      message: storageM('storage_deleteManyFailed', {
+        params: { count: summary.failures.length },
+      }),
       ext: { deleteMany: summary },
     },
   }

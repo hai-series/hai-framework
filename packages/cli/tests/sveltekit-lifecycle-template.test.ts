@@ -10,7 +10,10 @@ const template = readFileSync(new URL('../templates/base/src/hooks.server.ts.hbs
 
 function instantiate(closeApp: () => Promise<void>) {
   const source = Handlebars.compile(template)({ projectName: 'lifecycle', features: {}, hasI18n: false })
-  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true }, reportDiagnostics: true })
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
+    reportDiagnostics: true,
+  })
   expect(compiled.diagnostics?.filter(item => item.category === ts.DiagnosticCategory.Error)).toEqual([])
   const process = Object.assign(new EventEmitter(), { exitCode: undefined as number | undefined })
   const error = vi.fn()
@@ -19,14 +22,31 @@ function instantiate(closeApp: () => Promise<void>) {
     require(name: string) {
       if (name === 'node:process')
         return process
-      if (name === '$lib/server/init.js')
-        return { initApp: vi.fn(), closeApp }
-      if (name === '$lib/server/kit-config.js')
-        return { getKitConfig: vi.fn() }
-      if (name === '@h-ai/core')
-        return { core: { logger: { error } } }
-      if (name === '@h-ai/kit')
-        return { kit: { sequence: vi.fn() } }
+      if (name === '#lib/server/init.js') {
+        return {
+          initApp: vi.fn(),
+          closeApp,
+        }
+      }
+      if (name === '#lib/server/kit-config.js') {
+        return {
+          getKitConfig: vi.fn(),
+        }
+      }
+      if (name === '@h-ai/core') {
+        return {
+          core: {
+            logger: { error },
+          },
+        }
+      }
+      if (name === '@h-ai/kit') {
+        return {
+          kit: {
+            sequence: vi.fn(),
+          },
+        }
+      }
       throw new Error(`Unexpected lifecycle dependency: ${name}`)
     },
   })

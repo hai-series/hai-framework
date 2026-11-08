@@ -74,7 +74,10 @@ export const PasswordConfigSchema = z.object({
   preventSamePassword: z.boolean().default(false),
   /** 管理员创建或重置的初始密码必须先更换；不影响用户自行注册设密。 */
   requireInitialChange: z.boolean().default(false),
-}).refine(config => config.maxLength >= config.minLength, { message: 'maxLength must be >= minLength', path: ['maxLength'] })
+}).refine(config => config.maxLength >= config.minLength, {
+  message: 'maxLength must be >= minLength',
+  path: ['maxLength'],
+})
 
 /**
  * 密码配置类型

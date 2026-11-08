@@ -13,9 +13,24 @@ const check = process.argv.includes('--check')
 /** 收集实际应用入口直接读取的环境变量；跳过生成目录与测试夹具。 */
 async function runtimeVariables(directory, names = new Set()) {
   // NTFS与Linux返回顺序不同；先稳定文件次序，避免可选变量的说明顺序随平台漂移。
-  for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
-    if (['node_modules', 'dist', 'build', '.svelte-kit', 'paraglide', 'target', 'tests', 'e2e', 'src-tauri'].includes(entry.name))
+  for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name < b.name
+    ? -1
+    : a.name > b.name
+      ? 1
+      : 0)) {
+    if ([
+      'node_modules',
+      'dist',
+      'build',
+      '.svelte-kit',
+      'paraglide',
+      'target',
+      'tests',
+      'e2e',
+      'src-tauri',
+    ].includes(entry.name)) {
       continue
+    }
     const file = path.join(directory, entry.name)
     if (entry.isDirectory()) {
       await runtimeVariables(file, names)
@@ -42,7 +57,9 @@ for (const app of (await readdir('apps')).sort()) {
   }
   const active = new Map()
   const modules = new Set()
-  for (const configFile of (await readdir(path.join(directory, 'config')).catch(error => error.code === 'ENOENT' ? [] : Promise.reject(error))).sort()) {
+  for (const configFile of (await readdir(path.join(directory, 'config')).catch(error => error.code === 'ENOENT'
+    ? []
+    : Promise.reject(error))).sort()) {
     if (!configFile.endsWith('.yml'))
       continue
     const module = configFile.replace(/^_/, '').replace(/\.yml$/, '')
@@ -59,7 +76,9 @@ for (const app of (await readdir('apps')).sort()) {
       active.set(variable.name, variable)
   }
   // 部署属于项目级配置；迁移到 JSON 后仍保留显式变量、路径及可选部署字段。
-  const projectConfig = await readFile(path.join(directory, 'hai.json'), 'utf8').catch(error => error.code === 'ENOENT' ? null : Promise.reject(error))
+  const projectConfig = await readFile(path.join(directory, 'hai.json'), 'utf8').catch(error => error.code === 'ENOENT'
+    ? null
+    : Promise.reject(error))
   if (projectConfig !== null) {
     const project = JSON.parse(projectConfig)
     if (project.deploy && typeof project.deploy === 'object' && !Array.isArray(project.deploy)) {
@@ -70,8 +89,14 @@ for (const app of (await readdir('apps')).sort()) {
   }
   // 纯客户端应用的公开地址来自已有公共示例；本机私有覆盖不参与生成。
   for (const [name, value] of Object.entries(parseEnv(previous))) {
-    if (name.startsWith('PUBLIC_'))
-      active.set(name, { ...byName.get(name), name, value, path: name })
+    if (name.startsWith('PUBLIC_')) {
+      active.set(name, {
+        ...byName.get(name),
+        name,
+        value,
+        path: name,
+      })
+    }
   }
   const optionalNames = await runtimeVariables(directory)
   if (modules.has('iam')) {
@@ -93,19 +118,26 @@ for (const app of (await readdir('apps')).sort()) {
     else
       optional.delete(name)
   }
-  const candidates = [...optional.values()]
+  const candidates = [
+    ...optional.values(),
+  ]
   const primitiveArrays = candidates.filter(variable => variable.constraint.includes('JSON 数组') && candidates.some(child => child.name === `${variable.name}_0` && !child.constraint.includes('JSON 对象')))
   const optionalText = renderEnvironment(candidates.filter((variable) => {
     if (primitiveArrays.some(parent => variable.name.startsWith(`${parent.name}_`)) && !active.has(variable.name))
       return false
     if (!(variable.constraint.includes('JSON 对象') || variable.constraint.includes('JSON 数组')) || variable.constraint.includes('false'))
       return true
-    if ([...active.values()].some(child => child.name.startsWith(`${variable.name}_`)))
+    if ([
+      ...active.values(),
+    ].some(child => child.name.startsWith(`${variable.name}_`))) {
       return false
+    }
     return !candidates.some(child => child.name.startsWith(`${variable.name}_`)) || primitiveArrays.includes(variable)
   }))
     .split('\n')
-    .map(line => line && !line.startsWith('#') ? `# ${line}` : line)
+    .map(line => line && !line.startsWith('#')
+      ? `# ${line}`
+      : line)
     .join('\n')
   const content = [
     '# 环境配置示例：包含本应用完整可用字段、说明和取值约束。',
@@ -113,7 +145,9 @@ for (const app of (await readdir('apps')).sort()) {
     '# 优先级：进程环境 > .env.<mode>.local > .env.local > .env.<mode> > .env > YAML。',
     '# 生成配置优先细项，数组保留 JSON；手写 JSON 放模块细项前，同源细项继续覆盖。宿主提供 Schema 后可设置未填写的合法路径。完整框架变量见根 .env.example。',
     '',
-    renderEnvironment([...active.values()].filter(variable => !variable.optional)),
+    renderEnvironment([
+      ...active.values(),
+    ].filter(variable => !variable.optional)),
     '',
     '# 可选字段（宿主 Schema 识别结构，所属模块最终校验）：',
     optionalText.trimEnd(),

@@ -6,21 +6,42 @@ import { defineCacheSuite, memoryEnv, redisEnv } from './helpers/cache-test-suit
 function defineSetOptionsTests(): void {
   it.each(['ex', 'px', 'exat', 'pxat'] as const)('拒绝 %s 的零、负数、非整数及溢出值，保留值和 TTL', async (mode) => {
     await cache.kv.set('expiry', 'original', { ex: 120 })
-    for (const value of [0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
-      expect(await cache.kv.set('expiry', 'changed', { [mode]: value })).toMatchObject({ success: false, error: { code: HaiCacheError.INVALID_SET_OPTIONS.code } })
+    for (const value of [
+      0,
+      -1,
+      0.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      expect(await cache.kv.set('expiry', 'changed', { [mode]: value })).toMatchObject({
+        success: false,
+        error: { code: HaiCacheError.INVALID_SET_OPTIONS.code },
+      })
       expect(await cache.kv.get('expiry')).toMatchObject({ success: true, data: 'original' })
       const ttl = await cache.kv.ttl('expiry')
       expect(ttl.success && ttl.data > 0 && ttl.data <= 120).toBe(true)
     }
   })
 
-  it.each<SetOptions>([{ ex: 10, px: 1000 }, { exat: 1, pxat: 1 }, { ex: 10, keepTtl: true }, { nx: true, xx: true }])('拒绝冲突策略 %j 且不创建键', async (options) => {
-    expect(await cache.kv.set('conflict', 'value', options)).toMatchObject({ success: false, error: { code: HaiCacheError.INVALID_SET_OPTIONS.code } })
+  it.each<SetOptions>([
+    { ex: 10, px: 1000 },
+    { exat: 1, pxat: 1 },
+    { ex: 10, keepTtl: true },
+    { nx: true, xx: true },
+  ])('拒绝冲突策略 %j 且不创建键', async (options) => {
+    expect(await cache.kv.set('conflict', 'value', options)).toMatchObject({
+      success: false,
+      error: { code: HaiCacheError.INVALID_SET_OPTIONS.code },
+    })
     expect(await cache.kv.ttl('conflict')).toMatchObject({ success: true, data: -2 })
   })
 
   it('正数的过去绝对时间实际写入后立即过期，不能变为永久键', async () => {
-    for (const options of [{ exat: Math.floor(Date.now() / 1000) - 10 }, { pxat: Date.now() - 10_000 }]) {
+    for (const options of [
+      { exat: Math.floor(Date.now() / 1000) - 10 },
+      { pxat: Date.now() - 10_000 },
+    ]) {
       await cache.kv.set('past', 'old')
       expect(await cache.kv.set('past', 'new', options)).toEqual({ success: true, data: true })
       expect(await cache.kv.get('past')).toMatchObject({ success: true, data: null })
@@ -58,14 +79,26 @@ function defineSetOptionsTests(): void {
   })
 
   it('使用 JSON 快照，序列化失败不会破坏原值和 TTL', async () => {
-    const value = { nested: { value: 1 } }
+    const value = {
+      nested: { value: 1 },
+    }
     await cache.kv.set('snapshot', value, { px: 120_000 })
     value.nested.value = 2
-    expect(await cache.kv.get('snapshot')).toMatchObject({ success: true, data: { nested: { value: 1 } } })
+    expect(await cache.kv.get('snapshot')).toMatchObject({
+      success: true,
+      data: {
+        nested: { value: 1 },
+      },
+    })
     const circular: Record<string, CacheValue> = {}
     circular.self = circular
     expect((await cache.kv.set('snapshot', circular)).success).toBe(false)
-    expect(await cache.kv.get('snapshot')).toMatchObject({ success: true, data: { nested: { value: 1 } } })
+    expect(await cache.kv.get('snapshot')).toMatchObject({
+      success: true,
+      data: {
+        nested: { value: 1 },
+      },
+    })
     const ttl = await cache.kv.ttl('snapshot')
     expect(ttl.success && ttl.data > 0 && ttl.data <= 120).toBe(true)
   })
@@ -77,6 +110,9 @@ describe('sET expiry and applied contract', () => {
     const env = await redisEnv()
     if (env.config.type !== 'redis')
       throw new Error('Redis test configuration required')
-    return { ...env, config: { ...env.config, keyPrefix: 'cache-set-options:' } }
+    return {
+      ...env,
+      config: { ...env.config, keyPrefix: 'cache-set-options:' },
+    }
   }, defineSetOptionsTests)
 })

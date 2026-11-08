@@ -10,7 +10,10 @@ import SensitiveActionsHarness from './fixtures/SensitiveActionsHarness.svelte'
 function setup() {
   const reauthenticate = vi.fn<(password: string, operation: string) => Promise<HaiResult<{ ticket: string }>>>(async () => ok({ ticket: 'proof' }))
   const actions = createSensitiveActions({ reauthenticate })
-  actions.configure({ enabled: true, operations: ['orders.approve'] })
+  actions.configure({
+    enabled: true,
+    operations: ['orders.approve'],
+  })
   return { actions, reauthenticate }
 }
 
@@ -19,7 +22,12 @@ describe('通用敏感操作确认', () => {
     const reauthenticate = vi.fn(async () => ok({ ticket: 'one-action-proof' }))
     const target = document.createElement('div')
     document.body.append(target)
-    const component = mount(SensitiveActionsHarness, { target, props: { actions: { reauthenticate } } })
+    const component = mount(SensitiveActionsHarness, {
+      target,
+      props: {
+        actions: { reauthenticate },
+      },
+    })
     try {
       flushSync()
       target.querySelector<HTMLButtonElement>('[data-testid="sensitive-start"]')!.click()
@@ -45,7 +53,10 @@ describe('通用敏感操作确认', () => {
   it('未开启或不在清单时不弹窗，也不请求密码验证', async () => {
     const { actions, reauthenticate } = setup()
     expect(await actions.authorize('orders.read')).toBeUndefined()
-    actions.configure({ enabled: false, operations: ['orders.approve'] })
+    actions.configure({
+      enabled: false,
+      operations: ['orders.approve'],
+    })
     expect(await actions.authorize('orders.approve')).toBeUndefined()
     expect(actions.open).toBe(false)
     expect(reauthenticate).not.toHaveBeenCalled()
@@ -136,7 +147,12 @@ describe('通用敏感操作确认', () => {
 
   it('数据库新增的规则由标准公开配置实时同步，失败不会静默放行', async () => {
     const reauthenticate = vi.fn(async () => ok({ ticket: 'db-proof' }))
-    const publicConfig = vi.fn(async () => ok({ reauthentication: { enabled: true, operations: ['db.operation'] } }))
+    const publicConfig = vi.fn(async () => ok({
+      reauthentication: {
+        enabled: true,
+        operations: ['db.operation'],
+      },
+    }))
     const actions = createSensitiveActions({ reauthenticate, publicConfig })
     actions.configure({ enabled: true, operations: [] })
     const pending = actions.authorize('db.operation')

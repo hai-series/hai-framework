@@ -37,7 +37,7 @@ pnpm --filter framework-website start
 
 构建命令也可以使用 `pnpm --filter framework-website build`，通过框架 `hai build` 调用本应用的 `compile` 脚本。产物目录为 `apps/framework-website/build`，静态适配器完整预渲染所有页面，含 `.nojekyll`。预览地址为 `http://127.0.0.1:4297/hai-framework/`。缺少构建首页时，预览器立即退出并提示先执行 `pnpm build`，避免启动后持续返回 404。`start:test` 和 `start:prod` 使用同一个静态预览器；它们不会启动 Node 应用后端。
 
-GitHub Pages 目标地址为 `https://hai-series.github.io/hai-framework/`。仓库子路径固定在 `svelte.config.js`，发布工作流上传上述构建目录。更新根 `package.json` 的版本后需要重新构建，页面仅公开读取其中的版本字段。文档、导航和版本文件均属于应用构建缓存输入。
+GitHub Pages 目标地址为 `https://hai-series.github.io/hai-framework/`。仓库子路径固定在 `vite.config.ts` 的 SvelteKit 插件，发布工作流上传上述构建目录。更新根 `package.json` 的版本后需要重新构建，页面仅公开读取其中的版本字段。文档、导航和版本文件均属于应用构建缓存输入。
 
 本应用只维护静态文件与 GitHub Pages 发布流程，未提供 Dockerfile、镜像构建或后端服务部署配置。`hai.json` 保留空对象；`hai build` 的默认 compile 流程直接调用 package.json 的 `compile` 脚本，不需要镜像声明。`start`、`start:test`、`start:prod` 仅用于本机静态预览，不是生产服务部署命令。
 

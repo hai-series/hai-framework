@@ -15,7 +15,9 @@ describe('generateSpec', () => {
     expect(spec.openapi.startsWith('3.')).toBe(true)
     expect(spec.info.title).toBe('test-service')
     expect(spec.info.version).toBe('0.0.1')
-    expect(spec.servers).toEqual([{ url: '/api/v1' }])
+    expect(spec.servers).toEqual([
+      { url: '/api/v1' },
+    ])
     expect(spec.components?.securitySchemes?.bearerAuth).toMatchObject({
       type: 'http',
       scheme: 'bearer',

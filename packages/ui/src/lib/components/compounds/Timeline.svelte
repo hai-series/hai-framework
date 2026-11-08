@@ -102,7 +102,9 @@
   function getLineColorClass(item: TimelineItem, isAfter: boolean): string {
     if (!item.completed && isAfter)
       return ''
-    return item.color ? `bg-${item.color}` : 'bg-primary'
+    return item.color
+      ? `bg-${item.color}`
+      : 'bg-primary'
   }
 
   function shouldShowStart(index: number): boolean {
@@ -163,7 +165,9 @@
         {:else}
           <span class={cn(
             'flex h-4 w-4 rounded-full',
-            item.completed ? getColorClass(item.color) : 'bg-base-300',
+            item.completed
+              ? getColorClass(item.color)
+              : 'bg-base-300',
           )}></span>
         {/if}
       </div>

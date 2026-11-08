@@ -3,10 +3,8 @@
   /**
    * 企业官网根布局
    */
-  import { browser } from '$app/environment'
+  import { browser } from '$app/env'
   import { resolve } from '$app/paths'
-  import * as m from '$lib/paraglide/messages.js'
-  import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
   import {
     applyTheme,
     getSavedTheme,
@@ -14,6 +12,8 @@
     setGlobalLocale,
     ThemeSelector,
   } from '@h-ai/ui'
+  import * as m from '#lib/paraglide/messages.js'
+  import { getLocale, setLocale } from '#lib/paraglide/runtime.js'
   import '../app.css'
 
   interface Props {
@@ -26,12 +26,30 @@
   let currentLocale = $state<'zh-CN' | 'en-US' | 'ja-JP'>('zh-CN')
 
   const navItems = $derived([
-    { href: '/', label: m.nav_home() },
-    { href: '/about', label: m.nav_about() },
-    { href: '/services', label: m.nav_services() },
-    { href: '/news', label: m.nav_news() },
-    { href: '/contact', label: m.nav_contact() },
-    { href: '/partners', label: m.nav_partner() },
+    {
+      href: resolve('/'),
+      label: m.nav_home(),
+    },
+    {
+      href: resolve('about'),
+      label: m.nav_about(),
+    },
+    {
+      href: resolve('services'),
+      label: m.nav_services(),
+    },
+    {
+      href: resolve('news'),
+      label: m.nav_news(),
+    },
+    {
+      href: resolve('contact'),
+      label: m.nav_contact(),
+    },
+    {
+      href: resolve('partners'),
+      label: m.nav_partner(),
+    },
   ])
 
   function handleLanguageChange(lang: string) {
@@ -69,7 +87,7 @@
   <header class='sticky top-0 z-50 border-b border-base-200/80 bg-base-100/90 backdrop-blur'>
     <div class='navbar mx-auto w-full max-w-[120rem] px-4 lg:px-8'>
       <div class='flex-1'>
-        <a href={resolve('/', {})} class='text-lg lg:text-xl font-semibold tracking-wide'>
+        <a href={resolve('/')} class='text-lg lg:text-xl font-semibold tracking-wide'>
           {m.brand()}
         </a>
       </div>
@@ -77,7 +95,9 @@
       <nav class='hidden lg:flex'>
         <ul class='menu menu-horizontal px-1'>
           {#each navItems as item (item.href)}
-            <li><a href={resolve(item.href, {})}>{item.label}</a></li>
+            <li><!-- eslint-disable svelte/no-navigation-without-resolve -- 菜单字段已由 resolve 生成完整挂载地址；规则无法追踪派生/筛选后的集合，不能二次添加前缀。 -->
+              <a href={item.href}>{item.label}</a>
+              <!-- eslint-enable svelte/no-navigation-without-resolve --></li>
           {/each}
         </ul>
       </nav>
@@ -97,7 +117,7 @@
           class='hidden sm:block'
         />
 
-        <a href={resolve('/partners/admin/login', {})} class='btn btn-sm btn-outline hidden md:inline-flex'>
+        <a href={resolve('partners/admin/login')} class='btn btn-sm btn-outline hidden md:inline-flex'>
           {m.nav_partner_admin()}
         </a>
 
@@ -107,9 +127,11 @@
           </button>
           <ul class='menu menu-sm dropdown-content bg-base-100 rounded-box z-10 mt-3 w-64 p-2 shadow border border-base-200'>
             {#each navItems as item (item.href)}
-              <li><a href={resolve(item.href, {})}>{item.label}</a></li>
+              <li><!-- eslint-disable svelte/no-navigation-without-resolve -- 菜单字段已由 resolve 生成完整挂载地址；规则无法追踪派生/筛选后的集合，不能二次添加前缀。 -->
+                <a href={item.href}>{item.label}</a>
+                <!-- eslint-enable svelte/no-navigation-without-resolve --></li>
             {/each}
-            <li><a href={resolve('/partners/admin/login', {})}>{m.nav_partner_admin()}</a></li>
+            <li><a href={resolve('partners/admin/login')}>{m.nav_partner_admin()}</a></li>
             <li class='mt-1 px-3 py-2 text-xs text-base-content/50'>{m.layout_theme()}</li>
             <li class='px-3'><ThemeSelector currentTheme={currentTheme} onchange={handleThemeChange} showPreview={false} grouped /></li>
             <li class='mt-1 px-3 py-2 text-xs text-base-content/50'>{m.layout_language()}</li>
@@ -128,18 +150,18 @@
     <div class='footer md:footer-horizontal mx-auto w-full max-w-[120rem] p-10 md:justify-between gap-8'>
       <nav class='gap-2'>
         <h6 class='footer-title'>{m.footer_about()}</h6>
-        <a href={resolve('/about', {})} class='link link-hover'>{m.nav_about()}</a>
-        <a href={resolve('/news', {})} class='link link-hover'>{m.nav_news()}</a>
+        <a href={resolve('about')} class='link link-hover'>{m.nav_about()}</a>
+        <a href={resolve('news')} class='link link-hover'>{m.nav_news()}</a>
       </nav>
       <nav class='gap-2'>
         <h6 class='footer-title'>{m.footer_services()}</h6>
-        <a href={resolve('/services', {})} class='link link-hover'>{m.nav_services()}</a>
-        <a href={resolve('/partners', {})} class='link link-hover'>{m.nav_partner()}</a>
+        <a href={resolve('services')} class='link link-hover'>{m.nav_services()}</a>
+        <a href={resolve('partners')} class='link link-hover'>{m.nav_partner()}</a>
       </nav>
       <nav class='gap-2'>
         <h6 class='footer-title'>{m.footer_contact()}</h6>
-        <a href={resolve('/contact', {})} class='link link-hover'>{m.nav_contact()}</a>
-        <a href={resolve('/partners/admin/login', {})} class='link link-hover'>{m.nav_partner_admin()}</a>
+        <a href={resolve('contact')} class='link link-hover'>{m.nav_contact()}</a>
+        <a href={resolve('partners/admin/login')} class='link link-hover'>{m.nav_partner_admin()}</a>
       </nav>
     </div>
     <div class='footer footer-center border-t border-neutral-content/10 p-4 bg-neutral-focus text-neutral-content'>

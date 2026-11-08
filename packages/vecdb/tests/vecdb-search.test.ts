@@ -23,14 +23,61 @@ describe('vecdb.vector.search', () => {
   const COLLECTION = 'search-test'
 
   const defineCommon = () => {
+    it.each(['cosine', 'euclidean', 'dot'] as const)('%s 分数保持0–1、高分优先且阈值作用于转换后的相似度', async (metric) => {
+      expect((await vecdb.collection.create(COLLECTION, { dimension: 2, metric })).success).toBe(true)
+      expect((await vecdb.vector.upsert(COLLECTION, [
+        {
+          id: 'near',
+          vector: [1, 0],
+        },
+        {
+          id: 'large',
+          vector: [10, 1],
+        },
+        {
+          id: 'opposite',
+          vector: [-1, 0],
+        },
+      ])).success).toBe(true)
+      const found = await vecdb.vector.search(COLLECTION, [1, 0], { topK: 3 })
+      expect(found.success).toBe(true)
+      if (!found.success)
+        return
+      expect(found.data[0].id).toBe(metric === 'dot'
+        ? 'large'
+        : 'near')
+      expect(found.data.every(hit => hit.score >= 0 && hit.score <= 1)).toBe(true)
+      expect(found.data.map(hit => hit.score)).toEqual([
+        ...found.data.map(hit => hit.score),
+      ].sort((left, right) => right - left))
+      const threshold = await vecdb.vector.search(COLLECTION, [1, 0], { topK: 3, minScore: 0.9 })
+      expect(threshold.success).toBe(true)
+      if (threshold.success)
+        expect(threshold.data.map(hit => hit.id)).toEqual(found.data.filter(hit => hit.score >= 0.9).map(hit => hit.id))
+    })
     it('基本向量搜索', async () => {
       await vecdb.collection.create(COLLECTION, { dimension: DIM })
 
       // 插入三组向量，base 不同使其有不同相似度
       await vecdb.vector.insert(COLLECTION, [
-        { id: 'close', vector: makeVector(DIM, 1.0), content: 'Close doc', metadata: { group: 'a' } },
-        { id: 'medium', vector: makeVector(DIM, 0.5), content: 'Medium doc', metadata: { group: 'a' } },
-        { id: 'far', vector: makeVector(DIM, -1.0), content: 'Far doc', metadata: { group: 'b' } },
+        {
+          id: 'close',
+          vector: makeVector(DIM, 1.0),
+          content: 'Close doc',
+          metadata: { group: 'a' },
+        },
+        {
+          id: 'medium',
+          vector: makeVector(DIM, 0.5),
+          content: 'Medium doc',
+          metadata: { group: 'a' },
+        },
+        {
+          id: 'far',
+          vector: makeVector(DIM, -1.0),
+          content: 'Far doc',
+          metadata: { group: 'b' },
+        },
       ])
 
       // 以 close 向量查询
@@ -67,8 +114,16 @@ describe('vecdb.vector.search', () => {
       await vecdb.collection.create(COLLECTION, { dimension: DIM })
 
       await vecdb.vector.insert(COLLECTION, [
-        { id: 'similar', vector: makeVector(DIM, 1.0), content: 'Very similar' },
-        { id: 'diff', vector: makeVector(DIM, -1.0), content: 'Very different' },
+        {
+          id: 'similar',
+          vector: makeVector(DIM, 1.0),
+          content: 'Very similar',
+        },
+        {
+          id: 'diff',
+          vector: makeVector(DIM, -1.0),
+          content: 'Very different',
+        },
       ])
 
       const result = await vecdb.vector.search(COLLECTION, makeVector(DIM, 1.0), {
@@ -110,9 +165,21 @@ describe('vecdb.vector.search', () => {
       await vecdb.collection.create(COLLECTION, { dimension: DIM })
 
       await vecdb.vector.insert(COLLECTION, [
-        { id: 'v1', vector: makeVector(DIM, 1.0), content: 'Doc 1' },
-        { id: 'v2', vector: makeVector(DIM, 0.5), content: 'Doc 2' },
-        { id: 'v3', vector: makeVector(DIM, 0.2), content: 'Doc 3' },
+        {
+          id: 'v1',
+          vector: makeVector(DIM, 1.0),
+          content: 'Doc 1',
+        },
+        {
+          id: 'v2',
+          vector: makeVector(DIM, 0.5),
+          content: 'Doc 2',
+        },
+        {
+          id: 'v3',
+          vector: makeVector(DIM, 0.2),
+          content: 'Doc 3',
+        },
       ])
 
       const result = await vecdb.vector.search(COLLECTION, makeVector(DIM, 1.0), { topK: 3 })

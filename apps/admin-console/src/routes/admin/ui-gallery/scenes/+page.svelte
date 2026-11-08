@@ -8,19 +8,19 @@
 -->
 <script lang='ts'>
   import { resolve } from '$app/paths'
-  import markdownEn from '$lib/components/gallery/content/markdown.en-US.md?raw'
-  import markdownJa from '$lib/components/gallery/content/markdown.ja-JP.md?raw'
-  import markdownZh from '$lib/components/gallery/content/markdown.zh-CN.md?raw'
-  import DemoCard from '$lib/components/gallery/DemoCard.svelte'
-  import DemoSection from '$lib/components/gallery/DemoSection.svelte'
-  import * as m from '$lib/paraglide/messages.js'
-  import { getLocale } from '$lib/paraglide/runtime.js'
   // FileList 与 DOM 全局类型同名，必须显式导入
   import { AiDocumentEditor, AiTableEditor, ErrorPage, FileList, MarkdownRenderer, toast } from '@h-ai/ui'
+  import markdownEn from '#lib/components/gallery/content/markdown.en-US.md?raw'
+  import markdownJa from '#lib/components/gallery/content/markdown.ja-JP.md?raw'
+  import markdownZh from '#lib/components/gallery/content/markdown.zh-CN.md?raw'
+  import DemoCard from '#lib/components/gallery/DemoCard.svelte'
+  import DemoSection from '#lib/components/gallery/DemoSection.svelte'
+  import * as m from '#lib/paraglide/messages.js'
+  import { getLocale } from '#lib/paraglide/runtime.js'
 
-  const adminUsersPath = resolve('/admin/iam/users', {})
-  const adminRolesPath = resolve('/admin/iam/roles', {})
-  const adminPermissionsPath = resolve('/admin/iam/permissions', {})
+  const adminUsersPath = resolve('admin/iam/users')
+  const adminRolesPath = resolve('admin/iam/roles')
+  const adminPermissionsPath = resolve('admin/iam/permissions')
 
   // === 状态 ===
   let pwdVal = $state('')
@@ -153,10 +153,34 @@
   }
 
   const demoFiles = [
-    { id: '1', name: m.gallery_demo_design_v3_png(), size: 2048000, type: 'image/png', url: '#' },
-    { id: '2', name: m.gallery_demo_requirements_pdf(), size: 512000, type: 'application/pdf', url: '#' },
-    { id: '3', name: m.gallery_demo_data_report_xlsx(), size: 1024000, type: 'application/vnd.ms-excel', url: '#' },
-    { id: '4', name: m.gallery_demo_meeting_notes_docx(), size: 256000, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', url: '#' },
+    {
+      id: '1',
+      name: m.gallery_demo_design_v3_png(),
+      size: 2048000,
+      type: 'image/png',
+      url: '#',
+    },
+    {
+      id: '2',
+      name: m.gallery_demo_requirements_pdf(),
+      size: 512000,
+      type: 'application/pdf',
+      url: '#',
+    },
+    {
+      id: '3',
+      name: m.gallery_demo_data_report_xlsx(),
+      size: 1024000,
+      type: 'application/vnd.ms-excel',
+      url: '#',
+    },
+    {
+      id: '4',
+      name: m.gallery_demo_meeting_notes_docx(),
+      size: 256000,
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      url: '#',
+    },
   ]
 
   // === 示例源码 ===
@@ -242,7 +266,7 @@
 <Button onclick={() => showError = !showError}>切换校验提示</Button>
 <PasswordInput value='short' error={showError ? '密码长度不足 8 位' : undefined} showToggle />`
 
-  const codeUserProfile = `<UserProfile user={demoUser} editable onsubmit={async () => { /* 保存资料 */ }} />`
+  const codeUserProfile = `<UserProfile user={demoUser} editable onsubmit={async () => { /* 保存成功后返回 true，失败返回 false */ return true }} />`
 
   const codeFileUpload = `<FileUpload accept='image/*,.pdf,.doc,.docx' maxFiles={5} multiple dragDrop autoUpload={false} />
 <FileUpload accept='image/*' maxFiles={1} dragDrop autoUpload={false} />`
@@ -357,14 +381,41 @@
           editable={false}
           tableData={{
             table_columns: [
-              { key: 'metric', label: m.gallery_demo_metric(), type: 'text' },
-              { key: 'value', label: m.gallery_demo_value(), type: 'number' },
-              { key: 'trend', label: m.gallery_demo_trends(), type: 'tag' },
+              {
+                key: 'metric',
+                label: m.gallery_demo_metric(),
+                type: 'text',
+              },
+              {
+                key: 'value',
+                label: m.gallery_demo_value(),
+                type: 'number',
+              },
+              {
+                key: 'trend',
+                label: m.gallery_demo_trends(),
+                type: 'tag',
+              },
             ],
             table_rows: [
-              { row_id: 'r1', metric: m.gallery_demo_new_customers(), value: 128, trend: m.gallery_demo_increase() },
-              { row_id: 'r2', metric: m.gallery_demo_completed_orders(), value: 42, trend: m.gallery_demo_stable() },
-              { row_id: 'r3', metric: m.gallery_demo_refund_rate(), value: 1.8, trend: m.gallery_demo_decrease() },
+              {
+                row_id: 'r1',
+                metric: m.gallery_demo_new_customers(),
+                value: 128,
+                trend: m.gallery_demo_increase(),
+              },
+              {
+                row_id: 'r2',
+                metric: m.gallery_demo_completed_orders(),
+                value: 42,
+                trend: m.gallery_demo_stable(),
+              },
+              {
+                row_id: 'r3',
+                metric: m.gallery_demo_refund_rate(),
+                value: 1.8,
+                trend: m.gallery_demo_decrease(),
+              },
             ],
           }}
         />
@@ -437,7 +488,9 @@
         {#each errorPresets as preset (preset)}
           <button
             type='button'
-            class='btn btn-sm no-animation {errorStatus === preset ? 'btn-primary' : 'btn-ghost'}'
+            class='btn btn-sm no-animation {errorStatus === preset
+              ? 'btn-primary'
+              : 'btn-ghost'}'
             onclick={() => (errorStatus = preset)}
           >
             {preset}
@@ -534,8 +587,12 @@
           </div>
           <div class='p-4 rounded-lg bg-base-200/30'>
             <p class='text-xs font-medium text-base-content/50 mb-2'>{m.gallery_demo_error_state()}</p>
-            <Button size='sm' class='mb-2' data-testid='password-error-demo' onclick={() => showPasswordError = !showPasswordError}>{showPasswordError ? m.gallery_demo_clear_validation_feedback() : m.gallery_demo_show_validation_feedback()}</Button>
-            <PasswordInput value='short' error={showPasswordError ? m.gallery_demo_use_at_least_8_characters_for_the_password() : undefined} showToggle />
+            <Button size='sm' class='mb-2' data-testid='password-error-demo' onclick={() => showPasswordError = !showPasswordError}>{showPasswordError
+              ? m.gallery_demo_clear_validation_feedback()
+              : m.gallery_demo_show_validation_feedback()}</Button>
+            <PasswordInput value='short' error={showPasswordError
+              ? m.gallery_demo_use_at_least_8_characters_for_the_password()
+              : undefined} showToggle />
           </div>
         </div>
       </div>
@@ -545,7 +602,10 @@
       <UserProfile
         user={demoUser}
         editable
-        onsubmit={async () => { toast.success(m.gallery_demo_profile_updated()) }}
+        onsubmit={async () => {
+          toast.success(m.gallery_demo_profile_updated())
+          return true
+        }}
       />
     </DemoCard>
   </DemoSection>

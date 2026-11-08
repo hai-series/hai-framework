@@ -36,14 +36,25 @@ function requireStrings(params: Record<string, unknown>, fields: readonly string
 
 /** 微信 JSAPI 只在桥接对象已就绪时调起；回调仅表示客户端响应，不能证明已付款。 */
 function invokeWechatJsapi(clientParams: Record<string, unknown>): Promise<InvokePaymentResult> {
-  requireStrings(clientParams, ['appId', 'timeStamp', 'nonceStr', 'package', 'signType', 'paySign'])
+  requireStrings(clientParams, [
+    'appId',
+    'timeStamp',
+    'nonceStr',
+    'package',
+    'signType',
+    'paySign',
+  ])
   if (clientParams.signType !== 'RSA' || !/^prepay_id=.+$/.test(String(clientParams.package))
     || !/^\d+$/.test(String(clientParams.timeStamp))) {
     throw new Error('Invalid Wechat JSAPI parameters')
   }
   const bridge = (window as Window & { WeixinJSBridge?: WechatPaymentBridge }).WeixinJSBridge
-  if (typeof bridge?.invoke !== 'function')
-    return Promise.resolve({ invoked: false, message: paymentM('payment_wechatBridgeUnavailable') })
+  if (typeof bridge?.invoke !== 'function') {
+    return Promise.resolve({
+      invoked: false,
+      message: paymentM('payment_wechatBridgeUnavailable'),
+    })
+  }
   return new Promise((resolve) => {
     bridge.invoke('getBrandWCPayRequest', clientParams, (response) => {
       resolve({ invoked: true, message: response.err_msg })
@@ -60,7 +71,19 @@ function invokeAlipayH5(clientParams: Record<string, unknown>): InvokePaymentRes
   || typeof fields !== 'object' || fields === null || Array.isArray(fields)) {
     throw new Error('Invalid Alipay page parameters')
   }
-  const required = ['app_id', 'method', 'format', 'charset', 'sign_type', 'timestamp', 'version', 'notify_url', 'return_url', 'biz_content', 'sign']
+  const required = [
+    'app_id',
+    'method',
+    'format',
+    'charset',
+    'sign_type',
+    'timestamp',
+    'version',
+    'notify_url',
+    'return_url',
+    'biz_content',
+    'sign',
+  ]
   const entries: Array<[string, string]> = []
   for (const [key, value] of Object.entries(fields) as Array<[string, unknown]>) {
     if (!required.includes(key) || typeof value !== 'string' || !value.trim())

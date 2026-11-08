@@ -7,12 +7,27 @@ import { reldb } from '@h-ai/reldb'
 
 async function main() {
   const input = JSON.parse(process.env.IAM_SECURITY_WORKER_INPUT)
-  core.init({ logging: { level: 'fatal' } })
+  core.init({
+    logging: { level: 'fatal' },
+  })
   try {
     for (const [stage, initialize] of [
-      ['reldb', () => reldb.init(input.db)],
-      ['cache', () => cache.init(input.cache)],
-      ['iam', () => iam.init({ ...input.iam, seedDefaultData: false, onOtpSendEmail: async () => {} })],
+      [
+        'reldb',
+        () => reldb.init(input.db),
+      ],
+      [
+        'cache',
+        () => cache.init(input.cache),
+      ],
+      [
+        'iam',
+        () => iam.init({
+          ...input.iam,
+          seedDefaultData: false,
+          onOtpSendEmail: async () => {},
+        }),
+      ],
     ]) {
       const result = await initialize()
       if (!result.success)
@@ -25,11 +40,16 @@ async function main() {
         : input.operation === 'send'
           ? await iam.auth.sendOtp(input.identifier)
           : await iam.user.confirmPasswordReset(input.token, input.password)
-    process.stdout.write(JSON.stringify({ success: result.success, code: result.success ? undefined : result.error.code }))
+    process.stdout.write(JSON.stringify({
+      success: result.success,
+      code: result.success ? undefined : result.error.code,
+    }))
   }
   catch (error) {
     process.exitCode = 1
-    process.stderr.write(error instanceof Error ? error.message : 'IAM security worker failed')
+    process.stderr.write(error instanceof Error
+      ? error.message
+      : 'IAM security worker failed')
   }
   finally {
     await iam.close()

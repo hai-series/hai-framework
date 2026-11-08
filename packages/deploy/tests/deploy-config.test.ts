@@ -44,9 +44,20 @@ describe('deployConfigSchema', () => {
       services: {
         db: { provisioner: 'neon', apiKey: 'neon_xxx' },
         cache: { provisioner: 'upstash', email: 'a@b.com', apiKey: 'upa_xxx' },
-        storage: { provisioner: 'cloudflare-r2', accessKeyId: 's3-key', secretAccessKey: 's3-secret', accountId: 'acc123', apiToken: 'cf_xxx' },
+        storage: {
+          provisioner: 'cloudflare-r2',
+          accessKeyId: 's3-key',
+          secretAccessKey: 's3-secret',
+          accountId: 'acc123',
+          apiToken: 'cf_xxx',
+        },
         email: { provisioner: 'resend', from: 'sender@example.test', apiKey: 're_xxx' },
-        sms: { provisioner: 'aliyun', signName: 'Test', accessKeyId: 'LTAI_xxx', accessKeySecret: 'xxx' },
+        sms: {
+          provisioner: 'aliyun',
+          signName: 'Test',
+          accessKeyId: 'LTAI_xxx',
+          accessKeySecret: 'xxx',
+        },
       },
     })
     expect(result.success).toBe(true)
@@ -166,16 +177,43 @@ describe('docker-ssh provider schema', () => {
   })
 
   it.each([
-    { serv: { extra_hosts: { 'db.example.test': '10.0.0.1:5432' } } },
-    { serv: { extra_hosts: { 'https://db.example.test': '10.0.0.1' } } },
-    { serv: { extra_hosts: { DB: '10.0.0.1' } } },
-    { serv: { extra_hosts: { 'Db.example.test': '10.0.0.1', 'db.example.test': '10.0.0.2' } } },
-    { serv: { image: 'arbitrary:1' } },
-    { server: { extra_hosts: { 'db.example.test': '10.0.0.1' } } },
+    {
+      serv: {
+        extra_hosts: { 'db.example.test': '10.0.0.1:5432' },
+      },
+    },
+    {
+      serv: {
+        extra_hosts: { 'https://db.example.test': '10.0.0.1' },
+      },
+    },
+    {
+      serv: {
+        extra_hosts: { DB: '10.0.0.1' },
+      },
+    },
+    {
+      serv: {
+        extra_hosts: { 'Db.example.test': '10.0.0.1', 'db.example.test': '10.0.0.2' },
+      },
+    },
+    {
+      serv: { image: 'arbitrary:1' },
+    },
+    {
+      server: {
+        extra_hosts: { 'db.example.test': '10.0.0.1' },
+      },
+    },
   ])('拒绝无效的 Compose 服务扩展 %j', (services) => {
     const result = DeployConfigSchema.safeParse({
-      provider: { type: 'docker-ssh', expose: { hostPort: 18080 } },
-      container: { compose: { services } },
+      provider: {
+        type: 'docker-ssh',
+        expose: { hostPort: 18080 },
+      },
+      container: {
+        compose: { services },
+      },
     })
     expect(result.success).toBe(false)
     if (!result.success)

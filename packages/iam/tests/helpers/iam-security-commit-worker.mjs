@@ -8,10 +8,14 @@ import { reldb } from '@h-ai/reldb'
 
 async function main() {
   const input = JSON.parse(process.env.IAM_COMMIT_WORKER_INPUT)
-  core.init({ logging: { level: 'fatal' } })
+  core.init({
+    logging: { level: 'fatal' },
+  })
   let pausedFor = 0
   async function pause() {
-    await new Promise((resolve, reject) => process.send({ phase: 'paused', operation: input.operation }, error => error ? reject(error) : resolve()))
+    await new Promise((resolve, reject) => process.send({ phase: 'paused', operation: input.operation }, error => error
+      ? reject(error)
+      : resolve()))
     const started = Date.now()
     // Atomics.wait 真正停止 JS 与续租定时器；不使用只暂停业务 Promise 的测试替身。
     const sleep = new Int32Array(new SharedArrayBuffer(4))
@@ -26,7 +30,11 @@ async function main() {
     for (const initialize of [
       () => reldb.init(input.db),
       () => cache.init(input.cache),
-      () => iam.init({ seedDefaultData: false, otp: { resendInterval: 30, expiresIn: 120 }, onOtpSendEmail: async () => {} }),
+      () => iam.init({
+        seedDefaultData: false,
+        otp: { resendInterval: 30, expiresIn: 120 },
+        onOtpSendEmail: async () => {},
+      }),
     ]) {
       const initialized = await initialize()
       if (!initialized.success)
@@ -56,11 +64,17 @@ async function main() {
     const result = input.operation === 'otp'
       ? await iam.auth.loginWithOtp({ identifier: input.identifier, code: input.code })
       : await iam.user.confirmPasswordReset(input.token, 'OldWorkerPassword234')
-    process.stdout.write(JSON.stringify({ success: result.success, code: result.success ? undefined : result.error.code, pausedFor }))
+    process.stdout.write(JSON.stringify({
+      success: result.success,
+      code: result.success ? undefined : result.error.code,
+      pausedFor,
+    }))
   }
   catch (error) {
     process.exitCode = 1
-    process.stderr.write(error instanceof Error ? error.message : 'Commit worker failed')
+    process.stderr.write(error instanceof Error
+      ? error.message
+      : 'Commit worker failed')
   }
   finally {
     await iam.close()

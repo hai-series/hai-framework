@@ -15,6 +15,8 @@
 
 ## 初始化与关闭
 
+`ai.close()` 等待已开始的初始化完成并清理，合并并发关闭；重初始化先清理旧实例，关闭期间不接受新初始化。
+
 ```ts
 import { ai } from '@h-ai/ai'
 import { core } from '@h-ai/core'
@@ -109,7 +111,7 @@ knowledge:
     maxSize: 1500
     overlap: 200
 
-# 可选：mem0ai/oss 引擎；无法映射持久化后端时默认 fail-fast
+# 可选：Mem0 数据格式适配；仅支持 Qdrant，生产不允许临时回退
 memory:
   provider: mem0
   defaultTopK: 10
@@ -239,15 +241,17 @@ await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: cor
 
 ## 记忆、RAG 与知识库
 
-`memory.provider` 默认为 `native`（推荐）：HAI 原生引擎，复用 vecdb/reldb/LLM/Embedding，`extract` 采用 **Mem0 式批量合并**（一次 LLM 调用对整批事实与相关既有记忆做 ADD/UPDATE/DELETE/NONE，支持 `category`）。`mem0` 则直接使用 `mem0ai/oss` 的 `Memory` 引擎：LLM/Embedder 从 `llm` 配置提取（OpenAI 兼容），向量库从底层 vecdb 后端提取（qdrant 复用）。当前适配仅映射带完整连接参数的 `qdrant`；生产环境（`NODE_ENV` 或 `HAI_CORE_ENV` 为 `production`）即使设置 `memory.allowEphemeralFallback: true` 也拒绝实际内存回退。临时回退仅限开发或明确的 `HAI_E2E=1` / `HAI_E2E_MOCK=1`；缺少后端同样不能在生产启动。两者提供同一组 `ai.memory.*` 操作。
+`ai.memory.scoped({ objectId })` 要求非空且非纯空白的主体 ID，否则工厂立即抛 `TypeError`，不会创建未绑定实例。公共 `clear({ scope: {} })` 等空范围返回失败；跨主体全清必须调用显式管理员入口。原生记忆的访问统计与更新使用版本 CAS，迟到读取不会复活已删除记录；数据库或向量清理失败通过 HaiResult 返回，不能当作成功。 Memory/Persona 的存储故障返回固定本地化文案，具体原因仅写服务端日志；先检查 result.success。
 
-Mem0 的 `update` 使用 SDK 原地修改文本与元数据，保持 `id` 和创建时间。SDK 查询使用 `filters.user_id`，写入和整主体删除使用 `userId`。SDK 无列表游标：`list` / `listPage` / 条件 `clear` 最多支持每主体 1000 条原始候选（含过期条目），多取一条探测完整性；超限返回 `MEMORY_LIST_INCOMPLETE`（906），不会伪造 total 或执行部分条件删除。候选完整时按 UTC 日期剔除过期项，再按类型/scope 过滤和分页；仅 `objectId` 的清理使用 SDK `deleteAll`，不受列表上限限制。公共空条件清理被拒绝；跨主体全清仅限受信管理员显式 `admin.clearAll({ confirm: true })`。
+`memory.provider` 默认为 `native`（推荐），复用 vecdb/reldb/LLM/Embedding 并支持 Mem0 式批量合并。`mem0` 是 Mem0 数据格式适配，复用框架提取与 Embedding，通过原生 HTTP 读写 Qdrant，保留 UUID/payload、主体隔离和既有数据；不运行完整上游引擎。生产拒绝实际内存回退，只有开发或显式 E2E 可配置临时回退。两者提供同一组 `ai.memory.*` 操作。
 
-Mem0 3.3.1 的 Qdrant 适配仍依赖 `QdrantClient.search`；项目将 `@qdrant/js-client-rest` 精确锁定为受测的 `1.18.0`，AI 的可选 peer 也声明此版本。启动会检查该公开方法，缺失时明确配置失败；不要覆盖为已移除此方法的 1.19。
+切换 `native` 与 Mem0 数据格式适配不会自动迁移数据。切换前备份关系库和向量集合，并显式迁移/核对每条记忆的 ID、objectId、scope、元数据及 Embedding 模型/维度；不得把一个后端的数据目录或集合名直接配置为另一个后端并当作迁移完成。
 
-Mem0 的 pgvector 组合在所有环境拒绝启动：当前 SDK 将 PostgreSQL 连接保存在私有对象中，未提供公开关闭入口，框架无法履行资源清理契约。需要 pgvector 时选择 `memory.provider: native`；该原生后端保持支持。`disableHistory: true` 使用 SDK 无资源的历史占位实现，不创建历史 SQLite 文件。工厂通过公开的一条有界只读查询等待实际后端 ready 后才发布成功。
+Mem0 的 `update` 原地修改文本与元数据，保持 `id` 和创建时间。候选扫描有界：`list` / `listPage` / 条件 `clear` 最多支持每主体 1000 条原始候选（含过期条目），多取一条探测完整性；超限返回 `MEMORY_LIST_INCOMPLETE`（906），不会伪造 total 或执行部分条件删除。候选完整时按 UTC 日期剔除过期项，再按类型/scope 过滤和分页；仅 `objectId` 的清理使用后端过滤删除，不受列表上限限制。公共空条件清理被拒绝；跨主体全清仅限受信管理员显式 `admin.clearAll({ confirm: true })`。
 
-`add` / `extract` 的 SDK 回执不含完整业务字段，框架写后读取权威记录再返回；并发提取等待全部在途写入结束。若写入或写后读失败，`error.ext.requiresEffectReconciliation=true`，`memoryIds` 保存已知写入 ID（回执丢失时可能为空）。应按主体核对实际记忆后决定恢复，不能盲目重做 add/extract；框架不自动重放。
+
+
+`add` / `extract` 的写入回执不含完整业务字段，框架写后读取权威记录再返回；并发提取等待全部在途写入结束。若写入或写后读失败，`error.ext.requiresEffectReconciliation=true`，`memoryIds` 保存已知写入 ID（回执丢失时可能为空）。应按主体核对实际记忆后决定恢复，不能盲目重做 add/extract；框架不自动重放。
 
 ```ts
 const enriched = await ai.memory.injectMemories(messages, { objectId: 'user-001', topK: 5 })
@@ -453,7 +457,14 @@ export const POST = kit.handler(async ({ request }) => {
 - 只向模型注册允许自动执行的工具；写操作默认要求业务侧确认或幂等键，不能把“模型请求调用”当作授权。
 - 批量导入、批量 embedding 用批量 API，避免 await-in-loop。
 - 文件解析/OCR 失败按 `HaiAIError.FILE_*` 返回，不抛业务异常。
+- HTML 文件按 HTML 结构解析并迭代提取，script/style 不进入结果，正常正文不截断。`data.text` 仍是文本/Markdown，不是可信 HTML；使用文本绑定或 `MarkdownRenderer`，不能直接交给 `{@html}`。
 - A2A 认证失败返回 `A2A_AUTH_FAILED`；`callRemoteAgent` 只依赖 `ai.init()`，无需注册本地 executor。远端 URL 仅接受 HTTP(S) 且不得内嵌凭据，应用仍须配置 origin 白名单与出口网络策略。不要记录 token、apiKey、私钥、完整 headers 或带 query 的 URL。
 - A2A 入站日志保存并重验租约后才执行业务，出站日志在已有有界队列内完成后才发布；日志失败产生 failed/interrupted Task，不重放相同 receipt。日志不是交付回执，按 requiresEffectReconciliation 核对可能已执行的效果；listMessages 失败为安全的 A2A_LIST_MESSAGES_FAILED（984）。
 - A2A 任务与事件只有共享 journal 一套权威，不装配旧 TaskStore；push notification 配置和 authenticated extended card RPC 返回 SDK 标准不支持/未配置错误。应用通过公开 executor 接口接入，不导入内部 handler/Store 装配类型。
 - Context 的 flush 会报告本节点后台提取异常及失败 HaiResult；同轮并发调用共享一次报告，返回即确认该批，后续只观察新任务。save/reset(waitForMemoryTasks)/consolidate 传播失败并停止后续写入，pendingMemoryTasks=0 不代表成功，不自动重试未知副作用。
+
+A2A 使用原生 1.0 协议：JSON-RPC 方法为 `SendMessage` / `SendStreamingMessage` / `GetTask` / `CancelTask` / `SubscribeToTask`，不接收旧版方法名。请求的消息 role 使用 `ROLE_USER`；执行器通过 `AgentEvent.message(Message.fromJSON(...))` 或 `AgentEvent.task(Task.fromJSON(...))` 发布事件（构建器与枚举从 `@h-ai/ai` 导入），文本 Part 的 ProtoJSON 为 `{ text: '...' }`，解码后的 SDK Part 从 `content.$case/value` 读取。SDK 的 `Role` / `TaskState` 为数值枚举，远端调用的 `taskState` 同样返回该枚举；直接 HTTP 响应由 `getAgentCard` / `handleRequest` 完成标准 ProtoJSON 编码，无需调用方了解 SDK oneof。远端调用自定义头按大小写不敏感的同名字段覆盖，并拒绝 HTTP 重定向，避免把认证头转发到其它目标。
+
+Mem0 格式存储与 VecDB 的 Qdrant Provider 均使用原生 HTTP，无需额外 SDK。固定 REST 请求使用 `query`，路径段编码；30 秒超时覆盖完整响应体，响应超过 16 MiB 明确失败。写入和删除等待 `wait=true` 的实际完成回执。列表和条件清理最多核对每主体 1000 条原始候选（包括过期项），超限返回 `MEMORY_LIST_INCOMPLETE`，不执行部分条件删除；仅按主体清理不受此列表上限限制。
+
+Qdrant 格式后端要求 1.19 或更新版本，并拒绝 HTTP 重定向。更新使用服务端 `update_only` 与主体/版本条件，同一次原子写入拒绝已删除或已被其它写入更新的条目；迟到更新不会复活删除记录。写后版本核对失败仍需按已有回执核对实际效果。

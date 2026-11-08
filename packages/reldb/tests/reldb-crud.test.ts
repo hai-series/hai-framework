@@ -74,7 +74,10 @@ describe('reldb.crud', () => {
         expect(pageResult.data.items).toHaveLength(2)
       }
 
-      const countResult = await crud.count({ where: 'name LIKE ?', params: ['用户%'] })
+      const countResult = await crud.count({
+        where: 'name LIKE ?',
+        params: ['用户%'],
+      })
       expect(countResult.success).toBe(true)
       if (countResult.success) {
         expect(countResult.data).toBe(3)
@@ -296,7 +299,10 @@ describe('reldb.crud', () => {
       await crud.create({ name: '用户X', email: 'x@test.com' })
       await crud.create({ name: '用户Y', email: 'y@test.com' })
 
-      const result = await crud.count({ where: 'email = ?', params: ['x@test.com'] })
+      const result = await crud.count({
+        where: 'email = ?',
+        params: ['x@test.com'],
+      })
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data).toBe(1)

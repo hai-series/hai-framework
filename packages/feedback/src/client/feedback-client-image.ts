@@ -41,7 +41,10 @@ export async function captureFeedbackScreenshot(signal?: AbortSignal): Promise<U
   if (document.fonts) {
     let timeout: ReturnType<typeof setTimeout> | undefined
     try {
-      await Promise.race([document.fonts.ready, new Promise<void>(resolve => timeout = setTimeout(resolve, 500))])
+      await Promise.race([
+        document.fonts.ready,
+        new Promise<void>(resolve => timeout = setTimeout(resolve, 500)),
+      ])
     }
     finally {
       clearTimeout(timeout)
@@ -75,7 +78,17 @@ export async function captureFeedbackScreenshot(signal?: AbortSignal): Promise<U
       if (paint && clone.defaultView) {
         for (const element of clone.querySelectorAll<HTMLElement>('*')) {
           const computed = clone.defaultView.getComputedStyle(element)
-          for (const property of ['color', 'background-color', 'border-top-color', 'border-bottom-color', 'border-left-color', 'border-right-color', 'outline-color', 'text-decoration-color', '-webkit-text-stroke-color']) {
+          for (const property of [
+            'color',
+            'background-color',
+            'border-top-color',
+            'border-bottom-color',
+            'border-left-color',
+            'border-right-color',
+            'outline-color',
+            'text-decoration-color',
+            '-webkit-text-stroke-color',
+          ]) {
             const raw = computed.getPropertyValue(property)
             if (!/oklch|oklab|color\(|lab\(|lch\(/i.test(raw))
               continue
@@ -113,8 +126,12 @@ export async function captureFeedbackScreenshot(signal?: AbortSignal): Promise<U
         }
         else {
           const control = element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-          const value = 'value' in control ? control.value : element.textContent
-          replacement.textContent = value ? '••••' : element.getAttribute('placeholder') ?? ''
+          const value = 'value' in control
+            ? control.value
+            : element.textContent
+          replacement.textContent = value
+            ? '••••'
+            : element.getAttribute('placeholder') ?? ''
         }
         replacement.setAttribute('aria-hidden', 'true')
         element.replaceWith(replacement)
@@ -142,18 +159,38 @@ export async function captureFeedbackScreenshot(signal?: AbortSignal): Promise<U
  * ```
  */
 export async function annotateFeedbackImage(bytes: Uint8Array, annotation: FeedbackImageAnnotation): Promise<Uint8Array> {
-  if (![annotation.x, annotation.y, annotation.width, annotation.height].every(Number.isFinite) || annotation.width <= 0 || annotation.height <= 0)
+  if (![
+    annotation.x,
+    annotation.y,
+    annotation.width,
+    annotation.height,
+  ].every(Number.isFinite) || annotation.width <= 0 || annotation.height <= 0) {
     throw new Error('Invalid annotation rectangle')
+  }
   const image = new Image()
-  const imageUrl = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'image/png' }))
+  const imageUrl = URL.createObjectURL(new Blob([
+    new Uint8Array(bytes),
+  ], { type: 'image/png' }))
   const canvas = document.createElement('canvas')
   try {
     image.src = imageUrl
     await image.decode()
     if (annotation.coordinateSpace === 'ratio') {
-      if ([annotation.x, annotation.y, annotation.width, annotation.height].some(value => value < 0 || value > 1))
+      if ([
+        annotation.x,
+        annotation.y,
+        annotation.width,
+        annotation.height,
+      ].some(value => value < 0 || value > 1)) {
         throw new Error('Invalid annotation ratio')
-      annotation = { ...annotation, x: annotation.x * image.naturalWidth, y: annotation.y * image.naturalHeight, width: annotation.width * image.naturalWidth, height: annotation.height * image.naturalHeight }
+      }
+      annotation = {
+        ...annotation,
+        x: annotation.x * image.naturalWidth,
+        y: annotation.y * image.naturalHeight,
+        width: annotation.width * image.naturalWidth,
+        height: annotation.height * image.naturalHeight,
+      }
     }
     canvas.width = image.naturalWidth
     canvas.height = image.naturalHeight
@@ -183,6 +220,8 @@ export async function annotateFeedbackImage(bytes: Uint8Array, annotation: Feedb
 }
 
 async function canvasBytes(canvas: HTMLCanvasElement): Promise<Uint8Array> {
-  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('Screenshot encoding failed')), 'image/png'))
+  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value
+    ? resolve(value)
+    : reject(new Error('Screenshot encoding failed')), 'image/png'))
   return new Uint8Array(await blob.arrayBuffer())
 }

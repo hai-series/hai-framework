@@ -158,7 +158,12 @@ export type MysqlPoolConfig = z.infer<typeof MysqlPoolConfigSchema>
  */
 export const SslConfigSchema = z.union([
   z.boolean(),
-  z.enum(['require', 'prefer', 'allow', 'disable']),
+  z.enum([
+    'require',
+    'prefer',
+    'allow',
+    'disable',
+  ]),
   z.record(z.string(), z.unknown()),
 ])
 
@@ -200,7 +205,9 @@ export const MysqlSslConfigSchema = z.union([
     cert: z.string().min(1).optional(),
     /** MySQL 客户端私钥，PEM 内容；必须同时提供 cert */
     key: z.string().min(1).optional(),
-  }).strict().refine(ssl => Boolean(ssl.cert) === Boolean(ssl.key), { path: ['key'] }),
+  }).strict().refine(ssl => Boolean(ssl.cert) === Boolean(ssl.key), {
+    path: ['key'],
+  }),
 ])
 
 /**
@@ -329,7 +336,10 @@ export const PostgresqlConfigSchema = NetworkConfigSchema.extend({
 export const MysqlConfigSchema = NetworkConfigSchema.extend({
   type: z.literal('mysql'),
   /** 网络数据库URL；MySQL空串表示使用分字段，非空仅mysql://且拒绝query/fragment，优先于host/port/database/user/password */
-  url: z.union([z.literal('').transform(() => undefined), z.url({ protocol: /^mysql$/ }).refine(value => !value.includes('?') && !value.includes('#'))]).optional(),
+  url: z.union([
+    z.literal('').transform(() => undefined),
+    z.url({ protocol: /^mysql$/ }).refine(value => !value.includes('?') && !value.includes('#')),
+  ]).optional(),
   /** 数据库：SQLite文件路径或:memory:；PostgreSQL必填名称；MySQL无URL时必填，URL模式从URL读取 */
   database: z.string().min(1).optional(),
   /** TLS：PostgreSQL使用其模式；MySQL仅false或严格对象，空对象默认校验证书链和DNS身份 */
@@ -339,7 +349,9 @@ export const MysqlConfigSchema = NetworkConfigSchema.extend({
   /** MySQL 特定选项 */
   mysql: MysqlOptionsSchema.optional(),
   ...OperationLogConfigFieldSchema,
-}).refine(config => Boolean(config.url) || Boolean(config.database), { path: ['database'] })
+}).refine(config => Boolean(config.url) || Boolean(config.database), {
+  path: ['database'],
+})
 
 /**
  * 统一数据库配置 Schema（判别联合体）

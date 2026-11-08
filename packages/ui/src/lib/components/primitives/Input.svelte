@@ -53,7 +53,18 @@
 
   const dataAttributes = $derived(getDataAttributes(restProps))
   const field = getFormFieldContext()
-  const validation = createControlValidation(() => validationMessage, () => [value, required, readonly, disabled, pattern, min, max, minlength, maxlength, step])
+  const validation = createControlValidation(() => validationMessage, () => [
+    value,
+    required,
+    readonly,
+    disabled,
+    pattern,
+    min,
+    max,
+    minlength,
+    maxlength,
+    step,
+  ])
   const uniqueId = $props.id()
   const messageId = `${uniqueId}-error`
   const localError = $derived(resolveFormText(error) || validation.message)
@@ -124,7 +135,12 @@
       bind:this={inputRef}
       id={id ?? field?.controlId}
       aria-invalid={effectiveError ? true : undefined}
-      aria-describedby={[field?.messageId, localError && !field?.error ? messageId : ''].filter(Boolean).join(' ') || undefined}
+      aria-describedby={[
+        field?.messageId,
+        localError && !field?.error
+          ? messageId
+          : '',
+      ].filter(Boolean).join(' ') || undefined}
       {name}
       {type}
       {placeholder}

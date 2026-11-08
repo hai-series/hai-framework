@@ -63,6 +63,7 @@
       "env": [
         "HAI_ACP_E2E_*",
         "HAI_TEST_CONTAINER_ENGINE",
+        "HAI_QDRANT_TEST_IMAGE",
         "HAI_STORAGE_RUN_BROWSER_GATES"
       ],
       "passThroughEnv": [

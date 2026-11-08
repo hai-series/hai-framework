@@ -69,7 +69,9 @@ function camelCase(str: string): string {
 function truncate(str: string, length: number, suffix = '...'): string {
   if (length <= 0)
     return str
-  return str.length > length ? str.slice(0, length) + suffix : str
+  return str.length > length
+    ? str.slice(0, length) + suffix
+    : str
 }
 
 /**

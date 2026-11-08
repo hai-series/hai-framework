@@ -16,7 +16,9 @@ import { servM } from './serv-i18n.js'
 const ApiPrefixSchema = z.custom<`/${string}`>(
   value => typeof value === 'string' && /^\/[\w.-]+(?:\/[\w.-]+)*$/.test(value)
     && !value.split('/').some(segment => segment === '.' || segment === '..'),
-  { error: () => servM('serv_invalidApiPrefix') },
+  {
+    error: () => servM('serv_invalidApiPrefix'),
+  },
 )
 
 const AbsolutePathSchema = z.custom<`/${string}`>(
@@ -268,7 +270,9 @@ export interface ServConfigInput {
 
 const OpenAPIHttpConfigInputSchema = z.union([
   z.literal(false),
-  z.object({ path: AbsolutePathSchema.default('/openapi.json') }),
+  z.object({
+    path: AbsolutePathSchema.default('/openapi.json'),
+  }),
 ])
 
 const DocsHttpConfigInputSchema = z.union([
@@ -290,7 +294,12 @@ const HealthHttpConfigInputSchema = z.union([
 const TransportRuntimeConfigInputSchema = z.union([
   z.literal(false),
   z.object({
-    maxPlaintextBytes: z.union([z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max), z.literal('auto')]).transform(value => value === 'auto' ? undefined : value).optional().describe('普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明').meta({ default: 'auto' }),
+    maxPlaintextBytes: z.union([
+      z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max),
+      z.literal('auto'),
+    ]).transform(value => value === 'auto'
+      ? undefined
+      : value).optional().describe('普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明').meta({ default: 'auto' }),
     maxFutureSkewSeconds: z.number().int().min(0).max(TRANSPORT_TIME_LIMITS.maxFutureSkewSeconds).optional().describe('允许客户端请求时间领先服务器的秒数').meta({ default: TRANSPORT_PROTOCOL.CLOCK_SKEW_MS / 1000 }),
     maxRequestAgeSeconds: z.number().int().min(TRANSPORT_TIME_LIMITS.minRequestAgeSeconds).max(TRANSPORT_TIME_LIMITS.maxRequestAgeSeconds).optional().describe('请求从签发起的有效秒数').meta({ default: TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS / 1000 }),
     routePlaintextBytes: z.record(AbsolutePathSchema, z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max)).optional().describe('完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量'),
@@ -307,7 +316,13 @@ const ServerConfigInputSchema = z.object({
 const CorsRuntimeConfigInputSchema = z.object({
   origin: z.string().optional(),
   nativeOrigins: z.string().optional(),
-  allowedHeaders: z.array(z.string()).default(['Authorization', 'Content-Type', 'X-Requested-With', 'X-Hai-Reauthentication', 'X-Hai-Terminal']),
+  allowedHeaders: z.array(z.string()).default([
+    'Authorization',
+    'Content-Type',
+    'X-Requested-With',
+    'X-Hai-Reauthentication',
+    'X-Hai-Terminal',
+  ]),
   exposedHeaders: z.array(z.string()).default([]),
   credentials: z.boolean().default(false),
 })
@@ -380,7 +395,10 @@ function readServerEnvOverride(): ServServerConfigInput {
  * ```
  */
 export function resolveServServerConfig(input: ServServerConfigInput = {}): ServServerConfig {
-  return { ...ServerConfigInputSchema.parse(input), ...readServerEnvOverride() }
+  return {
+    ...ServerConfigInputSchema.parse(input),
+    ...readServerEnvOverride(),
+  }
 }
 
 /**

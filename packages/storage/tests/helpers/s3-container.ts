@@ -96,7 +96,12 @@ export function createS3ContainerManager(
     const host = container.getHost()
     const port = container.getMappedPort(9000)
     const endpoint = `http://${host}:${port}`
-    const s3 = new S3Client({ region, endpoint, forcePathStyle: true, credentials })
+    const s3 = new S3Client({
+      region,
+      endpoint,
+      forcePathStyle: true,
+      credentials,
+    })
 
     try {
       try {
@@ -114,6 +119,14 @@ export function createS3ContainerManager(
       s3.destroy()
     }
 
-    return { host, port, bucket, region, ...credentials, endpoint, release }
+    return {
+      host,
+      port,
+      bucket,
+      region,
+      ...credentials,
+      endpoint,
+      release,
+    }
   }
 }

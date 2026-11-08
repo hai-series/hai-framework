@@ -148,11 +148,21 @@ describe('audit.cleanup', () => {
     const oldTime = Date.now() - 2 * 86400000
     await reldb.sql.execute(
       'INSERT INTO hai_audit_logs (id, action, resource, created_at) VALUES (?, ?, ?, ?)',
-      ['audit_old_1', 'test1', 'test', oldTime],
+      [
+        'audit_old_1',
+        'test1',
+        'test',
+        oldTime,
+      ],
     )
     await reldb.sql.execute(
       'INSERT INTO hai_audit_logs (id, action, resource, created_at) VALUES (?, ?, ?, ?)',
-      ['audit_old_2', 'test2', 'test', oldTime],
+      [
+        'audit_old_2',
+        'test2',
+        'test',
+        oldTime,
+      ],
     )
     // 新记录
     await audit.log({ action: 'new', resource: 'test' })

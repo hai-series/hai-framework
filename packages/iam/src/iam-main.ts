@@ -129,13 +129,17 @@ export const iam: IamFunctions = {
       if (!reldb.isInitialized) {
         return err(
           HaiIamError.CONFIG_ERROR,
-          iamM('iam_depsNotInitialized', { params: { dep: 'reldb' } }),
+          iamM('iam_depsNotInitialized', {
+            params: { dep: 'reldb' },
+          }),
         )
       }
       if (!cache.isInitialized) {
         return err(
           HaiIamError.CONFIG_ERROR,
-          iamM('iam_depsNotInitialized', { params: { dep: 'cache' } }),
+          iamM('iam_depsNotInitialized', {
+            params: { dep: 'cache' },
+          }),
         )
       }
 
@@ -157,7 +161,9 @@ export const iam: IamFunctions = {
         logger.error('IAM config validation failed', { error: parseResult.error.message })
         return err(
           HaiIamError.CONFIG_ERROR,
-          iamM('iam_configError', { params: { error: parseResult.error.message } }),
+          iamM('iam_configError', {
+            params: { error: parseResult.error.message },
+          }),
           parseResult.error,
         )
       }
@@ -165,7 +171,11 @@ export const iam: IamFunctions = {
 
       // Reach 是可选的外部依赖；通知回调解析在基础依赖和配置验证成功后执行。
       const { onPasswordResetRequest, onOtpSendEmail, onOtpSendSms } = await resolveIamNotifications(config)
-      logger.info('IAM notification channels resolved', { email: Boolean(onOtpSendEmail), sms: Boolean(onOtpSendSms), passwordReset: Boolean(onPasswordResetRequest) })
+      logger.info('IAM notification channels resolved', {
+        email: Boolean(onOtpSendEmail),
+        sms: Boolean(onOtpSendSms),
+        passwordReset: Boolean(onPasswordResetRequest),
+      })
 
       // 创建子功能（按依赖顺序），使用局部变量暂存，全部成功后再原子性赋值
       const migration = await migrateIam()
@@ -183,7 +193,13 @@ export const iam: IamFunctions = {
             if (!passwordState.success)
               return passwordState
           }
-          return ok(found.data ? { version: found.data.credentialVersion ?? '', available: isUserActive(found.data), profile: { username: found.data.username, displayName: found.data.displayName, avatarUrl: found.data.avatarUrl } } : null)
+          return ok(found.data
+            ? {
+                version: found.data.credentialVersion ?? '',
+                available: isUserActive(found.data),
+                profile: { username: found.data.username, displayName: found.data.displayName, avatarUrl: found.data.avatarUrl },
+              }
+            : null)
         },
       })
       if (!sessionResult.success) {
@@ -235,8 +251,15 @@ export const iam: IamFunctions = {
       currentAuthz = authorization
       currentUser = users
       currentConfig = parsed
-      currentPublicConfig = buildIamPublicConfig(parsed, { ...config, onPasswordResetRequest, onOtpSendEmail, onOtpSendSms })
-      currentApiKey = authnResult.data.apiKeyFunctions ? observeApiKeys(authnResult.data.apiKeyFunctions) : null
+      currentPublicConfig = buildIamPublicConfig(parsed, {
+        ...config,
+        onPasswordResetRequest,
+        onOtpSendEmail,
+        onOtpSendSms,
+      })
+      currentApiKey = authnResult.data.apiKeyFunctions
+        ? observeApiKeys(authnResult.data.apiKeyFunctions)
+        : null
       // 一次性票据能力（仅依赖 cache + crypto，随 IAM 初始化即可用）
       currentTicket = createTicketOperations()
 
@@ -285,7 +308,9 @@ export const iam: IamFunctions = {
     return currentAuth ?? notInitializedAuth
   },
   async getPublicConfig() {
-    const snapshot = currentPublicConfig ? structuredClone(currentPublicConfig) : null
+    const snapshot = currentPublicConfig
+      ? structuredClone(currentPublicConfig)
+      : null
     const authz = currentAuthz
     if (!snapshot || !authz)
       return notInitialized.result<IamPublicConfig>()
@@ -294,7 +319,18 @@ export const iam: IamFunctions = {
     const configured = await authz.getSensitiveOperations()
     if (!configured.success)
       return configured
-    return ok({ ...snapshot, reauthentication: { ...snapshot.reauthentication, operations: [...new Set([...snapshot.reauthentication.operations, ...configured.data])].sort() } })
+    return ok({
+      ...snapshot,
+      reauthentication: {
+        ...snapshot.reauthentication,
+        operations: [
+          ...new Set([
+            ...snapshot.reauthentication.operations,
+            ...configured.data,
+          ]),
+        ].sort(),
+      },
+    })
   },
   get user(): UserOperations {
     return currentUser ?? notInitializedUser
@@ -312,10 +348,14 @@ export const iam: IamFunctions = {
     return currentTicket ?? notInitializedTicket
   },
   get config() {
-    return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null
+    return currentConfig
+      ? core.sanitize.sanitizeSensitiveFields(currentConfig)
+      : null
   },
   get publicConfig() {
-    return currentPublicConfig ? structuredClone(currentPublicConfig) : null
+    return currentPublicConfig
+      ? structuredClone(currentPublicConfig)
+      : null
   },
   get isInitialized() {
     return currentConfig !== null

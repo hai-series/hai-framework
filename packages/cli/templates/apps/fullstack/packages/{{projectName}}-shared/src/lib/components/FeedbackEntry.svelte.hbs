@@ -41,7 +41,13 @@
     }
   }
   function input(data: FeedbackFormData) {
-    return { description: data.description, category: data.type, contact: data.contact, files: data.files, removedAttachmentIds: data.removedAttachmentIds }
+    return {
+      description: data.description,
+      category: data.type,
+      contact: data.contact,
+      files: data.files,
+      removedAttachmentIds: data.removedAttachmentIds,
+    }
   }
   async function submit(data: FeedbackFormData) {
     const result = await browserFeedback.submit(input(data))
@@ -82,5 +88,13 @@
 <Button variant='ghost' size='sm' loading={preparing} onclick={() => void prepare()} data-testid='feedback-open'>{m.nav_feedback()}</Button>
 <FeedbackModal bind:open {attachments} budget={browserFeedback.budget} resetKey={draft?.submissionId} onsubmit={submit} oncapture={capturePage} onannotate={annotate} onexport={exportLocal} onfileschange={addFiles}
   evidence={draft?.evidence ?? []}
-  evidenceSummary={draft?.missing.length ? [{ label: m.feedback_logs(), status: 'partial', detail: draft.missing.join(', ') }] : []} />
+  evidenceSummary={draft?.missing.length
+? [
+{
+label: m.feedback_logs(),
+status: 'partial',
+detail: draft.missing.join(', '),
+},
+]
+: []} />
 {{/if}}

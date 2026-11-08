@@ -1,6 +1,4 @@
 FROM node:24.22.1-bookworm-slim AS build
-ARG SQLITE_PREBUILD_MIRROR=
-ENV npm_config_better_sqlite3_binary_host_mirror=$SQLITE_PREBUILD_MIRROR
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 ENV CI=true

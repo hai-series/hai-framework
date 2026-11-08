@@ -28,13 +28,27 @@ export function createAuthProcedures() {
 export function createAdminProcedures() {
   return serv.implement(adminContract).context<ServContext>().route('permissions.list').permission('app.roles.manage').handle(async ({ input }) => {
     const result = await iam.authz.getAllPermissions(input)
-    return result.success ? ok({ total: result.data.total, items: result.data.items.map(item => ({ id: item.id, code: item.code, name: item.name, sensitiveOperations: item.sensitiveOperations ?? [] })) }) : result
+    return result.success
+      ? ok({
+          total: result.data.total,
+          items: result.data.items.map(item => ({
+            id: item.id,
+            code: item.code,
+            name: item.name,
+            sensitiveOperations: item.sensitiveOperations ?? [],
+          })),
+        })
+      : result
   }).route('permissions.update').permission('app.roles.manage').handle(({ input, context }) => withAdminMutation(context, 'iam.permissions.sensitiveOperations', async () => {
     const result = await iam.authz.setPermissionSensitiveOperations(input.id, input.sensitiveOperations)
-    return result.success ? ok({ saved: true as const }) : result
+    return result.success
+      ? ok({ saved: true as const })
+      : result
   })).route('configuration.get').permission('app.config.manage').handle(() => readBusinessSettings()).route('configuration.update').permission('app.config.manage').handle(async ({ input, context }) => {
     const checked = await iam.auth.checkSensitiveOperation(context.accessToken ?? '', 'business.settings.update', context.request.headers.get('x-hai-reauthentication') ?? undefined)
-    return checked.success ? saveBusinessSettings(input) : checked
+    return checked.success
+      ? saveBusinessSettings(input)
+      : checked
   }).route('users.list').permission('app.users.manage').handle(async ({ input }) => {
     const users = await iam.user.listUsers(input)
     if (!users.success)
@@ -42,7 +56,10 @@ export function createAdminProcedures() {
     const roles = await iam.authz.getUserRolesForMany(users.data.items.map(user => user.id))
     if (!roles.success)
       return roles
-    return ok({ ...users.data, items: users.data.items.map(user => toAdminUser(user, roles.data.get(user.id) ?? [])) })
+    return ok({
+      ...users.data,
+      items: users.data.items.map(user => toAdminUser(user, roles.data.get(user.id) ?? [])),
+    })
   }).route('users.resetPassword').permission('app.users.manage').handle(({ input, context }) => withAdminMutation(context, 'iam.users.resetPassword', async () => {
     const result = await iam.user.adminResetPassword(input.id, input.newPassword)
     if (!result.success)
@@ -74,33 +91,68 @@ export function createAdminProcedures() {
     const result = roles.data.items.find(item => item.id === input.id)
     if (!result)
       return err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale }))
-    await recordAudit(context, 'update', 'roles', input.id, { fields: ['description'] })
+    await recordAudit(context, 'update', 'roles', input.id, {
+      fields: ['description'],
+    })
     return ok(result)
   })).route('audit.backup').permission('audit:backup').handle(async ({ input, context }) => {
     const checked = await iam.auth.checkSensitiveOperation(context.accessToken ?? '', 'audit.backup', context.request.headers.get('x-hai-reauthentication') ?? undefined)
     if (!checked.success)
       return checked
     const result = await audit.backup.run({ ...input, signal: context.request.signal })
-    return result.success ? ok({ ...result.data, createdAt: result.data.createdAt.toISOString(), cutoff: result.data.cutoff.toISOString() }) : result
+    return result.success
+      ? ok({
+          ...result.data,
+          createdAt: result.data.createdAt.toISOString(),
+          cutoff: result.data.cutoff.toISOString(),
+        })
+      : result
   }).route('audit.list').permission('audit:read').handle(async ({ input, context }) => {
     if (input.startDate && input.endDate && input.startDate > input.endDate)
       return err(HaiCommonError.VALIDATION_ERROR, serverM('invalidDateRange', { locale: context.locale }))
-    const result = await audit.list({ ...input, startDate: input.startDate ? new Date(input.startDate) : undefined, endDate: input.endDate ? new Date(input.endDate) : undefined })
+    const result = await audit.list({
+      ...input,
+      startDate: input.startDate
+        ? new Date(input.startDate)
+        : undefined,
+      endDate: input.endDate
+        ? new Date(input.endDate)
+        : undefined,
+    })
     if (!result.success)
       return result
-    const stats = await audit.getStats(7, { category: input.category, outcome: input.outcome, severity: input.severity, resource: input.resource, scopeId: input.scopeId, userId: input.userId })
+    const stats = await audit.getStats(7, {
+      category: input.category,
+      outcome: input.outcome,
+      severity: input.severity,
+      resource: input.resource,
+      scopeId: input.scopeId,
+      userId: input.userId,
+    })
     if (!stats.success)
       return stats
-    return ok({ ...result.data, stats: stats.data, backupEnabled: AuditInitConfigSchema.parse(core.config.get('audit') ?? {}).backup.enabled, items: result.data.items.map(item => ({ ...item, createdAt: new Date(item.createdAt).toISOString() })) })
+    return ok({
+      ...result.data,
+      stats: stats.data,
+      backupEnabled: AuditInitConfigSchema.parse(core.config.get('audit') ?? {}).backup.enabled,
+      items: result.data.items.map(item => ({
+        ...item,
+        createdAt: new Date(item.createdAt).toISOString(),
+      })),
+    })
   }).build()
 }
 
 export function createProfileProcedures() {
   return serv.implement(profileContract).context<ServContext>().route('update').auth().handle(async ({ input, context }) => {
     const checked = await iam.auth.checkSensitiveOperation(context.accessToken ?? '', 'iam.profile.update', context.request.headers.get('x-hai-reauthentication') ?? undefined)
-    return checked.success ? updateProfile(input, context) : checked
+    return checked.success
+      ? updateProfile(input, context)
+      : checked
   }).route('avatar').auth().handle(async ({ input, context }) => {
     const checked = await iam.auth.checkSensitiveOperation(context.accessToken ?? '', 'iam.profile.avatar', context.request.headers.get('x-hai-reauthentication') ?? undefined)
-    return checked.success ? uploadAvatar(context.session.userId, input, context) : checked
+    return checked.success
+      ? uploadAvatar(context.session.userId, input, context)
+      : checked
   }).build()
 }

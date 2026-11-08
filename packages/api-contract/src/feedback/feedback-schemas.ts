@@ -28,7 +28,12 @@ export const FeedbackStatusSchema = z.enum(['pending', 'handled'])
  * FeedbackCollectionStatusSchema.parse('collecting')
  * ```
  */
-export const FeedbackCollectionStatusSchema = z.enum(['collecting', 'complete', 'partial', 'failed'])
+export const FeedbackCollectionStatusSchema = z.enum([
+  'collecting',
+  'complete',
+  'partial',
+  'failed',
+])
 /**
  * 通知状态，sent 仅表示邮件服务受理。
  * @example
@@ -37,7 +42,14 @@ export const FeedbackCollectionStatusSchema = z.enum(['collecting', 'complete', 
  * FeedbackNotificationStatusSchema.parse('pending')
  * ```
  */
-export const FeedbackNotificationStatusSchema = z.enum(['disabled', 'pending', 'sending', 'sent', 'deferred', 'failed'])
+export const FeedbackNotificationStatusSchema = z.enum([
+  'disabled',
+  'pending',
+  'sending',
+  'sent',
+  'deferred',
+  'failed',
+])
 
 /**
  * 单条有界、JSON 可序列化的诊断证据。
@@ -51,7 +63,17 @@ export const FeedbackEvidenceInputSchema = z.strictObject({
   id,
   source: z.string().min(1).max(128),
   sequence: z.number().int().nonnegative().safe(),
-  kind: z.enum(['log', 'error', 'request', 'interaction', 'environment', 'snapshot', 'replay', 'business', 'missing']),
+  kind: z.enum([
+    'log',
+    'error',
+    'request',
+    'interaction',
+    'environment',
+    'snapshot',
+    'replay',
+    'business',
+    'missing',
+  ]),
   timestamp,
   requestId: id.optional(),
   errorId: id.optional(),
@@ -66,7 +88,10 @@ export const FeedbackEvidenceInputSchema = z.strictObject({
  * FeedbackEvidenceSchema.parse({ id: 'event-1', feedbackId: 'report-1', revision: 1, source: 'browser', sequence: 1, kind: 'log', timestamp: 1, data: {} })
  * ```
  */
-export const FeedbackEvidenceSchema = FeedbackEvidenceInputSchema.extend({ feedbackId: id, revision: z.number().int().min(1) })
+export const FeedbackEvidenceSchema = FeedbackEvidenceInputSchema.extend({
+  feedbackId: id,
+  revision: z.number().int().min(1),
+})
 
 /**
  * 附件声明，不含可指定的 S3 key。
@@ -115,7 +140,11 @@ export const FeedbackSubmitInputSchema = z.strictObject({
   appVersion: z.string().max(128).optional(),
   buildId: z.string().max(128).optional(),
   commit: z.string().max(128).optional(),
-  anchor: z.strictObject({ kind: z.enum(['error', 'feedback']), timestamp, errorId: id.optional() }).optional(),
+  anchor: z.strictObject({
+    kind: z.enum(['error', 'feedback']),
+    timestamp,
+    errorId: id.optional(),
+  }).optional(),
   evidence: z.array(FeedbackEvidenceInputSchema).max(1000).optional(),
   attachments: z.array(FeedbackAttachmentInputSchema).max(20).optional(),
 })
@@ -204,7 +233,12 @@ export const FeedbackEvidenceQuerySchema = PaginationQuerySchema.extend({
  * FeedbackSetStatusInputSchema.parse({ id: 'report-1', status: 'handled', expectedVersion: 1 })
  * ```
  */
-export const FeedbackSetStatusInputSchema = z.strictObject({ id, status: FeedbackStatusSchema, expectedVersion: z.number().int().min(1), note: z.string().max(10000).optional() })
+export const FeedbackSetStatusInputSchema = z.strictObject({
+  id,
+  status: FeedbackStatusSchema,
+  expectedVersion: z.number().int().min(1),
+  note: z.string().max(10000).optional(),
+})
 /**
  * 提交后补采分块，服务端按来源序号幂等确认。
  * @example
@@ -213,7 +247,10 @@ export const FeedbackSetStatusInputSchema = z.strictObject({ id, status: Feedbac
  * FeedbackAppendEvidenceInputSchema.parse({ id: 'report-1', evidence: [] })
  * ```
  */
-export const FeedbackAppendEvidenceInputSchema = z.strictObject({ id, evidence: z.array(FeedbackEvidenceInputSchema).max(1000) })
+export const FeedbackAppendEvidenceInputSchema = z.strictObject({
+  id,
+  evidence: z.array(FeedbackEvidenceInputSchema).max(1000),
+})
 /**
  * 已可靠入库的证据确认。
  * @example
@@ -222,7 +259,10 @@ export const FeedbackAppendEvidenceInputSchema = z.strictObject({ id, evidence: 
  * FeedbackEvidenceAckSchema.parse({ acknowledged: ['event-1'], evidenceRevision: 1 })
  * ```
  */
-export const FeedbackEvidenceAckSchema = z.object({ acknowledged: z.array(id), evidenceRevision: z.number().int().min(1) })
+export const FeedbackEvidenceAckSchema = z.object({
+  acknowledged: z.array(id),
+  evidenceRevision: z.number().int().min(1),
+})
 /**
  * 采集结束或部分缺失。
  * @example
@@ -231,7 +271,10 @@ export const FeedbackEvidenceAckSchema = z.object({ acknowledged: z.array(id), e
  * FeedbackCompleteInputSchema.parse({ id: 'report-1', missing: [] })
  * ```
  */
-export const FeedbackCompleteInputSchema = z.strictObject({ id, missing: z.array(z.string().max(2000)).max(100).optional() })
+export const FeedbackCompleteInputSchema = z.strictObject({
+  id,
+  missing: z.array(z.string().max(2000)).max(100).optional(),
+})
 /**
  * 按任务类别重试。
  * @example
@@ -240,7 +283,17 @@ export const FeedbackCompleteInputSchema = z.strictObject({ id, missing: z.array
  * FeedbackRetryInputSchema.parse({ id: 'report-1', target: 'notify' })
  * ```
  */
-export const FeedbackRetryInputSchema = z.strictObject({ id, target: z.enum(['collect', 'notify', 'webhook', 'export', 'attachment']), targetId: z.string().max(128).optional() })
+export const FeedbackRetryInputSchema = z.strictObject({
+  id,
+  target: z.enum([
+    'collect',
+    'notify',
+    'webhook',
+    'export',
+    'attachment',
+  ]),
+  targetId: z.string().max(128).optional(),
+})
 /**
  * 固定证据修订的导出请求。
  * @example
@@ -249,7 +302,10 @@ export const FeedbackRetryInputSchema = z.strictObject({ id, target: z.enum(['co
  * FeedbackExportInputSchema.parse({ id: 'report-1' })
  * ```
  */
-export const FeedbackExportInputSchema = z.strictObject({ id, evidenceRevision: z.number().int().min(1).optional() })
+export const FeedbackExportInputSchema = z.strictObject({
+  id,
+  evidenceRevision: z.number().int().min(1).optional(),
+})
 /**
  * 已生成问题包的受权下载定位。
  * @example
@@ -271,8 +327,19 @@ export const FeedbackExportQuerySchema = z.strictObject({ id, jobId: id })
 export const FeedbackJobSchema = z.object({
   id,
   feedbackId: id,
-  type: z.enum(['collect', 'notify', 'webhook', 'export', 'cleanup']),
-  status: z.enum(['pending', 'running', 'succeeded', 'failed']),
+  type: z.enum([
+    'collect',
+    'notify',
+    'webhook',
+    'export',
+    'cleanup',
+  ]),
+  status: z.enum([
+    'pending',
+    'running',
+    'succeeded',
+    'failed',
+  ]),
   attempts: z.number().int().nonnegative(),
   createdAt: timestamp,
   updatedAt: timestamp,
@@ -288,7 +355,15 @@ export const FeedbackJobSchema = z.object({
  * FeedbackHistorySchema.parse({ id: 'history-1', feedbackId: 'report-1', userId: 'user-1', from: 'pending', to: 'handled', timestamp: 1 })
  * ```
  */
-export const FeedbackHistorySchema = z.object({ id, feedbackId: id, userId: id, from: FeedbackStatusSchema, to: FeedbackStatusSchema, timestamp, note: z.string().optional() })
+export const FeedbackHistorySchema = z.object({
+  id,
+  feedbackId: id,
+  userId: id,
+  from: FeedbackStatusSchema,
+  to: FeedbackStatusSchema,
+  timestamp,
+  note: z.string().optional(),
+})
 /**
  * 详情按需加载，完整日志通过单独分页接口查询。
  * @example
@@ -297,7 +372,12 @@ export const FeedbackHistorySchema = z.object({ id, feedbackId: id, userId: id, 
  * function numberOfAttachments(detail: FeedbackDetail) { return detail.attachments.length }
  * ```
  */
-export const FeedbackDetailSchema = z.object({ report: FeedbackReportSchema, attachments: z.array(FeedbackAttachmentSchema), history: z.array(FeedbackHistorySchema), jobs: z.array(FeedbackJobSchema) })
+export const FeedbackDetailSchema = z.object({
+  report: FeedbackReportSchema,
+  attachments: z.array(FeedbackAttachmentSchema),
+  history: z.array(FeedbackHistorySchema),
+  jobs: z.array(FeedbackJobSchema),
+})
 /**
  * 有界附件上传，解码前后均须检查长度和 checksum。
  * @example
@@ -306,7 +386,11 @@ export const FeedbackDetailSchema = z.object({ report: FeedbackReportSchema, att
  * FeedbackUploadInputSchema.parse({ id: 'report-1', attachmentId: 'image-1', dataBase64: 'iVBORw==' })
  * ```
  */
-export const FeedbackUploadInputSchema = z.strictObject({ id, attachmentId, dataBase64: z.string().max(4 * Math.ceil(5 * 1024 * 1024 / 3)).refine(value => value.length % 4 === 0 && /^[A-Z0-9+/]*={0,2}$/i.test(value)) })
+export const FeedbackUploadInputSchema = z.strictObject({
+  id,
+  attachmentId,
+  dataBase64: z.string().max(4 * Math.ceil(5 * 1024 * 1024 / 3)).refine(value => value.length % 4 === 0 && /^[A-Z0-9+/]*={0,2}$/i.test(value)),
+})
 /**
  * 附件受权读取定位。
  * @example
@@ -324,7 +408,11 @@ export const FeedbackAttachmentQuerySchema = z.strictObject({ id, attachmentId }
  * FeedbackAttachmentDataSchema.parse({ name: 'screen.png', contentType: 'image/png', dataBase64: 'iVBORw==' })
  * ```
  */
-export const FeedbackAttachmentDataSchema = z.object({ name: z.string(), contentType: z.string(), dataBase64: z.string() })
+export const FeedbackAttachmentDataSchema = z.object({
+  name: z.string(),
+  contentType: z.string(),
+  dataBase64: z.string(),
+})
 
 /**
  * FeedbackStatus 的共享类型，由对应 schema 推导。

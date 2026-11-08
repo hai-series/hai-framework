@@ -9,7 +9,10 @@ import { core } from '../src/index.js'
 
 describe('core.object', () => {
   it('deepClone 应该返回不同引用', () => {
-    const obj = { a: 1, b: { c: 2 } }
+    const obj = {
+      a: 1,
+      b: { c: 2 },
+    }
     const cloned = core.object.deepClone(obj)
     expect(cloned).toEqual(obj)
     expect(cloned).not.toBe(obj)
@@ -18,18 +21,34 @@ describe('core.object', () => {
 
   it('deepMerge 应该合并嵌套对象', () => {
     const merged = core.object.deepMerge(
-      { a: 1, b: { c: 1, d: 2 } },
-      { b: { d: 3 }, e: 4 },
+      {
+        a: 1,
+        b: { c: 1, d: 2 },
+      },
+      {
+        b: { d: 3 },
+        e: 4,
+      },
     )
-    expect(merged).toEqual({ a: 1, b: { c: 1, d: 3 }, e: 4 })
+    expect(merged).toEqual({
+      a: 1,
+      b: { c: 1, d: 3 },
+      e: 4,
+    })
   })
 
   it('deepMerge 数组应被直接覆盖而非合并', () => {
     const merged = core.object.deepMerge(
-      { items: [1, 2, 3] },
-      { items: [4, 5] },
+      {
+        items: [1, 2, 3],
+      },
+      {
+        items: [4, 5],
+      },
     )
-    expect(merged).toEqual({ items: [4, 5] })
+    expect(merged).toEqual({
+      items: [4, 5],
+    })
   })
 
   it('deepMerge 应该支持多个对象合并', () => {
@@ -45,8 +64,22 @@ describe('core.object', () => {
     class Endpoint {
       constructor(readonly host: string) {}
     }
-    const previous = { at: new Date('2025-01-01'), map: new Map([['old', 1]]), set: new Set([1]), endpoint: new Endpoint('old') }
-    const next = { at: new Date('2026-01-01'), map: new Map([['new', 2]]), set: new Set([2]), endpoint: new Endpoint('new') }
+    const previous = {
+      at: new Date('2025-01-01'),
+      map: new Map([
+        ['old', 1],
+      ]),
+      set: new Set([1]),
+      endpoint: new Endpoint('old'),
+    }
+    const next = {
+      at: new Date('2026-01-01'),
+      map: new Map([
+        ['new', 2],
+      ]),
+      set: new Set([2]),
+      endpoint: new Endpoint('new'),
+    }
     const merged = core.object.deepMerge(previous, next)
     for (const key of ['at', 'map', 'set', 'endpoint'] as const)
       expect(merged[key]).toBe(next[key])
@@ -55,18 +88,28 @@ describe('core.object', () => {
   })
 
   it('deepMerge 回归：普通对象与实例相互覆盖，空原型对象仍递归合并', () => {
-    const plain: Record<string, unknown> = { value: { nested: true } }
-    const instance: Record<string, unknown> = { value: new Date('2026-01-01') }
+    const plain: Record<string, unknown> = {
+      value: { nested: true },
+    }
+    const instance: Record<string, unknown> = {
+      value: new Date('2026-01-01'),
+    }
     expect(core.object.deepMerge(plain, instance).value).toBe(instance.value)
     expect(core.object.deepMerge(instance, plain).value).toEqual({ nested: true })
     const nullPrototype: Record<string, unknown> = Object.create(null)
     nullPrototype.left = 1
-    expect(core.object.deepMerge({ nested: nullPrototype }, { nested: { right: 2 } })).toEqual({ nested: { left: 1, right: 2 } })
+    expect(core.object.deepMerge({ nested: nullPrototype }, {
+      nested: { right: 2 },
+    })).toEqual({
+      nested: { left: 1, right: 2 },
+    })
   })
 
   it('deepMerge 非对象值应被直接覆盖', () => {
     const merged = core.object.deepMerge(
-      { a: { nested: true } },
+      {
+        a: { nested: true },
+      },
       { a: 'string' as unknown as Record<string, unknown> },
     )
     expect(merged).toEqual({ a: 'string' })
@@ -102,11 +145,17 @@ describe('core.object', () => {
     const obj = { a: 1, b: 2 }
     expect(core.object.keys(obj)).toEqual(['a', 'b'])
     expect(core.object.values(obj)).toEqual([1, 2])
-    expect(core.object.entries(obj)).toEqual([['a', 1], ['b', 2]])
+    expect(core.object.entries(obj)).toEqual([
+      ['a', 1],
+      ['b', 2],
+    ])
   })
 
   it('fromEntries 应该构建对象', () => {
-    const entries: Array<[string, number]> = [['a', 1], ['b', 2]]
+    const entries: Array<[string, number]> = [
+      ['a', 1],
+      ['b', 2],
+    ]
     expect(core.object.fromEntries(entries)).toEqual({ a: 1, b: 2 })
   })
 

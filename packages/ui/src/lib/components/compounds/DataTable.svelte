@@ -115,9 +115,13 @@
   let localSortDir = $state<'asc' | 'desc'>('asc')
 
   /** 当前生效的排序字段。 */
-  const activeSortKey = $derived(controlled ? (sortKey ?? null) : localSortKey)
+  const activeSortKey = $derived(controlled
+    ? (sortKey ?? null)
+    : localSortKey)
   /** 当前生效的排序方向。 */
-  const activeSortDir = $derived<'asc' | 'desc' | null>(controlled ? (sortDir ?? null) : (localSortKey ? localSortDir : null))
+  const activeSortDir = $derived<'asc' | 'desc' | null>(controlled
+    ? (sortDir ?? null)
+    : (localSortKey ? localSortDir : null))
 
   /** 切换列排序，并在受控模式下通知父组件。 */
   function toggleSort(col: Column) {
@@ -126,7 +130,9 @@
     /** 统一为字符串的列 key，用于和受控排序字段比较。 */
     const key = String(col.key)
     /** 同一列再次点击时切换方向，否则从升序开始。 */
-    const nextDir: 'asc' | 'desc' = activeSortKey === key && activeSortDir === 'asc' ? 'desc' : 'asc'
+    const nextDir: 'asc' | 'desc' = activeSortKey === key && activeSortDir === 'asc'
+      ? 'desc'
+      : 'asc'
     if (controlled) {
       onsort?.(key, nextDir)
       return
@@ -163,7 +169,9 @@
       else {
         cmp = String(av).localeCompare(String(bv), undefined, { numeric: true })
       }
-      return dir === 'asc' ? cmp : -cmp
+      return dir === 'asc'
+        ? cmp
+        : -cmp
     })
     return copy
   })
@@ -239,9 +247,13 @@
   /** 数据操作格的背景由 rowClass 统一下发，确保默认、斑马纹和 hover 状态一致且不透明。 */
   const actionCellClass = $derived(actionColumnClass)
   /** 操作按钮保持单行的固有宽度，既不强制填满单元格，也不会被其它列挤压。 */
-  const actionWrapClass = $derived(density === 'compact' ? 'inline-flex flex-nowrap items-center justify-center gap-0.5' : 'inline-flex flex-nowrap items-center justify-center gap-1')
+  const actionWrapClass = $derived(density === 'compact'
+    ? 'inline-flex flex-nowrap items-center justify-center gap-0.5'
+    : 'inline-flex flex-nowrap items-center justify-center gap-1')
   /** 加载和空数据占位单元格样式。 */
-  const placeholderCellClass = $derived(density === 'compact' ? 'text-center py-6 text-base-content/40' : 'text-center py-8 text-base-content/40')
+  const placeholderCellClass = $derived(density === 'compact'
+    ? 'text-center py-6 text-base-content/40'
+    : 'text-center py-8 text-base-content/40')
   /** 未声明宽度的文本列最多占用的空间，保留其他列与操作列的可见区域。 */
   const defaultContentMaxWidth = 'min(24rem, 40vw)'
 
@@ -290,7 +302,9 @@
    * 仅给 th 设置 width 会被 table-auto 的内容尺寸重新撑开，必须同时限制 td 内的内容盒子。
    */
   function getContentStyle(col: Column): string {
-    const maxWidth = col.width ? `min(${col.width}, 20vw)` : defaultContentMaxWidth
+    const maxWidth = col.width
+      ? `min(${col.width}, 20vw)`
+      : defaultContentMaxWidth
     return `max-width: ${maxWidth};`
   }
 </script>
@@ -303,7 +317,13 @@
           {@const isSorted = activeSortKey === String(col.key)}
           <th
             scope='col'
-            aria-sort={col.sortable ? (isSorted ? (activeSortDir === 'asc' ? 'ascending' : 'descending') : 'none') : undefined}
+            aria-sort={col.sortable
+              ? (isSorted
+                ? (activeSortDir === 'asc'
+                  ? 'ascending'
+                  : 'descending')
+                : 'none')
+              : undefined}
             style={getColumnStyle(col)}
             class='{getAlignClass(col.align)} {headerCellDividerClass} relative font-medium'
           >

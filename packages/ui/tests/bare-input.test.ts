@@ -12,11 +12,17 @@ describe('bareInput file selection', () => {
       expect(event.currentTarget.files?.[0]).toBe(file)
       event.currentTarget.value = ''
     })
-    const component = mount(BareInput, { target, props: { type: 'file', onchange } })
+    const component = mount(BareInput, {
+      target,
+      props: { type: 'file', onchange },
+    })
     try {
       flushSync()
       const input = target.querySelector('input')!
-      Object.defineProperty(input, 'files', { value: [file], configurable: true })
+      Object.defineProperty(input, 'files', {
+        value: [file],
+        configurable: true,
+      })
       let selectedPath = 'C:\\fakepath\\avatar.png'
       // 模拟浏览器选中文件后只允许业务清空路径的安全规则。
       Object.defineProperty(input, 'value', {

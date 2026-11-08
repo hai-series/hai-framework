@@ -36,7 +36,9 @@ describe('capacitor.push', () => {
     const addListener = vi.fn((event: 'registration' | 'registrationError', callback: (payload: unknown) => void) => {
       return Promise.resolve().then(() => {
         listeners[event] = callback
-        return { remove: vi.fn(async () => {}) }
+        return {
+          remove: vi.fn(async () => {}),
+        }
       })
     })
     const register = vi.fn(async () => {

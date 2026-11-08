@@ -64,16 +64,36 @@ test('列表示例的键盘、排序、分页、筛选和错误恢复可连续�
   await expect(demo.getByLabel('跳转到页')).toHaveValue('1')
   await demo.getByRole('button', { name: '清除筛选', exact: true }).click()
   await expect(demo.getByRole('table').locator('tbody tr')).toHaveCount(10)
-  await demo.screenshot({ path: testInfo.outputPath('interaction-desktop.png'), animations: 'disabled' })
+  await demo.screenshot({
+    path: testInfo.outputPath('interaction-desktop.png'),
+    animations: 'disabled',
+  })
   expect(errors).toEqual([])
 })
 
 test('演示错误由用户触发，清除后恢复且初始不挤占操作提示', async ({ page, request }) => {
   await registerAndLogin(page, request, 'demofeedback')
   for (const scenario of [
-    { route: 'compounds', demos: [{ id: 'combobox-error-demo', text: '请选择一个框架' }, { id: 'datepicker-error-demo', text: '请选择有效日期' }] },
-    { route: 'primitives', demos: [{ id: 'input-error-demo', text: '请输入有效内容' }, { id: 'select-error-demo', text: '请选择一项' }] },
-    { route: 'scenes', demos: [{ id: 'password-error-demo', text: '密码长度不足 8 位' }] },
+    {
+      route: 'compounds',
+      demos: [
+        { id: 'combobox-error-demo', text: '请选择一个框架' },
+        { id: 'datepicker-error-demo', text: '请选择有效日期' },
+      ],
+    },
+    {
+      route: 'primitives',
+      demos: [
+        { id: 'input-error-demo', text: '请输入有效内容' },
+        { id: 'select-error-demo', text: '请选择一项' },
+      ],
+    },
+    {
+      route: 'scenes',
+      demos: [
+        { id: 'password-error-demo', text: '密码长度不足 8 位' },
+      ],
+    },
   ]) {
     await page.goto(`/admin/ui-gallery/${scenario.route}`)
     await waitForHydration(page)
@@ -98,9 +118,30 @@ test.describe('触摸、主题、语言和减少动态效果', () => {
   test.use({ hasTouch: true })
 
   for (const locale of [
-    { id: 'zh', choice: '', ready: '正常', empty: '空态', filter: '展开筛选', next: '下一页' },
-    { id: 'en', choice: 'English', ready: 'Ready', empty: 'Empty', filter: 'Expand filters', next: 'Next page' },
-    { id: 'ja', choice: '日本語', ready: '通常', empty: '空の結果', filter: '絞り込みを展開', next: '次のページ' },
+    {
+      id: 'zh',
+      choice: '',
+      ready: '正常',
+      empty: '空态',
+      filter: '展开筛选',
+      next: '下一页',
+    },
+    {
+      id: 'en',
+      choice: 'English',
+      ready: 'Ready',
+      empty: 'Empty',
+      filter: 'Expand filters',
+      next: 'Next page',
+    },
+    {
+      id: 'ja',
+      choice: '日本語',
+      ready: '通常',
+      empty: '空の結果',
+      filter: '絞り込みを展開',
+      next: '次のページ',
+    },
   ]) {
     // 主题各自保留完整宽度矩阵，避免全部高分辨率截图挤在一个用例的总时限内。
     for (const theme of ['light', 'dark']) {
@@ -111,20 +152,27 @@ test.describe('触摸、主题、语言和减少动态效果', () => {
           await waitForHydration(page)
           await page.getByRole('button', { name: /区域|Region/ }).click()
           await page.getByRole('button', { name: /切换语言|Switch language/ }).last().click()
-          await page.locator('.dropdown-content').getByRole('button', { name: new RegExp(locale.choice) }).click()
+          await page.locator('.dropdown-content').getByRole('button', {
+            name: new RegExp(locale.choice),
+          }).click()
         }
         await page.goto('/admin/ui-gallery/compounds')
         await waitForHydration(page)
         await page.emulateMedia({ reducedMotion: 'reduce' })
         const demo = page.getByTestId('interaction-patterns')
-        for (const width of locale.id === 'zh' ? [390, 1440, 1920, 2560, 3840] : [390, 1440]) {
+        for (const width of locale.id === 'zh'
+          ? [390, 1440, 1920, 2560, 3840]
+          : [390, 1440]) {
           await page.setViewportSize({ width, height: 1000 })
           await page.evaluate(themeName => document.documentElement.setAttribute('data-theme', themeName), theme)
           await demo.getByRole('tab', { name: locale.empty, exact: true }).click()
           expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
           if (width >= 1920)
             expect((await demo.boundingBox())!.width).toBeGreaterThan(width - 400)
-          await demo.screenshot({ path: testInfo.outputPath(`interaction-${locale.id}-${theme}-${width}.png`), animations: 'disabled' })
+          await demo.screenshot({
+            path: testInfo.outputPath(`interaction-${locale.id}-${theme}-${width}.png`),
+            animations: 'disabled',
+          })
           await demo.getByRole('tab', { name: locale.ready, exact: true }).click()
           const toggle = demo.locator('.hai-filter-bar button[aria-controls]')
           await expect(toggle).toHaveText(locale.filter)
@@ -139,7 +187,10 @@ test.describe('触摸、主题、语言和减少动态效果', () => {
           const panel = await select.boundingBox()
           expect(panel!.x).toBeGreaterThanOrEqual(0)
           expect(panel!.x + panel!.width).toBeLessThanOrEqual(width)
-          await demo.screenshot({ path: testInfo.outputPath(`interaction-filter-${locale.id}-${theme}-${width}.png`), animations: 'disabled' })
+          await demo.screenshot({
+            path: testInfo.outputPath(`interaction-filter-${locale.id}-${theme}-${width}.png`),
+            animations: 'disabled',
+          })
           await demo.locator('.hai-filter-bar button[aria-controls]').click()
           const next = demo.getByRole('button', { name: locale.next, exact: true })
           const box = await next.boundingBox()

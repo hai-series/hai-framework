@@ -12,7 +12,10 @@ export default function setup(project) {
   const ledger = join(directory, 'builds.jsonl')
   const env = { HAI_TEST_IMAGE_RUN: owner, HAI_TEST_IMAGE_LEDGER: ledger }
   // 显式设置 worker 环境，CLI 子进程继承；不依赖全局 setup 与 worker 共享内存。
-  project.config.env = { ...project.config.env, ...env }
+  project.config.env = {
+    ...project.config.env,
+    ...env,
+  }
   const restoreSignals = manageCancellation(project)
   let teardownPromise
   return () => {
@@ -24,10 +27,20 @@ export default function setup(project) {
         const builds = readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line))
         for (const runtime of new Set(builds.map(build => build.runtime))) {
           try {
-            reports.push(await cleanupTestImagesAsync({ runtime, owner, imageRefs: builds.filter(build => build.runtime === runtime).map(build => build.imageRef), apply: true }))
+            reports.push(await cleanupTestImagesAsync({
+              runtime,
+              owner,
+              imageRefs: builds.filter(build => build.runtime === runtime).map(build => build.imageRef),
+              apply: true,
+            }))
           }
           catch (error) {
-            reports.push({ runtime, failures: [{ error: error.message }] })
+            reports.push({
+              runtime,
+              failures: [
+                { error: error.message },
+              ],
+            })
           }
         }
         const output = resolve(project.config.root, 'test-results')
@@ -67,7 +80,9 @@ function manageCancellation(project) {
       if (cancelling)
         return
       cancelling = true
-      process.exitCode ||= signal === 'SIGINT' ? 130 : 143
+      process.exitCode ||= signal === 'SIGINT'
+        ? 130
+        : 143
       process.stderr.write('Cancellation requested; waiting for tests and owned image cleanup.\n')
       void (async () => {
         try {

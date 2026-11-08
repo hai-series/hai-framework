@@ -176,8 +176,11 @@ interface ResolvedAnthropic {
 function contentToText(content: unknown): string {
   if (typeof content === 'string')
     return content
-  if (Array.isArray(content))
-    return content.map(part => (isRecord(part) && part.type === 'text' && typeof part.text === 'string' ? part.text : '')).filter(Boolean).join('')
+  if (Array.isArray(content)) {
+    return content.map(part => (isRecord(part) && part.type === 'text' && typeof part.text === 'string'
+      ? part.text
+      : '')).filter(Boolean).join('')
+  }
   return ''
 }
 
@@ -207,7 +210,13 @@ function toAnthropicMessages(messages: ChatMessage[]): { messages: AnthropicMess
     if (message.role === 'tool') {
       result.push({
         role: 'user',
-        content: [{ type: 'tool_result', tool_use_id: message.tool_call_id, content: contentToText(message.content) }],
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: message.tool_call_id,
+            content: contentToText(message.content),
+          },
+        ],
       })
       continue
     }
@@ -222,24 +231,44 @@ function toAnthropicMessages(messages: ChatMessage[]): { messages: AnthropicMess
           if (call.type === 'function') {
             let input: unknown = {}
             try {
-              input = call.function.arguments ? JSON.parse(call.function.arguments) : {}
+              input = call.function.arguments
+                ? JSON.parse(call.function.arguments)
+                : {}
             }
             catch {
               input = {}
             }
-            blocks.push({ type: 'tool_use', id: call.id, name: call.function.name, input })
+            blocks.push({
+              type: 'tool_use',
+              id: call.id,
+              name: call.function.name,
+              input,
+            })
           }
         }
       }
-      result.push({ role: 'assistant', content: blocks.length > 0 ? blocks : (text || '') })
+      result.push({
+        role: 'assistant',
+        content: blocks.length > 0
+          ? blocks
+          : (text || ''),
+      })
       continue
     }
 
     // user
-    result.push({ role: 'user', content: contentToText(message.content) })
+    result.push({
+      role: 'user',
+      content: contentToText(message.content),
+    })
   }
 
-  return { messages: result, system: systemParts.length > 0 ? systemParts.join('\n\n') : undefined }
+  return {
+    messages: result,
+    system: systemParts.length > 0
+      ? systemParts.join('\n\n')
+      : undefined,
+  }
 }
 
 /** 将 Chat Completions 工具定义转换为 Anthropic 工具定义 */
@@ -256,7 +285,9 @@ function toAnthropicTools(tools?: ToolDefinition[]): AnthropicTool[] | undefined
       input_schema: (tool.function.parameters ?? { type: 'object', properties: {} }) as Record<string, unknown>,
     })
   }
-  return mapped.length > 0 ? mapped : undefined
+  return mapped.length > 0
+    ? mapped
+    : undefined
 }
 
 /** 将 Anthropic stop_reason 映射为 Chat Completions finish_reason */
@@ -273,10 +304,19 @@ function toChatResponse(response: AnthropicResponse, model: string): ChatComplet
   const textParts: string[] = []
   const toolCalls: ToolCall[] = []
   for (const block of response.content) {
-    if (block.type === 'text')
+    if (block.type === 'text') {
       textParts.push(block.text)
-    else if (block.type === 'tool_use')
-      toolCalls.push({ id: block.id, type: 'function', function: { name: block.name, arguments: JSON.stringify(block.input ?? {}) } })
+    }
+    else if (block.type === 'tool_use') {
+      toolCalls.push({
+        id: block.id,
+        type: 'function',
+        function: {
+          name: block.name,
+          arguments: JSON.stringify(block.input ?? {}),
+        },
+      })
+    }
   }
   const text = textParts.join('')
 
@@ -285,17 +325,23 @@ function toChatResponse(response: AnthropicResponse, model: string): ChatComplet
     object: 'chat.completion',
     created: Math.floor(Date.now() / 1000),
     model: response.model ?? model,
-    choices: [{
-      index: 0,
-      message: {
-        role: 'assistant',
-        content: toolCalls.length > 0 && text.length === 0 ? null : text,
-        refusal: null,
-        ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: 'assistant',
+          content: toolCalls.length > 0 && text.length === 0
+            ? null
+            : text,
+          refusal: null,
+          ...(toolCalls.length > 0
+            ? { tool_calls: toolCalls }
+            : {}),
+        },
+        finish_reason: mapStopReason(response.stop_reason, toolCalls.length > 0) as ChatCompletionResponse['choices'][number]['finish_reason'],
+        logprobs: null,
       },
-      finish_reason: mapStopReason(response.stop_reason, toolCalls.length > 0) as ChatCompletionResponse['choices'][number]['finish_reason'],
-      logprobs: null,
-    }],
+    ],
     usage: {
       prompt_tokens: response.usage.input_tokens,
       completion_tokens: response.usage.output_tokens,
@@ -311,7 +357,14 @@ function textChunk(id: string, model: string, delta: string): ChatCompletionChun
     object: 'chat.completion.chunk',
     created: Math.floor(Date.now() / 1000),
     model,
-    choices: [{ index: 0, delta: { content: delta }, finish_reason: null, logprobs: null }],
+    choices: [
+      {
+        index: 0,
+        delta: { content: delta },
+        finish_reason: null,
+        logprobs: null,
+      },
+    ],
   }
 }
 
@@ -344,12 +397,19 @@ export function createAnthropicProvider(deps: AILLMFunctionsDeps): LLMProvider {
    * 混合模型池中的 Anthropic 条目不继承 OpenAI 的全局端点，最后使用厂商变量兜底。
    */
   function resolveAnthropic(requestModel?: string, tempModel?: TempModelConfig): HaiResult<ResolvedAnthropic> {
-    const entry = requestModel ? config.llm.models?.find(m => m.id === requestModel || m.model === requestModel) : undefined
+    const entry = requestModel
+      ? config.llm.models?.find(m => m.id === requestModel || m.model === requestModel)
+      : undefined
     const model = tempModel?.model ?? entry?.model ?? requestModel ?? config.llm.model ?? 'claude-3-5-sonnet-latest'
     const apiKey = tempModel?.apiKey ?? entry?.apiKey ?? config.llm.apiKey ?? (process.env.HAI_AI_LLM_APIKEY?.trim() || process.env.ANTHROPIC_API_KEY)
-    if (!apiKey)
-      return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_configError', { params: { error: 'API Key is required for Anthropic' } }))
-    const globalBaseUrl = config.llm.protocol === 'anthropic' ? config.llm.baseUrl ?? (process.env.HAI_AI_LLM_BASEURL?.trim() || undefined) : undefined
+    if (!apiKey) {
+      return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_configError', {
+        params: { error: 'API Key is required for Anthropic' },
+      }))
+    }
+    const globalBaseUrl = config.llm.protocol === 'anthropic'
+      ? config.llm.baseUrl ?? (process.env.HAI_AI_LLM_BASEURL?.trim() || undefined)
+      : undefined
     const baseUrl = (tempModel?.baseUrl ?? entry?.baseUrl ?? globalBaseUrl ?? process.env.ANTHROPIC_BASE_URL ?? DEFAULT_ANTHROPIC_BASE_URL).replace(/\/+$/, '')
     return ok({
       apiKey,
@@ -369,10 +429,20 @@ export function createAnthropicProvider(deps: AILLMFunctionsDeps): LLMProvider {
       model: resolved.model,
       max_tokens: request.max_tokens ?? resolved.maxTokens,
       messages,
-      ...(system ? { system } : {}),
-      ...(temperature != null ? { temperature } : {}),
-      ...(request.top_p != null ? { top_p: request.top_p } : {}),
-      ...(toAnthropicTools(request.tools) ? { tools: toAnthropicTools(request.tools) } : {}),
+      ...(system
+        ? { system }
+        : {}),
+      ...(temperature != null
+        ? { temperature }
+        : {}),
+      ...(request.top_p != null
+        ? { top_p: request.top_p }
+        : {}),
+      ...(toAnthropicTools(request.tools)
+        ? {
+            tools: toAnthropicTools(request.tools),
+          }
+        : {}),
       stream,
     }
   }
@@ -389,7 +459,9 @@ export function createAnthropicProvider(deps: AILLMFunctionsDeps): LLMProvider {
         'anthropic-version': ANTHROPIC_VERSION,
       },
       body: JSON.stringify(body),
-      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      signal: signal
+        ? AbortSignal.any([signal, timeout])
+        : timeout,
     })
   }
 
@@ -423,7 +495,13 @@ export function createAnthropicProvider(deps: AILLMFunctionsDeps): LLMProvider {
       catch (error) {
         if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError'))
           return err(HaiAIError.TIMEOUT, aiM('ai_requestTimeout'), { message: error.message })
-        return err(HaiAIError.INTERNAL_ERROR, aiM('ai_internalError', { params: { error: error instanceof Error ? error.message : 'Unknown error' } }), error)
+        return err(HaiAIError.INTERNAL_ERROR, aiM('ai_internalError', {
+          params: {
+            error: error instanceof Error
+              ? error.message
+              : 'Unknown error',
+          },
+        }), error)
       }
     },
 
@@ -464,7 +542,14 @@ export function createAnthropicProvider(deps: AILLMFunctionsDeps): LLMProvider {
             object: 'chat.completion.chunk',
             created: Math.floor(Date.now() / 1000),
             model: resolved.model,
-            choices: [{ index: 0, delta: {}, finish_reason: 'stop', logprobs: null }],
+            choices: [
+              {
+                index: 0,
+                delta: {},
+                finish_reason: 'stop',
+                logprobs: null,
+              },
+            ],
             usage: {
               prompt_tokens: payload.message?.usage?.input_tokens ?? 0,
               completion_tokens: payload.usage.output_tokens,

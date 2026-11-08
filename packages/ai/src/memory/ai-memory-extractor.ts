@@ -50,7 +50,9 @@ function formatMessages(messages: ChatMessage[]): string {
   return messages
     .filter(m => m.role === 'user' || m.role === 'assistant')
     .map((m) => {
-      const content = typeof m.content === 'string' ? m.content : '[multimodal content]'
+      const content = typeof m.content === 'string'
+        ? m.content
+        : '[multimodal content]'
       return `${m.role}: ${content}`
     })
     .join('\n')
@@ -107,7 +109,9 @@ export async function extractMemories(
 
     const chatResult = await llm.chat({
       model: options?.model,
-      ...(options?.tempModel ? { tempModel: options.tempModel } : {}),
+      ...(options?.tempModel
+        ? { tempModel: options.tempModel }
+        : {}),
       messages: [
         { role: 'system', content: options?.systemPrompt ?? MEMORY_EXTRACTION_SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
@@ -118,7 +122,11 @@ export async function extractMemories(
 
     if (!chatResult.success) {
       logger.warn('Memory extraction LLM call failed', { error: chatResult.error })
-      return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', { params: { error: String(chatResult.error.message) } }), chatResult.error)
+      return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', {
+        params: {
+          error: String(chatResult.error.message),
+        },
+      }), chatResult.error)
     }
 
     const content = chatResult.data.choices[0]?.message?.content ?? ''
@@ -145,13 +153,23 @@ export async function extractMemories(
   }
   catch (error) {
     logger.error('Memory extraction failed', { error })
-    return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', { params: { error: String(error) } }), error)
+    return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', {
+      params: {
+        error: String(error),
+      },
+    }), error)
   }
 }
 
 // ─── 响应解析 ───
 
-const VALID_MEMORY_TYPES = new Set<string>(['fact', 'preference', 'event', 'entity', 'instruction'])
+const VALID_MEMORY_TYPES = new Set<string>([
+  'fact',
+  'preference',
+  'event',
+  'entity',
+  'instruction',
+])
 
 /**
  * 解析 LLM 返回的记忆 JSON
@@ -178,11 +196,15 @@ function parseMemoryResponse(content: string): MemoryEntryInput[] {
       }
     }
 
-    logger.warn('Memory extraction returned unexpected format', { content: content.slice(0, 200) })
+    logger.warn('Memory extraction returned unexpected format', {
+      content: content.slice(0, 200),
+    })
     return []
   }
   catch {
-    logger.warn('Memory extraction returned invalid JSON', { content: content.slice(0, 200) })
+    logger.warn('Memory extraction returned invalid JSON', {
+      content: content.slice(0, 200),
+    })
     return []
   }
 }

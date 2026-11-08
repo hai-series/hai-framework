@@ -38,7 +38,9 @@ export function createOpenAIImageProvider(): ImageProvider {
     async generate(request) {
       try {
         const hasReferences = request.referenceImages.length > 0
-        const size = request.size ? `${request.size.width}x${request.size.height}` : undefined
+        const size = request.size
+          ? `${request.size.width}x${request.size.height}`
+          : undefined
         const form = new FormData()
         if (hasReferences) {
           form.set('model', request.model.model)
@@ -63,7 +65,9 @@ export function createOpenAIImageProvider(): ImageProvider {
                 model: request.model.model,
                 prompt: request.prompt,
                 n: 1,
-                ...(size ? { size } : {}),
+                ...(size
+                  ? { size }
+                  : {}),
                 output_format: 'png',
               }),
           signal: request.signal,
@@ -76,12 +80,16 @@ export function createOpenAIImageProvider(): ImageProvider {
         if ((body.data?.length ?? 0) > request.maxImages)
           throw new RangeError('Image count exceeds limit')
         const format = body.output_format ?? 'png'
-        const mimeType = format === 'jpg' ? 'image/jpeg' : `image/${format}`
+        const mimeType = format === 'jpg'
+          ? 'image/jpeg'
+          : `image/${format}`
         const images = body.data
           ?.filter(item => typeof item.b64_json === 'string')
           .map(item => imageFromBase64(item.b64_json!, mimeType, request))
           .filter(image => image.data.byteLength > 0)
-        return images?.length ? { success: true, data: images } : imageProtocolError()
+        return images?.length
+          ? { success: true, data: images }
+          : imageProtocolError()
       }
       catch (error) {
         return imageProviderFailure(error)

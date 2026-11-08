@@ -1,10 +1,10 @@
 <script lang='ts'>
   import { resolve } from '$app/paths'
-  import * as m from '$lib/paraglide/messages.js'
   /**
    * 企业官网首页 — SEO 友好的着陆页
    */
   import { Button, Input, Spinner } from '@h-ai/ui'
+  import * as m from '#lib/paraglide/messages.js'
 
   interface ChatMessage {
     id: number
@@ -35,7 +35,10 @@
     if (!msg)
       return
 
-    chatMessages = [...chatMessages, createChatMessage('user', msg)]
+    chatMessages = [
+      ...chatMessages,
+      createChatMessage('user', msg),
+    ]
     chatInput = ''
     chatLoading = true
 
@@ -47,10 +50,16 @@
       })
       const data = await res.json()
       const reply = data.data?.reply ?? m.home_ai_fallback()
-      chatMessages = [...chatMessages, createChatMessage('assistant', reply)]
+      chatMessages = [
+        ...chatMessages,
+        createChatMessage('assistant', reply),
+      ]
     }
     catch {
-      chatMessages = [...chatMessages, createChatMessage('assistant', m.home_ai_error())]
+      chatMessages = [
+        ...chatMessages,
+        createChatMessage('assistant', m.home_ai_error()),
+      ]
     }
     finally {
       chatLoading = false
@@ -102,10 +111,10 @@
       {m.home_subtitle()}
     </p>
     <div class='flex flex-wrap gap-4 justify-center'>
-      <a href={resolve('/partners', {})}>
+      <a href={resolve('partners')}>
         <Button variant='primary' size='lg'>{m.home_partner_cta()}</Button>
       </a>
-      <a href={resolve('/services', {})}>
+      <a href={resolve('services')}>
         <Button variant='default' size='lg' outline>{m.home_service_cta()}</Button>
       </a>
     </div>
@@ -171,8 +180,12 @@
       <!-- 聊天消息区域 -->
       <div class='min-h-50 max-h-75 overflow-y-auto space-y-3 mb-4'>
         {#each chatMessages as msg (msg.id)}
-          <div class="chat {msg.role === 'user' ? 'chat-end' : 'chat-start'}">
-            <div class="chat-bubble {msg.role === 'user' ? 'chat-bubble-primary' : ''}">
+          <div class="chat {msg.role === 'user'
+            ? 'chat-end'
+            : 'chat-start'}">
+            <div class="chat-bubble {msg.role === 'user'
+              ? 'chat-bubble-primary'
+              : ''}">
               {msg.content}
             </div>
           </div>
@@ -206,7 +219,7 @@
   <div class='max-w-3xl mx-auto text-center'>
     <h2 class='text-3xl font-bold tracking-tight text-base-content mb-4'>{m.home_cta_title()}</h2>
     <p class='text-base-content/60 mb-8'>{m.home_cta_subtitle()}</p>
-    <a href={resolve('/contact', {})}>
+    <a href={resolve('contact')}>
       <Button variant='primary' size='lg'>{m.home_cta_button()}</Button>
     </a>
   </div>

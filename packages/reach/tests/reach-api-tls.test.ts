@@ -21,8 +21,28 @@ const servers: Array<Server | ReturnType<typeof createHttpServer>> = []
 
 beforeAll(() => {
   directory = mkdtempSync(join(tmpdir(), 'hai-reach-tls-'))
-  const binary = process.platform === 'win32' && existsSync('C:/Program Files/Git/usr/bin/openssl.exe') ? 'C:/Program Files/Git/usr/bin/openssl.exe' : 'openssl'
-  execFileSync(binary, ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(directory, 'key.pem'), '-out', join(directory, 'cert.pem'), '-days', '1', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1', '-addext', 'basicConstraints=critical,CA:TRUE'], { windowsHide: true, stdio: 'ignore' })
+  const binary = process.platform === 'win32' && existsSync('C:/Program Files/Git/usr/bin/openssl.exe')
+    ? 'C:/Program Files/Git/usr/bin/openssl.exe'
+    : 'openssl'
+  execFileSync(binary, [
+    'req',
+    '-x509',
+    '-newkey',
+    'rsa:2048',
+    '-nodes',
+    '-keyout',
+    join(directory, 'key.pem'),
+    '-out',
+    join(directory, 'cert.pem'),
+    '-days',
+    '1',
+    '-subj',
+    '/CN=localhost',
+    '-addext',
+    'subjectAltName=DNS:localhost,IP:127.0.0.1',
+    '-addext',
+    'basicConstraints=critical,CA:TRUE',
+  ], { windowsHide: true, stdio: 'ignore' })
   key = readFileSync(join(directory, 'key.pem'), 'utf8')
   cert = readFileSync(join(directory, 'cert.pem'), 'utf8')
   originalCertificates = getCACertificates()
@@ -71,7 +91,9 @@ it.each(['same-origin', 'https', 'http'] as const)('可信 TLS 接收端可受�
   const origin = `https://127.0.0.1:${address.port}`
   location = `${origin}/received`
   if (destination !== 'same-origin') {
-    const target = destination === 'https' ? createServer({ key, cert }, handler) : createHttpServer(handler)
+    const target = destination === 'https'
+      ? createServer({ key, cert }, handler)
+      : createHttpServer(handler)
     servers.push(target)
     target.listen(0, '127.0.0.1')
     await once(target, 'listening')
@@ -81,11 +103,39 @@ it.each(['same-origin', 'https', 'http'] as const)('可信 TLS 接收端可受�
     location = `${destination}://127.0.0.1:${targetAddress.port}/received`
   }
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
-  expect((await reach.init({ providers: [{ name: 'secure', type: 'api', url: `${origin}/received`, requireHttps: true }], dnd: { enabled: false } })).success).toBe(true)
+  expect((await reach.init({
+    providers: [
+      {
+        name: 'secure',
+        type: 'api',
+        url: `${origin}/received`,
+        requireHttps: true,
+      },
+    ],
+    dnd: { enabled: false },
+  })).success).toBe(true)
   expect((await reach.send({ provider: 'secure', to: 'fixture', body: 'synthetic' })).success).toBe(true)
   expect(forwarded).toBe(1)
   await reach.close()
-  expect((await reach.init({ providers: [{ name: 'secure', type: 'api', url: `${origin}/redirect`, requireHttps: true, headers: { 'X-Private-Fixture': 'synthetic' } }], dnd: { enabled: false } })).success).toBe(true)
-  expect((await reach.send({ provider: 'secure', to: 'fixture', body: 'synthetic', sensitive: true, idempotencyKey: destination, expiresAt: Date.now() + 60000 })).success).toBe(false)
+  expect((await reach.init({
+    providers: [
+      {
+        name: 'secure',
+        type: 'api',
+        url: `${origin}/redirect`,
+        requireHttps: true,
+        headers: { 'X-Private-Fixture': 'synthetic' },
+      },
+    ],
+    dnd: { enabled: false },
+  })).success).toBe(true)
+  expect((await reach.send({
+    provider: 'secure',
+    to: 'fixture',
+    body: 'synthetic',
+    sensitive: true,
+    idempotencyKey: destination,
+    expiresAt: Date.now() + 60000,
+  })).success).toBe(false)
   expect(forwarded).toBe(1)
 })

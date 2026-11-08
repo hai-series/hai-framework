@@ -5,6 +5,7 @@
  * @module browser
  */
 
+import type { BrowserKitFunctions } from './kit-types.js'
 import { createKitAuthActions } from './client/kit-client-auth.js'
 import { createKitClient, installBrowserTransport, installBrowserTransportFetch } from './client/kit-client.js'
 import { defineCrud } from './crud/kit-crud.js'
@@ -22,7 +23,7 @@ import { setAllModulesLocale } from './kit-i18n.js'
  * client.destroy()
  * ```
  */
-export const kit = {
+export const kit: BrowserKitFunctions = {
   client: {
     create: createKitClient,
     createAuthActions: createKitAuthActions,
@@ -52,6 +53,7 @@ export type {
   ApiResponse,
   AuthOperations,
   AuthOperationsProvider,
+  BrowserKitFunctions,
   CorsConfig,
   FormError,
   FormValidationResult,

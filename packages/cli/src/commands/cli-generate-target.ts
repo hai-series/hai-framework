@@ -65,7 +65,9 @@ async function readPackage(directory: string): Promise<GeneratePackage | undefin
     throw new Error(cliM('cli_generateUnsupportedProject'))
   const dependencies: Record<string, string> = {}
   for (const key of ['dependencies', 'devDependencies']) {
-    const entries = key in value ? Reflect.get(value, key) : undefined
+    const entries = key in value
+      ? Reflect.get(value, key)
+      : undefined
     if (entries && typeof entries === 'object' && !Array.isArray(entries)) {
       for (const [name, version] of Object.entries(entries)) {
         if (typeof version === 'string')
@@ -73,7 +75,9 @@ async function readPackage(directory: string): Promise<GeneratePackage | undefin
       }
     }
   }
-  const name = 'name' in value && typeof value.name === 'string' ? value.name : path.basename(directory)
+  const name = 'name' in value && typeof value.name === 'string'
+    ? value.name
+    : path.basename(directory)
   if (!/^(?:@[\w.-]+\/)?[\w.-]+$/.test(name))
     throw new Error(cliM('cli_generateUnsupportedProject'))
   return { directory, name, dependencies }
@@ -133,11 +137,16 @@ export async function resolveGenerateTarget(options: GenerateOptions): Promise<G
   await addPackage(root)
   if (await fse.pathExists(path.join(root, 'pnpm-workspace.yaml'))) {
     const workspace: unknown = parse(await fse.readFile(path.join(root, 'pnpm-workspace.yaml'), 'utf8'))
-    const patterns = workspace && typeof workspace === 'object' && 'packages' in workspace && Array.isArray(workspace.packages) ? workspace.packages : []
+    const patterns = workspace && typeof workspace === 'object' && 'packages' in workspace && Array.isArray(workspace.packages)
+      ? workspace.packages
+      : []
     for (const pattern of patterns) {
       if (typeof pattern !== 'string' || pattern.startsWith('!') || pattern.split(/[\\/]/).includes('..') || path.isAbsolute(pattern))
         throw new Error(cliM('cli_generateUnsupportedProject'))
-      for await (const manifest of glob(`${pattern}/package.json`, { cwd: root, exclude: ['**/node_modules/**'] }))
+      for await (const manifest of glob(`${pattern}/package.json`, {
+        cwd: root,
+        exclude: ['**/node_modules/**'],
+      }))
         await addPackage(path.dirname(path.resolve(root, manifest)))
     }
   }
@@ -156,13 +165,25 @@ export async function resolveGenerateTarget(options: GenerateOptions): Promise<G
           ? ['sveltekit', 'svelte'].includes(architecture)
           : Object.keys(pkg.dependencies).some(name => name.startsWith('@h-ai/'))
   }
-  const candidates = options.workspace || (selected.length === 1 && (cwd !== root || applicable(selected[0]!))) ? selected.filter(applicable) : packages.filter(applicable)
-  if (candidates.length !== 1)
-    throw new Error(cliM(candidates.length > 1 ? 'cli_generateAmbiguousWorkspace' : 'cli_generateUnsupportedProject'))
+  const candidates = options.workspace || (selected.length === 1 && (cwd !== root || applicable(selected[0]!)))
+    ? selected.filter(applicable)
+    : packages.filter(applicable)
+  if (candidates.length !== 1) {
+    throw new Error(cliM(candidates.length > 1
+      ? 'cli_generateAmbiguousWorkspace'
+      : 'cli_generateUnsupportedProject'))
+  }
   const target = candidates[0]!
   if (generateArchitecture(target) === 'sveltekit' && (options.type === 'page' || options.type === 'api')) {
-    // 不执行应用 JS 配置；明确使用 kit.files 定制布局时拒绝猜测默认路由目录。
-    for (const name of ['svelte.config.js', 'svelte.config.mjs', 'svelte.config.cjs', 'svelte.config.ts']) {
+    // 不执行应用 JS 配置；Kit 3 的 files 位于 Vite 插件，定制布局时拒绝猜测默认路由目录。
+    for (const name of [
+      'vite.config.js',
+      'vite.config.mjs',
+      'vite.config.cjs',
+      'vite.config.ts',
+      'vite.config.mts',
+      'vite.config.cts',
+    ]) {
       const configFile = path.join(target.directory, name)
       if (await fse.pathExists(configFile) && /\bfiles\s*[:.[(]/.test(await fse.readFile(configFile, 'utf8')))
         throw new Error(cliM('cli_generateCustomRoutes'))

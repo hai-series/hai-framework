@@ -55,7 +55,9 @@ function pickColumns(
 ): { columns: string[], values: unknown[] } {
   const keys = Object.keys(data)
   // 若提供 allowList，则仅保留白名单列
-  const columns = allowList ? keys.filter(key => allowList.includes(key)) : keys
+  const columns = allowList
+    ? keys.filter(key => allowList.includes(key))
+    : keys
   const values = columns.map(key => data[key])
   return { columns, values }
 }
@@ -141,7 +143,9 @@ export function createCrud<TItem>(
   // SQL 片段拼接工具（仅在传入值时附加）
 
   /** 构建 WHERE 子句，无条件时返回空字符串 */
-  const buildWhereClause = (where?: string): string => (where ? ` WHERE ${where}` : '')
+  const buildWhereClause = (where?: string): string => (where
+    ? ` WHERE ${where}`
+    : '')
 
   /**
    * 构建 ORDER BY 子句
@@ -170,7 +174,9 @@ export function createCrud<TItem>(
         logger.debug('Skipped invalid orderBy identifier', { table, column: colName })
         continue
       }
-      safeParts.push(direction ? `${colName} ${direction.toUpperCase()}` : colName)
+      safeParts.push(direction
+        ? `${colName} ${direction.toUpperCase()}`
+        : colName)
     }
     if (safeParts.length === 0)
       return ''
@@ -338,7 +344,9 @@ export function createCrud<TItem>(
         return result
       }
       // 未命中时返回 null
-      return ok(result.data ? mapRow(result.data) : null)
+      return ok(result.data
+        ? mapRow(result.data)
+        : null)
     },
 
     /**
@@ -356,7 +364,11 @@ export function createCrud<TItem>(
         return findResult
       }
       if (findResult.data === null) {
-        return err(HaiReldbError.RECORD_NOT_FOUND, reldbM('reldb_crudRecordNotFound', { params: { id: String(id) } }))
+        return err(HaiReldbError.RECORD_NOT_FOUND, reldbM('reldb_crudRecordNotFound', {
+          params: {
+            id: String(id),
+          },
+        }))
       }
       return ok(findResult.data)
     },
@@ -425,7 +437,9 @@ export function createCrud<TItem>(
       }
 
       const allowList = (config.updateColumns ?? []).filter(column => column !== idColumn)
-      const { columns } = pickColumns(data, allowList.length > 0 ? allowList : undefined)
+      const { columns } = pickColumns(data, allowList.length > 0
+        ? allowList
+        : undefined)
       const filtered = columns.filter(column => column !== idColumn)
 
       if (filtered.length === 0) {
@@ -441,7 +455,10 @@ export function createCrud<TItem>(
 
       const setClause = filtered.map(column => `${column} = ?`).join(', ')
       const sql = `UPDATE ${table} SET ${setClause} WHERE ${idColumn} = ?`
-      const params = [...filtered.map(column => data[column]), id]
+      const params = [
+        ...filtered.map(column => data[column]),
+        id,
+      ]
       return resolveOps(tx).execute(sql, params)
     },
 

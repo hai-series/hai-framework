@@ -17,7 +17,9 @@ export function createServerProcedures(options: CreateServerProceduresOptions) {
   return {
     // @hai-generator:procedures:entries
     app: createAppProcedures(options.app),
-    iam: { auth: createAuthProcedures() },
+    iam: {
+      auth: createAuthProcedures(),
+    },
     admin: createAdminProcedures(),
     profile: createProfileProcedures(),
 {{#if features.feedback}}

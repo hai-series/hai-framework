@@ -65,8 +65,12 @@
         class={buttonClass}
         disabled={disabled || loading}
         aria-label={ariaLabel || undefined}
-        aria-keyshortcuts={type === 'submit' && submitHint ? 'Enter' : undefined}
-        title={type === 'submit' && submitHint ? uiM('keyboard_submit_enter') : undefined}
+        aria-keyshortcuts={type === 'submit' && submitHint
+          ? 'Enter'
+          : undefined}
+        title={type === 'submit' && submitHint
+          ? uiM('keyboard_submit_enter')
+          : undefined}
         onclick={handleClick}
 >
   {#if loading}

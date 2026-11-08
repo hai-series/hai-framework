@@ -117,7 +117,9 @@ async function parallel<T, R>(
   }
 
   const workers = Array.from(
-    { length: Math.min(concurrency, items.length) },
+    {
+      length: Math.min(concurrency, items.length),
+    },
     () => worker(),
   )
   await Promise.all(workers)

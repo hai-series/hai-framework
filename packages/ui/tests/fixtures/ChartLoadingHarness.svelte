@@ -14,4 +14,8 @@
   empty = false
 }}>Ready</button>
 <button onclick={() => type = 'line'}>Line</button>
-<Chart {type} {loading} data={empty ? [] : [{ month: 'Jan', revenue: 42 }]} x='month' y='revenue' preset='stacked-bar' seriesLayout='group' legend={false} customOption='native' height={180} />
+<Chart {type} {loading} data={empty
+  ? []
+  : [
+    { month: 'Jan', revenue: 42 },
+  ]} x='month' y='revenue' preset='stacked-bar' seriesLayout='group' legend={false} customOption='native' height={180} />

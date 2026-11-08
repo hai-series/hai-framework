@@ -3,9 +3,9 @@
  * @module routes/api/tts/+server
  */
 
-import { TtsRequestSchema } from '$lib/ai-lab-types.js'
-import { synthesizeSpeech } from '$lib/server/ai-lab.js'
 import { kit } from '@h-ai/kit'
+import { TtsRequestSchema } from '#lib/ai-lab-types.js'
+import { synthesizeSpeech } from '#lib/server/ai-lab.js'
 
 export const POST = kit.handler(async ({ request }) => {
   const input = await kit.validate.body(request, TtsRequestSchema)
@@ -15,9 +15,15 @@ export const POST = kit.handler(async ({ request }) => {
 
   return new Response(result.data.data.slice().buffer, {
     headers: {
-      'Content-Type': result.data.format === 'wav' ? 'audio/wav' : 'application/octet-stream',
+      'Content-Type': result.data.format === 'wav'
+        ? 'audio/wav'
+        : 'application/octet-stream',
       'X-Audio-Format': result.data.format,
-      ...(result.data.sampleRate ? { 'X-Audio-Sample-Rate': String(result.data.sampleRate) } : {}),
+      ...(result.data.sampleRate
+        ? {
+            'X-Audio-Sample-Rate': String(result.data.sampleRate),
+          }
+        : {}),
     },
   })
 })

@@ -50,20 +50,37 @@ export interface FeedbackHandlerOptions {
  * ```
  */
 export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestHandler {
-  const basePath = (options.basePath ?? '/api/feedback').replace(/\/+$/, '')
+  const configuredPath = options.basePath ?? '/api/feedback'
+  let pathEnd = configuredPath.length
+  while (pathEnd > 0 && configuredPath[pathEnd - 1] === '/')
+    pathEnd--
+  const basePath = configuredPath.slice(0, pathEnd)
   return async (event) => {
     let actor: FeedbackContext | null
     try {
       actor = await options.resolveContext(event)
     }
     catch {
-      return fromError({ ...HaiCommonError.INTERNAL_ERROR, message: kitM('kit_internalError') })
+      return fromError({
+        ...HaiCommonError.INTERNAL_ERROR,
+        message: kitM('kit_internalError'),
+      })
     }
-    if (!actor?.scopeId || !actor.userId)
-      return fromError({ ...HaiCommonError.UNAUTHORIZED, message: kitM('kit_unauthorized') })
-    if (options.feedback.isInitialized === false)
-      return fromError({ ...HaiCommonError.SERVICE_UNAVAILABLE, message: kitM('kit_feedbackUnavailable') })
-    const suffix = event.url.pathname.startsWith(`${basePath}/`) ? event.url.pathname.slice(basePath.length + 1) : ''
+    if (!actor?.scopeId || !actor.userId) {
+      return fromError({
+        ...HaiCommonError.UNAUTHORIZED,
+        message: kitM('kit_unauthorized'),
+      })
+    }
+    if (options.feedback.isInitialized === false) {
+      return fromError({
+        ...HaiCommonError.SERVICE_UNAVAILABLE,
+        message: kitM('kit_feedbackUnavailable'),
+      })
+    }
+    const suffix = event.url.pathname.startsWith(`${basePath}/`)
+      ? event.url.pathname.slice(basePath.length + 1)
+      : ''
     let parts: string[]
     try {
       parts = suffix.split('/').map(decodeURIComponent)
@@ -73,8 +90,12 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
     }
     if (parts.length === 1 && parts[0] === 'policy' && event.request.method === 'GET')
       return ok(options.feedback.budget)
-    if (parts[0] !== 'reports' || parts.length > 4)
-      return fromError({ ...HaiCommonError.NOT_FOUND, message: core.i18n.coreM('core_errorNotFound') })
+    if (parts[0] !== 'reports' || parts.length > 4) {
+      return fromError({
+        ...HaiCommonError.NOT_FOUND,
+        message: core.i18n.coreM('core_errorNotFound'),
+      })
+    }
     let body: unknown = {}
     if (!['GET', 'HEAD'].includes(event.request.method)) {
       if (event.request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json')
@@ -83,7 +104,9 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
         body = await readBoundedJson(event.request, options.feedback.budget.maxTransportBytes)
       }
       catch (error) {
-        return invalid(error instanceof RangeError ? 413 : 400)
+        return invalid(error instanceof RangeError
+          ? 413
+          : 400)
       }
     }
     if (!body || typeof body !== 'object' || Array.isArray(body))
@@ -91,7 +114,13 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
     const bodyRecord = body as Record<string, unknown>
     if (parts[1] && Object.hasOwn(bodyRecord, 'id') && bodyRecord.id !== parts[1])
       return invalid(400)
-    const input = { ...Object.fromEntries(event.url.searchParams), ...bodyRecord, ...(parts[1] ? { id: parts[1] } : {}) }
+    const input = {
+      ...Object.fromEntries(event.url.searchParams),
+      ...bodyRecord,
+      ...(parts[1]
+        ? { id: parts[1] }
+        : {}),
+    }
     const method = event.request.method
     const service = options.feedback
     async function execute<T>(schema: z.ZodType<T>, operation: (value: T) => Promise<HaiResult<unknown>>): Promise<Response> {
@@ -100,10 +129,15 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
         return invalid(400)
       try {
         const result = await core.context.run(actor!, () => operation(parsed.data))
-        return result.success ? ok(result.data) : fromError(result.error)
+        return result.success
+          ? ok(result.data)
+          : fromError(result.error)
       }
       catch {
-        return fromError({ ...HaiCommonError.INTERNAL_ERROR, message: kitM('kit_internalError') })
+        return fromError({
+          ...HaiCommonError.INTERNAL_ERROR,
+          message: kitM('kit_internalError'),
+        })
       }
     }
     if (parts.length === 1) {
@@ -139,12 +173,19 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
       Object.assign(input, { jobId: parts[3] })
       return execute(FeedbackExportQuerySchema, value => service.getExport(value, actor))
     }
-    return fromError({ ...HaiCommonError.NOT_FOUND, message: core.i18n.coreM('core_errorNotFound') })
+    return fromError({
+      ...HaiCommonError.NOT_FOUND,
+      message: core.i18n.coreM('core_errorNotFound'),
+    })
   }
 }
 
 function invalid(status: number): Response {
-  return fromError({ ...HaiCommonError.INVALID_REQUEST, httpStatus: status, message: kitM('kit_validationFailed') })
+  return fromError({
+    ...HaiCommonError.INVALID_REQUEST,
+    httpStatus: status,
+    message: kitM('kit_validationFailed'),
+  })
 }
 
 /** 读取时限制实际字节数，不能只信 Content-Length。 */
@@ -168,7 +209,9 @@ async function readBoundedJson(request: Request, maximum: number): Promise<unkno
       text += decoder.decode(chunk.value, { stream: true })
     }
     text += decoder.decode()
-    return text ? JSON.parse(text) : {}
+    return text
+      ? JSON.parse(text)
+      : {}
   }
   finally {
     reader.releaseLock()

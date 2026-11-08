@@ -118,7 +118,9 @@ export class StripeOperationRepository {
     const row = result.data
     return {
       requestHash: row.request_hash,
-      result: typeof row.result_json === 'string' ? JSON.parse(row.result_json) : row.result_json,
+      result: typeof row.result_json === 'string'
+        ? JSON.parse(row.result_json)
+        : row.result_json,
       paymentIntent: row.payment_intent,
       canRetry: row.can_retry === true || row.can_retry === 1 || row.can_retry === '1',
     }
@@ -148,8 +150,11 @@ export class StripeOperationRepository {
         [id, requestHash],
       )
       record = await this.load(id)
-      if (!record)
-        throw new Error('Failed to reserve Stripe operation', { cause: inserted.success ? undefined : inserted.error })
+      if (!record) {
+        throw new Error('Failed to reserve Stripe operation', {
+          cause: inserted.success ? undefined : inserted.error,
+        })
+      }
     }
     if (record.requestHash !== requestHash)
       throw new Error('Stripe operation identifier was reused with different parameters')
@@ -176,7 +181,12 @@ export class StripeOperationRepository {
     const updated = await this.db.sql.execute(
       `UPDATE ${STRIPE_OPERATION_TABLE} SET result_json = ?, payment_intent = ?
        WHERE id = ? AND request_hash = ? AND result_json IS NULL`,
-      [JSON.stringify(result), paymentIntent ?? null, id, requestHash],
+      [
+        JSON.stringify(result),
+        paymentIntent ?? null,
+        id,
+        requestHash,
+      ],
     )
     if (!updated.success)
       throw new Error('Failed to persist Stripe operation result', { cause: updated.error })

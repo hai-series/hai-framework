@@ -8,7 +8,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { importDeploymentSecrets } from '../src/index.js'
 
 const command = vi.hoisted(() => vi.fn())
-vi.mock('../src/container/deploy-command.js', async importOriginal => ({ ...await importOriginal<typeof import('../src/container/deploy-command.js')>(), runCommand: command }))
+vi.mock('../src/container/deploy-command.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/container/deploy-command.js')>(),
+  runCommand: command,
+}))
 const roots: string[] = []
 afterEach(() => {
   vi.resetAllMocks()
@@ -26,31 +29,78 @@ function fixture() {
   mkdirSync(directory, { mode: 0o700 })
   const inputFile = join(root, 'private.json')
   const password = 'synthetic #$\'"\\:= @秘密'
-  const input = { version: 1, projectName: 'demo-test', credentials: { DB_PASSWORD: password }, services: [{ service: 'db', kind: 'postgresql', container: 'hai-demo-test-db', volumes: ['owned-volume'] }] }
+  const input = {
+    version: 1,
+    projectName: 'demo-test',
+    credentials: { DB_PASSWORD: password },
+    services: [
+      {
+        service: 'db',
+        kind: 'postgresql',
+        container: 'hai-demo-test-db',
+        volumes: ['owned-volume'],
+      },
+    ],
+  }
   writeFileSync(inputFile, JSON.stringify(input), { mode: 0o600 })
   command.mockImplementation(async (_runtime: string, args: string[], options: { input?: string }) => {
     let stdout = ''
-    if (args[0] === 'inspect')
-      stdout = `${JSON.stringify({ 'com.docker.compose.project': 'hai-demo-test', 'com.docker.compose.service': 'db' })}\n${JSON.stringify([{ Type: 'volume', Name: 'owned-volume' }])}\ntrue\n${JSON.stringify({ app: { NetworkID: 'owned-network' } })}\n`
-    else if (args[0] === 'exec' && options.input === `${password}\n`)
+    if (args[0] === 'inspect') {
+      stdout = `${JSON.stringify({ 'com.docker.compose.project': 'hai-demo-test', 'com.docker.compose.service': 'db' })}\n${JSON.stringify([
+        { Type: 'volume', Name: 'owned-volume' },
+      ])}\ntrue\n${JSON.stringify({
+        app: { NetworkID: 'owned-network' },
+      })}\n`
+    }
+    else if (args[0] === 'exec' && options.input === `${password}\n`) {
       stdout = '1\n'
-    else return { success: false, error: { code: 'fixture', message: 'verification rejected' } }
-    return ok({ code: 0, stdout, stderr: '', stdoutTruncated: false, stderrTruncated: false })
+    }
+    else {
+      return {
+        success: false,
+        error: { code: 'fixture', message: 'verification rejected' },
+      }
+    }
+    return ok({
+      code: 0,
+      stdout,
+      stderr: '',
+      stdoutTruncated: false,
+      stderrTruncated: false,
+    })
   })
-  return { directory, inputFile, input, password }
+  return {
+    directory,
+    inputFile,
+    input,
+    password,
+  }
 }
 
 it('默认预检核验实际服务，特殊字符保留且目录、状态和 current 均不变', async () => {
   const { directory, inputFile, password } = fixture()
   const before = readdirSync(directory)
   const result = await importDeploymentSecrets({ directory, inputFile, runtime: 'docker' })
-  expect(result).toMatchObject({ success: true, data: { changed: false, stateVersion: 2, groups: ['DB_PASSWORD'], volumes: ['owned-volume'] } })
+  expect(result).toMatchObject({
+    success: true,
+    data: {
+      changed: false,
+      stateVersion: 2,
+      groups: ['DB_PASSWORD'],
+      volumes: ['owned-volume'],
+    },
+  })
   expect(JSON.stringify(result)).not.toContain(password)
   expect(readdirSync(directory)).toEqual(before)
   expect(command.mock.calls.some(([, args]) => args.some((arg: string) => arg.includes(password)))).toBe(false)
 })
 
-it.each(['password', 'volume', 'project', 'missing'])('预检拒绝 %s，不生成状态、不泄漏私有内容', async (failure) => {
+it.each([
+  'password',
+  'volume',
+  'project',
+  'missing',
+])('预检拒绝 %s，不生成状态、不泄漏私有内容', async (failure) => {
   const { directory, inputFile, input, password } = fixture()
   if (failure === 'password')
     input.credentials.DB_PASSWORD = 'WRONG_SYNTHETIC_PASSWORD'
@@ -67,7 +117,13 @@ it.each(['password', 'volume', 'project', 'missing'])('预检拒绝 %s，不生�
   expect(existsSync(join(directory, 'managed-secrets.env'))).toBe(false)
 })
 
-it.each(['matching', 'io-only', 'empty-docker', 'conflicting-project', 'conflicting-service'] as const)('两种Compose身份标签必须同源且不互相矛盾：%s', async (labelsMode) => {
+it.each([
+  'matching',
+  'io-only',
+  'empty-docker',
+  'conflicting-project',
+  'conflicting-service',
+] as const)('两种Compose身份标签必须同源且不互相矛盾：%s', async (labelsMode) => {
   const { directory, inputFile } = fixture()
   const original = command.getMockImplementation()!
   command.mockImplementation(async (runtime: string, args: string[], options: { input?: string }) => {
@@ -75,8 +131,12 @@ it.each(['matching', 'io-only', 'empty-docker', 'conflicting-project', 'conflict
     if (args[0] === 'inspect' && result.success) {
       const labels: Record<string, string> = { 'io.podman.compose.project': 'hai-demo-test', 'io.podman.compose.service': 'db' }
       if (labelsMode !== 'io-only') {
-        labels['com.docker.compose.project'] = labelsMode === 'empty-docker' ? '' : 'hai-demo-test'
-        labels['com.docker.compose.service'] = labelsMode === 'empty-docker' ? '' : 'db'
+        labels['com.docker.compose.project'] = labelsMode === 'empty-docker'
+          ? ''
+          : 'hai-demo-test'
+        labels['com.docker.compose.service'] = labelsMode === 'empty-docker'
+          ? ''
+          : 'db'
       }
       if (labelsMode === 'conflicting-project')
         labels['io.podman.compose.project'] = 'hai-foreign-test'
@@ -126,7 +186,10 @@ it('损坏或冲突状态保持原样；相同版本化状态可重复预检', a
   expect((await importDeploymentSecrets({ directory, inputFile, runtime: 'docker' })).success).toBe(false)
   expect(readFileSync(path, 'utf8')).toContain('BROKEN=PRIVATE_SENTINEL')
   writeFileSync(path, `FORMAT_VERSION=2\nPROJECT=hai-demo-test\nDB_PASSWORD=${Buffer.from(password).toString('hex')}\nVOLUME_1=DB_PASSWORD:owned-volume\n`)
-  expect(await importDeploymentSecrets({ directory, inputFile, runtime: 'docker' })).toMatchObject({ success: true, data: { changed: false } })
+  expect(await importDeploymentSecrets({ directory, inputFile, runtime: 'docker' })).toMatchObject({
+    success: true,
+    data: { changed: false },
+  })
 })
 
 it.each(['', 'line\nbreak', '\u0000', '\uD800'])('拒绝不能安全往返保存的密码 %#，不触达容器', async (password) => {
@@ -139,7 +202,12 @@ it.each(['', 'line\nbreak', '\u0000', '\uD800'])('拒绝不能安全往返保存
 
 it('自定义数据库身份不能仅导入密码后隐式切换为框架默认身份', async () => {
   const { directory, inputFile, input } = fixture()
-  writeFileSync(inputFile, JSON.stringify({ ...input, services: [{ ...input.services[0], username: 'business-user' }] }))
+  writeFileSync(inputFile, JSON.stringify({
+    ...input,
+    services: [
+      { ...input.services[0], username: 'business-user' },
+    ],
+  }))
   expect((await importDeploymentSecrets({ directory, inputFile, runtime: 'docker' })).success).toBe(false)
   expect(command).not.toHaveBeenCalled()
 })
@@ -162,8 +230,20 @@ it.each([true, false])('mySQL 必须拒绝错误密码，不能将跳过授权�
   writeFileSync(inputFile, JSON.stringify(input))
   const original = command.getMockImplementation()!
   command.mockImplementation(async (runtime: string, args: string[], options: { input?: string }) => {
-    if (args[0] === 'exec' && options.input !== `${password}\n`)
-      return enforcesPassword ? { success: false, error: { code: 'fixture', message: 'ERROR 1045 (28000): Access denied' } } : ok({ code: 0, stdout: '1\n', stderr: '', stdoutTruncated: false, stderrTruncated: false })
+    if (args[0] === 'exec' && options.input !== `${password}\n`) {
+      return enforcesPassword
+        ? {
+            success: false,
+            error: { code: 'fixture', message: 'ERROR 1045 (28000): Access denied' },
+          }
+        : ok({
+            code: 0,
+            stdout: '1\n',
+            stderr: '',
+            stdoutTruncated: false,
+            stderrTruncated: false,
+          })
+    }
     return original(runtime, args, options)
   })
   expect((await importDeploymentSecrets({ directory, inputFile, runtime: 'podman' })).success).toBe(enforcesPassword)
@@ -178,11 +258,29 @@ it.skipIf(process.platform === 'win32')('拒绝公开可读的秘密输入', asy
 
 it('lDAP 密码按原始字节交给密码文件输入，不附加换行', async () => {
   const { directory, inputFile, input, password } = fixture()
-  writeFileSync(inputFile, JSON.stringify({ ...input, credentials: { LDAP_PASSWORD: password }, services: [{ ...input.services[0], service: 'ldap', kind: 'ldap' }] }))
+  writeFileSync(inputFile, JSON.stringify({
+    ...input,
+    credentials: { LDAP_PASSWORD: password },
+    services: [
+      { ...input.services[0], service: 'ldap', kind: 'ldap' },
+    ],
+  }))
   const original = command.getMockImplementation()!
   command.mockImplementation(async (runtime: string, args: string[], options: { input?: string }) => {
-    if (args[0] === 'exec')
-      return options.input === password ? ok({ code: 0, stdout: 'dn:cn=admin,dc=example,dc=org\n', stderr: '', stdoutTruncated: false, stderrTruncated: false }) : { success: false, error: { code: 'fixture', message: 'invalid credentials' } }
+    if (args[0] === 'exec') {
+      return options.input === password
+        ? ok({
+            code: 0,
+            stdout: 'dn:cn=admin,dc=example,dc=org\n',
+            stderr: '',
+            stdoutTruncated: false,
+            stderrTruncated: false,
+          })
+        : {
+            success: false,
+            error: { code: 'fixture', message: 'invalid credentials' },
+          }
+    }
     const result = await original(runtime, args, options)
     result.data.stdout = result.data.stdout.replace('"com.docker.compose.service":"db"', '"com.docker.compose.service":"ldap"')
     return result

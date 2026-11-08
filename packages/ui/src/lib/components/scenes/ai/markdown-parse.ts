@@ -60,12 +60,16 @@ function createTableCellAttrs(cell: Tokens.TableCell): string {
     attrs.push(`title="${escapeHtml(cell.text)}"`)
   }
 
-  return attrs.length > 0 ? ` ${attrs.join(' ')}` : ''
+  return attrs.length > 0
+    ? ` ${attrs.join(' ')}`
+    : ''
 }
 
 /** 围栏代码和 HTML 代码共用渲染，颜色与复制控件始终由框架生成。 */
 function renderCodeBlock(text: string, lang: string | undefined, options: Required<MarkdownParseOptions>): string {
-  const language = lang && isLanguageSupported(lang) ? lang : ''
+  const language = lang && isLanguageSupported(lang)
+    ? lang
+    : ''
   let highlighted: string
 
   if (options.enableHighlight && language) {
@@ -88,18 +92,31 @@ function renderCodeBlock(text: string, lang: string | undefined, options: Requir
 
   return `<div class="hai-md-code-block">`
     + `<div class="hai-md-code-header">${langLabel}${copyBtn}</div>`
-    + `<pre><code class="hai-hl${language ? ` language-${escapeHtml(language)}` : ''}">${highlighted}</code></pre>`
-    + `</div>`
+    + `<pre><code class="hai-hl${language
+      ? ` language-${escapeHtml(language)}`
+      : ''}">${highlighted}</code></pre>`
+      + `</div>`
 }
 
 /** 仅还原代码文本的实体；随后仍按普通代码转义，绝不把代码中的标签作为 HTML 执行。 */
 function decodeCodeText(text: string): string {
-  const named: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: '\'', nbsp: '\u00A0' }
+  const named: Record<string, string> = {
+    amp: '&',
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: '\'',
+    nbsp: '\u00A0',
+  }
   return text.replace(/&(#(?:[xX][\da-fA-F]+|\d+)|amp|lt|gt|quot|apos|nbsp);/g, (entity, key: string) => {
     if (!key.startsWith('#'))
       return named[key] ?? entity
-    const code = key[1]?.toLowerCase() === 'x' ? Number.parseInt(key.slice(2), 16) : Number(key.slice(1))
-    return code > 0 && code <= 0x10FFFF && !(code >= 0xD800 && code <= 0xDFFF) ? String.fromCodePoint(code) : entity
+    const code = key[1]?.toLowerCase() === 'x'
+      ? Number.parseInt(key.slice(2), 16)
+      : Number(key.slice(1))
+    return code > 0 && code <= 0x10FFFF && !(code >= 0xD800 && code <= 0xDFFF)
+      ? String.fromCodePoint(code)
+      : entity
   })
 }
 
@@ -146,7 +163,9 @@ function createRendererObject(options: Required<MarkdownParseOptions>): Renderer
       const isExternal = safeHref && isExternalLinkHref(safeHref)
       const attrs = [
         `href="${escapeHtml(safeHref)}"`,
-        title ? `title="${escapeHtml(title)}"` : '',
+        title
+          ? `title="${escapeHtml(title)}"`
+          : '',
         isExternal ? 'target="_blank" rel="noopener noreferrer"' : '',
       ].filter(Boolean).join(' ')
       return `<a ${attrs}>${text}</a>`
@@ -159,7 +178,9 @@ function createRendererObject(options: Required<MarkdownParseOptions>): Renderer
       const attrs = [
         `src="${escapeHtml(safeSrc)}"`,
         `alt="${escapeHtml(text || '')}"`,
-        title ? `title="${escapeHtml(title)}"` : '',
+        title
+          ? `title="${escapeHtml(title)}"`
+          : '',
         'loading="lazy"',
         'class="hai-md-img"',
       ].filter(Boolean).join(' ')
@@ -240,7 +261,10 @@ export function parseMarkdown(content: string, options?: MarkdownParseOptions): 
   if (!content)
     return ''
 
-  const mergedOptions: Required<MarkdownParseOptions> = { ...DEFAULT_OPTIONS, ...options }
+  const mergedOptions: Required<MarkdownParseOptions> = {
+    ...DEFAULT_OPTIONS,
+    ...options,
+  }
   const key = getOptionsKey(mergedOptions)
 
   if (!cachedInstance || cachedOptionsKey !== key) {
@@ -250,5 +274,7 @@ export function parseMarkdown(content: string, options?: MarkdownParseOptions): 
 
   const result = cachedInstance.parse(content)
   // marked.parse 可能返回 string | Promise<string>，此处同步调用
-  return typeof result === 'string' ? result : ''
+  return typeof result === 'string'
+    ? result
+    : ''
 }

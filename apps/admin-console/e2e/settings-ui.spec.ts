@@ -7,11 +7,17 @@ test.describe('Settings UI', () => {
     await page.goto('/admin/settings')
     await waitForHydration(page)
     await page.getByRole('button', { name: '外观', exact: true }).click()
-    await page.screenshot({ path: testInfo.outputPath('settings-light.png'), animations: 'disabled' })
+    await page.screenshot({
+      path: testInfo.outputPath('settings-light.png'),
+      animations: 'disabled',
+    })
     await page.getByRole('button', { name: '选择主题', exact: true }).last().click()
     await page.getByRole('button', { name: 'Dark', exact: true }).click()
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
-    await page.screenshot({ path: testInfo.outputPath('settings-dark.png'), animations: 'disabled' })
+    await page.screenshot({
+      path: testInfo.outputPath('settings-dark.png'),
+      animations: 'disabled',
+    })
     await page.reload()
     await waitForHydration(page)
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')

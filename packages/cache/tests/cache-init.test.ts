@@ -11,7 +11,7 @@ import { defineCacheSuite, memoryEnv, redisEnv } from './helpers/cache-test-suit
 describe('cache.init', () => {
   // ─── 初始化前状态 ───
 
-  describe.sequential('初始化前状态', () => {
+  describe('初始化前状态', { concurrent: false }, () => {
     beforeEach(async () => {
       await cache.close()
     })
@@ -32,7 +32,7 @@ describe('cache.init', () => {
 
   // ─── 非法配置 ───
 
-  describe.sequential('非法配置', () => {
+  describe('非法配置', { concurrent: false }, () => {
     beforeEach(async () => {
       await cache.close()
     })

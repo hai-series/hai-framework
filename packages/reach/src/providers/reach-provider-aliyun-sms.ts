@@ -27,13 +27,10 @@ const GATEWAY_RESPONSE_LIMIT_BYTES = 64 * 1024
 /**
  * 将异常包装为 ReachError
  */
-function toReachError(error: unknown): HaiError {
+function toReachError(): HaiError {
   return {
-    code: HaiReachError.SEND_FAILED.code,
-    message: reachM('reach_smsSendFailed', {
-      params: { error: error instanceof Error ? error.message : String(error) },
-    }),
-    cause: error,
+    ...HaiReachError.SEND_FAILED,
+    message: reachM('reach_smsSendFailed'),
   }
 }
 
@@ -86,10 +83,19 @@ async function prepareGatewayRequest(gateway: NonNullable<AliyunSmsProviderConfi
     })
     try {
       const output = await Promise.race([
-        Promise.resolve().then(() => hook({ method: 'POST', url, body: typeof body === 'string' ? body : JSON.stringify(body), signal })),
+        Promise.resolve().then(() => hook({
+          method: 'POST',
+          url,
+          body: typeof body === 'string'
+            ? body
+            : JSON.stringify(body),
+          signal,
+        })),
         aborted,
       ])
-      const patch = ReachGatewayFieldsSchema.parse(output === undefined ? {} : output)
+      const patch = ReachGatewayFieldsSchema.parse(output === undefined
+        ? {}
+        : output)
       body = patch.body ?? body
       for (const [name, value] of Object.entries(patch.headers ?? {}))
         headers.set(name, value)
@@ -98,9 +104,20 @@ async function prepareGatewayRequest(gateway: NonNullable<AliyunSmsProviderConfi
       listener?.[Symbol.dispose]()
     }
   }
-  if (body !== undefined && !headers.has('Content-Type'))
-    headers.set('Content-Type', typeof body === 'string' ? 'text/plain; charset=utf-8' : 'application/json')
-  return { method: 'POST', headers, body: typeof body === 'string' ? body : JSON.stringify(body), redirect: 'error', signal }
+  if (body !== undefined && !headers.has('Content-Type')) {
+    headers.set('Content-Type', typeof body === 'string'
+      ? 'text/plain; charset=utf-8'
+      : 'application/json')
+  }
+  return {
+    method: 'POST',
+    headers,
+    body: typeof body === 'string'
+      ? body
+      : JSON.stringify(body),
+    redirect: 'error',
+    signal,
+  }
 }
 
 /** 只接受有界的阿里云成功回执，拒绝网关自己的空成功响应。 */
@@ -117,7 +134,9 @@ async function readGatewayResponse(response: Response): Promise<HaiResult<SendRe
     }))
     const body: unknown = await new Response(stream).json()
     if (body && typeof body === 'object' && 'Code' in body && body.Code === 'OK') {
-      const messageId = 'BizId' in body ? body.BizId : undefined
+      const messageId = 'BizId' in body
+        ? body.BizId
+        : undefined
       if (messageId === undefined || (typeof messageId === 'string' && messageId.length <= 255))
         return ok({ success: true, messageId })
     }
@@ -157,12 +176,16 @@ export function createAliyunSmsProvider(gatewayHook?: ReachGatewayHook): ReachPr
       if (config.type !== 'aliyun-sms') {
         return err(
           HaiReachError.CONFIG_ERROR,
-          reachM('reach_unsupportedType', { params: { type: config.type } }),
+          reachM('reach_unsupportedType', {
+            params: { type: config.type },
+          }),
         )
       }
 
       smsConfig = config
-      logger.info('Aliyun SMS provider connected', config.gateway ? { gateway: true } : { endpoint: config.endpoint })
+      logger.info('Aliyun SMS provider connected', config.gateway
+        ? { gateway: true }
+        : { endpoint: config.endpoint })
       return ok(undefined)
     },
 
@@ -235,7 +258,7 @@ export function createAliyunSmsProvider(gatewayHook?: ReachGatewayHook): ReachPr
           logger.warn('SMS send returned non-OK status', { code: body.Code })
           return err(
             HaiReachError.SEND_FAILED,
-            reachM('reach_smsSendFailed', { params: { error: body.Message } }),
+            reachM('reach_smsSendFailed'),
           )
         }
 
@@ -248,7 +271,7 @@ export function createAliyunSmsProvider(gatewayHook?: ReachGatewayHook): ReachPr
           return err(HaiReachError.SEND_FAILED, reachM('reach_smsGatewayFailed'))
         }
         logger.error('SMS send failed', { to: message.to, error })
-        return err(toReachError(error))
+        return err(toReachError())
       }
     },
   }

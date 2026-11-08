@@ -29,10 +29,47 @@ const s3FieldPrompts: Partial<Record<string, Parameters<typeof cliM>[0]>> = {
 
 /** 支持 URL 和分字段配置的后端，以及完整连接串替代的字段。 */
 const connectionUrlOptions = {
-  postgresql: { fields: ['host', 'port', 'database', 'user', 'password'], example: 'postgresql://user:password@db.example.com:5432/app' },
-  mysql: { fields: ['host', 'port', 'database', 'user', 'password'], example: 'mysql://user:password@db.example.com:3306/app' },
-  pgvector: { fields: ['host', 'port', 'database', 'user', 'password'], example: 'postgresql://user:password@db.example.com:5432/vectors' },
-  redis: { fields: ['host', 'port', 'password', 'db', 'cluster', 'sentinel'], example: 'rediss://user:password@redis.example.com:6379/0' },
+  postgresql: {
+    fields: [
+      'host',
+      'port',
+      'database',
+      'user',
+      'password',
+    ],
+    example: 'postgresql://user:password@db.example.com:5432/app',
+  },
+  mysql: {
+    fields: [
+      'host',
+      'port',
+      'database',
+      'user',
+      'password',
+    ],
+    example: 'mysql://user:password@db.example.com:3306/app',
+  },
+  pgvector: {
+    fields: [
+      'host',
+      'port',
+      'database',
+      'user',
+      'password',
+    ],
+    example: 'postgresql://user:password@db.example.com:5432/vectors',
+  },
+  redis: {
+    fields: [
+      'host',
+      'port',
+      'password',
+      'db',
+      'cluster',
+      'sentinel',
+    ],
+    example: 'rediss://user:password@redis.example.com:6379/0',
+  },
 } satisfies Record<string, { fields: string[], example: string }>
 
 /** 检查向导所选连接串的协议和地址，并确保可为 PostgreSQL 系后端填入数据库名。 */
@@ -41,10 +78,16 @@ function parseConnectionUrl(value: string, backend: string): URL | undefined {
     const url = new URL(value)
     if (!url.hostname)
       return undefined
-    if (backend === 'mysql')
-      return url.protocol === 'mysql:' && !value.includes('?') && !value.includes('#') ? url : undefined
-    if (backend === 'redis')
-      return ['redis:', 'rediss:'].includes(url.protocol) ? url : undefined
+    if (backend === 'mysql') {
+      return url.protocol === 'mysql:' && !value.includes('?') && !value.includes('#')
+        ? url
+        : undefined
+    }
+    if (backend === 'redis') {
+      return ['redis:', 'rediss:'].includes(url.protocol)
+        ? url
+        : undefined
+    }
     if (['postgres:', 'postgresql:'].includes(url.protocol) && decodeURIComponent(url.pathname.slice(1)))
       return url
   }
@@ -83,37 +126,81 @@ async function ask(question: prompts.PromptObject): Promise<unknown> {
 export async function configureDeployMiddleware(module: DeployModule, scan: ScanResult, environment: DeploymentEnvironment, config: Record<string, unknown>, yes = false): Promise<Partial<Record<string, MiddlewareMode>>> {
   const modes: Partial<Record<string, MiddlewareMode>> = {}
   const services: Record<string, unknown> = {}
-  const existingServices = config.services && typeof config.services === 'object' ? config.services as Record<string, unknown> : {}
+  const existingServices = config.services && typeof config.services === 'object'
+    ? config.services as Record<string, unknown>
+    : {}
   const provider = config.provider as { type?: string } | undefined
   for (const requirement of scan.middlewares ?? []) {
     const choices = module.DEPLOY_MIDDLEWARE[requirement.service]
     const current = choices.find(item => item.backend === requirement.backend)
-    if (!current)
-      throw new Error(cliM('cli_deploy_cloud_unsupported', { params: { backend: requirement.backend } }))
-    writeCliMessage(cliM('cli_deploy_middleware', { params: { service: requirement.service, backend: current.label, purpose: module.describeMiddlewareBackend(current), source: requirement.source } }))
+    if (!current) {
+      throw new Error(cliM('cli_deploy_cloud_unsupported', {
+        params: { backend: requirement.backend },
+      }))
+    }
+    writeCliMessage(cliM('cli_deploy_middleware', {
+      params: {
+        service: requirement.service,
+        backend: current.label,
+        purpose: module.describeMiddlewareBackend(current),
+        source: requirement.source,
+      },
+    }))
     const canKeep = module.canKeepMiddleware(requirement, current, environment)
     const mode = yes
       ? canKeep ? 'keep' : 'default'
       : await ask({
         type: 'select',
         name: 'value',
-        message: cliM('cli_deploy_action', { params: { service: requirement.service } }),
+        message: cliM('cli_deploy_action', {
+          params: { service: requirement.service },
+        }),
         choices: [
-          { title: cliM('cli_deploy_default'), value: 'default' },
-          { title: cliM('cli_deploy_custom'), value: 'custom' },
-          ...(canKeep ? [{ title: cliM('cli_deploy_keep'), value: 'keep' }] : []),
+          {
+            title: cliM('cli_deploy_default'),
+            value: 'default',
+          },
+          {
+            title: cliM('cli_deploy_custom'),
+            value: 'custom',
+          },
+          ...(canKeep
+            ? [
+                {
+                  title: cliM('cli_deploy_keep'),
+                  value: 'keep',
+                },
+              ]
+            : []),
         ],
       }) as MiddlewareMode
     modes[requirement.envPrefix] = mode
     // 同类服务可有多个 Provider；保留每项选择，聚合值仅用于选择云开通器。
     const previous = modes[requirement.service]
-    modes[requirement.service] = previous === 'default' || mode === 'default' ? 'default' : previous === 'custom' || mode === 'custom' ? 'custom' : 'keep'
+    modes[requirement.service] = previous === 'default' || mode === 'default'
+      ? 'default'
+      : previous === 'custom' || mode === 'custom'
+        ? 'custom'
+        : 'keep'
     if (mode === 'keep') {
-      if (!canKeep)
-        throw new Error(cliM('cli_deploy_missing_keep', { params: { service: requirement.service } }))
+      if (!canKeep) {
+        throw new Error(cliM('cli_deploy_missing_keep', {
+          params: { service: requirement.service },
+        }))
+      }
       continue
     }
-    const backendName = yes ? current.backend : String(await ask({ type: 'select', name: 'value', message: cliM('cli_deploy_backend', { params: { service: requirement.service } }), initial: choices.indexOf(current), choices: choices.map(item => ({ title: `${item.label} — ${module.describeMiddlewareBackend(item)}`, value: item.backend })) }))
+    const backendName = yes
+      ? current.backend
+      : String(await ask({
+          type: 'select',
+          name: 'value',
+          message: cliM('cli_deploy_backend', {
+            params: { service: requirement.service },
+          }),
+          initial: choices.indexOf(current),
+          choices: choices.map(item => ({ title: `${item.label} — ${module.describeMiddlewareBackend(item)}`, value: item.backend })),
+        }))
     const backend = choices.find(item => item.backend === backendName)
     if (!backend)
       throw new Error(cliM('cli_deploy_invalid_value'))
@@ -121,10 +208,22 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
     const updates: Record<string, unknown> = {}
     let configuration: Record<string, unknown> | undefined
     let connectionAddress: string | undefined
-    for (const option of mode === 'default' && provider?.type === 'docker-ssh' ? backend.containerOptions ?? [] : []) {
-      const container = config.container && typeof config.container === 'object' ? config.container as Record<string, unknown> : {}
+    for (const option of mode === 'default' && provider?.type === 'docker-ssh'
+      ? backend.containerOptions ?? []
+      : []) {
+      const container = config.container && typeof config.container === 'object'
+        ? config.container as Record<string, unknown>
+        : {}
       const currentValue = String(container[option.field] ?? option.defaultValue)
-      const selected = yes ? currentValue : String(await ask({ type: 'select', name: 'value', message: module.describeMiddlewareBackend(option), initial: Math.max(0, option.choices.findIndex(item => item.value === currentValue)), choices: option.choices.map(item => ({ title: item.label, value: item.value })) }))
+      const selected = yes
+        ? currentValue
+        : String(await ask({
+            type: 'select',
+            name: 'value',
+            message: module.describeMiddlewareBackend(option),
+            initial: Math.max(0, option.choices.findIndex(item => item.value === currentValue)),
+            choices: option.choices.map(item => ({ title: item.label, value: item.value })),
+          }))
       if (!option.choices.some(item => item.value === selected))
         throw new Error(cliM('cli_deploy_invalid_value'))
       config.container = { ...container, [option.field]: selected }
@@ -132,8 +231,11 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
       const deploymentFile = projectConfigPath(scan.appDir ?? environment.envDir)
       const project: { deploy?: { container?: Record<string, unknown> | null } } = readProjectConfig(deploymentFile)
       project.deploy ??= {}
-      if (project.deploy.container != null && (typeof project.deploy.container !== 'object' || Array.isArray(project.deploy.container)))
-        throw new Error(cliM('cli_deploy_config_node', { params: { path: deploymentFile, field: 'deploy.container' } }))
+      if (project.deploy.container != null && (typeof project.deploy.container !== 'object' || Array.isArray(project.deploy.container))) {
+        throw new Error(cliM('cli_deploy_config_node', {
+          params: { path: deploymentFile, field: 'deploy.container' },
+        }))
+      }
       project.deploy.container ??= {}
       if (!(option.field in project.deploy.container)) {
         project.deploy.container[option.field] = `\${${option.variable}:${option.defaultValue}}`
@@ -141,16 +243,31 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
       }
     }
     if (mode === 'default' && provider?.type === 'vercel') {
-      if (!backend.provisioner)
-        throw new Error(cliM('cli_deploy_cloud_unsupported', { params: { backend: backend.label } }))
+      if (!backend.provisioner) {
+        throw new Error(cliM('cli_deploy_cloud_unsupported', {
+          params: { backend: backend.label },
+        }))
+      }
       const prior = existingServices[requirement.service]
-      const priorConfig = prior && typeof prior === 'object' ? prior as Record<string, unknown> : {}
+      const priorConfig = prior && typeof prior === 'object'
+        ? prior as Record<string, unknown>
+        : {}
       const cloud: Record<string, string> = { provisioner: backend.provisioner }
       for (const name of backend.cloudFields ?? []) {
         const key = `HAI_DEPLOY_SERVICES_${requirement.service.toUpperCase()}_${name.toUpperCase()}`
         const initial = String(priorConfig[name] ?? environment.values[key] ?? '')
         const label = `${backend.label} — ${cliM(`cli_deploy_cloud_input_${name}` as Parameters<typeof cliM>[0])}`
-        const value = yes ? initial : String(await ask({ type: /key|token|secret/i.test(name) ? 'password' : 'text', name: 'value', message: label, initial, validate: input => Boolean(input) || cliM('cli_deploy_required') }))
+        const value = yes
+          ? initial
+          : String(await ask({
+              type: /key|token|secret/i.test(name)
+                ? 'password'
+                : 'text',
+              name: 'value',
+              message: label,
+              initial,
+              validate: input => Boolean(input) || cliM('cli_deploy_required'),
+            }))
         if (!value)
           throw new Error(`${label}: ${cliM('cli_deploy_required')}`)
         cloud[name] = value
@@ -159,10 +276,17 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
       services[requirement.service] = cloud
     }
     else {
-      if (mode === 'default' && backend.containerSupported === false)
-        throw new Error(cliM('cli_deploy_cloud_unsupported', { params: { backend: backend.label } }))
+      if (mode === 'default' && backend.containerSupported === false) {
+        throw new Error(cliM('cli_deploy_cloud_unsupported', {
+          params: { backend: backend.label },
+        }))
+      }
       // 默认与自定义都从同后端的有效配置继续，不能用表单字段重建并丢失未展示选项。
-      const connection: Record<string, unknown> = backendName === current.backend ? { ...requirement.config } : requirement.config.name === undefined ? {} : { name: requirement.config.name }
+      const connection: Record<string, unknown> = backendName === current.backend
+        ? { ...requirement.config }
+        : requirement.config.name === undefined
+          ? {}
+          : { name: requirement.config.name }
       const custom = mode === 'custom' && !yes
       const urlOptions = custom && Object.hasOwn(connectionUrlOptions, backendName)
         ? connectionUrlOptions[backendName as keyof typeof connectionUrlOptions]
@@ -172,21 +296,39 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
         const method = await ask({
           type: 'select',
           name: 'value',
-          message: cliM('cli_deploy_connection_method', { params: { backend: backend.label } }),
+          message: cliM('cli_deploy_connection_method', {
+            params: { backend: backend.label },
+          }),
           initial: connection.url ? 1 : 0,
           choices: [
-            { title: cliM('cli_deploy_connection_fields'), value: 'fields' },
-            { title: cliM('cli_deploy_connection_url'), value: 'url' },
+            {
+              title: cliM('cli_deploy_connection_fields'),
+              value: 'fields',
+            },
+            {
+              title: cliM('cli_deploy_connection_url'),
+              value: 'url',
+            },
           ],
         })
         if (method === 'url') {
-          const reason = cliM(backendName === 'mysql' ? 'cli_deploy_mysql_url_invalid' : backendName === 'redis' ? 'cli_deploy_redis_url_invalid' : 'cli_deploy_postgres_url_invalid')
-          const invalid = cliM('cli_deploy_middleware_field_error', { params: { variable: `${requirement.envPrefix}_URL`, reason } })
+          const reason = cliM(backendName === 'mysql'
+            ? 'cli_deploy_mysql_url_invalid'
+            : backendName === 'redis'
+              ? 'cli_deploy_redis_url_invalid'
+              : 'cli_deploy_postgres_url_invalid')
+          const invalid = cliM('cli_deploy_middleware_field_error', {
+            params: { variable: `${requirement.envPrefix}_URL`, reason },
+          })
           const value = String(await ask({
             type: 'password',
             name: 'value',
-            message: cliM('cli_deploy_connection_url_prompt', { params: { example: urlOptions.example } }),
-            initial: typeof connection.url === 'string' ? connection.url : '',
+            message: cliM('cli_deploy_connection_url_prompt', {
+              params: { example: urlOptions.example },
+            }),
+            initial: typeof connection.url === 'string'
+              ? connection.url
+              : '',
             validate: input => Boolean(parseConnectionUrl(String(input), backendName)) || invalid,
           }))
           const url = parseConnectionUrl(value, backendName)
@@ -209,12 +351,24 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
         }
       }
       for (const field of fields) {
-        const previous = backendName === current.backend ? requirement.config[field.name] : undefined
-        const initial = previous === undefined ? field.defaultValue ?? '' : typeof previous === 'object' ? JSON.stringify(previous) : String(previous)
+        const previous = backendName === current.backend
+          ? requirement.config[field.name]
+          : undefined
+        const initial = previous === undefined
+          ? field.defaultValue ?? ''
+          : typeof previous === 'object'
+            ? JSON.stringify(previous)
+            : String(previous)
         const variable = `${requirement.envPrefix}_${field.name.toUpperCase()}`
         const info = moduleEnvironmentVariables(requirement.configName).find(item => item.name === variable)
-        const prompt = backendName === 's3' ? s3FieldPrompts[field.name] : undefined
-        const message = prompt ? cliM(prompt) : cliM('cli_deploy_field', { params: { description: info?.description ?? field.name, constraint: info?.constraint ?? field.kind ?? 'string' } })
+        const prompt = backendName === 's3'
+          ? s3FieldPrompts[field.name]
+          : undefined
+        const message = prompt
+          ? cliM(prompt)
+          : cliM('cli_deploy_field', {
+              params: { description: info?.description ?? field.name, constraint: info?.constraint ?? field.kind ?? 'string' },
+            })
         const value = custom
           ? String(await ask({
               type: field.secret ? 'password' : 'text',
@@ -222,28 +376,58 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
               message,
               initial,
               validate: (input) => {
-                const result = module.parseMiddlewareField({ value: String(input), field, backend: backendName })
-                return result.success || cliM('cli_deploy_middleware_field_error', { params: { variable, reason: result.error.message } })
+                const result = module.parseMiddlewareField({
+                  value: String(input),
+                  field,
+                  backend: backendName,
+                })
+                return result.success || cliM('cli_deploy_middleware_field_error', {
+                  params: { variable, reason: result.error.message },
+                })
               },
             }))
           : initial
-        const parsed = module.parseMiddlewareField({ value, field, backend: backendName, managed: mode === 'default' })
-        if (!parsed.success)
-          throw new Error(cliM('cli_deploy_middleware_field_error', { params: { variable, reason: parsed.error.message } }))
+        const parsed = module.parseMiddlewareField({
+          value,
+          field,
+          backend: backendName,
+          managed: mode === 'default',
+        })
+        if (!parsed.success) {
+          throw new Error(cliM('cli_deploy_middleware_field_error', {
+            params: { variable, reason: parsed.error.message },
+          }))
+        }
         if (parsed.data === undefined)
           delete connection[field.name]
         else connection[field.name] = parsed.data
       }
       configuration = connection
     }
-    const saved = module.saveMiddlewareEnvironment(environment, { appDir: scan.appDir ?? '.', requirement, backend: backendName, configuration, updates })
-    if (!saved.success)
-      throw new Error(cliM('cli_deploy_middleware_field_error', { params: { variable: requirement.envPrefix, reason: saved.error.message } }))
-    if (connectionAddress)
-      writeCliMessage(cliM('cli_deploy_connection_address', { params: { service: requirement.service, address: connectionAddress } }))
-    writeCliMessage(cliM('cli_deploy_saved', { params: { service: requirement.service } }))
+    const saved = module.saveMiddlewareEnvironment(environment, {
+      appDir: scan.appDir ?? '.',
+      requirement,
+      backend: backendName,
+      configuration,
+      updates,
+    })
+    if (!saved.success) {
+      throw new Error(cliM('cli_deploy_middleware_field_error', {
+        params: { variable: requirement.envPrefix, reason: saved.error.message },
+      }))
+    }
+    if (connectionAddress) {
+      writeCliMessage(cliM('cli_deploy_connection_address', {
+        params: { service: requirement.service, address: connectionAddress },
+      }))
+    }
+    writeCliMessage(cliM('cli_deploy_saved', {
+      params: { service: requirement.service },
+    }))
   }
   // 仅默认选项对应的云服务参与初始化/开通；custom/keep 不认证、不创建。
-  config.services = Object.keys(services).length ? services : undefined
+  config.services = Object.keys(services).length
+    ? services
+    : undefined
   return modes
 }

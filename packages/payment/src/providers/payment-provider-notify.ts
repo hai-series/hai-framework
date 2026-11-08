@@ -15,5 +15,7 @@
  */
 export function getNotifyHeader(headers: Record<string, string>, name: string): string | undefined {
   const values = Object.entries(headers).filter(([key]) => key.toLowerCase() === name.toLowerCase())
-  return values.length === 1 ? values[0][1] : undefined
+  return values.length === 1
+    ? values[0][1]
+    : undefined
 }

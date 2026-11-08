@@ -6,11 +6,11 @@
  * @module routes/api/asr/stream/+server
  */
 
-import { MAX_AUDIO_BYTES } from '$lib/ai-lab-types.js'
-import * as m from '$lib/paraglide/messages.js'
-import { transcribeSpeechStream } from '$lib/server/ai-lab.js'
 import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
+import { MAX_AUDIO_BYTES } from '#lib/ai-lab-types.js'
+import * as m from '#lib/paraglide/messages.js'
+import { transcribeSpeechStream } from '#lib/server/ai-lab.js'
 
 /** MIME → 音频容器格式映射（MiMo ASR 仅支持 wav/mp3） */
 const AUDIO_FORMATS = new Map<string, 'wav' | 'mp3'>([
@@ -21,7 +21,11 @@ const AUDIO_FORMATS = new Map<string, 'wav' | 'mp3'>([
 ])
 
 export const POST = kit.handler(async ({ request, locals }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   const formData = await request.formData()
   const file = formData.get('audio')
   const language = String(formData.get('language') ?? 'auto')
@@ -37,7 +41,13 @@ export const POST = kit.handler(async ({ request, locals }) => {
     return kit.response.badRequest(m.asr_error_language({}, { locale }))
 
   const data = new Uint8Array(await file.arrayBuffer())
-  const events = transcribeSpeechStream({ data, format, language: language === 'auto' ? undefined : language })
+  const events = transcribeSpeechStream({
+    data,
+    format,
+    language: language === 'auto'
+      ? undefined
+      : language,
+  })
   const encoder = new TextEncoder()
 
   // 逐个转写事件以 NDJSON 推送；异步迭代抛错时输出错误标记行并正常结束流
@@ -50,7 +60,11 @@ export const POST = kit.handler(async ({ request, locals }) => {
         }
       }
       catch (error) {
-        core.logger.warn('ASR stream failed', { error: error instanceof Error ? error.message : String(error) })
+        core.logger.warn('ASR stream failed', {
+          error: error instanceof Error
+            ? error.message
+            : String(error),
+        })
         controller.enqueue(encoder.encode(`${JSON.stringify({ error: true })}\n`))
       }
       finally {

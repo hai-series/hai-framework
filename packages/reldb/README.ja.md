@@ -129,7 +129,11 @@ MySQL の `close()` は新規・待機リクエストを直ちに拒否し、借
 MySQL は `mysql://` の `url` だけでも接続でき、URL がなければ `database` が必須です。URL の host/port/database/user/password を優先し、競合する個別フィールドは接続に使用しません。`pool`、`mysql.charset`、`ssl`、`operationLog` は独立して適用します。query/fragment は拒否し、URL 内の隠れた設定で TLS やプールを変更できません。接続ログの URL は機密情報を伏せます。以下は `HAI_DB_URL` の設定を前提とします：
 
 ```ts
-const initialized = await reldb.init({ type: 'mysql', url: process.env.HAI_DB_URL, pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 } })
+const initialized = await reldb.init({
+  type: 'mysql',
+  url: process.env.HAI_DB_URL,
+  pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 }
+})
 if (!initialized.success)
   throw new Error(initialized.error.message)
 ```
@@ -144,7 +148,12 @@ MySQL の空 `url`（空の環境変数を含む）は host/port/database/user/p
 
 ```ts
 // trustedCaPem は配置時の信頼設定から供給し、任意の接続先証明書をそのまま信頼しません。
-const initialized = await reldb.init({ type: 'mysql', host: 'db.example.com', database: 'app', ssl: { ca: trustedCaPem } })
+const initialized = await reldb.init({
+  type: 'mysql',
+  host: 'db.example.com',
+  database: 'app',
+  ssl: { ca: trustedCaPem }
+})
 if (!initialized.success)
   throw new Error(initialized.error.message)
 ```
@@ -203,6 +212,8 @@ await reldb.init({
 操作ログには固定の操作名、SQL 長、パラメーター数、バッチ件数を記録します。失敗時は、エラーコード、traceId、許可リストに含まれるマスキング済みのドライバーメッセージとスタックも保持します。SQL 全文、バインド値、接続設定をそのまま記録することはありません。
 
 ### トランザクション
+
+トランザクションの終了処理を所有できるのは一つの操作だけです。commit または rollback の開始後、新規クエリ、重複 commit、並行 rollback は直ちに TRANSACTION_FAILED を返し、接続は一度だけ返却します。復旧目的で並行終了を試みず、最初の終了結果を待ってください。
 
 3 種類の使用方法：
 
@@ -272,8 +283,14 @@ if (!rolledBack.success)
 ```ts
 await reldb.tx.wrap(async (tx) => {
   const inserted = await tx.batch([
-    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['Alice'] },
-    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['Bob'] },
+    {
+      sql: 'INSERT INTO users (name) VALUES (?)',
+      params: ['Alice']
+    },
+    {
+      sql: 'INSERT INTO users (name) VALUES (?)',
+      params: ['Bob']
+    },
   ])
   if (!inserted.success)
     throw new Error(inserted.error.message, { cause: inserted.error })
@@ -376,10 +393,16 @@ await userCrud.deleteById(1)
 #### count / exists / existsById
 
 ```ts
-const total = await userCrud.count({ where: 'name LIKE ?', params: ['%张%'] })
+const total = await userCrud.count({
+  where: 'name LIKE ?',
+  params: ['%张%']
+})
 // total.data → 5
 
-const has = await userCrud.exists({ where: 'email = ?', params: ['test@example.com'] })
+const has = await userCrud.exists({
+  where: 'email = ?',
+  params: ['test@example.com']
+})
 // has.data → true
 
 const found = await userCrud.existsById(1)
@@ -426,11 +449,46 @@ interface UserRow {
 }
 
 const USER_FIELDS: ReldbCrudFieldDefinition[] = [
-  { fieldName: 'id', columnName: 'id', def: { type: 'INTEGER', primaryKey: true, autoIncrement: true }, select: true, create: false, update: false },
-  { fieldName: 'name', columnName: 'name', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: true },
-  { fieldName: 'email', columnName: 'email', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: true },
-  { fieldName: 'createdAt', columnName: 'created_at', def: { type: 'TIMESTAMP', notNull: true }, select: true, create: true, update: false },
-  { fieldName: 'updatedAt', columnName: 'updated_at', def: { type: 'TIMESTAMP', notNull: true }, select: true, create: true, update: false },
+  {
+    fieldName: 'id',
+    columnName: 'id',
+    def: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+    select: true,
+    create: false,
+    update: false
+  },
+  {
+    fieldName: 'name',
+    columnName: 'name',
+    def: { type: 'TEXT', notNull: true },
+    select: true,
+    create: true,
+    update: true
+  },
+  {
+    fieldName: 'email',
+    columnName: 'email',
+    def: { type: 'TEXT', notNull: true },
+    select: true,
+    create: true,
+    update: true
+  },
+  {
+    fieldName: 'createdAt',
+    columnName: 'created_at',
+    def: { type: 'TIMESTAMP', notNull: true },
+    select: true,
+    create: true,
+    update: false
+  },
+  {
+    fieldName: 'updatedAt',
+    columnName: 'updated_at',
+    def: { type: 'TIMESTAMP', notNull: true },
+    select: true,
+    create: true,
+    update: false
+  },
 ]
 
 class UserRepository extends BaseReldbCrudRepository<UserRow> {
@@ -440,7 +498,11 @@ class UserRepository extends BaseReldbCrudRepository<UserRow> {
 
   /** 自定义查询方法 */
   async findByEmail(email: string) {
-    return this.findAll({ where: 'email = ?', params: [email], limit: 1 })
+    return this.findAll({
+      where: 'email = ?',
+      params: [email],
+      limit: 1
+    })
   }
 
   /** 自定义方法中使用 this.sql(tx) 自动路由到事务 */
@@ -568,7 +630,13 @@ await reldb.ddl.createTable('products', {
 // 插入初始 JSON
 await reldb.sql.execute(
   `INSERT INTO products (meta) VALUES (?)`,
-  [JSON.stringify({ status: 'draft', tags: ['new'], version: 1 })],
+  [
+    JSON.stringify({
+      status: 'draft',
+      tags: ['new'],
+      version: 1
+    })
+  ],
 )
 
 // 设置字段
@@ -636,7 +704,7 @@ if (!result.success) {
 
 ## モジュールのスキーマ移行
 
-`schemaColumns(reldb, table, sql?)` は実際の列を読み取ります。`migrateSchema(reldb, module, steps, { dryRun: true })` は台帳を作成しません。各モジュールが手順を所有し、`hai_schema_migrations` に版を記録します。SQLite/PostgreSQL はトランザクション、MySQL の暗黙 DDL コミットには再入可能な手順が必要です。失敗時は版を進めず、実構造を再確認して再試行します。新しい台帳へのダウングレードは拒否します。旧書込を停止し DB/セッションキャッシュをバックアップしてください。復旧は互換 DB とバイナリを一緒に戻します。[更新ガイド](../../docs/usage/README.ja.md)を参照。
+`reldb.schemaColumns(table, sql?)` は実際の列を読み取ります。`reldb.migrateSchema(module, steps, { dryRun: true })` は台帳を作成しません。各モジュールが手順を所有し、`hai_schema_migrations` に版を記録します。SQLite/PostgreSQL はトランザクション、MySQL の暗黙 DDL コミットには再入可能な手順が必要です。失敗時は版を進めず、実構造を再確認して再試行します。新しい台帳へのダウングレードは拒否します。旧書込を停止し DB/セッションキャッシュをバックアップしてください。復旧は互換 DB とバイナリを一緒に戻します。[更新ガイド](../../docs/usage/README.ja.md)を参照。
 
 ## エラー表示とログの関連付け
 

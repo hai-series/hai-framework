@@ -113,7 +113,9 @@ function sanitizeColor(value: string | undefined): string | undefined {
   }
 
   const normalized = value.trim().toLowerCase()
-  return HEX_COLOR_REGEX.test(normalized) ? normalized : undefined
+  return HEX_COLOR_REGEX.test(normalized)
+    ? normalized
+    : undefined
 }
 
 function sanitizeAlign(value: string | undefined): EditorAlignToken['align'] | undefined {
@@ -218,8 +220,12 @@ export function createEditorMarkdownExtensions(): TokenizerAndRendererExtension[
       renderer(token) {
         const spanToken = token as EditorSpanToken
         const style = [
-          spanToken.color ? `color:${spanToken.color}` : '',
-          spanToken.background ? `background-color:${spanToken.background}` : '',
+          spanToken.color
+            ? `color:${spanToken.color}`
+            : '',
+          spanToken.background
+            ? `background-color:${spanToken.background}`
+            : '',
         ].filter(Boolean).join(';')
 
         if (!style) {

@@ -50,33 +50,114 @@
 
   const dataAttributes = $derived(getDataAttributes(restProps))
   const effectiveQuery = $derived(query ?? { page: data.page, pageSize: data.pageSize })
-  const pageSizeOptions = $derived([...new Set([data.pageSize, 10, 20, 50, 100])].sort((left, right) => left - right))
+  const pageSizeOptions = $derived([
+    ...new Set([data.pageSize, 10, 20, 50, 100]),
+  ].sort((left, right) => left - right))
   let actionError = $state('')
   let busyId = $state('')
   let search = $derived(effectiveQuery.search ?? '')
   const sortDirection = $derived(effectiveQuery.sortDirection ?? 'desc')
-  let filterValues = $derived<Record<string, unknown>>({ status: effectiveQuery.status ?? '', collectionStatus: effectiveQuery.collectionStatus ?? '', appId: effectiveQuery.appId ?? '', appVersion: effectiveQuery.appVersion ?? '', from: feedbackDateValue(effectiveQuery.from), to: feedbackDateValue(effectiveQuery.to) })
+  let filterValues = $derived<Record<string, unknown>>({
+    status: effectiveQuery.status ?? '',
+    collectionStatus: effectiveQuery.collectionStatus ?? '',
+    appId: effectiveQuery.appId ?? '',
+    appVersion: effectiveQuery.appVersion ?? '',
+    from: feedbackDateValue(effectiveQuery.from),
+    to: feedbackDateValue(effectiveQuery.to),
+  })
   const columns = $derived([
-    { key: 'number', label: uiM('feedback_number') },
-    { key: 'description', label: uiM('feedback_summary') },
-    { key: 'appId', label: uiM('feedback_application') },
-    { key: 'appVersion', label: uiM('feedback_version') },
-    { key: 'userId', label: uiM('feedback_submitter') },
-    { key: 'createdAt', label: uiM('feedback_created_at'), sortable: true },
-    { key: 'status', label: uiM('feedback_processing') },
-    { key: 'collectionStatus', label: uiM('feedback_collection') },
-    { key: 'notificationStatus', label: uiM('feedback_notification') },
+    {
+      key: 'number',
+      label: uiM('feedback_number'),
+    },
+    {
+      key: 'description',
+      label: uiM('feedback_summary'),
+    },
+    {
+      key: 'appId',
+      label: uiM('feedback_application'),
+    },
+    {
+      key: 'appVersion',
+      label: uiM('feedback_version'),
+    },
+    {
+      key: 'userId',
+      label: uiM('feedback_submitter'),
+    },
+    {
+      key: 'createdAt',
+      label: uiM('feedback_created_at'),
+      sortable: true,
+    },
+    {
+      key: 'status',
+      label: uiM('feedback_processing'),
+    },
+    {
+      key: 'collectionStatus',
+      label: uiM('feedback_collection'),
+    },
+    {
+      key: 'notificationStatus',
+      label: uiM('feedback_notification'),
+    },
   ])
   const filterFields = $derived([
-    { id: 'status', label: uiM('feedback_processing'), type: 'select', options: [{ label: uiM('feedback_pending'), value: 'pending' }, { label: uiM('feedback_handled'), value: 'handled' }] },
-    { id: 'collectionStatus', label: uiM('feedback_collection'), type: 'select', options: ['collecting', 'complete', 'partial', 'failed'].map(value => ({ value, label: collectionLabel(value as FeedbackReportView['collectionStatus']) })) },
-    { id: 'appId', label: uiM('feedback_application'), type: 'text' },
-    { id: 'appVersion', label: uiM('feedback_version'), type: 'text' },
-    { id: 'createdAt', label: uiM('feedback_date_range'), type: 'date-range', startKey: 'from', endKey: 'to' },
+    {
+      id: 'status',
+      label: uiM('feedback_processing'),
+      type: 'select',
+      options: [
+        {
+          label: uiM('feedback_pending'),
+          value: 'pending',
+        },
+        {
+          label: uiM('feedback_handled'),
+          value: 'handled',
+        },
+      ],
+    },
+    {
+      id: 'collectionStatus',
+      label: uiM('feedback_collection'),
+      type: 'select',
+      options: [
+        'collecting',
+        'complete',
+        'partial',
+        'failed',
+      ].map(value => ({
+        value,
+        label: collectionLabel(value as FeedbackReportView['collectionStatus']),
+      })),
+    },
+    {
+      id: 'appId',
+      label: uiM('feedback_application'),
+      type: 'text',
+    },
+    {
+      id: 'appVersion',
+      label: uiM('feedback_version'),
+      type: 'text',
+    },
+    {
+      id: 'createdAt',
+      label: uiM('feedback_date_range'),
+      type: 'date-range',
+      startKey: 'from',
+      endKey: 'to',
+    },
   ])
 
   function update(next: Partial<FeedbackListQuery>) {
-    return applyQuery({ ...effectiveQuery, ...next })
+    return applyQuery({
+      ...effectiveQuery,
+      ...next,
+    })
   }
   async function applyQuery(next: FeedbackListQuery) {
     query = next
@@ -91,7 +172,29 @@
   function filter(values: Record<string, unknown>) {
     const from = feedbackDayBoundary(values.from, 'start')
     const to = feedbackDayBoundary(values.to, 'end')
-    void update({ page: 1, search: search.trim() || undefined, status: values.status === 'pending' || values.status === 'handled' ? values.status : undefined, collectionStatus: ['collecting', 'complete', 'partial', 'failed'].includes(String(values.collectionStatus)) ? values.collectionStatus as FeedbackReportView['collectionStatus'] : undefined, appId: String(values.appId ?? '') || undefined, appVersion: String(values.appVersion ?? '') || undefined, from: Number.isFinite(from) ? from : undefined, to: Number.isFinite(to) ? to : undefined })
+    void update({
+      page: 1,
+      search: search.trim() || undefined,
+      status: values.status === 'pending' || values.status === 'handled'
+        ? values.status
+        : undefined,
+      collectionStatus: [
+        'collecting',
+        'complete',
+        'partial',
+        'failed',
+      ].includes(String(values.collectionStatus))
+        ? values.collectionStatus as FeedbackReportView['collectionStatus']
+        : undefined,
+      appId: String(values.appId ?? '') || undefined,
+      appVersion: String(values.appVersion ?? '') || undefined,
+      from: Number.isFinite(from)
+        ? from
+        : undefined,
+      to: Number.isFinite(to)
+        ? to
+        : undefined,
+    })
   }
   async function run(report: FeedbackReportView, action: (() => void | Promise<void>) | undefined) {
     if (!action || busyId)
@@ -109,7 +212,9 @@
     }
   }
   useToastFeedback(() => error || actionError)
-  useToastFeedback(() => permissions.read === false ? uiM('feedback_permission_denied') : '', 'warning')
+  useToastFeedback(() => permissions.read === false
+    ? uiM('feedback_permission_denied')
+    : '', 'warning')
 </script>
 
 <section {...dataAttributes} class={`feedback-list flex min-h-0 min-w-0 flex-1 flex-col gap-3 ${className}`} aria-label={uiM('feedback_list_title')}>
@@ -126,7 +231,11 @@
             {:else if key === 'appVersion'}{item.appVersion || '—'}
             {:else if key === 'userId'}<span class='block max-w-36 truncate' title={item.userId}>{item.userId || '—'}</span>
             {:else if key === 'createdAt'}{feedbackTime(item.createdAt)}
-            {:else if key === 'status'}<Badge size='sm' variant={item.status === 'handled' ? 'success' : 'ghost'}>{uiM(item.status === 'handled' ? 'feedback_handled' : 'feedback_pending')}</Badge>
+            {:else if key === 'status'}<Badge size='sm' variant={item.status === 'handled'
+              ? 'success'
+              : 'ghost'}>{uiM(item.status === 'handled'
+              ? 'feedback_handled'
+              : 'feedback_pending')}</Badge>
             {:else if key === 'collectionStatus'}<span class:text-warning={item.collectionStatus === 'failed' || item.collectionStatus === 'partial'}>{collectionLabel(item.collectionStatus)}</span>
             {:else if key === 'notificationStatus'}{notificationLabel(item.notificationStatus)}{/if}
           {/snippet}
@@ -134,7 +243,15 @@
             <div class='inline-flex flex-nowrap items-center gap-1'>
               {#if onview}<Button size='xs' variant='ghost' disabled={Boolean(busyId)} onclick={() => run(item, () => onview(item))}>{uiM('feedback_details')}</Button>{/if}
               {#if onstatus && ((item.status === 'pending' && permissions.process) || (item.status === 'handled' && permissions.reopen))}
-                <Button size='xs' variant='ghost' loading={busyId === item.id} disabled={Boolean(busyId)} onclick={() => run(item, () => onstatus({ id: item.id, status: item.status === 'pending' ? 'handled' : 'pending', expectedVersion: item.version }))}>{uiM(item.status === 'pending' ? 'feedback_handle' : 'feedback_reopen')}</Button>
+                <Button size='xs' variant='ghost' loading={busyId === item.id} disabled={Boolean(busyId)} onclick={() => run(item, () => onstatus({
+                  id: item.id,
+                  status: item.status === 'pending'
+                    ? 'handled'
+                    : 'pending',
+                  expectedVersion: item.version,
+                }))}>{uiM(item.status === 'pending'
+                  ? 'feedback_handle'
+                  : 'feedback_reopen')}</Button>
               {/if}
               {#if permissions.export && onexport}<Button size='xs' variant='ghost' disabled={Boolean(busyId)} onclick={() => run(item, () => onexport(item))}>{uiM('feedback_export')}</Button>{/if}
               {#if permissions.retry && onretry && (item.collectionStatus === 'partial' || item.collectionStatus === 'failed' || item.notificationStatus === 'failed')}<Button size='xs' variant='ghost' disabled={Boolean(busyId)} onclick={() => run(item, () => onretry(item))}>{uiM('feedback_retry')}</Button>{/if}

@@ -57,7 +57,9 @@
   useControlFeedback(() => resolveFormText(error) || validation.message)
   let nativeSelect: HTMLSelectElement | undefined = $state()
   // 独立保存原生选中值，筛选输入的文字不能代替表单实际选项。
-  const nativeValue = $derived(value === undefined || value === null ? '' : String(value))
+  const nativeValue = $derived(value === undefined || value === null
+    ? ''
+    : String(value))
   $effect(() => {
     void options
     void required
@@ -333,12 +335,19 @@
         bind:this={inputRef}
         id={controlId}
         aria-invalid={effectiveError ? true : undefined}
-        aria-describedby={[field?.messageId, localError && !field?.error ? messageId : ''].filter(Boolean).join(' ') || undefined}
+        aria-describedby={[
+          field?.messageId,
+          localError && !field?.error
+            ? messageId
+            : '',
+        ].filter(Boolean).join(' ') || undefined}
         type='text'
         class={inputClass}
         {disabled}
         {placeholder}
-        value={isDropdownOpen ? filterText : selectedLabel()}
+        value={isDropdownOpen
+          ? filterText
+          : selectedLabel()}
         oninput={handleFilterInput}
         onkeydown={handleInputKeydown}
         onfocus={() => {
@@ -357,7 +366,12 @@
         bind:this={inputRef}
         id={controlId}
         aria-invalid={effectiveError ? true : undefined}
-        aria-describedby={[field?.messageId, localError && !field?.error ? messageId : ''].filter(Boolean).join(' ') || undefined}
+        aria-describedby={[
+          field?.messageId,
+          localError && !field?.error
+            ? messageId
+            : '',
+        ].filter(Boolean).join(' ') || undefined}
         type='text'
         class={inputClass}
         readonly
@@ -434,7 +448,9 @@
                 handleOptionSelect(option.value, option.disabled)
               }
             }}
-            tabindex={option.disabled ? -1 : 0}
+            tabindex={option.disabled
+              ? -1
+              : 0}
           >
             {option.label}
           </li>

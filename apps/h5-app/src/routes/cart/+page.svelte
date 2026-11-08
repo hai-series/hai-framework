@@ -3,12 +3,24 @@
    * 购物车页 — 使用 SwipeCell 滑动删除
    */
   import { resolve } from '$app/paths'
-  import * as m from '$lib/paraglide/messages.js'
   import { Button, Card, Empty, IconButton, SwipeCell } from '@h-ai/ui'
+  import * as m from '#lib/paraglide/messages.js'
 
   let items = $state([
-    { id: 1, name: m.home_rec_watch(), price: 299, qty: 1, icon: '⌚' },
-    { id: 2, name: m.home_rec_earbuds(), price: 129, qty: 2, icon: '🎧' },
+    {
+      id: 1,
+      name: m.home_rec_watch(),
+      price: 299,
+      qty: 1,
+      icon: '⌚',
+    },
+    {
+      id: 2,
+      name: m.home_rec_earbuds(),
+      price: 129,
+      qty: 2,
+      icon: '🎧',
+    },
   ])
 
   const total = $derived(items.reduce((sum, item) => sum + item.price * item.qty, 0))
@@ -37,7 +49,7 @@
   {#if items.length === 0}
     <Empty title={m.cart_empty()} icon='inbox'>
       {#snippet action()}
-        <a href={resolve('/', {})}>
+        <a href={resolve('/')}>
           <Button variant='primary' size='sm'>
             <span class='icon-[tabler--arrow-left] text-base'></span>
             {m.cart_go_shopping()}
@@ -50,8 +62,16 @@
       {#each items as item (item.id)}
         <SwipeCell
           actions={[
-            { id: 'collect', label: m.swipe_collect(), variant: 'warning' },
-            { id: 'delete', label: m.swipe_delete(), variant: 'error' },
+            {
+              id: 'collect',
+              label: m.swipe_collect(),
+              variant: 'warning',
+            },
+            {
+              id: 'delete',
+              label: m.swipe_delete(),
+              variant: 'error',
+            },
           ]}
           onaction={actionId => handleSwipeAction(item.id, actionId)}
         >

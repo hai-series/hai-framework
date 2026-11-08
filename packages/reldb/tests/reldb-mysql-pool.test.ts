@@ -17,7 +17,13 @@ describe('mysql pool contract', () => {
     expect(ReldbConfigSchema.safeParse({ type: 'mysql', url: 'https://db.example/url_db' }).success).toBe(false)
   })
   it('rejects unsupported retention options and requires finite positive acquisition limits', () => {
-    for (const pool of [{ min: 0 }, { idleTimeout: 30000 }, { acquireTimeout: 0 }, { acquireTimeout: 2147483648 }, { queueLimit: 0 }]) {
+    for (const pool of [
+      { min: 0 },
+      { idleTimeout: 30000 },
+      { acquireTimeout: 0 },
+      { acquireTimeout: 2147483648 },
+      { queueLimit: 0 },
+    ]) {
       const parsed = ReldbConfigSchema.safeParse({ type: 'mysql', database: 'test', pool })
       expect(parsed.success, JSON.stringify(pool)).toBe(false)
     }
@@ -28,7 +34,11 @@ describe('mysql pool contract', () => {
     expect(parsed.type).toBe('mysql')
     if (parsed.type === 'mysql')
       expect(parsed.pool).toEqual({ max: 10, acquireTimeout: 10000, queueLimit: 1000 })
-    expect(ReldbConfigSchema.safeParse({ type: 'mysql', database: 'test', mysql: { timezone: '+08:00' } }).success).toBe(false)
+    expect(ReldbConfigSchema.safeParse({
+      type: 'mysql',
+      database: 'test',
+      mysql: { timezone: '+08:00' },
+    }).success).toBe(false)
   })
 })
 
@@ -42,8 +52,18 @@ describe('mysql bounded acquisition', () => {
   beforeAll(async () => {
     const lease = await acquireMysqlContainer()
     release = lease.release
-    const connection = { host: lease.host, port: lease.port, database: lease.database, user: lease.user, password: lease.password }
-    config = { type: 'mysql', ...connection, pool: { max: 1, acquireTimeout: 1000 } }
+    const connection = {
+      host: lease.host,
+      port: lease.port,
+      database: lease.database,
+      user: lease.user,
+      password: lease.password,
+    }
+    config = {
+      type: 'mysql',
+      ...connection,
+      pool: { max: 1, acquireTimeout: 1000 },
+    }
     url = `mysql://${encodeURIComponent(lease.user)}:${encodeURIComponent(lease.password)}@127.0.0.1:${lease.port}/hai_pool_uri`
     observer = mysql.createPool(connection)
     prototype = Object.getPrototypeOf(observer) as Pool
@@ -101,7 +121,12 @@ describe('mysql bounded acquisition', () => {
       reldb.sql.get('SELECT 1 AS value'),
       reldb.sql.execute('INSERT INTO hai_pool_effects (value) VALUES (?)', [1]),
       reldb.ddl.raw('CREATE TABLE hai_pool_late_ddl (id INT)'),
-      reldb.sql.batch([{ sql: 'INSERT INTO hai_pool_effects (value) VALUES (?)', params: [2] }]),
+      reldb.sql.batch([
+        {
+          sql: 'INSERT INTO hai_pool_effects (value) VALUES (?)',
+          params: [2],
+        },
+      ]),
     ]
     const pendingTx = reldb.tx.begin()
     try {
@@ -152,7 +177,10 @@ describe('mysql bounded acquisition', () => {
   })
 
   it('rejects a full finite queue immediately and preserves FIFO for admitted writes', async () => {
-    expect((await reldb.init({ ...config, pool: { max: 1, acquireTimeout: 1000, queueLimit: 2 } })).success).toBe(true)
+    expect((await reldb.init({
+      ...config,
+      pool: { max: 1, acquireTimeout: 1000, queueLimit: 2 },
+    })).success).toBe(true)
     const held = await reldb.tx.begin()
     expect(held.success).toBe(true)
     if (!held.success)
@@ -250,7 +278,11 @@ describe('mysql bounded acquisition', () => {
     const clock = vi.spyOn(performance, 'now').mockImplementation(() => {
       calls++
       // 依次是创建截止期限、开始借用、驱动返回、业务调用前；SDK 不使用此时钟。
-      return calls >= (boundary === 'on delivery' ? 3 : 4) ? 2000 : 1000
+      return calls >= (boundary === 'on delivery'
+        ? 3
+        : 4)
+        ? 2000
+        : 1000
     })
     try {
       const result = await reldb.sql.execute('INSERT INTO hai_pool_effects (value) VALUES (?)', [1])

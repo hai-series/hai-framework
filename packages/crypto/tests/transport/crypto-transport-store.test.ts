@@ -95,7 +95,9 @@ describe('crypto transport key stores', () => {
       second = first
     }
     const expiry = Date.now() + 60_000
-    const results = await Promise.all(Array.from({ length: 16 }, (_, i) => (i % 2 ? first : second).claimRequest('client', 'nonce', expiry)))
+    const results = await Promise.all(Array.from({ length: 16 }, (_, i) => (i % 2
+      ? first
+      : second).claimRequest('client', 'nonce', expiry)))
     expect(results.filter(Boolean)).toHaveLength(1)
     expect(await second.claimRequest('client', 'nonce', expiry)).toBe(false)
     expect(await second.claimRequest('other-client', 'nonce', expiry)).toBe(true)

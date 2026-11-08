@@ -30,7 +30,20 @@ import { validateFormOrFail } from './kit-validation.js'
  * void publicPaths
  * ```
  */
-export const authApiPublicPaths = ['/api/auth/session/close', '/api/auth/logout', '/api/auth/captcha', '/api/auth/config', '/api/auth/login', '/api/auth/login/ldap', '/api/auth/login/otp', '/api/auth/register', '/api/auth/otp/send', '/api/auth/password-reset/request', '/api/auth/password-reset/confirm', '/api/auth/password/renew']
+export const authApiPublicPaths = [
+  '/api/auth/session/close',
+  '/api/auth/logout',
+  '/api/auth/captcha',
+  '/api/auth/config',
+  '/api/auth/login',
+  '/api/auth/login/ldap',
+  '/api/auth/login/otp',
+  '/api/auth/register',
+  '/api/auth/otp/send',
+  '/api/auth/password-reset/request',
+  '/api/auth/password-reset/confirm',
+  '/api/auth/password/renew',
+]
 
 function requestContext(event: Pick<RequestEvent, 'request' | 'getClientAddress'>): AuthRequestContext {
   let ip: string | undefined
@@ -39,7 +52,13 @@ function requestContext(event: Pick<RequestEvent, 'request' | 'getClientAddress'
   }
   catch { /* 未配置可信连接地址时保持未知，启用 IP 限制将拒绝登录。 */ }
   const terminal = event.request.headers.get('x-hai-terminal')
-  return { ip, userAgent: event.request.headers.get('user-agent') ?? undefined, terminalType: terminal === 'app' || terminal === 'desktop' || terminal === 'api' ? terminal : 'web' }
+  return {
+    ip,
+    userAgent: event.request.headers.get('user-agent') ?? undefined,
+    terminalType: terminal === 'app' || terminal === 'desktop' || terminal === 'api'
+      ? terminal
+      : 'web',
+  }
 }
 
 /**
@@ -55,7 +74,9 @@ function requestContext(event: Pick<RequestEvent, 'request' | 'getClientAddress'
  */
 export function createAuthApi(iam: IamFunctions) {
   function response<T>(result: HaiResult<T>) {
-    return result.success ? ok(result.data) : fromError(result.error)
+    return result.success
+      ? ok(result.data)
+      : fromError(result.error)
   }
   return {
     closeSession: handler(async ({ request, cookies }) => {
@@ -80,25 +101,33 @@ export function createAuthApi(iam: IamFunctions) {
       const { request, cookies } = event
       const input = await validateFormOrFail(request, IamLoginInputSchema)
       const result = await login(cookies, input, requestContext(event))
-      return result.success ? ok({ user: result.data.user }) : fromError(result.error)
+      return result.success
+        ? ok({ user: result.data.user })
+        : fromError(result.error)
     }),
     loginWithLdap: handler(async (event) => {
       const { request, cookies } = event
       const input = await validateFormOrFail(request, IamLdapLoginInputSchema)
       const result = await loginWithLdap(cookies, input, requestContext(event))
-      return result.success ? ok({ user: result.data.user }) : fromError(result.error)
+      return result.success
+        ? ok({ user: result.data.user })
+        : fromError(result.error)
     }),
     loginWithOtp: handler(async (event) => {
       const { request, cookies } = event
       const input = await validateFormOrFail(request, IamOtpLoginInputSchema)
       const result = await loginWithOtp(cookies, input, requestContext(event))
-      return result.success ? ok({ user: result.data.user }) : fromError(result.error)
+      return result.success
+        ? ok({ user: result.data.user })
+        : fromError(result.error)
     }),
     register: handler(async (event) => {
       const { request, cookies } = event
       const input = await validateFormOrFail(request, IamRegisterInputSchema)
       const result = await registerAndLogin(cookies, input, requestContext(event))
-      return result.success ? ok({ user: result.data.user }) : fromError(result.error)
+      return result.success
+        ? ok({ user: result.data.user })
+        : fromError(result.error)
     }),
     sendOtp: handler(async ({ request }) => {
       const input = await validateFormOrFail(request, IamSendOtpInputSchema)

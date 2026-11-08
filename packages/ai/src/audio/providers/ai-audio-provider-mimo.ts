@@ -31,7 +31,12 @@ const logger = core.logger.child({ module: 'ai', scope: 'audio-mimo' })
 
 /** MiMo 平台能力：HTTP 识别（非持续音频输入，流式返回文本）+ HTTP 流式合成（不接收增量文本，框架内句子分段） */
 const MIMO_CAPABILITIES: AudioModelCapabilities = {
-  transcribe: { supported: true, realtimeAudioInput: false, speechBoundaryEvents: false, streamingTranscriptOutput: true },
+  transcribe: {
+    supported: true,
+    realtimeAudioInput: false,
+    speechBoundaryEvents: false,
+    streamingTranscriptOutput: true,
+  },
   synthesize: { supported: true, incrementalTextInput: false, streamingAudioOutput: true },
 }
 
@@ -94,25 +99,43 @@ export function createMimoAudioProvider(): AudioProvider {
   async function transcribe(request: ProviderTranscriptionRequest): Promise<HaiResult<TranscriptionResult>> {
     const { model, audio, language, signal } = request
     const mime = MIMO_ASR_MIME[audio.format]
-    if (!mime)
-      return err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', { params: { provider: 'mimo', reason: `format ${audio.format} (only wav/mp3)` } }))
+    if (!mime) {
+      return err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', {
+        params: { provider: 'mimo', reason: `format ${audio.format} (only wav/mp3)` },
+      }))
+    }
 
     const requestSignal = combineSignal(signal, model.timeout)
     try {
       const response = await postChat(model.baseUrl, model.apiKey, {
         model: model.model,
-        messages: [{ role: 'user', content: [{ type: 'input_audio', input_audio: { data: `data:${mime};base64,${toBase64(audio.data)}` } }] }],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'input_audio',
+                input_audio: { data: `data:${mime};base64,${toBase64(audio.data)}` },
+              },
+            ],
+          },
+        ],
         asr_options: { language: language ?? 'auto' },
       }, requestSignal)
-      if (!response.ok)
-        return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: await describeHttpError(response) } }))
+      if (!response.ok) {
+        return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
+          params: { error: await describeHttpError(response) },
+        }))
+      }
 
       const body = await response.json() as MimoChunk
       const text = body.choices?.[0]?.message?.content ?? ''
       return ok({ text })
     }
     catch (error) {
-      logger.debug('MiMo transcribe failed', { error: errorMessage(error) })
+      logger.debug('MiMo transcribe failed', {
+        error: errorMessage(error),
+      })
       return toAudioErrorResult(error, requestSignal)
     }
   }
@@ -120,22 +143,40 @@ export function createMimoAudioProvider(): AudioProvider {
   async function* transcribeStream(request: ProviderTranscriptionStreamRequest): AsyncIterable<TranscriptionEvent> {
     const { model, audio, language, signal } = request
     if ('chunks' in audio) {
-      throw audioError(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', { params: { provider: 'mimo', reason: 'streaming audio input' } }))
+      throw audioError(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', {
+        params: { provider: 'mimo', reason: 'streaming audio input' },
+      }))
     }
     const content = audio as AudioContent
     const mime = MIMO_ASR_MIME[content.format]
-    if (!mime)
-      throw audioError(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', { params: { provider: 'mimo', reason: `format ${content.format} (only wav/mp3)` } }))
+    if (!mime) {
+      throw audioError(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', {
+        params: { provider: 'mimo', reason: `format ${content.format} (only wav/mp3)` },
+      }))
+    }
 
     const requestSignal = combineSignal(signal, model.timeout)
     const response = await postChat(model.baseUrl, model.apiKey, {
       model: model.model,
-      messages: [{ role: 'user', content: [{ type: 'input_audio', input_audio: { data: `data:${mime};base64,${toBase64(content.data)}` } }] }],
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_audio',
+              input_audio: { data: `data:${mime};base64,${toBase64(content.data)}` },
+            },
+          ],
+        },
+      ],
       asr_options: { language: language ?? 'auto' },
       stream: true,
     }, requestSignal)
-    if (!response.ok)
-      throw audioError(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: await describeHttpError(response) } }))
+    if (!response.ok) {
+      throw audioError(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
+        params: { error: await describeHttpError(response) },
+      }))
+    }
 
     let text = ''
     for await (const chunk of readChunks(response, requestSignal)) {
@@ -157,20 +198,38 @@ export function createMimoAudioProvider(): AudioProvider {
       const response = await postChat(model.baseUrl, model.apiKey, {
         model: model.model,
         messages: buildTtsMessages(text, instruction),
-        audio: { format: out.format, ...(voice ? { voice } : {}) },
+        audio: {
+          format: out.format,
+          ...(voice
+            ? { voice }
+            : {}),
+        },
       }, requestSignal)
-      if (!response.ok)
-        return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: await describeHttpError(response) } }))
+      if (!response.ok) {
+        return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
+          params: { error: await describeHttpError(response) },
+        }))
+      }
 
       const body = await response.json() as MimoChunk
       const base64 = body.choices?.[0]?.message?.audio?.data
-      if (!base64)
-        return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: 'missing audio data' } }))
+      if (!base64) {
+        return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
+          params: { error: 'missing audio data' },
+        }))
+      }
 
-      return ok({ data: fromBase64(base64), format: out.format, sampleRate: out.sampleRate, channels: out.channels })
+      return ok({
+        data: fromBase64(base64),
+        format: out.format,
+        sampleRate: out.sampleRate,
+        channels: out.channels,
+      })
     }
     catch (error) {
-      logger.debug('MiMo synthesize failed', { error: errorMessage(error) })
+      logger.debug('MiMo synthesize failed', {
+        error: errorMessage(error),
+      })
       return toAudioErrorResult(error, requestSignal)
     }
   }
@@ -180,7 +239,9 @@ export function createMimoAudioProvider(): AudioProvider {
     const outFormat = resolveSynthesisOutput({ format }).format
 
     // MiMo TTS 不原生接收增量文本：字符串一次合成；持续文本流按句子分段逐句合成，降低首音延迟
-    const segments = typeof text === 'string' ? [text] : streamSentences(text)
+    const segments = typeof text === 'string'
+      ? [text]
+      : streamSentences(text)
     for await (const segment of segments) {
       if (!segment)
         continue
@@ -189,11 +250,19 @@ export function createMimoAudioProvider(): AudioProvider {
       const response = await postChat(model.baseUrl, model.apiKey, {
         model: model.model,
         messages: buildTtsMessages(segment, instruction),
-        audio: { format: outFormat, ...(voice ? { voice } : {}) },
+        audio: {
+          format: outFormat,
+          ...(voice
+            ? { voice }
+            : {}),
+        },
         stream: true,
       }, requestSignal)
-      if (!response.ok)
-        throw audioError(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: await describeHttpError(response) } }))
+      if (!response.ok) {
+        throw audioError(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
+          params: { error: await describeHttpError(response) },
+        }))
+      }
 
       for await (const chunk of readChunks(response, requestSignal)) {
         const base64 = chunk.choices?.[0]?.delta?.audio?.data
@@ -212,8 +281,16 @@ export function createMimoAudioProvider(): AudioProvider {
 
 /** MiMo 流式合成除 wav 外均输出 pcm16；pcm16 时补默认采样率 24000。 */
 function resolveSynthesisOutput(request: { format?: AudioFormat, sampleRate?: number }): SynthesisOutputMeta {
-  const format: AudioFormat = request.format === 'wav' ? 'wav' : 'pcm16'
-  return { format, sampleRate: format === 'pcm16' ? (request.sampleRate ?? 24000) : undefined, channels: 1 }
+  const format: AudioFormat = request.format === 'wav'
+    ? 'wav'
+    : 'pcm16'
+  return {
+    format,
+    sampleRate: format === 'pcm16'
+      ? (request.sampleRate ?? 24000)
+      : undefined,
+    channels: 1,
+  }
 }
 
 // ─── 内部辅助 ───

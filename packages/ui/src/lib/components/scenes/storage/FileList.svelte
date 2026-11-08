@@ -66,7 +66,9 @@
 
   // 格式化日期
   function formatDate(date: Date | string): string {
-    const d = typeof date === 'string' ? new Date(date) : date
+    const d = typeof date === 'string'
+      ? new Date(date)
+      : date
     return d.toLocaleDateString(getUILocale(), {
       year: 'numeric',
       month: '2-digit',

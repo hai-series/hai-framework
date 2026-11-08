@@ -7,7 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { ApiKeyCredentials, AuthRequestContext, AuthResult, LdapCredentials, OtpCredentials, PasswordCredentials, RegisterOptions } from '@h-ai/iam'
-import type { AuthOperations, AuthOperationsProvider } from './kit-types.js'
+import type { AuthCookieWriter, AuthOperations, AuthOperationsProvider } from './kit-types.js'
 import { err, ok } from '@h-ai/core'
 import { kitM } from './kit-i18n.js'
 
@@ -67,16 +67,7 @@ interface CookieReader {
  * }
  * ```
  */
-interface CookieWriter {
-  set: (name: string, value: string, options: {
-    path: string
-    httpOnly: boolean
-    sameSite: 'lax' | 'strict' | 'none'
-    secure: boolean
-    maxAge?: number
-  }) => void
-  delete: (name: string, options: { path: string }) => void
-}
+type CookieWriter = AuthCookieWriter
 
 /**
  * 浏览器 Token 存储器；使用页面内存或平台安全存储，禁止写入 Web Storage。
@@ -136,7 +127,9 @@ function getBearerTokenFromRequest(request: Request): string | null {
     return null
 
   const trimmed = token.trim()
-  return trimmed.length > 0 ? trimmed : null
+  return trimmed.length > 0
+    ? trimmed
+    : null
 }
 
 /**

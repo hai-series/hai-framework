@@ -1,4 +1,5 @@
 # Windows 构建机交付 Linux 启动脚本时必须保留 LF，避免 /bin/sh 解释器失效。
+*.hbs text eol=lf
 *.sh text eol=lf
 *.sh.hbs text eol=lf
 *.envsh text eol=lf
@@ -11,3 +12,6 @@
 Dockerfile text eol=lf
 *.Dockerfile text eol=lf
 *.Dockerfile.hbs text eol=lf
+
+# 补丁上下文中的前导空格和空白行属于补丁语法，不能按源码空白错误处理。
+*.patch text eol=lf -whitespace

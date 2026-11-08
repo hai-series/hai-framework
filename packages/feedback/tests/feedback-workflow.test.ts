@@ -13,15 +13,43 @@ import { readFeedbackBundle } from '../src/bundle/index.js'
 import { feedback, HaiFeedbackError } from '../src/index.js'
 
 const actor: FeedbackContext = { scopeId: 'tenant-a', userId: 'user-a' }
-const admin: FeedbackContext = { ...actor, userId: 'administrator', permissions: ['feedback:*'] }
-const other: FeedbackContext = { scopeId: 'tenant-b', userId: 'user-b', permissions: ['feedback:*'] }
-const config = { appId: 'test-app', recipients: ['admin@example.test'], notificationProvider: 'email', adminUrl: 'http://localhost/admin/feedback', workerIntervalMs: 0, collectionTimeoutMs: 60000, maxReportsPerUserDay: 1000, maxBytesPerUserDay: 1024 ** 4, maxStoredBytesPerScope: 1024 ** 4 }
+const admin: FeedbackContext = {
+  ...actor,
+  userId: 'administrator',
+  permissions: ['feedback:*'],
+}
+const other: FeedbackContext = {
+  scopeId: 'tenant-b',
+  userId: 'user-b',
+  permissions: ['feedback:*'],
+}
+const config = {
+  appId: 'test-app',
+  recipients: ['admin@example.test'],
+  notificationProvider: 'email',
+  adminUrl: 'http://localhost/admin/feedback',
+  workerIntervalMs: 0,
+  collectionTimeoutMs: 60000,
+  maxReportsPerUserDay: 1000,
+  maxBytesPerUserDay: 1024 ** 4,
+  maxStoredBytesPerScope: 1024 ** 4,
+}
 let root: string
 beforeAll(async () => {
   root = await mkdtemp(join(tmpdir(), 'hai-feedback-workflow-'))
-  expect((await reldb.init({ type: 'sqlite', database: join(root, 'feedback.sqlite') })).success).toBe(true)
-  expect((await storage.init({ type: 'local', root: join(root, 'objects') })).success).toBe(true)
-  expect((await reach.init({ providers: [{ name: 'email', type: 'console' }] })).success).toBe(true)
+  expect((await reldb.init({
+    type: 'sqlite',
+    database: join(root, 'feedback.sqlite'),
+  })).success).toBe(true)
+  expect((await storage.init({
+    type: 'local',
+    root: join(root, 'objects'),
+  })).success).toBe(true)
+  expect((await reach.init({
+    providers: [
+      { name: 'email', type: 'console' },
+    ],
+  })).success).toBe(true)
   expect((await feedback.init(config)).success).toBe(true)
 })
 afterAll(async () => {
@@ -34,7 +62,7 @@ afterAll(async () => {
     await rm(root, { recursive: true, force: true })
 })
 
-describe.sequential('反馈公开流程', () => {
+describe('反馈公开流程', { concurrent: false }, () => {
   it('允许空描述、同一提交幂等，并拒绝借同一标识替换现场', async () => {
     const first = await feedback.submit({ submissionId: 'empty-1', appId: config.appId }, actor)
     expect(first.success).toBe(true)
@@ -43,7 +71,10 @@ describe.sequential('反馈公开流程', () => {
     const retry = await feedback.submit({ submissionId: 'empty-1', appId: config.appId }, actor)
     expect(retry.success && retry.data.id).toBe(first.data.id)
     const different = await feedback.submit({ submissionId: 'empty-1', appId: config.appId, description: 'changed' }, actor)
-    expect(different).toMatchObject({ success: false, error: { code: HaiFeedbackError.CONFLICT.code } })
+    expect(different).toMatchObject({
+      success: false,
+      error: { code: HaiFeedbackError.CONFLICT.code },
+    })
     const hidden = await feedback.get(first.data.id, other)
     expect(hidden.success).toBe(false)
     expect((await feedback.list({}, actor)).success).toBe(false)
@@ -67,11 +98,21 @@ describe.sequential('反馈公开流程', () => {
   })
 
   it('分页筛选仅返回当前范围，处理/撤销保留历史且拒绝过期版本', async () => {
-    const first = await feedback.submit({ submissionId: 'filter-1', appId: config.appId, description: 'needle_literal_%', appVersion: 'v1' }, actor)
+    const first = await feedback.submit({
+      submissionId: 'filter-1',
+      appId: config.appId,
+      description: 'needle_literal_%',
+      appVersion: 'v1',
+    }, actor)
     expect(first.success).toBe(true)
     if (!first.success)
       return
-    const list = await feedback.list({ page: 1, pageSize: 1, search: 'needle_literal_%', appVersion: 'v1' }, admin)
+    const list = await feedback.list({
+      page: 1,
+      pageSize: 1,
+      search: 'needle_literal_%',
+      appVersion: 'v1',
+    }, admin)
     expect(list.success).toBe(true)
     if (list.success) {
       expect(list.data.total).toBe(1)
@@ -80,7 +121,12 @@ describe.sequential('反馈公开流程', () => {
     const handled = await feedback.setStatus({ id: first.data.id, status: 'handled', expectedVersion: 1 }, admin)
     expect(handled.success && handled.data.status).toBe('handled')
     expect((await feedback.setStatus({ id: first.data.id, status: 'pending', expectedVersion: 1 }, admin)).success).toBe(false)
-    const reopened = await feedback.setStatus({ id: first.data.id, status: 'pending', expectedVersion: 2, note: 'reopened' }, admin)
+    const reopened = await feedback.setStatus({
+      id: first.data.id,
+      status: 'pending',
+      expectedVersion: 2,
+      note: 'reopened',
+    }, admin)
     expect(reopened.success).toBe(true)
     const detail = await feedback.get(first.data.id, admin)
     expect(detail.success && detail.data.history.length).toBe(2)
@@ -91,14 +137,35 @@ describe.sequential('反馈公开流程', () => {
     expect(report.success).toBe(true)
     if (!report.success)
       return
-    const event = { id: 'entry-1', source: 'browser:1', sequence: 1, kind: 'log' as const, timestamp: Date.now(), data: { message: 'failed', password: 'fixture-secret', authorization: 'Bearer fixture-token' } }
-    const saved = await feedback.appendEvidence({ id: report.data.id, evidence: [event] }, actor)
+    const event = {
+      id: 'entry-1',
+      source: 'browser:1',
+      sequence: 1,
+      kind: 'log' as const,
+      timestamp: Date.now(),
+      data: { message: 'failed', password: 'fixture-secret', authorization: 'Bearer fixture-token' },
+    }
+    const saved = await feedback.appendEvidence({
+      id: report.data.id,
+      evidence: [event],
+    }, actor)
     expect(saved.success).toBe(true)
     if (saved.success)
       expect(saved.data.acknowledged).toEqual(['entry-1'])
-    const retry = await feedback.appendEvidence({ id: report.data.id, evidence: [event] }, actor)
+    const retry = await feedback.appendEvidence({
+      id: report.data.id,
+      evidence: [event],
+    }, actor)
     expect(retry.success && retry.data.evidenceRevision).toBe(saved.success && saved.data.evidenceRevision)
-    const changed = await feedback.appendEvidence({ id: report.data.id, evidence: [{ ...event, data: { message: 'different' } }] }, actor)
+    const changed = await feedback.appendEvidence({
+      id: report.data.id,
+      evidence: [
+        {
+          ...event,
+          data: { message: 'different' },
+        },
+      ],
+    }, actor)
     expect(changed.success).toBe(false)
     const page = await feedback.getEvidence({ id: report.data.id, source: 'browser:1', pageSize: 1 }, actor)
     expect(page.success && page.data.total).toBe(1)
@@ -125,22 +192,89 @@ describe.sequential('反馈公开流程', () => {
     expect(report.success).toBe(true)
     if (!report.success)
       return
-    const event = { id: 'batch-entry', source: 'browser:conflict-batch', sequence: 1, kind: 'log' as const, timestamp: Date.now(), data: { message: 'first' } }
-    const result = await feedback.appendEvidence({ id: report.data.id, evidence: [event, { ...event, id: 'changed-entry', data: { message: 'changed' } }] }, actor)
-    expect(result).toMatchObject({ success: false, error: { code: HaiFeedbackError.CONFLICT.code } })
+    const event = {
+      id: 'batch-entry',
+      source: 'browser:conflict-batch',
+      sequence: 1,
+      kind: 'log' as const,
+      timestamp: Date.now(),
+      data: { message: 'first' },
+    }
+    const result = await feedback.appendEvidence({
+      id: report.data.id,
+      evidence: [
+        event,
+        {
+          ...event,
+          id: 'changed-entry',
+          data: { message: 'changed' },
+        },
+      ],
+    }, actor)
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: HaiFeedbackError.CONFLICT.code },
+    })
     const stored = await feedback.getEvidence({ id: report.data.id, source: event.source }, actor)
     expect(stored.success && stored.data.total).toBe(0)
   })
 
   it.each(['video/webm', 'video/mp4'])('短录屏%s校验容器字节，上传和授权读取保留原内容', async (contentType) => {
-    const bytes = contentType === 'video/webm' ? Buffer.from([0x1A, 0x45, 0xDF, 0xA3, 0, 0, 0, 0, 0, 0, 0, 0]) : Buffer.from([0, 0, 0, 12, 102, 116, 121, 112, 105, 115, 111, 109])
+    const bytes = contentType === 'video/webm'
+      ? Buffer.from([
+          0x1A,
+          0x45,
+          0xDF,
+          0xA3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+        ])
+      : Buffer.from([
+          0,
+          0,
+          0,
+          12,
+          102,
+          116,
+          121,
+          112,
+          105,
+          115,
+          111,
+          109,
+        ])
     const invalid = Buffer.alloc(bytes.length)
-    for (const [key, data] of [['valid', bytes], ['invalid', invalid]] as const) {
-      const report = await feedback.submit({ submissionId: `recording-${contentType}-${key}`, appId: config.appId, attachments: [{ id: 'recording', name: 'recording', contentType, size: data.length, checksum: createHash('sha256').update(data).digest('hex') }] }, actor)
+    for (const [key, data] of [
+      ['valid', bytes],
+      ['invalid', invalid],
+    ] as const) {
+      const report = await feedback.submit({
+        submissionId: `recording-${contentType}-${key}`,
+        appId: config.appId,
+        attachments: [
+          {
+            id: 'recording',
+            name: 'recording',
+            contentType,
+            size: data.length,
+            checksum: createHash('sha256').update(data).digest('hex'),
+          },
+        ],
+      }, actor)
       expect(report.success).toBe(true)
       if (!report.success)
         return
-      const uploaded = await feedback.uploadAttachment({ id: report.data.id, attachmentId: 'recording', dataBase64: data.toString('base64') }, actor)
+      const uploaded = await feedback.uploadAttachment({
+        id: report.data.id,
+        attachmentId: 'recording',
+        dataBase64: data.toString('base64'),
+      }, actor)
       expect(uploaded.success).toBe(key === 'valid')
       if (key === 'valid') {
         const loaded = await feedback.getAttachment({ id: report.data.id, attachmentId: 'recording' }, actor)
@@ -153,15 +287,39 @@ describe.sequential('反馈公开流程', () => {
   it('截图验证字节/类型/checksum，私有读授权并随离线包导出', async () => {
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/x9sAAAAASUVORK5CYII=', 'base64')
     const checksum = createHash('sha256').update(png).digest('hex')
-    const report = await feedback.submit({ submissionId: 'image-1', appId: config.appId, attachments: [{ id: 'screen', name: 'screen.png', contentType: 'image/png', size: png.length, checksum }] }, actor)
+    const report = await feedback.submit({
+      submissionId: 'image-1',
+      appId: config.appId,
+      attachments: [
+        {
+          id: 'screen',
+          name: 'screen.png',
+          contentType: 'image/png',
+          size: png.length,
+          checksum,
+        },
+      ],
+    }, actor)
     expect(report.success).toBe(true)
     if (!report.success)
       return
-    const bad = await feedback.uploadAttachment({ id: report.data.id, attachmentId: 'screen', dataBase64: Buffer.alloc(png.length).toString('base64') }, actor)
+    const bad = await feedback.uploadAttachment({
+      id: report.data.id,
+      attachmentId: 'screen',
+      dataBase64: Buffer.alloc(png.length).toString('base64'),
+    }, actor)
     expect(bad.success).toBe(false)
-    const upload = await feedback.uploadAttachment({ id: report.data.id, attachmentId: 'screen', dataBase64: png.toString('base64') }, actor)
+    const upload = await feedback.uploadAttachment({
+      id: report.data.id,
+      attachmentId: 'screen',
+      dataBase64: png.toString('base64'),
+    }, actor)
     expect(upload.success).toBe(true)
-    expect((await feedback.uploadAttachment({ id: report.data.id, attachmentId: 'screen', dataBase64: png.toString('base64') }, actor)).success).toBe(true)
+    expect((await feedback.uploadAttachment({
+      id: report.data.id,
+      attachmentId: 'screen',
+      dataBase64: png.toString('base64'),
+    }, actor)).success).toBe(true)
     expect((await feedback.getAttachment({ id: report.data.id, attachmentId: 'screen' }, other)).success).toBe(false)
     const downloaded = await feedback.getAttachment({ id: report.data.id, attachmentId: 'screen' }, actor)
     expect(downloaded.success && downloaded.data.dataBase64).toBe(png.toString('base64'))

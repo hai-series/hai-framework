@@ -1,10 +1,10 @@
 <script lang='ts'>
   // LLM 对话面板：发送对话、按需注入记忆，并在展示回复后后台提取记忆（避免二次 LLM 调用阻塞回复）
-  import type { LabMessage } from '$lib/ai-lab-types.js'
-  import * as m from '$lib/paraglide/messages.js'
-  import { rememberExchange, sendChat } from '$lib/services/ai-lab.js'
+  import type { LabMessage } from '#lib/ai-lab-types.js'
   import { Button, Card, toast, ToggleInput } from '@h-ai/ui'
   import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  import * as m from '#lib/paraglide/messages.js'
+  import { rememberExchange, sendChat } from '#lib/services/ai-lab.js'
 
   interface Props {
     profileId: string
@@ -14,7 +14,10 @@
   const { profileId, onmemorychange }: Props = $props()
   const sessionId = crypto.randomUUID()
   let messages = $state<LabMessage[]>([
-    { role: 'assistant', content: m.chat_welcome() },
+    {
+      role: 'assistant',
+      content: m.chat_welcome(),
+    },
   ])
   let prompt = $state('')
   let useMemory = $state(true)
@@ -34,7 +37,10 @@
     memoryAbortController = undefined
     remembering = false
 
-    const nextMessages = [...messages, { role: 'user' as const, content }]
+    const nextMessages = [
+      ...messages,
+      { role: 'user' as const, content },
+    ]
     messages = nextMessages
     prompt = ''
     busy = true
@@ -54,12 +60,21 @@
             : message)
         }
         else {
-          messages = [...messages, { role: 'assistant', content: reply }]
+          messages = [
+            ...messages,
+            { role: 'assistant', content: reply },
+          ]
           replyAdded = true
         }
       }, chatAbortController.signal)
       if (!replyAdded) {
-        messages = [...messages, { role: 'assistant', content: m.chat_empty_reply() }]
+        messages = [
+          ...messages,
+          {
+            role: 'assistant',
+            content: m.chat_empty_reply(),
+          },
+        ]
         replyAdded = true
       }
       // 记忆提取与对话解耦：回复已展示，后台异步提取，不阻塞 UI
@@ -105,7 +120,12 @@
     chatAbortController?.abort()
     memoryAbortController?.abort()
     memoryAbortController = undefined
-    messages = [{ role: 'assistant', content: m.chat_welcome() }]
+    messages = [
+      {
+        role: 'assistant',
+        content: m.chat_welcome(),
+      },
+    ]
     remembering = false
     error = ''
   }

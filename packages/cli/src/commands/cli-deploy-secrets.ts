@@ -25,7 +25,14 @@ export async function deploySecretsCommand(directory: string, options: { import?
   catch {
     throw new Error(cliM('cli_deploy_module_missing'))
   }
-  const result = await module.importDeploymentSecrets({ directory: resolve(cwd, directory), inputFile: resolve(cwd, options.import), runtime: options.runtime === 'podman' ? 'podman' : 'docker', dryRun: options.apply !== true })
+  const result = await module.importDeploymentSecrets({
+    directory: resolve(cwd, directory),
+    inputFile: resolve(cwd, options.import),
+    runtime: options.runtime === 'podman'
+      ? 'podman'
+      : 'docker',
+    dryRun: options.apply !== true,
+  })
   if (!result.success) {
     const context = result.error.ext
     throw new Error(`${result.error.message}\n${JSON.stringify({ phase: context?.phase, state: context?.state })}`)

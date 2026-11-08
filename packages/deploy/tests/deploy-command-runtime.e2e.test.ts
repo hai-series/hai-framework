@@ -29,7 +29,12 @@ const repository = path.resolve(fileURLToPath(new URL('../../..', import.meta.ur
 
 /** 测试只操作自己创建的 Linux 容器。 */
 function execute(script: string): string {
-  return execFileSync(runtime, ['exec', container, 'sh', '-c', script], { encoding: 'utf8', timeout: 20_000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+  return execFileSync(runtime, ['exec', container, 'sh', '-c', script], {
+    encoding: 'utf8',
+    timeout: 20_000,
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim()
 }
 
 /** 复制 core 的真实可移植运行依赖，不使用 Windows 二进制或另写进程控制替身。 */
@@ -49,7 +54,17 @@ function copyDependency(name: string, from: string, copied: Set<string>): void {
   }
   copied.add(name)
   const manifest: { dependencies?: Record<string, string>, optionalDependencies?: Record<string, string> } = JSON.parse(readFileSync(path.join(directory, 'package.json'), 'utf8'))
-  cpSync(directory, path.join(root, 'node_modules', name), { recursive: true, dereference: true, filter: file => !['node_modules', 'src', 'tests', 'tmp', '.turbo'].includes(path.basename(file)) })
+  cpSync(directory, path.join(root, 'node_modules', name), {
+    recursive: true,
+    dereference: true,
+    filter: file => ![
+      'node_modules',
+      'src',
+      'tests',
+      'tmp',
+      '.turbo',
+    ].includes(path.basename(file)),
+  })
   for (const dependency of Object.keys(manifest.dependencies ?? {}))
     copyDependency(dependency, directory, copied)
   for (const dependency of Object.keys(manifest.optionalDependencies ?? {})) {
@@ -72,7 +87,21 @@ function application(name: string, projectName = name): string {
   writeFileSync(path.join(app, '.env.test'), 'HAI_CORE_ENV=test\n')
   writeFileSync(path.join(app, '.hai/build/docker/latest'), 'release-1\n')
   writeFileSync(path.join(artifacts, 'serv-1.2.3.tar'), 'prebuilt-image')
-  writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'release-1', images: [{ name: 'serv', file: 'serv-1.2.3.tar', imageRef: 'localhost/command-test:1', sha256: createHash('sha256').update('prebuilt-image').digest('hex'), containerPort: 3000 }] }))
+  writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
+    version: 4,
+    primaryService: 'serv',
+    appVersion: '1.2.3',
+    buildId: 'release-1',
+    images: [
+      {
+        name: 'serv',
+        file: 'serv-1.2.3.tar',
+        imageRef: 'localhost/command-test:1',
+        sha256: createHash('sha256').update('prebuilt-image').digest('hex'),
+        containerPort: 3000,
+      },
+    ],
+  }))
   return app
 }
 
@@ -93,12 +122,26 @@ describe.skipIf(!enabled)('linux process groups and real ssh execution', () => {
     runtime = selected
     root = mkdtempSync(path.join(tmpdir(), 'hai-command-runtime-'))
     const key = path.join(root, 'key')
-    execFileSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', key], { windowsHide: true, timeout: remaining(10_000), stdio: 'ignore' })
+    execFileSync('ssh-keygen', [
+      '-q',
+      '-t',
+      'ed25519',
+      '-N',
+      '',
+      '-f',
+      key,
+    ], {
+      windowsHide: true,
+      timeout: remaining(10_000),
+      stdio: 'ignore',
+    })
     ensureDeployTestBaseImage(runtime, 'docker.io/library/node:24.22.1-bookworm-slim', remaining(180_000), process.env.HAI_DEPLOY_E2E_MIRROR)
     const mirror = process.env.HAI_DEPLOY_E2E_APT_MIRROR
     if (mirror && !/^[a-z0-9.-]+$/i.test(mirror))
       throw new Error('Expected an APT mirror hostname')
-    const mirrorCommand = mirror ? `sed -i 's#deb.debian.org#${mirror}#g' /etc/apt/sources.list.d/debian.sources && ` : ''
+    const mirrorCommand = mirror
+      ? `sed -i 's#deb.debian.org#${mirror}#g' /etc/apt/sources.list.d/debian.sources && `
+      : ''
     writeFileSync(path.join(root, 'package.json'), '{"type":"module"}')
     writeFileSync(path.join(root, 'runtime-preparation.mjs'), readFileSync(new URL('./fixtures/runtime-preparation.mjs', import.meta.url)))
     copyDependency('@h-ai/core', path.join(repository, 'packages/deploy'), new Set())
@@ -123,34 +166,117 @@ const output=await runCommand(process.execPath,['-e','process.stdout.write("x".r
 `)
     const tsupManifest = fileURLToPath(import.meta.resolve('tsup/package.json'))
     const tsup: { bin: Record<string, string> } = JSON.parse(readFileSync(tsupManifest, 'utf8'))
-    execFileSync(process.execPath, [path.join(path.dirname(tsupManifest), tsup.bin.tsup!), path.join(root, 'linux-runner.ts'), path.join(root, 'linux-password.ts'), '--format', 'esm', '--platform', 'node', '--out-dir', path.join(root, 'runner'), '--external', '@h-ai/core', '--external', 'zod'], { cwd: root, windowsHide: true, encoding: 'utf8', timeout: remaining(60_000), stdio: ['ignore', 'pipe', 'pipe'] })
+    execFileSync(process.execPath, [
+      path.join(path.dirname(tsupManifest), tsup.bin.tsup!),
+      path.join(root, 'linux-runner.ts'),
+      path.join(root, 'linux-password.ts'),
+      '--format',
+      'esm',
+      '--platform',
+      'node',
+      '--out-dir',
+      path.join(root, 'runner'),
+      '--external',
+      '@h-ai/core',
+      '--external',
+      'zod',
+    ], {
+      cwd: root,
+      windowsHide: true,
+      encoding: 'utf8',
+      timeout: remaining(60_000),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
     fixtureContext = await createDeployTestFixture(runtime, 'docker.io/library/node:24.22.1-bookworm-slim', '', root, runId, {
       command: ['sleep', 'infinity'],
       timeoutMs: remaining(180_000),
       signal: setupSignal,
       prepare: async (fixture, signal) => {
         // 网络安装在已登记 ID 的私有 PID namespace 内执行；失败不会留下 host builder。
-        await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', `node -e "require('node:fs').writeFileSync('/tmp/node-ca.crt',require('node:tls').rootCertificates.join(String.fromCharCode(10)))" && ${mirrorCommand}sed -i 's#http://#https://#g' /etc/apt/sources.list.d/debian.sources && apt-get -o Acquire::ForceIPv4=true -o Acquire::https::CaInfo=/tmp/node-ca.crt -o Acquire::https::Timeout=20 -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update`], { timeoutMs: remaining(180_000), signal, stage: 'apt-update' })
-        await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', 'DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::ForceIPv4=true -o Acquire::https::CaInfo=/tmp/node-ca.crt -o Acquire::https::Timeout=20 install -y --no-install-recommends ca-certificates openssh-server util-linux && rm -rf /var/lib/apt/lists/* /tmp/node-ca.crt && ssh-keygen -A && mkdir -p /run/sshd /root/.ssh && chmod 700 /root/.ssh'], { timeoutMs: remaining(180_000), signal, stage: 'apt-install' })
-        execFileSync(runtime, ['cp', `${key}.pub`, `${fixture.containerId}:/root/.ssh/authorized_keys`], { windowsHide: true, timeout: remaining(20_000), stdio: 'ignore' })
-        const keyOwnership = await executeDeployTestFixture(runtime, fixture, ['stat', '-c', '%u:%g %a', '/root/.ssh/authorized_keys'], { timeoutMs: remaining(10_000), signal })
+        await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', `node -e "require('node:fs').writeFileSync('/tmp/node-ca.crt',require('node:tls').rootCertificates.join(String.fromCharCode(10)))" && ${mirrorCommand}sed -i 's#http://#https://#g' /etc/apt/sources.list.d/debian.sources && apt-get -o Acquire::ForceIPv4=true -o Acquire::https::CaInfo=/tmp/node-ca.crt -o Acquire::https::Timeout=20 -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update`], {
+          timeoutMs: remaining(180_000),
+          signal,
+          stage: 'apt-update',
+        })
+        await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', 'DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::ForceIPv4=true -o Acquire::https::CaInfo=/tmp/node-ca.crt -o Acquire::https::Timeout=20 install -y --no-install-recommends ca-certificates openssh-server util-linux && rm -rf /var/lib/apt/lists/* /tmp/node-ca.crt && ssh-keygen -A && mkdir -p /run/sshd /root/.ssh && chmod 700 /root/.ssh'], {
+          timeoutMs: remaining(180_000),
+          signal,
+          stage: 'apt-install',
+        })
+        execFileSync(runtime, ['cp', `${key}.pub`, `${fixture.containerId}:/root/.ssh/authorized_keys`], {
+          windowsHide: true,
+          timeout: remaining(20_000),
+          stdio: 'ignore',
+        })
+        const keyOwnership = await executeDeployTestFixture(runtime, fixture, [
+          'stat',
+          '-c',
+          '%u:%g %a',
+          '/root/.ssh/authorized_keys',
+        ], {
+          timeoutMs: remaining(10_000),
+          signal,
+        })
         process.stdout.write(`SSH fixture copied key ownership: ${keyOwnership.trim()}\n`)
         // 跨引擎复制后显式恢复 sshd 要求的服务端密钥归属，不关闭 StrictModes。
-        await executeDeployTestFixture(runtime, fixture, ['chown', '0:0', '/root/.ssh/authorized_keys'], { timeoutMs: remaining(10_000), signal })
+        await executeDeployTestFixture(runtime, fixture, ['chown', '0:0', '/root/.ssh/authorized_keys'], {
+          timeoutMs: remaining(10_000),
+          signal,
+        })
         // 合成密码仅从标准输入交给本夹具 chpasswd，不进入 runtime 参数或镜像层。
-        execFileSync(runtime, ['exec', '-i', fixture.containerId, 'chpasswd'], { input: `root:${sshPassword}\n`, windowsHide: true, timeout: remaining(10_000), stdio: ['pipe', 'pipe', 'pipe'] })
-        await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', `chmod 600 /root/.ssh/authorized_keys; printf '\\nPermitRootLogin yes\\nPasswordAuthentication yes\\nUsePAM no\\n' >> /etc/ssh/sshd_config; /usr/sbin/sshd -E /tmp/hai-sshd.log`], { timeoutMs: remaining(10_000), signal, stage: 'sshd' })
+        execFileSync(runtime, [
+          'exec',
+          '-i',
+          fixture.containerId,
+          'chpasswd',
+        ], {
+          input: `root:${sshPassword}\n`,
+          windowsHide: true,
+          timeout: remaining(10_000),
+          stdio: ['pipe', 'pipe', 'pipe'],
+        })
+        await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', `chmod 600 /root/.ssh/authorized_keys; printf '\\nPermitRootLogin yes\\nPasswordAuthentication yes\\nUsePAM no\\n' >> /etc/ssh/sshd_config; /usr/sbin/sshd -E /tmp/hai-sshd.log`], {
+          timeoutMs: remaining(10_000),
+          signal,
+          stage: 'sshd',
+        })
       },
     })
     container = fixtureContext.containerId
     sshPort = fixtureContext.sshHostPort
-    await executeDeployTestFixture(runtime, fixtureContext, ['mkdir', '/fixture'], { timeoutMs: remaining(10_000), signal: setupSignal })
-    for (const folder of ['node_modules', 'runner', 'runtime-preparation.mjs'])
-      execFileSync(runtime, ['cp', path.join(root, folder), `${container}:/fixture/${folder}`], { windowsHide: true, timeout: remaining(180_000) })
-    await executeDeployTestFixture(runtime, fixtureContext, ['sh', '-ec', `printf '#!/bin/sh\\nexit 0\\n' >/usr/local/bin/curl; chmod 700 /usr/local/bin/curl`], { timeoutMs: remaining(10_000), signal: setupSignal })
-    const ssh = sshModule.createSshExecutor({ host: '127.0.0.1', port: sshPort, username: 'root', identityFile: key, knownHostsFile: path.join(root, 'known-hosts'), strictHostKeyChecking: false, connectTimeoutSeconds: 5 })
-    const connected = await ssh.exec('true', { timeoutMs: remaining(20_000) })
-    const diagnostic = connected.success ? undefined : execute('stat -c "%u:%g %a %n" /root /root/.ssh /root/.ssh/authorized_keys; tail -n 20 /tmp/hai-sshd.log')
+    await executeDeployTestFixture(runtime, fixtureContext, ['mkdir', '/fixture'], {
+      timeoutMs: remaining(10_000),
+      signal: setupSignal,
+    })
+    for (const folder of ['node_modules', 'runner', 'runtime-preparation.mjs']) {
+      execFileSync(runtime, [
+        'cp',
+        path.join(root, folder),
+        `${container}:/fixture/${folder}`,
+      ], {
+        windowsHide: true,
+        timeout: remaining(180_000),
+      })
+    }
+    await executeDeployTestFixture(runtime, fixtureContext, ['sh', '-ec', `printf '#!/bin/sh\\nexit 0\\n' >/usr/local/bin/curl; chmod 700 /usr/local/bin/curl`], {
+      timeoutMs: remaining(10_000),
+      signal: setupSignal,
+    })
+    const ssh = sshModule.createSshExecutor({
+      host: '127.0.0.1',
+      port: sshPort,
+      username: 'root',
+      identityFile: key,
+      knownHostsFile: path.join(root, 'known-hosts'),
+      strictHostKeyChecking: false,
+      connectTimeoutSeconds: 5,
+    })
+    const connected = await ssh.exec('true', {
+      timeoutMs: remaining(20_000),
+    })
+    const diagnostic = connected.success
+      ? undefined
+      : execute('stat -c "%u:%g %a %n" /root /root/.ssh /root/.ssh/authorized_keys; tail -n 20 /tmp/hai-sshd.log')
     expect(connected.success, diagnostic).toBe(true)
   }, 300_000)
 
@@ -162,7 +288,9 @@ const output=await runCommand(process.execPath,['-e','process.stdout.write("x".r
 
   afterAll(() => {
     const failures: DeployFixtureCleanupFailure[] = []
-    const report = createDeployFixtureCleanupReport(runId, fixtureContext ? [fixtureContext] : [], [])
+    const report = createDeployFixtureCleanupReport(runId, fixtureContext
+      ? [fixtureContext]
+      : [], [])
     try {
       if (fixtureContext)
         removeDeployTestFixture(runtime, fixtureContext)
@@ -189,7 +317,12 @@ const output=await runCommand(process.execPath,['-e','process.stdout.write("x".r
   }, 90_000)
 
   it('真实 Linux 进程组收回长运行父子/早退父命令，并保留有界输出与 deadline race', () => {
-    const output = execFileSync(runtime, ['exec', container, 'node', '/fixture/runner/linux-runner.js'], { encoding: 'utf8', timeout: 30_000, windowsHide: true })
+    const output = execFileSync(runtime, [
+      'exec',
+      container,
+      'node',
+      '/fixture/runner/linux-runner.js',
+    ], { encoding: 'utf8', timeout: 30_000, windowsHide: true })
     const evidence = JSON.parse(output.split('\n').find(line => line.startsWith('EVIDENCE:'))!.slice(9))
     expect(evidence).toMatchObject({ platform: 'linux', races: 5 })
     expect(evidence.trees).toHaveLength(2)
@@ -197,10 +330,22 @@ const output=await runCommand(process.execPath,['-e','process.stdout.write("x".r
 
   it('真实sshd密码登录、错误密码、SCP与主机键不匹配边界', async () => {
     const knownHostsFile = path.join(root, 'password-known-hosts')
-    const config = { host: '127.0.0.1', port: sshPort, username: 'root', password: sshPassword, auth: 'password' as const, strictHostKeyChecking: true, knownHostsFile, connectTimeoutSeconds: 5 }
+    const config = {
+      host: '127.0.0.1',
+      port: sshPort,
+      username: 'root',
+      password: sshPassword,
+      auth: 'password' as const,
+      strictHostKeyChecking: true,
+      knownHostsFile,
+      connectTimeoutSeconds: 5,
+    }
     const ssh = sshModule.createSshExecutor(config)
     const connected = await ssh.exec('printf password-connected', { timeoutMs: 20_000 })
-    expect(connected).toMatchObject({ success: true, data: { stdout: 'password-connected' } })
+    expect(connected).toMatchObject({
+      success: true,
+      data: { stdout: 'password-connected' },
+    })
     const payload = path.join(root, 'password-upload 中文.txt')
     const content = `upload-${runId}`
     writeFileSync(payload, content)
@@ -211,7 +356,15 @@ const output=await runCommand(process.execPath,['-e','process.stdout.write("x".r
     expect(JSON.stringify(wrong)).not.toContain(sshPassword)
     // 向同一受控地址信任另一把真实生成的 key；服务器仍为本夹具，不连接外部服务器。
     const otherKey = path.join(root, 'untrusted-host')
-    execFileSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', otherKey], { windowsHide: true, timeout: 10_000, stdio: 'ignore' })
+    execFileSync('ssh-keygen', [
+      '-q',
+      '-t',
+      'ed25519',
+      '-N',
+      '',
+      '-f',
+      otherKey,
+    ], { windowsHide: true, timeout: 10_000, stdio: 'ignore' })
     const publicKey = readFileSync(`${otherKey}.pub`, 'utf8').trim().split(' ').slice(0, 2).join(' ')
     const mismatched = path.join(root, 'mismatched-known-hosts')
     writeFileSync(mismatched, `[127.0.0.1]:${sshPort} ${publicKey}\n`)
@@ -221,14 +374,34 @@ const output=await runCommand(process.execPath,['-e','process.stdout.write("x".r
   }, 90_000)
 
   it('真实Linux SDK使用POSIX askpass，覆盖密码SCP和helper回收', () => {
-    const result = spawnSync(runtime, ['exec', '-i', container, 'node', '/fixture/runner/linux-password.js'], { input: JSON.stringify({ password: sshPassword }), encoding: 'utf8', windowsHide: true, timeout: 45_000 })
+    const result = spawnSync(runtime, [
+      'exec',
+      '-i',
+      container,
+      'node',
+      '/fixture/runner/linux-password.js',
+    ], {
+      input: JSON.stringify({ password: sshPassword }),
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 45_000,
+    })
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
     expect(result.stdout).toContain('LINUX_PASSWORD:accepted')
     expect(`${result.stdout}\n${result.stderr}`).not.toContain(sshPassword)
   }, 60_000)
 
   it('真实密码SSH超时确认本地进程退出，保留远端未知并回收helper', async () => {
-    const ssh = sshModule.createSshExecutor({ host: '127.0.0.1', port: sshPort, username: 'root', auth: 'password', password: sshPassword, knownHostsFile: path.join(root, 'password-timeout-known-hosts'), strictHostKeyChecking: true, connectTimeoutSeconds: 5 })
+    const ssh = sshModule.createSshExecutor({
+      host: '127.0.0.1',
+      port: sshPort,
+      username: 'root',
+      auth: 'password',
+      password: sshPassword,
+      knownHostsFile: path.join(root, 'password-timeout-known-hosts'),
+      strictHostKeyChecking: true,
+      connectTimeoutSeconds: 5,
+    })
     const result = await ssh.exec('echo $$ > /fixture/password-timeout.pid; exec sleep 30', { timeoutMs: 10_000 })
     expect(result.success).toBe(false)
     if (result.success)
@@ -247,21 +420,66 @@ const output=await runCommand(process.execPath,['-e','process.stdout.write("x".r
     mkdirSync(local)
     const apply = path.join(local, 'apply.sh')
     writeFileSync(apply, '#!/bin/sh\nset -eu\nprintf applied > "$1/password-accepted"\n')
-    execFileSync('tar', ['-cf', path.join(local, 'password.tar'), '-C', local, 'apply.sh'], { windowsHide: true, timeout: 10_000 })
+    execFileSync('tar', [
+      '-cf',
+      path.join(local, 'password.tar'),
+      '-C',
+      local,
+      'apply.sh',
+    ], { windowsHide: true, timeout: 10_000 })
     const upload = createUploadScripts()
     writeFileSync(path.join(local, 'deploy.sh'), upload.sh)
     writeFileSync(path.join(local, 'deploy.ps1'), upload.ps1)
     writeFileSync(path.join(local, 'read-target.awk'), upload.reader)
     const remote = `/fixture/offline-password-${script}`
-    writeFileSync(path.join(local, 'deploy-target.json'), JSON.stringify({ host: '127.0.0.1', port: script === 'sh' ? 22 : sshPort, username: 'root', auth: 'password', passwordEnv: 'HAI_DEPLOY_PROVIDER_SSH_PASSWORD', knownHostsFile: script === 'sh' ? `/fixture/known-password-${script}` : path.join(root, 'known-password-ps1'), directory: remote, bundle: 'password.tar' }))
+    writeFileSync(path.join(local, 'deploy-target.json'), JSON.stringify({
+      host: '127.0.0.1',
+      port: script === 'sh'
+        ? 22
+        : sshPort,
+      username: 'root',
+      auth: 'password',
+      passwordEnv: 'HAI_DEPLOY_PROVIDER_SSH_PASSWORD',
+      knownHostsFile: script === 'sh'
+        ? `/fixture/known-password-${script}`
+        : path.join(root, 'known-password-ps1'),
+      directory: remote,
+      bundle: 'password.tar',
+    }))
     if (script === 'sh') {
       execFileSync(runtime, ['cp', local, `${container}:/fixture/real-password-sh`], { windowsHide: true, timeout: 20_000 })
-      const result = spawnSync(runtime, ['exec', '-i', container, 'sh', '-ec', 'IFS= read -r HAI_DEPLOY_PROVIDER_SSH_PASSWORD; export HAI_DEPLOY_PROVIDER_SSH_PASSWORD; sh /fixture/real-password-sh/deploy.sh'], { input: `${sshPassword}\n`, encoding: 'utf8', windowsHide: true, timeout: 60_000 })
+      const result = spawnSync(runtime, [
+        'exec',
+        '-i',
+        container,
+        'sh',
+        '-ec',
+        'IFS= read -r HAI_DEPLOY_PROVIDER_SSH_PASSWORD; export HAI_DEPLOY_PROVIDER_SSH_PASSWORD; sh /fixture/real-password-sh/deploy.sh',
+      ], {
+        input: `${sshPassword}\n`,
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 60_000,
+      })
       expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
       expect(`${result.stdout}\n${result.stderr}`).not.toContain(sshPassword)
     }
     else {
-      const result = spawnSync(script === 'pwsh' ? 'pwsh' : 'powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(local, 'deploy.ps1')], { env: { ...process.env, HAI_DEPLOY_PROVIDER_SSH_PASSWORD: sshPassword }, encoding: 'utf8', windowsHide: true, timeout: 60_000 })
+      const result = spawnSync(script === 'pwsh'
+        ? 'pwsh'
+        : 'powershell.exe', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        path.join(local, 'deploy.ps1'),
+      ], {
+        env: { ...process.env, HAI_DEPLOY_PROVIDER_SSH_PASSWORD: sshPassword },
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 60_000,
+      })
       expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
       expect(`${result.stdout}\n${result.stderr}`).not.toContain(sshPassword)
     }
@@ -292,23 +510,46 @@ if [ "$1" = load ] && [ -f /fixture/block-load ]; then
 fi
 `)
     execFileSync(runtime, ['cp', docker, `${container}:/usr/local/bin/docker`], { windowsHide: true })
-    execute(`chmod 700 /usr/local/bin/docker; ${mode === 'continuing' ? 'touch /fixture/block-load' : ':'}`)
+    execute(`chmod 700 /usr/local/bin/docker; ${mode === 'continuing'
+      ? 'touch /fixture/block-load'
+      : ':'}`)
     const original = sshModule.createSshExecutor
     const paused = new Promise<void>((resolve) => {
       releaseOutput = resolve
     })
     vi.spyOn(sshModule, 'createSshExecutor').mockImplementation((config) => {
       const ssh = original(config)
-      return { ...ssh, exec: (command, options) => ssh.exec(command, command.includes('apply.sh')
-        ? { ...options, timeoutMs: mode === 'completed' ? 10_000 : 2500, onOutput: async (chunk) => {
-            await options?.onOutput?.(chunk)
-            // 完成场景包含真实配置编译；暂停消费制造丢失回执，原始十分钟 deadline 仍缩短为本用例预算。
-            if (mode === 'completed')
-              await paused
-          } }
-        : options) }
+      return {
+        ...ssh,
+        exec: (command, options) => ssh.exec(command, command.includes('apply.sh')
+          ? {
+              ...options,
+              timeoutMs: mode === 'completed'
+                ? 10_000
+                : 2500,
+              onOutput: async (chunk) => {
+                await options?.onOutput?.(chunk)
+                // 完成场景包含真实配置编译；暂停消费制造丢失回执，原始十分钟 deadline 仍缩短为本用例预算。
+                if (mode === 'completed')
+                  await paused
+              },
+            }
+          : options),
+      }
     })
-    const provider = { type: 'docker-ssh' as const, ssh: { host: '127.0.0.1', port: sshPort, username: 'root', identityFile: path.join(root, 'key'), knownHostsFile: path.join(root, 'known-hosts'), strictHostKeyChecking: false }, remote: { runtime: 'docker' as const, baseDir: '/fixture/deploy' }, expose: { hostPort: 18080 } }
+    const provider = {
+      type: 'docker-ssh' as const,
+      ssh: {
+        host: '127.0.0.1',
+        port: sshPort,
+        username: 'root',
+        identityFile: path.join(root, 'key'),
+        knownHostsFile: path.join(root, 'known-hosts'),
+        strictHostKeyChecking: false,
+      },
+      remote: { runtime: 'docker' as const, baseDir: '/fixture/deploy' },
+      expose: { hostPort: 18080 },
+    }
     expect(await deploy.init({ provider })).toMatchObject({ success: true })
     const app = application(`ssh-${mode}`)
     const result = await deploy.deployApp(app, { environment: 'test', skipMiddleware: true })
@@ -316,7 +557,13 @@ fi
     if (result.success)
       throw new Error('Injected deadline must remain visible')
     const state = getDeployCommandState(result.error)
-    expect(state).toMatchObject({ reason: 'timeout', localTermination: 'confirmed', remoteExecution: mode === 'continuing' ? 'unknown' : 'finished' })
+    expect(state).toMatchObject({
+      reason: 'timeout',
+      localTermination: 'confirmed',
+      remoteExecution: mode === 'continuing'
+        ? 'unknown'
+        : 'finished',
+    })
     expect(state?.resultFile).toContain(`result-${state?.deploymentId}.json`)
     if (mode === 'continuing') {
       expect(execute('kill -0 "$(cat /fixture/remote-worker.pid)" && echo alive')).toBe('alive')
@@ -333,7 +580,13 @@ fi
       const snapshot = () => execute('find /fixture/deploy/ssh-completed-test -type f -exec sha256sum {} \\; | sort')
       const before = snapshot()
       const plan = await createDeploymentPlan(app, { provider }, { environment: 'test', skipMiddleware: true, inspectRemote: true })
-      expect(plan).toMatchObject({ success: true, data: { baseline: { state: 'verified', release: state?.deploymentId }, artifact: { buildId: 'release-1', verified: true } } })
+      expect(plan).toMatchObject({
+        success: true,
+        data: {
+          baseline: { state: 'verified', release: state?.deploymentId },
+          artifact: { buildId: 'release-1', verified: true },
+        },
+      })
       expect(snapshot()).toBe(before)
     }
   }, 60_000)
@@ -348,11 +601,21 @@ fi
     expect(evidence.stateReader).toBe('function')
     expect(existsSync(evidence.bundle)).toBe(true)
     const scripts = path.dirname(evidence.bundle)
-    execFileSync(runtime, ['cp', path.join(scripts, 'deploy.sh'), `${container}:/fixture/operator.sh`], { windowsHide: true })
+    execFileSync(runtime, [
+      'cp',
+      path.join(scripts, 'deploy.sh'),
+      `${container}:/fixture/operator.sh`,
+    ], { windowsHide: true })
     execute('sh -n /fixture/operator.sh')
     if (process.platform === 'win32') {
       const file = path.join(scripts, 'deploy.ps1').replaceAll('\'', '\'\'')
-      execFileSync('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', `$tokens=$null;$errors=$null;[System.Management.Automation.Language.Parser]::ParseFile('${file}',[ref]$tokens,[ref]$errors)|Out-Null;if($errors.Count){exit 1}`], { windowsHide: true, stdio: 'ignore' })
+      execFileSync('powershell.exe', [
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `$tokens=$null;$errors=$null;[System.Management.Automation.Language.Parser]::ParseFile('${file}',[ref]$tokens,[ref]$errors)|Out-Null;if($errors.Count){exit 1}`,
+      ], { windowsHide: true, stdio: 'ignore' })
     }
   }, 60_000)
 })

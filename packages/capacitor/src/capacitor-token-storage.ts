@@ -19,6 +19,15 @@ import { HaiCapacitorError } from './capacitor-types.js'
 const PREF_ACCESS_TOKEN = 'hai_access_token'
 const PREF_REFRESH_TOKEN = 'hai_refresh_token'
 
+// 所有适配器使用相同原生键；串行完成写入/删除，防止旧写在 clear 返回后恢复持久凭据。
+let credentialMutationTail: Promise<void> = Promise.resolve()
+
+function mutateCredentials(operation: () => Promise<void>): Promise<void> {
+  const pending = credentialMutationTail.then(operation)
+  credentialMutationTail = pending.catch(() => {})
+  return pending
+}
+
 /** 动态 import 自带模块缓存；不永久缓存平台检查失败或缺失插件的结果。 */
 async function loadSecureStoragePlugin(): Promise<SecureStoragePlugin> {
   const { Capacitor } = await import('@capacitor/core')
@@ -37,6 +46,7 @@ async function loadSecureStoragePlugin(): Promise<SecureStoragePlugin> {
  * `clear()` 一开始即屏蔽本实例旧凭据，删除失败时仍保持屏蔽；相应 key 成功写入后恢复读取。
  * 任一凭据写入失败也会屏蔽整对凭据，避免 access 已保存、refresh 失败时暴露半完成登录。
  * 本实例屏蔽不代表原生持久数据已删除；跨重启撤销仍依赖服务端退出/撤销会话。
+ * 同模块内全部适配器的原生变更按调用顺序完成；clear 等待更早写入，之后的显式写入可建立新凭据。
  *
  * @returns TokenStorage 实例
  * @throws 返回适配器的方法在插件不可用或原生存储失败时拒绝 Promise。
@@ -69,40 +79,48 @@ export function createCapacitorTokenStorage(): TokenStorage {
   /** 部分写入失败时撤销整对本地凭据，交由认证调用方显式重试持久清理。 */
   async function writeToken(key: typeof PREF_ACCESS_TOKEN | typeof PREF_REFRESH_TOKEN, token: string): Promise<void> {
     const writeGeneration = credentialGeneration
-    try {
-      const storage = await loadSecureStoragePlugin()
-      await storage.setItem(key, token)
-      if (writeGeneration === credentialGeneration) {
-        if (key === PREF_ACCESS_TOKEN)
-          accessBlocked = false
-        else
-          refreshBlocked = false
+    await mutateCredentials(async () => {
+      try {
+        const storage = await loadSecureStoragePlugin()
+        await storage.setItem(key, token)
+        if (writeGeneration === credentialGeneration) {
+          if (key === PREF_ACCESS_TOKEN)
+            accessBlocked = false
+          else
+            refreshBlocked = false
+        }
       }
-    }
-    catch (error) {
-      if (writeGeneration === credentialGeneration)
-        blockCredentials()
-      throw error
-    }
+      catch (error) {
+        if (writeGeneration === credentialGeneration)
+          blockCredentials()
+        throw error
+      }
+    })
   }
 
   return {
     async getAccessToken(): Promise<string | null> {
       const readGeneration = credentialGeneration
+      await credentialMutationTail
       const storage = await loadSecureStoragePlugin()
       if (accessBlocked)
         return null
       const token = await storage.getItem(PREF_ACCESS_TOKEN)
-      return accessBlocked || readGeneration !== credentialGeneration ? null : token
+      return accessBlocked || readGeneration !== credentialGeneration
+        ? null
+        : token
     },
 
     async getRefreshToken(): Promise<string | null> {
       const readGeneration = credentialGeneration
+      await credentialMutationTail
       const storage = await loadSecureStoragePlugin()
       if (refreshBlocked)
         return null
       const token = await storage.getItem(PREF_REFRESH_TOKEN)
-      return refreshBlocked || readGeneration !== credentialGeneration ? null : token
+      return refreshBlocked || readGeneration !== credentialGeneration
+        ? null
+        : token
     },
 
     async setAccessToken(token: string): Promise<void> {
@@ -115,15 +133,17 @@ export function createCapacitorTokenStorage(): TokenStorage {
 
     async clear(): Promise<void> {
       blockCredentials()
-      const storage = await loadSecureStoragePlugin()
-      // 等全部删除完成再报告失败，避免迟到的删除与下一次登录写入交错。
-      const results = await Promise.allSettled([
-        storage.removeItem(PREF_ACCESS_TOKEN),
-        storage.removeItem(PREF_REFRESH_TOKEN),
-      ])
-      const errors = results.filter(result => result.status === 'rejected').map(result => result.reason)
-      if (errors.length > 0)
-        throw new AggregateError(errors, capacitorM('capacitor_secureStorageClearFailed'))
+      await mutateCredentials(async () => {
+        const storage = await loadSecureStoragePlugin()
+        // 两个删除全部完成才释放变更队列，失败也不能留下迟到的删除影响后续登录。
+        const results = await Promise.allSettled([
+          storage.removeItem(PREF_ACCESS_TOKEN),
+          storage.removeItem(PREF_REFRESH_TOKEN),
+        ])
+        const errors = results.filter(result => result.status === 'rejected').map(result => result.reason)
+        if (errors.length > 0)
+          throw new AggregateError(errors, capacitorM('capacitor_secureStorageClearFailed'))
+      })
     },
   }
 }

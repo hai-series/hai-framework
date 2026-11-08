@@ -53,6 +53,8 @@ await apiClient.init({
 
 A failed credential write blocks both credentials, including an access token already saved before a refresh-token write failed. After failed login or registration persistence, attempt `auth.clear()` to remove partially saved data. Report cleanup failures explicitly instead of claiming device credentials were deleted.
 
+All TokenStorage instances in the same module share a native mutation queue. `clear()` waits for earlier writes before removing credentials, preventing late writes from restoring old tokens after successful cleanup. Explicit later writes may save new credentials. This ordering does not coordinate independent WebViews or JavaScript runtimes.
+
 #### Device information and push notifications
 
 ```ts

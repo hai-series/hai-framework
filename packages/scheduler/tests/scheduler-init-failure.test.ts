@@ -16,7 +16,10 @@ describe('scheduler initialization failure', () => {
   ])('rejects invalid task $name without retaining earlier tasks', async (invalid) => {
     const result = await scheduler.init({
       enableDb: true,
-      tasks: [{ id: 'valid', name: 'valid', cron: '* * * * *' }, invalid],
+      tasks: [
+        { id: 'valid', name: 'valid', cron: '* * * * *' },
+        invalid,
+      ],
     })
     expect(result.success).toBe(false)
     expect(scheduler.isInitialized).toBe(false)

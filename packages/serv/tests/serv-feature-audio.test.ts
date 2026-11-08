@@ -32,17 +32,39 @@ function createAudioMock(): AudioOperations {
       yield { type: 'transcript', text: '最终', final: true }
       yield { type: 'speech_stopped' }
     },
-    synthesize: async () => ok({ data: new Uint8Array([1]), format: 'pcm16' }),
+    synthesize: async () => ok({
+      data: new Uint8Array([1]),
+      format: 'pcm16',
+    }),
     async* synthesizeStream(request) {
-      const segments = Symbol.asyncIterator in request.text ? request.text : single(request.text)
+      const segments = Symbol.asyncIterator in request.text
+        ? request.text
+        : single(request.text)
       for await (const segment of segments) {
-        yield { type: 'segment_started', segmentId: segment.id, text: segment.text, format: 'pcm16', sampleRate: 24000, channels: 1 }
-        yield { type: 'audio', segmentId: segment.id, data: new Uint8Array([1, 2]) }
-        yield { type: 'audio', segmentId: segment.id, data: new Uint8Array([3, 4]) }
+        yield {
+          type: 'segment_started',
+          segmentId: segment.id,
+          text: segment.text,
+          format: 'pcm16',
+          sampleRate: 24000,
+          channels: 1,
+        }
+        yield {
+          type: 'audio',
+          segmentId: segment.id,
+          data: new Uint8Array([1, 2]),
+        }
+        yield {
+          type: 'audio',
+          segmentId: segment.id,
+          data: new Uint8Array([3, 4]),
+        }
         yield { type: 'segment_done', segmentId: segment.id }
       }
     },
-    getCapabilities: () => ok({ synthesize: { supported: true, incrementalTextInput: false, streamingAudioOutput: true } }),
+    getCapabilities: () => ok({
+      synthesize: { supported: true, incrementalTextInput: false, streamingAudioOutput: true },
+    }),
   }
 }
 
@@ -50,13 +72,19 @@ async function* single<T>(value: T): AsyncIterable<T> {
   yield value
 }
 
-const TEST_SESSION = { userId: 'user-1', roles: ['user'], permissions: ['ai:audio'] }
+const TEST_SESSION = {
+  userId: 'user-1',
+  roles: ['user'],
+  permissions: ['ai:audio'],
+}
 type AudioWsTestDeps = Omit<AudioWsDeps, 'verifyTicket'> & Pick<Partial<AudioWsDeps>, 'verifyTicket'>
 
 /** 取出 registerAudioWsRoute 注册的连接处理器 */
 function captureHandlers(deps: AudioWsTestDeps, ticket = 'ticket-1'): WsHandlers {
   let factory: ((c: unknown) => WsHandlers) | undefined
-  const app = { get: (_path: string, _handler: unknown) => {} } as unknown as Hono
+  const app = {
+    get: (_path: string, _handler: unknown) => {},
+  } as unknown as Hono
   const upgradeWebSocket = ((f: (c: unknown) => WsHandlers) => {
     factory = f
     return () => {}
@@ -65,7 +93,14 @@ function captureHandlers(deps: AudioWsTestDeps, ticket = 'ticket-1'): WsHandlers
     ...deps,
     verifyTicket: deps.verifyTicket ?? (async () => ok({ session: TEST_SESSION })),
   })
-  const honoContext = { req: { query: (name: string) => name === 'ticket' ? ticket : undefined, header: () => undefined } }
+  const honoContext = {
+    req: {
+      query: (name: string) => name === 'ticket'
+        ? ticket
+        : undefined,
+      header: () => undefined,
+    },
+  }
   return factory!(honoContext)
 }
 
@@ -95,6 +130,42 @@ function parseJsonMessages(ws: { messages: unknown[] }): Array<Record<string, un
 }
 
 describe('serv feature audio', () => {
+  it('主动关闭存活语音连接，并让重复关闭复用同一结果', async () => {
+    const contract = apiContract.create({})
+    const app = serv.createApp({
+      contract,
+      procedures: serv.implement(contract).context<ServContext>().build(),
+      audio: {
+        ai: {
+          audio: createAudioMock(),
+        },
+        verifyTicket: async () => ok({ session: TEST_SESSION }),
+      },
+      http: { openapi: false, docs: false },
+    })
+    const handle = serv.listen(app, { port: 0 })
+    let socket: WebSocket | undefined
+    try {
+      if (!handle.server.listening)
+        await once(handle.server, 'listening')
+      const address = handle.server.address()
+      if (!address || typeof address === 'string')
+        throw new Error('Missing test server address')
+      socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/v1/ai/audio?ticket=test-ticket`)
+      await once(socket, 'open')
+      const disconnected = once(socket, 'close')
+      const first = handle.close()
+      expect(handle.close()).toBe(first)
+      await first
+      expect((await disconnected)[0]).toBe(1001)
+      expect(audioWsServers.get(app)?.clients.size).toBe(0)
+    }
+    finally {
+      socket?.terminate()
+      await handle.close()
+    }
+  })
+
   it.each(['result', 'throw'] as const)('真实 WebSocket 的 %s 失败不泄露上游实现信息', async (mode) => {
     const audio = createAudioMock()
     audio.transcribe = async () => {
@@ -103,7 +174,15 @@ describe('serv feature audio', () => {
       return err({ code: 'provider:internal', httpStatus: 500 }, 'SELECT private_column; private-schema; credential=private-key')
     }
     const contract = apiContract.create({})
-    const app = serv.createApp({ contract, procedures: serv.implement(contract).context<ServContext>().build(), audio: { ai: { audio }, verifyTicket: async () => ok({ session: TEST_SESSION }) }, http: { openapi: false, docs: false } })
+    const app = serv.createApp({
+      contract,
+      procedures: serv.implement(contract).context<ServContext>().build(),
+      audio: {
+        ai: { audio },
+        verifyTicket: async () => ok({ session: TEST_SESSION }),
+      },
+      http: { openapi: false, docs: false },
+    })
     const handle = serv.listen(app, { host: '127.0.0.1', port: 0 })
     let socket: WebSocket | undefined
     try {
@@ -120,12 +199,20 @@ describe('serv feature audio', () => {
       })
       await once(socket, 'open')
       const closed = once(socket, 'close')
-      socket.send(JSON.stringify({ type: 'start', operation: 'transcribe', stream: false, format: 'wav' }))
+      socket.send(JSON.stringify({
+        type: 'start',
+        operation: 'transcribe',
+        stream: false,
+        format: 'wav',
+      }))
       socket.send(new Uint8Array([1, 2, 3]))
       socket.send(JSON.stringify({ type: 'done' }))
       await closed
       expect(received).toHaveLength(1)
-      expect(JSON.parse(received[0]!)).toMatchObject({ type: 'error', message: expect.stringContaining('traceId:') })
+      expect(JSON.parse(received[0]!)).toMatchObject({
+        type: 'error',
+        message: expect.stringContaining('traceId:'),
+      })
       expect(received[0]).not.toContain('private')
       expect(received[0]).not.toContain('SELECT')
       expect(received[0]).not.toContain('postgres')
@@ -142,7 +229,12 @@ describe('serv feature audio', () => {
     const app = serv.createApp({
       contract,
       procedures,
-      audio: { ai: { audio: createAudioMock() }, verifyTicket: async () => ok({ session: TEST_SESSION }) },
+      audio: {
+        ai: {
+          audio: createAudioMock(),
+        },
+        verifyTicket: async () => ok({ session: TEST_SESSION }),
+      },
       http: { openapi: false, docs: false },
     })
     const handle = serv.listen(app, { port: 0 })
@@ -166,7 +258,12 @@ describe('serv feature audio', () => {
             resolve()
         })
       })
-      socket.send(JSON.stringify({ type: 'start', operation: 'transcribe', stream: false, format: 'wav' }))
+      socket.send(JSON.stringify({
+        type: 'start',
+        operation: 'transcribe',
+        stream: false,
+        format: 'wav',
+      }))
       socket.send(new Uint8Array([1, 2, 3]))
       socket.send(JSON.stringify({ type: 'done' }))
       await completed
@@ -182,10 +279,22 @@ describe('serv feature audio', () => {
   })
 
   it('流式识别返回临时与最终文本，并以 end 结束', async () => {
-    const handlers = captureHandlers({ ai: { audio: createAudioMock() } })
+    const handlers = captureHandlers({
+      ai: {
+        audio: createAudioMock(),
+      },
+    })
     const ws = createWsMock()
     handlers.onOpen({}, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'start', operation: 'transcribe', stream: true, format: 'pcm16', sampleRate: 16000 }) }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({
+        type: 'start',
+        operation: 'transcribe',
+        stream: true,
+        format: 'pcm16',
+        sampleRate: 16000,
+      }),
+    }, ws)
     await flush()
 
     const msgs = parseJsonMessages(ws)
@@ -199,12 +308,27 @@ describe('serv feature audio', () => {
   })
 
   it('非流式识别缓冲音频后返回单条最终结果', async () => {
-    const handlers = captureHandlers({ ai: { audio: createAudioMock() } })
+    const handlers = captureHandlers({
+      ai: {
+        audio: createAudioMock(),
+      },
+    })
     const ws = createWsMock()
     handlers.onOpen({}, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'start', operation: 'transcribe', stream: false, format: 'wav' }) }, ws)
-    handlers.onMessage({ data: new Uint8Array([1, 2, 3]) }, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'done' }) }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({
+        type: 'start',
+        operation: 'transcribe',
+        stream: false,
+        format: 'wav',
+      }),
+    }, ws)
+    handlers.onMessage({
+      data: new Uint8Array([1, 2, 3]),
+    }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'done' }),
+    }, ws)
     await flush()
 
     const msgs = parseJsonMessages(ws)
@@ -215,19 +339,36 @@ describe('serv feature audio', () => {
   })
 
   it('语音合成以二进制帧返回音频并以 end 结束', async () => {
-    const handlers = captureHandlers({ ai: { audio: createAudioMock() } })
+    const handlers = captureHandlers({
+      ai: {
+        audio: createAudioMock(),
+      },
+    })
     const ws = createWsMock()
     handlers.onOpen({}, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'start', operation: 'synthesize', format: 'pcm16' }) }, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'text', segmentId: 'seg-1', text: '你好' }) }, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'done' }) }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'start', operation: 'synthesize', format: 'pcm16' }),
+    }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'text', segmentId: 'seg-1', text: '你好' }),
+    }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'done' }),
+    }, ws)
     await flush()
 
     const binaryFrames = ws.messages.filter(m => m instanceof ArrayBuffer)
     expect(binaryFrames.length).toBe(2)
     const jsonMsgs = parseJsonMessages(ws)
     expect(jsonMsgs).toEqual([
-      { type: 'segment_started', segmentId: 'seg-1', text: '你好', format: 'pcm16', sampleRate: 24000, channels: 1 },
+      {
+        type: 'segment_started',
+        segmentId: 'seg-1',
+        text: '你好',
+        format: 'pcm16',
+        sampleRate: 24000,
+        channels: 1,
+      },
       { type: 'segment_done', segmentId: 'seg-1' },
       { type: 'end' },
     ])
@@ -235,10 +376,17 @@ describe('serv feature audio', () => {
 
   it('无效或已消费的 ticket 返回错误并关闭', async () => {
     const verifyTicket = async (): Promise<HaiResult<never>> => err(HaiCommonError.UNAUTHORIZED, 'invalid')
-    const handlers = captureHandlers({ ai: { audio: createAudioMock() }, verifyTicket }, 'used-ticket')
+    const handlers = captureHandlers({
+      ai: {
+        audio: createAudioMock(),
+      },
+      verifyTicket,
+    }, 'used-ticket')
     const ws = createWsMock()
     handlers.onOpen({}, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'start', operation: 'transcribe', stream: true }) }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'start', operation: 'transcribe', stream: true }),
+    }, ws)
     await flush()
 
     const msgs = parseJsonMessages(ws)
@@ -249,11 +397,19 @@ describe('serv feature audio', () => {
   it('缺失 ticket 时不会调用校验或付费能力', async () => {
     const verifyTicket = vi.fn(async () => ok({ session: TEST_SESSION }))
     const transcribeStream = vi.fn(createAudioMock().transcribeStream)
-    const audio = { ...createAudioMock(), transcribeStream }
-    const handlers = captureHandlers({ ai: { audio }, verifyTicket }, '')
+    const audio = {
+      ...createAudioMock(),
+      transcribeStream,
+    }
+    const handlers = captureHandlers({
+      ai: { audio },
+      verifyTicket,
+    }, '')
     const ws = createWsMock()
     handlers.onOpen({}, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'start', operation: 'transcribe', stream: true }) }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'start', operation: 'transcribe', stream: true }),
+    }, ws)
     await flush()
 
     expect(verifyTicket).not.toHaveBeenCalled()
@@ -262,11 +418,20 @@ describe('serv feature audio', () => {
   })
 
   it('超大消息帧返回 AUDIO_INPUT_TOO_LARGE 错误码', async () => {
-    const handlers = captureHandlers({ ai: { audio: createAudioMock() }, maxMessageBytes: 4 })
+    const handlers = captureHandlers({
+      ai: {
+        audio: createAudioMock(),
+      },
+      maxMessageBytes: 4,
+    })
     const ws = createWsMock()
     handlers.onOpen({}, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'start', operation: 'transcribe', stream: true }) }, ws)
-    handlers.onMessage({ data: new Uint8Array(16) }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'start', operation: 'transcribe', stream: true }),
+    }, ws)
+    handlers.onMessage({
+      data: new Uint8Array(16),
+    }, ws)
     await flush()
 
     const msgs = parseJsonMessages(ws)
@@ -275,19 +440,36 @@ describe('serv feature audio', () => {
 
   it('鉴权未完成前不调用付费 ASR（串行化 + 鉴权先行，消除竞态）', async () => {
     const transcribe = vi.fn(async () => ok({ text: '不该被识别' }))
-    const audio = { ...createAudioMock(), transcribe } as unknown as AudioOperations
+    const audio = {
+      ...createAudioMock(),
+      transcribe,
+    } as unknown as AudioOperations
     // 鉴权异步失败（下一 tick 才 resolve），模拟快速连发时的竞态窗口
     const verifyTicket = async (): Promise<HaiResult<never>> => {
       await Promise.resolve()
       return err(HaiCommonError.UNAUTHORIZED, 'invalid')
     }
-    const handlers = captureHandlers({ ai: { audio }, verifyTicket }, 'bad-ticket')
+    const handlers = captureHandlers({
+      ai: { audio },
+      verifyTicket,
+    }, 'bad-ticket')
     const ws = createWsMock()
     handlers.onOpen({}, ws)
     // 快速连发 start → binary → done，试图在鉴权完成前触发付费 ASR
-    handlers.onMessage({ data: JSON.stringify({ type: 'start', operation: 'transcribe', stream: false, format: 'wav' }) }, ws)
-    handlers.onMessage({ data: new Uint8Array([1, 2, 3]) }, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'done' }) }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({
+        type: 'start',
+        operation: 'transcribe',
+        stream: false,
+        format: 'wav',
+      }),
+    }, ws)
+    handlers.onMessage({
+      data: new Uint8Array([1, 2, 3]),
+    }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'done' }),
+    }, ws)
     await flush()
 
     // 付费 ASR 未被调用，且返回鉴权错误
@@ -297,11 +479,20 @@ describe('serv feature audio', () => {
   })
 
   it('文本累计超过 maxTextBytes 返回 AUDIO_INPUT_TOO_LARGE 并关闭', async () => {
-    const handlers = captureHandlers({ ai: { audio: createAudioMock() }, maxTextBytes: 4 })
+    const handlers = captureHandlers({
+      ai: {
+        audio: createAudioMock(),
+      },
+      maxTextBytes: 4,
+    })
     const ws = createWsMock()
     handlers.onOpen({}, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'start', operation: 'synthesize', format: 'pcm16' }) }, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'text', segmentId: 'seg-1', text: '这是一段很长的文本' }) }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'start', operation: 'synthesize', format: 'pcm16' }),
+    }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'text', segmentId: 'seg-1', text: '这是一段很长的文本' }),
+    }, ws)
     await flush()
 
     const msgs = parseJsonMessages(ws)
@@ -311,14 +502,36 @@ describe('serv feature audio', () => {
 
   it('保存 ticket 对应 Session，并只使用授权后的模型与音色', async () => {
     const synthesizeStream = vi.fn(createAudioMock().synthesizeStream)
-    const audio = { ...createAudioMock(), synthesizeStream }
-    const authorize = vi.fn(async () => ok({ operation: 'synthesize' as const, model: 'allowed-tts', voice: 'ServerVoice', format: 'pcm16' as const }))
-    const handlers = captureHandlers({ ai: { audio }, authorize })
+    const audio = {
+      ...createAudioMock(),
+      synthesizeStream,
+    }
+    const authorize = vi.fn(async () => ok({
+      operation: 'synthesize' as const,
+      model: 'allowed-tts',
+      voice: 'ServerVoice',
+      format: 'pcm16' as const,
+    }))
+    const handlers = captureHandlers({
+      ai: { audio },
+      authorize,
+    })
     const ws = createWsMock()
     handlers.onOpen({}, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'start', operation: 'synthesize', model: 'expensive-tts', voice: 'ClientVoice' }) }, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'text', segmentId: 'seg-1', text: '授权测试' }) }, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'done' }) }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({
+        type: 'start',
+        operation: 'synthesize',
+        model: 'expensive-tts',
+        voice: 'ClientVoice',
+      }),
+    }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'text', segmentId: 'seg-1', text: '授权测试' }),
+    }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'done' }),
+    }, ws)
     await flush()
 
     expect(authorize).toHaveBeenCalledWith(TEST_SESSION, expect.objectContaining({ model: 'expensive-tts', voice: 'ClientVoice' }), undefined)
@@ -327,13 +540,30 @@ describe('serv feature audio', () => {
 
   it('未配置 authorize 时忽略客户端 model、voice 与 instruction', async () => {
     const synthesizeStream = vi.fn(createAudioMock().synthesizeStream)
-    const audio = { ...createAudioMock(), synthesizeStream }
-    const handlers = captureHandlers({ ai: { audio } })
+    const audio = {
+      ...createAudioMock(),
+      synthesizeStream,
+    }
+    const handlers = captureHandlers({
+      ai: { audio },
+    })
     const ws = createWsMock()
     handlers.onOpen({}, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'start', operation: 'synthesize', model: 'expensive-tts', voice: 'ClientVoice', instruction: 'client rule' }) }, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'text', segmentId: 'seg-1', text: '默认授权' }) }, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'done' }) }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({
+        type: 'start',
+        operation: 'synthesize',
+        model: 'expensive-tts',
+        voice: 'ClientVoice',
+        instruction: 'client rule',
+      }),
+    }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'text', segmentId: 'seg-1', text: '默认授权' }),
+    }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'done' }),
+    }, ws)
     await flush()
 
     expect(synthesizeStream).toHaveBeenCalledWith(expect.objectContaining({ model: undefined, voice: undefined, instruction: undefined }))
@@ -341,12 +571,23 @@ describe('serv feature audio', () => {
 
   it('连接结束后调用一次 onSessionEnd 释放并发占用', async () => {
     const onSessionEnd = vi.fn()
-    const handlers = captureHandlers({ ai: { audio: createAudioMock() }, onSessionEnd })
+    const handlers = captureHandlers({
+      ai: {
+        audio: createAudioMock(),
+      },
+      onSessionEnd,
+    })
     const ws = createWsMock()
     handlers.onOpen({}, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'start', operation: 'synthesize' }) }, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'text', segmentId: 'seg-1', text: '结束' }) }, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'done' }) }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'start', operation: 'synthesize' }),
+    }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'text', segmentId: 'seg-1', text: '结束' }),
+    }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'done' }),
+    }, ws)
     await flush()
     handlers.onClose()
 
@@ -355,45 +596,88 @@ describe('serv feature audio', () => {
   })
 
   it('无效的协议帧（非法 operation）被运行时 Schema 拒绝', async () => {
-    const handlers = captureHandlers({ ai: { audio: createAudioMock() } })
+    const handlers = captureHandlers({
+      ai: {
+        audio: createAudioMock(),
+      },
+    })
     const ws = createWsMock()
     handlers.onOpen({}, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'start', operation: 'delete-everything' }) }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'start', operation: 'delete-everything' }),
+    }, ws)
     await flush()
     expect(parseJsonMessages(ws)[0]).toMatchObject({ type: 'error', code: 'hai:ai:050' })
   })
 
   it('识别会话拒绝文本帧、合成会话拒绝音频帧（严格状态机）', async () => {
-    const transcribe = captureHandlers({ ai: { audio: createAudioMock() } })
+    const transcribe = captureHandlers({
+      ai: {
+        audio: createAudioMock(),
+      },
+    })
     const wsT = createWsMock()
     transcribe.onOpen({}, wsT)
-    transcribe.onMessage({ data: JSON.stringify({ type: 'start', operation: 'transcribe', stream: true, format: 'pcm16', sampleRate: 16000 }) }, wsT)
-    transcribe.onMessage({ data: JSON.stringify({ type: 'text', segmentId: 's', text: 'x' }) }, wsT)
+    transcribe.onMessage({
+      data: JSON.stringify({
+        type: 'start',
+        operation: 'transcribe',
+        stream: true,
+        format: 'pcm16',
+        sampleRate: 16000,
+      }),
+    }, wsT)
+    transcribe.onMessage({
+      data: JSON.stringify({ type: 'text', segmentId: 's', text: 'x' }),
+    }, wsT)
     await flush()
     expect(parseJsonMessages(wsT).find(m => m.type === 'error')).toMatchObject({ code: 'hai:ai:050' })
 
-    const synth = captureHandlers({ ai: { audio: createAudioMock() } })
+    const synth = captureHandlers({
+      ai: {
+        audio: createAudioMock(),
+      },
+    })
     const wsS = createWsMock()
     synth.onOpen({}, wsS)
-    synth.onMessage({ data: JSON.stringify({ type: 'start', operation: 'synthesize', format: 'pcm16' }) }, wsS)
-    synth.onMessage({ data: new Uint8Array([1, 2, 3]) }, wsS)
+    synth.onMessage({
+      data: JSON.stringify({ type: 'start', operation: 'synthesize', format: 'pcm16' }),
+    }, wsS)
+    synth.onMessage({
+      data: new Uint8Array([1, 2, 3]),
+    }, wsS)
     await flush()
     expect(parseJsonMessages(wsS).find(m => m.type === 'error')).toMatchObject({ code: 'hai:ai:050' })
   })
 
   it('重复 segmentId 被状态机拒绝', async () => {
-    const dupSeg = captureHandlers({ ai: { audio: createAudioMock() } })
+    const dupSeg = captureHandlers({
+      ai: {
+        audio: createAudioMock(),
+      },
+    })
     const ws2 = createWsMock()
     dupSeg.onOpen({}, ws2)
-    dupSeg.onMessage({ data: JSON.stringify({ type: 'start', operation: 'synthesize', format: 'pcm16' }) }, ws2)
-    dupSeg.onMessage({ data: JSON.stringify({ type: 'text', segmentId: 'dup', text: 'x' }) }, ws2)
-    dupSeg.onMessage({ data: JSON.stringify({ type: 'text', segmentId: 'dup', text: 'y' }) }, ws2)
+    dupSeg.onMessage({
+      data: JSON.stringify({ type: 'start', operation: 'synthesize', format: 'pcm16' }),
+    }, ws2)
+    dupSeg.onMessage({
+      data: JSON.stringify({ type: 'text', segmentId: 'dup', text: 'x' }),
+    }, ws2)
+    dupSeg.onMessage({
+      data: JSON.stringify({ type: 'text', segmentId: 'dup', text: 'y' }),
+    }, ws2)
     await flush()
     expect(parseJsonMessages(ws2).some(m => m.type === 'error' && String(m.message).includes('duplicate segmentId'))).toBe(true)
   })
 
   it('预鉴权超时：鉴权后未及时 start 即以领域错误关闭', async () => {
-    const handlers = captureHandlers({ ai: { audio: createAudioMock() }, preAuthTimeoutMs: 5 })
+    const handlers = captureHandlers({
+      ai: {
+        audio: createAudioMock(),
+      },
+      preAuthTimeoutMs: 5,
+    })
     const ws = createWsMock()
     handlers.onOpen({}, ws)
     // 不发送 start，等待超过预鉴权超时
@@ -404,11 +688,21 @@ describe('serv feature audio', () => {
 
   it('票据 grant 绑定操作与 start 不符时默认授权拒绝', async () => {
     const verifyTicket = async (): Promise<HaiResult<{ session: typeof TEST_SESSION, grant: { operation: 'transcribe' } }>> =>
-      ok({ session: TEST_SESSION, grant: { operation: 'transcribe' } })
-    const handlers = captureHandlers({ ai: { audio: createAudioMock() }, verifyTicket })
+      ok({
+        session: TEST_SESSION,
+        grant: { operation: 'transcribe' },
+      })
+    const handlers = captureHandlers({
+      ai: {
+        audio: createAudioMock(),
+      },
+      verifyTicket,
+    })
     const ws = createWsMock()
     handlers.onOpen({}, ws)
-    handlers.onMessage({ data: JSON.stringify({ type: 'start', operation: 'synthesize', format: 'pcm16' }) }, ws)
+    handlers.onMessage({
+      data: JSON.stringify({ type: 'start', operation: 'synthesize', format: 'pcm16' }),
+    }, ws)
     await flush()
     expect(parseJsonMessages(ws).find(m => m.type === 'error')).toBeDefined()
   })
@@ -419,7 +713,12 @@ describe('serv feature audio', () => {
     const app = serv.createApp({
       contract,
       procedures,
-      audio: { ai: { audio: createAudioMock() }, verifyTicket: async () => ok({ session: TEST_SESSION }) },
+      audio: {
+        ai: {
+          audio: createAudioMock(),
+        },
+        verifyTicket: async () => ok({ session: TEST_SESSION }),
+      },
       http: { openapi: false, docs: false },
     })
     expect(audioWsServers.has(app)).toBe(true)

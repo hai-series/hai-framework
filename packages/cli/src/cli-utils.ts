@@ -39,8 +39,11 @@ export function writeCliError(message: string, error?: unknown): void {
   process.stderr.write(`${message}\n`)
   if (error && typeof error === 'object' && 'error' in error)
     error = error.error
-  if (error !== undefined)
-    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+  if (error !== undefined) {
+    process.stderr.write(`${error instanceof Error
+      ? error.message
+      : String(error)}\n`)
+  }
 }
 
 /**
@@ -67,7 +70,9 @@ export function formatPromptDescription(description: string): string {
  */
 export function toCamelCase(str: string): string {
   return str
-    .replace(CAMEL_CASE_SEPARATOR_REGEX, (_, c) => c ? c.toUpperCase() : '')
+    .replace(CAMEL_CASE_SEPARATOR_REGEX, (_, c) => c
+      ? c.toUpperCase()
+      : '')
     .replace(LEADING_CHAR_REGEX, c => c.toLowerCase())
 }
 
@@ -326,7 +331,9 @@ export function formatDuration(ms: number): string {
 export function registerHelpers(): void {
   // 条件判断
   Handlebars.registerHelper('if_eq', function (this: unknown, a: unknown, b: unknown, options: Handlebars.HelperOptions) {
-    return a === b ? options.fn(this) : options.inverse(this)
+    return a === b
+      ? options.fn(this)
+      : options.inverse(this)
   })
 
   // 日期格式化

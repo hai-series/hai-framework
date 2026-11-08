@@ -10,8 +10,17 @@ import { storage } from '@h-ai/storage'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { feedback } from '../src/index.js'
 
-const actor = { scopeId: 'retention-scope', userId: 'owner', permissions: ['feedback:*'] }
-const config = { appId: 'retention-app', recipients: ['admin@example.test'], adminUrl: 'http://localhost/admin/feedback', workerIntervalMs: 0 }
+const actor = {
+  scopeId: 'retention-scope',
+  userId: 'owner',
+  permissions: ['feedback:*'],
+}
+const config = {
+  appId: 'retention-app',
+  recipients: ['admin@example.test'],
+  adminUrl: 'http://localhost/admin/feedback',
+  workerIntervalMs: 0,
+}
 let directory: string | undefined
 let previousLevel = core.logger.getLevel()
 
@@ -21,7 +30,11 @@ beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'hai-feedback-retention-'))
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
   expect((await storage.init({ type: 'local', root: directory })).success).toBe(true)
-  expect((await reach.init({ providers: [{ name: 'email', type: 'console' }] })).success).toBe(true)
+  expect((await reach.init({
+    providers: [
+      { name: 'email', type: 'console' },
+    ],
+  })).success).toBe(true)
   expect((await feedback.init(config)).success).toBe(true)
 })
 
@@ -44,16 +57,35 @@ async function expire(id: string) {
   expect((await feedback.get(id, actor)).success).toBe(false)
 }
 
-describe.sequential('反馈数据保留与顺序', () => {
+describe('反馈数据保留与顺序', { concurrent: false }, () => {
   it('已到期反馈删除正文、历史、证据及导出job内固定快照，不能残留诊断原文', async () => {
     const marker = 'private-retention-evidence-marker'
-    const report = await feedback.submit({ submissionId: 'expired-snapshot', appId: config.appId, description: marker, evidence: [{ id: 'private-evidence', source: 'browser:retention', sequence: 1, kind: 'log', timestamp: Date.now(), data: { message: marker } }] }, actor)
+    const report = await feedback.submit({
+      submissionId: 'expired-snapshot',
+      appId: config.appId,
+      description: marker,
+      evidence: [
+        {
+          id: 'private-evidence',
+          source: 'browser:retention',
+          sequence: 1,
+          kind: 'log',
+          timestamp: Date.now(),
+          data: { message: marker },
+        },
+      ],
+    }, actor)
     expect(report.success).toBe(true)
     if (!report.success)
       return
     expect((await feedback.completeCollection({ id: report.data.id }, actor)).success).toBe(true)
     expect((await feedback.runJobs()).success).toBe(true)
-    expect((await feedback.setStatus({ id: report.data.id, status: 'handled', expectedVersion: 1, note: marker }, actor)).success).toBe(true)
+    expect((await feedback.setStatus({
+      id: report.data.id,
+      status: 'handled',
+      expectedVersion: 1,
+      note: marker,
+    }, actor)).success).toBe(true)
     const exported = await feedback.export({ id: report.data.id }, actor)
     expect(exported.success).toBe(true)
     if (!exported.success)
@@ -66,8 +98,15 @@ describe.sequential('反馈数据保留与顺序', () => {
     expect(jobs.success).toBe(true)
     if (jobs.success)
       expect(JSON.stringify(jobs.data)).not.toContain(marker)
-    for (const table of ['hai_feedback_reports', 'hai_feedback_evidence', 'hai_feedback_history', 'hai_feedback_attachments']) {
-      const field = table === 'hai_feedback_reports' ? 'id' : 'report_id'
+    for (const table of [
+      'hai_feedback_reports',
+      'hai_feedback_evidence',
+      'hai_feedback_history',
+      'hai_feedback_attachments',
+    ]) {
+      const field = table === 'hai_feedback_reports'
+        ? 'id'
+        : 'report_id'
       const rows = await reldb.sql.get<{ count: number }>(`SELECT COUNT(*) AS count FROM ${table} WHERE ${field} = ?`, [report.data.id])
       expect(rows.success && Number(rows.data?.count)).toBe(0)
     }
@@ -75,11 +114,27 @@ describe.sequential('反馈数据保留与顺序', () => {
 
   it('到期清理涵盖未登记在export结果中的失败尝试对象', async () => {
     const bytes = Buffer.from('private attachment')
-    const report = await feedback.submit({ submissionId: 'expired-orphan-object', appId: config.appId, attachments: [{ id: 'attachment', name: 'note.txt', contentType: 'text/plain', size: bytes.length, checksum: createHash('sha256').update(bytes).digest('hex') }] }, actor)
+    const report = await feedback.submit({
+      submissionId: 'expired-orphan-object',
+      appId: config.appId,
+      attachments: [
+        {
+          id: 'attachment',
+          name: 'note.txt',
+          contentType: 'text/plain',
+          size: bytes.length,
+          checksum: createHash('sha256').update(bytes).digest('hex'),
+        },
+      ],
+    }, actor)
     expect(report.success).toBe(true)
     if (!report.success)
       return
-    expect((await feedback.uploadAttachment({ id: report.data.id, attachmentId: 'attachment', dataBase64: bytes.toString('base64') }, actor)).success).toBe(true)
+    expect((await feedback.uploadAttachment({
+      id: report.data.id,
+      attachmentId: 'attachment',
+      dataBase64: bytes.toString('base64'),
+    }, actor)).success).toBe(true)
     expect((await feedback.completeCollection({ id: report.data.id }, actor)).success).toBe(true)
     expect((await feedback.runJobs()).success).toBe(true)
     const objects = await storage.dir.list({ prefix: 'feedback/' })
@@ -105,7 +160,9 @@ describe.sequential('反馈数据保留与顺序', () => {
     expect(tombstones.data).toHaveLength(1)
     const tombstone = tombstones.data[0]!
     expect(tombstone.kind).toBe('cleanup')
-    const payload: unknown = typeof tombstone.payload === 'string' ? JSON.parse(tombstone.payload) : tombstone.payload
+    const payload: unknown = typeof tombstone.payload === 'string'
+      ? JSON.parse(tombstone.payload)
+      : tombstone.payload
     expect(payload).toMatchObject({ tombstone: true, prefix })
     expect(Object.keys(payload as object).sort()).toEqual(['prefix', 'tombstone', 'until'])
     // 报告已被删除后，旧进程才完成对象写入；墓碑仍须继续清扫，不受普通maxAttempts限制。
@@ -117,7 +174,10 @@ describe.sequential('反馈数据保留与顺序', () => {
     const live = await reldb.sql.get<{ status: string }>('SELECT status FROM hai_feedback_jobs WHERE id = ?', [tombstone.id])
     expect(live.success && live.data?.status).toBe('pending')
     // 用fixture将24小时窗口推进到终点，最终清理墓碑本身。
-    expect((await reldb.sql.execute('UPDATE hai_feedback_jobs SET next_run_at = 0, payload = ? WHERE id = ?', [JSON.stringify({ tombstone: true, prefix, until: Date.now() - 1 }), tombstone.id])).success).toBe(true)
+    expect((await reldb.sql.execute('UPDATE hai_feedback_jobs SET next_run_at = 0, payload = ? WHERE id = ?', [
+      JSON.stringify({ tombstone: true, prefix, until: Date.now() - 1 }),
+      tombstone.id,
+    ])).success).toBe(true)
     expect((await feedback.runJobs()).success).toBe(true)
     const final = await reldb.sql.get<{ count: number }>('SELECT COUNT(*) AS count FROM hai_feedback_jobs WHERE report_id = ?', [report.data.id])
     expect(final.success && Number(final.data?.count)).toBe(0)
@@ -140,10 +200,15 @@ describe.sequential('反馈数据保留与顺序', () => {
     expect(stored.success && stored.data).toBeTruthy()
     if (!stored.success || !stored.data)
       return
-    const snapshot: unknown = typeof stored.data.payload === 'string' ? JSON.parse(stored.data.payload) : stored.data.payload
+    const snapshot: unknown = typeof stored.data.payload === 'string'
+      ? JSON.parse(stored.data.payload)
+      : stored.data.payload
     if (!snapshot || typeof snapshot !== 'object')
       throw new Error('Export fixture payload unavailable')
-    expect((await reldb.sql.execute('UPDATE hai_feedback_jobs SET payload = ? WHERE id = ?', [JSON.stringify({ ...snapshot, snapshotExpiresAt: 0 }), initial.data.id])).success).toBe(true)
+    expect((await reldb.sql.execute('UPDATE hai_feedback_jobs SET payload = ? WHERE id = ?', [
+      JSON.stringify({ ...snapshot, snapshotExpiresAt: 0 }),
+      initial.data.id,
+    ])).success).toBe(true)
     expect((await feedback.runJobs()).success).toBe(true)
     expect((await feedback.getExport({ id: report.data.id, jobId: initial.data.id }, actor)).success).toBe(false)
     const renewed = await feedback.export({ id: report.data.id }, actor)

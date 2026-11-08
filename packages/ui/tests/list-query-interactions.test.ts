@@ -7,9 +7,12 @@ import { CrudPage, defineCrud } from '../src/lib/components/scenes/crud/index.js
 
 const closeDescriptor = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close')
 beforeEach(() => {
-  Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value() {
-    this.open = false
-  } })
+  Object.defineProperty(HTMLDialogElement.prototype, 'close', {
+    configurable: true,
+    value() {
+      this.open = false
+    },
+  })
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
 })
 
@@ -32,12 +35,22 @@ it('通用工具栏常驻查询和重置，展开筛选后一次提交，不自�
   vi.useFakeTimers()
   const target = document.body.appendChild(document.createElement('div'))
   const onsearch = vi.fn()
-  const component = mount(TableToolbar, { target, props: { onsearch, filterFields: [{ id: 'appId', label: 'Application', type: 'text' }] } })
+  const component = mount(TableToolbar, {
+    target,
+    props: {
+      onsearch,
+      filterFields: [
+        { id: 'appId', label: 'Application', type: 'text' },
+      ],
+    },
+  })
   try {
     flushSync()
     const form = target.querySelector('form')!
     expect(form).not.toBeNull()
-    expect([...target.querySelectorAll('button')].some(button => button.textContent?.includes('重置'))).toBe(true)
+    expect([
+      ...target.querySelectorAll('button'),
+    ].some(button => button.textContent?.includes('重置'))).toBe(true)
     input(target.querySelector('input')!, 'needle')
     target.querySelector<HTMLButtonElement>('[aria-controls]')!.click()
     flushSync()
@@ -57,7 +70,24 @@ it('通用工具栏常驻查询和重置，展开筛选后一次提交，不自�
 it('反馈查询原子提交搜索与筛选，翻页和排序不带入未提交草稿，重置恢复默认条件', async () => {
   const target = document.body.appendChild(document.createElement('div'))
   const onquerychange = vi.fn()
-  const component = mount(FeedbackList, { target, props: { data: { items: [], total: 60, page: 2, pageSize: 20 }, query: { page: 2, pageSize: 20, search: 'applied', appId: 'old' }, onquerychange } })
+  const component = mount(FeedbackList, {
+    target,
+    props: {
+      data: {
+        items: [],
+        total: 60,
+        page: 2,
+        pageSize: 20,
+      },
+      query: {
+        page: 2,
+        pageSize: 20,
+        search: 'applied',
+        appId: 'old',
+      },
+      onquerychange,
+    },
+  })
   try {
     flushSync()
     input(target.querySelector('input')!, 'draft')
@@ -73,12 +103,21 @@ it('反馈查询原子提交搜索与筛选，翻页和排序不带入未提交�
     target.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     flushSync()
     expect(onquerychange).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, search: 'draft', appId: 'new' }))
-    const header = [...target.querySelectorAll('th')].find(cell => cell.textContent?.includes('提交时间'))!
+    const header = [
+      ...target.querySelectorAll('th'),
+    ].find(cell => cell.textContent?.includes('提交时间'))!
     header.querySelector('button')!.click()
     flushSync()
-    expect(onquerychange).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, search: 'draft', appId: 'new', sortDirection: 'asc' }))
+    expect(onquerychange).toHaveBeenLastCalledWith(expect.objectContaining({
+      page: 1,
+      search: 'draft',
+      appId: 'new',
+      sortDirection: 'asc',
+    }))
     expect(header.getAttribute('aria-sort')).toBe('ascending')
-    ;[...target.querySelectorAll('button')].find(button => button.textContent?.trim() === '重置')!.click()
+    ;[
+      ...target.querySelectorAll('button'),
+    ].find(button => button.textContent?.trim() === '重置')!.click()
     flushSync()
     expect(onquerychange).toHaveBeenLastCalledWith({ page: 1, pageSize: 20 })
   }
@@ -91,8 +130,44 @@ it('反馈查询原子提交搜索与筛选，翻页和排序不带入未提交�
 it('cRUD 默认复用卡片内查询栏，服务端排序与翻页只使用已提交条件', async () => {
   const target = document.body.appendChild(document.createElement('div'))
   const navigate = vi.fn()
-  const crud = defineCrud({ name: 'records', label: 'Records', fields: [{ id: 'name', label: 'Name', type: 'text', inList: true, filterable: true }], api: { list: async () => ({ items: [], total: 0, page: 1, pageSize: 20 }) } })
-  const component = mount(CrudPage, { target, props: { crud, sortableColumns: [{ key: 'name', label: 'Name' }], data: { items: [], total: 60, page: 2, pageSize: 20, filters: { search: 'applied' } }, nav: { pathname: '/records', navigate } } })
+  const crud = defineCrud({
+    name: 'records',
+    label: 'Records',
+    fields: [
+      {
+        id: 'name',
+        label: 'Name',
+        type: 'text',
+        inList: true,
+        filterable: true,
+      },
+    ],
+    api: {
+      list: async () => ({
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 20,
+      }),
+    },
+  })
+  const component = mount(CrudPage, {
+    target,
+    props: {
+      crud,
+      sortableColumns: [
+        { key: 'name', label: 'Name' },
+      ],
+      data: {
+        items: [],
+        total: 60,
+        page: 2,
+        pageSize: 20,
+        filters: { search: 'applied' },
+      },
+      nav: { pathname: '/records', navigate },
+    },
+  })
   try {
     flushSync()
     const form = target.querySelector('form')!

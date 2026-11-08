@@ -61,7 +61,9 @@ describe.skipIf(!image)('aCP container volume E2E', () => {
         'utf8',
       )
       value(
-        await ai.init({ acp: { requestTimeout: 30000, promptTimeout: 30000 } }),
+        await ai.init({
+          acp: { requestTimeout: 30000, promptTimeout: 30000 },
+        }),
       )
       vi.stubEnv('ACP_FIXTURE_AGENT', 'agent-only-fixture')
       vi.stubEnv('ACP_FIXTURE_GIT_HEADER', 'Authorization: Bearer git-only-fixture')
@@ -124,10 +126,17 @@ describe.skipIf(!image)('aCP container volume E2E', () => {
         }),
       )
       const info = value(await session.info())
-      expect(JSON.parse(value(await session.prompt([{ type: 'text', text: 'credential-boundary' }])).text)).toEqual({ agent: true, git: false })
+      expect(JSON.parse(value(await session.prompt([
+        { type: 'text', text: 'credential-boundary' },
+      ])).text)).toEqual({ agent: true, git: false })
       const resource = info.resource!
       const storage = info.workspace?.storage
-      expect(storage).toEqual({ type: 'volume', engine, name: volume, mountPath: '/workspace' })
+      expect(storage).toEqual({
+        type: 'volume',
+        engine,
+        name: volume,
+        mountPath: '/workspace',
+      })
       if (storage?.type !== 'volume')
         throw new Error('Expected volume handoff')
       const preview = await run([
@@ -184,7 +193,9 @@ describe.skipIf(!image)('aCP container volume E2E', () => {
       expect(await previewContent()).toBe('changed')
       const resumed = value(await ai.acp.sessions.resume('isolated'))
       expect(
-        value(await resumed.prompt([{ type: 'text', text: 'alive' }])).text,
+        value(await resumed.prompt([
+          { type: 'text', text: 'alive' },
+        ])).text,
       ).toBe('alive')
       value(
         await resumed.publish({
@@ -237,13 +248,20 @@ describe.skipIf(!image)('aCP container volume E2E', () => {
         environmentRefs: { HTTP_PROXY: 'HAI_ACP_TEST_PROXY' },
       }))
       const configured = value(await ai.acp.sessions.create({ agentId: 'explicit-proxy', workspaceId: 'container' }))
-      expect(value(await configured.prompt([{ type: 'text', text: 'proxy' }])).text).toBe('http://proxy.example.invalid:8123')
+      expect(value(await configured.prompt([
+        { type: 'text', text: 'proxy' },
+      ])).text).toBe('http://proxy.example.invalid:8123')
       value(await configured.close())
     }
     finally {
       await ai.close()
       vi.unstubAllEnvs()
-      const ids = (await run(['ps', '-aq', '--filter', `volume=${volume}`]))
+      const ids = (await run([
+        'ps',
+        '-aq',
+        '--filter',
+        `volume=${volume}`,
+      ]))
         .split(/\s+/)
         .filter(Boolean)
       if (ids.length)

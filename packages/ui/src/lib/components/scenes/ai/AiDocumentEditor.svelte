@@ -539,7 +539,9 @@
   )
   // 只有一个改写动作时直接渲染成按钮，多动作才保留菜单，减少一次点击。
   const directRewriteAction = $derived(
-    resolvedRewriteActions.length === 1 ? resolvedRewriteActions[0] : null,
+    resolvedRewriteActions.length === 1
+      ? resolvedRewriteActions[0]
+      : null,
   )
   // 新版工具条支持 paragraph / heading1-4，优先走细粒度回调，避免把旧接口误当成新接口调用。
   const richBlockFormattingEnabled = $derived(Boolean(onapplyblockstyle))
@@ -575,7 +577,9 @@
     cn(
       'hai-markdown',
       'hai-markdown-document',
-      sourceKind === 'code' ? 'hai-markdown-code-only' : '',
+      sourceKind === 'code'
+        ? 'hai-markdown-code-only'
+        : '',
       editable ? 'hai-markdown-editable' : '',
     ),
   )
@@ -777,10 +781,22 @@
     }
 
     return [
-      { id: 'polish', label: uiM('markdown_rewrite_polish') },
-      { id: 'expand', label: uiM('markdown_rewrite_expand') },
-      { id: 'shorten', label: uiM('markdown_rewrite_shorten') },
-      { id: 'explain', label: uiM('markdown_rewrite_explain') },
+      {
+        id: 'polish',
+        label: uiM('markdown_rewrite_polish'),
+      },
+      {
+        id: 'expand',
+        label: uiM('markdown_rewrite_expand'),
+      },
+      {
+        id: 'shorten',
+        label: uiM('markdown_rewrite_shorten'),
+      },
+      {
+        id: 'explain',
+        label: uiM('markdown_rewrite_explain'),
+      },
     ]
   }
 
@@ -925,7 +941,9 @@
         [blockId]: {
           status: 'error',
           error:
-            error instanceof Error ? error.message : uiM('markdown_run_failed'),
+            error instanceof Error
+              ? error.message
+              : uiM('markdown_run_failed'),
         },
       }
     }
@@ -1216,7 +1234,9 @@
         return
       }
 
-      const message = error instanceof Error ? error.message : uiM('markdown_mermaid_failed')
+      const message = error instanceof Error
+        ? error.message
+        : uiM('markdown_mermaid_failed')
       const entry: MermaidRenderCacheEntry = {
         signature: renderToken,
         status: 'error',
@@ -1531,7 +1551,9 @@
       return false
     }
 
-    return visit(root) ? length : null
+    return visit(root)
+      ? length
+      : null
   }
 
   function getTextOffsetInPreview(node: Node, offset: number): number | null {
@@ -2146,7 +2168,9 @@
   }
 
   function resolveColorOptionValue(colorOption: string | ColorSwatchOption): string | null {
-    return typeof colorOption === 'string' ? colorOption : colorOption.value
+    return typeof colorOption === 'string'
+      ? colorOption
+      : colorOption.value
   }
 
   function updateHoveredLink(link: HTMLAnchorElement | null): void {
@@ -2385,7 +2409,9 @@
       : 0
     const minLeft = Math.max(
       horizontalPadding,
-      outlineOverlap > 24 ? outlineOverlap + 12 : horizontalPadding,
+      outlineOverlap > 24
+        ? outlineOverlap + 12
+        : horizontalPadding,
     )
     const measuredToolbarWidth = selectionChromeEl
       ? Math.max(selectionChromeEl.offsetWidth, selectionChromeEl.clientWidth)
@@ -2581,7 +2607,9 @@
       ? target.closest<HTMLAnchorElement>('a[href]')
       : null
 
-    updateHoveredLink(link && previewHost?.contains(link) ? link : null)
+    updateHoveredLink(link && previewHost?.contains(link)
+      ? link
+      : null)
   }
 
   function handlePreviewMouseLeave(): void {

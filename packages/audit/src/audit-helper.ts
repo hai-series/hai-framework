@@ -47,17 +47,39 @@ function toVoid(result: HaiResult<AuditLog>): HaiResult<void> {
 export function createHelper(logFn: (input: CreateAuditLogInput) => Promise<HaiResult<AuditLog>>): AuditHelper {
   return {
     async login(userId: string, ip?: string, ua?: string): Promise<HaiResult<void>> {
-      const result = await logFn({ userId, category: 'system', action: 'login', resource: 'auth', ipAddress: ip, userAgent: ua })
+      const result = await logFn({
+        userId,
+        category: 'system',
+        action: 'login',
+        resource: 'auth',
+        ipAddress: ip,
+        userAgent: ua,
+      })
       return toVoid(result)
     },
 
     async logout(userId: string, ip?: string, ua?: string): Promise<HaiResult<void>> {
-      const result = await logFn({ userId, category: 'system', action: 'logout', resource: 'auth', ipAddress: ip, userAgent: ua })
+      const result = await logFn({
+        userId,
+        category: 'system',
+        action: 'logout',
+        resource: 'auth',
+        ipAddress: ip,
+        userAgent: ua,
+      })
       return toVoid(result)
     },
 
     async register(userId: string, ip?: string, ua?: string): Promise<HaiResult<void>> {
-      const result = await logFn({ userId, category: 'system', action: 'register', resource: 'auth', resourceId: userId, ipAddress: ip, userAgent: ua })
+      const result = await logFn({
+        userId,
+        category: 'system',
+        action: 'register',
+        resource: 'auth',
+        resourceId: userId,
+        ipAddress: ip,
+        userAgent: ua,
+      })
       return toVoid(result)
     },
 
@@ -74,7 +96,14 @@ export function createHelper(logFn: (input: CreateAuditLogInput) => Promise<HaiR
     },
 
     async passwordResetComplete(userId: string | null, ip?: string, ua?: string): Promise<HaiResult<void>> {
-      const result = await logFn({ userId, category: 'system', action: 'password_reset', resource: 'auth', ipAddress: ip, userAgent: ua })
+      const result = await logFn({
+        userId,
+        category: 'system',
+        action: 'password_reset',
+        resource: 'auth',
+        ipAddress: ip,
+        userAgent: ua,
+      })
       return toVoid(result)
     },
 

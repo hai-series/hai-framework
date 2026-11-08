@@ -12,7 +12,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createProject } from '../src/commands/cli-create.js'
 import * as templateEngine from '../src/commands/cli-template-engine.js'
 
-const commandMocks = vi.hoisted(() => ({ execSync: vi.fn() }))
+const commandMocks = vi.hoisted(() => ({
+  execSync: vi.fn(),
+}))
 vi.mock('node:child_process', async importOriginal => ({
   ...await importOriginal<typeof import('node:child_process')>(),
   execSync: commandMocks.execSync,
@@ -38,12 +40,26 @@ afterEach(async () => {
 })
 
 describe('create 用户输出', () => {
-  it.each(['../escape', 'my app', 'MY_APP', 'my.app', 'nested\\name'])('非法名称 %s 应拒绝且不产生工程文件', async (name) => {
+  it.each([
+    '../escape',
+    'my app',
+    'MY_APP',
+    'my.app',
+    'nested\\name',
+  ])('非法名称 %s 应拒绝且不产生工程文件', async (name) => {
     const root = await mkdtemp(path.join(tmpdir(), 'hai-create-invalid-'))
     temporaryRoots.push(root)
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
-    await expect(createProject({ name, appType: 'api', defaults: true, install: false, git: false, packageManager: 'pnpm', cwd: root })).rejects.toThrow()
+    await expect(createProject({
+      name,
+      appType: 'api',
+      defaults: true,
+      install: false,
+      git: false,
+      packageManager: 'pnpm',
+      cwd: root,
+    })).rejects.toThrow()
     expect(stderr).toHaveBeenCalled()
     expect(await readdir(root)).toEqual([])
     expect(commandMocks.execSync).not.toHaveBeenCalled()
@@ -63,7 +79,16 @@ describe('create 用户输出', () => {
       throw Object.assign(new Error('Command failed'), { status: 1, stdout: 'Install progress', stderr: 'ERR_PNPM_TEST_FAILURE: registry unavailable' })
     })
 
-    await expect(createProject({ name: 'install-error', appType: 'fullstack', frontends: ['web'], defaults: true, install: true, git: false, packageManager: 'pnpm', cwd: root })).rejects.toThrow('registry unavailable')
+    await expect(createProject({
+      name: 'install-error',
+      appType: 'fullstack',
+      frontends: ['web'],
+      defaults: true,
+      install: true,
+      git: false,
+      packageManager: 'pnpm',
+      cwd: root,
+    })).rejects.toThrow('registry unavailable')
     const errorOutput = stderr.mock.calls.map(([message]) => String(message)).join('')
     expect(errorOutput).toContain('ERR_PNPM_TEST_FAILURE: registry unavailable')
     expect(errorOutput).toContain(exitCode)
@@ -73,8 +98,24 @@ describe('create 用户输出', () => {
 
   it.each([60, 80, 120].flatMap(columns => ['zh-CN', 'ja-JP'].flatMap(locale => ['unicode', 'windows'].map(symbols => ({ columns, locale, symbols })))))('$locale select/multiselect 在 $columns 列终端重绘与确认时清除全部行 ($symbols)', async ({ columns, locale, symbols }) => {
     Object.assign(promptFigures, symbols === 'unicode'
-      ? { radioOn: '◉', radioOff: '◯', tick: '✔', cross: '✖', ellipsis: '…', pointerSmall: '›', pointer: '❯' }
-      : { radioOn: '(*)', radioOff: '( )', tick: '√', cross: '×', ellipsis: '...', pointerSmall: '»', pointer: '>' })
+      ? {
+          radioOn: '◉',
+          radioOff: '◯',
+          tick: '✔',
+          cross: '✖',
+          ellipsis: '…',
+          pointerSmall: '›',
+          pointer: '❯',
+        }
+      : {
+          radioOn: '(*)',
+          radioOff: '( )',
+          tick: '√',
+          cross: '×',
+          ellipsis: '...',
+          pointerSmall: '»',
+          pointer: '>',
+        })
     core.i18n.setGlobalLocale(locale)
     Object.defineProperty(process.stdout, 'columns', { value: columns, configurable: true })
     const root = await mkdtemp(path.join(tmpdir(), 'hai-create-prompt-'))
@@ -86,7 +127,13 @@ describe('create 用户输出', () => {
     vi.spyOn(templateEngine, 'generateFromTemplates').mockRejectedValueOnce(promptsCollected)
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
-    await expect(createProject({ name: 'prompt-test', install: false, git: false, packageManager: 'pnpm', cwd: root })).rejects.toBe(promptsCollected)
+    await expect(createProject({
+      name: 'prompt-test',
+      install: false,
+      git: false,
+      packageManager: 'pnpm',
+      cwd: root,
+    })).rejects.toBe(promptsCollected)
     const questions = [select.mock.calls[0][0], multiselect.mock.calls[0][0]]
     select.mockRestore()
     multiselect.mockRestore()
@@ -100,13 +147,24 @@ describe('create 用户输出', () => {
       const message = String(question.message)
       let previous = frames.find(frame => frame.includes(message))!
       expect(previous).toBeDefined()
-      for (const name of ['down', 'down', 'down', 'down', 'down', 'return']) {
+      for (const name of [
+        'down',
+        'down',
+        'down',
+        'down',
+        'down',
+        'return',
+      ]) {
         const start = frames.length
         stdin.emit('keypress', '', { name })
         const next = frames.slice(start).find(frame => frame.includes(message))!
         expect(next).toBeDefined()
         const physicalRows = stripVTControlCharacters(previous).split('\n').reduce((rows, line) => rows + Math.max(1, Math.ceil(stringWidth(line) / columns)), 0)
-        expect(frames.slice(start).join('').split('\u001B[2K').length - 1, JSON.stringify({ message, previous: stripVTControlCharacters(previous), key: name })).toBe(physicalRows)
+        expect(frames.slice(start).join('').split('\u001B[2K').length - 1, JSON.stringify({
+          message,
+          previous: stripVTControlCharacters(previous),
+          key: name,
+        })).toBe(physicalRows)
         previous = next
       }
       await answer

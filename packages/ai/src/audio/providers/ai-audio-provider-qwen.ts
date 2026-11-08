@@ -31,7 +31,12 @@ const logger = core.logger.child({ module: 'ai', scope: 'audio-qwen' })
 
 /** Qwen 实时平台能力：WebSocket 实时识别（含服务端 VAD）+ 实时合成（支持增量文本输入） */
 const QWEN_CAPABILITIES: AudioModelCapabilities = {
-  transcribe: { supported: true, realtimeAudioInput: true, speechBoundaryEvents: true, streamingTranscriptOutput: true },
+  transcribe: {
+    supported: true,
+    realtimeAudioInput: true,
+    speechBoundaryEvents: true,
+    streamingTranscriptOutput: true,
+  },
   synthesize: { supported: true, incrementalTextInput: true, streamingAudioOutput: true },
 }
 
@@ -96,14 +101,25 @@ export function createQwenAudioProvider(): AudioProvider {
   async function transcribe(request: ProviderTranscriptionRequest): Promise<HaiResult<TranscriptionResult>> {
     try {
       let finalText = ''
-      for await (const event of transcribeStream({ model: request.model, audio: request.audio, language: request.language, contextHints: request.contextHints, signal: request.signal })) {
-        if (event.type === 'transcript' && event.final)
-          finalText = finalText ? `${finalText}${event.text}` : event.text
+      for await (const event of transcribeStream({
+        model: request.model,
+        audio: request.audio,
+        language: request.language,
+        contextHints: request.contextHints,
+        signal: request.signal,
+      })) {
+        if (event.type === 'transcript' && event.final) {
+          finalText = finalText
+            ? `${finalText}${event.text}`
+            : event.text
+        }
       }
       return ok({ text: finalText })
     }
     catch (error) {
-      logger.debug('Qwen transcribe failed', { error: errorMessage(error) })
+      logger.debug('Qwen transcribe failed', {
+        error: errorMessage(error),
+      })
       return toAudioErrorResult(error)
     }
   }
@@ -123,22 +139,41 @@ export function createQwenAudioProvider(): AudioProvider {
         session: {
           input_audio_format: QWEN_FORMAT[format],
           sample_rate: sampleRate ?? 16000,
-          input_audio_transcription: language ? { language } : {},
-          turn_detection: isStreamInput ? { type: 'server_vad' } : null,
+          input_audio_transcription: language
+            ? { language }
+            : {},
+          turn_detection: isStreamInput
+            ? { type: 'server_vad' }
+            : null,
         },
       }))
 
       // 音频发送：持续输入边到边送，完整音频一次送出后手动 commit
       const sendAudio = (async () => {
         if ('chunks' in audio) {
-          for await (const part of audio.chunks)
-            conn.send(JSON.stringify({ event_id: newEventId(), type: 'input_audio_buffer.append', audio: toBase64(part) }))
+          for await (const part of audio.chunks) {
+            conn.send(JSON.stringify({
+              event_id: newEventId(),
+              type: 'input_audio_buffer.append',
+              audio: toBase64(part),
+            }))
+          }
         }
         else {
-          conn.send(JSON.stringify({ event_id: newEventId(), type: 'input_audio_buffer.append', audio: toBase64(audio.data) }))
-          conn.send(JSON.stringify({ event_id: newEventId(), type: 'input_audio_buffer.commit' }))
+          conn.send(JSON.stringify({
+            event_id: newEventId(),
+            type: 'input_audio_buffer.append',
+            audio: toBase64(audio.data),
+          }))
+          conn.send(JSON.stringify({
+            event_id: newEventId(),
+            type: 'input_audio_buffer.commit',
+          }))
         }
-        conn.send(JSON.stringify({ event_id: newEventId(), type: 'session.finish' }))
+        conn.send(JSON.stringify({
+          event_id: newEventId(),
+          type: 'session.finish',
+        }))
       })()
       // 发送失败不阻塞读取循环，读取结束后再统一 surface
       let sendError: unknown
@@ -188,12 +223,27 @@ export function createQwenAudioProvider(): AudioProvider {
     const out = resolveSynthesisOutput({ format, sampleRate })
     try {
       const chunks: Uint8Array[] = []
-      for await (const audio of synthesizeStream({ model: request.model, text: request.text, voice: request.voice, instruction: request.instruction, format: out.format, sampleRate, signal: request.signal }))
+      for await (const audio of synthesizeStream({
+        model: request.model,
+        text: request.text,
+        voice: request.voice,
+        instruction: request.instruction,
+        format: out.format,
+        sampleRate,
+        signal: request.signal,
+      }))
         chunks.push(audio)
-      return ok({ data: concatChunks(chunks), format: out.format, sampleRate: out.sampleRate, channels: out.channels })
+      return ok({
+        data: concatChunks(chunks),
+        format: out.format,
+        sampleRate: out.sampleRate,
+        channels: out.channels,
+      })
     }
     catch (error) {
-      logger.debug('Qwen synthesize failed', { error: errorMessage(error) })
+      logger.debug('Qwen synthesize failed', {
+        error: errorMessage(error),
+      })
       return toAudioErrorResult(error)
     }
   }
@@ -214,20 +264,37 @@ export function createQwenAudioProvider(): AudioProvider {
           mode: isStreamInput ? 'server_commit' : 'commit',
           response_format: QWEN_FORMAT[outFormat],
           sample_rate: sampleRate ?? 24000,
-          ...(instruction ? { instructions: instruction } : {}),
+          ...(instruction
+            ? { instructions: instruction }
+            : {}),
         },
       }))
 
       const sendText = (async () => {
         if (typeof text === 'string') {
-          conn.send(JSON.stringify({ event_id: newEventId(), type: 'input_text_buffer.append', text }))
-          conn.send(JSON.stringify({ event_id: newEventId(), type: 'input_text_buffer.commit' }))
+          conn.send(JSON.stringify({
+            event_id: newEventId(),
+            type: 'input_text_buffer.append',
+            text,
+          }))
+          conn.send(JSON.stringify({
+            event_id: newEventId(),
+            type: 'input_text_buffer.commit',
+          }))
         }
         else {
-          for await (const part of text)
-            conn.send(JSON.stringify({ event_id: newEventId(), type: 'input_text_buffer.append', text: part }))
+          for await (const part of text) {
+            conn.send(JSON.stringify({
+              event_id: newEventId(),
+              type: 'input_text_buffer.append',
+              text: part,
+            }))
+          }
         }
-        conn.send(JSON.stringify({ event_id: newEventId(), type: 'session.finish' }))
+        conn.send(JSON.stringify({
+          event_id: newEventId(),
+          type: 'session.finish',
+        }))
       })()
       let sendError: unknown
       sendText.catch((e: unknown) => {
@@ -267,7 +334,13 @@ export function createQwenAudioProvider(): AudioProvider {
 /** Qwen 未指定格式时默认 pcm16；pcm16 时补默认采样率 24000。 */
 function resolveSynthesisOutput(request: { format?: AudioFormat, sampleRate?: number }): SynthesisOutputMeta {
   const format: AudioFormat = request.format ?? 'pcm16'
-  return { format, sampleRate: format === 'pcm16' ? (request.sampleRate ?? 24000) : undefined, channels: 1 }
+  return {
+    format,
+    sampleRate: format === 'pcm16'
+      ? (request.sampleRate ?? 24000)
+      : undefined,
+    channels: 1,
+  }
 }
 
 /** 解析服务端 JSON 事件（解析失败返回空对象，交由调用方忽略） */

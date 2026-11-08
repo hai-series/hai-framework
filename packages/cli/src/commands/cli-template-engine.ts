@@ -24,13 +24,15 @@ import { generateConfigFile } from './cli-config-templates.js'
 // 注册自定义 Handlebars helpers
 Handlebars.registerHelper('deploymentConfig', () => JSON.stringify(parse(generateConfigFile('deploy')), null, 2))
 Handlebars.registerHelper('if_eq', function (this: unknown, a: unknown, b: unknown, options: Handlebars.HelperOptions) {
-  return a === b ? options.fn(this) : options.inverse(this)
+  return a === b
+    ? options.fn(this)
+    : options.inverse(this)
 })
 
 // 配置中的显示名称可包含引号、空格和换行，嵌入 TS / JSON / YAML 时必须作为字面量编码。
 Handlebars.registerHelper('json', (value: unknown) => JSON.stringify(value))
 Handlebars.registerHelper('html', (value: string) => Handlebars.escapeExpression(value))
-Handlebars.registerHelper('yaml', (key: string, value: unknown) => stringify({ [key]: value }).trim())
+Handlebars.registerHelper('yaml', (key: string, value: unknown) => stringify({ [key]: value }, { singleQuote: true }).trim())
 Handlebars.registerHelper('jsString', (value: string) => `'${JSON.stringify(value).slice(1, -1).replace(/\\"/g, '"').replace(/'/g, '\\\'')}'`)
 
 // 同一份模块配置供直接渲染和 create 命令使用，避免精简配置覆盖完整模板。
@@ -48,7 +50,13 @@ Handlebars.registerHelper('moduleConfig', function (this: TemplateContext, modul
 })
 
 const TEMPLATE_SKIP_IF_EMPTY_MARKER = '@skipIfEmpty'
-const NORMALIZED_RENDER_EXTENSIONS = new Set(['.ts', '.js', '.svelte', '.json', '.css'])
+const NORMALIZED_RENDER_EXTENSIONS = new Set([
+  '.ts',
+  '.js',
+  '.svelte',
+  '.json',
+  '.css',
+])
 
 // Capacitor 应用为纯客户端 SPA（Svelte 5 + Vite），没有服务端运行时。
 // 服务端专属产物（hooks、server init）必须跳过，否则预渲染会因访问 url.searchParams 报错。
@@ -61,61 +69,61 @@ const CAPACITOR_SKIPPED_SERVER_FILES = new Set([
 // 单包脚手架直接写具体版本，pnpm fullstack workspace 会通过 catalog: 引用这些版本。
 const VERSIONS = {
   tauriFs: '2.7.1',
-  tauriDialog: '2.8.3',
+  tauriDialog: '2.8.4',
   capacitorShare: '8.0.3',
   capacitorFilesystem: '8.1.5',
-  antfuEslintConfig: '9.5.1',
+  antfuEslintConfig: '10.0.0',
   capacitorSecureStorage: '8.0.1',
   // UI / Icon
-  bitsUi: '2.19.5',
-  iconifyJsonTabler: '1.2.42',
+  bitsUi: '2.20.6',
+  iconifyJsonTabler: '1.2.43',
   iconifyTailwind: '1.2.3',
   // Capacitor
-  capacitorAndroid: '8.5.3',
+  capacitorAndroid: '8.6.0',
   capacitorApp: '8.1.2',
-  capacitorCamera: '8.2.5',
-  capacitorCli: '8.5.3',
-  capacitorCore: '8.5.3',
+  capacitorCamera: '8.2.6',
+  capacitorCli: '8.6.0',
+  capacitorCore: '8.6.0',
   capacitorDevice: '8.0.3',
-  capacitorIos: '8.5.3',
+  capacitorIos: '8.6.0',
   capacitorPreferences: '8.0.1',
   capacitorPushNotifications: '8.1.3',
   capacitorStatusBar: '8.0.4',
   // Tailwind / DaisyUI
-  daisyui: '5.7.47',
-  tailwindcss: '4.3.3',
-  tailwindcssVite: '4.3.3',
+  daisyui: '5.7.50',
+  tailwindcss: '4.3.5',
+  tailwindcssVite: '4.3.5',
   // i18n
-  inlangParaglide: '2.27.0',
-  inlangMessageFormat: '4.5.0',
+  inlangParaglide: '3.2.1',
+  inlangMessageFormat: '4.6.0',
   // Svelte / Vite
-  svelte: '5.57.2',
-  svelteKit: '2.70.3',
-  svelteAdapterNode: '5.5.7',
-  svelteAdapterStatic: '^3.0.10',
-  svelteCheck: '4.7.6',
+  svelte: '5.57.3',
+  svelteKit: '3.1.1',
+  svelteAdapterNode: '6.0.1',
+  svelteAdapterStatic: '4.0.1',
+  svelteCheck: '4.7.8',
   sveltePlugin: '7.3.1',
   // Build / Test
-  vite: '8.3.4',
-  vitest: '4.1.11',
-  tsup: '8.5.1',
+  vite: '8.3.6',
+  vitest: '5.1.0',
+  tsup: '9.0.0',
   pinoPretty: '^13.2.0',
-  rimraf: '6.1.3',
+  rimraf: '6.1.4',
   // ESLint
-  eslint: '10.12.0',
+  eslint: '10.14.0',
   eslintPluginFormat: '2.0.1',
-  eslintPluginSvelte: '3.23.1',
-  svelteEslintParser: '1.9.0',
+  eslintPluginSvelte: '3.24.1',
+  svelteEslintParser: '1.10.1',
   // Node / TS
-  nodeTypes: '26.6.5',
+  nodeTypes: '26.6.6',
   // Svelte / ESLint / tsup 继续使用稳定的 JavaScript 编译 API。
   typescript: '6.0.3',
   // E2E
-  playwright: '1.64.0',
+  playwright: '1.65.0',
   // Validation
-  zod: '4.6.5',
+  zod: '4.6.7',
   // Tauri
-  tauriCli: '2.12.1',
+  tauriCli: '2.12.4',
 } as const
 
 /**
@@ -143,7 +151,13 @@ const FRONTEND_LABELS: Record<FrontendTarget, string> = {
 
 const IMPLEMENTED_FRONTENDS: readonly FrontendTarget[] = ['web', 'app', 'desktop']
 const DEFAULT_FULLSTACK_FRONTENDS: readonly FrontendTarget[] = ['web', 'app', 'desktop']
-const DEFAULT_THEMES = ['light', 'dark', 'high-contrast', 'formal', 'eye-care'] as const
+const DEFAULT_THEMES = [
+  'light',
+  'dark',
+  'high-contrast',
+  'formal',
+  'eye-care',
+] as const
 const DEFAULT_THEME_NAME = 'light'
 // 框架与模板同步发布；范围版本会把旧命名 alpha9 视为比 alpha.58 更新。
 const HAI_PACKAGE_VERSION = getCliVersion()
@@ -364,7 +378,9 @@ function pickCatalogPackages(
   availableCatalogPackages: CatalogPackageVersions,
 ): Record<string, string> {
   return Object.fromEntries(
-    [...new Set(packageNames)]
+    [
+      ...new Set(packageNames),
+    ]
       .sort((left, right) => left.localeCompare(right))
       .map((packageName) => {
         const version = availableCatalogPackages[packageName]
@@ -378,7 +394,10 @@ function pickCatalogPackages(
 
 function buildFullstackPackageSpecifiers(useCatalogProtocol: boolean): FullstackPackageSpecifiers {
   return Object.fromEntries(
-    Object.entries(VERSIONS).map(([key, version]) => [key, useCatalogProtocol ? HAI_PACKAGE_SPECIFIER_CATALOG : version]),
+    Object.entries(VERSIONS).map(([key, version]) => [
+      key,
+      useCatalogProtocol ? HAI_PACKAGE_SPECIFIER_CATALOG : version,
+    ]),
   ) as FullstackPackageSpecifiers
 }
 
@@ -881,7 +900,14 @@ export function buildTemplateContext(options: {
 
   // fullstack 默认交付完整 mini 管理功能，不能移除其必需模块。
   if (options.appType === 'fullstack') {
-    for (const feature of ['iam', 'db', 'cache', 'crypto', 'storage', 'audit']) featureMap[feature] = true
+    for (const feature of [
+      'iam',
+      'db',
+      'cache',
+      'crypto',
+      'storage',
+      'audit',
+    ]) featureMap[feature] = true
   }
 
   // feedback 默认使用独立控制台通知；HTTP 接入仍复用可信认证、持久化和附件。
@@ -985,7 +1011,11 @@ function buildFullstackTemplateContext(
   moduleConfigs?: ModuleConfigs,
   useCatalogProtocol = false,
 ): FullstackTemplateContext {
-  const selectedFrontends = [...new Set(frontendsInput.length > 0 ? frontendsInput : DEFAULT_FULLSTACK_FRONTENDS)]
+  const selectedFrontends = [
+    ...new Set(frontendsInput.length > 0
+      ? frontendsInput
+      : DEFAULT_FULLSTACK_FRONTENDS),
+  ]
 
   const portsConfig = moduleConfigs?.fullstack?.ports ?? {}
   const portFor = (target: ImplementedFrontendTarget): number =>
@@ -1045,8 +1075,12 @@ function resolveI18nContext(moduleConfigs?: ModuleConfigs): FullstackI18nContext
   const baseLocale = moduleConfigs?.fullstack?.i18n?.baseLocale ?? coreLocale
   const requested = moduleConfigs?.fullstack?.i18n?.locales
   const locales = requested && requested.length > 0
-    ? [...new Set(requested)]
-    : [...new Set([baseLocale, 'zh-CN', 'en-US', 'ja-JP'])]
+    ? [
+        ...new Set(requested),
+      ]
+    : [
+        ...new Set([baseLocale, 'zh-CN', 'en-US', 'ja-JP']),
+      ]
   if (!locales.includes(baseLocale)) {
     locales.unshift(baseLocale)
   }
@@ -1067,7 +1101,9 @@ function resolveThemeContext(moduleConfigs?: ModuleConfigs): FullstackThemeConte
   const defaultTheme = moduleConfigs?.fullstack?.theme?.defaultTheme ?? DEFAULT_THEME_NAME
   const requested = moduleConfigs?.fullstack?.theme?.themes
   const themes = requested && requested.length > 0
-    ? [...new Set(requested)]
+    ? [
+        ...new Set(requested),
+      ]
     : [...DEFAULT_THEMES]
   if (!themes.includes(defaultTheme)) {
     themes.unshift(defaultTheme)
@@ -1093,7 +1129,9 @@ function toIdentifier(value: string): string {
     .join('')
   if (!camel)
     return 'app'
-  return IDENTIFIER_START_REGEX.test(camel) ? camel : `app${camel}`
+  return IDENTIFIER_START_REGEX.test(camel)
+    ? camel
+    : `app${camel}`
 }
 
 function toPascalIdentifier(value: string): string {
@@ -1141,13 +1179,17 @@ export async function generateFromTemplates(
   else {
     // API/fullstack 自有骨架，质量门禁仍复用单包模板的同一份规则。
     await fse.copy(path.join(root, 'base', 'eslint-rules.js'), path.join(projectPath, 'eslint-rules.js'))
+    // 多包架构也必须携带 pnpm 配置引用的安全补丁，不能只生成注册项。
+    await fse.copy(path.join(root, 'base', 'patches'), path.join(projectPath, 'patches'))
   }
 
   // ─── ② 拷贝 apps/{appType} 路由 ───
   // messages/ 目录仅在 hasI18n 时拷贝
   const appDir = path.join(root, 'apps', context.appType)
   if (await fse.pathExists(appDir)) {
-    const appExcludes = context.hasI18n ? [] : ['messages']
+    const appExcludes = context.hasI18n
+      ? []
+      : ['messages']
     await copyStaticDir(appDir, projectPath, appExcludes)
   }
 
@@ -1213,7 +1255,9 @@ export async function generateFromTemplates(
   await fse.copy(path.join(root, 'shared', 'public-base-path.mjs'), path.join(projectPath, 'scripts', 'public-base-path.mjs'))
   const browserAssetDirectory = context.fullstack?.frontends.web
     ? path.join(projectPath, 'apps', `${context.projectName}-web`, 'public')
-    : includeBaseTemplate && !context.isSvelteOnlyApp ? path.join(projectPath, 'static') : undefined
+    : includeBaseTemplate && !context.isSvelteOnlyApp
+      ? path.join(projectPath, 'static')
+      : undefined
   if (browserAssetDirectory) {
     await fse.copy(path.join(root, 'shared', 'browser-check'), path.join(browserAssetDirectory, '_hai', 'browser-check'))
     await fse.copy(path.join(root, 'shared', 'browser-startup.spec.ts'), path.join(projectPath, 'e2e', 'browser-startup.spec.ts'))
@@ -1267,7 +1311,9 @@ async function renderDynamicFiles(
 ): Promise<void> {
   // ── base + apps/{appType} → 输出到项目根 ──
   const rootDirs = context.appType === 'fullstack' || context.isApiWorkspace
-    ? [path.join(templatesRoot, 'apps', context.appType)]
+    ? [
+        path.join(templatesRoot, 'apps', context.appType),
+      ]
     : [
         path.join(templatesRoot, 'base'),
         path.join(templatesRoot, 'apps', context.appType),
@@ -1352,7 +1398,9 @@ async function renderHbsInDir(
 
     const destPath = path.join(destRoot, outRelPath)
     const configMatch = /(?:^|[/\\])config[/\\]_([^/\\]+)\.ya?ml$/.exec(outRelPath)
-    const normalizedRendered = normalizeRenderedContent(configMatch ? documentConfig(configMatch[1], parameterizeConfig(configMatch[1], rendered)) : rendered, outRelPath)
+    const normalizedRendered = normalizeRenderedContent(configMatch
+      ? documentConfig(configMatch[1], parameterizeConfig(configMatch[1], rendered))
+      : rendered, outRelPath)
 
     await fse.ensureDir(path.dirname(destPath))
     await fse.writeFile(destPath, normalizedRendered, 'utf-8')
@@ -1409,7 +1457,9 @@ function normalizeRenderedContent(content: string, outRelPath: string): string {
   if (normalized.trim().length === 0) {
     return ''
   }
-  return normalized.endsWith('\n') ? normalized : `${normalized}\n`
+  return normalized.endsWith('\n')
+    ? normalized
+    : `${normalized}\n`
 }
 
 function shouldSkipRenderedFile(template: string, rendered: string): boolean {

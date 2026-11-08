@@ -163,7 +163,7 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### Build options
 
-`--target` selects compile (default), image, app or desktop. `--images serv|web|serv,web` selects images. `--runtime auto|podman|docker` selects the local engine; auto prefers reachable Podman. `--network` overrides build networking, `--no-http-proxy` disables inherited Podman proxies, and `--sqlite-prebuild-mirror` selects a trusted HTTP(S) binary mirror. Native `--platform` and `--arch` require the matching host SDK and Rust toolchain. Builds do not load deployment environments or runtime secrets.
+`--target` selects compile (default), image, app or desktop. `--images serv|web|serv,web` selects images. `--runtime auto|podman|docker` selects the local engine; auto prefers reachable Podman. `--network` overrides build networking, `--no-http-proxy` disables inherited Podman proxies. SQLite 13 includes native binaries in its npm package and uses the configured npm registry. Native `--platform` and `--arch` require the matching host SDK and Rust toolchain. Builds do not load deployment environments or runtime secrets.
 
 #### Describe packaging in `hai.json`
 
@@ -317,7 +317,7 @@ After upgrading, run the project's typecheck, lint, build, test, and affected E2
 
 Use `pnpm build --target app --platform android --runtime auto --debug` to build a debug APK inside a container. Omit `--debug` for a signed release. iOS IPA export uses macOS/Xcode. App and desktop installers are archived under `.hai/build/app/<platform>/<variant>/<buildId>/` and `.hai/build/desktop/<platform>/<variant>/<buildId>/`. See [native build and signing instructions](build.md#原生和离线条件).
 
-`schemaColumns(reldb, table, sql?)` inspects real columns. `migrateSchema(reldb, module, steps, { dryRun: true })` creates no ledger. Modules own their steps. Execution journals versions in `hai_schema_migrations`; SQLite/PostgreSQL are transactional, while MySQL implicit DDL commits require reentrant steps. Failures do not advance versions; retries inspect real state. Older code rejects newer ledgers. Stop old writers and back up DB/session cache first. Rollback restores compatible database and binaries together. See the [upgrade guide](workflow.en.md).
+`reldb.schemaColumns(table, sql?)` inspects real columns. `reldb.migrateSchema(module, steps, { dryRun: true })` creates no ledger. Modules own their steps. Execution journals versions in `hai_schema_migrations`; SQLite/PostgreSQL are transactional, while MySQL implicit DDL commits require reentrant steps. Failures do not advance versions; retries inspect real state. Older code rejects newer ledgers. Stop old writers and back up DB/session cache first. Rollback restores compatible database and binaries together. See the [upgrade guide](workflow.en.md).
 
 ## Development and testing
 

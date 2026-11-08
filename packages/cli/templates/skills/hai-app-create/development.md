@@ -73,7 +73,9 @@ YAML 使用 `${HAI_DB_TYPE:sqlite}` 等显式引用，冒号后是未配置时�
 
 `prod` 是文件模式名，对应 `HAI_CORE_ENV=production`；环境枚举为 `development | test | production | staging`。SvelteKit adapter-node 产物使用 `node scripts/run-node.mjs prod . build/index.js`。路径相对工作目录，公共文件提交 Git，私有文件不进入镜像或版本库。部署容器由 SDK 统一运行文件加载，浏览器只接收公开白名单。
 
-当前 SDK 的 Node 后端默认读取实际挂载的发布 `.env.runtime`，修改后重启容器生效；托管连接保持更高优先级，静态 Web、中间件、网关路径、端口/挂载和 Node 启动参数按部署流程更新。长期修改同步回源环境，下一次后端发布会重新生成；见[部署指引](../hai-deploy/SKILL.md#后端运行配置重载)。自行维护且只使用 Compose `env_file` 注入环境的容器，改文件后需要重新创建，通常无需重建镜像。请求策略可固定引用只读挂载 YAML，后续改文件并重启服务实例重新读取；运行中不监视文件、不逐请求读盘。完整 `HAI_SERV` / `HAI_KIT` 优先于叶子变量，不叠加覆盖。待上传归档与 SDK 策略快照不能手改；运维外部文件和 Compose override 另行备份，SDK 自动回滚不恢复外部文件。
+当前 SDK 的 Node 后端默认读取实际挂载的发布 `.env.runtime`，修改后重启容器生效；托管连接保持更高优先级，静态 Web、中间件、网关路径、端口/挂载和 Node 启动参数按部署流程更新。长期修改同步回源环境，下一次后端发布会重新生成；已交付 `hai-deploy` 的工程按该技能“后端运行配置重载”小节处理，未交付时以本工程实际启动/部署脚本为准。自行维护且只使用 Compose `env_file` 注入环境的容器，改文件后需要重新创建，通常无需重建镜像。请求策略可固定引用只读挂载 YAML，后续改文件并重启服务实例重新读取；运行中不监视文件、不逐请求读盘。同一来源先应用 `HAI_SERV` / `HAI_KIT` 父 JSON，再由叶子变量覆盖；更高来源的父对象才清除低来源细项，遵循本节统一来源顺序。待上传归档与 SDK 策略快照不能手改；运维外部文件和 Compose override 另行备份，SDK 自动回滚不恢复外部文件。
+
+SDK 的 SvelteKit SSR 在 HTTP/HTTPS 下均通过独立 gateway，后端不公开端口；协议、Host 与客户端地址由网关覆盖，adapter 转发信任由 Compose 固定。adapter-node 6 不读取运行期 `ORIGIN`，不能靠改该变量切换访问地址；应用默认不固定 `paths.origin`，旧直接公开 SSR 的部署须重新生成全量交付包。
 
 Fullstack 的环境文件在工程根；service 脚本通过 `../../.env*` 加载，Web/App/Desktop 的 Vite 自动 dotenv 加载关闭（`envDir: false`），开发和预览由 `core.config.loadEnvFiles` 从工程根读取，构建不读取部署环境文件。API workspace 的环境文件在 `apps/<name>-serv/`。独立应用在各自根目录加载。静态 Web 通过 `runtime-config.js` 获取公开地址，部署环境覆盖无需重建镜像；原生包在复制静态资源前配置该入口。修改编译进客户端的默认值时仍需重新构建；fullstack 的公开应用元数据由 service `app.info` 返回。
 

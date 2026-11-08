@@ -23,13 +23,24 @@ describe('@h-ai/serv', () => {
     const app = serv.createApp({
       contract,
       procedures,
-      middlewares: [{ path: '/early', middleware: c => c.text('accepted') }],
+      middlewares: [
+        {
+          path: '/early',
+          middleware: c => c.text('accepted'),
+        },
+      ],
     })
     for (const path of ['/health', '/missing', '/early']) {
-      const response = await app.request(path, { headers: { 'x-request-id': 'feedback-request-1' } })
+      const response = await app.request(path, {
+        headers: { 'x-request-id': 'feedback-request-1' },
+      })
       expect(response.headers.get('x-request-id')).toBe('feedback-request-1')
     }
-    const invalid = await app.request('/health', { headers: { 'x-request-id': 'x'.repeat(129) } })
+    const invalid = await app.request('/health', {
+      headers: {
+        'x-request-id': 'x'.repeat(129),
+      },
+    })
     expect(invalid.headers.get('x-request-id')).toMatch(/^[\w.:-]{1,128}$/)
   })
 
@@ -38,20 +49,26 @@ describe('@h-ai/serv', () => {
     const app = serv.createApp({
       contract,
       procedures,
-      middlewares: [{
-        path: '/locale',
-        middleware: async (c) => {
-          if (c.req.header('x-hai-locale') === 'en-US')
-            await gate.promise
-          else gate.resolve()
-          await Promise.resolve()
-          return c.text(core.i18n.coreM('core_errorTimeout'))
+      middlewares: [
+        {
+          path: '/locale',
+          middleware: async (c) => {
+            if (c.req.header('x-hai-locale') === 'en-US')
+              await gate.promise
+            else gate.resolve()
+            await Promise.resolve()
+            return c.text(core.i18n.coreM('core_errorTimeout'))
+          },
         },
-      }],
+      ],
     })
     const responses = await Promise.all([
-      app.request('/locale', { headers: { 'x-hai-locale': 'en-US' } }),
-      app.request('/locale', { headers: { 'x-hai-locale': 'zh-CN' } }),
+      app.request('/locale', {
+        headers: { 'x-hai-locale': 'en-US' },
+      }),
+      app.request('/locale', {
+        headers: { 'x-hai-locale': 'zh-CN' },
+      }),
     ])
     expect(await Promise.all(responses.map(response => response.text()))).toEqual(['Request timeout', '请求超时'])
     expect(core.i18n.getGlobalLocale()).toBe('zh-CN')
@@ -122,22 +139,32 @@ describe('@h-ai/serv', () => {
 
   it('returns localized JSON 404 for a missing route', async () => {
     const app = serv.createApp({ contract, procedures })
-    const response = await app.request('/api/v1/unregistered', { headers: { 'accept-language': 'en-US' } })
+    const response = await app.request('/api/v1/unregistered', {
+      headers: { 'accept-language': 'en-US' },
+    })
     expect(response.status).toBe(404)
     expect(response.headers.get('content-type')).toContain('application/json')
     expect(await response.json()).toMatchObject({
       success: false,
-      error: { code: HaiCommonError.NOT_FOUND.code, message: expect.stringContaining(core.i18n.coreM('core_errorNotFound', { locale: 'en-US' })) },
+      error: {
+        code: HaiCommonError.NOT_FOUND.code,
+        message: expect.stringContaining(core.i18n.coreM('core_errorNotFound', { locale: 'en-US' })),
+      },
     })
   })
 
   it.each(['ja-JP', 'ja', 'ja-JP,en;q=0.9'])('returns Japanese errors for request locale %s', async (locale) => {
     const app = serv.createApp({ contract, procedures })
-    const response = await app.request('/api/v1/unregistered', { headers: { 'accept-language': locale } })
+    const response = await app.request('/api/v1/unregistered', {
+      headers: { 'accept-language': locale },
+    })
     expect(response.status).toBe(404)
     expect(await response.json()).toMatchObject({
       success: false,
-      error: { code: HaiCommonError.NOT_FOUND.code, message: expect.stringContaining('リソースが見つかりません') },
+      error: {
+        code: HaiCommonError.NOT_FOUND.code,
+        message: expect.stringContaining('リソースが見つかりません'),
+      },
     })
   })
 
@@ -162,14 +189,18 @@ describe('@h-ai/serv', () => {
     expect(response.headers.get('content-type')).toBe('image/png')
     expect(response.headers.get('cache-control')).toBe('public, max-age=60')
     expect(response.headers.get('x-content-type-options')).toBe('nosniff')
-    expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([0x89, 0x50, 0x4E, 0x47])
+    expect([
+      ...new Uint8Array(await response.arrayBuffer()),
+    ]).toEqual([0x89, 0x50, 0x4E, 0x47])
   })
 
   it('supports path-scoped custom middlewares', async () => {
     const app = serv.createApp({
       contract,
       procedures,
-      http: { openapi: { path: '/openapi.json' } },
+      http: {
+        openapi: { path: '/openapi.json' },
+      },
       middlewares: [
         {
           path: '/openapi.json',
@@ -267,7 +298,14 @@ describe('@h-ai/serv', () => {
   })
 
   it.each(['/somepath/reference', '/somepath/reference/'])('文档 %s 的脚本和 spec 保持在同一网关前缀，保留或剥离前缀均可访问', async (path) => {
-    const app = serv.createApp({ contract, procedures, http: { docs: { path: path as `/${string}` }, openapi: { path: '/somepath/openapi.json' } } })
+    const app = serv.createApp({
+      contract,
+      procedures,
+      http: {
+        docs: { path: path as `/${string}` },
+        openapi: { path: '/somepath/openapi.json' },
+      },
+    })
     const response = await app.request(path)
     const html = await response.text()
     expect(response.status).toBe(200)
@@ -279,7 +317,14 @@ describe('@h-ai/serv', () => {
     expect((await app.request(scriptPath)).status).toBe(200)
     expect(new URL(spec, base).pathname).toBe('/somepath/openapi.json')
     expect((await app.request('/_hai/scalar.js')).status).toBe(404)
-    const stripped = serv.createApp({ contract, procedures, http: { docs: { path: '/reference' }, openapi: { path: '/openapi.json' } } })
+    const stripped = serv.createApp({
+      contract,
+      procedures,
+      http: {
+        docs: { path: '/reference' },
+        openapi: { path: '/openapi.json' },
+      },
+    })
     const strippedHtml = await (await stripped.request('/reference')).text()
     const strippedScript = /src="([^"]+)"/.exec(strippedHtml)![1]!
     expect(new URL(strippedScript, 'https://example.test/somepath/reference').pathname).toBe('/somepath/_hai/scalar.js')

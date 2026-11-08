@@ -1,5 +1,7 @@
 <script lang='ts'>
-  import * as m from '$lib/paraglide/messages.js'
+  import { useToastFeedback } from '@h-ai/ui/toast'
+  import { onMount } from 'svelte'
+  import * as m from '#lib/paraglide/messages.js'
   import {
     currentUsers,
     currentUsersError,
@@ -8,9 +10,7 @@
     isUsersLoading,
     loadMoreUsers,
     refreshUsers,
-  } from '$lib/stores/users-store.svelte.js'
-  import { useToastFeedback } from '@h-ai/ui/toast'
-  import { onMount } from 'svelte'
+  } from '#lib/stores/users-store.svelte.js'
 
   onMount(() => {
     void refreshUsers()
@@ -26,7 +26,9 @@
   <div class='space-y-4 p-4 pb-6'>
     <section>
       <h1 class='text-2xl font-bold'>{m.users_title()}</h1>
-      <p class='text-base-content/60 mt-1 text-sm'>{m.users_subtitle({ total: currentUsersTotal() })}</p>
+      <p class='text-base-content/60 mt-1 text-sm'>{m.users_subtitle({
+        total: currentUsersTotal(),
+      })}</p>
     </section>
 
     <InfiniteScroll
@@ -45,8 +47,14 @@
               <div class='min-w-0 flex-1'>
                 <div class='flex items-center gap-2'>
                   <p class='truncate font-medium'>{user.username}</p>
-                  <Badge variant={user.accountStatus === 'active' ? 'success' : 'warning'} size='sm'>
-                    {user.accountStatus === 'active' ? m.account_active() : user.accountStatus === 'dormant' ? m.account_dormant() : m.account_closed()}
+                  <Badge variant={user.accountStatus === 'active'
+                    ? 'success'
+                    : 'warning'} size='sm'>
+                    {user.accountStatus === 'active'
+                      ? m.account_active()
+                      : user.accountStatus === 'dormant'
+                      ? m.account_dormant()
+                      : m.account_closed()}
                   </Badge>
                 </div>
                 <p class='text-base-content/50 truncate text-sm'>{user.email ?? m.users_email_empty()}</p>

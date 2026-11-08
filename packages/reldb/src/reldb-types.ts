@@ -8,6 +8,7 @@
 import type { ErrorInfo, HaiResult, PaginatedResult, PaginationOptions, PaginationOptionsInput } from '@h-ai/core'
 import type { DbType, ReldbConfig, ReldbConfigInput } from './reldb-config.js'
 import type { JsonSqlExpr, ReldbJsonOps } from './reldb-json.js'
+import type { SchemaMigration, SchemaMigrationPlan } from './reldb-migration.js'
 import { core } from '@h-ai/core'
 
 export type { JsonSqlExpr, ReldbJsonOps }
@@ -837,6 +838,28 @@ export interface ReldbFunctions {
 
   /** 事务管理器 */
   readonly tx: TxManager
+
+  /**
+   * 预检或执行模块维护的版本迁移；绑定当前数据库，不接受其它模块实例。
+   * @example
+   * ```ts
+   * import { reldb } from '@h-ai/reldb'
+   * const plan = await reldb.migrateSchema('example', [], { dryRun: true })
+   * if (!plan.success) throw new Error(plan.error.message)
+   * ```
+   */
+  migrateSchema: (module: string, steps: readonly SchemaMigration[], options?: { dryRun?: boolean }) => Promise<HaiResult<SchemaMigrationPlan>>
+
+  /**
+   * 只读查询当前数据库真实列名；sql 可指定当前事务，不创建表。
+   * @example
+   * ```ts
+   * import { reldb } from '@h-ai/reldb'
+   * const columns = await reldb.schemaColumns('hai_iam_users')
+   * if (!columns.success) throw new Error(columns.error.message)
+   * ```
+   */
+  schemaColumns: (table: string, sql?: DmlOperations) => Promise<HaiResult<string[]>>
 
   /** 当前数据库脱敏配置快照（未初始化时为 null） */
   readonly config: ReldbConfig | null

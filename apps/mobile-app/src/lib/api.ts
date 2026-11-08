@@ -55,14 +55,18 @@ export async function initApi(): Promise<void> {
   const initResult = await mobileApiClient.init({
     baseUrl: resolveApiBase(),
     clientName: 'hai-mobile-app',
-    headers: native ? { 'x-hai-token-transport': 'body' } : {},
+    headers: native
+      ? { 'x-hai-token-transport': 'body' }
+      : {},
     auth: {
       storage: await createTokenStorage(),
       onRefreshFailed: () => {
         navigateToLogin()
       },
     },
-    ...(transport ? { transport } : {}),
+    ...(transport
+      ? { transport }
+      : {}),
   })
 
   if (!initResult.success) {

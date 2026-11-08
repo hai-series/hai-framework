@@ -11,7 +11,11 @@ describe('admin runtime kit config', () => {
     const configured = getAdminKitConfig()
     expect(configured.transport).toMatchObject({ keyExchangePath: '/api/_hai/key-exchange' })
     expect(configured.server).toMatchObject({ host: '127.0.0.1', port: 3000 })
-    expect(configured.access).toMatchObject({ rules: [{ id: 'private-network-label' }] })
+    expect(configured.access).toMatchObject({
+      rules: [
+        { id: 'private-network-label' },
+      ],
+    })
     const { load } = await import('../src/routes/+layout.server.js')
     const publicData = load()
     expect(Object.keys(publicData.kitConfig)).toEqual(['transport'])

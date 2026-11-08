@@ -1,7 +1,10 @@
 import { expect, test } from '@playwright/test'
 import { loginOnPage, waitForHydration } from './helpers'
 
-for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+for (const viewport of [
+  { width: 1440, height: 900 },
+  { width: 390, height: 844 },
+]) {
   test(`列表分页在空数据、少量数据和滚动时保留在底部 (${viewport.width})`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport)
     await loginOnPage(page, 'admin', 'admin123456')
@@ -9,7 +12,9 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     for (const state of ['few', 'empty', 'overflow']) {
       const route = state === 'overflow'
         ? '/admin/iam/permissions?pageSize=100'
-        : `/admin/iam/users${state === 'empty' ? '?search=pagination-no-matching-user' : '?search=admin'}`
+        : `/admin/iam/users${state === 'empty'
+          ? '?search=pagination-no-matching-user'
+          : '?search=admin'}`
       await page.goto(route)
       await waitForHydration(page)
       const navigation = page.locator('.hai-pagination__navigation')
@@ -46,7 +51,10 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
         await expect(table.locator('tbody tr').last()).toBeVisible()
         expect((await navigation.boundingBox())!.y).toBe(before!.y)
       }
-      await page.screenshot({ path: testInfo.outputPath(`pagination-${state}-${viewport.width}.png`), fullPage: true })
+      await page.screenshot({
+        path: testInfo.outputPath(`pagination-${state}-${viewport.width}.png`),
+        fullPage: true,
+      })
     }
   })
 }

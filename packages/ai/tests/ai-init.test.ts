@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
 import { ai, AIConfigSchema, HaiAIError, OptionalSecretSchema } from '../src/index.js'
+import { createMemoryStoreProvider } from '../src/store/providers/ai-store-provider-memory.js'
 
 function createNoopRelStore<T>(): AIRelStore<T> {
   return {
@@ -33,6 +34,41 @@ function createNoopVectorStore(): AIVectorStore {
 }
 
 describe('ai.init', () => {
+  it('关闭等待在途初始化，完成后不会重新发布实例', async () => {
+    const provider = createMemoryStoreProvider()
+    let release!: () => void
+    let reached!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const blocked = new Promise<void>((resolve) => {
+      reached = resolve
+    })
+    provider.initialize = async () => {
+      reached()
+      await gate
+    }
+    const initializing = ai.init({}, { storeProvider: provider })
+    try {
+      await blocked
+      let finished = false
+      const closing = ai.close().then(() => {
+        finished = true
+      })
+      await Promise.resolve()
+      expect(finished).toBe(false)
+      release()
+      expect((await initializing).success).toBe(true)
+      await closing
+      expect(ai.isInitialized).toBe(false)
+      expect((await ai.llm.ask('closed')).success).toBe(false)
+    }
+    finally {
+      release()
+      await initializing
+      await ai.close()
+    }
+  })
   it('可选密钥应把 null 和空白字符串规范化为 undefined', () => {
     expect(OptionalSecretSchema.parse(null)).toBeUndefined()
     expect(OptionalSecretSchema.parse('')).toBeUndefined()
@@ -42,13 +78,15 @@ describe('ai.init', () => {
     const config = AIConfigSchema.parse({
       llm: { apiKey: null },
       audio: {
-        models: [{
-          id: 'asr',
-          provider: 'mimo',
-          model: 'mimo-v2.5-asr',
-          operations: ['transcribe'],
-          apiKey: null,
-        }],
+        models: [
+          {
+            id: 'asr',
+            provider: 'mimo',
+            model: 'mimo-v2.5-asr',
+            operations: ['transcribe'],
+            apiKey: null,
+          },
+        ],
       },
     })
     expect(config.llm.apiKey).toBeUndefined()
@@ -125,7 +163,9 @@ describe('ai.init', () => {
   it('同时配置 llm 和 mcp', async () => {
     const result = await ai.init({
       llm: { model: 'gpt-4o', apiKey: 'sk-test' },
-      mcp: { server: { name: 'my-server' } },
+      mcp: {
+        server: { name: 'my-server' },
+      },
     })
     expect(result.success).toBe(true)
     expect(ai.config?.llm?.model).toBe('gpt-4o')
@@ -135,17 +175,23 @@ describe('ai.init', () => {
 
   it('mcp 配置默认值', async () => {
     await ai.init({
-      mcp: { server: { name: 'test-server' } },
+      mcp: {
+        server: { name: 'test-server' },
+      },
     })
     expect(ai.config?.mcp?.server?.version).toBe('1.0.0')
     await ai.close()
   })
 
   it('重复初始化应重置状态', async () => {
-    await ai.init({ llm: { model: 'model-a' } })
+    await ai.init({
+      llm: { model: 'model-a' },
+    })
     expect(ai.config!.llm?.model).toBe('model-a')
 
-    await ai.init({ llm: { model: 'model-b' } })
+    await ai.init({
+      llm: { model: 'model-b' },
+    })
     expect(ai.config!.llm?.model).toBe('model-b')
     await ai.close()
   })
@@ -178,7 +224,9 @@ describe('ai.close', () => {
       close: async () => { closeCount += 1 },
     }
 
-    const result = await ai.init({ llm: { model: 'gpt-4o-mini' } }, { storeProvider })
+    const result = await ai.init({
+      llm: { model: 'gpt-4o-mini' },
+    }, { storeProvider })
     expect(result.success).toBe(true)
 
     await ai.close()
@@ -197,7 +245,11 @@ describe('ai.isInitialized', () => {
 describe('未初始化时的 LLM 操作', () => {
   it('ai.llm.chat 返回 NOT_INITIALIZED', async () => {
     await ai.close()
-    const result = await ai.llm.chat({ messages: [{ role: 'user', content: '你好' }] })
+    const result = await ai.llm.chat({
+      messages: [
+        { role: 'user', content: '你好' },
+      ],
+    })
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
@@ -215,7 +267,11 @@ describe('未初始化时的 LLM 操作', () => {
 
   it('ai.llm.chatStream 抛出 NOT_INITIALIZED', async () => {
     await ai.close()
-    const stream = ai.llm.chatStream({ messages: [{ role: 'user', content: '你好' }] })
+    const stream = ai.llm.chatStream({
+      messages: [
+        { role: 'user', content: '你好' },
+      ],
+    })
     await expect(async () => {
       for await (const _chunk of stream) {
         // 不应进入
@@ -322,7 +378,9 @@ describe('ai.tools / ai.stream 无需初始化即可使用', () => {
   it('ai.stream.createSSEDecoder 无需 init', async () => {
     await ai.close()
     const decoder = ai.stream.createSSEDecoder()
-    const events = [...decoder.decode('data: hello\n\n')]
+    const events = [
+      ...decoder.decode('data: hello\n\n'),
+    ]
     expect(events[0].data).toBe('hello')
   })
 })

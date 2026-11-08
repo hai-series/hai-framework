@@ -17,9 +17,17 @@ function failure(module: string, phase: 'start' | 'close', detail?: unknown): { 
       }
     }
   }
-  const code = detail && typeof detail === 'object' && 'code' in detail && (typeof detail.code === 'number' || typeof detail.code === 'string') ? detail.code : undefined
-  const uniqueFields = [...new Set(fields)]
-  let message = i18n.coreM(phase === 'start' ? 'core_runtimeStartFailed' : 'core_runtimeCloseFailed', { params: { module } })
+  const code = detail && typeof detail === 'object' && 'code' in detail && (typeof detail.code === 'number' || typeof detail.code === 'string')
+    ? detail.code
+    : undefined
+  const uniqueFields = [
+    ...new Set(fields),
+  ]
+  let message = i18n.coreM(phase === 'start'
+    ? 'core_runtimeStartFailed'
+    : 'core_runtimeCloseFailed', {
+    params: { module },
+  })
   // 仅依据结构化错误码和 Schema 路径说明原因，不猜测字段缺失，也不回显原始异常或配置值。
   if (phase === 'start' && uniqueFields.length) {
     const configMessage = code === HaiConfigError.CONFIG_ENV_VAR_MISSING.code
@@ -27,14 +35,45 @@ function failure(module: string, phase: 'start' | 'close', detail?: unknown): { 
       : code === HaiConfigError.CONFIG_VALIDATION_ERROR.code || (detail && typeof detail === 'object' && 'issues' in detail && Array.isArray(detail.issues))
         ? 'core_runtimeConfigInvalid'
         : 'core_runtimeConfigProblem'
-    message = i18n.coreM(configMessage, { params: { message, fields: uniqueFields.join(', ') } })
+    message = i18n.coreM(configMessage, {
+      params: {
+        message,
+        fields: uniqueFields.join(', '),
+      },
+    })
   }
   // 启动边界即使只打印 message，也能看到原因、处理建议和错误码；关闭失败保留字段诊断。
   const diagnostics = [
-    ...(code !== undefined ? [i18n.coreM('core_runtimeErrorCode', { params: { code } })] : []),
-    ...(phase === 'close' ? uniqueFields : []),
+    ...(code !== undefined
+      ? [
+          i18n.coreM('core_runtimeErrorCode', {
+            params: { code },
+          }),
+        ]
+      : []),
+    ...(phase === 'close'
+      ? uniqueFields
+      : []),
   ].join(', ')
-  return { success: false, error: { ...HaiCommonError.INIT_FAILED, message: diagnostics ? `${message} (${diagnostics})` : message, ext: { module, phase, ...(code !== undefined ? { code } : {}), ...(uniqueFields.length ? { fields: uniqueFields } : {}) } } }
+  return {
+    success: false,
+    error: {
+      ...HaiCommonError.INIT_FAILED,
+      message: diagnostics
+        ? `${message} (${diagnostics})`
+        : message,
+      ext: {
+        module,
+        phase,
+        ...(code !== undefined
+          ? { code }
+          : {}),
+        ...(uniqueFields.length
+          ? { fields: uniqueFields }
+          : {}),
+      },
+    },
+  }
 }
 
 /**

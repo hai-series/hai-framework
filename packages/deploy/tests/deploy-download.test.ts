@@ -22,12 +22,27 @@ it.each([
 
 it('自定义源保留原始仓库对应关系和摘要', () => {
   const digest = `sha256:${'a'.repeat(64)}`
-  expect(resolveImageReference(`ghcr.io/rustfs/rustfs@${digest}`, { type: 'custom', registries: { 'ghcr.io': 'mirror.example.com/cache/ghcr.io' } })).toBe(`mirror.example.com/cache/ghcr.io/rustfs/rustfs@${digest}`)
-  expect(() => resolveImageReference('ghcr.io/rustfs/rustfs:1.0.1', { type: 'custom', registries: { 'docker.io': 'mirror.example.com' } })).toThrow('ghcr.io')
+  expect(resolveImageReference(`ghcr.io/rustfs/rustfs@${digest}`, {
+    type: 'custom',
+    registries: { 'ghcr.io': 'mirror.example.com/cache/ghcr.io' },
+  })).toBe(`mirror.example.com/cache/ghcr.io/rustfs/rustfs@${digest}`)
+  expect(() => resolveImageReference('ghcr.io/rustfs/rustfs:1.0.1', {
+    type: 'custom',
+    registries: { 'docker.io': 'mirror.example.com' },
+  })).toThrow('ghcr.io')
 })
 
-it.each(['https://user:private-value@mirror.example.com', 'http://mirror.example.com', 'mirror.example.com/a/../b', 'mirror.example.com?token=private-value', 'mirror.example.com/a%2fb'])('拒绝非法镜像映射且不回显私密值：%s', (replacement) => {
-  const resolve = (): string => resolveImageReference('node:24.22.1-bookworm-slim', { type: 'custom', registries: { 'docker.io': replacement } })
+it.each([
+  'https://user:private-value@mirror.example.com',
+  'http://mirror.example.com',
+  'mirror.example.com/a/../b',
+  'mirror.example.com?token=private-value',
+  'mirror.example.com/a%2fb',
+])('拒绝非法镜像映射且不回显私密值：%s', (replacement) => {
+  const resolve = (): string => resolveImageReference('node:24.22.1-bookworm-slim', {
+    type: 'custom',
+    registries: { 'docker.io': replacement },
+  })
   expect(resolve).toThrow()
   expect(resolve).not.toThrow('private-value')
 })
@@ -44,7 +59,12 @@ it('继承与禁用代理不会改写调用者环境', () => {
 
 it('自定义代理覆盖继承值并保留绕过列表', () => {
   vi.stubEnv('HTTPS_PROXY', 'http://127.0.0.1:10808')
-  expect(resolveDownloadProxy({ mode: 'custom', url: 'http://proxy.example.com:3128', bypass: 'localhost,.example.com' })).toMatchObject({ HTTP_PROXY: 'http://proxy.example.com:3128', HTTPS_PROXY: 'http://proxy.example.com:3128', NO_PROXY: 'localhost,.example.com', ALL_PROXY: '' })
+  expect(resolveDownloadProxy({ mode: 'custom', url: 'http://proxy.example.com:3128', bypass: 'localhost,.example.com' })).toMatchObject({
+    HTTP_PROXY: 'http://proxy.example.com:3128',
+    HTTPS_PROXY: 'http://proxy.example.com:3128',
+    NO_PROXY: 'localhost,.example.com',
+    ALL_PROXY: '',
+  })
   expect(() => resolveDownloadProxy({ mode: 'custom', url: 'http://user:private-value@proxy.example.com' })).toThrow()
 })
 

@@ -52,7 +52,10 @@ export function allGuards(...guards: RouteGuard[]): RouteGuard {
  */
 export function anyGuard(...guards: RouteGuard[]): RouteGuard {
   return async (event, session): Promise<GuardResult> => {
-    let lastResult: GuardResult = { allowed: false, message: kitM('kit_noGuardsPassed') }
+    let lastResult: GuardResult = {
+      allowed: false,
+      message: kitM('kit_noGuardsPassed'),
+    }
 
     for (const guard of guards) {
       const result = await guard(event, session)

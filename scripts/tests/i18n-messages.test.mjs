@@ -8,10 +8,23 @@ const root = fileURLToPath(new URL('../../', import.meta.url))
 
 function messageFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    if (['node_modules', 'dist', 'build', 'test-results', 'tmp', '.svelte-kit', '.turbo'].includes(entry.name) || entry.name.startsWith('.tmp-'))
+    if ([
+      'node_modules',
+      'dist',
+      'build',
+      'test-results',
+      'tmp',
+      '.svelte-kit',
+      '.turbo',
+    ].includes(entry.name) || entry.name.startsWith('.tmp-')) {
       return []
+    }
     const filename = path.join(directory, entry.name)
-    return entry.isDirectory() ? messageFiles(filename) : /^en-US\.json(?:\.hbs)?$/.test(entry.name) ? [filename] : []
+    return entry.isDirectory()
+      ? messageFiles(filename)
+      : /^en-US\.json(?:\.hbs)?$/.test(entry.name)
+        ? [filename]
+        : []
   })
 }
 
@@ -27,12 +40,19 @@ it('消息契约扫描排除生成工程、构建产物和浏览器证据目录'
   if (path.dirname(fixture) !== parent)
     throw new Error('Unexpected fixture cleanup path')
   try {
-    for (const relative of ['src/messages', '.tmp-template-quality-123/messages', 'build/messages', 'test-results/messages']) {
+    for (const relative of [
+      'src/messages',
+      '.tmp-template-quality-123/messages',
+      'build/messages',
+      'test-results/messages',
+    ]) {
       const directory = path.join(fixture, relative)
       mkdirSync(directory, { recursive: true })
       writeFileSync(path.join(directory, 'en-US.json'), '{}')
     }
-    expect(messageFiles(fixture)).toEqual([path.join(fixture, 'src/messages/en-US.json')])
+    expect(messageFiles(fixture)).toEqual([
+      path.join(fixture, 'src/messages/en-US.json'),
+    ])
   }
   finally {
     rmSync(fixture, { recursive: true, force: true })
@@ -48,8 +68,12 @@ describe.each(['packages', 'apps'])('%s 的三语消息契约', (directory) => {
       for (const [key, message] of Object.entries(source)) {
         expect(typeof translated[key]).toBe('string')
         expect(translated[key].trim()).not.toBe('')
-        expect([...translated[key].matchAll(/\{\w+\}/g)].map(match => match[0]).sort())
-          .toEqual([...message.matchAll(/\{\w+\}/g)].map(match => match[0]).sort())
+        expect([
+          ...translated[key].matchAll(/\{\w+\}/g),
+        ].map(match => match[0]).sort())
+          .toEqual([
+            ...message.matchAll(/\{\w+\}/g),
+          ].map(match => match[0]).sort())
       }
     }
   })

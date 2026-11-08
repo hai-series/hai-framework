@@ -1,12 +1,13 @@
 /** 部署环境的加载和持久化；公开环境文件不保存真实凭据。 */
 import type { HaiResult } from '@h-ai/core'
-import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { extname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 import { LineCounter, parseDocument } from 'yaml'
 import configurationShapes from './deploy-config-shapes.json' with { type: 'json' }
 import { deployM } from './deploy-i18n.js'
+import { readLocalFile, writeLocalFile } from './deploy-local-file.js'
 import { HaiDeployError } from './deploy-types.js'
 
 /**
@@ -36,7 +37,7 @@ const shapes: Record<string, Record<string, unknown>> = configurationShapes
 function environmentFile(path: string): Record<string, string> {
   const values: Record<string, string> = {}
   if (existsSync(path)) {
-    for (const [name, value] of Object.entries(core.config.parseEnv(readFileSync(path, 'utf8')))) {
+    for (const [name, value] of Object.entries(core.config.parseEnv(readLocalFile(path).toString('utf8')))) {
       if (value !== undefined)
         values[name] = value
     }
@@ -75,10 +76,20 @@ export function mergeEnvironmentLayers(layers: Array<Record<string, string | und
  * ```
  */
 export function describeDeploymentVariableSources(directory: string, environment: string, values: Record<string, string>, names: readonly string[]): string {
-  const files = [`.env.${environment}.local`, '.env.local', `.env.${environment}`, '.env']
-    .map(name => ({ path: join(directory, name), values: environmentFile(join(directory, name)) }))
+  const files = [
+    `.env.${environment}.local`,
+    '.env.local',
+    `.env.${environment}`,
+    '.env',
+  ]
+    .map(name => ({
+      path: join(directory, name),
+      values: environmentFile(join(directory, name)),
+    }))
   return names.filter(name => values[name]).map((name) => {
-    const source = process.env[name] !== undefined ? 'process.env' : files.find(file => Object.hasOwn(file.values, name))?.path
+    const source = process.env[name] !== undefined
+      ? 'process.env'
+      : files.find(file => Object.hasOwn(file.values, name))?.path
     return `${name}: ${source ?? '.env.runtime'}`
   }).join('\n')
 }
@@ -107,37 +118,78 @@ export function loadDeploymentConfig(name: string, path: string, values: Record<
     if (extname(path).toLowerCase() === '.json') {
       try {
         const project: unknown = JSON.parse(content)
-        input = project && typeof project === 'object' && !Array.isArray(project) ? (project as Record<string, unknown>)[name] : undefined
+        input = project && typeof project === 'object' && !Array.isArray(project)
+          ? (project as Record<string, unknown>)[name]
+          : undefined
       }
       catch {
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path, line: '1' } }))
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
+          params: { path, line: '1' },
+        }))
       }
-      if (!input || typeof input !== 'object' || Array.isArray(input))
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path, line: '1' } }))
+      if (!input || typeof input !== 'object' || Array.isArray(input)) {
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
+          params: { path, line: '1' },
+        }))
+      }
     }
     else {
       const lineCounter = new LineCounter()
       const document = parseDocument(content, { lineCounter, prettyErrors: false })
-      if (document.errors.length)
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path, line: String(lineCounter.linePos(document.errors[0]!.pos[0]).line) } }))
+      if (document.errors.length) {
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
+          params: {
+            path,
+            line: String(lineCounter.linePos(document.errors[0]!.pos[0]).line),
+          },
+        }))
+      }
       input = document.toJS()
     }
-    const resolved = core.config.resolve({ name, value: input, environment: values, shape: shapes[name], missing: 'empty' })
+    const resolved = core.config.resolve({
+      name,
+      value: input,
+      environment: values,
+      shape: shapes[name],
+      missing: 'empty',
+    })
     if (!resolved.success) {
       const cause = resolved.error.cause
-      const fields = cause && typeof cause === 'object' && 'fields' in cause ? cause.fields : undefined
-      const safeFields = Array.isArray(fields) ? fields.filter((field: unknown) => typeof field === 'string' && /^HAI_[A-Z0-9_]+$/.test(field)).join(', ') : ''
-      if (name === 'reach' && /^HAI_REACH_PROVIDERS_\d+(?:_|$)/.test(safeFields) && /^\s*\[\s*\]\s*$/.test(values.HAI_REACH_PROVIDERS ?? ''))
-        return err({ ...resolved.error, message: deployM('deploy_reachEmptyProviderOverride', { params: { path, field: safeFields } }) })
-      return err({ ...resolved.error, message: deployM('deploy_configResolutionFailed', { params: { path, fields: safeFields || name } }) })
+      const fields = cause && typeof cause === 'object' && 'fields' in cause
+        ? cause.fields
+        : undefined
+      const safeFields = Array.isArray(fields)
+        ? fields.filter((field: unknown) => typeof field === 'string' && /^HAI_[A-Z0-9_]+$/.test(field)).join(', ')
+        : ''
+      if (name === 'reach' && /^HAI_REACH_PROVIDERS_\d+(?:_|$)/.test(safeFields) && /^\s*\[\s*\]\s*$/.test(values.HAI_REACH_PROVIDERS ?? '')) {
+        return err({
+          ...resolved.error,
+          message: deployM('deploy_reachEmptyProviderOverride', {
+            params: { path, field: safeFields },
+          }),
+        })
+      }
+      return err({
+        ...resolved.error,
+        message: deployM('deploy_configResolutionFailed', {
+          params: { path, fields: safeFields || name },
+        }),
+      })
     }
     const config = resolved.data
-    if (config !== null && (typeof config !== 'object' || Array.isArray(config)))
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path, line: '1' } }))
-    return ok(config && typeof config === 'object' && !Array.isArray(config) ? config as Record<string, unknown> : {})
+    if (config !== null && (typeof config !== 'object' || Array.isArray(config))) {
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
+        params: { path, line: '1' },
+      }))
+    }
+    return ok(config && typeof config === 'object' && !Array.isArray(config)
+      ? config as Record<string, unknown>
+      : {})
   }
   catch {
-    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileUnreadable', { params: { path } }))
+    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileUnreadable', {
+      params: { path },
+    }))
   }
 }
 
@@ -158,13 +210,20 @@ export function loadDeploymentConfig(name: string, path: string, values: Record<
  * ```
  */
 export function loadDeploymentEnvironment(options: { environment: string, envDir: string, requireFile?: boolean }): HaiResult<DeploymentEnvironment> {
-  const environment = options.environment === 'production' ? 'prod' : options.environment === 'development' ? 'dev' : options.environment
+  const environment = options.environment === 'production'
+    ? 'prod'
+    : options.environment === 'development'
+      ? 'dev'
+      : options.environment
   if (!/^[a-z0-9][\w-]*$/i.test(environment) || ['local', 'example'].includes(environment.toLowerCase()))
     return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_invalidEnvironment'))
   const envDir = resolve(options.envDir)
   const target = join(envDir, `.env.${environment}`)
-  if (options.requireFile !== false && !existsSync(target))
-    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_environmentMissing', { params: { path: target } }))
+  if (options.requireFile !== false && !existsSync(target)) {
+    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_environmentMissing', {
+      params: { path: target },
+    }))
+  }
   const loaded = core.config.loadEnvFiles({ mode: environment, envDir })
   if (!loaded.success)
     return loaded
@@ -178,12 +237,32 @@ export function loadDeploymentEnvironment(options: { environment: string, envDir
     }
     values.HAI_DEPLOY_ENVIRONMENT = environment
     if (values.HAI_CORE_ENV === undefined) {
-      const fallback = environment === 'prod' ? 'production' : environment === 'dev' ? 'development' : environment === 'test' ? 'test' : 'staging'
-      const configured = core.config.resolve({ name: 'core', value: { env: fallback }, environment: values, shape: shapes.core })
-      const settings = configured.success && configured.data && typeof configured.data === 'object' ? configured.data as Record<string, unknown> : undefined
-      values.HAI_CORE_ENV = typeof settings?.env === 'string' ? settings.env : fallback
+      const fallback = environment === 'prod'
+        ? 'production'
+        : environment === 'dev'
+          ? 'development'
+          : environment === 'test'
+            ? 'test'
+            : 'staging'
+      const configured = core.config.resolve({
+        name: 'core',
+        value: { env: fallback },
+        environment: values,
+        shape: shapes.core,
+      })
+      const settings = configured.success && configured.data && typeof configured.data === 'object'
+        ? configured.data as Record<string, unknown>
+        : undefined
+      values.HAI_CORE_ENV = typeof settings?.env === 'string'
+        ? settings.env
+        : fallback
     }
-    return ok({ environment, envDir, values, targetValues: selected })
+    return ok({
+      environment,
+      envDir,
+      values,
+      targetValues: selected,
+    })
   }
   catch {
     return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_environmentReadFailed'))
@@ -194,6 +273,9 @@ const reachGatewayEnvironment = /^HAI_REACH_PROVIDERS_\d+_GATEWAY$/i
 
 /** 判断值是否包含凭据；连接 URL 和 JSON 配置需要递归检查。 */
 function isSecret(name: string, value: string): boolean {
+  // 通用 API 的认证头可使用任意字段名，与网关一样整体保密。
+  if (name === 'headers' || /^HAI_REACH_PROVIDERS_\d+_HEADERS(?:_|$)/i.test(name))
+    return true
   // 任意网关头或正文都可能包含凭据，不能只靠字段名猜测。
   if (/^HAI_REACH_PROVIDERS_\d+_GATEWAY_(?:HEADERS|BODY)(?:_|$)/i.test(name))
     return true
@@ -201,8 +283,11 @@ function isSecret(name: string, value: string): boolean {
     return true
   try {
     const url = new URL(value)
-    if (url.username || url.password || [...url.searchParams.keys()].some(key => /password|secret|token|key|authorization/i.test(key)))
+    if (url.username || url.password || [
+      ...url.searchParams.keys(),
+    ].some(key => /password|secret|token|key|authorization/i.test(key))) {
       return true
+    }
   }
   catch { /* 非 URL 配置继续按结构检查。 */ }
   try {
@@ -210,7 +295,9 @@ function isSecret(name: string, value: string): boolean {
     if (parsed && typeof parsed === 'object') {
       if ((name === 'gateway' || reachGatewayEnvironment.test(name)) && (Object.hasOwn(parsed, 'headers') || Object.hasOwn(parsed, 'body')))
         return true
-      return Object.entries(parsed).some(([key, nested]) => isSecret(key, typeof nested === 'string' ? nested : JSON.stringify(nested)))
+      return Object.entries(parsed).some(([key, nested]) => isSecret(key, typeof nested === 'string'
+        ? nested
+        : JSON.stringify(nested)))
     }
   }
   catch { /* 普通字符串无需 JSON 处理。 */ }
@@ -231,7 +318,11 @@ export function generatedVariables(values: Record<string, unknown>): Record<stri
   for (const [name, value] of Object.entries(values)) {
     if (value === undefined)
       continue
-    const text = typeof value === 'string' ? value : value === null || typeof value === 'object' ? JSON.stringify(value) : String(value)
+    const text = typeof value === 'string'
+      ? value
+      : value === null || typeof value === 'object'
+        ? JSON.stringify(value)
+        : String(value)
     generated[name] = text
     // 独立进程开关不参与 Serv Schema 展开，也不能被空父对象移除。
     if (name === 'HAI_SERV_REFRESH_COOKIE_SECURE')
@@ -253,7 +344,13 @@ export function generatedVariables(values: Record<string, unknown>): Record<stri
     const structuredNames = Object.keys(group).filter(name => structures.has(name))
     if (!structuredNames.length)
       continue
-    const resolved = core.config.resolve({ name: module, value: {}, environment: group, shape: shapes[module], missing: 'empty' })
+    const resolved = core.config.resolve({
+      name: module,
+      value: {},
+      environment: group,
+      shape: shapes[module],
+      missing: 'empty',
+    })
     if (resolved.success) {
       const flattened = core.config.toEnv({ prefix: `HAI_${module.toUpperCase()}`, value: resolved.data, shape: shapes[module] })
       const represented = structuredNames.every(name => Object.entries(flattened).some(([key, value]) => key === name || key.startsWith(`${name}_`) || (name.startsWith(`${key}_`) && value.startsWith('['))))
@@ -296,13 +393,15 @@ export function generatedVariables(values: Record<string, unknown>): Record<stri
 
 /** 按原有行更新键，保留注释与其他配置；更新私有文件时要求权限 600。 */
 function updateFile(path: string, values: Record<string, string>, privateFile: boolean): void {
-  let content = existsSync(path) ? readFileSync(path, 'utf8') : '# Local private deployment configuration; do not commit.\n'
+  let content = existsSync(path)
+    ? readLocalFile(path).toString('utf8')
+    : '# Local private deployment configuration; do not commit.\n'
   for (const [name, value] of Object.entries(values)) {
     if (!/^[A-Z][A-Z0-9_]*$/.test(name))
       throw new Error('Invalid environment variable name')
     const line = core.config.stringifyEnv({ [name]: value }).trimEnd()
     // parseEnv 支持多行引号；替换时一起消费原值，避免遗留秘密片段。
-    const pattern = new RegExp(`^(?:export\\s+)?${name}\\s*=\\s*(?:'[^']*'|"(?:[^"\\\\]|\\\\.)*"|\`[^\`]*\`|[^\\r\\n]*)[^\\r\\n]*`, 'gm')
+    const pattern = new RegExp(`^[\\t ]*(?:export[\\t ]+)?${name}[\\t ]*=[\\t ]*(?:'[^']*'|"(?:[^"\\\\]|\\\\.)*"|\`[^\`]*\`|[^\\r\\n]*)[^\\r\\n]*`, 'gm')
     if (pattern.test(content))
       content = content.replace(pattern, () => line)
     else
@@ -312,27 +411,24 @@ function updateFile(path: string, values: Record<string, string>, privateFile: b
   for (const [name, value] of Object.entries(core.config.parseEnv(content)).sort(([left], [right]) => left.length - right.length)) {
     if (!name.startsWith('HAI_') || !/^\s*[[{]/.test(value))
       continue
-    const parent = new RegExp(`^(?:export\\s+)?${name}\\s*=\\s*(?:'[^']*'|"(?:[^"\\\\]|\\\\.)*"|\`[^\`]*\`|[^\\r\\n]*)[^\\r\\n]*(?:\\r?\\n|$)`, 'm').exec(content)
-    const child = new RegExp(`^(?:export\\s+)?${name}_[A-Z0-9_]+\\s*=`, 'm').exec(content)
+    const parent = new RegExp(`^[\\t ]*(?:export[\\t ]+)?${name}[\\t ]*=[\\t ]*(?:'[^']*'|"(?:[^"\\\\]|\\\\.)*"|\`[^\`]*\`|[^\\r\\n]*)[^\\r\\n]*(?:\\r?\\n|$)`, 'm').exec(content)
+    const child = new RegExp(`^[\\t ]*(?:export[\\t ]+)?${name}_[A-Z0-9_]+[\\t ]*=`, 'm').exec(content)
     if (parent && child && parent.index > child.index) {
       const withoutParent = content.slice(0, parent.index) + content.slice(parent.index + parent[0].length)
       content = withoutParent.slice(0, child.index) + parent[0].replace(/\r?\n?$/, '\n') + withoutParent.slice(child.index)
     }
   }
-  writeFileSync(path, content, { mode: privateFile ? 0o600 : 0o644 })
-  if (privateFile)
-    chmodSync(path, 0o600)
+  writeLocalFile(path, content, privateFile)
 }
 
 /** 明确修改的公共项必须清掉同名旧私有覆盖，避免重新加载后仍用旧后端。 */
 function removeOverrides(path: string, names: string[], privateFile = true): void {
   if (!existsSync(path) || names.length === 0)
     return
-  let content = readFileSync(path, 'utf8')
+  let content = readLocalFile(path).toString('utf8')
   for (const name of names)
-    content = content.replace(new RegExp(`^(?:export\\s+)?${name}\\s*=\\s*(?:'[^']*'|"(?:[^"\\\\]|\\\\.)*"|\`[^\`]*\`|[^\\r\\n]*)[^\\r\\n]*(?:\\r?\\n|$)`, 'gm'), '')
-  writeFileSync(path, content, { mode: privateFile ? 0o600 : 0o644 })
-  chmodSync(path, privateFile ? 0o600 : 0o644)
+    content = content.replace(new RegExp(`^[\\t ]*(?:export[\\t ]+)?${name}[\\t ]*=[\\t ]*(?:'[^']*'|"(?:[^"\\\\]|\\\\.)*"|\`[^\`]*\`|[^\\r\\n]*)[^\\r\\n]*(?:\\r?\\n|$)`, 'gm'), '')
+  writeLocalFile(path, content, privateFile)
 }
 
 /**
@@ -360,14 +456,20 @@ export function saveDeploymentEnvironment(environment: DeploymentEnvironment, va
     const privateValues: Record<string, string> = {}
     // 数组保留一个公共结构，秘密仅以索引细项写私有文件，不复制完整数组。
     function splitArrayValue(name: string, value: unknown): unknown {
-      const literal = typeof value === 'string' ? value : JSON.stringify(value)
+      const literal = typeof value === 'string'
+        ? value
+        : JSON.stringify(value)
       if (!isSecret(name, literal))
         return value
       if (Array.isArray(value))
         return value.map((item, index) => splitArrayValue(`${name}_${index}`, item) ?? null)
       // 网关整体写入私有文件，以保留请求体的 JSON 类型及原始字符串内容。
-      if (value && typeof value === 'object' && !reachGatewayEnvironment.test(name) && !isSecret(name, '') && Object.keys(value).every(key => /^[a-z][a-zA-Z0-9]*$/.test(key)))
-        return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, splitArrayValue(`${name}_${key.toUpperCase()}`, item)]).filter(([, item]) => item !== undefined))
+      if (value && typeof value === 'object' && !reachGatewayEnvironment.test(name) && !isSecret(name, '') && Object.keys(value).every(key => /^[a-z][a-zA-Z0-9]*$/.test(key))) {
+        return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+          key,
+          splitArrayValue(`${name}_${key.toUpperCase()}`, item),
+        ]).filter(([, item]) => item !== undefined))
+      }
       privateValues[name] = literal
       return undefined
     }
@@ -423,10 +525,12 @@ export function saveDeploymentEnvironment(environment: DeploymentEnvironment, va
     removeOverrides(privatePath, Object.keys(shared).filter(name => !(name in privateValues)))
     if (Object.keys(privateValues).length) {
       const ignorePath = join(environment.envDir, '.gitignore')
-      const ignore = existsSync(ignorePath) ? readFileSync(ignorePath, 'utf8') : ''
+      const ignore = existsSync(ignorePath)
+        ? readLocalFile(ignorePath).toString('utf8')
+        : ''
       const missing = ['.env.local', '.env.*.local', '.hai/deploy/'].filter(line => !ignore.split(/\r?\n/).includes(line))
       if (missing.length)
-        writeFileSync(ignorePath, `${ignore.trimEnd()}\n${missing.join('\n')}\n`)
+        writeLocalFile(ignorePath, `${ignore.trimEnd()}\n${missing.join('\n')}\n`)
     }
     return ok(Object.keys(values))
   }

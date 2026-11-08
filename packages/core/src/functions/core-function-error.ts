@@ -28,6 +28,7 @@ function formatMessage(error: Pick<HaiError, 'message' | 'traceId'>): string {
 
 /**
  * HTTP/UI 边界仅公开安全消息和关联标识；内部异常及扩展信息留在脱敏日志。
+ * 只有明确有效的 4xx 状态公开业务消息，缺失或非法状态按 500 处理。
  * @example
  * ```ts
  * import { core } from '@h-ai/core'
@@ -37,21 +38,37 @@ function formatMessage(error: Pick<HaiError, 'message' | 'traceId'>): string {
 function toPublic(error: HaiError, traceId?: string, locale?: string): HaiError {
   const context = requestContext.get()
   const candidate = traceId ?? context.traceId ?? context.requestId ?? error.traceId
-  const safeTraceId = candidate && /^[\w.:-]{1,128}$/.test(candidate) ? candidate : id.uuid()
+  const safeTraceId = candidate && /^[\w.:-]{1,128}$/.test(candidate)
+    ? candidate
+    : id.uuid()
+  const httpStatus = typeof error.httpStatus === 'number' && Number.isInteger(error.httpStatus) && error.httpStatus >= 400 && error.httpStatus <= 599
+    ? error.httpStatus
+    : 500
   const result: HaiError = {
     code: error.code,
-    message: (error.httpStatus ?? 400) >= 500 ? i18n.coreM('core_errorInternal', { locale }) : sanitize.sanitizeText(error.message),
+    message: httpStatus >= 500
+      ? i18n.coreM('core_errorInternal', { locale })
+      : sanitize.sanitizeText(error.message),
     traceId: safeTraceId,
-    ...(error.httpStatus !== undefined ? { httpStatus: error.httpStatus } : {}),
-    ...(error.system ? { system: error.system } : {}),
-    ...(error.module ? { module: error.module } : {}),
+    httpStatus,
+    ...(error.system
+      ? { system: error.system }
+      : {}),
+    ...(error.module
+      ? { module: error.module }
+      : {}),
   }
   if (error.publicExt)
     result.ext = sanitize.sanitizeSensitiveFields(error.publicExt)
   // 字段校验只携带已本地化的 field/message，不复制 rejectedValue 或原始 Zod issue。
-  if ((error.httpStatus === 400 || error.httpStatus === 422) && Array.isArray(error.cause)) {
+  if ((httpStatus === 400 || httpStatus === 422) && Array.isArray(error.cause)) {
     result.cause = error.cause.flatMap((item: unknown) => item && typeof item === 'object' && 'field' in item && typeof item.field === 'string' && 'message' in item && typeof item.message === 'string'
-      ? [{ field: item.field, message: sanitize.sanitizeText(item.message) }]
+      ? [
+          {
+            field: item.field,
+            message: sanitize.sanitizeText(item.message),
+          },
+        ]
       : [])
   }
   result.message = formatMessage(result)

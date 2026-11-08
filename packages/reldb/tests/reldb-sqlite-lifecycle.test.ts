@@ -27,7 +27,7 @@ afterEach(async () => {
   }
 })
 
-describe.sequential('sQLite resource ownership', () => {
+describe('sQLite resource ownership', { concurrent: false }, () => {
   it.each(['SQLITE_BUSY', 'SQLITE_BUSY_RECOVERY'])('retries only transient WAL startup %s and restores the SQL busy budget', async (code) => {
     const original = Database.prototype.pragma
     let failures = 2
@@ -94,12 +94,22 @@ describe.sequential('sQLite resource ownership', () => {
     reader.exec('CREATE TABLE startup (value INTEGER); BEGIN; SELECT * FROM startup')
     const release = setTimeout(() => reader.exec('COMMIT'), 100)
     try {
-      const result = await reldb.init({ type: 'sqlite', database: path, sqlite: { executor: 'worker' } })
+      const result = await reldb.init({
+        type: 'sqlite',
+        database: path,
+        sqlite: { executor: 'worker' },
+      })
       expect(result.success).toBe(true)
       const mode = await reldb.sql.get<{ journal_mode: string }>('PRAGMA journal_mode')
-      expect(mode).toMatchObject({ success: true, data: { journal_mode: 'wal' } })
+      expect(mode).toMatchObject({
+        success: true,
+        data: { journal_mode: 'wal' },
+      })
       const budget = await reldb.sql.get<{ timeout: number }>('PRAGMA busy_timeout')
-      expect(budget).toMatchObject({ success: true, data: { timeout: 5000 } })
+      expect(budget).toMatchObject({
+        success: true,
+        data: { timeout: 5000 },
+      })
     }
     finally {
       clearTimeout(release)
@@ -119,7 +129,11 @@ describe.sequential('sQLite resource ownership', () => {
       return terminate.call(this)
     })
     const started = performance.now()
-    const result = await reldb.init({ type: 'sqlite', database: path, sqlite: { executor: 'worker', readonly: true } })
+    const result = await reldb.init({
+      type: 'sqlite',
+      database: path,
+      sqlite: { executor: 'worker', readonly: true },
+    })
     expect(result.success).toBe(false)
     expect(performance.now() - started).toBeLessThan(3000)
     expect(workers).toHaveLength(1)
@@ -138,7 +152,11 @@ describe.sequential('sQLite resource ownership', () => {
     })
     try {
       const started = performance.now()
-      const result = await reldb.init({ type: 'sqlite', database: path, sqlite: { executor: 'worker' } })
+      const result = await reldb.init({
+        type: 'sqlite',
+        database: path,
+        sqlite: { executor: 'worker' },
+      })
       expect(result.success).toBe(false)
       expect(performance.now() - started).toBeGreaterThanOrEqual(4900)
       expect(performance.now() - started).toBeLessThan(6500)
@@ -206,13 +224,21 @@ describe.sequential('sQLite resource ownership', () => {
       return terminate.call(this)
     })
     for (let attempt = 0; attempt < 3; attempt++) {
-      const result = await reldb.init({ type: 'sqlite', database: ':memory:', sqlite: { executor: 'worker', workerConnectTimeoutMs: 1 } })
+      const result = await reldb.init({
+        type: 'sqlite',
+        database: ':memory:',
+        sqlite: { executor: 'worker', workerConnectTimeoutMs: 1 },
+      })
       expect(result.success).toBe(false)
       expect(reldb.isInitialized).toBe(false)
     }
     expect(workers).toHaveLength(3)
     expect(workers.every(worker => worker.threadId === -1)).toBe(true)
-    expect((await reldb.init({ type: 'sqlite', database: ':memory:', sqlite: { executor: 'worker' } })).success).toBe(true)
+    expect((await reldb.init({
+      type: 'sqlite',
+      database: ':memory:',
+      sqlite: { executor: 'worker' },
+    })).success).toBe(true)
   })
 
   it('worker initialization error terminates the failed worker without waiting for timeout', async () => {
@@ -222,7 +248,11 @@ describe.sequential('sQLite resource ownership', () => {
       workers.push(this)
       return terminate.call(this)
     })
-    const result = await reldb.init({ type: 'sqlite', database: join(tmpdir(), `missing-${randomUUID()}`, 'database.sqlite'), sqlite: { executor: 'worker' } })
+    const result = await reldb.init({
+      type: 'sqlite',
+      database: join(tmpdir(), `missing-${randomUUID()}`, 'database.sqlite'),
+      sqlite: { executor: 'worker' },
+    })
     expect(result.success).toBe(false)
     if (!result.success)
       expect(result.error.message).not.toContain('timed out')
@@ -257,7 +287,11 @@ describe.sequential('sQLite resource ownership', () => {
         return Promise.reject(new Error('injected terminate failure'))
       return terminate.call(this)
     })
-    const result = await reldb.init({ type: 'sqlite', database: ':memory:', sqlite: { executor: 'worker', workerConnectTimeoutMs: 1 } })
+    const result = await reldb.init({
+      type: 'sqlite',
+      database: ':memory:',
+      sqlite: { executor: 'worker', workerConnectTimeoutMs: 1 },
+    })
     expect(result.success).toBe(false)
     if (!result.success)
       expect(result.error.ext?.cleanupPending).toBe(true)

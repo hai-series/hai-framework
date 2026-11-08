@@ -20,7 +20,10 @@ import { z } from 'zod'
  */
 export const DeploymentArtifactSchema = z.object({
   /** 清单格式版本，与应用版本和部署环境无关。 */
-  version: z.union([z.literal(4), z.literal(5)]),
+  version: z.union([
+    z.literal(4),
+    z.literal(5),
+  ]),
   /** 主运行服务：独立后端为 serv，独立浏览器站点（静态或 SSR）为 web。 */
   primaryService: z.enum(['serv', 'web']),
   /** 应用根 package.json 的版本，用于归档、Compose 与桌面交付；最长 80 字符。 */
@@ -31,7 +34,7 @@ export const DeploymentArtifactSchema = z.object({
   source: z.object({
     /** 工程 package.json 所在仓库的提交 SHA；无法确定时为 unknown。 */
     commit: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64}|unknown)$/),
-    /** 工程目录有未提交改动时为 true；无法检查时为 null。 */
+    /** 工程及所选镜像上下文/构建定义有未提交改动时为 true；跨仓库或无法检查时为 null。 */
     dirty: z.boolean().nullable(),
   }).optional(),
   /** 只包含所选镜像的构建不能用于首次安装。 */
@@ -59,7 +62,9 @@ export const DeploymentArtifactSchema = z.object({
     /** 容器内部监听端口；服务器公开端口由部署选择。 */
     containerPort: z.number().int().min(1).max(65535).optional(),
   })).min(1).max(2).refine(images => new Set(images.map(image => image.name)).size === images.length),
-}).refine(artifact => artifact.version === 5 ? !!artifact.webBasePath : !artifact.webBasePath).refine(artifact => !artifact.webBasePath || artifact.hasWeb).refine(artifact => artifact.images.every(image => image.file === `${image.name}-${artifact.appVersion}.tar`)).refine(artifact => artifact.primaryService !== 'web' || artifact.hasWeb).refine(artifact => artifact.images.every(image => image.name === artifact.primaryService || (image.name === 'web' && artifact.hasWeb))).refine(artifact => artifact.partial || artifact.images.some(image => image.name === artifact.primaryService)).refine(artifact => artifact.partial || !artifact.hasWeb || artifact.images.some(image => image.name === 'web'))
+}).refine(artifact => artifact.version === 5
+  ? !!artifact.webBasePath
+  : !artifact.webBasePath).refine(artifact => !artifact.webBasePath || artifact.hasWeb).refine(artifact => artifact.images.every(image => image.file === `${image.name}-${artifact.appVersion}.tar`)).refine(artifact => artifact.primaryService !== 'web' || artifact.hasWeb).refine(artifact => artifact.images.every(image => image.name === artifact.primaryService || (image.name === 'web' && artifact.hasWeb))).refine(artifact => artifact.partial || artifact.images.some(image => image.name === artifact.primaryService)).refine(artifact => artifact.partial || !artifact.hasWeb || artifact.images.some(image => image.name === 'web'))
 
 /**
  * 构建器与部署器共享的镜像交付结构；参见 DeploymentArtifactSchema 示例。

@@ -179,7 +179,9 @@ export const audit: AuditFunctions = {
         logger.error('Audit config validation failed', { error: parseResult.error.message })
         return err(
           HaiAuditError.CONFIG_ERROR,
-          auditM('audit_configError', { params: { error: parseResult.error.message } }),
+          auditM('audit_configError', {
+            params: { error: parseResult.error.message },
+          }),
           parseResult.error,
         )
       }
@@ -196,7 +198,9 @@ export const audit: AuditFunctions = {
         logger.error('Audit config contains invalid identifiers', { error: identifierResult.error.message })
         return err(
           HaiAuditError.CONFIG_ERROR,
-          auditM('audit_configError', { params: { error: identifierResult.error.message } }),
+          auditM('audit_configError', {
+            params: { error: identifierResult.error.message },
+          }),
           identifierResult.error,
         )
       }
@@ -211,7 +215,9 @@ export const audit: AuditFunctions = {
       })
       const ready = await candidate.ready()
       if (!ready.success) {
-        return err(HaiAuditError.CONFIG_ERROR, auditM('audit_initFailed', { params: { error: ready.error.message } }), ready.error)
+        return err(HaiAuditError.CONFIG_ERROR, auditM('audit_initFailed', {
+          params: { error: ready.error.message },
+        }), ready.error)
       }
       const protection = await migrateAudit()
       if (!protection.success)
@@ -226,7 +232,12 @@ export const audit: AuditFunctions = {
       currentWriter = createAuditWriter(candidate, parsed)
       capturePolicy = parsed.capture
       currentHelper = createHelper(input => audit.log(input))
-      currentBackup = createAuditBackup({ repository: candidate, config: parsed.backup, storage: config?.storage, capture: (input, options) => audit.capture(input, options) })
+      currentBackup = createAuditBackup({
+        repository: candidate,
+        config: parsed.backup,
+        storage: config?.storage,
+        capture: (input, options) => audit.capture(input, options),
+      })
       currentAlerts = createAuditAlerts({ config: parsed.alerts, reach: config?.reach, log: currentWriter })
 
       logger.info('Audit module initialized')
@@ -236,7 +247,13 @@ export const audit: AuditFunctions = {
       logger.error('Audit module initialization failed', { error })
       return err(
         HaiAuditError.CONFIG_ERROR,
-        auditM('audit_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        auditM('audit_initFailed', {
+          params: {
+            error: error instanceof Error
+              ? error.message
+              : String(error),
+          },
+        }),
         error,
       )
     }
@@ -273,7 +290,9 @@ export const audit: AuditFunctions = {
     if (!capturePolicy?.enabled || (options?.read && !capturePolicy.includeReads && (!input.outcome || input.outcome === 'success')))
       return ok(undefined)
     const written = await audit.log(input, options?.tx)
-    return written.success ? ok(undefined) : written
+    return written.success
+      ? ok(undefined)
+      : written
   },
 
   /**
@@ -286,13 +305,21 @@ export const audit: AuditFunctions = {
     if (!currentRepo) {
       return Promise.resolve(notInitialized.result())
     }
-    if (!validAuditQuery(options))
-      return Promise.resolve(err(HaiAuditError.QUERY_FAILED, auditM('audit_invalidInput', { params: { field: 'query', reason: auditM('audit_queryInvalid') } })))
+    if (!validAuditQuery(options)) {
+      return Promise.resolve(err(HaiAuditError.QUERY_FAILED, auditM('audit_invalidInput', {
+        params: {
+          field: 'query',
+          reason: auditM('audit_queryInvalid'),
+        },
+      })))
+    }
 
     if (options?.startDate && options?.endDate && options.startDate > options.endDate) {
       return Promise.resolve(err(
         HaiAuditError.QUERY_FAILED,
-        auditM('audit_invalidInput', { params: { field: 'dateRange', reason: 'startDate must be before endDate' } }),
+        auditM('audit_invalidInput', {
+          params: { field: 'dateRange', reason: 'startDate must be before endDate' },
+        }),
       ))
     }
 
@@ -314,14 +341,18 @@ export const audit: AuditFunctions = {
     if (!isNonEmptyString(userId)) {
       return Promise.resolve(err(
         HaiAuditError.QUERY_FAILED,
-        auditM('audit_invalidInput', { params: { field: 'userId', reason: 'must be non-empty string' } }),
+        auditM('audit_invalidInput', {
+          params: { field: 'userId', reason: 'must be non-empty string' },
+        }),
       ))
     }
 
     if (typeof limit === 'number' && (!Number.isInteger(limit) || limit <= 0)) {
       return Promise.resolve(err(
         HaiAuditError.QUERY_FAILED,
-        auditM('audit_invalidInput', { params: { field: 'limit', reason: 'must be a positive integer' } }),
+        auditM('audit_invalidInput', {
+          params: { field: 'limit', reason: 'must be a positive integer' },
+        }),
       ))
     }
 
@@ -342,7 +373,9 @@ export const audit: AuditFunctions = {
     if (typeof olderThanDays === 'number' && (!Number.isInteger(olderThanDays) || olderThanDays < 0)) {
       return Promise.resolve(err(
         HaiAuditError.CLEANUP_FAILED,
-        auditM('audit_invalidInput', { params: { field: 'olderThanDays', reason: 'must be a non-negative integer' } }),
+        auditM('audit_invalidInput', {
+          params: { field: 'olderThanDays', reason: 'must be a non-negative integer' },
+        }),
       ))
     }
 
@@ -359,13 +392,21 @@ export const audit: AuditFunctions = {
     if (!currentRepo) {
       return Promise.resolve(notInitialized.result())
     }
-    if (!validAuditQuery(filters))
-      return Promise.resolve(err(HaiAuditError.STATS_FAILED, auditM('audit_invalidInput', { params: { field: 'query', reason: auditM('audit_queryInvalid') } })))
+    if (!validAuditQuery(filters)) {
+      return Promise.resolve(err(HaiAuditError.STATS_FAILED, auditM('audit_invalidInput', {
+        params: {
+          field: 'query',
+          reason: auditM('audit_queryInvalid'),
+        },
+      })))
+    }
 
     if (typeof days === 'number' && (!Number.isInteger(days) || days < 0)) {
       return Promise.resolve(err(
         HaiAuditError.STATS_FAILED,
-        auditM('audit_invalidInput', { params: { field: 'days', reason: 'must be a non-negative integer' } }),
+        auditM('audit_invalidInput', {
+          params: { field: 'days', reason: 'must be a non-negative integer' },
+        }),
       ))
     }
 
@@ -389,7 +430,9 @@ export const audit: AuditFunctions = {
   },
 
   checkAlerts(options) {
-    return currentAlerts ? currentAlerts.check(options) : Promise.resolve(notInitialized.result())
+    return currentAlerts
+      ? currentAlerts.check(options)
+      : Promise.resolve(notInitialized.result())
   },
 
   get schedulerPlan(): AuditFunctions['schedulerPlan'] {
@@ -398,14 +441,19 @@ export const audit: AuditFunctions = {
     if (!backup && !alerts)
       return null
     return {
-      tasks: [...(backup?.tasks ?? []), ...(alerts?.tasks ?? [])].map(task => ({ ...task })),
-      hooks: { onTaskExecute: async (input) => {
-        if (input.context.taskId === 'hai-audit-backup' && backup)
-          return backup.hooks.onTaskExecute!(input)
-        if (input.context.taskId === 'hai-audit-alerts' && alerts)
-          return alerts.hooks.onTaskExecute!(input)
-        throw core.error.buildHaiErrorInst(HaiAuditError.CONFIG_ERROR, auditM('audit_unknownTask'))
-      } },
+      tasks: [
+        ...(backup?.tasks ?? []),
+        ...(alerts?.tasks ?? []),
+      ].map(task => ({ ...task })),
+      hooks: {
+        onTaskExecute: async (input) => {
+          if (input.context.taskId === 'hai-audit-backup' && backup)
+            return backup.hooks.onTaskExecute!(input)
+          if (input.context.taskId === 'hai-audit-alerts' && alerts)
+            return alerts.hooks.onTaskExecute!(input)
+          throw core.error.buildHaiErrorInst(HaiAuditError.CONFIG_ERROR, auditM('audit_unknownTask'))
+        },
+      },
     }
   },
 

@@ -77,7 +77,12 @@ describe('ai.tools.createRegistry — 序列化边界', () => {
       name: 'obj_tool',
       description: 'test',
       parameters: z.object({}),
-      handler: () => ({ key: 'value', nested: { arr: [1, 2] } }),
+      handler: () => ({
+        key: 'value',
+        nested: {
+          arr: [1, 2],
+        },
+      }),
     })
     registry.register(objTool)
 
@@ -90,7 +95,12 @@ describe('ai.tools.createRegistry — 序列化边界', () => {
     expect(result.success).toBe(true)
     if (result.success) {
       const parsed = JSON.parse(result.data.content)
-      expect(parsed).toEqual({ key: 'value', nested: { arr: [1, 2] } })
+      expect(parsed).toEqual({
+        key: 'value',
+        nested: {
+          arr: [1, 2],
+        },
+      })
     }
   })
 
@@ -159,20 +169,30 @@ describe('ai.stream.createProcessor — 工具调用边界', () => {
       object: 'chat.completion.chunk',
       created: Date.now(),
       model: 'test',
-      choices: [{
-        index: 0,
-        delta: {
-          tool_calls: [{
-            index,
-            ...(options?.id ? { id: options.id } : {}),
-            function: {
-              ...(options?.name !== undefined ? { name: options.name } : {}),
-              ...(options?.arguments !== undefined ? { arguments: options.arguments } : {}),
-            },
-          }],
+      choices: [
+        {
+          index: 0,
+          delta: {
+            tool_calls: [
+              {
+                index,
+                ...(options?.id
+                  ? { id: options.id }
+                  : {}),
+                function: {
+                  ...(options?.name !== undefined
+                    ? { name: options.name }
+                    : {}),
+                  ...(options?.arguments !== undefined
+                    ? { arguments: options.arguments }
+                    : {}),
+                },
+              },
+            ],
+          },
+          finish_reason: options?.finishReason ?? null,
         },
-        finish_reason: options?.finishReason ?? null,
-      }],
+      ],
     }
   }
 
@@ -246,7 +266,11 @@ describe('ai.mcp — 同步与边界场景', () => {
     await ai.init()
 
     ai.mcp.registerTool(
-      { name: 'sync_add', description: '同步加法', inputSchema: { type: 'object' } },
+      {
+        name: 'sync_add',
+        description: '同步加法',
+        inputSchema: { type: 'object' },
+      },
       ((input: unknown) => {
         const { a, b } = input as { a: number, b: number }
         return { sum: a + b }
@@ -280,7 +304,12 @@ describe('ai.mcp — 同步与边界场景', () => {
 
     ai.mcp.registerPrompt(
       { name: 'no_args_prompt' },
-      async () => [{ role: 'user', content: { type: 'text', text: 'fixed' } }],
+      async () => [
+        {
+          role: 'user',
+          content: { type: 'text', text: 'fixed' },
+        },
+      ],
     )
 
     // 传入额外参数不影响
@@ -331,11 +360,15 @@ describe('ai — 未初始化时的行为一致性', () => {
   })
 
   it('close 后再访问 llm 功能返回 NOT_INITIALIZED', async () => {
-    await ai.init({ llm: { apiKey: 'sk-test' } })
+    await ai.init({
+      llm: { apiKey: 'sk-test' },
+    })
     await ai.close()
 
     const result = await ai.llm.chat({
-      messages: [{ role: 'user', content: 'test' }],
+      messages: [
+        { role: 'user', content: 'test' },
+      ],
     })
 
     expect(result.success).toBe(false)

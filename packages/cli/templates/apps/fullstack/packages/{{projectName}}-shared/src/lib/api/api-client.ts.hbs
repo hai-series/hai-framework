@@ -40,7 +40,12 @@ export async function initializeManagementApi(options: ManagementApiOptions = {}
     clientName: options.clientName ?? '{{fullstack.sharedPackageName}}',
     fetch: createCredentialedFetch(options.fetchFn),
     headers: options.headers,
-    auth: { recoverSession: sessionRecovery.recover, terminalType: options.terminalType ?? 'web', storage: options.tokenStorage, onRefreshFailed: options.onSessionExpired },
+    auth: {
+      recoverSession: sessionRecovery.recover,
+      terminalType: options.terminalType ?? 'web',
+      storage: options.tokenStorage,
+      onRefreshFailed: options.onSessionExpired,
+    },
     transport: { crypto },
   })
 }
@@ -65,7 +70,9 @@ export function resolveAvatarUrl(value: string | undefined): string | undefined 
 function resolveDefaultApiOrigin(): string {
   return resolveRuntimeApiOrigin()
     || import.meta.env.PUBLIC_API_BASE
-    || (typeof globalThis.location === 'undefined' ? DEFAULT_API_ORIGIN : globalThis.location.origin)
+    || (typeof globalThis.location === 'undefined'
+      ? DEFAULT_API_ORIGIN
+      : globalThis.location.origin)
 }
 
 /** 跨端浏览器请求携带服务端管理的 httpOnly refresh Cookie。 */

@@ -3,7 +3,13 @@ import type { FeedbackContext } from '@h-ai/feedback'
 import type { RequestEvent } from '@sveltejs/kit'
 import { iam } from '@h-ai/iam'
 
-const FEEDBACK_PERMISSIONS = ['create', 'read', 'process', 'reopen', 'export'] as const
+const FEEDBACK_PERMISSIONS = [
+  'create',
+  'read',
+  'process',
+  'reopen',
+  'export',
+] as const
 
 export function getFeedbackContext(event: Pick<RequestEvent, 'locals'>): FeedbackContext | null {
   const session = event.locals.session
@@ -26,7 +32,13 @@ export async function seedFeedbackPermissions(): Promise<void> {
     if (!permission.success)
       throw new Error(permission.error.message)
     if (!permission.data) {
-      permission = await iam.authz.createPermission({ code, name: code, type: 'api', resource: 'feedback', action })
+      permission = await iam.authz.createPermission({
+        code,
+        name: code,
+        type: 'api',
+        resource: 'feedback',
+        action,
+      })
       if (!permission.success)
         throw new Error(permission.error.message)
     }
