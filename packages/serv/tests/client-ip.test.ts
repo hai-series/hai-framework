@@ -28,16 +28,35 @@ describe('可信客户端 IP', () => {
     const resolve = core.access.createClientIpResolver(['127.0.0.1'])
     expect(resolve(request({ 'x-forwarded-for': 'unknown, 10.0.0.1', 'x-real-ip': '198.51.100.10' }), '127.0.0.1')).toBe('10.0.0.1')
     expect(resolve(request({ 'x-forwarded-for': 'unknown, 127.0.0.1', 'x-real-ip': '198.51.100.10' }), '127.0.0.1')).toBeUndefined()
-    expect(resolve(request({ 'x-forwarded-for': Array.from({ length: 33 }).fill('127.0.0.1').join(','), 'x-real-ip': '198.51.100.10' }), '127.0.0.1')).toBeUndefined()
-    expect(resolve(new Request('http://test.local', { headers: { 'x-real-ip': '198.51.100.10' } }), '127.0.0.1')).toBe('198.51.100.10')
-    expect(resolve(new Request('http://test.local', { headers: { 'x-real-ip': 'spoofed:123' } }), '127.0.0.1')).toBeUndefined()
+    expect(resolve(request({
+      'x-forwarded-for': Array.from({ length: 33 }).fill('127.0.0.1').join(','),
+      'x-real-ip': '198.51.100.10',
+    }), '127.0.0.1')).toBeUndefined()
+    expect(resolve(new Request('http://test.local', {
+      headers: { 'x-real-ip': '198.51.100.10' },
+    }), '127.0.0.1')).toBe('198.51.100.10')
+    expect(resolve(new Request('http://test.local', {
+      headers: { 'x-real-ip': 'spoofed:123' },
+    }), '127.0.0.1')).toBeUndefined()
   })
 
   it('启动配置校验 IP/CIDR，默认不信任代理', () => {
     expect(resolveServHttpConfig().trustedProxies).toBe('auto')
-    expect(resolveServHttpConfig({ trustedProxies: ['127.0.0.1/32', '::1/128'] }).trustedProxies).toHaveLength(2)
-    for (const invalid of ['localhost', '*', '1.2.3.4/33', '::1/129', '1.2.3.4/x', '10.0.0.1/8/9'])
-      expect(() => resolveServHttpConfig({ trustedProxies: [invalid] })).toThrow()
+    expect(resolveServHttpConfig({
+      trustedProxies: ['127.0.0.1/32', '::1/128'],
+    }).trustedProxies).toHaveLength(2)
+    for (const invalid of [
+      'localhost',
+      '*',
+      '1.2.3.4/33',
+      '::1/129',
+      '1.2.3.4/x',
+      '10.0.0.1/8/9',
+    ]) {
+      expect(() => resolveServHttpConfig({
+        trustedProxies: [invalid],
+      })).toThrow()
+    }
   })
 
   it('node socket、Fetch 元数据与自定义上下文共用可信解析', async () => {
@@ -61,7 +80,13 @@ describe('可信客户端 IP', () => {
       expect(await response.json()).toMatchObject({ success: true, data: '127.0.0.1' })
       const direct = await app.fetch(request(), { remoteAddress: '203.0.113.9' })
       expect(await direct.json()).toMatchObject({ success: true, data: '203.0.113.9' })
-      const proxiedApp = serv.createApp({ contract, procedures, http: { trustedProxies: ['10.0.0.0/8'] } })
+      const proxiedApp = serv.createApp({
+        contract,
+        procedures,
+        http: {
+          trustedProxies: ['10.0.0.0/8'],
+        },
+      })
       const proxied = await proxiedApp.fetch(request(), { remoteAddress: '10.0.0.1' })
       expect(await proxied.json()).toMatchObject({ success: true, data: '198.51.100.10' })
       const unknown = await proxiedApp.fetch(request({ 'x-forwarded-for': 'unknown, 10.0.0.2', 'x-real-ip': '127.0.0.1' }), { remoteAddress: '10.0.0.1' })

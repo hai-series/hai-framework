@@ -34,8 +34,22 @@ export interface ServCorsConfig {
   readonly maxAge?: number
 }
 
-const DEFAULT_CORS_METHODS = ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS']
-const DEFAULT_CORS_ALLOWED_HEADERS = ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Hai-Reauthentication', 'X-Hai-Terminal']
+const DEFAULT_CORS_METHODS = [
+  'GET',
+  'HEAD',
+  'PUT',
+  'PATCH',
+  'POST',
+  'DELETE',
+  'OPTIONS',
+]
+const DEFAULT_CORS_ALLOWED_HEADERS = [
+  'Authorization',
+  'Content-Type',
+  'X-Requested-With',
+  'X-Hai-Reauthentication',
+  'X-Hai-Terminal',
+]
 const DEFAULT_CORS_MAX_AGE = 86_400
 const corsMiddlewares = new WeakSet<ServMiddleware>()
 
@@ -63,9 +77,19 @@ export function isCorsMiddleware(middleware: ServMiddleware): boolean {
  * ```
  */
 export function cors(config: ServCorsConfig = {}): ServMiddleware {
-  const methods = [...(config.methods ?? DEFAULT_CORS_METHODS)]
-  const allowedHeaders = [...(config.allowedHeaders ?? DEFAULT_CORS_ALLOWED_HEADERS)]
-  const exposedHeaders = [...new Set(['X-Request-Id', 'X-Trace-Id', ...(config.exposedHeaders ?? [])])]
+  const methods = [
+    ...(config.methods ?? DEFAULT_CORS_METHODS),
+  ]
+  const allowedHeaders = [
+    ...(config.allowedHeaders ?? DEFAULT_CORS_ALLOWED_HEADERS),
+  ]
+  const exposedHeaders = [
+    ...new Set([
+      'X-Request-Id',
+      'X-Trace-Id',
+      ...(config.exposedHeaders ?? []),
+    ]),
+  ]
   const credentials = config.credentials ?? false
   const maxAge = config.maxAge ?? DEFAULT_CORS_MAX_AGE
   const originConfig = config.origin ?? '*'
@@ -123,14 +147,23 @@ function resolveCorsOrigin(
   if (configOrigin === '*')
     return '*'
 
-  if (typeof configOrigin === 'string')
-    return origin === configOrigin ? origin : null
+  if (typeof configOrigin === 'string') {
+    return origin === configOrigin
+      ? origin
+      : null
+  }
 
-  if (Array.isArray(configOrigin))
-    return configOrigin.includes(origin) ? origin : null
+  if (Array.isArray(configOrigin)) {
+    return configOrigin.includes(origin)
+      ? origin
+      : null
+  }
 
-  if (typeof configOrigin === 'function')
-    return configOrigin(origin) ? origin : null
+  if (typeof configOrigin === 'function') {
+    return configOrigin(origin)
+      ? origin
+      : null
+  }
 
   return null
 }

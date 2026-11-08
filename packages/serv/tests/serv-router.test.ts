@@ -10,11 +10,15 @@ const logger = core.logger.child({ module: 'serv-router-test' })
 const testContract = {
   publicInfo: apiContract
     .route({ method: 'POST', path: '/router/public-info' })
-    .output(apiContract.haiResultSchema(z.object({ name: z.string() }))),
+    .output(apiContract.haiResultSchema(z.object({
+      name: z.string(),
+    }))),
   nested: {
     echo: apiContract
       .route({ method: 'POST', path: '/router/echo' })
-      .input(z.object({ message: z.string() }))
+      .input(z.object({
+        message: z.string(),
+      }))
       .output(apiContract.haiResultSchema(z.object({
         message: z.string(),
         userId: z.string(),
@@ -25,7 +29,9 @@ const testContract = {
 const nonHaiResultContract = {
   raw: apiContract
     .route({ method: 'POST', path: '/router/raw' })
-    .output(z.object({ value: z.string() })),
+    .output(z.object({
+      value: z.string(),
+    })),
 }
 
 function createContext(session?: ServContext['session']): ServContext {
@@ -188,7 +194,10 @@ describe('serv chain router', () => {
     const handler = procedureHandler(procedures.nested.echo)
     const result = await handler(handlerOptions(
       handler,
-      { ...createContext(), accessToken: 'unverified-token' },
+      {
+        ...createContext(),
+        accessToken: 'unverified-token',
+      },
       { message: 'hello' },
     ))
 
@@ -317,6 +326,24 @@ describe('serv chain router', () => {
       expect(result.error.httpStatus).toBe(401)
   })
 
+  it.each([
+    ['record:*', true],
+    ['records:*', false],
+    ['record:r*', false],
+    ['record:read', true],
+  ])('权限范围 %s 与 IAM、Kit 保持相同冒号通配语义', async (grant, expected) => {
+    const procedures = serv.implement(testContract).context<ServContext>().route('publicInfo', () => ok({ name: 'hai' })).route('nested.echo').permission('record:read').handle(({ input, context }) => ok({ message: input.message, userId: context.session.userId })).build()
+    const handler = procedureHandler(procedures.nested.echo)
+    const result = await handler(handlerOptions(handler, createContext({
+      userId: 'u1',
+      roles: [],
+      permissions: [grant],
+    }), { message: 'hello' }))
+    expect(result.success).toBe(expected)
+    if (!result.success)
+      expect(result.error.httpStatus).toBe(403)
+  })
+
   it('requires every declared role and supports wildcard role', async () => {
     const procedures = serv
       .implement(testContract)
@@ -351,7 +378,12 @@ describe('serv chain router', () => {
 
   it('preserves handler HaiResult failures', async () => {
     const expected = err(
-      { code: 'router:test', httpStatus: 418, system: 'router', module: 'test' },
+      {
+        code: 'router:test',
+        httpStatus: 418,
+        system: 'router',
+        module: 'test',
+      },
       'expected',
     )
     const procedures = serv
@@ -369,7 +401,15 @@ describe('serv chain router', () => {
       permissions: [],
     }), { message: 'hello' }))
 
-    expect(result).toMatchObject({ success: false, error: { code: 'router:test', httpStatus: 418, message: 'expected (traceId: req-router-test)', traceId: 'req-router-test' } })
+    expect(result).toMatchObject({
+      success: false,
+      error: {
+        code: 'router:test',
+        httpStatus: 418,
+        message: 'expected (traceId: req-router-test)',
+        traceId: 'req-router-test',
+      },
+    })
   })
 
   it('maps guarded async exceptions with the request locale', async () => {
@@ -407,7 +447,10 @@ describe('serv chain router', () => {
     const builder = serv.implement(testContract).context<ServContext>()
     const route = Reflect.get(builder, 'route')
 
-    Reflect.apply(route, builder, ['publicInfo', () => ok({ name: 'hai' })])
+    Reflect.apply(route, builder, [
+      'publicInfo',
+      () => ok({ name: 'hai' }),
+    ])
     expect(() => Reflect.apply(route, builder, [
       'publicInfo',
       () => ok({ name: 'again' }),

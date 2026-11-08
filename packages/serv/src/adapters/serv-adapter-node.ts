@@ -9,7 +9,9 @@
 import type { ServerType } from '@hono/node-server'
 import type { AddressInfo } from 'node:net'
 import type { ServHttpApp } from '../serv-app.js'
+import { errorMonitor } from 'node:events'
 import process from 'node:process'
+import { core } from '@h-ai/core'
 import { serve } from '@hono/node-server'
 import { audioWsServers } from '../serv-app.js'
 
@@ -70,8 +72,8 @@ export interface ServListenOptions {
    * 优雅关闭回调（释放业务模块资源）。
    *
    * 传入后 `serv.listen` 自动监听 `SIGINT` / `SIGTERM`，按以下顺序关闭：
-   * 1. 停止接受新 HTTP 连接
-   * 2. 调用此回调释放业务资源
+   * 1. 停止接受新 HTTP 连接，关闭 Audio WebSocket（未配合者最多等待一秒）
+   * 2. 等待监听句柄关闭，再调用此回调释放业务资源
    *
    * 应用层无需手动注册 `process.once('SIGINT', ...)` 或维护 `shuttingDown` 标志。
    */
@@ -97,7 +99,7 @@ export interface ServNodeServer {
   readonly server: ServerType
   /** 实际监听地址（host 与解析后的 port）。 */
   readonly address: { readonly host: string, readonly port: number }
-  /** 优雅关闭服务器并等待已有连接断开。 */
+  /** 停止接入或取消待完成绑定；关闭语音连接最多等待一秒。并发关闭复用结果，真实监听失败仍会拒绝。 */
   readonly close: () => Promise<void>
 }
 
@@ -130,6 +132,7 @@ export function listen(app: ServHttpApp, options: ServListenOptions = {}): ServN
   const host = options.host ?? DEFAULT_SERV_HOST
   const port = options.port ?? DEFAULT_SERV_PORT
   const audioServer = audioWsServers.get(app)
+  const logger = core.logger.child({ module: 'serv', scope: 'node-adapter' })
 
   const server = serve(
     {
@@ -137,21 +140,65 @@ export function listen(app: ServHttpApp, options: ServListenOptions = {}): ServN
       fetch: (request, bindings) => app.fetch(request, Object.assign(bindings, { remoteAddress: bindings.incoming.socket.remoteAddress })),
       hostname: host,
       port,
-      websocket: audioServer ? { server: audioServer } : undefined,
+      websocket: audioServer
+        ? { server: audioServer }
+        : undefined,
     },
     options.onListening,
   )
 
+  let listenFailure: Error | undefined
+  const rememberListenFailure = (error: Error) => {
+    listenFailure = error
+    logger.error('Service listener failed', { error })
+  }
+  // 只观察错误，不消费 Node 的 error 事件；未安装业务错误处理器时仍按 Node 契约失败。
+  server.on(errorMonitor, rememberListenFailure)
+
+  let closing: Promise<void> | undefined
+  let removeSignalListeners = () => {}
   const handle: ServNodeServer = {
     server,
     address: { host, port },
-    close: () => new Promise((resolve, reject) => {
-      server.close((error) => {
-        if (error)
-          reject(error)
-        else resolve()
+    close: () => closing ??= (async () => {
+      removeSignalListeners()
+      const httpClosed = new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          server.removeListener(errorMonitor, rememberListenFailure)
+          if (listenFailure) {
+            reject(listenFailure)
+            return
+          }
+          // Node close 会取消尚未完成的 listen；只有确无监听且没有启动失败时才视为已关闭。
+          if (error && !('code' in error && error.code === 'ERR_SERVER_NOT_RUNNING' && !server.listening))
+            reject(error)
+          else resolve()
+        })
       })
-    }),
+      const audioClosed = new Promise<void>((resolve, reject) => {
+        if (!audioServer) {
+          resolve()
+          return
+        }
+        // 先停止升级，再通知现有连接；不能等客户端的业务会话超时才释放上游流。
+        const deadline = setTimeout(() => {
+          for (const socket of audioServer.clients)
+            socket.terminate()
+        }, 1000)
+        audioServer.close((error) => {
+          clearTimeout(deadline)
+          if (error)
+            reject(error)
+          else resolve()
+        })
+        for (const socket of audioServer.clients)
+          socket.close(1001, 'Server shutting down')
+      })
+      const results = await Promise.allSettled([httpClosed, audioClosed])
+      const errors = results.filter(result => result.status === 'rejected').map(result => result.reason)
+      if (errors.length)
+        throw new AggregateError(errors, 'Service listener shutdown failed')
+    })(),
   }
 
   // 注册 SIGINT / SIGTERM 优雅关闭（仅在传入 onClose 时启用）。
@@ -165,14 +212,21 @@ export function listen(app: ServHttpApp, options: ServListenOptions = {}): ServN
       try {
         await handle.close()
       }
-      catch { /* 忽略 HTTP server 关闭错误 */ }
+      catch (error) { logger.error('Service listener shutdown failed', { error }) }
       try {
         await onClose()
       }
-      catch { /* 忽略业务模块关闭错误 */ }
+      catch (error) { logger.error('Service resource shutdown failed', { error }) }
     }
-    process.once('SIGINT', () => void shutdown())
-    process.once('SIGTERM', () => void shutdown())
+    const onSignal = () => {
+      void shutdown()
+    }
+    process.once('SIGINT', onSignal)
+    process.once('SIGTERM', onSignal)
+    removeSignalListeners = () => {
+      process.removeListener('SIGINT', onSignal)
+      process.removeListener('SIGTERM', onSignal)
+    }
   }
 
   return handle

@@ -16,9 +16,8 @@
  * @module serv-cookie-auth
  */
 
-import type { HaiResult } from '@h-ai/core'
+import type { HaiError, HaiResult } from '@h-ai/core'
 import type { Hono } from 'hono'
-import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { ServIam } from './serv-context.js'
 import process from 'node:process'
 import { apiContract } from '@h-ai/api-contract'
@@ -174,7 +173,9 @@ function resolveRefreshCookieConfig(
   // ⚠️ 不 `.bind(iam.session)`：IAM NotInitializedKit Proxy 在 init 后才切换为真实实现，
   //    提前 bind 会捕获未初始化 Proxy。用闭包延迟到调用点再解析。
   const onRefresh = config.onRefresh
-    ?? (iam ? (refreshToken: string) => iam.session.refresh(refreshToken) : undefined)
+    ?? (iam
+      ? (refreshToken: string) => iam.session.refresh(refreshToken)
+      : undefined)
   if (!onRefresh) {
     // 抛 HaiError 实例而非裸 Error：保留 code/system/module，便于上层错误处理识别这是
     // 配置缺失而非业务异常。该错误只在 createApp 装配阶段出现，不会泄漏到 HTTP 响应。
@@ -234,7 +235,9 @@ function extractRefreshTokenFromData(data: unknown): string | undefined {
   if (!tokens || typeof tokens !== 'object')
     return undefined
   const t = tokens as Record<string, unknown>
-  return typeof t.refreshToken === 'string' && t.refreshToken ? t.refreshToken : undefined
+  return typeof t.refreshToken === 'string' && t.refreshToken
+    ? t.refreshToken
+    : undefined
 }
 
 /**
@@ -263,8 +266,12 @@ function stripRefreshTokenFromData(data: unknown): unknown {
 function stripRefreshTokenFromPair(tokens: RefreshTokenPair): SafeRefreshTokenPair {
   return {
     accessToken: tokens.accessToken,
-    ...(tokens.expiresIn === undefined ? {} : { expiresIn: tokens.expiresIn }),
-    ...(tokens.tokenType === undefined ? {} : { tokenType: tokens.tokenType }),
+    ...(tokens.expiresIn === undefined
+      ? {}
+      : { expiresIn: tokens.expiresIn }),
+    ...(tokens.tokenType === undefined
+      ? {}
+      : { tokenType: tokens.tokenType }),
   }
 }
 
@@ -368,28 +375,49 @@ export function mountRefreshCookieRoutes(
       return c.json(buildHaiErrorBody(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale })), 401)
     }
 
-    const result = await onRefresh(refreshToken)
-    if (!result.success) {
-      const status = (result.error.httpStatus ?? 401) as ContentfulStatusCode
-      // 浏览器刷新失败时清除失效 cookie，避免客户端循环重试；原生客户端自行清理安全存储。
+    const fail = (internal: HaiError): Response => {
+      const safe = core.error.toPublic(internal, undefined, resolveRequestLocale(c.req.raw.headers))
+      core.logger.error('Refresh token request failed', { traceId: safe.traceId, error: internal })
       const headers = new Headers({ 'Content-Type': 'application/json' })
-      if (!useNativeTokenTransport)
+      // 仅认证失效才清理浏览器凭据；限流、后端故障与未知状态保留重试机会。
+      if (!useNativeTokenTransport && safe.httpStatus === 401)
         headers.set('Set-Cookie', buildClearCookieHeader(cookieName, refreshCookiePath))
-      return new Response(JSON.stringify({ success: false, error: result.error }), {
-        status,
+      return new Response(JSON.stringify({ success: false, error: safe }), {
+        status: safe.httpStatus ?? 500,
         headers,
       })
     }
+    let result: HaiResult<RefreshTokenPair>
+    try {
+      result = await onRefresh(refreshToken)
+    }
+    catch (cause) {
+      return fail({
+        ...HaiCommonError.INTERNAL_ERROR,
+        message: servM('serv_errorInternal'),
+        cause,
+      })
+    }
+    if (!result.success)
+      return fail(result.error)
 
     const tokens = result.data
     if (useNativeTokenTransport) {
-      return new Response(JSON.stringify({ success: true, data: { tokens } }), {
+      return new Response(JSON.stringify({
+        success: true,
+        data: { tokens },
+      }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
     }
     const setCookie = buildSetCookieHeader(cookieName, tokens.refreshToken, refreshCookiePath, maxAge, isSecure)
-    return new Response(JSON.stringify({ success: true, data: { tokens: stripRefreshTokenFromPair(tokens) } }), {
+    return new Response(JSON.stringify({
+      success: true,
+      data: {
+        tokens: stripRefreshTokenFromPair(tokens),
+      },
+    }), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',

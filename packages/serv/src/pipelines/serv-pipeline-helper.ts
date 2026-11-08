@@ -72,7 +72,9 @@ export function buildHaiErrorBody(def: ServErrorBodyDef, message: string) {
  */
 export function mapHaiError<TInput, TOutput>(handler: ServProcedureHandler<TInput, TOutput>): ServProcedureHandler<TInput, TOutput> {
   return options => audit.withContext({
-    actor: options.context.session ? { id: options.context.session.userId, username: options.context.session.username, roles: options.context.session.roles } : null,
+    actor: options.context.session
+      ? { id: options.context.session.userId, username: options.context.session.username, roles: options.context.session.roles }
+      : null,
     requestId: options.context.requestId,
     traceId: options.context.requestId,
     scopeId: options.context.scopeId,
@@ -86,25 +88,44 @@ export function mapHaiError<TInput, TOutput>(handler: ServProcedureHandler<TInpu
       const written = await audit.capture({
         action: 'request.execute',
         resource,
-        category: /^(?:iam|auth|audit)(?:\.|$)/.test(resource) ? 'system' : 'business',
-        outcome: [401, 403, 423, 429].includes(status) ? 'denied' : status >= 400 ? 'failure' : 'success',
-        details: { method: options.context.request.method, status, ...(reasonCode === undefined ? {} : { reasonCode }) },
-      }, { read: ['GET', 'HEAD', 'OPTIONS'].includes(options.context.request.method) })
+        category: /^(?:iam|auth|audit)(?:\.|$)/.test(resource)
+          ? 'system'
+          : 'business',
+        outcome: [401, 403, 423, 429].includes(status)
+          ? 'denied'
+          : status >= 400
+            ? 'failure'
+            : 'success',
+        details: {
+          method: options.context.request.method,
+          status,
+          ...(reasonCode === undefined
+            ? {}
+            : { reasonCode }),
+        },
+      }, {
+        read: ['GET', 'HEAD', 'OPTIONS'].includes(options.context.request.method),
+      })
       if (!written.success)
         options.context.logger.error('Request audit failed', { resource, error: written.error })
     }
     try {
       const result = await handler(options)
-      await capture(result.success ? 200 : result.error.httpStatus ?? 500, result.success ? undefined : result.error.code)
-      if (result.success)
+      if (result.success) {
+        await capture(200)
         return result
+      }
       const error = core.error.toPublic(result.error, options.context.requestId, options.context.locale)
+      await capture(error.httpStatus ?? 500, error.code)
       options.context.logger.error('Procedure failed', { traceId: error.traceId, error: result.error })
       return { success: false, error }
     }
     catch (error) {
       // 所有未捕获异常统一在这里收口，避免直接把异常冒泡到 HTTP 层。
-      const safe = core.error.toPublic({ ...HaiCommonError.INTERNAL_ERROR, message: servM('serv_errorInternal', { locale: options.context.locale }) }, options.context.requestId, options.context.locale)
+      const safe = core.error.toPublic({
+        ...HaiCommonError.INTERNAL_ERROR,
+        message: servM('serv_errorInternal', { locale: options.context.locale }),
+      }, options.context.requestId, options.context.locale)
       options.context.logger.error('Procedure threw an exception', { traceId: safe.traceId, error })
       await capture(500, HaiCommonError.INTERNAL_ERROR.code)
       return err(safe)

@@ -8,6 +8,8 @@
 
 hai-framework の API サービスランタイム。公開 HTTP App 抽象を通じて `@h-ai/api-contract` を複数プラットフォームから使える HTTP API として提供します。Hono は内部実装です。
 
+実行時の操作は `serv.xx` を使います。名前空間の型注釈や再エクスポートにはルート入口の `ServFunctions` を利用できます。context ファクトリーと汎用 `implement` の公開シグネチャーは利用側の宣言生成に対応し、内部ビルドパスや独立した helper は不要です。
+
 ## 主な機能
 
 - `serv.createApp(...)` → `serv.listen(app, { port })` で起動。アプリは Hono を import する必要がありません。
@@ -22,7 +24,9 @@ hai-framework の API サービスランタイム。公開 HTTP App 抽象を通
 - 任意の通信暗号化：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` で鍵交換とリクエスト・レスポンスの暗号化を自動接続。
 - 任意の音声入口：`serv.createApp({ audio: { ai, verifyTicket, authorize } })` が共通 WebSocket を接続します。接続直後に単回 ticket で認証（`{ session, grant? }`、独立した事前認証 timeout）。各フレームを Zod と厳密な状態機械で検証し、入力・キュー・送信バッファの背圧と連鎖キャンセルを管理します。サーバーの認可処理で操作・モデル・声・割当量・同時使用数を確認します。
 
-> ライフサイクル：`@h-ai/serv` は状態を持たない HTTP App の構成機能で、`init()` / `close()` は不要です。app 作成前に `iam` / `storage` / `ai` / `crypto` などを初期化し、`serv.listen(..., { onClose })` で逆順に解放します。`serv.createApp()` は transport 管理器の生成失敗など起動設定のエラーを即座に throw します。 onClose は SIGINT/SIGTERM 用の終了コールバックです。返された handle.close の直接呼出しは HTTP だけを閉じ、業務モジュールはホストが別途逆順に解放します。
+> ライフサイクル：`@h-ai/serv` は状態を持たない HTTP App の構成機能で、`init()` / `close()` は不要です。app 作成前に `iam` / `storage` / `ai` / `crypto` などを初期化し、`serv.listen(..., { onClose })` で逆順に解放します。`serv.createApp()` は transport 管理器の生成失敗など起動設定のエラーを即座に throw します。 onClose は SIGINT/SIGTERM 用の終了コールバックです。返された handle.close の直接呼出しは HTTP リスナーと音声接続を閉じ、業務モジュールはホストが別途逆順に解放します。
+
+開始直後の close は未完了のバインドを取り消し、繰り返しの close は同じ結果を共有します。アドレス使用中など実際のリッスン失敗は正常終了として扱わず、close の拒否理由として保持します。
 
 ## 使い始める
 
@@ -53,6 +57,7 @@ const procedures = {
 const app = serv.createApp({
   contract,
   procedures,
+  iam,
   http: {
     apiPrefix: '/api/v1',
     openapi: { path: '/openapi.json' },
@@ -199,14 +204,16 @@ const app = serv.createApp({
   contract,
   procedures,
   http: servConfig.http,
-  middlewares: [{
-    middleware: serv.cors({
-      origin: servConfig.cors.origin,
-      credentials: servConfig.cors.credentials,
-      allowedHeaders: [...servConfig.cors.allowedHeaders],
-      exposedHeaders: [...servConfig.cors.exposedHeaders],
-    }),
-  }],
+  middlewares: [
+    {
+      middleware: serv.cors({
+        origin: servConfig.cors.origin,
+        credentials: servConfig.cors.credentials,
+        allowedHeaders: [...servConfig.cors.allowedHeaders],
+        exposedHeaders: [...servConfig.cors.exposedHeaders],
+      }),
+    }
+  ],
   transport: servConfig.transport === false
     ? undefined
     : {
@@ -419,6 +426,7 @@ const procedures = serv
 
 - `.permission()` と `.role()` は認証も要求します。失敗時の HaiResult の `error.httpStatus` は未認証で 401、権限不足で 403 ですが、通常の procedure の HTTP 応答は既定で 200 です。
 - 同じルートの複数 permission/role はすべて満たす必要があります。`serv.WILDCARD_PERMISSION` / `serv.WILDCARD_ROLE` は各分類を許可。
+- 権限は IAM/Kit と同じコロン接頭辞にも対応します。`users:*` は `users:read` に一致し、`users2:read` やドット区切りの権限には一致しません。
 - 未処理の handler 例外は INTERNAL_ERROR の HaiResult に変換。予期する業務失敗は直接 `err(...)` を返します。
 - path・input・output は contract から推論。重複・未知のパスを拒否し、完全に実装するまで `.build()` は呼べません。
 
@@ -487,11 +495,14 @@ await apiClient.init({
 
 > リフレッシュ Cookie には `HttpOnly` と `SameSite=Strict` が付き、パスは `{apiPrefix}/auth/refresh` に限定されます。本番では既定で `Secure` も付きます。
 
+更新失敗にも公開エラー処理を適用します。5xx と欠落・不正なステータスは安全なメッセージと traceId を返し、内部原因はサーバーログだけに残します。更新 Cookie を消去するのは認証失効の 401 のみです。レート制限やバックエンド障害では再試行できるよう資格情報を保持します。自動監査にも同じ正規化済み失敗ステータスを使います。
+
 ### API 一覧
 
 - `serv.createApp(options)`：独自 middleware、ヘルスチェック、OpenAPI、任意の文書を備えた HTTP App を作成。
 - `serv.parseRequestContext({ request })`：Bearer token + requestId を抽出し、session は設定しません。
 - `serv.listen(app, options)`：Node.js HTTP サービスを起動し、`{ server, address, close }` を返す。
+  返された `close()` は冪等です。新規接続を止め、Audio WebSocket を閉じ、応答しない音声接続を 1 秒後に強制終了して HTTP 終了を待ちます。直接呼出しでもプロセスのシグナルリスナーを解除します。業務モジュールは引き続きホストが逆順に解放します。
 - `serv.toFetch(app)`：標準の `fetch(Request)` handler に変換。
 - `serv.generateSpec(contract, options)`：contract から OpenAPI 3.1 spec を生成。
 - `serv.storageAssets(config)`：key/MIME 許可リスト、GET/HEAD、ETag 付きの読み取り専用 Storage middleware。
@@ -626,15 +637,18 @@ const app = serv.createApp({
     openapi: security.exposeApiDocs ? servConfig.http.openapi : false,
     docs: security.exposeApiDocs ? servConfig.http.docs : false,
   },
+  iam,
   refreshCookie: { secure: security.secureRefreshCookie },
-  middlewares: [{
-    middleware: serv.cors({
-      origin: security.allowOrigin,
-      credentials: servConfig.cors.credentials,
-      allowedHeaders: [...servConfig.cors.allowedHeaders],
-      exposedHeaders: [...servConfig.cors.exposedHeaders],
-    }),
-  }],
+  middlewares: [
+    {
+      middleware: serv.cors({
+        origin: security.allowOrigin,
+        credentials: servConfig.cors.credentials,
+        allowedHeaders: [...servConfig.cors.allowedHeaders],
+        exposedHeaders: [...servConfig.cors.exposedHeaders],
+      }),
+    }
+  ],
 })
 ```
 
@@ -699,7 +713,7 @@ const procedures = serv
   .build()
 ```
 
-> `iam.user.xxx()` など下流が直接 `HaiResult` を返す場合、serv は `error.message` をそのまま渡します。`HaiError` は最終 `message` のみで `messageKey/params` を持たないため、**serv の境界で任意の下流エラーを汎用的に再翻訳することはできません**。リクエストごとの i18n はエラーを生成するモジュールで locale を受け取る必要があります。
+> 下流の 4xx メッセージは秘匿処理後に公開します。5xx と欠落・不正なステータスは traceId 付きの安全な内部エラーメッセージに統一し、完全な原因はサーバーログだけに記録します。`HaiError` は `messageKey/params` を持たないため、ドメインメッセージの i18n は生成元のモジュールでリクエストの locale を受け取って行います。
 
 ### リクエスト言語の分離
 
@@ -737,7 +751,10 @@ const procedures = {
 const app = serv.createApp({
   contract,
   procedures,
-  createContext: async input => ({ ...await authenticate(input), scopeId: 'configured-product' }),
+  createContext: async input => ({
+    ...await authenticate(input),
+    scopeId: 'configured-product'
+  }),
 })
 ```
 

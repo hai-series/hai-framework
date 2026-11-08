@@ -682,8 +682,13 @@ function collectProcedurePaths(
   contract: ServContract,
   prefix: readonly string[] = [],
 ): string[] {
-  if (isContractProcedure(contract))
-    return prefix.length > 0 ? [prefix.join('.')] : []
+  if (isContractProcedure(contract)) {
+    return prefix.length > 0
+      ? [
+          prefix.join('.'),
+        ]
+      : []
+  }
 
   return Object.entries(contract).flatMap(([key, child]) =>
     collectProcedurePaths(child, [...prefix, key]))
