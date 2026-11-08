@@ -4,11 +4,191 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/api-contract](../api-contract/README.md) · [@h-ai/core](../core/README.md) · [@h-ai/datapipe](../datapipe/README.md) · [@h-ai/reldb](../reldb/README.md) · [@h-ai/vecdb](../vecdb/README.md)
 
-## 简介
-
 AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、文生图、工具调用、MCP、Embedding、记忆、检索/RAG、知识库、上下文管理、文件解析、Rerank、语音（ASR/TTS）与 A2A。Node.js 侧通过 `ai.init()` 初始化，浏览器侧通过 API/client 代理访问。
 
-## 核心功能清单
+## 快速开始
+
+`ai.close()` 等待已开始的初始化完成并清理，合并并发关闭；重初始化先清理旧实例，关闭期间不接受新初始化。
+
+### 开发 LLM-only（零数据库依赖）
+
+```ts
+import { ai } from '@h-ai/ai'
+
+const init = await ai.init({
+  llm: {
+    model: 'gpt-4o-mini',
+    apiKey: process.env.HAI_AI_LLM_APIKEY,
+  },
+})
+if (!init.success)
+  throw new Error(init.error.message)
+
+try {
+  const result = await ai.llm.chat({
+    messages: [
+      { role: 'user', content: '你好！' }
+    ],
+  })
+  if (!result.success)
+    throw new Error(result.error.message)
+  const reply = result.data.choices[0]?.message.content ?? ''
+}
+finally {
+  await ai.close()
+}
+```
+
+开发/显式测试未初始化 reldb/vecdb 时，AI 使用进程内临时 Store；关闭、退出或切换实例后不保留。`NODE_ENV` 或 `HAI_CORE_ENV` 为 production 时，临时 Store、SQLite 或本地向量后端会使初始化失败。生产必须先初始化共享 RelDB 与网络 vecdb，或传入满足同等原子契约的共享 Provider。
+
+## 功能
+
+### 用途、输入与输出
+
+除标明“direct”、AsyncIterable 或 Promise 直接结果的项目外，输出列均指 HaiResult 成功后的 data；先检查 success。表中 request/definition/options 等变量必须按该行真实输入类型在应用提供，不能把类型名当成运行时值。流和显式工具可能抛错，应在消费边界处理。
+
+下表的调用片段复用本页已初始化的服务；命名变量代表应用已提供的请求、Schema、资源定义或配置。完整步骤和失败处理见对应功能示例。`HaiResult` 先判断 `success`，异步项按签名 `await`。
+
+| 入口                              | 场景                 | 输入                                                                              | 输出                                                                      | 调用片段                                                                                  |
+| --------------------------------- | -------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `ai.llm.chat`                     | 单次回答             | `ChatCompletionRequest: messages, model?, signal?, tools?`                        | `ChatCompletionResponse: choices, model, usage?`                          | `ai.llm.chat({ messages: [{ role: "user", content: "你好" }] })`                          |
+| `ai.llm.chatStream`               | 逐块回答             | `same ChatCompletionRequest`                                                      | `AsyncIterable<ChatCompletionChunk>; iteration may throw`                 | `ai.llm.chatStream({ messages })`                                                         |
+| `ai.llm.ask`                      | 纯文本问答           | `question: string, AskOptions?`                                                   | `string answer`                                                           | `ai.llm.ask("解释共享状态")`                                                              |
+| `ai.llm.askStream`                | 纯文本流             | `question: string, AskOptions?`                                                   | `AsyncIterable<string>`                                                   | `ai.llm.askStream("解释共享状态")`                                                        |
+| `ai.llm.generateObject`           | 受 Schema 约束的答案 | `Zod schema, messages, model?, maxRepairs?, signal?`                              | `schema-inferred T`                                                       | `ai.llm.generateObject({ schema: AnswerSchema, messages })`                               |
+| `ai.llm.listModels`               | 查询模型             | `none`                                                                            | `string[] model IDs`                                                      | `ai.llm.listModels()`                                                                     |
+| `ai.llm.getHistory`               | 读取对话历史         | `{ objectId, sessionId }, { limit?, order? }?`                                    | `ChatRecord[]`                                                            | `ai.llm.getHistory({ objectId: "u1", sessionId: "s1" })`                                  |
+| `ai.llm.listSessions`             | 列出主体会话         | `objectId: string`                                                                | `SessionInfo[]`                                                           | `ai.llm.listSessions("u1")`                                                               |
+| `ai.tools.define`                 | 定义可授权工具       | `{ name, description, parameters: Zod schema, handler, timeoutMs? }`              | `direct Tool<TInput,TOutput>; no init required`                           | `ai.tools.define(toolDefinition)`                                                         |
+| `ai.tools.createRegistry`         | 管理工具集合         | `{ authorize? }?`                                                                 | `direct ToolRegistryOperations; no init required`                         | `ai.tools.createRegistry({ authorize })`                                                  |
+| `ai.stream.createProcessor`       | 积累增量文本         | `none`                                                                            | `direct StreamProcessor`                                                  | `ai.stream.createProcessor()`                                                             |
+| `ai.stream.collect`               | 完整消费聊天流       | `AsyncIterable<ChatCompletionChunk>`                                              | `Promise<StreamResult>; stream failure rejects`                           | `ai.stream.collect(ai.llm.chatStream({ messages }))`                                      |
+| `ai.stream.createSSEDecoder`      | 跨片段解码 SSE       | `none`                                                                            | `direct SSEDecoder with decode/reset`                                     | `ai.stream.createSSEDecoder()`                                                            |
+| `ai.stream.encodeSSE`             | 编码事件流           | `SSEEvent: data, event?, id?, retry?`                                             | `direct string; invalid metadata throws`                                  | `ai.stream.encodeSSE({ data: "Hello" })`                                                  |
+| `ai.embedding.embed`              | 通用向量请求         | `EmbeddingRequest with input/model?`                                              | `EmbeddingResponse`                                                       | `ai.embedding.embed({ input: "产品说明" })`                                               |
+| `ai.embedding.embedText`          | 单段向量             | `text: string`                                                                    | `number[]`                                                                | `ai.embedding.embedText("产品说明")`                                                      |
+| `ai.embedding.embedBatch`         | 批量向量             | `texts: string[]`                                                                 | `number[][] in input order`                                               | `ai.embedding.embedBatch(["简介", "部署"])`                                               |
+| `ai.mcp.registerTool`             | 注册本进程工具       | `MCPToolDefinition, typed handler`                                                | `void`                                                                    | `ai.mcp.registerTool(mcpToolDefinition, toolHandler)`                                     |
+| `ai.mcp.registerResource`         | 注册资源             | `MCPResource, async content handler`                                              | `void`                                                                    | `ai.mcp.registerResource(resourceDefinition, readContent)`                                |
+| `ai.mcp.registerPrompt`           | 注册提示词           | `MCPPrompt, args => Promise<MCPPromptMessage[]>`                                  | `void`                                                                    | `ai.mcp.registerPrompt(promptDefinition, buildMessages)`                                  |
+| `ai.mcp.callTool`                 | 调用已注册工具       | `name, arguments, MCPContext?`                                                    | `unknown tool result`                                                     | `ai.mcp.callTool("search", { query: "配置" })`                                            |
+| `ai.mcp.readResource`             | 读取资源             | `resource URI`                                                                    | `MCPResourceContent with exactly text or blob`                            | `ai.mcp.readResource("docs://intro")`                                                     |
+| `ai.mcp.getPrompt`                | 构建提示词           | `name, Record<string,string> arguments`                                           | `MCPPromptMessage[]`                                                      | `ai.mcp.getPrompt("review", { topic: "API" })`                                            |
+| `ai.retrieval.addSource`          | 登记检索源           | `RetrievalSource: id, collection, optional metadata`                              | `void`                                                                    | `ai.retrieval.addSource({ id: "docs", collection: "manual" })`                            |
+| `ai.retrieval.removeSource`       | 撤销检索源           | `sourceId: string`                                                                | `void`                                                                    | `ai.retrieval.removeSource("docs")`                                                       |
+| `ai.retrieval.listSources`        | 列出可用检索源       | `none`                                                                            | `direct Promise<RetrievalSource[]>`                                       | `ai.retrieval.listSources()`                                                              |
+| `ai.retrieval.retrieve`           | 向量检索             | `RetrievalRequest: query, sources?, topK?, minScore?, enableRerank?`              | `RetrievalResult`                                                         | `ai.retrieval.retrieve({ query: "部署" })`                                                |
+| `ai.rag.query`                    | 带引用回答           | `query: string, RagOptions?`                                                      | `RagResult: answer, context, citations, query, model`                     | `ai.rag.query("如何部署？", { sources: ["docs"] })`                                       |
+| `ai.rag.queryStream`              | 带引用流式回答       | `query: string, RagOptions?`                                                      | `AsyncIterable<RagStreamEvent>`                                           | `ai.rag.queryStream("如何部署？", { sources: ["docs"] })`                                 |
+| `ai.knowledge.setup`              | 准备集合             | `KnowledgeSetupOptions?`                                                          | `void; collection ready for ingest`                                       | `ai.knowledge.setup()`                                                                    |
+| `ai.knowledge.ingest`             | 发布文本资料         | `{ documentId, content, title?, collection?, ...metadata }`                       | `KnowledgeIngestResult with revision/cleanupPending`                      | `ai.knowledge.ingest({ documentId: "intro", content: "入门正文" })`                       |
+| `ai.knowledge.ingestFile`         | 导入文件             | `KnowledgeIngestFileInput including file bytes and document identity`             | `KnowledgeIngestResult`                                                   | `ai.knowledge.ingestFile(fileInput)`                                                      |
+| `ai.knowledge.ingestBatch`        | 批量导入             | `KnowledgeIngestInput[], onProgress?`                                             | `KnowledgeIngestBatchResult with per-document outcomes`                   | `ai.knowledge.ingestBatch(documentInputs, onProgress)`                                    |
+| `ai.knowledge.retrieve`           | 检索发布版本         | `query: string, KnowledgeRetrieveOptions?`                                        | `KnowledgeRetrieveResult`                                                 | `ai.knowledge.retrieve("部署说明")`                                                       |
+| `ai.knowledge.ask`                | 基于知识回答         | `query: string, KnowledgeAskOptions?`                                             | `KnowledgeAskResult`                                                      | `ai.knowledge.ask("如何恢复备份？")`                                                      |
+| `ai.knowledge.findByEntity`       | 按实体找资料         | `entityName: string, EntityQueryOptions?`                                         | `EntityDocumentResult[]`                                                  | `ai.knowledge.findByEntity("订单")`                                                       |
+| `ai.knowledge.listEntities`       | 实体清单             | `EntityListOptions?`                                                              | `KnowledgeEntity[]`                                                       | `ai.knowledge.listEntities()`                                                             |
+| `ai.knowledge.listDocuments`      | 文档清单             | `KnowledgeDocumentListOptions?`                                                   | `KnowledgeDocumentInfo[]`                                                 | `ai.knowledge.listDocuments()`                                                            |
+| `ai.knowledge.removeDocument`     | 撤销文档             | `documentId, KnowledgeDocumentRemoveOptions?`                                     | `void; may fail after visibility revocation if cleanup fails`             | `ai.knowledge.removeDocument("intro")`                                                    |
+| `ai.knowledge.repair`             | 补偿残留向量         | `{ collection?, offset?, limit? }`                                                | `KnowledgeRepairResult with progress`                                     | `ai.knowledge.repair({ offset: 0, limit: 100 })`                                          |
+| `ai.knowledge.deleteCollection`   | 撤销整个集合         | `collection name?`                                                                | `void; cleanup tombstone remains`                                         | `ai.knowledge.deleteCollection("retired-manual")`                                         |
+| `ai.memory.scoped`                | 绑定可信主体         | `{ objectId: nonempty string, scope? }`                                           | `direct ScopedMemoryOperations; invalid binding throws TypeError`         | `ai.memory.scoped({ objectId: "u1", scope: { topicId: "orders" } })`                      |
+| `ai.memory.extract`               | 提取事实记忆         | `ChatMessage[], { objectId, scope?, model?, signal?, ...options }`                | `MemoryEntry[]`                                                           | `ai.memory.extract(messages, { objectId: "u1" })`                                         |
+| `ai.memory.add`                   | 保存明确事实         | `MemoryEntryInput: objectId, content, type, scope?`                               | `MemoryEntry`                                                             | `ai.memory.add({ objectId: "u1", content: "偏好中文", type: "preference" })`              |
+| `ai.memory.get`                   | 授权读取记忆         | `memoryId, { objectId, scope? } for untrusted IDs`                                | `MemoryEntry`                                                             | `ai.memory.get(memoryId, { objectId: "u1" })`                                             |
+| `ai.memory.update`                | 更新已有事实         | `memoryId, MemoryUpdateInput, trusted access scope`                               | `MemoryEntry`                                                             | `ai.memory.update(memoryId, { content: "偏好日文" }, { objectId: "u1" })`                 |
+| `ai.memory.remove`                | 删除授权记忆         | `memoryId, trusted access scope`                                                  | `void`                                                                    | `ai.memory.remove(memoryId, { objectId: "u1" })`                                          |
+| `ai.memory.recall`                | 召回相关事实         | `query, { objectId, scope?, topK?, types?, ...options }`                          | `MemoryEntry[]`                                                           | `ai.memory.recall("语言偏好", { objectId: "u1" })`                                        |
+| `ai.memory.injectMemories`        | 补充对话上下文       | `ChatMessage[], { objectId, scope?, topK?, ...options }`                          | `ChatMessage[]`                                                           | `ai.memory.injectMemories(messages, { objectId: "u1" })`                                  |
+| `ai.memory.list`                  | 读取完整列表         | `MemoryListOptions with objectId/scope filters`                                   | `MemoryEntry[]; incomplete scan fails`                                    | `ai.memory.list({ objectId: "u1" })`                                                      |
+| `ai.memory.listPage`              | 分页浏览记忆         | `MemoryListPageOptions with objectId/pagination`                                  | `StorePage<MemoryEntry>`                                                  | `ai.memory.listPage({ objectId: "u1", offset: 0, limit: 20 })`                            |
+| `ai.memory.clear`                 | 清理指定范围         | `nonempty MemoryClearOptions`                                                     | `void; empty filters are rejected`                                        | `ai.memory.clear({ objectId: "u1" })`                                                     |
+| `ai.memory.admin.clearAll`        | 可信管理员全清       | `{ confirm: true }; require host administrator authorization`                     | `void; destructive across subjects`                                       | `ai.memory.admin.clearAll({ confirm: true })`                                             |
+| `ai.persona.save`                 | 保存角色             | `PersonaProfileInput: id, name, systemPrompt, objectId?, traits?`                 | `PersonaProfile`                                                          | `ai.persona.save(personaProfile)`                                                         |
+| `ai.persona.get`                  | 读取角色             | `id, { objectId }?; omitted subject selects system profile`                       | `PersonaProfile`                                                          | `ai.persona.get("tutor", { objectId: "u1" })`                                             |
+| `ai.persona.update`               | 更新角色             | `id, PersonaProfileUpdate, { objectId }?`                                         | `PersonaProfile`                                                          | `ai.persona.update("tutor", updates, { objectId: "u1" })`                                 |
+| `ai.persona.remove`               | 删除角色             | `id, { objectId }?`                                                               | `void`                                                                    | `ai.persona.remove("tutor", { objectId: "u1" })`                                          |
+| `ai.persona.list`                 | 列出主体角色         | `{ objectId }?`                                                                   | `PersonaProfile[]`                                                        | `ai.persona.list({ objectId: "u1" })`                                                     |
+| `ai.persona.compose`              | 生成系统提示词       | `id, { objectId }?`                                                               | `string prompt`                                                           | `ai.persona.compose("tutor", { objectId: "u1" })`                                         |
+| `ai.token.estimateText`           | 估算单段 Token       | `text: string`                                                                    | `direct number; estimate, not billing usage`                              | `ai.token.estimateText("Hello 世界")`                                                     |
+| `ai.token.estimateMessages`       | 估算消息 Token       | `ChatMessage[]`                                                                   | `direct number including protocol overhead`                               | `ai.token.estimateMessages(messages)`                                                     |
+| `ai.summary.generate`             | 生成摘要文本         | `ChatMessage[], SummaryOptions?`                                                  | `string`                                                                  | `ai.summary.generate(messages)`                                                           |
+| `ai.summary.summarize`            | 生成摘要及覆盖信息   | `ChatMessage[], SummaryOptions?`                                                  | `{ summary, tokenCount, coveredMessages }`                                | `ai.summary.summarize(messages)`                                                          |
+| `ai.compress.tryCompress`         | 按预算压缩           | `ChatMessage[], { strategy?, maxTokens?, preserveLastN?, ...options }`            | `CompressResult: messages and original/compressed token counts`           | `ai.compress.tryCompress(messages, { maxTokens: 4000 })`                                  |
+| `ai.context.createManager`        | 开始多轮对话         | `ContextManagerOptions with scope { objectId, sessionId }`                        | `ContextManager`                                                          | `ai.context.createManager({ scope: { objectId: "u1", sessionId: "s1" } })`                |
+| `ai.context.restoreManager`       | 恢复对话             | `{ objectId, sessionId }, options?`                                               | `ContextManager`                                                          | `ai.context.restoreManager({ objectId: "u1", sessionId: "s1" })`                          |
+| `ai.context.listSessions`         | 列出可恢复会话       | `objectId`                                                                        | `SessionInfo[]`                                                           | `ai.context.listSessions("u1")`                                                           |
+| `ai.context.renameSession`        | 修改会话标题         | `scope, title`                                                                    | `void`                                                                    | `ai.context.renameSession({ objectId: "u1", sessionId: "s1" }, "订单讨论")`               |
+| `ai.context.removeSession`        | 删除指定会话         | `scope`                                                                           | `void; tombstone prevents scope reuse`                                    | `ai.context.removeSession({ objectId: "u1", sessionId: "s1" })`                           |
+| `ai.rerank.rerank`                | 重排文档对象         | `RerankRequest: query, documents, model?, topN?`                                  | `RerankResponse with model/results`                                       | `ai.rerank.rerank({ query: "部署", documents: ["配置说明"] })`                            |
+| `ai.rerank.rerankTexts`           | 重排文本候选         | `query, string[] texts, topN?`                                                    | `RerankItem[] with index/relevanceScore`                                  | `ai.rerank.rerankTexts("部署", ["配置说明"], 1)`                                          |
+| `ai.file.parse`                   | 识别文件并提取       | `FileParseRequest with content, filename, options?`                               | `FileParseResult; extraction is not HTML sanitization`                    | `ai.file.parse({ content: "<p>正文</p>", filename: "intro.html" })`                       |
+| `ai.file.parseText`               | 直接提取文本         | `Buffer\|string content, filename?`                                               | `string`                                                                  | `ai.file.parseText("Hello", "intro.txt")`                                                 |
+| `ai.reasoning.run`                | 多步骤求解           | `query, ReasoningOptions including strategy/tools?`                               | `ReasoningResult`                                                         | `ai.reasoning.run("审查方案", { strategy: "cot" })`                                       |
+| `ai.reasoning.runStream`          | 观察推理过程         | `query, ReasoningOptions?`                                                        | `AsyncIterable<ReasoningStreamEvent>`                                     | `ai.reasoning.runStream("审查方案", { strategy: "react" })`                               |
+| `ai.audio.transcribe`             | 识别完整音频         | `TranscriptionRequest: audio, language?, model?, signal?`                         | `TranscriptionResult: text, language?, segments?`                         | `ai.audio.transcribe({ audio: { data: wavBytes, format: "wav" } })`                       |
+| `ai.audio.transcribeStream`       | 持续语音识别         | `TranscriptionStreamRequest: chunks or complete audio`                            | `AsyncIterable<TranscriptionEvent>`                                       | `ai.audio.transcribeStream(transcriptionInput)`                                           |
+| `ai.audio.synthesize`             | 合成完整语音         | `SynthesisRequest: text, language?, model?, signal?`                              | `SynthesisResult: audio and duration metadata`                            | `ai.audio.synthesize({ text: "你好" })`                                                   |
+| `ai.audio.synthesizeStream`       | 按段合成             | `SynthesisStreamRequest: text segment or async segments`                          | `AsyncIterable<SynthesisEvent>`                                           | `ai.audio.synthesizeStream(synthesisInput)`                                               |
+| `ai.audio.getCapabilities`        | 先检查模型能力       | `{ operation: transcribe\|synthesize, model? }`                                   | `AudioModelCapabilities`                                                  | `ai.audio.getCapabilities({ operation: "synthesize" })`                                   |
+| `ai.image.generate`               | 生成或参考图片       | `{ prompt, referenceImages?, model?, size?, signal? }`                            | `{ images: GeneratedImage[] } with bytes/MIME`                            | `ai.image.generate({ prompt: "一座灯塔" })`                                               |
+| `ai.a2a.registerExecutor`         | 注册任务执行器       | `SDK AgentExecutor`                                                               | `void`                                                                    | `ai.a2a.registerExecutor(executor)`                                                       |
+| `ai.a2a.getAgentCard`             | 提供标准发现文档     | `none; configured a2a card`                                                       | `A2AAgentCardDocument (A2A 1.0 ProtoJSON)`                                | `ai.a2a.getAgentCard()`                                                                   |
+| `ai.a2a.handleRequest`            | 处理认证的协议请求   | `unknown JSON-RPC body, trusted context.agentId?`                                 | `direct Promise<A2AHandleResult>; JSON-RPC/SSE outcome`                   | `ai.a2a.handleRequest(body, { agentId: trustedAgentId })`                                 |
+| `ai.a2a.listMessages`             | 可信管理查询         | `A2ATaskFilter: callerId?, contextId?, since?, pagination?`                       | `StorePage<A2AMessageRecord>`                                             | `ai.a2a.listMessages(messageFilter)`                                                      |
+| `ai.a2a.callRemoteAgent`          | 调用获准远端         | `allowlisted HTTPS URL, message, A2ACallOptions?`                                 | `A2ACallResult`                                                           | `ai.a2a.callRemoteAgent("https://agent.example.com/a2a", "请分析订单")`                   |
+| `ai.init`                         | 准备服务             | `AIConfigInput?, AIInitOptions?`                                                  | `HaiResult<void>; validate dependencies before use`                       | `ai.init({ llm: { apiKey: process.env.HAI_AI_LLM_APIKEY } })`                             |
+| `ai.close`                        | 反序释放服务         | `none`                                                                            | `Promise<void>; wait for cleanup`                                         | `ai.close()`                                                                              |
+| `ai.config`                       | 诊断当前配置         | `none`                                                                            | `redacted AIConfig or null`                                               | `ai.config`                                                                               |
+| `ai.isInitialized`                | 检查生命周期状态     | `none`                                                                            | `boolean`                                                                 | `ai.isInitialized`                                                                        |
+| `ai.llm.models.list`              | 列出合并清单         | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.llm.models.list()`                                                                    |
+| `ai.llm.models.get`               | 读取来源和版本       | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.llm.models.get("coding")`                                                             |
+| `ai.llm.models.register`          | 登记数据库定义       | `ModelEntry input (id/model/protocol/credentials/capabilities)`                   | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.llm.models.register(modelDefinition)`                                                 |
+| `ai.llm.models.update`            | 按版本替换定义       | `ModelEntry input (id/model/protocol/credentials/capabilities), expectedVersion?` | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.llm.models.update(modelDefinition, current.data.version)`                             |
+| `ai.llm.models.remove`            | 删除数据库定义       | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.llm.models.remove("coding", current.data.version)`                                    |
+| `ai.audio.models.list`            | 列出合并清单         | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.audio.models.list()`                                                                  |
+| `ai.audio.models.get`             | 读取来源和版本       | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.audio.models.get("speech")`                                                           |
+| `ai.audio.models.register`        | 登记数据库定义       | `AudioModelEntry input (id/provider/model/operations)`                            | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.audio.models.register(audioModelDefinition)`                                          |
+| `ai.audio.models.update`          | 按版本替换定义       | `AudioModelEntry input (id/provider/model/operations), expectedVersion?`          | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.audio.models.update(audioModelDefinition, current.data.version)`                      |
+| `ai.audio.models.remove`          | 删除数据库定义       | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.audio.models.remove("speech", current.data.version)`                                  |
+| `ai.image.models.list`            | 列出合并清单         | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.image.models.list()`                                                                  |
+| `ai.image.models.get`             | 读取来源和版本       | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.image.models.get("poster")`                                                           |
+| `ai.image.models.register`        | 登记数据库定义       | `ImageModelEntry input (id/provider/model)`                                       | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.image.models.register(imageModelDefinition)`                                          |
+| `ai.image.models.update`          | 按版本替换定义       | `ImageModelEntry input (id/provider/model), expectedVersion?`                     | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.image.models.update(imageModelDefinition, current.data.version)`                      |
+| `ai.image.models.remove`          | 删除数据库定义       | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.image.models.remove("poster", current.data.version)`                                  |
+| `ai.mcp.servers.list`             | 列出合并清单         | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.mcp.servers.list()`                                                                   |
+| `ai.mcp.servers.get`              | 读取来源和版本       | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.mcp.servers.get("tools")`                                                             |
+| `ai.mcp.servers.register`         | 登记数据库定义       | `MCPExternalServer input (id/transport/url or command)`                           | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.mcp.servers.register(mcpServerDefinition)`                                            |
+| `ai.mcp.servers.update`           | 按版本替换定义       | `MCPExternalServer input (id/transport/url or command), expectedVersion?`         | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.mcp.servers.update(mcpServerDefinition, current.data.version)`                        |
+| `ai.mcp.servers.remove`           | 删除数据库定义       | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.mcp.servers.remove("tools", current.data.version)`                                    |
+| `ai.retrieval.sources.list`       | 列出合并清单         | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.retrieval.sources.list()`                                                             |
+| `ai.retrieval.sources.get`        | 读取来源和版本       | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.retrieval.sources.get("docs")`                                                        |
+| `ai.retrieval.sources.register`   | 登记数据库定义       | `RetrievalSource input (id/collection)`                                           | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.retrieval.sources.register(sourceDefinition)`                                         |
+| `ai.retrieval.sources.update`     | 按版本替换定义       | `RetrievalSource input (id/collection), expectedVersion?`                         | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.retrieval.sources.update(sourceDefinition, current.data.version)`                     |
+| `ai.retrieval.sources.remove`     | 删除数据库定义       | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.retrieval.sources.remove("docs", current.data.version)`                               |
+| `ai.acp.agents.list`              | 列出合并清单         | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.acp.agents.list()`                                                                    |
+| `ai.acp.agents.get`               | 读取来源和版本       | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.acp.agents.get("coder")`                                                              |
+| `ai.acp.agents.register`          | 登记数据库定义       | `ACPAgent input (id/mode/adapter/modelIds)`                                       | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.acp.agents.register(agentDefinition)`                                                 |
+| `ai.acp.agents.update`            | 按版本替换定义       | `ACPAgent input (id/mode/adapter/modelIds), expectedVersion?`                     | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.acp.agents.update(agentDefinition, current.data.version)`                             |
+| `ai.acp.agents.remove`            | 删除数据库定义       | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.acp.agents.remove("coder", current.data.version)`                                     |
+| `ai.acp.workspaces.list`          | 列出合并清单         | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.acp.workspaces.list()`                                                                |
+| `ai.acp.workspaces.get`           | 读取来源和版本       | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.acp.workspaces.get("project")`                                                        |
+| `ai.acp.workspaces.register`      | 登记数据库定义       | `ACPWorkspace input (id/storage/repositories)`                                    | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.acp.workspaces.register(workspaceDefinition)`                                         |
+| `ai.acp.workspaces.update`        | 按版本替换定义       | `ACPWorkspace input (id/storage/repositories), expectedVersion?`                  | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.acp.workspaces.update(workspaceDefinition, current.data.version)`                     |
+| `ai.acp.workspaces.remove`        | 删除数据库定义       | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.acp.workspaces.remove("project", current.data.version)`                               |
+| `ai.acp.agents.initialize`        | 预检适配器配置       | `agentId, modelId?`                                                               | `HaiResult<{ agentId, mode, modelIds }>; no credentials`                  | `ai.acp.agents.initialize("coder")`                                                       |
+| `ai.acp.agents.check`             | 实际连接并握手       | `agentId, { workspaceId?, ...ACPClientOptions }`                                  | `HaiResult<native initialize response>; owned connection is closed`       | `ai.acp.agents.check("coder", { workspaceId: "project" })`                                |
+| `ai.acp.workspaces.prepare`       | 准备工作目录         | `workspaceId`                                                                     | `HaiResult<main absolute path>; dirty content is retained`                | `ai.acp.workspaces.prepare("project")`                                                    |
+| `ai.acp.workspaces.importFiles`   | 导入受控文件         | `workspaceId, { path: relative path, content: string\|Uint8Array }[]`             | `HaiResult<{ imported: string[] }>; no overwrite`                         | `ai.acp.workspaces.importFiles("project", [{ path: "notes.txt", content: "需求" }])`      |
+| `ai.acp.sessions.create`          | 启动受管开发会话     | `ACPCreateSessionOptions: agentId/workspaceId/newWorktree?`                       | `HaiResult<managed session handle>`                                       | `ai.acp.sessions.create({ agentId: "coder", workspaceId: "project", newWorktree: true })` |
+| `ai.acp.sessions.get`             | 读取会话句柄         | `framework session id`                                                            | `HaiResult<managed session handle>; does not resume`                      | `ai.acp.sessions.get("task-1")`                                                           |
+| `ai.acp.sessions.list`            | 查询受管会话         | `workspaceId?`                                                                    | `HaiResult<ACPSessionInfo[]>`                                             | `ai.acp.sessions.list("project")`                                                         |
+| `ai.acp.sessions.resume`          | 恢复原生会话         | `framework session id, ACPClientOptions?`                                         | `HaiResult<managed session handle>; definition changes may reject`        | `ai.acp.sessions.resume("task-1")`                                                        |
+| `ai.acp.sessions.close`           | 停止拥有的执行环境   | `framework session id`                                                            | `HaiResult<void>; source and native history retained`                     | `ai.acp.sessions.close("task-1")`                                                         |
+| `ai.acp.sessions.reclaimWorktree` | 回收干净检出目录     | `closed framework session id; preview stopped and changes saved`                  | `HaiResult<void>; branch and normal files retained`                       | `ai.acp.sessions.reclaimWorktree("task-1")`                                               |
+| `ai.acp.sessions.remove`          | 移除会话记录         | `closed or failed framework session id`                                           | `HaiResult<void>; worktree and native history retained`                   | `ai.acp.sessions.remove("task-1")`                                                        |
+| `ai.acp.connect`                  | 接入原生传输         | `ACPTransport: stdio/http/ws, ACPClientOptions?`                                  | `HaiResult<connection handle>`                                            | `ai.acp.connect({ type: "http", url: "https://agent.example.com/acp" })`                  |
+| `ai.acp.close`                    | 关闭子系统           | `none; normally call ai.close()`                                                  | `Promise<void>; cleanup may throw`                                        | `ai.acp.close()`                                                                          |
 
 - `ai.tools`：工具定义、注册表、批量执行；无需初始化。
 - `ai.stream`：ChatCompletion 流式 chunk 处理；无需初始化。
@@ -26,7 +206,7 @@ AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、文生
 - `ai.a2a`：Agent-to-Agent 请求处理与远端调用。
 - `@h-ai/ai/client`：独立浏览器 Audio WebSocket 客户端。
 
-`@h-ai/ai/client` 仅提供 `createAudioClient({ url, getTicket })` 与 Audio 客户端类型。HTTP 使用 `@h-ai/api-client` 的 typed 领域方法；默认聊天补全非流式，流与 A2A 使用应用自行绑定的 contract。旧字符串路径客户端和重复 SSE helper 已删除，浏览器不导出 Node 单例 `ai`。
+`@h-ai/ai/client` 仅提供 `createAudioClient({ url, getTicket })` 与 Audio 客户端类型。HTTP 使用 `@h-ai/api-client` 的 typed 领域方法；默认聊天补全非流式，流与 A2A 使用应用自行绑定的 contract。浏览器不导出 Node 单例 `ai`。
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -53,38 +233,7 @@ finally {
 
 更完整的方法清单、错误码与长示例见 [REFERENCE.md](./REFERENCE.md)。
 
-## 使用入门
-
-`ai.close()` 等待已开始的初始化完成并清理，合并并发关闭；重初始化先清理旧实例，关闭期间不接受新初始化。
-
-### 快速开始
-
-#### 开发 LLM-only（零数据库依赖）
-
-```ts
-import { ai } from '@h-ai/ai'
-
-const init = await ai.init({
-  llm: {
-    model: 'gpt-4o-mini',
-    apiKey: process.env.HAI_AI_LLM_APIKEY,
-  },
-})
-if (!init.success)
-  return init
-
-const result = await ai.llm.chat({
-  messages: [
-    { role: 'user', content: '你好！' }
-  ],
-})
-
-await ai.close()
-```
-
-开发/显式测试未初始化 reldb/vecdb 时，AI 使用进程内临时 Store；关闭、退出或切换实例后不保留。`NODE_ENV` 或 `HAI_CORE_ENV` 为 production 时，临时 Store、SQLite 或本地向量后端会使初始化失败。生产必须先初始化共享 RelDB 与网络 vecdb，或传入满足同等原子契约的共享 Provider。
-
-#### 持久化 DB Provider（reldb + vecdb）
+### 持久化 DB Provider（reldb + vecdb）
 
 ```ts
 import { ai } from '@h-ai/ai'
@@ -131,7 +280,7 @@ if (failures.length)
 
 MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确的 ER_DUP_KEYNAME/1061，并重新核对列及顺序、非唯一完整列、升序可见 BTREE 和无表达式；已有同名错误结构仍失败。账户需要建表和 INDEX 权限，元数据读取、权限或其他 DDL 错误使 ai.init 返回 CONFIGURATION_ERROR。返回前等待全部已启动 DDL 结束；MySQL DDL 不回滚，失败保留已创建结构，修复权限/结构后再重试。逐步检查初始化结果，失败不接收业务请求，并逆序关闭 AI、vecdb、reldb。
 
-#### 自定义 StoreProvider
+### 自定义 StoreProvider
 
 ```ts
 import type { AIStoreProvider } from '@h-ai/ai'
@@ -187,7 +336,7 @@ const claude = await ai.llm.chat({ messages, model: 'claude' }) // 该模型配�
 // 临时客户端按 TTL 缓存（llm.tempModelCacheTtl，默认 10 分钟），与常驻模型客户端隔离
 const temp = await ai.llm.chat({
   messages,
-  tempModel: { model: 'claude-3-5-sonnet', protocol: 'anthropic', apiKey: 'sk-temp' },
+  tempModel: { model: 'claude-3-5-sonnet', protocol: 'anthropic', apiKey: process.env.TEMP_LLM_API_KEY },
 })
 ```
 
@@ -603,7 +752,12 @@ const turns = m.getTurns()
 
 ```ts
 // 会话结束时固化：整合摘要 → 提取长期记忆（写入不含 sessionId 的持久作用域）
-const result = await manager.consolidate({
+const created = ai.context.createManager({
+  scope: { objectId: 'user-001', sessionId: 'sess-001' }
+})
+if (!created.success)
+  return created
+const result = await created.data.consolidate({
   scope: { userId: 'user-001', personaId: 'xiaoq' }
 })
 if (result.success) {
@@ -627,6 +781,8 @@ await ai.persona.save({
 
 // 组合出可直接喂给 ContextManager 的系统提示词（systemPrompt + traits）
 const composed = await ai.persona.compose('xiaoq')
+if (!composed.success)
+  return composed
 const manager = ai.context.createManager({
   scope: { objectId: 'user-001', sessionId: 'persona-session' },
   systemPrompt: composed.data,
@@ -640,11 +796,86 @@ const manager = ai.context.createManager({
 
 `ai.persona` 提供 `save` / `get` / `update` / `remove` / `list` / `compose`，按 `[objectId, id]` 隔离角色。保存时传 `objectId`，其余操作传 `{ objectId }`；省略时访问 `system` 平台角色。租户业务应绑定可信认证主体，不能把客户端传入的角色 ID 当作授权。
 
-### 配置
+### 安全边界
+
+- Prompt、检索文档和模型输出都按不可信输入处理；不要把用户内容拼进不可覆盖的系统规则。
+- Zod 只校验工具参数形状，不代表调用者有权限。高权限工具必须在 handler 内再次校验身份、租户、资源归属与配额，并只把允许自动执行的工具注册给模型。
+- `callRemoteAgent()` 是独立客户端能力，只依赖 `ai.init()`，不要求配置 Agent Card 或注册本地 executor。它拒绝非 HTTP(S) 和 URL 内嵌凭据，但应用仍必须对远端 origin 配置白名单，并在出口代理处限制 DNS 重绑定、重定向到私网和云元数据地址。
+- 不记录完整 Prompt、工具参数、A2A headers、临时模型凭据或带 query 的远端 URL；确需审计时仅保存脱敏摘要。
+
+### 返回句柄的用法
+
+`registry` 来自 `ai.tools.createRegistry()`；`manager` 来自 `ai.context.createManager/restoreManager` 成功后的 data；`session` 来自受管 ACP sessions.create/get/resume 的 data，`connection` 来自 `ai.acp.connect` 的 data。每种句柄只在自己的生命周期及授权范围内使用。scoped Memory 的十个方法与上表同名，主体/作用域已由工厂绑定，不再接受 objectId/scope 覆盖。
+
+| 入口                       | 场景               | 输入                                                       | 输出                                                                   | 调用片段                                                 |
+| -------------------------- | ------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------- |
+| `registry.register`        | 登记单个工具       | `Tool`                                                     | `HaiResult<void>; duplicate rejected`                                  | `registry.register(tool)`                                |
+| `registry.registerMany`    | 批量登记工具       | `Tool[]`                                                   | `HaiResult<void>`                                                      | `registry.registerMany(tools)`                           |
+| `registry.replace`         | 显式替换工具       | `Tool with existing name`                                  | `HaiResult<void>`                                                      | `registry.replace(tool)`                                 |
+| `registry.unregister`      | 移除工具           | `tool name`                                                | `boolean`                                                              | `registry.unregister("search")`                          |
+| `registry.get`             | 读取工具定义       | `tool name`                                                | `Tool or undefined`                                                    | `registry.get("search")`                                 |
+| `registry.has`             | 检查工具存在       | `tool name`                                                | `boolean`                                                              | `registry.has("search")`                                 |
+| `registry.getNames`        | 工具名称           | `none`                                                     | `string[]`                                                             | `registry.getNames()`                                    |
+| `registry.getDefinitions`  | 传给模型的定义     | `none`                                                     | `ToolDefinition[]`                                                     | `registry.getDefinitions()`                              |
+| `registry.execute`         | 授权后执行工具     | `ToolCall, ToolExecutionOptions?`                          | `Promise<HaiResult<ToolMessage>>`                                      | `registry.execute(toolCall, { objectId: "u1" })`         |
+| `registry.executeAll`      | 逐个或显式并行执行 | `ToolCall[], { parallel?, ...executionOptions }`           | `Promise<HaiResult<ToolMessage[]>>`                                    | `registry.executeAll(toolCalls)`                         |
+| `registry.clear`           | 清理本地工具       | `none`                                                     | `void`                                                                 | `registry.clear()`                                       |
+| `registry.size`            | 工具数量           | `none`                                                     | `number`                                                               | `registry.size`                                          |
+| `manager.addMessage`       | 补充对话消息       | `ChatMessage`                                              | `Promise<HaiResult<void>>`                                             | `manager.addMessage({ role: "user", content: "你好" })`  |
+| `manager.getMessages`      | 读取对话快照       | `none`                                                     | `HaiResult<ChatMessage[]>`                                             | `manager.getMessages()`                                  |
+| `manager.reload`           | 刷新共享快照       | `none`                                                     | `Promise<HaiResult<void>>`                                             | `manager.reload()`                                       |
+| `manager.getTokenUsage`    | 观察上下文预算     | `none`                                                     | `HaiResult<{ current, budget }>`                                       | `manager.getTokenUsage()`                                |
+| `manager.getSummaries`     | 读取摘要           | `none`                                                     | `HaiResult<SummaryResult[]>`                                           | `manager.getSummaries()`                                 |
+| `manager.save`             | 持久保存           | `none`                                                     | `Promise<HaiResult<void>>`                                             | `manager.save()`                                         |
+| `manager.flush`            | 等待后台记忆写入   | `none`                                                     | `Promise<HaiResult<void>>`                                             | `manager.flush()`                                        |
+| `manager.reset`            | 终止并重置对话     | `ContextResetOptions?`                                     | `Promise<HaiResult<void>>`                                             | `manager.reset({ preserveSystemPrompt: true })`          |
+| `manager.getTurns`         | 读取真实轮次       | `none`                                                     | `HaiResult<ConversationTurn[]>`                                        | `manager.getTurns()`                                     |
+| `manager.markTurnSpeaking` | 记录开始播放       | `turnId`                                                   | `Promise<HaiResult<void>>`                                             | `manager.markTurnSpeaking(turnId)`                       |
+| `manager.commitTurn`       | 提交已表达内容     | `turnId, { text? }`                                        | `Promise<HaiResult<void>>`                                             | `manager.commitTurn(turnId, { text: spokenText })`       |
+| `manager.interruptTurn`    | 提交打断前内容     | `turnId, { text? }`                                        | `Promise<HaiResult<void>>`                                             | `manager.interruptTurn(turnId, { text: spokenText })`    |
+| `manager.consolidate`      | 固化长期记忆       | `ConsolidateOptions?`                                      | `Promise<HaiResult<{ summary, memories }>>`                            | `manager.consolidate({ scope: { personaId: "tutor" } })` |
+| `manager.chat`             | 多轮回答           | `message: string, ContextChatOptions?`                     | `Promise<HaiResult<ContextChatResult>>`                                | `manager.chat("请继续")`                                 |
+| `manager.chatStream`       | 多轮流式回答       | `message: string, ContextChatOptions?`                     | `AsyncIterable<ContextStreamEvent>`                                    | `manager.chatStream("请继续")`                           |
+| `session.info`             | 读取受管会话       | `none`                                                     | `Promise<HaiResult<ACPSessionInfo>>`                                   | `session.info()`                                         |
+| `session.prompt`           | 执行一轮开发       | `ContentBlock[], AbortSignal?`                             | `Promise<HaiResult<{ text, stopReason, events }>>`                     | `session.prompt([{ type: "text", text: "检查工程" }])`   |
+| `session.promptStructured` | 校验一份 JSON      | `ContentBlock[], Zod schema, AbortSignal?`                 | `Promise<HaiResult<schema-inferred T>>`                                | `session.promptStructured(content, OutputSchema)`        |
+| `session.stream`           | 观察原生事件       | `ContentBlock[], AbortSignal?`                             | `AsyncIterable<SessionNotification>; failure throws`                   | `session.stream([{ type: "text", text: "检查工程" }])`   |
+| `session.cancel`           | 取消当前轮次       | `none`                                                     | `Promise<HaiResult<void>>`                                             | `session.cancel()`                                       |
+| `session.setMode`          | 选择已公布模式     | `native mode ID`                                           | `Promise<HaiResult<native mode response>>`                             | `session.setMode("code")`                                |
+| `session.setConfigOption`  | 设置已公布选项     | `native option key and allowed value`                      | `Promise<HaiResult<native config response>>`                           | `session.setConfigOption("model", "coding")`             |
+| `session.updateMain`       | 仅快进更新主分支   | `none; execution and preview must be stopped`              | `Promise<HaiResult<ACPGitReport[]>>; partial failure reports in cause` | `session.updateMain()`                                   |
+| `session.publish`          | 提交并推送         | `{ mode, message, author }; managed isolated session only` | `Promise<HaiResult<ACPGitReport[]>>`                                   | `session.publish(publishOptions)`                        |
+| `session.close`            | 停止执行保留状态   | `none`                                                     | `Promise<HaiResult<void>>`                                             | `session.close()`                                        |
+| `connection.authenticate`  | 原生认证           | `advertised authentication method ID`                      | `Promise<HaiResult<native auth response>>`                             | `connection.authenticate("api-key")`                     |
+| `connection.createSession` | 创建低层原生会话   | `absolute remote cwd, McpServer[]?`                        | `Promise<HaiResult<{ id, prompt, cancel }>>`                           | `connection.createSession("/workspace/project", [])`     |
+| `connection.listSessions`  | 原生分页会话       | `cursor?`                                                  | `Promise<HaiResult<native paginated response>>`                        | `connection.listSessions()`                              |
+| `connection.deleteSession` | 删除原生会话       | `native session ID`                                        | `Promise<HaiResult<native delete response>>`                           | `connection.deleteSession(nativeId)`                     |
+| `connection.close`         | 关闭低层连接       | `none`                                                     | `Promise<HaiResult<void>>`                                             | `connection.close()`                                     |
+
+## 配置
+
+### 按场景选择配置入口
+
+| 配置入口    | 场景               | 输入                                                                       | 生效结果                                                             | 示例                                                                                                      |
+| ----------- | ------------------ | -------------------------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `llm`       | 模型连接与请求协议 | model, protocol, apiKey/baseUrl, timeout, models/scenarios                 | chat/Responses/Anthropic selection; normalized model requests        | `{ llm: { model: "gpt-4o-mini", timeout: 60000 } }`                                                       |
+| `embedding` | 检索向量           | model?, dimensions?, batchSize?                                            | consistent vector dimensions for the target collection               | `{ embedding: { dimensions: 1536, batchSize: 100 } }`                                                     |
+| `mcp`       | 外部工具服务       | servers with transport/endpoints or commands                               | registered server definitions; application authorizes tool execution | `{ mcp: { servers: [] } }`                                                                                |
+| `retrieval` | 默认信源           | sources: { id, collection, topK?, minScore?, filter? }[]                   | queryable source definitions; does not import documents              | `{ retrieval: { sources: [{ id: "docs", collection: "manual", topK: 5 }] } }`                             |
+| `knowledge` | 文档发布与分块     | collection, dimension, cleanOptions, chunkOptions                          | versioned document/vector publication and bounded chunks             | `{ knowledge: { collection: "manual", dimension: 1536, chunkOptions: { maxSize: 1500, overlap: 200 } } }` |
+| `memory`    | 主体记忆后端和预算 | provider, quotas, recencyDecay, defaultTopK, candidateMultiplier           | native or Mem0-format behavior with explicit persistence limits      | `{ memory: { provider: "native", defaultTopK: 10 } }`                                                     |
+| `token`     | Token 估算         | tokenRatio > 0; default 0.25                                               | local token budget estimates; not provider billing usage             | `{ token: { tokenRatio: 0.25 } }`                                                                         |
+| `summary`   | 摘要规则           | systemPrompt?                                                              | prompt used by summary generation; model from llm.scenarios          | `{ summary: { systemPrompt: "保留已确认决策和待办" } }`                                                   |
+| `compress`  | 上下文压缩预算     | defaultStrategy, defaultMaxTokens, preserveLastN                           | compression defaults; 0 budget derives from model limit              | `{ compress: { defaultStrategy: "hybrid", defaultMaxTokens: 4000, preserveLastN: 4 } }`                   |
+| `file`      | OCR 提取规则       | systemPrompt?; model via llm.scenarios.ocr                                 | text extraction instructions; not HTML sanitization                  | `{ file: { systemPrompt: "只提取可见文字" } }`                                                            |
+| `audio`     | 语音模型与容量     | models, transcribeModel/synthesizeModel, maxAudioBytes/maxStreamDurationMs | provider capability/operation selection and bounded input/stream     | `see Audio examples`                                                                                      |
+| `image`     | 图像模型与下载预算 | models, generateModel, maxImageBytes, maxImages; timeout per model         | generated bytes with MIME; unsafe downloads rejected                 | `see Image examples`                                                                                      |
+| `a2a`       | 代理发现与执行租约 | agentCard and execution lease/poll/deadline options                        | ProtoJSON discovery and shared task journal                          | `see A2A protocol section`                                                                                |
+| `acp`       | 智能体执行约束     | agents/workspaces and execution content/event limits                       | validated definitions and managed native sessions                    | `see ACP guide`                                                                                           |
 
 Rerank 继承全局 LLM timeout，模型条目可覆盖；同一预算覆盖请求及响应正文，超时返回 RERANK_API_ERROR。
 
-LLM 协议字段已从 `llm.api` / `llm.models[].api` / `tempModel.api` 统一改为 `protocol`，取值仍为 `chat | responses | anthropic`。环境变量改用 `HAI_AI_LLM_PROTOCOL`、`HAI_AI_LLM_MODELS_0_PROTOCOL`（其他项按索引递增）。旧字段和旧协议变量会明确报错并提示迁移；`apiKey` 及其变量不变。
+模型请求协议通过 `llm.protocol`、`llm.models[].protocol` 或单次 `tempModel.protocol` 指定，支持 `chat | responses | anthropic`。环境变量为 `HAI_AI_LLM_PROTOCOL`、`HAI_AI_LLM_MODELS_0_PROTOCOL`（模型项按索引递增）；凭据通过 `apiKey` 或相应私有环境提供。
 
 ```yaml
 llm:
@@ -724,14 +955,7 @@ const memories = await ai.memory.recall('经济发展', {
 
 `ai.config` 返回脱敏后的配置快照；`apiKey`、`privateKey`、URL 内嵌凭证等敏感字段不会原样暴露。
 
-### 安全边界
-
-- Prompt、检索文档和模型输出都按不可信输入处理；不要把用户内容拼进不可覆盖的系统规则。
-- Zod 只校验工具参数形状，不代表调用者有权限。高权限工具必须在 handler 内再次校验身份、租户、资源归属与配额，并只把允许自动执行的工具注册给模型。
-- `callRemoteAgent()` 是独立客户端能力，只依赖 `ai.init()`，不要求配置 Agent Card 或注册本地 executor。它拒绝非 HTTP(S) 和 URL 内嵌凭据，但应用仍必须对远端 origin 配置白名单，并在出口代理处限制 DNS 重绑定、重定向到私网和云元数据地址。
-- 不记录完整 Prompt、工具参数、A2A headers、临时模型凭据或带 query 的远端 URL；确需审计时仅保存脱敏摘要。
-
-### 错误处理
+## 错误处理
 
 ```ts
 const result = await ai.llm.chat({ messages })

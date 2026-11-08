@@ -4,23 +4,13 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
 
-## Introduction
-
 Built-in messages support `zh-CN`, `en-US` and `ja-JP`; the language selector offers all three by default.
 
 A cross-platform Svelte 5 Runes component library with DaisyUI v5 + Tailwind CSS v4 styling and Bits UI v2 headless interactions. Includes built-in i18n (zh-CN / en-US / ja-JP) and 15 curated DaisyUI themes plus high contrast, square business and eye-care themes.
 
-
 HTTP/UI boundaries expose business messages only for explicit valid 4xx statuses. Missing or invalid `httpStatus` is treated as 500 with a safe message. Custom business errors must carry a complete error definition or an explicit status.
-## Core features
 
-- Forms, tables, dialogs, navigation, charts and application components.
-- Authentication, CRUD, AI content, onboarding and a help center.
-- Svelte 5, themes, responsive layouts and Chinese/English/Japanese component messages.
-
-Markdown underline and highlight markers support escaping; unclosed markers remain text. Toasts and document downloads handle unusually long text without repeated scanning, while trace identifiers remain hidden by default.
-
-## Getting started
+## Quick Start
 
 ### Installation
 
@@ -30,15 +20,13 @@ npm install @h-ai/ui @h-ai/core
 
 For a Node server, declare both UI and core as production dependencies so the adapter preserves native logging and runtime dependencies.
 
-### Quick start
-
-#### 1. Configure application imports in package.json
+### 1. Configure application imports in package.json
 
 ```json
 { "imports": { "#lib/*": "./src/lib/*" } }
 ```
 
-#### 2. Configure vite.config.ts
+### 2. Configure vite.config.ts
 
 SvelteKit 3 configures preprocessing, the compiler and the adapter in the Vite plugin; only a plain Svelte/Vite project keeps svelte.config.js.
 
@@ -68,7 +56,7 @@ export default defineConfig({
 })
 ```
 
-#### 3. Configure src/app.css
+### 3. Configure src/app.css
 
 When using Crypto or Kit/IAM, include `sm-crypto@0.5.8` in application production dependencies. CLI projects already do this; for manual setup, run `pnpm add sm-crypto@0.5.8`. The external option alone is insufficient: adapter-node also uses direct production dependencies to preserve native package loading.
 
@@ -91,7 +79,7 @@ When using Crypto or Kit/IAM, include `sm-crypto@0.5.8` in application productio
 
 > `@source` makes TailwindCSS scan classes in `@h-ai/ui`; without it, component styles are missing. In nested monorepo apps, dependencies may be hoisted to root `node_modules`, so retain both paths.
 
-#### 4. Use components
+### 4. Use components
 
 ```svelte
 <script>
@@ -123,7 +111,99 @@ import { Button } from '@h-ai/ui/components/primitives/index'
 import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
 ```
 
-#### data-\* attribute forwarding
+## Features
+
+### Purpose, inputs and outputs
+
+UI has no init/close. Use these fragments in the application component or browser interaction context. Named variables stand for application-provided requests, schemas, resource definitions or options. Follow the corresponding examples for setup and failure handling. Check HaiResult.success and await asynchronous calls.
+
+| Entry | Use case | Input | Output | Call fragment |
+| --- | --- | --- | --- | --- |
+| `autoImportHaiUi` | Auto-import | `preprocessed Svelte source and filename through markup` | `PreprocessorGroup; synchronous { code }` | `autoImportHaiUi()` |
+| `parseMarkdown` | Safe Markdown | `Markdown source, MarkdownParseOptions?` | `HTML string; raw HTML escaped or allowlisted` | `parseMarkdown("# Hello", { allowHtmlTags: false })` |
+| `renderMarkdownDocument` | Editor document model | `Markdown source, MarkdownDocumentParseOptions?` | `MarkdownRenderResult with outline/codeBlocks/blocks` | `renderMarkdownDocument("# Report", { allowHtmlTags: false })` |
+| `isLanguageSupported` | Check highlight language | `language name` | `boolean` | `isLanguageSupported("typescript")` |
+| `highlightCode` | Highlight code | `code text, supported language` | `escaped/highlighted HTML string` | `highlightCode("const total = 1", "typescript")` |
+| `resolveDocumentMarkdownContent` | Fence code content | `text, sourceKind?, language?` | `Markdown string with a safe fence length` | `resolveDocumentMarkdownContent("const x = 1", "code", "ts")` |
+| `resolveDocumentDownloadActions` | Download menu | `MarkdownToolbarDownloadAction[]?` | `AiDocumentResolvedDownloadAction[]` | `resolveDocumentDownloadActions([{ id: "markdown", label: "Markdown" }])` |
+| `downloadAiDocument` | Download selected format | `AiDocumentDownloadRequest` | `Promise<void>; browser failure rejects, SSR does nothing` | `downloadAiDocument({ actionId: "markdown", content: "# Report", filename: "report.md" })` |
+| `createLocaleStore` | Component locale state | `{ defaultLocale?, supportedLocales?, detectBrowser?, persistKey? }` | `locale store with current/set/isSupported` | `createLocaleStore({ defaultLocale: "zh-CN", detectBrowser: false })` |
+| `getGlobalLocale` | Read current locale | `none` | `locale string from current context` | `getGlobalLocale()` |
+| `setGlobalLocale` | Set browser/startup locale | `locale` | `void; use request context for SSR` | `setGlobalLocale("en-US")` |
+| `detectBrowserLocale` | Detect browser locale | `supportedLocales?` | `supported locale or null` | `detectBrowserLocale()` |
+| `isLocaleSupported` | Check supported locale | `locale, supportedLocales?` | `boolean` | `isLocaleSupported("ja-JP")` |
+| `resolveLocale` | Normalize locale | `locale, supportedLocales?, fallback?` | `supported locale` | `resolveLocale("en")` |
+| `interpolate` | Interpolate message | `template string, InterpolationParams` | `string` | `interpolate("Hello {name}", { name: "Ada" })` |
+| `getThemeInfo` | Theme metadata | `theme ID` | `ThemeInfo or undefined` | `getThemeInfo("light")` |
+| `isDarkTheme` | Dark theme check | `theme ID` | `boolean` | `isDarkTheme("dark")` |
+| `normalizeThemeId` | Normalize theme | `candidate theme ID, fallback?` | `supported theme ID` | `normalizeThemeId("unknown", "light")` |
+| `normalizeHexColor` | Normalize color | `string or null/undefined` | `six-digit lowercase hex string or null` | `normalizeHexColor("#5765F0")` |
+| `resolveThemeTone` | Theme tone | `theme ID` | `light or dark` | `resolveThemeTone("light")` |
+| `createThemeBootstrapScript` | Bootstrap theme | `ThemeBootstrapScriptOptions from trusted host config` | `script string for the application HTML shell` | `createThemeBootstrapScript({ storageKey: "theme", defaultThemeId: "light" })` |
+| `getThemeInitScript` | Default theme bootstrap | `none` | `script string` | `getThemeInitScript()` |
+| `applyTheme` | Apply theme | `theme ID, persist? (default true)` | `void; updates DOM/browser preference` | `applyTheme("dark")` |
+| `getCurrentTheme` | Current theme | `none` | `theme ID string` | `getCurrentTheme()` |
+| `getSavedTheme` | Saved theme | `fallback theme ID?` | `theme ID string` | `getSavedTheme("light")` |
+| `createGuide` | Guide controller | `GuideOptions: tours, articles?, nav?, persistence?, persistKey?` | `GuideController; no init/close` | `createGuide({ tours: [], persistence: "memory" })` |
+| `resolveGuideText` | Resolve guide text | `string or translation callback?` | `string` | `resolveGuideText(() => m.help())` |
+| `matchPermission` | Permission visibility | `required permission, userPermissions[]` | `boolean; not server authorization` | `matchPermission("orders:read", ["orders:*"])` |
+| `setPermissionContext` | Provide permission context | `() => current permissions; component initialization only` | `void` | `setPermissionContext(() => user.permissions)` |
+| `usePermission` | Consume permissions | `none; component initialization only` | `PermissionContext with hasPerm/hasAnyPerm/hasAllPerms` | `usePermission()` |
+| `createSensitiveActions` | Sensitive confirmation | `standard auth actions providing reauthenticate/publicConfig?` | `SensitiveActions: configure/authorize/submit/cancel` | `createSensitiveActions(actions)` |
+| `createSessionRecovery` | In-place session recovery | `none; configure public config and current user afterward` | `SessionRecovery controller` | `createSessionRecovery()` |
+| `defineCrud` | Define CRUD | `CrudResource with fields/API callbacks` | `CrudDef for CrudPage` | `defineCrud(resourceDefinition)` |
+| `createCrudController` | Manage list state | `CrudDef, { autoLoad? }?` | `controller data/nav/loading/loaded/error/load/reload` | `createCrudController(crud, { autoLoad: false })` |
+| `mapPaginated` | Map paginated items | `PaginatedResult<T>, (item,index) => R` | `PaginatedResult<R> retaining total/page/pageSize` | `mapPaginated(page, item => ({ ...item, selected: false }))` |
+| `createBrowserNavAdapter` | Browser navigation | `none` | `NavAdapter` | `createBrowserNavAdapter()` |
+| `registerClipboardHostWriter` | Register host clipboard | `async text => boolean or null to unregister` | `void` | `registerClipboardHostWriter(null)` |
+| `writeTextToClipboard` | Copy and check result | `text: string` | `Promise<boolean>; true only when write succeeds` | `writeTextToClipboard("trace-001")` |
+| `cn` | Combine classes | `...string\|boolean\|null\|undefined values` | `string` | `cn("flex", active && "text-primary")` |
+| `getDataAttributes` | Forward data attributes | `props record` | `ForwardedDataAttributes` | `getDataAttributes({ "data-testid": "save" })` |
+| `generateId` | UI identifier | `prefix?; not a security token generator` | `string` | `generateId("field")` |
+| `portal` | Portal a node | `HTMLElement, target HTMLElement or selector?` | `Svelte action result with cleanup` | `portal(node, document.body)` |
+| `detectPlatform` | Detect platform | `none` | `Platform` | `detectPlatform()` |
+| `isMobile` | Check mobile | `none` | `boolean` | `isMobile()` |
+| `isNativeApp` | Check native shell | `none` | `boolean` | `isNativeApp()` |
+| `usePlatform` | Reactive platform view | `none; component initialization` | `{ current, isMobile, isApp }` | `usePlatform()` |
+| `getVariantClass` | Map theme classes | `Variant, prefix?` | `string class name` | `getVariantClass("primary", "btn")` |
+| `getSizeClass` | Map theme classes | `Size, prefix?` | `string class name` | `getSizeClass("sm", "btn")` |
+| `getInputSizeClass` | Map theme classes | `Size` | `string class name` | `getInputSizeClass("sm")` |
+| `getBadgeVariantClass` | Map theme classes | `Variant` | `string class name` | `getBadgeVariantClass("info")` |
+| `getBadgeSizeClass` | Map theme classes | `Size` | `string class name` | `getBadgeSizeClass("sm")` |
+| `getAlertVariantClass` | Map theme classes | `Variant` | `string class name` | `getAlertVariantClass("info")` |
+| `getProgressVariantClass` | Map theme classes | `Variant` | `string class name` | `getProgressVariantClass("primary")` |
+| `useToastFeedback` | Operation feedback | `() => safely localized message, variant?` | `void; source-owned toast lifecycle` | `useToastFeedback(() => errorMessage(error))` |
+| `notifySuccess` | Operation feedback | `localized message, duration?` | `toast ID string` | `notifySuccess(m.saved())` |
+| `notifyInfo` | Operation feedback | `localized message, duration?` | `toast ID string` | `notifyInfo(m.loading())` |
+| `notifyWarning` | Operation feedback | `localized message, duration?` | `toast ID string` | `notifyWarning(m.warning())` |
+| `notifyError` | Operation feedback | `unknown error, safe fallback?, duration?` | `toast ID string; internal exception text hidden` | `notifyError(error, m.retry())` |
+| `errorMessage` | Operation feedback | `unknown error, safe fallback?` | `safe localized string` | `errorMessage(error, m.retry())` |
+| `toast.add` | Shared feedback queue | `localized options/message` | `string item ID` | `toast.add({ message: m.saved(), variant: "success" })` |
+| `toast.success` | Shared feedback queue | `localized safe message, duration?` | `string item ID` | `toast.success(m.result())` |
+| `toast.info` | Shared feedback queue | `localized safe message, duration?` | `string item ID` | `toast.info(m.result())` |
+| `toast.warning` | Shared feedback queue | `localized safe message, duration?` | `string item ID` | `toast.warning(m.result())` |
+| `toast.error` | Shared feedback queue | `localized safe message, duration?` | `string item ID` | `toast.error(m.result())` |
+| `toast.remove` | Shared feedback queue | `item ID` | `void` | `toast.remove(id)` |
+| `toast.clear` | Shared feedback queue | `none` | `void` | `toast.clear()` |
+| `message.add` | Shared feedback queue | `localized options/message` | `string item ID` | `message.add({ message: m.saved(), type: "success" })` |
+| `message.success` | Shared feedback queue | `localized safe message, duration?` | `string item ID` | `message.success(m.result())` |
+| `message.info` | Shared feedback queue | `localized safe message, duration?` | `string item ID` | `message.info(m.result())` |
+| `message.warning` | Shared feedback queue | `localized safe message, duration?` | `string item ID` | `message.warning(m.result())` |
+| `message.error` | Shared feedback queue | `localized safe message, duration?` | `string item ID` | `message.error(m.result())` |
+| `message.remove` | Shared feedback queue | `item ID` | `void` | `message.remove(id)` |
+| `message.clear` | Shared feedback queue | `none` | `void` | `message.clear()` |
+| `toast.pause` | Toast timing | `toast ID` | `void` | `toast.pause(id)` |
+| `toast.resume` | Toast timing | `toast ID` | `void` | `toast.resume(id)` |
+| `messageBox.confirm` | Async confirmation | `localized string or MessageBoxOptions` | `Promise<boolean>; host handles confirmation/cancellation` | `messageBox.confirm({ message: m.confirm() })` |
+| `messageBox.alert` | Async confirmation | `localized string or MessageBoxOptions` | `Promise<boolean>; host handles confirmation/cancellation` | `messageBox.alert({ message: m.confirm() })` |
+
+- Forms, tables, dialogs, navigation, charts and application components.
+- Authentication, CRUD, AI content, onboarding and a help center.
+- Svelte 5, themes, responsive layouts and Chinese/English/Japanese component messages.
+
+Markdown underline and highlight markers support escaping; unclosed markers remain text. Toasts and document downloads handle unusually long text without repeated scanning, while trace identifiers remain hidden by default.
+
+### data-\* attribute forwarding
 
 Public Svelte components forward caller-supplied `data-*` attributes to their root or primary interactive element for tests, analytics, and automation. Other unknown attributes are not forwarded.
 
@@ -134,6 +214,32 @@ Public Svelte components forward caller-supplied `data-*` attributes to their ro
 ```
 
 No extra button, input, or overlay wrappers are needed just for `data-testid`.
+
+### Component-family inputs, events and outputs
+
+These families cover the interaction categories in the component catalog. Supply application-owned m, rows, user, controllers and callbacks. Display components render DOM; interactive components report through bindings/callbacks and do not grant server authorization. See Examples, catalog notes and the UI skill for complete compositions. Exported Props types constrain further options.
+
+| Component family | Input | Output/events | Example fragment |
+| --- | --- | --- | --- |
+| Button / IconButton / BareButton | variant, size, loading, disabled; icon/snippet; onclick | click event; loading/disabled block repeated action | `<Button loading={saving} onclick={save}>{m.save()}</Button>` |
+| Input / BareInput / Textarea / PasswordInput | type, value, label/validation props | bind:value; input/change/focus events; file input exposes FileList | `<Input bind:value={draft} required />` |
+| Select / Radio / Range / Rating / Combobox | options or min/max/step, current value | bound selected value and selection callbacks | `<Select options={options} bind:value={selected} />` |
+| Checkbox / Switch / ToggleCheckbox / ToggleInput / ToggleRadio | checked/name/label, disabled | bind:checked and change events | `<Checkbox bind:checked={enabled} label={m.enabled()} />` |
+| Form / FormLayout / FormField / TagInput | columns, labels, error/hint, tags, submit callback | validated submit event, tag changes, accessible field association | `<Form onsubmit={save}><FormField label={m.name()}><Input bind:value={name} /></FormField></Form>` |
+| Modal / Drawer / Popover / Dropdown / Tooltip / Calendar | open, trigger/content snippets, dimensions, selected value | bound open/selection; focus handling and close actions | `<Modal bind:open={open} title={m.details()}>{m.content()}</Modal>` |
+| DataTable / TableToolbar / Pagination / FilterBar | rows, columns, total/page, draft search/filter, loading | row/sort/page/query callbacks; host performs the request | `<DataTable {columns} data={rows} sortKey={sortKey} sortDir={sortDir} onsort={sortRows} />` |
+| Tabs / Breadcrumb / Steps / BottomNav / AppBar | items/current key, links, titles and action snippets | selected key/navigation callbacks; host owns routing | `<Tabs {items} bind:active={activeTab} />` |
+| Alert / Badge / Avatar / Tag / Spinner / Progress / Skeleton / Empty / Result | status/variant/value/text/image and state props | presentational DOM; tag/alert close callbacks when enabled | `<Progress value={completed} max={total} />` |
+| WorkspaceLayout / PageHeader / SettingsLayout / SettingsModal | title, sections, active key, leading/actions/footer/children | layout DOM; selection/open callbacks; no business writes | `<WorkspaceLayout title={m.title()}>{m.content()}</WorkspaceLayout>` |
+| FileUpload / ImageUpload / AvatarUpload / FileList | accept/size limits, File values, uploadHandler, files | selected files/progress/result URL and delete/download callbacks | `<ImageUpload bind:value={imageUrl} uploadHandler={uploadImage} />` |
+| AuthPanel / AuthShell / LoginForm / RegisterForm / password forms / PermGuard | public IAM config, standard actions, errors, permission context | authenticated/submit/reset callbacks; server still authorizes | `<AuthPanel {config} {actions} />` |
+| UserProfile / SensitiveOperationsForm / ReauthenticationDialog / SessionRecoveryDialog | profile or operations, async submit, current controller/state | UserProfile closes only on true; other confirmations report explicit completion | `<UserProfile {user} editable onsubmit={saveProfile} />` |
+| CrudPage / CrudFilterBar / CrudEditPanel / CrudDetailPanel / CrudDeleteConfirm | CrudDef, data/nav, loading/error/permissions, API callbacks | resource-bound query/edit/delete callbacks; server enforces resource access | `<CrudPage {crud} data={controller.data} nav={controller.nav} />` |
+| MarkdownRenderer / AiDocumentEditor / AiTableEditor / AiDocumentDownloadMenu | content or columns/rows, action callbacks, safe HTML options | Markdown HTML, content/cell changes and explicit download/run requests | `<MarkdownRenderer content={markdown} allowHtmlTags={false} />` |
+| EncryptedInput / HashDisplay / SignatureDisplay | plaintext/hash/signature, algorithm label, real onencrypt callback | display DOM; bound encryptedValue only after current request succeeds | `<EncryptedInput bind:value={plain} bind:encryptedValue={cipher} onencrypt={encrypt} />` |
+| FeedbackModal / FeedbackForm / FeedbackList / FeedbackDetail / FeedbackScreenshot | prepared evidence, attachments, rows/report, permissions and actions | submission/query/status/export/retry/annotation callbacks | `<FeedbackForm attachments={attachments} onsubmit={submitFeedback} />` |
+| Chart / DashboardGrid / MetricCard / ReportCard | chart data/preset and raw chart props; metrics and loading state | rendered chart/dashboard; native chart callbacks pass through | `<MetricCard title={m.revenue()} value={revenue} trend={growth} />` |
+| GuideHost / HelpCenter | GuideController, locale/scope, articles/tours | onboarding/help UI; start/close callbacks and nonsensitive preferences | `<GuideHost {guide} scope={user.id} locale={locale} />` |
 
 ### Component architecture
 
@@ -154,7 +260,7 @@ components/
 
 ### Component catalog
 
-#### Primitives (20)
+#### Primitives
 
 | Component        | Description         | Key props                                                                      |
 | ---------------- | ------------------- | ------------------------------------------------------------------------------ |
@@ -183,7 +289,7 @@ components/
 
 For `BareInput` with `type="file"`, read `event.currentTarget.files` in `onchange` and leave the file path `value` unbound. Other input types support `bind:value`.
 
-#### Compounds (37)
+#### Compounds
 
 ##### Forms
 
@@ -308,16 +414,16 @@ Inside a Modal or Drawer, portal controls participate in the owning dialog's Tab
 | ------------ | ----------- | ----------------------------------------------- |
 | `PageHeader` | Page header | `title`, `description`; supports `actions` slot |
 
-#### Scenes (47)
+#### Scenes
 
-##### Guide (2)
+##### Guide
 
 | Component | Description | Key props |
 | --- | --- | --- |
 | `GuideHost` | First-use invitations, tours and help dialog host | `guide`, `locale`, `scope`, `autoStart` |
 | `HelpCenter` | Standalone searchable help center | `articles`, `tours`, `locale`, `selectedId`, `onstart` |
 
-##### App (11)
+##### App
 
 | Component          | Description                                    | Key props                                                |
 | ------------------ | ---------------------------------------------- | -------------------------------------------------------- |
@@ -337,7 +443,7 @@ Pass the type: webhook task from report jobs into FeedbackDetail.webhook to show
 
 Descriptions are optional. Call `prepare()` from `@h-ai/feedback/client` before opening the modal. Connect `onfileschange` to attachment preparation and `onannotate` to image editing that burns annotations into the pixels. Failed submissions retain input and support local export. The list shows the description or server summary and requests pages through `onquerychange`; UI permissions do not replace server authorization. See the [feedback module](../feedback/README.en.md) for integration and offline tools.
 
-##### IAM authentication (11)
+##### IAM authentication
 
 | Component            | Description                                      | Key props                                                                                              |
 | -------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
@@ -355,7 +461,7 @@ Descriptions are optional. Call `prepare()` from `@h-ai/feedback/client` before 
 | `SessionRecoveryDialog` | In-place session recovery | `recovery`, `actions` |
 | `SensitiveOperationsForm` | Permission operation editor | `operations`, `onsubmit`, `ondone` |
 
-##### Storage (4)
+##### Storage
 
 | Component      | Description   | Key props                                                    |
 | -------------- | ------------- | ------------------------------------------------------------ |
@@ -366,7 +472,7 @@ Descriptions are optional. Call `prepare()` from `@h-ai/feedback/client` before 
 
 Upload components do not embed presigning, headers, or PUT/POST protocols. Applications call their service through `uploadHandler(file, { signal, onProgress })` and return `{ url?, response? }`. Image/avatar uploads require a displayable `url`. Without a handler, `FileUpload` only selects files, and image/avatar components generate local previews only.
 
-##### Crypto display (3)
+##### Crypto display
 
 Input changes immediately clear `encryptedValue`; only successful results for current input are restored. Clearing, callback replacement, and unmounting invalidate old requests. Failures show built-in errors and leave ciphertext empty. Submit encrypted inputs only when current ciphertext is nonempty.
 
@@ -380,7 +486,7 @@ Callers must connect `EncryptedInput` to a real encryption service through `onen
 
 Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and `SM2` for signatures.
 
-##### AI documents and spreadsheets (4)
+##### AI documents and spreadsheets
 
 | Component                | Description            | Key props / capabilities                                                                                   |
 | ------------------------ | ---------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -436,7 +542,6 @@ Renderers load dynamically by type. SSR reserves height and shows a loading plac
 </ReportCard>
 ```
 
-
 `Chart type='line'` uses LayerChart's native line chart by default. For monitoring dashboards with segmented lines, points, nearest-point hover, and vertical reference lines, use `lineVariant='segmented-point'`:
 
 ```svelte
@@ -454,7 +559,7 @@ Renderers load dynamically by type. SSR reserves height and shows a loading plac
 />
 ```
 
-##### CRUD scenes (5)
+##### CRUD scenes
 
 | Component           | Description                                     | Key props / capabilities                                                                                                                                                                                                                                                    |
 | ------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -471,7 +576,7 @@ Renderers load dynamically by type. SSR reserves height and shows a loading plac
 >
 > Columns first shrink to 7rem and truncate long text; horizontal scrolling appears only if total width still exceeds the container. The action column stays fixed on the right.
 
-##### Error pages (1)
+##### Error pages
 
 | Component   | Description                                         | Key props / capabilities                                                |
 | ----------- | --------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -876,8 +981,6 @@ agreements:
   # privacyPolicyUrl: https://example.com/privacy
 ```
 
-
-
 AuthPanel accepts public IAM config and actions for password/LDAP/email/SMS login, registration and recovery. config.ui supplies layout, branding and images. LoginForm supports methods, onsendotp, otpLength and resendInterval; password forms accept passwordPolicy. Network and token storage remain in actions.
 
 Use `authErrorMessage(error)` from `@h-ai/ui/components/scenes/iam/index` for authentication failures. It maps public codes to the current UI language, combines username/password failures, hides raw unknown/server errors and preserves a valid `traceId`. AuthPanel, OTP sending, sensitive confirmation and fullstack password changes share this mapping. Initial/expired passwords, reuse of the current password (`hai:iam:034`) and session limits have actionable messages. Authentication errors and successful operations use the unified Toast. Password confirmation compares exact strings without Unicode normalization or trimming and reports mismatches through Toast while retaining field associations. AuthPanel displays the server’s UTC time and synchronization guidance for time errors verified by Kit or API Client.
@@ -1000,7 +1103,6 @@ Agreements open in a Modal and preserve form input. Pages must allow iframe embe
 </AuthPanel>
 ```
 
-
 Component subpaths expose only explicit barrels in package.exports, such as `@h-ai/ui/components/primitives/index`. Component internals and storage helpers stay private; host clipboard registration remains public.
 
 ### Request locale isolation
@@ -1009,11 +1111,11 @@ Wrap Node requests and SSR in `core.i18n.runWithLocale(locale, () => handleReque
 
 Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During SSR, UI store initialization and setters only update the store; messages read the request scope. `runWithLocale` requires the Node entry; browser translations use explicit locale options or application state.
 
-## Input limits and HTTP capabilities
+### Input limits and HTTP capabilities
 
 Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../storage/README.md#存储输入约束与跨端能力).
 
-## Compact workspaces and collapsible filters
+### Compact workspaces and collapsible filters
 
 `WorkspaceLayout` shares a compact navigation header, a content area with 12/16px padding and an optional footer. An omitted footer reserves no space. title is the page title in navigation; leading/actions/footer are snippets. data-* attributes reach the content main. The host must pass down available height and min-height: 0.
 
@@ -1041,25 +1143,46 @@ In this example, m, statusOptions, clearFilters and loadRows belong to the host 
 </div>
 ```
 
-## Design and interaction acceptance
+### Design and interaction acceptance
 
 Use [hai-ui-design](../cli/templates/skills/hai-ui-design/SKILL.md) for page decisions, [hai-ui](../cli/templates/skills/hai-ui/SKILL.md) for implementation, and [hai-ui-review](../cli/templates/skills/hai-ui-review/SKILL.md) for rendered UI review. See the [shared design guidance](../../.agents/instructions/ui-design.md).
 
 Tabs support arrow/Home/End navigation, disabled items and one Tab stop. Tables expose sort/loading state and keyboard row activation. Pagination labels follow locale and external page changes update the jump input. Expanded filters follow document focus order and view buttons expose selection. Empty/Alert wrap long content. theme.css imports shared tokens; focus follows the current theme and global.css respects reduced motion. Applications still implement filtering, sorting, paging and recovery.
 
-## Error messages and correlated logs
-
-HTTP errors carry safe localized messages and a reference ID. ToastContainer shows only the readable message by default; its diagnostic icon reveals the ID and copy action. The same ID remains in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
-
-Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
-
-## Optional interactive challenges
+### Optional interactive challenges
 
 AuthPanel uses actions.createCaptcha to automatically create and asynchronously solve self-hosted ALTCHA when config.captcha.enabled, submitting one-use proofs for login/register/sendOtp/passwordReset/renewPassword. The solver is not loaded when disabled. createAuthActions supplies the action; custom actions must preserve captcha and missing actions fail closed. Proofs stay in request memory and are always verified/consumed on the server.
 
 See policy, defaults and recovery boundaries in [IAM](../iam/README.en.md).
 
-## Development and testing
+## Configuration
+
+### Choose configuration by task
+
+| Configuration entry | Scenario | Input | Effect | Example |
+| --- | --- | --- | --- | --- |
+| `Component Props` | Rendering and interaction | typed props, bound values, callbacks, children snippets | DOM, bindings and callback events | `<Input bind:value={draft} />` |
+| `Theme` | Themes and colors | supported theme ID, color values, preference key | DOM theme/CSS variables; nonsensitive browser preference | `applyTheme("light")` |
+| `Locale` | Interface language | supportedLocales, defaultLocale, persistKey, detectBrowser | component-tree locale; isolated SSR state | `createLocaleStore({ defaultLocale: "ja-JP", detectBrowser: false })` |
+| `Guide` | Help and onboarding | tours, articles, nonsecret scope/version, nav adapter | guide/help state and nonsensitive progress | `createGuide({ tours: [], persistence: "memory" })` |
+| `CRUD` | Resource fields and API | CrudResource fields/API callbacks and controller options | resource view model; API must implement authorization | `createCrudController(crud, { autoLoad: false })` |
+| `Authentication` | Public auth policy | IAM-whitelisted config and standard actions | AuthPanel submits to host actions; no secret persistence | `<AuthPanel {config} {actions} />` |
+
+When building Svelte applications with pnpm, register the `deepmerge@4.3.1` patch in the project's `patchedDependencies` and keep the patch file. Retain the DaisyUI style patch when that package is used. CLI-generated projects include applicable entries. Installing a framework npm package does not propagate this repository's pnpm patch configuration; manual integrations must copy the relevant [patch files](../../patches/) and registrations before reinstalling dependencies.
+
+This package contains Svelte components and utilities and has no init/close lifecycle. Inputs are component props, callbacks and theme options; outputs are rendered UI, bound values and events. Configure Tailwind/DaisyUI and preprocessing as shown above. There is no shared _ui.yml or module environment variable for component props.
+
+## Error Handling
+
+The host provides loading/error and completion state. Check business HaiResult.success in the application adapter, then pass safe localized messages. UI helpers use the direct return types above rather than a universal HaiResult wrapper. notifyError/errorMessage hide unknown internal exception text. Catch rejected browser helpers such as downloadAiDocument at the interaction boundary and release loading. UserProfile.onsubmit ends editing only when it returns true.
+
+### Error messages and correlated logs
+
+HTTP errors carry safe localized messages and a reference ID. ToastContainer shows only the readable message by default; its diagnostic icon reveals the ID and copy action. The same ID remains in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
+
+Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
+
+## Development
 
 ```sh
 pnpm --filter @h-ai/ui typecheck

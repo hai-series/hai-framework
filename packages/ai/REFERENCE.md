@@ -24,7 +24,7 @@ MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确
 
 ## LLM
 
-模型请求格式由 `llm.protocol` 指定，每个 `llm.models[]` 或单次 `tempModel` 可用 `protocol` 覆盖。取值为 `chat`、`responses`、`anthropic`。环境变量使用 `HAI_AI_LLM_PROTOCOL` 和 `HAI_AI_LLM_MODELS_0_PROTOCOL` 等；旧 `api` 字段及旧协议变量会返回迁移错误。密钥仍使用 `apiKey`。
+模型请求格式由 `llm.protocol` 指定，每个 `llm.models[]` 或单次 `tempModel` 可用 `protocol` 覆盖。取值为 `chat`、`responses`、`anthropic`。环境变量使用 `HAI_AI_LLM_PROTOCOL` 和 `HAI_AI_LLM_MODELS_0_PROTOCOL` 等。凭据由 `apiKey` 或私有环境提供。
 
 - `chat(options)`：非流式 Chat Completion。
 - `chatStream(options)`：流式 Chat Completion。
@@ -150,9 +150,9 @@ Knowledge `retrieve/ask` 与默认 DB Store 的 filter 透传向量 Provider，�
 
 共享单活动生成租约为存储端时钟30秒，每10秒续租，最终 CAS 同时检查版本、owner 和截止时间。过期生成仅 interrupted，不自动重放 LLM/工具/记忆；manual pending 持久保存，可跨节点/重启按 turnId 提交。相同终态与真实文本重复提交幂等，内容冲突失败。queue 可取消轮询，不保证FIFO。reset 更换共享纪元，删除保留永久墓碑且 scope 不复用。外部 LLM/工具/本地后台记忆不与上下文跨系统原子提交；崩溃后的未知副作用必须由应用核对。
 
-自定义 `AIRelStore` 必须提供版本化读取、原子 CAS 和存储端 `currentTime()`；普通 save/saveMany 也推进版本。CAS 缺失版本只允许创建，notAfter 在最终持久化时严格检查，存储故障抛错不能当空数据；业务 HaiResult 边界负责转失败。默认 DB schema 含 version 列，不自动迁移旧表；多节点优先 PostgreSQL/MySQL，SQLite 文件仅在实际一致共享文件系统中可共享。
+自定义 `AIRelStore` 遵守[Context 持久化约束](../cli/templates/skills/hai-ai/reference.md#context)：最终写入必须同时检查版本、owner 与存储端时钟截止条件；关系存储含 `version` 列。SQLite 仅用于开发/明确测试，生产要求 PostgreSQL/MySQL 与共享向量服务。
 
-`ai.context.createManager(options)` 返回有状态管理器，适合多轮对话。
+`ai.context.createManager(options)` 返回 `HaiResult<ContextManager>`，适合多轮对话；先判断 `success`，再通过 `data` 使用有状态管理器。
 
 常用选项：
 

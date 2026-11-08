@@ -298,7 +298,7 @@ const answer = await ai.knowledge.ask('核心架构是什么？')
 
 共享单活动生成租约为存储端时钟30秒，每10秒续租，最终 CAS 同时检查版本、owner 和截止时间。过期生成仅 interrupted，不自动重放 LLM/工具/记忆；manual pending 持久保存，可跨节点/重启按 turnId 提交。相同终态与真实文本重复提交幂等，内容冲突失败。queue 可取消轮询，不保证FIFO。reset 更换共享纪元，删除保留永久墓碑且 scope 不复用。外部 LLM/工具/本地后台记忆不与上下文跨系统原子提交；崩溃后的未知副作用必须由应用核对。
 
-自定义 `AIRelStore` 必须提供版本化读取、原子 CAS 和存储端 `currentTime()`；普通 save/saveMany 也推进版本。CAS 缺失版本只允许创建，notAfter 在最终持久化时严格检查，存储故障抛错不能当空数据；业务 HaiResult 边界负责转失败。默认 DB schema 含 version 列，不自动迁移旧表；SQLite 仅用于开发/测试，生产使用 PostgreSQL/MySQL。
+自定义 Store 接入遵守[Context 持久化约束](reference.md#context)，包括最终提交时的版本、存储端时钟和截止条件；不能用一次续租或读前检查替代最终原子判断。
 
 ```ts
 const managerResult = ai.context.createManager({
@@ -399,6 +399,8 @@ if (!playable.success)
 ### 本地 CPU 模型服务
 
 hai-framework 源码仓库提供 `pnpm model <name> --device cpu` 与 `pnpm model:run <name>`，默认优先使用 Podman，可构建/启动 `faster-whisper-large-v3`、`indextts-2.5`、`qwen3-4b`。三套权重均优先从清单锁定的 ModelScope revision 下载并复用容器 volume，Hugging Face 只作回退。Whisper/IndexTTS 仍配置为 `audio.models[].baseUrl`，Qwen3-4B 仍配置为 OpenAI-compatible `llm.models[].baseUrl`；部署位置不进入 Provider 名称。离线部署使用准备权重后的 bundled 镜像。
+
+`model:run` 只发布宿主 `127.0.0.1`；宿主设置 `HAI_MODEL_API_KEY` 时通过引擎环境变量名传入，客户端使用匹配 Bearer，Qwen在进程内映射到 `VLLM_API_KEY`，不能在额外参数中填写密钥。IndexTTS构建每轮需从固定HTTPS端点取得源码树元数据，源码文件可按摘要复用；仓库/缓存父目录须可信，离线目标运行预先完成的镜像。对外生产服务另行配置网络、HTTPS、认证和资源限额。
 
 ## 文生图（Image）
 

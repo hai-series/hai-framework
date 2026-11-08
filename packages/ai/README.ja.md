@@ -4,11 +4,191 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/api-contract](../api-contract/README.ja.md) · [@h-ai/core](../core/README.ja.md) · [@h-ai/datapipe](../datapipe/README.ja.md) · [@h-ai/reldb](../reldb/README.ja.md) · [@h-ai/vecdb](../vecdb/README.ja.md)
 
-## 概要
-
 共通の `ai` サービスで LLM 対話、画像生成、ツール、MCP、Embedding、記憶、検索/RAG、知識ベース、コンテキスト管理、ファイル解析、Rerank、音声（ASR/TTS）、A2A を提供します。Node.js では `ai.init()` で初期化し、ブラウザーからは API/client を経由します。
 
-## 主な機能
+## クイックスタート
+
+`ai.close()` は進行中の初期化を待ってから解放し、並行する close は一つにまとめます。再初期化は旧インスタンスを先に解放し、終了処理中の新規初期化は拒否します。
+
+### 開発用 LLM のみ（DB 依存なし）
+
+```ts
+import { ai } from '@h-ai/ai'
+
+const init = await ai.init({
+  llm: {
+    model: 'gpt-4o-mini',
+    apiKey: process.env.HAI_AI_LLM_APIKEY,
+  },
+})
+if (!init.success)
+  throw new Error(init.error.message)
+
+try {
+  const result = await ai.llm.chat({
+    messages: [
+      { role: 'user', content: '你好！' }
+    ],
+  })
+  if (!result.success)
+    throw new Error(result.error.message)
+  const reply = result.data.choices[0]?.message.content ?? ''
+}
+finally {
+  await ai.close()
+}
+```
+
+開発・明示的テストで reldb/vecdb が未初期化の場合、一時 Store を使い、終了やインスタンス切り替えで失われます。`NODE_ENV` または `HAI_CORE_ENV` が production の場合、一時 Store・SQLite・ローカル vecdb は初期化に失敗します。共有 RelDB とネットワーク vecdb を先に初期化するか、同等の原子的契約を満たす共有 Provider を指定してください。
+
+## 機能
+
+### 用途・入力・出力
+
+direct・AsyncIterable・直接の Promise 値と記載したもの以外、出力欄は success 確認後の HaiResult.data です。request/definition/options などの変数は記載した実入力型でアプリ側に用意します。ストリームと明示的な例外は消費境界で処理してください。
+
+呼出し断片は本ページで初期化したサービスを使います。変数はアプリ側で用意する要求・Schema・リソース定義・設定を表します。初期化と失敗処理は各機能の例を参照し、HaiResult.success の確認と非同期処理の await を行ってください。
+
+| 入口                              | 用途                     | 入力                                                                              | 出力                                                                      | 呼出し断片                                                                                |
+| --------------------------------- | ------------------------ | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `ai.llm.chat`                     | 単発応答                 | `ChatCompletionRequest: messages, model?, signal?, tools?`                        | `ChatCompletionResponse: choices, model, usage?`                          | `ai.llm.chat({ messages: [{ role: "user", content: "你好" }] })`                          |
+| `ai.llm.chatStream`               | 増分応答                 | `same ChatCompletionRequest`                                                      | `AsyncIterable<ChatCompletionChunk>; iteration may throw`                 | `ai.llm.chatStream({ messages })`                                                         |
+| `ai.llm.ask`                      | テキスト応答             | `question: string, AskOptions?`                                                   | `string answer`                                                           | `ai.llm.ask("解释共享状态")`                                                              |
+| `ai.llm.askStream`                | テキストストリーム       | `question: string, AskOptions?`                                                   | `AsyncIterable<string>`                                                   | `ai.llm.askStream("解释共享状态")`                                                        |
+| `ai.llm.generateObject`           | Schema 制約付き応答      | `Zod schema, messages, model?, maxRepairs?, signal?`                              | `schema-inferred T`                                                       | `ai.llm.generateObject({ schema: AnswerSchema, messages })`                               |
+| `ai.llm.listModels`               | モデル一覧               | `none`                                                                            | `string[] model IDs`                                                      | `ai.llm.listModels()`                                                                     |
+| `ai.llm.getHistory`               | 会話履歴                 | `{ objectId, sessionId }, { limit?, order? }?`                                    | `ChatRecord[]`                                                            | `ai.llm.getHistory({ objectId: "u1", sessionId: "s1" })`                                  |
+| `ai.llm.listSessions`             | 主体の会話一覧           | `objectId: string`                                                                | `SessionInfo[]`                                                           | `ai.llm.listSessions("u1")`                                                               |
+| `ai.tools.define`                 | ツールを定義             | `{ name, description, parameters: Zod schema, handler, timeoutMs? }`              | `direct Tool<TInput,TOutput>; no init required`                           | `ai.tools.define(toolDefinition)`                                                         |
+| `ai.tools.createRegistry`         | ツール一覧を管理         | `{ authorize? }?`                                                                 | `direct ToolRegistryOperations; no init required`                         | `ai.tools.createRegistry({ authorize })`                                                  |
+| `ai.stream.createProcessor`       | 増分を蓄積               | `none`                                                                            | `direct StreamProcessor`                                                  | `ai.stream.createProcessor()`                                                             |
+| `ai.stream.collect`               | 対話ストリームを消費     | `AsyncIterable<ChatCompletionChunk>`                                              | `Promise<StreamResult>; stream failure rejects`                           | `ai.stream.collect(ai.llm.chatStream({ messages }))`                                      |
+| `ai.stream.createSSEDecoder`      | 分割 SSE の復号          | `none`                                                                            | `direct SSEDecoder with decode/reset`                                     | `ai.stream.createSSEDecoder()`                                                            |
+| `ai.stream.encodeSSE`             | SSE を符号化             | `SSEEvent: data, event?, id?, retry?`                                             | `direct string; invalid metadata throws`                                  | `ai.stream.encodeSSE({ data: "Hello" })`                                                  |
+| `ai.embedding.embed`              | 埋め込み要求             | `EmbeddingRequest with input/model?`                                              | `EmbeddingResponse`                                                       | `ai.embedding.embed({ input: "产品说明" })`                                               |
+| `ai.embedding.embedText`          | 一文のベクトル           | `text: string`                                                                    | `number[]`                                                                | `ai.embedding.embedText("产品说明")`                                                      |
+| `ai.embedding.embedBatch`         | 複数文のベクトル         | `texts: string[]`                                                                 | `number[][] in input order`                                               | `ai.embedding.embedBatch(["简介", "部署"])`                                               |
+| `ai.mcp.registerTool`             | ローカルツール登録       | `MCPToolDefinition, typed handler`                                                | `void`                                                                    | `ai.mcp.registerTool(mcpToolDefinition, toolHandler)`                                     |
+| `ai.mcp.registerResource`         | 資源登録                 | `MCPResource, async content handler`                                              | `void`                                                                    | `ai.mcp.registerResource(resourceDefinition, readContent)`                                |
+| `ai.mcp.registerPrompt`           | プロンプト登録           | `MCPPrompt, args => Promise<MCPPromptMessage[]>`                                  | `void`                                                                    | `ai.mcp.registerPrompt(promptDefinition, buildMessages)`                                  |
+| `ai.mcp.callTool`                 | 登録済みツール呼出し     | `name, arguments, MCPContext?`                                                    | `unknown tool result`                                                     | `ai.mcp.callTool("search", { query: "配置" })`                                            |
+| `ai.mcp.readResource`             | 資源読取                 | `resource URI`                                                                    | `MCPResourceContent with exactly text or blob`                            | `ai.mcp.readResource("docs://intro")`                                                     |
+| `ai.mcp.getPrompt`                | プロンプト生成           | `name, Record<string,string> arguments`                                           | `MCPPromptMessage[]`                                                      | `ai.mcp.getPrompt("review", { topic: "API" })`                                            |
+| `ai.retrieval.addSource`          | 検索元を登録             | `RetrievalSource: id, collection, optional metadata`                              | `void`                                                                    | `ai.retrieval.addSource({ id: "docs", collection: "manual" })`                            |
+| `ai.retrieval.removeSource`       | 検索元を解除             | `sourceId: string`                                                                | `void`                                                                    | `ai.retrieval.removeSource("docs")`                                                       |
+| `ai.retrieval.listSources`        | 検索元一覧               | `none`                                                                            | `direct Promise<RetrievalSource[]>`                                       | `ai.retrieval.listSources()`                                                              |
+| `ai.retrieval.retrieve`           | 候補検索                 | `RetrievalRequest: query, sources?, topK?, minScore?, enableRerank?`              | `RetrievalResult`                                                         | `ai.retrieval.retrieve({ query: "部署" })`                                                |
+| `ai.rag.query`                    | 根拠付き応答             | `query: string, RagOptions?`                                                      | `RagResult: answer, context, citations, query, model`                     | `ai.rag.query("如何部署？", { sources: ["docs"] })`                                       |
+| `ai.rag.queryStream`              | 根拠付きストリーム       | `query: string, RagOptions?`                                                      | `AsyncIterable<RagStreamEvent>`                                           | `ai.rag.queryStream("如何部署？", { sources: ["docs"] })`                                 |
+| `ai.knowledge.setup`              | コレクションを準備       | `KnowledgeSetupOptions?`                                                          | `void; collection ready for ingest`                                       | `ai.knowledge.setup()`                                                                    |
+| `ai.knowledge.ingest`             | 文書を公開               | `{ documentId, content, title?, collection?, ...metadata }`                       | `KnowledgeIngestResult with revision/cleanupPending`                      | `ai.knowledge.ingest({ documentId: "intro", content: "入门正文" })`                       |
+| `ai.knowledge.ingestFile`         | ファイルを取込           | `KnowledgeIngestFileInput including file bytes and document identity`             | `KnowledgeIngestResult`                                                   | `ai.knowledge.ingestFile(fileInput)`                                                      |
+| `ai.knowledge.ingestBatch`        | 一括取込                 | `KnowledgeIngestInput[], onProgress?`                                             | `KnowledgeIngestBatchResult with per-document outcomes`                   | `ai.knowledge.ingestBatch(documentInputs, onProgress)`                                    |
+| `ai.knowledge.retrieve`           | 公開版の検索             | `query: string, KnowledgeRetrieveOptions?`                                        | `KnowledgeRetrieveResult`                                                 | `ai.knowledge.retrieve("部署说明")`                                                       |
+| `ai.knowledge.ask`                | 知識に基づく応答         | `query: string, KnowledgeAskOptions?`                                             | `KnowledgeAskResult`                                                      | `ai.knowledge.ask("如何恢复备份？")`                                                      |
+| `ai.knowledge.findByEntity`       | 実体から資料検索         | `entityName: string, EntityQueryOptions?`                                         | `EntityDocumentResult[]`                                                  | `ai.knowledge.findByEntity("订单")`                                                       |
+| `ai.knowledge.listEntities`       | 実体一覧                 | `EntityListOptions?`                                                              | `KnowledgeEntity[]`                                                       | `ai.knowledge.listEntities()`                                                             |
+| `ai.knowledge.listDocuments`      | 文書一覧                 | `KnowledgeDocumentListOptions?`                                                   | `KnowledgeDocumentInfo[]`                                                 | `ai.knowledge.listDocuments()`                                                            |
+| `ai.knowledge.removeDocument`     | 文書の公開解除           | `documentId, KnowledgeDocumentRemoveOptions?`                                     | `void; may fail after visibility revocation if cleanup fails`             | `ai.knowledge.removeDocument("intro")`                                                    |
+| `ai.knowledge.repair`             | 残留ベクトルの補償       | `{ collection?, offset?, limit? }`                                                | `KnowledgeRepairResult with progress`                                     | `ai.knowledge.repair({ offset: 0, limit: 100 })`                                          |
+| `ai.knowledge.deleteCollection`   | コレクションを解除       | `collection name?`                                                                | `void; cleanup tombstone remains`                                         | `ai.knowledge.deleteCollection("retired-manual")`                                         |
+| `ai.memory.scoped`                | 信頼する主体を束縛       | `{ objectId: nonempty string, scope? }`                                           | `direct ScopedMemoryOperations; invalid binding throws TypeError`         | `ai.memory.scoped({ objectId: "u1", scope: { topicId: "orders" } })`                      |
+| `ai.memory.extract`               | 記憶を抽出               | `ChatMessage[], { objectId, scope?, model?, signal?, ...options }`                | `MemoryEntry[]`                                                           | `ai.memory.extract(messages, { objectId: "u1" })`                                         |
+| `ai.memory.add`                   | 明示的記憶を保存         | `MemoryEntryInput: objectId, content, type, scope?`                               | `MemoryEntry`                                                             | `ai.memory.add({ objectId: "u1", content: "偏好中文", type: "preference" })`              |
+| `ai.memory.get`                   | 所有者の記憶を読取       | `memoryId, { objectId, scope? } for untrusted IDs`                                | `MemoryEntry`                                                             | `ai.memory.get(memoryId, { objectId: "u1" })`                                             |
+| `ai.memory.update`                | 記憶を更新               | `memoryId, MemoryUpdateInput, trusted access scope`                               | `MemoryEntry`                                                             | `ai.memory.update(memoryId, { content: "偏好日文" }, { objectId: "u1" })`                 |
+| `ai.memory.remove`                | 所有者の記憶を削除       | `memoryId, trusted access scope`                                                  | `void`                                                                    | `ai.memory.remove(memoryId, { objectId: "u1" })`                                          |
+| `ai.memory.recall`                | 関連記憶の検索           | `query, { objectId, scope?, topK?, types?, ...options }`                          | `MemoryEntry[]`                                                           | `ai.memory.recall("语言偏好", { objectId: "u1" })`                                        |
+| `ai.memory.injectMemories`        | 会話の文脈を補足         | `ChatMessage[], { objectId, scope?, topK?, ...options }`                          | `ChatMessage[]`                                                           | `ai.memory.injectMemories(messages, { objectId: "u1" })`                                  |
+| `ai.memory.list`                  | 記憶一覧                 | `MemoryListOptions with objectId/scope filters`                                   | `MemoryEntry[]; incomplete scan fails`                                    | `ai.memory.list({ objectId: "u1" })`                                                      |
+| `ai.memory.listPage`              | 記憶のページ表示         | `MemoryListPageOptions with objectId/pagination`                                  | `StorePage<MemoryEntry>`                                                  | `ai.memory.listPage({ objectId: "u1", offset: 0, limit: 20 })`                            |
+| `ai.memory.clear`                 | 指定範囲を解除           | `nonempty MemoryClearOptions`                                                     | `void; empty filters are rejected`                                        | `ai.memory.clear({ objectId: "u1" })`                                                     |
+| `ai.memory.admin.clearAll`        | 信頼された管理者の全解除 | `{ confirm: true }; require host administrator authorization`                     | `void; destructive across subjects`                                       | `ai.memory.admin.clearAll({ confirm: true })`                                             |
+| `ai.persona.save`                 | ペルソナを保存           | `PersonaProfileInput: id, name, systemPrompt, objectId?, traits?`                 | `PersonaProfile`                                                          | `ai.persona.save(personaProfile)`                                                         |
+| `ai.persona.get`                  | ペルソナを読取           | `id, { objectId }?; omitted subject selects system profile`                       | `PersonaProfile`                                                          | `ai.persona.get("tutor", { objectId: "u1" })`                                             |
+| `ai.persona.update`               | ペルソナを更新           | `id, PersonaProfileUpdate, { objectId }?`                                         | `PersonaProfile`                                                          | `ai.persona.update("tutor", updates, { objectId: "u1" })`                                 |
+| `ai.persona.remove`               | ペルソナを削除           | `id, { objectId }?`                                                               | `void`                                                                    | `ai.persona.remove("tutor", { objectId: "u1" })`                                          |
+| `ai.persona.list`                 | ペルソナ一覧             | `{ objectId }?`                                                                   | `PersonaProfile[]`                                                        | `ai.persona.list({ objectId: "u1" })`                                                     |
+| `ai.persona.compose`              | システム指示を合成       | `id, { objectId }?`                                                               | `string prompt`                                                           | `ai.persona.compose("tutor", { objectId: "u1" })`                                         |
+| `ai.token.estimateText`           | 文章 Token の推定        | `text: string`                                                                    | `direct number; estimate, not billing usage`                              | `ai.token.estimateText("Hello 世界")`                                                     |
+| `ai.token.estimateMessages`       | メッセージ Token の推定  | `ChatMessage[]`                                                                   | `direct number including protocol overhead`                               | `ai.token.estimateMessages(messages)`                                                     |
+| `ai.summary.generate`             | 要約本文を生成           | `ChatMessage[], SummaryOptions?`                                                  | `string`                                                                  | `ai.summary.generate(messages)`                                                           |
+| `ai.summary.summarize`            | 要約と対象情報           | `ChatMessage[], SummaryOptions?`                                                  | `{ summary, tokenCount, coveredMessages }`                                | `ai.summary.summarize(messages)`                                                          |
+| `ai.compress.tryCompress`         | 予算に合わせて圧縮       | `ChatMessage[], { strategy?, maxTokens?, preserveLastN?, ...options }`            | `CompressResult: messages and original/compressed token counts`           | `ai.compress.tryCompress(messages, { maxTokens: 4000 })`                                  |
+| `ai.context.createManager`        | 複数回対話を開始         | `ContextManagerOptions with scope { objectId, sessionId }`                        | `ContextManager`                                                          | `ai.context.createManager({ scope: { objectId: "u1", sessionId: "s1" } })`                |
+| `ai.context.restoreManager`       | 対話を復元               | `{ objectId, sessionId }, options?`                                               | `ContextManager`                                                          | `ai.context.restoreManager({ objectId: "u1", sessionId: "s1" })`                          |
+| `ai.context.listSessions`         | 保存会話を一覧           | `objectId`                                                                        | `SessionInfo[]`                                                           | `ai.context.listSessions("u1")`                                                           |
+| `ai.context.renameSession`        | 会話名を変更             | `scope, title`                                                                    | `void`                                                                    | `ai.context.renameSession({ objectId: "u1", sessionId: "s1" }, "订单讨论")`               |
+| `ai.context.removeSession`        | 会話を削除               | `scope`                                                                           | `void; tombstone prevents scope reuse`                                    | `ai.context.removeSession({ objectId: "u1", sessionId: "s1" })`                           |
+| `ai.rerank.rerank`                | 文書の順位付け           | `RerankRequest: query, documents, model?, topN?`                                  | `RerankResponse with model/results`                                       | `ai.rerank.rerank({ query: "部署", documents: ["配置说明"] })`                            |
+| `ai.rerank.rerankTexts`           | テキストの順位付け       | `query, string[] texts, topN?`                                                    | `RerankItem[] with index/relevanceScore`                                  | `ai.rerank.rerankTexts("部署", ["配置说明"], 1)`                                          |
+| `ai.file.parse`                   | ファイル解析             | `FileParseRequest with content, filename, options?`                               | `FileParseResult; extraction is not HTML sanitization`                    | `ai.file.parse({ content: "<p>正文</p>", filename: "intro.html" })`                       |
+| `ai.file.parseText`               | 本文抽出                 | `Buffer\|string content, filename?`                                               | `string`                                                                  | `ai.file.parseText("Hello", "intro.txt")`                                                 |
+| `ai.reasoning.run`                | 多段推論                 | `query, ReasoningOptions including strategy/tools?`                               | `ReasoningResult`                                                         | `ai.reasoning.run("审查方案", { strategy: "cot" })`                                       |
+| `ai.reasoning.runStream`          | 推論過程を観察           | `query, ReasoningOptions?`                                                        | `AsyncIterable<ReasoningStreamEvent>`                                     | `ai.reasoning.runStream("审查方案", { strategy: "react" })`                               |
+| `ai.audio.transcribe`             | 音声認識                 | `TranscriptionRequest: audio, language?, model?, signal?`                         | `TranscriptionResult: text, language?, segments?`                         | `ai.audio.transcribe({ audio: { data: wavBytes, format: "wav" } })`                       |
+| `ai.audio.transcribeStream`       | 連続音声認識             | `TranscriptionStreamRequest: chunks or complete audio`                            | `AsyncIterable<TranscriptionEvent>`                                       | `ai.audio.transcribeStream(transcriptionInput)`                                           |
+| `ai.audio.synthesize`             | 音声合成                 | `SynthesisRequest: text, language?, model?, signal?`                              | `SynthesisResult: audio and duration metadata`                            | `ai.audio.synthesize({ text: "你好" })`                                                   |
+| `ai.audio.synthesizeStream`       | 区間ごとの音声合成       | `SynthesisStreamRequest: text segment or async segments`                          | `AsyncIterable<SynthesisEvent>`                                           | `ai.audio.synthesizeStream(synthesisInput)`                                               |
+| `ai.audio.getCapabilities`        | 能力を先に確認           | `{ operation: transcribe\|synthesize, model? }`                                   | `AudioModelCapabilities`                                                  | `ai.audio.getCapabilities({ operation: "synthesize" })`                                   |
+| `ai.image.generate`               | 画像生成                 | `{ prompt, referenceImages?, model?, size?, signal? }`                            | `{ images: GeneratedImage[] } with bytes/MIME`                            | `ai.image.generate({ prompt: "一座灯塔" })`                                               |
+| `ai.a2a.registerExecutor`         | 実行器の登録             | `SDK AgentExecutor`                                                               | `void`                                                                    | `ai.a2a.registerExecutor(executor)`                                                       |
+| `ai.a2a.getAgentCard`             | 標準発見文書             | `none; configured a2a card`                                                       | `A2AAgentCardDocument (A2A 1.0 ProtoJSON)`                                | `ai.a2a.getAgentCard()`                                                                   |
+| `ai.a2a.handleRequest`            | 認証済み要求を処理       | `unknown JSON-RPC body, trusted context.agentId?`                                 | `direct Promise<A2AHandleResult>; JSON-RPC/SSE outcome`                   | `ai.a2a.handleRequest(body, { agentId: trustedAgentId })`                                 |
+| `ai.a2a.listMessages`             | 管理用メッセージ検索     | `A2ATaskFilter: callerId?, contextId?, since?, pagination?`                       | `StorePage<A2AMessageRecord>`                                             | `ai.a2a.listMessages(messageFilter)`                                                      |
+| `ai.a2a.callRemoteAgent`          | 許可された遠隔を呼出し   | `allowlisted HTTPS URL, message, A2ACallOptions?`                                 | `A2ACallResult`                                                           | `ai.a2a.callRemoteAgent("https://agent.example.com/a2a", "请分析订单")`                   |
+| `ai.init`                         | サービス準備             | `AIConfigInput?, AIInitOptions?`                                                  | `HaiResult<void>; validate dependencies before use`                       | `ai.init({ llm: { apiKey: process.env.HAI_AI_LLM_APIKEY } })`                             |
+| `ai.close`                        | サービス解放             | `none`                                                                            | `Promise<void>; wait for cleanup`                                         | `ai.close()`                                                                              |
+| `ai.config`                       | 安全な設定参照           | `none`                                                                            | `redacted AIConfig or null`                                               | `ai.config`                                                                               |
+| `ai.isInitialized`                | 状態確認                 | `none`                                                                            | `boolean`                                                                 | `ai.isInitialized`                                                                        |
+| `ai.llm.models.list`              | 統合した一覧             | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.llm.models.list()`                                                                    |
+| `ai.llm.models.get`               | 出所と版を参照           | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.llm.models.get("coding")`                                                             |
+| `ai.llm.models.register`          | DB 定義を登録            | `ModelEntry input (id/model/protocol/credentials/capabilities)`                   | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.llm.models.register(modelDefinition)`                                                 |
+| `ai.llm.models.update`            | 版を条件に置換           | `ModelEntry input (id/model/protocol/credentials/capabilities), expectedVersion?` | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.llm.models.update(modelDefinition, current.data.version)`                             |
+| `ai.llm.models.remove`            | DB 定義を削除            | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.llm.models.remove("coding", current.data.version)`                                    |
+| `ai.audio.models.list`            | 統合した一覧             | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.audio.models.list()`                                                                  |
+| `ai.audio.models.get`             | 出所と版を参照           | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.audio.models.get("speech")`                                                           |
+| `ai.audio.models.register`        | DB 定義を登録            | `AudioModelEntry input (id/provider/model/operations)`                            | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.audio.models.register(audioModelDefinition)`                                          |
+| `ai.audio.models.update`          | 版を条件に置換           | `AudioModelEntry input (id/provider/model/operations), expectedVersion?`          | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.audio.models.update(audioModelDefinition, current.data.version)`                      |
+| `ai.audio.models.remove`          | DB 定義を削除            | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.audio.models.remove("speech", current.data.version)`                                  |
+| `ai.image.models.list`            | 統合した一覧             | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.image.models.list()`                                                                  |
+| `ai.image.models.get`             | 出所と版を参照           | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.image.models.get("poster")`                                                           |
+| `ai.image.models.register`        | DB 定義を登録            | `ImageModelEntry input (id/provider/model)`                                       | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.image.models.register(imageModelDefinition)`                                          |
+| `ai.image.models.update`          | 版を条件に置換           | `ImageModelEntry input (id/provider/model), expectedVersion?`                     | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.image.models.update(imageModelDefinition, current.data.version)`                      |
+| `ai.image.models.remove`          | DB 定義を削除            | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.image.models.remove("poster", current.data.version)`                                  |
+| `ai.mcp.servers.list`             | 統合した一覧             | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.mcp.servers.list()`                                                                   |
+| `ai.mcp.servers.get`              | 出所と版を参照           | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.mcp.servers.get("tools")`                                                             |
+| `ai.mcp.servers.register`         | DB 定義を登録            | `MCPExternalServer input (id/transport/url or command)`                           | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.mcp.servers.register(mcpServerDefinition)`                                            |
+| `ai.mcp.servers.update`           | 版を条件に置換           | `MCPExternalServer input (id/transport/url or command), expectedVersion?`         | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.mcp.servers.update(mcpServerDefinition, current.data.version)`                        |
+| `ai.mcp.servers.remove`           | DB 定義を削除            | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.mcp.servers.remove("tools", current.data.version)`                                    |
+| `ai.retrieval.sources.list`       | 統合した一覧             | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.retrieval.sources.list()`                                                             |
+| `ai.retrieval.sources.get`        | 出所と版を参照           | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.retrieval.sources.get("docs")`                                                        |
+| `ai.retrieval.sources.register`   | DB 定義を登録            | `RetrievalSource input (id/collection)`                                           | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.retrieval.sources.register(sourceDefinition)`                                         |
+| `ai.retrieval.sources.update`     | 版を条件に置換           | `RetrievalSource input (id/collection), expectedVersion?`                         | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.retrieval.sources.update(sourceDefinition, current.data.version)`                     |
+| `ai.retrieval.sources.remove`     | DB 定義を削除            | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.retrieval.sources.remove("docs", current.data.version)`                               |
+| `ai.acp.agents.list`              | 統合した一覧             | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.acp.agents.list()`                                                                    |
+| `ai.acp.agents.get`               | 出所と版を参照           | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.acp.agents.get("coder")`                                                              |
+| `ai.acp.agents.register`          | DB 定義を登録            | `ACPAgent input (id/mode/adapter/modelIds)`                                       | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.acp.agents.register(agentDefinition)`                                                 |
+| `ai.acp.agents.update`            | 版を条件に置換           | `ACPAgent input (id/mode/adapter/modelIds), expectedVersion?`                     | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.acp.agents.update(agentDefinition, current.data.version)`                             |
+| `ai.acp.agents.remove`            | DB 定義を削除            | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.acp.agents.remove("coder", current.data.version)`                                     |
+| `ai.acp.workspaces.list`          | 統合した一覧             | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.acp.workspaces.list()`                                                                |
+| `ai.acp.workspaces.get`           | 出所と版を参照           | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.acp.workspaces.get("project")`                                                        |
+| `ai.acp.workspaces.register`      | DB 定義を登録            | `ACPWorkspace input (id/storage/repositories)`                                    | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.acp.workspaces.register(workspaceDefinition)`                                         |
+| `ai.acp.workspaces.update`        | 版を条件に置換           | `ACPWorkspace input (id/storage/repositories), expectedVersion?`                  | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.acp.workspaces.update(workspaceDefinition, current.data.version)`                     |
+| `ai.acp.workspaces.remove`        | DB 定義を削除            | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.acp.workspaces.remove("project", current.data.version)`                               |
+| `ai.acp.agents.initialize`        | エージェント事前確認     | `agentId, modelId?`                                                               | `HaiResult<{ agentId, mode, modelIds }>; no credentials`                  | `ai.acp.agents.initialize("coder")`                                                       |
+| `ai.acp.agents.check`             | 実接続と握手             | `agentId, { workspaceId?, ...ACPClientOptions }`                                  | `HaiResult<native initialize response>; owned connection is closed`       | `ai.acp.agents.check("coder", { workspaceId: "project" })`                                |
+| `ai.acp.workspaces.prepare`       | 作業領域を準備           | `workspaceId`                                                                     | `HaiResult<main absolute path>; dirty content is retained`                | `ai.acp.workspaces.prepare("project")`                                                    |
+| `ai.acp.workspaces.importFiles`   | 制御ファイル取込         | `workspaceId, { path: relative path, content: string\|Uint8Array }[]`             | `HaiResult<{ imported: string[] }>; no overwrite`                         | `ai.acp.workspaces.importFiles("project", [{ path: "notes.txt", content: "需求" }])`      |
+| `ai.acp.sessions.create`          | 管理会話を開始           | `ACPCreateSessionOptions: agentId/workspaceId/newWorktree?`                       | `HaiResult<managed session handle>`                                       | `ai.acp.sessions.create({ agentId: "coder", workspaceId: "project", newWorktree: true })` |
+| `ai.acp.sessions.get`             | 会話ハンドル参照         | `framework session id`                                                            | `HaiResult<managed session handle>; does not resume`                      | `ai.acp.sessions.get("task-1")`                                                           |
+| `ai.acp.sessions.list`            | 管理会話一覧             | `workspaceId?`                                                                    | `HaiResult<ACPSessionInfo[]>`                                             | `ai.acp.sessions.list("project")`                                                         |
+| `ai.acp.sessions.resume`          | ネイティブ会話再開       | `framework session id, ACPClientOptions?`                                         | `HaiResult<managed session handle>; definition changes may reject`        | `ai.acp.sessions.resume("task-1")`                                                        |
+| `ai.acp.sessions.close`           | 所有する実行を停止       | `framework session id`                                                            | `HaiResult<void>; source and native history retained`                     | `ai.acp.sessions.close("task-1")`                                                         |
+| `ai.acp.sessions.reclaimWorktree` | 清浄な worktree を回収   | `closed framework session id; preview stopped and changes saved`                  | `HaiResult<void>; branch and normal files retained`                       | `ai.acp.sessions.reclaimWorktree("task-1")`                                               |
+| `ai.acp.sessions.remove`          | 会話記録を削除           | `closed or failed framework session id`                                           | `HaiResult<void>; worktree and native history retained`                   | `ai.acp.sessions.remove("task-1")`                                                        |
+| `ai.acp.connect`                  | 原生転送へ接続           | `ACPTransport: stdio/http/ws, ACPClientOptions?`                                  | `HaiResult<connection handle>`                                            | `ai.acp.connect({ type: "http", url: "https://agent.example.com/acp" })`                  |
+| `ai.acp.close`                    | サブシステムを閉じる     | `none; normally call ai.close()`                                                  | `Promise<void>; cleanup may throw`                                        | `ai.acp.close()`                                                                          |
 
 - `ai.tools`：ツール定義・登録・一括実行。初期化不要。
 - `ai.stream`：ChatCompletion のストリーミング chunk 処理。初期化不要。
@@ -26,44 +206,13 @@
 - `ai.a2a`：Agent-to-Agent のリクエスト処理とリモート呼び出し。
 - `@h-ai/ai/client`：独立したブラウザー Audio WebSocket クライアント。
 
-`@h-ai/ai/client` は `createAudioClient({ url, getTicket })` と Audio クライアント型のみを公開します。HTTP は `@h-ai/api-client` の型付きドメインメソッドを使います。既定のチャット補完は非ストリーミングで、ストリームと A2A はアプリ独自の contract に結び付けます。文字列パスの旧クライアントと重複 SSE helper は削除しました。ブラウザーには Node の `ai` シングルトンを公開しません。
+`@h-ai/ai/client` は `createAudioClient({ url, getTicket })` と Audio クライアント型のみを公開します。HTTP は `@h-ai/api-client` の型付きドメインメソッドを使います。既定のチャット補完は非ストリーミングで、ストリームと A2A はアプリ独自の contract に結び付けます。ブラウザーには Node の `ai` シングルトンを公開しません。
 
 - `AIStoreProvider`：ストレージ抽象。本番は `stateScope: 'shared'` が必須で、組み込み実装は PostgreSQL/MySQL とネットワーク vecdb の初期化を必要とします。開発・明示的テストでは一時 Store を利用できます。
 
 詳しいメソッド一覧・エラーコード・長い例は [REFERENCE.md（中国語）](./REFERENCE.md) を参照してください。
 
-## 使い始める
-
-`ai.close()` は進行中の初期化を待ってから解放し、並行する close は一つにまとめます。再初期化は旧インスタンスを先に解放し、終了処理中の新規初期化は拒否します。
-
-### クイックスタート
-
-#### 開発用 LLM のみ（DB 依存なし）
-
-```ts
-import { ai } from '@h-ai/ai'
-
-const init = await ai.init({
-  llm: {
-    model: 'gpt-4o-mini',
-    apiKey: process.env.HAI_AI_LLM_APIKEY,
-  },
-})
-if (!init.success)
-  return init
-
-const result = await ai.llm.chat({
-  messages: [
-    { role: 'user', content: '你好！' }
-  ],
-})
-
-await ai.close()
-```
-
-開発・明示的テストで reldb/vecdb が未初期化の場合、一時 Store を使い、終了やインスタンス切り替えで失われます。`NODE_ENV` または `HAI_CORE_ENV` が production の場合、一時 Store・SQLite・ローカル vecdb は初期化に失敗します。共有 RelDB とネットワーク vecdb を先に初期化するか、同等の原子的契約を満たす共有 Provider を指定してください。
-
-#### 永続 DB Provider（reldb + vecdb）
+### 永続 DB Provider（reldb + vecdb）
 
 ```ts
 import { ai } from '@h-ai/ai'
@@ -110,7 +259,7 @@ if (failures.length)
 
 MySQL の初回初期化は複数ノードで実行できます。mysql2 の明示的な ER_DUP_KEYNAME/1061 だけを受け入れ、実際の列・順序、非一意・列全体・昇順・可視 BTREE・式なしを再確認します。同名でも構造が異なれば失敗します。テーブル作成と INDEX 権限が必要で、メタデータ取得・権限・その他 DDL の失敗は ai.init の CONFIGURATION_ERROR になります。開始した全 DDL の終了を待ってから返します。MySQL DDL はロールバックされないため、権限や構造を修正してから再試行してください。各初期化結果を確認し、失敗時は業務リクエストを受けず、AI・vecdb・reldb の逆順で終了します。
 
-#### 独自 StoreProvider
+### 独自 StoreProvider
 
 ```ts
 import type { AIStoreProvider } from '@h-ai/ai'
@@ -166,7 +315,7 @@ const claude = await ai.llm.chat({ messages, model: 'claude' }) // 该模型配�
 // 临时客户端按 TTL 缓存（llm.tempModelCacheTtl，默认 10 分钟），与常驻模型客户端隔离
 const temp = await ai.llm.chat({
   messages,
-  tempModel: { model: 'claude-3-5-sonnet', protocol: 'anthropic', apiKey: 'sk-temp' },
+  tempModel: { model: 'claude-3-5-sonnet', protocol: 'anthropic', apiKey: process.env.TEMP_LLM_API_KEY },
 })
 ```
 
@@ -576,7 +725,12 @@ const turns = m.getTurns()
 
 ```ts
 // 会话结束时固化：整合摘要 → 提取长期记忆（写入不含 sessionId 的持久作用域）
-const result = await manager.consolidate({
+const created = ai.context.createManager({
+  scope: { objectId: 'user-001', sessionId: 'sess-001' }
+})
+if (!created.success)
+  return created
+const result = await created.data.consolidate({
   scope: { userId: 'user-001', personaId: 'xiaoq' }
 })
 if (result.success) {
@@ -600,6 +754,8 @@ await ai.persona.save({
 
 // 组合出可直接喂给 ContextManager 的系统提示词（systemPrompt + traits）
 const composed = await ai.persona.compose('xiaoq')
+if (!composed.success)
+  return composed
 const manager = ai.context.createManager({
   scope: { objectId: 'user-001', sessionId: 'persona-session' },
   systemPrompt: composed.data,
@@ -613,11 +769,86 @@ const manager = ai.context.createManager({
 
 `ai.persona` は `save` / `get` / `update` / `remove` / `list` / `compose` を提供し、`[objectId, id]` ごとにプロフィールを分離します。保存時は `objectId`、その他は `{ objectId }` を渡し、省略すると `system` のプラットフォーム用プロフィールを参照します。テナント操作には信頼された認証主体を結び付けてください。クライアントが送るプロフィール ID 自体はアクセス権を与えません。
 
-### 設定
+### セキュリティ上の境界
+
+- Prompt・検索文書・モデル出力は信頼できない入力として扱い、変更不可のシステム規則へユーザー内容を組み込まないでください。
+- Zod はツール引数の形を検証するだけで権限を保証しません。高権限 handler は主体・テナント・所有者・割当量を確認し、自動実行を許可したツールのみをモデルへ登録してください。
+- `callRemoteAgent()` は `ai.init()` のみで使える独立クライアントで、Agent Card・ローカル executor は不要です。非 HTTP(S)・URL 内認証情報を拒否しますが、アプリは origin 許可リストと出口側での DNS リバインディング・内部網へのリダイレクト・クラウドメタデータ対策を行う必要があります。
+- 完全な Prompt・ツール引数・A2A headers・一時認証情報・query 付き遠隔 URL を記録せず、監査が必要な場合もマスク済みの概要のみ保存してください。
+
+### 返されたハンドルの使用
+
+registry は ai.tools.createRegistry()、manager は context.createManager/restoreManager の成功 data、session は管理 ACP sessions.create/get/resume の data、connection は acp.connect の data です。各ハンドルの生命周期と認可範囲を守ってください。scoped Memory は上記十操作と同名ですが、objectId/scope は工場で束縛され、呼出しごとに上書きしません。
+
+| 入口                       | 用途                   | 入力                                                       | 出力                                                                   | 呼出し断片                                               |
+| -------------------------- | ---------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------- |
+| `registry.register`        | ツール登録             | `Tool`                                                     | `HaiResult<void>; duplicate rejected`                                  | `registry.register(tool)`                                |
+| `registry.registerMany`    | 一括ツール登録         | `Tool[]`                                                   | `HaiResult<void>`                                                      | `registry.registerMany(tools)`                           |
+| `registry.replace`         | ツールを明示的に置換   | `Tool with existing name`                                  | `HaiResult<void>`                                                      | `registry.replace(tool)`                                 |
+| `registry.unregister`      | ツール解除             | `tool name`                                                | `boolean`                                                              | `registry.unregister("search")`                          |
+| `registry.get`             | ツール参照             | `tool name`                                                | `Tool or undefined`                                                    | `registry.get("search")`                                 |
+| `registry.has`             | ツール有無             | `tool name`                                                | `boolean`                                                              | `registry.has("search")`                                 |
+| `registry.getNames`        | ツール名               | `none`                                                     | `string[]`                                                             | `registry.getNames()`                                    |
+| `registry.getDefinitions`  | モデル用定義           | `none`                                                     | `ToolDefinition[]`                                                     | `registry.getDefinitions()`                              |
+| `registry.execute`         | 認可後ツール実行       | `ToolCall, ToolExecutionOptions?`                          | `Promise<HaiResult<ToolMessage>>`                                      | `registry.execute(toolCall, { objectId: "u1" })`         |
+| `registry.executeAll`      | 複数呼出し実行         | `ToolCall[], { parallel?, ...executionOptions }`           | `Promise<HaiResult<ToolMessage[]>>`                                    | `registry.executeAll(toolCalls)`                         |
+| `registry.clear`           | ローカル一覧解除       | `none`                                                     | `void`                                                                 | `registry.clear()`                                       |
+| `registry.size`            | ツール数               | `none`                                                     | `number`                                                               | `registry.size`                                          |
+| `manager.addMessage`       | メッセージを追加       | `ChatMessage`                                              | `Promise<HaiResult<void>>`                                             | `manager.addMessage({ role: "user", content: "你好" })`  |
+| `manager.getMessages`      | 会話スナップショット   | `none`                                                     | `HaiResult<ChatMessage[]>`                                             | `manager.getMessages()`                                  |
+| `manager.reload`           | 共有状態を再読込       | `none`                                                     | `Promise<HaiResult<void>>`                                             | `manager.reload()`                                       |
+| `manager.getTokenUsage`    | 文脈予算を観察         | `none`                                                     | `HaiResult<{ current, budget }>`                                       | `manager.getTokenUsage()`                                |
+| `manager.getSummaries`     | 要約参照               | `none`                                                     | `HaiResult<SummaryResult[]>`                                           | `manager.getSummaries()`                                 |
+| `manager.save`             | 文脈を保存             | `none`                                                     | `Promise<HaiResult<void>>`                                             | `manager.save()`                                         |
+| `manager.flush`            | 背景記憶処理を待機     | `none`                                                     | `Promise<HaiResult<void>>`                                             | `manager.flush()`                                        |
+| `manager.reset`            | 会話をリセット         | `ContextResetOptions?`                                     | `Promise<HaiResult<void>>`                                             | `manager.reset({ preserveSystemPrompt: true })`          |
+| `manager.getTurns`         | 実際のターンを参照     | `none`                                                     | `HaiResult<ConversationTurn[]>`                                        | `manager.getTurns()`                                     |
+| `manager.markTurnSpeaking` | 再生開始を記録         | `turnId`                                                   | `Promise<HaiResult<void>>`                                             | `manager.markTurnSpeaking(turnId)`                       |
+| `manager.commitTurn`       | 実際の内容を確定       | `turnId, { text? }`                                        | `Promise<HaiResult<void>>`                                             | `manager.commitTurn(turnId, { text: spokenText })`       |
+| `manager.interruptTurn`    | 中断前の内容を確定     | `turnId, { text? }`                                        | `Promise<HaiResult<void>>`                                             | `manager.interruptTurn(turnId, { text: spokenText })`    |
+| `manager.consolidate`      | 長期記憶へ統合         | `ConsolidateOptions?`                                      | `Promise<HaiResult<{ summary, memories }>>`                            | `manager.consolidate({ scope: { personaId: "tutor" } })` |
+| `manager.chat`             | 状態付き応答           | `message: string, ContextChatOptions?`                     | `Promise<HaiResult<ContextChatResult>>`                                | `manager.chat("请继续")`                                 |
+| `manager.chatStream`       | 状態付きストリーム     | `message: string, ContextChatOptions?`                     | `AsyncIterable<ContextStreamEvent>`                                    | `manager.chatStream("请继续")`                           |
+| `session.info`             | 管理会話参照           | `none`                                                     | `Promise<HaiResult<ACPSessionInfo>>`                                   | `session.info()`                                         |
+| `session.prompt`           | 開発ターン実行         | `ContentBlock[], AbortSignal?`                             | `Promise<HaiResult<{ text, stopReason, events }>>`                     | `session.prompt([{ type: "text", text: "检查工程" }])`   |
+| `session.promptStructured` | JSON 出力検証          | `ContentBlock[], Zod schema, AbortSignal?`                 | `Promise<HaiResult<schema-inferred T>>`                                | `session.promptStructured(content, OutputSchema)`        |
+| `session.stream`           | 原生イベント観察       | `ContentBlock[], AbortSignal?`                             | `AsyncIterable<SessionNotification>; failure throws`                   | `session.stream([{ type: "text", text: "检查工程" }])`   |
+| `session.cancel`           | 現在ターン取消         | `none`                                                     | `Promise<HaiResult<void>>`                                             | `session.cancel()`                                       |
+| `session.setMode`          | 公開されたモードを選択 | `native mode ID`                                           | `Promise<HaiResult<native mode response>>`                             | `session.setMode("code")`                                |
+| `session.setConfigOption`  | 公開された設定を指定   | `native option key and allowed value`                      | `Promise<HaiResult<native config response>>`                           | `session.setConfigOption("model", "coding")`             |
+| `session.updateMain`       | 主分岐を早送り更新     | `none; execution and preview must be stopped`              | `Promise<HaiResult<ACPGitReport[]>>; partial failure reports in cause` | `session.updateMain()`                                   |
+| `session.publish`          | コミットと push        | `{ mode, message, author }; managed isolated session only` | `Promise<HaiResult<ACPGitReport[]>>`                                   | `session.publish(publishOptions)`                        |
+| `session.close`            | 実行停止と状態保持     | `none`                                                     | `Promise<HaiResult<void>>`                                             | `session.close()`                                        |
+| `connection.authenticate`  | 原生認証               | `advertised authentication method ID`                      | `Promise<HaiResult<native auth response>>`                             | `connection.authenticate("api-key")`                     |
+| `connection.createSession` | 低層原生会話作成       | `absolute remote cwd, McpServer[]?`                        | `Promise<HaiResult<{ id, prompt, cancel }>>`                           | `connection.createSession("/workspace/project", [])`     |
+| `connection.listSessions`  | 原生会話一覧           | `cursor?`                                                  | `Promise<HaiResult<native paginated response>>`                        | `connection.listSessions()`                              |
+| `connection.deleteSession` | 原生会話削除           | `native session ID`                                        | `Promise<HaiResult<native delete response>>`                           | `connection.deleteSession(nativeId)`                     |
+| `connection.close`         | 低層接続を閉じる       | `none`                                                     | `Promise<HaiResult<void>>`                                             | `connection.close()`                                     |
+
+## 設定
+
+### 用途に応じた設定入口
+
+| 設定入口    | 用途                       | 入力                                                                       | 効果                                                                 | 例                                                                                                        |
+| ----------- | -------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `llm`       | モデル接続と要求形式       | model, protocol, apiKey/baseUrl, timeout, models/scenarios                 | chat/Responses/Anthropic selection; normalized model requests        | `{ llm: { model: "gpt-4o-mini", timeout: 60000 } }`                                                       |
+| `embedding` | 検索ベクトル               | model?, dimensions?, batchSize?                                            | consistent vector dimensions for the target collection               | `{ embedding: { dimensions: 1536, batchSize: 100 } }`                                                     |
+| `mcp`       | 外部ツールサービス         | servers with transport/endpoints or commands                               | registered server definitions; application authorizes tool execution | `{ mcp: { servers: [] } }`                                                                                |
+| `retrieval` | 既定の検索元               | sources: { id, collection, topK?, minScore?, filter? }[]                   | queryable source definitions; does not import documents              | `{ retrieval: { sources: [{ id: "docs", collection: "manual", topK: 5 }] } }`                             |
+| `knowledge` | 文書公開と分割             | collection, dimension, cleanOptions, chunkOptions                          | versioned document/vector publication and bounded chunks             | `{ knowledge: { collection: "manual", dimension: 1536, chunkOptions: { maxSize: 1500, overlap: 200 } } }` |
+| `memory`    | 主体記憶の保存先           | provider, quotas, recencyDecay, defaultTopK, candidateMultiplier           | native or Mem0-format behavior with explicit persistence limits      | `{ memory: { provider: "native", defaultTopK: 10 } }`                                                     |
+| `token`     | Token 推定                 | tokenRatio > 0; default 0.25                                               | local token budget estimates; not provider billing usage             | `{ token: { tokenRatio: 0.25 } }`                                                                         |
+| `summary`   | 要約方針                   | systemPrompt?                                                              | prompt used by summary generation; model from llm.scenarios          | `{ summary: { systemPrompt: "保留已确认决策和待办" } }`                                                   |
+| `compress`  | 文脈の圧縮予算             | defaultStrategy, defaultMaxTokens, preserveLastN                           | compression defaults; 0 budget derives from model limit              | `{ compress: { defaultStrategy: "hybrid", defaultMaxTokens: 4000, preserveLastN: 4 } }`                   |
+| `file`      | OCR 抽出方針               | systemPrompt?; model via llm.scenarios.ocr                                 | text extraction instructions; not HTML sanitization                  | `{ file: { systemPrompt: "只提取可见文字" } }`                                                            |
+| `audio`     | 音声モデルと上限           | models, transcribeModel/synthesizeModel, maxAudioBytes/maxStreamDurationMs | provider capability/operation selection and bounded input/stream     | `see Audio examples`                                                                                      |
+| `image`     | 画像モデルと取得上限       | models, generateModel, maxImageBytes, maxImages; timeout per model         | generated bytes with MIME; unsafe downloads rejected                 | `see Image examples`                                                                                      |
+| `a2a`       | エージェント発見と実行期限 | agentCard and execution lease/poll/deadline options                        | ProtoJSON discovery and shared task journal                          | `see A2A protocol section`                                                                                |
+| `acp`       | エージェント実行制約       | agents/workspaces and execution content/event limits                       | validated definitions and managed native sessions                    | `see ACP guide`                                                                                           |
 
 Rerank は LLM 全体の timeout を継承し、モデル単位で上書きできます。期限は応答本文まで含み、超過時は RERANK_API_ERROR を返します。
 
-LLM の `llm.api`、`llm.models[].api`、`tempModel.api` は `protocol` に統一されました。値は `chat | responses | anthropic` のままです。環境変数は `HAI_AI_LLM_PROTOCOL`、`HAI_AI_LLM_MODELS_0_PROTOCOL`（他の項目は対応する添字）を使います。旧フィールドと旧プロトコル変数は移行案内付きでエラーになります。`apiKey` とその変数は変更ありません。
+リクエスト形式は `llm.protocol`、`llm.models[].protocol` または呼出し単位の `tempModel.protocol` で指定し、`chat | responses | anthropic` を使います。環境変数は `HAI_AI_LLM_PROTOCOL`、`HAI_AI_LLM_MODELS_0_PROTOCOL`（モデルの添字に対応）です。認証情報は `apiKey` または非公開環境変数で渡します。
 
 ```yaml
 llm:
@@ -697,14 +928,7 @@ const memories = await ai.memory.recall('经济发展', {
 
 `ai.config` はマスク済み設定を返し、`apiKey`、`privateKey`、URL 内認証情報などをそのまま公開しません。
 
-### セキュリティ上の境界
-
-- Prompt・検索文書・モデル出力は信頼できない入力として扱い、変更不可のシステム規則へユーザー内容を組み込まないでください。
-- Zod はツール引数の形を検証するだけで権限を保証しません。高権限 handler は主体・テナント・所有者・割当量を確認し、自動実行を許可したツールのみをモデルへ登録してください。
-- `callRemoteAgent()` は `ai.init()` のみで使える独立クライアントで、Agent Card・ローカル executor は不要です。非 HTTP(S)・URL 内認証情報を拒否しますが、アプリは origin 許可リストと出口側での DNS リバインディング・内部網へのリダイレクト・クラウドメタデータ対策を行う必要があります。
-- 完全な Prompt・ツール引数・A2A headers・一時認証情報・query 付き遠隔 URL を記録せず、監査が必要な場合もマスク済みの概要のみ保存してください。
-
-### エラー処理
+## エラー処理
 
 ```ts
 const result = await ai.llm.chat({ messages })

@@ -4,23 +4,13 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md)
 
-## 概要
-
 内蔵メッセージは `zh-CN`、`en-US`、`ja-JP` に対応し、言語セレクターは既定で3言語を表示します。
 
 Svelte 5 Runes のクロスプラットフォーム UI ライブラリーです。DaisyUI v5 + Tailwind CSS v4 のスタイル、Bits UI v2 のヘッドレス UI、内蔵 i18n（zh-CN / en-US / ja-JP）、15 種類の厳選テーマ、ハイコントラスト、直角ビジネス、目にやさしいテーマを提供します。
 
-
 HTTP/UI 境界で業務メッセージを公開するのは、明示された有効な4xx状態のみです。`httpStatus` が未指定または不正な場合は500として安全なメッセージを返します。独自の業務エラーには完全なエラー定義または明示的な状態を指定してください。
-## 主な機能
 
-- フォーム、テーブル、ダイアログ、ナビゲーション、チャートなどの部品。
-- 認証、CRUD、AI コンテンツ、操作ガイド、ヘルプセンター。
-- Svelte 5、テーマ、レスポンシブ表示、中国語・英語・日本語のコンポーネント文言。
-
-Markdown の下線と強調マーカーはエスケープに対応し、閉じていないマーカーはテキストとして扱います。長い異常入力でも Toast と文書出力で反復走査を避け、追跡 ID は既定で折りたたみます。
-
-## 使い始める
+## クイックスタート
 
 ### インストール
 
@@ -30,15 +20,13 @@ npm install @h-ai/ui @h-ai/core
 
 Node サーバーでは UI と core の両方を本番依存に含め、ログなどのネイティブ依存を通常どおり読み込めるようにします。
 
-### クイックスタート
-
-#### 1. package.json のアプリ内インポートを設定
+### 1. package.json のアプリ内インポートを設定
 
 ```json
 { "imports": { "#lib/*": "./src/lib/*" } }
 ```
 
-#### 2. vite.config.ts を設定
+### 2. vite.config.ts を設定
 
 SvelteKit 3 の前処理、コンパイラー、アダプターは Vite プラグインで設定します。通常の Svelte/Vite プロジェクトのみ svelte.config.js を保持します。
 
@@ -68,7 +56,7 @@ export default defineConfig({
 })
 ```
 
-#### 3. src/app.css の設定
+### 3. src/app.css の設定
 
 Crypto または Kit/IAM を使うアプリでは `sm-crypto@0.5.8` を本番依存に追加します。CLI は設定済みです。手動導入では `pnpm add sm-crypto@0.5.8` を実行してください。external だけでは不十分で、adapter-node がネイティブ解決を維持するには直接の本番依存が必要です。
 
@@ -91,7 +79,7 @@ Crypto または Kit/IAM を使うアプリでは `sm-crypto@0.5.8` を本番依
 
 > `@source` で TailwindCSS に `@h-ai/ui` の class を走査させます。ない場合はスタイルが欠落します。monorepo 内のアプリでは依存がルート `node_modules` に置かれる場合があるため、両方のパスを残すことを推奨します。
 
-#### 4. コンポーネントの使用
+### 4. コンポーネントの使用
 
 ```svelte
 <script>
@@ -123,7 +111,99 @@ import { Button } from '@h-ai/ui/components/primitives/index'
 import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
 ```
 
-#### data-\* 属性の転送
+## 機能
+
+### 用途・入力・出力
+
+UI に init/close はありません。アプリのコンポーネントまたはブラウザー操作の文脈で使います。変数はアプリ側で用意する要求・Schema・リソース定義・設定を表します。初期化と失敗処理は各機能の例を参照し、HaiResult.success の確認と非同期処理の await を行ってください。
+
+| 入口 | 用途 | 入力 | 出力 | 呼出し断片 |
+| --- | --- | --- | --- | --- |
+| `autoImportHaiUi` | 自動 import | `preprocessed Svelte source and filename through markup` | `PreprocessorGroup; synchronous { code }` | `autoImportHaiUi()` |
+| `parseMarkdown` | 安全な Markdown | `Markdown source, MarkdownParseOptions?` | `HTML string; raw HTML escaped or allowlisted` | `parseMarkdown("# Hello", { allowHtmlTags: false })` |
+| `renderMarkdownDocument` | 編集文書モデル | `Markdown source, MarkdownDocumentParseOptions?` | `MarkdownRenderResult with outline/codeBlocks/blocks` | `renderMarkdownDocument("# Report", { allowHtmlTags: false })` |
+| `isLanguageSupported` | 強調言語確認 | `language name` | `boolean` | `isLanguageSupported("typescript")` |
+| `highlightCode` | コード強調 | `code text, supported language` | `escaped/highlighted HTML string` | `highlightCode("const total = 1", "typescript")` |
+| `resolveDocumentMarkdownContent` | コードを囲む | `text, sourceKind?, language?` | `Markdown string with a safe fence length` | `resolveDocumentMarkdownContent("const x = 1", "code", "ts")` |
+| `resolveDocumentDownloadActions` | ダウンロード一覧 | `MarkdownToolbarDownloadAction[]?` | `AiDocumentResolvedDownloadAction[]` | `resolveDocumentDownloadActions([{ id: "markdown", label: "Markdown" }])` |
+| `downloadAiDocument` | 選択形式を取得 | `AiDocumentDownloadRequest` | `Promise<void>; browser failure rejects, SSR does nothing` | `downloadAiDocument({ actionId: "markdown", content: "# Report", filename: "report.md" })` |
+| `createLocaleStore` | 画面言語の状態 | `{ defaultLocale?, supportedLocales?, detectBrowser?, persistKey? }` | `locale store with current/set/isSupported` | `createLocaleStore({ defaultLocale: "zh-CN", detectBrowser: false })` |
+| `getGlobalLocale` | 現在言語の参照 | `none` | `locale string from current context` | `getGlobalLocale()` |
+| `setGlobalLocale` | ブラウザー・起動言語の設定 | `locale` | `void; use request context for SSR` | `setGlobalLocale("en-US")` |
+| `detectBrowserLocale` | ブラウザー言語検出 | `supportedLocales?` | `supported locale or null` | `detectBrowserLocale()` |
+| `isLocaleSupported` | 対応言語検査 | `locale, supportedLocales?` | `boolean` | `isLocaleSupported("ja-JP")` |
+| `resolveLocale` | 言語の正規化 | `locale, supportedLocales?, fallback?` | `supported locale` | `resolveLocale("en")` |
+| `interpolate` | 文言パラメーター | `template string, InterpolationParams` | `string` | `interpolate("Hello {name}", { name: "Ada" })` |
+| `getThemeInfo` | テーマの情報 | `theme ID` | `ThemeInfo or undefined` | `getThemeInfo("light")` |
+| `isDarkTheme` | 暗色テーマ検査 | `theme ID` | `boolean` | `isDarkTheme("dark")` |
+| `normalizeThemeId` | テーマの正規化 | `candidate theme ID, fallback?` | `supported theme ID` | `normalizeThemeId("unknown", "light")` |
+| `normalizeHexColor` | 色の正規化 | `string or null/undefined` | `six-digit lowercase hex string or null` | `normalizeHexColor("#5765F0")` |
+| `resolveThemeTone` | テーマの明暗 | `theme ID` | `light or dark` | `resolveThemeTone("light")` |
+| `createThemeBootstrapScript` | 初期テーマ設定 | `ThemeBootstrapScriptOptions from trusted host config` | `script string for the application HTML shell` | `createThemeBootstrapScript({ storageKey: "theme", defaultThemeId: "light" })` |
+| `getThemeInitScript` | 既定テーマ起動 | `none` | `script string` | `getThemeInitScript()` |
+| `applyTheme` | ページテーマ変更 | `theme ID, persist? (default true)` | `void; updates DOM/browser preference` | `applyTheme("dark")` |
+| `getCurrentTheme` | 現在テーマ | `none` | `theme ID string` | `getCurrentTheme()` |
+| `getSavedTheme` | 保存テーマ | `fallback theme ID?` | `theme ID string` | `getSavedTheme("light")` |
+| `createGuide` | ガイド制御 | `GuideOptions: tours, articles?, nav?, persistence?, persistKey?` | `GuideController; no init/close` | `createGuide({ tours: [], persistence: "memory" })` |
+| `resolveGuideText` | ガイド文言の解決 | `string or translation callback?` | `string` | `resolveGuideText(() => m.help())` |
+| `matchPermission` | 権限表示 | `required permission, userPermissions[]` | `boolean; not server authorization` | `matchPermission("orders:read", ["orders:*"])` |
+| `setPermissionContext` | 権限文脈を提供 | `() => current permissions; component initialization only` | `void` | `setPermissionContext(() => user.permissions)` |
+| `usePermission` | 権限文脈を利用 | `none; component initialization only` | `PermissionContext with hasPerm/hasAnyPerm/hasAllPerms` | `usePermission()` |
+| `createSensitiveActions` | 重要操作確認 | `standard auth actions providing reauthenticate/publicConfig?` | `SensitiveActions: configure/authorize/submit/cancel` | `createSensitiveActions(actions)` |
+| `createSessionRecovery` | 画面内会話復帰 | `none; configure public config and current user afterward` | `SessionRecovery controller` | `createSessionRecovery()` |
+| `defineCrud` | CRUD 定義 | `CrudResource with fields/API callbacks` | `CrudDef for CrudPage` | `defineCrud(resourceDefinition)` |
+| `createCrudController` | 一覧状態を管理 | `CrudDef, { autoLoad? }?` | `controller data/nav/loading/loaded/error/load/reload` | `createCrudController(crud, { autoLoad: false })` |
+| `mapPaginated` | ページ項目を変換 | `PaginatedResult<T>, (item,index) => R` | `PaginatedResult<R> retaining total/page/pageSize` | `mapPaginated(page, item => ({ ...item, selected: false }))` |
+| `createBrowserNavAdapter` | ブラウザー移動 | `none` | `NavAdapter` | `createBrowserNavAdapter()` |
+| `registerClipboardHostWriter` | ホストのクリップボード登録 | `async text => boolean or null to unregister` | `void` | `registerClipboardHostWriter(null)` |
+| `writeTextToClipboard` | コピー結果を確認 | `text: string` | `Promise<boolean>; true only when write succeeds` | `writeTextToClipboard("trace-001")` |
+| `cn` | クラス結合 | `...string\|boolean\|null\|undefined values` | `string` | `cn("flex", active && "text-primary")` |
+| `getDataAttributes` | data 属性だけ転送 | `props record` | `ForwardedDataAttributes` | `getDataAttributes({ "data-testid": "save" })` |
+| `generateId` | UI 識別子 | `prefix?; not a security token generator` | `string` | `generateId("field")` |
+| `portal` | ノードをホストへ配置 | `HTMLElement, target HTMLElement or selector?` | `Svelte action result with cleanup` | `portal(node, document.body)` |
+| `detectPlatform` | 実行環境検出 | `none` | `Platform` | `detectPlatform()` |
+| `isMobile` | モバイル判定 | `none` | `boolean` | `isMobile()` |
+| `isNativeApp` | 原生シェル判定 | `none` | `boolean` | `isNativeApp()` |
+| `usePlatform` | 反応的な環境状態 | `none; component initialization` | `{ current, isMobile, isApp }` | `usePlatform()` |
+| `getVariantClass` | テーマクラス変換 | `Variant, prefix?` | `string class name` | `getVariantClass("primary", "btn")` |
+| `getSizeClass` | テーマクラス変換 | `Size, prefix?` | `string class name` | `getSizeClass("sm", "btn")` |
+| `getInputSizeClass` | テーマクラス変換 | `Size` | `string class name` | `getInputSizeClass("sm")` |
+| `getBadgeVariantClass` | テーマクラス変換 | `Variant` | `string class name` | `getBadgeVariantClass("info")` |
+| `getBadgeSizeClass` | テーマクラス変換 | `Size` | `string class name` | `getBadgeSizeClass("sm")` |
+| `getAlertVariantClass` | テーマクラス変換 | `Variant` | `string class name` | `getAlertVariantClass("info")` |
+| `getProgressVariantClass` | テーマクラス変換 | `Variant` | `string class name` | `getProgressVariantClass("primary")` |
+| `useToastFeedback` | 操作結果通知 | `() => safely localized message, variant?` | `void; source-owned toast lifecycle` | `useToastFeedback(() => errorMessage(error))` |
+| `notifySuccess` | 操作結果通知 | `localized message, duration?` | `toast ID string` | `notifySuccess(m.saved())` |
+| `notifyInfo` | 操作結果通知 | `localized message, duration?` | `toast ID string` | `notifyInfo(m.loading())` |
+| `notifyWarning` | 操作結果通知 | `localized message, duration?` | `toast ID string` | `notifyWarning(m.warning())` |
+| `notifyError` | 操作結果通知 | `unknown error, safe fallback?, duration?` | `toast ID string; internal exception text hidden` | `notifyError(error, m.retry())` |
+| `errorMessage` | 操作結果通知 | `unknown error, safe fallback?` | `safe localized string` | `errorMessage(error, m.retry())` |
+| `toast.add` | 共用通知キュー | `localized options/message` | `string item ID` | `toast.add({ message: m.saved(), variant: "success" })` |
+| `toast.success` | 共用通知キュー | `localized safe message, duration?` | `string item ID` | `toast.success(m.result())` |
+| `toast.info` | 共用通知キュー | `localized safe message, duration?` | `string item ID` | `toast.info(m.result())` |
+| `toast.warning` | 共用通知キュー | `localized safe message, duration?` | `string item ID` | `toast.warning(m.result())` |
+| `toast.error` | 共用通知キュー | `localized safe message, duration?` | `string item ID` | `toast.error(m.result())` |
+| `toast.remove` | 共用通知キュー | `item ID` | `void` | `toast.remove(id)` |
+| `toast.clear` | 共用通知キュー | `none` | `void` | `toast.clear()` |
+| `message.add` | 共用通知キュー | `localized options/message` | `string item ID` | `message.add({ message: m.saved(), type: "success" })` |
+| `message.success` | 共用通知キュー | `localized safe message, duration?` | `string item ID` | `message.success(m.result())` |
+| `message.info` | 共用通知キュー | `localized safe message, duration?` | `string item ID` | `message.info(m.result())` |
+| `message.warning` | 共用通知キュー | `localized safe message, duration?` | `string item ID` | `message.warning(m.result())` |
+| `message.error` | 共用通知キュー | `localized safe message, duration?` | `string item ID` | `message.error(m.result())` |
+| `message.remove` | 共用通知キュー | `item ID` | `void` | `message.remove(id)` |
+| `message.clear` | 共用通知キュー | `none` | `void` | `message.clear()` |
+| `toast.pause` | 通知タイマー | `toast ID` | `void` | `toast.pause(id)` |
+| `toast.resume` | 通知タイマー | `toast ID` | `void` | `toast.resume(id)` |
+| `messageBox.confirm` | 非同期確認 | `localized string or MessageBoxOptions` | `Promise<boolean>; host handles confirmation/cancellation` | `messageBox.confirm({ message: m.confirm() })` |
+| `messageBox.alert` | 非同期確認 | `localized string or MessageBoxOptions` | `Promise<boolean>; host handles confirmation/cancellation` | `messageBox.alert({ message: m.confirm() })` |
+
+- フォーム、テーブル、ダイアログ、ナビゲーション、チャートなどの部品。
+- 認証、CRUD、AI コンテンツ、操作ガイド、ヘルプセンター。
+- Svelte 5、テーマ、レスポンシブ表示、中国語・英語・日本語のコンポーネント文言。
+
+Markdown の下線と強調マーカーはエスケープに対応し、閉じていないマーカーはテキストとして扱います。長い異常入力でも Toast と文書出力で反復走査を避け、追跡 ID は既定で折りたたみます。
+
+### data-\* 属性の転送
 
 公開 Svelte コンポーネントは `data-*` をルート・主操作要素へ転送し、テスト・計測・自動化に使えます。通常の未知属性は転送しません。
 
@@ -134,6 +214,32 @@ import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
 ```
 
 `data-testid` のためだけにボタン・入力・ポップアップをラップする必要はありません。
+
+### コンポーネント群の入力・イベント・出力
+
+一覧の操作分類を下表にまとめます。m・rows・user・controller・コールバックは業務アプリが用意します。表示部品は DOM、操作部品はバインドとイベントを出力し、サーバー認可は行いません。完全な組合せは使用例・部品一覧・UI skill を参照し、追加項目は公開 Props 型に従ってください。
+
+| コンポーネント群 | 入力 | 出力/イベント | 使用断片 |
+| --- | --- | --- | --- |
+| Button / IconButton / BareButton | variant, size, loading, disabled; icon/snippet; onclick | click event; loading/disabled block repeated action | `<Button loading={saving} onclick={save}>{m.save()}</Button>` |
+| Input / BareInput / Textarea / PasswordInput | type, value, label/validation props | bind:value; input/change/focus events; file input exposes FileList | `<Input bind:value={draft} required />` |
+| Select / Radio / Range / Rating / Combobox | options or min/max/step, current value | bound selected value and selection callbacks | `<Select options={options} bind:value={selected} />` |
+| Checkbox / Switch / ToggleCheckbox / ToggleInput / ToggleRadio | checked/name/label, disabled | bind:checked and change events | `<Checkbox bind:checked={enabled} label={m.enabled()} />` |
+| Form / FormLayout / FormField / TagInput | columns, labels, error/hint, tags, submit callback | validated submit event, tag changes, accessible field association | `<Form onsubmit={save}><FormField label={m.name()}><Input bind:value={name} /></FormField></Form>` |
+| Modal / Drawer / Popover / Dropdown / Tooltip / Calendar | open, trigger/content snippets, dimensions, selected value | bound open/selection; focus handling and close actions | `<Modal bind:open={open} title={m.details()}>{m.content()}</Modal>` |
+| DataTable / TableToolbar / Pagination / FilterBar | rows, columns, total/page, draft search/filter, loading | row/sort/page/query callbacks; host performs the request | `<DataTable {columns} data={rows} sortKey={sortKey} sortDir={sortDir} onsort={sortRows} />` |
+| Tabs / Breadcrumb / Steps / BottomNav / AppBar | items/current key, links, titles and action snippets | selected key/navigation callbacks; host owns routing | `<Tabs {items} bind:active={activeTab} />` |
+| Alert / Badge / Avatar / Tag / Spinner / Progress / Skeleton / Empty / Result | status/variant/value/text/image and state props | presentational DOM; tag/alert close callbacks when enabled | `<Progress value={completed} max={total} />` |
+| WorkspaceLayout / PageHeader / SettingsLayout / SettingsModal | title, sections, active key, leading/actions/footer/children | layout DOM; selection/open callbacks; no business writes | `<WorkspaceLayout title={m.title()}>{m.content()}</WorkspaceLayout>` |
+| FileUpload / ImageUpload / AvatarUpload / FileList | accept/size limits, File values, uploadHandler, files | selected files/progress/result URL and delete/download callbacks | `<ImageUpload bind:value={imageUrl} uploadHandler={uploadImage} />` |
+| AuthPanel / AuthShell / LoginForm / RegisterForm / password forms / PermGuard | public IAM config, standard actions, errors, permission context | authenticated/submit/reset callbacks; server still authorizes | `<AuthPanel {config} {actions} />` |
+| UserProfile / SensitiveOperationsForm / ReauthenticationDialog / SessionRecoveryDialog | profile or operations, async submit, current controller/state | UserProfile closes only on true; other confirmations report explicit completion | `<UserProfile {user} editable onsubmit={saveProfile} />` |
+| CrudPage / CrudFilterBar / CrudEditPanel / CrudDetailPanel / CrudDeleteConfirm | CrudDef, data/nav, loading/error/permissions, API callbacks | resource-bound query/edit/delete callbacks; server enforces resource access | `<CrudPage {crud} data={controller.data} nav={controller.nav} />` |
+| MarkdownRenderer / AiDocumentEditor / AiTableEditor / AiDocumentDownloadMenu | content or columns/rows, action callbacks, safe HTML options | Markdown HTML, content/cell changes and explicit download/run requests | `<MarkdownRenderer content={markdown} allowHtmlTags={false} />` |
+| EncryptedInput / HashDisplay / SignatureDisplay | plaintext/hash/signature, algorithm label, real onencrypt callback | display DOM; bound encryptedValue only after current request succeeds | `<EncryptedInput bind:value={plain} bind:encryptedValue={cipher} onencrypt={encrypt} />` |
+| FeedbackModal / FeedbackForm / FeedbackList / FeedbackDetail / FeedbackScreenshot | prepared evidence, attachments, rows/report, permissions and actions | submission/query/status/export/retry/annotation callbacks | `<FeedbackForm attachments={attachments} onsubmit={submitFeedback} />` |
+| Chart / DashboardGrid / MetricCard / ReportCard | chart data/preset and raw chart props; metrics and loading state | rendered chart/dashboard; native chart callbacks pass through | `<MetricCard title={m.revenue()} value={revenue} trend={growth} />` |
+| GuideHost / HelpCenter | GuideController, locale/scope, articles/tours | onboarding/help UI; start/close callbacks and nonsensitive preferences | `<GuideHost {guide} scope={user.id} locale={locale} />` |
 
 ### コンポーネント構成
 
@@ -154,7 +260,7 @@ components/
 
 ### コンポーネント一覧
 
-#### Primitives：基本コンポーネント（20）
+#### Primitives：基本コンポーネント
 
 | コンポーネント   | 説明                   | 主なプロパティ                                                                 |
 | ---------------- | ---------------------- | ------------------------------------------------------------------------------ |
@@ -183,7 +289,7 @@ components/
 
 `BareInput` の `type="file"` では `onchange` の `event.currentTarget.files` を読み取り、ファイルパスの `value` はバインドしません。他の入力型では `bind:value` を使用できます。
 
-#### Compounds：複合コンポーネント（37）
+#### Compounds：複合コンポーネント
 
 ##### フォーム
 
@@ -308,16 +414,16 @@ Modal または Drawer 内では、portal の操作要素も所属ダイアロ�
 | -------------- | -------------- | ---------------------------------------------- |
 | `PageHeader`   | ページヘッダー | `title`, `description`、`actions` スロット対応 |
 
-#### Scenes：用途別コンポーネント（47）
+#### Scenes：用途別コンポーネント
 
-##### Guide：案内・ヘルプ（2）
+##### Guide：案内・ヘルプ
 
 | コンポーネント | 説明 | 主なプロパティ |
 | --- | --- | --- |
 | `GuideHost` | 初回案内・ガイド・ヘルプダイアログ | `guide`, `locale`, `scope`, `autoStart` |
 | `HelpCenter` | 独立して使える検索付きヘルプ | `articles`, `tours`, `locale`, `selectedId`, `onstart` |
 
-##### App：アプリ全体（13）
+##### App：アプリ全体
 
 | コンポーネント     | 説明                                        | 主なプロパティ                                           |
 | ------------------ | ------------------------------------------- | -------------------------------------------------------- |
@@ -337,7 +443,7 @@ Modal または Drawer 内では、portal の操作要素も所属ダイアロ�
 
 説明は任意です。モーダルを開く前に `@h-ai/feedback/client` の `prepare()` で現場を固定します。`onfileschange` で添付を準備し、`onannotate` で注釈を画像のピクセルに反映します。送信失敗時は入力を保持し、ローカルに出力できます。一覧は説明またはサーバーの要約を表示し、`onquerychange` でページを取得します。UI の権限表示とは別にサーバーの認可が必要です。接続方法とオフラインツールは [feedback モジュール](../feedback/README.ja.md) を参照してください。
 
-##### IAM：認証（13）
+##### IAM：認証
 
 | コンポーネント       | 説明                                    | 主なプロパティ                                                                                         |
 | -------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -355,7 +461,7 @@ Modal または Drawer 内では、portal の操作要素も所属ダイアロ�
 | `SessionRecoveryDialog` | 画面内のセッション復帰 | `recovery`, `actions` |
 | `SensitiveOperationsForm` | 権限の重要操作編集 | `operations`, `onsubmit`, `ondone` |
 
-##### Storage：ストレージ（4）
+##### Storage：ストレージ
 
 | コンポーネント | 説明                 | 主なプロパティ                                               |
 | -------------- | -------------------- | ------------------------------------------------------------ |
@@ -366,7 +472,7 @@ Modal または Drawer 内では、portal の操作要素も所属ダイアロ�
 
 アップロード部品は presign・ヘッダー・PUT/POST を内蔵しません。アプリは `uploadHandler(file, { signal, onProgress })` からサービスを呼び、`{ url?, response? }` を返します。画像・アバターには表示可能な `url` が必要です。handler がなければ `FileUpload` は選択のみ、画像・アバターはローカルのプレビューのみを作成します。
 
-##### Crypto：暗号表示（3）
+##### Crypto：暗号表示
 
 入力変更で `encryptedValue` を即座に消去し、現在の入力の成功結果のみを反映します。消去・コールバック置換・破棄で旧リクエストを無効化します。失敗時は組み込みエラーを表示し暗号文は空です。暗号化対象の送信は現在の暗号文が空でない場合に限ってください。
 
@@ -380,7 +486,7 @@ Modal または Drawer 内では、portal の操作要素も所属ダイアロ�
 
 既定は `@h-ai/crypto` と共通で、暗号化入力は `SM4`、ハッシュは `SM3`、署名は `SM2` です。
 
-##### AI：文書・表計算（4）
+##### AI：文書・表計算
 
 | コンポーネント           | 説明                     | 主なプロパティ・機能                                                                                       |
 | ------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------------- |
@@ -436,7 +542,6 @@ Modal または Drawer 内では、portal の操作要素も所属ダイアロ�
 </ReportCard>
 ```
 
-
 `Chart type='line'` は既定で LayerChart の折れ線を使います。監視画面で分割線・点・最寄りの点への hover・縦基準線が必要な場合は `lineVariant='segmented-point'` を使います：
 
 ```svelte
@@ -454,7 +559,7 @@ Modal または Drawer 内では、portal の操作要素も所属ダイアロ�
 />
 ```
 
-##### CRUD：一覧操作（5）
+##### CRUD：一覧操作
 
 | コンポーネント      | 説明                                                   | 主なプロパティ・機能                                                                                                                                                                                                                                                        |
 | ------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -471,7 +576,7 @@ Modal または Drawer 内では、portal の操作要素も所属ダイアロ�
 >
 > 列は先に 7rem まで縮小し長文を切り詰め、総幅が容器を超える場合のみ横スクロールを出します。操作列は右に固定し、横スクロール中も表示します。
 
-##### エラーページ（1）
+##### エラーページ
 
 | コンポーネント | 説明                                               | 主なプロパティ・機能                                                    |
 | -------------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -876,8 +981,6 @@ agreements:
   # privacyPolicyUrl: https://example.com/privacy
 ```
 
-
-
 AuthPanel に IAM 公開設定と actions を渡すと、複数方式のログイン、登録、復旧、規約を利用できます。config.ui でレイアウトとブランド画像を指定し、パスワードフォームは passwordPolicy を受け取ります。通信と Token 保存は actions の責務です。
 
 認証エラーには `@h-ai/ui/components/scenes/iam/index` の `authErrorMessage(error)` を使用します。公開コードを現在の UI 言語に変換し、ユーザー名とパスワードの誤りを区別せず、未知・サーバーエラーの原文を隠し、有効な `traceId` を保持します。AuthPanel、OTP 送信、重要操作の再認証、fullstack のパスワード変更で共用します。初期・期限切れパスワード、現在のパスワードの再使用（`hai:iam:034`）、セッション数上限には操作案内を表示します。認証エラーと操作成功は統一 Toast を使用します。確認パスワードはサーバーと同じく Unicode 正規化や空白除去をせず厳密に比較し、不一致をフィールドに表示します。Kit または API Client で検証した時刻エラーでは、AuthPanel がサーバーの UTC 時刻と時刻調整の案内を表示します。
@@ -1000,7 +1103,6 @@ import { toast } from '@h-ai/ui'
 </AuthPanel>
 ```
 
-
 コンポーネントのサブパスは package.exports に明記した barrel（例: `@h-ai/ui/components/primitives/index`）に限定します。内部実装やストレージ補助関数は非公開で、ホストのクリップボード登録は引き続き公開します。
 
 ### リクエスト言語の分離
@@ -1009,11 +1111,11 @@ Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleReq
 
 ブラウザーはアプリ全体の `setGlobalLocale` / `createLocaleStore` を使います。SSR の UI store 初期化と setter は自身の状態のみ変更し、メッセージはリクエストコンテキストを参照します。`runWithLocale` は Node 入口専用です。
 
-## 入力制約と HTTP 機能
+### 入力制約と HTTP 機能
 
 キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../storage/README.md#存储输入约束与跨端能力)を参照してください。
 
-## コンパクトな作業領域と折りたたみ式の絞り込み
+### コンパクトな作業領域と折りたたみ式の絞り込み
 
 `WorkspaceLayout` はコンパクトなナビゲーション、12/16px の余白を持つ本文、任意のフッターを統一します。フッターを省略すると高さを確保しません。title はナビゲーションのページ名、leading/actions/footer は snippet です。data-* は本文の main に渡します。親レイアウトから残りの高さと min-height: 0 を引き継いでください。
 
@@ -1041,23 +1143,44 @@ Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleReq
 </div>
 ```
 
-## デザインと操作の検証
+### デザインと操作の検証
 
 画面設計は [hai-ui-design](../cli/templates/skills/hai-ui-design/SKILL.md)、実装は [hai-ui](../cli/templates/skills/hai-ui/SKILL.md)、実画面の確認は [hai-ui-review](../cli/templates/skills/hai-ui-review/SKILL.md) を参照してください。[共通設計指針](../../.agents/instructions/ui-design.md) も利用できます。
 
 Tabs は方向キー・Home/End、無効項目のスキップと単一の Tab 入口に対応します。表は並べ替え・読み込み状態と行のキーボード操作を提供します。ページ切り替えのラベルは言語に従い、外部ページ変更を入力欄に同期します。展開した条件は文書のフォーカス順序に従い、表示切り替えの選択状態を提供します。Empty/Alert は長文を折り返します。theme.css は共通 tokens を読み込み、global.css は動きを減らす設定に対応します。業務側で検索、並べ替え、ページ切り替えと復旧処理を接続してください。
 
-## エラー表示とログの関連付け
-
-HTTP エラーには安全な翻訳文と追跡番号を含めます。ToastContainer の本文には番号を表示せず、調査情報のアイコンから表示・コピーできます。同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
-
-HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
-
-## 任意の対話チャレンジ
+### 任意の対話チャレンジ
 
 AuthPanel は config.captcha.enabled の場合 actions.createCaptcha で自己ホスト ALTCHA を自動生成・非同期求解し、login/register/sendOtp/passwordReset/renewPassword 用の単用証明を送信します。無効時は求解器を読み込みません。createAuthActions は対応済みで、独自動作は captcha を保持し、不足時は通過しません。証明は現在のメモリ内だけに保持し、サーバーで必ず検証・消費します。
 
 方針・既定値・復旧範囲は次を参照： [IAM](../iam/README.ja.md)。
+
+## 設定
+
+### 用途に応じた設定入口
+
+| 設定入口 | 用途 | 入力 | 効果 | 例 |
+| --- | --- | --- | --- | --- |
+| `Component Props` | 表示と操作 | typed props, bound values, callbacks, children snippets | DOM, bindings and callback events | `<Input bind:value={draft} />` |
+| `Theme` | テーマと色 | supported theme ID, color values, preference key | DOM theme/CSS variables; nonsensitive browser preference | `applyTheme("light")` |
+| `Locale` | 画面言語 | supportedLocales, defaultLocale, persistKey, detectBrowser | component-tree locale; isolated SSR state | `createLocaleStore({ defaultLocale: "ja-JP", detectBrowser: false })` |
+| `Guide` | ヘルプと初回ガイド | tours, articles, nonsecret scope/version, nav adapter | guide/help state and nonsensitive progress | `createGuide({ tours: [], persistence: "memory" })` |
+| `CRUD` | 資源項目と API | CrudResource fields/API callbacks and controller options | resource view model; API must implement authorization | `createCrudController(crud, { autoLoad: false })` |
+| `Authentication` | 公開認証方針 | IAM-whitelisted config and standard actions | AuthPanel submits to host actions; no secret persistence | `<AuthPanel {config} {actions} />` |
+
+pnpm で Svelte アプリを構築する工程では、`patchedDependencies` に `deepmerge@4.3.1` の補丁を登録し、実際の patch ファイルも保持してください。DaisyUI を使う場合はスタイル補丁も必要です。CLI の生成工程には該当項目が含まれます。npm パッケージを導入しても、このリポジトリーの pnpm 補丁設定は自動伝播しません。手動接入では該当する[補丁ファイル](../../patches/)と登録を同期して依存を再インストールしてください。
+
+本パッケージは Svelte コンポーネントとツールを提供し、init/close はありません。入力は Props・コールバック・テーマ設定、出力は画面・バインド値・イベントです。クイックスタートに従って Tailwind/DaisyUI と前処理を設定してください。共通の _ui.yml はなく、Props をモジュール環境変数として設定しません。
+
+## エラー処理
+
+loading/error と業務完了状態はホストが提供します。業務の HaiResult.success を適合層で確認し、安全な翻訳済み文言を渡します。UI ツールは上表の直接値を返し、一律の HaiResult 包装ではありません。notifyError/errorMessage は未知の内部例外を隠します。downloadAiDocument などの拒否を操作境界で処理して loading を解除してください。UserProfile.onsubmit は true の時だけ編集を終了します。
+
+### エラー表示とログの関連付け
+
+HTTP エラーには安全な翻訳文と追跡番号を含めます。ToastContainer の本文には番号を表示せず、調査情報のアイコンから表示・コピーできます。同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
+
+HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
 
 ## 開発とテスト
 

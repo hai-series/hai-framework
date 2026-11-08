@@ -4,33 +4,13 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/ai](../ai/README.md) · [@h-ai/api-contract](../api-contract/README.md) · [@h-ai/core](../core/README.md) · [@h-ai/crypto](../crypto/README.md) · [@h-ai/iam](../iam/README.md) · [@h-ai/storage](../storage/README.md)
 
-## 简介
-
 hai-framework 的 API 服务运行时：对外暴露稳定的 HTTP App 抽象，把 `@h-ai/api-contract` 契约挂载为跨端可访问的 HTTP API；Hono 仅作为内部运行时实现。
 
 运行时统一通过 `serv.xx` 使用。需要标注或转导出整个命名空间时，从根入口导入 `ServFunctions`；上下文工厂与泛型 `implement` 的公开签名可直接用于消费者声明生成，无需引用内部构建文件或独立 helper。
 
-## 核心功能清单
+## 快速开始
 
-- 一行启动：`serv.createApp(...)` → `serv.listen(app, { port })`，应用代码不需要 import Hono
-- 扁平 API（最小知识）：`serv.createApp / serv.implement / serv.listen / serv.toFetch / serv.generateSpec / ...`
-- 链式 procedure：`implement().context().route().auth/permission/role().handle().build()`
-- 自定义 pipeline：`createApp({ middlewares })` 挂 HTTP middleware；请求级字段通过 context 工厂注入
-- 只读 Storage 资源：`serv.storageAssets(...)` 统一处理安全 key、MIME 白名单、GET/HEAD、ETag 与缓存头
-- 默认 feature procedures：`createIamProcedures()`、`createStorageProcedures()`、`createAiProcedures()`
-- `build()` 同步返回普通 router，可按嵌套属性选取默认 feature procedures；挂载的 contract 与所选 procedures 保持一致，未选入口不开放。
-- 缺失路由返回本地化的 HaiResult JSON 404，启用传输加密后保留 404，不误报为非 JSON 响应导致的 500。
-- 内置安全响应头、健康检查、可选 OpenAPI JSON、可选 Scalar 文档页
-- 可选传输加密：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` 自动挂载密钥协商与请求/响应加解密
-- 可选语音入口：`serv.createApp({ audio: { ai, verifyTicket, authorize } })` 挂载统一语音 WebSocket；连接建立即用一次性 ticket 鉴权（返回 `{ session, grant? }`，独立预鉴权超时），每帧运行时 Zod 校验 + 严格状态机，输入/积压/发送缓冲背压与级联取消；授权回调负责服务端确认操作、模型、音色、配额与并发占用
-
-> 生命周期说明：`@h-ai/serv` 本身是无状态 HTTP App 装配器，不需要 `init()` / `close()`；请在创建 app 前初始化 `iam` / `storage` / `ai` / `crypto` 等依赖，并在 `serv.listen(..., { onClose })` 中反向释放它们。`serv.createApp()` 遇到启动期配置错误（例如 transport manager 创建失败）会 fail-fast 抛出，便于进程启动阶段暴露问题。 onClose 是 SIGINT/SIGTERM 的关闭回调；主动调用返回句柄的 close 关闭 HTTP 监听与语音连接，业务模块由宿主另行反序释放。
-
-监听句柄可在启动后立即关闭，以取消尚未完成的绑定；重复关闭复用同一结果。地址占用等真实监听失败仍会拒绝关闭结果，不会当作正常退出。
-
-## 使用入门
-
-### 快速开始
+下面业务装配片段使用应用已初始化的 `iam`、`storage`、`ai`、`core` 与 logger，并由应用提供 `closeApp`；不是独立初始化脚本。只需要健康检查时可用空 contract 和空 procedures 创建 App。`serv` 是工厂，无 init/close，退出时关闭 listen 返回的句柄并反序释放业务模块。
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
@@ -85,7 +65,47 @@ AI 默认 procedures 从可信 `context.session.userId` 绑定 `objectId`，客�
 
 `chats.createCompletion`（`POST /ai/chats/completions`）只返回一次非流式 `HaiResult<AiChatCompletionData>`。完整 function `tools`（含嵌套 JSON Schema、`strict`）和 `tool_choice`（`auto` / `none` / `required` / 指定名称）传递到模型；消息保留角色、`name`、用户图片和工具调用。工具结果必须使用 `role: 'tool'` 与非空 `tool_call_id`，指定工具选择须引用本次提供的工具。默认 procedure 不自动执行工具，应用授权并执行后，将助手的 `tool_calls` 与对应工具结果一并回传。输入不提供 `stream` 字段，传入 `true` 或 `false` 均在 HTTP 边界返回 400；需要流式时由应用使用 `ai.llm.chatStream()` 定义匹配流输出的独立 endpoint。
 
-#### host / port 配置
+## 功能
+
+### 用途、输入与输出
+
+下表的调用片段复用本页已初始化的服务；命名变量代表应用已提供的请求、Schema、资源定义或配置。完整步骤和失败处理见对应功能示例。`HaiResult` 先判断 `success`，异步项按签名 `await`。
+
+| 入口                               | 场景             | 输入                                                                    | 输出                                                                 | 调用片段                                                                                                 |
+| ---------------------------------- | ---------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `serv.createApp`                   | 组装接口应用     | `contract, procedures, http?, iam?, middlewares?, transport?`           | `ServHttpApp (fetch/request)`                                        | `serv.createApp({ contract, procedures })`                                                               |
+| `serv.listen`                      | 启动 Node 监听   | `app, { host?, port?, onClose?, onListening? }`                         | `ServNodeServer { server, address, close(): Promise<void> }`         | `serv.listen(app, { host: "127.0.0.1", port: 3000 })`                                                    |
+| `serv.toFetch`                     | 接入 Fetch 宿主  | `ServHttpApp`                                                           | `(Request) => Promise<Response>`                                     | `serv.toFetch(app)`                                                                                      |
+| `serv.implement`                   | 实现领域路由     | `typed contract`                                                        | `ServImplementer; context/route/auth/permission/role/handle/build`   | `serv.implement(contract)`                                                                               |
+| `serv.parseRequestContext`         | 解析追踪与令牌   | `{ request, platform? }`                                                | `ServContext with requestId/locale/accessToken; no verified session` | `serv.parseRequestContext({ request })`                                                                  |
+| `serv.buildAuthContextFactory`     | 构造可信会话     | `(accessToken) => Promise<HaiResult<ServSession>>`                      | `CreateServContext; invalid credentials leave session absent`        | `serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))`                                     |
+| `serv.cors`                        | 限定跨域入口     | `{ origin?, methods?, allowedHeaders?, exposedHeaders?, credentials? }` | `ServMiddleware`                                                     | `serv.cors({ origin: "https://app.example.com", credentials: true })`                                    |
+| `serv.createRuntimeSecurityPolicy` | 收敛环境安全策略 | `{ environment, corsOrigin, nativeOrigins? }`                           | `allowOrigin, secureRefreshCookie, exposeApiDocs`                    | `serv.createRuntimeSecurityPolicy({ environment: "production", corsOrigin: "https://app.example.com" })` |
+| `serv.storageAssets`               | 授权的只读资源   | `ServStorageAssetsConfig with reader/key/MIME policy`                   | `GET/HEAD middleware with ETag`                                      | `serv.storageAssets(assetOptions)`                                                                       |
+| `serv.generateSpec`                | 生成 OpenAPI     | `contract, { title?, version?, description?, apiPrefix? }`              | `Promise<OpenAPI.Document>`                                          | `serv.generateSpec(contract, { title: "Orders", version: "1.0.0" })`                                     |
+| `serv.validateInputOrFail`         | 校验业务输入     | `Zod schema, input, locale?`                                            | `HaiResult<z.infer<Schema>>; failure contains safe field errors`     | `serv.validateInputOrFail(InputSchema, input, context.locale)`                                           |
+| `serv.resolveRequestLocale`        | 解析请求语言     | `Headers`                                                               | `normalized supported locale`                                        | `serv.resolveRequestLocale(request.headers)`                                                             |
+| `serv.m`                           | 翻译模块提示     | `message key, { locale?, ...messageOptions }`                           | `string`                                                             | `serv.m("serv_errorForbidden", { locale: "zh-CN" })`                                                     |
+| `serv.WILDCARD_PERMISSION`         | 显式全权限常量   | `none`                                                                  | `string constant; only use in trusted permission policy`             | `serv.WILDCARD_PERMISSION`                                                                               |
+| `serv.WILDCARD_ROLE`               | 显式全角色常量   | `none`                                                                  | `string constant; does not authorize arbitrary requests`             | `serv.WILDCARD_ROLE`                                                                                     |
+
+- 一行启动：`serv.createApp(...)` → `serv.listen(app, { port })`，应用代码不需要 import Hono
+- 扁平 API（最小知识）：`serv.createApp / serv.implement / serv.listen / serv.toFetch / serv.generateSpec / ...`
+- 链式 procedure：`implement().context().route().auth/permission/role().handle().build()`
+- 自定义 pipeline：`createApp({ middlewares })` 挂 HTTP middleware；请求级字段通过 context 工厂注入
+- 只读 Storage 资源：`serv.storageAssets(...)` 统一处理安全 key、MIME 白名单、GET/HEAD、ETag 与缓存头
+- 默认 feature procedures：`createIamProcedures()`、`createStorageProcedures()`、`createAiProcedures()`
+- `build()` 同步返回普通 router，可按嵌套属性选取默认 feature procedures；挂载的 contract 与所选 procedures 保持一致，未选入口不开放。
+- 缺失路由返回本地化的 HaiResult JSON 404，启用传输加密后保留 404，不误报为非 JSON 响应导致的 500。
+- 内置安全响应头、健康检查、可选 OpenAPI JSON、可选 Scalar 文档页
+- 可选传输加密：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` 自动挂载密钥协商与请求/响应加解密
+- 可选语音入口：`serv.createApp({ audio: { ai, verifyTicket, authorize } })` 挂载统一语音 WebSocket；连接建立即用一次性 ticket 鉴权（返回 `{ session, grant? }`，独立预鉴权超时），每帧运行时 Zod 校验 + 严格状态机，输入/积压/发送缓冲背压与级联取消；授权回调负责服务端确认操作、模型、音色、配额与并发占用
+
+> 生命周期说明：`@h-ai/serv` 本身是无状态 HTTP App 装配器，不需要 `init()` / `close()`；请在创建 app 前初始化 `iam` / `storage` / `ai` / `crypto` 等依赖，并在 `serv.listen(..., { onClose })` 中反向释放它们。`serv.createApp()` 遇到启动期配置错误（例如 transport manager 创建失败）会 fail-fast 抛出，便于进程启动阶段暴露问题。 onClose 是 SIGINT/SIGTERM 的关闭回调；主动调用返回句柄的 close 关闭 HTTP 监听与语音连接，业务模块由宿主另行反序释放。
+
+监听句柄可在启动后立即关闭，以取消尚未完成的绑定；重复关闭复用同一结果。地址占用等真实监听失败仍会拒绝关闭结果，不会当作正常退出。
+
+### host / port 配置
 
 host/port 统一由 `config/_serv.yml` 的 `server` 提供，优先级：`HOST` / `PORT` 环境变量 > 配置文件 > 默认 `127.0.0.1:3000`。默认 `127.0.0.1` 仅本机可达，容器对外暴露时改为 `0.0.0.0`：
 
@@ -98,7 +118,7 @@ server:
 
 应用把解析后的 `server` 传给 `serv.listen`（`serv.listen` 也可直接传 `host` / `port` 显式覆盖）。
 
-#### 标准 fetch 签名适配
+### 标准 fetch 签名适配
 
 toFetch 提供标准 fetch 调用签名，适合 Node 兼容宿主与测试注入；包根仍依赖 Node API，不能据此承诺无需 Node 能力的 Workers/Deno/边缘部署。
 
@@ -111,7 +131,7 @@ Node `serv.listen()` 自动提供 socket 对端地址；默认忽略 `X-Forwarde
 
 toFetch 对 Request、URL、字符串统一调用标准 Request(input, init)，RequestInit 可覆盖 method、headers、body、signal 等字段；不修改原 Request 的字段，正文已消费/锁定或非法正文组合会以 Promise 拒绝。预取消和派发前取消不进入 handler，进行中取消结束调用方等待并把有效 signal 传给应用；监听器在完成/失败/取消后释放，取消后的迟到响应会取消未消费正文。取消不能回滚已经开始的外部副作用；Response 交付后的流由应用监听 request.signal 并自行关闭。
 
-#### Audio WebSocket：ticket 与服务端授权
+### Audio WebSocket：ticket 与服务端授权
 
 语音入口必须使用短期、一次性 ticket。应用通过已登录 HTTP endpoint 签发 ticket（推荐 `iam.ticket.issue`），并在 `verifyTicket` 中原子消费（推荐 `iam.ticket.consume`）；连接建立即完成鉴权（独立预鉴权超时），未鉴权不处理任何业务帧。框架保存返回的 `ServSession` 与可选 `grant`，再调用 `authorize` 确认付费参数：
 
@@ -137,7 +157,7 @@ const app = serv.createApp({
 - `onSessionEnd` 在成功、失败或断连后至多调用一次，供应用释放并发占用。
 - 浏览器 `createAudioClient({ url, getTicket })` 只把一次性 `ticket` 放入 WebSocket URL；`getTicket(request)` 接收本次操作摘要（`operation` / `model`），可签发与本次操作严格绑定的票据；禁止传普通 IAM access token。
 
-#### 传输加密（与 `@h-ai/crypto` 统一）
+### 传输加密（与 `@h-ai/crypto` 统一）
 
 serv 不暴露本地传输加密工厂；统一从 `crypto.transport` 创建服务端管理器。服务端显式注入顶层 `crypto`、受管密钥环和共享 registry：
 
@@ -230,9 +250,7 @@ const app = serv.createApp({
 
 > **安全策略**：启用 `transport` 后，除 `excludePaths` 与密钥协商端点外，业务请求必须携带有效 `X-Client-Id`。缺失或未知 clientId 会返回 400；响应体无法加密、非 JSON 业务响应或超过单次加密上限时返回错误，不会明文透传业务数据。
 
-认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求默认有效期为 5 分钟，客户端时间最多可领先服务器 30 秒。服务端可用 `maxRequestAgeSeconds`（1～600）和 `maxFutureSkewSeconds`（0～300）调整，单位为整数秒。共享 registry 原子消费 (clientId, requestId)，nonce 保留到 issuedAt + 11 分钟，覆盖最长可配窗口及节点时钟差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
-
-空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口由 Serv/Kit 路径规则 `encryption: disabled` 或宿主 `excludePaths` 显式允许；调用方同步选择普通请求，API Client/Kit 包装器使用自己的 `excludePaths`。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
+传输使用认证 v2 封装，先验签和 MAC 再解密，并绑定方法、路径、时间与响应状态。共享 registry 原子消费 nonce；TLS、可信代理、业务授权及幂等仍由宿主负责。自定义跨域入口须允许并暴露 `X-Hai-Transport`。完整字段、无正文响应、时钟窗口和防重放要求统一见 [Transport 协议](../crypto/TRANSPORT-PROTOCOL.md)。
 
 业务容量通过 `transport.maxPlaintextBytes` 统一配置：默认 1 MiB，整数范围 1 KiB～64 MiB，请求和响应共用 UTF-8 明文字节预算。客户端从握手自动获取上限，密文与部署代理预算由 `resolveTransportBodyLimits()` 推导（两倍明文 + 32 KiB）。握手、公钥、认证头和防重放约束独立；超限取消原流并释放 reader，请求 413、响应为加密的 500 容量错误，客户端识别 `TransportBodyTooLargeError` / `hai:crypto:070`。 [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
 
@@ -240,7 +258,7 @@ const app = serv.createApp({
 
 Serv/Kit 对通过请求绑定、签名和 MAC 校验但超出时间窗口的请求返回加密的 HTTP 400 错误。客户端抛出 `TransportTimeError`（`hai:crypto:071`），显示校验时的服务器 UTC 时间，提示开启设备的自动校时或手工修改时间后刷新。`serverTime` 为 Unix 毫秒，旧服务端未提供该值时仍显示校时提示。`api-client` 映射为 `VALIDATION_FAILED`，在 `cause.transportCode` 和 `cause.serverTime` 保留诊断信息。
 
-#### Token 认证（`iam` / `refreshCookie`）
+### Token 认证（`iam` / `refreshCookie`）
 
 `serv.createApp` 推荐直接传入顶层 `iam` 句柄，自动派生两件事：
 
@@ -284,7 +302,7 @@ const app = serv.createApp({
 
 标准登出入口 `auth.logout` 从 input.accessToken 或 Authorization Bearer 取得要撤销的完整令牌，不要求 access 仍有效。它不接受 userId 授权或撤销目标；缺少令牌返回失败，未知令牌幂等成功。共享存储故障原样保留失败 HaiResult，Cookie middleware 只对成功结果清理 refresh Cookie。普通 procedure 继续使用既有 HTTP 200 / HaiResult 协议，客户端必须检查 success，不能只检查状态码。
 
-#### 自定义 procedure（认证 + 权限）
+### 自定义 procedure（认证 + 权限）
 
 ```ts
 const procedures = serv
@@ -298,7 +316,7 @@ const procedures = serv
   .build()
 ```
 
-#### 高级：自定义 pipeline（HTTP middleware + context + route guard）
+### 高级：自定义 pipeline（HTTP middleware + context + route guard）
 
 `@h-ai/serv` 的“pipeline”分三层，分别对应三种扩展方式：
 
@@ -306,7 +324,7 @@ const procedures = serv
 2. **context 层**：通过 `verifyToken` / `createContext` / `serv.buildAuthContextFactory()` 定制请求上下文。
 3. **route guard 层**：通过 `.auth()` / `.permission()` / `.role()` 声明认证授权。
 
-##### 1) 自定义 HTTP middleware
+#### 1) 自定义 HTTP middleware
 
 当你需要加请求日志、trace、限流、CORS、租户头校验等 **HTTP 层横切逻辑**，或挂载不适合进入 JSON/oRPC contract 的 WebSocket、文件和二进制端点时，使用 `middlewares`。常见 CORS 场景可直接复用 `serv.cors(...)`：
 
@@ -375,7 +393,7 @@ const app = serv.createApp({
 - 浏览器若需读取自定义响应头（例如 transport 的 `X-Encrypted`），请通过 `serv.cors({ exposedHeaders: [...] })` 显式暴露
 - 这一层直接操作 HTTP middleware context，返回的是 **HTTP Response**，不是 `HaiResult`
 
-##### 2) 自定义 context pipeline
+#### 2) 自定义 context pipeline
 
 如果你只想复用 `Bearer token -> session` 这一段逻辑，再额外补充租户、工作区、来源系统等字段，
 优先用 `serv.buildAuthContextFactory()` 组装自定义 `createContext`：
@@ -402,7 +420,7 @@ const app = serv.createApp({
 - 想在默认认证上下文之上追加字段：用 `buildAuthContextFactory(...) + createContext`
 - 想完全接管上下文构造：直接用 `createContext`
 
-##### 3) Route guard
+#### 3) Route guard
 
 公开 procedure 使用 `.route(path, handler)`；需要 guard 时使用
 `.route(path).auth/permission/role().handle(handler)`：
@@ -436,7 +454,7 @@ const procedures = serv
 - 对应用层公开的稳定入口仍然是根入口 `@h-ai/serv`
 - `securityHeaders` / `buildHaiErrorBody` 等内部 helper/middleware 不作为单独子路径文档暴露
 
-#### httpOnly Cookie 认证（推荐生产方案）
+### httpOnly Cookie 认证（推荐生产方案）
 
 httpOnly cookie 模式将 refresh token 存储在服务端管理的 cookie 中（浏览器 JS 无法读取），避免 XSS 风险。
 
@@ -535,7 +553,81 @@ await apiClient.init({
 
 `http.trustedProxies` 默认 `auto`：普通宿主忽略转发头；受管 Compose 的私有代理拓扑才自动采用容器网段。自管代理指定真实 IP/CIDR，`[]` 显式关闭。代理必须清洗转发头，Node 监听器或 Fetch 平台必须提供可信对端元数据。独立文件、外层代理和部署回滚步骤见[请求访问控制手册](../../docs/usage/configuration/request-access.md)。
 
-### 配置
+### 配置驱动认证页面
+
+协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
+
+`createIamProcedures({ iam })` 直接实现公开配置、密码/LDAP/OTP、注册与密码重置，无需应用复制 procedure。LDAP 登录沿用现有浏览器 httpOnly refresh Cookie 和可信原生 Token 传输。管理端创建调用 iam.user.createUser，自助注册关闭时管理功能仍可用；授权仍由既有 permission guard 执行。
+
+[完整 IAM 配置 / IAM configuration](../iam/README.md)
+
+### 请求语言隔离
+
+Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest())`；SvelteKit 可使用 `kit.i18n.runWithLocale(locale, () => resolve(event))`，serv 自动按请求头建立上下文。异步子任务继承请求语言，优先级为显式 `MessageOptions.locale`、请求语言、进程启动默认语言。`setGlobalLocale` 在请求上下文中只更新当前请求；上下文外仅用于启动默认值，不能在请求 hook 中调用它修改默认值。
+
+浏览器继续使用应用级 `setGlobalLocale` / `createLocaleStore`。SSR 的 UI store 初始化和 setter 只修改自身状态，不写全局语言；UI 消息从请求上下文读取。`runWithLocale` 仅支持 Node 入口，浏览器通过显式 locale 或应用状态翻译。
+
+### 输入约束与 HTTP 能力
+
+存储 key 按 UTF-8 最多 1024 字节，并拒绝绝对路径、反斜线、控制字符及点路径段；公开 HTTP 批量删除每次 1–1000 项。`@h-ai/storage/schemas` 提供浏览器安全的共同规则。预签名有效期为整数 1–604800 秒（Node 默认 3600，HTTP 默认 900）；HTTP 上传仅接受 key/contentType/expiresIn，不支持 contentLength/maxSize/metadata/checksum。无效输入返回 HTTP 400，typed client 映射 VALIDATION_FAILED。FileUpload 的大小/类型限制仅为前端体验，实际对象须由应用服务端复核。Node 流式读写/checksum/条件写等没有默认 HTTP 端点。完整映射与授权边界见 [存储 API 能力](../storage/README.md#存储输入约束与跨端能力)。
+
+### 可选的反馈服务与可信范围
+
+通过 `@h-ai/serv/features/feedback` 的 `createFeedbackProcedures` 挂载 `apiContract.feedback`；只导入运行时根入口不会加载反馈服务。宿主先初始化 reldb/storage/reach/feedback，再从已验证的会话与部署策略映射反馈范围。resolveContext 返回 null 或用户不匹配时拒绝访问；领域模块再次校验范围与权限。
+
+所有 HTTP 响应（包括探活、404、中间件短路）携带有界 X-Request-Id。普通业务日志需由已有 createContext 的可选 scopeId 建立可信范围，scopeId 从不读取客户端头。HTTP 入口清理旧身份，认证后的异步业务日志自动继承当前请求 ID 与用户。
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+import { feedback } from '@h-ai/feedback'
+import { iam } from '@h-ai/iam'
+import { serv } from '@h-ai/serv'
+import { createFeedbackProcedures } from '@h-ai/serv/features/feedback'
+
+const contract = apiContract.create({ feedback: apiContract.feedback })
+const authenticate = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
+const procedures = {
+  feedback: createFeedbackProcedures({
+    feedback,
+    resolveContext: context => context.scopeId
+      ? { scopeId: context.scopeId, userId: context.session.userId, permissions: context.session.permissions }
+      : null,
+  }),
+}
+const app = serv.createApp({
+  contract,
+  procedures,
+  createContext: async input => ({
+    ...await authenticate(input),
+    scopeId: 'configured-product'
+  }),
+})
+```
+
+### 可选交互挑战
+
+标准 IAM procedure 包含 POST /auth/captcha，输入 operation，返回可公开的 ALTCHA 挑战。开启 IAM captcha 时密码/OTP/LDAP、注册、通知请求及匿名原密码续期均由 IAM 强制检查单用证明；请求映射保留 captcha，不依赖菜单或客户端判断。
+
+策略、默认值和恢复边界见 [IAM](../iam/README.md)。
+
+### 页面离开会话策略
+
+`session.endOnPageHide` 默认 `false`。启用后宿主调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })` 并在卸载时调用返回的清理函数；标准 admin/H5/fullstack 模板已经接入。非 BFCache 的 `pagehide`（也包括刷新、整页导航）通过 POST `/auth/session/close` 尽力撤销当前 access 及关联 refresh，沿用 CSRF/传输加密，使用 `keepalive` 且不自动刷新会话。该响应不清 Cookie/本地凭据，避免旧响应覆盖下一次登录。显式退出仍使用正常 logout，可靠撤销并清理当前凭据。浏览器可能不发送页面离开请求，因此必须按业务配合服务端 `idleTimeout`/`absoluteTimeout`；不能据此保证关闭即撤销。
+
+## 配置
+
+### 按场景选择配置入口
+
+| 配置入口                                               | 场景             | 输入                                                                     | 生效结果                                                             | 示例                                                           |
+| ------------------------------------------------------ | ---------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `server`                                               | Node 监听地址    | host/port; HOST and PORT take precedence                                 | options passed to serv.listen; default 127.0.0.1:3000                | `server: { host: 127.0.0.1, port: 3000 }`                      |
+| `http.apiPrefix`                                       | 业务路径前缀     | absolute validated prefix, default /api/v1                               | OpenAPI/REST mounting prefix                                         | `http: { apiPrefix: /api/v1 }`                                 |
+| `http.health`                                          | 存活与就绪检查   | path, readyPath                                                          | health/readiness routes                                              | `health: { path: /health, readyPath: /ready }`                 |
+| `http.openapi / http.docs`                             | 接口说明         | false or explicit path/authorization settings                            | spec/Scalar routes; production exposure controlled by host policy    | `openapi: false`                                               |
+| `http.trustedProxies / http.access`                    | 入口可信边界     | proxy list/auto and access policy                                        | trusted address and per-request entry policy                         | `trustedProxies: []`                                           |
+| `cors`                                                 | 跨端来源与请求头 | origin/nativeOrigins/credentials/allowedHeaders/exposedHeaders           | serv.cors middleware input; explicit production allowlist            | `cors: { origin: https://app.example.com, credentials: true }` |
+| `transport`                                            | 双向认证加密     | false or public paths/limits; serverKeyRing/keyStore injected separately | handshake and authenticated request/response handling                | `transport: { maxPlaintextBytes: auto }`                       |
+| `createApp.iam / refreshCookie / nativeTokenTransport` | 宿主认证装配     | initialized IAM, secure Cookie policy and native transport rule          | trusted session/token channel; frontend receives only allowed fields | `serv.createApp({ contract, procedures, iam })`                |
 
 `@h-ai/serv` 本身不主动扫描 YAML；推荐由 `@h-ai/core` 统一加载 `config/_serv.yml`，再把解析结果传给 `serv.createApp()`。
 
@@ -611,8 +703,6 @@ transport:
 
 `ServHttpConfigInput`：
 
-原生 RPC 入口及 `HAI_SERV_HTTP_RPC`、`ServRpcHttpConfig` 已删除。业务继续使用现有 OpenAPI/REST 路径和 `api-client`，底层 oRPC contract 与 procedure 保留。
-
 - `apiPrefix`：默认 `/api/v1`；支持 `/somepath/api/v1` 等完整绝对前缀。路径段只含字母、数字、下划线、连字符和点，不接受末尾斜杠、空段、单独的 `.`/`..`、查询或片段。健康、文档和存储公开路径分别配置到同一目录。
 - `health`：默认 `{ path: '/health', readyPath: '/ready' }`
 - `openapi`：默认 `false`；启用：`{ path: '/openapi.json' }`
@@ -656,15 +746,11 @@ const app = serv.createApp({
 
 受控内网或 VPN 的生产 HTTP 入口可以在后端进程环境设置 `HAI_SERV_REFRESH_COOKIE_SECURE=false`。重新启动后端并登录后，登录和刷新响应会下发省略 `Secure` 的 Cookie，刷新凭据会经 HTTP 明文传输。设置 `true` 可强制启用 `Secure`，留空或其他值沿用环境默认值。直接调用 `serv.createApp` 时，显式 `refreshCookie.secure` 优先，其次是此变量，再按 `NODE_ENV` 或 `HAI_CORE_ENV` 判断是否为生产。
 
-### 配置驱动认证页面
+### 传输容量与模块预算
 
-协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
+配置 `transport.maxPlaintextBytes` 支持 1 KiB～64 MiB 的显式整数或 `auto`。auto/省略在解析后为 undefined：无模块需求时仍为 1 MiB，反馈宿主使用 crypto.resolveTransportBodyLimits 的 requiredPlaintextBytes 统一推导。显式上限不足时启动/打包失败，不能被反馈覆盖；代理、adapter-node、握手与运行时使用一致预算。业务附件、解压和数据行数上限继续独立校验。
 
-`createIamProcedures({ iam })` 直接实现公开配置、密码/LDAP/OTP、注册与密码重置，无需应用复制 procedure。LDAP 登录沿用现有浏览器 httpOnly refresh Cookie 和可信原生 Token 传输。管理端创建调用 iam.user.createUser，自助注册关闭时管理功能仍可用；授权仍由既有 permission guard 执行。
-
-[完整 IAM 配置 / IAM configuration](../iam/README.md)
-
-### 错误处理
+## 错误处理
 
 普通 procedure 的认证、授权、业务失败和被捕获的 handler 异常都作为 `HaiResult` 输出，默认通过 HTTP 200 返回；`error.httpStatus` 是领域错误元数据，不会自动改写响应状态。客户端必须检查 `success` 与 `error.code`。例如未登录为 `error.httpStatus=401`，数据库查询失败或 INTERNAL_ERROR 为 500。
 
@@ -715,50 +801,7 @@ const procedures = serv
 
 > 下游 `HaiResult` 的 4xx 消息经脱敏后公开；5xx 和缺失或非法状态统一为安全内部错误，保留 traceId，完整原因只记录到服务端日志。`HaiError` 不携带 `messageKey/params`，领域消息的请求级 i18n 仍由创建消息的模块接收 locale 后完成。
 
-### 请求语言隔离
-
-Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest())`；SvelteKit 可使用 `kit.i18n.runWithLocale(locale, () => resolve(event))`，serv 自动按请求头建立上下文。异步子任务继承请求语言，优先级为显式 `MessageOptions.locale`、请求语言、进程启动默认语言。`setGlobalLocale` 在请求上下文中只更新当前请求；上下文外仅用于启动默认值，不能在请求 hook 中调用它修改默认值。
-
-浏览器继续使用应用级 `setGlobalLocale` / `createLocaleStore`。SSR 的 UI store 初始化和 setter 只修改自身状态，不写全局语言；UI 消息从请求上下文读取。`runWithLocale` 仅支持 Node 入口，浏览器通过显式 locale 或应用状态翻译。
-
-## 输入约束与 HTTP 能力
-
-存储 key 按 UTF-8 最多 1024 字节，并拒绝绝对路径、反斜线、控制字符及点路径段；公开 HTTP 批量删除每次 1–1000 项。`@h-ai/storage/schemas` 提供浏览器安全的共同规则。预签名有效期为整数 1–604800 秒（Node 默认 3600，HTTP 默认 900）；HTTP 上传仅接受 key/contentType/expiresIn，不支持 contentLength/maxSize/metadata/checksum。无效输入返回 HTTP 400，typed client 映射 VALIDATION_FAILED。FileUpload 的大小/类型限制仅为前端体验，实际对象须由应用服务端复核。Node 流式读写/checksum/条件写等没有默认 HTTP 端点。完整映射与授权边界见 [存储 API 能力](../storage/README.md#存储输入约束与跨端能力)。
-
-## 可选的反馈服务与可信范围
-
-通过 `@h-ai/serv/features/feedback` 的 `createFeedbackProcedures` 挂载 `apiContract.feedback`；只导入运行时根入口不会加载反馈服务。宿主先初始化 reldb/storage/reach/feedback，再从已验证的会话与部署策略映射反馈范围。resolveContext 返回 null 或用户不匹配时拒绝访问；领域模块再次校验范围与权限。
-
-所有 HTTP 响应（包括探活、404、中间件短路）携带有界 X-Request-Id。普通业务日志需由已有 createContext 的可选 scopeId 建立可信范围，scopeId 从不读取客户端头。HTTP 入口清理旧身份，认证后的异步业务日志自动继承当前请求 ID 与用户。
-
-```ts
-import { apiContract } from '@h-ai/api-contract'
-import { feedback } from '@h-ai/feedback'
-import { iam } from '@h-ai/iam'
-import { serv } from '@h-ai/serv'
-import { createFeedbackProcedures } from '@h-ai/serv/features/feedback'
-
-const contract = apiContract.create({ feedback: apiContract.feedback })
-const authenticate = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
-const procedures = {
-  feedback: createFeedbackProcedures({
-    feedback,
-    resolveContext: context => context.scopeId
-      ? { scopeId: context.scopeId, userId: context.session.userId, permissions: context.session.permissions }
-      : null,
-  }),
-}
-const app = serv.createApp({
-  contract,
-  procedures,
-  createContext: async input => ({
-    ...await authenticate(input),
-    scopeId: 'configured-product'
-  }),
-})
-```
-
-## 错误提示与关联日志
+### 错误提示与关联日志
 
 原生 Audio WebSocket 同样使用安全错误边界：内部 Provider/SDK 错误与堆栈只进入脱敏日志，客户端收到稳定错误码、安全提示和 traceId。自定义跨域配置需保留敏感操作使用的 X-Hai-Reauthentication；默认 Serv/Kit 已允许。
 
@@ -767,20 +810,6 @@ HTTP 错误返回本地化安全文案及追踪编号；ToastContainer 默认隐
 `core.error.toPublic(error, traceId?)` 用于接口/UI 边界；`core.error.formatMessage(error)` 用于重新翻译后的提示，重复调用不会重复追加标识。日志传入完整 Error 对象，不能只记录通用标题或提前 String(error) 丢失上下文。数据库失败记录驱动错误码、消息、堆栈及表/列；SQL 原文、绑定值和连接凭据不进入日志。
 
 audit 已初始化时，procedure 自动绑定经过验证的身份、可信连接地址与请求/范围编号，业务 audit.log 继承此上下文。写操作及失败/拒绝记录 request.execute；契约校验、协议、中间件和缺失路由的 HTTP 拒绝记录 http.reject。入口只记录操作、方法、状态和原因码，不复制请求体、动态 URL、令牌或错误详情。capture.enabled 可关闭自动采集，capture.includeReads 可开启成功读取；显式业务 log 不受影响。业务语义仍须应用在完成/失败边界记录。
-
-## 可选交互挑战
-
-标准 IAM procedure 包含 POST /auth/captcha，输入 operation，返回可公开的 ALTCHA 挑战。开启 IAM captcha 时密码/OTP/LDAP、注册、通知请求及匿名原密码续期均由 IAM 强制检查单用证明；请求映射保留 captcha，不依赖菜单或客户端判断。
-
-策略、默认值和恢复边界见 [IAM](../iam/README.md)。
-
-## 页面离开会话策略
-
-`session.endOnPageHide` 默认 `false`。启用后宿主调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })` 并在卸载时调用返回的清理函数；标准 admin/H5/fullstack 模板已经接入。非 BFCache 的 `pagehide`（也包括刷新、整页导航）通过 POST `/auth/session/close` 尽力撤销当前 access 及关联 refresh，沿用 CSRF/传输加密，使用 `keepalive` 且不自动刷新会话。该响应不清 Cookie/本地凭据，避免旧响应覆盖下一次登录。显式退出仍使用正常 logout，可靠撤销并清理当前凭据。浏览器可能不发送页面离开请求，因此必须按业务配合服务端 `idleTimeout`/`absoluteTimeout`；不能据此保证关闭即撤销。
-
-## 传输容量与模块预算
-
-配置 `transport.maxPlaintextBytes` 支持 1 KiB～64 MiB 的显式整数或 `auto`。auto/省略在解析后为 undefined：无模块需求时仍为 1 MiB，反馈宿主使用 crypto.resolveTransportBodyLimits 的 requiredPlaintextBytes 统一推导。显式上限不足时启动/打包失败，不能被反馈覆盖；代理、adapter-node、握手与运行时使用一致预算。业务附件、解压和数据行数上限继续独立校验。
 
 ## 开发测试
 

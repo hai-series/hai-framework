@@ -4,11 +4,191 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/api-contract](../api-contract/README.en.md) · [@h-ai/core](../core/README.en.md) · [@h-ai/datapipe](../datapipe/README.en.md) · [@h-ai/reldb](../reldb/README.en.md) · [@h-ai/vecdb](../vecdb/README.en.md)
 
-## Introduction
-
 AI capabilities through a unified `ai` service: LLM chat, image generation, tools, MCP, embeddings, memory, retrieval/RAG, knowledge bases, context management, file parsing, reranking, audio (ASR/TTS), and A2A. Initialize with `ai.init()` on Node.js; browsers access it through APIs/clients.
 
-## Core features
+## Quick Start
+
+`ai.close()` waits for an initialization already in progress and then cleans up; concurrent closes share one operation. Reinitialization first cleans up the previous instance, and new initialization is rejected while closing.
+
+### Development LLM-only (no database dependencies)
+
+```ts
+import { ai } from '@h-ai/ai'
+
+const init = await ai.init({
+  llm: {
+    model: 'gpt-4o-mini',
+    apiKey: process.env.HAI_AI_LLM_APIKEY,
+  },
+})
+if (!init.success)
+  throw new Error(init.error.message)
+
+try {
+  const result = await ai.llm.chat({
+    messages: [
+      { role: 'user', content: '你好！' }
+    ],
+  })
+  if (!result.success)
+    throw new Error(result.error.message)
+  const reply = result.data.choices[0]?.message.content ?? ''
+}
+finally {
+  await ai.close()
+}
+```
+
+Development/explicit tests without initialized reldb/vecdb use a temporary process store, lost on close, exit, or instance switching. When either `NODE_ENV` or `HAI_CORE_ENV` is production, temporary stores, SQLite and local vector backends fail initialization. Initialize shared RelDB and network vecdb first, or supply a shared provider with equivalent atomic guarantees.
+
+## Features
+
+### Purpose, inputs and outputs
+
+Unless marked direct, AsyncIterable or a direct Promise value, the output column describes HaiResult.data after success has been checked. Provide named request/definition/options variables using the stated real input type. Streams and explicitly throwing helpers need error handling at the consumer boundary.
+
+Call fragments reuse the initialized service from this page. Named variables stand for application-provided requests, schemas, resource definitions or options. Follow the corresponding examples for setup and failure handling. Check HaiResult.success and await asynchronous calls.
+
+| Entry                             | Use case                     | Input                                                                             | Output                                                                    | Call fragment                                                                             |
+| --------------------------------- | ---------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `ai.llm.chat`                     | Single answer                | `ChatCompletionRequest: messages, model?, signal?, tools?`                        | `ChatCompletionResponse: choices, model, usage?`                          | `ai.llm.chat({ messages: [{ role: "user", content: "你好" }] })`                          |
+| `ai.llm.chatStream`               | Stream completion            | `same ChatCompletionRequest`                                                      | `AsyncIterable<ChatCompletionChunk>; iteration may throw`                 | `ai.llm.chatStream({ messages })`                                                         |
+| `ai.llm.ask`                      | Text answer                  | `question: string, AskOptions?`                                                   | `string answer`                                                           | `ai.llm.ask("解释共享状态")`                                                              |
+| `ai.llm.askStream`                | Text stream                  | `question: string, AskOptions?`                                                   | `AsyncIterable<string>`                                                   | `ai.llm.askStream("解释共享状态")`                                                        |
+| `ai.llm.generateObject`           | Schema-constrained answer    | `Zod schema, messages, model?, maxRepairs?, signal?`                              | `schema-inferred T`                                                       | `ai.llm.generateObject({ schema: AnswerSchema, messages })`                               |
+| `ai.llm.listModels`               | List models                  | `none`                                                                            | `string[] model IDs`                                                      | `ai.llm.listModels()`                                                                     |
+| `ai.llm.getHistory`               | Read history                 | `{ objectId, sessionId }, { limit?, order? }?`                                    | `ChatRecord[]`                                                            | `ai.llm.getHistory({ objectId: "u1", sessionId: "s1" })`                                  |
+| `ai.llm.listSessions`             | Subject sessions             | `objectId: string`                                                                | `SessionInfo[]`                                                           | `ai.llm.listSessions("u1")`                                                               |
+| `ai.tools.define`                 | Define a tool                | `{ name, description, parameters: Zod schema, handler, timeoutMs? }`              | `direct Tool<TInput,TOutput>; no init required`                           | `ai.tools.define(toolDefinition)`                                                         |
+| `ai.tools.createRegistry`         | Create tool registry         | `{ authorize? }?`                                                                 | `direct ToolRegistryOperations; no init required`                         | `ai.tools.createRegistry({ authorize })`                                                  |
+| `ai.stream.createProcessor`       | Accumulate chunks            | `none`                                                                            | `direct StreamProcessor`                                                  | `ai.stream.createProcessor()`                                                             |
+| `ai.stream.collect`               | Consume a chat stream        | `AsyncIterable<ChatCompletionChunk>`                                              | `Promise<StreamResult>; stream failure rejects`                           | `ai.stream.collect(ai.llm.chatStream({ messages }))`                                      |
+| `ai.stream.createSSEDecoder`      | Decode split SSE             | `none`                                                                            | `direct SSEDecoder with decode/reset`                                     | `ai.stream.createSSEDecoder()`                                                            |
+| `ai.stream.encodeSSE`             | Encode SSE                   | `SSEEvent: data, event?, id?, retry?`                                             | `direct string; invalid metadata throws`                                  | `ai.stream.encodeSSE({ data: "Hello" })`                                                  |
+| `ai.embedding.embed`              | Embedding request            | `EmbeddingRequest with input/model?`                                              | `EmbeddingResponse`                                                       | `ai.embedding.embed({ input: "产品说明" })`                                               |
+| `ai.embedding.embedText`          | Embed one text               | `text: string`                                                                    | `number[]`                                                                | `ai.embedding.embedText("产品说明")`                                                      |
+| `ai.embedding.embedBatch`         | Embed many texts             | `texts: string[]`                                                                 | `number[][] in input order`                                               | `ai.embedding.embedBatch(["简介", "部署"])`                                               |
+| `ai.mcp.registerTool`             | Register local tool          | `MCPToolDefinition, typed handler`                                                | `void`                                                                    | `ai.mcp.registerTool(mcpToolDefinition, toolHandler)`                                     |
+| `ai.mcp.registerResource`         | Register resource            | `MCPResource, async content handler`                                              | `void`                                                                    | `ai.mcp.registerResource(resourceDefinition, readContent)`                                |
+| `ai.mcp.registerPrompt`           | Register prompt              | `MCPPrompt, args => Promise<MCPPromptMessage[]>`                                  | `void`                                                                    | `ai.mcp.registerPrompt(promptDefinition, buildMessages)`                                  |
+| `ai.mcp.callTool`                 | Call local tool              | `name, arguments, MCPContext?`                                                    | `unknown tool result`                                                     | `ai.mcp.callTool("search", { query: "配置" })`                                            |
+| `ai.mcp.readResource`             | Read resource                | `resource URI`                                                                    | `MCPResourceContent with exactly text or blob`                            | `ai.mcp.readResource("docs://intro")`                                                     |
+| `ai.mcp.getPrompt`                | Build prompt                 | `name, Record<string,string> arguments`                                           | `MCPPromptMessage[]`                                                      | `ai.mcp.getPrompt("review", { topic: "API" })`                                            |
+| `ai.retrieval.addSource`          | Register source              | `RetrievalSource: id, collection, optional metadata`                              | `void`                                                                    | `ai.retrieval.addSource({ id: "docs", collection: "manual" })`                            |
+| `ai.retrieval.removeSource`       | Remove source                | `sourceId: string`                                                                | `void`                                                                    | `ai.retrieval.removeSource("docs")`                                                       |
+| `ai.retrieval.listSources`        | List sources                 | `none`                                                                            | `direct Promise<RetrievalSource[]>`                                       | `ai.retrieval.listSources()`                                                              |
+| `ai.retrieval.retrieve`           | Retrieve candidates          | `RetrievalRequest: query, sources?, topK?, minScore?, enableRerank?`              | `RetrievalResult`                                                         | `ai.retrieval.retrieve({ query: "部署" })`                                                |
+| `ai.rag.query`                    | Grounded answer              | `query: string, RagOptions?`                                                      | `RagResult: answer, context, citations, query, model`                     | `ai.rag.query("如何部署？", { sources: ["docs"] })`                                       |
+| `ai.rag.queryStream`              | Grounded stream              | `query: string, RagOptions?`                                                      | `AsyncIterable<RagStreamEvent>`                                           | `ai.rag.queryStream("如何部署？", { sources: ["docs"] })`                                 |
+| `ai.knowledge.setup`              | Prepare collection           | `KnowledgeSetupOptions?`                                                          | `void; collection ready for ingest`                                       | `ai.knowledge.setup()`                                                                    |
+| `ai.knowledge.ingest`             | Publish document             | `{ documentId, content, title?, collection?, ...metadata }`                       | `KnowledgeIngestResult with revision/cleanupPending`                      | `ai.knowledge.ingest({ documentId: "intro", content: "入门正文" })`                       |
+| `ai.knowledge.ingestFile`         | Ingest a file                | `KnowledgeIngestFileInput including file bytes and document identity`             | `KnowledgeIngestResult`                                                   | `ai.knowledge.ingestFile(fileInput)`                                                      |
+| `ai.knowledge.ingestBatch`        | Ingest batch                 | `KnowledgeIngestInput[], onProgress?`                                             | `KnowledgeIngestBatchResult with per-document outcomes`                   | `ai.knowledge.ingestBatch(documentInputs, onProgress)`                                    |
+| `ai.knowledge.retrieve`           | Retrieve published revision  | `query: string, KnowledgeRetrieveOptions?`                                        | `KnowledgeRetrieveResult`                                                 | `ai.knowledge.retrieve("部署说明")`                                                       |
+| `ai.knowledge.ask`                | Answer from knowledge        | `query: string, KnowledgeAskOptions?`                                             | `KnowledgeAskResult`                                                      | `ai.knowledge.ask("如何恢复备份？")`                                                      |
+| `ai.knowledge.findByEntity`       | Find by entity               | `entityName: string, EntityQueryOptions?`                                         | `EntityDocumentResult[]`                                                  | `ai.knowledge.findByEntity("订单")`                                                       |
+| `ai.knowledge.listEntities`       | List entities                | `EntityListOptions?`                                                              | `KnowledgeEntity[]`                                                       | `ai.knowledge.listEntities()`                                                             |
+| `ai.knowledge.listDocuments`      | List documents               | `KnowledgeDocumentListOptions?`                                                   | `KnowledgeDocumentInfo[]`                                                 | `ai.knowledge.listDocuments()`                                                            |
+| `ai.knowledge.removeDocument`     | Remove document              | `documentId, KnowledgeDocumentRemoveOptions?`                                     | `void; may fail after visibility revocation if cleanup fails`             | `ai.knowledge.removeDocument("intro")`                                                    |
+| `ai.knowledge.repair`             | Repair cleanup               | `{ collection?, offset?, limit? }`                                                | `KnowledgeRepairResult with progress`                                     | `ai.knowledge.repair({ offset: 0, limit: 100 })`                                          |
+| `ai.knowledge.deleteCollection`   | Remove collection            | `collection name?`                                                                | `void; cleanup tombstone remains`                                         | `ai.knowledge.deleteCollection("retired-manual")`                                         |
+| `ai.memory.scoped`                | Bind trusted subject         | `{ objectId: nonempty string, scope? }`                                           | `direct ScopedMemoryOperations; invalid binding throws TypeError`         | `ai.memory.scoped({ objectId: "u1", scope: { topicId: "orders" } })`                      |
+| `ai.memory.extract`               | Extract memories             | `ChatMessage[], { objectId, scope?, model?, signal?, ...options }`                | `MemoryEntry[]`                                                           | `ai.memory.extract(messages, { objectId: "u1" })`                                         |
+| `ai.memory.add`                   | Store explicit memory        | `MemoryEntryInput: objectId, content, type, scope?`                               | `MemoryEntry`                                                             | `ai.memory.add({ objectId: "u1", content: "偏好中文", type: "preference" })`              |
+| `ai.memory.get`                   | Read owned memory            | `memoryId, { objectId, scope? } for untrusted IDs`                                | `MemoryEntry`                                                             | `ai.memory.get(memoryId, { objectId: "u1" })`                                             |
+| `ai.memory.update`                | Update memory                | `memoryId, MemoryUpdateInput, trusted access scope`                               | `MemoryEntry`                                                             | `ai.memory.update(memoryId, { content: "偏好日文" }, { objectId: "u1" })`                 |
+| `ai.memory.remove`                | Remove owned memory          | `memoryId, trusted access scope`                                                  | `void`                                                                    | `ai.memory.remove(memoryId, { objectId: "u1" })`                                          |
+| `ai.memory.recall`                | Recall memories              | `query, { objectId, scope?, topK?, types?, ...options }`                          | `MemoryEntry[]`                                                           | `ai.memory.recall("语言偏好", { objectId: "u1" })`                                        |
+| `ai.memory.injectMemories`        | Enrich messages              | `ChatMessage[], { objectId, scope?, topK?, ...options }`                          | `ChatMessage[]`                                                           | `ai.memory.injectMemories(messages, { objectId: "u1" })`                                  |
+| `ai.memory.list`                  | List memories                | `MemoryListOptions with objectId/scope filters`                                   | `MemoryEntry[]; incomplete scan fails`                                    | `ai.memory.list({ objectId: "u1" })`                                                      |
+| `ai.memory.listPage`              | Page memories                | `MemoryListPageOptions with objectId/pagination`                                  | `StorePage<MemoryEntry>`                                                  | `ai.memory.listPage({ objectId: "u1", offset: 0, limit: 20 })`                            |
+| `ai.memory.clear`                 | Clear selected scope         | `nonempty MemoryClearOptions`                                                     | `void; empty filters are rejected`                                        | `ai.memory.clear({ objectId: "u1" })`                                                     |
+| `ai.memory.admin.clearAll`        | Trusted administrator clear  | `{ confirm: true }; require host administrator authorization`                     | `void; destructive across subjects`                                       | `ai.memory.admin.clearAll({ confirm: true })`                                             |
+| `ai.persona.save`                 | Save persona                 | `PersonaProfileInput: id, name, systemPrompt, objectId?, traits?`                 | `PersonaProfile`                                                          | `ai.persona.save(personaProfile)`                                                         |
+| `ai.persona.get`                  | Get persona                  | `id, { objectId }?; omitted subject selects system profile`                       | `PersonaProfile`                                                          | `ai.persona.get("tutor", { objectId: "u1" })`                                             |
+| `ai.persona.update`               | Update persona               | `id, PersonaProfileUpdate, { objectId }?`                                         | `PersonaProfile`                                                          | `ai.persona.update("tutor", updates, { objectId: "u1" })`                                 |
+| `ai.persona.remove`               | Remove persona               | `id, { objectId }?`                                                               | `void`                                                                    | `ai.persona.remove("tutor", { objectId: "u1" })`                                          |
+| `ai.persona.list`                 | List personas                | `{ objectId }?`                                                                   | `PersonaProfile[]`                                                        | `ai.persona.list({ objectId: "u1" })`                                                     |
+| `ai.persona.compose`              | Compose system prompt        | `id, { objectId }?`                                                               | `string prompt`                                                           | `ai.persona.compose("tutor", { objectId: "u1" })`                                         |
+| `ai.token.estimateText`           | Estimate text tokens         | `text: string`                                                                    | `direct number; estimate, not billing usage`                              | `ai.token.estimateText("Hello 世界")`                                                     |
+| `ai.token.estimateMessages`       | Estimate message tokens      | `ChatMessage[]`                                                                   | `direct number including protocol overhead`                               | `ai.token.estimateMessages(messages)`                                                     |
+| `ai.summary.generate`             | Generate summary text        | `ChatMessage[], SummaryOptions?`                                                  | `string`                                                                  | `ai.summary.generate(messages)`                                                           |
+| `ai.summary.summarize`            | Summary metadata             | `ChatMessage[], SummaryOptions?`                                                  | `{ summary, tokenCount, coveredMessages }`                                | `ai.summary.summarize(messages)`                                                          |
+| `ai.compress.tryCompress`         | Compress to budget           | `ChatMessage[], { strategy?, maxTokens?, preserveLastN?, ...options }`            | `CompressResult: messages and original/compressed token counts`           | `ai.compress.tryCompress(messages, { maxTokens: 4000 })`                                  |
+| `ai.context.createManager`        | Create context               | `ContextManagerOptions with scope { objectId, sessionId }`                        | `ContextManager`                                                          | `ai.context.createManager({ scope: { objectId: "u1", sessionId: "s1" } })`                |
+| `ai.context.restoreManager`       | Restore context              | `{ objectId, sessionId }, options?`                                               | `ContextManager`                                                          | `ai.context.restoreManager({ objectId: "u1", sessionId: "s1" })`                          |
+| `ai.context.listSessions`         | List stored sessions         | `objectId`                                                                        | `SessionInfo[]`                                                           | `ai.context.listSessions("u1")`                                                           |
+| `ai.context.renameSession`        | Rename session               | `scope, title`                                                                    | `void`                                                                    | `ai.context.renameSession({ objectId: "u1", sessionId: "s1" }, "订单讨论")`               |
+| `ai.context.removeSession`        | Remove session               | `scope`                                                                           | `void; tombstone prevents scope reuse`                                    | `ai.context.removeSession({ objectId: "u1", sessionId: "s1" })`                           |
+| `ai.rerank.rerank`                | Rerank documents             | `RerankRequest: query, documents, model?, topN?`                                  | `RerankResponse with model/results`                                       | `ai.rerank.rerank({ query: "部署", documents: ["配置说明"] })`                            |
+| `ai.rerank.rerankTexts`           | Rerank texts                 | `query, string[] texts, topN?`                                                    | `RerankItem[] with index/relevanceScore`                                  | `ai.rerank.rerankTexts("部署", ["配置说明"], 1)`                                          |
+| `ai.file.parse`                   | Parse a file                 | `FileParseRequest with content, filename, options?`                               | `FileParseResult; extraction is not HTML sanitization`                    | `ai.file.parse({ content: "<p>正文</p>", filename: "intro.html" })`                       |
+| `ai.file.parseText`               | Extract plain text           | `Buffer\|string content, filename?`                                               | `string`                                                                  | `ai.file.parseText("Hello", "intro.txt")`                                                 |
+| `ai.reasoning.run`                | Multistep reasoning          | `query, ReasoningOptions including strategy/tools?`                               | `ReasoningResult`                                                         | `ai.reasoning.run("审查方案", { strategy: "cot" })`                                       |
+| `ai.reasoning.runStream`          | Observe reasoning stream     | `query, ReasoningOptions?`                                                        | `AsyncIterable<ReasoningStreamEvent>`                                     | `ai.reasoning.runStream("审查方案", { strategy: "react" })`                               |
+| `ai.audio.transcribe`             | Transcribe audio             | `TranscriptionRequest: audio, language?, model?, signal?`                         | `TranscriptionResult: text, language?, segments?`                         | `ai.audio.transcribe({ audio: { data: wavBytes, format: "wav" } })`                       |
+| `ai.audio.transcribeStream`       | Stream transcription         | `TranscriptionStreamRequest: chunks or complete audio`                            | `AsyncIterable<TranscriptionEvent>`                                       | `ai.audio.transcribeStream(transcriptionInput)`                                           |
+| `ai.audio.synthesize`             | Synthesize audio             | `SynthesisRequest: text, language?, model?, signal?`                              | `SynthesisResult: audio and duration metadata`                            | `ai.audio.synthesize({ text: "你好" })`                                                   |
+| `ai.audio.synthesizeStream`       | Synthesize segments          | `SynthesisStreamRequest: text segment or async segments`                          | `AsyncIterable<SynthesisEvent>`                                           | `ai.audio.synthesizeStream(synthesisInput)`                                               |
+| `ai.audio.getCapabilities`        | Inspect capabilities         | `{ operation: transcribe\|synthesize, model? }`                                   | `AudioModelCapabilities`                                                  | `ai.audio.getCapabilities({ operation: "synthesize" })`                                   |
+| `ai.image.generate`               | Generate images              | `{ prompt, referenceImages?, model?, size?, signal? }`                            | `{ images: GeneratedImage[] } with bytes/MIME`                            | `ai.image.generate({ prompt: "一座灯塔" })`                                               |
+| `ai.a2a.registerExecutor`         | Register executor            | `SDK AgentExecutor`                                                               | `void`                                                                    | `ai.a2a.registerExecutor(executor)`                                                       |
+| `ai.a2a.getAgentCard`             | Agent discovery              | `none; configured a2a card`                                                       | `A2AAgentCardDocument (A2A 1.0 ProtoJSON)`                                | `ai.a2a.getAgentCard()`                                                                   |
+| `ai.a2a.handleRequest`            | Handle protocol request      | `unknown JSON-RPC body, trusted context.agentId?`                                 | `direct Promise<A2AHandleResult>; JSON-RPC/SSE outcome`                   | `ai.a2a.handleRequest(body, { agentId: trustedAgentId })`                                 |
+| `ai.a2a.listMessages`             | Administrative message query | `A2ATaskFilter: callerId?, contextId?, since?, pagination?`                       | `StorePage<A2AMessageRecord>`                                             | `ai.a2a.listMessages(messageFilter)`                                                      |
+| `ai.a2a.callRemoteAgent`          | Call approved remote agent   | `allowlisted HTTPS URL, message, A2ACallOptions?`                                 | `A2ACallResult`                                                           | `ai.a2a.callRemoteAgent("https://agent.example.com/a2a", "请分析订单")`                   |
+| `ai.init`                         | Initialize service           | `AIConfigInput?, AIInitOptions?`                                                  | `HaiResult<void>; validate dependencies before use`                       | `ai.init({ llm: { apiKey: process.env.HAI_AI_LLM_APIKEY } })`                             |
+| `ai.close`                        | Release service              | `none`                                                                            | `Promise<void>; wait for cleanup`                                         | `ai.close()`                                                                              |
+| `ai.config`                       | Read safe config             | `none`                                                                            | `redacted AIConfig or null`                                               | `ai.config`                                                                               |
+| `ai.isInitialized`                | Check lifecycle              | `none`                                                                            | `boolean`                                                                 | `ai.isInitialized`                                                                        |
+| `ai.llm.models.list`              | List merged definitions      | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.llm.models.list()`                                                                    |
+| `ai.llm.models.get`               | Read source and version      | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.llm.models.get("coding")`                                                             |
+| `ai.llm.models.register`          | Register database definition | `ModelEntry input (id/model/protocol/credentials/capabilities)`                   | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.llm.models.register(modelDefinition)`                                                 |
+| `ai.llm.models.update`            | Replace using a version      | `ModelEntry input (id/model/protocol/credentials/capabilities), expectedVersion?` | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.llm.models.update(modelDefinition, current.data.version)`                             |
+| `ai.llm.models.remove`            | Remove database definition   | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.llm.models.remove("coding", current.data.version)`                                    |
+| `ai.audio.models.list`            | List merged definitions      | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.audio.models.list()`                                                                  |
+| `ai.audio.models.get`             | Read source and version      | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.audio.models.get("speech")`                                                           |
+| `ai.audio.models.register`        | Register database definition | `AudioModelEntry input (id/provider/model/operations)`                            | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.audio.models.register(audioModelDefinition)`                                          |
+| `ai.audio.models.update`          | Replace using a version      | `AudioModelEntry input (id/provider/model/operations), expectedVersion?`          | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.audio.models.update(audioModelDefinition, current.data.version)`                      |
+| `ai.audio.models.remove`          | Remove database definition   | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.audio.models.remove("speech", current.data.version)`                                  |
+| `ai.image.models.list`            | List merged definitions      | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.image.models.list()`                                                                  |
+| `ai.image.models.get`             | Read source and version      | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.image.models.get("poster")`                                                           |
+| `ai.image.models.register`        | Register database definition | `ImageModelEntry input (id/provider/model)`                                       | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.image.models.register(imageModelDefinition)`                                          |
+| `ai.image.models.update`          | Replace using a version      | `ImageModelEntry input (id/provider/model), expectedVersion?`                     | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.image.models.update(imageModelDefinition, current.data.version)`                      |
+| `ai.image.models.remove`          | Remove database definition   | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.image.models.remove("poster", current.data.version)`                                  |
+| `ai.mcp.servers.list`             | List merged definitions      | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.mcp.servers.list()`                                                                   |
+| `ai.mcp.servers.get`              | Read source and version      | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.mcp.servers.get("tools")`                                                             |
+| `ai.mcp.servers.register`         | Register database definition | `MCPExternalServer input (id/transport/url or command)`                           | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.mcp.servers.register(mcpServerDefinition)`                                            |
+| `ai.mcp.servers.update`           | Replace using a version      | `MCPExternalServer input (id/transport/url or command), expectedVersion?`         | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.mcp.servers.update(mcpServerDefinition, current.data.version)`                        |
+| `ai.mcp.servers.remove`           | Remove database definition   | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.mcp.servers.remove("tools", current.data.version)`                                    |
+| `ai.retrieval.sources.list`       | List merged definitions      | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.retrieval.sources.list()`                                                             |
+| `ai.retrieval.sources.get`        | Read source and version      | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.retrieval.sources.get("docs")`                                                        |
+| `ai.retrieval.sources.register`   | Register database definition | `RetrievalSource input (id/collection)`                                           | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.retrieval.sources.register(sourceDefinition)`                                         |
+| `ai.retrieval.sources.update`     | Replace using a version      | `RetrievalSource input (id/collection), expectedVersion?`                         | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.retrieval.sources.update(sourceDefinition, current.data.version)`                     |
+| `ai.retrieval.sources.remove`     | Remove database definition   | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.retrieval.sources.remove("docs", current.data.version)`                               |
+| `ai.acp.agents.list`              | List merged definitions      | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.acp.agents.list()`                                                                    |
+| `ai.acp.agents.get`               | Read source and version      | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.acp.agents.get("coder")`                                                              |
+| `ai.acp.agents.register`          | Register database definition | `ACPAgent input (id/mode/adapter/modelIds)`                                       | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.acp.agents.register(agentDefinition)`                                                 |
+| `ai.acp.agents.update`            | Replace using a version      | `ACPAgent input (id/mode/adapter/modelIds), expectedVersion?`                     | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.acp.agents.update(agentDefinition, current.data.version)`                             |
+| `ai.acp.agents.remove`            | Remove database definition   | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.acp.agents.remove("coder", current.data.version)`                                     |
+| `ai.acp.workspaces.list`          | List merged definitions      | `none`                                                                            | `HaiResult<AIResourceEntry[]>; config wins, list has no database version` | `ai.acp.workspaces.list()`                                                                |
+| `ai.acp.workspaces.get`           | Read source and version      | `id: string`                                                                      | `HaiResult<AIResourceEntry> with value/source/version?`                   | `ai.acp.workspaces.get("project")`                                                        |
+| `ai.acp.workspaces.register`      | Register database definition | `ACPWorkspace input (id/storage/repositories)`                                    | `HaiResult<AIResourceEntry>; config entries are read-only`                | `ai.acp.workspaces.register(workspaceDefinition)`                                         |
+| `ai.acp.workspaces.update`        | Replace using a version      | `ACPWorkspace input (id/storage/repositories), expectedVersion?`                  | `HaiResult<AIResourceEntry>; full replacement, conflict fails`            | `ai.acp.workspaces.update(workspaceDefinition, current.data.version)`                     |
+| `ai.acp.workspaces.remove`        | Remove database definition   | `id, expectedVersion?; ACP definitions must have no session references`           | `HaiResult<void>; external files/services are retained`                   | `ai.acp.workspaces.remove("project", current.data.version)`                               |
+| `ai.acp.agents.initialize`        | Preflight agent              | `agentId, modelId?`                                                               | `HaiResult<{ agentId, mode, modelIds }>; no credentials`                  | `ai.acp.agents.initialize("coder")`                                                       |
+| `ai.acp.agents.check`             | Connect and handshake        | `agentId, { workspaceId?, ...ACPClientOptions }`                                  | `HaiResult<native initialize response>; owned connection is closed`       | `ai.acp.agents.check("coder", { workspaceId: "project" })`                                |
+| `ai.acp.workspaces.prepare`       | Prepare workspace            | `workspaceId`                                                                     | `HaiResult<main absolute path>; dirty content is retained`                | `ai.acp.workspaces.prepare("project")`                                                    |
+| `ai.acp.workspaces.importFiles`   | Import controlled files      | `workspaceId, { path: relative path, content: string\|Uint8Array }[]`             | `HaiResult<{ imported: string[] }>; no overwrite`                         | `ai.acp.workspaces.importFiles("project", [{ path: "notes.txt", content: "需求" }])`      |
+| `ai.acp.sessions.create`          | Start managed session        | `ACPCreateSessionOptions: agentId/workspaceId/newWorktree?`                       | `HaiResult<managed session handle>`                                       | `ai.acp.sessions.create({ agentId: "coder", workspaceId: "project", newWorktree: true })` |
+| `ai.acp.sessions.get`             | Get session handle           | `framework session id`                                                            | `HaiResult<managed session handle>; does not resume`                      | `ai.acp.sessions.get("task-1")`                                                           |
+| `ai.acp.sessions.list`            | List managed sessions        | `workspaceId?`                                                                    | `HaiResult<ACPSessionInfo[]>`                                             | `ai.acp.sessions.list("project")`                                                         |
+| `ai.acp.sessions.resume`          | Resume native session        | `framework session id, ACPClientOptions?`                                         | `HaiResult<managed session handle>; definition changes may reject`        | `ai.acp.sessions.resume("task-1")`                                                        |
+| `ai.acp.sessions.close`           | Stop owned execution         | `framework session id`                                                            | `HaiResult<void>; source and native history retained`                     | `ai.acp.sessions.close("task-1")`                                                         |
+| `ai.acp.sessions.reclaimWorktree` | Reclaim clean worktree       | `closed framework session id; preview stopped and changes saved`                  | `HaiResult<void>; branch and normal files retained`                       | `ai.acp.sessions.reclaimWorktree("task-1")`                                               |
+| `ai.acp.sessions.remove`          | Remove session record        | `closed or failed framework session id`                                           | `HaiResult<void>; worktree and native history retained`                   | `ai.acp.sessions.remove("task-1")`                                                        |
+| `ai.acp.connect`                  | Connect native transport     | `ACPTransport: stdio/http/ws, ACPClientOptions?`                                  | `HaiResult<connection handle>`                                            | `ai.acp.connect({ type: "http", url: "https://agent.example.com/acp" })`                  |
+| `ai.acp.close`                    | Close subsystem              | `none; normally call ai.close()`                                                  | `Promise<void>; cleanup may throw`                                        | `ai.acp.close()`                                                                          |
 
 - `ai.tools`: tool definitions, registries, and batch execution; no initialization required.
 - `ai.stream`: ChatCompletion stream chunk processing; no initialization required.
@@ -32,38 +212,7 @@ AI capabilities through a unified `ai` service: LLM chat, image generation, tool
 
 For the full method list, error codes, and longer examples, see [REFERENCE.md (Chinese)](./REFERENCE.md).
 
-## Getting started
-
-`ai.close()` waits for an initialization already in progress and then cleans up; concurrent closes share one operation. Reinitialization first cleans up the previous instance, and new initialization is rejected while closing.
-
-### Quick start
-
-#### Development LLM-only (no database dependencies)
-
-```ts
-import { ai } from '@h-ai/ai'
-
-const init = await ai.init({
-  llm: {
-    model: 'gpt-4o-mini',
-    apiKey: process.env.HAI_AI_LLM_APIKEY,
-  },
-})
-if (!init.success)
-  return init
-
-const result = await ai.llm.chat({
-  messages: [
-    { role: 'user', content: '你好！' }
-  ],
-})
-
-await ai.close()
-```
-
-Development/explicit tests without initialized reldb/vecdb use a temporary process store, lost on close, exit, or instance switching. When either `NODE_ENV` or `HAI_CORE_ENV` is production, temporary stores, SQLite and local vector backends fail initialization. Initialize shared RelDB and network vecdb first, or supply a shared provider with equivalent atomic guarantees.
-
-#### Persistent DB provider (reldb + vecdb)
+### Persistent DB provider (reldb + vecdb)
 
 ```ts
 import { ai } from '@h-ai/ai'
@@ -110,7 +259,7 @@ if (failures.length)
 
 Concurrent MySQL first startup accepts only the explicit mysql2 ER_DUP_KEYNAME/1061 error, then verifies the actual columns and order, non-unique full columns, ascending visible BTREE, and no expressions. An existing index with the wrong definition fails. The account needs table creation and INDEX privileges; metadata, permission, or other DDL failures return CONFIGURATION_ERROR from ai.init. All started DDL settles before return. MySQL DDL is not rolled back: repair privileges/schema before retrying partial initialization. Check each initialization result, reject business traffic on failure, and close AI, vecdb, and reldb in reverse order.
 
-#### Custom StoreProvider
+### Custom StoreProvider
 
 ```ts
 import type { AIStoreProvider } from '@h-ai/ai'
@@ -166,7 +315,7 @@ const claude = await ai.llm.chat({ messages, model: 'claude' }) // 该模型配�
 // 临时客户端按 TTL 缓存（llm.tempModelCacheTtl，默认 10 分钟），与常驻模型客户端隔离
 const temp = await ai.llm.chat({
   messages,
-  tempModel: { model: 'claude-3-5-sonnet', protocol: 'anthropic', apiKey: 'sk-temp' },
+  tempModel: { model: 'claude-3-5-sonnet', protocol: 'anthropic', apiKey: process.env.TEMP_LLM_API_KEY },
 })
 ```
 
@@ -576,7 +725,12 @@ turns short-term memory + summaries into **cross-session long-term memory**, com
 
 ```ts
 // 会话结束时固化：整合摘要 → 提取长期记忆（写入不含 sessionId 的持久作用域）
-const result = await manager.consolidate({
+const created = ai.context.createManager({
+  scope: { objectId: 'user-001', sessionId: 'sess-001' }
+})
+if (!created.success)
+  return created
+const result = await created.data.consolidate({
   scope: { userId: 'user-001', personaId: 'xiaoq' }
 })
 if (result.success) {
@@ -600,6 +754,8 @@ await ai.persona.save({
 
 // 组合出可直接喂给 ContextManager 的系统提示词（systemPrompt + traits）
 const composed = await ai.persona.compose('xiaoq')
+if (!composed.success)
+  return composed
 const manager = ai.context.createManager({
   scope: { objectId: 'user-001', sessionId: 'persona-session' },
   systemPrompt: composed.data,
@@ -613,11 +769,86 @@ const manager = ai.context.createManager({
 
 `ai.persona` exposes `save` / `get` / `update` / `remove` / `list` / `compose`, with profiles isolated by `[objectId, id]`. Supply `objectId` when saving and `{ objectId }` for other operations; omission selects the `system` platform profile. Bind tenant operations to a trusted authenticated subject; a client-provided profile ID does not authorize access.
 
-### Configuration
+### Security boundaries
+
+- Treat prompts, retrieved documents, and model outputs as untrusted. Do not insert user content into non-overridable system rules.
+- Zod validates tool argument shapes, not caller permissions. High-privilege handlers must verify identity, tenant, ownership, and quota, and expose only tools allowed to execute automatically.
+- `callRemoteAgent()` is an independent client requiring only `ai.init()`, without Agent Card or local executors. It rejects non-HTTP(S) and embedded URL credentials; applications must still allowlist origins and enforce egress protection against DNS rebinding, private-network redirects, and cloud metadata access.
+- Do not log full prompts, tool arguments, A2A headers, temporary model credentials, or remote URLs with queries. Audits should retain redacted summaries only.
+
+### Using returned handles
+
+`registry` comes from ai.tools.createRegistry(); `manager` is successful data from context.createManager/restoreManager; `session` is successful data from managed ACP sessions.create/get/resume; `connection` comes from acp.connect. Respect each handle's lifecycle and authorization. Scoped Memory exposes the same ten operations above with objectId/scope bound by the factory; per-call overrides are omitted.
+
+| Entry                      | Use case                 | Input                                                      | Output                                                                 | Call fragment                                            |
+| -------------------------- | ------------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------- |
+| `registry.register`        | Register one tool        | `Tool`                                                     | `HaiResult<void>; duplicate rejected`                                  | `registry.register(tool)`                                |
+| `registry.registerMany`    | Register tools           | `Tool[]`                                                   | `HaiResult<void>`                                                      | `registry.registerMany(tools)`                           |
+| `registry.replace`         | Explicitly replace tool  | `Tool with existing name`                                  | `HaiResult<void>`                                                      | `registry.replace(tool)`                                 |
+| `registry.unregister`      | Unregister tool          | `tool name`                                                | `boolean`                                                              | `registry.unregister("search")`                          |
+| `registry.get`             | Get tool                 | `tool name`                                                | `Tool or undefined`                                                    | `registry.get("search")`                                 |
+| `registry.has`             | Check tool               | `tool name`                                                | `boolean`                                                              | `registry.has("search")`                                 |
+| `registry.getNames`        | Tool names               | `none`                                                     | `string[]`                                                             | `registry.getNames()`                                    |
+| `registry.getDefinitions`  | Model-facing definitions | `none`                                                     | `ToolDefinition[]`                                                     | `registry.getDefinitions()`                              |
+| `registry.execute`         | Execute authorized tool  | `ToolCall, ToolExecutionOptions?`                          | `Promise<HaiResult<ToolMessage>>`                                      | `registry.execute(toolCall, { objectId: "u1" })`         |
+| `registry.executeAll`      | Execute calls            | `ToolCall[], { parallel?, ...executionOptions }`           | `Promise<HaiResult<ToolMessage[]>>`                                    | `registry.executeAll(toolCalls)`                         |
+| `registry.clear`           | Clear local tools        | `none`                                                     | `void`                                                                 | `registry.clear()`                                       |
+| `registry.size`            | Tool count               | `none`                                                     | `number`                                                               | `registry.size`                                          |
+| `manager.addMessage`       | Add message              | `ChatMessage`                                              | `Promise<HaiResult<void>>`                                             | `manager.addMessage({ role: "user", content: "你好" })`  |
+| `manager.getMessages`      | Read message snapshot    | `none`                                                     | `HaiResult<ChatMessage[]>`                                             | `manager.getMessages()`                                  |
+| `manager.reload`           | Reload shared state      | `none`                                                     | `Promise<HaiResult<void>>`                                             | `manager.reload()`                                       |
+| `manager.getTokenUsage`    | Observe budget           | `none`                                                     | `HaiResult<{ current, budget }>`                                       | `manager.getTokenUsage()`                                |
+| `manager.getSummaries`     | Read summaries           | `none`                                                     | `HaiResult<SummaryResult[]>`                                           | `manager.getSummaries()`                                 |
+| `manager.save`             | Save context             | `none`                                                     | `Promise<HaiResult<void>>`                                             | `manager.save()`                                         |
+| `manager.flush`            | Flush background memory  | `none`                                                     | `Promise<HaiResult<void>>`                                             | `manager.flush()`                                        |
+| `manager.reset`            | Reset conversation       | `ContextResetOptions?`                                     | `Promise<HaiResult<void>>`                                             | `manager.reset({ preserveSystemPrompt: true })`          |
+| `manager.getTurns`         | Read actual turns        | `none`                                                     | `HaiResult<ConversationTurn[]>`                                        | `manager.getTurns()`                                     |
+| `manager.markTurnSpeaking` | Mark speaking            | `turnId`                                                   | `Promise<HaiResult<void>>`                                             | `manager.markTurnSpeaking(turnId)`                       |
+| `manager.commitTurn`       | Commit actual content    | `turnId, { text? }`                                        | `Promise<HaiResult<void>>`                                             | `manager.commitTurn(turnId, { text: spokenText })`       |
+| `manager.interruptTurn`    | Commit interruption      | `turnId, { text? }`                                        | `Promise<HaiResult<void>>`                                             | `manager.interruptTurn(turnId, { text: spokenText })`    |
+| `manager.consolidate`      | Consolidate memory       | `ConsolidateOptions?`                                      | `Promise<HaiResult<{ summary, memories }>>`                            | `manager.consolidate({ scope: { personaId: "tutor" } })` |
+| `manager.chat`             | Stateful answer          | `message: string, ContextChatOptions?`                     | `Promise<HaiResult<ContextChatResult>>`                                | `manager.chat("请继续")`                                 |
+| `manager.chatStream`       | Stateful stream          | `message: string, ContextChatOptions?`                     | `AsyncIterable<ContextStreamEvent>`                                    | `manager.chatStream("请继续")`                           |
+| `session.info`             | Read managed session     | `none`                                                     | `Promise<HaiResult<ACPSessionInfo>>`                                   | `session.info()`                                         |
+| `session.prompt`           | Execute one turn         | `ContentBlock[], AbortSignal?`                             | `Promise<HaiResult<{ text, stopReason, events }>>`                     | `session.prompt([{ type: "text", text: "检查工程" }])`   |
+| `session.promptStructured` | Validate JSON output     | `ContentBlock[], Zod schema, AbortSignal?`                 | `Promise<HaiResult<schema-inferred T>>`                                | `session.promptStructured(content, OutputSchema)`        |
+| `session.stream`           | Observe native events    | `ContentBlock[], AbortSignal?`                             | `AsyncIterable<SessionNotification>; failure throws`                   | `session.stream([{ type: "text", text: "检查工程" }])`   |
+| `session.cancel`           | Cancel turn              | `none`                                                     | `Promise<HaiResult<void>>`                                             | `session.cancel()`                                       |
+| `session.setMode`          | Select advertised mode   | `native mode ID`                                           | `Promise<HaiResult<native mode response>>`                             | `session.setMode("code")`                                |
+| `session.setConfigOption`  | Set native option        | `native option key and allowed value`                      | `Promise<HaiResult<native config response>>`                           | `session.setConfigOption("model", "coding")`             |
+| `session.updateMain`       | Fast-forward main        | `none; execution and preview must be stopped`              | `Promise<HaiResult<ACPGitReport[]>>; partial failure reports in cause` | `session.updateMain()`                                   |
+| `session.publish`          | Commit and push          | `{ mode, message, author }; managed isolated session only` | `Promise<HaiResult<ACPGitReport[]>>`                                   | `session.publish(publishOptions)`                        |
+| `session.close`            | Stop and retain state    | `none`                                                     | `Promise<HaiResult<void>>`                                             | `session.close()`                                        |
+| `connection.authenticate`  | Native authentication    | `advertised authentication method ID`                      | `Promise<HaiResult<native auth response>>`                             | `connection.authenticate("api-key")`                     |
+| `connection.createSession` | Create native session    | `absolute remote cwd, McpServer[]?`                        | `Promise<HaiResult<{ id, prompt, cancel }>>`                           | `connection.createSession("/workspace/project", [])`     |
+| `connection.listSessions`  | Native sessions          | `cursor?`                                                  | `Promise<HaiResult<native paginated response>>`                        | `connection.listSessions()`                              |
+| `connection.deleteSession` | Delete native session    | `native session ID`                                        | `Promise<HaiResult<native delete response>>`                           | `connection.deleteSession(nativeId)`                     |
+| `connection.close`         | Close native connection  | `none`                                                     | `Promise<HaiResult<void>>`                                             | `connection.close()`                                     |
+
+## Configuration
+
+### Choose configuration by task
+
+| Configuration entry | Scenario                         | Input                                                                      | Effect                                                               | Example                                                                                                   |
+| ------------------- | -------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `llm`               | Model connection and protocol    | model, protocol, apiKey/baseUrl, timeout, models/scenarios                 | chat/Responses/Anthropic selection; normalized model requests        | `{ llm: { model: "gpt-4o-mini", timeout: 60000 } }`                                                       |
+| `embedding`         | Embedding vectors                | model?, dimensions?, batchSize?                                            | consistent vector dimensions for the target collection               | `{ embedding: { dimensions: 1536, batchSize: 100 } }`                                                     |
+| `mcp`               | External tool servers            | servers with transport/endpoints or commands                               | registered server definitions; application authorizes tool execution | `{ mcp: { servers: [] } }`                                                                                |
+| `retrieval`         | Default retrieval sources        | sources: { id, collection, topK?, minScore?, filter? }[]                   | queryable source definitions; does not import documents              | `{ retrieval: { sources: [{ id: "docs", collection: "manual", topK: 5 }] } }`                             |
+| `knowledge`         | Publication and chunking         | collection, dimension, cleanOptions, chunkOptions                          | versioned document/vector publication and bounded chunks             | `{ knowledge: { collection: "manual", dimension: 1536, chunkOptions: { maxSize: 1500, overlap: 200 } } }` |
+| `memory`            | Subject memory backend           | provider, quotas, recencyDecay, defaultTopK, candidateMultiplier           | native or Mem0-format behavior with explicit persistence limits      | `{ memory: { provider: "native", defaultTopK: 10 } }`                                                     |
+| `token`             | Token estimate                   | tokenRatio > 0; default 0.25                                               | local token budget estimates; not provider billing usage             | `{ token: { tokenRatio: 0.25 } }`                                                                         |
+| `summary`           | Summary policy                   | systemPrompt?                                                              | prompt used by summary generation; model from llm.scenarios          | `{ summary: { systemPrompt: "保留已确认决策和待办" } }`                                                   |
+| `compress`          | Context compression              | defaultStrategy, defaultMaxTokens, preserveLastN                           | compression defaults; 0 budget derives from model limit              | `{ compress: { defaultStrategy: "hybrid", defaultMaxTokens: 4000, preserveLastN: 4 } }`                   |
+| `file`              | OCR instructions                 | systemPrompt?; model via llm.scenarios.ocr                                 | text extraction instructions; not HTML sanitization                  | `{ file: { systemPrompt: "只提取可见文字" } }`                                                            |
+| `audio`             | Audio models and limits          | models, transcribeModel/synthesizeModel, maxAudioBytes/maxStreamDurationMs | provider capability/operation selection and bounded input/stream     | `see Audio examples`                                                                                      |
+| `image`             | Image models and download limits | models, generateModel, maxImageBytes, maxImages; timeout per model         | generated bytes with MIME; unsafe downloads rejected                 | `see Image examples`                                                                                      |
+| `a2a`               | Agent discovery and leases       | agentCard and execution lease/poll/deadline options                        | ProtoJSON discovery and shared task journal                          | `see A2A protocol section`                                                                                |
+| `acp`               | Agent execution limits           | agents/workspaces and execution content/event limits                       | validated definitions and managed native sessions                    | `see ACP guide`                                                                                           |
 
 Rerank inherits the global LLM timeout with per-model overrides; the deadline covers the request and response body, returning RERANK_API_ERROR on timeout.
 
-The LLM protocol field is now `protocol` in `llm`, `llm.models[]`, and `tempModel`, replacing `api`. Values remain `chat | responses | anthropic`. Use `HAI_AI_LLM_PROTOCOL` and `HAI_AI_LLM_MODELS_0_PROTOCOL` (adjust the index for other entries). Old fields and protocol variables fail with a migration message; `apiKey` and its variables are unchanged.
+Set the request protocol with `llm.protocol`, `llm.models[].protocol` or per-call `tempModel.protocol`: `chat | responses | anthropic`. Environment names are `HAI_AI_LLM_PROTOCOL` and `HAI_AI_LLM_MODELS_0_PROTOCOL` (adjust the model index). Supply credentials with `apiKey` or private environment variables.
 
 ```yaml
 llm:
@@ -697,14 +928,7 @@ const memories = await ai.memory.recall('经济发展', {
 
 `ai.config` returns a redacted snapshot without exposing original `apiKey`, `privateKey`, embedded URL credentials, or other secrets.
 
-### Security boundaries
-
-- Treat prompts, retrieved documents, and model outputs as untrusted. Do not insert user content into non-overridable system rules.
-- Zod validates tool argument shapes, not caller permissions. High-privilege handlers must verify identity, tenant, ownership, and quota, and expose only tools allowed to execute automatically.
-- `callRemoteAgent()` is an independent client requiring only `ai.init()`, without Agent Card or local executors. It rejects non-HTTP(S) and embedded URL credentials; applications must still allowlist origins and enforce egress protection against DNS rebinding, private-network redirects, and cloud metadata access.
-- Do not log full prompts, tool arguments, A2A headers, temporary model credentials, or remote URLs with queries. Audits should retain redacted summaries only.
-
-### Error handling
+## Error Handling
 
 ```ts
 const result = await ai.llm.chat({ messages })
@@ -732,7 +956,7 @@ Common error ranges:
 - `hai:ai:900-906`：Memory。
 - `hai:ai:980-984`：A2A。
 
-## Development and testing
+## Development
 
 ```bash
 pnpm --filter @h-ai/ai typecheck

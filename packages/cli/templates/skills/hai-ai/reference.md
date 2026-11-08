@@ -169,9 +169,9 @@ Knowledge `retrieve/ask` 与默认 DB Store 的 filter 透传向量 Provider，�
 
 共享单活动生成租约为存储端时钟30秒，每10秒续租，最终 CAS 同时检查版本、owner 和截止时间。过期生成仅 interrupted，不自动重放 LLM/工具/记忆；manual pending 持久保存，可跨节点/重启按 turnId 提交。相同终态与真实文本重复提交幂等，内容冲突失败。queue 可取消轮询，不保证FIFO。reset 更换共享纪元，删除保留永久墓碑且 scope 不复用。外部 LLM/工具/本地后台记忆不与上下文跨系统原子提交；崩溃后的未知副作用必须由应用核对。
 
-自定义 `AIRelStore` 必须提供版本化读取、原子 CAS 和存储端 `currentTime()`；普通 save/saveMany 也推进版本。CAS 缺失版本只允许创建，notAfter 在最终持久化时严格检查，存储故障抛错不能当空数据；业务 HaiResult 边界负责转失败。默认 DB schema 含 version 列，不自动迁移旧表；SQLite 仅用于开发/测试，生产必须 PostgreSQL/MySQL 与共享向量服务。
+自定义 `AIRelStore` 必须提供版本化读取、原子 CAS 和存储端 `currentTime()`；普通 save/saveMany 也推进版本。CAS 缺失版本只允许创建，`notAfter` 在最终持久化时用存储端时钟严格检查，存储故障抛错不能当空数据，外层业务边界转为 HaiResult 失败。默认关系存储含 `version` 列；SQLite 仅用于开发/测试，生产使用 PostgreSQL/MySQL 与共享向量服务。
 
-`ai.context.createManager(options)` 返回有状态管理器，适合多轮对话。
+`ai.context.createManager(options)` 同步返回 `HaiResult<ContextManager>`，适合多轮对话；先判断 `success`，再通过 `data` 使用有状态管理器。`restoreManager(scope, options?)` 为异步恢复入口，同样先检查结果。
 
 常用选项：
 
