@@ -1,16 +1,16 @@
-import * as m from '$lib/paraglide/messages.js'
+import { audit } from '@h-ai/audit'
 /**
  * =============================================================================
  * Admin Console - 用户管理 API
  * =============================================================================
  */
 
-import { toIamUserResponse } from '$lib/server/iam-admin.js'
-import { createCreateUserSchema, ListUsersQuerySchema } from '$lib/server/schemas/index.js'
-import { requireAssignableRoles } from '$lib/server/security-roles.js'
-import { audit } from '@h-ai/audit'
 import { HaiIamError, iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+import * as m from '#lib/paraglide/messages.js'
+import { toIamUserResponse } from '#lib/server/iam-admin.js'
+import { createCreateUserSchema, ListUsersQuerySchema } from '#lib/server/schemas/index.js'
+import { requireAssignableRoles } from '#lib/server/security-roles.js'
 
 /**
  * GET /api/iam/users - 获取用户列表
@@ -33,7 +33,16 @@ export const GET = kit.handler(async ({ url, locals }) => {
 
   const { page, pageSize, search, accountStatus, roleCode, sortBy, sortDirection } = kit.validate.query(url, ListUsersQuerySchema)
 
-  const usersResult = await iam.user.listUsers({ page, pageSize, search, accountStatus, roleCode, include: ['roles'], sortBy, sortDirection })
+  const usersResult = await iam.user.listUsers({
+    page,
+    pageSize,
+    search,
+    accountStatus,
+    roleCode,
+    include: ['roles'],
+    sortBy,
+    sortDirection,
+  })
   if (!usersResult.success) {
     return kit.response.internalError(usersResult.error.message)
   }
@@ -65,7 +74,11 @@ export const GET = kit.handler(async ({ url, locals }) => {
  * 需要权限：user:api:create
  */
 export const POST = kit.handler(async ({ request, locals, getClientAddress, cookies }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   kit.guard.require(locals.session, 'user:api:create')
   await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.users.create')
 

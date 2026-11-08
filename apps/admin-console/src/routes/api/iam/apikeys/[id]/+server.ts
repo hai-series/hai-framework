@@ -1,12 +1,12 @@
-import { requireManageableApiKeyOwner } from '$lib/server/security-roles.js'
+import { iam } from '@h-ai/iam'
 /**
  * =============================================================================
  * Admin Console - 单个 API Key 管理 API（详情 / 吊销）
  * =============================================================================
  */
 
-import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+import { requireManageableApiKeyOwner } from '#lib/server/security-roles.js'
 
 /**
  * GET /api/iam/apikeys/[id] - 获取 API Key 详情

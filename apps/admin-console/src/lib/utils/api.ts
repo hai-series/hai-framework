@@ -30,7 +30,7 @@ import { kit } from '@h-ai/kit'
 const client = kit.client.create({
   // 只有会话失效才需要UI，普通请求观察器不应在导入时加载Svelte组件。
   recoverSession: async () => {
-    const { sessionRecovery } = await import('$lib/services/session-recovery.svelte.js')
+    const { sessionRecovery } = await import('#lib/services/session-recovery.svelte.js')
     return sessionRecovery.recover()
   },
 })
@@ -44,31 +44,54 @@ export function observeAdminRequests(observer: (record: Record<string, unknown>)
 }
 
 export const apiFetch: ReturnType<typeof kit.client.create>['apiFetch'] = async (input, init, options) => {
-  const rawUrl = input instanceof Request ? input.url : String(input)
+  const rawUrl = input instanceof Request
+    ? input.url
+    : String(input)
   const requestId = core.id.uuid()
-  const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
+  const headers = new Headers(init?.headers ?? (input instanceof Request
+    ? input.headers
+    : undefined))
   headers.set('X-Request-Id', requestId)
   const started = Date.now()
   let status: number | undefined
   let observingResponse = false
   const excluded = rawUrl.includes('/feedback/')
-  const metadata = () => ({ requestId, url: rawUrl.split(/[?#]/)[0], method: init?.method ?? (input instanceof Request ? input.method : 'GET'), timestamp: started, duration: Date.now() - started, status: status ?? null })
+  const metadata = () => ({
+    requestId,
+    url: rawUrl.split(/[?#]/)[0],
+    method: init?.method ?? (input instanceof Request
+      ? input.method
+      : 'GET'),
+    timestamp: started,
+    duration: Date.now() - started,
+    status: status ?? null,
+  })
   try {
     const response = await client.apiFetch(input, { ...init, headers }, options)
     status = response.status
     if (!excluded) {
       observingResponse = true
       // 旁路读取有界副本，不延迟业务响应，也不消费调用方的原始 body。
-      if (response.headers.get('content-type')?.includes('application/json'))
+      if (response.headers.get('content-type')?.includes('application/json')) {
         void observeResponse(response.clone(), metadata())
-      else
-        notify({ ...metadata(), success: response.ok })
+      }
+      else {
+        notify({
+          ...metadata(),
+          success: response.ok,
+        })
+      }
     }
     return response
   }
   finally {
-    if (!excluded && !observingResponse)
-      notify({ ...metadata(), success: false, errorCode: 'network-error' })
+    if (!excluded && !observingResponse) {
+      notify({
+        ...metadata(),
+        success: false,
+        errorCode: 'network-error',
+      })
+    }
   }
 }
 
@@ -103,7 +126,13 @@ async function observeResponse(response: Response, metadata: Record<string, unkn
   catch { /* 非 JSON、取消与解析失败只影响补充信息。 */ }
   finally {
     reader?.releaseLock()
-    notify({ ...metadata, success: businessSuccess, ...(errorCode === undefined ? {} : { errorCode }) })
+    notify({
+      ...metadata,
+      success: businessSuccess,
+      ...(errorCode === undefined
+        ? {}
+        : { errorCode }),
+    })
   }
 }
 

@@ -1,15 +1,15 @@
-import * as m from '$lib/paraglide/messages.js'
+import { iam } from '@h-ai/iam'
 /**
  * =============================================================================
  * Admin Console - 单个角色管理 API
  * =============================================================================
  */
 
-import { deleteAdminRole, getAdminRole, resolvePermissionIds, updateAdminRole } from '$lib/server/iam-admin.js'
-import { IdParamSchema, UpdateRoleSchema } from '$lib/server/schemas/index.js'
-import { requireGrantablePermissions, requireManageableRoles } from '$lib/server/security-roles.js'
-import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+import * as m from '#lib/paraglide/messages.js'
+import { deleteAdminRole, getAdminRole, resolvePermissionIds, updateAdminRole } from '#lib/server/iam-admin.js'
+import { IdParamSchema, UpdateRoleSchema } from '#lib/server/schemas/index.js'
+import { requireGrantablePermissions, requireManageableRoles } from '#lib/server/security-roles.js'
 
 /**
  * GET /api/iam/roles/[id] - 获取单个角色
@@ -17,7 +17,11 @@ import { kit } from '@h-ai/kit'
  * 需要权限：role:list
  */
 export const GET = kit.handler(async ({ params, locals }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   kit.guard.require(locals.session, 'role:list')
 
   const { id } = kit.validate.params(params, IdParamSchema)
@@ -35,7 +39,11 @@ export const GET = kit.handler(async ({ params, locals }) => {
  * 需要权限：role:api:update
  */
 export const PUT = kit.handler(async ({ params, request, locals, cookies }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   kit.guard.require(locals.session, 'role:api:update')
   await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.roles.update')
 
@@ -73,7 +81,11 @@ export const PUT = kit.handler(async ({ params, request, locals, cookies }) => {
  * 需要权限：role:api:delete
  */
 export const DELETE = kit.handler(async ({ params, locals, request, cookies }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   kit.guard.require(locals.session, 'role:api:delete')
   await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.roles.delete')
 

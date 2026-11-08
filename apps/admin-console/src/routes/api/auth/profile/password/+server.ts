@@ -1,13 +1,17 @@
-import * as m from '$lib/paraglide/messages.js'
-import { createChangeCurrentPasswordSchema } from '$lib/server/schemas/index.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+import * as m from '#lib/paraglide/messages.js'
+import { createChangeCurrentPasswordSchema } from '#lib/server/schemas/index.js'
 
 /**
  * 修改当前登录用户密码，成功后要求重新登录。
  */
 export const PUT = kit.handler(async ({ request, locals }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   if (!locals.accessToken) {
     return kit.response.unauthorized(m.common_error({}, { locale }))
   }

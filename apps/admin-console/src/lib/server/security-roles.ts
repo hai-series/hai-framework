@@ -1,28 +1,69 @@
 /** 示例应用的职责配置；框架 IAM 不绑定这些业务角色名。 */
 import type { HaiResult } from '@h-ai/core'
 import type { SessionLike } from '@h-ai/kit'
-import * as m from '$lib/paraglide/messages.js'
-import { listAdminRoles } from '$lib/server/iam-admin.js'
 import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { HaiIamError, iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { error } from '@sveltejs/kit'
+import * as m from '#lib/paraglide/messages.js'
+import { listAdminRoles } from '#lib/server/iam-admin.js'
 
 const common = ['dashboard:view', 'profile:read']
 export const ADMIN_DUTIES = {
-  admin: [...common, 'user:read', 'user:list', 'user:create', 'user:update', 'user:delete', 'user:api:create', 'user:api:update', 'user:api:delete', 'role:read', 'role:list', 'role:create', 'role:update', 'role:delete', 'role:api:create', 'role:api:update', 'role:api:delete', 'permission:read', 'permission:list', 'permission:manage', 'permission:create', 'permission:delete', 'permission:api:create', 'permission:api:delete', 'system:modules', 'apikey:list', 'apikey:create', 'apikey:delete'],
-  audit_admin: [...common, 'system:logs', 'audit:read', 'audit:backup'],
+  admin: [
+    ...common,
+    'user:read',
+    'user:list',
+    'user:create',
+    'user:update',
+    'user:delete',
+    'user:api:create',
+    'user:api:update',
+    'user:api:delete',
+    'role:read',
+    'role:list',
+    'role:create',
+    'role:update',
+    'role:delete',
+    'role:api:create',
+    'role:api:update',
+    'role:api:delete',
+    'permission:read',
+    'permission:list',
+    'permission:manage',
+    'permission:create',
+    'permission:delete',
+    'permission:api:create',
+    'permission:api:delete',
+    'system:modules',
+    'apikey:list',
+    'apikey:create',
+    'apikey:delete',
+  ],
+  audit_admin: [
+    ...common,
+    'system:logs',
+    'audit:read',
+    'audit:backup',
+  ],
   config_admin: [...common, 'system:settings'],
-  business_operator: [...common, 'feedback:create', 'feedback:read', 'feedback:process', 'feedback:reopen', 'feedback:export'],
+  business_operator: [
+    ...common,
+    'feedback:create',
+    'feedback:read',
+    'feedback:process',
+    'feedback:reopen',
+    'feedback:export',
+  ],
   user: [...common, 'feedback:create'],
 } as const
 
 /** 页面 load 使用 SvelteKit HttpError；API 的 Response 控制流由 kit.handler 处理。 */
 export function requirePagePermission(session: SessionLike | null | undefined, permission: string): void {
   if (!session)
-    error(401, { message: m.security_auth_required() })
+    error(401, m.security_auth_required())
   if (!kit.guard.check(session, permission))
-    error(403, { message: m.security_permission_denied() })
+    error(403, m.security_permission_denied())
 }
 
 /** 启动时同步示例职责；原 admin 的审计/基础配置权限会移交独立角色。 */
@@ -39,8 +80,11 @@ export async function seedAdminDuties(names: Record<keyof typeof ADMIN_DUTIES, s
         permission = await iam.authz.createPermission({ code: permissionCode, name: permissionCode, type: 'api' })
         if (!permission.success) {
           permission = await iam.authz.getPermissionByCode(permissionCode)
-          if (!permission.success || !permission.data)
-            return permission.success ? err(HaiCommonError.INTERNAL_ERROR) : permission
+          if (!permission.success || !permission.data) {
+            return permission.success
+              ? err(HaiCommonError.INTERNAL_ERROR)
+              : permission
+          }
         }
       }
       if (permission.data)
@@ -53,8 +97,11 @@ export async function seedAdminDuties(names: Record<keyof typeof ADMIN_DUTIES, s
       role = await iam.authz.createRole({ code, name: names[code as keyof typeof ADMIN_DUTIES], isSystem: true })
       if (!role.success) {
         role = await iam.authz.getRoleByCode(code)
-        if (!role.success || !role.data)
-          return role.success ? err(HaiCommonError.INTERNAL_ERROR) : role
+        if (!role.success || !role.data) {
+          return role.success
+            ? err(HaiCommonError.INTERNAL_ERROR)
+            : role
+        }
       }
     }
     if (!role.data)
@@ -94,8 +141,12 @@ export async function requireManageableRoles(actor: SessionLike | null | undefin
     const permissions = await iam.authz.getRolePermissions(id)
     if (!permissions.success)
       throw kit.response.fromError(permissions.error)
-    if (!canGrantRole(actor, { code: role.data.code, permissions: permissions.data.map(permission => permission.code) }))
+    if (!canGrantRole(actor, {
+      code: role.data.code,
+      permissions: permissions.data.map(permission => permission.code),
+    })) {
       throw kit.response.forbidden()
+    }
   }
 }
 
@@ -119,6 +170,15 @@ export async function requireAssignableRoles(actor: SessionLike | null | undefin
     throw kit.response.badRequest(m.security_duty_conflict())
 }
 
+/** 恢复用超级账号不由普通账号管理路由改密、改角色或删除，检查目标已有角色而非请求的新角色。 */
+export async function requireManageableAccount(id: string): Promise<void> {
+  const roles = await iam.authz.getUserRoles(id)
+  if (!roles.success)
+    throw kit.response.fromError(roles.error)
+  if (roles.data.some(role => role.code === iam.config?.rbac.superAdminRole))
+    throw kit.response.forbidden()
+}
+
 /** 代发 API Key 会取得目标账号的业务访问能力，继续按权限子集校验。 */
 export async function requireManageableApiKeyOwner(actor: SessionLike | null | undefined, id: string): Promise<void> {
   const roles = await iam.authz.getUserRoles(id)
@@ -140,11 +200,17 @@ export async function bootstrapDutyAccount(username: 'audit_admin' | 'config_adm
   if (!password)
     return ok(undefined)
   const created = await iam.user.createUser({ username, password })
-  if (!created.success)
-    return created.error.code === HaiIamError.USER_ALREADY_EXISTS.code ? ok(undefined) : created
+  if (!created.success) {
+    return created.error.code === HaiIamError.USER_ALREADY_EXISTS.code
+      ? ok(undefined)
+      : created
+  }
   const role = await iam.authz.getRoleByCode(username)
-  if (!role.success || !role.data)
-    return role.success ? err(HaiCommonError.INTERNAL_ERROR) : role
+  if (!role.success || !role.data) {
+    return role.success
+      ? err(HaiCommonError.INTERNAL_ERROR)
+      : role
+  }
   const assigned = await iam.authz.syncRoles(created.data.user.id, [role.data.id])
   if (!assigned.success) {
     const removed = await iam.user.deleteUser(created.data.user.id)

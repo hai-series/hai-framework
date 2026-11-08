@@ -4,9 +4,9 @@
 <script lang='ts'>
   import type { PageData } from './$types'
   import { resolve } from '$app/paths'
-  import * as m from '$lib/paraglide/messages'
-  import { getLocale } from '$lib/paraglide/runtime'
   import { Badge, PageHeader, usePermission } from '@h-ai/ui'
+  import * as m from '#lib/paraglide/messages.js'
+  import { getLocale } from '#lib/paraglide/runtime.js'
 
   interface Props {
     data: PageData
@@ -14,11 +14,8 @@
 
   const { data }: Props = $props()
   const { hasPerm } = usePermission()
-  const emptyRouteParams = {}
 
-  type QuickLinkHref = '/admin/iam/users' | '/admin/iam/roles' | '/admin/iam/permissions' | '/admin/logs' | '/admin/ui-gallery' | '/admin/settings'
-
-  const logsPath = resolve('/admin/logs', emptyRouteParams)
+  const logsPath = resolve('admin/logs')
 
   function formatTime(isoString: string | Date): string {
     const date = new Date(isoString)
@@ -27,13 +24,24 @@
 
     if (diff < 60000)
       return m.time_just_now()
-    if (diff < 3600000)
-      return m.time_minutes_ago({ count: Math.floor(diff / 60000) })
-    if (diff < 86400000)
-      return m.time_hours_ago({ count: Math.floor(diff / 3600000) })
+    if (diff < 3600000) {
+      return m.time_minutes_ago({
+        count: Math.floor(diff / 60000),
+      })
+    }
+    if (diff < 86400000) {
+      return m.time_hours_ago({
+        count: Math.floor(diff / 3600000),
+      })
+    }
 
     const locale = getLocale()
-    return date.toLocaleDateString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    return date.toLocaleDateString(locale, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
   }
 
   function translateAction(action: string): string {
@@ -47,7 +55,9 @@
       password_reset: m.activity_password_reset,
     }
     const fn = translations[action]
-    return fn ? fn() : action
+    return fn
+      ? fn()
+      : action
   }
 
   function getActivityBadgeVariant(action: string): 'success' | 'warning' | 'error' | 'primary' | 'info' {
@@ -110,12 +120,48 @@
   ].filter(card => card.visible))
 
   const quickLinks = $derived([
-    { permission: 'user:read', href: '/admin/iam/users', icon: 'icon-[tabler--users]', label: m.nav_users(), color: 'text-primary' },
-    { permission: 'role:read', href: '/admin/iam/roles', icon: 'icon-[tabler--shield-check]', label: m.nav_roles(), color: 'text-emerald-600' },
-    { permission: 'permission:read', href: '/admin/iam/permissions', icon: 'icon-[tabler--key]', label: m.nav_permissions(), color: 'text-amber-600' },
-    { permission: 'audit:read', href: '/admin/logs', icon: 'icon-[tabler--file-text]', label: m.nav_logs(), color: 'text-sky-600' },
-    { permission: 'profile:read', href: '/admin/ui-gallery', icon: 'icon-[tabler--components]', label: m.nav_ui_gallery(), color: 'text-violet-600' },
-    { permission: 'system:settings', href: '/admin/settings', icon: 'icon-[tabler--settings]', label: m.nav_settings(), color: 'text-base-content/50' },
+    {
+      permission: 'user:read',
+      href: resolve('admin/iam/users'),
+      icon: 'icon-[tabler--users]',
+      label: m.nav_users(),
+      color: 'text-primary',
+    },
+    {
+      permission: 'role:read',
+      href: resolve('admin/iam/roles'),
+      icon: 'icon-[tabler--shield-check]',
+      label: m.nav_roles(),
+      color: 'text-emerald-600',
+    },
+    {
+      permission: 'permission:read',
+      href: resolve('admin/iam/permissions'),
+      icon: 'icon-[tabler--key]',
+      label: m.nav_permissions(),
+      color: 'text-amber-600',
+    },
+    {
+      permission: 'audit:read',
+      href: resolve('admin/logs'),
+      icon: 'icon-[tabler--file-text]',
+      label: m.nav_logs(),
+      color: 'text-sky-600',
+    },
+    {
+      permission: 'profile:read',
+      href: resolve('admin/ui-gallery'),
+      icon: 'icon-[tabler--components]',
+      label: m.nav_ui_gallery(),
+      color: 'text-violet-600',
+    },
+    {
+      permission: 'system:settings',
+      href: resolve('admin/settings'),
+      icon: 'icon-[tabler--settings]',
+      label: m.nav_settings(),
+      color: 'text-base-content/50',
+    },
   ].filter(link => hasPerm(link.permission)))
 </script>
 
@@ -157,10 +203,12 @@
       </div>
       <div class='grid grid-cols-2 gap-1'>
         {#each quickLinks as link (link.href)}
-          <a href={resolve(link.href as QuickLinkHref, emptyRouteParams)} class='flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-base-content/4 transition-colors duration-150 group'>
+          <!-- eslint-disable svelte/no-navigation-without-resolve -- 菜单字段已由 resolve 生成完整挂载地址；规则无法追踪派生/筛选后的集合，不能二次添加前缀。 -->
+          <a href={link.href} class='flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-base-content/4 transition-colors duration-150 group'>
             <span class='{link.icon} size-4 {link.color} opacity-70 group-hover:opacity-100 transition-opacity'></span>
             <span class='text-[13px] text-base-content/70 group-hover:text-base-content/90 transition-colors'>{link.label}</span>
           </a>
+          <!-- eslint-enable svelte/no-navigation-without-resolve -->
         {/each}
       </div>
     </div>

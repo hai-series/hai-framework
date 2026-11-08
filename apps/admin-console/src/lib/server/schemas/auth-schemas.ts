@@ -8,9 +8,9 @@
  * =============================================================================
  */
 
-import * as m from '$lib/paraglide/messages.js'
 import { iam } from '@h-ai/iam'
 import { z } from 'zod'
+import * as m from '#lib/paraglide/messages.js'
 
 const USERNAME_REGEX = /^\w{3,20}$/
 const EMAIL_REGEX = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/

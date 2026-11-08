@@ -1,5 +1,4 @@
 /** 使用真实 IAM 与路由验证职责隔离，不能只靠菜单隐藏。 */
-import type { RequestEvent } from '@sveltejs/kit'
 import { audit } from '@h-ai/audit'
 import { cache } from '@h-ai/cache'
 import { iam } from '@h-ai/iam'
@@ -9,8 +8,9 @@ import { ADMIN_DUTIES, canGrantRole, requireAssignableRoles, requireManageableAp
 import { load as dashboard } from '../src/routes/admin/+page.server.js'
 import { DELETE as deletePermission } from '../src/routes/api/iam/permissions/[id]/+server.js'
 import { POST as createUser } from '../src/routes/api/iam/users/+server.js'
-import { PUT as updateUser } from '../src/routes/api/iam/users/[id]/+server.js'
+import { DELETE as deleteUser, PUT as updateUser } from '../src/routes/api/iam/users/[id]/+server.js'
 import { POST as inviteUser } from '../src/routes/api/iam/users/invite/+server.js'
+import { createRequestEvent } from './fixtures/request-event.js'
 
 beforeEach(async () => {
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
@@ -25,13 +25,72 @@ afterEach(async () => {
   await reldb.close()
 })
 
-it('管理端创建用户保存表单显示名称', async () => {
-  const response = await createUser({
-    request: new Request('https://app.test/api/iam/users', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'named_member', email: 'member@example.test', password: 'ExampleOnly123!', display_name: '业务成员', roles: [] }) }),
-    cookies: { get: () => undefined },
-    locals: { session: { userId: 'system-actor', roles: ['admin'], permissions: ['user:api:create'] } },
+it('普通账号管理员不能改密、修改或删除已有超级角色账号', async () => {
+  const role = await iam.authz.createRole({ code: 'super_admin', name: 'Recovery administrator' })
+  const created = await iam.user.createUser({ username: 'protected_root', password: 'OriginalExample123!' })
+  if (!role.success || !created.success)
+    throw new Error('Missing recovery fixture')
+  expect((await iam.authz.syncRoles(created.data.user.id, [role.data.id])).success).toBe(true)
+  const targetId = created.data.user.id
+  const actor = {
+    userId: 'system-actor',
+    roles: ['admin'],
+    permissions: [...ADMIN_DUTIES.admin],
+  }
+  const event = (method: string, input?: Record<string, unknown>) => (createRequestEvent({
+    params: { id: targetId },
+    request: new Request('https://app.test/api/iam/users/target', {
+      method,
+      headers: { 'content-type': 'application/json' },
+      body: input
+        ? JSON.stringify(input)
+        : undefined,
+    }),
+    cookies: {
+      get: () => undefined,
+    },
+    locals: { session: actor },
     getClientAddress: () => '127.0.0.1',
-  } as RequestEvent)
+  }))
+  for (const input of [
+    { password: 'ChangedExample456!' },
+    { display_name: 'Changed' },
+    { accountStatus: 'dormant' },
+    { roles: [] },
+  ])
+    expect((await updateUser(event('PUT', input))).status).toBe(403)
+  expect((await deleteUser(event('DELETE'))).status).toBe(403)
+  expect(await iam.user.getUser(targetId)).toMatchObject({
+    success: true,
+    data: { username: 'protected_root', accountStatus: 'active' },
+  })
+})
+
+it('管理端创建用户保存表单显示名称', async () => {
+  const response = await createUser(createRequestEvent({
+    request: new Request('https://app.test/api/iam/users', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        username: 'named_member',
+        email: 'member@example.test',
+        password: 'ExampleOnly123!',
+        display_name: '业务成员',
+        roles: [],
+      }),
+    }),
+    cookies: {
+      get: () => undefined,
+    },
+    locals: {
+      session: {
+        userId: 'system-actor',
+        roles: ['admin'],
+        permissions: ['user:api:create'],
+      },
+    },
+    getClientAddress: () => '127.0.0.1',
+  }))
   expect(response.status).toBe(200)
   const body = await response.json() as { data: { id: string } }
   const created = await iam.user.getUser(body.data.id)
@@ -41,28 +100,56 @@ it('管理端创建用户保存表单显示名称', async () => {
 it('手机号邀请无需额外邮箱，目标联系方式仍由 IAM 服务端策略校验', async () => {
   await iam.close()
   let notifiedPhone: string | undefined
-  expect((await iam.init({ initialCredentials: { enabled: true }, passwordReset: { enabled: true, mode: 'phone' }, onPasswordResetRequest: async (user) => {
-    notifiedPhone = user.phone
-  } })).success).toBe(true)
-  const response = await inviteUser({
-    request: new Request('https://app.test/api/iam/users/invite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'phone_member', phone: '+8613800138000', roles: [] }) }),
-    cookies: { get: () => undefined },
-    locals: { session: { userId: 'system-actor', roles: ['admin'], permissions: ['user:api:create'] } },
+  expect((await iam.init({
+    initialCredentials: { enabled: true },
+    passwordReset: { enabled: true, mode: 'phone' },
+    onPasswordResetRequest: async (user) => {
+      notifiedPhone = user.phone
+    },
+  })).success).toBe(true)
+  const response = await inviteUser(createRequestEvent({
+    request: new Request('https://app.test/api/iam/users/invite', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'phone_member', phone: '+8613800138000', roles: [] }),
+    }),
+    cookies: {
+      get: () => undefined,
+    },
+    locals: {
+      session: {
+        userId: 'system-actor',
+        roles: ['admin'],
+        permissions: ['user:api:create'],
+      },
+    },
     getClientAddress: () => '127.0.0.1',
-  } as RequestEvent)
+  }))
   expect(response.status).toBe(201)
   expect(notifiedPhone).toBe('+8613800138000')
 })
 
 it('没有审计权限的系统管理员不能从仪表盘读取审计事件', async () => {
   expect((await audit.log({ action: 'private-audit-event', resource: 'security' })).success).toBe(true)
-  const data = await dashboard({ locals: { session: { userId: 'system-actor', roles: ['admin'], permissions: ['dashboard:view'] } } } as Parameters<typeof dashboard>[0])
+  const data = await dashboard({
+    locals: {
+      session: {
+        userId: 'system-actor',
+        roles: ['admin'],
+        permissions: ['dashboard:view'],
+      },
+    },
+  } as Parameters<typeof dashboard>[0])
   expect(data).toMatchObject({ recentActivity: [], auditStats: [], canReadAudit: false })
 })
 
 it('页面加载拒绝使用 SvelteKit 错误状态，不能把 API Response 抛成 500', () => {
   expect(() => requirePagePermission(null, 'audit:read')).toThrow(expect.objectContaining({ status: 401 }))
-  expect(() => requirePagePermission({ userId: 'system', permissions: [...ADMIN_DUTIES.admin] }, 'audit:read')).toThrow(expect.objectContaining({ status: 403 }))
+  expect(() => requirePagePermission({
+    userId: 'system',
+    roles: ['admin'],
+    permissions: [...ADMIN_DUTIES.admin],
+  }, 'audit:read')).toThrow(expect.objectContaining({ status: 403 }))
 })
 
 it('系统账号管理权限不能将本人提升为审计管理员', async () => {
@@ -70,17 +157,35 @@ it('系统账号管理权限不能将本人提升为审计管理员', async () =
   const permission = await iam.authz.getPermissionByCode('audit:read')
   if (!created.success || !permission.success || !permission.data)
     throw new Error('Duty fixture failed')
-  const auditRole = await iam.authz.createRole({ code: 'audit_admin', name: 'Audit admin', permissionIds: [permission.data.id] })
+  const auditRole = await iam.authz.createRole({
+    code: 'audit_admin',
+    name: 'Audit admin',
+    permissionIds: [permission.data.id],
+  })
   if (!auditRole.success)
     throw new Error(auditRole.error.message)
   // 平台字段夹具；处理器、权限判断和写入均为实际实现。
-  const response = await updateUser({
+  const response = await updateUser(createRequestEvent({
     params: { id: created.data.user.id },
-    request: new Request('https://app.test/api/iam/users/current', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ roles: [auditRole.data.id] }) }),
-    cookies: { get: () => undefined },
-    locals: { session: { userId: created.data.user.id, roles: ['admin'], permissions: ['dashboard:view', 'profile:read', 'user:api:update'] } },
+    request: new Request('https://app.test/api/iam/users/current', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        roles: [auditRole.data.id],
+      }),
+    }),
+    cookies: {
+      get: () => undefined,
+    },
+    locals: {
+      session: {
+        userId: created.data.user.id,
+        roles: ['admin'],
+        permissions: ['dashboard:view', 'profile:read', 'user:api:update'],
+      },
+    },
     getClientAddress: () => '127.0.0.1',
-  } as RequestEvent)
+  }))
   expect(response.status).toBe(403)
   const roles = await iam.authz.getUserRoles(created.data.user.id)
   expect(roles.success).toBe(true)
@@ -89,7 +194,13 @@ it('系统账号管理权限不能将本人提升为审计管理员', async () =
 })
 
 it('四类职责与基础用户权限互斥，重复初始化也不会把审计权限还给系统管理员', async () => {
-  const names = { admin: 'System', audit_admin: 'Audit', config_admin: 'Config', business_operator: 'Operator', user: 'Member' }
+  const names = {
+    admin: 'System',
+    audit_admin: 'Audit',
+    config_admin: 'Config',
+    business_operator: 'Operator',
+    user: 'Member',
+  }
   expect((await seedAdminDuties(names)).success).toBe(true)
   expect((await seedAdminDuties(names)).success).toBe(true)
   for (const [code, permissions] of Object.entries(ADMIN_DUTIES)) {
@@ -104,11 +215,33 @@ it('四类职责与基础用户权限互斥，重复初始化也不会把审计�
 })
 
 it('账号管理与 API Key 委托分开，禁止混合职责及授予隐式超级角色', async () => {
-  expect((await seedAdminDuties({ admin: 'System', audit_admin: 'Audit', config_admin: 'Config', business_operator: 'Operator', user: 'Member' })).success).toBe(true)
-  const actor = { userId: 'system', roles: ['admin'], permissions: [...ADMIN_DUTIES.admin] }
-  expect(canGrantRole(actor, { code: 'user', permissions: [...ADMIN_DUTIES.user] })).toBe(true)
-  expect(canGrantRole(actor, { code: 'user', permissions: [...ADMIN_DUTIES.user, 'audit:read'] })).toBe(false)
-  expect(canGrantRole({ ...actor, permissions: ['profile:read'] }, { code: 'user', permissions: [...ADMIN_DUTIES.user] })).toBe(false)
+  expect((await seedAdminDuties({
+    admin: 'System',
+    audit_admin: 'Audit',
+    config_admin: 'Config',
+    business_operator: 'Operator',
+    user: 'Member',
+  })).success).toBe(true)
+  const actor = {
+    userId: 'system',
+    roles: ['admin'],
+    permissions: [...ADMIN_DUTIES.admin],
+  }
+  expect(canGrantRole(actor, {
+    code: 'user',
+    permissions: [...ADMIN_DUTIES.user],
+  })).toBe(true)
+  expect(canGrantRole(actor, {
+    code: 'user',
+    permissions: [...ADMIN_DUTIES.user, 'audit:read'],
+  })).toBe(false)
+  expect(canGrantRole({
+    ...actor,
+    permissions: ['profile:read'],
+  }, {
+    code: 'user',
+    permissions: [...ADMIN_DUTIES.user],
+  })).toBe(false)
   const created = await iam.user.createUser({ username: 'protected-auditor', password: 'ExampleOnly123!' })
   const role = await iam.authz.getRoleByCode('audit_admin')
   if (!created.success || !role.success || !role.data)
@@ -126,41 +259,93 @@ it('账号管理与 API Key 委托分开，禁止混合职责及授予隐式超�
   await expect(requireAssignableRoles(actor, [superRole.data.id])).rejects.toMatchObject({ status: 403 })
 })
 
-it.each(['admin', 'audit_admin', 'config_admin', 'business_operator', 'user'])('系统管理员可创建并管理 %s 账号，重置密码不会激活休眠账号', async (code) => {
-  expect((await seedAdminDuties({ admin: 'System', audit_admin: 'Audit', config_admin: 'Config', business_operator: 'Operator', user: 'Member' })).success).toBe(true)
+it.each([
+  'admin',
+  'audit_admin',
+  'config_admin',
+  'business_operator',
+  'user',
+])('系统管理员可创建并管理 %s 账号，重置密码不会激活休眠账号', async (code) => {
+  expect((await seedAdminDuties({
+    admin: 'System',
+    audit_admin: 'Audit',
+    config_admin: 'Config',
+    business_operator: 'Operator',
+    user: 'Member',
+  })).success).toBe(true)
   const role = await iam.authz.getRoleByCode(code)
   if (!role.success || !role.data)
     throw new Error('Missing duty role')
-  const actor = { userId: 'system-actor', roles: ['admin'], permissions: [...ADMIN_DUTIES.admin] }
+  const actor = {
+    userId: 'system-actor',
+    roles: ['admin'],
+    permissions: [...ADMIN_DUTIES.admin],
+  }
   const username = `duty_${code.slice(0, 12)}`
-  const created = await createUser({
-    request: new Request('https://app.test/api/iam/users', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username, email: `${code}@example.test`, password: 'ExampleOnly123!', roles: [role.data.id] }) }),
-    cookies: { get: () => undefined },
+  const created = await createUser(createRequestEvent({
+    request: new Request('https://app.test/api/iam/users', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        username,
+        email: `${code}@example.test`,
+        password: 'ExampleOnly123!',
+        roles: [role.data.id],
+      }),
+    }),
+    cookies: {
+      get: () => undefined,
+    },
     locals: { session: actor },
     getClientAddress: () => '127.0.0.1',
-  } as RequestEvent)
+  }))
   expect(created.status).toBe(200)
   const body = await created.json() as { data: { id: string } }
-  const updated = await updateUser({
+  const updated = await updateUser(createRequestEvent({
     params: { id: body.data.id },
-    request: new Request('https://app.test/api/iam/users/target', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ display_name: 'Managed account', accountStatus: 'dormant', password: 'ResetExample456!' }) }),
-    cookies: { get: () => undefined },
+    request: new Request('https://app.test/api/iam/users/target', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ display_name: 'Managed account', accountStatus: 'dormant', password: 'ResetExample456!' }),
+    }),
+    cookies: {
+      get: () => undefined,
+    },
     locals: { session: actor },
     getClientAddress: () => '127.0.0.1',
-  } as RequestEvent)
+  }))
   expect(updated.status).toBe(200)
-  expect(await updated.json()).toMatchObject({ data: { display_name: 'Managed account', accountStatus: 'dormant' } })
-  expect(await iam.auth.login({ identifier: username, password: 'ResetExample456!' })).toMatchObject({ success: false, error: { code: 'hai:iam:002' } })
+  expect(await updated.json()).toMatchObject({
+    data: { display_name: 'Managed account', accountStatus: 'dormant' },
+  })
+  expect(await iam.auth.login({ identifier: username, password: 'ResetExample456!' })).toMatchObject({
+    success: false,
+    error: { code: 'hai:iam:002' },
+  })
 })
 
 it('允许清理未分配的自定义权限，拒绝删除其他职责正在使用的定义', async () => {
-  expect((await seedAdminDuties({ admin: 'System', audit_admin: 'Audit', config_admin: 'Config', business_operator: 'Operator', user: 'Member' })).success).toBe(true)
-  const remove = (id: string) => deletePermission({
+  expect((await seedAdminDuties({
+    admin: 'System',
+    audit_admin: 'Audit',
+    config_admin: 'Config',
+    business_operator: 'Operator',
+    user: 'Member',
+  })).success).toBe(true)
+  const remove = (id: string) => deletePermission(createRequestEvent({
     params: { id },
     request: new Request(`https://app.test/api/iam/permissions/${id}`, { method: 'DELETE' }),
-    cookies: { get: () => undefined },
-    locals: { session: { userId: 'system-actor', roles: ['admin'], permissions: [...ADMIN_DUTIES.admin] } },
-  } as RequestEvent)
+    cookies: {
+      get: () => undefined,
+    },
+    locals: {
+      session: {
+        userId: 'system-actor',
+        roles: ['admin'],
+        permissions: [...ADMIN_DUTIES.admin],
+      },
+    },
+  }))
   const unused = await iam.authz.createPermission({ code: 'fixture:unassigned', name: 'Unused definition', type: 'api' })
   if (!unused.success)
     throw new Error(unused.error.message)
@@ -172,5 +357,8 @@ it('允许清理未分配的自定义权限，拒绝删除其他职责正在使�
     throw new Error('Missing protected definition fixture')
   expect((await iam.authz.assignPermissionToRole(role.data.id, protectedDefinition.data.id)).success).toBe(true)
   expect((await remove(protectedDefinition.data.id)).status).toBe(403)
-  expect(await iam.authz.getPermission(protectedDefinition.data.id)).toMatchObject({ success: true, data: { id: protectedDefinition.data.id } })
+  expect(await iam.authz.getPermission(protectedDefinition.data.id)).toMatchObject({
+    success: true,
+    data: { id: protectedDefinition.data.id },
+  })
 })

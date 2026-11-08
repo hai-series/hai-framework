@@ -9,14 +9,14 @@
   import type { ResetPasswordFormData } from '@h-ai/ui'
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
-  import * as m from '$lib/paraglide/messages'
-  import { authActions as actions } from '$lib/services/auth'
   import { authErrorMessage } from '@h-ai/ui/i18n'
+  import * as m from '#lib/paraglide/messages.js'
+  import { authActions as actions } from '#lib/services/auth.js'
 
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
   let success = $state(false)
-  const loginPath = resolve('/auth/login', {})
+  const loginPath = resolve('auth/login')
 
   // 从 URL 获取 token
   const token = $derived(page.url.searchParams.get('token') ?? '')
@@ -29,7 +29,9 @@
 
     const resetToken = token || data.code
     if (!resetToken) {
-      errors = { general: m.auth_reset_invalid_link() }
+      errors = {
+        general: m.auth_reset_invalid_link(),
+      }
       return
     }
 
@@ -42,11 +44,15 @@
         success = true
       }
       else {
-        errors = { general: authErrorMessage(result.error) }
+        errors = {
+          general: authErrorMessage(result.error),
+        }
       }
     }
     catch {
-      errors = { general: m.common_network_error() }
+      errors = {
+        general: m.common_network_error(),
+      }
     }
     finally {
       loading = false

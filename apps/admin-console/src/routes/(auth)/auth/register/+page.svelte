@@ -9,11 +9,11 @@
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
-  import * as m from '$lib/paraglide/messages'
-  import { authActions as actions } from '$lib/services/auth'
+  import * as m from '#lib/paraglide/messages.js'
+  import { authActions as actions } from '#lib/services/auth.js'
 
-  const adminHomePath = resolve('/admin', {})
-  const loginPath = resolve('/auth/login', {})
+  const adminHomePath = resolve('admin')
+  const loginPath = resolve('auth/login')
 
   const config = $derived({
     ...page.data.iamPublicConfig,

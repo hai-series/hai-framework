@@ -6,21 +6,23 @@
 
 import type { PermissionType } from '@h-ai/iam'
 import type { PageServerLoad } from './$types'
-import { listAdminPermissionsPage, listAdminRoles } from '$lib/server/iam-admin.js'
 import { kit } from '@h-ai/kit'
 import { error } from '@sveltejs/kit'
+import { listAdminPermissionsPage, listAdminRoles } from '#lib/server/iam-admin.js'
 
 export const load: PageServerLoad = async ({ url, locals }) => {
   // 权限检查：permission:read
   if (!kit.guard.check(locals.session, 'permission:read')) {
-    throw error(403, { message: 'Forbidden' })
+    error(403, 'Forbidden')
   }
 
   const page = Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1
   const pageSize = Math.min(Number.parseInt(url.searchParams.get('pageSize') ?? '20', 10) || 20, 100)
   const search = url.searchParams.get('search') || undefined
   const typeParam = url.searchParams.get('type') || undefined
-  const type = (['menu', 'api', 'button'].includes(typeParam ?? '') ? typeParam : undefined) as PermissionType | undefined
+  const type = (['menu', 'api', 'button'].includes(typeParam ?? '')
+    ? typeParam
+    : undefined) as PermissionType | undefined
 
   const [permResult, roles] = await Promise.all([
     listAdminPermissionsPage({ page, pageSize, search, type }),

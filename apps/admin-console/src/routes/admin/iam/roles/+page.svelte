@@ -4,10 +4,10 @@
 <script lang='ts'>
   import type { CrudOperations } from '@h-ai/kit'
   import type { PageData } from './$types'
-  import { createRoleCrud } from '$lib/crud/admin-crud'
-  import * as m from '$lib/paraglide/messages'
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
   import { CrudPage, usePermission } from '@h-ai/ui'
+  import { createRoleCrud } from '#lib/crud/admin-crud.js'
+  import * as m from '#lib/paraglide/messages.js'
 
   interface RoleData {
     id: string
@@ -73,8 +73,17 @@
   crud={roleCrud}
   data={crudData}
   permissions={{ create: canCreate, update: canUpdate, delete: canDelete }}
-  form={{ variant: 'modal', modalSize: '3xl', columns: 2, labelPosition: 'top' }}
-  pagination={{ showSizeChanger: true, showJumper: true, pageSizeOptions: [10, 20, 50] }}
+  form={{
+    variant: 'modal',
+    modalSize: '3xl',
+    columns: 2,
+    labelPosition: 'top',
+  }}
+  pagination={{
+    showSizeChanger: true,
+    showJumper: true,
+    pageSizeOptions: [10, 20, 50],
+  }}
   onbeforedelete={handleBeforeDelete}
   {nav}
 />

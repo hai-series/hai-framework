@@ -1,15 +1,15 @@
-import { createAdminRole, listAdminRoles, resolvePermissionIds } from '$lib/server/iam-admin.js'
+import { core } from '@h-ai/core'
 /**
  * =============================================================================
  * Admin Console - 角色管理 API
  * =============================================================================
  */
 
-import { CreateRoleSchema } from '$lib/server/schemas/index.js'
-import { requireGrantablePermissions } from '$lib/server/security-roles.js'
-import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+import { createAdminRole, listAdminRoles, resolvePermissionIds } from '#lib/server/iam-admin.js'
+import { CreateRoleSchema } from '#lib/server/schemas/index.js'
+import { requireGrantablePermissions } from '#lib/server/security-roles.js'
 
 /**
  * GET /api/iam/roles - 获取角色列表

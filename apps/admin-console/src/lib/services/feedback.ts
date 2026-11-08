@@ -1,13 +1,13 @@
 /** 反馈页面的 API 与采集编排；界面仅调用这些动作。 */
 import type { FeedbackEvidence, FeedbackListInput } from '@h-ai/api-contract/feedback'
 import type { FeedbackAnnotation, FeedbackFormData, FeedbackListQuery } from '@h-ai/ui/components/scenes/app/index'
-import { adminBuildMetadata } from '$lib/build-metadata.js'
-import * as m from '$lib/paraglide/messages.js'
-import { apiFetch, observeAdminRequests } from '$lib/utils/api.js'
-import { feedbackApiBaseUrl } from '$lib/utils/feedback-browser.js'
 import { apiClient } from '@h-ai/api-client'
 import { apiContract } from '@h-ai/api-contract'
 import { createFeedbackClient, createFeedbackReview } from '@h-ai/feedback/client'
+import { adminBuildMetadata } from '#lib/build-metadata.js'
+import * as m from '#lib/paraglide/messages.js'
+import { apiFetch, observeAdminRequests } from '#lib/utils/api.js'
+import { feedbackApiBaseUrl } from '#lib/utils/feedback-browser.js'
 
 const http = apiClient.create(apiContract.create({ feedback: apiContract.feedback }))
 const capture = createFeedbackClient()
@@ -17,20 +17,36 @@ const review = createFeedbackReview(http.feedback.reports)
 
 export async function initFeedbackBrowser(): Promise<void> {
   initialize ??= (async () => {
-    const initialized = await http.init({ baseUrl: feedbackApiBaseUrl(), fetch: apiFetch, clientName: 'admin-console' })
+    const initialized = await http.init({
+      baseUrl: feedbackApiBaseUrl(),
+      fetch: apiFetch,
+      clientName: 'admin-console',
+    })
     if (!initialized.success)
       throw new Error(initialized.error.message, { cause: initialized.error })
-    const result = await capture.init({ appId: 'admin-console', ...adminBuildMetadata, cookieAllowlist: ['PARAGLIDE_LOCALE', 'theme'], replay: true, actions: {
-      policy: () => http.feedback.reports.policy({}),
-      submit: input => http.feedback.reports.submit(input),
-      appendEvidence: input => http.feedback.reports.appendEvidence(input),
-      completeCollection: input => http.feedback.reports.completeCollection(input),
-      upload: input => http.feedback.attachments.upload(input),
-    } })
+    const result = await capture.init({
+      appId: 'admin-console',
+      ...adminBuildMetadata,
+      cookieAllowlist: ['PARAGLIDE_LOCALE', 'theme'],
+      replay: true,
+      actions: {
+        policy: () => http.feedback.reports.policy({}),
+        submit: input => http.feedback.reports.submit(input),
+        appendEvidence: input => http.feedback.reports.appendEvidence(input),
+        completeCollection: input => http.feedback.reports.completeCollection(input),
+        upload: input => http.feedback.attachments.upload(input),
+      },
+    })
     if (!result.success)
       throw new Error(result.error.message, { cause: result.error })
     stopRequests = observeAdminRequests((data) => {
-      capture.record({ kind: 'request', data, requestId: typeof data.requestId === 'string' ? data.requestId : undefined })
+      capture.record({
+        kind: 'request',
+        data,
+        requestId: typeof data.requestId === 'string'
+          ? data.requestId
+          : undefined,
+      })
     })
   })().catch((error) => {
     initialize = undefined
@@ -55,12 +71,25 @@ export function feedbackDraftView() {
   const draft = capture.getDraft()
   return {
     ...capture.getView(),
-    evidenceSummary: [{ label: m.feedback_material_missing(), count: draft?.missing.length ?? 0, status: draft?.missing.length ? 'partial' as const : 'complete' as const, detail: draft?.missing.join(', ') }],
+    evidenceSummary: [
+      {
+        label: m.feedback_material_missing(),
+        count: draft?.missing.length ?? 0,
+        status: draft?.missing.length ? 'partial' as const : 'complete' as const,
+        detail: draft?.missing.join(', '),
+      },
+    ],
   }
 }
 
 export async function submitFeedback(input: FeedbackFormData) {
-  const result = await capture.submit({ description: input.description, category: input.type, contact: input.contact, files: input.files, removedAttachmentIds: input.removedAttachmentIds })
+  const result = await capture.submit({
+    description: input.description,
+    category: input.type,
+    contact: input.contact,
+    files: input.files,
+    removedAttachmentIds: input.removedAttachmentIds,
+  })
   if (!result.success)
     throw new Error(result.error.message, { cause: result.error })
   return { number: result.data.number, collectionStatus: result.data.collectionStatus }
@@ -99,7 +128,18 @@ export function feedbackDraftId() {
 }
 
 export function feedbackListParameters(query: FeedbackListQuery): FeedbackListInput {
-  return { page: query.page, pageSize: query.pageSize, status: query.status, collectionStatus: query.collectionStatus, appId: query.appId, appVersion: query.appVersion, search: query.search, from: query.from, to: query.to, sortDirection: query.sortDirection }
+  return {
+    page: query.page,
+    pageSize: query.pageSize,
+    status: query.status,
+    collectionStatus: query.collectionStatus,
+    appId: query.appId,
+    appVersion: query.appVersion,
+    search: query.search,
+    from: query.from,
+    to: query.to,
+    sortDirection: query.sortDirection,
+  }
 }
 
 export const feedbackApi = http

@@ -1,11 +1,13 @@
-import { BusinessSettingsSchema, readBusinessSettings, saveBusinessSettings } from '$lib/server/business-settings.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+import { BusinessSettingsSchema, readBusinessSettings, saveBusinessSettings } from '#lib/server/business-settings.js'
 
 export const GET = kit.handler(async ({ locals }) => {
   kit.guard.require(locals.session, 'system:settings')
   const result = await readBusinessSettings()
-  return result.success ? kit.response.ok(result.data) : kit.response.fromError(result.error)
+  return result.success
+    ? kit.response.ok(result.data)
+    : kit.response.fromError(result.error)
 })
 
 export const PUT = kit.handler(async (event) => {
@@ -13,5 +15,7 @@ export const PUT = kit.handler(async (event) => {
   await kit.guard.requireSensitive(iam, event, 'business.settings.update')
   const input = await kit.validate.body(event.request, BusinessSettingsSchema)
   const result = await saveBusinessSettings(input)
-  return result.success ? kit.response.ok(result.data) : kit.response.fromError(result.error)
+  return result.success
+    ? kit.response.ok(result.data)
+    : kit.response.fromError(result.error)
 })

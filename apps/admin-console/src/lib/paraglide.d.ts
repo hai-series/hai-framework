@@ -9,29 +9,29 @@ type ParaglideMessageFn = (
   options?: { locale?: 'zh-CN' | 'en-US' | 'ja-JP' },
 ) => string
 
-declare module '$lib/paraglide/messages' {
+declare module '#lib/paraglide/messages.js' {
   const messages: Record<string, ParaglideMessageFn>
   export = messages
 }
 
-declare module '$lib/paraglide/messages.js' {
+declare module '#lib/paraglide/messages.js' {
   const messages: Record<string, ParaglideMessageFn>
   export = messages
 }
 
-declare module '$lib/paraglide/runtime' {
+declare module '#lib/paraglide/runtime.js' {
   export function getLocale(): string
   export function setLocale(locale: string): void
   export function deLocalizeUrl(url: URL): URL
 }
 
-declare module '$lib/paraglide/runtime.js' {
+declare module '#lib/paraglide/runtime.js' {
   export function getLocale(): string
   export function setLocale(locale: string): void
   export function deLocalizeUrl(url: URL): URL
 }
 
-declare module '$lib/paraglide/server' {
+declare module '#lib/paraglide/server.js' {
   export const paraglideMiddleware: (
     request: Request,
     callback: (args: {
@@ -41,7 +41,7 @@ declare module '$lib/paraglide/server' {
   ) => Response | Promise<Response>
 }
 
-declare module '$lib/paraglide/server.js' {
+declare module '#lib/paraglide/server.js' {
   export const paraglideMiddleware: (
     request: Request,
     callback: (args: {

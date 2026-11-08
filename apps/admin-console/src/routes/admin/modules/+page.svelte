@@ -2,97 +2,261 @@
   模块功能示例页面 - 展示 hai-framework 各后端模块的使用方式
 -->
 <script lang='ts'>
-  import aiExample from '$lib/examples/modules/ai.ts?raw'
-  import cacheExample from '$lib/examples/modules/cache.ts?raw'
-  import coreExample from '$lib/examples/modules/core.ts?raw'
-  import cryptoExample from '$lib/examples/modules/crypto.ts?raw'
-  import datapipeExample from '$lib/examples/modules/datapipe.ts?raw'
-  import reldbExample from '$lib/examples/modules/reldb.ts?raw'
-  import storageExample from '$lib/examples/modules/storage.ts?raw'
-  import vecdbExample from '$lib/examples/modules/vecdb.ts?raw'
-  import * as m from '$lib/paraglide/messages'
   import { crypto } from '@h-ai/crypto'
   import { toast } from '@h-ai/ui'
+  import aiExample from '#lib/examples/modules/ai.ts?raw'
+  import cacheExample from '#lib/examples/modules/cache.ts?raw'
+  import coreExample from '#lib/examples/modules/core.ts?raw'
+  import cryptoExample from '#lib/examples/modules/crypto.ts?raw'
+  import datapipeExample from '#lib/examples/modules/datapipe.ts?raw'
+  import reldbExample from '#lib/examples/modules/reldb.ts?raw'
+  import storageExample from '#lib/examples/modules/storage.ts?raw'
+  import vecdbExample from '#lib/examples/modules/vecdb.ts?raw'
+  import * as m from '#lib/paraglide/messages.js'
 
   let activeTab = $state('core')
   const tabs = $derived([
-    { key: 'core', label: m.modules_tab_core() },
-    { key: 'db', label: m.modules_tab_db() },
-    { key: 'cache', label: m.modules_tab_cache() },
-    { key: 'storage', label: m.modules_tab_storage() },
-    { key: 'ai', label: m.modules_tab_ai() },
-    { key: 'vecdb', label: m.modules_tab_vecdb() },
-    { key: 'datapipe', label: m.modules_tab_datapipe() },
-    { key: 'crypto', label: m.modules_tab_crypto() },
+    {
+      key: 'core',
+      label: m.modules_tab_core(),
+    },
+    {
+      key: 'db',
+      label: m.modules_tab_db(),
+    },
+    {
+      key: 'cache',
+      label: m.modules_tab_cache(),
+    },
+    {
+      key: 'storage',
+      label: m.modules_tab_storage(),
+    },
+    {
+      key: 'ai',
+      label: m.modules_tab_ai(),
+    },
+    {
+      key: 'vecdb',
+      label: m.modules_tab_vecdb(),
+    },
+    {
+      key: 'datapipe',
+      label: m.modules_tab_datapipe(),
+    },
+    {
+      key: 'crypto',
+      label: m.modules_tab_crypto(),
+    },
   ])
 
   // Core 示例数据
   const coreFeatures = $derived([
-    { name: m.modules_core_feat_config_name(), desc: m.modules_core_feat_config_desc(), api: 'core.config.get(key)' },
-    { name: m.modules_core_feat_log_name(), desc: m.modules_core_feat_log_desc(), api: 'core.logger.info(msg, meta)' },
-    { name: m.modules_core_feat_i18n_name(), desc: m.modules_core_feat_i18n_desc(), api: 'core.i18n.setGlobalLocale(locale)' },
-    { name: m.modules_core_feat_lifecycle_name(), desc: m.modules_core_feat_lifecycle_desc(), api: 'core.init(config)' },
+    {
+      name: m.modules_core_feat_config_name(),
+      desc: m.modules_core_feat_config_desc(),
+      api: 'core.config.get(key)',
+    },
+    {
+      name: m.modules_core_feat_log_name(),
+      desc: m.modules_core_feat_log_desc(),
+      api: 'core.logger.info(msg, meta)',
+    },
+    {
+      name: m.modules_core_feat_i18n_name(),
+      desc: m.modules_core_feat_i18n_desc(),
+      api: 'core.i18n.setGlobalLocale(locale)',
+    },
+    {
+      name: m.modules_core_feat_lifecycle_name(),
+      desc: m.modules_core_feat_lifecycle_desc(),
+      api: 'core.init(config)',
+    },
   ])
 
   // DB 示例数据
   const dbExamples = $derived([
-    { op: 'CREATE TABLE', sql: 'CREATE TABLE users (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  email TEXT UNIQUE\n)', desc: m.modules_db_op_create_desc() },
-    { op: 'INSERT', sql: 'INSERT INTO users (name, email)\nVALUES (\'张三\', \'zhang@example.com\')', desc: m.modules_db_op_insert_desc() },
-    { op: 'SELECT', sql: 'SELECT * FROM users WHERE name LIKE \'%张%\'', desc: m.modules_db_op_select_desc() },
-    { op: 'TRANSACTION', sql: 'await reldb.tx.wrap(async (tx) => {\n  const saved = await tx.execute(\'INSERT INTO users (name, email) VALUES (?, ?)\', [\'Alice\', \'alice@example.com\'])\n  if (!saved.success) throw new Error(saved.error.message, { cause: saved.error })\n  const found = await tx.get(\'SELECT * FROM users WHERE email = ?\', [\'alice@example.com\'])\n  if (!found.success) throw new Error(found.error.message, { cause: found.error })\n  return found.data\n})', desc: m.modules_db_op_tx_desc() },
+    {
+      op: 'CREATE TABLE',
+      sql: 'CREATE TABLE users (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  email TEXT UNIQUE\n)',
+      desc: m.modules_db_op_create_desc(),
+    },
+    {
+      op: 'INSERT',
+      sql: 'INSERT INTO users (name, email)\nVALUES (\'张三\', \'zhang@example.com\')',
+      desc: m.modules_db_op_insert_desc(),
+    },
+    {
+      op: 'SELECT',
+      sql: 'SELECT * FROM users WHERE name LIKE \'%张%\'',
+      desc: m.modules_db_op_select_desc(),
+    },
+    {
+      op: 'TRANSACTION',
+      sql: 'await reldb.tx.wrap(async (tx) => {\n  const saved = await tx.execute(\'INSERT INTO users (name, email) VALUES (?, ?)\', [\'Alice\', \'alice@example.com\'])\n  if (!saved.success) throw new Error(saved.error.message, { cause: saved.error })\n  const found = await tx.get(\'SELECT * FROM users WHERE email = ?\', [\'alice@example.com\'])\n  if (!found.success) throw new Error(found.error.message, { cause: found.error })\n  return found.data\n})',
+      desc: m.modules_db_op_tx_desc(),
+    },
   ])
 
   // Cache 示例
   const cacheOps = $derived([
-    { op: 'SET', code: 'await cache.kv.set(\'user:1\', userData, { ex: 3600 })', desc: m.modules_cache_op_set_desc() },
-    { op: 'GET', code: 'const user = await cache.kv.get<User>(\'user:1\')', desc: m.modules_cache_op_get_desc() },
-    { op: 'DELETE', code: 'await cache.kv.del(\'user:1\')', desc: m.modules_cache_op_delete_desc() },
-    { op: 'SCAN', code: 'const page = await cache.kv.scan(\'0\', { match: \'user:*\', count: 100 })\nif (!page.success) return page\nconst [cursor, keys] = page.data', desc: m.modules_cache_op_clear_desc() },
+    {
+      op: 'SET',
+      code: 'await cache.kv.set(\'user:1\', userData, { ex: 3600 })',
+      desc: m.modules_cache_op_set_desc(),
+    },
+    {
+      op: 'GET',
+      code: 'const user = await cache.kv.get<User>(\'user:1\')',
+      desc: m.modules_cache_op_get_desc(),
+    },
+    {
+      op: 'DELETE',
+      code: 'await cache.kv.del(\'user:1\')',
+      desc: m.modules_cache_op_delete_desc(),
+    },
+    {
+      op: 'SCAN',
+      code: 'const page = await cache.kv.scan(\'0\', { match: \'user:*\', count: 100 })\nif (!page.success) return page\nconst [cursor, keys] = page.data',
+      desc: m.modules_cache_op_clear_desc(),
+    },
   ])
 
   // Storage 示例
   const storageOps = $derived([
-    { op: m.modules_storage_op_upload(), code: 'await storage.file.put(\'docs/report.pdf\', fileBuffer)', desc: m.modules_storage_op_upload_desc() },
-    { op: m.modules_storage_op_download(), code: 'const file = await storage.file.get(\'docs/report.pdf\')', desc: m.modules_storage_op_download_desc() },
-    { op: m.modules_storage_op_presign(), code: 'const url = await storage.presign.getUrl(\'docs/report.pdf\', { expiresIn: 3600 })\nif (!url.success) return url', desc: m.modules_storage_op_presign_desc() },
-    { op: m.modules_storage_op_list(), code: 'const files = await storage.dir.list({ prefix: \'docs/\' })', desc: m.modules_storage_op_list_desc() },
+    {
+      op: m.modules_storage_op_upload(),
+      code: 'await storage.file.put(\'docs/report.pdf\', fileBuffer)',
+      desc: m.modules_storage_op_upload_desc(),
+    },
+    {
+      op: m.modules_storage_op_download(),
+      code: 'const file = await storage.file.get(\'docs/report.pdf\')',
+      desc: m.modules_storage_op_download_desc(),
+    },
+    {
+      op: m.modules_storage_op_presign(),
+      code: 'const url = await storage.presign.getUrl(\'docs/report.pdf\', { expiresIn: 3600 })\nif (!url.success) return url',
+      desc: m.modules_storage_op_presign_desc(),
+    },
+    {
+      op: m.modules_storage_op_list(),
+      code: 'const files = await storage.dir.list({ prefix: \'docs/\' })',
+      desc: m.modules_storage_op_list_desc(),
+    },
   ])
 
   // AI 示例
   const aiFeatures = $derived([
-    { name: m.modules_ai_feat_chat_name(), desc: m.modules_ai_feat_chat_desc(), api: 'ai.llm.chat({ messages: [...] })' },
-    { name: m.modules_ai_feat_embed_name(), desc: m.modules_ai_feat_embed_desc(), api: 'ai.embedding.embedText(text)' },
-    { name: m.modules_ai_feat_multi_name(), desc: m.modules_ai_feat_multi_desc(), api: 'ai.init({ llm: { protocol, model } })' },
-    { name: m.modules_ai_feat_stream_name(), desc: m.modules_ai_feat_stream_desc(), api: 'ai.llm.chatStream({ messages: [...] })' },
-    { name: m.modules_ai_feat_image_name(), desc: m.modules_ai_feat_image_desc(), api: 'ai.image.generate({ prompt, size })' },
+    {
+      name: m.modules_ai_feat_chat_name(),
+      desc: m.modules_ai_feat_chat_desc(),
+      api: 'ai.llm.chat({ messages: [...] })',
+    },
+    {
+      name: m.modules_ai_feat_embed_name(),
+      desc: m.modules_ai_feat_embed_desc(),
+      api: 'ai.embedding.embedText(text)',
+    },
+    {
+      name: m.modules_ai_feat_multi_name(),
+      desc: m.modules_ai_feat_multi_desc(),
+      api: 'ai.init({ llm: { protocol, model } })',
+    },
+    {
+      name: m.modules_ai_feat_stream_name(),
+      desc: m.modules_ai_feat_stream_desc(),
+      api: 'ai.llm.chatStream({ messages: [...] })',
+    },
+    {
+      name: m.modules_ai_feat_image_name(),
+      desc: m.modules_ai_feat_image_desc(),
+      api: 'ai.image.generate({ prompt, size })',
+    },
   ])
 
   // VecDB 示例
   const vecdbFeatures = $derived([
-    { name: m.modules_vecdb_feat_create_name(), desc: m.modules_vecdb_feat_create_desc(), api: 'vecdb.collection.create(name, { dimension })' },
-    { name: m.modules_vecdb_feat_insert_name(), desc: m.modules_vecdb_feat_insert_desc(), api: 'vecdb.vector.insert(collection, docs)' },
-    { name: m.modules_vecdb_feat_search_name(), desc: m.modules_vecdb_feat_search_desc(), api: 'vecdb.vector.search(collection, query, { topK })' },
-    { name: m.modules_vecdb_feat_drop_name(), desc: m.modules_vecdb_feat_drop_desc(), api: 'vecdb.collection.drop(name)' },
+    {
+      name: m.modules_vecdb_feat_create_name(),
+      desc: m.modules_vecdb_feat_create_desc(),
+      api: 'vecdb.collection.create(name, { dimension })',
+    },
+    {
+      name: m.modules_vecdb_feat_insert_name(),
+      desc: m.modules_vecdb_feat_insert_desc(),
+      api: 'vecdb.vector.insert(collection, docs)',
+    },
+    {
+      name: m.modules_vecdb_feat_search_name(),
+      desc: m.modules_vecdb_feat_search_desc(),
+      api: 'vecdb.vector.search(collection, query, { topK })',
+    },
+    {
+      name: m.modules_vecdb_feat_drop_name(),
+      desc: m.modules_vecdb_feat_drop_desc(),
+      api: 'vecdb.collection.drop(name)',
+    },
   ])
 
   const vecdbOps = $derived([
-    { op: m.modules_vecdb_op_create(), code: 'await vecdb.collection.create(\'docs\', { dimension: 1536 })', desc: m.modules_vecdb_op_create_desc() },
-    { op: m.modules_vecdb_op_insert(), code: 'await vecdb.vector.insert(\'docs\', [{ id: \'1\', vector: embedding, metadata: { title: \'文档标题\' } }])', desc: m.modules_vecdb_op_insert_desc() },
-    { op: m.modules_vecdb_op_search(), code: 'const results = await vecdb.vector.search(\'docs\', queryVector, { topK: 5 })', desc: m.modules_vecdb_op_search_desc() },
-    { op: m.modules_vecdb_op_delete(), code: 'await vecdb.vector.delete(\'docs\', [\'1\', \'2\'])', desc: m.modules_vecdb_op_delete_desc() },
+    {
+      op: m.modules_vecdb_op_create(),
+      code: 'await vecdb.collection.create(\'docs\', { dimension: 1536 })',
+      desc: m.modules_vecdb_op_create_desc(),
+    },
+    {
+      op: m.modules_vecdb_op_insert(),
+      code: 'await vecdb.vector.insert(\'docs\', [{ id: \'1\', vector: embedding, metadata: { title: \'文档标题\' } }])',
+      desc: m.modules_vecdb_op_insert_desc(),
+    },
+    {
+      op: m.modules_vecdb_op_search(),
+      code: 'const results = await vecdb.vector.search(\'docs\', queryVector, { topK: 5 })',
+      desc: m.modules_vecdb_op_search_desc(),
+    },
+    {
+      op: m.modules_vecdb_op_delete(),
+      code: 'await vecdb.vector.delete(\'docs\', [\'1\', \'2\'])',
+      desc: m.modules_vecdb_op_delete_desc(),
+    },
   ])
 
   // DataPipe 示例
   const datapipeFeatures = $derived([
-    { name: m.modules_datapipe_feat_clean_name(), desc: m.modules_datapipe_feat_clean_desc(), api: 'datapipe.clean(text, options)' },
-    { name: m.modules_datapipe_feat_chunk_name(), desc: m.modules_datapipe_feat_chunk_desc(), api: 'datapipe.chunk(text, options)' },
-    { name: m.modules_datapipe_feat_pipe_name(), desc: m.modules_datapipe_feat_pipe_desc(), api: 'datapipe.pipeline().clean(...).chunk(...).run(input)' },
+    {
+      name: m.modules_datapipe_feat_clean_name(),
+      desc: m.modules_datapipe_feat_clean_desc(),
+      api: 'datapipe.clean(text, options)',
+    },
+    {
+      name: m.modules_datapipe_feat_chunk_name(),
+      desc: m.modules_datapipe_feat_chunk_desc(),
+      api: 'datapipe.chunk(text, options)',
+    },
+    {
+      name: m.modules_datapipe_feat_pipe_name(),
+      desc: m.modules_datapipe_feat_pipe_desc(),
+      api: 'datapipe.pipeline().clean(...).chunk(...).run(input)',
+    },
   ])
 
   const datapipeOps = $derived([
-    { op: 'Clean', code: 'const cleaned = datapipe.clean(htmlContent, {\n  removeHtml: true,\n  normalizeWhitespace: true,\n  removeUrls: true,\n})', desc: m.modules_datapipe_op_clean_desc() },
-    { op: 'Chunk', code: 'const chunks = datapipe.chunk(longText, {\n  mode: \'paragraph\',\n  maxSize: 1000,\n  overlap: 200,\n})', desc: m.modules_datapipe_op_chunk_desc() },
-    { op: 'Pipeline', code: 'const result = await datapipe.pipeline()\n  .clean({ removeHtml: true })\n  .chunk({ mode: \'paragraph\', maxSize: 500 })\n  .run(rawContent)', desc: m.modules_datapipe_op_pipe_desc() },
+    {
+      op: 'Clean',
+      code: 'const cleaned = datapipe.clean(htmlContent, {\n  removeHtml: true,\n  normalizeWhitespace: true,\n  removeUrls: true,\n})',
+      desc: m.modules_datapipe_op_clean_desc(),
+    },
+    {
+      op: 'Chunk',
+      code: 'const chunks = datapipe.chunk(longText, {\n  mode: \'paragraph\',\n  maxSize: 1000,\n  overlap: 200,\n})',
+      desc: m.modules_datapipe_op_chunk_desc(),
+    },
+    {
+      op: 'Pipeline',
+      code: 'const result = await datapipe.pipeline()\n  .clean({ removeHtml: true })\n  .chunk({ mode: \'paragraph\', maxSize: 500 })\n  .run(rawContent)',
+      desc: m.modules_datapipe_op_pipe_desc(),
+    },
   ])
 
   // Crypto 示例状态
@@ -168,7 +332,9 @@
       <button
         type='button'
         role='tab'
-        class="tab {activeTab === tab.key ? 'tab-active' : ''}"
+        class="tab {activeTab === tab.key
+          ? 'tab-active'
+          : ''}"
         onclick={() => activeTab = tab.key}
       >
         {tab.label}

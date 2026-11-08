@@ -8,10 +8,10 @@
  * =============================================================================
  */
 
-import * as m from '$lib/paraglide/messages.js'
 import { iam } from '@h-ai/iam'
 import { IdParamSchema, PaginationQuerySchema } from '@h-ai/kit'
 import { z } from 'zod'
+import * as m from '#lib/paraglide/messages.js'
 
 const USERNAME_REGEX = /^\w{3,20}$/
 const EMAIL_REGEX = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/
@@ -35,7 +35,13 @@ export const ListUsersQuerySchema = PaginationQuerySchema.extend({
   roleCode: z.string().trim().min(1).max(100).optional(),
   accountStatus: z.enum(['active', 'dormant', 'closed']).optional(),
   /** IAM 用户列表允许排序的领域字段。 */
-  sortBy: z.enum(['username', 'email', 'displayName', 'accountStatus', 'createdAt']).optional(),
+  sortBy: z.enum([
+    'username',
+    'email',
+    'displayName',
+    'accountStatus',
+    'createdAt',
+  ]).optional(),
   /** 服务端排序方向。 */
   sortDirection: z.enum(['asc', 'desc']).optional(),
 }).strict()
@@ -57,7 +63,11 @@ export function createCreateUserSchema() {
 
 /** 更新用户请求 Schema */
 export function createInviteUserSchema() {
-  return createCreateUserSchema().omit({ password: true }).extend({ email: z.string().regex(EMAIL_REGEX, m.api_auth_email_invalid()).optional(), phone: z.string().trim().min(1).max(32).optional(), accountStatus: z.literal('active').optional() })
+  return createCreateUserSchema().omit({ password: true }).extend({
+    email: z.string().regex(EMAIL_REGEX, m.api_auth_email_invalid()).optional(),
+    phone: z.string().trim().min(1).max(32).optional(),
+    accountStatus: z.literal('active').optional(),
+  })
 }
 
 /** 更新用户请求 Schema */

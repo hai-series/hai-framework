@@ -6,13 +6,13 @@
 -->
 <script lang='ts'>
   import type { PageData } from './$types'
-  import { browser } from '$app/environment'
-  import { invalidateAll } from '$app/navigation'
-  import * as m from '$lib/paraglide/messages.js'
-  import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
-  import { saveBusinessNotice } from '$lib/services/business-settings'
+  import { browser } from '$app/env'
+  import { refreshAll } from '$app/navigation'
   import { applyTheme, getCurrentTheme, getSavedTheme, setGlobalLocale } from '@h-ai/ui'
   import { errorMessage as formatOperationError, toast, useToastFeedback } from '@h-ai/ui/toast'
+  import * as m from '#lib/paraglide/messages.js'
+  import { getLocale, setLocale } from '#lib/paraglide/runtime.js'
+  import { saveBusinessNotice } from '#lib/services/business-settings.js'
 
   interface Props { data: PageData }
   const { data }: Props = $props()
@@ -30,7 +30,7 @@
       }
       else {
         toast.success(m.common_success())
-        await invalidateAll()
+        await refreshAll()
       }
     }
     catch { errorMessage = m.common_network_error() }
@@ -41,7 +41,9 @@
   let activeSection = $state('business')
 
   // ========== 主题设置 ==========
-  let currentTheme = $state(browser ? getCurrentTheme() : 'light')
+  let currentTheme = $state(browser
+    ? getCurrentTheme()
+    : 'light')
 
   // 处理主题变更
   function handleThemeChange(theme: string) {
@@ -52,7 +54,9 @@
   }
 
   // ========== 语言设置 ==========
-  let currentLanguage = $state(browser ? getLocale() : 'zh-CN')
+  let currentLanguage = $state(browser
+    ? getLocale()
+    : 'zh-CN')
 
   function handleLanguageChange(lang: string) {
     if (!browser)
@@ -89,10 +93,26 @@
   title={m.settings_title()}
   description={m.settings_subtitle()}
   sections={[
-    { id: 'business', label: m.business_settings_title(), icon: 'icon-[tabler--message]' },
-    { id: 'appearance', label: m.settings_appearance(), icon: 'icon-[tabler--palette]' },
-    { id: 'region', label: m.settings_region(), icon: 'icon-[tabler--language]' },
-    { id: 'about', label: m.settings_about(), icon: 'icon-[tabler--info-circle]' },
+    {
+      id: 'business',
+      label: m.business_settings_title(),
+      icon: 'icon-[tabler--message]',
+    },
+    {
+      id: 'appearance',
+      label: m.settings_appearance(),
+      icon: 'icon-[tabler--palette]',
+    },
+    {
+      id: 'region',
+      label: m.settings_region(),
+      icon: 'icon-[tabler--language]',
+    },
+    {
+      id: 'about',
+      label: m.settings_about(),
+      icon: 'icon-[tabler--info-circle]',
+    },
   ]}
   active={activeSection}
   onselect={id => (activeSection = id)}

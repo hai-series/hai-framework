@@ -4,13 +4,13 @@
 <script lang='ts'>
   import type { CrudOperations } from '@h-ai/kit'
   import type { PageData } from './$types'
-  import { invalidateAll } from '$app/navigation'
-  import { createPermissionCrud } from '$lib/crud/admin-crud'
-  import * as m from '$lib/paraglide/messages'
-  import { sensitiveFetch } from '$lib/services/sensitive-actions.svelte'
+  import { refreshAll } from '$app/navigation'
   import { err, HaiCommonError, ok } from '@h-ai/core'
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
   import { Button, CrudPage, Modal, SensitiveOperationsForm, usePermission } from '@h-ai/ui'
+  import { createPermissionCrud } from '#lib/crud/admin-crud.js'
+  import * as m from '#lib/paraglide/messages.js'
+  import { sensitiveFetch } from '#lib/services/sensitive-actions.svelte.js'
 
   interface PermissionItem {
     id: string
@@ -70,10 +70,14 @@
   async function saveOperations(operations: string[]) {
     if (!editing)
       return err(HaiCommonError.VALIDATION_ERROR)
-    const response = await sensitiveFetch('iam.permissions.sensitiveOperations', `/api/iam/permissions/${encodeURIComponent(editing.id)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sensitiveOperations: operations }) })
+    const response = await sensitiveFetch('iam.permissions.sensitiveOperations', `/api/iam/permissions/${encodeURIComponent(editing.id)}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sensitiveOperations: operations }),
+    })
     if (!response.ok)
       return err(HaiCommonError.INTERNAL_ERROR)
-    await invalidateAll()
+    await refreshAll()
     return ok(undefined)
   }
 </script>

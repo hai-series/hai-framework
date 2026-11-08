@@ -9,15 +9,15 @@
   import type { ForgotPasswordFormData } from '@h-ai/ui'
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
-  import * as m from '$lib/paraglide/messages'
-  import { authActions as actions } from '$lib/services/auth'
   import { authErrorMessage } from '@h-ai/ui/i18n'
+  import * as m from '#lib/paraglide/messages.js'
+  import { authActions as actions } from '#lib/services/auth.js'
 
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
   let success = $state(false)
-  const loginPath = resolve('/auth/login', {})
-  const resetPath = resolve('/auth/reset-password', {})
+  const loginPath = resolve('auth/login')
+  const resetPath = resolve('auth/reset-password')
 
   async function handleForgotPassword(data: ForgotPasswordFormData) {
     errors = {}
@@ -30,11 +30,15 @@
         success = true
       }
       else {
-        errors = { general: authErrorMessage(result.error) }
+        errors = {
+          general: authErrorMessage(result.error),
+        }
       }
     }
     catch {
-      errors = { general: m.common_network_error() }
+      errors = {
+        general: m.common_network_error(),
+      }
     }
     finally {
       loading = false

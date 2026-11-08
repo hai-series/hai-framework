@@ -8,9 +8,9 @@
  * =============================================================================
  */
 
-import * as m from '$lib/paraglide/messages.js'
 import { kit } from '@h-ai/kit'
 import { storage } from '@h-ai/storage'
+import * as m from '#lib/paraglide/messages.js'
 
 function isSafeStorageKey(key: string): boolean {
   return key.length > 0
@@ -20,10 +20,14 @@ function isSafeStorageKey(key: string): boolean {
 }
 
 export const GET = kit.handler(async ({ params, locals }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   const key = params.key
 
-  if (!isSafeStorageKey(key)) {
+  if (!key || !isSafeStorageKey(key)) {
     return kit.response.badRequest(m.common_error({}, { locale }))
   }
 
@@ -48,7 +52,9 @@ export const GET = kit.handler(async ({ params, locals }) => {
       'cache-control': 'public, max-age=300',
       'content-length': String(headResult.data.size),
       'content-type': headResult.data.contentType || 'application/octet-stream',
-      ...(headResult.data.etag ? { etag: headResult.data.etag } : {}),
+      ...(headResult.data.etag
+        ? { etag: headResult.data.etag }
+        : {}),
     },
     status: 200,
   })

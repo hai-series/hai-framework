@@ -4,12 +4,12 @@
 <script lang='ts'>
   import type { CrudOperations } from '@h-ai/kit'
   import type { PageData } from './$types'
-  import { invalidateAll } from '$app/navigation'
-  import InviteUserDialog from '$lib/components/InviteUserDialog.svelte'
-  import { createUserCrud } from '$lib/crud/admin-crud'
-  import * as m from '$lib/paraglide/messages'
+  import { refreshAll } from '$app/navigation'
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
   import { Button, CrudPage, usePermission } from '@h-ai/ui'
+  import InviteUserDialog from '#lib/components/InviteUserDialog.svelte'
+  import { createUserCrud } from '#lib/crud/admin-crud.js'
+  import * as m from '#lib/paraglide/messages.js'
 
   interface UserData {
     id: string
@@ -78,15 +78,27 @@
 
   /** 用户列表后端实际支持的排序列；角色为当前页关联数据，不能伪装成服务端排序。 */
   const userSortableColumns = $derived([
-    { key: 'username', label: m.iam_users_col_username() },
-    { key: 'email', label: m.iam_users_col_email() },
-    { key: 'accountStatus', label: m.account_state() },
-    { key: 'created_at', label: m.iam_users_col_created_at() },
+    {
+      key: 'username',
+      label: m.iam_users_col_username(),
+    },
+    {
+      key: 'email',
+      label: m.iam_users_col_email(),
+    },
+    {
+      key: 'accountStatus',
+      label: m.account_state(),
+    },
+    {
+      key: 'created_at',
+      label: m.iam_users_col_created_at(),
+    },
   ])
 
   // 提交前把 roles（显示名）替换为 roleIds（实际 ID）
   async function handleAfterSubmit() {
-    await invalidateAll()
+    await refreshAll()
   }
 
   const nav = createSvelteKitNavAdapter()
@@ -100,7 +112,13 @@
   crud={userCrud}
   data={crudData}
   permissions={{ create: canCreate, update: canUpdate, delete: canDelete }}
-  form={{ variant: 'drawer', drawerWidth: '44rem', columns: 2, labelPosition: 'left', labelWidth: '5.5rem' }}
+  form={{
+    variant: 'drawer',
+    drawerWidth: '44rem',
+    columns: 2,
+    labelPosition: 'left',
+    labelWidth: '5.5rem',
+  }}
   density='compact'
   detailColumns={['username']}
   sortableColumns={userSortableColumns}

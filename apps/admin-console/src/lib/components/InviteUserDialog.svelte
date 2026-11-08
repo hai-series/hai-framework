@@ -1,8 +1,8 @@
 <script lang='ts'>
-  import * as m from '$lib/paraglide/messages.js'
-  import { inviteUser } from '$lib/services/invitation.js'
   import { Button, FormField, FormLayout, Input, Modal, Select } from '@h-ai/ui'
   import { errorMessage as formatOperationError, useToastFeedback } from '@h-ai/ui/toast'
+  import * as m from '#lib/paraglide/messages.js'
+  import { inviteUser } from '#lib/services/invitation.js'
 
   interface Props {
     open: boolean
@@ -18,13 +18,28 @@
   let role = $state('')
   let loading = $state(false)
   let error = $state('')
-  const roleOptions = $derived([{ value: '', label: m.invitation_default_role() }, ...roles.map(role => ({ value: role.id, label: role.name }))])
+  const roleOptions = $derived([
+    {
+      value: '',
+      label: m.invitation_default_role(),
+    },
+    ...roles.map(role => ({ value: role.id, label: role.name })),
+  ])
   async function submit(event: SubmitEvent) {
     event.preventDefault()
     loading = true
     error = ''
     try {
-      const result = await inviteUser({ username, email: email || undefined, phone: mode === 'phone' ? phone : undefined, roles: role ? [role] : undefined })
+      const result = await inviteUser({
+        username,
+        email: email || undefined,
+        phone: mode === 'phone'
+          ? phone
+          : undefined,
+        roles: role
+          ? [role]
+          : undefined,
+      })
       await onrefresh()
       if (!result.success) {
         error = `${formatOperationError(result.error, m.common_error())} ${m.invitation_check_existing()}`

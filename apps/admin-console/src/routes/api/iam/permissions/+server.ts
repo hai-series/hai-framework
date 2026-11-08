@@ -4,11 +4,11 @@
  * =============================================================================
  */
 
-import * as m from '$lib/paraglide/messages.js'
-import { createAdminPermission, getAdminPermissionByCode, listAdminPermissionsPage } from '$lib/server/iam-admin.js'
-import { CreatePermissionSchema, ListPermissionsQuerySchema } from '$lib/server/schemas/index.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+import * as m from '#lib/paraglide/messages.js'
+import { createAdminPermission, getAdminPermissionByCode, listAdminPermissionsPage } from '#lib/server/iam-admin.js'
+import { CreatePermissionSchema, ListPermissionsQuerySchema } from '#lib/server/schemas/index.js'
 
 /**
  * GET /api/iam/permissions - 获取权限列表（分页）
@@ -30,7 +30,11 @@ export const GET = kit.handler(async ({ url, locals }) => {
  * 需要权限：permission:api:create
  */
 export const POST = kit.handler(async ({ request, locals, cookies }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   kit.guard.require(locals.session, 'permission:api:create')
   await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.permissions.create')
 

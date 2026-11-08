@@ -6,7 +6,7 @@
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
-  import * as m from '$lib/paraglide/messages'
+  import * as m from '#lib/paraglide/messages.js'
 
   interface Props {
     children: Snippet
@@ -16,19 +16,34 @@
 
   /** UI Gallery 标签页配置列表，按 UI 顺序排列。 */
   const tabs = $derived([
-    { key: 'primitives', label: m.gallery_tab_primitives() },
-    { key: 'compounds', label: m.gallery_tab_compounds() },
-    { key: 'scenes', label: m.gallery_tab_scenes() },
-    { key: 'charts', label: m.gallery_tab_charts() },
-    { key: 'overlays', label: m.gallery_tab_overlays() },
+    {
+      key: 'primitives',
+      label: m.gallery_tab_primitives(),
+    },
+    {
+      key: 'compounds',
+      label: m.gallery_tab_compounds(),
+    },
+    {
+      key: 'scenes',
+      label: m.gallery_tab_scenes(),
+    },
+    {
+      key: 'charts',
+      label: m.gallery_tab_charts(),
+    },
+    {
+      key: 'overlays',
+      label: m.gallery_tab_overlays(),
+    },
   ])
 
   /** 各标签页对应的路由路径，通过 SvelteKit resolve 生成。 */
-  const primitivesPath = resolve('/admin/ui-gallery/primitives', {})
-  const compoundsPath = resolve('/admin/ui-gallery/compounds', {})
-  const scenesPath = resolve('/admin/ui-gallery/scenes', {})
-  const chartsPath = resolve('/admin/ui-gallery/charts', {})
-  const overlaysPath = resolve('/admin/ui-gallery/overlays', {})
+  const primitivesPath = resolve('admin/ui-gallery/primitives')
+  const compoundsPath = resolve('admin/ui-gallery/compounds')
+  const scenesPath = resolve('admin/ui-gallery/scenes')
+  const chartsPath = resolve('admin/ui-gallery/charts')
+  const overlaysPath = resolve('admin/ui-gallery/overlays')
 
   /** 从 URL 路径推断当前激活的标签 */
   const activeTab = $derived.by(() => {

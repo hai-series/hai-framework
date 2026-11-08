@@ -6,9 +6,9 @@
   import { resolve } from '$app/paths'
   import { onMount } from 'svelte'
 
-  const uiGalleryPrimitivesPath = resolve('/admin/ui-gallery/primitives', {})
+  const uiGalleryPrimitivesPath = resolve('admin/ui-gallery/primitives')
 
   onMount(() => {
-    void goto(uiGalleryPrimitivesPath, { replaceState: true })
+    void goto(uiGalleryPrimitivesPath, { replace: true })
   })
 </script>

@@ -5,14 +5,17 @@
 <script lang='ts'>
   import type { Snippet } from 'svelte'
   import type { LayoutData } from './$types'
-  import { browser } from '$app/environment'
-  import { base } from '$app/paths'
-  import * as m from '$lib/paraglide/messages'
-  import { getLocale } from '$lib/paraglide/runtime.js'
+  import { browser } from '$app/env'
+  import { resolve } from '$app/paths'
   import { crypto } from '@h-ai/crypto'
   import { kit } from '@h-ai/kit'
   import { setGlobalLocale } from '@h-ai/ui'
   import { untrack } from 'svelte'
+  import * as m from '#lib/paraglide/messages.js'
+  import { getLocale } from '#lib/paraglide/runtime.js'
+
+  // Vite 配置固定 paths.relative=false，HTTP 前缀不会随 SSR 页面深度改变。
+  const base = resolve('/').replace(/\/$/, '')
   import '../app.css'
 
   interface Props {

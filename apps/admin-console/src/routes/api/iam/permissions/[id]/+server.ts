@@ -1,16 +1,16 @@
-import * as m from '$lib/paraglide/messages.js'
+import { IamPermissionSchema } from '@h-ai/api-contract'
 /**
  * =============================================================================
  * Admin Console - 单个权限管理 API
  * =============================================================================
  */
 
-import { deleteAdminPermission, getAdminPermission } from '$lib/server/iam-admin.js'
-import { IdParamSchema } from '$lib/server/schemas/index.js'
-import { requireManageablePermission } from '$lib/server/security-roles.js'
-import { IamPermissionSchema } from '@h-ai/api-contract'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+import * as m from '#lib/paraglide/messages.js'
+import { deleteAdminPermission, getAdminPermission } from '#lib/server/iam-admin.js'
+import { IdParamSchema } from '#lib/server/schemas/index.js'
+import { requireManageablePermission } from '#lib/server/security-roles.js'
 
 /** 系统管理人员可维护权限的再鉴别要求；不改变原有职责授权。 */
 export const PUT = kit.handler(async ({ params, locals, request, cookies }) => {
@@ -19,7 +19,9 @@ export const PUT = kit.handler(async ({ params, locals, request, cookies }) => {
   const { id } = kit.validate.params(params, IdParamSchema)
   const input = await kit.validate.body(request, IamPermissionSchema.pick({ sensitiveOperations: true }))
   const result = await iam.authz.setPermissionSensitiveOperations(id, input.sensitiveOperations)
-  return result.success ? kit.response.ok(null) : kit.response.fromError(result.error)
+  return result.success
+    ? kit.response.ok(null)
+    : kit.response.fromError(result.error)
 })
 
 /**
@@ -28,7 +30,11 @@ export const PUT = kit.handler(async ({ params, locals, request, cookies }) => {
  * 需要权限：permission:api:delete
  */
 export const DELETE = kit.handler(async ({ params, locals, request, cookies }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   kit.guard.require(locals.session, 'permission:api:delete')
   await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.permissions.delete')
 

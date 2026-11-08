@@ -5,11 +5,11 @@
  */
 
 import type { LayoutServerLoad } from './$types'
-import { readBusinessSettings } from '$lib/server/business-settings.js'
-import { requireAdminData } from '$lib/server/iam-admin.js'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { redirect } from '@sveltejs/kit'
+import { readBusinessSettings } from '#lib/server/business-settings.js'
+import { requireAdminData } from '#lib/server/iam-admin.js'
 
 export const load: LayoutServerLoad = async ({ locals, url }) => {
   if (!locals.session) {

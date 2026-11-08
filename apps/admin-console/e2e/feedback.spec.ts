@@ -16,7 +16,12 @@ test('Desktop 默认 CSP 允许 Blob 截图预览、像素遮挡和下载，并�
   const policy = /"csp":\s*"([^"]+)"/.exec(template)?.[1]
   expect(policy).toBeTruthy()
   expect(policy!.split(';').find(value => value.trim().startsWith('script-src'))).not.toContain('blob:')
-  await page.route('https://desktop-csp.test/', route => route.fulfill({ status: 200, headers: { 'Content-Security-Policy': policy! }, contentType: 'text/html', body: '<!doctype html><title>Desktop capture</title><body></body>' }))
+  await page.route('https://desktop-csp.test/', route => route.fulfill({
+    status: 200,
+    headers: { 'Content-Security-Policy': policy! },
+    contentType: 'text/html',
+    body: '<!doctype html><title>Desktop capture</title><body></body>',
+  }))
   await page.goto('https://desktop-csp.test/')
   const pixels = await page.evaluate(async () => {
     const canvas = document.createElement('canvas')
@@ -38,22 +43,35 @@ test('Desktop 默认 CSP 允许 Blob 截图预览、像素遮挡和下载，并�
     link.download = 'desktop-feedback.png'
     link.textContent = 'Save screenshot'
     document.body.append(link)
-    return { naturalWidth: image.naturalWidth, mask: [...context.getImageData(25, 25, 1, 1).data] }
+    return {
+      naturalWidth: image.naturalWidth,
+      mask: [
+        ...context.getImageData(25, 25, 1, 1).data,
+      ],
+    }
   })
-  expect(pixels).toEqual({ naturalWidth: 100, mask: [17, 17, 17, 255] })
+  expect(pixels).toEqual({
+    naturalWidth: 100,
+    mask: [17, 17, 17, 255],
+  })
   const download = page.waitForEvent('download')
   await page.getByRole('link', { name: 'Save screenshot' }).click()
   expect((await download).suggestedFilename()).toBe('desktop-feedback.png')
 })
 test.beforeAll(async ({ browserName }, testInfo) => {
   buildFacts = readAdminBuildFacts()
-  await testInfo.attach('admin-build-facts', { body: JSON.stringify({ browserName, ...buildFacts }, null, 2), contentType: 'application/json' })
+  await testInfo.attach('admin-build-facts', {
+    body: JSON.stringify({ browserName, ...buildFacts }, null, 2),
+    contentType: 'application/json',
+  })
 })
 
 /** 公开证据接口分别校验浏览器和服务产物，不能以相同空值冒充一致。 */
 async function expectReportBuildFacts(page: Page, id: string): Promise<void> {
   await expect.poll(async () => {
-    const response = await page.request.get(`/api/feedback/reports/${id}/evidence`, { params: { kind: 'environment', page: 1, pageSize: 100 } })
+    const response = await page.request.get(`/api/feedback/reports/${id}/evidence`, {
+      params: { kind: 'environment', page: 1, pageSize: 100 },
+    })
     const result: HaiResult<PaginatedResult<FeedbackEvidence>> = await response.json()
     if (!result.success)
       return { error: result.error.code }
@@ -64,7 +82,11 @@ async function expectReportBuildFacts(page: Page, id: string): Promise<void> {
 }
 
 async function capture(page: Page, name: string, testInfo: TestInfo) {
-  await page.screenshot({ path: testInfo.outputPath(name), fullPage: true, animations: 'disabled' })
+  await page.screenshot({
+    path: testInfo.outputPath(name),
+    fullPage: true,
+    animations: 'disabled',
+  })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 }
 
@@ -89,7 +111,9 @@ async function submitFeedback(page: Page, description = '') {
 
 /** 校验实际上传材料；不会以页面截图或缺失标记代替诊断 PNG。 */
 async function storedPng(page: Page, number: string, name: string): Promise<Buffer> {
-  const listed = await page.request.get('/api/feedback/reports', { params: { page: 1, pageSize: 20, search: number } })
+  const listed = await page.request.get('/api/feedback/reports', {
+    params: { page: 1, pageSize: 20, search: number },
+  })
   expect(listed.ok()).toBe(true)
   const reports: HaiResult<PaginatedResult<FeedbackReport>> = await listed.json()
   expect(reports.success).toBe(true)
@@ -179,7 +203,10 @@ test('当前截图、换页补图、材料内容、真实编码录屏和页面�
     marker.id = 'feedback-current-page-probe'
     marker.style.cssText = 'position:fixed;left:200px;top:180px;width:80px;height:80px;background:rgb(19,221,119);z-index:900'
     document.body.append(marker)
-    for (const [id, type, left] of [['ordinary', 'text', 320], ['secret', 'password', 500]] as const) {
+    for (const [id, type, left] of [
+      ['ordinary', 'text', 320],
+      ['secret', 'password', 500],
+    ] as const) {
       const input = document.createElement('input')
       input.id = `feedback-${id}-probe`
       input.type = type
@@ -209,25 +236,49 @@ test('当前截图、换页补图、材料内容、真实编码录屏和页面�
     canvas.height = source.naturalHeight
     const context = canvas.getContext('2d')!
     context.drawImage(source, 0, 0)
-    return { ordinary: [...context.getImageData(450, 200, 1, 1).data], secret: [...context.getImageData(630, 200, 1, 1).data] }
+    return {
+      ordinary: [
+        ...context.getImageData(450, 200, 1, 1).data,
+      ],
+      secret: [
+        ...context.getImageData(630, 200, 1, 1).data,
+      ],
+    }
   })
   expect(controlPixels.ordinary).toEqual([255, 255, 255, 255])
   expect(controlPixels.secret).toEqual([17, 17, 17, 255])
   await expect(page.locator('#feedback-ordinary-probe')).toHaveValue('sensitive-value-must-be-hidden')
   await form.locator('input[type="file"]').setInputFiles([
-    { name: 'browser-empty-mime.log', mimeType: '', buffer: Buffer.from('safe diagnostic line\npassword=private-log-sentinel') },
-    { name: 'local-generic-mime.png', mimeType: 'application/octet-stream', buffer: Buffer.from(await form.locator('img[alt="screenshot.png"]').evaluate(async image => [...new Uint8Array(await (await fetch((image as HTMLImageElement).src)).arrayBuffer())])) },
+    {
+      name: 'browser-empty-mime.log',
+      mimeType: '',
+      buffer: Buffer.from('safe diagnostic line\npassword=private-log-sentinel'),
+    },
+    {
+      name: 'local-generic-mime.png',
+      mimeType: 'application/octet-stream',
+      buffer: Buffer.from(await form.locator('img[alt="screenshot.png"]').evaluate(async image => [
+        ...new Uint8Array(await (await fetch((image as HTMLImageElement).src)).arrayBuffer()),
+      ])),
+    },
   ])
   await expect(form).toContainText('browser-empty-mime.log')
   await expect(form.locator('img[alt="local-generic-mime.png"]')).toBeVisible()
   await form.locator('textarea[name="description"]').fill(description)
-  const materials = form.locator('details').filter({ has: page.locator('summary', { hasText: /^收集材料$/ }) }).first()
+  const materials = form.locator('details').filter({
+    has: page.locator('summary', { hasText: /^收集材料$/ }),
+  }).first()
   await materials.locator('summary').first().click()
-  const environment = materials.locator('details').filter({ has: page.locator('summary', { hasText: 'environment' }) }).first()
+  const environment = materials.locator('details').filter({
+    has: page.locator('summary', { hasText: 'environment' }),
+  }).first()
   await environment.locator('summary').click()
   await expect(environment.locator('pre')).toContainText('admin-console')
   await expect(environment.locator('pre')).toContainText('1440')
-  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 600 }]) {
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 390, height: 600 },
+  ]) {
     await page.setViewportSize(viewport)
     const contentBox = await form.locator(':scope > div').first().boundingBox()
     const actionsBox = await form.locator(':scope > div').last().boundingBox()
@@ -256,31 +307,36 @@ test('当前截图、换页补图、材料内容、真实编码录屏和页面�
   await expect(form.locator('section img')).toHaveCount(3)
   // 仅替代系统选屏授权，编码使用 Chrome 的真实 MediaRecorder 和视频轨。
   await page.evaluate(() => {
-    Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', { configurable: true, value: async () => {
-      const canvas = document.createElement('canvas')
-      canvas.width = 320
-      canvas.height = 180
-      const context = canvas.getContext('2d')!
-      let frame = 0
-      const draw = () => {
-        context.fillStyle = frame++ % 2 ? '#2563eb' : '#16a34a'
-        context.fillRect(0, 0, 320, 180)
-        context.fillStyle = '#fff'
-        context.fillText('Feedback video', 20, 80)
-      }
-      draw()
-      const stream = canvas.captureStream(10)
-      const timer = setInterval(draw, 100)
-      for (const track of stream.getTracks()) {
-        const stop = track.stop.bind(track)
-        track.stop = () => {
-          clearInterval(timer)
-          stop()
+    Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', {
+      configurable: true,
+      value: async () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = 320
+        canvas.height = 180
+        const context = canvas.getContext('2d')!
+        let frame = 0
+        const draw = () => {
+          context.fillStyle = frame++ % 2
+            ? '#2563eb'
+            : '#16a34a'
+          context.fillRect(0, 0, 320, 180)
+          context.fillStyle = '#fff'
+          context.fillText('Feedback video', 20, 80)
         }
-      }
-      Object.assign(window, { __feedbackTestStream: stream })
-      return stream
-    } })
+        draw()
+        const stream = canvas.captureStream(10)
+        const timer = setInterval(draw, 100)
+        for (const track of stream.getTracks()) {
+          const stop = track.stop.bind(track)
+          track.stop = () => {
+            clearInterval(timer)
+            stop()
+          }
+        }
+        Object.assign(window, { __feedbackTestStream: stream })
+        return stream
+      },
+    })
   })
   await form.getByRole('button', { name: '录屏', exact: true }).click()
   await form.getByRole('button', { name: '开始录屏', exact: true }).click()
@@ -333,7 +389,9 @@ test('当前截图、换页补图、材料内容、真实编码录屏和页面�
   await expect.poll(async () => {
     const response = await page.request.get(`/api/feedback/reports/${submitted.data.id}`)
     const result: HaiResult<FeedbackDetail> = await response.json()
-    return result.success ? result.data.attachments.filter(item => [recorded.name, 'browser-empty-mime.log', 'local-generic-mime.png'].includes(item.name)).map(item => item.status).sort() : result.error.code
+    return result.success
+      ? result.data.attachments.filter(item => [recorded.name, 'browser-empty-mime.log', 'local-generic-mime.png'].includes(item.name)).map(item => item.status).sort()
+      : result.error.code
   }).toEqual(['available', 'available', 'available'])
   await form.getByRole('button', { name: '关闭', exact: true }).click()
   await page.goto(`/admin/feedback?search=${encodeURIComponent(number)}`)
@@ -381,12 +439,22 @@ test('列表通过服务端分页与筛选取得不同记录', async ({ page }, 
     const grid = element.querySelector<HTMLElement>('.hai-form-grid')!
     return {
       gap: Number.parseFloat(getComputedStyle(grid).columnGap),
-      fields: [...grid.querySelectorAll<HTMLElement>(':scope > .hai-form-field')].map((field) => {
+      fields: [
+        ...grid.querySelectorAll<HTMLElement>(':scope > .hai-form-field'),
+      ].map((field) => {
         const label = field.querySelector('label')!
         const control = field.querySelector<HTMLElement>('.field-content > .fieldset > div') ?? field.querySelector<HTMLElement>('select, input')!
         const box = field.getBoundingClientRect()
         const controlBox = control.getBoundingClientRect()
-        return { left: box.left, right: box.right, controlRight: controlBox.right, controlLeft: controlBox.left, labelTop: label.getBoundingClientRect().top, controlTop: controlBox.top, height: controlBox.height }
+        return {
+          left: box.left,
+          right: box.right,
+          controlRight: controlBox.right,
+          controlLeft: controlBox.left,
+          labelTop: label.getBoundingClientRect().top,
+          controlTop: controlBox.top,
+          height: controlBox.height,
+        }
       }),
     }
   })
@@ -438,7 +506,9 @@ test('列表通过服务端分页与筛选取得不同记录', async ({ page }, 
 
 test('无反馈管理权限的用户不能读取列表或修改已有反馈', async ({ page, playwright, baseURL }) => {
   await loginOnPage(page, dutyAccounts.operator.username, dutyAccounts.operator.password)
-  const accepted = await page.request.post('/api/feedback/reports', { data: { submissionId: uniqueUser('fbdeny').username, appId: 'admin-console' } })
+  const accepted = await page.request.post('/api/feedback/reports', {
+    data: { submissionId: uniqueUser('fbdeny').username, appId: 'admin-console' },
+  })
   expect(accepted.ok()).toBe(true)
   const acceptedBody: { success: boolean, data?: { id: string, version: number } } = await accepted.json()
   expect(acceptedBody.success).toBe(true)
@@ -446,19 +516,30 @@ test('无反馈管理权限的用户不能读取列表或修改已有反馈', as
   const user = uniqueUser('fblimit')
   await page.request.post('/api/auth/logout')
   await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
-  const created = await page.request.post('/api/iam/users', { data: { ...user, roles: [] } })
+  const created = await page.request.post('/api/iam/users', {
+    data: { ...user, roles: [] },
+  })
   expect(created.ok()).toBe(true)
   const createdBody: { success: boolean, data: { id: string } } = await created.json()
   expect(createdBody.success).toBe(true)
-  const limited = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL! } })
+  const limited = await playwright.request.newContext({
+    baseURL,
+    extraHTTPHeaders: { Origin: baseURL! },
+  })
   try {
     expect((await limited.get('/api/feedback/reports')).status()).toBe(401)
-    const login = await limited.post('/api/auth/login', { data: { identifier: user.username, password: user.password } })
+    const login = await limited.post('/api/auth/login', {
+      data: { identifier: user.username, password: user.password },
+    })
     expect(login.ok()).toBe(true)
-    expect((await limited.post('/api/feedback/reports', { data: { submissionId: uniqueUser('fbreject').username, appId: 'admin-console' } })).status()).toBe(403)
+    expect((await limited.post('/api/feedback/reports', {
+      data: { submissionId: uniqueUser('fbreject').username, appId: 'admin-console' },
+    })).status()).toBe(403)
     expect((await limited.get('/api/feedback/reports')).status()).toBe(403)
     expect((await limited.get(`/api/feedback/reports/${report.id}`)).status()).toBe(403)
-    expect((await limited.patch(`/api/feedback/reports/${report.id}/status`, { data: { id: report.id, status: 'handled', expectedVersion: report.version } })).status()).toBe(403)
+    expect((await limited.patch(`/api/feedback/reports/${report.id}/status`, {
+      data: { id: report.id, status: 'handled', expectedVersion: report.version },
+    })).status()).toBe(403)
   }
   finally {
     await limited.dispose()
@@ -470,13 +551,19 @@ test('受理网络故障保留现场与输入，可下载自包含离线包', as
   test.setTimeout(60_000)
   await loginOnPage(page, dutyAccounts.operator.username, dutyAccounts.operator.password)
   const secret = `secret-${uniqueUser('cookie').username}`
-  await page.context().addCookies([{ name: 'private_session_token', value: secret, url: new URL(page.url()).origin }])
+  await page.context().addCookies([
+    { name: 'private_session_token', value: secret, url: new URL(page.url()).origin },
+  ])
   await openFeedback(page)
   const description = `offline-${uniqueUser('fbdown').username}`
   await page.locator('.feedback-form textarea[name="description"]').fill(description)
   const note = `Offline attachment ${description}`
   await page.locator('.feedback-form summary').filter({ hasText: '更多选项' }).click()
-  await page.locator('.feedback-form input[type="file"]').setInputFiles({ name: 'offline-note.txt', mimeType: 'text/plain', buffer: Buffer.from(note) })
+  await page.locator('.feedback-form input[type="file"]').setInputFiles({
+    name: 'offline-note.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from(note),
+  })
   await expect(page.locator('.feedback-form section')).toContainText('offline-note.txt')
   await page.route('**/api/feedback/reports', route => route.abort('connectionfailed'))
   try {
@@ -532,12 +619,21 @@ test('主动添加JPEG可以预览并烧录遮挡，以PNG实际上传', async (
     return canvas.toDataURL('image/jpeg').split(',')[1]!
   })
   await page.locator('.feedback-form summary').filter({ hasText: '更多选项' }).click()
-  await page.locator('.feedback-form input[type="file"]').setInputFiles({ name: 'added-photo.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(jpeg, 'base64') })
-  const added = page.locator('.feedback-form section > div').filter({ has: page.locator('img[alt^="added-photo."]') })
+  await page.locator('.feedback-form input[type="file"]').setInputFiles({
+    name: 'added-photo.jpg',
+    mimeType: 'image/jpeg',
+    buffer: Buffer.from(jpeg, 'base64'),
+  })
+  const added = page.locator('.feedback-form section > div').filter({
+    has: page.locator('img[alt^="added-photo."]'),
+  })
   await expect(added).toBeVisible()
   await added.locator('img[alt="added-photo.jpg"]').scrollIntoViewIfNeeded()
   await capture(page, 'feedback-added-image-before-mask.png', testInfo)
-  await added.locator('img[alt="added-photo.jpg"]').screenshot({ path: testInfo.outputPath('feedback-added-image-before-mask-detail.png'), animations: 'disabled' })
+  await added.locator('img[alt="added-photo.jpg"]').screenshot({
+    path: testInfo.outputPath('feedback-added-image-before-mask-detail.png'),
+    animations: 'disabled',
+  })
   await added.getByRole('button', { name: '遮挡敏感区域', exact: true }).click()
   await expect(added.getByRole('spinbutton')).toHaveCount(0)
   // 实际放大图片后反向框选不足一个原始像素的边缘区域，遮挡不能通过抗锯齿透出原图。
@@ -585,7 +681,10 @@ test('主动添加JPEG可以预览并烧录遮挡，以PNG实际上传', async (
   expect(pixel.slice(0, 3).every(value => value < 32)).toBe(true)
   await preview.scrollIntoViewIfNeeded()
   await capture(page, 'feedback-added-image-masked.png', testInfo)
-  await preview.screenshot({ path: testInfo.outputPath('feedback-added-image-masked-detail.png'), animations: 'disabled' })
+  await preview.screenshot({
+    path: testInfo.outputPath('feedback-added-image-masked-detail.png'),
+    animations: 'disabled',
+  })
   const submittedImage = await preview.evaluate(async image => Array.from(new Uint8Array(await (await fetch((image as HTMLImageElement).src)).arrayBuffer())))
   await page.locator('.feedback-form').getByRole('button', { name: '提交反馈', exact: true }).click()
   const receipt = page.locator('.feedback-form [data-testid=feedback-receipt]').first()
@@ -601,7 +700,9 @@ test('主动添加JPEG可以预览并烧录遮挡，以PNG实际上传', async (
 
 test('邮件反馈链接直接定位详情，关闭后恢复列表查询', async ({ page }, testInfo) => {
   await loginOnPage(page, dutyAccounts.operator.username, dutyAccounts.operator.password)
-  const created = await page.request.post('/api/feedback/reports', { data: { submissionId: uniqueUser('fbmail').username, appId: 'admin-console', description: 'notification deep link' } })
+  const created = await page.request.post('/api/feedback/reports', {
+    data: { submissionId: uniqueUser('fbmail').username, appId: 'admin-console', description: 'notification deep link' },
+  })
   const body: HaiResult<FeedbackReport> = await created.json()
   expect(body.success).toBe(true)
   if (!body.success)
@@ -626,7 +727,11 @@ test('默认反馈入口向普通用户开放，管理页面和操作仍受管�
   await expect(page.locator('a[href="/admin/feedback"]')).toBeVisible()
   await capture(page, 'feedback-default-admin-entry.png', testInfo)
   const user = uniqueUser('fbnormal')
-  const context = await browser.newContext({ baseURL, viewport: { width: 1440, height: 1000 }, extraHTTPHeaders: { Origin: baseURL! } })
+  const context = await browser.newContext({
+    baseURL,
+    viewport: { width: 1440, height: 1000 },
+    extraHTTPHeaders: { Origin: baseURL! },
+  })
   const memberPage = await context.newPage()
   let userId = ''
   try {
@@ -650,7 +755,11 @@ test('默认反馈入口向普通用户开放，管理页面和操作仍受管�
     expect(ordinaryRole).toBeDefined()
     if (!ordinaryRole)
       throw new Error('Existing ordinary user role is missing')
-    const assigned = await page.request.put(`/api/iam/users/${userId}`, { data: { roles: [ordinaryRole.id] } })
+    const assigned = await page.request.put(`/api/iam/users/${userId}`, {
+      data: {
+        roles: [ordinaryRole.id],
+      },
+    })
     expect(assigned.ok()).toBe(true)
     const assignedBody: HaiResult<{ roles: string[] }> = await assigned.json()
     expect(assignedBody.success).toBe(true)
@@ -689,7 +798,11 @@ test('默认反馈入口向普通用户开放，管理页面和操作仍受管�
     // 同一批先有有效图片、后有超限文件，失败不得把前者留在不可见的 SDK 草稿中。
     await form.locator('input[type="file"]').setInputFiles([
       { name: pendingPngName, mimeType: 'image/png', buffer: validPng },
-      { name: overLimitName, mimeType: 'text/plain', buffer: Buffer.alloc(5 * 1024 * 1024 + 1, 'B') },
+      {
+        name: overLimitName,
+        mimeType: 'text/plain',
+        buffer: Buffer.alloc(5 * 1024 * 1024 + 1, 'B'),
+      },
     ])
     const filesError = memberPage.locator('.hai-toast-item[data-variant=error]')
     await expect(filesError).toBeVisible()
@@ -714,7 +827,9 @@ test('默认反馈入口向普通用户开放，管理页面和操作仍受管�
     expect(number).toBeTruthy()
     await capture(memberPage, 'feedback-default-member-accepted-mobile.png', testInfo)
     await memberPage.locator('.feedback-form').getByRole('button', { name: '关闭', exact: true }).click()
-    const reportsResponse = await page.request.get('/api/feedback/reports', { params: { search: number!, page: 1, pageSize: 20 } })
+    const reportsResponse = await page.request.get('/api/feedback/reports', {
+      params: { search: number!, page: 1, pageSize: 20 },
+    })
     const reports: HaiResult<PaginatedResult<FeedbackReport>> = await reportsResponse.json()
     expect(reports.success).toBe(true)
     if (!reports.success)
@@ -736,9 +851,14 @@ test('默认反馈入口向普通用户开放，管理页面和操作仍受管�
     expect(savedAttachmentNames).not.toContain(pendingPngName)
     expect(savedAttachmentNames).not.toContain(overLimitName)
     expect((await memberPage.request.get('/api/feedback/reports')).status()).toBe(403)
-    for (const status of ['handled', 'pending'])
-      expect((await memberPage.request.patch(`/api/feedback/reports/${report.id}/status`, { data: { id: report.id, status, expectedVersion: report.version } })).status()).toBe(403)
-    expect((await memberPage.request.post(`/api/feedback/reports/${report.id}/exports`, { data: { id: report.id } })).status()).toBe(403)
+    for (const status of ['handled', 'pending']) {
+      expect((await memberPage.request.patch(`/api/feedback/reports/${report.id}/status`, {
+        data: { id: report.id, status, expectedVersion: report.version },
+      })).status()).toBe(403)
+    }
+    expect((await memberPage.request.post(`/api/feedback/reports/${report.id}/exports`, {
+      data: { id: report.id },
+    })).status()).toBe(403)
     const deniedPage = await memberPage.goto('/admin/feedback')
     expect(deniedPage?.status()).toBe(403)
     await capture(memberPage, 'feedback-default-member-management-denied.png', testInfo)
