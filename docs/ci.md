@@ -93,6 +93,8 @@ npm 会在包可安装前进行扫描，发布回执可能先于版本查询可�
 
 当前 `daisyui@5.7.50` 补丁修复 CSS 构建兼容性，并非安全漏洞补丁。Tailwind 将 join 的 `@scope` 提升后，Lightning CSS 1.33 会错误丢弃两条相对选择器规则，影响焦点/悬停边框层级；补丁只添加零特异性的 `:where(:scope)` 锚点，保持优化开启。依据见 [Tailwind 官方问题](https://github.com/tailwindlabs/tailwindcss/issues/20668)、[DaisyUI 问题](https://github.com/saadeghi/daisyui/issues/4851) 和[尚未合并的上游修复](https://github.com/tailwindlabs/tailwindcss/pull/20671)。真实 compile→optimize 回归检查声明保留且无警告；升级到上游修复版后，核对实际产物再移除补丁与注册。根工作区和生成 UI 工程成套携带补丁；纯 API 不注册未使用的 DaisyUI/deepmerge 补丁。
 
+`deepmerge@4.3.1` 的 [GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4) 是真实的返回对象原型污染问题，上游尚无已发布修复版本。工作区与生成 UI 工程通过 `patchedDependencies` 同时修补源码、CommonJS 和 UMD 文件，拒绝两侧输入中的 `__proto__` 键；不能仅升级到同一个 4.3.1 就称已解决。`scripts/tests/dependency-security.test.mjs` 从实际应用依赖树加载发布文件，覆盖普通/空原型输入、嵌套对象、数组元素及浏览器 UMD 入口，并保留正常合并回归。版本型 audit 仍会报告该低危项，不能据此声称补丁失效，也不能隐藏告警；升级到上游正式修复版后，应重新核对实际产物和回归，再移除补丁及模板注册。
+
 - 每个阶段的日志和 Job Summary 明确写出实际运行，或复用的来源运行编号、提交及阶段。复用不应报告成当前提交重新执行了全部测试。
 - 同一提交的瞬时环境故障，可在 Actions 使用 **Re-run failed jobs**，保留其他独立阶段的结果。断言失败应先定位并修复；新提交按输入指纹决定复用范围。
 - Chrome 下载偶尔会因连接中断失败。浏览器安装最多尝试三次，最后一次仍失败就阻断该阶段；应用测试的失败不自动重试。脚手架和部署浏览器失败时保留截图、页面上下文及 trace，方便区分下载故障与应用错误。
