@@ -172,7 +172,13 @@ export function createRedisProvider(): CacheProvider {
         return err(HaiCacheError.CROSS_SLOT, cacheM('cache_crossSlot'), error)
       return err(
         HaiCacheError.OPERATION_FAILED,
-        cacheM('cache_operationFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        cacheM('cache_operationFailed', {
+          params: {
+            error: error instanceof Error
+              ? error.message
+              : String(error),
+          },
+        }),
         error,
       )
     }
@@ -197,7 +203,19 @@ export function createRedisProvider(): CacheProvider {
       return wrapOperation(async () => {
         if ((options?.px !== undefined && (!Number.isSafeInteger(options.px) || options.px <= 0)) || (options?.px !== undefined && options.keepTtl))
           throw new TypeError('Invalid compare-and-swap expiry')
-        return isRedisOne(await client!.eval(COMPARE_AND_SWAP_SCRIPT, 1, key, expected === undefined ? 'missing' : 'value', expected === undefined ? '' : serialize(expected), value === undefined ? 'delete' : 'value', value === undefined ? '' : serialize(value), options?.keepTtl ? 'keep' : options?.px !== undefined ? 'px' : 'none', options?.px ?? 0))
+        return isRedisOne(await client!.eval(COMPARE_AND_SWAP_SCRIPT, 1, key, expected === undefined
+          ? 'missing'
+          : 'value', expected === undefined
+          ? ''
+          : serialize(expected), value === undefined
+          ? 'delete'
+          : 'value', value === undefined
+          ? ''
+          : serialize(value), options?.keepTtl
+          ? 'keep'
+          : options?.px !== undefined
+            ? 'px'
+            : 'none', options?.px ?? 0))
       })
     },
     async get<T = CacheValue>(key: string): Promise<HaiResult<T | null>> {
@@ -213,7 +231,10 @@ export function createRedisProvider(): CacheProvider {
         return validated
       return wrapOperation(async () => {
         const policy = validated.data
-        const args: (string | number)[] = [key, serialize(value)]
+        const args: (string | number)[] = [
+          key,
+          serialize(value),
+        ]
         if (policy.expiry)
           args.push(...policy.expiry)
         if (policy.nx)
@@ -362,7 +383,10 @@ export function createRedisProvider(): CacheProvider {
           return client!.hset(key, fieldOrData, serialize(value))
         }
         if (typeof fieldOrData === 'object') {
-          const serialized = Object.fromEntries(Object.entries(fieldOrData).map(([key, value]) => [key, serialize(value)]))
+          const serialized = Object.fromEntries(Object.entries(fieldOrData).map(([key, value]) => [
+            key,
+            serialize(value),
+          ]))
           return client!.hset(key, serialized)
         }
         return 0
@@ -384,7 +408,10 @@ export function createRedisProvider(): CacheProvider {
       return wrapOperation(async () => {
         const data = await client!.hgetall(key)
         // 保留 __proto__ 等合法字段，不触发普通对象的原型 setter。
-        return Object.fromEntries(Object.entries(data).map(([key, value]) => [key, deserialize(value)])) as T
+        return Object.fromEntries(Object.entries(data).map(([key, value]) => [
+          key,
+          deserialize(value),
+        ])) as T
       })
     },
 
@@ -475,7 +502,10 @@ export function createRedisProvider(): CacheProvider {
         const result = await client!.blpop(...keys, timeout)
         if (!result)
           return null
-        return [result[0], deserialize<T>(result[1])]
+        return [
+          result[0],
+          deserialize<T>(result[1]),
+        ]
       })
     },
 
@@ -484,7 +514,10 @@ export function createRedisProvider(): CacheProvider {
         const result = await client!.brpop(...keys, timeout)
         if (!result)
           return null
-        return [result[0], deserialize<T>(result[1])]
+        return [
+          result[0],
+          deserialize<T>(result[1]),
+        ]
       })
     },
   }
@@ -582,7 +615,9 @@ export function createRedisProvider(): CacheProvider {
     async zscore(key: string, member: string): Promise<HaiResult<number | null>> {
       return wrapOperation(async () => {
         const score = await client!.zscore(key, member)
-        return score !== null ? Number.parseFloat(score) : null
+        return score !== null
+          ? Number.parseFloat(score)
+          : null
       })
     },
 
@@ -600,7 +635,10 @@ export function createRedisProvider(): CacheProvider {
           const result = await client!.zrange(key, String(start), String(stop), 'WITHSCORES')
           const members: ZMember[] = []
           for (let i = 0; i < result.length; i += 2) {
-            members.push({ member: result[i], score: Number.parseFloat(result[i + 1]) })
+            members.push({
+              member: result[i],
+              score: Number.parseFloat(result[i + 1]),
+            })
           }
           return members
         }
@@ -614,7 +652,10 @@ export function createRedisProvider(): CacheProvider {
           const result = await client!.zrevrange(key, start, stop, 'WITHSCORES')
           const members: ZMember[] = []
           for (let i = 0; i < result.length; i += 2) {
-            members.push({ member: result[i], score: Number.parseFloat(result[i + 1]) })
+            members.push({
+              member: result[i],
+              score: Number.parseFloat(result[i + 1]),
+            })
           }
           return members
         }
@@ -629,7 +670,11 @@ export function createRedisProvider(): CacheProvider {
       options?: { withScores?: boolean, offset?: number, count?: number },
     ): Promise<HaiResult<string[] | ZMember[]>> {
       return wrapOperation(async () => {
-        const args: (string | number)[] = [key, String(min), String(max)]
+        const args: (string | number)[] = [
+          key,
+          String(min),
+          String(max),
+        ]
         if (options?.withScores)
           args.push('WITHSCORES')
         if (options?.offset !== undefined && options?.count !== undefined) {
@@ -640,7 +685,10 @@ export function createRedisProvider(): CacheProvider {
         if (options?.withScores) {
           const members: ZMember[] = []
           for (let i = 0; i < result.length; i += 2) {
-            members.push({ member: result[i], score: Number.parseFloat(result[i + 1]) })
+            members.push({
+              member: result[i],
+              score: Number.parseFloat(result[i + 1]),
+            })
           }
           return members
         }
@@ -685,7 +733,9 @@ export function createRedisProvider(): CacheProvider {
         const owner = core.id.uuid()
         // SET key value NX EX ttl — 原子获锁
         const result = await client!.set(lockKey, owner, 'EX', ttl, 'NX')
-        return result === 'OK' ? owner : null
+        return result === 'OK'
+          ? owner
+          : null
       })
     },
 
@@ -739,14 +789,18 @@ export function createRedisProvider(): CacheProvider {
       if (config.type !== 'redis') {
         return err(
           HaiCacheError.UNSUPPORTED_TYPE,
-          cacheM('cache_unsupportedType', { params: { type: config.type } }),
+          cacheM('cache_unsupportedType', {
+            params: { type: config.type },
+          }),
         )
       }
 
       try {
         await closeClient()
         const redisOptions: RedisOptions = {
-          ...(!config.url && config.password !== undefined ? { password: config.password } : {}),
+          ...(!config.url && config.password !== undefined
+            ? { password: config.password }
+            : {}),
           connectTimeout: config.connectTimeout,
           commandTimeout: config.commandTimeout,
           keyPrefix: config.keyPrefix,
@@ -802,7 +856,9 @@ export function createRedisProvider(): CacheProvider {
         await client.ping()
 
         ready = true
-        const address = config.url ? core.sanitize.sanitizeUrl(config.url) : `${config.host}:${config.port}`
+        const address = config.url
+          ? core.sanitize.sanitizeUrl(config.url)
+          : `${config.host}:${config.port}`
         logger.info('Redis connected', { address })
 
         return ok(undefined)
@@ -820,11 +876,21 @@ export function createRedisProvider(): CacheProvider {
         }
         const result = err(
           HaiCacheError.CONNECTION_FAILED,
-          cacheM('cache_redisConnectionFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          cacheM('cache_redisConnectionFailed', {
+            params: {
+              error: error instanceof Error
+                ? error.message
+                : String(error),
+            },
+          }),
           error,
         )
-        if (cleanupError !== undefined && !result.success)
-          return err({ ...result.error, ext: { cleanupPending: true, cleanupError } })
+        if (cleanupError !== undefined && !result.success) {
+          return err({
+            ...result.error,
+            ext: { cleanupPending: true, cleanupError },
+          })
+        }
         return result
       }
     },

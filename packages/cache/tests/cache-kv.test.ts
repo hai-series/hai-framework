@@ -10,25 +10,74 @@ import { defineCacheSuite, memoryEnv, redisEnv } from './helpers/cache-test-suit
 
 defineCacheSuite('memory boundaries', memoryEnv, () => {
   afterEach(() => vi.restoreAllMocks())
+  it.each(['hash', 'list', 'set', 'zset'] as const)('通用 key 操作与过期覆盖 %s', async (type) => {
+    if (type === 'hash')
+      await cache.hash.hset('structured', 'field', 'value')
+    else if (type === 'list')
+      await cache.list.rpush('structured', 'value')
+    else if (type === 'set')
+      await cache.set_.sadd('structured', 'value')
+    else await cache.zset.zadd('structured', { member: 'value', score: 1 })
+    expect(await cache.kv.exists('structured')).toMatchObject({ success: true, data: 1 })
+    expect(await cache.kv.keys('*')).toMatchObject({
+      success: true,
+      data: ['structured'],
+    })
+    expect(await cache.kv.scan('0')).toMatchObject({
+      success: true,
+      data: [
+        '0',
+        ['structured'],
+      ],
+    })
+    expect(await cache.kv.expire('structured', 10)).toMatchObject({ success: true, data: true })
+    expect(await cache.kv.persist('structured')).toMatchObject({ success: true, data: true })
+    expect(await cache.kv.ttl('structured')).toMatchObject({ success: true, data: -1 })
+    expect(await cache.kv.del('structured')).toMatchObject({ success: true, data: 1 })
+    if (type === 'hash')
+      await cache.hash.hset('structured', 'field', 'value')
+    else if (type === 'list')
+      await cache.list.rpush('structured', 'value')
+    else if (type === 'set')
+      await cache.set_.sadd('structured', 'value')
+    else await cache.zset.zadd('structured', { member: 'value', score: 1 })
+    expect(await cache.kv.expireAt('structured', 1)).toMatchObject({ success: true, data: true })
+    expect(await cache.kv.type('structured')).toMatchObject({ success: true, data: 'none' })
+    expect(await cache.kv.exists('structured')).toMatchObject({ success: true, data: 0 })
+  })
 
   it('到期瞬间不可读，epoch 0 也不是永不过期', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1000)
     expect((await cache.kv.set('exact', 'value', { pxat: 1000 })).success).toBe(true)
     expect(await cache.kv.get('exact')).toMatchObject({ success: true, data: null })
     expect(await cache.kv.ttl('exact')).toMatchObject({ success: true, data: -2 })
-    expect(await cache.kv.set('epoch', 'value', { pxat: 0 })).toMatchObject({ success: false, error: { code: HaiCacheError.INVALID_SET_OPTIONS.code } })
+    expect(await cache.kv.set('epoch', 'value', { pxat: 0 })).toMatchObject({
+      success: false,
+      error: { code: HaiCacheError.INVALID_SET_OPTIONS.code },
+    })
     expect(await cache.kv.get('epoch')).toMatchObject({ success: true, data: null })
   })
 
   it.each([null, true, [], {}, '', ' 1 ', 1.5])('拒绝非整数计数值 %j 且保留原值', async (value) => {
     await cache.kv.set('counter', value)
-    expect(await cache.kv.incr('counter')).toMatchObject({ success: false, error: { code: HaiCacheError.OPERATION_FAILED.code } })
+    expect(await cache.kv.incr('counter')).toMatchObject({
+      success: false,
+      error: { code: HaiCacheError.OPERATION_FAILED.code },
+    })
     expect(await cache.kv.get('counter')).toMatchObject({ success: true, data: value })
   })
 
-  it.each([Number.NaN, Number.POSITIVE_INFINITY, 0.5, Number.MAX_SAFE_INTEGER])('非法或溢出增量不污染计数器 %s', async (increment) => {
+  it.each([
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    0.5,
+    Number.MAX_SAFE_INTEGER,
+  ])('非法或溢出增量不污染计数器 %s', async (increment) => {
     await cache.kv.set('counter', 1)
-    expect(await cache.kv.incrBy('counter', increment)).toMatchObject({ success: false, error: { code: HaiCacheError.OPERATION_FAILED.code } })
+    expect(await cache.kv.incrBy('counter', increment)).toMatchObject({
+      success: false,
+      error: { code: HaiCacheError.OPERATION_FAILED.code },
+    })
     expect(await cache.kv.get('counter')).toMatchObject({ success: true, data: 1 })
   })
 })
@@ -251,7 +300,13 @@ describe('cache kv advanced operations', () => {
             break
         }
       }
-      expect(allKeys.sort()).toEqual(['scan:0', 'scan:1', 'scan:2', 'scan:3', 'scan:4'])
+      expect(allKeys.sort()).toEqual([
+        'scan:0',
+        'scan:1',
+        'scan:2',
+        'scan:3',
+        'scan:4',
+      ])
     })
 
     // ─── keys ───
@@ -311,11 +366,19 @@ describe('cache kv advanced operations', () => {
         expect(boolResult.data).toBe(true)
       }
 
-      await cache.kv.set('obj', { nested: { arr: [1, 2, 3] } })
+      await cache.kv.set('obj', {
+        nested: {
+          arr: [1, 2, 3],
+        },
+      })
       const objResult = await cache.kv.get<{ nested: { arr: number[] } }>('obj')
       expect(objResult.success).toBe(true)
       if (objResult.success) {
-        expect(objResult.data).toEqual({ nested: { arr: [1, 2, 3] } })
+        expect(objResult.data).toEqual({
+          nested: {
+            arr: [1, 2, 3],
+          },
+        })
       }
 
       await cache.kv.set('nil', null)

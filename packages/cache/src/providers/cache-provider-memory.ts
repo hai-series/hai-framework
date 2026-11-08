@@ -100,6 +100,94 @@ export function createMemoryProvider(): CacheProvider {
   const setStore = new Map<string, Set<string>>()
   /** ZSet 存储：key → { member → score } */
   const zsetStore = new Map<string, Map<string, number>>()
+  /** 非 KV 结构共用 key 期限；通用 key 操作与 Redis 使用同一命名空间。 */
+  const structureExpiry = new Map<string, number>()
+
+  function deleteKey(key: string): boolean {
+    const existed = store.has(key) || Boolean(hashStore.get(key)?.size || listStore.get(key)?.length || setStore.get(key)?.size || zsetStore.get(key)?.size)
+    store.delete(key)
+    hashStore.delete(key)
+    listStore.delete(key)
+    setStore.delete(key)
+    zsetStore.delete(key)
+    structureExpiry.delete(key)
+    return existed
+  }
+  function expireKey(key: string): void {
+    const expiresAt = store.get(key)?.expiresAt ?? structureExpiry.get(key)
+    if (expiresAt !== undefined && expiresAt <= Date.now())
+      deleteKey(key)
+  }
+  function keyType(key: string): string {
+    expireKey(key)
+    if (store.has(key))
+      return 'string'
+    if (hashStore.get(key)?.size)
+      return 'hash'
+    if (listStore.get(key)?.length)
+      return 'list'
+    if (setStore.get(key)?.size)
+      return 'set'
+    if (zsetStore.get(key)?.size)
+      return 'zset'
+    return 'none'
+  }
+  function keyExpiry(key: string): number | undefined {
+    return store.get(key)?.expiresAt ?? structureExpiry.get(key)
+  }
+  function setKeyExpiry(key: string, expiresAt: number): void {
+    const entry = store.get(key)
+    if (entry)
+      entry.expiresAt = expiresAt
+    else structureExpiry.set(key, expiresAt)
+    expireKey(key)
+  }
+  function allKeys(): string[] {
+    return [
+      ...new Set([
+        ...store.keys(),
+        ...hashStore.keys(),
+        ...listStore.keys(),
+        ...setStore.keys(),
+        ...zsetStore.keys(),
+      ]),
+    ].filter(key => keyType(key) !== 'none')
+  }
+  /** 各结构的所有操作先检查统一类型和期限；不复制几十个相同的守卫。 */
+  function guardStructure<T extends object>(operations: T, type: string): T {
+    return new Proxy(operations, {
+      get(target, property, receiver) {
+        const operation: unknown = Reflect.get(target, property, receiver)
+        if (typeof operation !== 'function')
+          return operation
+        return (...args: unknown[]) => {
+          const keys = ([
+            'sinter',
+            'sunion',
+            'sdiff',
+            'blpop',
+            'brpop',
+          ].includes(String(property))
+            ? args
+            : args.slice(0, 1)).filter((key): key is string => typeof key === 'string')
+          for (const key of keys) {
+            const actual = keyType(key)
+            if (actual !== 'none' && actual !== type) {
+              return Promise.resolve(err(HaiCacheError.OPERATION_FAILED, cacheM('cache_operationFailed', {
+                params: { error: 'Key contains another data type' },
+              })))
+            }
+          }
+          return Promise.resolve(Reflect.apply(operation, target, args)).finally(() => {
+            for (const key of keys) {
+              if (keyType(key) === 'none')
+                deleteKey(key)
+            }
+          })
+        }
+      },
+    })
+  }
 
   let connected = false
   /** 定期清理过期 KV 数据的定时器；间隔 60s */
@@ -120,9 +208,11 @@ export function createMemoryProvider(): CacheProvider {
     const now = Date.now()
     for (const [key, entry] of store.entries()) {
       if (entry.expiresAt != null && entry.expiresAt <= now) {
-        store.delete(key)
+        deleteKey(key)
       }
     }
+    for (const key of structureExpiry.keys())
+      expireKey(key)
   }
 
   /**
@@ -134,6 +224,7 @@ export function createMemoryProvider(): CacheProvider {
    * @returns 有效的缓存项，或 null
    */
   function getValidEntry(key: string): CacheEntry | null {
+    expireKey(key)
     const entry = store.get(key)
     if (!entry)
       return null
@@ -151,31 +242,56 @@ export function createMemoryProvider(): CacheProvider {
       try {
         if ((options?.px !== undefined && (!Number.isSafeInteger(options.px) || options.px <= 0)) || (options?.px !== undefined && options.keepTtl))
           throw new TypeError('Invalid compare-and-swap expiry')
+        const type = keyType(key)
+        if (type !== 'none' && type !== 'string')
+          throw new TypeError('Key contains another data type')
         const entry = getValidEntry(key)
-        const actual = entry ? serializeValue(entry.value) : undefined
-        if (actual !== (expected === undefined ? undefined : serializeValue(expected)))
+        const actual = entry
+          ? serializeValue(entry.value)
+          : undefined
+        if (actual !== (expected === undefined
+          ? undefined
+          : serializeValue(expected))) {
           return ok(false)
+        }
         if (value === undefined) {
           store.delete(key)
         }
         else {
-          const expiresAt = options?.px !== undefined ? Date.now() + options.px : options?.keepTtl ? entry?.expiresAt : undefined
+          const expiresAt = options?.px !== undefined
+            ? Date.now() + options.px
+            : options?.keepTtl ? entry?.expiresAt : undefined
           // 与 Redis 相同使用 JSON 快照，调用方修改对象不能绕过条件写入。
-          store.set(key, { value: deserializeValue(serializeValue(value)), expiresAt })
+          store.set(key, {
+            value: deserializeValue(serializeValue(value)),
+            expiresAt,
+          })
         }
         return ok(true)
       }
       catch (error) {
-        return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_operationFailed', { params: { error: 'Compare-and-swap failed' } }), error)
+        return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_operationFailed', {
+          params: { error: 'Compare-and-swap failed' },
+        }), error)
       }
     },
     async get<T = CacheValue>(key: string): Promise<HaiResult<T | null>> {
       try {
+        const type = keyType(key)
+        if (type !== 'none' && type !== 'string') {
+          return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_operationFailed', {
+            params: { error: 'Key contains another data type' },
+          }))
+        }
         const entry = getValidEntry(key)
-        return ok(entry ? (deserializeValue(serializeValue(entry.value)) as T) : null)
+        return ok(entry
+          ? (deserializeValue(serializeValue(entry.value)) as T)
+          : null)
       }
       catch (error) {
-        return err(HaiCacheError.SERIALIZATION_FAILED, cacheM('cache_operationFailed', { params: { error: 'JSON snapshot failed' } }), error)
+        return err(HaiCacheError.SERIALIZATION_FAILED, cacheM('cache_operationFailed', {
+          params: { error: 'JSON snapshot failed' },
+        }), error)
       }
     },
 
@@ -184,18 +300,16 @@ export function createMemoryProvider(): CacheProvider {
       if (!validated.success)
         return validated
       const policy = validated.data
-      const currentEntry = getValidEntry(key)
-      const existing = currentEntry !== null || Boolean(hashStore.get(key)?.size || listStore.get(key)?.length || setStore.get(key)?.size || zsetStore.get(key)?.size)
+      const existing = keyType(key) !== 'none'
       if ((policy.nx && existing) || (policy.xx && !existing))
         return ok(false)
       try {
         // 先得到与 Redis 一致的 JSON 快照；序列化失败不能破坏原值或 TTL。
         const snapshot = deserializeValue(serializeValue(value))
-        const expiresAt = policy.keepTtl ? currentEntry?.expiresAt : policy.expiresAt
-        hashStore.delete(key)
-        listStore.delete(key)
-        setStore.delete(key)
-        zsetStore.delete(key)
+        const expiresAt = policy.keepTtl
+          ? keyExpiry(key)
+          : policy.expiresAt
+        deleteKey(key)
         if (expiresAt !== undefined && expiresAt <= Date.now())
           store.delete(key)
         else
@@ -210,12 +324,9 @@ export function createMemoryProvider(): CacheProvider {
     async del(...keys: string[]): Promise<HaiResult<number>> {
       let count = 0
       for (const key of keys) {
-        if (store.delete(key))
+        expireKey(key)
+        if (deleteKey(key))
           count++
-        hashStore.delete(key)
-        listStore.delete(key)
-        setStore.delete(key)
-        zsetStore.delete(key)
       }
       return ok(count)
     },
@@ -223,42 +334,42 @@ export function createMemoryProvider(): CacheProvider {
     async exists(...keys: string[]): Promise<HaiResult<number>> {
       let count = 0
       for (const key of keys) {
-        if (getValidEntry(key))
+        if (keyType(key) !== 'none')
           count++
       }
       return ok(count)
     },
 
     async expire(key: string, seconds: number): Promise<HaiResult<boolean>> {
-      const entry = getValidEntry(key)
-      if (!entry)
+      if (keyType(key) === 'none')
         return ok(false)
-      entry.expiresAt = Date.now() + seconds * 1000
+      setKeyExpiry(key, Date.now() + seconds * 1000)
       return ok(true)
     },
 
     async expireAt(key: string, timestamp: number): Promise<HaiResult<boolean>> {
-      const entry = getValidEntry(key)
-      if (!entry)
+      if (keyType(key) === 'none')
         return ok(false)
-      entry.expiresAt = timestamp * 1000
+      setKeyExpiry(key, timestamp * 1000)
       return ok(true)
     },
 
     async ttl(key: string): Promise<HaiResult<number>> {
-      const entry = getValidEntry(key)
-      if (!entry)
+      if (keyType(key) === 'none')
         return ok(-2)
-      if (entry.expiresAt == null)
+      const expiresAt = keyExpiry(key)
+      if (expiresAt === undefined)
         return ok(-1)
-      return ok(Math.ceil((entry.expiresAt - Date.now()) / 1000))
+      return ok(Math.ceil((expiresAt - Date.now()) / 1000))
     },
 
     async persist(key: string): Promise<HaiResult<boolean>> {
-      const entry = getValidEntry(key)
-      if (!entry)
+      if (keyType(key) === 'none')
         return ok(false)
-      delete entry.expiresAt
+      const entry = store.get(key)
+      if (entry)
+        delete entry.expiresAt
+      structureExpiry.delete(key)
       return ok(true)
     },
 
@@ -267,10 +378,15 @@ export function createMemoryProvider(): CacheProvider {
     },
 
     async incrBy(key: string, increment: number): Promise<HaiResult<number>> {
+      const type = keyType(key)
+      if (type !== 'none' && type !== 'string')
+        return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_valueNotNumber'))
       const entry = getValidEntry(key)
       // 计数器只接受安全整数，避免 Number(null/boolean/array) 的隐式类型转换。
       const value = entry?.value ?? (entry ? Number.NaN : 0)
-      const current = typeof value === 'number' || (typeof value === 'string' && /^-?\d+$/.test(value)) ? Number(value) : Number.NaN
+      const current = typeof value === 'number' || (typeof value === 'string' && /^-?\d+$/.test(value))
+        ? Number(value)
+        : Number.NaN
       const newValue = current + increment
       if (!Number.isSafeInteger(current) || !Number.isSafeInteger(increment) || !Number.isSafeInteger(newValue)) {
         return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_valueNotNumber'))
@@ -292,62 +408,63 @@ export function createMemoryProvider(): CacheProvider {
         const results: (T | null)[] = []
         for (const key of keys) {
           const entry = getValidEntry(key)
-          results.push(entry ? (deserializeValue(serializeValue(entry.value)) as T) : null)
+          results.push(entry
+            ? (deserializeValue(serializeValue(entry.value)) as T)
+            : null)
         }
         return ok(results)
       }
       catch (error) {
-        return err(HaiCacheError.SERIALIZATION_FAILED, cacheM('cache_operationFailed', { params: { error: 'JSON snapshot failed' } }), error)
+        return err(HaiCacheError.SERIALIZATION_FAILED, cacheM('cache_operationFailed', {
+          params: { error: 'JSON snapshot failed' },
+        }), error)
       }
     },
 
     async mset(entries: Array<[string, CacheValue]>): Promise<HaiResult<void>> {
-      for (const [key, value] of entries) {
-        store.set(key, { value })
+      try {
+        const snapshots = entries.map(([key, value]) => [
+          key,
+          deserializeValue(serializeValue(value)),
+        ] as const)
+        for (const [key, value] of snapshots) {
+          deleteKey(key)
+          store.set(key, { value })
+        }
+        return ok(undefined)
       }
-      return ok(undefined)
+      catch (error) {
+        return err(HaiCacheError.SERIALIZATION_FAILED, cacheM('cache_serializationFailed'), error)
+      }
     },
 
     async scan(cursor: string, options?: ScanOptions): Promise<HaiResult<[string, string[]]>> {
       if (typeof cursor !== 'string' || !/^\d{1,20}$/.test(cursor) || BigInt(cursor) > 18_446_744_073_709_551_615n || !Number.isSafeInteger(options?.count ?? 10) || (options?.count ?? 10) <= 0)
         return err(HaiCacheError.INVALID_SCAN, cacheM('cache_invalidScan'))
-      const allKeys = Array.from(store.keys()).filter((key) => {
-        const entry = store.get(key)
-        return entry && !isExpired(entry)
-      })
-      const regex = options?.match ? globToRegex(options.match) : null
-      const filtered = regex ? allKeys.filter(k => regex.test(k)) : allKeys
+      const keysInStore = allKeys()
+      const regex = options?.match
+        ? globToRegex(options.match)
+        : null
+      const filtered = regex
+        ? keysInStore.filter(k => regex.test(k))
+        : keysInStore
       const count = options?.count || 10
       const start = Number(cursor)
       const end = Math.min(start + count, filtered.length)
       const keys = filtered.slice(start, end)
-      const nextCursor = end >= filtered.length ? '0' : String(end)
+      const nextCursor = end >= filtered.length
+        ? '0'
+        : String(end)
       return ok([nextCursor, keys])
     },
 
     async keys(pattern: string): Promise<HaiResult<string[]>> {
       const regex = globToRegex(pattern)
-      const result: string[] = []
-      for (const [key] of store.entries()) {
-        if (regex.test(key) && getValidEntry(key)) {
-          result.push(key)
-        }
-      }
-      return ok(result)
+      return ok(allKeys().filter(key => regex.test(key)))
     },
 
     async type(key: string): Promise<HaiResult<string>> {
-      if (getValidEntry(key))
-        return ok('string')
-      if (hashStore.has(key))
-        return ok('hash')
-      if (listStore.has(key))
-        return ok('list')
-      if (setStore.has(key))
-        return ok('set')
-      if (zsetStore.has(key))
-        return ok('zset')
-      return ok('none')
+      return ok(keyType(key))
     },
   }
 
@@ -359,7 +476,9 @@ export function createMemoryProvider(): CacheProvider {
       if (!map)
         return ok(null)
       const val = map.get(field)
-      return ok(val !== undefined ? (deserializeValue(val) as T) : null)
+      return ok(val !== undefined
+        ? (deserializeValue(val) as T)
+        : null)
     },
 
     hset: (async (key: string, fieldOrData: string | Record<string, CacheValue>, value?: CacheValue): Promise<HaiResult<number>> => {
@@ -411,12 +530,17 @@ export function createMemoryProvider(): CacheProvider {
       if (!map)
         return ok({} as T)
       // fromEntries 保留 __proto__ 等合法字段，不触发原型 setter。
-      return ok(Object.fromEntries(Array.from(map, ([field, value]) => [field, deserializeValue(value)])) as T)
+      return ok(Object.fromEntries(Array.from(map, ([field, value]) => [
+        field,
+        deserializeValue(value),
+      ])) as T)
     },
 
     async hkeys(key: string): Promise<HaiResult<string[]>> {
       const map = hashStore.get(key)
-      return ok(map ? Array.from(map.keys()) : [])
+      return ok(map
+        ? Array.from(map.keys())
+        : [])
     },
 
     async hvals<T = CacheValue>(key: string): Promise<HaiResult<T[]>> {
@@ -435,7 +559,9 @@ export function createMemoryProvider(): CacheProvider {
       const map = hashStore.get(key)
       const results: (T | null)[] = fields.map((field) => {
         const val = map?.get(field)
-        return val !== undefined ? (deserializeValue(val) as T) : null
+        return val !== undefined
+          ? (deserializeValue(val) as T)
+          : null
       })
       return ok(results)
     },
@@ -446,7 +572,9 @@ export function createMemoryProvider(): CacheProvider {
         map = new Map()
         hashStore.set(key, map)
       }
-      const current = map.has(field) ? Number(deserializeValue(map.get(field)!)) : 0
+      const current = map.has(field)
+        ? Number(deserializeValue(map.get(field)!))
+        : 0
       const newValue = current + increment
       map.set(field, serializeValue(newValue))
       return ok(newValue)
@@ -505,8 +633,12 @@ export function createMemoryProvider(): CacheProvider {
       if (!arr)
         return ok([])
       const len = arr.length
-      const s = start < 0 ? Math.max(len + start, 0) : start
-      const e = stop < 0 ? len + stop + 1 : stop + 1
+      const s = start < 0
+        ? Math.max(len + start, 0)
+        : start
+      const e = stop < 0
+        ? len + stop + 1
+        : stop + 1
       return ok(arr.slice(s, e).map(v => deserializeValue(v) as T))
     },
 
@@ -514,9 +646,13 @@ export function createMemoryProvider(): CacheProvider {
       const arr = listStore.get(key)
       if (!arr)
         return ok(null)
-      const i = index < 0 ? arr.length + index : index
+      const i = index < 0
+        ? arr.length + index
+        : index
       const val = arr[i]
-      return ok(val !== undefined ? (deserializeValue(val) as T) : null)
+      return ok(val !== undefined
+        ? (deserializeValue(val) as T)
+        : null)
     },
 
     async lset(key: string, index: number, value: CacheValue): Promise<HaiResult<void>> {
@@ -524,7 +660,9 @@ export function createMemoryProvider(): CacheProvider {
       if (!arr) {
         return err(HaiCacheError.KEY_NOT_FOUND, cacheM('cache_keyNotFound'))
       }
-      const i = index < 0 ? arr.length + index : index
+      const i = index < 0
+        ? arr.length + index
+        : index
       if (i < 0 || i >= arr.length) {
         return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_indexOutOfRange'))
       }
@@ -537,8 +675,12 @@ export function createMemoryProvider(): CacheProvider {
       if (!arr)
         return ok(undefined)
       const len = arr.length
-      const s = start < 0 ? Math.max(len + start, 0) : start
-      const e = stop < 0 ? len + stop + 1 : stop + 1
+      const s = start < 0
+        ? Math.max(len + start, 0)
+        : start
+      const e = stop < 0
+        ? len + stop + 1
+        : stop + 1
       listStore.set(key, arr.slice(s, e))
       return ok(undefined)
     },
@@ -551,7 +693,10 @@ export function createMemoryProvider(): CacheProvider {
         const arr = listStore.get(key)
         if (arr && arr.length > 0) {
           const val = arr.shift()!
-          return ok([key, deserializeValue(val) as T])
+          return ok([
+            key,
+            deserializeValue(val) as T,
+          ])
         }
       }
       return ok(null)
@@ -565,7 +710,10 @@ export function createMemoryProvider(): CacheProvider {
         const arr = listStore.get(key)
         if (arr && arr.length > 0) {
           const val = arr.pop()!
-          return ok([key, deserializeValue(val) as T])
+          return ok([
+            key,
+            deserializeValue(val) as T,
+          ])
         }
       }
       return ok(null)
@@ -726,7 +874,9 @@ export function createMemoryProvider(): CacheProvider {
     async zscore(key: string, member: string): Promise<HaiResult<number | null>> {
       const map = zsetStore.get(key)
       const score = map?.get(member)
-      return ok(score !== undefined ? score : null)
+      return ok(score !== undefined
+        ? score
+        : null)
     },
 
     async zrank(key: string, member: string): Promise<HaiResult<number | null>> {
@@ -735,7 +885,9 @@ export function createMemoryProvider(): CacheProvider {
         return ok(null)
       const sorted = Array.from(map.entries()).sort((a, b) => a[1] - b[1])
       const idx = sorted.findIndex(([m]) => m === member)
-      return ok(idx >= 0 ? idx : null)
+      return ok(idx >= 0
+        ? idx
+        : null)
     },
 
     async zrevrank(key: string, member: string): Promise<HaiResult<number | null>> {
@@ -744,7 +896,9 @@ export function createMemoryProvider(): CacheProvider {
         return ok(null)
       const sorted = Array.from(map.entries()).sort((a, b) => b[1] - a[1])
       const idx = sorted.findIndex(([m]) => m === member)
-      return ok(idx >= 0 ? idx : null)
+      return ok(idx >= 0
+        ? idx
+        : null)
     },
 
     async zrange(key: string, start: number, stop: number, withScores?: boolean): Promise<HaiResult<string[] | ZMember[]>> {
@@ -753,8 +907,12 @@ export function createMemoryProvider(): CacheProvider {
         return ok([])
       const sorted = Array.from(map.entries()).sort((a, b) => a[1] - b[1])
       const len = sorted.length
-      const s = start < 0 ? Math.max(len + start, 0) : start
-      const e = stop < 0 ? len + stop + 1 : stop + 1
+      const s = start < 0
+        ? Math.max(len + start, 0)
+        : start
+      const e = stop < 0
+        ? len + stop + 1
+        : stop + 1
       const slice = sorted.slice(s, e)
       if (withScores) {
         return ok(slice.map(([member, score]) => ({ member, score })))
@@ -768,8 +926,12 @@ export function createMemoryProvider(): CacheProvider {
         return ok([])
       const sorted = Array.from(map.entries()).sort((a, b) => b[1] - a[1])
       const len = sorted.length
-      const s = start < 0 ? Math.max(len + start, 0) : start
-      const e = stop < 0 ? len + stop + 1 : stop + 1
+      const s = start < 0
+        ? Math.max(len + start, 0)
+        : start
+      const e = stop < 0
+        ? len + stop + 1
+        : stop + 1
       const slice = sorted.slice(s, e)
       if (withScores) {
         return ok(slice.map(([member, score]) => ({ member, score })))
@@ -786,8 +948,12 @@ export function createMemoryProvider(): CacheProvider {
       const map = zsetStore.get(key)
       if (!map)
         return ok([])
-      const minVal = min === '-inf' ? Number.NEGATIVE_INFINITY : Number(min)
-      const maxVal = max === '+inf' ? Number.POSITIVE_INFINITY : Number(max)
+      const minVal = min === '-inf'
+        ? Number.NEGATIVE_INFINITY
+        : Number(min)
+      const maxVal = max === '+inf'
+        ? Number.POSITIVE_INFINITY
+        : Number(max)
       let sorted = Array.from(map.entries())
         .filter(([, score]) => score >= minVal && score <= maxVal)
         .sort((a, b) => a[1] - b[1])
@@ -811,8 +977,12 @@ export function createMemoryProvider(): CacheProvider {
       const map = zsetStore.get(key)
       if (!map)
         return ok(0)
-      const minVal = min === '-inf' ? Number.NEGATIVE_INFINITY : Number(min)
-      const maxVal = max === '+inf' ? Number.POSITIVE_INFINITY : Number(max)
+      const minVal = min === '-inf'
+        ? Number.NEGATIVE_INFINITY
+        : Number(min)
+      const maxVal = max === '+inf'
+        ? Number.POSITIVE_INFINITY
+        : Number(max)
       let count = 0
       for (const score of map.values()) {
         if (score >= minVal && score <= maxVal)
@@ -839,8 +1009,12 @@ export function createMemoryProvider(): CacheProvider {
         return ok(0)
       const sorted = Array.from(map.entries()).sort((a, b) => a[1] - b[1])
       const len = sorted.length
-      const s = start < 0 ? Math.max(len + start, 0) : start
-      const e = stop < 0 ? len + stop + 1 : stop + 1
+      const s = start < 0
+        ? Math.max(len + start, 0)
+        : start
+      const e = stop < 0
+        ? len + stop + 1
+        : stop + 1
       const toRemove = sorted.slice(s, e)
       for (const [member] of toRemove) {
         map.delete(member)
@@ -852,8 +1026,12 @@ export function createMemoryProvider(): CacheProvider {
       const map = zsetStore.get(key)
       if (!map)
         return ok(0)
-      const minVal = min === '-inf' ? Number.NEGATIVE_INFINITY : Number(min)
-      const maxVal = max === '+inf' ? Number.POSITIVE_INFINITY : Number(max)
+      const minVal = min === '-inf'
+        ? Number.NEGATIVE_INFINITY
+        : Number(min)
+      const maxVal = max === '+inf'
+        ? Number.POSITIVE_INFINITY
+        : Number(max)
       let count = 0
       for (const [member, score] of map.entries()) {
         if (score >= minVal && score <= maxVal) {
@@ -943,16 +1121,17 @@ export function createMemoryProvider(): CacheProvider {
       listStore.clear()
       setStore.clear()
       zsetStore.clear()
+      structureExpiry.clear()
       connected = false
     },
 
     isConnected: () => connected,
 
     kv,
-    hash,
-    list,
-    set_,
-    zset,
+    hash: guardStructure(hash, 'hash'),
+    list: guardStructure(list, 'list'),
+    set_: guardStructure(set_, 'set'),
+    zset: guardStructure(zset, 'zset'),
     lock,
 
     async ping(): Promise<HaiResult<string>> {
