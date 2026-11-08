@@ -6,8 +6,18 @@ import { closeSync, constants, fchmodSync, fstatSync, fsyncSync, lstatSync, open
 import { basename, dirname, join } from 'node:path'
 import process from 'node:process'
 
+/**
+ * 本机文件读取策略，仅供部署模块内部复用已有大小和权限约束。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const options: ReadOptions = { maxBytes: 65536, private: true }
+ * ```
+ */
 interface ReadOptions {
+  /** 内容大小上限；省略时使用 Node Buffer 可分配上限。 */
   maxBytes?: number
+  /** 在支持 POSIX 权限的平台上限制所有者和组/其他用户的访问。 */
   private?: boolean
 }
 
