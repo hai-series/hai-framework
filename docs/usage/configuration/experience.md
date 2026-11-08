@@ -26,6 +26,8 @@
 
 检查标签与 `for` / `id` 关联、Tab顺序、提交失败保留输入和防重复提交。校验错误统一Toast，控件保留 `aria-invalid` 和读屏说明；修正后清除旧提示，关闭提示后再次无效提交仍提示。服务端再次校验输入和权限。
 
+保存型场景组件还要明确成功信号。`UserProfile.onsubmit` 接收表单值，返回 `boolean | Promise<boolean>`：只有 `true` 才退出编辑；`false` 或异常保留草稿。输入一个会被服务端拒绝的值时，应看到安全错误提示且仍能继续编辑；不要把“请求结束”当成“保存成功”。
+
 ## Toast位置、时长和排查信息
 
 根布局只挂载一个 `ToastContainer`。所有警告/错误均由它显示，`Alert` 仅支持 `info` / `success` 持续信息；恢复按钮留在原页面，用户能继续处理。
@@ -96,10 +98,51 @@ stripe:
 
 先用授权沙箱验证创建、通知、重复通知和未知结果恢复。共享幂等记录、服务端订单终态和金额核对才是业务依据，HTTP200或前端跳转都不够。
 
+微信 JSAPI 的输入配置包含商户身份、签名私钥和受信平台公钥映射：
+
+```yaml schema=@h-ai/payment:PaymentConfigSchema
+wechat:
+  mchId: example-merchant
+  appId: example-app
+  apiV3Key: ${WECHAT_API_V3_KEY}
+  serialNo: example-merchant-certificate-serial
+  privateKey: ${WECHAT_MERCHANT_PRIVATE_KEY}
+  platformKeys:
+    example-trusted-platform-serial: ${WECHAT_PLATFORM_PUBLIC_KEY}
+```
+
+占位值必须替换为支付平台已登记的真实值，私钥/公钥变量保存完整 PEM 内容。有效支付创建应返回对应渠道的客户端支付参数；验签时只按配置的 `platformKeys` 标识选键。未登记标识、错误签名或金额不符应拒绝，不能从来访通知中接受新公钥。
+
+支付宝 H5 使用自己的身份和 RSA 密钥，不复用微信或 Stripe 凭据：
+
+```yaml schema=@h-ai/payment:PaymentConfigSchema
+alipay:
+  appId: example-app
+  sellerId: example-seller
+  privateKey: ${ALIPAY_PRIVATE_KEY}
+  alipayPublicKey: ${ALIPAY_PUBLIC_KEY}
+  returnUrl: https://shop.example.invalid/payment/result
+  signType: RSA2
+  sandbox: true
+```
+
+输入使用授权沙箱账号。支付宝创建成功后的 `data.clientParams` 是 `{ gateway, fields }` 对象：浏览器向可信的渠道 `gateway` 提交已签名的 `fields` 表单，不把它当成链接或 HTML。`returnUrl` 只是导航，服务端查询或已验签通知才可推进订单状态。生产使用对应账号、密钥及 `sandbox: false`，先验证拒绝错误商户、重复通知和重放。Stripe 的 `data.clientParams.checkoutUrl` 是支付页面地址，也需区分 test/live；`successUrl/cancelUrl` 都不能成为付款事实。
+
 ## 原生地址、权限与安全存储
 
 Capacitor配置由原生工程和能力调用消费，不从同名YAML自动接入。`app` 是 Android / iOS 安装包，`desktop` 是桌面安装包，`web` 才是浏览器交付角色。
 
 Tauri开发回退API 地址为 `http://localhost:3000/api/v1`；手机上的 `localhost` 指手机自身，Capacitor应明确真实可达地址。静态公开`runtime-config.js`只存公开API地址等白名单，不能放服务端密钥。原生`token`使用安全 `TokenStorage`，WebView的`localStorage`不适合敏感凭据。
+
+原生工程还需分别配置应用标识、展示名称、打包 Web 目录、平台权限和签名；这些由 `capacitor.config.ts` / Tauri 工程及平台工具链消费，不是 `_core.yml.name` 的替代。输入一个设备真实可达的公开 API 地址后，应能从真机发出健康请求；相机、推送和安全存储还需分别验证授权允许、拒绝和重启恢复。仅同步资源或生成安装包不会证明设备权限、令牌存储与业务请求正常，完整能力选项见[原生接入](../development/integrations.md)。
+
+| 能力参数 | 默认与输入 | 输出、影响和限制 |
+| --- | --- | --- |
+| `camera.takePhoto` 的 `source` | `prompt`；可选 camera/photos | 选择相机或图库，需要平台权限和对应插件；拒绝授权时返回失败结果 |
+| `quality` / `width` / `height` | quality=90（0–100）；宽高可省略、单位像素 | 限制照片质量/尺寸，不是服务器上传大小保证，上传前仍核对真实字节 |
+| `resultType` | uri；可选 base64/dataUrl | `data` 分别为可访问路径、Base64字符串、Data URL；`format` 是 jpeg 等扩展名，不是 MIME 类型 |
+| `statusBar.configure` 的 `style` | dark/light/default，可省略 | 改变文字样式；backgroundColor 为十六进制颜色，overlay 控制是否覆盖内容，需要按真机安全区检查 |
+
+例如已初始化 Capacitor 后调用 `camera.takePhoto({ source: 'photos', resultType: 'uri', width: 1200 })`，输入是用户选择操作与尺寸预算，成功结果包含 `data/format`。先检查 `success` 再使用内容；关闭页面和模块时释放本轮监听，不能把取图成功当作已经上传或保存。
 
 `pnpm build --target app --platform android --runtime auto --debug` 在容器内打调试 APK，省略 `--debug` 时使用发布签名。iOS 在 macOS/Xcode 上导出 IPA。`build.app` 指定原生工程，归档位于 `.hai/build/app/<平台>/<构建类型>/<buildId>/`。`CAPACITOR_SERVER_URL` 只用于开发，打包会拒绝同步后的热更新地址。签名见 [原生和离线条件](../getting-started/build.md#原生和离线条件)。

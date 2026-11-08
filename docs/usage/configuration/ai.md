@@ -44,7 +44,18 @@ acp:
 
 Goose 原生服务用 `transport: http` 与 `http://.../acp`，或 `transport: ws` 与 `ws://.../acp`；`supportedTransports` 只填实际部署支持的类型。`headerEnv: { X-Secret-Key: HAI_GOOSE_SECRET }` 在启动连接时从宿主变量解析服务认证信息。Goose 自身通过 GOOSE_PROVIDER/GOOSE_MODEL/供应商密钥配置模型；不要给 custom-service 绑定 modelIds，也不要把服务凭据放进 URL。远程 TLS、卷、Git 与服务进程由部署方维护。
 
-受管仓库的读写凭据使用 `acp.workspaces[].gitEnvironmentRefs`，映射的值是宿主变量名。只有框架执行远程克隆、拉取或推送时才解析。Agent 专用变量使用 `acp.agents[].environmentRefs`。旧工作区的 `environmentRefs` 仍是共用映射，启用 Git 隔离时将原 Git 凭据及其网络设置移到 `gitEnvironmentRefs`，并从共用映射删除。可信部署方提供认证工具、路径或 HTTP 认证头。
+受管仓库的读写凭据使用 `acp.workspaces[].gitEnvironmentRefs`，映射的值是宿主变量名，只有框架执行远程克隆、拉取或推送时才解析。Agent 专用变量使用 `acp.agents[].environmentRefs`。工作区 `environmentRefs` 是共用映射，不能在这里放只应交给 Git 的秘密。可信部署方提供认证工具、路径或 HTTP 认证头。
+
+| ACP 条目字段 | 默认或要求 | 场景、影响与可观察结果 |
+| --- | --- | --- |
+| `id` / `name` | id 必填且清单内唯一；Agent name 必填 | id 用于资源引用和受管目录，名称供管理界面识别；不要写秘密或个人信息 |
+| Agent `enabled` | `true` | 暂停新任务时设为 `false`，新建和恢复会话被拒绝；不等于已撤销外部正在执行的副作用 |
+| Agent `defaultModelId` | 可省略 | 本机/托管 Agent 有多个 `modelIds` 时指定默认项，必须属于该数组；custom-service 不填写模型绑定 |
+| `adapter` / `command` / `args` | `generic` / 适配器默认启动方式 | 选择已安装原生 Agent；覆盖命令时提供程序与参数数组，不拼 shell，启动失败返回具体诊断 |
+| `storage` | 工作区必填 | directory 指向本机目录，volume 的 `name`、`image` 必填；容器引擎及镜像与 Agent 一致，重启后仍应找到原工程 |
+| 仓库 `remote` | `origin` | 多远程工程选择受管 Git 远程名；`url` 与 `mainBranch` 必填，不自动猜主分支 |
+
+本节 YAML 的输入是模型短名 `coding`、Agent `coder` 与工作区 `project`。初始化后，对应清单的 list/get 应能查到这些只读配置资源；真正创建会话还需原生程序、有效凭据和可访问仓库。用无敏感任务写一份临时文件并独立读回，才能确认工具实际执行；只查到清单不证明模型可用。
 
 运行步骤和 API 示例见 [ACP 智能体与工程会话](../development/ai-acp.md)。
 
@@ -95,19 +106,7 @@ llm:
 
 `id` 是应用为模型取的短名，例如 `fast`；`model` 才是发给供应商的真实型号。`scenarios.chat: fast` 表示普通对话默认使用 `fast` 这一项；单次调用显式指定模型时优先使用该选择。只用一个模型时，可以不写 `models` 和 `scenarios`。
 
-### 从旧版 api 字段迁移
-
-LLM 的协议字段统一叫 `protocol`，取值仍为 `chat | responses | anthropic`。OpenAI Chat Completions 及兼容接口通常选 `chat`，Responses 接口选 `responses`，Anthropic Messages 接口选 `anthropic`。
-
-| 旧配置 | 新配置 |
-| --- | --- |
-| `llm.api` | `llm.protocol` |
-| `llm.models[].api` | `llm.models[].protocol` |
-| 调用参数 `tempModel.api` | `tempModel.protocol` |
-| `HAI_AI_LLM_API` | `HAI_AI_LLM_PROTOCOL` |
-| `HAI_AI_LLM_MODELS_0_API` | `HAI_AI_LLM_MODELS_0_PROTOCOL`，后续项使用对应索引 |
-
-旧字段和旧协议变量会明确报错并提示迁移。供应商密钥仍叫 `apiKey`，`HAI_AI_LLM_APIKEY` 不变。改完重启后端，发送一条短请求，确认模型和协议匹配。
+`protocol` 选择当前端点真实支持的协议：Chat Completions 选 `chat`，Responses 选 `responses`，Anthropic Messages 选 `anthropic`。`apiKey` 始终表示凭据；它与协议选择是两个字段。上例的输入是普通对话和推理两种场景，输出应分别由 `fast` 与 `deep` 模型处理，日志只记录安全模型标识和请求关联，不打印密钥。
 
 ### 在不同环境使用不同模型服务
 
@@ -123,7 +122,7 @@ LLM 的协议字段统一叫 `protocol`，取值仍为 `chat | responses | anthr
 | `audio.models[0].baseUrl` | `HAI_AI_AUDIO_MODELS_0_BASEURL` |
 | `image.models[0].apiKey` | `HAI_AI_IMAGE_MODELS_0_APIKEY` |
 
-第二个模型把变量中的 `_0_` 改为 `_1_`。地址、模型名等环境差异放 `.env.test` / `.env.prod`，真实密钥放 `.env.local` 或由目标环境注入。不要同时填写整个 `HAI_AI` JSON 和这些细项，父对象会覆盖子项。
+第二个模型把变量中的 `_0_` 改为 `_1_`。地址、模型名等环境差异放 `.env.test` / `.env.prod`，真实密钥放 `.env.local` 或由目标环境注入。同一来源的父 JSON 先应用、细项后覆盖；更高来源的父对象会清除低来源细项。尽量只维护一份清晰的基础结构与必要覆盖，完整规则见[环境来源](runtime.md#配置从哪里来)。
 
 ## 知识分块与`embedding`
 
@@ -136,6 +135,8 @@ LLM 的协议字段统一叫 `protocol`，取值仍为 `chat | responses | anthr
 | `chunkOptions` | markdown/1500/overlap200 | 与独立Datapipe默认overlap0不同，分块失败不能静默退回整篇 |
 | `entityBoostWeight` | 0.15 | 实体命中分数增益，范围0–1；需用实际查询评估 |
 | `entityTypes`/`systemPrompt` | 无配置默认 | 覆盖内置实体类型/提示；只写可信业务规则，不能扩大数据可见范围 |
+
+`cleanOptions.removeHtml`、`normalizeWhitespace`、`trim` 默认 `true`，`removeUrls`、`removeEmails` 默认 `false`；`customReplacements` 的每项 `pattern/replacement` 是可信规则，不是允许任意用户提交正则的入口。`chunkOptions.separator` 仅供 custom 模式，`markdownMinLevel` 默认 2、`markdownKeepTitle` 默认 true；具体清洗前后文本与分块结果见[文本处理配置](data.md#文本清洗和分块)。知识导入默认 overlap 为 200，独立 Datapipe 默认 0，不混用两者预算。
 
 ```yaml schema=@h-ai/ai:AIConfigSchema
 llm:
@@ -160,12 +161,12 @@ knowledge:
 
 | Provider/配置 | 默认或必填 | 影响与适用条件 |
 | --- | --- | --- |
-| `lancedb.path` | 必填 | 本地目录，重启/多实例边界按部署存储核对 |
-| `pgvector.host` / `port` / `database` | localhost/5432/`database`必填 | user/`password`/`url`可提供；服务需要pgvector扩展和所需权限 |
-| `pgvector.tablePrefix` / `indexType` | vec_/hnsw（索引缺省行为） | 可选ivfflat；选型取决数据量、召回与构建成本，非授权边界 |
-| `qdrant.url` / `apiKey` | http://localhost:6333/无默认 | 生产显式HTTPS/凭据，不依赖公开本机默认地址 |
-| `chroma.url`或`path` | 无默认 | `url`连接独立服务，`path`本地启动；`host`/`port`默认localhost/8000，`serverCommand`默认chroma |
-| `chroma.startupTimeout` / `apiKey` | 30000ms/无默认 | 启动期限和访问凭据；远端URL拒绝含凭据等非法形式 |
+| lancedb 的 `path` | 必填 | 本地目录，重启/多实例边界按部署存储核对 |
+| pgvector 的 `host` / `port` / `database` | localhost/5432/`database`必填 | user/`password`/`url`可提供；服务需要pgvector扩展和所需权限 |
+| pgvector 的 `tablePrefix` / `indexType` | vec_/hnsw（索引缺省行为） | 可选ivfflat；选型取决数据量、召回与构建成本，非授权边界 |
+| qdrant 的 `url` / `apiKey` | http://localhost:6333/无默认 | 生产显式HTTPS/凭据，不依赖公开本机默认地址 |
+| chroma 的 `url`或`path` | 无默认 | `url`连接独立服务，`path`本地启动；`host`/`port`默认localhost/8000，`serverCommand`默认chroma |
+| chroma 的 `startupTimeout` / `apiKey` | 30000ms/无默认 | 启动期限和访问凭据；URL仅根端点，不含凭据、路径前缀、查询或片段；apiKey 为受信自托管网关的 Bearer token，不是 Chroma Cloud 配置 |
 | `metric` | cosine（默认距离） | 可选euclidean/dot；已有集合应核对是否允许变更 |
 | `operationLog` | 可省略 | `read`/`write`默认false，`maxLength1000`、`level` debug，只记录安全摘要 |
 
@@ -177,6 +178,39 @@ metric: cosine
 ```
 
 先建立专用集合，插入已知向量并查询，再验证重启和另一实例可见。
+
+各 Provider 的字段直接放在顶层，不再套同名对象。已有 PostgreSQL/pgvector 服务时可使用：
+
+```yaml schema=@h-ai/vecdb:VecdbConfigSchema
+type: pgvector
+host: db.internal.example
+port: 5432
+database: orders
+user: orders_vectors
+password: ${VECTOR_DB_PASSWORD}
+tablePrefix: orders_vec_
+indexType: hnsw
+metric: cosine
+```
+
+本机开发使用 LanceDB，目录需由应用控制：
+
+```yaml schema=@h-ai/vecdb:VecdbConfigSchema
+type: lancedb
+path: ./data/vecdb
+metric: cosine
+```
+
+连接独立 Chroma 服务时配置端点；不配置 path 就不会由框架拉起本机进程：
+
+```yaml schema=@h-ai/vecdb:VecdbConfigSchema
+type: chroma
+url: https://vectors.internal.example
+apiKey: ${CHROMA_GATEWAY_TOKEN}
+metric: cosine
+```
+
+这三份输入选择不同存储实现，预期业务输出仍是相同集合中的ID、内容和相似度。分数统一在0–1之间，越大越相似，不是概率；`minScore` 应按实际样本重新评估。生产共享状态要求不会因目录持久化而放宽，集合维度和已有距离定义也不会被改一行配置自动转换。
 
 ## 会话记忆、压缩与检索
 
@@ -265,9 +299,15 @@ image:
 
 先验证超限输入被本地边界拒绝，再用合法测试材料验证真实Provider。语音/图片记录涉及隐私和费用，不能在手册示例中默默发起外部请求。
 
+音频 Provider 接受 `openai/mimo/qwen/doubao/whisper/indextts`，图片 Provider 接受 `openai/google/qwen/seedream/pollinations`。先按实际服务选择 Provider，再登记该服务支持的模型与操作；枚举值合法不代表任意模型都支持所有操作。上例中输入短录音应由 `speech-in` 返回转写文本，输入文本由 `speech-out` 返回音频，图片提示由 `pictures` 返回生成结果；超出字节/数量预算时应在调用厂商前拒绝，不产生额外外部调用。
+
+源码仓库的 `pnpm model:run <name>` 只发布本机 `127.0.0.1`，宿主配置 `HAI_MODEL_API_KEY` 时向容器传入同名变量，客户端使用匹配凭据；Qwen由启动桥接转为vLLM原生环境认证。模型构建、固定树元数据联网前置、可信缓存与离线制品准备见[模型服务](../../../packages/ai/models/README.md)，对外生产服务另行配置网络、HTTPS和资源限额。
+
 ## MCP和A2A
 
 MCP配置`server.name`必填，`version`默认1.0.0，能力对象内`tools`/`resources`/`prompts`默认true；能力声明不赋予业务权限。工具调用在服务端授权并约束输入、超时和外部副作用。
+
+外部 MCP 清单位于 `mcp.servers`。每项 `id/name/transport` 必填：`stdio` 需要 `command`，`args` 默认空数组；`http` / `sse` 需要 HTTP(S) `url`。`environmentRefs` 给 stdio 注入宿主变量引用，`headerEnv` 为网络连接解析认证头引用，两者默认 `{}`，不直接保存密钥。配置后只有在会话选择对应 `mcpServerIds` 时才使用；输入一个仅可读的测试工具请求，输出应是该工具结果及调用事件，不能只凭清单存在判断工具已经执行。
 
 A2A的`agentCard`需`name`/`url`，`description`/`version`/`skills`可选；skill需id/`name`，`description`/tags可选。`security.apiKey`默认header、名称x-api-`key`，推荐header避免URL暴露凭据。共享`execution`默认`leaseMs`=30000、`pollIntervalMs`=250、`maxExecutionMs`=300000，分别控制租约、订阅轮询和单次绝对执行上限。
 

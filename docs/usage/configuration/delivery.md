@@ -8,6 +8,8 @@
 
 `package.json.name`是项目资源身份，去scope、转小写并规范非法字符；不能通过目录名猜测，缺失会报错。应用根`version`用于制品版本。`hai.json.build`描述编译/镜像/原生打包，`hai.json.deploy`描述部署；服务目录仅用于扫描依赖和运行配置。
 
+`deploy.environment` 或命令 `--env` 选择 `.env.<环境>` 的部署模式，例如 test/prod；`local` 与 `example` 不是可部署模式。它不选择构建期密钥，也不把一份制品变成已验证的生产版本。
+
 中间件向导选择默认或自定义时，保留同后端的完整有效配置，表单未展示项也会传到运行环境：数据库连接池/操作日志、S3 的 `publicEndpoint/publicUrl/prefix`、Redis 重试/键前缀、向量检索选项、SMTP 发件人和 LDAP 属性映射。自建与云开通只定稿实际连接及凭据，切换后端清除不兼容字段。生成端优先输出细项，同来源细项覆盖手写 JSON 基础。配置合并在 Core，字段 Schema 与业务验证属于所属模块；CLI 部署向导只收集输入并调用 SDK。
 
 ### 连接已有数据库、缓存和对象存储
@@ -24,7 +26,7 @@ PostgreSQL、MySQL、Redis 和 pgvector 可选「连接 URL」或「分字段」
 
 自定义 S3 的 `endpoint` 是后端能访问的 S3 API 地址，例如 `https://objects.example.com:9000`。桶名只填在 `bucket`，例如 `uploads`。AWS S3 可留空，由 SDK 按 `region` 选地址。MinIO、RustFS 等通常使用 `forcePathStyle=true`，请求地址形如 `endpoint/uploads`。要求使用桶子域名的服务按其要求设为 `false`。Access Key ID 和 Secret Access Key 使用存储服务签发的一对凭据。
 
-生产模板通过 `HAI_REACH_PROVIDERS='[]'` 要求显式设置通知 Provider。空列表时，交互式部署提示应填写的私有文件路径。设置完整列表后再运行 `deploy`，可以逐项配置邮件和短信。列表位于环境私有文件时，向导将修改保存在同一文件。HTTP API 的请求头以隐藏方式输入。若旧向导在空列表旁写入了 `HAI_REACH_PROVIDERS_0`、`HAI_REACH_PROVIDERS_0_NAME`、`HAI_REACH_PROVIDERS_0_TYPE`，删掉这些旧索引变量，再把应用所需的完整列表写入 `.env.prod.local`。例如邮件和短信都通过 HTTPS API 发送时，可按下列结构填写实际端点和所需认证。
+生产模板通过 `HAI_REACH_PROVIDERS='[]'` 要求显式设置通知 Provider。空列表时，交互式部署提示应填写的私有文件路径。把完整列表写入 `.env.prod.local` 后再运行 `deploy`，可以逐项配置邮件和短信。数组索引只能覆盖已声明的列表项，不能从空数组创建元素。列表位于环境私有文件时，向导将修改保存在同一文件。HTTP API 的请求头整体私密保存并以隐藏方式输入。例如邮件和短信都通过 HTTPS API 发送时，可按下列结构填写实际端点和所需认证。
 
 ```dotenv
 HAI_REACH_PROVIDERS='[{"name":"email","type":"api","url":"https://mail.example.invalid/send","method":"POST"},{"name":"sms","type":"api","url":"https://sms.example.invalid/send","method":"POST"}]'
@@ -63,6 +65,8 @@ HAI_REACH_PROVIDERS='[{"name":"email","type":"api","url":"https://mail.example.i
 
 这是fullstack结构示例，先核对真实workspace路径，删除不存在的app/desktop项，配置所需环境。镜像需各自Dockerfile；构建不注入运行期密钥，不使用Windows node_modules替代Linux依赖。
 
+`build.images` 每项的 `name` 为 serv/web，`context` 省略时是项目根，`dockerfile` 必填；`containerPort` 声明实际应用端口，部署据此核对布局。`desktop/app` 是原生工程目录数组。输入一个存在的服务Dockerfile及可信context，输出应包含该角色镜像和校验元数据；填不存在的目录或重复角色应在构建前修正，而不是手动补制品清单。
+
 | build参数 | 默认/条件 | 影响 |
 | --- | --- | --- |
 | `--target` | compile | compile编译源码，`image`构建镜像，app/desktop生成对应原生制品 |
@@ -72,6 +76,8 @@ HAI_REACH_PROVIDERS='[{"name":"email","type":"api","url":"https://mail.example.i
 | `--network`/`--no-http-proxy` | 默认引擎网络/默认继承规则 | 按网络环境明确设置，完全离线还需基础镜像和依赖缓存 |
 | `--platform`/`--arch` | 按目标工具链 | 原生包需对应OS/SDK/签名；同步资源不等于生成安装包 |
 | `--debug` | app/desktop 默认 release | 生成对应平台的调试安装包 |
+| `--json` | 默认不启用 | 镜像构建使用非交互模式，stdout仅给本次结果JSON，供自动化读取真实制品目录 |
+| `--yes` | 默认交互确认未保存的下载设置 | 非交互复用已保存值，首次未配置使用官方源；不表示授权忽略输入或构建失败 |
 
 构建工具会自动记录应用版本、本次构建编号、Git 来源、镜像 OS/架构、网站目录、服务组合及镜像校验和。部署工具据此检查交付内容，用户无需填写或修改清单格式。CLI 与应用框架依赖保持匹配版本；全部镜像导出成功后，才会更新本地最近构建记录。自动化可直接读取本次构建返回的制品位置。[构建结果](../getting-started/build.md#在自动化中使用本次结果)
 
@@ -83,11 +89,13 @@ HAI_REACH_PROVIDERS='[{"name":"email","type":"api","url":"https://mail.example.i
 
 镜像构建仅使用可信且构建期间不会被其他主体替换的 context。各 context 的 `images/dependencies/` 是 CLI 管理的依赖缓存，`.managed.json` 跟踪清单读写上限为 16MiB。生成目录祖先不得使用符号链接或 Windows junction，文件不得是链接或多硬链接文件。归档按固定小块比较和复制，更新通过独占临时文件原子替换，未变化内容不重写；旧清单清理按实际规范路径限制在缓存树内，路径别名不会删除本次有效文件。错误消息区分路径类型、变化、读写失败和 JSON 损坏，并提供诊断码，不回显原文件内容。
 
-SQLite 13 的原生二进制随 npm 包交付。旧的 `--sqlite-prebuild-mirror`、`SQLITE_PREBUILD_MIRROR` 和独立安装器已经移除；升级既有工程时同步 Dockerfile，并删除旧命令参数。离线构建仍需缓存完整 npm 包，生成镜像会实际打开内存数据库验证原生依赖。
+被收集为依赖输入的 `package.json`、`.pnpmfile.cjs`、`.tgz` 和 `.patch` 源文件也须为普通单链接文件；硬链接不会用于把 context 外内容带入镜像。符号链接不作为普通源文件收集。遇到路径诊断时检查链接、权限和损坏清单，恢复受控普通文件后重新构建。
+
+SQLite 原生二进制随完整 npm 包交付，跟随所选 npm registry 获取。离线构建需缓存完整 npm 包；含数据库的生成镜像实际打开内存数据库验证原生依赖。
 
 `image` 目标默认最多并行两项镜像，资源紧张时用 `--concurrency 1`。Dockerfile 在源码 COPY 前安装依赖，前后端仅复制各自必要的源码，源码变化可复用下载与安装层。运行镜像移除应用自身的声明文件、源码映射与说明文件。打包按镜像内容 ID 在 `.hai/cache/images` 缓存中间件归档，复用前验证摘要，损坏则重新导出；应用镜像复制时同步计算摘要。速度取决于资源与缓存命中，不承诺固定比例。
 
-旧 `--target docker` 已改为 `--target image`；`--runtime docker|podman` 继续表示引擎，现有 `.hai/build/docker` 制品目录保持可用。
+`--target image` 选择镜像构建目标；`--runtime docker|podman` 选择引擎，镜像制品保存在 `.hai/build/docker`。
 
 后端探针、模板镜像和 Fullstack 同源代理按最终健康路径生成，支持 `HAI_SERV_HTTP_HEALTH_PATH=/status`。同一来源先应用 `HAI_SERV` 父 JSON，再由叶字段覆盖；更高来源的父对象才会清除低来源细项，完整顺序见[运行时配置](runtime.md)。已启用的文档页面、OpenAPI JSON 与本地 Scalar 脚本会转发至后端，保留生产关闭与认证限制。路径和路由变更需要重新部署，同步 Nginx 与发布探针。
 
@@ -142,7 +150,7 @@ pnpm build --target image --image-source custom --image-mirrors "docker.io=mirro
 
 `docker pull` 和远程 `podman pull` 由引擎执行，构建参数不能配置该引擎的出口。CLI 单独提示预检结果；Docker Desktop 在代理设置中选择系统/手动代理，Linux Docker 在 daemon 服务中配置，Podman Machine/API 服务设置自身代理。[Docker 说明](https://docs.docker.com/engine/daemon/proxy/)和[Podman 说明](https://podman-desktop.io/docs/proxy)提供对应入口。修改这些设置及重启引擎需独立安排。
 
-现有工程先同步新版 Dockerfile 的全局 `HAI_NODE_IMAGE`、适用的 `HAI_NGINX_IMAGE`，以及构建阶段的 `HAI_NPM_REGISTRY`、`COREPACK_NPM_REGISTRY`、`npm_config_registry`、`pnpm_config_registry`。选择非官方源而旧模板不支持时，CLI 在构建前指出文件。模板同步后重新构建，已有交付包不变。
+自定义 Dockerfile 声明全局 `HAI_NODE_IMAGE`、适用的 `HAI_NGINX_IMAGE`，以及构建阶段的 `HAI_NPM_REGISTRY`、`COREPACK_NPM_REGISTRY`、`npm_config_registry`、`pnpm_config_registry`，才能接收源配置。所选源与 Dockerfile 不匹配时，CLI 在构建前指出文件。修改后重新构建，交付包保持不可变。
 
 ## 网站部署在子目录
 
@@ -187,7 +195,7 @@ finally {
 
 访问 `http://127.0.0.1:5173/yyy/`，从导航进入登录页，再刷新登录或业务深链接。正式编译时在同样的`PUBLIC_BASE_PATH`下执行 `pnpm build`；生产服务仍须满足数据库、缓存、密钥等配置要求，开发可访问不代表生产配置已验收。
 
-新模板已将base加入`kit.createHandle`的`protectedPaths`/`publicPaths`/`loginUrl`，并为`createAuthActions`设置带base的api/auth地址。已有应用升级时，同步检查自定义fetch、链接、守卫与回调地址；守卫匹配的是实际URL。带目录的私有API应返回401，页面应跳转到同一目录下的登录页。API的401响应保留诊断信息，界面错误继续使用公共Toast。
+`kit.createHandle` 的 `protectedPaths`/`publicPaths`/`loginUrl` 和 `createAuthActions` 的 api/auth 地址都使用同一 base。自定义 fetch、链接、守卫与回调地址同样包含实际目录；守卫匹配实际 URL。带目录的私有 API 应返回401，页面应跳转到同一目录下的登录页。API 的401响应保留诊断信息，界面错误使用公共 Toast。
 
 ![SvelteKit子目录登录页](../images/subpath-sveltekit-login.png)
 
@@ -201,7 +209,7 @@ Web的API地址按显式`baseUrl`、`runtime-config.js`、构建时`PUBLIC_API_B
 
 ![前后端分离应用的子目录入口](../images/subpath-vite-login.png)
 
-图为当轮真实生成的 Fullstack Web 经 `/yyy/` 反代访问的页面。验收将 Serv 的 `http.apiPrefix` 配为 `/yyy/api/v1`，网关保留 API 前缀并拒绝根路径 `/api/v1/` 与 `/health`；沿该入口完成管理业务、hash 深链接与刷新。
+图示 Fullstack Web 经 `/yyy/` 反代访问的页面。若 Serv 的 `http.apiPrefix` 为 `/yyy/api/v1`，网关应保留该 API 前缀，并按对外策略拒绝根路径 `/api/v1/` 与 `/health`；沿该入口检查管理业务、hash 深链接与刷新。
 
 ![子目录入口使用的公开 API 运行配置](../images/subpath-vite-runtime-config.png)
 
@@ -233,7 +241,7 @@ http:
 
 ### 容器、增量部署与反向代理
 
-SvelteKit SSR 的 HTTP/HTTPS 部署统一通过独立 `gateway`，SSR 容器不映射公开端口。网关以实际连接覆盖 Host 和标准转发头，Compose 固定 `PROTOCOL_HEADER=x-forwarded-proto`、`HOST_HEADER=host`、`ADDRESS_HEADER=x-forwarded-for` 与 `XFF_DEPTH=1`，不信任客户端提供的转发值；`PORT_HEADER` 为空，端口保留在 Host 中。这些项由部署装配提供，不能在业务 `.env.runtime` 中覆盖。adapter-node 6 不再读取运行期 `ORIGIN`；应用默认不固定构建期 `paths.origin`，同一镜像可跨环境复用。旧直接公开 SSR 的部署需要用当前工具重新生成并执行全量交付包，不能只改环境变量或复用旧增量基线。
+SvelteKit SSR 的 HTTP/HTTPS 部署统一通过独立 `gateway`，SSR 容器不映射公开端口。网关以实际连接覆盖 Host 和标准转发头，Compose 固定 `PROTOCOL_HEADER=x-forwarded-proto`、`HOST_HEADER=host`、`ADDRESS_HEADER=x-forwarded-for` 与 `XFF_DEPTH=1`，不信任客户端提供的转发值；`PORT_HEADER` 为空，端口保留在 Host 中。这些项由部署装配提供，不能在业务 `.env.runtime` 中覆盖。adapter-node 使用受信转发头还原来源，不读取运行期 `ORIGIN`；应用默认不固定构建期 `paths.origin`，同一镜像可跨环境复用。首次建立或改变网关拓扑时执行全量交付，普通环境变量重启不能代替拓扑更新。
 
 外层负载均衡终止 TLS 时，将其实际来源 IP/CIDR 填入 `trustedEdgeProxies`，并由它覆盖 `Host`、`X-Forwarded-For` 与单值 `X-Forwarded-Proto`。独立 gateway 只从白名单真实对端接受 `http` / `https`；其他对端、重复/组合协议值仍使用网关自身连接协议。不要把所有公网或不受控共享网段列为可信上游。
 
@@ -309,7 +317,7 @@ hai create docs-site --type website --defaults
 cd docs-site
 ```
 
-创建后先完成上述裁剪，保留 Core/Kit/UI，再执行静态构建。现有已裁剪工程仍可直接使用静态构建；不再提供轻量创建参数。
+创建后先完成上述裁剪，保留 Core/Kit/UI，再执行静态构建。
 
 | 构建值 | 默认 | 不同值的影响 |
 | --- | --- | --- |
@@ -336,7 +344,7 @@ finally {
 
 GitHub仓库Pages选择Actions，上传build时显式include-hidden-files:true保留.nojekyll，并使`PUBLIC_BASE_PATH`与实际项目子路径相同。预览并刷新首页、about/`services`/contact深链，确认CSS/图标和图片没有请求到域名根路径，再检查私有哨兵不在产物。联系表单只是模板演示，提交时通过Toast说明“在线留言尚未开通”并保留输入，纯静态站不会自动得到邮件/API能力；需要真实提交时，应接入实际留言服务，配置输入校验、限流及业务所需的访问控制，再验证加载、成功和失败状态。
 
-下面两图来自实际CLI创建的空业务website：安装当轮本地发布包后，完成类型、lint、静态构建，并在 `/scaffold-static/` 子路径的纯静态服务器中操作。浏览器实际检查了四个页面和刷新、JS/CSS/图片、未知页面与API返回404，以及提交不发送POST并保留输入；不是独立手写官网的替代截图。
+下面两图展示生成 website 的静态联系页面。未接入留言服务时，提交只显示说明并保留输入，不发送 POST；未知页面与 API 路径返回404。部署时分别核对四个页面、深链刷新、JS/CSS/图片和真实公开目录。
 
 ![真实静态站联系页面：未接服务时说明下一步并保留输入](../images/website-static-contact-warning.png)
 
@@ -426,14 +434,26 @@ Fullstack 创建阶段为各环境生成独立的账号初始密码；打包阶�
 
 | 可选云开通项 | 无默认的必需信息 |
 | --- | --- |
-| `services.db` / neon | `apiKey` |
-| `services.cache` / upstash | email、`apiKey` |
-| `services.storage` / cloudflare-r2 | `accessKeyId`、`secretAccessKey`、`accountId`、`apiToken` |
-| `services.email` / resend | from、`apiKey` |
-| `services.sms` / aliyun | `signName`、`accessKeyId`、`accessKeySecret` |
+| `services.db` / `provisioner: neon` | `apiKey` |
+| `services.cache` / `provisioner: upstash` | email、`apiKey` |
+| `services.storage` / `provisioner: cloudflare-r2` | `accessKeyId`、`secretAccessKey`、`accountId`、`apiToken` |
+| `services.email` / `provisioner: resend` | from、`apiKey` |
+| `services.sms` / `provisioner: aliyun` | `signName`、`accessKeyId`、`accessKeySecret` |
 | `provider.type`=vercel | `token`；仅prebuilt，无Compose离线/按服务更新 |
 
 云开通需要外网和账号授权，不是完全离线自包含部署。自建中间件镜像随完整包交付，外部服务还需目标网络可达。
+
+Vercel 仅上传已经生成的 `.vercel/output`，例如 `hai.json.deploy` 使用以下对象：
+
+```json schema=@h-ai/deploy:DeployConfigSchema
+{
+  "provider": { "type": "vercel", "token": "${VERCEL_TOKEN}" }
+}
+```
+
+Token 只在私有环境提供，输出为平台受理的部署结果；平台状态和实际公开地址还需核对。Docker-SSH 的 Compose、离线包及按服务增量不适用于该模式，不能因为配置校验成功就认为平台已部署。
+
+Vercel API 和文件上传固定请求官方入口并拒绝重定向，每次请求与完整 JSON 响应读取共用 30 秒期限，没有新增配置项。超时后先到平台查询部署状态，再决定后续操作，不能据此断定部署未受理并无条件重发。
 
 ### 为容器设置主机名映射
 
@@ -610,7 +630,7 @@ images/                 # 本次镜像归档
 .hai/                   # 内部运行资产与恢复证据
 ```
 
-`manifest.json.metadata` 合并依赖、布局、健康路径、镜像列表、网关路径和托管绑定等非敏感信息，秘密不进入 manifest。`.hai/compose.json` 保存完整 Compose 快照，局部更新按服务替换并保留未选定义，不链接历史 Compose 文件。原生环境 `.hai/middleware-runtime.env`、加载器、Nginx/TLS、请求策略和 `.hai/SHA256SUMS` 属于内部生成文件。新包格式为 2，不提供旧目录兼容或迁移。
+`manifest.json.metadata` 合并依赖、布局、健康路径、镜像列表、网关路径和托管绑定等非敏感信息，秘密不进入 manifest。`.hai/compose.json` 保存完整 Compose 快照，局部更新按服务替换并保留未选定义，不链接历史 Compose 文件。原生环境 `.hai/middleware-runtime.env`、加载器、Nginx/TLS、请求策略和 `.hai/SHA256SUMS` 属于内部生成文件。当前制品格式为 2，由工具生成和校验，用户不手动修改格式或目录。
 
 每个部署包的外层 `README.txt` 和归档内 `APPLY.txt` 都包含文件索引、环境优先级、当前包的变量名和排障步骤。解包目录的 `config/.env.runtime` 是发布输入，部署根下的是当前运行配置，`releases/<ID>/` 下的是历史记录。外部 PostgreSQL 改密后更新项目源环境并发布后端。部署校验拒绝 URL 与分字段密码冲突，增量切换外部与随包中间件需要改用全量发布。
 
@@ -652,7 +672,7 @@ images/                 # 本次镜像归档
 
 自动恢复先核对新发布保存的旧绑定快照、长期账本和旧卷，再按旧发布记录的端口和健康路径验证旧容器与HTTP。快照损坏、卷缺失或绑定冲突会阻止恢复，不把空库启动当恢复成功；只compose up成功同样不能作为恢复完成。SDK通过`getDeployCommandState(error)`给出本地终止、远端执行和恢复状态，CLI分别展示。强杀/断电不执行trap，锁释放也不意味着副作用回退。
 
-图来自当轮五个实际通过的定向Linux脚本场景：真实Podman容器运行公开API生成的Shell、tar、checksum、flock、文件和退出码；Compose/HTTP为确定性故障夹具，用于稳定验证恢复分支，不是实际应用容器/数据库恢复证明。过滤项不计通过。复现完整部署E2E使用`pnpm --filter @h-ai/deploy test:e2e`，runner会启用所需前置；不要直接运行漏掉环境开关的Vitest命令。
+在隔离环境验证恢复时，分别模拟解包校验失败、服务更新失败、健康失败和 SSH 结果未知，核对上表状态以及实际业务和持久数据。源码仓库可用 `pnpm --filter @h-ai/deploy test:e2e` 检查脚本恢复分支；它启用所需夹具前置，但不能代替目标应用的真实数据库和业务恢复演练。
 
 成功发布后需要主动回退时：
 

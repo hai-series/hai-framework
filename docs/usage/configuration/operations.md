@@ -88,12 +88,14 @@ exportRetentionHours: 12
 | API `url` | 必填 HTTP(S) 地址 | 默认使用 `method: POST`，`timeout: 10000` 表示等待 10 秒；`redirect: error` 表示拒绝重定向。认证信息等请求头放在 `headers` 中 |
 | API `requireHttps` | 未填写时按消息和环境决定 | `true` 拒绝 HTTP 地址及 `follow` 重定向设置；`false` 明确允许 HTTP，包括生产中的敏感消息。生产通道需要强制 HTTPS 时填写 `true` |
 | API `idempotent` | `false` | 接收端能按同一个幂等键识别并丢弃重复消息时，才填写 `true`；这个开关不会替接收端实现去重 |
-| Aliyun短信 | `accessKeyId`/`accessKeySecret`/`signName`必填 | 直连默认 `dysmsapi.aliyuncs.com`。隔离网关配置 `gateway.url`，可加 `gateway.headers` 和 `gateway.body` |
+| Aliyun短信 | `accessKeyId`/`accessKeySecret`/`signName`必填 | `endpoint` 直连默认 `dysmsapi.aliyuncs.com`。隔离网关配置 `gateway.url`，可加 `gateway.headers` 和 `gateway.body` |
 | `templates` | 可省略 | 每项必须有模板名 `name`、通道名 `provider` 和正文 `body`；邮件主题 `subject` 可选 |
 | `dnd.enabled` / `dnd.strategy` / `dnd.start` / `dnd.end` | `false`/`discard`/`00:00`/`00:00` | 开启后，指定时段内的消息按策略处理：`delay` 先存入关系数据库等待发送，`discard` 直接丢弃。丢弃不表示已发送 |
 | `queue.maxAttempts`/`queue.retryDelayMs`/`queue.maxRetryDelayMs` | 5 次 / 60000 毫秒 / 3600000 毫秒 | 最多尝试 5 次；首次重试等 1 分钟，以后逐次加倍，最长等 1 小时。修改只影响新入队消息 |
 
 API 回调省略 `requireHttps` 时，生产环境中的敏感消息（`sensitive: true`）会强制使用 HTTPS；普通消息和开发环境不自动强制。生产环境按 `NODE_ENV` 或 `HAI_CORE_ENV` 为 `production` 判断，显式 E2E 测试例外。填写 `false` 会覆盖这个自动判断。敏感消息始终不跟随重定向，与 `requireHttps` 的取值无关。
+
+API 的整个 `headers` 字典都作为私密配置处理，不靠 `Authorization` 等特定头名猜测秘密。使用环境私有文件或 Secret 注入；`reach.config` 隐藏全部 API 头值，只是安全诊断快照，不能用它重新初始化真实凭据。`timeout: 0` 会在计时器下一次执行时取消请求，不表示无限等待；普通通道应设置能完成实际请求的正数预算。
 
 阿里云隔离网关使用 `POST` 和已签名查询参数，`gateway.url` 填写完整路径。需要空 JSON 时填写 `body: {}`。网关需要逐次生成请求头或正文时，由服务端通过 `reach.init(config, { gatewayHooks: { sms: hook } })` 按 Provider 名称注入函数。网关默认使用 HTTPS，受信内网的明文地址需显式启用 `gateway.allowInsecureHttp`。明文查询串包含手机号和模板变量，网关及代理日志应对查询串脱敏。验收时确认网关把签名参数转发到阿里云 `/`，并回传 `Code: OK` 和 `BizId`；最终送达以运营商回执为准。
 
@@ -113,6 +115,33 @@ dnd: { enabled: false, strategy: discard, start: '00:00', end: '00:00' }
 ```
 
 配置好后，用测试收件箱或受控接口接收一条不含敏感内容的消息，同时核对发送结果和接收端记录。状态为 `unknown` 时，先确认接收端是否已收到，再按事实标记 `sent` 或 `discarded`；重排 `dead` 消息时携带当前版本，防止覆盖其他人的操作。敏感消息同时设置 `sensitive`、到期时间 `expiresAt` 和幂等键 `idempotencyKey`。
+
+已有企业邮箱、短信通道的应用可使用下列配置。输入凭据来自对应私有变量，模板通过 Provider 的 `name` 路由：
+
+```yaml schema=@h-ai/reach:ReachConfigSchema
+providers:
+  - name: email
+    type: smtp
+    host: smtp.example.invalid
+    port: 465
+    secure: true
+    user: ${SMTP_USER}
+    pass: ${SMTP_PASSWORD}
+    from: noreply@example.invalid
+  - name: sms
+    type: aliyun-sms
+    accessKeyId: ${ALIYUN_ACCESS_KEY_ID}
+    accessKeySecret: ${ALIYUN_ACCESS_KEY_SECRET}
+    signName: example-sign
+    endpoint: dysmsapi.aliyuncs.com
+templates:
+  - name: order-ready
+    provider: email
+    subject: 'Order {orderId}'
+    body: 'Order {orderId} is ready.'
+```
+
+为 `order-ready` 提供测试变量 `orderId: demo-42` 时，渲染正文为 `Order demo-42 is ready.`，再由 `email` 通道发送；SMTP 接受不等于最终送达。短信还需真实获批签名、渠道模板及对应参数。设置 DND delay 后，时段内应先看到持久队列回执，时段结束才尝试发送；discard 则返回阻止结果，不应展示“发送成功”。
 
 ## Audit采集、保留保护、归档与告警
 

@@ -21,6 +21,8 @@
 
 `core.init()` 不读取 dotenv。Node/Vite 宿主先调用 `core.config.loadEnvFiles` 并检查 success，生成工程的 Node 启动命令复用 `scripts/run-node.mjs`。Core、构建和部署使用相同顺序。更高来源整段替换节点时先清除低来源细项，同来源再按父到子应用，与行序无关。同文件重复变量报错。
 
+`mode` 选择环境文件后缀，例如 `dev/test/prod`；`envDir` 选择读取目录。它们是宿主加载函数的参数，不是 `_core.yml.env` 的别名。输入 `mode: 'prod', envDir: '.'` 时读取该目录的生产文件组合；输出 `env.data` 是已合并字典，仍需由宿主装入进程并初始化消费模块，不向浏览器返回该字典。
+
 例如同一文件有 `HAI_IAM_SESSION='{"maxAge":3600}'` 和 `HAI_IAM_SESSION_MAXAGE=1800`，最终为 1800。宿主显式提供模块 `configSchemas` 后，Schema 中合法的可选路径即使未写入 YAML 也能接收细项；扫描仅使用结构和类型，模块仍执行完整校验。没有 Schema 时按已有 YAML/JSON 结构定位，未知路径不凭空创建。
 
 ### JSON 兜底与生成规则
@@ -32,7 +34,7 @@
 HAI_STORAGE='{"type":"s3","bucket":"hai","region":"us-east-1"}'
 HAI_STORAGE_ENDPOINT=http://storage:9000
 HAI_STORAGE_FORCEPATHSTYLE=true
-HAI_STORAGE_PUBLICENDPOINT=http://172.30.85.45:12348/files
+HAI_STORAGE_PUBLICENDPOINT=http://192.0.2.10:12348/files
 HAI_STORAGE_CREATEBUCKET=true
 
 # 列表保留一个 JSON；索引只修改已有项，不追加、不生成空洞。
@@ -194,4 +196,13 @@ if (!started.success) throw new Error(started.error.message)
 | Audit/Scheduler/Payment | 共享 RelDB；通知按需 Reach，未知副作用先核对再恢复 |
 | Serv/Kit/UI/Datapipe | 工厂、宿主适配、组件或纯函数，按公开契约，不统一套 init/close |
 
-本章实际验证覆盖顺序、Schema 默认和错误边界。生产多节点故障及滚动更新应结合目标数据库、缓存和部署环境验收。
+配置输入、可观察输出和失败检查分别核对：
+
+| 输入 | 应观察到的结果 | 特殊约束 |
+| --- | --- | --- |
+| 同源 `HAI_IAM_SESSION_MAXAGE=1800` 覆盖父 JSON 的3600 | 校验后的 `session.maxAge` 为1800 | 不公开完整配置验证秘密；只记录白名单数字 |
+| `_core.yml` 的 `logging.redact: [customer.email]` | 测试日志该字段为 `[REDACTED]`，订单编号保留 | 不改变原业务对象，不清理历史日志 |
+| 必需数据库字段缺失或非法 | validate/init 返回失败，应用不继续启动依赖业务 | `core.init()` 返回结束本身不证明所有配置有效 |
+| 修改运行 `.env.runtime` 后重启对应后端 | 新请求使用新值，健康和业务请求通过 | 不热更新已创建的连接池；拓扑与浏览器构建参数需重新部署 |
+
+生产多节点故障及滚动更新应结合目标数据库、缓存和部署环境验收。

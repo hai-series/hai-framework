@@ -67,6 +67,22 @@ sqlite:
 
 确认方式：在隔离库做参数化写入、查询、事务中失败和回滚，再检查连接在超时/关闭后释放。事务回调正常返回会提交，返回失败 `HaiResult` 并不会自动回滚，业务必须按公开事务机制处理失败。MySQL DDL 隐式提交，迁移步骤必须可重入；数据库结构和数据回退要单独准备。
 
+MySQL 使用单独的池配置；例如业务最多占用 8 个连接、连接等待预算 5 秒：
+
+```yaml schema=@h-ai/reldb:ReldbConfigSchema
+type: mysql
+host: mysql.internal.example
+port: 3306
+database: orders
+user: orders_app
+password: ${MYSQL_PASSWORD}
+ssl: { rejectUnauthorized: true, verifyIdentity: true }
+pool: { max: 8, acquireTimeout: 5000, queueLimit: 100 }
+mysql: { charset: utf8mb4 }
+```
+
+输入是目标数据库连接与有限队列预算；正常查询输出数据库结果，连接耗尽且超过等待期限时返回失败，不无限排队。TLS 连接需要目标证书和主机名匹配；私有 CA 通过 `ssl.ca` 提供 PEM 内容。不要把 PostgreSQL 的 `pool.min` 或 `ssl: require` 复制到这里。
+
 ## 缓存与共享状态
 
 位置：`config/_cache.yml`。`type` 无默认，`memory` 仅开发/显式测试；会话、限流、锁和幂等状态在生产使用 Redis。
@@ -99,6 +115,21 @@ readOnly: false
 | `sentinel` | 无默认 | `sentinels` 非空数组及主节点 `name` 必填，实际故障切换需目标环境验证 |
 
 初始化后做带 TTL 写读、到期读取、条件写与锁释放。`kv.set` 的 `success: true` 表示调用成功，是否真的条件写入还看 `data`；不能把未取得锁当作已获授权。
+
+Redis 单实例、Cluster 和 Sentinel 使用同一业务门面，配置选择实际部署拓扑。下面是 Sentinel 输入示例，`name` 必须匹配服务端登记的主节点名，节点列表用于发现主节点：
+
+```yaml schema=@h-ai/cache:CacheConfigSchema
+type: redis
+password: ${REDIS_PASSWORD}
+keyPrefix: 'orders-prod:'
+sentinel:
+  name: orders-master
+  sentinels:
+    - { host: sentinel-a.internal.example, port: 26379 }
+    - { host: sentinel-b.internal.example, port: 26379 }
+```
+
+Cluster 则填写 `cluster: [{ host: redis-a.internal.example, port: 6379 }]`，每项都是启动发现节点；不要同时混配两种拓扑。写入键 `probe`、设定短 TTL 后应能读回值，到期后读到未命中；完成一次受控主从切换后再核对相同业务流程。前缀只组织键，不是隔离不同用户权限的措施。
 
 ## 文件存储与临时签名
 
@@ -173,7 +204,7 @@ prefix: private
 
 生成链接的应用 API 仍受认证、权限和请求策略约束。文件直连由 Nginx 与 S3 校验，**不会再次执行 Serv/Kit 的会话、IP 或时段守卫**；已经发出的链接也不会因退出登录或改变角色立即撤销。下载请求本身需要网络/时间限制时，在受管入口或存储网络策略中配置并实测，同时采用符合业务要求的短有效期。
 
-普通应用通过 Core 的环境覆盖规则加载此项；可在 YAML 写明 `publicEndpoint: ${HAI_STORAGE_PUBLICENDPOINT:https://app.example.com}`，或在私有环境文件整体配置 `HAI_STORAGE`。整体父对象会覆盖 YAML 和其下叶项；部署保存过 `HAI_STORAGE` 时，修改这一有效对象，不能只改已被覆盖的 YAML。Compose 默认自建会替换内部连接和托管凭据，保留桶、区域、`prefix`、`publicEndpoint`、`publicUrl` 和操作日志设置。外部 S3、R2 或既有连接按其自身地址访问，不生成指向本地 Storage 的路由。
+普通应用通过 Core 的环境覆盖规则加载此项；可在 YAML 写明 `publicEndpoint: ${HAI_STORAGE_PUBLICENDPOINT:https://app.example.com}`，或在私有环境文件整体配置 `HAI_STORAGE`。环境父对象覆盖 YAML；同一来源细项可继续覆盖父 JSON，更高来源父对象会清除低来源细项，见[配置来源](runtime.md#配置从哪里来)。Compose 默认自建会替换内部连接和托管凭据，保留桶、区域、`prefix`、`publicEndpoint`、`publicUrl` 和操作日志设置。外部 S3、R2 或既有连接按其自身地址访问，不生成指向本地 Storage 的路由。
 
 ![从授权请求到私有对象直接下载](../images/storage-private-download.svg)
 
@@ -192,7 +223,7 @@ prefix: private
 
 前后端分离部署把桶路由加到已有 Web Nginx；SvelteKit SSR 和独立 API 增加 `gateway`，宿主机公开端口由它持有，应用只在 Compose 网络监听。Storage 的 9000 端口与控制台不直接发布。Nginx 保留签名 Host、原始 URI 和查询，关闭对象请求/响应缓冲及对象路由日志，支持 Range；仅允许 GET/HEAD、PUT 和 OPTIONS，实际对象权限仍由 S3 校验。外层负载均衡、CDN和日志平台也必须清除签名查询；跨源浏览器需要在实际 S3 服务配置精确 CORS，网关不会自动放开来源。
 
-首次从旧拓扑升级、改变公开端点、桶或其他自建 S3 访问配置时使用全量部署。交付包记录代理服务和不含密钥的配置摘要；与已装配置不一致的增量包会在更新服务前拒绝。正常应用/Storage 增量保留未选服务；容器 IP 变化后刷新保留代理的 DNS。失败回滚按原发布的拓扑、端口和健康路径恢复。容器回滚不撤销对象写入，数据仍按原卷和托管凭据保留；改变 `prefix`/`bucket` 前应准备数据迁移与业务核对。
+首次建立文件网关、改变公开端点、桶或其他自建 S3 访问配置时使用全量部署。交付包记录代理服务和不含密钥的配置摘要；与已装配置不一致的增量包会在更新服务前拒绝。正常应用/Storage 增量保留未选服务；容器 IP 变化后刷新保留代理的 DNS。失败回滚按原发布的拓扑、端口和健康路径恢复。容器回滚不撤销对象写入，数据仍按原卷和托管凭据保留；改变 `prefix`/`bucket` 前应准备数据迁移与业务核对。
 
 验收时在浏览器 Network 或受控请求工具检查：签名接口只返回小响应；大文件请求的地址是公开桶路径；Range 返回 206；无签名、篡改及过期 URL 返回 403。部署日志不能记录完整 URL。Local 不支持预签名，框架不会把私有文件目录直接映射给 Nginx。
 
@@ -213,3 +244,18 @@ Datapipe 是函数，不通过 `_clean.yml` / `_chunk.yml` 初始化。调用时
 | `markdownMinLevel`/`markdownKeepTitle` | 2 / `true` | 控制标题分块边界与保留；AI Knowledge 的默认 `overlap` 另为200 |
 
 先用一段短文本确认分块位置和重叠内容，再用真实非敏感文档评估检索效果。
+
+```ts
+import { datapipe } from '@h-ai/datapipe'
+
+const cleaned = datapipe.clean('<b>Hello</b>', { removeHtml: true })
+// 输入是带标签文本，成功时 cleaned.data 为 'Hello'。
+if (!cleaned.success) throw new Error(cleaned.error.message)
+
+const chunks = datapipe.chunk('abcdef', { mode: 'character', maxSize: 3, overlap: 1 })
+if (!chunks.success) throw new Error(chunks.error.message)
+const contents = chunks.data.map(chunk => chunk.content)
+// 输出依次为 ['abc', 'cde', 'ef']；相邻块保留一个字符的上下文。
+```
+
+`customReplacements.pattern` 和 custom 模式的 `separator` 会作为正则执行，仅由可信配置提供；不能直接拼入用户输入。word 模式按词计量，其他模式按 Unicode code point，而不是字节或模型 Token。Markdown section 之间不重叠，围栏代码里的标题不参与切分；只有 `markdownKeepTitle: false` 才移除标题。
