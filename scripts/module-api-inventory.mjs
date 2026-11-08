@@ -2,7 +2,8 @@
  * 从真实 package.exports 和构建声明生成公开 API 清单；不执行包入口或加载服务。
  * @example `node scripts/module-api-inventory.mjs --check`
  */
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { closeSync, constants, existsSync, fstatSync, fsyncSync, lstatSync, openSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -300,6 +301,72 @@ function markdown(inventory) {
   return lines.join('\n')
 }
 
+/** 只读写受控生成目录中的普通单链接文件；不能改写外部共享 inode。 */
+function updateSnapshot(file, content, checkOnly) {
+  const parent = lstatSync(dirname(file))
+  if (!parent.isDirectory() || parent.isSymbolicLink())
+    throw new Error(`Unsafe API inventory directory: ${dirname(file)}`)
+  const regular = (metadata) => {
+    if (!metadata.isFile() || metadata.nlink !== 1)
+      throw new Error(`Unsafe API inventory file: ${file}`)
+  }
+  const existing = () => {
+    try {
+      const metadata = lstatSync(file)
+      regular(metadata)
+      return metadata
+    }
+    catch (error) {
+      if (error?.code === 'ENOENT')
+        return undefined
+      throw error
+    }
+  }
+  const before = existing()
+  if (before) {
+    const fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0))
+    try {
+      const opened = fstatSync(fd)
+      regular(opened)
+      if (before.dev !== opened.dev || before.ino !== opened.ino)
+        throw new Error(`API inventory changed while opening: ${file}`)
+      if (readFileSync(fd, 'utf8').replaceAll('\r\n', '\n') === content)
+        return false
+    }
+    finally {
+      closeSync(fd)
+    }
+  }
+  if (checkOnly)
+    return true
+  const temporary = join(dirname(file), `.hai-api-${randomUUID()}.tmp`)
+  const fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o644)
+  const owned = fstatSync(fd)
+  try {
+    try {
+      writeFileSync(fd, content, 'utf8')
+      fsyncSync(fd)
+    }
+    finally {
+      closeSync(fd)
+    }
+    existing()
+    const candidate = lstatSync(temporary)
+    if (!candidate.isFile() || candidate.nlink !== 1 || owned.dev !== candidate.dev || owned.ino !== candidate.ino)
+      throw new Error(`API inventory temporary file changed: ${file}`)
+    renameSync(temporary, file)
+  }
+  finally {
+    try {
+      const candidate = lstatSync(temporary)
+      if (candidate.isFile() && owned.dev === candidate.dev && owned.ino === candidate.ino)
+        unlinkSync(temporary)
+    }
+    catch { /* 发布成功或失败均只清理本次仍拥有的临时文件。 */ }
+  }
+  return true
+}
+
 /** 写入或校验稳定快照；符号变化必须经审查后重新生成。 */
 function main() {
   const inventory = inspectModuleApi(root)
@@ -313,13 +380,11 @@ function main() {
   const errors = [...inventory.errors]
   for (const [path, content] of outputs) {
     const file = join(root, path)
-    const changed = !existsSync(file) || readFileSync(file, 'utf8').replaceAll('\r\n', '\n') !== content
+    const checkOnly = process.argv.includes('--check')
+    const changed = updateSnapshot(file, content, checkOnly)
     if (process.argv.includes('--check')) {
       if (changed)
         errors.push(`API inventory is stale: ${path}`)
-    }
-    else if (changed) {
-      writeFileSync(file, content, 'utf8')
     }
   }
   if (errors.length) {

@@ -1,7 +1,9 @@
 /** 公开 API 清单必须来自发布产物，并保持条件、类型转发和真实导出绑定。 */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { copyFileSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { expandPackageExports, inspectModuleApi } from '../module-api-inventory.mjs'
 
@@ -21,6 +23,34 @@ function fixture(run) {
 }
 
 describe('published module API inventory', () => {
+  it('生成清单拒绝硬链接，不覆盖缓存目录外文件，并保留正常增量生成', () => {
+    const root = mkdtempSync(fileURLToPath(new URL('../../tmp/hai-api-snapshot-', import.meta.url)))
+    try {
+      mkdirSync(join(root, 'packages'))
+      mkdirSync(join(root, 'scripts', 'generated'), { recursive: true })
+      const script = join(root, 'scripts', 'module-api-inventory.mjs')
+      copyFileSync(new URL('../module-api-inventory.mjs', import.meta.url), script)
+      const target = join(root, 'scripts', 'generated', 'module-api-inventory.json')
+      const outside = join(root, 'outside.json')
+      writeFileSync(outside, 'do-not-overwrite')
+      linkSync(outside, target)
+      const run = () => spawnSync(process.execPath, [script], { encoding: 'utf8', windowsHide: true })
+      const rejected = run()
+      expect(readFileSync(outside, 'utf8')).toBe('do-not-overwrite')
+      expect(rejected.status).toBe(1)
+      expect(rejected.stderr).toContain('Unsafe API inventory file')
+      rmSync(target)
+      expect(run().status).toBe(0)
+      expect(JSON.parse(readFileSync(target, 'utf8'))).toEqual({ packages: [], errors: [] })
+      const modified = statSync(target).mtimeMs
+      expect(run().status).toBe(0)
+      expect(statSync(target).mtimeMs).toBe(modified)
+    }
+    finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('preserves conditional entries and expands only real wildcard files', () => fixture((root, put) => {
     put('dist/button.js', 'export const Button = 1')
     put('dist/button.d.ts', 'export declare const Button: number')
