@@ -113,7 +113,7 @@ With auto-import enabled, use components directly in templates without individua
 
 Pages using a subset of components, such as administration screens, can import public component-directory entry points directly. Import theme utilities from the lightweight `@h-ai/ui/theme` entry so theme consumers do not load the root entry's AI and chart components. Use `@h-ai/ui/i18n` for locale utilities in stores without loading components or tour CSS. Check the installed package's exports; do not import its internal `src/` or `dist/` paths.
 
-The preprocessor recognizes semicolon-free, multiline and aliased imports without injecting components already bound locally. Type-only imports do not replace runtime components.
+The preprocessor uses the syntax tree to recognize real semicolon-free, multiline and aliased imports, preserving examples in strings and comments and existing runtime bindings. Type-only component bindings from the root `@h-ai/ui` entry are promoted to values when needed. A conflicting type-only import from another module causes a build error naming the file and component; alias the type, or explicitly import the component under another local name.
 
 ```ts
 import { Card } from '@h-ai/ui/components/compounds/index'

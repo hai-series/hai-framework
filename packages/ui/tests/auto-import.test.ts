@@ -13,6 +13,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parse } from 'svelte/compiler'
 import { describe, expect, it } from 'vitest'
 import { autoImportHaiUi } from '../auto-import.js'
 
@@ -44,6 +45,20 @@ const preprocessor = autoImportHaiUi()
 /** 调用 markup 的快捷方法 */
 function process(content: string, filename = '/app/src/routes/+page.svelte') {
   return preprocessor.markup({ content, filename })
+}
+
+/** 用真实 Svelte 解析结果断言运行时绑定，避免只匹配字符串却生成无效 import。 */
+function runtimeUiNames(content: string): string[] {
+  const ast = parse(content, { modern: true })
+  return (ast.instance?.content.body ?? []).flatMap((statement) => {
+    if (statement.type !== 'ImportDeclaration' || statement.source.value !== '@h-ai/ui'
+      || ('importKind' in statement && statement.importKind === 'type')) {
+      return []
+    }
+    return statement.specifiers.flatMap(specifier => 'importKind' in specifier && specifier.importKind === 'type'
+      ? []
+      : [specifier.local.name])
+  })
 }
 
 function uniqueSorted(values: string[]): string[] {
@@ -181,14 +196,100 @@ describe('自动注入', () => {
     expect(process(input).code).toBe(input)
   })
 
-  it('组件别名和仅类型导入不应屏蔽同名运行时组件', () => {
+  it.each([
+    `import { Button as OtherButton, type Card } from './other.js'`,
+    `import type Card from './other.js'`,
+    `import type * as Card from './other.js'`,
+  ])('外部同名类型不可安全合并时给出明确构建诊断：%s', (declaration) => {
     const input = `<script lang="ts">
-  import { Button as OtherButton, type Card } from './other.js'
+  ${declaration}
+</script>
+<Button /><OtherButton /><Card />`
+    expect(() => process(input, '/app/src/routes/conflict/+page.svelte'))
+      .toThrow('[auto-import-hai-ui] /app/src/routes/conflict/+page.svelte: Cannot auto-import component(s) Card')
+    expect(() => process(input))
+      .toThrow('Alias the type-only import or explicitly import the component under a different local name.')
+  })
+
+  it('外部类型设置别名后保留原类型并正确注入运行时组件', () => {
+    const declaration = `import { Button as OtherButton, type Card as CardProps } from './other.js'`
+    const result = process(`<script lang="ts">${declaration}</script><Button /><OtherButton /><Card />`)
+    expect(result.code).toContain(declaration)
+    expect(runtimeUiNames(result.code)).toEqual(['Button', 'Card'])
+  })
+
+  it('外部类型同名时允许显式使用另一个本地名的组件', () => {
+    const declarations = `import type { Card } from './other.js'\nimport { Card as UiCard } from '@h-ai/ui'`
+    const input = `<script lang="ts">${declarations}</script><UiCard />`
+    const result = process(input)
+    expect(result.code).toBe(input)
+    expect(runtimeUiNames(result.code)).toEqual(['UiCard'])
+  })
+
+  it('同包类型组件被提升，外部组件别名保持原样', () => {
+    const input = `<script lang="ts">
+  import { Button as OtherButton } from './other.js'
+  import type { Card } from '@h-ai/ui'
 </script>
 <Button /><OtherButton /><Card />`
     const result = process(input)
-    expect(result.code).toContain(`import { Button, Card } from '@h-ai/ui'`)
-    expect(result.code).toContain('Button as OtherButton, type Card')
+    expect(runtimeUiNames(result.code).sort()).toEqual(['Button', 'Card'])
+    expect(result.code).toContain('Button as OtherButton')
+  })
+
+  it.each([
+    `const text = "import { Card } from '@h-ai/ui'"`,
+    `/* import { Card } from '@h-ai/ui' */`,
+  ])('字符串和注释中的伪 import 保持原样：%s', (script) => {
+    const input = `<script lang="ts">${script}</script><Button />`
+    const result = process(input)
+    expect(result.code).toContain(script)
+    expect(runtimeUiNames(result.code)).toEqual(['Button'])
+  })
+
+  it('按具名绑定范围合并，保留别名、内部注释和尾逗号', () => {
+    const input = `<script lang="ts">
+  import {
+    toast as showToast /* comment with } and import { Fake } */,
+    type UserProfileProps,
+  } from '@h-ai/ui';
+</script><Button />`
+    const result = process(input)
+    expect(runtimeUiNames(result.code)).toEqual(['showToast', 'Button'])
+    expect(result.code).toContain('toast as showToast /* comment with } and import { Fake } */')
+    expect(result.code).toContain('type UserProfileProps, Button,')
+    expect((result.code.match(/from '@h-ai\/ui'/g) ?? [])).toHaveLength(1)
+  })
+
+  it('只提升被用作组件的类型绑定，其他类型仍无运行时导入', () => {
+    const input = `<script lang="ts">
+  import /* keep type note */ type { Button, UserProfileProps } from '@h-ai/ui'
+</script><Button />`
+    const result = process(input)
+    expect(runtimeUiNames(result.code)).toEqual(['Button'])
+    expect(result.code).toContain('/* keep type note */')
+    expect(result.code).toContain('type UserProfileProps')
+  })
+
+  it('内联类型别名提升时保留其显式组件映射', () => {
+    const result = process(`<script lang="ts">import { type Button as Card, toast } from '@h-ai/ui'</script><Card /><Input />`)
+    expect(runtimeUiNames(result.code)).toEqual(['Card', 'toast', 'Input'])
+    expect(result.code).toContain('Button as Card')
+  })
+
+  it('命名空间和无关类型导入不被重写成具名组件导入', () => {
+    const script = `import * as Ui from '@h-ai/ui'\nimport type { Props } from './other.js'`
+    const result = process(`<script lang="ts">${script}</script><Button />`)
+    expect(result.code).toContain(script)
+    expect(runtimeUiNames(result.code)).toEqual(['Button', 'Ui'])
+  })
+
+  it('约32KiB的伪import文本保留且真实导入只补缺失组件', () => {
+    const text = `${'import {'.repeat(4000)}} invalid`
+    const script = `const example = ${JSON.stringify(text)};\nimport { Card } from '@h-ai/ui'`
+    const result = process(`<script lang="ts">${script}</script><Button />`)
+    expect(result.code).toContain(`const example = ${JSON.stringify(text)}`)
+    expect(runtimeUiNames(result.code)).toEqual(['Card', 'Button'])
   })
 
   it('range 应保持显式导入，避免和 DOM Range 构造器冲突', () => {

@@ -131,7 +131,6 @@ const UI_COMPONENTS = new Set([
 
 const TAG_REGEX = /<([A-Z][A-Za-z0-9]*)\b/g
 const SCRIPT_REGEX = /<script\b([^>]*)>([\s\S]*?)<\/script>/g
-const UI_IMPORT_REGEX = /import\s*\{([^}]+)\}\s*from\s*['"]@h-ai\/ui['"];?/
 const WINDOWS_PATH_SEPARATOR_REGEX = /\\/g
 const MODULE_CONTEXT_ATTR_REGEX = /context\s*=\s*['"]module['"]/i
 
@@ -146,47 +145,122 @@ function collectUsedComponents(content) {
   return used
 }
 
-function collectImportedNames(scriptContent) {
+/** 一次解析同时提供运行时绑定与真实 import 范围，不再扫描字符串/注释中的伪 import。 */
+function analyzeScript(scriptContent) {
+  const prefix = '<script lang="ts">'
+  const ast = parse(`${prefix}${scriptContent}</script>`, { modern: true })
   const imported = new Set()
-  // 复用 Svelte 的 TS 解析器识别绑定，兼容无分号、跨行、注释及别名。
-  const ast = parse(`<script lang="ts">${scriptContent}</script>`, { modern: true })
+  const externalTypeBindings = new Set()
+  const declarations = []
   for (const statement of ast.instance?.content.body ?? []) {
-    if (statement.type !== 'ImportDeclaration' || statement.importKind === 'type')
+    if (statement.type !== 'ImportDeclaration')
       continue
     for (const specifier of statement.specifiers) {
-      if (specifier.importKind !== 'type')
+      if (statement.importKind !== 'type' && specifier.importKind !== 'type')
         imported.add(specifier.local.name)
+      else if (statement.source.value !== '@h-ai/ui')
+        externalTypeBindings.add(specifier.local.name)
     }
+    if (statement.source.value === '@h-ai/ui')
+      declarations.push(statement)
   }
-  return imported
+  return {
+    imported,
+    externalTypeBindings,
+    declarations,
+    offset: prefix.length,
+  }
 }
 
-function mergeHaiUiImport(scriptContent, components) {
+/** 整条 type import 提升为混合导入时，跳过词法空白和注释，只移除解析器确认的 type 关键字。 */
+function typeKeywordStart(scriptContent, declarationStart) {
+  let cursor = declarationStart + 'import'.length
+  while (cursor < scriptContent.length) {
+    if (/\s/.test(scriptContent[cursor])) {
+      cursor++
+    }
+    else if (scriptContent.startsWith('/*', cursor)) {
+      const end = scriptContent.indexOf('*/', cursor + 2)
+      if (end === -1)
+        break
+      cursor = end + 2
+    }
+    else if (scriptContent.startsWith('//', cursor)) {
+      const end = scriptContent.indexOf('\n', cursor + 2)
+      if (end === -1)
+        break
+      cursor = end + 1
+    }
+    else {
+      break
+    }
+  }
+  if (scriptContent.slice(cursor, cursor + 4) !== 'type')
+    throw new Error('Unable to locate the parsed type-only import keyword')
+  return cursor
+}
+
+function mergeHaiUiImport(scriptContent, components, analysis) {
   if (components.length === 0)
     return scriptContent
 
-  const existingMatch = scriptContent.match(UI_IMPORT_REGEX)
-  if (existingMatch) {
-    const existing = existingMatch[1]
-      .split(',')
-      .map(name => name.trim())
-      .filter(Boolean)
-
-    const merged = [
-      ...existing,
-      ...components.filter(name => !existing.includes(name)),
-    ]
-    const updated = `import { ${merged.join(', ')} } from '@h-ai/ui'`
-    return scriptContent.replace(UI_IMPORT_REGEX, updated)
+  const missing = new Set(components)
+  const edits = []
+  let target
+  for (const declaration of analysis.declarations) {
+    const named = declaration.specifiers.filter(specifier => specifier.type === 'ImportSpecifier')
+    if (named.length === 0)
+      continue
+    const typeOnly = declaration.importKind === 'type'
+    const promoted = named.filter(specifier => (typeOnly || specifier.importKind === 'type') && missing.has(specifier.local.name))
+    if (typeOnly) {
+      if (promoted.length === 0)
+        continue
+      const start = typeKeywordStart(scriptContent, declaration.start - analysis.offset)
+      edits.push({ start, end: start + 4, text: '' })
+      // 仅被用作组件的类型绑定提升为值；同声明内其它类型继续保持 type，不引入不存在的运行时导出。
+      for (const specifier of named) {
+        if (!promoted.includes(specifier)) {
+          const start = specifier.start - analysis.offset
+          edits.push({ start, end: start, text: 'type ' })
+        }
+      }
+    }
+    else {
+      for (const specifier of promoted) {
+        const start = specifier.start - analysis.offset
+        edits.push({ start, end: start + 'type'.length, text: '' })
+      }
+    }
+    for (const specifier of promoted)
+      missing.delete(specifier.local.name)
+    target ??= named[named.length - 1]
   }
 
-  return `import { ${components.join(', ')} } from '@h-ai/ui'\n${scriptContent}`
+  if (missing.size > 0) {
+    if (target) {
+      const start = target.end - analysis.offset
+      // 在最后一个真实具名绑定后插入；已有注释、别名、尾逗号和导入属性保持原样。
+      edits.push({ start, end: start, text: `, ${[...missing].join(', ')}` })
+    }
+    else {
+      edits.push({ start: 0, end: 0, text: `import { ${[...missing].join(', ')} } from '@h-ai/ui'\n` })
+    }
+  }
+  let result = scriptContent
+  for (const edit of edits.sort((left, right) => right.start - left.start))
+    result = result.slice(0, edit.start) + edit.text + result.slice(edit.end)
+  return result
 }
 
-function updateScriptBlock(scriptContent, usedComponents) {
-  const imported = collectImportedNames(scriptContent)
-  const missing = [...usedComponents].filter(name => !imported.has(name))
-  return mergeHaiUiImport(scriptContent, missing)
+function updateScriptBlock(scriptContent, usedComponents, filename) {
+  const analysis = analyzeScript(scriptContent)
+  const missing = [...usedComponents].filter(name => !analysis.imported.has(name))
+  const conflicts = missing.filter(name => analysis.externalTypeBindings.has(name))
+  if (conflicts.length > 0) {
+    throw new Error(`[auto-import-hai-ui] ${filename}: Cannot auto-import component(s) ${conflicts.join(', ')} because a type-only import from another module uses the same local name. Alias the type-only import or explicitly import the component under a different local name.`)
+  }
+  return mergeHaiUiImport(scriptContent, missing, analysis)
 }
 
 function autoImportHaiUi() {
@@ -221,7 +295,7 @@ function autoImportHaiUi() {
         lastIndex = start + fullMatch.length
 
         if (!applied && !isModule) {
-          const newScript = updateScriptBlock(scriptContent, usedComponents)
+          const newScript = updateScriptBlock(scriptContent, usedComponents, filename)
           updated += `<script${attrs}>${newScript}</script>`
           applied = true
         }
@@ -231,7 +305,7 @@ function autoImportHaiUi() {
       }
 
       if (!applied) {
-        const scriptBlock = `<script lang="ts">${updateScriptBlock('', usedComponents)}</script>\n`
+        const scriptBlock = `<script lang="ts">${updateScriptBlock('', usedComponents, filename)}</script>\n`
         return { code: scriptBlock + content }
       }
 
