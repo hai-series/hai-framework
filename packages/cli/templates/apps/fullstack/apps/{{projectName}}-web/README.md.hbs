@@ -16,6 +16,8 @@
 
 ### i18n 与 shared 协同
 
+从根目录安装依赖并启动Serv，再执行本页dev命令。输入有效测试账号后进入共享管理界面；普通用户只能看到被授权的功能。修改个人资料成功才结束编辑，失败保留输入。个人设置的主题/语言保存后，刷新并重新登录应能恢复。
+
 - 本端页面文案：`messages/{locale}.json` + `project.inlang/settings.json`
 - 共享 Shell/主题/语言/API：`packages/{{fullstack.sharedPackageName}}`
 - 个人设置保存语言与风格偏好到 IAM 元数据，并同步 shared 和本端 Paraglide runtime
@@ -36,19 +38,15 @@ pnpm --filter {{projectName}}-web build
 
 从工程根运行 `pnpm build --target image` 导出镜像。默认带部署工具，可运行 `pnpm run deploy --env test --build` 一次完成构建发布，或 `pnpm run deploy --env prod --bundle-only` 交付已有镜像及跨平台脚本。完整包包含自建中间件，人工部署与按服务更新见工程根 README。
 
-### IAM 认证配置
+### 认证与模块导航
 
-服务端 `config/_iam.yml` 统一控制登录、注册、重置、协议与 `ui` 品牌。邮件/短信可用 `_reach.yml` 中的 Provider/标准模板或自定义发送回调。`AuthPanel` 使用安全公开配置及框架认证动作；无需在页面适配 Token、验证码倒计时和错误提示。Memory 仅用于本地开发和显式测试；生产环境即使只有一个实例，也须使用框架支持的共享数据库与 Redis，并按工程根 README 配置写入路由和传输会话。
+认证方式、注册、密码策略、协议与品牌由Serv的 `_iam.yml` 控制。前端只接收安全公开配置，使用共享AuthPanel和加密typed client；服务端再次核验权限。LDAP、通知回调、用途证明和会话限制在服务端接入，不把私密配置复制到客户端。
 
-LDAP/Reach 均可选：基础认证无需安装。默认 LDAP 客户端需在 IAM 服务端 workspace 安装 ldapts，再配置 login.ldap 与连接信息。自定义 onOtpSendEmail/onOtpSendSms/onPasswordResetRequest 回调可独立于 Reach 使用，投递失败须拒绝 Promise；回调第三参数 context 提供 expiresAt/idempotencyKey，发送服务按稳定键持久化去重，异常/超时为结果未知且不自动重发。协议在 Modal 显示；LoginForm/RegisterForm 提供 header/extraFields/footer，AuthPanel 透传 loginHeader/loginFields/loginFooter 和 registerHeader/registerFields/registerFooter。配置及例子见生成项目的 hai-iam/hai-ui skills。
-
-协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
-
-完整契约见生成应用的 `.agents/skills/hai-iam/reference.md`。
+所有前端共用的偏好、认证存储、表单、审计与帮助行为见[共享工作区](../../packages/{{fullstack.sharedPackageName}}/README.md)，详细配置见[生成应用IAM技能](../../.agents/skills/hai-iam/reference.md)。
 
 ## 开发测试
 
-从工程根执行 `pnpm typecheck`、`pnpm lint`、`pnpm build`、`pnpm test` 和 `pnpm test:e2e`。浏览器预览通过后，原生壳仍需在对应系统或设备单独验收。
+从工程根执行 `pnpm typecheck`、`pnpm lint`、`pnpm build`、`pnpm test` 和 `pnpm test:e2e`。浏览器通过后仍需在实际公开地址验证部署、认证与持久数据。
 
 ## 许可证
 

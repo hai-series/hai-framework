@@ -1,99 +1,79 @@
 # {{fullstack.sharedPackageName}}
 
-## Introduction
+供{{projectName}}的Web、Capacitor App和Tauri Desktop复用的前端工作区，提供AdminWorkspace、AppShell、typed API、管理状态、语言主题、引导和帮助。它不单独部署，也不在浏览器中初始化服务端数据库/IAM。
 
-Shared mini administration workspace for **{{projectName}}**. Web, Capacitor App and Tauri desktop use the same `AdminWorkspace`, responsive `AppShell`, typed API client and management store.
+## 运行与接入
 
-## Core features
+从工程根安装依赖，启动Serv，再启动所选前端。各端已经接入此共享包；增加页面优先复用现有状态和组件。公开入口包含AdminWorkspace/AppShell、initializeManagementApi/managementApi、AVAILABLE_THEMES/themeStore及语言消息与runtime。
 
-- Shared management pages, forms, navigation and application state.
-- Typed encrypted API client and platform-specific token storage.
-- Themes, language preferences, onboarding and help.
+以下示例用于已有前端宿主，地址替换为实际API；原有宿主已初始化时直接复用，不重复执行初始化：
 
-## Getting started
+```ts
+import { initializeManagementApi, managementApi } from '{{fullstack.sharedPackageName}}'
 
-### Behavior and configuration
+const ready = await initializeManagementApi({ baseUrl: 'https://api.example.invalid/api/v1' })
+if (!ready.success) throw new Error(ready.error.message)
+const info = await managementApi.app.info()
+if (!info.success) throw new Error(info.error.message)
+// info.data包含后端Core名称/版本、环境、语言、公告及前端清单。
+```
 
-The behavior below describes the initial example. Roles, permissions, workflows, limits, preferences and audit policies can change with the user's requirements. Update conflicting implementation, tests and guidance together; preserve the applicable public API contracts and server security checks.
+输入为可信API基址，输出为统一HaiResult。初始化装配认证刷新和传输加密，不能把请求结束当成功；应用入口统一处理安全错误与生命周期，退出时先停止当前身份的后台操作，再清凭据和关闭客户端。
 
-- Administrators manage users, upload user avatars, assign the built-in administrator/user roles, edit role descriptions and query audit logs.
-- By default, ordinary users update their own profile, avatar, language, appearance and password. The server enforces the actual business permissions on every request.
-- The workspace uses the available window width. Tables scroll within their own area; settings panels form two columns on large screens and stack on phones.
-- `ManagementStore` owns API calls and business state; components render the state and forward user interactions.
-- Application name, version, environment and default locale come from the backend `app.info` contract, which reads `core` configuration. Do not duplicate these values in translations or frontend constants.
-- Requests, token refresh and JSON responses use the same `@h-ai/api-client` + `@h-ai/crypto` transport. Avatar uploads use encrypted JSON and validate PNG/JPEG/WebP content, with a 512 KiB limit.
-- Read metadata through the same initialized `managementApi.app.info()` client; inspect `success` before using `data`.
+## 功能与输入输出
 
-Vite development and preview servers read the workspace root environment files and proxy /api to the backend. Builds do not load deployment environment files. Web containers receive their public API address at startup; native apps follow the platform configuration below.
+| 功能 | 用户输入/调用场景 | 可观察输出与限制 |
+| --- | --- | --- |
+| 元信息 | managementApi.app.info() | 后端Core名称、版本、环境及语言；不在前端重复硬编码 |
+| 用户/角色管理 | 当前职责允许的列表、筛选、排序与修改 | 服务端授权后的数据与明确结果；隐藏按钮不代替服务端检查 |
+| 个人资料/头像 | 资料值、允许的PNG/JPEG/WebP（不超过512KiB） | 成功保存后更新；失败保留草稿。头像key由服务端生成 |
+| 审计 | 分类、结果、等级、排序或备份条件 | 当前权限范围内记录、近7天统计、私有备份key/数量/SHA256回执；不公开备份对象 |
+| 公告 | 配置人员的受限正文输入 | 公告与审计同事务提交，失败回滚，不把客户端编辑当已发布 |
+| 主题/语言 | 个人设置选择已编译主题/语言 | 保存到IAM用户metadata，登录后恢复，并同步shared与宿主runtime |
+| 引导/帮助 | 首次使用邀请、稍后、关闭、完成或重播 | 按用户及引导版本保存偏好，帮助入口可再次打开，不作为业务完成证明 |
+| 表单/提示 | 输入、失焦、提交与失败重试 | 统一Toast显示安全说明，控件保留错误边框和读屏关联；成功信号决定退出编辑 |
 
-An origin-only API base uses `/api/v1`. For a custom service `http.apiPrefix`, include that path in `PUBLIC_API_BASE` or the runtime API base; the client preserves the configured path and restricts avatar URLs to its matching resource prefix.
+默认示例职责为系统管理、审计、配置、业务操作员和普通成员，实际规则由应用维护。临时账号、生命周期、邀请、敏感操作再认证及密码/会话限制通过服务端策略实现；取消再认证不发送对应敏感业务请求。
 
-### Configurable security and duties
+工作区按窗口扩展，表格内部滚动，宽屏表单可两列，窄屏收拢。FormField.colSpan可明确占列。页面和数据逻辑分别维护在组件与ManagementStore，错误恢复保留用户输入。
 
-System administrators manage accounts and roles, auditors query/export private audit archives, configuration staff maintain the public notice, and business operators process feedback. Basic members retain self-serv access. Navigation and server permissions follow the same application-owned duties. Management forms support temporary account expiry and active/dormant/closed states; optional invitations use one-time password setup notifications. `ReauthenticationDialog` collects confirmation for configured operations through the service layer, and proofs are passed only to the corresponding API call. Audit pages expose category/outcome/severity filters, sorting, seven-day statistics and private backup receipts. Page-exit revocation is optional and best effort; combine it with server idle/absolute deadlines.
+## 配置与扩展
 
-### Authentication and preferences
+### API地址、认证与平台存储
 
-Web and browser previews keep access tokens in memory and refresh tokens in the server's httpOnly Cookie. Requests include credentials; reload restores the session through the encrypted refresh flow. Never store authentication tokens in localStorage.
+initializeManagementApi接受baseUrl、fetchFn、clientName、terminalType、tokenStorage、headers、requireApiBase和onSessionExpired。基址顺序为显式baseUrl→公开runtime-config→PUBLIC_API_BASE→当前origin；只给origin时补/api/v1，自定义http.apiPrefix必须明确包含。
 
-Capacitor native uses `createCapacitorTokenStorage()` and the trusted native token channel. Set its public API address in the App's `public/runtime-config.js` before compiling and syncing native assets. Tauri uses memory token storage and requires a new login after restart; set process `PUBLIC_API_BASE` before launching the installed application, and its Rust host injects the address. Both send `clientName` and `X-HAI-Token-Transport: body`; the service verifies the trusted native origin before returning a refresh token in JSON. Capacitor requires explicit API configuration. The Tauri host defaults to http://localhost:3000/api/v1 when PUBLIC_API_BASE is absent; configure the actual service address for installed applications. A configured address does not prove connectivity.
+- Web/浏览器预览使用内存access token和服务端HttpOnly刷新Cookie，刷新恢复会话；认证token不放localStorage。
+- Capacitor原生使用createCapacitorTokenStorage及受信原生通道。编译/同步前在App的public/runtime-config.js设置公开API地址，不放服务端秘密。
+- Tauri原生凭据只在内存，重启重新登录。启动安装程序前设置进程PUBLIC_API_BASE，Rust宿主注入地址；缺省http://localhost:3000/api/v1只适合本机服务。
+- 原生请求声明clientName及body通道头，服务端还核验可信Origin；仅声明头不获得原生权限。
 
-Language and theme preferences are saved in IAM user metadata, restored after login and synchronized with the shared/host Paraglide runtimes and `core.i18n`. The small reactive theme store delegates DOM updates and safe appearance caching to `@h-ai/ui/theme` (`applyTheme` / `getSavedTheme`); the framework uses the `theme` localStorage key. Appearance selectors live in personal settings and save through the authenticated profile contract.
+仅配置地址不证明设备可达。代理、HTTPS、凭据传递与认证状态恢复应在对应平台验证。
 
-### Onboarding and help
+### IAM与通知
 
-AdminWorkspace mounts the shared `@h-ai/ui/guide` controller and GuideHost after authentication. AppShell includes a help button; first-use invitations offer start, later and dismiss. Web stores preferences in Cookies, while App/Desktop use localStorage, scoped by the current user and tour version. Help articles link to the overview and profile tours.
+Serv的config/_iam.yml控制登录/注册/重置、协议与ui品牌，AuthPanel只使用安全公开配置。密码、验证码、LDAP及发送回调的完整配置见[生成应用IAM技能](../../.agents/skills/hai-iam/reference.md)。协议正文Markdown优先于URL并安全渲染；邮件/短信投递未知需查回执，不能自动重复发送。
 
-Extend `src/lib/stores/guide-store.ts` and the shared Chinese/English/Japanese messages, then add stable data-guide attributes to existing components. Navigation uses the same ManagementStore. Keep business text as i18n callbacks and preserve the host's locale/scope binding. Browser tests cover completion, reload, replay, settings navigation and mobile help.
+页面离开撤销为可选且尽力而为；生产仍用共享数据库/Redis、闲置与绝对期限。管理写入路由和最后管理员边界按根README的实际部署方案执行。
 
-### i18n and themes
+### 消息、主题、组件与引导
 
-Shared page copy belongs in `messages/{zh-CN,en-US,ja-JP}.json`. Frontend-specific copy belongs in each app's own messages directory. Keep `baseLocale` and `locales` aligned across all enabled projects, then run root `pnpm i18n:compile`; do not edit generated Paraglide files.
+共享文案在messages，前端专属文案放各端messages；启用语言及baseLocale一致后执行根 `pnpm i18n:compile`，不手改生成文件。插件来自已安装workspace依赖，不在编译时从CDN获取。
 
-All frontend and shared projects load the installed message-format plugin from the workspace root `node_modules`, matching the scaffold's hoisted dependency layout. Compilation uses the workspace dependency version and does not fetch a plugin from a CDN.
+AVAILABLE_THEMES只暴露已编译CSS主题，eye-care为可选护眼主题；默认主题和显式白名单由宿主决定。外观缓存可保存theme，认证token不能复用该存储。修改AppShell、相邻管理组件或ManagementStore时同步三语与键盘/窄屏恢复流程。
 
-The default theme list includes `eye-care` (Eye care / 护眼 / 目にやさしい), with warm green surfaces, dark text and clear focus outlines. It keeps the existing default appearance. Explicit `fullstack.theme.themes` lists remain host controlled; add `eye-care` to enable it there.
+引导定义在src/lib/stores/guide-store.ts，组件提供稳定data-guide属性；Web引导偏好用Cookie，App/Desktop用按当前用户与版本划分的localStorage，不存认证信息。设计、实现和复核分别使用根skills中的hai-ui-design、hai-ui、hai-ui-review。
 
-The scaffold theme configuration determines the themes compiled into frontend CSS. Personal settings offer only those available themes. Customize the common layout in `src/lib/components/AppShell.svelte`, the management pages in adjacent components, and business behavior in `src/lib/stores/management-store.svelte.ts`.
+{{#if features.feedback}}
+### 用户反馈
 
-### Validation
+反馈页面复用shared SDK预览、标注、保存草稿与导出轮询；提交受理编号不表示材料和通知全部完成。服务端 `_feedback.yml` 配置采集预算/业务采集超时/Webhook，密钥仅在服务端私有环境。退出身份清理草稿与观察器，导出文件通过受授权私有通道交付。App/Desktop按平台安全保存文件并清理临时资源。
+{{/if}}
 
-Run root `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` and `pnpm test:e2e`. Shared API tests exercise real transport key exchange, encrypted request/response handling, configured core metadata and credential forwarding. Root browser tests cover administrator and ordinary-user workflows, avatar rendering, persisted preferences, password/session invalidation and narrow-screen layout. All selected Web/App/Desktop previews also exercise login, tours, help and profile navigation. Clean screenshots, reports, temporary projects, containers and helper processes in finally/teardown, including failure paths. These browser checks do not replace native-shell or miniapp device acceptance.
+## 验证
 
-### IAM configuration
+从根目录运行 `pnpm typecheck`、`pnpm lint`、`pnpm build`、`pnpm test`、`pnpm test:e2e`。核对管理员与普通用户、跨资源拒绝、资料失败保留、头像、偏好恢复、密码/会话失效及窄屏布局。所有已选择前端共用流程，但浏览器测试不替代原生壳、设备权限或miniapp验收。
 
-The service's `config/_iam.yml` controls login methods, registration, password reset, agreements and `ui` branding. Email and SMS use providers/templates in `_reach.yml` or custom callbacks. `AuthPanel` uses the public configuration and framework auth actions to manage tokens, resend countdowns and errors. Memory cache is for local development and explicit tests. Production requires supported shared database/cache backends even with one instance, write routing and a shared managed transport key ring and registry as described in the project README.
-
-Authentication defaults to a split layout. Set `ui.variant`, `title`, `subtitle`, `brandTitle`, `brandText`, `logoUrl` and `illustrationUrl` to customize login and registration. Without a `brandTitle`, the displayed application name comes from `app.info` and follows `core` configuration.
-
-LDAP and Reach are optional. Install ldapts in the IAM service workspace only when using its default LDAP client, then enable login.ldap and set connection settings. Custom onOtpSendEmail/onOtpSendSms/onPasswordResetRequest callbacks work without Reach and must reject on delivery failure. Their third context argument supplies expiresAt/idempotencyKey; senders durably deduplicate that key, and errors/timeouts mean unknown delivery with no automatic resend. Agreements open in a Modal. LoginForm/RegisterForm support header/extraFields/footer snippets; AuthPanel forwards loginHeader/loginFields/loginFooter and registerHeader/registerFields/registerFooter. See the generated hai-iam/hai-ui skills for configuration and examples.
-
-Agreements accept Markdown text or a URL. Markdown takes precedence and opens in a safely rendered dialog.
-
-See `.agents/skills/hai-iam/reference.md` in the generated application for the complete contract.
-
-### Operation feedback
-
-Operation results use the shared `toast` queue from the lightweight `@h-ai/ui/toast` entry. `AdminWorkspace` mounts one `ToastContainer` for Web, App and Desktop: notifications float at the bottom right by default, use UI-owned semantic colors for information, success, warning and error, with a soft tinted background, a narrow color border and a distinct icon, close automatically or manually, and appear one at a time in FIFO order. Waiting notifications do not expire before being shown. Set `position` in `toast.add` for any of the six supported positions. Field validation and persistent business state stay inline.
-
-### Form layouts
-
-The user editor uses `FormLayout columns={2} labelPosition="left"`. Personal settings fill the available width and use two columns on wide screens, with stacked labels and a single avatar editor. Narrow containers automatically stack cards, fields and labels. UI controls and CRUD forms show client validation on blur, update errors while correcting input and validate untouched fields on submit. Field errors follow the current UI language. The management store syncs locale through the lightweight `@h-ai/ui/i18n` entry, without loading components or tour CSS. Configure `colSpan` on FormField to override automatic spans for textareas, uploads and multiple choices.
-
-## 界面设计与验收
-
-共享管理界面的 Web/App/Desktop 使用同一套 UI 组件和状态。设计、实现、审查分别参考根目录 `.agents/skills/hai-ui-design/`、`hai-ui/`、`hai-ui-review/`；正常、加载、空态、错误恢复、键盘、语言/主题和窄容器均按实际场景验收。组件的筛选、排序和分页仍由业务数据回调接入。
-
-## 反馈现场与交付检查
-
-feedback.init(config, { collectEvidence }) 支持等待业务 text/data 与文本/ZIP/GZIP 附件；_feedback.yml 提供业务采集超时和 Webhook URL/签名密钥/请求超时。密钥仅放服务端私有环境。Webhook 持久重试，详情展示状态并允许管理员重试。
-
-反馈的 console/disabled/reach 独立选择；SDK getView/ratio/saveDraft 与 createFeedbackReview 统一预览、标注、保存及轮询。退出身份清理草稿和观察器。宿主生命周期由 core.module.createRuntime 处理，框架表升级前备份停旧写入并运行各模块 dryRun 预检。
-
-## Development and testing
-
-Run root `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` and `pnpm test:e2e`. Browser checks cover shared workflows; test native shells on their target platforms separately.
-
-## License
+## 许可证
 
 Apache-2.0

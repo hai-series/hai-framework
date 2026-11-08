@@ -1,276 +1,148 @@
 # @h-ai/cli
 
-[简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
+[简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md) · [框架首页](../../README.md)
 
-[框架首页](../../README.md)
+用 `hai` 创建应用、添加模块、生成基础代码，并构建 Web、API 与原生制品。完整操作流程和配置含义见[使用指南](../../docs/usage/README.md)。
 
-## 简介
-
-生成项目默认启用 `zh-CN`、`en-US`、`ja-JP`。交互配置可选择日语为默认语言；fullstack 可通过 `fullstack.i18n.locales` 缩小启用语言列表。CLI 终端语言按 `HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` 选择，支持中英日文。
-
-用 `hai` 创建应用、添加模块、生成基础代码，再构建和交付应用。支持 SvelteKit、独立 API 和前后端分离工程。第一次使用可按[完整使用指南](../../docs/usage/README.md)从创建走到部署。
-
-## 核心功能清单
-
-- 创建管理后台、企业官网、H5、API、移动应用或多端 fullstack 工程。
-- 为已有项目添加模块、补齐配置和 AI 开发指引。
-- 生成页面、组件、接口、模型和迁移骨架。
-- 按镜像构建，完整离线交付，或只更新选中的服务。
-
-## 使用入门
+## 快速开始
 
 ### 安装 CLI
 
-需要符合项目 `engines` 的 Node.js（`^22.23.4 || ^24.22.1 || ^26.12.1`）与 pnpm 12.11.2。PowerShell 使用 `pnpm.cmd`。
-
-先查询已发布渠道，再安装当前 latest。使用 `hai create --help` 核对所安装版本支持的选项；尚未发布的源码能力按下方本地开发步骤验证。
+使用符合 `engines` 的 Node.js（`^22.23.4 || ^24.22.1 || ^26.12.1`）与 pnpm 12.11.2。PowerShell 使用 `pnpm.cmd`。
 
 ```sh
-pnpm view @h-ai/cli dist-tags
 pnpm view @h-ai/cli@latest version
 pnpm add -g @h-ai/cli@latest
 hai --version
-hai --help
-```
-
-生成的框架依赖固定到 CLI 对应版本；安装失败会显示命令、退出码与输出，保留已生成文件供重试。未发布的源码功能请按下方本地开发方式验证。
-
-### 创建项目
-
-```sh
 hai create my-app --type fullstack --frontends web
 cd my-app
 pnpm dev
 ```
 
-省略选项时按向导选择，`--defaults` 使用默认值。默认安装依赖并初始化 Git，`--no-install` / `--no-git` 可关闭。部署工具默认作为开发依赖安装，不需要时加 `--no-deploy`。
+输入项目名称与模板类型，输出工程文件；默认安装依赖并初始化 Git。`--defaults` 采用默认选择，`--no-install`、`--no-git`、`--no-deploy` 分别关闭安装、Git 初始化和部署开发依赖。省略名称或类型时交互选择。每个命令的选项以 `hai <command> --help` 为准。
+
+## 功能
+
+### 命令、输入与输出
+
+这些是终端命令，不需要先初始化框架服务。按实际输出与退出码判断结果。TARGET_VERSION需替换为pnpm view刚查询到的已发布精确版本，不原样输入占位词。
+
+| 命令           | 用途与输入                                | 输出与示例                                                                                                                      |
+| -------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| create         | 创建项目；名称、type、fullstack前端选择   | `hai create orders --type admin --defaults` 生成可运行的管理应用                                                                |
+| add            | 给已有工程增加模块；模块名及当前目录      | `hai add ai` 补依赖、配置和技能，保留已有业务内容；应用仍需接入初始化、关闭和路由                                               |
+| init           | 补齐已有工程的配置与AI入口                | `hai init` 补缺失文件；`--force` 可重建模块配置，执行前核对差异                                                                 |
+| generate / g   | 生成业务骨架；类型、名称、目标workspace   | `hai generate api orders --workspace orders-serv` 生成路由或contract/procedure；同类快捷命令为 g:page/g:component/g:api/g:model |
+| build          | 编译或打包；target、镜像/平台与源码       | `hai build --target image --json` 输出本次制品JSON；build不接收部署环境                                                         |
+| deploy         | 计划、打包或发布；环境、制品、所选服务    | `hai deploy --env prod --plan` 输出只读计划；去掉plan才进入交付流程                                                             |
+| upgrade        | 检查目标完整发布；精确版本、工程目录      | `hai upgrade TARGET_VERSION` 输出依赖、完整性、配置和技能漂移报告，不自动安装或覆盖                                             |
+| deploy-secrets | 受控导入服务器已有凭据；目录、私有JSON    | `hai deploy-secrets /srv/orders --import /private/orders.json --runtime docker` 默认预检，显式 `--apply` 才保存                 |
+| feedback       | 查看离线诊断ZIP；action、包路径和过滤条件 | `hai feedback summary feedback.zip` 输出摘要；inspect/evidence/view分别输出清单、证据或本机查看器                               |
+
+全局 `--cwd/-C` 指定工程目录，`--verbose/-v` 开启详细诊断。CLI消息按 `HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` 选择中英日文；生成应用的默认语言独立配置。
 
 ### 项目模板
 
-| 类型                       | 生成内容                                                          |
-| -------------------------- | ----------------------------------------------------------------- |
-| `admin` / `website` / `h5` | SvelteKit 管理后台、官网、移动网页                                |
-| `api`                      | 共享 contract + API service 的 pnpm workspace                     |
-| `mobile-app`               | Svelte + Vite + Capacitor                                         |
-| `fullstack`                | contract、API、共享界面与所选 Web/App/Desktop；miniapp 仅预留说明 |
+| type                 | 生成内容与场景                                                    |
+| -------------------- | ----------------------------------------------------------------- |
+| admin / website / h5 | SvelteKit管理后台、展示网站或移动网页；website默认只接Core/Kit/UI |
+| api                  | contract与独立Serv服务的pnpm workspace                            |
+| mobile-app           | Svelte/Vite/Capacitor客户端，连接独立API                          |
+| fullstack            | contract、Serv、共享UI及所选Web/App/Desktop；miniapp仅为预留说明  |
 
-每个模板只安装实际使用的模块：admin/h5 包含认证、验证码及找回密码通知，以及数据库、缓存、加密依赖；website 只包含 Core/Kit/UI；API 包含认证、通知、上传和反馈；fullstack 保留管理后台的认证、审计、存储、通知、调度和反馈；mobile-app 只使用客户端能力。AI、payment、vecdb、datapipe 不默认安装。所有项目保留完整模块 YAML 和 `.env.example`，未启用项以注释提供，只有已启用项进入公共环境默认值。后续添加对应依赖、取消所需配置注释，再接入初始化、关闭及业务路由；添加依赖不会自动启用功能。`--template`、`--features`、`--examples/--no-examples` 已删除，`create --yes/-y` 改为 `--defaults`，旧参数明确报错；`deploy --yes` 保持原义。已有工程不会自动裁剪依赖。
+模板只安装实际使用的模块，同时保留注释中的可选配置和 `.env.example`。取消配置注释不等于完成业务接入。AI/payment/vecdb/datapipe按需添加；生产使用共享数据库、Redis和文件后端。项目中默认启用中英日文，fullstack可用 `fullstack.i18n.locales` 选择子集。
 
-独立 `mobile-app` 默认包含前端 crypto，并启用 typed client 加密传输。已有明文 API 可显式使用 `PUBLIC_API_TRANSPORT=off`；`PUBLIC_API_KEY_EXCHANGE_PATH` 只覆盖公开协商子路径。握手失败不会降级，服务端私钥不进入客户端。客户端先关闭 transport，再释放自身初始化的 crypto。
+带浏览器界面的模板在加载前检查已知低版本浏览器；最低要求为Chrome/Edge111、Firefox114、Safari及iOS/iPadOS16.4。[浏览器入口](../../docs/usage/getting-started/build.md#浏览器启动检测)
 
-admin、website、h5 和 Fullstack Web 在主应用加载前检测低版本浏览器，独立升级页显示当前版本、最低要求和官方更新入口。最低版本为 Chrome/Edge 111、Firefox 114、Safari 16.4，iOS/iPadOS 使用系统 16.4。迁移已有工程见[浏览器启动检测](../../docs/usage/getting-started/build.md#浏览器启动检测)。
-
-### 纯静态 website 与 GitHub Pages
-
-新建 website 默认 Node SSR，只安装展示站所需的 Core/Kit/UI，可以直接使用下述静态构建。以后接入了服务端业务模块、初始化或 API/actions 时，静态发布前须移除这些动态能力；保留的注释配置和变量示例不影响静态构建。
-
-website默认Node SSR。仅构建时设置`HAI_BUILD_STATIC=1`与`PUBLIC_BASE_PATH=/docs-site`（docs-site替换为实际仓库名；各目录段仅ASCII字母、数字、_、.、-，无末尾/，根站留空）后执行`pnpm build`，输出build静态目录。静态标志只接受0/1，且仅用于compile；PUBLIC_BASE_PATH也可用于Docker网站构建，原生app/desktop目标不接受网站目录。静态拒绝服务端业务模块、自定义API/actions和未预渲染页面，不放宽生产守卫，不生成SPA回退；默认健康API不进入静态产物。
-
-根.env不参与构建，Kit也不读取根私有文件。static是公开资产目录，图片、字体等正常资源会原样发布，不能放入任何私密内容；检测到.env/.env.*或符号链接时会停止构建。发布只上传build，显式include-hidden-files:true保留.nojekyll；实际验证子路径首页、每个深链刷新、资产和无敏感哨兵。详细命令见[静态网站配置](../../docs/usage/configuration/delivery.md#静态website与github-pages)。
-
-website联系表单是界面示例，尚未接入留言服务。提交后通过Toast说明尚未开通并保留输入；投入使用前应连接实际服务并验证加载、成功和失败状态。
-
-### 网站部署到子目录
-
-SvelteKit的admin/h5/website通过构建进程`PUBLIC_BASE_PATH=/yyy`设置`kit.paths.base`，默认空字符串；改变目录需要重新构建，网关保留前缀。Vite Web默认`base: './'`，入口和runtime-config.js使用相对地址，hash路由可经剥离目录的网关挂载到`/yyy/`；显式设置PUBLIC_BASE_PATH时固定Vite基址。API地址独立配置，不能从网页目录推断。
-
-Docker构建时同样显式设置PUBLIC_BASE_PATH；非根目录生成格式5制品，记录webBasePath，由部署SDK生成匹配代理、健康检查和访问URL，额外网关保留前缀。根目录继续使用格式4。全量和部分构建须保持相同目录，即使只构建serv；改变目录使用全量部署。格式5需匹配的CLI/Deploy，旧工具明确拒绝。操作、默认值、反代差异与实际截图见[网站子目录配置](../../docs/usage/configuration/delivery.md#网站部署在子目录)。
-
-### Fullstack mini 管理后台
-
-提供用户管理、角色、审计日志、头像和个人设置，以及主题、语言、引导和帮助中心。首次登录使用 `admin`，随机密码在当前环境 `.env.dev.local/.env.test.local/.env.prod.local` 的 `HAI_ADMIN_DEFAULT_PASSWORD`；已有用户时不会重设密码。模板业务可按需求修改，权限检查始终在服务端执行。
-
-创建工程时为 `.env.dev.local`、`.env.test.local`、`.env.prod.local` 分别生成独立初始密码和传输密钥环，文件不提交 Git。克隆工程后通过受保护文件或 Secret Manager 分发对应环境秘密，同环境所有节点使用同一 ring 与共享 registry，不在节点启动时生成。缺少或无效的 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 在上传前报错。CLI 和离线说明只提示初始密码变量及来源，不输出值；密码仅用于创建缺失账号，已有账号不被重置。
-
-### 应用配置与显示
-
-带界面的模板提供 `eye-care` 护眼主题：暖绿色背景、深色文字和清晰焦点，选择后刷新仍保留。fullstack 默认主题列表包含它；显式 `fullstack.theme.themes` 仍按宿主白名单生成，`defaultTheme` 保持原配置。
-
-模板默认使用 `pretty` 日志并安装运行依赖 `pino-pretty`；`HAI_CORE_LOGGING_FORMAT=json` 可切换为结构化输出。启动失败保留模块、错误码与缺失配置字段；端口冲突显示 `EADDRINUSE`、地址和端口。
-
-公共配置保存在 `.env` 和 `.env.<mode>`，连接凭据与 SSH 配置保存在忽略 Git 的 `.env.<mode>.local`，`.env.local` 用于本机共享私有值。构建不读取部署秘密。 所有 `HAI_*` 统一使用：进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML。同来源 JSON 为基础，细项继续覆盖；高来源整段替换先清掉低来源细项。Node/Vite 与部署共用 Core 合并，不维护模块专用顺序。
-
-### 已有项目与代码生成
-
-通过 `hai add ai` 可补齐 reldb 与 vecdb 依赖；随后在应用入口按数据库 → 向量库 → AI 初始化，失败时检查关闭结果并逆序清理。`.env.prod` 按启用模块选择 PostgreSQL（已选 MySQL 则保留）、Redis、S3、Qdrant，默认使用 Compose 的 `db/cache/storage/vecdb` 服务名。数据库/缓存密码、S3 凭据、模型密钥和受保护 Qdrant 的密钥必须由私有环境注入；容器外运行需覆盖这些内部地址。生产 Reach 的空 Provider 数组有意拒绝启动，须私有注入真实 `HAI_REACH_PROVIDERS` JSON。`hai add` 保留已有生产参数，只补新增字段；随后在现有业务入口接入新增模块。
+### 生成页面、组件、API、模型与迁移
 
 ```sh
-hai add storage
-hai init
-hai generate
 hai generate page dashboard
 hai generate component UserCard
-hai generate api orders
+hai generate api orders --workspace orders-serv
 hai generate model order
 hai generate migration add-orders
 ```
 
-`hai add` 解析模块依赖并补充配置。`hai init` 补齐缺失配置和 AI 文件，保留已有自定义内容；`--force` 可重建模块配置，使用前检查差异。 已有模块也会检查传递依赖与所属 workspace 的 catalog；旧版安装失败后可重跑同一命令修复，保留已有版本、注释和配置值。
+名称不含路径，默认不覆盖业务文件。`--workspace` 选包名或相对目录；SvelteKit的 `--output` 必须位于src/routes，Serv生成器不接受该参数。page仅用于文件路由；纯Vite页面/API组合明确拒绝。Serv只更新带 `@hai-generator` 标记的聚合入口。整批预检，写入失败回滚本次修改；`--force` 仅替换生成文件。迁移输出up/down函数，不执行数据变更。
 
-page 只支持 SvelteKit 文件路由；api 会按目标应用选择 SvelteKit 文件路由或 serv 的共享 contract/procedure。API/fullstack 根目录可自动选择唯一后端；多应用用 `--workspace <包名或相对路径>`，也可进入目标 workspace。纯 Vite 的 page/api 组合明确拒绝；serv 不接受 `--output`，SvelteKit 路由输出须位于 `src/routes` 内，定制 `kit.files` 时明确拒绝猜测；API 目标须已安装 `@h-ai/kit` 与 `zod`。serv 只改写带 `@hai-generator` 标记的既有聚合入口，未知结构要求手动扩展，不创建平行路由。名称不能包含路径；默认拒绝覆盖，`--force` 只替换生成文件，不覆盖已有业务领域注册。整批预检，写入失败回滚本次修改。迁移只生成 up/down 函数，不自动执行；运行前确认数据影响。
-
-CLI 消息支持中文、英文和日文，优先使用 `HAI_CORE_DEFAULTLOCALE`，再按 `LC_ALL` → `LC_MESSAGES` → `LANG` 选择非空终端语言；`en`/`zh`/`ja` 地区变体映射到现有字典，`C`/`POSIX` 使用英文。未知语言保留 core 当前语言（默认中文）。例如 PowerShell 先执行 `$env:HAI_CORE_DEFAULTLOCALE='en-US'`，再执行 `hai generate`。CLI 内部命令也响应 `core.i18n.setGlobalLocale('en-US')` 的同进程语言切换；省略类型或名称会交互，取消后不写文件。生成源码的中文注释和用户指定名称保留原样。
-
-`create`、`add`、`init` 与 `generate` 的提示、校验、模块/模板名称、描述和完成信息均使用当前 CLI 语言。静态选择目录在读取时翻译，同一进程切换 locale 也会生效。CLI 语言与生成应用的 `core.defaultLocale` 分开配置；生成的中文 README、配置/源码注释、用户输入和外部工具原始诊断保留原样。
-
-### SvelteKit 接口安全配置
-
-创建 admin、website 或 h5 时选择 crypto，可在 `_kit.yml` 中开启 transport；默认仍为 false。服务端从各环境独立生成的密钥环装配加密，根布局只向浏览器提供公开 transport 配置，私有 IP/时段规则不下发。选择 db 后使用数据库 registry；无 db 的内存 registry 仅限开发/测试。静态网站没有这些动态接口。
-
-路径规则 `encryption: required / disabled` 可以让内部接口保持加密、外部接口接收普通 HTTPS 请求；模式冲突或缺少必需加密装配会拒绝创建宿主。Fullstack 管理模板固定要求 transport，使用路径规则设置明文例外。完整配置与验证见[接口访问和加密](../../docs/usage/configuration/request-access.md)。
-
-### 可选 HTTPS 证书
-
-`pnpm run deploy` 为所有容器模板统一提供“不启用 / 已有 PEM 证书和私钥路径 / Let’s Encrypt”。相对路径以工程根为基准，已有证书校验域名、有效期和密钥匹配后复制到私有发布包。Let’s Encrypt 使用固定版本官方 Certbot 镜像申请，每 12 小时检查续期，Nginx 自动重载。需要确认服务条款、真实邮箱、公网 DNS、80 端口和 CA 网络；隔离环境使用已有证书。证书状态保留在服务器，私钥不进入应用镜像。`--yes` 复用保存配置。
-
-配置为 `hai.json.deploy.provider.expose.https`，也可用环境私有文件覆盖。默认 HTTPS 443、HTTP 跳转开启，未配置保持 HTTP；启停或更改模式、域名、端口、本地证书需全量部署。配置和续期边界见[HTTPS 手册](../../docs/usage/configuration/delivery.md#可选https证书)。`--plan` 的 `root` 表示工程根，`serviceDir` 表示部署服务源码与配置目录，仅显示公开证书元数据。
-
-### 构建与部署
-
-Windows 构建会转发标准输出与错误，统一终端换行；pnpm 下载使用追加式日志，保留 WARN 与失败信息。
-
-镜像和 npm 下载分别使用 `--image-source official|cn|custom`、`--npm-source official|cn|custom`。大陆预设采用毫秒镜像（Docker Hub/GHCR）和 npmmirror。首次交互把选择保存为 `hai.json.build.sources` 默认；命令参数只覆盖本次，`--yes` 复用配置，非交互未配置时使用官方源。代理用 `--proxy-mode inherit|system|custom|none`，自定义配合 `--proxy-url`、`--proxy-bypass`，配置位于 `build.proxy`。Docker/Podman 构建均传递代理参数，按构建网络处理回环地址并检查容器内可达性；镜像拉取仍由引擎侧代理决定。自定义映射、旧 Dockerfile 更新和系统代理支持范围见[下载源和代理](../../docs/usage/configuration/delivery.md#下载源和代理)。
+### 构建、静态站与原生包
 
 ```sh
-pnpm build --target image --image-source cn --npm-source cn
-pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source cn
-pnpm build --target image --proxy-mode custom --proxy-url http://127.0.0.1:10808
+hai build --target image --images "serv,web" --concurrency 1
+hai build --target app --platform android --runtime auto --debug
+hai build --target desktop --platform windows --arch x64
 ```
 
-部署向导的默认/自定义模式保留同后端完整配置，包括未出现在表单中的 `publicEndpoint`、连接池及操作日志；自建或云开通只重新定稿连接与认证。 生成端优先写细项，数组保留 JSON；手写 JSON 允许兜底，放在对应模块细项之前。同源细项覆盖 JSON，动态字典、JSON 文本和显式空对象保留原义；整体替换展开时以最上层 `{}` 标记阻止旧 YAML 字段恢复。容器路径只写交付配置，不反写工程源环境。
+target默认compile，其他目标为image/app/desktop。镜像角色为serv/web；原生app/desktop不作为Compose服务。镜像默认最多并行2项，runtime的auto优先可用Podman、再选Docker，显式选择不降级。Android省略runtime时使用本机工具链；iOS需macOS/Xcode与签名。
 
-自定义 PostgreSQL、MySQL、Redis 或 pgvector 时，先选连接 URL 或分字段。URL 隐藏输入，保存后显示协议、主机和端口。S3 向导将 API `endpoint` 与 `bucket` 分开填写。字段校验失败时会指出变量及其取值要求。填写示例见[连接已有中间件](../../docs/usage/configuration/delivery.md#连接已有数据库缓存和对象存储)。
+输出在 `.hai/build/` 的独立批次目录，成功归档后更新相对 `latest`。`--json` 的stdout仅包含本次镜像构建JSON，`artifactDir` 可供后续部署使用；进度和失败写stderr。Git来源为unknown或dirty未知时不能当干净制品。[命名、签名和自动化](../../docs/usage/getting-started/build.md)
 
-Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>/config/.env.runtime`。应用配置与托管连接在此合并，修改 `HAI_STORAGE_PUBLICENDPOINT` 等细项后重启对应后端即可；同一来源的细项覆盖父 JSON。配置目录只读挂载到 `/run/hai/config`，编辑器原子替换文件也会被下一次启动读取。私有代理标记和 Node 启动参数由部署装配管理；静态 Web、中间件原生环境、端口/挂载、Nginx 路由与限额变更仍需部署。仅更新 Web/中间件保留当前应用配置；后端局部更新保留服务器托管连接，其余值来自新包，全量更新采用新包并按已有凭据状态定稿。手工修改先备份，长期配置同步回源环境。
+website静态构建在构建进程设置 `HAI_BUILD_STATIC=1` 与实际 `PUBLIC_BASE_PATH`，再执行 `pnpm build`，只发布build目录并保留.nojekyll。静态构建拒绝动态API/actions、服务端业务初始化、私密资产及链接；联系表单未接服务时只提示并保留输入。网站目录变化需要重建；API地址独立配置。[静态与子目录部署](../../docs/usage/configuration/delivery.md)
 
-每个部署包的外层 `README.txt` 和归档内 `APPLY.txt` 都包含文件索引、环境优先级、当前包的变量名和排障步骤。解包目录的 `config/.env.runtime` 是发布输入，部署根下的是当前运行配置，`releases/<ID>/` 下的是历史记录。外部 PostgreSQL 改密后更新项目源环境并发布后端。部署校验拒绝 URL 与分字段密码冲突，增量切换外部与随包中间件需要改用全量发布。
-
-容器打包时，监听地址采用 `0.0.0.0`，端口采用制品声明值（未声明时采用部署配置），并生成 `HOST`、`PORT` 和 Serv 的对应细项。本机 `.env` 中的回环地址与开发端口继续用于本地运行。修改容器端口时更新制品与部署布局后重新部署。
-
-Nginx 通过动态上游跟随应用和存储容器的 DNS 地址变化。共用的 `.hai/proxy-start.sh` 作为镜像入口钩子执行，保留镜像原有启动命令，并从容器 `/etc/resolv.conf` 读取解析器，HTTPS 时同时监视证书更新；Docker 与 Podman 均无需固定 DNS 地址。修改运行配置后重启后端，即使容器 IP 变化，代理也会自动恢复连接。
-
-镜像默认最多并行两项，`--concurrency 1` 可降低资源占用。Dockerfile 在复制源码前安装依赖；前后端仅复制各自必要源码，复用安装层和驱动缓存。运行镜像移除应用自身的声明文件、源码映射和说明文件。打包按镜像内容 ID 复用并校验中间件归档，复制应用镜像时同时计算摘要。默认交付压缩为 `.tar.gz`，显式 `--output release.tar` 可保留未压缩格式；交付目录包含 `README.txt`，归档内含手工部署说明 `APPLY.txt`。成功部署后清理本次 incoming 上传和解包目录，release 保留恢复配置和状态，镜像由容器引擎保存。
-
-数据库连接保存前使用所选后端的真实公开 Schema 校验：MySQL `ssl` 仅 `false` 或严格 TLS 对象，`{}` 默认校验证书链和 DNS 身份；PostgreSQL 保留其模式。CLI 已内联纯 Schema 和 Zod，配置校验不要求目标应用安装数据库包/驱动；实际运行应用仍需相应依赖。部署功能仍须能解析已安装的 `@h-ai/deploy`（生成工程将其作为开发依赖）。
-
-`pnpm build` 只编译源码。镜像使用 `images/` 中独立 Dockerfile，由项目根 `hai.json` 的 `build.images` 指定文件，部署参数放在同文件的 `deploy`；`--images` 决定构建哪些镜像，`--services` 决定更新哪些服务。容器引擎 auto 优先 Podman，再尝试 Docker。下载、安装和整理生产依赖共用包缓存与 SQLite 驱动缓存，避免重复下载。
-
-镜像构建只应使用可信且构建期间不会被其他主体替换的 context。CLI 在各 context 的 `images/dependencies/` 生成依赖缓存及 `.managed.json` 跟踪清单；缓存祖先目录不得是符号链接或 Windows junction，缓存文件不得是链接或多硬链接文件。更新通过独占临时文件原子替换，内容未变时保留时间戳；旧清单清理仅限该缓存树。若报缓存路径错误，按提示的原因和诊断码检查该路径，处理链接或访问权限后再重建。跟踪清单最多 16MiB，超限或 JSON 损坏时会给出诊断，且不会回显原文件内容。
-
-默认容器用于 CPU 运行或连接远程 AI 服务，不额外下载 GPU 运行库。需要使用部署机器上的 GPU 时，自行定制镜像和容器运行参数。
-
-CLI 在过滤调用者的 `HAI_/PUBLIC_/VITE_` 后，只注入内部生成的 `HAI_BUILD_ID/HAI_BUILD_COMMIT`，Docker 将同一镜像批次标识传入实际编译。生成应用的反馈分别读取前后端自己的 `appVersion/buildId/commit`，版本来自各自 manifest，同次 SSR 共用构建 ID；无所属 Git 提交时明确 `unknown`。三字段 `build-metadata.json` 与代码内联值一致，用于与 API/ZIP 实际证据核对。
-
-交付角色统一为 `serv`（独立 API 后端）、`web`（静态或 SSR 浏览器站点）、`app`（Android/iOS 手机安装包）、`desktop`（桌面安装包）。Fullstack 容器为 serv + 可选 web，API 为 serv，admin/website/h5/mobile-app 的浏览器镜像为 web；原生 app/desktop 不作为服务器 Compose 服务。`--images` 与 `--services` 使用 serv/web，`--target app` 与 `--target desktop` 生成原生包。API workspace 的服务目录为 `apps/<项目>-serv`。镜像与容器共用工程根 `package.json.name` 的归一化身份（去 scope、转小写、非法字符合并为连字符）；名称缺失或无效时报错，不回退目录名。镜像为 `localhost/hai-<项目>-<角色>:<buildId>`，容器为 `hai-<项目>-<环境>-<角色>`，镜像可跨环境复用。
+### 部署、离线交付与恢复
 
 ```sh
-pnpm build --target image
-pnpm run deploy --env prod
-pnpm run deploy --env prod --build --services web
-# 多个服务共用一个 --services，用英文逗号分隔；加引号兼容 PowerShell
-pnpm run deploy --env prod --build --services "serv,web"
-pnpm run deploy --env prod --build --bundle-only
+hai deploy --env prod --plan
+hai deploy --env prod --plan --inspect-remote
+hai deploy --env prod --build --bundle-only
+hai deploy --env prod --build --services "serv,web"
 ```
 
-自动化使用 `hai build --target image --json`。成功时 stdout 只包含本次构建的 JSON，其中 `artifactDir` 可直接传给部署；`manifest` 包含来源提交、是否有未提交改动、镜像平台和 SHA-256。进度及失败信息写到 stderr。
+plan只校验并输出计划；inspect-remote另通过SSH读取基线事实，not-inspected不表示通过。bundle-only不连接目标，输出归档、目标描述、上传/本机部署脚本和说明；归档中的APPLY.txt解释手工入口。首次安装和拓扑变化使用完整包，部分服务更新要求匹配服务器成功基线。
 
-`manifest.source.dirty` 覆盖工程、所选镜像 context 与 Dockerfile 的未忽略 Git 改动，仓库根 context 包含兄弟包；输入跨所属仓库或检查失败时为 `null`，不能解释为干净。该字段不是构建输入的内容证明。
+工程根 `package.json.name` 决定项目身份，再附加环境后缀。完整包保存当前服务组合与私有配置；服务器凭据、后端绑定账本和数据卷成套保护。失败可能恢复上一成功服务，但不撤销数据写入、迁移、通知或支付。SSH结果unknown时先只读核对远端，不能自动重复发布。[部署与恢复](../deploy/README.md)
 
-默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时报错，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar.gz`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
+HTTPS支持已有普通PEM文件或Let’s Encrypt。证书/私钥每份最多1MiB、拒绝链接；ACME需要真实域名、邮箱、条款确认和公网80端口。证书状态在服务器，启停或改变布局需全量部署。[HTTPS配置](../../docs/usage/configuration/delivery.md#可选https证书)
 
-制品格式4和5都记录 primaryService（serv/web），hasWeb 表示完整工程是否包含浏览器端；格式5另记录非根目录webBasePath。只有 serv + web 才生成同源 API 代理。格式1至3制品须重新构建。旧部署先备份并核对项目名、数据卷和受管凭据，再切换到新的完整部署基线；工具不自动跨项目迁移数据。完整部署仍会按 Compose 规则清理同项目的旧服务容器，不能仅修改 deploy-target.json.directory 完成迁移。
+### 诊断、升级预检与凭据导入
 
-迁移已有工程时，先同步 hai.json 的 build.images 名称、Dockerfile 文件名与引用；API workspace 的服务目录、包名和依赖引用统一为 -serv，并重新安装依赖。随后重新构建完整制品；不要仅改归档文件名或手工修改 manifest 冒充新构建。
+```sh
+hai feedback evidence feedback.zip --request-id request-42 --page 1 --page-size 20
+hai feedback view feedback.zip
+hai upgrade TARGET_VERSION
+```
 
-CLI 的 --project-name 与 SDK 的 DeployAppOptions.projectName 覆盖入口已移除；旧参数会明确报错，请在工程根 package.json.name 维护资源身份。
+离线包必须是普通单链接文件，最多64MiB；view仅监听loopback，使用随机访问路径。浏览器只运行框架内置查看器，不执行包内同名脚本。过滤结果不代表证据完整，继续按请求/错误编号检查上下文。
 
-自建中间件的密码由服务器 `<remoteDir>/managed-secrets.env` 持久保存（权限 0600），应与数据卷一起备份。每次打包只生成首次初始化的随机候选，不依赖打包机缓存；在线 SDK、deploy.sh、deploy.ps1 和 deploy-local.sh 都在部署锁内复用服务器值，同时更新应用连接配置及中间件原生变量。交付 tar 保持不可变，只有服务器私有运行文件使用定稿值。若状态缺失而对应数据卷已存在，部署在变更服务前明确停止，须恢复服务器凭据备份；不会自动换密或删除数据。旧版本可通过下述显式预检和凭据导入流程迁移。
+upgrade比较实际消费者的框架包、CLI/deploy制品、catalog/lock/安装状态及技能定制；不执行迁移。deploy-secrets需在Linux服务器提供Node，JSON最多64KiB且为私有普通单链接文件，默认只读；导入不恢复数据库或建立成功发布基线。[凭据输入与恢复边界](../deploy/docs/credential-import.md)
 
-Docker/Podman 部署的主机名映射按镜像配置。使用 `deploy.container.compose.services.<serv 或 web>.extra_hosts`，修改后重新打包并部署对应服务。 [配置示例](../../docs/usage/configuration/delivery.md#为容器设置主机名映射)
+### AI指引与应用体验
 
-完整包包含应用和自建中间件镜像。部署缓存、tar 与操作目录默认放在工程根 `.hai/deploy/<环境>/`；`--output` 可显式指定相对命令执行目录的 tar 路径。交互式仅打包在构建和中间件配置后、打包前最后询问是否添加或修改 SSH 信息，保存到 `.env.<环境>.local` 并用于本次和后续 target；`--yes` 或跳过时复用已有连接。交付目录仅含 tar、deploy-local.sh、read-target.awk、README.txt、带逐项说明的 `deploy-target.json` 与 Windows PowerShell 5+ `deploy.ps1`、Linux/macOS `deploy.sh`。上传前核对 target 并补齐缺项，两个脚本均读取此文件，支持 key/agent 和 password，均无需 Node/pnpm。target 只引用 `passwordEnv`（默认 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD`）；密码取自操作机环境，仅进入本次 SSH/SCP 子进程，不进入应用环境或包内。修改 target 仅影响本包，不回写工程。完全隔离的 Linux 服务器复制整个目录后运行 `sh deploy-local.sh`，自动解包部署。只复制归档时，解压后阅读 `APPLY.txt`，在同目录执行 `sh ./apply.sh`。首次部署必须完整；部分更新保留未选服务和数据卷。每步报告结果，失败返回非零并尝试恢复。前置工具、缓存、版本和恢复流程见[部署说明](../deploy/README.md)。
+生成应用的共享入口是AGENTS.md和 `.agents/skills/`；Claude/Copilot/OpenCode引用共享规范。添加模块补齐相关技能引用，已有自定义文件保留。任务按能力选择skill，公共契约以安装版本类型为准。[模板组成](templates/README.md)
 
-首次补齐 SSH 连接和认证，密码隐藏输入并保留空格与前导零；完整配置在 `--yes` 下复用。 公共配置保存在 `.env` 和 `.env.<mode>`，连接凭据与 SSH 配置保存在忽略 Git 的 `.env.<mode>.local`，`.env.local` 用于本机共享私有值。构建不读取部署秘密。 所有 `HAI_*` 统一使用：进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML。同来源 JSON 为基础，细项继续覆盖；高来源整段替换先清掉低来源细项。Node/Vite 与部署共用 Core 合并，不维护模块专用顺序。
+Fullstack提供用户/角色、审计、反馈、个人设置和主题语言界面；初始账号密码只在环境私有文件或Secret中分发，CLI不打印值。密码只创建缺失账号，不重置已有账号。原生展示名来自Core配置，文件名使用工程标识。
 
-部署失败时分别显示本地受管理进程终止确认、远端未知/脚本已完成状态和结果文件路径；本地 SSH 结束不证明远端停止。未知状态先核对服务器，CLI 不自动重跑发布或回滚。Windows 命令使用内嵌的系统 PowerShell/.NET Job，需允许 Add-Type，失败不会裸启动。
+## 配置
 
-正常前台部署及同步失败恢复收尾、发布终态后显式释放 `.deploy.lock`，后台服务继续运行不阻塞后续发布。HUP/INT/TERM 中断或父 shell 被强杀时，继承描述符的活跃子命令仍持锁，全部 holder 退出或服务器重启后才释放；锁文件永久保留，不删除或替换。
+`hai.json.build.images` 指定角色、context、Dockerfile和端口，build.sources/build.proxy控制下载，deploy控制目标。镜像与npm源分别选择official/cn/custom，代理选择inherit/system/custom/none。命令参数覆盖本次操作；详细输入和效果见[配置手册](../../docs/usage/configuration/delivery.md)。
 
-桌面安装包用 `pnpm build --target desktop --platform windows|linux|macos --arch x64|arm64`，在对应系统准备工具链并验证。容器里的 Web 页面不代替原生安装包。
+全部HAI配置来源为进程 > 模式私有 > 全局私有 > 模式公共 > 基础env > YAML。同来源先父JSON后细项；高来源父对象清除低来源细项。运行配置、密钥和SSH凭据存私有文件，构建不读取部署秘密。修改普通后端运行配置后重启；端口、挂载、网关、HTTPS或网站构建目录变化需要部署/重建。[运行配置](../../docs/usage/configuration/runtime.md)
 
-### 使用 AI 辅助开发
+镜像context必须可信且稳定。依赖输入及缓存要求普通单链接文件，缓存祖先拒绝symlink/junction；清单最多16MiB，归档按64KiB块比较/复制。文件不变保留mtime，更新原子替换；异常提示路径、原因与诊断码，不回显清单内容。
 
-生成工程根的 `AGENTS.md` 导航到 `.agents/skills/`；Claude、Copilot、OpenCode 的入口引用同一套规则。普通功能用 [应用开发](templates/skills/hai-app-create/SKILL.md)，较大文档先[审查](templates/skills/hai-spec-review/SKILL.md)再[逐项实施](templates/skills/hai-spec-implement/SKILL.md)，框架升级用[升级与同步](templates/skills/hai-framework-sync/SKILL.md)。
+pnpm工程保留适用的deepmerge/DaisyUI补丁实体及patchedDependencies注册；仅安装框架npm包不会继承仓库补丁配置。[补丁目录](../../patches/)
 
-Skill 入口保存任务边界，相邻参考按需读取。`hai init` / `hai add` 只补齐缺失内容，已有技能与自定义规则需合并；同步时复制完整目录。
+## 错误处理
 
-## 技能工作流与前端指引
-
-工作流统一使用 hai-spec-review、hai-spec-implement、hai-app-create、hai-app-tests、hai-app-review、hai-pr-review。需求、验收、发现与证据通过 [交接契约](templates/skills/hai-spec-implement/handoff.md) 连接，文档差异仍沿已有 Git 基线推进。
-
-UI 模块成套交付 [hai-ui-design](templates/skills/hai-ui-design/SKILL.md)、hai-ui 与 [hai-ui-review](templates/skills/hai-ui-review/SKILL.md)；纯 API 模板排除这些前端技能。init/add 保留已有私有入口并补齐缺失参考资源。仓库同职责技能采用同名入口。
-
-fullstack 示例按应用配置分离 `admin`、`audit_admin`、`config_admin`、`business_operator` 与基础 `user`，系统管理员不能接管其他职责账号。CLI 沿用 `.env.dev.local/.env.test.local/.env.prod.local` 的环境配置方式，为每个环境的四类账号分别生成独立随机初始密码；私有配置不提交 Git，同环境通过受保护配置共享，本机私有文件或进程变量可覆盖；已有账号不改密、不重新分配职责。`_iam.yml` 和 `_audit.yml` 按业务启用安全增强，详见生成项目 README。
-
-fullstack 的逐项开关、默认值、启用前提与使用影响见[配置化安全使用指南模板](templates/apps/fullstack/docs/security-configuration.md.hbs)；新项目会生成 `docs/security-configuration.md`，工程 README 提供入口。
-
-### 问题反馈与离线分析
-
-使用 `hai create my-app --type fullstack --frontends web` 默认启用反馈；API 工程也默认包含反馈，无需额外参数。普通成员及业务操作员可提交反馈，`business_operator` 才显示管理菜单并能查看、处理、撤销和导出；自动补齐数据库、存储、触达与认证依赖。Fullstack 生成收集入口、分页管理页和服务端接口；API 工程生成服务端接口。生产使用共享 DB 和私有 S3；通知独立选择 `disabled`、`console` 或 `reach`，默认 `console` 只输出 `metadata`。需要摘要时显式设 `consoleContent: summary`，需要实际发送时再配置 Reach 通道与收件人。
-
-业务扩展在 feedback.init(config, { collectEvidence }) 中 await 文本/ZIP 等材料；_feedback.yml 提供 businessCollectionTimeoutMs、webhookUrl/webhookSecret/webhookTimeoutMs。Webhook 独立持久重试，详情可查看状态并重试；密钥仅放服务端私有环境。见 [feedback 配置与示例](../feedback/README.md)。
-
-离线工具：`hai feedback summary <包.zip>`、`inspect`、`evidence --request-id <ID> --page 1 --page-size 20`、`view`。查看器仅本机监听，Ctrl+C 关闭，无需生产连接。
-
-## 发布预检与原生打包
-
-构建目录统一为 `build-<工程>-<目标>-YYYYMMDD-HHmmss-<随机串>-<版本>`，目标包含原生平台、Desktop 架构和 debug/release；部署保留 `bundle-<工程>-<环境>-YYYYMMDD-HHmmss-<随机串>-<版本>`。两者都使用构建机本地时间。归档安装包例如 `todo-android-debug-0.1.0.apk`、`todo-windows-x64-release-0.1.0-setup.exe`，以工程标识命名；Core `name` 控制应用显示名。`latest` 指向批次相对目录，旧制品仍可读取，详见[统一命名](../../docs/usage/getting-started/build.md#统一命名)。
-
-Capacitor 的 `appName`、Tauri 产品名和主窗口初始标题统一读取 `_core.yml` 的 `name` / `HAI_CORE_NAME`。Fullstack 从工程根读取环境文件，从 serv 读取 YAML。父级 `HAI_CORE` JSON 替换 YAML，省略 `name` 且没有生效的 `HAI_CORE_NAME` 时使用 Core 默认名。正式打包默认 `prod`，Tauri dev 默认 `dev`，进程 `HAI_CORE_ENV` 可切换模式。Desktop 使用生成的 `pnpm tauri` / `tauri:build` 入口。已有 Capacitor 平台还需同步显示名。原生配置只接收名称，详见[原生应用名称](../../docs/usage/getting-started/build.md#原生应用名称)。
-
-upgrade 按消费者路径读取 ESM-only 包及 pnpm 链接的清单，不执行包入口；递归扫描 workspace 并尊重排除规则。实际消费的 Audit 发布制品公开导出迁移函数时，报告包含 `migrateAudit({ dryRun: true })`；报告不执行迁移。部署计划的 target.runtime 来自远端配置，和本地打包引擎独立。
-
-旧目标在 Linux 服务器运行 `hai deploy-secrets <目录> --import <私有JSON> --runtime docker` 做只读认证，显式加 `--apply` 才导入。此工具要求服务器 Node，与普通离线部署的要求不同；凭据不放命令参数。输入格式、安全限制及恢复步骤见[凭据导入指南](../deploy/docs/credential-import.md)。
-
-`hai upgrade 0.1.0-alpha.71` 只读检查全部消费框架包及 CLI/deploy 的精确版本、发布 tar 完整性、CLI/skills 文件、catalog/lock/安装漂移和业务 skill 定制；不安装、不覆盖本地修改，缺包退出非零。JSON 包含模块迁移预检入口、备份与旧会话边界。`hai deploy --env prod --plan` 校验本地制品并显示项目/环境身份、配置来源键名、选中/保留范围、基线要求与恢复目录，不构建、不生成凭据或连接目标；未读取的远端基线明确 not-inspected。
-
-从工程根运行 `pnpm build --target app --platform android --runtime auto --debug` 打调试 APK，省略 `--debug` 生成签名发布包。Android 用 `--runtime auto|docker|podman` 选择容器，省略时使用本机 Capacitor；iOS 在 macOS/Xcode 上签名导出 IPA。App 与桌面安装包分别归档到 `.hai/build/app/<平台>/<构建类型>/<buildId>/` 和 `.hai/build/desktop/<平台>/<构建类型>/<buildId>/`，同类型的 `latest` 只在本次归档成功后更新。签名环境变量和完整步骤见 [原生和离线条件](../../docs/usage/getting-started/build.md#原生和离线条件)。
-
-需要目标基线事实时使用 `--plan --inspect-remote`（SDK inspectRemote:true），仅通过 SSH 读取 current 及成功发布目录，报告 verified/missing/unavailable 和实际恢复发布 ID，不写目标。
+命令失败显示安全原因、路径或步骤并以非零码退出。安装失败保留已生成文件便于重试；构建失败不更新成功latest。密钥不放命令参数或日志。计划、预检和导入回执各有明确范围，不能当部署成功。失败后按诊断修复配置、权限或前置依赖，再重试原步骤；结果未知先查事实。
 
 ## 开发测试
 
-### 开发阶段本地使用
-
-在框架仓库根执行，用当前源码生成项目。完整测试命令如下，部署门禁另需可用 Podman/Docker。
+在框架仓库使用当前源码：
 
 ```sh
-pnpm --filter @h-ai/cli build
-node packages/cli/dist/index.js create ../my-app
 pnpm --filter @h-ai/cli typecheck
 pnpm --filter @h-ai/cli lint
+pnpm --filter @h-ai/cli build
+node packages/cli/dist/index.js create ../my-app
 pnpm --filter @h-ai/cli test
 pnpm check:skills
 pnpm --filter @h-ai/cli test:scaffold-gates
-pnpm --filter @h-ai/cli test:scaffold-gates --list --json
 pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
-生成门禁保留十一个场景，逐应用类型执行真实安装、编译及 HTTP/浏览器验收。scaffold 与生成路由 runtime 两个重型文件分批顺序执行，避免实测的构建和安装资源争用；三个语言、CLI 进程和环境消费文件可与 runtime 在最多两个 worker 内并行。各场景复用 E2E 入口自带的完整构建，原有生产构建隔离检查在 E2E 后验证非空的真实产物。真实容器部署按运行形态选取 API、SSR（admin 代表 website/h5 共用的 Dockerfile 与部署分支）、静态移动前端和 fullstack；资源拥有权、认证/传输、增量更新、损坏制品与回滚验收保留。部署夹具启用 init 并验证孤儿进程实际回收；快速 Nginx 门禁用生产同版本镜像对部署包执行 `nginx -t`，普通单测不探测引擎。workspace 的 compile 通过真实依赖图构建 contract，fullstack 先准备共享 i18n，避免重复编译 contract。
-
-脚手架门禁生成真实项目，执行安装、typecheck、lint、build、test 和浏览器测试，同时覆盖生成路由的实际 HTTP 入口、CLI 进程语言选择和环境文件消费；`--generate`、`--i18n` 可分别定向复测。部署门禁覆盖实际资源拥有权、动态宿主端口隔离，以及离线包、SSH/人工发布、增量更新和回滚。只回收本轮已记录的容器 ID 和私有镜像 tag；安全元数据报告保留在 ignored `tmp/validation/module-review/VERIFY-05/`。已生成的浏览器截图、trace 和报告默认保留在 ignored `tmp/validation/module-review/scaffold-browser/` 或 `deploy-browser/`；也可显式指定证据、HTML 报告和输出目录。临时工程、密钥、数据及进程仍自动回收。原生壳和真实云服务单独验收。
-
-可选 Windows 安装包验收需准备 Rust 的 `x86_64-pc-windows-msvc` 目标和 MSVC 构建工具。设置 `HAI_CLI_NATIVE_BUILD=1` 后运行 `pnpm --filter @h-ai/cli test:scaffold-gates`，现有 fullstack 场景会构建 NSIS 安装包并核对应用根版本与产物文件名。可用 `CARGO_BUILD_JOBS=2` 限制 Rust 编译并发。原生 UI 交互与设备能力另行验收。
-
-部署夹具先检查固定公开基础镜像，仅明确缺失时拉取，可沿用 HAI_DEPLOY_E2E_MIRROR；公共缓存不进入清理账本。成功 create 后先登记容器 ID，再在其私有 PID namespace 内异步安装 APT/pip 并启动 sshd。准备失败、超时或合作式取消会等待本地客户端退出，按已登记 ID 回收并确认消失；仅重型嵌套 Podman 夹具使用特权。HAI_DEPLOY_E2E_APT_MIRROR 只接受镜像站主机名并保留 HTTPS。拥有权测试用固定公开镜像的本轮私有 tag，保留同内容外部 tag、重指向保护、动态端口和外部 sentinel 检查。create 回执丢失且未获得可信 ID、测试进程被强制终止等情况仍需记录未知状态，不能按名称或 label 认领清理。
-
-`--generate` 是定向路由门禁：复用仓库已安装依赖，实际生成、构建并访问 SvelteKit、serv API、fullstack 后端的新路由（含 transport）。它不替代上面的完整安装与浏览器矩阵。
-
-`test:e2e` 为本轮服务显式选择隔离的测试后端及绝对数据目录，服务子进程不继承外部 `HAI_*` / `PUBLIC_*` / `VITE_*` 配置或读取用户 `.env.local`。测试专用 `HAI_E2E=1` 不改变普通开发、生产 dotenv 或共享后端要求；启用 transport 的场景使用新建可信 SM2 ring 与实际 registry。样板浏览器阶段另用独立 TCP 计数进程核验外部数据库配置未被触达。完整部署验收仍保留 fullstack 的真实 Redis/S3、增量发布与回滚。
-
-带浏览器前端的 fullstack 项目使用同一份 `playwright.config.ts`。`pnpm test:e2e` 先运行默认回归，再用独立服务和数据目录运行页面离开与空闲超时测试。
-
-`--i18n` 定向门禁构建 CLI 后，在独立进程中验证语言优先级、help、生成成功与失败，并重放中英日文选择/名称校验/取消交互。
+脚手架门禁实际安装、编译并运行生成项目的测试和浏览器流程；部署门禁需Podman/Docker。`--generate` 和 `--i18n` 分别定向检查生成路由及终端语言。测试后端与用户配置隔离，夹具通过不表示实际生产数据或第三方服务验收。Windows原生门禁另需Rust/MSVC并显式设置HAI_CLI_NATIVE_BUILD=1；真实设备交互独立验证。
 
 ## 许可证
 

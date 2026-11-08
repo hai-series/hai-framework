@@ -4,7 +4,7 @@
 
 ## 简介
 
-桌面端工程，参考 `apps/desktop-app` 使用 Tauri v2 + Svelte 5 + Vite，前端通过共享 contract 调用 `{{fullstack.servPackageName}}`。
+Tauri v2 + Svelte 5 + Vite桌面工程，前端通过共享contract调用 `{{fullstack.servPackageName}}`。
 
 ## 核心功能清单
 
@@ -15,6 +15,8 @@
 ## 使用入门
 
 ### i18n 与 shared 协同
+
+先从工程根安装依赖、启动Serv并配置实际API地址，再运行tauri:dev。有效账号登录后使用相同共享管理界面；输入受权限允许的管理操作，输出与Web一致。关闭并重启原生程序后内存凭据不保留，需要重新登录；外观/语言属于服务器偏好，登录后恢复。
 
 - 本端页面文案：`messages/{locale}.json` + `project.inlang/settings.json`
 - 共享 Shell/主题/语言/API：`packages/{{fullstack.sharedPackageName}}`
@@ -46,15 +48,11 @@ pnpm build --target desktop --platform windows --arch x64
 
 加 `--debug` 生成调试安装包。成功后 CLI 打印 `.hai/build/desktop/<平台>/<构建类型>/build-{{projectName}}-desktop-<平台>-<架构>-<类型>-YYYYMMDD-HHmmss-<随机串>-<版本>/` 中的归档路径。Windows 文件名如 `{{projectName}}-windows-x64-release-<版本>-setup.exe`；使用工程标识，产品显示名仍取 Core。
 
-### IAM 认证配置
+### 认证与模块导航
 
-服务端 `config/_iam.yml` 统一控制登录、注册、重置、协议与 `ui` 品牌。邮件/短信可用 `_reach.yml` 中的 Provider/标准模板或自定义发送回调。`AuthPanel` 使用安全公开配置及框架认证动作；无需在页面适配 Token、验证码倒计时和错误提示。Memory 仅用于本地开发和显式测试；生产环境即使只有一个实例，也须使用框架支持的共享数据库与 Redis，并按工程根 README 配置写入路由和传输会话。
+认证方式、注册、密码策略、协议与品牌由Serv的 `_iam.yml` 控制。前端只接收安全公开配置，使用共享AuthPanel和加密typed client；服务端再次核验权限。LDAP、通知回调、用途证明和会话限制在服务端接入，不把私密配置复制到客户端。
 
-LDAP/Reach 均可选：基础认证无需安装。默认 LDAP 客户端需在 IAM 服务端 workspace 安装 ldapts，再配置 login.ldap 与连接信息。自定义 onOtpSendEmail/onOtpSendSms/onPasswordResetRequest 回调可独立于 Reach 使用，投递失败须拒绝 Promise；回调第三参数 context 提供 expiresAt/idempotencyKey，发送服务按稳定键持久化去重，异常/超时为结果未知且不自动重发。协议在 Modal 显示；LoginForm/RegisterForm 提供 header/extraFields/footer，AuthPanel 透传 loginHeader/loginFields/loginFooter 和 registerHeader/registerFields/registerFooter。配置及例子见生成项目的 hai-iam/hai-ui skills。
-
-协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
-
-完整契约见生成应用的 `.agents/skills/hai-iam/reference.md`。
+所有前端共用的偏好、认证存储、表单、审计与帮助行为见[共享工作区](../../packages/{{fullstack.sharedPackageName}}/README.md)，详细配置见[生成应用IAM技能](../../.agents/skills/hai-iam/reference.md)。
 
 启用反馈时使用 SDK 原生保存对话框，Tauri dialog/fs 插件只允许选择路径后写入。CSP 允许图片和视频 blob 预览、沙箱回放，脚本和网络来源限制保持明确；Web 浏览器验证不代替系统 WebView/安装包验收。
 

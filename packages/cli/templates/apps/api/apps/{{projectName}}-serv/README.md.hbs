@@ -19,10 +19,12 @@ pnpm --filter {{api.servPackageName}} dev
 pnpm --filter {{api.servPackageName}} test
 ```
 
+启动读取本服务配置并校验依赖。默认健康入口 `GET /health` 返回可达状态，`POST /api/v1/app/info` 返回公开服务信息；路径按 `_serv.yml` 调整。`app.echo` 输入 `{ message: 'hello' }`，成功输出相同message、请求编号和时间；按已装配客户端/传输协议调用，不把curl明文当启用加密后的通用调用方式。启用的认证/反馈/存储等模块按根目录及对应skill接入。
+
 ### 容器运行
 
 
-- 配置默认打包自本目录 `config/`，可在运行时只读挂载到 `/app/config`，敏感值通过环境变量注入。
+- YAML配置默认打包自本目录 `config/`，镜像内位于 `/app/config`；SDK部署的私有 `.env.runtime` 另通过 `/run/hai/config` 只读挂载并在启动时读取。修改普通运行配置后重启，端口/网关/挂载变化需重新部署。
 {{#if features.iam}}- 受控内网或 VPN 的生产 HTTP 入口可设置 `HAI_SERV_REFRESH_COOKIE_SECURE=false` 和实际 `HAI_SERV_CORS_ORIGIN`，重新部署后端后重新登录。刷新凭据会经 HTTP 明文传输。
 {{/if}}
 

@@ -14,6 +14,14 @@
 
 ### 包含内容
 
+输入输出约定由Schema共享，客户端先检查 `success` 再取 `data`：
+
+| 功能 | 输入示例 | 成功输出与边界 |
+| --- | --- | --- |
+| app.info | 无业务参数 | name/version/env/defaultLocale/uptimeMs/transportEnabled；只返回公开元信息 |
+| app.echo | `{ message: 'hello' }`，1–2000字符 | 同一message及requestId/timestamp，可含userId；演示回显，不写业务数据 |
+| 工程contract | 聚合应用与已启用模块契约 | Serv与typed client使用同一输入/输出类型；声明不替代服务端授权 |
+
 - `app-contract.ts`：应用级接口定义，业务 path 与一次性输出 Schema 就近内联
 - `app-schemas.ts`：跨接口、跨层复用的输入/数据 Zod Schema
 - `{{projectName}}-contract.ts`：工程级 contract 聚合入口

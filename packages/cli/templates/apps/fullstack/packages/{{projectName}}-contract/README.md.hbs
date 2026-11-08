@@ -14,6 +14,13 @@
 
 ### 骨架说明
 
+| 功能 | 输入示例 | 成功输出与边界 |
+| --- | --- | --- |
+| app.info | 无业务参数 | notice、名称/版本/环境、语言、启动时间及frontends；只返回公开元信息 |
+| app.echo | `{ message: 'hello' }`，1–200字符 | 相同message、echoedAt、requestId；演示回显，不持久化 |
+| admin契约 | 用户、角色、审计、公告或个人设置操作参数 | 受当前身份/权限与资源范围约束的HaiResult；先检查success再读data |
+| 工程聚合 | app/admin及框架模块contract | Serv和所有前端共用类型，契约声明不会自动授予权限 |
+
 - `src/app-schemas.ts`：跨接口、跨层复用的输入/数据 Schema 与类型。
 - `src/app-contract.ts`：app 领域 contract；每个业务 path 直接写在对应接口定义中。
 - `src/admin-schemas.ts` / `src/admin-contract.ts`：示例管理员用户、系统/审计/配置/业务操作员及基础成员角色、账号生命周期、邀请、用户列表服务端排序、审计分类/列头排序/统计/备份、业务公告和个人设置、加密 JSON 头像上传 Schema/类型/路由；认证复用框架的 IAM auth contract，通过服务端配置启用注册、密码/LDAP/验证码登录及密码重置。
@@ -22,11 +29,6 @@
 只使用一次的输出 Schema 直接内联到 `.output(...)`；同一 contract 文件内重复使用时才保留私有常量。
 API 前缀、健康检查与跨端 Header 等传输配置位于 serv 包的 `config/_serv.yml`。
 `SUPPORTED_LOCALES` 为生成时实际编译的语言列表；`app.info` 中名称、版本、环境、默认语言来自后端 core 配置。更新公开契约时同时更新 serv、shared typed API client、各端 UI 与测试。
-
-### 开发
-
-- `pnpm --filter {{fullstack.contractPackageName}} typecheck`
-- `pnpm --filter {{fullstack.contractPackageName}} test`
 
 ## 开发测试
 

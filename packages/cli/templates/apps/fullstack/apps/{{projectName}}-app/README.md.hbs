@@ -20,6 +20,8 @@ App/H5 前端工程，复用 shared 的响应式 mini 后台，使用 Svelte 5 +
 
 ### i18n 与 shared 协同
 
+先从工程根安装依赖并启动Serv。浏览器预览输入有效账号应进入共享界面，原生包还要配置设备真实可达API。上传头像的输入为允许类型且不超过512KiB的图片，输出为服务端生成资源标识和展示结果；不把本机任意路径当上传key。主题/语言改变后应在重新登录时恢复。
+
 - 本端页面文案：`messages/{locale}.json` + `project.inlang/settings.json`
 - 共享 Shell/主题/语言/API：`packages/{{fullstack.sharedPackageName}}`
 - 语言切换通过 shared runtime 与本端 `src/lib/paraglide/runtime.js` 同步。
@@ -49,15 +51,11 @@ pnpm build --target app --platform ios
 
 Android 容器会安装依赖、编译 workspace 并打包。调试时可临时生成缺失的 Android 工程。发布时使用已有 Android 工程和私有签名配置，见 [Android 容器打包](../../.agents/skills/hai-capacitor/reference.md#android-容器打包)。iOS 使用 macOS/Xcode 和相应签名。`CAPACITOR_SERVER_URL` 仅供开发热更新。成功后 CLI 打印 `.hai/build/app/<平台>/<构建类型>/build-{{projectName}}-app-<平台>-<类型>-YYYYMMDD-HHmmss-<随机串>-<版本>/` 中的安装包路径；APK 如 `{{projectName}}-android-debug-<版本>.apk`，使用工程标识，显示名仍取 Core。
 
-### IAM 认证配置
+### 认证与模块导航
 
-服务端 `config/_iam.yml` 统一控制登录、注册、重置、协议与 `ui` 品牌。邮件/短信可用 `_reach.yml` 中的 Provider/标准模板或自定义发送回调。`AuthPanel` 使用安全公开配置及框架认证动作；无需在页面适配 Token、验证码倒计时和错误提示。Memory 仅用于本地开发和显式测试；生产环境即使只有一个实例，也须使用框架支持的共享数据库与 Redis，并按工程根 README 配置写入路由和传输会话。
+认证方式、注册、密码策略、协议与品牌由Serv的 `_iam.yml` 控制。前端只接收安全公开配置，使用共享AuthPanel和加密typed client；服务端再次核验权限。LDAP、通知回调、用途证明和会话限制在服务端接入，不把私密配置复制到客户端。
 
-LDAP/Reach 均可选：基础认证无需安装。默认 LDAP 客户端需在 IAM 服务端 workspace 安装 ldapts，再配置 login.ldap 与连接信息。自定义 onOtpSendEmail/onOtpSendSms/onPasswordResetRequest 回调可独立于 Reach 使用，投递失败须拒绝 Promise；回调第三参数 context 提供 expiresAt/idempotencyKey，发送服务按稳定键持久化去重，异常/超时为结果未知且不自动重发。协议在 Modal 显示；LoginForm/RegisterForm 提供 header/extraFields/footer，AuthPanel 透传 loginHeader/loginFields/loginFooter 和 registerHeader/registerFields/registerFooter。配置及例子见生成项目的 hai-iam/hai-ui skills。
-
-协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
-
-完整契约见生成应用的 `.agents/skills/hai-iam/reference.md`。
+所有前端共用的偏好、认证存储、表单、审计与帮助行为见[共享工作区](../../packages/{{fullstack.sharedPackageName}}/README.md)，详细配置见[生成应用IAM技能](../../.agents/skills/hai-iam/reference.md)。
 
 启用反馈时，shared SDK 负责图片预览/比例标注/导出轮询；原生保存使用 Filesystem 缓存与 Share，完成/取消清理临时文件。首次添加 iOS 平台后按 Filesystem 插件要求配置 PrivacyInfo.xcprivacy。
 

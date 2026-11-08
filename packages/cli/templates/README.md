@@ -1,65 +1,70 @@
 # CLI 项目模板
 
-## 简介
+本目录供 `hai create/add/init` 组合应用源码、配置、脚本和AI指引；维护者在这里修改生成源，接入应用使用生成后的工程。模板不承担应用自身的业务授权和数据恢复。
 
-这里保存 `hai create` 生成应用时使用的源码、配置和 AI 指引。维护模板后，需要生成真实项目验证，不能只检查模板文件本身。
+## 快速开始
 
-## 核心功能清单
+在框架根构建CLI，再生成独立工程检查模板效果：
 
-- `admin`、`website`、`h5`：SvelteKit 应用。
-- `api`：共享 contract 与 API service 的 workspace。
-- `mobile-app`：Svelte + Vite + Capacitor 应用。
-- `fullstack`：contract、API、共享界面，以及按需选择的 Web/App/Desktop；miniapp 仅预留说明。
-- 后台工作区随窗口扩展；手机壳支持宽屏，表格在内部滚动，文章与认证表单保留阅读宽度。
-- 默认部署工具、独立镜像 Dockerfile、环境示例和可复制的 AI 技能。
+```sh
+pnpm --filter @h-ai/cli build
+node packages/cli/dist/index.js create ../template-probe --type website --defaults --no-install --no-git
+```
 
-## 使用入门
+输入模板种类与工程名，输出新目录中的源码、README、配置、Dockerfile及适用技能。随后在该工程安装并验证；仅检查 `.hbs` 语法不能证明生成结果能运行。
+
+## 功能
 
 ### 文件如何组合
 
-| 目录           | 用途                                                                |
-| -------------- | ------------------------------------------------------------------- |
-| `base/`        | 普通应用共用的配置、脚本和入口                                      |
-| `apps/<类型>/` | 应用专属页面、workspace、原生壳与配置；API/fullstack 维护自己的骨架 |
-| `features/`    | 按所选模块叠加的路由和页面                                          |
-| `i18n/`        | Paraglide 工程配置                                                  |
-| `skills/`      | 完整的技能目录与各类型 AI 入口                                      |
+| 目录                | 场景、输入与输出                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| base/               | 普通应用共享基础；输入渲染上下文，输出配置、脚本和入口                                |
+| apps/               | 按admin/website/h5/api/mobile-app/fullstack选择骨架；API/fullstack有独立workspace结构 |
+| features/           | 叠加实际模块所需路由与页面；不把Serv套成SvelteKit文件路由                             |
+| i18n/               | 生成Paraglide工程与应用消息；默认中英日文                                             |
+| shared/             | 原生显示名、Tauri入口及跨模板文件约定，避免各模板复制不同规则                         |
+| skills/ 与 bridges/ | 输出完整 `.agents/skills/` 及根AGENTS入口，工具配置只桥接共享规则                     |
 
-普通文件直接复制，`.hbs` 经 Handlebars 渲染并去掉后缀。`cli-template-engine.ts` 决定适用目录与条件；`cli-create.ts` 完成配置、镜像定义和根 README 等生成工作。修改前先查实际调用路径，API/fullstack 不套用 SvelteKit 文件路由。
+普通文件复制，`.hbs` 由Handlebars渲染并去后缀。`cli-template-engine.ts` 选择目录/条件，`cli-create.ts` 编排配置、镜像与README生成。例如website输出Core/Kit/UI展示站，fullstack输出contract、Serv、共享UI及所选Web/App/Desktop；miniapp仅为预留说明。
 
-### 配置与构建
+### 生成上下文与配置
 
-产物名称使用工程标识，批次统一为 `build-<工程>-<目标>-YYYYMMDD-HHmmss-<随机串>-<版本>`，安装包补齐平台、Desktop 架构和 debug/release。时间与 deploy 共用本地日历格式；`latest` 指向相对批次目录，不能把它当成清单里的短 `buildId`。生成 README 和 AI 指引需与[统一命名](../../../docs/usage/getting-started/build.md#统一命名)保持一致。
+上下文含 `projectName/appType/features/hasUi/hasI18n/versions` 和 `api/fullstack` 形状，定义见[CLI类型](../src/cli-types.ts)。模块YAML使用 `moduleConfig` helper，字段和默认值由[配置生成器](../src/commands/cli-config-templates.ts)共同维护。
 
-原生名称通过 `shared/native-name.mjs` 复用 Core 配置与 dotenv 规则：Capacitor 读取 `appName`，Desktop 的 `shared/run-tauri.mjs` 向 Tauri 传入产品名和主窗口标题覆盖。独立 mobile 读取自身 `_core.yml`，Fullstack 读取 serv 的 `_core.yml`；只投影名称，不将完整配置交给原生工具。Desktop 的脚本和工程根 Core 开发依赖需一起生成，名称规则见[构建指南](../../../docs/usage/getting-started/build.md#原生应用名称)。
+输入启用模块后，输出对应依赖、有效配置及公共环境默认；未使用模块保留注释示例。新功能仍须接入校验、初始化、关闭和业务路由，不能仅取消YAML注释。`hai add/init` 补缺失项并保留自定义文件。
 
-Desktop 名称覆盖保留当前平台 JSON 的窗口数组与删除设置，优先更新 main 标签窗口；辅助窗口标题和调用方后续显式 `--config` 保持原有优先级。
+### 构建、原生名称与部署
 
-构建阶段的 pnpm fetch/install 固定追加式日志，避免 PowerShell 中动态进度刷新错位；CLI 同时规范 Windows 转发输出的换行并保留警告与错误。
+部署工具默认是开发依赖，`--no-deploy` 可省略。`hai.json.build.images` 指向images内独立Dockerfile，Web资源在images/web。构建器生成images/dependencies，根gitignore忽略该缓存、运行数据和私有环境。
 
-Dockerfile 用全局 `HAI_NODE_IMAGE` / `HAI_NGINX_IMAGE` 接收镜像源，用构建阶段 `HAI_NPM_REGISTRY` 同时控制 Corepack 和 pnpm 下载。代理仅使用预定义构建参数，首个下载步骤检查容器内可达性；运行阶段不保存代理。CLI 的 `--image-source` / `--npm-source` 和 `--proxy-mode` 以 `hai.json.build.sources` / `build.proxy` 保存项目默认，具体契约见[下载源与代理](skills/hai-build/reference.md#下载源与代理)。
+Dockerfile使用全局HAI_NODE_IMAGE/HAI_NGINX_IMAGE及构建阶段HAI_NPM_REGISTRY接收下载设置，代理只用于构建，不进入运行镜像。pnpm下载采用追加日志，Windows转发保留警告、错误和统一换行。[下载源契约](skills/hai-build/reference.md#下载源与代理)
 
-模板通过 `projectName`、`appType`、`features`、`hasUi`、`hasI18n`、`versions` 以及 `api`/`fullstack` 上下文渲染，完整字段见 [cli-types.ts](../src/cli-types.ts)。模块 YAML 使用 `moduleConfig` helper，与 [配置生成器](../src/commands/cli-config-templates.ts) 共用字段和默认值。
+产物使用工程标识，批次名为 `build-<工程>-<目标>-YYYYMMDD-HHmmss-<随机串>-<版本>`，latest保存相对批次名。输入一个Core展示名后，Capacitor的appName和Tauri产品/主窗口名使用该值；Fullstack读取Serv的Core，独立mobile读取自身Core。只投影名称，不下发完整配置。辅助窗口及后续显式Tauri配置保持自身优先级。[名称与构建](../../../docs/usage/getting-started/build.md#原生应用名称)
 
-部署默认启用，`--no-deploy` 可关闭；SDK 是开发依赖。每个镜像使用 `images/` 中独立 Dockerfile，Web 资源放 `images/web/`。`hai.json` 的 `build.images` 选择文件，`deploy` 保存项目级部署参数；依赖输入由构建器生成到 `images/dependencies/`。所有根 `.gitignore` 均忽略 `**/images/dependencies/`、运行数据和私有环境文件。
+### 服务端边界与页面
 
-Fullstack 服务端保留各模块的配置示例，未使用模块保持注释。安装依赖、校验和初始化、接入业务后才启用对应配置。修改公开 Schema 时同步配置生成器、环境变量说明、调用方与技能。
+SvelteKit服务端固定加载Kit配置，根load只投影公开transport。选择crypto后，hooks从私有环境装配密钥环和registry；共享DB用于共享registry，内存仅开发/测试。纯客户端不生成服务端私钥。输入冲突路径策略或缺少required加密依赖时，创建宿主应失败。
 
-SvelteKit 的 `kit-config.ts` 在服务端读取并固定 `_kit.yml`，根 load 只投影公开 transport；选择 crypto 后，hooks 装配环境密钥环和 registry，布局安装浏览器传输。db 提供共享 registry，无 db 仅限开发/测试。路径规则可配置 IP、时段与 required/disabled 加密，规则冲突须在装配时失败。调整时同步三种 SSR 布局、服务端入口、私钥生成边界和实际生成工程的根/子目录门禁；纯客户端工程不生成服务端私钥。
+页面文字走应用messages，认证复用AuthPanel及公开IAM配置，表单使用Form/FormLayout/FormField。输入无效表单时保留草稿、显示安全Toast和可访问错误关联；默认角色、流程和限额由业务决定，并在服务端授权。宽屏工作区可扩展，窄屏表格内部滚动，阅读内容保留合适宽度。
 
-### AI 指引
+### AI指引
 
-`skills/hai-*` 的完整目录复制到生成应用 `.agents/skills/`，按应用架构排除不适用项。`bridges/<类型>/AGENTS.md` 提供根入口；Claude/Copilot/OpenCode 配置只引用共享规则。新增参考文件必须随 skill 一起复制，不能链接回框架私有路径。
+复制skill完整目录及其相对参考文件，并按应用架构排除不适用能力；引用不得回到框架私有目录。输入website或fullstack两种架构时，输出应各自形成可独立使用的引用闭包。Claude/Copilot/OpenCode仅引用AGENTS和共享规范，不复制长正文。调整公共契约时同步实现、配置、示例、调用方与skills。
 
-`hai add` / `hai init` 补齐缺失文件，保留应用已有的自定义内容。框架升级时按目标发布版本比较并合并，不直接覆盖应用规则。
+## 配置
 
-### 页面与文案
+模板参数在生成阶段消费，生成应用通过自身 `config/`、环境与宿主参数配置运行。环境公共值与私有秘密分开，版本固定到CLI对应框架发布；pnpm补丁注册必须连同实际patch文件复制。[应用配置手册](../../../docs/usage/configuration/README.md)
 
-用户可见文本加入对应 messages。认证复用 AuthPanel 与服务端公开 IAM 配置；表单复用 Form/FormLayout/FormField。业务规则由应用需求决定，模板默认角色、流程和限额可调整，修改时同步授权、界面、测试和文档。
+维护 `shared/.gitattributes`，使Dockerfile、dockerignore和POSIX脚本输出LF。原生工程名、API公开地址、网站basepath与服务器私密配置职责独立，不将完整服务端配置投影到浏览器或原生打包工具。
+
+## 错误处理
+
+模板渲染失败应指出文件/步骤并停止，不以部分产物当成功。生成后的校验或构建失败回到所属模板修复，不能只手工修一份测试工程。私钥、凭据和完整用户数据不进入错误正文。缺失依赖、非法路径、引用不完整和不支持的架构组合要明确拒绝。
 
 ## 开发测试
 
-维护模板时保留 `shared/.gitattributes`，让生成工程的 `.dockerignore`、Dockerfile 和 POSIX 脚本统一使用 LF，保持跨平台输入一致并确保 Linux 脚本可运行。在仓库根执行：
+在仓库根按实际影响选择：
 
 ```sh
 pnpm --filter @h-ai/cli typecheck
@@ -71,7 +76,7 @@ pnpm --filter @h-ai/cli test:scaffold-gates
 pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
-脚手架门禁会生成项目并执行安装、类型检查、lint、构建、测试和浏览器流程。部署门禁另需可用 Podman/Docker，验证镜像构建、隔离服务器上的 SSH/人工部署与部分更新。原生安装包和真实第三方服务需要各自的验收环境。
+脚手架门禁真实安装、类型/lint、构建、测试和浏览器流程；部署门禁需可用Podman/Docker，并验证实际镜像、SSH/手工适用及部分更新。原生设备和第三方线上服务另需对应环境。仅文案改动不代表重跑过所有运行场景。
 
 ## 许可证
 
