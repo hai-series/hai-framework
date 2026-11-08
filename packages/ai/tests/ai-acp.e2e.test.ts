@@ -882,7 +882,8 @@ describe('aCP managed session E2E', () => {
     // 注册远端始终由工作区契约决定；在真实远端拒绝创建分支来模拟部分失败。
     await git(web.remote, ['config', 'receive.denyCurrentBranch', 'refuse'])
     await git(web.remote, ['config', 'receive.denyNonFastForwards', 'true'])
-    await writeFile(join(web.remote, 'hooks/pre-receive'), '#!/bin/sh\nexit 1\n')
+    // Git 在 POSIX 上忽略不可执行的 hook；夹具必须真实拒绝推送，而非依赖平台默认权限。
+    await writeFile(join(web.remote, 'hooks/pre-receive'), '#!/bin/sh\nexit 1\n', { mode: 0o700 })
     const result = await session.publish({
       mode: 'push-branch',
       message: 'partial',

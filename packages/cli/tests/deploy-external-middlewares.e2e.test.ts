@@ -200,7 +200,7 @@ afterEach(async () => {
   mocked.prompt.mockReset()
 }, 45_000)
 
-describe.runIf(enabled).sequential('真实外部中间件配置', () => {
+describe.runIf(enabled)('真实外部中间件配置', { concurrent: false }, () => {
   it.each(['postgresql', 'mysql'] as const)('%s 保存完整连接选项并完成读写和事务', async (type) => {
     const password = randomBytes(24).toString('hex')
     const postgres = type === 'postgresql'

@@ -9,7 +9,9 @@ const { createOrder, mount } = vi.hoisted(() => ({
 vi.mock('@h-ai/payment', () => ({
   payment: { createOrder },
 }))
-vi.mock('$app/paths', () => mount)
+vi.mock('$app/paths', () => ({
+  resolve: (route: string) => `${mount.base}${route}`,
+}))
 
 const valid = {
   provider: 'wechat',
@@ -72,16 +74,19 @@ describe('payment template trade validation', () => {
 
   it('默认支付回调包含SvelteKit目录，显式回调地址保持不变', async () => {
     mount.base = '/portal'
-    await POST(event(valid))
+    // paths.base 属于构建配置；用新模块实例模拟不同挂载目录。
+    vi.resetModules()
+    const { POST: mountedPost } = await import('../../cli/templates/features/payment/routes/api/v1/payment/create/+server')
+    await mountedPost(event(valid))
     expect(createOrder.mock.calls[0][1].notifyUrl).toBe('https://shop.example/portal/api/v1/payment/notify/wechat')
-    await POST(event({ ...valid, notifyUrl: 'https://notify.example/payments' }))
+    await mountedPost(event({ ...valid, notifyUrl: 'https://notify.example/payments' }))
     expect(createOrder.mock.calls[1][1].notifyUrl).toBe('https://notify.example/payments')
   })
 
   it('支付宝 h5 不改变模式，调用失败按 HaiResult 返回', async () => {
     createOrder.mockResolvedValueOnce({
       success: false,
-      error: { code: 'hai:payment:042', message: 'Invalid input' },
+      error: { code: 'hai:payment:042', message: 'Invalid input', httpStatus: 400 },
     })
     const response = await POST(event({ ...valid, provider: 'alipay', tradeType: 'h5' }))
     expect(createOrder.mock.calls[0][1].tradeType).toBe('h5')

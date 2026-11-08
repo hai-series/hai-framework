@@ -690,7 +690,7 @@ describe('admin 应用类型生成', () => {
       expect(content).toContain('AuthPanel')
       expect(content).toContain('page.data.iamPublicConfig')
       // eslint-disable-next-line no-template-curly-in-string -- 静态核对生成代码，插值必须保留到目标应用执行。
-      expect(content).toContain('kit.client.createAuthActions({ basePath: `${resolve(\'\').replace(/\\/$/, \'\')}/api/auth` })')
+      expect(content).toContain('kit.client.createAuthActions({ basePath: `${resolve(\'/\').replace(/\\/$/, \'\')}/api/auth` })')
       expect(content).not.toContain('>登录<')
     })
 
@@ -1042,7 +1042,7 @@ describe('feature 叠加', () => {
     const login = await readGenerated(projectPath, 'src/routes/(auth)/auth/login/+page.svelte')
     expect(login).toContain('AuthPanel')
     // eslint-disable-next-line no-template-curly-in-string -- 静态核对生成代码，插值必须保留到目标应用执行。
-    expect(login).toContain('kit.client.createAuthActions({ basePath: `${resolve(\'\').replace(/\\/$/, \'\')}/api/auth` })')
+    expect(login).toContain('kit.client.createAuthActions({ basePath: `${resolve(\'/\').replace(/\\/$/, \'\')}/api/auth` })')
 
     const register = await readGenerated(projectPath, 'src/routes/(auth)/auth/register/+page.svelte')
     expect(register).toContain('AuthPanel')

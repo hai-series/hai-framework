@@ -15,7 +15,7 @@ import { stringify } from 'yaml'
 
 const enabled = process.env.HAI_DEPLOY_E2E === '1'
 
-describe.skipIf(!enabled).sequential('私有 S3 公开下载网关', () => {
+describe.skipIf(!enabled)('私有 S3 公开下载网关', { concurrent: false }, () => {
   it.each(['minio', 'rustfs'] as const)('%s：全栈、API、SvelteKit 的大文件/Range/上传签名通过 Nginx 直达存储', async (engine) => {
     const root = mkdtempSync(path.join(tmpdir(), 'hai-storage-proxy-'))
     const startedAt = new Date().toISOString()

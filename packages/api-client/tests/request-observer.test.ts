@@ -23,7 +23,7 @@ describe('logical request observations', () => {
         requestId = new Request(input).headers.get('x-request-id')
         return Response.json({
           success: false,
-          error: { code: 'app:denied', message: 'Denied' },
+          error: { code: 'app:denied', message: 'Denied', httpStatus: 403 },
         })
       },
     })).success).toBe(true)

@@ -122,16 +122,16 @@ function expectNonWorkspaceDepsUseCatalog(pkg: {
 }
 
 function expectHaiCatalogEntries(workspaceYaml: string, packageNames: readonly string[]) {
-  expect(workspaceYaml).toContain('catalog:')
+  const workspace = parse(workspaceYaml) as { catalog?: Record<string, string> }
   for (const packageName of packageNames) {
-    expect(workspaceYaml).toContain(`'${packageName}': ${HAI_DEP_VERSION}`)
+    expect(workspace.catalog?.[packageName]).toBe(HAI_DEP_VERSION)
   }
 }
 
 function expectCatalogPackageNames(workspaceYaml: string, packageNames: readonly string[]) {
-  expect(workspaceYaml).toContain('catalog:')
+  const workspace = parse(workspaceYaml) as { catalog?: Record<string, string> }
   for (const packageName of packageNames) {
-    expect(workspaceYaml).toContain(`'${packageName}':`)
+    expect(workspace.catalog?.[packageName]).toEqual(expect.any(String))
   }
 }
 
@@ -570,7 +570,7 @@ describe('createProject — admin 类型 + iam', () => {
     expect(content).toContain('AuthPanel')
     expect(content).toContain('page.data.iamPublicConfig')
     // eslint-disable-next-line no-template-curly-in-string -- 静态核对生成代码，插值必须保留到目标应用执行。
-    expect(content).toContain('kit.client.createAuthActions({ basePath: `${resolve(\'\').replace(/\\/$/, \'\')}/api/auth` })')
+    expect(content).toContain('kit.client.createAuthActions({ basePath: `${resolve(\'/\').replace(/\\/$/, \'\')}/api/auth` })')
   })
 
   it('iam API 路由存在', async () => {
@@ -860,10 +860,14 @@ describe('createProject — mobile-app 类型', () => {
     expect(pkg.dependencies.zod).toBeUndefined()
     expect(pkg.devDependencies['@sveltejs/kit']).toBeUndefined()
     expect(pkg.devDependencies['@sveltejs/adapter-static']).toBeUndefined()
-    expect(pkg.devDependencies['@capacitor/app']).toBe('8.1.2')
-    expect(pkg.devDependencies['@capacitor/camera']).toBe('8.2.5')
-    expect(pkg.devDependencies['@capacitor/device']).toBe('8.0.3')
-    expect(pkg.devDependencies['@capacitor/push-notifications']).toBe('8.1.3')
+    const sourceWorkspace = parse(await readText(path.resolve(import.meta.dirname, '../../..'), 'pnpm-workspace.yaml')) as { catalog: Record<string, string> }
+    for (const dependency of [
+      '@capacitor/app',
+      '@capacitor/camera',
+      '@capacitor/device',
+      '@capacitor/push-notifications',
+    ])
+      expect(pkg.devDependencies[dependency]).toBe(sourceWorkspace.catalog[dependency]?.replace(/^[~^]/, ''))
     expect(pkg.scripts.typecheck).not.toContain('svelte-kit sync')
     expect(pkg.scripts.compile).toContain('pnpm paraglide:compile')
 
