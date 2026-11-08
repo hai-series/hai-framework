@@ -3,7 +3,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { DeploymentEnvironment } from './deploy-environment.js'
 import type { MiddlewareBackend, MiddlewareField } from './deploy-middleware.js'
 import type { MiddlewareRequirement } from './deploy-types.js'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { core, err, ok } from '@h-ai/core'
 import { MysqlSslConfigSchema, ReldbConfigSchema, SslConfigSchema } from '@h-ai/reldb/schemas'
@@ -11,6 +11,7 @@ import { LineCounter, parseDocument } from 'yaml'
 import configurationShapes from './deploy-config-shapes.json' with { type: 'json' }
 import { saveDeploymentEnvironment } from './deploy-environment.js'
 import { deployM } from './deploy-i18n.js'
+import { readLocalFile, writeLocalFile } from './deploy-local-file.js'
 import { HaiDeployError } from './deploy-types.js'
 
 /**
@@ -32,7 +33,7 @@ export function canKeepMiddleware(requirement: MiddlewareRequirement, backend: M
     if (existsSync(privatePath)) {
       targetValues = core.config.mergeEnv([
         targetValues,
-        core.config.parseEnv(readFileSync(privatePath, 'utf8')),
+        core.config.parseEnv(readLocalFile(privatePath).toString('utf8')),
       ])
     }
   }
@@ -262,7 +263,7 @@ export function saveMiddlewareEnvironment(environment: DeploymentEnvironment, op
     const path = join(directory, `_${requirement.configName}.yml`)
     const lineCounter = new LineCounter()
     const document = parseDocument(existsSync(path)
-      ? readFileSync(path, 'utf8')
+      ? readLocalFile(path).toString('utf8')
       : '{}\n', { lineCounter, prettyErrors: false })
     if (document.errors.length) {
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', {
@@ -281,8 +282,8 @@ export function saveMiddlewareEnvironment(environment: DeploymentEnvironment, op
     if (requirement.service === 'ldap' && !document.hasIn(['login', 'ldap']))
       document.setIn(['login', 'ldap'], false)
     const content = document.toString()
-    if (!existsSync(path) || readFileSync(path, 'utf8') !== content)
-      writeFileSync(path, content)
+    if (!existsSync(path) || readLocalFile(path).toString('utf8') !== content)
+      writeLocalFile(path, content)
     // 禁用只切换功能开关；保留已有连接与凭据，确保 YAML 节点仍可解析并允许重新启用。
     return saveDeploymentEnvironment(environment, updates, {
       replace: options.configuration && backend !== 'disabled'

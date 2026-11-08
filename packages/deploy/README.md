@@ -242,6 +242,8 @@ SDK 在服务器本地健康通过并提交 `current` 后，还从操作机检�
 
 `pnpm run deploy` 为所有容器模板统一提供“不启用 / 已有 PEM 证书和私钥路径 / Let’s Encrypt”。相对路径以工程根为基准，已有证书校验域名、有效期和密钥匹配后复制到私有发布包。Let’s Encrypt 使用固定版本官方 Certbot 镜像申请，每 12 小时检查续期，Nginx 自动重载。需要确认服务条款、真实邮箱、公网 DNS、80 端口和 CA 网络；隔离环境使用已有证书。证书状态保留在服务器，私钥不进入应用镜像。`--yes` 复用保存配置。
 
+只接受末级无软链接或硬链接的普通 PEM 文件，每份不超过 1 MiB；父目录仍须可信。Certbot `live/` 的软链接需安全复制为受控目录中的普通文件，或使用框架 `letsencrypt` 模式。
+
 配置为 `hai.json.deploy.provider.expose.https`，也可用环境私有文件覆盖。默认 HTTPS 443、HTTP 跳转开启，未配置保持 HTTP；启停或更改模式、域名、端口、本地证书需全量部署。配置和续期边界见[HTTPS 手册](../../docs/usage/configuration/delivery.md#可选https证书)。`--plan` 的 `root` 表示工程根，`serviceDir` 表示部署服务源码与配置目录，仅显示公开证书元数据。
 
 ### SDK

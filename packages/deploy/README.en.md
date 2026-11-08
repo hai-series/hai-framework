@@ -219,6 +219,8 @@ Image builds run at most two images concurrently by default; use `--concurrency 
 
 `pnpm run deploy` offers no HTTPS, existing PEM certificate/key paths, or Let’s Encrypt for every container template. Relative paths resolve from the project root. Certificates are checked for domain, validity and key matching, then copied into private releases. A pinned official Certbot image handles issuance and renewal checks every 12 hours, with automatic Nginx reload. It requires terms acceptance, a real email, public DNS, port 80 and CA connectivity. Isolated servers use existing certificates. Certificate state stays on the server; keys stay out of application images. `--yes` reuses saved settings.
 
+Supply regular PEM files of at most 1 MiB each; final-component symbolic links and hard links are rejected, and parent directories must remain trusted. Securely copy Certbot `live/` symlink targets to regular files in a controlled directory, or use the framework `letsencrypt` mode.
+
 Configure `hai.json.deploy.provider.expose.https` or private environment overrides. Defaults are HTTPS 443 and HTTP redirection; omission retains HTTP. Enabling/disabling HTTPS or changing mode, domain, ports or supplied certificates requires a full deployment. See the [HTTPS guide](../../docs/usage/configuration/delivery.md#可选https证书). Plans use `root` for the project and `serviceDir` for the service source/configuration directory, exposing only public certificate metadata.
 
 ### SDK

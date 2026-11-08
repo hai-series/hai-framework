@@ -1,10 +1,10 @@
 /** HTTPS 的证书交付、Nginx 入口和 Certbot 生命周期；所有应用类型共用。 */
 import type { DockerSshProviderConfig } from '../deploy-config.js'
 import { createPrivateKey, createPublicKey, X509Certificate } from 'node:crypto'
-import { readFileSync, statSync } from 'node:fs'
 import { isIP } from 'node:net'
 import { resolve } from 'node:path'
 import { deployM } from '../deploy-i18n.js'
+import { readLocalFile } from '../deploy-local-file.js'
 import { shellArgument } from './deploy-shell.js'
 
 /**
@@ -43,9 +43,7 @@ export function createHttpsAssets(config: HttpsConfig, projectDirectory: string)
     try {
       const readPem = (file: string): string => {
         const path = resolve(projectDirectory, file)
-        if (!statSync(path).isFile() || statSync(path).size > 1048576)
-          throw new Error('Invalid PEM file')
-        return readFileSync(path, 'utf8')
+        return readLocalFile(path, { maxBytes: 1048576 }).toString('utf8')
       }
       const certificate = readPem(config.certificateFile)
       const key = readPem(config.privateKeyFile)

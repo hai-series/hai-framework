@@ -494,6 +494,8 @@ docker exec hai-orders-prod-serv node -e 'require("node:dns").lookup("db.intrane
 
 相对路径以工程根为基准。打包校验证书域名、有效期和私钥匹配，并将证书与私钥复制到私有发布包，只读挂载给 Nginx。模板构建上下文排除证书和私钥，运行镜像不含它们。证书源文件变化后生成新的全量发布，不修改旧包或旧发布快照。使用私有 CA 时，访问客户端也须信任该 CA。
 
+提供末级无软链接或硬链接的普通 PEM 文件，每份最多 1 MiB；父目录仍须可信。Certbot `live/` 的软链需安全复制为受控目录中的普通文件，或使用下述框架 `letsencrypt` 模式。
+
 Let’s Encrypt 使用同一配置位置：
 
 ```json schema=@h-ai/deploy:DeployConfigSchema

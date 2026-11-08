@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { linkSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseEnv } from 'node:util'
@@ -17,6 +17,20 @@ function fixture(): string {
   roots.push(root)
   return root
 }
+
+it('拒绝通过既有硬链接把私密部署值写入其他文件', () => {
+  const root = fixture()
+  const loaded = loadDeploymentEnvironment({ environment: 'test', envDir: root, requireFile: false })
+  expect(loaded.success).toBe(true)
+  if (!loaded.success)
+    return
+  const outside = join(fixture(), 'public.env')
+  writeFileSync(outside, 'PUBLIC_VALUE=unchanged\n')
+  linkSync(outside, join(root, '.env.test.local'))
+  const saved = saveDeploymentEnvironment(loaded.data, { HAI_DB_PASSWORD: 'synthetic-private-value' }, { private: true })
+  expect(saved.success).toBe(false)
+  expect(readFileSync(outside, 'utf8')).toBe('PUBLIC_VALUE=unchanged\n')
+})
 
 it('loads only the named hai.json section and preserves deployment environment overrides', () => {
   const file = join(fixture(), 'hai.json')

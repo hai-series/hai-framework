@@ -1,12 +1,13 @@
 /** 部署环境的加载和持久化；公开环境文件不保存真实凭据。 */
 import type { HaiResult } from '@h-ai/core'
-import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { extname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 import { LineCounter, parseDocument } from 'yaml'
 import configurationShapes from './deploy-config-shapes.json' with { type: 'json' }
 import { deployM } from './deploy-i18n.js'
+import { readLocalFile, writeLocalFile } from './deploy-local-file.js'
 import { HaiDeployError } from './deploy-types.js'
 
 /**
@@ -36,7 +37,7 @@ const shapes: Record<string, Record<string, unknown>> = configurationShapes
 function environmentFile(path: string): Record<string, string> {
   const values: Record<string, string> = {}
   if (existsSync(path)) {
-    for (const [name, value] of Object.entries(core.config.parseEnv(readFileSync(path, 'utf8')))) {
+    for (const [name, value] of Object.entries(core.config.parseEnv(readLocalFile(path).toString('utf8')))) {
       if (value !== undefined)
         values[name] = value
     }
@@ -393,7 +394,7 @@ export function generatedVariables(values: Record<string, unknown>): Record<stri
 /** 按原有行更新键，保留注释与其他配置；更新私有文件时要求权限 600。 */
 function updateFile(path: string, values: Record<string, string>, privateFile: boolean): void {
   let content = existsSync(path)
-    ? readFileSync(path, 'utf8')
+    ? readLocalFile(path).toString('utf8')
     : '# Local private deployment configuration; do not commit.\n'
   for (const [name, value] of Object.entries(values)) {
     if (!/^[A-Z][A-Z0-9_]*$/.test(name))
@@ -417,24 +418,17 @@ function updateFile(path: string, values: Record<string, string>, privateFile: b
       content = withoutParent.slice(0, child.index) + parent[0].replace(/\r?\n?$/, '\n') + withoutParent.slice(child.index)
     }
   }
-  writeFileSync(path, content, {
-    mode: privateFile ? 0o600 : 0o644,
-  })
-  if (privateFile)
-    chmodSync(path, 0o600)
+  writeLocalFile(path, content, privateFile)
 }
 
 /** 明确修改的公共项必须清掉同名旧私有覆盖，避免重新加载后仍用旧后端。 */
 function removeOverrides(path: string, names: string[], privateFile = true): void {
   if (!existsSync(path) || names.length === 0)
     return
-  let content = readFileSync(path, 'utf8')
+  let content = readLocalFile(path).toString('utf8')
   for (const name of names)
     content = content.replace(new RegExp(`^[\\t ]*(?:export[\\t ]+)?${name}[\\t ]*=[\\t ]*(?:'[^']*'|"(?:[^"\\\\]|\\\\.)*"|\`[^\`]*\`|[^\\r\\n]*)[^\\r\\n]*(?:\\r?\\n|$)`, 'gm'), '')
-  writeFileSync(path, content, {
-    mode: privateFile ? 0o600 : 0o644,
-  })
-  chmodSync(path, privateFile ? 0o600 : 0o644)
+  writeLocalFile(path, content, privateFile)
 }
 
 /**
@@ -532,11 +526,11 @@ export function saveDeploymentEnvironment(environment: DeploymentEnvironment, va
     if (Object.keys(privateValues).length) {
       const ignorePath = join(environment.envDir, '.gitignore')
       const ignore = existsSync(ignorePath)
-        ? readFileSync(ignorePath, 'utf8')
+        ? readLocalFile(ignorePath).toString('utf8')
         : ''
       const missing = ['.env.local', '.env.*.local', '.hai/deploy/'].filter(line => !ignore.split(/\r?\n/).includes(line))
       if (missing.length)
-        writeFileSync(ignorePath, `${ignore.trimEnd()}\n${missing.join('\n')}\n`)
+        writeLocalFile(ignorePath, `${ignore.trimEnd()}\n${missing.join('\n')}\n`)
     }
     return ok(Object.keys(values))
   }

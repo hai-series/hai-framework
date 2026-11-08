@@ -3,13 +3,14 @@ import type { HaiResult } from '@h-ai/core'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs'
+import { existsSync, lstatSync, realpathSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { err, ok } from '@h-ai/core'
 import { z } from 'zod'
 import { runCommand } from './container/deploy-command.js'
 import { deployM } from './deploy-i18n.js'
+import { readLocalFile } from './deploy-local-file.js'
 import { HaiDeployError } from './deploy-types.js'
 
 const nameSchema = z.string().regex(/^[a-z0-9][\w.-]{0,127}$/i)
@@ -346,10 +347,7 @@ function isSymbolicLink(path: string): boolean {
 }
 
 function privateFile(path: string): string {
-  const stat = lstatSync(path)
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > 65536 || (process.platform !== 'win32' && ((stat.mode & 0o077) || (process.getuid?.() !== 0 && stat.uid !== process.getuid?.()))))
-    throw new Error('private-file')
-  return readFileSync(path, 'utf8')
+  return readLocalFile(path, { maxBytes: 65536, private: true }).toString('utf8')
 }
 
 async function inspectContainer(runtime: string, container: string, secrets: string[]) {
