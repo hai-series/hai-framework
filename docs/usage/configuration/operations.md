@@ -116,7 +116,7 @@ dnd: { enabled: false, strategy: discard, start: '00:00', end: '00:00' }
 
 配置好后，用测试收件箱或受控接口接收一条不含敏感内容的消息，同时核对发送结果和接收端记录。状态为 `unknown` 时，先确认接收端是否已收到，再按事实标记 `sent` 或 `discarded`；重排 `dead` 消息时携带当前版本，防止覆盖其他人的操作。敏感消息同时设置 `sensitive`、到期时间 `expiresAt` 和幂等键 `idempotencyKey`。
 
-已有企业邮箱、短信通道的应用可使用下列配置。输入凭据来自对应私有变量，模板通过 Provider 的 `name` 路由：
+已有邮件服务或手机消息渠道的应用可使用下列配置。输入凭据来自对应私有变量，模板通过 Provider 的 `name` 路由：
 
 ```yaml schema=@h-ai/reach:ReachConfigSchema
 providers:
