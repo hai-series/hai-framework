@@ -129,15 +129,121 @@ const UI_COMPONENTS = new Set([
   'ErrorPage',
 ])
 
-const TAG_REGEX = /<([A-Z][A-Za-z0-9]*)\b/g
 const WINDOWS_PATH_SEPARATOR_REGEX = /\\/g
 
-function collectUsedComponents(content) {
+/** 解构绑定与普通名称共用同一收集路径，类型注解不会创建运行时值。 */
+function bindPattern(pattern, bindings) {
+  if (!pattern)
+    return
+  if (pattern.type === 'Identifier') {
+    bindings.add(pattern.name)
+  }
+  else if (pattern.type === 'RestElement' || pattern.type === 'SpreadElement') {
+    bindPattern(pattern.argument, bindings)
+  }
+  else if (pattern.type === 'AssignmentPattern') {
+    bindPattern(pattern.left, bindings)
+  }
+  else if (pattern.type === 'ArrayPattern' || pattern.type === 'ArrayExpression') {
+    pattern.elements.forEach(element => bindPattern(element, bindings))
+  }
+  else if (pattern.type === 'ObjectPattern' || pattern.type === 'ObjectExpression') {
+    pattern.properties.forEach(property => bindPattern(['RestElement', 'SpreadElement'].includes(property.type)
+      ? property.argument
+      : property.value, bindings))
+  }
+}
+
+/** 只记录顶层真实值声明；声明在函数体里的同名局部值不影响组件模板。 */
+function bindDeclaration(statement, bindings) {
+  const declaration = statement.type === 'ExportNamedDeclaration' || statement.type === 'ExportDefaultDeclaration'
+    ? statement.declaration
+    : statement
+  if (!declaration)
+    return
+  if (declaration.type === 'VariableDeclaration') {
+    declaration.declarations.forEach(item => bindPattern(item.id, bindings))
+  }
+  else if ([
+    'FunctionDeclaration',
+    'ClassDeclaration',
+    'TSEnumDeclaration',
+    'TSModuleDeclaration',
+  ].includes(declaration.type)) {
+    bindPattern(declaration.id, bindings)
+  }
+}
+
+/** 组件只来自模板 AST，同时尊重脚本与 each/await/snippet/let 的词法绑定。 */
+function collectUsedComponents(ast) {
   const used = new Set()
-  for (const match of content.matchAll(TAG_REGEX)) {
-    const name = match[1]
-    if (UI_COMPONENTS.has(name)) {
-      used.add(name)
+  const outer = new Set([
+    ...analyzeScript(ast.module).bindings,
+    ...analyzeScript(ast.instance).bindings,
+  ])
+  const pending = [
+    { node: ast.fragment, bindings: outer },
+  ]
+  while (pending.length) {
+    const { node, bindings } = pending.pop()
+    if (!node || typeof node !== 'object')
+      continue
+    if (Array.isArray(node)) {
+      for (let index = node.length - 1; index >= 0; index--)
+        pending.push({ node: node[index], bindings })
+      continue
+    }
+    if (node.type === 'Component' && UI_COMPONENTS.has(node.name) && !bindings.has(node.name))
+      used.add(node.name)
+    if (node.type === 'EachBlock') {
+      const body = new Set(bindings)
+      bindPattern(node.context, body)
+      if (node.index)
+        body.add(node.index)
+      pending.push({ node: node.fallback, bindings }, { node: node.body, bindings: body })
+      continue
+    }
+    if (node.type === 'AwaitBlock') {
+      const then = new Set(bindings)
+      const caught = new Set(bindings)
+      bindPattern(node.value, then)
+      bindPattern(node.error, caught)
+      pending.push({ node: node.catch, bindings: caught }, { node: node.then, bindings: then }, { node: node.pending, bindings })
+      continue
+    }
+    if (node.type === 'SnippetBlock') {
+      const body = new Set(bindings)
+      bindPattern(node.expression, body)
+      node.parameters.forEach(parameter => bindPattern(parameter, body))
+      pending.push({ node: node.body, bindings: body })
+      continue
+    }
+    let scoped = bindings
+    if (node.type === 'Fragment') {
+      scoped = new Set(bindings)
+      for (const child of node.nodes) {
+        if (child.type === 'SnippetBlock')
+          bindPattern(child.expression, scoped)
+        else if (child.type === 'ConstTag' || child.type === 'DeclarationTag')
+          bindDeclaration(child.declaration, scoped)
+      }
+    }
+    for (const attribute of node.attributes ?? []) {
+      if (attribute.type === 'LetDirective') {
+        if (scoped === bindings)
+          scoped = new Set(bindings)
+        bindPattern(attribute.expression ?? { type: 'Identifier', name: attribute.name }, scoped)
+      }
+    }
+    // 仅遍历模板子节点；脚本、属性表达式和样式中的文本不会成为组件节点。
+    for (const key of [
+      'fragment',
+      'nodes',
+      'consequent',
+      'alternate',
+    ]) {
+      if (node[key])
+        pending.push({ node: node[key], bindings: scoped })
     }
   }
   return used
@@ -145,15 +251,17 @@ function collectUsedComponents(content) {
 
 /** 一次解析同时提供运行时绑定与真实 import 范围，不再扫描字符串/注释中的伪 import。 */
 function analyzeScript(script) {
-  const imported = new Set()
+  const bindings = new Set()
   const externalTypeBindings = new Set()
   const declarations = []
   for (const statement of script?.content.body ?? []) {
-    if (statement.type !== 'ImportDeclaration')
+    if (statement.type !== 'ImportDeclaration') {
+      bindDeclaration(statement, bindings)
       continue
+    }
     for (const specifier of statement.specifiers) {
       if (statement.importKind !== 'type' && specifier.importKind !== 'type')
-        imported.add(specifier.local.name)
+        bindings.add(specifier.local.name)
       else if (statement.source.value !== '@h-ai/ui')
         externalTypeBindings.add(specifier.local.name)
     }
@@ -161,7 +269,7 @@ function analyzeScript(script) {
       declarations.push(statement)
   }
   return {
-    imported,
+    bindings,
     externalTypeBindings,
     declarations,
     offset: script?.content.start ?? 0,
@@ -252,9 +360,9 @@ function mergeHaiUiImport(scriptContent, components, analysis) {
 function updateScriptBlock(scriptContent, usedComponents, filename, ast) {
   const analysis = analyzeScript(ast.instance)
   // 模块脚本的运行时 import 同样可供模板使用，但只向实例脚本注入缺失项。
-  for (const name of analyzeScript(ast.module).imported)
-    analysis.imported.add(name)
-  const missing = [...usedComponents].filter(name => !analysis.imported.has(name))
+  for (const name of analyzeScript(ast.module).bindings)
+    analysis.bindings.add(name)
+  const missing = [...usedComponents].filter(name => !analysis.bindings.has(name))
   const conflicts = missing.filter(name => analysis.externalTypeBindings.has(name))
   if (conflicts.length > 0) {
     throw new Error(`[auto-import-hai-ui] ${filename}: Cannot auto-import component(s) ${conflicts.join(', ')} because a type-only import from another module uses the same local name. Alias the type-only import or explicitly import the component under a different local name.`)
@@ -276,11 +384,6 @@ function autoImportHaiUi() {
         return { code: content }
       }
 
-      const usedComponents = collectUsedComponents(content)
-      if (usedComponents.size === 0) {
-        return { code: content }
-      }
-
       // 先由语言预处理器转换样式/模板，再按整份 Svelte AST 选择真实实例脚本。
       // Svelte parse 会移除 BOM；局部坐标基于去除 BOM 的源码，输出仍保留它。
       const prefix = content.startsWith('\uFEFF')
@@ -288,6 +391,9 @@ function autoImportHaiUi() {
         : ''
       const source = content.slice(prefix.length)
       const ast = parse(source, { modern: true })
+      const usedComponents = collectUsedComponents(ast)
+      if (usedComponents.size === 0)
+        return { code: content }
       const instance = ast.instance
       if (!instance) {
         const scriptContent = updateScriptBlock('', usedComponents, filename, ast)

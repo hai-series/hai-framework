@@ -42,6 +42,7 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 至少检查以下四项：
 
 - SvelteKit 3 在 `vite.config.*` 的 `sveltekit({...})` 中设置预处理；纯 Svelte/Vite 使用 `svelte.config.*`。两者都先执行 `vitePreprocess()` 或其他样式/模板语言转换，再执行 `autoImportHaiUi()`；后者按整份 Svelte AST 定位实例脚本，不直接接受转换前的 SCSS/Pug，直接 markup 调用保持同步。
+- 自动导入只补模板中实际使用且未被脚本或模板局部作用域绑定的组件；注释、textarea 与脚本字符串里的组件示例不触发导入。
 - `vite.config.*`：`ssr.noExternal` 包含 `@h-ai/ui` 和 `@h-ai/kit`，`optimizeDeps.exclude` 包含 `bits-ui`。
 - `app.css`：已导入 `global.css` / `theme.css`；移动端还要导入 `design-tokens.css` / `mobile.css`。
 - Tailwind：已配置 `@source` 扫描 `@h-ai/ui/dist/**/*.{svelte,js,ts}`。

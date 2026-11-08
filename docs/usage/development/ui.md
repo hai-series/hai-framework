@@ -1,10 +1,12 @@
 # 开发一个清楚、可操作的业务页面
 
-[返回使用指南](../README.md) · [组件 API](../../../packages/ui/README.md) · [配置入口](../configuration-reference.md)
+[返回使用指南](../README.md) · [组件 API](../../../packages/ui/README.md) · [配置入口](../configuration/README.md)
 
 业务页面通常包含查询、结果、编辑和操作反馈。先把这条流程接通，再调整视觉细节。`@h-ai/ui` 提供公共布局、表单、表格、弹窗和提示；这些能力通过组件参数和主题控制，没有统一的 `_ui.yml`。
 
 本页截图来自当前管理台的真实组件演示和设置页面。表单与列表演示用于观察公共组件行为；示例数据不代表后台业务已经保存。真实反馈处理流程见[运行维护](../operations/feedback.md)。
+
+组件自动导入按[UI 接入配置](../../../packages/ui/README.md)启用：先执行 `vitePreprocess()` 或自定义语言转换，再执行 `autoImportHaiUi()`。输入是转换后的 Svelte 源码，输出只为模板实际使用且未绑定的组件补充 import；注释、textarea 和脚本字符串中的示例不会触发导入，脚本声明及 each、await、snippet 的局部组件仍使用自己的绑定。
 
 ## 页面骨架与列表
 
@@ -155,7 +157,7 @@ SSR 保留图表高度和加载占位，浏览器挂载且有数据后按类型�
 
 已有 `errorMessage` / `authErrorMessage` 返回的 `(traceId: …)` 会由 Toast 自动分离；新代码也可直接传 `toast.add({ message: m.retry(), variant: 'warning', traceId })`。`m.retry()` 为应用翻译函数，`traceId` 使用本次请求的公开标识，不能填入凭据或业务隐私。
 
-迁移已有页面时，将 `Alert variant="warning"/"error"` 改为 `toast.warning`、`notifyError` 或组件初始化时的 `useToastFeedback(() => error)`；Alert 的类型已收窄，编译器会指出遗漏调用。响应式提示更新或清空时会替换或移除该来源的旧通知，同类、同文案、同编号的待显示通知合并；组件卸载不会撤销已经发出的通知。
+操作警告用 `toast.warning`，业务错误用 `notifyError`；需要跟随响应式错误状态时，在组件初始化时注册 `useToastFeedback(() => error)`。状态更新或清空会替换或移除该来源的待显示通知，同类、同文案、同编号的待显示通知合并；组件卸载不会撤销已经发出的通知。
 
 直接传入完整 `HaiError`，可以保留安全的业务原因和 `traceId`。需要向组件抛出异常时，使用 `new Error(result.error.message, { cause: result.error })`。`errorMessage` / `notifyError` 能读取这条来源链；未知异常和 5xx 仍显示安全兜底，不能把数据库或密钥细节展示给用户。
 

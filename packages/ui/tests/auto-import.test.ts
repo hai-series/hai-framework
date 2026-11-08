@@ -364,6 +364,33 @@ describe('自动注入', () => {
 })
 
 describe('跳过规则', () => {
+  it.each([
+    '<!-- <Button /> -->',
+    '<textarea><Button /></textarea>',
+    '<script lang="ts">const example = "<Button />"</script>',
+  ])('仅示例中的组件不产生真实导入：%s', (input) => {
+    expect(process(input).code).toBe(input)
+  })
+
+  it.each([
+    '<script lang="ts">const Button = () => null</script><Button />',
+    '<script module lang="ts">export const Button = () => null</script><Button />',
+    '<script lang="ts">const { Button } = { Button: () => null }</script><Button />',
+    '<script lang="ts">const components = [() => null]</script>{#each components as Button}<Button />{/each}',
+    '<script lang="ts">const task = Promise.resolve(() => null)</script>{#await task then Button}<Button />{/await}',
+    '{#snippet example(Button)}<Button />{/snippet}',
+  ])('已有脚本与模板作用域的组件绑定不重复导入：%s', (input) => {
+    const result = process(input)
+    expect(result.code).toBe(input)
+    expect(compile(result.code, { generate: 'server' }).js.code).toBeTruthy()
+  })
+
+  it('模板局部绑定不会隐藏作用域之外的真实 UI 组件', () => {
+    const result = process('<script lang="ts">const components = [() => null]</script>{#each components as Button}<Button />{/each}<Button />')
+    expect(runtimeUiNames(result.code)).toEqual(['Button'])
+    expect(compile(result.code, { generate: 'server' }).js.code).toBeTruthy()
+  })
+
   it('应跳过 @h-ai/ui 包自身的文件', () => {
     const input = `<script lang="ts"></script>\n<Button>测试</Button>`
     const result = process(input, '/workspaces/hai-framework/packages/ui/src/lib/components/compounds/Modal.svelte')
