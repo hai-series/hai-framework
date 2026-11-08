@@ -12,23 +12,30 @@
   let saving = $state(false)
   let errors = $state<Record<string, string>>({})
 
-  async function handleSave(data: UserProfileSubmitData): Promise<void> {
+  /** 保存用户资料；只有服务端确认成功才返回 true，失败保留编辑草稿。 */
+  async function handleSave(data: UserProfileSubmitData): Promise<boolean> {
     saving = true
     errors = {}
-    const result = await desktopApiClient.iam.auth.updateCurrentUser({
-      username: data.username,
-      email: data.email,
-    })
-    if (result.success) {
-      toast.success(m('profile_updated'))
-      await refreshCurrentUser()
+    try {
+      const result = await desktopApiClient.iam.auth.updateCurrentUser({
+        username: data.username,
+        email: data.email,
+      })
+      if (result.success) {
+        toast.success(m('profile_updated'))
+        await refreshCurrentUser()
+      }
+      else {
+        const code = String(result.error.code ?? 'unknown')
+        errors = {
+          general: m('profile_update_failed', { code }),
+        }
+      }
+      return result.success
     }
-    else {
-      const code = String(result.error.code ?? 'unknown')
-      errors = { general: m('profile_update_failed', { code }) }
-      toast.error(m('profile_update_failed', { code }))
+    finally {
+      saving = false
     }
-    saving = false
   }
 </script>
 

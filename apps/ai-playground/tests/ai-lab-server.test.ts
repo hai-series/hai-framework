@@ -7,7 +7,7 @@
 
 import type { ChatMessage } from '@h-ai/ai'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { generateImage, rememberExchange, streamChatWithMemory } from '../src/lib/server/ai-lab.js'
+import { generateImage, getLabStatus, rememberExchange, streamChatWithMemory } from '../src/lib/server/ai-lab.js'
 
 const mocks = vi.hoisted(() => ({
   extract: vi.fn(),
@@ -35,7 +35,9 @@ vi.mock('@h-ai/ai', () => ({
 
 vi.mock('@h-ai/core', () => ({
   core: {
-    logger: { warn: vi.fn() },
+    logger: {
+      warn: vi.fn(),
+    },
   },
   ok: (data: unknown) => ({ success: true as const, data }),
 }))
@@ -49,6 +51,7 @@ vi.mock('../src/lib/server/init.js', () => ({
     imageProvider: 'test',
     ttsModel: 'test-tts',
     ttsVoices: [],
+    memoryMode: 'persistent',
   }),
 }))
 
@@ -65,14 +68,34 @@ beforeEach(() => {
 })
 
 describe('aI Playground memory extraction concurrency', () => {
+  it('能力状态使用已初始化数据库的存储模式，不宣称持久记忆会随重启清空', () => {
+    expect(getLabStatus().memoryMode).toBe('persistent')
+  })
   it('forwards the prompt and dimensions to the image module', async () => {
     mocks.generateImage.mockResolvedValue({
       success: true,
-      data: { images: [{ data: new Uint8Array([1]), mimeType: 'image/png' }] },
+      data: {
+        images: [
+          {
+            data: new Uint8Array([1]),
+            mimeType: 'image/png',
+          },
+        ],
+      },
     })
 
-    const referenceImages = [{ data: new Uint8Array([137, 80, 78, 71]), mimeType: 'image/png' }]
-    await expect(generateImage({ prompt: 'A fox', width: 1024, height: 768, referenceImages })).resolves.toMatchObject({
+    const referenceImages = [
+      {
+        data: new Uint8Array([137, 80, 78, 71]),
+        mimeType: 'image/png',
+      },
+    ]
+    await expect(generateImage({
+      prompt: 'A fox',
+      width: 1024,
+      height: 768,
+      referenceImages,
+    })).resolves.toMatchObject({
       success: true,
     })
     expect(mocks.generateImage).toHaveBeenCalledWith({
@@ -111,7 +134,9 @@ describe('aI Playground memory extraction concurrency', () => {
     const chat = await streamChatWithMemory({
       profileId: `user-${useMemory}`,
       sessionId: 'session-1',
-      messages: [{ role: 'user', content: '第二个问题' }],
+      messages: [
+        { role: 'user', content: '第二个问题' },
+      ],
       useMemory,
     })
 

@@ -1,10 +1,10 @@
 <script lang='ts'>
-  // 麦克风实时转写面板：录音期间周期转写当前快照，停止时仅补齐最后一段
-  import { blobToWav } from '$lib/audio/wav.js'
-  import * as m from '$lib/paraglide/messages.js'
-  import { transcribe } from '$lib/services/ai-lab.js'
   import { Button, Card } from '@h-ai/ui'
   import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  // 麦克风实时转写面板：录音期间周期转写当前快照，停止时仅补齐最后一段
+  import { blobToWav } from '#lib/audio/wav.js'
+  import * as m from '#lib/paraglide/messages.js'
+  import { transcribe } from '#lib/services/ai-lab.js'
 
   /** 面板阶段：空闲 / 录音并实时转写 / 完成最后一段转写 */
   type Phase = 'idle' | 'recording' | 'finalizing'
@@ -209,7 +209,9 @@
     <Button class='mt-4 w-full' variant='primary' onclick={start} disabled={!supported || phase === 'finalizing'} data-testid='mic-start'>
       {#if phase === 'finalizing'}<span class='loading loading-spinner loading-sm'></span>{/if}
       <span class='icon-[tabler--microphone] size-4'></span>
-      {phase === 'finalizing' ? m.mic_transcribing() : m.mic_start()}
+      {phase === 'finalizing'
+        ? m.mic_transcribing()
+        : m.mic_start()}
     </Button>
   {/if}
 </Card>

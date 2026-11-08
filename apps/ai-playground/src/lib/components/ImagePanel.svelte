@@ -1,9 +1,9 @@
 <script lang='ts'>
-  // 文生图面板：UI 仅负责收集提示词、调用 service 并展示返回图片
-  import * as m from '$lib/paraglide/messages.js'
-  import { generateImage } from '$lib/services/ai-lab.js'
   import { Button, Card } from '@h-ai/ui'
   import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  // 文生图面板：UI 仅负责收集提示词、调用 service 并展示返回图片
+  import * as m from '#lib/paraglide/messages.js'
+  import { generateImage } from '#lib/services/ai-lab.js'
 
   let prompt = $state(m.image_default_prompt())
   let size = $state('1024x1024')
@@ -26,7 +26,12 @@
     imageUrl = ''
     try {
       const [width, height] = size.split('x').map(Number)
-      const image = await generateImage({ prompt: prompt.trim(), width: width!, height: height!, referenceImages })
+      const image = await generateImage({
+        prompt: prompt.trim(),
+        width: width!,
+        height: height!,
+        referenceImages,
+      })
       imageUrl = URL.createObjectURL(image)
     }
     catch (cause) {
@@ -79,6 +84,8 @@
 
   <Button class='mt-4 w-full' onclick={run} disabled={busy || !prompt.trim()} data-testid='image-run'>
     {#if busy}<span class='loading loading-spinner loading-sm'></span>{/if}
-    {busy ? m.image_running() : m.image_run()}
+    {busy
+      ? m.image_running()
+      : m.image_run()}
   </Button>
 </Card>

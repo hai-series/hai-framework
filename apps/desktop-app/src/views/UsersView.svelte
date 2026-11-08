@@ -31,15 +31,27 @@
 
   const columns = $derived([
     { key: 'id', label: 'ID', width: '8rem' },
-    { key: 'username', sortable: true, label: m('username') },
-    { key: 'email', sortable: true, label: m('email') },
+    {
+      key: 'username',
+      sortable: true,
+      label: m('username'),
+    },
+    {
+      key: 'email',
+      sortable: true,
+      label: m('email'),
+    },
     {
       key: 'accountStatus',
       sortable: true,
       label: m('status'),
       align: 'center' as const,
       width: '6rem',
-      render: (item: IamUser) => item.accountStatus === 'active' ? m('account_active') : item.accountStatus === 'dormant' ? m('account_dormant') : m('account_closed'),
+      render: (item: IamUser) => item.accountStatus === 'active'
+        ? m('account_active')
+        : item.accountStatus === 'dormant'
+        ? m('account_dormant')
+        : m('account_closed'),
     },
   ])
 
@@ -57,14 +69,23 @@
     else {
       error = result.error.code === HaiCommonError.REQUEST_ACCESS_DENIED.code
         ? authErrorMessage(result.error)
-        : core.error.formatMessage({ message: m('users_failed'), traceId: result.error.traceId })
+        : core.error.formatMessage({
+          message: m('users_failed'),
+          traceId: result.error.traceId,
+        })
     }
     loading = false
   }
 
   $effect(() => {
     void queryRevision
-    void fetchUsers({ page, pageSize, search: appliedSearch || undefined, sortBy: sortKey, sortDirection: sortDir })
+    void fetchUsers({
+      page,
+      pageSize,
+      search: appliedSearch || undefined,
+      sortBy: sortKey,
+      sortDirection: sortDir,
+    })
   })
 
   function sort(key: string, direction: 'asc' | 'desc') {

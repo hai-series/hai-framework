@@ -1,25 +1,55 @@
 <script lang='ts'>
   import { resolve } from '$app/paths'
-  import * as m from '$lib/paraglide/messages.js'
   import { Button, Input, Select, Textarea, toast } from '@h-ai/ui'
   import { errorMessage } from '@h-ai/ui/toast'
+  import * as m from '#lib/paraglide/messages.js'
 
   const EMAIL_REGEX = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/
 
   const cooperationTypeOptions = $derived([
-    { value: 'channel', label: m.partner_form_type_channel() },
-    { value: 'solution', label: m.partner_form_type_solution() },
-    { value: 'delivery', label: m.partner_form_type_delivery() },
-    { value: 'marketing', label: m.partner_form_type_marketing() },
-    { value: 'other', label: m.partner_form_type_other() },
+    {
+      value: 'channel',
+      label: m.partner_form_type_channel(),
+    },
+    {
+      value: 'solution',
+      label: m.partner_form_type_solution(),
+    },
+    {
+      value: 'delivery',
+      label: m.partner_form_type_delivery(),
+    },
+    {
+      value: 'marketing',
+      label: m.partner_form_type_marketing(),
+    },
+    {
+      value: 'other',
+      label: m.partner_form_type_other(),
+    },
   ])
 
   const budgetOptions = $derived([
-    { value: 'unknown', label: m.partner_form_budget_unknown() },
-    { value: 'lt-100k', label: m.partner_form_budget_lt100k() },
-    { value: '100k-500k', label: m.partner_form_budget_100k500k() },
-    { value: '500k-1m', label: m.partner_form_budget_500k1m() },
-    { value: 'gt-1m', label: m.partner_form_budget_gt1m() },
+    {
+      value: 'unknown',
+      label: m.partner_form_budget_unknown(),
+    },
+    {
+      value: 'lt-100k',
+      label: m.partner_form_budget_lt100k(),
+    },
+    {
+      value: '100k-500k',
+      label: m.partner_form_budget_100k500k(),
+    },
+    {
+      value: '500k-1m',
+      label: m.partner_form_budget_500k1m(),
+    },
+    {
+      value: 'gt-1m',
+      label: m.partner_form_budget_gt1m(),
+    },
   ])
 
   let form = $state({
@@ -91,7 +121,9 @@
         errors = {}
       }
       else {
-        toast.error(errorMessage(data.error && typeof data.error === 'object' ? { ...data.error, httpStatus: response.status } : undefined, m.partner_submit_failed()))
+        toast.error(errorMessage(data.error && typeof data.error === 'object'
+          ? { ...data.error, httpStatus: response.status }
+          : undefined, m.partner_submit_failed()))
       }
     }
     catch {
@@ -167,10 +199,18 @@
               <h2 class='font-semibold text-base-content mb-3'>{m.partner_process_title()}</h2>
               <Steps
                 items={[
-                  { title: m.partner_process_step_1() },
-                  { title: m.partner_process_step_2() },
-                  { title: m.partner_process_step_3() },
-                  { title: m.partner_process_step_4() },
+                  {
+                    title: m.partner_process_step_1(),
+                  },
+                  {
+                    title: m.partner_process_step_2(),
+                  },
+                  {
+                    title: m.partner_process_step_3(),
+                  },
+                  {
+                    title: m.partner_process_step_4(),
+                  },
                 ]}
                 current={0}
                 direction='vertical'
@@ -188,7 +228,7 @@
             <div>
               <h2 class='font-semibold text-base-content mb-2'>{m.partner_admin_entry_title()}</h2>
               <p class='text-sm text-base-content/60 mb-3'>{m.partner_admin_entry_desc()}</p>
-              <a href={resolve('/partners/admin/login', {})}>
+              <a href={resolve('partners/admin/login')}>
                 <Button variant='default' size='sm' outline>{m.partner_admin_entry_cta()}</Button>
               </a>
             </div>

@@ -76,11 +76,15 @@
         </div>
         <div>
           <p class='text-sm opacity-60'>{m('transport')}</p>
-          <p class='font-medium'>{currentServiceInfo()?.transportEnabled ? m('enabled') : m('disabled')}</p>
+          <p class='font-medium'>{currentServiceInfo()?.transportEnabled
+            ? m('enabled')
+            : m('disabled')}</p>
         </div>
         <div>
           <p class='text-sm opacity-60'>{m('uptime')}</p>
-          <p class='font-medium'>{m('seconds', { count: Math.round((currentServiceInfo()?.uptimeMs ?? 0) / 1000) })}</p>
+          <p class='font-medium'>{m('seconds', {
+            count: Math.round((currentServiceInfo()?.uptimeMs ?? 0) / 1000),
+          })}</p>
         </div>
       </div>
     {/if}

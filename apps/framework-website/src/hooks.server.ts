@@ -4,11 +4,11 @@
  * =============================================================================
  */
 
-import type { Handle } from '@sveltejs/kit'
-import { paraglideMiddleware } from '$lib/paraglide/server.js'
-import { initApp } from '$lib/server/init.js'
+import type { Handle } from '@sveltejs/kit/hooks'
 import { core } from '@h-ai/core'
 import { kit, KitConfigSchema } from '@h-ai/kit'
+import { paraglideMiddleware } from '#lib/paraglide/server.js'
+import { initApp } from '#lib/server/init.js'
 
 // =============================================================================
 // 应用初始化
@@ -84,7 +84,10 @@ const haiHandle: Handle = async (input) => {
             success: false,
             error: core.error.toPublic({ code: 'INTERNAL_ERROR', message: '', httpStatus: 500 }),
           }),
-          { status: 500, headers: { 'Content-Type': 'application/json' } },
+          {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+          },
         )
       },
     })

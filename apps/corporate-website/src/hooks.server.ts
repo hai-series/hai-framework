@@ -4,14 +4,14 @@
  * =============================================================================
  */
 
-import type { Handle } from '@sveltejs/kit'
+import type { Handle } from '@sveltejs/kit/hooks'
 import process from 'node:process'
-import { paraglideMiddleware } from '$lib/paraglide/server.js'
-import { initApp } from '$lib/server/init.js'
-import { getPartnerAdminSessionByToken } from '$lib/server/partner-service.js'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { kit, KitConfigSchema } from '@h-ai/kit'
+import { paraglideMiddleware } from '#lib/paraglide/server.js'
+import { initApp } from '#lib/server/init.js'
+import { getPartnerAdminSessionByToken } from '#lib/server/partner-service.js'
 
 let appInitPromise: Promise<void> | null = null
 
@@ -87,7 +87,11 @@ const haiHandle: Handle = async (input) => {
         protectedPaths: ['/partners/admin', '/partners/admin/*', '/api/partners/admin/*'],
         publicPaths: ['/partners/admin/login', '/api/partners/admin/login'],
       },
-      rateLimit: { windowMs: 60000, maxRequests: 120, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'corporate-website', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1' }) },
+      rateLimit: {
+        windowMs: 60000,
+        maxRequests: 120,
+        store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'corporate-website', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1' }),
+      },
     })
   }
   return configuredHandle(input)

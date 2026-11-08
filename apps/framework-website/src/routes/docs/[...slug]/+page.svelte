@@ -1,9 +1,9 @@
 <script lang='ts'>
   import type { PageProps } from './$types'
   import { afterNavigate } from '$app/navigation'
-  import DocTree from '$lib/components/DocTree.svelte'
-  import * as m from '$lib/paraglide/messages'
   import { MarkdownRenderer } from '@h-ai/ui'
+  import DocTree from '#lib/components/DocTree.svelte'
+  import * as m from '#lib/paraglide/messages.js'
 
   const { data }: PageProps = $props()
   const hasScreenshots = $derived(data.document.sections.some(section => section.html.includes('<img ')))

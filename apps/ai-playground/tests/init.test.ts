@@ -1,14 +1,29 @@
 /** 应用启动边界：共享存储先于 AI，失败逆序释放且清理失败后可重试。 */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({ calls: [] as string[], fail: '', cleanupFailures: 0 }))
+const state = vi.hoisted(() => ({
+  calls: [] as string[],
+  fail: '',
+  cleanupFailures: 0,
+  databaseType: 'postgresql',
+  database: 'test',
+}))
 const modelConfig = vi.hoisted(() => ({
   llm: { model: 'test' },
-  audio: { transcribeModel: 'asr', synthesizeModel: 'tts', models: [
-    { id: 'asr', model: 'asr-test', provider: 'mimo' },
-    { id: 'tts', model: 'tts-test', provider: 'mimo' },
-  ] },
-  image: { generateModel: 'image', models: [{ id: 'image', model: 'image-test', provider: 'openai' }] },
+  audio: {
+    transcribeModel: 'asr',
+    synthesizeModel: 'tts',
+    models: [
+      { id: 'asr', model: 'asr-test', provider: 'mimo' },
+      { id: 'tts', model: 'tts-test', provider: 'mimo' },
+    ],
+  },
+  image: {
+    generateModel: 'image',
+    models: [
+      { id: 'image', model: 'image-test', provider: 'openai' },
+    ],
+  },
 }))
 
 vi.mock('@h-ai/ai', () => ({
@@ -16,7 +31,12 @@ vi.mock('@h-ai/ai', () => ({
   ai: {
     init: async () => {
       state.calls.push('ai.init')
-      return state.fail === 'ai' ? { success: false, error: { message: 'AI unavailable' } } : { success: true }
+      return state.fail === 'ai'
+        ? {
+            success: false,
+            error: { message: 'AI unavailable' },
+          }
+        : { success: true }
     },
     close: async () => {
       state.calls.push('ai.close')
@@ -43,12 +63,21 @@ vi.mock('@h-ai/vecdb', () => ({
   vecdb: {
     init: async () => {
       state.calls.push('vecdb.init')
-      return state.fail === 'vecdb' ? { success: false, error: { message: 'Vector unavailable' } } : { success: true }
+      return state.fail === 'vecdb'
+        ? {
+            success: false,
+            error: { message: 'Vector unavailable' },
+          }
+        : { success: true }
     },
     close: async () => {
       state.calls.push('vecdb.close')
-      if (state.cleanupFailures-- > 0)
-        return { success: false, error: { message: 'Vector cleanup unavailable' } }
+      if (state.cleanupFailures-- > 0) {
+        return {
+          success: false,
+          error: { message: 'Vector cleanup unavailable' },
+        }
+      }
       return { success: true }
     },
   },
@@ -57,10 +86,19 @@ vi.mock('@h-ai/core', () => ({
   core: {
     init: () => undefined,
     config: {
-      validate: (name: string) => ({ success: true, data: name === 'ai' ? modelConfig : { type: 'postgresql' } }),
+      validate: (name: string) => ({
+        success: true,
+        data: name === 'ai'
+          ? modelConfig
+          : { type: state.databaseType, database: state.database },
+      }),
       getOrThrow: () => modelConfig,
     },
-    logger: { info: () => undefined, error: () => undefined, getLevel: () => 'info' },
+    logger: {
+      info: () => undefined,
+      error: () => undefined,
+      getLevel: () => 'info',
+    },
   },
 }))
 
@@ -68,13 +106,29 @@ beforeEach(() => {
   state.calls.length = 0
   state.fail = ''
   state.cleanupFailures = 0
+  state.databaseType = 'postgresql'
+  state.database = 'test'
   vi.resetModules()
 })
 
 describe('aI Playground initialization', () => {
+  it.each([
+    ['postgresql', 'test', 'persistent'],
+    ['sqlite', 'fixture.db', 'persistent'],
+    ['sqlite', ':memory:', 'ephemeral'],
+  ])('按成功初始化的 %s/%s 显示存储模式 %s', async (type, database, mode) => {
+    state.databaseType = type
+    state.database = database
+    const { ensureAIInitialized, getAIPlaygroundMetadata } = await import('../src/lib/server/init.js')
+    await ensureAIInitialized()
+    expect(getAIPlaygroundMetadata().memoryMode).toBe(mode)
+  })
   it('并发请求共享一次启动，db/vecdb先于AI', async () => {
     const { ensureAIInitialized, getAIPlaygroundMetadata } = await import('../src/lib/server/init.js')
-    await Promise.all([ensureAIInitialized(), ensureAIInitialized()])
+    await Promise.all([
+      ensureAIInitialized(),
+      ensureAIInitialized(),
+    ])
     expect(state.calls).toEqual(['db.init', 'vecdb.init', 'ai.init'])
     expect(getAIPlaygroundMetadata().llmModel).toBe('test')
   })
@@ -98,6 +152,13 @@ describe('aI Playground initialization', () => {
     state.fail = ''
     const offset = state.calls.length
     await ensureAIInitialized()
-    expect(state.calls.slice(offset)).toEqual(['ai.close', 'vecdb.close', 'db.close', 'db.init', 'vecdb.init', 'ai.init'])
+    expect(state.calls.slice(offset)).toEqual([
+      'ai.close',
+      'vecdb.close',
+      'db.close',
+      'db.init',
+      'vecdb.init',
+      'ai.init',
+    ])
   })
 })

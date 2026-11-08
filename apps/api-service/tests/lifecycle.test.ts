@@ -22,7 +22,7 @@ async function leaveFailedInitialization() {
   await expect(initApp()).rejects.toThrow('startup and cleanup failed')
 }
 
-describe.sequential('application lifecycle cleanup', () => {
+describe('application lifecycle cleanup', { concurrent: false }, () => {
   it('reports returned module failure, tries other closers, and retries on another close', async () => {
     const close = vi.spyOn(cache, 'close')
       .mockResolvedValueOnce(err({ code: 'test:cleanup', message: 'injected cleanup failure' }))
@@ -37,7 +37,11 @@ describe.sequential('application lifecycle cleanup', () => {
       .mockResolvedValueOnce(err({ code: 'test:cleanup', message: 'injected cleanup failure' }))
       .mockResolvedValue(ok(undefined))
     await leaveFailedInitialization()
-    await Promise.all([closeApp(), closeApp(), closeApp()])
+    await Promise.all([
+      closeApp(),
+      closeApp(),
+      closeApp(),
+    ])
     expect(close).toHaveBeenCalledTimes(2)
   })
 
@@ -58,14 +62,33 @@ describe.sequential('application lifecycle cleanup', () => {
       calls.push('vecdb.init')
       return err({ code: 'test:vector', message: 'injected vector startup failure' })
     })
-    for (const [name, module] of [['ai', ai], ['storage', storage], ['iam', iam], ['reach', reach], ['vecdb', vecdb], ['cache', cache], ['db', reldb]] as const) {
+    for (const [name, module] of [
+      ['ai', ai],
+      ['storage', storage],
+      ['iam', iam],
+      ['reach', reach],
+      ['vecdb', vecdb],
+      ['cache', cache],
+      ['db', reldb],
+    ] as const) {
       vi.spyOn(module, 'close').mockImplementation(async () => {
         calls.push(`${name}.close`)
         return ok(undefined)
       })
     }
     await expect(initApp()).rejects.toThrow('VecDB initialization failed')
-    expect(calls).toEqual(['db.init', 'cache.init', 'vecdb.init', 'ai.close', 'storage.close', 'iam.close', 'reach.close', 'vecdb.close', 'cache.close', 'db.close'])
+    expect(calls).toEqual([
+      'db.init',
+      'cache.init',
+      'vecdb.init',
+      'ai.close',
+      'storage.close',
+      'iam.close',
+      'reach.close',
+      'vecdb.close',
+      'cache.close',
+      'db.close',
+    ])
     await closeApp()
     expect(calls.filter(call => call === 'db.close')).toHaveLength(1)
   })

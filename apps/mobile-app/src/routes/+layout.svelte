@@ -1,21 +1,21 @@
 <script lang='ts'>
-  import { browser } from '$app/environment'
+  import { browser } from '$app/env'
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import { page } from '$app/stores'
-  import { closeApi, initApi } from '$lib/api'
-  import { initCapacitor } from '$lib/capacitor'
-  import * as m from '$lib/paraglide/messages.js'
+  import { page } from '$app/state'
+  import { applyTheme, getSavedTheme } from '@h-ai/ui'
+  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  import { onMount } from 'svelte'
+  import { closeApi, initApi } from '#lib/api.js'
+  import { initCapacitor } from '#lib/capacitor.js'
+  import * as m from '#lib/paraglide/messages.js'
   import {
     hasPermission,
     isAuthenticated,
     isInitialized,
     refreshCurrentUser,
-  } from '$lib/stores/auth-store.svelte.js'
-  import { changeLocale, localeStore } from '$lib/stores/locale-store.svelte.js'
-  import { applyTheme, getSavedTheme } from '@h-ai/ui'
-  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
-  import { onMount } from 'svelte'
+  } from '#lib/stores/auth-store.svelte.js'
+  import { changeLocale, localeStore } from '#lib/stores/locale-store.svelte.js'
   import '../app.css'
 
   const { children } = $props()
@@ -24,31 +24,43 @@
   let bootError = $state<string | null>(null)
 
   type TabId = 'dashboard' | 'users' | 'profile'
-  type TabRoute = '/' | '/users' | '/profile'
+  type TabRoute = ReturnType<typeof resolve>
 
   const tabRoutes: Record<TabId, TabRoute> = {
-    dashboard: '/',
-    users: '/users',
-    profile: '/profile',
+    dashboard: resolve('/'),
+    users: resolve('users'),
+    profile: resolve('profile'),
   }
 
   const navItems = $derived.by(() => {
     // Paraglide 文案通过共享语言状态触发重新求值。
     void localeStore.current
     const items = [
-      { id: 'dashboard', label: m.nav_dashboard(), iconClass: 'icon-[tabler--layout-dashboard]' },
-      { id: 'profile', label: m.nav_profile(), iconClass: 'icon-[tabler--user]' },
+      {
+        id: 'dashboard',
+        label: m.nav_dashboard(),
+        iconClass: 'icon-[tabler--layout-dashboard]',
+      },
+      {
+        id: 'profile',
+        label: m.nav_profile(),
+        iconClass: 'icon-[tabler--user]',
+      },
     ]
 
     if (hasPermission('user:list')) {
-      items.splice(1, 0, { id: 'users', label: m.nav_users(), iconClass: 'icon-[tabler--users]' })
+      items.splice(1, 0, {
+        id: 'users',
+        label: m.nav_users(),
+        iconClass: 'icon-[tabler--users]',
+      })
     }
 
     return items
   })
 
   const activeTab = $derived.by(() => {
-    const path = $page.url.pathname
+    const path = page.url.pathname
     if (path.startsWith('/users'))
       return 'users'
     if (path.startsWith('/profile'))
@@ -56,13 +68,14 @@
     return 'dashboard'
   })
 
-  const isAuthPage = $derived($page.url.pathname.startsWith('/auth'))
+  const isAuthPage = $derived(page.url.pathname.startsWith('/auth'))
 
   function handleTabChange(id: string): void {
     if (!(id in tabRoutes))
       return
 
-    void goto(resolve(tabRoutes[id as TabId], {}))
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- 导航映射的每个值已由 resolve 构造，id 已验证；不能二次添加挂载前缀。
+    void goto(tabRoutes[id as TabId])
   }
 
   async function bootstrap(): Promise<void> {
@@ -100,19 +113,19 @@
     if (!browser || booting || bootError || !isInitialized())
       return
 
-    const path = $page.url.pathname
+    const path = page.url.pathname
     if (!isAuthenticated() && !path.startsWith('/auth')) {
-      void goto(resolve('/auth/login', {}))
+      void goto(resolve('auth/login'))
       return
     }
 
     if (isAuthenticated() && path.startsWith('/auth')) {
-      void goto(resolve('/', {}))
+      void goto(resolve('/'))
       return
     }
 
     if (path.startsWith('/users') && !hasPermission('user:list')) {
-      void goto(resolve('/', {}))
+      void goto(resolve('/'))
     }
   })
   useToastFeedback(() => bootError)

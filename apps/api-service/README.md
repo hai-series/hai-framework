@@ -58,7 +58,12 @@ import { AppInfoOutputDataSchema } from './app-schemas.js'
 
 export const appContract = {
   info: apiContract
-    .route({ method: 'POST', path: '/app/info', operationId: 'app.info', tags: ['app'] })
+    .route({
+      method: 'POST',
+      path: '/app/info',
+      operationId: 'app.info',
+      tags: ['app']
+    })
     .output(apiContract.haiResultSchema(AppInfoOutputDataSchema)),
 }
 ```

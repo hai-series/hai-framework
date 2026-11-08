@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types'
-import { listPartnerLeads, PartnerLeadQuerySchema } from '$lib/server/partner-service.js'
+import { listPartnerLeads, PartnerLeadQuerySchema } from '#lib/server/partner-service.js'
 
 export const load: PageServerLoad = async ({ url, locals }) => {
   if (!locals.session) {

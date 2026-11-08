@@ -1,11 +1,14 @@
 <script lang='ts'>
-  import type { SearchEntry } from '$lib/docs-types.js'
-  import { base, resolve } from '$app/paths'
-  import * as m from '$lib/paraglide/messages'
-  import { loadSearchIndex, searchDocuments } from '$lib/services/search.js'
+  import type { SearchEntry } from '#lib/docs-types.js'
+  import { resolve } from '$app/paths'
   import { Input, Modal } from '@h-ai/ui'
   import { notifyError } from '@h-ai/ui/toast'
   import { untrack } from 'svelte'
+  import * as m from '#lib/paraglide/messages.js'
+  import { loadSearchIndex, searchDocuments } from '#lib/services/search.js'
+
+  // Vite 配置固定 paths.relative=false，HTTP 前缀不会随 SSR 页面深度改变。
+  const base = resolve('/').replace(/\/$/, '')
 
   let { open = $bindable(false) }: { open?: boolean } = $props()
   let query = $state('')
@@ -58,7 +61,9 @@
     {:else}
       <ul>
         {#each results as result (result.href)}
-          <li><a href={resolve('/docs/[...slug]', { slug: result.href.slice(`${base}/docs/`.length).replace(/\/$/, '') })} onclick={() => { open = false }}><strong>{result.title}</strong><span>{result.excerpt}</span></a></li>
+          <li><a href={resolve('/docs/[...slug]', {
+            slug: result.href.slice(`${base}/docs/`.length).replace(/\/$/, ''),
+          })} onclick={() => { open = false }}><strong>{result.title}</strong><span>{result.excerpt}</span></a></li>
         {/each}
       </ul>
     {/if}

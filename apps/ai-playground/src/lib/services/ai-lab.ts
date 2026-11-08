@@ -6,7 +6,7 @@
  * @module services/ai-lab
  */
 
-import type { ChatReply, LabMessage, LabStatus, MemoryView, RememberResult } from '$lib/ai-lab-types.js'
+import type { ChatReply, LabMessage, LabStatus, MemoryView, RememberResult } from '#lib/ai-lab-types.js'
 
 /** API 错误负载（HaiResult 序列化后的 error 字段） */
 interface ApiErrorPayload {
@@ -45,8 +45,12 @@ async function requestJson<T>(input: RequestInfo | URL, init?: RequestInit): Pro
 function jsonRequest(method: 'POST' | 'DELETE', body?: unknown): RequestInit {
   return {
     method,
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: body === undefined
+      ? undefined
+      : { 'Content-Type': 'application/json' },
+    body: body === undefined
+      ? undefined
+      : JSON.stringify(body),
   }
 }
 
@@ -112,7 +116,10 @@ export function rememberExchange(input: {
   userMessage: string
   assistantMessage: string
 }, signal?: AbortSignal): Promise<RememberResult> {
-  return requestJson('/api/chat/remember', { ...jsonRequest('POST', input), signal })
+  return requestJson('/api/chat/remember', {
+    ...jsonRequest('POST', input),
+    signal,
+  })
 }
 
 /** 语音合成：文本 → WAV 音频 Blob */

@@ -1,18 +1,24 @@
 import type { HaiResult } from '@h-ai/core'
 import { createHash, timingSafeEqual } from 'node:crypto'
-import * as m from '$lib/paraglide/messages.js'
 import { cache } from '@h-ai/cache'
 import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 import { z } from 'zod'
+import * as m from '#lib/paraglide/messages.js'
 
 export const PartnerLeadSchema = z.object({
   companyName: z.string().min(2).max(120),
   contactName: z.string().min(2).max(80),
   email: z.string().email().max(120),
   phone: z.string().min(6).max(32),
-  cooperationType: z.enum(['channel', 'solution', 'delivery', 'marketing', 'other']),
+  cooperationType: z.enum([
+    'channel',
+    'solution',
+    'delivery',
+    'marketing',
+    'other',
+  ]),
   budgetRange: z.string().max(64).default('unknown'),
   message: z.string().min(10).max(3000),
   source: z.string().max(64).default('website'),
@@ -23,7 +29,14 @@ export const PartnerLeadQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().max(120).optional(),
   status: z.enum(['pending', 'contacted', 'archived']).optional(),
-  sortBy: z.enum(['created_at', 'company_name', 'contact_name', 'cooperation_type', 'budget_range', 'status']).default('created_at'),
+  sortBy: z.enum([
+    'created_at',
+    'company_name',
+    'contact_name',
+    'cooperation_type',
+    'budget_range',
+    'status',
+  ]).default('created_at'),
   sortDirection: z.enum(['asc', 'desc']).default('desc'),
 })
 
@@ -189,8 +202,17 @@ export async function listPartnerLeads(options: z.infer<typeof PartnerLeadQueryS
   }
 
   // 排序标识符仅来自代码白名单；方向由已校验枚举选择。
-  const columns = { created_at: 'created_at', company_name: 'company_name', contact_name: 'contact_name', cooperation_type: 'cooperation_type', budget_range: 'budget_range', status: 'status' }
-  sql += ` ORDER BY ${columns[options.sortBy]} ${options.sortDirection === 'asc' ? 'ASC' : 'DESC'}, id ASC`
+  const columns = {
+    created_at: 'created_at',
+    company_name: 'company_name',
+    contact_name: 'contact_name',
+    cooperation_type: 'cooperation_type',
+    budget_range: 'budget_range',
+    status: 'status',
+  }
+  sql += ` ORDER BY ${columns[options.sortBy]} ${options.sortDirection === 'asc'
+    ? 'ASC'
+    : 'DESC'}, id ASC`
 
   const queryResult = await reldb.sql.queryPage<Record<string, unknown>>({
     sql,

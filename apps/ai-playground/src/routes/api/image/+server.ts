@@ -3,13 +3,17 @@
  * @module routes/api/image/+server
  */
 
-import { ImageRequestSchema, MAX_REFERENCE_IMAGE_BYTES } from '$lib/ai-lab-types.js'
-import * as m from '$lib/paraglide/messages.js'
-import { generateImage } from '$lib/server/ai-lab.js'
 import { kit } from '@h-ai/kit'
+import { ImageRequestSchema, MAX_REFERENCE_IMAGE_BYTES } from '#lib/ai-lab-types.js'
+import * as m from '#lib/paraglide/messages.js'
+import { generateImage } from '#lib/server/ai-lab.js'
 
 export const POST = kit.handler(async ({ request, locals }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   const formData = await request.formData()
   const parsed = ImageRequestSchema.safeParse({
     prompt: formData.get('prompt'),
@@ -35,8 +39,16 @@ export const POST = kit.handler(async ({ request, locals }) => {
   return new Response(image.data.slice().buffer, {
     headers: {
       'Content-Type': image.mimeType,
-      ...(image.width ? { 'X-Image-Width': String(image.width) } : {}),
-      ...(image.height ? { 'X-Image-Height': String(image.height) } : {}),
+      ...(image.width
+        ? {
+            'X-Image-Width': String(image.width),
+          }
+        : {}),
+      ...(image.height
+        ? {
+            'X-Image-Height': String(image.height),
+          }
+        : {}),
     },
   })
 })

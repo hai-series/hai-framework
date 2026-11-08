@@ -1,5 +1,5 @@
-import { listPartnerLeads, PartnerLeadQuerySchema } from '$lib/server/partner-service.js'
 import { kit } from '@h-ai/kit'
+import { listPartnerLeads, PartnerLeadQuerySchema } from '#lib/server/partner-service.js'
 
 export const GET = kit.handler(async ({ url }) => {
   const query = kit.validate.query(url, PartnerLeadQuerySchema)

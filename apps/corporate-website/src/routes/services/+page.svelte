@@ -2,7 +2,7 @@
   /**
    * 服务页面
    */
-  import * as m from '$lib/paraglide/messages.js'
+  import * as m from '#lib/paraglide/messages.js'
 
   const services = $derived([
     {
@@ -11,7 +11,11 @@
       accent: 'bg-primary/8',
       title: m.services_item_software_title(),
       desc: m.services_item_software_desc(),
-      points: [m.services_item_software_point_1(), m.services_item_software_point_2(), m.services_item_software_point_3()],
+      points: [
+        m.services_item_software_point_1(),
+        m.services_item_software_point_2(),
+        m.services_item_software_point_3(),
+      ],
     },
     {
       icon: 'icon-[tabler--cloud]',
@@ -19,7 +23,11 @@
       accent: 'bg-info/8',
       title: m.services_item_cloud_title(),
       desc: m.services_item_cloud_desc(),
-      points: [m.services_item_cloud_point_1(), m.services_item_cloud_point_2(), m.services_item_cloud_point_3()],
+      points: [
+        m.services_item_cloud_point_1(),
+        m.services_item_cloud_point_2(),
+        m.services_item_cloud_point_3(),
+      ],
     },
     {
       icon: 'icon-[tabler--lock]',
@@ -27,7 +35,11 @@
       accent: 'bg-warning/8',
       title: m.services_item_security_title(),
       desc: m.services_item_security_desc(),
-      points: [m.services_item_security_point_1(), m.services_item_security_point_2(), m.services_item_security_point_3()],
+      points: [
+        m.services_item_security_point_1(),
+        m.services_item_security_point_2(),
+        m.services_item_security_point_3(),
+      ],
     },
     {
       icon: 'icon-[tabler--chart-bar]',
@@ -35,7 +47,11 @@
       accent: 'bg-success/8',
       title: m.services_item_data_title(),
       desc: m.services_item_data_desc(),
-      points: [m.services_item_data_point_1(), m.services_item_data_point_2(), m.services_item_data_point_3()],
+      points: [
+        m.services_item_data_point_1(),
+        m.services_item_data_point_2(),
+        m.services_item_data_point_3(),
+      ],
     },
   ])
 </script>

@@ -24,7 +24,7 @@
   })
   async function authenticated() {
     await refreshCurrentUser()
-    await goto(resolve('/', {}))
+    await goto(resolve('/'))
   }
 </script>
 

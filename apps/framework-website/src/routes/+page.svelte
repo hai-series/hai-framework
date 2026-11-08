@@ -1,24 +1,87 @@
 <script lang='ts'>
   import type { PageProps } from './$types'
   import { asset, resolve } from '$app/paths'
-  import * as m from '$lib/paraglide/messages'
   import { Badge, MarkdownRenderer } from '@h-ai/ui'
+  import * as m from '#lib/paraglide/messages.js'
 
   const { data }: PageProps = $props()
   const install = '```sh\npnpm add -g @h-ai/cli@latest\nhai create my-app --type website --defaults\ncd my-app && pnpm dev\n```'
   const features = [
-    { icon: 'icon-[tabler--layout-grid]', title: m.site_feature_apps, body: m.site_feature_apps_body, slug: 'getting-started/create' },
-    { icon: 'icon-[tabler--settings]', title: m.site_feature_config, body: m.site_feature_config_body, slug: 'configuration/data' },
-    { icon: 'icon-[tabler--shield-check]', title: m.site_feature_security, body: m.site_feature_security_body, slug: 'development/authentication' },
-    { icon: 'icon-[tabler--sparkles]', title: m.site_feature_ai, body: m.site_feature_ai_body, slug: 'development/ai' },
-    { icon: 'icon-[tabler--components]', title: m.site_feature_ui, body: m.site_feature_ui_body, slug: 'development/ui' },
-    { icon: 'icon-[tabler--package]', title: m.site_feature_delivery, body: m.site_feature_delivery_body, slug: 'operations/deployment' },
+    {
+      icon: 'icon-[tabler--layout-grid]',
+      title: m.site_feature_apps,
+      body: m.site_feature_apps_body,
+      slug: 'getting-started/create',
+    },
+    {
+      icon: 'icon-[tabler--settings]',
+      title: m.site_feature_config,
+      body: m.site_feature_config_body,
+      slug: 'configuration/data',
+    },
+    {
+      icon: 'icon-[tabler--shield-check]',
+      title: m.site_feature_security,
+      body: m.site_feature_security_body,
+      slug: 'development/authentication',
+    },
+    {
+      icon: 'icon-[tabler--sparkles]',
+      title: m.site_feature_ai,
+      body: m.site_feature_ai_body,
+      slug: 'development/ai',
+    },
+    {
+      icon: 'icon-[tabler--components]',
+      title: m.site_feature_ui,
+      body: m.site_feature_ui_body,
+      slug: 'development/ui',
+    },
+    {
+      icon: 'icon-[tabler--package]',
+      title: m.site_feature_delivery,
+      body: m.site_feature_delivery_body,
+      slug: 'operations/deployment',
+    },
   ]
   const previews = [
-    { id: 'fullstack', title: m.site_preview_fullstack, body: m.site_preview_fullstack_body, image: '/template-previews/fullstack-users.png', width: 1280, height: 720, command: 'hai create my-business --type fullstack --frontends web --defaults' },
-    { id: 'website', title: m.site_preview_website, body: m.site_preview_website_body, image: '/guide-images/website-static-contact-warning.png', width: 1280, height: 720, command: 'hai create my-site --type website --defaults' },
-    { id: 'admin', title: m.site_preview_admin, body: m.site_preview_admin_body, image: '/template-previews/admin-login.png', width: 1280, height: 720, command: 'hai create my-admin --type admin --defaults' },
-    { id: 'mobile', title: m.site_preview_mobile, body: m.site_preview_mobile_body, image: '/template-previews/mobile-login.png', width: 390, height: 933, command: 'hai create my-mobile --type mobile-app --defaults' },
+    {
+      id: 'fullstack',
+      title: m.site_preview_fullstack,
+      body: m.site_preview_fullstack_body,
+      image: asset('template-previews/fullstack-users.png'),
+      width: 1280,
+      height: 720,
+      command: 'hai create my-business --type fullstack --frontends web --defaults',
+    },
+    // 手册截图由 Vite 插件从 docs/usage 发射，未进入 public 静态文件类型目录。
+    {
+      id: 'website',
+      title: m.site_preview_website,
+      body: m.site_preview_website_body,
+      image: `${resolve('/').replace(/\/$/, '')}/guide-images/website-static-contact-warning.png`,
+      width: 1280,
+      height: 720,
+      command: 'hai create my-site --type website --defaults',
+    },
+    {
+      id: 'admin',
+      title: m.site_preview_admin,
+      body: m.site_preview_admin_body,
+      image: asset('template-previews/admin-login.png'),
+      width: 1280,
+      height: 720,
+      command: 'hai create my-admin --type admin --defaults',
+    },
+    {
+      id: 'mobile',
+      title: m.site_preview_mobile,
+      body: m.site_preview_mobile_body,
+      image: asset('template-previews/mobile-login.png'),
+      width: 390,
+      height: 933,
+      command: 'hai create my-mobile --type mobile-app --defaults',
+    },
   ]
 </script>
 
@@ -56,8 +119,10 @@
     <div class='template-grid'>
       {#each previews as preview (preview.id)}
         <article class='template-card' data-template-preview={preview.id}>
-          <a class='template-image-link' href={asset(preview.image)} target='_blank' rel='noopener noreferrer' aria-label={m.site_preview_open({ name: preview.title() })}>
-            <div class='template-image-frame'><img src={asset(preview.image)} alt={preview.title()} width={preview.width} height={preview.height} loading='lazy' /></div>
+          <a class='template-image-link' href={preview.image} target='_blank' rel='external noopener noreferrer' aria-label={m.site_preview_open({
+            name: preview.title(),
+          })}>
+            <div class='template-image-frame'><img src={preview.image} alt={preview.title()} width={preview.width} height={preview.height} loading='lazy' /></div>
             <span class='template-image-action'>{m.site_preview_original()} <span aria-hidden='true'>↗</span></span>
           </a>
           <div class='template-card-copy'><h3>{preview.title()}</h3><p>{preview.body()}</p><code>{preview.command}</code></div>

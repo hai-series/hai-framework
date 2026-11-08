@@ -144,7 +144,7 @@ image:
 # 说明：Memory 配置
 # 取值：配置块（填写下方缩进字段）
 memory:
-  # 说明：记忆后端：native 使用框架原生存储与批量合并；mem0 将框架提取结果写入受支持的嵌入式 SDK 后端
+  # 说明：记忆后端：native 使用框架原生存储与批量合并；mem0 将框架提取结果以 Mem0 数据格式写入 Qdrant
   # 取值：字符串；取值：native | mem0
   provider: ${HAI_AI_MEMORY_PROVIDER:native}
   # 说明：是否启用向量检索（默认 true，关闭则仅使用关键词匹配）

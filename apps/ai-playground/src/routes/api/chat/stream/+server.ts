@@ -3,11 +3,11 @@
  * @module routes/api/chat/stream/+server
  */
 
-import { ChatRequestSchema } from '$lib/ai-lab-types.js'
-import { streamChatWithMemory } from '$lib/server/ai-lab.js'
 import { ai } from '@h-ai/ai'
 import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
+import { ChatRequestSchema } from '#lib/ai-lab-types.js'
+import { streamChatWithMemory } from '#lib/server/ai-lab.js'
 
 export const POST = kit.handler(async ({ request }) => {
   const input = await kit.validate.body(request, ChatRequestSchema)
@@ -32,7 +32,11 @@ export const POST = kit.handler(async ({ request }) => {
       }
       catch (error) {
         if (!abortController.signal.aborted) {
-          core.logger.warn('LLM chat stream failed', { error: error instanceof Error ? error.message : String(error) })
+          core.logger.warn('LLM chat stream failed', {
+            error: error instanceof Error
+              ? error.message
+              : String(error),
+          })
           controller.enqueue(encoder.encode(`${JSON.stringify({ error: true })}\n`))
         }
       }

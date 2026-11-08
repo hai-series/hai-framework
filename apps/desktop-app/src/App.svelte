@@ -22,7 +22,18 @@
   import RegisterView from './views/RegisterView.svelte'
   import UsersView from './views/UsersView.svelte'
 
-  useToastFeedback(() => isInitialized() && isAuthenticated() && !['/', '/login', '/register', '/dashboard', '/users', '/profile'].includes(currentPathname()) ? m('unknown_route', { path: currentPathname() }) : '', 'warning')
+  useToastFeedback(() => isInitialized() && isAuthenticated() && ![
+    '/',
+    '/login',
+    '/register',
+    '/dashboard',
+    '/users',
+    '/profile',
+  ].includes(currentPathname())
+    ? m('unknown_route', {
+      path: currentPathname(),
+    })
+    : '', 'warning')
 
   onMount(() => {
     const dispose = installRouter()
@@ -50,7 +61,9 @@
       navigate('/dashboard')
     }
     else if (path === '/') {
-      navigate(isAuthenticated() ? '/dashboard' : '/login')
+      navigate(isAuthenticated()
+        ? '/dashboard'
+        : '/login')
     }
   })
 </script>

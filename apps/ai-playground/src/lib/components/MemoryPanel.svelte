@@ -1,17 +1,18 @@
 <script lang='ts'>
   // 记忆管理面板：按测试主体添加、检索、删除与清空长期记忆
-  import type { MemoryView } from '$lib/ai-lab-types.js'
-  import * as m from '$lib/paraglide/messages.js'
-  import { clearMemories, createMemory, deleteMemory, loadMemories } from '$lib/services/ai-lab.js'
+  import type { LabStatus, MemoryView } from '#lib/ai-lab-types.js'
   import { Button, Card } from '@h-ai/ui'
   import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  import * as m from '#lib/paraglide/messages.js'
+  import { clearMemories, createMemory, deleteMemory, loadMemories } from '#lib/services/ai-lab.js'
 
   interface Props {
     profileId: string
     refreshToken: number
+    memoryMode?: LabStatus['memoryMode']
   }
 
-  const { profileId, refreshToken }: Props = $props()
+  const { profileId, refreshToken, memoryMode }: Props = $props()
   let items = $state<MemoryView[]>([])
   let query = $state('')
   let content = $state('')
@@ -49,7 +50,12 @@
     busy = true
     error = ''
     try {
-      await createMemory({ profileId, content: content.trim(), type, importance })
+      await createMemory({
+        profileId,
+        content: content.trim(),
+        type,
+        importance,
+      })
       content = ''
       await refresh()
     }
@@ -110,7 +116,9 @@
       </h2>
       <p class='mt-1 text-sm text-base-content/55'>{m.memory_description()}</p>
     </div>
-    <span class='badge badge-warning badge-outline shrink-0 whitespace-nowrap'>{m.memory_ephemeral()}</span>
+    {#if memoryMode}<span class='badge badge-outline shrink-0 whitespace-nowrap' class:badge-warning={memoryMode === 'ephemeral'} class:badge-info={memoryMode === 'persistent'}>{memoryMode === 'persistent'
+      ? m.memory_persistent()
+      : m.memory_ephemeral()}</span>{/if}
   </div>
 
   <div class='mt-4 space-y-3 rounded-2xl bg-base-200/65 p-3'>
@@ -147,7 +155,9 @@
             <div class='min-w-0'>
               <div class='mb-1 flex items-center gap-2'>
                 <span class='badge badge-sm badge-outline'>{typeLabels[item.type]}</span>
-                <span class='text-[0.68rem] text-base-content/40'>{m.memory_score({ score: item.importance.toFixed(1) })}</span>
+                <span class='text-[0.68rem] text-base-content/40'>{m.memory_score({
+                  score: item.importance.toFixed(1),
+                })}</span>
               </div>
               <p class='text-sm leading-5'>{item.content}</p>
             </div>

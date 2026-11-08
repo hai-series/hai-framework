@@ -5,13 +5,13 @@
  * @module hooks.server
  */
 
-import type { Handle } from '@sveltejs/kit'
+import type { Handle } from '@sveltejs/kit/hooks'
 import process from 'node:process'
-import { paraglideMiddleware } from '$lib/paraglide/server.js'
-import { ensureAIInitialized } from '$lib/server/init.js'
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { kit, KitConfigSchema } from '@h-ai/kit'
+import { paraglideMiddleware } from '#lib/paraglide/server.js'
+import { ensureAIInitialized } from '#lib/server/init.js'
 
 // 初始化 AI（E2E mock 模式跳过）、设置 locale 与 API 安全响应头
 let rateLimitInit: Promise<void> | undefined
@@ -20,8 +20,12 @@ let rateLimitInit: Promise<void> | undefined
 async function ensureRateLimit(): Promise<void> {
   if (!rateLimitInit) {
     rateLimitInit = (async () => {
-      if (!core.config.has('cache'))
-        core.init({ configDir: './config', configSchemas: { cache: CacheConfigSchema } })
+      if (!core.config.has('cache')) {
+        core.init({
+          configDir: './config',
+          configSchemas: { cache: CacheConfigSchema },
+        })
+      }
       const config = core.config.validate('cache', CacheConfigSchema)
       if (!config.success)
         throw new Error('Rate limit cache configuration is invalid')
@@ -69,7 +73,11 @@ const haiHandle: Handle = async (input) => {
     configuredHandle = kit.createHandle({
       trustedProxies: loaded.data.trustedProxies,
       access: loaded.data.access,
-      rateLimit: { windowMs: 60000, maxRequests: 120, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'ai-playground', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1' }) },
+      rateLimit: {
+        windowMs: 60000,
+        maxRequests: 120,
+        store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'ai-playground', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1' }),
+      },
     })
   }
   return configuredHandle(input)

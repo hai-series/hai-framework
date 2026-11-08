@@ -1,5 +1,5 @@
-import { createPartnerLead, PartnerLeadSchema } from '$lib/server/partner-service.js'
 import { kit } from '@h-ai/kit'
+import { createPartnerLead, PartnerLeadSchema } from '#lib/server/partner-service.js'
 
 export const POST = kit.handler(async ({ request }) => {
   const payload = await kit.validate.body(request, PartnerLeadSchema)
