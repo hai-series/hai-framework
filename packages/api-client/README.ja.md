@@ -6,56 +6,119 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/api-contract](../api-contract/README.ja.md) · [@h-ai/core](../core/README.ja.md) · [@h-ai/crypto](../crypto/README.ja.md)
 
-## 概要
-
 hai-framework のクロスプラットフォーム oRPC/OpenAPI 型付きクライアント。Web、アプリ、ミニプログラムに共通の API 呼び出しと Token 管理を提供します。
 
-## 主な機能
-
-- `apiClient`：iam/storage/ai ドメインに対応する既定の型付きクライアント。
-- `apiClient.create(contract)`：独自の contract に対応する型付きクライアントを作成。
-- `apiClient.tokenStorage.{memory,httpOnlyCookie}()`：Token ストレージのファクトリー。ブラウザーでは access token をメモリー、refresh token をサーバー管理の httpOnly Cookie に保持し、ネイティブではプラットフォームの安全なストレージを注入します。認証情報を Web Storage に保存しません。
-- ブラウザー、Node、Capacitor、ミニプログラムのブリッジに対応する独自 `fetch` を指定可能。
-- Bearer Token の自動付与と、401 応答後の更新および 1 回の再試行。
-- ネットワークエラーを `HaiResult` のエラーに変換。
-- 任意の通信暗号化：`apiClient.init({ transport: { crypto } })` が `crypto.transport.createClient()` を自動使用。
-- 通信暗号化と自動更新を併用可能。401 後の `/auth/refresh` も暗号化された fetch を使用し、平文には切り替わりません。
-
-## 使い始める
-
-### クイックスタート
+## クイックスタート
 
 `close()` は旧更新を無効化し、進行中の認証情報書き込みを待ちます。外部 TokenStorage の値は保持され、終了後に再利用できます。`timeout` はヘッダー、JSON 本文全体、および HTML エラーページを含む全失敗応答の本文が対象です。タイムアウトや取消後は Token を更新しません。内蔵 Cookie アダプターはログインと更新で認証情報を送るため、CORS の Origin と credentials を設定します。メモリー・ネイティブ保存は元の要求の方針を維持します。独自ストリームは逐次読み取り、本文の中断には呼出側の signal を使います。
 
 ```ts
+import type { IamAuthLoginInput } from '@h-ai/api-client'
 import { apiClient } from '@h-ai/api-client'
 
-await apiClient.init({
-  baseUrl: 'https://api.example.com/api/v1',
-  auth: {}, // 默认使用 httpOnly cookie 存储（推荐）；SSR 测试请显式传入 apiClient.tokenStorage.memory()
-})
-
-const login = await apiClient.iam.auth.login({
-  identifier: 'alice',
-  password: 'secret',
-})
-
-if (login.success) {
-  // httpOnly cookie 模式下 refresh token 由服务端 Set-Cookie 管理，
-  // api-client 默认存储只需要把 access token 写入内存。
-  await apiClient.auth.setTokens(login.data.tokens)
+async function loginAndLoadProfile(input: IamAuthLoginInput) {
+  const initialized = await apiClient.init({ baseUrl: '/api/v1', auth: {} })
+  if (!initialized.success)
+    return initialized
+  try {
+    const actions = apiClient.createAuthActions(apiClient)
+    const loggedIn = await actions.login(input)
+    if (!loggedIn.success)
+      return loggedIn
+    const profile = await apiClient.iam.auth.currentUser()
+    if (!profile.success)
+      return profile
+    return profile
+  }
+  catch (writeError) {
+    try {
+      await apiClient.auth.clear()
+    }
+    catch (cleanupError) {
+      throw new AggregateError([writeError, cleanupError], 'Credential persistence and cleanup failed')
+    }
+    throw writeError
+  }
+  finally {
+    await apiClient.close()
+  }
 }
-
-const me = await apiClient.iam.auth.currentUser()
-if (me.success) {
-  // 身份资料与服务端重新校验后的访问范围一次返回，客户端无需持久化权限快照。
-  const { roles, permissions, ...user } = me.data
-}
-
-await apiClient.close()
 ```
 
-#### 通信暗号化の有効化
+## 機能
+
+### 用途・入力・出力
+
+先に初期化します。名前付き変数は検証済みホスト入力、HaiResult.success を確認します。auth/保存の Promise<void> は reject し得るため、失敗と消去障害を処理し、サーバー成功だけでログイン完了を表示しません。
+
+| 入口                                    | 入力                            | 出力                       | 用途と失敗条件                                                | 例                                                           |
+| --------------------------------------- | ------------------------------- | -------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------ |
+| `apiClient.init`                        | config: baseUrl、认证及传输选项 | `Promise<HaiResult<void>>` | 初期化し失敗時は呼出しを停止                                  | `await apiClient.init({ baseUrl: '/api/v1', auth: {} })`     |
+| `apiClient.close`                       | なし                            | `Promise<void>`            | 更新を無効化し解放。サーバーログアウトとは別                  | `await apiClient.close()`                                    |
+| `apiClient.create`                      | 共有契約                        | `ApiClient<TContract>`     | 独立インスタンス。SSR は要求ごとに作成                        | `apiClient.create(contract)`                                 |
+| `apiClient.auth.setTokens`              | 検証済み応答                    | `Promise<void>`            | 直列保存し旧更新を無効化。保存障害は reject                   | `await apiClient.auth.setTokens(tokens)`                     |
+| `apiClient.auth.clear`                  | なし                            | `Promise<void>`            | ローカル資格情報を消去。reject の可能性、サーバー logout は別 | `await apiClient.auth.clear()`                               |
+| `apiClient.auth.onTokenRefreshed`       | callback(TokenPair)             | `() => void`               | 保存後の更新を監視、解除関数を返す。Token を出力しない        | `apiClient.auth.onTokenRefreshed(() => refreshProfile())`    |
+| `apiClient.tokenStorage.memory`         | なし                            | `TokenStorage`             | Node/SSR/テスト用の独立メモリー適合                           | `apiClient.tokenStorage.memory()`                            |
+| `apiClient.tokenStorage.httpOnlyCookie` | なし                            | `TokenStorage`             | ブラウザー access はメモリー、refresh はサーバー Cookie       | `apiClient.tokenStorage.httpOnlyCookie()`                    |
+| `apiClient.createAuthActions`           | 標準 IAM 契約                   | `Auth actions object`      | init と auth 有効化後に認証フォームへ接続                     | `apiClient.createAuthActions(apiClient)`                     |
+| `apiClient.observeRequests`             | observer(ApiRequestRecord)      | `() => void`               | 秘匿した論理結果を監視し解除関数を返す                        | `apiClient.observeRequests(record => reportOutcome(record))` |
+
+#### 認証フォーム操作
+
+`const actions = apiClient.createAuthActions(apiClient)`
+
+| 入口                           | 入力                                            | 出力                                          | 用途と失敗条件                             | 例                                                                   |
+| ------------------------------ | ----------------------------------------------- | --------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------- |
+| `actions.publicConfig`         | —                                               | `Promise<HaiResult<T>>` → IamPublicConfig     | 公開認証方針を読む                         | `await actions.publicConfig()`                                       |
+| `actions.createCaptcha`        | { operation }                                   | `Promise<HaiResult<T>>` → IamCaptchaChallenge | 操作用挑戦を取得                           | `await actions.createCaptcha({ operation: 'login' })`                |
+| `actions.login`                | IamAuthLoginInput                               | `Promise<HaiResult<T>>` → 認証結果            | 方式を選び資格情報保存の成功を待つ         | `await actions.login({ identifier, password })`                      |
+| `actions.register`             | IamRegisterInput                                | `Promise<HaiResult<T>>` → 登録認証結果        | サーバー登録方針に従い資格情報を保存       | `await actions.register({ username, password })`                     |
+| `actions.sendOtp`              | identifier, { captcha? }?                       | `Promise<HaiResult<T>>` → { expiresAt }       | メール/電話 OTP を送信。ログインとは別     | `await actions.sendOtp(identifier)`                                  |
+| `actions.requestPasswordReset` | identifier, { captcha? }?                       | `Promise<HaiResult<T>>` → void                | アカウント列挙防止方針に従いリセット申請   | `await actions.requestPasswordReset(identifier)`                     |
+| `actions.confirmPasswordReset` | token, newPassword                              | `Promise<HaiResult<T>>` → void                | 専用リセット Token を消費                  | `await actions.confirmPasswordReset(resetToken, newPassword)`        |
+| `actions.renewPassword`        | { identifier, password, newPassword, captcha? } | `Promise<HaiResult<T>>` → void                | 期限切れパスワードを更新                   | `await actions.renewPassword({ identifier, password, newPassword })` |
+| `actions.reauthenticate`       | password, operation                             | `Promise<HaiResult<T>>` → 用途票              | 機密操作に結びついた短期資格を取得         | `await actions.reauthenticate(password, 'users:delete')`             |
+| `actions.bindPageExit`         | { enabled? }                                    | `() => void`                                  | ページ離脱時の最善努力失効。解除関数を返す | `actions.bindPageExit({ enabled: endOnPageHide })`                   |
+
+#### 安全保存インスタンス
+
+`const storage = apiClient.tokenStorage.memory()`
+
+| 入口                      | 入力  | 出力                      | 用途と失敗条件                                            | 例                                            |
+| ------------------------- | ----- | ------------------------- | --------------------------------------------------------- | --------------------------------------------- |
+| `storage.getAccessToken`  | —     | `Promise<string \| null>` | access を取得、null は不存在のみ                          | `await storage.getAccessToken()`              |
+| `storage.setAccessToken`  | token | `Promise<void>`           | access 保存。接続済みは auth.setTokens を使用             | `await storage.setAccessToken(accessToken)`   |
+| `storage.getRefreshToken` | —     | `Promise<string \| null>` | Cookie モードは内部番兵で Cookie 本文ではない             | `await storage.getRefreshToken()`             |
+| `storage.setRefreshToken` | token | `Promise<void>`           | メモリーは保存、Cookie 適合はサーバー Cookie を変更しない | `await storage.setRefreshToken(refreshToken)` |
+| `storage.clear`           | —     | `Promise<void>`           | 適合側のみ消去、障害は reject。サーバー失効は別           | `await storage.clear()`                       |
+
+#### 既定の業務領域
+
+既定領域は api-contract の HTTP 契約で、サーバーモジュール全体ではありません。独自 client は渡した契約のみを持ちます。
+
+- `apiClient.iam`: IAM 認証・登録・利用者・役割・権限 — [API Contract](../api-contract/README.md), [IAM](../iam/README.md).
+- `apiClient.storage`: ストレージ一覧・メタデータ・署名・削除 — [API Contract](../api-contract/README.md), [Storage](../storage/README.md).
+- `apiClient.ai`: 非ストリーミング AI チャット — [API Contract](../api-contract/README.md), [AI](../ai/README.md).
+
+配列・権限・業務エラーは実契約に従います。認可はサーバーが行い、クライアント設定では権限を付与できません。
+
+```ts
+const files = await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 })
+if (!files.success)
+  throw new Error(files.error.message)
+const chat = await apiClient.ai.chats.createCompletion({
+  messages: [
+    { role: 'user', content: 'Summarize this public report.' }
+  ],
+})
+if (!chat.success)
+  throw new Error(chat.error.message)
+```
+
+`apiClient.config` は秘匿済み実行設定（未初期化時 null）で、秘密の復元には使えません。`apiClient.isInitialized` は準備完了 boolean。どちらも読取専用で通信は発生しません。
+
+### 通信暗号化の有効化
 
 サーバーで先に `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` を有効にします。クライアントには同じ `@h-ai/crypto` サービスのインスタンスを渡すだけで、鍵交換コードの実装は不要です。
 
@@ -98,29 +161,11 @@ await client.init({ baseUrl: 'https://api.example.com/api/v1' })
 const result = await client.iam.auth.login({ identifier: 'alice', password: 'secret' })
 ```
 
-### API 一覧
-
-- `apiClient.init(config)`：既定のクライアントを初期化。
-- `apiClient.close()`：クライアントの状態を解放。
-- `apiClient.auth.setTokens(tokens)`：認証情報を置き換えて access token を保存。httpOnly 以外では指定された refresh token も保存し、省略時は古い値を削除します。
-- `apiClient.auth.clear()`：Token を削除。
-- `apiClient.create(contract)`：独自の型付きクライアントを作成。
+### 資格情報の更新と終了
 
 `auth.clear()` と `auth.setTokens()` は、このクライアントの既存の更新リクエストを直ちにキャンセルして無効化します。遅れて届いた成功応答や 401 は、ログアウト済みの認証状態を復元したり、新しいアカウントを上書きしたり、古い更新コールバックを通知したりしません。ストレージへの書き込みは直列化され、メソッド完了後に以前の非同期書き込みが認証情報を上書きすることはありません。ログアウトとアカウント切り替えには、ストレージを直接変更せずこれらのメソッドを使ってください。httpOnly Cookie とサーバーセッションは、引き続きサーバーのログアウトエンドポイントで失効させる必要があります。
 
 初期化済みのクライアントで `init()` を再度呼ぶと `CONFIG_ERROR` が返り、既存のクライアントは維持されます。`baseUrl` / `fetch` / `transport` を変更する場合は、先に `await apiClient.close()` を呼んでから再初期化してください。
-
-### 設定
-
-- `baseUrl`：API のベース URL。通常は `/api/v1` を含みます。
-- `auth.storage`：Token ストレージアダプター。既定は `apiClient.tokenStorage.httpOnlyCookie()`（ブラウザー推奨）。SSR / テストでは `apiClient.tokenStorage.memory()` を明示してください。
-- `auth.refreshPath`：Token 更新パス。既定は `/auth/refresh`。
-- `timeout`：リクエストのタイムアウト。既定は 30000 ms。
-- `headers`：静的または動的な共通リクエストヘッダー。
-- `fetch`：独自の fetch 実装。
-- `transport.crypto`：透過的なリクエスト/レスポンス暗号化・復号。初期化済みの `@h-ai/crypto` インスタンスが必要です。
-- `transport.keyExchangePath`：鍵交換のサブパス。既定は `/_hai/key-exchange` で、`baseUrl` に自動的に連結されます。
-- `apiClient.config`：**機密情報をマスクした実行時設定のスナップショット**。`baseUrl` 内の認証情報や `headers.authorization` などの機密値は自動的に非表示になります。
 
 ### 設定による認証画面
 
@@ -132,7 +177,57 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 
 [完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
 
-### エラー処理
+### 入力制約と HTTP 機能
+
+キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../storage/README.md#存储输入约束与跨端能力)を参照してください。
+
+### 論理リクエストの監視
+
+`client.observeRequests` は論理呼び出しごとに一度通知し、解除関数を返します。requestId、procedure、所要時間、HTTP 状態、最終 success/errorCode、業務リクエストの attempts を含みます。HTTP 200 の失敗 HaiResult も失敗として扱い、認証更新後の再試行も同じ requestId を保持します。本文・Token・URL クエリーは含みません。認証更新や鍵交換をユーザー操作としません。close は購読を解除するため、再初期化後は再購読してください。
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+
+const unsubscribe = apiClient.observeRequests((record) => {
+  const failed = !record.success
+  const requestId = record.requestId
+})
+unsubscribe()
+```
+
+### 任意の対話チャレンジ
+
+createAuthActions(client) は createCaptcha({operation}) を提供し、ログイン・更新・登録で captcha を保持します。sendOtp(identifier,{captcha}) と requestPasswordReset(identifier,{captcha}) は任意の第2引数に対応します。AuthPanel は自動求解し、独自フォームも ALTCHA 手順を使い、証明を TokenStorage に保存しません。
+
+方針・既定値・復旧範囲は次を参照： [IAM](../iam/README.ja.md)。
+
+### 機密操作の再認証
+
+`reauthenticate` が返す用途限定証明を、個別呼び出しの `options.context.reauthentication` に渡すと `X-Hai-Reauthentication` が付きます。グローバルヘッダー、永続保存、ログには入れません。サーバーは現在の権限、対象範囲、用途を確認して原子的に消費し、並行する通常リクエストには引き継ぎません。クロスオリジン環境ではヘッダーを許可してください。Serv/Kit の既定設定には含まれます。
+
+### 期限切れセッションの画面内復帰
+
+`auth.recoverSession` によって現在の画面と入力を保持して再ログインできます。UI の `createSessionRecovery` / `SessionRecoveryDialog` を使い、ルートで公開方針と元の利用者を設定し、`recovery.recover` と標準認証 actions を渡して破棄時に cancel します。IAM は発行前に `expectedUserId` を確認し、通常の CAPTCHA・ロック・改密・アクセス規則を適用します。認証拒否が明確な要求だけ1回続行でき、取消・5xx・タイムアウト・結果不明の書込は再送しません。旧セッションの重要操作証明は再確認が必要な場合があります。コールバックなしは従来動作で、有効時は即時の onRefreshFailed 遷移を復帰処理が置き換えます。auth.terminalType（web/app/desktop/api、既定 web）は分類用で機器認証ではありません。
+
+### ページ離脱時のセッション方針
+
+`session.endOnPageHide` の既定値は `false` です。ホストは `actions.bindPageExit({ enabled: config.session.endOnPageHide })` を呼び、破棄時に戻り値の解除関数を実行します。標準 admin/H5/fullstack テンプレートは接続済みです。BFCache 以外の `pagehide`（再読み込み、文書全体の移動を含む）で POST `/auth/session/close` を最善努力で送信し、保持する access と関連 refresh を失効します。既存の CSRF/暗号化転送を使用し、`keepalive` を付け、自動更新しません。古い応答が新しいログインを上書きしないよう Cookie/ローカル資格情報を消去しません。明示的ログアウトは通常どおり失効と消去を行います。ブラウザーが離脱要求を送らない場合もあるため、業務に応じてサーバーの `idleTimeout`/`absoluteTimeout` を併用してください。閉じた瞬間の失効は保証できません。
+
+重要操作では `reauthorize: () => sensitiveActions.authorize(operation)` を Kit apiFetch の第3引数、または typed client の options.context に渡します。セッション更新・復帰または明確な証明拒否の後、新しい用途証明で1回だけ続行します。取消時は追加の書込を送らず、コールバックがなければ旧証明を再送しません。
+
+## 設定
+
+- `baseUrl`：API のベース URL。通常は `/api/v1` を含みます。
+- `auth.storage`：Token ストレージアダプター。既定は `apiClient.tokenStorage.httpOnlyCookie()`（ブラウザー推奨）。SSR / テストでは `apiClient.tokenStorage.memory()` を明示してください。
+- `auth.refreshPath`：Token 更新パス。既定は `/auth/refresh`。
+- `timeout`：リクエストのタイムアウト。既定は 30000 ms。
+- `headers`：静的または動的な共通リクエストヘッダー。
+- `fetch`：独自の fetch 実装。
+- `transport.crypto`：透過的なリクエスト/レスポンス暗号化・復号。初期化済みの `@h-ai/crypto` インスタンスが必要です。
+- `transport.keyExchangePath`：鍵交換のサブパス。既定は `/_hai/key-exchange` で、`baseUrl` に自動的に連結されます。
+- `apiClient.config`：**機密情報をマスクした実行時設定のスナップショット**。`baseUrl` 内の認証情報や `headers.authorization` などの機密値は自動的に非表示になります。
+
+## エラー処理
 
 業務 API は `HaiResult<T>` を返します：
 
@@ -152,49 +247,11 @@ else {
 
 自動更新は実際の HTTP 401（`Response.status`）、または HTTP 200 の有効な失敗 HaiResult（`success=false`、文字列の `error.code/message`、`error.httpStatus=401`）で動作します。更新が成功すると元のリクエストを一度だけ再試行します。組み込みのログイン・登録と設定された `auth.refreshPath` は自動更新の対象外で、403/500 など他の失敗でも更新しません。serv の通常の procedure は引き続き HTTP 200 を返します。呼び出し側は最終結果の `success` と `error.code` を確認し、更新失敗による認証失効を処理してください。
 
-## 入力制約と HTTP 機能
-
-キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../storage/README.md#存储输入约束与跨端能力)を参照してください。
-
-## 論理リクエストの監視
-
-`client.observeRequests` は論理呼び出しごとに一度通知し、解除関数を返します。requestId、procedure、所要時間、HTTP 状態、最終 success/errorCode、業務リクエストの attempts を含みます。HTTP 200 の失敗 HaiResult も失敗として扱い、認証更新後の再試行も同じ requestId を保持します。本文・Token・URL クエリーは含みません。認証更新や鍵交換をユーザー操作としません。close は購読を解除するため、再初期化後は再購読してください。
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-
-const unsubscribe = apiClient.observeRequests((record) => {
-  const failed = !record.success
-  const requestId = record.requestId
-})
-unsubscribe()
-```
-
-## エラー表示とログの関連付け
+### エラー表示とログの関連付け
 
 HTTP エラーには安全な翻訳文と追跡番号を含めます。ToastContainer は番号を既定で非表示にし、調査情報のアイコンから表示・コピーできます。同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
 
 HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
-
-## 任意の対話チャレンジ
-
-createAuthActions(client) は createCaptcha({operation}) を提供し、ログイン・更新・登録で captcha を保持します。sendOtp(identifier,{captcha}) と requestPasswordReset(identifier,{captcha}) は任意の第2引数に対応します。AuthPanel は自動求解し、独自フォームも ALTCHA 手順を使い、証明を TokenStorage に保存しません。
-
-方針・既定値・復旧範囲は次を参照： [IAM](../iam/README.ja.md)。
-
-## 機密操作の再認証
-
-`reauthenticate` が返す用途限定証明を、個別呼び出しの `options.context.reauthentication` に渡すと `X-Hai-Reauthentication` が付きます。グローバルヘッダー、永続保存、ログには入れません。サーバーは現在の権限、対象範囲、用途を確認して原子的に消費し、並行する通常リクエストには引き継ぎません。クロスオリジン環境ではヘッダーを許可してください。Serv/Kit の既定設定には含まれます。
-
-## 期限切れセッションの画面内復帰
-
-`auth.recoverSession` によって現在の画面と入力を保持して再ログインできます。UI の `createSessionRecovery` / `SessionRecoveryDialog` を使い、ルートで公開方針と元の利用者を設定し、`recovery.recover` と標準認証 actions を渡して破棄時に cancel します。IAM は発行前に `expectedUserId` を確認し、通常の CAPTCHA・ロック・改密・アクセス規則を適用します。認証拒否が明確な要求だけ1回続行でき、取消・5xx・タイムアウト・結果不明の書込は再送しません。旧セッションの重要操作証明は再確認が必要な場合があります。コールバックなしは従来動作で、有効時は即時の onRefreshFailed 遷移を復帰処理が置き換えます。auth.terminalType（web/app/desktop/api、既定 web）は分類用で機器認証ではありません。
-
-## ページ離脱時のセッション方針
-
-`session.endOnPageHide` の既定値は `false` です。ホストは `actions.bindPageExit({ enabled: config.session.endOnPageHide })` を呼び、破棄時に戻り値の解除関数を実行します。標準 admin/H5/fullstack テンプレートは接続済みです。BFCache 以外の `pagehide`（再読み込み、文書全体の移動を含む）で POST `/auth/session/close` を最善努力で送信し、保持する access と関連 refresh を失効します。既存の CSRF/暗号化転送を使用し、`keepalive` を付け、自動更新しません。古い応答が新しいログインを上書きしないよう Cookie/ローカル資格情報を消去しません。明示的ログアウトは通常どおり失効と消去を行います。ブラウザーが離脱要求を送らない場合もあるため、業務に応じてサーバーの `idleTimeout`/`absoluteTimeout` を併用してください。閉じた瞬間の失効は保証できません。
-
-重要操作では `reauthorize: () => sensitiveActions.authorize(operation)` を Kit apiFetch の第3引数、または typed client の options.context に渡します。セッション更新・復帰または明確な証明拒否の後、新しい用途証明で1回だけ続行します。取消時は追加の書込を送らず、コールバックがなければ旧証明を再送しません。
 
 ## 開発とテスト
 

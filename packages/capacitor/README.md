@@ -4,11 +4,73 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/api-client](../api-client/README.md) · [@h-ai/core](../core/README.md)
 
-## 简介
-
 Capacitor 原生桥接模块，为 hai Framework 移动应用提供原生安全 Token 存储、设备信息、推送通知、相机与状态栏等能力的统一封装。
 
-## 核心功能清单
+## 快速开始
+
+```ts
+import { capacitor } from '@h-ai/capacitor'
+
+const initialized = await capacitor.init()
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+const failures: unknown[] = []
+try {
+  const saved = await capacitor.preferences.set('theme', 'dark')
+  if (!saved.success)
+    throw new Error(saved.error.message)
+  const theme = await capacitor.preferences.get('theme')
+  if (!theme.success)
+    throw new Error(theme.error.message)
+  // theme.data 为 'dark'；尚未保存的键为 null。
+}
+catch (cause) {
+  failures.push(cause)
+}
+finally {
+  const closed = await capacitor.close()
+  if (!closed.success)
+    failures.push(closed.error)
+}
+if (failures.length)
+  throw new AggregateError(failures, 'Native preference operation failed')
+```
+
+## 功能
+
+### 用途、输入与输出
+
+capacitor 的子功能在初始化成功后使用。HaiResult<T> 先判断 success，再读成功 data；void 没有业务数据，Promise 必须 await。tokens 是 createCapacitorTokenStorage() 返回的独立适配器，其读写/清理在原生存储失败时拒绝 Promise。独立 Preferences 辅助函数不依赖模块状态，把同一插件操作包装为 HaiResult。
+
+| 入口                             | 使用场景               | 输入（`—` 表示无参数）                                                                                 | 返回值                                                                                                | 调用示例                                                                        |
+| -------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `capacitor.init`                 | 检测并准备原生宿主     | `—`                                                                                                    | `Promise<HaiResult<void>>`                                                                            | `await capacitor.init()`                                                        |
+| `capacitor.close`                | 释放推送监听等资源     | `—`                                                                                                    | `Promise<HaiResult<void>>`                                                                            | `await capacitor.close()`                                                       |
+| `capacitor.getPlatform`          | 选择平台行为           | `—`                                                                                                    | `string: ios / android / web`                                                                         | `capacitor.getPlatform()`                                                       |
+| `capacitor.isNative`             | 判断是否原生环境       | `—`                                                                                                    | `boolean`                                                                                             | `capacitor.isNative()`                                                          |
+| `capacitor.isInitialized`        | 检查模块状态           | `—`                                                                                                    | `boolean`                                                                                             | `capacitor.isInitialized`                                                       |
+| `capacitor.device.getInfo`       | 显示设备诊断信息       | `—`                                                                                                    | `Promise<HaiResult<{ platform, osVersion, model, manufacturer, isVirtual, appVersion?, appBuild? }>>` | `await capacitor.device.getInfo()`                                              |
+| `capacitor.device.getAppVersion` | 显示当前安装版本       | `—`                                                                                                    | `Promise<HaiResult<{ version, build }>>`                                                              | `await capacitor.device.getAppVersion()`                                        |
+| `capacitor.camera.takePhoto`     | 拍照或选择相册图片     | `{ source?: camera/photos/prompt, quality?: 0…100, width?, height?, resultType?: uri/base64/dataUrl }` | `Promise<HaiResult<{ data: string, format: string }>>`                                                | `await capacitor.camera.takePhoto({ source: "photos", resultType: "dataUrl" })` |
+| `capacitor.push.register`        | 申请权限并获取推送标识 | `{ signal?: AbortSignal }`                                                                             | `Promise<HaiResult<{ token: string }>>`                                                               | `await capacitor.push.register()`                                               |
+| `capacitor.push.listen`          | 接收推送与点击事件     | `{ onReceived?, onActionPerformed? }, { signal? }`                                                     | `Promise<HaiResult<() => Promise<HaiResult<void>>>>`                                                  | `await capacitor.push.listen(callbacks, { signal })`                            |
+| `capacitor.statusBar.configure`  | 设置状态栏显示         | `{ style?: dark/light/default, backgroundColor?: color, overlay?: boolean }`                           | `Promise<HaiResult<void>>`                                                                            | `await capacitor.statusBar.configure({ style: "dark", overlay: true })`         |
+| `capacitor.statusBar.show`       | 显示状态栏             | `—`                                                                                                    | `Promise<HaiResult<void>>`                                                                            | `await capacitor.statusBar.show()`                                              |
+| `capacitor.statusBar.hide`       | 隐藏状态栏             | `—`                                                                                                    | `Promise<HaiResult<void>>`                                                                            | `await capacitor.statusBar.hide()`                                              |
+| `capacitor.preferences.get`      | 读取普通偏好           | `key: string`                                                                                          | `Promise<HaiResult<string / null>>`                                                                   | `await capacitor.preferences.get("theme")`                                      |
+| `capacitor.preferences.set`      | 保存普通偏好           | `key: string, value: string`                                                                           | `Promise<HaiResult<void>>`                                                                            | `await capacitor.preferences.set("theme", "dark")`                              |
+| `capacitor.preferences.remove`   | 删除普通偏好           | `key: string`                                                                                          | `Promise<HaiResult<void>>`                                                                            | `await capacitor.preferences.remove("theme")`                                   |
+| `createCapacitorTokenStorage`    | 创建原生安全凭据适配器 | `—`                                                                                                    | `TokenStorage`                                                                                        | `createCapacitorTokenStorage()`                                                 |
+| `tokens.getAccessToken`          | 读取已保存的访问令牌   | `—`                                                                                                    | `Promise<string / null>`                                                                              | `await tokens.getAccessToken()`                                                 |
+| `tokens.getRefreshToken`         | 读取已保存的刷新令牌   | `—`                                                                                                    | `Promise<string / null>`                                                                              | `await tokens.getRefreshToken()`                                                |
+| `tokens.setAccessToken`          | 保存访问令牌           | `token: string`                                                                                        | `Promise<void>`                                                                                       | `await tokens.setAccessToken(accessToken)`                                      |
+| `tokens.setRefreshToken`         | 保存刷新令牌           | `token: string`                                                                                        | `Promise<void>`                                                                                       | `await tokens.setRefreshToken(refreshToken)`                                    |
+| `tokens.clear`                   | 删除本机两类凭据       | `—`                                                                                                    | `Promise<void>`                                                                                       | `await tokens.clear()`                                                          |
+| `safeGetPreference`              | 独立读取非敏感偏好     | `key: string`                                                                                          | `Promise<HaiResult<string / null>>`                                                                   | `await safeGetPreference("theme")`                                              |
+| `safeSetPreference`              | 独立保存非敏感偏好     | `key: string, value: string`                                                                           | `Promise<HaiResult<void>>`                                                                            | `await safeSetPreference("theme", "dark")`                                      |
+| `safeRemovePreference`           | 独立删除非敏感偏好     | `key: string`                                                                                          | `Promise<HaiResult<void>>`                                                                            | `await safeRemovePreference("theme")`                                           |
+
+照片的 source 选择相机、相册或交互选择器；quality 是 0–100 的质量值，width/height 是像素约束。成功时 data 随 resultType 返回可显示的 webPath、裸 Base64 或带 MIME 前缀的 Data URL，format 是插件返回的图片格式。callbacks 的 onReceived/onActionPerformed 接收推送对象，signal 来自应用创建的 AbortController；成功 listen 的 data 是需要 await 并检查结果的清理函数。独立工厂与 Preferences 辅助函数从 @h-ai/capacitor 根入口导入。
 
 - **Token 存储**：`@aparajita/capacitor-secure-storage`（原生必需）。Android 使用 KeyStore + 加密 SharedPreferences，iOS 使用 Keychain；Web 不回退。
 - **Preferences**：`@capacitor/preferences`（必需）。通用偏好数据存储，适合非敏感配置，不用于认证 Token。
@@ -18,21 +80,7 @@ Capacitor 原生桥接模块，为 hai Framework 移动应用提供原生安全 
 - **相机/相册**：`@capacitor/camera`（可选）。拍照、选取相册图片。
 - **状态栏**：`@capacitor/status-bar`（可选）。沉浸式、背景色、样式配置。
 
-## 使用入门
-
-### 快速开始
-
-```ts
-import { capacitor } from '@h-ai/capacitor'
-
-// 应用启动时初始化（检测 Capacitor 环境）
-const result = await capacitor.init()
-if (!result.success) {
-  // 非 Capacitor 环境（纯 Web）
-}
-```
-
-#### 与 api-client 配合的 Token 安全存储
+### 与 api-client 配合的 Token 安全存储
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -55,7 +103,7 @@ await apiClient.init({
 
 同一模块中的全部 TokenStorage 实例共享原生变更队列。`clear()` 等待更早调用的写入完成再删除，避免迟到写入在清理成功后恢复旧凭据；之后显式调用的写入可保存新凭据。该顺序不跨独立 WebView/JavaScript 运行环境提供进程间协调。
 
-#### 设备信息与推送
+### 设备信息与推送
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -73,7 +121,7 @@ if (reg.success) {
 
 推送仅在实际原生平台调用插件。`push.register({ signal? })` 与 `push.listen(callbacks, { signal? })` 的设置阶段限时 30 秒（包含权限和监听器挂载）；失败、超时、取消及 `capacitor.close()` 都会停止回调并移除本次拥有的句柄，迟到的句柄在完成后立即移除，不调用影响其他消费者的 removeAllListeners。listen 成功后信号仍有效，也可调用返回的 cleanup。cleanup 与 close 均返回 `HaiResult<void>`；原生 remove 失败返回 `PUSH_CLEANUP_FAILED`（`capacitor:032`），失败句柄保留供再次调用重试，成功移除的句柄不重复操作。模块关闭后立即不可用；重新初始化前先重试遗留清理。自动化验证控制插件时序，不能代替 Android/iOS 真机 FCM/APNs 权限、注册与反复挂载验收。
 
-#### 状态栏
+### 状态栏
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -85,7 +133,7 @@ await capacitor.statusBar.configure({
 })
 ```
 
-#### 相机
+### 相机
 
 ```ts
 const photo = await capacitor.camera.takePhoto({
@@ -95,7 +143,7 @@ const photo = await capacitor.camera.takePhoto({
 })
 ```
 
-#### Preferences
+### Preferences
 
 ```ts
 await capacitor.preferences.set('my_key', 'value')
@@ -104,18 +152,6 @@ await capacitor.preferences.remove('my_key')
 ```
 
 `capacitor.preferences` 适合保存语言、主题、草稿等普通偏好数据；认证 Token 请使用 `createCapacitorTokenStorage()`。
-
-### 配置
-
-本模块无配置文件。`capacitor.init()` 仅检测 Capacitor 运行环境是否可用。
-
-Capacitor 应用必须使用 SPA 模式：
-
-```ts
-// src/routes/+layout.ts
-export const prerender = true
-export const ssr = false
-```
 
 ### Android 容器打包
 
@@ -142,9 +178,21 @@ docker run --rm -it --platform linux/amd64 \
 
 构建下载依赖时需要访问 npm、Gradle 分发站点、Google Maven 和 Maven Central。发布包沿用应用的签名流程，密钥库从容器外只读挂载，口令由构建环境注入。应用示例见 [mobile-app 原生交付与验收](../../apps/mobile-app/README.md#原生交付与验收)。
 
-### 错误处理
+## 配置
 
-`capacitor.*` 业务操作与 `safe*Preference` 返回 `HaiResult<T>`；TokenStorage 适配器方法以 Promise 拒绝报告平台与存储错误：
+本模块无配置文件。`capacitor.init()` 仅检测 Capacitor 运行环境是否可用。
+
+原生 WebView 运行客户端页面。若应用使用 SvelteKit，配置静态 SPA；纯 Svelte/Vite 模板不使用下面的路由文件：
+
+```ts
+// src/routes/+layout.ts
+export const prerender = true
+export const ssr = false
+```
+
+## 错误处理
+
+`init/close`、device/camera/push/statusBar/preferences 业务操作与 `safe*Preference` 返回 `HaiResult<T>`；`getPlatform/isNative/isInitialized` 返回直接值。TokenStorage 适配器方法以 Promise 拒绝报告平台与存储错误：
 
 ```ts
 import { capacitor, HaiCapacitorError } from '@h-ai/capacitor'

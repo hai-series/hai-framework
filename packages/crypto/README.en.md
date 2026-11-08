@@ -4,28 +4,9 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/cache](../cache/README.en.md) · [@h-ai/core](../core/README.en.md) · [@h-ai/reldb](../reldb/README.en.md)
 
-## Introduction
-
 A cryptography module for asymmetric encryption, hashing, symmetric encryption, and password hashing.
 
-## Core features
-
-- Asymmetric cryptography (key generation, encryption/decryption, signing/verification)
-- Hashing (hash, HMAC, verification)
-- Symmetric encryption (ECB/CBC modes)
-- Password hashing (salted iterative hashes)
-- Transport encryption (`crypto.transport`: server manager + client `encryptedFetch`)
-- Shared server/browser support (Node.js / browser)
-
-## Getting started
-
-### Security notice
-
-- **SM4 encryption returns a structured payload by default**: `crypto.symmetric.encrypt(data, key)` uses CBC + a random IV by default and returns `{ mode, ciphertext, iv, encoding }`. Pass that object to `crypto.symmetric.decrypt(payload, key)` to decrypt.
-- **Use random SM4 keys**: generate keys with `crypto.symmetric.generateKey()`. This module does not provide a KDF for password-based encryption keys. Store passwords with the server-only `crypto.password.hash(password)`; do not use passwords or password hashes directly as SM4 keys.
-- **IVs must be unique**: never reuse an IV with the same key. Prefer default CBC or `encryptWithIV()` to generate one for each call. Transmit and store the IV with the ciphertext; the IV can be public.
-
-### Quick start
+## Quick Start
 
 Concurrent `close()` invalidates an unfinished `init()`, so late initialization cannot reopen the module. Wait for that initialization to settle before initializing again.
 
@@ -38,7 +19,55 @@ if (!initialized.success)
   throw new Error(initialized.error.message)
 ```
 
-#### Asymmetric cryptography (encryption / signing)
+## Features
+
+### Purpose, inputs and outputs
+
+Initialize crypto successfully before using algorithms. Check HaiResult.success before reading data of type T; void has no business data and Promises must be awaited. Keys, ciphertext, signatures, digests and payloads come from the matching successful operations. manager is createServer.data after success; session is returned directly by createClient. HTTP adapters derive requestContext/messageContext from the actual request, not a client-supplied identity. Complete workflows follow below.
+
+| Entry                                 | Use case                              | Input (`—` means none)                                                    | Return value                                           | Call example                                                                                            |
+| ------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `crypto.init`                         | Prepare cryptographic operations      | `—`                                                                       | `Promise<HaiResult<void>>`                             | `await crypto.init()`                                                                                   |
+| `crypto.close`                        | Release module state                  | `—`                                                                       | `Promise<void>`                                        | `await crypto.close()`                                                                                  |
+| `crypto.isInitialized`                | Check readiness                       | `—`                                                                       | `boolean`                                              | `crypto.isInitialized`                                                                                  |
+| `crypto.asymmetric.generateKeyPair`   | Generate an SM2 key pair              | `—`                                                                       | `HaiResult<{ publicKey, privateKey }>`                 | `crypto.asymmetric.generateKeyPair()`                                                                   |
+| `crypto.asymmetric.encrypt`           | Encrypt with the recipient public key | `data: string, publicKey: string, options?: { cipherMode, outputFormat }` | `HaiResult<string>`                                    | `crypto.asymmetric.encrypt("orders", publicKey)`                                                        |
+| `crypto.asymmetric.decrypt`           | Decrypt with the private key          | `ciphertext: string, privateKey: string, options?`                        | `HaiResult<string>`                                    | `crypto.asymmetric.decrypt(ciphertext, privateKey)`                                                     |
+| `crypto.asymmetric.sign`              | Sign a message                        | `data: string, privateKey: string, options?: { hash, userId }`            | `HaiResult<string>`                                    | `crypto.asymmetric.sign("orders", privateKey)`                                                          |
+| `crypto.asymmetric.verify`            | Verify a message signature            | `data: string, signature: string, publicKey: string, options?`            | `HaiResult<boolean>`                                   | `crypto.asymmetric.verify("orders", signature, publicKey)`                                              |
+| `crypto.asymmetric.isValidPublicKey`  | Check public-key format               | `publicKey: string`                                                       | `boolean`                                              | `crypto.asymmetric.isValidPublicKey(publicKey)`                                                         |
+| `crypto.asymmetric.isValidPrivateKey` | Check private-key format              | `privateKey: string`                                                      | `boolean`                                              | `crypto.asymmetric.isValidPrivateKey(privateKey)`                                                       |
+| `crypto.hash.hash`                    | Compute an SM3 digest                 | `data: string / Uint8Array, options?: { inputEncoding }`                  | `HaiResult<string>: 64 hex`                            | `crypto.hash.hash("orders")`                                                                            |
+| `crypto.hash.hmac`                    | Compute a keyed digest                | `data: string, key: string`                                               | `HaiResult<string>`                                    | `crypto.hash.hmac("orders", hmacKey)`                                                                   |
+| `crypto.hash.verify`                  | Compare text with a digest            | `data: string, expectedHash: string`                                      | `HaiResult<boolean>`                                   | `crypto.hash.verify("orders", digest)`                                                                  |
+| `crypto.symmetric.generateKey`        | Generate a random SM4 key             | `—`                                                                       | `string: 32 hex`                                       | `crypto.symmetric.generateKey()`                                                                        |
+| `crypto.symmetric.generateIV`         | Generate a random IV                  | `—`                                                                       | `string: 32 hex`                                       | `crypto.symmetric.generateIV()`                                                                         |
+| `crypto.symmetric.encrypt`            | Encrypt with structured metadata      | `data: string, key: 32 hex, options?: { mode, iv, outputFormat }`         | `HaiResult<{ mode, ciphertext, iv?, encoding }>`       | `crypto.symmetric.encrypt("orders", key)`                                                               |
+| `crypto.symmetric.decrypt`            | Decrypt a structured payload          | `payload: SymmetricEncryptedPayload, key: 32 hex`                         | `HaiResult<string>`                                    | `crypto.symmetric.decrypt(payload, key)`                                                                |
+| `crypto.symmetric.encryptWithIV`      | Encrypt with a fresh IV               | `data: string, key: 32 hex`                                               | `HaiResult<{ mode: "cbc", ciphertext, iv, encoding }>` | `crypto.symmetric.encryptWithIV("orders", key)`                                                         |
+| `crypto.symmetric.decryptWithIV`      | Decrypt ciphertext with its IV        | `ciphertext: string, key: 32 hex, iv: 32 hex`                             | `HaiResult<string>`                                    | `crypto.symmetric.decryptWithIV(ciphertext, key, iv)`                                                   |
+| `crypto.symmetric.isValidKey`         | Check key format                      | `key: string`                                                             | `boolean`                                              | `crypto.symmetric.isValidKey(key)`                                                                      |
+| `crypto.symmetric.isValidIV`          | Check IV format                       | `iv: string`                                                              | `boolean`                                              | `crypto.symmetric.isValidIV(iv)`                                                                        |
+| `crypto.password.hash`                | Hash a password on the server         | `password: string, options?: { saltLength, iterations }`                  | `HaiResult<string>: $hai$…`                            | `crypto.password.hash(password)`                                                                        |
+| `crypto.password.verify`              | Verify a password on the server       | `password: string, storedHash: string`                                    | `HaiResult<boolean>`                                   | `crypto.password.verify(password, storedHash)`                                                          |
+| `crypto.transport.createServer`       | Create a shared transport manager     | `{ serverKeyRing, keyStore, maxPlaintextBytes?, … }`                      | `HaiResult<TransportEncryptionManager>`                | `crypto.transport.createServer({ serverKeyRing, keyStore })`                                            |
+| `crypto.transport.createClient`       | Create an encrypted HTTP session      | `{ keyExchangeUrl: HTTPS URL, fetch?, maxPlaintextBytes? }`               | `TransportClient: init / encryptedFetch / destroy`     | `crypto.transport.createClient({ keyExchangeUrl: "https://api.example.com/api/v1/_hai/key-exchange" })` |
+| `crypto.transport.protocol`           | Read protocol paths and headers       | `—`                                                                       | `TRANSPORT_PROTOCOL_T`                                 | `crypto.transport.protocol`                                                                             |
+| `manager.getServerKeyId`              | Read the active server key ID         | `—`                                                                       | `string`                                               | `manager.getServerKeyId()`                                                                              |
+| `manager.getServerPublicKey`          | Read the handshake public key         | `—`                                                                       | `string`                                               | `manager.getServerPublicKey()`                                                                          |
+| `manager.registerClientKey`           | Register a client public key          | `clientPublicKey: string`                                                 | `Promise<string>: clientId`                            | `await manager.registerClientKey(clientPublicKey)`                                                      |
+| `manager.getClientPublicKey`          | Read a registered client key          | `clientId: string`                                                        | `Promise<string / undefined>`                          | `await manager.getClientPublicKey(clientId)`                                                            |
+| `manager.decryptRequest`              | Authenticate and decrypt a request    | `payload: EncryptedRequestPayload, expected: TransportRequestContext`     | `Promise<HaiResult<string>>`                           | `await manager.decryptRequest(encryptedRequest, requestContext)`                                        |
+| `manager.encryptResponse`             | Authenticate and encrypt a response   | `request: TransportMessageContext, data: string, status: number`          | `Promise<HaiResult<EncryptedPayload>>`                 | `await manager.encryptResponse(messageContext, "{}", 200)`                                              |
+| `manager.close`                       | Release manager resources             | `—`                                                                       | `Promise<void>`                                        | `await manager.close()`                                                                                 |
+| `session.init`                        | Initialize the encrypted session      | `—`                                                                       | `Promise<HaiResult<void>>`                             | `await session.init()`                                                                                  |
+| `session.encryptedFetch`              | Call an encrypted endpoint            | `input: RequestInfo / URL, init?: RequestInit`                            | `Promise<Response>`                                    | `await session.encryptedFetch("https://api.example.com/api/v1/orders")`                                 |
+| `session.ready`                       | Check handshake readiness             | `—`                                                                       | `boolean`                                              | `session.ready()`                                                                                       |
+| `session.destroy`                     | Clear the local transport session     | `—`                                                                       | `void`                                                 | `session.destroy()`                                                                                     |
+
+Shared server/browser support (Node.js / browser)
+
+### Asymmetric cryptography (encryption / signing)
 
 ```ts
 // 生成密钥对
@@ -69,7 +98,7 @@ crypto.asymmetric.isValidPublicKey(publicKey) // true
 crypto.asymmetric.isValidPrivateKey(privateKey) // true
 ```
 
-#### Hashing (Hash / HMAC / verification)
+### Hashing (Hash / HMAC / verification)
 
 ```ts
 // 字符串哈希
@@ -93,7 +122,7 @@ if (hash.success) {
 }
 ```
 
-#### Symmetric encryption (default CBC / structured payload)
+### Symmetric encryption (default CBC / structured payload)
 
 ```ts
 // 生成随机密钥和 IV
@@ -134,7 +163,7 @@ crypto.symmetric.isValidKey(key) // true
 crypto.symmetric.isValidIV(iv) // true
 ```
 
-#### Password hashing (salted iterations)
+### Password hashing (salted iterations)
 
 ```ts
 // 哈希密码（输出格式: $hai$<iterations>$<salt>$<hash>）
@@ -156,7 +185,7 @@ if (hashed.success) {
 }
 ```
 
-#### Transport encryption (crypto.transport)
+### Transport encryption (crypto.transport)
 
 Transport client `destroy()` invalidates and aborts an in-flight handshake; late results cannot restore keys or overwrite the next handshake. It clears local state; server registry entries retain their own expiry.
 
@@ -171,7 +200,7 @@ For typical applications, use the higher-level integrations:
 
 Call `crypto.transport.createServer({ serverKeyRing, keyStore })` / `createClient()` directly only for custom runtimes, tests, or manually integrated HTTP key exchange endpoints.
 
-##### Workflow
+#### Workflow
 
 1. Call `await crypto.init()` to initialize `crypto.asymmetric` and `crypto.symmetric`.
 2. On the server, create a `manager` with `crypto.transport.createServer({ serverKeyRing, keyStore })`. It holds the server key pair and stores client public keys. Inject a shared `keyStore` for multi-node deployments.
@@ -180,7 +209,7 @@ Call `crypto.transport.createServer({ serverKeyRing, keyStore })` / `createClien
 5. Every request sends an authenticated envelope `{ context, direction, status, encryptedKey, ciphertext, iv, tag, signature }`, including empty POST and GET/HEAD.
 6. Custom adapters first await `authenticateTransportRequest(manager, request)`. Only successful `data.plaintext` reaches business code; retain `data.context`.
 7. Encrypt responses with `await manager.encryptResponse(context, data, response.status)`; clients verify context, status and authenticity before returning plaintext.
-8. Clear a client session with `client.destroy()`. Release server resources with `manager.close()` or module-level `await crypto.close()`.
+8. Clear the local client session with `client.destroy()`. On the server, first `await manager.close()`, then `await crypto.close()`. Closing the module does not close independently created managers or revoke application sessions.
 
 > Servers must explicitly inject the same managed `serverKeyRing` and a shared `keyStore` (Redis or a shared database). Sharing client public keys alone cannot enable cross-node decryption. There is no implicit process key or memory-registry fallback; development/tests may explicitly use `createInMemoryKeyStore(capacity)`. Reload the same ring after restart; sticky sessions are unnecessary.
 
@@ -194,7 +223,7 @@ Registration validates the encoding and SM2 curve point before writing. Only 128
 
 Omitting Redis/DB `ttlSeconds` keeps keys indefinitely. Explicit values must be integer seconds from 1 to 2147483647; a finite TTL is recommended. Redis uses native per-key expiration and does not expose the DB `maxClients` limit; configure memory budgets without evicting valid nonces. DB `maxClients` is a positive safe integer, defaults to 10000, and must match the persistent setting on every node. Registration locks a shared capacity row inside its transaction before counting and inserting; a full registry rejects registration without evicting valid keys or nonces. Deleting a client does not delete its valid nonces.
 
-DB expiry uses database epoch milliseconds. Synchronize both database and node clocks within the protocol limits. Failed initial table creation can be retried. Each registration prunes one batch; `await registry.pruneExpired()` deletes at most 100 expired keys and 100 expired nonces per call. Schedule it in the application for low-traffic deployments: the registry creates no background timers and does not close the injected reldb. Migrate old timestamp key columns offline to BIGINT `created_at_ms` / `expires_at_ms`. Capacity is persisted in `hai_crypto_transport_capacity`; coordinate changes across all nodes and that row, and never clear valid nonces to recreate a registry.
+DB expiry uses database epoch milliseconds. Synchronize both database and node clocks within the protocol limits. Failed initial table creation can be retried. Each registration prunes one batch; `await registry.pruneExpired()` deletes at most 100 expired keys and 100 expired nonces per call. Schedule it in the application for low-traffic deployments: the registry creates no background timers and does not close the injected reldb. Key expiry uses BIGINT columns `created_at_ms` / `expires_at_ms`. Capacity is persisted in `hai_crypto_transport_capacity`; coordinate changes across all nodes and that row, and never clear valid nonces to recreate a registry.
 
 ```ts
 const registry = createReldbTransportKeyStore({ reldb, ttlSeconds: 3600, maxClients: 10000 })
@@ -256,7 +285,7 @@ Only authenticated protocol v2 is accepted. Independent random SM4-CBC and HMAC-
 
 Empty POSTs still send an authenticated envelope for empty plaintext. GET/HEAD carry it in X-Hai-Transport; bodyless responses such as 204/304/HEAD use the same header. Other requests/responses carry a JSON envelope and X-Encrypted: true. The client must match the original request context and HTTP status; missing markers, old formats and authentication failures reject. Serv/Kit hosts explicitly allow plaintext through `encryption: disabled` path rules or host `excludePaths`. Callers must select ordinary requests; API Client/Kit wrappers use their own `excludePaths`. CORS must allow and expose X-Hai-Transport. TLS authenticates handshake keys; this protocol does not replace IAM authorization.
 
-Set `transport.maxPlaintextBytes` for both request and response JSON plaintext, measured in UTF-8 bytes: default 1 MiB, integer range 1 KiB–64 MiB. Clients learn the server limit during key exchange. `resolveTransportBodyLimits()` derives encrypted/proxy bytes as twice the plaintext limit plus 32 KiB. Handshake, public-key, header and replay constraints remain independent. Oversized streams are cancelled and readers released: requests return 413; oversized responses return an encrypted 500 capacity error, recognized as `TransportBodyTooLargeError` / `hai:crypto:070`. [容量配置、文件换算与升级](TRANSPORT-CAPACITY.md)。
+Set `transport.maxPlaintextBytes` for both request and response JSON plaintext, measured in UTF-8 bytes: default 1 MiB, integer range 1 KiB–64 MiB. Clients learn the server limit during key exchange. `resolveTransportBodyLimits()` derives encrypted/proxy bytes as twice the plaintext limit plus 32 KiB. Handshake, public-key, header and replay constraints remain independent. Oversized streams are cancelled and readers released: requests return 413; oversized responses return an encrypted 500 capacity error, recognized as `TransportBodyTooLargeError` / `hai:crypto:070`. [Capacity and file-size calculation](TRANSPORT-CAPACITY.md)。
 
 Ordinary routes retain `transport.maxPlaintextBytes` (auto/omitted: 1 MiB). Declare Feedback report intake, evidence, attachments and ZIP download capacity separately using `routePlaintextBytes` and `feedback.budget.maxTransportBytes`; `*` matches one complete path segment and explicit host route values take precedence. Handshakes, adapter-node and proxies use the maximum route capacity. HTTP adapters admit at most 2 explicitly declared material requests above 1 MiB and a separate 16 ordinary business requests, releasing admission after the entire response or failure. Busy admission returns 503 / `hai:crypto:072`; business writes are not automatically replayed.
 
@@ -276,33 +305,32 @@ const text = await readTransportBody(request.body, {
 const payload: unknown = JSON.parse(text)
 ```
 
-#### Close the module
+### Close the module
 
 ```ts
 // 使用完毕后关闭，释放内部状态
 await crypto.close()
 ```
 
-### Error handling
+### Security notice
 
-All operations return `HaiResult<T>`:
-
-```ts
-const result = crypto.asymmetric.encrypt('data', publicKey)
-if (!result.success) {
-  // result.error.code / result.error.message
-}
-```
+- **SM4 encryption returns a structured payload by default**: `crypto.symmetric.encrypt(data, key)` uses CBC + a random IV by default and returns `{ mode, ciphertext, iv, encoding }`. Pass that object to `crypto.symmetric.decrypt(payload, key)` to decrypt.
+- **Use random SM4 keys**: generate keys with `crypto.symmetric.generateKey()`. This module does not provide a KDF for password-based encryption keys. Store passwords with the server-only `crypto.password.hash(password)`; do not use passwords or password hashes directly as SM4 keys.
+- **IVs must be unique**: never reuse an IV with the same key. Prefer default CBC or `encryptWithIV()` to generate one for each call. Transmit and store the IV with the ciphertext; the IV can be public.
 
 ### Optional integrations
 
 The admin console's online encryption demo calls the Crypto SM3/SM4 APIs directly. SM4 uses a random temporary key and IV and verifies decryption before showing success; keys are not saved. Changing input clears previous results. Random digests or Base64 must not be presented as cryptographic results.
 
-## Production shared state
+## Configuration
+
+crypto.init() takes no configuration object. Algorithm options belong to individual calls; configure HTTP transport with crypto.transport.createServer/createClient options and explicitly inject the server key ring and shared registry. Keep private keys out of browsers and public YAML.
+
+### Production shared state
 
 Production transport registries must declare stateScope=shared and actually use Redis or PostgreSQL/MySQL. Memory, Redis factories over memory, and RelDB factories over SQLite are rejected. All nodes load the same managed versioned key ring. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../.agents/instructions/distributed-state.md)。
 
-## Module requirements and explicit limits
+### Module requirements and explicit limits
 
 `resolveTransportBodyLimits(limit?, { requiredPlaintextBytes? })` derives capacity from enabled modules only when limit is omitted; without module requirements it remains 1 MiB. A smaller explicit limit throws RangeError instead of silently increasing or reducing capacity. All values remain bounded to 1 KiB–64 MiB; encrypted capacity is twice plaintext plus 32 KiB. Serv/Kit configuration accepts `auto`, normalized to undefined at runtime.
 
@@ -313,7 +341,18 @@ const limits = resolveTransportBodyLimits(24 * 1024 * 1024, { requiredPlaintextB
 // plaintextBytes: 25165824; encryptedPayloadBytes: 50364416
 ```
 
-## Development and testing
+## Error Handling
+
+Encryption, signatures, hashes and password operations return `HaiResult<T>`; check `success` first. Random key/IV and format validators return direct values, and `crypto.close()` returns `Promise<void>`. `encryptedFetch` rejects like fetch; catch errors from stream readers and explicitly throwing capacity helpers at their call boundary:
+
+```ts
+const result = crypto.asymmetric.encrypt('data', publicKey)
+if (!result.success) {
+  // result.error.code / result.error.message
+}
+```
+
+## Development
 
 ```bash
 pnpm --filter @h-ai/crypto test

@@ -6,56 +6,119 @@ Requests and token refresh use the current `core.i18n` locale as `Accept-Languag
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/api-contract](../api-contract/README.en.md) · [@h-ai/core](../core/README.en.md) · [@h-ai/crypto](../crypto/README.en.md)
 
-## Introduction
-
 A cross-platform oRPC/OpenAPI typed client for hai-framework, with consistent API calls and token management across Web, apps, and mini programs.
 
-## Core features
-
-- `apiClient`: the default typed client for the iam/storage/ai domains.
-- `apiClient.create(contract)`: create a typed client for a custom contract.
-- `apiClient.tokenStorage.{memory,httpOnlyCookie}()`: token storage factories. Browsers keep access tokens in memory and refresh tokens in server-managed httpOnly cookies; native clients inject platform secure storage. Credentials are never written to Web Storage.
-- Custom `fetch` support for browsers, Node, Capacitor, and mini-program bridges.
-- Automatic Bearer token injection, with token refresh and one retry after a 401.
-- Network failures are converted to `HaiResult` errors.
-- Optional transport encryption: `apiClient.init({ transport: { crypto } })` automatically uses `crypto.transport.createClient()`.
-- Transport encryption and automatic refresh can run together: `/auth/refresh` after a 401 still uses encrypted fetch without falling back to plaintext.
-
-## Getting started
-
-### Quick start
+## Quick Start
 
 `close()` invalidates retired refreshes and drains credential writes while preserving external TokenStorage values. After close completes, the same storage may be reused. `timeout` covers headers, the complete JSON body, and every unsuccessful response body, including HTML error pages. Timeout or cancellation prevents token refresh. The built-in Cookie adapter includes credentials for login and refresh, requiring explicit credentialed CORS origins; memory and native storage preserve the original request credentials. Custom application streams remain incremental and their bodies use the caller signal for cancellation.
 
 ```ts
+import type { IamAuthLoginInput } from '@h-ai/api-client'
 import { apiClient } from '@h-ai/api-client'
 
-await apiClient.init({
-  baseUrl: 'https://api.example.com/api/v1',
-  auth: {}, // 默认使用 httpOnly cookie 存储（推荐）；SSR 测试请显式传入 apiClient.tokenStorage.memory()
-})
-
-const login = await apiClient.iam.auth.login({
-  identifier: 'alice',
-  password: 'secret',
-})
-
-if (login.success) {
-  // httpOnly cookie 模式下 refresh token 由服务端 Set-Cookie 管理，
-  // api-client 默认存储只需要把 access token 写入内存。
-  await apiClient.auth.setTokens(login.data.tokens)
+async function loginAndLoadProfile(input: IamAuthLoginInput) {
+  const initialized = await apiClient.init({ baseUrl: '/api/v1', auth: {} })
+  if (!initialized.success)
+    return initialized
+  try {
+    const actions = apiClient.createAuthActions(apiClient)
+    const loggedIn = await actions.login(input)
+    if (!loggedIn.success)
+      return loggedIn
+    const profile = await apiClient.iam.auth.currentUser()
+    if (!profile.success)
+      return profile
+    return profile
+  }
+  catch (writeError) {
+    try {
+      await apiClient.auth.clear()
+    }
+    catch (cleanupError) {
+      throw new AggregateError([writeError, cleanupError], 'Credential persistence and cleanup failed')
+    }
+    throw writeError
+  }
+  finally {
+    await apiClient.close()
+  }
 }
-
-const me = await apiClient.iam.auth.currentUser()
-if (me.success) {
-  // 身份资料与服务端重新校验后的访问范围一次返回，客户端无需持久化权限快照。
-  const { roles, permissions, ...user } = me.data
-}
-
-await apiClient.close()
 ```
 
-#### Enable transport encryption
+## Features
+
+### Purpose, inputs and outputs
+
+Initialize first. Named variables are validated host input; check HaiResult.success. auth and storage Promise<void> operations may reject: surface the failure and handle cleanup faults instead of reporting successful login from a server result alone.
+
+| Entry                                   | Input                           | Output                     | Purpose and failure boundary                                              | Example                                                      |
+| --------------------------------------- | ------------------------------- | -------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `apiClient.init`                        | config: baseUrl、认证及传输选项 | `Promise<HaiResult<void>>` | Initialize; stop on failure                                               | `await apiClient.init({ baseUrl: '/api/v1', auth: {} })`     |
+| `apiClient.close`                       | none                            | `Promise<void>`            | Invalidate refresh and release this instance; not server logout           | `await apiClient.close()`                                    |
+| `apiClient.create`                      | shared contract                 | `ApiClient<TContract>`     | Create isolated instances, one per SSR request                            | `apiClient.create(contract)`                                 |
+| `apiClient.auth.setTokens`              | trusted response                | `Promise<void>`            | Serialize credentials and invalidate old refresh; storage failures reject | `await apiClient.auth.setTokens(tokens)`                     |
+| `apiClient.auth.clear`                  | none                            | `Promise<void>`            | Clear local credentials; may reject; server still needs logout            | `await apiClient.auth.clear()`                               |
+| `apiClient.auth.onTokenRefreshed`       | callback(TokenPair)             | `() => void`               | Observe after persistence; returns unsubscribe; never log tokens          | `apiClient.auth.onTokenRefreshed(() => refreshProfile())`    |
+| `apiClient.tokenStorage.memory`         | none                            | `TokenStorage`             | Isolated in-memory adapter for Node/SSR/tests                             | `apiClient.tokenStorage.memory()`                            |
+| `apiClient.tokenStorage.httpOnlyCookie` | none                            | `TokenStorage`             | Browser access in memory, refresh in server Cookie                        | `apiClient.tokenStorage.httpOnlyCookie()`                    |
+| `apiClient.createAuthActions`           | standard IAM contract           | `Auth actions object`      | Bind auth forms after init with auth enabled                              | `apiClient.createAuthActions(apiClient)`                     |
+| `apiClient.observeRequests`             | observer(ApiRequestRecord)      | `() => void`               | Observe sanitized logical outcomes; returns unsubscribe                   | `apiClient.observeRequests(record => reportOutcome(record))` |
+
+#### Authentication form actions
+
+`const actions = apiClient.createAuthActions(apiClient)`
+
+| Entry                          | Input                                           | Output                                        | Purpose and failure boundary                                 | Example                                                              |
+| ------------------------------ | ----------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------- |
+| `actions.publicConfig`         | —                                               | `Promise<HaiResult<T>>` → IamPublicConfig     | Read public auth policy                                      | `await actions.publicConfig()`                                       |
+| `actions.createCaptcha`        | { operation }                                   | `Promise<HaiResult<T>>` → IamCaptchaChallenge | Request an operation challenge                               | `await actions.createCaptcha({ operation: 'login' })`                |
+| `actions.login`                | IamAuthLoginInput                               | `Promise<HaiResult<T>>` → auth result         | Map password/ldap/email/sms and await credential persistence | `await actions.login({ identifier, password })`                      |
+| `actions.register`             | IamRegisterInput                                | `Promise<HaiResult<T>>` → auth result         | Register under server policy and save credentials            | `await actions.register({ username, password })`                     |
+| `actions.sendOtp`              | identifier, { captcha? }?                       | `Promise<HaiResult<T>>` → { expiresAt }       | Send email/phone OTP; does not log in                        | `await actions.sendOtp(identifier)`                                  |
+| `actions.requestPasswordReset` | identifier, { captcha? }?                       | `Promise<HaiResult<T>>` → void                | Request reset under server account-enumeration policy        | `await actions.requestPasswordReset(identifier)`                     |
+| `actions.confirmPasswordReset` | token, newPassword                              | `Promise<HaiResult<T>>` → void                | Consume the dedicated reset token                            | `await actions.confirmPasswordReset(resetToken, newPassword)`        |
+| `actions.renewPassword`        | { identifier, password, newPassword, captcha? } | `Promise<HaiResult<T>>` → void                | Renew an expired password                                    | `await actions.renewPassword({ identifier, password, newPassword })` |
+| `actions.reauthenticate`       | password, operation                             | `Promise<HaiResult<T>>` → purpose ticket      | Obtain a short-lived operation-bound credential              | `await actions.reauthenticate(password, 'users:delete')`             |
+| `actions.bindPageExit`         | { enabled? }                                    | `() => void`                                  | Bind best-effort page-exit revocation; returns cleanup       | `actions.bindPageExit({ enabled: endOnPageHide })`                   |
+
+#### Secure storage instance
+
+`const storage = apiClient.tokenStorage.memory()`
+
+| Entry                     | Input | Output                    | Purpose and failure boundary                                     | Example                                       |
+| ------------------------- | ----- | ------------------------- | ---------------------------------------------------------------- | --------------------------------------------- |
+| `storage.getAccessToken`  | —     | `Promise<string \| null>` | Read access; null means absent only                              | `await storage.getAccessToken()`              |
+| `storage.setAccessToken`  | token | `Promise<void>`           | Save access; bound clients use auth.setTokens                    | `await storage.setAccessToken(accessToken)`   |
+| `storage.getRefreshToken` | —     | `Promise<string \| null>` | Cookie mode yields an internal sentinel, not Cookie contents     | `await storage.getRefreshToken()`             |
+| `storage.setRefreshToken` | token | `Promise<void>`           | Memory saves; Cookie adapter does not change server Cookie       | `await storage.setRefreshToken(refreshToken)` |
+| `storage.clear`           | —     | `Promise<void>`           | Clear adapter credentials; failures reject; no server revocation | `await storage.clear()`                       |
+
+#### Default business domains
+
+Default domains mirror HTTP contracts in api-contract, not the complete server module objects. A custom client contains only the supplied contract.
+
+- `apiClient.iam`: IAM login, registration, users, roles and permissions — [API Contract](../api-contract/README.md), [IAM](../iam/README.md).
+- `apiClient.storage`: Storage listing, metadata, presigning and deletion — [API Contract](../api-contract/README.md), [Storage](../storage/README.md).
+- `apiClient.ai`: Non-streaming AI chat — [API Contract](../api-contract/README.md), [AI](../ai/README.md).
+
+Follow the actual contract for arrays, permissions and business errors. The server authorizes identity/resources; client settings grant no permission.
+
+```ts
+const files = await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 })
+if (!files.success)
+  throw new Error(files.error.message)
+const chat = await apiClient.ai.chats.createCompletion({
+  messages: [
+    { role: 'user', content: 'Summarize this public report.' }
+  ],
+})
+if (!chat.success)
+  throw new Error(chat.error.message)
+```
+
+`apiClient.config` is a redacted runtime snapshot (null before initialization), not a source for restoring secrets. `apiClient.isInitialized` is the ready boolean. Both are read-only properties and make no network request.
+
+### Enable transport encryption
 
 First enable `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` on the server. The client only needs the same `@h-ai/crypto` service instance; no manual key exchange code is required.
 
@@ -98,29 +161,11 @@ await client.init({ baseUrl: 'https://api.example.com/api/v1' })
 const result = await client.iam.auth.login({ identifier: 'alice', password: 'secret' })
 ```
 
-### API overview
-
-- `apiClient.init(config)`: initialize the default client.
-- `apiClient.close()`: clear client state.
-- `apiClient.auth.setTokens(tokens)`: replace credentials and store the access token; non-httpOnly storage saves the supplied refresh token or clears its previous value when omitted.
-- `apiClient.auth.clear()`: clear tokens.
-- `apiClient.create(contract)`: create a custom typed client.
+### Credential changes and closing
 
 `auth.clear()` and `auth.setTokens()` immediately cancel and invalidate this client's previous refresh request. A late success or 401 cannot restore a logged-out session, overwrite a new account, or notify stale refresh callbacks. Storage writes are serialized, so an earlier asynchronous write cannot overwrite credentials after either method completes. Use these methods when logging out or switching accounts instead of writing to storage directly. The server logout endpoint must still revoke the httpOnly cookie and server session.
 
 Calling `init()` on an initialized client returns `CONFIG_ERROR` and leaves the existing client intact. To change `baseUrl` / `fetch` / `transport`, call `await apiClient.close()` before initializing again.
-
-### Configuration
-
-- `baseUrl`: API base URL, usually including `/api/v1`.
-- `auth.storage`: token storage adapter; defaults to `apiClient.tokenStorage.httpOnlyCookie()` (recommended for browsers). Explicitly use `apiClient.tokenStorage.memory()` for SSR / tests.
-- `auth.refreshPath`: token refresh path; defaults to `/auth/refresh`.
-- `timeout`: request timeout; defaults to 30000 ms.
-- `headers`: static or dynamic shared request headers.
-- `fetch`: custom fetch implementation.
-- `transport.crypto`: transparent request/response encryption and decryption; requires an initialized `@h-ai/crypto` instance.
-- `transport.keyExchangePath`: key exchange subpath; defaults to `/_hai/key-exchange` and is appended to `baseUrl` automatically.
-- `apiClient.config`: a **redacted snapshot of runtime configuration**; credentials embedded in `baseUrl`, `headers.authorization`, and other sensitive values are hidden automatically.
 
 ### Configuration driven authentication
 
@@ -132,7 +177,57 @@ apiClient.createAuthActions(client) supplies publicConfig, login, register, send
 
 [完整 IAM 配置 / IAM configuration](../iam/README.en.md)
 
-### Error handling
+### Input limits and HTTP capabilities
+
+Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../storage/README.md#存储输入约束与跨端能力).
+
+### Logical request observation
+
+`client.observeRequests` observes each logical call once and returns an unsubscribe function. Records contain requestId, procedure, duration, HTTP status, final success/errorCode, and business request attempts. A failed HaiResult with HTTP 200 is a failure. Authentication retries retain the same requestId. Records exclude bodies, tokens, and URL query parameters. Refresh and key exchange are not presented as user operations. close clears subscriptions, so subscribe again after reinitializing.
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+
+const unsubscribe = apiClient.observeRequests((record) => {
+  const failed = !record.success
+  const requestId = record.requestId
+})
+unsubscribe()
+```
+
+### Optional interactive challenges
+
+createAuthActions(client) supplies createCaptcha({operation}) and preserves captcha in login mappings, renewal and registration. sendOtp(identifier,{captcha}) and requestPasswordReset(identifier,{captcha}) take an optional second argument. AuthPanel solves automatically; custom forms reuse ALTCHA without persisting proofs in TokenStorage.
+
+See policy, defaults and recovery boundaries in [IAM](../iam/README.en.md).
+
+### Sensitive request reauthentication
+
+Pass the purpose-bound proof returned by `reauthenticate` through the individual call’s `options.context.reauthentication`; the request pipeline emits `X-Hai-Reauthentication`. Never place it in global client headers, persistent storage or logs. The server checks current permissions, resource scope and proof purpose before atomic consumption. Concurrent ordinary calls do not inherit the header. Cross-origin hosts must allow it; Serv/Kit defaults already include it.
+
+### Recovering an expired session in place
+
+Set `auth.recoverSession` to sign in again without discarding the current page. Use UI `createSessionRecovery` / `SessionRecoveryDialog`: configure the public policy and original user in the root layout, pass `recovery.recover` as the callback, provide standard authentication actions, and cancel on teardown. IAM checks login `expectedUserId` before issuing a session; captcha, lockout, password renewal and access rules remain active. Only an explicitly authentication-rejected request is retried once. Cancellation, 5xx, timeouts and ambiguous writes are not replayed. Sensitive-operation proofs from an old session may need a new confirmation. Without the callback, behavior is unchanged; with it, recovery handles failure instead of immediate onRefreshFailed navigation. auth.terminalType (web/app/desktop/api; default web) selects a session group and does not attest hardware identity.
+
+### Page exit session policy
+
+`session.endOnPageHide` defaults to `false`. Hosts call `actions.bindPageExit({ enabled: config.session.endOnPageHide })` and invoke its returned cleanup on unmount; standard admin/H5/fullstack templates already bind it. A non-BFCache `pagehide` (including reload and full document navigation) makes a best effort POST to `/auth/session/close`, revoking the held access and related refresh through the existing CSRF/encrypted transport with `keepalive` and no automatic refresh. This response does not clear cookies/local credentials, avoiding a late old response overwriting a new login. Explicit logout still revokes and clears current credentials normally. Browsers may omit page exit requests; configure server `idleTimeout`/`absoluteTimeout` as appropriate. Immediate revocation on browser close is not guaranteed.
+
+For a sensitive call, supply `reauthorize: () => sensitiveActions.authorize(operation)` in the third Kit apiFetch argument or typed-client options.context. After session rotation/recovery or an explicit proof rejection, obtain a new purpose-bound proof before one retry. Cancellation sends no further write; without a callback, an old proof is never replayed.
+
+## Configuration
+
+- `baseUrl`: API base URL, usually including `/api/v1`.
+- `auth.storage`: token storage adapter; defaults to `apiClient.tokenStorage.httpOnlyCookie()` (recommended for browsers). Explicitly use `apiClient.tokenStorage.memory()` for SSR / tests.
+- `auth.refreshPath`: token refresh path; defaults to `/auth/refresh`.
+- `timeout`: request timeout; defaults to 30000 ms.
+- `headers`: static or dynamic shared request headers.
+- `fetch`: custom fetch implementation.
+- `transport.crypto`: transparent request/response encryption and decryption; requires an initialized `@h-ai/crypto` instance.
+- `transport.keyExchangePath`: key exchange subpath; defaults to `/_hai/key-exchange` and is appended to `baseUrl` automatically.
+- `apiClient.config`: a **redacted snapshot of runtime configuration**; credentials embedded in `baseUrl`, `headers.authorization`, and other sensitive values are hidden automatically.
+
+## Error Handling
 
 Business APIs return `HaiResult<T>`:
 
@@ -152,51 +247,13 @@ A valid failed `HaiResult` returned with a non-2xx HTTP status retains its busin
 
 Automatic refresh handles an actual HTTP 401 (`Response.status`) or a valid failed HaiResult over HTTP 200 (`success=false`, string `error.code/message` and `error.httpStatus=401`). After a successful refresh, the original request is retried once. Built-in login and registration routes and the configured `auth.refreshPath` never trigger automatic refresh; other failures such as 403/500 do not trigger it either. Ordinary serv procedures still return HTTP 200. Callers must check the final `success` and `error.code` and handle expired authentication when refresh fails.
 
-## Input limits and HTTP capabilities
-
-Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../storage/README.md#存储输入约束与跨端能力).
-
-## Logical request observation
-
-`client.observeRequests` observes each logical call once and returns an unsubscribe function. Records contain requestId, procedure, duration, HTTP status, final success/errorCode, and business request attempts. A failed HaiResult with HTTP 200 is a failure. Authentication retries retain the same requestId. Records exclude bodies, tokens, and URL query parameters. Refresh and key exchange are not presented as user operations. close clears subscriptions, so subscribe again after reinitializing.
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-
-const unsubscribe = apiClient.observeRequests((record) => {
-  const failed = !record.success
-  const requestId = record.requestId
-})
-unsubscribe()
-```
-
-## Error messages and correlated logs
+### Error messages and correlated logs
 
 HTTP errors carry safe localized messages and a reference ID. ToastContainer hides the ID by default and reveals it through its diagnostic icon. The same ID remains in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
 
 Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
 
-## Optional interactive challenges
-
-createAuthActions(client) supplies createCaptcha({operation}) and preserves captcha in login mappings, renewal and registration. sendOtp(identifier,{captcha}) and requestPasswordReset(identifier,{captcha}) take an optional second argument. AuthPanel solves automatically; custom forms reuse ALTCHA without persisting proofs in TokenStorage.
-
-See policy, defaults and recovery boundaries in [IAM](../iam/README.en.md).
-
-## Sensitive request reauthentication
-
-Pass the purpose-bound proof returned by `reauthenticate` through the individual call’s `options.context.reauthentication`; the request pipeline emits `X-Hai-Reauthentication`. Never place it in global client headers, persistent storage or logs. The server checks current permissions, resource scope and proof purpose before atomic consumption. Concurrent ordinary calls do not inherit the header. Cross-origin hosts must allow it; Serv/Kit defaults already include it.
-
-## Recovering an expired session in place
-
-Set `auth.recoverSession` to sign in again without discarding the current page. Use UI `createSessionRecovery` / `SessionRecoveryDialog`: configure the public policy and original user in the root layout, pass `recovery.recover` as the callback, provide standard authentication actions, and cancel on teardown. IAM checks login `expectedUserId` before issuing a session; captcha, lockout, password renewal and access rules remain active. Only an explicitly authentication-rejected request is retried once. Cancellation, 5xx, timeouts and ambiguous writes are not replayed. Sensitive-operation proofs from an old session may need a new confirmation. Without the callback, behavior is unchanged; with it, recovery handles failure instead of immediate onRefreshFailed navigation. auth.terminalType (web/app/desktop/api; default web) selects a session group and does not attest hardware identity.
-
-## Page exit session policy
-
-`session.endOnPageHide` defaults to `false`. Hosts call `actions.bindPageExit({ enabled: config.session.endOnPageHide })` and invoke its returned cleanup on unmount; standard admin/H5/fullstack templates already bind it. A non-BFCache `pagehide` (including reload and full document navigation) makes a best effort POST to `/auth/session/close`, revoking the held access and related refresh through the existing CSRF/encrypted transport with `keepalive` and no automatic refresh. This response does not clear cookies/local credentials, avoiding a late old response overwriting a new login. Explicit logout still revokes and clears current credentials normally. Browsers may omit page exit requests; configure server `idleTimeout`/`absoluteTimeout` as appropriate. Immediate revocation on browser close is not guaranteed.
-
-For a sensitive call, supply `reauthorize: () => sensitiveActions.authorize(operation)` in the third Kit apiFetch argument or typed-client options.context. After session rotation/recovery or an explicit proof rejection, obtain a new purpose-bound proof before one retry. Cancellation sends no further write; without a callback, an old proof is never replayed.
-
-## Development and testing
+## Development
 
 ```bash
 pnpm --filter @h-ai/api-client test

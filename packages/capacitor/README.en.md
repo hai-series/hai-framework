@@ -4,11 +4,73 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/api-client](../api-client/README.en.md) · [@h-ai/core](../core/README.en.md)
 
-## Introduction
-
 A Capacitor native bridge for hai Framework mobile apps, with a unified API for secure token storage, device information, push notifications, camera, and status bar access.
 
-## Core features
+## Quick Start
+
+```ts
+import { capacitor } from '@h-ai/capacitor'
+
+const initialized = await capacitor.init()
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+const failures: unknown[] = []
+try {
+  const saved = await capacitor.preferences.set('theme', 'dark')
+  if (!saved.success)
+    throw new Error(saved.error.message)
+  const theme = await capacitor.preferences.get('theme')
+  if (!theme.success)
+    throw new Error(theme.error.message)
+  // theme.data is 'dark'; an absent key returns null.
+}
+catch (cause) {
+  failures.push(cause)
+}
+finally {
+  const closed = await capacitor.close()
+  if (!closed.success)
+    failures.push(closed.error)
+}
+if (failures.length)
+  throw new AggregateError(failures, 'Native preference operation failed')
+```
+
+## Features
+
+### Purpose, inputs and outputs
+
+Use capacitor subfeatures after successful initialization. Check HaiResult.success before reading data; void has no business data and Promises must be awaited. tokens is an independent adapter returned by createCapacitorTokenStorage(); its methods reject on native storage failure. Standalone Preferences helpers do not use module state and wrap the same plugin operations in HaiResult.
+
+| Entry                            | Use case                                     | Input (`—` means none)                                                                                 | Return value                                                                                          | Call example                                                                    |
+| -------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `capacitor.init`                 | Detect and prepare the native host           | `—`                                                                                                    | `Promise<HaiResult<void>>`                                                                            | `await capacitor.init()`                                                        |
+| `capacitor.close`                | Release owned native resources               | `—`                                                                                                    | `Promise<HaiResult<void>>`                                                                            | `await capacitor.close()`                                                       |
+| `capacitor.getPlatform`          | Choose platform behavior                     | `—`                                                                                                    | `string: ios / android / web`                                                                         | `capacitor.getPlatform()`                                                       |
+| `capacitor.isNative`             | Check the native environment                 | `—`                                                                                                    | `boolean`                                                                                             | `capacitor.isNative()`                                                          |
+| `capacitor.isInitialized`        | Check module readiness                       | `—`                                                                                                    | `boolean`                                                                                             | `capacitor.isInitialized`                                                       |
+| `capacitor.device.getInfo`       | Read device diagnostics                      | `—`                                                                                                    | `Promise<HaiResult<{ platform, osVersion, model, manufacturer, isVirtual, appVersion?, appBuild? }>>` | `await capacitor.device.getInfo()`                                              |
+| `capacitor.device.getAppVersion` | Read the installed app version               | `—`                                                                                                    | `Promise<HaiResult<{ version, build }>>`                                                              | `await capacitor.device.getAppVersion()`                                        |
+| `capacitor.camera.takePhoto`     | Capture or select a photo                    | `{ source?: camera/photos/prompt, quality?: 0…100, width?, height?, resultType?: uri/base64/dataUrl }` | `Promise<HaiResult<{ data: string, format: string }>>`                                                | `await capacitor.camera.takePhoto({ source: "photos", resultType: "dataUrl" })` |
+| `capacitor.push.register`        | Request permission and a push token          | `{ signal?: AbortSignal }`                                                                             | `Promise<HaiResult<{ token: string }>>`                                                               | `await capacitor.push.register()`                                               |
+| `capacitor.push.listen`          | Observe notifications and taps               | `{ onReceived?, onActionPerformed? }, { signal? }`                                                     | `Promise<HaiResult<() => Promise<HaiResult<void>>>>`                                                  | `await capacitor.push.listen(callbacks, { signal })`                            |
+| `capacitor.statusBar.configure`  | Configure the status bar                     | `{ style?: dark/light/default, backgroundColor?: color, overlay?: boolean }`                           | `Promise<HaiResult<void>>`                                                                            | `await capacitor.statusBar.configure({ style: "dark", overlay: true })`         |
+| `capacitor.statusBar.show`       | Show the status bar                          | `—`                                                                                                    | `Promise<HaiResult<void>>`                                                                            | `await capacitor.statusBar.show()`                                              |
+| `capacitor.statusBar.hide`       | Hide the status bar                          | `—`                                                                                                    | `Promise<HaiResult<void>>`                                                                            | `await capacitor.statusBar.hide()`                                              |
+| `capacitor.preferences.get`      | Read a nonsensitive preference               | `key: string`                                                                                          | `Promise<HaiResult<string / null>>`                                                                   | `await capacitor.preferences.get("theme")`                                      |
+| `capacitor.preferences.set`      | Save a nonsensitive preference               | `key: string, value: string`                                                                           | `Promise<HaiResult<void>>`                                                                            | `await capacitor.preferences.set("theme", "dark")`                              |
+| `capacitor.preferences.remove`   | Remove a nonsensitive preference             | `key: string`                                                                                          | `Promise<HaiResult<void>>`                                                                            | `await capacitor.preferences.remove("theme")`                                   |
+| `createCapacitorTokenStorage`    | Create native secure token storage           | `—`                                                                                                    | `TokenStorage`                                                                                        | `createCapacitorTokenStorage()`                                                 |
+| `tokens.getAccessToken`          | Read the saved access token                  | `—`                                                                                                    | `Promise<string / null>`                                                                              | `await tokens.getAccessToken()`                                                 |
+| `tokens.getRefreshToken`         | Read the saved refresh token                 | `—`                                                                                                    | `Promise<string / null>`                                                                              | `await tokens.getRefreshToken()`                                                |
+| `tokens.setAccessToken`          | Save an access token                         | `token: string`                                                                                        | `Promise<void>`                                                                                       | `await tokens.setAccessToken(accessToken)`                                      |
+| `tokens.setRefreshToken`         | Save a refresh token                         | `token: string`                                                                                        | `Promise<void>`                                                                                       | `await tokens.setRefreshToken(refreshToken)`                                    |
+| `tokens.clear`                   | Remove both saved credentials                | `—`                                                                                                    | `Promise<void>`                                                                                       | `await tokens.clear()`                                                          |
+| `safeGetPreference`              | Read a preference without module lifecycle   | `key: string`                                                                                          | `Promise<HaiResult<string / null>>`                                                                   | `await safeGetPreference("theme")`                                              |
+| `safeSetPreference`              | Save a preference without module lifecycle   | `key: string, value: string`                                                                           | `Promise<HaiResult<void>>`                                                                            | `await safeSetPreference("theme", "dark")`                                      |
+| `safeRemovePreference`           | Remove a preference without module lifecycle | `key: string`                                                                                          | `Promise<HaiResult<void>>`                                                                            | `await safeRemovePreference("theme")`                                           |
+
+Photo source selects the camera, library or prompt; quality is 0–100 and width/height are pixel constraints. Successful data is a displayable webPath, raw Base64 or a MIME-prefixed Data URL according to resultType; format is the plugin image format. callbacks.onReceived/onActionPerformed receive notifications and signal comes from an application AbortController. A successful listen returns an async cleanup function whose result must be checked. Import standalone factories and Preferences helpers from the package root.
 
 - **Token storage**: `@aparajita/capacitor-secure-storage` (required on native platforms). Android uses KeyStore + encrypted SharedPreferences; iOS uses Keychain. No Web fallback.
 - **Preferences**: `@capacitor/preferences` (required). General preferences storage for nonsensitive settings, not authentication tokens.
@@ -18,21 +80,7 @@ A Capacitor native bridge for hai Framework mobile apps, with a unified API for 
 - **Camera/gallery**: `@capacitor/camera` (optional). Capture photos or select gallery images.
 - **Status bar**: `@capacitor/status-bar` (optional). Immersive mode, background color, and style settings.
 
-## Getting started
-
-### Quick start
-
-```ts
-import { capacitor } from '@h-ai/capacitor'
-
-// 应用启动时初始化（检测 Capacitor 环境）
-const result = await capacitor.init()
-if (!result.success) {
-  // 非 Capacitor 环境（纯 Web）
-}
-```
-
-#### Secure token storage with api-client
+### Secure token storage with api-client
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -55,7 +103,7 @@ A failed credential write blocks both credentials, including an access token alr
 
 All TokenStorage instances in the same module share a native mutation queue. `clear()` waits for earlier writes before removing credentials, preventing late writes from restoring old tokens after successful cleanup. Explicit later writes may save new credentials. This ordering does not coordinate independent WebViews or JavaScript runtimes.
 
-#### Device information and push notifications
+### Device information and push notifications
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -73,7 +121,7 @@ if (reg.success) {
 
 Push requires an actual native platform. The setup phase of `push.register({ signal? })` and `push.listen(callbacks, { signal? })` has a 30-second deadline including permission requests and listener attachment. Failure, timeout, cancellation and `capacitor.close()` stop callbacks and remove owned handles; late handles are removed when they arrive. Other consumers are not affected through removeAllListeners. After listen succeeds, its signal and returned cleanup can still stop it. Cleanup and close return `HaiResult<void>`; native removal failures return `PUSH_CLEANUP_FAILED` (`capacitor:032`) and retain failed handles for retry without repeating successful removals. Closing disables the module immediately, and initialization retries pending cleanup first. Controlled plugin timing tests do not replace repeated registration, permission and FCM/APNs checks on Android/iOS devices.
 
-#### Status bar
+### Status bar
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -85,7 +133,7 @@ await capacitor.statusBar.configure({
 })
 ```
 
-#### Camera
+### Camera
 
 ```ts
 const photo = await capacitor.camera.takePhoto({
@@ -95,7 +143,7 @@ const photo = await capacitor.camera.takePhoto({
 })
 ```
 
-#### Preferences
+### Preferences
 
 ```ts
 await capacitor.preferences.set('my_key', 'value')
@@ -104,18 +152,6 @@ await capacitor.preferences.remove('my_key')
 ```
 
 `capacitor.preferences` is for general preferences such as language, theme, and drafts. Use `createCapacitorTokenStorage()` for authentication tokens.
-
-### Configuration
-
-This module has no configuration file. `capacitor.init()` only checks whether the Capacitor runtime is available.
-
-Capacitor applications must use SPA mode:
-
-```ts
-// src/routes/+layout.ts
-export const prerender = true
-export const ssr = false
-```
 
 ### Build an Android APK in a container
 
@@ -142,9 +178,21 @@ docker run --rm -it --platform linux/amd64 \
 
 Downloading dependencies requires access to npm, Gradle distributions, Google Maven, and Maven Central. Use the app's signing workflow for release builds. Mount the keystore read-only and inject passwords through the build environment. See the [mobile-app packaging and acceptance example](../../apps/mobile-app/README.md#原生交付与验收).
 
-### Error handling
+## Configuration
 
-Business operations on `capacitor.*` and `safe*Preference` return `HaiResult<T>`. TokenStorage adapter methods reject their promises on platform or storage errors:
+This module has no configuration file. `capacitor.init()` only checks whether the Capacitor runtime is available.
+
+Native WebViews load a client application. For SvelteKit, configure a static SPA as below; pure Svelte/Vite templates do not use this route file:
+
+```ts
+// src/routes/+layout.ts
+export const prerender = true
+export const ssr = false
+```
+
+## Error Handling
+
+`init/close`, device/camera/push/statusBar/preferences operations and `safe*Preference` return `HaiResult<T>`; `getPlatform/isNative/isInitialized` return direct values. TokenStorage methods reject on platform or storage errors:
 
 ```ts
 import { capacitor, HaiCapacitorError } from '@h-ai/capacitor'
@@ -175,7 +223,7 @@ Common error codes:
 | `HaiCapacitorError.CAMERA_FAILED`             | `hai:capacitor:040` | Camera operation failed             |
 | `HaiCapacitorError.STATUS_BAR_FAILED`         | `hai:capacitor:050` | Status bar operation failed         |
 
-## Development and testing
+## Development
 
 ```bash
 pnpm --filter @h-ai/capacitor test

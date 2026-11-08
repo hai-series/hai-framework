@@ -4,30 +4,9 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/cache](../cache/README.ja.md) · [@h-ai/core](../core/README.ja.md) · [@h-ai/reldb](../reldb/README.ja.md)
 
-## 概要
-
 非対称暗号、ハッシュ、対称暗号、パスワードハッシュを提供する暗号モジュールです。
 
-## 主な機能
-
-- 非対称暗号（鍵生成、暗号化・復号、署名・検証）
-- ハッシュ（Hash、HMAC、検証）
-- 対称暗号（ECB/CBC モード）
-- パスワードハッシュ（ソルト付き反復ハッシュ）
-- 通信暗号化（`crypto.transport`：サーバー管理機能 + クライアントの `encryptedFetch`）
-- サーバー・ブラウザー共通（Node.js / ブラウザー）
-
-## 使い始める
-
-### セキュリティに関する注意
-
-伝送クライアントの `destroy()` は進行中のハンドシェイクを無効化して中断し、遅延結果による鍵の復活や次回ハンドシェイクの上書きを防ぎます。サーバー registry は自身の期限で回収します。
-
-- **SM4 の既定の暗号化結果は構造化された暗号文**：`crypto.symmetric.encrypt(data, key)` は既定で CBC + ランダム IV を使用し、`{ mode, ciphertext, iv, encoding }` を返します。復号時はこのオブジェクトを `crypto.symmetric.decrypt(payload, key)` に渡します。
-- **SM4 にはランダムな鍵を使用してください**：`crypto.symmetric.generateKey()` で鍵を生成します。このモジュールはパスワードから暗号鍵を導出する KDF を提供しません。パスワードの保存にはサーバー専用の `crypto.password.hash(password)` を使用し、パスワードやそのハッシュを直接 SM4 の鍵にしないでください。
-- **IV は毎回一意にしてください**：同じ鍵で IV を再利用してはいけません。既定の CBC または `encryptWithIV()` による毎回の自動生成を推奨します。IV は暗号文と一緒に送信・保存します（公開可能で、秘密にする必要はありません）。
-
-### クイックスタート
+## クイックスタート
 
 並行する `close()` は未完了の `init()` を無効にし、遅い初期化がモジュールを再開しないようにします。その初期化の完了を待ってから再初期化できます。
 
@@ -40,7 +19,55 @@ if (!initialized.success)
   throw new Error(initialized.error.message)
 ```
 
-#### 非対称暗号（暗号化・復号 / 署名・検証）
+## 機能
+
+### 用途・入力・出力
+
+アルゴリズムを使う前に crypto の初期化成功を確認します。HaiResult<T> は success の後に T 型の data を読み、void は業務データなし、Promise は await します。鍵・暗号文・署名・ダイジェストは対応する成功結果から取得します。manager は createServer 成功時の data、session は createClient の直接の戻り値です。requestContext/messageContext は HTTP アダプターが実際の要求から構築し、クライアントが申告した身元を信用しません。完全な流れは下で説明します。
+
+| 入口                                  | 使用場面                               | 入力（`—` は引数なし）                                                    | 戻り値                                                 | 呼出例                                                                                                  |
+| ------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `crypto.init`                         | 暗号化機能を準備する                   | `—`                                                                       | `Promise<HaiResult<void>>`                             | `await crypto.init()`                                                                                   |
+| `crypto.close`                        | モジュールの状態を解放する             | `—`                                                                       | `Promise<void>`                                        | `await crypto.close()`                                                                                  |
+| `crypto.isInitialized`                | 初期化状態を確認する                   | `—`                                                                       | `boolean`                                              | `crypto.isInitialized`                                                                                  |
+| `crypto.asymmetric.generateKeyPair`   | SM2 鍵ペアを生成する                   | `—`                                                                       | `HaiResult<{ publicKey, privateKey }>`                 | `crypto.asymmetric.generateKeyPair()`                                                                   |
+| `crypto.asymmetric.encrypt`           | 相手の公開鍵で暗号化する               | `data: string, publicKey: string, options?: { cipherMode, outputFormat }` | `HaiResult<string>`                                    | `crypto.asymmetric.encrypt("orders", publicKey)`                                                        |
+| `crypto.asymmetric.decrypt`           | 秘密鍵で復号する                       | `ciphertext: string, privateKey: string, options?`                        | `HaiResult<string>`                                    | `crypto.asymmetric.decrypt(ciphertext, privateKey)`                                                     |
+| `crypto.asymmetric.sign`              | メッセージに署名する                   | `data: string, privateKey: string, options?: { hash, userId }`            | `HaiResult<string>`                                    | `crypto.asymmetric.sign("orders", privateKey)`                                                          |
+| `crypto.asymmetric.verify`            | 署名を検証する                         | `data: string, signature: string, publicKey: string, options?`            | `HaiResult<boolean>`                                   | `crypto.asymmetric.verify("orders", signature, publicKey)`                                              |
+| `crypto.asymmetric.isValidPublicKey`  | 公開鍵の形式を確認する                 | `publicKey: string`                                                       | `boolean`                                              | `crypto.asymmetric.isValidPublicKey(publicKey)`                                                         |
+| `crypto.asymmetric.isValidPrivateKey` | 秘密鍵の形式を確認する                 | `privateKey: string`                                                      | `boolean`                                              | `crypto.asymmetric.isValidPrivateKey(privateKey)`                                                       |
+| `crypto.hash.hash`                    | SM3 ダイジェストを計算する             | `data: string / Uint8Array, options?: { inputEncoding }`                  | `HaiResult<string>: 64 hex`                            | `crypto.hash.hash("orders")`                                                                            |
+| `crypto.hash.hmac`                    | 鍵付きダイジェストを計算する           | `data: string, key: string`                                               | `HaiResult<string>`                                    | `crypto.hash.hmac("orders", hmacKey)`                                                                   |
+| `crypto.hash.verify`                  | テキストとダイジェストを照合する       | `data: string, expectedHash: string`                                      | `HaiResult<boolean>`                                   | `crypto.hash.verify("orders", digest)`                                                                  |
+| `crypto.symmetric.generateKey`        | ランダムな SM4 鍵を生成する            | `—`                                                                       | `string: 32 hex`                                       | `crypto.symmetric.generateKey()`                                                                        |
+| `crypto.symmetric.generateIV`         | ランダムな IV を生成する               | `—`                                                                       | `string: 32 hex`                                       | `crypto.symmetric.generateIV()`                                                                         |
+| `crypto.symmetric.encrypt`            | 復号用の情報とともに暗号化する         | `data: string, key: 32 hex, options?: { mode, iv, outputFormat }`         | `HaiResult<{ mode, ciphertext, iv?, encoding }>`       | `crypto.symmetric.encrypt("orders", key)`                                                               |
+| `crypto.symmetric.decrypt`            | 構造化した暗号文を復号する             | `payload: SymmetricEncryptedPayload, key: 32 hex`                         | `HaiResult<string>`                                    | `crypto.symmetric.decrypt(payload, key)`                                                                |
+| `crypto.symmetric.encryptWithIV`      | 新しい IV で暗号化する                 | `data: string, key: 32 hex`                                               | `HaiResult<{ mode: "cbc", ciphertext, iv, encoding }>` | `crypto.symmetric.encryptWithIV("orders", key)`                                                         |
+| `crypto.symmetric.decryptWithIV`      | 指定した IV で復号する                 | `ciphertext: string, key: 32 hex, iv: 32 hex`                             | `HaiResult<string>`                                    | `crypto.symmetric.decryptWithIV(ciphertext, key, iv)`                                                   |
+| `crypto.symmetric.isValidKey`         | 鍵の形式を確認する                     | `key: string`                                                             | `boolean`                                              | `crypto.symmetric.isValidKey(key)`                                                                      |
+| `crypto.symmetric.isValidIV`          | IV の形式を確認する                    | `iv: string`                                                              | `boolean`                                              | `crypto.symmetric.isValidIV(iv)`                                                                        |
+| `crypto.password.hash`                | サーバーでパスワードをハッシュ化する   | `password: string, options?: { saltLength, iterations }`                  | `HaiResult<string>: $hai$…`                            | `crypto.password.hash(password)`                                                                        |
+| `crypto.password.verify`              | サーバーでパスワードを検証する         | `password: string, storedHash: string`                                    | `HaiResult<boolean>`                                   | `crypto.password.verify(password, storedHash)`                                                          |
+| `crypto.transport.createServer`       | 共有トランスポート管理器を作成する     | `{ serverKeyRing, keyStore, maxPlaintextBytes?, … }`                      | `HaiResult<TransportEncryptionManager>`                | `crypto.transport.createServer({ serverKeyRing, keyStore })`                                            |
+| `crypto.transport.createClient`       | 暗号化 HTTP セッションを作成する       | `{ keyExchangeUrl: HTTPS URL, fetch?, maxPlaintextBytes? }`               | `TransportClient: init / encryptedFetch / destroy`     | `crypto.transport.createClient({ keyExchangeUrl: "https://api.example.com/api/v1/_hai/key-exchange" })` |
+| `crypto.transport.protocol`           | プロトコルのパスとヘッダー名を参照する | `—`                                                                       | `TRANSPORT_PROTOCOL_T`                                 | `crypto.transport.protocol`                                                                             |
+| `manager.getServerKeyId`              | 有効なサーバー鍵 ID を読む             | `—`                                                                       | `string`                                               | `manager.getServerKeyId()`                                                                              |
+| `manager.getServerPublicKey`          | ハンドシェイクの公開鍵を読む           | `—`                                                                       | `string`                                               | `manager.getServerPublicKey()`                                                                          |
+| `manager.registerClientKey`           | クライアントの公開鍵を登録する         | `clientPublicKey: string`                                                 | `Promise<string>: clientId`                            | `await manager.registerClientKey(clientPublicKey)`                                                      |
+| `manager.getClientPublicKey`          | 登録済みの公開鍵を読む                 | `clientId: string`                                                        | `Promise<string / undefined>`                          | `await manager.getClientPublicKey(clientId)`                                                            |
+| `manager.decryptRequest`              | リクエストを認証して復号する           | `payload: EncryptedRequestPayload, expected: TransportRequestContext`     | `Promise<HaiResult<string>>`                           | `await manager.decryptRequest(encryptedRequest, requestContext)`                                        |
+| `manager.encryptResponse`             | 対応する応答を認証して暗号化する       | `request: TransportMessageContext, data: string, status: number`          | `Promise<HaiResult<EncryptedPayload>>`                 | `await manager.encryptResponse(messageContext, "{}", 200)`                                              |
+| `manager.close`                       | 管理器のリソースを解放する             | `—`                                                                       | `Promise<void>`                                        | `await manager.close()`                                                                                 |
+| `session.init`                        | 暗号化セッションを初期化する           | `—`                                                                       | `Promise<HaiResult<void>>`                             | `await session.init()`                                                                                  |
+| `session.encryptedFetch`              | 暗号化エンドポイントを呼び出す         | `input: RequestInfo / URL, init?: RequestInit`                            | `Promise<Response>`                                    | `await session.encryptedFetch("https://api.example.com/api/v1/orders")`                                 |
+| `session.ready`                       | ハンドシェイク済みか確認する           | `—`                                                                       | `boolean`                                              | `session.ready()`                                                                                       |
+| `session.destroy`                     | ローカルの暗号化セッションを消去する   | `—`                                                                       | `void`                                                 | `session.destroy()`                                                                                     |
+
+サーバー・ブラウザー共通（Node.js / ブラウザー）
+
+### 非対称暗号（暗号化・復号 / 署名・検証）
 
 ```ts
 // 生成密钥对
@@ -71,7 +98,7 @@ crypto.asymmetric.isValidPublicKey(publicKey) // true
 crypto.asymmetric.isValidPrivateKey(privateKey) // true
 ```
 
-#### ハッシュ（Hash / HMAC / 検証）
+### ハッシュ（Hash / HMAC / 検証）
 
 ```ts
 // 字符串哈希
@@ -95,7 +122,7 @@ if (hash.success) {
 }
 ```
 
-#### 対称暗号（既定の CBC / 構造化暗号文）
+### 対称暗号（既定の CBC / 構造化暗号文）
 
 ```ts
 // 生成随机密钥和 IV
@@ -136,7 +163,7 @@ crypto.symmetric.isValidKey(key) // true
 crypto.symmetric.isValidIV(iv) // true
 ```
 
-#### パスワードハッシュ（ソルト付き反復）
+### パスワードハッシュ（ソルト付き反復）
 
 ```ts
 // 哈希密码（输出格式: $hai$<iterations>$<salt>$<hash>）
@@ -158,7 +185,7 @@ if (hashed.success) {
 }
 ```
 
-#### 通信暗号化（crypto.transport）
+### 通信暗号化（crypto.transport）
 
 正規化、検証順序、nonce 保存は [Transport v2 プロトコル](TRANSPORT-PROTOCOL.md) を参照してください。
 
@@ -171,7 +198,7 @@ if (hashed.success) {
 
 `crypto.transport.createServer({ serverKeyRing, keyStore })` / `createClient()` の直接呼び出しは、独自ランタイム、テスト、HTTP 鍵交換 endpoint を自分で接続する場合に限って推奨します。
 
-##### 使用手順
+#### 使用手順
 
 1. `await crypto.init()` を呼び、`crypto.asymmetric` と `crypto.symmetric` を初期化します。
 2. サーバーで `crypto.transport.createServer({ serverKeyRing, keyStore })` を呼び、`manager` を作成します。サーバー鍵ペアとクライアント公開鍵を管理します。複数ノードでは共有 `keyStore` を注入できます。
@@ -180,7 +207,7 @@ if (hashed.success) {
 5. 空の POST と GET/HEAD を含め、すべての要求が認証封装 `{ context, direction, status, encryptedKey, ciphertext, iv, tag, signature }` を送ります。
 6. 独自アダプターは先に `await authenticateTransportRequest(manager, request)` を実行し、成功時のみ `data.plaintext` を業務へ渡し、`data.context` を保持します。
 7. 応答は `await manager.encryptResponse(context, data, response.status)` で元要求に関連付け、クライアントがコンテキスト・status・完全性を検証してから平文を返します。
-8. `client.destroy()` でクライアントセッションを消去します。サーバー側のリソースは `manager.close()` またはモジュール単位の `await crypto.close()` で解放します。
+8. `client.destroy()` でローカルのセッションを消去します。サーバーでは `await manager.close()` の後に `await crypto.close()` を呼びます。モジュールを閉じても、独立して作成した管理器の終了や業務セッションの失効は行いません。
 
 > サーバーには同じ管理済み `serverKeyRing` と共有 `keyStore`（Redis または共有 DB）を明示的に渡します。クライアント公開鍵の共有だけではノード間で復号できません。暗黙のプロセス鍵・メモリー registry はなく、開発・テストでは `createInMemoryKeyStore(capacity)` を明示します。再起動後は同じ鍵環を読み込み、sticky session は不要です。
 
@@ -194,7 +221,7 @@ if (hashed.success) {
 
 Redis/DB の `ttlSeconds` を省略すると無期限です。指定時は 1–2147483647 の整数秒とし、有限 TTL を推奨します。Redis はネイティブのキー TTL を使い、DB の `maxClients` 上限は提供しません。メモリー予算を設定し、有効な nonce を追い出さないでください。DB の `maxClients` は正の安全な整数、既定 10000 で、全ノードと永続容量レコードが一致する必要があります。登録はトランザクション内で共有容量行をロックし、件数確認後に挿入します。満杯では登録を拒否し、有効な公開鍵や nonce を削除しません。クライアント削除時も有効な nonce は保持します。
 
-DB の期限は DB 時計の epoch ミリ秒で生成・判定します。DB と各ノードの時計をプロトコルの許容範囲内に同期してください。初回テーブル作成失敗後は再試行できます。登録時に 1 バッチ清掃し、`await registry.pruneExpired()` は期限切れ公開鍵と nonce を各 100 件まで削除します。低トラフィック時もアプリで定期実行してください。暗黙のタイマーは作らず、注入された reldb も閉じません。旧 timestamp 列は停止中に BIGINT の `created_at_ms` / `expires_at_ms` に移行します。容量は `hai_crypto_transport_capacity` に永続化されるため、変更時は全ノードと保存行を調整し、registry 再作成のために有効な nonce を消さないでください。
+DB の期限は DB 時計の epoch ミリ秒で生成・判定します。DB と各ノードの時計をプロトコルの許容範囲内に同期してください。初回テーブル作成失敗後は再試行できます。登録時に 1 バッチ清掃し、`await registry.pruneExpired()` は期限切れ公開鍵と nonce を各 100 件まで削除します。低トラフィック時もアプリで定期実行してください。暗黙のタイマーは作らず、注入された reldb も閉じません。公開鍵の期限は BIGINT の `created_at_ms` / `expires_at_ms` に保存します。容量は `hai_crypto_transport_capacity` に永続化されるため、変更時は全ノードと保存行を調整し、registry 再作成のために有効な nonce を消さないでください。
 
 ```ts
 const registry = createReldbTransportKeyStore({ reldb, ttlSeconds: 3600, maxClients: 10000 })
@@ -256,7 +283,7 @@ const server = crypto.transport.createServer({ serverKeyRing, keyStore })
 
 空の POST も空平文の認証封装を送ります。GET/HEAD は X-Hai-Transport ヘッダー、204/304/HEAD など本文なし応答も同じヘッダーを使います。他の要求・応答は JSON 本文と X-Encrypted: true を使います。クライアントは元の要求コンテキストと HTTP status を照合し、マーカー欠落、旧形式、認証失敗では reject します。平文 endpoint は Serv/Kit の `encryption: disabled` ルールまたはホストの `excludePaths` で明示的に許可し、呼出側も通常の要求を選びます。API Client/Kit のラッパーは自身の `excludePaths` を使用します。CORS では X-Hai-Transport を許可・公開してください。鍵交換の公開鍵認証は TLS に依存し、IAM の業務認可は別に必要です。
 
-`transport.maxPlaintextBytes` でリクエストとレスポンスの JSON 平文容量を共通設定します。単位は UTF-8 バイト、既定値は 1 MiB、有効範囲は 1 KiB～64 MiB の整数です。クライアントは鍵交換で上限を取得し、`resolveTransportBodyLimits()` が暗号文とプロキシ容量（平文の 2 倍 + 32 KiB）を算出します。鍵交換、公開鍵、認証ヘッダー、防リプレイ制約は独立です。超過時は元ストリームを停止して reader を解放します。要求は 413、応答は暗号化された 500 容量エラーとなり、`TransportBodyTooLargeError` / `hai:crypto:070` で識別できます。 [容量配置、文件换算与升级](TRANSPORT-CAPACITY.md)。
+`transport.maxPlaintextBytes` でリクエストとレスポンスの JSON 平文容量を共通設定します。単位は UTF-8 バイト、既定値は 1 MiB、有効範囲は 1 KiB～64 MiB の整数です。クライアントは鍵交換で上限を取得し、`resolveTransportBodyLimits()` が暗号文とプロキシ容量（平文の 2 倍 + 32 KiB）を算出します。鍵交換、公開鍵、認証ヘッダー、防リプレイ制約は独立です。超過時は元ストリームを停止して reader を解放します。要求は 413、応答は暗号化された 500 容量エラーとなり、`TransportBodyTooLargeError` / `hai:crypto:070` で識別できます。 [容量設定とファイルサイズの計算](TRANSPORT-CAPACITY.md)。
 
 通常業務は `transport.maxPlaintextBytes`（auto/省略は 1 MiB）を維持します。Feedback の受理・証拠・添付・ZIP ダウンロードは `routePlaintextBytes` と `feedback.budget.maxTransportBytes` で別途宣言します。`*` は完全な1パス区間のみ一致し、ホストの明示値が優先です。ハンドシェイク、adapter-node、プロキシは経路の最大値を使用します。HTTP アダプターは個別宣言された 1 MiB 超の資料経路を最大2件、通常業務を別枠で16件まで許可し、応答完了・失敗時に解放します。混雑は503 / `hai:crypto:072` を返し、業務書込は自動再送しません。
 
@@ -276,33 +303,34 @@ const text = await readTransportBody(request.body, {
 const payload: unknown = JSON.parse(text)
 ```
 
-#### モジュールの終了
+### モジュールの終了
 
 ```ts
 // 使用完毕后关闭，释放内部状态
 await crypto.close()
 ```
 
-### エラー処理
+### セキュリティに関する注意
 
-すべての操作は `HaiResult<T>` を返します：
+伝送クライアントの `destroy()` は進行中のハンドシェイクを無効化して中断し、遅延結果による鍵の復活や次回ハンドシェイクの上書きを防ぎます。サーバー registry は自身の期限で回収します。
 
-```ts
-const result = crypto.asymmetric.encrypt('data', publicKey)
-if (!result.success) {
-  // result.error.code / result.error.message
-}
-```
+- **SM4 の既定の暗号化結果は構造化された暗号文**：`crypto.symmetric.encrypt(data, key)` は既定で CBC + ランダム IV を使用し、`{ mode, ciphertext, iv, encoding }` を返します。復号時はこのオブジェクトを `crypto.symmetric.decrypt(payload, key)` に渡します。
+- **SM4 にはランダムな鍵を使用してください**：`crypto.symmetric.generateKey()` で鍵を生成します。このモジュールはパスワードから暗号鍵を導出する KDF を提供しません。パスワードの保存にはサーバー専用の `crypto.password.hash(password)` を使用し、パスワードやそのハッシュを直接 SM4 の鍵にしないでください。
+- **IV は毎回一意にしてください**：同じ鍵で IV を再利用してはいけません。既定の CBC または `encryptWithIV()` による毎回の自動生成を推奨します。IV は暗号文と一緒に送信・保存します（公開可能で、秘密にする必要はありません）。
 
 ### 任意の連携
 
 管理画面のオンライン暗号化デモは Crypto の SM3/SM4 API を直接呼びます。SM4 はランダムな一時鍵と IV を使い、成功表示前に復号を検証します。鍵は保存しません。入力が変わると古い結果を消去し、ランダムなダイジェストや Base64 を暗号処理の結果として表示してはいけません。
 
-## 本番の共有状態
+## 設定
+
+crypto.init() に設定オブジェクトは渡しません。アルゴリズムのオプションは各呼出しに渡し、HTTP 転送は crypto.transport.createServer/createClient で設定します。サーバー鍵リングと共有 registry は明示的に注入し、秘密鍵をブラウザーや公開 YAML に含めません。
+
+### 本番の共有状態
 
 本番の伝送 registry は stateScope=shared と実際の Redis または PostgreSQL/MySQL が必須です。memory、および memory/SQLite を包む工場も拒否します。各ノードは同じ管理されたバージョン付き鍵セットを読み込みます。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../.agents/instructions/distributed-state.md)。
 
-## モジュール要件と明示的な上限
+### モジュール要件と明示的な上限
 
 `resolveTransportBodyLimits(limit?, { requiredPlaintextBytes? })` は limit 省略時だけ有効なモジュールの必要量から計算し、要件がなければ 1 MiB です。明示上限が必要量未満なら RangeError とし、勝手に拡張・縮小しません。範囲は 1 KiB～64 MiB、暗号文は平文の2倍＋32 KiBです。Serv/Kit の `auto` は実行時に undefined へ正規化します。
 
@@ -311,6 +339,17 @@ import { resolveTransportBodyLimits } from '@h-ai/crypto'
 
 const limits = resolveTransportBodyLimits(24 * 1024 * 1024, { requiredPlaintextBytes: 11250348 })
 // plaintextBytes: 25165824; encryptedPayloadBytes: 50364416
+```
+
+## エラー処理
+
+暗号化・署名・ハッシュ・パスワード操作は `HaiResult<T>` を返すため、先に `success` を確認します。鍵・IV 生成と形式検査は直接値を返し、`crypto.close()` は `Promise<void>` です。`encryptedFetch` は fetch と同様に Promise を拒否します。ストリーム読み取りや上限計算など明示的に例外を投げるツールは呼出し境界で処理してください：
+
+```ts
+const result = crypto.asymmetric.encrypt('data', publicKey)
+if (!result.success) {
+  // result.error.code / result.error.message
+}
 ```
 
 ## 開発とテスト

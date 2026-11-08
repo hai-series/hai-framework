@@ -4,28 +4,9 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md)
 
-## 简介
-
 hai-framework 的公共 HTTP API 契约包，用 oRPC contract 和 Zod 让前后端共用接口路径、输入输出校验与类型。
 
-## 核心功能清单
-
-- `apiContract.iam`、`apiContract.storage`、`apiContract.ai`、`apiContract.payment`：领域级 contract。
-- `apiContract.create()`：按应用场景组合启用的领域 contract。
-- `apiContract.route()`：定义自定义 HTTP 路由元数据，供应用级 contract 复用。
-- `apiContract.pathOf()`：从 contract procedure 读取唯一业务路径，供 middleware/client 复用。
-- `apiContract.haiResultSchema()` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema()`：公共 DTO Schema 工厂。
-- 公共 DTO Schema：所有 HTTP 输出统一包装为 `HaiResult<T>`。
-- IAM token DTO 兼容 httpOnly cookie 模式：响应体中 `refreshToken` 可能不存在，由服务端 `Set-Cookie` 管理。
-- IAM `auth.currentUser` 返回用户资料以及服务端当前会话的 `roles` / `permissions`，客户端恢复会话时无需持久化权限快照。
-
-支付创建输入和输出仅接受微信 `jsapi`、支付宝 `h5`、Stripe `h5`；微信输入必填 `userId`（openid）。App、Native、小程序与其它组合会在输入校验时失败。支付宝输出是 `{ gateway, fields }` 页面参数，创建成功不代表支付完成；客户端处理见 [Payment](../payment/README.md)。
-
-用户列表支持 `sortBy`（username/email/displayName/enabled/createdAt）和 `sortDirection`（asc/desc），供列头排序在分页前执行。
-
-## 使用入门
-
-### 快速开始
+## 快速开始
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
@@ -56,6 +37,34 @@ export const appContract = {
     }))),
 }
 ```
+
+## 功能
+
+### 用途、输入与输出
+
+本包声明接口和校验结构，不发送请求，也没有 init/close。表中 Schema 是校验器本身；调用 safeParse 后检查其 success。业务响应中的 HaiResult.success 与校验器的 success 属于不同层，不能混用。路由的输入/输出 Schema 由应用挂载到 Serv 或客户端后实际使用。
+
+| 入口                           | 使用场景             | 输入（`—` 表示无参数）                     | 返回值                                                                                  | 调用示例                                                                     |
+| ------------------------------ | -------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `apiContract.create`           | 组合应用接口         | `{ iam: apiContract.iam, payment: false }` | `{ iam: IamContract }`                                                                  | `apiContract.create({ iam: apiContract.iam, payment: false })`               |
+| `apiContract.route`            | 声明 HTTP 接口       | `{ method: "GET", path: "/status" }`       | `ContractProcedureBuilder`                                                              | `apiContract.route({ method: "GET", path: "/status" })`                      |
+| `apiContract.pathOf`           | 取唯一业务路径       | `apiContract.iam.auth.login`               | `string: "/auth/login"`                                                                 | `apiContract.pathOf(apiContract.iam.auth.login)`                             |
+| `apiContract.haiResultSchema`  | 校验成功或失败结果   | `z.string()`                               | `ZodSchema<HaiResult<string>>`                                                          | `apiContract.haiResultSchema(z.string())`                                    |
+| `apiContract.voidResultSchema` | 校验无业务数据的结果 | `{ success: true, data: undefined }`       | `ZodSchema<HaiResult<void>>`                                                            | `apiContract.voidResultSchema.safeParse({ success: true, data: undefined })` |
+| `apiContract.paginatedSchema`  | 校验分页列表         | `z.object({ id: z.string() })`             | `ZodSchema<{ items: { id: string }[], total: number, page: number, pageSize: number }>` | `apiContract.paginatedSchema(z.object({ id: z.string() }))`                  |
+| `apiContract.iam`              | 认证与账号接口       | `—`                                        | `iam contract router`                                                                   | `apiContract.create({ iam: apiContract.iam })`                               |
+| `apiContract.storage`          | 文件接口             | `—`                                        | `storage contract router`                                                               | `apiContract.create({ storage: apiContract.storage })`                       |
+| `apiContract.ai`               | AI 接口              | `—`                                        | `ai contract router`                                                                    | `apiContract.create({ ai: apiContract.ai })`                                 |
+| `apiContract.payment`          | 支付接口             | `—`                                        | `payment contract router`                                                               | `apiContract.create({ payment: apiContract.payment })`                       |
+| `apiContract.feedback`         | 反馈接口             | `—`                                        | `feedback contract router`                                                              | `apiContract.create({ feedback: apiContract.feedback })`                     |
+
+- 公共 DTO Schema：所有 HTTP 输出统一包装为 `HaiResult<T>`。
+- IAM token DTO 兼容 httpOnly cookie 模式：响应体中 `refreshToken` 可能不存在，由服务端 `Set-Cookie` 管理。
+- IAM `auth.currentUser` 返回用户资料以及服务端当前会话的 `roles` / `permissions`，客户端恢复会话时无需持久化权限快照。
+
+支付创建输入和输出仅接受微信 `jsapi`、支付宝 `h5`、Stripe `h5`；微信输入必填 `userId`（openid）。App、Native、小程序与其它组合会在输入校验时失败。支付宝输出是 `{ gateway, fields }` 页面参数，创建成功不代表支付完成；客户端处理见 [Payment](../payment/README.md)。
+
+用户列表支持 `sortBy`（username/email/displayName/enabled/createdAt）和 `sortDirection`（asc/desc），供列头排序在分页前执行。
 
 ### API 契约
 
@@ -110,10 +119,6 @@ const app = serv.createApp({
 
 业务 path 必须直接写在对应 `*-contract.ts`。只使用一次的输出 Schema 直接内联到 `.output(...)`；同一 contract 文件内重复使用时可保留私有常量，但不得从 schemas 导出。
 
-### 配置
-
-本包无运行时配置，不读取环境变量。
-
 ### 配置驱动认证页面
 
 密码登录只提交 `identifier` 和 `password`；`AuthPanel` 将 `LoginForm` 的 `username` 映射为 `identifier`。会话有效期由服务端 `session.maxAge` / `session.refreshTokenMaxAge` 配置决定，登录表单不提供按次登录的持久会话选项。
@@ -124,15 +129,11 @@ const app = serv.createApp({
 
 [完整 IAM 配置 / IAM configuration](../iam/README.md)
 
-### 错误处理
-
-Contract 只描述输入输出结构。业务错误由 procedure 返回 `HaiResult<T>` 表达，客户端不需要捕获业务异常。
-
-## 输入约束与 HTTP 能力
+### 输入约束与 HTTP 能力
 
 存储 key 按 UTF-8 最多 1024 字节，并拒绝绝对路径、反斜线、控制字符及点路径段；公开 HTTP 批量删除每次 1–1000 项。`@h-ai/storage/schemas` 提供浏览器安全的共同规则。预签名有效期为整数 1–604800 秒（Node 默认 3600，HTTP 默认 900）；HTTP 上传仅接受 key/contentType/expiresIn，不支持 contentLength/maxSize/metadata/checksum。无效输入返回 HTTP 400，typed client 映射 VALIDATION_FAILED。FileUpload 的大小/类型限制仅为前端体验，实际对象须由应用服务端复核。Node 流式读写/checksum/条件写等没有默认 HTTP 端点。完整映射与授权边界见 [存储 API 能力](../storage/README.md#存储输入约束与跨端能力)。
 
-## 反馈领域契约
+### 反馈领域契约
 
 `FeedbackJob.type` 与 `FeedbackRetryInput.target` 支持独立 `webhook` 任务；状态、尝试次数和安全错误码见详情 jobs。业务采集函数与回调配置仅在可信服务端注册，不接受 HTTP 输入指定。正文与 ZIP/GZIP 通过既有证据/附件接口取得，接入见 [feedback](../feedback/README.md)。
 
@@ -148,15 +149,23 @@ const contract = apiContract.create({ feedback: apiContract.feedback })
 const path = apiContract.pathOf(contract.feedback.reports.submit)
 ```
 
-## 可选交互挑战
+### 可选交互挑战
 
 IamCreateCaptchaInputSchema / IamCaptchaChallengeSchema 定义 POST /auth/captcha 的用途与可公开挑战，交互鉴别输入允许最多4096字符的可选 captcha。IamPublicConfigSchema.captcha 仅含 enabled，缺省关闭。Schema 校验结构，证明有效期、用途和单次消费由服务端 IAM 执行。
 
 策略、默认值和恢复边界见 [IAM](../iam/README.md)。
 
-## 页面离开会话策略
+### 页面离开会话策略
 
 `session.endOnPageHide` 默认 `false`。启用后宿主调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })` 并在卸载时调用返回的清理函数；标准 admin/H5/fullstack 模板已经接入。非 BFCache 的 `pagehide`（也包括刷新、整页导航）通过 POST `/auth/session/close` 尽力撤销当前 access 及关联 refresh，沿用 CSRF/传输加密，使用 `keepalive` 且不自动刷新会话。该响应不清 Cookie/本地凭据，避免旧响应覆盖下一次登录。显式退出仍使用正常 logout，可靠撤销并清理当前凭据。浏览器可能不发送页面离开请求，因此必须按业务配合服务端 `idleTimeout`/`absoluteTimeout`；不能据此保证关闭即撤销。
+
+## 配置
+
+本包无运行时配置，不读取环境变量。
+
+## 错误处理
+
+Contract 只描述输入输出结构，业务错误由 procedure 返回 `HaiResult<T>` 表达。直接调用 Zod `parse()` 会在输入无效时抛校验异常；读取外部输入时可用 `safeParse()` 并检查其 `success`。这个校验结果与业务响应里的 `HaiResult.success` 分别处理。
 
 ## 开发测试
 

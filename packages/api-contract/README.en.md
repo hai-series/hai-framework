@@ -4,28 +4,9 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
 
-## Introduction
-
 Public HTTP API contracts for hai-framework, with oRPC contract + Zod as the single source of truth.
 
-## Core features
-
-- `apiContract.iam`, `apiContract.storage`, `apiContract.ai`, `apiContract.payment`: domain contracts.
-- `apiContract.create()`: compose enabled domain contracts for an application.
-- `apiContract.route()`: define custom HTTP route metadata for reuse in application contracts.
-- `apiContract.pathOf()`: read the authoritative business path from a contract procedure for middleware/client reuse.
-- `apiContract.haiResultSchema()` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema()`: shared DTO schema factories.
-- Shared DTO schemas: every HTTP output is wrapped in `HaiResult<T>`.
-- IAM token DTOs support httpOnly cookies: `refreshToken` may be absent from the response body and managed by the server through `Set-Cookie`.
-- IAM `auth.currentUser` returns the user profile and the current server session's `roles` / `permissions`; clients need not persist a permission snapshot to restore a session.
-
-Payment creation inputs and outputs accept WeChat `jsapi`, Alipay `h5`, and Stripe `h5` only; WeChat requires `userId` (openid). App, Native, mini-program, and other combinations fail validation. Alipay returns `{ gateway, fields }` page parameters; creation success does not establish payment. See [Payment](../payment/README.en.md) for client handling.
-
-User listing accepts `sortBy` (username/email/displayName/enabled/createdAt) and `sortDirection` (asc/desc) for header sorting before pagination.
-
-## Getting started
-
-### Quick start
+## Quick Start
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
@@ -56,6 +37,34 @@ export const appContract = {
     }))),
 }
 ```
+
+## Features
+
+### Purpose, inputs and outputs
+
+This package declares routes and validation schemas; it sends no requests and has no init/close lifecycle. A returned Schema is a validator. Check safeParse.success when parsing: it is separate from HaiResult.success inside a business response. Serv and clients consume the input/output schemas when the application mounts the routes.
+
+| Entry                          | Use case                               | Input (`—` means none)                     | Return value                                                                            | Call example                                                                 |
+| ------------------------------ | -------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `apiContract.create`           | Compose application routes             | `{ iam: apiContract.iam, payment: false }` | `{ iam: IamContract }`                                                                  | `apiContract.create({ iam: apiContract.iam, payment: false })`               |
+| `apiContract.route`            | Declare an HTTP endpoint               | `{ method: "GET", path: "/status" }`       | `ContractProcedureBuilder`                                                              | `apiContract.route({ method: "GET", path: "/status" })`                      |
+| `apiContract.pathOf`           | Read the declared business path        | `apiContract.iam.auth.login`               | `string: "/auth/login"`                                                                 | `apiContract.pathOf(apiContract.iam.auth.login)`                             |
+| `apiContract.haiResultSchema`  | Validate a success or failure result   | `z.string()`                               | `ZodSchema<HaiResult<string>>`                                                          | `apiContract.haiResultSchema(z.string())`                                    |
+| `apiContract.voidResultSchema` | Validate results without business data | `{ success: true, data: undefined }`       | `ZodSchema<HaiResult<void>>`                                                            | `apiContract.voidResultSchema.safeParse({ success: true, data: undefined })` |
+| `apiContract.paginatedSchema`  | Validate a page of items               | `z.object({ id: z.string() })`             | `ZodSchema<{ items: { id: string }[], total: number, page: number, pageSize: number }>` | `apiContract.paginatedSchema(z.object({ id: z.string() }))`                  |
+| `apiContract.iam`              | Identity routes                        | `—`                                        | `iam contract router`                                                                   | `apiContract.create({ iam: apiContract.iam })`                               |
+| `apiContract.storage`          | Storage routes                         | `—`                                        | `storage contract router`                                                               | `apiContract.create({ storage: apiContract.storage })`                       |
+| `apiContract.ai`               | AI routes                              | `—`                                        | `ai contract router`                                                                    | `apiContract.create({ ai: apiContract.ai })`                                 |
+| `apiContract.payment`          | Payment routes                         | `—`                                        | `payment contract router`                                                               | `apiContract.create({ payment: apiContract.payment })`                       |
+| `apiContract.feedback`         | Feedback routes                        | `—`                                        | `feedback contract router`                                                              | `apiContract.create({ feedback: apiContract.feedback })`                     |
+
+- Shared DTO schemas: every HTTP output is wrapped in `HaiResult<T>`.
+- IAM token DTOs support httpOnly cookies: `refreshToken` may be absent from the response body and managed by the server through `Set-Cookie`.
+- IAM `auth.currentUser` returns the user profile and the current server session's `roles` / `permissions`; clients need not persist a permission snapshot to restore a session.
+
+Payment creation inputs and outputs accept WeChat `jsapi`, Alipay `h5`, and Stripe `h5` only; WeChat requires `userId` (openid). App, Native, mini-program, and other combinations fail validation. Alipay returns `{ gateway, fields }` page parameters; creation success does not establish payment. See [Payment](../payment/README.en.md) for client handling.
+
+User listing accepts `sortBy` (username/email/displayName/enabled/createdAt) and `sortDirection` (asc/desc) for header sorting before pagination.
 
 ### API contracts
 
@@ -110,10 +119,6 @@ Batch deletion via `storage.files.deleteMany` returns `{ deletedKeys, failures: 
 
 Write each business path directly in its `*-contract.ts` file. Inline output schemas used only once in `.output(...)`; schemas reused within the same contract file may be private constants, but must not be exported from schemas.
 
-### Configuration
-
-This package has no runtime configuration and does not read environment variables.
-
 ### Configuration driven authentication
 
 Password login submits only `identifier` and `password`; `AuthPanel` maps the `LoginForm` field `username` to `identifier`. Server settings `session.maxAge` / `session.refreshTokenMaxAge` control session lifetimes. The login form has no per-login persistent-session option.
@@ -124,15 +129,11 @@ IAM adds GET /auth/config and POST /auth/login/ldap, /auth/password-reset/reques
 
 [完整 IAM 配置 / IAM configuration](../iam/README.en.md)
 
-### Error handling
-
-Contracts describe input and output structures only. Procedures express business errors with `HaiResult<T>`, so clients need not catch business exceptions.
-
-## Input limits and HTTP capabilities
+### Input limits and HTTP capabilities
 
 Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../storage/README.md#存储输入约束与跨端能力).
 
-## Feedback domain contract
+### Feedback domain contract
 
 `FeedbackJob.type` and `FeedbackRetryInput.target` support independent `webhook` jobs. Details expose status, attempts and safe error codes in jobs. Business collectors and callback settings belong to trusted server initialization, not HTTP input. Read text and ZIP/GZIP through existing APIs; see [feedback](../feedback/README.en.md).
 
@@ -148,17 +149,25 @@ const contract = apiContract.create({ feedback: apiContract.feedback })
 const path = apiContract.pathOf(contract.feedback.reports.submit)
 ```
 
-## Optional interactive challenges
+### Optional interactive challenges
 
 IamCreateCaptchaInputSchema/IamCaptchaChallengeSchema define POST /auth/captcha purposes and public challenges. Interactive inputs accept optional captcha up to4096 characters; public configuration exposes only enabled, defaulting false. Schemas validate structure; IAM enforces expiry, purpose and one-use consumption server-side.
 
 See policy, defaults and recovery boundaries in [IAM](../iam/README.en.md).
 
-## Page exit session policy
+### Page exit session policy
 
 `session.endOnPageHide` defaults to `false`. Hosts call `actions.bindPageExit({ enabled: config.session.endOnPageHide })` and invoke its returned cleanup on unmount; standard admin/H5/fullstack templates already bind it. A non-BFCache `pagehide` (including reload and full document navigation) makes a best effort POST to `/auth/session/close`, revoking the held access and related refresh through the existing CSRF/encrypted transport with `keepalive` and no automatic refresh. This response does not clear cookies/local credentials, avoiding a late old response overwriting a new login. Explicit logout still revokes and clears current credentials normally. Browsers may omit page exit requests; configure server `idleTimeout`/`absoluteTimeout` as appropriate. Immediate revocation on browser close is not guaranteed.
 
-## Development and testing
+## Configuration
+
+This package has no runtime configuration and does not read environment variables.
+
+## Error Handling
+
+Contracts describe input and output structures; procedures express business errors with `HaiResult<T>`. Direct Zod `parse()` calls throw on invalid input. For external input, use `safeParse()` and check its `success`, separately from `HaiResult.success` inside a business response.
+
+## Development
 
 ```bash
 pnpm --filter @h-ai/api-contract test
