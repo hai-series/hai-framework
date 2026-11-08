@@ -56,7 +56,10 @@
       <p class='mb-4 text-sm text-base-content/60'>{uiM('session_recovery_hint')}</p>
       {#if recovery.user?.username}<p class='mb-4 text-sm font-medium'>{recovery.user.username}</p>{/if}
       {#if recovery.config}
-        <AuthPanel embedded initialIdentifier={recovery.user?.username} config={{ ...recovery.config, register: { enabled: false } }} actions={recoveryActions} onauthenticated={() => recovery.complete(authenticatedId, authenticatedVersion)} />
+        <AuthPanel embedded initialIdentifier={recovery.user?.username} config={{
+          ...recovery.config,
+          register: { enabled: false },
+        }} actions={recoveryActions} onauthenticated={() => recovery.complete(authenticatedId, authenticatedVersion)} />
       {/if}
       <div class='mt-4 flex justify-end'><Button variant='ghost' disabled={authenticating} onclick={() => recovery.cancel()}>{uiM('session_recovery_later')}</Button></div>
     </div>

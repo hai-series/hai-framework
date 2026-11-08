@@ -97,13 +97,21 @@
   // 条件数量保持可感知，false 和 0 同样是有效草稿值。
   const activeFilterCount = $derived(Object.values(filterValues).filter(v => v !== undefined && v !== '' && v !== null).length)
 
-  const dateLikeTypes = new Set(['date', 'datetime-local', 'datetime', 'month', 'week'])
+  const dateLikeTypes = new Set([
+    'date',
+    'datetime-local',
+    'datetime',
+    'month',
+    'week',
+  ])
   const numberLikeTypes = new Set(['number', 'integer'])
 
   function resolveText(text: string | (() => string) | undefined): string {
     if (!text)
       return ''
-    return typeof text === 'function' ? text() : text
+    return typeof text === 'function'
+      ? text()
+      : text
   }
 
   function normalizeType(type: string): string {
@@ -131,7 +139,9 @@
   function resolveOptions(options?: FilterFieldDef['options']): Array<{ label: string, value: string | number | boolean }> {
     if (!options)
       return []
-    return typeof options === 'function' ? options() : options
+    return typeof options === 'function'
+      ? options()
+      : options
   }
 
   function handleFilterChange(fieldId: string, value: unknown) {
@@ -140,7 +150,10 @@
   }
 
   function handleFilterPatch(partial: Record<string, unknown>) {
-    filterValues = { ...filterValues, ...partial }
+    filterValues = {
+      ...filterValues,
+      ...partial,
+    }
     onfilterchange?.(filterValues)
   }
 
@@ -179,7 +192,9 @@
       {@const fieldPlaceholder = resolveText(field.placeholder)}
       {@const opts = resolveOptions(field.options)}
       {@const controlId = `${toolbarId}-${field.id}`}
-      <FormField label={resolveText(field.label)} for={controlId} colSpan={isDateRangeField(field) ? 2 : 1}>
+      <FormField label={resolveText(field.label)} for={controlId} colSpan={isDateRangeField(field)
+        ? 2
+        : 1}>
         {#if isDateRangeField(field)}
           {@const startKey = field.startKey ?? `${field.id}Start`}
           {@const endKey = field.endKey ?? `${field.id}End`}
@@ -223,10 +238,16 @@
         {#if showViewSwitch}
           <div class='join' role='group' aria-label={uiM('toolbar_view_switch')}>
             {#each ['table', 'card'] as mode (mode)}
-              <button type='button' class='btn btn-sm join-item' class:text-primary={viewMode === mode} aria-label={uiM(mode === 'table' ? 'toolbar_view_table' : 'toolbar_view_card')} aria-pressed={viewMode === mode} onclick={() => {
-                viewMode = mode === 'table' ? 'table' : 'card'
+              <button type='button' class='btn btn-sm join-item' class:text-primary={viewMode === mode} aria-label={uiM(mode === 'table'
+                ? 'toolbar_view_table'
+                : 'toolbar_view_card')} aria-pressed={viewMode === mode} onclick={() => {
+                viewMode = mode === 'table'
+                  ? 'table'
+                  : 'card'
                 onviewmodechange?.(viewMode)
-              }}><span class={mode === 'table' ? 'icon-[tabler--table] size-4' : 'icon-[tabler--layout-grid] size-4'} aria-hidden='true'></span></button>
+              }}><span class={mode === 'table'
+                ? 'icon-[tabler--table] size-4'
+                : 'icon-[tabler--layout-grid] size-4'} aria-hidden='true'></span></button>
             {/each}
           </div>
         {/if}
@@ -239,7 +260,9 @@
     event.preventDefault()
     onsearch?.(searchValue)
   }}>
-    <FilterBar bind:expanded activeCount={activeFilterCount} leading={searchable ? search : undefined} actions={buttons} onreset={handleReset} children={filterFields.length > 0 ? fields : undefined} />
+    <FilterBar bind:expanded activeCount={activeFilterCount} leading={searchable ? search : undefined} actions={buttons} onreset={handleReset} children={filterFields.length > 0
+      ? fields
+      : undefined} />
   </form>
 </div>
 

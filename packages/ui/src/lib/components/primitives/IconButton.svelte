@@ -49,7 +49,9 @@
    * 若需要复杂内容，请改用 Snippet / children。
    */
   const sanitizedIcon = $derived(
-    typeof icon === 'string' ? sanitizeInlineSvg(icon) : '',
+    typeof icon === 'string'
+      ? sanitizeInlineSvg(icon)
+      : '',
   )
 
   const buttonClass = $derived(

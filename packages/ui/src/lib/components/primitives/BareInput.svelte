@@ -113,7 +113,9 @@
        aria-controls={ariaControls}
        aria-autocomplete={ariaAutocomplete}
        class={className}
-       value={type === 'file' ? undefined : value}
+       value={type === 'file'
+         ? undefined
+         : value}
        oninput={handleInput}
        onchange={handleChange}
        onkeydown={handleKeydown}

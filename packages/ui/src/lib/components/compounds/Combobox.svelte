@@ -171,10 +171,14 @@
   )
 
   /** 多选模式：提供给 Combobox.Root 的类型安全值 */
-  const multiVal = $derived(Array.isArray(value) ? value as string[] : [])
+  const multiVal = $derived(Array.isArray(value)
+    ? value as string[]
+    : [])
 
   /** 单选模式：提供给 Combobox.Root 的类型安全值 */
-  const singleVal = $derived(typeof value === 'string' ? value : '')
+  const singleVal = $derived(typeof value === 'string'
+    ? value
+    : '')
 
   function syncInputElementValue() {
     if (!inputRef)
@@ -285,10 +289,17 @@
           <Combobox.Input
             id={field?.controlId}
             aria-invalid={effectiveError ? true : undefined}
-            aria-describedby={[field?.messageId, localError && !field?.error ? messageId : ''].filter(Boolean).join(' ') || undefined}
+            aria-describedby={[
+              field?.messageId,
+              localError && !field?.error
+                ? messageId
+                : '',
+            ].filter(Boolean).join(' ') || undefined}
             bind:ref={inputRef}
             class={cn('flex-1 min-w-20 bg-transparent py-0.5 outline-none placeholder:text-base-content/40', sizeClasses.spacing)}
-            placeholder={selectedOptions.length === 0 ? placeholder : ''}
+            placeholder={selectedOptions.length === 0
+              ? placeholder
+              : ''}
             {disabled}
             oninput={handleInput}
             onfocus={() => {
@@ -310,7 +321,9 @@
           class={contentClass}
           align='start'
           alignOffset={anchorOffset}
-          style={triggerWidth > 0 ? `--bits-combobox-anchor-width:${triggerWidth}px` : undefined}
+          style={triggerWidth > 0
+            ? `--bits-combobox-anchor-width:${triggerWidth}px`
+            : undefined}
           sideOffset={4}
         >
           {#if filteredOptions.length === 0}
@@ -360,7 +373,12 @@
         <Combobox.Input
           id={field?.controlId}
           aria-invalid={effectiveError ? true : undefined}
-          aria-describedby={[field?.messageId, localError && !field?.error ? messageId : ''].filter(Boolean).join(' ') || undefined}
+          aria-describedby={[
+            field?.messageId,
+            localError && !field?.error
+              ? messageId
+              : '',
+          ].filter(Boolean).join(' ') || undefined}
           bind:ref={inputRef}
           class={cn(
             'w-full rounded-lg border bg-base-100 pr-9 outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-base-content/40',

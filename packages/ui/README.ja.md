@@ -10,6 +10,8 @@
 
 Svelte 5 Runes のクロスプラットフォーム UI ライブラリーです。DaisyUI v5 + Tailwind CSS v4 のスタイル、Bits UI v2 のヘッドレス UI、内蔵 i18n（zh-CN / en-US / ja-JP）、15 種類の厳選テーマ、ハイコントラスト、直角ビジネス、目にやさしいテーマを提供します。
 
+
+HTTP/UI 境界で業務メッセージを公開するのは、明示された有効な4xx状態のみです。`httpStatus` が未指定または不正な場合は500として安全なメッセージを返します。独自の業務エラーには完全なエラー定義または明示的な状態を指定してください。
 ## 主な機能
 
 - フォーム、テーブル、ダイアログ、ナビゲーション、チャートなどの部品。
@@ -30,48 +32,43 @@ Node サーバーでは UI と core の両方を本番依存に含め、ログ�
 
 ### クイックスタート
 
-#### 1. svelte.config.js の設定
+#### 1. package.json のアプリ内インポートを設定
 
-```js
-import { autoImportHaiUi } from '@h-ai/ui/auto-import'
-import adapter from '@sveltejs/adapter-node'
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
-
-/** @type {import('@sveltejs/kit').Config} */
-const config = {
-  preprocess: [autoImportHaiUi(), vitePreprocess()],
-  compilerOptions: { runes: true },
-  kit: { adapter: adapter() },
-}
-
-export default config
+```json
+{ "imports": { "#lib/*": "./src/lib/*" } }
 ```
 
-#### 2. vite.config.ts の設定
+#### 2. vite.config.ts を設定
+
+SvelteKit 3 の前処理、コンパイラー、アダプターは Vite プラグインで設定します。通常の Svelte/Vite プロジェクトのみ svelte.config.js を保持します。
 
 ```ts
+import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
+import adapter from '@sveltejs/adapter-node'
 import { sveltekit } from '@sveltejs/kit/vite'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [sveltekit(), tailwindcss()],
-  optimizeDeps: {
-    // bits-ui 含 .svelte 源码须 exclude；@internationalized/date 须与 bits-ui 同为原始副本，
-    // 否则日期组件会因双实例 instanceof 失败抛 "Unknown date type"
-    exclude: [...haiOptimizeExclude],
-    // 预打包 @h-ai/ui 的重型纯 JS 依赖（语法高亮 / Mermaid / PDF 等），
-    // 避免首次进入业务路由时触发依赖再优化与整页刷新
-    include: [...haiPrebundledDeps],
-  },
+  plugins: [
+    sveltekit({
+      preprocess: [autoImportHaiUi(), vitePreprocess()],
+      compilerOptions: { runes: true },
+      adapter: adapter(),
+      paths: { relative: false },
+    }),
+    tailwindcss(),
+  ],
+  optimizeDeps: { exclude: [...haiOptimizeExclude], include: [...haiPrebundledDeps] },
   ssr: { noExternal: ['@h-ai/ui', '@h-ai/kit'], external: ['@h-ai/core', 'sm-crypto'] },
 })
 ```
 
-Crypto または Kit/IAM を使う場合、アプリの本番依存に `sm-crypto@0.5.7` を含めます。CLI 生成済みのプロジェクトでは設定済みです。手動導入は `pnpm add sm-crypto@0.5.7` を実行してください。adapter-node は直接の本番依存も参照するため、external 指定だけでは不十分です。
-
 #### 3. src/app.css の設定
+
+Crypto または Kit/IAM を使うアプリでは `sm-crypto@0.5.8` を本番依存に追加します。CLI は設定済みです。手動導入では `pnpm add sm-crypto@0.5.8` を実行してください。external だけでは不十分で、adapter-node がネイティブ解決を維持するには直接の本番依存が必要です。
 
 ```css
 @import 'tailwindcss';
@@ -211,6 +208,8 @@ components/
 
 `UserProfile.fieldConstraints` は項目別に `required`、`minlength`、`maxlength`、`pattern`、`validationMessage` を受け取り、ユーザー名などの業務ルールをフォーカス離脱時に検証します。`pattern` は単一行の入力に適用し、`validationMessage` は翻訳関数にも対応します。
 
+`UserProfile.onsubmit` は保存成功時に `true`、編集と下書きを保持する場合は `false` を必ず返します。例外時も編集を閉じず、共通の Toast で通知します。キャンセルすると `user` の保存済み値に戻ります。
+
 `CrudEditPanel.onsubmit` はフォームに宣言された書き込み可能な項目だけを受け取ります。`readonly` の項目は編集時に除外し、新規作成時には入力できます。主キー、関連データの表示値、監査日時を行全体から自動送信しません。空値、`false`、`0` は保持します。サーバーでは引き続き厳密なスキーマ検証を行ってください。
 
 `LoginForm`、`RegisterForm`、`ChangePasswordForm`、`ForgotPasswordForm`、`ResetPasswordForm`、`AuthPanel`、`UserProfile`、`FeedbackModal` は同じレイアウト設定に対応します。`CrudPage.form` または `CrudEditPanel` に渡します。CRUD 項目は `colSpan` と翻訳関数の `validation.message` に対応し、ボタンと Enter のどちらも送信前に検証します。入力修正でエラーが消えます。サーバー側の検証も必要です。
@@ -245,6 +244,8 @@ components/
 | `Popover`      | ポップオーバー | `open`, `position`, `trigger`, `offset`, `portal`                            |
 
 `Popover` は既定で `body` に描画されます。`click` モードでは Enter または Space で開くとパネルにフォーカスが移り、Escape で閉じるとトリガーに戻ります。インラインで描画する場合は `portal={false}` を指定します。
+
+Modal または Drawer 内では、portal の操作要素も所属ダイアログの Tab／Shift+Tab 順序に含まれます。閉じると登録を解除してトリガーにフォーカスを戻します。
 
 ##### データ表示
 
@@ -811,7 +812,7 @@ transformPageChunk: ({ html }) => html.replace('%theme_bootstrap%', themeBootstr
 ```svelte
 <script>
   import { createLocaleStore, setGlobalLocale } from '@h-ai/ui/i18n'
-  import { setLocale } from '$lib/paraglide/runtime'
+  import { setLocale } from '#lib/paraglide/runtime.js'
 
   const localeStore = createLocaleStore()
 

@@ -18,9 +18,18 @@
   const { title, value, unit = '', trend, trendLabel = '', trendTone = 'neutral', description = '', loading = false, children, class: className = '', ...restProps }: MetricCardProps = $props()
   const hasValue = $derived(value != null && (typeof value !== 'number' || Number.isFinite(value)))
   const hasTrend = $derived(typeof trend === 'number' && Number.isFinite(trend))
-  const direction = $derived((trend ?? 0) > 0 ? 'up' : (trend ?? 0) < 0 ? 'down' : 'flat')
+  const direction = $derived((trend ?? 0) > 0
+    ? 'up'
+    : (trend ?? 0) < 0
+    ? 'down'
+    : 'flat')
   const trendText = $derived(new Intl.NumberFormat(getUILocale(), { style: 'percent', maximumFractionDigits: 1, signDisplay: 'exceptZero' }).format((trend ?? 0) / 100))
-  const toneClass = { success: 'text-success', warning: 'text-warning', error: 'text-error', neutral: 'text-base-content' }
+  const toneClass = {
+    success: 'text-success',
+    warning: 'text-warning',
+    error: 'text-error',
+    neutral: 'text-base-content',
+  }
 </script>
 
 <Card {...getDataAttributes(restProps)} class={cn('hai-metric-card min-w-0', className)} shadow={false}>
@@ -37,9 +46,17 @@
         <div class='flex flex-wrap items-center gap-x-2 gap-y-1 text-sm'>
           <span data-trend-direction={direction} class={cn('inline-flex items-center gap-1 font-medium tabular-nums', toneClass[trendTone])}>
             <svg aria-hidden='true' viewBox='0 0 20 20' class='size-4 shrink-0' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'>
-              <path d={direction === 'up' ? 'M3 14 8 9 12 12 17 5 M12 5h5v5' : direction === 'down' ? 'M3 6 8 11 12 8 17 15 M12 15h5v-5' : 'M3 10h14 m-4 -4 4 4 -4 4'}></path>
+              <path d={direction === 'up'
+                ? 'M3 14 8 9 12 12 17 5 M12 5h5v5'
+                : direction === 'down'
+                ? 'M3 6 8 11 12 8 17 15 M12 15h5v-5'
+                : 'M3 10h14 m-4 -4 4 4 -4 4'}></path>
             </svg>
-            <span class='sr-only'>{uiM(direction === 'up' ? 'metric_increase' : direction === 'down' ? 'metric_decrease' : 'metric_unchanged')}</span>
+            <span class='sr-only'>{uiM(direction === 'up'
+              ? 'metric_increase'
+              : direction === 'down'
+              ? 'metric_decrease'
+              : 'metric_unchanged')}</span>
             {trendText}
           </span>
           {#if trendLabel}<span class='text-base-content/80'>{trendLabel}</span>{/if}

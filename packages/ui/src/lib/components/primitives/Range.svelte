@@ -106,7 +106,9 @@
   )
 
   // 计算步长数量
-  const stepCount = $derived(showSteps ? Math.floor((max - min) / step) + 1 : 0)
+  const stepCount = $derived(showSteps
+    ? Math.floor((max - min) / step) + 1
+    : 0)
 
   function handleInput(e: Event) {
     const target = e.target as HTMLInputElement

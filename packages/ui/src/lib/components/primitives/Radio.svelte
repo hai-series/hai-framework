@@ -38,7 +38,9 @@
   const containerClass = $derived(
     cn(
       'flex gap-2',
-      direction === 'horizontal' ? 'flex-row flex-wrap' : 'flex-col',
+      direction === 'horizontal'
+        ? 'flex-row flex-wrap'
+        : 'flex-col',
       className,
     ),
   )

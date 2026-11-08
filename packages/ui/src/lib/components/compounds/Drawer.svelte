@@ -195,8 +195,12 @@
       return
 
     event.preventDefault()
-    const edgeDelta = event.key === 'ArrowLeft' ? -16 : 16
-    const nextWidth = clampWidth(drawer.getBoundingClientRect().width + (position === 'right' ? -edgeDelta : edgeDelta))
+    const edgeDelta = event.key === 'ArrowLeft'
+      ? -16
+      : 16
+    const nextWidth = clampWidth(drawer.getBoundingClientRect().width + (position === 'right'
+      ? -edgeDelta
+      : edgeDelta))
     resizeWidthForStorage = nextWidth
     resizedWidth = nextWidth
     if (widthStorageKey) {
@@ -234,13 +238,17 @@
       onclick={handleBackdropClick}
     ></button>
 
-    <div bind:this={panel} class={contentClass} style={widthStyle} role='dialog' aria-modal={open ? 'true' : undefined} aria-labelledby={title ? titleId : undefined} aria-label={title ? undefined : uiM('common_dialog')} tabindex='-1'>
+    <div bind:this={panel} class={contentClass} style={widthStyle} role='dialog' aria-modal={open ? 'true' : undefined} aria-labelledby={title ? titleId : undefined} aria-label={title
+      ? undefined
+      : uiM('common_dialog')} tabindex='-1'>
       {#if canResize}
         <button
           type='button'
           aria-label={uiM('drawer_resize')}
           data-drawer-resize-handle
-          class='absolute inset-y-0 z-20 hidden w-2 cursor-col-resize touch-none border-0 bg-transparent p-0 md:block {position === 'right' ? 'left-0' : 'right-0'}'
+          class='absolute inset-y-0 z-20 hidden w-2 cursor-col-resize touch-none border-0 bg-transparent p-0 md:block {position === 'right'
+            ? 'left-0'
+            : 'right-0'}'
           onmousedown={startResize}
           onkeydown={handleResizeKeydown}
         ></button>

@@ -53,7 +53,9 @@
     cn(
       'card bg-base-100 rounded-xl border border-base-content/6',
       bordered && 'border-base-300',
-      typeof shadow === 'boolean' ? shadowMap[String(shadow) as 'true' | 'false'] : shadowMap[shadow],
+      typeof shadow === 'boolean'
+        ? shadowMap[String(shadow) as 'true' | 'false']
+        : shadowMap[shadow],
       className,
     ),
   )

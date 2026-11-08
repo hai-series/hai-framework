@@ -135,7 +135,9 @@
   }
 
   function abortAllActiveRequests(): void {
-    for (const fileId of [...activeRequests.keys()]) {
+    for (const fileId of [
+      ...activeRequests.keys(),
+    ]) {
       abortActiveRequest(fileId)
     }
   }
@@ -199,7 +201,10 @@
       newFiles.push(uploadFile)
     }
 
-    files = [...files, ...newFiles]
+    files = [
+      ...files,
+      ...newFiles,
+    ]
     onchange?.(files)
 
     // 自动上传

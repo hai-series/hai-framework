@@ -83,8 +83,12 @@
   const dataAttributes = $derived(getDataAttributes(restProps))
   let showValue = $state(false)
   let encryptionError = $state(false)
-  useToastFeedback(() => encryptionError ? uiM('encrypted_input_failed') : '')
-  useToastFeedback(() => !onencrypt ? uiM('encrypted_input_unavailable') : '', 'warning')
+  useToastFeedback(() => encryptionError
+    ? uiM('encrypted_input_failed')
+    : '')
+  useToastFeedback(() => !onencrypt
+    ? uiM('encrypted_input_unavailable')
+    : '', 'warning')
 
   // 输入、回调或组件生命周期变化时，旧请求立即失效。
   $effect(() => {
@@ -150,7 +154,9 @@
       class='absolute right-3 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content'
       onclick={toggleShow}
       tabindex={-1}
-      ariaLabel={showValue ? uiM('encrypted_input_hide') : uiM('encrypted_input_show')}
+      ariaLabel={showValue
+        ? uiM('encrypted_input_hide')
+        : uiM('encrypted_input_show')}
     >
       {#if showValue}
         <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>

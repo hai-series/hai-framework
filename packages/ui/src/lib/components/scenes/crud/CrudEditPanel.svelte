@@ -103,7 +103,9 @@
   function resolveOptions(options?: CrudFieldDef['options']): Array<{ label: string, value: string | number | boolean }> {
     if (!options)
       return []
-    return typeof options === 'function' ? options() : options
+    return typeof options === 'function'
+      ? options()
+      : options
   }
 
   const sortedFields = $derived(
@@ -115,8 +117,11 @@
       if ((!attempted && !touched[field.id]) || (mode === 'edit' && field.readonly))
         continue
       const issue = getCrudValidationIssue(field, formData[field.id])
-      if (issue)
-        errors[field.id] = field.validation?.message ? resolveText(field.validation.message) : uiM(issue.key, issue.params)
+      if (issue) {
+        errors[field.id] = field.validation?.message
+          ? resolveText(field.validation.message)
+          : uiM(issue.key, issue.params)
+      }
     }
     return errors
   })
@@ -204,14 +209,23 @@
       {@const isReadonly = field.readonly && mode === 'edit'}
       {@const isRequired = field.validation?.required}
       {@const fieldValue = formData[field.id]}
-      {@const placeholder = field.placeholder ? resolveText(field.placeholder) : ''}
+      {@const placeholder = field.placeholder
+        ? resolveText(field.placeholder)
+        : ''}
       {@const controlId = `${panelId}-${field.id}`}
       <FormField
         for={controlId}
         label={resolveText(field.label)}
         required={isRequired}
         error={fieldErrors[field.id]}
-        colSpan={field.colSpan ?? (['textarea', 'multi-select', 'date-range', 'custom'].includes(field.type) ? 2 : 'auto')}
+        colSpan={field.colSpan ?? ([
+          'textarea',
+          'multi-select',
+          'date-range',
+          'custom',
+        ].includes(field.type)
+          ? 2
+          : 'auto')}
         data-field={field.id}
       >
 
@@ -240,7 +254,10 @@
             disabled={submitting || isReadonly}
             options={[
               { value: '', label: placeholder || uiM('crud_filter_all') },
-              ...opts.map(opt => ({ value: String(opt.value), label: opt.label })),
+              ...opts.map(opt => ({
+                value: String(opt.value),
+                label: opt.label,
+              })),
             ]}
             onchange={value => updateField(field.id, opts.find(opt => String(opt.value) === value)?.value ?? value)}
           />
@@ -285,11 +302,21 @@
             disabled={submitting || isReadonly}
             required={isRequired}
             pattern={field.validation?.pattern}
-            minlength={field.type !== 'number' ? field.validation?.min : undefined}
-            maxlength={field.type !== 'number' ? field.validation?.max : undefined}
-            min={field.type === 'number' ? field.validation?.min : undefined}
-            max={field.type === 'number' ? field.validation?.max : undefined}
-            oninput={e => updateField(field.id, field.type === 'number' && e.currentTarget.value !== '' ? Number(e.currentTarget.value) : e.currentTarget.value)}
+            minlength={field.type !== 'number'
+              ? field.validation?.min
+              : undefined}
+            maxlength={field.type !== 'number'
+              ? field.validation?.max
+              : undefined}
+            min={field.type === 'number'
+              ? field.validation?.min
+              : undefined}
+            max={field.type === 'number'
+              ? field.validation?.max
+              : undefined}
+            oninput={e => updateField(field.id, field.type === 'number' && e.currentTarget.value !== ''
+              ? Number(e.currentTarget.value)
+              : e.currentTarget.value)}
           />
         {/if}
       </FormField>
@@ -311,7 +338,9 @@
     {#if submitting}
       <span class='loading loading-spinner loading-xs mr-2'></span>
     {/if}
-    {mode === 'create' ? uiM('crud_create') : uiM('crud_save')}
+    {mode === 'create'
+      ? uiM('crud_create')
+      : uiM('crud_save')}
   </Button>
 {/snippet}
 

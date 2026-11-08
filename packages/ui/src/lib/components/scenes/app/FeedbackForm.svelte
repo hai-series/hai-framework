@@ -115,15 +115,37 @@
   let previousKey = $state(untrack(() => resetKey))
   const visibleAttachments = $derived(attachments.filter(item => !removedAttachmentIds.includes(item.id)))
   const attachmentBytes = $derived(visibleAttachments.reduce((total, file) => total + (file.size ?? 0), 0))
-  const recordingBytes = $derived(budget ? Math.max(0, Math.min(budget.maxAttachmentBytes, budget.maxAttachmentsBytes - attachmentBytes)) : undefined)
-  const attachmentLimitReached = $derived(budget ? visibleAttachments.length >= budget.maxAttachmentCount || attachmentBytes >= budget.maxAttachmentsBytes : false)
+  const recordingBytes = $derived(budget
+    ? Math.max(0, Math.min(budget.maxAttachmentBytes, budget.maxAttachmentsBytes - attachmentBytes))
+    : undefined)
+  const attachmentLimitReached = $derived(budget
+    ? visibleAttachments.length >= budget.maxAttachmentCount || attachmentBytes >= budget.maxAttachmentsBytes
+    : false)
   const materialGroups = $derived([
-    { label: uiM('feedback_environment'), kinds: ['environment'] },
-    { label: uiM('feedback_logs'), kinds: ['log', 'error', 'request'] },
-    { label: uiM('feedback_scene'), kinds: ['interaction', 'snapshot', 'business'] },
-    { label: uiM('feedback_replay'), kinds: ['replay'] },
-    { label: uiM('feedback_missing'), kinds: ['missing'] },
-  ].map(group => ({ ...group, items: evidence.filter(item => group.kinds.includes(item.kind)) })).filter(group => group.items.length))
+    {
+      label: uiM('feedback_environment'),
+      kinds: ['environment'],
+    },
+    {
+      label: uiM('feedback_logs'),
+      kinds: ['log', 'error', 'request'],
+    },
+    {
+      label: uiM('feedback_scene'),
+      kinds: ['interaction', 'snapshot', 'business'],
+    },
+    {
+      label: uiM('feedback_replay'),
+      kinds: ['replay'],
+    },
+    {
+      label: uiM('feedback_missing'),
+      kinds: ['missing'],
+    },
+  ].map(group => ({
+    ...group,
+    items: evidence.filter(item => group.kinds.includes(item.kind)),
+  })).filter(group => group.items.length))
   const typeOptions = $derived([
     { value: 'bug', label: labels.types?.bug ?? uiM('feedback_type_bug') },
     { value: 'feature', label: labels.types?.feature ?? uiM('feedback_type_feature') },
@@ -145,7 +167,13 @@
   })
 
   function values(): FeedbackFormData {
-    return { description: description.trim(), type: feedbackType, contact: contact.trim() || undefined, files: [...files], removedAttachmentIds: [...removedAttachmentIds] }
+    return {
+      description: description.trim(),
+      type: feedbackType,
+      contact: contact.trim() || undefined,
+      files: [...files],
+      removedAttachmentIds: [...removedAttachmentIds],
+    }
   }
 
   async function submit(event: SubmitEvent) {
@@ -222,7 +250,10 @@
   }
 
   function selectFiles(event: Event & { currentTarget: HTMLInputElement }) {
-    files = [...files, ...Array.from(event.currentTarget.files ?? [])]
+    files = [
+      ...files,
+      ...Array.from(event.currentTarget.files ?? []),
+    ]
     // 清空原生选择值允许再次选择同名文件，不绑定浏览器的文件路径。
     event.currentTarget.value = ''
     if (onfileschange)
@@ -243,13 +274,20 @@
     await stageFiles()
   }
   useToastFeedback(() => error)
-  useToastFeedback(() => receipt ? uiM('feedback_accepted', { number: receipt.number }) : '', 'success')
+  useToastFeedback(() => receipt
+    ? uiM('feedback_accepted', { number: receipt.number })
+    : '', 'success')
 </script>
 
 <form {...dataAttributes} class={`feedback-form flex min-h-0 min-w-0 flex-1 flex-col gap-4 ${className}`} onsubmit={submit} data-feedback-ui='true' data-feedback-ignore='true'>
   <div class='min-h-0 flex-1 space-y-4 overflow-y-auto'>
     {#if budget}
-      <p class='text-xs text-base-content/60'>{uiM('feedback_capacity_hint', { used: (attachments.filter(item => !removedAttachmentIds.includes(item.id)).reduce((sum, item) => sum + (item.size ?? 0), 0) / 1048576).toFixed(1), total: (budget.maxAttachmentsBytes / 1048576).toFixed(1), single: (budget.maxAttachmentBytes / 1048576).toFixed(1), count: budget.maxAttachmentCount })}</p>
+      <p class='text-xs text-base-content/60'>{uiM('feedback_capacity_hint', {
+        used: (attachments.filter(item => !removedAttachmentIds.includes(item.id)).reduce((sum, item) => sum + (item.size ?? 0), 0) / 1048576).toFixed(1),
+        total: (budget.maxAttachmentsBytes / 1048576).toFixed(1),
+        single: (budget.maxAttachmentBytes / 1048576).toFixed(1),
+        count: budget.maxAttachmentCount,
+      })}</p>
     {/if}
     {#if receipt}
       <div data-testid='feedback-receipt' class='rounded-lg border border-base-content/10 bg-base-200/50 p-4 space-y-2 break-words'>
@@ -287,7 +325,9 @@
                   <Button size='xs' variant='ghost' disabled={loading || annotating || exporting} ariaLabel={`${uiM('feedback_remove')} ${attachment.name}`} onclick={() => removedAttachmentIds = [...removedAttachmentIds, attachment.id]}>{uiM('feedback_remove')}</Button>
                 </div>
               </div>
-              {#if attachment.mimeType?.startsWith('image/') && attachment.url}<FeedbackScreenshot {attachment} onannotate={!loading && !exporting && !staging && onannotate ? annotate : undefined} />{/if}
+              {#if attachment.mimeType?.startsWith('image/') && attachment.url}<FeedbackScreenshot {attachment} onannotate={!loading && !exporting && !staging && onannotate
+                ? annotate
+                : undefined} />{/if}
               {#if attachment.mimeType?.startsWith('video/') && attachment.url}<!-- svelte-ignore a11y_media_has_caption (用户上传的无声录屏) -->
                 <video src={attachment.url} controls preload='metadata' class='max-w-full rounded' aria-label={attachment.name}></video>{/if}
               {#if attachment.missingReason}<Button size='sm' variant='ghost' onclick={() => toast.warning(`${uiM('feedback_missing')}: ${attachment.missingReason}`)}>{uiM('feedback_missing')}</Button>{/if}
@@ -313,7 +353,9 @@
                 <dt class='font-medium'>{group.label} · {group.items.length}</dt>
                 <dd class='space-y-2 pt-2'>
                   {#each group.items as item (item.id)}
-                    <details class='rounded bg-base-200 p-2' ontoggle={event => expandedMaterials = event.currentTarget.open ? [...expandedMaterials, item.id] : expandedMaterials.filter(id => id !== item.id)}>
+                    <details class='rounded bg-base-200 p-2' ontoggle={event => expandedMaterials = event.currentTarget.open
+                      ? [...expandedMaterials, item.id]
+                      : expandedMaterials.filter(id => id !== item.id)}>
                       <summary class='cursor-pointer break-all text-xs'>{feedbackTime(item.timestamp)} · {item.kind} · {item.source} #{item.sequence}</summary>
                       {#if expandedMaterials.includes(item.id)}<pre class='mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-all text-xs'>{evidenceText(item.data)}</pre>{/if}
                     </details>
@@ -322,7 +364,17 @@
               </div>
             {/each}
             {#each evidenceSummary as item, index (`${item.label}:${index}`)}
-              <div class='min-w-0'><dt class='font-medium'>{item.label}{item.count === undefined ? '' : ` · ${item.count}`}</dt><dd class='text-base-content/65 break-words'>{item.status === 'missing' ? uiM('feedback_missing') : item.status === 'not-applicable' ? uiM('feedback_not_applicable') : item.status === 'partial' ? uiM('feedback_partial') : uiM('feedback_complete')}{item.detail ? ` · ${item.detail}` : ''}</dd></div>
+              <div class='min-w-0'><dt class='font-medium'>{item.label}{item.count === undefined
+                ? ''
+                : ` · ${item.count}`}</dt><dd class='text-base-content/65 break-words'>{item.status === 'missing'
+                ? uiM('feedback_missing')
+                : item.status === 'not-applicable'
+                ? uiM('feedback_not_applicable')
+                : item.status === 'partial'
+                ? uiM('feedback_partial')
+                : uiM('feedback_complete')}{item.detail
+                ? ` · ${item.detail}`
+                : ''}</dd></div>
             {/each}
           </dl>
         </details>
@@ -331,7 +383,9 @@
   </div>
   <div class='shrink-0 flex flex-wrap justify-end gap-2 border-t border-base-content/10 bg-base-100 pt-4 pb-2'>
     {#if onexport}<Button variant='ghost' loading={exporting} disabled={annotating || staging} onclick={saveLocal}>{uiM('feedback_local_export')}</Button>{/if}
-    {#if oncancel}<Button variant='ghost' onclick={oncancel}>{receipt ? uiM('feedback_close') : labels.cancel ?? uiM('feedback_cancel')}</Button>{/if}
+    {#if oncancel}<Button variant='ghost' onclick={oncancel}>{receipt
+      ? uiM('feedback_close')
+      : labels.cancel ?? uiM('feedback_cancel')}</Button>{/if}
     {#if !receipt}<Button type='submit' variant='primary' loading={loading || staging} disabled={annotating || exporting || recording || Boolean(onfileschange && filesError)}>{labels.submit ?? uiM('feedback_submit')}</Button>{/if}
   </div>
 </form>

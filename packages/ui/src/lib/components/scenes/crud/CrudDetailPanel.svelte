@@ -87,13 +87,17 @@
 
   const dataAttributes = $derived(getDataAttributes(restProps))
   function resolveText(text: string | (() => string)): string {
-    return typeof text === 'function' ? text() : text
+    return typeof text === 'function'
+      ? text()
+      : text
   }
 
   function resolveOptions(options?: FieldDef['options']): Array<{ label: string, value: string | number | boolean }> {
     if (!options)
       return []
-    return typeof options === 'function' ? options() : options
+    return typeof options === 'function'
+      ? options()
+      : options
   }
 
   function formatValue(field: FieldDef, value: unknown): string {

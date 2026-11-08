@@ -9,11 +9,17 @@
   const { agreements }: { agreements?: AgreementDisplay } = $props()
   let selected = $state<'user' | 'privacy' | null>(null)
   let open = $state(false)
-  const url = $derived(selected === 'user' ? agreements?.userAgreementUrl : agreements?.privacyPolicyUrl)
-  const markdown = $derived(selected === 'user' ? agreements?.userAgreementMarkdown : agreements?.privacyPolicyMarkdown)
+  const url = $derived(selected === 'user'
+    ? agreements?.userAgreementUrl
+    : agreements?.privacyPolicyUrl)
+  const markdown = $derived(selected === 'user'
+    ? agreements?.userAgreementMarkdown
+    : agreements?.privacyPolicyMarkdown)
   const hasUserAgreement = $derived(Boolean(agreements?.userAgreementMarkdown || agreements?.userAgreementUrl))
   const hasPrivacyPolicy = $derived(Boolean(agreements?.privacyPolicyMarkdown || agreements?.privacyPolicyUrl))
-  const title = $derived(selected === 'user' ? uiM('agreement_user_agreement') : uiM('agreement_privacy_policy'))
+  const title = $derived(selected === 'user'
+    ? uiM('agreement_user_agreement')
+    : uiM('agreement_privacy_policy'))
 
   function show(kind: 'user' | 'privacy') {
     selected = kind

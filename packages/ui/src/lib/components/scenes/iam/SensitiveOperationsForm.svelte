@@ -38,7 +38,9 @@
     event.preventDefault()
     if (loading)
       return
-    const items = [...new Set(value.split(/\r?\n/).map(item => item.trim()).filter(Boolean))]
+    const items = [
+      ...new Set(value.split(/\r?\n/).map(item => item.trim()).filter(Boolean)),
+    ]
     fieldError = ''
     if (items.length > 1000 || items.some(item => item.length > 128)) {
       fieldError = uiM('sensitive_operations_invalid')

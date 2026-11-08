@@ -54,7 +54,13 @@
   const offered = $derived.by(() => {
     void locale
     const tour = guide.offeredTour
-    return tour ? { id: tour.id, title: resolveGuideText(tour.title), description: resolveGuideText(tour.description) } : null
+    return tour
+      ? {
+        id: tour.id,
+        title: resolveGuideText(tour.title),
+        description: resolveGuideText(tour.description),
+      }
+      : null
   })
   const text = $derived.by(() => ({
     welcome: uiM('guide_welcome', undefined, locale),

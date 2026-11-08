@@ -49,7 +49,10 @@
     cancelled = false
     try {
       // 必须直接来自点击事件，保留浏览器的用户激活授权。
-      const selected = await navigator.mediaDevices.getDisplayMedia({ video: { width: 1280, height: 720, frameRate: 10 }, audio: false })
+      const selected = await navigator.mediaDevices.getDisplayMedia({
+        video: { width: 1280, height: 720, frameRate: 10 },
+        audio: false,
+      })
       if (!mounted) {
         selected.getTracks().forEach(track => track.stop())
         return
@@ -72,7 +75,9 @@
       }
       current.onerror = (event) => {
         cancelled = true
-        error = errorMessage('error' in event ? event.error : new Error('MediaRecorder failed'), uiM('feedback_record_failed'))
+        error = errorMessage('error' in event
+          ? event.error
+          : new Error('MediaRecorder failed'), uiM('feedback_record_failed'))
         stop(true)
       }
       current.onstart = () => {
@@ -94,11 +99,15 @@
           if (!mounted || cancelled)
             return
           if (!size || size > maxBytes) {
-            error = errorMessage(new Error('Recording output was empty or exceeded budget', { cause: { size, maxBytes, seconds, mimeType } }), uiM('feedback_record_empty'))
+            error = errorMessage(new Error('Recording output was empty or exceeded budget', {
+              cause: { size, maxBytes, seconds, mimeType },
+            }), uiM('feedback_record_empty'))
             return
           }
           const type = mimeType.split(';')[0]!
-          await onrecord(new File(chunks, `recording-${Date.now()}.${type === 'video/mp4' ? 'mp4' : 'webm'}`, { type }))
+          await onrecord(new File(chunks, `recording-${Date.now()}.${type === 'video/mp4'
+            ? 'mp4'
+            : 'webm'}`, { type }))
           expanded = false
         }
         catch (cause) {
@@ -139,7 +148,11 @@
 <div class='space-y-2 min-w-0'>
   <Button size='sm' variant='ghost' disabled={disabled || active || busy} onclick={() => expanded = !expanded}>{uiM('feedback_record')}</Button>
   {#if expanded}
-    <p class='text-xs text-base-content/65'>{supported ? uiM('feedback_record_hint', { size: (maxBytes / 1048576).toFixed(1) }) : uiM('feedback_record_unsupported')}</p>
+    <p class='text-xs text-base-content/65'>{supported
+      ? uiM('feedback_record_hint', {
+        size: (maxBytes / 1048576).toFixed(1),
+      })
+      : uiM('feedback_record_unsupported')}</p>
     {#if supported}<Button size='sm' loading={busy} disabled={disabled || active} onclick={start}>{uiM('feedback_record_start')}</Button>{/if}
   {/if}
 </div>

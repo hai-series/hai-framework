@@ -79,7 +79,9 @@
       <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
       <li
         class='step {getStepClass(index)}'
-        data-content={item.icon || (index < current ? '✓' : index + 1)}
+        data-content={item.icon || (index < current
+          ? '✓'
+          : index + 1)}
         onclick={() => handleClick(index)}
         onkeydown={e => e.key === 'Enter' && handleClick(index)}
         role='button'
@@ -95,7 +97,9 @@
     {:else}
       <li
         class='step {getStepClass(index)}'
-        data-content={item.icon || (index < current ? '✓' : index + 1)}
+        data-content={item.icon || (index < current
+          ? '✓'
+          : index + 1)}
       >
         <div class='step-content'>
           <span class='font-medium'>{item.title}</span>

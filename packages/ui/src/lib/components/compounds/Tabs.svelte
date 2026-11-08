@@ -100,10 +100,14 @@
     let next: number
     switch (event.key) {
       case 'ArrowRight':
-        next = index + (rtl ? -1 : 1)
+        next = index + (rtl
+          ? -1
+          : 1)
         break
       case 'ArrowLeft':
-        next = index + (rtl ? 1 : -1)
+        next = index + (rtl
+          ? 1
+          : -1)
         break
       case 'Home':
         next = 0
@@ -127,8 +131,12 @@
       id={`${tabsId}-${encodeURIComponent(item.key)}`}
       role='tab'
       aria-selected={active === item.key}
-      aria-controls={children ? `${tabsId}-panel` : undefined}
-      tabindex={active === item.key ? 0 : -1}
+      aria-controls={children
+        ? `${tabsId}-panel`
+        : undefined}
+      tabindex={active === item.key
+        ? 0
+        : -1}
       class={cn('tab shrink-0', active === item.key && 'tab-active')}
       disabled={item.disabled}
       onclick={() => handleSelect(item.key)}
@@ -143,7 +151,9 @@
 </div>
 
 {#if children}
-  <div id={`${tabsId}-panel`} role='tabpanel' aria-labelledby={active ? `${tabsId}-${encodeURIComponent(active)}` : undefined} tabindex='0' class='min-w-0 py-4'>
+  <div id={`${tabsId}-panel`} role='tabpanel' aria-labelledby={active
+    ? `${tabsId}-${encodeURIComponent(active)}`
+    : undefined} tabindex='0' class='min-w-0 py-4'>
     {@render children({ active, isActivated })}
   </div>
 {/if}

@@ -23,7 +23,9 @@
     <Input name='email' type='email' bind:value={email} />
   </FormField>
   <FormField label='Role' data-field='role'>
-    <Select name='role' bind:value={role} required options={[{ value: 'admin', label: 'Admin' }]} />
+    <Select name='role' bind:value={role} required options={[
+      { value: 'admin', label: 'Admin' },
+    ]} />
   </FormField>
   <FormField label='Notes' data-field='notes'>
     <Textarea name='notes' bind:value={notes} required validationMessage={() => 'Please add notes'} />

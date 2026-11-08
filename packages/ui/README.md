@@ -10,6 +10,8 @@
 
 基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 样式 + Bits UI v2 headless 交互，内置 i18n（zh-CN / en-US / ja-JP），内置 15 个精选 DaisyUI 主题、高对比、直角商务及护眼主题。
 
+
+HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 `httpStatus` 或状态非法时按 500 返回安全提示。手写业务错误须提供完整错误定义或显式状态，不能依赖缺省状态展示原文。
 ## 核心功能清单
 
 - 表单、表格、弹窗、导航、图表与业务场景组件。
@@ -30,48 +32,43 @@ Node 服务端工程将 UI 与 core 都列为生产依赖，确保适配器保�
 
 ### 快速开始
 
-#### 1. 配置 svelte.config.js
+#### 1. 配置 package.json 的应用导入
 
-```js
-import { autoImportHaiUi } from '@h-ai/ui/auto-import'
-import adapter from '@sveltejs/adapter-node'
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
-
-/** @type {import('@sveltejs/kit').Config} */
-const config = {
-  preprocess: [autoImportHaiUi(), vitePreprocess()],
-  compilerOptions: { runes: true },
-  kit: { adapter: adapter() },
-}
-
-export default config
+```json
+{ "imports": { "#lib/*": "./src/lib/*" } }
 ```
 
 #### 2. 配置 vite.config.ts
 
+SvelteKit 3 的预处理、编译器与适配器都在 Vite 插件中配置；纯 Svelte/Vite 工程才保留 svelte.config.js。
+
 ```ts
+import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
+import adapter from '@sveltejs/adapter-node'
 import { sveltekit } from '@sveltejs/kit/vite'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [sveltekit(), tailwindcss()],
-  optimizeDeps: {
-    // bits-ui 含 .svelte 源码须 exclude；@internationalized/date 须与 bits-ui 同为原始副本，
-    // 否则日期组件会因双实例 instanceof 失败抛 "Unknown date type"
-    exclude: [...haiOptimizeExclude],
-    // 预打包 @h-ai/ui 的重型纯 JS 依赖（语法高亮 / Mermaid / PDF 等），
-    // 避免首次进入业务路由时触发依赖再优化与整页刷新
-    include: [...haiPrebundledDeps],
-  },
+  plugins: [
+    sveltekit({
+      preprocess: [autoImportHaiUi(), vitePreprocess()],
+      compilerOptions: { runes: true },
+      adapter: adapter(),
+      paths: { relative: false },
+    }),
+    tailwindcss(),
+  ],
+  optimizeDeps: { exclude: [...haiOptimizeExclude], include: [...haiPrebundledDeps] },
   ssr: { noExternal: ['@h-ai/ui', '@h-ai/kit'], external: ['@h-ai/core', 'sm-crypto'] },
 })
 ```
 
-使用 Crypto 或依赖它的 Kit/IAM 时，应用生产依赖需包含 `sm-crypto@0.5.7`。CLI 已配好这一项；手工接入时运行 `pnpm add sm-crypto@0.5.7`。仅设置 external 不够，adapter-node 还需要这项直接依赖声明才能保留原包加载。
-
 #### 3. 配置 src/app.css
+
+使用 Crypto 或依赖它的 Kit/IAM 时，应用生产依赖需包含 `sm-crypto@0.5.8`。CLI 已配好这一项；手工接入时运行 `pnpm add sm-crypto@0.5.8`。仅设置 external 不够，adapter-node 还需要直接生产依赖声明才能保留原包加载。
 
 ```css
 @import 'tailwindcss';
@@ -211,6 +208,8 @@ components/
 
 `UserProfile.fieldConstraints` 按字段接收 `required`、`minlength`、`maxlength`、`pattern` 和 `validationMessage`（`pattern` 用于单行输入），让应用的用户名等业务规则复用失焦校验；`validationMessage` 支持延迟翻译函数。
 
+`UserProfile.onsubmit` 必须返回 `true` 确认保存成功，返回 `false` 时保留编辑器和草稿；抛错也保留草稿并通过统一 Toast 提示。取消编辑恢复 `user` 中已保存的值。
+
 `CrudEditPanel.onsubmit` 只接收表单声明的可写字段，编辑时排除 `readonly` 字段；新建时仍可填写该字段。主键、关联展示值和审计时间不从整行记录自动回传，空值、`false` 和 `0` 保持原值。服务端继续使用严格 schema 校验。
 
 `LoginForm`、`RegisterForm`、`ChangePasswordForm`、`ForgotPasswordForm`、`ResetPasswordForm`、`AuthPanel`、`UserProfile` 和 `FeedbackModal` 接受同一组布局参数。`CrudPage` 通过 `form` 传入；`CrudEditPanel` 直接接收。CRUD 字段支持 `colSpan`，`validation.message` 支持翻译函数；按钮与回车均先校验，修正后错误消失，客户端校验不能替代服务端校验。
@@ -245,6 +244,8 @@ components/
 | `Popover` | 弹出层 | `open`, `position`, `trigger`, `offset`, `portal`       |
 
 `Popover` 默认挂载到 `body`。在 `click` 模式下按 Enter 或空格打开后，焦点进入面板，按 Escape 关闭并返回触发控件。需要内联挂载时使用 `portal={false}`。
+
+在 Modal/Drawer 内，Popover 的 portal 内容参与所属弹窗的 Tab 与 Shift+Tab 顺序，保持在模态边界内；关闭后撤销登记并恢复触发位置。
 
 ##### 数据展示
 
@@ -810,7 +811,7 @@ transformPageChunk: ({ html }) => html.replace('%theme_bootstrap%', themeBootstr
 ```svelte
 <script>
   import { createLocaleStore, setGlobalLocale } from '@h-ai/ui/i18n'
-  import { setLocale } from '$lib/paraglide/runtime'
+  import { setLocale } from '#lib/paraglide/runtime.js'
 
   const localeStore = createLocaleStore()
 

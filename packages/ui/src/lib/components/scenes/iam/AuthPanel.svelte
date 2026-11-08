@@ -53,7 +53,15 @@
   let renewalIdentifier = $state('')
   let actionError = $state<HaiError>()
   let networkFailed = $state(false)
-  const errors = $derived<Record<string, string>>(actionError ? { general: authErrorMessage(actionError) } : networkFailed ? { general: uiM('auth_network_error') } : {})
+  const errors = $derived<Record<string, string>>(actionError
+    ? {
+      general: authErrorMessage(actionError),
+    }
+    : networkFailed
+    ? {
+      general: uiM('auth_network_error'),
+    }
+    : {})
   let notice = $state<UIMessageKey | ''>('')
   // SSR 表单先显示但不可编辑；客户端绑定事件后开放输入，避免接管时丢失早到的输入。
   let interactive = $state(false)
@@ -63,9 +71,23 @@
     interactive = true
     return () => captchaController?.abort()
   })
-  const methods = $derived(config ? (['password', 'ldap', 'email', 'sms'] as AuthLoginMethod[]).filter(method => config.login[method]) : [])
-  const title = $derived(mode === 'register' ? uiM('register_title') : mode === 'forgot' ? uiM('forgot_password_title') : mode === 'renew' ? uiM('auth_renew_title') : mode === 'reset' ? uiM('reset_password_title') : uiM('login_title'))
-  const available = $derived(config && (mode === 'login' || (mode === 'renew' ? Boolean(actions.renewPassword) : mode === 'register' ? config.register.enabled : config.passwordReset.enabled)))
+  const methods = $derived(config
+    ? (['password', 'ldap', 'email', 'sms'] as AuthLoginMethod[]).filter(method => config.login[method])
+    : [])
+  const title = $derived(mode === 'register'
+    ? uiM('register_title')
+    : mode === 'forgot'
+    ? uiM('forgot_password_title')
+    : mode === 'renew'
+    ? uiM('auth_renew_title')
+    : mode === 'reset'
+    ? uiM('reset_password_title')
+    : uiM('login_title'))
+  const available = $derived(config && (mode === 'login' || (mode === 'renew'
+    ? Boolean(actions.renewPassword)
+    : mode === 'register'
+    ? config.register.enabled
+    : config.passwordReset.enabled)))
 
   function switchMode(next: AuthPanelMode) {
     captchaController?.abort()
@@ -141,13 +163,22 @@
     const renew = actions.renewPassword
     if (!renew || loading || !renewalIdentifier.trim())
       return
-    await run(() => withCaptcha('renewPassword', captcha => renew({ identifier: renewalIdentifier.trim(), password, newPassword, captcha })), false, 'auth_reset_done')
+    await run(() => withCaptcha('renewPassword', captcha => renew({
+      identifier: renewalIdentifier.trim(),
+      password,
+      newPassword,
+      captcha,
+    })), false, 'auth_reset_done')
     if (!actionError && !networkFailed)
       mode = 'login'
   }
   useToastFeedback(() => error)
-  useToastFeedback(() => notice ? uiM(notice) : '', 'info')
-  useToastFeedback(() => config && !available ? uiM('auth_unavailable') : '', 'warning')
+  useToastFeedback(() => notice
+    ? uiM(notice)
+    : '', 'info')
+  useToastFeedback(() => config && !available
+    ? uiM('auth_unavailable')
+    : '', 'warning')
 </script>
 
 {#snippet link(next: AuthPanelMode, label: string, href?: string)}
@@ -179,15 +210,27 @@
       {:else if !available}
         <div class='mt-4 text-center'>{@render link('login', uiM('login_submit'), loginUrl)}</div>
       {:else}
-        <span role='status' class='sr-only'>{verifying ? uiM('auth_captcha_verifying') : ''}</span>
+        <span role='status' class='sr-only'>{verifying
+          ? uiM('auth_captcha_verifying')
+          : ''}</span>
         {#if mode === 'login'}
-          <LoginForm {initialIdentifier} submitText={verifying ? uiM('auth_captcha_verifying') : undefined} {columns} {labelPosition} {labelWidth} {methods} {loading} {errors} header={loginHeader} extraFields={loginFields} showForgotPassword={config.passwordReset.enabled} {forgotPasswordUrl}
-                     onforgotpassword={forgotPasswordUrl ? undefined : () => switchMode('forgot')}
+          <LoginForm {initialIdentifier} submitText={verifying
+            ? uiM('auth_captcha_verifying')
+            : undefined} {columns} {labelPosition} {labelWidth} {methods} {loading} {errors} header={loginHeader} extraFields={loginFields} showForgotPassword={config.passwordReset.enabled} {forgotPasswordUrl}
+                     onforgotpassword={forgotPasswordUrl
+                       ? undefined
+                       : () => switchMode('forgot')}
                      otpLength={config.otp.length} resendInterval={config.otp.resendInterval} onsendotp={identifier => withCaptcha('sendOtp', captcha => actions.sendOtp(identifier, { captcha }))}
                      agreements={config.agreements.showOnLogin ? config.agreements : undefined}
                      onsubmit={(data) => {
                        renewalIdentifier = data.username
-                       return run(() => withCaptcha('login', captcha => actions.login({ identifier: data.username, password: data.password, method: data.method, code: data.code, captcha })), true)
+                       return run(() => withCaptcha('login', captcha => actions.login({
+                         identifier: data.username,
+                         password: data.password,
+                         method: data.method,
+                         code: data.code,
+                         captcha,
+                       })), true)
                      }}>
             {#snippet footer()}
               {#if loginFooter}{@render loginFooter()}{/if}
@@ -195,15 +238,28 @@
             {/snippet}
           </LoginForm>
         {:else if mode === 'register'}
-          <RegisterForm submitText={verifying ? uiM('auth_captcha_verifying') : undefined} {columns} {labelPosition} {labelWidth} {loading} {errors} header={registerHeader} extraFields={registerFields} fields={config.passwordReset.mode === 'phone' ? ['username', 'phone', 'password'] : ['username', 'email', 'password']} passwordPolicy={config.password} minPasswordLength={config.password.minLength}
-                        agreements={config.agreements.showOnRegister ? config.agreements : undefined} onsubmit={data => run(() => withCaptcha('register', captcha => actions.register({ username: data.username || '', password: data.password, email: data.email, phone: data.phone, displayName: data.nickname, captcha })), true)}>
+          <RegisterForm submitText={verifying
+            ? uiM('auth_captcha_verifying')
+            : undefined} {columns} {labelPosition} {labelWidth} {loading} {errors} header={registerHeader} extraFields={registerFields} fields={config.passwordReset.mode === 'phone'
+            ? ['username', 'phone', 'password']
+            : ['username', 'email', 'password']} passwordPolicy={config.password} minPasswordLength={config.password.minLength}
+                        agreements={config.agreements.showOnRegister ? config.agreements : undefined} onsubmit={data => run(() => withCaptcha('register', captcha => actions.register({
+                          username: data.username || '',
+                          password: data.password,
+                          email: data.email,
+                          phone: data.phone,
+                          displayName: data.nickname,
+                          captcha,
+                        })), true)}>
             {#snippet footer()}
               {#if registerFooter}{@render registerFooter()}{/if}
               <div class='text-center'>{@render link('login', uiM('register_login_now'), loginUrl)}</div>
             {/snippet}
           </RegisterForm>
         {:else if mode === 'forgot'}
-          <ForgotPasswordForm submitText={verifying ? uiM('auth_captcha_verifying') : undefined} {columns} {labelPosition} {labelWidth} {loading} {errors} mode={config.passwordReset.mode ?? 'email'} onsubmit={data => run(() => withCaptcha('passwordReset', captcha => actions.requestPasswordReset(data.email || data.phone || '', { captcha })), false, 'auth_reset_sent')}>
+          <ForgotPasswordForm submitText={verifying
+            ? uiM('auth_captcha_verifying')
+            : undefined} {columns} {labelPosition} {labelWidth} {loading} {errors} mode={config.passwordReset.mode ?? 'email'} onsubmit={data => run(() => withCaptcha('passwordReset', captcha => actions.requestPasswordReset(data.email || data.phone || '', { captcha })), false, 'auth_reset_sent')}>
             {#snippet footer()}<div class='flex justify-between gap-3'>{@render link('login', uiM('login_submit'), loginUrl)}{@render link('reset', uiM('auth_have_token'))}</div>{/snippet}
           </ForgotPasswordForm>
         {:else if mode === 'renew'}
@@ -212,7 +268,9 @@
               <Input id='renew-identifier' autocomplete='username' bind:value={renewalIdentifier} disabled={loading} required />
             </FormField>
           </div>
-          <ChangePasswordForm submitText={verifying ? uiM('auth_captcha_verifying') : undefined} {columns} {labelPosition} {labelWidth} {loading} {errors} disabled={!renewalIdentifier.trim()} passwordPolicy={config.password} minPasswordLength={config.password.minLength}
+          <ChangePasswordForm submitText={verifying
+            ? uiM('auth_captcha_verifying')
+            : undefined} {columns} {labelPosition} {labelWidth} {loading} {errors} disabled={!renewalIdentifier.trim()} passwordPolicy={config.password} minPasswordLength={config.password.minLength}
                               onsubmit={data => renewPassword(data.oldPassword || '', data.newPassword)} />
           <div class='mt-4 text-center'>{@render link('login', uiM('login_submit'), loginUrl)}</div>
         {:else}

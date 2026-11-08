@@ -27,7 +27,12 @@
 
   let {
     report,
-    evidence = { items: [], total: 0, page: 1, pageSize: 20 },
+    evidence = {
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+    },
     attachments = [],
     history = [],
     webhook,
@@ -78,13 +83,34 @@
   let errorId = $derived(evidenceQuery.errorId ?? '')
   let kind = $derived(evidenceQuery.kind ?? '')
   const tabs = $derived([
-    { key: 'overview', label: uiM('feedback_overview') },
-    { key: 'scene', label: uiM('feedback_scene') },
-    { key: 'replay', label: uiM('feedback_replay') },
-    { key: 'logs', label: uiM('feedback_logs') },
-    { key: 'business', label: uiM('feedback_business') },
-    { key: 'environment', label: uiM('feedback_environment') },
-    { key: 'history', label: uiM('feedback_history') },
+    {
+      key: 'overview',
+      label: uiM('feedback_overview'),
+    },
+    {
+      key: 'scene',
+      label: uiM('feedback_scene'),
+    },
+    {
+      key: 'replay',
+      label: uiM('feedback_replay'),
+    },
+    {
+      key: 'logs',
+      label: uiM('feedback_logs'),
+    },
+    {
+      key: 'business',
+      label: uiM('feedback_business'),
+    },
+    {
+      key: 'environment',
+      label: uiM('feedback_environment'),
+    },
+    {
+      key: 'history',
+      label: uiM('feedback_history'),
+    },
   ])
 
   async function run(action: (() => void | Promise<void>) | undefined) {
@@ -103,7 +129,10 @@
     }
   }
   async function query(next: Partial<FeedbackEvidenceQuery>) {
-    evidenceQuery = { ...evidenceQuery, ...next }
+    evidenceQuery = {
+      ...evidenceQuery,
+      ...next,
+    }
     const generation = ++queryGeneration
     querying = true
     actionError = ''
@@ -120,18 +149,41 @@
     }
   }
   function changeTab(tab: string) {
-    if (tab === 'environment')
-      void query({ page: 1, kind: 'environment', requestId: undefined, errorId: undefined })
-    else if (tab === 'scene')
-      void query({ page: 1, kind: 'interaction', requestId: undefined, errorId: undefined })
-    else if (tab === 'logs')
+    if (tab === 'environment') {
+      void query({
+        page: 1,
+        kind: 'environment',
+        requestId: undefined,
+        errorId: undefined,
+      })
+    }
+    else if (tab === 'scene') {
+      void query({
+        page: 1,
+        kind: 'interaction',
+        requestId: undefined,
+        errorId: undefined,
+      })
+    }
+    else if (tab === 'logs') {
       void query({ page: 1, kind: undefined })
-    else if (tab === 'business')
-      void query({ page: 1, kind: 'business', requestId: undefined, errorId: undefined })
+    }
+    else if (tab === 'business') {
+      void query({
+        page: 1,
+        kind: 'business',
+        requestId: undefined,
+        errorId: undefined,
+      })
+    }
   }
   useToastFeedback(() => error || actionError)
-  useToastFeedback(() => permissions.read === false ? uiM('feedback_permission_denied') : '', 'warning')
-  useToastFeedback(() => failedPreviews.length ? uiM('feedback_preview_failed') : '', 'warning')
+  useToastFeedback(() => permissions.read === false
+    ? uiM('feedback_permission_denied')
+    : '', 'warning')
+  useToastFeedback(() => failedPreviews.length
+    ? uiM('feedback_preview_failed')
+    : '', 'warning')
 </script>
 
 <section {...dataAttributes} class={`feedback-detail min-w-0 space-y-4 ${className}`} aria-label={uiM('feedback_details')}>
@@ -139,7 +191,11 @@
     <header class='flex flex-wrap items-center justify-between gap-3'>
       <div class='min-w-0'><h2 class='text-xl font-semibold break-all'>{report.number}</h2><p class='text-sm text-base-content/65'>{report.appId} · {report.appVersion || '—'} · {feedbackTime(report.createdAt)}</p></div>
       <div class='flex flex-wrap items-center gap-2'>
-        <Badge variant={report.status === 'handled' ? 'success' : 'ghost'}>{uiM(report.status === 'handled' ? 'feedback_handled' : 'feedback_pending')}</Badge>
+        <Badge variant={report.status === 'handled'
+          ? 'success'
+          : 'ghost'}>{uiM(report.status === 'handled'
+          ? 'feedback_handled'
+          : 'feedback_pending')}</Badge>
         {#if permissions.export && onexport}<Button size='sm' disabled={busy} onclick={() => run(() => onexport(report!))}>{uiM('feedback_export')}</Button>{/if}
         {#if onclose}<Button size='sm' variant='ghost' onclick={onclose}>{uiM('feedback_close')}</Button>{/if}
       </div>
@@ -154,7 +210,11 @@
               <div><dt class='text-base-content/55'>{uiM('feedback_collection')}</dt><dd>{collectionLabel(report.collectionStatus)}</dd></div>
               <div><dt class='text-base-content/55'>{uiM('feedback_notification')}</dt><dd>{notificationLabel(report.notificationStatus)}</dd></div>
               {#if webhook}
-                <div><dt class='text-base-content/55'>{uiM('feedback_webhook')}</dt><dd>{notificationLabel(webhook.status === 'succeeded' ? 'sent' : webhook.status === 'running' ? 'sending' : webhook.status)} · {uiM('feedback_attempts')}: {webhook.attempts}</dd>{#if webhook.lastError}<dd><Button variant='ghost' size='sm' onclick={() => toast.error(webhook!.lastError!)}>{uiM('toast_diagnostics')}</Button></dd>{/if}</div>
+                <div><dt class='text-base-content/55'>{uiM('feedback_webhook')}</dt><dd>{notificationLabel(webhook.status === 'succeeded'
+                  ? 'sent'
+                  : webhook.status === 'running'
+                  ? 'sending'
+                  : webhook.status)} · {uiM('feedback_attempts')}: {webhook.attempts}</dd>{#if webhook.lastError}<dd><Button variant='ghost' size='sm' onclick={() => toast.error(webhook!.lastError!)}>{uiM('toast_diagnostics')}</Button></dd>{/if}</div>
               {/if}
               <div><dt class='text-base-content/55'>{uiM('feedback_submitter')}</dt><dd class='break-all'>{report.userId || '—'}</dd></div>
               <div><dt class='text-base-content/55'>{uiM('feedback_revision')}</dt><dd>{report.evidenceRevision}</dd></div>
@@ -186,7 +246,12 @@
             {#if tab === 'logs'}
               <form onsubmit={(event) => {
                 event.preventDefault()
-                void query({ page: 1, kind: kind || undefined, requestId: requestId || undefined, errorId: errorId || undefined })
+                void query({
+                  page: 1,
+                  kind: kind || undefined,
+                  requestId: requestId || undefined,
+                  errorId: errorId || undefined,
+                })
               }}>
                 <FormLayout columns={2}>
                   <FormField label={uiM('feedback_kind')}><Input bind:value={kind} /></FormField>
@@ -212,16 +277,29 @@
             {#if onstatus && ((report.status === 'pending' && permissions.process) || (report.status === 'handled' && permissions.reopen))}
               <form class='space-y-3' onsubmit={(event) => {
                 event.preventDefault()
-                void run(() => onstatus({ id: report!.id, status: report!.status === 'pending' ? 'handled' : 'pending', expectedVersion: report!.version, note: note.trim() || undefined }))
+                void run(() => onstatus({
+                  id: report!.id,
+                  status: report!.status === 'pending'
+                    ? 'handled'
+                    : 'pending',
+                  expectedVersion: report!.version,
+                  note: note.trim() || undefined,
+                }))
               }}>
                 <FormLayout><FormField label={uiM('feedback_note')}><Textarea bind:value={note} maxlength={4000} disabled={busy} /></FormField></FormLayout>
-                <Button type='submit' variant='primary' loading={busy}>{uiM(report.status === 'pending' ? 'feedback_handle' : 'feedback_reopen')}</Button>
+                <Button type='submit' variant='primary' loading={busy}>{uiM(report.status === 'pending'
+                  ? 'feedback_handle'
+                  : 'feedback_reopen')}</Button>
               </form>
             {/if}
             {#if permissions.retry && onretry && (report.notificationStatus === 'failed' || report.collectionStatus === 'partial' || report.collectionStatus === 'failed')}<Button size='sm' disabled={busy} onclick={() => run(() => onretry(report!))}>{uiM('feedback_retry')}</Button>{/if}
             <ol class='space-y-3'>
               {#each history as change (change.id)}
-                <li class='rounded-lg border border-base-content/10 p-3 text-sm'><p class='text-base-content/60'>{feedbackTime(change.createdAt)} · {change.actorId}</p><p>{uiM(change.fromStatus === 'handled' ? 'feedback_handled' : 'feedback_pending')} → {uiM(change.toStatus === 'handled' ? 'feedback_handled' : 'feedback_pending')}</p>{#if change.note}<p class='mt-1 whitespace-pre-wrap break-words'>{change.note}</p>{/if}</li>
+                <li class='rounded-lg border border-base-content/10 p-3 text-sm'><p class='text-base-content/60'>{feedbackTime(change.createdAt)} · {change.actorId}</p><p>{uiM(change.fromStatus === 'handled'
+                  ? 'feedback_handled'
+                  : 'feedback_pending')} → {uiM(change.toStatus === 'handled'
+                  ? 'feedback_handled'
+                  : 'feedback_pending')}</p>{#if change.note}<p class='mt-1 whitespace-pre-wrap break-words'>{change.note}</p>{/if}</li>
               {/each}
             </ol>
           </div>
