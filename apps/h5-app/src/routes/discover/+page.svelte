@@ -1,7 +1,7 @@
 <script lang='ts'>
-  import * as m from '$lib/paraglide/messages.js'
   import { toast, useToastFeedback } from '@h-ai/ui/toast'
   import { onDestroy, onMount } from 'svelte'
+  import * as m from '#lib/paraglide/messages.js'
 
   interface VisionAnalysis {
     summary: string

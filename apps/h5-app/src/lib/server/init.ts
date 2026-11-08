@@ -24,41 +24,12 @@ import { reach, ReachConfigSchema } from '@h-ai/reach'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 import { storage, StorageConfigSchema } from '@h-ai/storage'
 import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
+import { ensureVisionTable } from './vision-records.js'
 
 type DbConfigInput = Parameters<typeof reldb.init>[0]
 type StorageConfigInput = Parameters<typeof storage.init>[0]
 
 let initialized = false
-
-/**
- * 初始化拍照识别记录表
- */
-async function ensureVisionTable(): Promise<void> {
-  const createResult = await reldb.ddl.createTable('vision_records', {
-    id: { type: 'TEXT', primaryKey: true, notNull: true },
-    storage_key: { type: 'TEXT', notNull: true },
-    file_name: { type: 'TEXT', notNull: true },
-    mime_type: { type: 'TEXT', notNull: true },
-    prompt: { type: 'TEXT' },
-    analysis: { type: 'TEXT', notNull: true },
-    tags_json: { type: 'TEXT', notNull: true },
-    confidence: { type: 'REAL', notNull: true },
-    created_at: { type: 'TEXT', notNull: true },
-  })
-
-  if (!createResult.success) {
-    throw new Error(`Vision table initialization failed: ${createResult.error.message}`)
-  }
-
-  const indexResult = await reldb.ddl.createIndex('vision_records', 'idx_vision_records_created_at', {
-    columns: ['created_at'],
-  })
-  if (!indexResult.success) {
-    core.logger.warn('Vision table index initialization failed', {
-      error: indexResult.error.message,
-    })
-  }
-}
 
 /** 本次启动创建的资源；关闭失败时保留义务，下次启动先重试。 */
 let rollback: Array<() => Promise<HaiResult<void> | void>> = []
@@ -102,7 +73,15 @@ export async function initApp(): Promise<void> {
     // 1. 加载配置
     core.init({
       configDir: './config',
-      configSchemas: { ai: AIConfigSchema, cache: CacheConfigSchema, iam: IamConfigSchema, reach: ReachConfigSchema, db: ReldbConfigSchema, storage: StorageConfigSchema, vecdb: VecdbConfigSchema },
+      configSchemas: {
+        ai: AIConfigSchema,
+        cache: CacheConfigSchema,
+        iam: IamConfigSchema,
+        reach: ReachConfigSchema,
+        db: ReldbConfigSchema,
+        storage: StorageConfigSchema,
+        vecdb: VecdbConfigSchema,
+      },
       logging: { level: 'info' },
     })
 

@@ -7,4 +7,4 @@
   const actions = kit.client.createAuthActions()
 </script>
 
-<AuthPanel config={page.data.iamPublicConfig} {actions} initialMode='reset' resetToken={page.url.searchParams.get('token') ?? ''} loginUrl={resolve('/auth/login', {})} />
+<AuthPanel config={page.data.iamPublicConfig} {actions} initialMode='reset' resetToken={page.url.searchParams.get('token') ?? ''} loginUrl={resolve('auth/login')} />

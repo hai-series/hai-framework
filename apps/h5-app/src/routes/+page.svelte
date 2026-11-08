@@ -1,35 +1,126 @@
 <script lang='ts'>
+  import { Badge, Card, InfiniteScroll, Input, PullRefresh } from '@h-ai/ui'
   /**
    * H5 首页 — 轮播 + 功能入口 + 推荐列表（PullRefresh + InfiniteScroll）
    */
-  import * as m from '$lib/paraglide/messages.js'
-  import { Badge, Card, InfiniteScroll, Input, PullRefresh } from '@h-ai/ui'
+  import * as m from '#lib/paraglide/messages.js'
 
   const banners = [
-    { id: 'new', title: m.home_banner_new_title, subtitle: m.home_banner_new_subtitle, color: 'from-primary to-primary/70' },
-    { id: 'sale', title: m.home_banner_sale_title, subtitle: m.home_banner_sale_subtitle, color: 'from-secondary to-secondary/70' },
-    { id: 'member', title: m.home_banner_member_title, subtitle: m.home_banner_member_subtitle, color: 'from-accent to-accent/70' },
+    {
+      id: 'new',
+      title: m.home_banner_new_title,
+      subtitle: m.home_banner_new_subtitle,
+      color: 'from-primary to-primary/70',
+    },
+    {
+      id: 'sale',
+      title: m.home_banner_sale_title,
+      subtitle: m.home_banner_sale_subtitle,
+      color: 'from-secondary to-secondary/70',
+    },
+    {
+      id: 'member',
+      title: m.home_banner_member_title,
+      subtitle: m.home_banner_member_subtitle,
+      color: 'from-accent to-accent/70',
+    },
   ]
 
   const quickEntries = [
-    { id: 'flash-sale', icon: 'icon-[tabler--bolt]', label: m.home_quick_flash_sale, color: 'text-error' },
-    { id: 'coupon', icon: 'icon-[tabler--ticket]', label: m.home_quick_coupon, color: 'text-warning' },
-    { id: 'orders', icon: 'icon-[tabler--package]', label: m.home_quick_orders, color: 'text-primary' },
-    { id: 'favorites', icon: 'icon-[tabler--star]', label: m.home_quick_favorites, color: 'text-accent' },
-    { id: 'hot', icon: 'icon-[tabler--flame]', label: m.home_quick_hot, color: 'text-error' },
-    { id: 'categories', icon: 'icon-[tabler--category]', label: m.home_quick_categories, color: 'text-info' },
-    { id: 'support', icon: 'icon-[tabler--message-circle]', label: m.home_quick_support, color: 'text-success' },
-    { id: 'notice', icon: 'icon-[tabler--speakerphone]', label: m.home_quick_notice, color: 'text-secondary' },
+    {
+      id: 'flash-sale',
+      icon: 'icon-[tabler--bolt]',
+      label: m.home_quick_flash_sale,
+      color: 'text-error',
+    },
+    {
+      id: 'coupon',
+      icon: 'icon-[tabler--ticket]',
+      label: m.home_quick_coupon,
+      color: 'text-warning',
+    },
+    {
+      id: 'orders',
+      icon: 'icon-[tabler--package]',
+      label: m.home_quick_orders,
+      color: 'text-primary',
+    },
+    {
+      id: 'favorites',
+      icon: 'icon-[tabler--star]',
+      label: m.home_quick_favorites,
+      color: 'text-accent',
+    },
+    {
+      id: 'hot',
+      icon: 'icon-[tabler--flame]',
+      label: m.home_quick_hot,
+      color: 'text-error',
+    },
+    {
+      id: 'categories',
+      icon: 'icon-[tabler--category]',
+      label: m.home_quick_categories,
+      color: 'text-info',
+    },
+    {
+      id: 'support',
+      icon: 'icon-[tabler--message-circle]',
+      label: m.home_quick_support,
+      color: 'text-success',
+    },
+    {
+      id: 'notice',
+      icon: 'icon-[tabler--speakerphone]',
+      label: m.home_quick_notice,
+      color: 'text-secondary',
+    },
   ]
 
   /** 模拟推荐列表（支持分页加载更多） */
   const allItems = [
-    { id: 1, title: m.home_rec_watch(), price: '¥299', image: '⌚', tag: m.home_tag_new() },
-    { id: 2, title: m.home_rec_earbuds(), price: '¥129', image: '🎧', tag: m.home_tag_hot() },
-    { id: 3, title: m.home_rec_powerbank(), price: '¥89', image: '🔋', tag: m.home_tag_special() },
-    { id: 4, title: m.home_rec_bottle(), price: '¥49', image: '🥤', tag: '' },
-    { id: 5, title: m.home_rec_watch(), price: '¥259', image: '⌚', tag: m.home_tag_hot() },
-    { id: 6, title: m.home_rec_earbuds(), price: '¥99', image: '🎧', tag: m.home_tag_special() },
+    {
+      id: 1,
+      title: m.home_rec_watch(),
+      price: '¥299',
+      image: '⌚',
+      tag: m.home_tag_new(),
+    },
+    {
+      id: 2,
+      title: m.home_rec_earbuds(),
+      price: '¥129',
+      image: '🎧',
+      tag: m.home_tag_hot(),
+    },
+    {
+      id: 3,
+      title: m.home_rec_powerbank(),
+      price: '¥89',
+      image: '🔋',
+      tag: m.home_tag_special(),
+    },
+    {
+      id: 4,
+      title: m.home_rec_bottle(),
+      price: '¥49',
+      image: '🥤',
+      tag: '',
+    },
+    {
+      id: 5,
+      title: m.home_rec_watch(),
+      price: '¥259',
+      image: '⌚',
+      tag: m.home_tag_hot(),
+    },
+    {
+      id: 6,
+      title: m.home_rec_earbuds(),
+      price: '¥99',
+      image: '🎧',
+      tag: m.home_tag_special(),
+    },
   ]
 
   const PAGE_SIZE = 4
@@ -48,7 +139,10 @@
   async function handleLoadMore() {
     await new Promise(resolve => setTimeout(resolve, 600))
     const next = allItems.slice(recommendations.length, recommendations.length + PAGE_SIZE)
-    recommendations = [...recommendations, ...next]
+    recommendations = [
+      ...recommendations,
+      ...next,
+    ]
   }
 </script>
 

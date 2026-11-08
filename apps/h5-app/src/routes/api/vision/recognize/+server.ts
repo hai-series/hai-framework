@@ -5,13 +5,14 @@
  */
 
 import { Buffer } from 'node:buffer'
-import * as m from '$lib/paraglide/messages.js'
-import { parseVisionAnalysis } from '$lib/server/vision'
 import { ai } from '@h-ai/ai'
 import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
+import * as m from '#lib/paraglide/messages.js'
+import { ownedImageKey, ownedImageUrl } from '#lib/server/storage-access.js'
+import { parseVisionAnalysis } from '#lib/server/vision.js'
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
@@ -22,7 +23,14 @@ const EXT_MAP: Record<string, string> = {
 }
 
 export const POST = kit.handler(async ({ request, locals }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
+  const userId = locals.session?.userId
+  if (!userId)
+    return kit.response.unauthorized()
+  const locale = locals.locale === 'en-US'
+    ? 'en-US'
+    : locals.locale === 'ja-JP'
+      ? 'ja-JP'
+      : 'zh-CN'
   if (!storage.isInitialized) {
     return kit.response.error('STORAGE_UNAVAILABLE', m.vision_storage_unavailable({}, { locale }), 503)
   }
@@ -49,7 +57,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 
   const buffer = Buffer.from(await file.arrayBuffer())
   const ext = EXT_MAP[file.type]
-  const key = `vision/${core.id.generate()}.${ext}`
+  const key = ownedImageKey(userId, 'vision', `${core.id.generate()}.${ext}`)
 
   const storeResult = await storage.file.put(key, buffer, {
     contentType: file.type,
@@ -73,7 +81,10 @@ export const POST = kit.handler(async ({ request, locals }) => {
         role: 'user',
         content: [
           { type: 'text', text: userText },
-          { type: 'image_url', image_url: { url: imageDataUrl, detail: 'auto' } },
+          {
+            type: 'image_url',
+            image_url: { url: imageDataUrl, detail: 'auto' },
+          },
         ],
       },
     ],
@@ -90,10 +101,11 @@ export const POST = kit.handler(async ({ request, locals }) => {
   const recordId = core.id.generate()
   const insertResult = await reldb.sql.execute(
     `INSERT INTO vision_records
-      (id, storage_key, file_name, mime_type, prompt, analysis, tags_json, confidence, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, user_id, storage_key, file_name, mime_type, prompt, analysis, tags_json, confidence, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       recordId,
+      userId,
       key,
       file.name,
       file.type,
@@ -113,7 +125,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
   return kit.response.ok({
     id: recordId,
     key,
-    imageUrl: storage.presign.publicUrl(key),
+    imageUrl: ownedImageUrl(key),
     prompt,
     analysis,
     createdAt: Date.now(),
