@@ -75,7 +75,9 @@ const watchEntries = new Map<string, WatchEntry>()
  * @returns HaiError，错误码为 NOT_LOADED
  */
 function createNotLoadedError(name: string): HaiError {
-  const result = err(HaiConfigError.CONFIG_NOT_LOADED, i18n.coreM('core_configNotLoaded', { params: { name } }))
+  const result = err(HaiConfigError.CONFIG_NOT_LOADED, i18n.coreM('core_configNotLoaded', {
+    params: { name },
+  }))
   if (!result.success)
     return result.error
 
@@ -122,7 +124,9 @@ function notifyWatchCallbacks(name: string, result: HaiResult<unknown>): void {
  */
 function loadYaml(name: string, filePath: string, schema?: ZodType): HaiResult<unknown> {
   if (!existsSync(filePath)) {
-    return err(HaiConfigError.CONFIG_FILE_NOT_FOUND, i18n.coreM('core_configFileNotExist', { params: { filePath } }))
+    return err(HaiConfigError.CONFIG_FILE_NOT_FOUND, i18n.coreM('core_configFileNotExist', {
+      params: { filePath },
+    }))
   }
 
   try {
@@ -131,7 +135,9 @@ function loadYaml(name: string, filePath: string, schema?: ZodType): HaiResult<u
     return resolveEnvironment({ name, value: parsed, schema })
   }
   catch (error) {
-    return err(HaiConfigError.CONFIG_PARSE_ERROR, i18n.coreM('core_configParseFailed', { params: { filePath } }), error)
+    return err(HaiConfigError.CONFIG_PARSE_ERROR, i18n.coreM('core_configParseFailed', {
+      params: { filePath },
+    }), error)
   }
 }
 
@@ -175,7 +181,9 @@ function loadAndCache<T>(
   filePath: string,
   schema?: ZodType<T>,
 ): HaiResult<T> {
-  const result = schema ? loadConfig(name, filePath, schema) : loadYaml(name, filePath) as HaiResult<T>
+  const result = schema
+    ? loadConfig(name, filePath, schema)
+    : loadYaml(name, filePath) as HaiResult<T>
   if (result.success) {
     configCache.set(name, {
       data: result.data,
@@ -197,8 +205,14 @@ function loadAndCache<T>(
  */
 export function loadConfigStructure(name: string, filePath: string, schemaHint?: ZodType): HaiResult<unknown> {
   const result = loadYaml(name, filePath, schemaHint)
-  if (result.success)
-    configCache.set(name, { data: result.data, filePath, schemaHint, loadedAt: Date.now() })
+  if (result.success) {
+    configCache.set(name, {
+      data: result.data,
+      filePath,
+      schemaHint,
+      loadedAt: Date.now(),
+    })
+  }
   return result
 }
 
@@ -253,7 +267,9 @@ function reloadAndNotify(name: string): HaiResult<unknown> {
   }
 
   // 无 Schema 时直接加载 YAML（不做校验），避免 schema 为 undefined 导致运行时崩溃
-  const result = entry.schema ? loadConfig(name, entry.filePath, entry.schema) : loadYaml(name, entry.filePath, entry.schemaHint)
+  const result = entry.schema
+    ? loadConfig(name, entry.filePath, entry.schema)
+    : loadYaml(name, entry.filePath, entry.schemaHint)
   if (result.success) {
     configCache.set(name, {
       ...entry,
@@ -474,13 +490,22 @@ export const config = {
    * ```
    */
   loadEnvFiles(options: { mode: string, envDir?: string }): HaiResult<Record<string, string>> {
-    const mode = options.mode === 'development' ? 'dev' : options.mode === 'production' ? 'prod' : options.mode
+    const mode = options.mode === 'development'
+      ? 'dev'
+      : options.mode === 'production'
+        ? 'prod'
+        : options.mode
     if (!/^[a-z0-9][\w-]*$/i.test(mode))
       return err(HaiConfigError.CONFIG_VALIDATION_ERROR, i18n.coreM('core_configValidationFailed'))
     const envDir = options.envDir ?? process.cwd()
     try {
       const layers: Array<Record<string, string | undefined>> = []
-      for (const name of ['.env', `.env.${mode}`, '.env.local', `.env.${mode}.local`]) {
+      for (const name of [
+        '.env',
+        `.env.${mode}`,
+        '.env.local',
+        `.env.${mode}.local`,
+      ]) {
         const file = join(envDir, name)
         if (existsSync(file))
           layers.push(parseEnvironment(readFileSync(file, 'utf8')))
@@ -492,7 +517,9 @@ export const config = {
     }
     catch {
       // dotenv 解析异常可能携带原始行，错误边界不暴露文件内容。
-      return err(HaiConfigError.CONFIG_PARSE_ERROR, i18n.coreM('core_configParseFailed', { params: { filePath: envDir } }))
+      return err(HaiConfigError.CONFIG_PARSE_ERROR, i18n.coreM('core_configParseFailed', {
+        params: { filePath: envDir },
+      }))
     }
   },
 
@@ -576,7 +603,9 @@ export const config = {
   getOrThrow<T>(name: string): T {
     const data = this.get<T>(name)
     if (data === undefined) {
-      throw new Error(i18n.coreM('core_configNotLoaded', { params: { name } }))
+      throw new Error(i18n.coreM('core_configNotLoaded', {
+        params: { name },
+      }))
     }
     return data
   },

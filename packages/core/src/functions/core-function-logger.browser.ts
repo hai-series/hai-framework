@@ -59,7 +59,10 @@ function configureLogger(config: Partial<LoggingConfig>): void {
     log.setLevel(LEVEL_MAP[config.level])
   }
   if (config.context) {
-    globalContext = { ...globalContext, ...config.context }
+    globalContext = {
+      ...globalContext,
+      ...config.context,
+    }
   }
   if (config.format)
     globalFormat = config.format
@@ -138,17 +141,39 @@ function formatMessage(message: string, context?: LogContext, format: LogFormat 
 function wrapLoglevel(resolveLogger: () => log.Logger, resolveContext: () => Record<string, unknown>, resolveFormat: () => LogFormat): Logger {
   const write = (level: LogLevel, message: string, ctx?: LogContext): void => {
     const output = resolveLogger()
-    const priorities: Record<LogLevel, number> = { trace: 0, debug: 1, info: 2, warn: 3, error: 4, fatal: 4 }
+    const priorities: Record<LogLevel, number> = {
+      trace: 0,
+      debug: 1,
+      info: 2,
+      warn: 3,
+      error: 4,
+      fatal: 4,
+    }
     if (priorities[level] < output.getLevel())
       return
-    const context = sanitizeLogContext({ ...resolveContext(), ...ctx, ...requestContext.get() }) ?? {}
+    const context = sanitizeLogContext({
+      ...resolveContext(),
+      ...ctx,
+      ...requestContext.get(),
+    }) ?? {}
     message = sanitizeUtils.sanitizeText(message)
     const text = formatMessage(message, context, resolveFormat(), level)
-    if (level === 'fatal')
-      output.error(resolveFormat() === 'json' ? text : `[FATAL] ${text}`)
-    else output[level](text)
-    if (!requestContext.get().suppressLogObservers)
-      emitLogRecord({ timestamp: Date.now(), level, message, context })
+    if (level === 'fatal') {
+      output.error(resolveFormat() === 'json'
+        ? text
+        : `[FATAL] ${text}`)
+    }
+    else {
+      output[level](text)
+    }
+    if (!requestContext.get().suppressLogObservers) {
+      emitLogRecord({
+        timestamp: Date.now(),
+        level,
+        message,
+        context,
+      })
+    }
   }
   return {
     trace(message: string, ctx?: LogContext) {
@@ -170,7 +195,10 @@ function wrapLoglevel(resolveLogger: () => log.Logger, resolveContext: () => Rec
       write('fatal', message, ctx)
     },
     child(childContext: Record<string, unknown>): Logger {
-      return wrapLoglevel(resolveLogger, () => ({ ...resolveContext(), ...childContext }), resolveFormat)
+      return wrapLoglevel(resolveLogger, () => ({
+        ...resolveContext(),
+        ...childContext,
+      }), resolveFormat)
     },
   }
 }
@@ -192,7 +220,9 @@ function createLogger(options: LoggerOptions = {}): Logger {
   const context = { ...options.context }
 
   // 创建或获取 logger 实例
-  const loggerInstance = name ? log.getLogger(name) : log
+  const loggerInstance = name
+    ? log.getLogger(name)
+    : log
 
   const resolveLogger = (): log.Logger => {
     const effectiveLevel = LEVEL_MAP[level ?? globalLevel]
@@ -201,7 +231,10 @@ function createLogger(options: LoggerOptions = {}): Logger {
     return loggerInstance
   }
   resolveLogger()
-  return wrapLoglevel(resolveLogger, () => ({ ...globalContext, ...context }), () => format ?? globalFormat)
+  return wrapLoglevel(resolveLogger, () => ({
+    ...globalContext,
+    ...context,
+  }), () => format ?? globalFormat)
 }
 
 // ─── 默认 Logger 实例 ───

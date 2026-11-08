@@ -19,9 +19,13 @@ const CREDENTIAL_TEXT = /\b(?:Bearer|Basic)\s+[\w.~+/-]+=*|\b(?:[\w-]*[_-])?(?:p
  */
 export function sanitizeText(text: string, secretValues: readonly string[] = []): string {
   let result = text
-  for (const value of [...new Set(secretValues)].filter(Boolean).sort((a, b) => b.length - a.length))
+  for (const value of [
+    ...new Set(secretValues),
+  ].filter(Boolean).sort((a, b) => b.length - a.length))
     result = result.replaceAll(value, '[REDACTED]')
-  return result.replace(/\b[a-z][a-z\d+.-]*:\/\/[^\s<>"']+/gi, url => sanitizeUrl(url)).replace(CREDENTIAL_TEXT, match => match.includes('[REDACTED') ? match : '[REDACTED]')
+  return result.replace(/\b[a-z][a-z\d+.-]*:\/\/[^\s<>"']+/gi, url => sanitizeUrl(url)).replace(CREDENTIAL_TEXT, match => match.includes('[REDACTED')
+    ? match
+    : '[REDACTED]')
 }
 
 /**
@@ -190,7 +194,9 @@ export function sanitizeUrl(url: string, options: SanitizeSensitiveFieldsOptions
 function sanitizeUrlParameters(parameters: URLSearchParams, context: SanitizeSensitiveContext): URLSearchParams {
   const sanitized = new URLSearchParams()
   for (const [key, value] of parameters) {
-    sanitized.append(key, context.isSensitiveKey(key, normalizeKeyForMatching(key)) ? context.urlReplacement : value)
+    sanitized.append(key, context.isSensitiveKey(key, normalizeKeyForMatching(key))
+      ? context.urlReplacement
+      : value)
   }
   return sanitized
 }
@@ -237,7 +243,9 @@ function createSanitizeSensitiveContext(
 
   return {
     replacement,
-    urlReplacement: typeof replacement === 'string' ? replacement : DEFAULT_SENSITIVE_REPLACEMENT,
+    urlReplacement: typeof replacement === 'string'
+      ? replacement
+      : DEFAULT_SENSITIVE_REPLACEMENT,
     isSensitiveKey: compileSensitiveKeyMatcher(options.matcher ?? DEFAULT_SENSITIVE_KEY_REGEX),
   }
 }
@@ -265,7 +273,11 @@ function sanitizeSensitiveValueWithContext(
   errorDepth = 0,
 ): unknown {
   const isPlainObjectValue = isPlainRecord(value)
-  const errorValue = value instanceof Error ? value : typeof DOMException !== 'undefined' && value instanceof DOMException ? value : undefined
+  const errorValue = value instanceof Error
+    ? value
+    : typeof DOMException !== 'undefined' && value instanceof DOMException
+      ? value
+      : undefined
   const isErrorDiagnostic = errorPath !== undefined || errorValue !== undefined
 
   if (key !== null) {
@@ -290,7 +302,9 @@ function sanitizeSensitiveValueWithContext(
   // 保留内置日期/URL 的诊断值，直接调用原生方法，绕开实例自定义 toJSON。
   if (value instanceof Date) {
     const timestamp = Date.prototype.getTime.call(value)
-    return Number.isFinite(timestamp) ? Date.prototype.toISOString.call(value) : null
+    return Number.isFinite(timestamp)
+      ? Date.prototype.toISOString.call(value)
+      : null
   }
   if (value instanceof URL)
     return sanitizeUrlWithContext(URL.prototype.toString.call(value), context)
@@ -299,8 +313,11 @@ function sanitizeSensitiveValueWithContext(
   if (isErrorDiagnostic) {
     if (typeof value === 'bigint')
       return value.toString()
-    if (value === null || typeof value !== 'object')
-      return typeof value === 'string' ? sanitizeText(value) : value
+    if (value === null || typeof value !== 'object') {
+      return typeof value === 'string'
+        ? sanitizeText(value)
+        : value
+    }
 
     const activePath = errorPath ?? new WeakSet<object>()
     if (activePath.has(value))
@@ -313,7 +330,9 @@ function sanitizeSensitiveValueWithContext(
       if (Array.isArray(value)) {
         return Array.from({ length: value.length }, (_, index) => {
           const descriptor = Object.getOwnPropertyDescriptor(value, index)
-          const item: unknown = descriptor && 'value' in descriptor ? descriptor.value : undefined
+          const item: unknown = descriptor && 'value' in descriptor
+            ? descriptor.value
+            : undefined
           return sanitizeSensitiveValueWithContext(item, null, context, cache, activePath, errorDepth + 1)
         })
       }
@@ -352,7 +371,9 @@ function sanitizeSensitiveValueWithContext(
     cache.set(value, sanitizedArray)
     for (let index = 0; index < value.length; index++) {
       const descriptor = Object.getOwnPropertyDescriptor(value, index)
-      const item: unknown = descriptor && 'value' in descriptor ? descriptor.value : undefined
+      const item: unknown = descriptor && 'value' in descriptor
+        ? descriptor.value
+        : undefined
       sanitizedArray[index] = sanitizeSensitiveValueWithContext(item, null, context, cache)
     }
     return sanitizedArray

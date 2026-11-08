@@ -42,7 +42,18 @@ describe('core.init', () => {
   })
 
   it('不再接受没有运行时消费的全局 ID、debug 或业务开关', () => {
-    for (const option of [{ id: { length: 12 } }, { debug: true }, { features: { apiAccess: true } }, { supportedLocales: ['en-US'] }])
+    for (const option of [
+      {
+        id: { length: 12 },
+      },
+      { debug: true },
+      {
+        features: { apiAccess: true },
+      },
+      {
+        supportedLocales: ['en-US'],
+      },
+    ])
       expect(CoreConfigSchema.safeParse(option).success).toBe(false)
     writeFileSync(join(tempDir, '_core.yml'), 'debug: true\n', 'utf-8')
     core.init({ configDir: tempDir })
@@ -54,7 +65,9 @@ describe('core.init', () => {
   })
 
   it('init 应该支持 logging 选项', () => {
-    core.init({ logging: { level: 'debug' } })
+    core.init({
+      logging: { level: 'debug' },
+    })
     expect(core.logger.getLevel()).toBe('debug')
 
     // 恢复
@@ -62,7 +75,9 @@ describe('core.init', () => {
   })
 
   it('init 配置目录不存在应不崩溃', () => {
-    expect(() => core.init({ configDir: join(tempDir, 'nonexistent') })).not.toThrow()
+    expect(() => core.init({
+      configDir: join(tempDir, 'nonexistent'),
+    })).not.toThrow()
   })
 
   it('目录扫描的文件系统异常仍向调用方传播', () => {
@@ -87,8 +102,14 @@ describe('core.init', () => {
   })
 
   it('项目构建部署 JSON 不参与运行时 YAML 扫描', () => {
-    // eslint-disable-next-line no-template-curly-in-string -- 工具配置中的变量应保持原文，Core 不解析项目 JSON。
-    writeFileSync(join(tempDir, 'hai.json'), JSON.stringify({ deploy: { provider: { ssh: { host: '${HAI_SSH_HOST}' } } } }))
+    writeFileSync(join(tempDir, 'hai.json'), JSON.stringify({
+      deploy: {
+        provider: {
+          // eslint-disable-next-line no-template-curly-in-string -- 保留供配置解析器处理的字面占位符。
+          ssh: { host: '${HAI_SSH_HOST}' },
+        },
+      },
+    }))
     writeFileSync(join(tempDir, 'app.yml'), 'ready: true\n')
 
     core.init({ configDir: tempDir, watchConfig: true })
@@ -114,8 +135,13 @@ describe('core.init', () => {
     vi.stubEnv('HAI_DEPLOY_PROVIDER_SSH_HOST', 'deployment.example.test')
     const loaded = core.config.load('deploy', file)
     expect(loaded.success).toBe(true)
-    if (loaded.success)
-      expect(loaded.data).toEqual({ provider: { ssh: { host: 'deployment.example.test' } } })
+    if (loaded.success) {
+      expect(loaded.data).toEqual({
+        provider: {
+          ssh: { host: 'deployment.example.test' },
+        },
+      })
+    }
   })
 
   it('其它单项配置失败仍记录错误并继续加载有效业务配置', () => {
@@ -150,7 +176,10 @@ describe('core.init', () => {
 
   it('init 带 logging 选项时应覆盖 core 配置的 logging', () => {
     writeFileSync(join(tempDir, '_core.yml'), 'name: app\nlogging:\n  level: warn\n', 'utf-8')
-    core.init({ configDir: tempDir, logging: { level: 'error' } })
+    core.init({
+      configDir: tempDir,
+      logging: { level: 'error' },
+    })
     // 显式传入的 logging 应优先
     expect(core.logger.getLevel()).toBe('error')
 

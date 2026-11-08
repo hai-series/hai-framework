@@ -93,7 +93,9 @@ core.logger.info('Application ready', { name: config.data.name }) // 返回 unde
 import { core } from '@h-ai/core'
 
 // 浏览器不读取 YAML；此处只设置日志，输出 warn 及以上级别。
-core.init({ logging: { level: 'warn' } }) // 返回 undefined；之后 info 日志被过滤。
+core.init({
+  logging: { level: 'warn' }
+}) // 返回 undefined；之后 info 日志被过滤。
 
 // 设置当前页面使用的默认消息语言。
 core.i18n.setGlobalLocale('zh-CN') // 返回 undefined；页面默认消息使用中文。
@@ -131,7 +133,9 @@ import { core } from '@h-ai/core'
 import { z } from 'zod'
 
 // 读取上方 config/app.yml；Schema 同时描述类型和校验规则。
-const AppSchema = z.object({ port: z.number().int().min(1).max(65535) })
+const AppSchema = z.object({
+  port: z.number().int().min(1).max(65535)
+})
 const loaded = core.config.load('app', './config/app.yml', AppSchema)
 if (!loaded.success)
   throw new Error(loaded.error.message, { cause: loaded.error })
@@ -230,11 +234,25 @@ import { core } from '@h-ai/core'
 import { z } from 'zod'
 
 // 用显式环境数据演示覆盖顺序、数值/布尔转换与字符串保留。
-const AppSchema = z.object({ port: z.number(), enabled: z.boolean(), label: z.string(), code: z.string() })
+const AppSchema = z.object({
+  port: z.number(),
+  enabled: z.boolean(),
+  label: z.string(),
+  code: z.string()
+})
 const resolved = core.config.resolve({
   name: 'app',
-  // eslint-disable-next-line no-template-curly-in-string -- 保留 YAML 中等待框架解析的字面表达式。
-  value: { port: '${PORT:3000}', enabled: '${ENABLED:false}', label: 'server-${PORT:3000}', code: '${APP_CODE:00123}' },
+
+  value: {
+    // eslint-disable-next-line no-template-curly-in-string -- 保留供配置解析器处理的字面占位符。
+    port: '${PORT:3000}',
+    // eslint-disable-next-line no-template-curly-in-string -- 保留供配置解析器处理的字面占位符。
+    enabled: '${ENABLED:false}',
+    // eslint-disable-next-line no-template-curly-in-string -- 保留供配置解析器处理的字面占位符。
+    label: 'server-${PORT:3000}',
+    // eslint-disable-next-line no-template-curly-in-string -- 保留供配置解析器处理的字面占位符。
+    code: '${APP_CODE:00123}'
+  },
   environment: { PORT: '4000', HAI_APP_PORT: '5000' },
   schema: AppSchema,
 })
@@ -265,9 +283,18 @@ resolve() はビルド・デプロイ時のメモリ上の設定計算にも使�
 import { core } from '@h-ai/core'
 
 // 配置生成器把普通对象转成 HAI_APP_PORT 等变量；数组保留为 JSON。
-const values = core.config.toEnv({ prefix: 'HAI_APP', value: { port: 3000, tags: ['local'] } })
+const values = core.config.toEnv({
+  prefix: 'HAI_APP',
+  value: {
+    port: 3000,
+    tags: ['local']
+  }
+})
 // values：{ HAI_APP_PORT: '3000', HAI_APP_TAGS: '["local"]' }。
-const merged = core.config.mergeEnv([values, { HAI_APP_PORT: '4000' }])
+const merged = core.config.mergeEnv([
+  values,
+  { HAI_APP_PORT: '4000' }
+])
 // merged：{ HAI_APP_PORT: '4000', HAI_APP_TAGS: '["local"]' }。
 const text = core.config.stringifyEnv(merged) // 编码为可写入 .env 的文本。
 // text 含以下两行，每行以换行符结尾：
@@ -295,7 +322,9 @@ core.logger.trace('Processing detail', { step: 1 })
 core.logger.debug('Read started')
 core.logger.info('Order created', { orderId: 'order-1' })
 core.logger.warn('Retry scheduled')
-core.logger.error('Operation failed', { error: new Error('Example failure') })
+core.logger.error('Operation failed', {
+  error: new Error('Example failure')
+})
 core.logger.fatal('Service cannot continue')
 // 六次日志调用均返回 undefined；分别输出对应级别、上面的消息及所传字段。
 // 例如 info 日志的消息为 'Order created'，字段 orderId 为 'order-1'。
@@ -307,10 +336,16 @@ create() は名前付き Logger、child() は固定項目付き Logger を作り
 import { core } from '@h-ai/core'
 
 // 全局配置可作用于已经创建的 Logger；redact 补充业务隐私字段。
-core.logger.configure({ level: 'info', format: 'json', redact: ['customer.email'] }) // 返回 undefined；后续日志按此配置输出。
+core.logger.configure({
+  level: 'info',
+  format: 'json',
+  redact: ['customer.email']
+}) // 返回 undefined；后续日志按此配置输出。
 const orders = core.logger.create({ name: 'orders' }) // 返回 Logger 对象，可调用 info/warn 等方法。
 const request = core.logger.child({ requestId: 'request-1' }) // 返回带固定 requestId 的 Logger。
-orders.info('Order created', { customer: { email: 'user@example.com' } }) // 返回 undefined；输出中 customer.email 为 '[REDACTED]'。
+orders.info('Order created', {
+  customer: { email: 'user@example.com' }
+}) // 返回 undefined；输出中 customer.email 为 '[REDACTED]'。
 request.warn('Request needs attention') // 返回 undefined；输出中 requestId 为 'request-1'。
 core.logger.getLevel() // 'info'。
 ```
@@ -370,7 +405,10 @@ core.sanitize.sanitizeSensitiveValue('example-only', 'password') // '[REDACTED]'
 const safe = core.sanitize.sanitizeSensitiveFields({ password: 'example-only', email: 'user@example.com' })
 // safe：{ password: '[REDACTED]', email: 'user@example.com' }，原对象不变。
 // 默认仅遮蔽凭据；额外业务隐私可在已处理凭据的副本上继续清理。
-core.sanitize.sanitizeSensitiveFields(safe, { matcher: ['email'], replacement: '***' })
+core.sanitize.sanitizeSensitiveFields(safe, {
+  matcher: ['email'],
+  replacement: '***'
+})
 // => { password: '[REDACTED]', email: '***' }
 core.sanitize.sanitizeUrl('https://user:example-only@example.com/?token=example-only')
 // => 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]'
@@ -449,6 +487,10 @@ HTTP/UI 境界では `core.error.toPublic(error, traceId?, locale?)` を使い�
 
 これらは `HaiConfigError` の定数です。モジュール共通のエラーは `HaiCommonError` を使います。
 
+`HaiCommonError.RATE_LIMIT_EXCEEDED` は `hai:common:203` / HTTP 429 に対応します。Kit の応答ヘルパーとガードも共通エラー定義を使用します。
+
+HTTP/UI 境界で業務メッセージを公開するのは、明示された有効な4xx状態のみです。`httpStatus` が未指定または不正な場合は500として安全なメッセージを返します。独自の業務エラーには完全なエラー定義または明示的な状態を指定してください。
+
 ### メッセージと言語：`core.i18n`
 
 パラメーター置換付きのメッセージ取得関数を作り、Core 内蔵メッセージや言語を取得・設定します。定数は内蔵言語一覧であり、アプリ翻訳の自動登録は行いません。
@@ -478,7 +520,9 @@ const message = core.i18n.createMessageGetter({
 // createMessageGetter 返回消息函数；如 message('welcome', { locale: 'zh-CN', params: { name: 'Alice' } }) 得到 '欢迎 Alice'。
 const greeting = await core.i18n.runWithLocale('en-US', async () => {
   await Promise.resolve()
-  return message('welcome', { params: { name: 'Alice' } })
+  return message('welcome', {
+    params: { name: 'Alice' }
+  })
 })
 // greeting：'Welcome Alice'；runWithLocale 返回回调的结果，此处等待 Promise 得到字符串。
 core.logger.info('Greeting prepared', { greeting })
@@ -500,7 +544,9 @@ const message = core.zodValidation.createPrefixedZodMessageGetter('core', key =>
     ? core.i18n.coreM('core_validationEmail', { locale: 'zh-CN' })
     : core.i18n.coreM('core_errorValidation', { locale: 'zh-CN' }))
 // 返回消息函数；message('validationEmail') 得到 '请输入有效的邮箱地址'。
-const parsed = z.object({ email: z.email() }).safeParse({ email: 'invalid' })
+const parsed = z.object({
+  email: z.email()
+}).safeParse({ email: 'invalid' })
 if (!parsed.success) {
   const errors = core.zodValidation.mapZodErrorToFormErrors(parsed.error, message)
   // errors：[{ field: 'email', message: '请输入有效的邮箱地址' }]。
@@ -617,10 +663,14 @@ import { AccessConditionSchema, core } from '@h-ai/core'
 
 core.access.normalizeClientIp('::ffff:198.51.100.23') // 198.51.100.23。
 const resolve = core.access.createClientIpResolver(['192.0.2.10']) // 返回 IP 解析函数，只信任这个代理。
-const request = new Request('https://example.test/api/orders', { headers: { 'x-forwarded-for': '198.51.100.23' } })
+const request = new Request('https://example.test/api/orders', {
+  headers: { 'x-forwarded-for': '198.51.100.23' }
+})
 // 第二参数必须来自真实 socket/可信平台；这里用测试地址模拟代理对端。
 const clientIp = resolve(request, '192.0.2.10') // '198.51.100.23'，读取受信代理的转发头。
-const check = core.access.createConditionCheck(AccessConditionSchema.parse({ allowIps: ['198.51.100.0/24'] }))
+const check = core.access.createConditionCheck(AccessConditionSchema.parse({
+  allowIps: ['198.51.100.0/24']
+}))
 // createConditionCheck 返回检查函数；check(clientIp) 得到 { allowed: true }。
 core.logger.info('Address checked', { allowed: check(clientIp).allowed })
 ```
@@ -632,7 +682,15 @@ import { core } from '@h-ai/core'
 
 // 可改为 loadPolicy({ file: './config/security/request-access.yml' }) 在启动时读独立文件。
 const policy = core.access.loadPolicy({
-  rules: [{ id: 'external-api', paths: ['/api/external/**'], methods: ['POST'], allowIps: ['192.0.2.0/24'], encryption: 'disabled' }],
+  rules: [
+    {
+      id: 'external-api',
+      paths: ['/api/external/**'],
+      methods: ['POST'],
+      allowIps: ['192.0.2.0/24'],
+      encryption: 'disabled'
+    }
+  ],
 })
 // policy.rules[0] 保留上方规则，并补 denyIps: []、windows: []、timezone: 'UTC'。
 const check = core.access.createRequestCheck(policy) // 返回请求检查函数，另带 encryption 方法和 requiresEncryption 属性。
@@ -702,7 +760,9 @@ core.object.omit(settings, ['port']) // { name: 'orders' }。
 core.object.keys(settings) // ['name', 'port']，元素类型为 'name' | 'port'。
 core.object.values(settings) // ['orders', 4000]。
 core.object.entries(settings) // [['name', 'orders'], ['port', 4000]]。
-core.object.fromEntries([['mode', 'local']]) // { mode: 'local' }。
+core.object.fromEntries([
+  ['mode', 'local']
+]) // { mode: 'local' }。
 ```
 
 deepClone は structuredClone で Date/Map/Set/循環など複製可能な値を扱い、関数など非対応値では例外です。deepMerge は通常オブジェクトのみ再帰結合し、配列・Date・集合・クラスは後の値で置換し、入力は変更しません。インスタンスの複製ではありません。
@@ -739,11 +799,17 @@ import { core } from '@h-ai/core'
 
 core.array.unique([1, 1, 2]) // [1, 2]。
 core.array.chunk([1, 2, 3], 2) // [[1, 2], [3]]。
-core.array.groupBy([{ role: 'admin' }, { role: 'user' }], item => item.role)
+core.array.groupBy([
+  { role: 'admin' },
+  { role: 'user' }
+], item => item.role)
 // => { admin: [{ role: 'admin' }], user: [{ role: 'user' }] }
 core.array.first([1, 2, 3]) // 1；空数组为 undefined。
 core.array.last([1, 2, 3]) // 3；空数组为 undefined。
-core.array.flatten([[1], [2, 3]]) // [1, 2, 3]，只展开一层。
+core.array.flatten([
+  [1],
+  [2, 3]
+]) // [1, 2, 3]，只展开一层。
 core.array.compact([0, null, 1, undefined]) // [0, 1]，保留 0/false/空字符串。
 core.array.shuffle([1, 2, 3]) // 如 [2, 3, 1]，次序随机；新数组不修改输入。
 core.array.intersection([1, 2], [2, 3]) // [2]。

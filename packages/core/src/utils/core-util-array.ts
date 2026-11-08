@@ -15,7 +15,9 @@
  * ```
  */
 function unique<T>(arr: T[]): T[] {
-  return [...new Set(arr)]
+  return [
+    ...new Set(arr),
+  ]
 }
 
 /**
@@ -38,8 +40,14 @@ function groupBy<T, K extends string | number>(
   for (const item of arr) {
     const key = fn(item)
     // 定义自有数据属性，避免读取继承分组或触发 __proto__ setter。
-    if (!Object.hasOwn(result, key))
-      Object.defineProperty(result, key, { value: [], enumerable: true, writable: true, configurable: true })
+    if (!Object.hasOwn(result, key)) {
+      Object.defineProperty(result, key, {
+        value: [],
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      })
+    }
     result[key].push(item)
   }
   return result
