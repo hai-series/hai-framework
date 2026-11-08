@@ -75,8 +75,11 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
 
   /** 校验完整音频大小，超过上限返回错误 */
   function guardAudioSize(audio: AudioContent): HaiError | null {
-    if (audio.data.length > audioConfig.maxAudioBytes)
-      return audioError(HaiAIError.AUDIO_INPUT_TOO_LARGE, aiM('ai_audioInputTooLarge', { params: { limit: audioConfig.maxAudioBytes } }))
+    if (audio.data.length > audioConfig.maxAudioBytes) {
+      return audioError(HaiAIError.AUDIO_INPUT_TOO_LARGE, aiM('ai_audioInputTooLarge', {
+        params: { limit: audioConfig.maxAudioBytes },
+      }))
+    }
     return null
   }
 
@@ -98,12 +101,17 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
   /** 组合请求取消信号与实时连接时长上限（P0-5：maxStreamDurationMs 生效） */
   function withStreamTimeout(signal: AbortSignal | undefined): AbortSignal {
     const timeout = AbortSignal.timeout(audioConfig.maxStreamDurationMs)
-    return signal ? AbortSignal.any([signal, timeout]) : timeout
+    return signal
+      ? AbortSignal.any([signal, timeout])
+      : timeout
   }
 
   async function transcribe(request: TranscriptionRequest): Promise<HaiResult<TranscriptionResult>> {
-    if (!request.audio?.data?.length)
-      return err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', { params: { reason: 'empty audio' } }))
+    if (!request.audio?.data?.length) {
+      return err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', {
+        params: { reason: 'empty audio' },
+      }))
+    }
     const sizeErr = guardAudioSize(request.audio)
     if (sizeErr)
       return { success: false, error: sizeErr }
@@ -113,8 +121,11 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
       return resolved
     const provider = getProvider(resolved.data.provider)
     const transcription = provider.transcription
-    if (!transcription)
-      return err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', { params: { provider: resolved.data.provider, reason: 'transcription' } }))
+    if (!transcription) {
+      return err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', {
+        params: { provider: resolved.data.provider, reason: 'transcription' },
+      }))
+    }
     const credErr = ensureAudioCredential(resolved.data)
     if (credErr)
       return { success: false, error: credErr }
@@ -127,17 +138,35 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     const startedAt = Date.now()
     const context = { provider: resolved.data.provider, model: resolved.data.model, audioBytes: request.audio.data.length }
     logger.debug('Audio transcription started', context)
-    const result = await transcription.transcribe({ model: resolved.data, audio: request.audio, language: request.language, contextHints: request.contextHints, timestampGranularities: request.timestampGranularities, vad: request.vad, signal: request.signal })
-    if (result.success)
+    const result = await transcription.transcribe({
+      model: resolved.data,
+      audio: request.audio,
+      language: request.language,
+      contextHints: request.contextHints,
+      timestampGranularities: request.timestampGranularities,
+      vad: request.vad,
+      signal: request.signal,
+    })
+    if (result.success) {
       logger.info('Audio transcription completed', { ...context, durationMs: Date.now() - startedAt, textLength: result.data.text.length })
-    else
-      logger.warn('Audio transcription failed', { ...context, durationMs: Date.now() - startedAt, code: result.error.code, error: result.error.message })
+    }
+    else {
+      logger.warn('Audio transcription failed', {
+        ...context,
+        durationMs: Date.now() - startedAt,
+        code: result.error.code,
+        error: result.error.message,
+      })
+    }
     return result
   }
 
   async function* transcribeStream(request: TranscriptionStreamRequest): AsyncIterable<TranscriptionEvent> {
-    if (!('chunks' in request.audio) && !request.audio.data?.length)
-      throw audioError(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', { params: { reason: 'empty audio' } }))
+    if (!('chunks' in request.audio) && !request.audio.data?.length) {
+      throw audioError(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', {
+        params: { reason: 'empty audio' },
+      }))
+    }
     if (!('chunks' in request.audio)) {
       const sizeErr = guardAudioSize(request.audio)
       if (sizeErr)
@@ -149,8 +178,11 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
       throw resolved.error
     const provider = getProvider(resolved.data.provider)
     const transcription = provider.transcription
-    if (!transcription)
-      throw audioError(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', { params: { provider: resolved.data.provider, reason: 'transcription' } }))
+    if (!transcription) {
+      throw audioError(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', {
+        params: { provider: resolved.data.provider, reason: 'transcription' },
+      }))
+    }
     const credErr = ensureAudioCredential(resolved.data)
     if (credErr)
       throw credErr
@@ -165,7 +197,15 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     logger.debug('Audio transcription stream started', context)
     const signal = withStreamTimeout(request.signal)
     try {
-      yield* transcribeStreamOrFallback(transcription, { model: resolved.data, audio: request.audio, language: request.language, contextHints: request.contextHints, timestampGranularities: request.timestampGranularities, vad: request.vad, signal })
+      yield* transcribeStreamOrFallback(transcription, {
+        model: resolved.data,
+        audio: request.audio,
+        language: request.language,
+        contextHints: request.contextHints,
+        timestampGranularities: request.timestampGranularities,
+        vad: request.vad,
+        signal,
+      })
       logger.info('Audio transcription stream completed', { ...context, durationMs: Date.now() - startedAt })
     }
     catch (error) {
@@ -175,8 +215,11 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
   }
 
   async function synthesize(request: SynthesisRequest): Promise<HaiResult<SynthesisResult>> {
-    if (!request.text)
-      return err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', { params: { reason: 'empty text' } }))
+    if (!request.text) {
+      return err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', {
+        params: { reason: 'empty text' },
+      }))
+    }
     const validErr = validateSynthesisRequest(request)
     if (validErr)
       return { success: false, error: validErr }
@@ -189,8 +232,11 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
       return resolved
     const provider = getProvider(resolved.data.provider)
     const synthesis = provider.synthesis
-    if (!synthesis)
-      return err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', { params: { provider: resolved.data.provider, reason: 'synthesis' } }))
+    if (!synthesis) {
+      return err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', {
+        params: { provider: resolved.data.provider, reason: 'synthesis' },
+      }))
+    }
     const credErr = ensureAudioCredential(resolved.data)
     if (credErr)
       return { success: false, error: credErr }
@@ -201,13 +247,45 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     }
 
     const startedAt = Date.now()
-    const context = { provider: resolved.data.provider, model: resolved.data.model, textLength: request.text.length, voice: request.voice }
+    const context = {
+      provider: resolved.data.provider,
+      model: resolved.data.model,
+      textLength: request.text.length,
+      voice: request.voice,
+    }
     logger.debug('Audio synthesis started', context)
-    const result = await synthesis.synthesize({ model: resolved.data, text: request.text, language: request.language, voice: request.voice, speakerReference: request.speakerReference, styleReference: request.styleReference, styleStrength: request.styleStrength, instruction: request.instruction, speed: request.speed, targetDurationMs: request.targetDurationMs, durationToleranceMs: request.durationToleranceMs, format: request.format, sampleRate: request.sampleRate, signal: request.signal })
-    if (result.success)
-      logger.info('Audio synthesis completed', { ...context, durationMs: Date.now() - startedAt, audioBytes: result.data.data.length, format: result.data.format })
-    else
-      logger.warn('Audio synthesis failed', { ...context, durationMs: Date.now() - startedAt, code: result.error.code, error: result.error.message })
+    const result = await synthesis.synthesize({
+      model: resolved.data,
+      text: request.text,
+      language: request.language,
+      voice: request.voice,
+      speakerReference: request.speakerReference,
+      styleReference: request.styleReference,
+      styleStrength: request.styleStrength,
+      instruction: request.instruction,
+      speed: request.speed,
+      targetDurationMs: request.targetDurationMs,
+      durationToleranceMs: request.durationToleranceMs,
+      format: request.format,
+      sampleRate: request.sampleRate,
+      signal: request.signal,
+    })
+    if (result.success) {
+      logger.info('Audio synthesis completed', {
+        ...context,
+        durationMs: Date.now() - startedAt,
+        audioBytes: result.data.data.length,
+        format: result.data.format,
+      })
+    }
+    else {
+      logger.warn('Audio synthesis failed', {
+        ...context,
+        durationMs: Date.now() - startedAt,
+        code: result.error.code,
+        error: result.error.message,
+      })
+    }
     return result
   }
 
@@ -224,8 +302,11 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
       throw resolved.error
     const provider = getProvider(resolved.data.provider)
     const synthesis = provider.synthesis
-    if (!synthesis)
-      throw audioError(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', { params: { provider: resolved.data.provider, reason: 'synthesis' } }))
+    if (!synthesis) {
+      throw audioError(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', {
+        params: { provider: resolved.data.provider, reason: 'synthesis' },
+      }))
+    }
     const credErr = ensureAudioCredential(resolved.data)
     if (credErr)
       throw credErr
@@ -242,12 +323,37 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     // 由 Provider 依据自身默认规则解析真实输出格式，供 segment_started 标注（不由调用方猜测）
     const output = synthesis.resolveSynthesisOutput({ format: request.format, sampleRate: request.sampleRate })
     try {
-      const segments = isSynthesisTextSegment(request.text) ? singleSegment(request.text) : request.text
+      const segments = isSynthesisTextSegment(request.text)
+        ? singleSegment(request.text)
+        : request.text
       for await (const segment of segments) {
-        if (!segment.id || !segment.text)
-          throw audioError(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', { params: { reason: 'empty segment id or text' } }))
-        yield { type: 'segment_started', segmentId: segment.id, text: segment.text, format: output.format, sampleRate: output.sampleRate, channels: output.channels }
-        for await (const data of synthesizeSegmentAudio(synthesis, { model: resolved.data, text: segment.text, language: request.language, voice: request.voice, speakerReference: request.speakerReference, styleReference: request.styleReference, styleStrength: request.styleStrength, instruction: request.instruction, speed: request.speed, format: request.format, sampleRate: request.sampleRate, signal }))
+        if (!segment.id || !segment.text) {
+          throw audioError(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', {
+            params: { reason: 'empty segment id or text' },
+          }))
+        }
+        yield {
+          type: 'segment_started',
+          segmentId: segment.id,
+          text: segment.text,
+          format: output.format,
+          sampleRate: output.sampleRate,
+          channels: output.channels,
+        }
+        for await (const data of synthesizeSegmentAudio(synthesis, {
+          model: resolved.data,
+          text: segment.text,
+          language: request.language,
+          voice: request.voice,
+          speakerReference: request.speakerReference,
+          styleReference: request.styleReference,
+          styleStrength: request.styleStrength,
+          instruction: request.instruction,
+          speed: request.speed,
+          format: request.format,
+          sampleRate: request.sampleRate,
+          signal,
+        }))
           yield { type: 'audio', segmentId: segment.id, data }
         yield { type: 'segment_done', segmentId: segment.id }
       }
@@ -272,7 +378,13 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
       : { synthesize: capabilities.synthesize })
   }
 
-  return { transcribe, transcribeStream, synthesize, synthesizeStream, getCapabilities }
+  return {
+    transcribe,
+    transcribeStream,
+    synthesize,
+    synthesizeStream,
+    getCapabilities,
+  }
 }
 
 function isSynthesisTextSegment(value: SynthesisStreamRequest['text']): value is SynthesisTextSegment {
@@ -285,12 +397,16 @@ async function* singleSegment(segment: SynthesisTextSegment): AsyncIterable<Synt
 
 /** 构造 `AUDIO_INVALID_REQUEST` 错误 */
 function invalidRequest(reason: string): HaiError {
-  return audioError(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', { params: { reason } }))
+  return audioError(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', {
+    params: { reason },
+  }))
 }
 
 /** 构造「模型不支持某能力」的 `AUDIO_UNSUPPORTED_INPUT` 错误 */
 function unsupportedCapability(provider: AudioProviderName, feature: string): HaiError {
-  return audioError(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', { params: { provider, reason: `${feature} not supported by this model` } }))
+  return audioError(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', {
+    params: { provider, reason: `${feature} not supported by this model` },
+  }))
 }
 
 /** 校验 TTS 公共选项（风格强度 / 语速）；识别与合成流式均复用 */
@@ -310,8 +426,12 @@ function validateSynthesisRequest(request: SynthesisRequest | SynthesisStreamReq
   if (base)
     return base
   // targetDurationMs / durationToleranceMs 仅完整合成支持
-  const targetDurationMs = 'targetDurationMs' in request ? request.targetDurationMs : undefined
-  const durationToleranceMs = 'durationToleranceMs' in request ? request.durationToleranceMs : undefined
+  const targetDurationMs = 'targetDurationMs' in request
+    ? request.targetDurationMs
+    : undefined
+  const durationToleranceMs = 'durationToleranceMs' in request
+    ? request.durationToleranceMs
+    : undefined
   if (targetDurationMs !== undefined && (!Number.isInteger(targetDurationMs) || targetDurationMs <= 0))
     return invalidRequest('targetDurationMs must be a positive integer')
   if (durationToleranceMs !== undefined && targetDurationMs === undefined)
@@ -368,9 +488,20 @@ async function* transcribeStreamOrFallback(transcription: AudioTranscriptionProv
     yield* transcription.transcribeStream(request)
     return
   }
-  if ('chunks' in request.audio)
-    throw audioError(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', { params: { provider: request.model.provider, reason: 'streaming audio input' } }))
-  const result = await transcription.transcribe({ model: request.model, audio: request.audio, language: request.language, contextHints: request.contextHints, timestampGranularities: request.timestampGranularities, vad: request.vad, signal: request.signal })
+  if ('chunks' in request.audio) {
+    throw audioError(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', {
+      params: { provider: request.model.provider, reason: 'streaming audio input' },
+    }))
+  }
+  const result = await transcription.transcribe({
+    model: request.model,
+    audio: request.audio,
+    language: request.language,
+    contextHints: request.contextHints,
+    timestampGranularities: request.timestampGranularities,
+    vad: request.vad,
+    signal: request.signal,
+  })
   if (!result.success)
     throw result.error
   yield { type: 'transcript', text: result.data.text, final: true }
@@ -386,8 +517,23 @@ async function* synthesizeSegmentAudio(synthesis: AudioSynthesisProvider, reques
     yield* synthesis.synthesizeStream(request)
     return
   }
-  const text = typeof request.text === 'string' ? request.text : await collectText(request.text)
-  const result = await synthesis.synthesize({ model: request.model, text, language: request.language, voice: request.voice, speakerReference: request.speakerReference, styleReference: request.styleReference, styleStrength: request.styleStrength, instruction: request.instruction, speed: request.speed, format: request.format, sampleRate: request.sampleRate, signal: request.signal })
+  const text = typeof request.text === 'string'
+    ? request.text
+    : await collectText(request.text)
+  const result = await synthesis.synthesize({
+    model: request.model,
+    text,
+    language: request.language,
+    voice: request.voice,
+    speakerReference: request.speakerReference,
+    styleReference: request.styleReference,
+    styleStrength: request.styleStrength,
+    instruction: request.instruction,
+    speed: request.speed,
+    format: request.format,
+    sampleRate: request.sampleRate,
+    signal: request.signal,
+  })
   if (!result.success)
     throw result.error
   yield result.data.data

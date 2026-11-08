@@ -5,7 +5,7 @@
  * @module ai-a2a-types
  */
 
-import type { AgentCard } from '@a2a-js/sdk'
+import type { TaskState } from '@a2a-js/sdk'
 import type { AgentExecutor } from '@a2a-js/sdk/server'
 import type { HaiResult } from '@h-ai/core'
 
@@ -16,26 +16,20 @@ import type { StorePage } from '../store/ai-store-types.js'
 export type {
   AgentCapabilities,
   AgentCard,
+  AgentInterface,
   AgentProvider,
   AgentSkill,
   Artifact,
-  DataPart,
-  FilePart,
-  FileWithBytes,
-  FileWithUri,
-  Message,
-  MessageSendParams,
-  Part,
-  PushNotificationConfig,
-  Task,
-  TaskArtifactUpdateEvent,
-  TaskIdParams,
-  TaskQueryParams,
-  TaskState,
-  TaskStatus,
-  TaskStatusUpdateEvent,
-  TextPart,
+  CancelTaskRequest,
+  GetTaskRequest,
+  StreamResponse,
+  SubscribeToTaskRequest,
+  TaskPushNotificationConfig,
 } from '@a2a-js/sdk'
+
+// 协议构建器与枚举供执行器直接构造完整原生对象。
+export { Message, Part, Role, SendMessageRequest, Task, TaskArtifactUpdateEvent, TaskState, TaskStatus, TaskStatusUpdateEvent } from '@a2a-js/sdk'
+export { AgentEvent } from '@a2a-js/sdk/server'
 
 export type {
   AgentExecutor,
@@ -43,6 +37,28 @@ export type {
   RequestContext,
   ServerCallContext,
 } from '@a2a-js/sdk/server'
+
+/**
+ * 可直接用于 HTTP 发现响应的 A2A 1.0 ProtoJSON 文档；不暴露 SDK 内部 oneof 结构。
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ * const card = ai.a2a.getAgentCard()
+ * if (card.success) Response.json(card.data)
+ * ```
+ */
+export interface A2AAgentCardDocument {
+  name: string
+  description: string
+  version: string
+  supportedInterfaces: Array<{ url: string, protocolBinding: string, protocolVersion: string }>
+  defaultInputModes: string[]
+  defaultOutputModes: string[]
+  capabilities: { streaming: boolean, pushNotifications: boolean }
+  skills: Array<{ id: string, name: string, description: string, tags: string[] }>
+  securitySchemes?: Record<string, { apiKeySecurityScheme: { location: string, name: string } }>
+  securityRequirements?: Array<{ schemes: Record<string, { list: string[] }> }>
+}
 
 // ─── A2A 消息记录（持久化用） ───
 
@@ -213,9 +229,9 @@ export interface A2AOperations {
    *
    * 配置了 a2a 后即可使用，无需注册 executor。
    *
-   * @returns 符合 A2A 0.3 的完整 Agent Card（含能力与安全方案）
+   * @returns 可直接用于 HTTP 发现响应的 A2A 1.0 ProtoJSON Agent Card（含能力与安全方案）
    */
-  getAgentCard: () => HaiResult<AgentCard>
+  getAgentCard: () => HaiResult<A2AAgentCardDocument>
 
   /**
    * 处理入站 JSON-RPC 请求
@@ -310,7 +326,7 @@ export interface A2AAgentCardConfig {
     description?: string
     tags?: string[]
   }>
-  /** 安全认证配置（体现在 Agent Card 的 securitySchemes / security 字段） */
+  /** 安全认证配置（体现在 Agent Card 的 securitySchemes / securityRequirements 字段） */
   security?: A2ASecurityConfig
 }
 
@@ -356,7 +372,7 @@ export interface A2AHandleResult {
 export interface A2ACallOptions {
   /** 超时时间（毫秒），默认 60 秒。 */
   timeout?: number
-  /** 额外请求头 */
+  /** 额外请求头，按大小写不敏感的同名字段覆盖；远端 HTTP 重定向被拒绝。 */
   headers?: Record<string, string>
 }
 
@@ -375,7 +391,7 @@ export interface A2ACallResult {
   /** 远端任务 ID */
   taskId?: string
   /** 任务最终状态 */
-  taskState?: string
+  taskState?: TaskState
   /** 响应消息文本 */
   responseText?: string
   /** 响应消息 Part 数组 */

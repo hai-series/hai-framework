@@ -6,14 +6,14 @@
  * @module ai-a2a-functions
  */
 
-import type { Message, Task } from '@a2a-js/sdk'
+import type { Task } from '@a2a-js/sdk'
 import type { AgentExecutor } from '@a2a-js/sdk/server'
 import type { HaiResult } from '@h-ai/core'
-
 import type { A2AConfig } from '../ai-config.js'
-import type { AIRelStore, AIStoreProvider } from '../store/ai-store-types.js'
 
+import type { AIRelStore, AIStoreProvider } from '../store/ai-store-types.js'
 import type { A2AJournal, A2ARuntimeOptions } from './ai-a2a-runtime.js'
+
 import type {
   A2AAgentCardConfig,
   A2ACallOptions,
@@ -23,14 +23,15 @@ import type {
   A2AOperations,
   A2ATaskFilter,
 } from './ai-a2a-types.js'
+import { Message, Role, SendMessageRequest } from '@a2a-js/sdk'
 
-import { A2AClient } from '@a2a-js/sdk/client'
+import { ClientFactory, JsonRpcTransportFactory } from '@a2a-js/sdk/client'
 import { JsonRpcTransportHandler, ServerCallContext as ServerCallContextImpl } from '@a2a-js/sdk/server'
 import { core, err, ok } from '@h-ai/core'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
-import { buildAgentCard } from './ai-a2a-card.js'
+import { buildAgentCard, buildAgentCardDocument } from './ai-a2a-card.js'
 import { SharedA2ARequestHandler } from './ai-a2a-runtime.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'a2a' })
@@ -57,7 +58,7 @@ interface ValidatedRemoteUrl {
  *
  * A2A 目标通常来自服务端配置；这里拒绝非 HTTP(S) 协议和 URL 内嵌凭据，
  * 并生成不含 query/hash 的安全标签用于错误与持久化记录。部署侧仍应对可访问 origin
- * 使用白名单，因为 DNS 解析与重定向策略属于应用网络边界。
+ * 使用白名单以约束 DNS 解析；模块拒绝 HTTP 重定向，避免转发自定义认证头。
  */
 function validateRemoteUrl(remoteUrl: string): ValidatedRemoteUrl {
   const parsed = new URL(remoteUrl)
@@ -73,7 +74,9 @@ function validateRemoteUrl(remoteUrl: string): ValidatedRemoteUrl {
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' ? value as Record<string, unknown> : undefined
+  return value && typeof value === 'object'
+    ? value as Record<string, unknown>
+    : undefined
 }
 
 function isTaskResult(value: unknown): value is Task {
@@ -86,7 +89,10 @@ function isMessageResult(value: unknown): value is Message {
 
 function getPartText(part: unknown): string | undefined {
   const record = asRecord(part)
-  return typeof record?.text === 'string' ? record.text : undefined
+  const content = asRecord(record?.content)
+  return content?.$case === 'text' && typeof content.value === 'string'
+    ? content.value
+    : undefined
 }
 
 function getTextParts(parts: readonly unknown[] | undefined): string[] {
@@ -105,35 +111,39 @@ async function executeRemoteAgentCall(
     safeLabel = validatedUrl.safeLabel
     const customHeaders = options?.headers
     const timeoutMs = Math.max(1, options?.timeout ?? DEFAULT_A2A_CALL_TIMEOUT_MS)
-    const client = new A2AClient(requestUrl, {
+    const transport = new JsonRpcTransportFactory({
       fetchImpl: ((input: RequestInfo | URL, init?: RequestInit) => {
-        const existingHeaders = init?.headers
-          ? Object.fromEntries(new Headers(init.headers as HeadersInit).entries())
-          : {}
-        const signals = [init?.signal, AbortSignal.timeout(timeoutMs)].filter((signal): signal is AbortSignal => Boolean(signal))
+        const headers = new Headers(init?.headers)
+        for (const [name, value] of Object.entries(customHeaders ?? {}))
+          headers.set(name, value)
+        const signals = [
+          init?.signal,
+          AbortSignal.timeout(timeoutMs),
+        ].filter((signal): signal is AbortSignal => Boolean(signal))
         const fetchInit: RequestInit = {
           ...init,
-          headers: { ...existingHeaders, ...customHeaders },
-          signal: signals.length > 1 ? AbortSignal.any(signals) : signals[0],
+          headers,
+          redirect: 'error',
+          signal: signals.length > 1
+            ? AbortSignal.any(signals)
+            : signals[0],
         }
         return globalThis.fetch(input, fetchInit)
       }) as typeof fetch,
     })
-    const params: { message: Message } = {
-      message: {
-        kind: 'message',
+    const client = await new ClientFactory({
+      transports: [transport],
+    }).createFromAgentCard(buildAgentCard({ name: 'remote', url: requestUrl }))
+    const params = SendMessageRequest.fromJSON({
+      message: Message.toJSON(Message.fromJSON({
         messageId: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-        role: 'user',
-        parts: [{ kind: 'text', text: message }],
-      },
-    }
-
-    const response = await client.sendMessage(params)
-    if ('error' in response) {
-      return err(HaiAIError.A2A_REMOTE_CALL_FAILED, aiM('ai_a2aRemoteCallFailed', { params: { url: safeLabel, error: 'Remote agent returned an error' } }))
-    }
-
-    const responseData = response.result
+        role: Role.ROLE_USER,
+        parts: [
+          { text: message },
+        ],
+      })),
+    })
+    const responseData = await client.sendMessage(params)
     let result: A2ACallResult
     if (isTaskResult(responseData)) {
       const textParts = responseData.artifacts?.flatMap(artifact => getTextParts(artifact.parts)) ?? []
@@ -158,8 +168,12 @@ async function executeRemoteAgentCall(
     return ok(result)
   }
   catch (error) {
-    const errorName = error instanceof Error ? error.name : 'UnknownError'
-    return err(HaiAIError.A2A_REMOTE_CALL_FAILED, aiM('ai_a2aRemoteCallFailed', { params: { url: safeLabel, error: errorName } }))
+    const errorName = error instanceof Error
+      ? error.name
+      : 'UnknownError'
+    return err(HaiAIError.A2A_REMOTE_CALL_FAILED, aiM('ai_a2aRemoteCallFailed', {
+      params: { url: safeLabel, error: errorName },
+    }))
   }
 }
 
@@ -270,7 +284,12 @@ export function createA2AOperations(
 
   // 构建 SDK 层
   const agentCard = buildAgentCard(agentCardConfig)
-  const requestHandler = new SharedA2ARequestHandler(agentCard, options.executor, journalStore, contextStore, messageStore, { leaseMs: 30000, pollIntervalMs: 250, maxExecutionMs: 300000, ...options.runtime })
+  const requestHandler = new SharedA2ARequestHandler(agentCard, options.executor, journalStore, contextStore, messageStore, {
+    leaseMs: 30000,
+    pollIntervalMs: 250,
+    maxExecutionMs: 300000,
+    ...options.runtime,
+  })
   const transportHandler = new JsonRpcTransportHandler(requestHandler)
 
   return {
@@ -281,17 +300,26 @@ export function createA2AOperations(
     },
 
     getAgentCard() {
-      return ok(buildAgentCard(agentCardConfig))
+      return ok(buildAgentCardDocument(agentCardConfig))
     },
 
     async handleRequest(requestBody: unknown, context?: Record<string, unknown>): Promise<A2AHandleResult> {
       // 身份只能来自可信传输层认证结果，不能从 JSON-RPC 参数中读取。
-      const agentId = typeof context?.agentId === 'string' ? context.agentId : undefined
-      const serverContext = new ServerCallContextImpl(undefined, agentId
-        ? { isAuthenticated: true, userName: agentId }
-        : undefined)
+      const agentId = typeof context?.agentId === 'string'
+        ? context.agentId
+        : undefined
+      const serverContext = new ServerCallContextImpl({
+        requestedVersion: '1.0',
+        user: agentId
+          ? { isAuthenticated: true, userName: agentId }
+          : undefined,
+      })
 
-      const result = await transportHandler.handle(requestBody, serverContext)
+      // SDK 接收 JSON 对象或原始字符串；其它输入交由固定的非法请求对象处理。
+      const body = typeof requestBody === 'string'
+        ? requestBody
+        : asRecord(requestBody) ?? {}
+      const result = await transportHandler.handle(body, serverContext)
 
       // 判断是否为 AsyncGenerator（流式响应）
       if (result && typeof result === 'object' && Symbol.asyncIterator in result) {
@@ -314,8 +342,14 @@ export function createA2AOperations(
             objectId: filter.callerId,
             status: filter.status,
             where: {
-              ...(filter.contextId === undefined ? {} : { contextId: filter.contextId }),
-              ...(filter.since === undefined ? {} : { createdAt: { $gte: filter.since } }),
+              ...(filter.contextId === undefined
+                ? {}
+                : { contextId: filter.contextId }),
+              ...(filter.since === undefined
+                ? {}
+                : {
+                    createdAt: { $gte: filter.since },
+                  }),
             },
             orderBy: { field: 'createdAt' as keyof A2AMessageRecord, direction: 'desc' },
           },
@@ -397,7 +431,9 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
       }
       const stores = deps.getStores()
       if (!stores) {
-        return err(HaiAIError.STORE_FAILED, aiM('ai_internalError', { params: { error: 'StoreProvider not available' } }))
+        return err(HaiAIError.STORE_FAILED, aiM('ai_internalError', {
+          params: { error: 'StoreProvider not available' },
+        }))
       }
       const agentCardWithSecurity = { ...a2aConfig.agentCard, security: a2aConfig.security }
       const impl = createA2AOperations(
@@ -415,7 +451,7 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
         return impl.getAgentCard()
       const a2aConfig = deps.getA2AConfig()
       if (a2aConfig)
-        return ok(buildAgentCard({ ...a2aConfig.agentCard, security: a2aConfig.security }))
+        return ok(buildAgentCardDocument({ ...a2aConfig.agentCard, security: a2aConfig.security }))
       if (!deps.isInitialized())
         return deps.notInitializedResult()
       return err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured'))
@@ -430,10 +466,14 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
         streaming: false,
         body: {
           jsonrpc: '2.0',
-          id: typeof id === 'string' || typeof id === 'number' ? id : null,
+          id: typeof id === 'string' || typeof id === 'number'
+            ? id
+            : null,
           error: {
             code: -32603,
-            message: aiM(deps.isInitialized() ? 'ai_a2aNotConfigured' : 'ai_notInitialized'),
+            message: aiM(deps.isInitialized()
+              ? 'ai_a2aNotConfigured'
+              : 'ai_notInitialized'),
           },
         },
       }

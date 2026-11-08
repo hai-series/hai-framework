@@ -31,7 +31,12 @@ const logger = core.logger.child({ module: 'ai', scope: 'audio-openai' })
 
 /** OpenAI 平台能力：HTTP 文件识别（非实时）+ HTTP 流式合成（不原生接收增量文本，框架内句子分段） */
 const OPENAI_CAPABILITIES: AudioModelCapabilities = {
-  transcribe: { supported: true, realtimeAudioInput: false, speechBoundaryEvents: false, streamingTranscriptOutput: false },
+  transcribe: {
+    supported: true,
+    realtimeAudioInput: false,
+    speechBoundaryEvents: false,
+    streamingTranscriptOutput: false,
+  },
   synthesize: { supported: true, incrementalTextInput: false, streamingAudioOutput: true },
 }
 
@@ -67,8 +72,11 @@ export function createOpenAIAudioProvider(): AudioProvider {
 
   async function transcribe(request: ProviderTranscriptionRequest): Promise<HaiResult<TranscriptionResult>> {
     const { model, audio, language, contextHints, signal } = request
-    if (!model.apiKey)
-      return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', { params: { provider: 'openai' } }))
+    if (!model.apiKey) {
+      return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', {
+        params: { provider: 'openai' },
+      }))
+    }
 
     try {
       const client = createClient(model.apiKey, model.baseUrl, model.timeout)
@@ -77,26 +85,37 @@ export function createOpenAIAudioProvider(): AudioProvider {
         file,
         model: model.model,
         language,
-        ...(contextHints?.length ? { prompt: contextHints.join(', ') } : {}),
+        ...(contextHints?.length
+          ? {
+              prompt: contextHints.join(', '),
+            }
+          : {}),
       }, { signal })
       return ok({ text: result.text })
     }
     catch (error) {
-      logger.debug('OpenAI transcribe failed', { error: errorMessage(error) })
+      logger.debug('OpenAI transcribe failed', {
+        error: errorMessage(error),
+      })
       return toAudioErrorResult(error, signal)
     }
   }
 
   async function* transcribeStream(request: ProviderTranscriptionStreamRequest): AsyncIterable<TranscriptionEvent> {
     const { model, audio, language, contextHints, signal } = request
-    if (!model.apiKey)
-      throw audioError(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', { params: { provider: 'openai' } }))
+    if (!model.apiKey) {
+      throw audioError(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', {
+        params: { provider: 'openai' },
+      }))
+    }
 
     // OpenAI 标准 Audio API 仅支持完整音频文件，不支持持续音频输入的实时识别
     if ('chunks' in audio) {
       throw audioError(
         HaiAIError.AUDIO_UNSUPPORTED_INPUT,
-        aiM('ai_audioUnsupportedInput', { params: { provider: 'openai', reason: 'streaming audio input' } }),
+        aiM('ai_audioUnsupportedInput', {
+          params: { provider: 'openai', reason: 'streaming audio input' },
+        }),
       )
     }
 
@@ -107,7 +126,11 @@ export function createOpenAIAudioProvider(): AudioProvider {
       model: model.model,
       language,
       stream: true,
-      ...(contextHints?.length ? { prompt: contextHints.join(', ') } : {}),
+      ...(contextHints?.length
+        ? {
+            prompt: contextHints.join(', '),
+          }
+        : {}),
     }, { signal })
 
     let text = ''
@@ -124,8 +147,11 @@ export function createOpenAIAudioProvider(): AudioProvider {
 
   async function synthesize(request: ProviderSynthesisRequest): Promise<HaiResult<SynthesisResult>> {
     const { model, text, voice, instruction, format, sampleRate, signal } = request
-    if (!model.apiKey)
-      return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', { params: { provider: 'openai' } }))
+    if (!model.apiKey) {
+      return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', {
+        params: { provider: 'openai' },
+      }))
+    }
 
     const out = resolveSynthesisOutput({ format, sampleRate })
     try {
@@ -135,27 +161,41 @@ export function createOpenAIAudioProvider(): AudioProvider {
         voice: voice ?? 'alloy',
         input: text,
         response_format: OPENAI_SPEECH_FORMAT[out.format],
-        ...(instruction ? { instructions: instruction } : {}),
+        ...(instruction
+          ? { instructions: instruction }
+          : {}),
       }, { signal })
       const data = new Uint8Array(await response.arrayBuffer())
-      return ok({ data, format: out.format, sampleRate: out.sampleRate, channels: out.channels })
+      return ok({
+        data,
+        format: out.format,
+        sampleRate: out.sampleRate,
+        channels: out.channels,
+      })
     }
     catch (error) {
-      logger.debug('OpenAI synthesize failed', { error: errorMessage(error) })
+      logger.debug('OpenAI synthesize failed', {
+        error: errorMessage(error),
+      })
       return toAudioErrorResult(error, signal)
     }
   }
 
   async function* synthesizeStream(request: ProviderSynthesisStreamRequest): AsyncIterable<Uint8Array> {
     const { model, text, voice, instruction, format, signal } = request
-    if (!model.apiKey)
-      throw audioError(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', { params: { provider: 'openai' } }))
+    if (!model.apiKey) {
+      throw audioError(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', {
+        params: { provider: 'openai' },
+      }))
+    }
 
     const outFormat = resolveSynthesisOutput({ format }).format
     const client = createClient(model.apiKey, model.baseUrl, model.timeout)
 
     // OpenAI TTS 不原生接收增量文本：字符串一次合成；持续文本流按句子分段逐句合成，降低首音延迟
-    const segments = typeof text === 'string' ? [text] : streamSentences(text)
+    const segments = typeof text === 'string'
+      ? [text]
+      : streamSentences(text)
     for await (const segment of segments) {
       if (!segment)
         continue
@@ -164,7 +204,9 @@ export function createOpenAIAudioProvider(): AudioProvider {
         voice: voice ?? 'alloy',
         input: segment,
         response_format: OPENAI_SPEECH_FORMAT[outFormat],
-        ...(instruction ? { instructions: instruction } : {}),
+        ...(instruction
+          ? { instructions: instruction }
+          : {}),
       }, { signal })
 
       const body = response.body
@@ -198,7 +240,13 @@ export function createOpenAIAudioProvider(): AudioProvider {
 /** OpenAI 未指定格式时默认 mp3；pcm16 时补默认采样率 24000。 */
 function resolveSynthesisOutput(request: { format?: AudioFormat, sampleRate?: number }): SynthesisOutputMeta {
   const format = request.format ?? 'mp3'
-  return { format, sampleRate: format === 'pcm16' ? (request.sampleRate ?? 24000) : undefined, channels: 1 }
+  return {
+    format,
+    sampleRate: format === 'pcm16'
+      ? (request.sampleRate ?? 24000)
+      : undefined,
+    channels: 1,
+  }
 }
 
 /** 构造上传文件：裸 pcm16 先封装为 WAV 容器，其余按真实格式生成文件名（OpenAI 文件接口依据扩展名识别容器） */

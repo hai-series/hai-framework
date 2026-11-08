@@ -51,7 +51,12 @@ function resolveExecutionContext(
     : timeoutSignal
 
   return {
-    context: { signal, objectId: options?.objectId, sessionId: options?.sessionId, deadline },
+    context: {
+      signal,
+      objectId: options?.objectId,
+      sessionId: options?.sessionId,
+      deadline,
+    },
     timeoutMs,
   }
 }
@@ -81,7 +86,9 @@ async function runWithCancellation<T>(
         },
         (error: unknown) => {
           signal.removeEventListener('abort', onAbort)
-          reject(error instanceof Error ? error : new Error(String(error)))
+          reject(error instanceof Error
+            ? error
+            : new Error(String(error)))
         },
       )
   })
@@ -133,13 +140,21 @@ export function defineTool<TInput, TOutput>(
             ctx => authorizer({ toolName: name, input: parseResult.data, context: ctx }),
             context,
           )
-          if (!allowed)
-            return err(HaiAIError.TOOL_FORBIDDEN, aiM('ai_toolForbidden', { params: { name } }))
+          if (!allowed) {
+            return err(HaiAIError.TOOL_FORBIDDEN, aiM('ai_toolForbidden', {
+              params: { name },
+            }))
+          }
         }
         catch (error) {
-          if (isAbortError(error))
-            return err(HaiAIError.TOOL_TIMEOUT, aiM('ai_toolTimeout', { params: { name, ms: effectiveTimeout } }), error)
-          return err(HaiAIError.TOOL_FORBIDDEN, aiM('ai_toolForbidden', { params: { name } }))
+          if (isAbortError(error)) {
+            return err(HaiAIError.TOOL_TIMEOUT, aiM('ai_toolTimeout', {
+              params: { name, ms: effectiveTimeout },
+            }), error)
+          }
+          return err(HaiAIError.TOOL_FORBIDDEN, aiM('ai_toolForbidden', {
+            params: { name },
+          }))
         }
       }
 
@@ -148,9 +163,14 @@ export function defineTool<TInput, TOutput>(
         return ok(output)
       }
       catch (error) {
-        if (isAbortError(error))
-          return err(HaiAIError.TOOL_TIMEOUT, aiM('ai_toolTimeout', { params: { name, ms: effectiveTimeout } }), error)
-        return err(HaiAIError.TOOL_EXECUTION_FAILED, error instanceof Error ? error.message : String(error), error)
+        if (isAbortError(error)) {
+          return err(HaiAIError.TOOL_TIMEOUT, aiM('ai_toolTimeout', {
+            params: { name, ms: effectiveTimeout },
+          }), error)
+        }
+        return err(HaiAIError.TOOL_EXECUTION_FAILED, error instanceof Error
+          ? error.message
+          : String(error), error)
       }
     },
 
@@ -191,7 +211,9 @@ export function createToolRegistry(options: ToolRegistryOptions = {}): ToolRegis
   const tools: Map<string, Tool> = new Map()
 
   function duplicateTool(name: string): HaiResult<void> {
-    return err(HaiAIError.TOOL_ALREADY_REGISTERED, aiM('ai_toolAlreadyRegistered', { params: { name } }))
+    return err(HaiAIError.TOOL_ALREADY_REGISTERED, aiM('ai_toolAlreadyRegistered', {
+      params: { name },
+    }))
   }
 
   const registry: ToolRegistryOperations = {
@@ -218,8 +240,11 @@ export function createToolRegistry(options: ToolRegistryOptions = {}): ToolRegis
 
     /** 显式替换已注册工具 */
     replace<TInput, TOutput>(tool: Tool<TInput, TOutput>): HaiResult<void> {
-      if (!tools.has(tool.name))
-        return err(HaiAIError.TOOL_NOT_FOUND, aiM('ai_toolNotFound', { params: { name: tool.name } }))
+      if (!tools.has(tool.name)) {
+        return err(HaiAIError.TOOL_NOT_FOUND, aiM('ai_toolNotFound', {
+          params: { name: tool.name },
+        }))
+      }
       tools.set(tool.name, tool as Tool)
       return ok(undefined)
     },
@@ -253,11 +278,15 @@ export function createToolRegistry(options: ToolRegistryOptions = {}): ToolRegis
     async execute(toolCall: ToolCall, execOptions?: ToolExecutionOptions): Promise<HaiResult<ToolMessage>> {
       // 仅支持 function 类型工具调用（OpenAI SDK union 含 custom 类型）
       if (toolCall.type !== 'function') {
-        return err(HaiAIError.TOOL_NOT_FOUND, aiM('ai_toolNotFound', { params: { name: 'unknown' } }))
+        return err(HaiAIError.TOOL_NOT_FOUND, aiM('ai_toolNotFound', {
+          params: { name: 'unknown' },
+        }))
       }
       const tool = tools.get(toolCall.function.name)
       if (!tool) {
-        return err(HaiAIError.TOOL_NOT_FOUND, aiM('ai_toolNotFound', { params: { name: toolCall.function.name } }))
+        return err(HaiAIError.TOOL_NOT_FOUND, aiM('ai_toolNotFound', {
+          params: { name: toolCall.function.name },
+        }))
       }
 
       let args: unknown

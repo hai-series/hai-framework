@@ -85,7 +85,9 @@ function contentToText(content: unknown): string {
     return content
   if (Array.isArray(content)) {
     return content
-      .map(part => (isRecord(part) && part.type === 'text' && typeof part.text === 'string' ? part.text : ''))
+      .map(part => (isRecord(part) && part.type === 'text' && typeof part.text === 'string'
+        ? part.text
+        : ''))
       .filter(Boolean)
       .join('')
   }
@@ -143,8 +145,12 @@ export function toResponsesInput(messages: ChatMessage[]): ResponseInput {
     }
 
     // system / developer / user——仅映射 EasyInputMessage 支持的角色（跳过遗留 function 角色）
-    if (message.role === 'user' || message.role === 'system' || message.role === 'developer')
-      items.push({ role: message.role, content: contentToText(message.content) })
+    if (message.role === 'user' || message.role === 'system' || message.role === 'developer') {
+      items.push({
+        role: message.role,
+        content: contentToText(message.content),
+      })
+    }
   }
   return items
 }
@@ -174,7 +180,9 @@ export function toResponsesTools(tools?: ToolDefinition[]): ResponsesTool[] | un
       strict: tool.function.strict ?? false,
     })
   }
-  return mapped.length > 0 ? mapped : undefined
+  return mapped.length > 0
+    ? mapped
+    : undefined
 }
 
 /** 从 Responses 响应的 output 数组提取 function_call → Chat Completions tool_calls */
@@ -224,9 +232,13 @@ export function responsesToChatResponse(response: ResponsesResponse, model: stri
 
   const message: ChatCompletionResponse['choices'][number]['message'] = {
     role: 'assistant',
-    content: toolCalls.length > 0 && text.length === 0 ? null : text,
+    content: toolCalls.length > 0 && text.length === 0
+      ? null
+      : text,
     refusal: null,
-    ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+    ...(toolCalls.length > 0
+      ? { tool_calls: toolCalls }
+      : {}),
   }
 
   const usage = mapUsage(response.usage)
@@ -236,13 +248,19 @@ export function responsesToChatResponse(response: ResponsesResponse, model: stri
     object: 'chat.completion',
     created: response.created_at,
     model: response.model ?? model,
-    choices: [{
-      index: 0,
-      message,
-      finish_reason: toolCalls.length > 0 ? 'tool_calls' : 'stop',
-      logprobs: null,
-    }],
-    ...(usage ? { usage } : {}),
+    choices: [
+      {
+        index: 0,
+        message,
+        finish_reason: toolCalls.length > 0
+          ? 'tool_calls'
+          : 'stop',
+        logprobs: null,
+      },
+    ],
+    ...(usage
+      ? { usage }
+      : {}),
   }
 }
 
@@ -271,7 +289,14 @@ export function responsesEventToChunk(event: ResponseStreamEvent, model: string)
       object: 'chat.completion.chunk',
       created: Math.floor(Date.now() / 1000),
       model,
-      choices: [{ index: 0, delta: { content: event.delta }, finish_reason: null, logprobs: null }],
+      choices: [
+        {
+          index: 0,
+          delta: { content: event.delta },
+          finish_reason: null,
+          logprobs: null,
+        },
+      ],
     }
   }
 
@@ -282,8 +307,17 @@ export function responsesEventToChunk(event: ResponseStreamEvent, model: string)
       object: 'chat.completion.chunk',
       created: event.response.created_at,
       model: event.response.model ?? model,
-      choices: [{ index: 0, delta: {}, finish_reason: 'stop', logprobs: null }],
-      ...(usage ? { usage } : {}),
+      choices: [
+        {
+          index: 0,
+          delta: {},
+          finish_reason: 'stop',
+          logprobs: null,
+        },
+      ],
+      ...(usage
+        ? { usage }
+        : {}),
     }
   }
 

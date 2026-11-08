@@ -23,10 +23,20 @@ import { HaiAIError } from '../ai-types.js'
  * ```
  */
 export function serializePlayableAudio(audio: AudioContent): HaiResult<PlayableAudio> {
-  if (audio.format === 'wav')
-    return ok({ audioBase64: toBase64(audio.data), format: 'wav', mimeType: 'audio/wav' })
-  if (audio.format === 'mp3')
-    return ok({ audioBase64: toBase64(audio.data), format: 'mp3', mimeType: 'audio/mpeg' })
+  if (audio.format === 'wav') {
+    return ok({
+      audioBase64: toBase64(audio.data),
+      format: 'wav',
+      mimeType: 'audio/wav',
+    })
+  }
+  if (audio.format === 'mp3') {
+    return ok({
+      audioBase64: toBase64(audio.data),
+      format: 'mp3',
+      mimeType: 'audio/mpeg',
+    })
+  }
   if (audio.format !== 'pcm16')
     return err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, `Unsupported playable audio format: ${audio.format}`)
 
@@ -51,7 +61,11 @@ export function serializePlayableAudio(audio: AudioContent): HaiResult<PlayableA
   writeAscii(wav, 36, 'data')
   view.setUint32(40, audio.data.byteLength, true)
   wav.set(audio.data, 44)
-  return ok({ audioBase64: toBase64(wav), format: 'wav', mimeType: 'audio/wav' })
+  return ok({
+    audioBase64: toBase64(wav),
+    format: 'wav',
+    mimeType: 'audio/wav',
+  })
 }
 
 function writeAscii(target: Uint8Array, offset: number, value: string): void {

@@ -35,7 +35,11 @@ const ready = await apiClient.init({ baseUrl: 'https://api.example.com/api/v1' }
 if (!ready.success)
   throw new Error(ready.error.message)
 try {
-  const response = await apiClient.ai.chats.createCompletion({ messages: [{ role: 'user', content: '你好' }] })
+  const response = await apiClient.ai.chats.createCompletion({
+    messages: [
+      { role: 'user', content: '你好' }
+    ]
+  })
   if (!response.success)
     throw new Error(response.error.message)
   const reply = response.data.choices[0]?.message.content
@@ -50,6 +54,8 @@ finally {
 更完整的方法清单、错误码与长示例见 [REFERENCE.md](./REFERENCE.md)。
 
 ## 使用入门
+
+`ai.close()` 等待已开始的初始化完成并清理，合并并发关闭；重初始化先清理旧实例，关闭期间不接受新初始化。
 
 ### 快速开始
 
@@ -68,7 +74,9 @@ if (!init.success)
   return init
 
 const result = await ai.llm.chat({
-  messages: [{ role: 'user', content: '你好！' }],
+  messages: [
+    { role: 'user', content: '你好！' }
+  ],
 })
 
 await ai.close()
@@ -97,7 +105,11 @@ try {
   })
   if (!initialized.success)
     throw new Error(initialized.error.message)
-  const result = await ai.llm.chat({ messages: [{ role: 'user', content: 'Hello!' }] })
+  const result = await ai.llm.chat({
+    messages: [
+      { role: 'user', content: 'Hello!' }
+    ]
+  })
   if (!result.success)
     throw new Error(result.error.message)
   const reply = result.data.choices[0]?.message.content ?? ''
@@ -128,7 +140,9 @@ import { ai } from '@h-ai/ai'
 const storeProvider: AIStoreProvider = createMyStoreProvider()
 
 await ai.init(
-  { llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY } },
+  {
+    llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY }
+  },
   { storeProvider },
 )
 
@@ -191,7 +205,9 @@ const registry = ai.tools.createRegistry({
 const registered = registry.register(ai.tools.define({
   name: 'get_weather',
   description: '获取天气',
-  parameters: z.object({ city: z.string() }),
+  parameters: z.object({
+    city: z.string()
+  }),
   // handler 第二参为执行上下文：可响应取消（打断/超时）、感知截止时间与交互主体
   handler: async ({ city }, { signal }) => {
     const res = await fetch(`https://api.example.com/weather?city=${city}`, { signal })
@@ -208,7 +224,10 @@ const result = await registry.execute(toolCall, { signal: controller.signal, obj
 // 批量调用默认串行，避免副作用工具并发启动；纯读取且确认安全时才显式并行
 const batch = await registry.executeAll(toolCalls)
 
-const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
+const chat = await ai.llm.chat({
+  messages,
+  tools: registry.getDefinitions()
+})
 ```
 
 #### ACP 智能体、工作区和会话
@@ -240,7 +259,9 @@ Goose 1.57.0 镜像提供原生 `goose serve` HTTP/WS `/acp` 服务，通过 cus
 
 #### A2A 协议边界
 
-`ai.a2a.getAgentCard()` 返回完整 A2A 0.3 Agent Card，含 `protocolVersion`、MIME 和 streaming 能力；Kit 默认发现路径为 `/.well-known/agent-card.json`。`handleRequest()` 始终返回 JSON-RPC/SSE 处理结果，未初始化返回 JSON-RPC 错误。可信 HTTP 认证上下文的 `agentId` 映射为 executor 的 `context.user.userName`。当前支持 JSON-RPC/SSE，不声明 push notifications、gRPC 或 REST 支持；业务资源授权仍由应用负责。
+远端调用的自定义请求头按名称大小写不敏感地覆盖。固定 JSON-RPC 地址拒绝 HTTP 重定向，认证头不会被转发到重定向目标。
+
+`ai.a2a.getAgentCard()` 返回可直接用于 HTTP 发现响应的标准 A2A 1.0 ProtoJSON，含 `supportedInterfaces`、MIME 和 streaming 能力；Kit 默认发现路径为 `/.well-known/agent-card.json`。`handleRequest()` 始终返回 JSON-RPC/SSE 处理结果，未初始化返回 JSON-RPC 错误。可信 HTTP 认证上下文的 `agentId` 映射为 executor 的 `context.user.userName`。当前支持 JSON-RPC/SSE，不声明 push notifications、gRPC 或 REST 支持；业务资源授权仍由应用负责。
 
 A2A 的 journal、context 归属与消息表在 `ai.init()` 阶段初始化。任务按可信 `agentId` 隔离（含获取、取消和续接）；匿名请求共享匿名主体，生产应在可信传输层认证。`listMessages` 是服务端管理接口，支持 `callerId`、`contextId`、`since`，不能向未授权客户端暴露。
 
@@ -261,14 +282,24 @@ import { z } from 'zod'
 const server = createMcpServer({ name: 'my-server', version: '1.0.0' })
 server.registerTool('search', {
   description: '搜索',
-  inputSchema: { query: z.string() },
+  inputSchema: {
+    query: z.string()
+  },
 }, async ({ query }) => ({
-  content: [{ type: 'text', text: `Results for ${query}` }],
+  content: [
+    { type: 'text', text: `Results for ${query}` }
+  ],
 }))
-await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: () => globalThis.crypto.randomUUID() }))
+await server.connect(new StreamableHTTPServerTransport({
+  sessionIdGenerator: () => globalThis.crypto.randomUUID()
+}))
 ```
 
 #### Memory / RAG / Knowledge
+
+原生记忆删除（包括管理员全清）先清向量，再删除权威记录；向量清理失败时记录保留以便重试。SQL 与向量后端不共享事务，后一步失败仍需核对当前状态。
+
+`ai.memory.scoped({ objectId })` 要求非空且非纯空白的主体 ID，否则工厂立即抛 `TypeError`，不会创建未绑定实例。公共 `clear({ scope: {} })` 等空范围返回失败；跨主体全清必须调用显式管理员入口。原生记忆的访问统计与更新使用版本 CAS，迟到读取不会复活已删除记录；数据库或向量清理失败通过 HaiResult 返回，不能当作成功。
 
 Knowledge 每次导入生成唯一 `revision` 和分块 ID，先完整准备分块、向量及实体，再持久化暂存清单、写入向量，最后通过共享 Store CAS 一次发布正文、实体和元数据。相同文档并发重建只允许一个写入者；失败时保留完整旧版，缩短文档不会留下可见旧尾块。检索只接受当前发布版本，并在发布穿插时重试，持续冲突返回错误供调用方重试。向量候选可能按需扩大，清理积压会增加查询成本。
 
@@ -287,15 +318,23 @@ if (!enriched.success) {
 }
 
 // 多租户推荐入口：scoped() 绑定主体与作用域，所有操作自动携带 objectId / scope（含归属校验），杜绝「忘记传 objectId」越权
-const memory = ai.memory.scoped({ objectId: 'user-001', scope: { topicId: 't-1', personaId: 'p-1' } })
+const memory = ai.memory.scoped({
+  objectId: 'user-001',
+  scope: { topicId: 't-1', personaId: 'p-1' }
+})
 await memory.add({ content: '用户偏好中文', type: 'preference' })
 const recalled = await memory.recall('语言偏好')
 
 // clear 拒绝空过滤（防误清全局）；全局清空只能显式走管理接口
-await memory.clear({ types: ['event'] }) // 仅清该作用域内的 event
+await memory.clear({
+  types: ['event']
+}) // 仅清该作用域内的 event
 await ai.memory.admin.clearAll({ confirm: true }) // 危险：清空整个记忆后端，需显式确认
 
-const rag = await ai.rag.query('核心架构是什么？', { sources: ['docs'], topK: 5 })
+const rag = await ai.rag.query('核心架构是什么？', {
+  sources: ['docs'],
+  topK: 5
+})
 
 const setup = await ai.knowledge.setup()
 if (setup.success) {
@@ -326,11 +365,33 @@ await ai.init({
   audio: {
     inheritLlmApiKey: true,
     models: [
-      { id: 'asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime', operations: ['transcribe'] },
-      { id: 'tts', provider: 'qwen', model: 'qwen3-tts-flash-realtime', operations: ['synthesize'] },
+      {
+        id: 'asr',
+        provider: 'qwen',
+        model: 'qwen3-asr-flash-realtime',
+        operations: ['transcribe']
+      },
+      {
+        id: 'tts',
+        provider: 'qwen',
+        model: 'qwen3-tts-flash-realtime',
+        operations: ['synthesize']
+      },
       // 自托管：whisper / indextts 必须显式配置 baseUrl
-      { id: 'whisper', provider: 'whisper', model: 'faster-whisper-large-v3', operations: ['transcribe'], baseUrl: 'http://127.0.0.1:8101/v1' },
-      { id: 'indextts', provider: 'indextts', model: 'indextts-2.5', operations: ['synthesize'], baseUrl: 'http://127.0.0.1:8102/v1' },
+      {
+        id: 'whisper',
+        provider: 'whisper',
+        model: 'faster-whisper-large-v3',
+        operations: ['transcribe'],
+        baseUrl: 'http://127.0.0.1:8101/v1'
+      },
+      {
+        id: 'indextts',
+        provider: 'indextts',
+        model: 'indextts-2.5',
+        operations: ['synthesize'],
+        baseUrl: 'http://127.0.0.1:8102/v1'
+      },
     ],
     transcribeModel: 'asr',
     synthesizeModel: 'tts',
@@ -495,7 +556,10 @@ if (manager.success) {
 `chatStream` 在**调用上游模型前**就登记轮次并产出 `turn_started`（事件序列 `turn_started → delta* → done`，中途取消时 `turn_started → delta* → cancelled`）。因此即使生成到一半被 `AbortSignal` 取消，也能拿到 `turnId` 与已生成文本，用真实内容提交：
 
 ```ts
-const created = ai.context.createManager({ scope: { objectId: 'user-001', sessionId: 'sess-001' }, turnCommit: 'manual' })
+const created = ai.context.createManager({
+  scope: { objectId: 'user-001', sessionId: 'sess-001' },
+  turnCommit: 'manual'
+})
 if (!created.success)
   return created
 const m = created.data
@@ -533,7 +597,9 @@ const turns = m.getTurns()
 
 ```ts
 // 会话结束时固化：整合摘要 → 提取长期记忆（写入不含 sessionId 的持久作用域）
-const result = await manager.consolidate({ scope: { userId: 'user-001', personaId: 'xiaoq' } })
+const result = await manager.consolidate({
+  scope: { userId: 'user-001', personaId: 'xiaoq' }
+})
 if (result.success) {
   // result.data.summary  —— 本次会话整合摘要
   // result.data.memories —— 固化到长期记忆的条目
@@ -558,11 +624,15 @@ const composed = await ai.persona.compose('xiaoq')
 const manager = ai.context.createManager({
   scope: { objectId: 'user-001', sessionId: 'persona-session' },
   systemPrompt: composed.data,
-  memory: { enable: true, enableExtract: true, scope: { personaId: 'xiaoq' } },
+  memory: {
+    enable: true,
+    enableExtract: true,
+    scope: { personaId: 'xiaoq' }
+  },
 })
 ```
 
-`ai.persona` 提供 `save` / `get` / `update` / `remove` / `list` / `compose`；角色档案全局共享（不按 `objectId` 隔离）。
+`ai.persona` 提供 `save` / `get` / `update` / `remove` / `list` / `compose`，按 `[objectId, id]` 隔离角色。保存时传 `objectId`，其余操作传 `{ objectId }`；省略时访问 `system` 平台角色。租户业务应绑定可信认证主体，不能把客户端传入的角色 ID 当作授权。
 
 ### 配置
 
@@ -616,7 +686,7 @@ memory:
 通过 `core.config.load('ai', ...)` 加载时，约定环境变量优先于 YAML；
 例如 `HAI_AI_LLM_APIKEY`、`HAI_AI_LLM_BASEURL`、`HAI_AI_LLM_MODEL`。
 
-启用 mem0（真·嵌入式 mem0ai/oss 引擎）：
+启用 Mem0 数据格式适配：
 
 ```yaml
 memory:
@@ -625,17 +695,15 @@ memory:
 ```
 
 - **`native`（默认，推荐）**：HAI 原生引擎，复用同一套 vecdb（向量库）、reldb（关系库）、LLM 与 Embedding。`extract` 采用 **Mem0 式批量合并**——一次 LLM 调用对整批抽取事实与相关既有记忆做 ADD / UPDATE / DELETE / NONE 决策，实现增量更新、跨条去重与矛盾删除，并支持 `category` 主题标签。`maxEntriesPerObject`、`maxEntriesGlobal`、`recencyDecay`、`embeddingEnabled`、`writebackRelatedTopK` 均作用于此后端；淘汰按 `objectId` 分区触发，不会因某一主体写入过多而淘汰其他主体的记忆。native 后端的 `scope` 过滤：候选集已被 `objectId` 索引收窄（≤ `maxEntriesPerObject`），PostgreSQL 上还会把 scope 下推为 `data @> '{"scope":...}'::jsonb` 包含查询并命中 JSONB **GIN 索引**（SQLite / MySQL 退回内存匹配，结果一致）。
-- **`mem0`（真·mem0ai/oss）**：直接使用 `mem0ai/oss` 的 `Memory` 引擎（嵌入式，无云服务）。LLM / Embedder 从 `llm` 配置提取；`qdrant` 可复用底层 vecdb。当前适配仅映射带完整连接参数的 `qdrant`；生产环境（`NODE_ENV` 或 `HAI_CORE_ENV` 为 `production`）即使设置 `memory.allowEphemeralFallback: true` 也拒绝实际内存回退。临时回退仅限开发或明确的 `HAI_E2E=1` / `HAI_E2E_MOCK=1`；缺少后端同样不能在生产启动。历史记录默认禁用。
+- **`mem0`（数据格式适配）**：框架负责提取与 Embedding，通过原生 HTTP 读写 Qdrant 的 Mem0 UUID/payload 格式，可读取既有数据；不运行完整上游引擎、遥测或历史数据库。仅映射带完整连接参数的 Qdrant。生产（`NODE_ENV` 或 `HAI_CORE_ENV=production`）拒绝临时回退；开发或明确 E2E 可显式使用 `memory.allowEphemeralFallback: true`。其它持久化后端选择 `native`。
 
-两个 Provider 对外 `ai.memory.*` API 完全一致（`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`），均支持 `objectId`（主体隔离）与 `scope`（业务作用域 key-value 过滤，如 `{ topicId, personaId }`）。`recall` / `list` / `listPage` / `clear` 均按 `scope` 严格过滤，`clear` 在传入 `types` / `scope` 时仅删除同时匹配项（避免误删）。mem0 后端的 `extract` 在框架层用统一提取器完成分类与打分（honor `types` / `model` / `minImportance` / `systemPrompt`）后以 `infer:false` 写入，保留 `hai_type` / `hai_importance`；`recall` 同样支持 `types` 过滤与 `recencyWeight` 时间衰减——二者行为与 native 一致。Mem0 的 `update` 使用 SDK 原地修改文本与元数据，保持 `id` 和创建时间。SDK 查询使用 `filters.user_id`，写入和整主体删除使用 `userId`。SDK 无列表游标：`list` / `listPage` / 条件 `clear` 最多支持每主体 1000 条原始候选（含过期条目），多取一条探测完整性；超限返回 `MEMORY_LIST_INCOMPLETE`（906），不会伪造 total 或执行部分条件删除。候选完整时按 UTC 日期剔除过期项，再按类型/scope 过滤和分页；仅 `objectId` 的清理使用 SDK `deleteAll`，不受列表上限限制。公共空条件清理被拒绝；跨主体全清仅限受信管理员显式 `admin.clearAll({ confirm: true })`。
+两个 Provider 对外 `ai.memory.*` API 完全一致（`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`），均支持 `objectId`（主体隔离）与 `scope`（业务作用域 key-value 过滤，如 `{ topicId, personaId }`）。`recall` / `list` / `listPage` / `clear` 均按 `scope` 严格过滤，`clear` 在传入 `types` / `scope` 时仅删除同时匹配项（避免误删）。mem0 后端的 `extract` 在框架层用统一提取器完成分类与打分（honor `types` / `model` / `minImportance` / `systemPrompt`）后直接写入格式存储，保留 `hai_type` / `hai_importance`；`recall` 同样支持 `types` 过滤与 `recencyWeight` 时间衰减——二者行为与 native 一致。Mem0 的 `update` 原地修改文本与元数据，保持 `id` 和创建时间。候选扫描有界：`list` / `listPage` / 条件 `clear` 最多支持每主体 1000 条原始候选（含过期条目），多取一条探测完整性；超限返回 `MEMORY_LIST_INCOMPLETE`（906），不会伪造 total 或执行部分条件删除。候选完整时按 UTC 日期剔除过期项，再按类型/scope 过滤和分页；仅 `objectId` 的清理使用后端过滤删除，不受列表上限限制。公共空条件清理被拒绝；跨主体全清仅限受信管理员显式 `admin.clearAll({ confirm: true })`。
 
-Mem0 3.3.1 的 Qdrant 适配仍依赖 `QdrantClient.search`；项目将 `@qdrant/js-client-rest` 精确锁定为受测的 `1.18.0`，AI 的可选 peer 也声明此版本。启动会检查该公开方法，缺失时明确配置失败；不要覆盖为已移除此方法的 1.19。
+Mem0 格式存储与 VecDB 的 Qdrant Provider 均使用原生 HTTP，无需额外 SDK。固定 REST 请求使用 `query`，路径段编码；30 秒超时覆盖完整响应体，响应超过 16 MiB 明确失败。写入和删除等待 `wait=true` 的实际完成回执。列表和条件清理最多核对每主体 1000 条原始候选（包括过期项），超限返回 `MEMORY_LIST_INCOMPLETE`，不执行部分条件删除；仅按主体清理不受此列表上限限制。
 
-适配器通过 SDK 公开的 `client` 配置注入独享客户端；Mem0 的 Qdrant 写入与删除均使用 `wait: true`，等待服务端应用完成后才继续写后读或分批清理。
+Qdrant 格式后端要求 1.19 或更新版本，并拒绝 HTTP 重定向。更新使用服务端 `update_only` 与主体/版本条件，同一次原子写入拒绝已删除或已被其它写入更新的条目；迟到更新不会复活删除记录。写后版本核对失败仍需按已有回执核对实际效果。
 
-Mem0 的 pgvector 组合在所有环境拒绝启动：当前 SDK 将 PostgreSQL 连接保存在私有对象中，未提供公开关闭入口，框架无法履行资源清理契约。需要 pgvector 时选择 `memory.provider: native`；该原生后端保持支持。`disableHistory: true` 使用 SDK 无资源的历史占位实现，不创建历史 SQLite 文件。工厂通过公开的一条有界只读查询等待实际后端 ready 后才发布成功。
-
-`add` / `extract` 的 SDK 回执不含完整业务字段，框架写后读取权威记录再返回；并发提取等待全部在途写入结束。若写入或写后读失败，`error.ext.requiresEffectReconciliation=true`，`memoryIds` 保存已知写入 ID（回执丢失时可能为空）。应按主体核对实际记忆后决定恢复，不能盲目重做 add/extract；框架不自动重放。
+`add` / `extract` 的写入回执不含完整业务字段，框架写后读取权威记录再返回；并发提取等待全部在途写入结束。若写入或写后读失败，`error.ext.requiresEffectReconciliation=true`，`memoryIds` 保存已知写入 ID（回执丢失时可能为空）。应按主体核对实际记忆后决定恢复，不能盲目重做 add/extract；框架不自动重放。
 
 **候选池与 scope 漏召回**：`scope` 过滤在内存中完成，若先按 `topK` 截断再过滤，同一主体下相关度较高的其它主题/角色记忆会把目标 scope 的记忆挤出候选池，导致「明明有却召回 0 条」。为此 `recall` / `injectMemories` 先取回 `topK × candidateMultiplier`（默认 5）条候选，过滤后再截取 `topK`。scope 隔离越细（如按 `topicId` + `personaId`），可将 `candidateMultiplier` 调大：
 

@@ -38,7 +38,11 @@ function googleImageFormat(size: ImageSize): { aspectRatio: string, imageSize: s
   const edge = Math.max(size.width, size.height)
   return {
     aspectRatio: `${size.width / divisor}:${size.height / divisor}`,
-    imageSize: edge <= 1024 ? '1K' : edge <= 2048 ? '2K' : '4K',
+    imageSize: edge <= 1024
+      ? '1K'
+      : edge <= 2048
+        ? '2K'
+        : '4K',
   }
 }
 
@@ -63,9 +67,13 @@ export function createGoogleImageProvider(): ImageProvider {
         const generationConfig = request.size
           ? {
               responseModalities: ['IMAGE'],
-              responseFormat: { image: googleImageFormat(request.size) },
+              responseFormat: {
+                image: googleImageFormat(request.size),
+              },
             }
-          : { responseModalities: ['IMAGE'] }
+          : {
+              responseModalities: ['IMAGE'],
+            }
         const response = await fetch(`${request.model.baseUrl}/v1/models/${encodeURIComponent(request.model.model)}:generateContent`, {
           method: 'POST',
           headers: {
@@ -73,17 +81,19 @@ export function createGoogleImageProvider(): ImageProvider {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            contents: [{
-              parts: [
-                ...request.referenceImages.map(image => ({
-                  inlineData: {
-                    mimeType: image.mimeType,
-                    data: referenceImageBase64(image),
-                  },
-                })),
-                { text: request.prompt },
-              ],
-            }],
+            contents: [
+              {
+                parts: [
+                  ...request.referenceImages.map(image => ({
+                    inlineData: {
+                      mimeType: image.mimeType,
+                      data: referenceImageBase64(image),
+                    },
+                  })),
+                  { text: request.prompt },
+                ],
+              },
+            ],
             generationConfig,
           }),
           signal: request.signal,
@@ -97,13 +107,21 @@ export function createGoogleImageProvider(): ImageProvider {
         if (parts.filter(part => part.inlineData?.data || part.inline_data?.data).length > request.maxImages)
           throw new RangeError('Image count exceeds limit')
         const images = parts.flatMap((part) => {
-          if (part.inlineData?.data)
-            return [imageFromBase64(part.inlineData.data, part.inlineData.mimeType ?? 'image/png', request)]
-          if (part.inline_data?.data)
-            return [imageFromBase64(part.inline_data.data, part.inline_data.mime_type ?? 'image/png', request)]
+          if (part.inlineData?.data) {
+            return [
+              imageFromBase64(part.inlineData.data, part.inlineData.mimeType ?? 'image/png', request),
+            ]
+          }
+          if (part.inline_data?.data) {
+            return [
+              imageFromBase64(part.inline_data.data, part.inline_data.mime_type ?? 'image/png', request),
+            ]
+          }
           return []
         })
-        return images.length ? { success: true, data: images } : imageProtocolError()
+        return images.length
+          ? { success: true, data: images }
+          : imageProtocolError()
       }
       catch (error) {
         return imageProviderFailure(error)

@@ -8,7 +8,7 @@ import type { MemoryConfig } from '../src/ai-config.js'
 import type { EmbeddingOperations } from '../src/embedding/ai-embedding-types.js'
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import type { MemoryEntry } from '../src/memory/ai-memory-types.js'
-import type { AIRelStore, AIVectorStore, StoreFilter, StorePage, StoreScope } from '../src/store/ai-store-types.js'
+import type { AIRelStore, AIRelStoreCompareAndSwap, AIVectorStore, StoreFilter, StorePage, StoreScope } from '../src/store/ai-store-types.js'
 import { describe, expect, it, vi } from 'vitest'
 import { extractMemories } from '../src/memory/ai-memory-extractor.js'
 import { createNativeMemoryOperations } from '../src/memory/providers/ai-memory-provider-native.js'
@@ -21,6 +21,7 @@ import { createNativeMemoryOperations } from '../src/memory/providers/ai-memory-
 interface MockStoreRecord<T> {
   data: T
   scope?: StoreScope
+  version: string
 }
 
 function cloneStoreValue<T>(value: T): T {
@@ -38,7 +39,9 @@ function matchesStoreFilter<T>(record: MockStoreRecord<T>, filter?: StoreFilter<
   if (filter.refId !== undefined && record.scope?.refId !== filter.refId)
     return false
   if (filter.status !== undefined) {
-    const expected = Array.isArray(filter.status) ? filter.status : [filter.status]
+    const expected = Array.isArray(filter.status)
+      ? filter.status
+      : [filter.status]
     if (!expected.includes(record.scope?.status ?? ''))
       return false
   }
@@ -58,13 +61,23 @@ function sortByOrder<T>(items: T[], orderBy?: StoreFilter<T>['orderBy']): T[] {
     const right = (b as Record<string, unknown>)[orderBy.field as string]
     if (left === right)
       return 0
-    if (left == null)
-      return orderBy.direction === 'asc' ? -1 : 1
-    if (right == null)
-      return orderBy.direction === 'asc' ? 1 : -1
+    if (left == null) {
+      return orderBy.direction === 'asc'
+        ? -1
+        : 1
+    }
+    if (right == null) {
+      return orderBy.direction === 'asc'
+        ? 1
+        : -1
+    }
     return orderBy.direction === 'asc'
-      ? (left > right ? 1 : -1)
-      : (left > right ? -1 : 1)
+      ? (left > right
+          ? 1
+          : -1)
+      : (left > right
+          ? -1
+          : 1)
   })
 }
 
@@ -72,20 +85,53 @@ function createMockStore<T>(): AIRelStore<T> {
   const data = new Map<string, MockStoreRecord<T>>()
   return {
     save: vi.fn(async (id: string, value: T, scope?: StoreScope) => {
-      data.set(id, { data: cloneStoreValue(value), scope: scope ? { ...scope } : undefined })
+      data.set(id, {
+        data: cloneStoreValue(value),
+        scope: scope
+          ? { ...scope }
+          : undefined,
+        version: crypto.randomUUID(),
+      })
     }),
     saveMany: vi.fn(async (items: Array<{ id: string, data: T, scope?: StoreScope }>) => {
       for (const item of items) {
         data.set(item.id, {
           data: cloneStoreValue(item.data),
-          scope: item.scope ? { ...item.scope } : undefined,
+          scope: item.scope
+            ? { ...item.scope }
+            : undefined,
+          version: crypto.randomUUID(),
         })
       }
     }),
     get: vi.fn(async (id: string) => {
       const record = data.get(id)
-      return record ? cloneStoreValue(record.data) : undefined
+      return record
+        ? cloneStoreValue(record.data)
+        : undefined
     }),
+    readVersioned: vi.fn(async (id: string) => {
+      const record = data.get(id)
+      return record
+        ? {
+            data: cloneStoreValue(record.data),
+            version: record.version,
+          }
+        : undefined
+    }),
+    compareAndSwap: vi.fn(async (id: string, input: AIRelStoreCompareAndSwap<T>) => {
+      const record = data.get(id)
+      if (record?.version !== input.expectedVersion || (input.notAfter !== undefined && Date.now() >= input.notAfter))
+        return undefined
+      const version = crypto.randomUUID()
+      data.set(id, {
+        data: cloneStoreValue(input.data),
+        scope: input.scope ?? record?.scope,
+        version,
+      })
+      return version
+    }),
+    currentTime: async () => Date.now(),
     query: vi.fn(async (filter: StoreFilter<T>) => {
       let items = Array.from(data.values())
         .filter(record => matchesStoreFilter(record, filter))
@@ -101,7 +147,10 @@ function createMockStore<T>(): AIRelStore<T> {
         .map(record => cloneStoreValue(record.data))
       items = sortByOrder(items, filter.orderBy)
       const total = items.length
-      return { items: items.slice(page.offset, page.offset + page.limit), total }
+      return {
+        items: items.slice(page.offset, page.offset + page.limit),
+        total,
+      }
     }),
     remove: vi.fn(async (id: string) => data.delete(id)),
     removeBy: vi.fn(async (filter: StoreFilter<T>) => {
@@ -139,7 +188,12 @@ function createMockVectorStore(): AIVectorStore {
   const vectors = new Map<string, { vector: number[], metadata?: Record<string, unknown> }>()
   return {
     upsert: vi.fn(async (id: string, vector: number[], metadata?: Record<string, unknown>) => {
-      vectors.set(id, { vector, metadata: metadata ? { ...metadata } : undefined })
+      vectors.set(id, {
+        vector,
+        metadata: metadata
+          ? { ...metadata }
+          : undefined,
+      })
     }),
     search: vi.fn(async (queryVec: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }) => {
       const topK = options?.topK ?? 10
@@ -226,12 +280,14 @@ function createMockLLM(responses: Array<{ content: string | null }>): LLMOperati
           object: 'chat.completion' as const,
           created: Date.now(),
           model: 'test-model',
-          choices: [{
-            index: 0,
-            message: { role: 'assistant' as const, content: resp.content, refusal: null },
-            logprobs: null,
-            finish_reason: 'stop' as const,
-          }],
+          choices: [
+            {
+              index: 0,
+              message: { role: 'assistant' as const, content: resp.content, refusal: null },
+              logprobs: null,
+              finish_reason: 'stop' as const,
+            },
+          ],
           usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
         },
       }
@@ -247,7 +303,10 @@ function createMockEmbedding(vectors?: number[][]): EmbeddingOperations {
     embed: vi.fn(),
     embedText: vi.fn(async () => {
       if (!vectors || vectors.length === 0) {
-        return { success: true as const, data: [0.1, 0.2, 0.3] }
+        return {
+          success: true as const,
+          data: [0.1, 0.2, 0.3],
+        }
       }
       const vec = vectors[callIndex] ?? vectors[vectors.length - 1]
       callIndex++
@@ -267,12 +326,14 @@ function createLLMChatOk(content: string | null): MockChatResult {
       object: 'chat.completion' as const,
       created: Date.now(),
       model: 'test-model',
-      choices: [{
-        index: 0,
-        message: { role: 'assistant' as const, content, refusal: null },
-        logprobs: null,
-        finish_reason: 'stop' as const,
-      }],
+      choices: [
+        {
+          index: 0,
+          message: { role: 'assistant' as const, content, refusal: null },
+          logprobs: null,
+          finish_reason: 'stop' as const,
+        },
+      ],
       usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
     },
   } as unknown as MockChatResult
@@ -320,12 +381,14 @@ function createTestMemoryHarness(
 
 describe('extractMemories', () => {
   it('从对话中提取记忆条目', async () => {
-    const mockLLM = createMockLLM([{
-      content: JSON.stringify([
-        { content: '用户喜欢中文', type: 'preference', importance: 0.8 },
-        { content: '项目名为 HAI', type: 'fact', importance: 0.9 },
-      ]),
-    }])
+    const mockLLM = createMockLLM([
+      {
+        content: JSON.stringify([
+          { content: '用户喜欢中文', type: 'preference', importance: 0.8 },
+          { content: '项目名为 HAI', type: 'fact', importance: 0.9 },
+        ]),
+      },
+    ])
 
     const messages = [
       { role: 'user' as const, content: '我更喜欢中文回复' },
@@ -342,7 +405,9 @@ describe('extractMemories', () => {
   })
 
   it('空对话返回空列表', async () => {
-    const mockLLM = createMockLLM([{ content: '[]' }])
+    const mockLLM = createMockLLM([
+      { content: '[]' },
+    ])
     const result = await extractMemories(mockLLM, [])
     expect(result.success).toBe(true)
     if (result.success) {
@@ -351,9 +416,11 @@ describe('extractMemories', () => {
   })
 
   it('去除 markdown 围栏后解析', async () => {
-    const mockLLM = createMockLLM([{
-      content: '```json\n[{"content":"记忆","type":"fact","importance":0.5}]\n```',
-    }])
+    const mockLLM = createMockLLM([
+      {
+        content: '```json\n[{"content":"记忆","type":"fact","importance":0.5}]\n```',
+      },
+    ])
 
     const result = await extractMemories(mockLLM, [
       { role: 'user' as const, content: '测试' },
@@ -365,12 +432,14 @@ describe('extractMemories', () => {
   })
 
   it('按 minImportance 过滤', async () => {
-    const mockLLM = createMockLLM([{
-      content: JSON.stringify([
-        { content: '低重要性', type: 'fact', importance: 0.2 },
-        { content: '高重要性', type: 'fact', importance: 0.9 },
-      ]),
-    }])
+    const mockLLM = createMockLLM([
+      {
+        content: JSON.stringify([
+          { content: '低重要性', type: 'fact', importance: 0.2 },
+          { content: '高重要性', type: 'fact', importance: 0.9 },
+        ]),
+      },
+    ])
 
     const result = await extractMemories(mockLLM, [
       { role: 'user' as const, content: '测试' },
@@ -384,11 +453,13 @@ describe('extractMemories', () => {
   })
 
   it('支持自定义 systemPrompt', async () => {
-    const mockLLM = createMockLLM([{
-      content: JSON.stringify([
-        { content: '用户偏好中文', type: 'preference', importance: 0.8 },
-      ]),
-    }])
+    const mockLLM = createMockLLM([
+      {
+        content: JSON.stringify([
+          { content: '用户偏好中文', type: 'preference', importance: 0.8 },
+        ]),
+      },
+    ])
 
     const result = await extractMemories(mockLLM, [
       { role: 'user' as const, content: '请记住我喜欢中文回复。' },
@@ -407,7 +478,9 @@ describe('extractMemories', () => {
   })
 
   it('将取消信号透传给提取 LLM', async () => {
-    const mockLLM = createMockLLM([{ content: '[]' }])
+    const mockLLM = createMockLLM([
+      { content: '[]' },
+    ])
     const controller = new AbortController()
 
     const result = await extractMemories(mockLLM, [
@@ -456,12 +529,23 @@ describe('createNativeMemoryOperations', () => {
 
   it('extract 从对话中提取并存储记忆', async () => {
     const llm = createMockLLM([
-      { content: JSON.stringify([
-        { content: '提取到的记忆', type: 'fact', importance: 0.8 },
-      ]) },
-      { content: JSON.stringify({ memory: [
-        { text: '提取到的记忆', type: 'fact', importance: 0.8, event: 'ADD' },
-      ] }) },
+      {
+        content: JSON.stringify([
+          { content: '提取到的记忆', type: 'fact', importance: 0.8 },
+        ]),
+      },
+      {
+        content: JSON.stringify({
+          memory: [
+            {
+              text: '提取到的记忆',
+              type: 'fact',
+              importance: 0.8,
+              event: 'ADD',
+            },
+          ],
+        }),
+      },
     ])
     const embedding = createMockEmbedding()
     const ops = createTestMemoryOps(defaultConfig, llm, embedding)
@@ -487,12 +571,23 @@ describe('createNativeMemoryOperations', () => {
 
   it('extract 将同一取消信号透传给抽取与对账调用', async () => {
     const llm = createMockLLM([
-      { content: JSON.stringify([
-        { content: '提取到的记忆', type: 'fact', importance: 0.8 },
-      ]) },
-      { content: JSON.stringify({ memory: [
-        { text: '提取到的记忆', type: 'fact', importance: 0.8, event: 'ADD' },
-      ] }) },
+      {
+        content: JSON.stringify([
+          { content: '提取到的记忆', type: 'fact', importance: 0.8 },
+        ]),
+      },
+      {
+        content: JSON.stringify({
+          memory: [
+            {
+              text: '提取到的记忆',
+              type: 'fact',
+              importance: 0.8,
+              event: 'ADD',
+            },
+          ],
+        }),
+      },
     ])
     const controller = new AbortController()
     const ops = createTestMemoryOps(defaultConfig, llm, createMockEmbedding())
@@ -508,11 +603,13 @@ describe('createNativeMemoryOperations', () => {
   })
 
   it('extract 支持通过 options.systemPrompt 覆盖模块默认提示词', async () => {
-    const llm = createMockLLM([{
-      content: JSON.stringify([
-        { content: '提取到的偏好', type: 'preference', importance: 0.9 },
-      ]),
-    }])
+    const llm = createMockLLM([
+      {
+        content: JSON.stringify([
+          { content: '提取到的偏好', type: 'preference', importance: 0.9 },
+        ]),
+      },
+    ])
     const embedding = createMockEmbedding()
     const ops = createTestMemoryOps({
       ...defaultConfig,
@@ -535,11 +632,13 @@ describe('createNativeMemoryOperations', () => {
   })
 
   it('extract 遇到同 scope 的完全重复记忆时返回 noop', async () => {
-    const llm = createMockLLM([{
-      content: JSON.stringify([
-        { content: '用户偏好中文', type: 'preference', importance: 0.8 },
-      ]),
-    }])
+    const llm = createMockLLM([
+      {
+        content: JSON.stringify([
+          { content: '用户偏好中文', type: 'preference', importance: 0.8 },
+        ]),
+      },
+    ])
     const embedding = createMockEmbedding()
     const { ops } = createTestMemoryHarness(defaultConfig, llm, embedding)
 
@@ -571,12 +670,23 @@ describe('createNativeMemoryOperations', () => {
 
   it('extract 不会把不同 scope 的旧记忆当成重复项', async () => {
     const llm = createMockLLM([
-      { content: JSON.stringify([
-        { content: '用户偏好中文', type: 'preference', importance: 0.8 },
-      ]) },
-      { content: JSON.stringify({ memory: [
-        { text: '用户偏好中文', type: 'preference', importance: 0.8, event: 'ADD' },
-      ] }) },
+      {
+        content: JSON.stringify([
+          { content: '用户偏好中文', type: 'preference', importance: 0.8 },
+        ]),
+      },
+      {
+        content: JSON.stringify({
+          memory: [
+            {
+              text: '用户偏好中文',
+              type: 'preference',
+              importance: 0.8,
+              event: 'ADD',
+            },
+          ],
+        }),
+      },
     ])
     const embedding = createMockEmbedding()
     const { ops } = createTestMemoryHarness(defaultConfig, llm, embedding)
@@ -632,13 +742,15 @@ describe('createNativeMemoryOperations', () => {
         { content: '用户偏好先给结论，再展开说明', type: 'instruction', importance: 0.9 },
       ])))
       .mockResolvedValueOnce(createLLMChatOk(JSON.stringify({
-        memory: [{
-          id: existingResult.data.id,
-          text: '用户偏好先给结论，再根据需要展开说明',
-          type: 'instruction',
-          importance: 0.9,
-          event: 'UPDATE',
-        }],
+        memory: [
+          {
+            id: existingResult.data.id,
+            text: '用户偏好先给结论，再根据需要展开说明',
+            type: 'instruction',
+            importance: 0.9,
+            event: 'UPDATE',
+          },
+        ],
       })))
 
     const result = await ops.extract([
@@ -684,13 +796,15 @@ describe('createNativeMemoryOperations', () => {
         { content: '用户偏好先给结论，再展开说明', type: 'instruction', importance: 0.9 },
       ])))
       .mockResolvedValueOnce(createLLMChatOk(JSON.stringify({
-        memory: [{
-          id: existingResult.data.id,
-          text: '用户偏好先给结论，再根据需要展开说明',
-          type: 'instruction',
-          importance: 0.9,
-          event: 'UPDATE',
-        }],
+        memory: [
+          {
+            id: existingResult.data.id,
+            text: '用户偏好先给结论，再根据需要展开说明',
+            type: 'instruction',
+            importance: 0.9,
+            event: 'UPDATE',
+          },
+        ],
       })))
 
     const { extract } = ops
@@ -770,13 +884,15 @@ describe('createNativeMemoryOperations', () => {
         { content: '用户偏好先给结论，再展开说明', type: 'instruction', importance: 0.9 },
       ])))
       .mockResolvedValueOnce(createLLMChatOk(JSON.stringify({
-        memory: [{
-          id: 'missing-memory-id',
-          text: '用户偏好先给结论，再根据需要展开说明',
-          type: 'instruction',
-          importance: 0.9,
-          event: 'UPDATE',
-        }],
+        memory: [
+          {
+            id: 'missing-memory-id',
+            text: '用户偏好先给结论，再根据需要展开说明',
+            type: 'instruction',
+            importance: 0.9,
+            event: 'UPDATE',
+          },
+        ],
       })))
 
     const result = await ops.extract([
@@ -799,11 +915,13 @@ describe('createNativeMemoryOperations', () => {
   })
 
   it('extract 对账使用 writebackRelatedTopK，普通 recall 继续使用 defaultTopK', async () => {
-    const llm = createMockLLM([{
-      content: JSON.stringify([
-        { content: '用户偏好中文', type: 'preference', importance: 0.8 },
-      ]),
-    }])
+    const llm = createMockLLM([
+      {
+        content: JSON.stringify([
+          { content: '用户偏好中文', type: 'preference', importance: 0.8 },
+        ]),
+      },
+    ])
     const embedding = createMockEmbedding()
     const { ops, vectorStore } = createTestMemoryHarness({
       ...defaultConfig,
@@ -811,8 +929,18 @@ describe('createNativeMemoryOperations', () => {
       writebackRelatedTopK: 5,
     }, llm, embedding)
 
-    await ops.add({ content: '用户偏好中文', type: 'preference', importance: 0.8, objectId: 'user-1' })
-    await ops.add({ content: '用户使用 TypeScript', type: 'fact', importance: 0.7, objectId: 'user-1' })
+    await ops.add({
+      content: '用户偏好中文',
+      type: 'preference',
+      importance: 0.8,
+      objectId: 'user-1',
+    })
+    await ops.add({
+      content: '用户使用 TypeScript',
+      type: 'fact',
+      importance: 0.7,
+      objectId: 'user-1',
+    })
 
     const extractResult = await ops.extract([
       { role: 'user' as const, content: '请记住我更喜欢中文回复。' },
@@ -830,11 +958,13 @@ describe('createNativeMemoryOperations', () => {
   })
 
   it('extract 对账不会增加相关旧记忆的访问元数据', async () => {
-    const llm = createMockLLM([{
-      content: JSON.stringify([
-        { content: '用户偏好中文', type: 'preference', importance: 0.8 },
-      ]),
-    }])
+    const llm = createMockLLM([
+      {
+        content: JSON.stringify([
+          { content: '用户偏好中文', type: 'preference', importance: 0.8 },
+        ]),
+      },
+    ])
     const embedding = createMockEmbedding()
     const { ops, store } = createTestMemoryHarness(defaultConfig, llm, embedding)
 
@@ -990,14 +1120,25 @@ describe('createNativeMemoryOperations', () => {
     const llm = createMockLLM([])
     const ops = createTestMemoryOps(defaultConfig, llm, null)
 
-    const added = await ops.add({ content: '主题 A 的记忆', type: 'fact', objectId: 'user-A', scope: { topicId: 'A' } })
+    const added = await ops.add({
+      content: '主题 A 的记忆',
+      type: 'fact',
+      objectId: 'user-A',
+      scope: { topicId: 'A' },
+    })
     expect(added.success).toBe(true)
     if (!added.success)
       return
     const id = added.data.id
 
-    expect((await ops.get(id, { objectId: 'user-A', scope: { topicId: 'A' } })).success).toBe(true)
-    expect((await ops.get(id, { objectId: 'user-A', scope: { topicId: 'B' } })).success).toBe(false)
+    expect((await ops.get(id, {
+      objectId: 'user-A',
+      scope: { topicId: 'A' },
+    })).success).toBe(true)
+    expect((await ops.get(id, {
+      objectId: 'user-A',
+      scope: { topicId: 'B' },
+    })).success).toBe(false)
   })
 
   it('list 支持按类型过滤', async () => {
@@ -1007,7 +1148,9 @@ describe('createNativeMemoryOperations', () => {
     await ops.add({ content: '事实', type: 'fact' })
     await ops.add({ content: '偏好', type: 'preference' })
 
-    const result = await ops.list({ types: ['preference'] })
+    const result = await ops.list({
+      types: ['preference'],
+    })
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data).toHaveLength(1)
@@ -1022,7 +1165,9 @@ describe('createNativeMemoryOperations', () => {
     await ops.add({ content: '事实', type: 'fact' })
     await ops.add({ content: '偏好', type: 'preference' })
 
-    const clearResult = await ops.clear({ types: ['fact'] })
+    const clearResult = await ops.clear({
+      types: ['fact'],
+    })
     expect(clearResult.success).toBe(true)
 
     const listResult = await ops.list()
@@ -1116,11 +1261,24 @@ describe('createNativeMemoryOperations', () => {
   it('list 按 scope 过滤（issue #12）', async () => {
     const ops = createTestMemoryOps(defaultConfig, createMockLLM([]), createMockEmbedding())
 
-    await ops.add({ content: '主题A', type: 'fact', objectId: 'u1', scope: { topicId: 'A' } })
-    await ops.add({ content: '主题B', type: 'fact', objectId: 'u1', scope: { topicId: 'B' } })
+    await ops.add({
+      content: '主题A',
+      type: 'fact',
+      objectId: 'u1',
+      scope: { topicId: 'A' },
+    })
+    await ops.add({
+      content: '主题B',
+      type: 'fact',
+      objectId: 'u1',
+      scope: { topicId: 'B' },
+    })
     await ops.add({ content: '无作用域', type: 'fact', objectId: 'u1' })
 
-    const result = await ops.list({ objectId: 'u1', scope: { topicId: 'A' } })
+    const result = await ops.list({
+      objectId: 'u1',
+      scope: { topicId: 'A' },
+    })
     expect(result.success).toBe(true)
     if (!result.success)
       return
@@ -1129,11 +1287,31 @@ describe('createNativeMemoryOperations', () => {
 
   it('listPage 按 scope 过滤并分页（issue #12）', async () => {
     const ops = createTestMemoryOps(defaultConfig, createMockLLM([]), createMockEmbedding())
-    await ops.add({ content: 'a', type: 'fact', objectId: 'u1', scope: { topicId: 'A' } })
-    await ops.add({ content: 'b', type: 'fact', objectId: 'u1', scope: { topicId: 'B' } })
-    await ops.add({ content: 'c', type: 'fact', objectId: 'u1', scope: { topicId: 'A' } })
+    await ops.add({
+      content: 'a',
+      type: 'fact',
+      objectId: 'u1',
+      scope: { topicId: 'A' },
+    })
+    await ops.add({
+      content: 'b',
+      type: 'fact',
+      objectId: 'u1',
+      scope: { topicId: 'B' },
+    })
+    await ops.add({
+      content: 'c',
+      type: 'fact',
+      objectId: 'u1',
+      scope: { topicId: 'A' },
+    })
 
-    const result = await ops.listPage({ objectId: 'u1', scope: { topicId: 'A' }, offset: 0, limit: 10 })
+    const result = await ops.listPage({
+      objectId: 'u1',
+      scope: { topicId: 'A' },
+      offset: 0,
+      limit: 10,
+    })
     expect(result.success).toBe(true)
     if (!result.success)
       return
@@ -1143,17 +1321,35 @@ describe('createNativeMemoryOperations', () => {
 
   it('clear 按 scope 仅删除匹配条目（issue #12）', async () => {
     const ops = createTestMemoryOps(defaultConfig, createMockLLM([]), createMockEmbedding())
-    await ops.add({ content: '主题A', type: 'fact', objectId: 'u1', scope: { topicId: 'A' } })
-    await ops.add({ content: '主题B', type: 'fact', objectId: 'u1', scope: { topicId: 'B' } })
+    await ops.add({
+      content: '主题A',
+      type: 'fact',
+      objectId: 'u1',
+      scope: { topicId: 'A' },
+    })
+    await ops.add({
+      content: '主题B',
+      type: 'fact',
+      objectId: 'u1',
+      scope: { topicId: 'B' },
+    })
 
-    await ops.clear({ objectId: 'u1', scope: { topicId: 'A' } })
+    await ops.clear({
+      objectId: 'u1',
+      scope: { topicId: 'A' },
+    })
 
     const remaining = await ops.list({ objectId: 'u1' })
     expect(remaining.success && remaining.data.map(e => e.content)).toEqual(['主题B'])
   })
 
   it('多用户配额隔离：用户 A 写满不淘汰用户 B（issue #15）', async () => {
-    const config: MemoryConfig = { ...defaultConfig, maxEntriesPerObject: 3, maxEntriesGlobal: 100000, embeddingEnabled: false }
+    const config: MemoryConfig = {
+      ...defaultConfig,
+      maxEntriesPerObject: 3,
+      maxEntriesGlobal: 100000,
+      embeddingEnabled: false,
+    }
     const harness = createTestMemoryHarness(config, createMockLLM([]), null)
 
     // 用户 B 先写入一条基线记忆
@@ -1161,8 +1357,14 @@ describe('createNativeMemoryOperations', () => {
     expect(bBaseline.success).toBe(true)
 
     // 用户 A 大量写入，超过单主体配额触发淘汰
-    for (let i = 0; i < 8; i++)
-      await harness.ops.add({ content: `A-${i}`, type: 'fact', objectId: 'userA', importance: 0.1 })
+    for (let i = 0; i < 8; i++) {
+      await harness.ops.add({
+        content: `A-${i}`,
+        type: 'fact',
+        objectId: 'userA',
+        importance: 0.1,
+      })
+    }
 
     // 用户 B 的记忆不应被淘汰
     const bList = await harness.ops.list({ objectId: 'userB' })
@@ -1200,7 +1402,9 @@ function createMem0LLM(
         return createLLMChatOk(JSON.stringify(extraction))
       const userContent = req.messages.find(message => message.role === 'user')?.content ?? '{}'
       const payload = JSON.parse(userContent) as { existingMemories: Array<{ id: string, content: string }> }
-      return createLLMChatOk(JSON.stringify({ memory: buildOps(payload.existingMemories) }))
+      return createLLMChatOk(JSON.stringify({
+        memory: buildOps(payload.existingMemories),
+      }))
     }),
     chatStream: vi.fn(),
     listModels: vi.fn(),
@@ -1210,7 +1414,11 @@ function createMem0LLM(
 function createMem0Ops(llm: LLMOperations, embedding: EmbeddingOperations | null = createMockEmbedding()) {
   const store = createMockStore<MemoryEntry>()
   const vectorStore = createMockVectorStore()
-  return { ops: createNativeMemoryOperations(mem0Config, llm, embedding, store, vectorStore), store, vectorStore }
+  return {
+    ops: createNativeMemoryOperations(mem0Config, llm, embedding, store, vectorStore),
+    store,
+    vectorStore,
+  }
 }
 
 describe('createNativeMemoryOperations 批量合并（Mem0 式）', () => {
@@ -1221,8 +1429,18 @@ describe('createNativeMemoryOperations 批量合并（Mem0 式）', () => {
         { content: '项目名为 HAI', type: 'fact', importance: 0.9 },
       ],
       () => [
-        { text: '用户喜欢中文', type: 'preference', importance: 0.8, event: 'ADD' },
-        { text: '项目名为 HAI', type: 'fact', importance: 0.9, event: 'ADD' },
+        {
+          text: '用户喜欢中文',
+          type: 'preference',
+          importance: 0.8,
+          event: 'ADD',
+        },
+        {
+          text: '项目名为 HAI',
+          type: 'fact',
+          importance: 0.9,
+          event: 'ADD',
+        },
       ],
     )
     const { ops } = createMem0Ops(llm)
@@ -1239,12 +1457,27 @@ describe('createNativeMemoryOperations 批量合并（Mem0 式）', () => {
 
   it('对既有记忆执行 UPDATE（增量更新，不新增）', async () => {
     const llm = createMem0LLM(
-      [{ content: '用户偏好中文回复', type: 'preference', importance: 0.9 }],
-      existing => [{ id: existing[0]?.id, text: '用户偏好中文回复', type: 'preference', importance: 0.9, event: 'UPDATE' }],
+      [
+        { content: '用户偏好中文回复', type: 'preference', importance: 0.9 },
+      ],
+      existing => [
+        {
+          id: existing[0]?.id,
+          text: '用户偏好中文回复',
+          type: 'preference',
+          importance: 0.9,
+          event: 'UPDATE',
+        },
+      ],
     )
     const { ops } = createMem0Ops(llm)
 
-    const added = await ops.add({ content: '用户偏好', type: 'preference', importance: 0.5, objectId: 'u1' })
+    const added = await ops.add({
+      content: '用户偏好',
+      type: 'preference',
+      importance: 0.5,
+      objectId: 'u1',
+    })
     expect(added.success).toBe(true)
 
     const result = await ops.extract(mem0Messages, { objectId: 'u1' })
@@ -1261,12 +1494,27 @@ describe('createNativeMemoryOperations 批量合并（Mem0 式）', () => {
 
   it('对已覆盖的事实执行 NONE（去重跳过）', async () => {
     const llm = createMem0LLM(
-      [{ content: '用户偏好中文', type: 'preference', importance: 0.8 }],
-      existing => [{ id: existing[0]?.id, text: '用户偏好中文', type: 'preference', importance: 0.8, event: 'NONE' }],
+      [
+        { content: '用户偏好中文', type: 'preference', importance: 0.8 },
+      ],
+      existing => [
+        {
+          id: existing[0]?.id,
+          text: '用户偏好中文',
+          type: 'preference',
+          importance: 0.8,
+          event: 'NONE',
+        },
+      ],
     )
     const { ops } = createMem0Ops(llm)
 
-    await ops.add({ content: '用户偏好中文', type: 'preference', importance: 0.8, objectId: 'u1' })
+    await ops.add({
+      content: '用户偏好中文',
+      type: 'preference',
+      importance: 0.8,
+      objectId: 'u1',
+    })
     const result = await ops.extract(mem0Messages, { objectId: 'u1' })
     expect(result.success).toBe(true)
     if (!result.success)
@@ -1279,12 +1527,27 @@ describe('createNativeMemoryOperations 批量合并（Mem0 式）', () => {
 
   it('对矛盾的记忆执行 DELETE', async () => {
     const llm = createMem0LLM(
-      [{ content: '用户改用英文', type: 'preference', importance: 0.8 }],
-      existing => [{ id: existing[0]?.id, text: '用户偏好中文', type: 'preference', importance: 0.8, event: 'DELETE' }],
+      [
+        { content: '用户改用英文', type: 'preference', importance: 0.8 },
+      ],
+      existing => [
+        {
+          id: existing[0]?.id,
+          text: '用户偏好中文',
+          type: 'preference',
+          importance: 0.8,
+          event: 'DELETE',
+        },
+      ],
     )
     const { ops } = createMem0Ops(llm)
 
-    await ops.add({ content: '用户偏好中文', type: 'preference', importance: 0.8, objectId: 'u1' })
+    await ops.add({
+      content: '用户偏好中文',
+      type: 'preference',
+      importance: 0.8,
+      objectId: 'u1',
+    })
     const result = await ops.extract(mem0Messages, { objectId: 'u1' })
     expect(result.success).toBe(true)
 
@@ -1294,10 +1557,12 @@ describe('createNativeMemoryOperations 批量合并（Mem0 式）', () => {
 
   it('合并响应非法 JSON 时回退为 ADD-all', async () => {
     const llm = createMockLLM([
-      { content: JSON.stringify([
-        { content: '用户喜欢中文', type: 'preference', importance: 0.8 },
-        { content: '项目名为 HAI', type: 'fact', importance: 0.9 },
-      ]) },
+      {
+        content: JSON.stringify([
+          { content: '用户喜欢中文', type: 'preference', importance: 0.8 },
+          { content: '项目名为 HAI', type: 'fact', importance: 0.9 },
+        ]),
+      },
       { content: 'not valid json' },
     ])
     const { ops } = createMem0Ops(llm)
@@ -1313,7 +1578,12 @@ describe('createNativeMemoryOperations 批量合并（Mem0 式）', () => {
     const llm = createMockLLM([])
     const { ops } = createMem0Ops(llm)
 
-    const added = await ops.add({ content: '直接写入的记忆', type: 'fact', importance: 0.7, objectId: 'u1' })
+    const added = await ops.add({
+      content: '直接写入的记忆',
+      type: 'fact',
+      importance: 0.7,
+      objectId: 'u1',
+    })
     expect(added.success).toBe(true)
     if (!added.success)
       return

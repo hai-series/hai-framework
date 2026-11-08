@@ -30,6 +30,8 @@ import { HaiAIError } from '../ai-types.js'
  * 创建绑定作用域的记忆实例：所有操作自动携带 objectId / scope，get/update/remove 自动归属校验。
  */
 function createScopedMemory(core: MemoryCoreOperations, binding: ScopedMemoryBinding): ScopedMemoryOperations {
+  if (typeof binding.objectId !== 'string' || !binding.objectId.trim())
+    throw new TypeError(aiM('ai_memoryScopeInvalid'))
   const { objectId, scope } = binding
   const accessScope = { objectId, scope }
 
@@ -82,7 +84,9 @@ export function createMemoryOperations(core: MemoryCoreOperations): MemoryOperat
      * 避免误清全局；全局清空必须显式使用 `admin.clearAll({ confirm: true })`。
      */
     async clear(options?: MemoryClearOptions): Promise<HaiResult<void>> {
-      const hasFilter = Boolean(options?.objectId) || Boolean(options?.types?.length) || Boolean(options?.scope)
+      if (options?.objectId !== undefined && (typeof options.objectId !== 'string' || !options.objectId.trim()))
+        return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryScopeInvalid'))
+      const hasFilter = Boolean(options?.objectId?.trim()) || Boolean(options?.types?.length) || Boolean(options?.scope && Object.keys(options.scope).length)
       if (!hasFilter) {
         return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryClearRequiresFilter'))
       }

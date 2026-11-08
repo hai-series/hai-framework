@@ -1,38 +1,71 @@
+import type { Task } from '@a2a-js/sdk'
 /** 消息日志与共享有界执行队列的故障和等待边界。 */
-import type { Message, MessageSendParams, Task } from '@a2a-js/sdk'
 import type { AgentExecutor } from '@a2a-js/sdk/server'
 import type { A2AImplementation } from '../src/a2a/ai-a2a-functions.js'
+import type { WireSendMessageRequest as MessageSendParams } from './helpers/a2a-wire.js'
+import { Message, Role, TaskState } from '@a2a-js/sdk'
+import { AgentEvent } from '@a2a-js/sdk/server'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createA2AOperations, createA2AStores } from '../src/a2a/ai-a2a-functions.js'
 import { createMemoryStoreProvider } from '../src/store/providers/ai-store-provider-memory.js'
+import { decodeA2AResult } from './helpers/a2a-wire.js'
 
 const active: A2AImplementation[] = []
 afterEach(async () => {
   vi.restoreAllMocks()
   await Promise.all(active.splice(0).map(api => api.close()))
 })
-const input = (): MessageSendParams => ({ message: { kind: 'message', role: 'user', messageId: crypto.randomUUID(), parts: [{ kind: 'text', text: 'hello' }] } })
+function input(): MessageSendParams {
+  return {
+    message: {
+      role: 'ROLE_USER',
+      messageId: crypto.randomUUID(),
+      parts: [
+        { text: 'hello' },
+      ],
+    },
+  }
+}
 function node(stores: ReturnType<typeof createA2AStores>, executor: AgentExecutor, maxExecutionMs = 2000) {
-  const api = createA2AOperations({ agentCard: { name: 'logs', url: 'https://agent.example' }, executor, runtime: { leaseMs: 1000, pollIntervalMs: 10, maxExecutionMs } }, stores)
+  const api = createA2AOperations({
+    agentCard: { name: 'logs', url: 'https://agent.example' },
+    executor,
+    runtime: { leaseMs: 1000, pollIntervalMs: 10, maxExecutionMs },
+  }, stores)
   active.push(api)
   return api
 }
 async function send(api: A2AImplementation, params: MessageSendParams): Promise<Task | Message> {
-  const result = await api.handleRequest({ jsonrpc: '2.0', id: 'request', method: 'message/send', params }, { agentId: 'alice' })
+  const result = await api.handleRequest({
+    jsonrpc: '2.0',
+    id: 'request',
+    method: 'SendMessage',
+    params,
+  }, { agentId: 'alice' })
   expect(result.streaming).toBe(false)
   const response = result.body as { result?: Task | Message, error?: unknown }
   expect(response.error).toBeUndefined()
   if (!response.result)
     throw new Error('Missing response')
   expect(JSON.stringify(result)).not.toContain('private-db-password')
-  return response.result
+  return decodeA2AResult(response.result)
 }
 function executor() {
   const execute = vi.fn<AgentExecutor['execute']>(async (request, bus) => {
-    bus.publish({ kind: 'message', messageId: 'answer', role: 'agent', taskId: request.taskId, parts: [{ kind: 'text', text: 'completed effect' }] })
+    bus.publish(AgentEvent.message(Message.fromJSON({
+      messageId: 'answer',
+      role: 'ROLE_AGENT',
+      taskId: request.taskId,
+      parts: [
+        { text: 'completed effect' },
+      ],
+    })))
     bus.finished()
   })
-  return { execute, cancelTask: async () => {} }
+  return {
+    execute,
+    cancelTask: async () => {},
+  }
 }
 
 it('入站日志失败时不执行业务，同一消息跨节点重复调用不重放', async () => {
@@ -43,8 +76,15 @@ it('入站日志失败时不执行业务，同一消息跨节点重复调用不�
   const b = node(stores, worker)
   const params = input()
   const result = await send(a, params)
-  expect(result).toMatchObject({ kind: 'task', status: { state: 'failed' }, metadata: { haiExecution: { requiresEffectReconciliation: true } } })
-  expect(await send(b, params)).toMatchObject({ kind: 'task', status: { state: 'failed' } })
+  expect(result).toMatchObject({
+    status: { state: TaskState.TASK_STATE_FAILED },
+    metadata: {
+      haiExecution: { requiresEffectReconciliation: true },
+    },
+  })
+  expect(await send(b, params)).toMatchObject({
+    status: { state: TaskState.TASK_STATE_FAILED },
+  })
   expect(worker.execute).not.toHaveBeenCalled()
 })
 
@@ -60,8 +100,15 @@ it('出站日志失败不会发布完成消息，也不会因同receipt重试而
   const a = node(stores, worker)
   const b = node(stores, worker)
   const params = input()
-  expect(await send(a, params)).toMatchObject({ kind: 'task', status: { state: 'failed' }, metadata: { haiExecution: { requiresEffectReconciliation: true } } })
-  expect(await send(b, params)).toMatchObject({ kind: 'task', status: { state: 'failed' } })
+  expect(await send(a, params)).toMatchObject({
+    status: { state: TaskState.TASK_STATE_FAILED },
+    metadata: {
+      haiExecution: { requiresEffectReconciliation: true },
+    },
+  })
+  expect(await send(b, params)).toMatchObject({
+    status: { state: TaskState.TASK_STATE_FAILED },
+  })
   expect(worker.execute).toHaveBeenCalledTimes(1)
   const [journal] = await stores.journalStore.query({})
   expect(journal?.events).toHaveLength(0)
@@ -97,7 +144,7 @@ it('finished 等待出站日志，发布后即可在其它节点完整读取', a
     expect((await stores.journalStore.query({}))[0]).toMatchObject({ finished: false, events: [] })
   }
   finally { release() }
-  expect(await result).toMatchObject({ kind: 'message', role: 'agent' })
+  expect(await result).toMatchObject({ role: Role.ROLE_AGENT })
   const messages = await b.listMessages({ callerId: 'alice' })
   expect(messages.success).toBe(true)
   if (messages.success)
@@ -122,7 +169,9 @@ it('入站日志暂停跨过真实执行期限后，旧节点恢复也不得进�
     await expect.poll(async () => (await stores.journalStore.query({}))[0]?.interrupted).toBe(true)
   }
   finally { release() }
-  expect(await result).toMatchObject({ kind: 'task', status: { state: 'failed' } })
+  expect(await result).toMatchObject({
+    status: { state: TaskState.TASK_STATE_FAILED },
+  })
   expect(worker.execute).not.toHaveBeenCalled()
 })
 
@@ -137,18 +186,33 @@ it('等待入站日志时跨节点取消，owner 确认尚未启动的业务不�
     await pending
     await save(...args)
   })
-  const worker = { ...executor(), cancelTask: vi.fn<AgentExecutor['cancelTask']>(async () => {}) }
+  const worker = {
+    ...executor(),
+    cancelTask: vi.fn<AgentExecutor['cancelTask']>(async () => {}),
+  }
   const a = node(stores, worker)
   const b = node(stores, worker)
-  const started = await send(a, { ...input(), configuration: { blocking: false } })
-  if (started.kind !== 'task')
+  const started = await send(a, {
+    ...input(),
+    configuration: { returnImmediately: true },
+  })
+  if (!('id' in started))
     throw new Error('Missing task')
-  const cancelled = b.handleRequest({ jsonrpc: '2.0', id: 'cancel', method: 'tasks/cancel', params: { id: started.id } }, { agentId: 'alice' })
+  const cancelled = b.handleRequest({
+    jsonrpc: '2.0',
+    id: 'cancel',
+    method: 'CancelTask',
+    params: { id: started.id },
+  }, { agentId: 'alice' })
   try {
     await expect.poll(async () => (await stores.journalStore.get(started.id))?.cancelRequested).toBe(true)
   }
   finally { release() }
-  expect((await cancelled).body).toMatchObject({ result: { kind: 'task', status: { state: 'canceled' } } })
+  expect((await cancelled).body).toMatchObject({
+    result: {
+      status: { state: 'TASK_STATE_CANCELED' },
+    },
+  })
   expect(worker.execute).not.toHaveBeenCalled()
   expect(worker.cancelTask).not.toHaveBeenCalled()
 })

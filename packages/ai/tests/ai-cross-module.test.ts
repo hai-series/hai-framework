@@ -20,6 +20,7 @@ import { ai } from '../src/index.js'
 import { createRagOperations } from '../src/rag/ai-rag-functions.js'
 import { createReasoningOperations } from '../src/reasoning/ai-reasoning-functions.js'
 import { createRetrievalOperations } from '../src/retrieval/ai-retrieval-functions.js'
+import { createMemoryStoreProvider } from '../src/store/providers/ai-store-provider-memory.js'
 
 // =============================================================================
 // Mock 工厂
@@ -39,11 +40,13 @@ function createMockLLM(responses: string[]): LLMOperations {
           object: 'chat.completion' as const,
           created: Date.now(),
           model: 'test-model',
-          choices: [{
-            index: 0,
-            message: { role: 'assistant' as const, content },
-            finish_reason: 'stop' as const,
-          }],
+          choices: [
+            {
+              index: 0,
+              message: { role: 'assistant' as const, content },
+              finish_reason: 'stop' as const,
+            },
+          ],
           usage: { prompt_tokens: 50, completion_tokens: 20, total_tokens: 70 },
         },
       }
@@ -57,7 +60,9 @@ function createMockLLM(responses: string[]): LLMOperations {
 function createMockEmbedding(dim: number): EmbeddingOperations {
   return {
     embed: vi.fn(async (req: { input: string | string[] }) => {
-      const inputs = Array.isArray(req.input) ? req.input : [req.input]
+      const inputs = Array.isArray(req.input)
+        ? req.input
+        : [req.input]
       return {
         success: true as const,
         data: {
@@ -179,7 +184,12 @@ describe('rAG + citation 跨模块流程', () => {
 
   it('rAG 结果无 citation 时 citations 为空数组', async () => {
     const mockRetrieval = createMockRetrieval([
-      { id: 'chunk-1', content: 'Plain content', score: 0.9, sourceId: 'src' },
+      {
+        id: 'chunk-1',
+        content: 'Plain content',
+        score: 0.9,
+        sourceId: 'src',
+      },
     ])
     const mockLLM = createMockLLM(['Answer'])
     const rag = createRagOperations(mockLLM, mockRetrieval)
@@ -234,35 +244,45 @@ describe('rAG + citation 跨模块流程', () => {
 
 const mockStoreProvider: AIStoreProvider = {
   name: 'mock',
-  // eslint-disable-next-line ts/no-explicit-any
-  createRelStore: () => ({ save: async () => {}, saveMany: async () => {}, get: async () => undefined, query: async () => [], queryPage: async () => ({ items: [], total: 0 }), remove: async () => false, removeBy: async () => 0, count: async () => 0, clear: async () => {} }) as AIRelStore<any>,
-  createVectorStore: () => ({ upsert: async () => {}, search: async () => [], remove: async () => {}, clear: async () => {} }),
+  stateScope: 'local',
+
+  createRelStore: <T>(): AIRelStore<T> => ({
+    currentTime: async () => Date.now(),
+    readVersioned: async () => undefined,
+    compareAndSwap: async () => undefined,
+    save: async () => {},
+    saveMany: async () => {},
+    get: async () => undefined,
+    query: async () => [],
+    queryPage: async () => ({ items: [], total: 0 }),
+    remove: async () => false,
+    removeBy: async () => 0,
+    count: async () => 0,
+    clear: async () => {},
+  }),
+  createVectorStore: () => ({
+    upsert: async () => {},
+    search: async () => [],
+    remove: async () => {},
+    clear: async () => {},
+  }),
   initialize: async () => {},
 }
 
 function createMockSourceStore(): AIRelStore<RetrievalSource> {
-  const store = new Map<string, RetrievalSource>()
-  return {
-    async save(id, data) { store.set(id, data) },
-    async saveMany(items) { for (const { id, data } of items) store.set(id, data) },
-    async get(id) { return store.get(id) },
-    async query() { return Array.from(store.values()) },
-    async queryPage(_, page) {
-      const items = Array.from(store.values())
-      return { items: items.slice(page.offset, page.offset + page.limit), total: items.length }
-    },
-    async remove(id) { return store.delete(id) },
-    async removeBy() { return 0 },
-    async count() { return store.size },
-    async clear() { store.clear() },
-  }
+  return createMemoryStoreProvider().createRelStore<RetrievalSource>('sources')
 }
 
 describe('retrieval 源管理进阶', () => {
   it('多源管理：添加、列出、删除', async () => {
     const ops = createRetrievalOperations(createMockEmbedding(8), mockStoreProvider, createMockSourceStore())
 
-    await ops.addSource({ id: 'wiki', collection: 'wiki-docs', topK: 5, name: 'Wiki' })
+    await ops.addSource({
+      id: 'wiki',
+      collection: 'wiki-docs',
+      topK: 5,
+      name: 'Wiki',
+    })
     await ops.addSource({ id: 'kb', collection: 'knowledge-base', topK: 10 })
     await ops.addSource({ id: 'faq', collection: 'faq-docs', minScore: 0.8 })
 
@@ -365,14 +385,20 @@ describe('tools 注册表组合场景', () => {
     const add = ai.tools.define({
       name: 'add',
       description: '加法',
-      parameters: z.object({ a: z.number(), b: z.number() }),
+      parameters: z.object({
+        a: z.number(),
+        b: z.number(),
+      }),
       handler: ({ a, b }) => a + b,
     })
 
     const multiply = ai.tools.define({
       name: 'multiply',
       description: '乘法',
-      parameters: z.object({ a: z.number(), b: z.number() }),
+      parameters: z.object({
+        a: z.number(),
+        b: z.number(),
+      }),
       handler: ({ a, b }) => a * b,
     })
 
@@ -410,7 +436,9 @@ describe('tools 注册表组合场景', () => {
     registry.register(ai.tools.define({
       name: 'greet',
       description: '问候',
-      parameters: z.object({ name: z.string() }),
+      parameters: z.object({
+        name: z.string(),
+      }),
       handler: ({ name }) => `Hello ${name}`,
     }))
 
@@ -482,7 +510,9 @@ describe('embedding 跨模块边界', () => {
 describe('配置变体初始化', () => {
   it('仅 LLM 配置，无 embedding 配置', async () => {
     await ai.close()
-    const result = await ai.init({ llm: { model: 'gpt-4o', apiKey: 'sk-test' } })
+    const result = await ai.init({
+      llm: { model: 'gpt-4o', apiKey: 'sk-test' },
+    })
     expect(result.success).toBe(true)
     expect(ai.config?.llm?.model).toBe('gpt-4o')
     await ai.close()
@@ -490,7 +520,12 @@ describe('配置变体初始化', () => {
 
   it('仅 embedding 配置', async () => {
     await ai.close()
-    const result = await ai.init({ llm: { apiKey: 'sk-test', scenarios: { embedding: 'text-embedding-3-small' } } })
+    const result = await ai.init({
+      llm: {
+        apiKey: 'sk-test',
+        scenarios: { embedding: 'text-embedding-3-small' },
+      },
+    })
     expect(result.success).toBe(true)
     expect(ai.config?.llm?.scenarios?.embedding).toBe('text-embedding-3-small')
     await ai.close()
@@ -499,7 +534,13 @@ describe('配置变体初始化', () => {
   it('完整配置（LLM + Embedding）', async () => {
     await ai.close()
     const result = await ai.init({
-      llm: { model: 'gpt-4o', apiKey: 'sk-test', temperature: 0.7, maxTokens: 4096, scenarios: { embedding: 'text-embedding-3-large' } },
+      llm: {
+        model: 'gpt-4o',
+        apiKey: 'sk-test',
+        temperature: 0.7,
+        maxTokens: 4096,
+        scenarios: { embedding: 'text-embedding-3-large' },
+      },
     })
     expect(result.success).toBe(true)
     expect(ai.config?.llm?.temperature).toBe(0.7)

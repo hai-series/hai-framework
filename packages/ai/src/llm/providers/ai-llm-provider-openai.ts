@@ -48,7 +48,9 @@ function sanitizeErrorCause(error: unknown): { message: string, status?: number,
   if (error instanceof Error) {
     return { message: error.message }
   }
-  return { message: String(error) }
+  return {
+    message: String(error),
+  }
 }
 
 /**
@@ -77,7 +79,11 @@ function toAIError(error: unknown): { def: HaiErrorDef, message: string, cause: 
     else if (error.status === 400) {
       def = HaiAIError.INVALID_REQUEST
     }
-    return { def, message: error.message, cause: sanitizeErrorCause(error) }
+    return {
+      def,
+      message: error.message,
+      cause: sanitizeErrorCause(error),
+    }
   }
 
   if (error instanceof Error && error.name === 'AbortError') {
@@ -91,7 +97,11 @@ function toAIError(error: unknown): { def: HaiErrorDef, message: string, cause: 
   return {
     def: HaiAIError.INTERNAL_ERROR,
     message: aiM('ai_internalError', {
-      params: { error: error instanceof Error ? error.message : 'Unknown error' },
+      params: {
+        error: error instanceof Error
+          ? error.message
+          : 'Unknown error',
+      },
     }),
     cause: sanitizeErrorCause(error),
   }
@@ -102,7 +112,9 @@ function toOpenAIMessage(message: ChatMessage): OpenAI.Chat.Completions.ChatComp
     const developerMessage: OpenAI.Chat.Completions.ChatCompletionDeveloperMessageParam = {
       role: 'developer',
       content: message.content,
-      ...(message.name ? { name: message.name } : {}),
+      ...(message.name
+        ? { name: message.name }
+        : {}),
     }
     return developerMessage
   }
@@ -199,14 +211,22 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
     if (tempModel)
       return resolveTempClient(tempModel)
     const resolvedResult = resolveModelEntry(config.llm, 'chat', requestModel, {
-      missingApiKeyMessage: aiM('ai_configError', { params: { error: 'API Key is required for chat' } }),
+      missingApiKeyMessage: aiM('ai_configError', {
+        params: { error: 'API Key is required for chat' },
+      }),
     })
     if (!resolvedResult.success)
       return resolvedResult
     const { apiKey, baseUrl, timeout, model, protocol: api } = resolvedResult.data
     // 本 Provider 覆盖 OpenAI 原生的两种协议；anthropic 由路由层分派到 Anthropic Provider
-    const resolvedApi = api === 'responses' ? 'responses' : 'chat'
-    return ok({ client: getClient(apiKey ?? '', baseUrl ?? 'https://api.openai.com/v1', timeout), model, protocol: resolvedApi })
+    const resolvedApi = api === 'responses'
+      ? 'responses'
+      : 'chat'
+    return ok({
+      client: getClient(apiKey ?? '', baseUrl ?? 'https://api.openai.com/v1', timeout),
+      model,
+      protocol: resolvedApi,
+    })
   }
 
   /**
@@ -217,11 +237,16 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
    */
   function resolveTempClient(tempModel: TempModelConfig): HaiResult<ResolvedClient> {
     const apiKey = tempModel.apiKey ?? config.llm.apiKey ?? (process.env.HAI_AI_LLM_APIKEY?.trim() || process.env.OPENAI_API_KEY)
-    if (!apiKey)
-      return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_configError', { params: { error: 'API Key is required for temp model' } }))
+    if (!apiKey) {
+      return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_configError', {
+        params: { error: 'API Key is required for temp model' },
+      }))
+    }
     const baseUrl = tempModel.baseUrl ?? config.llm.baseUrl ?? (process.env.HAI_AI_LLM_BASEURL?.trim() || process.env.OPENAI_BASE_URL) ?? 'https://api.openai.com/v1'
     const timeout = tempModel.timeout ?? config.llm.timeout ?? 60000
-    const api = (tempModel.protocol ?? config.llm.protocol) === 'responses' ? 'responses' : 'chat'
+    const api = (tempModel.protocol ?? config.llm.protocol) === 'responses'
+      ? 'responses'
+      : 'chat'
     return ok({
       client: getTempClient(apiKey, baseUrl, timeout),
       model: tempModel.model,
@@ -243,15 +268,29 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
   ): OpenAI.Responses.ResponseCreateParamsNonStreaming {
     const maxOutput = request.max_tokens ?? resolved.maxTokens
     const temperature = request.temperature ?? resolved.temperature
-    const toolChoice = typeof request.tool_choice === 'string' ? request.tool_choice : undefined
+    const toolChoice = typeof request.tool_choice === 'string'
+      ? request.tool_choice
+      : undefined
     return {
       model: resolved.model,
       input: toResponsesInput(request.messages),
-      ...(maxOutput != null ? { max_output_tokens: maxOutput } : {}),
-      ...(temperature != null ? { temperature } : {}),
-      ...(request.top_p != null ? { top_p: request.top_p } : {}),
-      ...(toResponsesTools(request.tools) ? { tools: toResponsesTools(request.tools) } : {}),
-      ...(toolChoice ? { tool_choice: toolChoice } : {}),
+      ...(maxOutput != null
+        ? { max_output_tokens: maxOutput }
+        : {}),
+      ...(temperature != null
+        ? { temperature }
+        : {}),
+      ...(request.top_p != null
+        ? { top_p: request.top_p }
+        : {}),
+      ...(toResponsesTools(request.tools)
+        ? {
+            tools: toResponsesTools(request.tools),
+          }
+        : {}),
+      ...(toolChoice
+        ? { tool_choice: toolChoice }
+        : {}),
       stream: false,
     }
   }
@@ -276,8 +315,12 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
           ...openaiRequest,
           messages: openaiMessages,
           model,
-          ...(maxTokens !== undefined && openaiRequest.max_tokens == null ? { max_tokens: maxTokens } : {}),
-          ...(temperature !== undefined && openaiRequest.temperature == null ? { temperature } : {}),
+          ...(maxTokens !== undefined && openaiRequest.max_tokens == null
+            ? { max_tokens: maxTokens }
+            : {}),
+          ...(temperature !== undefined && openaiRequest.temperature == null
+            ? { temperature }
+            : {}),
           stream: false,
         } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming
         // 仅在存在取消信号时传入请求选项，避免无谓的第二参数
@@ -303,7 +346,10 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
       // Responses API 流式分支：转发文本增量与完成事件
       if (api === 'responses') {
         const responsesStream = await client.responses.create(
-          { ...buildResponsesParams(request, resolved), stream: true },
+          {
+            ...buildResponsesParams(request, resolved),
+            stream: true,
+          },
           { signal },
         )
         for await (const event of responsesStream) {
@@ -319,8 +365,12 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
         ...openaiRequest,
         messages: openaiMessages,
         model,
-        ...(maxTokens !== undefined && openaiRequest.max_tokens == null ? { max_tokens: maxTokens } : {}),
-        ...(temperature !== undefined && openaiRequest.temperature == null ? { temperature } : {}),
+        ...(maxTokens !== undefined && openaiRequest.max_tokens == null
+          ? { max_tokens: maxTokens }
+          : {}),
+        ...(temperature !== undefined && openaiRequest.temperature == null
+          ? { temperature }
+          : {}),
         stream: true,
       } as OpenAI.Chat.ChatCompletionCreateParamsStreaming
       const stream = signal

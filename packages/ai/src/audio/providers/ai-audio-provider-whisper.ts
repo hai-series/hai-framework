@@ -134,14 +134,19 @@ export function createWhisperAudioProvider(): AudioProvider {
         body: form,
         signal: combineSignal(signal, model.timeout),
       })
-      if (!response.ok)
-        return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: await describeHttpError(response) } }))
+      if (!response.ok) {
+        return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
+          params: { error: await describeHttpError(response) },
+        }))
+      }
 
       const body = await response.json() as WhisperResponse
       return ok(mapWhisperResponse(body))
     }
     catch (error) {
-      logger.debug('Whisper transcribe failed', { error: errorMessage(error) })
+      logger.debug('Whisper transcribe failed', {
+        error: errorMessage(error),
+      })
       return toAudioErrorResult(error, signal)
     }
   }
@@ -159,7 +164,9 @@ function mapWhisperResponse(body: WhisperResponse): TranscriptionResult {
     text: body.text ?? '',
     language: body.language,
     durationMs: body.durationMs,
-    ...(segments?.length ? { segments } : {}),
+    ...(segments?.length
+      ? { segments }
+      : {}),
   }
 }
 
@@ -169,11 +176,17 @@ function mapWhisperSegment(segment: WhisperSegment): TranscriptionSegment | null
     return null
   const words = segment.words?.map(mapWhisperWord).filter((word): word is TranscriptionWord => word !== null)
   return {
-    ...(segment.id !== undefined ? { id: String(segment.id) } : {}),
+    ...(segment.id !== undefined
+      ? {
+          id: String(segment.id),
+        }
+      : {}),
     text: segment.text ?? '',
     startMs: segment.startMs,
     endMs: segment.endMs,
-    ...(words?.length ? { words } : {}),
+    ...(words?.length
+      ? { words }
+      : {}),
   }
 }
 
@@ -185,6 +198,8 @@ function mapWhisperWord(word: WhisperWord): TranscriptionWord | null {
     text: word.text ?? '',
     startMs: word.startMs,
     endMs: word.endMs,
-    ...(typeof word.confidence === 'number' ? { confidence: word.confidence } : {}),
+    ...(typeof word.confidence === 'number'
+      ? { confidence: word.confidence }
+      : {}),
   }
 }

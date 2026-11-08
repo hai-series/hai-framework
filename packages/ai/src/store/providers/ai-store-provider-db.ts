@@ -36,7 +36,9 @@ function dataTimestamp<T>(data: T, field: 'createdAt' | 'updatedAt', fallback: n
     return fallback
 
   const value = (data as Record<string, unknown>)[field]
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : fallback
 }
 
 /**
@@ -116,9 +118,17 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   async createTable(): Promise<void> {
     const t = this.table
     const db = this.dbType
-    const idType = db === 'mysql' ? 'VARCHAR(512)' : 'TEXT'
-    const scopeType = db === 'mysql' ? 'VARCHAR(255)' : 'TEXT'
-    const dataType = db === 'postgresql' ? 'JSONB' : db === 'mysql' ? 'JSON' : 'TEXT'
+    const idType = db === 'mysql'
+      ? 'VARCHAR(512)'
+      : 'TEXT'
+    const scopeType = db === 'mysql'
+      ? 'VARCHAR(255)'
+      : 'TEXT'
+    const dataType = db === 'postgresql'
+      ? 'JSONB'
+      : db === 'mysql'
+        ? 'JSON'
+        : 'TEXT'
 
     const cols: string[] = [`id ${idType} PRIMARY KEY`]
     if (this.hasObjectId)
@@ -186,7 +196,9 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
 
   /** 普通写入也更换版本，使并发条件写入识别所有较新修改。 */
   async save(id: string, data: T, scope?: StoreScope): Promise<void> {
-    await this.saveManyBatch([{ id, data, scope }], this.buildSaveColumnNames())
+    await this.saveManyBatch([
+      { id, data, scope },
+    ], this.buildSaveColumnNames())
   }
 
   /** SQLite TEXT 需要解码；PostgreSQL JSONB/MySQL JSON 已由驱动解码，包含标量字符串。 */
@@ -203,7 +215,10 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     const found = requireSqlSuccess(await this.sql.get<{ version: string, data: unknown }>(`SELECT version, data FROM ${this.table} WHERE id = ?`, [id]))
     if (!found.data)
       return undefined
-    return { version: found.data.version, data: this.decodeData(found.data.data) }
+    return {
+      version: found.data.version,
+      data: this.decodeData(found.data.data),
+    }
   }
 
   /** 所有节点从持久化端读取租约时钟；不使用进程 Date.now() 判断共享 owner 是否过期。 */
@@ -233,25 +248,43 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     const columns = this.buildSaveColumnNames()
     const values = this.buildSaveValues(id, input.data, input.scope, now)
     values[columns.indexOf('version')] = version
-    const deadline = input.notAfter === undefined ? '1 = 1' : `${this.databaseClock()} < ?`
-    const deadlineParams = input.notAfter === undefined ? [] : [input.notAfter]
+    const deadline = input.notAfter === undefined
+      ? '1 = 1'
+      : `${this.databaseClock()} < ?`
+    const deadlineParams = input.notAfter === undefined
+      ? []
+      : [input.notAfter]
     if (input.expectedVersion !== undefined) {
       const updated = columns.filter(column => column !== 'id' && column !== 'created_at'
         && (input.scope !== undefined || ['version', 'data', 'updated_at'].includes(column)))
       const result = requireSqlSuccess(await this.sql.execute(
         `UPDATE ${this.table} SET ${updated.map(column => `${column} = ?`).join(', ')} WHERE id = ? AND version = ? AND ${deadline}`,
-        [...updated.map(column => values[columns.indexOf(column)]), id, input.expectedVersion, ...deadlineParams],
+        [
+          ...updated.map(column => values[columns.indexOf(column)]),
+          id,
+          input.expectedVersion,
+          ...deadlineParams,
+        ],
       ))
-      return result.data.changes === 1 ? version : undefined
+      return result.data.changes === 1
+        ? version
+        : undefined
     }
     try {
       // MySQL 不用 INSERT IGNORE：除唯一主键冲突外，任何故障都必须向上抛出。
-      const conflict = this.dbType === 'mysql' ? '' : ' ON CONFLICT(id) DO NOTHING'
+      const conflict = this.dbType === 'mysql'
+        ? ''
+        : ' ON CONFLICT(id) DO NOTHING'
       const result = requireSqlSuccess(await this.sql.execute(
         `INSERT INTO ${this.table} (${columns.join(', ')}) SELECT ${values.map(() => '?').join(', ')} WHERE ${deadline}${conflict}`,
-        [...values, ...deadlineParams],
+        [
+          ...values,
+          ...deadlineParams,
+        ],
       ))
-      return result.data.changes === 1 ? version : undefined
+      return result.data.changes === 1
+        ? version
+        : undefined
     }
     catch (error) {
       if (this.dbType === 'mysql') {
@@ -259,7 +292,9 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
         for (let depth = 0; depth < 8 && cause && typeof cause === 'object'; depth++) {
           if (('code' in cause && cause.code === 'ER_DUP_ENTRY') || ('errno' in cause && cause.errno === 1062))
             return undefined
-          cause = 'cause' in cause ? cause.cause : undefined
+          cause = 'cause' in cause
+            ? cause.cause
+            : undefined
         }
       }
       throw error
@@ -302,12 +337,16 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     if (countConditions.length > 0)
       countSql += ` WHERE ${countConditions.join(' AND ')}`
     const countResult = await this.sql.get<{ cnt: number }>(countSql, countParams)
-    const total = countResult.success && countResult.data != null ? countResult.data.cnt : 0
+    const total = countResult.success && countResult.data != null
+      ? countResult.data.cnt
+      : 0
 
     const { sql, params } = this.buildQuery({ ...filter, limit: undefined })
     const pagedSql = `${sql} LIMIT ? OFFSET ?`
     const result = await this.sql.query<{ data: unknown }>(pagedSql, [...params, page.limit, page.offset])
-    const items = result.success ? result.data.map(row => this.decodeData(row.data)) : []
+    const items = result.success
+      ? result.data.map(row => this.decodeData(row.data))
+      : []
 
     return { items, total }
   }
@@ -326,13 +365,17 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       const whereClause = ` WHERE ${conditions.join(' AND ')}`
       countSql += whereClause
       const countResult = await this.sql.get<{ cnt: number }>(countSql, [...params])
-      const count = countResult.success && countResult.data != null ? countResult.data.cnt : 0
+      const count = countResult.success && countResult.data != null
+        ? countResult.data.cnt
+        : 0
       await this.sql.execute(`DELETE FROM ${this.table}${whereClause}`, params)
       return count
     }
 
     const countResult = await this.sql.get<{ cnt: number }>(countSql)
-    const count = countResult.success && countResult.data != null ? countResult.data.cnt : 0
+    const count = countResult.success && countResult.data != null
+      ? countResult.data.cnt
+      : 0
     await this.sql.execute(`DELETE FROM ${this.table}`)
     return count
   }
@@ -340,7 +383,9 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   async count(filter?: StoreFilter<T>): Promise<number> {
     if (!filter?.where && !filter?.objectId && !filter?.sessionId && !filter?.status && !filter?.refId) {
       const result = await this.sql.get<{ cnt: number }>(`SELECT COUNT(*) as cnt FROM ${this.table}`)
-      return result.success && result.data != null ? result.data.cnt : 0
+      return result.success && result.data != null
+        ? result.data.cnt
+        : 0
     }
     const params: unknown[] = []
     const conditions = this.buildAllConditions(filter!, params)
@@ -348,7 +393,9 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     if (conditions.length > 0)
       sql += ` WHERE ${conditions.join(' AND ')}`
     const result = await this.sql.get<{ cnt: number }>(sql, params)
-    return result.success && result.data != null ? result.data.cnt : 0
+    return result.success && result.data != null
+      ? result.data.cnt
+      : 0
   }
 
   async clear(filter?: StoreFilter<T>): Promise<void> {
@@ -396,7 +443,9 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
 
   /** 构造跨数据库 upsert 更新片段；列名来自内部白名单，不接受外部输入。 */
   private buildSaveUpdateParts(): string[] {
-    const valueRef = (column: string) => this.dbType === 'mysql' ? `VALUES(${column})` : `excluded.${column}`
+    const valueRef = (column: string) => this.dbType === 'mysql'
+      ? `VALUES(${column})`
+      : `excluded.${column}`
     const updateParts: string[] = [`version = ${valueRef('version')}`, `data = ${valueRef('data')}`, `updated_at = ${valueRef('updated_at')}`]
     if (this.hasObjectId)
       updateParts.push(`object_id = ${valueRef('object_id')}`)
@@ -438,7 +487,9 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       sql += ` WHERE ${conditions.join(' AND ')}`
 
     if (filter.orderBy) {
-      const dir = filter.orderBy.direction === 'asc' ? 'ASC' : 'DESC'
+      const dir = filter.orderBy.direction === 'asc'
+        ? 'ASC'
+        : 'DESC'
       const field = String(filter.orderBy.field)
       if (field === 'createdAt') {
         sql += ` ORDER BY created_at ${dir}`
@@ -590,7 +641,9 @@ class VecdbAIVectorStore implements AIVectorStore {
 
   async upsert(id: string, vector: number[], metadata?: Record<string, unknown>): Promise<void> {
     await ensureVecdbCollection(this.vecdb, this.collection, vector.length)
-    requireVecdbSuccess(await this.vecdb.vector.upsert(this.collection, [{ id, vector, metadata }]))
+    requireVecdbSuccess(await this.vecdb.vector.upsert(this.collection, [
+      { id, vector, metadata },
+    ]))
   }
 
   async search(vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }): Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>> {
@@ -599,14 +652,16 @@ class VecdbAIVectorStore implements AIVectorStore {
   }
 
   async remove(id: string): Promise<void> {
-    await this.vecdb.vector.delete(this.collection, [id])
+    // 从未写入向量或集合已删除时，删除是已完成的幂等操作；查询故障仍须传播。
+    if (!requireVecdbSuccess(await this.vecdb.collection.exists(this.collection)))
+      return
+    requireVecdbSuccess(await this.vecdb.vector.delete(this.collection, [id]))
   }
 
   async clear(_filter?: Record<string, unknown>): Promise<void> {
-    const exists = await this.vecdb.collection.exists(this.collection)
-    if (exists.success && exists.data) {
-      await this.vecdb.collection.drop(this.collection)
-    }
+    const exists = requireVecdbSuccess(await this.vecdb.collection.exists(this.collection))
+    if (exists)
+      requireVecdbSuccess(await this.vecdb.collection.drop(this.collection))
   }
 }
 
@@ -662,7 +717,9 @@ export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvide
     get stateScope(): 'local' | 'shared' {
       const vector = vecdbDep.config
       const sharedVector = vector?.type === 'qdrant' || vector?.type === 'pgvector' || (vector?.type === 'chroma' && (!vector.path || Boolean(vector.url)))
-      return dbType !== 'sqlite' && sharedVector ? 'shared' : 'local'
+      return dbType !== 'sqlite' && sharedVector
+        ? 'shared'
+        : 'local'
     },
 
     createRelStore<T>(name: string, options?: AIRelStoreOptions): AIRelStore<T> {
@@ -679,7 +736,9 @@ export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvide
 
     getVectorBackend(): AIVectorBackend | undefined {
       const connection = vecdbDep.rawConnection
-      return connection ? { ...connection } : undefined
+      return connection
+        ? { ...connection }
+        : undefined
     },
 
     createKnowledgeStore(): KnowledgeStore {
@@ -699,7 +758,9 @@ export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvide
     async initialize(): Promise<void> {
       if (relStores.size > 0) {
         // 同表串行、独立表并行；失败后仍等待所有在途 DDL，避免关闭连接时操作尚未结束。
-        const results = await Promise.allSettled([...relStores.values()].map(async (stores) => {
+        const results = await Promise.allSettled([
+          ...relStores.values(),
+        ].map(async (stores) => {
           for (const store of stores)
             await store.createTable()
         }))

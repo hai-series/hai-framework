@@ -30,16 +30,36 @@ function createMockSql(calls: ExecuteCall[]): DmlOperations {
       return ok({ changes: 1 })
     },
     batch: async () => ok(undefined),
-    queryPage: async <T = QueryRow>() => ok<PaginatedResult<T>>({ items: [], total: 0, page: 1, pageSize: 20 }),
+    queryPage: async <T = QueryRow>() => ok<PaginatedResult<T>>({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+    }),
   }
 }
 
 const jsonOps: ReldbJsonOps = {
-  extract: (column, path) => ({ sql: column, params: [path] }),
-  set: (column, path, value) => ({ sql: column, params: [path, value] }),
-  insert: (column, path, value) => ({ sql: column, params: [path, value] }),
-  remove: (column, path) => ({ sql: column, params: [path] }),
-  merge: (column, patch) => ({ sql: column, params: [patch] }),
+  extract: (column, path) => ({
+    sql: column,
+    params: [path],
+  }),
+  set: (column, path, value) => ({
+    sql: column,
+    params: [path, value],
+  }),
+  insert: (column, path, value) => ({
+    sql: column,
+    params: [path, value],
+  }),
+  remove: (column, path) => ({
+    sql: column,
+    params: [path],
+  }),
+  merge: (column, patch) => ({
+    sql: column,
+    params: [patch],
+  }),
 }
 
 function createMockVecdb(): VecdbFunctions {
@@ -53,7 +73,12 @@ function createMockVecdb(): VecdbFunctions {
       create: async () => ok(undefined),
       drop: async () => ok(undefined),
       exists: async () => ok(false),
-      info: async name => ok({ name, dimension: 0, metric: 'cosine', count: 0 }),
+      info: async name => ok({
+        name,
+        dimension: 0,
+        metric: 'cosine',
+        count: 0,
+      }),
       list: async () => ok([]),
     },
     vector: {
@@ -67,11 +92,50 @@ function createMockVecdb(): VecdbFunctions {
 }
 
 describe('db vector writes propagate failures', () => {
+  it.each(['delete', 'exists', 'drop'] as const)('向量清理 %s 失败不能报告完成', async (operation) => {
+    const database = createMockVecdb()
+    const failure: HaiResult<never> = {
+      success: false,
+      error: { code: 'hai:vecdb:011', message: 'Controlled vector cleanup failure' },
+    }
+    if (operation === 'delete') {
+      vi.spyOn(database.collection, 'exists').mockResolvedValue(ok(true))
+      vi.spyOn(database.vector, 'delete').mockResolvedValue(failure)
+    }
+    else if (operation === 'exists') {
+      vi.spyOn(database.collection, 'exists').mockResolvedValue(failure)
+    }
+    else {
+      vi.spyOn(database.collection, 'exists').mockResolvedValue(ok(true))
+      vi.spyOn(database.collection, 'drop').mockResolvedValue(failure)
+    }
+    const provider = createDbStoreProvider({
+      sql: createMockSql([]),
+      jsonOps,
+      vecdb: database,
+    })
+    const vectors = provider.createVectorStore('memories')
+    await expect(operation === 'delete'
+      ? vectors.remove('private-memory')
+      : vectors.clear()).rejects.toThrow('Controlled vector cleanup failure')
+  })
   it.each(['vector', 'knowledge'] as const)('%s Store 原样传递 filter，过滤失败向上传播', async (kind) => {
     const database = createMockVecdb()
-    const search = vi.spyOn(database.vector, 'search').mockResolvedValue({ success: false, error: { code: 'hai:vecdb:011', message: 'Unsupported metadata filter' } })
-    const provider = createDbStoreProvider({ sql: createMockSql([]), jsonOps, vecdb: database })
-    const options = { filter: { nested: { owner: 'alice' } }, topK: 3 }
+    const search = vi.spyOn(database.vector, 'search').mockResolvedValue({
+      success: false,
+      error: { code: 'hai:vecdb:011', message: 'Unsupported metadata filter' },
+    })
+    const provider = createDbStoreProvider({
+      sql: createMockSql([]),
+      jsonOps,
+      vecdb: database,
+    })
+    const options = {
+      filter: {
+        nested: { owner: 'alice' },
+      },
+      topK: 3,
+    }
     const operation = kind === 'vector'
       ? () => provider.createVectorStore('docs').search([1, 0], options)
       : () => provider.createKnowledgeStore!().searchVectors('docs', [1, 0], options)
@@ -82,14 +146,21 @@ describe('db vector writes propagate failures', () => {
   it('vector Store 传播 exists/create/upsert 错误，不继续伪成功', async () => {
     for (const phase of ['exists', 'create', 'upsert'] as const) {
       const database = createMockVecdb()
-      const failure = { success: false as const, error: { code: 'hai:vecdb:008', message: `${phase} unavailable` } }
+      const failure = {
+        success: false as const,
+        error: { code: 'hai:vecdb:008', message: `${phase} unavailable` },
+      }
       const create = vi.spyOn(database.collection, 'create')
       const upsert = vi.spyOn(database.vector, 'upsert')
       if (phase === 'upsert')
         upsert.mockResolvedValue(failure)
       else
         vi.spyOn(database.collection, phase).mockResolvedValue(failure)
-      const provider = createDbStoreProvider({ sql: createMockSql([]), jsonOps, vecdb: database })
+      const provider = createDbStoreProvider({
+        sql: createMockSql([]),
+        jsonOps,
+        vecdb: database,
+      })
       const operation = () => provider.createVectorStore('docs').upsert('one', [1, 0])
       await expect(operation()).rejects.toThrow(`${phase} unavailable`)
       if (phase !== 'upsert')
@@ -101,10 +172,17 @@ describe('db vector writes propagate failures', () => {
 
   it('并发创建已存在可继续写入，其它创建错误不能忽略；不缓存本进程的集合存在状态', async () => {
     const database = createMockVecdb()
-    vi.spyOn(database.collection, 'create').mockResolvedValue({ success: false, error: { code: 'hai:vecdb:004', message: 'already exists' } })
+    vi.spyOn(database.collection, 'create').mockResolvedValue({
+      success: false,
+      error: { code: 'hai:vecdb:004', message: 'already exists' },
+    })
     const exists = vi.spyOn(database.collection, 'exists')
     const upsert = vi.spyOn(database.vector, 'upsert')
-    const provider = createDbStoreProvider({ sql: createMockSql([]), jsonOps, vecdb: database })
+    const provider = createDbStoreProvider({
+      sql: createMockSql([]),
+      jsonOps,
+      vecdb: database,
+    })
     const store = provider.createVectorStore('docs')
     await store.upsert('one', [1, 0])
     await store.upsert('two', [0, 1])
@@ -131,8 +209,18 @@ describe('db store provider saveMany', () => {
     const calls: ExecuteCall[] = []
     const sql = createMockSql(calls)
     const query = vi.spyOn(sql, 'query')
-    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'mysql', vecdb: createMockVecdb() })
-    provider.createRelStore('hai_ai_indexed', { hasObjectId: true, hasSessionId: true, hasStatus: true, hasRefId: true })
+    const provider = createDbStoreProvider({
+      sql,
+      jsonOps,
+      dbType: 'mysql',
+      vecdb: createMockVecdb(),
+    })
+    provider.createRelStore('hai_ai_indexed', {
+      hasObjectId: true,
+      hasSessionId: true,
+      hasStatus: true,
+      hasRefId: true,
+    })
     await provider.initialize()
     const indexes = calls.filter(call => call.sql.startsWith('CREATE INDEX'))
     expect(indexes).toHaveLength(5)
@@ -140,7 +228,13 @@ describe('db store provider saveMany', () => {
     expect(query).toHaveBeenCalledWith(expect.stringContaining('TABLE_SCHEMA = DATABASE()'), ['hai_ai_indexed', 'idx_hai_ai_indexed_object_id'])
 
     calls.length = 0
-    for (const columns of [['object_id'], ['session_id'], ['object_id', 'session_id'], ['status'], ['ref_id']])
+    for (const columns of [
+      ['object_id'],
+      ['session_id'],
+      ['object_id', 'session_id'],
+      ['status'],
+      ['ref_id'],
+    ])
       query.mockResolvedValueOnce(ok(indexDefinition(columns)))
     await provider.initialize()
     expect(calls.filter(call => call.sql.startsWith('CREATE INDEX'))).toHaveLength(0)
@@ -151,11 +245,21 @@ describe('db store provider saveMany', () => {
     const query = vi.spyOn(sql, 'query').mockResolvedValueOnce(ok([])).mockResolvedValueOnce(ok(indexDefinition(['object_id'])))
     const native = Object.assign(new Error('Duplicate key name'), { code: 'ER_DUP_KEYNAME', errno: 1061 })
     const execute = vi.spyOn(sql, 'execute').mockResolvedValueOnce(ok({ changes: 0 }))
-    if (failure === 'throw')
+    if (failure === 'throw') {
       execute.mockRejectedValueOnce(native)
-    else
-      execute.mockResolvedValueOnce({ success: false, error: { code: 'hai:reldb:002', message: 'DDL failed', cause: native } })
-    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'mysql', vecdb: createMockVecdb() })
+    }
+    else {
+      execute.mockResolvedValueOnce({
+        success: false,
+        error: { code: 'hai:reldb:002', message: 'DDL failed', cause: native },
+      })
+    }
+    const provider = createDbStoreProvider({
+      sql,
+      jsonOps,
+      dbType: 'mysql',
+      vecdb: createMockVecdb(),
+    })
     provider.createRelStore('hai_ai_index_race', { hasObjectId: true })
     await expect(provider.initialize()).resolves.toBeUndefined()
     expect(query).toHaveBeenCalledTimes(2)
@@ -172,19 +276,39 @@ describe('db store provider saveMany', () => {
     { expression: 'LOWER(object_id)' },
   ])('已有同名但结构错误的索引不能当作就绪：%j', async (changed) => {
     const sql = createMockSql([])
-    vi.spyOn(sql, 'query').mockResolvedValue(ok([{ ...indexDefinition(['object_id'])[0]!, ...changed }]))
+    vi.spyOn(sql, 'query').mockResolvedValue(ok([
+      {
+        ...indexDefinition(['object_id'])[0]!,
+        ...changed,
+      },
+    ]))
     const execute = vi.spyOn(sql, 'execute')
-    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'mysql', vecdb: createMockVecdb() })
+    const provider = createDbStoreProvider({
+      sql,
+      jsonOps,
+      dbType: 'mysql',
+      vecdb: createMockVecdb(),
+    })
     provider.createRelStore('hai_ai_index_bad', { hasObjectId: true })
     await expect(provider.initialize()).rejects.toThrow()
     expect(execute).toHaveBeenCalledTimes(1)
   })
 
-  it.each([{ columns: [] }, { columns: ['session_id'] }])('重复错误后索引缺失或列不符仍失败：%j', async ({ columns }) => {
+  it.each([
+    { columns: [] },
+    {
+      columns: ['session_id'],
+    },
+  ])('重复错误后索引缺失或列不符仍失败：%j', async ({ columns }) => {
     const sql = createMockSql([])
     vi.spyOn(sql, 'query').mockResolvedValueOnce(ok([])).mockResolvedValueOnce(ok(indexDefinition(columns)))
     vi.spyOn(sql, 'execute').mockResolvedValueOnce(ok({ changes: 0 })).mockRejectedValueOnce(Object.assign(new Error('duplicate'), { code: 'ER_DUP_KEYNAME', errno: 1061 }))
-    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'mysql', vecdb: createMockVecdb() })
+    const provider = createDbStoreProvider({
+      sql,
+      jsonOps,
+      dbType: 'mysql',
+      vecdb: createMockVecdb(),
+    })
     provider.createRelStore('hai_ai_index_missing', { hasObjectId: true })
     await expect(provider.initialize()).rejects.toThrow()
   })
@@ -197,7 +321,12 @@ describe('db store provider saveMany', () => {
     const sql = createMockSql([])
     const query = vi.spyOn(sql, 'query')
     vi.spyOn(sql, 'execute').mockResolvedValueOnce(ok({ changes: 0 })).mockRejectedValueOnce(failure)
-    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'mysql', vecdb: createMockVecdb() })
+    const provider = createDbStoreProvider({
+      sql,
+      jsonOps,
+      dbType: 'mysql',
+      vecdb: createMockVecdb(),
+    })
     provider.createRelStore('hai_ai_index_fault', { hasObjectId: true })
     await expect(provider.initialize()).rejects.toBe(failure)
     expect(query).toHaveBeenCalledTimes(1)
@@ -222,7 +351,12 @@ describe('db store provider saveMany', () => {
       }
       return ok({ changes: 0 })
     })
-    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'postgresql', vecdb: createMockVecdb() })
+    const provider = createDbStoreProvider({
+      sql,
+      jsonOps,
+      dbType: 'postgresql',
+      vecdb: createMockVecdb(),
+    })
     provider.createRelStore('hai_ai_shared_ddl', { hasObjectId: true, hasSessionId: true })
     provider.createRelStore('hai_ai_shared_ddl', { hasObjectId: true, hasSessionId: true })
     provider.createRelStore('hai_ai_independent_ddl')
@@ -252,7 +386,12 @@ describe('db store provider saveMany', () => {
         await pending
         return ok({ changes: 0 })
       })
-    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'mysql', vecdb: createMockVecdb() })
+    const provider = createDbStoreProvider({
+      sql,
+      jsonOps,
+      dbType: 'mysql',
+      vecdb: createMockVecdb(),
+    })
     provider.createRelStore('hai_ai_index_failure')
     provider.createRelStore('hai_ai_index_pending')
     let settled = false
@@ -272,7 +411,12 @@ describe('db store provider saveMany', () => {
     const failure = new Error('Metadata unavailable')
     vi.spyOn(sql, 'query').mockRejectedValueOnce(failure)
     const execute = vi.spyOn(sql, 'execute')
-    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'mysql', vecdb: createMockVecdb() })
+    const provider = createDbStoreProvider({
+      sql,
+      jsonOps,
+      dbType: 'mysql',
+      vecdb: createMockVecdb(),
+    })
     provider.createRelStore('hai_ai_index_metadata', { hasObjectId: true })
     await expect(provider.initialize()).rejects.toBe(failure)
     expect(execute).toHaveBeenCalledTimes(1)
@@ -280,11 +424,19 @@ describe('db store provider saveMany', () => {
 
   it('sQL 写入或查询失败不能变成成功、空数组或缺失记录', async () => {
     const sql = createMockSql([])
-    const failure = { success: false as const, error: { code: 'hai:reldb:002', message: 'database unavailable' } }
+    const failure = {
+      success: false as const,
+      error: { code: 'hai:reldb:002', message: 'database unavailable' },
+    }
     sql.execute = async () => failure
     sql.query = async () => failure
     sql.get = async () => failure
-    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'sqlite', vecdb: createMockVecdb() })
+    const provider = createDbStoreProvider({
+      sql,
+      jsonOps,
+      dbType: 'sqlite',
+      vecdb: createMockVecdb(),
+    })
     const store = provider.createRelStore<{ title: string }>('hai_ai_failure')
     for (const operation of [
       () => provider.initialize(),
@@ -302,7 +454,12 @@ describe('db store provider saveMany', () => {
 
   it('使用业务数据的时间字段填充索引列', async () => {
     const calls: ExecuteCall[] = []
-    const provider = createDbStoreProvider({ sql: createMockSql(calls), jsonOps, dbType: 'sqlite', vecdb: createMockVecdb() })
+    const provider = createDbStoreProvider({
+      sql: createMockSql(calls),
+      jsonOps,
+      dbType: 'sqlite',
+      vecdb: createMockVecdb(),
+    })
     const store = provider.createRelStore<{ createdAt: number, updatedAt: number }>('hai_ai_timestamped')
 
     await store.save('id-1', { createdAt: 100, updatedAt: 200 })
@@ -312,7 +469,12 @@ describe('db store provider saveMany', () => {
 
   it('小批量数据使用单条参数化 upsert', async () => {
     const calls: ExecuteCall[] = []
-    const provider = createDbStoreProvider({ sql: createMockSql(calls), jsonOps, dbType: 'sqlite', vecdb: createMockVecdb() })
+    const provider = createDbStoreProvider({
+      sql: createMockSql(calls),
+      jsonOps,
+      dbType: 'sqlite',
+      vecdb: createMockVecdb(),
+    })
     const store = provider.createRelStore<{ title: string }>('hai_ai_test', {
       hasObjectId: true,
       hasSessionId: true,
@@ -321,8 +483,26 @@ describe('db store provider saveMany', () => {
     })
 
     await store.saveMany([
-      { id: 'id-1', data: { title: 'first' }, scope: { objectId: 'obj', sessionId: 'sess', status: 'ready', refId: 'ref-1' } },
-      { id: 'id-2', data: { title: 'second' }, scope: { objectId: 'obj', sessionId: 'sess', status: 'ready', refId: 'ref-2' } },
+      {
+        id: 'id-1',
+        data: { title: 'first' },
+        scope: {
+          objectId: 'obj',
+          sessionId: 'sess',
+          status: 'ready',
+          refId: 'ref-1',
+        },
+      },
+      {
+        id: 'id-2',
+        data: { title: 'second' },
+        scope: {
+          objectId: 'obj',
+          sessionId: 'sess',
+          status: 'ready',
+          refId: 'ref-2',
+        },
+      },
     ])
 
     expect(calls).toHaveLength(1)
@@ -332,8 +512,24 @@ describe('db store provider saveMany', () => {
     expect(sql).toContain('VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?, ?, ?)')
     expect(sql).toContain('ON CONFLICT(id) DO UPDATE SET version = excluded.version, data = excluded.data')
     expect(params).toHaveLength(18)
-    expect(params.slice(0, 7)).toEqual(['id-1', 'obj', 'sess', 'ready', 'ref-1', expect.any(String), JSON.stringify({ title: 'first' })])
-    expect(params.slice(9, 16)).toEqual(['id-2', 'obj', 'sess', 'ready', 'ref-2', expect.any(String), JSON.stringify({ title: 'second' })])
+    expect(params.slice(0, 7)).toEqual([
+      'id-1',
+      'obj',
+      'sess',
+      'ready',
+      'ref-1',
+      expect.any(String),
+      JSON.stringify({ title: 'first' }),
+    ])
+    expect(params.slice(9, 16)).toEqual([
+      'id-2',
+      'obj',
+      'sess',
+      'ready',
+      'ref-2',
+      expect.any(String),
+      JSON.stringify({ title: 'second' }),
+    ])
     expect(params[5]).not.toBe(params[14])
     expect(typeof params[7]).toBe('number')
     expect(typeof params[16]).toBe('number')
@@ -341,9 +537,17 @@ describe('db store provider saveMany', () => {
 
   it('超过参数预算时按批拆分', async () => {
     const calls: ExecuteCall[] = []
-    const provider = createDbStoreProvider({ sql: createMockSql(calls), jsonOps, dbType: 'mysql', vecdb: createMockVecdb() })
+    const provider = createDbStoreProvider({
+      sql: createMockSql(calls),
+      jsonOps,
+      dbType: 'mysql',
+      vecdb: createMockVecdb(),
+    })
     const store = provider.createRelStore<{ index: number }>('hai_ai_batch')
-    const items = Array.from({ length: 226 }, (_, index) => ({ id: `id-${index}`, data: { index } }))
+    const items = Array.from({ length: 226 }, (_, index) => ({
+      id: `id-${index}`,
+      data: { index },
+    }))
 
     await store.saveMany(items)
 
@@ -370,14 +574,24 @@ function createMockSqlWithQuery(execCalls: ExecuteCall[], queryCalls: ExecuteCal
       return ok({ changes: 1 })
     },
     batch: async () => ok(undefined),
-    queryPage: async <T = QueryRow>() => ok<PaginatedResult<T>>({ items: [], total: 0, page: 1, pageSize: 20 }),
+    queryPage: async <T = QueryRow>() => ok<PaginatedResult<T>>({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+    }),
   }
 }
 
 describe('db store provider scope index', () => {
   it('hasScopeIndex 在 PostgreSQL 上建 JSONB GIN 索引', async () => {
     const execCalls: ExecuteCall[] = []
-    const provider = createDbStoreProvider({ sql: createMockSql(execCalls), jsonOps, dbType: 'postgresql', vecdb: createMockVecdb() })
+    const provider = createDbStoreProvider({
+      sql: createMockSql(execCalls),
+      jsonOps,
+      dbType: 'postgresql',
+      vecdb: createMockVecdb(),
+    })
     provider.createRelStore('hai_ai_memory', { hasObjectId: true, hasScopeIndex: true })
     await provider.initialize()
 
@@ -389,7 +603,12 @@ describe('db store provider scope index', () => {
 
   it('sqlite 不建 GIN 索引（不支持）', async () => {
     const execCalls: ExecuteCall[] = []
-    const provider = createDbStoreProvider({ sql: createMockSql(execCalls), jsonOps, dbType: 'sqlite', vecdb: createMockVecdb() })
+    const provider = createDbStoreProvider({
+      sql: createMockSql(execCalls),
+      jsonOps,
+      dbType: 'sqlite',
+      vecdb: createMockVecdb(),
+    })
     provider.createRelStore('hai_ai_memory', { hasObjectId: true, hasScopeIndex: true })
     await provider.initialize()
 
@@ -398,27 +617,47 @@ describe('db store provider scope index', () => {
 
   it('query scope 在 PostgreSQL 下推为 data @> ?::jsonb', async () => {
     const queryCalls: ExecuteCall[] = []
-    const provider = createDbStoreProvider({ sql: createMockSqlWithQuery([], queryCalls), jsonOps, dbType: 'postgresql', vecdb: createMockVecdb() })
+    const provider = createDbStoreProvider({
+      sql: createMockSqlWithQuery([], queryCalls),
+      jsonOps,
+      dbType: 'postgresql',
+      vecdb: createMockVecdb(),
+    })
     const store = provider.createRelStore<{ content: string }>('hai_ai_memory', { hasObjectId: true, hasScopeIndex: true })
 
-    await store.query({ objectId: 'u1', scope: { topicId: 'C', personaId: 'p1' } })
+    await store.query({
+      objectId: 'u1',
+      scope: { topicId: 'C', personaId: 'p1' },
+    })
 
     expect(queryCalls).toHaveLength(1)
     const sql = queryCalls[0].sql.replace(/\s+/g, ' ')
     expect(sql).toContain('data @> ?::jsonb')
     // 包含参数为 { scope: {...} } 的 JSON 序列化
-    expect(queryCalls[0].params).toContain(JSON.stringify({ scope: { topicId: 'C', personaId: 'p1' } }))
+    expect(queryCalls[0].params).toContain(JSON.stringify({
+      scope: { topicId: 'C', personaId: 'p1' },
+    }))
   })
 
   it('query scope 在 SQLite 上不下推（no-op，内存过滤）', async () => {
     const queryCalls: ExecuteCall[] = []
-    const provider = createDbStoreProvider({ sql: createMockSqlWithQuery([], queryCalls), jsonOps, dbType: 'sqlite', vecdb: createMockVecdb() })
+    const provider = createDbStoreProvider({
+      sql: createMockSqlWithQuery([], queryCalls),
+      jsonOps,
+      dbType: 'sqlite',
+      vecdb: createMockVecdb(),
+    })
     const store = provider.createRelStore<{ content: string }>('hai_ai_memory', { hasObjectId: true, hasScopeIndex: true })
 
-    await store.query({ objectId: 'u1', scope: { topicId: 'C' } })
+    await store.query({
+      objectId: 'u1',
+      scope: { topicId: 'C' },
+    })
 
     expect(queryCalls).toHaveLength(1)
     expect(queryCalls[0].sql).not.toContain('@>')
-    expect(queryCalls[0].params).not.toContain(JSON.stringify({ scope: { topicId: 'C' } }))
+    expect(queryCalls[0].params).not.toContain(JSON.stringify({
+      scope: { topicId: 'C' },
+    }))
   })
 })

@@ -34,6 +34,8 @@
 
 ## 使い始める
 
+`ai.close()` は進行中の初期化を待ってから解放し、並行する close は一つにまとめます。再初期化は旧インスタンスを先に解放し、終了処理中の新規初期化は拒否します。
+
 ### クイックスタート
 
 #### 開発用 LLM のみ（DB 依存なし）
@@ -51,7 +53,9 @@ if (!init.success)
   return init
 
 const result = await ai.llm.chat({
-  messages: [{ role: 'user', content: '你好！' }],
+  messages: [
+    { role: 'user', content: '你好！' }
+  ],
 })
 
 await ai.close()
@@ -80,7 +84,11 @@ try {
   })
   if (!initialized.success)
     throw new Error(initialized.error.message)
-  const result = await ai.llm.chat({ messages: [{ role: 'user', content: 'Hello!' }] })
+  const result = await ai.llm.chat({
+    messages: [
+      { role: 'user', content: 'Hello!' }
+    ]
+  })
   if (!result.success)
     throw new Error(result.error.message)
   const reply = result.data.choices[0]?.message.content ?? ''
@@ -111,7 +119,9 @@ import { ai } from '@h-ai/ai'
 const storeProvider: AIStoreProvider = createMyStoreProvider()
 
 await ai.init(
-  { llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY } },
+  {
+    llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY }
+  },
   { storeProvider },
 )
 
@@ -174,7 +184,9 @@ const registry = ai.tools.createRegistry({
 const registered = registry.register(ai.tools.define({
   name: 'get_weather',
   description: '获取天气',
-  parameters: z.object({ city: z.string() }),
+  parameters: z.object({
+    city: z.string()
+  }),
   // handler 第二参为执行上下文：可响应取消（打断/超时）、感知截止时间与交互主体
   handler: async ({ city }, { signal }) => {
     const res = await fetch(`https://api.example.com/weather?city=${city}`, { signal })
@@ -191,7 +203,10 @@ const result = await registry.execute(toolCall, { signal: controller.signal, obj
 // 批量调用默认串行，避免副作用工具并发启动；纯读取且确认安全时才显式并行
 const batch = await registry.executeAll(toolCalls)
 
-const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
+const chat = await ai.llm.chat({
+  messages,
+  tools: registry.getDefinitions()
+})
 ```
 
 #### ACP エージェント、ワークスペースとセッション
@@ -223,7 +238,9 @@ Goose 1.57.0 イメージは `goose serve` のネイティブ HTTP/WS `/acp` を
 
 #### A2A プロトコルの境界
 
-`ai.a2a.getAgentCard()` は `protocolVersion`、MIME、streaming 機能を含む完全な A2A 0.3 Agent Card を返します。Kit の既定検出パスは `/.well-known/agent-card.json`。`handleRequest()` は常に JSON-RPC/SSE の結果を返し、未初期化時は JSON-RPC エラーです。信頼された HTTP の `agentId` を executor の `context.user.userName` に対応付けます。JSON-RPC/SSE に対応し、push notifications・gRPC・REST 対応は宣言しません。業務リソースの認可はアプリの責任です。
+リモート呼び出しのヘッダーは大文字小文字を区別せず上書きします。固定 JSON-RPC URL は HTTP リダイレクトを拒否し、認証ヘッダーを転送先へ渡しません。
+
+`ai.a2a.getAgentCard()` は `supportedInterfaces`、MIME、streaming 機能を含むHTTP 検出応答に直接使える標準 A2A 1.0 ProtoJSON を返します。Kit の既定検出パスは `/.well-known/agent-card.json`。`handleRequest()` は常に JSON-RPC/SSE の結果を返し、未初期化時は JSON-RPC エラーです。信頼された HTTP の `agentId` を executor の `context.user.userName` に対応付けます。JSON-RPC/SSE に対応し、push notifications・gRPC・REST 対応は宣言しません。業務リソースの認可はアプリの責任です。
 
 A2A の journal・context 所有者・メッセージテーブルは `ai.init()` で初期化します。取得・キャンセル・継続は信頼された `agentId` で分離します。匿名は共通主体のため、本番は信頼された伝送層で認証してください。`listMessages` は `callerId`・`contextId`・`since` を持つ管理 API であり、未認可クライアントへ公開しません。
 
@@ -244,14 +261,24 @@ import { z } from 'zod'
 const server = createMcpServer({ name: 'my-server', version: '1.0.0' })
 server.registerTool('search', {
   description: '搜索',
-  inputSchema: { query: z.string() },
+  inputSchema: {
+    query: z.string()
+  },
 }, async ({ query }) => ({
-  content: [{ type: 'text', text: `Results for ${query}` }],
+  content: [
+    { type: 'text', text: `Results for ${query}` }
+  ],
 }))
-await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: () => globalThis.crypto.randomUUID() }))
+await server.connect(new StreamableHTTPServerTransport({
+  sessionIdGenerator: () => globalThis.crypto.randomUUID()
+}))
 ```
 
 #### Memory / RAG / Knowledge
+
+native 記憶の削除は管理者の全削除を含め、先にベクトルを削除してから権威レコードを削除します。ベクトル削除失敗時は再試行用にレコードを保持します。SQL とベクトルは同じトランザクションではないため、後段の失敗時も状態確認が必要です。
+
+`ai.memory.scoped({ objectId })` は空でなく空白のみでもない主体 ID を要求し、不正な入力ではファクトリーが直ちに `TypeError` を送出します。未束縛のインスタンスは作成しません。`clear({ scope: {} })` など空範囲の公開削除は失敗し、主体横断の全削除には明示的な管理 API が必要です。ネイティブ記憶のアクセス統計と更新はバージョン CAS を使い、遅れた読み取りで削除済みデータを復活させません。DB・ベクトル削除の失敗は失敗の HaiResult で返します。
 
 Knowledge は取り込みごとに一意の `revision` と chunk ID を生成します。全文・ベクトル・エンティティを準備し、永続ステージングマニフェストとベクトルを書いた後、共有 Store CAS で完全なスナップショットを一度に公開します。同じ文書の再構築は一つの writer に制限され、失敗時は完全な旧版を保持します。短い新版に旧末尾 chunk が混在しません。検索は未公開版を除外し、公開と競合すれば再試行します。競合が続く場合はエラーを返します。候補拡張や清掃待ちは検索負荷を増やすことがあります。
 
@@ -270,15 +297,23 @@ if (!enriched.success) {
 }
 
 // 多租户推荐入口：scoped() 绑定主体与作用域，所有操作自动携带 objectId / scope（含归属校验），杜绝「忘记传 objectId」越权
-const memory = ai.memory.scoped({ objectId: 'user-001', scope: { topicId: 't-1', personaId: 'p-1' } })
+const memory = ai.memory.scoped({
+  objectId: 'user-001',
+  scope: { topicId: 't-1', personaId: 'p-1' }
+})
 await memory.add({ content: '用户偏好中文', type: 'preference' })
 const recalled = await memory.recall('语言偏好')
 
 // clear 拒绝空过滤（防误清全局）；全局清空只能显式走管理接口
-await memory.clear({ types: ['event'] }) // 仅清该作用域内的 event
+await memory.clear({
+  types: ['event']
+}) // 仅清该作用域内的 event
 await ai.memory.admin.clearAll({ confirm: true }) // 危险：清空整个记忆后端，需显式确认
 
-const rag = await ai.rag.query('核心架构是什么？', { sources: ['docs'], topK: 5 })
+const rag = await ai.rag.query('核心架构是什么？', {
+  sources: ['docs'],
+  topK: 5
+})
 
 const setup = await ai.knowledge.setup()
 if (setup.success) {
@@ -309,11 +344,33 @@ await ai.init({
   audio: {
     inheritLlmApiKey: true,
     models: [
-      { id: 'asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime', operations: ['transcribe'] },
-      { id: 'tts', provider: 'qwen', model: 'qwen3-tts-flash-realtime', operations: ['synthesize'] },
+      {
+        id: 'asr',
+        provider: 'qwen',
+        model: 'qwen3-asr-flash-realtime',
+        operations: ['transcribe']
+      },
+      {
+        id: 'tts',
+        provider: 'qwen',
+        model: 'qwen3-tts-flash-realtime',
+        operations: ['synthesize']
+      },
       // 自托管：whisper / indextts 必须显式配置 baseUrl
-      { id: 'whisper', provider: 'whisper', model: 'faster-whisper-large-v3', operations: ['transcribe'], baseUrl: 'http://127.0.0.1:8101/v1' },
-      { id: 'indextts', provider: 'indextts', model: 'indextts-2.5', operations: ['synthesize'], baseUrl: 'http://127.0.0.1:8102/v1' },
+      {
+        id: 'whisper',
+        provider: 'whisper',
+        model: 'faster-whisper-large-v3',
+        operations: ['transcribe'],
+        baseUrl: 'http://127.0.0.1:8101/v1'
+      },
+      {
+        id: 'indextts',
+        provider: 'indextts',
+        model: 'indextts-2.5',
+        operations: ['synthesize'],
+        baseUrl: 'http://127.0.0.1:8102/v1'
+      },
     ],
     transcribeModel: 'asr',
     synthesizeModel: 'tts',
@@ -472,7 +529,10 @@ if (manager.success) {
 `chatStream` は**モデル呼び出し前**にターン登録と `turn_started` を行います（`turn_started → delta* → done`、キャンセル時は `turn_started → delta* → cancelled`）。途中で `AbortSignal` により中止しても `turnId` と生成済みテキストを取得し、実際の内容を保存できます：
 
 ```ts
-const created = ai.context.createManager({ scope: { objectId: 'user-001', sessionId: 'sess-001' }, turnCommit: 'manual' })
+const created = ai.context.createManager({
+  scope: { objectId: 'user-001', sessionId: 'sess-001' },
+  turnCommit: 'manual'
+})
 if (!created.success)
   return created
 const m = created.data
@@ -510,7 +570,9 @@ const turns = m.getTurns()
 
 ```ts
 // 会话结束时固化：整合摘要 → 提取长期记忆（写入不含 sessionId 的持久作用域）
-const result = await manager.consolidate({ scope: { userId: 'user-001', personaId: 'xiaoq' } })
+const result = await manager.consolidate({
+  scope: { userId: 'user-001', personaId: 'xiaoq' }
+})
 if (result.success) {
   // result.data.summary  —— 本次会话整合摘要
   // result.data.memories —— 固化到长期记忆的条目
@@ -535,11 +597,15 @@ const composed = await ai.persona.compose('xiaoq')
 const manager = ai.context.createManager({
   scope: { objectId: 'user-001', sessionId: 'persona-session' },
   systemPrompt: composed.data,
-  memory: { enable: true, enableExtract: true, scope: { personaId: 'xiaoq' } },
+  memory: {
+    enable: true,
+    enableExtract: true,
+    scope: { personaId: 'xiaoq' }
+  },
 })
 ```
 
-`ai.persona` は `save` / `get` / `update` / `remove` / `list` / `compose` を提供します。プロフィールは全体で共有し、`objectId` では分離しません。
+`ai.persona` は `save` / `get` / `update` / `remove` / `list` / `compose` を提供し、`[objectId, id]` ごとにプロフィールを分離します。保存時は `objectId`、その他は `{ objectId }` を渡し、省略すると `system` のプラットフォーム用プロフィールを参照します。テナント操作には信頼された認証主体を結び付けてください。クライアントが送るプロフィール ID 自体はアクセス権を与えません。
 
 ### 設定
 
@@ -593,7 +659,7 @@ memory:
 `core.config.load('ai', ...)` では規約に沿う環境変数が YAML より優先されます：
 例：`HAI_AI_LLM_APIKEY`、`HAI_AI_LLM_BASEURL`、`HAI_AI_LLM_MODEL`。
 
-mem0（組み込み mem0ai/oss エンジン）の有効化：
+Mem0 データ形式アダプターの有効化：
 
 ```yaml
 memory:
@@ -602,17 +668,15 @@ memory:
 ```
 
 - **`native`（既定・推奨）**：HAI のネイティブエンジンは vecdb、reldb、LLM、Embedding を再利用します。`extract` は **Mem0 型の一括マージ**で、抽出した事実と既存記憶に 1 回の LLM 呼び出しで ADD / UPDATE / DELETE / NONE を決定し、増分更新・重複除去・矛盾削除・`category` 分類を実現します。`maxEntriesPerObject`、`maxEntriesGlobal`、`recencyDecay`、`embeddingEnabled`、`writebackRelatedTopK` が適用されます。削除は `objectId` ごとなので、ある主体の大量書き込みでほかの主体の記憶は失いません。scope の候補は `objectId` で絞り（≤ `maxEntriesPerObject`）、PostgreSQL はさらに JSONB 包含検索へ scope を渡して **GIN インデックス**を使います。SQLite/MySQL はメモリー照合で同じ結果を返します。
-- **`mem0`（mem0ai/oss）**：`mem0ai/oss` の `Memory` エンジンを直接組み込み、クラウドを使いません。LLM/Embedder は `llm` 設定から取得し、`qdrant` は vecdb を再利用できます。現在のアダプターは完全な接続設定を持つ Qdrant のみをマッピングします。本番（`NODE_ENV` または `HAI_CORE_ENV=production`）では `memory.allowEphemeralFallback: true` でも実際のメモリーへの移行を拒否し、バックエンド未指定も失敗します。一時利用は開発または明示的な `HAI_E2E=1` / `HAI_E2E_MOCK=1` に限ります。履歴は既定で無効です。
+- **`mem0`（データ形式アダプター）**：抽出と Embedding は Hai が行い、ネイティブ HTTP で Qdrant の Mem0 UUID/payload 形式を読み書きします。既存データも読み取れます。上流の完全なエンジン、テレメトリー、履歴 DB は実行しません。完全な接続設定を持つ Qdrant のみ対応します。本番（`NODE_ENV` または `HAI_CORE_ENV=production`）は一時ストレージへの移行を拒否します。開発・明示的 E2E のみ `memory.allowEphemeralFallback: true` を指定できます。他の永続バックエンドは `native` を選択します。
 
-両 Provider は同じ `ai.memory.*`（`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`）を提供し、`objectId` の主体分離と `{ topicId, personaId }` などの `scope` をサポートします。`recall` / `list` / `listPage` / `clear` は scope を厳密に絞り、`clear` に `types` / `scope` を渡すと同時一致のみを削除します。mem0 の `extract` は共通抽出器で分類・採点（`types` / `model` / `minImportance` / `systemPrompt`）後、`infer:false` で `hai_type` / `hai_importance` を保存します。`recall` も `types` と `recencyWeight` 減衰に対応し、native と同じ動作です。Mem0 はテキストとメタデータをその場で更新し、`id` と作成時刻を保持します。SDK の検索は `filters.user_id`、書き込みと主体全体の削除は `userId` を使います。SDK に一覧カーソルがないため、`list` / `listPage` / 条件付き `clear` は期限切れを含む主体候補 1000 件まで対応します。1 件余分に読み、超過は `MEMORY_LIST_INCOMPLETE`（906）で失敗します。不正確な total や一部のみの条件付き削除は行いません。候補が完全な場合、UTC の有効期限、型、scope で絞ってからページ分割します。主体全体の `deleteAll` は一覧上限の対象外です。公開 API の空条件 clear は拒否し、全主体の削除は信頼された管理者による明示的な `admin.clearAll({ confirm: true })` に限定します。
+両 Provider は同じ `ai.memory.*`（`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`）を提供し、`objectId` の主体分離と `{ topicId, personaId }` などの `scope` をサポートします。`recall` / `list` / `listPage` / `clear` は scope を厳密に絞り、`clear` に `types` / `scope` を渡すと同時一致のみを削除します。mem0 の `extract` は共通抽出器で分類・採点（`types` / `model` / `minImportance` / `systemPrompt`）後、直接 `hai_type` / `hai_importance` を保存します。`recall` も `types` と `recencyWeight` 減衰に対応し、native と同じ動作です。Mem0 はテキストとメタデータをその場で更新し、`id` と作成時刻を保持します。候補走査は有界のため、`list` / `listPage` / 条件付き `clear` は期限切れを含む主体候補 1000 件まで対応します。1 件余分に読み、超過は `MEMORY_LIST_INCOMPLETE`（906）で失敗します。不正確な total や一部のみの条件付き削除は行いません。候補が完全な場合、UTC の有効期限、型、scope で絞ってからページ分割します。主体全体の削除 は一覧上限の対象外です。公開 API の空条件 clear は拒否し、全主体の削除は信頼された管理者による明示的な `admin.clearAll({ confirm: true })` に限定します。
 
-Mem0 3.3.1 は `QdrantClient.search` を呼び出すため、カタログと AI の optional peer は検証済みの `@qdrant/js-client-rest` `1.18.0` に固定します。起動時に公開メソッドを確認し、不整合は設定エラーにします。このメソッドを削除した 1.19 への上書きはできません。
+Mem0 形式ストレージと VecDB の Qdrant Provider は追加 SDK なしでネイティブ HTTP を使います。固定 REST 要求は `query` とエンコードしたパスを使用し、30 秒のタイムアウトは応答本文全体を含みます。16 MiB を超える応答は明示的に失敗します。書き込みと削除は `wait=true` の適用完了を待ちます。一覧と条件付き削除は期限切れを含む主体候補 1000 件まで完全性を確認し、超過時は `MEMORY_LIST_INCOMPLETE` を返して部分削除しません。主体全体の削除はこの一覧上限の対象外です。
 
-アダプターは SDK の公開 `client` 設定から専用クライアントを渡します。Mem0 の Qdrant 書き込みと削除は `wait: true` を指定し、サーバーでの適用完了後に書き込み後の読み取りや次の削除バッチへ進みます。
+Qdrant 形式バックエンドは 1.19 以降が必要で、HTTP リダイレクトを拒否します。更新はサーバーの `update_only` と主体・版条件を同じ原子書き込みに適用し、削除済み・同時変更済みの行を拒否します。遅延更新で削除行は復活しません。書き込み後の版確認に失敗した場合は実際の効果を照合してください。
 
-Mem0 + pgvector は全環境で起動を拒否します。SDK が PostgreSQL 接続を私有オブジェクトに保持し、公開された close API がないためです。pgvector は `memory.provider: native` で利用でき、ネイティブの対応は維持します。`disableHistory: true` はリソースを持たない履歴実装を選び、履歴 SQLite ファイルを作成しません。ファクトリーは上限付きの公開読み取りでバックエンドの準備完了を待ってから成功を公開します。
-
-SDK の追加応答には完全な業務フィールドがないため、`add` / `extract` は書き込み後に保存済みレコードを読み取ります。extract は全ての進行中の書き込み完了を待ちます。書き込みまたは再読み取り失敗時、`error.ext.requiresEffectReconciliation=true` と既知の ID の `memoryIds` を返します（応答消失時は空の場合もあります）。主体の実データを照合してから復旧し、add/extract を無条件に繰り返さないでください。自動再実行は行いません。
+追加書き込みの応答には完全な業務フィールドがないため、`add` / `extract` は書き込み後に保存済みレコードを読み取ります。extract は全ての進行中の書き込み完了を待ちます。書き込みまたは再読み取り失敗時、`error.ext.requiresEffectReconciliation=true` と既知の ID の `memoryIds` を返します（応答消失時は空の場合もあります）。主体の実データを照合してから復旧し、add/extract を無条件に繰り返さないでください。自動再実行は行いません。
 
 **候補集合と scope の検索漏れ**：`topK` で先に切り捨てると、別の話題・人格の関連性が高い記憶が対象 scope を押し出します。そのため `recall` / `injectMemories` は `topK × candidateMultiplier`（既定 5）件を取得してから絞り、`topK` 件にします。`topicId` + `personaId` など細かく分離する場合は `candidateMultiplier` を増やせます：
 

@@ -33,7 +33,13 @@ import { z } from 'zod'
  * const selected = parsed.data
  * ```
  */
-export const MemoryTypeSchema = z.enum(['fact', 'preference', 'event', 'entity', 'instruction'])
+export const MemoryTypeSchema = z.enum([
+  'fact',
+  'preference',
+  'event',
+  'entity',
+  'instruction',
+])
 
 /**
  * 记忆类型
@@ -620,6 +626,7 @@ export interface MemoryOperations extends MemoryCoreOperations {
    *
    * @param binding - 作用域绑定（objectId + 可选 scope）
    * @returns 所有操作自动携带该作用域的记忆实例
+   * @throws objectId 缺失、为空或只有空白时抛 TypeError；工厂不创建未绑定的实例。
    */
   scoped: (binding: ScopedMemoryBinding) => ScopedMemoryOperations
   /** 管理接口（危险的全局操作，需显式确认） */

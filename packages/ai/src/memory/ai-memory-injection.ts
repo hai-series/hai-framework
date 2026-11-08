@@ -62,8 +62,11 @@ export function isMemoryAccessDenied(entry: MemoryEntry, accessScope?: MemoryAcc
 function extractQueryFromMessages(messages: ChatMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i]
-    if (message.role === 'user')
-      return typeof message.content === 'string' ? message.content : ''
+    if (message.role === 'user') {
+      return typeof message.content === 'string'
+        ? message.content
+        : ''
+    }
   }
   return ''
 }
@@ -103,7 +106,9 @@ export async function injectRelevantMemories(
       minImportance: options?.minImportance,
     })
     if (!recallResult.success) {
-      return err(HaiAIError.MEMORY_ENRICH_FAILED, aiM('ai_memoryEnrichFailed', { params: { error: recallResult.error.message } }), recallResult.error)
+      return err(HaiAIError.MEMORY_ENRICH_FAILED, aiM('ai_memoryEnrichFailed', {
+        params: { error: recallResult.error.message },
+      }), recallResult.error)
     }
 
     if (recallResult.data.length === 0)
@@ -161,6 +166,10 @@ export async function injectRelevantMemories(
   }
   catch (error) {
     logger.error('Memory enrichment failed', { error })
-    return err(HaiAIError.MEMORY_ENRICH_FAILED, aiM('ai_memoryEnrichFailed', { params: { error: String(error) } }), error)
+    return err(HaiAIError.MEMORY_ENRICH_FAILED, aiM('ai_memoryEnrichFailed', {
+      params: {
+        error: String(error),
+      },
+    }), error)
   }
 }

@@ -44,13 +44,13 @@
   "ai_knowledgeCollectionNotFound": "ナレッジコレクション「{collection}」が見つかりません",
   "ai_memoryExtractFailed": "メモリーの抽出に失敗しました: {error}",
   "ai_memoryStoreFailed": "メモリーの保存に失敗しました: {error}",
+  "ai_memoryOperationFailed": "メモリー操作に失敗しました。再試行するか管理者に連絡してください。",
+  "ai_memoryScopeInvalid": "メモリー主体の ID は空または空白のみにできません。",
   "ai_memoryRecallFailed": "メモリーの想起に失敗しました: {error}",
   "ai_memoryNotFound": "メモリーエントリー「{id}」が見つかりません",
   "ai_memoryEphemeralFallbackDenied": "メモリープロバイダー mem0 はベクトルバックエンド '{backend}' を永続ストアに対応付けできません。qdrant を使用するか、開発環境または E2E でのみ一時保存へのフォールバックを明示的に許可してください。",
   "ai_memorySharedBackendRequired": "本番環境の Mem0 メモリーには、永続化された実際の qdrant バックエンドが必要です。一時メモリーへのフォールバックは開発環境または明示的な E2E に限られます。",
-  "ai_memoryBackendLifecycleUnsupported": "Mem0 pgvector は非対応です。SDK が PostgreSQL 接続を内部で保持し、公開の close API を提供していません。Mem0 Qdrant、または pgvector を使う native メモリーを使用してください。",
   "ai_memoryBackendConnectionRequired": "Mem0 バックエンド '{backend}' を永続バックエンドとして扱うには、完全な接続設定が必要です。",
-  "ai_memoryBackendSdkIncompatible": "Mem0 Qdrant には公開の search メソッドを持つ @qdrant/js-client-rest 1.18.0 が必要です。起動前に検証済みの peer バージョンをインストールしてください。",
   "ai_memoryListIncomplete": "Mem0 は対象候補が {limit} 件を超える場合、完全な一覧を取得できません。一覧取得と条件付き削除を拒否しました。部分的な結果の返却や削除は行っていません。",
   "ai_memoryClearRequiresFilter": "clear()には少なくとも1つのフィルター（objectId / types / scope）が必要です。すべてのメモリーを消去するにはai.memory.admin.clearAll({ confirm: true })を使用してください",
   "ai_memoryClearAllUnconfirmed": "admin.clearAll()には明示的な確認が必要です: { confirm: true }を渡してください",
@@ -58,6 +58,7 @@
   "ai_memoryPromoteFailed": "メモリーの昇格（長期記憶への統合）に失敗しました: {error}",
   "ai_personaNotFound": "ペルソナ「{id}」が見つかりません",
   "ai_personaSaveFailed": "ペルソナの保存に失敗しました: {error}",
+  "ai_personaOperationFailed": "ペルソナ操作に失敗しました。再試行するか管理者に連絡してください。",
   "ai_contextCompressFailed": "コンテキストの圧縮に失敗しました: {error}",
   "ai_contextBudgetExceeded": "保護されたコンテキストは{tokens}トークンを使用しており、{budget}トークンの圧縮予算に収まりません。",
   "ai_contextSummarizeFailed": "コンテキストの要約に失敗しました: {error}",
@@ -154,5 +155,6 @@
   "ai_resourceNotFound": "リソースが見つかりません。",
   "ai_resourceConflict": "リソースが存在するかバージョンが変更されています。",
   "ai_resourceInvalid": "リソース設定が無効です。",
-  "ai_resourceOperationFailed": "リソース一覧の操作に失敗しました。"
+  "ai_resourceOperationFailed": "リソース一覧の操作に失敗しました。",
+  "ai_memoryBackendUnsupported": "Mem0 データ形式アダプターは Qdrant のみ対応します。他の永続バックエンドは native メモリーを使用してください。"
 }

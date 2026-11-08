@@ -539,7 +539,7 @@ export interface KnowledgeStore {
 /**
  * 向量库后端连接信息
  *
- * 由 Provider 暴露底层向量库的原始连接，供需要复用同一后端的外部引擎（如 mem0 OSS）
+ * 由 Provider 暴露底层向量库的原始连接，供需要复用同一后端的格式适配器（如 Mem0 数据格式存储）
  * 直连。字段按后端类型填充；包含凭证，仅供同进程内集成使用。
  *
  * @example
@@ -604,7 +604,7 @@ export interface AIStoreProvider {
   /**
    * 暴露底层向量库后端连接（可选）
    *
-   * 供需要直连同一向量库的外部引擎（如 mem0 OSS）复用后端。未初始化或不支持时返回
+   * 供需要直连同一向量库的格式适配器（如 Mem0 数据格式存储）复用后端。未初始化或不支持时返回
    * `undefined`。返回值含凭证，仅供同进程内集成使用，禁止写入日志。
    */
   getVectorBackend?: () => AIVectorBackend | undefined

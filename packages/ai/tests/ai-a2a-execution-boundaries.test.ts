@@ -1,5 +1,7 @@
 /** 执行领取/进入业务的截止条件，以及事件持久化失败后的队列边界。 */
 import type { AgentExecutor, ExecutionEventBus, RequestContext } from '@a2a-js/sdk/server'
+import { Message, Task, TaskState, TaskStatusUpdateEvent } from '@a2a-js/sdk'
+import { AgentEvent } from '@a2a-js/sdk/server'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createA2AOperations, createA2AStores } from '../src/a2a/ai-a2a-functions.js'
 import { createMemoryStoreProvider } from '../src/store/providers/ai-store-provider-memory.js'
@@ -14,10 +16,28 @@ function latch() {
   return { promise, release }
 }
 
-const input = { jsonrpc: '2.0' as const, id: 'boundary', method: 'message/send', params: { message: { kind: 'message', role: 'user', messageId: 'first', parts: [{ kind: 'text', text: 'hello' }] }, configuration: { blocking: false } } }
+const input = {
+  jsonrpc: '2.0' as const,
+  id: 'boundary',
+  method: 'SendMessage',
+  params: {
+    message: {
+      role: 'ROLE_USER',
+      messageId: 'first',
+      parts: [
+        { text: 'hello' },
+      ],
+    },
+    configuration: { returnImmediately: true },
+  },
+}
 
 function instance(stores: ReturnType<typeof createA2AStores>, executor: AgentExecutor) {
-  return createA2AOperations({ agentCard: { name: 'boundary', url: 'https://boundary.example' }, executor, runtime: { leaseMs: 1000, pollIntervalMs: 10, maxExecutionMs: 1000 } }, stores)
+  return createA2AOperations({
+    agentCard: { name: 'boundary', url: 'https://boundary.example' },
+    executor,
+    runtime: { leaseMs: 1000, pollIntervalMs: 10, maxExecutionMs: 1000 },
+  }, stores)
 }
 
 it('initial claim delayed beyond its deadline is rejected and only a fresh candidate can execute', async () => {
@@ -42,15 +62,27 @@ it('initial claim delayed beyond its deadline is rejected and only a fresh candi
     const current = await stores.journalStore.get(context.taskId)
     expect(current!.deadline).toBeGreaterThan(now)
     expect(current!.leasedUntil).toBeGreaterThan(now)
-    bus.publish({ kind: 'message', role: 'agent', messageId: 'answer', parts: [{ kind: 'text', text: 'done' }] })
+    bus.publish(AgentEvent.message(Message.fromJSON({
+      role: 'ROLE_AGENT',
+      messageId: 'answer',
+      parts: [
+        { text: 'done' },
+      ],
+    })))
     bus.finished()
   })
-  const api = instance(stores, { execute, cancelTask: async () => {} })
+  const api = instance(stores, {
+    execute,
+    cancelTask: async () => {},
+  })
   try {
     const result = await api.handleRequest(input, { agentId: 'alice' })
     expect(result.body).not.toHaveProperty('error')
     await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce())
-    expect(claims).toEqual([{ notAfter: now - 1, accepted: false }, { notAfter: now + 1000, accepted: true }])
+    expect(claims).toEqual([
+      { notAfter: now - 1, accepted: false },
+      { notAfter: now + 1000, accepted: true },
+    ])
     const records = await stores.journalStore.query({})
     expect(records).toHaveLength(1)
     expect(records[0].receipts).toHaveLength(1)
@@ -74,7 +106,10 @@ it.each(['deadline', 'close'] as const)('a committed claim delayed before execut
     return version
   })
   const execute = vi.fn(async () => {})
-  const api = instance(stores, { execute, cancelTask: async () => {} })
+  const api = instance(stores, {
+    execute,
+    cancelTask: async () => {},
+  })
   try {
     const pending = api.handleRequest(input, { agentId: 'alice' })
     await committed.promise
@@ -94,12 +129,12 @@ it.each(['deadline', 'close'] as const)('a committed claim delayed before execut
 it('an event CAS failure stops all later queued events and local completion notifications', async () => {
   const stores = createA2AStores(createMemoryStoreProvider())
   const compare = stores.journalStore.compareAndSwap.bind(stores.journalStore)
-  const attempted: string[] = []
+  const attempted: Array<TaskState | undefined> = []
   let failed = false
   vi.spyOn(stores.journalStore, 'compareAndSwap').mockImplementation(async (id, value) => {
     const event = value.data.events.at(-1)
-    if (event?.kind === 'task' || event?.kind === 'status-update') {
-      attempted.push(event.status.state)
+    if (event?.kind === 'task' || event?.kind === 'statusUpdate') {
+      attempted.push(event.data.status?.state)
       if (!failed) {
         failed = true
         throw new Error('injected first event persistence failure')
@@ -111,19 +146,33 @@ it('an event CAS failure stops all later queued events and local completion noti
   const api = instance(stores, {
     async execute(context, bus) {
       bus.on('event', notification)
-      bus.publish({ kind: 'task', id: context.taskId, contextId: context.contextId, status: { state: 'working' } })
-      bus.publish({ kind: 'status-update', taskId: context.taskId, contextId: context.contextId, status: { state: 'completed' }, final: true })
+      bus.publish(AgentEvent.task(Task.fromJSON({
+        id: context.taskId,
+        contextId: context.contextId,
+        status: { state: 'TASK_STATE_WORKING' },
+      })))
+      bus.publish(AgentEvent.statusUpdate(TaskStatusUpdateEvent.fromJSON({
+        taskId: context.taskId,
+        contextId: context.contextId,
+        status: { state: 'TASK_STATE_COMPLETED' },
+      })))
       bus.finished()
     },
     cancelTask: async () => {},
   })
   try {
-    const response = await api.handleRequest({ ...input, params: { ...input.params, configuration: { blocking: true } } }, { agentId: 'alice' })
-    expect(response.body).toHaveProperty('result.status.state', 'failed')
+    const response = await api.handleRequest({
+      ...input,
+      params: {
+        ...input.params,
+        configuration: { returnImmediately: false },
+      },
+    }, { agentId: 'alice' })
+    expect(response.body).toHaveProperty('result.task.status.state', 'TASK_STATE_FAILED')
     const records = await stores.journalStore.query({})
     expect(records[0].interrupted).toBe(true)
     expect(records[0].events).toEqual([])
-    expect(attempted).toEqual(['working'])
+    expect(attempted).toEqual([TaskState.TASK_STATE_WORKING])
     expect(notification).not.toHaveBeenCalled()
   }
   finally { await api.close() }

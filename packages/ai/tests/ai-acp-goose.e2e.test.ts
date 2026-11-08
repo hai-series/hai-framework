@@ -51,7 +51,15 @@ async function engineCommand(engine: string, args: string[], secret?: string): P
       timeout: 120000,
       maxBuffer: 8 * 1024 * 1024,
       windowsHide: true,
-      env: { ...process.env, ...(apiKey ? { OPENROUTER_API_KEY: apiKey } : {}), ...(secret ? { GOOSE_SERVER__SECRET_KEY: secret } : {}) },
+      env: {
+        ...process.env,
+        ...(apiKey
+          ? { OPENROUTER_API_KEY: apiKey }
+          : {}),
+        ...(secret
+          ? { GOOSE_SERVER__SECRET_KEY: secret }
+          : {}),
+      },
     })).stdout.trim()
   }
   catch {
@@ -79,7 +87,7 @@ async function readyEngine(): Promise<'podman' | 'docker'> {
   throw new Error('No requested Podman/Docker engine is ready')
 }
 
-describe.sequential('goose native remote ACP acceptance', () => {
+describe('goose native remote ACP acceptance', { concurrent: false }, () => {
   for (const transport of ['http', 'ws'] as const) {
     it.skipIf(!enabled || ((!apiKey || !image) && !required))(`Goose / ${transport}: 真实鉴权、工程工具与声明的恢复能力`, async () => {
       const started = Date.now()
@@ -122,7 +130,9 @@ describe.sequential('goose native remote ACP acceptance', () => {
         container = await engineCommand(engine, [
           'create',
           // 远程服务夹具自行负责网络策略，不继承 Podman 服务端可能不可达的回环代理。
-          ...(engine === 'podman' ? ['--http-proxy=false'] : []),
+          ...(engine === 'podman'
+            ? ['--http-proxy=false']
+            : []),
           '--init',
           '--publish',
           '127.0.0.1::3284',
@@ -163,7 +173,9 @@ describe.sequential('goose native remote ACP acceptance', () => {
         let ready = false
         const deadline = Date.now() + 60000
         while (Date.now() < deadline) {
-          const response = await fetch(`${origin}/acp`, { signal: AbortSignal.timeout(2000) }).catch(() => undefined)
+          const response = await fetch(`${origin}/acp`, {
+            signal: AbortSignal.timeout(2000),
+          }).catch(() => undefined)
           if (response?.status === 401) {
             ready = true
             break
@@ -175,48 +187,112 @@ describe.sequential('goose native remote ACP acceptance', () => {
           throw new Error('Goose authenticated ACP server did not become ready')
         evidence.events.push({ type: 'authentication', summary: 'Real /acp endpoint returned HTTP 401 without the service secret' })
         process.env.HAI_ACP_GOOSE_SECRET = secret
-        value(await ai.init({ acp: { requestTimeout: 10000, promptTimeout: 240000, cancelTimeout: 5000, maxPendingEvents: 4096 } }))
-        const url = `${transport === 'http' ? origin : origin.replace('http:', 'ws:')}/acp`
-        const rejected = await ai.acp.connect({ type: transport, url, headers: { 'X-Secret-Key': randomUUID() } })
+        value(await ai.init({
+          acp: {
+            requestTimeout: 10000,
+            promptTimeout: 240000,
+            cancelTimeout: 5000,
+            maxPendingEvents: 4096,
+          },
+        }))
+        const url = `${transport === 'http'
+          ? origin
+          : origin.replace('http:', 'ws:')}/acp`
+        const rejected = await ai.acp.connect({
+          type: transport,
+          url,
+          headers: {
+            'X-Secret-Key': randomUUID(),
+          },
+        })
         expect(rejected.success).toBe(false)
         evidence.events.push({ type: 'authentication', summary: `Wrong X-Secret-Key rejected by real ${transport.toUpperCase()} initialization` })
-        value(await ai.acp.agents.register({ id: 'goose', name: 'Goose remote', mode: 'custom-service', transport, url, supportedTransports: ['http', 'ws'], headerEnv: { 'X-Secret-Key': 'HAI_ACP_GOOSE_SECRET' } }))
+        value(await ai.acp.agents.register({
+          id: 'goose',
+          name: 'Goose remote',
+          mode: 'custom-service',
+          transport,
+          url,
+          supportedTransports: ['http', 'ws'],
+          headerEnv: { 'X-Secret-Key': 'HAI_ACP_GOOSE_SECRET' },
+        }))
         const callbacks = {
           onEvent: (event: SessionNotification) => {
             if (evidence.events.length >= 10000)
               return
             const update = event.update
-            const title = 'title' in update && typeof update.title === 'string' ? update.title : ''
-            const status = 'status' in update && typeof update.status === 'string' ? update.status : ''
-            evidence.events.push({ type: update.sessionUpdate, summary: redact([title, status].filter(Boolean).join(' ')).slice(0, 500) })
+            const title = 'title' in update && typeof update.title === 'string'
+              ? update.title
+              : ''
+            const status = 'status' in update && typeof update.status === 'string'
+              ? update.status
+              : ''
+            evidence.events.push({
+              type: update.sessionUpdate,
+              summary: redact([title, status].filter(Boolean).join(' ')).slice(0, 500),
+            })
           },
           handlers: {
             'session/request_permission': ({ params }: { params: { options: Array<{ kind: string, optionId: string }> } }) => {
               const option = params.options.find(item => item.kind === 'allow_once')
-              return option ? { outcome: { outcome: 'selected' as const, optionId: option.optionId } } : { outcome: { outcome: 'cancelled' as const } }
+              return option
+                ? {
+                    outcome: { outcome: 'selected' as const, optionId: option.optionId },
+                  }
+                : {
+                    outcome: { outcome: 'cancelled' as const },
+                  }
             },
           },
         }
         const initialization = value(await ai.acp.agents.check('goose', callbacks))
         const canResume = Boolean(initialization.agentCapabilities?.loadSession || initialization.agentCapabilities?.sessionCapabilities?.resume)
         evidence.events.push({ type: 'native_capabilities', summary: `Native resume/load capability: ${canResume ? 'advertised' : 'not advertised'}` })
-        let session = value(await ai.acp.sessions.create({ id: 'goose-remote', agentId: 'goose', cwd: '/workspace', ...callbacks }))
+        let session = value(await ai.acp.sessions.create({
+          id: 'goose-remote',
+          agentId: 'goose',
+          cwd: '/workspace',
+          ...callbacks,
+        }))
         const nativeId = value(await session.info()).nativeId
         expect(nativeId).toBeTruthy()
-        const phases = canResume ? ['initial', 'resumed'] as const : ['initial'] as const
+        const phases = canResume
+          ? ['initial', 'resumed'] as const
+          : ['initial'] as const
         for (const phase of phases) {
           const token = `GOOSE-${randomUUID()}`
-          const input = phase === 'initial' ? 'challenge.txt' : 'resume-challenge.txt'
-          const output = phase === 'initial' ? 'result.txt' : 'resumed-result.txt'
-          await engineCommand(engine, ['exec', container, 'node', '-e', 'require("node:fs").writeFileSync(process.argv[1],process.argv[2])', `/workspace/${input}`, token])
+          const input = phase === 'initial'
+            ? 'challenge.txt'
+            : 'resume-challenge.txt'
+          const output = phase === 'initial'
+            ? 'result.txt'
+            : 'resumed-result.txt'
+          await engineCommand(engine, [
+            'exec',
+            container,
+            'node',
+            '-e',
+            'require("node:fs").writeFileSync(process.argv[1],process.argv[2])',
+            `/workspace/${input}`,
+            token,
+          ])
           if (phase === 'resumed') {
             value(await session.close())
             session = value(await ai.acp.sessions.resume('goose-remote', callbacks))
           }
           expect(value(await session.info()).nativeId).toBe(nativeId)
           const offset = evidence.events.length
-          const written = value(await session.prompt([{ type: 'text', text: `Use your actual developer tools to read /workspace/${input}. It contains a unique random token not included in this prompt. Write exactly that token (optional final newline) to /workspace/${output} and briefly confirm completion. Do not inspect environment variables, credentials or files outside /workspace. This is an isolated acceptance fixture; writing the result is authorized. Do not simulate tool use.` }]))
-          const fileContent = redact((await engineCommand(engine, ['exec', container, 'node', '-e', 'process.stdout.write(require("node:fs").readFileSync(process.argv[1],"utf8"))', `/workspace/${output}`])).trim())
+          const written = value(await session.prompt([
+            { type: 'text', text: `Use your actual developer tools to read /workspace/${input}. It contains a unique random token not included in this prompt. Write exactly that token (optional final newline) to /workspace/${output} and briefly confirm completion. Do not inspect environment variables, credentials or files outside /workspace. This is an isolated acceptance fixture; writing the result is authorized. Do not simulate tool use.` },
+          ]))
+          const fileContent = redact((await engineCommand(engine, [
+            'exec',
+            container,
+            'node',
+            '-e',
+            'process.stdout.write(require("node:fs").readFileSync(process.argv[1],"utf8"))',
+            `/workspace/${output}`,
+          ])).trim())
           const writeReply = redact(written.text.trim())
           const writeToolCalls = evidence.events.slice(offset).filter(event => event.type === 'tool_call').length
           evidence.files.push({ path: `/workspace/${output}`, passed: fileContent === token, summary: fileContent })
@@ -226,11 +302,25 @@ describe.sequential('goose native remote ACP acceptance', () => {
           expect(fileContent).toBe(token)
           // 所有传输固定增加读回请求，验证后续轮次的原生工具与回复，不做失败重试。
           const readbackOffset = evidence.events.length
-          const response = value(await session.prompt([{ type: 'text', text: `Read /workspace/${output} from disk using your actual developer tool. This is an explicit readback verification: do not rely on prior messages. Your final assistant response must contain the complete literal file contents, including the full random token. Return the contents, not a completion summary. Do not modify files or inspect anything outside /workspace.` }]))
+          const response = value(await session.prompt([
+            { type: 'text', text: `Read /workspace/${output} from disk using your actual developer tool. This is an explicit readback verification: do not rely on prior messages. Your final assistant response must contain the complete literal file contents, including the full random token. Return the contents, not a completion summary. Do not modify files or inspect anything outside /workspace.` },
+          ]))
           const reply = redact(response.text.trim())
           const readbackToolCalls = evidence.events.slice(readbackOffset).filter(event => event.type === 'tool_call').length
           const toolCalls = evidence.events.slice(offset).filter(event => event.type === 'tool_call').length
-          evidence.rounds.push({ phase, stopReason: response.stopReason, reply, expectedToken: token, fileContent, nativeId: nativeId ?? '', toolCalls, writeReply, writeStopReason: written.stopReason, writeToolCalls, readbackToolCalls })
+          evidence.rounds.push({
+            phase,
+            stopReason: response.stopReason,
+            reply,
+            expectedToken: token,
+            fileContent,
+            nativeId: nativeId ?? '',
+            toolCalls,
+            writeReply,
+            writeStopReason: written.stopReason,
+            writeToolCalls,
+            readbackToolCalls,
+          })
           evidence.reply += `${phase} write: ${writeReply}\n${phase} readback: ${reply}\n`
           expect(response.stopReason).toBe('end_turn')
           expect(readbackToolCalls).toBeGreaterThan(0)
@@ -248,7 +338,9 @@ describe.sequential('goose native remote ACP acceptance', () => {
       }
       catch (error) {
         failed = true
-        evidence.error = redact(error instanceof Error ? error.message : String(error)).slice(0, 5000)
+        evidence.error = redact(error instanceof Error
+          ? error.message
+          : String(error)).slice(0, 5000)
       }
       finally {
         const cleanupErrors: string[] = []
@@ -282,7 +374,10 @@ describe.sequential('goose native remote ACP acceptance', () => {
           delete process.env.HAI_ACP_GOOSE_SECRET
         else
           process.env.HAI_ACP_GOOSE_SECRET = previousSecret
-        evidence.cleanup = { status: cleanupErrors.length ? 'failed' : 'passed', summary: cleanupErrors.join('; ') || 'Owned native Goose service, ACP transports and temporary volumes removed' }
+        evidence.cleanup = {
+          status: cleanupErrors.length ? 'failed' : 'passed',
+          summary: cleanupErrors.join('; ') || 'Owned native Goose service, ACP transports and temporary volumes removed',
+        }
         if (cleanupErrors.length) {
           failed = true
           evidence.error = [evidence.error, ...cleanupErrors].filter(Boolean).join('; ')

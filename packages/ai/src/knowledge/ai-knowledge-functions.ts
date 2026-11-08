@@ -113,7 +113,9 @@ export function createKnowledgeOperations(
      */
     async setup(options?: KnowledgeSetupOptions): Promise<HaiResult<void>> {
       if (!store) {
-        return err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', { params: { error: 'KnowledgeStore not available. Provider may not support knowledge operations.' } }))
+        return err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', {
+          params: { error: 'KnowledgeStore not available. Provider may not support knowledge operations.' },
+        }))
       }
 
       const collection = options?.collection ?? config.collection
@@ -131,7 +133,11 @@ export function createKnowledgeOperations(
       }
       catch (error) {
         logger.error('Knowledge base setup failed', { error })
-        return err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', { params: { error: String(error) } }), error)
+        return err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     },
 
@@ -179,15 +185,20 @@ export function createKnowledgeOperations(
 
         // ② 分块预算是输入约束；失败不能回退整篇文本绕过上限后继续向量化/发布。
         const chunkResult = datapipe.chunk(cleanedText, chunkOptions)
-        if (!chunkResult.success)
-          return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: chunkResult.error.message } }), chunkResult.error)
+        if (!chunkResult.success) {
+          return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
+            params: { error: chunkResult.error.message },
+          }), chunkResult.error)
+        }
         const chunks = chunkResult.data
 
         // ③ 批量向量化
         const texts = chunks.map(c => c.content)
         const embedResult = await embedding.embedBatch(texts)
         if (!embedResult.success) {
-          return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: 'Embedding failed' } }), embedResult.error)
+          return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
+            params: { error: 'Embedding failed' },
+          }), embedResult.error)
         }
 
         // ④ 每次导入使用不可复用 revision，任何新旧分块都不会覆盖同一个向量 ID。
@@ -246,7 +257,9 @@ export function createKnowledgeOperations(
           }
           else {
             // 显式要求的实体提取失败不能发布不完整的新版本。
-            return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: entityResult.error.message } }), entityResult.error)
+            return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
+              params: { error: entityResult.error.message },
+            }), entityResult.error)
           }
         }
 
@@ -282,7 +295,11 @@ export function createKnowledgeOperations(
       }
       catch (error) {
         logger.error('Document ingestion failed', { documentId: input.documentId, error })
-        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: String(error) } }), error)
+        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     },
 
@@ -303,7 +320,11 @@ export function createKnowledgeOperations(
       const topK = options?.topK ?? 10
       const enableEntityBoost = options?.enableEntityBoost ?? true
 
-      logger.trace('Knowledge retrieval', { query: query.slice(0, 100), collection, topK })
+      logger.trace('Knowledge retrieval', {
+        query: query.slice(0, 100),
+        collection,
+        topK,
+      })
 
       try {
         if (!await isCollectionReady(collection))
@@ -311,7 +332,9 @@ export function createKnowledgeOperations(
         // ① 向量化查询
         const embedResult = await embedding.embedText(query)
         if (!embedResult.success) {
-          return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', { params: { error: 'Query embedding failed' } }), embedResult.error)
+          return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', {
+            params: { error: 'Query embedding failed' },
+          }), embedResult.error)
         }
 
         // ② 向量搜索
@@ -416,7 +439,11 @@ export function createKnowledgeOperations(
       }
       catch (error) {
         logger.error('Knowledge retrieval failed', { error })
-        return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', { params: { error: String(error) } }), error)
+        return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     },
 
@@ -434,7 +461,9 @@ export function createKnowledgeOperations(
       // 先检索
       const retrieveResult = await this.retrieve(query, options)
       if (!retrieveResult.success) {
-        return err(HaiAIError.RAG_FAILED, aiM('ai_ragFailed', { params: { error: retrieveResult.error.message } }), retrieveResult.error)
+        return err(HaiAIError.RAG_FAILED, aiM('ai_ragFailed', {
+          params: { error: retrieveResult.error.message },
+        }), retrieveResult.error)
       }
 
       const { items, citations } = retrieveResult.data
@@ -470,7 +499,9 @@ export function createKnowledgeOperations(
       })
 
       if (!chatResult.success) {
-        return err(HaiAIError.RAG_FAILED, aiM('ai_ragFailed', { params: { error: chatResult.error.message } }), chatResult.error)
+        return err(HaiAIError.RAG_FAILED, aiM('ai_ragFailed', {
+          params: { error: chatResult.error.message },
+        }), chatResult.error)
       }
 
       const choice = chatResult.data.choices[0]
@@ -530,7 +561,11 @@ export function createKnowledgeOperations(
         })))
       }
       catch (error) {
-        return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', { params: { error: String(error) } }), error)
+        return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     },
 
@@ -559,7 +594,11 @@ export function createKnowledgeOperations(
         })))
       }
       catch (error) {
-        return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', { params: { error: String(error) } }), error)
+        return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     },
 
@@ -591,7 +630,11 @@ export function createKnowledgeOperations(
         return ok(result)
       }
       catch (error) {
-        return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', { params: { error: String(error) } }), error)
+        return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     },
 
@@ -612,7 +655,11 @@ export function createKnowledgeOperations(
         return ok(undefined)
       }
       catch (error) {
-        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: String(error) } }), error)
+        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     },
 
@@ -624,13 +671,19 @@ export function createKnowledgeOperations(
         return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       if (!Number.isSafeInteger(options?.offset ?? 0) || (options?.offset ?? 0) < 0
         || !Number.isSafeInteger(options?.limit ?? 100) || (options?.limit ?? 100) < 1 || (options?.limit ?? 100) > 1000) {
-        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: 'Repair offset must be nonnegative and limit must be between 1 and 1000' } }))
+        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
+          params: { error: 'Repair offset must be nonnegative and limit must be between 1 and 1000' },
+        }))
       }
       try {
         return ok(await store.repair(options?.collection ?? config.collection, options))
       }
       catch (error) {
-        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: String(error) } }), error)
+        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     },
 
@@ -658,7 +711,11 @@ export function createKnowledgeOperations(
         })
       }
       catch (error) {
-        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: String(error) } }), error)
+        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     },
 
@@ -682,22 +739,39 @@ export function createKnowledgeOperations(
         if (ingestResult.success) {
           successCount++
           results.push({ documentId, result: ingestResult.data })
-          onProgress?.({ completed: i + 1, total: inputs.length, currentDocumentId: documentId, result: ingestResult.data })
+          onProgress?.({
+            completed: i + 1,
+            total: inputs.length,
+            currentDocumentId: documentId,
+            result: ingestResult.data,
+          })
         }
         else {
           failureCount++
           results.push({ documentId, error: ingestResult.error })
-          onProgress?.({ completed: i + 1, total: inputs.length, currentDocumentId: documentId, error: ingestResult.error })
+          onProgress?.({
+            completed: i + 1,
+            total: inputs.length,
+            currentDocumentId: documentId,
+            error: ingestResult.error,
+          })
         }
       }
 
-      return ok({ successCount, failureCount, results, duration: Date.now() - startTime })
+      return ok({
+        successCount,
+        failureCount,
+        results,
+        duration: Date.now() - startTime,
+      })
     },
 
     // ─── deleteCollection ───
     async deleteCollection(collection?: string): Promise<HaiResult<void>> {
       if (!store) {
-        return err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', { params: { error: 'KnowledgeStore not available. Provider may not support knowledge operations.' } }))
+        return err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', {
+          params: { error: 'KnowledgeStore not available. Provider may not support knowledge operations.' },
+        }))
       }
 
       const col = collection ?? config.collection
@@ -710,7 +784,11 @@ export function createKnowledgeOperations(
       }
       catch (error) {
         logger.error('Knowledge collection deletion failed', { collection: col, error })
-        return err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', { params: { error: String(error) } }), error)
+        return err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', {
+          params: {
+            error: String(error),
+          },
+        }), error)
       }
     },
   }

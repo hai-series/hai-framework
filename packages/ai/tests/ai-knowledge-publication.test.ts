@@ -27,7 +27,15 @@ function revision(collection: string, count: number, label: string): KnowledgeDo
       content: `${label}-${index}`,
       metadata: { documentId: 'guide', revision: id, label },
     })),
-    entities: [{ id: `${id}:entity`, name: label, type: 'concept', aliases: [], chunkIds: [`${id}:chunk-0`] }],
+    entities: [
+      {
+        id: `${id}:entity`,
+        name: label,
+        type: 'concept',
+        aliases: [],
+        chunkIds: [`${id}:chunk-0`],
+      },
+    ],
   }
 }
 
@@ -40,7 +48,7 @@ function latch() {
   return { promise, open }
 }
 
-describe.sequential('knowledge publication actual SQLite and Qdrant', () => {
+describe('knowledge publication actual SQLite and Qdrant', { concurrent: false }, () => {
   let lease: QdrantContainerLease | undefined
   let directory: string
   let database: string
@@ -200,7 +208,10 @@ describe.sequential('knowledge publication actual SQLite and Qdrant', () => {
     vi.spyOn(reldb.sql, 'execute').mockImplementation(async (sql, params) => {
       if (!failed && sql.startsWith('UPDATE hai_ai_knowledge_documents') && params?.some(value => typeof value === 'string' && value.includes('"title":"new"') && !value.includes('"pending":'))) {
         failed = true
-        return { success: false, error: { code: 'hai:reldb:002', message: 'Injected publication failure' } }
+        return {
+          success: false,
+          error: { code: 'hai:reldb:002', message: 'Injected publication failure' },
+        }
       }
       return execute(sql, params)
     })
@@ -236,7 +247,10 @@ describe.sequential('knowledge publication actual SQLite and Qdrant', () => {
       expect(current?.data.pending).toBeDefined()
       await manifests.compareAndSwap(row.key, {
         expectedVersion: current?.version,
-        data: { ...current!.data, pending: { ...current!.data.pending!, deadline: await manifests.currentTime() - 1 } },
+        data: {
+          ...current!.data,
+          pending: { ...current!.data.pending!, deadline: await manifests.currentTime() - 1 },
+        },
       })
       await b.repair(collection)
       await b.replaceDocument(revision(collection, 3, 'winner'))
@@ -271,7 +285,11 @@ describe.sequential('knowledge publication actual SQLite and Qdrant', () => {
 
   it('超过一页的集合删除按批完成，repair分页进度包含永久墓碑', async () => {
     for (let index = 0; index < 101; index++) {
-      await a.replaceDocument({ ...revision(collection, 0, `document-${index}`), documentId: `document-${index}`, entities: [] })
+      await a.replaceDocument({
+        ...revision(collection, 0, `document-${index}`),
+        documentId: `document-${index}`,
+        entities: [],
+      })
     }
     await b.deleteCollection(collection)
     expect(await a.collectionExists(collection)).toBe(false)

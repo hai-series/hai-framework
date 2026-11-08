@@ -69,8 +69,11 @@ export function createIndexTtsAudioProvider(): AudioProvider {
   async function synthesize(request: ProviderSynthesisRequest): Promise<HaiResult<SynthesisResult>> {
     const { model, text, language, speakerReference, styleReference, styleStrength, speed, targetDurationMs, durationToleranceMs, format, sampleRate, signal } = request
     // IndexTTS 需要说话人参考音频；缺失时在调用服务前返回明确错误
-    if (!speakerReference)
-      return err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', { params: { reason: 'speaker_reference is required' } }))
+    if (!speakerReference) {
+      return err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', {
+        params: { reason: 'speaker_reference is required' },
+      }))
+    }
 
     const out = resolveSynthesisOutput({ format, sampleRate })
     let requestSignal = signal
@@ -115,8 +118,11 @@ export function createIndexTtsAudioProvider(): AudioProvider {
           signal: requestSignal,
           dispatcher,
         })
-        if (!response.ok)
-          return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: await describeHttpError(response) } }))
+        if (!response.ok) {
+          return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', {
+            params: { error: await describeHttpError(response) },
+          }))
+        }
 
         const data = new Uint8Array(await response.arrayBuffer())
         return ok(buildSynthesisResult(data, out, response.headers))
@@ -126,7 +132,9 @@ export function createIndexTtsAudioProvider(): AudioProvider {
       }
     }
     catch (error) {
-      logger.debug('IndexTTS synthesize failed', { error: errorMessage(error) })
+      logger.debug('IndexTTS synthesize failed', {
+        error: errorMessage(error),
+      })
       return toAudioErrorResult(error, requestSignal)
     }
   }
@@ -140,7 +148,13 @@ export function createIndexTtsAudioProvider(): AudioProvider {
 /** IndexTTS 未指定格式时默认 wav；pcm16 时补默认采样率 24000。 */
 function resolveSynthesisOutput(request: { format?: AudioFormat, sampleRate?: number }): SynthesisOutputMeta {
   const format: AudioFormat = request.format ?? 'wav'
-  return { format, sampleRate: format === 'pcm16' ? (request.sampleRate ?? 24000) : undefined, channels: 1 }
+  return {
+    format,
+    sampleRate: format === 'pcm16'
+      ? (request.sampleRate ?? 24000)
+      : undefined,
+    channels: 1,
+  }
 }
 
 /** 追加参考音频及其文本 / 语言到表单（裸 pcm16 已由 toAudioUploadPart 封装为 WAV） */
@@ -157,7 +171,9 @@ function appendReference(form: FormData, field: string, reference: AudioReferenc
 function buildSynthesisResult(data: Uint8Array, out: SynthesisOutputMeta, headers: Headers): SynthesisResult {
   const durationMs = parseNumberHeader(headers.get(HEADER_DURATION_MS))
   const sampleRate = parseNumberHeader(headers.get(HEADER_SAMPLE_RATE)) ?? out.sampleRate
-  const channels = parseNumberHeader(headers.get(HEADER_CHANNELS)) === 2 ? 2 : out.channels
+  const channels = parseNumberHeader(headers.get(HEADER_CHANNELS)) === 2
+    ? 2
+    : out.channels
   const durationMatched = parseBooleanHeader(headers.get(HEADER_DURATION_MATCHED))
   const appliedSpeed = parseNumberHeader(headers.get(HEADER_APPLIED_SPEED))
 
@@ -172,8 +188,12 @@ function buildSynthesisResult(data: Uint8Array, out: SynthesisOutputMeta, header
     format: out.format,
     sampleRate,
     channels,
-    ...(durationMs !== undefined ? { durationMs } : {}),
-    ...(Object.keys(metadata).length ? { metadata } : {}),
+    ...(durationMs !== undefined
+      ? { durationMs }
+      : {}),
+    ...(Object.keys(metadata).length
+      ? { metadata }
+      : {}),
   }
 }
 
@@ -182,7 +202,9 @@ function parseNumberHeader(value: string | null): number | undefined {
   if (value === null)
     return undefined
   const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : undefined
+  return Number.isFinite(parsed)
+    ? parsed
+    : undefined
 }
 
 /** 解析布尔响应头（缺失返回 undefined，保留「无法判断」语义） */

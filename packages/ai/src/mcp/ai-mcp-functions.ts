@@ -125,7 +125,9 @@ export function createAIMCPFunctions(): MCPOperations {
         return ok(undefined)
       }
       catch (error) {
-        return err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpInvalidToolSchema', { params: { name: definition.name } }), error)
+        return err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpInvalidToolSchema', {
+          params: { name: definition.name },
+        }), error)
       }
     },
 
@@ -163,11 +165,16 @@ export function createAIMCPFunctions(): MCPOperations {
       try {
         const registration = tools.get(name)
         if (!registration) {
-          return err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpToolNotFound', { params: { name } }))
+          return err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpToolNotFound', {
+            params: { name },
+          }))
         }
         const validation = registration.validate(args)
-        if (!validation.valid)
-          return err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpInvalidToolInput', { params: { name } }))
+        if (!validation.valid) {
+          return err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpInvalidToolInput', {
+            params: { name },
+          }))
+        }
         const ctx: MCPContext = { ...context, requestId: context?.requestId ?? crypto.randomUUID() }
         const result = await registration.handler(args, ctx)
         return ok(result)
@@ -176,7 +183,12 @@ export function createAIMCPFunctions(): MCPOperations {
         return err(
           HaiAIError.MCP_TOOL_ERROR,
           aiM('ai_mcpToolFailed', {
-            params: { name, error: error instanceof Error ? error.message : 'Unknown error' },
+            params: {
+              name,
+              error: error instanceof Error
+                ? error.message
+                : 'Unknown error',
+            },
           }),
           error,
         )
@@ -193,7 +205,9 @@ export function createAIMCPFunctions(): MCPOperations {
       try {
         const registration = resources.get(uri)
         if (!registration) {
-          return err(HaiAIError.MCP_RESOURCE_ERROR, aiM('ai_mcpResourceNotFound', { params: { uri } }))
+          return err(HaiAIError.MCP_RESOURCE_ERROR, aiM('ai_mcpResourceNotFound', {
+            params: { uri },
+          }))
         }
         const content = await registration.handler()
         // SDK Schema 校验字段类型，再保证 text/blob 恰好存在一项。
@@ -202,7 +216,9 @@ export function createAIMCPFunctions(): MCPOperations {
         if (text.success === blob.success
           || (text.success && Object.hasOwn(content, 'blob'))
           || (blob.success && Object.hasOwn(content, 'text'))) {
-          return err(HaiAIError.MCP_RESOURCE_ERROR, aiM('ai_mcpInvalidResource', { params: { uri } }))
+          return err(HaiAIError.MCP_RESOURCE_ERROR, aiM('ai_mcpInvalidResource', {
+            params: { uri },
+          }))
         }
         return ok(content)
       }
@@ -210,7 +226,12 @@ export function createAIMCPFunctions(): MCPOperations {
         return err(
           HaiAIError.MCP_RESOURCE_ERROR,
           aiM('ai_mcpResourceFailed', {
-            params: { uri, error: error instanceof Error ? error.message : 'Unknown error' },
+            params: {
+              uri,
+              error: error instanceof Error
+                ? error.message
+                : 'Unknown error',
+            },
           }),
           error,
         )
@@ -233,28 +254,43 @@ export function createAIMCPFunctions(): MCPOperations {
       try {
         const registration = prompts.get(name)
         if (!registration) {
-          return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpPromptNotFound', { params: { name } }))
+          return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpPromptNotFound', {
+            params: { name },
+          }))
         }
 
         // 验证必需参数
         for (const arg of registration.prompt.arguments || []) {
           if (arg.required && !Object.hasOwn(args, arg.name)) {
-            return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpPromptMissingArg', { params: { name, arg: arg.name } }))
+            return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpPromptMissingArg', {
+              params: { name, arg: arg.name },
+            }))
           }
-          if (Object.hasOwn(args, arg.name) && typeof args[arg.name] !== 'string')
-            return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpInvalidPrompt', { params: { name } }))
+          if (Object.hasOwn(args, arg.name) && typeof args[arg.name] !== 'string') {
+            return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpInvalidPrompt', {
+              params: { name },
+            }))
+          }
         }
 
         const messages = await registration.handler(args)
-        if (!Array.isArray(messages) || messages.some(message => !PromptMessageSchema.safeParse(message).success))
-          return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpInvalidPrompt', { params: { name } }))
+        if (!Array.isArray(messages) || messages.some(message => !PromptMessageSchema.safeParse(message).success)) {
+          return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpInvalidPrompt', {
+            params: { name },
+          }))
+        }
         return ok(messages)
       }
       catch (error) {
         return err(
           HaiAIError.MCP_PROTOCOL_ERROR,
           aiM('ai_mcpPromptFailed', {
-            params: { name, error: error instanceof Error ? error.message : 'Unknown error' },
+            params: {
+              name,
+              error: error instanceof Error
+                ? error.message
+                : 'Unknown error',
+            },
           }),
           error,
         )
