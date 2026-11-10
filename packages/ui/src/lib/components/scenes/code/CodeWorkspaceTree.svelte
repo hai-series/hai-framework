@@ -7,6 +7,17 @@
   import Button from '../../primitives/Button.svelte'
   import Spinner from '../../primitives/Spinner.svelte'
 
+  /**
+   * 文件树的内部加载、选中及打开回调。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const props: Props = {
+   *   source: { listChildren: () => [], readFile: () => ({ text: '' }) },
+   *   onopen: node => node.id,
+   * }
+   * ```
+   */
   interface Props {
     source: CodeWorkspaceSource
     activeId?: string
@@ -15,11 +26,27 @@
     onopen: (node: CodeWorkspaceFileNode, ancestors: readonly CodeWorkspaceFolder[]) => void
   }
 
+  /**
+   * 可见树节点及其目录链，用于键盘导航。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const rootFile: TreeEntry = { node: { kind: 'file', id: 'readme', name: 'README.md' }, ancestors: [] }
+   * ```
+   */
   interface TreeEntry {
     node: CodeWorkspaceNode
     ancestors: readonly CodeWorkspaceFolder[]
   }
 
+  /**
+   * 树缓存的父级键，根节点使用 null。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const root: ParentId = null
+   * ```
+   */
   type ParentId = string | null
 
   const { source, activeId, locale, reveal, onopen }: Props = $props()

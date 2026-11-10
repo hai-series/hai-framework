@@ -5,6 +5,18 @@
   import { uiM } from '../../../messages.js'
   import Button from '../../primitives/Button.svelte'
 
+  /**
+   * 工作区搜索的内部接线。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const props: Props = {
+   *   source: { listChildren: () => [], readFile: () => ({ text: '' }) },
+   *   mode: 'files',
+   *   onopen: hit => hit.node.id,
+   * }
+   * ```
+   */
   interface Props {
     source: CodeWorkspaceSource
     mode: CodeWorkspaceSearchQuery['mode'] | null
@@ -40,6 +52,14 @@
     ? 'code_searchPlaceholderFiles'
     : 'code_searchPlaceholderContent'))
 
+  /**
+   * 将焦点移到工作区搜索输入框。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * focus()
+   * ```
+   */
   export function focus() {
     input?.focus()
   }

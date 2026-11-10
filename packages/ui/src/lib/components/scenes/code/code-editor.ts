@@ -48,6 +48,14 @@ function inheritedTheme(host: HTMLElement): editor.BuiltinTheme {
   return dark ? 'vs-dark' : 'vs'
 }
 
+/**
+ * 将工作区主题转换为已注册的 Monaco 主题名称。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const theme = workspaceThemeName('inherit', document.documentElement)
+ * ```
+ */
 export function workspaceThemeName(theme: CodeWorkspaceTheme, host: HTMLElement): string {
   if (theme === 'inherit')
     return inheritedTheme(host)

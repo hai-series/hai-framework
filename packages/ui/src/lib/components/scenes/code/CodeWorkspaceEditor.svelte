@@ -1,4 +1,12 @@
 <script module lang='ts'>
+  /**
+   * 只在浏览器加载的 Monaco 运行时。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const runtime: Promise<Runtime> = import('./code-editor.js')
+   * ```
+   */
   type Runtime = typeof import('./code-editor.js')
   let runtimePromise: Promise<Runtime> | undefined
 
@@ -35,6 +43,19 @@
   import Button from '../../primitives/Button.svelte'
   import CodeWorkspaceGutter from './CodeWorkspaceGutter.svelte'
 
+  /**
+   * 编辑器内部的文件、显示选项和宿主回调。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const props: Props = {
+   *   file: { node: { kind: 'file', id: 'readme', name: 'README.md' }, text: '# Hello' },
+   *   options: { lineNumbers: true },
+   *   theme: 'inherit',
+   *   onselection: selection => selection?.text,
+   * }
+   * ```
+   */
   interface Props {
     file: CodeWorkspaceFile
     options: CodeWorkspaceDisplay
@@ -62,6 +83,14 @@
   }: Props = $props()
 
   const editorId = $props.id()
+  /**
+   * 纯文本视图按文件记忆滚动与选区偏移。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const view: PlainView = { top: 0, left: 0, start: 2, end: 7 }
+   * ```
+   */
   type PlainView = { top: number, left: number, start: number, end: number }
   const viewLimit = 24
   const editorViews = new Map<string, MonacoEditor.ICodeEditorViewState>()
@@ -376,7 +405,14 @@
     void tick().then(() => plainInput?.focus())
   }
 
-  /** 打开当前文件查找入口。 */
+  /**
+   * 打开当前文件查找入口。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * find()
+   * ```
+   */
   export function find(): void {
     if (editor)
       void editor.getAction('actions.find')?.run()
@@ -384,7 +420,14 @@
       showPlainTool('find')
   }
 
-  /** 打开当前文件跳行入口。 */
+  /**
+   * 打开当前文件跳行入口。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * goToLine()
+   * ```
+   */
   export function goToLine(): void {
     if (editor) {
       // Monaco 的跳行控件挂到当前聚焦的编辑器，工具栏按钮需先交回焦点。

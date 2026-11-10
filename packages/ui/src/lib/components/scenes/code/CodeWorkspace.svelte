@@ -41,10 +41,42 @@
   import CodeWorkspaceSearch from './CodeWorkspaceSearch.svelte'
   import CodeWorkspaceTree from './CodeWorkspaceTree.svelte'
 
+  /**
+   * 面板和拖动分隔条共享的方向。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const side: Side = 'left'
+   * ```
+   */
   type Side = 'left' | 'right'
+  /**
+   * 在资源管理器中显示的搜索模式。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const mode: SearchMode = 'content'
+   * ```
+   */
   type SearchMode = CodeWorkspaceSearchQuery['mode']
+  /**
+   * 设置菜单中的内置编辑器主题。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const preset: Preset = 'github-dark'
+   * ```
+   */
   type Preset = Exclude<CodeWorkspaceTheme, object>
 
+  /**
+   * 标签页保留文件身份、目录链和读取结果。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const tab: Tab = { key: 'readme', node: { kind: 'file', id: 'readme', name: 'README.md' }, ancestors: [] }
+   * ```
+   */
   interface Tab {
     key: string
     node: CodeWorkspaceFileNode
@@ -53,6 +85,20 @@
     failed?: boolean
   }
 
+  /**
+   * 绑定到标签和版本的行列导航请求。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const location: Location = {
+   *   key: 'readme',
+   *   range: { startLine: 1, startColumn: 1, endLine: 1, endColumn: 6 },
+   *   version: 'rev-1',
+   *   request: 1,
+   *   focus: true,
+   * }
+   * ```
+   */
   interface Location {
     key: string
     range: CodeWorkspaceRange

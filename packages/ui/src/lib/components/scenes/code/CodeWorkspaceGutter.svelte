@@ -5,6 +5,16 @@
   import { onDestroy, tick, untrack } from 'svelte'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 
+  /**
+   * 渲染当前文件在 Monaco 行前区域的交互标记。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * function hasMarks({ annotations }: Props): boolean {
+   *   return annotations.length > 0
+   * }
+   * ```
+   */
   interface Props {
     editor: MonacoEditor.IStandaloneCodeEditor
     file: CodeWorkspaceFile
