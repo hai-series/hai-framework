@@ -416,6 +416,30 @@ Inside a Modal or Drawer, portal controls participate in the owning dialog's Tab
 
 #### Scenes
 
+##### Code workspace
+
+Use `CodeWorkspace` to browse read-only source files. A directory listing and a file reader are enough to get started. The directory callback receives `null` for the root. Opening a file creates or reuses a tab keyed by file ID and version. Switching tabs restores the cursor and scroll position for recently viewed files.
+
+```svelte
+<script lang="ts">
+  import type { CodeWorkspaceSource } from '@h-ai/ui/components/scenes/code/index'
+  import { CodeWorkspace } from '@h-ai/ui/components/scenes/code/index'
+
+  const source: CodeWorkspaceSource = {
+    listChildren: () => [{ kind: 'file', id: 'readme', name: 'README.md' }],
+    readFile: () => ({ text: '# Hello', language: 'markdown' }),
+  }
+</script>
+
+<CodeWorkspace {source} />
+```
+
+Supply `source.search` for filename and workspace content search, and return `nextCursor` when another page is available. File and folder `markers` can show risk and Git state. Return `annotations` from `readFile` to mark lines or ranges. Use the `inspector` and `selectionActions` snippets to render the side panel and actions for the selected code. See the [code workspace guide](../../docs/usage/development/ui.md#代码工作区).
+
+Vite loads Monaco and its same-origin workers on demand in the browser. The editor follows the Hai theme by default and supports presets and custom palettes. Monaco editors on the same page share a theme. Mobile devices and editor load failures use a plain-text view.
+
+Use the `annotationIcon` snippet to render a gutter icon. On hover, `hoverText` displays plain text, or `annotationHover` renders a custom component when `hoverText` is omitted. Press Enter to enter the popup and Escape to close it.
+
 ##### Guide
 
 | Component | Description | Key props |

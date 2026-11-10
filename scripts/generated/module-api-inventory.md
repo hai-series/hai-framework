@@ -113,9 +113,9 @@
 | @h-ai/storage | `./client (types)` | 9 |
 | @h-ai/storage | `./schemas (import)` | 8 |
 | @h-ai/storage | `./schemas (types)` | 8 |
-| @h-ai/ui | `. (import)` | 388 |
-| @h-ai/ui | `. (svelte)` | 388 |
-| @h-ai/ui | `. (types)` | 388 |
+| @h-ai/ui | `. (import)` | 409 |
+| @h-ai/ui | `. (svelte)` | 409 |
+| @h-ai/ui | `. (types)` | 409 |
 | @h-ai/ui | `./auto-import (import)` | 1 |
 | @h-ai/ui | `./auto-import (types)` | 1 |
 | @h-ai/ui | `./guide (import)` | 11 |
@@ -131,7 +131,7 @@
 | @h-ai/ui | `./toast (types)` | 8 |
 | @h-ai/ui | `./vite (import)` | 2 |
 | @h-ai/ui | `./vite (types)` | 2 |
-| @h-ai/ui | `./components/ 下的显式入口（13 个真实子路径，见 JSON）` | 逐项记录 |
+| @h-ai/ui | `./components/ 下的显式入口（14 个真实子路径，见 JSON）` | 逐项记录 |
 | @h-ai/ui | `./styles/*（8 个真实子路径，见 JSON）` | 逐项记录 |
 | @h-ai/vecdb | `. (default)` | 23 |
 | @h-ai/vecdb | `. (import)` | 23 |

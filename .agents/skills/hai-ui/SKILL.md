@@ -1,6 +1,6 @@
 ---
 name: hai-ui
-description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、看板图表、弹窗、引导、主题与 AI 内容展示。"
+description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、看板图表、弹窗、引导、代码工作区、主题与 AI 内容展示。"
 ---
 
 # hai-ui
@@ -9,7 +9,7 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、看板图表、�
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、移动界面、主题与 AI 内容展示 |
+| 能力 | 使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、代码工作区、移动界面、主题与 AI 内容展示 |
 | 适用场景 | 已有 Svelte 项目中的组件选择与交互实现 |
 | 输入 | 现有 Svelte 页面、组件 Props、Tailwind 扫描路径与主题 |
 | 输出 | 复用原子/组合/场景组件的界面及交互验证 |

@@ -14,6 +14,9 @@ export * from './app/index.js'
 // Chart 图表场景组件
 export * from './charts/index.js'
 
+// 代码工作区场景组件
+export * from './code/index.js'
+
 // CRUD 场景组件
 export * from './crud/index.js'
 

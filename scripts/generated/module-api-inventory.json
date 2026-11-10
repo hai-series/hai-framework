@@ -34672,6 +34672,132 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "CodeWorkspace",
+              "kind": "value+type",
+              "declaration": "CodeWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceActionContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceActionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotation",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotationContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotationContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceDisplay",
+              "kind": "type",
+              "declaration": "CodeWorkspaceDisplay",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFile",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFile",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileContent",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileContent",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFolder",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFolder",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceInspectorContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceInspectorContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceMarker",
+              "kind": "type",
+              "declaration": "CodeWorkspaceMarker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceNode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceProps",
+              "kind": "type",
+              "declaration": "CodeWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceRange",
+              "kind": "type",
+              "declaration": "CodeWorkspaceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchHit",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchHit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchPage",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchPage",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchQuery",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchQuery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSelection",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSource",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceTheme",
+              "kind": "type",
+              "declaration": "CodeWorkspaceTheme",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceThemeBase",
+              "kind": "type",
+              "declaration": "CodeWorkspaceThemeBase",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "Combobox",
               "kind": "value+type",
               "declaration": "Combobox",
@@ -37010,6 +37136,132 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "CodeWorkspace",
+              "kind": "value+type",
+              "declaration": "CodeWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceActionContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceActionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotation",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotationContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotationContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceDisplay",
+              "kind": "type",
+              "declaration": "CodeWorkspaceDisplay",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFile",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFile",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileContent",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileContent",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFolder",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFolder",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceInspectorContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceInspectorContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceMarker",
+              "kind": "type",
+              "declaration": "CodeWorkspaceMarker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceNode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceProps",
+              "kind": "type",
+              "declaration": "CodeWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceRange",
+              "kind": "type",
+              "declaration": "CodeWorkspaceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchHit",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchHit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchPage",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchPage",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchQuery",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchQuery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSelection",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSource",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceTheme",
+              "kind": "type",
+              "declaration": "CodeWorkspaceTheme",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceThemeBase",
+              "kind": "type",
+              "declaration": "CodeWorkspaceThemeBase",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "Combobox",
               "kind": "value+type",
               "declaration": "Combobox",
@@ -39346,6 +39598,132 @@
               "kind": "value",
               "declaration": "cn",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "CodeWorkspace",
+              "kind": "value+type",
+              "declaration": "CodeWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceActionContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceActionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotation",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotationContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotationContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceDisplay",
+              "kind": "type",
+              "declaration": "CodeWorkspaceDisplay",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFile",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFile",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileContent",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileContent",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFolder",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFolder",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceInspectorContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceInspectorContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceMarker",
+              "kind": "type",
+              "declaration": "CodeWorkspaceMarker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceNode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceProps",
+              "kind": "type",
+              "declaration": "CodeWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceRange",
+              "kind": "type",
+              "declaration": "CodeWorkspaceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchHit",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchHit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchPage",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchPage",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchQuery",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchQuery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSelection",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSource",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceTheme",
+              "kind": "type",
+              "declaration": "CodeWorkspaceTheme",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceThemeBase",
+              "kind": "type",
+              "declaration": "CodeWorkspaceThemeBase",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "Combobox",
@@ -42474,6 +42852,132 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "CodeWorkspace",
+              "kind": "value+type",
+              "declaration": "CodeWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceActionContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceActionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotation",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotationContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotationContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceDisplay",
+              "kind": "type",
+              "declaration": "CodeWorkspaceDisplay",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFile",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFile",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileContent",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileContent",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFolder",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFolder",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceInspectorContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceInspectorContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceMarker",
+              "kind": "type",
+              "declaration": "CodeWorkspaceMarker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceNode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceProps",
+              "kind": "type",
+              "declaration": "CodeWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceRange",
+              "kind": "type",
+              "declaration": "CodeWorkspaceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchHit",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchHit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchPage",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchPage",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchQuery",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchQuery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSelection",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSource",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceTheme",
+              "kind": "type",
+              "declaration": "CodeWorkspaceTheme",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceThemeBase",
+              "kind": "type",
+              "declaration": "CodeWorkspaceThemeBase",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "Combobox",
               "kind": "value+type",
               "declaration": "Combobox",
@@ -43990,6 +44494,132 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "CodeWorkspace",
+              "kind": "value+type",
+              "declaration": "CodeWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceActionContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceActionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotation",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotationContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotationContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceDisplay",
+              "kind": "type",
+              "declaration": "CodeWorkspaceDisplay",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFile",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFile",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileContent",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileContent",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFolder",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFolder",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceInspectorContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceInspectorContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceMarker",
+              "kind": "type",
+              "declaration": "CodeWorkspaceMarker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceNode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceProps",
+              "kind": "type",
+              "declaration": "CodeWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceRange",
+              "kind": "type",
+              "declaration": "CodeWorkspaceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchHit",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchHit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchPage",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchPage",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchQuery",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchQuery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSelection",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSource",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceTheme",
+              "kind": "type",
+              "declaration": "CodeWorkspaceTheme",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceThemeBase",
+              "kind": "type",
+              "declaration": "CodeWorkspaceThemeBase",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "Combobox",
               "kind": "value+type",
               "declaration": "Combobox",
@@ -45504,6 +46134,132 @@
               "kind": "value+type",
               "declaration": "Checkbox",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CodeWorkspace",
+              "kind": "value+type",
+              "declaration": "CodeWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceActionContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceActionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotation",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotationContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotationContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceDisplay",
+              "kind": "type",
+              "declaration": "CodeWorkspaceDisplay",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFile",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFile",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileContent",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileContent",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFolder",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFolder",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceInspectorContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceInspectorContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceMarker",
+              "kind": "type",
+              "declaration": "CodeWorkspaceMarker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceNode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceProps",
+              "kind": "type",
+              "declaration": "CodeWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceRange",
+              "kind": "type",
+              "declaration": "CodeWorkspaceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchHit",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchHit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchPage",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchPage",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchQuery",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchQuery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSelection",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSource",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceTheme",
+              "kind": "type",
+              "declaration": "CodeWorkspaceTheme",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceThemeBase",
+              "kind": "type",
+              "declaration": "CodeWorkspaceThemeBase",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "Combobox",
@@ -48634,6 +49390,414 @@
           ]
         },
         {
+          "subpath": "./components/scenes/code/index",
+          "conditions": [
+            "import"
+          ],
+          "target": "./dist/components/scenes/code/index.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "CodeWorkspace",
+              "kind": "value+type",
+              "declaration": "CodeWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceActionContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceActionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotation",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotationContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotationContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceDisplay",
+              "kind": "type",
+              "declaration": "CodeWorkspaceDisplay",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFile",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFile",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileContent",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileContent",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFolder",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFolder",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceInspectorContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceInspectorContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceMarker",
+              "kind": "type",
+              "declaration": "CodeWorkspaceMarker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceNode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceProps",
+              "kind": "type",
+              "declaration": "CodeWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceRange",
+              "kind": "type",
+              "declaration": "CodeWorkspaceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchHit",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchHit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchPage",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchPage",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchQuery",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchQuery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSelection",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSource",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceTheme",
+              "kind": "type",
+              "declaration": "CodeWorkspaceTheme",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceThemeBase",
+              "kind": "type",
+              "declaration": "CodeWorkspaceThemeBase",
+              "declarationKind": "TypeAliasDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": "./components/scenes/code/index",
+          "conditions": [
+            "svelte"
+          ],
+          "target": "./dist/components/scenes/code/index.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "CodeWorkspace",
+              "kind": "value+type",
+              "declaration": "CodeWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceActionContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceActionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotation",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotationContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotationContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceDisplay",
+              "kind": "type",
+              "declaration": "CodeWorkspaceDisplay",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFile",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFile",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileContent",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileContent",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFolder",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFolder",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceInspectorContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceInspectorContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceMarker",
+              "kind": "type",
+              "declaration": "CodeWorkspaceMarker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceNode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceProps",
+              "kind": "type",
+              "declaration": "CodeWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceRange",
+              "kind": "type",
+              "declaration": "CodeWorkspaceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchHit",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchHit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchPage",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchPage",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchQuery",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchQuery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSelection",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSource",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceTheme",
+              "kind": "type",
+              "declaration": "CodeWorkspaceTheme",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceThemeBase",
+              "kind": "type",
+              "declaration": "CodeWorkspaceThemeBase",
+              "declarationKind": "TypeAliasDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": "./components/scenes/code/index",
+          "conditions": [
+            "types"
+          ],
+          "target": "./dist/components/scenes/code/index.d.ts",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "CodeWorkspace",
+              "kind": "value+type",
+              "declaration": "CodeWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceActionContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceActionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotation",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotationContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotationContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceDisplay",
+              "kind": "type",
+              "declaration": "CodeWorkspaceDisplay",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFile",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFile",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileContent",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileContent",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFolder",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFolder",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceInspectorContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceInspectorContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceMarker",
+              "kind": "type",
+              "declaration": "CodeWorkspaceMarker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceNode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceProps",
+              "kind": "type",
+              "declaration": "CodeWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceRange",
+              "kind": "type",
+              "declaration": "CodeWorkspaceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchHit",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchHit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchPage",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchPage",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchQuery",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchQuery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSelection",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSource",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceTheme",
+              "kind": "type",
+              "declaration": "CodeWorkspaceTheme",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceThemeBase",
+              "kind": "type",
+              "declaration": "CodeWorkspaceThemeBase",
+              "declarationKind": "TypeAliasDeclaration"
+            }
+          ]
+        },
+        {
           "subpath": "./components/scenes/crud/index",
           "conditions": [
             "import"
@@ -50142,6 +51306,132 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "CodeWorkspace",
+              "kind": "value+type",
+              "declaration": "CodeWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceActionContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceActionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotation",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotationContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotationContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceDisplay",
+              "kind": "type",
+              "declaration": "CodeWorkspaceDisplay",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFile",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFile",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileContent",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileContent",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFolder",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFolder",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceInspectorContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceInspectorContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceMarker",
+              "kind": "type",
+              "declaration": "CodeWorkspaceMarker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceNode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceProps",
+              "kind": "type",
+              "declaration": "CodeWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceRange",
+              "kind": "type",
+              "declaration": "CodeWorkspaceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchHit",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchHit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchPage",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchPage",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchQuery",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchQuery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSelection",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSource",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceTheme",
+              "kind": "type",
+              "declaration": "CodeWorkspaceTheme",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceThemeBase",
+              "kind": "type",
+              "declaration": "CodeWorkspaceThemeBase",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "createBrowserNavAdapter",
               "kind": "value",
               "declaration": "createBrowserNavAdapter",
@@ -51268,6 +52558,132 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "CodeWorkspace",
+              "kind": "value+type",
+              "declaration": "CodeWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceActionContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceActionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotation",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotationContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotationContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceDisplay",
+              "kind": "type",
+              "declaration": "CodeWorkspaceDisplay",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFile",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFile",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileContent",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileContent",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFolder",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFolder",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceInspectorContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceInspectorContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceMarker",
+              "kind": "type",
+              "declaration": "CodeWorkspaceMarker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceNode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceProps",
+              "kind": "type",
+              "declaration": "CodeWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceRange",
+              "kind": "type",
+              "declaration": "CodeWorkspaceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchHit",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchHit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchPage",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchPage",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchQuery",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchQuery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSelection",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSource",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceTheme",
+              "kind": "type",
+              "declaration": "CodeWorkspaceTheme",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceThemeBase",
+              "kind": "type",
+              "declaration": "CodeWorkspaceThemeBase",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "createBrowserNavAdapter",
               "kind": "value",
               "declaration": "createBrowserNavAdapter",
@@ -52391,6 +53807,132 @@
               "name": "ChartType",
               "kind": "type",
               "declaration": "ChartType",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspace",
+              "kind": "value+type",
+              "declaration": "CodeWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceActionContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceActionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotation",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceAnnotationContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceAnnotationContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceDisplay",
+              "kind": "type",
+              "declaration": "CodeWorkspaceDisplay",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFile",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFile",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileContent",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileContent",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFileNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFileNode",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceFolder",
+              "kind": "type",
+              "declaration": "CodeWorkspaceFolder",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceInspectorContext",
+              "kind": "type",
+              "declaration": "CodeWorkspaceInspectorContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceMarker",
+              "kind": "type",
+              "declaration": "CodeWorkspaceMarker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceNode",
+              "kind": "type",
+              "declaration": "CodeWorkspaceNode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceProps",
+              "kind": "type",
+              "declaration": "CodeWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceRange",
+              "kind": "type",
+              "declaration": "CodeWorkspaceRange",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchHit",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchHit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchPage",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchPage",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSearchQuery",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSearchQuery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSelection",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceSource",
+              "kind": "type",
+              "declaration": "CodeWorkspaceSource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceTheme",
+              "kind": "type",
+              "declaration": "CodeWorkspaceTheme",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "CodeWorkspaceThemeBase",
+              "kind": "type",
+              "declaration": "CodeWorkspaceThemeBase",
               "declarationKind": "TypeAliasDeclaration"
             },
             {

@@ -40,6 +40,38 @@
 
 ![组件页中的面包屑层级与多种标签页样式](../images/gallery-compounds-zh-CN.png)
 
+## 代码工作区
+
+在管理台「UI 组件库 → 场景组件 → 代码浏览」打开示例。展开目录可以看到异步加载，点击不同文件会打开独立标签。切换标签时，工作区恢复近期文件的光标和滚动位置。桌面布局可拖动分隔条或用方向键调整宽度，窄容器将两侧面板收进抽屉。
+
+![管理台代码工作区中的文件树、多标签、行标注及选区检查](../images/code-workspace.png)
+
+1. 从 `@h-ai/ui/components/scenes/code/index` 导入 `CodeWorkspace`。先传入实现 `listChildren` 和 `readFile` 的 `source`，即可通过文件树浏览源码。`listChildren(null, signal)` 返回根节点，展开目录时再传入该目录。浏览过程中保持 `source` 引用稳定，切换仓库或分支时替换它。 [最小接入示例](../../../packages/ui/README.md#代码工作区)
+2. 给 `source` 添加 `search` 启用文件名和工作区内容搜索。用 `mode` 区分两种搜索，把查询交给宿主索引，搜索范围可覆盖未展开目录。每个命中返回 `node`，按需加上从根下第一级目录到父目录的 `ancestors`、`range` 和 `preview`。返回 `nextCursor` 会显示继续加载入口，下一次请求通过 `cursor` 携带该值。将回调收到的 `AbortSignal` 传给宿主请求，让快速切换查询、文件或仓库时可以取消等待。
+3. 在节点的 `markers` 中提供标记名称、短文本和语义色。在 `readFile` 的结果中返回 `annotations`，将 Git 状态或检查结论显示在行前、对应范围或两处。搜索和标注使用同一份文件版本与坐标，行和列从 1 开始，列按 UTF-16 计数，结束位置不包含在范围内。工作区按节点 ID 和版本复用标签。读取结果与搜索命中的版本不一致时，工作区会提示重新搜索。
+4. 按需添加下面两个 snippet。右侧面板收到当前文件和可为空的选区，可以用 `reveal` 跳到当前文件的标注。浮动操作收到非空选区，可用 `openInspector` 打开右栏。示例沿用步骤 1 定义的 `source`，实际应用将按钮文案接入自身翻译字典。
+
+```svelte
+<CodeWorkspace {source}>
+  {#snippet inspector({ file, selection, reveal })}
+    <p>{file.node.name}</p>
+    {#each file.annotations ?? [] as annotation (annotation)}
+      <button type="button" onclick={() => reveal(annotation.range)}>{annotation.label}</button>
+    {/each}
+    {#if selection}<pre>{selection.text}</pre>{/if}
+  {/snippet}
+  {#snippet selectionActions({ openInspector })}
+    <button type="button" onclick={openInspector}>查看选区</button>
+  {/snippet}
+</CodeWorkspace>
+```
+
+行前交互标记显示在标注的起始行，原有的色条仍覆盖整个标注范围。传入 `annotationIcon({ file, annotation })` 可自定义图标。标注的 `hoverText` 用于纯文本提示，省略时可由 `annotationHover({ file, annotation })` 渲染浮层组件。图标可以悬停或聚焦，按 Enter 进入浮层，按 Escape 关闭。同一行的标注共用一个触发器。移动端的纯文本降级视图通过右侧检查区呈现标注。
+
+搜索快捷键在工作区内生效。`Ctrl/⌘+P` 找文件，`Ctrl/⌘+Shift+F` 搜工作区内容。代码区支持 `Ctrl/⌘+F` 查找、`Ctrl/⌘+G` 跳行，选中代码后用 `Alt+Shift+Enter` 聚焦浮动操作。文件树用方向键浏览，首次展开异步目录时焦点留在目录上。标签栏用左右方向键切换，`Delete` 关闭当前标签。
+
+工具栏可以切换行号、缩略图、面包屑和自动换行。`options` 设置初始值。`theme` 默认为 `inherit`，可指定亮色、暗色、高对比或 GitHub Dark 风格预设，也可以传入以预设为基础的自定义颜色和语法标记样式。同一页面的 Monaco 实例共享主题。服务端渲染工作区外壳，打开文件后由 Vite 在浏览器按需加载编辑器及同源 worker。移动设备和编辑器加载失败时使用纯文本视图，仍可选择、查找和跳行。权限、搜索索引、分析和写入由宿主处理。
+
 ## 指标卡、图表与轻量看板
 
 在管理台“组件演示 → 图表”可以查看完整经营看板：顶部指标卡显示收入、订单、转化和耗时，统计周期切换会同步更新示例数据。下方报表展示收入与成本、渠道占比、图形预设、原生仪表和加载/空态。

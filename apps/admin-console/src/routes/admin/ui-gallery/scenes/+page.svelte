@@ -1,5 +1,6 @@
 <!--
   场景组件（Scenes）展示
+  Code: CodeWorkspace
   AI: MarkdownRenderer / AiDocumentEditor / AiTableEditor
   IAM: LoginForm / RegisterForm / ForgotPasswordForm / ResetPasswordForm /
        ChangePasswordForm / PasswordInput / UserProfile
@@ -10,6 +11,7 @@
   import { resolve } from '$app/paths'
   // FileList 与 DOM 全局类型同名，必须显式导入
   import { AiDocumentEditor, AiTableEditor, ErrorPage, FileList, MarkdownRenderer, toast } from '@h-ai/ui'
+  import CodeWorkspaceDemo from '#lib/components/gallery/CodeWorkspaceDemo.svelte'
   import markdownEn from '#lib/components/gallery/content/markdown.en-US.md?raw'
   import markdownJa from '#lib/components/gallery/content/markdown.ja-JP.md?raw'
   import markdownZh from '#lib/components/gallery/content/markdown.zh-CN.md?raw'
@@ -240,6 +242,19 @@
      基于 @h-ai/kit/client 的 SvelteKit 导航适配器完成 URL 同步与刷新 -->
 <a href='/admin/iam/users'>查看用户 CRUD</a>`
 
+  const codeCodeWorkspace = `<script lang='ts'>
+  import type { CodeWorkspaceFileNode, CodeWorkspaceSource } from '@h-ai/ui/components/scenes/code/index'
+  import { CodeWorkspace } from '@h-ai/ui/components/scenes/code/index'
+
+  const readme: CodeWorkspaceFileNode = { kind: 'file', id: 'README.md', name: 'README.md' }
+  const source: CodeWorkspaceSource = {
+    listChildren: () => [readme],
+    readFile: () => ({ text: '# Review Kit', language: 'markdown' }),
+  }
+</${'script'}>
+
+<CodeWorkspace {source} initialFile={readme} />`
+
   const codeErrorPage = `<ErrorPage status='404' showBack showHome />
 <!-- 内置 401 / 403 / 404 / 500 / 503 预设 -->`
 
@@ -296,6 +311,17 @@
 </script>
 
 <div class='space-y-10'>
+  <DemoSection
+    title={m.gallery_code_workspace_section()}
+    subtitle='CodeWorkspace'
+    iconClass='icon-[tabler--code]'
+    tone='info'
+  >
+    <DemoCard title='CodeWorkspace' description={m.gallery_code_workspace_description()} code={codeCodeWorkspace}>
+      <CodeWorkspaceDemo />
+    </DemoCard>
+  </DemoSection>
+
   <DemoSection
     title={m.gallery_demo_ai_components()}
     subtitle='MarkdownRenderer / AiDocumentEditor / AiTableEditor'

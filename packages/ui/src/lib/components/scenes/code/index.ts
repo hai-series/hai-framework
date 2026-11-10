@@ -1,0 +1,23 @@
+export type {
+  CodeWorkspaceActionContext,
+  CodeWorkspaceAnnotation,
+  CodeWorkspaceAnnotationContext,
+  CodeWorkspaceDisplay,
+  CodeWorkspaceFile,
+  CodeWorkspaceFileContent,
+  CodeWorkspaceFileNode,
+  CodeWorkspaceFolder,
+  CodeWorkspaceInspectorContext,
+  CodeWorkspaceMarker,
+  CodeWorkspaceNode,
+  CodeWorkspaceProps,
+  CodeWorkspaceRange,
+  CodeWorkspaceSearchHit,
+  CodeWorkspaceSearchPage,
+  CodeWorkspaceSearchQuery,
+  CodeWorkspaceSelection,
+  CodeWorkspaceSource,
+  CodeWorkspaceTheme,
+  CodeWorkspaceThemeBase,
+} from './code-types.js'
+export { default as CodeWorkspace } from './CodeWorkspace.svelte'

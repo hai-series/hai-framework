@@ -1,6 +1,6 @@
 ---
 name: hai-ui
-description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、看板图表、弹窗、引导、主题与 AI 内容展示。"
+description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、看板图表、弹窗、引导、代码工作区、主题与 AI 内容展示。"
 ---
 
 # hai-ui
@@ -11,7 +11,7 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、看板图表、�
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、移动界面、主题与 AI 内容展示 |
+| 能力 | 使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、代码工作区、移动界面、主题与 AI 内容展示 |
 | 适用场景 | 已有 Svelte 项目中的组件选择与交互实现 |
 | 输入 | 现有 Svelte 页面、组件 Props、Tailwind 扫描路径与主题 |
 | 输出 | 复用原子/组合/场景组件的界面及交互验证 |
@@ -62,6 +62,8 @@ AuthPanel 的 config.captcha.enabled 开启后，复用 createAuthActions 提供
 ## 按需参考
 
 新手引导、首次 Cookie 提示、操作导览和帮助中心见 [guide.md](guide.md)。fullstack 默认在共享管理界面接入，新增业务只补内容与 data-guide 锚点。
+
+浏览源码、多文件标签、工作区搜索和选区操作见[代码工作区](reference.md#代码工作区)。只需提供目录列表和文件读取回调即可开始浏览，按需添加搜索和宿主面板。
 
 按任务读取 [reference.md](reference.md) 的对应小节；签名以当前源码或安装版本的公开类型为准，不默认加载全部资料。示例中的业务变量由应用提供。
 

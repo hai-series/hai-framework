@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/ui",
   "type": "module",
-  "version": "1.0.0-beta.20",
+  "version": "1.0.0-beta.21",
   "description": "Hai Framework UI component library for Svelte 5 Runes.",
   "license": "Apache-2.0",
   "svelte": "./dist/index.js",
@@ -67,6 +67,11 @@
       "types": "./dist/components/scenes/charts/index.d.ts",
       "svelte": "./dist/components/scenes/charts/index.js",
       "import": "./dist/components/scenes/charts/index.js"
+    },
+    "./components/scenes/code/index": {
+      "types": "./dist/components/scenes/code/index.d.ts",
+      "svelte": "./dist/components/scenes/code/index.js",
+      "import": "./dist/components/scenes/code/index.js"
     },
     "./components/scenes/crud/index": {
       "types": "./dist/components/scenes/crud/index.d.ts",
@@ -147,6 +152,7 @@
     "layerchart": "catalog:",
     "marked": "catalog:",
     "mermaid": "catalog:",
+    "monaco-editor": "catalog:",
     "shiki": "catalog:",
     "tailwind-merge": "catalog:"
   },

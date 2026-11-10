@@ -416,6 +416,30 @@ components/
 
 #### 场景组件 Scenes
 
+##### 代码工作区
+
+用 `CodeWorkspace` 浏览只读源码。最小接入只需提供目录列表和文件内容。目录回调收到 `null` 时返回根节点。打开文件即创建标签，标签按文件 ID 和版本复用，切换时恢复近期查看过的文件的光标与滚动位置。
+
+```svelte
+<script lang="ts">
+  import type { CodeWorkspaceSource } from '@h-ai/ui/components/scenes/code/index'
+  import { CodeWorkspace } from '@h-ai/ui/components/scenes/code/index'
+
+  const source: CodeWorkspaceSource = {
+    listChildren: () => [{ kind: 'file', id: 'readme', name: 'README.md' }],
+    readFile: () => ({ text: '# Hello', language: 'markdown' }),
+  }
+</script>
+
+<CodeWorkspace {source} />
+```
+
+传入 `source.search` 启用文件名和工作区内容搜索，返回 `nextCursor` 时可继续加载。文件或目录上的 `markers` 展示风险和 Git 状态，`readFile` 返回的 `annotations` 可标记行或范围。传入 `inspector` 和 `selectionActions` snippet 连接右侧检查区及选区浮动操作。更多用法见[代码工作区接入](../../docs/usage/development/ui.md#代码工作区)。
+
+Monaco 和同源 worker 由 Vite 在浏览器按需加载。主题默认跟随 Hai，可选预设或传自定义配色。同页 Monaco 编辑器共享主题。移动端和编辑器加载失败时提供纯文本浏览。
+
+行前图标由 `annotationIcon` Snippet 自定义。悬停时优先显示标注的 `hoverText`，否则使用 `annotationHover` Snippet，支持交互组件。按 Enter 可进入浮层，按 Escape 关闭。
+
 ##### Guide 引导与帮助
 
 | 组件 | 描述 | 主要属性 |

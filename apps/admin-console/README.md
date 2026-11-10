@@ -270,6 +270,8 @@ pnpm paraglide:compile # 编译 i18n 翻译文件
 
 `/admin/ui-gallery/compounds` 的列表状态示例展示加载、空态、错误恢复、筛选、排序、分页与键盘操作。页面沿 [共享设计约定](../../.agents/instructions/ui-design.md) 和 hai-ui-design → hai-ui → hai-ui-review 工作流维护；浏览器测试覆盖实际渲染与交互，外部服务和原生平台另行验收。
 
+`/admin/ui-gallery/scenes` 的 `CodeWorkspace` 示例展示异步目录、多标签和跨文件内容搜索。搜索 `confidential preview` 可打开尚未展开的文件并定位匹配内容。选中代码可体验宿主提供的标记操作与检查面板，展开示例源码可查看最小接入方式。
+
 ## 框架能力导航
 
 本应用的启动、页面和业务操作按上文执行；各框架模块的完整用途、输入输出、配置和错误处理见下表。不要从应用示例推断模块全部能力；服务端与浏览器入口按对应模块契约选择。

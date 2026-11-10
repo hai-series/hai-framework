@@ -416,6 +416,30 @@ Modal または Drawer 内では、portal の操作要素も所属ダイアロ�
 
 #### Scenes：用途別コンポーネント
 
+##### コードワークスペース
+
+`CodeWorkspace` は読み取り専用のソース閲覧コンポーネントです。ディレクトリ一覧とファイル内容を返すコールバックだけで利用できます。ルートの一覧を取得する際は、ディレクトリのコールバックに `null` が渡ります。タブはファイル ID とバージョンで識別されます。タブを切り替えると、最近表示したファイルのカーソル位置とスクロール位置が復元されます。
+
+```svelte
+<script lang="ts">
+  import type { CodeWorkspaceSource } from '@h-ai/ui/components/scenes/code/index'
+  import { CodeWorkspace } from '@h-ai/ui/components/scenes/code/index'
+
+  const source: CodeWorkspaceSource = {
+    listChildren: () => [{ kind: 'file', id: 'readme', name: 'README.md' }],
+    readFile: () => ({ text: '# Hello', language: 'markdown' }),
+  }
+</script>
+
+<CodeWorkspace {source} />
+```
+
+`source.search` を指定するとファイル名とワークスペース全体の内容を検索できます。続きがある場合は `nextCursor` を返します。ファイルやフォルダーの `markers` でリスクや Git の状態を表示し、`readFile` が返す `annotations` で行や範囲をマークできます。右側のパネルと選択範囲の操作には `inspector` と `selectionActions` の snippet を指定します。[コードワークスペース利用ガイド](../../docs/usage/development/ui.md#代码工作区)を参照してください。
+
+Monaco と同一オリジンの worker は、Vite がブラウザーで必要に応じて読み込みます。エディターは既定で Hai のテーマに従い、プリセットとカスタム配色にも対応します。同じページ内の Monaco エディターはテーマを共有します。モバイル端末とエディターの読み込みに失敗した場合は、プレーンテキストで閲覧できます。
+
+`annotationIcon` スニペットで行頭アイコンを描画できます。ホバー時は `hoverText` のテキストを優先し、省略時は `annotationHover` で操作可能なコンポーネントを表示できます。Enter でポップアップに移動し、Escape で閉じます。
+
 ##### Guide：案内・ヘルプ
 
 | コンポーネント | 説明 | 主なプロパティ |

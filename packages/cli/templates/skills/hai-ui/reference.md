@@ -75,6 +75,7 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 | 登录/注册页布局 | `AuthShell` + `LoginForm` / `RegisterForm` | `variant='card'` 或 `'split'`；split 可通过 `illustration`/`description`/`highlights` 放大图与重点说明 |
 | 登录/注册/资料页 | `LoginForm` / `RegisterForm` / `UserProfile` | 页面只负责路由和提交逻辑 |
 | 文件/图片上传 | `FileUpload` / `ImageUpload` / `AvatarUpload` | 上传 URL、限制和业务状态由应用层提供 |
+| 在线代码浏览与检查 | `CodeWorkspace` | 两个读取回调接入文件树与多标签，按需添加工作区搜索、检查面板和选区操作 |
 | 移动端页面骨架 | `SafeArea` + `AppBar` + `BottomNav` | 原生壳页面优先这一套 |
 | AI 文档/Markdown 展示 | `MarkdownRenderer` / `AiDocumentEditor` | Mermaid、代码高亮、复制/下载已内置 |
 
@@ -335,6 +336,33 @@ const p = usePlatform()
 ### 场景组件（Scenes）
 
 内置中英日文翻译的业务场景组件。
+
+#### 代码工作区
+
+`CodeWorkspace` 提供异步文件树、只读 Monaco 代码区和可选的检查面板。从 `@h-ai/ui/components/scenes/code/index` 导入组件和类型。
+
+```svelte
+<script lang="ts">
+  import type { CodeWorkspaceSource } from '@h-ai/ui/components/scenes/code/index'
+  import { CodeWorkspace } from '@h-ai/ui/components/scenes/code/index'
+
+  const source: CodeWorkspaceSource = {
+    listChildren: () => [{ kind: 'file', id: 'readme', name: 'README.md' }],
+    readFile: () => ({ text: '# Hello', language: 'markdown' }),
+  }
+</script>
+
+<CodeWorkspace {source} />
+```
+
+- `listChildren(null, signal)` 读取根节点。目录展开时组件传入目录节点并复用已加载的结果。文件 ID 与版本用于复用标签和恢复视图。`initialFile` 与 `initialAncestors` 可预先打开文件并展开其父目录。保持 `source` 对象引用稳定，切换仓库或分支时替换对象。
+- 可选的 `search({ mode, query, cursor }, signal)` 接入宿主索引。`mode` 是 `files` 或 `content`。命中包含 `node`，可附带 `ancestors`、`range` 和 `preview`。返回 `nextCursor` 启用续页。把收到的 `signal` 传给实际请求，后端负责授权与索引范围。回调失败时可抛错或拒绝 Promise，组件会提供重试入口。
+- 节点的 `markers` 使用 `label` 提供可访问名称，按需附加 `text` 和 `tone`。`readFile` 返回的 `annotations` 使用 `range`、`label` 和可选的 `tone`、`display`，可在行前和对应范围内显示。搜索命中与标注应使用同一文件版本，行列从 1 开始，列按 UTF-16 计数，结束位置不含。
+- `inspector` snippet 收到 `{ file, selection, reveal }`，其中 `selection` 可以为 `null`。`selectionActions` 收到非空选区、同一 `file`、`reveal` 和 `openInspector`。`reveal(range)` 仅在对应文档仍激活时跳转，`openInspector()` 可打开已有右栏。解释、标记保存等宿主操作从这两个入口接入。
+- 工作区内 `Ctrl/⌘+P` 找文件，`Ctrl/⌘+Shift+F` 搜工作区内容；代码区 `Ctrl/⌘+F` 查找，`Ctrl/⌘+G` 跳行；`Alt+Shift+Enter` 聚焦可用的选区操作。通过 `options` 设置行号、缩略图、面包屑和换行的初始值，用户可在工具栏切换。
+- `theme` 默认 `inherit`，另有 `vs-light`、`vs-dark`、`hc-light`、`hc-dark` 和 `github-dark`。自定义主题传入 `{ base, colors, tokens }`，其中 `base` 是 VS 或高对比预设，`colors` 和 `tokens` 可省略。同页 Monaco 实例共享编辑器主题。工作区外壳可 SSR，Monaco 及默认同源 worker 由 Vite 在浏览器按需加载。移动端和编辑器加载失败时使用纯文本视图。
+
+行前图标和浮层可通过 `annotationIcon`、`annotationHover` Snippet 自定义，两者收到 `{ file, annotation }`。仅需提示文字时，在标注上传入 `hoverText`，它优先于浮层 Snippet。图标锚定标注起始行，支持悬停、键盘和点击。
 
 #### 引导与帮助场景组件
 
@@ -651,6 +679,7 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 | `@h-ai/ui/auto-import`     | Svelte 预处理器：组件自动导入          |
 | `@h-ai/ui/components/primitives/index` 等明确 barrel | 仅 package.exports 列出的组件目录；组件默认导出经 barrel 转发 |
 | `@h-ai/ui/components/primitives/index` | 公开原子组件目录入口，如 Button/Input |
+| `@h-ai/ui/components/scenes/code/index` | `CodeWorkspace` 与代码工作区接入类型 |
 | `@h-ai/ui/styles/global.css`       | 全局基础样式（重置/滚动条/焦点）       |
 | `@h-ai/ui/styles/theme.css`        | Tailwind v4 `@theme` Token            |
 | `@h-ai/ui/styles/design-tokens.css`| CSS 自定义属性（间距/圆角/z-index）    |

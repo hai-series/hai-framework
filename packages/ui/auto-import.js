@@ -59,6 +59,7 @@ const UI_COMPONENTS = new Set([
   'PageHeader',
   'FilterBar',
   'WorkspaceLayout',
+  'CodeWorkspace',
   'Pagination',
   'Popover',
   'PullRefresh',
