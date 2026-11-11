@@ -4,6 +4,7 @@
   "reldb_initFailed": "Failed to initialize database",
   "reldb_closeFailed": "Failed to close database",
   "reldb_ddlFailed": "DDL operation failed",
+  "reldb_schemaMismatch": "Table {table} does not match its current schema",
   "reldb_queryFailed": "Query failed",
   "reldb_duplicateEntry": "Record already exists",
   "reldb_batchFailed": "Batch execute failed",

@@ -76,7 +76,7 @@ vi.mock('@h-ai/reach', () => ({
 vi.mock('@h-ai/reldb', () => ({ reldb: state.modules.reldb, ReldbConfigSchema: {} }))
 vi.mock('@h-ai/storage', () => ({ storage: state.modules.storage, StorageConfigSchema: {} }))
 vi.mock('@h-ai/vecdb', () => ({ vecdb: state.modules.vecdb, VecdbConfigSchema: {} }))
-// 表结构迁移由真实数据库用例覆盖；此文件只验证应用生命周期与失败回滚。
+// 表结构校验由真实数据库用例覆盖；此文件只验证应用生命周期与失败回滚。
 vi.mock('./vision-records.js', () => ({
   ensureVisionTable: vi.fn(async () => undefined),
 }))

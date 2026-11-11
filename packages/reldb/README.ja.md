@@ -113,10 +113,9 @@ params で値を束縛して業務データを操作。順に行配列、先頭�
 
 永続化の準備。テーブル名から列名、モジュール名・手順・dryRun から移行計画を取得。適用前にバックアップし競合書込を停止。
 
-| 入口                  | 入力引数               | 成功結果              | 呼出し例                                                                |
-| --------------------- | ---------------------- | --------------------- | ----------------------------------------------------------------------- |
-| `reldb.schemaColumns` | table, sql             | `string[]`            | `await reldb.schemaColumns('orders')`                                   |
-| `reldb.migrateSchema` | module, steps, options | `SchemaMigrationPlan` | `await reldb.migrateSchema('orders', migrationSteps, { dryRun: true })` |
+| 入口                  | 入力引数   | 成功結果   | 呼出し例                              |
+| --------------------- | ---------- | ---------- | ------------------------------------- |
+| `reldb.schemaColumns` | table, sql | `string[]` | `await reldb.schemaColumns('orders')` |
 
 #### reldb.tx
 
@@ -603,9 +602,9 @@ await reldb.sql.execute(`UPDATE products SET meta = ${rmSql} WHERE id = ?`, [...
 
 本番は PostgreSQL/MySQL が必須です。ファイルを含む SQLite は開発・明示的テスト用であり、ホスト間の共有状態を保証しません。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../.agents/instructions/distributed-state.md).
 
-### モジュールのスキーマ移行
+### テーブル構造の確認
 
-`reldb.schemaColumns(table, sql?)` は実際の列を読み取ります。`reldb.migrateSchema(module, steps, { dryRun: true })` は台帳を作成しません。各モジュールが手順を所有し、`hai_schema_migrations` に版を記録します。SQLite/PostgreSQL はトランザクション、MySQL の暗黙 DDL コミットには再入可能な手順が必要です。失敗時は版を進めず、実構造を再確認して再試行します。新しい台帳へのダウングレードは拒否します。旧書込を停止し DB/セッションキャッシュをバックアップしてください。復旧は互換 DB とバイナリを一緒に戻します。[更新ガイド](../../docs/usage/README.ja.md)を参照。
+`reldb.schemaColumns(table, sql?)` で実際の列名を読み取れます。トランザクションの SQL ハンドルを渡すと、同じトランザクション内で構造を確認できます。各フレームワークモジュールは初期化時に自身のテーブル構造を検証し、業務テーブルはアプリが管理します。
 
 ## 設定
 

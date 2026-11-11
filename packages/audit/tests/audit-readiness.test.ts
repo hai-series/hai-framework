@@ -3,7 +3,7 @@ import { err } from '@h-ai/core'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AuditLogRepository } from '../src/audit-repository-log.js'
-import { audit, migrateAudit } from '../src/index.js'
+import { audit } from '../src/index.js'
 
 beforeEach(async () => {
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
@@ -90,8 +90,9 @@ it('init在DDL完成前不发布，完成后立即查询可用', async () => {
 })
 
 it('自定义查询全部等待基类DDL，失败不会提前执行SQL', async () => {
-  // 内部仓库夹具先准备模块元数据，审计表本身仍由下方受门闩控制的基类创建。
-  expect((await migrateAudit()).success).toBe(true)
+  expect((await audit.init()).success).toBe(true)
+  await audit.close()
+  expect((await reldb.ddl.dropTable('hai_audit_logs')).success).toBe(true)
   const release = delayDdl()
   const repo = new AuditLogRepository({ userTable: 'hai_iam_users', userIdColumn: 'id', userNameColumn: 'username' })
   let finished = 0

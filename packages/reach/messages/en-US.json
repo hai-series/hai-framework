@@ -1,4 +1,5 @@
 {
+  "reach_sendLogIndexRequired": "The send log table requires a unique index on receipt IDs",
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "reach_notInitialized": "Reach module not initialized, call reach.init() first",
   "reach_initFailed": "Reach module initialization failed: {error}",

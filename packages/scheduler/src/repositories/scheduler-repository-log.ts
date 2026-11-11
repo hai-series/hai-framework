@@ -61,6 +61,10 @@ interface LogRow {
  * ```
  */
 export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
+  ready(): Promise<HaiResult<void>> {
+    return this.ensureSchema()
+  }
+
   constructor(db: ReldbFunctions) {
     super(db, {
       table: SCHEDULER_LOG_TABLE,

@@ -33,7 +33,6 @@ function tests() {
       'hai_audit_logs',
       'hai_audit_policy',
       'hai_audit_alert_claims',
-      'hai_schema_migrations',
       'hai_iam_users',
     ])
       expect((await reldb.ddl.dropTable(table, true)).success).toBe(true)

@@ -3,7 +3,7 @@ import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { defineDbSuite, mysqlEnv, postgresEnv, sqliteMemoryEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
-import { audit, migrateAudit } from '../src/index.js'
+import { audit } from '../src/index.js'
 
 function tests() {
   beforeEach(async () => {
@@ -11,7 +11,6 @@ function tests() {
       'hai_audit_logs',
       'hai_audit_policy',
       'hai_audit_alert_claims',
-      'hai_schema_migrations',
       'audit_security_users',
     ])
       expect((await reldb.ddl.dropTable(table, true)).success).toBe(true)
@@ -299,13 +298,12 @@ function tests() {
     expect(await audit.cleanup(0)).toEqual({ success: true, data: 1 })
   })
 
-  it('旧表升级保留原始事件，不补造历史身份或结果，预检只读且迁移可重入', async () => {
+  it('数据表结构不符时拒绝初始化并保留现有事件', async () => {
     await audit.close()
     for (const table of [
       'hai_audit_logs',
       'hai_audit_policy',
       'hai_audit_alert_claims',
-      'hai_schema_migrations',
     ])
       expect((await reldb.ddl.dropTable(table, true)).success).toBe(true)
     expect((await reldb.ddl.createTable('hai_audit_logs', {
@@ -329,41 +327,13 @@ function tests() {
         ? date.getTime()
         : date,
     ])).success).toBe(true)
-    expect(await migrateAudit({ dryRun: true })).toMatchObject({
+    expect(await audit.init({ userTable: 'audit_security_users' })).toMatchObject({ success: false })
+    expect(audit.isInitialized).toBe(false)
+    const columns = await reldb.schemaColumns('hai_audit_logs')
+    expect(columns.success && columns.data).not.toContain('category')
+    expect(await reldb.sql.get('SELECT action FROM hai_audit_logs WHERE id=?', ['legacy'])).toMatchObject({
       success: true,
-      data: {
-        currentVersion: 0,
-        changes: [
-          'event-context-and-identity',
-          'persistent-retention-policy',
-          'retention-write-guards',
-          ...(reldb.config?.type === 'mysql'
-            ? ['millisecond-event-time']
-            : []),
-          'alert-notification-claims',
-          'event-time-index',
-        ],
-      },
-    })
-    expect((await audit.init({ userTable: 'audit_security_users' })).success).toBe(true)
-    expect(await audit.list()).toMatchObject({
-      success: true,
-      data: {
-        total: 1,
-        items: [
-          {
-            id: 'legacy',
-            action: 'legacy-event',
-            category: null,
-            outcome: null,
-            actorSnapshot: null,
-          },
-        ],
-      },
-    })
-    expect(await migrateAudit({ dryRun: true })).toMatchObject({
-      success: true,
-      data: { changes: [] },
+      data: { action: 'legacy-event' },
     })
   })
 

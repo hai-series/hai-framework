@@ -355,8 +355,9 @@ export async function createDbUserRepository(): Promise<UserRepository> {
     return userRepoInstance
 
   const repo = new DbUserRepository()
-  // 确保底层表创建完成（BaseReldbCrudRepository 的表创建是异步的）
-  await repo.count()
+  const ready = await repo.ready()
+  if (!ready.success)
+    throw ready.error
   repo.create = guardIamMutation(repo.create.bind(repo), 1)
   repo.updateById = guardIamMutation(repo.updateById.bind(repo), 2)
   repo.deleteById = guardIamMutation(repo.deleteById.bind(repo), 1)
@@ -379,6 +380,10 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
       table: TABLE_NAME,
       fields: USER_FIELDS,
     })
+  }
+
+  ready(): Promise<HaiResult<void>> {
+    return this.ensureSchema()
   }
 
   /** 数据库时钟在执行最终 SQL 时核验有效期，暂停进程不能复用旧的 Date.now()。 */

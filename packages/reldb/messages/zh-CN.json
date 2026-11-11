@@ -4,6 +4,7 @@
   "reldb_initFailed": "初始化数据库失败",
   "reldb_closeFailed": "关闭数据库失败",
   "reldb_ddlFailed": "DDL 操作失败",
+  "reldb_schemaMismatch": "数据表 {table} 与当前结构定义不符",
   "reldb_queryFailed": "查询失败",
   "reldb_duplicateEntry": "记录已存在",
   "reldb_batchFailed": "批量执行失败",

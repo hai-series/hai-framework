@@ -133,7 +133,7 @@ SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 
 
 - `audit.init(config)` - 初始化审计模块
 - `audit.log(input)` - 记录审计日志
-- `audit.list(options)` - 返回统一 `PaginatedResult<AuditLogWithUser>`（items/total/page/pageSize，含用户名 JOIN）；页码/条数复用 core 分页规范化，默认 pageSize 为 20，调用方直接使用返回元数据。
+- `audit.list(options)` - 返回统一 `PaginatedResult<AuditLogWithUser>`（items/total/page/pageSize，含事件时的用户名）；页码/条数复用 core 分页规范化，默认 pageSize 为 20，调用方直接使用返回元数据。
 - `audit.getUserRecent(userId, limit)` - 获取用户最近活动
 - `audit.cleanup(days)` - 清理旧日志
 - `audit.getStats(days, filters)` - 获取按分类等条件筛选的操作统计
@@ -165,7 +165,7 @@ SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 
 
 `retention: { enabled: true, minDays: 90 }` 开启最低保留。共享数据库保存策略，清理使用实际最低期限，`cleanup(0)` 不能绕过；数据库触发器拒绝保护期内的 UPDATE、DELETE 和冲突覆盖写。框架首次未配置时不强制保护，清理参数默认90天本身不构成不可变保证。未传 retention 的重初始化沿用既有策略，只有可信启动配置显式关闭才解除。该保护针对正常行级写入；数据库所有者的 DDL/权限、独立归档和更强存储保护需由部署管理。
 
-升级前先停旧写入并备份，`migrateAudit({ dryRun: true })` 只读预检；audit.init 自动执行可重入升级。历史未知分类、结果和身份快照保持 null，不补造历史身份。列表对无快照的历史记录保留旧的用户表关联展示，不能当作事件时身份。写入失败返回失败并输出关联诊断；close 等待已开始写入后再释放模块，随后才能关闭 RelDB。
+`audit.init()` 准备当前表结构和留存策略，结构不符时返回初始化失败。列表中的用户名来自事件时的身份快照，缺失时为 `null`。写入失败返回失败并输出关联诊断。`audit.close()` 等待已开始的写入，随后可关闭 RelDB。
 
 脱敏匹配整个字段：对象、数组以及自定义 JSON 投影内的敏感值同样隐藏。关闭或尚未初始化 Audit 时，capture 返回未初始化失败；只有已初始化模块的关闭采集配置才跳过自动事件。
 
@@ -252,7 +252,7 @@ await audit.init({
 
 > 说明：`audit.close()` 也返回 `HaiResult<void>`；`audit.helper.passwordResetRequest()` 的邮箱详情默认经过业务隐私脱敏。
 
-`audit.init()` 会等待自动建表和仓库就绪才返回成功；DDL 失败保持 `isInitialized=false`，修正数据库后可重试。自定义 JOIN、统计和清理也使用同一就绪屏障；初始化期间关闭会使迟到结果失效。先检查 init 的 HaiResult，再立即记录或查询；audit 不拥有共享 RelDB 的连接，关闭 audit 后再关闭数据库。
+`audit.init()` 会等待自动建表和仓库就绪才返回成功；DDL 失败保持 `isInitialized=false`，修正数据库后可重试。列表、统计和清理也使用同一就绪屏障；初始化期间关闭会使迟到结果失效。先检查 init 的 HaiResult，再立即记录或查询；audit 不拥有共享 RelDB 的连接，关闭 audit 后再关闭数据库。
 
 ## 开发测试
 

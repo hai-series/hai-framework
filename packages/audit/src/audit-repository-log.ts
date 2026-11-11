@@ -13,7 +13,7 @@ import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 import { readAuditTime } from './audit-database-time.js'
 import { auditM } from './audit-i18n.js'
 import { readAuditActor } from './audit-log-functions.js'
-import { auditRetentionDays } from './audit-migration.js'
+import { auditRetentionDays } from './audit-retention.js'
 import { HaiAuditError } from './audit-types.js'
 
 const logger = core.logger.child({ module: 'audit', scope: 'repository' })
@@ -97,15 +97,19 @@ interface AuditRepositoryConfig {
 export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
   private readonly repoConfig: AuditRepositoryConfig
   private readonly isSqlite: boolean
+  private readonly mysqlTable?: Promise<HaiResult<void>>
+  private readonly readiness: Promise<HaiResult<void>>
 
   /**
    * @param config - 仓库配置（用户表映射）
    */
   constructor(config: AuditRepositoryConfig) {
+    const mysql = reldb.config?.type === 'mysql'
     super(reldb, {
       table: AUDIT_TABLE,
       idColumn: 'id',
       generateId: () => core.id.withPrefix('audit_'),
+      createTableIfNotExists: !mysql,
       fields: [
         {
           fieldName: 'id',
@@ -239,6 +243,22 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     })
     this.repoConfig = config
     this.isSqlite = this.db.config?.type === 'sqlite'
+    if (mysql) {
+      // 审计事件需要毫秒精度，MySQL 表直接使用 DATETIME(3)。
+      this.mysqlTable = this.db.ddl.raw(`CREATE TABLE IF NOT EXISTS ${AUDIT_TABLE} (
+        id VARCHAR(255) NOT NULL PRIMARY KEY, user_id VARCHAR(255), action VARCHAR(255) NOT NULL,
+        resource VARCHAR(255) NOT NULL, resource_id VARCHAR(255), details JSON, ip_address VARCHAR(255),
+        user_agent VARCHAR(255), category VARCHAR(255), outcome VARCHAR(255), severity VARCHAR(255),
+        request_id VARCHAR(255), trace_id VARCHAR(255), scope_id VARCHAR(255), actor_snapshot JSON,
+        created_at DATETIME(3)
+      )`)
+    }
+    this.readiness = this.validateSchema()
+  }
+
+  protected override async ensureReady(): Promise<HaiResult<void>> {
+    const mysql = await this.mysqlTable
+    return mysql ?? super.ensureReady()
   }
 
   /**
@@ -247,7 +267,19 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
    * @example const ready = await repository.ready(); if (!ready.success) return ready
    */
   ready(): Promise<HaiResult<void>> {
-    return this.ensureReady()
+    return this.readiness
+  }
+
+  private async validateSchema(): Promise<HaiResult<void>> {
+    const schema = await this.ensureSchema()
+    if (!schema.success || !this.mysqlTable)
+      return schema
+    const column = await this.db.sql.get<{ digits: number }>('SELECT DATETIME_PRECISION AS digits FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?', [AUDIT_TABLE, 'created_at'])
+    if (!column.success)
+      return column
+    return Number(column.data?.digits) >= 3
+      ? ok(undefined)
+      : err(HaiAuditError.CONFIG_ERROR, auditM('audit_timestampPrecisionRequired'))
   }
 
   /**
@@ -405,7 +437,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
   }
 
   /**
-   * 分页查询日志列表（含用户名 LEFT JOIN）
+   * 分页查询日志列表，用户名来自事件时的身份快照。
    *
    * @param options - 过滤条件与分页参数
    * @returns 成功时返回 PaginatedResult（items/total/page/pageSize）；失败时返回 QUERY_FAILED
@@ -417,8 +449,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     logger.debug('Querying audit logs', { userId: options.userId, action: options.action, resource: options.resource })
 
     const { conditions, params } = this.filters(options)
-    const { userTable, userIdColumn, userNameColumn } = this.repoConfig
-    // 配置标识符已由 init 校验；别名加引号防止 PostgreSQL 折叠大小写。
+    // 别名加引号防止 PostgreSQL 折叠大小写。
     const quote = this.db.config?.type === 'mysql'
       ? '`'
       : '"'
@@ -447,13 +478,12 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       : ''
 
     try {
-      const result = await this.sql().queryPage<AuditReadRow & { username: string | null }>({
+      const result = await this.sql().queryPage<AuditReadRow>({
         sql: `SELECT a.id, a.user_id AS ${identifier('userId')}, a.action, a.resource, a.resource_id AS ${identifier('resourceId')},
                 a.details, a.ip_address AS ${identifier('ipAddress')}, a.user_agent AS ${identifier('userAgent')},
                 a.created_at AS ${identifier('createdAt')}, a.category, a.outcome, a.severity,
-                a.request_id AS ${identifier('requestId')}, a.trace_id AS ${identifier('traceId')}, a.scope_id AS ${identifier('scopeId')}, a.actor_snapshot AS ${identifier('actorSnapshot')}, u.${identifier(userNameColumn)} AS username
+                a.request_id AS ${identifier('requestId')}, a.trace_id AS ${identifier('traceId')}, a.scope_id AS ${identifier('scopeId')}, a.actor_snapshot AS ${identifier('actorSnapshot')}
          FROM ${AUDIT_TABLE} a
-         LEFT JOIN ${identifier(userTable)} u ON a.user_id = u.${identifier(userIdColumn)}
          ${whereClause}
          ORDER BY a.${sortColumns[sortBy]} ${direction.toUpperCase()}, a.id ${direction.toUpperCase()}`,
         params,
@@ -474,12 +504,10 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
 
       return ok({
         ...result.data,
-        items: result.data.items.map(row => ({
-          ...normalizeAuditLog(row),
-          username: readAuditActor(row.actorSnapshot)?.username ?? (row.actorSnapshot == null
-            ? row.username ?? null
-            : null),
-        })),
+        items: result.data.items.map((row) => {
+          const record = normalizeAuditLog(row)
+          return { ...record, username: record.actorSnapshot?.username ?? null }
+        }),
       })
     }
     catch (error) {

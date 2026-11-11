@@ -1,4 +1,5 @@
 {
+  "reach_sendLogIndexRequired": "送信ログテーブルには受付 ID の一意インデックスが必要です",
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "reach_notInitialized": "通知モジュールが初期化されていません。先にreach.init()を呼び出してください",
   "reach_initFailed": "通知モジュールの初期化に失敗しました: {error}",

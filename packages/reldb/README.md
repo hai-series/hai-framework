@@ -113,10 +113,9 @@ table/column/index 名必须来自可信代码；sql 是可信语句，params �
 
 模块持久化准备。输入表名得到列名数组；输入模块名、迁移步骤和 dryRun 得到迁移计划。执行前备份并停止冲突写入。
 
-| 入口                  | 输入参数               | 成功结果              | 调用示例                                                                |
-| --------------------- | ---------------------- | --------------------- | ----------------------------------------------------------------------- |
-| `reldb.schemaColumns` | table, sql             | `string[]`            | `await reldb.schemaColumns('orders')`                                   |
-| `reldb.migrateSchema` | module, steps, options | `SchemaMigrationPlan` | `await reldb.migrateSchema('orders', migrationSteps, { dryRun: true })` |
+| 入口                  | 输入参数   | 成功结果   | 调用示例                              |
+| --------------------- | ---------- | ---------- | ------------------------------------- |
+| `reldb.schemaColumns` | table, sql | `string[]` | `await reldb.schemaColumns('orders')` |
 
 #### reldb.tx
 
@@ -603,9 +602,9 @@ await reldb.sql.execute(`UPDATE products SET meta = ${rmSql} WHERE id = ?`, [...
 
 生产仅使用 PostgreSQL/MySQL；SQLite（含磁盘文件）只用于开发/明确测试，不能作为跨主机共享状态。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../.agents/instructions/distributed-state.md).
 
-### 模块架构迁移
+### 检查数据表结构
 
-`reldb.schemaColumns(table, sql?)` 只读检查真实结构；`reldb.migrateSchema(module, steps, { dryRun: true })` 不创建账本。版本步骤由所属模块维护，业务不修改框架内部表。执行使用 `hai_schema_migrations`，SQLite/PostgreSQL 整体事务，MySQL DDL 隐式提交因此步骤必须可重入；失败不推进版本，重新检查真实结构后续做，拒绝向低版本降级。升级前停止所有旧写入并备份 DB/会话缓存；回退需恢复兼容数据库与旧代码，不能只换二进制。详见 [升级指南](../../docs/usage/README.md).
+`reldb.schemaColumns(table, sql?)` 只读查询实际列名。传入当前事务的 SQL 操作句柄，可在同一事务中检查表结构。框架模块初始化时校验各自的表结构，业务表由应用管理。
 
 ## 配置
 

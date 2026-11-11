@@ -28,8 +28,8 @@ import { createHelper } from './audit-helper.js'
 import { auditM } from './audit-i18n.js'
 import { createAuditWriter, validAuditQuery } from './audit-log-functions.js'
 
-import { configureAuditRetention, migrateAudit } from './audit-migration.js'
 import { AuditLogRepository } from './audit-repository-log.js'
+import { configureAuditRetention, initializeAuditStorage } from './audit-retention.js'
 import {
   HaiAuditError,
 } from './audit-types.js'
@@ -205,9 +205,6 @@ export const audit: AuditFunctions = {
         )
       }
 
-      const migrated = await migrateAudit()
-      if (!migrated.success)
-        return migrated
       const candidate = new AuditLogRepository({
         userTable: parsed.userTable,
         userIdColumn: parsed.userIdColumn,
@@ -219,7 +216,7 @@ export const audit: AuditFunctions = {
           params: { error: ready.error.message },
         }), ready.error)
       }
-      const protection = await migrateAudit()
+      const protection = await initializeAuditStorage()
       if (!protection.success)
         return protection
       const configured = await configureAuditRetention(parsed.retention)
@@ -296,7 +293,7 @@ export const audit: AuditFunctions = {
   },
 
   /**
-   * 分页查询审计日志列表（含用户名 LEFT JOIN）
+   * 分页查询审计日志列表，用户名来自事件时的身份快照。
    *
    * @param options - 过滤条件与分页参数
    * @returns 成功时返回 PaginatedResult（items/total/page/pageSize）；未初始化时返回 NOT_INITIALIZED

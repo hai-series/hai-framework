@@ -29,7 +29,7 @@ description: "接入 @h-ai/audit 记录业务操作，查询分页日志与统�
 
 `audit.log(input,tx)`、`audit.capture(input,{tx})` 可使用调用者现有 RelDB 事务，事件和变更一并提交或回滚；失败尝试须在回滚后由入口记录。自动记录失败输出诊断并保留已生效业务结果；强制审计的业务检查同事务显式 log 的 HaiResult 后再提交。list 支持 requestId/traceId 关联筛选。
 
-`retention:{enabled:true,minDays:90}` 将最低保留写入共享数据库，cleanup(0) 也必须遵守；数据库触发器保护近期行的改删与覆盖。框架首次未配置不强制保护；未传 retention 的重初始化保留既有策略，显式可信配置可关闭。DB 所有者 DDL/权限与独立归档是部署边界。升级前停旧写入、备份并用 `migrateAudit({dryRun:true})` 预检。写失败返回失败并输出诊断；close 等待在途写入后再关闭数据库。
+`retention:{enabled:true,minDays:90}` 将最低保留写入共享数据库，cleanup(0) 也必须遵守；数据库触发器保护近期行的改删与覆盖。框架首次未配置不强制保护；未传 retention 的重初始化保留既有策略，显式可信配置可关闭。DB 所有者 DDL/权限与独立归档是部署边界。`audit.init()` 校验当前表结构。用户名取自事件时的身份快照。写失败返回失败并输出诊断；close 等待在途写入后再关闭数据库。
 
 常见事件使用 `audit.helper` 与公开 `AuditHelper` 类型；内部记录器装配工厂不从包入口导出。
 

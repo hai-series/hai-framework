@@ -511,7 +511,7 @@ SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点�
 
 未启用额外期限时，access 与 refresh 独立到期：access 过期仍可凭有效 refresh 轮换，刷新不先要求旧 access 认证。`session.idleTimeout`、`absoluteTimeout` 以秒配置，0关闭；启用后 access 与 refresh 均检查，刷新保留首次登录时间。成功的 access 认证请求算活动；自动 refresh 仅换票，不延长闲置期限。后台业务轮询仍需按项目设计。`maxSessions: 0` 不限，否则在用户分区 CAS 原子限制有效会话数；`singleDevice: true` 默认顶旧保新，`singleDeviceMode: 'reject'` 保留旧会话并拒绝新登录。删除 access、logoutAll、单设备替换均撤销对应 refresh；`revokeRefresh` 保留仍有效的 access。
 
-账号生命周期仅使用必填 `accountStatus`（active/dormant/closed），无 User.enabled；列表过滤/排序同名，注册 defaultAccountStatus 默认 active、可设 dormant。beta.1 迁移前停旧写入并备份数据库；v6 将原停用 active 账号转 dormant 后删除旧列，镜像回滚不能恢复数据库。账号默认 `permanent/active`；管理端可配置 `temporary` 与 `accountExpiresAt`，或设 `accountStatus` 为 `dormant/closed`。状态/有效期变化推进持久凭据代际，重新激活不恢复旧会话。`accounts.dormantAfterDays: 0` 关闭自动休眠；启用后按 `scanIntervalSeconds` 扫描最后成功登录/创建时间，也可从可信后台调用 `iam.user.scanInactiveAccounts()`。公开注册不能接受管理字段；`closed` 保留记录，个人数据注销由项目处理。
+账号生命周期使用必填 `accountStatus`（active/dormant/closed）。列表过滤和排序使用同名字段，注册 `defaultAccountStatus` 默认为 `active`，也可设置为 `dormant`。账号默认 `permanent/active`；管理端可配置 `temporary` 与 `accountExpiresAt`，或设 `accountStatus` 为 `dormant/closed`。状态/有效期变化推进持久凭据代际，重新激活不恢复旧会话。`accounts.dormantAfterDays: 0` 关闭自动休眠；启用后按 `scanIntervalSeconds` 扫描最后成功登录/创建时间，也可从可信后台调用 `iam.user.scanInactiveAccounts()`。公开注册不能接受管理字段；`closed` 保留记录，个人数据注销由项目处理。
 
 `password.minCharacterClasses` 支持任意 N 类字符；创建/改密/重置共用服务端强度校验。`expirationDays: 0` 关闭期限；`preventSamePassword` 可独立启用，期限或首次强改时也拒绝旧密码。`requireInitialChange` 只约束管理端初始/重置密码，关闭后不受历史标记约束。首次/过期用户用 `iam.user.renewPassword({identifier,password,newPassword})` 完成原密码验证与换密后重新登录，不能先授予普通会话。AuthPanel 与标准 Kit/Serv 端点提供该流程。
 

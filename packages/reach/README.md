@@ -175,7 +175,7 @@ if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
 
 发送密码、OTP 或重置令牌时使用 `reach.send({ ..., sensitive: true, expiresAt, idempotencyKey })`。expiresAt 是 Unix 毫秒，稳定操作键不可包含凭据。必须有共享发送账本：只持久化无载荷回执/状态，接收方脱敏，不存正文、变量或低熵凭据摘要，也不进入延迟队列。发送成功返回 receiptId；DND/过期不投递，异常或不明状态不自动重投。明确启用的开发控制台仍可显示业务允许的通知，持久采集观察器被隔离；生产 Console Provider 限制不变。普通通知可用 deferPolicy: reject 阻止二次排队。
 
-`migrateReach({ dryRun: true })` 预检持久结构，仓储初始化执行支持的准备步骤；失败时停止初始化。执行前备份并停止冲突写入，保留发送账本，不把结构准备作为重新发送凭据的理由。
+`reach.init()` 创建并校验发送日志表及队列标识约束，结构不符时返回初始化失败。保留发送账本，按持久回执核对状态，避免重发结果不明的凭据通知。
 
 ### API 回执与目标边界
 

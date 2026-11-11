@@ -16,7 +16,6 @@ function tests() {
     for (const table of [
       'hai_audit_logs',
       'hai_audit_policy',
-      'hai_schema_migrations',
       'hai_iam_users',
     ])
       expect((await reldb.ddl.dropTable(table, true)).success).toBe(true)

@@ -41,4 +41,4 @@ description: "使用 @h-ai/reldb 访问 SQLite/PostgreSQL/MySQL，编写 SQL、C
 
 JSON 对象合并使用 RFC 7396 补丁，必须将返回的 SQL/params 放在同一次 UPDATE 内；禁止先读对象再覆盖整个列来模拟跨节点原子合并。路径函数的后端差异和完整可类型检查示例见 [reference.md](reference.md)。
 
-框架模块维护自己的版本迁移，应用不直接 ALTER 框架表。`reldb.schemaColumns(table, sql?)` 只读真实列；`reldb.migrateSchema(module, steps, { dryRun: true })` 不创建账本。生产先停旧写入并备份 DB/共享会话缓存；SQLite/PostgreSQL 事务，MySQL DDL 隐式提交须可重入，失败不推进版本且重试检查真实结构。回退恢复兼容 DB 与代码，不只换二进制。模块 migrateIam/migrateReach/migrateScheduler 分别预检，初始化执行受支持步骤。
+`reldb.schemaColumns(table, sql?)` 读取实际列名。框架模块按当前定义初始化并校验各自的表。应用只管理自己的业务表。

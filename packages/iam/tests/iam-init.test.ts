@@ -64,6 +64,30 @@ describe('iam.init', () => {
       await iam.close()
     })
 
+    it('用户表缺少当前字段时拒绝初始化并保留现有记录', async () => {
+      await iam.close()
+      const table = 'hai_iam_users'
+      expect((await reldb.ddl.dropTable(table, true)).success).toBe(true)
+      expect((await reldb.ddl.createTable(table, {
+        id: { type: 'TEXT', primaryKey: true },
+        username: { type: 'TEXT', notNull: true },
+      })).success).toBe(true)
+      expect((await reldb.sql.execute('INSERT INTO hai_iam_users (id, username) VALUES (?, ?)', ['existing', 'member'])).success).toBe(true)
+      expect(await iam.init({})).toMatchObject({
+        success: false,
+        error: { code: HaiIamError.CONFIG_ERROR.code },
+      })
+      expect(iam.isInitialized).toBe(false)
+      expect(await reldb.schemaColumns(table)).toMatchObject({
+        success: true,
+        data: ['id', 'username'],
+      })
+      expect(await reldb.sql.get('SELECT username FROM hai_iam_users WHERE id=?', ['existing'])).toMatchObject({
+        success: true,
+        data: { username: 'member' },
+      })
+    })
+
     it('正常初始化应成功', async () => {
       await iam.close()
       const result = await iam.init({})

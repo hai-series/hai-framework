@@ -101,6 +101,10 @@ interface TaskRow {
  * ```
  */
 export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
+  ready(): Promise<HaiResult<void>> {
+    return this.ensureSchema()
+  }
+
   constructor(db: ReldbFunctions) {
     super(db, {
       table: SCHEDULER_TASK_TABLE,

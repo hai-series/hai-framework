@@ -25,7 +25,6 @@ import { resetRoleRepoSingleton } from './authz/iam-authz-repository-role.js'
 import { observeApiKeys, observeAuth, observeAuthorization, observeSessions, observeUsers } from './iam-audit.js'
 import { IamConfigSchema } from './iam-config.js'
 import { iamM } from './iam-i18n.js'
-import { migrateIam } from './iam-migration.js'
 import { resolveIamNotifications } from './iam-notifications.js'
 import { buildIamPublicConfig } from './iam-public-config.js'
 import { readIamUserSecurity } from './iam-security-cache.js'
@@ -178,9 +177,6 @@ export const iam: IamFunctions = {
       })
 
       // 创建子功能（按依赖顺序），使用局部变量暂存，全部成功后再原子性赋值
-      const migration = await migrateIam()
-      if (!migration.success)
-        return migration
       const credentialUsers = await createDbUserRepository()
       const sessionResult = await createSessionOperations({
         config: parsed,

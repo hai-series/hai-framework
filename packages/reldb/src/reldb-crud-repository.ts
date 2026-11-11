@@ -467,6 +467,23 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
     return ok(undefined)
   }
 
+  /** 验证框架仓库使用当前字段定义，结构不符时停止发布仓库。 */
+  protected async ensureSchema(): Promise<HaiResult<void>> {
+    const ready = await this.ensureReady()
+    if (!ready.success)
+      return ready
+    const columns = await this.db.schemaColumns(this.table)
+    if (!columns.success)
+      return columns
+    const names = new Set(columns.data)
+    if (names.size !== this.fields.length || this.fields.some(field => !names.has(field.columnName))) {
+      return err(HaiReldbError.DDL_FAILED, reldbM('reldb_schemaMismatch', {
+        params: { table: this.table },
+      }))
+    }
+    return ok(undefined)
+  }
+
   /**
    * 创建单条记录
    *

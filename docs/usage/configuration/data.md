@@ -170,7 +170,7 @@ operationLog: { read: false, write: true, maxLength: 1000 }
 
 可用 `HAI_STORAGE_MULTIPART_PARTSIZEBYTES` 和 `HAI_STORAGE_MULTIPART_QUEUESIZE` 覆盖两项设置。流长度未超过片大小时使用单次 PUT，超过时分片。每次流式上传的主要缓冲预算约为片大小乘以并发数。设置在 Storage 初始化时应用。
 
-存储业务操作失败仍返回原错误，同时记录 `warn`。初始化、连接和关闭失败记录 `error`。应用可用 `HAI_STORAGE_OPERATIONLOG_WRITE=false` 关闭写操作的 `debug` 记录。移除旧的 `operationLog.level` 和 `HAI_STORAGE_OPERATIONLOG_LEVEL`，通过 `HAI_CORE_LOGGING_LEVEL` 过滤日志。
+存储业务操作失败仍返回原错误，同时记录 `warn`。初始化、连接和关闭失败记录 `error`。应用可用 `HAI_STORAGE_OPERATIONLOG_WRITE=false` 关闭写操作的 `debug` 记录，通过 `HAI_CORE_LOGGING_LEVEL` 过滤日志。
 
 S3 流式上传的告警包含可取得的 S3 操作名和服务端请求编号。分片上传和后续清理都失败时，`error.cause` 保留首次失败，`error.ext?.cleanupError` 保存清理错误，两者可用请求编号与存储审计对照。
 

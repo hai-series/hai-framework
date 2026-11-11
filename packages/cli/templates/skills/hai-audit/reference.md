@@ -69,7 +69,7 @@ if (!closeResult.success) {
 
 `audit.log(input,tx)`、`audit.capture(input,{tx})` 可使用调用者现有 RelDB 事务，事件和变更一并提交或回滚；失败尝试须在回滚后由入口记录。自动记录失败输出诊断并保留已生效业务结果；强制审计的业务检查同事务显式 log 的 HaiResult 后再提交。list 支持 requestId/traceId 关联筛选。
 
-`retention:{enabled:true,minDays:90}` 启用共享最低保留，cleanup(0) 不能绕过。触发器拒绝保护期内改删及冲突覆盖；未传 retention 的重初始化沿用已有策略，只有显式可信配置能关闭。默认清理90天不等于不可变保护，首次未配置时不强制启用。DB 所有者 DDL、权限与独立归档需部署侧控制。升级前停旧写入并备份，`migrateAudit({dryRun:true})` 只读预检，init 自动升级；close 会等待已开始的写入。
+`retention:{enabled:true,minDays:90}` 启用共享最低保留，cleanup(0) 不能绕过。触发器拒绝保护期内改删及冲突覆盖；未传 retention 的重初始化沿用已有策略，只有显式可信配置能关闭。默认清理90天不等于不可变保护，首次未配置时不强制启用。DB 所有者 DDL、权限与独立归档需部署侧控制。`audit.init()` 校验当前表结构。用户名取自事件时的身份快照。`audit.close()` 等待已开始的写入。
 
 `backup.enabled` 默认关闭；开启后注入已初始化的私有 StorageFunctions。backup.run({id?,from?,to?,signal?}) 流式条件创建 JSONL，返回记录数/SHA-256/截止时间；稳定 ID 只复用完整且条件相同的归档，不覆盖。backup.verify(key) 有界核对；batchSize/maxRecordBytes 控制内存，超限不截断证据。AUDIT_BACKUP_PREFIX 固定为 hai-private/audit-backups/，公开读取入口只允许指定资源，关闭备份不解除私有边界；已配置公开 publicUrl 的 S3 不能启用备份。
 

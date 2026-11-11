@@ -114,7 +114,7 @@ it('识图历史只返回当前用户的数据，匿名和归属不明的旧记�
   })
 })
 
-it('迁移保留旧识图记录，所有者保持未知且重复启动不重复改写', async () => {
+it('识图表缺少所有者列时停止初始化，保留已有记录', async () => {
   expect((await reldb.sql.execute('DROP TABLE vision_records')).success).toBe(true)
   expect((await reldb.sql.execute('CREATE TABLE vision_records (id TEXT PRIMARY KEY,storage_key TEXT,file_name TEXT,mime_type TEXT,prompt TEXT,analysis TEXT,tags_json TEXT,confidence REAL,created_at TEXT)')).success).toBe(true)
   expect((await reldb.sql.execute('INSERT INTO vision_records VALUES (?,?,?,?,?,?,?,?,?)', [
@@ -128,13 +128,15 @@ it('迁移保留旧识图记录，所有者保持未知且重复启动不重复�
     1,
     '1',
   ])).success).toBe(true)
-  await ensureVisionTable()
-  await ensureVisionTable()
-  expect(await reldb.sql.get('SELECT user_id, analysis FROM vision_records WHERE id=?', ['legacy'])).toMatchObject({
+  await expect(ensureVisionTable()).rejects.toThrow('Vision table does not match its current schema')
+  expect(await reldb.schemaColumns('vision_records')).toMatchObject({
     success: true,
-    data: { user_id: null, analysis: 'kept' },
+    data: expect.not.arrayContaining(['user_id']),
   })
-  expect(await (await history(event('member-a'))).json()).toMatchObject({ data: [] })
+  expect(await reldb.sql.get('SELECT analysis FROM vision_records WHERE id=?', ['legacy'])).toMatchObject({
+    success: true,
+    data: { analysis: 'kept' },
+  })
 })
 
 it('文件读取只开放当前用户的规范图片键，私有对象和旧无归属键保持拒绝', async () => {

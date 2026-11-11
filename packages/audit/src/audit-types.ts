@@ -128,7 +128,7 @@ export interface AuditLog extends AuditEventFields {
 /**
  * 审计日志记录（含用户名）
  *
- * 新记录使用事件时身份快照；无快照的历史记录才保留旧的用户表关联展示。
+ * 用户名来自事件时的身份快照；无名称时为 null。
  * @example
  * ```ts
  * import type { AuditLogWithUser } from '@h-ai/audit'
@@ -136,7 +136,7 @@ export interface AuditLog extends AuditEventFields {
  * ```
  */
 export interface AuditLogWithUser extends AuditLog {
-  /** 操作用户的用户名；用户不存在或系统操作时为 null */
+  /** 事件时的用户名；未捕获到名称时为 null。 */
   username: string | null
 }
 
@@ -390,7 +390,7 @@ export interface AuditFunctions {
    */
   capture: (input: CreateAuditLogInput, options?: { read?: boolean, tx?: DmlWithTxOperations }) => Promise<HaiResult<void>>
   /**
-   * 分页查询审计日志列表（含用户名 LEFT JOIN）
+   * 分页查询审计日志列表，用户名来自事件时的身份快照。
    *
    * @param options - 查询过滤与分页选项
    * @returns 成功时返回 PaginatedResult（items/total/page/pageSize）；失败时返回 QUERY_FAILED

@@ -1,4 +1,5 @@
 {
+  "audit_timestampPrecisionRequired": "审计事件时间列必须支持毫秒精度",
   "audit_eventFieldsInvalid": "事件字段无效",
   "audit_identityMismatch": "身份快照与操作者不一致",
   "audit_queryInvalid": "筛选条件或日期无效",

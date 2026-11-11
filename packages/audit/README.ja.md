@@ -133,7 +133,7 @@ SQLite、PostgreSQL、MySQL で読み取り契約は共通です。`createdAt` �
 
 - `audit.init(config)`：監査モジュールを初期化。
 - `audit.log(input)`：監査ログを記録。
-- `audit.list(options)`：`PaginatedResult<AuditLogWithUser>`（items/total/page/pageSize、ユーザー名 JOIN）を返します。core がページ入力を正規化し、既定 pageSize は 20 です。返されたメタデータを直接利用してください。
+- `audit.list(options)`：`PaginatedResult<AuditLogWithUser>`（items/total/page/pageSize、イベント時のユーザー名）を返します。core がページ入力を正規化し、既定 pageSize は 20 です。返されたメタデータを直接利用してください。
 - `audit.getUserRecent(userId, limit)`：ユーザーの最近の操作を取得。
 - `audit.cleanup(days)`：古いログを削除。
 - `audit.getStats(days)`：操作統計を取得。
@@ -165,7 +165,7 @@ SQLite、PostgreSQL、MySQL で読み取り契約は共通です。`createdAt` �
 
 `retention: { enabled: true, minDays: 90 }` は共有DBの最低保持を有効にします。cleanup(0) も最低期間を守り、トリガーは保護対象の UPDATE・DELETE・衝突置換を拒否します。未設定の新規フレームワークは保持保護を強制せず、削除引数の既定90日だけでは不変保証になりません。retention を省略した再初期化はDB設定を継続し、信頼できる起動設定で明示的に無効化できます。通常の行書込を対象とし、DB所有者のDDL・権限や独立アーカイブなどは配備側で管理します。
 
-更新前に旧書込を停止してバックアップし、`migrateAudit({ dryRun: true })` で読み取り専用の事前確認ができます。audit.init は再実行可能な移行を行います。歴史上不明な分類・結果・身元は null のままです。旧記録のユーザー表JOINは表示互換であり、当時の身元の証拠にはしません。書込失敗は失敗結果と関連診断を返し、close は開始済み書込を待つため、その後に RelDB を閉じてください。
+`audit.init()` は現在のテーブル構造と保持ポリシーを準備し、構造が一致しない場合は失敗します。一覧のユーザー名はイベント時のスナップショットを使用し、名称がない場合は `null` です。書き込み失敗時はエラーと関連診断を返します。開始済みの書き込みを待つため、RelDB の前に audit を終了します。
 
 マスキングは項目全体に適用し、オブジェクト、配列、独自 JSON 変換の機密値も隠します。未初期化または close 後の capture は未初期化エラーを返し、初期化済みモジュールで capture を無効にした場合だけ自動イベントを省略します。
 
@@ -252,7 +252,7 @@ await audit.init({
 
 > 注：`audit.close()` も `HaiResult<void>` を返します。`audit.helper.passwordResetRequest()` のメール情報は既定の業務個人情報設定でマスクされます。
 
-`audit.init()` は自動建表とリポジトリーの準備完了を待って成功します。DDL 失敗時は `isInitialized=false` のままで、DB を修正後に再試行できます。独自 JOIN・統計・削除も同じ準備完了を待ちます。初期化中の close は遅れた公開を無効化します。init の HaiResult を確認後に記録・検索し、共有 DB の接続は所有しないため audit の終了後に DB を終了します。
+`audit.init()` は自動建表とリポジトリーの準備完了を待って成功します。DDL 失敗時は `isInitialized=false` のままで、DB を修正後に再試行できます。一覧・統計・削除も同じ準備完了を待ちます。初期化中の close は遅れた公開を無効化します。init の HaiResult を確認後に記録・検索し、共有 DB の接続は所有しないため audit の終了後に DB を終了します。
 
 ## 開発とテスト
 

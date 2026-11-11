@@ -217,6 +217,11 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
     })
   }
 
+  /** 等待执行表就绪并验证当前字段定义。 */
+  ready(): Promise<HaiResult<void>> {
+    return this.ensureSchema()
+  }
+
   /**
    * 只按已初始化的数据库类型选择存储端毫秒时钟。
    * PostgreSQL/MySQL 使用执行时钟，不能使用固定在事务/语句开始处的时间快照。

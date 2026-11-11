@@ -12,7 +12,6 @@ import { err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
 
 import { reachM } from '../reach-i18n.js'
-import { migrateReach } from '../reach-migration.js'
 import { HaiReachError } from '../reach-types.js'
 
 // ─── 发送日志实体类型 ───
@@ -640,12 +639,8 @@ export async function createSendLogRepository(db: ReldbFunctions): Promise<HaiRe
   if (sendLogRepoInstance && sendLogRepoSqlOps === db.sql)
     return ok(sendLogRepoInstance)
 
-  const migration = await migrateReach({}, db)
-  if (!migration.success)
-    return migration
   const repo = new DbSendLogRepository(db)
-  // 触发表创建（BaseReldbCrudRepository 的表创建是异步的）
-  const initResult = await repo.count()
+  const initResult = await repo.ready()
   if (!initResult.success) {
     return err(
       HaiReachError.SEND_FAILED,
@@ -664,6 +659,24 @@ export async function createSendLogRepository(db: ReldbFunctions): Promise<HaiRe
  * 基于数据库的发送日志存储实现
  */
 class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> implements SendLogRepository {
+  /** 唯一回执约束保证多个节点不能为同一操作排入不同的发送记录。 */
+  async ready(): Promise<HaiResult<void>> {
+    const schema = await this.ensureSchema()
+    if (!schema.success)
+      return schema
+    const type = this.db.config?.type
+    const index = type === 'sqlite'
+      ? await this.db.sql.get('SELECT i.name FROM pragma_index_list(?) i JOIN pragma_index_info(i.name) f WHERE i."unique"=1 AND i.partial=0 GROUP BY i.name HAVING COUNT(*)=1 AND MAX(f.name)=?', [TABLE_NAME, 'queue_id'])
+      : type === 'mysql'
+        ? await this.db.sql.get('SELECT index_name FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name=? AND non_unique=0 GROUP BY index_name HAVING COUNT(*)=1 AND MAX(column_name)=?', [TABLE_NAME, 'queue_id'])
+        : await this.db.sql.get('SELECT i.indexrelid FROM pg_index i JOIN pg_class t ON t.oid=i.indrelid JOIN pg_namespace n ON n.oid=t.relnamespace JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=i.indkey[0] WHERE t.relname=? AND n.nspname=current_schema() AND i.indisunique AND i.indisvalid AND i.indpred IS NULL AND i.indnkeyatts=1 AND a.attname=?', [TABLE_NAME, 'queue_id'])
+    if (!index.success)
+      return index
+    return index.data
+      ? ok(undefined)
+      : err(HaiReachError.SEND_FAILED, reachM('reach_sendLogIndexRequired'))
+  }
+
   /** 共享后端取真正执行时钟；本地 SQLite 保留可控的单进程测试时钟。 */
   private clockSql(localNow?: number): string {
     if (this.db.config?.type === 'postgresql')

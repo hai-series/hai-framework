@@ -19,7 +19,6 @@ import { ExecutionResolutionSchema, SchedulerConfigSchema, TriggerTaskSchema } f
 import { cancelTaskDefinitionReads, clearHooks, drainTaskDefinitions, getHooks, getTask, getTaskRegistry, loadConfigTasks, loadPersistedTasks, queryTaskLogs, registerTask, resetTaskState, setHooks, unregisterTask, updateRegisteredTask } from './scheduler-functions.js'
 import { schedulerM } from './scheduler-i18n.js'
 import { clearJsTaskHandlerCache } from './scheduler-js-compiler.js'
-import { migrateScheduler } from './scheduler-migration.js'
 import { configureExecution, drainRunner, isTimerRunning, repairExecutionLogs, resetRunner, runTask, setLogRepository, setTaskRepository, startTimer, stopTimer } from './scheduler-runner.js'
 import { HaiSchedulerError } from './scheduler-types.js'
 
@@ -48,15 +47,17 @@ async function initDatabase(parsed: SchedulerConfig): Promise<SchedulerConfig> {
     throw new Error(schedulerM('scheduler_reldbNotInitialized'))
   }
 
-  const migration = await migrateScheduler()
-  if (!migration.success)
-    throw migration.error
   taskRepo = new SchedulerTaskRepository(reldb)
   logRepo = new SchedulerLogRepository(reldb)
   executionRepo = new SchedulerExecutionRepository(reldb)
-  const ready = await executionRepo.count()
-  if (!ready.success)
-    throw new Error(schedulerM('scheduler_executionStateFailed'))
+  for (const ready of await Promise.all([
+    taskRepo.ready(),
+    logRepo.ready(),
+    executionRepo.ready(),
+  ])) {
+    if (!ready.success)
+      throw ready.error
+  }
   setTaskRepository(taskRepo)
   setLogRepository(logRepo, {
     maxLogs: parsed.maxLogs,

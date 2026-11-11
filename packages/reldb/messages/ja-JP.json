@@ -4,6 +4,7 @@
   "reldb_initFailed": "データベースの初期化に失敗しました",
   "reldb_closeFailed": "データベースの終了に失敗しました",
   "reldb_ddlFailed": "DDL操作に失敗しました",
+  "reldb_schemaMismatch": "テーブル {table} が現在のスキーマ定義と一致しません",
   "reldb_queryFailed": "クエリに失敗しました",
   "reldb_duplicateEntry": "レコードは既に存在します",
   "reldb_batchFailed": "バッチ実行に失敗しました",

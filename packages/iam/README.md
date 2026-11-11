@@ -1095,7 +1095,7 @@ RBAC 权限支持 `sensitiveOperations: string[]`（持久字段 `sensitive_oper
 
 ### 持久结构与凭据通知
 
-`migrateIam({ dryRun: true })` 在 RelDB 初始化后只读预检；iam.init 准备模块持久结构和凭据/重置字段，保留用户、密码与业务权限。结构变更前备份并停止冲突写入；会话必须匹配当前安全代际，不匹配时重新登录，不能降低数据库安全代际来恢复授权。默认 Reach 通知使用 sensitive/expiresAt/idempotencyKey，不落明文、不延迟重投；自定义回调同样须遵守有效期与凭据保护。
+先初始化 RelDB，再调用 `iam.init()`。IAM 会创建并校验所需表，结构不符时返回初始化失败。会话必须匹配当前凭据代次，不匹配时需重新登录。默认 Reach 通知使用 `sensitive`、`expiresAt` 和 `idempotencyKey`，不保存凭据正文或延迟重投。自定义回调也须遵守有效期与凭据保护要求。
 
 审计模块已初始化且 capture.enabled 开启时，IAM 自动记录关键账号、鉴别、密码、授权、API Key 和会话事件，包含失败/拒绝与安全原因码。先初始化 audit 再初始化 IAM，关闭时反序。不会记录密码、一次性票据或令牌；成功登录才确认主体，可信服务/CLI 调用应以 audit.withContext 提供操作者和关联信息。外部授权事务的事件随该事务提交或回滚，回滚失败尝试由调用入口在事务结束后记录。审计写失败输出诊断，不把已生效业务改成可盲目重试的失败。
 

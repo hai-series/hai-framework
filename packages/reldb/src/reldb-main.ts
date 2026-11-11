@@ -28,8 +28,8 @@ import { createSqliteProvider } from './providers/reldb-provider-sqlite.js'
 import { ReldbConfigSchema } from './reldb-config.js'
 import { reldbM } from './reldb-i18n.js'
 import { createJsonOps } from './reldb-json.js'
-import { migrateSchema, schemaColumns } from './reldb-migration.js'
 import { pagination } from './reldb-pagination.js'
+import { schemaColumns } from './reldb-schema.js'
 import { HaiReldbError } from './reldb-types.js'
 
 const logger = core.logger.child({ module: 'reldb', scope: 'main' })
@@ -304,13 +304,6 @@ export const reldb: ReldbFunctions = {
   /** 事务管理器 */
   get tx(): TxManager {
     return currentProvider?.tx ?? notInitializedTx
-  },
-
-  /** 迁移操作绑定当前实例，调用方只提供模块自己的步骤。 */
-  migrateSchema(module, steps, options) {
-    if (!currentProvider)
-      return Promise.resolve(notInitialized.result())
-    return migrateSchema(reldb, module, steps, options)
   },
 
   /** 列检查复用当前连接或显式传入的事务。 */

@@ -170,7 +170,9 @@ export async function createDbPermissionRepository(): Promise<PermissionReposito
     return permRepoInstance
 
   const repo = new DbPermissionRepository()
-  await repo.count()
+  const ready = await repo.ready()
+  if (!ready.success)
+    throw ready.error
   permRepoInstance = repo
   permRepoSqlOps = reldb.sql
   return repo
@@ -229,6 +231,10 @@ class DbPermissionRepository extends BaseReldbCrudRepository<Permission> impleme
       table: TABLE_NAME,
       fields: PERMISSION_FIELDS,
     })
+  }
+
+  ready(): Promise<HaiResult<void>> {
+    return this.ensureSchema()
   }
 
   /** 根据权限代码查找权限 */

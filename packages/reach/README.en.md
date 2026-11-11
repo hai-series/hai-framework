@@ -175,7 +175,7 @@ Production rejects console providers and requires SMTP, SMS or an actual API ser
 
 Use `reach.send({ ..., sensitive: true, expiresAt, idempotencyKey })` for passwords, OTPs and reset tokens. expiresAt is Unix milliseconds; stable operation keys must contain no credentials. A shared ledger stores only metadata receipts/status and redacted destinations, never bodies, variables or credential hashes. There is no delayed credential queue. Success returns receiptId; DND/expired messages are not sent, and uncertain delivery is never automatically repeated. Explicit development console output is isolated from persistent observers. Production Console restrictions remain. Normal messages may use deferPolicy: reject to avoid a second queue.
 
-`migrateReach({ dryRun: true })` previews persistence preparation performed during repository initialization. Stop on failure, back up and stop conflicting writers first, preserve the sending ledger and never treat schema preparation as permission to replay credentials.
+`reach.init()` creates and validates the send log and its queue identifier constraint. Incompatible tables cause initialization to fail. Preserve send receipts and reconcile uncertain outcomes before attempting further credential delivery.
 
 ### API acknowledgements and destination boundaries
 

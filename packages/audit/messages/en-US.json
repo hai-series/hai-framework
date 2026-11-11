@@ -1,4 +1,5 @@
 {
+  "audit_timestampPrecisionRequired": "The audit event timestamp must support millisecond precision",
   "audit_eventFieldsInvalid": "Invalid event fields",
   "audit_identityMismatch": "Actor snapshot does not match the event identity",
   "audit_queryInvalid": "Invalid filters or dates",

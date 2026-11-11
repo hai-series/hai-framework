@@ -8,7 +8,6 @@
 import type { ErrorInfo, HaiResult, PaginatedResult, PaginationOptions, PaginationOptionsInput } from '@h-ai/core'
 import type { DbType, ReldbConfig, ReldbConfigInput } from './reldb-config.js'
 import type { JsonSqlExpr, ReldbJsonOps } from './reldb-json.js'
-import type { SchemaMigration, SchemaMigrationPlan } from './reldb-migration.js'
 import { core } from '@h-ai/core'
 
 export type { JsonSqlExpr, ReldbJsonOps }
@@ -21,7 +20,6 @@ const ReldbErrorInfo = {
   QUERY_FAILED: '002:500',
   CONSTRAINT_VIOLATION: '003:409',
   TRANSACTION_FAILED: '004:500',
-  MIGRATION_FAILED: '005:500',
   RECORD_NOT_FOUND: '006:404',
   DUPLICATE_ENTRY: '007:409',
   DEADLOCK: '008:500',
@@ -838,17 +836,6 @@ export interface ReldbFunctions {
 
   /** 事务管理器 */
   readonly tx: TxManager
-
-  /**
-   * 预检或执行模块维护的版本迁移；绑定当前数据库，不接受其它模块实例。
-   * @example
-   * ```ts
-   * import { reldb } from '@h-ai/reldb'
-   * const plan = await reldb.migrateSchema('example', [], { dryRun: true })
-   * if (!plan.success) throw new Error(plan.error.message)
-   * ```
-   */
-  migrateSchema: (module: string, steps: readonly SchemaMigration[], options?: { dryRun?: boolean }) => Promise<HaiResult<SchemaMigrationPlan>>
 
   /**
    * 只读查询当前数据库真实列名；sql 可指定当前事务，不创建表。

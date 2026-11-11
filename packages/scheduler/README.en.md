@@ -279,7 +279,7 @@ When a scheduled task sends Reach notifications, a scheduler lock or task comple
 
 Definition refresh, registration, update and deletion are coordinated in arrival order within each process, including a mutation's refresh and commit. Valid concurrent registrations no longer fail merely because snapshots interleave; actual database failures still return errors. close stops entry points and the runner, cancels read waits and operations that have not started writing, then drains active persistent writes. Late snapshots cannot publish or repopulate state afterward. Business callbacks do not hold this queue. Nodes still rely on the shared database, versions and leases; local coordination is not a distributed lock.
 
-After RelDB initialization, `migrateScheduler({ dryRun: true })` previews persistence preparation; scheduler.init performs supported setup before creating repositories. Back up and use an exclusive change window, stop startup on failure and keep the execution journal distinct from observation logs.
+Initialize RelDB before calling `scheduler.init()` to create and validate the task, execution and log tables. Incompatible tables cause initialization to fail. Manage execution records and observation logs according to their distinct purposes.
 
 ## Configuration
 

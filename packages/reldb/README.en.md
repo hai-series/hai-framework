@@ -113,10 +113,9 @@ Pagination: normalize accepts page options and limits and returns normalized opt
 
 Prepare module persistence: table name returns columns; module name, steps and dryRun return a migration plan. Back up and stop conflicting writers before applying.
 
-| Entry                 | Input parameters       | Successful result     | Call example                                                            |
-| --------------------- | ---------------------- | --------------------- | ----------------------------------------------------------------------- |
-| `reldb.schemaColumns` | table, sql             | `string[]`            | `await reldb.schemaColumns('orders')`                                   |
-| `reldb.migrateSchema` | module, steps, options | `SchemaMigrationPlan` | `await reldb.migrateSchema('orders', migrationSteps, { dryRun: true })` |
+| Entry                 | Input parameters | Successful result | Call example                          |
+| --------------------- | ---------------- | ----------------- | ------------------------------------- |
+| `reldb.schemaColumns` | table, sql       | `string[]`        | `await reldb.schemaColumns('orders')` |
 
 #### reldb.tx
 
@@ -603,9 +602,9 @@ await reldb.sql.execute(`UPDATE products SET meta = ${rmSql} WHERE id = ?`, [...
 
 Production requires PostgreSQL/MySQL. SQLite, including disk files, is for development/explicit tests and does not provide cross-host shared state. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../.agents/instructions/distributed-state.md).
 
-### Module schema migrations
+### Inspect table structure
 
-`reldb.schemaColumns(table, sql?)` inspects real columns. `reldb.migrateSchema(module, steps, { dryRun: true })` creates no ledger. Modules own their steps. Execution journals versions in `hai_schema_migrations`; SQLite/PostgreSQL are transactional, while MySQL implicit DDL commits require reentrant steps. Failures do not advance versions; retries inspect real state. Older code rejects newer ledgers. Stop old writers and back up DB/session cache first. Rollback restores compatible database and binaries together. See the [upgrade guide](../../docs/usage/README.en.md).
+`reldb.schemaColumns(table, sql?)` reads the actual column names. Pass the transaction SQL handle to inspect the structure within the current transaction. Framework modules validate their own schemas during initialization. Applications manage their business tables.
 
 ## Configuration
 

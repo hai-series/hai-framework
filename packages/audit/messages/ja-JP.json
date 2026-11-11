@@ -1,4 +1,5 @@
 {
+  "audit_timestampPrecisionRequired": "監査イベントの時刻列にはミリ秒精度が必要です",
   "audit_eventFieldsInvalid": "イベント項目が無効です",
   "audit_identityMismatch": "身元スナップショットと操作者が一致しません",
   "audit_queryInvalid": "検索条件または日付が無効です",

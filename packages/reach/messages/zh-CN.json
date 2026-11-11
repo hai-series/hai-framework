@@ -1,4 +1,5 @@
 {
+  "reach_sendLogIndexRequired": "发送日志表必须为回执编号建立唯一索引",
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "reach_notInitialized": "触达模块尚未初始化，请先调用 reach.init()",
   "reach_initFailed": "触达模块初始化失败: {error}",

@@ -444,7 +444,6 @@ if (!result.success) throw new Error(result.error.message)
 | `HaiReldbError.QUERY_FAILED`         | `hai:reldb:002`  | 查询或执行失败     |
 | `HaiReldbError.CONSTRAINT_VIOLATION` | `hai:reldb:003`  | 约束违反           |
 | `HaiReldbError.TRANSACTION_FAILED`   | `hai:reldb:004`  | 事务失败           |
-| `HaiReldbError.MIGRATION_FAILED`     | `hai:reldb:005`  | 迁移失败           |
 | `HaiReldbError.RECORD_NOT_FOUND`     | `hai:reldb:006`  | 记录不存在         |
 | `HaiReldbError.DUPLICATE_ENTRY`      | `hai:reldb:007`  | 重复条目           |
 | `HaiReldbError.DEADLOCK`             | `hai:reldb:008`  | 死锁               |
@@ -500,7 +499,7 @@ const result = await reldb.tx.wrap(async (tx) => {
 
 ## 生产共享状态
 
-应用自己的表迁移使用 `reldb.schemaColumns(table, sql?)` 读取真实列，使用 `reldb.migrateSchema(module, steps, options?)` 执行版本步骤；两者属于已初始化实例，不另传 reldb 句柄。`dryRun: true` 不写账本，失败不推进版本；MySQL DDL 必须可重入。框架表由各模块迁移入口维护，应用不要直接修改。
+`reldb.schemaColumns(table, sql?)` 只读查询实际列名。传入当前事务的 SQL 操作句柄，可在同一事务中检查表结构。框架模块初始化时校验各自的表结构，业务表由应用管理。
 
 生产仅使用 PostgreSQL/MySQL；SQLite（含磁盘文件）只用于开发/明确测试，不能作为跨主机共享状态。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化成功前检查，只有 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试豁免。不要将租约当作最终写入条件，外部未知效果须按稳定业务键核对。
 

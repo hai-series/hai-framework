@@ -116,11 +116,11 @@ export const AuditInitConfigSchema = z.object({
     /** 额外脱敏的详情字段名，不区分大小写；例如 customerPhone，不要将秘密放进 action/resourceId。 */
     fields: z.array(z.string().trim().min(1).max(256)).max(1000).default([]),
   }).default({ enabled: true, fields: [] }),
-  /** 用户表名，用于 list 查询时 LEFT JOIN 获取用户名 */
+  /** 事件写入时用于捕获用户名的用户表名。 */
   userTable: z.string().default('hai_iam_users'),
-  /** 用户表主键列名，用于 JOIN 条件 */
+  /** 用于查找事件操作者的用户表主键列名。 */
   userIdColumn: z.string().default('id'),
-  /** 用户表用户名列名，用于 SELECT 输出 */
+  /** 用于写入身份快照的用户名列名。 */
   userNameColumn: z.string().default('username'),
 })
 

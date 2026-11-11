@@ -50,7 +50,7 @@ Memory 的 KV、Hash、List、Set、ZSet 共用 key 命名空间。`exists/expir
 
 批量删除即使HTTP200也可能部分失败，检查逐项回执；unknown先查对象真实状态再补偿。`publicUrl`不是访问控制；服务端先检查私有文件的访问权限，再提供短期签名。
 
-开发/测试的 Local 文件与代际元数据一起备份；`.hai-storage-meta/` 是保留目录，不能作为业务 key。当前格式不读取旧 `<key>.meta.json`，旧对象须离线迁移或重新上传，缺少当前记录时会明确失败。写入先准备元数据再发布内容，具体提交和清理边界见 [Storage](../../../packages/storage/README.md#api-概览)。
+开发/测试的 Local 文件与代际元数据一起备份；`.hai-storage-meta/` 是保留目录，不能作为业务 key。缺少有效元数据的读取会失败。写入先准备元数据再发布内容，具体提交和清理边界见 [Storage](../../../packages/storage/README.md#api-概览)。
 
 ## 清洗和分块
 

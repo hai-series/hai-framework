@@ -181,7 +181,7 @@ New records include category (system/business), outcome (success/failure/denied)
 
 `retention: { enabled: true, minDays: 90 }` activates a shared database policy. Cleanup honors the actual minimum even with cleanup(0); triggers reject protected UPDATE, DELETE and conflicting replacement writes. An unconfigured fresh framework installation does not force retention protection: the default cleanup argument of 90 days alone is no immutability guarantee. Reinitialization without retention preserves the database policy; explicit trusted startup configuration can disable it. This covers ordinary row writes; database-owner DDL/privileges and stronger archive/storage protection belong to deployment management.
 
-Stop old writers and back up before upgrading. `migrateAudit({ dryRun: true })` previews without writes; audit.init applies repeatable migrations. Unknown historical fields remain null. Legacy joined usernames are display compatibility, rather than historical identity evidence. Failed writes return failure and emit correlated diagnostics. close drains started writes before RelDB can close.
+`audit.init()` prepares the current tables and retention policy and fails if their structure is incompatible. List results use the event-time actor snapshot for the username and return `null` when it is unavailable. Failed writes return an error and emit correlated diagnostics. Close audit before closing RelDB so started writes can finish.
 
 Redaction matches whole fields, including objects, arrays and sensitive values produced by custom JSON projections. capture returns not-initialized failure before initialization or after close; only an initialized module with capture disabled skips automatic events.
 
