@@ -1,4 +1,5 @@
 import type { LogRecord } from '@h-ai/core'
+import { Buffer } from 'node:buffer'
 import { once } from 'node:events'
 import { createReadStream } from 'node:fs'
 import { mkdtemp, rm, unlink, writeFile } from 'node:fs/promises'
@@ -265,6 +266,119 @@ describe('storage 操作日志', () => {
         },
       ])
       expect(JSON.stringify(records)).not.toContain('private upstream message')
+    }
+    finally {
+      await storage.close()
+      server.closeAllConnections()
+      await new Promise<void>((resolve, reject) => server.close(error => error
+        ? reject(error)
+        : resolve()))
+    }
+  })
+
+  it('s3 分片失败后清理被拒绝时保留原始错误，并发上传诊断互不影响', async () => {
+    const server = createServer((request, response) => {
+      request.resume()
+      request.once('end', () => {
+        const path = new URL(request.url ?? '/', 'http://fixture')
+        const cleanupDenied = path.pathname.endsWith('/cleanup-denied.zip')
+        response.setHeader('Content-Type', 'application/xml')
+        if (request.method === 'GET') {
+          response.end('<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>')
+        }
+        else if (path.searchParams.has('uploads')) {
+          response.end('<InitiateMultipartUploadResult><UploadId>fixture</UploadId></InitiateMultipartUploadResult>')
+        }
+        else if (path.searchParams.get('partNumber') === '1') {
+          response.setHeader('x-amz-request-id', cleanupDenied ? 'first-failure' : 'other-failure')
+          response.writeHead(400).end(`<Error><Code>${cleanupDenied ? 'InvalidRequest' : 'BadDigest'}</Code><Message>private upstream reason</Message></Error>`)
+        }
+        else if (path.searchParams.has('partNumber')) {
+          response.setHeader('ETag', '"fixture-part"')
+          response.end()
+        }
+        else if (request.method === 'DELETE' && cleanupDenied) {
+          response.setHeader('x-amz-request-id', 'cleanup-failure')
+          response.writeHead(403).end('<Error><Code>AccessDenied</Code><Message>private cleanup reason</Message></Error>')
+        }
+        else {
+          response.writeHead(204).end()
+        }
+      })
+    })
+    try {
+      server.listen(0, '127.0.0.1')
+      await once(server, 'listening')
+      const address = server.address()
+      if (!address || typeof address === 'string')
+        throw new Error('Missing S3 fixture address')
+      expect((await storage.init({
+        type: 's3',
+        bucket: 'fixture',
+        region: 'us-east-1',
+        accessKeyId: 'fixture',
+        secretAccessKey: 'fixture',
+        endpoint: `http://127.0.0.1:${address.port}`,
+        forcePathStyle: true,
+      })).success).toBe(true)
+      const source = join(root, 'archive.zip')
+      await writeFile(source, Buffer.alloc(5 * 1024 * 1024 + 1))
+      const options = { ifNoneMatch: '*' as const, signal: new AbortController().signal }
+      const [denied, cleaned] = await Promise.all([
+        storage.file.put('cleanup-denied.zip', createReadStream(source), options),
+        storage.file.put('cleanup-succeeded.zip', createReadStream(source), options),
+      ])
+      expect(denied).toMatchObject({
+        success: false,
+        error: {
+          code: HaiStorageError.OPERATION_FAILED.code,
+          cause: {
+            name: 'InvalidRequest',
+            $metadata: { httpStatusCode: 400, requestId: 'first-failure' },
+          },
+          ext: {
+            s3Operation: 'UploadPart',
+            cleanupPending: true,
+            cleanupError: {
+              code: HaiStorageError.PERMISSION_DENIED.code,
+              cause: {
+                name: 'AccessDenied',
+                $metadata: { httpStatusCode: 403, requestId: 'cleanup-failure' },
+              },
+            },
+          },
+        },
+      })
+      expect(cleaned).toMatchObject({
+        success: false,
+        error: {
+          cause: { name: 'BadDigest' },
+          ext: { s3Operation: 'UploadPart' },
+        },
+      })
+      if (!cleaned.success)
+        expect(cleaned.error.ext?.cleanupError).toBeUndefined()
+      const warnings = records.filter(record => record.level === 'warn')
+      expect(warnings).toHaveLength(2)
+      expect(warnings).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          context: expect.objectContaining({
+            operation: 'file.put',
+            s3Operation: 'UploadPart',
+            causeCode: 'InvalidRequest',
+            providerRequestId: 'first-failure',
+            cleanupError: expect.objectContaining({
+              causeCode: 'AccessDenied',
+              httpStatus: 403,
+              providerRequestId: 'cleanup-failure',
+            }),
+          }),
+        }),
+        expect.objectContaining({
+          context: expect.objectContaining({ causeCode: 'BadDigest', providerRequestId: 'other-failure' }),
+        }),
+      ]))
+      expect(JSON.stringify(records)).not.toMatch(/private upstream reason|private cleanup reason|cleanup-denied.zip/)
     }
     finally {
       await storage.close()

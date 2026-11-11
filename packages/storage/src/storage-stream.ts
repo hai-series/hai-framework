@@ -80,8 +80,14 @@ export async function uploadWithSource(
         cause: signal.reason,
       })
     }
-    if (failedInput || (readable?.errored && readable.errored === cause))
-      return err(HaiStorageError.UPLOAD_FAILED, storageM('storage_uploadSourceReadFailed'), originalCause)
+    if (failedInput || (readable?.errored && readable.errored === cause)) {
+      return err({
+        ...HaiStorageError.UPLOAD_FAILED,
+        message: storageM('storage_uploadSourceReadFailed'),
+        cause: originalCause,
+        ...result.error.ext && { ext: result.error.ext },
+      })
+    }
     return result
   }
   finally {

@@ -11,6 +11,7 @@ import type { HaiError, HaiResult } from '@h-ai/core'
 import type { S3Config, StorageConfig } from '../storage-config.js'
 import type { DirOperations, FileMetadata, FileOperations, ListResult, PresignOperations, StorageDeleteFailure, StorageDeleteResult, StorageDeleteSummary } from '../storage-types.js'
 import type { StorageProvider } from './storage-provider-types.js'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { Buffer } from 'node:buffer'
 import { Readable } from 'node:stream'
 import {
@@ -51,6 +52,56 @@ const RETRYABLE_DELETE_CODES = new Set([
   'SlowDown',
   'RequestTimeout',
 ])
+
+/**
+ * 同一次流式上传的 SDK 写入和清理诊断；并发上传各自隔离。
+ * @example 模块内部上下文
+ * ```ts
+ * const diagnostics: UploadDiagnostics = { bucket: 'uploads', key: 'report.zip' }
+ * uploadDiagnostics.run(diagnostics, () => void uploadDiagnostics.getStore())
+ * ```
+ */
+interface UploadDiagnostics {
+  bucket: string
+  key: string
+  failure?: { cause: unknown, operation?: string }
+  cleanup?: { cause: unknown }
+}
+
+const uploadDiagnostics = new AsyncLocalStorage<UploadDiagnostics>()
+const UPLOAD_COMMANDS = new Set([
+  'PutObject',
+  'CreateMultipartUpload',
+  'UploadPart',
+  'CompleteMultipartUpload',
+  'AbortMultipartUpload',
+])
+
+/** SDK 自动清理分片时可能抛出第二个错误，提前保留写入失败及其操作名。 */
+function observeUploadRequests(client: S3Client): void {
+  client.middlewareStack.add((next, context) => async (args) => {
+    const diagnostics = uploadDiagnostics.getStore()
+    if (!diagnostics)
+      return next(args)
+    const operation = context.commandName?.replace(/Command$/, '')
+    const input = args.input
+    if (!operation || !UPLOAD_COMMANDS.has(operation) || !input || typeof input !== 'object'
+      || !('Bucket' in input) || input.Bucket !== diagnostics.bucket
+      || !('Key' in input) || input.Key !== diagnostics.key) {
+      return next(args)
+    }
+    try {
+      return await next(args)
+    }
+    catch (cause) {
+      if (operation === 'AbortMultipartUpload')
+        diagnostics.cleanup = { cause }
+      else
+        diagnostics.failure ??= { cause, operation }
+      throw cause
+    }
+  }, { step: 'initialize', name: 'haiStorageObserveUploadRequests' })
+}
 
 // ─── 辅助函数 ───
 
@@ -303,10 +354,17 @@ export function createS3Provider(): StorageProvider {
           await s3Client.send(new PutObjectCommand({ ...params, Body: body }), { abortSignal: options.signal })
         }
         else {
+          const diagnostics: UploadDiagnostics = { bucket: s3Config.bucket, key: fullPath }
           async function* counted(): AsyncIterable<Uint8Array> {
-            for await (const chunk of toByteStream(data, options.signal)) {
-              size += chunk.byteLength
-              yield chunk
+            try {
+              for await (const chunk of toByteStream(data, options.signal)) {
+                size += chunk.byteLength
+                yield chunk
+              }
+            }
+            catch (cause) {
+              diagnostics.failure ??= { cause }
+              throw cause
             }
           }
           const stream = Readable.from(counted(), { objectMode: false })
@@ -318,13 +376,36 @@ export function createS3Provider(): StorageProvider {
               abort()
             // 标准 S3 multipart；SDK 管理分片与失败清理，最多缓冲两片。
             const { Upload } = await import('@aws-sdk/lib-storage')
-            await new Upload({
+            const upload = new Upload({
               client: s3Client,
               params: { ...params, Body: stream },
               queueSize: 2,
               leavePartsOnError: false,
               abortController: controller,
-            }).done()
+            })
+            await uploadDiagnostics.run(diagnostics, () => upload.done())
+          }
+          catch (cause) {
+            const failure = diagnostics.failure
+            const cleanup = diagnostics.cleanup
+            const original = cleanup && failure && Object.is(cause, cleanup.cause)
+              ? failure.cause
+              : cause
+            const error = toStorageError(original, key)
+            const s3Operation = failure && Object.is(failure.cause, original)
+              ? failure.operation
+              : undefined
+            if (s3Operation || cleanup) {
+              error.ext = {
+                ...error.ext,
+                s3Operation,
+                ...(cleanup && {
+                  cleanupPending: true,
+                  cleanupError: toStorageError(cleanup.cause),
+                }),
+              }
+            }
+            return err(error)
           }
           finally {
             options.signal?.removeEventListener('abort', abort)
@@ -789,6 +870,7 @@ export function createS3Provider(): StorageProvider {
           },
         }
         client = new S3Client(clientConfig)
+        observeUploadRequests(client)
         // 回执丢失时重放可能删除并发新版本；只允许上层对明确的逐项瞬时错误重试。
         deleteClient = new S3Client({ ...clientConfig, maxAttempts: 1 })
         // 签名阶段不联网；不得用外部地址执行内部健康检查，也不能在签名后改写 Host。

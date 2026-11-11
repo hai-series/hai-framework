@@ -88,6 +88,9 @@ export function storageErrorContext(code: HaiError['code'], cause?: unknown, can
   const status = typeof metadata === 'object' && metadata !== null && 'httpStatusCode' in metadata
     ? metadata.httpStatusCode
     : undefined
+  const requestId = typeof metadata === 'object' && metadata !== null && 'requestId' in metadata
+    ? metadata.requestId
+    : undefined
   return {
     code,
     reason: cancelled || name === 'AbortError' || causeCode === 'ABORT_ERR'
@@ -102,17 +105,32 @@ export function storageErrorContext(code: HaiError['code'], cause?: unknown, can
     httpStatus: typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599
       ? status
       : undefined,
+    providerRequestId: typeof requestId === 'string' && ERROR_NAME.test(requestId)
+      ? requestId
+      : undefined,
   }
 }
 
 function warnFailure(operation: string, failure: Pick<HaiError, 'code' | 'cause' | 'ext'>, signal?: AbortSignal): void {
   const batch = failure.ext?.deleteMany
+  const s3Operation = failure.ext?.s3Operation
+  const cleanup = failure.ext?.cleanupError
+  const cleanupContext = cleanup && typeof cleanup === 'object' && 'code' in cleanup
+    && typeof cleanup.code === 'string' && ERROR_NAME.test(cleanup.code)
+    ? storageErrorContext(cleanup.code, 'cause' in cleanup
+        ? cleanup.cause
+        : undefined)
+    : undefined
   const failures = batch && typeof batch === 'object' && 'failures' in batch && Array.isArray(batch.failures)
     ? batch.failures
     : undefined
   logger.warn('Storage operation failed', {
     operation,
     ...storageErrorContext(failure.code, failure.cause, signal?.aborted && Object.is(failure.cause, signal.reason)),
+    s3Operation: typeof s3Operation === 'string' && ERROR_NAME.test(s3Operation)
+      ? s3Operation
+      : undefined,
+    cleanupError: cleanupContext,
     failedCount: failures?.length,
     failureCodes: failures && [
       ...new Set(failures.slice(0, 32).flatMap((item: unknown) => {
