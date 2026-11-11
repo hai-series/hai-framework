@@ -17,7 +17,7 @@
  */
 
 import type { RequestAccessCheck } from '@h-ai/core'
-import type { CryptoFunctions, TransportEncryptionManager, TransportKeyStore, TransportMessageContext, TransportServerKeyRing } from '@h-ai/crypto'
+import type { CryptoFunctions, KeyExchangeResponse, TransportEncryptionManager, TransportKeyStore, TransportMessageContext, TransportServerKeyRing } from '@h-ai/crypto'
 import type { MiddlewareHandler } from 'hono'
 import { core, err, HaiCommonError } from '@h-ai/core'
 import { authenticateTransportRequest, createTransportBodyPolicy, createTransportErrorResponse, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
@@ -259,7 +259,8 @@ async function handleKeyExchange(request: Request, manager: TransportEncryptionM
       serverPublicKey,
       clientId,
       maxPlaintextBytes: manager.bodyLimits.plaintextBytes,
-    }), {
+      clientKeyTtlSeconds: manager.clientKeyTtlSeconds,
+    } satisfies KeyExchangeResponse), {
       status: 200,
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
     })

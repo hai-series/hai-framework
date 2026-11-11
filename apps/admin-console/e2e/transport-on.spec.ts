@@ -83,7 +83,7 @@ test.describe('Transport enabled E2E', () => {
     await loginViaUi(page)
   })
 
-  test('encrypts login, API GET and SvelteKit navigation while the browser receives usable data', async ({ page }) => {
+  test('renews transport before SvelteKit navigation after idle', async ({ page }) => {
     await loginViaUi(page)
     await expect(page.getByTestId('app-environment-badge')).toBeVisible()
 
@@ -98,7 +98,8 @@ test.describe('Transport enabled E2E', () => {
     expect(me.status).toBe(200)
     expect(me.body.success).toBe(true)
     expect(me.body.user?.username ?? me.body.data?.user?.username).toBe(transportAdmin.username)
-    expect((await networkMe.request().allHeaders())['x-hai-transport']).toBeTruthy()
+    const initialHeaders = await networkMe.request().allHeaders()
+    expect(initialHeaders['x-hai-transport']).toBeTruthy()
 
     // 在放行导航数据前读取并校验密文，避免 Chrome 在切换路由后回收响应体。
     // route.fetch 保留真实服务端加密响应；fulfill 将相同响应交给浏览器解密。
@@ -109,8 +110,20 @@ test.describe('Transport enabled E2E', () => {
       await route.fulfill({ response })
     })
     const networkDataPromise = page.waitForResponse(response => response.url().includes('/admin/iam/roles/__data.json'))
+    const exchangePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/api/_hai/key-exchange').then(async (response) => {
+      expect(response.ok()).toBe(true)
+      return response.json() as Promise<{ clientId: string, clientKeyTtlSeconds: number }>
+    })
+    // 模拟浏览器空闲一小时的经过时间，保留请求签发使用的实际系统时间。
+    await page.evaluate(() => {
+      const now = performance.now.bind(performance)
+      performance.now = () => now() + 3600_000
+    })
     await page.locator('a[href="/admin/iam/roles"]').first().click()
-    await networkDataPromise
+    const [exchange, navigation] = await Promise.all([exchangePromise, networkDataPromise])
+    expect(exchange.clientKeyTtlSeconds).toBe(3600)
+    expect(exchange.clientId).not.toBe(initialHeaders['x-client-id'])
+    expect((await navigation.request().allHeaders())['x-client-id']).toBe(exchange.clientId)
     await expect(page).toHaveURL(/\/admin\/iam\/roles/)
     await expect(page.locator('table')).toBeVisible()
   })

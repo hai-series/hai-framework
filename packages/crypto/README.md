@@ -60,9 +60,9 @@ if (!initialized.success)
 | `manager.decryptRequest`              | 验证并解密请求            | `payload: EncryptedRequestPayload, expected: TransportRequestContext`     | `Promise<HaiResult<string>>`                           | `await manager.decryptRequest(encryptedRequest, requestContext)`                                        |
 | `manager.encryptResponse`             | 认证并加密关联响应        | `request: TransportMessageContext, data: string, status: number`          | `Promise<HaiResult<EncryptedPayload>>`                 | `await manager.encryptResponse(messageContext, "{}", 200)`                                              |
 | `manager.close`                       | 释放管理器资源            | `—`                                                                       | `Promise<void>`                                        | `await manager.close()`                                                                                 |
-| `session.init`                        | 显式执行握手              | `—`                                                                       | `Promise<HaiResult<void>>`                             | `await session.init()`                                                                                  |
+| `session.init`                        | 取得可用传输会话          | `—`                                                                       | `Promise<HaiResult<void>>`                             | `await session.init()`                                                                                  |
 | `session.encryptedFetch`              | 按 fetch 契约调用加密接口 | `input: RequestInfo / URL, init?: RequestInit`                            | `Promise<Response>`                                    | `await session.encryptedFetch("https://api.example.com/api/v1/orders")`                                 |
-| `session.ready`                       | 检查握手状态              | `—`                                                                       | `boolean`                                              | `session.ready()`                                                                                       |
+| `session.ready`                       | 检查会话能否发送新请求    | `—`                                                                       | `boolean`                                              | `session.ready()`                                                                                       |
 | `session.destroy`                     | 清除本地传输会话          | `—`                                                                       | `void`                                                 | `session.destroy()`                                                                                     |
 
 SM2/SM3/SM4 与传输支持 Node.js / 浏览器；密码哈希仅服务端
@@ -204,8 +204,8 @@ if (hashed.success) {
 
 1. 先 `await crypto.init()`，确保 `crypto.asymmetric` 与 `crypto.symmetric` 已初始化。
 2. 服务端调用 `crypto.transport.createServer({ serverKeyRing, keyStore })` 创建 `manager`；它持有服务端密钥对，并负责保存客户端公钥。多节点部署时可注入共享 `keyStore`。
-3. 服务端提供一个 POST 密钥协商端点：接收 `{ clientPublicKey }`，调用 `manager.registerClientKey()` 注册客户端，再返回 `{ serverKeyId: manager.getServerKeyId(), serverPublicKey: manager.getServerPublicKey(), clientId }`。
-4. 客户端调用 `crypto.transport.createClient({ keyExchangeUrl })` 创建会话；首次 `client.init()` 或 `client.encryptedFetch()` 会自动完成这次协商。
+3. 服务端的 POST 密钥协商端点接收 `{ clientPublicKey }`，调用 `manager.registerClientKey()` 后返回 `clientId`、`serverKeyId`、`serverPublicKey`、`maxPlaintextBytes` 和可选的 `clientKeyTtlSeconds`。Serv/Kit 自动从注册表取得有效期，自定义适配器可读取 `manager.clientKeyTtlSeconds`。
+4. 客户端调用 `crypto.transport.createClient({ keyExchangeUrl })` 创建会话。首次使用或登记临近到期时，`client.init()` 和 `client.encryptedFetch()` 按需协商。并发请求共享握手，协商成功后才发送业务请求。
 5. 每次请求都发送认证封装 `{ context, direction, status, encryptedKey, ciphertext, iv, tag, signature }`；空 POST 和 GET/HEAD 也必须认证。
 6. 自定义适配器先 `await authenticateTransportRequest(manager, request)`，成功后才将 `data.plaintext` 交给业务并保存 `data.context`。
 7. 响应用 `await manager.encryptResponse(context, data, response.status)` 关联原请求；客户端校验上下文、状态和完整性后才返回明文。

@@ -18,7 +18,7 @@ import { cryptoM } from '../crypto-i18n.js'
 import { isValidSM2PublicKey } from '../crypto-public-key.js'
 import { HaiCryptoError } from '../crypto-types.js'
 import { resolveTransportBodyLimits } from './crypto-transport-body.js'
-import { hashTransportPath, isValidEncryptedPayload, openTransportPayload, sealTransportPayload, transportAuthenticationFailure } from './crypto-transport-codec.js'
+import { hashTransportPath, isValidEncryptedPayload, isValidTransportKeyTtlSeconds, openTransportPayload, sealTransportPayload, transportAuthenticationFailure } from './crypto-transport-codec.js'
 import { TransportTimeError } from './crypto-transport-error.js'
 import { parseTransportServerKeyRing } from './crypto-transport-keyring.js'
 import { TRANSPORT_PROTOCOL, TRANSPORT_TIME_LIMITS } from './crypto-transport-types.js'
@@ -89,6 +89,9 @@ export function createTransportEncryption(
   // eslint-disable-next-line node/prefer-global/process -- 此文件也随客户端打包，避免静态引入Node内建模块。
   if (core.module.requiresSharedState(globalThis.process?.env ?? {}) && options.keyStore.stateScope !== 'shared')
     return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportKeyStoreRequired'))
+  const { clientKeyTtlSeconds } = options.keyStore
+  if (clientKeyTtlSeconds !== undefined && !isValidTransportKeyTtlSeconds(clientKeyTtlSeconds))
+    return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportKeyStoreTtlInvalid'))
   const serverKeys = new Map<string, TransportKeyPair>()
   for (const [id, key] of Object.entries(ring.data.keys)) {
     // 同时验证密钥格式和公私钥配对；只返回无敏感上下文的配置错误。
@@ -107,6 +110,7 @@ export function createTransportEncryption(
 
   const manager: TransportEncryptionManager = {
     bodyLimits,
+    clientKeyTtlSeconds,
     getServerKeyId() {
       return activeKeyId
     },

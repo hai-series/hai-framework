@@ -339,9 +339,9 @@ const app = serv.createApp({
 1. 通过共享 `readTransportBody` 逐块读取原始请求流，握手 JSON 最多 16 KiB（UTF-8 字节）；超限立即取消并返回 413。
 2. 要求携带非空 `clientPublicKey`，公钥最多 4 KiB，否则返回 400；不接受 null 等错误 JSON 结构。
 3. 确认服务端公钥不超过同一预算后，调 `manager.registerClientKey(clientPublicKey)`。
-4. 返回 `clientId`、`serverPublicKey` 与 `serverKeyId`；客户端请求密文携带此版本，任意节点仅按 ID 选择私钥。客户端在 30 秒握手超时内按相同预算有界读取响应。
+4. 返回 `clientId`、`serverPublicKey`、`serverKeyId` 与 `maxPlaintextBytes`。注册表指定固定 TTL 时返回 `clientKeyTtlSeconds`。客户端在 30 秒握手超时内按相同预算有界读取响应。
 
-后续客户端要用这个 `clientId` 放到请求头里。
+客户端把当前 `clientId` 放入请求头，并在登记临近到期后的首次请求前重新协商。业务封装携带协商选定的密钥版本，服务端按版本 ID 选择私钥。
 
 ### 请求解密流程
 

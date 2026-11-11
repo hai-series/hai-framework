@@ -6,7 +6,7 @@
  */
 
 import type { RequestAccessCheck } from '@h-ai/core'
-import type { TransportEncryptionManager, TransportMessageContext } from '@h-ai/crypto'
+import type { KeyExchangeResponse, TransportEncryptionManager, TransportMessageContext } from '@h-ai/crypto'
 import type { Middleware } from '../../kit-types.js'
 import type { TransportEncryptionConfig } from './kit-crypto-types.js'
 import { core, err, HaiCommonError } from '@h-ai/core'
@@ -241,7 +241,8 @@ async function handleKeyExchange(
         serverPublicKey,
         clientId,
         maxPlaintextBytes: manager.bodyLimits.plaintextBytes,
-      }),
+        clientKeyTtlSeconds: manager.clientKeyTtlSeconds,
+      } satisfies KeyExchangeResponse),
       {
         status: 200,
         headers: { 'Content-Type': 'application/json' },

@@ -31,6 +31,7 @@ function makeRoundTripFetch(
         serverPublicKey: manager.getServerPublicKey(),
         serverKeyId: manager.getServerKeyId(),
         clientId,
+        clientKeyTtlSeconds: manager.clientKeyTtlSeconds,
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -165,6 +166,111 @@ describe('crypto.transport', () => {
     expect(response.status).toBe(200)
     const body = await response.json() as { message: string }
     expect(body.message).toBe('shared-store-ready')
+  })
+
+  it('verifies an in-flight response with the keys used before renewal', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
+    const server = crypto.transport.createServer({
+      serverKeyRing,
+      keyStore: {
+        ...createInMemoryKeyStore(),
+        clientKeyTtlSeconds: 60,
+      },
+    })
+    if (!server.success)
+      throw new Error(server.error.message)
+
+    const roundTrip = makeRoundTripFetch(server.data, plaintext => plaintext)
+    const responseReady = Promise.withResolvers<void>()
+    const releaseResponse = Promise.withResolvers<void>()
+    const fetch = vi.fn<typeof globalThis.fetch>(async (input, init) => {
+      const response = await roundTrip(input, init)
+      if (String(input) === 'https://api.test/slow') {
+        responseReady.resolve()
+        await releaseResponse.promise
+      }
+      return response
+    })
+    const client = crypto.transport.createClient({ keyExchangeUrl: KEY_EXCHANGE_URL, fetch })
+    const first = client.encryptedFetch('https://api.test/slow', { method: 'POST', body: '"first"' })
+    try {
+      await Promise.race([responseReady.promise, first])
+      expect(client.ready()).toBe(true)
+      vi.setSystemTime(Date.now() + 60_000)
+      expect(client.ready()).toBe(false)
+      const second = await client.encryptedFetch('https://api.test/echo', { method: 'POST', body: '"second"' })
+      expect(await second.json()).toBe('second')
+      expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+        KEY_EXCHANGE_URL,
+        'https://api.test/slow',
+        KEY_EXCHANGE_URL,
+        'https://api.test/echo',
+      ])
+      releaseResponse.resolve()
+      expect(await (await first).json()).toBe('first')
+    }
+    finally {
+      releaseResponse.resolve()
+      await first.catch(() => {})
+      client.destroy()
+    }
+  })
+
+  it('checks the deadline again after reading a slow request body', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
+    const server = crypto.transport.createServer({
+      serverKeyRing,
+      keyStore: {
+        ...createInMemoryKeyStore(),
+        clientKeyTtlSeconds: 60,
+      },
+    })
+    if (!server.success)
+      throw new Error(server.error.message)
+    const roundTrip = makeRoundTripFetch(server.data, plaintext => plaintext)
+    const fetch = vi.fn<typeof globalThis.fetch>(roundTrip)
+    const client = crypto.transport.createClient({ keyExchangeUrl: KEY_EXCHANGE_URL, fetch })
+    const reading = Promise.withResolvers<void>()
+    const releaseBody = Promise.withResolvers<void>()
+    const body = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        reading.resolve()
+        await releaseBody.promise
+        controller.enqueue(new TextEncoder().encode('"stream"'))
+        controller.close()
+      },
+    }, { highWaterMark: 0 })
+    const pending = client.encryptedFetch('https://api.test/echo', { method: 'POST', body })
+    try {
+      await Promise.race([reading.promise, pending])
+      vi.setSystemTime(Date.now() + 60_000)
+      releaseBody.resolve()
+      expect(await (await pending).json()).toBe('stream')
+      expect(fetch.mock.calls.map(([url]) => url)).toEqual([KEY_EXCHANGE_URL, KEY_EXCHANGE_URL, 'https://api.test/echo'])
+    }
+    finally {
+      releaseBody.resolve()
+      await pending.catch(() => {})
+      client.destroy()
+    }
+  })
+
+  it.each([0, -1, 1.5, 2_147_483_648, '60', null])('rejects an invalid client-key TTL in key exchange: %j', async (clientKeyTtlSeconds) => {
+    const client = crypto.transport.createClient({
+      keyExchangeUrl: KEY_EXCHANGE_URL,
+      fetch: async () => Response.json({
+        serverKeyId: 'test-v1',
+        serverPublicKey: serverKeyRing.keys['test-v1']!.publicKey,
+        clientId: 'id',
+        clientKeyTtlSeconds,
+      }),
+    })
+    expect((await client.init()).success).toBe(false)
+    expect(client.ready()).toBe(false)
   })
 
   it('encryptedFetch rejects when key exchange fails', async () => {

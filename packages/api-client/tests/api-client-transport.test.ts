@@ -100,7 +100,10 @@ function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fet
   if (!key.success)
     throw new Error(key.error.message)
   const mgrResult = crypto.transport.createServer({
-    keyStore: createInMemoryKeyStore(),
+    keyStore: {
+      ...createInMemoryKeyStore(),
+      clientKeyTtlSeconds: 60,
+    },
     serverKeyRing: {
       activeKeyId: 'test-v1',
       keys: { 'test-v1': key.data },
@@ -140,6 +143,7 @@ function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fet
         serverPublicKey: mgr.getServerPublicKey(),
         serverKeyId: mgr.getServerKeyId(),
         clientId,
+        clientKeyTtlSeconds: mgr.clientKeyTtlSeconds,
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -298,7 +302,7 @@ describe('api-client transport', () => {
     await client.close()
   })
 
-  it.each([false, true])('hTTP/domain unauthorized=%s refresh keeps encrypted transport', async (domainUnauthorized) => {
+  it.each([false, true])('renews transport before refreshing a session after idle, domain unauthorized=%s', async (domainUnauthorized) => {
     const client = apiClient.create(protectedContract)
     const server = makeRefreshServerFetch(domainUnauthorized)
     let refreshed = false
@@ -314,23 +318,41 @@ describe('api-client transport', () => {
     })
     expect(init.success).toBe(true)
 
-    await client.auth.setTokens({
-      accessToken: 'old-access',
-      refreshToken: 'server-managed-by-cookie',
-      expiresIn: 1,
-      tokenType: 'Bearer',
-    })
+    const clock = vi.spyOn(Date, 'now')
+    try {
+      await client.auth.setTokens({
+        accessToken: 'new-access',
+        refreshToken: 'server-managed-by-cookie',
+        expiresIn: 3600,
+        tokenType: 'Bearer',
+      })
+      expect(await client.protected()).toMatchObject({
+        success: true,
+        data: { ok: true },
+      })
+      clock.mockReturnValue(Date.now() + 61_000)
+      await client.auth.setTokens({
+        accessToken: 'old-access',
+        refreshToken: 'server-managed-by-cookie',
+        expiresIn: 1,
+        tokenType: 'Bearer',
+      })
 
-    const result = await client.protected()
+      const result = await client.protected()
 
-    expect(result.success).toBe(true)
-    if (result.success)
-      expect(result.data.ok).toBe(true)
-    expect(refreshed).toBe(true)
-    expect(refreshFailed).toBe(false)
-    expect(server.calls.some(call => call.includes('POST /api/v1/auth/refresh') && call.includes('client=c_') && call.includes('credentials=include'))).toBe(true)
-    expect(server.calls.some(call => call.includes('GET /api/v1/protected auth=Bearer new-access'))).toBe(true)
-
-    await client.close()
+      expect(result).toMatchObject({
+        success: true,
+        data: { ok: true },
+      })
+      expect(refreshed).toBe(true)
+      expect(refreshFailed).toBe(false)
+      expect(server.calls.filter(call => call.includes('POST /api/v1/_hai/key-exchange'))).toHaveLength(2)
+      expect(server.calls.some(call => call.includes('POST /api/v1/auth/refresh') && call.includes('client=c_') && call.includes('credentials=include'))).toBe(true)
+      expect(server.calls.at(-1)).toContain('GET /api/v1/protected auth=Bearer new-access')
+    }
+    finally {
+      clock.mockRestore()
+      await client.close()
+    }
   })
 })

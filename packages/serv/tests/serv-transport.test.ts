@@ -2,7 +2,8 @@ import type { CryptoFunctions, EncryptedPayload, EncryptedRequestPayload, Transp
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
 import { err, ok } from '@h-ai/core'
-import { createInMemoryKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportTimeError } from '@h-ai/crypto'
+import { createInMemoryKeyStore, createReldbTransportKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportTimeError } from '@h-ai/crypto'
+import { reldb } from '@h-ai/reldb'
 import { Hono } from 'hono'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { serv } from '../src/serv-main.js'
@@ -282,6 +283,75 @@ describe('serv.createApp({ transport })', () => {
     const data = await resp.json() as { echoed: { msg: string } }
     expect(data.echoed.msg).toBe('hello')
   })
+
+  it('renews an expired registry entry before sending concurrent POSTs', async () => {
+    const database = await reldb.init({ type: 'sqlite', database: ':memory:' })
+    expect(database.success).toBe(true)
+    const keyStore = createReldbTransportKeyStore({ reldb, ttlSeconds: 2 })
+    const origin = 'http://test.local'
+    const exchangeUrl = `${origin}/api/v1/_hai/key-exchange`
+    const clientIds: string[] = []
+    const exchange = vi.fn()
+    const handled = vi.fn()
+    const app = serv.createApp({
+      contract,
+      procedures,
+      http: { apiPrefix: '/api/v1', openapi: false, docs: false },
+      transport: { crypto, serverKeyRing, keyStore },
+      middlewares: [
+        {
+          path: '/api/v1/expiry-probe',
+          middleware: async (context) => {
+            const body = await context.req.json<{ value: number }>()
+            handled(body.value)
+            return context.json(body)
+          },
+        },
+      ],
+    })
+    const client = crypto.transport.createClient({
+      keyExchangeUrl: exchangeUrl,
+      fetch: (input, init) => {
+        const request = new Request(input, init)
+        if (request.url === exchangeUrl)
+          exchange()
+        else
+          clientIds.push(request.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER) ?? '')
+        return Promise.resolve(app.fetch(request))
+      },
+    })
+    const send = async (value: number) => {
+      const response = await client.encryptedFetch(new Request(`${origin}/api/v1/expiry-probe`, {
+        method: 'POST',
+        body: JSON.stringify({ value }),
+      }))
+      expect(response.status).toBe(200)
+      return response.json()
+    }
+    try {
+      expect(await send(0)).toEqual({ value: 0 })
+      const initialClientId = clientIds[0]!
+      expect(initialClientId).toMatch(/^c_/)
+      await vi.waitFor(async () => expect(await keyStore.get(initialClientId)).toBeUndefined(), { timeout: 4000, interval: 50 })
+
+      expect(await Promise.all([
+        send(1),
+        send(2),
+      ])).toEqual([
+        { value: 1 },
+        { value: 2 },
+      ])
+      expect(exchange).toHaveBeenCalledTimes(2)
+      expect(clientIds).toHaveLength(3)
+      expect(clientIds[1]).not.toBe(initialClientId)
+      expect(clientIds[2]).toBe(clientIds[1])
+      expect(handled.mock.calls.map(([value]) => value).sort()).toEqual([0, 1, 2])
+    }
+    finally {
+      client.destroy()
+      await reldb.close()
+    }
+  }, 8000)
 
   it('空 POST 仍使用认证封装，普通空请求拒绝', async () => {
     const app = serv.createApp({

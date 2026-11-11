@@ -10,6 +10,7 @@ import type { HaiError, HaiResult } from '@h-ai/core'
 import type { TransportKeyStore } from '../crypto-transport-types.js'
 import { cryptoM } from '../../crypto-i18n.js'
 import { isValidSM2PublicKey } from '../../crypto-public-key.js'
+import { isValidTransportKeyTtlSeconds } from '../crypto-transport-codec.js'
 
 const TRANSPORT_KEY_CACHE_PREFIX = 'hai:crypto:transport:client'
 
@@ -42,14 +43,6 @@ export interface CreateRedisTransportKeyStoreOptions {
   readonly cache: CacheFunctions
   /** 客户端公钥的 TTL（正整数秒，最大 2147483647）；未传则保持不过期。 */
   readonly ttlSeconds?: number
-}
-
-function normalizeTtlSeconds(ttlSeconds: number | undefined): number | undefined {
-  if (ttlSeconds === undefined)
-    return undefined
-  if (!Number.isSafeInteger(ttlSeconds) || ttlSeconds <= 0 || ttlSeconds > 2_147_483_647)
-    throw new TypeError(cryptoM('crypto_transportKeyStoreTtlInvalid'))
-  return ttlSeconds
 }
 
 function createClientId(): string {
@@ -96,13 +89,16 @@ function unwrapResult<T>(operation: string, result: HaiResult<T>): T {
  * ```
  */
 export function createRedisTransportKeyStore(options: CreateRedisTransportKeyStoreOptions): TransportKeyStore {
-  const ttlSeconds = normalizeTtlSeconds(options.ttlSeconds)
+  const { ttlSeconds } = options
+  if (ttlSeconds !== undefined && !isValidTransportKeyTtlSeconds(ttlSeconds))
+    throw new TypeError(cryptoM('crypto_transportKeyStoreTtlInvalid'))
 
   function buildCacheKey(clientId: string): string {
     return `${TRANSPORT_KEY_CACHE_PREFIX}:${clientId}`
   }
 
   return {
+    clientKeyTtlSeconds: ttlSeconds,
     get stateScope() {
       return options.cache.config?.type === 'redis'
         ? 'shared'

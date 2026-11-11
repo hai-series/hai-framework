@@ -206,8 +206,8 @@ const sharedServer = crypto.transport.createServer({
 
 使用流程：
 1. 先 `await crypto.init()`。
-2. 服务端显式传入受管 serverKeyRing 和共享 keyStore，协商返回 `serverKeyId + serverPublicKey + clientId`。
-3. 客户端 `createClient({ keyExchangeUrl })` 后，首次 `init()` / `encryptedFetch()` 会自动做密钥协商。
+2. 服务端显式传入受管 `serverKeyRing` 和共享 `keyStore`。协商响应包含 `serverKeyId`、`serverPublicKey`、`clientId`、`maxPlaintextBytes` 和可选的 `clientKeyTtlSeconds`。自定义适配器读取 `manager.clientKeyTtlSeconds` 填充登记有效期。
+3. 客户端 `createClient({ keyExchangeUrl })` 后，首次使用或登记临近到期时自动协商。并发请求共享握手，协商完成后再发送业务请求。
 4. 所有请求均发送 v2 认证封装；包括 GET/HEAD 和无 input POST，不能只附带 clientId。
 5. 自定义适配器先 await authenticateTransportRequest(manager, request)，再用 manager.encryptResponse(verified.data.context, data, status) 关联响应。
 6. 客户端收到 `X-Encrypted: true` 的响应后自动解密；`destroy()` 可清空当前会话。

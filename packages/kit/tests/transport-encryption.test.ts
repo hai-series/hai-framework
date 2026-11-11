@@ -1,4 +1,4 @@
-import type { CryptoFunctions, EncryptedPayload, EncryptedRequestPayload, TransportEncryptionManager, TransportServerKeyRing } from '@h-ai/crypto'
+import type { CryptoFunctions, EncryptedPayload, EncryptedRequestPayload, KeyExchangeResponse, TransportEncryptionManager, TransportServerKeyRing } from '@h-ai/crypto'
 import type { RequestEvent } from '@sveltejs/kit'
 import type { Handle } from '@sveltejs/kit/hooks'
 import { err, HaiCommonError, ok } from '@h-ai/core'
@@ -468,12 +468,15 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     expect(resolve).toHaveBeenCalledOnce()
   })
 
-  it('暴露统一密钥协商端点', async () => {
+  it.each([undefined, 3600])('密钥协商传递客户端公钥登记有效期 %s', async (clientKeyTtlSeconds) => {
     const handle = kit.createHandle({
       crypto: {
         crypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: {
+            ...createInMemoryKeyStore(),
+            clientKeyTtlSeconds,
+          },
           serverKeyRing,
         },
       },
@@ -494,9 +497,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
     expect(response.status).toBe(200)
     expect(resolve).not.toHaveBeenCalled()
-    const body = await response.json() as { serverPublicKey: string, clientId: string }
+    const body = await response.json() as KeyExchangeResponse
     expect(body.serverPublicKey).toBeTruthy()
     expect(body.clientId).toBeTruthy()
+    expect(body.clientKeyTtlSeconds).toBe(clientKeyTtlSeconds)
   })
 
   it('强制加密时拒绝缺少 clientId 的业务请求', async () => {

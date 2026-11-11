@@ -979,7 +979,7 @@ export interface TransportOperations {
    * options.fetch：实际发送 HTTP 请求的 fetch（默认 `globalThis.fetch`）。
    *
    * @remarks
-   * 返回的是“单会话”客户端：同一个实例会复用已协商得到的 `clientId` 与服务端公钥；
+   * 同一实例在登记有效期内复用 `clientId` 与服务端公钥，临近到期时在新请求前按需协商。
    * 调用 `destroy()` 后会回到未协商状态。
    * @param options - 实际调用输入，按该方法约束验证。
    * @param options.keyExchangeUrl - 密钥协商端点完整 URL。

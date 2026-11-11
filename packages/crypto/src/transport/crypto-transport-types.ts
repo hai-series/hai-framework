@@ -78,20 +78,28 @@ export interface KeyExchangeRequest {
 }
 
 /**
- * TLS协商响应，公开服务端版本、公钥和registry生成的clientId；不含服务端私钥。
+ * TLS 协商响应，包含服务端公钥、密钥版本和客户端登记信息。
  *
  * @example
  * ```ts
  * import type { KeyExchangeRequest, KeyExchangeResponse, TransportEncryptionManager } from '@h-ai/crypto'
  * async function exchange(manager: TransportEncryptionManager, body: KeyExchangeRequest): Promise<KeyExchangeResponse> {
  *   const clientId = await manager.registerClientKey(body.clientPublicKey)
- *   return { clientId, serverKeyId: manager.getServerKeyId(), serverPublicKey: manager.getServerPublicKey() }
+ *   return {
+ *     clientId,
+ *     serverKeyId: manager.getServerKeyId(),
+ *     serverPublicKey: manager.getServerPublicKey(),
+ *     maxPlaintextBytes: manager.bodyLimits.plaintextBytes,
+ *     clientKeyTtlSeconds: manager.clientKeyTtlSeconds,
+ *   }
  * }
  * ```
  */
 export interface KeyExchangeResponse {
   /** 服务端业务明文 UTF-8 字节上限；缺省表示旧服务端的 1 MiB 默认值。 */
   readonly maxPlaintextBytes?: number
+  /** 客户端公钥从登记起的寿命，单位为秒；省略时客户端按无已知期限处理。 */
+  readonly clientKeyTtlSeconds?: number
   /** 服务端当前加密密钥版本；业务请求必须带回该值。 */
   readonly serverKeyId: string
   readonly serverPublicKey: string
@@ -319,6 +327,8 @@ export interface TransportCryptoServiceLike {
 export interface TransportKeyStore {
   /** 公钥与nonce状态的真实共享能力；生产只接受shared。 */
   readonly stateScope: 'local' | 'shared'
+  /** 登记时赋予新公钥的 TTL，整数秒，范围 1～2147483647；未指定期限时省略。 */
+  readonly clientKeyTtlSeconds?: number
   /**
    * 注册有效 SM2 公钥，返回服务端生成的 clientId；格式/曲线点无效或存储故障必须 reject。
    * 容量策略见具体工厂契约：数据库满容量拒绝，开发/测试内存实现允许 FIFO 淘汰公钥。
@@ -513,6 +523,8 @@ export interface TransportCreateServerOptions {
 export interface TransportEncryptionManager {
   /** 本管理器不可变的双向预算；由 maxPlaintextBytes 推导，安全预算独立。 */
   readonly bodyLimits: import('./crypto-transport-body.js').TransportBodyLimits
+  /** 共享 registry 的客户端公钥 TTL，单位为秒，由协商响应传给客户端。 */
+  readonly clientKeyTtlSeconds?: number
   /**
    * 当前新协商使用的服务端密钥 ID。
    * @returns 直接返回值，使用前先初始化模块。
@@ -642,7 +654,7 @@ export interface TransportEncryptionManager {
 }
 
 /**
- * 客户端单会话；首次调用自动协商，后续请求生成随机nonce并认证响应关联/签名/MAC。
+ * 客户端传输会话；首次调用或登记临近到期时按需协商，随后认证本次请求和响应。
  * init返回HaiResult；encryptedFetch按fetch契约reject；destroy清本地会话，不代表撤销服务端registry。
  *
  * @example
@@ -665,9 +677,9 @@ export interface TransportEncryptionManager {
  */
 export interface TransportClient {
   /**
-   * 完成密钥协商；多次调用幂等（同一会话只协商一次）。
+   * 取得可用的传输会话；并发调用共享握手，有效期内复用已有会话。
    *
-   * 通常无需手动调用：`encryptedFetch` 在首次请求前会自动 `init()`。
+   * `encryptedFetch` 在发送请求前会自动取得可用会话。
    * 协商在 30 秒内完成，握手 JSON 与单个公钥分别受 TRANSPORT_BODY_LIMITS 限制。
    * @returns HaiResult，先检查success再读取data。
    *
@@ -717,8 +729,8 @@ export interface TransportClient {
    */
   encryptedFetch: typeof fetch
   /**
-   * 是否已完成密钥协商。
-   * @returns 直接boolean，false表示不匹配/未就绪。
+   * 检查本地会话是否可用于发起新请求。
+   * @returns 已完成协商且尚未到续期时间时返回 true。
    *
    * @example
    * ```ts

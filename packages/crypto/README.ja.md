@@ -60,9 +60,9 @@ if (!initialized.success)
 | `manager.decryptRequest`              | リクエストを認証して復号する           | `payload: EncryptedRequestPayload, expected: TransportRequestContext`     | `Promise<HaiResult<string>>`                           | `await manager.decryptRequest(encryptedRequest, requestContext)`                                        |
 | `manager.encryptResponse`             | 対応する応答を認証して暗号化する       | `request: TransportMessageContext, data: string, status: number`          | `Promise<HaiResult<EncryptedPayload>>`                 | `await manager.encryptResponse(messageContext, "{}", 200)`                                              |
 | `manager.close`                       | 管理器のリソースを解放する             | `—`                                                                       | `Promise<void>`                                        | `await manager.close()`                                                                                 |
-| `session.init`                        | 暗号化セッションを初期化する           | `—`                                                                       | `Promise<HaiResult<void>>`                             | `await session.init()`                                                                                  |
+| `session.init`                        | 利用可能な通信セッションを取得する     | `—`                                                                       | `Promise<HaiResult<void>>`                             | `await session.init()`                                                                                  |
 | `session.encryptedFetch`              | 暗号化エンドポイントを呼び出す         | `input: RequestInfo / URL, init?: RequestInit`                            | `Promise<Response>`                                    | `await session.encryptedFetch("https://api.example.com/api/v1/orders")`                                 |
-| `session.ready`                       | ハンドシェイク済みか確認する           | `—`                                                                       | `boolean`                                              | `session.ready()`                                                                                       |
+| `session.ready`                       | 新しいリクエストを送信できるか確認する | `—`                                                                       | `boolean`                                              | `session.ready()`                                                                                       |
 | `session.destroy`                     | ローカルの暗号化セッションを消去する   | `—`                                                                       | `void`                                                 | `session.destroy()`                                                                                     |
 
 サーバー・ブラウザー共通（Node.js / ブラウザー）
@@ -202,8 +202,8 @@ if (hashed.success) {
 
 1. `await crypto.init()` を呼び、`crypto.asymmetric` と `crypto.symmetric` を初期化します。
 2. サーバーで `crypto.transport.createServer({ serverKeyRing, keyStore })` を呼び、`manager` を作成します。サーバー鍵ペアとクライアント公開鍵を管理します。複数ノードでは共有 `keyStore` を注入できます。
-3. POST の鍵交換 endpoint を用意します。`{ clientPublicKey }` を受け取り、`manager.registerClientKey()` で登録し、`{ serverKeyId: manager.getServerKeyId(), serverPublicKey: manager.getServerPublicKey(), clientId }` を返します。
-4. クライアントで `crypto.transport.createClient({ keyExchangeUrl })` によりセッションを作成します。最初の `client.init()` または `client.encryptedFetch()` で鍵交換が自動実行されます。
+3. POST の鍵交換エンドポイントは `{ clientPublicKey }` を受け取り、`manager.registerClientKey()` で登録します。応答には `clientId`、`serverKeyId`、`serverPublicKey`、`maxPlaintextBytes`、設定時は `clientKeyTtlSeconds` が含まれます。Serv と Kit は登録ストアの有効期間を返します。独自アダプターでは `manager.clientKeyTtlSeconds` を参照できます。
+4. クライアントで `crypto.transport.createClient({ keyExchangeUrl })` によりセッションを作成します。`client.init()` と `client.encryptedFetch()` は、初回利用時と登録期限が近づいたときに鍵交換を行います。同時に発生したリクエストは鍵交換を共有し、成功してから送信します。
 5. 空の POST と GET/HEAD を含め、すべての要求が認証封装 `{ context, direction, status, encryptedKey, ciphertext, iv, tag, signature }` を送ります。
 6. 独自アダプターは先に `await authenticateTransportRequest(manager, request)` を実行し、成功時のみ `data.plaintext` を業務へ渡し、`data.context` を保持します。
 7. 応答は `await manager.encryptResponse(context, data, response.status)` で元要求に関連付け、クライアントがコンテキスト・status・完全性を検証してから平文を返します。

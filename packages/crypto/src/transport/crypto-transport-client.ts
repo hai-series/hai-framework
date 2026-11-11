@@ -2,7 +2,7 @@
  * @h-ai/crypto — 传输加密客户端实现
  *
  * 提供浏览器 / Node 环境下使用的 `encryptedFetch` 包装：
- * - 首次调用前自动与服务端做一次密钥协商；
+ * - 首次调用或客户端公钥临近到期时，与服务端协商；
  * - 之后所有出站请求自动以混合加密包裹；
  * - 验证响应关联、发送方签名与 MAC 后解密，缺少认证的响应拒绝。
  *
@@ -12,8 +12,8 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { TransportBodyLimits } from './crypto-transport-body.js'
 import type {
-  EncryptedPayload,
   KeyExchangeResponse,
   TransportClient,
   TransportCryptoServiceLike,
@@ -24,7 +24,7 @@ import { err, HaiCommonError, ok } from '@h-ai/core'
 import { cryptoM } from '../crypto-i18n.js'
 import { HaiCryptoError } from '../crypto-types.js'
 import { readTransportBody, resolveTransportBodyLimits, TRANSPORT_BODY_LIMITS, TransportBodyTooLargeError } from './crypto-transport-body.js'
-import { hashTransportPath, isValidEncryptedPayload, openTransportPayload, sameTransportContext, sealTransportPayload } from './crypto-transport-codec.js'
+import { hashTransportPath, isValidEncryptedPayload, isValidTransportKeyTtlSeconds, openTransportPayload, sameTransportContext, sealTransportPayload } from './crypto-transport-codec.js'
 import { TransportTimeError } from './crypto-transport-error.js'
 import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
 
@@ -62,7 +62,32 @@ export interface CreateTransportClientOptions {
 }
 
 /**
- * 创建模块内部传输会话；同一在途协商共享Promise，首次请求前协商，后续复用。
+ * 一次协商的密钥与容量快照，供同一请求的加密和响应验证使用。
+ * @example 模块内部上下文
+ * ```ts
+ * function clientIdOf(session: TransportClientSession): string {
+ *   return session.clientId
+ * }
+ * ```
+ */
+interface TransportClientSession {
+  readonly keyPair: TransportKeyPair
+  readonly serverPublicKey: string
+  readonly serverKeyId: string
+  readonly clientId: string
+  readonly bodyLimits: TransportBodyLimits
+  /** 客户端本地 Unix 毫秒期限，覆盖系统休眠。 */
+  readonly renewAt: number
+  /** 单调时钟毫秒期限，覆盖系统时钟回拨。 */
+  readonly monotonicRenewAt: number
+}
+
+function isSessionUsable(session: TransportClientSession): boolean {
+  return Date.now() < session.renewAt && performance.now() < session.monotonicRenewAt
+}
+
+/**
+ * 创建传输会话；并发调用共享握手，首次使用或达到续期时间时按需协商。
  * 协议仅接受匹配原请求/HTTP状态的认证响应；明文、缺标记、错误签名/MAC一律拒绝。
  * @param options - 已初始化crypto、完整HTTPS协商URL和可选fetch。
  * @returns 会话；init返回HaiResult，encryptedFetch按fetch契约reject，destroy只清本地状态。
@@ -91,13 +116,9 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
   const localLimits = options.maxPlaintextBytes === undefined
     ? undefined
     : resolveTransportBodyLimits(options.maxPlaintextBytes)
-  let bodyLimits = localLimits ?? resolveTransportBodyLimits()
-  let keyPair: TransportKeyPair | null = null
-  let serverPublicKey: string | null = null
-  let serverKeyId: string | null = null
-  let clientId: string | null = null
+  let session: TransportClientSession | undefined
   /** 进行中的协商 Promise；用于并发去重。 */
-  let initPromise: Promise<HaiResult<void>> | null = null
+  let initPromise: Promise<HaiResult<TransportClientSession>> | undefined
   let generation = 0
   let handshakeController: AbortController | undefined
 
@@ -111,7 +132,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
    * if (!initialized.success) throw new Error(initialized.error.message)
    * ```
    */
-  async function doInit(attemptGeneration: number): Promise<HaiResult<void>> {
+  async function doInit(attemptGeneration: number): Promise<HaiResult<TransportClientSession>> {
     const kpResult = options.crypto.asymmetric.generateKeyPair()
     if (!kpResult.success)
       return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientKeyGenerateFailed'), kpResult.error)
@@ -121,6 +142,8 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
 
     const controller = new AbortController()
     handshakeController = controller
+    const exchangeStartedAt = Date.now()
+    const monotonicStart = performance.now()
     const timeout = setTimeout(() => controller.abort(new DOMException('Key exchange timed out', 'TimeoutError')), 30_000)
     try {
       let response: Response
@@ -158,6 +181,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
         return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeMissingFields'))
       }
 
+      let bodyLimits: TransportBodyLimits
       try {
         const serverLimits = resolveTransportBodyLimits(body.maxPlaintextBytes)
         bodyLimits = resolveTransportBodyLimits(Math.min(localLimits?.plaintextBytes ?? serverLimits.plaintextBytes, serverLimits.plaintextBytes))
@@ -168,11 +192,25 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
 
       if (attemptGeneration !== generation || controller.signal.aborted)
         return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientNotInitialized'))
-      keyPair = localKeyPair
-      serverPublicKey = body.serverPublicKey
-      serverKeyId = body.serverKeyId
-      clientId = body.clientId
-      return ok(undefined)
+
+      const ttlMs = body.clientKeyTtlSeconds === undefined
+        ? Number.POSITIVE_INFINITY
+        : body.clientKeyTtlSeconds * 1000
+      // 从发出握手起计时，涵盖传输延迟，并为下一次请求留出最多 30 秒。
+      const usableMs = ttlMs - Math.min(ttlMs / 10, 30_000)
+      const nextSession: TransportClientSession = {
+        keyPair: localKeyPair,
+        serverPublicKey: body.serverPublicKey,
+        serverKeyId: body.serverKeyId,
+        clientId: body.clientId,
+        bodyLimits,
+        renewAt: exchangeStartedAt + usableMs,
+        monotonicRenewAt: monotonicStart + usableMs,
+      }
+      if (!isSessionUsable(nextSession))
+        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeRequestFailed'))
+      session = nextSession
+      return ok(nextSession)
     }
     finally {
       clearTimeout(timeout)
@@ -182,7 +220,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
   }
 
   /**
-   * 同一会话共享在途协商Promise；失败清除Promise允许后续重试，成功复用已建立状态。
+   * 复用可用会话，并发续期共享握手。握手结束后释放 Promise，允许下一次协商。
    * @returns 协商结果；单个业务请求取消只停止自己的等待，不中断其它调用的共享握手。
    *
    * @example 模块内部上下文
@@ -192,60 +230,44 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
    * if (!second.success) throw new Error(second.error.message)
    * ```
    */
-  async function ensureReady(): Promise<HaiResult<void>> {
-    if (clientId && serverPublicKey)
-      return ok(undefined)
+  async function ensureReady(): Promise<HaiResult<TransportClientSession>> {
+    if (session && isSessionUsable(session))
+      return ok(session)
     if (!initPromise) {
-      const pending = doInit(generation).then((result) => {
-        // 失败时清空 promise，允许下次重试；成功时保留即可。
-        if (!result.success && initPromise === pending)
-          initPromise = null
-        return result
+      session = undefined
+      const pending = doInit(generation).finally(() => {
+        if (initPromise === pending)
+          initPromise = undefined
       })
       initPromise = pending
     }
     return initPromise
   }
 
-  /**
-   * 使用已协商的服务端公钥和客户端私钥创建请求认证封装；未就绪直接失败。
-   * @param plaintext - 已有界读取的原请求明文。
-   * @param context - 从本次实际请求生成的绑定上下文。
-   * @returns v2认证封装或失败。
-   *
-   * @example 模块内部上下文
-   * ```ts
-   * function sealActual(plaintext: string, context: TransportMessageContext) {
-   *   const result = encryptBody(plaintext, context)
-   *   if (!result.success) throw new Error(result.error.message)
-   *   return result.data
-   * }
-   * ```
-   */
-  function encryptBody(plaintext: string, context: TransportMessageContext): HaiResult<EncryptedPayload> {
-    if (!serverPublicKey || !serverKeyId || !keyPair)
-      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientNotInitialized'))
-    return sealTransportPayload(options.crypto, plaintext, context, 'request', 0, serverPublicKey, keyPair.privateKey, bodyLimits)
-  }
-
-  /**
-   * 用本地私钥和协商服务端公钥验签/MAC后解密；调用前还须关联本次请求上下文和HTTP状态。
-   * @param payload - 已经过形状与响应关联检查的完整封装。
-   * @returns 明文或失败。
-   *
-   * @example 模块内部上下文
-   * ```ts
-   * function openActual(payload: EncryptedPayload) {
-   *   const result = decryptPayload(payload)
-   *   if (!result.success) throw new Error(result.error.message)
-   *   return result.data
-   * }
-   * ```
-   */
-  function decryptPayload(payload: EncryptedPayload): HaiResult<string> {
-    if (!keyPair || !serverPublicKey)
-      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientNotInitialized'))
-    return openTransportPayload(options.crypto, payload, keyPair.privateKey, serverPublicKey, bodyLimits)
+  async function waitForSession(signal: AbortSignal | undefined): Promise<TransportClientSession> {
+    signal?.throwIfAborted()
+    // 单个请求取消只停止自己的等待；共享握手由独立的有界超时管理，避免取消其它调用。
+    let onAbort: (() => void) | undefined
+    try {
+      const ready = await (signal
+        ? Promise.race([
+            ensureReady(),
+            new Promise<never>((_resolve, reject) => {
+              onAbort = () => reject(signal.reason)
+              signal.addEventListener('abort', onAbort, { once: true })
+              if (signal.aborted)
+                onAbort()
+            }),
+          ])
+        : ensureReady())
+      if (!ready.success)
+        throw new Error(ready.error.message)
+      return ready.data
+    }
+    finally {
+      if (onAbort)
+        signal?.removeEventListener('abort', onAbort)
+    }
   }
 
   const encryptedFetch: typeof fetch = async (input, init) => {
@@ -263,45 +285,29 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     if (targetUrl === options.keyExchangeUrl)
       return baseFetch(input, init)
 
-    // 单个请求取消只停止自己的等待；共享握手由独立的有界超时管理，避免取消其它调用。
-    let onAbort: (() => void) | undefined
-    let ready: HaiResult<void>
-    try {
-      ready = await (signal
-        ? Promise.race([
-            ensureReady(),
-            new Promise<never>((_resolve, reject) => {
-              onAbort = () => reject(signal.reason)
-              signal.addEventListener('abort', onAbort, { once: true })
-              if (signal.aborted)
-                onAbort()
-            }),
-          ])
-        : ensureReady())
-    }
-    finally {
-      if (onAbort)
-        signal?.removeEventListener('abort', onAbort)
-    }
-    if (!ready.success)
-      throw new Error(ready.error.message)
-
-    // 复制并改造 init：附加 X-Client-Id；空正文也生成认证封装。
-    const headers = new Headers(init?.headers ?? requestInput?.headers)
-    headers.set(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER, clientId!)
-
-    // 兼容 oRPC 等场景：body 可能在 Request 上而非 init.body。
-    let rawBody: BodyInit | null | undefined = init?.body
-    if (rawBody == null && requestInput) {
-      const method = (init?.method ?? requestInput.method).toUpperCase()
-      if (method !== 'GET' && method !== 'HEAD') {
-        const text = await readTransportBody(requestInput.body, { maxBytes: bodyLimits.plaintextBytes, signal })
-        if (text)
-          rawBody = text
-      }
-    }
-
+    const requestGeneration = generation
+    let requestSession = await waitForSession(signal)
+    if (requestGeneration !== generation)
+      throw new Error(cryptoM('crypto_transportClientNotInitialized'))
     const method = (init?.method ?? requestInput?.method ?? 'GET').toUpperCase()
+    // oRPC 等调用方会在 Request 上提供正文。读取原流一次，续期时复用有界明文。
+    const requestBody = init?.body != null
+      ? new Response(init.body).body
+      : method === 'GET' || method === 'HEAD'
+        ? null
+        : requestInput?.body ?? null
+    const plaintext = await readTransportBody(requestBody, { maxBytes: requestSession.bodyLimits.plaintextBytes, signal })
+    // 读取慢流期间也可能到达续期时间，发送前再取得可用会话。
+    if (requestGeneration === generation && (requestSession !== session || !isSessionUsable(requestSession)))
+      requestSession = await waitForSession(signal)
+    signal?.throwIfAborted()
+    if (requestGeneration !== generation || !isSessionUsable(requestSession))
+      throw new Error(cryptoM('crypto_transportClientNotInitialized'))
+    const { bodyLimits, clientId, keyPair, serverKeyId, serverPublicKey } = requestSession
+
+    // 请求和响应都绑定本次发送使用的会话；后续协商可以替换客户端的当前会话。
+    const headers = new Headers(init?.headers ?? requestInput?.headers)
+    headers.set(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER, clientId)
     const base = new URL(options.keyExchangeUrl, globalThis.location?.href ?? 'http://localhost')
     const url = new URL(targetUrl, base)
     const pathHash = hashTransportPath(options.crypto, url.pathname + url.search)
@@ -309,19 +315,19 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
       throw new Error(pathHash.error.message)
     const context: TransportMessageContext = {
       version: TRANSPORT_PROTOCOL.VERSION,
-      serverKeyId: serverKeyId!,
-      clientId: clientId!,
+      serverKeyId,
+      clientId,
       requestId: options.crypto.symmetric.generateKey(),
       issuedAt: Date.now(),
       method,
       pathHash: pathHash.data,
     }
-    const plaintext = rawBody == null
-      ? ''
-      : await readTransportBody(new Response(rawBody).body, { maxBytes: bodyLimits.plaintextBytes, signal })
-    const encResult = encryptBody(plaintext, context)
-    if (!encResult.success)
+    const encResult = sealTransportPayload(options.crypto, plaintext, context, 'request', 0, serverPublicKey, keyPair.privateKey, bodyLimits)
+    if (!encResult.success) {
+      if (encResult.error.cause instanceof TransportBodyTooLargeError)
+        throw encResult.error.cause
       throw new Error(encResult.error.message)
+    }
     const serialized = JSON.stringify(encResult.data)
     if (new TextEncoder().encode(serialized).byteLength > bodyLimits.encryptedPayloadBytes)
       throw new TransportBodyTooLargeError(bodyLimits.encryptedPayloadBytes, new TextEncoder().encode(serialized).byteLength, { stage: 'encrypted' })
@@ -400,7 +406,9 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
       throw new Error(cryptoM('crypto_transportResponseDecryptFailed'))
     }
 
-    const decResult = decryptPayload(payload)
+    if (requestGeneration !== generation)
+      throw new Error(cryptoM('crypto_transportClientNotInitialized'))
+    const decResult = openTransportPayload(options.crypto, payload, keyPair.privateKey, serverPublicKey, bodyLimits)
     if (!decResult.success) {
       if (decResult.error.cause instanceof TransportBodyTooLargeError)
         throw decResult.error.cause
@@ -456,18 +464,20 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
   }
 
   return {
-    init: ensureReady,
+    async init() {
+      const ready = await ensureReady()
+      return ready.success
+        ? ok(undefined)
+        : ready
+    },
     encryptedFetch,
-    ready: () => clientId !== null && serverPublicKey !== null,
+    ready: () => session !== undefined && isSessionUsable(session),
     destroy() {
       generation++
       handshakeController?.abort()
       handshakeController = undefined
-      keyPair = null
-      serverPublicKey = null
-      serverKeyId = null
-      clientId = null
-      initPromise = null
+      session = undefined
+      initPromise = undefined
     },
   }
 }
@@ -514,4 +524,5 @@ function isKeyExchangeResponse(body: unknown): body is KeyExchangeResponse {
     && new TextEncoder().encode(fields.serverPublicKey).byteLength <= TRANSPORT_BODY_LIMITS.publicKeyBytes
     && typeof fields.clientId === 'string' && fields.clientId.length > 0
     && typeof fields.serverKeyId === 'string' && /^[\w-]{1,64}$/.test(fields.serverKeyId)
+    && (fields.clientKeyTtlSeconds === undefined || isValidTransportKeyTtlSeconds(fields.clientKeyTtlSeconds))
 }

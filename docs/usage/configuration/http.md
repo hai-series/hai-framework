@@ -268,6 +268,8 @@ Edge 100 缺少加密客户端读取请求正文所用的 `Request.body`，可�
 
 Crypto通过公开工厂/调用参数装配，不依赖`_crypto.yml`。先执行 `await crypto.init()` 并检查结果，再用Serv/Kit/API Client统一协议；自定义适配才直接`createServer`/`createClient`。
 
+为 Redis 或数据库注册表设置 `ttlSeconds: 3600` 后，每次密钥协商会登记一个有效期为一小时的客户端公钥。Serv 和 Kit 在握手响应中返回该期限。用户闲置后再次操作时，客户端按需重新协商，再发送业务请求。登录会话按身份模块的期限单独续期。可在测试环境缩短登记有效期，确认过期后的第一个业务请求使用新的 `X-Client-Id`。
+
 | 工厂/选项 | 默认与条件 | 影响 |
 | --- | --- | --- |
 | `createServer`的`serverKeyRing`/`keyStore` | 显式提供，无秘密/内存回退 | 多节点必须同一有效ring与共享registry，重启加载原ring；不能每次启动新建 |

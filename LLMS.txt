@@ -36,7 +36,7 @@
 | @h-ai/payment | [订单、回调、查单、退款](packages/cli/templates/skills/hai-payment/SKILL.md) |
 | @h-ai/audit | [审计记录、查询、清理](packages/cli/templates/skills/hai-audit/SKILL.md) |
 | @h-ai/scheduler | [定时/API/JS/Hook 任务](packages/cli/templates/skills/hai-scheduler/SKILL.md) |
-| @h-ai/crypto | [SM2/SM3/SM4、密码、transport](packages/cli/templates/skills/hai-crypto/SKILL.md) |
+| @h-ai/crypto | [SM2/SM3/SM4、密码、传输加密与续期](packages/cli/templates/skills/hai-crypto/SKILL.md) |
 | @h-ai/api-contract | [共享领域 HTTP contract](packages/cli/templates/skills/hai-api-contract/SKILL.md) |
 | @h-ai/serv | [procedures、HTTP App、OpenAPI、守卫、ServFunctions 公开类型](packages/cli/templates/skills/hai-serv/SKILL.md) |
 | @h-ai/kit | [SvelteKit hooks、guard、validate、response、服务端/浏览器命名空间类型](packages/cli/templates/skills/hai-kit/SKILL.md) |

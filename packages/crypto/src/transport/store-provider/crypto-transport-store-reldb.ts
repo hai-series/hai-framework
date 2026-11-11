@@ -10,6 +10,7 @@ import type { DmlWithTxOperations, ReldbFunctions } from '@h-ai/reldb'
 import type { TransportKeyStore } from '../crypto-transport-types.js'
 import { cryptoM } from '../../crypto-i18n.js'
 import { isValidSM2PublicKey } from '../../crypto-public-key.js'
+import { isValidTransportKeyTtlSeconds } from '../crypto-transport-codec.js'
 
 const TRANSPORT_KEY_TABLE = 'hai_crypto_transport_client_keys'
 const TRANSPORT_REQUEST_TABLE = 'hai_crypto_transport_requests'
@@ -115,7 +116,7 @@ function unwrapResult<T>(operation: string, result: HaiResult<T>): T {
  */
 export function createReldbTransportKeyStore(options: CreateReldbTransportKeyStoreOptions): ReldbTransportKeyStore {
   const { ttlSeconds } = options
-  if (ttlSeconds !== undefined && (!Number.isSafeInteger(ttlSeconds) || ttlSeconds <= 0 || ttlSeconds > 2_147_483_647))
+  if (ttlSeconds !== undefined && !isValidTransportKeyTtlSeconds(ttlSeconds))
     throw new TypeError(cryptoM('crypto_transportKeyStoreTtlInvalid'))
   const maxClients = options.maxClients ?? 10000
   if (!Number.isSafeInteger(maxClients) || maxClients <= 0)
@@ -278,6 +279,7 @@ export function createReldbTransportKeyStore(options: CreateReldbTransportKeySto
   }
 
   return {
+    clientKeyTtlSeconds: ttlSeconds,
     get stateScope() {
       return options.reldb.config?.type && options.reldb.config.type !== 'sqlite'
         ? 'shared'

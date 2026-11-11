@@ -4,7 +4,9 @@ serv、kit、api-client 及浏览器/移动端客户端共用此应用层协议�
 
 ## 协商与密钥
 
-协商 POST JSON `{ clientPublicKey }`，服务端注册到共享 registry 后返回 `{ clientId, serverKeyId, serverPublicKey }`。客户端保存自己的 SM2 私钥及协商得到的服务端版本/公钥。每个节点使用同一受管 key ring；轮换时保留旧版本直到过渡结束，删除旧版本即撤销。密钥环仅存在于服务端私密配置中。
+协商 POST JSON `{ clientPublicKey }`，服务端注册到共享 registry 后返回 `clientId`、`serverKeyId`、`serverPublicKey` 和 `maxPlaintextBytes`。登记配置了固定 TTL 时，响应包含从登记起算的 `clientKeyTtlSeconds`。客户端保存自己的 SM2 私钥及协商得到的服务端版本和公钥。每个节点使用同一受管 key ring；轮换时保留旧版本直到过渡结束，删除旧版本即撤销。密钥环仅存在于服务端私密配置中。
+
+客户端从发送握手起计算续期时间，并预留 TTL 的十分之一，最多 30 秒。到达续期时间后，下一次请求先完成新协商再发送，等待中的并发请求共享握手。已经发出的请求使用发送时的会话验证响应。省略 `clientKeyTtlSeconds` 表示客户端没有可用于自动续期的期限。自定义 registry 可通过 `TransportKeyStore.clientKeyTtlSeconds` 声明其固定 TTL。
 
 公钥只接受非压缩 SM2 点：128 个 hex 字符或 `04` + 128 个 hex 字符，编码和曲线点均须有效。纯函数 `isValidSM2PublicKey` 无需初始化；serv/kit 先验证再调用 registry，畸形点返回 400。所有内置 registry 及 manager 直接注册也校验，不把畸形点写入存储。
 

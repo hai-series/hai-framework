@@ -12,6 +12,20 @@ import { HaiCryptoError } from '../crypto-types.js'
 import { TRANSPORT_BODY_LIMITS, TransportBodyTooLargeError } from './crypto-transport-body.js'
 import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
 
+/**
+ * 校验 registry 配置及协商响应中的登记寿命，单位为秒。
+ * @param value - 来自本地配置或协商响应的值。
+ * @returns 是否为 1～2147483647 范围内的整数。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const valid = isValidTransportKeyTtlSeconds(3600)
+ * ```
+ */
+export function isValidTransportKeyTtlSeconds(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 2_147_483_647
+}
+
 /** 固定位置数组防止对象属性顺序、字段拼接或查询参数边界产生歧义。 */
 function authenticatedText(payload: Omit<EncryptedPayload, 'tag' | 'signature'>): string {
   const c = payload.context

@@ -44,6 +44,7 @@ describe('crypto transport key stores', () => {
       return
 
     const store = createRedisTransportKeyStore({ cache, ttlSeconds: 60 })
+    expect(store.clientKeyTtlSeconds).toBe(60)
     const clientId = await store.register(firstKey)
 
     expect(await store.get(clientId)).toBe(firstKey)
@@ -59,6 +60,7 @@ describe('crypto transport key stores', () => {
       return
 
     const store = createReldbTransportKeyStore({ reldb, ttlSeconds: 60 })
+    expect(store.clientKeyTtlSeconds).toBe(60)
     const clientId = await store.register(firstKey)
 
     expect(await store.get(clientId)).toBe(firstKey)
