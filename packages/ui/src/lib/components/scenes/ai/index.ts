@@ -28,7 +28,6 @@ export type {
 } from './document-parse.js'
 export type {
   AiDocumentEditorProps,
-  MarkdownBlockFormatKind,
   MarkdownBlockStyleKind,
   MarkdownCodeBlockItem,
   MarkdownCodeRunRequest,

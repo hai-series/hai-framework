@@ -8,7 +8,7 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 
 认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求默认有效期为 5 分钟，客户端时间最多可领先服务器 30 秒。服务端可用 `maxRequestAgeSeconds`（1～600）和 `maxFutureSkewSeconds`（0～300）调整，单位为整数秒。共享 registry 原子消费 (clientId, requestId)，nonce 保留到 issuedAt + 11 分钟，覆盖最长可配窗口及节点时钟差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
 
-在 `_kit.yml` 的 `transport` 块配置时间窗口，将字段传给服务端 transport 装配。完成旧节点升级后等待 12 分钟，再把有效期调到 300 秒以上。校时提示与 `TransportTimeError.serverTime` 见 [Crypto 参考](../hai-crypto/reference.md)。`kit.client.createAuthActions()` 将已认证校时错误转为 `HaiResult`，供 AuthPanel 展示。
+在 `_kit.yml` 的 `transport` 块配置时间窗口，将字段传给服务端 transport 装配。校时提示与 `TransportTimeError.serverTime` 见 [Crypto 参考](../hai-crypto/reference.md)。`kit.client.createAuthActions()` 将已认证校时错误转为 `HaiResult`，供 AuthPanel 展示。
 
 空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口由 Serv/Kit 路径规则 `encryption: disabled` 或宿主 `excludePaths` 显式允许；调用方同步选择普通请求，API Client/Kit 包装器使用自己的 `excludePaths`。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
 
@@ -101,7 +101,7 @@ export const handle = kit.createHandle({
 })
 ```
 
-需要保护会话 Cookie 时配置 `crypto.encryptedCookies`，并通过 `crypto.cookieEncryptionKey` 或 `HAI_KIT_COOKIE_KEY` 提供密钥。密钥必须为 32 位十六进制。Cookie 采用分离子密钥的 SM4-CBC/HMAC-SHA256，先验证版本、名称、IV 与密文，再解密；旧版无认证 Cookie 升级后失效，需重新登录。缺少或非法密钥会在 `createHandle()` 时失败；加解密错误不会回退到明文 Cookie。
+需要保护会话 Cookie 时配置 `crypto.encryptedCookies`，并通过 `crypto.cookieEncryptionKey` 或 `HAI_KIT_COOKIE_KEY` 提供密钥。密钥必须为 32 位十六进制。Cookie 使用独立子密钥执行 SM4-CBC 和 HMAC-SHA256，验证版本、名称、IV 与密文后解密。`createHandle()` 会拒绝缺失或无效的密钥。
 
 不再使用无运行入口的旧 Crypto Helpers 或其 `CryptoServiceLike`、`EncryptedCookieConfig`、`CryptoCsrfConfig`、`WebhookVerifyConfig` 类型；这些已删除。Cookie 通过上述 `kit.createHandle` 配置保护，其他加密能力使用 `@h-ai/crypto` 真实公开 API。
 

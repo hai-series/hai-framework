@@ -193,8 +193,6 @@ export function createAILLMFunctions(
   async function chatWithRecord(
     request: ChatCompletionRequest,
   ): Promise<HaiResult<ChatCompletionResponse>> {
-    if (request.tempModel && Object.hasOwn(request.tempModel, 'api'))
-      return err(HaiAIError.INVALID_REQUEST, aiM('ai_llmProtocolRenamed'))
     const start = Date.now()
     const context = {
       model: request.model ?? request.tempModel?.model,
@@ -279,8 +277,6 @@ export function createAILLMFunctions(
   async function* chatStreamWithRecord(
     request: ChatCompletionRequest,
   ): AsyncIterable<ChatCompletionChunk> {
-    if (request.tempModel && Object.hasOwn(request.tempModel, 'api'))
-      throw new Error(aiM('ai_llmProtocolRenamed'))
     const start = Date.now()
     const logContext = {
       model: request.model ?? request.tempModel?.model,

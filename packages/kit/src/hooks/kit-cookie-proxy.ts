@@ -92,7 +92,7 @@ export function createEncryptedCookieProxy(
 
           try {
             const ciphertext = raw.slice(ENCRYPTED_PREFIX.length)
-            // 旧版无认证格式不再接受，不能以兼容回退绕过验真。
+            // 加密 Cookie 必须包含可验证的认证封装。
             const parts = ciphertext.split(':')
             if (parts.length !== 3 || !/^[\da-f]{64}$/i.test(parts[2]!)) {
               logger.warn('Encrypted cookie has invalid format', { name })

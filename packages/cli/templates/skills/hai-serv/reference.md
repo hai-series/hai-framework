@@ -297,7 +297,7 @@ transport:
 
 认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求默认有效期为 5 分钟，客户端时间最多可领先服务器 30 秒。服务端可用 `maxRequestAgeSeconds`（1～600）和 `maxFutureSkewSeconds`（0～300）调整，单位为整数秒。共享 registry 原子消费 (clientId, requestId)，nonce 保留到 issuedAt + 11 分钟，覆盖最长可配窗口及节点时钟差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
 
-在 `_serv.yml` 的 `transport` 块配置时间窗口，将字段传给服务端 transport 装配。完成旧节点升级后等待 12 分钟，再把有效期调到 300 秒以上。校时提示与 `TransportTimeError.serverTime` 见 [Crypto 参考](../hai-crypto/reference.md)。
+在 `_serv.yml` 的 `transport` 块配置时间窗口，将字段传给服务端 transport 装配。校时提示与 `TransportTimeError.serverTime` 见 [Crypto 参考](../hai-crypto/reference.md)。
 
 空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口由 Serv/Kit 路径规则 `encryption: disabled` 或宿主 `excludePaths` 显式允许；调用方同步选择普通请求，API Client/Kit 包装器使用自己的 `excludePaths`。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
 
@@ -391,7 +391,7 @@ await apiClient.init({
 
 > 不要导入或暴露子目录内部 transport 工厂；公共装配点只有 `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })`。
 
-启用 transport 必须显式注入 `serverKeyRing` 与 `keyStore`；多节点使用相同受管 ring 和共享 Redis/数据库 registry，仅共享客户端公钥不足以跨节点解密。通过根入口 `parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)` 解析并检查 HaiResult，私钥不放 `_serv.yml`、PUBLIC_/VITE_、日志或响应。请求带协商 serverKeyId，未知/撤销 ID 拒绝。轮换先分发新旧 ring，再切 activeKeyId 并滚动重建；删除旧版本后客户端须 destroy 并重协商，不自动重放非幂等业务。默认 YAML maxClients 已删除；开发/测试显式 `createInMemoryKeyStore(capacity)`。无需 sticky session，详见 hai-crypto 的密钥轮换说明。
+启用 transport 必须显式注入 `serverKeyRing` 与 `keyStore`；多节点使用相同受管 ring 和共享 Redis/数据库 registry，仅共享客户端公钥不足以跨节点解密。通过根入口 `parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)` 解析并检查 HaiResult，私钥不放 `_serv.yml`、PUBLIC_/VITE_、日志或响应。请求带协商 serverKeyId，未知/撤销 ID 拒绝。轮换先分发新旧 ring，再切 activeKeyId 并滚动重建；删除旧版本后客户端须 destroy 并重协商，不自动重放非幂等业务。开发和测试显式 `createInMemoryKeyStore(capacity)`。无需 sticky session，详见 hai-crypto 的密钥轮换说明。
 
 **上下文工厂优先级**（`context.session` 填充来源）：
 

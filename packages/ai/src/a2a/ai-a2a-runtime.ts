@@ -76,7 +76,7 @@ const malformed = (message: string) => new RequestMalformedError({ message })
 const notFound = (message: string) => new TaskNotFoundError({ message })
 const notCancelable = (message: string) => new TaskNotCancelableError({ message })
 
-/** 执行事件到协议流的映射不经过旧版兼容层。 */
+/** 将执行事件映射为 A2A 协议流。 */
 function streamResponse(event: AgentExecutionEvent): StreamResponse {
   switch (event.kind) {
     case 'message': return {

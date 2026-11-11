@@ -27,7 +27,6 @@ function extractMeUser(meBody: unknown) {
 
   const body = meBody as {
     success?: boolean
-    user?: unknown
     data?: { user?: unknown }
   }
 
@@ -35,7 +34,7 @@ function extractMeUser(meBody: unknown) {
     return null
   }
 
-  return body.user ?? body.data?.user ?? null
+  return body.data?.user ?? null
 }
 
 /** 等待 SvelteKit 客户端完成 hydration，避免操作仅由 SSR 渲染的控件。 */
@@ -106,7 +105,7 @@ export async function loginOnPage(page: Page, username: string, password: string
   }
 
   // 与页面真实认证一致：只通过登录响应设置的 httpOnly Cookie 验证会话。
-  const meRes = await page.request.get('/api/auth/me')
+  const meRes = await page.request.get('/api/auth/profile')
   const meBody = await meRes.json()
   const meUser = extractMeUser(meBody)
   if (!meRes.ok() || !meUser) {
@@ -175,7 +174,7 @@ export async function registerAndLoginViaApi(request: APIRequestContext, prefix 
     throw new Error(`Login failed: ${loginRes.status()} ${JSON.stringify(loginBody)}`)
   }
 
-  const meRes = await request.get('/api/auth/me')
+  const meRes = await request.get('/api/auth/profile')
   const meBody = await meRes.json()
   const meUser = extractMeUser(meBody)
   if (!meRes.ok() || !meUser) {

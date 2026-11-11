@@ -1,6 +1,6 @@
 # Transport v2 协议
 
-serv、kit、api-client 及浏览器/移动端客户端共用此应用层协议。只接受 v2，旧版 `{ encryptedKey, ciphertext, iv }` 和仅带 clientId 的空请求均拒绝。TLS 负责握手公钥的真实性；此协议不替代 TLS、IAM 授权或业务幂等键。
+serv、kit、api-client 及浏览器/移动端客户端共用此应用层协议。请求和响应使用 v2 认证封装。TLS 负责握手公钥的真实性；此协议不替代 TLS、IAM 授权或业务幂等键。
 
 ## 协商与密钥
 
@@ -77,7 +77,7 @@ const signedText = JSON.stringify([authenticatedText, tag])
 
 ## 防重放状态
 
-requestId 至少保留到 issuedAt + 11 分钟，覆盖最长可配的 10 分钟有效期和 60 秒的节点间时钟差。部署需保证数据库与各节点时钟同步在 ±30 秒内。客户端未来偏差配置只控制请求是否被接受。升级旧版本时沿用默认窗口，等最后一个旧节点停止处理请求满 12 分钟后才把请求有效期调到 300 秒以上，以覆盖旧版本写入的 6 分钟保留记录。
+requestId 至少保留到 issuedAt + 11 分钟，覆盖最长可配的 10 分钟有效期和 60 秒的节点间时钟差。部署需保证数据库与各节点时钟同步在 ±30 秒内。客户端未来偏差配置只控制请求是否被接受。
 
 Redis provider 使用单 key CAS + TTL；SQL provider 使用 `hai_crypto_transport_requests` 的唯一主键插入，注册和周期 `pruneExpired()` 每批最多清理 100 条过期 nonce；nonce 消费不争用公钥容量锁。有效记录不能提前删除/驱逐；Redis 需要 noeviction 和符合部署持久化要求的配置。数据库/Redis 的回滚、数据丢失或不同节点连接不同后端会破坏去重，生产须使用同一可靠共享后端。
 
@@ -94,6 +94,6 @@ Redis provider 使用单 key CAS + TTL；SQL provider 使用 `hai_crypto_transpo
 - 普通响应：JSON 正文承载封装。HEAD、204、304 或实际无正文响应：封装放在 `X-Hai-Transport` 响应头。
 - 同一消息不允许同时用头和正文承载封装。CORS 需允许并暴露 X-Hai-Transport。
 
-业务预算由 maxPlaintextBytes 配置，默认明文 1 MiB，范围 1 KiB～64 MiB；密文预算由 resolveTransportBodyLimits 推导为两倍明文加 32 KiB。握手 JSON 16 KiB、公钥 4 KiB、头封装 16 KiB、路径 8 KiB 及所有认证/防重放约束保持独立。读取超限/取消必须取消原流并释放 reader；生成的代理与 adapter-node 使用同一派生预算。详见 [容量配置与升级](TRANSPORT-CAPACITY.md)。
+业务预算由 maxPlaintextBytes 配置，默认明文 1 MiB，范围 1 KiB～64 MiB；密文预算由 resolveTransportBodyLimits 推导为两倍明文加 32 KiB。握手 JSON 16 KiB、公钥 4 KiB、头封装 16 KiB、路径 8 KiB 及所有认证/防重放约束保持独立。读取超限/取消必须取消原流并释放 reader；生成的代理与 adapter-node 使用同一派生预算。详见 [容量配置](TRANSPORT-CAPACITY.md)。
 
 明文接口通过服务端 excludePaths 和对应客户端排除规则显式隔离。kit 不提供 requireEncryption/encryptResponse 降级开关；业务拒绝响应经 transport 返回时也应认证。

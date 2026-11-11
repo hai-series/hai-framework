@@ -22,13 +22,13 @@ README 编辑先读章节，把功能说明与示例合并到对应章节；新�
 
 ### 页面与布局
 
-每个模板只安装实际使用的模块：admin/h5 包含认证、验证码及找回密码通知，以及数据库、缓存、加密依赖；website 只包含 Core/Kit/UI；API 包含认证、通知、上传和反馈；fullstack 保留管理后台的认证、审计、存储、通知、调度和反馈；mobile-app 只使用客户端能力。AI、payment、vecdb、datapipe 不默认安装。所有项目保留完整模块 YAML 和 `.env.example`，未启用项以注释提供，只有已启用项进入公共环境默认值。后续添加对应依赖、取消所需配置注释，再接入初始化、关闭及业务路由；添加依赖不会自动启用功能。`--template`、`--features`、`--examples/--no-examples` 已删除，`create --yes/-y` 改为 `--defaults`，旧参数明确报错；`deploy --yes` 保持原义。已有工程不会自动裁剪依赖。
+每个模板只安装实际使用的模块：admin/h5 包含认证、验证码及找回密码通知，以及数据库、缓存、加密依赖；website 只包含 Core/Kit/UI；API 包含认证、通知、上传和反馈；fullstack 保留管理后台的认证、审计、存储、通知、调度和反馈；mobile-app 只使用客户端能力。AI、payment、vecdb、datapipe 不默认安装。所有项目保留完整模块 YAML 和 `.env.example`，未启用项以注释提供，只有已启用项进入公共环境默认值。后续添加对应依赖、取消所需配置注释，再接入初始化、关闭及业务路由；添加依赖不会自动启用功能。无交互创建项目使用 `hai create --defaults`。执行 `hai deploy --yes` 时使用已保存的部署配置。
 
 website默认SSR；静态发布须先移除服务端业务依赖、初始化及API/actions。静态构建与实际路径验证按[hai-build](../hai-build/SKILL.md)。
 
 admin、website、h5 和 Fullstack Web 在入口 HTML 加载 `_hai/browser-check/startup.js` 后才进入应用。检测到 Chrome/Edge 低于 111、Firefox 低于 114、Safari 或 iOS/iPadOS 低于 16.4 时，浏览器跳转到同目录的静态升级页。保留经典脚本标签和静态资源，验证根目录和发布子目录都能在应用包加载失败时显示升级提示。
 
-网站挂载到`/yyy/`等目录时，按[网站挂载目录](../hai-build/paths.md)同步资源、链接、认证端点和服务端守卫。SvelteKit在编译时固定base，Vite默认相对资源加hash导航；API基址单独配置。SDK子目录制品使用格式5，健康与增量检查随制品处理，不手工修改旧格式清单来代替重新构建。
+网站挂载到`/yyy/`等目录时，按[网站挂载目录](../hai-build/paths.md)同步资源、链接、认证端点和服务端守卫。SvelteKit在编译时固定base，Vite默认相对资源加hash导航；API基址单独配置。镜像清单使用格式 5，部署健康检查和增量更新按清单中的 `webBasePath` 处理。
 
 页面共用根布局的 header/footer。独立移动应用的页面放在 `src/lib/pages/**/*.svelte`，Fullstack 放在 `packages/<name>-shared/src/lib/pages/**/*.svelte`，由 `HashRouter` 和 `import.meta.glob` 自动发现；新增页面无需修改路由表，菜单按业务配置入口。SvelteKit 保留 `src/routes/**/+page.svelte` 自动文件路由、服务端鉴权和刷新定位。
 
@@ -85,7 +85,7 @@ Fullstack 的环境文件在工程根；service 脚本通过 `../../.env*` 加�
 
 先把原来被忽略的 `.env` 私有值迁入 `.env.local`，再提交公共基础和环境文件。本机文件只保留需要覆盖的值，避免整份复制示例后固定开发环境。旧的 `HAI_AI_LLM_API_KEY` / `HAI_AI_LLM_BASE_URL` 改为 `HAI_AI_LLM_APIKEY` / `HAI_AI_LLM_BASEURL`；音频和图像厂商回退变量同样使用 `APIKEY` 后缀。Reach 和 deploy 凭据按当前 YAML 路径命名，以项目 `.env.example` 为准，同步迁移部署平台变量和本机文件。
 
-原 `HAI_AI_ANTHROPIC_API_KEY` / `HAI_AI_ANTHROPIC_BASE_URL` 不再使用。默认协议为 `anthropic` 时改用标准 LLM 变量；混合模型池中有独立凭据或端点时，将 `apiKey` / `baseUrl` 配置在对应模型项。厂商回退 `ANTHROPIC_API_KEY` / `ANTHROPIC_BASE_URL` 保留，优先级以 AI 模块说明为准。
+默认协议为 `anthropic` 时使用标准 LLM 配置。混合模型池的独立凭据或端点配置在对应模型项的 `apiKey` 和 `baseUrl`。厂商环境变量及优先级见 AI 模块说明。
 
 #### 常用变量及约束
 

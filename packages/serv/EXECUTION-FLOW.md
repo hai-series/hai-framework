@@ -398,7 +398,7 @@ const app = serv.createApp({
 
 密钥环 `{ activeKeyId, keys: { [id]: { publicKey, privateKey } } }` 仅从 Secret Manager 或服务端私有环境装配，不放公开 `_serv.yml`。示例应用读取 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，用根入口 `parseTransportServerKeyRing()` 安全解析；错误不含原始 JSON/私钥片段。工厂校验公私钥配对并捕获快照。
 
-轮换先把含新旧版本的 ring 分发到所有节点，再切换 activeKeyId 并滚动重建 manager；过渡期保留旧版本，删除旧 ID 并更新所有节点即撤销。未知/撤销 ID 不尝试其它密钥。旧客户端需要 destroy 后重协商，非幂等业务不得自动重放。开发/测试内存 registry 必须显式 `createInMemoryKeyStore(capacity)`，原 YAML maxClients 已移除。
+轮换先把含新旧版本的 ring 分发到所有节点，再切换 activeKeyId 并滚动重建 manager；过渡期保留旧版本，删除旧 ID 并更新所有节点即撤销。未知/撤销 ID 不尝试其它密钥。旧客户端需要 destroy 后重协商，非幂等业务不得自动重放。开发和测试显式使用 `createInMemoryKeyStore(capacity)`。
 
 ## Refresh Cookie 逻辑（补充）
 

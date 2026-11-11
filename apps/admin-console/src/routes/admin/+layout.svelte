@@ -45,7 +45,7 @@
     if (checkingNavigation)
       return
     checkingNavigation = true
-    void apiFetch('/api/auth/me').then(async (response) => {
+    void apiFetch('/api/auth/profile').then(async (response) => {
       if (response.ok) {
         approvedNavigation = target.href
         // target 来自 SvelteKit 导航目标，已包含部署 base，不能重复 resolve。

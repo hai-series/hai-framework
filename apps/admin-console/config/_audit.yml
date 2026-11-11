@@ -1,11 +1,11 @@
 # 审计日志与事件时身份快照
-# 说明：用户表名，用于 list 查询时 LEFT JOIN 获取用户名
+# 说明：事件写入时用于捕获用户名的用户表名。
 # 取值：字符串
 userTable: hai_iam_users
-# 说明：用户表主键列名，用于 JOIN 条件
+# 说明：用于查找事件操作者的用户表主键列名。
 # 取值：字符串
 userIdColumn: id
-# 说明：用户表用户名列名，用于 SELECT 输出
+# 说明：用于写入身份快照的用户名列名。
 # 取值：字符串
 userNameColumn: username
 

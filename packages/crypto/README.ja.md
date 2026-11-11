@@ -277,7 +277,7 @@ const serverKeyRing = ring.data
 const server = crypto.transport.createServer({ serverKeyRing, keyStore })
 ```
 
-鍵交換は `{ serverKeyId, serverPublicKey, clientId }` を返し、暗号化リクエストは `serverKeyId` を送ります。サーバーは指定した秘密鍵だけを選び、不明・失効 ID は他の鍵を試さず拒否します。応答はクライアント公開鍵で暗号化します。更新時は全ノードに新旧の鍵を先に配布し、続いて `activeKeyId` を切り替えて manager を順次再構築します。移行期間後に古い ID を全ノードから削除します。旧クライアントは `destroy()` 後に再交渉し、非冪等処理を自動再送しません。同じ鍵環を Secret Manager またはサーバー専用の非公開環境から配布し、通常の YAML、PUBLIC_/VITE_、ログ、公開応答には含めないでください。CLI は Git 対象外の `.env.dev.local/.env.test.local/.env.prod.local` に独立した鍵環を作成します。クローン後は保護ファイルまたは Secret Manager で環境ごとに配布します。実行時には生成しません。
+鍵交換は `{ serverKeyId, serverPublicKey, clientId, maxPlaintextBytes }` を返し、暗号化リクエストは `serverKeyId` を送ります。サーバーは指定した秘密鍵だけを選び、不明・失効 ID は他の鍵を試さず拒否します。応答はクライアント公開鍵で暗号化します。更新時は全ノードに新旧の鍵を先に配布し、続いて `activeKeyId` を切り替えて manager を順次再構築します。移行期間後に古い ID を全ノードから削除します。旧クライアントは `destroy()` 後に再交渉し、非冪等処理を自動再送しません。同じ鍵環を Secret Manager またはサーバー専用の非公開環境から配布し、通常の YAML、PUBLIC_/VITE_、ログ、公開応答には含めないでください。CLI は Git 対象外の `.env.dev.local/.env.test.local/.env.prod.local` に独立した鍵環を作成します。クローン後は保護ファイルまたは Secret Manager で環境ごとに配布します。実行時には生成しません。
 
 認証済み v2 のみを受け付けます。独立したランダム SM4-CBC 鍵と HMAC-SM3 鍵を SM2 で包み、送信者署名、MAC の順に検証してから CBC を復号します。要求はクライアント秘密鍵、応答は選択されたサーバー鍵バージョンで署名します。version、direction、serverKeyId、clientId、nonce を兼ねるランダム 128 ビット requestId、issuedAt、HTTP method、pathname と元の search の SM3 pathHash、応答 status を認証します。既定では要求は 5 分で期限切れになり、クライアント時刻はサーバーより最大 30 秒先まで許容されます。サーバー側の `maxRequestAgeSeconds`（1～600）と `maxFutureSkewSeconds`（0～300）で整数秒単位に調整できます。共有レジストリは (clientId, requestId) をアトミックに消費し、設定可能な最長の有効期間とノード間の時刻差をカバーするため、nonce を issuedAt の 11 分後まで保持します。ストレージ障害時は要求を拒否します。時計同期と Redis の noeviction/永続化により有効な nonce を保持してください。業務の再試行には別の冪等キーが必要です。
 
@@ -287,7 +287,7 @@ const server = crypto.transport.createServer({ serverKeyRing, keyStore })
 
 通常業務は `transport.maxPlaintextBytes`（auto/省略は 1 MiB）を維持します。Feedback の受理・証拠・添付・ZIP ダウンロードは `routePlaintextBytes` と `feedback.budget.maxTransportBytes` で別途宣言します。`*` は完全な1パス区間のみ一致し、ホストの明示値が優先です。ハンドシェイク、adapter-node、プロキシは経路の最大値を使用します。HTTP アダプターは個別宣言された 1 MiB 超の資料経路を最大2件、通常業務を別枠で16件まで許可し、応答完了・失敗時に解放します。混雑は503 / `hai:crypto:072` を返し、業務書込は自動再送しません。
 
-Serv/Kit は要求の結合、署名、MAC を検証した後、時刻の許容範囲を超えた要求に暗号化した HTTP 400 を返します。クライアントは `TransportTimeError`（`hai:crypto:071`）をスローし、検証時のサーバー UTC 時刻を表示して、自動時刻同期を有効にするか手動で時刻を設定してから再読み込みするよう案内します。`serverTime` は Unix ミリ秒です。旧サーバーが値を返さない場合も時刻調整の案内を表示します。`api-client` は `VALIDATION_FAILED` に変換し、`cause.transportCode` と `cause.serverTime` を保持します。
+Serv/Kit は要求の結合、署名、MAC を検証した後、時刻の許容範囲を超えた要求に暗号化した HTTP 400 を返します。クライアントは `TransportTimeError`（`hai:crypto:071`）をスローし、検証時のサーバー UTC 時刻を表示して、自動時刻同期を有効にするか手動で時刻を設定してから再読み込みするよう案内します。`serverTime` は Unix ミリ秒です。`api-client` は `VALIDATION_FAILED` に変換し、`cause.transportCode` と `cause.serverTime` を保持します。
 
 独自 HTTP アダプターでは `error instanceof TransportTimeError && error.context` を確認し、`createTransportErrorResponse(error, { manager, context: error.context })` で拒否応答を暗号化します。未認証の報文のタイムスタンプだけで時刻異常を診断しないでください。
 

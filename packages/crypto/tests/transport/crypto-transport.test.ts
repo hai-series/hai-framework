@@ -31,6 +31,7 @@ function makeRoundTripFetch(
         serverPublicKey: manager.getServerPublicKey(),
         serverKeyId: manager.getServerKeyId(),
         clientId,
+        maxPlaintextBytes: manager.bodyLimits.plaintextBytes,
         clientKeyTtlSeconds: manager.clientKeyTtlSeconds,
       }), {
         status: 200,
@@ -83,7 +84,12 @@ describe('crypto.transport', () => {
     })
     const opening = client.init()
     client.destroy()
-    release(Response.json({ clientId: 'old-client', serverKeyId: 'test-v1', serverPublicKey: serverKeyRing.keys['test-v1'].publicKey }))
+    release(Response.json({
+      clientId: 'old-client',
+      serverKeyId: 'test-v1',
+      serverPublicKey: serverKeyRing.keys['test-v1'].publicKey,
+      maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+    }))
     expect((await opening).success).toBe(false)
     expect(client.ready()).toBe(false)
     client.destroy()
@@ -266,7 +272,21 @@ describe('crypto.transport', () => {
         serverKeyId: 'test-v1',
         serverPublicKey: serverKeyRing.keys['test-v1']!.publicKey,
         clientId: 'id',
+        maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
         clientKeyTtlSeconds,
+      }),
+    })
+    expect((await client.init()).success).toBe(false)
+    expect(client.ready()).toBe(false)
+  })
+
+  it('rejects a key exchange without an advertised plaintext limit', async () => {
+    const client = crypto.transport.createClient({
+      keyExchangeUrl: KEY_EXCHANGE_URL,
+      fetch: async () => Response.json({
+        serverKeyId: 'test-v1',
+        serverPublicKey: serverKeyRing.keys['test-v1']!.publicKey,
+        clientId: 'id',
       }),
     })
     expect((await client.init()).success).toBe(false)
@@ -330,7 +350,12 @@ describe('crypto.transport', () => {
     })
     const fetch = vi.fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(new Response(stream))
-      .mockResolvedValueOnce(Response.json({ serverKeyId: 'test-v1', serverPublicKey: 'server-key', clientId: 'client-id' }))
+      .mockResolvedValueOnce(Response.json({
+        serverKeyId: 'test-v1',
+        serverPublicKey: 'server-key',
+        clientId: 'client-id',
+        maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+      }))
     const client = crypto.transport.createClient({ keyExchangeUrl: KEY_EXCHANGE_URL, fetch })
     expect((await client.init()).success).toBe(false)
     expect(cancel).toHaveBeenCalledOnce()
@@ -344,6 +369,7 @@ describe('crypto.transport', () => {
     {
       serverKeyId: 'test-v1',
       serverPublicKey: '你'.repeat(1366),
+      maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
       clientId: 'id',
     },
   ])('拒绝无效或超限服务端公钥：%j', async (body) => {
@@ -381,7 +407,12 @@ describe('crypto.transport', () => {
       },
       cancel,
     })
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({ serverKeyId: 'test-v1', serverPublicKey: serverKeyRing.keys['test-v1']!.publicKey, clientId: 'id' }))
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({
+      serverKeyId: 'test-v1',
+      serverPublicKey: serverKeyRing.keys['test-v1']!.publicKey,
+      clientId: 'id',
+      maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+    }))
     const client = crypto.transport.createClient({ keyExchangeUrl: KEY_EXCHANGE_URL, fetch })
     await expect(client.encryptedFetch('https://api.test/echo', { method: 'POST', body: stream })).rejects.toBeInstanceOf(RangeError)
     expect(fetch).toHaveBeenCalledOnce()
@@ -401,7 +432,12 @@ describe('crypto.transport', () => {
       cancel,
     })
     const fetch = vi.fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(Response.json({ serverKeyId: 'test-v1', serverPublicKey: serverKeyRing.keys['test-v1']!.publicKey, clientId: 'id' }))
+      .mockResolvedValueOnce(Response.json({
+        serverKeyId: 'test-v1',
+        serverPublicKey: serverKeyRing.keys['test-v1']!.publicKey,
+        clientId: 'id',
+        maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+      }))
       .mockResolvedValueOnce(new Response(stream, {
         headers: { 'X-Encrypted': 'true' },
       }))
@@ -414,7 +450,12 @@ describe('crypto.transport', () => {
 
   it.each(['invalid json', '{}'])('异常加密响应不回退到原密文：%s', async (body) => {
     const fetch = vi.fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(Response.json({ serverKeyId: 'test-v1', serverPublicKey: serverKeyRing.keys['test-v1']!.publicKey, clientId: 'id' }))
+      .mockResolvedValueOnce(Response.json({
+        serverKeyId: 'test-v1',
+        serverPublicKey: serverKeyRing.keys['test-v1']!.publicKey,
+        clientId: 'id',
+        maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+      }))
       .mockResolvedValueOnce(new Response(body, {
         headers: { 'X-Encrypted': 'true' },
       }))
@@ -477,7 +518,12 @@ describe('crypto.transport', () => {
     const cancel = vi.fn()
     const stream = new ReadableStream<Uint8Array>({ cancel })
     const fetch = vi.fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(Response.json({ serverKeyId: 'test-v1', serverPublicKey: serverKeyRing.keys['test-v1']!.publicKey, clientId: 'id' }))
+      .mockResolvedValueOnce(Response.json({
+        serverKeyId: 'test-v1',
+        serverPublicKey: serverKeyRing.keys['test-v1']!.publicKey,
+        clientId: 'id',
+        maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+      }))
       .mockResolvedValueOnce(new Response(stream, {
         headers: { 'X-Encrypted': 'true' },
       }))

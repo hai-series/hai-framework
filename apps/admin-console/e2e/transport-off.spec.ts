@@ -26,16 +26,15 @@ test.describe('Transport disabled E2E', () => {
 
     expect(body.success).toBe(true)
 
-    const meRes = await request.get('/api/auth/me')
+    const meRes = await request.get('/api/auth/profile')
     expect(meRes.ok()).toBeTruthy()
 
     const meBody = await meRes.json() as {
       success?: boolean
-      user?: { username?: string }
       data?: { user?: { username?: string } }
     }
 
     expect(meBody.success).toBe(true)
-    expect(meBody.user?.username ?? meBody.data?.user?.username).toBe(DEFAULT_ADMIN.username)
+    expect(meBody.data?.user?.username).toBe(DEFAULT_ADMIN.username)
   })
 })

@@ -134,19 +134,6 @@ export interface MarkdownRewriteRequest {
 }
 
 /**
- * 块级快捷操作种类：标题或列表。
- *
- * @example
- * ```ts
- * import type { MarkdownBlockFormatKind } from '@h-ai/ui'
- * const example: MarkdownBlockFormatKind = 'heading'
- * ```
- */
-export type MarkdownBlockFormatKind
-  = | 'heading'
-    | 'bullet'
-
-/**
  * 当前工具栏支持的具体段落和标题样式。
  *
  * @example
@@ -392,8 +379,6 @@ export interface AiDocumentEditorProps extends DataAttributes {
   onhistory?: () => void
   /** 宿主自定义的整篇复制操作。 */
   oncopydocument?: () => void | Promise<void>
-  /** 标题/列表快捷格式操作回调。 */
-  onapplyblockformat?: BivariantCallback<[kind: MarkdownBlockFormatKind], void>
   /** 切换段落或具体标题级别的回调。 */
   onapplyblockstyle?: BivariantCallback<[kind: MarkdownBlockStyleKind], void>
   /** 选区工具栏的行内格式回调。 */

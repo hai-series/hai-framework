@@ -1,4 +1,4 @@
-# 加密传输容量配置与升级
+# 加密传输容量配置
 
 `transport.maxPlaintextBytes` 表示**单个请求或响应的完整 JSON 明文 UTF-8 字节数**，两个方向使用同一上限。默认 `1048576`（1 MiB），有效范围是 `1024`～`67108864`（1 KiB～64 MiB）的整数；不接受字符串、零、负数、小数或无限制。此设置只影响启用 transport 的路径。
 
@@ -54,13 +54,8 @@ docker-ssh 从目标环境解析后的同一 `_serv.yml` 生成 Nginx `client_ma
 
 全量部署直接使用新预算。仅更新 app 的增量包也携带新代理配置；容量变化时复用现有 Web 镜像，重建 Web 以挂载新配置，并把 Web 纳入健康检查和失败恢复。无需构建或上传新 Web 镜像。增量仅允许容量指令改变，端口、API 路由或其他代理策略改变仍要求全量部署；容量变动却未选择 app 时明确拒绝并提示包含 app。容量不变时保留现有 Web 容器。
 
-自管代理和自管 adapter-node 启动器应调用 `resolveTransportBodyLimits()` 取得派生预算；不要保留 2129920 或 adapter 默认正文阈值。外部 CDN/网关的独立限制仍须由运营方配置。
+自管代理和自管 adapter-node 启动器应调用 `resolveTransportBodyLimits()` 取得派生预算。外部 CDN/网关的独立限制仍须由运营方配置。
 
-## 从 alpha.68 容量补丁升级
+## 自定义传输管理器
 
-1. 同步升级 crypto、serv/kit、api-client 和 CLI/deploy，重新构建浏览器/桌面/移动客户端与服务端。
-2. 在服务端正式配置中设置所需明文预算（例如 8 MiB），将字段转发到创建服务端 transport 的配置对象，然后移除依赖补丁。
-3. 部署 app；全量或 app 增量均可。让客户端重新握手（重新加载或 destroy 后 init），已有会话不会在后台自动更新容量。
-4. 验证原 4 MiB XLSX、较大合法 JSON、请求与响应超限及业务安全校验。
-
-手写 `TransportEncryptionManager` 或测试替身需补充只读 `bodyLimits`，可直接使用 `resolveTransportBodyLimits()` 的返回值。未设置新字段的普通应用保留 1 MiB 行为。新版客户端连接没有容量字段的旧握手端点时使用 1 MiB；旧客户端连接新服务端仍受其自身固定阈值约束，不能仅升级服务端就宣称大报文已可用。降低服务端容量会立即拒绝过大的旧会话请求，客户端需重新握手获取新预算。
+自定义 `TransportEncryptionManager` 或测试替身使用 `resolveTransportBodyLimits()` 生成 `bodyLimits`。握手响应必须包含 `maxPlaintextBytes`。服务端未覆盖配置时返回默认值 1 MiB。调低上限后，服务端立即按新上限校验，客户端重新握手获取新预算。

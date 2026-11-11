@@ -1260,13 +1260,7 @@
 
 <style>
   .hai-ai-table-pane {
-    /*
-      主题变量兼容层：
-      - hai-mate Web 端主要使用 daisyUI v5 的 `--color-*` 语义变量；
-      - 组件库内部分场景仍可能提供旧版 `--b1/--bc/--p` 通道变量；
-      - 这里统一抽象为 AiTableEditor 私有变量，确保在两套主题体系下都能稳定着色。
-    */
-    --hai-ai-table-bg: var(--color-base-100, var(--color-base-100, oklch(1 0 0)));
+    --hai-ai-table-bg: var(--color-base-100, oklch(1 0 0));
     --hai-ai-table-bg-soft: var(--color-base-200, var(--color-base-200, oklch(0.97 0 0)));
     --hai-ai-table-fg: var(--color-base-content, var(--color-base-content, oklch(0.22 0 0)));
     --hai-ai-table-primary: var(--color-primary, var(--color-primary, oklch(0.62 0.2 258)));

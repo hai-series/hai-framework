@@ -918,7 +918,6 @@ import { createThemeBootstrapScript, DEFAULT_THEME_COLOR_CSS_VAR } from '@h-ai/u
 
 const themeBootstrapScript = createThemeBootstrapScript({
   storageKey: 'hai-demo-preferences',
-  legacyThemeStorageKey: 'hai-demo-theme',
   defaultThemeColor: '#5765f0',
   colorCssVar: DEFAULT_THEME_COLOR_CSS_VAR,
 })

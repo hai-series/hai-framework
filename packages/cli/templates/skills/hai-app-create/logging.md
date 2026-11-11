@@ -23,7 +23,7 @@
 
 ## Storage
 
-`storage` 默认开启写操作摘要，读操作按需开启。常规操作使用 `debug`，上传、下载、删除等失败返回业务错误并记录 `warn`，初始化、连接或关闭失败记录 `error`。日志省略对象键、签名地址和内容。使用 `HAI_CORE_LOGGING_LEVEL`，旧的 `HAI_STORAGE_OPERATIONLOG_LEVEL` 与 `operationLog.level` 已移除。
+`storage` 默认开启写操作摘要，读操作按需开启。常规操作使用 `debug`，上传、下载、删除等失败返回业务错误并记录 `warn`，初始化、连接或关闭失败记录 `error`。日志省略对象键、签名地址和内容，由 `HAI_CORE_LOGGING_LEVEL` 过滤。
 
 流式上传保留源读取错误、取消原因和 S3 原始写入错误。分片清理也失败时单独保留清理错误，并记录可用的 S3 操作名和请求编号。条件写入冲突按 `ALREADY_EXISTS` 处理。使用 Storage 时查阅项目中 `hai-storage` 的配置与错误说明。
 

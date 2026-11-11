@@ -298,7 +298,7 @@ transport は既定で同一オリジンの `/api/*`、SvelteKit の `__data.jso
 
 通常業務は `transport.maxPlaintextBytes`（auto/省略は 1 MiB）を維持します。Feedback の受理・証拠・添付・ZIP ダウンロードは `routePlaintextBytes` と `feedback.budget.maxTransportBytes` で別途宣言します。`*` は完全な1パス区間のみ一致し、ホストの明示値が優先です。ハンドシェイク、adapter-node、プロキシは経路の最大値を使用します。HTTP アダプターは個別宣言された 1 MiB 超の資料経路を最大2件、通常業務を別枠で16件まで許可し、応答完了・失敗時に解放します。混雑は503 / `hai:crypto:072` を返し、業務書込は自動再送しません。
 
-Serv/Kit は要求の結合、署名、MAC を検証した後、時刻の許容範囲を超えた要求に暗号化した HTTP 400 を返します。クライアントは `TransportTimeError`（`hai:crypto:071`）をスローし、検証時のサーバー UTC 時刻を表示して、自動時刻同期を有効にするか手動で時刻を設定してから再読み込みするよう案内します。`serverTime` は Unix ミリ秒です。旧サーバーが値を返さない場合も時刻調整の案内を表示します。`api-client` は `VALIDATION_FAILED` に変換し、`cause.transportCode` と `cause.serverTime` を保持します。標準認証アクションは検証済みの通信時刻エラーを `HaiResult` に変換し、サーバー時刻と時刻調整の案内を AuthPanel に渡します。
+Serv/Kit は要求の結合、署名、MAC を検証した後、時刻の許容範囲を超えた要求に暗号化した HTTP 400 を返します。クライアントは `TransportTimeError`（`hai:crypto:071`）をスローし、検証時のサーバー UTC 時刻を表示して、自動時刻同期を有効にするか手動で時刻を設定してから再読み込みするよう案内します。`serverTime` は Unix ミリ秒です。`api-client` は `VALIDATION_FAILED` に変換し、`cause.transportCode` と `cause.serverTime` を保持します。標準認証アクションは検証済みの通信時刻エラーを `HaiResult` に変換し、サーバー時刻と時刻調整の案内を AuthPanel に渡します。
 
 ### `_kit.yml` による共通 transport 設定
 

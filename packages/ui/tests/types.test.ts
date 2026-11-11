@@ -8,7 +8,6 @@
 import type { Snippet } from 'svelte'
 import type {
   AiDocumentEditorProps,
-  MarkdownBlockFormatKind as AiMarkdownBlockFormatKind,
   MarkdownInlineFormatKind as AiMarkdownInlineFormatKind,
   MarkdownBlockStyleKind,
   MarkdownCodeRunResult,
@@ -113,7 +112,6 @@ describe('图表类型', () => {
 
 describe('aI 文档编辑器类型', () => {
   it('兼容保留旧的 block / inline 格式 union', () => {
-    expectTypeOf<AiMarkdownBlockFormatKind>().toEqualTypeOf<'heading' | 'bullet'>()
     expectTypeOf<MarkdownBlockStyleKind>().toEqualTypeOf<
       | 'paragraph'
       | 'heading1'
@@ -133,7 +131,6 @@ describe('aI 文档编辑器类型', () => {
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('allowUnsafeCodePreview')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('fontSize')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('allowHtmlTags')
-    expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplyblockformat')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplyblockstyle')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplyinlineformat')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplylink')

@@ -134,7 +134,6 @@
   "ai_a2aExecutionInterrupted": "A2A 実行が中断されました。外部への影響を確認してください",
   "ai_a2aSubscriptionAdvanced": "後続のメッセージがタスクを進めています。再度購読してください",
   "ai_a2aExecutorAlreadyRegistered": "A2A 実行器は既に登録されています。置き換える前に AI を終了してください",
-  "ai_llmProtocolRenamed": "LLM の api は protocol に変更されました。llm.protocol、models[].protocol、tempModel.protocol と環境変数 HAI_AI_LLM_PROTOCOL / HAI_AI_LLM_MODELS_<番号>_PROTOCOL を更新してください。",
   "ai_modelCapabilitiesInvalid": "モデル能力が無効です。出力上限はコンテキスト容量以下にし、推論非対応時は推論レベルを指定しないでください。",
   "ai_acpGitNotFound": "実行環境に Git がインストールされていません。",
   "ai_acpOperationFailed": "ACP 操作に失敗しました。接続、作業領域、実行環境を確認してください。",

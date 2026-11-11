@@ -10,28 +10,21 @@ import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
  * @example
  * ```ts
  * import { TransportTimeError } from '@h-ai/crypto'
- * const error = new TransportTimeError()
+ * const error = new TransportTimeError(undefined, Date.now())
  * // 展示 error.message；同步设备/服务器时间后由用户刷新重试。
  * ```
  */
 export class TransportTimeError extends Error {
   readonly code = HaiCryptoError.TRANSPORT_TIME_INVALID.code
-  readonly serverTime?: number
-
-  constructor(readonly context?: TransportMessageContext, serverTime?: number) {
-    const validTime = typeof serverTime === 'number' && Number.isSafeInteger(serverTime) && serverTime >= 0 && serverTime <= 8.64e15
-      ? serverTime
-      : undefined
-    const message = validTime === undefined
-      ? cryptoM('crypto_transportTimeInvalid')
-      : cryptoM('crypto_transportTimeInvalidWithServerTime', {
-          params: {
-            serverTime: new Date(validTime).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC'),
-          },
-        })
-    super(message)
+  constructor(readonly context: TransportMessageContext | undefined, readonly serverTime: number) {
+    if (!Number.isSafeInteger(serverTime) || serverTime < 0 || serverTime > 8.64e15)
+      throw new RangeError(cryptoM('crypto_transportTimeResponseInvalid'))
+    super(cryptoM('crypto_transportTimeInvalidWithServerTime', {
+      params: {
+        serverTime: new Date(serverTime).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC'),
+      },
+    }))
     this.name = 'TransportTimeError'
-    this.serverTime = validTime
   }
 }
 
@@ -75,7 +68,7 @@ export async function createTransportErrorResponse(
         },
   }
   if (authenticated) {
-    const encryptedError = isTimeError && error.serverTime !== undefined
+    const encryptedError = isTimeError
       ? {
           ...publicError,
           message: error.message,

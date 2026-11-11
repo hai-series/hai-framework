@@ -96,8 +96,8 @@ export interface KeyExchangeRequest {
  * ```
  */
 export interface KeyExchangeResponse {
-  /** 服务端业务明文 UTF-8 字节上限；缺省表示旧服务端的 1 MiB 默认值。 */
-  readonly maxPlaintextBytes?: number
+  /** 服务端业务明文 UTF-8 字节上限。 */
+  readonly maxPlaintextBytes: number
   /** 客户端公钥从登记起的寿命，单位为秒；省略时客户端按无已知期限处理。 */
   readonly clientKeyTtlSeconds?: number
   /** 服务端当前加密密钥版本；业务请求必须带回该值。 */

@@ -82,7 +82,7 @@ await ai.close()
 
 ## 配置要点
 
-LLM 协议使用 `llm.protocol`、`llm.models[].protocol` 和 `tempModel.protocol`，值为 `chat | responses | anthropic`；环境变量使用 `HAI_AI_LLM_PROTOCOL`、`HAI_AI_LLM_MODELS_0_PROTOCOL` 等。旧 `api` 字段及旧协议变量会报迁移错误，密钥字段 `apiKey` 不变。
+LLM 协议使用 `llm.protocol`、`llm.models[].protocol` 和 `tempModel.protocol`，值为 `chat | responses | anthropic`；环境变量使用 `HAI_AI_LLM_PROTOCOL`、`HAI_AI_LLM_MODELS_0_PROTOCOL` 等。
 
 ```yaml
 llm:

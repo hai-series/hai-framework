@@ -25,7 +25,6 @@
   import type { DataAttributes } from '../../../types.js'
   import type {
     AiDocumentEditorProps,
-    MarkdownBlockFormatKind,
     MarkdownBlockStyleKind,
     MarkdownCodeBlockItem,
     MarkdownCodeRunRequest,
@@ -405,8 +404,6 @@
     onhistory,
     // 全文复制回调。
     oncopydocument,
-    // 块级格式动作回调。
-    onapplyblockformat,
     // 细粒度块样式动作回调。
     onapplyblockstyle,
     // 行内格式动作回调。
@@ -543,21 +540,11 @@
       ? resolvedRewriteActions[0]
       : null,
   )
-  // 新版工具条支持 paragraph / heading1-4，优先走细粒度回调，避免把旧接口误当成新接口调用。
-  const richBlockFormattingEnabled = $derived(Boolean(onapplyblockstyle))
-  // 旧版 heading / bullet 回调仍然保留，用于兼容外部还没迁移的调用方。
-  const legacyBlockFormattingEnabled = $derived(
-    Boolean(onapplyblockformat) && !onapplyblockstyle,
-  )
-  // 这里统一判断是否存在任意块级格式能力，方便控制分隔线和浮层显隐。
-  const anyBlockFormattingEnabled = $derived(
-    richBlockFormattingEnabled || legacyBlockFormattingEnabled,
-  )
   // selectionToolsEnabled 统一判断选区工具条是否值得出现，避免正文只读展示时还露出空浮层。
   const selectionToolsEnabled = $derived(
     [
       onrewrite,
-      anyBlockFormattingEnabled,
+      onapplyblockstyle,
       onapplyinlineformat,
       onapplyalignment,
       onapplylink,
@@ -2474,17 +2461,6 @@
     })
   }
 
-  function applyBlockFormat(kind: MarkdownBlockFormatKind): void {
-    if (!syncSelectionForToolbarAction()) {
-      return
-    }
-
-    onapplyblockformat?.(kind)
-    activeSelectionMenu = null
-    activeSelectionMenuTrigger = null
-    queueSelectionRefresh()
-  }
-
   function applyBlockStyle(kind: MarkdownBlockStyleKind): void {
     if (!syncSelectionForToolbarAction()) {
       return
@@ -2886,7 +2862,7 @@
                     </button>
                   {/if}
 
-                  {#if richBlockFormattingEnabled}
+                  {#if onapplyblockstyle}
                     {#if onrewrite}
                       <span class='hai-ai-doc-selection-divider'></span>
                     {/if}
@@ -2914,38 +2890,10 @@
                         ></path>
                       </svg>
                     </button>
-                  {:else if legacyBlockFormattingEnabled}
-                    {#if onrewrite}
-                      <span class='hai-ai-doc-selection-divider'></span>
-                    {/if}
-                    <button
-                      type='button'
-                      class='hai-ai-doc-selection-btn'
-                      title={uiM('markdown_format_heading')}
-                      onclick={() => applyBlockFormat('heading')}
-                    >
-                      <svg viewBox='0 0 24 24' aria-hidden='true'>
-                        <path
-                          d='M5 5.25a.75.75 0 0 1 .75.75V11h6.5V6a.75.75 0 0 1 1.5 0v12a.75.75 0 0 1-1.5 0v-5.5h-6.5V18a.75.75 0 0 1-1.5 0V6A.75.75 0 0 1 5 5.25Zm11.25 2.5a.75.75 0 0 1 0 1.5h3a.75.75 0 0 1 0 1.5H18.5v8.5a.75.75 0 0 1-1.5 0v-8.5h-.75a.75.75 0 0 1 0-1.5h3Z'
-                        ></path>
-                      </svg>
-                    </button>
-                    <button
-                      type='button'
-                      class='hai-ai-doc-selection-btn'
-                      title={uiM('markdown_format_bullet')}
-                      onclick={() => applyBlockFormat('bullet')}
-                    >
-                      <svg viewBox='0 0 24 24' aria-hidden='true'>
-                        <path
-                          d='M6.25 7.25a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Zm14 0a.75.75 0 0 1-.75.75H8.75a.75.75 0 0 1 0-1.5H19.5a.75.75 0 0 1 .75.75Zm-14 5.5a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Zm14 0a.75.75 0 0 1-.75.75H8.75a.75.75 0 0 1 0-1.5H19.5a.75.75 0 0 1 .75.75Zm-14 5.5a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Zm14 0a.75.75 0 0 1-.75.75H8.75a.75.75 0 0 1 0-1.5H19.5a.75.75 0 0 1 .75.75Z'
-                        ></path>
-                      </svg>
-                    </button>
                   {/if}
 
                   {#if onapplyalignment}
-                    {#if anyBlockFormattingEnabled || onrewrite}
+                    {#if onapplyblockstyle || onrewrite}
                       <span class='hai-ai-doc-selection-divider'></span>
                     {/if}
                     <button
@@ -2983,7 +2931,7 @@
                   {/if}
 
                   {#if onapplyinlineformat || onapplylink || onapplycolor}
-                    {#if anyBlockFormattingEnabled || onapplyalignment || onrewrite}
+                    {#if onapplyblockstyle || onapplyalignment || onrewrite}
                       <span class='hai-ai-doc-selection-divider'></span>
                     {/if}
                   {/if}
@@ -3178,7 +3126,7 @@
                       </button>
                     {/each}
                   </div>
-                {:else if activeSelectionMenu === 'block' && richBlockFormattingEnabled}
+                {:else if activeSelectionMenu === 'block' && onapplyblockstyle}
                   <div
                     class='hai-ai-doc-selection-panel'
                     data-menu-alignment={selectionMenuAlignment}

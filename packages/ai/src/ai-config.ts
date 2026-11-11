@@ -208,10 +208,6 @@ export const ModelEntrySchema = z.strictObject({
   temperature: z.number().min(0).max(2).optional(),
   /** 超时覆盖（可选，毫秒） */
   timeout: z.number().positive().optional(),
-}, {
-  error: issue => issue.code === 'unrecognized_keys' && issue.keys.includes('api')
-    ? aiM('ai_llmProtocolRenamed')
-    : undefined,
 })
 
 /**
@@ -274,10 +270,6 @@ export const LLMConfigSchema = z.strictObject({
     k,
     z.string().optional(),
   ])) as Record<ModelScenario, z.ZodOptional<z.ZodString>>).optional(),
-}, {
-  error: issue => issue.code === 'unrecognized_keys' && issue.keys.includes('api')
-    ? aiM('ai_llmProtocolRenamed')
-    : undefined,
 })
 
 /**

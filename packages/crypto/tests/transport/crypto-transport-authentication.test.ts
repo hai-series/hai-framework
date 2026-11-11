@@ -344,7 +344,12 @@ describe('authenticated transport protocol', () => {
         const request = new Request(input, init)
         if (request.url.endsWith('/exchange')) {
           const body = await request.json() as { clientPublicKey: string }
-          return Response.json({ serverKeyId: 'v1', serverPublicKey: serverKey.publicKey, clientId: await f.a.registerClientKey(body.clientPublicKey) })
+          return Response.json({
+            serverKeyId: 'v1',
+            serverPublicKey: serverKey.publicKey,
+            maxPlaintextBytes: f.a.bodyLimits.plaintextBytes,
+            clientId: await f.a.registerClientKey(body.clientPublicKey),
+          })
         }
         const verified = await authenticateTransportRequest(f.b, request)
         if (!verified.success)
@@ -403,7 +408,12 @@ describe('authenticated transport protocol', () => {
         const request = new Request(input, init)
         if (request.url.endsWith('/exchange')) {
           const body = await request.json() as { clientPublicKey: string }
-          return Response.json({ serverKeyId: 'v1', serverPublicKey: serverKey.publicKey, clientId: await f.a.registerClientKey(body.clientPublicKey) })
+          return Response.json({
+            serverKeyId: 'v1',
+            serverPublicKey: serverKey.publicKey,
+            maxPlaintextBytes: f.a.bodyLimits.plaintextBytes,
+            clientId: await f.a.registerClientKey(body.clientPublicKey),
+          })
         }
         const wire = await request.text()
         sizes.push(new TextEncoder().encode(wire).byteLength)
@@ -445,7 +455,12 @@ describe('authenticated transport protocol', () => {
         const request = new Request(input, init)
         if (request.url.endsWith('/exchange')) {
           const body = await request.json() as { clientPublicKey: string }
-          return Response.json({ serverKeyId: 'v1', serverPublicKey: serverKey.publicKey, clientId: await f.a.registerClientKey(body.clientPublicKey) })
+          return Response.json({
+            serverKeyId: 'v1',
+            serverPublicKey: serverKey.publicKey,
+            maxPlaintextBytes: f.a.bodyLimits.plaintextBytes,
+            clientId: await f.a.registerClientKey(body.clientPublicKey),
+          })
         }
         const envelope = request.headers.get(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)!
         expect(new TextEncoder().encode(envelope).byteLength).toBeLessThan(2048)

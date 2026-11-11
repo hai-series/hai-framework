@@ -180,11 +180,11 @@ test.describe('Profile UI', () => {
     expect(formSrc).toBe(summarySrc)
     expect(String(summarySrc)).toMatch(/^https?:\/\//)
 
-    const meResponse = await page.request.get('/api/auth/me')
+    const meResponse = await page.request.get('/api/auth/profile')
     const meBody = await meResponse.json()
     expect(meResponse.ok()).toBeTruthy()
     expect(meBody.success).toBeTruthy()
-    const meUser = meBody.user ?? meBody.data?.user
+    const meUser = meBody.data?.user
     expect(meUser?.avatar).toBe(summarySrc)
 
     const avatarAssetResponse = await page.request.get(String(summarySrc))

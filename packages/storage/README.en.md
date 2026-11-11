@@ -278,7 +278,7 @@ await storage.init({
 })
 ```
 
-Set `HAI_STORAGE_OPERATIONLOG_WRITE=false` to disable debug records for writes. When upgrading, remove `operationLog.level` and `HAI_STORAGE_OPERATIONLOG_LEVEL`. Set the global threshold through `HAI_CORE_LOGGING_LEVEL`.
+Set `HAI_STORAGE_OPERATIONLOG_WRITE=false` to disable debug records for writes. Set the global threshold through `HAI_CORE_LOGGING_LEVEL`.
 
 For a failed `storage.file.put()`, inspect `error.code` and `error.message`. When available, `error.cause` holds the original error. A destination conflict with `ifNoneMatch: '*'` returns `ALREADY_EXISTS`. A source read failure, including a failed `createReadStream()`, returns `UPLOAD_FAILED`. Cancellation preserves `AbortSignal.reason`. Warnings include a reason summary and the underlying error code or HTTP status when available.
 

@@ -278,7 +278,7 @@ await storage.init({
 })
 ```
 
-`HAI_STORAGE_OPERATIONLOG_WRITE=false` で書き込み操作の `debug` ログを無効にできます。アップグレード時は `operationLog.level` と `HAI_STORAGE_OPERATIONLOG_LEVEL` を削除し、全体のログレベルを `HAI_CORE_LOGGING_LEVEL` で設定してください。
+`HAI_STORAGE_OPERATIONLOG_WRITE=false` で書き込み操作の `debug` ログを無効にできます。全体のログレベルは `HAI_CORE_LOGGING_LEVEL` で設定します。
 
 `storage.file.put()` が失敗した場合は `error.code` と `error.message` を確認します。元のエラーがある場合は `error.cause` に保持します。`ifNoneMatch: '*'` で保存先が既に存在する場合は `ALREADY_EXISTS`、`createReadStream()` などのアップロード元を読み取れない場合は `UPLOAD_FAILED` を返します。キャンセル時は `AbortSignal.reason` を保持します。警告には失敗理由の要約と、取得できるエラーコードや HTTP ステータスが含まれます。
 

@@ -16,7 +16,7 @@ test('密码登录仅提交标识符和密码，真实会话可用', async ({ pa
   const body: unknown = (await submitted).postDataJSON()
   expect(body).toEqual({ identifier: user.username, password: user.password })
   await expect(page).toHaveURL(/\/admin/)
-  const current = await page.request.get('/api/auth/me')
+  const current = await page.request.get('/api/auth/profile')
   expect(current.ok()).toBe(true)
   expect((await current.json()).success).toBe(true)
 })

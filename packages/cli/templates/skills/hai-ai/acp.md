@@ -122,7 +122,7 @@ Podman 不自动继承远程服务的代理变量。需要代理时，使用 Age
 
 发布仅允许框架创建的隔离 session，避免将共享目录中别人的修改算入当前任务。操作前停止受管进程/容器，避免背景工具继续写入；要继续编码显式 `sessions.resume(id)`。原生 Agent 自己创建的 worktree 不自动纳入框架发布范围。
 
-私有仓库把 Git 凭据引用写入 workspace 的 `gitEnvironmentRefs`，把 Agent 专用变量写入 agent 的 `environmentRefs`。旧 workspace 的 `environmentRefs` 仍共用，迁移时移走其中的 Git 凭据。启用 Git 隔离后，远程克隆、拉取、推送只使用登记的远端地址和可信环境注入，在独立 Git 目录运行；需要的网络代理或 CA 设置也随 Git 引用配置。认证脚本和全局 Git 配置应由可信执行器提供。任务之间的访问权限仍由应用和运行环境隔离。
+私有仓库把 Git 凭据引用写入 workspace 的 `gitEnvironmentRefs`，把 Agent 专用变量写入 agent 的 `environmentRefs`。启用 Git 隔离后，远程克隆、拉取、推送只使用登记的远端地址和可信环境注入，在独立 Git 目录运行；需要的网络代理或 CA 设置也随 Git 引用配置。认证脚本和全局 Git 配置应由可信执行器提供。任务之间的访问权限仍由应用和运行环境隔离。
 
 多个工程不是原子事务。失败时返回 `ACP_PARTIAL_FAILURE`，`error.cause.reports` 列出每个工程 success、phase、commit 和 error；已完成工程不回滚，冲突保留现场。失败于 push 后，排除权限/网络问题可重试；远端结果不明时先核对实际分支。普通文件的修改留在 session 目录，不自动纳入 Git 发布。失败创建的 worktree 也保留，避免删除已有成果。
 

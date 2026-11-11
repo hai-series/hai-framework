@@ -134,7 +134,6 @@
   "ai_a2aExecutionInterrupted": "A2A execution interrupted",
   "ai_a2aSubscriptionAdvanced": "A later message advanced the subscription",
   "ai_a2aExecutorAlreadyRegistered": "A2A executor is already registered; close AI before replacing it",
-  "ai_llmProtocolRenamed": "LLM api was renamed to protocol. Update llm.protocol, models[].protocol, tempModel.protocol and HAI_AI_LLM_PROTOCOL / HAI_AI_LLM_MODELS_<index>_PROTOCOL environment variables.",
   "ai_modelCapabilitiesInvalid": "Invalid model capabilities: output capacity exceeds context capacity, or reasoning efforts are declared without reasoning support.",
   "ai_acpGitNotFound": "Git is not installed in the execution environment.",
   "ai_acpOperationFailed": "ACP operation failed. Check the connection, workspace and runtime.",

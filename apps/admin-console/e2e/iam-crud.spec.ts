@@ -119,7 +119,7 @@ test.describe('IAM Users CRUD', () => {
     await registerAndLoginViaApi(request, 'selfdelete')
 
     // 获取当前用户 ID
-    const meRes = await request.get('/api/auth/me')
+    const meRes = await request.get('/api/auth/profile')
     const meBody = await meRes.json()
     const meUser = getUserPayload(meBody) as { id?: string }
     const myId = meUser?.id
@@ -439,7 +439,7 @@ test.describe('Auth Flow', () => {
     expect(loginUser.username).toBe(u.username)
 
     // 3. 获取当前用户身份
-    const meRes = await request.get('/api/auth/me')
+    const meRes = await request.get('/api/auth/profile')
     const meBody = await meRes.json()
     expect(meBody.success).toBe(true)
     const meUserAfterLogin = getUserPayload(meBody) as { username: string }

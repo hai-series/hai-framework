@@ -89,9 +89,9 @@ test.describe('Transport enabled E2E', () => {
 
     // 在收到响应时立即读取密文，避免页面跳转后 Chrome 已释放旧请求的响应体。
     const [networkMe, me] = await Promise.all([
-      page.waitForResponse(response => response.url().endsWith('/api/auth/me') && response.request().method() === 'GET').then(response => expectEncrypted(response, response.request())),
+      page.waitForResponse(response => response.url().endsWith('/api/auth/profile') && response.request().method() === 'GET').then(response => expectEncrypted(response, response.request())),
       page.evaluate(async () => {
-        const response = await fetch('/api/auth/me')
+        const response = await fetch('/api/auth/profile')
         return { status: response.status, body: await response.json() }
       }),
     ])

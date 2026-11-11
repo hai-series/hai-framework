@@ -320,7 +320,7 @@ await storage.init({
 })
 ```
 
-设置 `HAI_STORAGE_OPERATIONLOG_WRITE=false` 可关闭写操作的 `debug` 记录。升级时移除原有的 `operationLog.level` 和 `HAI_STORAGE_OPERATIONLOG_LEVEL`，通过 `HAI_CORE_LOGGING_LEVEL` 调整全局阈值。
+设置 `HAI_STORAGE_OPERATIONLOG_WRITE=false` 可关闭写操作的 `debug` 记录。通过 `HAI_CORE_LOGGING_LEVEL` 调整全局阈值。
 
 `storage.file.put()` 失败时通过 `error.code` 和 `error.message` 区分场景，底层原因可用时保留在 `error.cause`。`ifNoneMatch: '*'` 的目标冲突返回 `ALREADY_EXISTS`，读取 `createReadStream()` 等上传源失败返回 `UPLOAD_FAILED`。主动取消保留 `AbortSignal.reason`。对应告警包含原因摘要及可用的底层错误码和 HTTP 状态。
 

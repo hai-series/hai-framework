@@ -292,7 +292,7 @@ Set `transport.maxPlaintextBytes` for both request and response JSON plaintext, 
 
 Ordinary routes retain `transport.maxPlaintextBytes` (auto/omitted: 1 MiB). Declare Feedback report intake, evidence, attachments and ZIP download capacity separately using `routePlaintextBytes` and `feedback.budget.maxTransportBytes`; `*` matches one complete path segment and explicit host route values take precedence. Handshakes, adapter-node and proxies use the maximum route capacity. HTTP adapters admit at most 2 explicitly declared material requests above 1 MiB and a separate 16 ordinary business requests, releasing admission after the entire response or failure. Busy admission returns 503 / `hai:crypto:072`; business writes are not automatically replayed.
 
-Serv/Kit return an encrypted HTTP 400 for an out-of-window request after validating request binding, signature and MAC. The client throws `TransportTimeError` (`hai:crypto:071`), displays the server’s UTC time at validation, and asks the user to enable automatic synchronization or set the device time manually before refreshing. `serverTime` is Unix milliseconds. Clients still show synchronization guidance when an older server omits it. `api-client` maps the error to `VALIDATION_FAILED` and preserves `cause.transportCode` and `cause.serverTime`. Standard authentication actions convert authenticated transport time errors to `HaiResult` with the server time and synchronization guidance for AuthPanel.
+Serv/Kit return an encrypted HTTP 400 for an out-of-window request after validating request binding, signature and MAC. The client throws `TransportTimeError` (`hai:crypto:071`), displays the server’s UTC time at validation, and asks the user to enable automatic synchronization or set the device time manually before refreshing. `serverTime` is Unix milliseconds. `api-client` maps the error to `VALIDATION_FAILED` and preserves `cause.transportCode` and `cause.serverTime`. Standard authentication actions convert authenticated transport time errors to `HaiResult` with the server time and synchronization guidance for AuthPanel.
 
 ### Shared transport configuration with `_kit.yml`
 
@@ -468,7 +468,7 @@ Automatic request auditing runs only when `audit.isInitialized`. Static sites an
 
 With `crypto.encryptedCookies`, also provide `crypto.cookieEncryptionKey` or `HAI_KIT_COOKIE_KEY`. Missing keys fail immediately in `createHandle()`. Plaintext, damaged ciphertext, or decryption failures for protected cookies are treated as absent; encryption failures never fall back to writing plaintext.
 
-The key must contain 32 hexadecimal characters. Cookies use separately derived SM4-CBC and HMAC-SHA256 keys, authenticating the version, cookie name, IV, and ciphertext before decryption to reject tampering and cross-name substitution. Legacy unauthenticated cookies become invalid after upgrading and require signing in again; there is no legacy fallback.
+The key must contain 32 hexadecimal characters. Cookies use separately derived SM4-CBC and HMAC-SHA256 keys, authenticating the version, cookie name, IV, and ciphertext before decryption to reject tampering and cross-name substitution.
 
 Authentication cookies default to `Secure` when either `NODE_ENV` or `HAI_CORE_ENV` is `production`; `HAI_E2E` / `HAI_E2E_MOCK` do not relax cookie security. Production rate limiting recognizes both flags; only explicit test switches permit memory counters.
 

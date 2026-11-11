@@ -344,7 +344,6 @@ describe('createThemeBootstrapScript - 通用主题启动脚本', () => {
   it('应包含 storage key、主题色和 tone dataset 配置', () => {
     const script = createThemeBootstrapScript({
       storageKey: 'hai-demo-preferences',
-      legacyThemeStorageKey: 'hai-demo-theme',
       defaultThemeId: 'night',
       defaultThemeColor: '#abc',
       colorCssVar: '--demo-theme-color',
@@ -357,7 +356,6 @@ describe('createThemeBootstrapScript - 通用主题启动脚本', () => {
     })
 
     expect(script).toContain('hai-demo-preferences')
-    expect(script).toContain('hai-demo-theme')
     expect(script).toContain('--demo-theme-color')
     expect(script).toContain('demoThemeTone')
     expect(script).toContain('"themeColor":"#aabbcc"')

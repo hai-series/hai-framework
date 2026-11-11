@@ -150,6 +150,7 @@ describe('managed transport server key ring', () => {
           return Response.json({
             serverKeyId: handshakeNode.getServerKeyId(),
             serverPublicKey: handshakeNode.getServerPublicKey(),
+            maxPlaintextBytes: handshakeNode.bodyLimits.plaintextBytes,
             clientId: await handshakeNode.registerClientKey(body.clientPublicKey),
           })
         }

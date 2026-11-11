@@ -426,9 +426,9 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
       catch {}
       if (failure?.success === false && failure.error?.code === HaiCryptoError.TRANSPORT_TIME_INVALID.code) {
         const serverTime = failure.error.details?.serverTime
-        throw new TransportTimeError(undefined, typeof serverTime === 'number'
-          ? serverTime
-          : undefined)
+        if (typeof serverTime !== 'number')
+          throw new TypeError(cryptoM('crypto_transportTimeResponseInvalid'))
+        throw new TransportTimeError(undefined, serverTime)
       }
     }
     // 只从已验签/MAC、关联请求和状态的错误报文恢复服务端响应容量诊断。
@@ -512,7 +512,7 @@ function isRequestLike(input: RequestInfo | URL): input is Request {
  *
  * @example 模块内部上下文
  * ```ts
- * const valid = isKeyExchangeResponse({ clientId: '', serverKeyId: '', serverPublicKey: '' })
+ * const valid = isKeyExchangeResponse({ clientId: '', serverKeyId: '', serverPublicKey: '', maxPlaintextBytes: 1024 })
  * // 空字段不构成一次合法握手。
  * ```
  */
@@ -524,5 +524,6 @@ function isKeyExchangeResponse(body: unknown): body is KeyExchangeResponse {
     && new TextEncoder().encode(fields.serverPublicKey).byteLength <= TRANSPORT_BODY_LIMITS.publicKeyBytes
     && typeof fields.clientId === 'string' && fields.clientId.length > 0
     && typeof fields.serverKeyId === 'string' && /^[\w-]{1,64}$/.test(fields.serverKeyId)
+    && typeof fields.maxPlaintextBytes === 'number'
     && (fields.clientKeyTtlSeconds === undefined || isValidTransportKeyTtlSeconds(fields.clientKeyTtlSeconds))
 }

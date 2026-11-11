@@ -21,7 +21,7 @@ function getUserPayload(body: { user?: unknown, data?: { user?: unknown } }) {
 }
 
 async function expectCurrentUser(request: import('@playwright/test').APIRequestContext, expectedUsername: string) {
-  const meRes = await request.get('/api/auth/me')
+  const meRes = await request.get('/api/auth/profile')
   expect(meRes.ok()).toBeTruthy()
 
   const meBody = await meRes.json()
@@ -181,14 +181,13 @@ test.describe('POST /api/auth/logout', () => {
 })
 
 // ---------------------------------------------------------------------------
-// GET /api/auth/me
+// GET /api/auth/profile
 // ---------------------------------------------------------------------------
-test.describe('GET /api/auth/me', () => {
-  test('未登录返回 user: null', async ({ request }) => {
-    const res = await request.get('/api/auth/me')
-    const body = await res.json()
-    // 未认证时返回 success: false 或 user: null
-    expect(body.user === null || body.success === false).toBeTruthy()
+test.describe('GET /api/auth/profile', () => {
+  test('未登录返回 401', async ({ request }) => {
+    const res = await request.get('/api/auth/profile')
+    expect(res.status()).toBe(401)
+    expect(await res.json()).toMatchObject({ success: false })
   })
 
   test('登录后返回用户信息', async ({ request }) => {

@@ -28,7 +28,7 @@ const protectedContract = {
  * 模拟一个对端 serv：处理 key-exchange + 解密 echo 请求 + 加密响应。
  * 直接用 crypto.transport.createServer 复用真实加解密路径。
  */
-function makeServerFetch(clockOffset = 0, legacyTimeError = false): typeof fetch {
+function makeServerFetch(clockOffset = 0): typeof fetch {
   const key = crypto.asymmetric.generateKeyPair()
   if (!key.success)
     throw new Error(key.error.message)
@@ -57,6 +57,7 @@ function makeServerFetch(clockOffset = 0, legacyTimeError = false): typeof fetch
       return new Response(JSON.stringify({
         serverPublicKey: mgr.getServerPublicKey(),
         serverKeyId: mgr.getServerKeyId(),
+        maxPlaintextBytes: mgr.bodyLimits.plaintextBytes,
         clientId,
       }), {
         status: 200,
@@ -74,9 +75,7 @@ function makeServerFetch(clockOffset = 0, legacyTimeError = false): typeof fetch
     if (!verified.success) {
       const time = verified.error.cause
       if (time instanceof TransportTimeError && time.context) {
-        return createTransportErrorResponse(legacyTimeError
-          ? new TransportTimeError()
-          : time, { manager: mgr, context: time.context })
+        return createTransportErrorResponse(time, { manager: mgr, context: time.context })
       }
       throw new Error(verified.error.message)
     }
@@ -142,6 +141,7 @@ function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fet
       return new Response(JSON.stringify({
         serverPublicKey: mgr.getServerPublicKey(),
         serverKeyId: mgr.getServerKeyId(),
+        maxPlaintextBytes: mgr.bodyLimits.plaintextBytes,
         clientId,
         clientKeyTtlSeconds: mgr.clientKeyTtlSeconds,
       }), {
@@ -233,29 +233,6 @@ describe('api-client transport', () => {
     finally { await client.close() }
   })
 
-  it('旧服务端缺少校验时间时仍保留校时提示', async () => {
-    const client = apiClient.create(testContract)
-    const fetch = makeServerFetch(600_000, true)
-    expect((await client.init({
-      baseUrl: 'https://test.local/api/v1',
-      fetch,
-      transport: { crypto },
-    })).success).toBe(true)
-    try {
-      const result = await client.echo({ msg: 'pending business request' })
-      expect(result).toMatchObject({
-        success: false,
-        error: {
-          code: HaiApiClientError.VALIDATION_FAILED.code,
-          message: expect.stringContaining(new TransportTimeError().message),
-          cause: { transportCode: HaiCryptoError.TRANSPORT_TIME_INVALID.code },
-        },
-      })
-      if (!result.success)
-        expect(result.error.cause).not.toHaveProperty('serverTime')
-    }
-    finally { await client.close() }
-  })
   it('客户端容量超限映射为稳定 HaiResult 错误，保留字节诊断', async () => {
     const client = apiClient.create(testContract)
     expect((await client.init({

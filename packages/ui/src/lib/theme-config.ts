@@ -449,8 +449,6 @@ export interface ThemeBootstrapLocaleConfig {
 export interface ThemeBootstrapScriptOptions {
   /** 偏好存储 key。 */
   storageKey: string
-  /** 历史主题 key；传 null 表示不做迁移。 */
-  legacyThemeStorageKey?: string | null
   /** 默认主题 ID。 */
   defaultThemeId?: string
   /** 默认主题色；传 null 表示不处理主题色。 */
@@ -507,7 +505,7 @@ export function createThemeBootstrapScript(options: ThemeBootstrapScriptOptions)
     defaultPreferences[locale.key] = locale.defaultValue
   }
 
-  return `(function(){var d=${escapeJsonForScript(defaultPreferences)};var s=${escapeJsonForScript(options.storageKey)};var l=${escapeJsonForScript(options.legacyThemeStorageKey ?? null)};var u=new Set(${escapeJsonForScript(SUPPORTED_THEME_IDS)});var k=new Set(${escapeJsonForScript(DARK_THEMES)});var c=${escapeJsonForScript(options.colorCssVar ?? null)};var y=${escapeJsonForScript(options.toneDatasetKey ?? null)};var i=${escapeJsonForScript(locale)};function n(e){var r=''+(e??'');return u.has(r)?r:d.themeId}function h(e){var r=(''+(e??'')).trim().toLowerCase();if(/^#[0-9a-f]{6}$/i.test(r))return r;if(/^#[0-9a-f]{3}$/i.test(r))return '#'+r[1]+r[1]+r[2]+r[2]+r[3]+r[3];return Object.prototype.hasOwnProperty.call(d,'themeColor')?d.themeColor:null}function g(e){var r={...d,themeId:n(e?.themeId)};if(Object.prototype.hasOwnProperty.call(d,'themeColor'))r.themeColor=h(e?.themeColor);if(i)r[i.key]=i.supportedValues.includes(e?.[i.key])?e[i.key]:d[i.key];return r}function a(e){var r=document.documentElement;var o=k.has(e.themeId)?'dark':'light';r.setAttribute('data-theme',e.themeId);if(y)r.dataset[y]=o;if(c){if(e.themeColor){r.style.setProperty(c,e.themeColor)}else{r.style.removeProperty(c)}}r.style.setProperty('color-scheme',o)}var p=d;try{var f=window.localStorage.getItem(s);if(f){p=g(JSON.parse(f))}else if(l){p=g({themeId:window.localStorage.getItem(l)})}else{p=g(d)}a(p);window.localStorage.setItem(s,JSON.stringify(p));if(l)window.localStorage.removeItem(l)}catch{a(d)}})()`
+  return `(function(){var d=${escapeJsonForScript(defaultPreferences)};var s=${escapeJsonForScript(options.storageKey)};var u=new Set(${escapeJsonForScript(SUPPORTED_THEME_IDS)});var k=new Set(${escapeJsonForScript(DARK_THEMES)});var c=${escapeJsonForScript(options.colorCssVar ?? null)};var y=${escapeJsonForScript(options.toneDatasetKey ?? null)};var i=${escapeJsonForScript(locale)};function n(e){var r=''+(e??'');return u.has(r)?r:d.themeId}function h(e){var r=(''+(e??'')).trim().toLowerCase();if(/^#[0-9a-f]{6}$/i.test(r))return r;if(/^#[0-9a-f]{3}$/i.test(r))return '#'+r[1]+r[1]+r[2]+r[2]+r[3]+r[3];return Object.prototype.hasOwnProperty.call(d,'themeColor')?d.themeColor:null}function g(e){var r={...d,themeId:n(e?.themeId)};if(Object.prototype.hasOwnProperty.call(d,'themeColor'))r.themeColor=h(e?.themeColor);if(i)r[i.key]=i.supportedValues.includes(e?.[i.key])?e[i.key]:d[i.key];return r}function a(e){var r=document.documentElement;var o=k.has(e.themeId)?'dark':'light';r.setAttribute('data-theme',e.themeId);if(y)r.dataset[y]=o;if(c){if(e.themeColor){r.style.setProperty(c,e.themeColor)}else{r.style.removeProperty(c)}}r.style.setProperty('color-scheme',o)}var p=d;try{var f=window.localStorage.getItem(s);if(f){p=g(JSON.parse(f))}a(p);window.localStorage.setItem(s,JSON.stringify(p))}catch{a(d)}})()`
 }
 
 /**
