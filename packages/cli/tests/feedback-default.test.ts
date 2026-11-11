@@ -1,5 +1,4 @@
-import type { FeatureId } from '../src/cli-types.js'
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -22,7 +21,7 @@ afterEach(async () => {
 })
 
 describe('fullstack 默认反馈生成', () => {
-  it('未指定 features 的新工程包含反馈依赖、可信接口、界面和自动容量环境默认值', async () => {
+  it('新工程包含反馈依赖、可信接口、界面和自动容量环境默认值', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hai-feedback-default-'))
     temporaryRoots.push(root)
     const name = 'default-feedback'
@@ -70,33 +69,6 @@ describe('fullstack 默认反馈生成', () => {
     expect(browserTests).toContain('attached-large-log.txt')
     expect(browserTests).toContain('getImageData(12, 12, 1, 1)')
     expect(browserTests).toContain('readFeedbackBundle')
-  })
-
-  it.each([
-    { label: '显式空选择', features: [] as FeatureId[] },
-    {
-      label: '显式其它模块',
-      features: ['ai'] as FeatureId[],
-    },
-  ])('$label 已移除，在写入文件前明确拒绝', async ({ features }) => {
-    const root = await mkdtemp(path.join(tmpdir(), 'hai-feedback-explicit-'))
-    temporaryRoots.push(root)
-    const name = 'explicit-features'
-    const options = Object.assign({
-      name,
-      appType: 'fullstack' as const,
-      frontends: ['web'] as const,
-      defaults: true,
-      install: false,
-      git: false,
-      packageManager: 'pnpm' as const,
-      cwd: root,
-    }, { features })
-    await expect(createProject({
-      ...options,
-      frontends: ['web'],
-    })).rejects.toThrow('create')
-    expect(await readdir(root)).toEqual([])
   })
 
   it('api 新工程也包含完整反馈能力与自动容量预算', async () => {

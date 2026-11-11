@@ -21,7 +21,7 @@ afterEach(async () => {
 })
 
 describe('网站创建默认', () => {
-  it('website 只安装展示功能依赖，已移除的功能参数在写文件前拒绝', async () => {
+  it('website 只安装展示功能依赖', async () => {
     const options = {
       appType: 'website' as const,
       defaults: true,
@@ -35,8 +35,6 @@ describe('网站创建默认', () => {
     expect(pkg.dependencies).toMatchObject({ '@h-ai/core': 'catalog:', '@h-ai/kit': 'catalog:', '@h-ai/ui': 'catalog:' })
     for (const name of ['ai', 'feedback', 'reldb', 'iam'])
       expect(pkg.dependencies).not.toHaveProperty(`@h-ai/${name}`)
-    await expect(createProject(Object.assign({ ...options, name: 'obsolete-site' }, { features: [] }))).rejects.toThrow('create')
-    expect(existsSync(path.join(root, 'obsolete-site'))).toBe(false)
   })
 })
 

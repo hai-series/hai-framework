@@ -173,9 +173,7 @@ exec nginx -g 'daemon off;'`
           }
         })
         writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
-          version: kind === 'api'
-            ? 4
-            : 5,
+          version: 5,
           primaryService: ssr ? 'web' : 'serv',
           appVersion: '1.0.0',
           buildId: 'storage-gate-1',

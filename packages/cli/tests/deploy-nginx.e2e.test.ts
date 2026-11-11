@@ -115,7 +115,7 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       }
     })
     writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
-      version: base ? 5 : 4,
+      version: 5,
       primaryService: fullstack || api
         ? 'serv'
         : 'web',
@@ -694,7 +694,7 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       }
     })
     writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
-      version: base ? 5 : 4,
+      version: 5,
       primaryService: standalone ? 'web' : 'serv',
       appVersion: '1.2.3',
       buildId: 'release-1',
