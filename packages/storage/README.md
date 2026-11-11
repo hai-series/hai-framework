@@ -326,6 +326,8 @@ await storage.init({
 
 S3 流式上传的错误可通过 `error.ext?.s3Operation` 查看失败操作。分片写入失败后若清理也失败，`error.cause` 保留原始失败，`error.ext?.cleanupError` 记录清理失败。告警记录两个失败的错误码及可用的服务端请求编号。
 
+分片响应成功但缺少 `ETag` 时，原因为 `MissingETag`，告警还会记录分片编号。
+
 `storage.presign.putUrl()` 当前仅支持 `contentType` 与 `expiresIn` 等签名参数，不提供 `maxSize` 约束。
 
 本地 `storage.dir.list()` 将 `prefix` 作为 key 字符串前缀（如 `reports/2026-`），按 UTF-8 字节序分页。`maxKeys` 为 1–1000 的整数，默认 1000，`files` 与 `commonPrefixes` 共用该预算。`delimiter` 将前缀之后首次出现的分隔符及其后内容折叠为一个 `commonPrefixes` 条目；空字符串不折叠，空物理目录不生成条目。这些分组与计数规则参照 [S3 ListObjectsV2](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html).

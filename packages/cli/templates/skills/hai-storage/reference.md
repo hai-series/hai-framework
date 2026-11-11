@@ -60,6 +60,8 @@ S3 服务端流式上传使用 `multipart.partSizeBytes` 和 `multipart.queueSiz
 
 S3 流式上传用 `error.cause` 获取首次失败，`error.ext?.s3Operation` 查看失败的 S3 操作。若分片清理也失败，从 `error.ext?.cleanupError` 获取清理错误。告警包含可取得的服务端请求编号。
 
+若 `UploadPart` 返回成功但缺少 `ETag`，用 `MissingETag`、分片编号及请求编号定位存储端和网关的响应。
+
 处理 `storage.file.put()` 失败时用 `error.code` 分支，底层原因可用时从 `error.cause` 读取。`ifNoneMatch: '*'` 的目标冲突为 `ALREADY_EXISTS`，文件或输入流读取失败为 `UPLOAD_FAILED`，取消保留 `AbortSignal.reason`。告警记录原因摘要、底层错误码及可用的 HTTP 状态。
 
 ### 2. 初始化与关闭

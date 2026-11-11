@@ -282,12 +282,17 @@ describe('storage 操作日志', () => {
       request.once('end', () => {
         const path = new URL(request.url ?? '/', 'http://fixture')
         const cleanupDenied = path.pathname.endsWith('/cleanup-denied.zip')
+        const missingETag = path.pathname.endsWith('/missing-etag.zip')
         response.setHeader('Content-Type', 'application/xml')
         if (request.method === 'GET') {
           response.end('<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>')
         }
         else if (path.searchParams.has('uploads')) {
           response.end('<InitiateMultipartUploadResult><UploadId>fixture</UploadId></InitiateMultipartUploadResult>')
+        }
+        else if (path.searchParams.get('partNumber') === '1' && missingETag) {
+          response.setHeader('x-amz-request-id', 'missing-etag-part')
+          response.end()
         }
         else if (path.searchParams.get('partNumber') === '1') {
           response.setHeader('x-amz-request-id', cleanupDenied ? 'first-failure' : 'other-failure')
@@ -297,8 +302,8 @@ describe('storage 操作日志', () => {
           response.setHeader('ETag', '"fixture-part"')
           response.end()
         }
-        else if (request.method === 'DELETE' && cleanupDenied) {
-          response.setHeader('x-amz-request-id', 'cleanup-failure')
+        else if (request.method === 'DELETE' && (cleanupDenied || missingETag)) {
+          response.setHeader('x-amz-request-id', missingETag ? 'missing-etag-cleanup' : 'cleanup-failure')
           response.writeHead(403).end('<Error><Code>AccessDenied</Code><Message>private cleanup reason</Message></Error>')
         }
         else {
@@ -324,9 +329,10 @@ describe('storage 操作日志', () => {
       const source = join(root, 'archive.zip')
       await writeFile(source, Buffer.alloc(5 * 1024 * 1024 + 1))
       const options = { ifNoneMatch: '*' as const, signal: new AbortController().signal }
-      const [denied, cleaned] = await Promise.all([
+      const [denied, cleaned, missingETag] = await Promise.all([
         storage.file.put('cleanup-denied.zip', createReadStream(source), options),
         storage.file.put('cleanup-succeeded.zip', createReadStream(source), options),
+        storage.file.put('missing-etag.zip', createReadStream(source), options),
       ])
       expect(denied).toMatchObject({
         success: false,
@@ -358,8 +364,30 @@ describe('storage 操作日志', () => {
       })
       if (!cleaned.success)
         expect(cleaned.error.ext?.cleanupError).toBeUndefined()
+      expect(missingETag).toMatchObject({
+        success: false,
+        error: {
+          code: HaiStorageError.OPERATION_FAILED.code,
+          cause: {
+            name: 'MissingETag',
+            partNumber: 1,
+            $metadata: { httpStatusCode: 200, requestId: 'missing-etag-part' },
+          },
+          ext: {
+            s3Operation: 'UploadPart',
+            cleanupPending: true,
+            cleanupError: {
+              code: HaiStorageError.PERMISSION_DENIED.code,
+              cause: {
+                name: 'AccessDenied',
+                $metadata: { httpStatusCode: 403, requestId: 'missing-etag-cleanup' },
+              },
+            },
+          },
+        },
+      })
       const warnings = records.filter(record => record.level === 'warn')
-      expect(warnings).toHaveLength(2)
+      expect(warnings).toHaveLength(3)
       expect(warnings).toEqual(expect.arrayContaining([
         expect.objectContaining({
           context: expect.objectContaining({
@@ -377,8 +405,18 @@ describe('storage 操作日志', () => {
         expect.objectContaining({
           context: expect.objectContaining({ causeCode: 'BadDigest', providerRequestId: 'other-failure' }),
         }),
+        expect.objectContaining({
+          context: expect.objectContaining({
+            operation: 'file.put',
+            s3Operation: 'UploadPart',
+            causeCode: 'MissingETag',
+            partNumber: 1,
+            providerRequestId: 'missing-etag-part',
+            cleanupError: expect.objectContaining({ causeCode: 'AccessDenied', providerRequestId: 'missing-etag-cleanup' }),
+          }),
+        }),
       ]))
-      expect(JSON.stringify(records)).not.toMatch(/private upstream reason|private cleanup reason|cleanup-denied.zip/)
+      expect(JSON.stringify(records)).not.toMatch(/private upstream reason|private cleanup reason|cleanup-denied\.zip|missing-etag\.zip/)
     }
     finally {
       await storage.close()

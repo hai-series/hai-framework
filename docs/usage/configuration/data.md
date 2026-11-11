@@ -174,6 +174,8 @@ operationLog: { read: false, write: true, maxLength: 1000 }
 
 S3 流式上传的告警包含可取得的 S3 操作名和服务端请求编号。分片上传和后续清理都失败时，`error.cause` 保留首次失败，`error.ext?.cleanupError` 保存清理错误，两者可用请求编号与存储审计对照。
 
+若 `UploadPart` 返回成功但缺少 `ETag`，告警会记录 `causeCode=MissingETag` 和分片编号。可用该分片的请求编号核对对象存储与网关的响应头。
+
 使用 `createReadStream()` 上传时，源文件打开或读取失败会返回 `UPLOAD_FAILED`，底层原因在 `error.cause`。条件写的目标冲突仍返回 `ALREADY_EXISTS`，主动取消保留取消信号的 `reason`。`warn` 记录对应的脱敏原因摘要。
 
 在 YAML 中设置 `prefix: orders/`，或在注册了 `StorageConfigSchema` 的应用中设置 `HAI_STORAGE_PREFIX=orders/`。调用 `storage.file.put('report.pdf', bytes)` 后，桶内保存的键为 `orders/report.pdf`。之后读、删、签名仍传 `report.pdf`。初始化探测和默认列表都查询 `orders/`，配置值写成 `orders` 也会按同一目录查询。修改前缀不会搬迁已有对象，切换前先处理数据迁移。

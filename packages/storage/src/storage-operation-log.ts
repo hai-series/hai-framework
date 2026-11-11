@@ -91,6 +91,9 @@ export function storageErrorContext(code: HaiError['code'], cause?: unknown, can
   const requestId = typeof metadata === 'object' && metadata !== null && 'requestId' in metadata
     ? metadata.requestId
     : undefined
+  const partNumber = 'partNumber' in details
+    ? details.partNumber
+    : undefined
   return {
     code,
     reason: cancelled || name === 'AbortError' || causeCode === 'ABORT_ERR'
@@ -107,6 +110,9 @@ export function storageErrorContext(code: HaiError['code'], cause?: unknown, can
       : undefined,
     providerRequestId: typeof requestId === 'string' && ERROR_NAME.test(requestId)
       ? requestId
+      : undefined,
+    partNumber: typeof partNumber === 'number' && Number.isInteger(partNumber) && partNumber >= 1 && partNumber <= 10_000
+      ? partNumber
       : undefined,
   }
 }

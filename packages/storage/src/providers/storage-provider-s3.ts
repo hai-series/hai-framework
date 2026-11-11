@@ -91,7 +91,20 @@ function observeUploadRequests(client: S3Client): void {
       return next(args)
     }
     try {
-      return await next(args)
+      const response = await next(args)
+      // SDK 在请求返回后才检查 ETag；提前归入分片失败，清理报错时仍可定位原始响应。
+      if (operation === 'UploadPart' && (!('ETag' in response.output) || !response.output.ETag)) {
+        const { httpStatusCode, requestId } = response.output.$metadata
+        const partNumber = 'PartNumber' in input && typeof input.PartNumber === 'number'
+          ? input.PartNumber
+          : undefined
+        throw Object.assign(new Error('S3 upload part response is missing ETag'), {
+          name: 'MissingETag',
+          partNumber,
+          $metadata: { httpStatusCode, requestId },
+        })
+      }
+      return response
     }
     catch (cause) {
       if (operation === 'AbortMultipartUpload')

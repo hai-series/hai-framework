@@ -284,6 +284,8 @@ await storage.init({
 
 S3 のストリーミングアップロードでは、失敗したリクエストを取得できる場合に `error.ext?.s3Operation` に保持します。分割アップロードの後処理も失敗した場合は、元の原因を `error.cause`、後処理の原因を `error.ext?.cleanupError` に保持します。警告にはそれぞれのエラーコードと取得できるストレージのリクエスト ID を記録します。
 
+パートの応答が成功でも `ETag` がない場合、エラーの原因は `MissingETag` になります。警告にはパート番号も記録されます。
+
 `storage.presign.putUrl()` は現在 `contentType` や `expiresIn` などの署名パラメーターに対応しますが、`maxSize` 制限は提供しません。
 
 ローカルの `storage.dir.list()` は `prefix` を key の文字列接頭辞（例：`reports/2026-`）として扱い、UTF-8 バイト順でページ分割します。`maxKeys` は 1–1000 の整数で既定値は 1000、`files` と `commonPrefixes` の合計件数に適用します。`delimiter` は prefix の後で最初に現れる区切りまでを一つの `commonPrefixes` 項目にまとめます。空文字列ではグループ化せず、空の物理ディレクトリーは項目になりません。グループ化と件数の規則は [S3 ListObjectsV2](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html) に基づきます。

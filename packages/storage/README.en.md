@@ -284,6 +284,8 @@ For a failed `storage.file.put()`, inspect `error.code` and `error.message`. Whe
 
 For S3 streaming uploads, `error.ext?.s3Operation` identifies the failed request when available. If multipart cleanup also fails, `error.cause` keeps the original failure and `error.ext?.cleanupError` holds the cleanup failure. The warning records the error codes and available storage request IDs for both.
 
+A successful part response with a missing `ETag` produces a `MissingETag` cause. The warning also includes the part number.
+
 `storage.presign.putUrl()` currently supports signing options such as `contentType` and `expiresIn`, but no `maxSize` constraint.
 
 Local `storage.dir.list()` treats `prefix` as a key string prefix (for example, `reports/2026-`) and paginates in UTF-8 byte order. `maxKeys` is an integer from 1 to 1000, default 1000; files and common prefixes share that budget. `delimiter` folds keys at its first occurrence after the prefix into one `commonPrefixes` entry. An empty delimiter disables grouping; empty physical directories produce no entries. The grouping and counting rules follow [S3 ListObjectsV2](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html).
