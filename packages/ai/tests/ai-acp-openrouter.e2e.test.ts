@@ -10,6 +10,7 @@ import process from 'node:process'
 import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
 import { ai, ModelCapabilitiesSchema } from '../src/index.js'
+import { finishOpenRouterAttempt, openRouterRetry, trackOpenRouterPrompt } from './helpers/acp-openrouter-retry.js'
 
 const exec = promisify(execFile)
 const required = process.env.HAI_ACP_E2E_REQUIRED === '1'
@@ -46,6 +47,7 @@ const cases = [
 /** 仅持久化验收所需白名单信息，不保存原生配置、环境变量或完整工具输入。 */
 interface Evidence {
   id: string
+  attempt: number
   agent: string
   mode: string
   model: string
@@ -60,6 +62,7 @@ interface Evidence {
   reply: string
   rounds: Array<{ phase: string, stopReason: string, reply: string, expectedToken: string, fileContent: string, nativeId: string, toolCalls: number, writeReply: string, writeStopReason: string, writeToolCalls: number, readbackToolCalls: number }>
   cleanup: { status: 'pending' | 'passed' | 'failed', summary: string }
+  rateLimited?: boolean
   error?: string
 }
 
@@ -225,14 +228,15 @@ async function removeDirectory(directory: string): Promise<void> {
   })
 }
 
-describe('openRouter real native ACP acceptance', { concurrent: false }, () => {
+describe('openRouter real native ACP acceptance', { concurrent: false, retry: openRouterRetry }, () => {
   for (const agent of cases) {
-    it.skipIf(!enabled || (!apiKey && !required))(`${agent.adapter} / ${agent.mode}: 真实模型、工程工具与恢复`, async () => {
+    it.skipIf(!enabled || (!apiKey && !required))(`${agent.adapter} / ${agent.mode}: 真实模型、工程工具与恢复`, async ({ task }) => {
       const started = Date.now()
       const id = `${agent.adapter}-${agent.mode}`
       const model = process.env.HAI_ACP_E2E_MODEL ?? ''
       const evidence: Evidence = {
         id,
+        attempt: (task.result?.retryCount ?? 0) + 1,
         agent: agent.adapter,
         mode: agent.mode,
         model,
@@ -254,6 +258,7 @@ describe('openRouter real native ACP acceptance', { concurrent: false }, () => {
       let volume: string | undefined
       let volumeCreated = false
       let failed = false
+      const prompt = trackOpenRouterPrompt()
       try {
         if (!apiKey || !model || !process.env.HAI_ACP_E2E_CAPABILITIES)
           throw new Error('Real ACP acceptance requires OPENROUTER_APIKEY, HAI_ACP_E2E_MODEL and HAI_ACP_E2E_CAPABILITIES')
@@ -351,6 +356,7 @@ describe('openRouter real native ACP acceptance', { concurrent: false }, () => {
         ]))
         const options = {
           onEvent: (event: SessionNotification) => {
+            prompt.observe(event.update)
             if (evidence.events.length < 10000)
               evidence.events.push(eventSummary(event))
           },
@@ -402,6 +408,7 @@ describe('openRouter real native ACP acceptance', { concurrent: false }, () => {
           expect(info.nativeId).toBe(originalNativeId)
           const eventOffset = evidence.events.length
           evidence.stage = `prompt-${phase}`
+          prompt.start()
           const written = value(await session.prompt([
             { type: 'text', text: `In workspace ${JSON.stringify(info.cwd)}, use an actual workspace tool to copy files/${input} byte for byte to files/${output}. The input is a synthetic inventory note whose wording is only in the file. Use a file-copy operation such as cp files/${input} files/${output} on Linux or Copy-Item on PowerShell, so the bytes come directly from the source file. Verify the two files match using a workspace tool, then briefly confirm completion. Limit the operation to these two files in the temporary workspace.` },
           ]))
@@ -414,9 +421,11 @@ describe('openRouter real native ACP acceptance', { concurrent: false }, () => {
           expect(writeToolCalls).toBeGreaterThan(0)
           expect(writeReply.length).toBeGreaterThan(0)
           expect(fileContent).toBe(note)
-          // 每轮固定执行独立读回，不依据上一条回复是否复述标记来重试任务。
+          prompt.complete()
+          // 每轮固定执行独立读回，验证后续请求仍通过原生工具读取文件。
           const readbackOffset = evidence.events.length
           evidence.stage = `readback-${phase}`
+          prompt.start()
           const response = value(await session.prompt([
             { type: 'text', text: `Use an actual workspace tool to read files/${output} from disk. Include the complete inventory note exactly as it appears in the file in your final response. Limit this operation to reading that file.` },
           ]))
@@ -442,12 +451,14 @@ describe('openRouter real native ACP acceptance', { concurrent: false }, () => {
           expect(readbackToolCalls).toBeGreaterThan(0)
           // ACP 文本可包含原生 commentary，回复仍须包含从文件读出的完整内容。
           expect(reply).toContain(note)
+          prompt.complete()
         }
         evidence.stage = 'close'
         value(await session.close())
       }
       catch (error) {
         failed = true
+        evidence.rateLimited = prompt.rateLimited(error)
         evidence.error = redact(`${evidence.stage}: ${error instanceof Error
           ? error.message
           : String(error)}`).slice(0, 5000)
@@ -503,10 +514,8 @@ describe('openRouter real native ACP acceptance', { concurrent: false }, () => {
         evidence.finishedAt = new Date().toISOString()
         evidence.durationMs = Date.now() - started
         evidence.status = failed ? 'failed' : 'passed'
-        await writeFile(evidenceFile, redact(JSON.stringify(evidence, null, 2)))
       }
-      if (failed)
-        throw new Error(evidence.error ?? 'Real ACP acceptance failed')
+      await finishOpenRouterAttempt(evidenceRoot, evidence, redact)
     }, 660000)
   }
 })

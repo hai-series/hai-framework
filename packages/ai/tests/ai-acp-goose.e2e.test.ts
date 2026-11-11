@@ -8,6 +8,7 @@ import process from 'node:process'
 import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
 import { ai } from '../src/index.js'
+import { finishOpenRouterAttempt, openRouterRetry, trackOpenRouterPrompt } from './helpers/acp-openrouter-retry.js'
 
 const exec = promisify(execFile)
 const required = process.env.HAI_ACP_E2E_REQUIRED === '1'
@@ -20,6 +21,7 @@ const evidenceRoot = resolve('test-results/acp-openrouter')
 /** 真实服务验收只保存白名单，不写原生配置、请求头或工具原始参数。 */
 interface GooseEvidence {
   id: string
+  attempt: number
   agent: string
   mode: string
   transport: 'http' | 'ws'
@@ -34,6 +36,7 @@ interface GooseEvidence {
   reply: string
   rounds: Array<{ phase: string, stopReason: string, reply: string, expectedToken: string, fileContent: string, nativeId: string, toolCalls: number, writeReply: string, writeStopReason: string, writeToolCalls: number, readbackToolCalls: number }>
   cleanup: { status: 'pending' | 'passed' | 'failed', summary: string }
+  rateLimited?: boolean
   error?: string
 }
 
@@ -87,15 +90,16 @@ async function readyEngine(): Promise<'podman' | 'docker'> {
   throw new Error('No requested Podman/Docker engine is ready')
 }
 
-describe('goose native remote ACP acceptance', { concurrent: false }, () => {
+describe('goose native remote ACP acceptance', { concurrent: false, retry: openRouterRetry }, () => {
   for (const transport of ['http', 'ws'] as const) {
-    it.skipIf(!enabled || ((!apiKey || !image) && !required))(`Goose / ${transport}: 真实鉴权、工程工具与声明的恢复能力`, async () => {
+    it.skipIf(!enabled || ((!apiKey || !image) && !required))(`Goose / ${transport}: 真实鉴权、工程工具与声明的恢复能力`, async ({ task }) => {
       const started = Date.now()
       const id = `goose-custom-service-${transport}`
       const secret = `${randomUUID()}${randomUUID()}`
       const previousSecret = process.env.HAI_ACP_GOOSE_SECRET
       const evidence: GooseEvidence = {
         id,
+        attempt: (task.result?.retryCount ?? 0) + 1,
         agent: 'goose',
         mode: 'custom-service',
         transport,
@@ -113,6 +117,7 @@ describe('goose native remote ACP acceptance', { concurrent: false }, () => {
       await mkdir(evidenceRoot, { recursive: true })
       const evidenceFile = join(evidenceRoot, `${id}.json`)
       await writeFile(evidenceFile, JSON.stringify(evidence, null, 2))
+      const prompt = trackOpenRouterPrompt()
       let engine: 'podman' | 'docker' | undefined
       let container: string | undefined
       const volumes: string[] = []
@@ -218,6 +223,7 @@ describe('goose native remote ACP acceptance', { concurrent: false }, () => {
         }))
         const callbacks = {
           onEvent: (event: SessionNotification) => {
+            prompt.observe(event.update)
             if (evidence.events.length >= 10000)
               return
             const update = event.update
@@ -282,6 +288,7 @@ describe('goose native remote ACP acceptance', { concurrent: false }, () => {
           }
           expect(value(await session.info()).nativeId).toBe(nativeId)
           const offset = evidence.events.length
+          prompt.start()
           const written = value(await session.prompt([
             { type: 'text', text: `Use your actual developer tools to read /workspace/${input}. It contains a unique random token not included in this prompt. Write exactly that token (optional final newline) to /workspace/${output} and briefly confirm completion. Do not inspect environment variables, credentials or files outside /workspace. This is an isolated acceptance fixture; writing the result is authorized. Do not simulate tool use.` },
           ]))
@@ -300,8 +307,10 @@ describe('goose native remote ACP acceptance', { concurrent: false }, () => {
           expect(writeToolCalls).toBeGreaterThan(0)
           expect(writeReply.length).toBeGreaterThan(0)
           expect(fileContent).toBe(token)
-          // 所有传输固定增加读回请求，验证后续轮次的原生工具与回复，不做失败重试。
+          prompt.complete()
+          // 所有传输固定增加读回请求，验证后续轮次的原生工具与回复。
           const readbackOffset = evidence.events.length
+          prompt.start()
           const response = value(await session.prompt([
             { type: 'text', text: `Read /workspace/${output} from disk using your actual developer tool. This is an explicit readback verification: do not rely on prior messages. Your final assistant response must contain the complete literal file contents, including the full random token. Return the contents, not a completion summary. Do not modify files or inspect anything outside /workspace.` },
           ]))
@@ -326,6 +335,7 @@ describe('goose native remote ACP acceptance', { concurrent: false }, () => {
           expect(readbackToolCalls).toBeGreaterThan(0)
           // 验证回复实际包含随机值；不把模型的 Markdown/说明文字当成传输失败。
           expect(reply).toContain(token)
+          prompt.complete()
         }
         value(await session.close())
         if (!canResume) {
@@ -338,6 +348,7 @@ describe('goose native remote ACP acceptance', { concurrent: false }, () => {
       }
       catch (error) {
         failed = true
+        evidence.rateLimited = prompt.rateLimited(error)
         evidence.error = redact(error instanceof Error
           ? error.message
           : String(error)).slice(0, 5000)
@@ -385,10 +396,8 @@ describe('goose native remote ACP acceptance', { concurrent: false }, () => {
         evidence.finishedAt = new Date().toISOString()
         evidence.durationMs = Date.now() - started
         evidence.status = failed ? 'failed' : 'passed'
-        await writeFile(evidenceFile, redact(JSON.stringify(evidence, null, 2)))
       }
-      if (failed)
-        throw new Error(evidence.error ?? 'Goose native remote acceptance failed')
+      await finishOpenRouterAttempt(evidenceRoot, evidence, redact)
     }, 660000)
   }
 })
