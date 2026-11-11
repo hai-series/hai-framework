@@ -7187,7 +7187,7 @@
     "name": "HAI_VECDB_OPERATIONLOG_MAXLENGTH",
     "module": "vecdb",
     "path": "vecdb.operationLog.maxLength",
-    "description": "操作日志字段的最大字符数，0 表示不截断",
+    "description": "安全摘要的最大字符数，0 省略摘要。",
     "value": "1000",
     "constraint": "整数；>= 0；<= 9007199254740991"
   },

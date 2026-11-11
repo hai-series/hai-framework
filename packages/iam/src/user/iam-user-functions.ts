@@ -389,7 +389,7 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
       return assigned
     }
 
-    logger.info('User registered', { userId: createdUser.id, username: options.username })
+    logger.info('User registered', { userId: createdUser.id })
     return ok({
       user: toUser(createdUser),
       agreements: buildAgreementDisplay(agreementConfig, agreementConfig.showOnRegister),
@@ -995,7 +995,7 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
       const captcha = await verifyIamCaptcha(ctx.config.captcha, 'passwordReset', options?.captcha)
       if (!captcha.success)
         return captcha
-      logger.debug('Password reset requested', { identifier })
+      logger.debug('Password reset requested')
 
       const resetConfig = ctx.resetConfig
       if (!resetConfig.enabled || !onPasswordResetRequest)
@@ -1005,12 +1005,12 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
       const userResult = await userRepository.findByIdentifier(identifier)
       if (!userResult.success) {
         // 防止用户枚举：无论是否查找失败都返回 ok
-        logger.warn('Failed to look up user for password reset', { identifier })
+        logger.warn('Failed to look up user for password reset', { reasonCode: userResult.error.code })
         return ok(undefined)
       }
       if (!userResult.data) {
         // 防止用户枚举：用户不存在也返回 ok
-        logger.debug('User not found for password reset, returning ok to prevent enumeration', { identifier })
+        logger.debug('User not found for password reset')
         return ok(undefined)
       }
 

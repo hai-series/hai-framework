@@ -164,9 +164,11 @@ path: ./data/vecdb
 operationLog:
   read: false # collection.exists/info/list, vector.search/count
   write: false # collection.create/drop, vector.insert/upsert/delete
-  maxLength: 1000 # 参数序列化后的最大输出长度，超出会截断
-  level: debug # info | debug | trace，默认 debug
+  maxLength: 1000 # Maximum summary length in characters. Use 0 to omit the summary.
+  level: debug # info | debug | trace, defaults to debug
 ```
+
+Logs include the operation and a summary such as document counts, dimensions, topK, and whether a filter was supplied.
 
 ```ts
 await vecdb.init({

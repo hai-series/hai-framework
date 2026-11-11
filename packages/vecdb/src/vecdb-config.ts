@@ -65,6 +65,7 @@ export type DistanceMetric = z.infer<typeof DistanceMetricSchema>
 export const VecdbOperationLogConfigSchema = z.object({
   read: z.boolean().default(false),
   write: z.boolean().default(false),
+  /** 安全摘要的最大字符数，0 省略摘要。 */
   maxLength: z.number().int().min(0).default(1000),
   level: z.enum(['info', 'debug', 'trace']).default('debug'),
 })

@@ -164,9 +164,11 @@ path: ./data/vecdb
 operationLog:
   read: false # collection.exists/info/list, vector.search/count
   write: false # collection.create/drop, vector.insert/upsert/delete
-  maxLength: 1000 # 参数序列化后的最大输出长度，超出会截断
-  level: debug # info | debug | trace，默认 debug
+  maxLength: 1000 # 概要の最大文字数。0 で概要を省略します。
+  level: debug # info | debug | trace、既定値は debug
 ```
+
+ログには操作名と件数、次元数、topK、フィルターの有無などの概要だけを記録します。
 
 ```ts
 await vecdb.init({

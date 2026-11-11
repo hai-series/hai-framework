@@ -53,7 +53,6 @@ export function createConsoleProvider(): ReachProvider {
     async send(message: ReachMessage): Promise<HaiResult<SendResult>> {
       logger.debug('Sending message via console', {
         provider: message.provider,
-        to: message.to,
         hasSubject: Boolean(message.subject),
         bodyLength: message.body?.length ?? 0,
         template: message.template,

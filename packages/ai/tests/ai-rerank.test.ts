@@ -5,6 +5,7 @@
  */
 
 import type { AIConfig } from '../src/ai-config.js'
+import { core } from '@h-ai/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HaiAIError } from '../src/ai-types.js'
 import { createRerankOperations } from '../src/rerank/ai-rerank-functions.js'
@@ -23,16 +24,6 @@ function makeRerankResponse(results: Array<{ index: number, relevance_score: num
       results,
     }),
     text: async () => '',
-  }
-}
-
-/** 构造失败的 API 响应 */
-function makeErrorResponse(status: number, body: string) {
-  return {
-    ok: false,
-    status,
-    statusText: body,
-    text: async () => body,
   }
 }
 
@@ -235,17 +226,34 @@ describe('rerank operations', () => {
       }
     })
 
-    it('请求失败时（HTTP 非 200）返回 RERANK_API_ERROR', async () => {
-      mockFetch.mockResolvedValueOnce(makeErrorResponse(429, 'Rate limit exceeded'))
-
-      const ops = createRerankOperations(mockConfig)
-      const result = await ops.rerank({
-        query: '测试',
-        documents: ['文档'],
+    it('供应商失败时保留 HTTP 状态与请求编号，省略上游响应正文', async () => {
+      const observations: unknown[] = []
+      const stop = core.logger.observe(entry => observations.push(entry))
+      const response = new Response('private rerank response body', {
+        status: 429,
+        headers: { 'x-request-id': 'rerank-request-1' },
       })
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(HaiAIError.RERANK_API_ERROR.code)
+      mockFetch.mockResolvedValueOnce(response)
+
+      try {
+        const result = await createRerankOperations(mockConfig).rerank({
+          query: '测试',
+          documents: ['文档'],
+        })
+        expect(result).toMatchObject({
+          success: false,
+          error: {
+            code: HaiAIError.RERANK_API_ERROR.code,
+            message: expect.stringContaining('HTTP 429'),
+          },
+        })
+        expect(JSON.stringify(result)).not.toContain('private rerank response body')
+        expect(JSON.stringify(observations)).toContain('rerank-request-1')
+        expect(JSON.stringify(observations)).not.toContain('private rerank response body')
+        expect(response.bodyUsed).toBe(true)
+      }
+      finally {
+        stop()
       }
     })
 

@@ -234,7 +234,7 @@ export function createRetrievalOperations(
         const limitedItems = allItems.slice(0, topK)
 
         const duration = Date.now() - startTime
-        logger.trace('Retrieval completed', { query: request.query, resultCount: limitedItems.length, duration })
+        logger.trace('Retrieval completed', { queryLength: request.query.length, resultCount: limitedItems.length, duration })
 
         return ok({
           items: limitedItems,

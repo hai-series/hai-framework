@@ -58,7 +58,7 @@ operationLog:
 约定环境变量优先于 YAML，例如 `HAI_VECDB_URL`、
 `HAI_VECDB_APIKEY`、`HAI_VECDB_OPERATIONLOG_LEVEL`。
 
-`operationLog` 在集合/向量操作进入真实 Provider 前输出日志，不要在 `vecdb-main.ts` 或调用方重复包装。`maxLength` 用于截断序列化后的向量、文档和过滤条件，`level` 默认 `debug`。
+`operationLog` 在集合/向量操作进入真实 Provider 前输出日志。日志包含操作类型以及条数、维度、topK、是否有过滤条件等摘要。`maxLength` 限制摘要字符数，0 省略摘要。`level` 默认 `debug`。
 
 ### 2. 初始化与关闭
 

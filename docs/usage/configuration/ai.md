@@ -168,7 +168,7 @@ knowledge:
 | chroma 的 `url`或`path` | 无默认 | `url`连接独立服务，`path`本地启动；`host`/`port`默认localhost/8000，`serverCommand`默认chroma |
 | chroma 的 `startupTimeout` / `apiKey` | 30000ms/无默认 | 启动期限和访问凭据；URL仅根端点，不含凭据、路径前缀、查询或片段；apiKey 为受信自托管网关的 Bearer token，不是 Chroma Cloud 配置 |
 | `metric` | cosine（默认距离） | 可选euclidean/dot；已有集合应核对是否允许变更 |
-| `operationLog` | 可省略 | `read`/`write`默认false，`maxLength1000`、`level` debug，只记录安全摘要 |
+| `operationLog` | 可省略 | `read` 和 `write` 默认 `false`，`level` 默认 `debug`。`maxLength` 默认 1000，限制条数、维度等摘要的字符数，0 省略摘要。 |
 
 ```yaml schema=@h-ai/vecdb:VecdbConfigSchema
 type: qdrant

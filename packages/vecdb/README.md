@@ -164,9 +164,11 @@ path: ./data/vecdb
 operationLog:
   read: false # collection.exists/info/list, vector.search/count
   write: false # collection.create/drop, vector.insert/upsert/delete
-  maxLength: 1000 # 参数序列化后的最大输出长度，超出会截断
+  maxLength: 1000 # 安全摘要的最大字符数，0 省略摘要
   level: debug # info | debug | trace，默认 debug
 ```
+
+日志只记录操作类型和条数、维度、topK、是否有过滤条件等摘要。
 
 ```ts
 await vecdb.init({

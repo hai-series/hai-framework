@@ -146,10 +146,16 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
       })
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => response.statusText)
-        logger.error('Rerank API request failed', { status: response.status, error: errorText })
+        const requestId = response.headers.get('x-request-id')
+        await response.body?.cancel().catch(() => {})
+        logger.error('Rerank API request failed', {
+          status: response.status,
+          providerRequestId: requestId && /^[\w.:-]{1,128}$/.test(requestId)
+            ? requestId
+            : undefined,
+        })
         return err(HaiAIError.RERANK_API_ERROR, aiM('ai_rerankApiFailed', {
-          params: { error: `HTTP ${response.status}: ${errorText}` },
+          params: { error: `HTTP ${response.status}` },
         }))
       }
 
@@ -167,10 +173,13 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
       return ok({ model: resolved.model, results })
     }
     catch (error) {
-      logger.error('Rerank API call failed', { error })
+      const causeName = error instanceof Error
+        ? error.name
+        : undefined
+      logger.error('Rerank API call failed', { causeName })
       return err(HaiAIError.RERANK_API_ERROR, aiM('ai_rerankApiFailed', {
         params: {
-          error: String(error),
+          error: causeName ?? core.i18n.coreM('core_errorInternal'),
         },
       }), error)
     }

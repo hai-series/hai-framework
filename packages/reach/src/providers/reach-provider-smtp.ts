@@ -18,6 +18,27 @@ import { HaiReachError } from '../reach-types.js'
 
 const logger = core.logger.child({ module: 'reach', scope: 'provider-smtp' })
 
+/** SMTP 的原始异常可能包含信封地址、认证信息或邮件服务器的响应正文。 */
+function smtpErrorDiagnostics(error: unknown) {
+  const code = error && typeof error === 'object' && 'code' in error
+    ? error.code
+    : undefined
+  const responseCode = error && typeof error === 'object' && 'responseCode' in error
+    ? error.responseCode
+    : undefined
+  return {
+    causeName: error instanceof Error
+      ? error.name
+      : undefined,
+    causeCode: typeof code === 'string' && /^[A-Z0-9_]{1,64}$/.test(code)
+      ? code
+      : undefined,
+    responseCode: typeof responseCode === 'number'
+      ? responseCode
+      : undefined,
+  }
+}
+
 /**
  * 将异常包装为 ReachError
  */
@@ -79,7 +100,7 @@ export function createSmtpProvider(): ReachProvider {
         return ok(undefined)
       }
       catch (error) {
-        logger.error('SMTP connection failed', { error })
+        logger.error('SMTP connection failed', smtpErrorDiagnostics(error))
         return err(toReachError())
       }
     },
@@ -105,7 +126,7 @@ export function createSmtpProvider(): ReachProvider {
         )
       }
 
-      logger.debug('Sending email', { to: message.to, subject: message.subject })
+      logger.debug('Sending email')
 
       try {
         const sendMail = (transporter as { sendMail: (opts: unknown) => Promise<{ messageId: string }> }).sendMail.bind(transporter)
@@ -116,11 +137,11 @@ export function createSmtpProvider(): ReachProvider {
           html: message.body ?? '',
         })
 
-        logger.info('Email sent', { to: message.to, messageId: info.messageId })
+        logger.info('Email sent')
         return ok({ success: true, messageId: info.messageId })
       }
       catch (error) {
-        logger.error('Email send failed', { to: message.to, error })
+        logger.warn('Email send failed', smtpErrorDiagnostics(error))
         return err(toReachError())
       }
     },

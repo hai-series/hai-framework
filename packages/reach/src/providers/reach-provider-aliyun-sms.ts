@@ -209,7 +209,7 @@ export function createAliyunSmsProvider(gatewayHook?: ReachGatewayHook): ReachPr
 
       const templateCode = message.extra?.templateCode as string | undefined
       if (!config.gateway)
-        logger.debug('Sending SMS', { to: message.to, templateCode })
+        logger.debug('Sending SMS', { templateCode })
 
       try {
         const params: Record<string, string> = {
@@ -262,15 +262,23 @@ export function createAliyunSmsProvider(gatewayHook?: ReachGatewayHook): ReachPr
           )
         }
 
-        logger.info('SMS sent', { to: message.to, bizId: body.BizId })
+        logger.info('SMS sent', { bizId: body.BizId })
         return ok({ success: true, messageId: body.BizId })
       }
       catch (error) {
         if (config.gateway) {
-          logger.warn('SMS gateway request failed')
+          logger.warn('SMS gateway request failed', {
+            causeName: error instanceof Error
+              ? error.name
+              : undefined,
+          })
           return err(HaiReachError.SEND_FAILED, reachM('reach_smsGatewayFailed'))
         }
-        logger.error('SMS send failed', { to: message.to, error })
+        logger.warn('SMS send failed', {
+          causeName: error instanceof Error
+            ? error.name
+            : undefined,
+        })
         return err(toReachError())
       }
     },

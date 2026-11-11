@@ -534,7 +534,7 @@ export async function executeSend(
     }
 
     // discard 策略：直接拒绝
-    logger.info('Message blocked by DND (discard strategy)', { provider: providerName, to: message.to })
+    logger.info('Message blocked by DND (discard strategy)', { provider: providerName })
     return err(
       HaiReachError.DND_BLOCKED,
       reachM('reach_dndBlocked'),
@@ -545,7 +545,6 @@ export async function executeSend(
 
   logger.debug('Sending message', {
     provider: providerName,
-    to: preprocessed.data.to,
     template: message.template,
   })
 
@@ -553,7 +552,6 @@ export async function executeSend(
   if (!result.success) {
     logger.warn('Message send failed', {
       provider: providerName,
-      to: message.to,
       error: result.error.code,
     })
     return result

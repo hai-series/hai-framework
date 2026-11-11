@@ -9,6 +9,7 @@
 import type { ReachProvider } from '../src/providers/reach-provider-types.js'
 import type { ProviderConfig } from '../src/reach-config.js'
 import type { ReachMessage } from '../src/reach-types.js'
+import { core } from '@h-ai/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAliyunSmsProvider } from '../src/providers/reach-provider-aliyun-sms.js'
 import { createApiProvider } from '../src/providers/reach-provider-api.js'
@@ -63,6 +64,29 @@ describe('console provider', () => {
       expect(result.data.success).toBe(true)
       expect(result.data.messageId).toBeDefined()
       expect(result.data.messageId).toMatch(/^console-\d+$/)
+    }
+  })
+
+  it('console 诊断只记录发送状态，省略收件人和消息内容', async () => {
+    const previous = core.logger.getLevel()
+    core.logger.setLevel('debug')
+    const observations: unknown[] = []
+    const stop = core.logger.observe(entry => observations.push(entry))
+    try {
+      await provider.connect({ name: 'dev', type: 'console' })
+      await expect(provider.send({
+        provider: 'dev',
+        to: 'private-recipient@example.invalid',
+        subject: 'private-subject',
+        body: 'private-body',
+      })).resolves.toMatchObject({ success: true })
+      const logged = JSON.stringify(observations)
+      expect(logged).toContain('Sending message via console')
+      expect(logged).not.toContain('private-')
+    }
+    finally {
+      stop()
+      core.logger.setLevel(previous)
     }
   })
 
