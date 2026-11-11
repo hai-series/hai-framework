@@ -78,9 +78,13 @@ describe.each(['table', 'index'] as const)('concurrent PostgreSQL %s creation', 
   }, 15_000)
 })
 
-it.each(['heap_create_with_catalog', 'TypeCreate'])('建表类型竞争 %s 仅重执行一次并实际创建可用表', async (routine) => {
-  const table = `type_race_${routine.toLowerCase()}`
-  const error = Object.assign(new Error('Injected row type race'), { code: '42710', routine })
+it.each([
+  { code: '42710', routine: 'heap_create_with_catalog' },
+  { code: '42710', routine: 'TypeCreate' },
+  { code: '42P07', routine: 'heap_create_with_catalog' },
+])('建表目录竞争 $code/$routine 仅重执行一次并实际创建可用表', async ({ code, routine }) => {
+  const table = `table_race_${code.toLowerCase()}_${routine.toLowerCase()}`
+  const error = Object.assign(new Error('Injected table catalog race'), { code, routine })
   const query = vi.spyOn(pg.Pool.prototype, 'query').mockRejectedValueOnce(error)
   const result = await reldb.sql.execute(`CREATE TABLE IF NOT EXISTS "${table}" ("id" TEXT)`)
   expect(result.success).toBe(true)
@@ -157,6 +161,20 @@ it.each([
     calls: 1,
   },
   {
+    statement: 'CREATE TABLE IF NOT EXISTS duplicate (id TEXT)',
+    code: '42P07',
+    constraint: '',
+    routine: 'DefineRelation',
+    calls: 1,
+  },
+  {
+    statement: 'CREATE TABLE IF NOT EXISTS still_failing (id TEXT)',
+    code: '42P07',
+    constraint: '',
+    routine: 'heap_create_with_catalog',
+    calls: 2,
+  },
+  {
     statement: 'CREATE TABLE IF NOT EXISTS still_failing (id TEXT)',
     code: '42710',
     constraint: '',
@@ -174,7 +192,12 @@ it.each([
     throw error
   })
   const result = await reldb.sql.execute(statement)
-  expect(result.success).toBe(false)
+  expect(result).toMatchObject({
+    success: false,
+    error: {
+      cause: { code },
+    },
+  })
   expect(query).toHaveBeenCalledTimes(calls)
 })
 

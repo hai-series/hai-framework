@@ -333,9 +333,11 @@ export function createPostgresProvider(): ReldbProvider {
       const catalogConflict = typeof error === 'object' && error !== null && 'code' in error && (
         (error.code === '23505' && 'schema' in error && error.schema === 'pg_catalog'
           && 'constraint' in error && (error.constraint === 'pg_class_relname_nsp_index' || (kind === 'TABLE' && error.constraint === 'pg_type_typname_nsp_index')))
-        // 建表的 relation 检查与行类型检查之间，另一个节点也可能已提交；此路径不携带 schema/constraint。
-        || (kind === 'TABLE' && error.code === '42710' && 'routine' in error
-          && (error.routine === 'heap_create_with_catalog' || error.routine === 'TypeCreate'))
+        // 并发提交可能在系统目录检查之间触发重复关系或类型错误，此路径没有 schema/constraint。
+        || (kind === 'TABLE' && 'routine' in error && (
+          (error.routine === 'heap_create_with_catalog' && (error.code === '42P07' || error.code === '42710'))
+          || (error.routine === 'TypeCreate' && error.code === '42710')
+        ))
       )
       if (!kind || !single || !catalogConflict)
         throw error
