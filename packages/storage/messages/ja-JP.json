@@ -31,6 +31,7 @@
   "storage_s3ClientNotInitialized": "S3クライアントが初期化されていません",
   "storage_s3ConfigNotInitialized": "S3設定が初期化されていません",
   "storage_uploadCanceled": "アップロードをキャンセルしました",
+  "storage_uploadSourceReadFailed": "アップロード元のファイルまたは入力ストリームを読み取れませんでした",
   "storage_downloadCanceled": "ダウンロードをキャンセルしました",
   "storage_uploadFailedStatus": "アップロードに失敗しました（ステータス{status}）: {statusText}",
   "storage_downloadFailedStatus": "ダウンロードに失敗しました（ステータス{status}）: {statusText}",

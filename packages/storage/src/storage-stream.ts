@@ -3,9 +3,93 @@
  *
  * 供存储 Provider 与 checksum 共用，保持消费有界且支持取消。
  */
-import type { StorageData } from './storage-types.js'
+import type { HaiResult } from '@h-ai/core'
+import type { FileMetadata, StorageData } from './storage-types.js'
 import { Buffer } from 'node:buffer'
+import { finished, Readable } from 'node:stream'
+import { err } from '@h-ai/core'
 import { storageM } from './storage-i18n.js'
+import { HaiStorageError } from './storage-types.js'
+
+/**
+ * 保护调用方已经打开的上传源，并将源读取失败与目标写入失败区分。
+ * @example 模块内部上下文
+ * ```ts
+ * function upload(data: StorageData, write: (input: StorageData) => Promise<HaiResult<FileMetadata>>) {
+ *   return uploadWithSource(data, undefined, write)
+ * }
+ * ```
+ */
+export async function uploadWithSource(
+  data: StorageData,
+  signal: AbortSignal | undefined,
+  write: (input: StorageData) => Promise<HaiResult<FileMetadata>>,
+): Promise<HaiResult<FileMetadata>> {
+  const readable = data instanceof Readable
+    ? data
+    : undefined
+  if (readable) {
+    // createReadStream 可能在 Provider 等待目标准备或加载 SDK 时就发出打开错误。
+    const cleanup = finished(readable, { readable: true, writable: false }, () => cleanup())
+  }
+  let sourceFailure: Error | undefined
+  function failReading(cause: unknown): never {
+    // Node 流只能可靠传播 Error，调用方仍收到原始抛出值作为 cause。
+    sourceFailure = new Error('Storage upload source failed', { cause })
+    throw sourceFailure
+  }
+  function track(source: AsyncIterable<Uint8Array>): AsyncIterable<Uint8Array> {
+    return {
+      [Symbol.asyncIterator]() {
+        let iterator: AsyncIterator<Uint8Array>
+        try {
+          iterator = source[Symbol.asyncIterator]()
+        }
+        catch (cause) {
+          return failReading(cause)
+        }
+        return {
+          async next() {
+            try {
+              return await iterator.next()
+            }
+            catch (cause) {
+              return failReading(cause)
+            }
+          },
+          return: iterator.return?.bind(iterator),
+        }
+      },
+    }
+  }
+  try {
+    const input = typeof data === 'string' || data instanceof Uint8Array || readable
+      ? data
+      : track(data)
+    const result = await write(input)
+    if (result.success)
+      return result
+    const { cause } = result.error
+    const readFailure = sourceFailure
+    const failedInput = readFailure !== undefined && cause === readFailure
+    const originalCause = failedInput ? readFailure.cause : cause
+    if (signal?.aborted && (Object.is(originalCause, signal.reason) || (originalCause instanceof Error && originalCause.name === 'AbortError'))) {
+      return err({
+        ...result.error,
+        message: storageM('storage_uploadCanceled'),
+        cause: signal.reason,
+      })
+    }
+    if (failedInput || (readable?.errored && readable.errored === cause))
+      return err(HaiStorageError.UPLOAD_FAILED, storageM('storage_uploadSourceReadFailed'), originalCause)
+    return result
+  }
+  finally {
+    // 预取消、初始化和目标校验失败可能还未开始消费源，仍需释放文件描述符。
+    if (readable && !readable.readableEnded && !readable.destroyed)
+      readable.destroy()
+  }
+}
 
 /**
  * 规范化字节输入；取消时终止等待并关闭迭代器，拒绝对象模式流中的非字节块。
@@ -30,6 +114,7 @@ export async function* toByteStream(data: StorageData, signal?: AbortSignal): As
   }
   const iterator = data[Symbol.asyncIterator]()
   let completed = false
+  let failed = false
   try {
     while (true) {
       signal?.throwIfAborted()
@@ -62,13 +147,18 @@ export async function* toByteStream(data: StorageData, signal?: AbortSignal): As
     }
     signal?.throwIfAborted()
   }
+  catch (error) {
+    failed = true
+    throw error
+  }
   finally {
     if (!completed && iterator.return) {
-      // 不可取消的源可能把 return 排在挂起的 next 后面；取消结果不能继续等待源释放。
-      if (signal?.aborted)
-        void Promise.resolve(iterator.return()).catch(() => {})
+      // 保留首个读取/取消错误。不可取消的迭代器可能让 return 等待挂起的 next。
+      const closed = Promise.resolve().then(() => iterator.return?.())
+      if (failed || signal?.aborted)
+        void closed.catch(() => {})
       else
-        await iterator.return()
+        await closed
     }
   }
 }

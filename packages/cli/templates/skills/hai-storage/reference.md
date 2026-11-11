@@ -53,6 +53,8 @@ MinIO、RustFS 使用同一个 S3 Provider：配置 `type: s3`、S3 API `endpoin
 
 `operationLog` 默认记录写操作，读操作需显式开启。操作记录固定为 `debug`，由 Core 日志级别过滤。业务失败返回原错误并记录一次 `warn`，初始化、连接和关闭失败为 `error`。`maxLength` 限制安全摘要的字符数，0 省略摘要。签名直传助手在浏览器记录失败，日志不包含对象键、签名 URL 或文件内容。升级时移除 `operationLog.level` 与 `HAI_STORAGE_OPERATIONLOG_LEVEL`，通过 `HAI_CORE_LOGGING_LEVEL` 设置全局阈值。
 
+处理 `storage.file.put()` 失败时用 `error.code` 分支，底层原因可用时从 `error.cause` 读取。`ifNoneMatch: '*'` 的目标冲突为 `ALREADY_EXISTS`，文件或输入流读取失败为 `UPLOAD_FAILED`，取消保留 `AbortSignal.reason`。告警记录原因摘要、底层错误码及可用的 HTTP 状态。
+
 ### 2. 初始化与关闭
 
 ```typescript

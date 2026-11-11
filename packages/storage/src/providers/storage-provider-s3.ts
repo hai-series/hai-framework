@@ -69,9 +69,9 @@ const RETRYABLE_DELETE_CODES = new Set([
  * @returns 统一的 StorageError
  */
 function toStorageError(error: unknown, key?: string): HaiError {
-  const e = error as { name?: string, message?: string, Code?: string }
+  const e = (error ?? {}) as { name?: string, message?: string, Code?: string, $metadata?: { httpStatusCode?: number } }
 
-  if (e.name === 'PreconditionFailed' || (e as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 412) {
+  if (e.name === 'PreconditionFailed' || e.$metadata?.httpStatusCode === 412) {
     return {
       ...HaiStorageError.ALREADY_EXISTS,
       message: storageM('storage_fileAlreadyExists', {
@@ -84,7 +84,7 @@ function toStorageError(error: unknown, key?: string): HaiError {
   // S3 特定错误处理
   if (e.name === 'NoSuchKey' || e.Code === 'NoSuchKey'
     || e.name === 'NotFound' || e.Code === 'NotFound'
-    || e.name === '404' || (e as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) {
+    || e.name === '404' || e.$metadata?.httpStatusCode === 404) {
     return {
       ...HaiStorageError.NOT_FOUND,
       message: storageM('storage_fileNotFound', {
@@ -94,7 +94,7 @@ function toStorageError(error: unknown, key?: string): HaiError {
     }
   }
 
-  if (e.name === 'AccessDenied' || e.Code === 'AccessDenied') {
+  if (e.name === 'AccessDenied' || e.Code === 'AccessDenied' || e.$metadata?.httpStatusCode === 403) {
     return {
       ...HaiStorageError.PERMISSION_DENIED,
       message: storageM('storage_permissionDenied', {

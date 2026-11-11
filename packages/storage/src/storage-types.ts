@@ -340,7 +340,8 @@ export interface FileOperations {
    * @param key - 文件键/路径
    * @param data - 文件内容（Buffer、Uint8Array、字符串或异步字节流）
    * @param options - 上传选项
-   * @returns 上传结果包含文件元数据
+   * @returns 成功包含文件元数据。失败包含错误码和消息，底层原因可用时保留在 error.cause。
+   * `ifNoneMatch: '*'` 的目标冲突返回 ALREADY_EXISTS，上传源读取失败返回 UPLOAD_FAILED。
    * @example
    * ```ts
    * const result = await storage.file.put('uploads/a.txt', 'hello')

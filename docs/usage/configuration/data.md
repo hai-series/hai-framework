@@ -167,6 +167,8 @@ operationLog: { read: false, write: true, maxLength: 1000 }
 
 存储业务操作失败仍返回原错误，同时记录 `warn`。初始化、连接和关闭失败记录 `error`。应用可用 `HAI_STORAGE_OPERATIONLOG_WRITE=false` 关闭写操作的 `debug` 记录。移除旧的 `operationLog.level` 和 `HAI_STORAGE_OPERATIONLOG_LEVEL`，通过 `HAI_CORE_LOGGING_LEVEL` 过滤日志。
 
+使用 `createReadStream()` 上传时，源文件打开或读取失败会返回 `UPLOAD_FAILED`，底层原因在 `error.cause`。条件写的目标冲突仍返回 `ALREADY_EXISTS`，主动取消保留取消信号的 `reason`。`warn` 记录对应的脱敏原因摘要。
+
 在 YAML 中设置 `prefix: orders/`，或在注册了 `StorageConfigSchema` 的应用中设置 `HAI_STORAGE_PREFIX=orders/`。调用 `storage.file.put('report.pdf', bytes)` 后，桶内保存的键为 `orders/report.pdf`。之后读、删、签名仍传 `report.pdf`。初始化探测和默认列表都查询 `orders/`，配置值写成 `orders` 也会按同一目录查询。修改前缀不会搬迁已有对象，切换前先处理数据迁移。
 
 如果应用凭据只能访问这个目录，使用预先创建的桶和 `createBucket: false`，将对象权限限制到 `arn:aws:s3:::orders-private/orders/*`，并给 `s3:ListBucket` 设置 `s3:prefix` 条件 `orders/*`。可用该凭据验证初始化、列表和上传，再核对 S3 拒绝前缀外的访问。

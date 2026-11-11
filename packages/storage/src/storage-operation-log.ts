@@ -2,11 +2,35 @@ import type { HaiError, HaiResult } from '@h-ai/core'
 import type { StorageProvider } from './providers/storage-provider-types.js'
 import type { StorageOperationLogConfig } from './storage-config.js'
 import { Buffer } from 'node:buffer'
-import { core, ok } from '@h-ai/core'
+import { getSystemErrorMessage } from 'node:util'
+import { core, err, ok } from '@h-ai/core'
+import { storageM } from './storage-i18n.js'
+import { uploadWithSource } from './storage-stream.js'
 import { HaiStorageError } from './storage-types.js'
 
 const logger = core.logger.child({ module: 'storage', scope: 'operations' })
-const ERROR_NAME = /^[\w-]{1,80}$/
+const ERROR_NAME = /^[\w:-]{1,80}$/
+const FAILURE_REASONS: Readonly<Record<string, string>> = {
+  [HaiStorageError.CONNECTION_FAILED.code]: 'Storage connection or cleanup failed',
+  [HaiStorageError.OPERATION_FAILED.code]: 'Storage operation failed',
+  [HaiStorageError.NOT_FOUND.code]: 'Storage object was not found',
+  [HaiStorageError.ALREADY_EXISTS.code]: 'Destination object already exists',
+  [HaiStorageError.PERMISSION_DENIED.code]: 'Storage access was denied',
+  [HaiStorageError.QUOTA_EXCEEDED.code]: 'Storage quota or disk space was exhausted',
+  [HaiStorageError.INVALID_PATH.code]: 'Storage path was invalid',
+  [HaiStorageError.IO_ERROR.code]: 'Storage read or write failed',
+  [HaiStorageError.NETWORK_ERROR.code]: 'Storage network request failed',
+  [HaiStorageError.NOT_INITIALIZED.code]: 'Storage provider was not initialized',
+  [HaiStorageError.UNSUPPORTED_TYPE.code]: 'Storage provider type was unsupported',
+  [HaiStorageError.CONFIG_ERROR.code]: 'Storage configuration was invalid',
+  [HaiStorageError.PRESIGN_FAILED.code]: 'Could not sign a storage URL',
+  [HaiStorageError.UPLOAD_FAILED.code]: 'Could not read the upload source',
+  [HaiStorageError.DOWNLOAD_FAILED.code]: 'Storage download failed',
+  [HaiStorageError.CHECKSUM_FAILED.code]: 'Could not calculate the checksum',
+  [HaiStorageError.INVALID_CHECKSUM.code]: 'Checksum input was invalid',
+  [HaiStorageError.UNSUPPORTED_OPERATION.code]: 'Storage provider does not support this operation',
+  [HaiStorageError.INVALID_LIST_OPTIONS.code]: 'Storage list options or cursor were invalid',
+}
 
 /**
  * Provider 对外的三组业务操作。
@@ -45,24 +69,35 @@ type Summary = Record<string, number | undefined>
  * void fields.code
  * ```
  */
-export function storageErrorContext(code: HaiError['code'], cause?: unknown): Record<string, unknown> {
-  if (typeof cause !== 'object' || cause === null)
-    return { code }
-  const reason = 'code' in cause
-    ? cause.code
-    : ('name' in cause
-        ? cause.name
-        : undefined)
-  const metadata = '$metadata' in cause
-    ? cause.$metadata
+export function storageErrorContext(code: HaiError['code'], cause?: unknown, cancelled = false): Record<string, unknown> {
+  const details = cause && typeof cause === 'object'
+    ? cause
+    : {}
+  const name = 'name' in details
+    ? details.name
+    : undefined
+  const causeCode = 'code' in details && typeof details.code === 'string'
+    ? details.code
+    : name
+  const errno = 'errno' in details
+    ? details.errno
+    : undefined
+  const metadata = '$metadata' in details
+    ? details.$metadata
     : undefined
   const status = typeof metadata === 'object' && metadata !== null && 'httpStatusCode' in metadata
     ? metadata.httpStatusCode
     : undefined
   return {
     code,
-    causeCode: typeof reason === 'string' && ERROR_NAME.test(reason)
-      ? reason
+    reason: cancelled || name === 'AbortError' || causeCode === 'ABORT_ERR'
+      ? 'Storage operation was cancelled'
+      : FAILURE_REASONS[code] ?? 'Storage operation failed',
+    causeCode: typeof causeCode === 'string' && ERROR_NAME.test(causeCode)
+      ? causeCode
+      : undefined,
+    systemReason: typeof errno === 'number' && Number.isInteger(errno) && errno < 0 && errno >= -2147483648
+      ? getSystemErrorMessage(errno)
       : undefined,
     httpStatus: typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599
       ? status
@@ -70,10 +105,22 @@ export function storageErrorContext(code: HaiError['code'], cause?: unknown): Re
   }
 }
 
-function warnFailure(operation: string, code: HaiError['code'], cause?: unknown): void {
+function warnFailure(operation: string, failure: Pick<HaiError, 'code' | 'cause' | 'ext'>, signal?: AbortSignal): void {
+  const batch = failure.ext?.deleteMany
+  const failures = batch && typeof batch === 'object' && 'failures' in batch && Array.isArray(batch.failures)
+    ? batch.failures
+    : undefined
   logger.warn('Storage operation failed', {
     operation,
-    ...storageErrorContext(code, cause),
+    ...storageErrorContext(failure.code, failure.cause, signal?.aborted && Object.is(failure.cause, signal.reason)),
+    failedCount: failures?.length,
+    failureCodes: failures && [
+      ...new Set(failures.slice(0, 32).flatMap((item: unknown) => {
+        if (typeof item === 'object' && item !== null && 'code' in item && typeof item.code === 'string' && ERROR_NAME.test(item.code))
+          return [item.code]
+        return []
+      })),
+    ],
   })
 }
 
@@ -85,17 +132,16 @@ function warnFailure(operation: string, code: HaiError['code'], cause?: unknown)
  * if (result.success) void result.data
  * ```
  */
-export async function logStorageResult<Result extends HaiResult<unknown>>(operation: string, pending: Promise<Result>): Promise<Result> {
-  let result: Result
-  try {
-    result = await pending
-  }
-  catch (cause) {
-    warnFailure(operation, HaiStorageError.OPERATION_FAILED.code, cause)
-    throw cause
-  }
+export async function logStorageResult<Value>(operation: string, pending: Promise<HaiResult<Value>>, signal?: AbortSignal): Promise<HaiResult<Value>> {
+  const result = await pending.catch((cause: unknown) => err(HaiStorageError.OPERATION_FAILED, storageM('storage_operationFailed', {
+    params: {
+      error: cause instanceof Error
+        ? cause.message
+        : storageM('storage_unknownError'),
+    },
+  }), cause))
   if (!result.success)
-    warnFailure(operation, result.error.code, result.error.cause)
+    warnFailure(operation, result.error, signal)
   return result
 }
 
@@ -104,7 +150,7 @@ async function* logReadStream(stream: AsyncIterable<Uint8Array>): AsyncIterable<
     yield* stream
   }
   catch (cause) {
-    warnFailure('file.getStream', HaiStorageError.OPERATION_FAILED.code, cause)
+    warnFailure('file.getStream', { code: HaiStorageError.DOWNLOAD_FAILED.code, cause })
     throw cause
   }
 }
@@ -132,20 +178,23 @@ function debugOperation(config: StorageOperationLogConfig | undefined, category:
  */
 export function withStorageOperationLogs(provider: StorageOperations, config?: StorageOperationLogConfig): StorageOperations {
   const { file, dir, presign } = provider
-  function run<Result extends HaiResult<unknown>>(category: Category, operation: string, invoke: () => Promise<Result>, summary?: Summary): Promise<Result> {
+  function run<Value>(category: Category, operation: string, invoke: () => Promise<HaiResult<Value>>, summary?: Summary): Promise<HaiResult<Value>> {
     debugOperation(config, category, operation, summary)
     return logStorageResult(operation, invoke())
   }
 
   return {
     file: {
-      put: (key, data, options) => run('write', 'file.put', () => file.put(key, data, options), {
-        byteLength: typeof data === 'string'
-          ? Buffer.byteLength(data)
-          : data instanceof Uint8Array
-            ? data.byteLength
-            : undefined,
-      }),
+      put(key, data, options) {
+        debugOperation(config, 'write', 'file.put', {
+          byteLength: typeof data === 'string'
+            ? Buffer.byteLength(data)
+            : data instanceof Uint8Array
+              ? data.byteLength
+              : undefined,
+        })
+        return logStorageResult('file.put', uploadWithSource(data, options?.signal, input => file.put(key, input, options)), options?.signal)
+      },
       get: (key, options) => run('read', 'file.get', () => file.get(key, options)),
       async getStream(key, options) {
         const result = await run('read', 'file.getStream', () => file.getStream(key, options))

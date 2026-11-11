@@ -320,6 +320,8 @@ await storage.init({
 
 设置 `HAI_STORAGE_OPERATIONLOG_WRITE=false` 可关闭写操作的 `debug` 记录。升级时移除原有的 `operationLog.level` 和 `HAI_STORAGE_OPERATIONLOG_LEVEL`，通过 `HAI_CORE_LOGGING_LEVEL` 调整全局阈值。
 
+`storage.file.put()` 失败时通过 `error.code` 和 `error.message` 区分场景，底层原因可用时保留在 `error.cause`。`ifNoneMatch: '*'` 的目标冲突返回 `ALREADY_EXISTS`，读取 `createReadStream()` 等上传源失败返回 `UPLOAD_FAILED`。主动取消保留 `AbortSignal.reason`。对应告警包含原因摘要及可用的底层错误码和 HTTP 状态。
+
 `storage.presign.putUrl()` 当前仅支持 `contentType` 与 `expiresIn` 等签名参数，不提供 `maxSize` 约束。
 
 本地 `storage.dir.list()` 将 `prefix` 作为 key 字符串前缀（如 `reports/2026-`），按 UTF-8 字节序分页。`maxKeys` 为 1–1000 的整数，默认 1000，`files` 与 `commonPrefixes` 共用该预算。`delimiter` 将前缀之后首次出现的分隔符及其后内容折叠为一个 `commonPrefixes` 条目；空字符串不折叠，空物理目录不生成条目。这些分组与计数规则参照 [S3 ListObjectsV2](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html).

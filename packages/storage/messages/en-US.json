@@ -31,6 +31,7 @@
   "storage_s3ClientNotInitialized": "S3 client not initialized",
   "storage_s3ConfigNotInitialized": "S3 config not initialized",
   "storage_uploadCanceled": "Upload canceled",
+  "storage_uploadSourceReadFailed": "Could not read the upload source file or input stream",
   "storage_downloadCanceled": "Download canceled",
   "storage_uploadFailedStatus": "Upload failed (status {status}): {statusText}",
   "storage_downloadFailedStatus": "Download failed (status {status}): {statusText}",

@@ -51,7 +51,7 @@ const METADATA_DIRECTORY = '.hai-storage-meta'
  * @returns 统一的 StorageError
  */
 function toStorageError(error: unknown, key?: string): HaiError {
-  const e = error as NodeJS.ErrnoException
+  const e = (error ?? {}) as NodeJS.ErrnoException
 
   if (e.code === 'EEXIST') {
     return {

@@ -31,6 +31,7 @@
   "storage_s3ClientNotInitialized": "S3 客户端未初始化",
   "storage_s3ConfigNotInitialized": "S3 配置未初始化",
   "storage_uploadCanceled": "上传已取消",
+  "storage_uploadSourceReadFailed": "无法读取上传源文件或输入流",
   "storage_downloadCanceled": "下载已取消",
   "storage_uploadFailedStatus": "上传失败（状态码 {status}）：{statusText}",
   "storage_downloadFailedStatus": "下载失败（状态码 {status}）：{statusText}",
