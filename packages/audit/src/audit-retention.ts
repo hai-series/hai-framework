@@ -79,7 +79,7 @@ async function installTimeIndex(sql: DmlOperations): Promise<HaiResult<unknown>>
  * @example 模块内部上下文
  * ```ts
  * const initialized = await initializeAuditStorage()
- * if (!initialized.success) return initialized
+ * if (!initialized.success) throw new Error(initialized.error.message)
  * ```
  */
 export async function initializeAuditStorage(): Promise<HaiResult<void>> {
@@ -145,7 +145,7 @@ export async function initializeAuditStorage(): Promise<HaiResult<void>> {
  * @example 模块内部上下文
  * ```ts
  * const configured = await configureAuditRetention({ enabled: true, minDays: 90 })
- * if (!configured.success) return configured
+ * if (!configured.success) throw new Error(configured.error.message)
  * ```
  */
 export async function configureAuditRetention(policy: AuditInitConfig['retention']): Promise<HaiResult<void>> {
@@ -165,7 +165,7 @@ export async function configureAuditRetention(policy: AuditInitConfig['retention
  * @example 模块内部上下文
  * ```ts
  * const retention = await auditRetentionDays()
- * if (!retention.success) return retention
+ * if (!retention.success) throw new Error(retention.error.message)
  * ```
  */
 export async function auditRetentionDays(sql: DmlOperations = reldb.sql): Promise<HaiResult<number>> {

@@ -55,6 +55,6 @@ Android は `pnpm build --target app --platform android --runtime auto --debug` 
 
 ## 6. 更新と復旧
 
-公開済みの正確な対象版を調べ、`TARGET_VERSION` を置き換えて `hai upgrade TARGET_VERSION` を実行します。このコマンドは公開の完全性、package/lock/skill の差異、移行の前提を調べ、導入や上書きは行いません。必要な API・設定・skill を合わせて更新し、影響する検証と成果物の再構築を行います。
+公開済みの正確な対象版を調べ、`TARGET_VERSION` を置き換えて `hai upgrade TARGET_VERSION` を実行します。このコマンドは公開の完全性、package/lock/skill の差異を調べ、導入や上書きは行いません。必要な API・設定・skill を合わせて更新し、影響する検証と成果物の再構築を行います。
 
-永続データを変更する前に互換性のない書込を停止し、DB、セッションキャッシュ、オブジェクト、管理認証情報を保護します。移行手順は各モジュールが所有し、`reldb.migrateSchema(..., { dryRun: true })` は事前確認です。コンテナーの復旧は業務データや外部効果を取り消しません。復旧材料を保持し、配備版、health、ログイン、永続レコードを確認します。[更新手順](upgrade.md) · [復旧条件](../configuration/delivery.md#失败恢复与发布后回滚)
+永続データを変更する前に互換性のない書込を停止し、DB、セッションキャッシュ、オブジェクト、管理認証情報を保護します。データベースの複製で対象版の初期化を検証します。コンテナーの復旧は業務データや外部効果を取り消しません。復旧材料を保持し、配備版、health、ログイン、永続レコードを確認します。[更新手順](upgrade.md) · [復旧条件](../configuration/delivery.md#失败恢复与发布后回滚)

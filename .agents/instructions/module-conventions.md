@@ -176,7 +176,7 @@ function register(tool: Tool): HaiResult<void> {
 - 错误码段位与已有模块冲突（段位注册表见 hai-module-create §4）
 - 为单一实现新增 Provider / Factory / Strategy / Base 抽象
 - 同一模块混用扁平方法与子操作对象两种 API 风格
-- 做兼容性处理（开发期，不考虑兼容旧版本）
+- 在 Alpha/Beta 阶段为不同框架版本增加兼容分支、配置别名或数据迁移脚本
 - 在模块内为已有依赖包的类型定义本地鸭子类型接口：若 `dependencies` 中已有对应包，直接 import 使用真实类型；禁止以 `as unknown as` 强转规避类型不兼容
 - `as unknown as T` 类型强转：禁止用此模式绕过真实类型差异，应修改接口/函数签名使用正确的类型；合规例外：第三方库类型缺失时的 workaround（须加注释说明原因）
 - 将表名/缓存 key 定义在模块 main、全局 constants 或配置文件中，导致与实现分离

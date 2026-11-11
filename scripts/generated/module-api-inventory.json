@@ -17087,12 +17087,6 @@
               "kind": "type",
               "declaration": "ListAuditLogsOptions",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "migrateAudit",
-              "kind": "value",
-              "declaration": "migrateAudit",
-              "declarationKind": "FunctionDeclaration"
             }
           ]
         },
@@ -17229,12 +17223,6 @@
               "kind": "type",
               "declaration": "ListAuditLogsOptions",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "migrateAudit",
-              "kind": "value",
-              "declaration": "migrateAudit",
-              "declarationKind": "FunctionDeclaration"
             }
           ]
         },
@@ -17371,12 +17359,6 @@
               "kind": "type",
               "declaration": "ListAuditLogsOptions",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "migrateAudit",
-              "kind": "value",
-              "declaration": "migrateAudit",
-              "declarationKind": "FunctionDeclaration"
             }
           ]
         }
@@ -22046,12 +22028,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "importDeploymentSecrets",
-              "kind": "value",
-              "declaration": "importDeploymentSecrets",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "loadDeploymentConfig",
               "kind": "value",
               "declaration": "loadDeploymentConfig",
@@ -22344,12 +22320,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "importDeploymentSecrets",
-              "kind": "value",
-              "declaration": "importDeploymentSecrets",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "loadDeploymentConfig",
               "kind": "value",
               "declaration": "loadDeploymentConfig",
@@ -22640,12 +22610,6 @@
               "kind": "type",
               "declaration": "ImageSourceConfig",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "importDeploymentSecrets",
-              "kind": "value",
-              "declaration": "importDeploymentSecrets",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "loadDeploymentConfig",
@@ -24914,12 +24878,6 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "migrateIam",
-              "kind": "value",
-              "declaration": "migrateIam",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "OtpConfig",
               "kind": "type",
               "declaration": "OtpConfig",
@@ -25434,12 +25392,6 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "migrateIam",
-              "kind": "value",
-              "declaration": "migrateIam",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "OtpConfig",
               "kind": "type",
               "declaration": "OtpConfig",
@@ -25952,12 +25904,6 @@
               "kind": "value",
               "declaration": "LoginConfigSchema",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "migrateIam",
-              "kind": "value",
-              "declaration": "migrateIam",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "OtpConfig",
@@ -28307,12 +28253,6 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "migrateReach",
-              "kind": "value",
-              "declaration": "migrateReach",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "ProviderConfig",
               "kind": "type",
               "declaration": "ProviderConfig",
@@ -28575,12 +28515,6 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "migrateReach",
-              "kind": "value",
-              "declaration": "migrateReach",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "ProviderConfig",
               "kind": "type",
               "declaration": "ProviderConfig",
@@ -28841,12 +28775,6 @@
               "kind": "value",
               "declaration": "HaiReachError",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "migrateReach",
-              "kind": "value",
-              "declaration": "migrateReach",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "ProviderConfig",
@@ -29344,18 +29272,6 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "SchemaMigration",
-              "kind": "type",
-              "declaration": "SchemaMigration",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "SchemaMigrationPlan",
-              "kind": "type",
-              "declaration": "SchemaMigrationPlan",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "SqliteConfig",
               "kind": "type",
               "declaration": "SqliteConfig",
@@ -29702,18 +29618,6 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "SchemaMigration",
-              "kind": "type",
-              "declaration": "SchemaMigration",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "SchemaMigrationPlan",
-              "kind": "type",
-              "declaration": "SchemaMigrationPlan",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "SqliteConfig",
               "kind": "type",
               "declaration": "SqliteConfig",
@@ -30058,18 +29962,6 @@
               "kind": "value",
               "declaration": "ReldbTypeSchema",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "SchemaMigration",
-              "kind": "type",
-              "declaration": "SchemaMigration",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "SchemaMigrationPlan",
-              "kind": "type",
-              "declaration": "SchemaMigrationPlan",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "SqliteConfig",
@@ -30609,12 +30501,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "migrateScheduler",
-              "kind": "value",
-              "declaration": "migrateScheduler",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "scheduler",
               "kind": "value",
               "declaration": "scheduler",
@@ -30841,12 +30727,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "migrateScheduler",
-              "kind": "value",
-              "declaration": "migrateScheduler",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "scheduler",
               "kind": "value",
               "declaration": "scheduler",
@@ -31071,12 +30951,6 @@
               "kind": "type",
               "declaration": "LogQueryOptions",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "migrateScheduler",
-              "kind": "value",
-              "declaration": "migrateScheduler",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "scheduler",
@@ -35710,12 +35584,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "MarkdownBlockStyleKind",
               "kind": "type",
               "declaration": "MarkdownBlockStyleKind",
@@ -38174,12 +38042,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "MarkdownBlockStyleKind",
               "kind": "type",
               "declaration": "MarkdownBlockStyleKind",
@@ -40636,12 +40498,6 @@
               "kind": "value",
               "declaration": "mapPaginated",
               "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "MarkdownBlockStyleKind",
@@ -43530,12 +43386,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "MarkdownBlockStyleKind",
               "kind": "type",
               "declaration": "MarkdownBlockStyleKind",
@@ -45170,12 +45020,6 @@
               "kind": "value",
               "declaration": "mapPaginated",
               "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "MarkdownBlockStyleKind",
@@ -46814,12 +46658,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "MarkdownBlockStyleKind",
               "kind": "type",
               "declaration": "MarkdownBlockStyleKind",
@@ -47946,12 +47784,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "MarkdownBlockStyleKind",
               "kind": "type",
               "declaration": "MarkdownBlockStyleKind",
@@ -48208,12 +48040,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "MarkdownBlockStyleKind",
               "kind": "type",
               "declaration": "MarkdownBlockStyleKind",
@@ -48468,12 +48294,6 @@
               "kind": "value",
               "declaration": "isLanguageSupported",
               "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "MarkdownBlockStyleKind",
@@ -51894,12 +51714,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "MarkdownBlockStyleKind",
               "kind": "type",
               "declaration": "MarkdownBlockStyleKind",
@@ -53146,12 +52960,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "MarkdownBlockStyleKind",
               "kind": "type",
               "declaration": "MarkdownBlockStyleKind",
@@ -54396,12 +54204,6 @@
               "kind": "value",
               "declaration": "mapPaginated",
               "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "MarkdownBlockStyleKind",
