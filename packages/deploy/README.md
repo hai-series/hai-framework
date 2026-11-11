@@ -177,6 +177,8 @@ SSH 参数保存到选中环境的 `.env.<环境>.local`。`--bundle-only` 在�
 
 #### 私有对象存储直连
 
+预签名下载请求落入静态网站回退，或 SSR/API 网关收到应用的 404 时，Nginx 返回 HTTP 404 和独立的下载提示页。提示按浏览器语言显示中文、英文或日文。现有容器部署使用完整交付包更新代理规则，独立静态 Web 镜像使用更新后的 CLI 模板重新构建。[下载排查](../../docs/usage/configuration/data.md#下载链接无法访问)
+
 自建 S3 的 `endpoint` 使用 Compose 内部地址，浏览器地址用 `_storage.yml` 的 `publicEndpoint` 配置，例如 `https://app.example.com/delivery/files`。Nginx 对外开放 `/delivery/files/<bucket>/...`，去掉 `/delivery/files` 后将原始桶 URI、签名查询与 Host 直接转发 storage:9000，文件不经过 Serv；省略目录时继续使用根桶路径。入口可位于网站目录内，API/资源/健康路径冲突会在打包前失败。存储端口与控制台不公开，对象缓冲和签名日志关闭；S3 负责私有桶授权和跨源 CORS。外层代理须保留完整入口路径与 Host，只由 SDK 网关去掉前缀。
 
 自建配置保留 bucket/region/prefix/publicEndpoint/publicUrl/operationLog，只替换内部连接与托管凭据。首次增加网关或改变这些访问设置须全量部署，增量预检按配置摘要拒绝不一致；普通应用/存储增量刷新保留代理的服务 DNS，失败恢复使用旧拓扑。外部/保持连接不生成本地存储路由，Local 不公开私有目录。详见[存储配置手册](../../docs/usage/configuration/data.md#配置人员区分三个访问地址).

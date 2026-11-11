@@ -16,6 +16,7 @@ import { stringify } from 'yaml'
 import { generatedVariables, mergeEnvironmentLayers } from '../deploy-environment.js'
 import { usesDefaultMiddleware } from '../deploy-functions.js'
 import { mergeManagedMiddlewareConfig } from '../deploy-middleware-config.js'
+import { renderDownloadErrorLocation, renderDownloadErrorMaps } from './deploy-download-error.js'
 import { CERTBOT_IMAGE } from './deploy-https.js'
 
 /** sidecar 镜像固定版本，避免 `:latest` 漂移导致行为变化。 */
@@ -892,6 +893,7 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, options:
   }
 `).join('')
   return `include /tmp/hai-dns.conf;
+${renderDownloadErrorMaps()}
 ${renderResolvedUpstream('hai_serv_backend', 'serv', port)}${options.storageBucket
   ? renderStorageUpstream(options.storageBucket, options.storageBasePath)
   : ''}server {
@@ -1026,21 +1028,7 @@ export function generateApplicationProxyConfig(options: { primaryService: 'serv'
   const bodyLimits = resolveTransportBodyLimits(maxPlaintextBytes)
   const trustedEdges = renderTrustedEdgeProxies(options.trustedEdgeProxies)
   const forwardedProtocol = options.trustedEdgeProxies?.length ? '$hai_request_scheme' : '$scheme'
-  return `include /tmp/hai-dns.conf;
-${renderResolvedUpstream('hai_application_backend', primaryService, port)}${renderTrustedEdgeProtocol(options.trustedEdgeProxies)}${bucket
-  ? renderStorageUpstream(bucket, options.storageBasePath)
-  : ''}server {
-  listen 8080;
-  server_name _;
-${trustedEdges}  large_client_header_buffers 4 32k;
-${bucket
-  ? renderStorageLocation(bucket, reservedPaths, options.storageBasePath)
-  : ''}  location = /_hai/gateway-health {
-    access_log off;
-    return 200 'ok';
-  }
-  location / {
-    client_max_body_size ${bodyLimits.encryptedPayloadBytes};
+  const proxySettings = `    client_max_body_size ${bodyLimits.encryptedPayloadBytes};
     proxy_pass http://hai_application_backend;
     proxy_http_version 1.1;
     proxy_set_header Host $http_host;
@@ -1054,7 +1042,33 @@ ${bucket
     proxy_request_buffering off;
     proxy_buffering off;
     proxy_buffer_size 32k;
-    proxy_buffers 8 32k;
+    proxy_buffers 8 32k;`
+  return `include /tmp/hai-dns.conf;
+${renderDownloadErrorMaps()}
+${renderResolvedUpstream('hai_application_backend', primaryService, port)}${renderTrustedEdgeProtocol(options.trustedEdgeProxies)}${bucket
+  ? renderStorageUpstream(bucket, options.storageBasePath)
+  : ''}server {
+  listen 8080;
+  server_name _;
+${trustedEdges}  large_client_header_buffers 4 32k;
+${bucket
+  ? renderStorageLocation(bucket, reservedPaths, options.storageBasePath)
+  : ''}  location = /_hai/gateway-health {
+    access_log off;
+    return 200 'ok';
+  }
+${renderDownloadErrorLocation()}  location / {
+    recursive_error_pages on;
+    error_page 418 = @hai_download_proxy;
+    if ($hai_signed_download) { return 418; }
+${proxySettings}
+  }
+  location @hai_download_proxy {
+    access_log off;
+    error_log /dev/null;
+    proxy_intercept_errors on;
+    error_page 404 = @hai_download_unavailable;
+${proxySettings}
   }
 }
 `
@@ -1107,21 +1121,31 @@ map "$hai_trusted_edge:$http_x_forwarded_proto" $hai_request_scheme {
 function renderWebLocation(webBasePath: string): string {
   if (webBasePath && (!/^\/[\w.-]+(?:\/[\w.-]+)*$/.test(webBasePath) || webBasePath.split('/').some(segment => segment === '.' || segment === '..') || ['/health', '/_hai/web-health'].includes(webBasePath)))
     throw new Error('Invalid web base path')
-  return webBasePath
+  const fallback = `${renderDownloadErrorLocation()}  location @hai_spa_fallback {
+    error_page 418 = @hai_download_unavailable;
+    if ($hai_signed_download) { return 418; }
+    try_files /index.html =404;
+  }
+`
+  return fallback + (webBasePath
     ? `  absolute_redirect off;
   location = ${webBasePath} {
     return 308 ${webBasePath}/$is_args$args;
   }
   location ${webBasePath}/ {
     rewrite ^${webBasePath.replaceAll('.', '\\.').replaceAll('-', '\\-')}/(.*)$ /$1 break;
-    try_files $uri/index.html $uri /index.html =404;
+    try_files $uri/index.html $uri @hai_spa_fallback;
   }
-  location / { return 404; }
+  location / {
+    error_page 418 = @hai_download_unavailable;
+    if ($hai_signed_download) { return 418; }
+    return 404;
+  }
 `
     : `  location / {
-    try_files $uri $uri/ /index.html;
+    try_files $uri $uri/ @hai_spa_fallback;
   }
-`
+`)
 }
 
 /**
@@ -1138,7 +1162,8 @@ function renderWebLocation(webBasePath: string): string {
 export function generateStaticWebConfig(port: number, webBasePath: string): string {
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error('Invalid web proxy target')
-  return `server {
+  return `${renderDownloadErrorMaps()}
+server {
   listen ${port};
   server_name _;
   root /usr/share/nginx/html;

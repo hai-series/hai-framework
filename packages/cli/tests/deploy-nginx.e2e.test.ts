@@ -1,5 +1,6 @@
 /** 用与生产镜像相同的 Nginx 校验公开部署包，普通单测不探测或启动引擎。 */
 import type { DeployFixtureCleanupFailure, DeployTestFixture } from './helpers/deploy-container-fixture.js'
+import { Buffer } from 'node:buffer'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createECDH, createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
@@ -12,6 +13,7 @@ import { TLSSocket } from 'node:tls'
 import { resolveTransportBodyLimits } from '@h-ai/crypto'
 import { deploy } from '@h-ai/deploy'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
 import { createDeployFixtureCleanupReport, createDeployTestFixture, DEPLOY_FIXTURE_API_PORT, DEPLOY_FIXTURE_WEB_PORT, ensureDeployTestBaseImage, executeDeployTestFixture, removeDeployTestFixture, testContainerRuntimeCandidates } from './helpers/deploy-container-fixture.js'
 
 const enabled = process.env.HAI_DEPLOY_E2E === '1'
@@ -36,6 +38,239 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     // 其余协议夹具使用固定回环上游；地址变化用例另行启动实际 DNS 响应器。
     await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', 'printf "resolver 127.0.0.1:18053 valid=1s;\\nresolver_timeout 1s;\\n" > /tmp/hai-dns.conf'])
   }, 120_000)
+
+  it.each([
+    'admin',
+    'website',
+    'h5',
+    'api',
+    'mobile-app',
+    'fullstack',
+  ] as const)('%s 模板的错误下载链接返回独立提示页', async (kind) => {
+    if (!fixture)
+      throw new Error('Expected an owned Nginx fixture')
+    const owned = fixture
+    const generated = path.join(root, `download-template-${kind}`)
+    await generateFromTemplates(generated, buildTemplateContext({
+      name: `download-${kind}`,
+      appType: kind,
+      features: [],
+      frontends: kind === 'fullstack'
+        ? ['web', 'app', 'desktop']
+        : undefined,
+      packageManager: 'pnpm',
+    }))
+    const ssr = ['admin', 'website', 'h5'].includes(kind)
+    const api = kind === 'api'
+    const fullstack = kind === 'fullstack'
+    const project = path.join(root, `download-proxy-${kind}`)
+    const artifacts = path.join(project, 'artifacts')
+    mkdirSync(artifacts, { recursive: true })
+    mkdirSync(path.join(project, 'config'))
+    const packages = [
+      ...(ssr
+        ? ['@sveltejs/kit']
+        : []),
+      ...(api
+        ? ['@h-ai/storage']
+        : []),
+    ]
+    const dependencies = Object.fromEntries(packages.map(name => [name, '1']))
+    writeFileSync(path.join(project, 'package.json'), JSON.stringify({
+      name: `download-${kind}`,
+      version: '1.0.0',
+      dependencies,
+    }))
+    writeFileSync(path.join(project, 'pnpm-lock.yaml'), JSON.stringify({
+      lockfileVersion: '9.0',
+      importers: {
+        '.': { dependencies },
+      },
+      packages: Object.fromEntries(packages.map(name => [`${name}@1`, {}])),
+    }))
+    writeFileSync(path.join(project, '.env.test'), 'HAI_CORE_ENV=test\n')
+    writeFileSync(path.join(project, 'config/_serv.yml'), 'http:\n  apiPrefix: /api/v1\n')
+    if (ssr)
+      writeFileSync(path.join(project, 'svelte.config.js'), 'export default {}')
+    if (api)
+      writeFileSync(path.join(project, 'config/_storage.yml'), 'type: s3\nbucket: download-files\n')
+    const base = api ? '' : '/portal'
+    const imageNames = fullstack
+      ? ['serv', 'web']
+      : [
+          api ? 'serv' : 'web',
+        ]
+    const images = imageNames.map((name) => {
+      const content = `download-${kind}-${name}`
+      const file = `${name}-1.0.0.tar`
+      writeFileSync(path.join(artifacts, file), content)
+      return {
+        name,
+        file,
+        imageRef: `localhost/download-${kind}-${name}:gate`,
+        sha256: createHash('sha256').update(content).digest('hex'),
+        containerPort: name === 'web' && !ssr
+          ? 8080
+          : 3000,
+      }
+    })
+    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
+      version: base ? 5 : 4,
+      primaryService: fullstack || api
+        ? 'serv'
+        : 'web',
+      hasWeb: !api,
+      webBasePath: base,
+      appVersion: '1.0.0',
+      buildId: 'download-error-gate',
+      partial: false,
+      images,
+    }))
+    expect((await deploy.init({
+      provider: {
+        type: 'docker-ssh',
+        expose: { hostPort: 18080 },
+      },
+    })).success).toBe(true)
+    const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts })
+      .finally(() => deploy.close())
+    expect(bundle.success, bundle.success ? undefined : bundle.error.message).toBe(true)
+    if (!bundle.success || !bundle.data.bundlePath)
+      throw new Error('Expected a download error deployment bundle')
+    const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './.hai/web.conf'], { encoding: 'utf8', windowsHide: true })
+    const configurations = [
+      { mode: 'deploy', config: proxy, base },
+    ]
+    const imageConfig = path.join(generated, 'images/web/nginx.conf')
+    if (existsSync(imageConfig)) {
+      configurations.push({
+        mode: 'image',
+        config: readFileSync(imageConfig, 'utf8'),
+        base: '',
+      })
+    }
+    const zip = Buffer.from(`504b0506${'00'.repeat(18)}`, 'hex')
+    const files = path.join(project, 'files')
+    mkdirSync(path.join(files, 'portal'), { recursive: true })
+    mkdirSync(path.join(files, 'download-files'))
+    writeFileSync(path.join(files, 'index.html'), '<!doctype html><html lang="en"><title>Template page</title><body><main>Template page</main></body></html>')
+    for (const directory of ['', 'portal', 'download-files'])
+      writeFileSync(path.join(files, directory, 'ok.zip'), zip)
+    writeFileSync(path.join(files, 'runtime-config.js'), 'globalThis.__HAI_PUBLIC_CONFIG__={};')
+    await executeDeployTestFixture(runtime, owned, ['mkdir', '-p', '/tmp/hai-download-fixture'])
+    execFileSync(runtime, ['cp', `${files}/.`, `${owned.containerId}:/tmp/hai-download-fixture`], { windowsHide: true })
+    for (const { mode, config: source, base: mountedBase } of configurations) {
+      const backend = `server {
+        listen 3000;
+        root /tmp/hai-download-fixture;
+        location = /portal/deep/path { default_type text/html; return 200 '<!doctype html><title>Template page</title><main>Template page</main>'; }
+        location = /api/v1/probe { default_type application/json; return 200 '{"ok":true}'; }
+        location = /forbidden { default_type application/xml; return 403 '<Error>Denied</Error>'; }
+        location /api/v1/ { default_type application/json; return 404 '{"code":"missing"}'; }
+        location / { try_files $uri =404; }
+      }
+      server { listen 9000; root /tmp/hai-download-fixture; location / { try_files $uri =404; } }`
+      const actual = source
+        .replaceAll('server serv:', 'server 127.0.0.1:')
+        .replaceAll('server web:', 'server 127.0.0.1:')
+        .replaceAll('server storage:', 'server 127.0.0.1:')
+        .replaceAll('listen 8080;', `listen ${DEPLOY_FIXTURE_WEB_PORT};`)
+        .replaceAll('/usr/share/nginx/html', '/tmp/hai-download-fixture')
+        .replaceAll('/tmp/hai-runtime-config', '/tmp/hai-download-fixture')
+      const config = `pid /tmp/hai-download-nginx.pid;\nevents {}\nhttp {\ninclude /etc/nginx/mime.types;\n${actual}\n${backend}\n}\n`
+      const file = path.join(project, `nginx-${mode}.conf`)
+      writeFileSync(file, config)
+      execFileSync(runtime, ['cp', file, `${owned.containerId}:/tmp/hai-download-nginx.conf`], { windowsHide: true })
+      const evidenceDirectory = process.env.HAI_DEPLOY_E2E_DOWNLOAD_EVIDENCE_DIR
+      if (evidenceDirectory) {
+        mkdirSync(evidenceDirectory, { recursive: true })
+        writeFileSync(path.join(evidenceDirectory, `${kind}-${mode}.conf`), config)
+      }
+      await executeDeployTestFixture(runtime, owned, [
+        'nginx',
+        '-t',
+        '-c',
+        '/tmp/hai-download-nginx.conf',
+      ])
+      let started = false
+      try {
+        await executeDeployTestFixture(runtime, owned, ['nginx', '-c', '/tmp/hai-download-nginx.conf'])
+        started = true
+        const origin = `http://127.0.0.1:${owned.webHostPort}`
+        const target = `${origin}${mountedBase}/files/missing.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=synthetic-download-signature`
+        for (const [language, title] of [
+          ['zh-CN', '下载链接无法访问'],
+          ['en-US', 'Download link unavailable'],
+          ['ja-JP', 'ダウンロードリンクにアクセスできません'],
+        ]) {
+          const response = await fetch(target, {
+            headers: { 'Accept-Language': language },
+            signal: AbortSignal.timeout(5000),
+          })
+          expect(response.status).toBe(404)
+          expect(response.headers.get('content-type')).toContain('text/html')
+          expect(response.headers.get('cache-control')).toContain('no-store')
+          const page = await response.text()
+          expect(page).toContain(title)
+          expect(page).not.toContain('synthetic-download-signature')
+          expect(page).not.toContain('<script')
+        }
+        const head = await fetch(target, {
+          method: 'HEAD',
+          signal: AbortSignal.timeout(5000),
+        })
+        expect(head.status).toBe(404)
+        expect(await head.text()).toBe('')
+        if (mountedBase && !ssr) {
+          const outside = await fetch(target.replace(mountedBase, ''), {
+            signal: AbortSignal.timeout(5000),
+          })
+          expect(outside.status).toBe(404)
+          expect(await outside.text()).toContain('下载链接无法访问')
+        }
+        if (!api || mode === 'image') {
+          const deepLink = await fetch(`${origin}${mountedBase}/deep/path`, {
+            signal: AbortSignal.timeout(5000),
+          })
+          expect(deepLink.status).toBe(200)
+          expect(await deepLink.text()).toContain('Template page')
+        }
+        const downloadPath = api
+          ? '/download-files/ok.zip'
+          : `${mountedBase}/ok.zip`
+        const download = await fetch(`${origin}${downloadPath}`, {
+          signal: AbortSignal.timeout(5000),
+        })
+        expect(download.status).toBe(200)
+        expect(download.headers.get('content-type')).toContain('application/zip')
+        expect(Buffer.from(await download.arrayBuffer())).toEqual(zip)
+        const range = await fetch(`${origin}${downloadPath}`, {
+          headers: { Range: 'bytes=0-3' },
+          signal: AbortSignal.timeout(5000),
+        })
+        expect(range.status).toBe(206)
+        expect(Buffer.from(await range.arrayBuffer())).toEqual(zip.subarray(0, 4))
+        if (ssr || api || (fullstack && mode === 'deploy')) {
+          const missingApi = await fetch(`${origin}/api/v1/missing`, {
+            signal: AbortSignal.timeout(5000),
+          })
+          expect(missingApi.status).toBe(404)
+          expect(await missingApi.json()).toEqual({ code: 'missing' })
+        }
+        if (ssr || api) {
+          const denied = await fetch(`${origin}/forbidden?X-Amz-Signature=synthetic-download-signature`, {
+            signal: AbortSignal.timeout(5000),
+          })
+          expect(denied.status).toBe(403)
+          expect(await denied.text()).toBe('<Error>Denied</Error>')
+        }
+      }
+      finally {
+        if (started)
+          await executeDeployTestFixture(runtime, owned, ['sh', '-ec', 'nginx -s quit -c /tmp/hai-download-nginx.conf; for n in 1 2 3 4 5 6 7 8 9 10; do [ ! -e /tmp/hai-download-nginx.pid ] && exit 0; sleep 0.1; done; exit 1'])
+      }
+    }
+  }, 90_000)
 
   it('后端地址变化后真实 Nginx 自动恢复，无需重启 Web', async () => {
     if (!fixture)

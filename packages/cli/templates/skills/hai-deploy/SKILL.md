@@ -98,6 +98,8 @@ Serv/SvelteKit 后端的策略快照、只读挂载、环境覆盖、代理信�
 
 ## 自建对象存储直连
 
+签名下载误入静态网站回退或在 SSR/API 网关收到应用 404 时，Nginx 返回独立的 404 提示页。重复失败时，检查生效的 `HAI_STORAGE_PUBLICENDPOINT` 和实际代理路由，再签发新链接验证。升级已有代理规则使用完整交付包，独立静态 Web 镜像从更新后的模板重建。
+
 S3 的内部 endpoint 与预签名 publicEndpoint 分开；后者无默认，填用户可访问的 HTTP(S) origin，不含桶名或网站目录。全栈 Web Nginx 及 SSR/API gateway 将实际桶路径原样代理至 storage，不经过 Serv，保留签名 Host/URI/query，关闭对象缓冲和签名日志。桶与网站/API 路径不能重叠；外层反向代理也须转发桶路径，不能把网站 base 加到签名 URL。跨源 CORS 在 S3 配置，私有桶保持签名授权；外部 S3 不生成本地路由，Local 不开放目录。
 
 自建保留 bucket/region/prefix/publicEndpoint/publicUrl/operationLog。增加 gateway 或改变这些访问配置需全量基线，增量摘要不一致在更新前拒绝；选中范围不改变完整拓扑规划。应用/Storage 增量刷新保留代理 DNS，恢复使用旧发布拓扑。验证真实 S3+Nginx 大文件、Range、PUT、匿名/篡改/过期拒绝，并核对外层日志和回滚；不能用只检查生成字符串代替网络验证。

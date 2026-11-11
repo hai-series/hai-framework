@@ -1,12 +1,14 @@
 {{! @skipIfEmpty }}
 {{#if fullstack.frontends.web}}
+{{{nginxDownloadErrors "http"}}}
 server {
   listen 8080;
   server_name _;
   root /usr/share/nginx/html;
 
+{{{nginxDownloadErrors "server"}}}
   location / {
-    try_files $uri $uri/ /index.html;
+    try_files $uri $uri/ @hai_spa_fallback;
   }
 
   location = /runtime-config.js {

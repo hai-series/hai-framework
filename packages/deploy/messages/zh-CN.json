@@ -137,5 +137,7 @@
   "deploy_middlewareMethod": "请输入 POST 或 PUT。",
   "deploy_configResolutionFailed": "无法解析 {path}。请检查 {fields} 对应的配置结构与数组索引。",
   "deploy_reachEmptyProviderOverride": "解析 {path} 的生效配置时发现 {field} 指向不存在的 Provider。HAI_REACH_PROVIDERS 当前为 []。请删除旧的索引变量，并在 .env.<环境>.local 中用 HAI_REACH_PROVIDERS 配置完整的通知 Provider 列表。",
-  "deploy_s3Engine": "选择自建 S3 服务实现"
+  "deploy_s3Engine": "选择自建 S3 服务实现",
+  "deploy_downloadUnavailableTitle": "下载链接无法访问",
+  "deploy_downloadUnavailableInstruction": "请返回下载页面重新获取链接。若仍无法下载，请联系管理员。"
 }

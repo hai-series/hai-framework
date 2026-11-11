@@ -137,5 +137,7 @@
   "deploy_middlewareMethod": "POST または PUT を入力してください。",
   "deploy_configResolutionFailed": "{path} を解決できません。{fields} に対応する設定の構造と配列インデックスを確認してください。",
   "deploy_reachEmptyProviderOverride": "{path} の有効な設定を解決できません。HAI_REACH_PROVIDERS が [] のため、{field} に対応するプロバイダーがありません。古いインデックス付き変数を削除し、.env.<環境>.local の HAI_REACH_PROVIDERS に通知プロバイダーの完全な一覧を設定してください。",
-  "deploy_s3Engine": "セルフホスト S3 の実装を選択"
+  "deploy_s3Engine": "セルフホスト S3 の実装を選択",
+  "deploy_downloadUnavailableTitle": "ダウンロードリンクにアクセスできません",
+  "deploy_downloadUnavailableInstruction": "ダウンロードページに戻り、新しいリンクを取得してください。解決しない場合は管理者にお問い合わせください。"
 }

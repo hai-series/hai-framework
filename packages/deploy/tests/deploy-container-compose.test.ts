@@ -670,7 +670,7 @@ describe('generateComposeFile', () => {
     expect(proxy).toContain('proxy_buffer_size 32k;')
     expect(proxy).toContain('proxy_buffers 8 32k;')
     expect(proxy).toContain('proxy_request_buffering off;')
-    expect(proxy).toContain('try_files $uri $uri/ /index.html;')
+    expect(proxy).toContain('try_files $uri $uri/ @hai_spa_fallback;')
     expect(() => generateWebProxyConfig(3001, '/api; injected')).toThrow()
   })
   it('生成 serv 服务并映射端口', () => {

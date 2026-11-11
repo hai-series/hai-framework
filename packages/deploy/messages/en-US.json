@@ -137,5 +137,7 @@
   "deploy_middlewareMethod": "Enter POST or PUT.",
   "deploy_configResolutionFailed": "Cannot resolve {path}. Check the configuration structure and array indices for {fields}.",
   "deploy_reachEmptyProviderOverride": "While resolving {path}, {field} refers to a missing provider because HAI_REACH_PROVIDERS is []. Remove stale indexed variables and set HAI_REACH_PROVIDERS to the complete notification provider list in .env.<environment>.local.",
-  "deploy_s3Engine": "Choose the self-hosted S3 implementation"
+  "deploy_s3Engine": "Choose the self-hosted S3 implementation",
+  "deploy_downloadUnavailableTitle": "Download link unavailable",
+  "deploy_downloadUnavailableInstruction": "Return to the download page to get a new link. If the download still fails, contact your administrator."
 }

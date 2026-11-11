@@ -23,6 +23,9 @@ import { generateConfigFile } from './cli-config-templates.js'
 
 // 注册自定义 Handlebars helpers
 Handlebars.registerHelper('deploymentConfig', () => JSON.stringify(parse(generateConfigFile('deploy')), null, 2))
+// 静态 Web 模板内联同一份提示页配置，镜像运行时直接由 Nginx 返回。
+Handlebars.registerHelper('nginxDownloadErrors', (scope: 'http' | 'server') =>
+  fse.readFileSync(path.join(getTemplatesRoot(), 'shared', 'download-error', `${scope}.conf`), 'utf8'))
 Handlebars.registerHelper('if_eq', function (this: unknown, a: unknown, b: unknown, options: Handlebars.HelperOptions) {
   return a === b
     ? options.fn(this)
