@@ -73,15 +73,21 @@ describe.skipIf(!enabled)('私有 S3 公开下载网关', { concurrent: false },
       }))
       const bytes = randomBytes(5 * 1024 * 1024 + 17)
       const key = '资料 +%/large-file.bin'
+      const gatewayConfigReady = '/tmp/hai-storage-proxy-ready'
+      const gatewayWaitingMessage = 'Waiting for generated gateway configuration'
+      const gatewayStartup = `echo '${gatewayWaitingMessage}'
+until [ -f ${gatewayConfigReady} ]; do sleep 0.1; done
+exec nginx -g 'daemon off;'`
       for (const { kind, storageBasePath } of ['fullstack', 'api', 'sveltekit'].flatMap(kind => ['', '/delivery/files.v1'].map(storageBasePath => ({ kind, storageBasePath })))) {
         topology = `${kind}:${storageBasePath || 'root'}`
         const webBasePath = storageBasePath ? '/delivery' : '/portal'
         phase = 'start independent gateway'
-        // 每种应用独立部署；不让上一拓扑的保活连接跨越下一次网关重载。
+        // 先分配本轮网关的宿主端口以生成公开地址，等交付配置写好再启动 Nginx。
         nginx = await new GenericContainer('docker.io/nginxinc/nginx-unprivileged:1.29.8-alpine')
           .withNetwork(network)
           .withExposedPorts(8080)
-          .withWaitStrategy(Wait.forHttp('/', 8080))
+          .withCommand(['sh', '-ec', gatewayStartup])
+          .withWaitStrategy(Wait.forLogMessage(gatewayWaitingMessage))
           .start()
         writeFileSync(path.join(root, 'resources.json'), JSON.stringify({
           network: network.getId(),
@@ -193,7 +199,7 @@ describe.skipIf(!enabled)('私有 S3 公开下载网关', { concurrent: false },
           throw new Error('Expected a storage deployment bundle')
         const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './.hai/web.conf'], { encoding: 'utf8', windowsHide: true })
         const startup = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './.hai/proxy-start.sh'], { encoding: 'utf8', windowsHide: true })
-        // 夹具保留已经运行的 Nginx；执行交付入口钩子后再加载本轮公开配置。
+        // 执行交付入口钩子并校验生成配置，再启动网关，避免默认站点的旧 worker 响应请求。
         expect(startup).toContain('/etc/resolv.conf')
         execFileSync(runtime, [
           'exec',
@@ -215,11 +221,10 @@ describe.skipIf(!enabled)('私有 S3 公开下载网关', { concurrent: false },
         execFileSync(runtime, [
           'exec',
           nginx.getId(),
-          'nginx',
-          '-s',
-          'reload',
+          'touch',
+          gatewayConfigReady,
         ], { windowsHide: true, timeout: 20_000, stdio: 'pipe' })
-        phase = 'wait for gateway reload'
+        phase = 'wait for generated gateway'
         const healthPath = kind === 'fullstack'
           ? '/_hai/web-health'
           : '/_hai/gateway-health'
