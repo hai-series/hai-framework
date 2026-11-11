@@ -245,6 +245,18 @@ exec nginx -g 'daemon off;'`
           throw new Error('Expected a presigned download')
         expect(new URL(signed.data).origin).toBe(publicOrigin)
         expect(new URL(signed.data).pathname).toBe(`${storageBasePath}/${bucket}/private/${key.split('/').map(encodeURIComponent).join('/')}`)
+        const unsigned = new URL(signed.data)
+        unsigned.search = ''
+        phase = 'wait for storage upstream'
+        // 网关健康路径只证明 Nginx 已监听。等待动态 DNS 找到对象存储，再验证签名下载。
+        await expect.poll(async () => {
+          const response = await fetch(unsigned, {
+            method: 'HEAD',
+            signal: AbortSignal.timeout(3000),
+          })
+          await response.body?.cancel()
+          return response.status
+        }, { timeout: 10_000 }).toBe(403)
         const download = await request(signed.data)
         if (download.status !== 200) {
           const body = await download.text()
@@ -268,8 +280,6 @@ exec nginx -g 'daemon off;'`
         expect(range.status).toBe(206)
         expect(range.headers.get('content-range')).toBe(`bytes 1024-4095/${bytes.length}`)
         expect(Buffer.from(await range.arrayBuffer())).toEqual(bytes.subarray(1024, 4096))
-        const unsigned = new URL(signed.data)
-        unsigned.search = ''
         const denied = await request(unsigned)
         expect(denied.status).toBe(403)
         await denied.body?.cancel()
