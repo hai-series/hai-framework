@@ -14,8 +14,14 @@ if [ -r "$ubuntu_sources" ]; then
   trap 'rm -f "$sources"' EXIT
   chmod 0644 "$sources"
   set -- "$@" -o "Dir::Etc::sourcelist=$sources" -o Dir::Etc::sourceparts=-
+  suite=$(awk '$1=="Suites:" {print $2; exit}' "$ubuntu_sources")
+  test -n "$suite"
   installed=false
-  for archive in https://archive.ubuntu.com/ubuntu https://us.archive.ubuntu.com/ubuntu; do
+  for archive in https://archive.ubuntu.com/ubuntu https://mirrors.edge.kernel.org/ubuntu https://mirror.math.princeton.edu/pub/ubuntu; do
+    if ! curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+      --connect-timeout 6 --max-time 12 --output /dev/null "$archive/dists/$suite/InRelease"; then
+      continue
+    fi
     sed "s|^URIs:.*$|URIs: $archive|" "$ubuntu_sources" > "$sources"
     printf 'Preparing sandbox packages from %s\n' "$archive"
     if install_sandbox_packages "$@"; then
@@ -23,7 +29,10 @@ if [ -r "$ubuntu_sources" ]; then
       break
     fi
   done
-  test "$installed" = true
+  if [ "$installed" = false ]; then
+    printf 'Could not install the Ubuntu packages required for sandbox validation.\n' >&2
+    exit 1
+  fi
 else
   install_sandbox_packages "$@"
 fi

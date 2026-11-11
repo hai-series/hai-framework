@@ -53,7 +53,7 @@ flowchart TD
 
 构建产物和 Turbo 内容缓存由同一轮构建准备，通过 `ci-build-state-<runId>-<attempt>` 传给检查。共享包同时包含 `packages/*/dist`、应用私有包的 `apps/*/dist`、静态站点 `apps/*/build`、SvelteKit/适配器输出和 Turbo 缓存，不只传框架包。启动器直接消费的应用产物必须实际存在；缓存中的压缩记录不能代替这些文件。依赖任务仍由 Turbo 校验输入并恢复必要输出；上游构建失败不启动依赖它的检查。官网额外直接构建一次，确保 `build-metadata.json` 中的提交号属于本次提交。
 
-可信 Linux runner 用独立的 Ubuntu 官方 HTTPS 源安装 bubblewrap 和 AppArmor 工具。沿用 runner 的发行版、组件和包签名配置。主镜像失败时尝试官方区域镜像，两者失败会停止验收。安装成功后加载发行版的 `bwrap-userns-restrict` profile。Codex 镜像使用发行版的 bubblewrap。容器预检在断网的一次性 Podman 容器中运行 `codex sandbox`，验证工作区内读写成功且工作区外写入被拒绝。宿主预检在独立临时工程及 `CODEX_HOME` 下验证工作区读写。两项预检均不接收上游密钥，失败即阻断真实验收。 [Codex 官方沙箱说明](https://learn.chatgpt.com/docs/sandboxing)
+可信 Linux runner 使用 Ubuntu 的 HTTPS 软件源安装 bubblewrap 和 AppArmor 工具。先检查主源是否可达，失败时依次尝试 kernel.org 和 Princeton 的镜像。各源沿用 runner 的发行版、组件和 Ubuntu 包签名配置。安装成功后加载发行版的 `bwrap-userns-restrict` profile。Codex 镜像使用发行版的 bubblewrap。容器预检在断网的一次性 Podman 容器中运行 `codex sandbox`，验证工作区内读写成功且工作区外写入被拒绝。宿主预检在独立临时工程及 `CODEX_HOME` 下验证工作区读写。两项预检均不接收上游密钥，失败即阻断真实验收。 [Codex 官方沙箱说明](https://learn.chatgpt.com/docs/sandboxing)
 
 ## 修复后复用哪些结果
 
