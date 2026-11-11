@@ -1,5 +1,11 @@
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
+import { once } from 'node:events'
+import { createReadStream } from 'node:fs'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { createServer } from 'node:http'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { HaiStorageError, storage } from '../src/index.js'
 import { defineS3StorageSuites, defineStorageSuite, localStorageEnv } from './helpers/storage-test-suite.js'
@@ -81,6 +87,109 @@ describe('storage streams', () => {
   defineStorageSuite('local', localStorageEnv, defineStreamTests)
   defineS3StorageSuites(defineStreamTests, 'stream')
 })
+
+it('s3 流式上传按配置切片并并发发送三片', async () => {
+  const partSizeBytes = 6 * 1024 ** 2
+  const partSizes: number[] = []
+  const pendingParts: Array<() => void> = []
+  let singlePutSize: number | undefined
+  const directory = await mkdtemp(join(tmpdir(), 'hai-storage-multipart-config-'))
+  const server = createServer((request, response) => {
+    const url = new URL(request.url ?? '/', 'http://fixture')
+    let bytes = 0
+    request.on('data', (chunk: Buffer) => {
+      bytes += chunk.byteLength
+    })
+    request.once('end', () => {
+      if (request.method === 'GET') {
+        response.setHeader('Content-Type', 'application/xml')
+        response.end('<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>')
+      }
+      else if (request.method === 'HEAD') {
+        response.setHeader('Content-Length', url.pathname.endsWith('/single.zip')
+          ? singlePutSize ?? 0
+          : partSizes.reduce((total, size) => total + size, 0))
+        response.end()
+      }
+      else if (request.method === 'PUT' && url.searchParams.has('partNumber')) {
+        partSizes[Number(url.searchParams.get('partNumber')) - 1] = bytes
+        pendingParts.push(() => {
+          response.setHeader('ETag', '"fixture-part"')
+          response.end()
+        })
+        // 三个请求都已到达后才返回；SDK 使用默认并发 2 时无法进入这个分支。
+        if (pendingParts.length === 3) {
+          for (const finish of pendingParts)
+            finish()
+        }
+      }
+      else if (request.method === 'PUT') {
+        singlePutSize = bytes
+        response.end()
+      }
+      else if (url.searchParams.has('uploads') && url.pathname.endsWith('/multipart.zip')) {
+        response.setHeader('Content-Type', 'application/xml')
+        response.end('<InitiateMultipartUploadResult><UploadId>fixture</UploadId></InitiateMultipartUploadResult>')
+      }
+      else if (url.searchParams.has('uploadId') && request.method === 'POST') {
+        response.setHeader('Content-Type', 'application/xml')
+        response.end('<CompleteMultipartUploadResult/>')
+      }
+      else {
+        response.writeHead(400).end('<Error><Code>InvalidRequest</Code></Error>')
+      }
+    })
+  })
+  try {
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    const address = server.address()
+    if (!address || typeof address === 'string')
+      throw new Error('Missing S3 fixture address')
+    expect((await storage.init({
+      type: 's3',
+      bucket: 'fixture',
+      region: 'us-east-1',
+      accessKeyId: 'fixture',
+      secretAccessKey: 'fixture',
+      endpoint: `http://127.0.0.1:${address.port}`,
+      forcePathStyle: true,
+      multipart: { partSizeBytes, queueSize: 3 },
+    })).success).toBe(true)
+    const singleSource = join(directory, 'single.zip')
+    await writeFile(singleSource, Buffer.alloc(partSizeBytes))
+    await expect(storage.file.put('single.zip', createReadStream(singleSource), {
+      signal: AbortSignal.timeout(5000),
+    }))
+      .resolves
+      .toMatchObject({
+        success: true,
+        data: { size: partSizeBytes },
+      })
+    expect(singlePutSize).toBe(partSizeBytes)
+
+    const size = 2 * partSizeBytes + 1
+    const multipartSource = join(directory, 'multipart.zip')
+    await writeFile(multipartSource, Buffer.alloc(size))
+    await expect(storage.file.put('multipart.zip', createReadStream(multipartSource), {
+      signal: AbortSignal.timeout(5000),
+    }))
+      .resolves
+      .toMatchObject({
+        success: true,
+        data: { size },
+      })
+    expect(partSizes).toEqual([partSizeBytes, partSizeBytes, 1])
+  }
+  finally {
+    await storage.close()
+    server.closeAllConnections()
+    await new Promise<void>((resolve, reject) => server.close(error => error
+      ? reject(error)
+      : resolve()))
+    await rm(directory, { recursive: true, force: true })
+  }
+}, 15_000)
 
 defineStorageSuite('local stream boundaries', localStorageEnv, () => {
   it('目录不是文件，流式读取在返回阶段报告 INVALID_PATH', async () => {

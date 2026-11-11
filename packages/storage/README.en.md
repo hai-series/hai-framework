@@ -211,8 +211,10 @@ Lifecycle: init takes backend/business configuration; use the module only after 
 
 Local storage rejects file symlinks and directory junctions in key paths; reserved `.meta.json` / `.upload.tmp` suffixes are case insensitive. Overwrite put replaces old metadata, while copy inherits source metadata by default. The browser root exports schemas, types and client helpers, without the server singleton.
 
-- **S3**: requires `bucket / region / accessKeyId / secretAccessKey`; optional `createBucket / endpoint / publicEndpoint / forcePathStyle / prefix / publicUrl`.
+- **S3** requires `bucket / region / accessKeyId / secretAccessKey`. Optional settings include `createBucket / endpoint / publicEndpoint / forcePathStyle / prefix / publicUrl / multipart`.
 - **Local**: requires `root`; optional `directoryMode / fileMode`.
+
+Server-side S3 streaming uploads default to 5 MiB parts and two concurrent parts per upload. Set `multipart.partSizeBytes` and `multipart.queueSize` in `_storage.yml`, or use `HAI_STORAGE_MULTIPART_PARTSIZEBYTES=8388608` and `HAI_STORAGE_MULTIPART_QUEUESIZE=3` for 8 MiB and three concurrent parts. Part size accepts integer byte counts from 5 MiB to 5 GiB. Queue size accepts positive integers. Budget approximately part size times concurrency for each active upload. The settings take effect at initialization.
 
 MinIO and RustFS share the S3 provider with `type: 's3'`; no separate storage type is needed. For self-hosted instances, set the S3 API endpoint (usually port 9000) and enable path-style access.
 

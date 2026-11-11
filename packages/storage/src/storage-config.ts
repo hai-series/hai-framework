@@ -7,6 +7,9 @@ import { z } from 'zod'
 import { storageM } from './storage-i18n.js'
 import { StoragePresignExpiresInSchema } from './storage-schemas.js'
 
+const S3_MIN_PART_SIZE_BYTES = 5 * 1024 ** 2
+const S3_MAX_PART_SIZE_BYTES = 5 * 1024 ** 3
+
 // ─── 配置 Schema ───
 
 /**
@@ -132,6 +135,14 @@ export const S3ConfigSchema = z.object({
 
   /** 公开访问基础 URL（用于生成公开 URL） */
   publicUrl: z.string().url().optional(),
+
+  /** S3 服务端流式上传的分片设置。 */
+  multipart: z.object({
+    /** 每片字节数，默认 5 MiB，范围 5 MiB 至 5 GiB。 */
+    partSizeBytes: z.number().int().min(S3_MIN_PART_SIZE_BYTES).max(S3_MAX_PART_SIZE_BYTES).default(S3_MIN_PART_SIZE_BYTES),
+    /** 单次上传的最大并发片数，默认 2。 */
+    queueSize: z.number().int().min(1).default(2),
+  }).prefault({}),
 
   ...OperationLogConfigFieldSchema,
 })

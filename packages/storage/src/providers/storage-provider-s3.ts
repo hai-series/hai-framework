@@ -374,12 +374,13 @@ export function createS3Provider(): StorageProvider {
           try {
             if (options.signal?.aborted)
               abort()
-            // 标准 S3 multipart；SDK 管理分片与失败清理，最多缓冲两片。
+            // SDK 按配置切片并限制单次上传的分片并发。
             const { Upload } = await import('@aws-sdk/lib-storage')
             const upload = new Upload({
               client: s3Client,
               params: { ...params, Body: stream },
-              queueSize: 2,
+              partSize: s3Config.multipart.partSizeBytes,
+              queueSize: s3Config.multipart.queueSize,
               leavePartsOnError: false,
               abortController: controller,
             })

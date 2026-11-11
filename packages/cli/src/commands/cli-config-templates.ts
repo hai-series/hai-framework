@@ -427,6 +427,10 @@ accessKeyId: ''
 secretAccessKey: ''
 endpoint: \${HAI_STORAGE_ENDPOINT:https://s3.amazonaws.com}
 forcePathStyle: false
+# S3 服务端流式上传分片大小（字节）和单次上传并发数。
+multipart:
+  partSizeBytes: \${HAI_STORAGE_MULTIPART_PARTSIZEBYTES:5242880}
+  queueSize: \${HAI_STORAGE_MULTIPART_QUEUESIZE:2}
 # 可直接设置 HAI_STORAGE_PREFIX=my-app/uploads/；保存 report.pdf 后的键名为 my-app/uploads/report.pdf。
 # prefix: "\${HAI_STORAGE_PREFIX:}"
 # publicEndpoint: https://app.example.com # 浏览器下载入口，可带 /files 等代理目录；不含桶名

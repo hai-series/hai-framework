@@ -211,8 +211,10 @@ checksum の中止時は次のチャンクを待つ処理を終了し、入力�
 
 Local は key 内のシンボリックリンクと junction を拒否し、予約拡張子 `.meta.json` / `.upload.tmp` は大文字小文字を区別せず保護します。put 上書きは旧メタデータを置換し、copy は既定で元を継承します。ブラウザー入口にサーバー単一インスタンスは含まれません。
 
-- **S3**：`bucket / region / accessKeyId / secretAccessKey` は必須。`createBucket / endpoint / publicEndpoint / forcePathStyle / prefix / publicUrl` は任意。
+- **S3** の `bucket / region / accessKeyId / secretAccessKey` は必須です。`createBucket / endpoint / publicEndpoint / forcePathStyle / prefix / publicUrl / multipart` は任意です。
 - **Local**：`root` は必須。`directoryMode / fileMode` は任意。
+
+サーバー側の S3 ストリーミングアップロードは、既定で各パート 5 MiB、1 回のアップロードにつき同時に 2 パートです。`_storage.yml` の `multipart.partSizeBytes` と `multipart.queueSize`、または環境変数 `HAI_STORAGE_MULTIPART_PARTSIZEBYTES=8388608` と `HAI_STORAGE_MULTIPART_QUEUESIZE=3` で 8 MiB と同時 3 パートを設定できます。パートサイズは 5 MiB から 5 GiB の整数バイト数、同時数は正の整数です。主なバッファー使用量はアップロードごとにパートサイズと同時数の積が目安です。設定は初期化時に適用されます。
 
 MinIO と RustFS は S3 Provider を共有し、`type: 's3'` を使います。専用のストレージ種別は不要です。自前のインスタンスでは S3 API endpoint（通常ポート 9000）とパス形式を設定します。
 

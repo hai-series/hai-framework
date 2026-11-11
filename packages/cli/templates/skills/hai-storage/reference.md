@@ -35,6 +35,9 @@ root: ./data/storage
 # createBucket: ${HAI_STORAGE_CREATEBUCKET:false}
 # forcePathStyle: false
 # prefix: "${HAI_STORAGE_PREFIX:}"
+# multipart:
+#   partSizeBytes: ${HAI_STORAGE_MULTIPART_PARTSIZEBYTES:5242880}
+#   queueSize: ${HAI_STORAGE_MULTIPART_QUEUESIZE:2}
 # publicUrl: ''
 operationLog:
   read: false # file.get/head/exists, dir.list, presign.getUrl/publicUrl
@@ -52,6 +55,8 @@ MinIO、RustFS 使用同一个 S3 Provider：配置 `type: s3`、S3 API `endpoin
 使用 hai-deploy 的默认自建 S3 配置时，可通过 `hai.json` 的 `deploy.container.s3Engine`（`HAI_DEPLOY_CONTAINER_S3ENGINE`，`rustfs | minio`）选择实现，默认 RustFS。运行环境启用 `HAI_STORAGE_CREATEBUCKET=true` 后由应用初始化 storage 时建桶；部署不再生成独立初始化服务或脚本。自定义外部 S3 默认不建桶，可按凭据权限显式启用。
 
 `operationLog` 默认记录写操作，读操作需显式开启。操作记录固定为 `debug`，由 Core 日志级别过滤。业务失败返回原错误并记录一次 `warn`，初始化、连接和关闭失败为 `error`。`maxLength` 限制安全摘要的字符数，0 省略摘要。签名直传助手在浏览器记录失败，日志不包含对象键、签名 URL 或文件内容。升级时移除 `operationLog.level` 与 `HAI_STORAGE_OPERATIONLOG_LEVEL`，通过 `HAI_CORE_LOGGING_LEVEL` 设置全局阈值。
+
+S3 服务端流式上传使用 `multipart.partSizeBytes` 和 `multipart.queueSize`，默认 5 MiB 和 2 片。大小为 5 MiB 至 5 GiB 的整数，队列大小为正整数。上述两个环境变量在初始化时覆盖相应字段。每个活跃上传的主要缓冲预算约为片大小乘以并发数。
 
 S3 流式上传用 `error.cause` 获取首次失败，`error.ext?.s3Operation` 查看失败的 S3 操作。若分片清理也失败，从 `error.ext?.cleanupError` 获取清理错误。告警包含可取得的服务端请求编号。
 

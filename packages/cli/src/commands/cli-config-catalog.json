@@ -7016,6 +7016,30 @@
     "constraint": "true | false"
   },
   {
+    "name": "HAI_STORAGE_MULTIPART",
+    "module": "storage",
+    "path": "storage.multipart",
+    "description": "S3 服务端流式上传的分片设置。",
+    "value": "{}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_STORAGE_MULTIPART_PARTSIZEBYTES",
+    "module": "storage",
+    "path": "storage.multipart.partSizeBytes",
+    "description": "每片字节数，默认 5 MiB，范围 5 MiB 至 5 GiB。",
+    "value": "5242880",
+    "constraint": "整数；>= 5242880；<= 5368709120"
+  },
+  {
+    "name": "HAI_STORAGE_MULTIPART_QUEUESIZE",
+    "module": "storage",
+    "path": "storage.multipart.queueSize",
+    "description": "单次上传的最大并发片数，默认 2。",
+    "value": "2",
+    "constraint": "整数；>= 1；<= 9007199254740991"
+  },
+  {
     "name": "HAI_STORAGE_OPERATIONLOG",
     "module": "storage",
     "path": "storage.operationLog",

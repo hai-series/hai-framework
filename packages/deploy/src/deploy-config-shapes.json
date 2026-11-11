@@ -585,6 +585,24 @@
             "type": "string",
             "format": "uri"
           },
+          "multipart": {
+            "default": {},
+            "type": "object",
+            "properties": {
+              "partSizeBytes": {
+                "default": 5242880,
+                "type": "integer",
+                "minimum": 5242880,
+                "maximum": 5368709120
+              },
+              "queueSize": {
+                "default": 2,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              }
+            }
+          },
           "operationLog": {
             "default": {},
             "type": "object",

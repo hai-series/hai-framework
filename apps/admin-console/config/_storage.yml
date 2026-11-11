@@ -42,6 +42,16 @@ endpoint: ${HAI_STORAGE_ENDPOINT:https://s3.amazonaws.com}
 # 说明：强制使用路径风格 URL（某些 S3 兼容服务需要）
 # 取值：true | false
 forcePathStyle: ${HAI_STORAGE_FORCEPATHSTYLE:false}
+# S3 服务端流式上传分片配置。
+# 说明：S3 服务端流式上传的分片设置。
+# 取值：配置块（填写下方缩进字段）
+multipart:
+  # 说明：每片字节数，默认 5 MiB，范围 5 MiB 至 5 GiB。
+  # 取值：整数；>= 5242880；<= 5368709120
+  partSizeBytes: ${HAI_STORAGE_MULTIPART_PARTSIZEBYTES:5242880}
+  # 说明：单次上传的最大并发片数，默认 2。
+  # 取值：整数；>= 1
+  queueSize: ${HAI_STORAGE_MULTIPART_QUEUESIZE:2}
 # prefix: "${HAI_STORAGE_PREFIX:}" # 说明：S3 桶内对象键前缀，例如 my-app/uploads/，留空使用桶根；取值：字符串
 # 可选自动建桶；生产自建 S3 由环境启用，需具备建桶权限。
 # 说明：初始化时检查并创建缺失的桶；默认关闭，启用后凭据须有建桶权限。

@@ -63,6 +63,30 @@ describe('storageConfigSchema', () => {
       expect(result.bucket).toBe('my-bucket')
       expect(result.forcePathStyle).toBe(false)
       expect(result.prefix).toBe('')
+      expect(result.multipart).toEqual({ partSizeBytes: 5 * 1024 ** 2, queueSize: 2 })
+    })
+
+    it('分片配置可独立覆盖，未指定字段使用默认值', () => {
+      expect(S3ConfigSchema.parse({
+        ...validS3,
+        multipart: { partSizeBytes: 8 * 1024 ** 2 },
+      }).multipart)
+        .toEqual({ partSizeBytes: 8 * 1024 ** 2, queueSize: 2 })
+      expect(S3ConfigSchema.parse({
+        ...validS3,
+        multipart: { queueSize: 1 },
+      }).multipart)
+        .toEqual({ partSizeBytes: 5 * 1024 ** 2, queueSize: 1 })
+    })
+
+    it.each([
+      { partSizeBytes: 5 * 1024 ** 2 - 1 },
+      { partSizeBytes: 5 * 1024 ** 3 + 1 },
+      { partSizeBytes: 8 * 1024 ** 2 + 0.5 },
+      { queueSize: 0 },
+      { queueSize: 1.5 },
+    ])('拒绝无效分片配置 %j', (multipart) => {
+      expect(S3ConfigSchema.safeParse({ ...validS3, multipart }).success).toBe(false)
     })
 
     it('缺少 bucket 应校验失败', () => {

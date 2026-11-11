@@ -253,8 +253,10 @@ if (key.success) {
 
 Local 后端拒绝 key 路径中的文件符号链接和目录 junction，保留后缀 `.meta.json` / `.upload.tmp` 的保护不区分大小写。覆盖 put 会替换旧元数据，copy 默认继承源元数据；浏览器根入口仅提供 Schema、类型和客户端工具，不包含服务端 storage 单例。
 
-- **S3**：`bucket / region / accessKeyId / secretAccessKey` 必填，可选 `createBucket / endpoint / publicEndpoint / forcePathStyle / prefix / publicUrl`
+- **S3**：`bucket / region / accessKeyId / secretAccessKey` 必填，可选 `createBucket / endpoint / publicEndpoint / forcePathStyle / prefix / publicUrl / multipart`
 - **Local**：`root` 必填，可选 `directoryMode / fileMode`
+
+S3 服务端流式上传默认每片 5 MiB，单次上传最多并发 2 片。在 `_storage.yml` 使用 `multipart.partSizeBytes` 和 `multipart.queueSize`，也可设置 `HAI_STORAGE_MULTIPART_PARTSIZEBYTES=8388608` 和 `HAI_STORAGE_MULTIPART_QUEUESIZE=3`，分别表示 8 MiB 和 3 片并发。片大小接受 5 MiB 至 5 GiB 的整数，队列大小为正整数。每次上传的主要缓冲预算约为片大小乘以并发数，配置在初始化时应用。
 
 MinIO、RustFS 共用 S3 Provider，使用 `type: 's3'`，无需单独的存储类型。连接自建实例时指定 S3 API 端点（通常为 9000 端口）并启用路径风格。
 
