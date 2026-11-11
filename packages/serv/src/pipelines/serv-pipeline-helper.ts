@@ -116,8 +116,13 @@ export function mapHaiError<TInput, TOutput>(handler: ServProcedureHandler<TInpu
         return result
       }
       const error = core.error.toPublic(result.error, options.context.requestId, options.context.locale)
-      await capture(error.httpStatus ?? 500, error.code)
-      options.context.logger.error('Procedure failed', { traceId: error.traceId, error: result.error })
+      const status = error.httpStatus ?? 500
+      await capture(status, error.code)
+      const logContext = { traceId: error.traceId, errorCode: error.code, status }
+      if (status >= 500)
+        options.context.logger.error('Procedure failed', { ...logContext, error: result.error })
+      else
+        options.context.logger.debug('Procedure failed', logContext)
       return { success: false, error }
     }
     catch (error) {

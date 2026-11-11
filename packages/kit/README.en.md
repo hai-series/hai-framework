@@ -462,7 +462,7 @@ When building Svelte applications with pnpm, register the `deepmerge@4.3.1` patc
 | `a2a`        | `HandleA2AOperations \| HandleA2AConfig` | A2A integration (Agent Card + JSON-RPC)                                |
 | `onError`    | `function`                               | Custom error handling                                                  |
 
-Request/response summaries use the `trace` level. Logging is enabled by default and `logBody` defaults to false. Query values come from the original `request.url`, while the path remains SvelteKit's current `event.url.pathname`. Logging does not access the tracked `event.url.search/searchParams`, so static pages can prerender with logging enabled. Password/token/secret, authorization and API-key fields are redacted in queries and optional JSON-body logs. The body is read from a clone and remains available to application code.
+Request and response summaries use the `trace` level. Logging is enabled by default and `logBody` defaults to false. The request log uses SvelteKit's current `event.url.pathname` and counts query parameters from the original `request.url`, including during prerendering. Optional JSON body logging uses a request clone and redacts fields such as passwords, tokens, secrets, authorization, and API keys.
 
 Automatic request auditing runs only when `audit.isInitialized`. Static sites and applications without Audit need not initialize it for this handle. State is checked per request, so modules may initialize after the handle is created. Applications selecting Audit must still check `audit.init()` and stop startup on failure. Explicit `audit.log/capture` calls retain their uninitialized errors, and initialized modules still report actual write failures as `Request audit failed`. Mandatory business auditing must check explicit results and enforce the application's transaction rules.
 
@@ -484,7 +484,7 @@ For a sensitive call, supply `reauthorize: () => sensitiveActions.authorize(oper
 
 ### Error messages and correlated logs
 
-`kit.response.fromError/fromResult` preserve safe field-validation `cause`, explicitly public `publicExt` (mapped to `ext`), and `httpStatus`. Internal causes and extensions remain private. Each module failure produces one correlated log entry.
+`kit.response.fromError/fromResult` preserve safe field-validation `cause`, explicitly public `publicExt` (mapped to `ext`), and `httpStatus`. A 4xx response logs the error code, status, and trace ID at `debug`. A 5xx response uses `error` and retains redacted exception diagnostics on the server.
 
 HTTP/UI boundaries expose business messages only for explicit valid 4xx statuses. Missing or invalid `httpStatus` is treated as 500 with a safe message. Custom business errors must carry a complete error definition or an explicit status.
 

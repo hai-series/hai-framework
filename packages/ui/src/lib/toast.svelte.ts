@@ -360,11 +360,20 @@ export function errorMessage(error: unknown, fallback = ''): string {
       ? error
       : ''
   const embeddedTraceId = /\(traceId: ([\w.:-]{1,128})\)$/.exec(receivedMessage)?.[1]
-  const traceId = known?.traceId ?? embeddedTraceId ?? core.context.get().traceId ?? core.context.get().requestId ?? core.id.uuid()
-  core.logger.error('User operation failed', { traceId, error })
+  const reportedTraceId = known?.traceId && /^[\w.:-]{1,128}$/.test(known.traceId)
+? known.traceId
+: embeddedTraceId
+  const traceId = reportedTraceId ?? core.context.get().traceId ?? core.context.get().requestId ?? core.id.uuid()
+  const safe = known && core.error.toPublic(known, traceId)
+  const status = safe?.httpStatus
+  const logContext = { traceId, errorCode: safe?.code, status }
+  if (reportedTraceId || (status !== undefined && status >= 400 && status < 500))
+    core.logger.debug('User operation failed', logContext)
+  else
+    core.logger.error('User operation failed', { ...logContext, error })
   let message = fallback || core.i18n.coreM('core_errorInternal')
-  if (known)
-    message = core.error.toPublic(known, traceId).message
+  if (safe)
+    message = safe.message
   else if (typeof error === 'string')
     message = receivedMessage
   return core.error.formatMessage({

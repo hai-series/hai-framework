@@ -24,7 +24,7 @@ export interface LoggingMiddlewareConfig {
   logBody?: boolean
   /** 为 `true` 时记录响应头 */
   logResponse?: boolean
-  /** 查询参数和 JSON 正文的脱敏字段；默认包含 password/token/secret、授权/API Key 和银行卡字段。 */
+  /** JSON 正文的脱敏字段；默认包含 password/token/secret、授权/API Key 和银行卡字段。 */
   redactFields?: string[]
 }
 
@@ -32,7 +32,7 @@ export interface LoggingMiddlewareConfig {
  * 创建日志中间件
  *
  * 以 `core.logger.trace` 级别记录请求进出信息，包含：
- * - 请求：method / path / query / userAgent / ip
+ * - 请求：method / path / queryParameterCount / userAgent / ip
  * - 响应：status / duration
  *
  * 敏感字段会被自动替换为 `[REDACTED]`。
@@ -75,7 +75,7 @@ export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middlew
       method: event.request.method,
       path: event.url.pathname,
       // SvelteKit 预渲染禁止读取追踪 URL 的查询；日志只读原请求，不建立页面路由依赖。
-      query: redactObject(Object.fromEntries(new URL(event.request.url).searchParams), redactFields),
+      queryParameterCount: new URL(event.request.url).searchParams.size,
       userAgent: event.request.headers.get('user-agent'),
       ip: clientIp,
     }

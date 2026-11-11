@@ -111,15 +111,16 @@ export function error(
 ): Response {
   const safe = core.error.toPublic({ code, message, httpStatus: status }, requestId)
   const safeStatus = safe.httpStatus ?? 500
-  core.logger.error('API request failed', {
-    traceId: safe.traceId,
-    error: {
-      code,
-      message,
-      httpStatus: status,
-      details,
-    },
-  })
+  const logContext = { traceId: safe.traceId, errorCode: safe.code, status: safeStatus }
+  if (safeStatus >= 500) {
+    core.logger.error('API request failed', {
+      ...logContext,
+      error: { code, message, httpStatus: status },
+    })
+  }
+  else {
+    core.logger.debug('API request failed', logContext)
+  }
   const response: ApiResponse = {
     success: false,
     error: {
@@ -353,7 +354,11 @@ export function fromError(
   requestId?: string,
 ): Response {
   const safe = core.error.toPublic(haiError, requestId)
-  core.logger.error('API operation failed', { traceId: safe.traceId, error: haiError })
+  const logContext = { traceId: safe.traceId, errorCode: safe.code, status: safe.httpStatus }
+  if ((safe.httpStatus ?? 500) >= 500)
+    core.logger.error('API operation failed', { ...logContext, error: haiError })
+  else
+    core.logger.debug('API operation failed', logContext)
   // 已经过公开边界过滤，直接保留安全字段；再次调用 error 会丢失校验详情并重复记日志。
   const response: ApiResponse = {
     success: false,

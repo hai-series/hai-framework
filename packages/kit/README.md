@@ -462,7 +462,7 @@ export const PATCH = handler
 | `a2a`            | `HandleA2AOperations \| HandleA2AConfig` | A2A 协议集成（Agent Card + JSON-RPC）                              |
 | `onError`        | `function`                               | 自定义错误处理                                                     |
 
-请求/响应摘要使用 `trace` 日志级别；`logging` 默认开启，`logBody` 默认关闭。日志查询从原始 `request.url` 读取，路径保留 SvelteKit 当前路由的 `event.url.pathname`，不会读取预渲染受限的 `event.url.search/searchParams`；静态页无需为构建关闭日志。查询和启用后的 JSON 正文在日志入口对 password/token/secret、授权/API Key 等字段脱敏，正文使用请求副本读取，不影响业务处理。
+请求和响应摘要使用 `trace` 级别。`logging` 默认开启，`logBody` 默认关闭。请求日志使用 SvelteKit 当前路由的 `event.url.pathname`，并从原始 `request.url` 统计查询参数数量，支持静态页预渲染。启用 JSON 正文日志时，从请求副本读取并对 password、token、secret、授权和 API Key 等字段脱敏。
 
 请求自动审计仅在 `audit.isInitialized` 时执行，纯静态站点或未选 Audit 的应用无需为 handle 初始化它。该状态在每个请求中判断，因此 handle 可先创建、模块随后初始化。选择了 Audit 的应用仍必须检查 `audit.init()` 结果并在失败时停止启动；业务显式 `audit.log/capture` 的未初始化错误不变，已初始化模块的真实写入失败仍记录 `Request audit failed`。需要强制审计的业务应检查显式审计结果，并按业务事务约束提交。
 
@@ -486,7 +486,7 @@ export const PATCH = handler
 
 ### 错误提示与关联日志
 
-`kit.response.fromError/fromResult` 保留安全的字段校验 `cause`、显式公开的 `publicExt`（映射为 `ext`）和 `httpStatus`；任意内部 cause/ext 不公开。每次模块失败只写一条关联日志。
+`kit.response.fromError/fromResult` 保留安全的字段校验 `cause`、显式公开的 `publicExt`（映射为 `ext`）和 `httpStatus`。4xx 响应以 `debug` 记录错误码、状态和追踪编号。5xx 响应以 `error` 记录，并在服务端保留脱敏的异常诊断。
 
 HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 `httpStatus` 或状态非法时按 500 返回安全提示。手写业务错误须提供完整错误定义或显式状态，不能依赖缺省状态展示原文。
 

@@ -42,7 +42,7 @@ export const handle: Handle = haiHandle
 
 ### 2. SvelteKit API endpoint
 
-业务失败用 `kit.response.fromResult/fromError`，保留安全字段错误、显式 `publicExt` 和 HTTP 状态，内部异常仅进入关联日志；不要在业务 endpoint 手工拼接原始异常。
+业务失败用 `kit.response.fromResult/fromError`，保留安全字段错误、显式 `publicExt` 和 HTTP 状态。4xx 使用 `debug` 记录错误码、状态和追踪编号，5xx 使用 `error` 记录服务端异常诊断。请求日志仅记录查询参数数量。
 
 ```ts
 import { kit } from '@h-ai/kit'

@@ -1,4 +1,4 @@
-/** 公共 handle 的日志不得读取 prerender 受限 URL；路由路径、查询脱敏和正文消费仍保持一致。 */
+/** 请求日志须支持 prerender，保留路由路径和查询参数数量，并且不消费请求正文。 */
 import type { RequestEvent } from '@sveltejs/kit'
 import { core } from '@h-ai/core'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -55,14 +55,14 @@ it('默认请求日志支持 prerender 受限 URL，保留公开页面和安全�
   expect(response.headers.get('x-content-type-options')).toBe('nosniff')
   expect(core.logger.trace).toHaveBeenCalledWith('Incoming request', expect.objectContaining({
     path: '/docs',
-    query: { language: 'zh-CN' },
+    queryParameterCount: 1,
     ip: 'unknown',
     userAgent: 'static-build',
   }))
 })
 
-it('查询从原请求读取，保留重写后的路由路径并在日志入口脱敏', async () => {
-  const input = event(new Request('https://example.test/original?token=private-token&api_key=private-key&page=2'), '/docs/resolved')
+it('查询只记录参数数量，保留重写后的路由路径', async () => {
+  const input = event(new Request('https://example.test/original?token=private-token&search=person%40example.invalid&page=2'), '/docs/resolved')
   const response = await kit.createHandle()({
     event: input,
     resolve: async () => new Response('OK'),
@@ -70,8 +70,11 @@ it('查询从原请求读取，保留重写后的路由路径并在日志入口�
   expect(response.status).toBe(200)
   expect(core.logger.trace).toHaveBeenCalledWith('Incoming request', expect.objectContaining({
     path: '/docs/resolved',
-    query: { token: '[REDACTED]', api_key: '[REDACTED]', page: '2' },
+    queryParameterCount: 3,
   }))
+  const calls = JSON.stringify(vi.mocked(core.logger.trace).mock.calls)
+  expect(calls).not.toContain('example.invalid')
+  expect(calls).not.toContain('private-token')
   expect(input.request.url).toContain('token=private-token')
 })
 
@@ -92,7 +95,7 @@ it('开启正文日志仍先脱敏副本，不消费应用读取的 JSON 请求�
   })
   expect(response.status).toBe(201)
   expect(core.logger.trace).toHaveBeenCalledWith('Incoming request', expect.objectContaining({
-    query: { secret: '[REDACTED]' },
+    queryParameterCount: 1,
     body: { password: '[REDACTED]', orderId: 'order-1' },
   }))
   expect(core.logger.trace).toHaveBeenCalledWith('Request completed', expect.objectContaining({ status: 201 }))

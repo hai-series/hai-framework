@@ -460,7 +460,7 @@ pnpm で Svelte アプリを構築する工程では、`patchedDependencies` に
 | `a2a`        | `HandleA2AOperations \| HandleA2AConfig` | A2A 統合（Agent Card + JSON-RPC）                               |
 | `onError`    | `function`                               | 独自のエラー処理                                                |
 
-リクエスト/レスポンス概要は `trace` レベルで記録します。ログは既定で有効、`logBody` は既定で無効です。クエリーは元の `request.url`、パスは SvelteKit の現在の `event.url.pathname` を使用します。追跡付き `event.url.search/searchParams` を読まないため、ログを有効にした静的ページも事前生成できます。クエリーと任意の JSON 本文ログでは password/token/secret、認証、API キーなどを秘匿します。本文は複製から読み、アプリ側で引き続き利用できます。
+リクエストとレスポンスの概要は `trace` レベルで記録します。ログは既定で有効、`logBody` は既定で無効です。パスには SvelteKit の現在の `event.url.pathname` を使い、クエリーは元の `request.url` からパラメーター数だけを数えるため、事前生成にも対応します。JSON 本文のログを有効にすると、リクエストの複製から読み取り、パスワード、トークン、シークレット、認証情報、API キーなどを秘匿します。
 
 リクエストの自動監査は `audit.isInitialized` の場合だけ実行します。静的サイトや Audit を選択しないアプリは handle のために初期化する必要がありません。各リクエストで確認するため、handle 作成後のモジュール初期化にも対応します。Audit を選択したアプリは `audit.init()` の結果を確認し、失敗時は起動を止めます。明示的な `audit.log/capture` の未初期化エラーは維持し、初期化済みモジュールの実際の書込み失敗は `Request audit failed` として記録します。必須の業務監査では明示的な結果を確認し、業務トランザクションの規則を適用してください。
 
@@ -484,7 +484,7 @@ pnpm で Svelte アプリを構築する工程では、`patchedDependencies` に
 
 ### エラー表示とログの関連付け
 
-`kit.response.fromError/fromResult` は安全なフィールド検証 `cause`、明示的な `publicExt`（`ext` に変換）、`httpStatus` を保持します。内部原因や拡張情報は公開せず、モジュール失敗ごとに関連ログを一度だけ記録します。
+`kit.response.fromError/fromResult` は安全なフィールド検証 `cause`、明示的な `publicExt`（`ext` に変換）、`httpStatus` を保持します。4xx 応答はエラーコード、状態、追跡 ID を `debug` で記録します。5xx 応答は `error` を使い、秘匿処理済みの例外情報をサーバーに記録します。
 
 HTTP/UI 境界で業務メッセージを公開するのは、明示された有効な4xx状態のみです。`httpStatus` が未指定または不正な場合は500として安全なメッセージを返します。独自の業務エラーには完全なエラー定義または明示的な状態を指定してください。
 

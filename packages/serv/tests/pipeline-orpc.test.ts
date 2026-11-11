@@ -48,6 +48,7 @@ describe('pipeline.orpc', () => {
     const initialized = vi.spyOn(audit, 'isInitialized', 'get').mockReturnValue(true)
     const capture = vi.spyOn(audit, 'capture').mockResolvedValue(err(HaiCommonError.INTERNAL_ERROR))
     const log = vi.spyOn(logger, 'error').mockImplementation(() => {})
+    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {})
     try {
       const handler = mapHaiError<unknown, never>(async () => ({
         success: false,
@@ -61,6 +62,14 @@ describe('pipeline.orpc', () => {
         ? httpStatus
         : 500
       expect(result.error.httpStatus).toBe(status)
+      if (status >= 500) {
+        expect(log).toHaveBeenCalledWith('Procedure failed', expect.objectContaining({ status, traceId: 'req-1' }))
+        expect(debug).not.toHaveBeenCalled()
+      }
+      else {
+        expect(log.mock.calls.filter(([message]) => message === 'Procedure failed')).toHaveLength(0)
+        expect(debug).toHaveBeenCalledWith('Procedure failed', { status, traceId: 'req-1', errorCode: 'test:failure' })
+      }
       expect(capture).toHaveBeenCalledWith(expect.objectContaining({
         outcome: status === 401 || status === 403
           ? 'denied'
@@ -72,6 +81,7 @@ describe('pipeline.orpc', () => {
       initialized.mockRestore()
       capture.mockRestore()
       log.mockRestore()
+      debug.mockRestore()
     }
   })
 

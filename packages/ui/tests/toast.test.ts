@@ -231,6 +231,30 @@ describe('toast notify helpers', () => {
     expect(mod.toast.items[0]).toMatchObject({ message: '反馈已更新，请刷新后重试', traceId: 'request-feedback-1' })
   })
 
+  it('服务端错误用 debug 关联，浏览器本地异常保留 error 诊断', async () => {
+    const { core } = await import('@h-ai/core')
+    const debug = vi.spyOn(core.logger, 'debug').mockImplementation(() => {})
+    const error = vi.spyOn(core.logger, 'error').mockImplementation(() => {})
+    try {
+      mod.notifyError({
+        code: 'app:failed',
+        message: 'Private server detail',
+        httpStatus: 500,
+        traceId: 'server-trace',
+      })
+      expect(error).not.toHaveBeenCalled()
+      expect(debug).toHaveBeenCalledWith('User operation failed', { errorCode: 'app:failed', status: 500, traceId: 'server-trace' })
+      expect(mod.toast.items[0].traceId).toBe('server-trace')
+      const local = new Error('Local error')
+      mod.notifyError(local)
+      expect(error).toHaveBeenCalledWith('User operation failed', expect.objectContaining({ error: local }))
+    }
+    finally {
+      debug.mockRestore()
+      error.mockRestore()
+    }
+  })
+
   it('包装后的服务端异常仍隐藏内部细节，循环 cause 不会阻塞提示', () => {
     mod.notifyError(new Error('Internal wrapper', {
       cause: {

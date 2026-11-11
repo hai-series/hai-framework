@@ -5,10 +5,11 @@
  */
 
 import type { RequestEvent } from '@sveltejs/kit'
-import { core } from '@h-ai/core'
+import { core, err, HaiCommonError } from '@h-ai/core'
 import { error as httpError, redirect } from '@sveltejs/kit'
 import { describe, expect, it, vi } from 'vitest'
 
+import { kit } from '../src/index.js'
 import { handler } from '../src/kit-handler.js'
 
 /**
@@ -32,6 +33,25 @@ function createMockEvent(path = '/api/test', method = 'GET') {
 }
 
 describe('handler', () => {
+  it('业务冲突以 debug 记录状态与追踪编号', async () => {
+    const debug = vi.spyOn(core.logger, 'debug').mockImplementation(() => {})
+    const error = vi.spyOn(core.logger, 'error').mockImplementation(() => {})
+    try {
+      const response = await handler(() => kit.response.fromResult(err(HaiCommonError.CONFLICT, 'Already updated')))(createMockEvent())
+      expect(response.status).toBe(409)
+      expect(error).not.toHaveBeenCalled()
+      expect(debug).toHaveBeenCalledWith('API operation failed', {
+        traceId: response.headers.get('X-Trace-Id'),
+        errorCode: HaiCommonError.CONFLICT.code,
+        status: 409,
+      })
+    }
+    finally {
+      debug.mockRestore()
+      error.mockRestore()
+    }
+  })
+
   it('完整驱动异常仅写一次关联日志，响应不携带诊断内容', async () => {
     const logged = vi.spyOn(core.logger, 'error').mockImplementation(() => {})
     try {

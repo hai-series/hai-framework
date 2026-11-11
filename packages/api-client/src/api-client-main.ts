@@ -425,9 +425,10 @@ async function callObservedProcedure(rawClient: unknown, path: string[], args: u
     record.errorCode = String(result.error.code)
     if ('message' in result.error && typeof result.error.message === 'string') {
       const error = result.error as Parameters<typeof core.error.toPublic>[0]
-      const receivedId = error.traceId && /^[\w.:-]{1,128}$/.test(error.traceId)
+      const errorTraceId = error.traceId && /^[\w.:-]{1,128}$/.test(error.traceId)
         ? error.traceId
-        : record.requestId
+        : undefined
+      const receivedId = errorTraceId ?? record.requestId
       record.requestId = receivedId
       const safe = core.error.toPublic({ ...error, publicExt: error.ext }, receivedId)
       if (error.cause && typeof error.cause === 'object' && !Array.isArray(error.cause)) {
@@ -449,13 +450,35 @@ async function callObservedProcedure(rawClient: unknown, path: string[], args: u
         if (Object.keys(metadata).length)
           safe.cause = metadata
       }
-      core.logger.error('API request failed', {
+      // 结构化服务端错误由服务端记录。缺少该关联标识的协议或传输失败由客户端诊断。
+      const serverReported = record.status !== undefined && errorTraceId !== undefined
+      const status = record.status !== undefined && record.status >= 400
+        ? record.status
+        : safe.httpStatus
+      const cause = error.cause instanceof Error
+        ? error.cause
+        : undefined
+      const networkCause = cause?.cause ?? cause
+      const causeCode = networkCause && typeof networkCause === 'object' && 'code' in networkCause
+        && typeof networkCause.code === 'string' && /^[A-Z0-9_]{1,64}$/.test(networkCause.code)
+        ? networkCause.code
+        : undefined
+      const logContext = {
         traceId: safe.traceId,
         requestId: record.requestId,
         procedure: record.procedure,
-        status: record.status,
-        error: result.error,
-      })
+        status,
+        errorCode: safe.code,
+        causeName: cause?.name,
+        causeCode,
+        diagnostic: !Array.isArray(safe.cause)
+          ? safe.cause
+          : undefined,
+      }
+      if (serverReported || (status !== undefined && status >= 400 && status < 500))
+        core.logger.debug('API request failed', logContext)
+      else
+        core.logger.error('API request failed', logContext)
       result = { ...result, error: safe }
     }
   }

@@ -394,7 +394,11 @@ export function createTokenManager(
         return null
       // 网络或 fetch 本身抛异常（超时、断网、CORS）视为可重试的暂时性错误，
       // 不清除 Token，仅记录日志。调用方可在下次请求时重试。
-      logger.error('Token refresh failed (transient)', { error })
+      logger.warn('Token refresh failed (transient)', {
+        causeName: error instanceof Error
+          ? error.name
+          : undefined,
+      })
       return null
     }
     finally {
