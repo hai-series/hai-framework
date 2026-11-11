@@ -18,6 +18,7 @@ import { createS3Provider } from './providers/storage-provider-s3.js'
 import { checksum } from './storage-checksum.js'
 import { StorageConfigSchema } from './storage-config.js'
 import { storageM } from './storage-i18n.js'
+import { logStorageResult, storageErrorContext, withStorageOperationLogs } from './storage-operation-log.js'
 import {
 
   HaiStorageError,
@@ -59,7 +60,7 @@ async function closeOwnedProvider(): Promise<HaiResult<void>> {
     return ok(undefined)
   }
   catch (error) {
-    logger.error('Provider cleanup failed; retaining resource for retry', { error })
+    logger.error('Provider cleanup failed; retaining resource for retry', storageErrorContext(HaiStorageError.CONNECTION_FAILED.code, error))
     return err({
       ...HaiStorageError.CONNECTION_FAILED,
       message: storageM('storage_operationFailed', {
@@ -151,6 +152,12 @@ const notInitializedPresign = new Proxy(
   },
 )
 
+const unavailableOperations = withStorageOperationLogs({
+  file: notInitializedFile,
+  dir: notInitializedDir,
+  presign: notInitializedPresign,
+})
+
 // ─── 存储服务对象 ───
 
 /**
@@ -177,7 +184,10 @@ const notInitializedPresign = new Proxy(
  * ```
  */
 export const storage: StorageFunctions = {
-  checksum,
+  checksum: {
+    generate: (data, options) => logStorageResult('checksum.generate', checksum.generate(data, options)),
+    verify: (data, expected, options) => logStorageResult('checksum.verify', checksum.verify(data, expected, options)),
+  },
   /**
    * 初始化存储连接。
    *
@@ -199,7 +209,7 @@ export const storage: StorageFunctions = {
   async init(config: StorageConfigInput): Promise<HaiResult<void>> {
     // 并发初始化防护：避免多次 init 同时执行导致 Provider 泄漏
     if (initInProgress || closingPromise) {
-      logger.warn('Storage init already in progress, skipping concurrent call')
+      logger.error('Storage initialization refused during an existing lifecycle operation', { code: HaiStorageError.OPERATION_FAILED.code })
       return err(
         HaiStorageError.OPERATION_FAILED,
         storageM('storage_operationFailed', {
@@ -218,11 +228,11 @@ export const storage: StorageFunctions = {
       if (!cleanup.success)
         return cleanup
 
-      logger.info('Initializing storage module')
+      logger.debug('Initializing storage module')
 
       const parseResult = StorageConfigSchema.safeParse(config)
       if (!parseResult.success) {
-        logger.error('Storage config validation failed', { error: parseResult.error.message })
+        logger.error('Storage config validation failed', { code: HaiStorageError.CONFIG_ERROR.code, issueCount: parseResult.error.issues.length })
         return err(
           HaiStorageError.CONFIG_ERROR,
           storageM('storage_configError', {
@@ -232,27 +242,32 @@ export const storage: StorageFunctions = {
         )
       }
       const parsed = parseResult.data
-      if (core.module.requiresSharedState(process.env) && (parsed.type === 'local'))
+      if (core.module.requiresSharedState(process.env) && parsed.type === 'local') {
+        logger.error('Storage initialization requires a shared provider', { code: HaiStorageError.CONFIG_ERROR.code, provider: parsed.type })
         return err(HaiStorageError.CONFIG_ERROR, storageM('storage_sharedBackendRequired'))
+      }
 
       const provider = createProvider(parsed)
       pendingProvider = provider
       const connectResult = await provider.connect(parsed)
       if (!connectResult.success) {
         logger.error('Storage module initialization failed', {
-          code: connectResult.error.code,
-          message: connectResult.error.message,
+          provider: provider.name,
+          ...storageErrorContext(connectResult.error.code, connectResult.error.cause),
         })
         return await failInitialization(connectResult)
       }
+      currentProvider = {
+        ...provider,
+        ...withStorageOperationLogs(provider, parsed.operationLog),
+      }
       pendingProvider = null
-      currentProvider = provider
       currentConfig = parsed
-      logger.info('Storage module initialized')
+      logger.debug('Storage module initialized')
       return ok(undefined)
     }
     catch (error) {
-      logger.error('Storage module initialization failed', { error })
+      logger.error('Storage module initialization failed', storageErrorContext(HaiStorageError.CONNECTION_FAILED.code, error))
       return await failInitialization(err(
         HaiStorageError.CONNECTION_FAILED,
         storageM('storage_operationFailed', {
@@ -273,13 +288,13 @@ export const storage: StorageFunctions = {
   },
 
   /** 文件操作接口。未初始化时所有方法返回 NOT_INITIALIZED 错误 */
-  get file(): FileOperations { return currentProvider?.file ?? notInitializedFile },
+  get file(): FileOperations { return currentProvider?.file ?? unavailableOperations.file },
 
   /** 目录操作接口。未初始化时所有方法返回 NOT_INITIALIZED 错误 */
-  get dir(): DirOperations { return currentProvider?.dir ?? notInitializedDir },
+  get dir(): DirOperations { return currentProvider?.dir ?? unavailableOperations.dir },
 
   /** 签名 URL 操作接口。未初始化时 publicUrl 返回 null，其余返回错误 */
-  get presign(): PresignOperations { return currentProvider?.presign ?? notInitializedPresign },
+  get presign(): PresignOperations { return currentProvider?.presign ?? unavailableOperations.presign },
 
   /** 当前脱敏后的存储配置快照；未初始化或已关闭时为 null */
   get config() {

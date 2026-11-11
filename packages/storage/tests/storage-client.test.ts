@@ -2,6 +2,8 @@
  * @h-ai/storage — 前端客户端工具函数测试
  */
 
+import type { LogRecord } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   downloadAndSave,
@@ -169,9 +171,25 @@ describe('storage client 工具函数', () => {
         statusText: 'Forbidden',
       }))
 
-      const result = await uploadWithPresignedUrl('https://example.com/upload', 'data')
-      expect(result.success).toBe(false)
-      expect(result.error).toBeDefined()
+      const warnings: LogRecord[] = []
+      const stop = core.logger.observe((record) => {
+        if (record.level === 'warn' && record.context.scope === 'client')
+          warnings.push(record)
+      })
+      try {
+        const result = await uploadWithPresignedUrl('https://example.com/upload?X-Amz-Signature=fixture-value', 'private body')
+        expect(result.success).toBe(false)
+        expect(result.error).toBeDefined()
+        expect(warnings).toMatchObject([
+          {
+            context: { operation: 'uploadWithPresignedUrl', httpStatus: 403 },
+          },
+        ])
+        expect(JSON.stringify(warnings)).not.toMatch(/fixture-value|private body/)
+      }
+      finally {
+        stop()
+      }
     })
 
     it('fetch 抛出网络错误时应返回失败', async () => {

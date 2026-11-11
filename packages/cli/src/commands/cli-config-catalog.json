@@ -7019,23 +7019,15 @@
     "name": "HAI_STORAGE_OPERATIONLOG",
     "module": "storage",
     "path": "storage.operationLog",
-    "description": "storage 操作日志的读写开关、级别与字段截断规则",
-    "value": "",
+    "description": "文件、目录和签名操作的 debug 日志开关与安全摘要长度。",
+    "value": "{}",
     "constraint": "JSON 对象；整体覆盖时替换该节点"
-  },
-  {
-    "name": "HAI_STORAGE_OPERATIONLOG_LEVEL",
-    "module": "storage",
-    "path": "storage.operationLog.level",
-    "description": "操作日志的输出级别",
-    "value": "debug",
-    "constraint": "字符串；取值：info | debug | trace"
   },
   {
     "name": "HAI_STORAGE_OPERATIONLOG_MAXLENGTH",
     "module": "storage",
     "path": "storage.operationLog.maxLength",
-    "description": "操作日志字段的最大字符数，0 表示不截断",
+    "description": "诊断摘要的字符上限，0 省略摘要。",
     "value": "1000",
     "constraint": "整数；>= 0；<= 9007199254740991"
   },
@@ -7043,7 +7035,7 @@
     "name": "HAI_STORAGE_OPERATIONLOG_READ",
     "module": "storage",
     "path": "storage.operationLog.read",
-    "description": "是否记录读取操作",
+    "description": "以 debug 记录读取操作，默认关闭。",
     "value": "false",
     "constraint": "true | false"
   },
@@ -7051,8 +7043,8 @@
     "name": "HAI_STORAGE_OPERATIONLOG_WRITE",
     "module": "storage",
     "path": "storage.operationLog.write",
-    "description": "是否记录写入操作",
-    "value": "false",
+    "description": "以 debug 记录写入操作，默认开启。",
+    "value": "true",
     "constraint": "true | false"
   },
   {

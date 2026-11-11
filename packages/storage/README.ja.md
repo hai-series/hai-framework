@@ -252,7 +252,7 @@ if (!initResult.success) {
 
 #### 操作ログ
 
-`operationLog` でファイル・ディレクトリー・署名付き URL の操作ログを有効にできます。Local/S3 Provider の実際の操作箇所で出力し、`storage-main.ts` で一括ラップしません。ファイル内容は記録せず、アップロードデータはバイト数のみを記録します。
+Local と S3 は書き込み操作を既定で記録します。読み取りを記録するには `operationLog.read` を有効にします。操作ログは `debug` 固定で、Core のログレベルに従います。操作の失敗時は元のエラーを返し、`warn` を出力します。ダウンロードストリームの読み取り中の失敗も対象です。初期化、接続、終了時の失敗は `error` を出力します。操作名、既知のバイト数、件数などの安全な要約を記録します。署名付き URL のアップロードとダウンロードのヘルパーはブラウザーで失敗を記録します。
 
 ```yaml
 # config/_storage.yml
@@ -260,9 +260,8 @@ type: local
 root: ./data/uploads
 operationLog:
   read: false # file.get/head/exists, dir.list, presign.getUrl/publicUrl
-  write: false # file.put/delete/deleteMany/copy, dir.delete, presign.putUrl
-  maxLength: 1000 # 参数序列化后的最大输出长度，超出会截断
-  level: debug # info | debug | trace，默认 debug
+  write: true # file.put/delete/deleteMany/copy, dir.delete, presign.putUrl
+  maxLength: 1000 # 要約の最大文字数、0 の場合は要約を省略
 ```
 
 ```ts
@@ -273,10 +272,11 @@ await storage.init({
     read: true,
     write: true,
     maxLength: 500,
-    level: 'debug',
   },
 })
 ```
+
+`HAI_STORAGE_OPERATIONLOG_WRITE=false` で書き込み操作の `debug` ログを無効にできます。アップグレード時は `operationLog.level` と `HAI_STORAGE_OPERATIONLOG_LEVEL` を削除し、全体のログレベルを `HAI_CORE_LOGGING_LEVEL` で設定してください。
 
 `storage.presign.putUrl()` は現在 `contentType` や `expiresIn` などの署名パラメーターに対応しますが、`maxSize` 制限は提供しません。
 

@@ -38,7 +38,6 @@ import {
   HaiStorageError,
 
 } from '../storage-types.js'
-import { logStorageOperation } from './storage-operation-log.js'
 
 const logger = core.logger.child({ module: 'storage', scope: 'provider-s3' })
 const TRAILING_SLASHES_REGEX = /\/+$/
@@ -274,10 +273,6 @@ export function createS3Provider(): StorageProvider {
     return withPrefix(key, getConfig().prefix)
   }
 
-  function logOperation(category: 'read' | 'write', operation: string, payload: unknown): void {
-    logStorageOperation(logger, config?.operationLog, category, operation, payload)
-  }
-
   // -------------------------------------------------------------------------
   // 文件操作实现
   // -------------------------------------------------------------------------
@@ -304,12 +299,6 @@ export function createS3Provider(): StorageProvider {
           ContentDisposition: options.contentDisposition,
           IfNoneMatch: options.ifNoneMatch,
         }
-        logOperation('write', 'file.put', {
-          key,
-          fullPath,
-          byteLength: buffered ? size : undefined,
-          options,
-        })
         if (buffered) {
           await s3Client.send(new PutObjectCommand({ ...params, Body: body }), { abortSignal: options.signal })
         }
@@ -382,7 +371,6 @@ export function createS3Provider(): StorageProvider {
         const s3Client = getClient()
         const s3Config = getConfig()
         const fullPath = fullKey(key)
-        logOperation('read', 'file.getStream', { key, fullPath, options })
 
         let Range: string | undefined
         if (options.rangeStart !== undefined || options.rangeEnd !== undefined) {
@@ -420,7 +408,6 @@ export function createS3Provider(): StorageProvider {
         const s3Client = getClient()
         const s3Config = getConfig()
         const fullPath = fullKey(key)
-        logOperation('read', 'file.head', { key, fullPath })
 
         const response = await s3Client.send(new HeadObjectCommand({
           Bucket: s3Config.bucket,
@@ -442,7 +429,6 @@ export function createS3Provider(): StorageProvider {
     },
 
     async exists(key): Promise<HaiResult<boolean>> {
-      logOperation('read', 'file.exists', { key })
       const result = await file.head(key)
       if (result.success) {
         return ok(true)
@@ -458,7 +444,6 @@ export function createS3Provider(): StorageProvider {
         const s3Client = getClient()
         const s3Config = getConfig()
         const fullPath = fullKey(key)
-        logOperation('write', 'file.delete', { key, fullPath })
 
         await s3Client.send(new DeleteObjectCommand({
           Bucket: s3Config.bucket,
@@ -476,7 +461,6 @@ export function createS3Provider(): StorageProvider {
       try {
         const s3Client = getClient('deleteMany')
         const s3Config = getConfig()
-        logOperation('write', 'file.deleteMany', { count: keys.length, keys })
         const uniqueKeys = [
           ...new Set(keys),
         ]
@@ -596,13 +580,6 @@ export function createS3Provider(): StorageProvider {
         ]
           .map(part => encodeURIComponent(part).replace(/[!'()*]/g, character => `%${character.charCodeAt(0).toString(16).toUpperCase()}`))
           .join('/')
-        logOperation('write', 'file.copy', {
-          sourceKey,
-          destKey,
-          sourceFullPath,
-          destFullPath,
-          options,
-        })
 
         await s3Client.send(new CopyObjectCommand({
           Bucket: s3Config.bucket,
@@ -632,7 +609,6 @@ export function createS3Provider(): StorageProvider {
       try {
         const s3Client = getClient()
         const s3Config = getConfig()
-        logOperation('read', 'dir.list', { options })
 
         const response = await s3Client.send(new ListObjectsV2Command({
           Bucket: s3Config.bucket,
@@ -668,7 +644,6 @@ export function createS3Provider(): StorageProvider {
 
     async delete(prefix): Promise<HaiResult<void>> {
       try {
-        logOperation('write', 'dir.delete', { prefix })
         // 分页列出并逐批删除，每批最多 1000 个对象
         let continuationToken: string | undefined
 
@@ -713,7 +688,6 @@ export function createS3Provider(): StorageProvider {
         const s3Client = getClient('presign')
         const s3Config = getConfig()
         const fullPath = fullKey(key)
-        logOperation('read', 'presign.getUrl', { key, fullPath, options })
         const basePath = publicBasePath
 
         const command = new GetObjectCommand({
@@ -744,7 +718,6 @@ export function createS3Provider(): StorageProvider {
         const s3Client = getClient('presign')
         const s3Config = getConfig()
         const fullPath = fullKey(key)
-        logOperation('write', 'presign.putUrl', { key, fullPath, options })
         const basePath = publicBasePath
 
         const command = new PutObjectCommand({
@@ -774,7 +747,6 @@ export function createS3Provider(): StorageProvider {
         return null
       }
       const fullPath = fullKey(key)
-      logOperation('read', 'presign.publicUrl', { key, fullPath })
       return `${s3Config.publicUrl.replace(TRAILING_SLASHES_REGEX, '')}/${fullPath}`
     },
   }
@@ -802,13 +774,7 @@ export function createS3Provider(): StorageProvider {
         await closeClients()
 
         config = cfg
-        logger.info('Connecting S3 provider', {
-          bucket: cfg.bucket,
-          region: cfg.region,
-          endpoint: cfg.endpoint
-            ? core.sanitize.sanitizeUrl(cfg.endpoint)
-            : undefined,
-        })
+        logger.debug('Connecting S3 provider')
 
         const clientConfig: S3ClientConfig = {
           region: cfg.region,
@@ -858,7 +824,7 @@ export function createS3Provider(): StorageProvider {
                       CreateBucketConfiguration: { LocationConstraint: cfg.region as BucketLocationConstraint },
                     }),
               }))
-              logger.info('S3 bucket created', { bucket: cfg.bucket })
+              logger.debug('S3 bucket created')
             }
             catch (createError) {
               // 并发应用仅接受本账号已拥有的桶，并重新核验访问；全局名称冲突不能当成功。
@@ -878,11 +844,10 @@ export function createS3Provider(): StorageProvider {
 
         config = cfg
         ready = true
-        logger.info('S3 provider connected', { bucket: cfg.bucket })
+        logger.debug('S3 provider connected')
         return ok(undefined)
       }
       catch (error) {
-        logger.error('S3 provider connect failed', { error })
         const original = toStorageError(error)
         try {
           await closeClients()

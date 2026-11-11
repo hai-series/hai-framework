@@ -109,7 +109,7 @@ describe('storageConfigSchema', () => {
         forcePathStyle: true,
         prefix: 'uploads',
         publicUrl: 'https://cdn.example.com',
-        operationLog: { read: true, level: 'trace' as const, maxLength: 128 },
+        operationLog: { read: true, maxLength: 128 },
       }
       const result = S3ConfigSchema.parse(full)
       expect(result.endpoint).toBe('http://localhost:9000')
@@ -117,10 +117,7 @@ describe('storageConfigSchema', () => {
       expect(result.forcePathStyle).toBe(true)
       expect(result.prefix).toBe('uploads')
       expect(result.publicUrl).toBe('https://cdn.example.com')
-      expect(result.operationLog?.read).toBe(true)
-      expect(result.operationLog?.write).toBe(false)
-      expect(result.operationLog?.level).toBe('trace')
-      expect(result.operationLog?.maxLength).toBe(128)
+      expect(result.operationLog).toEqual({ read: true, write: true, maxLength: 128 })
     })
 
     it('非法 endpoint URL 应校验失败', () => {
@@ -166,6 +163,7 @@ describe('storageConfigSchema', () => {
       expect(result.root).toBe('/data/uploads')
       expect(result.directoryMode).toBe(0o755)
       expect(result.fileMode).toBe(0o644)
+      expect(result.operationLog).toEqual({ read: false, write: true, maxLength: 1000 })
     })
 
     it('缺少 root 应校验失败', () => {
@@ -181,21 +179,19 @@ describe('storageConfigSchema', () => {
         ...validLocal,
         directoryMode: 0o700,
         fileMode: 0o600,
-        operationLog: { write: true },
+        operationLog: { write: false },
       })
       expect(result.directoryMode).toBe(0o700)
       expect(result.fileMode).toBe(0o600)
-      expect(result.operationLog?.read).toBe(false)
-      expect(result.operationLog?.write).toBe(true)
-      expect(result.operationLog?.level).toBe('debug')
-      expect(result.operationLog?.maxLength).toBe(1000)
+      expect(result.operationLog).toEqual({ read: false, write: false, maxLength: 1000 })
     })
 
-    it('操作日志等级仅支持 info/debug/trace', () => {
-      expect(() => LocalConfigSchema.parse({
+    it('旧配置中的操作日志等级不再进入解析结果', () => {
+      const result = LocalConfigSchema.parse({
         ...validLocal,
         operationLog: { read: true, level: 'warn' },
-      })).toThrow()
+      })
+      expect(result.operationLog).toEqual({ read: true, write: true, maxLength: 1000 })
     })
   })
 

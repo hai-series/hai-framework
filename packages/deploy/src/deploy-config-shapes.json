@@ -586,6 +586,7 @@
             "format": "uri"
           },
           "operationLog": {
+            "default": {},
             "type": "object",
             "properties": {
               "read": {
@@ -593,7 +594,7 @@
                 "type": "boolean"
               },
               "write": {
-                "default": false,
+                "default": true,
                 "type": "boolean"
               },
               "maxLength": {
@@ -601,15 +602,6 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
-              },
-              "level": {
-                "default": "debug",
-                "type": "string",
-                "enum": [
-                  "info",
-                  "debug",
-                  "trace"
-                ]
               }
             }
           }
@@ -642,6 +634,7 @@
             "type": "number"
           },
           "operationLog": {
+            "default": {},
             "type": "object",
             "properties": {
               "read": {
@@ -649,7 +642,7 @@
                 "type": "boolean"
               },
               "write": {
-                "default": false,
+                "default": true,
                 "type": "boolean"
               },
               "maxLength": {
@@ -657,15 +650,6 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
-              },
-              "level": {
-                "default": "debug",
-                "type": "string",
-                "enum": [
-                  "info",
-                  "debug",
-                  "trace"
-                ]
               }
             }
           }

@@ -43,15 +43,17 @@ export type StorageType = z.infer<typeof StorageTypeSchema>
  * ```ts
  * import { StorageOperationLogConfigSchema } from '@h-ai/storage'
  *
- * const value = StorageOperationLogConfigSchema.parse({ read: false, write: true, maxLength: 500, level: 'debug' })
+ * const value = StorageOperationLogConfigSchema.parse({ read: false, write: true, maxLength: 500 })
  * void value
  * ```
  */
 export const StorageOperationLogConfigSchema = z.object({
+  /** 以 debug 记录读取操作，默认关闭。 */
   read: z.boolean().default(false),
-  write: z.boolean().default(false),
+  /** 以 debug 记录写入操作，默认开启。 */
+  write: z.boolean().default(true),
+  /** 诊断摘要的字符上限，0 省略摘要。 */
   maxLength: z.number().int().min(0).default(1000),
-  level: z.enum(['info', 'debug', 'trace']).default('debug'),
 })
 
 /**
@@ -60,14 +62,15 @@ export const StorageOperationLogConfigSchema = z.object({
  * ```ts
  * import { StorageOperationLogConfigSchema, type StorageOperationLogConfig } from '@h-ai/storage'
  *
- * const value: StorageOperationLogConfig = StorageOperationLogConfigSchema.parse({ read: false, write: true, maxLength: 500, level: 'debug' })
+ * const value: StorageOperationLogConfig = StorageOperationLogConfigSchema.parse({ read: false, write: true, maxLength: 500 })
  * void value
  * ```
  */
 export type StorageOperationLogConfig = z.infer<typeof StorageOperationLogConfigSchema>
 
 const OperationLogConfigFieldSchema = {
-  operationLog: StorageOperationLogConfigSchema.optional(),
+  /** 文件、目录和签名操作的 debug 日志开关与安全摘要长度。 */
+  operationLog: StorageOperationLogConfigSchema.prefault({}),
 }
 
 /**

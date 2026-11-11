@@ -294,7 +294,7 @@ if (!initResult.success) {
 
 #### 操作日志
 
-可在存储配置中通过 `operationLog` 开启文件、目录和预签名 URL 操作日志。日志在 Local/S3 Provider 的真实操作处输出，不在 `storage-main.ts` 中做统一包装；文件内容不会写入日志，上传数据只记录字节长度。
+Local 和 S3 默认记录写操作，读操作可通过 `operationLog.read` 开启。操作记录固定为 `debug`，由 Core 日志级别过滤。业务操作失败返回原错误并记录 `warn`，包括消费下载流时的失败。初始化、连接和关闭失败记录 `error`。操作日志只包含操作名、已知字节数或数量等安全摘要。浏览器签名上传和下载助手在浏览器记录失败。
 
 ```yaml
 # config/_storage.yml
@@ -302,9 +302,8 @@ type: local
 root: ./data/uploads
 operationLog:
   read: false # file.get/head/exists, dir.list, presign.getUrl/publicUrl
-  write: false # file.put/delete/deleteMany/copy, dir.delete, presign.putUrl
-  maxLength: 1000 # 参数序列化后的最大输出长度，超出会截断
-  level: debug # info | debug | trace，默认 debug
+  write: true # file.put/delete/deleteMany/copy, dir.delete, presign.putUrl
+  maxLength: 1000 # 摘要字符上限，0 省略摘要
 ```
 
 ```ts
@@ -315,10 +314,11 @@ await storage.init({
     read: true,
     write: true,
     maxLength: 500,
-    level: 'debug',
   },
 })
 ```
+
+设置 `HAI_STORAGE_OPERATIONLOG_WRITE=false` 可关闭写操作的 `debug` 记录。升级时移除原有的 `operationLog.level` 和 `HAI_STORAGE_OPERATIONLOG_LEVEL`，通过 `HAI_CORE_LOGGING_LEVEL` 调整全局阈值。
 
 `storage.presign.putUrl()` 当前仅支持 `contentType` 与 `expiresIn` 等签名参数，不提供 `maxSize` 约束。
 

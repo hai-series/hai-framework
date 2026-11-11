@@ -25,6 +25,7 @@ description: "实现本地/S3 文件与目录操作、流式读写、checksum �
 5. 批量删除核对逐项进度，S3 每批最多 1000 项；HTTP 200 不能代替成功判断。unknown 结果先核对业务状态，避免重删并发新对象；dir.delete 不保证隔离并发写入或清除 S3 历史版本。
 6. 自建 Compose 的桶路径由 Web Nginx 或 SSR/API gateway 直达 storage，下载/Range 不经过 Serv，存储端口和控制台不公开。publicEndpoint 可含入口前缀，Nginx 用原始 request_uri 去前缀且保留编码、Host、签名查询，外层代理不能再剥离；入口可在网站目录内，拒绝 API/资源/健康冲突。新增网关、变更桶/公开地址需全量基线，增量及回滚保持原配置。外部 S3 不生成本地路由，Local 不开放目录。验证大文件、Range、过期/篡改/匿名拒绝、根/前缀路径和增量代理 DNS 刷新；签名 URL 不进入日志或截图。
 7. 同源对象可能包含不可信 HTML；默认代理返回 CSP sandbox/default-src none、nosniff、no-referrer、private/no-store，不用于执行网站脚本。外部 S3/CDN 须配置等价策略。自建 bucket/region 为空时由部署补 hai/us-east-1，不能误写成 Storage Schema 默认值。
+8. 写操作默认以 `debug` 记录，业务操作失败返回原错误并记录 `warn`，初始化、连接及关闭失败记录 `error`。正常日志由 Core 级别过滤。
 
 ## 按需参考
 

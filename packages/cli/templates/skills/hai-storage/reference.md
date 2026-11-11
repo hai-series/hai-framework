@@ -38,9 +38,8 @@ root: ./data/storage
 # publicUrl: ''
 operationLog:
   read: false # file.get/head/exists, dir.list, presign.getUrl/publicUrl
-  write: false # file.put/delete/deleteMany/copy, dir.delete, presign.putUrl
+  write: true # file.put/delete/deleteMany/copy, dir.delete, presign.putUrl
   maxLength: 1000
-  level: debug # info | debug | trace
 ```
 
 约定环境变量优先于 YAML，例如 `HAI_STORAGE_ROOT`、
@@ -52,7 +51,7 @@ MinIO、RustFS 使用同一个 S3 Provider：配置 `type: s3`、S3 API `endpoin
 
 使用 hai-deploy 的默认自建 S3 配置时，可通过 `hai.json` 的 `deploy.container.s3Engine`（`HAI_DEPLOY_CONTAINER_S3ENGINE`，`rustfs | minio`）选择实现，默认 RustFS。运行环境启用 `HAI_STORAGE_CREATEBUCKET=true` 后由应用初始化 storage 时建桶；部署不再生成独立初始化服务或脚本。自定义外部 S3 默认不建桶，可按凭据权限显式启用。
 
-`operationLog` 在 Local/S3 Provider 的真实 file/dir/presign 操作处输出日志，不要在 `storage-main.ts` 或调用方重复包装。文件内容不会写入日志，上传数据只记录字节长度；`maxLength` 用于截断序列化后的参数，`level` 默认 `debug`。
+`operationLog` 默认记录写操作，读操作需显式开启。操作记录固定为 `debug`，由 Core 日志级别过滤。业务失败返回原错误并记录一次 `warn`，初始化、连接和关闭失败为 `error`。`maxLength` 限制安全摘要的字符数，0 省略摘要。签名直传助手在浏览器记录失败，日志不包含对象键、签名 URL 或文件内容。升级时移除 `operationLog.level` 与 `HAI_STORAGE_OPERATIONLOG_LEVEL`，通过 `HAI_CORE_LOGGING_LEVEL` 设置全局阈值。
 
 ### 2. 初始化与关闭
 

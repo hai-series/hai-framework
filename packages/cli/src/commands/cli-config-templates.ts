@@ -439,11 +439,11 @@ ${s3}
 # type 选择 Provider；未选分支字段由模块 Schema 忽略。
 # S3 兼容服务由环境注入 endpoint / forcePathStyle；默认端点用于 us-east-1。
 
+# 正常操作记录为 debug，业务操作失败记录为 warn，初始化和连接失败记录为 error。
 # operationLog:
 #   read: false
-#   write: false
+#   write: true
 #   maxLength: 1000
-#   level: debug # trace | debug | info
 `
 }
 

@@ -5,8 +5,16 @@
  * @module storage-client
  */
 
+import { core } from '@h-ai/core'
 import { storageM } from '../storage-i18n.js'
 import { MIME_TYPE_DEFAULT, MIME_TYPES } from '../storage-mime.js'
+
+const logger = core.logger.child({ module: 'storage', scope: 'client' })
+
+function transferFailure(operation: string, error: string, httpStatus?: number): { success: false, error: string } {
+  logger.warn('Storage client operation failed', { operation, httpStatus })
+  return { success: false, error }
+}
 
 // ─── 客户端类型 ───
 
@@ -97,13 +105,12 @@ export async function uploadWithPresignedUrl(
   data: File | Blob | ArrayBuffer | string,
   options: ClientUploadOptions = {},
 ): Promise<{ success: boolean, error?: string }> {
+  const operation = 'uploadWithPresignedUrl'
+  logger.debug('Storage client operation started', { operation })
   try {
     const signal = options.abortController?.signal
     if (signal?.aborted) {
-      return {
-        success: false,
-        error: storageM('storage_uploadCanceled'),
-      }
+      return transferFailure(operation, storageM('storage_uploadCanceled'))
     }
 
     // 准备请求体
@@ -121,12 +128,13 @@ export async function uploadWithPresignedUrl(
          * @param result - 本次最终结果，不推断远端是否已写对象。
          * @param result.success - 是否已成功完成本地请求。
          * @param result.error - 可选失败说明。
+         * @param httpStatus - HTTP 响应状态，适用于服务端拒绝上传。
          * @example 模块内部上下文
          * ```ts
          * finish({ success: false, error: storageM('storage_networkError') })
          * ```
          */
-        function finish(result: { success: boolean, error?: string }): void {
+        function finish(result: { success: true } | { success: false, error: string }, httpStatus?: number): void {
           if (settled)
             return
           settled = true
@@ -136,7 +144,9 @@ export async function uploadWithPresignedUrl(
           xhr.removeEventListener('error', onError)
           xhr.removeEventListener('abort', onAbort)
           xhr.removeEventListener('timeout', onError)
-          resolve(result)
+          resolve(result.success
+            ? result
+            : transferFailure(operation, result.error, httpStatus))
         }
 
         function onAbort(): void {
@@ -176,7 +186,7 @@ export async function uploadWithPresignedUrl(
                 error: storageM('storage_uploadFailedStatus', {
                   params: { status: xhr.status, statusText: xhr.statusText },
                 }),
-              })
+              }, xhr.status)
         }
 
         function onProgress(event: ProgressEvent): void {
@@ -242,29 +252,20 @@ export async function uploadWithPresignedUrl(
     })
 
     if (!response.ok) {
-      return {
-        success: false,
-        error: storageM('storage_uploadFailedStatus', {
-          params: { status: response.status, statusText: response.statusText },
-        }),
-      }
+      return transferFailure(operation, storageM('storage_uploadFailedStatus', {
+        params: { status: response.status, statusText: response.statusText },
+      }), response.status)
     }
 
     return { success: true }
   }
   catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      return {
-        success: false,
-        error: storageM('storage_uploadCanceled'),
-      }
+      return transferFailure(operation, storageM('storage_uploadCanceled'))
     }
-    return {
-      success: false,
-      error: error instanceof Error
-        ? error.message
-        : storageM('storage_unknownError'),
-    }
+    return transferFailure(operation, error instanceof Error
+      ? error.message
+      : storageM('storage_unknownError'))
   }
 }
 
@@ -291,6 +292,7 @@ export async function downloadWithPresignedUrl(
   url: string,
   options: ClientDownloadOptions = {},
 ): Promise<{ success: boolean, data?: Blob, error?: string }> {
+  const operation = 'downloadWithPresignedUrl'
   try {
     const response = await fetch(url, {
       method: 'GET',
@@ -298,12 +300,9 @@ export async function downloadWithPresignedUrl(
     })
 
     if (!response.ok) {
-      return {
-        success: false,
-        error: storageM('storage_downloadFailedStatus', {
-          params: { status: response.status, statusText: response.statusText },
-        }),
-      }
+      return transferFailure(operation, storageM('storage_downloadFailedStatus', {
+        params: { status: response.status, statusText: response.statusText },
+      }), response.status)
     }
 
     const blob = await response.blob()
@@ -311,17 +310,11 @@ export async function downloadWithPresignedUrl(
   }
   catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      return {
-        success: false,
-        error: storageM('storage_downloadCanceled'),
-      }
+      return transferFailure(operation, storageM('storage_downloadCanceled'))
     }
-    return {
-      success: false,
-      error: error instanceof Error
-        ? error.message
-        : storageM('storage_unknownError'),
-    }
+    return transferFailure(operation, error instanceof Error
+      ? error.message
+      : storageM('storage_unknownError'))
   }
 }
 
@@ -369,12 +362,9 @@ export async function downloadAndSave(
     return { success: true }
   }
   catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error
-        ? error.message
-        : storageM('storage_saveFileFailed'),
-    }
+    return transferFailure('downloadAndSave', error instanceof Error
+      ? error.message
+      : storageM('storage_saveFileFailed'))
   }
 }
 

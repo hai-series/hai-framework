@@ -29,7 +29,6 @@ import {
   HaiStorageError,
 
 } from '../storage-types.js'
-import { logStorageOperation } from './storage-operation-log.js'
 
 const logger = core.logger.child({ module: 'storage', scope: 'provider-local' })
 const PATH_SEGMENT_SPLIT_REGEX = /[\\/]+/
@@ -294,10 +293,6 @@ export function createLocalProvider(): StorageProvider {
     return target
   }
 
-  function logOperation(category: 'read' | 'write', operation: string, payload: unknown): void {
-    logStorageOperation(logger, config?.operationLog, category, operation, payload)
-  }
-
   /** 代际记录不追加到用户文件名上，保留文件系统对长文件名的原有支持。 */
   function metadataKey(filePath: string, stat: fs.BigIntStats): string {
     return path.relative(getConfig().root, path.join(path.dirname(filePath), METADATA_DIRECTORY, `${metadataGeneration(stat)}.meta.json`))
@@ -331,7 +326,6 @@ export function createLocalProvider(): StorageProvider {
           if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
             throw error
         }
-        logOperation('write', 'file.put', { key, options })
 
         // 确保目录存在
         const dir = path.dirname(filePath)
@@ -385,21 +379,20 @@ export function createLocalProvider(): StorageProvider {
           }
           catch (error) {
             if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
-              logger.warn('Obsolete local metadata cleanup failed', { key })
+              logger.warn('Obsolete local metadata cleanup failed')
           }
         }
 
         return ok(metadata)
       }
       catch (error) {
-        logger.warn('Put file failed', { key, error })
         return err(toStorageError(error, key))
       }
       finally {
         if (temporaryPath)
           await fsp.unlink(temporaryPath).catch(() => {})
         if (preparedMetadataPath && !published)
-          await fsp.unlink(preparedMetadataPath).catch(() => logger.warn('Unpublished local metadata cleanup failed', { key }))
+          await fsp.unlink(preparedMetadataPath).catch(() => logger.warn('Unpublished local metadata cleanup failed'))
       }
     },
 
@@ -429,7 +422,6 @@ export function createLocalProvider(): StorageProvider {
       }
       try {
         const filePath = await fullPath(key)
-        logOperation('read', 'file.getStream', { key, options })
         options.signal?.throwIfAborted()
         const stat = await fsp.stat(filePath)
         if (stat.isDirectory()) {
@@ -461,7 +453,6 @@ export function createLocalProvider(): StorageProvider {
       }
       try {
         const filePath = await fullPath(key)
-        logOperation('read', 'file.head', { key })
         for (let attempt = 0; attempt < 3; attempt++) {
           const stat = await fsp.stat(filePath, { bigint: true })
           if (stat.isDirectory()) {
@@ -487,17 +478,9 @@ export function createLocalProvider(): StorageProvider {
             customMetadata = JSON.parse(serializedMetadata)
           }
           catch {
-            logger.warn('Invalid local metadata record', {
-              key,
-              generation: metadataGeneration(stat),
-            })
             return err(HaiStorageError.OPERATION_FAILED, storageM('storage_metadataInvalid'))
           }
           if (!isMetadataRecord(customMetadata)) {
-            logger.warn('Invalid local metadata shape', {
-              key,
-              generation: metadataGeneration(stat),
-            })
             return err(HaiStorageError.OPERATION_FAILED, storageM('storage_metadataInvalid'))
           }
           return ok({
@@ -527,7 +510,6 @@ export function createLocalProvider(): StorageProvider {
       }
       try {
         const filePath = await fullPath(key)
-        logOperation('read', 'file.exists', { key })
         await fsp.access(filePath, fs.constants.F_OK)
         return ok(true)
       }
@@ -551,8 +533,6 @@ export function createLocalProvider(): StorageProvider {
       try {
         const filePath = await fullPath(key)
         const generationKey = metadataKey(filePath, await fsp.stat(filePath, { bigint: true }))
-        logOperation('write', 'file.delete', { key })
-        logger.debug('Deleting file', { key })
         await fsp.unlink(filePath)
 
         // 仅删除已确认对象代际；并发新代际使用不同路径，不会被本次清理删除。
@@ -561,7 +541,7 @@ export function createLocalProvider(): StorageProvider {
         }
         catch (error) {
           if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
-            logger.warn('Deleted object metadata cleanup failed', { key })
+            logger.warn('Deleted object metadata cleanup failed')
         }
 
         return ok(undefined)
@@ -571,13 +551,11 @@ export function createLocalProvider(): StorageProvider {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
           return ok(undefined)
         }
-        logger.warn('Delete file failed', { key, error })
         return err(toStorageError(error, key))
       }
     },
 
     async deleteMany(keys): Promise<StorageDeleteResult> {
-      logOperation('write', 'file.deleteMany', { count: keys.length, keys })
       const summary: StorageDeleteSummary = { deletedKeys: [], failures: [] }
       const uniqueKeys = [
         ...new Set(keys),
@@ -613,7 +591,6 @@ export function createLocalProvider(): StorageProvider {
     },
 
     async copy(sourceKey, destKey, options = {}): Promise<HaiResult<FileMetadata>> {
-      logOperation('write', 'file.copy', { sourceKey, destKey, options })
       const source = await file.head(sourceKey)
       if (!source.success)
         return source
@@ -648,7 +625,6 @@ export function createLocalProvider(): StorageProvider {
           || Buffer.from(prefix).toString('utf8') !== prefix || Buffer.from(delimiter).toString('utf8') !== delimiter) {
           return err(HaiStorageError.INVALID_LIST_OPTIONS, storageM('storage_listOptionsInvalid'))
         }
-        logOperation('read', 'dir.list', { options })
 
         // 前缀只是 key 字符串，不能当作目录打开；从规范根目录遍历，子目录符号链接不会被跟随。
         safePath(cfg.root, prefix)
@@ -763,7 +739,6 @@ export function createLocalProvider(): StorageProvider {
       }
       try {
         const dirPath = await fullPath(prefix)
-        logOperation('write', 'dir.delete', { prefix })
 
         // 递归删除目录
         await fsp.rm(dirPath, { recursive: true, force: true })
@@ -785,18 +760,15 @@ export function createLocalProvider(): StorageProvider {
   // -------------------------------------------------------------------------
 
   const presign: PresignOperations = {
-    async getUrl(key, options?): Promise<HaiResult<string>> {
-      logOperation('read', 'presign.getUrl', { key, options })
+    async getUrl(): Promise<HaiResult<string>> {
       return err(HaiStorageError.UNSUPPORTED_OPERATION, storageM('storage_localPresignUnsupported'))
     },
 
-    async putUrl(key, options?): Promise<HaiResult<string>> {
-      logOperation('write', 'presign.putUrl', { key, options })
+    async putUrl(): Promise<HaiResult<string>> {
       return err(HaiStorageError.UNSUPPORTED_OPERATION, storageM('storage_localPresignUnsupported'))
     },
 
-    publicUrl(key): string | null {
-      logOperation('read', 'presign.publicUrl', { key })
+    publicUrl(): string | null {
       // 本地存储不支持公开 URL
       return null
     },
@@ -823,25 +795,24 @@ export function createLocalProvider(): StorageProvider {
 
       try {
         config = cfg
-        logger.info('Connecting local provider', { root: cfg.root })
+        logger.debug('Connecting local provider')
 
         // 确保根目录存在
         await fsp.mkdir(cfg.root, { recursive: true, mode: cfg.directoryMode })
 
         config = { ...cfg, root: await fsp.realpath(cfg.root) }
         connected = true
-        logger.info('Local provider connected', { root: cfg.root })
+        logger.debug('Local provider connected')
         return ok(undefined)
       }
       catch (error) {
-        logger.error('Local provider connect failed', { error })
         config = null
         return err(toStorageError(error))
       }
     },
 
     async close(): Promise<void> {
-      logger.info('Local provider disconnected')
+      logger.debug('Local provider disconnected')
       config = null
       connected = false
     },

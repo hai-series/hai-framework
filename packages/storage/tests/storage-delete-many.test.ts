@@ -5,6 +5,7 @@ import { DeleteObjectsCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/c
 import { ok } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { storage } from '../src/index'
+import * as localProvider from '../src/providers/storage-provider-local.js'
 
 afterEach(async () => {
   await storage.close()
@@ -259,6 +260,8 @@ describe('local deleteMany', () => {
     if (!directory.startsWith(`${root}${path.sep}`))
       throw new Error('Unexpected local test directory')
     const provider = storage
+    const local = localProvider.createLocalProvider()
+    vi.spyOn(localProvider, 'createLocalProvider').mockReturnValue(local)
     try {
       expect((await provider.init({ type: 'local', root: directory })).success).toBe(true)
       expect(await provider.file.deleteMany([])).toEqual({
@@ -267,7 +270,8 @@ describe('local deleteMany', () => {
       })
       let active = 0
       let peak = 0
-      vi.spyOn(provider.file, 'delete').mockImplementation(async (key) => {
+      // 从 Provider 注入拒绝，公开的批量入口仍经过日志和结果处理。
+      vi.spyOn(local.file, 'delete').mockImplementation(async (key) => {
         if (key === 'bad')
           throw new Error('unexpected filesystem failure')
         active++

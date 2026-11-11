@@ -146,7 +146,7 @@ publicEndpoint: https://files.example.com
 createBucket: false
 forcePathStyle: true
 prefix: orders/
-operationLog: { read: false, write: false, maxLength: 1000, level: debug }
+operationLog: { read: false, write: true, maxLength: 1000 }
 ```
 
 | 项 | 框架默认 | 不同值的影响 |
@@ -159,11 +159,13 @@ operationLog: { read: false, write: false, maxLength: 1000, level: debug }
 | `createBucket` | `false` | `true` 在初始化时检查并创建缺失桶，需要对应权限；自建部署会明确注入 `true` |
 | `forcePathStyle` | `false` | `true` 使用路径风格寻址，按兼容 S3 服务要求选择 |
 | `prefix` | 空串 | 组织对象路径，不是租户/用户授权边界 |
-| `operationLog` | 可省略 | 启用对象内默认同数据库，只输出安全摘要 |
+| `operationLog.read` / `write` | `false` / `true` | 操作记录固定为 `debug`，只输出安全摘要，`maxLength` 默认 1000 字符 |
 | 预签名 `expiresIn` | 调用参数3600秒，允许1–604800 | 越长暴露窗口越大；敏感下载按业务选较短期限，`local` 不支持预签名 |
 | 预签名 `responseContentType` / `responseContentDisposition` | 无默认 | 控制下载响应；上传签名 `contentType` 默认 `application/octet-stream` |
 
 验证普通上传、禁止覆盖、无权限访问、过期签名和删除后不可读。私有对象由服务端检查访问权限后生成短期签名，不能把 `accessKey` 下发客户端。
+
+存储业务操作失败仍返回原错误，同时记录 `warn`。初始化、连接和关闭失败记录 `error`。应用可用 `HAI_STORAGE_OPERATIONLOG_WRITE=false` 关闭写操作的 `debug` 记录。移除旧的 `operationLog.level` 和 `HAI_STORAGE_OPERATIONLOG_LEVEL`，通过 `HAI_CORE_LOGGING_LEVEL` 过滤日志。
 
 在 YAML 中设置 `prefix: orders/`，或在注册了 `StorageConfigSchema` 的应用中设置 `HAI_STORAGE_PREFIX=orders/`。调用 `storage.file.put('report.pdf', bytes)` 后，桶内保存的键为 `orders/report.pdf`。之后读、删、签名仍传 `report.pdf`。初始化探测和默认列表都查询 `orders/`，配置值写成 `orders` 也会按同一目录查询。修改前缀不会搬迁已有对象，切换前先处理数据迁移。
 

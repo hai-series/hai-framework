@@ -252,7 +252,7 @@ For empty self-hosted bucket/region settings, deployment injects hai/us-east-1; 
 
 #### Operation logging
 
-Enable file, directory, and presigned URL operation logs with `operationLog`. Logs are emitted at the actual Local/S3 provider operations, without a shared wrapper in `storage-main.ts`. File contents are never logged; uploads log only the byte length.
+Local and S3 log writes by default. Set `operationLog.read` to enable read logs. Operation records use `debug` and follow the Core log level. Failed operations return the original error and emit `warn`, including failures while consuming a download stream. Initialization, connection, and shutdown failures emit `error`. Operation logs contain safe summaries such as the operation name, byte length when known, or item count. The presigned upload and download helpers report failures in the browser.
 
 ```yaml
 # config/_storage.yml
@@ -260,9 +260,8 @@ type: local
 root: ./data/uploads
 operationLog:
   read: false # file.get/head/exists, dir.list, presign.getUrl/publicUrl
-  write: false # file.put/delete/deleteMany/copy, dir.delete, presign.putUrl
-  maxLength: 1000 # 参数序列化后的最大输出长度，超出会截断
-  level: debug # info | debug | trace，默认 debug
+  write: true # file.put/delete/deleteMany/copy, dir.delete, presign.putUrl
+  maxLength: 1000 # maximum summary characters, 0 omits the summary
 ```
 
 ```ts
@@ -273,10 +272,11 @@ await storage.init({
     read: true,
     write: true,
     maxLength: 500,
-    level: 'debug',
   },
 })
 ```
+
+Set `HAI_STORAGE_OPERATIONLOG_WRITE=false` to disable debug records for writes. When upgrading, remove `operationLog.level` and `HAI_STORAGE_OPERATIONLOG_LEVEL`. Set the global threshold through `HAI_CORE_LOGGING_LEVEL`.
 
 `storage.presign.putUrl()` currently supports signing options such as `contentType` and `expiresIn`, but no `maxSize` constraint.
 
