@@ -31,7 +31,7 @@ HAI_AUDIT_BACKUP_ENABLED=true
 
 这里列的是 fullstack 模板默认值，不是所有项目或底层 Schema 的普适限制。
 
-加密请求默认有效 300 秒，允许客户端时间领先服务器最多 30 秒。可在 `_serv.yml` 的 `transport` 下设置 `maxRequestAgeSeconds`（1～600）和 `maxFutureSkewSeconds`（0～300），单位为整数秒。超限时，前端显示校验时的服务器 UTC 时间，提示用户开启设备自动校时或手工修改时间，然后刷新。升级旧版本后，从最后一个旧节点停止处理请求起等待 12 分钟，再把请求有效期调到 300 秒以上。
+加密请求默认有效 300 秒，允许客户端时间领先服务器最多 30 秒。可在 `_serv.yml` 的 `transport` 下设置 `maxRequestAgeSeconds`（1～600）和 `maxFutureSkewSeconds`（0～300），单位为整数秒。超限时，前端显示校验时的服务器 UTC 时间，提示用户开启设备自动校时或手工修改时间，然后刷新。
 
 | 条目                         | fullstack 默认及启用入口                                        | 使用影响                                                 |
 | ---------------------------- | --------------------------------------------------------------- | -------------------------------------------------------- |
@@ -65,7 +65,7 @@ HAI_AUDIT_BACKUP_ENABLED=true
 
 在 `_iam.yml` 设置 `register.enabled: false` 会隐藏访客注册入口，同时由服务端拒绝自助注册；已有账号仍可登录，管理员也仍可创建用户。设回 true 恢复访客注册。
 
-`register.defaultAccountStatus: dormant` 表示自助注册成功后创建休眠账号，等待系统管理员激活后才能登录。默认 active 表示无需审批；仅影响新自助注册账号，管理员创建可另选状态。环境变量为 `HAI_IAM_REGISTER_ENABLED` / `HAI_IAM_REGISTER_DEFAULTACCOUNTSTATUS`。账号只有激活、休眠、注销三种生命周期，不再使用独立启用/停用开关。系统管理员可管理所有职责账号的资料、状态、角色并重置密码；审计与业务配置权限仍归各职责。
+`register.defaultAccountStatus: dormant` 表示自助注册成功后创建休眠账号，等待系统管理员激活后才能登录。默认 active 表示无需审批；仅影响新自助注册账号，管理员创建可另选状态。环境变量为 `HAI_IAM_REGISTER_ENABLED` / `HAI_IAM_REGISTER_DEFAULTACCOUNTSTATUS`。账号状态包括激活、休眠和注销。系统管理员可管理所有职责账号的资料、状态、角色并重置密码；审计与业务配置权限仍归各职责。
 
 ## 账号类型、状态和自动休眠
 
@@ -330,7 +330,7 @@ alerts:
 
 反馈 console 通知默认 consoleContent: metadata，只打印编号、应用版本等元数据；summary 是显式选项，可能包含业务信息。Reach API 默认拒绝重定向，敏感发送始终拒绝重定向，生产敏感发送默认要求 HTTPS；可信内网例外必须显式配置 requireHttps: false 并评估网络边界。
 
-升级前可用 `hai upgrade <精确版本>` 检查实际消费的包和已发布迁移导出。报告出现 migrateAudit({ dryRun: true }) 时先只读预检，再按结果安排备份和实际迁移；报告本身不执行数据库迁移。旧部署缺少受管凭据状态时仍拒绝普通部署，按 hai-deploy skill 的凭据导入流程处理，不删除旧卷或生成新密码替代。
+升级前可用 `hai upgrade <精确版本>` 核对消费包、安装状态和技能差异。发布前在独立环境验证数据库结构与应用启动，备份数据库、会话缓存、数据卷和受保护的部署状态。部署预检发现已有卷缺少匹配状态时，从核验过的备份恢复。
 
 ## 其他模板和业务项目如何复用
 

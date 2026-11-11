@@ -463,7 +463,7 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   if (selected && (selected.some(name => !config.images!.some(image => image.name === name)) || new Set(selected).size !== selected.length))
     throw new Error(cliM('cli_build_selection_invalid'))
   const images = config.images.filter(image => !selected || selected.includes(image.name))
-  const webBasePath = compileEnvironment.PUBLIC_BASE_PATH
+  const webBasePath = compileEnvironment.PUBLIC_BASE_PATH ?? ''
   if (webBasePath && !config.images.some(image => image.name === 'web'))
     throw new Error(cliM('cli_build_base_requires_web'))
   for (const image of images) {
@@ -479,7 +479,8 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     resolve(cwd, image.dockerfile),
   ])
   const artifact: DeploymentArtifact = {
-    version: 4,
+    version: 5,
+    webBasePath,
     primaryService: config.images.some(image => image.name === 'serv')
       ? 'serv'
       : 'web',
@@ -501,10 +502,6 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   await preflightDownloadProxy(runtime, downloads.proxy, options.json
     ? message => process.stderr.write(`${message}\n`)
     : undefined)
-  if (webBasePath) {
-    artifact.version = 5
-    artifact.webBasePath = webBasePath
-  }
   // 部分构建仍保留工程显式声明的端口，不用构建默认值覆盖部署配置。
   for (const image of config.images) {
     if (image.containerPort !== undefined) {

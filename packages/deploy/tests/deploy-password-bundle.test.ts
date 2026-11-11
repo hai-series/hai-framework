@@ -26,7 +26,8 @@ it.each([undefined, 'key', 'password'] as const)('交付包只保存认证方式
   mkdirSync(artifactDir)
   writeFileSync(join(artifactDir, 'serv-1.2.3.tar'), 'prebuilt app image')
   const artifact = DeploymentArtifactSchema.parse({
-    version: 4,
+    version: 5,
+    webBasePath: '',
     primaryService: 'serv',
     appVersion: '1.2.3',
     buildId: 'password-test',

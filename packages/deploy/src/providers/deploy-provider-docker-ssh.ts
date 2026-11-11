@@ -280,7 +280,7 @@ export function createDockerSshProvider(
           ? `[${host}]`
           : host}:${hostPort}`
         : `http://SERVER_HOST:${hostPort}`
-    const webBasePath = artifact.webBasePath ?? ''
+    const webBasePath = artifact.webBasePath
     const applicationUrl = `${url}${webBasePath
       ? `${webBasePath}/`
       : ''}`

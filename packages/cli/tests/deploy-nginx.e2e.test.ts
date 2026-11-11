@@ -300,7 +300,8 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       }
     })
     writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
-      version: 4,
+      version: 5,
+      webBasePath: '',
       primaryService: 'serv',
       hasWeb: true,
       appVersion: '1.0.0',
@@ -443,7 +444,8 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     const content = 'prebuilt-https-web'
     writeFileSync(path.join(artifacts, 'web-1.0.0.tar'), content)
     writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
-      version: 4,
+      version: 5,
+      webBasePath: '',
       primaryService: 'web',
       hasWeb: true,
       appVersion: '1.0.0',
@@ -919,7 +921,8 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
         }
       })
       writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
-        version: 4,
+        version: 5,
+        webBasePath: '',
         primaryService: 'serv',
         appVersion: '1.2.3',
         buildId: 'capacity',
@@ -1023,7 +1026,8 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     writeFileSync(path.join(project, '.env.test'), 'HAI_CORE_ENV=test\n')
     writeFileSync(path.join(artifacts, 'web-1.0.0.tar'), 'ssr-origin-fixture')
     writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
-      version: 4,
+      version: 5,
+      webBasePath: '',
       primaryService: 'web',
       appVersion: '1.0.0',
       buildId: 'ssr-origin',
@@ -1131,7 +1135,8 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       }
     })
     writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
-      version: 4,
+      version: 5,
+      webBasePath: '',
       primaryService: 'serv',
       appVersion: '1.2.3',
       buildId: 'access',

@@ -26,8 +26,6 @@ import { HaiDeployError } from './deploy-types.js'
  * ```
  */
 export async function createDeploymentPlan(appDir: string, input: DeployConfigInput, options: DeployAppOptions & { inspectRemote?: boolean } = {}) {
-  if ('projectName' in options && options.projectName !== undefined)
-    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_projectNameOverrideRemoved'))
   const parsed = DeployConfigSchema.safeParse(input)
   if (!parsed.success) {
     return err({

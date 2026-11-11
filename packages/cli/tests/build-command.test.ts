@@ -507,7 +507,8 @@ it.each([
   const parent = join(root, '.hai/build/docker')
   const manifest = JSON.parse(readFileSync(join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim(), 'manifest.json'), 'utf8'))
   expect(manifest).toMatchObject({
-    version: 4,
+    version: 5,
+    webBasePath: '',
     primaryService: names.includes('serv')
       ? 'serv'
       : 'web',
@@ -763,7 +764,8 @@ it('只构建 Web 并记录部分制品，未知镜像名在启动引擎前失�
   const parent = join(root, '.hai/build/docker')
   const manifest = JSON.parse(readFileSync(join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim(), 'manifest.json'), 'utf8'))
   expect(manifest).toMatchObject({
-    version: 4,
+    version: 5,
+    webBasePath: '',
     primaryService: 'serv',
     partial: true,
     hasWeb: true,

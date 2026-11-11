@@ -5,7 +5,7 @@
  *
  * 读取根 package.json 的 version，同步到：
  *   1. 所有 packages/* 和 apps/* 的 package.json
- *   2. packages/cli/templates/base/package.json.hbs 中的版本号和所有 @h-ai/* 依赖
+ *   2. packages/cli/templates/base/package.json.hbs 中的项目版本号
  *
  * 用于 CI 发布流程中，确保所有模块版本号一致。
  *
@@ -29,20 +29,6 @@ function readJson(filePath) {
  */
 function writeJson(filePath, data) {
   writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf-8')
-}
-
-/**
- * 读取文本文件
- */
-function readText(filePath) {
-  return readFileSync(filePath, 'utf-8')
-}
-
-/**
- * 写入文本文件
- */
-function writeText(filePath, content) {
-  writeFileSync(filePath, content, 'utf-8')
 }
 
 /**
@@ -78,32 +64,21 @@ function syncVersion(pkgPath, version) {
 }
 
 /**
- * 同步版本号到 package.json.hbs 模板文件
- * 更新主版本号和所有 @h-ai/* 依赖的版本号
+ * 同步项目版本号到 package.json.hbs，框架依赖由 Handlebars 注入。
  *
  * @param {string} hbsPath - package.json.hbs 的完整路径
  * @param {string} version - 目标版本号
  * @returns {boolean} 是否有变更
  */
 function syncVersionInHbs(hbsPath, version) {
-  let content = readText(hbsPath)
-  const originalContent = content
-
-  // 1. 更新主版本号: "version": "0.0.1" -> "version": "X.Y.Z"
-  content = content.replace(/"version"\s*:\s*"[^"]*"/, `"version": "${version}"`)
-
-  // 2. 更新所有 @h-ai/* 依赖版本号: "@h-ai/xxx": "^..." -> "@h-ai/xxx": "^X.Y.Z"
-  // 支持带条件的 Handlebars 语法，如 "@h-ai/core": "^0.1.0-alpha1"{{#if hasUi}},
-  content = content.replace(/"@h-ai\/[^"]*"\s*:\s*"\^[^"]*"/g, (match) => {
-    // 替换版本号部分，保留 @ 和包名
-    return match.replace(/"\^[^"]*"/, `"^${version}"`)
-  })
+  const originalContent = readFileSync(hbsPath, 'utf-8')
+  const content = originalContent.replace(/"version"\s*:\s*"[^"]*"/, `"version": "${version}"`)
 
   if (content === originalContent) {
     return false
   }
 
-  writeText(hbsPath, content)
+  writeFileSync(hbsPath, content, 'utf-8')
   return true
 }
 
@@ -138,7 +113,7 @@ function main() {
     }
   }
 
-  // 同步 package.json.hbs 模板文件中的版本号和依赖版本
+  // 同步模板中的项目版本号
   const hbsPath = join(ROOT, 'packages/cli/templates/base/package.json.hbs')
   try {
     if (syncVersionInHbs(hbsPath, version)) {

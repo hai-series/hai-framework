@@ -409,7 +409,7 @@ if [ "$partial" = true ]; then
       fi
       ;;
   esac
-  # 目录属于完整Web拓扑；旧版本缺省为根目录，服务增量不能意外丢失或改变既有目录。
+  # Web 挂载目录由完整拓扑确定，服务增量必须匹配已部署的目录。
   current_web_base=$(deployment_json read metadata.web-base-path string "$source_dir/manifest.json")
   previous_web_base=$(deployment_json read metadata.web-base-path string "$root/releases/$previous/manifest.json")
   test "$current_web_base" = "$previous_web_base" || { printf 'Web base path changed. Match the installed prefix for partial updates, or create a full deployment.\n' >&2; exit 1; }

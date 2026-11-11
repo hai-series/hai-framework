@@ -43,7 +43,7 @@ deployment_metadata_init() {
 deployment_metadata_file() {
   metadata_directory=$1
   metadata_name=$2
-  case "$metadata_name" in layout|health-paths|image-list|dependencies|managed-project|managed-bindings|managed-volumes|managed-app-keys|unmanaged-app-keys|state-backends|storage-routing|web-base-path|node-runtime|proxy-service|https) ;; *) printf 'Unknown deployment metadata field.\n' >&2; return 1;; esac
+  case "$metadata_name" in layout|health-paths|image-list|dependencies|managed-bindings|managed-volumes|managed-app-keys|unmanaged-app-keys|state-backends|storage-routing|web-base-path|node-runtime|proxy-service|https) ;; *) printf 'Unknown deployment metadata field.\n' >&2; return 1;; esac
   test -f "$metadata_directory/manifest.json" && test ! -L "$metadata_directory/manifest.json" || return 1
   metadata_identity=$(printf '%s' "$metadata_directory" | sha256sum | awk '{print $1}')
   metadata_cached="$metadata_work/$metadata_identity-$metadata_name"

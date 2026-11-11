@@ -34,9 +34,7 @@ const IMAGES = {
   nginx: 'docker.io/nginxinc/nginx-unprivileged:1.29.8-alpine',
 } as const
 
-// 这些变量还由启动代码直接读取，父级 YAML/JSON 不会替代其进程语义。
-
-// 旧版本曾把镜像原生变量保存到应用环境；读取旧配置时也不再传给业务容器。
+// 镜像原生变量只进入相应的中间件容器。
 const CONTAINER_ENV_KEYS = new Set([
   'POSTGRES_USER',
   'POSTGRES_PASSWORD',

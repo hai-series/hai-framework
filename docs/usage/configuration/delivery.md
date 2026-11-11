@@ -590,7 +590,7 @@ pnpm run deploy --env prod --build --bundle-only
 sh deploy-local.sh
 ```
 
-Windows上传运行`deploy.ps1`（PowerShell5+/OpenSSH），Linux/`macOS`运行`deploy.sh`（sh/awk/ssh/scp）。目标Linux需容器引擎、支持`--pull` never的Compose（Docker Compose v2或podman-compose≥1.6.0）、sh/tar/sha256sum/awk/curl/util-linux flock及目录/容器权限；文件系统支持flock，不需Node/pnpm。凭据导入是独立例外，需要服务器Node。
+Windows上传运行`deploy.ps1`（PowerShell5+/OpenSSH），Linux/`macOS`运行`deploy.sh`（sh/awk/ssh/scp）。目标Linux需容器引擎、支持`--pull` never的Compose（Docker Compose v2或podman-compose≥1.6.0）、sh/tar/sha256sum/awk/curl/util-linux flock及目录/容器权限；文件系统支持flock，不需Node/pnpm。
 
 ### 只复制归档时手工部署
 
@@ -630,7 +630,7 @@ images/                 # 本次镜像归档
 .hai/                   # 内部运行资产与恢复证据
 ```
 
-`manifest.json.metadata` 合并依赖、布局、健康路径、镜像列表、网关路径和托管绑定等非敏感信息，秘密不进入 manifest。`.hai/compose.json` 保存完整 Compose 快照，局部更新按服务替换并保留未选定义，不链接历史 Compose 文件。原生环境 `.hai/middleware-runtime.env`、加载器、Nginx/TLS、请求策略和 `.hai/SHA256SUMS` 属于内部生成文件。当前制品格式为 2，由工具生成和校验，用户不手动修改格式或目录。
+`manifest.json.metadata` 合并依赖、布局、健康路径、镜像列表、网关路径和托管绑定等非敏感信息，秘密不进入 manifest。`.hai/compose.json` 保存完整 Compose 快照，局部更新按服务替换并保留未选定义，不链接历史 Compose 文件。原生环境 `.hai/middleware-runtime.env`、加载器、Nginx/TLS、请求策略和 `.hai/SHA256SUMS` 属于内部生成文件。部署归档的 `bundleFormat` 为 `2`，由工具生成并校验。
 
 每个部署包的外层 `README.txt` 和归档内 `APPLY.txt` 都包含文件索引、环境优先级、当前包的变量名和排障步骤。解包目录的 `config/.env.runtime` 是发布输入，部署根下的是当前运行配置，`releases/<ID>/` 下的是历史记录。外部 PostgreSQL 改密后更新项目源环境并发布后端。部署校验拒绝 URL 与分字段密码冲突，增量切换外部与随包中间件需要改用全量发布。
 
@@ -644,18 +644,14 @@ images/                 # 本次镜像归档
 
 | 服务器状态 | 用途与保留方式 |
 | --- | --- |
-| `managed-secrets.env` | 服务器长期凭据，与数据卷成套备份；凭据导入不等于证明卷的后端类型 |
+| `managed-secrets.env` | 服务器长期凭据，与数据卷成套备份 |
 | persistent-backends | 长期保存项目、引擎/用户/存储身份和实际卷的后端家族，启动前原子保存；服务移除、首次失败和自动恢复均不清掉 |
 | releases/部署ID/.hai/previous-state-backends | 新发布保存已确认的旧绑定，恢复前据此核对账本及旧卷；只作恢复核验，不回退长期账本 |
 | current及result-部署`ID.json` | 分别表示最后成功发布和某次执行结果，不能替代数据卷或凭据备份 |
 
 这些文件是私有部署元数据，没有新增公开配置API。保护访问权限，备份账本、凭据及数据卷，不手工编辑绑定、删除账本或复用旧工具强行认领。
 
-旧部署缺少完整绑定时，只在成功基线的家族已知，且唯一真实服务容器的命名卷挂载和镜像家族吻合时补证接管。已经移除服务留下的未知旧卷不会按名字猜测，应先核实数据来源并执行独立迁移。活动成功基线的卷丢失则停止普通发布，先检查挂载、daemon/store与备份；不会为了恢复可访问性而自动创建空库。没有真正创建卷的失败部署可以重新选型；已经写入卷的失败则继续保留原后端约束。
-
-当前实现支持受控导入：`hai deploy-secrets <目录> --import <私有JSON>`默认只读预检，`--apply`才写。只有核实项目、卷和实际旧凭据后使用，详见[受管凭据导入](../../../packages/deploy/docs/credential-import.md)；不是自动修复密码漂移。
-
-账本尚未认领的旧卷也可以通过这条受控路径补证：合法v2必须绑定准确项目、凭据组和卷，同项目/服务的唯一运行原容器还要以一致的Docker/Podman标签、实际挂载和镜像家族共同证明。停止的容器、FORMAT1或任一证据不符都会拒绝，已有账本或daemon/store身份冲突不会被导入覆盖。导入不建立成功基线；没有current时，使用当前CLI生成**新ID的完整全量包**完成首次接管，不能直接用`--services`或部分制品，成功后才可增量。先核对原数据库记录与对象数据，再恢复业务写入；凭据导入和容器接管都不执行数据库数据恢复或格式转换。
+已有卷必须与受保护账本中的服务、后端家族和卷名匹配。活动卷丢失或没有匹配的账本记录时，部署在变更服务前停止。核对原部署身份和存储引擎后，恢复经过验证的凭据、账本和数据卷备份。
 
 部署用固定`.deploy.lock`内核锁覆盖更新和恢复，不能删/换锁文件或按时间抢锁。current只在服务器本地HTTP成功后原子推进。结果写result-<部署ID>.json，重复同一包会停止；同版本重建的新包可发布。
 
@@ -689,4 +685,4 @@ pnpm run deploy --env prod --artifact-dir .hai/build/docker/<上一批次目录>
 
 旧`buildId`通常保留serv/web应用镜像；重新打包的中间件仍由当前CLI固定版本规划，这一步不保证精确回退所有中间件版本。发布前单独核实引擎主版本、数据目录格式与Schema兼容；跨服务器、daemon或数据恢复也要独立验证。
 
-容器/配置回退不恢复已写业务数据、Schema迁移、已发通知和支付副作用。生产发布前准备维护窗口、数据库/卷/账本/凭据备份、兼容迁移、旧制品和实际恢复演练；保留记录直到观察期结束。
+容器/配置回退不恢复已写业务数据、Schema迁移、已发通知和支付副作用。生产发布前准备维护窗口、数据库/卷/账本/凭据备份、前一次发布的制品和实际恢复演练；保留记录直到观察期结束。

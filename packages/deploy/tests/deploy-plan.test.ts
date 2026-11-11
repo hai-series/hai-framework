@@ -46,15 +46,6 @@ it.each(['vite', 'sveltekit'])('平台浏览器计划从根 build.images 读取 
       containers: [],
     },
   })
-  const legacyOptions = { environment: 'prod', projectName: 'legacy-override' }
-  expect(await createDeploymentPlan(root, {
-    provider: { type: 'vercel', token: 'plan-test-token' },
-  }, legacyOptions)).toMatchObject({
-    success: false,
-    error: {
-      message: expect.stringContaining('projectName'),
-    },
-  })
 })
 
 afterEach(async () => {
@@ -82,7 +73,8 @@ it('只读计划使用工程身份、校验制品、报告保留服务与未知�
   const image = new TextEncoder().encode('test-archive-bytes')
   await writeFile(join(directory, 'serv-1.0.0.tar'), image)
   await writeFile(join(directory, 'manifest.json'), JSON.stringify({
-    version: 4,
+    version: 5,
+    webBasePath: '',
     primaryService: 'serv',
     appVersion: '1.0.0',
     buildId: 'build-1',
@@ -185,7 +177,8 @@ async function middlewareFixture(configs: Record<string, unknown>, partial = fal
   const image = 'plan-fixture-archive'
   await writeFile(join(artifactDir, 'serv-1.0.0.tar'), image)
   await writeFile(join(artifactDir, 'manifest.json'), JSON.stringify({
-    version: 4,
+    version: 5,
+    webBasePath: '',
     primaryService: 'serv',
     appVersion: '1.0.0',
     buildId: 'plan-fixture',

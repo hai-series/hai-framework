@@ -4,7 +4,8 @@ import { DeploymentArtifactSchema, normalizeProjectName } from '../src/index.js'
 describe('交付角色与项目身份', () => {
   it('网站挂载路径保留在制品中，非法路径和没有Web的路径配置拒绝', () => {
     const artifact = {
-      version: 4,
+      version: 5,
+      webBasePath: '',
       primaryService: 'web',
       hasWeb: true,
       appVersion: '1.0.0',
@@ -18,9 +19,9 @@ describe('交付角色与项目身份', () => {
         },
       ],
     }
-    expect(DeploymentArtifactSchema.parse({ ...artifact, version: 5, webBasePath: '/yyy/sub' })).toMatchObject({ version: 5, webBasePath: '/yyy/sub' })
-    expect(DeploymentArtifactSchema.safeParse({ ...artifact, webBasePath: '/yyy/sub' }).success).toBe(false)
-    expect(DeploymentArtifactSchema.safeParse({ ...artifact, version: 5 }).success).toBe(false)
+    expect(DeploymentArtifactSchema.parse({ ...artifact, webBasePath: '/yyy/sub' })).toMatchObject({ version: 5, webBasePath: '/yyy/sub' })
+    expect(DeploymentArtifactSchema.safeParse({ ...artifact, version: 4, webBasePath: '' }).success).toBe(false)
+    expect(DeploymentArtifactSchema.safeParse({ ...artifact, webBasePath: undefined }).success).toBe(false)
     expect(DeploymentArtifactSchema.safeParse({ ...artifact, webBasePath: '' }).success).toBe(true)
     for (const value of [
       '/',
@@ -31,7 +32,7 @@ describe('交付角色与项目身份', () => {
       '/a#b',
       '/a%2fb',
     ])
-      expect(DeploymentArtifactSchema.safeParse({ ...artifact, version: 5, webBasePath: value }).success).toBe(false)
+      expect(DeploymentArtifactSchema.safeParse({ ...artifact, webBasePath: value }).success).toBe(false)
     expect(DeploymentArtifactSchema.safeParse({
       ...artifact,
       primaryService: 'serv',
@@ -67,7 +68,8 @@ describe('交付角色与项目身份', () => {
       sha256: 'a'.repeat(64),
     }))
     const artifact = {
-      version: 4,
+      version: 5,
+      webBasePath: '',
       primaryService,
       hasWeb,
       appVersion: '1.0.0',

@@ -110,7 +110,8 @@ async function configure(service: MiddlewareRequirement['service'], config: Reco
   const archive = Buffer.alloc(1024)
   writeFileSync(join(artifactDirectory, 'serv-1.0.0.tar'), archive)
   writeFileSync(join(artifactDirectory, 'manifest.json'), JSON.stringify({
-    version: 4,
+    version: 5,
+    webBasePath: '',
     primaryService: 'serv',
     appVersion: '1.0.0',
     buildId: 'external-fixture',

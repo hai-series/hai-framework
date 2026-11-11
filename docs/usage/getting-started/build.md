@@ -73,7 +73,7 @@ hai build --target image --json
 
 原生文件名包含平台、架构（Desktop）、debug/release 和版本，Android ABI/flavor 等输出差异继续保留；其他原生格式沿用 `.ipa`、`.dmg`、`.app`、`.deb`、`.AppImage`。只调整 `.hai/build` 中的归档名称，Gradle/Tauri 自身的工作目录和文件名仍由原生工具管理。`latest` 存批次相对目录名，manifest 中的 `buildId` 保持短标识；旧构建目录、旧 `latest` 和旧镜像清单仍可读取，无须改写历史产物。
 
-源码与镜像构建不选择生产环境、不注入运行密钥；镜像可跨环境复用。部分镜像制品不等于首次完整安装，部署模式由manifest和所选服务判断。旧格式/旧角色名需要重新构建，不只改文件名。
+源码与镜像构建不选择生产环境、不注入运行密钥；镜像可跨环境复用。部分镜像制品不等于首次完整安装，部署模式由manifest和所选服务判断。
 
 ## 原生和离线条件
 

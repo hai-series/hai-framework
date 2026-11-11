@@ -58,7 +58,7 @@ description: "构建或排查 hai 应用的源码、静态网站、容器镜像�
 
 交付角色统一为 `serv`（独立 API 后端）、`web`（静态或 SSR 浏览器站点）、`app`（Android/iOS 手机安装包）、`desktop`（桌面安装包）。Fullstack 容器为 serv + 可选 web，API 为 serv，admin/website/h5/mobile-app 的浏览器镜像为 web；原生 app/desktop 不作为服务器 Compose 服务。`--images` 与 `--services` 使用 serv/web，`--target app` 与 `--target desktop` 生成原生包。API workspace 的服务目录为 `apps/<项目>-serv`。镜像与容器共用工程根 `package.json.name` 的归一化身份（去 scope、转小写、非法字符合并为连字符）；名称缺失或无效时报错，不回退目录名。镜像为 `localhost/hai-<项目>-<角色>:<buildId>`，容器为 `hai-<项目>-<环境>-<角色>`，镜像可跨环境复用。
 
-制品格式4和5都记录primaryService（serv/web），hasWeb表示完整工程是否包含浏览器端；格式5另记录非根目录webBasePath。只有serv + web生成同源API代理；格式1至3须重新构建。CLI的--project-name与SDK的DeployAppOptions.projectName覆盖入口已移除，旧参数明确报错，请在工程根package.json.name维护身份。迁移旧工程先同步build.images、Dockerfile及API workspace的-serv包名与引用，重新安装依赖并重建完整制品。旧部署先备份、核对项目名、卷和受管凭据，再建立完整基线。工具不自动跨项目迁移数据；完整部署仍按Compose规则清理同项目旧服务，不能仅改deploy-target.json.directory完成迁移。网站目录与格式5迁移见[网站挂载目录](paths.md)。
+镜像制品统一使用格式 5，`webBasePath` 为空字符串时表示域名根目录。`primaryService` 记录主服务，`hasWeb` 记录完整 Web 拓扑。部署身份来自工程根 `package.json.name`。只有 `serv` 与 `web` 同时存在时才生成同源 API 代理。 公开挂载目录见[网站挂载目录](paths.md)。
 
 ## 按需参考
 

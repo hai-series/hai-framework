@@ -290,7 +290,7 @@ export async function createDeploymentBundle(options: {
         : ''}${httpsFingerprint
         ? `:${httpsFingerprint}`
         : ''}\n`,
-      'web-base-path': `${artifact.webBasePath ?? ''}\n`,
+      'web-base-path': `${artifact.webBasePath}\n`,
       'health-paths': `${options.healthPaths.join('\n')}\n`,
       'image-list': `${imageList.join('\n')}\n`,
       'dependencies': `${[...dependencies].join('\n')}\n`,
@@ -300,7 +300,6 @@ export async function createDeploymentBundle(options: {
         ? options.proxyService ?? 'web'
         : '',
       'https': options.httpsAssets?.https ?? '',
-      'managed-project': managed['managed-project']!,
       // 未选应用时只带容器原生绑定，保持当前发布的应用连接归属。
       'managed-bindings': updatesApp
         ? managed['managed-bindings']!

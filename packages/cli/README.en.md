@@ -27,17 +27,16 @@ Input a project name and template type; output is a project with dependency inst
 
 These are terminal commands; no framework service initialization is required. Observe actual output and exit status. Replace TARGET_VERSION with the published exact version returned by pnpm view; do not pass the placeholder literally.
 
-| Command        | Purpose and input                                  | Output and example                                                                                                                                    |
-| -------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| create         | Project name, type and fullstack frontend choices  | `hai create orders --type admin --defaults` creates an admin application                                                                              |
-| add            | Add a named module to the current project          | `hai add ai` adds dependencies, configuration and skills while preserving business files; wire initialization, shutdown and routes in the application |
-| init           | Complete project configuration and AI entry points | `hai init` fills missing files; review changes before `--force` rebuilds module configuration                                                         |
-| generate / g   | Type, name and target workspace                    | `hai generate api orders --workspace orders-serv` creates routes or contract/procedure files; shortcuts are g:page/g:component/g:api/g:model          |
-| build          | Target, images/platform and source inputs          | `hai build --target image --json` emits the current artifact JSON; build has no deployment environment option                                         |
-| deploy         | Environment, artifacts and selected services       | `hai deploy --env prod --plan` emits a read-only plan; omit plan to enter delivery                                                                    |
-| upgrade        | Exact release version and project                  | `hai upgrade TARGET_VERSION` reports dependencies, integrity, configuration and skill drift without installation or overwrites                        |
-| deploy-secrets | Server directory and private JSON                  | `hai deploy-secrets /srv/orders --import /private/orders.json --runtime docker` validates by default; only explicit `--apply` writes state            |
-| feedback       | Action, diagnostic ZIP and filters                 | `hai feedback summary feedback.zip` prints a summary; inspect/evidence/view provide manifest, evidence or a local viewer                              |
+| Command      | Purpose and input                                  | Output and example                                                                                                                                    |
+| ------------ | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| create       | Project name, type and fullstack frontend choices  | `hai create orders --type admin --defaults` creates an admin application                                                                              |
+| add          | Add a named module to the current project          | `hai add ai` adds dependencies, configuration and skills while preserving business files; wire initialization, shutdown and routes in the application |
+| init         | Complete project configuration and AI entry points | `hai init` fills missing files; review changes before `--force` rebuilds module configuration                                                         |
+| generate / g | Type, name and target workspace                    | `hai generate api orders --workspace orders-serv` creates routes or contract/procedure files; shortcuts are g:page/g:component/g:api/g:model          |
+| build        | Target, images/platform and source inputs          | `hai build --target image --json` emits the current artifact JSON; build has no deployment environment option                                         |
+| deploy       | Environment, artifacts and selected services       | `hai deploy --env prod --plan` emits a read-only plan; omit plan to enter delivery                                                                    |
+| upgrade      | Exact release version and project                  | `hai upgrade TARGET_VERSION` reports dependencies, integrity, configuration and skill drift without installation or overwrites                        |
+| feedback     | Action, diagnostic ZIP and filters                 | `hai feedback summary feedback.zip` prints a summary; inspect/evidence/view provide manifest, evidence or a local viewer                              |
 
 Global `--cwd/-C` selects the project and `--verbose/-v` enables detailed diagnostics. CLI language follows `HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG`, independently of the generated application's language.
 
@@ -107,7 +106,7 @@ hai upgrade TARGET_VERSION
 
 Bundles must be regular single-link files up to64MiB. View listens on loopback with a random path and uses the framework viewer instead of executing bundled replacement scripts. Filtered results are not proof of complete evidence.
 
-Upgrade checks actual consumer artifacts, CLI/deploy, catalog/lock/installation and skill customization; it does not execute migrations. Deploy-secrets requires Node on the Linux server and a private regular single-link JSON file up to64KiB. Import neither restores database data nor establishes a successful release baseline. See [credential requirements](../deploy/docs/credential-import.en.md).
+`hai upgrade` inspects the consumed packages, CLI/deploy artifacts, catalog, lockfile, installation state and skill differences.
 
 ### AI guidance and application experience
 

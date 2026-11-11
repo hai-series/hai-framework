@@ -131,7 +131,7 @@ pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source 
 
 构建器将锁文件、包配置、本地归档和补丁准备为 `images/dependencies/` 输入，结合 pnpm store 缓存与 Docker 分层复用下载。源码修改不应重新下载全部依赖；缓存为空仍能联网构建。Windows node_modules 不用于 Linux 镜像。完全离线构建还需预先准备基础镜像、工具链和匹配 ABI/架构/libc 的原生预编译包。
 
-版本来自应用根 package.json.version。制品位于 `.hai/build/docker/<buildId>/`，包括manifest.json、所选镜像tar和SHA-256；根目录使用格式4，非根目录使用格式5及webBasePath。partial 标识部分构建，hasWeb 保留工程拓扑。清单还会记住配置中填写的 serv/web 容器端口（servContainerPort、webContainerPort），只打包一个镜像也不会丢掉另一个的端口；没填写则沿用部署默认值。相同应用版本允许重建，构建编号和镜像引用区分实际内容；全部导出成功才更新本机构建入口。基础镜像、中间件及工具使用明确版本，不使用 latest。
+版本来自应用根 package.json.version。制品位于 `.hai/build/docker/<buildId>/`，包括manifest.json、所选镜像tar和SHA-256；镜像制品统一使用格式 5。`webBasePath` 记录公开挂载目录，空字符串表示域名根目录。partial 标识部分构建，hasWeb 保留工程拓扑。清单还会记住配置中填写的 serv/web 容器端口（servContainerPort、webContainerPort），只打包一个镜像也不会丢掉另一个的端口；没填写则沿用部署默认值。相同应用版本允许重建，构建编号和镜像引用区分实际内容；全部导出成功才更新本机构建入口。基础镜像、中间件及工具使用明确版本，不使用 latest。
 
 #### 网站挂载目录
 
@@ -147,7 +147,7 @@ SDK据制品生成Nginx目录、运行配置入口、SSR健康路径和返回URL
 
 全站仅开放 `/somepath/` 时，构建设置 `PUBLIC_BASE_PATH=/somepath`，并将 Serv 的 `http.apiPrefix`、健康/就绪和文档路径及存储 `publicEndpoint` 显式配置到同一目录。SDK 按这些有效配置生成代理和浏览器 API 地址；外层网关保留前缀，内部探活和 ACME 根路径单独处理。[完整配置与验收](../../docs/usage/configuration/delivery.md#所有对外业务路径必须带同一目录).
 
-制品格式4和5都记录primaryService（serv/web），hasWeb表示完整工程是否包含浏览器端；格式5另记录非根目录webBasePath。只有serv + web才生成同源API代理。格式1至3制品须重新构建。旧部署先备份并核对项目名、数据卷和受管凭据，再切换到新的完整部署基线；工具不自动跨项目迁移数据。完整部署仍会按Compose规则清理同项目的旧服务容器，不能仅修改deploy-target.json.directory完成迁移。
+`primaryService` 记录主服务（`serv` 或 `web`），`hasWeb` 记录工程是否包含浏览器端。只有 `serv` 与 `web` 同时存在时才生成同源 API 代理。
 
 准备 `.env.<环境>`（例如 `.env.prod`）和项目根 `hai.json`，其中 `build` 描述镜像与桌面构建，`deploy` 描述整个应用的部署。fullstack 的 deploy 参数仍指向 `packages/<项目>-serv`，API workspace 指向 `apps/<项目>-serv`，仅用于扫描运行依赖和模块 YAML；前后端构建与部署配置统一在项目根。
 
@@ -237,9 +237,7 @@ pnpm run deploy --env prod --build --bundle-only
 
 部署前核对自建 `db`、`storage`、`vecdb` 的实际卷与后端家族；禁止把 PostgreSQL 数据卷交给 MySQL、RustFS 数据卷交给 MinIO，或在向量库引擎之间复用原卷。服务器 `<remoteDir>/persistent-backends` 长期记录这些绑定，在任何服务启动前保存；全量移除服务、首次安装失败和自动恢复都不会清掉记录。因此“移除 PostgreSQL → 保留卷 → 再加 MySQL”也会被拒绝。该文件与 `managed-secrets.env`、数据卷成套保护和备份，不得删除或编辑账本强行认领旧卷；这些是部署私有元数据，没有新增公开配置项。
 
-旧部署缺少完整绑定时，只有成功基线中的已知家族、唯一真实服务容器的命名卷挂载和镜像家族一致，才能补证接管。已移除服务留下的未知旧卷不会按名称或密码猜测；需要核实数据并制定独立迁移方案。当前成功基线的卷缺失时停止发布，不自动创建空库。新发布的 `previous-state-backends` 保存已确认的旧绑定，只用于恢复前再次核验；恢复还要求旧卷存在且账本一致，不回退永久账本。
-
-另有明确的[受控凭据导入路径](docs/credential-import.md)：账本尚未认领该卷时，合法 v2 状态必须绑定准确项目、凭据组和卷，并由同项目/服务的唯一运行原容器，以一致的 Docker/Podman 标签、真实 Mounts 和 Config.Image 家族共同补证。缺任一证据仍拒绝，导入不能覆盖已知账本或引擎身份冲突。导入不建立成功基线；没有 `current` 时，首次接管必须用当前 CLI 生成**新 ID 的完整全量包**，成功后才可增量。
+已有数据卷必须与受保护账本中的服务、后端家族和卷名匹配。缺少活动卷或相应记录时停止部署，恢复已核验的备份后再试。每次发布保留 `previous-state-backends`，用于恢复前重新核验对应的账本记录与实际卷。
 
 这些身份检查在 **SSH 目标 Linux 服务器**执行 `apply.sh` 时生效：使用固定 SSH 用户、固定本地 daemon/store，Docker 要求默认 context，Podman 要求实际本地模式；远程连接与显式存储覆盖环境会被拒绝。生产建议显式设置 `remote.runtime` 为已验收的 `docker` 或 `podman`。若 `auto` 因新装 Podman 换了引擎，应先恢复原 runtime、SSH 用户和存储，再重试；有意更换服务器、daemon 或数据存储则单独迁移，不能用相同 uid 或目录名证明数据兼容。Windows/macOS 操作机通过 Docker Desktop 或 Podman VM 构建、打包再 SSH 发布不受这一服务器限制。
 
@@ -352,7 +350,7 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 项目根 `hai.json.deploy` 保存部署结构，`.env.<环境>` 保存公共配置，`.env.<环境>.local` 保存 SSH 及中间件秘密值。环境文件默认来自项目/workspace 根，`--env-dir` 可指定目录。完整配置后可使用 `pnpm run deploy --env test --build --bundle-only --yes` 无交互复用；只想保留现有中间件配置时追加 `--skip-middleware`。交互式仅打包会在最后询问是否保存或修改 SSH 信息；修改交付目录的 `deploy-target.json` 不会回写工程。
 
-自建中间件的密码由服务器 `<remoteDir>/managed-secrets.env` 持久保存（权限 0600），应与数据卷一起备份。每次打包只生成首次初始化的随机候选，不依赖打包机缓存；在线 SDK、deploy.sh、deploy.ps1 和 deploy-local.sh 都在部署锁内复用服务器值，同时更新应用连接配置及中间件原生变量。交付 tar 保持不可变，只有服务器私有运行文件使用定稿值。若状态缺失而对应数据卷已存在，部署在变更服务前明确停止，须恢复服务器凭据备份；不会自动换密或删除数据。状态缺失时可按显式预检和凭据导入流程补全，普通部署仍拒绝缺失状态。
+自建中间件的密码由服务器 `<remoteDir>/managed-secrets.env` 持久保存（权限 0600），应与数据卷一起备份。每次打包只生成首次初始化的随机候选，不依赖打包机缓存；在线 SDK、deploy.sh、deploy.ps1 和 deploy-local.sh 都在部署锁内复用服务器值，同时更新应用连接配置及中间件原生变量。交付 tar 保持不可变，只有服务器私有运行文件使用定稿值。若状态缺失而对应数据卷已存在，部署在变更服务前明确停止，须恢复服务器凭据备份；不会自动换密或删除数据。
 
 ### 请求策略文件与可信代理
 
@@ -372,11 +370,9 @@ Serv 的 `http.access`、SvelteKit 的 `access` 可引用独立 yml/yaml。部�
 
 资源清单复用执行端的完整 sidecar 拓扑：`containers` 只列本次选中的显式容器名，LDAP/SMTP 等由 Compose 命名的服务列在 `composeManagedServices`；自建 S3 的 SSR/API gateway 也会列入实际更新或保留范围。`logicalVolumes` 是完整拓扑的 Compose 逻辑卷声明，包含保留服务和应用继续挂载的数据卷，不表示新建或重建这些卷；实际引擎卷名由 Compose 项目作用域决定。未选中间件的 action 为 keep，云开通仅按实际选择范围计算，不展示凭据值。
 
-### 容量与凭据导入
+### 传输容量
 
 传输明文上限保留显式设置；反馈需求超过显式值时拒绝打包并说明冲突。缺省/auto 才按模块预算推导，Web 代理和 Kit BODY_SIZE_LIMIT 使用同一密文预算。计划的 target.runtime 表示远端 provider.remote.runtime，与本地镜像打包 options.runtime 分离；auto 不冒充已探测事实。
-
-旧目标可用 `importDeploymentSecrets({ directory, inputFile, runtime })` 或在服务器执行 `hai deploy-secrets <directory> --import <private.json>` 只读核验；显式 `--apply` / dryRun:false 才导入。工具核验项目、容器、卷和实际服务凭据，不猜测旧包、不轮换密码、不重建服务。新 v2 状态支持特殊字符并与部署共用 flock，原子写入权限 0600。常规离线部署无需服务器 Node；一次性导入工具需要受支持的 Node 与已安装的 CLI/deploy。详见[导入与恢复流程](docs/credential-import.md).
 
 ## 配置
 

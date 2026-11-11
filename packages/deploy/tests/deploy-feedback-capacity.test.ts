@@ -109,7 +109,8 @@ function fixture(kit = false) {
     }
   })
   writeFileSync(join(artifactDir, 'manifest.json'), JSON.stringify({
-    version: 4,
+    version: 5,
+    webBasePath: '',
     primaryService: 'serv',
     appVersion: '1.0.0',
     buildId: 'build-review',

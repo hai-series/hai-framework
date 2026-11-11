@@ -107,7 +107,8 @@ function project(kind: string): string {
     }
   })
   writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({
-    version: 4,
+    version: 5,
+    webBasePath: '',
     primaryService: names[0],
     hasWeb: names.includes('web'),
     appVersion: '1.0.0',

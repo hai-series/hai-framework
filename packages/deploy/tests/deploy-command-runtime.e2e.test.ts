@@ -88,7 +88,8 @@ function application(name: string, projectName = name): string {
   writeFileSync(path.join(app, '.hai/build/docker/latest'), 'release-1\n')
   writeFileSync(path.join(artifacts, 'serv-1.2.3.tar'), 'prebuilt-image')
   writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({
-    version: 4,
+    version: 5,
+    webBasePath: '',
     primaryService: 'serv',
     appVersion: '1.2.3',
     buildId: 'release-1',

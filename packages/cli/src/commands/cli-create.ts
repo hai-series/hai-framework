@@ -342,14 +342,6 @@ export async function createProject(options: CreateProjectOptions): Promise<void
   const spinner = ora()
 
   try {
-    if ([
-      'template',
-      'features',
-      'examples',
-      'yes',
-    ].some(key => Object.hasOwn(options, key))) {
-      throw new Error(cliM('cli_createOptionsRemoved'))
-    }
     // 交互式获取选项
     const resolvedOptions = await resolveOptions(options)
 
@@ -1349,7 +1341,7 @@ function generateBuildDeploymentReadme(pm: string, appDir: string): string {
   return `### 构建与部署
 
 创建时默认包含部署工具；不需要时使用 hai create --no-deploy。
-后端serv、浏览器站点web（静态或SSR）、手机原生包app、桌面原生包desktop。--images/--services使用serv/web，--target app/desktop用于原生交付。镜像和容器身份取工程根package.json.name，去scope、转小写并归一化字符；缺失或无效时报错，不使用目录名。根目录制品格式4，非根目录格式5及webBasePath，两者都记录primaryService/hasWeb；只有serv + web生成同源API代理。旧工程先同步build.images、Dockerfile及API workspace的-serv包名与引用，安装依赖并重建完整制品；旧部署先备份、核对项目名、卷与受管凭据，再建立完整基线。完整部署按Compose规则清理同项目旧服务，不自动跨项目迁移数据。
+后端serv、浏览器站点web（静态或SSR）、手机原生包app、桌面原生包desktop。--images/--services使用serv/web，--target app/desktop用于原生交付。镜像和容器身份取工程根package.json.name，去scope、转小写并归一化字符；缺失或无效时报错，不使用目录名。镜像制品使用格式 5，记录 primaryService、hasWeb 和 webBasePath；域名根目录的 webBasePath 为空字符串。只有同时包含 serv 与 web 时才生成同源 API 代理。完整部署按 Compose 项目更新容器并保留数据卷。
 
 网站地址含/yyy/等目录时，在构建进程显式设置PUBLIC_BASE_PATH=/yyy，默认空字符串；不从私有dotenv读取。SvelteKit编译时固定base，Vite默认相对资源与hash路由；API地址独立配置。Docker网站制品由SDK处理代理与健康路径，使用匹配CLI/Deploy；所有部分构建保持同一目录，即使只构建serv。目录变化使用全量部署，操作和验证见[网站挂载目录](.agents/skills/hai-build/paths.md)。
 

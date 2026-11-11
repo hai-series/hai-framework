@@ -17,7 +17,8 @@ it.each(['tar', 'tar.gz'])('交付包 %s 同时携带部署入口和操作说明
     const content = 'prebuilt image archive'
     writeFileSync(join(artifacts, 'serv-1.0.0.tar'), content)
     const artifact = DeploymentArtifactSchema.parse({
-      version: 4,
+      version: 5,
+      webBasePath: '',
       primaryService: 'serv',
       appVersion: '1.0.0',
       buildId: 'layout-fixture',

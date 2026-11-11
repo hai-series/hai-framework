@@ -103,12 +103,7 @@ function applyManagedPasswords(values, bindings, state) {
       continue
     if (!['DB_PASSWORD', 'STORAGE_PASSWORD', 'LDAP_PASSWORD'].includes(group) || !state[group])
       throw new Error('Managed middleware credential state is missing')
-    let password = state[group]
-    if (state.FORMAT_VERSION === '2') {
-      if (!/^(?:[a-f0-9]{2})+$/.test(password))
-        throw new Error('Managed middleware credential encoding is invalid')
-      password = Buffer.from(password, 'hex').toString('utf8')
-    }
+    const password = state[group]
     let configuration = {}
     const parent = Object.hasOwn(values, prefix)
     if (parent) {
@@ -191,15 +186,12 @@ function prepare(directory, previousManifest, previousEnvironment, credentialSta
   }
   const bindings = entries('managed-bindings').join('\n')
   const state = readEnvironment(credentialState)
-  const project = incoming.metadata['managed-project'] ?? previous.metadata['managed-project']
-  if (state.PROJECT && project && state.PROJECT !== project.trim())
-    throw new Error('Managed middleware credential project mismatch')
+  if (Object.entries(state).some(([key, value]) => !['DB_PASSWORD', 'STORAGE_PASSWORD', 'LDAP_PASSWORD'].includes(key) || !/^[\w-]{32}$/.test(value)))
+    throw new Error('Managed middleware credential state is invalid')
   applyManagedPasswords(next, bindings, state)
   validateRefreshCookie(next)
   incoming.metadata['managed-app-keys'] = `${keys.join('\n')}${keys.length ? '\n' : ''}`
   incoming.metadata['managed-bindings'] = `${bindings}${bindings ? '\n' : ''}`
-  if (project)
-    incoming.metadata['managed-project'] = project
   const environment = serialize(next)
   if (Buffer.byteLength(environment) > maximumBytes)
     throw new Error('Prepared runtime environment exceeds 1 MiB')

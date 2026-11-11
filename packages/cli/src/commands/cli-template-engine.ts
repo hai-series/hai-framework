@@ -162,7 +162,7 @@ const DEFAULT_THEMES = [
   'eye-care',
 ] as const
 const DEFAULT_THEME_NAME = 'light'
-// 框架与模板同步发布；范围版本会把旧命名 alpha9 视为比 alpha.58 更新。
+// 模板与框架同步发布，框架依赖使用本次发布的精确版本。
 const HAI_PACKAGE_VERSION = getCliVersion()
 const HAI_PACKAGE_SPECIFIER_CATALOG = 'catalog:'
 /**

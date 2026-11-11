@@ -27,17 +27,16 @@ pnpm dev
 
 这些是终端命令，不需要先初始化框架服务。按实际输出与退出码判断结果。TARGET_VERSION需替换为pnpm view刚查询到的已发布精确版本，不原样输入占位词。
 
-| 命令           | 用途与输入                                | 输出与示例                                                                                                                      |
-| -------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| create         | 创建项目；名称、type、fullstack前端选择   | `hai create orders --type admin --defaults` 生成可运行的管理应用                                                                |
-| add            | 给已有工程增加模块；模块名及当前目录      | `hai add ai` 补依赖、配置和技能，保留已有业务内容；应用仍需接入初始化、关闭和路由                                               |
-| init           | 补齐已有工程的配置与AI入口                | `hai init` 补缺失文件；`--force` 可重建模块配置，执行前核对差异                                                                 |
-| generate / g   | 生成业务骨架；类型、名称、目标workspace   | `hai generate api orders --workspace orders-serv` 生成路由或contract/procedure；同类快捷命令为 g:page/g:component/g:api/g:model |
-| build          | 编译或打包；target、镜像/平台与源码       | `hai build --target image --json` 输出本次制品JSON；build不接收部署环境                                                         |
-| deploy         | 计划、打包或发布；环境、制品、所选服务    | `hai deploy --env prod --plan` 输出只读计划；去掉plan才进入交付流程                                                             |
-| upgrade        | 检查目标完整发布；精确版本、工程目录      | `hai upgrade TARGET_VERSION` 输出依赖、完整性、配置和技能漂移报告，不自动安装或覆盖                                             |
-| deploy-secrets | 受控导入服务器已有凭据；目录、私有JSON    | `hai deploy-secrets /srv/orders --import /private/orders.json --runtime docker` 默认预检，显式 `--apply` 才保存                 |
-| feedback       | 查看离线诊断ZIP；action、包路径和过滤条件 | `hai feedback summary feedback.zip` 输出摘要；inspect/evidence/view分别输出清单、证据或本机查看器                               |
+| 命令         | 用途与输入                                | 输出与示例                                                                                                                      |
+| ------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| create       | 创建项目；名称、type、fullstack前端选择   | `hai create orders --type admin --defaults` 生成可运行的管理应用                                                                |
+| add          | 给已有工程增加模块；模块名及当前目录      | `hai add ai` 补依赖、配置和技能，保留已有业务内容；应用仍需接入初始化、关闭和路由                                               |
+| init         | 补齐已有工程的配置与AI入口                | `hai init` 补缺失文件；`--force` 可重建模块配置，执行前核对差异                                                                 |
+| generate / g | 生成业务骨架；类型、名称、目标workspace   | `hai generate api orders --workspace orders-serv` 生成路由或contract/procedure；同类快捷命令为 g:page/g:component/g:api/g:model |
+| build        | 编译或打包；target、镜像/平台与源码       | `hai build --target image --json` 输出本次制品JSON；build不接收部署环境                                                         |
+| deploy       | 计划、打包或发布；环境、制品、所选服务    | `hai deploy --env prod --plan` 输出只读计划；去掉plan才进入交付流程                                                             |
+| upgrade      | 检查目标完整发布；精确版本、工程目录      | `hai upgrade TARGET_VERSION` 输出依赖、完整性、配置和技能漂移报告，不自动安装或覆盖                                             |
+| feedback     | 查看离线诊断ZIP；action、包路径和过滤条件 | `hai feedback summary feedback.zip` 输出摘要；inspect/evidence/view分别输出清单、证据或本机查看器                               |
 
 全局 `--cwd/-C` 指定工程目录，`--verbose/-v` 开启详细诊断。CLI消息按 `HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` 选择中英日文；生成应用的默认语言独立配置。
 
@@ -107,7 +106,7 @@ hai upgrade TARGET_VERSION
 
 离线包必须是普通单链接文件，最多64MiB；view仅监听loopback，使用随机访问路径。浏览器只运行框架内置查看器，不执行包内同名脚本。过滤结果不代表证据完整，继续按请求/错误编号检查上下文。
 
-upgrade比较实际消费者的框架包、CLI/deploy制品、catalog/lock/安装状态及技能定制；不执行迁移。deploy-secrets需在Linux服务器提供Node，JSON最多64KiB且为私有普通单链接文件，默认只读；导入不恢复数据库或建立成功发布基线。[凭据输入与恢复边界](../deploy/docs/credential-import.md)
+`hai upgrade` 只读核对实际消费包、CLI/deploy 制品、catalog、锁文件、安装状态和技能差异。
 
 ### AI指引与应用体验
 

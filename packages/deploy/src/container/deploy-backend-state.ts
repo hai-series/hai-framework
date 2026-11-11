@@ -1,7 +1,6 @@
 /** 命名卷的后端身份独立于 current 拓扑保存，禁止把旧数据目录交给不兼容引擎。 */
 import { deployM } from '../deploy-i18n.js'
-import { createComposeContainerLookupScript } from './deploy-compose-identity.js'
-import { createManagedSecretValidationScript, resolveComposeNamedVolumes } from './deploy-managed-secrets.js'
+import { resolveComposeNamedVolumes } from './deploy-managed-secrets.js'
 import { createDeploymentManifestFunctions } from './deploy-manifest.js'
 
 const backendFamilies: Record<string, readonly string[]> = {
@@ -95,11 +94,11 @@ backend_manifest=$(deployment_metadata_file "$release" state-backends)
 regular() { test -f "$1" && test ! -L "$1" || fail "Backend state must be a regular file: $1"; }
 absent_or_regular() { if [ -e "$1" ] || [ -L "$1" ]; then regular "$1"; fi; }
 valid_tuples() {
-  LC_ALL=C awk -v legacy="$2" '
+  LC_ALL=C awk '
     NF {
-      if((NF!=3 && !(legacy==1 && NF==2)) || roles[$1]++) exit 1
+      if(NF!=3 || roles[$1]++) exit 1
       if(!(($1=="db" && $2~/^(postgresql|mysql)$/) || ($1=="storage" && $2~/^(rustfs|minio)$/) || ($1=="vecdb" && $2~/^(qdrant|pgvector|chroma)$/))) exit 1
-      if(NF==3 && ($3!~/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/ || volumes[$3]++)) exit 1
+      if($3!~/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/ || volumes[$3]++) exit 1
     }
   ' "$1"
 }
@@ -150,45 +149,6 @@ known=$("$runtime" volume ls -q) || fail 'Cannot list persistent volumes; no bac
 printf '%s\n' "$known" | LC_ALL=C awk 'NF {if(NF!=1 || $1!~/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/ || seen[$1]++) exit 1}' || fail 'Invalid persistent volume listing.'
 exists_volume() { printf '%s\n' "$known" | grep -Fxq "$1"; }
 ledger_tuple() { printf '%s\n' "$ledger" | awk -v volume="$1" '$3==volume {print}'; }
-@@MANAGED_VALUES_VALIDATOR@@
-@@COMPOSE_CONTAINER_LOOKUP@@
-# 状态补证：卷挂载和镜像均取自同项目、同角色的唯一实际容器。
-container_binding() {
-  binding_service=$1
-  binding_family=$2
-  binding_expected=$3
-  binding_running=$4
-  binding_flags=-aq
-  if [ "$binding_running" = true ]; then binding_flags=-q; fi
-  binding_containers=$(compose_container_ids "$runtime" "$project" "$binding_service" "$binding_flags") || fail 'Cannot inspect successful deployment containers.'
-  printf '%s\n' "$binding_containers" | LC_ALL=C awk 'NR!=1 || NF!=1 || $1!~/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/ {exit 1} END {if(NR!=1) exit 1}' || fail "Cannot prove the previous volume binding for $binding_service. Restore verified backend state."
-  if [ "$binding_running" = true ]; then
-    binding_status=$("$runtime" inspect --format '{{.State.Running}}' "$binding_containers") || fail 'Cannot verify the imported service is running.'
-    test "$binding_status" = true || fail "Imported backend requires its verified original container to be running: $binding_service."
-  fi
-  binding_mounted=$("$runtime" inspect --format '{{range .Mounts}}{{if eq .Type "volume"}}{{println .Name}}{{end}}{{end}}' "$binding_containers") || fail 'Cannot inspect previous named volume mounts.'
-  printf '%s\n' "$binding_mounted" | LC_ALL=C awk 'NR!=1 || NF!=1 || $1!~/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/ {exit 1} END {if(NR!=1) exit 1}' || fail "Ambiguous previous volume binding for $binding_service."
-  binding_image=$("$runtime" inspect --format '{{.Config.Image}}' "$binding_containers") || fail 'Cannot identify the previous container image.'
-  binding_actual_family=$(printf '%s\n' "$binding_image" | LC_ALL=C awk 'NR!=1 || NF!=1 {exit 1} {image=$0; sub(/^.*\//,"",image); sub(/[:@].*$/,"",image); if(image=="postgres") image="postgresql"; print image}') || fail 'Invalid previous container image identity.'
-  test "$binding_actual_family" = "$binding_family" || fail "Actual previous container image does not confirm its backend family: $binding_service."
-  if [ -n "$binding_expected" ] && [ "$binding_expected" != "$binding_mounted" ]; then fail "Actual previous volume differs from its backend manifest: $binding_service."; fi
-  printf '%s\n' "$binding_mounted"
-}
-confirmed_import() {
-  import_service=$1
-  import_family=$2
-  import_volume=$3
-  import_state="$root/managed-secrets.env"
-  test -f "$import_state" && test ! -L "$import_state" || return 1
-  valid_values "$import_state" || return 1
-  test "$(awk -F= '$1=="FORMAT_VERSION" {print $2}' "$import_state")" = 2 || return 1
-  test "$(awk -F= '$1=="PROJECT" {print $2}' "$import_state")" = "$project" || return 1
-  case "$import_service" in db|vecdb) import_group=DB_PASSWORD;; storage) import_group=STORAGE_PASSWORD;; *) return 1;; esac
-  awk -F= -v group="$import_group" -v binding="$import_group:$import_volume" '$1==group && $2!="" {credential=1} $1~/^VOLUME_[0-9]+$/ && $2==binding {volume=1} END {exit !(credential && volume)}' "$import_state" || return 1
-  # 密码不证明目录格式；受控导入还须与唯一运行原容器的实际卷及镜像家族共同吻合。
-  import_actual=$(container_binding "$import_service" "$import_family" "$import_volume" true) || return 1
-  test "$import_actual" = "$import_volume"
-}
 snapshot_previous=$previous
 if [ -z "$snapshot_previous" ]; then snapshot_previous=-; fi
 if [ "$mode" = recover ]; then
@@ -206,7 +166,7 @@ RECOVERY_TUPLES
   exit 0
 fi
 regular "$backend_manifest"
-valid_tuples "$backend_manifest" 0 || fail 'Invalid backend manifest; rebuild the deployment bundle.'
+valid_tuples "$backend_manifest" || fail 'Invalid backend manifest; rebuild the deployment bundle.'
 active=''
 if [ -n "$previous" ]; then
   baseline="$root/releases/$previous"
@@ -215,7 +175,7 @@ if [ -n "$previous" ]; then
   baseline_services=$(deployment_services_file "$baseline")
   previous_manifest=$(deployment_metadata_file "$baseline" state-backends)
   regular "$previous_manifest"
-  valid_tuples "$previous_manifest" 0 || fail 'Invalid successful backend manifest.'
+  valid_tuples "$previous_manifest" || fail 'Invalid successful backend manifest.'
   LC_ALL=C awk 'NF {if(NF!=1 || $1!~/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/ || seen[$1]++) exit 1}' "$baseline_services" || fail 'Invalid successful deployment services.'
   for active_service in db storage vecdb; do
     if ! grep -Fxq "$active_service" "$baseline_services"; then continue; fi
@@ -228,28 +188,18 @@ if [ -n "$previous" ]; then
     printf '%s %s %s\n' "$active_service" "$active_family" "$active_volume" | LC_ALL=C awk 'NF!=3 || !(($1=="db" && $2~/^(postgresql|mysql)$/) || ($1=="storage" && $2~/^(rustfs|minio)$/) || ($1=="vecdb" && $2~/^(qdrant|pgvector|chroma)$/)) {exit 1}' || fail "Unknown installed backend for $active_service."
     exists_volume "$active_volume" || fail "Active persistent volume is missing: $active_volume. Restore its backup instead of creating an empty replacement."
     confirmed=$(ledger_tuple "$active_volume")
-    test -z "$confirmed" || test "$confirmed" = "$active_service $active_family $active_volume" || fail "Active persistent backend conflicts with the protected ledger: $active_service."
-    if [ -z "$confirmed" ]; then
-      proven_volume=$(container_binding "$active_service" "$active_family" "$active_volume" false)
-      test "$proven_volume" = "$active_volume" || fail "Cannot confirm the active persistent volume: $active_service."
-    fi
+    test "$confirmed" = "$active_service $active_family $active_volume" || fail "Active persistent backend is missing from or conflicts with the protected ledger: $active_service. Restore verified backend state."
     active=$(printf '%s\n%s %s %s\n' "$active" "$active_service" "$active_family" "$active_volume" | sed '/^$/d')
   done
 fi
-# 各个旧 Compose 片段不能把同一实际卷重复绑定给不同有状态角色。
-printf '%s\n' "$active" | valid_tuples /dev/stdin 0 || fail 'Conflicting successful persistent volume bindings.'
+# 同一实际卷不能绑定给多个有状态服务。
+printf '%s\n' "$active" | valid_tuples /dev/stdin || fail 'Conflicting successful persistent volume bindings.'
 # 合并时只替换同一卷的无数据预认领，不能按本次拓扑裁剪历史绑定。
 merged=$ledger
 merge_tuple() {
   merged=$(printf '%s\n' "$merged" | awk -v volume="$3" 'NF && $3!=volume {print}')
   merged=$(printf '%s\n%s %s %s\n' "$merged" "$1" "$2" "$3" | sed '/^$/d')
 }
-while IFS=' ' read -r active_service active_family active_volume; do
-  test -n "$active_service" || continue
-  merge_tuple "$active_service" "$active_family" "$active_volume"
-done <<ACTIVE_TUPLES
-$active
-ACTIVE_TUPLES
 while IFS=' ' read -r candidate_service candidate_family candidate_volume; do
   test -n "$candidate_service" || continue
   prior_active=$(printf '%s\n' "$active" | awk -v service="$candidate_service" '$1==service {print}')
@@ -257,8 +207,6 @@ while IFS=' ' read -r candidate_service candidate_family candidate_volume; do
   test -z "$prior_active" || test "$prior_active" = "$tuple" || fail "Persistent backend $candidate_service changed or its active volume binding changed. Use a separate deployment identity and migrate or restore data explicitly."
   if exists_volume "$candidate_volume"; then
     confirmed=$(ledger_tuple "$candidate_volume")
-    if [ -z "$confirmed" ]; then confirmed=$(printf '%s\n' "$active" | awk -v volume="$candidate_volume" '$3==volume {print}'); fi
-    if [ -z "$confirmed" ] && confirmed_import "$candidate_service" "$candidate_family" "$candidate_volume"; then confirmed=$tuple; fi
     test "$confirmed" = "$tuple" || fail "Existing persistent volume has an unknown or incompatible backend: $candidate_service. Restore verified backend state; in-place reuse is refused."
   else
     users=$("$runtime" ps -aq --filter "volume=$candidate_volume") || fail 'Cannot check persistent volume users.'
@@ -278,5 +226,5 @@ mv -f -- "$snapshot.next" "$snapshot"
 (set -C; printf '%s\n' "$state_content" > "$state.next") || fail 'Cannot stage the persistent backend ledger.'
 chmod 600 "$state.next"
 mv -f -- "$state.next" "$state"
-`.replace('@@PROJECT@@', () => projectName).replace('@@MANAGED_VALUES_VALIDATOR@@', () => createManagedSecretValidationScript()).replace('@@COMPOSE_CONTAINER_LOOKUP@@', () => createComposeContainerLookupScript()).replace('@@MANIFEST_FUNCTIONS@@', () => createDeploymentManifestFunctions())
+`.replace('@@PROJECT@@', () => projectName).replace('@@MANIFEST_FUNCTIONS@@', () => createDeploymentManifestFunctions())
 }

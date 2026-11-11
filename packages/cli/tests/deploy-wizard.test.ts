@@ -311,7 +311,8 @@ it('infers Web selection from a partial artifact before configuring middleware',
   const file = 'web-1.2.3.tar'
   writeFileSync(join(artifacts, file), 'prebuilt-web')
   writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({
-    version: 4,
+    version: 5,
+    webBasePath: '',
     primaryService: 'serv',
     appVersion: '1.2.3',
     buildId: 'partial',
@@ -559,7 +560,8 @@ it.each([
   writeFileSync(join(app, '.hai/build/docker/latest'), 'release\n')
   writeFileSync(join(artifacts, 'serv-1.2.3.tar'), 'synthetic app image')
   writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({
-    version: 4,
+    version: 5,
+    webBasePath: '',
     primaryService: 'serv',
     appVersion: '1.2.3',
     buildId: 'release',

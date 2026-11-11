@@ -17,15 +17,10 @@ afterEach(() => {
   }
 })
 
-function archive(name: string, version: string, auditDeclaration = 'export declare function migrateAudit(options?: { dryRun?: boolean }): unknown', auditRuntime = 'export function migrateAudit() {}') {
+function archive(name: string, version: string) {
   const entries: Record<string, string> = {
     'package/package.json': JSON.stringify({ name, version }),
-    'package/dist/index.js': name === '@h-ai/audit'
-      ? auditRuntime
-      : 'export {}',
-    'package/dist/index.d.ts': name === '@h-ai/audit'
-      ? auditDeclaration
-      : 'export {}',
+    'package/dist/index.js': 'export {}',
   }
   if (name === '@h-ai/cli')
     entries['package/templates/skills/hai-feedback/SKILL.md'] = '---\nname: hai-feedback\n---\n'
@@ -44,15 +39,15 @@ function archive(name: string, version: string, auditDeclaration = 'export decla
   ]))
 }
 
-function registry(version: string, auditDeclaration?: string, auditRuntime?: string) {
+function registry(version: string) {
   const fetched = new Set<string>()
   vi.stubGlobal('fetch', vi.fn(async (input: URL | string) => {
     const url = new URL(String(input))
     fetched.add(url.href)
     if (url.pathname.endsWith('.tgz'))
-      return new Response(archive(`@h-ai/${url.pathname.slice(1, -4)}`, version, auditDeclaration, auditRuntime))
+      return new Response(archive(`@h-ai/${url.pathname.slice(1, -4)}`, version))
     const name = decodeURIComponent(url.pathname.split('/')[1]!)
-    const bytes = archive(name, version, auditDeclaration, auditRuntime)
+    const bytes = archive(name, version)
     return Response.json({
       version,
       dist: { tarball: `https://registry.npmjs.org/${name.split('/')[1]}.tgz`, integrity: `sha512-${createHash('sha512').update(bytes).digest('base64')}` },
@@ -61,7 +56,7 @@ function registry(version: string, auditDeclaration?: string, auditRuntime?: str
   return fetched
 }
 
-it('eSM-only 安装按消费者解析，发布 Audit 迁移导出纳入预检且始终只读', async () => {
+it('eSM-only 安装按消费者解析，发布制品检查保持只读', async () => {
   const version = '0.1.0-alpha.73'
   const root = mkdtempSync(join(tmpdir(), 'hai-review-upgrade-'))
   roots.push(root)
@@ -93,60 +88,9 @@ it('eSM-only 安装按消费者解析，发布 Audit 迁移导出纳入预检且
   expect(report.releaseComplete).toBe(true)
   expect(report.drift.find(item => item.package === '@h-ai/audit')?.installed).toBe(version)
   expect(report.drift.find(item => item.package === '@h-ai/ui')?.installed).toBe(version)
-  expect(report.migration.preflight).toContain('migrateAudit({ dryRun: true })')
   expect(fetched.has('https://registry.npmjs.org/audit.tgz')).toBe(true)
   expect(report.modified).toBe(false)
   expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(before)
-})
-
-it.each([
-  [
-    '0.1.0-alpha.50',
-    true,
-    'export {}',
-    false,
-  ],
-  [
-    '0.1.0-alpha.73',
-    true,
-    '/** migrateAudit */ declare function migrateAudit(): void; export {};',
-    false,
-  ],
-  [
-    '0.1.0-alpha.73',
-    true,
-    'declare const text: "export function migrateAudit"; export { text };',
-    false,
-  ],
-  [
-    '0.1.0-alpha.73',
-    true,
-    'declare type migrateAudit = string; export { type migrateAudit };',
-    false,
-  ],
-  [
-    '0.1.0-alpha.73',
-    true,
-    'declare function migration(): void; export { migration as migrateAudit };',
-    true,
-  ],
-  [
-    '0.1.0-alpha.73',
-    false,
-    'export declare function migrateAudit(): void;',
-    false,
-  ],
-] as const)('仅对实际消费且发布了迁移值导出的 Audit 给出预检：%s/%s/%s', async (version, consumed, declaration, expected) => {
-  const root = mkdtempSync(join(tmpdir(), 'hai-review-upgrade-'))
-  roots.push(root)
-  writeFileSync(join(root, 'package.json'), JSON.stringify({
-    name: 'review',
-    dependencies: consumed
-      ? { '@h-ai/audit': version }
-      : {},
-  }))
-  registry(version, declaration)
-  expect((await inspectFrameworkUpgrade(root, version)).migration.preflight.includes('migrateAudit({ dryRun: true })')).toBe(expected)
 })
 
 it('递归发现嵌套 workspace 并尊重排除规则，按 pnpm 链接读取 ESM-only 包', async () => {
@@ -182,16 +126,4 @@ it('递归发现嵌套 workspace 并尊重排除规则，按 pnpm 链接读取 E
   const report = await inspectFrameworkUpgrade(root, version)
   expect(report.drift).toContainEqual(expect.objectContaining({ package: '@h-ai/ui', source: 'apps/shop/web/package.json', installed: version }))
   expect(report.drift.some(item => item.package === '@h-ai/audit')).toBe(false)
-})
-
-it('声明有名称但实际运行时未导出的迁移函数不列入预检', async () => {
-  const version = '0.1.0-alpha.73'
-  const root = mkdtempSync(join(tmpdir(), 'hai-review-upgrade-'))
-  roots.push(root)
-  writeFileSync(join(root, 'package.json'), JSON.stringify({
-    name: 'review',
-    dependencies: { '@h-ai/audit': version },
-  }))
-  registry(version, undefined, 'function migrateAudit() {}; export {};')
-  expect((await inspectFrameworkUpgrade(root, version)).migration.preflight).not.toContain('migrateAudit({ dryRun: true })')
 })

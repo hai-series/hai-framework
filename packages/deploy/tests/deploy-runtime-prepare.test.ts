@@ -1,4 +1,3 @@
-import { Buffer } from 'node:buffer'
 import { spawnSync } from 'node:child_process'
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -18,7 +17,7 @@ function prepare(mode: string, next: Record<string, string>, previous: Record<st
     copyFileSync(new URL('../src/container/deploy-runtime-env.mjs', import.meta.url), program)
     mkdirSync(join(root, 'config'))
     writeFileSync(join(root, 'config/.env.runtime'), serializeEnvFile(next))
-    const shared = { 'managed-app-keys': 'HAI_STORAGE\n', 'managed-bindings': 'STORAGE_PASSWORD HAI_STORAGE prefix\n', 'managed-project': 'hai-example-test\n' }
+    const shared = { 'managed-app-keys': 'HAI_STORAGE\n', 'managed-bindings': 'STORAGE_PASSWORD HAI_STORAGE prefix\n' }
     writeFileSync(join(root, 'manifest.json'), JSON.stringify({ deploymentId: 'next', metadata }))
     writeFileSync(join(root, 'previous.json'), JSON.stringify({ deploymentId: 'before', metadata: shared }))
     writeFileSync(join(root, 'previous.env'), serializeEnvFile(previous))
@@ -47,7 +46,7 @@ function prepare(mode: string, next: Record<string, string>, previous: Record<st
 }
 
 it('局部后端发布保留实际运行连接和 publicEndpoint，更新业务参数并采用服务器托管密码', () => {
-  const secret = `server-password-with-'"-中-$`
+  const secret = 's3_server-key'.padEnd(32, 'A')
   const previous = {
     HAI_STORAGE: JSON.stringify({
       type: 's3',
@@ -62,7 +61,7 @@ it('局部后端发布保留实际运行连接和 publicEndpoint，更新业务�
     HAI_STORAGE: JSON.stringify({ type: 's3', publicEndpoint: 'https://local.example.test/files', secretAccessKey: 'laptop-password' }),
     APP_BUSINESS: 'new\n"quoted" $value',
   }
-  const result = prepare('partial', next, previous, `FORMAT_VERSION=2\nPROJECT=hai-example-test\nSTORAGE_PASSWORD=${Buffer.from(secret).toString('hex')}\n`)
+  const result = prepare('partial', next, previous, `STORAGE_PASSWORD=${secret}\n`)
   expect(result.status, result.stderr).toBe(0)
   const output = JSON.parse(result.stdout)
   const environment = parseEnv(output.environment)
@@ -81,11 +80,11 @@ it('完整发布采用新包的业务配置', () => {
   expect(parseEnv(JSON.parse(full.stdout).environment).APP).toBe('incoming')
 })
 
-it('数据库 URL 的托管密码保留百分号和 URI 特殊字符', () => {
-  const secret = `percent-%20-:@/中-'"`
+it('数据库 URL 使用服务器托管密码并保留主机和连接参数', () => {
+  const secret = 'db_server-key'.padEnd(32, 'B')
   const result = prepare('full', {
     HAI_DB: JSON.stringify({ type: 'postgresql', url: 'postgresql://hai:laptop@db:5432/hai?application_name=example' }),
-  }, {}, `FORMAT_VERSION=2\nPROJECT=hai-example-test\nDB_PASSWORD=${Buffer.from(secret).toString('hex')}\n`, { 'managed-project': 'hai-example-test\n', 'managed-app-keys': 'HAI_DB\n', 'managed-bindings': 'DB_PASSWORD HAI_DB prefix\n' })
+  }, {}, `DB_PASSWORD=${secret}\n`, { 'managed-app-keys': 'HAI_DB\n', 'managed-bindings': 'DB_PASSWORD HAI_DB prefix\n' })
   expect(result.status, result.stderr).toBe(0)
   const environment = parseEnv(JSON.parse(result.stdout).environment)
   const connection = new URL(environment.HAI_DB_URL!)

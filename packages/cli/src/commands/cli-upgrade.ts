@@ -18,19 +18,6 @@ function object(value: unknown): Record<string, unknown> {
     : {}
 }
 
-/** 只识别发布声明的值导出；注释、字符串、私有声明和 type 导出不构成迁移能力。 */
-function declaresValueExport(source: string, name: string): boolean {
-  const declarations = source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g, ' ')
-  if (new RegExp(`\\bexport\\s+(?:declare\\s+)?(?:function|const|let|var)\\s+${name}\\b`).test(declarations))
-    return true
-  return [
-    ...declarations.matchAll(/\bexport\s*\{([^}]+)\}/g),
-  ].some(match => match[1]!.split(',').some((item) => {
-    const value = item.trim()
-    return !value.startsWith('type ') && (value.split(/\s+as\s+/).at(-1)?.trim() === name)
-  }))
-}
-
 /** 有界检查 npm tar 内容，仅读取，不解压到工程。 */
 function tarFiles(bytes: Uint8Array): Map<string, Uint8Array> {
   const tar = gunzipSync(bytes, { maxOutputLength: 64 * 1024 * 1024 })
@@ -53,8 +40,8 @@ function tarFiles(bytes: Uint8Array): Map<string, Uint8Array> {
  * 指定精确版本检查全部消费包、CLI/deploy 制品和工作区漂移；不完整发布不会修改工程。
  * @example 模块内部上下文
  * ```ts
- * const result = await inspectFrameworkUpgrade('/workspace/shop', '0.1.0-alpha.71')
- * // result.releaseComplete 为真后再安排停机、备份与模块迁移；此函数始终只读。
+ * const result = await inspectFrameworkUpgrade('/workspace/shop', '1.0.0-beta.23')
+ * // result.releaseComplete 为真后再更新应用依赖、调用和配置；此函数始终只读。
  * ```
  */
 export async function inspectFrameworkUpgrade(directory: string, version: string) {
@@ -158,7 +145,6 @@ export async function inspectFrameworkUpgrade(directory: string, version: string
   if (registry.username || registry.password || registry.protocol !== 'https:')
     throw new Error(cliM('cli_upgrade_registry'))
   const releases: Array<{ package: string, available: boolean, issues: string[] }> = []
-  const migrationPreflight: string[] = []
   const skills: Array<{ name: string, state: string }> = []
   const pending = [...packages]
   for (let index = 0; index < pending.length; index++) {
@@ -213,14 +199,6 @@ export async function inspectFrameworkUpgrade(directory: string, version: string
         const manifest = files.get('package/package.json')
         if (!manifest || object(JSON.parse(new TextDecoder().decode(manifest))).version !== version || !files.has('package/dist/index.js'))
           throw new Error('Incomplete artifact')
-        const migration = {
-          '@h-ai/iam': 'migrateIam',
-          '@h-ai/reach': 'migrateReach',
-          '@h-ai/scheduler': 'migrateScheduler',
-          '@h-ai/audit': 'migrateAudit',
-        }[name]
-        if (migration && declaresValueExport(new TextDecoder().decode(files.get('package/dist/index.d.ts')), migration) && declaresValueExport(new TextDecoder().decode(files.get('package/dist/index.js')), migration))
-          migrationPreflight.push(`${migration}({ dryRun: true })`)
         if (name === '@h-ai/cli') {
           if (!files.has('package/templates/skills/hai-feedback/SKILL.md'))
             throw new Error('Skills missing')
@@ -279,14 +257,6 @@ export async function inspectFrameworkUpgrade(directory: string, version: string
         ]),
       ],
     },
-    migration: {
-      preflight: migrationPreflight,
-      inspectModuleReadmes: true,
-      exclusiveAccess: true,
-      backup: ['database', 'shared-session-cache'],
-      rollback: 'restore-compatible-database-and-binaries',
-      sessions: 'legacy-credential-sessions-require-login',
-    },
   }
 }
 
@@ -294,7 +264,7 @@ export async function inspectFrameworkUpgrade(directory: string, version: string
  * 只读升级诊断 CLI 入口。
  * @example 模块内部上下文
  * ```ts
- * await upgradeCommand('0.1.0-alpha.71', { cwd: '/workspace/shop' })
+ * await upgradeCommand('1.0.0-beta.23', { cwd: '/workspace/shop' })
  * ```
  */
 export async function upgradeCommand(version: string, options: { cwd?: string } = {}): Promise<void> {

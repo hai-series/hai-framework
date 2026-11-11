@@ -8,7 +8,7 @@
 
 默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时报错，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar.gz`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
 
-资源身份和制品格式沿用[构建技能](../hai-build/SKILL.md)及[网站挂载目录](../hai-build/paths.md)：根目录格式4，非根目录格式5，两者都有primaryService/hasWeb；webBasePath仅格式5。旧工程同步镜像角色、Dockerfile、-serv包名与引用后重建，不手改清单。旧部署先核对项目名、卷和受管凭据，再建立完整基线；工具不跨项目迁移数据，改target目录不能完成迁移。
+部署身份取自工程根 `package.json.name`。镜像清单字段及公开挂载目录见[构建技能](../hai-build/SKILL.md)与[网站挂载目录](../hai-build/paths.md)。
 
 `hai deploy` 首先输入部署环境，或用 `hai deploy --env test` 指定。`.env.test` / `.env.prod` 必须由用户先创建；缺失时停止，不代替用户创建一个空文件继续部署。指定要部署的目录，例如 `hai deploy packages/my-app-serv --env test`，该目录必须对应 lockfile 的一个 importer；不遍历 apps/packages 或猜测 fullstack 布局。环境文件默认取当前目录（有 `.env` 时）或 lockfile 根目录，必要时传 `--env-dir`。
 
@@ -23,7 +23,7 @@
 
 `.env.<mode>.local` 同时用于普通开发、Node 启动和部署；通过公共 Core 工具合并，不实现模块专用来源顺序。
 
-交付 tar 内的 `.env.runtime` 是按上述配置生成的 Compose 运行文件，不是下次部署的配置源。`NODE_ENV` 默认按目标模式选择：test 为 test，dev/development 为 development，其余为 production；显式应用配置仍可覆盖。构建保持正式优化模式，旧包需重新生成。完整配置使用 `--env test --yes` 复用；需要保持中间件时追加 `--skip-middleware`。自建中间件的密码由服务器 `<remoteDir>/managed-secrets.env` 持久保存（权限 0600），应与数据卷一起备份。每次打包只生成首次初始化的随机候选，不依赖打包机缓存；在线 SDK、deploy.sh、deploy.ps1 和 deploy-local.sh 都在部署锁内复用服务器值，同时更新应用连接配置及中间件原生变量。交付 tar 保持不可变，只有服务器私有运行文件使用定稿值。若状态缺失而对应数据卷已存在，部署在变更服务前明确停止，须恢复服务器凭据备份；不会自动换密或删除数据。旧版本可通过显式预检和凭据导入流程迁移，缺状态的普通部署仍拒绝。
+交付 tar 内的 `.env.runtime` 是按上述配置生成的 Compose 运行文件，不是下次部署的配置源。`NODE_ENV` 默认按目标模式选择：test 为 test，dev/development 为 development，其余为 production；显式应用配置仍可覆盖。构建保持正式优化模式，旧包需重新生成。完整配置使用 `--env test --yes` 复用；需要保持中间件时追加 `--skip-middleware`。自建中间件的密码由服务器 `<remoteDir>/managed-secrets.env` 持久保存（权限 0600），应与数据卷一起备份。每次打包只生成首次初始化的随机候选，不依赖打包机缓存；在线 SDK、deploy.sh、deploy.ps1 和 deploy-local.sh 都在部署锁内复用服务器值，同时更新应用连接配置及中间件原生变量。交付 tar 保持不可变，只有服务器私有运行文件使用定稿值。若状态缺失而对应数据卷已存在，部署在变更服务前明确停止，须恢复服务器凭据备份；不会自动换密或删除数据。
 
 自建或云开通的整体 `HAI_*` 配置会清除被替换的旧叶字段，例如 Redis 覆盖后不再留下 `HAI_CACHE_TYPE=memory`。全局 `~/.hai/credentials.yml` 只补缺项，不能覆盖当前环境/进程的同名键或父配置。部署先启动选中中间件，等待 PostgreSQL/MySQL/Redis/S3 健康，再启动 serv/Web；增量和失败恢复沿用此顺序，未选容器保持不变。
 

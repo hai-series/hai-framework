@@ -265,7 +265,7 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
 
     const { generateProjectAiSupport, resolveSkillNamesForPackages } = await import('./cli-skill-templates.js')
 
-    // 收集传递依赖；旧版失败可能只写入了所选模块，也必须继续修复。
+    // 补齐所选模块的直接依赖和传递依赖。
     const allPackages = new Set(moduleDef.packages)
     for (const dep of moduleDef.deps) {
       for (const name of MODULE_MAP[dep]?.packages ?? [])

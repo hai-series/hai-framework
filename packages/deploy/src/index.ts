@@ -10,5 +10,4 @@ export { canKeepMiddleware, parseMiddlewareField, saveMiddlewareEnvironment, val
 export * from './deploy-middleware.js'
 export * from './deploy-plan.js'
 export { getDeployCommandState, getDeployRecovery } from './deploy-recovery.js'
-export { importDeploymentSecrets } from './deploy-secrets.js'
 export * from './deploy-types.js'

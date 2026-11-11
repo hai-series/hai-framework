@@ -58,7 +58,8 @@ async function bundle(): Promise<string> {
   const bytes = 'prebuilt app image'
   writeFileSync(join(artifactDir, 'serv-1.2.3.tar'), bytes)
   const artifact = DeploymentArtifactSchema.parse({
-    version: 4,
+    version: 5,
+    webBasePath: '',
     primaryService: 'serv',
     appVersion: '1.2.3',
     buildId: 'download-test',

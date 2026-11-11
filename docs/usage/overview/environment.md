@@ -18,7 +18,7 @@ Node版本需满足`^22.23.4 || ^24.22.1 || ^26.12.1`，pnpm为12.11.2；安装�
 
 构建机需已安装并运行的Podman/Docker；Windows使用Linux容器。完全离线构建还需基础镜像、pnpm依赖缓存和匹配ABI/架构/libc的原生预编译包，Windows node_modules不能替代Linux依赖。
 
-操作机自动上传需tar/ssh/scp；Linux/`macOS`入口另需sh/awk，Windows需PowerShell5+与OpenSSH。目标Linux需容器引擎、支持`--pull` never的Compose、sh/tar/sha256sum/awk/curl/util-linux flock、支持flock的文件系统及目录/容器权限。普通离线部署不要求目标Node/pnpm，受控凭据导入是另需Node的独立功能。
+操作机自动上传需tar/ssh/scp；Linux/`macOS`入口另需sh/awk，Windows需PowerShell5+与OpenSSH。目标Linux需容器引擎、支持`--pull` never的Compose、sh/tar/sha256sum/awk/curl/util-linux flock、支持flock的文件系统及目录/容器权限。离线部署无需在目标服务器安装 Node 或 pnpm。
 
 生产HTTPS、证书、DNS、端口、防火墙、共享服务、备份和维护窗口仍由团队准备。更详细条件见[部署手册](../configuration/delivery.md)。
 

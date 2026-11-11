@@ -145,7 +145,8 @@ function writeArtifact(web = true, appVersion = '1.2.3'): void {
     }
   })
   writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({
-    version: 4,
+    version: 5,
+    webBasePath: '',
     primaryService: 'serv',
     hasWeb: web,
     appVersion,

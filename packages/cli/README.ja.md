@@ -27,17 +27,16 @@ pnpm dev
 
 CLIは端末から実行し、フレームワークサービスの初期化は不要です。出力と終了コードで判断します。TARGET_VERSIONはpnpm viewで確認した公開済みの厳密バージョンへ置き換え、文字列をそのまま渡さないでください。
 
-| コマンド       | 用途・入力                                | 出力と例                                                                                                                           |
-| -------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| create         | 工程名、type、fullstackのフロント選択     | `hai create orders --type admin --defaults` で管理アプリを生成                                                                     |
-| add            | 現工程へ指定モジュールを追加              | `hai add ai` は依存・設定・skillを補完。業務ファイルは維持し、初期化・終了・ルートはアプリで接続                                   |
-| init           | 設定とAI入口を補完                        | `hai init` は不足ファイルを追加。`--force` の設定再生成前に差分を確認                                                              |
-| generate / g   | 種別、名前、対象workspace                 | `hai generate api orders --workspace orders-serv` はルートまたはcontract/procedureを生成。短縮形はg:page/g:component/g:api/g:model |
-| build          | target、イメージ/プラットフォーム、ソース | `hai build --target image --json` は今回の成果物JSONを出力。buildはデプロイ環境を受け取らない                                      |
-| deploy         | 環境、成果物、対象サービス                | `hai deploy --env prod --plan` は読取専用計画。planを外すと配布処理へ進む                                                          |
-| upgrade        | 厳密な公開版と工程                        | `hai upgrade TARGET_VERSION` は依存・完全性・設定・skill差分を報告。自動インストールや上書きはしない                               |
-| deploy-secrets | サーバーディレクトリと私有JSON            | `hai deploy-secrets /srv/orders --import /private/orders.json --runtime docker` は既定で事前検査、明示的な `--apply` のみ保存      |
-| feedback       | action、診断ZIP、検索条件                 | `hai feedback summary feedback.zip` は要約。inspect/evidence/viewはmanifest、証跡、本機ビューア                                    |
+| コマンド     | 用途・入力                                | 出力と例                                                                                                                           |
+| ------------ | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| create       | 工程名、type、fullstackのフロント選択     | `hai create orders --type admin --defaults` で管理アプリを生成                                                                     |
+| add          | 現工程へ指定モジュールを追加              | `hai add ai` は依存・設定・skillを補完。業務ファイルは維持し、初期化・終了・ルートはアプリで接続                                   |
+| init         | 設定とAI入口を補完                        | `hai init` は不足ファイルを追加。`--force` の設定再生成前に差分を確認                                                              |
+| generate / g | 種別、名前、対象workspace                 | `hai generate api orders --workspace orders-serv` はルートまたはcontract/procedureを生成。短縮形はg:page/g:component/g:api/g:model |
+| build        | target、イメージ/プラットフォーム、ソース | `hai build --target image --json` は今回の成果物JSONを出力。buildはデプロイ環境を受け取らない                                      |
+| deploy       | 環境、成果物、対象サービス                | `hai deploy --env prod --plan` は読取専用計画。planを外すと配布処理へ進む                                                          |
+| upgrade      | 厳密な公開版と工程                        | `hai upgrade TARGET_VERSION` は依存・完全性・設定・skill差分を報告。自動インストールや上書きはしない                               |
+| feedback     | action、診断ZIP、検索条件                 | `hai feedback summary feedback.zip` は要約。inspect/evidence/viewはmanifest、証跡、本機ビューア                                    |
 
 共通 `--cwd/-C` は工程ディレクトリ、`--verbose/-v` は詳細診断です。CLI言語は `HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` から選び、生成アプリの言語とは独立します。
 
@@ -107,7 +106,7 @@ hai upgrade TARGET_VERSION
 
 ZIPは通常単一リンクファイル、最大64MiBです。viewはランダムパスでloopbackのみ待受け、フレームワーク内蔵ビューアを使い同梱置換スクリプトを実行しません。検索結果だけでは証跡完全性を証明しません。
 
-upgradeは実際の消費パッケージ、CLI/deploy、catalog/lock/導入状態、skillカスタマイズを比較し、マイグレーションを実行しません。deploy-secretsはLinuxサーバー側Nodeと、最大64KiBの私有通常単一リンクJSONを必要とします。取込はDBデータの復元や成功リリース基準の作成ではありません。[認証情報の条件](../deploy/docs/credential-import.ja.md)
+`hai upgrade` で利用パッケージ、CLI/deploy の成果物、catalog、ロックファイル、導入状態、skill の差異を読み取り専用で確認します。
 
 ### AI指引とアプリ体験
 

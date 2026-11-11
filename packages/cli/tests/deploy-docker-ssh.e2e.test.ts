@@ -995,7 +995,12 @@ done`
         : undefined)
       const buildId = readFileSync(path.join(appDir, '.hai/build/docker/latest'), 'utf8').trim()
       const artifact = JSON.parse(readFileSync(path.join(appDir, '.hai/build/docker', buildId, 'manifest.json'), 'utf8')) as DeploymentArtifact
-      expect(artifact).toMatchObject({ version: 4, primaryService: 'serv', appVersion: APPLICATION_VERSION })
+      expect(artifact).toMatchObject({
+        version: 5,
+        webBasePath: '',
+        primaryService: 'serv',
+        appVersion: APPLICATION_VERSION,
+      })
       expect(artifact.images.map(image => image.file)).toEqual([`serv-${APPLICATION_VERSION}.tar`, `web-${APPLICATION_VERSION}.tar`])
       for (const image of artifact.images) {
         testImages.set(image.imageRef, recordDeployTestImage(runtime!, image.imageRef))

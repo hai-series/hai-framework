@@ -2275,7 +2275,7 @@
     "name": "HAI_AUDIT_USERIDCOLUMN",
     "module": "audit",
     "path": "audit.userIdColumn",
-    "description": "用户表主键列名，用于 JOIN 条件",
+    "description": "用于查找事件操作者的用户表主键列名。",
     "value": "id",
     "constraint": "字符串"
   },
@@ -2283,7 +2283,7 @@
     "name": "HAI_AUDIT_USERNAMECOLUMN",
     "module": "audit",
     "path": "audit.userNameColumn",
-    "description": "用户表用户名列名，用于 SELECT 输出",
+    "description": "用于写入身份快照的用户名列名。",
     "value": "username",
     "constraint": "字符串"
   },
@@ -2291,7 +2291,7 @@
     "name": "HAI_AUDIT_USERTABLE",
     "module": "audit",
     "path": "audit.userTable",
-    "description": "用户表名，用于 list 查询时 LEFT JOIN 获取用户名",
+    "description": "事件写入时用于捕获用户名的用户表名。",
     "value": "hai_iam_users",
     "constraint": "字符串"
   },

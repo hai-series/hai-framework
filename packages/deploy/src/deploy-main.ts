@@ -404,9 +404,6 @@ export const deploy: DeployFunctions = {
       return notInitialized.result()
     }
 
-    if (options && 'projectName' in options && options.projectName !== undefined)
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_projectNameOverrideRemoved'))
-
     logger.info('Starting deployment', { appDir, environment: options?.environment })
 
     // 1. 扫描应用

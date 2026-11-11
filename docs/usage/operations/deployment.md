@@ -19,7 +19,7 @@ pnpm run deploy --env test --plan --inspect-remote
 
 ## 区分编译、镜像和安装包
 
-compile编译源码，`image`生成服务镜像，app/desktop生成原生包。核对根`name`/`version`和`hai.json.build`路径；serv/web是容器角色，app/desktop不是Compose服务。旧命名或旧格式须重新完整构建，不只改归档名。
+compile编译源码，`image`生成服务镜像，app/desktop生成原生包。核对根`name`/`version`和`hai.json.build`路径；serv/web是容器角色，app/desktop不是Compose服务。
 
 ```sh
 pnpm build --target image
@@ -73,7 +73,7 @@ Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>
 
 ## 凭据、数据卷与未知结果
 
-服务器`managed-secrets.env`、persistent-backends和数据卷成套保护与备份。长期账本记录实际卷的后端家族，移除服务或首次安装失败都不会清掉；不能删除/编辑账本强行把旧PostgreSQL卷交给MySQL。活动卷缺失会停止发布，不自动建空库。旧active只有成功基线与唯一真实容器的挂载、镜像家族一致才能补证；未知遗留卷须先核实并迁移。有可信旧凭据可走[只读预检后显式导入](../../../packages/deploy/docs/credential-import.md)，该独立功能需要服务器Node，导入密码不替代后端证据。
+将服务器 `managed-secrets.env`、`persistent-backends` 和数据卷成套备份。已有卷必须与账本记录的服务、卷名和后端家族匹配。记录缺失、身份冲突或活动卷丢失会停止部署，先恢复核验过的备份。
 
 受控导入后，未认领卷还须合法v2的准确项目/组/卷与唯一运行原容器的角色标签、挂载、镜像家族完全吻合，已知账本或运行环境冲突仍拒绝。导入不创建成功基线：无current时必须当前CLI生成新ID完整全量包首次接管，成功后再增量；不能把这一步当作数据库数据恢复。
 
