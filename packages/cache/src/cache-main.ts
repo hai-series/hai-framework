@@ -224,10 +224,9 @@ export const cache: CacheFunctions = {
         pendingProvider = provider
         const connectResult = await provider.connect(parsed)
         if (!connectResult.success) {
-          logger.error('Cache module initialization failed', {
-            code: connectResult.error.code,
-            message: connectResult.error.message,
-          })
+          // Redis 在实际连接失败处保留驱动诊断，避免重复记录。
+          if (parsed.type !== 'redis')
+            logger.error('Cache module initialization failed', { errorCode: connectResult.error.code })
           return await failInitialization(connectResult)
         }
         pendingProvider = null

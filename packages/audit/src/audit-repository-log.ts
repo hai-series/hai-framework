@@ -273,7 +273,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     const { userTable, userIdColumn, userNameColumn } = this.repoConfig
     const result = await this.sql(tx).get<{ username: string | null }>(`SELECT ${identifier(userNameColumn)} AS username FROM ${identifier(userTable)} WHERE ${identifier(userIdColumn)}=?`, [userId])
     if (!result.success) {
-      logger.warn('Audit actor name unavailable', { userId, error: result.error })
+      logger.warn('Audit actor name unavailable', { userId, errorCode: result.error.code, traceId: result.error.traceId })
       return { id: userId }
     }
     return {
@@ -360,7 +360,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     try {
       const createResult = await this.create(data, tx)
       if (!createResult.success) {
-        logger.error('Failed to record audit log', { action: input.action, error: createResult.error.message })
+        logger.error('Failed to record audit log', { action: input.action, errorCode: createResult.error.code, traceId: createResult.error.traceId })
         return err(
           HaiAuditError.LOG_FAILED,
           auditM('audit_logFailed', {
@@ -462,7 +462,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       })
 
       if (!result.success) {
-        logger.error('Failed to query audit logs', { error: result.error.message })
+        logger.error('Failed to query audit logs', { errorCode: result.error.code, traceId: result.error.traceId })
         return err(
           HaiAuditError.QUERY_FAILED,
           auditM('audit_queryFailed', {
@@ -621,7 +621,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       )
 
       if (!result.success) {
-        logger.error('Failed to cleanup audit logs', { error: result.error.message })
+        logger.error('Failed to cleanup audit logs', { errorCode: result.error.code, traceId: result.error.traceId })
         return err(
           HaiAuditError.CLEANUP_FAILED,
           auditM('audit_cleanupFailed', {
@@ -681,7 +681,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       )
 
       if (!result.success) {
-        logger.error('Failed to query audit statistics', { error: result.error.message })
+        logger.error('Failed to query audit statistics', { errorCode: result.error.code, traceId: result.error.traceId })
         return err(
           HaiAuditError.STATS_FAILED,
           auditM('audit_statsFailed', {

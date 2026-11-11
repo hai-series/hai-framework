@@ -91,6 +91,8 @@ hai deploy --env prod --build --services "serv,web"
 
 plan只校验并输出计划；inspect-remote另通过SSH读取基线事实，not-inspected不表示通过。bundle-only不连接目标，输出归档、目标描述、上传/本机部署脚本和说明；归档中的APPLY.txt解释手工入口。首次安装和拓扑变化使用完整包，部分服务更新要求匹配服务器成功基线。
 
+排查打包或部署故障时，在所选环境设置 `HAI_CORE_LOGGING_LEVEL=debug`，查看部署模块的诊断日志。`--plan` 的标准输出保留为 JSON。
+
 工程根 `package.json.name` 决定项目身份，再附加环境后缀。完整包保存当前服务组合与私有配置；服务器凭据、后端绑定账本和数据卷成套保护。失败可能恢复上一成功服务，但不撤销数据写入、迁移、通知或支付。SSH结果unknown时先只读核对远端，不能自动重复发布。[部署与恢复](../deploy/README.md)
 
 HTTPS支持已有普通PEM文件或Let’s Encrypt。证书/私钥每份最多1MiB、拒绝链接；ACME需要真实域名、邮箱、条款确认和公网80端口。证书状态在服务器，启停或改变布局需全量部署。[HTTPS配置](../../docs/usage/configuration/delivery.md#可选https证书)

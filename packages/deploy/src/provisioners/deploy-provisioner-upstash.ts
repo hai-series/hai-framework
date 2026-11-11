@@ -151,7 +151,7 @@ export function createUpstashProvisioner(): ServiceProvisioner {
 
         email = userEmail
         apiKey = userKey
-        logger.info('Upstash authenticated', { email: userEmail })
+        logger.info('Upstash authenticated')
         return ok(userEmail)
       }
       catch (error) {

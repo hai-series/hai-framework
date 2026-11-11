@@ -34,6 +34,8 @@ pnpm run deploy --env test --artifact-dir .hai/build/docker/<buildId>
 
 新连接与中间件私密值放`.env`.<环境>.local或Secret Manager，公开差异放`.env`.<环境>。部署来源与普通Core不同，先看[优先级](../configuration/delivery.md#环境和秘密的来源)，不要用打印完整环境排查。
 
+排查打包或部署故障时，可在所选环境设置 `HAI_CORE_LOGGING_LEVEL=debug` 查看部署模块的诊断日志。
+
 ## 可选 HTTPS
 
 部署可选择已有 PEM 证书和私钥（复制至发布包），或由官方 Certbot 申请、续期。首次启用和证书布局变更使用全量；`--yes` 复用保存设置。自动申请需确认条款、公网域名、80 端口和 CA 网络，隔离环境使用已有证书。详见[HTTPS 配置](../configuration/delivery.md#可选https证书)。

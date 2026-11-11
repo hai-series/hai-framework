@@ -76,7 +76,7 @@ export function createR2Provisioner(): ServiceProvisioner {
         token = apiTok
         accessKey = credentials.accessKeyId
         secretKey = credentials.secretAccessKey
-        logger.info('Cloudflare R2 authenticated', { accountId: acctId })
+        logger.info('Cloudflare R2 authenticated')
         return ok(acctId)
       }
       catch (error) {

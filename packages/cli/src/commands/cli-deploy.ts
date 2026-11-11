@@ -5,6 +5,7 @@
  * @module cli-deploy
  */
 
+import type { LogLevel } from '@h-ai/core'
 import type { DeploymentEnvironment } from '@h-ai/deploy'
 import type { GlobalOptions } from '../cli-types.js'
 import type { BuildDownloadOptions } from './cli-build-downloads.js'
@@ -14,7 +15,7 @@ import { dirname, resolve } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { parseEnv } from 'node:util'
-import { core } from '@h-ai/core'
+import { core, LogLevelSchema } from '@h-ai/core'
 import chalk from 'chalk'
 import ora from 'ora'
 import prompts from 'prompts'
@@ -396,9 +397,14 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
   let appDir = resolve(cwd, options.appDir ?? '.')
   let closeDeploy: (() => Promise<void>) | null = null
   let restoreProjectLogger: (() => void) | undefined
+  let configureProjectLogger: ((level: LogLevel) => void) | undefined
   const originalEnv = { ...process.env }
   const previousLogLevel = core.logger.getLevel()
-  core.logger.setLevel('fatal')
+  const initialLevel = options.plan
+    ? 'fatal'
+    : LogLevelSchema.safeParse(process.env.HAI_CORE_LOGGING_LEVEL).data
+  if (initialLevel)
+    core.logger.setLevel(initialLevel)
 
   try {
     if (options.inspectRemote && !options.plan)
@@ -438,7 +444,9 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
         const { core: projectCore } = await import(pathToFileURL(localRequire.resolve('@h-ai/core')).href) as typeof import('@h-ai/core')
         if (projectCore !== core) {
           const level = projectCore.logger.getLevel()
-          projectCore.logger.setLevel('fatal')
+          configureProjectLogger = next => projectCore.logger.setLevel(next)
+          if (initialLevel)
+            configureProjectLogger(initialLevel)
           restoreProjectLogger = () => projectCore.logger.setLevel(level)
         }
       }
@@ -547,6 +555,11 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       return
     }
     Object.assign(process.env, environment.data.values)
+    const level = LogLevelSchema.safeParse(process.env.HAI_CORE_LOGGING_LEVEL)
+    if (level.success) {
+      core.logger.setLevel(level.data)
+      configureProjectLogger?.(level.data)
+    }
 
     // 1. 加载凭证
     spinner.start(cliM('cli_deploy_load_credentials'))

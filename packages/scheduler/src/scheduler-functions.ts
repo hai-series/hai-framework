@@ -15,14 +15,12 @@ import type { Cron } from 'croner'
 import type { SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
 import type { LogQueryOptions, SchedulerTaskHooks, TaskDefinition, TaskExecutionLog, TaskRetryPolicy, TaskUpdateInput } from './scheduler-types.js'
 
-import { core, err, ok } from '@h-ai/core'
+import { err, ok } from '@h-ai/core'
 
 import { TaskHandlerConfigSchema } from './repositories/scheduler-repository-task.js'
 import { parseCronExpression } from './scheduler-cron.js'
 import { schedulerM } from './scheduler-i18n.js'
 import { HaiSchedulerError } from './scheduler-types.js'
-
-const logger = core.logger.child({ module: 'scheduler', scope: 'functions' })
 
 // ─── 任务注册表状态 ───
 
@@ -485,7 +483,6 @@ async function registerTaskDefinition(
   if (taskRepo) {
     const saveResult = await taskRepo.saveTask(normalizedTask)
     if (!saveResult.success) {
-      logger.warn('Failed to persist task definition', { taskId: task.id, error: saveResult.error.message })
       return err(
         HaiSchedulerError.DB_SAVE_FAILED,
         schedulerM('scheduler_dbSaveFailed', {
@@ -550,7 +547,6 @@ async function unregisterTaskDefinition(
     const deleteResult = await taskRepo.deleteTask(taskId, expected)
     if (!deleteResult.success) {
       // 删除失败保留原投影；数据库不可用时调度刷新也会阻止执行。
-      logger.warn('Failed to delete persisted task definition', { taskId, error: deleteResult.error.message })
       return err(
         HaiSchedulerError.DB_SAVE_FAILED,
         schedulerM('scheduler_dbSaveFailed', {
@@ -700,7 +696,6 @@ async function updateTaskDefinition(
   if (taskRepo) {
     const updateResult = await taskRepo.updateTask(taskId, normalizedUpdates)
     if (!updateResult.success) {
-      logger.warn('Failed to update persisted task definition', { taskId, error: updateResult.error.message })
       return err(
         HaiSchedulerError.DB_SAVE_FAILED,
         schedulerM('scheduler_dbSaveFailed', {

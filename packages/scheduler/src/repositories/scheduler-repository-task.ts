@@ -240,7 +240,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
       })
 
       if (!createResult.success) {
-        logger.error('Failed to save task definition', { taskId: task.id, error: createResult.error.message })
+        logger.error('Failed to save task definition', { taskId: task.id, errorCode: createResult.error.code, traceId: createResult.error.traceId })
         return err(
           HaiSchedulerError.DB_SAVE_FAILED,
           schedulerM('scheduler_dbSaveFailed', {
@@ -276,6 +276,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
         limit: 1,
       })
       if (!rows.success) {
+        logger.error('Failed to load task definition for update', { taskId, errorCode: rows.error.code, traceId: rows.error.traceId })
         return err(
           HaiSchedulerError.DB_SAVE_FAILED,
           schedulerM('scheduler_dbSaveFailed', {
@@ -317,7 +318,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
 
       const updateResult = await this.updateById(rows.data[0].id, data)
       if (!updateResult.success) {
-        logger.error('Failed to update task definition', { taskId, error: updateResult.error.message })
+        logger.error('Failed to update task definition', { taskId, errorCode: updateResult.error.code, traceId: updateResult.error.traceId })
         return err(
           HaiSchedulerError.DB_SAVE_FAILED,
           schedulerM('scheduler_dbSaveFailed', {
@@ -401,9 +402,11 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
           }
         }
         const deleted = await this.db.sql.execute(`DELETE FROM ${SCHEDULER_TASK_TABLE} WHERE ${conditions.join(' AND ')}`, params)
-        return deleted.success
-          ? ok(deleted.data.changes > 0)
-          : deleted
+        if (!deleted.success) {
+          logger.error('Failed to delete task definition', { taskId, errorCode: deleted.error.code, traceId: deleted.error.traceId })
+          return deleted
+        }
+        return ok(deleted.data.changes > 0)
       }
       const rows = await this.findAll({
         where: 'task_id = ?',
@@ -411,6 +414,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
         limit: 1,
       })
       if (!rows.success) {
+        logger.error('Failed to load task definition for deletion', { taskId, errorCode: rows.error.code, traceId: rows.error.traceId })
         return err(
           HaiSchedulerError.DB_SAVE_FAILED,
           schedulerM('scheduler_dbSaveFailed', {
@@ -425,7 +429,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
 
       const deleteResult = await this.deleteById(rows.data[0].id)
       if (!deleteResult.success) {
-        logger.error('Failed to delete task definition', { taskId, error: deleteResult.error.message })
+        logger.error('Failed to delete task definition', { taskId, errorCode: deleteResult.error.code, traceId: deleteResult.error.traceId })
         return err(
           HaiSchedulerError.DB_SAVE_FAILED,
           schedulerM('scheduler_dbSaveFailed', {
@@ -457,6 +461,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
     try {
       const rows = await this.findAll({ orderBy: 'id ASC' })
       if (!rows.success) {
+        logger.error('Failed to load task definitions', { errorCode: rows.error.code, traceId: rows.error.traceId })
         return err(
           HaiSchedulerError.DB_SAVE_FAILED,
           schedulerM('scheduler_dbSaveFailed', {

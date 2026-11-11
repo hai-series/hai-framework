@@ -24,8 +24,22 @@ const providers = new Map<string, PaymentProvider>()
 async function auditLog(input: CreateAuditLogInput): Promise<void> {
   const result = await audit.log(input)
   if (!result.success) {
-    logger.warn('Failed to write payment audit log', { action: input.action, error: result.error.message })
+    logger.warn('Failed to write payment audit log', { action: input.action, errorCode: result.error.code, traceId: result.error.traceId })
   }
+}
+
+/** 记录渠道失败诊断，同时将原始结果交给业务方。 */
+function reportProviderResult<T>(provider: string, operation: keyof PaymentProvider, result: HaiResult<T>): HaiResult<T> {
+  if (!result.success) {
+    logger.warn('Payment provider operation failed', {
+      provider,
+      operation,
+      errorCode: result.error.code,
+      status: result.error.httpStatus,
+      traceId: result.error.traceId,
+    })
+  }
+  return result
 }
 
 function isValidAmount(amount: number): boolean {
@@ -152,7 +166,7 @@ export async function createOrder(
       details: { provider: providerName, amount: input.amount, tradeType: input.tradeType },
     })
   }
-  return orderResult
+  return reportProviderResult(providerName, 'createOrder', orderResult)
 }
 
 /**
@@ -197,7 +211,7 @@ export async function handleNotify(
       },
     })
   }
-  return notifyResult
+  return reportProviderResult(providerName, 'handleNotify', notifyResult)
 }
 
 /**
@@ -222,7 +236,7 @@ export async function queryOrder(
   const result = requireProvider(providerName)
   if (!result.success)
     return result
-  return result.data.queryOrder(orderNo)
+  return reportProviderResult(providerName, 'queryOrder', await result.data.queryOrder(orderNo))
 }
 
 /**
@@ -261,7 +275,7 @@ export async function refund(
       details: { provider: providerName, refundNo: input.refundNo, amount: input.amount },
     })
   }
-  return refundResult
+  return reportProviderResult(providerName, 'refund', refundResult)
 }
 
 /**
@@ -295,7 +309,7 @@ export async function closeOrder(
       details: { provider: providerName },
     })
   }
-  return closeResult
+  return reportProviderResult(providerName, 'closeOrder', closeResult)
 }
 
 /**

@@ -58,7 +58,7 @@ export function createAliyunProvisioner(): ServiceProvisioner {
         accessKey = akId
         secretKey = akSecret
         signName = credentials.signName
-        logger.info('Aliyun authenticated', { accessKeyId: `${akId.slice(0, 6)}***` })
+        logger.info('Aliyun authenticated')
         return ok(akId)
       }
       catch (error) {

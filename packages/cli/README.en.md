@@ -91,6 +91,8 @@ hai deploy --env prod --build --services "serv,web"
 
 Plan validates and reports; inspect-remote additionally reads baseline facts over SSH. Not-inspected is not verified. Bundle-only avoids target connections and produces the archive, target description, upload/local scripts and instructions; APPLY.txt inside describes manual deployment. Initial installation and topology changes require a complete bundle; partial updates require a matching successful server baseline.
 
+Set `HAI_CORE_LOGGING_LEVEL=debug` for the selected environment when diagnosing packaging or deployment. `--plan` keeps stdout available for its JSON report.
+
 Root `package.json.name` defines project identity with an environment suffix. Protect server credentials, backend bindings and volumes together. Failed updates can restore previous services, but do not undo database changes, migrations, notifications or payments. For unknown SSH results, inspect remote facts before retrying. See [deployment/recovery](../deploy/README.en.md).
 
 HTTPS supports existing regular PEM files or Let's Encrypt. Each certificate/key is limited to1MiB and links are rejected; ACME needs DNS, email, terms acceptance and public port80. Certificate state stays on the server. Enabling, disabling or changing the layout requires full deployment. See [HTTPS](../../docs/usage/configuration/delivery.md#可选https证书).

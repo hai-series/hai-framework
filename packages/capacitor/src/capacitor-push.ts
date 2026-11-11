@@ -11,6 +11,25 @@ import { HaiCapacitorError } from './capacitor-types.js'
 
 const logger = core.logger.child({ module: 'capacitor', scope: 'push' })
 
+/** 原生插件的错误详情可能包含设备信息，只保留错误类型和代码。 */
+function logCleanupFailure(message: string, error: unknown): void {
+  const cause = error instanceof Error
+    ? error.cause ?? error
+    : error
+  const code = cause && typeof cause === 'object' && 'code' in cause
+    ? cause.code
+    : undefined
+  logger.warn(message, {
+    errorCode: HaiCapacitorError.PUSH_CLEANUP_FAILED.code,
+    causeName: cause instanceof Error
+      ? cause.name
+      : undefined,
+    causeCode: typeof code === 'string' && /^[\w.-]{1,64}$/.test(code)
+      ? code
+      : undefined,
+  })
+}
+
 /**
  * 两类推送流程共用的资源所有权；关闭立即停止回调，迟到 handle 仍必须回收。
  * @example 模块内部上下文
@@ -81,14 +100,15 @@ function createPushScope(options?: PushOptions): PushScope {
       return closing
     closing = Promise.allSettled([...handles].map(remove)).then((results) => {
       releaseIfComplete()
-      if (results.some(result => result.status === 'rejected'))
-        throw new Error(capacitorM('capacitor_pushCleanupFailed'))
+      const failure = results.find(result => result.status === 'rejected')
+      if (failure)
+        throw new Error(capacitorM('capacitor_pushCleanupFailed'), { cause: failure.reason })
     }).finally(() => { closing = undefined })
     return closing
   }
 
   function onAbort(): void {
-    void dispose().catch(() => logger.warn('Push listener cleanup failed; retry cleanup or capacitor.close'))
+    void dispose().catch(error => logCleanupFailure('Push listener cleanup failed; retry cleanup or capacitor.close', error))
   }
 
   scope = {
@@ -164,9 +184,12 @@ async function loadPushPlugin() {
  */
 export async function closePushListeners(): Promise<HaiResult<void>> {
   const results = await Promise.allSettled([...activeScopes].map(scope => scope.dispose()))
-  return results.some(result => result.status === 'rejected')
-    ? err(HaiCapacitorError.PUSH_CLEANUP_FAILED, capacitorM('capacitor_pushCleanupFailed'))
-    : ok(undefined)
+  const failure = results.find(result => result.status === 'rejected')
+  if (failure) {
+    logCleanupFailure('Push listener cleanup failed during capacitor.close', failure.reason)
+    return err(HaiCapacitorError.PUSH_CLEANUP_FAILED, capacitorM('capacitor_pushCleanupFailed'), failure.reason)
+  }
+  return ok(undefined)
 }
 
 /**
@@ -228,7 +251,7 @@ export async function registerPush(options?: PushOptions): Promise<HaiResult<Pus
     return ok({ token })
   }
   catch (cause) {
-    await scope.dispose().catch(() => logger.warn('Push registration cleanup failed; retry capacitor.close'))
+    await scope.dispose().catch(error => logCleanupFailure('Push registration cleanup failed; retry capacitor.close', error))
     return err(HaiCapacitorError.PUSH_REGISTER_FAILED, capacitorM('capacitor_pushRegisterFailed'), cause)
   }
 }
@@ -299,7 +322,7 @@ export async function listenPush(callbacks: PushNotificationCallbacks, options?:
     })
   }
   catch (cause) {
-    await scope.dispose().catch(() => logger.warn('Push setup cleanup failed; retry capacitor.close'))
+    await scope.dispose().catch(error => logCleanupFailure('Push setup cleanup failed; retry capacitor.close', error))
     return err(HaiCapacitorError.PUSH_LISTEN_FAILED, capacitorM('capacitor_pushListenFailed'), cause)
   }
 }

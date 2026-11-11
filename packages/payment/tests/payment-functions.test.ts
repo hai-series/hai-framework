@@ -5,7 +5,7 @@
  */
 
 import type { PaymentProvider } from '../src/payment-types'
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   clearProviders,
@@ -70,6 +70,28 @@ function createMockProvider(name: string): PaymentProvider {
 }
 
 describe('payment-functions', () => {
+  it('记录支付渠道失败的错误码并原样返回业务错误', async () => {
+    const provider = createMockProvider('mock')
+    const failure = err(HaiPaymentError.QUERY_ORDER_FAILED, 'private provider detail', new Error('private gateway body'))
+    provider.queryOrder = async () => failure
+    registerProvider(provider)
+    const observations: unknown[] = []
+    const stop = core.logger.observe(entry => observations.push(entry))
+    try {
+      expect(await queryOrder('mock', 'private-order-number')).toBe(failure)
+      const logged = JSON.stringify(observations)
+      expect(logged).toContain('Payment provider operation failed')
+      expect(logged).toContain(HaiPaymentError.QUERY_ORDER_FAILED.code)
+      expect(logged).not.toContain('private-')
+      expect(logged).not.toContain('private provider detail')
+      expect(logged).not.toContain('private gateway body')
+    }
+    finally {
+      stop()
+      clearProviders()
+    }
+  })
+
   it('registerProvider 注册后可通过 getProvider 获取', () => {
     clearProviders()
     const provider = createMockProvider('test')

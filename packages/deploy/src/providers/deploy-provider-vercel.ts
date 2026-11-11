@@ -139,7 +139,7 @@ export function createVercelProvider(): DeployProvider {
         )
         token = apiToken
         const username = user.user.username || user.user.email
-        logger.info('Vercel authenticated', { user: username })
+        logger.info('Vercel authenticated')
         return ok(username)
       }
       catch (error) {

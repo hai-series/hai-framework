@@ -1,4 +1,5 @@
 /** 对真实 Redis 连接注入建连/健康检查/关闭故障，核验客户端不随重试累积。 */
+import { core } from '@h-ai/core'
 import Redis from 'ioredis'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { cache } from '../src/index.js'
@@ -62,6 +63,28 @@ describe('redis lifecycle ownership', { concurrent: false }, () => {
     vi.spyOn(Redis.prototype, 'quit').mockRejectedValueOnce(new Error('injected QUIT failure'))
     expect((await cache.close()).success).toBe(true)
     await expectOnlyObserver()
+  })
+
+  it('includes the connection event code once when connect rejects without a code', async () => {
+    const observations: Array<{ message: string }> = []
+    const stop = core.logger.observe(entry => observations.push(entry))
+    const connect = Redis.prototype.connect
+    vi.spyOn(Redis.prototype, 'connect').mockImplementationOnce(async function (this: Redis) {
+      await connect.call(this)
+      this.emit('error', new Error('WRONGPASS private credential diagnostic'))
+      throw new Error('Connection is closed')
+    })
+    try {
+      expect((await cache.init(config())).success).toBe(false)
+      const failures = observations.filter(entry => /Redis (?:client )?connection|Cache module initialization failed/.test(entry.message))
+      expect(failures).toHaveLength(1)
+      expect(JSON.stringify(failures)).toContain('WRONGPASS')
+      expect(JSON.stringify(failures)).not.toContain('private credential diagnostic')
+      await expectOnlyObserver()
+    }
+    finally {
+      stop()
+    }
   })
 
   it('failed QUIT and disconnect retain one client until retry succeeds', async () => {

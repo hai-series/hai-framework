@@ -20,6 +20,26 @@ import { validateSetOptions } from './cache-set-options.js'
 
 const logger = core.logger.child({ module: 'cache', scope: 'redis' })
 
+/** 连接错误只记录诊断代码，避免 Redis 响应或连接参数进入日志。 */
+function redisErrorDiagnostics(error: unknown) {
+  const cause = error && typeof error === 'object' && 'lastNodeError' in error
+    ? error.lastNodeError ?? error
+    : error
+  const code = cause && typeof cause === 'object' && 'code' in cause
+    ? cause.code
+    : undefined
+  return {
+    causeName: cause instanceof Error
+      ? cause.name
+      : undefined,
+    causeCode: typeof code === 'string' && /^[A-Z0-9_]{1,64}$/.test(code)
+      ? code
+      : cause instanceof Error
+        ? /^(NOAUTH|WRONGPASS|NOPERM|LOADING|CLUSTERDOWN)\b/.exec(cause.message)?.[1]
+        : undefined,
+  }
+}
+
 /** 单键 CAS；比较、删除/替换和 TTL 在同一脚本内提交，不受租约过期影响。 */
 const COMPARE_AND_SWAP_SCRIPT = `
   local current = redis.call('get', KEYS[1])
@@ -99,7 +119,7 @@ export function createRedisProvider(): CacheProvider {
           await owned.quit()
       }
       catch (error) {
-        logger.warn('Redis graceful shutdown failed; disconnecting client', { error })
+        logger.warn('Redis graceful shutdown failed; disconnecting client', redisErrorDiagnostics(error))
       }
       owned.disconnect()
       client = null
@@ -795,6 +815,7 @@ export function createRedisProvider(): CacheProvider {
         )
       }
 
+      let connectionError: unknown
       try {
         await closeClient()
         const redisOptions: RedisOptions = {
@@ -851,10 +872,24 @@ export function createRedisProvider(): CacheProvider {
           })
         }
 
-        client.on('error', () => logger.warn('Redis client connection error'))
+        const connectedClient = client
+        connectedClient.on('error', (error: unknown) => {
+          if (client !== connectedClient)
+            return
+          if (ready) {
+            logger.warn('Redis client connection error', {
+              status: connectedClient.status,
+              ...redisErrorDiagnostics(error),
+            })
+          }
+          else {
+            connectionError = error
+          }
+        })
         await client.connect()
         await client.ping()
 
+        connectionError = undefined
         ready = true
         const address = config.url
           ? core.sanitize.sanitizeUrl(config.url)
@@ -864,6 +899,14 @@ export function createRedisProvider(): CacheProvider {
         return ok(undefined)
       }
       catch (error) {
+        const diagnostics = redisErrorDiagnostics(error)
+        logger.error('Redis connection failed', {
+          errorCode: HaiCacheError.CONNECTION_FAILED.code,
+          status: client?.status,
+          ...(diagnostics.causeCode || connectionError === undefined
+            ? diagnostics
+            : redisErrorDiagnostics(connectionError)),
+        })
         ready = false
         let cleanupError: unknown
         try {

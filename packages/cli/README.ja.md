@@ -91,6 +91,8 @@ hai deploy --env prod --build --services "serv,web"
 
 planは検査と報告のみ。inspect-remoteはSSHで基準状態を読み取り、not-inspectedは検証成功を意味しません。bundle-onlyは対象へ接続せず、アーカイブ、対象情報、転送/本機スクリプト、説明を生成します。内部APPLY.txtは手動適用手順です。初回と構成変更は完全パッケージ、部分更新は一致するサーバー成功基準が必要です。
 
+パッケージ作成や配布を調査するには、選択した環境で `HAI_CORE_LOGGING_LEVEL=debug` を設定します。`--plan` の標準出力は JSON レポート用です。
+
 根 `package.json.name` と環境接尾辞が工程IDです。サーバー認証情報、バックエンド台帳、データボリュームを一緒に保護します。失敗時に前サービスを復旧しても、データ変更、マイグレーション、通知、決済は取り消されません。SSH結果unknownは遠端事実を読取確認してから再試行します。[配布と復旧](../deploy/README.ja.md)
 
 HTTPSは通常PEMファイルまたはLet's Encrypt。証明書/鍵は各1MiB以内でリンクを拒否します。ACMEにはDNS、メール、規約同意、公開80番が必要。証明書状態はサーバーに保存し、有効化/無効化や構成変更は全量配布します。[HTTPS設定](../../docs/usage/configuration/delivery.md#可选https证书)

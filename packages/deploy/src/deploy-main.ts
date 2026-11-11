@@ -257,10 +257,8 @@ export const deploy: DeployFunctions = {
         else {
           provider = createProviderByType(parsed.provider.type)
           const authResult = await provider.authenticate(parsed.provider.token)
-          if (!authResult.success) {
+          if (!authResult.success)
             return err(authResult.error)
-          }
-          logger.info('Provider authenticated', { provider: parsed.provider.type, user: authResult.data })
         }
 
         // 创建 Provisioners（两类 Provider 均可复用云资源开通）
@@ -278,13 +276,15 @@ export const deploy: DeployFunctions = {
               logger.error('Provisioner authentication failed', {
                 service: serviceType,
                 provisioner: (serviceConfig as Record<string, unknown>).provisioner,
+                errorCode: provAuthResult.error.code,
+                traceId: provAuthResult.error.traceId,
               })
               currentProvisioners.clear()
               return err(provAuthResult.error)
             }
             logger.info('Provisioner authenticated', {
               service: serviceType,
-              user: provAuthResult.data,
+              provisioner: provisioner.name,
             })
             currentProvisioners.set(serviceType, provisioner)
           }

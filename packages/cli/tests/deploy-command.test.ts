@@ -143,6 +143,7 @@ describe('deployCommand', () => {
 
   it.each([false, true])('计划模式只读且不加载/保存凭据、不初始化或部署，远端检查=%s', async (inspectRemote) => {
     const appDir = createDeployApp()
+    const levelBefore = core.logger.getLevel()
     const before = readdirSync(tmpRoot, { recursive: true })
     const envBefore = readFileSync(join(appDir, '.env.prod'), 'utf8')
     const processBefore = { ...process.env }
@@ -158,9 +159,42 @@ describe('deployCommand', () => {
     expect(mocks.loadCredentials).not.toHaveBeenCalled()
     expect(mocks.init).not.toHaveBeenCalled()
     expect(mocks.deployApp).not.toHaveBeenCalled()
+    expect(mocks.writeMessage).toHaveBeenCalledOnce()
+    expect(JSON.parse(mocks.writeMessage.mock.calls[0][0])).toMatchObject({
+      baseline: { state: 'not-inspected' },
+    })
+    expect(core.logger.getLevel()).toBe(levelBefore)
     expect(readdirSync(tmpRoot, { recursive: true })).toEqual(before)
     expect(readFileSync(join(appDir, '.env.prod'), 'utf8')).toBe(envBefore)
     expect(process.env).toEqual(processBefore)
+  })
+
+  it('部署使用目标环境的日志级别，失败退出后恢复原值', async () => {
+    const appDir = createDeployApp()
+    const levelBefore = core.logger.getLevel()
+    writeFileSync(join(appDir, '.env.prod.local'), 'HAI_CORE_LOGGING_LEVEL=debug\n')
+    vi.stubEnv('HAI_CORE_LOGGING_LEVEL', undefined)
+    let observedLevel: string | undefined
+    mocks.init.mockImplementationOnce(async () => {
+      observedLevel = core.logger.getLevel()
+      return {
+        success: false,
+        error: { message: 'initialization failed' },
+      }
+    })
+    try {
+      await expect(deployCommand({
+        cwd: tmpRoot,
+        appDir,
+        env: 'prod',
+        yes: true,
+      })).rejects.toThrow('initialization failed')
+      expect(observedLevel).toBe('debug')
+      expect(core.logger.getLevel()).toBe(levelBefore)
+    }
+    finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('reports the invalid deployment field and expected type without echoing the value', async () => {
