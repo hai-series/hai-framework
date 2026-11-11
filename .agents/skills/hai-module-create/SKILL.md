@@ -168,6 +168,7 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 - [ ] 表名/缓存 key 就近定义且不可配置
 - [ ] 所有公共 API JSDoc 含 fenced ts/svelte `@example`，从实际公开入口导入并检查 HaiResult；内部示例标明“模块内部上下文”，以 check-module-jsdoc 对真实类型校验
 - [ ] 公共方法返回 `HaiResult<T>`，未使用 `throw`（合规场景除外）
+- [ ] 按 [日志级别规范](../../instructions/module-conventions.md#日志级别规范) 验证正常摘要、失败日志、原始原因与脱敏字段
 - [ ] 已实现 NotInitializedKit + `initInProgress` 并发防护（并发调用返回 HaiResult 错误）
 - [ ] 数据库租约使用同条条件 SQL 的存储端执行时钟；验证节点墙钟偏差与真实锁等待后仍拒绝过期提交，不能只续租或先读取时间
 - [ ] 测试覆盖正常 / 边界 / 多实现

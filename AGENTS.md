@@ -40,6 +40,7 @@ hai-framework monorepo：`packages/*` 为框架包，`apps/*` 为应用，`packa
 - 生命周期模块按 `init(config) → use → close()` 使用；纯函数、工厂、core、serv、kit 等按实际类型契约处理，不臆造生命周期。
 - 返回 `HaiResult` 的业务 API 不抛业务异常；调用方先判断 `success`。流式 API、显式抛错函数及框架控制流例外见模块规范。
 - 禁止 `any`、无说明的 `as unknown as T`、`console.log`、硬编码密钥。代码注释中文、日志英文；用户可见文本走 i18n 并同步中英日文。
+- 新增或修改日志与错误处理时遵循 [日志与错误诊断](packages/cli/templates/skills/hai-app-create/logging.md)，验证业务返回、日志级别、追踪编号及脱敏。
 - 公开 API、配置、类型、错误码或模板变动，全局核对并同步实现、调用方、测试、README、skills、LLMS.txt 和注释。
 
 ## 验证与报告

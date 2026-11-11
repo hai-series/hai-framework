@@ -228,9 +228,7 @@ export async function listArticles(params: ListParams): Promise<HaiResult<Pagina
 ### 服务层规则
 
 - 应用领域操作沿现有契约返回 `HaiResult<T>`；纯 getter、工具、工厂与流按实际签名，不统一改造
-- 写操作需 `debug`（进入）+ `info`（成功）日志
-- 读操作仅 `debug` 日志
-- 禁止 `console.log`，使用 `core.logger`
+- 需要记录服务层操作时，使用 `core.logger` 和 [日志与错误诊断](logging.md) 约定的安全摘要。传播框架模块的 `HaiResult` 错误时保留原因和关联信息。
 - 服务层不处理 HTTP 响应格式，只返回 HaiResult
 
 ## 创建数据模型
@@ -357,7 +355,7 @@ core.init() → crypto.init() → reldb.init() → cache.init() → iam.init() �
 - [ ] 页面使用 Svelte 5 Runes 语法
 - [ ] API 端点有权限守卫与输入校验
 - [ ] 服务层和调用方遵循实际返回/抛错/流契约，不能以 HTTP 成功替代业务状态成功
-- [ ] 日志级别正确（读 debug / 写 debug+info / 失败 warn|error）
+- [ ] 已验证 [日志与错误诊断](logging.md) 的日志级别、失败原因、关联编号和脱敏字段
 - [ ] 禁止 `console.log`、`any`、硬编码密钥
 - [ ] 用户可见文本走 i18n
 - [ ] 涉及容器交付时，镜像启动及配置/环境变量/数据目录行为已验证

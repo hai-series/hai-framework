@@ -163,27 +163,11 @@ function register(tool: Tool): HaiResult<void> {
 
 ## 日志级别规范
 
-| 位置                        | 级别                  | 说明                             |
-| --------------------------- | --------------------- | -------------------------------- |
-| init 重复初始化             | `warn`                | 提示重新初始化                   |
-| init 进入/成功              | `info`                | 附带关键配置                     |
-| init 失败                   | `error`               | 附带校验/异常信息                |
-| close 已关闭/进入/完成      | `info`                | —                                |
-| close 异常                  | `error`               | `{ error }`                      |
-| 业务写操作                  | `debug`/`info`/`warn` | 进入 debug，成功 info，失败 warn |
-| Provider connect/disconnect | `info`                | 附带连接目标                     |
-| 读操作/查询                 | `debug`               | 不使用 info                      |
-| 循环体内详细记录            | `trace`               | —                                |
+框架和应用共用 [日志与错误诊断](../../packages/cli/templates/skills/hai-app-create/logging.md)。模块在真正掌握失败原因的边界记录结构化日志，保留原始 `HaiResult` 错误和资源清理诊断。涉及生命周期、Provider 或 HTTP 边界时，按实际调用链验证日志和业务返回。
 
 ### 日志脱敏
 
-日志上下文中可能包含敏感信息时（URL / 连接字符串 / 配置对象中的 password、token、apiKey、secret 等），必须先通过 `sanitize*` 辅助函数脱敏后再传入 logger，禁止直接输出原始值。
-
-| 场景                                        | 脱敏方式                                                                                             |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| URL 类（redis://、postgres://、http:// 等） | 使用 `core.sanitize.sanitizeUrl()`；遮蔽 userinfo、敏感 query/OAuth fragment，非法地址返回固定占位符 |
-| 配置对象                                    | 剥离或遮蔽 `password`/`token`/`apiKey`/`secret` 字段                                                 |
-| 函数命名                                    | `sanitize{Subject}`，放在对应 Provider / functions 文件顶部                                          |
+先按共享规范的[允许记录的字段](../../packages/cli/templates/skills/hai-app-create/logging.md#保留根因与关联信息)构造上下文。连接地址和确需保留的异常诊断复用 `core.sanitize`。
 
 ## 模块禁止事项
 

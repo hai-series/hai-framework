@@ -88,8 +88,8 @@
 - [ ] API 边界 Zod 校验后才进入业务层
 - [ ] 文件路径防遍历；外部 URL 防 SSRF；无 eval / Function / 未消毒 innerHTML
 - [ ] 认证令牌：Web 用 httpOnly cookie，移动/桌面安全 TokenStore，禁止 localStorage
-- [ ] 无硬编码密钥；password/token/apiKey/隐私字段不进日志
-- [ ] URL/连接串/配置对象先 `sanitize*` 再记录
+- [ ] 按 [日志与错误诊断](../../../packages/cli/templates/skills/hai-app-create/logging.md) 检查级别、字段白名单与跨层重复记录
+- [ ] 沿实际调用链核对原始 `cause`、清理错误、追踪编号和脱敏后的日志。配置关闭正常摘要时仍可记录失败
 - [ ] 无 `console.log`；日志消息英文、代码注释中文、用户可见文本走 i18n key
 
 ## §8 测试与文档审查

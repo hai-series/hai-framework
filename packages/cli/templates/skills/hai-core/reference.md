@@ -192,7 +192,7 @@ logger.info('Module initialized')
 
 // 创建携带固定上下文的子 logger（自动合并到每条日志）
 const reqLogger = core.logger.child({ requestId: 'req-001' })
-reqLogger.info('Request started') // 日志中自动包含 requestId
+reqLogger.debug('Request started') // 日志中自动包含 requestId
 
 // 配置输出格式和级别
 core.logger.configure({
@@ -204,16 +204,7 @@ core.logger.setLevel('debug')
 const level = core.logger.getLevel() // 'debug'
 ```
 
-**日志级别规范**：
-
-| 级别    | 适用场景                           |
-| ------- | ---------------------------------- |
-| `trace` | 循环内详细调试数据                 |
-| `debug` | 函数进入、参数概要、读操作         |
-| `info`  | 业务事件（初始化完成、写操作成功） |
-| `warn`  | 异常但可恢复（校验失败、重试）     |
-| `error` | 操作失败（需人工排查）             |
-| `fatal` | 致命错误（服务无法继续）           |
+日志级别、业务错误处理和字段选择见 [日志与错误诊断](../hai-app-create/logging.md)。
 
 ### 国际化 — `core.i18n`
 

@@ -30,6 +30,7 @@ description: "审查 hai-framework packages 模块的公共契约、生命周期
 ## 按需参考
 
 - [详细审查规则](review.md)
+- [日志与错误诊断](../../../packages/cli/templates/skills/hai-app-create/logging.md)
 - [工作规范](../../instructions/workspace.md)
 - [模块规范](../../instructions/module-conventions.md)
 - [测试规范](../../instructions/test-conventions.md)

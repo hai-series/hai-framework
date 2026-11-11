@@ -28,6 +28,7 @@ CLI 创建/补模块/初始化提示使用现有中英日 locale；终端语言�
 - 独立 mobile 模板选择 IAM/crypto 时安装前端 crypto，默认接 typed client 加密 transport；未选 crypto 可连接明确的明文 API。只有匹配的明文服务才配置 `PUBLIC_API_TRANSPORT=off`，不能靠关闭测试 API 的传输掩盖缺失的客户端；握手失败不降级，关闭时先 client 再自身初始化的 crypto，私钥只在服务端。
 - 新手引导和帮助中心使用 `@h-ai/ui/guide`，复用已有导航适配器、i18n 和主题；fullstack 共享管理界面已有默认入口，按 [引导指南](../../../packages/cli/templates/skills/hai-ui/guide.md) 扩展内容和锚点。
 - 名称、版本、环境、语言与日志复用 `_core.yml` 和 core.config/core.logger；SvelteKit layout 与 fullstack app.info 只公开元信息白名单。独立 Vite 客户端经 Node 解析构建默认值，Web 部署可通过 runtime-config.js 覆盖公开地址和元数据，无需重建镜像；原生包在复制静态资源前设置公开配置。不能硬编码显示副本或把完整配置交给浏览器。
+- 涉及错误处理或日志时按 [日志与错误诊断](../../../packages/cli/templates/skills/hai-app-create/logging.md) 验证失败原因、级别、关联编号和脱敏字段。
 - 环境配置遵守 [六类文件与加载约定](../../../packages/cli/templates/skills/hai-app-create/development.md#环境配置)：公共基础和环境文件提交 Git，共享私有值写 `.env.local`，模式私有值写 `.env.<mode>.local`，后者优先；完整示例逐项说明字段与约束。新增或修改变量时同步应用、模板、模块说明和根 `.env.example`。
 - 对新增行为先写有意义的目标用例，仍适用的回归保持通过；被明确新需求替代的模板断言同步更新并记录依据，同步 i18n、README 和调用方。
 - 多项门禁按 [工作规范](../../instructions/workspace.md#验证与交付) 分轮收集、集中修复、再验证；普通失败不打断独立检查，不在每修一处后从头重跑全量门禁。

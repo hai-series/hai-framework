@@ -129,7 +129,7 @@ export function createXxYyFunctions(deps: XxYyFunctionsDeps): XxYyFunctions {
   const { config } = deps
   return {
     async create(input: CreateYyInput) {
-      logger.debug('Creating yy item', { name: input.name })
+      logger.debug('Creating yy item', { operation: 'yy.create' })
       if (!input.name) {
         return err(HaiXxError.VALIDATION_ERROR, xxM('xx_yy_nameRequired'))
       }
@@ -138,6 +138,11 @@ export function createXxYyFunctions(deps: XxYyFunctionsDeps): XxYyFunctions {
         return ok(item)
       }
       catch (error) {
+        logger.warn('Could not create yy item', {
+          operation: 'yy.create',
+          errorCode: HaiXxError.OPERATION_FAILED.code,
+          causeName: error instanceof Error ? error.name : undefined,
+        })
         return err(HaiXxError.OPERATION_FAILED, xxM('xx_yy_createFailed'), error)
       }
     },
@@ -190,20 +195,10 @@ src/client/xx-client.ts  —— 工厂函数 createXxClient(config) 创建
 
 ### R4.7 日志脱敏
 
-```ts
-function sanitizeRedisUrl(url: string): string {
-  try {
-    const u = new URL(url)
-    if (u.password) u.password = '***'
-    if (u.username) u.username = '***'
-    return u.toString()
-  }
-  catch {
-    return '(invalid url)'
-  }
-}
+按 [日志与错误诊断](../../../packages/cli/templates/skills/hai-app-create/logging.md) 选择级别和允许记录的字段。连接地址复用 Core 脱敏工具。
 
-logger.info('Redis connected', { address: sanitizeRedisUrl(config.url) })
+```ts
+logger.info('Redis connected', { address: core.sanitize.sanitizeUrl(config.url) })
 ```
 
 ## R5 messages JSON 范本

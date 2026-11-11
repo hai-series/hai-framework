@@ -747,6 +747,9 @@ it('generated migration executes up and down with HaiResult', async () => {
       for (const relativePath of scenario.expectedFiles) {
         expect(await fileExists(path.join(projectPath, relativePath))).toBe(true)
       }
+      const loggingGuide = 'hai-app-create/logging.md'
+      expect(await readFile(path.join(projectPath, '.agents/skills', loggingGuide), 'utf8'))
+        .toBe(await readFile(path.resolve(process.cwd(), 'templates/skills', loggingGuide), 'utf8'))
       for (const resource of [
         'SKILL.md',
         'workflow.md',
