@@ -53,7 +53,7 @@ flowchart TD
 
 构建产物和 Turbo 内容缓存由同一轮构建准备，通过 `ci-build-state-<runId>-<attempt>` 传给检查。共享包同时包含 `packages/*/dist`、应用私有包的 `apps/*/dist`、静态站点 `apps/*/build`、SvelteKit/适配器输出和 Turbo 缓存，不只传框架包。启动器直接消费的应用产物必须实际存在；缓存中的压缩记录不能代替这些文件。依赖任务仍由 Turbo 校验输入并恢复必要输出；上游构建失败不启动依赖它的检查。官网额外直接构建一次，确保 `build-metadata.json` 中的提交号属于本次提交。
 
-可信 Linux runner 安装 bubblewrap 和 AppArmor 工具，并加载发行版的 `bwrap-userns-restrict` profile。Codex 镜像使用发行版的 bubblewrap。容器预检在断网的一次性 Podman 容器中运行 `codex sandbox`，验证工作区内读写成功且工作区外写入被拒绝。宿主预检在独立临时工程及 `CODEX_HOME` 下验证工作区读写。两项预检均不接收上游密钥，失败即阻断真实验收。 [Codex 官方沙箱说明](https://learn.chatgpt.com/docs/sandboxing)
+可信 Linux runner 通过 Ubuntu 官方 HTTPS 仓库安装 bubblewrap 和 AppArmor 工具，沿用 runner 的发行版和包签名配置，并加载发行版的 `bwrap-userns-restrict` profile。Codex 镜像使用发行版的 bubblewrap。容器预检在断网的一次性 Podman 容器中运行 `codex sandbox`，验证工作区内读写成功且工作区外写入被拒绝。宿主预检在独立临时工程及 `CODEX_HOME` 下验证工作区读写。两项预检均不接收上游密钥，失败即阻断真实验收。 [Codex 官方沙箱说明](https://learn.chatgpt.com/docs/sandboxing)
 
 ## 修复后复用哪些结果
 
@@ -99,7 +99,7 @@ npm 会在包可安装前进行扫描，发布回执可能先于版本查询可�
 
 - 每个阶段的日志和 Job Summary 明确写出实际运行，或复用的来源运行编号、提交及阶段。复用不应报告成当前提交重新执行了全部测试。
 - 同一提交的瞬时环境故障，可在 Actions 使用 **Re-run failed jobs**，保留其他独立阶段的结果。断言失败应先定位并修复；新提交按输入指纹决定复用范围。
-- Chrome 下载偶尔会因连接中断失败。浏览器安装最多尝试三次，最后一次仍失败就阻断该阶段；应用测试的失败不自动重试。脚手架和部署浏览器失败时保留截图、页面上下文及 trace，方便区分下载故障与应用错误。
+- 浏览器阶段先用 Playwright 的 `chrome` 通道实际启动 runner 上的 Chrome 并打开空白页。探测失败时最多安装三次，每次安装后重新探测。Chrome 无法启动时阻断该阶段。应用测试的失败不自动重试。脚手架和部署浏览器失败时保留截图、页面上下文及 trace，方便区分下载故障与应用错误。
 - 需要重新执行全部验证阶段时，在 Actions 的 **CI → Run workflow** 勾选 `full`（默认勾选）。这会忽略成功记录，保留正常构建任务缓存；手工验证不发布 npm 或 Pages。
 - 新流程首次执行、CI 自身改变或没有可信记录时，需要建立一次完整基线；不能用旧串行流程没有生成的记录冒充命中。
 

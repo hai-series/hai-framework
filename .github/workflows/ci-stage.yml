@@ -92,11 +92,28 @@ jobs:
       - name: Restore build and task cache
         if: steps.proof.outputs.run == 'true' && inputs.build_artifact != ''
         run: tar -xzf "$RUNNER_TEMP/ci-build/build-state.tgz"
-      - name: Install browser and system dependencies
+      - name: Prepare Chrome for browser tests
         if: steps.proof.outputs.run == 'true' && inputs.browser
         run: |
+          chrome_ready() {
+            timeout 30s pnpm --filter admin-console exec node --input-type=module <<'JS'
+          import { chromium } from '@playwright/test'
+          const browser = await chromium.launch({ channel: 'chrome', timeout: 15000 })
+          try {
+            const page = await browser.newPage()
+            await page.goto('about:blank', { timeout: 5000 })
+            process.stdout.write(`Chrome ${browser.version()} is ready\n`)
+          }
+          finally {
+            await browser.close()
+          }
+          JS
+          }
+          if chrome_ready; then
+            exit 0
+          fi
           for browser_attempt in 1 2 3; do
-            if pnpm --filter admin-console exec playwright install --with-deps chrome; then
+            if pnpm --filter admin-console exec playwright install --with-deps chrome && chrome_ready; then
               exit 0
             fi
             if [ "$browser_attempt" -eq 3 ]; then

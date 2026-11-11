@@ -405,6 +405,17 @@ describe('ci 真实workflow依赖图', () => {
     expect(workflow.jobs.release.needs).toBe('quality')
   })
 
+  it('浏览器验证先启动 Chrome，安装后仍须通过同一探测', () => {
+    const steps = stage.jobs.check.steps
+    const prepare = steps.find(step => step.name === 'Prepare Chrome for browser tests')
+    expect(prepare.if).toBe('steps.proof.outputs.run == \'true\' && inputs.browser')
+    expect(prepare.run).toContain('chromium.launch({ channel: \'chrome\'')
+    expect(prepare.run).toContain('if chrome_ready; then')
+    expect(prepare.run.indexOf('if chrome_ready; then')).toBeLessThan(prepare.run.indexOf('playwright install'))
+    expect(prepare.run).toContain('playwright install --with-deps chrome && chrome_ready; then')
+    expect(steps.indexOf(prepare)).toBeLessThan(steps.findIndex(step => step.name === 'Execute verification'))
+  })
+
   it('通过记录精确恢复，写入限定可信main，命令失败不写入记录', () => {
     const steps = stage.jobs.check.steps
     const restore = steps.find(step => step.id === 'proof_cache')
