@@ -179,10 +179,12 @@ describe('ci ACP 原生验收前置', () => {
     expect(secret).toContain('github.event_name == \'push\'')
     expect(secret).toContain('github.ref == \'refs/heads/main\'')
     expect(workflow.jobs.unit.with.browser).toBe(true)
-    expect(workflow.jobs.unit.with.openrouter_model).toBe('qwen/qwen3.7-flash')
+    expect(workflow.jobs.unit.with.openrouter_model).toBe('z-ai/glm-5.3-flash')
     expect(JSON.parse(workflow.jobs.unit.with.openrouter_capabilities)).toMatchObject({
-      contextWindow: 1000000,
-      maxOutputTokens: 65536,
+      contextWindow: 1048576,
+      maxOutputTokens: 131072,
+      inputModalities: ['text', 'image'],
+      toolCalling: true,
       reasoning: {
         supported: true,
         efforts: ['low', 'medium', 'high'],

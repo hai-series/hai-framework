@@ -176,8 +176,8 @@ jobs:
       stage: unit
       fingerprint: ${{ fromJSON(needs.plan.outputs.fingerprints).unit }}
       command: node .github/scripts/ci-acp-test.mjs
-      openrouter_model: qwen/qwen3.7-flash
-      openrouter_capabilities: '{"contextWindow":1000000,"maxOutputTokens":65536,"inputModalities":["text","image"],"outputModalities":["text"],"toolCalling":true,"reasoning":{"supported":true,"efforts":["low","medium","high"]}}'
+      openrouter_model: z-ai/glm-5.3-flash
+      openrouter_capabilities: '{"contextWindow":1048576,"maxOutputTokens":131072,"inputModalities":["text","image"],"outputModalities":["text"],"toolCalling":true,"reasoning":{"supported":true,"efforts":["low","medium","high"]}}'
       baseline: ${{ needs.plan.outputs.baseline }}
       base_sha: ${{ needs.plan.outputs.base_sha }}
       build_artifact: ${{ needs.build.outputs.artifact }}

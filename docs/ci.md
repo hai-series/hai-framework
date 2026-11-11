@@ -47,7 +47,7 @@ flowchart TD
 
 单元阶段先由 `.github/scripts/ci-acp-test.mjs` 检查 Docker，并从 Agent manifest 读取版本构建 Codex/dsh/Goose 三个基础镜像，使用 Debian 官方镜像源。构建全部成功后，显式设置 `HAI_ACP_E2E_ENGINE=docker`、`HAI_ACP_E2E_IMAGE`、`HAI_ACP_E2E_DSH_IMAGE`、`HAI_ACP_E2E_GOOSE_IMAGE` 再执行无真实模型凭据的 `pnpm test`；任一前置或测试失败均阻断该阶段和发布。这样真实 Agent、volume、恢复和 Git 的 ACP E2E 在 CI 中实际运行，不依靠本地可选镜像开关。PR 仅执行本地 HTTP 模型夹具，不接收上游密钥。Turbo 将这些启用变量纳入 test 的环境和缓存身份，不能复用此前跳过原生用例的结果。测试回收本轮容器与 volume；临时 runner 销毁时回收镜像。可选 Java/Rust/Go 镜像组合不属于该基础验收。
 
-可信 `main` push 额外使用 Actions secret `OPENROUTER_APIKEY` 对接真实模型。调用方仅在该事件传递可选 secret，复用工作流只在执行验证步骤注入，安装依赖、Docker 构建和普通根测试均不接收它。夹具门禁通过后，脚本按 manifest 安装固定版本的宿主 Codex/dsh，定向运行 `ai-acp-openrouter.e2e.test.ts` 和 `ai-acp-goose.e2e.test.ts`，强制启用 Codex/dsh 的 embedded/builtin-service 四组及 Goose HTTP/WS 两组真实验收；缺密钥、模型配置或任何一组最终失败均阻断发布。每组在初始和恢复两轮分别执行固定的写入、独立工具读回请求，检查精确文件内容和完整的测试标记。Codex 与 dsh 的夹具使用每次生成的普通库存记录。写入确认可以是完成摘要，读回必须包含原样内容。当前模型为 `qwen/qwen3.7-flash`，容量声明来自已核验元数据，请求预算由测试单独限制。手工 dispatch 和 PR 继续只跑夹具，避免未授权分支触发真实调用。
+可信 `main` push 额外使用 Actions secret `OPENROUTER_APIKEY` 对接真实模型。调用方仅在该事件传递可选 secret，复用工作流只在执行验证步骤注入，安装依赖、Docker 构建和普通根测试均不接收它。夹具门禁通过后，脚本按 manifest 安装固定版本的宿主 Codex/dsh，定向运行 `ai-acp-openrouter.e2e.test.ts` 和 `ai-acp-goose.e2e.test.ts`，强制启用 Codex/dsh 的 embedded/builtin-service 四组及 Goose HTTP/WS 两组真实验收；缺密钥、模型配置或任何一组最终失败均阻断发布。每组在初始和恢复两轮分别执行固定的写入、独立工具读回请求，检查精确文件内容和完整的测试标记。Codex 与 dsh 的夹具使用每次生成的普通库存记录。写入确认可以是完成摘要，读回必须包含原样内容。当前模型为 `z-ai/glm-5.3-flash`，该模型在 OpenRouter 有多个供应商，已核对 Responses 和 Chat Completions 的工具调用与容量元数据。请求预算由测试单独限制。手工 dispatch 和 PR 继续只跑夹具，避免未授权分支触发真实调用。
 
 当前模型请求明确报告 OpenRouter `429` 且夹具清理成功时，用例等待 30 秒后以新会话和新工作区重新执行整组验收，最多重试两次。工作流在成功和失败后渲染各用例的最终 JSON 记录。已重试的记录保留在 `attempts/`，与最终 JSON、HTML 和 PNG 一起上传至 `acp-openrouter-<sha>-<attempt>` 制品，保留三天。证据需要脱敏。
 

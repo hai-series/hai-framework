@@ -15,7 +15,7 @@ const required = process.env.HAI_ACP_E2E_REQUIRED === '1'
 const enabled = required || process.env.HAI_ACP_E2E_GOOSE === '1'
 const apiKey = process.env.OPENROUTER_APIKEY?.trim()
 const image = process.env.HAI_ACP_E2E_GOOSE_IMAGE
-const model = process.env.HAI_ACP_E2E_GOOSE_MODEL ?? process.env.HAI_ACP_E2E_MODEL ?? 'qwen/qwen3.7-flash'
+const model = process.env.HAI_ACP_E2E_GOOSE_MODEL ?? process.env.HAI_ACP_E2E_MODEL ?? 'z-ai/glm-5.3-flash'
 const evidenceRoot = resolve('test-results/acp-openrouter')
 
 /** 真实服务验收只保存白名单，不写原生配置、请求头或工具原始参数。 */

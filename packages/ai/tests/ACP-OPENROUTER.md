@@ -2,7 +2,7 @@
 
 `ai-acp-openrouter.e2e.test.ts` 使用实际 Codex、DeepSeek Harness 和真实 OpenRouter 模型，分别验证 embedded 和 builtin-service，共四组。它不会启动模拟模型服务或 stdio 网关。
 
-每组先把唯一随机标识写入临时工作区的 `files/challenge.txt`。提示词只给文件名，智能体必须实际读取文件并写出 `files/result.txt`；先核验真实工具事件、正常结束和磁盘内容，再固定发出一个独立请求，要求用工具重新读取结果并返回完整标识。写入可以正常回复完成摘要，读回必须实际调用工具并在回复中包含标识。随后 close、导入另一个新标识，再用同一原生 sessionId 恢复并重复两个步骤。每组两轮、每轮两个固定请求，不按回复内容重试；固定口令、没有文件或没有实际工具调用均不能通过。
+每组先把唯一随机标识写入临时工作区的 `files/challenge.txt`。提示词只给文件名，智能体必须实际读取文件并写出 `files/result.txt`；先核验真实工具事件、正常结束和磁盘内容，再固定发出一个独立请求，要求用工具重新读取结果并返回完整标识。写入可以正常回复完成摘要，读回必须实际调用工具并在回复中包含标识。随后 close、导入另一个新标识，再用同一原生 sessionId 恢复并重复两个步骤。每组两轮，每轮两个固定请求。仅在当前模型请求明确出现 `429` 且夹具清理成功时等待 30 秒重跑整组，最多重试两次。
 
 ## 启用和准备
 
@@ -14,13 +14,13 @@ Linux 的 embedded Codex 还需可用的 bubblewrap/user namespace；Ubuntu 24.0
 
 内置 Podman 容器和本验收自行启动的 Goose 服务夹具不继承远程服务的代理变量，需在容器中直接访问 OpenRouter。业务部署如需代理，通过 Agent/workspace 的 `environmentRefs` 指定容器可访问的代理地址，勿使用宿主回环地址。此边界由实际容器回归覆盖，并保留显式代理注入的验证；已有自定义服务的网络与模型配置由服务部署方维护。
 
-下面为 2026-11-01 实际验收通过的低价 Flash 模型；升级时重新核对模型目录、工具支持、协议及容量。`maxOutputTokens=65536` 是容量声明；dsh 的请求预算为 `min(maxTokens=1024, maxOutputTokens)`。Codex 的采样上限依其原生设置，测试另有限时与输出体积约束。一个智能体任务可能产生多次模型调用及工具调用。
+下面使用 CI 固定的 GLM 5.3 Flash，切换模型时重新核对模型目录、工具支持、协议及容量。`maxOutputTokens=131072` 是容量声明，dsh 的请求预算为 `min(maxTokens=1024, maxOutputTokens)`。Codex 的采样上限依其原生设置，测试另有限时与输出体积约束。一个智能体任务可能产生多次模型调用及工具调用。 [OpenRouter 模型页](https://openrouter.ai/z-ai/glm-5.3-flash)
 
 ```powershell
 $env:HAI_ACP_E2E_REQUIRED = '1'
-$env:HAI_ACP_E2E_MODEL = 'qwen/qwen3.7-flash'
+$env:HAI_ACP_E2E_MODEL = 'z-ai/glm-5.3-flash'
 $env:HAI_ACP_E2E_BASEURL = 'https://openrouter.ai/api/v1'
-$env:HAI_ACP_E2E_CAPABILITIES = '{"contextWindow":1000000,"maxOutputTokens":65536,"inputModalities":["text","image"],"outputModalities":["text"],"toolCalling":true,"reasoning":{"supported":true,"efforts":["low","medium","high"]}}'
+$env:HAI_ACP_E2E_CAPABILITIES = '{"contextWindow":1048576,"maxOutputTokens":131072,"inputModalities":["text","image"],"outputModalities":["text"],"toolCalling":true,"reasoning":{"supported":true,"efforts":["low","medium","high"]}}'
 $env:HAI_ACP_E2E_IMAGE = 'localhost/hai-ai/codex-acp:2.5.0'
 $env:HAI_ACP_E2E_DSH_IMAGE = 'localhost/hai-ai/deepseek-harness:0.2.1-rc.5'
 pnpm.cmd --filter @h-ai/ai exec vitest run tests/ai-acp-openrouter.e2e.test.ts --maxWorkers=1
@@ -53,7 +53,7 @@ pnpm.cmd --filter @h-ai/ai exec vitest run tests/ai-acp-openrouter.e2e.test.ts t
 
 ## 证据和清理
 
-六组证据写入 `packages/ai/test-results/acp-openrouter/*.json`，包含开始/结束时间、真实模型、模式与传输、ACP 事件白名单摘要、两轮随机标识、实际文件内容、写入确认和读回回复、两步各自的工具调用计数、恢复的 nativeId 及清理状态。配置、环境变量、密钥、请求头和完整工具输入不写入证据；已知密钥和 Bearer 形式再次脱敏。
+六组的最终证据写入 `packages/ai/test-results/acp-openrouter/*.json`，包含开始/结束时间、真实模型、模式与传输、ACP 事件白名单摘要、两轮随机标识、实际文件内容、写入确认和读回回复、两步各自的工具调用计数、恢复的 nativeId 及清理状态。重试前的失败记录保留在 `attempts/`。配置、环境变量、密钥、请求头和完整工具输入不写入证据；已知密钥和 Bearer 形式再次脱敏。
 
 在仓库根目录生成截图：
 
