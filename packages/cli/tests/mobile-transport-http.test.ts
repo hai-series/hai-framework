@@ -1,4 +1,5 @@
 /** 实际生成客户端 + 真实 HTTP/SM2/SQLite registry，区分加密失败与显式明文模式。 */
+import type { KeyExchangeResponse } from '@h-ai/crypto'
 import { Buffer } from 'node:buffer'
 import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -131,7 +132,9 @@ it.each(['encrypted', 'rejected-handshake', 'explicit-plaintext'] as const)('真
           serverPublicKey: manager.data.getServerPublicKey(),
           serverKeyId: manager.data.getServerKeyId(),
           clientId,
-        }))
+          maxPlaintextBytes: manager.data.bodyLimits.plaintextBytes,
+          clientKeyTtlSeconds: manager.data.clientKeyTtlSeconds,
+        } satisfies KeyExchangeResponse))
         return
       }
       const payload = {

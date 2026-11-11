@@ -1,3 +1,4 @@
+import type { KeyExchangeResponse } from '@h-ai/crypto'
 import { HaiApiClientError } from '@h-ai/api-client'
 import { authenticateTransportRequest, createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -41,7 +42,9 @@ function createServerFetch() {
         serverKeyId: server.getServerKeyId(),
         serverPublicKey: server.getServerPublicKey(),
         clientId,
-      })
+        maxPlaintextBytes: server.bodyLimits.plaintextBytes,
+        clientKeyTtlSeconds: server.clientKeyTtlSeconds,
+      } satisfies KeyExchangeResponse)
     }
     const clientId = request.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)
     if (!clientId)
