@@ -24,7 +24,7 @@ pnpm --filter @h-ai/ai agent:build goose
 | hai-ai/deepseek-harness:0.2.1-rc.5 | dsh0.2.1-rc.5，profile=acp                   | 原生stdio会话与工具结果               |
 | hai-ai/goose:1.57.0                | 官方linux/amd64 musl二进制，原生/acp HTTP/WS | 远程ACP连接、工具事件与服务端工程文件 |
 
-所有镜像含Git、Node24、Python3。用 `--java --rust --go` 按需增加JDK、Rust/Cargo、Go，例如：
+所有镜像含 Git、Node 24、Python 3。Codex 镜像还包含 Debian 的 bubblewrap，宿主容器引擎需支持容器内的 Codex 工作区沙箱。用 `--java --rust --go` 按需增加 JDK、Rust/Cargo、Go，例如：
 
 ```sh
 pnpm --filter @h-ai/ai agent:build codex-acp --engine=docker --java --rust --go

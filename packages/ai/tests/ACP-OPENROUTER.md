@@ -10,7 +10,7 @@
 
 先安装与 `models/agents/*/agent.json` 相匹配的原生程序，并构建两个基础镜像。embedded 使用宿主的程序；builtin-service 使用指定镜像和一次性 volume。容器引擎 `auto` 优先就绪的 Podman，其次 Docker；验收只使用已存在的镜像，不隐式升级或安装工具。
 
-Linux 的 embedded Codex 还需可用的 bubblewrap/user namespace；Ubuntu 24.04 可能需要加载发行版提供的 `bwrap-userns-restrict` AppArmor profile，具体见 [Codex 沙箱前置](https://learn.chatgpt.com/docs/sandboxing)。CI 为一次性 Linux runner 安装这些系统依赖并加载该 profile，保持全局 AppArmor 限制。在发送真实模型请求前，使用隔离 `CODEX_HOME` 和临时工程运行 `codex sandbox`，验证实际读写；前置失败直接阻断，不能让模型靠提权或猜测绕过环境故障。
+Linux 的 embedded Codex 需要 bubblewrap 和可用的 user namespace。Ubuntu 24.04 可能需要加载发行版提供的 `bwrap-userns-restrict` AppArmor profile。可信 CI 使用 Ubuntu 24.04 上的 rootless Podman 运行 Agent 容器。在发送真实模型请求前，宿主和 Codex 容器分别运行 `codex sandbox` 验证工作区读写，容器还验证工作区外的写入被拒绝。前置失败会直接阻断验收。 [Codex 沙箱前置](https://learn.chatgpt.com/docs/sandboxing)
 
 内置 Podman 容器和本验收自行启动的 Goose 服务夹具不继承远程服务的代理变量，需在容器中直接访问 OpenRouter。业务部署如需代理，通过 Agent/workspace 的 `environmentRefs` 指定容器可访问的代理地址，勿使用宿主回环地址。此边界由实际容器回归覆盖，并保留显式代理注入的验证；已有自定义服务的网络与模型配置由服务部署方维护。
 

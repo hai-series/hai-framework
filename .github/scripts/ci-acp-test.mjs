@@ -7,6 +7,39 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
+const sandboxReadWriteProbe = `
+const fs = require('node:fs')
+const input = fs.readFileSync('probe-input.txt', 'utf8')
+fs.writeFileSync('probe-output.txt', input)
+if (fs.readFileSync('probe-output.txt', 'utf8') !== input)
+  throw new Error('Codex sandbox write verification failed')
+`
+const sandboxWriteBoundaryProbe = `
+try {
+  fs.writeFileSync('/state/outer-probe.txt', 'changed')
+}
+catch (error) {
+  if (['EACCES', 'EPERM', 'EROFS'].includes(error.code))
+    process.exit(0)
+  throw error
+}
+throw new Error('Codex sandbox allowed writing outside the workspace')
+`
+const containerSandboxProbe = `
+const fs = require('node:fs')
+const { spawnSync } = require('node:child_process')
+fs.writeFileSync('probe-input.txt', 'ACP sandbox filesystem probe')
+fs.writeFileSync('/state/outer-probe.txt', 'protected')
+const result = spawnSync('codex', [
+  'sandbox', '-P', ':workspace', '-C', '/workspace', '--', process.execPath, '-e',
+  ${JSON.stringify(sandboxReadWriteProbe + sandboxWriteBoundaryProbe)},
+], { stdio: 'inherit', timeout: 30_000 })
+if (result.error)
+  throw result.error
+if (result.status !== 0 || fs.readFileSync('/state/outer-probe.txt', 'utf8') !== 'protected')
+  process.exit(1)
+process.stdout.write('Codex container sandbox ready\\n')
+`
 
 /** 直接执行固定的 CI 工具；失败立即阻止后续测试，不使用 shell 或输出环境变量。 */
 async function execute(command, args, environment = process.env) {
@@ -37,16 +70,22 @@ async function execute(command, args, environment = process.env) {
  */
 export async function runACPContainerTests(run = execute, environment = process.env) {
   const { OPENROUTER_APIKEY: apiKey, ...fixtureEnvironment } = environment
+  const trustedMain = environment.GITHUB_EVENT_NAME === 'push' && environment.GITHUB_REF === 'refs/heads/main'
+  const trustedLinux = trustedMain && environment.RUNNER_OS === 'Linux'
+  // rootless Podman 的默认容器隔离支持 Codex 在容器内再建立工作区沙箱。
+  const engine = trustedLinux ? 'podman' : 'docker'
+  const localImagePrefix = trustedLinux ? 'localhost/' : ''
   // 普通根测试不接收真实上游凭据或启用开关，防止重复运行付费测试。
   delete fixtureEnvironment.HAI_ACP_E2E_OPENROUTER
   delete fixtureEnvironment.HAI_ACP_E2E_REQUIRED
   delete fixtureEnvironment.HAI_ACP_E2E_GOOSE
   await run('docker', ['info'], fixtureEnvironment)
-  if (fixtureEnvironment.RUNNER_OS === 'Linux' && environment.GITHUB_EVENT_NAME === 'push' && environment.GITHUB_REF === 'refs/heads/main') {
+  if (trustedLinux) {
     await run('sudo', [
       'sh',
       fileURLToPath(new URL('./ci-prepare-codex-sandbox.sh', import.meta.url)),
     ], fixtureEnvironment)
+    await run('podman', ['info'], fixtureEnvironment)
   }
   const images = {}
   const manifests = []
@@ -54,8 +93,8 @@ export async function runACPContainerTests(run = execute, environment = process.
     const directory = resolve(root, 'packages/ai/models/agents', name)
     const manifest = JSON.parse(await readFile(resolve(directory, 'agent.json'), 'utf8'))
     manifests.push(manifest)
-    images[name] = `${manifest.image}:${manifest.version}`
-    await run('docker', [
+    images[name] = `${localImagePrefix}${manifest.image}:${manifest.version}`
+    await run(engine, [
       'build',
       '--build-arg',
       'DEBIAN_MIRROR=https://deb.debian.org/debian',
@@ -66,15 +105,31 @@ export async function runACPContainerTests(run = execute, environment = process.
       directory,
     ], fixtureEnvironment)
   }
+  if (trustedLinux) {
+    await run(engine, [
+      'run',
+      '--rm',
+      '--init',
+      '--http-proxy=false',
+      '--network=none',
+      '--workdir',
+      '/workspace',
+      '--entrypoint',
+      'node',
+      images['codex-acp'],
+      '-e',
+      containerSandboxProbe,
+    ], fixtureEnvironment)
+  }
   const fixtureTestEnvironment = {
     ...fixtureEnvironment,
-    HAI_ACP_E2E_ENGINE: 'docker',
+    HAI_ACP_E2E_ENGINE: engine,
     HAI_ACP_E2E_IMAGE: images['codex-acp'],
     HAI_ACP_E2E_DSH_IMAGE: images['deepseek-harness'],
     HAI_ACP_E2E_GOOSE_IMAGE: images.goose,
   }
   await run('pnpm', ['test'], fixtureTestEnvironment)
-  if (environment.GITHUB_EVENT_NAME !== 'push' || environment.GITHUB_REF !== 'refs/heads/main')
+  if (!trustedMain)
     return
   if (!apiKey || !environment.HAI_ACP_E2E_MODEL || !environment.HAI_ACP_E2E_CAPABILITIES)
     throw new Error('Trusted main ACP acceptance requires OpenRouter credentials, model and verified capabilities')
@@ -107,7 +162,7 @@ export async function runACPContainerTests(run = execute, environment = process.
       const home = join(directory, 'state')
       await mkdir(home)
       await writeFile(join(directory, 'probe-input.txt'), 'ACP sandbox filesystem probe')
-      const code = 'const fs=require("node:fs");const input=fs.readFileSync("probe-input.txt","utf8");fs.writeFileSync("probe-output.txt",input);if(fs.readFileSync("probe-output.txt","utf8")!==input)process.exit(1);process.stdout.write("Codex native sandbox ready\\n")'
+      const code = `${sandboxReadWriteProbe}process.stdout.write("Codex native sandbox ready\\n")`
       await run('codex', [
         'sandbox',
         '-P',

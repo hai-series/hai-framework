@@ -7,7 +7,8 @@ ARG WITH_GO=false
 # 基础运行环境；可选语言在构建时选择，不在任务执行时临时安装。
 # 使用 Node 自带的公开 CA 引导 HTTPS，随后安装系统 CA；不关闭证书校验。
 RUN mkdir -p /etc/ssl/certs && node -e "require('node:fs').writeFileSync('/etc/ssl/certs/ca-certificates.crt', require('node:tls').rootCertificates.join('\\n'))"
-RUN set -eu; packages="git python3 python3-venv python3-pip ca-certificates"; \
+# 使用发行版的 bwrap 路径，使宿主的 AppArmor profile 能应用于容器内原生沙箱。
+RUN set -eu; packages="git python3 python3-venv python3-pip ca-certificates bubblewrap"; \
     case "$WITH_JAVA" in true) packages="$packages default-jdk-headless";; false) ;; *) exit 2;; esac; \
     case "$WITH_RUST" in true) packages="$packages rustc cargo";; false) ;; *) exit 2;; esac; \
     case "$WITH_GO" in true) packages="$packages golang";; false) ;; *) exit 2;; esac; \

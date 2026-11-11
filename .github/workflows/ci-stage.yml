@@ -46,7 +46,8 @@ permissions:
 jobs:
   check:
     name: Check ${{ inputs.stage }}
-    runs-on: ubuntu-latest
+    # 原生 ACP 容器在受支持的 Ubuntu 24.04 runner 上固定验证。
+    runs-on: ${{ inputs.stage == 'unit' && 'ubuntu-24.04' || 'ubuntu-latest' }}
     timeout-minutes: ${{ inputs.timeout }}
     env:
       CI: true

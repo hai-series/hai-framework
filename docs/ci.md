@@ -45,7 +45,7 @@ flowchart TD
 
 每个 runner 有自己的工作区、容器引擎、端口和测试数据。根单元入口内部仍遵守容器资源预算：普通包有界并发，容器包串行。浏览器矩阵关闭全局 fail-fast，以保留其他应用的独立结果。`pnpm e2e` 的本地串行入口保留，避免在同一工作区同时重写产物。
 
-单元阶段先由 `.github/scripts/ci-acp-test.mjs` 检查 Docker，并从 Agent manifest 读取版本构建 Codex/dsh/Goose 三个基础镜像，使用 Debian 官方镜像源。构建全部成功后，显式设置 `HAI_ACP_E2E_ENGINE=docker`、`HAI_ACP_E2E_IMAGE`、`HAI_ACP_E2E_DSH_IMAGE`、`HAI_ACP_E2E_GOOSE_IMAGE` 再执行无真实模型凭据的 `pnpm test`；任一前置或测试失败均阻断该阶段和发布。这样真实 Agent、volume、恢复和 Git 的 ACP E2E 在 CI 中实际运行，不依靠本地可选镜像开关。PR 仅执行本地 HTTP 模型夹具，不接收上游密钥。Turbo 将这些启用变量纳入 test 的环境和缓存身份，不能复用此前跳过原生用例的结果。测试回收本轮容器与 volume；临时 runner 销毁时回收镜像。可选 Java/Rust/Go 镜像组合不属于该基础验收。
+单元阶段固定使用 Ubuntu 24.04。脚本 `.github/scripts/ci-acp-test.mjs` 先检查中间件测试需要的 Docker，再按 Agent manifest 构建 Codex、dsh 和 Goose 镜像，使用 Debian 官方镜像源。可信 Linux `main` 推送用 rootless Podman 构建和运行 Agent 容器，PR 的本地 HTTP 模型夹具继续用 Docker。构建和适用的沙箱预检通过后，脚本显式传入 `HAI_ACP_E2E_ENGINE` 和三个镜像变量，执行无真实模型凭据的 `pnpm test`。默认工具链下的原生 Agent、volume、会话恢复和 Git 用例均随根测试启用。任一前置或测试失败均阻断发布。Turbo 将启用变量纳入测试缓存身份。用例回收本轮容器与 volume，临时 runner 销毁时回收镜像。
 
 可信 `main` push 额外使用 Actions secret `OPENROUTER_APIKEY` 对接真实模型。调用方仅在该事件传递可选 secret，复用工作流只在执行验证步骤注入，安装依赖、Docker 构建和普通根测试均不接收它。夹具门禁通过后，脚本按 manifest 安装固定版本的宿主 Codex/dsh，定向运行 `ai-acp-openrouter.e2e.test.ts` 和 `ai-acp-goose.e2e.test.ts`，强制启用 Codex/dsh 的 embedded/builtin-service 四组及 Goose HTTP/WS 两组真实验收；缺密钥、模型配置或任何一组最终失败均阻断发布。每组在初始和恢复两轮分别执行固定的写入、独立工具读回请求，检查精确文件内容和完整的测试标记。Codex 与 dsh 的夹具使用每次生成的普通库存记录。写入确认可以是完成摘要，读回必须包含原样内容。当前模型为 `z-ai/glm-5.3-flash`，该模型在 OpenRouter 有多个供应商，已核对 Responses 和 Chat Completions 的工具调用与容量元数据。请求预算由测试单独限制。手工 dispatch 和 PR 继续只跑夹具，避免未授权分支触发真实调用。
 
@@ -53,7 +53,7 @@ flowchart TD
 
 构建产物和 Turbo 内容缓存由同一轮构建准备，通过 `ci-build-state-<runId>-<attempt>` 传给检查。共享包同时包含 `packages/*/dist`、应用私有包的 `apps/*/dist`、静态站点 `apps/*/build`、SvelteKit/适配器输出和 Turbo 缓存，不只传框架包。启动器直接消费的应用产物必须实际存在；缓存中的压缩记录不能代替这些文件。依赖任务仍由 Turbo 校验输入并恢复必要输出；上游构建失败不启动依赖它的检查。官网额外直接构建一次，确保 `build-metadata.json` 中的提交号属于本次提交。
 
-可信 Linux runner 还会安装 bubblewrap、AppArmor 工具及发行版的沙箱 profile，只加载 `bwrap-userns-restrict`，不关闭全局 user namespace 限制。宿主原生程序安装完成后、真实模型验收开始前，`codex sandbox` 必须在临时工程中实际读写成功；该预检使用隔离 `CODEX_HOME`，不接收上游密钥，退出时删除本轮临时文件。系统依赖、profile 或原生沙箱不可用时直接阻断，避免模型在工具启动失败后猜测内容。前置依据见 [Codex 官方沙箱说明](https://learn.chatgpt.com/docs/sandboxing)。
+可信 Linux runner 安装 bubblewrap 和 AppArmor 工具，并加载发行版的 `bwrap-userns-restrict` profile。Codex 镜像使用发行版的 bubblewrap。容器预检在断网的一次性 Podman 容器中运行 `codex sandbox`，验证工作区内读写成功且工作区外写入被拒绝。宿主预检在独立临时工程及 `CODEX_HOME` 下验证工作区读写。两项预检均不接收上游密钥，失败即阻断真实验收。 [Codex 官方沙箱说明](https://learn.chatgpt.com/docs/sandboxing)
 
 ## 修复后复用哪些结果
 

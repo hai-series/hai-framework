@@ -143,28 +143,46 @@ describe('ci ACP 原生验收前置', () => {
     }, trustedEnvironment)).rejects.toThrow('fixture upstream acceptance failed')
   })
 
-  it('linux runner 先准备沙箱并实际预检，前置没有上游密钥且临时目录被回收', async () => {
+  it('linux runner 用 Podman 构建 Agent 镜像，分别预检容器和宿主的原生沙箱', async () => {
     const calls = []
     await runACPContainerTests(async (command, args, environment) => {
       calls.push({ command, args, environment })
     }, { ...trustedEnvironment, RUNNER_OS: 'Linux' })
     const setup = calls.findIndex(call => call.command === 'sudo')
+    const containerProbe = calls.findIndex(call => call.command === 'podman' && call.args[0] === 'run')
+    const fixtureTests = calls.findIndex(call => call.command === 'pnpm' && call.args[0] === 'test')
     const probe = calls.findIndex(call => call.command === 'codex' && call.args.includes('sandbox'))
     expect(setup).toBeGreaterThan(0)
     expect(calls[setup].args[1]).toMatch(/ci-prepare-codex-sandbox\.sh$/)
-    expect(probe).toBeGreaterThan(setup)
+    expect(calls.filter(call => call.command === 'podman' && call.args[0] === 'build')).toHaveLength(3)
+    expect(containerProbe).toBeGreaterThan(setup)
+    expect(containerProbe).toBeLessThan(fixtureTests)
+    expect(calls[containerProbe].args).toEqual(expect.arrayContaining([
+      '--rm',
+      '--init',
+      '--network=none',
+      '--http-proxy=false',
+    ]))
+    expect(calls[containerProbe].args).not.toContain('--privileged')
+    expect(calls[fixtureTests].environment.HAI_ACP_E2E_ENGINE).toBe('podman')
+    expect(calls[containerProbe].args).toContain(calls[fixtureTests].environment.HAI_ACP_E2E_IMAGE)
+    expect(probe).toBeGreaterThan(fixtureTests)
     expect(probe).toBeLessThan(calls.length - 1)
     expect(calls[probe].args).toContain(':workspace')
     expect(existsSync(dirname(calls[probe].environment.CODEX_HOME))).toBe(false)
     expect(calls.slice(0, -1).every(call => !Object.hasOwn(call.environment, 'OPENROUTER_APIKEY'))).toBe(true)
+    expect(calls.at(-1).environment.HAI_ACP_E2E_ENGINE).toBe('podman')
   })
 
-  it.each(['setup', 'probe'])('linux 沙箱 %s 失败阻断真实请求，清理本轮临时目录', async (stage) => {
+  it.each(['setup', 'container-probe', 'probe'])('linux 沙箱 %s 失败阻断真实请求，清理本轮临时目录', async (stage) => {
     const calls = []
     await expect(runACPContainerTests(async (command, args, environment) => {
       calls.push({ command, args, environment })
-      if ((stage === 'setup' && command === 'sudo') || (stage === 'probe' && command === 'codex' && args.includes('sandbox')))
+      if ((stage === 'setup' && command === 'sudo')
+        || (stage === 'container-probe' && command === 'podman' && args[0] === 'run')
+        || (stage === 'probe' && command === 'codex' && args.includes('sandbox'))) {
         throw new Error('sandbox prerequisite failed')
+      }
     }, { ...trustedEnvironment, RUNNER_OS: 'Linux' })).rejects.toThrow('sandbox prerequisite failed')
     expect(calls.some(call => call.args.includes('tests/ai-acp-openrouter.e2e.test.ts'))).toBe(false)
     const probe = calls.find(call => call.command === 'codex' && call.args.includes('sandbox'))
@@ -191,6 +209,7 @@ describe('ci ACP 原生验收前置', () => {
       },
     })
     expect(stage.on.workflow_call.secrets.OPENROUTER_APIKEY.required).toBe(false)
+    expect(stage.jobs.check['runs-on']).toContain('inputs.stage == \'unit\' && \'ubuntu-24.04\'')
     expect(stage.jobs.check.env).not.toHaveProperty('OPENROUTER_APIKEY')
     const steps = stage.jobs.check.steps
     const execution = steps.findIndex(step => step.name === 'Execute verification')
