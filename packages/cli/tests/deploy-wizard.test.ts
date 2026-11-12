@@ -709,6 +709,59 @@ it.each([false, undefined])('离线 SSH 提示允许跳过，取消时不继续�
   expect(readFileSync(join(app, '.env.test'), 'utf8')).not.toContain('HAI_DEPLOY_PROVIDER')
 }, 30_000)
 
+it.each([false, true])('交互打包仅在提示结束后启用诊断日志，取消=%s', async (cancel) => {
+  const { app, service } = await fullstackFixture()
+  const previousLevel = core.logger.getLevel()
+  writeFileSync(join(app, '.env.prod.local'), 'HAI_CORE_LOGGING_LEVEL=debug\n')
+  vi.stubEnv('HAI_CORE_LOGGING_LEVEL', undefined)
+  vi.mocked(deploy.credentials.load).mockImplementation(() => {
+    core.logger.debug('Credentials loaded')
+    return { success: true, data: [] }
+  })
+  const init = vi.spyOn(deploy, 'init').mockImplementation(async () => {
+    core.logger.debug('Packaging diagnostics enabled')
+    throw new Error('fixture initialization stopped')
+  })
+  const messages: string[] = []
+  const unsubscribe = core.logger.observe((record) => {
+    messages.push(record.message)
+  })
+  mocked.prompt.mockImplementation(async (question) => {
+    if (question.type === 'multiselect') {
+      return {
+        value: ['serv'],
+      }
+    }
+    return cancel
+      ? {}
+      : { value: false }
+  })
+
+  try {
+    const failure = cancel
+      ? cliM('cli_deploy_cancelled')
+      : 'fixture initialization stopped'
+    await expect(deployCommand({
+      appDir: service,
+      env: 'prod',
+      bundleOnly: true,
+    })).rejects.toThrow(failure)
+    expect(mocked.prompt.mock.calls.map(([question]) => question.message)).toEqual([
+      cliM('cli_deploy_choose_services'),
+      cliM('cli_deploy_bundle_configure_ssh'),
+    ])
+    expect(init).toHaveBeenCalledTimes(cancel ? 0 : 1)
+    const expectedMessages = cancel
+      ? []
+      : ['Packaging diagnostics enabled']
+    expect(messages).toEqual(expectedMessages)
+    expect(core.logger.getLevel()).toBe(previousLevel)
+  }
+  finally {
+    unsubscribe()
+  }
+}, 30_000)
+
 afterEach(async () => {
   await deploy.close()
   core.config.clear()

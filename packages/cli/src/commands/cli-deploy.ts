@@ -396,11 +396,12 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
   const cwd = options.cwd ?? process.cwd()
   let appDir = resolve(cwd, options.appDir ?? '.')
   let closeDeploy: (() => Promise<void>) | null = null
-  let restoreProjectLogger: (() => void) | undefined
-  let configureProjectLogger: ((level: LogLevel) => void) | undefined
   const originalEnv = { ...process.env }
-  const previousLogLevel = core.logger.getLevel()
-  const initialLevel = options.plan
+  const originalLogLevels = new Map<typeof core, LogLevel>()
+  originalLogLevels.set(core, core.logger.getLevel())
+  // pretty 日志由后台线程输出，问答前产生的日志也可能插入菜单。
+  const quietSetup = options.plan || !options.yes
+  const initialLevel = quietSetup
     ? 'fatal'
     : LogLevelSchema.safeParse(process.env.HAI_CORE_LOGGING_LEVEL).data
   if (initialLevel)
@@ -440,17 +441,6 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     try {
       // 全局安装的 CLI 先使用目标工程的 deploy 版本，不依赖 CLI 的开发依赖。
       const localRequire = createRequire(resolve(appDir, 'package.json'))
-      try {
-        const { core: projectCore } = await import(pathToFileURL(localRequire.resolve('@h-ai/core')).href) as typeof import('@h-ai/core')
-        if (projectCore !== core) {
-          const level = projectCore.logger.getLevel()
-          configureProjectLogger = next => projectCore.logger.setLevel(next)
-          if (initialLevel)
-            configureProjectLogger(initialLevel)
-          restoreProjectLogger = () => projectCore.logger.setLevel(level)
-        }
-      }
-      catch { /* 未安装项目依赖时，由 deploy 导入错误统一提示。 */ }
       let modulePath: string
       try {
         modulePath = localRequire.resolve('@h-ai/deploy')
@@ -459,6 +449,17 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
         // 工作区回退仍从实际部署包导入，以便按包路径加载交付脚本。
         modulePath = createRequire(import.meta.url).resolve('@h-ai/deploy')
       }
+      // 从实际部署包解析 Core，兼容 CLI 与部署包使用不同版本的情况。
+      try {
+        const corePath = createRequire(modulePath).resolve('@h-ai/core')
+        const { core: deployCore } = await import(pathToFileURL(corePath).href) as typeof import('@h-ai/core')
+        if (!originalLogLevels.has(deployCore)) {
+          originalLogLevels.set(deployCore, deployCore.logger.getLevel())
+          if (initialLevel)
+            deployCore.logger.setLevel(initialLevel)
+        }
+      }
+      catch { /* 若缺少部署包的依赖，由 deploy 导入错误统一提示。 */ }
       deployModule = await import(pathToFileURL(modulePath).href)
     }
     catch {
@@ -555,10 +556,12 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       return
     }
     Object.assign(process.env, environment.data.values)
-    const level = LogLevelSchema.safeParse(process.env.HAI_CORE_LOGGING_LEVEL)
-    if (level.success) {
-      core.logger.setLevel(level.data)
-      configureProjectLogger?.(level.data)
+    if (!quietSetup) {
+      const level = LogLevelSchema.safeParse(process.env.HAI_CORE_LOGGING_LEVEL).data
+      if (level) {
+        for (const instance of originalLogLevels.keys())
+          instance.logger.setLevel(level)
+      }
     }
 
     // 1. 加载凭证
@@ -744,6 +747,11 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     if (!refreshed.success)
       throw new Error(refreshed.error.message)
     Object.assign(process.env, refreshed.data.values)
+    if (quietSetup) {
+      const level = LogLevelSchema.safeParse(process.env.HAI_CORE_LOGGING_LEVEL).data
+      for (const [instance, originalLevel] of originalLogLevels)
+        instance.logger.setLevel(level ?? originalLevel)
+    }
 
     // 4. 初始化 deploy 模块
     spinner.start(cliM('cli_deploy_initializing'))
@@ -889,7 +897,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
         delete process.env[key]
     }
     Object.assign(process.env, originalEnv)
-    core.logger.setLevel(previousLogLevel)
-    restoreProjectLogger?.()
+    for (const [instance, level] of originalLogLevels)
+      instance.logger.setLevel(level)
   }
 }
