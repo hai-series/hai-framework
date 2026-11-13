@@ -4,7 +4,7 @@
 
 代码核验基线：`main / 89cd4deee1f4eb4c0677e91d5e890c237223e246`，`@h-ai/ai 1.0.0-beta.23`。原始需求见[讨论](thread://01a1d326-dd9c-7c40-bf06-8756d344b83d?hostId=local)。方案覆盖多种 Agent、三种 Worker 模式、镜像选配、多实例工具服务、完整授权、分布式执行、既有能力整合与灵活调用。
 
-建议采用：**统一 ai.acp 调用 + 少量 Agent 适配器 + 独立 runner 执行模块**。Codex、DeepSeek Harness、Goose 使用相同调用方式、三种 Worker 模式和授权规则；原生能力差异由适配器明确处理。普通调用不需要知道镜像、容器和服务实例；管理员配置这些细节。
+方案采用统一的 `ai.acp` 入口、原生适配器和独立的 Runner 模块。Codex、DeepSeek Harness、Goose 共用调用入口和授权规则。三个内置适配器可选 `user` 或 `task`，`shared` 需要适配器经过隔离验收后显式启用。管理员配置镜像和服务，普通调用只需指定智能体。
 
 - [本文](acp-multi-user-platform-plan.md)：怎么用、怎么选、主要安全边界。
 - [运行环境、工具服务与授权设计](acp-platform-runtime-design.md)：部署和实现契约。
@@ -107,7 +107,7 @@ AI 可以建议任务需要什么能力，但最终由服务端规则和实际�
 | `browser` 浏览器 | Agent + 固定版本浏览器及系统库 | 需要浏览器自动化或页面验证 |
 | `developer` 开发 | Git + 项目要求的 Node/pnpm、Python 或 Java/Rust/Go | 工程开发；语言工具链按构建配方选配 |
 
-这是目标镜像系列，当前只存在原有 Agent 镜像及部分语言工具链开关。`minimal` 的新大小尚未测，不能把旧基础镜像的 0.985 GiB 当成新精简镜像大小。
+构建脚本已支持五个变体，本机已完成代表性组合的构建和组件检查。Codex 和 Goose 的 `minimal` 镜像展开后分别为 966.5 MiB 和 484.7 MiB。其他组合与独立工具镜像的实测见[容量评估](acp-capacity-evaluation.md#2-镜像大小与文档测量)。
 
 同一份 Office/Python 依赖配方可以供 Agent 镜像和独立工具镜像构建，减少重复维护。每个组合有独立版本和 digest，不用同一个 tag 覆盖不同选项的产物。工作区只描述数据和访问范围，不再绑定某个 Agent 镜像；环境根据能力、架构和安全策略选择。
 
@@ -174,7 +174,7 @@ Full Access 仍受组织强制拒绝、用户身份、其他用户数据、宿�
 
 ### 调用示意
 
-以下是拟新增 API，当前不能直接运行。服务启动时初始化共享依赖、runner，再初始化 ai 并注入 runner；停止时先关闭 ai，再由应用关闭 runner 和基础依赖。ai 不关闭借入的 runner，也不停止其他节点拥有的执行；无需每次请求重复初始化。
+服务启动时初始化共享依赖和 Runner，再初始化 AI 并注入 Runner。停止时先关闭 AI，再由应用关闭 Runner 和基础依赖。以下示例假定应用已登记 `office-assistant`，并从服务端认证获得 `auth`。
 
 ```ts
 // auth 来自服务端认证；单次任务自动管理临时会话和清理。
@@ -191,7 +191,7 @@ return result.data
 
 可按需覆盖模型、执行模式/环境、上下文、工具、权限、资源、超时、输出格式和事件订阅。普通参数按“部署默认 → 会话 → 本轮”覆盖，组织上限始终生效；Agent 特有参数使用带 Schema 的 native 配置。数组整体替换、未知/不支持的选项报错，镜像、权限和其他用户的 Worker 全局设置不能由任意参数透传修改。详细示例见[调用参数](acp-call-options.md)。上传附件使用已授权文件 ID。
 
-拟增加 `scoped.plan(...)` 查看实际模式、环境、工具和缺少权限；`session.changeExecution({ mode: 'task' })` 请求安全切换。平台执行模式与 Agent 原生的“规划/编码”模式是不同概念，不复用原生 `setMode` 来切 Worker。
+`scoped.plan(...)` 预览执行模式、环境及权限校验结果。`session.changeExecution({ mode: 'task', acceptNewSession: true })` 在切换 Worker 时建立新的原生会话，可带入当前用户确认的 `historySummary`。原生规划和编码模式仍由 `setMode` 控制。
 
 ## 7. 场景覆盖和明确边界
 
@@ -214,12 +214,12 @@ return result.data
 
 ## 8. 性能结论和实施交付
 
-前轮真实 DeepSeek 对照确认：提供方配置在启动时加载后，`session/new` 中位数 **7,375 ms → 23 ms**，每组 5 次；真实回答通过。该优化尚未落入正式代码，模型首字仍需数秒。[定位记录](acp-startup-investigation.md)。
+Codex 已在 App Server 启动前加载提供方配置，消除了离线复现中 `thread/start` 与随后 `model/list` 的两次约 5 秒目录等待。真实 DeepSeek 对照中，`session/new` 中位数从 7,375 ms 降至 23 ms（每组 5 次）。按正式配置复测 3 次，中位数为 9.97 ms。同轮短答首字为 984 ms，完成耗时 1063 ms（各 1 次）。[定位与复测](acp-startup-investigation.md)
 
-重工具独立后要计入服务入口、预热实例和作业容器，不能继续只算 Agent 内存。新的容量示例分别计算这些开销；Office/OCR/浏览器冷启动还未实测。[性能与容量评估](acp-capacity-evaluation.md)。
+本地 Podman 下，三个原生 Agent 通过 `scoped.run` 访问本地模型夹具的冷任务用时为 Codex 3.73 秒、DSH 3.61 秒、Goose 2.94 秒，各测 1 次。独立工具的容量还要计入服务入口、预热实例和作业容器。Office 已通过预热容器复用及产物验收，生产冷启动、预热收益与并发峰值仍需压测。[性能与容量评估](acp-capacity-evaluation.md)
 
 实施以可验收的完整能力交付：先建立 runner 边界和统一适配器/授权契约，再完成三种模式、分布式归属和工具多实例，最后打通知识/记忆/skills、灵活调用、模式切换与场景验收。Codex、DSH、Goose 都进入每阶段的共同验收；Codex 启动修复作为其适配器专项。首版不包含 DAG 工作流、多地域实时迁移、任意协议自动转换和无限插件扩展。
 
 不保留旧接口适配和双结构读取。发布时停止接单、完成或取消在途任务、备份并导出需保留的业务资料，再启用新结构；不在讨论方案时删除现有数据。详细变更、验收矩阵和发布边界见[运行设计](acp-platform-runtime-design.md)。
 
-本轮仅更新设计文档，无运行时代码、公开 API、依赖或镜像变更；前轮测量作为已有证据引用，没有重复调用收费模型。
+已交付功能、验收证据和剩余边界见[实施记录](acp-platform-tasks.md)。

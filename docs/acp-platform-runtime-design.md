@@ -111,7 +111,7 @@ stdio MCP 适合受控的本地专属子进程，不能把一个 stdio 字节流
 
 ### 3.4 运行配置示意
 
-以下是待实现的部分配置，省略完整镜像清单、网络和全局配额；`<digest>` 是部署时必须替换的真实摘要。
+以下保留目标方案中的配置草图，省略完整镜像清单、网络和全局配额。实际部署使用 `mcp.servers` 下的 `transport: job`，运行配置和支持的工具见 [MCP 配置](usage/configuration/ai.md#mcp和a2a)。
 
 ```yaml
 runner:

@@ -328,7 +328,7 @@ MCP配置`server.name`必填，`version`默认1.0.0，能力对象内`tools`/`re
 
 外部 MCP 清单位于 `mcp.servers`。每项填写 `id`、`name` 和 `transport`。`stdio` 需要 `command`，`args` 默认空数组。`http` 和 `sse` 需要 HTTP(S) `url`。`environmentRefs` 为 stdio 提供环境变量引用，`headerEnv` 为远程服务提供认证头引用。两者默认是空对象。
 
-使用 `ai.mcp.services` 时，服务需要支持 Streamable HTTP，并在目录中通过 `allowedTools` 列出可调用的原生工具名。省略该字段时服务入口拒绝调用。`timeoutMs` 包含授权、连接和工具响应时间，默认 30,000 毫秒，取值范围 1–300,000 毫秒。部署方负责允许可信的 MCP 目的地，并在生产环境使用 HTTPS 或受保护的内部网络。
+通过 `ai.mcp.services` 调用远程 MCP 时，使用 `transport: http`，上游需要支持 Streamable HTTP。`allowedTools` 列出可调用的原生工具名，省略该字段时服务入口拒绝调用。`timeoutMs` 包含授权、连接和工具响应时间，默认 30,000 毫秒，取值范围 1–300,000 毫秒。部署方负责允许可信的 MCP 目的地，并在生产环境使用 HTTPS 或受保护的内部网络。
 
 ```yaml schema=@h-ai/ai:AIConfigSchema
 mcp:
