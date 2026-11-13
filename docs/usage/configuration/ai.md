@@ -29,6 +29,8 @@ environments:
 
 `llm.models[].capabilities` 可配置 contextWindow、maxOutputTokens、inputModalities、outputModalities、toolCalling、reasoning.supported/efforts；未知时省略。输出预算 maxTokens 不是模型输出容量，maxOutputTokens 不能大于 contextWindow。DSH 自定义模型需要已确认的容量/输入/工具/推理信息；支持推理时还需明确 efforts。Codex 的上游必须原生提供 Responses；Hai 客户端已有协议转换不会提供反向网关。
 
+DeepSeek Harness 连接 DeepSeek Chat 时使用 `protocol: chat`。适配器识别 `api.deepseek.com` 或中继保留的官方原生模型名，例如 `deepseek-flash`、`deepseek-v4-pro`，让 Harness 发送 `system` 指令并保留多轮工具调用所需的推理内容。端点填写 Chat API 的根地址，例如 `https://api.deepseek.com`，不用附加 `/chat/completions`。密钥只在服务端配置。
+
 | Agent 配置 | 接入效果 | 存储与模型 |
 | --- | --- | --- |
 | `mode: embedded`、adapter、可选 command/args | 本机原生 stdio；Windows 直接提供可执行程序或 Node + JS 入口 | directory 工作区；modelIds 引用 Hai 模型 |
@@ -261,6 +263,12 @@ retrieval:
 ```
 
 使用专用`objectId`写入并重启读取，检查跨用户不可见、容量策略和失败不丢原始材料。`topK`和`filter`不是服务端租户守卫的替代品；只靠调用成功不能声明知识和会话持久化完成。
+
+默认关系数据库 Store 自动为 `native` 创建 `hai_ai_memory_vector_outbox` 表，包含待处理操作和关联 ID。多个 AI 节点必须使用同一关系库及向量库。关系写入和同步记录一起提交，后台分批处理，向量失败后退避重试，AI 重新启动时接续。数据库备份应包含同步表。升级前停止使用旧版本写入该集合，再启动新版节点。切换向量后端前先处理待同步记录，确保各节点使用同一目标集合。
+
+后台约每秒检查到期记录，失败重试间隔从 1 秒递增至 30 秒。进程在收到向量库确认前退出时，其他节点在 45 秒领取期限到期后可接手。对可能迟到的旧向量写入，框架会在 60 秒内反复清理，检索始终按关系库的当前向量版本筛选。向量库若在窗口之后才执行旧请求，可能留下不可见的旧点，需要从向量库清理。
+
+积压达到 `max(1024, 2 × maxEntriesGlobal)` 时，限制会增加向量同步工作的写入，删除仍可提交。清理按批提交，执行期间并发新增的记录可能保留。自定义 Store 要提供同一事务的 `withRelatedWriteLock` 和有索引的 `queryKeys` 才能使用持久补偿。临时 Store 无法跨重启保留待同步状态。
 
 ## 音频与图片
 

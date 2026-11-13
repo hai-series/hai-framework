@@ -421,6 +421,8 @@ Goose 1.57.0 镜像提供原生 `goose serve` HTTP/WS `/acp` 服务，通过 cus
 
 模型容量、模态和推理能力填 `llm.models[].capabilities`，未知不猜。Codex 要求原生 Responses；Hai 现有转换不是反向服务网关。关闭后保留代码/状态卷，确认拥有的进程停止才释放 CAS 占用；worktree 不是安全沙箱。
 
+DeepSeek Harness 直连官方 DeepSeek Chat 时，在模型条目中设置 `protocol: 'chat'` 和 `baseUrl: 'https://api.deepseek.com'`。内部中继可保留官方模型名 `deepseek-flash` 或 `deepseek-v4-pro` 以启用相同的兼容设置。Harness 用 `system` 发送指令，按 DeepSeek 格式发送输出上限，并在工具结果回传时保留 `reasoning_content`。 [DeepSeek Chat API](https://api-docs.deepseek.com/api/create-chat-completion/)
+
 接入示例与限制见 [ACP 指南](../cli/templates/skills/hai-ai/acp.md)。构建 Agent 时可选 `minimal`、`documents`、`office`、`browser`、`developer`，默认精简镜像含 Git、Node 和原生 Agent，Codex 还含 bubblewrap。运行环境可登记镜像 ID 或远程清单 digest。[Agent 镜像](models/agents/README.md) 普通 API 返回 HaiResult，stream 失败抛出，ACP 运行入口位于 Node 服务端。
 
 托管 Git 遇到子模块或 Git LFS 属性时明确返回 ACP_UNSUPPORTED，避免将不完整工程报告为就绪。
@@ -609,9 +611,9 @@ async function bindManual(broker: ReturnType<typeof mountTools>['broker'], princ
 
 #### Memory / RAG / Knowledge
 
-原生记忆删除（包括管理员全清）先清向量，再删除权威记录；向量清理失败时记录保留以便重试。SQL 与向量后端不共享事务，后一步失败仍需核对当前状态。
+默认数据库 Store 在同一事务提交原生记忆和待同步向量操作。新增、更新、删除及清理成功表示关系数据已经生效，向量索引可稍后追平。向量库故障时读取仍以关系记录为准。任一共享同一关系库和向量库的节点都可以分批重试，进程重启后接续。
 
-`ai.memory.scoped({ objectId })` 要求非空且非纯空白的主体 ID，否则工厂立即抛 `TypeError`，不会创建未绑定实例。公共 `clear({ scope: {} })` 等空范围返回失败；跨主体全清必须调用显式管理员入口。原生记忆的访问统计与更新使用版本 CAS，迟到读取不会复活已删除记录；数据库或向量清理失败通过 HaiResult 返回，不能当作成功。
+`ai.memory.scoped({ objectId })` 要求非空且非纯空白的主体 ID，否则工厂立即抛 `TypeError`，不会创建未绑定实例。公共 `clear({ scope: {} })` 等空范围返回失败；跨主体全清必须调用显式管理员入口。原生记忆的访问统计与更新使用版本 CAS，迟到读取不会复活已删除记录；关系事务失败通过 HaiResult 返回。向量同步会自动重试，调用方无需重新提交业务操作。
 
 Knowledge 每次导入生成唯一 `revision` 和分块 ID，先完整准备分块、向量及实体，再持久化暂存清单、写入向量，最后通过共享 Store CAS 一次发布正文、实体和元数据。相同文档并发重建只允许一个写入者；失败时保留完整旧版，缩短文档不会留下可见旧尾块。检索只接受当前发布版本，并在发布穿插时重试，持续冲突返回错误供调用方重试。向量候选可能按需扩大，清理积压会增加查询成本。
 

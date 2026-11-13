@@ -14,6 +14,8 @@ Codex 用 `adapter: 'codex'`，DeepSeek Harness 用 `adapter: 'deepseek-harness'
 
 内置 Codex、DSH 和 Goose 通过原生 stdio 接入。HTTP/WS 是锁定 SDK 2.2.0 的官方实验传输，服务必须实现相同的 ACP 传输版本。自定义服务必须声明 `supportedTransports`，协议不匹配返回错误。
 
+DSH 直连 DeepSeek Chat 时，把 `llm.models` 条目的 `protocol` 设为 `chat`，`baseUrl` 设为 `https://api.deepseek.com`。框架通过 Harness 的原生兼容选项发送 `system` 角色，并保留工具回合所需的推理字段。使用内部中继时，保留 `deepseek-flash`、`deepseek-v4-pro` 等官方原生模型名即可启用同一设置。凭据由服务端加载，容器网络须能访问对应模型端点。 [DeepSeek Chat API](https://api-docs.deepseek.com/api/create-chat-completion/)
+
 Agent 镜像按任务选择 `minimal`、`documents`、`office`、`browser` 或 `developer`。将构建后的镜像 ID 或仓库清单 digest 登记到 Runner 环境。无需在任务内安装工具链。需要直接处理文件时，也可使用具备相应权限的独立工具作业。
 
 使用 `session.changeExecution({ mode: 'task', acceptNewSession: true, historySummary })` 切换到任务独占容器时，可带入当前用户确认过的历史摘要。摘要最多 8 KiB UTF-8，作为新会话首次请求的历史文本发送一次。会话工具和资料仍按当前授权重新核验。

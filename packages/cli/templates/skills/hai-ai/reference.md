@@ -111,13 +111,14 @@ Embedding OpenAI 客户端按 `apiKey + baseURL + timeout` 缓存；同一 key �
 Memory 后端通过 `memory.provider` 选择：
 
 - `native`（默认）：HAI 原生引擎，复用 vecdb/reldb/LLM/Embedding。`extract` 采用 Mem0 式批量合并（ADD/UPDATE/DELETE/NONE + `category`）；`maxEntriesPerObject`（单主体配额）/`maxEntriesGlobal`（全局上限）/`recencyDecay`/`embeddingEnabled`/`writebackRelatedTopK` 作用于此后端；淘汰按 `objectId` 分区。
+- 默认关系数据库 Store 在同一事务提交原生记忆和待同步操作。`add`、`update`、`remove` 成功即关系数据已生效，向量后台同步。向量服务失败后分批重试，进程重启或其他共享节点接手时继续处理。检索只使用当前关系记录，已删除的记录立即不可见。应用无需为向量同步再次提交业务写入，关闭时先 `await ai.close()` 再关闭 RelDB 和 VecDB。
 - **`mem0`（数据格式适配）**：框架负责提取与 Embedding，通过原生 HTTP 读写 Qdrant 的 Mem0 UUID/payload 格式，可读取既有数据；不运行完整上游引擎、遥测或历史数据库。仅映射带完整连接参数的 Qdrant。生产（`NODE_ENV` 或 `HAI_CORE_ENV=production`）拒绝临时回退；开发或明确 E2E 可显式使用 `memory.allowEphemeralFallback: true`。其它持久化后端选择 `native`。
 - 两者对外 API（extract/recall/injectMemories/add/update/get/remove/list/listPage/clear）完全一致；`objectId` 隔离不同主体的记忆，`scope`（key-value）用于业务作用域隔离（recall/list/listPage/clear 均严格过滤）。mem0 后端 `extract` 在框架层分类打分后直接写入格式存储（保留 `hai_type`/`hai_importance`），`recall` 支持 `types`/`recencyWeight`，与 native 一致；Mem0 的 `update` 原地修改文本与元数据，保持 `id` 和创建时间。候选扫描有界：`list` / `listPage` / 条件 `clear` 最多支持每主体 1000 条原始候选（含过期条目），多取一条探测完整性；超限返回 `MEMORY_LIST_INCOMPLETE`（906），不会伪造 total 或执行部分条件删除。候选完整时按 UTC 日期剔除过期项，再按类型/scope 过滤和分页；仅 `objectId` 的清理使用后端过滤删除，不受列表上限限制。公共空条件清理被拒绝；跨主体全清仅限受信管理员显式 `admin.clearAll({ confirm: true })`。
 
 
 
 
-`add` / `extract` 的写入回执不含完整业务字段，框架写后读取权威记录再返回；并发提取等待全部在途写入结束。若写入或写后读失败，`error.ext.requiresEffectReconciliation=true`，`memoryIds` 保存已知写入 ID（回执丢失时可能为空）。应按主体核对实际记忆后决定恢复，不能盲目重做 add/extract；框架不自动重放。
+`mem0` 格式后端的 `add` / `extract` 写后读取权威记录再返回；并发提取等待全部在途写入结束。若写入或写后读失败，`error.ext.requiresEffectReconciliation=true`，`memoryIds` 保存已知写入 ID（回执丢失时可能为空）。应按主体核对实际记忆后决定是否再次提交 add/extract。
 
 ## Retrieval / RAG
 

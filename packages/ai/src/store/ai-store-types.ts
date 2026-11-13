@@ -124,6 +124,8 @@ export interface StoreFilter<T> {
   limit?: number
   /** 按关系记录最后写入时间过滤，主要用于保留期维护。 */
   updatedBefore?: number
+  /** 按不可变主键继续扫描；提供后查询按主键升序。 */
+  afterId?: string
 }
 
 // ─── 分页结果 ───
@@ -255,6 +257,8 @@ export interface AIRelStoreCompareAndSwap<T> {
 export interface AIRelStore<T> {
   /** 在共享存储事务中串行执行配额读取和写入，回调使用事务内 Store。 */
   withWriteLock?: <R>(write: (store: AIRelStore<T>) => Promise<R>) => Promise<R>
+  /** 持同一个写锁，在同一事务中提交当前和另一个关系 Store 的改动。 */
+  withRelatedWriteLock?: <U, R>(related: AIRelStore<U>, write: (store: AIRelStore<T>, related: AIRelStore<U>) => Promise<R>) => Promise<R>
   /** 按更新时间和主键升序获取小批记录键，避免加载业务 JSON。 */
   queryKeys?: (filter: StoreFilter<T>, cursor?: { updatedAt: number, id: string }) => Promise<Array<{ id: string, updatedAt: number, version: string }>>
   /** 只删除指定版本，防止过期维护删除同时更新的记录。 */

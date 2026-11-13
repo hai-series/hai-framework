@@ -229,7 +229,8 @@ export function createMemory(input: {
 /** 删除一条记忆（校验主体归属） */
 export async function deleteMemory(profileId: string, memoryId: string): Promise<void> {
   const params = new URLSearchParams({ profileId })
-  const response = await fetch(`/api/memories/${encodeURIComponent(memoryId)}?${params}`, { method: 'DELETE' })
+  // 保留同源 DELETE 的 Origin，供 SvelteKit 核验；跨源仍不发送 Referer。
+  const response = await fetch(`/api/memories/${encodeURIComponent(memoryId)}?${params}`, { method: 'DELETE', referrerPolicy: 'same-origin' })
   if (response.status === 204)
     return
   const envelope = await response.json() as ApiEnvelope<void>
@@ -240,7 +241,7 @@ export async function deleteMemory(profileId: string, memoryId: string): Promise
 /** 清空当前主体的全部记忆 */
 export async function clearMemories(profileId: string): Promise<void> {
   const params = new URLSearchParams({ profileId })
-  const response = await fetch(`/api/memories?${params}`, { method: 'DELETE' })
+  const response = await fetch(`/api/memories?${params}`, { method: 'DELETE', referrerPolicy: 'same-origin' })
   const envelope = await response.json() as ApiEnvelope<void>
   if (!response.ok || !envelope.success)
     throw new LabRequestError(envelope.error?.message ?? `HTTP ${response.status}`, envelope.error?.code)

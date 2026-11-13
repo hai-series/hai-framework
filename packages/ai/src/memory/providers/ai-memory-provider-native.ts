@@ -30,13 +30,16 @@ import type {
   MemoryRecallOptions,
   MemoryUpdateInput,
 } from '../ai-memory-types.js'
+import type { MemoryVectorJob, StoredMemory } from '../ai-memory-vector-sync.js'
 
+import { randomUUID } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
 
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
 import { extractAndConsolidate } from '../ai-memory-consolidation.js'
 import { injectRelevantMemories, isMemoryAccessDenied } from '../ai-memory-injection.js'
+import { createMemoryVectorSync } from '../ai-memory-vector-sync.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'memory-native' })
 
@@ -47,10 +50,15 @@ const EVICTION_CANDIDATES = 64
 /**
  * 生成记忆条目唯一 ID
  *
- * 形如 `mem_<毫秒时间戳>_<随机后缀>`，保证同一毫秒内多次写入也不冲突。
+ * 形如 `mem_<UUID>`，由关系存储作为业务记录主键。
  */
 function generateId(): string {
-  return `mem_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+  return `mem_${randomUUID()}`
+}
+
+/** 向量键留在持久层，公开记忆只返回调用方已有的字段。 */
+function publicEntry({ vectorId: _vectorId, ...entry }: StoredMemory): MemoryEntry {
+  return entry
 }
 
 /**
@@ -102,6 +110,7 @@ function matchScope(entry: MemoryEntry, scope: Record<string, unknown>): boolean
  * @param embedding - Embedding 接口（可为 null，为 null 时使用关键词回退）
  * @param store - 记忆条目持久化存储
  * @param vectorStore - 向量库存储（用于语义检索）
+ * @param vectorQueue - 可与记忆记录原子提交的向量补偿队列
  * @returns MemoryCoreOperations 实例
  *
  * @example
@@ -119,9 +128,48 @@ export function createNativeMemoryOperations(
   config: MemoryConfig,
   llm: LLMOperations,
   embedding: EmbeddingOperations | null,
-  store: AIRelStore<MemoryEntry>,
+  store: AIRelStore<StoredMemory>,
   vectorStore: AIVectorStore,
+  vectorQueue?: AIRelStore<MemoryVectorJob>,
 ): MemoryCoreOperations {
+  return assembleNativeMemory(config, llm, embedding, store, vectorStore, vectorQueue).operations
+}
+
+/**
+ * 组装原生记忆操作与补偿器的生命周期，业务入口只暴露操作。
+ * @example
+ * ```ts
+ * // 模块内部上下文
+ * function closeMemory(memory: ReturnType<typeof assembleNativeMemory>) { return memory.sync?.close() }
+ * ```
+ */
+export function assembleNativeMemory(
+  config: MemoryConfig,
+  llm: LLMOperations,
+  embedding: EmbeddingOperations | null,
+  store: AIRelStore<StoredMemory>,
+  vectorStore: AIVectorStore,
+  vectorQueue?: AIRelStore<MemoryVectorJob>,
+) {
+  const sync = vectorQueue && createMemoryVectorSync(store, vectorQueue, vectorStore)
+  const maxPending = Math.max(1024, config.maxEntriesGlobal * 2)
+
+  async function ensureVectorCapacity(pending?: AIRelStore<MemoryVectorJob>) {
+    if (pending && await pending.count() >= maxPending)
+      throw new Error('Memory vector synchronization backlog is full')
+  }
+
+  async function deleteEntry(activeStore: AIRelStore<StoredMemory>, entry: StoredMemory, pending?: AIRelStore<MemoryVectorJob>) {
+    if (sync && pending) {
+      if (entry.vector)
+        await sync.retire(pending, entry)
+    }
+    else {
+      await vectorStore.remove(entry.id)
+    }
+    return activeStore.remove(entry.id)
+  }
+
   /** Store 故障始终留在公开 HaiResult 边界内。 */
   async function protect<T>(operation: () => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
     try {
@@ -136,7 +184,7 @@ export function createNativeMemoryOperations(
   }
 
   /** 访问统计只更新仍存在的最新版本，不能用旧快照复活删除或覆盖内容更新。 */
-  async function touchEntry(memoryId: string, accessScope?: MemoryAccessScope): Promise<MemoryEntry | undefined> {
+  async function touchEntry(memoryId: string, accessScope?: MemoryAccessScope): Promise<StoredMemory | undefined> {
     for (let attempt = 0; attempt < 64; attempt++) {
       const record = await store.readVersioned(memoryId)
       if (!record || isMemoryAccessDenied(record.data, accessScope))
@@ -178,17 +226,15 @@ export function createNativeMemoryOperations(
    * @param candidates - 参与淘汰评估的候选条目（通常按 objectId 或全局筛出）
    * @param count - 本批需释放的容量
    */
-  async function evictLowest(activeStore: AIRelStore<MemoryEntry>, candidates: MemoryEntry[], count: number): Promise<number> {
+  async function evictLowest(activeStore: AIRelStore<StoredMemory>, candidates: StoredMemory[], count: number, pending?: AIRelStore<MemoryVectorJob>): Promise<number> {
     const now = Date.now()
     const ranked = candidates.map((entry) => {
       const age = now - entry.createdAt
       const recency = Math.max(0, 1 - age / EVICTION_MAX_AGE_MS)
-      return { id: entry.id, score: entry.importance * 0.7 + recency * 0.3 }
+      return { entry, score: entry.importance * 0.7 + recency * 0.3 }
     }).sort((left, right) => left.score - right.score).slice(0, count)
-    for (const { id } of ranked) {
-      await vectorStore.remove(id)
-      await activeStore.remove(id)
-    }
+    for (const { entry } of ranked)
+      await deleteEntry(activeStore, entry, pending)
     return ranked.length
   }
 
@@ -204,7 +250,7 @@ export function createNativeMemoryOperations(
    * @param objectId - 即将写入条目的所属主体（undefined 表示全局记忆，仅受全局配额约束）
    * @returns 全部配额有余量时为 true。既有超量数据分批收敛。
    */
-  async function evictIfNeeded(activeStore: AIRelStore<MemoryEntry>, objectId?: string): Promise<boolean> {
+  async function evictIfNeeded(activeStore: AIRelStore<StoredMemory>, objectId?: string, pending?: AIRelStore<MemoryVectorJob>): Promise<boolean> {
     // 先执行主体配额，主体内释放一项可能同时满足全局配额。
     if (objectId) {
       const objectTotal = await activeStore.count({ objectId })
@@ -215,7 +261,7 @@ export function createNativeMemoryOperations(
           limit: EVICTION_CANDIDATES,
         })
         const needed = objectTotal - config.maxEntriesPerObject + 1
-        if (await evictLowest(activeStore, objectEntries, needed) < needed)
+        if (await evictLowest(activeStore, objectEntries, needed, pending) < needed)
           return false
       }
     }
@@ -226,14 +272,19 @@ export function createNativeMemoryOperations(
         limit: EVICTION_CANDIDATES,
       })
       const needed = globalTotal - config.maxEntriesGlobal + 1
-      return await evictLowest(activeStore, candidates, needed) >= needed
+      return await evictLowest(activeStore, candidates, needed, pending) >= needed
     }
     return true
   }
 
   let localWrites = Promise.resolve()
 
-  function writeMemory<T>(write: (activeStore: AIRelStore<MemoryEntry>) => Promise<T>): Promise<T> {
+  async function writeMemory<T>(write: (activeStore: AIRelStore<StoredMemory>, pending?: AIRelStore<MemoryVectorJob>) => Promise<T>): Promise<T> {
+    if (sync) {
+      const written = await sync.write(write)
+      sync.kick()
+      return written
+    }
     if (store.withWriteLock)
       return store.withWriteLock(write)
     const pending = localWrites.then(() => write(store))
@@ -246,7 +297,7 @@ export function createNativeMemoryOperations(
    */
   async function saveEntry(input: MemoryEntryInput, vector?: number[]): Promise<MemoryEntry | undefined> {
     const now = Date.now()
-    const entry: MemoryEntry = {
+    const entry: StoredMemory = {
       id: generateId(),
       content: input.content,
       type: input.type,
@@ -260,14 +311,20 @@ export function createNativeMemoryOperations(
       accessCount: 0,
     }
 
-    return writeMemory(async (activeStore) => {
-      if (!await evictIfNeeded(activeStore, input.objectId))
+    return writeMemory(async (activeStore, pending) => {
+      await ensureVectorCapacity(pending)
+      if (!await evictIfNeeded(activeStore, input.objectId, pending))
         return undefined
+      if (sync && pending && vector) {
+        entry.vectorId = randomUUID()
+        await sync.enqueue(pending, entry)
+      }
       await activeStore.save(entry.id, entry, { objectId: entry.objectId })
       if (vector) {
-        await vectorStore.upsert(entry.id, vector, { objectId: entry.objectId, type: entry.type })
+        if (!pending)
+          await vectorStore.upsert(entry.id, vector, { objectId: entry.objectId, type: entry.type })
       }
-      return entry
+      return publicEntry(entry)
     })
   }
 
@@ -277,44 +334,69 @@ export function createNativeMemoryOperations(
    */
   async function updateEntry(memoryId: string, updates: MemoryUpdateInput, accessScope?: MemoryAccessScope): Promise<HaiResult<MemoryEntry>> {
     try {
-      const record = await store.readVersioned(memoryId)
-      if (!record || isMemoryAccessDenied(record.data, accessScope)) {
+      const before = await store.get(memoryId)
+      if (!before || isMemoryAccessDenied(before, accessScope)) {
         return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
           params: { id: memoryId },
         }))
       }
-      const existing = record.data
-
-      if (updates.content !== undefined)
-        existing.content = updates.content
-      if (updates.type !== undefined)
-        existing.type = updates.type
-      if (updates.importance !== undefined)
-        existing.importance = updates.importance
-      if (updates.metadata !== undefined)
-        existing.metadata = updates.metadata
-
-      // 内容变更时重新计算向量
-      if (updates.content !== undefined) {
-        const vector = await computeVector(updates.content)
-        existing.vector = vector
-      }
-
-      if (!await store.compareAndSwap(memoryId, {
-        expectedVersion: record.version,
-        data: existing,
-        scope: { objectId: existing.objectId },
-      })) {
-        throw new Error('Memory was concurrently changed or deleted')
-      }
-      if (updates.content !== undefined && existing.vector) {
-        await vectorStore.upsert(memoryId, existing.vector, { objectId: existing.objectId, type: existing.type })
+      // 网络请求在 SQL 事务外完成。随后在共享写锁内重新读取并核验归属。
+      const vector = updates.content !== undefined
+        ? await computeVector(updates.content)
+        : undefined
+      const existing = await writeMemory(async (active, pending) => {
+        const record = await active.readVersioned(memoryId)
+        if (!record || isMemoryAccessDenied(record.data, accessScope))
+          return undefined
+        const previous = record.data
+        const changed: StoredMemory = {
+          ...previous,
+          ...(updates.type !== undefined && { type: updates.type }),
+          ...(updates.importance !== undefined && { importance: updates.importance }),
+          ...(updates.metadata !== undefined && { metadata: updates.metadata }),
+          ...(updates.content !== undefined && { content: updates.content }),
+          ...(updates.content !== undefined && { vector }),
+        }
+        const changesVector = updates.content !== undefined || (updates.type !== undefined && updates.type !== previous.type)
+        if (changesVector && sync && pending) {
+          if (previous.vector)
+            await sync.retire(pending, previous)
+          changed.vectorId = changed.vector
+            ? randomUUID()
+            : undefined
+          if (changed.vector) {
+            await ensureVectorCapacity(pending)
+            await sync.enqueue(pending, changed)
+          }
+        }
+        if (!await active.compareAndSwap(memoryId, {
+          expectedVersion: record.version,
+          data: changed,
+          scope: { objectId: changed.objectId },
+        })) {
+          throw new Error('Memory was concurrently changed or deleted')
+        }
+        if (changesVector && !pending) {
+          if (changed.vector)
+            await vectorStore.upsert(memoryId, changed.vector, { objectId: changed.objectId, type: changed.type })
+          else if (previous.vector)
+            await vectorStore.remove(memoryId)
+        }
+        return publicEntry(changed)
+      })
+      if (!existing) {
+        return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
+          params: { id: memoryId },
+        }))
       }
       logger.trace('Memory updated', { id: memoryId })
       return ok(existing)
     }
     catch (error) {
-      logger.error('Memory update failed', { id: memoryId, error })
+      logger.error('Memory update failed', {
+        id: memoryId,
+        error: core.sanitize.sanitizeSensitiveFields(error),
+      })
       return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryOperationFailed'))
     }
   }
@@ -386,21 +468,29 @@ export function createNativeMemoryOperations(
 
       const vectorScores = new Map<string, number>()
       if (queryVector) {
-        const vectorResults = await vectorStore.search(queryVector, {
-          topK: topK * candidateMultiplier,
-          filter: options?.objectId
-            ? { objectId: options.objectId }
-            : undefined,
-        })
-        for (const r of vectorResults) {
-          vectorScores.set(r.id, r.score)
+        try {
+          const vectorResults = await vectorStore.search(queryVector, {
+            topK: topK * candidateMultiplier,
+            filter: options?.objectId
+              ? { objectId: options.objectId }
+              : undefined,
+          })
+          for (const r of vectorResults)
+            vectorScores.set(r.id, r.score)
+        }
+        catch (error) {
+          if (!sync)
+            throw error
+          logger.debug('Memory vector search unavailable; using persisted embeddings')
         }
       }
 
       const now = Date.now()
 
       const scored = candidates.map((entry) => {
-        let similarity = vectorScores.get(entry.id) ?? 0
+        let similarity = entry.vector
+          ? (vectorScores.get(entry.vectorId ?? entry.id) ?? 0)
+          : 0
         if (!similarity && queryVector && entry.vector) {
           similarity = cosineSimilarity(queryVector, entry.vector)
         }
@@ -428,11 +518,11 @@ export function createNativeMemoryOperations(
             ? { objectId: options.objectId, scope: options.scope }
             : undefined)
           if (updated && (!options?.scope || matchScope(updated, options.scope)) && (!options?.types?.length || options.types.includes(updated.type)))
-            results.push(updated)
+            results.push(publicEntry(updated))
           continue
         }
 
-        results.push({ ...entry })
+        results.push(publicEntry(entry))
       }
 
       logger.trace('Memory recall completed', {
@@ -531,7 +621,7 @@ export function createNativeMemoryOperations(
           params: { id: memoryId },
         }))
       }
-      return ok(entry)
+      return ok(publicEntry(entry))
     },
 
     /**
@@ -542,15 +632,12 @@ export function createNativeMemoryOperations(
      * @returns `ok(undefined)` 删除成功；ID 不存在或归属不符时返回 `MEMORY_NOT_FOUND`
      */
     async remove(memoryId: string, accessScope?: MemoryAccessScope): Promise<HaiResult<void>> {
-      const existing = await store.get(memoryId)
-      if (!existing || isMemoryAccessDenied(existing, accessScope)) {
-        return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
-          params: { id: memoryId },
-        }))
-      }
-      // 保留关系记录直到向量删除确认，失败后同一入口仍能校验归属并重试清理。
-      await vectorStore.remove(memoryId)
-      const removed = await store.remove(memoryId)
+      const removed = await writeMemory(async (active, pending) => {
+        const existing = await active.get(memoryId)
+        if (!existing || isMemoryAccessDenied(existing, accessScope))
+          return false
+        return deleteEntry(active, existing, pending)
+      })
       if (!removed) {
         return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', {
           params: { id: memoryId },
@@ -587,12 +674,12 @@ export function createNativeMemoryOperations(
       })
 
       if (!options?.scope)
-        return ok(results)
+        return ok(results.map(publicEntry))
 
       const filtered = results.filter(e => matchScope(e, options.scope!))
-      return ok(options.limit
+      return ok((options.limit
         ? filtered.slice(0, options.limit)
-        : filtered)
+        : filtered).map(publicEntry))
     },
 
     /**
@@ -625,7 +712,10 @@ export function createNativeMemoryOperations(
           },
           { offset, limit },
         )
-        return ok(page)
+        return ok({
+          ...page,
+          items: page.items.map(publicEntry),
+        })
       }
 
       const all = await store.query({
@@ -638,7 +728,7 @@ export function createNativeMemoryOperations(
       })
       const filtered = all.filter(e => matchScope(e, options.scope!))
       return ok({
-        items: filtered.slice(offset, offset + limit),
+        items: filtered.slice(offset, offset + limit).map(publicEntry),
         total: filtered.length,
       })
     },
@@ -653,7 +743,7 @@ export function createNativeMemoryOperations(
      * @returns `ok(undefined)` 操作成功
      */
     async clear(options?: MemoryClearOptions): Promise<HaiResult<void>> {
-      if (!options?.types && !options?.objectId && !options?.scope) {
+      if (!sync && !options?.types && !options?.objectId && !options?.scope) {
         // 两后端不共享事务；向量失败时保留权威记录，使同一管理入口可重试。
         await vectorStore.clear()
         await store.clear()
@@ -662,42 +752,60 @@ export function createNativeMemoryOperations(
       }
 
       const where: WhereClause<MemoryEntry> = {}
-      if (options.types && options.types.length === 1)
+      if (options?.types && options.types.length === 1)
         where.type = options.types[0]
-      else if (options.types && options.types.length > 1)
+      else if (options?.types && options.types.length > 1)
         where.type = { $in: options.types }
 
-      const candidates = await store.query({
-        objectId: options.objectId,
-        scope: options.scope,
+      const filter = {
+        objectId: options?.objectId,
+        scope: options?.scope,
         where: Object.keys(where).length > 0
           ? where
           : undefined,
-      })
-      const toRemove = options.scope
-        ? candidates.filter(e => matchScope(e, options.scope!))
-        : candidates
-
-      for (const entry of toRemove) {
-        await vectorStore.remove(entry.id)
-        await store.remove(entry.id)
       }
+      const scope = options?.scope
+      let removed = 0
+      let afterId = ''
+      while (true) {
+        const batch = await writeMemory(async (active, pending) => {
+          const rows = await active.query(sync
+            ? { ...filter, afterId, limit: EVICTION_CANDIDATES }
+            : filter)
+          const selected = scope
+            ? rows.filter(e => matchScope(e, scope))
+            : rows
+          for (const entry of selected)
+            await deleteEntry(active, entry, pending)
+          return { nextId: rows.at(-1)?.id, total: rows.length, selected: selected.length }
+        })
+        removed += batch.selected
+        if (!sync || batch.total < EVICTION_CANDIDATES || !batch.nextId)
+          break
+        if (batch.nextId === afterId)
+          throw new Error('Memory store did not advance the primary-key cursor')
+        afterId = batch.nextId
+      }
+
       logger.debug('Memories cleared', {
-        removed: toRemove.length,
-        objectId: options.objectId,
-        types: options.types,
-        scoped: Boolean(options.scope),
+        removed,
+        objectId: options?.objectId,
+        types: options?.types,
+        scoped: Boolean(scope),
       })
       return ok(undefined)
     },
   }
 
   return {
-    ...operations,
-    get: (id, scope) => protect(() => operations.get(id, scope)),
-    remove: (id, scope) => protect(() => operations.remove(id, scope)),
-    list: options => protect(() => operations.list(options)),
-    listPage: options => protect(() => operations.listPage(options)),
-    clear: options => protect(() => operations.clear(options)),
+    sync,
+    operations: {
+      ...operations,
+      get: (id: string, scope?: MemoryAccessScope) => protect(() => operations.get(id, scope)),
+      remove: (id: string, scope?: MemoryAccessScope) => protect(() => operations.remove(id, scope)),
+      list: (options?: MemoryListOptions) => protect(() => operations.list(options)),
+      listPage: (options?: MemoryListPageOptions) => protect(() => operations.listPage(options)),
+      clear: (options?: MemoryClearOptions) => protect(() => operations.clear(options)),
+    } satisfies MemoryCoreOperations,
   }
 }

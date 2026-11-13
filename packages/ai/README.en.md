@@ -400,6 +400,8 @@ The Goose 1.57.0 image exposes its native `goose serve` HTTP/WS `/acp` service t
 
 Declare verified capacity, modalities and reasoning in `llm.models[].capabilities`. Codex needs native Responses; the existing Hai adapter is not a reverse gateway. Code and state persist after close. CAS ownership is released only after owned processes stop; worktrees are not security sandboxes.
 
+For DeepSeek Harness, set `protocol: 'chat'` and `baseUrl: 'https://api.deepseek.com'` to reach the official DeepSeek Chat endpoint. An internal relay can retain the official model ID `deepseek-flash` or `deepseek-v4-pro` to apply the same settings. Harness sends instructions as `system`, uses the DeepSeek output budget field, and preserves `reasoning_content` when sending tool results. [DeepSeek Chat API](https://api-docs.deepseek.com/api/create-chat-completion/)
+
 Build an Agent image with `minimal`, `documents`, `office`, `browser`, or `developer`. The default includes Git, Node, and the native Agent. Codex also includes bubblewrap. Register a local image ID or remote manifest digest for the execution environment. [Agent images](models/agents/README.md)
 
 ACP runs in the Node service. Ordinary methods return HaiResult and stream failures throw. [ACP guide](../cli/templates/skills/hai-ai/acp.md)
@@ -590,9 +592,9 @@ async function bindManual(broker: ReturnType<typeof mountTools>['broker'], princ
 
 #### Memory / RAG / Knowledge
 
-Native memory deletion, including administrator clear-all, cleans vectors before removing authoritative records. Failed vector cleanup retains records for retry. SQL and vector storage do not share a transaction; a later failure still requires checking current state.
+The default database Store commits native memory and its pending vector operation in the same transaction. Successful adds, updates, removals, and clears confirm the relational change. The vector index can catch up later. Reads use committed relational records during vector outages. Any node sharing both stores can retry pending operations in batches, including after a restart.
 
-`ai.memory.scoped({ objectId })` requires a nonempty, non-whitespace subject ID; invalid input immediately throws `TypeError` from the factory instead of creating an unbound instance. Empty public clearing ranges such as `clear({ scope: {} })` fail; cross-subject clearing requires the explicit administrator API. Native memory access statistics and updates use version CAS, so delayed reads cannot resurrect deleted entries. Database and vector cleanup failures return failed HaiResult values.
+`ai.memory.scoped({ objectId })` requires a nonempty, non-whitespace subject ID; invalid input immediately throws `TypeError` from the factory instead of creating an unbound instance. Empty public clearing ranges such as `clear({ scope: {} })` fail; cross-subject clearing requires the explicit administrator API. Native memory access statistics and updates use version CAS, so delayed reads cannot resurrect deleted entries. Relational transaction failures return a failed HaiResult. Automatic vector retries require no resubmission from callers.
 
 Each Knowledge ingestion creates a unique `revision` and chunk IDs. It prepares all chunks, embeddings and entities, persists a staging manifest, writes vectors, then publishes the complete document and entity snapshot with shared Store CAS. Only one writer can rebuild a document at a time. Failure preserves the complete old version; shorter replacements cannot expose old trailing chunks. Retrieval filters unpublished revisions and retries around publication; sustained contention returns an error. Candidate expansion and cleanup backlogs can increase query cost.
 

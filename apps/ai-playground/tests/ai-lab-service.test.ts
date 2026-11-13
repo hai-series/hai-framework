@@ -6,7 +6,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { generateImage, rememberExchange, sendChat } from '../src/lib/services/ai-lab.js'
+import { clearMemories, deleteMemory, generateImage, rememberExchange, sendChat } from '../src/lib/services/ai-lab.js'
 
 const request = {
   profileId: 'demo-user',
@@ -22,6 +22,20 @@ afterEach(() => {
 })
 
 describe('aI Playground client service', () => {
+  it('preserves the same-origin signal for memory DELETE requests', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(Response.json({ success: true }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await deleteMemory('demo-user', 'memory-1')
+    await clearMemories('demo-user')
+
+    const options = { method: 'DELETE', referrerPolicy: 'same-origin' }
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/memories/memory-1?profileId=demo-user', options)
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/memories?profileId=demo-user', options)
+  })
+
   it('assembles text deltas and cancels a truncated stream', async () => {
     const encoder = new TextEncoder()
     const complete = new Response(encoder.encode('{"delta":"你"}\n{"delta":"好"}\n{"final":true}\n'))

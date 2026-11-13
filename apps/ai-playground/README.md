@@ -182,6 +182,10 @@ mcp:
 
 应用按 `RelDB → VecDB → Runner（可选）→ AI` 初始化，并在启动失败时逆序清理。生产 `.env.prod` 默认使用 PostgreSQL、Qdrant 与 Redis。按实际部署配置 `db/cache/vecdb` 的 DNS 地址、认证和访问规则。缺少共享依赖时启动失败。应用默认限流为每分钟 120 个请求，可在可信代理或应用侧补充用户授权和模型消费预算。具体参数见 [AI 配置手册](../../docs/usage/configuration/ai.md) 和 [Runner 配置](../../packages/runner/README.md#配置)。
 
+使用 Node 产物部署时，SvelteKit 默认按 HTTPS 计算请求来源。若由可信反向代理提供 HTTP 环境，配置 `PROTOCOL_HEADER=x-forwarded-proto`，由代理覆盖该请求头为实际外部协议，并限制应用端口仅由代理访问。浏览器删除或清空记忆时需要同源校验。
+
+试用 DeepSeek Harness 时，保留 `playground-acp` 和 `playground-coding` 这两个 ID，把 `acp-demo` 的镜像换成构建好的 `deepseek-harness`，并将 Agent 的 `adapter` 设为 `deepseek-harness`。模型可使用 `model: deepseek-flash`、`protocol: chat` 和容器可达的 DeepSeek Chat 根地址。按供应商实际能力填写 `capabilities` 的 `contextWindow`、`maxOutputTokens`、`inputModalities`、`outputModalities`、`toolCalling` 和 `reasoning`，启用推理时列出支持的 `efforts`。完成配置后在「工具与智能体 → 受管 ACP 任务」运行，查看实际输出的 `plan.adapter` 和 `output.text`。 [模型能力参数](../../docs/usage/configuration/ai.md#acp-接入与模型能力)
+
 ## 错误处理
 
 实验卡片会标出缺少的模型场景、服务或 Runner 环境。配置正确后重启 Web 服务，再从环境卡片核对状态。可用性检查确认登记与配置，模型网络、凭据和镜像仍需运行时验证。请求失败时保留关联编号供服务端排查。限流超限返回 429，限流存储不可用返回 503。模型上游 402 时检查服务账户与预算。服务端日志避免输出私有配置和凭据。

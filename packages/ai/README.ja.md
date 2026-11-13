@@ -400,6 +400,8 @@ Goose 1.57.0 イメージは `goose serve` のネイティブ HTTP/WS `/acp` を
 
 確認済み容量、モダリティ、推論能力は `llm.models[].capabilities` に設定します。Codex は Responses を必要とし、既存 Hai 変換は逆方向ゲートウェイではありません。close 後もコード/状態を保持し、所有プロセス停止を確認後 CAS 占有を解放します。worktree はセキュリティサンドボックスではありません。
 
+DeepSeek Harness から公式の DeepSeek Chat に接続する場合、モデルに `protocol: 'chat'` と `baseUrl: 'https://api.deepseek.com'` を指定します。内部リレーでも公式モデル ID `deepseek-flash` または `deepseek-v4-pro` を維持すると、同じ設定が適用されます。Harness は指示を `system` ロールで送信し、DeepSeek の出力上限フィールドを使用します。ツール結果を送信する際は `reasoning_content` を保持します。 [DeepSeek Chat API](https://api-docs.deepseek.com/api/create-chat-completion/)
+
 Agent イメージのビルドでは `minimal`、`documents`、`office`、`browser`、`developer` を選択できます。既定のイメージには Git、Node、ネイティブ Agent が含まれ、Codex には bubblewrap も含まれます。実行環境にはローカルのイメージ ID またはリモートのマニフェスト digest を登録します。[Agent イメージ](models/agents/README.md)
 
 ACP は Node サービスで実行します。通常の API は HaiResult を返し、ストリームの失敗は例外になります。[ACP ガイド](../cli/templates/skills/hai-ai/acp.md)
@@ -590,9 +592,9 @@ async function bindManual(broker: ReturnType<typeof mountTools>['broker'], princ
 
 #### Memory / RAG / Knowledge
 
-native 記憶の削除は管理者の全削除を含め、先にベクトルを削除してから権威レコードを削除します。ベクトル削除失敗時は再試行用にレコードを保持します。SQL とベクトルは同じトランザクションではないため、後段の失敗時も状態確認が必要です。
+標準のデータベース Store は、ネイティブメモリとベクトル同期の保留操作を同じトランザクションで確定します。追加、更新、削除、一括削除の成功はリレーショナル側の確定を表します。ベクトル索引は後から同期されます。ベクトルストア障害時も確定済みのリレーショナルレコードを参照します。両方のストアを共有する各ノードが、再起動後も保留操作を分割して再試行できます。
 
-`ai.memory.scoped({ objectId })` は空でなく空白のみでもない主体 ID を要求し、不正な入力ではファクトリーが直ちに `TypeError` を送出します。未束縛のインスタンスは作成しません。`clear({ scope: {} })` など空範囲の公開削除は失敗し、主体横断の全削除には明示的な管理 API が必要です。ネイティブ記憶のアクセス統計と更新はバージョン CAS を使い、遅れた読み取りで削除済みデータを復活させません。DB・ベクトル削除の失敗は失敗の HaiResult で返します。
+`ai.memory.scoped({ objectId })` は空でなく空白のみでもない主体 ID を要求し、不正な入力ではファクトリーが直ちに `TypeError` を送出します。未束縛のインスタンスは作成しません。`clear({ scope: {} })` など空範囲の公開削除は失敗し、主体横断の全削除には明示的な管理 API が必要です。ネイティブ記憶のアクセス統計と更新はバージョン CAS を使い、遅れた読み取りで削除済みデータを復活させません。リレーショナル側のトランザクションに失敗した場合は HaiResult で返します。ベクトル同期は自動的に再試行されます。
 
 Knowledge は取り込みごとに一意の `revision` と chunk ID を生成します。全文・ベクトル・エンティティを準備し、永続ステージングマニフェストとベクトルを書いた後、共有 Store CAS で完全なスナップショットを一度に公開します。同じ文書の再構築は一つの writer に制限され、失敗時は完全な旧版を保持します。短い新版に旧末尾 chunk が混在しません。検索は未公開版を除外し、公開と競合すれば再試行します。競合が続く場合はエラーを返します。候補拡張や清掃待ちは検索負荷を増やすことがあります。
 

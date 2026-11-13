@@ -128,11 +128,18 @@ function matchesRecord<T>(record: StoredValue, filter: StoreFilter<T>): boolean 
 
 function createRelStore<T>(records: Map<string, StoredValue>): AIRelStore<T> {
   function select(filter: StoreFilter<T>): T[] {
-    let values = Array.from(records.values())
-      .filter(record => matchesRecord(record, filter))
-      .map(record => structuredClone(record.data) as T)
+    const afterId = filter.afterId
+    let entries = [
+      ...records.entries(),
+    ].filter(([id, record]) => (afterId === undefined || id > afterId) && matchesRecord(record, filter))
+    if (afterId !== undefined) {
+      entries = entries.sort(([left], [right]) => left < right
+        ? -1
+        : Number(left > right))
+    }
+    let values = entries.map(([, record]) => structuredClone(record.data) as T)
 
-    if (filter.orderBy) {
+    if (filter.orderBy && afterId === undefined) {
       const { field, direction } = filter.orderBy
       const multiplier = direction === 'asc'
         ? 1
@@ -210,7 +217,7 @@ function createRelStore<T>(records: Map<string, StoredValue>): AIRelStore<T> {
       return [
         ...records.entries(),
       ]
-        .filter(([id, record]) => matchesRecord(record, filter) && (!cursor || record.updatedAt > cursor.updatedAt
+        .filter(([id, record]) => (filter.afterId === undefined || id > filter.afterId) && matchesRecord(record, filter) && (!cursor || record.updatedAt > cursor.updatedAt
           || (record.updatedAt === cursor.updatedAt && id > cursor.id)))
         .map(([id, { updatedAt, version }]) => ({ id, updatedAt, version }))
         .sort((left, right) => left.updatedAt - right.updatedAt || (left.id < right.id
@@ -223,7 +230,7 @@ function createRelStore<T>(records: Map<string, StoredValue>): AIRelStore<T> {
     },
     async removeBy(filter) {
       const ids = Array.from(records.entries())
-        .filter(([, record]) => matchesRecord(record, filter))
+        .filter(([id, record]) => (filter.afterId === undefined || id > filter.afterId) && matchesRecord(record, filter))
         .map(([id]) => id)
       for (const id of ids)
         records.delete(id)
@@ -238,7 +245,7 @@ function createRelStore<T>(records: Map<string, StoredValue>): AIRelStore<T> {
         return
       }
       const ids = Array.from(records.entries())
-        .filter(([, record]) => matchesRecord(record, filter))
+        .filter(([id, record]) => (filter.afterId === undefined || id > filter.afterId) && matchesRecord(record, filter))
         .map(([id]) => id)
       for (const id of ids)
         records.delete(id)
