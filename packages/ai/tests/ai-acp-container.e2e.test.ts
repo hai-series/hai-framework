@@ -51,10 +51,10 @@ describe.skipIf(!image)('aCP container volume E2E', () => {
         'node',
         image!,
         '-e',
-        'for(const command of ["git","python3","node","codex","codex-acp"]){const r=require("node:child_process").spawnSync(command,["--version"],{encoding:"utf8"});if(r.status!==0)process.exit(1);process.stdout.write(r.stdout)}',
+        'const {spawnSync}=require("node:child_process");for(const command of ["git","node","bwrap","codex","codex-acp"]){const r=spawnSync(command,["--version"],{encoding:"utf8"});if(r.status!==0)process.exit(1);process.stdout.write(r.stdout)};for(const command of ["python3","libreoffice","chromium","java","rustc","go"]){if(spawnSync(command,["--version"]).error?.code!=="ENOENT")process.exit(2)}',
       ])
       expect(versions).toContain('git version')
-      expect(versions).toContain('Python')
+      expect(versions).toContain('bubblewrap')
       expect(versions).toContain('0.165.0')
       const fixture = await readFile(
         resolve('tests/fixtures/acp-agent.mjs'),
