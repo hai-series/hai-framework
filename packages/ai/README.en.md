@@ -400,6 +400,8 @@ The Goose 1.57.0 image exposes its native `goose serve` HTTP/WS `/acp` service t
 
 Declare verified capacity, modalities and reasoning in `llm.models[].capabilities`. Codex needs native Responses; the existing Hai adapter is not a reverse gateway. Code and state persist after close. CAS ownership is released only after owned processes stop; worktrees are not security sandboxes.
 
+For DeepSeek Harness, set `protocol: 'chat'` and `baseUrl: 'https://api.deepseek.com'` to reach the official DeepSeek Chat endpoint. An internal relay can retain the official model ID `deepseek-flash` or `deepseek-v4-pro` to apply the same settings. Harness sends instructions as `system`, uses the DeepSeek output budget field, and preserves `reasoning_content` when sending tool results. [DeepSeek Chat API](https://api-docs.deepseek.com/api/create-chat-completion/)
+
 Build an Agent image with `minimal`, `documents`, `office`, `browser`, or `developer`. The default includes Git, Node, and the native Agent. Codex also includes bubblewrap. Register a local image ID or remote manifest digest for the execution environment. [Agent images](models/agents/README.md)
 
 ACP runs in the Node service. Ordinary methods return HaiResult and stream failures throw. [ACP guide](../cli/templates/skills/hai-ai/acp.md)

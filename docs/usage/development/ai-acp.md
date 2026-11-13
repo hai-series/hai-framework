@@ -65,6 +65,8 @@ Podman 容器关闭远程服务的代理自动继承，避免把宿主 `127.0.0.
 
 Codex 使用 `adapter: 'codex'`，DeepSeek Harness 使用 `adapter: 'deepseek-harness'`，通过 `modelIds` 选择已有 `llm.models`。同一份模型清单维护型号、协议、端点、凭据与能力，不在智能体中另维护一份模型。Codex 需要实际提供 Responses 的上游；Hai 现有协议转换是客户端调用能力，不提供供原生 Codex 使用的反向网关。DSH 自定义模型还需完整、已确认的容量、输入模态、工具与推理信息，见[配置说明](../configuration/ai.md#acp-接入与模型能力)。
 
+DSH 直连官方 DeepSeek Chat 时，为模型设置 `protocol: 'chat'` 和 `baseUrl: 'https://api.deepseek.com'`。使用内部模型中继时，可保留 `deepseek-flash`、`deepseek-v4-pro` 等官方模型名以自动应用兼容设置。Harness 通过 `system` 角色传递指令，并在连续工具调用时保留推理字段。 [DeepSeek Chat API](https://api-docs.deepseek.com/api/create-chat-completion/)
+
 `acp.agents/workspaces` 可在配置中定义，也可分别用 `ai.acp.agents/workspaces.register` 保存数据库。`agents.initialize(id)` 校验绑定并生成原生配置；`agents.check(id, { workspaceId })` 实际启动握手后关闭，用于确认运行环境和能力。Windows stdio 需要系统 PowerShell 可用；npm 的 `.cmd` 包装应改用 `command: 'node.exe'` 与 JS 入口参数数组。框架跟踪整个进程树，关闭时清理后台子进程；系统策略阻止启动时直接返回错误。
 
 ## 创建和恢复会话

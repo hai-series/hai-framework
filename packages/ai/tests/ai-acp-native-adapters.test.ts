@@ -145,6 +145,78 @@ describe('原生智能体适配器', () => {
   })
 
   it.each([
+    [
+      'chat',
+      'https://api.deepseek.com/v1',
+      'custom-deepseek-model',
+      true,
+    ],
+    [
+      'chat',
+      'http://relay.example/v1',
+      'deepseek-flash',
+      true,
+    ],
+    [
+      'chat',
+      'https://api.deepseek.com.proxy.example/v1',
+      'custom-reasoning-model',
+      false,
+    ],
+    [
+      'chat',
+      'https://gateway.example/v1',
+      'deepseek/deepseek-v4-pro',
+      false,
+    ],
+    [
+      'responses',
+      'https://api.deepseek.com/v1',
+      'deepseek-flash',
+      false,
+    ],
+    [
+      'anthropic',
+      'https://api.deepseek.com/anthropic',
+      'deepseek-flash',
+      false,
+    ],
+  ] as const)('dSH %s applies DeepSeek Chat compatibility only to the intended endpoint or model (%s, %s)', async (protocol, baseUrl, model, compatible) => {
+    const agent = registeredAgent('deepseek-harness')
+    const [selected] = resolveAgentModels(agent, config)
+    const launch = await nativeAdapters['deepseek-harness']!.configure({
+      agent,
+      models: [
+        {
+          id: selected!.id,
+          config: {
+            ...selected!.config,
+            protocol,
+            baseUrl,
+            model,
+          },
+        },
+      ],
+      modelId: selected!.id,
+      statePath: '/state/task',
+    })
+    const [patch] = JSON.parse(launch.files!['hai-config.json']!)
+    const route = patch.config.providers['hai-0']
+    if (compatible) {
+      expect(route.compat).toEqual({
+        supportsDeveloperRole: false,
+        supportsStore: false,
+        maxTokensField: 'max_tokens',
+        thinkingFormat: 'deepseek',
+        requiresReasoningContentOnAssistantMessages: true,
+      })
+    }
+    else {
+      expect(route.compat).toBeUndefined()
+    }
+  })
+
+  it.each([
     { adapter: 'goose', field: 'GOOSE_MODE', expected: 'chat' },
     { adapter: 'deepseek-harness', field: 'DSH_PERMISSION_MODE', expected: 'read-only' },
   ])('maps the read-only profile in $adapter', async ({ adapter, field, expected }) => {

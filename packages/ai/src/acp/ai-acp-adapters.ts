@@ -6,6 +6,14 @@ import process from 'node:process'
 import { resolveModelEntry } from '../ai-config.js'
 import { ACPFailure } from './ai-acp-errors.js'
 
+// 中继保留官方模型名时，原生程序无法通过 URL 识别 DeepSeek Chat。
+const deepSeekChatModels = new Set([
+  'deepseek-flash',
+  'deepseek-v4-pro',
+  'deepseek-v4-flash',
+  'deepseek-v4-flash-vision-exp',
+])
+
 /**
  * 从已有 Hai 模型条目解析，禁止把不存在的 ID 当成模型名。
  * @param agent - 智能体定义及允许使用的模型 ID 列表。
@@ -143,6 +151,8 @@ export const nativeAdapters: Record<string, ACPAgentAdapter> = {
         throw new ACPFailure('model', { modelId })
       }
       const key = 'HAI_ACP_MODEL_0'
+      const deepSeekChat = model.protocol === 'chat'
+        && (URL.parse(model.baseUrl)?.hostname === 'api.deepseek.com' || deepSeekChatModels.has(model.model))
       const providers = {
         'hai-0': {
           apiKeyEnv: key,
@@ -152,6 +162,15 @@ export const nativeAdapters: Record<string, ACPAgentAdapter> = {
             responses: 'openai-responses',
             anthropic: 'anthropic-messages',
           }[model.protocol],
+          ...(deepSeekChat && {
+            compat: {
+              supportsDeveloperRole: false,
+              supportsStore: false,
+              maxTokensField: 'max_tokens',
+              thinkingFormat: 'deepseek',
+              requiresReasoningContentOnAssistantMessages: true,
+            },
+          }),
           // 输出容量是能力声明；单轮预算沿用 Hai 模型的 maxTokens。
           defaultMaxTokens: Math.min(model.maxTokens, caps.maxOutputTokens),
           defaultContextWindow: caps.contextWindow,

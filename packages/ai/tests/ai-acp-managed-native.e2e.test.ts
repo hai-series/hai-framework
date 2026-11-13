@@ -49,6 +49,9 @@ async function container(...args: string[]) {
 describe.skipIf(!enabled)('managed native ACP agents on an isolated network', () => {
   it.each(cases)('$adapter applies a real managed task Worker to the bound model', async ({ adapter, image, protocol, nativeResume }) => {
     expect(image, `${adapter} image is required when native managed acceptance is enabled`).toBeTruthy()
+    const model = adapter === 'deepseek-harness'
+      ? 'deepseek-flash'
+      : 'managed-fixture-model'
     const imageId = (await container('image', 'inspect', '--format', '{{.Id}}', image!)).replace(/^(?:sha256:)?/u, 'sha256:')
     const network = `hai-managed-native-${randomUUID()}`
     const fixture = await readFile(new URL('./fixtures/acp-managed-model.mjs', import.meta.url), 'utf8')
@@ -97,7 +100,7 @@ describe.skipIf(!enabled)('managed native ACP agents on an isolated network', ()
           models: [
             {
               id: 'fixture',
-              model: 'managed-fixture-model',
+              model,
               protocol,
               apiKey: 'managed-fixture-key',
               baseUrl: `http://${address}:19877/v1`,
@@ -106,7 +109,12 @@ describe.skipIf(!enabled)('managed native ACP agents on an isolated network', ()
                 maxOutputTokens: 1024,
                 inputModalities: ['text'],
                 toolCalling: true,
-                reasoning: { supported: false },
+                reasoning: adapter === 'deepseek-harness'
+                  ? {
+                      supported: true,
+                      efforts: ['low', 'high', 'max'],
+                    }
+                  : { supported: false },
               },
             },
           ],
@@ -178,7 +186,8 @@ describe.skipIf(!enabled)('managed native ACP agents on an isolated network', ()
         path: protocol === 'responses'
           ? '/v1/responses'
           : '/v1/chat/completions',
-        model: 'managed-fixture-model',
+        model,
+        ...(adapter === 'deepseek-harness' && { instructionRole: 'system' }),
       })
       if (process.env.HAI_ACP_MANAGED_NATIVE_TIMINGS === '1')
         process.stdout.write(`${adapter} scoped.run with fixture: ${Math.round(performance.now() - startedAt)} ms\n`)

@@ -421,6 +421,8 @@ Goose 1.57.0 镜像提供原生 `goose serve` HTTP/WS `/acp` 服务，通过 cus
 
 模型容量、模态和推理能力填 `llm.models[].capabilities`，未知不猜。Codex 要求原生 Responses；Hai 现有转换不是反向服务网关。关闭后保留代码/状态卷，确认拥有的进程停止才释放 CAS 占用；worktree 不是安全沙箱。
 
+DeepSeek Harness 直连官方 DeepSeek Chat 时，在模型条目中设置 `protocol: 'chat'` 和 `baseUrl: 'https://api.deepseek.com'`。内部中继可保留官方模型名 `deepseek-flash` 或 `deepseek-v4-pro` 以启用相同的兼容设置。Harness 用 `system` 发送指令，按 DeepSeek 格式发送输出上限，并在工具结果回传时保留 `reasoning_content`。 [DeepSeek Chat API](https://api-docs.deepseek.com/api/create-chat-completion/)
+
 接入示例与限制见 [ACP 指南](../cli/templates/skills/hai-ai/acp.md)。构建 Agent 时可选 `minimal`、`documents`、`office`、`browser`、`developer`，默认精简镜像含 Git、Node 和原生 Agent，Codex 还含 bubblewrap。运行环境可登记镜像 ID 或远程清单 digest。[Agent 镜像](models/agents/README.md) 普通 API 返回 HaiResult，stream 失败抛出，ACP 运行入口位于 Node 服务端。
 
 托管 Git 遇到子模块或 Git LFS 属性时明确返回 ACP_UNSUPPORTED，避免将不完整工程报告为就绪。

@@ -29,6 +29,8 @@ environments:
 
 `llm.models[].capabilities` 可配置 contextWindow、maxOutputTokens、inputModalities、outputModalities、toolCalling、reasoning.supported/efforts；未知时省略。输出预算 maxTokens 不是模型输出容量，maxOutputTokens 不能大于 contextWindow。DSH 自定义模型需要已确认的容量/输入/工具/推理信息；支持推理时还需明确 efforts。Codex 的上游必须原生提供 Responses；Hai 客户端已有协议转换不会提供反向网关。
 
+DeepSeek Harness 连接 DeepSeek Chat 时使用 `protocol: chat`。适配器识别 `api.deepseek.com` 或中继保留的官方原生模型名，例如 `deepseek-flash`、`deepseek-v4-pro`，让 Harness 发送 `system` 指令并保留多轮工具调用所需的推理内容。端点填写 Chat API 的根地址，例如 `https://api.deepseek.com`，不用附加 `/chat/completions`。密钥只在服务端配置。
+
 | Agent 配置 | 接入效果 | 存储与模型 |
 | --- | --- | --- |
 | `mode: embedded`、adapter、可选 command/args | 本机原生 stdio；Windows 直接提供可执行程序或 Node + JS 入口 | directory 工作区；modelIds 引用 Hai 模型 |

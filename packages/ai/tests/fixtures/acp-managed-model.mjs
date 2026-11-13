@@ -21,8 +21,29 @@ createServer(async (request, response) => {
     response.writeHead(404).end()
     return
   }
+  const deepSeekChat = input.model === 'deepseek-flash' && request.url === '/v1/chat/completions'
+  if (deepSeekChat && (input.messages?.[0]?.role !== 'system' || input.messages.some(message => message.role === 'developer')
+    || !Number.isSafeInteger(input.max_tokens) || input.max_tokens <= 0
+    || 'max_completion_tokens' in input || 'store' in input)) {
+    response.writeHead(422, { 'content-type': 'application/json' }).end(JSON.stringify({
+      error: { message: 'Invalid DeepSeek Chat request format' },
+    }))
+    return
+  }
+  const approval = body.includes('native-approval-fixture')
+  const toolFollowUp = input.messages?.some(message => message.role === 'tool')
+  if (deepSeekChat && approval && toolFollowUp && !input.messages.some(message => message.role === 'assistant' && message.tool_calls && message.reasoning_content === 'Fixture thinking')) {
+    response.writeHead(422, { 'content-type': 'application/json' }).end(JSON.stringify({
+      error: { message: 'Tool follow-up dropped reasoning_content' },
+    }))
+    return
+  }
   if (!recorded && body.includes(prompt)) {
-    writeFileSync(resultPath, JSON.stringify({ path: request.url, model: input.model }))
+    writeFileSync(resultPath, JSON.stringify({
+      path: request.url,
+      model: input.model,
+      ...(deepSeekChat && { instructionRole: input.messages[0].role }),
+    }))
     recorded = true
   }
   response.writeHead(200, { 'content-type': 'text/event-stream' })
@@ -34,8 +55,7 @@ createServer(async (request, response) => {
       created: 1,
       model: input.model,
     }
-    const approval = body.includes('native-approval-fixture')
-    if (approval && !input.messages?.some(message => message.role === 'tool')) {
+    if (approval && !toolFollowUp) {
       const command = body.includes('wrong-target')
         ? 'cat /input/wrong.txt'
         : 'cat /input/approved.txt'
@@ -46,6 +66,7 @@ createServer(async (request, response) => {
             index: 0,
             delta: {
               role: 'assistant',
+              ...(deepSeekChat && { reasoning_content: 'Fixture thinking' }),
               tool_calls: [
                 {
                   index: 0,

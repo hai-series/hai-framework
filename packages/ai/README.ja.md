@@ -400,6 +400,8 @@ Goose 1.57.0 イメージは `goose serve` のネイティブ HTTP/WS `/acp` を
 
 確認済み容量、モダリティ、推論能力は `llm.models[].capabilities` に設定します。Codex は Responses を必要とし、既存 Hai 変換は逆方向ゲートウェイではありません。close 後もコード/状態を保持し、所有プロセス停止を確認後 CAS 占有を解放します。worktree はセキュリティサンドボックスではありません。
 
+DeepSeek Harness から公式の DeepSeek Chat に接続する場合、モデルに `protocol: 'chat'` と `baseUrl: 'https://api.deepseek.com'` を指定します。内部リレーでも公式モデル ID `deepseek-flash` または `deepseek-v4-pro` を維持すると、同じ設定が適用されます。Harness は指示を `system` ロールで送信し、DeepSeek の出力上限フィールドを使用します。ツール結果を送信する際は `reasoning_content` を保持します。 [DeepSeek Chat API](https://api-docs.deepseek.com/api/create-chat-completion/)
+
 Agent イメージのビルドでは `minimal`、`documents`、`office`、`browser`、`developer` を選択できます。既定のイメージには Git、Node、ネイティブ Agent が含まれ、Codex には bubblewrap も含まれます。実行環境にはローカルのイメージ ID またはリモートのマニフェスト digest を登録します。[Agent イメージ](models/agents/README.md)
 
 ACP は Node サービスで実行します。通常の API は HaiResult を返し、ストリームの失敗は例外になります。[ACP ガイド](../cli/templates/skills/hai-ai/acp.md)
