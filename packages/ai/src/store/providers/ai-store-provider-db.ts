@@ -63,19 +63,28 @@ interface MysqlIndexColumn {
 }
 
 /**
- * 只识别驱动明确的重复索引错误；沿 HaiResult/Error cause 查找，不根据错误文案猜测。
+ * 沿 HaiResult/Error cause 查找明确的 MySQL 错误码。
  */
-function isMysqlDuplicateIndex(error: unknown): boolean {
+function isMysqlError(error: unknown, code: string, errno: number): boolean {
   const seen = new Set<object>()
   let current = error
   while (current !== null && typeof current === 'object' && !seen.has(current)) {
     seen.add(current)
     const details = current as Record<string, unknown>
-    if (details.code === 'ER_DUP_KEYNAME' && details.errno === 1061)
+    if (details.code === code && details.errno === errno)
       return true
     current = details.cause
   }
   return false
+}
+
+/** 与查询使用同一固定表达式。只有拥有向量的记录会保护对应的点。 */
+function memoryVectorKey(type: DbType): string {
+  if (type === 'postgresql')
+    return `(CASE WHEN jsonb_typeof(data->'vector') = 'array' THEN COALESCE(data->>'vectorId', id) END)`
+  if (type === 'mysql')
+    return 'memory_vector_key'
+  return `(CASE WHEN json_type(data, '$.vector') = 'array' THEN COALESCE(json_extract(data, '$.vectorId'), id) END)`
 }
 
 // ─── ReldbAIRelStore 实现 ───
@@ -99,8 +108,10 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   private readonly hasScopeIndex: boolean
   private readonly hasUpdatedAtIndex: boolean
   private readonly gate: string | undefined
+  private readonly memoryVectorKey: string | undefined
   readonly withWriteLock?: AIRelStore<T>['withWriteLock']
   readonly withRelatedWriteLock?: AIRelStore<T>['withRelatedWriteLock']
+  readonly getMemoryVectorIds?: AIRelStore<T>['getMemoryVectorIds']
 
   constructor(sql: DmlOperations, table: string, jsonOps: ReldbJsonOps, dbType: DbType, options?: AIRelStoreOptions, tx?: TxManager) {
     this.connection = sql
@@ -119,6 +130,24 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     this.hasRefId = options?.hasRefId ?? false
     this.hasScopeIndex = options?.hasScopeIndex ?? false
     this.hasUpdatedAtIndex = options?.hasUpdatedAtIndex ?? false
+    if (options?.hasMemoryVectorIndex) {
+      const key = memoryVectorKey(dbType)
+      this.memoryVectorKey = key
+      this.getMemoryVectorIds = async (ids) => {
+        if (!ids.length)
+          return []
+        if (ids.length > 128)
+          throw new RangeError('Too many memory vector keys')
+        const readIds = async (connection: DmlOperations) => requireSqlSuccess(await connection.query<{ vector_id: string }>(
+          `SELECT ${key} AS vector_id FROM ${table} WHERE ${key} IN (${ids.map(() => '?').join(', ')})`,
+          ids,
+        )).data.map(row => row.vector_id)
+        // SQLite 共用连接，读取前等待同进程的其他事务结算。
+        if (dbType === 'sqlite' && tx)
+          return requireSqlSuccess(await tx.wrap(readIds)).data
+        return readIds(this.sql)
+      }
+    }
     if (options?.serializeWrites && tx) {
       const gate = `${table}_write_gate`
       this.gate = gate
@@ -196,9 +225,39 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       await this.createIndex(`idx_${t}_ref_id`, 'ref_id')
     if (this.hasUpdatedAtIndex)
       await this.createIndex(`idx_${t}_updated_at`, 'updated_at, id')
+    if (this.memoryVectorKey)
+      await this.createMemoryVectorIndex(this.memoryVectorKey)
     // 业务作用域索引：仅 PostgreSQL 支持 JSONB GIN，用于加速 data @> '{"scope":...}' 包含查询。
     if (this.hasScopeIndex && db === 'postgresql')
       await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_data_gin ON ${t} USING GIN (data jsonb_path_ops)`)
+  }
+
+  /** 索引覆盖旧记录，无需逐条回写。MySQL 查询使用命名生成列以命中索引。 */
+  private async createMemoryVectorIndex(key: string): Promise<void> {
+    const name = `idx_${this.table}_vector_key`
+    if (this.dbType !== 'mysql') {
+      await this.sql.execute(`CREATE INDEX IF NOT EXISTS ${name} ON ${this.table}((${key}))`)
+      return
+    }
+    const read = async () => requireSqlSuccess(await this.sql.get<{ extra: string }>(
+      'SELECT EXTRA AS extra FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+      [this.table, key],
+    )).data
+    if (!(await read())) {
+      try {
+        await this.sql.execute(`ALTER TABLE ${this.table} ADD COLUMN ${key} VARCHAR(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin GENERATED ALWAYS AS (
+          CASE WHEN JSON_TYPE(JSON_EXTRACT(data, '$.vector')) = 'ARRAY'
+            THEN COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(data, '$.vectorId')), 'null'), id) END
+        ) VIRTUAL`)
+      }
+      catch (error) {
+        if (!isMysqlError(error, 'ER_DUP_FIELDNAME', 1060))
+          throw error
+      }
+    }
+    if ((await read())?.extra !== 'VIRTUAL GENERATED')
+      throw new Error(aiM('ai_storeIndexMismatch'))
+    await this.createIndex(name, key)
   }
 
   /**
@@ -226,7 +285,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
         await this.sql.execute(`CREATE INDEX ${name} ON ${this.table}(${columns})`)
       }
       catch (error) {
-        if (!isMysqlDuplicateIndex(error))
+        if (!isMysqlError(error, 'ER_DUP_KEYNAME', 1061))
           throw error
         // 两个节点都读到缺失时，败者只能在实际结构与预期一致后继续；不能吞掉其它失败。
         if (!matches(await read()))
@@ -739,10 +798,20 @@ async function ensureVecdbCollection(database: VecdbFunctions, name: string, dim
 class VecdbAIVectorStore implements AIVectorStore {
   private readonly vecdb: VecdbFunctions
   private readonly collection: string
+  readonly scan?: AIVectorStore['scan']
 
   constructor(vecdb: VecdbFunctions, collection: string) {
     this.vecdb = vecdb
     this.collection = collection
+    const scan = vecdb.vector.scan?.bind(vecdb.vector)
+    if (scan) {
+      this.scan = async (options) => {
+        const result = await scan(collection, options)
+        if (!result.success && result.error.code === HaiVecdbError.COLLECTION_NOT_FOUND.code)
+          return { items: [] }
+        return requireVecdbSuccess(result)
+      }
+    }
   }
 
   async upsert(id: string, vector: number[], metadata?: Record<string, unknown>): Promise<void> {
@@ -762,6 +831,12 @@ class VecdbAIVectorStore implements AIVectorStore {
     if (!requireVecdbSuccess(await this.vecdb.collection.exists(this.collection)))
       return
     requireVecdbSuccess(await this.vecdb.vector.delete(this.collection, [id]))
+  }
+
+  async removeMany(ids: string[]): Promise<void> {
+    const result = await this.vecdb.vector.delete(this.collection, ids)
+    if (!result.success && result.error.code !== HaiVecdbError.COLLECTION_NOT_FOUND.code)
+      requireVecdbSuccess(result)
   }
 
   async clear(_filter?: Record<string, unknown>): Promise<void> {

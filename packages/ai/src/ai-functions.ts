@@ -24,6 +24,7 @@ import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
 import type { ChatRecord } from './llm/ai-llm-types.js'
 import type { MCPJobFiles } from './mcp/ai-mcp-types.js'
 import type { MemoryOperations } from './memory/ai-memory-types.js'
+import type { MemoryVectorScanState } from './memory/ai-memory-vector-scan.js'
 import type { MemoryVectorJob, StoredMemory } from './memory/ai-memory-vector-sync.js'
 import type {
   PersonaOperations,
@@ -191,6 +192,7 @@ export async function createAISubsystems(
     : storeProvider.createRelStore<StoredMemory>('hai_ai_memory', {
         hasObjectId: true,
         hasScopeIndex: true,
+        hasMemoryVectorIndex: true,
         serializeWrites: true,
       })
   const memoryVectorQueue = memoryStore?.withRelatedWriteLock
@@ -212,6 +214,9 @@ export async function createAISubsystems(
   const memoryVectorStore = useMem0Oss
     ? null
     : storeProvider.createVectorStore('hai_ai_memory_vectors')
+  const memoryVectorScan = memoryStore?.getMemoryVectorIds && memoryVectorStore?.scan && memoryVectorStore.removeMany
+    ? storeProvider.createRelStore<MemoryVectorScanState>('hai_ai_memory_vector_scan', { serializeWrites: true })
+    : undefined
 
   let registriesOpen = true
   const isOpen = () => registriesOpen
@@ -404,7 +409,7 @@ export async function createAISubsystems(
   )
 
   const nativeMemory = memoryStore && memoryVectorStore
-    ? assembleNativeMemory(memoryParsed, llm, embedding, memoryStore, memoryVectorStore, memoryVectorQueue)
+    ? assembleNativeMemory(memoryParsed, llm, embedding, memoryStore, memoryVectorStore, memoryVectorQueue, memoryVectorScan)
     : undefined
   const memoryCore = nativeMemory?.operations ?? await createMem0MemoryOperations({
     config: memoryParsed,

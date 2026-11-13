@@ -69,6 +69,8 @@ if (result.success) process.stdout.write(result.data.title) // 例如：发布�
 
 原生记忆使用默认数据库 Store 时，`add`、`update`、`remove` 和清理操作提交关系记录时一并登记待同步的向量。成功代表关系数据已提交，向量索引可能仍在同步。向量库暂时不可用时，读取继续使用已提交的记录，已删记忆立即从结果中移除。恢复连接或重启后，任一共享同一数据库和向量集合的 AI 实例都可继续处理待同步记录。应用按 `HaiResult` 处理关系库失败，避免因索引延迟重复添加记忆。 [配置与后端要求](../configuration/ai.md#会话记忆压缩与检索)
 
+向量清理以关系库当前版本为准。即使旧写入在对应待办已经删除后才抵达，后续扫描仍会清理。所有节点共享一条扫描进度。`hai_ai_memory_vectors` 必须由同一套关系库独占，避免把其他应用的记忆误判为失效。 [存储与备份要求](../configuration/ai.md#会话记忆压缩与检索)
+
 ## 知识分块与检索
 
 按[知识与embedding](../configuration/ai.md#知识分块与embedding)准备同维度模型/集合。用一份可公开文档导入，核对来源、分块、版本和已知查询命中，再发布新版本并确认旧版不可见。分块失败停止`embedding`，`cleanupPending`通过repair处理。

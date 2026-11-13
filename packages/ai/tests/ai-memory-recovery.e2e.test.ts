@@ -6,6 +6,7 @@ import type { AddressInfo } from 'node:net'
 import type { MemoryEntry } from '../src/index.js'
 import { Buffer } from 'node:buffer'
 import { fork } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { once } from 'node:events'
 import { createServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
@@ -26,15 +27,31 @@ interface VectorWrite {
   applied: boolean
 }
 
+interface VectorScroll {
+  node: string
+  offset?: string
+  limit: number
+  returned: number
+}
+
+function qdrantId(logicalId: string): string {
+  const hash = createHash('sha256').update(logicalId).digest('hex')
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`
+}
+
 async function createMemoryGateway() {
   const points = new Map<string, Point>()
   const writes: VectorWrite[] = []
+  const scrolls: VectorScroll[] = []
   const vectors = { size: 2, distance: 'Cosine' }
   let rejectWrites = false
   let rejectQueries = false
   let loseDeleteAcknowledgement = false
   let pauseUpsert = false
-  let applyPausedUpsert: (() => void) | undefined
+  let pausedUpsert: { point: Point, apply: () => void } | undefined
+  let scrollPageSize = 256
+  let pauseNextContinuation = false
+  let pausedScroll: VectorScroll | undefined
 
   const server = createServer(async (request, response) => {
     const respond = (result: unknown) => response.setHeader('content-type', 'application/json').end(JSON.stringify({ status: 'ok', result }))
@@ -60,7 +77,7 @@ async function createMemoryGateway() {
         }))
         return
       }
-      const parts = /^\/vector\/([^/]+)\/collections(?:\/(hai_ai_memory_vectors)(?:\/(points(?:\/(?:delete|query))?))?)?$/.exec(path)
+      const parts = /^\/vector\/([^/]+)\/collections(?:\/(hai_ai_memory_vectors)(?:\/(points(?:\/(?:delete|query|scroll))?))?)?$/.exec(path)
       if (!parts) {
         response.writeHead(404).end()
         return
@@ -104,7 +121,7 @@ async function createMemoryGateway() {
         }
         if (pauseUpsert) {
           pauseUpsert = false
-          applyPausedUpsert = apply
+          pausedUpsert = { point: input.points[0], apply }
         }
         else {
           apply()
@@ -153,6 +170,38 @@ async function createMemoryGateway() {
         })
         return
       }
+      if (action === 'points/scroll' && request.method === 'POST') {
+        const input = JSON.parse(raw) as { limit: number, offset?: string, with_payload?: string[], with_vector?: boolean }
+        if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 256 || input.with_vector !== false || !input.with_payload || input.with_payload.length !== 1 || input.with_payload[0] !== '_id') {
+          response.writeHead(400).end()
+          return
+        }
+        const matched = Array.from(points.values())
+          .filter(point => input.offset === undefined || point.id >= input.offset)
+          .sort((left, right) => left.id.localeCompare(right.id))
+        const limit = Math.min(input.limit, scrollPageSize)
+        const page = matched.slice(0, limit)
+        const scroll = {
+          node,
+          offset: input.offset,
+          limit: input.limit,
+          returned: page.length,
+        }
+        scrolls.push(scroll)
+        if (pauseNextContinuation && input.offset !== undefined) {
+          pauseNextContinuation = false
+          pausedScroll = scroll
+          return
+        }
+        respond({
+          points: page.map(point => ({
+            id: point.id,
+            payload: { _id: point.payload._id },
+          })),
+          next_page_offset: matched[limit]?.id ?? null,
+        })
+        return
+      }
       response.writeHead(405).end()
     }
     catch {
@@ -166,15 +215,19 @@ async function createMemoryGateway() {
     url: `http://127.0.0.1:${port}`,
     points,
     writes,
+    scrolls,
     setUnavailable(value: boolean) { rejectWrites = value },
     setQueryUnavailable(value: boolean) { rejectQueries = value },
+    setScrollPageSize(value: number) { scrollPageSize = value },
+    holdNextScrollContinuation() { pauseNextContinuation = true },
+    pendingScroll() { return pausedScroll },
     holdDeleteAcknowledgement(value: boolean) { loseDeleteAcknowledgement = value },
     holdNextUpsert() { pauseUpsert = true },
-    hasPendingUpsert() { return applyPausedUpsert !== undefined },
+    pendingUpsert() { return pausedUpsert?.point },
     finishPendingUpsert() {
-      const apply = applyPausedUpsert
-      applyPausedUpsert = undefined
-      apply?.()
+      const pending = pausedUpsert
+      pausedUpsert = undefined
+      pending?.apply()
     },
     async close() {
       server.close()
@@ -387,7 +440,7 @@ describe.each([
     }
   }, 120_000)
 
-  it('ignores an older upsert arriving after a crash and recovers quota evictions and scoped clears', async () => {
+  it('cleans an upsert arriving after its retirement record is gone and recovers quota evictions and scoped clears', async () => {
     const children: ChildProcess[] = []
     const gateway = await createMemoryGateway()
     let releaseDatabase: (() => Promise<void>) | undefined
@@ -399,10 +452,11 @@ describe.each([
       let added: HaiResult<MemoryEntry> | undefined
       void call<HaiResult<MemoryEntry>>(original, 'add', { owner: 'alice', content: 'obsolete value' })
         .then((result) => { added = result }, () => {})
-      await expect.poll(gateway.hasPendingUpsert, poll).toBe(true)
+      await expect.poll(gateway.pendingUpsert, poll).toBeDefined()
       await expect.poll(() => added?.success, poll).toBe(true)
       const alice = value(added!)
-      const oldVectorId = gateway.writes[0].ids[0]
+      const oldVector = gateway.pendingUpsert()!
+      const oldVectorId = oldVector.id
       await stop(original, true)
 
       const replacement = await startNode(children, config, gateway.url, 'replacement', 2)
@@ -417,6 +471,9 @@ describe.each([
       ]))
       const deletesOfOldVector = () => gateway.writes.filter(write => write.operation === 'delete' && write.applied && write.ids.includes(oldVectorId)).length
       await expect.poll(deletesOfOldVector, poll).toBeGreaterThanOrEqual(1)
+      value(await call<HaiResult<unknown>>(replacement, 'expireVectorRetirement', { id: oldVector.payload._id }))
+      const pendingCount = async (node: ChildProcess) => value(await call<HaiResult<number>>(node, 'countVectorJobs'))
+      await expect.poll(() => pendingCount(replacement), poll).toBe(0)
       const previousDeletes = deletesOfOldVector()
       gateway.finishPendingUpsert()
       expect(gateway.points.get(oldVectorId)?.vector).toEqual([1, 0])
@@ -428,6 +485,7 @@ describe.each([
       gateway.setQueryUnavailable(false)
       await expect.poll(() => gateway.points.has(oldVectorId), poll).toBe(false)
       expect(deletesOfOldVector()).toBeGreaterThan(previousDeletes)
+      expect(await pendingCount(replacement)).toBe(0)
 
       gateway.setUnavailable(true)
       const fresh = value(await call<HaiResult<MemoryEntry>>(replacement, 'add', { owner: 'alice', content: 'fresh value' }))
@@ -437,6 +495,7 @@ describe.each([
       await expect.poll(() => gateway.writes.some(write => write.operation === 'delete' && !write.applied), poll).toBe(true)
       value(await call<HaiResult<void>>(replacement, 'clear', { owner: 'alice' }))
       expect(value(await call<HaiResult<MemoryEntry[]>>(replacement, 'list', { owner: 'alice' }))).toEqual([])
+      await expect.poll(() => pendingCount(replacement), poll).toBe(0)
       await stop(replacement)
       gateway.setUnavailable(false)
 
@@ -444,6 +503,97 @@ describe.each([
       await expect.poll(() => Array.from(gateway.points.values(), point => point.payload.objectId), { ...poll, timeout: 15_000 }).toEqual(['bob'])
       expect(value(await call<HaiResult<MemoryEntry>>(restarted, 'get', { owner: 'bob', id: bob.id })).content).toBe('Keep Bob’s memory')
       expect(value(await call<HaiResult<MemoryEntry[]>>(restarted, 'list', { owner: 'alice' }))).toEqual([])
+    }
+    finally {
+      await cleanup(children, gateway, releaseDatabase)
+    }
+  }, 120_000)
+
+  it('resumes a bounded vector scan after a node dies and retries a failed cleanup without growing the outbox', async () => {
+    const children: ChildProcess[] = []
+    const gateway = await createMemoryGateway()
+    let releaseDatabase: (() => Promise<void>) | undefined
+    try {
+      const { config, release } = await database()
+      releaseDatabase = release
+      const setup = await startNode(children, config, gateway.url, 'setup', 2)
+      const bob = value(await call<HaiResult<MemoryEntry>>(setup, 'add', { owner: 'bob', content: 'Keep Bob’s memory' }))
+      const legacyId = 'mem_1700000000000_legacy'
+      value(await call<HaiResult<unknown>>(setup, 'seedLegacyMemory', { id: legacyId }))
+      await expect.poll(() => ownerPoints(gateway, 'bob').length, poll).toBe(1)
+      const [bobPoint] = ownerPoints(gateway, 'bob')
+      await expect.poll(async () => value(await call<HaiResult<number>>(setup, 'countVectorJobs')), poll).toBe(0)
+      await stop(setup)
+
+      // 模拟已上线版本未携带新元数据的向量，以及在私有集合中误写的外部 ID。
+      const rawId = 'ffffffff-ffff-4fff-bfff-ffffffffffff'
+      const legacyPoint = {
+        id: qdrantId(legacyId),
+        payload: { objectId: 'alice', _id: legacyId },
+        vector: [1, 0],
+      }
+      const stale = [
+        '3e83ab22-0b55-4c3d-8551-54097d84389c',
+        'fc306710-eaf2-4fbc-9b66-f6e3cc8cc9a2',
+        'mem_1700000000000_deleted',
+      ].map(id => ({
+        id: qdrantId(id),
+        payload: { objectId: 'alice', _id: id },
+        vector: [1, 0],
+      }))
+      gateway.points.set(legacyPoint.id, legacyPoint)
+      gateway.points.set(rawId, {
+        id: rawId,
+        payload: { objectId: 'external', _id: 'external-unmanaged' },
+        vector: [1, 0],
+      })
+      for (const point of stale) gateway.points.set(point.id, point)
+
+      gateway.setScrollPageSize(1)
+      gateway.holdNextScrollContinuation()
+      const worker = await startNode(children, config, gateway.url, 'scanner', 2)
+      await expect.poll(gateway.pendingScroll, poll).toMatchObject({
+        node: 'scanner',
+        offset: expect.any(String),
+      })
+      const blocked = gateway.pendingScroll()!
+      await stop(worker, true)
+
+      gateway.setUnavailable(true)
+      const first = await startNode(children, config, gateway.url, 'restart-a', 2)
+      const second = await startNode(children, config, gateway.url, 'restart-b', 2)
+      value(await call<HaiResult<unknown>>(second, 'expireVectorScan'))
+      await expect.poll(() => gateway.scrolls.find(({ node }) => node.startsWith('restart-')), poll).toMatchObject({ offset: blocked.offset })
+      const failedDeletion = () => gateway.writes.find(write => write.node.startsWith('restart-') && write.operation === 'delete' && !write.applied)
+      await expect.poll(failedDeletion, poll).toBeDefined()
+      const failed = failedDeletion()!
+      const [failedWorker, survivor] = failed.node === 'restart-a'
+        ? [first, second]
+        : [second, first]
+      await stop(failedWorker)
+      gateway.setUnavailable(false)
+      await expect.poll(() => [
+        ...gateway.points.keys(),
+      ].sort(), { ...poll, timeout: 15_000 }).toEqual([bobPoint.id, legacyPoint.id, rawId].sort())
+      expect(gateway.writes).toContainEqual(expect.objectContaining({
+        node: failed.node === 'restart-a'
+          ? 'restart-b'
+          : 'restart-a',
+        operation: 'delete',
+        ids: expect.arrayContaining(failed.ids),
+        applied: true,
+      }))
+      expect(await call(survivor, 'get', { owner: 'bob', id: bob.id })).toMatchObject({
+        success: true,
+        data: { content: 'Keep Bob’s memory' },
+      })
+      expect(await call(survivor, 'get', { owner: 'alice', id: legacyId })).toMatchObject({
+        success: true,
+        data: { content: 'Legacy Alice memory' },
+      })
+      expect(await call(survivor, 'get', { owner: 'bob', id: legacyId })).toMatchObject(unavailableOwner)
+      expect(await call<HaiResult<number>>(survivor, 'countVectorJobs')).toMatchObject({ success: true, data: 0 })
+      expect(await call<HaiResult<number>>(survivor, 'countVectorScans')).toMatchObject({ success: true, data: 1 })
     }
     finally {
       await cleanup(children, gateway, releaseDatabase)

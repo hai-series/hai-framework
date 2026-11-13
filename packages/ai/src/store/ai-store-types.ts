@@ -186,6 +186,8 @@ export interface AIRelStoreOptions {
   serializeWrites?: boolean
   /** 为按最后更新时间读取记录键的维护任务建索引。 */
   hasUpdatedAtIndex?: boolean
+  /** 为原生记忆维护启用当前向量版本索引。 */
+  hasMemoryVectorIndex?: boolean
 }
 
 // ─── 存储适配器抽象 ───
@@ -259,6 +261,8 @@ export interface AIRelStore<T> {
   withWriteLock?: <R>(write: (store: AIRelStore<T>) => Promise<R>) => Promise<R>
   /** 持同一个写锁，在同一事务中提交当前和另一个关系 Store 的改动。 */
   withRelatedWriteLock?: <U, R>(related: AIRelStore<U>, write: (store: AIRelStore<T>, related: AIRelStore<U>) => Promise<R>) => Promise<R>
+  /** 核对有向量的记忆版本 ID，包含仍用业务 ID 存储向量的旧记录。 */
+  getMemoryVectorIds?: (ids: string[]) => Promise<string[]>
   /** 按更新时间和主键升序获取小批记录键，避免加载业务 JSON。 */
   queryKeys?: (filter: StoreFilter<T>, cursor?: { updatedAt: number, id: string }) => Promise<Array<{ id: string, updatedAt: number, version: string }>>
   /** 只删除指定版本，防止过期维护删除同时更新的记录。 */
@@ -321,6 +325,10 @@ export interface AIVectorStore {
   search: (vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }) => Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>>
   /** 删除向量 */
   remove: (id: string) => Promise<void>
+  /** 分页读取专用集合的向量键，游标由向量后端生成。 */
+  scan?: (options: { cursor?: string, limit: number }) => Promise<{ items: Array<{ id: string }>, nextCursor?: string }>
+  /** 按键批量删除向量，重复删除安全。 */
+  removeMany?: (ids: string[]) => Promise<void>
   /** 清空 */
   clear: (filter?: Record<string, unknown>) => Promise<void>
 }
