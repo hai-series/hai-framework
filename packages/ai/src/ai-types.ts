@@ -1,5 +1,7 @@
 import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import type { RunnerFunctions } from '@h-ai/runner'
 import type { A2AOperations } from './a2a/ai-a2a-types.js'
+import type { ACPPlatformPolicy } from './acp/ai-acp-platform.js'
 import type { ACPAgentAdapter, ACPOperations } from './acp/ai-acp-types.js'
 /**
  * @h-ai/ai — 公共类型定义
@@ -16,6 +18,7 @@ import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
 import type { FileOperations } from './file/ai-file-types.js'
 import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
 import type { StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
+import type { MCPJobFiles } from './mcp/ai-mcp-types.js'
 import type { MemoryOperations } from './memory/ai-memory-types.js'
 import type { PersonaOperations } from './persona/ai-persona-types.js'
 import type { RagOperations } from './rag/ai-rag-types.js'
@@ -77,6 +80,8 @@ const AIErrorInfo = {
   MCP_TOOL_ERROR: '202:500',
   MCP_RESOURCE_ERROR: '203:500',
   MCP_SERVER_ERROR: '204:502',
+  MCP_TOOL_FORBIDDEN: '205:403',
+  MCP_TOOL_CANCELLED: '206:499',
 
   // Embedding (300-399)
   EMBEDDING_API_ERROR: '300:502',
@@ -221,6 +226,12 @@ export const HaiAIError = core.error.buildHaiErrorsDef('ai', AIErrorInfo)
  * ```
  */
 export interface AIInitOptions {
+  /** 由应用初始化和关闭的受管执行实例。 */
+  runner?: RunnerFunctions
+  /** 应用对受管 ACP 请求执行的可信授权。 */
+  acpPolicy?: ACPPlatformPolicy
+  /** 在作业领取者上验证文件权限、读入对象和暂存结果。 */
+  mcpJobFiles?: MCPJobFiles
   /** 可信服务端扩展：为其他 ACP 智能体生成原生配置。 */
   acpAdapters?: Record<string, ACPAgentAdapter>
   /**

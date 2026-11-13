@@ -4,10 +4,12 @@ import type {
   SessionNotification,
 } from '@agentclientprotocol/sdk'
 import type { HaiResult } from '@h-ai/core'
+import type { RunnerFunctions } from '@h-ai/runner'
 import type { z } from 'zod'
 import type { AIConfig } from '../ai-config.js'
 import type { AIRelStore, AIStoreProvider } from '../store/ai-store-types.js'
 import type { ACPConnection } from './ai-acp-client.js'
+import type { ACPPlatformPolicy } from './ai-acp-platform.js'
 import type { ACPRuntime } from './ai-acp-runtime.js'
 import type {
   ACPAgentAdapter,
@@ -40,6 +42,7 @@ import {
 } from './ai-acp-config.js'
 import { acpError, ACPFailure } from './ai-acp-errors.js'
 import { createGitOperations } from './ai-acp-git.js'
+import { createACPPlatform } from './ai-acp-platform.js'
 import { openRuntime, selectEngine } from './ai-acp-runtime.js'
 
 /**
@@ -95,6 +98,8 @@ export function createACPOperations(
   extensions: Record<string, ACPAgentAdapter> = {},
   modelConfig: () => Promise<AIConfig> = async () => config,
   mcpLookup?: (ids: string[]) => Promise<McpServer[]>,
+  runner?: RunnerFunctions,
+  policy?: ACPPlatformPolicy,
 ) {
   const workspaces = provider.createRelStore<Workspace>(
     'hai_ai_acp_workspaces',
@@ -128,6 +133,15 @@ export function createACPOperations(
     config.acp?.workspaces ?? [],
     () => !closed,
   )
+  const platform = createACPPlatform({
+    runner,
+    policy,
+    store: provider,
+    limits,
+    adapters,
+    getAgent,
+    modelConfig,
+  })
   function ensure() {
     if (closed)
       throw new ACPFailure('closed')
@@ -812,6 +826,8 @@ export function createACPOperations(
     }
   }
   return {
+    scoped: platform.scoped,
+    registerManagedExecutors: platform.register,
     agents: {
       /**
        * 校验模型与适配器后新增数据库智能体；配置同名条目只读。
@@ -1547,6 +1563,7 @@ export function createACPOperations(
      */
     async close() {
       closed = true
+      await platform.close()
       await Promise.allSettled(
         [
           ...live.values(),

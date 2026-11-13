@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { platformOptionsSchema } from './ai-acp-platform-config.js'
 
 const acpIdSchema = z.string().regex(/^[a-z0-9][\w-]{0,95}$/i)
 const branch = z
@@ -104,6 +105,12 @@ const common = {
   defaultModelId: z.string().min(1).optional(),
   /** 目标环境变量名到宿主环境变量名的映射；保存引用而非明文凭据。 */
   environmentRefs: environment,
+  /** 可由受管 Runner 使用的已登记环境，首项是默认候选。 */
+  environmentIds: z.array(acpIdSchema).max(64).default([]),
+  /** 此 Agent 可选择的能力上限。 */
+  allowedCapabilities: z.array(acpIdSchema.or(z.string().regex(/^[\w.-]{1,96}$/u))).max(64).default([]),
+  /** 可由每次调用或会话覆盖的受管默认值。 */
+  defaults: platformOptionsSchema.optional(),
 }
 const launch = {
   /** 可选原生程序覆盖，使用参数数组执行，不经过 shell。 */
@@ -266,6 +273,8 @@ export const ACPConfigSchema = z.strictObject({
     .default(8 * 1024 * 1024),
   /** 未消费事件数量上限。 */
   maxPendingEvents: z.number().int().positive().default(1024),
+  /** 无打开会话的受管 Worker 回收时限，毫秒。 */
+  workerIdleTimeoutMs: z.number().int().min(1000).max(86_400_000).default(300_000),
 })
 
 /**

@@ -133,6 +133,15 @@ const notInitializedLLM: ManagedLLMOperations = {
 
 /** ACP 未初始化占位；各层对象与其他子功能一样在模块顶层复用。 */
 const notInitializedACP: ACPOperations = {
+  scoped: () => ({
+    plan: () => Promise.resolve(notInitialized.result()),
+    run: () => Promise.resolve(notInitialized.result()),
+    agents: notInitialized.proxy<ReturnType<ACPOperations['scoped']>['agents']>(),
+    approvals: notInitialized.proxy<ReturnType<ACPOperations['scoped']>['approvals']>(),
+    tasks: notInitialized.proxy<ReturnType<ACPOperations['scoped']>['tasks']>(),
+    sessions: notInitialized.proxy<ReturnType<ACPOperations['scoped']>['sessions']>(),
+  }),
+  registerManagedExecutors: () => {},
   agents: notInitialized.proxy<ACPOperations['agents']>(),
   sessions: notInitialized.proxy<ACPOperations['sessions']>(),
   workspaces: notInitialized.proxy<ACPOperations['workspaces']>(),
@@ -143,6 +152,10 @@ const notInitializedACP: ACPOperations = {
 /** MCP 未初始化占位：所有方法返回 NOT_INITIALIZED 错误 */
 const notInitializedMCP: ManagedMCPOperations = {
   servers: notInitialized.proxy<ManagedMCPOperations['servers']>(),
+  services: {
+    invoke: () => Promise.resolve(notInitialized.result()),
+    createBroker: () => notInitialized.result(),
+  },
   registerTool: () => notInitialized.result(),
   registerResource: () => notInitialized.result(),
   registerPrompt: () => notInitialized.result(),
@@ -387,11 +400,15 @@ export const ai: AIFunctions = {
         storeProvider,
         datapipe,
         acpAdapters: options?.acpAdapters,
+        runner: options?.runner,
+        acpPolicy: options?.acpPolicy,
+        mcpJobFiles: options?.mcpJobFiles,
       })
 
       currentRegistriesClose = subs.closeRegistries
       currentLLM = subs.llm
       currentACP = subs.acp
+      currentACP.registerManagedExecutors()
       currentMCP = subs.mcp
       currentEmbedding = subs.embedding
       currentReasoning = subs.reasoning
