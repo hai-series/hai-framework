@@ -1,5 +1,53 @@
 [
   {
+    "name": "HAI_ACP_E2E_DSH_IMAGE",
+    "module": "acp",
+    "path": "HAI_ACP_E2E_DSH_IMAGE",
+    "description": "环境入口；使用位置 packages/ai/tmp/user-worker-check/probe.test.ts",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
+    "name": "HAI_ACP_E2E_ENGINE",
+    "module": "acp",
+    "path": "HAI_ACP_E2E_ENGINE",
+    "description": "环境入口；使用位置 packages/ai/tmp/user-worker-check/probe.test.ts",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
+    "name": "HAI_ACP_E2E_GOOSE_IMAGE",
+    "module": "acp",
+    "path": "HAI_ACP_E2E_GOOSE_IMAGE",
+    "description": "环境入口；使用位置 packages/ai/tmp/user-worker-check/probe.test.ts",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
+    "name": "HAI_ACP_E2E_IMAGE",
+    "module": "acp",
+    "path": "HAI_ACP_E2E_IMAGE",
+    "description": "环境入口；使用位置 packages/ai/tmp/user-worker-check/probe.test.ts",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
+    "name": "HAI_ACP_MANAGED_NATIVE_TEST",
+    "module": "acp",
+    "path": "HAI_ACP_MANAGED_NATIVE_TEST",
+    "description": "环境入口；使用位置 packages/ai/tmp/user-worker-check/probe.test.ts",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
+    "name": "HAI_ACP_MANAGED_NATIVE_TIMINGS",
+    "module": "acp",
+    "path": "HAI_ACP_MANAGED_NATIVE_TIMINGS",
+    "description": "环境入口；使用位置 packages/ai/tmp/user-worker-check/probe.test.ts",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
     "name": "HAI_ADMIN_DEFAULT_PASSWORD",
     "module": "admin",
     "path": "HAI_ADMIN_DEFAULT_PASSWORD",
@@ -2126,6 +2174,22 @@
     "description": "同时执行的实例上限；未配置服务池时默认为 4。",
     "value": "",
     "constraint": "整数；>= 1；<= 1000"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVERS_0_POOL_MAXTOTAL",
+    "module": "ai",
+    "path": "ai.mcp.servers.0.pool.maxTotal",
+    "description": "集群内预热、启动、运行、销毁中实例的总上限。",
+    "value": "",
+    "constraint": "整数；>= 1；<= 1000"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVERS_0_POOL_MINREADY",
+    "module": "ai",
+    "path": "ai.mcp.servers.0.pool.minReady",
+    "description": "部署预热池期望保留的干净实例数量。",
+    "value": "",
+    "constraint": "整数；>= 0；<= 1000"
   },
   {
     "name": "HAI_AI_MCP_SERVERS_0_TIMEOUTMS",
@@ -7582,6 +7646,14 @@
     "description": "存储类型",
     "value": "local",
     "constraint": "字符串；取值：s3 | local"
+  },
+  {
+    "name": "HAI_TEST_CONTAINER_ENGINE",
+    "module": "test",
+    "path": "HAI_TEST_CONTAINER_ENGINE",
+    "description": "环境入口；使用位置 packages/ai/tmp/user-worker-check/probe.test.ts",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
   },
   {
     "name": "HAI_TEST_IMAGE_LEDGER",

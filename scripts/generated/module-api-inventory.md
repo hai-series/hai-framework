@@ -90,9 +90,9 @@
 | @h-ai/reldb | `./schemas (default)` | 22 |
 | @h-ai/reldb | `./schemas (import)` | 22 |
 | @h-ai/reldb | `./schemas (types)` | 22 |
-| @h-ai/runner | `. (default)` | 19 |
-| @h-ai/runner | `. (import)` | 19 |
-| @h-ai/runner | `. (types)` | 19 |
+| @h-ai/runner | `. (default)` | 20 |
+| @h-ai/runner | `. (import)` | 20 |
+| @h-ai/runner | `. (types)` | 20 |
 | @h-ai/scheduler | `. (default)` | 36 |
 | @h-ai/scheduler | `. (import)` | 36 |
 | @h-ai/scheduler | `. (types)` | 36 |

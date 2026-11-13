@@ -2990,6 +2990,16 @@
                       "type": "integer",
                       "minimum": 1,
                       "maximum": 1000
+                    },
+                    "minReady": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1000
+                    },
+                    "maxTotal": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
                     }
                   },
                   "required": [

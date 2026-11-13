@@ -30841,6 +30841,12 @@
               "kind": "type",
               "declaration": "RunnerSubmit",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerWarmPool",
+              "kind": "type",
+              "declaration": "RunnerWarmPool",
+              "declarationKind": "InterfaceDeclaration"
             }
           ]
         },
@@ -30965,6 +30971,12 @@
               "kind": "type",
               "declaration": "RunnerSubmit",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerWarmPool",
+              "kind": "type",
+              "declaration": "RunnerWarmPool",
+              "declarationKind": "InterfaceDeclaration"
             }
           ]
         },
@@ -31089,6 +31101,12 @@
               "kind": "type",
               "declaration": "RunnerSubmit",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerWarmPool",
+              "kind": "type",
+              "declaration": "RunnerWarmPool",
+              "declarationKind": "InterfaceDeclaration"
             }
           ]
         }
