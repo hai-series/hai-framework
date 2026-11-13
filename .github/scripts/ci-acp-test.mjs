@@ -147,6 +147,7 @@ export async function runACPContainerTests(run = execute, environment = process.
     HAI_ACP_E2E_DSH_IMAGE: images['deepseek-harness'],
     HAI_ACP_E2E_GOOSE_IMAGE: images.goose,
     HAI_ACP_MANAGED_TEST_IMAGE: images['codex-acp'],
+    HAI_ACP_MANAGED_NATIVE_TEST: '1',
     HAI_TEST_RUNNER_ARTIFACT_IMAGE: toolImages.HAI_TOOL_IMAGE_DOCUMENTS,
     HAI_TOOL_IMAGE_ENGINE: engine,
     ...toolImages,

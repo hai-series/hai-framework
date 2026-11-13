@@ -35,6 +35,7 @@ describe('ci ACP 原生验收前置', () => {
       HAI_ACP_E2E_DSH_IMAGE: calls[2].args.at(-2),
       HAI_ACP_E2E_GOOSE_IMAGE: calls[3].args.at(-2),
       HAI_ACP_MANAGED_TEST_IMAGE: calls[1].args.at(-2),
+      HAI_ACP_MANAGED_NATIVE_TEST: '1',
     })
   })
 

@@ -2982,6 +2982,20 @@
                   "type": "integer",
                   "minimum": 1,
                   "maximum": 300000
+                },
+                "pool": {
+                  "type": "object",
+                  "properties": {
+                    "maxRunning": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    }
+                  },
+                  "required": [
+                    "maxRunning"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [

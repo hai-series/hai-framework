@@ -37,6 +37,7 @@ async function initialize(acpPolicy?: ACPPlatformPolicy) {
     get: unavailable,
     events: unavailable,
     cancel: unavailable,
+    reconcileUnknown: unavailable,
   }
   expect(await ai.init({
     acp: {

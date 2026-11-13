@@ -63,6 +63,7 @@
       "env": [
         "HAI_ACP_E2E_*",
         "HAI_ACP_MANAGED_TEST_IMAGE",
+        "HAI_ACP_MANAGED_NATIVE_*",
         "HAI_TOOL_IMAGE_*",
         "HAI_TEST_RUNNER_ARTIFACT_IMAGE",
         "HAI_TEST_CONTAINER_ENGINE",

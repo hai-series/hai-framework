@@ -2112,6 +2112,22 @@
     "constraint": "字符串；最小字符数 1"
   },
   {
+    "name": "HAI_AI_MCP_SERVERS_0_POOL",
+    "module": "ai",
+    "path": "ai.mcp.servers.0.pool",
+    "description": "集群范围内该服务允许同时领取的作业数量，仅 job 模式使用。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVERS_0_POOL_MAXRUNNING",
+    "module": "ai",
+    "path": "ai.mcp.servers.0.pool.maxRunning",
+    "description": "同时执行的实例上限；未配置服务池时默认为 4。",
+    "value": "",
+    "constraint": "整数；>= 1；<= 1000"
+  },
+  {
     "name": "HAI_AI_MCP_SERVERS_0_TIMEOUTMS",
     "module": "ai",
     "path": "ai.mcp.servers.0.timeoutMs",

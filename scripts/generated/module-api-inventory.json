@@ -4408,6 +4408,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ACPTurnOptions",
+              "kind": "type",
+              "declaration": "ACPTurnOptions",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ACPWorkspaceSchema",
               "kind": "value",
               "declaration": "ACPWorkspaceSchema",
@@ -6626,6 +6632,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ACPTurnOptions",
+              "kind": "type",
+              "declaration": "ACPTurnOptions",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ACPWorkspaceSchema",
               "kind": "value",
               "declaration": "ACPWorkspaceSchema",
@@ -8841,6 +8853,12 @@
               "name": "ACPTransport",
               "kind": "type",
               "declaration": "ACPTransport",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPTurnOptions",
+              "kind": "type",
+              "declaration": "ACPTurnOptions",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -30801,6 +30819,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "RunnerReconciliation",
+              "kind": "type",
+              "declaration": "RunnerReconciliation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "RunnerResources",
               "kind": "type",
               "declaration": "RunnerResources",
@@ -30919,6 +30943,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "RunnerReconciliation",
+              "kind": "type",
+              "declaration": "RunnerReconciliation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "RunnerResources",
               "kind": "type",
               "declaration": "RunnerResources",
@@ -31034,6 +31064,12 @@
               "name": "RunnerProcess",
               "kind": "type",
               "declaration": "RunnerProcess",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerReconciliation",
+              "kind": "type",
+              "declaration": "RunnerReconciliation",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -36195,12 +36231,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "MarkdownBlockStyleKind",
               "kind": "type",
               "declaration": "MarkdownBlockStyleKind",
@@ -38659,12 +38689,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "MarkdownBlockStyleKind",
               "kind": "type",
               "declaration": "MarkdownBlockStyleKind",
@@ -41121,12 +41145,6 @@
               "kind": "value",
               "declaration": "mapPaginated",
               "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "MarkdownBlockStyleKind",
@@ -44015,12 +44033,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "MarkdownBlockStyleKind",
               "kind": "type",
               "declaration": "MarkdownBlockStyleKind",
@@ -45655,12 +45667,6 @@
               "kind": "value",
               "declaration": "mapPaginated",
               "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "MarkdownBlockStyleKind",
@@ -47299,12 +47305,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "MarkdownBlockStyleKind",
               "kind": "type",
               "declaration": "MarkdownBlockStyleKind",
@@ -48431,12 +48431,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "MarkdownBlockStyleKind",
               "kind": "type",
               "declaration": "MarkdownBlockStyleKind",
@@ -48693,12 +48687,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "MarkdownBlockStyleKind",
               "kind": "type",
               "declaration": "MarkdownBlockStyleKind",
@@ -48953,12 +48941,6 @@
               "kind": "value",
               "declaration": "isLanguageSupported",
               "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "MarkdownBlockStyleKind",
@@ -52379,12 +52361,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "MarkdownBlockStyleKind",
               "kind": "type",
               "declaration": "MarkdownBlockStyleKind",
@@ -53631,12 +53607,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "MarkdownBlockStyleKind",
               "kind": "type",
               "declaration": "MarkdownBlockStyleKind",
@@ -54881,12 +54851,6 @@
               "kind": "value",
               "declaration": "mapPaginated",
               "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "MarkdownBlockFormatKind",
-              "kind": "type",
-              "declaration": "MarkdownBlockFormatKind",
-              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "MarkdownBlockStyleKind",
