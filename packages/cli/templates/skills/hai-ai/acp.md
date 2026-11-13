@@ -10,13 +10,17 @@ ACP 把宿主应用接到能操作工程的智能体。`ai.llm` 负责模型调�
 | `builtin-service` | 使用已构建镜像启动专属容器 | 引用 Hai 模型；workspace volume 挂 `/workspace`，状态卷挂 `/state` |
 | `custom-service` | 已有原生 HTTP/WS ACP 服务 | 远端自行维护模型；传远端可见的 cwd；框架不操作远端 Git |
 
-Codex 用 `adapter: 'codex'`，DeepSeek Harness 用 `adapter: 'deepseek-harness'`，其他已配置模型的 ACP 程序用 `adapter: 'generic'` 和 `command/args`。需生成其他原生配置时，向 `ai.init(config, { acpAdapters })` 提供可信服务端适配器；适配器返回 command、args、env、可选 files（写到隔离状态目录）。不把密钥存入 Agent 定义，`environmentRefs` 是目标变量名到宿主环境变量名的映射。
+Codex 用 `adapter: 'codex'`，DeepSeek Harness 用 `adapter: 'deepseek-harness'`，Goose 用 `adapter: 'goose'`。其他已配置模型的 ACP 程序用 `adapter: 'generic'` 和 `command/args`。需生成其他原生配置时，向 `ai.init(config, { acpAdapters })` 提供可信服务端适配器。适配器返回 command、args、env 和写到隔离状态目录的可选 files。`environmentRefs` 保存目标变量名到宿主环境变量名的映射。
 
-内置 Codex/dsh 通过 stdio 使用。HTTP/WS 是锁定 SDK 2.2.0 的官方实验传输，服务必须实现相同的 ACP 传输版本；不把任意 HTTP 聊天接口当 ACP，也不自动架设 stdio 网关。自定义服务必须声明 `supportedTransports`，协议不匹配返回错误。
+内置 Codex、DSH 和 Goose 通过原生 stdio 接入。HTTP/WS 是锁定 SDK 2.2.0 的官方实验传输，服务必须实现相同的 ACP 传输版本。自定义服务必须声明 `supportedTransports`，协议不匹配返回错误。
+
+Agent 镜像按任务选择 `minimal`、`documents`、`office`、`browser` 或 `developer`。将构建后的镜像 ID 或仓库清单 digest 登记到 Runner 环境。无需在任务内安装工具链。需要直接处理文件时，也可使用具备相应权限的独立工具作业。
 
 Linux 上运行 embedded Codex 前，按 [Codex 沙箱前置](https://learn.chatgpt.com/docs/sandboxing) 准备 bubblewrap 和所需的 AppArmor profile，并用 `codex sandbox` 在临时目录验证读写。沙箱初始化失败应先修复宿主环境，不能通过关闭沙箱或让模型猜测文件内容完成任务。
 
-## 原生 HTTP/WS 服务：Goose
+## Goose 的原生接入
+
+受管 Goose 使用 `goose acp`，选择 `adapter: 'goose'`、`mode: 'embedded'` 或 `'builtin-service'`，绑定登记的 Hai 模型。适配器使用独立 Goose 状态目录和逐次工具审批，模型协议支持 Chat Completions、Responses 和 Anthropic。Goose 和 DSH 的每次受管启动只注入本次选中模型的凭据。
 
 Goose 1.57.0 自身提供 `goose serve` 与 `/acp` HTTP/WS，使用 custom-service 接入。先由部署方启动服务、挂载工作区/状态卷，并在 Goose 端维护模型（例如 `GOOSE_PROVIDER=openrouter`、`GOOSE_MODEL`、`OPENROUTER_API_KEY`）；服务独立设置 `GOOSE_SERVER__SECRET_KEY`。Hai 只使用 `X-Secret-Key` 认证，不向服务注入 Hai 模型密钥。
 
@@ -41,6 +45,62 @@ WebSocket 改为 `transport: 'ws'` 和 `ws://` 地址。`cwd` 是远端可见路
 ## 配置和数据库共同维护
 
 `acp.agents`、`acp.workspaces` 可以直接写在配置文件里，也可通过 register 保存到数据库。get/list 返回 `{ value, source, version? }`，配置同 ID 优先且不可修改；数据库支持完整 update 和 remove。模型、MCP 等清单也遵循此规则，见 [资源清单](resources.md)。创建会话可通过 `mcpServerIds` 绑定合并清单里的 MCP。
+
+## 为受管会话绑定第三方工具
+
+先在 `mcp.servers` 登记第三方 Streamable HTTP 服务，设置 `allowedTools` 和上游认证头引用。每个执行节点挂载自己的工具入口，并给 Worker 提供可达的地址。入口只把当前会话的短期 Bearer 传给 Agent，真实上游凭据由服务端解析。建议使用执行节点的内网服务地址和受保护的网络。
+
+```ts
+import { createServer } from 'node:http'
+import { ai, type ACPPlatformPolicy, type MCPServiceBroker, type MCPServiceBrokerOptions } from '@h-ai/ai'
+
+// 应用传入真实 IAM 检查。该函数复核任务归属、权限及实际工具参数。
+function prepareTools(url: string, authorize: MCPServiceBrokerOptions['authorize']) {
+  let broker: MCPServiceBroker | undefined
+  const http = createServer((req, res) => {
+    if (broker) return void broker.handleRequest(req, res)
+    res.writeHead(503).end()
+  })
+  const policy: ACPPlatformPolicy = {
+    // 示例只给 manuals 租户的 librarian 账号开放这一个工具。
+    allowTools: (scope, _agentId, ids) =>
+      scope.tenantId === 'manuals' && scope.userId === 'librarian' && ids.every(id => id === 'manual_search'),
+    async bindTools(scope, sessionId, ids, signal) {
+      if (!broker || ids.length !== 1 || ids[0] !== 'manual_search')
+        throw new Error('Manual tool binding is unavailable')
+      const bound = await broker.bind({
+        principal: { tenantId: scope.tenantId, userId: scope.userId },
+        taskId: sessionId,
+        signal,
+        tools: [{
+          id: 'manual_search',
+          serviceId: 'manual',
+          tool: 'search_manual',
+          description: 'Search authorized manuals',
+          inputSchema: {
+            type: 'object', properties: { query: { type: 'string', maxLength: 1000 } },
+            required: ['query'], additionalProperties: false,
+          },
+        }],
+      })
+      if (!bound.success) throw new Error(bound.error.message)
+      return bound.data
+    },
+  }
+  return {
+    http, policy,
+    activate() {
+      // ai.init(config, { runner, acpPolicy: policy }) 成功后，监听 HTTP 端口之前激活。
+      const created = ai.mcp.services.createBroker({ url, authorize })
+      if (created.success) broker = created.data
+      return created
+    },
+    close() { broker?.close() },
+  }
+}
+```
+
+创建绑定时，工具入口为每项工具检查目录白名单和输入 Schema。每次调用重新检查业务权限和目录，网络重定向会失败。绑定默认有效 15 分钟。会话关闭、租约失效或服务停止时撤销绑定。多个执行节点分别挂载自己的入口，使 Agent 始终访问签发本次凭据的节点。
 
 ## 最小本机接入
 

@@ -121,13 +121,38 @@ export async function runACPContainerTests(run = execute, environment = process.
       containerSandboxProbe,
     ], fixtureEnvironment)
   }
+  const toolImages = {}
+  for (const name of [
+    'documents',
+    'office',
+    'ocr',
+    'browser',
+  ]) {
+    const directory = resolve(root, 'packages/ai/tools')
+    const image = `${localImagePrefix}hai-tools-${name}:ci`
+    await run(engine, [
+      'build',
+      '-f',
+      resolve(directory, name, 'Dockerfile'),
+      '-t',
+      image,
+      directory,
+    ], fixtureEnvironment)
+    toolImages[`HAI_TOOL_IMAGE_${name.toUpperCase()}`] = image
+  }
   const fixtureTestEnvironment = {
     ...fixtureEnvironment,
     HAI_ACP_E2E_ENGINE: engine,
     HAI_ACP_E2E_IMAGE: images['codex-acp'],
     HAI_ACP_E2E_DSH_IMAGE: images['deepseek-harness'],
     HAI_ACP_E2E_GOOSE_IMAGE: images.goose,
+    HAI_ACP_MANAGED_TEST_IMAGE: images['codex-acp'],
+    HAI_TEST_RUNNER_ARTIFACT_IMAGE: toolImages.HAI_TOOL_IMAGE_DOCUMENTS,
+    HAI_TOOL_IMAGE_ENGINE: engine,
+    ...toolImages,
   }
+  await run('pnpm', ['--filter', '@h-ai/ai', 'test:tools'], fixtureTestEnvironment)
+  await run('node', ['packages/ai/tools/tests/image-smoke.mjs'], fixtureTestEnvironment)
   await run('pnpm', ['test'], fixtureTestEnvironment)
   if (!trustedMain)
     return

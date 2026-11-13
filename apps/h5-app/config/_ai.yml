@@ -61,7 +61,7 @@ llm:
 #   servers: # 说明：外部 MCP 服务只读清单；与数据库记录合并供受管 Agent 使用。；取值：列表（每项以 - 开头）
 #     - id: docs # 说明：服务唯一标识。；取值：字符串；最小字符数 1
 #       name: Docs # 说明：传给原生 MCP 客户端的服务名。；取值：字符串；最小字符数 1
-#       transport: stdio # 说明：原生 MCP 传输类型。；取值：字符串；取值：stdio | http | sse
+#       transport: stdio # 说明：原生 MCP 传输类型。；取值：字符串；取值：stdio | http | sse | job
 #       command: docs-mcp # 说明：stdio 程序路径；仅可信服务端配置。；取值：字符串；最小字符数 1
 #       environmentRefs: # 说明：stdio 变量名到宿主凭据变量名的映射。；取值：配置块（填写下方缩进字段）
 #         API_TOKEN: DOCS_API_TOKEN # 凭据只从服务端环境读取。

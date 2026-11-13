@@ -1,8 +1,8 @@
 # ACP 平台启动性能、资源与镜像评估
 
-日期：2026-11-13。配套[总方案](acp-multi-user-platform-plan.md)与[运行设计](acp-platform-runtime-design.md)。以下明确区分已有实测、容量假设和上线前待测项；新增镜像、工具池、三种模式尚未实现和压测。
+日期：2026-11-13。配套[总方案](acp-multi-user-platform-plan.md)与[运行设计](acp-platform-runtime-design.md)。这里区分已有实测、容量假设和上线前待测项。Runner、三种模式和工具作业已通过功能夹具，长期容量及预热策略仍待压测。
 
-统一接口不代表三种 Agent 的性能相同。**现有启动和内存实测来自 Codex，不能直接作为 DSH/Goose 的规格。** 新 runner、API 多副本、持久队列和事件转发也尚未实现，下面的准备时间不包含它们的完整开销。
+**现有启动和内存实测来自 Codex。** Runner、独立 API 进程、共享数据库和事件转发已做功能验证，下面的原生准备时间不包含它们的完整开销。DSH 与 Goose 需要各自的性能数据。
 
 | Agent | 本方案已有证据 | 尚缺的性能证据 |
 | --- | --- | --- |
@@ -48,6 +48,10 @@
 | 按当前仓库 Dockerfile 构建的 Codex 镜像 | 1,057,444,734 字节，约 0.985 GiB 展开大小 | 旧镜像的节点磁盘占用，不是新 minimal 的体积或压缩下载量 |
 | 添加 Python 小文档库的实验层 | 增加 42.7 MiB | 包含 python-docx 1.2.0、openpyxl 3.1.5、pypdf 7.0.1、defusedxml 0.7.1 及依赖 |
 | Codex minimal | 1,013,409,553 字节，966.5 MiB | 含 Node、Git、bubblewrap 和原生 Codex，不预装 Python/Office/浏览器 |
+| DeepSeek Harness documents | 1,464,870,301 字节，1397.0 MiB | 实测 DSH、DOCX/XLSX Python 库和 Poppler |
+| Codex office | 1,609,494,336 字节，1534.9 MiB | 实测 LibreOffice 7.4.7.2、DOCX/XLSX Python 库和 Poppler |
+| Codex browser | 1,787,978,671 字节，1705.1 MiB | 实测 Chromium 156.0.8078.79 |
+| Codex developer | 1,319,947,735 字节，1258.8 MiB | 实测 C 编译器、Python、pip、venv，本次未选 Java/Rust/Go |
 | Goose minimal | 508,292,891 字节，484.7 MiB | 含 Node、Git、证书、musl 和 Goose，固定 linux/amd64 |
 | 其余 Agent 镜像组合 | 依实际构建和运行验收补充 | 体积取决于变体、架构和发布时的依赖版本 |
 | 独立 documents 镜像 | 147,692,602 字节，140.9 MiB | 成功读取 TXT、DOCX 和 XLSX 的缓存值 |

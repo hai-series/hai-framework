@@ -1,6 +1,6 @@
 # ai.acp 调用方式与可配置参数
 
-日期：2026-11-13。**这是拟新增的接口设计，当前版本不能直接运行以下示例。** 配套[总方案](acp-multi-user-platform-plan.md)与[运行设计](acp-platform-runtime-design.md)。目标是普通调用短、高级调用可控，Codex、DeepSeek Harness、Goose 共用一套入口。
+日期：2026-11-13。本文记录目标接口。当前已实现的入口、部署前置和可运行示例见[使用指南](usage/development/ai-acp.md)，待完成范围见[实施记录](acp-platform-tasks.md)。
 
 ## 1. 普通任务只传智能体和消息
 

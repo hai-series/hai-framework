@@ -224,6 +224,22 @@
     "constraint": "字符串；最小字符数 1"
   },
   {
+    "name": "HAI_AI_ACP_AGENTS_0_ALLOWEDCAPABILITIES",
+    "module": "ai",
+    "path": "ai.acp.agents.0.allowedCapabilities",
+    "description": "此 Agent 可选择的能力上限。",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 64"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_ALLOWEDCAPABILITIES_0",
+    "module": "ai",
+    "path": "ai.acp.agents.0.allowedCapabilities.0",
+    "description": "此 Agent 可选择的能力上限。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；正则 ^[a-z0-9][\\w-]{0,95}$；正则 ^[\\w.-]{1,96}$"
+  },
+  {
     "name": "HAI_AI_ACP_AGENTS_0_ARGS",
     "module": "ai",
     "path": "ai.acp.agents.0.args",
@@ -256,6 +272,374 @@
     "constraint": "字符串；最小字符数 1"
   },
   {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults",
+    "description": "可由每次调用或会话覆盖的受管默认值。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_CAPABILITIES",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.capabilities",
+    "description": "所需的运行环境能力。",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 64"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_CAPABILITIES_0",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.capabilities.0",
+    "description": "所需的运行环境能力。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 100；正则 ^[\\w.-]+$"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_CONTEXT",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.context",
+    "description": "本次请求引用的业务资料。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_CONTEXT_FILEIDS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.context.fileIds",
+    "description": "可授权读取的文件 ID。",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 64"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_CONTEXT_FILEIDS_0",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.context.fileIds.0",
+    "description": "可授权读取的文件 ID。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 100；正则 ^[\\w.-]+$"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_CONTEXT_KNOWLEDGEBASEIDS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.context.knowledgeBaseIds",
+    "description": "可授权检索的知识库 ID。",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 64"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_CONTEXT_KNOWLEDGEBASEIDS_0",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.context.knowledgeBaseIds.0",
+    "description": "可授权检索的知识库 ID。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 100；正则 ^[\\w.-]+$"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_CONTEXT_MEMORY",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.context.memory",
+    "description": "记忆读取和写入范围。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_CONTEXT_MEMORY_SCOPE",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.context.memory.scope",
+    "description": "记忆的用户或空间范围。",
+    "value": "none",
+    "constraint": "字符串；取值：none | user | space"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_CONTEXT_MEMORY_SPACEID",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.context.memory.spaceId",
+    "description": "指定共享空间 ID。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 100；正则 ^[\\w.-]+$"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_CONTEXT_MEMORY_WRITE",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.context.memory.write",
+    "description": "记忆写入策略。",
+    "value": "none",
+    "constraint": "字符串；取值：none | confirm | on-success"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_CONTEXT_SKILLIDS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.context.skillIds",
+    "description": "登记的技能 ID。",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 64"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_CONTEXT_SKILLIDS_0",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.context.skillIds.0",
+    "description": "登记的技能 ID。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 100；正则 ^[\\w.-]+$"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_EXECUTION",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.execution",
+    "description": "Worker 模式、环境与资源覆盖。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_EXECUTION_ENVIRONMENTID",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.execution.environmentId",
+    "description": "允许使用的已登记环境 ID。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 100；正则 ^[\\w.-]+$"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_EXECUTION_MODE",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.execution.mode",
+    "description": "会话的 Worker 分配模式。",
+    "value": "auto",
+    "constraint": "字符串；取值：auto | shared | user | task"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_EXECUTION_RESOURCES",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.execution.resources",
+    "description": "在环境资源上限内请求的资源。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_EXECUTION_RESOURCES_CPU",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.execution.resources.cpu",
+    "description": "CPU 核心数。",
+    "value": "",
+    "constraint": "数字；<= 1024；> 0"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_EXECUTION_RESOURCES_MEMORYMIB",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.execution.resources.memoryMiB",
+    "description": "内存 MiB。",
+    "value": "",
+    "constraint": "整数；>= 16；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_LIMITS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.limits",
+    "description": "执行、排队、审批和输出上限。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_LIMITS_APPROVALTIMEOUTMS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.limits.approvalTimeoutMs",
+    "description": "单次审批等待上限，毫秒。",
+    "value": "",
+    "constraint": "整数；>= 1；<= 86400000"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_LIMITS_MAXOUTPUTBYTES",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.limits.maxOutputBytes",
+    "description": "文本输出上限，字节。",
+    "value": "",
+    "constraint": "整数；>= 1；<= 8388608"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_LIMITS_QUEUETIMEOUTMS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.limits.queueTimeoutMs",
+    "description": "排队等待上限，毫秒。",
+    "value": "",
+    "constraint": "整数；>= 1；<= 86400000"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_LIMITS_RUNTIMEOUTMS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.limits.runTimeoutMs",
+    "description": "单轮执行上限，毫秒。",
+    "value": "",
+    "constraint": "整数；>= 1；<= 86400000"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_METADATA",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.metadata",
+    "description": "有限的业务标签，不作为身份依据。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_MODEL",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.model",
+    "description": "已登记模型和适配器支持的覆盖值。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_MODEL_ID",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.model.id",
+    "description": "已登记的模型 ID。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 100；正则 ^[\\w.-]+$"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_MODEL_MAXOUTPUTTOKENS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.model.maxOutputTokens",
+    "description": "模型单次输出 Token 上限。",
+    "value": "",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_MODEL_REASONINGEFFORT",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.model.reasoningEffort",
+    "description": "模型声明支持的推理级别。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 100；正则 ^[\\w.-]+$"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_MODEL_TEMPERATURE",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.model.temperature",
+    "description": "适配器支持的采样温度。",
+    "value": "",
+    "constraint": "数字；>= 0；<= 2"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_NATIVE",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.native",
+    "description": "由适配器验证的原生选项。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_NATIVE_ADAPTER",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.native.adapter",
+    "description": "原生适配器 ID。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 100；正则 ^[\\w.-]+$"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_NATIVE_OPTIONS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.native.options",
+    "description": "适配器声明支持的原生参数。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_OUTPUT",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.output",
+    "description": "文本或结构化输出。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_OUTPUT_FORMAT",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.output.format",
+    "description": "结果格式。",
+    "value": "text",
+    "constraint": "字符串；取值：text | json"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_OUTPUT_SCHEMA",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.output.schema",
+    "description": "用于校验最终 JSON 的 Schema。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_PERMISSIONS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.permissions",
+    "description": "任务权限范围和审批策略。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_PERMISSIONS_APPROVAL",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.permissions.approval",
+    "description": "是否允许发起交互审批。",
+    "value": "on-request",
+    "constraint": "字符串；取值：on-request | never"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_PERMISSIONS_PROFILE",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.permissions.profile",
+    "description": "原生权限预设。",
+    "value": "read-only",
+    "constraint": "字符串；取值：read-only | workspace | full-access"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_PERMISSIONS_RULEIDS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.permissions.ruleIds",
+    "description": "应用可校验的持久授权规则。",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 64"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_PERMISSIONS_RULEIDS_0",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.permissions.ruleIds.0",
+    "description": "应用可校验的持久授权规则。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 100；正则 ^[\\w.-]+$"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_TOOLS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.tools",
+    "description": "本任务选择的逻辑工具。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_TOOLS_ALLOW",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.tools.allow",
+    "description": "允许使用的已登记工具 ID。",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 64"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_TOOLS_ALLOW_0",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.tools.allow.0",
+    "description": "允许使用的已登记工具 ID。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 100；正则 ^[\\w.-]+$"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTS_WORKSPACEID",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaults.workspaceId",
+    "description": "应用登记的工作区 ID。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 100；正则 ^[\\w.-]+$"
+  },
+  {
     "name": "HAI_AI_ACP_AGENTS_0_ENABLED",
     "module": "ai",
     "path": "ai.acp.agents.0.enabled",
@@ -270,6 +654,22 @@
     "description": "auto 优先可用 Podman，再选 Docker；显式选择不自动降级。",
     "value": "auto",
     "constraint": "字符串；取值：auto | podman | docker"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_ENVIRONMENTIDS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.environmentIds",
+    "description": "可由受管 Runner 使用的已登记环境，首项是默认候选。",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 64"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_ENVIRONMENTIDS_0",
+    "module": "ai",
+    "path": "ai.acp.agents.0.environmentIds.0",
+    "description": "可由受管 Runner 使用的已登记环境，首项是默认候选。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；正则 ^[a-z0-9][\\w-]{0,95}$"
   },
   {
     "name": "HAI_AI_ACP_AGENTS_0_ENVIRONMENTREFS",
@@ -406,6 +806,14 @@
     "description": "握手和控制请求超时，毫秒。",
     "value": "30000",
     "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKERIDLETIMEOUTMS",
+    "module": "ai",
+    "path": "ai.acp.workerIdleTimeoutMs",
+    "description": "无打开会话的受管 Worker 回收时限，毫秒。",
+    "value": "300000",
+    "constraint": "整数；>= 1000；<= 86400000"
   },
   {
     "name": "HAI_AI_ACP_WORKSPACES",
@@ -1624,6 +2032,22 @@
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
+    "name": "HAI_AI_MCP_SERVERS_0_ALLOWEDTOOLS",
+    "module": "ai",
+    "path": "ai.mcp.servers.0.allowedTools",
+    "description": "受管工具入口允许调用的名称；省略时不开放给 ai.mcp.services。",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1；最多项数 256"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVERS_0_ALLOWEDTOOLS_0",
+    "module": "ai",
+    "path": "ai.mcp.servers.0.allowedTools.0",
+    "description": "受管工具入口允许调用的名称；省略时不开放给 ai.mcp.services。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 128"
+  },
+  {
     "name": "HAI_AI_MCP_SERVERS_0_ARGS",
     "module": "ai",
     "path": "ai.mcp.servers.0.args",
@@ -1646,6 +2070,14 @@
     "description": "stdio 程序路径；仅可信服务端配置。",
     "value": "",
     "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVERS_0_ENVIRONMENTID",
+    "module": "ai",
+    "path": "ai.mcp.servers.0.environmentId",
+    "description": "固定工具作业环境 ID，仅 job 模式使用。",
+    "value": "",
+    "constraint": "字符串；正则 ^[\\w.-]{1,128}$"
   },
   {
     "name": "HAI_AI_MCP_SERVERS_0_ENVIRONMENTREFS",
@@ -1680,12 +2112,20 @@
     "constraint": "字符串；最小字符数 1"
   },
   {
+    "name": "HAI_AI_MCP_SERVERS_0_TIMEOUTMS",
+    "module": "ai",
+    "path": "ai.mcp.servers.0.timeoutMs",
+    "description": "受管工具连接和调用的总超时，单位毫秒；缺省为 30 秒。",
+    "value": "",
+    "constraint": "整数；>= 1；<= 300000"
+  },
+  {
     "name": "HAI_AI_MCP_SERVERS_0_TRANSPORT",
     "module": "ai",
     "path": "ai.mcp.servers.0.transport",
     "description": "原生 MCP 传输类型。",
     "value": "stdio",
-    "constraint": "字符串；取值：stdio | http | sse"
+    "constraint": "字符串；取值：stdio | http | sse | job"
   },
   {
     "name": "HAI_AI_MCP_SERVERS_0_URL",
@@ -7140,6 +7580,14 @@
     "module": "test",
     "path": "HAI_TEST_IMAGE_RUN",
     "description": "环境入口；使用位置 packages/cli/src/commands/cli-build.ts",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
+    "name": "HAI_TOOL_BROWSER_PROXY",
+    "module": "tool",
+    "path": "HAI_TOOL_BROWSER_PROXY",
+    "description": "环境入口；使用位置 packages/ai/tools/browser/operation.py",
     "value": "",
     "constraint": "字符串；按使用位置的校验规则填写"
   },

@@ -6,6 +6,25 @@
 
 ## ACP 接入与模型能力
 
+多用户部署可登记 `acp.agents[].environmentIds`，引用 Runner 启动配置中具有固定镜像 digest 的环境。下例展示 Runner 配置对象，其中 `digest` 替换为已构建并部署的镜像 ID。环境的 CPU、内存、PID 和临时空间上限同时约束所有按任务传入的覆盖值。
+
+```yaml
+nodeId: worker-east
+executor: true
+engine: podman
+environments:
+  - id: codex-minimal
+    image: registry.example/hai-codex@sha256:<digest>
+    networkPolicy: offline
+    resources:
+      cpu: 1
+      memoryMiB: 512
+      pids: 128
+      scratchMiB: 256
+```
+
+`offline` 适合本地工具和不需要联网的夹具。模型网关或 MCP broker 由部署方放在已配置的隔离网络上，Runner 检查该网络为 `internal`。应只允许访问任务需要的服务，任务的网络权限仍以实际部署策略为准。API 节点和执行节点共享数据库、Agent 清单及环境配置。
+
 `acp` 的 requestTimeout（30000ms）、promptTimeout（600000ms）、cancelTimeout（5000ms）、maxContentBytes（8388608）、maxPendingEvents（1024）控制连接、取消和输出边界。环境变量对应 `HAI_AI_ACP_REQUESTTIMEOUT` 等。agents/workspaces 可在配置文件定义或通过 `ai.acp` 写数据库；session 是运行记录，不从配置导入。配置与数据库按 ID 合并的规则见[资源清单](#配置与数据库清单)。
 
 `llm.models[].capabilities` 可配置 contextWindow、maxOutputTokens、inputModalities、outputModalities、toolCalling、reasoning.supported/efforts；未知时省略。输出预算 maxTokens 不是模型输出容量，maxOutputTokens 不能大于 contextWindow。DSH 自定义模型需要已确认的容量/输入/工具/推理信息；支持推理时还需明确 efforts。Codex 的上游必须原生提供 Responses；Hai 客户端已有协议转换不会提供反向网关。

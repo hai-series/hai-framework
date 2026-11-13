@@ -2,6 +2,39 @@
 
 [AI 内容与模型](ai.md) · [ACP 配置](../configuration/ai.md#acp-接入与模型能力)
 
+## 多用户应用的受管调用
+
+服务端从登录态取得 `tenantId` 和 `userId`。启动时先初始化 RelDB 和 Runner，再把 Runner 注入 `ai.init(config, { runner })`。同一部署的 API 实例与执行节点使用共享数据库和相同的已登记环境。API 节点可设置 Runner `executor: false`，执行节点负责 Podman 或 Docker 容器。结束时依次关闭 ai、Runner 与基础模块。
+
+```ts
+import { ai } from '@h-ai/ai'
+
+async function answer(identity: { tenantId: string, userId: string }, requestId: string) {
+  const agent = ai.acp.scoped(identity)
+  const plan = await agent.plan({ agentId: 'assistant' })
+  if (!plan.success) return plan
+  return agent.run({
+    agentId: 'assistant',
+    prompt: '把这次讨论整理成三条待办',
+    idempotencyKey: requestId,
+    execution: { mode: 'auto' },
+  })
+}
+```
+
+| 分配模式 | 适用任务 | 复用范围 |
+| --- | --- | --- |
+| `shared` | 只读、无私有上下文的受控问答 | 同租户复用通过共享验收的适配器进程，每个会话独立路由 |
+| `user` | 同一用户的多项持续任务 | 同一用户且启动配置一致时复用，分别关闭原生会话 |
+| `task` | 需要隔离文件、写入或完整权限的任务 | 一个业务会话使用一个容器 |
+| `auto` | 业务方未指定隔离方式 | 应用策略允许个人复用时选 user，否则在经过验收的只读场景选 shared，其余使用 task |
+
+Codex、DeepSeek Harness 和 Goose 使用固定版本的原生协议。内置适配器的共享模式仍需安全验收，当前默认走独立容器。持续对话使用 `scoped.sessions.create`、`session.prompt` 和 `session.close`。`session.changeExecution({ mode: 'task', acceptNewSession: true })` 会结束原生会话，再按目标配置建立会话。业务会话 ID 保持稳定，原生上下文从空会话开始。
+
+可选参数包括已登记模型、环境、资源、权限、排队和执行时限、输出格式与原生适配器扩展。部署默认值作为起点，应用可以用 `plan` 查验实际选择。JSON 输出可带 JSON Schema，解析失败时返回输出错误。逐轮使用 `session.prompt` 或 `session.stream` 可调整输出格式、时限和事件观察器。用相同主体和幂等键重试同一单次任务时，会读取已有结果。任务 ID 也可用于 `scoped.tasks.get`、`scoped.tasks.events` 和 `scoped.tasks.cancel`。
+
+应用可通过 `acpPolicy` 绑定上下文和工具。`allowContext` 验权后，`resolveContext` 提供允许进入模型的知识片段、记忆和附件，`resolveSkills` 提供授权的技能内容，`commitMemory` 用轮次 ID 提交记忆或登记待确认写入。`allowTools` 与 `bindTools` 按任务提供 HTTP MCP 入口，适合接入内置或第三方服务。任务内的审批事件通过 `scoped.approvals.respond` 回答，支持允许一次、本会话允许、保存匹配规则和拒绝。应用的 `resolvePermission` 负责把原生请求校验到具体文件、目标或操作，Runner 的网络和挂载边界始终生效。
+
 `ai.acp` 将能操作工程的智能体接入 Node 服务端，提供智能体维护、项目目录、原生会话、事件交互和显式 Git 操作。可以用于代码协作、工程问答或应用构建；用户权限、任务规则、预览、验收和业务部署由应用负责。
 
 ## 选择运行模式和传输
@@ -14,7 +47,7 @@
 
 本机/内置容器模式使用原生 stdio。远程模式显式选择 HTTP 或 WS，并在 `supportedTransports` 声明该服务实际支持的类型；请求不支持的类型会报错，不自动转换。HTTP/WS 使用锁定 SDK 的官方实验传输，部署双方需兼容。ACP 地址与模型 API、MCP 或 Agent 自带 Web UI 地址各有用途。
 
-builtin-service 的 `engine: 'auto'` 优先就绪的 Podman，再尝试 Docker；显式选择不降级。镜像自行构建和部署，基础环境含 Git、Node、Python，可选 Java/Rust/Go。Codex 镜像同时安装 codex-acp 和原生 Codex CLI。工作区与智能体必须使用匹配的 image 和引擎。
+使用 `pnpm --filter @h-ai/ai agent:build codex-acp --variant=documents` 构建带文档库的 Agent。可选 `minimal`、`documents`、`office`、`browser` 和 `developer`。默认 `minimal` 包含 Git、Node 和原生 Agent，Codex 还包含 bubblewrap。将脚本返回的本地 `imageId` 或推送后取得的清单 digest 登记到 Runner 环境。普通 `builtin-service` 使用匹配的 Agent 和工作区 `image`，`engine: 'auto'` 优先就绪的 Podman，其次为 Docker。[构建选项](../../../packages/ai/models/agents/README.md)
 
 Podman 容器关闭远程服务的代理自动继承，避免把宿主 `127.0.0.1` 代理带进容器。需要代理时，通过 Agent 或 workspace 的 `environmentRefs` 显式引用容器能访问的代理地址；宿主回环地址不能直接当作容器的宿主地址。
 
