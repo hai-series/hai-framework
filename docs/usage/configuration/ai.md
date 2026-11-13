@@ -6,6 +6,25 @@
 
 ## ACP 接入与模型能力
 
+多用户部署可登记 `acp.agents[].environmentIds`，引用 Runner 启动配置中具有固定镜像 digest 的环境。下例展示 Runner 配置对象，其中 `digest` 替换为已构建并部署的镜像 ID。环境的 CPU、内存、PID 和临时空间上限同时约束所有按任务传入的覆盖值。
+
+```yaml
+nodeId: worker-east
+executor: true
+engine: podman
+environments:
+  - id: codex-minimal
+    image: registry.example/hai-codex@sha256:<digest>
+    networkPolicy: offline
+    resources:
+      cpu: 1
+      memoryMiB: 512
+      pids: 128
+      scratchMiB: 256
+```
+
+`offline` 适合本地工具和不需要联网的夹具。模型网关或 MCP broker 由部署方放在已配置的隔离网络上，Runner 检查该网络为 `internal`。应只允许访问任务需要的服务，任务的网络权限仍以实际部署策略为准。API 节点和执行节点共享数据库、Agent 清单及环境配置。
+
 `acp` 的 requestTimeout（30000ms）、promptTimeout（600000ms）、cancelTimeout（5000ms）、maxContentBytes（8388608）、maxPendingEvents（1024）控制连接、取消和输出边界。环境变量对应 `HAI_AI_ACP_REQUESTTIMEOUT` 等。agents/workspaces 可在配置文件定义或通过 `ai.acp` 写数据库；session 是运行记录，不从配置导入。配置与数据库按 ID 合并的规则见[资源清单](#配置与数据库清单)。
 
 `llm.models[].capabilities` 可配置 contextWindow、maxOutputTokens、inputModalities、outputModalities、toolCalling、reasoning.supported/efforts；未知时省略。输出预算 maxTokens 不是模型输出容量，maxOutputTokens 不能大于 contextWindow。DSH 自定义模型需要已确认的容量/输入/工具/推理信息；支持推理时还需明确 efforts。Codex 的上游必须原生提供 Responses；Hai 客户端已有协议转换不会提供反向网关。
@@ -307,7 +326,41 @@ image:
 
 MCP配置`server.name`必填，`version`默认1.0.0，能力对象内`tools`/`resources`/`prompts`默认true；能力声明不赋予业务权限。工具调用在服务端授权并约束输入、超时和外部副作用。
 
-外部 MCP 清单位于 `mcp.servers`。每项 `id/name/transport` 必填：`stdio` 需要 `command`，`args` 默认空数组；`http` / `sse` 需要 HTTP(S) `url`。`environmentRefs` 给 stdio 注入宿主变量引用，`headerEnv` 为网络连接解析认证头引用，两者默认 `{}`，不直接保存密钥。配置后只有在会话选择对应 `mcpServerIds` 时才使用；输入一个仅可读的测试工具请求，输出应是该工具结果及调用事件，不能只凭清单存在判断工具已经执行。
+外部 MCP 清单位于 `mcp.servers`。每项填写 `id`、`name` 和 `transport`。`stdio` 需要 `command`，`args` 默认空数组。`http` 和 `sse` 需要 HTTP(S) `url`。`environmentRefs` 为 stdio 提供环境变量引用，`headerEnv` 为远程服务提供认证头引用。两者默认是空对象。
+
+使用 `ai.mcp.services` 时，服务需要支持 Streamable HTTP，并在目录中通过 `allowedTools` 列出可调用的原生工具名。省略该字段时服务入口拒绝调用。`timeoutMs` 包含授权、连接和工具响应时间，默认 30,000 毫秒，取值范围 1–300,000 毫秒。部署方负责允许可信的 MCP 目的地，并在生产环境使用 HTTPS 或受保护的内部网络。
+
+```yaml schema=@h-ai/ai:AIConfigSchema
+mcp:
+  servers:
+    - id: manual
+      name: Manuals
+      transport: http
+      url: https://tools.example.com/mcp
+      headerEnv: { Authorization: HAI_MANUAL_MCP_AUTHORIZATION }
+      allowedTools: [search_manual]
+      timeoutMs: 10000
+```
+
+`HAI_MANUAL_MCP_AUTHORIZATION` 由部署方设置为上游需要的完整请求头值。目录管理员可以维护地址、认证引用和工具列表。应用仍需核验调用主体和实际参数。启动服务后调用一次授权的只读工具，检查其返回内容和上游请求。
+
+固定工具容器使用同一目录中的 `transport: job`，填写 `environmentId`、`allowedTools` 和可选超时。Runner 环境需使用固定镜像摘要、`networkPolicy: offline`，并声明对应的能力。支持 `documents.extract`、`office.convert`、`office.recalculate` 和 `ocr.recognize`。调用参数是授权的 `fileId`。OCR 可传 `language`。应用通过 `AIInitOptions.mcpJobFiles` 在领取节点复核文件 ACL 并暂存产物，只把产物 ID 返回给调用者。
+
+工具作业使用 Runner 的 `toolCapacity` 和 `toolMaxRunning`，为等待工具的 Agent 保留独立的执行额度。每个服务通过 `pool.maxRunning` 限制全体执行节点同时运行的实例数，默认 4。达到任一上限时继续排队，直至额度释放或超时。部署方按节点实际资源配置普通和工具额度，两者的总量需要由宿主承载。
+
+经常使用的服务可在部署配置中增加 `pool.minReady` 与 `pool.maxTotal`。Runner 尽量保留 `minReady` 个未接触任务数据的容器。容器处理一次请求后销毁。预热、启动、运行和销毁中容器均计入集群的 `maxTotal`，实际运行仍受 `maxRunning` 和节点容量限制。`maxTotal` 至少为 `minReady` 和 `maxRunning` 的较大者。API 与执行节点使用相同的服务池配置。数据库动态登记的服务可设置 `maxRunning`，预热池由部署配置维护。
+
+```yaml schema=@h-ai/ai:AIConfigSchema
+mcp:
+  servers:
+    - id: extract-document
+      name: Document extractor
+      transport: job
+      environmentId: documents-job
+      allowedTools: [documents.extract]
+      timeoutMs: 30000
+      pool: { minReady: 1, maxRunning: 2, maxTotal: 3 }
+```
 
 A2A的`agentCard`需`name`/`url`，`description`/`version`/`skills`可选；skill需id/`name`，`description`/tags可选。`security.apiKey`默认header、名称x-api-`key`，推荐header避免URL暴露凭据。共享`execution`默认`leaseMs`=30000、`pollIntervalMs`=250、`maxExecutionMs`=300000，分别控制租约、订阅轮询和单次绝对执行上限。
 

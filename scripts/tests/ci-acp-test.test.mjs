@@ -15,6 +15,12 @@ describe('ci ACP 原生验收前置', () => {
       ['docker', 'build'],
       ['docker', 'build'],
       ['docker', 'build'],
+      ['docker', 'build'],
+      ['docker', 'build'],
+      ['docker', 'build'],
+      ['docker', 'build'],
+      ['pnpm', '--filter'],
+      ['node', 'packages/ai/tools/tests/image-smoke.mjs'],
       ['pnpm', 'test'],
     ])
     for (const [index, name] of ['codex-acp', 'deepseek-harness', 'goose'].entries()) {
@@ -22,11 +28,14 @@ describe('ci ACP 原生验收前置', () => {
       expect(calls[index + 1].args).toContain(`${manifest.image}:${manifest.version}`)
       expect(calls[index + 1].args).toContain('DEBIAN_MIRROR=https://deb.debian.org/debian')
     }
-    expect(calls[4].environment).toMatchObject({
+    expect(calls[8].args).toEqual(['--filter', '@h-ai/ai', 'test:tools'])
+    expect(calls[10].environment).toMatchObject({
       HAI_ACP_E2E_ENGINE: 'docker',
       HAI_ACP_E2E_IMAGE: calls[1].args.at(-2),
       HAI_ACP_E2E_DSH_IMAGE: calls[2].args.at(-2),
       HAI_ACP_E2E_GOOSE_IMAGE: calls[3].args.at(-2),
+      HAI_ACP_MANAGED_TEST_IMAGE: calls[1].args.at(-2),
+      HAI_ACP_MANAGED_NATIVE_TEST: '1',
     })
   })
 
@@ -54,6 +63,7 @@ describe('ci ACP 原生验收前置', () => {
     expect(workflow.jobs.quality.needs).toContain('unit')
     const turbo = JSON.parse(readFileSync(new URL('../../turbo.json', import.meta.url), 'utf8'))
     expect(turbo.tasks.test.env).toContain('HAI_ACP_E2E_*')
+    expect(turbo.tasks.test.env).toContain('HAI_ACP_MANAGED_TEST_IMAGE')
   })
 
   const trustedEnvironment = {
@@ -79,6 +89,12 @@ describe('ci ACP 原生验收前置', () => {
       ['docker', 'build'],
       ['docker', 'build'],
       ['docker', 'build'],
+      ['docker', 'build'],
+      ['docker', 'build'],
+      ['docker', 'build'],
+      ['docker', 'build'],
+      ['pnpm', '--filter'],
+      ['node', 'packages/ai/tools/tests/image-smoke.mjs'],
       ['pnpm', 'test'],
       ['npm', 'install'],
       ['codex-acp', '--version'],
@@ -94,7 +110,7 @@ describe('ci ACP 原生验收前置', () => {
     }
     const codex = JSON.parse(readFileSync(new URL('../../packages/ai/models/agents/codex-acp/agent.json', import.meta.url), 'utf8'))
     const dsh = JSON.parse(readFileSync(new URL('../../packages/ai/models/agents/deepseek-harness/agent.json', import.meta.url), 'utf8'))
-    expect(calls[5].args).toEqual([
+    expect(calls[11].args).toEqual([
       'install',
       '--global',
       '--no-audit',
@@ -127,7 +143,7 @@ describe('ci ACP 原生验收前置', () => {
       ...trustedEnvironment,
       ...identity,
     })
-    expect(calls).toHaveLength(5)
+    expect(calls).toHaveLength(11)
     expect(calls.every(call => !Object.hasOwn(call.environment, 'OPENROUTER_APIKEY'))).toBe(true)
   })
 
@@ -154,7 +170,7 @@ describe('ci ACP 原生验收前置', () => {
     const probe = calls.findIndex(call => call.command === 'codex' && call.args.includes('sandbox'))
     expect(setup).toBeGreaterThan(0)
     expect(calls[setup].args[1]).toMatch(/ci-prepare-codex-sandbox\.sh$/)
-    expect(calls.filter(call => call.command === 'podman' && call.args[0] === 'build')).toHaveLength(3)
+    expect(calls.filter(call => call.command === 'podman' && call.args[0] === 'build')).toHaveLength(7)
     expect(containerProbe).toBeGreaterThan(setup)
     expect(containerProbe).toBeLessThan(fixtureTests)
     expect(calls[containerProbe].args).toEqual(expect.arrayContaining([

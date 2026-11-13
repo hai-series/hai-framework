@@ -1,6 +1,6 @@
 # ACP 新建会话等待的定位与复测
 
-日期：2026-11-13。对应[三种 Worker 模式方案](acp-multi-user-platform-plan.md)。这是实验记录，正式适配器尚未修改。
+日期：2026-11-13。对应[三种 Worker 模式方案](acp-multi-user-platform-plan.md)。已在 Codex 适配器实现启动配置，以下保留修复前后的对照和本次验收记录。
 
 ## 1. 已确认的结论
 
@@ -12,7 +12,7 @@
 
 | 位置 | 核验结果 |
 | --- | --- |
-| [Hai Codex 适配器](../packages/ai/src/acp/ai-acp-adapters.ts) | 设置 `MODEL_PROVIDER=hai` 和 `CODEX_CONFIG`，没有生成启动用的 `config.toml` |
+| 修复前的 [Hai Codex 适配器](../packages/ai/src/acp/ai-acp-adapters.ts) | 设置 `MODEL_PROVIDER=hai` 和 `CODEX_CONFIG`，没有生成启动用的 `config.toml` |
 | [codex-acp 2.5.0 入口](https://github.com/agentclientprotocol/codex-acp/blob/v2.5.0/src/index.ts) | 读取 `CODEX_CONFIG`；分别构造 App Server 启动参数和会话配置 |
 | [CodexHookConfig.ts](https://github.com/agentclientprotocol/codex-acp/blob/v2.5.0/src/CodexHookConfig.ts) | 只将 `hooks` 提前转换为 App Server 参数，其余配置留给会话 |
 | [CodexAcpClient.ts](https://github.com/agentclientprotocol/codex-acp/blob/v2.5.0/src/CodexAcpClient.ts) | `newSession` 先 `threadStart`，再 `fetchAvailableModels`；后者调用 `model/list` |
@@ -72,9 +72,9 @@ prompt 指标各只有一次，不能给出模型服务的稳定延迟或加速�
 
 两组真实短回答后，进程树 PSS 分别约 182.00 / 160.94 MiB，RSS 约 266.61 / 299.32 MiB。PSS 受共享页分摊和临时子进程影响，这两次快照不构成优化内存收益证明，也不等于容器峰值。
 
-## 6. 如何落入正式代码
+## 6. 正式代码与验收
 
-复用 `ACPAgentAdapter.configure()` 已有的 `files` 返回值，由 runtime 在启动前写入受管状态目录；无需为这次修复新增全局环境变量。示意内容如下，实际值从已解析并校验的 Hai 模型配置生成：
+`ACPAgentAdapter.configure()` 同时生成会话配置和启动用的 `config.toml`。运行时在连接前写入受管状态目录。模型条目按精确目录 ID 选择，凭据通过进程专用环境变量传给该提供方。
 
 ```toml
 model_provider = "hai"
@@ -84,15 +84,18 @@ model = "deepseek-flash"
 name = "Hai"
 base_url = "https://api.deepseek.com"
 wire_api = "responses"
-env_key = "CODEX_API_KEY"
+env_key = "HAI_ACP_CODEX_MODEL_KEY"
 ```
 
-这里只展示与目录等待相关的最小配置。正式实现还需要：
+复测使用 Codex ACP 2.5.0 / Codex 0.165.0，每组新启一个进程，在同一进程连续新建 3 次。探针采用正式适配器的配置结构和专用凭据变量。
 
-1. 安全编码 TOML 字符串，维护既有模型能力、凭据来源、状态目录权限；不写用户全局配置、不将明文 key 写入文件。
-2. 多模型切换、恢复及 Worker 复用时，启动配置、会话配置和配置版本必须一致；不同凭据不能在共享进程中按请求全局替换。
-3. Hai 的 Codex 适配器要求 `protocol: responses`。`.env.local` 的 `chat` 默认值不能原样作为 Codex 模型条目；应显式覆盖模型条目，而不是改掉全局配置。[DeepSeek Responses 文档](https://api-docs.deepseek.com/guides/responses_api/)。
-4. 用真实能力补齐模型元数据。当前回答能成功，但原生元数据仍回退；不能将“无目录等待”当成上下文窗口、推理等级、工具和图像能力全部正确。
-5. 适配器测试验证生成配置和密钥处理；真实进程测试覆盖断网新建、真实 prompt、模型选择、恢复、其他 Agent 不受影响。继续记录目录阶段与推理阶段的独立耗时。
+| 环境 | 原生初始化 | 原生 session/new（ms） | prompt |
+| --- | ---: | --- | --- |
+| Podman 禁网，离线凭据 | 167.25 ms | 19.99 / 11.04 / 9.24 | 未发送 |
+| DeepSeek Responses，`deepseek-flash` | 148.56 ms | 21.20 / 9.97 / 9.70 | 首字 984 ms，1063 ms 完成，返回 `ACP_GATEWAY_OK` |
+
+测试覆盖启动和会话配置一致、TOML 字符转义、精确模型选择、凭据只经环境传递。框架的原生 Codex 集成用例通过本地 Responses 服务验证会话启动、发送请求的实际模型和凭据、项目规则与 skill 发现。Codex 首轮结束时可能发起辅助标题请求，集成测试只记录用户提示词对应的首个请求。
+
+Codex 模型条目应显式使用 `protocol: responses`。网关默认 `chat` 可继续供其他调用使用。真实 prompt 为单样本；多轮恢复、其他网关、原生模型元数据和并发仍需分别验收。[DeepSeek Responses 文档](https://api-docs.deepseek.com/guides/responses_api/)
 
 本机原始探针和结果位于被 Git 忽略的 `tmp/acp-three-modes-20261113/`：`latency-probe.py`、`real-probe.py`、`codex-proxy.py`、`latency-offline.jsonl`、`real-final.jsonl`。早期 `latency-real.jsonl` / `real-diagnostic.jsonl` 保留用于解释警告事件，正式首字数字只取 `real-final.jsonl`。临时容器随运行结束自动移除，临时状态清理；现有用户镜像和服务未改动。

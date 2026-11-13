@@ -1,0 +1,11 @@
+{
+  "runner_notInitialized": "Runner is not initialized",
+  "runner_alreadyInitialized": "Runner is already initialized or starting",
+  "runner_invalid": "Invalid execution options",
+  "runner_notFound": "Execution or environment not found",
+  "runner_conflict": "The execution key has different options or execution state changed",
+  "runner_unavailable": "Managed execution is unavailable",
+  "runner_capacity": "Execution queue or resource limit reached",
+  "runner_leaseLost": "The execution lease expired",
+  "runner_cleanupUnconfirmed": "Unable to verify release of all execution resources"
+}

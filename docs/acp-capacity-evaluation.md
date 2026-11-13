@@ -1,8 +1,8 @@
 # ACP 平台启动性能、资源与镜像评估
 
-日期：2026-11-13。配套[总方案](acp-multi-user-platform-plan.md)与[运行设计](acp-platform-runtime-design.md)。以下明确区分已有实测、容量假设和上线前待测项；新增镜像、工具池、三种模式尚未实现和压测。
+日期：2026-11-13。配套[总方案](acp-multi-user-platform-plan.md)与[运行设计](acp-platform-runtime-design.md)。这里区分已有实测、容量假设和上线前待测项。Runner、三种模式和工具作业已通过功能夹具，长期容量及预热策略仍待压测。
 
-统一接口不代表三种 Agent 的性能相同。**现有启动和内存实测来自 Codex，不能直接作为 DSH/Goose 的规格。** 新 runner、API 多副本、持久队列和事件转发也尚未实现，下面的准备时间不包含它们的完整开销。
+**现有启动和内存实测来自 Codex。** Runner、独立 API 进程、共享数据库和事件转发已做功能验证，下面的原生准备时间不包含它们的完整开销。DSH 与 Goose 需要各自的性能数据。
 
 | Agent | 本方案已有证据 | 尚缺的性能证据 |
 | --- | --- | --- |
@@ -11,6 +11,8 @@
 | Goose 1.57.0 | 固定版本服务接入、会话与权限状态实现及本仓库镜像定义 | 服务冷/热就绪、扩展初始化、真实调用、CPU/内存和多连接负载 |
 
 ## 1. 启动和使用性能
+
+一次本地 Podman 冷任务验收中，三种真实 Agent 分别通过同一 `scoped.run` 访问隔离网络里的模型夹具。Codex 3.73 秒、DSH 3.61 秒、Goose 2.94 秒，各 1 次，包含任务提交、启动、一次模型请求和回收。模型为本地夹具，这组数字用于核对链路，生产时延需另测。
 
 两段约 5 秒等待已定位为 Codex 的模型目录刷新：Hai 的提供方配置进入会话但未提前进入 App Server。启动前写入独立 `CODEX_HOME/config.toml` 后，探针不再重复等待目录超时。这是 Codex 适配器专项，不能推断其他 Agent 也有同一问题或同等收益。[完整源码与对照](acp-startup-investigation.md)。
 
@@ -41,12 +43,25 @@
 
 ## 2. 镜像大小与文档测量
 
+首次独立工具镜像已在本机 rootless Podman（amd64）构建，四种镜像通过只读根文件系统及禁网启动检查。下表体积取自 Podman `image inspect` 的展开大小，容量及启动延迟仍需在实际作业负载下测量。镜像内容和操作见[工具镜像目录](../packages/ai/tools/README.md)。
+
 | 项目 | 证据 | 能说明什么 |
 | --- | --- | --- |
 | 按当前仓库 Dockerfile 构建的 Codex 镜像 | 1,057,444,734 字节，约 0.985 GiB 展开大小 | 旧镜像的节点磁盘占用，不是新 minimal 的体积或压缩下载量 |
 | 添加 Python 小文档库的实验层 | 增加 42.7 MiB | 包含 python-docx 1.2.0、openpyxl 3.1.5、pypdf 7.0.1、defusedxml 0.7.1 及依赖 |
-| 新 Agent 可选镜像系列 | 尚未构建 | minimal/documents/office/browser/developer 逐个测量 |
-| 独立 Office/OCR/浏览器工具镜像 | 尚未构建 | 不能给出准确大小、RSS 或冷启动时间 |
+| Codex minimal | 1,013,409,553 字节，966.5 MiB | 含 Node、Git、bubblewrap 和原生 Codex，不预装 Python/Office/浏览器 |
+| DeepSeek Harness documents | 1,464,870,301 字节，1397.0 MiB | 实测 DSH、DOCX/XLSX Python 库和 Poppler |
+| Codex office | 1,609,494,336 字节，1534.9 MiB | 实测 LibreOffice 7.4.7.2、DOCX/XLSX Python 库和 Poppler |
+| Codex browser | 1,787,978,671 字节，1705.1 MiB | 实测 Chromium 156.0.8078.79 |
+| Codex developer | 1,319,947,735 字节，1258.8 MiB | 实测 C 编译器、Python、pip、venv，本次未选 Java/Rust/Go |
+| Goose minimal | 508,292,891 字节，484.7 MiB | 含 Node、Git、证书、musl 和 Goose，固定 linux/amd64 |
+| 其余 Agent 镜像组合 | 依实际构建和运行验收补充 | 体积取决于变体、架构和发布时的依赖版本 |
+| 独立 documents 镜像 | 147,692,602 字节，140.9 MiB | 成功读取 TXT、DOCX 和 XLSX 的缓存值 |
+| 独立 Office 镜像 | 686,232,776 字节，654.4 MiB | DOCX 转 PDF 后内容一致，XLSX 公式缓存从 0 重算为 3 |
+| 独立 OCR 镜像 | 215,886,916 字节，205.9 MiB | 成功识别夹具 PNG 中的英文文本 |
+| 独立 browser 镜像 | 1,093,393,680 字节，1042.7 MiB | 缺少代理时拒绝任务，启用 Chromium 沙箱时完成本地页面截图 |
+
+浏览器在独立内部网络中向测试代理发送了指定站点的 HTTPS CONNECT，代理拒绝了未授权的后台域名。代理到目标站点未完成 TLS，实际站点截图和生产出口策略仍需验收。
 
 旧镜像含 Node 24.22.1、Git、Python、证书、bubblewrap、Codex ACP 2.5.0 / Codex 0.165.0。小文档层的传递依赖为 lxml 6.1.3、et-xmlfile 2.0.0、typing-extensions 4.16.0；这是构建记录，不代表全量哈希锁已生成。
 

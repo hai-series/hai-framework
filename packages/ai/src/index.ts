@@ -1,6 +1,7 @@
 export * from './a2a/ai-a2a-types.js'
 export type { ACPConfig, ACPConfigInput } from './acp/ai-acp-config.js'
 export { ACPAgentSchema, ACPConfigSchema, ACPPublishSchema, ACPRepositorySchema, ACPWorkspaceSchema } from './acp/ai-acp-config.js'
+export type { ACPApprovalDecision, ACPPlatformPolicy, ACPPlatformRequest, ACPRunObserver, ACPRunRequest, ACPTurnOptions } from './acp/ai-acp-platform.js'
 export * from './acp/ai-acp-types.js'
 export * from './ai-config.js'
 export * from './ai-main.js'

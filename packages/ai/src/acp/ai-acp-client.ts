@@ -38,7 +38,7 @@ import { baseEnvironment, stopProcess } from './ai-acp-process.js'
  * ```
  */
 export async function connectACP(
-  transport: ACPTransport,
+  transport: ACPTransport | { type: 'pipe', stdin: Writable, stdout: Readable, close: () => Promise<void> },
   options: ACPClientOptions = {},
   inputLimits?: z.input<typeof ACPConfigSchema>,
 ) {
@@ -91,6 +91,14 @@ export async function connectACP(
     stream = ndJsonStream(
       Writable.toWeb(child.stdin),
       Readable.toWeb(child.stdout) as ReadableStream<Uint8Array>,
+      { maxMessageBytes: limits.maxContentBytes },
+    )
+  }
+  else if (transport.type === 'pipe') {
+    stop = transport.close
+    stream = ndJsonStream(
+      Writable.toWeb(transport.stdin),
+      Readable.toWeb(transport.stdout) as ReadableStream<Uint8Array>,
       { maxMessageBytes: limits.maxContentBytes },
     )
   }
@@ -152,20 +160,27 @@ export async function connectACP(
       }),
     ),
   }
-  let sessionId: string | undefined
-  let sessionOpening = false
   let closed = false
   let failure: unknown
   let closePromise: Promise<void> | undefined
-  const listeners = new Set<(event: SessionNotification) => void>()
+  const routes = new Map<string, (event: SessionNotification) => void>()
+  let opening = 0
+  let earlyBytes = 0
+  const early: SessionNotification[] = []
   const app = client({ name: 'hai-ai' })
-  // 通知优先注册：SDK 顺序尝试异步处理器，避免同一数据帧中的响应抢先结束 prompt。
+  // 新建响应前的事件按原生 ID 缓冲，确认归属后才交给调用者。
   app.onNotification(methods.client.session.update, ({ params }) => {
-    if (sessionId && params.sessionId !== sessionId)
-      return
     try {
-      options.onEvent?.(params)
-      for (const listener of listeners) listener(params)
+      const route = routes.get(params.sessionId)
+      if (route) {
+        route(params)
+      }
+      else if (opening) {
+        earlyBytes += Buffer.byteLength(JSON.stringify(params))
+        if (early.length >= limits.maxPendingEvents || earlyBytes > limits.maxContentBytes)
+          throw new ACPFailure('output')
+        early.push(params)
+      }
     }
     catch (error) {
       failure = error
@@ -173,7 +188,7 @@ export async function connectACP(
     }
   })
   function owned(id: string) {
-    if (!sessionId || id !== sessionId)
+    if (!routes.has(id))
       throw new ACPFailure('missing')
   }
   app.onRequest(methods.client.session.requestPermission, async (context) => {
@@ -281,7 +296,7 @@ export async function connectACP(
     operation: () => Promise<T>,
     timeout = limits.requestTimeout,
     signal?: AbortSignal,
-    prompt = false,
+    promptSession?: string,
     isCancelledResponse?: (output: T) => boolean,
   ) {
     if (closed)
@@ -296,9 +311,9 @@ export async function connectACP(
         if (reason)
           return
         reason = new ACPFailure(kind)
-        if (prompt && sessionId) {
+        if (promptSession) {
           void connection.agent
-            .notify(methods.agent.session.cancel, { sessionId })
+            .notify(methods.agent.session.cancel, { sessionId: promptSession })
             .catch(() => {})
         }
         // 合作取消不能保证对端响应，期限后必须关闭拥有的传输。
@@ -307,7 +322,7 @@ export async function connectACP(
           () => {
             void close().then(() => reject(reason), reject)
           },
-          prompt ? limits.cancelTimeout : 0,
+          promptSession ? limits.cancelTimeout : 0,
         )
       }
       timer = setTimeout(fail, timeout, 'timeout')
@@ -323,7 +338,7 @@ export async function connectACP(
         throw failure
       if (reason) {
         // 主动取消已获原生终态确认时保留会话；超时或未确认仍关闭，目录占用始终由宿主控制。
-        if (!(reason.kind === 'cancelled' && prompt && isCancelledResponse?.(output)))
+        if (!(reason.kind === 'cancelled' && promptSession && isCancelledResponse?.(output)))
           await close()
         throw reason
       }
@@ -372,129 +387,287 @@ export async function connectACP(
         }
       }
     }
-    let activePrompt: AbortController | undefined
-    async function prompt(content: ContentBlock[], signal?: AbortSignal) {
-      if (activePrompt)
-        throw new ACPFailure('busy')
-      if (!sessionId)
-        throw new ACPFailure('missing')
-      if (Buffer.byteLength(JSON.stringify(content)) > limits.maxContentBytes)
-        throw new ACPFailure('output')
-      for (const item of content) {
-        if (
-          (item.type === 'image'
-            && !agentCapabilities.promptCapabilities?.image)
-          || (item.type === 'audio'
-            && !agentCapabilities.promptCapabilities?.audio)
-          || (item.type === 'resource'
-            && !agentCapabilities.promptCapabilities?.embeddedContext)
-        ) {
-          throw new ACPFailure('unsupported')
+    function channel(observer?: ACPClientOptions['onEvent']) {
+      let sessionId: string | undefined
+      let sessionOpening = false
+      const listeners = new Set<(event: SessionNotification) => void>()
+      function dispatch(event: SessionNotification) {
+        observer?.(event)
+        for (const listener of listeners) listener(event)
+      }
+      function bind(id: string) {
+        if (routes.has(id))
+          throw new ACPFailure('conflict')
+        sessionId = id
+        routes.set(id, dispatch)
+        for (const event of early) {
+          if (event.sessionId === id)
+            dispatch(event)
         }
       }
-      const events: SessionNotification[] = []
-      let bytes = 0
-      let text = ''
-      let messageId: string | null | undefined
-      const listener = (event: SessionNotification) => {
-        bytes += Buffer.byteLength(JSON.stringify(event))
-        if (
-          events.length >= limits.maxPendingEvents
-          || bytes > limits.maxContentBytes
-        ) {
+      function unbind() {
+        if (sessionId)
+          routes.delete(sessionId)
+        sessionId = undefined
+      }
+      let activePrompt: AbortController | undefined
+      async function prompt(content: ContentBlock[], signal?: AbortSignal) {
+        if (activePrompt)
+          throw new ACPFailure('busy')
+        if (!sessionId)
+          throw new ACPFailure('missing')
+        if (Buffer.byteLength(JSON.stringify(content)) > limits.maxContentBytes)
           throw new ACPFailure('output')
+        for (const item of content) {
+          if (
+            (item.type === 'image'
+              && !agentCapabilities.promptCapabilities?.image)
+            || (item.type === 'audio'
+              && !agentCapabilities.promptCapabilities?.audio)
+            || (item.type === 'resource'
+              && !agentCapabilities.promptCapabilities?.embeddedContext)
+          ) {
+            throw new ACPFailure('unsupported')
+          }
         }
-        events.push(event)
-        if (
-          event.update.sessionUpdate === 'agent_message_chunk'
-          && event.update.content.type === 'text'
+        const events: SessionNotification[] = []
+        let bytes = 0
+        let text = ''
+        let messageId: string | null | undefined
+        const listener = (event: SessionNotification) => {
+          bytes += Buffer.byteLength(JSON.stringify(event))
+          if (
+            events.length >= limits.maxPendingEvents
+            || bytes > limits.maxContentBytes
+          ) {
+            throw new ACPFailure('output')
+          }
+          events.push(event)
+          if (
+            event.update.sessionUpdate === 'agent_message_chunk'
+            && event.update.content.type === 'text'
+          ) {
+            if (event.update.messageId && event.update.messageId !== messageId)
+              text = ''
+            messageId = event.update.messageId
+            text += event.update.content.text
+          }
+        }
+        listeners.add(listener)
+        activePrompt = new AbortController()
+        try {
+          const response = await request(
+            () =>
+              connection.agent.request(methods.agent.session.prompt, {
+                sessionId: sessionId!,
+                prompt: content,
+              }),
+            limits.promptTimeout,
+            signal
+              ? AbortSignal.any([activePrompt.signal, signal])
+              : activePrompt.signal,
+            sessionId,
+            output => output.stopReason === 'cancelled',
+          )
+          if (response.stopReason === 'cancelled')
+            throw new ACPFailure('cancelled')
+          return { ...response, text, events }
+        }
+        finally {
+          listeners.delete(listener)
+          activePrompt = undefined
+        }
+      }
+      return {
+        /**
+         * 执行单轮原生请求并收集有限事件。
+         * @param content - 原生内容块。
+         * @param signal - 本轮取消信号。
+         * @returns 最终文本、停止原因及事件；业务边界负责转换异常。
+         * @example
+         * ```ts
+         * // 内部上下文：runtime/git/connection 为相应工厂已创建的句柄。
+         * const response = await connection.prompt([{ type: 'text', text: '检查工程' }])
+         * ```
+         */
+        prompt,
+        /**
+         * 订阅会话事件；返回取消订阅函数。
+         * @param listener - 消费原生事件的回调；抛错会关闭连接。
+         * @returns 取消订阅函数。
+         * @example
+         * ```ts
+         * // 模块内部，connection 为 connectACP 返回值，异常由业务边界转换。
+         * const unsubscribe = connection.subscribe(event => consume(event)); unsubscribe()
+         * ```
+         */
+        subscribe(listener: (event: SessionNotification) => void) {
+          listeners.add(listener)
+          return () => listeners.delete(listener)
+        },
+        /**
+         * 发送原生取消通知并触发正在执行轮次的取消期限。
+         * @returns 通知发送后的 Promise；本轮终止由 prompt 的取消期限保证。
+         * @example
+         * ```ts
+         * // 模块内部，connection 为 connectACP 返回值，异常由业务边界转换。
+         * await connection.cancel()
+         * ```
+         */
+        cancel: async () => {
+          activePrompt?.abort()
+          if (sessionId && !closed) {
+            await connection.agent.notify(methods.agent.session.cancel, {
+              sessionId,
+            })
+          }
+        },
+        /**
+         * 创建此连接唯一的原生会话；MCP 类型必须由智能体声明支持。
+         * @param cwd - 对端可见的绝对工作目录。
+         * @param mcpServers - 原生 MCP 定义，默认空列表。
+         * @returns 包含原生 sessionId 的新建响应。
+         * @example
+         * ```ts
+         * // 模块内部，connection 为 connectACP 返回值，异常由业务边界转换。
+         * await connection.createSession('/srv/project', [])
+         * ```
+         */
+        async createSession(cwd: string, mcpServers: McpServer[] = []) {
+          if (sessionId || sessionOpening)
+            throw new ACPFailure('busy')
+          sessionOpening = true
+          opening++
+          try {
+            checkMcp(mcpServers)
+            const response = await request(() =>
+              connection.agent.request(methods.agent.session.new, {
+                cwd,
+                mcpServers,
+              }),
+            )
+            bind(response.sessionId)
+            return response
+          }
+          finally {
+            sessionOpening = false
+            if (!--opening) {
+              early.length = 0
+              earlyBytes = 0
+            }
+          }
+        },
+        /**
+         * 优先调用原生 resume，否则使用已声明的 load；均不支持则失败。
+         * @param id - 原生会话 ID。
+         * @param cwd - 原会话绝对工作目录。
+         * @param mcpServers - 当前原生 MCP 定义。
+         * @returns 恢复或加载响应；能力缺失时抛错。
+         * @example
+         * ```ts
+         * // 模块内部，connection 为 connectACP 返回值，异常由业务边界转换。
+         * await connection.resumeSession('native-id', '/srv/project')
+         * ```
+         */
+        async resumeSession(
+          id: string,
+          cwd: string,
+          mcpServers: McpServer[] = [],
         ) {
-          if (event.update.messageId && event.update.messageId !== messageId)
-            text = ''
-          messageId = event.update.messageId
-          text += event.update.content.text
-        }
-      }
-      listeners.add(listener)
-      activePrompt = new AbortController()
-      try {
-        const response = await request(
-          () =>
-            connection.agent.request(methods.agent.session.prompt, {
+          if (sessionId || sessionOpening)
+            throw new ACPFailure('busy')
+          checkMcp(mcpServers)
+          bind(id)
+          try {
+            if (agentCapabilities.sessionCapabilities?.resume) {
+              return await request(() =>
+                connection.agent.request(methods.agent.session.resume, {
+                  sessionId: id,
+                  cwd,
+                  mcpServers,
+                }),
+              )
+            }
+            if (agentCapabilities.loadSession) {
+              return await request(() =>
+                connection.agent.request(methods.agent.session.load, {
+                  sessionId: id,
+                  cwd,
+                  mcpServers,
+                }),
+              )
+            }
+            throw new ACPFailure('unsupported')
+          }
+          catch (error) {
+            unbind()
+            throw error
+          }
+        },
+        /**
+         * 若远端声明 close 能力则关闭原生会话；进程停止由 close 负责。
+         * @returns 原生关闭完成的 Promise；未声明能力时无需请求。
+         * @example
+         * ```ts
+         * // 模块内部，connection 为 connectACP 返回值，异常由业务边界转换。
+         * await connection.closeSession()
+         * ```
+         */
+        async closeSession() {
+          if (activePrompt)
+            throw new ACPFailure('busy')
+          if (!closed && sessionId && agentCapabilities.sessionCapabilities?.close) {
+            await request(() =>
+              connection.agent.request(methods.agent.session.close, {
+                sessionId: sessionId!,
+              }),
+            )
+            unbind()
+          }
+        },
+        /**
+         * 给当前原生会话设置智能体公布的模式。
+         * @param modeId - 原生模式 ID。
+         * @returns 原生模式响应。
+         * @example
+         * ```ts
+         * // 模块内部，connection 为 connectACP 返回值，异常由业务边界转换。
+         * await connection.setMode('code')
+         * ```
+         */
+        setMode: (modeId: string) =>
+          request(() =>
+            connection.agent.request(methods.agent.session.setMode, {
               sessionId: sessionId!,
-              prompt: content,
+              modeId,
             }),
-          limits.promptTimeout,
-          signal
-            ? AbortSignal.any([activePrompt.signal, signal])
-            : activePrompt.signal,
-          true,
-          output => output.stopReason === 'cancelled',
-        )
-        if (response.stopReason === 'cancelled')
-          throw new ACPFailure('cancelled')
-        return { ...response, text, events }
-      }
-      finally {
-        listeners.delete(listener)
-        activePrompt = undefined
+          ),
+        /**
+         * 给当前原生会话设置智能体公布的配置选项。
+         * @param configId - 原生配置选项 ID。
+         * @param value - 智能体允许的选项值。
+         * @returns 原生配置响应。
+         * @example
+         * ```ts
+         * // 模块内部，connection 为 connectACP 返回值，异常由业务边界转换。
+         * await connection.setConfigOption('model', 'coding')
+         * ```
+         */
+        setConfigOption: (configId: string, value: string) =>
+          request(() =>
+            connection.agent.request(methods.agent.session.setConfigOption, {
+              sessionId: sessionId!,
+              configId,
+              value,
+            }),
+          ),
       }
     }
     return {
       initialized,
-      /**
-       * 关闭传输并终止拥有的进程树，可重复调用。
-       * @returns 清理完成的 Promise；清理失败抛错。
-       * @example
-       * ```ts
-       * // 内部上下文：runtime/git/connection 为相应工厂已创建的句柄。
-       * await connection.close()
-       * ```
-       */
       close,
-      /**
-       * 执行单轮原生请求并收集有限事件。
-       * @param content - 原生内容块。
-       * @param signal - 本轮取消信号。
-       * @returns 最终文本、停止原因及事件；业务边界负责转换异常。
-       * @example
-       * ```ts
-       * // 内部上下文：runtime/git/connection 为相应工厂已创建的句柄。
-       * const response = await connection.prompt([{ type: 'text', text: '检查工程' }])
-       * ```
-       */
-      prompt,
-      /**
-       * 订阅会话事件；返回取消订阅函数。
-       * @param listener - 消费原生事件的回调；抛错会关闭连接。
-       * @returns 取消订阅函数。
-       * @example
-       * ```ts
-       * // 模块内部，connection 为 connectACP 返回值，异常由业务边界转换。
-       * const unsubscribe = connection.subscribe(event => consume(event)); unsubscribe()
-       * ```
-       */
-      subscribe(listener: (event: SessionNotification) => void) {
-        listeners.add(listener)
-        return () => listeners.delete(listener)
-      },
-      /**
-       * 发送原生取消通知并触发正在执行轮次的取消期限。
-       * @returns 通知发送后的 Promise；本轮终止由 prompt 的取消期限保证。
-       * @example
-       * ```ts
-       * // 模块内部，connection 为 connectACP 返回值，异常由业务边界转换。
-       * await connection.cancel()
-       * ```
-       */
-      cancel: async () => {
-        activePrompt?.abort()
-        if (sessionId && !closed) {
-          await connection.agent.notify(methods.agent.session.cancel, {
-            sessionId,
-          })
-        }
-      },
+      channel,
+      ...channel(options.onEvent),
       /**
        * 选择握手 authMethods 中的认证方法，凭据由原生进程或远程服务提供。
        * @param methodId - 对端握手声明的认证方法。
@@ -509,77 +682,6 @@ export async function connectACP(
         request(() =>
           connection.agent.request(methods.agent.authenticate, { methodId }),
         ),
-      /**
-       * 创建此连接唯一的原生会话；MCP 类型必须由智能体声明支持。
-       * @param cwd - 对端可见的绝对工作目录。
-       * @param mcpServers - 原生 MCP 定义，默认空列表。
-       * @returns 包含原生 sessionId 的新建响应。
-       * @example
-       * ```ts
-       * // 模块内部，connection 为 connectACP 返回值，异常由业务边界转换。
-       * await connection.createSession('/srv/project', [])
-       * ```
-       */
-      async createSession(cwd: string, mcpServers: McpServer[] = []) {
-        if (sessionId || sessionOpening)
-          throw new ACPFailure('busy')
-        sessionOpening = true
-        try {
-          checkMcp(mcpServers)
-          const response = await request(() =>
-            connection.agent.request(methods.agent.session.new, {
-              cwd,
-              mcpServers,
-            }),
-          )
-          sessionId = response.sessionId
-          return response
-        }
-        finally {
-          sessionOpening = false
-        }
-      },
-      /**
-       * 优先调用原生 resume，否则使用已声明的 load；均不支持则失败。
-       * @param id - 原生会话 ID。
-       * @param cwd - 原会话绝对工作目录。
-       * @param mcpServers - 当前原生 MCP 定义。
-       * @returns 恢复或加载响应；能力缺失时抛错。
-       * @example
-       * ```ts
-       * // 模块内部，connection 为 connectACP 返回值，异常由业务边界转换。
-       * await connection.resumeSession('native-id', '/srv/project')
-       * ```
-       */
-      async resumeSession(
-        id: string,
-        cwd: string,
-        mcpServers: McpServer[] = [],
-      ) {
-        if (sessionId || sessionOpening)
-          throw new ACPFailure('busy')
-        checkMcp(mcpServers)
-        sessionId = id
-        if (agentCapabilities.sessionCapabilities?.resume) {
-          return request(() =>
-            connection.agent.request(methods.agent.session.resume, {
-              sessionId: id,
-              cwd,
-              mcpServers,
-            }),
-          )
-        }
-        if (agentCapabilities.loadSession) {
-          return request(() =>
-            connection.agent.request(methods.agent.session.load, {
-              sessionId: id,
-              cwd,
-              mcpServers,
-            }),
-          )
-        }
-        throw new ACPFailure('unsupported')
-      },
       /**
        * 按智能体原生游标列出会话；未声明 list 能力则失败。
        * @param cursor - 可选分页游标。
@@ -616,64 +718,6 @@ export async function connectACP(
           }),
         )
       },
-      /**
-       * 若远端声明 close 能力则关闭原生会话；进程停止由 close 负责。
-       * @returns 原生关闭完成的 Promise；未声明能力时无需请求。
-       * @example
-       * ```ts
-       * // 模块内部，connection 为 connectACP 返回值，异常由业务边界转换。
-       * await connection.closeSession()
-       * ```
-       */
-      async closeSession() {
-        if (
-          !closed
-          && sessionId
-          && agentCapabilities.sessionCapabilities?.close
-        ) {
-          await request(() =>
-            connection.agent.request(methods.agent.session.close, {
-              sessionId: sessionId!,
-            }),
-          )
-        }
-      },
-      /**
-       * 给当前原生会话设置智能体公布的模式。
-       * @param modeId - 原生模式 ID。
-       * @returns 原生模式响应。
-       * @example
-       * ```ts
-       * // 模块内部，connection 为 connectACP 返回值，异常由业务边界转换。
-       * await connection.setMode('code')
-       * ```
-       */
-      setMode: (modeId: string) =>
-        request(() =>
-          connection.agent.request(methods.agent.session.setMode, {
-            sessionId: sessionId!,
-            modeId,
-          }),
-        ),
-      /**
-       * 给当前原生会话设置智能体公布的配置选项。
-       * @param configId - 原生配置选项 ID。
-       * @param value - 智能体允许的选项值。
-       * @returns 原生配置响应。
-       * @example
-       * ```ts
-       * // 模块内部，connection 为 connectACP 返回值，异常由业务边界转换。
-       * await connection.setConfigOption('model', 'coding')
-       * ```
-       */
-      setConfigOption: (configId: string, value: string) =>
-        request(() =>
-          connection.agent.request(methods.agent.session.setConfigOption, {
-            sessionId: sessionId!,
-            configId,
-            value,
-          }),
-        ),
     }
   }
   catch (error) {

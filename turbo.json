@@ -62,6 +62,10 @@
     "test": {
       "env": [
         "HAI_ACP_E2E_*",
+        "HAI_ACP_MANAGED_TEST_IMAGE",
+        "HAI_ACP_MANAGED_NATIVE_*",
+        "HAI_TOOL_IMAGE_*",
+        "HAI_TEST_RUNNER_ARTIFACT_IMAGE",
         "HAI_TEST_CONTAINER_ENGINE",
         "HAI_QDRANT_TEST_IMAGE",
         "HAI_STORAGE_RUN_BROWSER_GATES"

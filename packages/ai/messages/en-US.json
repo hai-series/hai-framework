@@ -1,5 +1,9 @@
 {
   "ai_mcpInvalidToolSchema": "Invalid input schema for MCP tool: {name}",
+  "ai_mcpServiceForbidden": "This request is not authorized to call the MCP tool.",
+  "ai_mcpServiceConnectionFailed": "Could not connect to the MCP service.",
+  "ai_mcpServiceCallFailed": "The MCP tool call failed. Check the service outcome before retrying.",
+  "ai_mcpServiceCancelled": "The MCP tool call was cancelled. Check any operation already submitted.",
   "ai_mcpInvalidToolInput": "Invalid input for MCP tool: {name}",
   "ai_mcpInvalidResource": "MCP resource must contain either valid text or blob: {uri}",
   "ai_mcpInvalidPrompt": "Invalid MCP prompt arguments or messages: {name}",

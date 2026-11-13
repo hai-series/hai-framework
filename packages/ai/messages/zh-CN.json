@@ -1,5 +1,9 @@
 {
   "ai_mcpInvalidToolSchema": "MCP 工具输入 Schema 无效：{name}",
+  "ai_mcpServiceForbidden": "当前请求无权调用此 MCP 工具。",
+  "ai_mcpServiceConnectionFailed": "MCP 服务连接失败。",
+  "ai_mcpServiceCallFailed": "MCP 工具调用失败，请核对服务端结果后再试。",
+  "ai_mcpServiceCancelled": "MCP 工具调用已取消，请核对已提交的操作。",
   "ai_mcpInvalidToolInput": "MCP 工具输入无效：{name}",
   "ai_mcpInvalidResource": "MCP 资源必须且只能包含有效 text 或 blob：{uri}",
   "ai_mcpInvalidPrompt": "MCP 提示词参数或消息无效：{name}",

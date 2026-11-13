@@ -1,0 +1,11 @@
+{
+  "runner_notInitialized": "Runner 尚未初始化",
+  "runner_alreadyInitialized": "Runner 正在初始化或已经启动",
+  "runner_invalid": "运行参数无效",
+  "runner_notFound": "未找到执行任务或运行环境",
+  "runner_conflict": "相同执行标识已绑定不同请求，或运行状态发生变化",
+  "runner_unavailable": "执行服务暂时不可用",
+  "runner_capacity": "运行队列或资源上限已达到",
+  "runner_leaseLost": "当前执行租约已失效",
+  "runner_cleanupUnconfirmed": "无法确认所有运行资源均已释放"
+}

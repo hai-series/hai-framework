@@ -1,5 +1,9 @@
 {
   "ai_mcpInvalidToolSchema": "MCPツールの入力スキーマが無効です: {name}",
+  "ai_mcpServiceForbidden": "このリクエストにはMCPツールを呼び出す権限がありません。",
+  "ai_mcpServiceConnectionFailed": "MCPサービスに接続できませんでした。",
+  "ai_mcpServiceCallFailed": "MCPツールの呼び出しに失敗しました。再試行する前にサービス側の結果を確認してください。",
+  "ai_mcpServiceCancelled": "MCPツールの呼び出しがキャンセルされました。送信済みの操作を確認してください。",
   "ai_mcpInvalidToolInput": "MCPツールの入力が無効です: {name}",
   "ai_mcpInvalidResource": "MCPリソースには有効なテキストまたはblobが必要です: {uri}",
   "ai_mcpInvalidPrompt": "MCPプロンプトの引数またはメッセージが無効です: {name}",

@@ -4306,6 +4306,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ACPApprovalDecision",
+              "kind": "type",
+              "declaration": "ACPApprovalDecision",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ACPClientOptions",
               "kind": "type",
               "declaration": "ACPClientOptions",
@@ -4348,6 +4354,18 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ACPPlatformPolicy",
+              "kind": "type",
+              "declaration": "ACPPlatformPolicy",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPPlatformRequest",
+              "kind": "type",
+              "declaration": "ACPPlatformRequest",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ACPPublishSchema",
               "kind": "value",
               "declaration": "ACPPublishSchema",
@@ -4358,6 +4376,18 @@
               "kind": "value",
               "declaration": "ACPRepositorySchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPRunObserver",
+              "kind": "type",
+              "declaration": "ACPRunObserver",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPRunRequest",
+              "kind": "type",
+              "declaration": "ACPRunRequest",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ACPSessionInfo",
@@ -4375,6 +4405,12 @@
               "name": "ACPTransport",
               "kind": "type",
               "declaration": "ACPTransport",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPTurnOptions",
+              "kind": "type",
+              "declaration": "ACPTurnOptions",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -5380,6 +5416,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "MCPJobFileContext",
+              "kind": "type",
+              "declaration": "MCPJobFileContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPJobFiles",
+              "kind": "type",
+              "declaration": "MCPJobFiles",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MCPOperations",
               "kind": "type",
               "declaration": "MCPOperations",
@@ -5455,6 +5503,48 @@
               "name": "McpServerOptions",
               "kind": "type",
               "declaration": "McpServerOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceAuthorization",
+              "kind": "type",
+              "declaration": "MCPServiceAuthorization",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceBinding",
+              "kind": "type",
+              "declaration": "MCPServiceBinding",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceBindingRequest",
+              "kind": "type",
+              "declaration": "MCPServiceBindingRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceBroker",
+              "kind": "type",
+              "declaration": "MCPServiceBroker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceBrokerOptions",
+              "kind": "type",
+              "declaration": "MCPServiceBrokerOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceOperations",
+              "kind": "type",
+              "declaration": "MCPServiceOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceRequest",
+              "kind": "type",
+              "declaration": "MCPServiceRequest",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -6440,6 +6530,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ACPApprovalDecision",
+              "kind": "type",
+              "declaration": "ACPApprovalDecision",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ACPClientOptions",
               "kind": "type",
               "declaration": "ACPClientOptions",
@@ -6482,6 +6578,18 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ACPPlatformPolicy",
+              "kind": "type",
+              "declaration": "ACPPlatformPolicy",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPPlatformRequest",
+              "kind": "type",
+              "declaration": "ACPPlatformRequest",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ACPPublishSchema",
               "kind": "value",
               "declaration": "ACPPublishSchema",
@@ -6492,6 +6600,18 @@
               "kind": "value",
               "declaration": "ACPRepositorySchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPRunObserver",
+              "kind": "type",
+              "declaration": "ACPRunObserver",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPRunRequest",
+              "kind": "type",
+              "declaration": "ACPRunRequest",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ACPSessionInfo",
@@ -6509,6 +6629,12 @@
               "name": "ACPTransport",
               "kind": "type",
               "declaration": "ACPTransport",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPTurnOptions",
+              "kind": "type",
+              "declaration": "ACPTurnOptions",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -7514,6 +7640,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "MCPJobFileContext",
+              "kind": "type",
+              "declaration": "MCPJobFileContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPJobFiles",
+              "kind": "type",
+              "declaration": "MCPJobFiles",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MCPOperations",
               "kind": "type",
               "declaration": "MCPOperations",
@@ -7589,6 +7727,48 @@
               "name": "McpServerOptions",
               "kind": "type",
               "declaration": "McpServerOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceAuthorization",
+              "kind": "type",
+              "declaration": "MCPServiceAuthorization",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceBinding",
+              "kind": "type",
+              "declaration": "MCPServiceBinding",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceBindingRequest",
+              "kind": "type",
+              "declaration": "MCPServiceBindingRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceBroker",
+              "kind": "type",
+              "declaration": "MCPServiceBroker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceBrokerOptions",
+              "kind": "type",
+              "declaration": "MCPServiceBrokerOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceOperations",
+              "kind": "type",
+              "declaration": "MCPServiceOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceRequest",
+              "kind": "type",
+              "declaration": "MCPServiceRequest",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -8574,6 +8754,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ACPApprovalDecision",
+              "kind": "type",
+              "declaration": "ACPApprovalDecision",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ACPClientOptions",
               "kind": "type",
               "declaration": "ACPClientOptions",
@@ -8616,6 +8802,18 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ACPPlatformPolicy",
+              "kind": "type",
+              "declaration": "ACPPlatformPolicy",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPPlatformRequest",
+              "kind": "type",
+              "declaration": "ACPPlatformRequest",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ACPPublishSchema",
               "kind": "value",
               "declaration": "ACPPublishSchema",
@@ -8626,6 +8824,18 @@
               "kind": "value",
               "declaration": "ACPRepositorySchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPRunObserver",
+              "kind": "type",
+              "declaration": "ACPRunObserver",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPRunRequest",
+              "kind": "type",
+              "declaration": "ACPRunRequest",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ACPSessionInfo",
@@ -8643,6 +8853,12 @@
               "name": "ACPTransport",
               "kind": "type",
               "declaration": "ACPTransport",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPTurnOptions",
+              "kind": "type",
+              "declaration": "ACPTurnOptions",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -9648,6 +9864,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "MCPJobFileContext",
+              "kind": "type",
+              "declaration": "MCPJobFileContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPJobFiles",
+              "kind": "type",
+              "declaration": "MCPJobFiles",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MCPOperations",
               "kind": "type",
               "declaration": "MCPOperations",
@@ -9723,6 +9951,48 @@
               "name": "McpServerOptions",
               "kind": "type",
               "declaration": "McpServerOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceAuthorization",
+              "kind": "type",
+              "declaration": "MCPServiceAuthorization",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceBinding",
+              "kind": "type",
+              "declaration": "MCPServiceBinding",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceBindingRequest",
+              "kind": "type",
+              "declaration": "MCPServiceBindingRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceBroker",
+              "kind": "type",
+              "declaration": "MCPServiceBroker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceBrokerOptions",
+              "kind": "type",
+              "declaration": "MCPServiceBrokerOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceOperations",
+              "kind": "type",
+              "declaration": "MCPServiceOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPServiceRequest",
+              "kind": "type",
+              "declaration": "MCPServiceRequest",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -30442,6 +30712,401 @@
               "kind": "value",
               "declaration": "SslConfigSchema",
               "declarationKind": "VariableDeclaration"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "package": "@h-ai/runner",
+      "entries": [
+        {
+          "subpath": ".",
+          "conditions": [
+            "default"
+          ],
+          "target": "./dist/index.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "createRunner",
+              "kind": "value",
+              "declaration": "createRunner",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "HaiRunnerError",
+              "kind": "value",
+              "declaration": "HaiRunnerError",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "runner",
+              "kind": "value",
+              "declaration": "runner",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "RunnerConfigInput",
+              "kind": "type",
+              "declaration": "RunnerConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerConfigSchema",
+              "kind": "value",
+              "declaration": "RunnerConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "RunnerContext",
+              "kind": "type",
+              "declaration": "RunnerContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerEnvironment",
+              "kind": "type",
+              "declaration": "RunnerEnvironment",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerEvent",
+              "kind": "type",
+              "declaration": "RunnerEvent",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerExecution",
+              "kind": "type",
+              "declaration": "RunnerExecution",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerFunctions",
+              "kind": "type",
+              "declaration": "RunnerFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerHandler",
+              "kind": "type",
+              "declaration": "RunnerHandler",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerJson",
+              "kind": "type",
+              "declaration": "RunnerJson",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerLaunch",
+              "kind": "type",
+              "declaration": "RunnerLaunch",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerOwner",
+              "kind": "type",
+              "declaration": "RunnerOwner",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerProcess",
+              "kind": "type",
+              "declaration": "RunnerProcess",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerReconciliation",
+              "kind": "type",
+              "declaration": "RunnerReconciliation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerResources",
+              "kind": "type",
+              "declaration": "RunnerResources",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerScope",
+              "kind": "type",
+              "declaration": "RunnerScope",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerSubmit",
+              "kind": "type",
+              "declaration": "RunnerSubmit",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerWarmPool",
+              "kind": "type",
+              "declaration": "RunnerWarmPool",
+              "declarationKind": "InterfaceDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": ".",
+          "conditions": [
+            "import"
+          ],
+          "target": "./dist/index.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "createRunner",
+              "kind": "value",
+              "declaration": "createRunner",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "HaiRunnerError",
+              "kind": "value",
+              "declaration": "HaiRunnerError",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "runner",
+              "kind": "value",
+              "declaration": "runner",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "RunnerConfigInput",
+              "kind": "type",
+              "declaration": "RunnerConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerConfigSchema",
+              "kind": "value",
+              "declaration": "RunnerConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "RunnerContext",
+              "kind": "type",
+              "declaration": "RunnerContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerEnvironment",
+              "kind": "type",
+              "declaration": "RunnerEnvironment",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerEvent",
+              "kind": "type",
+              "declaration": "RunnerEvent",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerExecution",
+              "kind": "type",
+              "declaration": "RunnerExecution",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerFunctions",
+              "kind": "type",
+              "declaration": "RunnerFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerHandler",
+              "kind": "type",
+              "declaration": "RunnerHandler",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerJson",
+              "kind": "type",
+              "declaration": "RunnerJson",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerLaunch",
+              "kind": "type",
+              "declaration": "RunnerLaunch",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerOwner",
+              "kind": "type",
+              "declaration": "RunnerOwner",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerProcess",
+              "kind": "type",
+              "declaration": "RunnerProcess",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerReconciliation",
+              "kind": "type",
+              "declaration": "RunnerReconciliation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerResources",
+              "kind": "type",
+              "declaration": "RunnerResources",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerScope",
+              "kind": "type",
+              "declaration": "RunnerScope",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerSubmit",
+              "kind": "type",
+              "declaration": "RunnerSubmit",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerWarmPool",
+              "kind": "type",
+              "declaration": "RunnerWarmPool",
+              "declarationKind": "InterfaceDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": ".",
+          "conditions": [
+            "types"
+          ],
+          "target": "./dist/index.d.ts",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "createRunner",
+              "kind": "value",
+              "declaration": "createRunner",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "HaiRunnerError",
+              "kind": "value",
+              "declaration": "HaiRunnerError",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "runner",
+              "kind": "value",
+              "declaration": "runner",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "RunnerConfigInput",
+              "kind": "type",
+              "declaration": "RunnerConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerConfigSchema",
+              "kind": "value",
+              "declaration": "RunnerConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "RunnerContext",
+              "kind": "type",
+              "declaration": "RunnerContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerEnvironment",
+              "kind": "type",
+              "declaration": "RunnerEnvironment",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerEvent",
+              "kind": "type",
+              "declaration": "RunnerEvent",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerExecution",
+              "kind": "type",
+              "declaration": "RunnerExecution",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerFunctions",
+              "kind": "type",
+              "declaration": "RunnerFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerHandler",
+              "kind": "type",
+              "declaration": "RunnerHandler",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerJson",
+              "kind": "type",
+              "declaration": "RunnerJson",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerLaunch",
+              "kind": "type",
+              "declaration": "RunnerLaunch",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerOwner",
+              "kind": "type",
+              "declaration": "RunnerOwner",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerProcess",
+              "kind": "type",
+              "declaration": "RunnerProcess",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerReconciliation",
+              "kind": "type",
+              "declaration": "RunnerReconciliation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerResources",
+              "kind": "type",
+              "declaration": "RunnerResources",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerScope",
+              "kind": "type",
+              "declaration": "RunnerScope",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerSubmit",
+              "kind": "type",
+              "declaration": "RunnerSubmit",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RunnerWarmPool",
+              "kind": "type",
+              "declaration": "RunnerWarmPool",
+              "declarationKind": "InterfaceDeclaration"
             }
           ]
         }

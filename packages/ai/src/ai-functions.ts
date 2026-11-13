@@ -1,7 +1,9 @@
 import type { McpServer } from '@agentclientprotocol/sdk'
 import type { DatapipeFunctions } from '@h-ai/datapipe'
+import type { RunnerFunctions } from '@h-ai/runner'
 import type { z } from 'zod'
 import type { A2ADeps } from './a2a/ai-a2a-functions.js'
+import type { ACPPlatformPolicy } from './acp/ai-acp-platform.js'
 import type { ACPAgentAdapter, ACPOperations } from './acp/ai-acp-types.js'
 
 import type { AIConfig } from './ai-config.js'
@@ -20,6 +22,7 @@ import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
 import type { FileOperations } from './file/ai-file-types.js'
 import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
 import type { ChatRecord } from './llm/ai-llm-types.js'
+import type { MCPJobFiles } from './mcp/ai-mcp-types.js'
 import type {
   MemoryEntry,
   MemoryOperations,
@@ -74,6 +77,7 @@ import { createImageOperations } from './image/ai-image-functions.js'
 import { createKnowledgeOperations } from './knowledge/ai-knowledge-functions.js'
 import { createAILLMFunctions } from './llm/ai-llm-functions.js'
 import { createAIMCPFunctions } from './mcp/ai-mcp-functions.js'
+import { createMCPServiceOperations } from './mcp/ai-mcp-services.js'
 import { createMemoryOperations } from './memory/ai-memory-facade.js'
 import { createMem0MemoryOperations } from './memory/providers/ai-memory-provider-mem0.js'
 import { createNativeMemoryOperations } from './memory/providers/ai-memory-provider-native.js'
@@ -100,6 +104,9 @@ import { createTokenOperations } from './token/ai-token-functions.js'
 export interface AISubsystemDeps {
   storeProvider: AIStoreProvider
   acpAdapters?: Record<string, ACPAgentAdapter>
+  runner?: RunnerFunctions
+  acpPolicy?: ACPPlatformPolicy
+  mcpJobFiles?: MCPJobFiles
   datapipe: DatapipeFunctions
 }
 
@@ -275,6 +282,8 @@ export async function createAISubsystems(
       if (!entry)
         throw new Error('MCP resource missing')
       const server = entry.value
+      if (server.transport === 'job')
+        throw new Error('Managed MCP jobs require a scoped broker')
       if (server.transport === 'stdio') {
         servers.push({
           name: server.name,
@@ -304,6 +313,8 @@ export async function createAISubsystems(
     deps.acpAdapters,
     llmConfig,
     mcpLookup,
+    deps.runner,
+    deps.acpPolicy,
   )
 
   // 统一初始化（建表等）
@@ -316,11 +327,6 @@ export async function createAISubsystems(
   })
   const llm: ManagedLLMOperations = Object.assign(llmFunctions.llm, {
     models: llmModels.operations,
-  })
-
-  // MCP
-  const mcp: ManagedMCPOperations = Object.assign(createAIMCPFunctions(), {
-    servers: mcpServers.operations,
   })
 
   // Embedding
@@ -518,8 +524,30 @@ export async function createAISubsystems(
       ),
   }
 
+  // MCP 在其他异步装配完成后注册执行处理器和预热池。
+  const mcpServices = createMCPServiceOperations(
+    async id => (await mcpServers.read(id))?.value,
+    deps.runner,
+    deps.mcpJobFiles,
+    config.mcp?.servers,
+  )
+  const managedMCPServers: ManagedMCPOperations['servers'] = {
+    ...mcpServers.operations,
+    register: input => input?.pool?.maxTotal === undefined
+      ? mcpServers.operations.register(input)
+      : Promise.resolve(err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))),
+    update: (input, version) => input?.pool?.maxTotal === undefined
+      ? mcpServers.operations.update(input, version)
+      : Promise.resolve(err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))),
+  }
+  const mcp: ManagedMCPOperations = Object.assign(createAIMCPFunctions(), {
+    servers: managedMCPServers,
+    services: mcpServices.operations,
+  })
+
   return {
     closeRegistries: () => {
+      mcpServices.close()
       registriesOpen = false
     },
     a2aStores,
