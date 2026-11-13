@@ -307,7 +307,36 @@ image:
 
 MCP配置`server.name`必填，`version`默认1.0.0，能力对象内`tools`/`resources`/`prompts`默认true；能力声明不赋予业务权限。工具调用在服务端授权并约束输入、超时和外部副作用。
 
-外部 MCP 清单位于 `mcp.servers`。每项 `id/name/transport` 必填：`stdio` 需要 `command`，`args` 默认空数组；`http` / `sse` 需要 HTTP(S) `url`。`environmentRefs` 给 stdio 注入宿主变量引用，`headerEnv` 为网络连接解析认证头引用，两者默认 `{}`，不直接保存密钥。配置后只有在会话选择对应 `mcpServerIds` 时才使用；输入一个仅可读的测试工具请求，输出应是该工具结果及调用事件，不能只凭清单存在判断工具已经执行。
+外部 MCP 清单位于 `mcp.servers`。每项填写 `id`、`name` 和 `transport`。`stdio` 需要 `command`，`args` 默认空数组。`http` 和 `sse` 需要 HTTP(S) `url`。`environmentRefs` 为 stdio 提供环境变量引用，`headerEnv` 为远程服务提供认证头引用。两者默认是空对象。
+
+使用 `ai.mcp.services` 时，服务需要支持 Streamable HTTP，并在目录中通过 `allowedTools` 列出可调用的原生工具名。省略该字段时服务入口拒绝调用。`timeoutMs` 包含授权、连接和工具响应时间，默认 30,000 毫秒，取值范围 1–300,000 毫秒。部署方负责允许可信的 MCP 目的地，并在生产环境使用 HTTPS 或受保护的内部网络。
+
+```yaml schema=@h-ai/ai:AIConfigSchema
+mcp:
+  servers:
+    - id: manual
+      name: Manuals
+      transport: http
+      url: https://tools.example.com/mcp
+      headerEnv: { Authorization: HAI_MANUAL_MCP_AUTHORIZATION }
+      allowedTools: [search_manual]
+      timeoutMs: 10000
+```
+
+`HAI_MANUAL_MCP_AUTHORIZATION` 由部署方设置为上游需要的完整请求头值。目录管理员可以维护地址、认证引用和工具列表。应用仍需核验调用主体和实际参数。启动服务后调用一次授权的只读工具，检查其返回内容和上游请求。
+
+固定工具容器使用同一目录中的 `transport: job`，填写 `environmentId`、`allowedTools` 和可选超时。Runner 环境需使用固定镜像摘要、`networkPolicy: offline`，并声明对应的能力。支持 `documents.extract`、`office.convert`、`office.recalculate` 和 `ocr.recognize`。调用参数是授权的 `fileId`。OCR 可传 `language`。应用通过 `AIInitOptions.mcpJobFiles` 在领取节点复核文件 ACL 并暂存产物，只把产物 ID 返回给调用者。建议为文档工具部署专用执行节点，使工具拥有独立于 Agent 的执行容量。
+
+```yaml schema=@h-ai/ai:AIConfigSchema
+mcp:
+  servers:
+    - id: extract-document
+      name: Document extractor
+      transport: job
+      environmentId: documents-job
+      allowedTools: [documents.extract]
+      timeoutMs: 30000
+```
 
 A2A的`agentCard`需`name`/`url`，`description`/`version`/`skills`可选；skill需id/`name`，`description`/tags可选。`security.apiKey`默认header、名称x-api-`key`，推荐header避免URL暴露凭据。共享`execution`默认`leaseMs`=30000、`pollIntervalMs`=250、`maxExecutionMs`=300000，分别控制租约、订阅轮询和单次绝对执行上限。
 

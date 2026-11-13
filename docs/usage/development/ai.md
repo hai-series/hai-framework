@@ -59,6 +59,25 @@ AiDocumentEditor检查Mermaid节点文字、箭头、预览与代码切换。渲
 
 按[工具和执行配置](../configuration/ai.md#mcp和a2a)先校验工具schema、用途授权、期限和副作用；工具内容和模型输出不扩大权限。HTTP completion默认非流式，流式需独立`endpoint`；业务授权后才执行工具并按tool_call_id回传结果。
 
+使用已登记的第三方 MCP 工具时，先从 IAM 取得当前主体，再在授权函数里检查工具用途和实际参数。框架读取最新目录并为每次调用创建独立的上游 MCP 会话。网络中断后先核对远端操作结果，再决定是否重试。
+
+```ts
+import { ai, type MCPServiceAuthorization } from '@h-ai/ai'
+
+// 应用已成功初始化 ai，authorization 来自可信服务端。
+async function searchManual(query: string, authorization: MCPServiceAuthorization) {
+  const result = await ai.mcp.services.invoke({
+    serviceId: 'manual',
+    tool: 'search_manual',
+    arguments: { query },
+  }, authorization)
+  if (!result.success) return result
+  return result.data.content
+}
+```
+
+让 ACP Agent 调用该工具时，在执行节点挂载 `ai.mcp.services.createBroker` 返回的 HTTP 处理器。应用为会话绑定精确工具列表，Agent 使用短期 Bearer，入口按实际参数复核权限。入口地址需能从该节点的 Agent 容器访问。挂载和绑定示例见 [ACP 工具入口](../../../packages/cli/templates/skills/hai-ai/acp.md#为受管会话绑定第三方工具)。
+
 音频/图片先测试大小与时间预算拒绝，再用合法测试材料连接真实 Provider 并验证取消。A2A 按任务 ID 订阅/取消，unknown 先查副作用，不能自动重放。完整 Provider 方法见[AI参考](../../../packages/ai/REFERENCE.md)。
 
 ## ACP 智能体与工程会话

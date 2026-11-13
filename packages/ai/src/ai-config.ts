@@ -523,7 +523,9 @@ export const MCPExternalServerSchema = z.strictObject({
   /** 传给原生 MCP 客户端的服务名。 */
   name: z.string().min(1),
   /** 原生 MCP 传输类型。 */
-  transport: z.enum(['stdio', 'http', 'sse']),
+  transport: z.enum(['stdio', 'http', 'sse', 'job']),
+  /** 固定工具作业环境 ID，仅 job 模式使用。 */
+  environmentId: z.string().regex(/^[\w.-]{1,128}$/u).optional(),
   /** stdio 程序路径；仅可信服务端配置。 */
   command: z.string().min(1).optional(),
   /** stdio 参数，不使用 shell 拼接。 */
@@ -534,9 +536,19 @@ export const MCPExternalServerSchema = z.strictObject({
   environmentRefs: z.record(z.string(), z.string()).default({}),
   /** 认证 Header 名到宿主凭据变量名的映射。 */
   headerEnv: z.record(z.string(), z.string()).default({}),
-}).refine(value => value.transport === 'stdio'
-  ? Boolean(value.command)
-  : Boolean(value.url && /^https?:/.test(value.url)))
+  /** 受管工具入口允许调用的名称；省略时不开放给 ai.mcp.services。 */
+  allowedTools: z.array(z.string().min(1).max(128)).min(1).max(256).optional(),
+  /** 受管工具连接和调用的总超时，单位毫秒；缺省为 30 秒。 */
+  timeoutMs: z.number().int().min(1).max(300_000).optional(),
+}).refine((value) => {
+  if (value.transport === 'job')
+    return Boolean(value.environmentId && value.allowedTools?.length && !value.command && !value.url && !value.args.length && !Object.keys(value.headerEnv).length && !Object.keys(value.environmentRefs).length)
+  if (value.environmentId)
+    return false
+  return value.transport === 'stdio'
+    ? Boolean(value.command)
+    : Boolean(value.url && /^https?:/.test(value.url))
+})
 
 /**
  * 外部 MCP 服务配置。

@@ -10,7 +10,7 @@ import type {
 import type { AudioOperations } from '../audio/ai-audio-types.js'
 import type { ImageOperations } from '../image/ai-image-types.js'
 import type { LLMOperations } from '../llm/ai-llm-types.js'
-import type { MCPOperations } from '../mcp/ai-mcp-types.js'
+import type { MCPOperations, MCPServiceOperations } from '../mcp/ai-mcp-types.js'
 import type { RetrievalOperations } from '../retrieval/ai-retrieval-types.js'
 
 /**
@@ -169,6 +169,8 @@ export interface ManagedImageOperations extends ImageOperations {
  * ```
  */
 export interface ManagedMCPOperations extends MCPOperations {
+  /** 按业务身份调用合并清单中已显式开放的工具。 */
+  services: MCPServiceOperations
   /** 配置只读、数据库可维护的合并清单。 */
   servers: AIResourceRegistry<
     z.output<typeof MCPExternalServerSchema>,
