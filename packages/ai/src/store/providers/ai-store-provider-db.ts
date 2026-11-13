@@ -204,6 +204,9 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       cols.push(`ref_id ${scopeType}`)
     cols.push('version VARCHAR(36) NOT NULL', `data ${dataType} NOT NULL`, `created_at BIGINT NOT NULL`, `updated_at BIGINT NOT NULL`)
 
+    if (db === 'mysql' && this.memoryVectorKey)
+      cols.push(this.mysqlMemoryVectorColumn(this.memoryVectorKey))
+
     await this.sql.execute(`CREATE TABLE IF NOT EXISTS ${t} (${cols.join(', ')})`)
     if (this.gate) {
       await this.sql.execute(`CREATE TABLE IF NOT EXISTS ${this.gate} (id INTEGER PRIMARY KEY, marker INTEGER NOT NULL)`)
@@ -232,6 +235,14 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_data_gin ON ${t} USING GIN (data jsonb_path_ops)`)
   }
 
+  /** MySQL 在新表中直接创建生成列，已有表在首次升级时添加该列。 */
+  private mysqlMemoryVectorColumn(key: string): string {
+    return `${key} VARCHAR(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin GENERATED ALWAYS AS (
+      CASE WHEN JSON_TYPE(JSON_EXTRACT(data, '$.vector')) = 'ARRAY'
+        THEN COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(data, '$.vectorId')), 'null'), id) END
+    ) VIRTUAL`
+  }
+
   /** 索引覆盖旧记录，无需逐条回写。MySQL 查询使用命名生成列以命中索引。 */
   private async createMemoryVectorIndex(key: string): Promise<void> {
     const name = `idx_${this.table}_vector_key`
@@ -245,10 +256,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     )).data
     if (!(await read())) {
       try {
-        await this.sql.execute(`ALTER TABLE ${this.table} ADD COLUMN ${key} VARCHAR(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin GENERATED ALWAYS AS (
-          CASE WHEN JSON_TYPE(JSON_EXTRACT(data, '$.vector')) = 'ARRAY'
-            THEN COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(data, '$.vectorId')), 'null'), id) END
-        ) VIRTUAL`)
+        await this.sql.execute(`ALTER TABLE ${this.table} ADD COLUMN ${this.mysqlMemoryVectorColumn(key)}`)
       }
       catch (error) {
         if (!isMysqlError(error, 'ER_DUP_FIELDNAME', 1060))
