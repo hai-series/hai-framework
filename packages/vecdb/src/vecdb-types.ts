@@ -294,6 +294,46 @@ export interface VectorOperations {
    * Qdrant 使用精确 count，不依赖集合信息的近似统计。
    */
   count: (collection: string) => Promise<HaiResult<number>>
+
+  /**
+   * 分页读取文档 ID，仅返回可以传给本模块删除操作的 ID。
+   *
+   * @param collection - 集合名称
+   * @param options - 扫描游标与每页条数
+   * @returns 本页 ID 和后续游标。扫描不提供跨页快照。
+   * @example await vecdb.vector.scan('docs', { limit: 32 })
+   */
+  scan?: (collection: string, options?: VectorScanOptions) => Promise<HaiResult<VectorScanPage>>
+}
+
+/**
+ * 文档 ID 扫描选项。
+ * @example
+ * ```ts
+ * import type { VectorScanOptions } from '@h-ai/vecdb'
+ * const options: VectorScanOptions = { limit: 32 }
+ * ```
+ */
+export interface VectorScanOptions {
+  /** 上一页返回的游标，首次扫描省略。游标仅用于同一后端的同一个集合。 */
+  cursor?: string
+  /** 每页最多返回的文档数量，默认 64，允许 1 到 128。 */
+  limit?: number
+}
+
+/**
+ * 一页文档 ID。
+ * @example
+ * ```ts
+ * import type { VectorScanPage } from '@h-ai/vecdb'
+ * const page: VectorScanPage = { items: [{ id: 'doc-1' }] }
+ * ```
+ */
+export interface VectorScanPage {
+  /** 文档 ID。Qdrant 只包含可映射回框架文档的记录。 */
+  items: Array<{ id: string }>
+  /** 下一页游标。即使当前页为空，只要存在游标就应继续扫描。 */
+  nextCursor?: string
 }
 
 // ─── VecdbFunctions 接口 ───

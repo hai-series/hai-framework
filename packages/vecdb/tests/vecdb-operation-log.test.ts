@@ -27,6 +27,7 @@ function setup(config: Partial<VecdbOperationLogConfig> = {}) {
     delete: async () => ok(undefined),
     search: async () => ok([]),
     count: async () => ok(0),
+    scan: async () => ok({ items: [] }),
   })
   return { ops, logger: ctx.logger }
 }
@@ -74,5 +75,15 @@ describe('vecdb operation log', () => {
     expect(logger.info).not.toHaveBeenCalled()
     expect(logger.debug).not.toHaveBeenCalled()
     expect(logger.trace).not.toHaveBeenCalled()
+  })
+
+  it('records scan page size without exposing the cursor', async () => {
+    const { ops, logger } = setup({ read: true })
+    await ops.scan('private-collection', { cursor: 'private-cursor', limit: 2 })
+    expect(logger.info).toHaveBeenCalledWith('VecDB operation started', {
+      category: 'read',
+      operation: 'vector.scan',
+      payload: JSON.stringify({ limit: 2, hasCursor: true }),
+    })
   })
 })

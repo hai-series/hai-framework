@@ -37,6 +37,7 @@ function provider(): VecdbProvider {
       delete: async () => ok(undefined),
       search: async () => ok([]),
       count: async () => ok(0),
+      scan: async () => ok({ items: [] }),
     },
   }
 }

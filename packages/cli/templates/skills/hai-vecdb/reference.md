@@ -84,7 +84,7 @@ if (!closeResult.success) {
 | 接口       | 用途                         | 入口               |
 | ---------- | ---------------------------- | ------------------ |
 | collection | 集合创建/删除/查询/判断存在  | `vecdb.collection` |
-| vector     | 向量插入/更新/删除/搜索/计数 | `vecdb.vector`     |
+| vector     | 向量写入、删除、搜索、计数和分页扫描 ID | `vecdb.vector`     |
 
 ## 核心 API
 
@@ -146,6 +146,7 @@ LanceDB filter 只支持顶层字面量键的 AND 精确匹配，值为 string/�
 | `delete` | `(collection, ids) => HaiResult<void>`                        | 按 ID 删除    |
 | `search` | `(collection, vector, options?) => HaiResult<SearchResult[]>` | 向量搜索      |
 | `count`  | `(collection) => HaiResult<number>`                           | 文档计数      |
+| `scan`   | `(collection, options?) => HaiResult<VectorScanPage>`          | 分页读取文档 ID |
 
 > 所有方法均返回 `Promise<HaiResult<T>>`，上表省略异步与错误类型。
 
@@ -175,6 +176,13 @@ await vecdb.vector.upsert('docs', [
 
 // 删除
 await vecdb.vector.delete('docs', ['doc-1', 'doc-2'])
+
+// 输入集合名和页大小，成功时返回 data.items（仅文档 ID）及可选的 data.nextCursor。
+const page = await vecdb.vector.scan('docs', { limit: 32 })
+// 当 data.nextCursor 存在时，把它传给同一集合，输出下一页文档 ID 和可选的后续游标。
+if (page.success && page.data.nextCursor !== undefined) {
+  const nextPage = await vecdb.vector.scan('docs', { cursor: page.data.nextCursor, limit: 32 })
+}
 ```
 
 > 空批量 `insert/upsert/delete` 会被视为 no-op；写入与搜索会校验向量维度，不匹配时返回 `HaiVecdbError.DIMENSION_MISMATCH`。Qdrant `collection.exists()` 仅在 404 时返回 `false`，网络异常会返回查询错误而不是误判不存在。

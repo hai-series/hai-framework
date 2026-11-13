@@ -136,8 +136,8 @@
 | @h-ai/ui | `./vite (types)` | 2 |
 | @h-ai/ui | `./components/ 下的显式入口（14 个真实子路径，见 JSON）` | 逐项记录 |
 | @h-ai/ui | `./styles/*（8 个真实子路径，见 JSON）` | 逐项记录 |
-| @h-ai/vecdb | `. (default)` | 23 |
-| @h-ai/vecdb | `. (import)` | 23 |
-| @h-ai/vecdb | `. (types)` | 23 |
+| @h-ai/vecdb | `. (default)` | 25 |
+| @h-ai/vecdb | `. (import)` | 25 |
+| @h-ai/vecdb | `. (types)` | 25 |
 
 CLI 根入口是命令启动入口，不提供命名库 API；运行冒烟使用隔离进程的 --help/--version。UI 的 .svelte 条件由 Svelte 构建器消费，不能用 Node 的原生模块加载器直接执行组件文件。其余服务端导入冒烟不调用 init，不连接外部服务。

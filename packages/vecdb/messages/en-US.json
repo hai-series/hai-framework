@@ -23,6 +23,8 @@
   "vecdb_indexBuildFailed": "Failed to build index: {error}",
   "vecdb_serializationFailed": "Serialization/deserialization failed: {error}",
   "vecdb_invalidDimension": "Invalid vector dimension: {dimension}, must be a positive integer",
+  "vecdb_invalidScanLimit": "The vector scan page size must be an integer between 1 and 128",
+  "vecdb_invalidScanCursor": "Invalid vector scan cursor. Use the cursor returned by the previous page",
   "vecdb_configPathRequired": "Database storage path is required",
   "vecdb_configDatabaseRequired": "Database name is required",
   "vecdb_sharedBackendRequired": "Production mode requires a shared backend; local files and memory backends are for development or explicit end-to-end tests.",

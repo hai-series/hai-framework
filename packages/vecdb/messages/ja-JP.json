@@ -23,6 +23,8 @@
   "vecdb_indexBuildFailed": "インデックスの構築に失敗しました: {error}",
   "vecdb_serializationFailed": "シリアライズまたはデシリアライズに失敗しました: {error}",
   "vecdb_invalidDimension": "ベクトルの次元が無効です: {dimension}。正の整数を指定してください",
+  "vecdb_invalidScanLimit": "ベクトルスキャンのページサイズには 1 から 128 の整数を指定してください",
+  "vecdb_invalidScanCursor": "ベクトルスキャンのカーソルが無効です。前のページから返されたカーソルを指定してください",
   "vecdb_configPathRequired": "データベースの保存パスは必須です",
   "vecdb_configDatabaseRequired": "データベース名は必須です",
   "vecdb_sharedBackendRequired": "本番環境には共有バックエンドが必要です。ローカルファイルとメモリーバックエンドは開発環境または明示的な E2E テストでのみ使用できます。",

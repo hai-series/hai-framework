@@ -6,13 +6,12 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { VecdbProvider } from './providers/vecdb-provider-base.js'
+import type { BuiltinVectorOperations, VecdbProvider } from './providers/vecdb-provider-base.js'
 import type { VecdbConfig, VecdbConfigInput } from './vecdb-config.js'
 import type {
   CollectionOperations,
   VecdbConnection,
   VecdbFunctions,
-  VectorOperations,
 } from './vecdb-types.js'
 
 import process from 'node:process'
@@ -157,7 +156,7 @@ const notInitialized = core.module.createNotInitializedKit(
 const notInitializedCollection = notInitialized.proxy<CollectionOperations>()
 
 /** 未初始化时的向量操作占位对象 */
-const notInitializedVector = notInitialized.proxy<VectorOperations>()
+const notInitializedVector = notInitialized.proxy<BuiltinVectorOperations>()
 
 /** 稳定转发层不泄漏 Provider 引用；旧调用方持有的操作在关闭期间同样停止服务。 */
 const collectionOps: CollectionOperations = {
@@ -177,7 +176,7 @@ const collectionOps: CollectionOperations = {
     ? currentProvider.collection.list()
     : notInitializedCollection.list(),
 }
-const vectorOps: VectorOperations = {
+const vectorOps: BuiltinVectorOperations = {
   insert: (collection, documents) => currentProvider && !closingPromise
     ? currentProvider.vector.insert(collection, documents)
     : notInitializedVector.insert(collection, documents),
@@ -193,6 +192,9 @@ const vectorOps: VectorOperations = {
   count: collection => currentProvider && !closingPromise
     ? currentProvider.vector.count(collection)
     : notInitializedVector.count(collection),
+  scan: (collection, options) => currentProvider && !closingPromise
+    ? currentProvider.vector.scan(collection, options)
+    : notInitializedVector.scan(collection, options),
 }
 
 // ─── 统一向量数据库服务对象 ───
@@ -223,7 +225,7 @@ const vectorOps: VectorOperations = {
  * }
  * ```
  */
-export const vecdb: VecdbFunctions = {
+export const vecdb: VecdbFunctions & { readonly vector: BuiltinVectorOperations } = {
   /**
    * 初始化向量数据库连接
    *
@@ -309,7 +311,7 @@ export const vecdb: VecdbFunctions = {
    *
    * 未初始化时返回占位对象（所有调用返回 NOT_INITIALIZED）。
    */
-  get vector(): VectorOperations {
+  get vector(): BuiltinVectorOperations {
     return vectorOps
   },
 

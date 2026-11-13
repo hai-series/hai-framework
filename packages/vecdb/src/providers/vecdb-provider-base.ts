@@ -16,6 +16,7 @@ import type {
   CollectionOperations,
   VectorDocument,
   VectorOperations,
+  VectorScanPage,
   VectorSearchOptions,
   VectorSearchResult,
 } from '../vecdb-types.js'
@@ -73,8 +74,19 @@ export interface VecdbProvider {
   /** 集合管理操作 */
   collection: CollectionOperations
   /** 向量操作 */
-  vector: VectorOperations
+  vector: BuiltinVectorOperations
 }
+
+/**
+ * 内置后端全部支持文档 ID 扫描。
+ * @example 模块内部上下文
+ * ```ts
+ * function firstPage(vector: BuiltinVectorOperations, name: string) {
+ *   return vector.scan(name)
+ * }
+ * ```
+ */
+export type BuiltinVectorOperations = VectorOperations & Required<Pick<VectorOperations, 'scan'>>
 
 // ─── 上下文与适配器接口 ───
 
@@ -146,6 +158,7 @@ export interface VectorDriver {
     options?: VectorSearchOptions,
   ) => Promise<HaiResult<VectorSearchResult[]>>
   count: (collection: string) => Promise<HaiResult<number>>
+  scan: (collection: string, limit: number, cursor?: string) => Promise<HaiResult<VectorScanPage>>
 }
 
 // ─── 内部帮助 ───
@@ -337,7 +350,7 @@ export function createBaseCollectionOps(ctx: VecdbOpsContext, driver: Collection
  * }
  * ```
  */
-export function createBaseVectorOps(ctx: VecdbOpsContext, driver: VectorDriver): VectorOperations {
+export function createBaseVectorOps(ctx: VecdbOpsContext, driver: VectorDriver): BuiltinVectorOperations {
   return {
     insert: (collection, documents) => {
       logVecdbOperation(ctx, 'write', 'vector.insert', { count: documents?.length, dimension: documents?.[0]?.vector?.length })
@@ -393,6 +406,18 @@ export function createBaseVectorOps(ctx: VecdbOpsContext, driver: VectorDriver):
         HaiVecdbError.QUERY_FAILED,
         'Failed to count vectors',
       )
+    },
+    scan: (collection, options) => {
+      const limit = options?.limit ?? 64
+      const cursor = options?.cursor
+      logVecdbOperation(ctx, 'read', 'vector.scan', { limit, hasCursor: cursor !== undefined })
+      return wrapOp(ctx, async () => {
+        if (!Number.isInteger(limit) || limit < 1 || limit > 128)
+          return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidScanLimit'))
+        if (cursor !== undefined && typeof cursor !== 'string')
+          return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidScanCursor'))
+        return driver.scan(collection, limit, cursor)
+      }, HaiVecdbError.QUERY_FAILED, 'Failed to scan vector IDs')
     },
   }
 }

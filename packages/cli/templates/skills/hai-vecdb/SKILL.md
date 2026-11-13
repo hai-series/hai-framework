@@ -23,6 +23,7 @@ description: "使用 LanceDB/pgvector/Qdrant/Chroma 管理向量集合、写入�
 - LanceDB 使用原生 JSON metadata；filter 仅支持顶层字面量键的 string/有限 number/boolean/null AND 匹配，null 不匹配缺失字段。对象/数组/undefined 与旧 Utf8 metadata 表返回 CONFIG_ERROR；过滤在 topK 前执行，错误不得当作空结果。其它后端的 null/复杂过滤能力须单独核对。
 - Chroma 仅支持 HTTP(S) 根 url（优先于 host/port），不接受路径前缀/URL 凭据/query/fragment；apiKey 按自托管网关协议发送 Authorization: Bearer，不表示 Chroma Cloud 支持。初始化同时验证数据端点权限，认证失败不得当成空库。Qdrant 只有 404 代表集合不存在。
 - Qdrant 仅支持未命名向量字段的三种公开 metric，外部 named-vector/Manhattan 集合返回 CONFIG_ERROR；Chroma 的 metadata/filter 由真实 SDK 校验，非法输入返回操作错误，不执行无过滤回退。
+- 用 `vecdb.vector.scan(collection, { cursor, limit })` 分页核对文档 ID。首页省略 `cursor`，`limit` 默认 64，范围 1 到 128。`items` 为空但仍有 `nextCursor` 时继续扫描。并发更新期间用多轮扫描收敛。
 
 ## 按需参考
 

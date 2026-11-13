@@ -9,6 +9,7 @@ import { GenericContainer, Wait } from 'testcontainers'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createChromaProvider } from '../src/providers/vecdb-provider-chroma.js'
 import { VecdbConfigSchema } from '../src/vecdb-config.js'
+import { HaiVecdbError } from '../src/vecdb-types.js'
 
 describe('chroma actual SDK behind a Bearer gateway', { concurrent: false }, () => {
   let container: StartedTestContainer | undefined
@@ -92,6 +93,10 @@ describe('chroma actual SDK behind a Bearer gateway', { concurrent: false }, () 
     const name = 'authenticated-documents'
     try {
       expect((await first.connect(config)).success).toBe(true)
+      await expect(first.vector.scan(name)).resolves.toMatchObject({
+        success: false,
+        error: { code: HaiVecdbError.COLLECTION_NOT_FOUND.code },
+      })
       expect((await first.collection.create(name, { dimension: 3 })).success).toBe(true)
       expect((await first.vector.insert(name, [
         {
@@ -116,6 +121,37 @@ describe('chroma actual SDK behind a Bearer gateway', { concurrent: false }, () 
         },
       ])).success).toBe(true)
       expect((await second.connect(config)).success).toBe(true)
+      const firstPage = await first.vector.scan(name, { limit: 1 })
+      expect(firstPage).toMatchObject({
+        success: true,
+        data: {
+          items: [
+            expect.anything(),
+          ],
+          nextCursor: expect.any(String),
+        },
+      })
+      if (!firstPage.success)
+        throw new Error(firstPage.error.message)
+      const secondPage = await second.vector.scan(name, { cursor: firstPage.data.nextCursor, limit: 1 })
+      expect(secondPage).toMatchObject({
+        success: true,
+        data: {
+          items: [
+            expect.anything(),
+          ],
+        },
+      })
+      if (!secondPage.success)
+        throw new Error(secondPage.error.message)
+      expect(secondPage.data.nextCursor).toBeUndefined()
+      expect([
+        ...firstPage.data.items,
+        ...secondPage.data.items,
+      ]).toEqual(expect.arrayContaining([
+        { id: 'a' },
+        { id: 'b' },
+      ]))
       const read = await second.vector.search(name, [1, 0, 0], {
         topK: 1,
         filter: { tenant: 'alpha' },

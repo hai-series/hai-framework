@@ -149,10 +149,10 @@ describe('vecdb init — pgvector', { concurrent: false }, () => {
   it('错误的连接参数返回 CONNECTION_FAILED', async () => {
     const result = await vecdb.init({
       type: 'pgvector',
-      host: 'invalid-host',
-      port: 1,
-      database: 'nonexistent',
-      user: 'nobody',
+      host: lease.host,
+      port: lease.port,
+      database: lease.database,
+      user: lease.user,
       password: 'wrong',
     })
     expect(result.success).toBe(false)
@@ -199,7 +199,7 @@ describe('vecdb init — qdrant', { concurrent: false }, () => {
   it('错误的连接 URL 返回 CONNECTION_FAILED', async () => {
     const result = await vecdb.init({
       type: 'qdrant',
-      url: 'http://invalid-host:6333',
+      url: `${lease.url}/nonexistent-prefix`,
     })
     expect(result.success).toBe(false)
     if (!result.success) {

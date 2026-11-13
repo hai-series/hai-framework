@@ -56614,6 +56614,18 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "VectorScanOptions",
+              "kind": "type",
+              "declaration": "VectorScanOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "VectorScanPage",
+              "kind": "type",
+              "declaration": "VectorScanPage",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "VectorSearchOptions",
               "kind": "type",
               "declaration": "VectorSearchOptions",
@@ -56762,6 +56774,18 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "VectorScanOptions",
+              "kind": "type",
+              "declaration": "VectorScanOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "VectorScanPage",
+              "kind": "type",
+              "declaration": "VectorScanPage",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "VectorSearchOptions",
               "kind": "type",
               "declaration": "VectorSearchOptions",
@@ -56907,6 +56931,18 @@
               "name": "VectorOperations",
               "kind": "type",
               "declaration": "VectorOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "VectorScanOptions",
+              "kind": "type",
+              "declaration": "VectorScanOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "VectorScanPage",
+              "kind": "type",
+              "declaration": "VectorScanPage",
               "declarationKind": "InterfaceDeclaration"
             },
             {
