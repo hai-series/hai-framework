@@ -216,7 +216,7 @@ return result.data
 
 Codex 已在 App Server 启动前加载提供方配置，消除了离线复现中 `thread/start` 与随后 `model/list` 的两次约 5 秒目录等待。真实 DeepSeek 对照中，`session/new` 中位数从 7,375 ms 降至 23 ms（每组 5 次）。按正式配置复测 3 次，中位数为 9.97 ms。同轮短答首字为 984 ms，完成耗时 1063 ms（各 1 次）。[定位与复测](acp-startup-investigation.md)
 
-本地 Podman 下，三个原生 Agent 通过 `scoped.run` 访问本地模型夹具的冷任务用时为 Codex 3.73 秒、DSH 3.61 秒、Goose 2.94 秒，各测 1 次。独立工具的容量还要计入服务入口、预热实例和作业容器。Office 已通过预热容器复用及产物验收，生产冷启动、预热收益与并发峰值仍需压测。[性能与容量评估](acp-capacity-evaluation.md)
+本地 Podman 下，三个原生 Agent 通过 `scoped.run` 访问本地模型夹具的冷任务用时为 Codex 3.73 秒、DSH 3.61 秒、Goose 2.94 秒，各测 1 次。已缓存镜像处理小文件时，文档提取中位数为 241–276 ms，Office 转 PDF 为 1.16 秒，OCR 为 0.33 秒。Office 已验证预热容器复用和产物发布。生产排队、预热收益和并发峰值仍需压测。[性能与容量评估](acp-capacity-evaluation.md)
 
 实施以可验收的完整能力交付：先建立 runner 边界和统一适配器/授权契约，再完成三种模式、分布式归属和工具多实例，最后打通知识/记忆/skills、灵活调用、模式切换与场景验收。Codex、DSH、Goose 都进入每阶段的共同验收；Codex 启动修复作为其适配器专项。首版不包含 DAG 工作流、多地域实时迁移、任意协议自动转换和无限插件扩展。
 

@@ -45,7 +45,7 @@ flowchart TD
 
 每个 runner 有自己的工作区、容器引擎、端口和测试数据。根单元入口内部仍遵守容器资源预算：普通包有界并发，容器包串行。浏览器矩阵关闭全局 fail-fast，以保留其他应用的独立结果。`pnpm e2e` 的本地串行入口保留，避免在同一工作区同时重写产物。
 
-单元阶段固定使用 Ubuntu 24.04。脚本 `.github/scripts/ci-acp-test.mjs` 先检查中间件测试需要的 Docker，再按 Agent manifest 构建 Codex、dsh 和 Goose 镜像，使用 Debian 官方镜像源。可信 Linux `main` 推送用 rootless Podman 构建和运行 Agent 容器，PR 的本地 HTTP 模型夹具继续用 Docker。构建和适用的沙箱预检通过后，脚本显式传入 `HAI_ACP_E2E_ENGINE` 和三个镜像变量，执行无真实模型凭据的 `pnpm test`。默认工具链下的原生 Agent、volume、会话恢复和 Git 用例均随根测试启用。任一前置或测试失败均阻断发布。Turbo 将启用变量纳入测试缓存身份。用例回收本轮容器与 volume，临时 runner 销毁时回收镜像。
+单元阶段固定使用 Ubuntu 24.04。脚本 `.github/scripts/ci-acp-test.mjs` 先检查中间件测试需要的 Docker，再构建 Codex、DSH、Goose 和四个独立工具镜像。可信 Linux `main` 推送用 rootless Podman，PR 的本地 HTTP 模型夹具用 Docker。镜像构建和适用的沙箱预检通过后，脚本运行工具协议测试和四个镜像的启动检查，再执行不含真实模型凭据的 `pnpm test`。三个原生 Agent 的受管会话、工具作业以及已有的卷、会话恢复和 Git 测试随根测试启用。任一前置或测试失败均阻断发布。Turbo 将启用变量纳入测试缓存身份。用例回收本轮容器与卷，临时 runner 销毁时回收镜像。
 
 可信 `main` push 额外使用 Actions secret `OPENROUTER_APIKEY` 对接真实模型。调用方仅在该事件传递可选 secret，复用工作流只在执行验证步骤注入，安装依赖、Docker 构建和普通根测试均不接收它。夹具门禁通过后，脚本按 manifest 安装固定版本的宿主 Codex/dsh，定向运行 `ai-acp-openrouter.e2e.test.ts` 和 `ai-acp-goose.e2e.test.ts`，强制启用 Codex/dsh 的 embedded/builtin-service 四组及 Goose HTTP/WS 两组真实验收；缺密钥、模型配置或任何一组最终失败均阻断发布。每组在初始和恢复两轮分别执行固定的写入、独立工具读回请求，检查精确文件内容和完整的测试标记。Codex 与 dsh 的夹具使用每次生成的普通库存记录。写入确认可以是完成摘要，读回必须包含原样内容。当前模型为 `z-ai/glm-5.3-flash`，该模型在 OpenRouter 有多个供应商，已核对 Responses 和 Chat Completions 的工具调用与容量元数据。请求预算由测试单独限制。手工 dispatch 和 PR 继续只跑夹具，避免未授权分支触发真实调用。
 
