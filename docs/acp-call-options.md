@@ -63,7 +63,7 @@ return result.data
 | `agentId`、`prompt` | 选择登记的 Agent；消息为文本或 ACP 内容块 | 复用协议内容类型；图片等需 Agent/模型支持，不能默默丢弃 |
 | `model` | `id`、`reasoningEffort`、`temperature`、`maxOutputTokens` | 模型 ID 引用服务端配置；可选项按适配器和模型 Schema 验证，不接受密钥或任意网关 URL |
 | `execution` | `mode`、`environmentId`、`resources` | mode 为 auto/shared/user/task；可请求允许范围内的 cpu/memoryMiB，其他限额继承环境；不接受镜像 URL、宿主挂载和引擎参数 |
-| `workspaceId` | 指定已授权项目/工作区 | 与知识库、附件分开；影响资料位置、复用和单写者约束，不能传任意宿主目录 |
+| `workspaceId` | 读取应用授权的项目快照 | 独占任务把最多 8 个平铺文件挂载到只读 `/input`，总量不超过 16 MiB 和执行环境 `scratchMiB`；临时副本写入 `/workspace` |
 | `context` | `fileIds`、`knowledgeBaseIds`、`skillIds`、`memory` | 全部按主体验证；memory 指定 scope 为 none/user/space，space 需 spaceId；write 为 none/confirm/on-success |
 | `tools.allow` | 允许使用的逻辑工具 ID 列表，如 `documents.extract`、`office.convert` | 由目录解析到 MCP/工具服务；平台知识、记忆工具也计入最终清单；安装或列出工具不代表得到数据授权 |
 | `capabilities` | 此任务必须具备的能力，如 `office.recalculate` | 用于检查和选择环境/工具；它不授予权限，也不要求每轮实际调用该工具 |

@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { promisify } from 'node:util'
+import { reldb } from '@h-ai/reldb'
 import { createRunner } from '@h-ai/runner'
 import { describe, expect, it } from 'vitest'
 import { ai, HaiAIError } from '../src/index.js'
@@ -166,6 +167,33 @@ describe.skipIf(!enabled)('managed native ACP agents on an isolated network', ()
       })
       if (process.env.HAI_ACP_MANAGED_NATIVE_TIMINGS === '1')
         process.stdout.write(`${adapter} scoped.run with fixture: ${Math.round(performance.now() - startedAt)} ms\n`)
+
+      const activeWorkers = async () => value(await reldb.sql.query<{ id: string }>(
+        'SELECT id FROM hai_runner_executions WHERE kind = ? AND state = ?',
+        ['hai.acp.worker.v1', 'running'],
+      ))
+      const userRequest = {
+        agentId: 'native',
+        execution: { mode: 'user' },
+        permissions: { profile: 'workspace', approval: 'never' },
+        limits: { runTimeoutMs: 30_000 },
+      } as const
+      const first = value(await scoped.run({
+        ...userRequest,
+        prompt: 'Return hai-managed-native-ok without tools. First user session.',
+      }))
+      expect(first.output.text).toContain('hai-managed-native-ok')
+      expect(first.effectiveOptions.resolvedMode).toBe('user')
+      const workers = await activeWorkers()
+      expect(workers).toHaveLength(1)
+      const second = value(await scoped.run({
+        ...userRequest,
+        prompt: 'Return hai-managed-native-ok without tools. Second user session.',
+      }))
+      expect(second.output.text).toContain('hai-managed-native-ok')
+      expect(second.effectiveOptions.resolvedMode).toBe('user')
+      expect(second.taskId).not.toBe(first.taskId)
+      expect(await activeWorkers()).toEqual(workers)
     }
     finally {
       try {

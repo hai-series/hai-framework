@@ -29,7 +29,9 @@ async function answer(identity: { tenantId: string, userId: string }, requestId:
 | `task` | 需要隔离文件、写入或完整权限的任务 | 一个业务会话使用一个容器 |
 | `auto` | 业务方未指定隔离方式 | 应用策略允许个人复用时选 user，否则在经过验收的只读场景选 shared，其余使用 task |
 
-Codex、DeepSeek Harness 和 Goose 使用固定版本的原生协议。内置适配器的共享模式仍需安全验收，当前默认走独立容器。持续对话使用 `scoped.sessions.create`、`session.prompt` 和 `session.close`。`session.changeExecution({ mode: 'task', acceptNewSession: true })` 保留业务会话 ID，结束旧原生会话并创建新会话。需要延续任务背景时，可传当前用户确认可带入的 `historySummary`，上限为 8 KiB UTF-8。摘要作为不可信历史文本随首次请求送入 `user` 或 `task` 会话，权限按新会话的规则重新检查。摘要发送失败后，由调用方决定是否重新提供。持久项目挂载与原生历史跨 Worker 恢复仍需部署支持。
+Codex、DeepSeek Harness 和 Goose 使用固定版本的原生协议。内置适配器的共享模式仍需安全验收，当前默认走独立容器。持续对话使用 `scoped.sessions.create`、`session.prompt` 和 `session.close`。`session.changeExecution({ mode: 'task', acceptNewSession: true })` 保留业务会话 ID，结束旧原生会话并创建新会话。需要延续任务背景时，可传当前用户确认可带入的 `historySummary`，上限为 8 KiB UTF-8。摘要作为不可信历史文本随首次请求送入 `user` 或 `task` 会话，权限按新会话的规则重新检查。摘要发送失败后，由调用方决定是否重新提供。跨 Worker 可移交文本摘要，原生历史恢复和持久可写项目挂载仍待实现。
+
+受管调用可用 `workspaceId` 读取项目快照。应用在 `acpPolicy.allowWorkspace(scope, workspaceId)` 检查权限，并在 `resolveWorkspace(scope, workspaceId, signal)` 从业务存储返回 `Record<string, Uint8Array>`。执行节点在启动前加载文件，最多 8 个平铺文件，总量取 16 MiB 与环境 `scratchMiB` 中的较小值。文件名由 ASCII 字母或数字开头，后接字母、数字、点、下划线或连字符，最长 128 字符。`auto` 选择独占任务。容器从 `/input` 只读快照，在 `/workspace` 保存临时副本。工作区权限在每轮重新核验，需要立即撤销挂载时关闭会话，已发送给模型的内容按应用数据策略处理。
 
 可选参数包括已登记模型、环境、资源、权限、排队和执行时限、输出格式与原生适配器扩展。部署默认值作为起点，应用可以用 `plan` 查验实际选择。JSON 输出可带 JSON Schema，解析失败时返回输出错误。逐轮使用 `session.prompt` 或 `session.stream` 可调整输出格式、时限和事件观察器。用相同主体和幂等键重试同一单次任务时，会读取已有结果。任务 ID 也可用于 `scoped.tasks.get`、`scoped.tasks.events` 和 `scoped.tasks.cancel`。
 

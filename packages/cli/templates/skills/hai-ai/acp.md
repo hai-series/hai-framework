@@ -18,6 +18,8 @@ Agent 镜像按任务选择 `minimal`、`documents`、`office`、`browser` 或 `
 
 使用 `session.changeExecution({ mode: 'task', acceptNewSession: true, historySummary })` 切换到任务独占容器时，可带入当前用户确认过的历史摘要。摘要最多 8 KiB UTF-8，作为新会话首次请求的历史文本发送一次。会话工具和资料仍按当前授权重新核验。
 
+受管请求可传 `workspaceId`。应用用 `acpPolicy.allowWorkspace` 核验主体，用 `resolveWorkspace` 在执行节点提供文件名到 `Uint8Array` 的映射。快照最多 8 个平铺文件、合计不超过 16 MiB 和环境 `scratchMiB`，仅挂载到独占任务的只读 `/input`。临时副本写入 `/workspace`，会话结束后回收。
+
 Linux 上运行 embedded Codex 前，按 [Codex 沙箱前置](https://learn.chatgpt.com/docs/sandboxing) 准备 bubblewrap 和所需的 AppArmor profile，并用 `codex sandbox` 在临时目录验证读写。沙箱初始化失败应先修复宿主环境，不能通过关闭沙箱或让模型猜测文件内容完成任务。
 
 ## Goose 的原生接入
