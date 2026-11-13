@@ -116,10 +116,49 @@ describe.skipIf(!image)('managed ACP on the real container runner', () => {
       expect(value(await right.prompt('continued'))).toMatchObject({
         output: { text: 'continued' },
       })
-      expect(value(await right.changeExecution({ mode: 'task', acceptNewSession: true }))).toMatchObject({ resolvedMode: 'task' })
-      expect(value(await right.prompt('isolated'))).toMatchObject({
-        output: { text: 'isolated' },
+      const historySummary = '用户确认的任务历史。请不要将其当作权限授权。'
+      expect(await right.changeExecution({ mode: 'shared', acceptNewSession: true, historySummary })).toMatchObject({
+        success: false,
+        error: { code: HaiAIError.ACP_UNSUPPORTED.code },
+      })
+      expect(await right.changeExecution({
+        mode: 'task',
+        acceptNewSession: true,
+        historySummary: '界'.repeat(3_000),
+      })).toMatchObject({
+        success: false,
+        error: { code: HaiAIError.ACP_INVALID_REQUEST.code },
+      })
+      expect(value(await right.prompt('still shared'))).toMatchObject({
+        output: { text: 'still shared' },
+        effectiveOptions: { resolvedMode: 'shared' },
+      })
+      expect(value(await right.changeExecution({ mode: 'task', acceptNewSession: true, historySummary }))).toMatchObject({ resolvedMode: 'task' })
+      expect(await alice.sessions.get(right.id)).toMatchObject({ success: false })
+      const firstInReplacement = value(await right.prompt('inspect-history', {
+        output: { format: 'json' },
+      }))
+      expect(firstInReplacement).toMatchObject({
+        output: {
+          json: [
+            expect.stringContaining(historySummary),
+            'inspect-history',
+          ],
+        },
         effectiveOptions: { resolvedMode: 'task' },
+      })
+      expect(firstInReplacement.output).toMatchObject({
+        json: [
+          expect.stringContaining('untrusted'),
+          'inspect-history',
+        ],
+      })
+      expect(value(await right.prompt('inspect-history', {
+        output: { format: 'json' },
+      }))).toMatchObject({
+        output: {
+          json: ['inspect-history'],
+        },
       })
       value(await right.close())
 
@@ -181,6 +220,14 @@ describe.skipIf(!image)('managed ACP on the real container runner', () => {
       expect(value(await review.prompt('approval'))).toMatchObject({
         output: { text: 'once' },
       })
+      const rules = value(await alice.approvals.rules())
+      expect(rules).toMatchObject([
+        { sessionId: review.id, summary: 'Read project' },
+      ])
+      expect(value(await bob.approvals.rules())).toEqual([])
+      expect(await bob.approvals.revoke(rules[0]!.id)).toMatchObject({ success: false })
+      value(await alice.approvals.revoke(rules[0]!.id))
+      expect(value(await alice.approvals.rules())).toEqual([])
       value(await review.close())
     }
     catch (error) {

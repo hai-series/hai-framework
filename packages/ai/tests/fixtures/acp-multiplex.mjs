@@ -75,11 +75,17 @@ input.on('line', (line) => {
         return undefined
       }
       setTimeout(() => {
+        const content = params.prompt.at(-1).text === 'inspect-history'
+          ? {
+              type: 'text',
+              text: JSON.stringify(params.prompt.map(item => item.text)),
+            }
+          : params.prompt[0]
         send({
           method: 'session/update',
           params: {
             sessionId: params.sessionId,
-            update: { sessionUpdate: 'agent_message_chunk', content: params.prompt[0] },
+            update: { sessionUpdate: 'agent_message_chunk', content },
           },
         })
         reply({ stopReason: 'end_turn' })

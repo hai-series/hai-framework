@@ -16,6 +16,8 @@ Codex 用 `adapter: 'codex'`，DeepSeek Harness 用 `adapter: 'deepseek-harness'
 
 Agent 镜像按任务选择 `minimal`、`documents`、`office`、`browser` 或 `developer`。将构建后的镜像 ID 或仓库清单 digest 登记到 Runner 环境。无需在任务内安装工具链。需要直接处理文件时，也可使用具备相应权限的独立工具作业。
 
+使用 `session.changeExecution({ mode: 'task', acceptNewSession: true, historySummary })` 切换到任务独占容器时，可带入当前用户确认过的历史摘要。摘要最多 8 KiB UTF-8，作为新会话首次请求的历史文本发送一次。会话工具和资料仍按当前授权重新核验。
+
 Linux 上运行 embedded Codex 前，按 [Codex 沙箱前置](https://learn.chatgpt.com/docs/sandboxing) 准备 bubblewrap 和所需的 AppArmor profile，并用 `codex sandbox` 在临时目录验证读写。沙箱初始化失败应先修复宿主环境，不能通过关闭沙箱或让模型猜测文件内容完成任务。
 
 ## Goose 的原生接入

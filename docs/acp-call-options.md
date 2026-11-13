@@ -107,7 +107,7 @@ return result.data
 
 不同 Agent 的 skill 机制有差异。参数 Schema 标明选项在启动/session/turn 哪一级生效，SDK 只暴露该层允许的子集；不支持动态变更时返回需重建，并由调用方决定。权限扩大不能靠修改普通参数绕过授权卡片。
 
-`session.changeExecution({ mode: 'task' })` 在安全空闲点切换；`{ mode: 'auto' }` 表示重新计算。切换要遵守[原生恢复及单执行者规则](acp-platform-runtime-design.md#6-自动路由和模式切换的准确语义)。默认不把授权不足变成“自动 Full Access”，也不在运行中为了减少排队而降低隔离。
+`session.changeExecution({ mode: 'task', acceptNewSession: true })` 切换 Worker，保留业务 ID 并创建新原生会话。`mode: 'auto'` 重新计算。调用方可提供已获同一用户确认的 `historySummary`（最多 8 KiB UTF-8），在新 `user` 或 `task` 会话的首轮作为用户历史文本引入。若首轮失败，调用方可在后续请求中主动重传，平台不会自动重放。切换仍重新核验上下文和工具权限。持久工作区及跨 Worker 原生历史恢复的设计见[运行方案](acp-platform-runtime-design.md#6-自动路由和模式切换的准确语义)。
 
 参数中移除知识库、附件或记忆，只能阻止后续读取，不能让模型忘记已经进入原生上下文的内容。需要严格收缩数据可见范围时重建原生 session，仅导入仍授权的摘要/产物；无法安全导出则新开会话，不能承诺仅换一组 ID 就已抹除上下文。
 
