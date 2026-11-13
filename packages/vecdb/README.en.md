@@ -79,6 +79,19 @@ Insert/upsert take collection/documents, delete IDs, yielding void; search takes
 | `vecdb.vector.delete` | collection, ids             | `void`                 | `await vecdb.vector.delete('documents', ['doc-1'])`                |
 | `vecdb.vector.search` | collection, vector, options | `VectorSearchResult[]` | `await vecdb.vector.search('documents', queryVector, { topK: 5 })` |
 | `vecdb.vector.count`  | collection                  | `number`               | `await vecdb.vector.count('documents')`                            |
+| `vecdb.vector.scan`   | collection, options         | `VectorScanPage`       | `await vecdb.vector.scan('documents', { limit: 32 })`              |
+
+Use `scan` to page through document IDs for reconciliation or cleanup. `collection` is the collection name. `options.limit` defaults to 64 and accepts 1 through 128. Omit `options.cursor` for the first page. Each page contains `{ id }` items. If `nextCursor` is present, continue with that cursor on the same collection and backend even when `items` is empty. Concurrent writes or deletions can affect pagination, so reconciliation jobs should run repeated sweeps. Qdrant returns only points that map back to framework document IDs.
+
+```ts
+// Input: collection name and page size. Output: HaiResult<VectorScanPage>.
+const page = await vecdb.vector.scan('documents', { limit: 32 })
+// On success, pass the cursor and page size to the same collection when another page exists.
+if (page.success && page.data.nextCursor !== undefined) {
+  const nextPage = await vecdb.vector.scan('documents', { cursor: page.data.nextCursor, limit: 32 })
+  // On success, nextPage.data.items contains the next IDs. An absent nextCursor marks the last page.
+}
+```
 
 ### Production shared state
 

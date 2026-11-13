@@ -494,6 +494,32 @@ export function createChromaProvider(): VecdbProvider {
       const target = await getCollection(collection)
       return ok(await target.count())
     },
+
+    async scan(collection, limit, cursor) {
+      const offset = cursor === undefined
+        ? 0
+        : Number(cursor)
+      if (!Number.isSafeInteger(offset) || offset < 0 || (cursor !== undefined && String(offset) !== cursor))
+        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidScanCursor'))
+      try {
+        const target = await getCollection(collection)
+        const { ids } = await target.get({ offset, limit: limit + 1, include: [] })
+        return ok({
+          items: ids.slice(0, limit).map(id => ({ id })),
+          nextCursor: ids.length > limit
+            ? String(offset + limit)
+            : undefined,
+        })
+      }
+      catch (error) {
+        if (error instanceof Error && ['ChromaNotFoundError', 'InvalidCollectionError'].includes(error.name)) {
+          return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+            params: { name: collection },
+          }))
+        }
+        throw error
+      }
+    },
   }
 
   // ─── Provider 接口 ───

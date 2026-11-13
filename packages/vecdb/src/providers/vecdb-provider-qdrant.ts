@@ -20,7 +20,7 @@ import { vecdbM } from '../vecdb-i18n.js'
 import { HaiVecdbError } from '../vecdb-types.js'
 
 import { createBaseCollectionOps, createBaseVectorOps, vectorScoreFromDistance } from './vecdb-provider-base.js'
-import { QdrantRestClient } from './vecdb-qdrant-rest.js'
+import { MAX_QDRANT_POINT_ID, QdrantRestClient } from './vecdb-qdrant-rest.js'
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'qdrant' })
 
@@ -382,6 +382,46 @@ export function createQdrantProvider(): VecdbProvider {
       // 集合信息中的 points_count 是近似统计，不能用作版本过滤扩大候选数的终止依据。
       const count = await client!.count(collection, { exact: true })
       return ok(count.count)
+    },
+
+    async scan(collection, limit, cursor) {
+      let offset: string | bigint | undefined
+      if (cursor !== undefined) {
+        if (/^n:(?:0|[1-9]\d{0,19})$/.test(cursor) && BigInt(cursor.slice(2)) <= MAX_QDRANT_POINT_ID)
+          offset = BigInt(cursor.slice(2))
+        else if (/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(cursor))
+          offset = cursor.toLowerCase()
+        else
+          return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidScanCursor'))
+      }
+      const page = await client!.scroll(collection, limit, offset).catch((error: unknown) => {
+        if (isQdrantNotFoundError(error))
+          return undefined
+        throw error
+      })
+      if (!page) {
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+          params: { name: collection },
+        }))
+      }
+      const items = page.points.flatMap(({ id, payload }) => {
+        const documentId = payload?._id
+        // 仅返回能被本模块按相同 ID 删除的记录，避免将原生 point ID 或伪造载荷当作框架 ID。
+        return typeof documentId === 'string' && hashToUuid(documentId) === id
+          ? [
+              { id: documentId },
+            ]
+          : []
+      })
+      const next = page.next_page_offset ?? undefined
+      if (next !== undefined && next === offset)
+        throw new Error('Qdrant scroll cursor did not advance')
+      return ok({
+        items,
+        nextCursor: typeof next === 'bigint'
+          ? `n:${next}`
+          : next,
+      })
     },
   }
 

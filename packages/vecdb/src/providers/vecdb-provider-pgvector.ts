@@ -529,6 +529,30 @@ export function createPgvectorProvider(): VecdbProvider {
       const result = await pool!.query(`SELECT COUNT(*) as count FROM ${quoteIdent(table)}`)
       return ok(Number.parseInt(String(result.rows[0].count), 10))
     },
+
+    async scan(collection, limit, cursor) {
+      const table = quoteIdent(tableName(collection))
+      const request = cursor === undefined
+        ? pool!.query(`SELECT id FROM ${table} ORDER BY id LIMIT $1`, [limit + 1])
+        : pool!.query(`SELECT id FROM ${table} WHERE id > $1 ORDER BY id LIMIT $2`, [cursor, limit + 1])
+      const page = await request.catch((error: unknown) => {
+        if (typeof error === 'object' && error !== null && 'code' in error && error.code === '42P01')
+          return undefined
+        throw error
+      })
+      if (!page) {
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', {
+          params: { name: collection },
+        }))
+      }
+      const items = page.rows.slice(0, limit).map(row => ({ id: row.id as string }))
+      return ok({
+        items,
+        nextCursor: page.rows.length > limit
+          ? items.at(-1)?.id
+          : undefined,
+      })
+    },
   }
 
   // ─── Provider 接口 ───

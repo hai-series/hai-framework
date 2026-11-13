@@ -1,7 +1,9 @@
 import type { AIRelStore, AIVectorStore } from '../store/ai-store-types.js'
 import type { MemoryEntry } from './ai-memory-types.js'
+import type { MemoryVectorScanState } from './ai-memory-vector-scan.js'
 import { randomUUID } from 'node:crypto'
 import { core } from '@h-ai/core'
+import { createMemoryVectorScan } from './ai-memory-vector-scan.js'
 
 /**
  * 关系记录携带当前向量修订 ID，读取时不会采用旧修订的向量分数。
@@ -58,10 +60,17 @@ function vectorId(memory: StoredMemory): string {
  * }
  * ```
  */
-export function createMemoryVectorSync(store: AIRelStore<StoredMemory>, queue: AIRelStore<MemoryVectorJob>, vectors: AIVectorStore) {
+export function createMemoryVectorSync(
+  store: AIRelStore<StoredMemory>,
+  queue: AIRelStore<MemoryVectorJob>,
+  vectors: AIVectorStore,
+  scanStore?: AIRelStore<MemoryVectorScanState>,
+) {
   const lock = store.withRelatedWriteLock?.bind(store)
   if (!lock || !queue.queryKeys)
     return undefined
+
+  const scan = scanStore && createMemoryVectorScan(store, scanStore, vectors)
 
   function write<R>(run: (memory: AIRelStore<StoredMemory>, pending: AIRelStore<MemoryVectorJob>) => Promise<R>): Promise<R> {
     return lock!(queue, run)
@@ -122,7 +131,12 @@ export function createMemoryVectorSync(store: AIRelStore<StoredMemory>, queue: A
       if (!job || job.token !== claimed.token)
         return
       const now = await pending.currentTime()
-      if (succeeded && claimed.entry && job.attempts > 1) {
+      if (scan && !claimed.entry) {
+        // 删除失败由周期扫描接手；清理旧版本不占用待同步队列。
+        await pending.remove(id)
+        return
+      }
+      if (!scan && succeeded && claimed.entry && job.attempts > 1) {
         // 重放成功只能确认本次请求。保留短期标记，删除时继续覆盖此前可能迟到的请求。
         await pending.save(id, {
           ...job,
@@ -132,7 +146,7 @@ export function createMemoryVectorSync(store: AIRelStore<StoredMemory>, queue: A
         })
         return
       }
-      if (succeeded && (!job.retireUntil || job.retireUntil <= now)) {
+      if (succeeded && (scan || !job.retireUntil || job.retireUntil <= now)) {
         await pending.remove(id)
         return
       }
@@ -174,12 +188,16 @@ export function createMemoryVectorSync(store: AIRelStore<StoredMemory>, queue: A
         timer = setInterval(kick, pollMs)
         timer.unref()
         kick()
+        scan?.start()
       }
     },
     async close() {
       clearInterval(timer)
       timer = undefined
-      await active
+      await Promise.all([
+        active,
+        scan?.close(),
+      ])
     },
     async enqueue(pending: AIRelStore<MemoryVectorJob>, entry: StoredMemory) {
       const now = await pending.currentTime()
@@ -198,7 +216,7 @@ export function createMemoryVectorSync(store: AIRelStore<StoredMemory>, queue: A
         memoryId: entry.id,
         updatedAt: now,
         attempts: 0,
-        ...(prior && { retireUntil: now + lateWriteWindowMs }),
+        ...(!scan && prior && { retireUntil: now + lateWriteWindowMs }),
       })
     },
   }

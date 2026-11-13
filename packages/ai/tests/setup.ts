@@ -49,6 +49,7 @@ const aiTables = [
   'hai_ai_sessions',
   'hai_ai_memory',
   'hai_ai_memory_vector_outbox',
+  'hai_ai_memory_vector_scan',
   'hai_ai_context',
   'hai_ai_retrieval_sources',
   'hai_ai_acp_workspaces',

@@ -3,6 +3,31 @@ import { core } from '@h-ai/core'
 import { z } from 'zod'
 
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024
+/**
+ * Qdrant 数字 point ID 使用完整 uint64 范围。
+ * @example 模块内部上下文
+ * ```ts
+ * const maxPointId = MAX_QDRANT_POINT_ID.toString()
+ * ```
+ */
+export const MAX_QDRANT_POINT_ID = 18_446_744_073_709_551_615n
+const scrollIdSchema = z.union([
+  z.guid(),
+  z.bigint().min(0n).max(MAX_QDRANT_POINT_ID),
+])
+
+// Node 22+ 支持保留 JSON 数值原文。仅 scroll 使用该模式，其余端点保留普通 JSON 语义。
+const parseWithSource = JSON.parse as (text: string, reviver: (key: string, value: unknown, context?: { source?: string }) => unknown) => unknown
+const rawJSON = (JSON as JSON & { rawJSON: (text: string) => object }).rawJSON
+
+function parseScrollJson(text: string): unknown {
+  return parseWithSource(text, (key, value, context) => {
+    const source = context?.source
+    if ((key === 'id' || key === 'next_page_offset') && typeof value === 'number' && source && /^\d{1,20}$/.test(source))
+      return BigInt(source)
+    return value
+  })
+}
 const pointSchema = z.object({
   id: z.union([
     z.string(),
@@ -56,7 +81,7 @@ export class QdrantRestClient {
       throw new Error('Qdrant URL must use HTTP(S) without embedded credentials')
   }
 
-  private async perform<T>(path: string, method: string, schema: z.ZodType<T>, body?: unknown): Promise<T> {
+  private async perform<T>(path: string, method: string, schema: z.ZodType<T>, body?: unknown, parseJson: (text: string) => unknown = JSON.parse): Promise<T> {
     const url = new URL(this.base)
     const [pathname, query] = path.split('?')
     url.pathname = `${url.pathname.replace(/\/$/, '')}${pathname}`
@@ -107,7 +132,7 @@ export class QdrantRestClient {
     }
     let bodyJson: unknown
     try {
-      bodyJson = JSON.parse(new TextDecoder().decode(bytes))
+      bodyJson = parseJson(new TextDecoder().decode(bytes))
     }
     catch {
       throw new Error('Qdrant returned invalid JSON')
@@ -121,9 +146,9 @@ export class QdrantRestClient {
     return envelope.data.result
   }
 
-  private async request<T>(path: string, method: string, schema: z.ZodType<T>, body?: unknown): Promise<T> {
+  private async request<T>(path: string, method: string, schema: z.ZodType<T>, body?: unknown, parseJson?: (text: string) => unknown): Promise<T> {
     try {
-      return await this.perform(path, method, schema, body)
+      return await this.perform(path, method, schema, body, parseJson)
     }
     catch (error) {
       if (error instanceof QdrantHttpError)
@@ -164,6 +189,25 @@ export class QdrantRestClient {
         score: z.number(),
       })),
     }), options)
+  }
+
+  scroll(name: string, limit: number, offset?: string | bigint) {
+    return this.request(`/collections/${encodeURIComponent(name)}/points/scroll`, 'POST', z.object({
+      points: z.array(z.object({
+        id: scrollIdSchema,
+        payload: z.object({
+          _id: z.unknown().optional(),
+        }).nullable().optional(),
+      })).max(limit),
+      next_page_offset: scrollIdSchema.nullish(),
+    }), {
+      limit,
+      offset: typeof offset === 'bigint'
+        ? rawJSON(String(offset))
+        : offset,
+      with_payload: ['_id'],
+      with_vector: false,
+    }, parseScrollJson)
   }
 
   count(name: string, options: { exact: boolean }) {

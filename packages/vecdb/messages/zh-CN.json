@@ -23,6 +23,8 @@
   "vecdb_indexBuildFailed": "构建索引失败: {error}",
   "vecdb_serializationFailed": "序列化/反序列化失败: {error}",
   "vecdb_invalidDimension": "无效的向量维度: {dimension}，必须为正整数",
+  "vecdb_invalidScanLimit": "向量扫描每页条数必须为 1 到 128 的整数",
+  "vecdb_invalidScanCursor": "向量扫描游标无效，请使用上一页返回的游标",
   "vecdb_configPathRequired": "数据库存储路径不能为空",
   "vecdb_configDatabaseRequired": "数据库名称不能为空",
   "vecdb_sharedBackendRequired": "生产模式需要跨节点共享后端；本机文件或内存后端仅用于开发和显式端到端测试。",

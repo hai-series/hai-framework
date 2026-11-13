@@ -79,6 +79,19 @@ insert/upsert は集合と文書配列、delete は ID 配列から void。searc
 | `vecdb.vector.delete` | collection, ids             | `void`                 | `await vecdb.vector.delete('documents', ['doc-1'])`                |
 | `vecdb.vector.search` | collection, vector, options | `VectorSearchResult[]` | `await vecdb.vector.search('documents', queryVector, { topK: 5 })` |
 | `vecdb.vector.count`  | collection                  | `number`               | `await vecdb.vector.count('documents')`                            |
+| `vecdb.vector.scan`   | collection, options         | `VectorScanPage`       | `await vecdb.vector.scan('documents', { limit: 32 })`              |
+
+`scan` は照合やクリーンアップのために文書 ID をページ単位で取得します。`collection` はコレクション名です。`options.limit` の既定値は 64、範囲は 1〜128 です。最初のページでは `options.cursor` を省略します。各ページの `items` には `{ id }` が入ります。`items` が空でも `nextCursor` があれば、同じバックエンドとコレクションにそのカーソルを渡して続けます。同時書き込みや削除でページの内容が変わるため、照合処理はスキャンを繰り返します。Qdrant はフレームワークの文書 ID に対応するポイントだけを返します。
+
+```ts
+// 入力はコレクション名とページサイズ、出力は HaiResult<VectorScanPage>。
+const page = await vecdb.vector.scan('documents', { limit: 32 })
+// 成功して次のページがある場合は、同じコレクションにカーソルとページサイズを渡す。
+if (page.success && page.data.nextCursor !== undefined) {
+  const nextPage = await vecdb.vector.scan('documents', { cursor: page.data.nextCursor, limit: 32 })
+  // 成功時の nextPage.data.items は次ページの ID。nextCursor のないページが最後。
+}
+```
 
 ### 本番の共有状態
 

@@ -25,7 +25,7 @@
 | --- | --- |
 | @h-ai/core | [配置、结果/错误、日志、i18n 与工具](packages/cli/templates/skills/hai-core/SKILL.md) |
 | @h-ai/reldb | [SQL、DDL、CRUD、事务、分页](packages/cli/templates/skills/hai-reldb/SKILL.md) |
-| @h-ai/vecdb | [向量集合与检索](packages/cli/templates/skills/hai-vecdb/SKILL.md) |
+| @h-ai/vecdb | [向量集合、检索与分页扫描](packages/cli/templates/skills/hai-vecdb/SKILL.md) |
 | @h-ai/cache | [KV、Hash/List/Set/ZSet、锁](packages/cli/templates/skills/hai-cache/SKILL.md) |
 | @h-ai/storage | [本地/S3、流式读写、checksum、预签名上传与操作日志](packages/cli/templates/skills/hai-storage/SKILL.md) |
 | @h-ai/datapipe | [文本清洗与分块](packages/cli/templates/skills/hai-datapipe/SKILL.md) |

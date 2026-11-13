@@ -79,6 +79,19 @@ if (!closeResult.success) {
 | `vecdb.vector.delete` | collection, ids             | `void`                 | `await vecdb.vector.delete('documents', ['doc-1'])`                |
 | `vecdb.vector.search` | collection, vector, options | `VectorSearchResult[]` | `await vecdb.vector.search('documents', queryVector, { topK: 5 })` |
 | `vecdb.vector.count`  | collection                  | `number`               | `await vecdb.vector.count('documents')`                            |
+| `vecdb.vector.scan`   | collection, options         | `VectorScanPage`       | `await vecdb.vector.scan('documents', { limit: 32 })`              |
+
+`scan` 分页返回文档 ID，可用于核对或批量清理集合。`collection` 是集合名，`options.limit` 默认为 64，取值为 1 到 128，`options.cursor` 在首页省略。每页的 `items` 只包含 `{ id }`。有 `nextCursor` 时，即使本页为空也继续读取，并将游标传给同一后端的同一集合。并发写入或删除可能改变分页结果，清理任务应重复扫描。Qdrant 只返回能映射回框架文档的记录。
+
+```ts
+// 输入集合名与页大小，输出 HaiResult<VectorScanPage>。
+const page = await vecdb.vector.scan('documents', { limit: 32 })
+// 成功且存在下一页时，将上一页游标与页大小传入同一集合。
+if (page.success && page.data.nextCursor !== undefined) {
+  const nextPage = await vecdb.vector.scan('documents', { cursor: page.data.nextCursor, limit: 32 })
+  // nextPage 成功时 data.items 是下一页文档 ID，data.nextCursor 缺失时已到末页。
+}
+```
 
 ### 生产共享状态
 

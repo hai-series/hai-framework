@@ -2,7 +2,7 @@
  * =============================================================================
  * @h-ai/vecdb - 向量 CRUD 容器化测试
  *
- * 覆盖 vecdb.vector 的 insert / upsert / delete / count 操作。
+ * 覆盖 vecdb.vector 的 insert / upsert / delete / count / scan 操作。
  * 在 LanceDB（本地）、pgvector（容器）和 Qdrant（容器）上运行。
  * =============================================================================
  */
@@ -23,6 +23,80 @@ describe('vecdb.vector CRUD', () => {
   const COLLECTION = 'crud-test'
 
   const defineCommon = () => {
+    it('扫描不存在的集合返回 COLLECTION_NOT_FOUND', async () => {
+      await expect(vecdb.vector.scan(COLLECTION)).resolves.toMatchObject({
+        success: false,
+        error: { code: HaiVecdbError.COLLECTION_NOT_FOUND.code },
+      })
+    })
+
+    it('通过游标分页读取文档 ID，不读取向量或其他内容', async () => {
+      const created = await vecdb.collection.create(COLLECTION, { dimension: DIM })
+      expect(created.success).toBe(true)
+      const ids = [
+        'scan-3',
+        'scan-1',
+        'scan-2',
+        'scan-4',
+        'scan-5',
+      ]
+      const written = await vecdb.vector.upsert(COLLECTION, ids.map(id => ({
+        id,
+        vector: randomVector(DIM),
+        content: 'document text',
+        metadata: { source: 'private' },
+      })))
+      expect(written.success).toBe(true)
+
+      const first = await vecdb.vector.scan(COLLECTION, { limit: 2 })
+      expect(first).toMatchObject({
+        success: true,
+        data: {
+          items: [
+            expect.anything(),
+            expect.anything(),
+          ],
+          nextCursor: expect.any(String),
+        },
+      })
+      if (!first.success)
+        return
+      const second = await vecdb.vector.scan(COLLECTION, { limit: 2, cursor: first.data.nextCursor })
+      expect(second).toMatchObject({
+        success: true,
+        data: {
+          items: [
+            expect.anything(),
+            expect.anything(),
+          ],
+          nextCursor: expect.any(String),
+        },
+      })
+      if (!second.success)
+        return
+      const third = await vecdb.vector.scan(COLLECTION, { limit: 2, cursor: second.data.nextCursor })
+      expect(third).toMatchObject({
+        success: true,
+        data: {
+          items: [
+            expect.anything(),
+          ],
+        },
+      })
+      if (!third.success)
+        return
+      expect(third.data.nextCursor).toBeUndefined()
+      expect([
+        ...first.data.items,
+        ...second.data.items,
+        ...third.data.items,
+      ]).toEqual(expect.arrayContaining(ids.map(id => ({ id }))))
+      await expect(vecdb.vector.scan(COLLECTION, { limit: 0 })).resolves.toMatchObject({
+        success: false,
+        error: { code: HaiVecdbError.CONFIG_ERROR.code },
+      })
+    })
+
     it('插入向量文档', async () => {
       await vecdb.collection.create(COLLECTION, { dimension: DIM })
 

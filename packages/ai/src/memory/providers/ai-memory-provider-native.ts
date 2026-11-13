@@ -30,6 +30,7 @@ import type {
   MemoryRecallOptions,
   MemoryUpdateInput,
 } from '../ai-memory-types.js'
+import type { MemoryVectorScanState } from '../ai-memory-vector-scan.js'
 import type { MemoryVectorJob, StoredMemory } from '../ai-memory-vector-sync.js'
 
 import { randomUUID } from 'node:crypto'
@@ -150,8 +151,9 @@ export function assembleNativeMemory(
   store: AIRelStore<StoredMemory>,
   vectorStore: AIVectorStore,
   vectorQueue?: AIRelStore<MemoryVectorJob>,
+  vectorScan?: AIRelStore<MemoryVectorScanState>,
 ) {
-  const sync = vectorQueue && createMemoryVectorSync(store, vectorQueue, vectorStore)
+  const sync = vectorQueue && createMemoryVectorSync(store, vectorQueue, vectorStore, vectorScan)
   const maxPending = Math.max(1024, config.maxEntriesGlobal * 2)
 
   async function ensureVectorCapacity(pending?: AIRelStore<MemoryVectorJob>) {

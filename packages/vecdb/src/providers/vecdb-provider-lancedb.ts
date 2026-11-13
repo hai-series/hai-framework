@@ -455,6 +455,22 @@ export function createLancedbProvider(): VecdbProvider {
         return ok(count)
       })
     },
+
+    async scan(collection, limit, cursor) {
+      return withCollection(collection, async (table) => {
+        const query = table.query().select(['id']).orderBy({ columnName: 'id', ascending: true }).limit(limit + 1)
+        if (cursor !== undefined)
+          query.where(`id > '${escapeLanceSqlValue(cursor)}'`)
+        const rows: Array<{ id: string }> = await query.toArray()
+        const items = rows.slice(0, limit).map(row => ({ id: row.id }))
+        return ok({
+          items,
+          nextCursor: rows.length > limit
+            ? items.at(-1)?.id
+            : undefined,
+        })
+      })
+    },
   }
 
   // ─── Provider 接口 ───
