@@ -55,7 +55,7 @@ direct・AsyncIterable・直接の Promise 値と記載したもの以外、出�
 | `ai.llm.chatStream`               | 増分応答                               | `same ChatCompletionRequest`                                                      | `AsyncIterable<ChatCompletionChunk>; iteration may throw`                 | `ai.llm.chatStream({ messages })`                                                         |
 | `ai.llm.ask`                      | テキスト応答                           | `question: string, AskOptions?`                                                   | `string answer`                                                           | `ai.llm.ask("解释共享状态")`                                                              |
 | `ai.llm.askStream`                | テキストストリーム                     | `question: string, AskOptions?`                                                   | `AsyncIterable<string>`                                                   | `ai.llm.askStream("解释共享状态")`                                                        |
-| `ai.llm.generateObject`           | Schema 制約付き応答                    | `Zod schema, messages, model?, maxRepairs?, signal?`                              | `schema-inferred T`                                                       | `ai.llm.generateObject({ schema: AnswerSchema, messages })`                               |
+| `ai.llm.generateObject`           | Schema 制約付き応答                    | `Zod schema, messages, model?, responseFormat?, maxRepairs?, signal?`             | `schema-inferred T`                                                       | `ai.llm.generateObject({ schema: AnswerSchema, messages })`                               |
 | `ai.llm.listModels`               | モデル一覧                             | `none`                                                                            | `string[] model IDs`                                                      | `ai.llm.listModels()`                                                                     |
 | `ai.llm.getHistory`               | 会話履歴                               | `{ objectId, sessionId }, { limit?, order? }?`                                    | `ChatRecord[]`                                                            | `ai.llm.getHistory({ objectId: "u1", sessionId: "s1" })`                                  |
 | `ai.llm.listSessions`             | 主体の会話一覧                         | `objectId: string`                                                                | `SessionInfo[]`                                                           | `ai.llm.listSessions("u1")`                                                               |
@@ -323,6 +323,29 @@ const temp = await ai.llm.chat({
 
 SSE は [WHATWG のイベントストリーム規則](https://html.spec.whatwg.org/multipage/server-sent-events.html#event-stream-interpretation)に従い、分割された LF/CRLF/CR、複数 data 行、コロン直後の空白一つ、id/retry の継承、既定の message を扱います。EOF の未完了イベントは配信しません。encodeSSE は data の改行を正規化し、不正なメタデータは明示的に例外を返します。Anthropic/MiMo は UTF-8 reader を共有し、終了・取消・失敗時に本文を取消して解放します。自動再接続や業務再実行は行わず、Anthropic の timeout は本文まで、MiMo は各 HTTP リクエスト単位で適用します。
 
+##### `ai.llm.generateObject` で構造化出力を得る
+
+モデルまたはゲートウェイの対応機能に合わせて `responseFormat` を選びます。既定の `json_schema` は厳密な JSON Schema を上流へ送ります。`schemaName` はこの方式だけで使い、既定値は `result` です。汎用 JSON モードの Chat ゲートウェイには `json_object` を指定し、フレームワークが Schema をプロンプトに含めます。両方式とも同じ Zod Schema でローカル検証を行います。解析・検証に失敗したときの修復回数は `maxRepairs` で制御し、既定は 1 回です。
+
+```ts
+import { ai } from '@h-ai/ai'
+import { z } from 'zod'
+
+// 汎用 JSON モードに対応するテキストモデルで AI を初期化済み。
+const result = await ai.llm.generateObject({
+  schema: z.object({
+    title: z.string()
+  }), // title 文字列を持つオブジェクトを要求する。
+  messages: [
+    { role: 'user', content: 'リリース確認表のタイトルを考えてください。' }
+  ], // 今回の入力。
+  responseFormat: 'json_object', // 汎用 JSON を要求し、Zod でローカル検証する。
+  maxRepairs: 1, // 解析または検証の失敗後に 1 回だけ修復を試す。
+})
+if (result.success)
+  process.stdout.write(result.data.title) // 例: リリース確認表。
+```
+
 #### ツール呼び出し
 
 ```ts
@@ -383,6 +406,69 @@ ACP は Node サービスで実行します。通常の API は HaiResult を返
 
 管理対象 Git でサブモジュールや Git LFS 属性を検出すると ACP_UNSUPPORTED を返し、不完全な内容を準備完了として扱いません。
 
+##### 認証済みユーザーの管理対象 ACP を実行する
+
+RelDB と [Runner](../runner/README.ja.md) を起動し、起動済みのインスタンスを `ai.init(config, { runner, acpPolicy })` に渡します。`acp.agents` に Agent を登録し、`environmentIds` で固定イメージの Runner 環境を、`modelIds` で `llm.models` のモデルを指定します。Codex には Responses ゲートウェイが必要です。API ノードと実行ノードではデータベースと環境定義を揃えます。終了時は AI、Runner、データベースの順に閉じます。
+
+`task` はそのセッション用の専用 Worker を起動します。`user` は主体と起動設定が一致する場合に Worker を再利用できます。`auto` はアプリのポリシーに基づいて選択します。`shared` を利用できるのは、共有を明示的に承認した読み取り専用アダプターで、非公開コンテキスト、ワークスペース、ツールを要求しない場合です。組み込みの Codex、DeepSeek Harness、Goose は専用モードを使用します。[ACP 設定例](../../docs/usage/configuration/ai.md#acp-接入与模型能力)
+
+```ts
+import type { RunnerScope } from '@h-ai/runner' // 認証済みアプリセッションから tenantId と userId を取得する。
+import { ai } from '@h-ai/ai' // Runner を渡して初期化済みのサーバーインスタンス。
+
+async function summarize(identity: RunnerScope, requestId: string) {
+  const agent = ai.acp.scoped(identity) // 以降のジョブ、セッション、承認をこの主体に紐づける。
+  const options = {
+    agentId: 'assistant',
+    execution: { mode: 'auto' as const }
+  } // assistant は登録済み Agent。
+  const plan = await agent.plan(options) // コンテナを取得せず、有効なモード、環境、モデル、リソースを返す。
+  if (!plan.success)
+    return plan // 環境や権限が合わない場合は投入しない。
+  const result = await agent.run({ ...options, prompt: 'リリースの確認項目を三つ挙げて', idempotencyKey: requestId }) // taskId、output、有効なオプションを返す。
+  if (!result.success)
+    return result // 投入、実行、後片付けの失敗を HaiResult として返す。
+  const events = await agent.tasks.events(result.data.taskId, 0, 20) // 最初の 20 イベントを読み、空なら []。
+  if (!events.success)
+    return events
+  return { result: result.data, events: events.data } // 例として output.text に回答、events に順序付きのイベントが入る。
+}
+```
+
+```ts
+import type { RunnerScope } from '@h-ai/runner' // サーバーで認証した主体。
+import { ai } from '@h-ai/ai' // assistant を登録し、同じユーザー内の Worker 再利用が可能とする。
+
+async function continueWork(identity: RunnerScope) {
+  const agent = ai.acp.scoped(identity) // アクセスをこの主体に紐づける。
+  const created = await agent.sessions.create({
+    agentId: 'assistant',
+    execution: { mode: 'user' }
+  }) // 成功時は id 付きのセッションハンドル。
+  if (!created.success)
+    return created
+  const session = created.data // prompt、stream、changeExecution、close が使える。
+  const run = async () => {
+    const first = await session.prompt('受け入れ条件を記録して') // このターンの taskId、output、有効なオプションを返す。
+    if (!first.success)
+      return first
+    const switched = await session.changeExecution({ mode: 'task', acceptNewSession: true }) // 業務上の id を維持し、新しいネイティブセッションを開始する。
+    if (!switched.success)
+      return switched
+    return await session.prompt('独立した受け入れチェックリストを出して') // 成功時の回答は data.output。
+  }
+  return run().finally(async () => {
+    const closed = await session.close() // 成功時の data は undefined。セッションまたは専用環境を解放する。
+    if (!closed.success)
+      throw new Error(closed.error.message)
+  })
+}
+```
+
+`agents.describe(agentId)` で組み込みアダプターの機能を確認できます。`sessions.get(id)` は同じ主体が別の API ノードからハンドルを取得するために使います。`session.stream(prompt, options)` は保存済みイベントを順に返し、失敗時は例外を送出します。`tasks.get(taskId)` は実行受付票、`tasks.cancel(taskId)` はキャンセル受理後の状態を返します。`run` や `prompt` の `onEvent` に届く `accepted` イベントから `taskId` を取得し、別のリクエストで照会やキャンセルを行えます。
+
+`acpPolicy` で `workspaceId` のスナップショット、ナレッジ、メモリ、ファイル、スキル、ツールを認可します。下記の MCP 入口には `allowTools` と `bindTools` を使います。`approval` イベントの `approvalId` に対して、同じ主体で `approvals.respond(id, 'allow-once' | 'allow-session' | 'always-allow' | 'deny')` を呼びます。成功時は `undefined` です。`approvals.rules(offset, limit)` は `expiresAt` を持つ有効なルールをページ取得し、`approvals.revoke(ruleId)` は主体自身のルールを取り消します。`full-access` にはアプリの明示的な承認と `task` モードが必要です。ワークスペースは読み取り専用スナップショットです。モード切り替え時にユーザーが確認した `historySummary` を渡せます。[管理対象 ACP の利用例](../../docs/usage/development/ai-acp.md#多用户应用的受管调用)
+
 #### 設定とデータベースのリソース一覧
 
 `llm.models`、`audio.models`、`image.models`、`mcp.servers`、`retrieval.sources`、`acp.agents/workspaces` は設定と DB を統合します。同じ ID は設定を優先し、設定は読み取り専用です。DB は list/get/register/update/remove に対応し、value/source/version と任意のバージョン照合を使用します。非同期呼び出しは最新の定義を読み、同期音声機能照会は直近のローカル情報を使います。エラーは 090–094。定義には認証情報が含まれるため、信頼できるサーバー管理 API として使用します。
@@ -425,6 +511,81 @@ server.registerTool('search', {
 await server.connect(new StreamableHTTPServerTransport({
   sessionIdGenerator: () => globalThis.crypto.randomUUID()
 }))
+```
+
+##### リモート MCP と独立ツールジョブを呼び出す
+
+`mcp.servers` の `transport: http` に外部 Streamable HTTP の URL と `allowedTools` を登録します。認証には `headerEnv` からサーバーの環境変数を参照します。`transport: job` では同じ API からオフラインの文書、Office、OCR を実行できます。`environmentId`、許可する操作、任意の `pool` を設定し、Runner と `mcpJobFiles` を `ai.init` に渡します。ジョブには認可済みの `fileId` を渡します。実行ノードがアクセス権を再確認し、成果物をオブジェクト ID で返します。ブラウザーイメージは独立して運用します。[MCP の設定](../../docs/usage/configuration/ai.md#mcp和a2a) · [ツールイメージ](tools/README.md)
+
+```ts
+import type { MCPServiceAuthorization } from '@h-ai/ai' // IAM に基づく主体と、実際の引数を検証する認可コールバックを渡す。
+import { ai } from '@h-ai/ai' // manual と office を登録済みのサーバーインスタンス。
+
+async function searchManual(access: MCPServiceAuthorization, query: string) {
+  const result = await ai.mcp.services.invoke({
+    serviceId: 'manual',
+    tool: 'search_manual',
+    arguments: { query }
+  }, access) // 登録と認可を確認し、標準の MCP ツール結果を返す。
+  if (!result.success)
+    return result // 拒否または上流サービスの失敗を返す。
+  return result.data.content // 例: [{ type: 'text', text: '...' }]。
+}
+
+async function convertDocument(access: MCPServiceAuthorization, fileId: string) {
+  const result = await ai.mcp.services.invoke({
+    serviceId: 'office',
+    tool: 'office.convert',
+    arguments: { fileId }
+  }, access) // 認可済みオブジェクト ID でオフライン変換を投入する。
+  if (!result.success)
+    return result
+  return result.data.structuredContent // 例: { fileId: 'pdf-123', name: 'result.pdf' }。ダウンロード時に再認可する。
+}
+```
+
+```ts
+import type { MCPServiceAuthorization, MCPServiceBrokerOptions } from '@h-ai/ai' // デプロイ時の URL と、主体・ジョブ・引数を再確認する authorize を渡す。
+import { createServer } from 'node:http' // 例の HTTP 入口を作成する。
+import { ai } from '@h-ai/ai' // manual を登録済みのサーバーインスタンス。
+
+function mountTools(options: MCPServiceBrokerOptions) {
+  const result = ai.mcp.services.createBroker(options) // 成功時は bind、handleRequest、close を提供する。
+  if (!result.success)
+    throw new Error(result.error.message)
+  const broker = result.data // 各実行ノードで Broker を作る。
+  const server = createServer((req, res) => {
+    void broker.handleRequest(req, res)
+  }) // 入口の MCP リクエストを処理する。
+  return { broker, server } // ホストが固定アドレスを待ち受け、通信を保護し、終了時に broker.close() と server.close() を呼ぶ。
+}
+
+async function bindManual(broker: ReturnType<typeof mountTools>['broker'], principal: MCPServiceAuthorization['principal'], sessionId: string, signal: AbortSignal) {
+  const result = await broker.bind({
+    principal,
+    taskId: sessionId,
+    signal,
+    tools: [
+      {
+        id: 'manual_search',
+        serviceId: 'manual',
+        tool: 'search_manual', // モデルに表示する名前と登録済みの操作名を設定する。
+        description: 'Search authorized manuals', // モデルに渡す説明。
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string' }
+          },
+          required: ['query'],
+          additionalProperties: false
+        }, // 呼び出し時に引数を検証する。
+      }
+    ]
+  }) // 成功時は { servers, revoke }。servers に現在のセッション用の短期 Bearer が入る。
+  if (!result.success)
+    throw new Error(result.error.message)
+  return result.data // ACPPlatformPolicy.bindTools から返す。セッション終了時に資格情報が無効になる。
+}
 ```
 
 #### Memory / RAG / Knowledge
@@ -931,6 +1092,8 @@ const memories = await ai.memory.recall('经济发展', {
 ```
 
 `ai.config` はマスク済み設定を返し、`apiKey`、`privateKey`、URL 内認証情報などをそのまま公開しません。
+
+ネイティブメモリの追加は、共有データベースのトランザクション内で主体別と全体の上限を確認します。古い候補を一度に最大 64 件読み出し、重要度と経過時間から削除対象を選びます。既存データが上限を超えている間は、追加前に分割して整理します。カスタム共有 Store では `AIRelStore.withWriteLock` によって同じノード間の保証を提供できます。
 
 ## エラー処理
 

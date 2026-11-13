@@ -6,7 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { AIConfig, EmbeddingConfig, ResolvedModelConfig } from '../ai-config.js'
+import type { AIConfig, EmbeddingConfig, LLMConfig, ResolvedModelConfig } from '../ai-config.js'
 
 import type {
   EmbeddingOperations,
@@ -30,6 +30,7 @@ const logger = core.logger.child({ module: 'ai', scope: 'embedding' })
  * 内部复用同一个 OpenAI 客户端实例，批量请求按 batchSize 自动拆分。
  *
  * @param config - 校验后的 AI 配置（apiKey / baseUrl 来自 llm 配置，dimensions / batchSize 来自 embedding 配置）
+ * @param loadModels - 每次请求读取相关模型配置，整个批次共用本次解析结果。
  * @returns EmbeddingOperations 实例（`embed` / `embedText` / `embedBatch`）
  *
  * @example
@@ -43,7 +44,7 @@ const logger = core.logger.child({ module: 'ai', scope: 'embedding' })
  * }
  * ```
  */
-export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations {
+export function createEmbeddingOperations(config: AIConfig, loadModels: (model?: string) => LLMConfig | Promise<LLMConfig> = () => config.llm): EmbeddingOperations {
   const embeddingConfig: EmbeddingConfig = config.embedding ?? { batchSize: 100 }
 
   /**
@@ -73,16 +74,7 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
   /**
    * 调用 OpenAI Embeddings API（单次请求）
    */
-  async function callEmbeddingAPI(request: EmbeddingRequest): Promise<HaiResult<EmbeddingResponse>> {
-    const resolvedResult = resolveModelEntry(config.llm, 'embedding', request.model, {
-      missingApiKeyMessage: aiM('ai_configError', {
-        params: { error: 'API Key is required for embedding' },
-      }),
-    })
-    if (!resolvedResult.success)
-      return resolvedResult
-    const resolved = resolvedResult.data
-
+  async function callEmbeddingAPI(request: EmbeddingRequest, resolved: ResolvedModelConfig): Promise<HaiResult<EmbeddingResponse>> {
     const input = Array.isArray(request.input)
       ? request.input
       : [request.input]
@@ -127,6 +119,13 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
    * 对外统一嵌入入口：单条 / 批量都复用同一套分批逻辑
    */
   async function embedRequest(request: EmbeddingRequest): Promise<HaiResult<EmbeddingResponse>> {
+    const resolved = resolveModelEntry(await loadModels(request.model), 'embedding', request.model, {
+      missingApiKeyMessage: aiM('ai_configError', {
+        params: { error: 'API Key is required for embedding' },
+      }),
+    })
+    if (!resolved.success)
+      return resolved
     const input = Array.isArray(request.input)
       ? request.input
       : [request.input]
@@ -134,7 +133,7 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
 
     // 如果输入不超过 batchSize，直接调用
     if (input.length <= batchSize) {
-      return callEmbeddingAPI(request)
+      return callEmbeddingAPI(request, resolved.data)
     }
 
     // 批量处理：按 batchSize 分组
@@ -145,7 +144,7 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
 
     for (let i = 0; i < input.length; i += batchSize) {
       const batch = input.slice(i, i + batchSize)
-      const result = await callEmbeddingAPI({ ...request, input: batch })
+      const result = await callEmbeddingAPI({ ...request, input: batch }, resolved.data)
       if (!result.success)
         return result
 

@@ -28,6 +28,7 @@
   "ai_configError": "AI 配置校验失败：{error}",
   "ai_llmRecordFailed": "对话记录保存失败：{error}",
   "ai_llmHistoryFailed": "对话历史查询失败：{error}",
+  "ai_generateObjectJson": "只输出符合此结构的 JSON，不要包含 Markdown 或其他文本。结构为 {schema}",
   "ai_generateObjectFailed": "结构化输出解析失败：{error}",
   "ai_generateObjectRepair": "上一次输出无法解析为要求的结构（{error}）。请只输出符合 schema 的 JSON，不要包含额外文本。",
   "ai_embeddingApiFailed": "Embedding API 调用失败：{error}",

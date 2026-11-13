@@ -378,6 +378,8 @@ export interface MCPServiceBinding {
   /** 仅传给当前 Agent，含短期 Bearer。 */
   servers: Array<Extract<ACPMcpServer, { type: 'http' }>>
   revoke: () => void
+  /** 此绑定到期、撤销或上层关闭时取消；受管 ACP 用它判定何时结束原生会话。 */
+  signal?: AbortSignal
 }
 
 /**

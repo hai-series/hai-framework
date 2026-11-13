@@ -22,6 +22,7 @@ input.on('line', (line) => {
       return reply({
         protocolVersion: 1,
         agentCapabilities: {
+          mcpCapabilities: { http: true },
           sessionCapabilities: { close: {} },
         },
         authMethods: [],
@@ -41,8 +42,20 @@ input.on('line', (line) => {
           error: { code: -32602, message: 'Unknown session' },
         })
       }
-      if (params.prompt[0].text === 'approval') {
+      if ([
+        'approval',
+        'approval-metadata',
+        'approval-missing',
+        'approval-conflict',
+      ].includes(params.prompt[0].text)) {
+        const operation = params.prompt[0].text
         const requestId = `permission-${params.sessionId}-${id}`
+        const toolCall = {
+          toolCallId: 'fixture-tool',
+          title: 'Read project',
+          kind: 'read',
+          rawInput: { id: 'project' },
+        }
         approvals.set(requestId, (decision) => {
           send({
             method: 'session/update',
@@ -56,17 +69,28 @@ input.on('line', (line) => {
           })
           reply({ stopReason: 'end_turn' })
         })
+        if (operation === 'approval-metadata' || operation === 'approval-conflict') {
+          send({
+            method: 'session/update',
+            params: {
+              sessionId: params.sessionId,
+              update: { sessionUpdate: 'tool_call', ...toolCall },
+            },
+          })
+        }
         send({
           id: requestId,
           method: 'session/request_permission',
           params: {
             sessionId: params.sessionId,
-            toolCall: {
-              toolCallId: 'fixture-tool',
-              title: 'Read project',
-              kind: 'read',
-              rawInput: { id: 'project' },
-            },
+            toolCall: operation === 'approval'
+              ? toolCall
+              : operation === 'approval-conflict'
+                ? {
+                    ...toolCall,
+                    rawInput: { id: 'another-project' },
+                  }
+                : { toolCallId: toolCall.toolCallId },
             options: [
               { optionId: 'once', name: 'Allow once', kind: 'allow_once' },
             ],

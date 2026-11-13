@@ -238,7 +238,7 @@ metric: cosine
 | 配置 | 框架默认（对象存在时） | 影响 |
 | --- | --- | --- |
 | `memory.provider` / `memory.allowEphemeralFallback` | `native` / `false` | `mem0` 是数据格式适配，要求 Qdrant ≥1.19；其它持久化后端使用 native Provider；其他后端不得静默退内存，生产始终要求真实持久连接 |
-| `maxEntriesPerObject`/`maxEntriesGlobal` | 1000/100000 | 主体与全局容量限制，主体淘汰不应误删其他主体数据 |
+| `maxEntriesPerObject`/`maxEntriesGlobal` | 1000/100000 | 原生记忆的主体和全局容量。默认数据库 Store 用事务串行检查写入配额，每批最多读取 64 条淘汰候选 |
 | `recencyDecay`/`embeddingEnabled` | 0.95 / `true` | 时间衰减及向量检索开关，需评估旧记忆保留和检索成本 |
 | `defaultTopK`/`candidateMultiplier`/`writebackRelatedTopK` | 10/5/20 | 输出条数、候选倍数及写回关联候选，改变检索/写回成本 |
 | `memory.systemPrompt`、`summary.systemPrompt`、`file.systemPrompt` | 无配置默认 | 使用实现内置提示；覆盖时保留安全和实际任务约束 |

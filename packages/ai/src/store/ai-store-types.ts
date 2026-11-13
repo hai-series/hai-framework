@@ -48,6 +48,8 @@ export interface StoreScope {
 export interface WhereOperator<V> {
   /** 值在给定列表中（IN 语义） */
   $in?: V[]
+  /** 不等于该值；缺失的字段也匹配。 */
+  $ne?: V
   /** 大于等于 */
   $gte?: V
   /** 大于 */
@@ -120,6 +122,8 @@ export interface StoreFilter<T> {
   orderBy?: { field: keyof T, direction: 'asc' | 'desc' }
   /** 数量限制 */
   limit?: number
+  /** 按关系记录最后写入时间过滤，主要用于保留期维护。 */
+  updatedBefore?: number
 }
 
 // ─── 分页结果 ───
@@ -176,6 +180,10 @@ export interface AIRelStoreOptions {
    * SQLite / MySQL 不建索引，`scope` 过滤退回调用方内存匹配（当前行为不变）。
    */
   hasScopeIndex?: boolean
+  /** 为存在全局配额的 Store 启用事务串行写入。 */
+  serializeWrites?: boolean
+  /** 为按最后更新时间读取记录键的维护任务建索引。 */
+  hasUpdatedAtIndex?: boolean
 }
 
 // ─── 存储适配器抽象 ───
@@ -245,6 +253,12 @@ export interface AIRelStoreCompareAndSwap<T> {
  * ```
  */
 export interface AIRelStore<T> {
+  /** 在共享存储事务中串行执行配额读取和写入，回调使用事务内 Store。 */
+  withWriteLock?: <R>(write: (store: AIRelStore<T>) => Promise<R>) => Promise<R>
+  /** 按更新时间和主键升序获取小批记录键，避免加载业务 JSON。 */
+  queryKeys?: (filter: StoreFilter<T>, cursor?: { updatedAt: number, id: string }) => Promise<Array<{ id: string, updatedAt: number, version: string }>>
+  /** 只删除指定版本，防止过期维护删除同时更新的记录。 */
+  removeIfUnchanged?: (id: string, version: string) => Promise<boolean>
   /**
    * 存储端 Unix 毫秒时钟；共享租约以它计算期限，不依赖各节点墙钟同步。
    */

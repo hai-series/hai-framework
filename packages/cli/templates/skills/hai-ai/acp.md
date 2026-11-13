@@ -104,7 +104,11 @@ function prepareTools(url: string, authorize: MCPServiceBrokerOptions['authorize
 }
 ```
 
-创建绑定时，工具入口为每项工具检查目录白名单和输入 Schema。每次调用重新检查业务权限和目录，网络重定向会失败。绑定默认有效 15 分钟。会话关闭、租约失效或服务停止时撤销绑定。多个执行节点分别挂载自己的入口，使 Agent 始终访问签发本次凭据的节点。
+创建绑定时，工具入口按工具独立编译输入 Schema，并检查目录白名单。每次调用重新检查业务权限和目录，网络重定向会失败。`bindTools` 收到的是 Worker 生命周期信号。示例直接返回 `bound.data`，其中的 `signal` 会在绑定到期或被撤销时终止；默认有效期为 15 分钟，可通过 `ttlMs` 调整。会话关闭、Worker 失租或服务停止时撤销绑定。凭据在轮次中失效会取消本轮，后续调用返回 `ACP_CLOSED`。要继续使用工具，显式创建新会话，并按需带入用户授权的历史摘要。多个执行节点分别挂载自己的入口，使 Agent 始终访问签发本次凭据的节点。
+
+应用使用 `scoped.approvals.rules(offset, limit)` 分页查看有效规则，使用 `revoke(id)` 撤销。`permissions.ruleIds` 可只启用指定持久规则，切换为 `approval: 'never'` 仍可复用同一执行安全范围的已授权操作。升级后，按旧 Worker 快照保存的规则仍可查看和撤销，继续使用时需重新授权。标准 Store 会在后台限批清理到期规则和已过期审批。
+
+受管会话、任务索引和幂等意图的保留期至少为 7 天。对应 Runner 记录清理后，ACP 执行节点才清理关联数据。仍活动或未核验的 `unknown` 执行受保留保护。自定义关系 Store 通过 `queryKeys` 和 `removeIfUnchanged` 接入后台清理。Runner 的 `retentionMs` 控制执行记录的保留期，应用应单独保存需要长期展示的业务历史。
 
 ## 最小本机接入
 

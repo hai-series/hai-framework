@@ -34,12 +34,57 @@ createServer(async (request, response) => {
       created: 1,
       model: input.model,
     }
+    const approval = body.includes('native-approval-fixture')
+    if (approval && !input.messages?.some(message => message.role === 'tool')) {
+      const command = body.includes('wrong-target')
+        ? 'cat /input/wrong.txt'
+        : 'cat /input/approved.txt'
+      send({
+        ...base,
+        choices: [
+          {
+            index: 0,
+            delta: {
+              role: 'assistant',
+              tool_calls: [
+                {
+                  index: 0,
+                  id: 'call-managed-fixture',
+                  type: 'function',
+                  function: {
+                    name: 'bash',
+                    arguments: JSON.stringify({
+                      command,
+                      description: 'Read the isolated approval fixture',
+                      sandbox_permissions: 'danger-full-access',
+                      justification: 'Read the pre-authorized fixture only',
+                    }),
+                  },
+                },
+              ],
+            },
+            finish_reason: null,
+          },
+        ],
+      })
+      send({
+        ...base,
+        choices: [
+          { index: 0, delta: {}, finish_reason: 'tool_calls' },
+        ],
+      })
+      response.end('data: [DONE]\n\n')
+      return
+    }
+    const text = approval
+      ? JSON.stringify(input.messages?.filter(message => message.role === 'tool').map(message => message.content))
+      : answer
     send({
       ...base,
       choices: [
         {
           index: 0,
-          delta: { role: 'assistant', content: answer },
+          delta: { role: 'assistant', content: text },
           finish_reason: null,
         },
       ],

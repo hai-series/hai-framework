@@ -28,6 +28,7 @@
   "ai_configError": "AI設定の検証に失敗しました: {error}",
   "ai_llmRecordFailed": "チャット記録の保存に失敗しました: {error}",
   "ai_llmHistoryFailed": "チャット履歴の取得に失敗しました: {error}",
+  "ai_generateObjectJson": "Markdown や補足文を含めず、次のスキーマに従う JSON のみを出力してください。スキーマは {schema} です。",
   "ai_generateObjectFailed": "構造化出力の解析に失敗しました: {error}",
   "ai_generateObjectRepair": "前の出力を必要な構造に解析できませんでした（{error}）。追加のテキストを含めず、スキーマに準拠したJSONのみを出力してください。",
   "ai_embeddingApiFailed": "埋め込みAPIの呼び出しに失敗しました: {error}",
