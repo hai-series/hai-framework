@@ -209,13 +209,23 @@ describe('managed execution', () => {
   it('counts resources through cleanup, routes pinned work, and waits for cancellation', async () => {
     const follower = createRunner()
     const jobResources = { ...capacity }
+    const started = Promise.withResolvers<void>()
+    const cleanupStarted = Promise.withResolvers<void>()
     const hold = Promise.withResolvers<void>()
     try {
       expect((await runner.init({ nodeId: 'alpha', capacity, maxRunning: 2 })).success).toBe(true)
       expect((await follower.init({ nodeId: 'beta', capacity, maxRunning: 2 })).success).toBe(true)
       for (const candidate of [runner, follower]) {
         expect((await candidate.register('hold', async (_input, context) => {
-          await new Promise<void>(resolve => context.signal.addEventListener('abort', () => resolve(), { once: true }))
+          const cancelled = new Promise<void>((resolve) => {
+            if (context.signal.aborted)
+              resolve()
+            else
+              context.signal.addEventListener('abort', () => resolve(), { once: true })
+          })
+          started.resolve()
+          await cancelled
+          cleanupStarted.resolve()
           await hold.promise
           return null
         })).success).toBe(true)
@@ -228,6 +238,10 @@ describe('managed execution', () => {
         resources: jobResources,
         nodeId: 'alpha',
       })
+      if (!active.success)
+        throw new Error(active.error.message)
+      await started.promise
+      await status(active.data.id, 'running')
       const second = await runner.submit({
         scope,
         kind: 'hold',
@@ -235,9 +249,8 @@ describe('managed execution', () => {
         resources: jobResources,
         nodeId: 'alpha',
       })
-      if (!active.success || !second.success)
-        throw new Error('submission failed')
-      await status(active.data.id, 'running')
+      if (!second.success)
+        throw new Error(second.error.message)
       await status(second.data.id, 'queued')
       const command = await follower.submit({
         scope,
@@ -256,6 +269,7 @@ describe('managed execution', () => {
         success: true,
         data: { status: 'cancelling' },
       })
+      await cleanupStarted.promise
       await status(second.data.id, 'queued')
       hold.resolve()
       await status(active.data.id, 'cancelled')
