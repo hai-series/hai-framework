@@ -434,6 +434,7 @@ async function scan(directory) {
       'paraglide',
       '.turbo',
       'test-results',
+      'tmp',
       'target',
       'tests',
       '__tests__',

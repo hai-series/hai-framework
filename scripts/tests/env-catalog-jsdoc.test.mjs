@@ -45,6 +45,8 @@ it('真实catalog排除JS/TS的JSDoc，保留运行入口、字符串生成代�
       }
     }
     await mkdir(path.join(root, 'packages/cli/src/commands'), { recursive: true })
+    await mkdir(path.join(root, 'packages/ai/tmp/probe'), { recursive: true })
+    await writeFile(path.join(root, 'packages/ai/tmp/probe/local.test.ts'), 'export const fixture = process.env.HAI_DOC02_LOCAL_PROBE\n')
     await mkdir(path.join(root, 'apps/fixture'), { recursive: true })
     await mkdir(path.join(root, 'scripts'), { recursive: true })
     const code = [
@@ -104,6 +106,7 @@ it('真实catalog排除JS/TS的JSDoc，保留运行入口、字符串生成代�
       'NESTED',
       'EOF',
       'SVELTE_DOC',
+      'LOCAL_PROBE',
     ]) expect(variables.has(`HAI_DOC02_${suffix}`), suffix).toBe(false)
     for (const suffix of [
       'RUNTIME',
