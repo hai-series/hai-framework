@@ -1,0 +1,43 @@
+{
+  "name": "@h-ai/runner",
+  "type": "module",
+  "version": "1.0.0-beta.23",
+  "description": "Hai Framework managed execution, resource admission, and worker ownership.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "publishConfig": { "access": "public" },
+  "engines": { "node": "^22.23.4 || ^24.22.1 || ^26.12.1" },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "node ../../scripts/typecheck.mjs --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "clean": "rimraf dist .turbo",
+    "build:clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@h-ai/core": "workspace:*",
+    "@h-ai/reldb": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "rimraf": "catalog:",
+    "testcontainers": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

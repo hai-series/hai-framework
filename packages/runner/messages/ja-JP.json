@@ -1,0 +1,11 @@
+{
+  "runner_notInitialized": "Runner は初期化されていません",
+  "runner_alreadyInitialized": "Runner は起動中または初期化済みです",
+  "runner_invalid": "実行オプションが無効です",
+  "runner_notFound": "実行タスクまたは実行環境が見つかりません",
+  "runner_conflict": "実行キーのオプションが異なるか、実行状態が変更されました",
+  "runner_unavailable": "実行サービスを利用できません",
+  "runner_capacity": "実行キューまたはリソースの上限に達しました",
+  "runner_leaseLost": "実行のリースが期限切れです",
+  "runner_cleanupUnconfirmed": "実行リソースの解放を確認できません"
+}
