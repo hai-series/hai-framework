@@ -1,6 +1,8 @@
 import { writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 
+let recordedPrompt = false
+
 // 仅模拟模型 HTTP 返回；测试运行的 Codex/dsh 与 ACP 传输均为真实程序。
 createServer(async (request, response) => {
   if (request.url === '/ready') {
@@ -10,13 +12,17 @@ createServer(async (request, response) => {
   let body = ''
   for await (const chunk of request) body += chunk
   const input = JSON.parse(body || '{}')
-  writeFileSync('/workspace/upstream.json', JSON.stringify({
-    url: request.url,
-    model: input.model,
-    authorization: request.headers.authorization,
-    repoInstructions: body.includes('hai-repo-instructions-v2'),
-    repoSkill: body.includes('hai-repo-skill-v2'),
-  }))
+  // Codex 还会异步请求会话标题。只采集验收提示词对应的请求。
+  if (!recordedPrompt && body.includes('Say native-agent-ok. Do not use tools.')) {
+    writeFileSync('/workspace/upstream.json', JSON.stringify({
+      url: request.url,
+      model: input.model,
+      authorization: request.headers.authorization,
+      repoInstructions: body.includes('hai-repo-instructions-v2'),
+      repoSkill: body.includes('hai-repo-skill-v2'),
+    }))
+    recordedPrompt = true
+  }
   response.writeHead(200, { 'content-type': 'text/event-stream' })
   const send = event => response.write(`data: ${JSON.stringify(event)}\n\n`)
   if (request.url.includes('/responses')) {

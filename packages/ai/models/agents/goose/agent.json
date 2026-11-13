@@ -2,7 +2,7 @@
   "name": "goose",
   "version": "1.57.0",
   "image": "hai-ai/goose",
-  "transports": ["http", "ws"],
+  "transports": ["stdio", "http", "ws"],
   "command": "goose",
   "args": ["serve", "--host", "0.0.0.0", "--port", "3284"],
   "source": "https://github.com/aaif-goose/goose/releases/tag/v1.57.0",

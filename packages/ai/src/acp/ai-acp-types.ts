@@ -61,6 +61,10 @@ export interface ACPClientOptions {
  * ```
  */
 export interface ACPAgentAdapter {
+  /** 仅已验证无原生越权入口、能安全隔离并关闭会话的适配器可声明。 */
+  sharedSessions?: true
+  /** 验证原生扩展并返回实际生效的选项。 */
+  nativeOptions?: z.ZodType<Record<string, import('@h-ai/runner').RunnerJson>>
   /**
    * 生成当前会话的原生启动参数；实现可以异步，不应在此启动进程或持久保存密钥。
    * @param input - 智能体、已解析模型与独立状态目录。
@@ -89,6 +93,12 @@ export interface ACPAgentAdapterInput {
   modelId?: string
   /** 已创建的专属状态目录；托管容器内使用 /state/<会话 ID>。 */
   statePath: string
+  /** 受管任务请求的权限范围。 */
+  permissionProfile?: 'read-only' | 'workspace' | 'full-access'
+  /** 已由适配器 Schema 校验的原生扩展选项。 */
+  nativeOptions?: Record<string, import('@h-ai/runner').RunnerJson>
+  /** 模型声明支持且适配器可落实的推理级别。 */
+  reasoningEffort?: string
 }
 /**
  * 单次启动的原生配置；env 可能含凭据，不可向浏览器或日志直接公开。

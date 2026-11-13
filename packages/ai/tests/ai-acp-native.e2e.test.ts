@@ -1,8 +1,11 @@
 import type { HaiResult } from '@h-ai/core'
+import { Buffer } from 'node:buffer'
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { createServer } from 'node:http'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
@@ -156,5 +159,154 @@ git('clone', '--bare', project, '/workspace/remote.git');
         }
       }
     }, 240000)
+  }
+})
+
+describe('installed native ACP agents with a loopback model', () => {
+  for (const { adapter, command } of [
+    { adapter: 'goose', command: process.env.HAI_ACP_E2E_GOOSE_COMMAND },
+    { adapter: 'deepseek-harness', command: process.env.HAI_ACP_E2E_DSH_COMMAND },
+  ]) {
+    it.skipIf(!command)(`${adapter} creates, prompts, closes and restores a session`, async () => {
+      const workspace = await mkdtemp(join(tmpdir(), 'hai-native-acp-'))
+      const modelRequests: Array<{ path: string | undefined, authorization: string | undefined, body: string }> = []
+      const server = createServer(async (request, response) => {
+        const body = Buffer.concat(await Array.fromAsync(request, chunk => Buffer.from(chunk))).toString()
+        if (request.method === 'GET' && request.url?.endsWith('/models')) {
+          response.setHeader('content-type', 'application/json')
+          response.end(JSON.stringify({
+            object: 'list',
+            data: [
+              {
+                id: 'fixture-model',
+                object: 'model',
+                created: 1,
+                owned_by: 'fixture',
+              },
+            ],
+          }))
+          return
+        }
+        modelRequests.push({ path: request.url, authorization: request.headers.authorization, body })
+        response.writeHead(200, { 'content-type': 'text/event-stream' })
+        const header = {
+          id: 'fixture',
+          object: 'chat.completion.chunk',
+          created: 1,
+          model: 'fixture-model',
+        }
+        for (const item of [
+          {
+            ...header,
+            choices: [
+              {
+                index: 0,
+                delta: { role: 'assistant', content: 'native-agent-ok' },
+                finish_reason: null,
+              },
+            ],
+          },
+          {
+            ...header,
+            choices: [
+              { index: 0, delta: {}, finish_reason: 'stop' },
+            ],
+            usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 },
+          },
+        ])
+          response.write(`data: ${JSON.stringify(item)}\n\n`)
+        response.end('data: [DONE]\n\n')
+      })
+      try {
+        await new Promise<void>((resolve, reject) => {
+          server.once('error', reject)
+          server.listen(0, '127.0.0.1', resolve)
+        })
+        const address = server.address()
+        if (!address || typeof address === 'string')
+          throw new Error('Native fixture did not bind to a TCP port')
+        value(await ai.init({
+          llm: {
+            models: [
+              {
+                id: 'fixture',
+                model: 'fixture-model',
+                protocol: 'chat',
+                apiKey: 'fixture-key',
+                baseUrl: `http://127.0.0.1:${address.port}/proxy/v1`,
+                capabilities: {
+                  contextWindow: 32768,
+                  maxOutputTokens: 1024,
+                  inputModalities: ['text'],
+                  toolCalling: true,
+                  reasoning: { supported: false },
+                },
+              },
+            ],
+          },
+          acp: { requestTimeout: 15000, promptTimeout: 15000 },
+        }))
+        value(await ai.acp.workspaces.register({
+          id: 'project',
+          storage: { type: 'directory', path: workspace },
+          repositories: [],
+        }))
+        const dshArgs: unknown = JSON.parse(process.env.HAI_ACP_E2E_DSH_ARGS ?? '[]')
+        if (!Array.isArray(dshArgs) || !dshArgs.every(item => typeof item === 'string'))
+          throw new Error('HAI_ACP_E2E_DSH_ARGS must be a JSON string array')
+        value(await ai.acp.agents.register({
+          id: 'native',
+          name: adapter,
+          adapter,
+          mode: 'embedded',
+          command,
+          ...(adapter === 'deepseek-harness'
+            ? { args: dshArgs }
+            : {}),
+          modelIds: ['fixture'],
+        }))
+        const handshake = value(await ai.acp.agents.check('native', { workspaceId: 'project' }))
+        expect(handshake.agentCapabilities?.sessionCapabilities?.close).toBeDefined()
+        if (adapter === 'goose')
+          expect(handshake.agentCapabilities?.loadSession).toBe(true)
+        else
+          expect(handshake.agentCapabilities?.sessionCapabilities?.resume).toBeDefined()
+
+        const created = value(await ai.acp.sessions.create({ id: 'native-test', agentId: 'native', workspaceId: 'project' }))
+        const firstPrompt = 'Return the first native fixture response.'
+        const first = value(await created.prompt([
+          { type: 'text', text: firstPrompt },
+        ]))
+        expect(first.text).toContain('native-agent-ok')
+        expect(first.stopReason).toBe('end_turn')
+        const original = value(await created.info()).nativeId
+        value(await created.close())
+        const restored = value(await ai.acp.sessions.resume('native-test'))
+        expect(value(await restored.info()).nativeId).toBe(original)
+        const secondPrompt = 'Return the second native fixture response.'
+        const second = value(await restored.prompt([
+          { type: 'text', text: secondPrompt },
+        ]))
+        expect(second.text).toContain('native-agent-ok')
+        expect(second.stopReason).toBe('end_turn')
+        value(await restored.close())
+        for (const prompt of [firstPrompt, secondPrompt]) {
+          expect(modelRequests.find(item => item.body.includes(prompt))).toMatchObject({
+            path: '/proxy/v1/chat/completions',
+            authorization: 'Bearer fixture-key',
+          })
+        }
+      }
+      finally {
+        try {
+          await ai.close()
+        }
+        finally {
+          server.closeAllConnections()
+          await new Promise<void>(resolve => server.close(() => resolve()))
+          await rm(workspace, { recursive: true, force: true })
+        }
+      }
+    }, 90000)
   }
 })
