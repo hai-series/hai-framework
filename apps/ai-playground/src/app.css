@@ -22,24 +22,71 @@
 body {
   min-width: 320px;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 15% 0%, color-mix(in oklab, var(--color-primary) 16%, transparent) 0, transparent 34rem),
-    radial-gradient(
-      circle at 85% 8%,
-      color-mix(in oklab, var(--color-secondary) 14%, transparent) 0,
-      transparent 30rem
-    ),
-    var(--color-base-200);
+  background: var(--color-base-200);
 }
 
-.lab-grid {
+.lab-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem);
-  gap: 1.25rem;
+  min-height: calc(100vh - 4rem);
+  grid-template-columns: 14rem minmax(0, 1fr);
 }
 
-@media (max-width: 900px) {
-  .lab-grid {
+.lab-rail {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  border-inline-end-width: 1px;
+}
+
+.lab-nav {
+  display: grid;
+  align-content: start;
+  gap: 0.25rem;
+  padding: 1rem 0.8rem;
+}
+
+.lab-service {
+  margin: auto 0.8rem 1rem;
+  border-radius: 0.75rem;
+  background: var(--color-base-200);
+  padding: 0.75rem;
+}
+
+.lab-content {
+  width: 100%;
+  max-width: 105rem;
+  justify-self: center;
+}
+
+@media (max-width: 767px) {
+  .lab-shell {
     grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+  }
+
+  .lab-rail {
+    flex-direction: column-reverse;
+    border-inline-end: 0;
+    border-bottom-width: 1px;
+  }
+
+  .lab-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.15rem;
+    padding: 0.35rem 0.6rem 0.65rem;
+  }
+
+  .lab-service {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin: 0;
+    border-radius: 0;
+    padding: 0.4rem 1rem;
+  }
+
+  .lab-service > :last-child {
+    margin-top: 0;
   }
 }

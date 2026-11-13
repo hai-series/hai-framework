@@ -14,6 +14,8 @@ export const CHAT_HISTORY_LIMIT = 20
 export const MAX_AUDIO_BYTES = 10 * 1024 * 1024
 /** 单张参考图的最大字节数（10 MiB） */
 export const MAX_REFERENCE_IMAGE_BYTES = 10 * 1024 * 1024
+/** 参考图最多四张，合计最大 10 MiB。 */
+export const MAX_REFERENCE_IMAGES = 4
 
 /** 文生图请求：提示词与输出像素尺寸 */
 export const ImageRequestSchema = z.object({

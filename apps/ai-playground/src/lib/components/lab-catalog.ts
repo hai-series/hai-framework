@@ -1,0 +1,208 @@
+import * as m from '#lib/paraglide/messages.js'
+
+export const labSections = [
+  {
+    id: 'setup',
+    icon: 'icon-[tabler--rocket]',
+    title: m.lab_nav_setup,
+    description: m.lab_section_setup,
+  },
+  {
+    id: 'models',
+    icon: 'icon-[tabler--message-circle]',
+    title: m.lab_nav_models,
+    description: m.lab_section_models,
+  },
+  {
+    id: 'knowledge',
+    icon: 'icon-[tabler--books]',
+    title: m.lab_nav_knowledge,
+    description: m.lab_section_knowledge,
+  },
+  {
+    id: 'context',
+    icon: 'icon-[tabler--brain]',
+    title: m.lab_nav_context,
+    description: m.lab_section_context,
+  },
+  {
+    id: 'agents',
+    icon: 'icon-[tabler--affiliate]',
+    title: m.lab_nav_agents,
+    description: m.lab_section_agents,
+  },
+  {
+    id: 'media',
+    icon: 'icon-[tabler--photo-video]',
+    title: m.lab_nav_media,
+    description: m.lab_section_media,
+  },
+] as const
+
+export type LabSection = typeof labSections[number]['id']
+
+export const labDemos = [
+  {
+    id: 'llm',
+    section: 'models',
+    title: m.demo_llm,
+    description: m.demo_llm_description,
+    example: m.example_prompt,
+  },
+  {
+    id: 'stream',
+    section: 'models',
+    title: m.demo_stream,
+    description: m.demo_stream_description,
+    example: m.example_document,
+  },
+  {
+    id: 'structured',
+    section: 'models',
+    title: m.demo_structured,
+    description: m.demo_structured_description,
+    example: m.example_document,
+  },
+  {
+    id: 'reasoning',
+    section: 'models',
+    title: m.demo_reasoning,
+    description: m.demo_reasoning_description,
+    example: m.example_prompt,
+  },
+  {
+    id: 'file',
+    section: 'knowledge',
+    title: m.demo_file,
+    description: m.demo_file_description,
+    example: () => '<h1>Playground</h1><p>Hai framework</p>',
+  },
+  {
+    id: 'embedding',
+    section: 'knowledge',
+    title: m.demo_embedding,
+    description: m.demo_embedding_description,
+    example: m.example_document,
+  },
+  {
+    id: 'rerank',
+    section: 'knowledge',
+    title: m.demo_rerank,
+    description: m.demo_rerank_description,
+    example: m.example_query,
+  },
+  {
+    id: 'retrieval',
+    section: 'knowledge',
+    title: m.demo_retrieval,
+    description: m.demo_retrieval_description,
+    example: m.example_query,
+  },
+  {
+    id: 'rag',
+    section: 'knowledge',
+    title: m.demo_rag,
+    description: m.demo_rag_description,
+    example: m.example_query,
+  },
+  {
+    id: 'knowledge',
+    section: 'knowledge',
+    title: m.demo_knowledge,
+    description: m.demo_knowledge_description,
+    example: m.example_query,
+  },
+  {
+    id: 'persona',
+    section: 'context',
+    title: m.demo_persona,
+    description: m.demo_persona_description,
+    example: m.example_document,
+  },
+  {
+    id: 'context',
+    section: 'context',
+    title: m.demo_context,
+    description: m.demo_context_description,
+    example: m.example_document,
+  },
+  {
+    id: 'token',
+    section: 'context',
+    title: m.demo_token,
+    description: m.demo_token_description,
+    example: m.example_document,
+  },
+  {
+    id: 'summary',
+    section: 'context',
+    title: m.demo_summary,
+    description: m.demo_summary_description,
+    example: m.example_document,
+  },
+  {
+    id: 'compress',
+    section: 'context',
+    title: m.demo_compress,
+    description: m.demo_compress_description,
+    example: m.example_document,
+  },
+  {
+    id: 'tools',
+    section: 'agents',
+    title: m.demo_tools,
+    description: m.demo_tools_description,
+    example: m.example_document,
+  },
+  {
+    id: 'mcp',
+    section: 'agents',
+    title: m.demo_mcp,
+    description: m.demo_mcp_description,
+    example: m.example_query,
+  },
+  {
+    id: 'mcp-remote',
+    section: 'agents',
+    title: m.demo_mcp_remote,
+    description: m.demo_mcp_remote_description,
+    example: m.example_query,
+  },
+  {
+    id: 'mcp-job',
+    section: 'agents',
+    title: m.demo_mcp_job,
+    description: m.demo_mcp_job_description,
+    example: () => 'playground-handbook.txt',
+  },
+  {
+    id: 'a2a',
+    section: 'agents',
+    title: m.demo_a2a,
+    description: m.demo_a2a_description,
+    example: m.example_document,
+  },
+  {
+    id: 'acp',
+    section: 'agents',
+    title: m.demo_acp,
+    description: m.demo_acp_description,
+    example: m.example_prompt,
+  },
+  {
+    id: 'audio-capabilities',
+    section: 'media',
+    title: m.demo_audio_capabilities,
+    description: m.demo_audio_capabilities_description,
+    example: m.tts_default_text,
+  },
+  {
+    id: 'tts-stream',
+    section: 'media',
+    title: m.demo_tts_stream,
+    description: m.demo_tts_stream_description,
+    example: m.tts_default_text,
+  },
+] as const
+
+export type LabDemo = typeof labDemos[number]

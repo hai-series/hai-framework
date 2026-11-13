@@ -2,6 +2,7 @@
   import { Button, Card } from '@h-ai/ui'
   import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
   // 语音合成面板：将文本合成为可播放的 WAV，音色列表由服务端配置注入
+  import ApiGuide from '#lib/components/ApiGuide.svelte'
   import * as m from '#lib/paraglide/messages.js'
   import { synthesize } from '#lib/services/ai-lab.js'
 
@@ -89,4 +90,5 @@
       ? m.tts_running()
       : m.tts_run()}
   </Button>
+  <ApiGuide id='tts-panel' />
 </Card>

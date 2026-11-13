@@ -3,6 +3,7 @@
   import type { LabStatus, MemoryView } from '#lib/ai-lab-types.js'
   import { Button, Card } from '@h-ai/ui'
   import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  import ApiGuide from '#lib/components/ApiGuide.svelte'
   import * as m from '#lib/paraglide/messages.js'
   import { clearMemories, createMemory, deleteMemory, loadMemories } from '#lib/services/ai-lab.js'
 
@@ -173,4 +174,5 @@
   {#if items.length > 0}
     <Button class='mt-3 w-full' variant='ghost' onclick={clearAll} disabled={busy}>{m.memory_clear()}</Button>
   {/if}
+  <ApiGuide id='memory-panel' />
 </Card>

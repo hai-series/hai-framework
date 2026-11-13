@@ -6,16 +6,17 @@
 import { kit } from '@h-ai/kit'
 import { z } from 'zod'
 import { removeMemory } from '#lib/server/ai-lab.js'
+import { scopeProfile } from '#lib/server/browser-scope.js'
 
 /** 删除时校验主体归属，防止跨主体删除 */
 const DeleteMemoryQuerySchema = z.object({
   profileId: z.string().trim().min(1).max(64),
 })
 
-export const DELETE = kit.handler(async ({ params, url }) => {
+export const DELETE = kit.handler(async ({ params, url, locals }) => {
   const { id } = kit.validate.params(params, kit.validate.IdParamSchema)
   const { profileId } = kit.validate.query(url, DeleteMemoryQuerySchema)
-  const result = await removeMemory(profileId, id)
+  const result = await removeMemory(scopeProfile(locals.playgroundOwner, profileId), id)
   return result.success
     ? kit.response.ok(undefined)
     : kit.response.fromError(result.error)

@@ -154,6 +154,23 @@ memory:
   # 取值：整数；> 0
   defaultTopK: ${HAI_AI_MEMORY_DEFAULTTOPK:8}
 
+# Playground 只索引随应用提供的只读手册。向量维度需与 llm.scenarios.embedding 指向的模型一致。
+# 说明：Retrieval 配置（预注册检索源）
+# 取值：配置块（填写下方缩进字段）
+retrieval:
+  # 说明：预注册检索源列表
+  # 取值：列表（每项以 - 开头）
+  sources:
+    # 说明：来源唯一标识
+    # 取值：字符串
+    - id: playground-handbook
+      # 说明：vecdb collection 名称
+      # 取值：字符串
+      collection: hai_playground_demo_knowledge
+      # 说明：信源显示名
+      # 取值：字符串
+      name: Hai Playground handbook
+
 # ACP 接入示例：配置与数据库清单合并，同 ID 配置优先且只读。
 # 使用前初始化共享 RelDB/VecDB，再初始化 AI；这些注释不会自动启动智能体。
 # 接入/容器/worktree 示例见 packages/cli/templates/skills/hai-ai/acp.md；

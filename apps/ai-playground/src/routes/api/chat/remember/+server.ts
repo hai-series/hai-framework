@@ -9,10 +9,14 @@
 import { kit } from '@h-ai/kit'
 import { RememberRequestSchema } from '#lib/ai-lab-types.js'
 import { rememberExchange } from '#lib/server/ai-lab.js'
+import { scopeProfile } from '#lib/server/browser-scope.js'
 
-export const POST = kit.handler(async ({ request }) => {
+export const POST = kit.handler(async ({ request, locals }) => {
   const input = await kit.validate.body(request, RememberRequestSchema)
-  const result = await rememberExchange(input, request.signal)
+  const result = await rememberExchange({
+    ...input,
+    profileId: scopeProfile(locals.playgroundOwner, input.profileId),
+  }, request.signal)
   return result.success
     ? kit.response.ok(result.data)
     : kit.response.fromError(result.error)

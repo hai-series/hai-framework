@@ -11,6 +11,7 @@ import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { kit, KitConfigSchema } from '@h-ai/kit'
 import { paraglideMiddleware } from '#lib/paraglide/server.js'
+import { browserScopeCookie, issueBrowserScope, scopeProfile, validBrowserScope } from '#lib/server/browser-scope.js'
 import { ensureAIInitialized } from '#lib/server/init.js'
 
 // 初始化 AI（E2E mock 模式跳过）、设置 locale 与 API 安全响应头
@@ -45,6 +46,18 @@ const securityHandle: Handle = async ({ event, resolve }) => {
   if (process.env.HAI_E2E_MOCK !== '1')
     await ensureAIInitialized()
   await ensureRateLimit()
+
+  let browserScope = event.cookies.get(browserScopeCookie)
+  if (!validBrowserScope(browserScope)) {
+    browserScope = issueBrowserScope()
+    event.cookies.set(browserScopeCookie, browserScope, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'strict',
+      maxAge: 30 * 24 * 60 * 60,
+    })
+  }
+  event.locals.playgroundOwner = scopeProfile(browserScope, 'browser')
 
   if (event.url.pathname.startsWith('/api/')) {
     event.locals.locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'

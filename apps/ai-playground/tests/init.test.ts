@@ -7,6 +7,7 @@ const state = vi.hoisted(() => ({
   cleanupFailures: 0,
   databaseType: 'postgresql',
   database: 'test',
+  runnerConfigured: false,
 }))
 const modelConfig = vi.hoisted(() => ({
   llm: { model: 'test' },
@@ -29,7 +30,9 @@ const modelConfig = vi.hoisted(() => ({
 vi.mock('@h-ai/ai', () => ({
   AIConfigSchema: {},
   ai: {
-    init: async () => {
+    init: async (_config: unknown, options?: { runner?: unknown }) => {
+      if (state.runnerConfigured && !options?.runner)
+        throw new Error('Runner injection missing')
       state.calls.push('ai.init')
       return state.fail === 'ai'
         ? {
@@ -58,6 +61,23 @@ vi.mock('@h-ai/reldb', () => ({
   },
 }))
 vi.mock('@h-ai/cache', () => ({ CacheConfigSchema: {} }))
+vi.mock('../src/lib/server/integration-demos.js', () => ({
+  playgroundJobFiles: {},
+  registerPlaygroundIntegrations: () => ({ success: true }),
+}))
+vi.mock('@h-ai/runner', () => ({
+  RunnerConfigSchema: {},
+  runner: {
+    init: async () => {
+      state.calls.push('runner.init')
+      return { success: true }
+    },
+    close: async () => {
+      state.calls.push('runner.close')
+      return { success: true }
+    },
+  },
+}))
 vi.mock('@h-ai/vecdb', () => ({
   VecdbConfigSchema: {},
   vecdb: {
@@ -86,6 +106,7 @@ vi.mock('@h-ai/core', () => ({
   core: {
     init: () => undefined,
     config: {
+      has: (name: string) => name === 'runner' && state.runnerConfigured,
       validate: (name: string) => ({
         success: true,
         data: name === 'ai'
@@ -108,6 +129,7 @@ beforeEach(() => {
   state.cleanupFailures = 0
   state.databaseType = 'postgresql'
   state.database = 'test'
+  state.runnerConfigured = false
   vi.resetModules()
 })
 
@@ -131,6 +153,23 @@ describe('aI Playground initialization', () => {
     ])
     expect(state.calls).toEqual(['db.init', 'vecdb.init', 'ai.init'])
     expect(getAIPlaygroundMetadata().llmModel).toBe('test')
+  })
+
+  it('仅配置 Runner 时启动并注入 AI，失败后在存储前关闭 Runner', async () => {
+    state.runnerConfigured = true
+    state.fail = 'ai'
+    const { ensureAIInitialized } = await import('../src/lib/server/init.js')
+    await expect(ensureAIInitialized()).rejects.toThrow('AI initialization failed')
+    expect(state.calls).toEqual([
+      'db.init',
+      'vecdb.init',
+      'runner.init',
+      'ai.init',
+      'ai.close',
+      'runner.close',
+      'vecdb.close',
+      'db.close',
+    ])
   })
 
   it.each(['vecdb', 'ai'])('%s失败后逆序释放，后续请求可以重试', async (failed) => {

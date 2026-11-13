@@ -3,6 +3,7 @@
   import type { LabMessage } from '#lib/ai-lab-types.js'
   import { Button, Card, toast, ToggleInput } from '@h-ai/ui'
   import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
+  import ApiGuide from '#lib/components/ApiGuide.svelte'
   import * as m from '#lib/paraglide/messages.js'
   import { rememberExchange, sendChat } from '#lib/services/ai-lab.js'
 
@@ -198,4 +199,5 @@
       </Button>
     </div>
   </form>
+  <div class='px-5 pb-5'><ApiGuide id='chat-panel' /></div>
 </Card>

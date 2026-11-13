@@ -22,6 +22,17 @@ afterEach(() => {
 })
 
 describe('aI Playground client service', () => {
+  it('assembles text deltas and cancels a truncated stream', async () => {
+    const encoder = new TextEncoder()
+    const complete = new Response(encoder.encode('{"delta":"你"}\n{"delta":"好"}\n{"final":true}\n'))
+    const truncated = new Response(encoder.encode('{"delta":"部分"}\n'))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(complete).mockResolvedValueOnce(truncated))
+    const updates: string[] = []
+    await expect(sendChat(request, text => updates.push(text))).resolves.toEqual({ reply: '你好' })
+    expect(updates).toEqual(['你', '你好'])
+    await expect(sendChat(request, () => {})).rejects.toMatchObject({ code: 'LLM_STREAM_ERROR' })
+  })
+
   it('parses progressive chat events split across network chunks', async () => {
     const encoder = new TextEncoder()
     const body = new ReadableStream<Uint8Array>({

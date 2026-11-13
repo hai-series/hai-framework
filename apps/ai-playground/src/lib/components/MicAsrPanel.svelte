@@ -3,6 +3,7 @@
   import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
   // 麦克风实时转写面板：录音期间周期转写当前快照，停止时仅补齐最后一段
   import { blobToWav } from '#lib/audio/wav.js'
+  import ApiGuide from '#lib/components/ApiGuide.svelte'
   import * as m from '#lib/paraglide/messages.js'
   import { transcribe } from '#lib/services/ai-lab.js'
 
@@ -214,4 +215,5 @@
         : m.mic_start()}
     </Button>
   {/if}
+  <ApiGuide id='mic-panel' />
 </Card>

@@ -24,10 +24,19 @@ test('真实 LLM、Memory、TTS、ASR 链路可用', async ({ request }) => {
     .split('\n')
     .map(line => line.trim())
     .filter(Boolean)
-    .map(line => JSON.parse(line) as { text?: string, final?: boolean, error?: boolean })
+    .map(line => JSON.parse(line) as { delta?: string, final?: boolean, error?: boolean })
   expect(chatEvents.some(event => event.error)).toBe(false)
   expect(chatEvents.at(-1)?.final).toBe(true)
-  expect((chatEvents.at(-1)?.text ?? '').length).toBeGreaterThan(0)
+  expect(chatEvents.map(event => event.delta ?? '').join('').length).toBeGreaterThan(0)
+
+  const structured = await request.post('/api/demos', {
+    data: { id: 'structured', input: 'List two steps: verify the input, then record the result.' },
+  })
+  expect(structured.ok(), await structured.text()).toBe(true)
+  expect((await structured.json()).data.result).toMatchObject({
+    title: expect.any(String),
+    points: expect.any(Array),
+  })
 
   const created = await request.post('/api/memories', {
     data: {
@@ -59,10 +68,10 @@ test('真实 LLM、Memory、TTS、ASR 链路可用', async ({ request }) => {
     .split('\n')
     .map(line => line.trim())
     .filter(Boolean)
-    .map(line => JSON.parse(line) as { text?: string, final?: boolean, error?: boolean })
+    .map(line => JSON.parse(line) as { delta?: string, final?: boolean, error?: boolean })
   expect(memoryChatEvents.some(event => event.error)).toBe(false)
   expect(memoryChatEvents.at(-1)?.final).toBe(true)
-  expect((memoryChatEvents.at(-1)?.text ?? '').length).toBeGreaterThan(0)
+  expect(memoryChatEvents.map(event => event.delta ?? '').join('').length).toBeGreaterThan(0)
 
   const phrase = '你好，这是海框架语音链路测试。'
   const tts = await request.post('/api/tts', {
@@ -91,7 +100,7 @@ test('真实 LLM、Memory、TTS、ASR 链路可用', async ({ request }) => {
   expect(asrBody.success).toBe(true)
   expect(asrBody.data.text.length).toBeGreaterThan(2)
 
-  // 流式语音识别（麦克风实时转写示例使用）：验证渐进式 NDJSON 转写输出
+  // 上传流式语音识别：验证渐进式 NDJSON 转写输出。
   const asrStream = await request.post('/api/asr/stream', {
     multipart: {
       language: 'zh',

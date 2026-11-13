@@ -87,7 +87,7 @@ export async function generateImage(input: { prompt: string, width: number, heig
  * 记忆「提取」是另一次耗时的 LLM 调用，与对话串行会显著拖慢回复（用户会误以为无响应），
  * 因此提取拆分到 {@link rememberExchange}，由客户端在展示回复后异步触发。
  */
-export async function chatWithMemory(input: ChatInput): Promise<HaiResult<ChatReply>> {
+export async function chatWithMemory(input: ChatInput, signal?: AbortSignal): Promise<HaiResult<ChatReply>> {
   const prepared = await prepareChatMessages(input)
   if (!prepared.success)
     return prepared
@@ -96,6 +96,8 @@ export async function chatWithMemory(input: ChatInput): Promise<HaiResult<ChatRe
     messages: prepared.data,
     objectId: input.profileId,
     sessionId: input.sessionId,
+    enablePersist: false,
+    signal,
     max_tokens: 1200,
   })
   if (!completion.success)
@@ -121,6 +123,7 @@ export async function streamChatWithMemory(
     messages: prepared.data,
     objectId: input.profileId,
     sessionId: input.sessionId,
+    enablePersist: false,
     max_tokens: 1200,
     signal,
   }))
@@ -204,10 +207,12 @@ export function transcribeSpeechStream(input: {
   data: Uint8Array
   format: 'wav' | 'mp3'
   language?: string
+  signal?: AbortSignal
 }): AsyncIterable<TranscriptionEvent> {
   return ai.audio.transcribeStream({
     audio: { data: input.data, format: input.format },
     language: input.language,
+    signal: input.signal,
   })
 }
 
