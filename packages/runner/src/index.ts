@@ -15,4 +15,5 @@ export type {
   RunnerReconciliation,
   RunnerScope,
   RunnerSubmit,
+  RunnerWarmPool,
 } from './runner-types.js'

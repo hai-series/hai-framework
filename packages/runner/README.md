@@ -61,6 +61,8 @@ finally {
 
 原执行节点的可信管理入口可以调用 `runner.reconcileUnknown(scope, id, { operatorId, reason })`。Runner 读取启动前保存的容器及引擎身份，确认容器已经移除并清理同一暂存目录后才释放预算和复用键，同时保存审核记录。原回执仍为 `unknown`，并增加 `reconciledAt`。缺少可信容器回执的任务继续保留预算。
 
+固定离线工具可在 API 与执行节点登记相同的 `registerWarmPool({ key, kind, environmentId, minReady, maxRunning, maxTotal })`。`minReady` 是全体执行节点的空容器目标，`maxTotal` 包含启动、等待、执行、清理和未核验实例。可信工具请求同时指定 `warmPool: true` 和对应服务并发键。领取前容器没有用户输入，领取成功后才写入授权文件。每个实例只执行一个作业，之后销毁。镜像需提供 `/usr/bin/python3`；预热会消耗工具预留资源。
+
 ## 开发测试
 
 ```bash

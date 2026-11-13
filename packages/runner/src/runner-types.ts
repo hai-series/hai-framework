@@ -102,6 +102,23 @@ export interface RunnerReconciliation {
 }
 
 /**
+ * 已登记离线固定工具的集群预热目标及容量边界。
+ * @example
+ * ```ts
+ * import type { RunnerWarmPool } from '@h-ai/runner'
+ * const pool: RunnerWarmPool = { key: 'docs', kind: 'docs.v1', environmentId: 'docs', minReady: 1, maxRunning: 2, maxTotal: 3 }
+ * ```
+ */
+export interface RunnerWarmPool {
+  key: string
+  kind: string
+  environmentId: string
+  minReady: number
+  maxRunning: number
+  maxTotal: number
+}
+
+/**
  * 持久事件游标从 1 开始，按执行内递增。
  * @example
  * ```ts
@@ -198,6 +215,8 @@ export interface RunnerFunctions {
   environment: (id: string) => HaiResult<RunnerEnvironment>
   /** 注册处理器并返回仅移除该处理器的回调。 */
   register: (kind: string, handler: RunnerHandler) => HaiResult<() => void>
+  /** 在 API 和执行节点登记同一部署快照。只在执行节点创建实例。 */
+  registerWarmPool: (pool: RunnerWarmPool) => HaiResult<() => void>
   /** 持久化接收，在可用节点领取。 */
   submit: (request: RunnerSubmit) => Promise<HaiResult<RunnerExecution>>
   /** 按业务幂等键定位既有执行。 */

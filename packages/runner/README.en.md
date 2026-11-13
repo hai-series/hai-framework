@@ -61,6 +61,8 @@ Tool handlers can stage canonical Base64 files by basename in read-only `/input`
 
 A trusted operator endpoint on the original execution node can call `runner.reconcileUnknown(scope, id, { operatorId, reason })`. Runner verifies the recorded engine and container, checks that the container is gone, and cleans up the recorded staging directory before releasing the reservation and reuse key. It records the operator decision and adds `reconciledAt` to the original `unknown` receipt. Executions without a reliable container receipt retain their reservations.
 
+For a fixed offline tool, register the same `registerWarmPool({ key, kind, environmentId, minReady, maxRunning, maxTotal })` on API and executor nodes. `minReady` targets empty containers across the cluster. `maxTotal` counts starting, ready, running, cleaning and unreconciled instances. Trusted tool requests select `warmPool: true` with the matching service concurrency key. Runner stages authorized input only after claiming a clean instance. Each instance runs one job and is destroyed. The image provides `/usr/bin/python3`, and standby containers consume reserved tool resources.
+
 ## Development
 
 ```bash

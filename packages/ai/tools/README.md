@@ -34,6 +34,8 @@ podman build -f packages/ai/tools/documents/Dockerfile -t localhost/hai-tools-do
 
 应用可将文档、Office、OCR 环境登记到 Runner，再在 `mcp.servers` 用 `transport: job` 绑定环境和工具白名单。任务只传授权文件 ID，执行节点通过 `mcpJobFiles` 复核权限后读入对象和暂存产物。Runner 用独立的工具容量领取作业，服务的 `pool.maxRunning` 控制所有执行节点上的并发上限。应用按产物所有者验证下载权限。配置示例见 [MCP 配置](../../../docs/usage/configuration/ai.md#mcp和a2a)。
 
+部署配置可设置 `pool.minReady` 和 `pool.maxTotal`。预热实例为空容器，每次只交给一个作业，完成后销毁。工具实例准备、领取和销毁期间持续占用资源额度。
+
 ```json
 { "operation": "browser.navigate", "url": "https://example.com/", "output": "page.png" }
 ```

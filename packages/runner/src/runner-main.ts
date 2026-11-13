@@ -1,12 +1,13 @@
 import type { HaiResult } from '@h-ai/core'
 import type { RunnerConfig, RunnerConfigInput } from './runner-config.js'
+import type { WarmContainer } from './runner-container.js'
 import type { RunnerClaim, RunnerStore } from './runner-store.js'
-import type { RunnerContext, RunnerFunctions, RunnerHandler, RunnerJson, RunnerLaunch, RunnerOwner, RunnerProcess, RunnerScope, RunnerSubmit } from './runner-types.js'
+import type { RunnerContext, RunnerFunctions, RunnerHandler, RunnerJson, RunnerLaunch, RunnerOwner, RunnerProcess, RunnerScope, RunnerSubmit, RunnerWarmPool } from './runner-types.js'
 import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
-import { json, RunnerConfigSchema, runnerKind, submitSchema } from './runner-config.js'
-import { confirmContainerReleased, startContainer } from './runner-container.js'
+import { json, RunnerConfigSchema, runnerKind, submitSchema, warmPoolSchema } from './runner-config.js'
+import { confirmContainerReleased, prepareWarmContainer, startContainer } from './runner-container.js'
 import { runnerM } from './runner-i18n.js'
 import { makeStore, readyStore } from './runner-store.js'
 import { HaiRunnerError } from './runner-types.js'
@@ -84,16 +85,79 @@ export function createRunner(): RunnerFunctions {
   let unconfirmedCleanup = false
   const running = new Map<string, LocalExecution>()
   const handlers = new Map<string, RunnerHandler>()
+  const pools = new Map<string, RunnerWarmPool>()
+  const warmReservations = new Map<string, RunnerWarmPool>()
+  const standby = new Map<string, { handle: WarmContainer, pool: RunnerWarmPool, transferred: () => void }>()
+  let warmAt = 0
+  const poolKey = (kind: string, key: string) => `${kind}:${key}`
 
-  function launch(claim: RunnerClaim, handler: RunnerHandler, current: RunnerStore, settings: RunnerConfig, holder: RunnerOwner) {
+  function prewarm(claim: RunnerClaim, pool: RunnerWarmPool, current: RunnerStore, settings: RunnerConfig) {
+    const abort = new AbortController()
+    const environment = claim.request.environment!
+    warmReservations.set(claim.id, pool)
+    const done = (async () => {
+      const launched = await prepareWarmContainer(settings.engine, environment, abort.signal, identity =>
+        current.recordContainer(claim.id, identity))
+      if (!launched.success) {
+        const stopped = launched.error.code !== HaiRunnerError.CLEANUP_UNCONFIRMED.code
+        await current.finish(claim.id, undefined, stopped)
+        if (!stopped)
+          unconfirmedCleanup = true
+        return stopped
+      }
+      const handle = launched.data
+      handle.stderr.resume()
+      let transferred = false
+      const released = new Promise<void>((resolve) => {
+        standby.set(claim.id, {
+          handle,
+          pool,
+          transferred: () => {
+            transferred = true
+            resolve()
+          },
+        })
+        abort.signal.addEventListener('abort', () => resolve(), { once: true })
+        if (abort.signal.aborted)
+          resolve()
+      })
+      const ready = await current.markWarmReady(claim.id)
+      if (ready.success && !abort.signal.aborted) {
+        await Promise.race([
+          released,
+          handle.wait(),
+        ])
+      }
+      standby.delete(claim.id)
+      if (transferred)
+        return true
+      const closed = await handle.close()
+      await current.finish(claim.id, undefined, closed.success)
+      if (!closed.success)
+        unconfirmedCleanup = true
+      return closed.success
+    })().catch(() => {
+      unconfirmedCleanup = true
+      logger.warn('Warm container cleanup could not be confirmed', { executionId: claim.id })
+      return false
+    }).finally(() => {
+      running.delete(claim.id)
+      warmReservations.delete(claim.id)
+    })
+    running.set(claim.id, { abort, done, renewAt: performance.now() + settings.pollMs })
+  }
+
+  function launch(claim: RunnerClaim, handler: RunnerHandler, current: RunnerStore, settings: RunnerConfig, holder: RunnerOwner, warmed?: WarmContainer) {
     const abort = new AbortController()
     let process: Promise<HaiResult<RunnerProcess>> | undefined
     let uncertain = false
 
     const closeProcess = async () => {
       const started = await process
-      return started?.success
-        ? (await started.data.close()).success
+      if (started?.success)
+        return (await started.data.close()).success
+      return warmed
+        ? (await warmed.close()).success
         : !uncertain
     }
 
@@ -107,8 +171,13 @@ export function createRunner(): RunnerFunctions {
           return renewed
         if (renewed.data !== 'running' || abort.signal.aborted)
           return err(HaiRunnerError.LEASE_LOST, runnerM('runner_leaseLost'))
-        const started = await startContainer(settings.engine, environment, resources, options, abort.signal, identity =>
-          current.recordContainer(claim.id, identity))
+        const started = warmed
+          ? await warmed.activate(options, abort.signal, async () => {
+              const lease = await current.renew(claim.id)
+              return lease.success && lease.data === 'running'
+            })
+          : await startContainer(settings.engine, environment, resources, options, abort.signal, identity =>
+              current.recordContainer(claim.id, identity))
         if (!started.success && started.error.code === HaiRunnerError.CLEANUP_UNCONFIRMED.code)
           uncertain = true
         return started
@@ -208,8 +277,12 @@ export function createRunner(): RunnerFunctions {
       ]
       if (!kinds.length)
         return
+      const configuredPools = [
+        ...pools.values(),
+      ].filter(pool => handlers.has(pool.kind))
       for (const category of ['control', 'tool', 'default'] as const) {
-        const claimed = await current.claim(kinds, category)
+        const available = [...standby].filter(([, candidate]) => pools.get(poolKey(candidate.pool.kind, candidate.pool.key)) === candidate.pool).map(([id]) => id)
+        const claimed = await current.claim(kinds, category, configuredPools, available)
         if (!claimed.success) {
           logger.warn('Managed execution claim failed', { code: claimed.error.code })
           continue
@@ -217,10 +290,27 @@ export function createRunner(): RunnerFunctions {
         if (!claimed.data)
           continue
         const handler = handlers.get(claimed.data.kind)
-        if (handler && !closingRequested)
-          launch(claimed.data, handler, current, settings, holder)
-        else
-          await current.finish(claimed.data.id, undefined, true)
+        const warmed = claimed.data.warmId
+          ? standby.get(claimed.data.warmId)
+          : undefined
+        warmed?.transferred()
+        if (handler && !closingRequested && (!claimed.data.warmId || warmed)) {
+          launch(claimed.data, handler, current, settings, holder, warmed?.handle)
+        }
+        else {
+          const stopped = warmed
+            ? (await warmed.handle.close()).success
+            : !claimed.data.warmId
+          await current.finish(claimed.data.id, undefined, stopped)
+        }
+      }
+      if (!closingRequested && performance.now() >= warmAt) {
+        warmAt = performance.now() + Math.max(250, settings.pollMs)
+        for (const pool of configuredPools) {
+          const reserved = await current.reserveWarm(pool)
+          if (reserved.success && reserved.data)
+            prewarm(reserved.data, pool, current, settings)
+        }
       }
     })().catch(() => {
       for (const execution of running.values())
@@ -248,6 +338,7 @@ export function createRunner(): RunnerFunctions {
       store = makeStore(config, owner)
       unconfirmedCleanup = false
       sweepAt = 0
+      warmAt = 0
       if (config.executor) {
         timer = setInterval(poll, config.pollMs)
         timer.unref()
@@ -287,6 +378,7 @@ export function createRunner(): RunnerFunctions {
           return cleanupUnconfirmed()
         clearInterval(timer)
         handlers.clear()
+        pools.clear()
         config = undefined
         owner = undefined
         store = undefined
@@ -331,6 +423,30 @@ export function createRunner(): RunnerFunctions {
           handlers.delete(kind)
       })
     },
+    registerWarmPool(input) {
+      if (!config || closingRequested)
+        return inactive()
+      const parsed = warmPoolSchema.safeParse(input)
+      if (!parsed.success)
+        return invalid()
+      const pool = parsed.data
+      const environment = config.environments.find(item => item.id === pool.environmentId)
+      if (!environment || environment.networkPolicy !== 'offline' || (config.executor && !handlers.has(pool.kind)))
+        return invalid()
+      const key = poolKey(pool.kind, pool.key)
+      if (pools.has(key) || pools.size >= 100)
+        return err(HaiRunnerError.CONFLICT, runnerM('runner_conflict'))
+      pools.set(key, pool)
+      return ok(() => {
+        if (pools.get(key) !== pool)
+          return
+        pools.delete(key)
+        for (const [id, candidate] of warmReservations) {
+          if (candidate === pool)
+            running.get(id)?.abort.abort()
+        }
+      })
+    },
     async submit(input: RunnerSubmit) {
       if (!store || closingRequested)
         return inactive()
@@ -338,9 +454,17 @@ export function createRunner(): RunnerFunctions {
         return invalid()
       try {
         const parsed = submitSchema.safeParse(input)
-        return parsed.success
-          ? await store.submit(parsed.data)
-          : invalid()
+        if (!parsed.success)
+          return invalid()
+        const request = parsed.data
+        const pool = request.concurrency && pools.get(poolKey(request.kind, request.concurrency.key))
+        if (request.warmPool && (!pool || pool.environmentId !== request.environmentId
+          || pool.maxRunning !== request.concurrency?.limit)) {
+          return invalid()
+        }
+        if (pool && !request.warmPool)
+          return invalid()
+        return await store.submit(request, pool)
       }
       catch {
         return invalid()

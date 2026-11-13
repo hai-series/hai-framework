@@ -4,12 +4,13 @@ import { randomUUID } from 'node:crypto'
 import { createServer } from 'node:http'
 import process from 'node:process'
 import { promisify } from 'node:util'
+import { reldb } from '@h-ai/reldb'
 import { createRunner } from '@h-ai/runner'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { ai, createMcpServer, HaiAIError, StreamableHTTPServerTransport } from '../src/index.js'
+import { ai, createMcpServer, HaiAIError, MCPExternalServerSchema, StreamableHTTPServerTransport } from '../src/index.js'
 
 const principal = { tenantId: 'tenant', userId: 'ada' }
 const request = {
@@ -18,7 +19,7 @@ const request = {
   arguments: { text: 'hello' },
 }
 
-async function remoteMcp() {
+async function remoteMcp(onInitialize?: () => Promise<void>) {
   const requests: Array<{ method?: string, path?: string, authorization?: string, sessionId?: string }> = []
   const sessions = new Map<string, StreamableHTTPServerTransport>()
   const close: Array<() => Promise<void>> = []
@@ -42,6 +43,7 @@ async function remoteMcp() {
         ? sessions.get(id)
         : undefined
       if (!id && req.method === 'POST') {
+        await onInitialize?.()
         const server = createMcpServer({ name: 'fixture' })
         server.registerTool('echo', {
           inputSchema: {
@@ -99,6 +101,42 @@ describe('ai.mcp.services', () => {
   afterEach(async () => {
     vi.unstubAllEnvs()
     await ai.close()
+  })
+
+  it('does not dispatch an upstream tool after catalog revocation during the handshake', async () => {
+    let release: (() => void) | undefined
+    const pause = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const initializing = vi.fn(() => pause)
+    const remote = await remoteMcp(initializing)
+    try {
+      expect((await ai.init()).success).toBe(true)
+      const registered = await ai.mcp.servers.register({
+        id: 'docs',
+        name: 'Docs',
+        transport: 'http',
+        url: `${remote.origin}/mcp`,
+        allowedTools: ['echo'],
+      })
+      expect(registered.success).toBe(true)
+      const pending = ai.mcp.services.invoke(request, {
+        principal,
+        authorize: () => true,
+      })
+      await expect.poll(() => initializing.mock.calls.length).toBe(1)
+      expect((await ai.mcp.servers.remove('docs')).success).toBe(true)
+      release?.()
+      expect(await pending).toMatchObject({
+        success: false,
+        error: { code: HaiAIError.RESOURCE_CONFLICT.code },
+      })
+      expect(remote.invoke).not.toHaveBeenCalled()
+    }
+    finally {
+      release?.()
+      await remote.close()
+    }
   })
 
   it('uses registered Streamable HTTP and isolates remote sessions per call', async () => {
@@ -343,7 +381,40 @@ describe('ai.mcp.services', () => {
       expect(result.error.code).toBe(HaiAIError.MCP_CONNECTION_ERROR.code)
   })
 
-  it('submits managed jobs in the tool capacity class with the registered service ceiling', async () => {
+  it('validates warm-pool bounds and restricts warm pools to deployment configuration', async () => {
+    const service = {
+      id: 'docs',
+      name: 'Docs',
+      transport: 'job',
+      environmentId: 'documents-job',
+      allowedTools: ['documents.extract'],
+      pool: { minReady: 1, maxRunning: 2, maxTotal: 3 },
+    } as const
+    const config = {
+      ...service,
+      allowedTools: [...service.allowedTools],
+    }
+    expect(MCPExternalServerSchema.safeParse(config).success).toBe(true)
+    expect(MCPExternalServerSchema.safeParse({
+      ...config,
+      pool: { minReady: 1, maxRunning: 3, maxTotal: 2 },
+    }).success).toBe(false)
+    expect(MCPExternalServerSchema.safeParse({
+      ...config,
+      pool: { minReady: 4, maxRunning: 2, maxTotal: 3 },
+    }).success).toBe(false)
+    expect(MCPExternalServerSchema.safeParse({
+      ...config,
+      pool: { minReady: 1, maxRunning: 2 },
+    }).success).toBe(false)
+    expect((await ai.init()).success).toBe(true)
+    expect(await ai.mcp.servers.register(config)).toMatchObject({
+      success: false,
+      error: { code: HaiAIError.RESOURCE_INVALID.code },
+    })
+  })
+
+  it('registers a deployment warm pool and submits jobs with its ceiling and tool capacity class', async () => {
     const runner = createRunner()
     const started = await runner.init({
       nodeId: 'tool-capacity-api',
@@ -364,6 +435,8 @@ describe('ai.mcp.services', () => {
     })
     expect(started.success).toBe(true)
     try {
+      const unregister = vi.fn()
+      const register = vi.spyOn(runner, 'registerWarmPool').mockReturnValue({ success: true, data: unregister })
       const submit = vi.spyOn(runner, 'submit').mockResolvedValue({
         success: true,
         data: {
@@ -387,7 +460,7 @@ describe('ai.mcp.services', () => {
             {
               ...service,
               allowedTools: [...service.allowedTools],
-              pool: { maxRunning: 2 },
+              pool: { minReady: 1, maxRunning: 2, maxTotal: 3 },
             },
           ],
         },
@@ -398,6 +471,14 @@ describe('ai.mcp.services', () => {
           publish: vi.fn(),
         },
       })).success).toBe(true)
+      expect(register).toHaveBeenCalledWith({
+        key: 'docs',
+        kind: 'ai-mcp-job',
+        environmentId: 'documents-job',
+        minReady: 1,
+        maxRunning: 2,
+        maxTotal: 3,
+      })
       const called = await ai.mcp.services.invoke({
         serviceId: 'docs',
         tool: 'documents.extract',
@@ -415,7 +496,10 @@ describe('ai.mcp.services', () => {
       expect(submit).toHaveBeenCalledWith(expect.objectContaining({
         capacityClass: 'tool',
         concurrency: { key: 'docs', limit: 2 },
+        warmPool: true,
       }))
+      await ai.close()
+      expect(unregister).toHaveBeenCalledTimes(1)
     }
     finally {
       await ai.close()
@@ -701,6 +785,7 @@ print(base64.b64encode(data.getvalue()).decode())`,
               transport: 'job',
               environmentId: 'office-job',
               allowedTools: ['office.convert'],
+              pool: { minReady: 1, maxRunning: 1, maxTotal: 1 },
             },
           ],
         },
@@ -709,6 +794,22 @@ print(base64.b64encode(data.getvalue()).decode())`,
         mcpJobFiles: { read, publish },
       })
       expect(initialized.success).toBe(true)
+      // 验收快照用于核对实际预热容器被交给本次作业，避免冷启动被误记为命中。
+      const containerFor = async (condition: 'ready' | 'completed') => {
+        const filter = condition === 'ready'
+          ? 'warm_state = \'ready\' AND state = \'running\''
+          : 'warm_state IS NULL AND state = \'succeeded\' AND pool_fingerprint IS NOT NULL'
+        const result = await reldb.sql.get<{ container_json: string | { id: string } }>(
+          `SELECT container_json FROM hai_runner_executions WHERE kind = ? AND ${filter}`,
+          ['ai-mcp-job'],
+        )
+        const container = result.success ? result.data?.container_json : undefined
+        return typeof container === 'string'
+          ? (JSON.parse(container) as { id: string }).id
+          : container?.id
+      }
+      await expect.poll(() => containerFor('ready'), { timeout: 15_000 }).toMatch(/^[a-f\d]{64}$/)
+      const warmedContainer = await containerFor('ready')
       await new Promise<void>(resolve => http.listen(0, '127.0.0.1', resolve))
       const address = http.address()
       if (!address || typeof address === 'string')
@@ -760,6 +861,7 @@ print(base64.b64encode(data.getvalue()).decode())`,
       expect(JSON.stringify(result)).not.toContain('JVBERi0')
       expect(read).toHaveBeenCalledWith(expect.objectContaining({ principal, taskId: 'task-office', fileId: 'report-object' }))
       expect(publish).toHaveBeenCalledWith(expect.objectContaining({ principal, taskId: 'task-office', name: 'result.pdf' }))
+      expect(await containerFor('completed')).toBe(warmedContainer)
       bound.data.revoke()
     }
     finally {

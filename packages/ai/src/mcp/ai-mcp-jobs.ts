@@ -78,6 +78,7 @@ export function createMCPJobs(
   read: (id: string) => Promise<MCPExternalServer | undefined>,
   runner: RunnerFunctions,
   files: MCPJobFiles,
+  warmServices: readonly MCPExternalServer[] = [],
 ) {
   function validateEnvironment(environmentId: string, operation: string) {
     const environment = runner.environment(environmentId)
@@ -179,8 +180,40 @@ export function createMCPJobs(
   if (!registration.success)
     throw new Error('MCP job executor registration failed')
 
+  const unregisterHandler = registration.data
+  const warmPools = new Map<string, () => void>()
+  function close() {
+    for (const unregister of warmPools.values())
+      unregister()
+    warmPools.clear()
+    unregisterHandler()
+  }
+  try {
+    for (const service of warmServices) {
+      if (!service.environmentId || !service.pool || service.pool.maxTotal === undefined
+        || !service.allowedTools?.every(tool => operations.safeParse(tool).success && validateEnvironment(service.environmentId!, tool))) {
+        throw new Error('MCP warm pool environment does not support the declared tools')
+      }
+      const pool = runner.registerWarmPool({
+        key: service.id,
+        kind,
+        environmentId: service.environmentId,
+        minReady: service.pool.minReady ?? 0,
+        maxRunning: service.pool.maxRunning,
+        maxTotal: service.pool.maxTotal,
+      })
+      if (!pool.success)
+        throw new Error('MCP warm pool registration failed')
+      warmPools.set(service.id, pool.data)
+    }
+  }
+  catch (error) {
+    close()
+    throw error
+  }
+
   return {
-    close: registration.data,
+    close,
     async invoke(
       service: MCPExternalServer,
       request: MCPServiceRequest,
@@ -188,6 +221,8 @@ export function createMCPJobs(
       taskId: string | undefined,
       signal: AbortSignal,
     ) {
+      if (service.pool?.maxTotal !== undefined && !warmPools.has(service.id))
+        throw new Error('MCP warm pool is not configured on this node')
       const args = z.strictObject({
         fileId: z.string().regex(fileName),
         language: language.optional(),
@@ -215,6 +250,9 @@ export function createMCPJobs(
         environmentId: input.environmentId,
         capacityClass: 'tool',
         concurrency: { key: service.id, limit: service.pool?.maxRunning ?? 4 },
+        ...(warmPools.has(service.id)
+          ? { warmPool: true }
+          : {}),
         input: {
           serviceId: input.serviceId,
           tool: input.tool,

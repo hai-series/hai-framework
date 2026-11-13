@@ -61,6 +61,8 @@ finally {
 
 元の実行ノード上の信頼できる管理エンドポイントは `runner.reconcileUnknown(scope, id, { operatorId, reason })` を呼び出せます。Runner は記録済みのエンジンとコンテナを確認し、コンテナが削除され、作業ディレクトリを後処理できた場合に実行枠と再利用キーを解放します。担当者の判断を記録し、元の `unknown` に `reconciledAt` を追加します。信頼できるコンテナの受付情報がなければ実行枠を保持します。
 
+固定のオフラインツールでは、API ノードと実行ノードに同じ `registerWarmPool({ key, kind, environmentId, minReady, maxRunning, maxTotal })` を登録します。`minReady` はクラスター全体の空コンテナの目標数です。`maxTotal` には起動、待機、実行、後処理、未確認のインスタンスが含まれます。信頼できるリクエストは、サービスの同時実行キーと `warmPool: true` を指定します。空のインスタンスを取得してから認可済み入力を配置し、1 回の実行後に破棄します。イメージには `/usr/bin/python3` が必要で、待機中もツール専用枠を使用します。
+
 ## 開発とテスト
 
 ```bash

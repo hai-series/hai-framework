@@ -136,6 +136,8 @@ export const submitSchema = z.strictObject({
   parentId: z.string().regex(/^[\da-f]{64}$/u).optional(),
   /** 仅可信服务提交工具类别；其节点资源与普通 Worker 分开核算。 */
   capacityClass: z.enum(['default', 'tool']).default('default'),
+  /** 使用已登记服务的单次预热池。 */
+  warmPool: z.literal(true).optional(),
   /** 同一 kind + key 的跨节点上限，部署变更期间采用最小活动值。 */
   concurrency: z.strictObject({
     key: id,
@@ -144,7 +146,23 @@ export const submitSchema = z.strictObject({
   reuseKey: z.string().min(1).max(200).optional(),
   queueTimeoutMs: timeout.default(300_000),
   runTimeoutMs: timeout.default(300_000),
-}).refine(value => !value.parentId || (!value.nodeId && !value.environmentId && !value.resources && !value.reuseKey && value.capacityClass === 'default' && !value.concurrency))
+}).refine(value => !value.parentId || (!value.nodeId && !value.environmentId && !value.resources && !value.reuseKey && value.capacityClass === 'default' && !value.concurrency)).refine(value => !value.warmPool || (value.capacityClass === 'tool' && value.environmentId && value.concurrency && !value.resources))
+
+/**
+ * 验证仅由部署方登记的预热池。
+ * @example 模块内部上下文
+ * ```ts
+ * const pool = warmPoolSchema.parse({ key: 'docs', kind: 'docs.v1', environmentId: 'docs', minReady: 1, maxRunning: 2, maxTotal: 3 })
+ * ```
+ */
+export const warmPoolSchema = z.strictObject({
+  key: id,
+  kind: id,
+  environmentId: id,
+  minReady: z.number().int().min(0).max(1000),
+  maxRunning: z.number().int().min(1).max(1000),
+  maxTotal: z.number().int().min(1).max(1000),
+}).refine(value => value.minReady <= value.maxTotal && value.maxRunning <= value.maxTotal)
 
 /**
  * 可信执行器注册名称校验。

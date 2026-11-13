@@ -37,10 +37,14 @@ export function createMCPServiceOperations(
   read: (id: string) => Promise<MCPExternalServer | undefined>,
   runner?: RunnerFunctions,
   files?: MCPJobFiles,
+  configuredServices: readonly MCPExternalServer[] = [],
 ) {
   const lifecycle = new AbortController()
+  const warmServices = configuredServices.filter(service => service.transport === 'job' && service.pool?.maxTotal !== undefined)
+  if (warmServices.length && (!runner || !files))
+    throw new Error('Managed MCP warm pools require a runner and file access policy')
   const jobs = runner && files
-    ? createMCPJobs(read, runner, files)
+    ? createMCPJobs(read, runner, files, warmServices)
     : undefined
   const operations: MCPServiceOperations = {
     createBroker: options => lifecycle.signal.aborted
@@ -159,6 +163,10 @@ export function createMCPServiceOperations(
         client = new Client({ name: 'hai-ai', version: '1.0.0' })
         await client.connect(transport, { signal, timeout: timeoutMs })
         connected = true
+        // 握手可能等待远端响应；发出工具调用前复核同一授权对象仍在目录中。
+        if (JSON.stringify(await read(input.serviceId)) !== JSON.stringify(service))
+          return err(HaiAIError.RESOURCE_CONFLICT, aiM('ai_resourceConflict'))
+        signal.throwIfAborted()
         const result = CallToolResultSchema.parse(await client.callTool({ name: input.tool, arguments: input.arguments }, CallToolResultSchema, { signal, timeout: timeoutMs }))
         return result.isError
           ? err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpServiceCallFailed'))

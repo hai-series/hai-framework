@@ -329,13 +329,6 @@ export async function createAISubsystems(
     models: llmModels.operations,
   })
 
-  // MCP
-  const mcpServices = createMCPServiceOperations(async id => (await mcpServers.read(id))?.value, deps.runner, deps.mcpJobFiles)
-  const mcp: ManagedMCPOperations = Object.assign(createAIMCPFunctions(), {
-    servers: mcpServers.operations,
-    services: mcpServices.operations,
-  })
-
   // Embedding
   async function resourceCall<T>(operation: () => Promise<T>) {
     try {
@@ -530,6 +523,27 @@ export async function createAISubsystems(
         createImageOperations(await imageConfig()).generate(request),
       ),
   }
+
+  // MCP 在其他异步装配完成后注册执行处理器和预热池。
+  const mcpServices = createMCPServiceOperations(
+    async id => (await mcpServers.read(id))?.value,
+    deps.runner,
+    deps.mcpJobFiles,
+    config.mcp?.servers,
+  )
+  const managedMCPServers: ManagedMCPOperations['servers'] = {
+    ...mcpServers.operations,
+    register: input => input?.pool?.maxTotal === undefined
+      ? mcpServers.operations.register(input)
+      : Promise.resolve(err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))),
+    update: (input, version) => input?.pool?.maxTotal === undefined
+      ? mcpServers.operations.update(input, version)
+      : Promise.resolve(err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))),
+  }
+  const mcp: ManagedMCPOperations = Object.assign(createAIMCPFunctions(), {
+    servers: managedMCPServers,
+    services: mcpServices.operations,
+  })
 
   return {
     closeRegistries: () => {

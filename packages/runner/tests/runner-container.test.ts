@@ -244,6 +244,151 @@ describe('managed engine isolation', () => {
 })
 
 describe('isolated artifact export', () => {
+  it.runIf(!!artifactImage)('consumes each ready container once after claim without carrying files between principals', async () => {
+    expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
+    const peer = createRunner()
+    const entered = Promise.withResolvers<string>()
+    const release = Promise.withResolvers<void>()
+    try {
+      const { stdout } = await cli(engine, [
+        'image',
+        'inspect',
+        '--format',
+        '{{.Id}}',
+        artifactImage!,
+      ])
+      const image = stdout.trim().replace(/^(?:sha256:)?/u, 'sha256:')
+      const environment = {
+        id: 'tools',
+        image,
+        resources: {
+          cpu: 0.5,
+          memoryMiB: 128,
+          pids: 24,
+          scratchMiB: 64,
+        },
+      }
+      const pool = {
+        key: 'documents',
+        kind: 'read',
+        environmentId: 'tools',
+        minReady: 1,
+        maxRunning: 1,
+        maxTotal: 1,
+      }
+      for (const [index, node] of [runner, peer].entries()) {
+        expect((await node.init({
+          nodeId: `warm-${index}`,
+          engine,
+          environments: [environment],
+        })).success).toBe(true)
+        expect((await node.register('read', async (input, context) => {
+          if (input === 'hold') {
+            entered.resolve(context.id)
+            await release.promise
+          }
+          const launched = await context.start({
+            command: '/bin/sh',
+            args: ['-ec', 'test -z "$(ls -A /output)"; cat /input/current'],
+            inputs: {
+              current: input === 'hold'
+                ? 'YWxwaGE='
+                : String(input),
+            },
+          })
+          if (!launched.success)
+            throw new Error(launched.error.message)
+          launched.data.stderr.resume()
+          return await read(launched.data.stdout)
+        })).success).toBe(true)
+        expect((await node.registerWarmPool(pool)).success).toBe(true)
+      }
+      const readyId = async () => {
+        const result = await reldb.sql.get<{ container_json: string }>('SELECT container_json FROM hai_runner_executions WHERE warm_state = \'ready\' AND state = \'running\'')
+        return result.success && result.data
+          ? JSON.parse(result.data.container_json).id as string
+          : undefined
+      }
+      const jobId = async (id: string) => {
+        const result = await reldb.sql.get<{ container_json: string }>('SELECT container_json FROM hai_runner_executions WHERE id = ?', [id])
+        return result.success && result.data
+          ? JSON.parse(result.data.container_json).id as string
+          : undefined
+      }
+      await expect.poll(readyId, { timeout: 8000 }).toBeDefined()
+      const initial = await readyId()
+      const submit = (userId: string, input: string) => runner.submit({
+        scope: { ...scope, userId },
+        kind: 'read',
+        input,
+        environmentId: 'tools',
+        capacityClass: 'tool',
+        concurrency: { key: 'documents', limit: 1 },
+        warmPool: true,
+      })
+      const alice = await submit('alice', 'hold')
+      if (!alice.success)
+        throw new Error(alice.error.message)
+      await expect.poll(() => runner.get({ ...scope, userId: 'alice' }, alice.data.id), { timeout: 8000 })
+        .toMatchObject({
+          success: true,
+          data: { status: 'running' },
+        })
+      expect(await entered.promise).toBe(alice.data.id)
+      expect(await jobId(alice.data.id)).toBe(initial)
+      const bob = await submit('bob', 'YmV0YQ==')
+      if (!bob.success)
+        throw new Error(bob.error.message)
+      const count = await reldb.sql.get<{ total: number }>('SELECT COUNT(*) AS total FROM hai_runner_executions WHERE state = \'running\'')
+      expect(count).toEqual({
+        success: true,
+        data: { total: 1 },
+      })
+      expect(await runner.get({ ...scope, userId: 'bob' }, bob.data.id))
+        .toMatchObject({
+          success: true,
+          data: { status: 'queued' },
+        })
+      expect(await readyId()).toBeUndefined()
+
+      // 失租后不得在原已认领容器上注入迟到的文件或启动工具。
+      expect((await reldb.sql.execute('UPDATE hai_runner_executions SET leased_until = 0 WHERE id = ?', [alice.data.id])).success).toBe(true)
+      release.resolve()
+      await expect.poll(() => runner.get({ ...scope, userId: 'alice' }, alice.data.id), { timeout: 8000 })
+        .toMatchObject({
+          success: true,
+          data: { status: 'unknown', output: undefined },
+        })
+      const review = { operatorId: 'ops', reason: 'Test confirms old container gone' }
+      await expect.poll(async () => {
+        const [a, b] = await Promise.all([
+          runner.reconcileUnknown({ ...scope, userId: 'alice' }, alice.data.id, review),
+          peer.reconcileUnknown({ ...scope, userId: 'alice' }, alice.data.id, review),
+        ])
+        return a.success || b.success
+      }, { timeout: 8000 }).toBe(true)
+      await expect.poll(() => runner.get({ ...scope, userId: 'bob' }, bob.data.id), { timeout: 8000 })
+        .toMatchObject({
+          success: true,
+          data: { status: 'succeeded', output: 'beta' },
+        })
+      expect(await jobId(bob.data.id)).not.toBe(initial)
+      await expect.poll(readyId, { timeout: 8000 }).toBeDefined()
+      expect(await readyId()).not.toBe(initial)
+    }
+    finally {
+      release.resolve()
+      try {
+        const closed = await Promise.all([
+          runner.close(),
+          peer.close(),
+        ])
+        expect(closed.every(result => result.success)).toBe(true)
+      }
+      finally { await reldb.close() }
+    }
+  }, 30_000)
+
   it.runIf(!!artifactImage)('exports a bounded regular file and rejects traversal, symlinks and FIFOs', async () => {
     expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
     try {

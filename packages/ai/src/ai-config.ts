@@ -544,10 +544,16 @@ export const MCPExternalServerSchema = z.strictObject({
   pool: z.strictObject({
     /** 同时执行的实例上限；未配置服务池时默认为 4。 */
     maxRunning: z.number().int().min(1).max(1000),
-  }).optional(),
+    /** 部署预热池期望保留的干净实例数量。 */
+    minReady: z.number().int().min(0).max(1000).optional(),
+    /** 集群内预热、启动、运行、销毁中实例的总上限。 */
+    maxTotal: z.number().int().min(1).max(1000).optional(),
+  }).refine(pool => pool.maxTotal === undefined
+    ? pool.minReady === undefined
+    : pool.maxTotal >= Math.max(pool.minReady ?? 0, pool.maxRunning)).optional(),
 }).refine((value) => {
   if (value.transport === 'job')
-    return Boolean(value.environmentId && value.allowedTools?.length && !value.command && !value.url && !value.args.length && !Object.keys(value.headerEnv).length && !Object.keys(value.environmentRefs).length)
+    return Boolean(/^[\w.-]{1,100}$/u.test(value.id) && value.environmentId && value.allowedTools?.length && !value.command && !value.url && !value.args.length && !Object.keys(value.headerEnv).length && !Object.keys(value.environmentRefs).length)
   if (value.environmentId || value.pool)
     return false
   return value.transport === 'stdio'

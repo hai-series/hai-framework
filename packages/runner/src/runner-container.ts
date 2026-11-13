@@ -4,6 +4,7 @@ import type { RunnerLaunch, RunnerProcess } from './runner-types.js'
 import { Buffer } from 'node:buffer'
 import { execFile, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { once } from 'node:events'
 import { chmod, lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join, posix } from 'node:path'
@@ -185,6 +186,48 @@ export async function confirmContainerReleased(record: RunnerContainerIdentity):
 }
 
 /**
+ * 单次预热的容器句柄只留在原执行节点。
+ * @example 模块内部上下文
+ * ```ts
+ * function staged(handle: WarmContainer) { return handle.activate({ command: 'true', inputs: {} }, new AbortController().signal, async () => true) }
+ * ```
+ */
+export interface WarmContainer extends RunnerProcess {
+  activate: (launch: RunnerLaunch, signal: AbortSignal, authorize: () => Promise<boolean>) => Promise<HaiResult<RunnerProcess>>
+}
+
+const STANDBY = `
+import json, os, sys
+if os.listdir('/input') or os.listdir('/output'):
+    raise SystemExit(2)
+os.write(1, b'+')
+if os.read(0, 1) != b'+':
+    raise SystemExit(2)
+with open('/run/hai-config/warm-launch.json', 'rb') as configuration:
+    data = configuration.read(524289)
+if len(data) > 524288:
+    raise SystemExit(2)
+command, *args = json.loads(data)
+os.execvp(command, [command, *args])
+`
+
+function decodeInputs(inputs: Record<string, string>, resources: RunnerResources) {
+  const budget = Math.min(MAX_FILE_BYTES, resources.scratchMiB * 1024 * 1024)
+  const entries = Object.entries(inputs)
+  if (entries.length > 8 || entries.reduce((total, [, value]) => total + value.length, 0) > 4 * Math.ceil(budget / 3) + 24)
+    return undefined
+  const decoded = entries.map(([name, value]) => ({
+    name,
+    value,
+    bytes: Buffer.from(value, 'base64'),
+  }))
+  return decoded.some(item => item.bytes.toString('base64') !== item.value)
+    || decoded.reduce((total, item) => total + item.bytes.length, 0) > budget
+    ? undefined
+    : decoded
+}
+
+/**
  * 运行已登记镜像中的单一进程，私有挂载和标准流由执行节点持有。
  * @example 模块内部上下文
  * ```ts
@@ -200,7 +243,8 @@ export async function startContainer(
   launch: RunnerLaunch,
   signal: AbortSignal,
   record: (identity: RunnerContainerIdentity) => Promise<HaiResult<void>>,
-): Promise<HaiResult<RunnerProcess>> {
+  warm = false,
+): Promise<HaiResult<WarmContainer>> {
   const parsed = launchSchema.safeParse(launch)
   if (!parsed.success || signal.aborted)
     return invalid()
@@ -211,21 +255,11 @@ export async function startContainer(
     return invalid()
   }
 
-  const inputs = options.inputs === undefined
+  const decoded = options.inputs === undefined
     ? undefined
-    : Object.entries(options.inputs)
-  const inputBudget = Math.min(MAX_FILE_BYTES, resources.scratchMiB * 1024 * 1024)
-  if (inputs && (inputs.length > 8 || inputs.reduce((total, [, value]) => total + value.length, 0) > 4 * Math.ceil(inputBudget / 3) + 24))
+    : decodeInputs(options.inputs, resources)
+  if (options.inputs && !decoded)
     return invalid()
-  const decoded = inputs?.map(([name, value]) => ({
-    name,
-    value,
-    bytes: Buffer.from(value, 'base64'),
-  }))
-  if (decoded && (decoded.some(item => item.bytes.toString('base64') !== item.value)
-    || decoded.reduce((total, item) => total + item.bytes.length, 0) > inputBudget)) {
-    return invalid()
-  }
 
   let temporary: string | undefined
   let id: string | undefined
@@ -434,11 +468,48 @@ export async function startContainer(
       })()
       return closing
     }
-    return ok({
+    let activated = false
+    const process: WarmContainer = {
       stdin: child.stdin,
       stdout: child.stdout,
       stderr: child.stderr,
       wait: () => completion,
+      async activate(launch, activationSignal, authorize) {
+        if (!warm || activated || closing || activationSignal.aborted)
+          return invalid()
+        activated = true
+        const parsed = launchSchema.safeParse(launch)
+        if (!parsed.success || parsed.data.cwd !== '/workspace' || Object.keys(parsed.data.env).length
+          || Object.keys(parsed.data.files).length || !parsed.data.inputs) {
+          return invalid()
+        }
+        const staged = decodeInputs(parsed.data.inputs, resources)
+        const request = JSON.stringify([parsed.data.command, ...parsed.data.args])
+        if (!staged || Buffer.byteLength(request) > 524288)
+          return invalid()
+        try {
+          await chmod(inputDir, 0o755)
+          await chmod(files, 0o755)
+          // 所有写入结算后才允许移除容器或暂存；失败也不会重新分配给另一主体。
+          const writes = await Promise.allSettled([
+            ...staged.map(item => writeFile(join(inputDir, item.name), item.bytes, { mode: 0o444, flag: 'wx' })),
+            writeFile(join(files, 'warm-launch.json'), request, { mode: 0o444, flag: 'wx' }),
+          ])
+          await chmod(inputDir, 0o555)
+          await chmod(files, 0o555)
+          if (writes.some(item => item.status === 'rejected') || !await authorize() || activationSignal.aborted || closing)
+            return invalid()
+          await new Promise<void>((resolve, reject) => {
+            child.stdin.write('+', error => error
+              ? reject(error)
+              : resolve())
+          })
+          return ok(process)
+        }
+        catch {
+          return unavailable()
+        }
+      },
       async artifact(name, maxBytes) {
         if (!decoded || closing || signal.aborted || !artifactName.test(name)
           || !Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > MAX_FILE_BYTES) {
@@ -473,7 +544,25 @@ export async function startContainer(
         }
       },
       close: stop,
-    })
+    }
+    if (warm) {
+      const readySignal = AbortSignal.any([
+        signal,
+        AbortSignal.timeout(15_000),
+      ])
+      try {
+        const [chunk] = await once(child.stdout, 'data', { signal: readySignal })
+        child.stdout.pause()
+        if (!Buffer.isBuffer(chunk) || chunk.length !== 1 || chunk[0] !== 43)
+          throw new Error('Invalid warm readiness')
+      }
+      catch {
+        return (await stop()).success
+          ? unavailable()
+          : uncertain()
+      }
+    }
+    return ok(process)
   }
   catch {
     if (envFile) {
@@ -498,4 +587,28 @@ export async function startContainer(
       ? uncertain()
       : unavailable()
   }
+}
+
+/**
+ * 启动完全无用户输入的单次候选容器，等待固定协议就绪。
+ * @example 模块内部上下文
+ * ```ts
+ * function prepare(settings: RunnerConfig, environment: RunnerEnvironment) {
+ *   return prepareWarmContainer(settings.engine, environment, new AbortController().signal, async () => ok(undefined))
+ * }
+ * ```
+ */
+export async function prepareWarmContainer(
+  engine: RunnerConfig['engine'],
+  environment: RunnerEnvironment,
+  signal: AbortSignal,
+  record: (identity: RunnerContainerIdentity) => Promise<HaiResult<void>>,
+) {
+  if (environment.networkPolicy !== 'offline')
+    return invalid()
+  return startContainer(engine, environment, environment.resources, {
+    command: '/usr/bin/python3',
+    args: ['-I', '-S', '-c', STANDBY],
+    inputs: {},
+  }, signal, record, true)
 }
