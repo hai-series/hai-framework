@@ -30,6 +30,64 @@ afterEach(async () => {
 })
 
 describe('managed execution', () => {
+  it('reserves separate tool resources and applies the smallest active service cap across nodes', async () => {
+    const otherNode = createRunner()
+    const unblock = Promise.withResolvers<void>()
+    try {
+      expect((await runner.init({
+        nodeId: 'alpha',
+        capacity,
+        toolCapacity: capacity,
+        maxRunningPerScope: 1,
+      })).success).toBe(true)
+      expect((await otherNode.init({ nodeId: 'beta', capacity, toolCapacity: capacity })).success).toBe(true)
+      for (const node of [runner, otherNode]) {
+        expect((await node.register('holding', async () => {
+          await unblock.promise
+          return null
+        })).success).toBe(true)
+      }
+      const ordinary = await runner.submit({
+        scope,
+        kind: 'holding',
+        input: null,
+        resources: capacity,
+        nodeId: 'alpha',
+      })
+      const tool = await runner.submit({
+        scope,
+        kind: 'holding',
+        input: null,
+        resources: capacity,
+        nodeId: 'alpha',
+        capacityClass: 'tool',
+        concurrency: { key: 'office', limit: 1 },
+      })
+      if (!ordinary.success || !tool.success)
+        throw new Error('submission failed')
+      await status(ordinary.data.id, 'running')
+      await status(tool.data.id, 'running')
+      const waiting = await runner.submit({
+        scope,
+        kind: 'holding',
+        input: null,
+        resources: capacity,
+        nodeId: 'beta',
+        capacityClass: 'tool',
+        concurrency: { key: 'office', limit: 2 },
+      })
+      if (!waiting.success)
+        throw new Error('submission failed')
+      await status(waiting.data.id, 'queued')
+      unblock.resolve()
+      await status(waiting.data.id, 'succeeded')
+    }
+    finally {
+      unblock.resolve()
+      expect((await otherNode.close()).success).toBe(true)
+    }
+  })
+
   it('expires a bounded queue even if no compatible executor handler is registered', async () => {
     expect((await runner.init({ nodeId: 'alpha', pollMs: 20 })).success).toBe(true)
     const receipt = await runner.submit({
@@ -183,6 +241,8 @@ describe('managed execution', () => {
       expect((await reldb.sql.execute('UPDATE hai_runner_executions SET leased_until = 0 WHERE id = ?', [first.data.id])).success).toBe(true)
       done.resolve()
       await status(first.data.id, 'unknown')
+      expect(await runner.reconcileUnknown(scope, first.data.id, { operatorId: 'ops', reason: 'Container evidence required' }))
+        .toMatchObject({ success: false })
       expect(await runner.submit({
         scope,
         kind: 'write',

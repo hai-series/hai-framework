@@ -51,11 +51,15 @@ Use `get` for status, `find` to recover a receipt by scope and idempotency key, 
 
 Each `environments` entry supplies an ID, a locally available image digest, CPU cores, memory MiB, PID count, and scratch MiB. Callers select the environment by `environmentId` and can request lower limits. Executors claim work and reserve resources in the same database transaction. Queue and concurrency limits apply by scope and node.
 
+Reserve separate tool capacity with `toolCapacity` so tools can run while agent workers hold their slots. The default tool budget is 1 CPU core, 1024 MiB of memory, 128 PIDs and 512 MiB of scratch. `toolMaxRunning` defaults to 4. The host must support both partitions. Trusted callers select `capacityClass: "tool"` and can set a cross-node service cap with `concurrency: { key, limit }`.
+
 Handlers use `context.start` to obtain process streams and exit information. Images require Linux cgroup v2 support, `/bin/sh`, and support for UID/GID 1000. The root filesystem is read-only. Runner assigns bounded tmpfs mounts at `/state`, `/workspace`, and `/tmp`, and copies launch files into `/state`. Networking is disabled by default. A registered internal network must pass the engine's internal-network check. Networked tasks should use a gateway configured for their trust boundary.
 
 The executor holds credentials and native connections in memory. Inputs, events, and outputs accept bounded JSON. Pass business identifiers and object references in execution records. When an owner disappears or cleanup cannot be verified, Runner preserves the `unknown` state and resource reservation pending operator reconciliation.
 
 Tool handlers can stage canonical Base64 files by basename in read-only `/input` using `inputs`. While the container is running, `artifact(name, maxBytes)` reads a regular file from `/output`. Total inputs and a single output are each limited to 50 MiB and remain subject to the scratch limit. Images that export artifacts provide `/usr/bin/python3`.
+
+A trusted operator endpoint on the original execution node can call `runner.reconcileUnknown(scope, id, { operatorId, reason })`. Runner verifies the recorded engine and container, checks that the container is gone, and cleans up the recorded staging directory before releasing the reservation and reuse key. It records the operator decision and adds `reconciledAt` to the original `unknown` receipt. Executions without a reliable container receipt retain their reservations.
 
 ## Development
 

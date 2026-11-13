@@ -12,6 +12,7 @@ export type {
   RunnerLaunch,
   RunnerOwner,
   RunnerProcess,
+  RunnerReconciliation,
   RunnerScope,
   RunnerSubmit,
 } from './runner-types.js'

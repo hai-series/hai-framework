@@ -66,6 +66,15 @@ export const RunnerConfigSchema = z.strictObject({
     pids: 512,
     scratchMiB: 2048,
   }),
+  /** 每个执行节点独立预留给工具作业的资源；宿主总预算须同时覆盖 capacity 和本项。 */
+  toolCapacity: resources.default({
+    cpu: 1,
+    memoryMiB: 1024,
+    pids: 128,
+    scratchMiB: 512,
+  }),
+  /** 每个执行节点的工具作业总并发，包括等待清理及未核验的作业，默认 4。 */
+  toolMaxRunning: z.number().int().min(1).max(1000).default(4),
   leaseMs: z.number().int().min(1000).max(120_000).default(10_000),
   pollMs: z.number().int().min(10).max(1000).default(50),
   maxRunning: z.number().int().min(1).max(1000).default(8),
@@ -125,10 +134,17 @@ export const submitSchema = z.strictObject({
   resources: resources.partial().optional(),
   nodeId: id.optional(),
   parentId: z.string().regex(/^[\da-f]{64}$/u).optional(),
+  /** 仅可信服务提交工具类别；其节点资源与普通 Worker 分开核算。 */
+  capacityClass: z.enum(['default', 'tool']).default('default'),
+  /** 同一 kind + key 的跨节点上限，部署变更期间采用最小活动值。 */
+  concurrency: z.strictObject({
+    key: id,
+    limit: z.number().int().min(1).max(1000),
+  }).optional(),
   reuseKey: z.string().min(1).max(200).optional(),
   queueTimeoutMs: timeout.default(300_000),
   runTimeoutMs: timeout.default(300_000),
-}).refine(value => !value.parentId || (!value.nodeId && !value.environmentId && !value.resources && !value.reuseKey))
+}).refine(value => !value.parentId || (!value.nodeId && !value.environmentId && !value.resources && !value.reuseKey && value.capacityClass === 'default' && !value.concurrency))
 
 /**
  * 可信执行器注册名称校验。

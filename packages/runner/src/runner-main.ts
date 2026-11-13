@@ -6,7 +6,7 @@ import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
 import { json, RunnerConfigSchema, runnerKind, submitSchema } from './runner-config.js'
-import { startContainer } from './runner-container.js'
+import { confirmContainerReleased, startContainer } from './runner-container.js'
 import { runnerM } from './runner-i18n.js'
 import { makeStore, readyStore } from './runner-store.js'
 import { HaiRunnerError } from './runner-types.js'
@@ -107,7 +107,8 @@ export function createRunner(): RunnerFunctions {
           return renewed
         if (renewed.data !== 'running' || abort.signal.aborted)
           return err(HaiRunnerError.LEASE_LOST, runnerM('runner_leaseLost'))
-        const started = await startContainer(settings.engine, environment, resources, options, abort.signal)
+        const started = await startContainer(settings.engine, environment, resources, options, abort.signal, identity =>
+          current.recordContainer(claim.id, identity))
         if (!started.success && started.error.code === HaiRunnerError.CLEANUP_UNCONFIRMED.code)
           uncertain = true
         return started
@@ -207,8 +208,8 @@ export function createRunner(): RunnerFunctions {
       ]
       if (!kinds.length)
         return
-      for (const control of [true, false]) {
-        const claimed = await current.claim(kinds, control)
+      for (const category of ['control', 'tool', 'default'] as const) {
+        const claimed = await current.claim(kinds, category)
         if (!claimed.success) {
           logger.warn('Managed execution claim failed', { code: claimed.error.code })
           continue
@@ -365,6 +366,33 @@ export function createRunner(): RunnerFunctions {
       return validAddress(scope, id)
         ? store.cancel(scope, id)
         : invalid()
+    },
+    async reconcileUnknown(scope, id, review) {
+      const current = store
+      if (!current || !config?.executor || closingRequested)
+        return inactive()
+      if (!validAddress(scope, id) || !review || typeof review.operatorId !== 'string'
+        || !runnerKind.safeParse(review.operatorId).success || typeof review.reason !== 'string'
+        || !review.reason.trim() || review.reason.length > 300 || /[\r\n\0]/u.test(review.reason)) {
+        return invalid()
+      }
+      if (running.has(id))
+        return cleanupUnconfirmed()
+      const evidence = await current.reconciliation(scope, id)
+      if (!evidence.success)
+        return evidence
+      const verified = await confirmContainerReleased(evidence.data.container)
+      if (!verified.success)
+        return verified
+      if (current !== store || closingRequested)
+        return inactive()
+      const reconciled = await current.reconcile(scope, id, evidence.data.generation, {
+        operatorId: review.operatorId,
+        reason: review.reason.trim(),
+      })
+      if (reconciled.success)
+        logger.info('Unknown execution resources reconciled', { executionId: id, operatorId: review.operatorId })
+      return reconciled
     },
     async events(scope, id, after = 0, limit = 100) {
       if (!store)

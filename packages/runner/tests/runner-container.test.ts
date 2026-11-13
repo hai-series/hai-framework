@@ -5,10 +5,10 @@ import process from 'node:process'
 import { promisify } from 'node:util'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { runner } from '../src/index.js'
+import { createRunner, runner } from '../src/index.js'
 
 const cli = promisify(execFile)
-const configuredEngine = process.env.HAI_TEST_CONTAINER_ENGINE
+const configuredEngine = process.env.HAI_ACP_E2E_ENGINE ?? process.env.HAI_TEST_CONTAINER_ENGINE
 const engine = configuredEngine === 'podman'
   ? 'podman'
   : 'docker'
@@ -156,6 +156,91 @@ describe('managed engine isolation', () => {
         data: { status: 'cancelled' },
       })
   }, 45_000)
+
+  it('releases a lost reservation only after the original engine has removed its recorded container', async () => {
+    const other = createRunner()
+    const review = { operatorId: 'operator', reason: 'INC-47: verified engine cleanup' }
+    try {
+      expect((await other.init({ engine, nodeId: 'another-engine-node' })).success).toBe(true)
+      expect((await runner.register('reconcile', async (_input, context) => {
+        const launched = await context.start({
+          command: 'sleep',
+          args: ['60'],
+        })
+        if (!launched.success)
+          throw new Error(launched.error.message)
+        launched.data.stdout.resume()
+        launched.data.stderr.resume()
+        expect((await context.emit({ launched: true })).success).toBe(true)
+        await launched.data.wait()
+        return null
+      })).success).toBe(true)
+      const original = await runner.submit({
+        scope,
+        kind: 'reconcile',
+        input: null,
+        environmentId: 'sandbox',
+        reuseKey: 'worker',
+        idempotencyKey: 'original',
+      })
+      if (!original.success)
+        throw new Error(original.error.message)
+      const id = original.data.id
+      await expect.poll(() => runner.events(scope, id), { timeout: 8000 })
+        .toMatchObject({
+          success: true,
+          data: [
+            {
+              data: { launched: true },
+            },
+          ],
+        })
+      expect(await runner.reconcileUnknown(scope, id, review)).toMatchObject({ success: false })
+      expect((await reldb.sql.execute('UPDATE hai_runner_executions SET leased_until = 0 WHERE id = ?', [id])).success).toBe(true)
+      await expect.poll(() => runner.get(scope, id), { timeout: 8000 })
+        .toMatchObject({
+          success: true,
+          data: { status: 'unknown' },
+        })
+      expect(await other.reconcileUnknown(scope, id, review)).toMatchObject({ success: false })
+      await expect.poll(() => runner.reconcileUnknown(scope, id, review), { timeout: 8000 })
+        .toMatchObject({
+          success: true,
+          data: {
+            status: 'unknown',
+            reconciledAt: expect.any(Number),
+          },
+        })
+      expect(await runner.reconcileUnknown(scope, id, review)).toMatchObject({ success: false })
+      const audit = await reldb.sql.get<{ reconciliation_json: string }>('SELECT reconciliation_json FROM hai_runner_executions WHERE id = ?', [id])
+      expect(audit.success && JSON.parse(audit.data!.reconciliation_json)).toEqual(review)
+      expect(await runner.find(scope, 'reconcile', 'original'))
+        .toMatchObject({
+          success: true,
+          data: {
+            id,
+            status: 'unknown',
+            reconciledAt: expect.any(Number),
+          },
+        })
+      const replacement = await runner.submit({
+        scope,
+        kind: 'reconcile',
+        input: null,
+        environmentId: 'sandbox',
+        reuseKey: 'worker',
+      })
+      expect(replacement).toMatchObject({
+        success: true,
+        data: {
+          id: expect.not.stringMatching(id),
+        },
+      })
+    }
+    finally {
+      expect((await other.close()).success).toBe(true)
+    }
+  }, 30_000)
 })
 
 describe('isolated artifact export', () => {

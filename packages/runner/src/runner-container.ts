@@ -3,9 +3,10 @@ import type { RunnerConfig, RunnerEnvironment, RunnerResources } from './runner-
 import type { RunnerLaunch, RunnerProcess } from './runner-types.js'
 import { Buffer } from 'node:buffer'
 import { execFile, spawn } from 'node:child_process'
-import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { chmod, lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, posix } from 'node:path'
+import { basename, join, posix } from 'node:path'
 import { promisify } from 'node:util'
 import { err, ok } from '@h-ai/core'
 import { z } from 'zod'
@@ -67,11 +68,128 @@ function uncertain() {
 }
 
 /**
+ * 持久化的实际容器及暂存身份，用于原节点核验资源。
+ * @example 模块内部上下文
+ * ```ts
+ * function engineName(record: RunnerContainerIdentity) { return record.engine }
+ * ```
+ */
+export interface RunnerContainerIdentity {
+  id: string
+  engine: RunnerConfig['engine']
+  engineKey: string
+  stageName: string
+  stageKey: string
+}
+
+const stageName = /^hai-runner-[a-z\d]{6}$/iu
+
+async function stagingRoot() {
+  const path = await realpath(tmpdir())
+  const info = await stat(path, { bigint: true })
+  return { path, key: `${path}:${info.dev}:${info.ino}` }
+}
+
+async function engineKey(engine: RunnerConfig['engine']) {
+  const root = await stagingRoot()
+  const host = (await readFile('/etc/machine-id', 'utf8')).trim()
+  if (!/^[\da-f]{32}$/u.test(host))
+    throw new Error('Host identity unavailable')
+  const value = engine === 'podman'
+    ? await cli(engine, ['info', '--format', '{{.Host.ServiceIsRemote}} {{.Store.GraphRoot}}'])
+    : await cli(engine, ['info', '--format', '{{.ID}}'])
+  if (engine === 'podman') {
+    if (!value.startsWith('false '))
+      throw new Error('Podman identity unavailable')
+    const storage = await stat(value.slice(6), { bigint: true })
+    return createHash('sha256').update(JSON.stringify([
+      host,
+      engine,
+      root.key,
+      value,
+      String(storage.dev),
+      String(storage.ino),
+    ])).digest('hex')
+  }
+  if (!value || value === '<no value>')
+    throw new Error('Docker identity unavailable')
+  return createHash('sha256').update(JSON.stringify([host, engine, root.key, value])).digest('hex')
+}
+
+async function containerAbsent(engine: RunnerConfig['engine'], id: string) {
+  return !(await cli(engine, [
+    'container',
+    'ls',
+    '--all',
+    '--no-trunc',
+    '--filter',
+    `id=${id}`,
+    '--format',
+    '{{.ID}}',
+  ]))
+}
+
+async function identityOf(path: string) {
+  const info = await lstat(path, { bigint: true })
+  if (!info.isDirectory())
+    throw new Error('Runner staging path is invalid')
+  return `${info.dev}:${info.ino}`
+}
+
+/**
+ * 仅在相同的真实引擎与暂存根上确认已停止，并清理已登记的专属暂存目录。
+ * @example 模块内部上下文
+ * ```ts
+ * async function verify(record: RunnerContainerIdentity) { return confirmContainerReleased(record) }
+ * ```
+ */
+export async function confirmContainerReleased(record: RunnerContainerIdentity): Promise<HaiResult<void>> {
+  if (!containerId.test(record.id) || !stageName.test(record.stageName))
+    return uncertain()
+  try {
+    if (record.engineKey !== await engineKey(record.engine) || !await containerAbsent(record.engine, record.id))
+      return uncertain()
+    const path = join((await stagingRoot()).path, record.stageName)
+    let actual: string | undefined
+    try {
+      actual = await identityOf(path)
+    }
+    catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT'))
+        return uncertain()
+    }
+    if (actual) {
+      if (actual !== record.stageKey)
+        return uncertain()
+      for (const name of ['input', 'configuration']) {
+        const directory = join(path, name)
+        try {
+          if (!(await lstat(directory)).isDirectory())
+            return uncertain()
+          await chmod(directory, 0o700)
+        }
+        catch (error) {
+          if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT'))
+            return uncertain()
+        }
+      }
+      await rm(path, { recursive: true, force: true })
+    }
+    return record.engineKey === await engineKey(record.engine) && await containerAbsent(record.engine, record.id)
+      ? ok(undefined)
+      : uncertain()
+  }
+  catch {
+    return uncertain()
+  }
+}
+
+/**
  * 运行已登记镜像中的单一进程，私有挂载和标准流由执行节点持有。
  * @example 模块内部上下文
  * ```ts
  * async function shell(config: RunnerConfig, environment: RunnerEnvironment) {
- *   return startContainer(config.engine, environment, environment.resources, { command: 'true' }, new AbortController().signal)
+ *   return startContainer(config.engine, environment, environment.resources, { command: 'true' }, new AbortController().signal, async () => ok(undefined))
  * }
  * ```
  */
@@ -81,6 +199,7 @@ export async function startContainer(
   resources: RunnerResources,
   launch: RunnerLaunch,
   signal: AbortSignal,
+  record: (identity: RunnerContainerIdentity) => Promise<HaiResult<void>>,
 ): Promise<HaiResult<RunnerProcess>> {
   const parsed = launchSchema.safeParse(launch)
   if (!parsed.success || signal.aborted)
@@ -131,16 +250,7 @@ export async function startContainer(
       // 查询引擎确认容器确实不在；单独收到 rm 失败不能推断已经停止。
     }
     try {
-      return !(await cli(engine, [
-        'container',
-        'ls',
-        '--all',
-        '--no-trunc',
-        '--filter',
-        `id=${container}`,
-        '--format',
-        '{{.ID}}',
-      ]))
+      return await containerAbsent(engine, container)
     }
     catch {
       return false
@@ -185,7 +295,8 @@ export async function startContainer(
         return unavailable()
     }
 
-    temporary = await mkdtemp(join(tmpdir(), 'hai-runner-'))
+    const key = await engineKey(engine)
+    temporary = await mkdtemp(join((await stagingRoot()).path, 'hai-runner-'))
     envFile = join(temporary, 'environment')
     const files = join(temporary, 'configuration')
     await writeFile(envFile, Object.entries({
@@ -253,7 +364,7 @@ export async function startContainer(
       `--pids-limit=${resources.pids}`,
       `--network=${environment.network ?? 'none'}`,
       ...(engine === 'podman'
-        ? ['--read-only-tmpfs=false']
+        ? ['--read-only-tmpfs=false', '--http-proxy=false']
         : []),
       '--env-file',
       envFile,
@@ -276,13 +387,22 @@ export async function startContainer(
       return uncertain()
     id = created
     await rm(envFile, { force: true })
-    if (signal.aborted) {
+    const receipt = await record({
+      id,
+      engine,
+      engineKey: key,
+      stageName: basename(temporary),
+      stageKey: await identityOf(temporary),
+    })
+    if (signal.aborted || !receipt.success) {
       const stopped = await removeContainer(id)
       if (stopped)
         await removeFiles()
-      return stopped
+      if (!stopped)
+        return uncertain()
+      return receipt.success
         ? invalid()
-        : uncertain()
+        : receipt
     }
 
     const child = spawn(engine, [

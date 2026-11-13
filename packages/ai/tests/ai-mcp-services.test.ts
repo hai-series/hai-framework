@@ -343,6 +343,86 @@ describe('ai.mcp.services', () => {
       expect(result.error.code).toBe(HaiAIError.MCP_CONNECTION_ERROR.code)
   })
 
+  it('submits managed jobs in the tool capacity class with the registered service ceiling', async () => {
+    const runner = createRunner()
+    const started = await runner.init({
+      nodeId: 'tool-capacity-api',
+      executor: false,
+      environments: [
+        {
+          id: 'documents-job',
+          image: `sha256:${'a'.repeat(64)}`,
+          capabilities: ['documents.extract'],
+          resources: {
+            cpu: 0.5,
+            memoryMiB: 192,
+            pids: 32,
+            scratchMiB: 24,
+          },
+        },
+      ],
+    })
+    expect(started.success).toBe(true)
+    try {
+      const submit = vi.spyOn(runner, 'submit').mockResolvedValue({
+        success: true,
+        data: {
+          id: 'fixture',
+          status: 'succeeded',
+          createdAt: 0,
+          updatedAt: 0,
+          output: { text: 'isolated' },
+        },
+      })
+      const service = {
+        id: 'docs',
+        name: 'Docs',
+        transport: 'job',
+        environmentId: 'documents-job',
+        allowedTools: ['documents.extract'],
+      } as const
+      expect((await ai.init({
+        mcp: {
+          servers: [
+            {
+              ...service,
+              allowedTools: [...service.allowedTools],
+              pool: { maxRunning: 2 },
+            },
+          ],
+        },
+      }, {
+        runner,
+        mcpJobFiles: {
+          read: vi.fn(),
+          publish: vi.fn(),
+        },
+      })).success).toBe(true)
+      const called = await ai.mcp.services.invoke({
+        serviceId: 'docs',
+        tool: 'documents.extract',
+        arguments: { fileId: 'file-1' },
+      }, {
+        principal,
+        authorize: () => true,
+      })
+      expect(called).toMatchObject({
+        success: true,
+        data: {
+          structuredContent: { text: 'isolated' },
+        },
+      })
+      expect(submit).toHaveBeenCalledWith(expect.objectContaining({
+        capacityClass: 'tool',
+        concurrency: { key: 'docs', limit: 2 },
+      }))
+    }
+    finally {
+      await ai.close()
+      await runner.close()
+    }
+  })
+
   it('rejects expired task credentials and aborts an authorization wait', async () => {
     const remote = await remoteMcp()
     let broker: import('../src/index.js').MCPServiceBroker | undefined
@@ -418,7 +498,7 @@ describe('ai.mcp.services', () => {
     }
   })
 
-  it.skipIf(!process.env.HAI_TOOL_IMAGE_DOCUMENTS)('executes document extraction in a real offline Runner job and enforces object ownership', async () => {
+  it.skipIf(!process.env.HAI_TOOL_IMAGE_DOCUMENTS)('runs an offline document job while the Agent class is full and enforces file ownership', async () => {
     const engine = (process.env.HAI_ACP_E2E_ENGINE ?? process.env.HAI_TEST_CONTAINER_ENGINE) === 'docker'
       ? 'docker'
       : 'podman'
@@ -433,6 +513,8 @@ describe('ai.mcp.services', () => {
     const started = await runner.init({
       engine,
       nodeId: 'documents-e2e',
+      maxRunning: 1,
+      maxRunningPerScope: 1,
       environments: [
         {
           id: 'documents-job',
@@ -449,7 +531,20 @@ describe('ai.mcp.services', () => {
       ],
     })
     expect(started.success).toBe(true)
+    let releaseAgent: (() => void) | undefined
     try {
+      const agentWork = new Promise<null>((resolve) => {
+        releaseAgent = () => resolve(null)
+      })
+      expect(runner.register('fixture-agent', () => agentWork).success).toBe(true)
+      const agent = await runner.submit({ scope: principal, kind: 'fixture-agent', input: null })
+      expect(agent.success).toBe(true)
+      if (!agent.success)
+        return
+      await expect.poll(async () => {
+        const status = await runner.get(principal, agent.data.id)
+        return status.success && status.data.status
+      }).toBe('running')
       const read = vi.fn<import('../src/index.js').MCPJobFiles['read']>(async (input) => {
         if (input.principal.userId !== 'ada') {
           return {
@@ -507,8 +602,13 @@ describe('ai.mcp.services', () => {
       })
       expect(read).toHaveBeenCalledWith(expect.objectContaining({ principal, taskId: 'task-docs', fileId: 'private-document' }))
       expect(publish).not.toHaveBeenCalled()
+      expect(await runner.get(principal, agent.data.id)).toMatchObject({
+        success: true,
+        data: { status: 'running' },
+      })
     }
     finally {
+      releaseAgent?.()
       await ai.close()
       expect((await runner.close()).success).toBe(true)
     }

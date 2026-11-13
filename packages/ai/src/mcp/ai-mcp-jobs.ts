@@ -213,6 +213,8 @@ export function createMCPJobs(
         scope: principal,
         kind,
         environmentId: input.environmentId,
+        capacityClass: 'tool',
+        concurrency: { key: service.id, limit: service.pool?.maxRunning ?? 4 },
         input: {
           serviceId: input.serviceId,
           tool: input.tool,

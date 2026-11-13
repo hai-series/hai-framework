@@ -51,11 +51,15 @@ finally {
 
 启动时配置 `environments`，每项提供 ID、已预拉取的镜像 digest、CPU 核数、内存 MiB、PID 数和临时盘 MiB。调用方通过 `environmentId` 选环境，并可请求更低的资源限制。执行节点在同一数据库事务内领取任务并预留资源。按主体和节点设置队列与并发上限。
 
+为防止 Agent Worker 占满节点后工具无法运行，使用 `toolCapacity` 独立预留工具资源。默认预留 1 核 CPU、1024 MiB 内存、128 个 PID 和 512 MiB 临时盘，`toolMaxRunning` 默认为 4。宿主总预算须覆盖两个分区。可信处理器通过 `capacityClass: "tool"` 使用该分区，`concurrency: { key, limit }` 为同一类服务设置跨节点并发上限。
+
 处理器通过 `context.start` 启动容器，取得标准输入、输出、错误流和退出结果。镜像应支持 Linux cgroup v2，使用 `/bin/sh`，并能以 UID/GID 1000 运行。根文件系统只读。`/state`、`/workspace` 和 `/tmp` 按任务分配受限 tmpfs。启动文件复制到 `/state`。节点上已登记的内部网络必须通过引擎的 internal 检查，默认完全禁用容器网络。联网任务应使用按信任域配置的内部网关。
 
 启动环境和原生连接留在执行节点。输入、事件、输出只接受有界 JSON。密钥由可信处理器在启动时解析，调用记录使用业务标识和对象引用。执行节点失联或清理无法确认时保留 `unknown` 状态和预留额度，待运维核实实际容器和外部副作用。
 
 工具处理器可用 `inputs` 将规范 Base64 文件按简单文件名写入只读 `/input`，并在容器仍运行时调用 `artifact(name, maxBytes)` 从 `/output` 读取普通文件。输入总量和输出各最多 50 MiB，同时受环境临时盘限制。用于产物导出的镜像应提供 `/usr/bin/python3`。
+
+原执行节点的可信管理入口可以调用 `runner.reconcileUnknown(scope, id, { operatorId, reason })`。Runner 读取启动前保存的容器及引擎身份，确认容器已经移除并清理同一暂存目录后才释放预算和复用键，同时保存审核记录。原回执仍为 `unknown`，并增加 `reconciledAt`。缺少可信容器回执的任务继续保留预算。
 
 ## 开发测试
 

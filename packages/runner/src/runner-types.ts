@@ -84,6 +84,21 @@ export interface RunnerExecution {
   failure?: 'queue-timeout' | 'run-timeout' | 'handler-failed' | 'owner-lost' | 'parent-ended' | 'cleanup-unconfirmed'
   createdAt: number
   updatedAt: number
+  /** 运维核验容器和本地暂存已清理的时间；未知业务副作用仍保留。 */
+  reconciledAt?: number
+}
+
+/**
+ * 由可信管理入口取得的核验责任人及工单原因。
+ * @example
+ * ```ts
+ * import type { RunnerReconciliation } from '@h-ai/runner'
+ * const review: RunnerReconciliation = { operatorId: 'ops-1', reason: 'INC-47: verified engine cleanup' }
+ * ```
+ */
+export interface RunnerReconciliation {
+  operatorId: string
+  reason: string
 }
 
 /**
@@ -191,6 +206,8 @@ export interface RunnerFunctions {
   get: (scope: RunnerScope, id: string) => Promise<HaiResult<RunnerExecution>>
   /** 持久记录取消请求。 */
   cancel: (scope: RunnerScope, id: string) => Promise<HaiResult<RunnerExecution>>
+  /** 原执行节点管理入口；核验环境已释放并审计，仍保留未知业务结果。 */
+  reconcileUnknown: (scope: RunnerScope, id: string, review: RunnerReconciliation) => Promise<HaiResult<RunnerExecution>>
   /** 分页读取保序事件。 */
   events: (scope: RunnerScope, id: string, after?: number, limit?: number) => Promise<HaiResult<RunnerEvent[]>>
 }

@@ -1,7 +1,8 @@
 import type { HaiResult } from '@h-ai/core'
 import type { DmlOperations, ReldbTableDef } from '@h-ai/reldb'
 import type { RunnerConfig, RunnerEnvironment, RunnerResources, submitSchema } from './runner-config.js'
-import type { RunnerEvent, RunnerExecution, RunnerJson, RunnerOwner, RunnerScope } from './runner-types.js'
+import type { RunnerContainerIdentity } from './runner-container.js'
+import type { RunnerEvent, RunnerExecution, RunnerJson, RunnerOwner, RunnerReconciliation, RunnerScope } from './runner-types.js'
 import { createHash, randomUUID } from 'node:crypto'
 import process from 'node:process'
 import { err, ok } from '@h-ai/core'
@@ -12,7 +13,7 @@ import { HaiRunnerError } from './runner-types.js'
 const EXECUTIONS = 'hai_runner_executions'
 const EVENTS = 'hai_runner_events'
 const GATE = 'hai_runner_gate'
-const ACTIVE = '(\'running\', \'cancelling\', \'unknown\')'
+const ACTIVE = '(state IN (\'running\', \'cancelling\') OR (state = \'unknown\' AND reconciled_at IS NULL))'
 const text = { type: 'TEXT', notNull: true } as const
 const nullableText = { type: 'TEXT' } as const
 const integer = { type: 'BIGINT', notNull: true } as const
@@ -44,6 +45,12 @@ const executions: ReldbTableDef = {
   result_json: payload,
   created_at: integer,
   updated_at: integer,
+  container_json: payload,
+  reconciliation_json: payload,
+  reconciled_at: { type: 'BIGINT' },
+  capacity_class: text,
+  concurrency_key: nullableText,
+  concurrency_limit: integer,
 }
 
 /**
@@ -84,6 +91,8 @@ interface ExecutionRow {
   result_json: { value: RunnerJson } | string | null
   created_at: string | number
   updated_at: string | number
+  container_json: RunnerContainerIdentity | string | null
+  reconciled_at: string | number | null
 }
 
 /**
@@ -151,6 +160,9 @@ function project(row: ExecutionRow): RunnerExecution {
     failure: row.reason ?? undefined,
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
+    reconciledAt: row.reconciled_at === null
+      ? undefined
+      : Number(row.reconciled_at),
   }
 }
 
@@ -263,7 +275,12 @@ export async function readyStore(): Promise<HaiResult<void>> {
     [
       EXECUTIONS,
       'hai_runner_scope_idx',
-      ['scope_key', 'state'],
+      ['scope_key', 'capacity_class', 'state'],
+    ],
+    [
+      EXECUTIONS,
+      'hai_runner_concurrency_idx',
+      ['concurrency_key', 'state'],
     ],
     [
       EVENTS,
@@ -343,6 +360,8 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner) {
         parentId: request.parentId ?? null,
         nodeId: request.nodeId ?? null,
         queueTimeoutMs: request.queueTimeoutMs,
+        capacityClass: request.capacityClass,
+        concurrency: request.concurrency ?? null,
         runTimeoutMs: request.runTimeoutMs,
       })
       return serialized(async (sql) => {
@@ -397,8 +416,8 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner) {
         }
         data(await sql.execute(`INSERT INTO ${EXECUTIONS}
           (id, scope_key, reuse_key, request_key, kind, request_json, environment_key, state, pinned_node, pinned_generation, parent_id,
-            leased_until, queue_until, run_until, event_sequence, cpu_milli, memory_mib, pids, scratch_mib, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, 0, ${now} + ?, 0, 0, ?, ?, ?, ?, ${now}, ${now})`, [
+            leased_until, queue_until, run_until, event_sequence, cpu_milli, memory_mib, pids, scratch_mib, created_at, updated_at, capacity_class, concurrency_key, concurrency_limit)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, 0, ${now} + ?, 0, 0, ?, ?, ?, ?, ${now}, ${now}, ?, ?, ?)`, [
           id,
           scopeKey,
           reuse,
@@ -413,6 +432,11 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner) {
           request.parentId ?? null,
           request.queueTimeoutMs,
           ...columns(resources),
+          request.capacityClass,
+          request.concurrency
+            ? hash([request.kind, request.concurrency.key])
+            : null,
+          request.concurrency?.limit ?? 0,
         ]))
         const row = await find(sql, id, scopeKey)
         if (!row)
@@ -462,17 +486,26 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner) {
       })
     },
 
-    async claim(kinds: string[], control: boolean): Promise<HaiResult<RunnerClaim | null>> {
+    async claim(kinds: string[], category: 'control' | 'default' | 'tool'): Promise<HaiResult<RunnerClaim | null>> {
       return serialized(async (sql) => {
         if (!kinds.length)
           return ok(null)
-        const maxRunning = control ? config.maxControlRunning : config.maxRunning
-        const parentFilter = control ? 'IS NOT NULL' : 'IS NULL'
+        const maxRunning = category === 'tool'
+          ? config.toolMaxRunning
+          : category === 'control'
+            ? config.maxControlRunning
+            : config.maxRunning
+        const capacityClass = category === 'tool'
+          ? 'tool'
+          : 'default'
+        const parentFilter = category === 'control'
+          ? 'IS NOT NULL'
+          : 'IS NULL'
         const reserved = data(await sql.get<{ active: number | string, cpu: number | string, memory: number | string, pids: number | string, scratch: number | string }>(
           `SELECT COUNT(*) AS active, COALESCE(SUM(cpu_milli),0) AS cpu, COALESCE(SUM(memory_mib),0) AS memory,
              COALESCE(SUM(pids),0) AS pids, COALESCE(SUM(scratch_mib),0) AS scratch
-           FROM ${EXECUTIONS} WHERE owner_node = ? AND state IN ${ACTIVE} AND parent_id ${parentFilter}`,
-          [owner.nodeId],
+           FROM ${EXECUTIONS} WHERE owner_node = ? AND capacity_class = ? AND ${ACTIVE} AND parent_id ${parentFilter}`,
+          [owner.nodeId, capacityClass],
         ))
         if (!reserved || Number(reserved.active) >= maxRunning)
           return ok(null)
@@ -480,21 +513,28 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner) {
         const eligibleEnvironment = envKeys.length
           ? ` OR q.environment_key IN (${envKeys.map(() => '?').join(',')})`
           : ''
-        const [cpu, memory, pids, scratch] = columns(config.capacity)
+        const [cpu, memory, pids, scratch] = columns(category === 'tool'
+          ? config.toolCapacity
+          : config.capacity)
         const row = data(await sql.get<ExecutionRow>(`
           SELECT q.* FROM ${EXECUTIONS} q
-          WHERE q.state = 'queued' AND q.queue_until > ${now} AND q.parent_id ${parentFilter}
+          WHERE q.state = 'queued' AND q.capacity_class = ? AND q.queue_until > ${now} AND q.parent_id ${parentFilter}
           AND (q.pinned_node IS NULL OR q.pinned_node = ?) AND (q.pinned_generation IS NULL OR q.pinned_generation = ?)
           AND q.kind IN (${kinds.map(() => '?').join(',')}) AND (q.environment_key IS NULL${eligibleEnvironment})
           AND q.cpu_milli <= ? AND q.memory_mib <= ? AND q.pids <= ? AND q.scratch_mib <= ?
           AND (q.parent_id IS NULL OR EXISTS (SELECT 1 FROM ${EXECUTIONS} p
             WHERE p.id = q.parent_id AND p.state = 'running' AND p.leased_until > ${now} AND p.run_until > ${now}))
-          AND (SELECT COUNT(*) FROM ${EXECUTIONS} a WHERE a.scope_key = q.scope_key AND a.state IN ${ACTIVE}
-            AND a.parent_id ${parentFilter}) < ?
+          AND (SELECT COUNT(*) FROM ${EXECUTIONS} a WHERE a.scope_key = q.scope_key AND ${ACTIVE}
+            AND a.capacity_class = q.capacity_class AND a.parent_id ${parentFilter}) < ?
+          AND (q.concurrency_key IS NULL OR (
+            (SELECT COUNT(*) FROM ${EXECUTIONS} a WHERE a.concurrency_key = q.concurrency_key AND ${ACTIVE}) < q.concurrency_limit
+            AND (SELECT COUNT(*) FROM ${EXECUTIONS} a WHERE a.concurrency_key = q.concurrency_key AND ${ACTIVE})
+              < COALESCE((SELECT MIN(a.concurrency_limit) FROM ${EXECUTIONS} a WHERE a.concurrency_key = q.concurrency_key AND ${ACTIVE}), q.concurrency_limit)))
           ORDER BY (SELECT COUNT(*) FROM ${EXECUTIONS} a WHERE a.scope_key = q.scope_key
-            AND a.state IN ${ACTIVE} AND a.parent_id ${parentFilter}) ASC, q.created_at ASC, q.id ASC
+            AND ${ACTIVE} AND a.capacity_class = q.capacity_class AND a.parent_id ${parentFilter}) ASC, q.created_at ASC, q.id ASC
           LIMIT 1
         `, [
+          capacityClass,
           owner.nodeId,
           owner.generation,
           ...kinds,
@@ -534,6 +574,60 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner) {
       return result.success
         ? ok(undefined)
         : unavailable()
+    },
+
+    async recordContainer(id: string, container: RunnerContainerIdentity): Promise<HaiResult<void>> {
+      const result = await reldb.sql.execute(`UPDATE ${EXECUTIONS} SET container_json = ${resultValue}
+        WHERE id = ? AND owner_generation = ? AND state = 'running' AND container_json IS NULL
+          AND leased_until > ${now} AND run_until > ${now}`, [
+        JSON.stringify(container),
+        id,
+        owner.generation,
+      ])
+      return result.success && result.data.changes === 1
+        ? ok(undefined)
+        : lost()
+    },
+
+    async reconciliation(scope: RunnerScope, id: string) {
+      try {
+        const row = await find(reldb.sql, id, hash([scope.tenantId, scope.userId]))
+        if (!row)
+          return missing()
+        if (row.state !== 'unknown' || row.owner_node !== owner.nodeId || row.reconciled_at !== null
+          || !row.owner_generation || !row.container_json) {
+          return conflict()
+        }
+        const container = databaseValue<RunnerContainerIdentity>(row.container_json)
+        return container.engine === config.engine
+          ? ok({ container, generation: row.owner_generation })
+          : conflict()
+      }
+      catch {
+        return unavailable()
+      }
+    },
+
+    async reconcile(scope: RunnerScope, id: string, generation: string, review: RunnerReconciliation): Promise<HaiResult<RunnerExecution>> {
+      return serialized(async (sql) => {
+        const scopeKey = hash([scope.tenantId, scope.userId])
+        const result = data(await sql.execute(`UPDATE ${EXECUTIONS}
+          SET reconciled_at = ${now}, reconciliation_json = ${resultValue}, reuse_key = NULL, updated_at = ${now}
+          WHERE id = ? AND scope_key = ? AND owner_node = ? AND owner_generation = ? AND state = 'unknown'
+            AND reconciled_at IS NULL AND container_json IS NOT NULL`, [
+          JSON.stringify(review),
+          id,
+          scopeKey,
+          owner.nodeId,
+          generation,
+        ]))
+        if (result.changes !== 1)
+          return conflict()
+        const row = await find(sql, id, scopeKey)
+        return row
+          ? ok(project(row))
+          : missing()
+      })
     },
 
     async renew(id: string): Promise<HaiResult<'running' | 'cancelling'>> {

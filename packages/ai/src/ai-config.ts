@@ -540,10 +540,15 @@ export const MCPExternalServerSchema = z.strictObject({
   allowedTools: z.array(z.string().min(1).max(128)).min(1).max(256).optional(),
   /** 受管工具连接和调用的总超时，单位毫秒；缺省为 30 秒。 */
   timeoutMs: z.number().int().min(1).max(300_000).optional(),
+  /** 集群范围内该服务允许同时领取的作业数量，仅 job 模式使用。 */
+  pool: z.strictObject({
+    /** 同时执行的实例上限；未配置服务池时默认为 4。 */
+    maxRunning: z.number().int().min(1).max(1000),
+  }).optional(),
 }).refine((value) => {
   if (value.transport === 'job')
     return Boolean(value.environmentId && value.allowedTools?.length && !value.command && !value.url && !value.args.length && !Object.keys(value.headerEnv).length && !Object.keys(value.environmentRefs).length)
-  if (value.environmentId)
+  if (value.environmentId || value.pool)
     return false
   return value.transport === 'stdio'
     ? Boolean(value.command)
