@@ -116,6 +116,35 @@ describe('ai.llm.generateObject', () => {
     expect(mockCreate).toHaveBeenCalledTimes(2)
   })
 
+  it('jSON 对象模式为网关提供 JSON 指令，仍按本地 schema 验证和修复', async () => {
+    mockCreate
+      .mockResolvedValueOnce(makeCompletion('{"value":"wrong"}'))
+      .mockResolvedValueOnce(makeCompletion('{"value":42}'))
+    const result = await ai.llm.generateObject({
+      schema: z.object({
+        value: z.number(),
+      }),
+      messages: [
+        { role: 'user', content: '给我一个数字' },
+      ],
+      responseFormat: 'json_object',
+    })
+    expect(result).toEqual({
+      success: true,
+      data: { value: 42 },
+    })
+    expect(mockCreate).toHaveBeenCalledTimes(2)
+    expect(mockCreate.mock.calls[0][0]).toMatchObject({
+      response_format: { type: 'json_object' },
+      messages: expect.arrayContaining([
+        {
+          role: 'system',
+          content: expect.stringContaining('JSON'),
+        },
+      ]),
+    })
+  })
+
   it('重试后仍无法解析返回 INVALID_REQUEST', async () => {
     mockCreate.mockResolvedValue(makeCompletion('永远不是 JSON'))
 

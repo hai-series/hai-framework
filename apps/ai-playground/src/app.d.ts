@@ -13,6 +13,7 @@ declare global {
     interface Locals {
       requestId: string
       locale: string
+      playgroundOwner: string
     }
   }
 }

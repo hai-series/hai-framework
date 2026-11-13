@@ -21,7 +21,7 @@ import type {
  * @example
  * ```ts
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
- * const stored: StoredValue = { version: 'version-1', data: { count: 1 }, scope: { objectId: 'user-1' } }
+ * const stored: StoredValue = { version: 'version-1', data: { count: 1 }, scope: { objectId: 'user-1' }, updatedAt: 0 }
  * const snapshot = structuredClone(stored.data)
  * ```
  */
@@ -29,6 +29,7 @@ interface StoredValue {
   version: string
   data: unknown
   scope?: StoreScope
+  updatedAt: number
 }
 
 /**
@@ -49,7 +50,14 @@ interface StoredVector {
 function isWhereOperator(value: unknown): value is WhereOperator<unknown> {
   return typeof value === 'object'
     && value !== null
-    && ['$in', '$gte', '$gt', '$lte', '$lt'].some(key => key in value)
+    && [
+      '$in',
+      '$ne',
+      '$gte',
+      '$gt',
+      '$lte',
+      '$lt',
+    ].some(key => key in value)
 }
 
 function compare(left: unknown, right: unknown): number {
@@ -60,6 +68,8 @@ function compare(left: unknown, right: unknown): number {
 
 function matchesOperator(value: unknown, operator: WhereOperator<unknown>): boolean {
   if (operator.$in && !operator.$in.some(candidate => Object.is(candidate, value)))
+    return false
+  if (operator.$ne !== undefined && Object.is(operator.$ne, value))
     return false
   if (operator.$gte !== undefined && compare(value, operator.$gte) < 0)
     return false
@@ -73,6 +83,8 @@ function matchesOperator(value: unknown, operator: WhereOperator<unknown>): bool
 }
 
 function matchesRecord<T>(record: StoredValue, filter: StoreFilter<T>): boolean {
+  if (filter.updatedBefore !== undefined && record.updatedAt >= filter.updatedBefore)
+    return false
   if (filter.objectId !== undefined && record.scope?.objectId !== filter.objectId)
     return false
   if (filter.sessionId !== undefined && record.scope?.sessionId !== filter.sessionId)
@@ -156,6 +168,7 @@ function createRelStore<T>(records: Map<string, StoredValue>): AIRelStore<T> {
         version,
         data: structuredClone(input.data),
         scope: structuredClone(input.scope ?? record?.scope),
+        updatedAt: Date.now(),
       })
       return version
     },
@@ -164,6 +177,7 @@ function createRelStore<T>(records: Map<string, StoredValue>): AIRelStore<T> {
         version: crypto.randomUUID(),
         data: structuredClone(data),
         scope: structuredClone(scope),
+        updatedAt: Date.now(),
       })
     },
     async saveMany(items) {
@@ -172,6 +186,7 @@ function createRelStore<T>(records: Map<string, StoredValue>): AIRelStore<T> {
           version: crypto.randomUUID(),
           data: structuredClone(item.data),
           scope: structuredClone(item.scope),
+          updatedAt: Date.now(),
         })
       }
     },
@@ -190,6 +205,21 @@ function createRelStore<T>(records: Map<string, StoredValue>): AIRelStore<T> {
     },
     async remove(id) {
       return records.delete(id)
+    },
+    async queryKeys(filter, cursor) {
+      return [
+        ...records.entries(),
+      ]
+        .filter(([id, record]) => matchesRecord(record, filter) && (!cursor || record.updatedAt > cursor.updatedAt
+          || (record.updatedAt === cursor.updatedAt && id > cursor.id)))
+        .map(([id, { updatedAt, version }]) => ({ id, updatedAt, version }))
+        .sort((left, right) => left.updatedAt - right.updatedAt || (left.id < right.id
+          ? -1
+          : Number(left.id > right.id)))
+        .slice(0, filter.limit ?? 64)
+    },
+    async removeIfUnchanged(id, version) {
+      return records.get(id)?.version === version && records.delete(id)
     },
     async removeBy(filter) {
       const ids = Array.from(records.entries())

@@ -37,6 +37,12 @@ Codex、DeepSeek Harness 和 Goose 使用固定版本的原生协议。内置适
 
 应用可通过 `acpPolicy` 绑定上下文和工具。`allowContext` 验权后，`resolveContext` 提供允许进入模型的知识片段、记忆和附件，`resolveSkills` 提供授权的技能内容，`commitMemory` 用轮次 ID 提交记忆或登记待确认写入。`allowTools` 与 `bindTools` 按任务提供 HTTP MCP 入口，适合接入内置或第三方服务。任务内的审批事件通过 `scoped.approvals.respond` 回答，支持允许一次、本会话允许、保存匹配规则和拒绝。应用的 `resolvePermission` 负责把原生请求校验到具体文件、目标或操作，Runner 的网络和挂载边界始终生效。
 
+使用 `scoped.approvals.rules(offset, limit)` 查看有效规则，使用 `revoke(id)` 撤销。可以在新会话通过 `permissions.ruleIds` 指定允许复用的持久规则。升级前保存的规则仍可查看和撤销，重新批准后才会复用。工具入口按工具隔离输入 Schema，且在每次调用时复核目录和应用权限。默认凭据有效期为 15 分钟。`bindTools` 返回 Broker 的 `signal` 时，到期或撤销会结束当前轮次，后续调用返回 `ACP_CLOSED`。应用可显式创建会话，重新检查权限并签发凭据。
+
+执行节点使用标准 Store 按批清理到期审批和授权。受管会话、任务索引和幂等意图至少保留 7 天，关联执行已由 Runner 清理后才回收。自定义关系 Store 通过 `queryKeys` 和 `removeIfUnchanged` 接入后台清理。Runner 的 `retentionMs` 可调整执行记录的保留时间。
+
+失联宿主和控制任务进入 `unknown`。运维用 `runner.reconcileUnknown(scope, id, { operatorId, reason, hostResourcesStopped: true })` 释放占用，需要从相同 Linux 宿主和 PID 命名空间核实原进程已退出，并确认自管资源停止。子任务须等待父任务完成或核验。需要长期展示业务历史时，由应用保存获准保留的结果。
+
 `ai.acp` 将能操作工程的智能体接入 Node 服务端，提供智能体维护、项目目录、原生会话、事件交互和显式 Git 操作。可以用于代码协作、工程问答或应用构建；用户权限、任务规则、预览、验收和业务部署由应用负责。
 
 ## 选择运行模式和传输

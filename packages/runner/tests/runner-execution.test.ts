@@ -1,4 +1,6 @@
 import type { RunnerExecution } from '../src/index.js'
+import { Buffer } from 'node:buffer'
+import { setTimeout as delay } from 'node:timers/promises'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createRunner, runner } from '../src/index.js'
@@ -30,6 +32,53 @@ afterEach(async () => {
 })
 
 describe('managed execution', () => {
+  it('bounds the aggregate event payload of a single execution', async () => {
+    expect((await runner.init({ nodeId: 'alpha' })).success).toBe(true)
+    const event = Buffer.alloc(500 * 1024, 'x').toString()
+    expect(runner.register('events.v1', async (_input, context) => {
+      for (let index = 0; index < 32; index++)
+        expect((await context.emit(event)).success).toBe(true)
+      const overflow = await context.emit(event)
+      return { overflowAccepted: overflow.success }
+    }).success).toBe(true)
+    const submitted = await runner.submit({ scope, kind: 'events.v1', input: null })
+    if (!submitted.success)
+      throw new Error(submitted.error.message)
+    await status(submitted.data.id, 'succeeded')
+    expect(await runner.get(scope, submitted.data.id)).toMatchObject({
+      success: true,
+      data: {
+        output: { overflowAccepted: false },
+      },
+    })
+    expect(await reldb.sql.get('SELECT COUNT(*) AS total FROM hai_runner_events WHERE execution_id = ?', [submitted.data.id]))
+      .toEqual({
+        success: true,
+        data: { total: 32 },
+      })
+  })
+
+  it('does not take the write gate when registered handlers have no eligible work', async () => {
+    const second = createRunner()
+    try {
+      expect((await runner.init({ nodeId: 'first', pollMs: 20 })).success).toBe(true)
+      expect((await second.init({ nodeId: 'second', pollMs: 20 })).success).toBe(true)
+      for (const instance of [runner, second])
+        expect(instance.register('idle.v1', async () => null).success).toBe(true)
+      const revision = () => reldb.sql.get<{ revision: number }>('SELECT revision FROM hai_runner_gate WHERE id = 1')
+      const before = await revision()
+      await delay(300)
+      expect(await revision()).toEqual(before)
+      expect(before).toEqual({
+        success: true,
+        data: { revision: 0 },
+      })
+    }
+    finally {
+      await second.close()
+    }
+  })
+
   it('reserves separate tool resources and applies the smallest active service cap across nodes', async () => {
     const otherNode = createRunner()
     const unblock = Promise.withResolvers<void>()

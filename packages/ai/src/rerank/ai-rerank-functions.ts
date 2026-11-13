@@ -6,7 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { AIConfig } from '../ai-config.js'
+import type { AIConfig, LLMConfig } from '../ai-config.js'
 
 import type {
   RerankDocument,
@@ -64,6 +64,7 @@ interface CohereRerankResponse {
  * 可在 `llm.models` 中为 rerank 场景配置独立的 apiKey / baseUrl。
  *
  * @param config - 校验后的 AI 配置
+ * @param loadModels - 读取当前请求需要的模型配置。
  * @returns RerankOperations 实例
  *
  * @example
@@ -77,7 +78,7 @@ interface CohereRerankResponse {
  * }
  * ```
  */
-export function createRerankOperations(config: AIConfig): RerankOperations {
+export function createRerankOperations(config: AIConfig, loadModels: (model?: string) => LLMConfig | Promise<LLMConfig> = () => config.llm): RerankOperations {
   /** 将输入文档统一转换为文本数组和 id 映射 */
   function normalizeDocuments(documents: string[] | RerankDocument[]): {
     texts: string[]
@@ -104,7 +105,7 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
    * 调用 Cohere 兼容的 Rerank API
    */
   async function callRerankAPI(request: RerankRequest): Promise<HaiResult<RerankResponse>> {
-    const resolvedResult = resolveModelEntry(config.llm, 'rerank', request.model, {
+    const resolvedResult = resolveModelEntry(await loadModels(request.model), 'rerank', request.model, {
       missingApiKeyMessage: aiM('ai_configError', {
         params: { error: 'API Key is required for rerank' },
       }),

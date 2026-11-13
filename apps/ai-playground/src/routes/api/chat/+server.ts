@@ -6,10 +6,14 @@
 import { kit } from '@h-ai/kit'
 import { ChatRequestSchema } from '#lib/ai-lab-types.js'
 import { chatWithMemory } from '#lib/server/ai-lab.js'
+import { scopeProfile } from '#lib/server/browser-scope.js'
 
-export const POST = kit.handler(async ({ request }) => {
+export const POST = kit.handler(async ({ request, locals }) => {
   const input = await kit.validate.body(request, ChatRequestSchema)
-  const result = await chatWithMemory(input)
+  const result = await chatWithMemory({
+    ...input,
+    profileId: scopeProfile(locals.playgroundOwner, input.profileId),
+  }, request.signal)
   return result.success
     ? kit.response.ok(result.data)
     : kit.response.fromError(result.error)

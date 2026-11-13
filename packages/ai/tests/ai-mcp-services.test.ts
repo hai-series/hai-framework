@@ -304,6 +304,7 @@ describe('ai.mcp.services', () => {
             tool: 'echo',
             description: 'Echo text',
             inputSchema: {
+              $id: 'urn:hai:fixture:duplicate-schema',
               type: 'object',
               properties: {
                 text: { type: 'string' },
@@ -317,6 +318,7 @@ describe('ai.mcp.services', () => {
       if (!bound.success)
         return
       const server = bound.data.servers[0]!
+      expect(bound.data.signal?.aborted).toBe(false)
       expect(JSON.stringify(server)).not.toContain('upstream-secret')
       const headers = Object.fromEntries(server.headers.map(({ name, value }) => [name, value]))
       await client.connect(new StreamableHTTPClientTransport(url, {
@@ -341,9 +343,77 @@ describe('ai.mcp.services', () => {
         ],
       })
       expect(authorize).toHaveBeenCalledWith(expect.objectContaining({ principal, taskId: 'task-a', ...request }))
+      const restricted = await broker.bind({
+        principal,
+        taskId: 'task-b',
+        tools: [
+          {
+            id: 'documents_echo',
+            serviceId: 'docs',
+            tool: 'echo',
+            description: 'Echo only the authorized value',
+            inputSchema: {
+              $id: 'urn:hai:fixture:duplicate-schema',
+              type: 'object',
+              properties: {
+                text: { const: 'allowed' },
+              },
+              required: ['text'],
+            },
+          },
+        ],
+      })
+      expect(restricted.success).toBe(true)
+      if (!restricted.success)
+        return
+      const restrictedClient = new Client({ name: 'restricted-agent', version: '1' })
+      try {
+        const restrictedHeaders = Object.fromEntries(restricted.data.servers[0]!.headers.map(({ name, value }) => [name, value]))
+        await restrictedClient.connect(new StreamableHTTPClientTransport(url, {
+          requestInit: { headers: restrictedHeaders },
+        }))
+        expect(await restrictedClient.callTool({
+          name: 'documents_echo',
+          arguments: { text: 'hello' },
+        })).toMatchObject({ isError: true })
+        expect(remote.invoke).toHaveBeenCalledTimes(1)
+        expect(await restrictedClient.callTool({
+          name: 'documents_echo',
+          arguments: { text: 'allowed' },
+        })).toMatchObject({
+          content: [
+            { type: 'text', text: 'allowed' },
+          ],
+        })
+      }
+      finally {
+        restricted.data.revoke()
+        await restrictedClient.close()
+      }
       bound.data.revoke()
+      expect(bound.data.signal?.aborted).toBe(true)
       expect((await fetch(url, { method: 'POST', headers, body: '{}' })).status).toBe(401)
-      expect(remote.invoke).toHaveBeenCalledTimes(1)
+      expect(remote.invoke).toHaveBeenCalledTimes(2)
+      const expiring = await broker.bind({
+        principal,
+        taskId: 'task-expiring',
+        ttlMs: 5,
+        tools: [
+          {
+            id: 'documents_echo',
+            serviceId: 'docs',
+            tool: 'echo',
+            description: 'Short-lived tool',
+            inputSchema: { type: 'object' },
+          },
+        ],
+      })
+      expect(expiring.success).toBe(true)
+      if (!expiring.success)
+        return
+      await expect.poll(() => expiring.data.signal?.aborted).toBe(true)
+      const expiredHeaders = Object.fromEntries(expiring.data.servers[0]!.headers.map(({ name, value }) => [name, value]))
+      expect((await fetch(url, { method: 'POST', headers: expiredHeaders, body: '{}' })).status).toBe(401)
     }
     finally {
       await client.close()

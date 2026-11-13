@@ -2,6 +2,7 @@
   import { Button, Card } from '@h-ai/ui'
   import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
   // 文生图面板：UI 仅负责收集提示词、调用 service 并展示返回图片
+  import ApiGuide from '#lib/components/ApiGuide.svelte'
   import * as m from '#lib/paraglide/messages.js'
   import { generateImage } from '#lib/services/ai-lab.js'
 
@@ -88,4 +89,5 @@
       ? m.image_running()
       : m.image_run()}
   </Button>
+  <ApiGuide id='image-panel' />
 </Card>

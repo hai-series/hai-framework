@@ -12,7 +12,9 @@ import { ai, AIConfigSchema } from '@h-ai/ai'
 import { CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
+import { runner, RunnerConfigSchema } from '@h-ai/runner'
 import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
+import { playgroundJobFiles, registerPlaygroundIntegrations } from './integration-demos.js'
 
 const DEFAULT_TTS_VOICES = [
   'mimo_default',
@@ -41,11 +43,19 @@ export interface AIPlaygroundMetadata {
 let initPromise: Promise<void> | undefined
 let metadata: AIPlaygroundMetadata | undefined
 let cleanupPending = false
+let runnerAttempted = false
 
 /** 失败时保留清理义务，下次启动先重试，不把部分关闭当作成功。 */
 async function cleanup(): Promise<void> {
   const failures: unknown[] = []
-  for (const module of [ai, vecdb, reldb]) {
+  for (const module of [
+    ai,
+    ...(runnerAttempted
+      ? [runner]
+      : []),
+    vecdb,
+    reldb,
+  ]) {
     try {
       const result = await module.close()
       if (result && !result.success)
@@ -57,6 +67,7 @@ async function cleanup(): Promise<void> {
   }
   if (failures.length > 0)
     throw new AggregateError(failures, 'AI Playground cleanup failed; retry is required')
+  runnerAttempted = false
   cleanupPending = false
 }
 
@@ -99,6 +110,7 @@ async function initialize(): Promise<void> {
       ai: AIConfigSchema,
       cache: CacheConfigSchema,
       db: ReldbConfigSchema,
+      runner: RunnerConfigSchema,
       vecdb: VecdbConfigSchema,
     },
   })
@@ -113,6 +125,11 @@ async function initialize(): Promise<void> {
   const vectorConfig = core.config.validate('vecdb', VecdbConfigSchema)
   if (!dbConfig.success || !vectorConfig.success)
     throw new Error('AI Playground database or vector configuration is invalid')
+  const runnerConfig = core.config.has('runner')
+    ? core.config.validate('runner', RunnerConfigSchema)
+    : undefined
+  if (runnerConfig && !runnerConfig.success)
+    throw new Error('AI Playground Runner configuration is invalid')
   // 本应用先初始化 RelDB/VecDB，AI 自动选择数据库 Store；只有显式 SQLite 内存库不跨重启保留记录。
   const memoryMode = dbConfig.data.type === 'sqlite' && dbConfig.data.database === ':memory:'
     ? 'ephemeral'
@@ -129,9 +146,20 @@ async function initialize(): Promise<void> {
     const vector = await vecdb.init(vectorConfig.data)
     if (!vector.success)
       throw new Error(`Vector initialization failed: ${vector.error.message}`)
-    const result = await ai.init(config)
+    if (runnerConfig?.success) {
+      runnerAttempted = true
+      const runtime = await runner.init(runnerConfig.data)
+      if (!runtime.success)
+        throw new Error(`Runner initialization failed: ${runtime.error.message}`)
+    }
+    const result = await ai.init(config, runnerAttempted
+      ? { runner, mcpJobFiles: playgroundJobFiles }
+      : undefined)
     if (!result.success)
       throw new Error(`AI initialization failed: ${result.error.message}`)
+    const integrations = registerPlaygroundIntegrations()
+    if (!integrations.success)
+      throw new Error(`AI Playground integration initialization failed: ${integrations.error.message}`)
   }
   catch (error) {
     try {

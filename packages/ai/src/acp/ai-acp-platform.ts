@@ -10,11 +10,12 @@ import type { ACPAgentAdapter } from './ai-acp-types.js'
 import { Buffer } from 'node:buffer'
 import { createHash, randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
-import { ok } from '@h-ai/core'
+import { core, ok } from '@h-ai/core'
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
 import { nativeAdapterCapabilities, resolveAgentModels, resolveEnvironment } from './ai-acp-adapters.js'
 import { connectACP } from './ai-acp-client.js'
 import { acpError, ACPFailure } from './ai-acp-errors.js'
+import { createACPMaintenance } from './ai-acp-maintenance.js'
 import { platformOptionsSchema, platformRequestSchema, platformRunSchema, platformScopeSchema } from './ai-acp-platform-config.js'
 import { encodeWorkspaceSnapshot } from './ai-acp-workspace.js'
 
@@ -22,6 +23,10 @@ const workerKind = 'hai.acp.worker.v1'
 const controlKind = 'hai.acp.control.v1'
 const turnSchema = platformOptionsSchema.pick({ limits: true, output: true })
 const historySummaryMaxBytes = 8192
+const maxPermissionCalls = 64
+const maxPermissionInputBytes = 8192
+const maintenanceIntervalMs = 30_000
+const logger = core.logger.child({ module: 'ai', scope: 'acp-maintenance' })
 
 /**
  * 应用核验主体和任务所请求的高权限选项。
@@ -38,8 +43,8 @@ export interface ACPPlatformPolicy {
   preferUserWorker?: (scope: RunnerScope, agentId: string) => boolean | Promise<boolean>
   /** 检查当前主体是否能使用选定工具，每轮重新校验。 */
   allowTools?: (scope: RunnerScope, agentId: string, toolIds: readonly string[]) => boolean | Promise<boolean>
-  /** 创建应用控制的 HTTP MCP 入口，凭据只在执行节点使用。 */
-  bindTools?: (scope: RunnerScope, sessionId: string, toolIds: readonly string[], signal: AbortSignal) => Promise<{ servers: McpServer[], revoke: () => void | Promise<void> }>
+  /** 创建应用控制的 HTTP MCP 入口。传入 Worker 生命周期，返回 signal 通知绑定到期或撤销。 */
+  bindTools?: (scope: RunnerScope, sessionId: string, toolIds: readonly string[], signal: AbortSignal) => Promise<{ servers: McpServer[], revoke: () => void | Promise<void>, signal?: AbortSignal }>
   /** 在计划和执行时验证知识库、文件与记忆选择的权限。 */
   allowContext?: (scope: RunnerScope, agentId: string, context: NonNullable<ACPPlatformRequest['context']>) => boolean | Promise<boolean>
   /** 以当前主体检查只读工作区快照的访问权限。 */
@@ -168,7 +173,8 @@ interface WorkerConnection {
   connection: ACPConnection
   sessions: Map<string, ReturnType<ACPConnection['channel']>>
   busy: Set<string>
-  revoke: Map<string, () => void | Promise<void>>
+  toolBindings: Map<string, { revoke: () => void | Promise<void>, signal: AbortSignal }>
+  signal: AbortSignal
   nativeIds: Map<string, string>
   approvals: Map<string, (request: RequestPermissionRequest) => Promise<RequestPermissionResponse>>
   lastUse: number
@@ -177,6 +183,24 @@ interface WorkerConnection {
 
 function hash(value: string) {
   return createHash('sha256').update(value).digest('hex')
+}
+
+function canonicalToolInput(value: unknown): string | undefined {
+  if (value === undefined || value === null)
+    return undefined
+  const sorted = JSON.stringify(value, (_key, item: unknown) => {
+    if (item && typeof item === 'object' && !Array.isArray(item)) {
+      return Object.fromEntries(Object.entries(item).sort(([a], [b]) => a < b
+        ? -1
+        : a > b
+          ? 1
+          : 0))
+    }
+    return item
+  })
+  return Buffer.byteLength(sorted) <= maxPermissionInputBytes
+    ? sorted
+    : undefined
 }
 
 function json(value: unknown): RunnerJson {
@@ -265,16 +289,46 @@ export function createACPPlatform(deps: {
   modelConfig: () => Promise<AIConfig>
 }) {
   const { limits, runner, policy } = deps
-  const bindings = deps.store.createRelStore<SessionBinding>('hai_ai_acp_managed_sessions')
-  const intents = deps.store.createRelStore<{ fingerprint: string }>('hai_ai_acp_managed_requests')
-  const approvals = deps.store.createRelStore<ApprovalRecord>('hai_ai_acp_managed_approvals')
-  const grants = deps.store.createRelStore<PermissionGrant>('hai_ai_acp_managed_grants')
-  const receipts = deps.store.createRelStore<{ scope: RunnerScope, workerScope: RunnerScope }>('hai_ai_acp_managed_receipts')
+  const maintenanceIndex = { hasUpdatedAtIndex: true }
+  const bindings = deps.store.createRelStore<SessionBinding>('hai_ai_acp_managed_sessions', maintenanceIndex)
+  const intents = deps.store.createRelStore<{ fingerprint: string }>('hai_ai_acp_managed_requests', maintenanceIndex)
+  const approvals = deps.store.createRelStore<ApprovalRecord>('hai_ai_acp_managed_approvals', maintenanceIndex)
+  const grants = deps.store.createRelStore<PermissionGrant>('hai_ai_acp_managed_grants', maintenanceIndex)
+  const receipts = deps.store.createRelStore<{ scope: RunnerScope, workerScope: RunnerScope }>('hai_ai_acp_managed_receipts', maintenanceIndex)
   const workers = new Map<string, WorkerConnection>()
   const localWorkers = new Map<string, Promise<void>>()
   const owned = new Map<string, RunnerScope>()
   const unregister: Array<() => void> = []
   let closed = false
+  let maintenanceTimer: NodeJS.Timeout | undefined
+  let maintenancePending: Promise<void> | undefined
+
+  async function maintainApprovals() {
+    if (!approvals.queryKeys || !approvals.removeIfUnchanged || !grants.queryKeys || !grants.removeIfUnchanged)
+      return
+    const now = await approvals.currentTime()
+    const [expiredApprovals, expiredGrants] = await Promise.all([
+      approvals.queryKeys({
+        where: {
+          deadline: { $lte: now },
+        },
+        limit: 64,
+      }),
+      grants.queryKeys({
+        where: {
+          expires: { $lte: now },
+        },
+        limit: 64,
+      }),
+    ])
+    const removeApproval = approvals.removeIfUnchanged.bind(approvals)
+    const removeGrant = grants.removeIfUnchanged.bind(grants)
+    // 每批限制行数，并核对版本，避免删除刚重新批准的同 ID 规则。
+    for (const entry of expiredApprovals)
+      await removeApproval(entry.id, entry.version)
+    for (const entry of expiredGrants)
+      await removeGrant(entry.id, entry.version)
+  }
 
   function getRunner() {
     if (closed)
@@ -589,7 +643,8 @@ export function createACPPlatform(deps: {
       connection,
       sessions: new Map(),
       busy: new Set(),
-      revoke: new Map(),
+      toolBindings: new Map(),
+      signal: context.signal,
       nativeIds: new Map(),
       approvals: pendingApprovals,
       lastUse: performance.now(),
@@ -626,18 +681,21 @@ export function createACPPlatform(deps: {
       }
       finally {
         await Promise.allSettled([
-          ...worker.revoke.values(),
-        ].map(async revoke => revoke()))
+          ...worker.toolBindings.values(),
+        ].map(async binding => binding.revoke()))
       }
     }
   }
 
-  async function decidePermission(binding: SessionBinding, sessionId: string, context: RunnerContext, request: RequestPermissionRequest, approval: 'on-request' | 'never', timeout: number, snapshot: string): Promise<RequestPermissionResponse> {
+  async function decidePermission(binding: SessionBinding, sessionId: string, context: RunnerContext, request: RequestPermissionRequest, planned: Awaited<ReturnType<typeof plan>>): Promise<RequestPermissionResponse> {
     const denied = {
       outcome: { outcome: 'cancelled' },
     } as const
     const option = request.options.find(option => option.kind === 'allow_once')
     if (!option || context.signal.aborted || binding.mode === 'shared' || !policy?.resolvePermission)
+      return denied
+    const rawInput = canonicalToolInput(request.toolCall.rawInput)
+    if (!rawInput || !request.toolCall.kind)
       return denied
     const authorized = await policy.resolvePermission(binding.scope, sessionId, request.toolCall)
     if (!authorized || !authorized.key || Buffer.byteLength(authorized.summary) > 2048)
@@ -645,34 +703,57 @@ export function createACPPlatform(deps: {
     const once: RequestPermissionResponse = {
       outcome: { outcome: 'selected', optionId: option.optionId },
     }
+    const { agent, effective, models, nativeOptions } = planned
+    const { approval, ruleIds } = effective.permissions
+    // 规则属于同一执行安全边界。选择规则本身、是否弹窗和轮次预算都不参与权限标识。
     const target = hash(JSON.stringify([
       binding.scope,
-      binding.request.agentId,
-      snapshot,
+      agent.id,
+      agent.adapter,
+      effective.resolvedMode,
+      effective.environmentId,
+      effective.image,
+      effective.workspaceId,
+      effective.permissions.profile,
+      agent.command,
+      agent.args,
+      models,
+      nativeOptions,
+      resolveEnvironment(agent.environmentRefs),
       authorized.key,
       request.toolCall.kind,
-      request.toolCall.rawInput,
+      request.toolCall.name ?? request.toolCall.title,
+      rawInput,
     ]))
     const sessionGrant = hash(JSON.stringify([sessionId, target]))
     const now = await approvals.currentTime()
-    const permanent = (await plan(binding.scope, binding.request)).effective.permissions.ruleIds
+    const scopeKey = hash(JSON.stringify(binding.scope))
     const matching = await Promise.all([
       grants.get(sessionGrant),
-      permanent === undefined || permanent.includes(target)
+      ruleIds === undefined || ruleIds.includes(target)
         ? grants.get(target)
         : undefined,
     ])
-    if (matching.some(grant => grant && !grant.revoked && grant.expires > now)) {
+    const reusable = matching.filter((grant): grant is PermissionGrant => !!grant && grant.scopeKey === scopeKey && !grant.revoked && grant.expires > now)
+    if (reusable.length) {
       const fresh = await policy.resolvePermission(binding.scope, sessionId, request.toolCall)
-      return fresh?.key === authorized.key && !context.signal.aborted
+      if (fresh?.key !== authorized.key || context.signal.aborted)
+        return denied
+      const confirmed = await Promise.all(reusable.map(grant => grants.get(grant.id)))
+      const checkedAt = await approvals.currentTime()
+      return !context.signal.aborted && confirmed.some(grant => grant && grant.scopeKey === scopeKey && !grant.revoked && grant.expires > checkedAt)
         ? once
         : denied
     }
     if (approval === 'never')
       return denied
     const approvalId = randomUUID()
-    const deadline = now + timeout
-    await approvals.save(approvalId, { scope: binding.scope, sessionId, deadline })
+    const deadline = now + effective.limits.approvalTimeoutMs
+    await approvals.save(approvalId, {
+      scope: binding.scope,
+      sessionId,
+      deadline,
+    })
     try {
       unwrap(await context.emit({
         type: 'approval',
@@ -690,7 +771,6 @@ export function createACPPlatform(deps: {
           if (fresh?.key !== authorized.key || context.signal.aborted || await approvals.currentTime() >= deadline)
             return denied
           const summary = authorized.summary
-          const scopeKey = hash(JSON.stringify(binding.scope))
           if (current.decision === 'allow-session') {
             await grants.save(sessionGrant, {
               id: sessionGrant,
@@ -737,15 +817,10 @@ export function createACPPlatform(deps: {
       if (command.op === 'prompt' && command.singleTurn === true) {
         const current = await bindings.readVersioned(id)
         if (current?.data.singleTurn && current.data.workerId === context.parentId && !current.data.closed) {
-          const channel = worker.sessions.get(id)
           try {
-            await channel?.closeSession()
-            await worker.revoke.get(id)?.()
+            await closeNativeSession(worker, id)
           }
           finally {
-            worker.sessions.delete(id)
-            worker.revoke.delete(id)
-            worker.nativeIds.delete(id)
             if (current.data.mode !== 'task') {
               await bindings.compareAndSwap(id, {
                 expectedVersion: current.version,
@@ -760,6 +835,24 @@ export function createACPPlatform(deps: {
     }
   }
 
+  async function revokeTools(worker: WorkerConnection, id: string, forget = true) {
+    const tools = worker.toolBindings.get(id)
+    if (tools && forget)
+      worker.toolBindings.delete(id)
+    await tools?.revoke()
+  }
+
+  async function closeNativeSession(worker: WorkerConnection, id: string) {
+    try {
+      await worker.sessions.get(id)?.closeSession()
+    }
+    finally {
+      worker.sessions.delete(id)
+      worker.nativeIds.delete(id)
+      await revokeTools(worker, id)
+    }
+  }
+
   async function executeControl(worker: WorkerConnection, id: string, command: Record<string, RunnerJson>, context: RunnerContext) {
     const versioned = await bindings.readVersioned(id)
     const binding = versioned?.data
@@ -771,25 +864,20 @@ export function createACPPlatform(deps: {
         : { error: 'closed' }
     }
     let channel = worker.sessions.get(id)
-    if (command.op === 'close') {
-      if (channel) {
-        await channel.closeSession()
-        worker.sessions.delete(id)
-      }
-      await worker.revoke.get(id)?.()
-      worker.revoke.delete(id)
-      worker.nativeIds.delete(id)
+    if (command.op === 'close' || worker.toolBindings.get(id)?.signal.aborted) {
+      await closeNativeSession(worker, id)
       if (!await bindings.compareAndSwap(id, {
         expectedVersion: versioned?.version,
         data: { ...binding, historySummary: undefined, closed: true },
       })) {
         throw new ACPFailure('conflict')
       }
-      return null
+      return command.op === 'close'
+        ? null
+        : { error: 'closed' }
     }
     const resolved = await plan(binding.scope, binding.request).catch(async (error: unknown) => {
-      await worker.revoke.get(id)?.()
-      worker.revoke.delete(id)
+      await revokeTools(worker, id, false)
       throw error
     })
     const { effective: base, toolIds, context: authorizedContext } = resolved
@@ -801,8 +889,7 @@ export function createACPPlatform(deps: {
       execution: { ...binding.request.execution, mode: base.resolvedMode, environmentId: base.environmentId },
     })
     if (worker.snapshot !== launchSnapshot(normalized)) {
-      await worker.revoke.get(id)?.()
-      worker.revoke.delete(id)
+      await revokeTools(worker, id, false)
       throw new ACPFailure('conflict')
     }
     if (!channel) {
@@ -810,9 +897,14 @@ export function createACPPlatform(deps: {
         throw new ACPFailure('busy')
       channel = worker.connection.channel()
       const tools = toolIds.length && policy?.bindTools
-        ? await policy.bindTools(binding.scope, id, toolIds, context.signal)
+        ? await policy.bindTools(binding.scope, id, toolIds, worker.signal)
         : undefined
       try {
+        context.signal.throwIfAborted()
+        if (tools?.signal?.aborted) {
+          await tools.revoke()
+          return { error: 'closed' }
+        }
         if (tools && (!tools.servers.length || tools.servers.some(server => !('type' in server) || server.type !== 'http')))
           throw new ACPFailure('unsupported', { parameter: 'tools.allow' })
         const native = await channel.createSession('/workspace', tools?.servers)
@@ -822,8 +914,20 @@ export function createACPPlatform(deps: {
         await tools?.revoke()
         throw error
       }
-      if (tools)
-        worker.revoke.set(id, tools.revoke)
+      if (tools) {
+        const local = new AbortController()
+        worker.toolBindings.set(id, {
+          signal: tools.signal
+            ? AbortSignal.any([local.signal, tools.signal])
+            : local.signal,
+          revoke: async () => {
+            if (!local.signal.aborted) {
+              local.abort()
+              await tools.revoke()
+            }
+          },
+        })
+      }
       worker.sessions.set(id, channel)
     }
     if (command.op === 'open')
@@ -860,7 +964,30 @@ export function createACPPlatform(deps: {
     const chunks: string[] = []
     let bytes = 0
     let exceeded = false
+    const pendingTools = new Map<string, RequestPermissionRequest['toolCall']>()
     const started = channel.subscribe((event: SessionNotification) => {
+      const update = event.update
+      if (update.sessionUpdate === 'tool_call' || update.sessionUpdate === 'tool_call_update') {
+        const previous = pendingTools.get(update.toolCallId)
+        if (update.status === 'completed' || update.status === 'failed') {
+          pendingTools.delete(update.toolCallId)
+        }
+        else if ((previous || update.sessionUpdate === 'tool_call') && (previous || pendingTools.size < maxPermissionCalls)) {
+          const raw = update.rawInput ?? previous?.rawInput
+          if (canonicalToolInput(raw)) {
+            pendingTools.set(update.toolCallId, {
+              toolCallId: update.toolCallId,
+              title: update.title ?? previous?.title,
+              kind: update.kind ?? previous?.kind,
+              name: update.name ?? previous?.name,
+              rawInput: raw,
+            })
+          }
+          else {
+            pendingTools.delete(update.toolCallId)
+          }
+        }
+      }
       if (event.update.sessionUpdate === 'agent_message_chunk' && event.update.content.type === 'text') {
         bytes += Buffer.byteLength(event.update.content.text)
         exceeded ||= bytes > effective.limits.maxOutputBytes
@@ -880,7 +1007,30 @@ export function createACPPlatform(deps: {
     }
     const timer = setInterval(flush, 50)
     const nativeId = worker.nativeIds.get(id)!
-    worker.approvals.set(nativeId, request => decidePermission(binding, id, context, request, effective.permissions.approval, effective.limits.approvalTimeoutMs, worker.snapshot))
+    const toolSignal = worker.toolBindings.get(id)?.signal
+    const turnSignal = toolSignal
+      ? AbortSignal.any([context.signal, toolSignal])
+      : context.signal
+    const permissionContext = { ...context, signal: turnSignal }
+    worker.approvals.set(nativeId, (request) => {
+      const fromEvent = pendingTools.get(request.toolCall.toolCallId)
+      const explicit = request.toolCall
+      if (fromEvent && ((explicit.kind && fromEvent.kind && explicit.kind !== fromEvent.kind)
+        || (explicit.name && fromEvent.name && explicit.name !== fromEvent.name)
+        || (explicit.rawInput !== undefined && canonicalToolInput(explicit.rawInput) !== canonicalToolInput(fromEvent.rawInput)))) {
+        return Promise.resolve({
+          outcome: { outcome: 'cancelled' },
+        })
+      }
+      const toolCall = {
+        ...explicit,
+        kind: explicit.kind ?? fromEvent?.kind,
+        name: explicit.name ?? fromEvent?.name,
+        title: explicit.title ?? fromEvent?.title,
+        rawInput: explicit.rawInput ?? fromEvent?.rawInput,
+      }
+      return decidePermission(binding, id, permissionContext, { ...request, toolCall }, { ...resolved, effective })
+    })
     try {
       const response = await channel.prompt([
         ...supplement,
@@ -888,7 +1038,9 @@ export function createACPPlatform(deps: {
         ...workspace,
         ...history,
         ...prompt,
-      ], context.signal)
+      ], turnSignal)
+      if (toolSignal?.aborted)
+        return { error: 'closed' }
       flush()
       await writes
       if (exceeded)
@@ -917,6 +1069,11 @@ export function createACPPlatform(deps: {
         stopReason: response.stopReason,
         ...(parsed !== undefined && { json: parsed }),
       })
+    }
+    catch (error) {
+      if (toolSignal?.aborted)
+        return { error: 'closed' }
+      throw error
     }
     finally {
       clearInterval(timer)
@@ -1237,9 +1394,11 @@ export function createACPPlatform(deps: {
             where: {
               scopeKey: hash(JSON.stringify(scope())),
               expires: { $gt: await grants.currentTime() },
+              revoked: { $ne: true },
             },
+            orderBy: { field: 'id', direction: 'asc' },
           }, { offset, limit })
-          return entries.items.filter(entry => !entry.revoked).map(entry => ({
+          return entries.items.map(entry => ({
             id: entry.id,
             summary: entry.summary,
             sessionId: entry.sessionId,
@@ -1330,9 +1489,15 @@ export function createACPPlatform(deps: {
             expectedVersion: undefined,
             data: { fingerprint },
           })
-          if (!claimed && (await intents.get(id))?.fingerprint !== fingerprint)
-            throw new ACPFailure('conflict')
           const saved = await bindings.get(id)
+          if (!claimed) {
+            const intent = await intents.readVersioned(id)
+            if (intent?.data.fingerprint !== fingerprint)
+              throw new ACPFailure('conflict')
+            // 没有会话绑定时刷新意图，避免维护与重新领取同时清除幂等保护。
+            if (!saved && !await intents.compareAndSwap(id, { expectedVersion: intent.version, data: intent.data }))
+              throw new ACPFailure('conflict')
+          }
           if (saved) {
             const existing = unwrap(await getRunner().find(saved.workerScope, controlKind, `run:${id}`))
             if (existing) {
@@ -1342,6 +1507,8 @@ export function createACPPlatform(deps: {
               await stop(saved, id)
               return { taskId: existing.id, output, effectiveOptions: (await plan(subject, saved.request)).effective }
             }
+            if (saved.closed)
+              throw new ACPFailure('missing')
           }
         }
         const opened = await open(request, id, undefined, true)
@@ -1369,6 +1536,19 @@ export function createACPPlatform(deps: {
         })
       })))
       unregister.push(unwrap(runner.register(controlKind, control)))
+      if (runner.isExecutor) {
+        const maintainPersistence = createACPMaintenance(runner, { bindings, intents, receipts })
+        maintenanceTimer = setInterval(() => {
+          maintenancePending ??= Promise.allSettled([
+            maintainApprovals(),
+            maintainPersistence(),
+          ]).then((results) => {
+            if (results.some(result => result.status === 'rejected'))
+              logger.warn('ACP persistence maintenance failed')
+          }).finally(() => { maintenancePending = undefined })
+        }, maintenanceIntervalMs)
+        maintenanceTimer.unref()
+      }
     }
     catch (error) {
       for (const remove of unregister.splice(0)) remove()
@@ -1378,6 +1558,8 @@ export function createACPPlatform(deps: {
 
   async function close() {
     closed = true
+    clearInterval(maintenanceTimer)
+    await maintenancePending
     for (const remove of unregister.splice(0)) remove()
     const results = await Promise.allSettled([...owned].map(async ([id, scope]) => {
       if (runner)

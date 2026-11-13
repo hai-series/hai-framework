@@ -123,7 +123,22 @@ describe.skipIf(!enabled)('managed native ACP agents on an isolated network', ()
             },
           ],
         },
-      }, { runner }))
+      }, {
+        runner,
+        acpPolicy: {
+          allowWorkspace: (_scope, id) => id === 'approval-fixture',
+          resolveWorkspace: async () => ({
+            'approved.txt': new TextEncoder().encode('dsh-private-fixture-read-ok'),
+          }),
+          resolvePermission: (_scope, _id, tool) => {
+            if (tool.title !== 'bash' || tool.kind !== 'other' || !tool.rawInput || typeof tool.rawInput !== 'object')
+              return undefined
+            if (!('command' in tool.rawInput) || tool.rawInput.command !== 'cat /input/approved.txt')
+              return undefined
+            return { key: 'read-approval-fixture', summary: 'Read the authorized synthetic fixture' }
+          },
+        },
+      }))
       const scoped = ai.acp.scoped({ tenantId: 'native-acceptance', userId: 'operator' })
       expect(value(await scoped.agents.describe('native'))).toMatchObject({
         adapter,
@@ -194,6 +209,29 @@ describe.skipIf(!enabled)('managed native ACP agents on an isolated network', ()
       expect(second.effectiveOptions.resolvedMode).toBe('user')
       expect(second.taskId).not.toBe(first.taskId)
       expect(await activeWorkers()).toEqual(workers)
+
+      if (adapter === 'deepseek-harness' && engine === 'podman') {
+        const approvalRequest = {
+          agentId: 'native',
+          workspaceId: 'approval-fixture',
+          execution: { mode: 'task' },
+          permissions: { profile: 'workspace', approval: 'on-request' },
+          limits: { runTimeoutMs: 10_000, approvalTimeoutMs: 2_000 },
+        } as const
+        let approvals = 0
+        const allow = value(await scoped.run({ ...approvalRequest, prompt: 'native-approval-fixture' }, {
+          onEvent(event) {
+            if (event && typeof event === 'object' && !Array.isArray(event) && event.type === 'approval' && typeof event.approvalId === 'string') {
+              approvals++
+              void scoped.approvals.respond(event.approvalId, 'allow-once')
+            }
+          },
+        }))
+        expect(approvals).toBe(1)
+        expect(allow.output.text).toContain('dsh-private-fixture-read-ok')
+        const deny = value(await scoped.run({ ...approvalRequest, prompt: 'native-approval-fixture wrong-target' }))
+        expect(deny.output.text).not.toContain('dsh-private-fixture-read-ok')
+      }
     }
     finally {
       try {

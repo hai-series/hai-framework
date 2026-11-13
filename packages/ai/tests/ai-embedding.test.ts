@@ -6,6 +6,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { AIConfigSchema } from '../src/ai-config.js'
+import { ai } from '../src/ai-main.js'
 import { HaiAIError } from '../src/ai-types.js'
 import { createEmbeddingOperations } from '../src/embedding/ai-embedding-functions.js'
 
@@ -51,6 +52,39 @@ const mockConfig = AIConfigSchema.parse({
 // ─── 测试 ───
 
 describe('embedding operations', () => {
+  it('公共入口复用相同配置的客户端并在模型目录变更后切换连接', async () => {
+    const start = openAIConstructorOptions.length
+    expect((await ai.init({
+      llm: {
+        apiKey: 'fixture',
+        scenarios: { embedding: 'vectors' },
+      },
+    })).success).toBe(true)
+    try {
+      expect((await ai.llm.models.register({
+        id: 'vectors',
+        model: 'vectors-a',
+        baseUrl: 'https://first.example.invalid',
+        timeout: 3000,
+      })).success).toBe(true)
+      expect((await ai.embedding.embedText('first')).success).toBe(true)
+      expect((await ai.embedding.embedBatch(['second'])).success).toBe(true)
+      expect(openAIConstructorOptions.slice(start).filter(config => config.baseURL === 'https://first.example.invalid')).toHaveLength(1)
+      expect((await ai.llm.models.update({
+        id: 'vectors',
+        model: 'vectors-b',
+        baseUrl: 'https://second.example.invalid',
+        apiKey: 'changed',
+        timeout: 5000,
+      })).success).toBe(true)
+      expect((await ai.embedding.embedText('third')).success).toBe(true)
+      expect(openAIConstructorOptions.at(-1)).toMatchObject({ baseURL: 'https://second.example.invalid', apiKey: 'changed', timeout: 5000 })
+    }
+    finally {
+      await ai.close()
+    }
+  })
+
   it('embedText 返回向量', async () => {
     const ops = createEmbeddingOperations(mockConfig)
     const result = await ops.embedText('Hello world')

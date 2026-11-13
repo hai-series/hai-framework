@@ -6,6 +6,8 @@
 
 配置入口、全部主要配置组、默认条件和取值影响集中在[AI手册](../configuration/ai.md)，本页侧重操作和结果。
 
+需要实际运行时，可从仓库执行 `pnpm --filter ai-playground dev`，先打开实验台的「接入指南」。选择能力后，展开「接入示例」即可复制 TypeScript，并核对公开 API、调用参数、返回值和所需配置。没有模型凭据时可先试本地流处理、文件解析、Token、函数工具和本地 MCP。 [AI Playground 接入与运行](../../../apps/ai-playground/README.md)
+
 ## 先确认内容如何显示
 
 管理台进入“UI组件库→场景组件”，展开MarkdownRenderer演示，先关HTML并选14px，再允许安全HTML并选18px，比较相同内容。
@@ -40,6 +42,22 @@ AiDocumentEditor检查Mermaid节点文字、箭头、预览与代码切换。渲
 按[模型配置](../configuration/ai.md#模型协议与场景路由)注入真实测试模型和私有密钥，初始化依赖及AI后检查success，再发送一条无敏感信息的请求。检查实际模型id、协议、场景路由与输出，不把应用注册id和厂商`model`混为一谈。
 
 用无效密钥、未知模型、取消和超时验证安全错误与资源释放，日志保留 `traceId`。模型失败应作为请求失败展示。真实模型接入还须检查供应商响应，配置校验和界面示例只验证各自边界。
+
+### 按网关能力选择结构化输出
+
+`ai.llm.generateObject` 默认使用 `responseFormat: 'json_schema'`，将严格 JSON Schema 发给上游。`schemaName` 仅在此模式使用，默认为 `result`。仅提供通用 JSON 模式的 Chat 网关用 `'json_object'`，框架将 Schema 加入提示词。两种模式都使用同一个 Zod Schema 做本地校验，`maxRepairs` 默认允许再尝试一次。
+
+```ts
+import { ai } from '@h-ai/ai'
+import { z } from 'zod'
+
+const result = await ai.llm.generateObject({
+  schema: z.object({ title: z.string() }), // 要求结果包含标题字符串。
+  messages: [{ role: 'user', content: '为发布检查表生成标题。' }], // 本次输入。
+  responseFormat: 'json_object', // 请求通用 JSON。
+})
+if (result.success) process.stdout.write(result.data.title) // 例如：发布检查表。
+```
 
 ## 临时 Store 与共享持久化
 

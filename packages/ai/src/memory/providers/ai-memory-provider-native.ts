@@ -42,6 +42,7 @@ const logger = core.logger.child({ module: 'ai', scope: 'memory-native' })
 
 /** 记忆淘汰的时间窗口：超过 7 天的记忆 recency 分量衰减为 0。 */
 const EVICTION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+const EVICTION_CANDIDATES = 64
 
 /**
  * 生成记忆条目唯一 ID
@@ -171,32 +172,24 @@ export function createNativeMemoryOperations(
   }
 
   /**
-   * 从给定候选集中淘汰优先级最低的一条（importance 0.7 + recency 0.3 加权最小者）
+   * 从给定候选集中淘汰优先级最低的条目。
    *
+   * @param activeStore - 当前写事务内的关系存储
    * @param candidates - 参与淘汰评估的候选条目（通常按 objectId 或全局筛出）
+   * @param count - 本批需释放的容量
    */
-  async function evictLowest(candidates: MemoryEntry[]): Promise<void> {
-    if (candidates.length === 0)
-      return
-
+  async function evictLowest(activeStore: AIRelStore<MemoryEntry>, candidates: MemoryEntry[], count: number): Promise<number> {
     const now = Date.now()
-    let lowestScore = Infinity
-    let lowestId: string | null = null
-
-    for (const entry of candidates) {
+    const ranked = candidates.map((entry) => {
       const age = now - entry.createdAt
       const recency = Math.max(0, 1 - age / EVICTION_MAX_AGE_MS)
-      const score = entry.importance * 0.7 + recency * 0.3
-      if (score < lowestScore) {
-        lowestScore = score
-        lowestId = entry.id
-      }
+      return { id: entry.id, score: entry.importance * 0.7 + recency * 0.3 }
+    }).sort((left, right) => left.score - right.score).slice(0, count)
+    for (const { id } of ranked) {
+      await vectorStore.remove(id)
+      await activeStore.remove(id)
     }
-
-    if (lowestId) {
-      await vectorStore.remove(lowestId)
-      await store.remove(lowestId)
-    }
+    return ranked.length
   }
 
   /**
@@ -207,39 +200,51 @@ export function createNativeMemoryOperations(
    *    该主体自身的条目，避免用户 A 大量写入淘汰掉用户 B 的记忆。
    * 2. 全局配额（maxEntriesGlobal）：跨所有主体的总量保护，超限时淘汰全局最低优先级条目。
    *
+   * @param activeStore - 当前写事务内的关系存储
    * @param objectId - 即将写入条目的所属主体（undefined 表示全局记忆，仅受全局配额约束）
+   * @returns 全部配额有余量时为 true。既有超量数据分批收敛。
    */
-  async function evictIfNeeded(objectId?: string): Promise<void> {
-    // 全局总量保护
-    const globalTotal = await store.count()
-    if (globalTotal >= config.maxEntriesGlobal) {
-      const all = await store.query({
-        orderBy: { field: 'createdAt', direction: 'asc' },
-        limit: globalTotal,
-      })
-      await evictLowest(all)
-    }
-
-    // 单主体配额：仅对具名主体生效（undefined 时 store 不会按 object_id 过滤，会误统计全局）
+  async function evictIfNeeded(activeStore: AIRelStore<MemoryEntry>, objectId?: string): Promise<boolean> {
+    // 先执行主体配额，主体内释放一项可能同时满足全局配额。
     if (objectId) {
-      const objectTotal = await store.count({ objectId })
+      const objectTotal = await activeStore.count({ objectId })
       if (objectTotal >= config.maxEntriesPerObject) {
-        const objectEntries = await store.query({
+        const objectEntries = await activeStore.query({
           objectId,
           orderBy: { field: 'createdAt', direction: 'asc' },
-          limit: objectTotal,
+          limit: EVICTION_CANDIDATES,
         })
-        await evictLowest(objectEntries)
+        const needed = objectTotal - config.maxEntriesPerObject + 1
+        if (await evictLowest(activeStore, objectEntries, needed) < needed)
+          return false
       }
     }
+    const globalTotal = await activeStore.count()
+    if (globalTotal >= config.maxEntriesGlobal) {
+      const candidates = await activeStore.query({
+        orderBy: { field: 'createdAt', direction: 'asc' },
+        limit: EVICTION_CANDIDATES,
+      })
+      const needed = globalTotal - config.maxEntriesGlobal + 1
+      return await evictLowest(activeStore, candidates, needed) >= needed
+    }
+    return true
+  }
+
+  let localWrites = Promise.resolve()
+
+  function writeMemory<T>(write: (activeStore: AIRelStore<MemoryEntry>) => Promise<T>): Promise<T> {
+    if (store.withWriteLock)
+      return store.withWriteLock(write)
+    const pending = localWrites.then(() => write(store))
+    localWrites = pending.then(() => {}, () => {})
+    return pending
   }
 
   /**
    * 持久化一条记忆条目（含向量 upsert），写入前按主体配额淘汰
    */
-  async function saveEntry(input: MemoryEntryInput, vector?: number[]): Promise<MemoryEntry> {
-    await evictIfNeeded(input.objectId)
-
+  async function saveEntry(input: MemoryEntryInput, vector?: number[]): Promise<MemoryEntry | undefined> {
     const now = Date.now()
     const entry: MemoryEntry = {
       id: generateId(),
@@ -255,16 +260,15 @@ export function createNativeMemoryOperations(
       accessCount: 0,
     }
 
-    await store.save(entry.id, entry, { objectId: entry.objectId })
-
-    if (vector) {
-      await vectorStore.upsert(entry.id, vector, {
-        objectId: entry.objectId,
-        type: entry.type,
-      })
-    }
-
-    return entry
+    return writeMemory(async (activeStore) => {
+      if (!await evictIfNeeded(activeStore, input.objectId))
+        return undefined
+      await activeStore.save(entry.id, entry, { objectId: entry.objectId })
+      if (vector) {
+        await vectorStore.upsert(entry.id, vector, { objectId: entry.objectId, type: entry.type })
+      }
+      return entry
+    })
   }
 
   /**
@@ -493,6 +497,8 @@ export function createNativeMemoryOperations(
       try {
         const vector = await computeVector(entry.content)
         const stored = await saveEntry(entry, vector)
+        if (!stored)
+          return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryOperationFailed'))
         logger.trace('Memory added', { id: stored.id, type: stored.type })
         return ok(stored)
       }

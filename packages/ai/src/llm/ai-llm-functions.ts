@@ -532,6 +532,17 @@ export function createAILLMFunctions(
       baseMessages.push(...request.messages)
 
       const jsonSchema = z.toJSONSchema(request.schema)
+      const jsonObject = request.responseFormat === 'json_object'
+      if (jsonObject) {
+        baseMessages.unshift({
+          role: 'system',
+          content: aiM('ai_generateObjectJson', {
+            params: {
+              schema: JSON.stringify(jsonSchema),
+            },
+          }),
+        })
+      }
       const schemaName = request.schemaName ?? 'result'
       const maxRepairs = request.maxRepairs ?? 1
       let lastError = ''
@@ -556,10 +567,12 @@ export function createAILLMFunctions(
           tempModel: request.tempModel,
           enablePersist: false,
           signal: request.signal,
-          response_format: {
-            type: 'json_schema',
-            json_schema: { name: schemaName, schema: jsonSchema, strict: true },
-          },
+          response_format: jsonObject
+            ? { type: 'json_object' }
+            : {
+                type: 'json_schema',
+                json_schema: { name: schemaName, schema: jsonSchema, strict: true },
+              },
         })
         if (!result.success)
           return result as HaiResult<never>

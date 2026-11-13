@@ -9,6 +9,7 @@ import { core, err, ok } from '@h-ai/core'
 import { json, RunnerConfigSchema, runnerKind, submitSchema, warmPoolSchema } from './runner-config.js'
 import { confirmContainerReleased, prepareWarmContainer, startContainer } from './runner-container.js'
 import { runnerM } from './runner-i18n.js'
+import { confirmRunnerProcessReleased, readRunnerProcess } from './runner-process.js'
 import { makeStore, readyStore } from './runner-store.js'
 import { HaiRunnerError } from './runner-types.js'
 
@@ -82,6 +83,7 @@ export function createRunner(): RunnerFunctions {
   let timer: NodeJS.Timeout | undefined
   let tick: Promise<void> | undefined
   let sweepAt = 0
+  let pruneAt = 0
   let unconfirmedCleanup = false
   const running = new Map<string, LocalExecution>()
   const handlers = new Map<string, RunnerHandler>()
@@ -272,6 +274,14 @@ export function createRunner(): RunnerFunctions {
       }
       if (closingRequested)
         return
+      if (pruneAt <= performance.now()) {
+        const pruned = await current.prune()
+        if (!pruned.success)
+          logger.warn('Managed execution retention failed', { code: pruned.error.code })
+        pruneAt = performance.now() + (pruned.success && pruned.data
+          ? 250
+          : 1000)
+      }
       const kinds = [
         ...handlers.keys(),
       ]
@@ -335,9 +345,12 @@ export function createRunner(): RunnerFunctions {
         generation: randomUUID(),
       }
       config = parsed.data
-      store = makeStore(config, owner)
+      store = makeStore(config, owner, config.executor
+        ? await readRunnerProcess()
+        : undefined)
       unconfirmedCleanup = false
       sweepAt = 0
+      pruneAt = 0
       warmAt = 0
       if (config.executor) {
         timer = setInterval(poll, config.pollMs)
@@ -497,6 +510,7 @@ export function createRunner(): RunnerFunctions {
         return inactive()
       if (!validAddress(scope, id) || !review || typeof review.operatorId !== 'string'
         || !runnerKind.safeParse(review.operatorId).success || typeof review.reason !== 'string'
+        || (review.hostResourcesStopped !== undefined && review.hostResourcesStopped !== true)
         || !review.reason.trim() || review.reason.length > 300 || /[\r\n\0]/u.test(review.reason)) {
         return invalid()
       }
@@ -505,14 +519,20 @@ export function createRunner(): RunnerFunctions {
       const evidence = await current.reconciliation(scope, id)
       if (!evidence.success)
         return evidence
-      const verified = await confirmContainerReleased(evidence.data.container)
-      if (!verified.success)
-        return verified
+      if (evidence.data.container) {
+        const verified = await confirmContainerReleased(evidence.data.container)
+        if (!verified.success)
+          return verified
+      }
+      else if (review.hostResourcesStopped !== true || !await confirmRunnerProcessReleased(evidence.data.process)) {
+        return cleanupUnconfirmed()
+      }
       if (current !== store || closingRequested)
         return inactive()
       const reconciled = await current.reconcile(scope, id, evidence.data.generation, {
         operatorId: review.operatorId,
         reason: review.reason.trim(),
+        ...(!evidence.data.container && { hostResourcesStopped: true }),
       })
       if (reconciled.success)
         logger.info('Unknown execution resources reconciled', { executionId: id, operatorId: review.operatorId })

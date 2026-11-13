@@ -798,7 +798,7 @@ export interface ChatRecord {
 /**
  * 结构化输出请求
  *
- * 给定 Zod schema，让模型返回严格符合结构的 JSON（内部使用 `json_schema` response_format），
+ * 给定 Zod schema，要求模型返回 JSON，并在应用本地验证结构。
  * 解析失败时自动带错误修复重试，避免调用方手写 `JSON.parse` 的不稳定性。
  *
  * @example
@@ -828,6 +828,8 @@ export interface GenerateObjectRequest<T> {
   tempModel?: TempModelConfig
   /** schema 名称（用于 json_schema response_format，默认 `result`） */
   schemaName?: string
+  /** 上游响应格式，默认 `json_schema`。只支持 JSON 模式的 Chat 网关可使用 `json_object`，本地仍会校验 schema。 */
+  responseFormat?: 'json_schema' | 'json_object'
   /** 解析失败时的修复重试次数（默认 1） */
   maxRepairs?: number
   /** 取消信号 */
@@ -887,7 +889,7 @@ export interface LLMOperations {
   /**
    * 结构化输出：按 Zod schema 约束模型输出并解析为对象
    *
-   * 内部使用 `json_schema` response_format 约束输出，解析/校验失败时自动带错误提示重试。
+   * 默认使用 `json_schema` 约束输出。使用 `json_object` 时由提示提供 Schema，两种模式均本地校验并按配置修复重试。
    *
    * @param request - 包含 schema、messages 及可选模型/修复次数等
    * @returns 符合 schema 的对象；多次重试仍无法解析时返回 `INVALID_REQUEST`

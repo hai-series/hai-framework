@@ -758,6 +758,9 @@ importers:
       '@h-ai/reldb':
         specifier: workspace:*
         version: link:../../packages/reldb
+      '@h-ai/runner':
+        specifier: workspace:*
+        version: link:../../packages/runner
       '@h-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui

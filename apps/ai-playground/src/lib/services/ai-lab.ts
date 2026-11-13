@@ -79,35 +79,48 @@ export async function sendChat(input: {
   const decoder = new TextDecoder()
   let buffer = ''
   let reply = ''
+  let complete = false
 
   const consumeLine = (line: string) => {
     if (!line)
       return
-    const event = JSON.parse(line) as { text?: string, final?: boolean, error?: boolean }
+    const event = JSON.parse(line) as { delta?: string, text?: string, final?: boolean, error?: boolean }
     if (event.error)
       throw new LabRequestError('LLM chat stream failed', 'LLM_STREAM_ERROR')
-    if (typeof event.text === 'string') {
-      reply = event.text
-      if (reply)
-        onText(reply)
-    }
+    const previous = reply
+    reply = typeof event.delta === 'string'
+      ? reply + event.delta
+      : (event.text ?? reply)
+    if (reply !== previous && reply)
+      onText(reply)
+    if (event.final)
+      complete = true
   }
 
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done)
-      break
-    buffer += decoder.decode(value, { stream: true })
-    let newlineIndex = buffer.indexOf('\n')
-    while (newlineIndex >= 0) {
-      consumeLine(buffer.slice(0, newlineIndex).trim())
-      buffer = buffer.slice(newlineIndex + 1)
-      newlineIndex = buffer.indexOf('\n')
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done)
+        break
+      buffer += decoder.decode(value, { stream: true })
+      let newlineIndex = buffer.indexOf('\n')
+      while (newlineIndex >= 0) {
+        consumeLine(buffer.slice(0, newlineIndex).trim())
+        buffer = buffer.slice(newlineIndex + 1)
+        newlineIndex = buffer.indexOf('\n')
+      }
     }
+    buffer += decoder.decode()
+    consumeLine(buffer.trim())
+    if (!complete)
+      throw new LabRequestError('LLM chat stream ended without a final event', 'LLM_STREAM_ERROR')
+    return { reply }
   }
-  buffer += decoder.decode()
-  consumeLine(buffer.trim())
-  return { reply }
+  finally {
+    if (!complete)
+      await reader.cancel().catch(() => undefined)
+    reader.releaseLock()
+  }
 }
 
 /** 从一轮对话中提取长期记忆，返回新增/更新条数（客户端在展示回复后后台调用） */
@@ -157,6 +170,44 @@ export function transcribe(file: File, language: 'auto' | 'zh' | 'en' | 'ja'): P
   formData.set('audio', file)
   formData.set('language', language)
   return requestJson('/api/asr', { method: 'POST', body: formData })
+}
+
+/** 上传完整音频，逐次返回供应商修订后的转写文本。 */
+export async function streamTranscription(file: File, language: 'auto' | 'zh' | 'en' | 'ja', update: (text: string) => void, signal: AbortSignal): Promise<void> {
+  const formData = new FormData()
+  formData.set('audio', file)
+  formData.set('language', language)
+  const response = await fetch('/api/asr/stream', { method: 'POST', body: formData, signal })
+  if (!response.ok || !response.body) {
+    const envelope = await response.json().catch(() => undefined) as ApiEnvelope<never> | undefined
+    throw new LabRequestError(envelope?.error?.message ?? `HTTP ${response.status}`, envelope?.error?.code)
+  }
+  let buffer = ''
+  const consume = (line: string) => {
+    if (!line.trim())
+      return
+    const event = JSON.parse(line) as { text?: string, error?: boolean }
+    if (event.error)
+      throw new LabRequestError('Speech stream failed', 'ASR_STREAM_ERROR')
+    if (typeof event.text === 'string')
+      update(event.text)
+  }
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+  try {
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done)
+        break
+      const lines = (buffer + value).split('\n')
+      buffer = lines.pop() ?? ''
+      for (const line of lines) consume(line)
+    }
+    consume(buffer)
+  }
+  finally {
+    await reader.cancel().catch(() => undefined)
+    reader.releaseLock()
+  }
 }
 
 /** 检索当前主体的记忆（留空 query 列出全部） */

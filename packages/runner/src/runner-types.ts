@@ -99,6 +99,8 @@ export interface RunnerExecution {
 export interface RunnerReconciliation {
   operatorId: string
   reason: string
+  /** 核对宿主处理器的所有应用侧资源均已停止。没有容器凭据时必须提供。 */
+  hostResourcesStopped?: true
 }
 
 /**
@@ -225,7 +227,7 @@ export interface RunnerFunctions {
   get: (scope: RunnerScope, id: string) => Promise<HaiResult<RunnerExecution>>
   /** 持久记录取消请求。 */
   cancel: (scope: RunnerScope, id: string) => Promise<HaiResult<RunnerExecution>>
-  /** 原执行节点管理入口；核验环境已释放并审计，仍保留未知业务结果。 */
+  /** 原执行节点管理入口；核验环境或原宿主进程已释放并审计，仍保留未知业务结果。 */
   reconcileUnknown: (scope: RunnerScope, id: string, review: RunnerReconciliation) => Promise<HaiResult<RunnerExecution>>
   /** 分页读取保序事件。 */
   events: (scope: RunnerScope, id: string, after?: number, limit?: number) => Promise<HaiResult<RunnerEvent[]>>

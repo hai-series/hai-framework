@@ -1376,6 +1376,27 @@ describe('createNativeMemoryOperations', () => {
     if (aList.success)
       expect(aList.data.length).toBeLessThanOrEqual(config.maxEntriesPerObject)
   })
+
+  it('并发新增后全局和主体记忆仍受配额限制', async () => {
+    const config = {
+      ...defaultConfig,
+      maxEntriesPerObject: 3,
+      maxEntriesGlobal: 5,
+      embeddingEnabled: false,
+    }
+    const harness = createTestMemoryHarness(config, createMockLLM([]), null)
+    const results = await Promise.all(Array.from({ length: 18 }, (_, index) => harness.ops.add({
+      objectId: index % 2 === 0
+        ? 'a'
+        : 'b',
+      type: 'fact',
+      content: `memory-${index}`,
+    })))
+    expect(results.every(result => result.success)).toBe(true)
+    expect(await harness.store.count()).toBeLessThanOrEqual(5)
+    expect(await harness.store.count({ objectId: 'a' })).toBeLessThanOrEqual(3)
+    expect(await harness.store.count({ objectId: 'b' })).toBeLessThanOrEqual(3)
+  })
 })
 
 // ─── Mem0 Provider（嵌入式合并）测试 ───

@@ -33,7 +33,7 @@
 | @h-ai/reach | [邮件、短信、API 通知](packages/cli/templates/skills/hai-reach/SKILL.md) |
 | @h-ai/feedback | [用户反馈、现场、管理员处理与离线包](packages/cli/templates/skills/hai-feedback/SKILL.md) |
 | @h-ai/ai | [LLM、Tools/MCP、RAG、记忆、图像、Audio、A2A、ACP](packages/cli/templates/skills/hai-ai/SKILL.md) |
-| @h-ai/runner | [受管容器、容量、持久任务与租约](packages/runner/README.md) |
+| @h-ai/runner | [受管容器、容量、任务保留与失联核验](packages/runner/README.md) |
 | @h-ai/payment | [订单、回调、查单、退款](packages/cli/templates/skills/hai-payment/SKILL.md) |
 | @h-ai/audit | [审计记录、查询、清理](packages/cli/templates/skills/hai-audit/SKILL.md) |
 | @h-ai/scheduler | [定时/API/JS/Hook 任务](packages/cli/templates/skills/hai-scheduler/SKILL.md) |
@@ -54,7 +54,7 @@
 
 - [环境文件与运行配置](docs/usage/configuration/runtime.md)、[变量清单](.env.example)：Core 与部署同源先父 JSON 后细项，高来源父对象清除低来源细项；秘密不得进入公开变量或浏览器。
 - [HTTP、Cookie 与访问控制](docs/usage/configuration/http.md)：生产 HTTP 入口的 Secure 刷新 Cookie、可信代理、CORS 和文档授权按实际后端配置处理。
-- [业务开发](docs/usage/development/README.md)、[ACP 接入](docs/usage/development/ai-acp.md)：按模块现有入口接入，授权与资源归属由可信服务端落实。
+- [业务开发](docs/usage/development/README.md)、[ACP 接入](docs/usage/development/ai-acp.md)、[AI Playground](apps/ai-playground/README.md)：从对应能力的公开入口接入，授权与资源归属由可信服务端落实。
 - [构建与浏览器要求](docs/usage/getting-started/build.md)、[部署与原生交付](docs/usage/configuration/delivery.md)、[部署运维](docs/usage/operations/deployment.md)：版本、构建 ID、目录、静态托管、产物与实际运行结果分别核验。
 - [共享状态与恢复边界](.agents/instructions/distributed-state.md)：核对每个模块真实后端与失败处理，不把数据库连接或锁本身当作一致性保证。
 - [公开 API 清单](scripts/generated/module-api-inventory.md)、[模块规范](.agents/instructions/module-conventions.md)：从公开入口使用真实类型，内部实现不能作为消费者扩展入口。

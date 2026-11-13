@@ -82,6 +82,8 @@ export const RunnerConfigSchema = z.strictObject({
   maxControlRunning: z.number().int().min(1).max(1000).default(8),
   maxQueued: z.number().int().min(1).max(100_000).default(5000),
   maxEvents: z.number().int().min(1).max(100_000).default(10_000),
+  /** 已结算任务、事件和幂等键的保留期限。未核验的 unknown 不受该期限影响。 */
+  retentionMs: z.number().int().min(3_600_000).max(365 * 86_400_000).default(7 * 86_400_000),
   closeTimeoutMs: z.number().int().min(100).max(120_000).default(20_000),
   environments: z.array(environment).max(1000).default([]),
 }).refine(value => value.pollMs * 3 < value.leaseMs

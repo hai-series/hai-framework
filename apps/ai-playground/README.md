@@ -1,88 +1,192 @@
 # AI 实验台
 
-## 简介
+[框架首页](../../README.md) · [AI 模块](../../packages/ai/README.md) · [Runner](../../packages/runner/README.md)
 
-基于 SvelteKit 和 `@h-ai/ai` 的交互式示例，用一个页面验证真实 LLM、文生图、Memory、TTS 与 ASR 链路。
+AI 实验台是 `@h-ai/ai` 的 SvelteKit 示例。可以切换模型、知识、上下文、工具和智能体、媒体实验。每项都可展开「接入示例」，查看公开 API、复制 TypeScript，并对照调用参数、返回值和所需配置。默认界面支持中文、英文、日文及主题切换。
 
-可从现有主题入口选择“护眼”（`eye-care`）：暖绿色背景、深色文字与清晰焦点，刷新后保留；原有默认主题不变。
+## 快速开始
 
-## 核心功能清单
+环境要求为 Node.js `^22.23.4 || ^24.22.1 || ^26.12.1` 和 pnpm `12.11.2`。开发默认使用 SQLite 和 LanceDB，文件保存在本应用的 `data/` 下，限流使用内存缓存。流处理、Token 估算、滑动窗口压缩、HTML 文件解析、本地工具和进程内 MCP 可以先在无模型凭据的情况下试用。
 
-- 宽屏下工作区随窗口扩展，列表在自身区域内滚动；手机端自动收拢，登录框和长篇正文保留阅读宽度。
-
-- LLM：多轮流式对话；首个文本片段到达即显示，记忆在回复后后台提取，新一轮对话会取消旧提取并优先响应。
-- Memory：按测试主体隔离的添加、检索、删除、自动注入与提取。
-- Image：通过 OpenAI、Gemini、Qwen、Seedream 或 Pollinations 免费额度模型生成并预览图片，可选上传一张或多张参考图。
-- TTS：预置音色、自然语言风格指令与 WAV 播放。
-- ASR：WAV/MP3 文件转写，以及麦克风录音期间持续更新的实时转写。
-- 中英日文界面、深浅主题、标准 E2E 与显式真实接口 E2E。
-
-> 默认接入 MiMo 系列模型，通过环境变量可切换到任意兼容 OpenAI 接口的模型服务。
-
-## 使用入门
-
-### 快速开始
-
-```bash
-cd apps/ai-playground
-# 按 .env.example 的字段说明，在 .env.local 中仅填写需要覆盖的私有值
-# 编辑 .env.local，填写 HAI_AI_LLM_APIKEY
-pnpm dev
+```sh
+pnpm install --frozen-lockfile       # 在仓库根安装锁定依赖。
+pnpm exec turbo run build --filter=ai-playground^...  # 构建应用所依赖的工作区模块。
+pnpm --filter ai-playground dev      # 启动本地 Web 服务，终端显示实际访问地址。
 ```
 
-打开 `http://localhost:5173`。`.env.local` 已由仓库根 `.gitignore` 忽略，不会进入 Git；不要把密钥改写到 `.env.example` 或源码中。
+Vite 通常显示 `http://localhost:5173`。运行对话、摘要、推理、语音或图片前，在 [`.env.example`](./.env.example) 找到对应配置，在本应用的 `.env.local` 写入私有值。模型端点和凭据只在服务端读取。录音功能需要浏览器的麦克风权限以及 `localhost` 或 HTTPS 安全上下文。
 
-应用先初始化 `reldb → vecdb → ai`，并发请求共用一次启动；失败按 `ai → vecdb → reldb` 关闭，关闭失败保留重试义务。API 路由使用 `ai.llm` / `ai.image` / `ai.memory` / `ai.audio`。开发默认 SQLite 与 LanceDB，状态持久化到 data；生产 `.env.prod` 选择共享 PostgreSQL、Qdrant，限流使用 Redis。数据库/缓存密码、受保护 Qdrant 密钥及模型密钥由 Secret/进程环境或忽略的 `.env.local` 注入。Compose 服务名为 `db/cache/vecdb`，容器外运行需覆盖地址；缺少共享依赖时启动失败，不会降级为内存 Store。
+## 功能
 
-首页与 Memory 面板从已初始化的数据库配置显示存储模式：文件 SQLite 和网络数据库属于持久存储，记忆在重启后仍保留；只有显式 SQLite `:memory:` 显示临时存储。测试主体 ID 只是选择记忆范围，不是用户认证；共享实验台中的测试记忆需主动删除。
+| 工作台       | 可运行实验                                                                 | 环境与配置                                                                                                                 | 输入 → 可观察结果                                                                                                                                                     |
+| ------------ | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 模型与流     | 多轮对话、单次文本、实时对话流、流处理器、结构化输出、推理                 | 对话与结构化用 `llm`，推理可用 `llm.scenarios.reasoning`。流处理器使用本地片段                                             | 提问 → 文本或逐段回复。结构化卡片输入一段正文 → `{ title, points }`。流处理器输入文字 → `{ chunks, text }`。推理 → `{ answer, strategy, rounds }`                     |
+| 文件与知识   | HTML 解析、向量嵌入、重排序、检索、RAG、知识集合                           | `file`、`llm.scenarios.embedding`、`llm.scenarios.rerank`、`embedding`、`retrieval.sources`、`knowledge`。见下文的模型配置 | HTML → 解析文本。文本 → 向量维度和前 12 项。查询 → 固定候选重排、匹配资料、带引用回答或知识文档与命中                                                                 |
+| 上下文与记忆 | 记忆的添加、搜索、删除、对话注入和提取，Persona、上下文、Token、摘要、压缩 | `memory`、`token`、`summary`、`compress`。摘要与自动提取需要模型，Persona 组合和滑动窗口压缩可本地运行                     | 保存偏好后查询 → 当前浏览器标签下的命中。Persona 输入 → 组合提示词和特征。上下文 → 初始消息和预算。正文 → Token 估算或摘要，压缩 → 缩减后的消息                       |
+| 工具与智能体 | 本地工具、进程内 MCP、远程 MCP、离线 MCP 作业、A2A、受管 ACP               | 本地工具和进程内 MCP 可直接运行。其余按下文登记服务、Agent Card 或 Runner 环境                                             | 输入 `two words` → 工具统计 `2`。MCP → 工具结果、资源和提示词。远程查询 → 上游 MCP 内容。离线固定文件 → 手册文本。A2A → Echo 响应。ACP → 执行计划、任务 ID 和模型输出 |
+| 媒体         | 图片生成和参考图、音频能力、TTS 和流式合成、上传 ASR 和转写流、麦克风识别  | `image.models`、`image.generateModel`、`audio.models` 和默认操作 ID。图片编辑和流能力依模型而定                            | 提示词 → 可预览图片。文字和音色 → WAV 或合成统计。上传音频或录音 → 文本。流式上传可观察分段事件                                                                       |
 
-### API 契约
+文档索引使用应用自带的固定资料，首次执行检索、RAG 或知识实验时写入固定文档 ID。浏览器的查询和 HTML 不会被导入公共知识集合。记忆及 Persona 使用服务器签发的 HttpOnly 浏览器 Cookie 绑定主体。切换标签只在当前浏览器内切换数据范围，清除 Cookie 后无法通过旧标签访问原记录。此 Cookie 用于演示隔离，部署到共享环境应由可信入口配置访问控制。
 
-| Endpoint                        | 用途                                                   |
-| ------------------------------- | ------------------------------------------------------ |
-| `GET /api/status`               | 查看实际模型和初始化状态                               |
-| `POST /api/chat`                | 对话（可注入记忆），仅返回回复文本                     |
-| `POST /api/chat/stream`         | 对话（可注入记忆），NDJSON 流式返回当前回复            |
-| `POST /api/chat/remember`       | 从一轮对话提取长期记忆，20 秒超时并支持取消            |
-| `GET/POST/DELETE /api/memories` | 检索、添加、清空当前主体记忆                           |
-| `DELETE /api/memories/:id`      | 删除单条且校验主体归属                                 |
-| `POST /api/tts`                 | 返回 WAV 音频                                          |
-| `POST /api/image`               | multipart 提交提示词、尺寸和可选参考图，返回图片二进制 |
-| `POST /api/asr`                 | multipart 上传 WAV/MP3 并返回文本                      |
-| `POST /api/asr/stream`          | multipart 上传音频，NDJSON 逐行流式返回转写            |
+结构化卡片调用 `ai.llm.generateObject` 时显式选择 `responseFormat: 'json_object'`，适用于提供通用 JSON 模式的网关，框架继续用 Zod 校验返回结果。模型支持服务端 Schema 时，省略该参数或显式用 `'json_schema'`。
 
-JSON 输入先经 Zod 校验；图片与音频上传在 multipart 边界校验。单张参考图和音频文件最大 10 MiB，AI 密钥只在服务端读取。
+### API 示例
 
-> 麦克风示例在录音期间每 2 秒获取最新音频快照，编码为 16 kHz 单声道 WAV 后调用 `/api/asr` 更新当前文本；慢请求期间会跳过中间快照并在下一节拍使用最新录音，不会形成无界请求队列。点击停止只补齐最后尚未识别的尾段，不再等停止后才开始转写。
+以下请求使用 `GET /api/demos` 查看当前不可用项。`POST /api/demos` 接收 `{ id, input }`，`input` 为 1–4000 字符，请求体最多 16 KiB。保留同一个 Cookie 以便后续请求复用浏览器作用域。
 
-### 配置
+```sh
+# 输入本地地址，输出可用性摘要，并保存本次会话的 Cookie。
+curl -sS -c ./playground.cookies http://localhost:5173/api/demos
+# 输入工具 ID 和示例文本，成功响应中 data.result.toolResult.content 为字符串 '{"words":2}'。
+curl -sS -b ./playground.cookies -H 'Content-Type: application/json' \
+  -d '{"id":"tools","input":"two words"}' http://localhost:5173/api/demos
+```
 
-本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。统一优先级为进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML。同源父 JSON 为基础、细项覆盖；高来源整段替换清掉低来源细项。模式私有文件不提交 Git。使用 `dev:test` / `dev:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置与环境变量](../../docs/usage/configuration/runtime.md)。
+| 接口                                                        | 输入                               | 输出                                                                          |
+| ----------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------- |
+| `GET /api/status`                                           | 无                                 | 成功响应的 `data` 包含已选模型与存储模式摘要                                  |
+| `GET /api/demos`、`POST /api/demos`                         | 无，或 `{ id, input }`             | 成功响应的 `data` 为 `{ unavailable }` 或 `{ result }`，失败返回 Hai API 错误 |
+| `POST /api/chat`、`POST /api/chat/stream`                   | 消息、当前记忆标签及是否注入记忆   | 对话回复或 NDJSON 流                                                          |
+| `POST /api/chat/remember`                                   | 一轮用户/助手消息与当前标签        | 记忆提取结果，20 秒超时                                                       |
+| `GET/POST/DELETE /api/memories`、`DELETE /api/memories/:id` | 当前标签、可选查询，或显式记忆内容 | 检索、保存、清空或删除结果，范围由服务端确定                                  |
+| `POST /api/tts`                                             | 文本、音色和可选风格               | WAV 音频                                                                      |
+| `POST /api/image`                                           | multipart 提示词、尺寸及可选参考图 | 图片二进制                                                                    |
+| `POST /api/asr`、`POST /api/asr/stream`                     | multipart WAV/MP3 和语言           | 完整文本或 NDJSON 事件                                                        |
 
-应用启动时扫描 [`config/_db.yml`](./config/_db.yml)、[`config/_vecdb.yml`](./config/_vecdb.yml)、[`config/_core.yml`](./config/_core.yml) 和
-[`config/_ai.yml`](./config/_ai.yml)：前者控制日志等级，后者集中声明 LLM、
-ASR/TTS、文生图厂商、模型、端点和超时。切换 OpenAI、Google、Qwen 或
-Seedream 时直接启用 `_ai.yml` 中对应示例块，不需要修改服务端代码。
+### 音频能力与流式演示
 
-YAML 提供默认值；环境变量按 `HAI_<配置名>_<YAML 路径>` 自动覆盖，
-且优先级高于 YAML。camelCase key 不拆词，例如 `llm.apiKey` 对应
-`HAI_AI_LLM_APIKEY`。数组模型密钥可使用索引约定名，也可像当前图片示例一样
-在 YAML 中显式绑定稳定的厂商变量名。
+`audio-capabilities` 用 `ai.audio.getCapabilities` 查询当前合成与转写模型的能力。输入只需满足卡片非空校验，查询不会将输入发给供应商。`tts-stream` 用默认合成模型调用 `ai.audio.synthesizeStream`，显示 `started.format`、`audioChunks`、`bytes` 和 `completed`。分块数与字节数取决于模型响应。
 
-| 环境变量                           | 用途                         |
-| ---------------------------------- | ---------------------------- |
-| `HAI_AI_LLM_APIKEY`                | 默认 MiMo 对话与音频密钥     |
-| `HAI_AI_IMAGE_POLLINATIONS_APIKEY` | 默认 Pollinations 文生图密钥 |
-| 其它厂商密钥                       | 见 `_ai.yml` 的注释示例      |
+```sh
+# 查询已登记能力。data.result.transcription 和 data.result.synthesis 分别包含转写与合成能力。
+curl -sS -b ./playground.cookies -H 'Content-Type: application/json' \
+  -d '{"id":"audio-capabilities","input":"check"}' http://localhost:5173/api/demos
+# 输入要朗读的短句，data.result 返回 WAV 格式、块数、总字节数和完成标志。
+curl -sS -b ./playground.cookies -H 'Content-Type: application/json' \
+  -d '{"id":"tts-stream","input":"Hello from Hai"}' http://localhost:5173/api/demos
+# 上传本地 WAV 与语言，按行查看实际转写事件，-N 禁用 curl 缓冲。
+curl -sSN -b ./playground.cookies -F 'audio=@sample.wav;type=audio/wav' \
+  -F 'language=en' http://localhost:5173/api/asr/stream
+```
 
-`_core.yml` 默认将开发日志设为 `debug`。文生图日志包含厂商、模型、尺寸、
-参考图数量、耗时、HTTP 状态、上游错误码和请求 ID；不会记录密钥、提示词或图片内容。
-Pollinations 返回 HTTP 402 表示账户余额或该 API Key 的预算耗尽，请在
-[Pollinations 控制台](https://enter.pollinations.ai/) 检查余额、模型白名单和 Key 预算。
+单张参考图和音频文件最大 10 MiB。文件流式转写由 `ai.audio.transcribeStream` 产生事件。麦克风演示约每两秒发送一份从录音开始到当前时刻的完整 WAV 快照，慢请求期间跳过中间快照，停止录音时补齐最后片段。
 
-服务端限流使用 @h-ai/cache：开发默认memory，生产必须配置共享Redis（HAI_CACHE_TYPE=redis及连接参数），并确保所有实例使用相同namespace和窗口。缓存不可用时503，超限429；HAI_E2E_MOCK仅用于测试，不得用于部署。初始化由hooks保证，AI和限流使用同一config目录。
+## 配置
 
-### 镜像构建与部署
+加载优先级为进程环境 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML。`config/_ai.yml` 定义 AI 默认值，`_db.yml`、`_vecdb.yml`、`_cache.yml` 管理存储和限流，`_core.yml` 设置日志，`_kit.yml` 管理入口策略。`config/_runner.yml` 可选，配置后在 AI 启动前初始化 Runner。环境变量和 YAML 的合并规则见 [配置与环境变量](../../docs/usage/configuration/runtime.md)。
+
+开发默认对话与语音示例使用 MiMo，图片示例使用 Pollinations。用 `HAI_AI_LLM_BASEURL`、`HAI_AI_LLM_MODEL`、`HAI_AI_LLM_PROTOCOL`、`HAI_AI_LLM_APIKEY` 覆盖默认对话端点。音频或图片另用供应商时，在 `_ai.yml` 配置对应 `models` 条目和默认 ID，只在确认为同一服务凭据时开启 `audio.inheritLlmApiKey`。图像密钥可用 `HAI_AI_IMAGE_POLLINATIONS_APIKEY`。供应商、模型与凭据不匹配时，先按网关错误检查协议和权限。
+
+### 向量和重排序模型
+
+将以下内容合并到 `config/_ai.yml`，保留已有音频、图片和检索配置。用实际网关、模型与维度替换示例。向量客户端把 `/embeddings` 加到模型的 `baseUrl`。重排序客户端把 `/v1/rerank` 加到 `baseUrl`，示例使用不带 `/v1` 的地址。
+
+```yaml
+llm:
+  models:
+    - id: vector # 应用绑定 ID，供 embedding 场景选择。
+      model: your-embedding-model # 供应商的实际向量模型名。
+      baseUrl: https://embedding.example.invalid/v1 # 应能调用 embeddings。
+      apiKey: ${PLAYGROUND_EMBEDDING_KEY:} # 从私有环境加载。
+    - id: ranker # 应用绑定 ID，供 rerank 场景选择。
+      model: your-rerank-model # 供应商的实际重排模型名。
+      baseUrl: https://rerank.example.invalid # 客户端请求 /v1/rerank。
+      apiKey: ${PLAYGROUND_RERANK_KEY:} # 从私有环境加载。
+  scenarios: {embedding: vector, rerank: ranker} # 启用向量、知识和重排演示。
+embedding:
+  dimensions: 1536 # 改成模型返回维度。
+knowledge:
+  dimension: 1536 # 使用相同维度。
+```
+
+应用的默认知识集合固定为 `hai_playground_demo_knowledge`，默认检索源为 `playground-handbook`。需要切换已建集合的向量维度时，使用新的实验数据目录，或先备份后移除旧实验集合再重新启动。
+
+### 远程 MCP 与 A2A
+
+以下配置合并到 `config/_ai.yml`。远程 MCP 卡片只请求部署方配置的 `playground-manuals` 服务与 `search_manual` 操作。输入是搜索文本，应用将它映射为 `{ query }`。`a2a.agentCard` 启用进程内 Echo 演示，页面返回公开卡片摘要和 JSON-RPC 结果，示例 URL 是卡片元数据。
+
+```yaml
+mcp:
+  servers:
+    - id: playground-manuals # 页面固定使用此服务 ID。
+      name: Manuals # 目录中的服务名。
+      transport: http # Streamable HTTP。
+      url: https://mcp.example.invalid/mcp # 换成经过部署审核的服务地址。
+      headerEnv: {Authorization: PLAYGROUND_MCP_AUTHORIZATION} # 需要时设置完整请求头值。
+      allowedTools: [search_manual] # 服务端许可的具体工具名。
+a2a:
+  agentCard:
+    name: Playground Echo # 返回的 Agent Card 名称。
+    url: https://playground.example.invalid/a2a # 演示卡片中的标识地址。
+```
+
+### 容器内的离线工具和受管 ACP
+
+在 Linux cgroup v2 执行节点准备 Podman 或 Docker、固定镜像与可用模型网络。默认 Web 镜像不含容器引擎 CLI。使用宿主 Node.js 运行本示例，或由部署方设置可用执行节点。Runner 容器默认断网，Codex 需要部署方登记实际可访问 Responses 网关的命名内部网络。部署方控制可信节点与出口。
+
+在仓库根构建镜像并读取摘要：
+
+```sh
+# 构建 Codex 精简镜像，JSON 输出含 imageId。将它放入私有变量 PLAYGROUND_AGENT_IMAGE。
+pnpm --filter @h-ai/ai agent:build codex-acp --engine=podman
+# 构建文档工具镜像，输入为文档 Dockerfile 与通用工具构建目录。
+podman build -f packages/ai/tools/documents/Dockerfile -t localhost/hai-tools-documents:playground packages/ai/tools
+# 输出文档工具的镜像 ID，放入私有变量 PLAYGROUND_DOCS_IMAGE，必要时补 sha256: 前缀。
+podman image inspect --format '{{.Id}}' localhost/hai-tools-documents:playground
+```
+
+添加 `config/_runner.yml`。将示例网络名换成已配置的内部网络。仅运行离线作业时可保留 `documents-demo` 环境并删去 ACP 环境块。
+
+```yaml
+nodeId: playground-executor # 执行节点唯一，重启后保持稳定。
+engine: podman # Docker 环境改为 docker。
+environments:
+  - id: documents-demo # 离线工具所用环境。
+    image: ${PLAYGROUND_DOCS_IMAGE} # 预先缓存的固定摘要。
+    networkPolicy: offline # 文档处理不需要网络。
+    capabilities: [documents.extract] # 允许文档提取。
+    resources: {cpu: 1, memoryMiB: 256, pids: 64, scratchMiB: 64} # 单容器资源上限。
+  - id: acp-demo # Agent 对应的环境。
+    image: ${PLAYGROUND_AGENT_IMAGE} # 预先缓存的 Codex 摘要。
+    networkPolicy: internal # 由容器引擎核验内部网络。
+    network: playground-model # 替换为能访问可信模型网关的内部网络。
+    resources: {cpu: 1, memoryMiB: 512, pids: 128, scratchMiB: 128} # 单容器资源上限。
+```
+
+合并到 `_ai.yml` 已有字段，并将 `playground-documents` 加入现有 `mcp.servers` 列表。ACP 卡片固定使用 `task`、`read-only`、`never`，不接收用户的工作区、额外工具或附件。离线工具卡片仅接受内置 `playground-handbook.txt`，返回手册文字。
+
+```yaml
+llm:
+  models:
+    - id: playground-coding # 由下方 Agent 绑定。
+      model: your-responses-model # 服务端实际模型名称。
+      protocol: responses # Codex 需要 Responses 协议。
+      baseUrl: https://models.example.invalid/v1 # 换成容器可达的内部模型网关。
+      apiKey: ${PLAYGROUND_ACP_MODEL_KEY:} # 私有凭据。
+acp:
+  agents:
+    - id: playground-acp # 页面固定使用此 Agent。
+      name: Playground Codex
+      adapter: codex
+      mode: embedded # 原生 stdio 接入，受管调用仍由 Runner 启动容器。
+      modelIds: [playground-coding] # 使用已登记模型。
+      environmentIds: [acp-demo] # 使用 Runner 的固定环境。
+mcp:
+  servers:
+    - id: playground-documents # 页面固定使用此工具服务。
+      name: Playground documents
+      transport: job # 通过 Runner 启动离线容器。
+      environmentId: documents-demo
+      allowedTools: [documents.extract] # 接受固定的文档提取操作。
+```
+
+应用按 `RelDB → VecDB → Runner（可选）→ AI` 初始化，并在启动失败时逆序清理。生产 `.env.prod` 默认使用 PostgreSQL、Qdrant 与 Redis。按实际部署配置 `db/cache/vecdb` 的 DNS 地址、认证和访问规则。缺少共享依赖时启动失败。应用默认限流为每分钟 120 个请求，可在可信代理或应用侧补充用户授权和模型消费预算。具体参数见 [AI 配置手册](../../docs/usage/configuration/ai.md) 和 [Runner 配置](../../packages/runner/README.md#配置)。
+
+## 错误处理
+
+实验卡片会标出缺少的模型场景、服务或 Runner 环境。配置正确后重启 Web 服务，再从环境卡片核对状态。可用性检查确认登记与配置，模型网络、凭据和镜像仍需运行时验证。请求失败时保留关联编号供服务端排查。限流超限返回 429，限流存储不可用返回 503。模型上游 402 时检查服务账户与预算。服务端日志避免输出私有配置和凭据。
+
+## 镜像构建与部署
 
 在本应用目录执行，镜像定义为 `images/web.Dockerfile`，`hai.json` 的 `build.images` 指定文件与仓库根构建上下文。Web 运行配置位于 `images/web/`（如有）。容器角色为 web，项目身份来自本目录的 package.json.name；应用版本来自本目录的 `package.json.version`。
 
@@ -102,19 +206,20 @@ pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
 
 本应用的启动、页面和业务操作按上文执行；各框架模块的完整用途、输入输出、配置和错误处理见下表。不要从应用示例推断模块全部能力；服务端与浏览器入口按对应模块契约选择。
 
-| 模块                                          | 本应用相关能力                 |
-| --------------------------------------------- | ------------------------------ |
-| [@h-ai/ai](../../packages/ai/README.md)       | 模型、记忆与工具流程           |
-| [@h-ai/cache](../../packages/cache/README.md) | 共享缓存与会话状态             |
-| [@h-ai/core](../../packages/core/README.md)   | 配置、日志、结果与国际化       |
-| [@h-ai/kit](../../packages/kit/README.md)     | SvelteKit 路由、请求与页面集成 |
-| [@h-ai/reldb](../../packages/reldb/README.md) | 关系型数据库与事务             |
-| [@h-ai/ui](../../packages/ui/README.md)       | 页面、表单和交互组件           |
-| [@h-ai/vecdb](../../packages/vecdb/README.md) | 向量集合与检索                 |
+| 模块                                            | 本应用相关能力                 |
+| ----------------------------------------------- | ------------------------------ |
+| [@h-ai/ai](../../packages/ai/README.md)         | 模型、记忆与工具流程           |
+| [@h-ai/cache](../../packages/cache/README.md)   | 共享缓存与会话状态             |
+| [@h-ai/core](../../packages/core/README.md)     | 配置、日志、结果与国际化       |
+| [@h-ai/kit](../../packages/kit/README.md)       | SvelteKit 路由、请求与页面集成 |
+| [@h-ai/reldb](../../packages/reldb/README.md)   | 关系型数据库与事务             |
+| [@h-ai/runner](../../packages/runner/README.md) | 独立工具与 ACP 容器执行        |
+| [@h-ai/ui](../../packages/ui/README.md)         | 页面、表单和交互组件           |
+| [@h-ai/vecdb](../../packages/vecdb/README.md)   | 向量集合与检索                 |
 
 ## 开发测试
 
-默认 E2E 拦截外部 AI 请求，只验证完整 UI 交互，稳定且不消耗额度：
+单测检查请求边界、身份隔离及演示路由，默认 E2E 使用受控响应验证页面交互，不调用商业模型。
 
 ```bash
 pnpm --filter ai-playground test

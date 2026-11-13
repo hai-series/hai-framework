@@ -7,7 +7,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { DbType, DmlOperations, ReldbJsonOps } from '@h-ai/reldb'
+import type { DbType, DmlOperations, ReldbJsonOps, TxManager } from '@h-ai/reldb'
 import type { VecdbFunctions } from '@h-ai/vecdb'
 import type { AIRelStore, AIRelStoreCompareAndSwap, AIRelStoreOptions, AIStoreProvider, AIVectorBackend, AIVectorStore, AIVersionedRecord, KnowledgeStore, StoreFilter, StorePage, StoreScope, WhereClause, WhereOperator } from '../ai-store-types.js'
 
@@ -96,8 +96,11 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   private readonly hasStatus: boolean
   private readonly hasRefId: boolean
   private readonly hasScopeIndex: boolean
+  private readonly hasUpdatedAtIndex: boolean
+  private readonly gate: string | undefined
+  readonly withWriteLock?: AIRelStore<T>['withWriteLock']
 
-  constructor(sql: DmlOperations, table: string, jsonOps: ReldbJsonOps, dbType: DbType, options?: AIRelStoreOptions) {
+  constructor(sql: DmlOperations, table: string, jsonOps: ReldbJsonOps, dbType: DbType, options?: AIRelStoreOptions, tx?: TxManager) {
     this.sql = {
       ...sql,
       execute: (query, params) => sql.execute(query, params).then(requireSqlSuccess),
@@ -112,6 +115,18 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     this.hasStatus = options?.hasStatus ?? false
     this.hasRefId = options?.hasRefId ?? false
     this.hasScopeIndex = options?.hasScopeIndex ?? false
+    this.hasUpdatedAtIndex = options?.hasUpdatedAtIndex ?? false
+    if (options?.serializeWrites && tx) {
+      const gate = `${table}_write_gate`
+      this.gate = gate
+      this.withWriteLock = async write => requireSqlSuccess(await tx.wrap(async (connection) => {
+        // 首条语句即加锁，MySQL 的后续一致读不会使用等待前的快照。
+        const locked = requireSqlSuccess(await connection.execute(`UPDATE ${gate} SET marker = 1 - marker WHERE id = 1`))
+        if (locked.data.changes !== 1)
+          throw new Error('Missing AI store write gate')
+        return write(new ReldbAIRelStore<T>(connection, table, jsonOps, dbType, options))
+      })).data
+    }
   }
 
   /** 创建表及索引（幂等） */
@@ -142,6 +157,13 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     cols.push('version VARCHAR(36) NOT NULL', `data ${dataType} NOT NULL`, `created_at BIGINT NOT NULL`, `updated_at BIGINT NOT NULL`)
 
     await this.sql.execute(`CREATE TABLE IF NOT EXISTS ${t} (${cols.join(', ')})`)
+    if (this.gate) {
+      await this.sql.execute(`CREATE TABLE IF NOT EXISTS ${this.gate} (id INTEGER PRIMARY KEY, marker INTEGER NOT NULL)`)
+      const conflict = db === 'mysql'
+        ? 'ON DUPLICATE KEY UPDATE id = id'
+        : 'ON CONFLICT(id) DO NOTHING'
+      await this.sql.execute(`INSERT INTO ${this.gate} (id, marker) VALUES (1, 0) ${conflict}`)
+    }
 
     if (this.hasObjectId)
       await this.createIndex(`idx_${t}_object_id`, 'object_id')
@@ -153,6 +175,8 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       await this.createIndex(`idx_${t}_status`, 'status')
     if (this.hasRefId)
       await this.createIndex(`idx_${t}_ref_id`, 'ref_id')
+    if (this.hasUpdatedAtIndex)
+      await this.createIndex(`idx_${t}_updated_at`, 'updated_at, id')
     // 业务作用域索引：仅 PostgreSQL 支持 JSONB GIN，用于加速 data @> '{"scope":...}' 包含查询。
     if (this.hasScopeIndex && db === 'postgresql')
       await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_data_gin ON ${t} USING GIN (data jsonb_path_ops)`)
@@ -336,24 +360,47 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     let countSql = `SELECT COUNT(*) as cnt FROM ${this.table}`
     if (countConditions.length > 0)
       countSql += ` WHERE ${countConditions.join(' AND ')}`
-    const countResult = await this.sql.get<{ cnt: number }>(countSql, countParams)
-    const total = countResult.success && countResult.data != null
-      ? countResult.data.cnt
-      : 0
+    const count = requireSqlSuccess(await this.sql.get<{ cnt: number | string }>(countSql, countParams)).data
 
     const { sql, params } = this.buildQuery({ ...filter, limit: undefined })
     const pagedSql = `${sql} LIMIT ? OFFSET ?`
-    const result = await this.sql.query<{ data: unknown }>(pagedSql, [...params, page.limit, page.offset])
-    const items = result.success
-      ? result.data.map(row => this.decodeData(row.data))
-      : []
+    const rows = requireSqlSuccess(await this.sql.query<{ data: unknown }>(pagedSql, [...params, page.limit, page.offset])).data
 
-    return { items, total }
+    return {
+      items: rows.map(row => this.decodeData(row.data)),
+      total: Number(count?.cnt ?? 0),
+    }
   }
 
   async remove(id: string): Promise<boolean> {
     await this.sql.execute(`DELETE FROM ${this.table} WHERE id = ?`, [id])
     return true
+  }
+
+  async queryKeys(filter: StoreFilter<T>, cursor?: { updatedAt: number, id: string }) {
+    const params: unknown[] = []
+    const conditions = this.buildAllConditions(filter, params)
+    if (cursor) {
+      conditions.push('(updated_at > ? OR (updated_at = ? AND id > ?))')
+      params.push(cursor.updatedAt, cursor.updatedAt, cursor.id)
+    }
+    const where = conditions.length
+      ? ` WHERE ${conditions.join(' AND ')}`
+      : ''
+    const result = await this.sql.query<{ id: string, updated_at: number | string, version: string }>(
+      `SELECT id, updated_at, version FROM ${this.table}${where} ORDER BY updated_at, id LIMIT ?`,
+      [...params, filter.limit ?? 64],
+    )
+    return requireSqlSuccess(result).data.map(row => ({
+      id: row.id,
+      updatedAt: Number(row.updated_at),
+      version: row.version,
+    }))
+  }
+
+  async removeIfUnchanged(id: string, version: string) {
+    const deleted = await this.sql.execute(`DELETE FROM ${this.table} WHERE id = ? AND version = ?`, [id, version])
+    return requireSqlSuccess(deleted).data.changes === 1
   }
 
   async removeBy(filter: StoreFilter<T>): Promise<number> {
@@ -366,7 +413,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       countSql += whereClause
       const countResult = await this.sql.get<{ cnt: number }>(countSql, [...params])
       const count = countResult.success && countResult.data != null
-        ? countResult.data.cnt
+        ? Number(countResult.data.cnt)
         : 0
       await this.sql.execute(`DELETE FROM ${this.table}${whereClause}`, params)
       return count
@@ -374,17 +421,17 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
 
     const countResult = await this.sql.get<{ cnt: number }>(countSql)
     const count = countResult.success && countResult.data != null
-      ? countResult.data.cnt
+      ? Number(countResult.data.cnt)
       : 0
     await this.sql.execute(`DELETE FROM ${this.table}`)
     return count
   }
 
   async count(filter?: StoreFilter<T>): Promise<number> {
-    if (!filter?.where && !filter?.objectId && !filter?.sessionId && !filter?.status && !filter?.refId) {
+    if (!filter?.where && !filter?.objectId && !filter?.sessionId && !filter?.status && !filter?.refId && !filter?.scope && filter?.updatedBefore === undefined) {
       const result = await this.sql.get<{ cnt: number }>(`SELECT COUNT(*) as cnt FROM ${this.table}`)
       return result.success && result.data != null
-        ? result.data.cnt
+        ? Number(result.data.cnt)
         : 0
     }
     const params: unknown[] = []
@@ -394,7 +441,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       sql += ` WHERE ${conditions.join(' AND ')}`
     const result = await this.sql.get<{ cnt: number }>(sql, params)
     return result.success && result.data != null
-      ? result.data.cnt
+      ? Number(result.data.cnt)
       : 0
   }
 
@@ -516,6 +563,10 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
 
   private buildAllConditions(filter: StoreFilter<T>, params: unknown[]): string[] {
     const conditions: string[] = []
+    if (filter.updatedBefore !== undefined) {
+      conditions.push('updated_at < ?')
+      params.push(filter.updatedBefore)
+    }
     if (filter.objectId && this.hasObjectId) {
       conditions.push('object_id = ?')
       params.push(filter.objectId)
@@ -559,49 +610,78 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
         if (op.$in !== undefined && Array.isArray(op.$in)) {
           const { sql: jsonSql, params: jsonParams } = this.jsonOps.extract('data', path)
           params.push(...jsonParams)
-          conditions.push(`${jsonSql} IN (${op.$in.map(() => '?').join(', ')})`)
-          params.push(...op.$in)
+          conditions.push(`${jsonSql} IN (${op.$in.map(() => this.jsonComparisonParameter()).join(', ')})`)
+          params.push(...op.$in.map(value => this.jsonComparisonValue(value)))
+        }
+        if (op.$ne !== undefined) {
+          const { sql: expression, params: pathParams } = this.jsonOps.extract('data', path)
+          // 缺失字段由 SQL NULL 表示，仍然符合不等于指定值的条件。
+          conditions.push(`COALESCE(${expression} <> ${this.jsonComparisonParameter()}, TRUE)`)
+          params.push(...pathParams, this.jsonComparisonValue(op.$ne))
         }
         if (op.$gte !== undefined) {
           const { sql: j, params: p } = this.jsonOps.extract('data', path)
           params.push(...p)
-          conditions.push(`${j} >= ?`)
-          params.push(op.$gte)
+          conditions.push(`${j} >= ${this.jsonComparisonParameter()}`)
+          params.push(this.jsonComparisonValue(op.$gte))
         }
         if (op.$gt !== undefined) {
           const { sql: j, params: p } = this.jsonOps.extract('data', path)
           params.push(...p)
-          conditions.push(`${j} > ?`)
-          params.push(op.$gt)
+          conditions.push(`${j} > ${this.jsonComparisonParameter()}`)
+          params.push(this.jsonComparisonValue(op.$gt))
         }
         if (op.$lte !== undefined) {
           const { sql: j, params: p } = this.jsonOps.extract('data', path)
           params.push(...p)
-          conditions.push(`${j} <= ?`)
-          params.push(op.$lte)
+          conditions.push(`${j} <= ${this.jsonComparisonParameter()}`)
+          params.push(this.jsonComparisonValue(op.$lte))
         }
         if (op.$lt !== undefined) {
           const { sql: j, params: p } = this.jsonOps.extract('data', path)
           params.push(...p)
-          conditions.push(`${j} < ?`)
-          params.push(op.$lt)
+          conditions.push(`${j} < ${this.jsonComparisonParameter()}`)
+          params.push(this.jsonComparisonValue(op.$lt))
         }
       }
       else {
         const { sql: jsonSql, params: jsonParams } = this.jsonOps.extract('data', path)
         params.push(...jsonParams)
-        conditions.push(`${jsonSql} = ?`)
-        params.push(value)
+        conditions.push(`${jsonSql} = ${this.jsonComparisonParameter()}`)
+        params.push(this.jsonComparisonValue(value))
       }
     }
     return conditions
+  }
+
+  private jsonComparisonParameter(): string {
+    if (this.dbType === 'postgresql')
+      return '?::jsonb'
+    return this.dbType === 'mysql'
+      ? 'CAST(? AS JSON)'
+      : '?'
+  }
+
+  private jsonComparisonValue(value: unknown): unknown {
+    if (this.dbType !== 'sqlite')
+      return JSON.stringify(value)
+    return typeof value === 'boolean'
+      ? Number(value)
+      : value
   }
 
   private isWhereOperator<V>(value: unknown): value is WhereOperator<V> {
     if (typeof value !== 'object' || value === null || Array.isArray(value))
       return false
     const keys = Object.keys(value)
-    return keys.length > 0 && keys.every(k => ['$in', '$gte', '$gt', '$lte', '$lt'].includes(k))
+    return keys.length > 0 && keys.every(k => [
+      '$in',
+      '$ne',
+      '$gte',
+      '$gt',
+      '$lte',
+      '$lt',
+    ].includes(k))
   }
 }
 
@@ -680,6 +760,7 @@ class VecdbAIVectorStore implements AIVectorStore {
  */
 export interface DbStoreProviderDeps {
   sql: DmlOperations
+  tx?: TxManager
   jsonOps: ReldbJsonOps
   dbType?: DbType
   vecdb: VecdbFunctions
@@ -723,7 +804,7 @@ export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvide
     },
 
     createRelStore<T>(name: string, options?: AIRelStoreOptions): AIRelStore<T> {
-      const store = new ReldbAIRelStore<T>(sql, name, jsonOps, dbType, options)
+      const store = new ReldbAIRelStore<T>(sql, name, jsonOps, dbType, options, deps.tx)
       const stores = relStores.get(name) ?? []
       stores.push(store as ReldbAIRelStore<unknown>)
       relStores.set(name, stores)
@@ -835,6 +916,7 @@ export function getUnavailableDbDeps(): string[] {
 export function createDbStoreProviderFromModules(): AIStoreProvider {
   return createDbStoreProvider({
     sql: reldb.sql,
+    tx: reldb.tx,
     jsonOps: reldb.json,
     dbType: reldb.config?.type,
     vecdb,

@@ -28,6 +28,15 @@ const bindingSchema = z.strictObject({
 })
 const maxRequestBytes = 1024 * 1024
 const digest = (token: string) => createHash('sha256').update(token).digest('hex')
+/**
+ * 绑定有效期内使用的单工具输入校验函数。
+ * @example
+ * ```ts
+ * // 模块内部上下文
+ * function validateInput(validate: ToolValidator, input: unknown) { return validate(input) }
+ * ```
+ */
+type ToolValidator = ReturnType<AjvJsonSchemaValidator['getValidator']>
 
 /**
  * 创建执行节点本地的短期工具绑定，原生 Agent 只接触此入口。
@@ -48,10 +57,9 @@ export function createMCPServiceBroker(
     return err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))
 
   const grants = new Map<string, NonNullable<ReturnType<typeof createGrant>>>()
-  const validator = new AjvJsonSchemaValidator()
   let closed = false
 
-  function createGrant(input: z.output<typeof bindingSchema>, key: string) {
+  function createGrant(input: z.output<typeof bindingSchema>, validators: Map<string, ToolValidator>, key: string) {
     const controller = new AbortController()
     const signal = AbortSignal.any([
       controller.signal,
@@ -69,6 +77,7 @@ export function createMCPServiceBroker(
     })
     return {
       input,
+      validators,
       signal,
       revoke: () => controller.abort(),
     }
@@ -96,15 +105,20 @@ export function createMCPServiceBroker(
           return err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))
         if (Buffer.byteLength(JSON.stringify(parsed.data.tools)) > maxRequestBytes)
           return err(HaiAIError.RESOURCE_INVALID, aiM('ai_resourceInvalid'))
-        const input = parsed.data
+        const input = {
+          ...parsed.data,
+          tools: structuredClone(parsed.data.tools),
+        }
         const services = new Map<string, MCPExternalServer | undefined>()
+        const validators = new Map<string, ToolValidator>()
         for (const tool of input.tools) {
           if (!services.has(tool.serviceId))
             services.set(tool.serviceId, await read(tool.serviceId))
           const service = services.get(tool.serviceId)
           if (!service || !['http', 'job'].includes(service.transport) || !service.allowedTools?.includes(tool.tool))
             return err(HaiAIError.MCP_TOOL_FORBIDDEN, aiM('ai_mcpServiceForbidden'))
-          validator.getValidator(tool.inputSchema)
+          // 每个工具独占编译命名空间，允许不同 Schema 使用同一个 $id。
+          validators.set(tool.id, new AjvJsonSchemaValidator().getValidator(tool.inputSchema))
         }
         if (closed || lifecycle.aborted)
           return err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
@@ -112,10 +126,7 @@ export function createMCPServiceBroker(
           return err(HaiAIError.RESOURCE_OPERATION_FAILED, aiM('ai_resourceOperationFailed'))
         const token = randomBytes(32).toString('base64url')
         const key = digest(token)
-        const grant = createGrant({
-          ...input,
-          tools: structuredClone(input.tools),
-        }, key)
+        const grant = createGrant(input, validators, key)
         if (!grant)
           return err(HaiAIError.MCP_TOOL_CANCELLED, aiM('ai_mcpServiceCancelled'))
         grants.set(key, grant)
@@ -131,6 +142,7 @@ export function createMCPServiceBroker(
             },
           ],
           revoke: grant.revoke,
+          signal: grant.signal,
         })
       }
       catch {
@@ -189,7 +201,7 @@ export function createMCPServiceBroker(
         }))
         server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
           const tool = grant.input.tools.find(tool => tool.id === params.name)
-          if (!tool || signal.aborted || !validator.getValidator(tool.inputSchema)(params.arguments ?? {}).valid)
+          if (!tool || signal.aborted || !grant.validators.get(params.name)?.(params.arguments ?? {}).valid)
             return failure()
           const result = await invoke({ serviceId: tool.serviceId, tool: tool.tool, arguments: params.arguments }, {
             principal: grant.input.principal,

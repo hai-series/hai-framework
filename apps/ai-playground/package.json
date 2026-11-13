@@ -1,7 +1,7 @@
 {
   "name": "ai-playground",
   "type": "module",
-  "version": "1.0.0-beta.24",
+  "version": "1.0.0-beta.25",
   "private": true,
   "description": "hai Agent Framework - AI 能力交互示例",
   "keywords": [
@@ -44,6 +44,7 @@
     "@h-ai/core": "workspace:*",
     "@h-ai/kit": "workspace:*",
     "@h-ai/reldb": "workspace:*",
+    "@h-ai/runner": "workspace:*",
     "@h-ai/ui": "workspace:*",
     "@h-ai/vecdb": "workspace:*",
     "sm-crypto": "catalog:",

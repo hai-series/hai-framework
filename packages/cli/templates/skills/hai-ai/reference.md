@@ -237,7 +237,19 @@ IndexTTS 的 Node HTTP 请求使用同版本 Undici fetch/Agent/FormData；模�
 
 ## LLM 结构化输出
 
-`ai.llm.generateObject({ schema, messages, model?, systemPrompt?, maxRepairs?, signal? })`：按 Zod schema 约束模型输出（json_schema）并解析为对象，解析/校验失败自动带错误提示重试（默 1 次）。适用于“是否为问题/意图分类/置信度”等需要稳定结构结果的场景，避免手写 `JSON.parse`。
+`ai.llm.generateObject({ schema, messages, model?, systemPrompt?, responseFormat?, schemaName?, maxRepairs?, signal? })` 适用于意图分类等需要结构化结果的场景。默认 `responseFormat: 'json_schema'` 向上游发送严格 Schema，仅在此模式使用 `schemaName`，默认 `result`。只支持通用 JSON 模式的 Chat 网关使用 `'json_object'`，框架将 Schema 加入提示词。两种模式都在本地用相同 Zod Schema 校验。解析或校验失败时按 `maxRepairs` 重试，默认再尝试一次。
+
+```ts
+import { ai } from '@h-ai/ai'
+import { z } from 'zod'
+
+const result = await ai.llm.generateObject({
+  schema: z.object({ intent: z.enum(['question', 'request']) }), // 定义允许的分类。
+  messages: [{ role: 'user', content: '如何部署？' }], // 输入待分类文本。
+  responseFormat: 'json_object', // 用于只提供通用 JSON 的 Chat 网关。
+})
+if (result.success) process.stdout.write(result.data.intent) // 示例输出 question。
+```
 
 ## A2A
 

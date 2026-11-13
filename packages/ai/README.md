@@ -55,7 +55,7 @@ finally {
 | `ai.llm.chatStream`               | 逐块回答                | `same ChatCompletionRequest`                                                      | `AsyncIterable<ChatCompletionChunk>; iteration may throw`                 | `ai.llm.chatStream({ messages })`                                                         |
 | `ai.llm.ask`                      | 纯文本问答              | `question: string, AskOptions?`                                                   | `string answer`                                                           | `ai.llm.ask("解释共享状态")`                                                              |
 | `ai.llm.askStream`                | 纯文本流                | `question: string, AskOptions?`                                                   | `AsyncIterable<string>`                                                   | `ai.llm.askStream("解释共享状态")`                                                        |
-| `ai.llm.generateObject`           | 受 Schema 约束的答案    | `Zod schema, messages, model?, maxRepairs?, signal?`                              | `schema-inferred T`                                                       | `ai.llm.generateObject({ schema: AnswerSchema, messages })`                               |
+| `ai.llm.generateObject`           | 受 Schema 约束的答案    | `Zod schema, messages, model?, responseFormat?, maxRepairs?, signal?`             | `schema-inferred T`                                                       | `ai.llm.generateObject({ schema: AnswerSchema, messages })`                               |
 | `ai.llm.listModels`               | 查询模型                | `none`                                                                            | `string[] model IDs`                                                      | `ai.llm.listModels()`                                                                     |
 | `ai.llm.getHistory`               | 读取对话历史            | `{ objectId, sessionId }, { limit?, order? }?`                                    | `ChatRecord[]`                                                            | `ai.llm.getHistory({ objectId: "u1", sessionId: "s1" })`                                  |
 | `ai.llm.listSessions`             | 列出主体会话            | `objectId: string`                                                                | `SessionInfo[]`                                                           | `ai.llm.listSessions("u1")`                                                               |
@@ -344,6 +344,29 @@ const temp = await ai.llm.chat({
 
 SSE 文本解码遵循 [WHATWG 事件流规则](https://html.spec.whatwg.org/multipage/server-sent-events.html#event-stream-interpretation)：LF/CRLF/CR 跨片、多行 data、仅去冒号后一个空格、继承有效 id/retry；空或缺省 event 按 message，EOF 不补空行派发残余事件。encodeSSE 规范化 data 换行，并对 id/event 换行、id 的 NUL 或无效 retry 显式抛错。Anthropic/MiMo 共用内部 UTF-8 流读取；消费方退出、取消、协议结束和失败均取消正文并释放 reader，不自动重连或重放业务。Anthropic timeout 覆盖正文，MiMo 保留每个 HTTP 请求的独立 timeout。
 
+##### 结构化输出：`ai.llm.generateObject`
+
+按模型或网关的响应能力选择 `responseFormat`。默认 `json_schema` 向上游发送严格 JSON Schema，`schemaName` 只用于此模式，默认 `result`。仅支持通用 JSON 的 Chat 网关使用 `json_object`，框架将 Schema 放入提示词。两种模式都在本地用同一个 Zod Schema 校验，解析或校验失败时可按 `maxRepairs` 修复，默认一次。
+
+```ts
+import { ai } from '@h-ai/ai'
+import { z } from 'zod'
+
+// 已初始化 AI，llm 使用支持通用 JSON 模式的文本模型。
+const result = await ai.llm.generateObject({
+  schema: z.object({
+    title: z.string()
+  }), // 要求返回含 title 字符串的对象。
+  messages: [
+    { role: 'user', content: '为发布检查表生成标题。' }
+  ], // 本次输入。
+  responseFormat: 'json_object', // 请求通用 JSON，仍会执行本地 Zod 校验。
+  maxRepairs: 1, // 解析或校验失败时允许再请求一次。
+})
+if (result.success)
+  process.stdout.write(result.data.title) // 例如：发布检查表。
+```
+
 #### 工具调用
 
 ```ts
@@ -402,6 +425,69 @@ Goose 1.57.0 镜像提供原生 `goose serve` HTTP/WS `/acp` 服务，通过 cus
 
 托管 Git 遇到子模块或 Git LFS 属性时明确返回 ACP_UNSUPPORTED，避免将不完整工程报告为就绪。
 
+##### 按用户运行受管 ACP
+
+服务启动时先初始化 RelDB 和 [Runner](../runner/README.md)，再将已启动的实例传给 `ai.init(config, { runner, acpPolicy })`。在 `acp.agents` 注册 Agent，并用 `environmentIds` 绑定 Runner 的固定镜像环境，用 `modelIds` 绑定 `llm.models` 的模型。Codex 需要 Responses 网关。API 和执行节点使用共享数据库与相同环境定义。关闭服务时先关闭 AI，再关闭 Runner 和数据库。
+
+`task` 为本次会话启动独占 Worker，`user` 可在同一主体与启动配置下复用。`auto` 按策略选择。`shared` 只适用于明确支持共享的只读适配器，且会话不能申请私有上下文、工作区或工具，内置 Codex、DeepSeek Harness 和 Goose 仍使用独立模式。配置示例见 [ACP 配置](../../docs/usage/configuration/ai.md#acp-接入与模型能力)。
+
+```ts
+import type { RunnerScope } from '@h-ai/runner' // tenantId 和 userId 来自已认证的应用会话。
+import { ai } from '@h-ai/ai' // 使用已注入 Runner 的服务端实例。
+
+async function summarize(identity: RunnerScope, requestId: string) {
+  const agent = ai.acp.scoped(identity) // 将后续任务、会话和权限访问绑定到此主体。
+  const options = {
+    agentId: 'assistant',
+    execution: { mode: 'auto' as const }
+  } // assistant 是已登记的 Agent。
+  const plan = await agent.plan(options) // 返回实际模式、环境、模型和资源设置，不领取容器。
+  if (!plan.success)
+    return plan // 环境或权限不满足时不提交。
+  const result = await agent.run({ ...options, prompt: '列出三条发布检查项', idempotencyKey: requestId }) // 返回 taskId、output 和生效选项。
+  if (!result.success)
+    return result // 提交、执行或清理失败时返回 HaiResult 错误。
+  const events = await agent.tasks.events(result.data.taskId, 0, 20) // 读取前 20 个持久事件，空页为 []。
+  if (!events.success)
+    return events
+  return { result: result.data, events: events.data } // 例如 output.text 是模型回答，events 含按序号排列的事件。
+}
+```
+
+```ts
+import type { RunnerScope } from '@h-ai/runner' // 服务端认证主体。
+import { ai } from '@h-ai/ai' // assistant 已登记，并允许在同一用户内复用 Worker。
+
+async function continueWork(identity: RunnerScope) {
+  const agent = ai.acp.scoped(identity) // 成功访问只限当前主体的资源。
+  const created = await agent.sessions.create({
+    agentId: 'assistant',
+    execution: { mode: 'user' }
+  }) // 成功得到含 id 的会话句柄。
+  if (!created.success)
+    return created
+  const session = created.data // 句柄提供 prompt、stream、changeExecution 和 close。
+  const run = async () => {
+    const first = await session.prompt('记下验收目标') // 返回这一轮的 taskId、output 与生效选项。
+    if (!first.success)
+      return first
+    const switched = await session.changeExecution({ mode: 'task', acceptNewSession: true }) // 保留业务 id，建立新的原生会话。
+    if (!switched.success)
+      return switched
+    return await session.prompt('给出独立验收清单') // 模型回答位于成功结果的 data.output。
+  }
+  return run().finally(async () => {
+    const closed = await session.close() // 成功的 data 为 undefined，释放会话或独占任务环境。
+    if (!closed.success)
+      throw new Error(closed.error.message)
+  })
+}
+```
+
+使用 `agents.describe(agentId)` 查询内置适配器的能力，`sessions.get(id)` 由同一主体在其他 API 节点取得句柄，`session.stream(prompt, options)` 迭代持久事件并在失败时抛错。`tasks.get(taskId)` 返回执行回执，`tasks.cancel(taskId)` 接受取消并返回当前状态。可在 `run` 或 `prompt` 的 `onEvent` 中取得 `accepted` 事件的 `taskId`，然后用另一请求查看或取消。
+
+`acpPolicy` 负责 `workspaceId` 快照、知识库、记忆、文件、Skills 和工具的业务授权。`allowTools` 与 `bindTools` 可接入下文的 MCP 入口。应用取得 `approval` 事件中的 `approvalId` 后，从同一主体调用 `approvals.respond(id, 'allow-once' | 'allow-session' | 'always-allow' | 'deny')`，成功返回 `undefined`。`approvals.rules(offset, limit)` 分页返回仍可用的规则和 `expiresAt`，`approvals.revoke(ruleId)` 撤销当前主体的规则。`full-access` 需要应用明确允许且使用 `task`。工作区提供只读快照，切换后可按需带入用户确认的 `historySummary`。更多示例见 [受管调用](../../docs/usage/development/ai-acp.md#多用户应用的受管调用)。
+
 #### 配置与数据库资源清单
 
 `llm.models`、`audio.models`、`image.models`、`mcp.servers`、`retrieval.sources`、`acp.agents/workspaces` 合并配置和数据库。配置同 ID 优先且只读，数据库支持 list/get/register/update/remove；条目返回 value/source/version，更新可检查版本。异步调用读取最新定义，音频同步能力查询使用最近刷新快照。资源错误为 090–094。管理定义可能含模型密钥，仅在可信服务端使用。
@@ -444,6 +530,81 @@ server.registerTool('search', {
 await server.connect(new StreamableHTTPServerTransport({
   sessionIdGenerator: () => globalThis.crypto.randomUUID()
 }))
+```
+
+##### 调用远程 MCP 和独立工具作业
+
+在 `mcp.servers` 的 `transport: http` 条目中登记第三方 Streamable HTTP 地址和 `allowedTools`。需要认证时用 `headerEnv` 引用服务器环境变量。`transport: job` 可用同一套调用接口运行离线文档、Office 和 OCR 工具。为作业配置 `environmentId`、允许操作和可选 `pool`，将 Runner 与 `mcpJobFiles` 传给 `ai.init`。作业请求只传已授权的 `fileId`，执行节点再次检查文件权限，产物以对象 ID 返回。浏览器镜像由部署方单独运行。详见 [MCP 配置](../../docs/usage/configuration/ai.md#mcp和a2a) 与 [工具镜像](tools/README.md)。
+
+```ts
+import type { MCPServiceAuthorization } from '@h-ai/ai' // 应用从 IAM 构造主体和按实际参数复核权限的回调。
+import { ai } from '@h-ai/ai' // 服务端已初始化，并登记了 manual 与 office 服务。
+
+async function searchManual(access: MCPServiceAuthorization, query: string) {
+  const result = await ai.mcp.services.invoke({
+    serviceId: 'manual',
+    tool: 'search_manual',
+    arguments: { query }
+  }, access) // 目录和授权通过后得到标准 MCP 工具结果。
+  if (!result.success)
+    return result // 权限拒绝或上游失败时保留错误。
+  return result.data.content // 例如 [{ type: 'text', text: '...' }]。
+}
+
+async function convertDocument(access: MCPServiceAuthorization, fileId: string) {
+  const result = await ai.mcp.services.invoke({
+    serviceId: 'office',
+    tool: 'office.convert',
+    arguments: { fileId }
+  }, access) // 用授权对象 ID 提交离线转换。
+  if (!result.success)
+    return result
+  return result.data.structuredContent // 成功示例 { fileId: 'pdf-123', name: 'result.pdf' }，下载需再次验权。
+}
+```
+
+```ts
+import type { MCPServiceAuthorization, MCPServiceBrokerOptions } from '@h-ai/ai' // url 由部署方指定，authorize 每次检查当前主体、任务和参数。
+import { createServer } from 'node:http' // 提供示例 HTTP 请求入口。
+import { ai } from '@h-ai/ai' // 服务端已初始化，并登记了 manual 服务。
+
+function mountTools(options: MCPServiceBrokerOptions) {
+  const result = ai.mcp.services.createBroker(options) // 成功返回 bind、handleRequest 和 close。
+  if (!result.success)
+    throw new Error(result.error.message)
+  const broker = result.data // 每个执行节点创建自己的入口。
+  const server = createServer((req, res) => {
+    void broker.handleRequest(req, res)
+  }) // 处理绑定地址上的 MCP 请求。
+  return { broker, server } // 宿主监听固定地址并负责传输保护，关闭时调用 broker.close() 和 server.close()。
+}
+
+async function bindManual(broker: ReturnType<typeof mountTools>['broker'], principal: MCPServiceAuthorization['principal'], sessionId: string, signal: AbortSignal) {
+  const result = await broker.bind({
+    principal,
+    taskId: sessionId,
+    signal,
+    tools: [
+      {
+        id: 'manual_search',
+        serviceId: 'manual',
+        tool: 'search_manual', // 模型可见名称与清单名称分开配置。
+        description: 'Search authorized manuals', // 提供给模型的说明。
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string' }
+          },
+          required: ['query'],
+          additionalProperties: false
+        }, // 调用时校验工具参数。
+      }
+    ]
+  }) // 成功为 { servers, revoke }，servers 含当前会话的短期 Bearer。
+  if (!result.success)
+    throw new Error(result.error.message)
+  return result.data // 可从 ACPPlatformPolicy.bindTools 返回；会话结束时撤销凭据。
+}
 ```
 
 #### Memory / RAG / Knowledge
@@ -956,6 +1117,8 @@ const memories = await ai.memory.recall('经济发展', {
 ```
 
 `ai.config` 返回脱敏后的配置快照；`apiKey`、`privateKey`、URL 内嵌凭证等敏感字段不会原样暴露。
+
+原生记忆新增使用共享关系库事务串行检查主体与全局配额。淘汰每次最多读取最旧 64 条候选并按重要性和时效评分。旧库超过配额时，新写入会先回收一批，直到有余量。自定义共享 Store 可实现 `AIRelStore.withWriteLock` 提供同样的跨节点保证。
 
 ## 错误处理
 

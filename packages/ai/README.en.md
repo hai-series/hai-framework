@@ -55,7 +55,7 @@ Call fragments reuse the initialized service from this page. Named variables sta
 | `ai.llm.chatStream`               | Stream completion                      | `same ChatCompletionRequest`                                                      | `AsyncIterable<ChatCompletionChunk>; iteration may throw`                 | `ai.llm.chatStream({ messages })`                                                         |
 | `ai.llm.ask`                      | Text answer                            | `question: string, AskOptions?`                                                   | `string answer`                                                           | `ai.llm.ask("解释共享状态")`                                                              |
 | `ai.llm.askStream`                | Text stream                            | `question: string, AskOptions?`                                                   | `AsyncIterable<string>`                                                   | `ai.llm.askStream("解释共享状态")`                                                        |
-| `ai.llm.generateObject`           | Schema-constrained answer              | `Zod schema, messages, model?, maxRepairs?, signal?`                              | `schema-inferred T`                                                       | `ai.llm.generateObject({ schema: AnswerSchema, messages })`                               |
+| `ai.llm.generateObject`           | Schema-constrained answer              | `Zod schema, messages, model?, responseFormat?, maxRepairs?, signal?`             | `schema-inferred T`                                                       | `ai.llm.generateObject({ schema: AnswerSchema, messages })`                               |
 | `ai.llm.listModels`               | List models                            | `none`                                                                            | `string[] model IDs`                                                      | `ai.llm.listModels()`                                                                     |
 | `ai.llm.getHistory`               | Read history                           | `{ objectId, sessionId }, { limit?, order? }?`                                    | `ChatRecord[]`                                                            | `ai.llm.getHistory({ objectId: "u1", sessionId: "s1" })`                                  |
 | `ai.llm.listSessions`             | Subject sessions                       | `objectId: string`                                                                | `SessionInfo[]`                                                           | `ai.llm.listSessions("u1")`                                                               |
@@ -323,6 +323,29 @@ const temp = await ai.llm.chat({
 
 SSE text decoding follows [WHATWG event-stream rules](https://html.spec.whatwg.org/multipage/server-sent-events.html#event-stream-interpretation): split LF/CRLF/CR, multiline data, one optional space, inherited valid id/retry, default message events, and no dispatch of unfinished EOF data. encodeSSE normalizes data line endings and explicitly throws for invalid metadata. Anthropic/MiMo share an internal UTF-8 reader that cancels/releases the body on exit, cancellation, termination or failure, without reconnecting or replaying business operations. Anthropic deadlines cover the body; MiMo retains separate deadlines per HTTP request.
 
+##### Structured output with `ai.llm.generateObject`
+
+Choose `responseFormat` according to the model or gateway. The default, `json_schema`, sends a strict JSON Schema upstream. `schemaName` applies to that mode and defaults to `result`. Use `json_object` for Chat gateways that support generic JSON mode. The framework adds the schema to the prompt. Both modes validate locally with the same Zod schema and use `maxRepairs` for parse or validation failures, defaulting to one repair.
+
+```ts
+import { ai } from '@h-ai/ai'
+import { z } from 'zod'
+
+// AI is initialized with a text model that supports generic JSON mode.
+const result = await ai.llm.generateObject({
+  schema: z.object({
+    title: z.string()
+  }), // Require an object with a string title.
+  messages: [
+    { role: 'user', content: 'Suggest a title for a release checklist.' }
+  ], // Input for this request.
+  responseFormat: 'json_object', // Request generic JSON while keeping local Zod validation.
+  maxRepairs: 1, // Allow one repair after a parse or validation failure.
+})
+if (result.success)
+  process.stdout.write(result.data.title) // For example, Release checklist.
+```
+
 #### Tool calls
 
 ```ts
@@ -383,6 +406,69 @@ ACP runs in the Node service. Ordinary methods return HaiResult and stream failu
 
 Managed Git rejects submodules and Git LFS attributes with ACP_UNSUPPORTED instead of reporting incomplete checkouts as ready.
 
+##### Run managed ACP for an authenticated user
+
+Start RelDB and [Runner](../runner/README.en.md), then pass the initialized instance to `ai.init(config, { runner, acpPolicy })`. Register agents in `acp.agents`. Set `environmentIds` to pinned Runner environments and `modelIds` to entries in `llm.models`. Codex needs a Responses gateway. API and executor nodes share the database and use the same environment definitions. On shutdown, close AI, Runner, and the database in that order.
+
+`task` starts a dedicated worker for the session. `user` may reuse a worker when the principal and startup settings match. `auto` selects a mode using application policy. `shared` is available to adapters explicitly approved for sharing with a read-only profile and without private context, workspaces, or tools. The built-in Codex, DeepSeek Harness, and Goose adapters use dedicated modes. See the [ACP configuration example](../../docs/usage/configuration/ai.md#acp-接入与模型能力).
+
+```ts
+import type { RunnerScope } from '@h-ai/runner' // tenantId and userId come from an authenticated application session.
+import { ai } from '@h-ai/ai' // Use the server instance initialized with Runner.
+
+async function summarize(identity: RunnerScope, requestId: string) {
+  const agent = ai.acp.scoped(identity) // Bind task, session, and approval access to this principal.
+  const options = {
+    agentId: 'assistant',
+    execution: { mode: 'auto' as const }
+  } // assistant is a registered agent.
+  const plan = await agent.plan(options) // Returns the effective mode, environment, model, and resources without claiming a container.
+  if (!plan.success)
+    return plan // Stop before submission when the environment or permissions do not match.
+  const result = await agent.run({ ...options, prompt: 'List three release checks', idempotencyKey: requestId }) // Returns taskId, output, and effective options.
+  if (!result.success)
+    return result // Preserve the HaiResult error on submission, execution, or cleanup failure.
+  const events = await agent.tasks.events(result.data.taskId, 0, 20) // Read the first 20 durable events, or [] when empty.
+  if (!events.success)
+    return events
+  return { result: result.data, events: events.data } // For example, output.text contains the answer and events are ordered by sequence.
+}
+```
+
+```ts
+import type { RunnerScope } from '@h-ai/runner' // The server-authenticated principal.
+import { ai } from '@h-ai/ai' // assistant is registered and supports worker reuse within a user.
+
+async function continueWork(identity: RunnerScope) {
+  const agent = ai.acp.scoped(identity) // Access is bound to this principal.
+  const created = await agent.sessions.create({
+    agentId: 'assistant',
+    execution: { mode: 'user' }
+  }) // Success yields a session handle with an id.
+  if (!created.success)
+    return created
+  const session = created.data // The handle exposes prompt, stream, changeExecution, and close.
+  const run = async () => {
+    const first = await session.prompt('Record the acceptance criteria') // Returns this turn's taskId, output, and effective options.
+    if (!first.success)
+      return first
+    const switched = await session.changeExecution({ mode: 'task', acceptNewSession: true }) // Keeps the business id and opens a fresh native session.
+    if (!switched.success)
+      return switched
+    return await session.prompt('Give me an independent acceptance checklist') // The answer is in data.output on success.
+  }
+  return run().finally(async () => {
+    const closed = await session.close() // Success returns data: undefined and releases the session or dedicated environment.
+    if (!closed.success)
+      throw new Error(closed.error.message)
+  })
+}
+```
+
+`agents.describe(agentId)` reports built-in adapter capabilities. `sessions.get(id)` obtains a handle from another API node for the same principal. `session.stream(prompt, options)` yields durable events and throws on failure. `tasks.get(taskId)` returns the execution receipt. `tasks.cancel(taskId)` acknowledges cancellation and returns current status. Read the `taskId` from the `accepted` event in a `run` or `prompt` observer to query or cancel from another request.
+
+The application supplies `acpPolicy` to authorize `workspaceId` snapshots, knowledge, memory, files, skills, and tools. Use `allowTools` and `bindTools` for the MCP broker below. After receiving an `approval` event, the same principal calls `approvals.respond(id, 'allow-once' | 'allow-session' | 'always-allow' | 'deny')` with its `approvalId`. Success returns `undefined`. `approvals.rules(offset, limit)` pages through valid rules with `expiresAt`, and `approvals.revoke(ruleId)` revokes a rule owned by the principal. `full-access` requires explicit application approval and `task` mode. A workspace provides a read-only snapshot. Mode changes can carry a user-approved `historySummary`. See [managed ACP usage](../../docs/usage/development/ai-acp.md#多用户应用的受管调用) for additional examples.
+
 #### Configuration and database resource catalogs
 
 `llm.models`, `audio.models`, `image.models`, `mcp.servers`, `retrieval.sources`, and `acp.agents/workspaces` merge configuration and database entries. Configuration wins duplicate IDs and is read-only. Database entries support list/get/register/update/remove with value/source/version metadata and optional version checks. Async calls read current definitions; synchronous audio capability checks use the latest local snapshot. Catalog errors use 090–094. Definitions may contain model credentials; expose only authorized, selected fields.
@@ -425,6 +511,81 @@ server.registerTool('search', {
 await server.connect(new StreamableHTTPServerTransport({
   sessionIdGenerator: () => globalThis.crypto.randomUUID()
 }))
+```
+
+##### Call remote MCP services and isolated tool jobs
+
+Register a third-party Streamable HTTP URL and `allowedTools` under `mcp.servers` with `transport: http`. Use `headerEnv` to reference server-side credentials. With `transport: job`, the same API can run offline document, Office, and OCR tools. Set `environmentId`, allowed operations, and an optional `pool`, and pass Runner and `mcpJobFiles` to `ai.init`. Jobs take an authorized `fileId`. Executors recheck file access and return an object ID for any artifact. Deploy the browser image independently. See [MCP configuration](../../docs/usage/configuration/ai.md#mcp和a2a) and [tool images](tools/README.md).
+
+```ts
+import type { MCPServiceAuthorization } from '@h-ai/ai' // Build the principal and the parameter-aware authorization callback from IAM.
+import { ai } from '@h-ai/ai' // The initialized server has registered manual and office services.
+
+async function searchManual(access: MCPServiceAuthorization, query: string) {
+  const result = await ai.mcp.services.invoke({
+    serviceId: 'manual',
+    tool: 'search_manual',
+    arguments: { query }
+  }, access) // Returns a standard MCP tool result after catalog and authorization checks.
+  if (!result.success)
+    return result // Preserve the denial or upstream error.
+  return result.data.content // For example, [{ type: 'text', text: '...' }].
+}
+
+async function convertDocument(access: MCPServiceAuthorization, fileId: string) {
+  const result = await ai.mcp.services.invoke({
+    serviceId: 'office',
+    tool: 'office.convert',
+    arguments: { fileId }
+  }, access) // Submit an offline conversion with the authorized object id.
+  if (!result.success)
+    return result
+  return result.data.structuredContent // Example: { fileId: 'pdf-123', name: 'result.pdf' }. Check authorization again on download.
+}
+```
+
+```ts
+import type { MCPServiceAuthorization, MCPServiceBrokerOptions } from '@h-ai/ai' // Supply a deployment URL and an authorize callback that rechecks the principal, task, and arguments.
+import { createServer } from 'node:http' // Hosts the example endpoint.
+import { ai } from '@h-ai/ai' // The initialized server has registered the manual service.
+
+function mountTools(options: MCPServiceBrokerOptions) {
+  const result = ai.mcp.services.createBroker(options) // On success the broker provides bind, handleRequest, and close.
+  if (!result.success)
+    throw new Error(result.error.message)
+  const broker = result.data // Create a broker on each executor.
+  const server = createServer((req, res) => {
+    void broker.handleRequest(req, res)
+  }) // Handle MCP requests on the bound endpoint.
+  return { broker, server } // The host listens on its fixed address, protects the transport, and calls broker.close() and server.close() at shutdown.
+}
+
+async function bindManual(broker: ReturnType<typeof mountTools>['broker'], principal: MCPServiceAuthorization['principal'], sessionId: string, signal: AbortSignal) {
+  const result = await broker.bind({
+    principal,
+    taskId: sessionId,
+    signal,
+    tools: [
+      {
+        id: 'manual_search',
+        serviceId: 'manual',
+        tool: 'search_manual', // Expose a model-facing name for the catalogued operation.
+        description: 'Search authorized manuals', // Description presented to the model.
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string' }
+          },
+          required: ['query'],
+          additionalProperties: false
+        }, // Validate call arguments.
+      }
+    ]
+  }) // Success returns { servers, revoke }. servers contains this session's short-lived Bearer credential.
+  if (!result.success)
+    throw new Error(result.error.message)
+  return result.data // Return from ACPPlatformPolicy.bindTools. The credential is revoked when the session ends.
+}
 ```
 
 #### Memory / RAG / Knowledge
@@ -931,6 +1092,8 @@ const memories = await ai.memory.recall('经济发展', {
 ```
 
 `ai.config` returns a redacted snapshot without exposing original `apiKey`, `privateKey`, embedded URL credentials, or other secrets.
+
+Native memory inserts check subject and global quotas inside a shared database transaction. Eviction scores up to 64 of the oldest candidates per batch by importance and recency. Existing data above quota is reduced in batches before new entries can be stored. Custom shared stores can implement `AIRelStore.withWriteLock` to provide the same cross-node guarantee.
 
 ## Error Handling
 

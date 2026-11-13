@@ -1,6 +1,7 @@
 import type { RunnerFunctions } from '@h-ai/runner'
 import type { ACPPlatformPolicy } from '../src/index.js'
 import { err, ok } from '@h-ai/core'
+import { reldb } from '@h-ai/reldb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ai, HaiAIError } from '../src/index.js'
 
@@ -59,6 +60,30 @@ async function initialize(acpPolicy?: ACPPlatformPolicy) {
 afterEach(async () => ai.close())
 
 describe('managed ACP planning', () => {
+  it.each(['count', 'page'] as const)('surfaces a database failure in the approval %s query', async (stage) => {
+    await initialize()
+    const approvals = ai.acp.scoped(scope).approvals
+    expect(await approvals.rules()).toEqual({ success: true, data: [] })
+    const failure = err({ code: 'fixture:approval-query', message: 'private database diagnostics' })
+    const originalGet = reldb.sql.get
+    const fault = stage === 'count'
+      ? vi.spyOn(reldb.sql, 'get').mockImplementation((sql, params) => sql.includes('COUNT(*)')
+          ? Promise.resolve(failure)
+          : originalGet(sql, params))
+      : vi.spyOn(reldb.sql, 'query').mockResolvedValueOnce(failure)
+    try {
+      const result = await approvals.rules()
+      expect(result).toMatchObject({
+        success: false,
+        error: { code: HaiAIError.ACP_OPERATION_FAILED.code },
+      })
+      expect(JSON.stringify(result)).not.toContain('private database diagnostics')
+    }
+    finally {
+      fault.mockRestore()
+    }
+  })
+
   it('chooses personal reuse only under the trusted application policy', async () => {
     await initialize({
       preferUserWorker: subject => subject.userId === 'alice',

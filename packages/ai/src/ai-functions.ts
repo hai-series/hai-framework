@@ -193,6 +193,7 @@ export async function createAISubsystems(
     : storeProvider.createRelStore<MemoryEntry>('hai_ai_memory', {
         hasObjectId: true,
         hasScopeIndex: true,
+        serializeWrites: true,
       })
   const contextStore = storeProvider.createRelStore<PersistedContextState>(
     'hai_ai_context',
@@ -255,6 +256,21 @@ export async function createAISubsystems(
     return {
       ...config,
       llm: { ...config.llm, models: await llmModels.values() },
+    }
+  }
+  async function scenarioModels(scenario: 'embedding' | 'rerank', explicit?: string): Promise<AIConfig['llm']> {
+    // 显式模型可按 ID 或供应商模型名匹配，沿用目录优先级；默认场景只需按 ID 查一条。
+    if (explicit)
+      return (await llmConfig()).llm
+    const modelId = config.llm.scenarios?.[scenario] ?? config.llm.scenarios?.default
+    if (!modelId)
+      return config.llm
+    const entry = await llmModels.read(modelId)
+    return {
+      ...config.llm,
+      models: entry
+        ? [entry.value]
+        : [],
     }
   }
   async function audioConfig(): Promise<AIConfig> {
@@ -341,19 +357,11 @@ export async function createAISubsystems(
       )
     }
   }
+  const embeddingRuntime = createEmbeddingOperations(config, model => scenarioModels('embedding', model))
   const embedding: EmbeddingOperations = {
-    embed: request =>
-      resourceCall(async () =>
-        createEmbeddingOperations(await llmConfig()).embed(request),
-      ),
-    embedText: text =>
-      resourceCall(async () =>
-        createEmbeddingOperations(await llmConfig()).embedText(text),
-      ),
-    embedBatch: texts =>
-      resourceCall(async () =>
-        createEmbeddingOperations(await llmConfig()).embedBatch(texts),
-      ),
+    embed: request => resourceCall(() => embeddingRuntime.embed(request)),
+    embedText: text => resourceCall(() => embeddingRuntime.embedText(text)),
+    embedBatch: texts => resourceCall(() => embeddingRuntime.embedBatch(texts)),
   }
 
   // Reasoning（依赖 LLM）
@@ -363,19 +371,10 @@ export async function createAISubsystems(
   }
 
   // Rerank
+  const rerankRuntime = createRerankOperations(config, model => scenarioModels('rerank', model))
   const rerank: RerankOperations = {
-    rerank: request =>
-      resourceCall(async () =>
-        createRerankOperations(await llmConfig()).rerank(request),
-      ),
-    rerankTexts: (query, texts, topN) =>
-      resourceCall(async () =>
-        createRerankOperations(await llmConfig()).rerankTexts(
-          query,
-          texts,
-          topN,
-        ),
-      ),
+    rerank: request => resourceCall(() => rerankRuntime.rerank(request)),
+    rerankTexts: (query, texts, topN) => resourceCall(() => rerankRuntime.rerankTexts(query, texts, topN)),
   }
 
   const retrieval: ManagedRetrievalOperations = Object.assign(
