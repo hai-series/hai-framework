@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/runner",
   "type": "module",
-  "version": "1.0.0-beta.25",
+  "version": "1.0.0-beta.26",
   "description": "Hai Framework managed execution, resource admission, and worker ownership.",
   "license": "Apache-2.0",
   "exports": {
