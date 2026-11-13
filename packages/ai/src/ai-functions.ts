@@ -23,10 +23,8 @@ import type { FileOperations } from './file/ai-file-types.js'
 import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
 import type { ChatRecord } from './llm/ai-llm-types.js'
 import type { MCPJobFiles } from './mcp/ai-mcp-types.js'
-import type {
-  MemoryEntry,
-  MemoryOperations,
-} from './memory/ai-memory-types.js'
+import type { MemoryOperations } from './memory/ai-memory-types.js'
+import type { MemoryVectorJob, StoredMemory } from './memory/ai-memory-vector-sync.js'
 import type {
   PersonaOperations,
   PersonaProfile,
@@ -80,7 +78,7 @@ import { createAIMCPFunctions } from './mcp/ai-mcp-functions.js'
 import { createMCPServiceOperations } from './mcp/ai-mcp-services.js'
 import { createMemoryOperations } from './memory/ai-memory-facade.js'
 import { createMem0MemoryOperations } from './memory/providers/ai-memory-provider-mem0.js'
-import { createNativeMemoryOperations } from './memory/providers/ai-memory-provider-native.js'
+import { assembleNativeMemory } from './memory/providers/ai-memory-provider-native.js'
 import { createPersonaOperations } from './persona/ai-persona-functions.js'
 import { createRagOperations } from './rag/ai-rag-functions.js'
 import { createReasoningOperations } from './reasoning/ai-reasoning-functions.js'
@@ -124,8 +122,8 @@ export interface AISubsystemDeps {
  * ```
  */
 export interface AISubsystems {
-  /** 使已捕获的资源清单句柄失效。 */
-  closeRegistries: () => void
+  /** 使已捕获的资源清单句柄失效并结束内部后台操作。 */
+  closeRegistries: () => Promise<void>
   /** 在统一初始化之前创建的 A2A 存储 */
   a2aStores: A2ADeps | null
   llm: ManagedLLMOperations
@@ -190,11 +188,14 @@ export async function createAISubsystems(
   )
   const memoryStore = useMem0Oss
     ? null
-    : storeProvider.createRelStore<MemoryEntry>('hai_ai_memory', {
+    : storeProvider.createRelStore<StoredMemory>('hai_ai_memory', {
         hasObjectId: true,
         hasScopeIndex: true,
         serializeWrites: true,
       })
+  const memoryVectorQueue = memoryStore?.withRelatedWriteLock
+    ? storeProvider.createRelStore<MemoryVectorJob>('hai_ai_memory_vector_outbox', { hasUpdatedAtIndex: true })
+    : undefined
   const contextStore = storeProvider.createRelStore<PersistedContextState>(
     'hai_ai_context',
     { hasObjectId: true, hasSessionId: true },
@@ -402,23 +403,17 @@ export async function createAISubsystems(
     knowledgeStore,
   )
 
-  const memoryCore
-    = memoryStore && memoryVectorStore
-      ? createNativeMemoryOperations(
-          memoryParsed,
-          llm,
-          embedding,
-          memoryStore,
-          memoryVectorStore,
-        )
-      : await createMem0MemoryOperations({
-          config: memoryParsed,
-          embedding,
-          llm,
-          collectionName: 'hai_ai_memory',
-          embeddingDims: config.embedding?.dimensions,
-          vectorBackend: storeProvider.getVectorBackend?.(),
-        })
+  const nativeMemory = memoryStore && memoryVectorStore
+    ? assembleNativeMemory(memoryParsed, llm, embedding, memoryStore, memoryVectorStore, memoryVectorQueue)
+    : undefined
+  const memoryCore = nativeMemory?.operations ?? await createMem0MemoryOperations({
+    config: memoryParsed,
+    embedding,
+    llm,
+    collectionName: 'hai_ai_memory',
+    embeddingDims: config.embedding?.dimensions,
+    vectorBackend: storeProvider.getVectorBackend?.(),
+  })
   // 封装出对外的公共记忆接口（作用域绑定 scoped + 管理接口 admin + clear 空过滤保护）
   const memory: MemoryOperations = createMemoryOperations(memoryCore)
 
@@ -543,11 +538,13 @@ export async function createAISubsystems(
     servers: managedMCPServers,
     services: mcpServices.operations,
   })
+  nativeMemory?.sync?.start()
 
   return {
-    closeRegistries: () => {
+    closeRegistries: async () => {
       mcpServices.close()
       registriesOpen = false
+      await nativeMemory?.sync?.close()
     },
     a2aStores,
     llm,

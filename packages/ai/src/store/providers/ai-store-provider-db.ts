@@ -88,6 +88,7 @@ function isMysqlDuplicateIndex(error: unknown): boolean {
  */
 class ReldbAIRelStore<T> implements AIRelStore<T> {
   private readonly sql: DmlOperations
+  private readonly connection: DmlOperations
   private readonly table: string
   private readonly jsonOps: ReldbJsonOps
   private readonly dbType: DbType
@@ -99,8 +100,10 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   private readonly hasUpdatedAtIndex: boolean
   private readonly gate: string | undefined
   readonly withWriteLock?: AIRelStore<T>['withWriteLock']
+  readonly withRelatedWriteLock?: AIRelStore<T>['withRelatedWriteLock']
 
   constructor(sql: DmlOperations, table: string, jsonOps: ReldbJsonOps, dbType: DbType, options?: AIRelStoreOptions, tx?: TxManager) {
+    this.connection = sql
     this.sql = {
       ...sql,
       execute: (query, params) => sql.execute(query, params).then(requireSqlSuccess),
@@ -119,13 +122,29 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     if (options?.serializeWrites && tx) {
       const gate = `${table}_write_gate`
       this.gate = gate
-      this.withWriteLock = async write => requireSqlSuccess(await tx.wrap(async (connection) => {
+      const lockedWrite = async <R>(write: (connection: DmlOperations) => Promise<R>) => requireSqlSuccess(await tx.wrap(async (connection) => {
         // 首条语句即加锁，MySQL 的后续一致读不会使用等待前的快照。
         const locked = requireSqlSuccess(await connection.execute(`UPDATE ${gate} SET marker = 1 - marker WHERE id = 1`))
         if (locked.data.changes !== 1)
           throw new Error('Missing AI store write gate')
-        return write(new ReldbAIRelStore<T>(connection, table, jsonOps, dbType, options))
+        return write(connection)
       })).data
+      this.withWriteLock = write => lockedWrite(connection => write(new ReldbAIRelStore<T>(connection, table, jsonOps, dbType, options)))
+      this.withRelatedWriteLock = (related, write) => {
+        if (!(related instanceof ReldbAIRelStore) || related.connection !== sql || related.dbType !== dbType || related.jsonOps !== jsonOps)
+          throw new TypeError('Related AI stores must share a database')
+        return lockedWrite(connection => write(
+          new ReldbAIRelStore<T>(connection, table, jsonOps, dbType, options),
+          new ReldbAIRelStore(connection, related.table, jsonOps, dbType, {
+            hasObjectId: related.hasObjectId,
+            hasSessionId: related.hasSessionId,
+            hasStatus: related.hasStatus,
+            hasRefId: related.hasRefId,
+            hasScopeIndex: related.hasScopeIndex,
+            hasUpdatedAtIndex: related.hasUpdatedAtIndex,
+          }),
+        ))
+      }
     }
   }
 
@@ -428,7 +447,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   }
 
   async count(filter?: StoreFilter<T>): Promise<number> {
-    if (!filter?.where && !filter?.objectId && !filter?.sessionId && !filter?.status && !filter?.refId && !filter?.scope && filter?.updatedBefore === undefined) {
+    if (!filter?.where && !filter?.objectId && !filter?.sessionId && !filter?.status && !filter?.refId && !filter?.scope && filter?.updatedBefore === undefined && filter?.afterId === undefined) {
       const result = await this.sql.get<{ cnt: number }>(`SELECT COUNT(*) as cnt FROM ${this.table}`)
       return result.success && result.data != null
         ? Number(result.data.cnt)
@@ -446,7 +465,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   }
 
   async clear(filter?: StoreFilter<T>): Promise<void> {
-    if (!filter?.where && !filter?.objectId && !filter?.sessionId && !filter?.status && !filter?.refId) {
+    if (!filter?.where && !filter?.objectId && !filter?.sessionId && !filter?.status && !filter?.refId && !filter?.scope && filter?.updatedBefore === undefined && filter?.afterId === undefined) {
       await this.sql.execute(`DELETE FROM ${this.table}`)
       return
     }
@@ -533,7 +552,10 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     if (conditions.length > 0)
       sql += ` WHERE ${conditions.join(' AND ')}`
 
-    if (filter.orderBy) {
+    if (filter.afterId !== undefined) {
+      sql += ' ORDER BY id ASC'
+    }
+    else if (filter.orderBy) {
       const dir = filter.orderBy.direction === 'asc'
         ? 'ASC'
         : 'DESC'
@@ -563,6 +585,10 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
 
   private buildAllConditions(filter: StoreFilter<T>, params: unknown[]): string[] {
     const conditions: string[] = []
+    if (filter.afterId !== undefined) {
+      conditions.push('id > ?')
+      params.push(filter.afterId)
+    }
     if (filter.updatedBefore !== undefined) {
       conditions.push('updated_at < ?')
       params.push(filter.updatedBefore)

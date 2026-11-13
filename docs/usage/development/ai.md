@@ -61,11 +61,13 @@ if (result.success) process.stdout.write(result.data.title) // 例如：发布�
 
 ## 临时 Store 与共享持久化
 
-`ai.memory.scoped({ objectId })` 要求非空且非纯空白的主体 ID，否则工厂立即抛 `TypeError`，不会创建未绑定实例。公共 `clear({ scope: {} })` 等空范围返回失败；跨主体全清必须调用显式管理员入口。原生记忆的访问统计与更新使用版本 CAS，迟到读取不会复活已删除记录；数据库或向量清理失败通过 HaiResult 返回，不能当作成功。 Persona 按 `[objectId, id]` 隔离，省略 objectId 访问 system 平台角色。
+`ai.memory.scoped({ objectId })` 要求非空且非纯空白的主体 ID，参数非法时立即抛 `TypeError`。公共 `clear({ scope: {} })` 等空范围返回失败，跨主体全清必须调用显式管理员入口。原生记忆的访问统计使用版本校验，迟到读取无法复活已删除记录。Persona 按 `[objectId, id]` 隔离，省略 `objectId` 访问 system 平台角色。
 
 按[存储与记忆配置](../configuration/ai.md#会话记忆压缩与检索)先初始化共享RelDB/网络VecDB或显式StoreProvider，再AI。开发临时Store在关闭/换进程后丢失，生产拒绝以临时Store、SQLite和本地向量冒充共享持久化。
 
 用可信用户绑定 `objectId`/`sessionId` 写入，重启后由另一实例读取，再试跨用户不可见；客户端自报 ID 不能决定授权。关闭先等待在途任务并处理 flush 失败，再反序关依赖。
+
+原生记忆使用默认数据库 Store 时，`add`、`update`、`remove` 和清理操作提交关系记录时一并登记待同步的向量。成功代表关系数据已提交，向量索引可能仍在同步。向量库暂时不可用时，读取继续使用已提交的记录，已删记忆立即从结果中移除。恢复连接或重启后，任一共享同一数据库和向量集合的 AI 实例都可继续处理待同步记录。应用按 `HaiResult` 处理关系库失败，避免因索引延迟重复添加记忆。 [配置与后端要求](../configuration/ai.md#会话记忆压缩与检索)
 
 ## 知识分块与检索
 

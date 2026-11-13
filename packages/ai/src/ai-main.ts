@@ -96,7 +96,7 @@ let currentA2AImpl: A2AImplementation | null = null
 /** 初始化阶段准备完成的任务与消息存储 */
 let currentA2AStores: A2ADeps | null = null
 /** 使所有配置/数据库清单的旧句柄失效。 */
-let currentRegistriesClose: (() => void) | null = null
+let currentRegistriesClose: (() => Promise<void>) | null = null
 /** 当前存储 Provider（用于模块关闭时统一释放资源） */
 let currentStoreProvider: AIStoreProvider | null = null
 
@@ -269,7 +269,7 @@ async function resetAllState(): Promise<void> {
 
   await currentACP?.close()
   currentLLM = null
-  currentRegistriesClose?.()
+  await currentRegistriesClose?.()
   currentRegistriesClose = null
   currentACP = null
   currentMCP = null
