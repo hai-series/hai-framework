@@ -280,6 +280,8 @@ if (failures.length)
   throw new AggregateError(failures, 'AI operation or cleanup failed')
 ```
 
+默认 PostgreSQL Store 支持空库首次部署和旧库升级时并发调用 `ai.init`。各节点通过事务级 advisory lock 排队准备表、索引和写入门闩。结构变更失败时回滚，修正权限或结构后可重试。已有索引直接复用。向量重建在事务提交后异步执行，节点失联后由其他节点接续。
+
 MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确的 ER_DUP_KEYNAME/1061，并重新核对列及顺序、非唯一完整列、升序可见 BTREE 和无表达式；已有同名错误结构仍失败。账户需要建表和 INDEX 权限，元数据读取、权限或其他 DDL 错误使 ai.init 返回 CONFIGURATION_ERROR。返回前等待全部已启动 DDL 结束；MySQL DDL 不回滚，失败保留已创建结构，修复权限/结构后再重试。逐步检查初始化结果，失败不接收业务请求，并逆序关闭 AI、vecdb、reldb。
 
 ### 自定义 StoreProvider
