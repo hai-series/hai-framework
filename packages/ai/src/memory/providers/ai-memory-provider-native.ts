@@ -152,8 +152,9 @@ export function assembleNativeMemory(
   vectorStore: AIVectorStore,
   vectorQueue?: AIRelStore<MemoryVectorJob>,
   vectorScan?: AIRelStore<MemoryVectorScanState>,
+  vectorCollection?: string,
 ) {
-  const sync = vectorQueue && createMemoryVectorSync(store, vectorQueue, vectorStore, vectorScan)
+  const sync = vectorQueue && createMemoryVectorSync(store, vectorQueue, vectorStore, vectorScan, vectorCollection)
   const maxPending = Math.max(1024, config.maxEntriesGlobal * 2)
 
   async function ensureVectorCapacity(pending?: AIRelStore<MemoryVectorJob>) {

@@ -24,6 +24,7 @@ import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
 import type { ChatRecord } from './llm/ai-llm-types.js'
 import type { MCPJobFiles } from './mcp/ai-mcp-types.js'
 import type { MemoryOperations } from './memory/ai-memory-types.js'
+import type { MemoryVectorNamespace } from './memory/ai-memory-vector-namespace.js'
 import type { MemoryVectorScanState } from './memory/ai-memory-vector-scan.js'
 import type { MemoryVectorJob, StoredMemory } from './memory/ai-memory-vector-sync.js'
 import type {
@@ -78,6 +79,7 @@ import { createAILLMFunctions } from './llm/ai-llm-functions.js'
 import { createAIMCPFunctions } from './mcp/ai-mcp-functions.js'
 import { createMCPServiceOperations } from './mcp/ai-mcp-services.js'
 import { createMemoryOperations } from './memory/ai-memory-facade.js'
+import { bindMemoryVectorNamespace, createMemoryVectorRebuild } from './memory/ai-memory-vector-namespace.js'
 import { createMem0MemoryOperations } from './memory/providers/ai-memory-provider-mem0.js'
 import { assembleNativeMemory } from './memory/providers/ai-memory-provider-native.js'
 import { createPersonaOperations } from './persona/ai-persona-functions.js'
@@ -210,11 +212,10 @@ export async function createAISubsystems(
     ? createA2AStores(storeProvider)
     : null
 
-  // 向量存储
-  const memoryVectorStore = useMem0Oss
-    ? null
-    : storeProvider.createVectorStore('hai_ai_memory_vectors')
-  const memoryVectorScan = memoryStore?.getMemoryVectorIds && memoryVectorStore?.scan && memoryVectorStore.removeMany
+  const memoryNamespace = memoryStore
+    ? storeProvider.createRelStore<MemoryVectorNamespace>('hai_ai_memory_vector_namespace', { serializeWrites: true })
+    : undefined
+  const memoryVectorScan = memoryStore?.getMemoryVectorIds
     ? storeProvider.createRelStore<MemoryVectorScanState>('hai_ai_memory_vector_scan', { serializeWrites: true })
     : undefined
 
@@ -342,6 +343,15 @@ export async function createAISubsystems(
   // 统一初始化（建表等）
   await storeProvider.initialize()
 
+  const memoryCollection = memoryNamespace && await bindMemoryVectorNamespace(memoryNamespace, memoryParsed.vectorNamespace)
+  const memoryVectorStore = memoryCollection
+    ? storeProvider.createVectorStore(memoryCollection)
+    : undefined
+  const memoryVectorRebuild = memoryStore && memoryNamespace && memoryVectorQueue?.queryKeys
+    && memoryVectorScan && memoryVectorStore?.scan && memoryVectorStore.removeMany
+    ? createMemoryVectorRebuild(memoryStore, memoryNamespace, memoryVectorStore)
+    : undefined
+
   const llmFunctions = createAILLMFunctions(config, {
     recordStore: chatRecordStore,
     sessionStore,
@@ -409,7 +419,7 @@ export async function createAISubsystems(
   )
 
   const nativeMemory = memoryStore && memoryVectorStore
-    ? assembleNativeMemory(memoryParsed, llm, embedding, memoryStore, memoryVectorStore, memoryVectorQueue, memoryVectorScan)
+    ? assembleNativeMemory(memoryParsed, llm, embedding, memoryStore, memoryVectorStore, memoryVectorQueue, memoryVectorScan, memoryCollection)
     : undefined
   const memoryCore = nativeMemory?.operations ?? await createMem0MemoryOperations({
     config: memoryParsed,
@@ -544,12 +554,16 @@ export async function createAISubsystems(
     services: mcpServices.operations,
   })
   nativeMemory?.sync?.start()
+  memoryVectorRebuild?.start()
 
   return {
     closeRegistries: async () => {
       mcpServices.close()
       registriesOpen = false
-      await nativeMemory?.sync?.close()
+      await Promise.all([
+        nativeMemory?.sync?.close(),
+        memoryVectorRebuild?.close(),
+      ])
     },
     a2aStores,
     llm,

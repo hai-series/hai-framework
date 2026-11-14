@@ -263,6 +263,8 @@ export interface AIRelStore<T> {
   withRelatedWriteLock?: <U, R>(related: AIRelStore<U>, write: (store: AIRelStore<T>, related: AIRelStore<U>) => Promise<R>) => Promise<R>
   /** 核对有向量的记忆版本 ID，包含仍用业务 ID 存储向量的旧记录。 */
   getMemoryVectorIds?: (ids: string[]) => Promise<string[]>
+  /** 从已提交的关系记录按不可变主键读取一批需重建索引的记忆，读取失败须抛错。 */
+  readMemoryVectorPage?: (afterId: string, limit: number) => Promise<T[]>
   /** 按更新时间和主键升序获取小批记录键，避免加载业务 JSON。 */
   queryKeys?: (filter: StoreFilter<T>, cursor?: { updatedAt: number, id: string }) => Promise<Array<{ id: string, updatedAt: number, version: string }>>
   /** 只删除指定版本，防止过期维护删除同时更新的记录。 */
@@ -318,6 +320,8 @@ export interface AIRelStore<T> {
 export interface AIVectorStore {
   /** 存储向量 */
   upsert: (id: string, vector: number[], metadata?: Record<string, unknown>) => Promise<void>
+  /** 批量存储同一集合的向量，允许安全重试。 */
+  upsertMany?: (entries: Array<{ id: string, vector: number[], metadata?: Record<string, unknown> }>) => Promise<void>
   /**
    * 向量相似度检索。默认 DB Store 的 filter 透传底层 Provider，失败抛错，由领域 API 转为 HaiResult。
    * LanceDB 只支持顶层 string/有限 number/boolean/null 的 AND 匹配，不支持嵌套结构。
@@ -624,7 +628,7 @@ export interface AIStoreProvider {
   /** 创建关系数据存储实例 */
   createRelStore: <T>(name: string, options?: AIRelStoreOptions) => AIRelStore<T>
 
-  /** 创建向量数据存储实例 */
+  /** 创建向量数据存储实例。原生记忆在关系 Store 初始化并读出集合名称后调用。 */
   createVectorStore: (name: string) => AIVectorStore
 
   /**
@@ -646,7 +650,7 @@ export interface AIStoreProvider {
   /**
    * 初始化所有已创建的存储（建表、建连接等）
    *
-   * 由 ai.init() 在创建完所有 store 实例后统一调用。
+   * 由 ai.init() 在创建完关系 Store 实例后调用。
    */
   initialize: () => Promise<void>
 

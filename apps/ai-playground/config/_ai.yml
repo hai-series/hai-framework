@@ -147,6 +147,9 @@ memory:
   # 说明：记忆后端：native 使用框架原生存储与批量合并；mem0 将框架提取结果以 Mem0 数据格式写入 Qdrant
   # 取值：字符串；取值：native | mem0
   provider: ${HAI_AI_MEMORY_PROVIDER:native}
+  # 说明：原生记忆向量命名空间，首次初始化后与关系库绑定。
+  # 取值：字符串；正则 ^[a-z](?:[a-z0-9_-]{0,18}[a-z0-9])?$
+  vectorNamespace: ${HAI_AI_MEMORY_VECTORNAMESPACE:default}
   # 说明：是否启用向量检索（默认 true，关闭则仅使用关键词匹配）
   # 取值：true | false
   embeddingEnabled: ${HAI_AI_MEMORY_EMBEDDINGENABLED:false}

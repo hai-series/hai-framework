@@ -2248,6 +2248,14 @@
     "constraint": "字符串"
   },
   {
+    "name": "HAI_AI_MEMORY_VECTORNAMESPACE",
+    "module": "ai",
+    "path": "ai.memory.vectorNamespace",
+    "description": "原生记忆向量命名空间，首次初始化后与关系库绑定。",
+    "value": "default",
+    "constraint": "字符串；正则 ^[a-z](?:[a-z0-9_-]{0,18}[a-z0-9])?$"
+  },
+  {
     "name": "HAI_AI_MEMORY_WRITEBACKRELATEDTOPK",
     "module": "ai",
     "path": "ai.memory.writebackRelatedTopK",

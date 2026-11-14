@@ -32,7 +32,7 @@
 | @h-ai/iam | [登录、会话、用户、RBAC](packages/cli/templates/skills/hai-iam/SKILL.md) |
 | @h-ai/reach | [邮件、短信、API 通知](packages/cli/templates/skills/hai-reach/SKILL.md) |
 | @h-ai/feedback | [用户反馈、现场、管理员处理与离线包](packages/cli/templates/skills/hai-feedback/SKILL.md) |
-| @h-ai/ai | [LLM、Tools/MCP、RAG、记忆、图像、Audio、A2A、ACP](packages/cli/templates/skills/hai-ai/SKILL.md) |
+| @h-ai/ai | [LLM、Tools/MCP、RAG、记忆、图像、Audio、A2A、ACP](packages/cli/templates/skills/hai-ai/SKILL.md)，[原生记忆命名空间与升级](docs/usage/configuration/ai.md#共用-qdrant-的应用) |
 | @h-ai/runner | [受管容器、容量、任务保留与失联核验](packages/runner/README.md) |
 | @h-ai/payment | [订单、回调、查单、退款](packages/cli/templates/skills/hai-payment/SKILL.md) |
 | @h-ai/audit | [审计记录、查询、清理](packages/cli/templates/skills/hai-audit/SKILL.md) |
