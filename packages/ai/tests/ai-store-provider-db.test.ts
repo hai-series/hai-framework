@@ -5,9 +5,10 @@
  */
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
-import type { DmlOperations, QueryRow, ReldbJsonOps } from '@h-ai/reldb'
+import type { DmlOperations, QueryRow, ReldbJsonOps, TxManager } from '@h-ai/reldb'
 import type { VecdbFunctions } from '@h-ai/vecdb'
 
+import { reldb } from '@h-ai/reldb'
 import { describe, expect, it, vi } from 'vitest'
 
 import { createDbStoreProvider } from '../src/store/providers/ai-store-provider-db.js'
@@ -36,6 +37,19 @@ function createMockSql(calls: ExecuteCall[]): DmlOperations {
       page: 1,
       pageSize: 20,
     }),
+  }
+}
+
+function mockTx(sql: DmlOperations): TxManager {
+  const control = {
+    ...sql,
+    crud: reldb.crud,
+    commit: async () => ok(undefined),
+    rollback: async () => ok(undefined),
+  }
+  return {
+    begin: async () => ok(control),
+    wrap: async fn => ok(await fn(control)),
   }
 }
 
@@ -332,7 +346,7 @@ describe('db store provider saveMany', () => {
     expect(query).toHaveBeenCalledTimes(1)
   })
 
-  it('同表 Store 初始化不竞争系统目录，保留各自索引并允许独立表并行', async () => {
+  it('sQLite 同表 Store 顺序初始化并保留各自索引，独立表可并行', async () => {
     const sql = createMockSql([])
     let release!: () => void
     const pending = new Promise<void>((resolve) => {
@@ -343,7 +357,7 @@ describe('db store provider saveMany', () => {
       const table = /^CREATE TABLE IF NOT EXISTS (\w+)/.exec(query)?.[1]
       if (table) {
         if (inFlight.has(table))
-          throw new Error('Concurrent CREATE TABLE conflicts in PostgreSQL system catalog')
+          throw new Error('Concurrent schema initialization for the same table')
         inFlight.add(table)
         if (table === 'hai_ai_shared_ddl')
           await pending
@@ -354,7 +368,7 @@ describe('db store provider saveMany', () => {
     const provider = createDbStoreProvider({
       sql,
       jsonOps,
-      dbType: 'postgresql',
+      dbType: 'sqlite',
       vecdb: createMockVecdb(),
     })
     provider.createRelStore('hai_ai_shared_ddl', { hasObjectId: true, hasSessionId: true })
@@ -586,8 +600,10 @@ function createMockSqlWithQuery(execCalls: ExecuteCall[], queryCalls: ExecuteCal
 describe('db store provider scope index', () => {
   it('hasScopeIndex 在 PostgreSQL 上建 JSONB GIN 索引', async () => {
     const execCalls: ExecuteCall[] = []
+    const sql = createMockSql(execCalls)
     const provider = createDbStoreProvider({
-      sql: createMockSql(execCalls),
+      sql,
+      tx: mockTx(sql),
       jsonOps,
       dbType: 'postgresql',
       vecdb: createMockVecdb(),

@@ -121,6 +121,7 @@
   "ai_a2aMessageStoreFailed": "A2A メッセージの永続化に失敗しました。タスクの結果を確認してください",
   "ai_contextMemoryTasksFailed": "バックグラウンドのメモリー抽出タスク {count} 件が失敗し、一部が完了している可能性があります。実際の影響を確認してください。自動再試行は行っていません",
   "ai_storeIndexMismatch": "AI ストアのインデックス定義が一致しません。再試行する前にデータベースのスキーマを確認してください",
+  "ai_storeTransactionRequired": "PostgreSQL AI Store の初期化にはトランザクションマネージャーが必要です。",
   "ai_sharedBackendRequired": "本番環境の AI には共有状態が必要です。共有データベースとベクトルサービスを初期化するか、stateScope が shared の信頼できるプロバイダーを指定してください。",
   "ai_a2aStateUnavailable": "A2A の共有状態を利用できません",
   "ai_a2aExecutionLost": "実行の所有権が失われました",

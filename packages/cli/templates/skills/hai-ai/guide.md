@@ -71,7 +71,7 @@ if (!vectorsClosed.success)
 return await reldb.close()
 ```
 
-MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确的 ER_DUP_KEYNAME/1061，并重新核对列及顺序、非唯一完整列、升序可见 BTREE 和无表达式；已有同名错误结构仍失败。账户需要建表和 INDEX 权限，元数据读取、权限或其他 DDL 错误使 ai.init 返回 CONFIGURATION_ERROR。返回前等待全部已启动 DDL 结束；MySQL DDL 不回滚，失败保留已创建结构，修复权限/结构后再重试。逐步检查初始化结果，失败不接收业务请求，并逆序关闭 AI、vecdb、reldb。
+使用默认 PostgreSQL Store 时，空库首次部署和旧库升级可以并发启动。节点自动等待表和索引准备完成，结构事务失败后可修正原因并重试 `ai.init`。查看 [存储初始化边界](reference.md) 了解 PostgreSQL 和 MySQL 的失败行为。
 
 自定义存储：
 

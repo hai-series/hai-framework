@@ -1,5 +1,6 @@
 /** 原生记忆向量命名空间回归，使用真实 Qdrant 和独立关系库。 */
 import type { HaiResult } from '@h-ai/core'
+import type { ReldbConfigInput } from '@h-ai/reldb'
 import type { ChildProcess } from 'node:child_process'
 import type { AddressInfo } from 'node:net'
 import type { MemoryEntry } from '../src/index.js'
@@ -10,6 +11,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { reldb } from '@h-ai/reldb'
 import { describe, expect, it } from 'vitest'
 import { mysqlEnv, postgresEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
 import { acquireQdrantContainer } from '../../vecdb/tests/helpers/qdrant-container.js'
@@ -190,6 +192,161 @@ async function ownedResources(run: (context: {
   }
 }
 
+describe('concurrent native memory initialization on PostgreSQL', () => {
+  async function withDatabase(run: (database: ReldbConfigInput) => Promise<void>) {
+    const { config, release } = await postgresEnv()
+    if (config.type !== 'postgresql')
+      throw new Error('Expected a PostgreSQL fixture')
+    try {
+      value(await reldb.init(config))
+      // 子进程只有一个连接，确保拿锁以后不会再从池里借另一条连接来执行 DDL。
+      await run({
+        ...config,
+        pool: { max: 1 },
+      })
+    }
+    finally {
+      try {
+        value(await reldb.close())
+      }
+      finally {
+        await release?.()
+        value(await reldb.init({ type: 'sqlite', database: ':memory:' }))
+      }
+    }
+  }
+
+  async function schemas() {
+    return value(await reldb.sql.get<{ namespace: string | null, outbox: string | null, vector_index: string | null }>(`
+      SELECT to_regclass('public.hai_ai_memory_vector_namespace')::text AS namespace,
+             to_regclass('public.hai_ai_memory_vector_outbox')::text AS outbox,
+             to_regclass('public.idx_hai_ai_memory_vector_key')::text AS vector_index
+    `))
+  }
+
+  it('lets three independent nodes open an empty database through the same schema lock', async () => {
+    await withDatabase(async (database) => {
+      await ownedResources(async ({ nodes, gateway }) => {
+        const blocker = value(await reldb.tx.begin())
+        let peers: Promise<PromiseSettledResult<ChildProcess>[]> | undefined
+        try {
+          value(await blocker.execute('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', ['hai:ai:store-schema']))
+          const options = { vectorNamespace: 'pg-concurrent' }
+          peers = Promise.allSettled([
+            startNode(nodes, database, gateway.url, 'one', options),
+            startNode(nodes, database, gateway.url, 'two', options),
+            startNode(nodes, database, gateway.url, 'three', options),
+          ])
+          // 观察数据库中的实际锁排队。放行前三个进程都应已发起 ai.init，且没有部分表可见。
+          await expect.poll(async () => {
+            const row = value(await reldb.sql.get<{ waiting: string }>(`
+              SELECT count(*) AS waiting FROM pg_locks
+              WHERE locktype = 'advisory' AND NOT granted
+                AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+            `))
+            return Number(row?.waiting)
+          }, poll).toBe(3)
+          expect(await schemas()).toEqual({ namespace: null, outbox: null, vector_index: null })
+          value(await blocker.commit())
+          const ready = (await peers).map((result) => {
+            if (result.status === 'rejected')
+              throw result.reason
+            return result.value
+          })
+          const added = value(await call<HaiResult<MemoryEntry>>(ready[0], 'add', { owner: 'common', content: 'Memory from a concurrent node' }))
+          await expect.poll(() => call(ready[1], 'get', { owner: 'common', id: added.id }), poll).toMatchObject({
+            success: true,
+            data: { id: added.id },
+          })
+          const row = value(await reldb.sql.get<{ count: string }>('SELECT count(*) FROM hai_ai_memory_vector_namespace'))
+          expect(Number(row?.count)).toBe(1)
+          // 同一个锁也保护 Knowledge 在首次调用时创建的关系表。
+          const knowledge = await Promise.all(ready.map((node, index) => call<HaiResult<unknown>>(node, 'prepareKnowledge', { collection: `knowledge-${index}` })))
+          expect(knowledge.every(result => result.success)).toBe(true)
+          expect(value(await reldb.sql.get('SELECT to_regclass(?)::text AS name', ['public.hai_ai_knowledge_documents']))).toEqual({ name: 'hai_ai_knowledge_documents' })
+        }
+        finally {
+          await blocker.rollback()
+          await peers
+        }
+      })
+    })
+  }, 120_000)
+
+  it('starts against an initialized schema while a normal memory write holds its transaction open', async () => {
+    await withDatabase(async (database) => {
+      await ownedResources(async ({ nodes, gateway }) => {
+        const options = { vectorNamespace: 'pg-running' }
+        const first = await startNode(nodes, database, gateway.url, 'serving', options)
+        const saved = value(await call<HaiResult<MemoryEntry>>(first, 'add', { owner: 'common', content: 'Memory while serving' }))
+        const writer = value(await reldb.tx.begin())
+        let peer: Promise<ChildProcess> | undefined
+        try {
+          value(await writer.execute('UPDATE hai_ai_memory SET updated_at = updated_at WHERE id = ?', [saved.id]))
+          peer = startNode(nodes, database, gateway.url, 'replica', options)
+          let initialized = false
+          void peer.then(() => {
+            initialized = true
+          }, () => {})
+          // 已有索引无需执行 CREATE INDEX。即使 IF NOT EXISTS，PostgreSQL 仍会取表级 SHARE 锁。
+          await expect.poll(() => initialized, { timeout: 5000 }).toBe(true)
+          const second = await peer
+          expect(value(await call<HaiResult<MemoryEntry[]>>(second, 'list', { owner: 'common' }))).toMatchObject([
+            { id: saved.id },
+          ])
+        }
+        finally {
+          value(await writer.rollback())
+          await peer
+        }
+      })
+    })
+  }, 120_000)
+
+  it('rolls back a failed upgrade, preserves existing memory, and retries in the same process', async () => {
+    await withDatabase(async (database) => {
+      await ownedResources(async ({ url, gateway, nodes }) => {
+        const source = forkNode(nodes)
+        await call(source, 'initDatabase', { database })
+        const legacyMemory = {
+          id: 'legacy-after-ddl-failure',
+          objectId: 'common',
+          content: 'Memory retained across rollback',
+          vector: [1, 0],
+        }
+        value(await call<HaiResult<unknown>>(source, 'seedUpgradeMemories', {
+          rows: [legacyMemory],
+        }))
+        value(await reldb.ddl.raw('CREATE TABLE idx_hai_ai_memory_vector_key (id TEXT)'))
+        const input = {
+          database,
+          url: gateway.url,
+          node: 'retriable',
+          vectorNamespace: 'pg-upgrade',
+        }
+        const retrying = forkNode(nodes)
+        await expect(call(retrying, 'init', input)).rejects.toThrow(HaiAIError.CONFIGURATION_ERROR.code)
+        // 真正的名称冲突不能返回成功，也不能留下本次创建的表与索引。
+        expect(await schemas()).toEqual({ namespace: null, outbox: null, vector_index: 'idx_hai_ai_memory_vector_key' })
+        expect(value(await reldb.sql.get('SELECT to_regclass(?)::text AS name', ['public.idx_hai_ai_memory_object_id']))).toEqual({ name: null })
+        expect(value(await reldb.sql.get('SELECT id FROM hai_ai_memory'))).toEqual({ id: legacyMemory.id })
+        expect(gateway.requests.filter(request => request.collection)).toEqual([])
+        value(await reldb.ddl.dropTable('idx_hai_ai_memory_vector_key'))
+        const [, peer] = await Promise.all([
+          call(retrying, 'init', input),
+          startNode(nodes, database, gateway.url, 'ready-peer', { vectorNamespace: input.vectorNamespace }),
+        ])
+        await expect.poll(() => call<NamespaceState>(peer, 'getVectorNamespace'), poll).toMatchObject({ migrated: true })
+        expect(value(await call<HaiResult<MemoryEntry>>(retrying, 'get', { owner: 'common', id: legacyMemory.id }))).toMatchObject({ content: legacyMemory.content })
+        const target = gateway.requests.find(request => request.points?.some(point => point.payload._id === legacyMemory.id))?.collection
+        expect(target).toMatch(/^hai_m_pg-upgrade_[0-9a-f]{32}$/)
+        expect(await pointKeys(url, target!)).toEqual([legacyMemory.id])
+        expect(value(await reldb.sql.get('SELECT indexname FROM pg_catalog.pg_indexes WHERE tablename = ? AND indexname = ?', ['hai_ai_memory', 'idx_hai_ai_memory_vector_key']))).toEqual({ indexname: 'idx_hai_ai_memory_vector_key' })
+      })
+    })
+  }, 120_000)
+})
+
 it('isolates two SQL databases that share Qdrant and choose the same configured namespace', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'native-memory-namespace-'))
   try {
@@ -297,19 +454,37 @@ describe.each([
         const oldKeys = ['legacy-memory-0000', 'legacy-revision-0001', 'foreign-application-vector']
         await putPoints(url, legacyCollection, oldKeys.map(id => point(id)))
         const migrationWrites = (node: string) => gateway.requests.filter(request => request.node === node && request.points?.length)
+        let firstWrite: VectorRequest | undefined
         let blocked: VectorRequest | undefined
         gateway.setBeforeWrite((request) => {
-          if (request.node === 'migration-owner' && request.points?.length && migrationWrites('migration-owner').length > 1) {
-            blocked = request
-            return pause.promise
+          if (!request.points?.length || blocked)
+            return
+          if (!firstWrite) {
+            firstWrite = request
+            return
           }
+          blocked = request
+          return pause.promise
         })
         const options = { vectorNamespace: 'upgrade-app', maxEntriesPerObject: 200 }
-        const first = await startNode(nodes, config, gateway.url, 'migration-owner', options)
+        const [nodeA, nodeB] = await Promise.all([
+          startNode(nodes, config, gateway.url, 'migration-a', options),
+          startNode(nodes, config, gateway.url, 'migration-b', options),
+        ])
         await expect.poll(() => blocked?.collection, poll).toBeDefined()
+        const owner = blocked!.node
+        const standby = owner === 'migration-a'
+          ? 'migration-b'
+          : 'migration-a'
+        const first = owner === 'migration-a'
+          ? nodeA
+          : nodeB
+        const second = owner === 'migration-a'
+          ? nodeB
+          : nodeA
         const target = blocked!.collection!
         expect(target).toMatch(/^hai_m_upgrade-app_[0-9a-f]{32}$/)
-        const firstBatch = migrationWrites('migration-owner')[0].points!
+        const firstBatch = firstWrite!.points!
         expect(firstBatch.length).toBeGreaterThan(1)
         expect(firstBatch.map(vector => vector.payload._id)).toContain('legacy-memory-0000')
         expect(firstBatch.map(vector => vector.payload._id)).toContain('legacy-revision-0001')
@@ -320,22 +495,24 @@ describe.each([
         expect(pending.cursor).toBeDefined()
         expect(pending.migrated).not.toBe(true)
 
-        const second = await startNode(nodes, config, gateway.url, 'migration-standby', options)
         const changed = rows.at(-1)!
+        const updatesStart = migrationWrites(standby).length
         const updated = value(await call<HaiResult<MemoryEntry>>(second, 'update', {
           owner: changed.objectId,
           id: changed.id,
           content: 'Updated by another node during migration',
         }))
-        const updatedWrite = () => migrationWrites('migration-standby').find(request => request.points?.some(vector => !vector.payload._id.startsWith('legacy-')))
+        const writesWhileBlocked = () => migrationWrites(standby).slice(updatesStart)
+        const updatedWrite = () => writesWhileBlocked().find(request => request.points?.some(vector => !vector.payload._id.startsWith('legacy-')))
         await expect.poll(() => updatedWrite()?.collection, poll).toBe(target)
-        expect(migrationWrites('migration-standby').every(request => request.points!.every(vector => !vector.payload._id.startsWith('legacy-')))).toBe(true)
+        expect(writesWhileBlocked().every(request => request.points!.every(vector => !vector.payload._id.startsWith('legacy-')))).toBe(true)
 
         await stop(first, true)
         pause.resolve()
+        const takeoverStart = migrationWrites(standby).length
         value(await call<HaiResult<unknown>>(source, 'expireVectorMigration'))
         await expect.poll(async () => (await call<NamespaceState>(source, 'getVectorNamespace')).migrated, poll).toBe(true)
-        const resumed = migrationWrites('migration-standby').find(request => request.points?.some(vector => vector.payload._id.startsWith('legacy-')))
+        const resumed = migrationWrites(standby).slice(takeoverStart).find(request => request.points?.some(vector => vector.payload._id.startsWith('legacy-')))
         expect(resumed?.collection).toBe(target)
         expect(resumed?.points?.map(vector => vector.payload._id)).toEqual(blocked!.points!.map(vector => vector.payload._id))
 

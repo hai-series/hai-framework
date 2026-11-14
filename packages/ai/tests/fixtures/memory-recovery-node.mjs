@@ -77,6 +77,9 @@ const operations = {
   recall({ owner, content, topK }) {
     return ai.memory.scoped({ objectId: owner }).recall(content, { topK, candidateMultiplier: 1, recencyWeight: 0 })
   },
+  prepareKnowledge({ collection }) {
+    return ai.knowledge.setup({ collection })
+  },
   update({ owner, id, content }) {
     return ai.memory.scoped({ objectId: owner }).update(id, { content })
   },

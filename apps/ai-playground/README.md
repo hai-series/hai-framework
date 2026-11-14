@@ -182,7 +182,7 @@ mcp:
 
 应用按 `RelDB → VecDB → Runner（可选）→ AI` 初始化，并在启动失败时逆序清理。生产 `.env.prod` 默认使用 PostgreSQL、Qdrant 与 Redis。按实际部署配置 `db/cache/vecdb` 的 DNS 地址、认证和访问规则。缺少共享依赖时启动失败。应用默认限流为每分钟 120 个请求，可在可信代理或应用侧补充用户授权和模型消费预算。具体参数见 [AI 配置手册](../../docs/usage/configuration/ai.md) 和 [Runner 配置](../../packages/runner/README.md#配置)。
 
-开启原生记忆向量检索时，在 `_ai.yml` 的 `memory.vectorNamespace` 或环境变量 `HAI_AI_MEMORY_VECTORNAMESPACE` 设置应用和环境名称，例如 `playground-dev`，默认值为 `default`。多个 Playground 可共用 Qdrant，使用独立关系库时会得到独立集合。共享记忆的实例使用相同关系库、命名空间及向量库。升级时用原来的关系库启动，应用会后台重建索引，清理仅作用于自己的新集合。 [升级与恢复步骤](../../docs/usage/configuration/ai.md#从旧共享集合升级)
+开启原生记忆向量检索时，在 `_ai.yml` 的 `memory.vectorNamespace` 或环境变量 `HAI_AI_MEMORY_VECTORNAMESPACE` 设置应用和环境名称，例如 `playground-dev`，默认值为 `default`。多个 Playground 可共用 Qdrant，使用独立关系库时会得到独立集合。共享记忆的实例使用相同关系库、命名空间及向量库。默认 PostgreSQL Store 支持空库首次部署和旧库升级时同时启动多个实例。结构准备完成后，应用会后台重建专用向量集合，迁移可由另一实例接手。 [升级与恢复步骤](../../docs/usage/configuration/ai.md#从旧共享集合升级)
 
 使用 Node 产物部署时，SvelteKit 默认按 HTTPS 计算请求来源。若由可信反向代理提供 HTTP 环境，配置 `PROTOCOL_HEADER=x-forwarded-proto`，由代理覆盖该请求头为实际外部协议，并限制应用端口仅由代理访问。浏览器删除或清空记忆时需要同源校验。
 

@@ -259,6 +259,8 @@ if (failures.length)
   throw new AggregateError(failures, 'AI operation or cleanup failed')
 ```
 
+With the default PostgreSQL Store, nodes can call `ai.init` concurrently on a fresh database or during an upgrade. A transaction-level advisory lock serializes creation of tables, indexes, and write-gate rows. On failure, the transaction rolls back. Retry after correcting the permissions or schema. Startup reuses existing indexes. The vector rebuild runs after commit and can resume on a surviving node.
+
 Concurrent MySQL first startup accepts only the explicit mysql2 ER_DUP_KEYNAME/1061 error, then verifies the actual columns and order, non-unique full columns, ascending visible BTREE, and no expressions. An existing index with the wrong definition fails. The account needs table creation and INDEX privileges; metadata, permission, or other DDL failures return CONFIGURATION_ERROR from ai.init. All started DDL settles before return. MySQL DDL is not rolled back: repair privileges/schema before retrying partial initialization. Check each initialization result, reject business traffic on failure, and close AI, vecdb, and reldb in reverse order.
 
 ### Custom StoreProvider
