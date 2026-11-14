@@ -30,6 +30,7 @@ function requireSqlSuccess<T>(result: HaiResult<T>): Extract<HaiResult<T>, { suc
 
 /** 单条批量 SQL 的参数上限，保守低于 SQLite 默认 999 变量限制。 */
 const MAX_BATCH_SQL_PARAMS = 900
+const POSTGRES_SCHEMA_LOCK = 'hai:ai:store-schema'
 
 /** 从业务数据读取可用于索引的 Unix 毫秒时间；没有时间字段时回退到写入时间。 */
 function dataTimestamp<T>(data: T, field: 'createdAt' | 'updatedAt', fallback: number): number {
@@ -191,9 +192,10 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   }
 
   /** 创建表及索引（幂等） */
-  async createTable(): Promise<void> {
+  async createTable(connection = this.connection): Promise<void> {
     const t = this.table
     const db = this.dbType
+    const execute = async (statement: string) => requireSqlSuccess(await connection.execute(statement))
     const idType = db === 'mysql'
       ? 'VARCHAR(512)'
       : 'TEXT'
@@ -220,32 +222,64 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     if (db === 'mysql' && this.memoryVectorKey)
       cols.push(this.mysqlMemoryVectorColumn(this.memoryVectorKey))
 
-    await this.sql.execute(`CREATE TABLE IF NOT EXISTS ${t} (${cols.join(', ')})`)
+    await execute(`CREATE TABLE IF NOT EXISTS ${t} (${cols.join(', ')})`)
     if (this.gate) {
-      await this.sql.execute(`CREATE TABLE IF NOT EXISTS ${this.gate} (id INTEGER PRIMARY KEY, marker INTEGER NOT NULL)`)
+      await execute(`CREATE TABLE IF NOT EXISTS ${this.gate} (id INTEGER PRIMARY KEY, marker INTEGER NOT NULL)`)
       const conflict = db === 'mysql'
         ? 'ON DUPLICATE KEY UPDATE id = id'
         : 'ON CONFLICT(id) DO NOTHING'
-      await this.sql.execute(`INSERT INTO ${this.gate} (id, marker) VALUES (1, 0) ${conflict}`)
+      await execute(`INSERT INTO ${this.gate} (id, marker) VALUES (1, 0) ${conflict}`)
     }
 
+    const indexes: Array<[suffix: string, columns: string, method?: 'GIN']> = []
     if (this.hasObjectId)
-      await this.createIndex(`idx_${t}_object_id`, 'object_id')
+      indexes.push(['object_id', 'object_id'])
     if (this.hasSessionId)
-      await this.createIndex(`idx_${t}_session_id`, 'session_id')
+      indexes.push(['session_id', 'session_id'])
     if (this.hasObjectId && this.hasSessionId)
-      await this.createIndex(`idx_${t}_object_session`, 'object_id, session_id')
+      indexes.push(['object_session', 'object_id, session_id'])
     if (this.hasStatus)
-      await this.createIndex(`idx_${t}_status`, 'status')
+      indexes.push(['status', 'status'])
     if (this.hasRefId)
-      await this.createIndex(`idx_${t}_ref_id`, 'ref_id')
+      indexes.push(['ref_id', 'ref_id'])
     if (this.hasUpdatedAtIndex)
-      await this.createIndex(`idx_${t}_updated_at`, 'updated_at, id')
-    if (this.memoryVectorKey)
-      await this.createMemoryVectorIndex(this.memoryVectorKey)
+      indexes.push(['updated_at', 'updated_at, id'])
+    if (this.memoryVectorKey && db !== 'mysql')
+      indexes.push(['vector_key', `(${this.memoryVectorKey})`])
     // 业务作用域索引：仅 PostgreSQL 支持 JSONB GIN，用于加速 data @> '{"scope":...}' 包含查询。
     if (this.hasScopeIndex && db === 'postgresql')
-      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_data_gin ON ${t} USING GIN (data jsonb_path_ops)`)
+      indexes.push(['data_gin', 'data jsonb_path_ops', 'GIN'])
+
+    // PostgreSQL 的 CREATE INDEX IF NOT EXISTS 即使跳过也会持有表的写入冲突锁。
+    // 已存在的可用索引从目录确认，避免每个启动节点在已就绪的表上重复加锁。
+    const existing = db === 'postgresql' && indexes.length > 0
+      ? requireSqlSuccess(await connection.query<{ name: string, valid: boolean }>(`
+          SELECT c.relname AS name, i.indisvalid AS valid FROM pg_catalog.pg_index AS i
+          JOIN pg_catalog.pg_class AS c ON c.oid = i.indexrelid
+          WHERE i.indrelid = pg_catalog.to_regclass(?)
+        `, [t])).data
+      : []
+    const existingIndexes = new Map(existing.map(row => [row.name, row.valid]))
+    for (const [suffix, columns, method] of indexes) {
+      const name = `idx_${t}_${suffix}`
+      if (db === 'mysql') {
+        await this.createMysqlIndex(name, columns)
+        continue
+      }
+      if (existingIndexes.get(name) === false)
+        throw new Error(aiM('ai_storeIndexMismatch'))
+      if (existingIndexes.has(name))
+        continue
+      const ifMissing = db === 'sqlite'
+        ? 'IF NOT EXISTS '
+        : ''
+      const using = method
+        ? ` USING ${method}`
+        : ''
+      await execute(`CREATE INDEX ${ifMissing}${name} ON ${t}${using} (${columns})`)
+    }
+    if (db === 'mysql' && this.memoryVectorKey)
+      await this.createMysqlMemoryVectorIndex(this.memoryVectorKey)
   }
 
   /** MySQL 在新表中直接创建生成列，已有表在首次升级时添加该列。 */
@@ -257,12 +291,8 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   }
 
   /** 索引覆盖旧记录，无需逐条回写。MySQL 查询使用命名生成列以命中索引。 */
-  private async createMemoryVectorIndex(key: string): Promise<void> {
+  private async createMysqlMemoryVectorIndex(key: string): Promise<void> {
     const name = `idx_${this.table}_vector_key`
-    if (this.dbType !== 'mysql') {
-      await this.sql.execute(`CREATE INDEX IF NOT EXISTS ${name} ON ${this.table}((${key}))`)
-      return
-    }
     const read = async () => requireSqlSuccess(await this.sql.get<{ extra: string }>(
       'SELECT EXTRA AS extra FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
       [this.table, key],
@@ -278,43 +308,39 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     }
     if ((await read())?.extra !== 'VIRTUAL GENERATED')
       throw new Error(aiM('ai_storeIndexMismatch'))
-    await this.createIndex(name, key)
+    await this.createMysqlIndex(name, key)
   }
 
   /**
    * MySQL 并发首次创建只接受明确的重复名称错误，并重读结构，权限/DDL/不匹配仍失败。
    */
-  private async createIndex(name: string, columns: string): Promise<void> {
-    if (this.dbType === 'mysql') {
-      const read = async () => requireSqlSuccess(await this.sql.query<MysqlIndexColumn>(
-        'SELECT COLUMN_NAME AS column_name, SEQ_IN_INDEX AS seq_in_index, NON_UNIQUE AS non_unique, SUB_PART AS sub_part, INDEX_TYPE AS index_type, COLLATION AS collation, IS_VISIBLE AS is_visible, EXPRESSION AS expression FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? ORDER BY SEQ_IN_INDEX',
-        [this.table, name],
-      )).data
-      const expected = columns.split(',').map(column => column.trim())
-      const matches = (definition: MysqlIndexColumn[]) => definition.length === expected.length
-        && definition.every((column, index) => column.column_name === expected[index]
-          && Number(column.seq_in_index) === index + 1 && Number(column.non_unique) === 1
-          && column.sub_part === null && column.index_type === 'BTREE' && column.collation === 'A'
-          && column.is_visible === 'YES' && column.expression === null)
-      const existing = await read()
-      if (existing.length > 0) {
-        if (!matches(existing))
-          throw new Error(aiM('ai_storeIndexMismatch'))
-        return
-      }
-      try {
-        await this.sql.execute(`CREATE INDEX ${name} ON ${this.table}(${columns})`)
-      }
-      catch (error) {
-        if (!isMysqlError(error, 'ER_DUP_KEYNAME', 1061))
-          throw error
-        // 两个节点都读到缺失时，败者只能在实际结构与预期一致后继续；不能吞掉其它失败。
-        if (!matches(await read()))
-          throw new Error(aiM('ai_storeIndexMismatch'), { cause: error })
-      }
+  private async createMysqlIndex(name: string, columns: string): Promise<void> {
+    const read = async () => requireSqlSuccess(await this.sql.query<MysqlIndexColumn>(
+      'SELECT COLUMN_NAME AS column_name, SEQ_IN_INDEX AS seq_in_index, NON_UNIQUE AS non_unique, SUB_PART AS sub_part, INDEX_TYPE AS index_type, COLLATION AS collation, IS_VISIBLE AS is_visible, EXPRESSION AS expression FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? ORDER BY SEQ_IN_INDEX',
+      [this.table, name],
+    )).data
+    const expected = columns.split(',').map(column => column.trim())
+    const matches = (definition: MysqlIndexColumn[]) => definition.length === expected.length
+      && definition.every((column, index) => column.column_name === expected[index]
+        && Number(column.seq_in_index) === index + 1 && Number(column.non_unique) === 1
+        && column.sub_part === null && column.index_type === 'BTREE' && column.collation === 'A'
+        && column.is_visible === 'YES' && column.expression === null)
+    const existing = await read()
+    if (existing.length > 0) {
+      if (!matches(existing))
+        throw new Error(aiM('ai_storeIndexMismatch'))
       return
     }
-    await this.sql.execute(`CREATE INDEX IF NOT EXISTS ${name} ON ${this.table}(${columns})`)
+    try {
+      await this.sql.execute(`CREATE INDEX ${name} ON ${this.table}(${columns})`)
+    }
+    catch (error) {
+      if (!isMysqlError(error, 'ER_DUP_KEYNAME', 1061))
+        throw error
+        // 两个节点都读到缺失时，败者只能在实际结构与预期一致后继续；不能吞掉其它失败。
+      if (!matches(await read()))
+        throw new Error(aiM('ai_storeIndexMismatch'), { cause: error })
+    }
   }
 
   /** 普通写入也更换版本，使并发条件写入识别所有较新修改。 */
@@ -884,13 +910,14 @@ class VecdbAIVectorStore implements AIVectorStore {
  * @example
  * ```ts
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
- * function bind(sql: DmlOperations, jsonOps: ReldbJsonOps, vector: VecdbFunctions): DbStoreProviderDeps {
- *   return { sql, jsonOps, dbType: 'postgresql', vecdb: vector }
+ * function bind(sql: DmlOperations, tx: TxManager, jsonOps: ReldbJsonOps, vector: VecdbFunctions): DbStoreProviderDeps {
+ *   return { sql, tx, jsonOps, dbType: 'postgresql', vecdb: vector }
  * }
  * ```
  */
 export interface DbStoreProviderDeps {
   sql: DmlOperations
+  /** PostgreSQL 必须提供同一数据库的事务管理器。 */
   tx?: TxManager
   jsonOps: ReldbJsonOps
   dbType?: DbType
@@ -902,6 +929,7 @@ export interface DbStoreProviderDeps {
  *
  * 基于 reldb + vecdb 的 AIStoreProvider 实现。
  * reldb 用于关系数据存储，vecdb 用于向量存储。
+ * PostgreSQL 用同一事务锁定并准备表、索引及写入门闩；失败时回滚，不发布 Store。
  * MySQL 首次建索引只在明确的 1061 重复名称后重查并接受匹配结构；其它 DDL 失败向上传播。
  * initialize 等待全部已启动 DDL 结束，失败不回滚 MySQL 已创建结构，也不关闭调用方的依赖。
  *
@@ -918,11 +946,38 @@ export interface DbStoreProviderDeps {
  * ```
  */
 export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvider {
-  const { sql, jsonOps, vecdb: vecdbDep } = deps
+  const { sql, tx, jsonOps, vecdb: vecdbDep } = deps
   const dbType = deps.dbType ?? 'sqlite'
 
-  /** 按表归组，避免同表 Store 并发 DDL 竞争 PostgreSQL 系统目录。 */
+  /** 同一张表的 Store 按登记顺序补齐各自的索引。 */
   const relStores = new Map<string, ReldbAIRelStore<unknown>[]>()
+
+  async function prepareTables(groups: Iterable<Array<Pick<ReldbAIRelStore<unknown>, 'createTable'>>>): Promise<void> {
+    if (dbType === 'postgresql') {
+      if (!tx)
+        throw new TypeError(aiM('ai_storeTransactionRequired'))
+      requireSqlSuccess(await tx.wrap(async (connection) => {
+        // 等待前一节点提交后，每条语句重新取得快照。事务结束自动释放锁。
+        requireSqlSuccess(await connection.execute('SET TRANSACTION ISOLATION LEVEL READ COMMITTED'))
+        requireSqlSuccess(await connection.execute('SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(?, 0))', [POSTGRES_SCHEMA_LOCK]))
+        for (const stores of groups) {
+          for (const store of stores)
+            await store.createTable(connection)
+        }
+      }))
+      return
+    }
+
+    // 同表串行、独立表并行；失败后仍等待所有在途 DDL，避免关闭连接时操作尚未结束。
+    const results = await Promise.allSettled(Array.from(groups, async (stores) => {
+      for (const store of stores)
+        await store.createTable()
+    }))
+    for (const result of results) {
+      if (result.status === 'rejected')
+        throw result.reason
+    }
+  }
 
   return {
     name: 'db',
@@ -935,7 +990,7 @@ export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvide
     },
 
     createRelStore<T>(name: string, options?: AIRelStoreOptions): AIRelStore<T> {
-      const store = new ReldbAIRelStore<T>(sql, name, jsonOps, dbType, options, deps.tx)
+      const store = new ReldbAIRelStore<T>(sql, name, jsonOps, dbType, options, tx)
       const stores = relStores.get(name) ?? []
       stores.push(store as ReldbAIRelStore<unknown>)
       relStores.set(name, stores)
@@ -960,26 +1015,15 @@ export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvide
         documents,
         collections,
         vecdb: vecdbDep,
-        prepare: async () => {
-          await documents.createTable()
-          await collections.createTable()
-        },
+        prepare: () => prepareTables([
+          [documents, collections],
+        ]),
       })
     },
 
     async initialize(): Promise<void> {
       if (relStores.size > 0) {
-        // 同表串行、独立表并行；失败后仍等待所有在途 DDL，避免关闭连接时操作尚未结束。
-        const results = await Promise.allSettled([
-          ...relStores.values(),
-        ].map(async (stores) => {
-          for (const store of stores)
-            await store.createTable()
-        }))
-        for (const result of results) {
-          if (result.status === 'rejected')
-            throw result.reason
-        }
+        await prepareTables(relStores.values())
         logger.debug('DB store provider initialized', { tableCount: relStores.size })
       }
     },
