@@ -240,6 +240,7 @@ metric: cosine
 | 配置 | 框架默认（对象存在时） | 影响 |
 | --- | --- | --- |
 | `memory.provider` / `memory.allowEphemeralFallback` | `native` / `false` | `mem0` 是数据格式适配，要求 Qdrant ≥1.19；其它持久化后端使用 native Provider；其他后端不得静默退内存，生产始终要求真实持久连接 |
+| `memory.vectorNamespace` | `default` | 原生记忆向量命名空间。首次启动绑定到关系库，同一应用的各节点必须使用相同值 |
 | `maxEntriesPerObject`/`maxEntriesGlobal` | 1000/100000 | 原生记忆的主体和全局容量。默认数据库 Store 用事务串行检查写入配额，每批最多读取 64 条淘汰候选 |
 | `recencyDecay`/`embeddingEnabled` | 0.95 / `true` | 时间衰减及向量检索开关，需评估旧记忆保留和检索成本 |
 | `defaultTopK`/`candidateMultiplier`/`writebackRelatedTopK` | 10/5/20 | 输出条数、候选倍数及写回关联候选，改变检索/写回成本 |
@@ -251,6 +252,7 @@ metric: cosine
 ```yaml schema=@h-ai/ai:AIConfigSchema
 memory:
   provider: native
+  vectorNamespace: orders-prod
   allowEphemeralFallback: false
   maxEntriesPerObject: 1000
   maxEntriesGlobal: 100000
@@ -264,13 +266,25 @@ retrieval:
 
 使用专用`objectId`写入并重启读取，检查跨用户不可见、容量策略和失败不丢原始材料。`topK`和`filter`不是服务端租户守卫的替代品；只靠调用成功不能声明知识和会话持久化完成。
 
-默认关系数据库 Store 自动为 `native` 创建 `hai_ai_memory_vector_outbox` 表，保存待处理操作和关联 ID。所有共享记忆的 AI 节点必须使用同一关系库及向量集合。`hai_ai_memory_vectors` 是框架专用集合，一个集合只对应一套关系库中的记忆表。不同 SQL 数据库、环境或独立应用使用各自的向量库实例、数据库或命名空间。升级前停止旧版本节点对集合的写入。备份和恢复应使用同一套关系与向量数据，关系备份包括同步表。
+### 共用 Qdrant 的应用
+
+每个应用使用独立的关系库，并建议为 `memory.vectorNamespace` 设置能辨认应用和环境的短名称，例如 `orders-prod`。名称为 1 至 20 个 ASCII 字符，以小写字母开头，以小写字母或数字结尾，中间可使用数字、下划线或连字符。Playground 可通过 `HAI_AI_MEMORY_VECTORNAMESPACE` 设置。默认 Store 将名称与随机归属 ID 持久保存在 `hai_ai_memory_vector_namespace`，即使两个应用配置了同名，独立的关系库仍会生成不同的物理集合。共享记忆的节点必须使用同一关系库、向量后端和命名空间；同一关系库改名时 `ai.init` 会失败。pgvector 的表前缀与物理名合计须在 PostgreSQL 的 63 字节内，默认前缀满足此要求。
+
+命名空间限制框架读写和巡检的范围。需要限制某个应用直接访问 Qdrant 的权限时，为各应用分配只允许访问其集合的凭据。关系库备份会保留向量集合归属，适用于替换原部署。独立测试或灾备演练若从备份复制关系库，应把配套向量快照恢复到另一套向量存储。两个同时运行的关系库副本由此各自维护独立集合。`memory.vectorNamespace` 仅用于 `native`。多个 Mem0 应用使用各自的向量后端。
+
+### 从旧共享集合升级
+
+1. 备份每个应用的关系库与向量库，停止仍会读写旧 `hai_ai_memory_vectors` 的旧版节点。分别为独立应用配置关系库和 `memory.vectorNamespace`。
+2. 用原来的关系库启动一个新版节点，完成 `ai.init` 建表后再启动其他节点，尤其是首次初始化 PostgreSQL 时。保持原嵌入维度。新版直接读取 `hai_ai_memory` 中已保存的向量，按主键分页重建专用集合。迁移期间可继续使用记忆，查询缺少索引分数时会用关系库中的向量计算。迁移不调用嵌入模型，也不会读取或改写旧共享集合。
+3. 确认每个应用的已有记忆能检索，并检查各自 `hai_ai_memory_vector_namespace` 表中 `id = 'namespace'` 的 `data.migrated` 为 `true`。确认没有旧版或其他服务使用旧集合后，可由管理员按备份及保留策略处理旧集合。迁移与巡检的游标均持久化，进程失联后其他节点可接手，重启后可续跑。
 
 已有 MySQL 记忆表在首次升级时会添加虚拟生成列及索引。执行这次初始化的账号需要对 `hai_ai_memory` 有 `ALTER` 和 `INDEX` 权限。新建数据库时，生成列随表创建。
 
-后台约每秒检查待同步操作，当前版本写入失败按 1 至 30 秒的退避重试，领取期限为 45 秒。默认 Store 也约每秒核对一页向量 ID，每页最多 64 条，只删除关系库当前版本未引用的点。每轮结束后暂停约 5 秒。满 10 万个点时，按每秒一页计算，一轮约 26 分钟，后端延迟和重试会增加耗时。共享表 `hai_ai_memory_vector_scan` 只保存一条进度，节点退出后由其他节点在 90 秒领取期届满后接手。后端恢复可用后，迟到的旧点会在后续巡检中清理。检索始终以关系库当前版本为准。
+### 同步、回收和巡检耗时
 
-积压达到 `max(1024, 2 × maxEntriesGlobal)` 时，限制会增加向量同步工作的写入，删除仍可提交。默认 Store 把失败的旧版本删除交给周期扫描，避免每个旧版本长期占用一条待办。清理按批提交，执行期间并发新增的记录可能保留。自定义 Store 提供 `withRelatedWriteLock` 和有索引的 `queryKeys` 可使用持久补偿。要清理超过原 60 秒补偿窗口才落地的旧点，关系 Store 还须支持 `getMemoryVectorIds`，向量 Store 须支持 `scan` 和 `removeMany`。临时 Store 无法跨重启保留待同步状态。
+默认关系数据库 Store 将待同步操作保存在 `hai_ai_memory_vector_outbox`。同步失败按 1 至 30 秒退避，单项领取期限为 45 秒。巡检约每秒全局领取一次，每批最多 32 页、每页 64 个 ID。批次运行约 750 毫秒后不再取下一页，已发出的单页请求可能超过该预算。每页确认后保存一条共享游标，失联时租约最多 90 秒。扫完一轮约暂停 5 秒，然后继续检查迟到的旧写入。单节点同机 Qdrant 1.20.0 与 SQLite 的测试中，10 万个 1,536 维有效点扫完整轮约 52 秒，不含准备和迁移。跨主机往返、并发负载和错误重试会增加耗时。
+
+积压达到 `max(1024, 2 × maxEntriesGlobal)` 时，限制会增加向量同步工作的写入，删除仍可提交。默认 Store 把失败的旧版本删除交给巡检，避免旧版本长期占用待办。自定义 Store 提供 `withRelatedWriteLock` 和有索引的 `queryKeys` 可使用持久补偿。在此基础上，提供 `getMemoryVectorIds`、`scan` 和 `removeMany` 可启用巡检，两种能力齐备且提供按主键读取已提交数据的 `readMemoryVectorPage` 后可启用重建。`upsertMany` 可合并同一批写入。临时 Store 无法跨重启保留待同步状态。
 
 ## 音频与图片
 

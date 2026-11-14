@@ -341,6 +341,7 @@ function createLLMChatOk(content: string | null): MockChatResult {
 
 const defaultConfig: MemoryConfig = {
   provider: 'native',
+  vectorNamespace: 'default',
   maxEntriesPerObject: 100,
   maxEntriesGlobal: 100000,
   recencyDecay: 0.95,

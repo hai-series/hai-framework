@@ -253,7 +253,7 @@ it('真实 INDEX 权限不足仍失败，补齐权限后可在部分建表库中
   })
 }, 180000)
 
-it('真实 MySQL 旧记忆表经 ALTER 升级后保留两种有效向量并删除孤立向量', async () => {
+it('真实 MySQL 旧记忆表经 ALTER 升级后重建两种有效向量并保留旧集合', async () => {
   await withDatabase(async ({ node, config, database, account, vectorUrl }) => {
     const username = `ai_init_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`
     const password = crypto.randomUUID().replaceAll('-', '')
@@ -343,12 +343,32 @@ it('真实 MySQL 旧记忆表经 ALTER 升级后保留两种有效向量并删�
       })
 
     const activePointIds = points.slice(0, 2).map(point => point.id).sort()
+    const namespace = await reldb.sql.get<{ owner: string }>(
+      'SELECT JSON_UNQUOTE(JSON_EXTRACT(data, \'$.owner\')) AS owner FROM hai_ai_memory_vector_namespace WHERE id = ?',
+      ['namespace'],
+    )
+    expect(namespace.success).toBe(true)
+    if (!namespace.success || !namespace.data?.owner)
+      throw new Error('Native memory vector namespace unavailable')
+    const target = `${vectorUrl}/collections/hai_m_default_${namespace.data.owner}`
     await expect.poll(async () => {
-      const { result } = await qdrant(`${collection}/points`, 'POST', {
-        ids: points.map(point => point.id),
+      const response = await fetch(`${target}/points`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ids: points.map(point => point.id),
+        }),
       })
+      if (response.status === 404)
+        return []
+      expect(response.ok).toBe(true)
+      const { result } = await response.json() as { result: Array<{ id: string }> }
       return result.map(point => point.id).sort()
     }, { timeout: 10_000 }).toEqual(activePointIds)
+    const old = await qdrant(`${collection}/points`, 'POST', {
+      ids: points.map(point => point.id),
+    })
+    expect(old.result.map(point => point.id).sort()).toEqual(points.map(point => point.id).sort())
 
     expect((await reldb.sql.execute(`REVOKE ALTER ON ${database}.hai_ai_memory FROM '${username}'@'%'`)).success).toBe(true)
     expect(await node(credentials).wait('result')).toMatchObject({ success: true, initialized: true })

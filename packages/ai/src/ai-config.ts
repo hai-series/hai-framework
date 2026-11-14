@@ -753,6 +753,8 @@ export type { EntityType } from './knowledge/ai-knowledge-types.js'
 export const MemoryConfigSchema = z.object({
   /** 记忆后端：native 使用框架原生存储与批量合并；mem0 将框架提取结果以 Mem0 数据格式写入 Qdrant */
   provider: z.enum(['native', 'mem0']).default('native'),
+  /** 原生记忆向量命名空间，首次初始化后与关系库绑定。 */
+  vectorNamespace: z.string().regex(/^[a-z](?:[a-z0-9_-]{0,18}[a-z0-9])?$/, aiM('ai_memoryVectorNamespaceInvalid')).default('default'),
   /**
    * 是否允许在配置了持久化向量后端但 mem0 无法映射时退回内存存储（默认 false）
    *

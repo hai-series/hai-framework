@@ -1,18 +1,16 @@
 /** 真实关系库、多进程和可注入故障的 Qdrant 协议夹具。 */
 import type { HaiResult } from '@h-ai/core'
-import type { ReldbConfigInput } from '@h-ai/reldb'
 import type { ChildProcess } from 'node:child_process'
 import type { AddressInfo } from 'node:net'
 import type { MemoryEntry } from '../src/index.js'
 import { Buffer } from 'node:buffer'
-import { fork } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { once } from 'node:events'
 import { createServer } from 'node:http'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mysqlEnv, postgresEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
 import { HaiAIError } from '../src/index.js'
+import { call, startNode, stop } from './helpers/memory-test-node.js'
 
 interface Point {
   id: string
@@ -44,6 +42,7 @@ async function createMemoryGateway() {
   const writes: VectorWrite[] = []
   const scrolls: VectorScroll[] = []
   const vectors = { size: 2, distance: 'Cosine' }
+  const collections = new Set<string>()
   let rejectWrites = false
   let rejectQueries = false
   let loseDeleteAcknowledgement = false
@@ -77,7 +76,7 @@ async function createMemoryGateway() {
         }))
         return
       }
-      const parts = /^\/vector\/([^/]+)\/collections(?:\/(hai_ai_memory_vectors)(?:\/(points(?:\/(?:delete|query|scroll))?))?)?$/.exec(path)
+      const parts = /^\/vector\/([^/]+)\/collections(?:\/(hai_m_[a-z0-9_-]+_[0-9a-f]{32})(?:\/(points(?:\/(?:delete|query|scroll))?))?)?$/.exec(path)
       if (!parts) {
         response.writeHead(404).end()
         return
@@ -85,10 +84,21 @@ async function createMemoryGateway() {
       const [, node, collection, action] = parts
       if (!collection && request.method === 'GET') {
         respond({
-          collections: [
-            { name: 'hai_ai_memory_vectors' },
-          ],
+          collections: Array.from(collections, name => ({ name })),
         })
+        return
+      }
+      if (!action && request.method === 'PUT') {
+        if (collections.size && !collections.has(collection)) {
+          response.writeHead(409).end()
+          return
+        }
+        collections.add(collection)
+        respond(true)
+        return
+      }
+      if (!collections.has(collection)) {
+        response.writeHead(404).end()
         return
       }
       if (!action && request.method === 'GET') {
@@ -234,87 +244,6 @@ async function createMemoryGateway() {
       server.closeAllConnections()
       await once(server, 'close')
     },
-  }
-}
-
-let nextRequestId = 0
-const fixture = fileURLToPath(new URL('./fixtures/memory-recovery-node.mjs', import.meta.url))
-
-interface Reply<T> {
-  id: number
-  output?: T
-  error?: string
-}
-
-function call<T = unknown>(child: ChildProcess, method: string, input?: unknown): Promise<T> {
-  const id = ++nextRequestId
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => fail(new Error(`Memory fixture timed out: ${method}`)), 20_000)
-    const exited = () => fail(new Error(`Memory fixture stopped: ${method}`))
-    function release() {
-      clearTimeout(timer)
-      child.off('message', receive)
-      child.off('exit', exited)
-    }
-    function fail(error: Error) {
-      release()
-      reject(error)
-    }
-    function receive(message: Reply<T>) {
-      if (message.id !== id)
-        return
-      if (message.error) {
-        fail(new Error(message.error))
-        return
-      }
-      release()
-      resolve(message.output as T)
-    }
-    child.on('message', receive)
-    child.once('exit', exited)
-    child.send({ id, method, input }, (error) => {
-      if (error)
-        fail(error)
-    })
-  })
-}
-
-async function startNode(children: ChildProcess[], database: ReldbConfigInput, url: string, node: string, maxEntriesPerObject = 1) {
-  const child = fork(fixture, [], {
-    execArgv: [],
-    stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
-  })
-  children.push(child)
-  await call(child, 'init', {
-    database,
-    url,
-    node,
-    maxEntriesPerObject,
-  })
-  return child
-}
-
-async function stop(child: ChildProcess, abrupt = false) {
-  if (child.exitCode !== null || child.signalCode !== null)
-    return
-  const exited = once(child, 'exit')
-  try {
-    if (abrupt) {
-      expect(child.kill('SIGKILL')).toBe(true)
-    }
-    else if (child.connected) {
-      await call(child, 'close')
-      child.disconnect()
-    }
-  }
-  finally {
-    const timer = setTimeout(() => child.kill('SIGKILL'), 3000)
-    try {
-      await exited
-    }
-    finally {
-      clearTimeout(timer)
-    }
   }
 }
 

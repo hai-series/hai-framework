@@ -3213,6 +3213,11 @@
               "mem0"
             ]
           },
+          "vectorNamespace": {
+            "default": "default",
+            "type": "string",
+            "pattern": "^[a-z](?:[a-z0-9_-]{0,18}[a-z0-9])?$"
+          },
           "allowEphemeralFallback": {
             "default": false,
             "type": "boolean"

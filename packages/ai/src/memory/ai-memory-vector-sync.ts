@@ -65,12 +65,13 @@ export function createMemoryVectorSync(
   queue: AIRelStore<MemoryVectorJob>,
   vectors: AIVectorStore,
   scanStore?: AIRelStore<MemoryVectorScanState>,
+  collection?: string,
 ) {
   const lock = store.withRelatedWriteLock?.bind(store)
   if (!lock || !queue.queryKeys)
     return undefined
 
-  const scan = scanStore && createMemoryVectorScan(store, scanStore, vectors)
+  const scan = scanStore && createMemoryVectorScan(store, scanStore, vectors, collection)
 
   function write<R>(run: (memory: AIRelStore<StoredMemory>, pending: AIRelStore<MemoryVectorJob>) => Promise<R>): Promise<R> {
     return lock!(queue, run)

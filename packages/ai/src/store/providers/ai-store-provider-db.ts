@@ -12,6 +12,7 @@ import type { VecdbFunctions } from '@h-ai/vecdb'
 import type { AIRelStore, AIRelStoreCompareAndSwap, AIRelStoreOptions, AIStoreProvider, AIVectorBackend, AIVectorStore, AIVersionedRecord, KnowledgeStore, StoreFilter, StorePage, StoreScope, WhereClause, WhereOperator } from '../ai-store-types.js'
 
 import type { KnowledgeCollectionManifest, KnowledgeDocumentManifest } from './ai-store-knowledge-db.js'
+import { Buffer } from 'node:buffer'
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
@@ -112,6 +113,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   readonly withWriteLock?: AIRelStore<T>['withWriteLock']
   readonly withRelatedWriteLock?: AIRelStore<T>['withRelatedWriteLock']
   readonly getMemoryVectorIds?: AIRelStore<T>['getMemoryVectorIds']
+  readonly readMemoryVectorPage?: AIRelStore<T>['readMemoryVectorPage']
 
   constructor(sql: DmlOperations, table: string, jsonOps: ReldbJsonOps, dbType: DbType, options?: AIRelStoreOptions, tx?: TxManager) {
     this.connection = sql
@@ -146,6 +148,17 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
         if (dbType === 'sqlite' && tx)
           return requireSqlSuccess(await tx.wrap(readIds)).data
         return readIds(this.sql)
+      }
+      this.readMemoryVectorPage = async (afterId, limit) => {
+        if (!Number.isInteger(limit) || limit < 1 || limit > 128)
+          throw new RangeError('Invalid memory vector rebuild page size')
+        const readPage = async (connection: DmlOperations) => requireSqlSuccess(await connection.query<{ data: unknown }>(
+          `SELECT data FROM ${table} WHERE id > ? AND ${key} IS NOT NULL ORDER BY id ASC LIMIT ?`,
+          [afterId, limit],
+        )).data.map(row => this.decodeData(row.data))
+        if (dbType === 'sqlite' && tx)
+          return requireSqlSuccess(await tx.wrap(readPage)).data
+        return readPage(this.sql)
       }
     }
     if (options?.serializeWrites && tx) {
@@ -809,6 +822,9 @@ class VecdbAIVectorStore implements AIVectorStore {
   readonly scan?: AIVectorStore['scan']
 
   constructor(vecdb: VecdbFunctions, collection: string) {
+    const config = vecdb.config
+    if (config?.type === 'pgvector' && Buffer.byteLength(`${config.tablePrefix}${collection}`) > 63)
+      throw new Error(aiM('ai_storeVectorCollectionNameTooLong'))
     this.vecdb = vecdb
     this.collection = collection
     const scan = vecdb.vector.scan?.bind(vecdb.vector)
@@ -823,10 +839,16 @@ class VecdbAIVectorStore implements AIVectorStore {
   }
 
   async upsert(id: string, vector: number[], metadata?: Record<string, unknown>): Promise<void> {
-    await ensureVecdbCollection(this.vecdb, this.collection, vector.length)
-    requireVecdbSuccess(await this.vecdb.vector.upsert(this.collection, [
+    await this.upsertMany([
       { id, vector, metadata },
-    ]))
+    ])
+  }
+
+  async upsertMany(entries: Array<{ id: string, vector: number[], metadata?: Record<string, unknown> }>): Promise<void> {
+    if (!entries.length)
+      return
+    await ensureVecdbCollection(this.vecdb, this.collection, entries[0]!.vector.length)
+    requireVecdbSuccess(await this.vecdb.vector.upsert(this.collection, entries))
   }
 
   async search(vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }): Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>> {
