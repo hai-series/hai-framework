@@ -2,36 +2,13 @@
  * ai.init / ai.close / ai.config / ai.isInitialized 生命周期测试
  */
 
-import type { AIRelStore, AIStoreProvider, AIVectorStore } from '../src/index.js'
+import type { AIStoreProvider } from '../src/index.js'
 
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
 import { ai, AIConfigSchema, HaiAIError, OptionalSecretSchema } from '../src/index.js'
 import { createMemoryStoreProvider } from '../src/store/providers/ai-store-provider-memory.js'
-
-function createNoopRelStore<T>(): AIRelStore<T> {
-  return {
-    save: async () => {},
-    saveMany: async () => {},
-    get: async () => undefined,
-    query: async () => [],
-    queryPage: async () => ({ items: [], total: 0 }),
-    remove: async () => false,
-    removeBy: async () => 0,
-    count: async () => 0,
-    clear: async () => {},
-  }
-}
-
-function createNoopVectorStore(): AIVectorStore {
-  return {
-    upsert: async () => {},
-    search: async () => [],
-    remove: async () => {},
-    clear: async () => {},
-  }
-}
 
 describe('ai.init', () => {
   it('关闭等待在途初始化，完成后不会重新发布实例', async () => {
@@ -216,12 +193,14 @@ describe('ai.close', () => {
 
   it('关闭时释放自定义 storeProvider', async () => {
     let closeCount = 0
+    const stores = createMemoryStoreProvider()
     const storeProvider: AIStoreProvider = {
+      ...stores,
       name: 'test',
-      createRelStore: () => createNoopRelStore(),
-      createVectorStore: () => createNoopVectorStore(),
-      initialize: async () => {},
-      close: async () => { closeCount += 1 },
+      close: async () => {
+        await stores.close?.()
+        closeCount += 1
+      },
     }
 
     const result = await ai.init({
