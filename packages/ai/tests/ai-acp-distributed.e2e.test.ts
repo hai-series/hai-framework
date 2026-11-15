@@ -91,7 +91,7 @@ async function stop(child: ChildProcess) {
 }
 
 describe.skipIf(!image)('independent ACP API and executor processes', () => {
-  it('deduplicates runs across API nodes, reconnects from another process, and cancels through the shared journal', async () => {
+  it('resumes and cancels across nodes and persists scoped approval rules in PostgreSQL', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'hai-acp-distributed-'))
     const children: ChildProcess[] = []
     let release: (() => Promise<void>) | undefined
@@ -183,6 +183,45 @@ describe.skipIf(!image)('independent ACP API and executor processes', () => {
         data: { status: 'cancelled' },
       })
       await call(reconnect, 'end', { sessionId })
+
+      const review = await call<string>(right, 'open')
+      let approvalId: string | undefined
+      const permission = call(right, 'prompt', { sessionId: review, prompt: 'approval' }, (event) => {
+        if (event && typeof event === 'object' && !Array.isArray(event) && event.type === 'approval' && typeof event.approvalId === 'string')
+          approvalId = event.approvalId
+      })
+      void permission.catch(() => {})
+      await expect.poll(() => approvalId).toBeDefined()
+      expect(await call(reconnect, 'approve', { approvalId })).toMatchObject({ success: true })
+      expect(await permission).toMatchObject({
+        success: true,
+        data: {
+          output: { text: 'once' },
+        },
+      })
+      await call(right, 'end', { sessionId: review })
+      await stop(right)
+      const listed = await call<{ success: boolean, data: Array<{ id: string }> }>(reconnect, 'rules')
+      expect(listed).toMatchObject({
+        success: true,
+        data: [
+          { summary: 'Read fixture' },
+        ],
+      })
+      const ruleId = listed.data[0]!.id
+      expect(await call(reconnect, 'rules', { other: true })).toEqual({ success: true, data: [] })
+      expect(await call(reconnect, 'revoke', { ruleId, other: true })).toMatchObject({ success: false })
+      const authorized = await call<string>(reconnect, 'open', { ruleId })
+      expect(await call(reconnect, 'prompt', { sessionId: authorized, prompt: 'approval' })).toMatchObject({
+        success: true,
+        data: {
+          output: { text: 'once' },
+        },
+      })
+      expect(await call(executor, 'revoke', { ruleId })).toMatchObject({ success: true })
+      expect(await call(reconnect, 'rules')).toEqual({ success: true, data: [] })
+      expect(await call(reconnect, 'prompt', { sessionId: authorized, prompt: 'approval' })).toMatchObject({ success: false })
+      await call(reconnect, 'end', { sessionId: authorized })
       await stop(executor)
     }
     finally {

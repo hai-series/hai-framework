@@ -76,8 +76,17 @@ const methods = {
   async run() {
     return alice().run({ ...request, prompt: 'cross-node', idempotencyKey: 'stable' })
   },
-  async open() {
-    const session = take(await alice().sessions.create(request))
+  async open(input) {
+    const options = input?.ruleId
+      ? {
+          ...request,
+          permissions: {
+            approval: 'never',
+            ruleIds: [input.ruleId],
+          },
+        }
+      : request
+    const session = take(await alice().sessions.create(options))
     sessions.set(session.id, session)
     return session.id
   },
@@ -96,6 +105,19 @@ const methods = {
   },
   async cancel({ taskId }) {
     return alice().tasks.cancel(taskId)
+  },
+  async approve({ approvalId }) {
+    return alice().approvals.respond(approvalId, 'always-allow')
+  },
+  async rules({ other } = {}) {
+    return (other
+      ? bob()
+      : alice()).approvals.rules()
+  },
+  async revoke({ ruleId, other }) {
+    return (other
+      ? bob()
+      : alice()).approvals.revoke(ruleId)
   },
   async end({ sessionId }) {
     const session = take(await alice().sessions.get(sessionId))

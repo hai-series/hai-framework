@@ -232,6 +232,11 @@ function hash(value: string) {
   return createHash('sha256').update(value).digest('hex')
 }
 
+function permissionScopeKey(scope: RunnerScope) {
+  // PostgreSQL JSONB 会重排键，授权归属始终使用固定字段顺序。
+  return hash(JSON.stringify({ tenantId: scope.tenantId, userId: scope.userId }))
+}
+
 function canonicalToolInput(value: unknown): string | undefined {
   if (value === undefined || value === null)
     return undefined
@@ -468,7 +473,7 @@ export function createACPPlatform(deps: {
     }
     if (permissions.ruleIds?.length && checkAccess) {
       const now = await grants.currentTime()
-      const scopeKey = hash(JSON.stringify(scope))
+      const scopeKey = permissionScopeKey(scope)
       for (const id of permissions.ruleIds) {
         const grant = await grants.get(id)
         if (grant?.scopeKey !== scopeKey || grant.sessionId || grant.revoked || grant.expires <= now)
@@ -815,7 +820,7 @@ export function createACPPlatform(deps: {
     ]))
     const sessionGrant = hash(JSON.stringify([sessionId, target]))
     const now = await approvals.currentTime()
-    const scopeKey = hash(JSON.stringify(binding.scope))
+    const scopeKey = permissionScopeKey(binding.scope)
     const matching = await Promise.all([
       grants.get(sessionGrant),
       ruleIds === undefined || ruleIds.includes(target)
@@ -1588,7 +1593,7 @@ export function createACPPlatform(deps: {
             throw new ACPFailure('invalid')
           const entries = await grants.queryPage({
             where: {
-              scopeKey: hash(JSON.stringify(scope())),
+              scopeKey: permissionScopeKey(scope()),
               expires: { $gt: await grants.currentTime() },
               revoked: { $ne: true },
             },
@@ -1604,7 +1609,7 @@ export function createACPPlatform(deps: {
         /** 撤销当前主体拥有的已保存规则。 */
         revoke: (id: string) => protectedCall(async () => {
           const previous = await grants.readVersioned(id)
-          if (!previous || previous.data.scopeKey !== hash(JSON.stringify(scope())))
+          if (!previous || previous.data.scopeKey !== permissionScopeKey(scope()))
             throw new ACPFailure('missing')
           if (!previous.data.revoked && !await grants.compareAndSwap(id, {
             expectedVersion: previous.version,
