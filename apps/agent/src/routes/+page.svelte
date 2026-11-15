@@ -170,13 +170,23 @@
 
   async function bootstrap() {
     home = await read<HomeView>()
-    useMemory = home.preferences.memoryRead
   }
 
   async function openTask(id: string) {
     observer?.abort()
     clearTimeout(poll)
     observer = new AbortController()
+    if (selection !== id) {
+      draft = ''
+      attachments = []
+      chosenKnowledge = []
+      chosenSkills = []
+      useMemory = home?.preferences.memoryRead ?? false
+      audioStop?.()
+      audioStop = undefined
+      recording = false
+      stopSpeech()
+    }
     selection = id
     task = undefined
     turns = []
@@ -301,12 +311,14 @@
   async function submit(text = draft) {
     if (!text.trim() || !selection || pending || running)
       return
+    const id = selection
+    const signal = observer?.signal
     pending = true
     errorText = ''
     try {
       await send({
         type: 'send',
-        task: selection,
+        task: id,
         turn: crypto.randomUUID(),
         text: text.trim(),
         files: attachments.map(file => file.id),
@@ -314,14 +326,18 @@
         skills: chosenSkills,
         memory: useMemory,
       })
+      if (signal?.aborted)
+        return
       draft = ''
-      await refresh(selection)
+      await refresh(id, signal)
       await bootstrap()
       requestAnimationFrame(() => feed?.scrollTo({ top: feed?.scrollHeight }))
     }
     catch (error) {
-      problem(error)
-      await refresh(selection)
+      if (!signal?.aborted) {
+        problem(error)
+        await refresh(id, signal)
+      }
     }
     finally { pending = false }
   }
@@ -350,20 +366,31 @@
     event.currentTarget.value = ''
     if (!file)
       return
+    const signal = observer?.signal
     try {
-      attachments = [...attachments, await upload(file)].slice(0, 8)
+      const uploaded = await upload(file)
+      if (!signal?.aborted)
+        attachments = [...attachments, uploaded].slice(0, 8)
     }
-    catch (error) { problem(error) }
+    catch (error) {
+      if (!signal?.aborted)
+        problem(error)
+    }
   }
 
-  async function addSpeech(blob: Blob) {
+  async function addSpeech(blob: Blob, signal = observer?.signal) {
     try {
       const result = await transcribe(blob)
+      if (signal?.aborted)
+        return
       draft = draft
         ? `${draft} ${result.text}`
         : result.text
     }
-    catch (error) { problem(error) }
+    catch (error) {
+      if (!signal?.aborted)
+        problem(error)
+    }
   }
 
   async function voiceInput(event: Event) {
@@ -380,15 +407,26 @@
       audioStop()
       return
     }
+    const signal = observer?.signal
     try {
-      audioStop = await record((audio) => {
+      const stop = await record((audio) => {
+        if (signal?.aborted)
+          return
         audioStop = undefined
         recording = false
-        void addSpeech(audio)
+        void addSpeech(audio, signal)
       })
+      if (signal?.aborted) {
+        stop()
+        return
+      }
+      audioStop = stop
       recording = true
     }
-    catch (error) { problem(error) }
+    catch (error) {
+      if (!signal?.aborted)
+        problem(error)
+    }
   }
 
   function stopSpeech() {

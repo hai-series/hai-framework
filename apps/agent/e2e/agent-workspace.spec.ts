@@ -15,6 +15,7 @@ test('keeps settings, memory, knowledge and task history in the authenticated ac
   await signup(page, a)
   await page.getByRole('button', { name: 'Personal' }).click()
   await page.getByLabel('Response preference').fill('Always answer with a checklist')
+  await page.getByLabel('Use my memory').check()
   await page.getByRole('button', { name: 'Save settings' }).click()
   await expect(page.getByText('Settings saved')).toBeVisible()
   await page.getByRole('button', { name: 'Memory' }).click()
@@ -31,6 +32,20 @@ test('keeps settings, memory, knowledge and task history in the authenticated ac
   await expect(page.getByText('Private handbook', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'New task' }).click()
   await expect(page.getByLabel('Message')).toBeVisible()
+  const useMemory = page.getByRole('button', { name: 'Use my memory', exact: true })
+  await expect(useMemory).toHaveAttribute('aria-pressed', 'true')
+  await useMemory.click()
+  await page.getByLabel('Message').fill('An unfinished draft')
+  await page.locator('input[type=file]:not([accept])').setInputFiles({
+    name: 'first-task.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('Data selected for only the first task'),
+  })
+  await expect(page.getByRole('button', { name: 'first-task.txt' })).toBeVisible()
+  await page.getByRole('button', { name: 'New task' }).click()
+  await expect(page.getByLabel('Message')).toHaveValue('')
+  await expect(page.getByRole('button', { name: 'first-task.txt' })).toHaveCount(0)
+  await expect(useMemory).toHaveAttribute('aria-pressed', 'true')
   const other = await browser.newPage({ locale: 'en-US' })
   try {
     await signup(other, `bob-${Date.now()}`)
