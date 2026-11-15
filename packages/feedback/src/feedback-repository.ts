@@ -219,6 +219,7 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<FeedbackRe
   constructor() {
     super(reldb, {
       table: REPORTS,
+      createTableIfNotExists: false,
       fields: Object.entries(reportDef).map(([name, def]) => ({
         fieldName: name,
         columnName: name,
@@ -231,180 +232,182 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<FeedbackRe
   }
 
   async ready(): Promise<HaiResult<void>> {
-    const report = await this.ensureReady()
-    if (!report.success)
-      return report
-    const definitions: Array<[string, ReldbTableDef]> = [
-      [
-        QUOTAS,
-        {
-          id: { type: 'TEXT', primaryKey: true },
-          app_id: { type: 'TEXT', notNull: true },
-          scope_id: { type: 'TEXT', notNull: true },
-          user_id: { type: 'TEXT', notNull: true },
-          period: { type: 'BIGINT', notNull: true },
-          report_count: { type: 'BIGINT', notNull: true },
-          reserved_bytes: { type: 'BIGINT', notNull: true },
-          report_bytes: { type: 'BIGINT', notNull: true, defaultValue: 0 },
-          export_limit: { type: 'INTEGER', notNull: true, defaultValue: 0 },
-          updated_at: { type: 'BIGINT', notNull: true },
-        },
-      ],
-      [
-        EVIDENCE,
-        {
-          id: { type: 'TEXT', primaryKey: true },
-          report_id: { type: 'TEXT' },
-          scope_id: { type: 'TEXT', notNull: true },
-          user_id: { type: 'TEXT', notNull: true },
-          app_id: { type: 'TEXT', notNull: true },
-          source: { type: 'TEXT', notNull: true },
-          sequence: { type: 'BIGINT', notNull: true },
-          kind: { type: 'TEXT', notNull: true },
-          timestamp: { type: 'BIGINT', notNull: true },
-          request_id: { type: 'TEXT' },
-          error_id: { type: 'TEXT' },
-          revision: { type: 'INTEGER', notNull: true },
-          bytes: { type: 'INTEGER', notNull: true },
-          expires_at: { type: 'BIGINT', notNull: true },
-          payload: { type: 'JSON', notNull: true },
-        },
-      ],
-      [
-        ATTACHMENTS,
-        {
-          id: { type: 'TEXT', primaryKey: true },
-          client_id: { type: 'TEXT', notNull: true },
-          report_id: { type: 'TEXT', notNull: true },
-          scope_id: { type: 'TEXT', notNull: true },
-          object_key: { type: 'TEXT', notNull: true },
-          status: { type: 'TEXT', notNull: true },
-          size: { type: 'BIGINT', notNull: true },
-          checksum: { type: 'TEXT', notNull: true },
-          updated_at: { type: 'BIGINT', notNull: true },
-          payload: { type: 'JSON', notNull: true },
-        },
-      ],
-      [
-        HISTORY,
-        {
-          id: { type: 'TEXT', primaryKey: true },
-          report_id: { type: 'TEXT', notNull: true },
-          payload: { type: 'JSON', notNull: true },
-        },
-      ],
-      [
-        JOBS,
-        {
-          id: { type: 'TEXT', primaryKey: true },
-          app_id: { type: 'TEXT', notNull: true },
-          snapshot_revision: { type: 'INTEGER' },
-          snapshot_version: { type: 'INTEGER' },
-          report_id: { type: 'TEXT', notNull: true },
-          scope_id: { type: 'TEXT', notNull: true },
-          kind: { type: 'TEXT', notNull: true },
-          status: { type: 'TEXT', notNull: true },
-          token: { type: 'TEXT' },
-          lease_until: { type: 'BIGINT', notNull: true },
-          attempts: { type: 'INTEGER', notNull: true },
-          next_run_at: { type: 'BIGINT', notNull: true },
-          created_at: { type: 'BIGINT', notNull: true },
-          updated_at: { type: 'BIGINT', notNull: true },
-          last_error: { type: 'TEXT' },
-          payload: { type: 'JSON', notNull: true },
-          result: { type: 'JSON' },
-        },
-      ],
-    ]
-    for (const [table, definition] of definitions) {
-      const created = await reldb.ddl.createTable(table, definition)
-      if (!created.success)
-        return created
-    }
-    const indexes = [
-      {
-        table: QUOTAS,
-        name: 'hai_feedback_quotas_expiry',
-        columns: ['app_id', 'period'],
-      },
-      {
-        table: REPORTS,
-        name: 'hai_feedback_reports_scope_time',
-        columns: ['scope_id', 'created_at'],
-      },
-      {
-        table: REPORTS,
-        name: 'hai_feedback_reports_scope_status',
-        columns: ['scope_id', 'status', 'created_at'],
-      },
-      {
-        table: EVIDENCE,
-        name: 'hai_feedback_evidence_report_seq',
-        columns: ['report_id', 'source', 'sequence'],
-      },
-      {
-        table: EVIDENCE,
-        name: 'hai_feedback_evidence_temp_expiry',
-        columns: ['app_id', 'report_id', 'expires_at'],
-      },
-      {
-        table: EVIDENCE,
-        name: 'hai_feedback_evidence_temp_scope',
-        columns: ['scope_id', 'user_id', 'timestamp'],
-      },
-      {
-        table: ATTACHMENTS,
-        name: 'hai_feedback_attachments_report',
-        columns: ['report_id'],
-      },
-      {
-        table: HISTORY,
-        name: 'hai_feedback_history_report',
-        columns: ['report_id'],
-      },
-      {
-        table: JOBS,
-        name: 'hai_feedback_jobs_pending',
-        columns: ['app_id', 'status', 'next_run_at'],
-      },
-      {
-        table: JOBS,
-        name: 'hai_feedback_jobs_snapshot',
-        columns: ['report_id', 'snapshot_revision', 'snapshot_version'],
-      },
-    ]
-    for (const index of indexes) {
-      // MySQL 的 CREATE INDEX 不支持 IF NOT EXISTS；重启和多节点启动须核验真实索引定义。
-      const inspect = async (): Promise<HaiResult<boolean>> => {
-        const found = await reldb.sql.query<{ column_name: string, non_unique: number }>('SELECT COLUMN_NAME AS column_name, NON_UNIQUE AS non_unique FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? ORDER BY SEQ_IN_INDEX', [index.table, index.name])
-        if (!found.success)
-          return found
-        if (!found.data.length)
-          return ok(false)
-        const matches = found.data.length === index.columns.length && found.data.every((column, position) => column.column_name === index.columns[position] && Number(column.non_unique) === 1)
-        return matches
-          ? ok(true)
-          : err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
+    return reldb.prepareSchema('hai:feedback:schema', async ({ ddl, sql }) => {
+      const definitions: Array<[string, ReldbTableDef]> = [
+        [REPORTS, reportDef],
+        [
+          QUOTAS,
+          {
+            id: { type: 'TEXT', primaryKey: true },
+            app_id: { type: 'TEXT', notNull: true },
+            scope_id: { type: 'TEXT', notNull: true },
+            user_id: { type: 'TEXT', notNull: true },
+            period: { type: 'BIGINT', notNull: true },
+            report_count: { type: 'BIGINT', notNull: true },
+            reserved_bytes: { type: 'BIGINT', notNull: true },
+            report_bytes: { type: 'BIGINT', notNull: true, defaultValue: 0 },
+            export_limit: { type: 'INTEGER', notNull: true, defaultValue: 0 },
+            updated_at: { type: 'BIGINT', notNull: true },
+          },
+        ],
+        [
+          EVIDENCE,
+          {
+            id: { type: 'TEXT', primaryKey: true },
+            report_id: { type: 'TEXT' },
+            scope_id: { type: 'TEXT', notNull: true },
+            user_id: { type: 'TEXT', notNull: true },
+            app_id: { type: 'TEXT', notNull: true },
+            source: { type: 'TEXT', notNull: true },
+            sequence: { type: 'BIGINT', notNull: true },
+            kind: { type: 'TEXT', notNull: true },
+            timestamp: { type: 'BIGINT', notNull: true },
+            request_id: { type: 'TEXT' },
+            error_id: { type: 'TEXT' },
+            revision: { type: 'INTEGER', notNull: true },
+            bytes: { type: 'INTEGER', notNull: true },
+            expires_at: { type: 'BIGINT', notNull: true },
+            payload: { type: 'JSON', notNull: true },
+          },
+        ],
+        [
+          ATTACHMENTS,
+          {
+            id: { type: 'TEXT', primaryKey: true },
+            client_id: { type: 'TEXT', notNull: true },
+            report_id: { type: 'TEXT', notNull: true },
+            scope_id: { type: 'TEXT', notNull: true },
+            object_key: { type: 'TEXT', notNull: true },
+            status: { type: 'TEXT', notNull: true },
+            size: { type: 'BIGINT', notNull: true },
+            checksum: { type: 'TEXT', notNull: true },
+            updated_at: { type: 'BIGINT', notNull: true },
+            payload: { type: 'JSON', notNull: true },
+          },
+        ],
+        [
+          HISTORY,
+          {
+            id: { type: 'TEXT', primaryKey: true },
+            report_id: { type: 'TEXT', notNull: true },
+            payload: { type: 'JSON', notNull: true },
+          },
+        ],
+        [
+          JOBS,
+          {
+            id: { type: 'TEXT', primaryKey: true },
+            app_id: { type: 'TEXT', notNull: true },
+            snapshot_revision: { type: 'INTEGER' },
+            snapshot_version: { type: 'INTEGER' },
+            report_id: { type: 'TEXT', notNull: true },
+            scope_id: { type: 'TEXT', notNull: true },
+            kind: { type: 'TEXT', notNull: true },
+            status: { type: 'TEXT', notNull: true },
+            token: { type: 'TEXT' },
+            lease_until: { type: 'BIGINT', notNull: true },
+            attempts: { type: 'INTEGER', notNull: true },
+            next_run_at: { type: 'BIGINT', notNull: true },
+            created_at: { type: 'BIGINT', notNull: true },
+            updated_at: { type: 'BIGINT', notNull: true },
+            last_error: { type: 'TEXT' },
+            payload: { type: 'JSON', notNull: true },
+            result: { type: 'JSON' },
+          },
+        ],
+      ]
+      for (const [table, definition] of definitions) {
+        const created = await ddl.createTable(table, definition)
+        if (!created.success)
+          return created
       }
-      if (reldb.config?.type === 'mysql') {
-        const existing = await inspect()
-        if (!existing.success)
-          return existing
-        if (existing.data)
-          continue
-      }
-      const result = await reldb.ddl.createIndex(index.table, index.name, { columns: index.columns })
-      if (!result.success) {
-        // 两个进程可能同时观察到缺失；仅另一进程已建立完全一致的索引才视为完成。
+      const indexes = [
+        {
+          table: QUOTAS,
+          name: 'hai_feedback_quotas_expiry',
+          columns: ['app_id', 'period'],
+        },
+        {
+          table: REPORTS,
+          createTableIfNotExists: false,
+          name: 'hai_feedback_reports_scope_time',
+          columns: ['scope_id', 'created_at'],
+        },
+        {
+          table: REPORTS,
+          createTableIfNotExists: false,
+          name: 'hai_feedback_reports_scope_status',
+          columns: ['scope_id', 'status', 'created_at'],
+        },
+        {
+          table: EVIDENCE,
+          name: 'hai_feedback_evidence_report_seq',
+          columns: ['report_id', 'source', 'sequence'],
+        },
+        {
+          table: EVIDENCE,
+          name: 'hai_feedback_evidence_temp_expiry',
+          columns: ['app_id', 'report_id', 'expires_at'],
+        },
+        {
+          table: EVIDENCE,
+          name: 'hai_feedback_evidence_temp_scope',
+          columns: ['scope_id', 'user_id', 'timestamp'],
+        },
+        {
+          table: ATTACHMENTS,
+          name: 'hai_feedback_attachments_report',
+          columns: ['report_id'],
+        },
+        {
+          table: HISTORY,
+          name: 'hai_feedback_history_report',
+          columns: ['report_id'],
+        },
+        {
+          table: JOBS,
+          name: 'hai_feedback_jobs_pending',
+          columns: ['app_id', 'status', 'next_run_at'],
+        },
+        {
+          table: JOBS,
+          name: 'hai_feedback_jobs_snapshot',
+          columns: ['report_id', 'snapshot_revision', 'snapshot_version'],
+        },
+      ]
+      for (const index of indexes) {
+        // MySQL 的 CREATE INDEX 不支持 IF NOT EXISTS；重启和多节点启动须核验真实索引定义。
+        const inspect = async (): Promise<HaiResult<boolean>> => {
+          const found = await sql.query<{ column_name: string, non_unique: number }>('SELECT COLUMN_NAME AS column_name, NON_UNIQUE AS non_unique FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? ORDER BY SEQ_IN_INDEX', [index.table, index.name])
+          if (!found.success)
+            return found
+          if (!found.data.length)
+            return ok(false)
+          const matches = found.data.length === index.columns.length && found.data.every((column, position) => column.column_name === index.columns[position] && Number(column.non_unique) === 1)
+          return matches
+            ? ok(true)
+            : err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
+        }
         if (reldb.config?.type === 'mysql') {
-          const concurrent = await inspect()
-          if (concurrent.success && concurrent.data)
+          const existing = await inspect()
+          if (!existing.success)
+            return existing
+          if (existing.data)
             continue
         }
-        return result
+        const result = await ddl.createIndex(index.table, index.name, { columns: index.columns })
+        if (!result.success) {
+          // 两个进程可能同时观察到缺失；仅另一进程已建立完全一致的索引才视为完成。
+          if (reldb.config?.type === 'mysql') {
+            const concurrent = await inspect()
+            if (concurrent.success && concurrent.data)
+              continue
+          }
+          return result
+        }
       }
-    }
-    return ok(undefined)
+      return ok(undefined)
+    })
   }
 
   async find(id: string, scope: string, sql: DmlOperations = reldb.sql) {

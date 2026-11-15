@@ -186,8 +186,8 @@ const ROLE_PERMISSION_SCHEMA = {
  */
 export async function createDbRolePermissionRepository(): Promise<HaiResult<RolePermissionRepository>> {
   // 确保表存在
-  async function ensureTable(): Promise<HaiResult<void>> {
-    const result = await reldb.ddl.createTable(ROLE_PERMISSION_TABLE, ROLE_PERMISSION_SCHEMA, true)
+  const initResult = await reldb.prepareSchema('hai:iam:role-permissions:schema', async ({ ddl }) => {
+    const result = await ddl.createTable(ROLE_PERMISSION_TABLE, ROLE_PERMISSION_SCHEMA, true)
     if (!result.success) {
       return err(
         HaiIamError.REPOSITORY_ERROR,
@@ -199,11 +199,11 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
     }
 
     const indexResults = await Promise.all([
-      reldb.ddl.createIndex(ROLE_PERMISSION_TABLE, 'idx_role_perm_role_perm', {
+      ddl.createIndex(ROLE_PERMISSION_TABLE, 'idx_role_perm_role_perm', {
         columns: ['role_id', 'permission_id'],
         unique: true,
       }),
-      reldb.ddl.createIndex(ROLE_PERMISSION_TABLE, 'idx_role_perm_role', {
+      ddl.createIndex(ROLE_PERMISSION_TABLE, 'idx_role_perm_role', {
         columns: ['role_id'],
       }),
     ])
@@ -220,9 +220,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
     }
 
     return ok(undefined)
-  }
-
-  const initResult = await ensureTable()
+  })
   if (!initResult.success) {
     return err(
       HaiIamError.REPOSITORY_ERROR,
@@ -505,8 +503,8 @@ export async function createDbUserRoleRepository(
    *
    * 创建 `hai_iam_user_roles` 表及唯一约束索引。
    */
-  async function ensureTable(): Promise<HaiResult<void>> {
-    const result = await reldb.ddl.createTable(USER_ROLE_TABLE, USER_ROLE_SCHEMA, true)
+  const initResult = await reldb.prepareSchema('hai:iam:user-roles:schema', async ({ ddl }) => {
+    const result = await ddl.createTable(USER_ROLE_TABLE, USER_ROLE_SCHEMA, true)
     if (!result.success) {
       return err(
         HaiIamError.REPOSITORY_ERROR,
@@ -518,11 +516,11 @@ export async function createDbUserRoleRepository(
     }
 
     const indexResults = await Promise.all([
-      reldb.ddl.createIndex(USER_ROLE_TABLE, 'idx_user_role_user_role', {
+      ddl.createIndex(USER_ROLE_TABLE, 'idx_user_role_user_role', {
         columns: ['user_id', 'role_id'],
         unique: true,
       }),
-      reldb.ddl.createIndex(USER_ROLE_TABLE, 'idx_user_role_user', {
+      ddl.createIndex(USER_ROLE_TABLE, 'idx_user_role_user', {
         columns: ['user_id'],
       }),
     ])
@@ -539,9 +537,7 @@ export async function createDbUserRoleRepository(
     }
 
     return ok(undefined)
-  }
-
-  const initResult = await ensureTable()
+  })
   if (!initResult.success) {
     return err(
       HaiIamError.REPOSITORY_ERROR,

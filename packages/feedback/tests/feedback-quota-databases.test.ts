@@ -20,6 +20,15 @@ for (const [name, factory] of [
       expect((await reldb.init(backend.config)).success).toBe(true)
       directory = await mkdtemp(join(tmpdir(), 'hai-feedback-quota-'))
       expect((await storage.init({ type: 'local', root: directory })).success).toBe(true)
+      if (name === 'postgresql') {
+        expect((await reldb.ddl.createTable('hai_feedback_reports_scope_time', {
+          collision: { type: 'TEXT' },
+        })).success).toBe(true)
+        expect((await feedback.init({ appId: 'quota-database', notificationMode: 'disabled', workerIntervalMs: 0 })).success).toBe(false)
+        const columns = await reldb.schemaColumns('hai_feedback_reports')
+        expect(columns.success && columns.data).toEqual([])
+        expect((await reldb.ddl.dropTable('hai_feedback_reports_scope_time')).success).toBe(true)
+      }
       expect((await feedback.init({
         appId: 'quota-database',
         notificationMode: 'disabled',

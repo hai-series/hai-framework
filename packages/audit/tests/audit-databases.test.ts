@@ -125,6 +125,13 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
         expect(count.success && Number(count.data?.total)).toBe(2)
       }
       if (type === 'postgresql') {
+        expect((await reldb.ddl.dropIndex('hai_audit_event_time_idx')).success).toBe(true)
+        expect((await reldb.ddl.createTable('hai_audit_event_time_idx', {
+          collision: { type: 'TEXT' },
+        })).success).toBe(true)
+        await expect(simultaneous(config)).rejects.toThrow(/42P07/)
+        expect((await reldb.ddl.dropTable('hai_audit_event_time_idx')).success).toBe(true)
+        await simultaneous(config)
         // 用真实权限错误验证子进程错误链，避免成功用例掩盖诊断信息丢失。
         expect((await reldb.ddl.dropTable('hai_audit_logs', true)).success).toBe(true)
         expect((await reldb.sql.execute('REVOKE CREATE ON SCHEMA public FROM PUBLIC')).success).toBe(true)
