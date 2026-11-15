@@ -1,0 +1,62 @@
+@import 'tailwindcss';
+@import '../../../packages/ui/src/lib/styles/global.css';
+@import '../../../packages/ui/src/lib/styles/theme.css';
+@source '../../../packages/ui/src/lib/**/*.{svelte,ts}';
+
+@plugin 'daisyui' {
+  themes:
+    light --default,
+    dark --prefersdark,
+    corporate,
+    night;
+}
+
+@plugin '@iconify/tailwind4' {
+  prefixes: tabler;
+}
+
+:root {
+  font-family: Inter, 'Noto Sans', ui-sans-serif, system-ui, sans-serif;
+  --agent-rail: color-mix(in oklab, var(--color-base-200), var(--color-base-100) 40%);
+  --agent-line: color-mix(in oklab, var(--color-base-content) 12%, transparent);
+  --agent-muted: color-mix(in oklab, var(--color-base-content) 66%, var(--color-base-100));
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--color-base-100);
+}
+
+.agent-rail {
+  background: var(--agent-rail);
+}
+
+.agent-divider {
+  border-color: var(--agent-line);
+}
+
+.agent-muted {
+  color: var(--agent-muted);
+}
+
+.agent-icon {
+  width: 1.2em;
+  height: 1.2em;
+  flex: none;
+}
+
+.agent-shadow {
+  box-shadow: 0 4px 25px color-mix(in oklab, var(--color-base-content) 7%, transparent);
+}
+
+.agent-mark {
+  display: grid;
+  place-items: center;
+  inline-size: 36px;
+  block-size: 36px;
+  color: white;
+  background: #3c5fe3;
+  border-radius: 11px;
+  box-shadow: 0 3px 10px rgb(28 55 185 / 24%);
+}

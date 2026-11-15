@@ -102,6 +102,8 @@ finally {
 
 ### 分配节点角色与读取环境
 
+默认 PostgreSQL Store 可由多个节点同时初始化。空库创建表、旧库补列与索引、初始化门闩在同一事务中完成；失败回滚，修正权限或结构冲突后可在同一实例重试 `init`。
+
 单进程应用可使用 `runner`。`createRunner()` 返回独立实例，适用于分别注入节点角色或隔离测试。多节点生产部署使用共享 PostgreSQL 或 MySQL，同一部署使用一致的环境定义和并发上限。执行节点 ID 必须唯一，并在节点重启后保持稳定。以下示例假定 RelDB 已启动，`imageId` 由部署方提供，是每台执行节点本地已缓存的 OCI 镜像 ID 或清单 digest。
 
 ```ts
@@ -225,6 +227,27 @@ if (!registration.success)
 ```
 
 提交 `{ scope, kind: 'copy.v1', input: null, environmentId: 'docs' }` 即可排队运行。`context.start` 每个任务至多调用一次。`files` 将启动文本文件放入 `/state`，`env` 只交给容器进程，`cwd` 默认 `/workspace`。`inputs` 最多 8 个平铺文件，输入合计不超过 50 MiB 与 `scratchMiB` 中的较小值。`artifact` 读取仍在运行的容器中 `/output` 的普通文件，并受传入的 `maxBytes` 与 50 MiB 硬上限约束。应用要检查产物归属后再提供下载。
+
+### 私有项目工作区
+
+`context.start({ command, workspace })` 接收规范 Base64 普通文件树，可用 `src/main.ts` 这样的相对路径。执行器把初始文件复制到容器私有的 `/workspace`，容量受临时盘限制。项目最多 512 个文件，最多 50 MiB，拒绝路径逃逸和 Git 元数据。工作区与预热单次工具分别使用独立入口。
+
+```ts
+// 输入已有任务处理器 context；启动命令在私有目录编辑，返回容器句柄。
+const launched = await context.start({
+  command: '/bin/sh',
+  args: ['-c', 'read -r done'],
+  workspace: { 'src/readme.txt': 'aGk=' }
+})
+if (!launched.success)
+  throw new Error(launched.error.message)
+// 输入允许读取的最大字节数，得到当前普通文件的 Base64 映射。
+const files = await launched.data.snapshot(1024 * 1024)
+if (!files.success)
+  throw new Error(files.error.message)
+```
+
+快照需要镜像提供 Node.js，只读取仍属于当前任务的工作区，跳过链接和特殊文件。授权用户确认接收或 Git 发布前，调用应用核对产物所有者。任务处理器退出会由 Runner 确认清理容器及暂存。
 
 ### 路由子任务、限制工具并发和预热
 

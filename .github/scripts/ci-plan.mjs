@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 
 const browserApps = [
   'admin-console',
+  'agent',
   'ai-playground',
   'corporate-website',
   'h5-app',

@@ -1,5 +1,5 @@
 import type { HaiResult } from '@h-ai/core'
-import type { DmlOperations, ReldbTableDef } from '@h-ai/reldb'
+import type { DmlOperations, ReldbFunctions, ReldbTableDef } from '@h-ai/reldb'
 import type { RunnerConfig, RunnerEnvironment, RunnerResources, submitSchema } from './runner-config.js'
 import type { RunnerContainerIdentity } from './runner-container.js'
 import type { RunnerProcessIdentity } from './runner-process.js'
@@ -264,6 +264,14 @@ function within(actual: RunnerResources, ceiling: RunnerResources) {
 export async function readyStore(): Promise<HaiResult<void>> {
   if (!reldb.isInitialized)
     return unavailable()
+  const initialized = await reldb.prepareSchema('hai:runner:schema', readySchema)
+  return initialized.success
+    ? initialized
+    : unavailable()
+}
+
+async function readySchema({ ddl, sql }: Pick<ReldbFunctions, 'ddl' | 'sql'>): Promise<HaiResult<void>> {
+  const type = reldb.config?.type
   const addedColumns = ['event_bytes', 'owner_process_json']
   for (const [name, def] of [
     [
@@ -285,20 +293,24 @@ export async function readyStore(): Promise<HaiResult<void>> {
       },
     ],
   ] satisfies [string, ReldbTableDef][]) {
-    const result = await reldb.ddl.createTable(name, def)
+    const result = await ddl.createTable(name, def)
     if (!result.success) {
-      const existing = await reldb.schemaColumns(name)
+      if (type === 'postgresql')
+        return result
+      const existing = await reldb.schemaColumns(name, sql)
       if (!existing.success || Object.keys(def).some(column => !existing.data.includes(column) && !(name === EXECUTIONS && addedColumns.includes(column))))
         return unavailable()
     }
   }
-  const existing = await reldb.schemaColumns(EXECUTIONS)
+  const existing = await reldb.schemaColumns(EXECUTIONS, sql)
   if (!existing.success)
     return unavailable()
   for (const column of addedColumns.filter(column => !existing.data.includes(column))) {
-    const added = await reldb.ddl.addColumn(EXECUTIONS, column, executions[column])
+    const added = await ddl.addColumn(EXECUTIONS, column, executions[column])
     if (!added.success) {
-      const refreshed = await reldb.schemaColumns(EXECUTIONS)
+      if (type === 'postgresql')
+        return added
+      const refreshed = await reldb.schemaColumns(EXECUTIONS, sql)
       if (!refreshed.success || !refreshed.data.includes(column))
         return unavailable()
     }
@@ -361,12 +373,12 @@ export async function readyStore(): Promise<HaiResult<void>> {
       ['execution_id', 'sequence_number'],
     ],
   ] satisfies [string, string, string[]][]) {
-    const result = await reldb.ddl.createIndex(table, name, { columns: fields })
+    const result = await ddl.createIndex(table, name, { columns: fields })
     if (!result.success) {
       // MySQL 缺少 CREATE INDEX IF NOT EXISTS；并发初始化后核对索引实际列。
-      if (reldb.config?.type !== 'mysql')
-        return unavailable()
-      const existing = await reldb.sql.query<{ column_name: string }>(
+      if (type !== 'mysql')
+        return result
+      const existing = await sql.query<{ column_name: string }>(
         'SELECT COLUMN_NAME AS column_name FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? ORDER BY SEQ_IN_INDEX',
         [table, name],
       )
@@ -375,10 +387,10 @@ export async function readyStore(): Promise<HaiResult<void>> {
     }
   }
 
-  const syntax = reldb.config?.type === 'mysql'
+  const syntax = type === 'mysql'
     ? ' ON DUPLICATE KEY UPDATE id = id'
     : ' ON CONFLICT (id) DO NOTHING'
-  const seed = await reldb.sql.execute(`INSERT INTO ${GATE} (id, revision) VALUES (1, 0)${syntax}`)
+  const seed = await sql.execute(`INSERT INTO ${GATE} (id, revision) VALUES (1, 0)${syntax}`)
   return seed.success
     ? ok(undefined)
     : unavailable()

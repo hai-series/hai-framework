@@ -80,6 +80,12 @@ describe.skipIf(!enabled)('managed native ACP agents on an isolated network', ()
       value(await runner.init({
         engine,
         nodeId: `managed-native-${adapter}`,
+        capacity: {
+          cpu: 4,
+          memoryMiB: 4096,
+          pids: 1024,
+          scratchMiB: 2048,
+        },
         environments: [
           {
             id: 'native',
@@ -128,6 +134,7 @@ describe.skipIf(!enabled)('managed native ACP agents on an isolated network', ()
               adapter,
               modelIds: ['fixture'],
               environmentIds: ['native'],
+              ...(adapter === 'deepseek-harness' && { sharedMode: true }),
             },
           ],
         },
@@ -152,17 +159,39 @@ describe.skipIf(!enabled)('managed native ACP agents on an isolated network', ()
         adapter,
         managedTransport: 'stdio',
         nativeResume,
-        workerModes: ['user', 'task'],
+        workerModes: adapter === 'deepseek-harness'
+          ? ['user', 'task', 'shared']
+          : ['user', 'task'],
         protocols: expect.arrayContaining([protocol]),
       })
-      expect(await scoped.plan({
+      const sharedRequest = {
         agentId: 'native',
         execution: { mode: 'shared' },
         permissions: { profile: 'read-only' },
-      })).toMatchObject({
-        success: false,
-        error: { code: HaiAIError.ACP_UNSUPPORTED.code },
-      })
+      } as const
+      let sharedWorkerId: string | undefined
+      if (adapter === 'deepseek-harness') {
+        const peer = ai.acp.scoped({ tenantId: 'native-acceptance', userId: 'peer' })
+        const a = value(await scoped.sessions.create(sharedRequest))
+        const b = value(await peer.sessions.create(sharedRequest))
+        expect(value(await reldb.sql.query('SELECT id FROM hai_runner_executions WHERE kind = ? AND state = ?', ['hai.acp.worker.v1', 'running']))).toHaveLength(1)
+        expect(await peer.sessions.get(a.id)).toMatchObject({ success: false })
+        expect(value(await a.prompt('shared-alpha-secret')).output).toMatchObject({ text: 'hai-managed-native-ok' })
+        expect(value(await b.prompt('shared-beta-check')).output).toMatchObject({ text: 'hai-managed-native-ok' })
+        const toolExposure = JSON.parse(await container('exec', modelId, 'node', '-e', 'process.stdout.write(require("node:fs").readFileSync("/workspace/shared-boundary.json","utf8"))'))
+        expect(toolExposure).toEqual({ tools: [], sawOtherUser: false })
+        value(await a.close())
+        value(await b.close())
+        const started = value(await reldb.sql.get<{ id: string }>('SELECT id FROM hai_runner_executions WHERE kind = ? AND state = ?', ['hai.acp.worker.v1', 'running']))
+        expect(started).toBeTruthy()
+        sharedWorkerId = started?.id
+      }
+      else {
+        expect(await scoped.plan(sharedRequest)).toMatchObject({
+          success: false,
+          error: { code: HaiAIError.ACP_UNSUPPORTED.code },
+        })
+      }
       const startedAt = performance.now()
       const result = value(await scoped.run({
         agentId: 'native',
@@ -195,7 +224,7 @@ describe.skipIf(!enabled)('managed native ACP agents on an isolated network', ()
       const activeWorkers = async () => value(await reldb.sql.query<{ id: string }>(
         'SELECT id FROM hai_runner_executions WHERE kind = ? AND state = ?',
         ['hai.acp.worker.v1', 'running'],
-      ))
+      )).filter(row => row.id !== sharedWorkerId)
       const userRequest = {
         agentId: 'native',
         execution: { mode: 'user' },

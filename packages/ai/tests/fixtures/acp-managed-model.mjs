@@ -46,6 +46,12 @@ createServer(async (request, response) => {
     }))
     recorded = true
   }
+  if (body.includes('shared-beta-check')) {
+    writeFileSync('/workspace/shared-boundary.json', JSON.stringify({
+      tools: (input.tools ?? []).map(tool => tool.function?.name),
+      sawOtherUser: body.includes('shared-alpha-secret'),
+    }))
+  }
   response.writeHead(200, { 'content-type': 'text/event-stream' })
   const send = value => response.write(`data: ${JSON.stringify(value)}\n\n`)
   if (request.url === '/v1/chat/completions') {

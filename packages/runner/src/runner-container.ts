@@ -7,12 +7,13 @@ import { createHash } from 'node:crypto'
 import { once } from 'node:events'
 import { chmod, lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, join, posix } from 'node:path'
+import { basename, dirname, join, posix } from 'node:path'
 import { promisify } from 'node:util'
 import { err, ok } from '@h-ai/core'
 import { z } from 'zod'
 import { runnerM } from './runner-i18n.js'
 import { HaiRunnerError } from './runner-types.js'
+import { captureWorkspace, decodeWorkspace, maxWorkspaceBytes, maxWorkspaceFiles, workspacePath } from './runner-workspace.js'
 
 const execute = promisify(execFile)
 const containerId = /^[\da-f]{64}$/u
@@ -27,6 +28,7 @@ const launchSchema = z.strictObject({
   env: z.record(z.string().regex(envKey), z.string().max(64_000).refine(value => !/[\r\n\0]/u.test(value))).default({}),
   files: z.record(z.string().regex(fileName).refine(value => value !== '.' && value !== '..'), z.string().max(128_000)).default({}),
   inputs: z.record(z.string().regex(artifactName), z.string().max(4 * Math.ceil(MAX_FILE_BYTES / 3))).optional(),
+  workspace: z.record(z.string().refine(workspacePath), z.string().max(4 * Math.ceil(maxWorkspaceBytes / 3))).optional(),
   cwd: z.string().max(1024).default('/workspace'),
 })
 
@@ -260,6 +262,13 @@ export async function startContainer(
     : decodeInputs(options.inputs, resources)
   if (options.inputs && !decoded)
     return invalid()
+  const workspaceMiB = Math.max(1, Math.floor(resources.scratchMiB / (decoded ? 8 : 2)))
+  const workspaceBudget = Math.min(maxWorkspaceBytes, workspaceMiB * 1024 * 1024)
+  const project = options.workspace === undefined
+    ? undefined
+    : decodeWorkspace(options.workspace, workspaceBudget)
+  if ((options.workspace && !project) || (project && warm))
+    return invalid()
 
   let temporary: string | undefined
   let id: string | undefined
@@ -353,24 +362,33 @@ export async function startContainer(
       await Promise.all(decoded.map(item => writeFile(join(inputDir, item.name), item.bytes, { mode: 0o444, flag: 'wx' })))
       await chmod(inputDir, 0o555)
     }
+    const projectDir = join(temporary, 'project')
+    if (project) {
+      await mkdir(projectDir)
+      // 外层暂存由执行节点账户持有。容器通过独立只读挂载复制到限额内工作区。
+      for (const file of project) {
+        const target = join(projectDir, file.name)
+        await mkdir(dirname(target), { recursive: true, mode: 0o755 })
+        await writeFile(target, file.bytes, { mode: 0o644, flag: 'wx' })
+      }
+    }
     if (signal.aborted) {
       await removeFiles()
       return invalid()
     }
 
     const state = Math.max(1, Math.floor(resources.scratchMiB / 8))
-    const workspace = Math.max(1, Math.floor(resources.scratchMiB / (decoded ? 8 : 2)))
     const output = decoded
       ? Math.max(1, Math.floor(resources.scratchMiB / 2))
       : 0
-    const scratch = resources.scratchMiB - state - workspace - output
+    const scratch = resources.scratchMiB - state - workspaceMiB - output
     if (scratch < 1) {
       await removeFiles()
       return invalid()
     }
     const mounts = [
       ['state', state],
-      ['workspace', workspace],
+      ['workspace', workspaceMiB],
       ['tmp', scratch],
       ...(decoded
         ? [
@@ -408,10 +426,15 @@ export async function startContainer(
       ...(decoded
         ? ['--mount', `type=bind,source=${inputDir},target=/input,readonly`]
         : []),
+      ...(project
+        ? ['--mount', `type=bind,source=${projectDir},target=/run/hai-project,readonly`]
+        : []),
       '--entrypoint=/bin/sh',
       environment.image,
       '-c',
-      'cp -R /run/hai-config/. /state/ && cd "$1" && shift && exec "$@"',
+      project
+        ? 'cp -R /run/hai-project/. /workspace/ && cp -R /run/hai-config/. /state/ && cd "$1" && shift && exec "$@"'
+        : 'cp -R /run/hai-config/. /state/ && cd "$1" && shift && exec "$@"',
       'hai-runner',
       cwd,
       options.command,
@@ -479,7 +502,7 @@ export async function startContainer(
           return invalid()
         activated = true
         const parsed = launchSchema.safeParse(launch)
-        if (!parsed.success || parsed.data.cwd !== '/workspace' || Object.keys(parsed.data.env).length
+        if (!parsed.success || parsed.data.workspace || parsed.data.cwd !== '/workspace' || Object.keys(parsed.data.env).length
           || Object.keys(parsed.data.files).length || !parsed.data.inputs) {
           return invalid()
         }
@@ -537,6 +560,38 @@ export async function startContainer(
           })
           return stdout.length <= maxBytes
             ? ok(stdout.toString('base64'))
+            : invalid()
+        }
+        catch {
+          return invalid()
+        }
+      },
+      async snapshot(maxBytes) {
+        if (!project || closing || signal.aborted || !Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > workspaceBudget)
+          return invalid()
+        try {
+          const { stdout } = await execute(engine, [
+            'container',
+            'exec',
+            '--user=1000:1000',
+            '--env=NODE_OPTIONS=',
+            '--env=NODE_PATH=',
+            created,
+            'node',
+            '--input-type=commonjs',
+            '-e',
+            captureWorkspace,
+            String(maxBytes),
+            String(maxWorkspaceFiles),
+          ], {
+            timeout: 15_000,
+            maxBuffer: 4 * Math.ceil(maxBytes / 3) + maxWorkspaceFiles * 2100,
+            windowsHide: true,
+            signal,
+          })
+          const files = launchSchema.shape.workspace.unwrap().parse(JSON.parse(stdout))
+          return decodeWorkspace(files, maxBytes)
+            ? ok(files)
             : invalid()
         }
         catch {

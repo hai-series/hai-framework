@@ -74,6 +74,22 @@ async function installTimeIndex(sql: DmlOperations): Promise<HaiResult<unknown>>
     : sql.execute('CREATE INDEX hai_audit_event_time_idx ON hai_audit_logs (created_at)')
 }
 
+async function prepareAuditTables(sql: DmlOperations, mysql: boolean): Promise<HaiResult<void>> {
+  const policy = await sql.execute('CREATE TABLE IF NOT EXISTS hai_audit_policy (id INTEGER PRIMARY KEY, enabled INTEGER NOT NULL, min_days INTEGER NOT NULL)')
+  if (!policy.success)
+    return policy
+  const claims = await sql.execute('CREATE TABLE IF NOT EXISTS hai_audit_alert_claims (id VARCHAR(64) PRIMARY KEY, rule_id VARCHAR(64) NOT NULL, target_id VARCHAR(64) NOT NULL, window_start BIGINT NOT NULL, status VARCHAR(16) NOT NULL, queue_id VARCHAR(64), error_code VARCHAR(128))')
+  if (!claims.success)
+    return claims
+  const seeded = await sql.execute(mysql
+    ? 'INSERT INTO hai_audit_policy (id, enabled, min_days) VALUES (1, 0, 90) ON DUPLICATE KEY UPDATE id=id'
+    : 'INSERT INTO hai_audit_policy (id, enabled, min_days) VALUES (1, 0, 90) ON CONFLICT(id) DO NOTHING')
+  if (!seeded.success)
+    return seeded
+
+  return ok(undefined)
+}
+
 /**
  * 在发布审计仓库前准备当前表、约束及触发器。
  * @example 模块内部上下文
@@ -83,18 +99,26 @@ async function installTimeIndex(sql: DmlOperations): Promise<HaiResult<unknown>>
  * ```
  */
 export async function initializeAuditStorage(): Promise<HaiResult<void>> {
-  const policy = await reldb.sql.execute('CREATE TABLE IF NOT EXISTS hai_audit_policy (id INTEGER PRIMARY KEY, enabled INTEGER NOT NULL, min_days INTEGER NOT NULL)')
-  if (!policy.success)
-    return policy
-  const claims = await reldb.sql.execute('CREATE TABLE IF NOT EXISTS hai_audit_alert_claims (id VARCHAR(64) PRIMARY KEY, rule_id VARCHAR(64) NOT NULL, target_id VARCHAR(64) NOT NULL, window_start BIGINT NOT NULL, status VARCHAR(16) NOT NULL, queue_id VARCHAR(64), error_code VARCHAR(128))')
-  if (!claims.success)
-    return claims
+  if (reldb.config?.type === 'postgresql') {
+    return reldb.prepareSchema('hai:audit:schema', async ({ sql, ddl }) => {
+      const prepared = await prepareAuditTables(sql, false)
+      if (!prepared.success)
+        return prepared
+      const retained = await auditRetentionDays(sql)
+      if (!retained.success)
+        return retained
+      const triggers = await installTriggers(sql)
+      if (!triggers.success)
+        return triggers
+      return ddl.createIndex('hai_audit_logs', 'hai_audit_event_time_idx', {
+        columns: ['created_at'],
+      })
+    })
+  }
   const mysql = reldb.config?.type === 'mysql'
-  const seeded = await reldb.sql.execute(mysql
-    ? 'INSERT INTO hai_audit_policy (id, enabled, min_days) VALUES (1, 0, 90) ON DUPLICATE KEY UPDATE id=id'
-    : 'INSERT INTO hai_audit_policy (id, enabled, min_days) VALUES (1, 0, 90) ON CONFLICT(id) DO NOTHING')
-  if (!seeded.success)
-    return seeded
+  const prepared = await prepareAuditTables(reldb.sql, mysql)
+  if (!prepared.success)
+    return prepared
 
   const started = await reldb.tx.begin()
   if (!started.success)

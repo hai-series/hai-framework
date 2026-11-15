@@ -53,6 +53,7 @@ describe.skipIf(!image)('managed ACP workspace snapshot', () => {
     const resolver = vi.fn<NonNullable<ACPPlatformPolicy['resolveWorkspace']>>(() => Promise.resolve({
       'notes.txt': Buffer.from('authorized document'),
     }))
+    const publishProject = vi.fn(async () => ({ id: 'saved-patch', name: 'project.patch' }))
     try {
       value(await ai.init({
         acp: {
@@ -81,8 +82,17 @@ describe.skipIf(!image)('managed ACP workspace snapshot', () => {
         },
         acpPolicy: {
           preferUserWorker: () => true,
-          allowWorkspace: (scope: typeof subject, id: string) => authorized && scope.tenantId === subject.tenantId && scope.userId === subject.userId && id === 'project',
+          allowWorkspace: (scope: typeof subject, id: string) => authorized && scope.tenantId === subject.tenantId && scope.userId === subject.userId && ['project', 'nested'].includes(id),
           resolveWorkspace: resolver,
+          resolveProject: async (_scope, id) => id === 'nested'
+            ? {
+                revision: 'a'.repeat(40),
+                files: {
+                  'src/readme.txt': Buffer.from('original\n').toString('base64'),
+                },
+              }
+            : undefined,
+          publishProject,
         },
       }))
       const alice = ai.acp.scoped(subject)
@@ -144,6 +154,31 @@ describe.skipIf(!image)('managed ACP workspace snapshot', () => {
         error: { code: HaiAIError.ACP_NOT_FOUND.code },
       })
       value(await session.close())
+      authorized = true
+      const project = value(await alice.sessions.create({
+        ...request,
+        workspaceId: 'nested',
+        permissions: { profile: 'workspace' },
+      }))
+      const edited = value(await project.prompt('edit project'))
+      expect(edited.output).toMatchObject({
+        artifacts: [
+          { id: 'saved-patch', name: 'project.patch' },
+        ],
+      })
+      expect(publishProject).toHaveBeenCalledWith(expect.objectContaining({
+        scope: subject,
+        workspaceId: 'nested',
+        revision: 'a'.repeat(40),
+        changes: {
+          paths: ['src/readme.txt'],
+          patch: expect.stringContaining('+edited'),
+        },
+      }), expect.any(AbortSignal))
+      expect(value(await alice.tasks.events(edited.taskId)).map(event => event.data))
+        .toContainEqual({ type: 'artifact', id: 'saved-patch', name: 'project.patch' })
+      expect(await bob.tasks.events(edited.taskId)).toMatchObject({ success: false })
+      value(await project.close())
     }
     finally {
       await ai.close()

@@ -43,6 +43,7 @@ import {
 import { acpError, ACPFailure } from './ai-acp-errors.js'
 import { createGitOperations } from './ai-acp-git.js'
 import { createACPPlatform } from './ai-acp-platform.js'
+import { diffSnapshot, publishSnapshot, readGitSnapshot } from './ai-acp-project.js'
 import { openRuntime, selectEngine } from './ai-acp-runtime.js'
 
 /**
@@ -1022,6 +1023,15 @@ export function createACPOperations(
         }),
     },
     workspaces: {
+      /** 从受信仓库的一次提交读取有界普通文件快照。 */
+      readGitSnapshot: (input: Parameters<typeof readGitSnapshot>[0], signal?: AbortSignal) =>
+        protectResult(async () => ok(await readGitSnapshot(input, signal))),
+      /** 比较快照并生成可下载的补丁。 */
+      diffSnapshot: (before: Record<string, string>, after: Record<string, string>, signal?: AbortSignal) =>
+        protectResult(async () => ok(await diffSnapshot(before, after, signal))),
+      /** 应用重新验权后，向独立任务分支提交并普通推送。 */
+      publishSnapshot: (input: Parameters<typeof publishSnapshot>[0], signal?: AbortSignal) =>
+        protectResult(async () => ok(await publishSnapshot(input, signal))),
       /**
        * 新增数据库工作区并归一化存储位置；拒绝目录重叠或同一 volume 重复登记。
        * @param input - 工作区存储位置、显式 Git 主分支和环境变量引用。

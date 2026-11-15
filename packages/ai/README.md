@@ -433,7 +433,7 @@ DeepSeek Harness 直连官方 DeepSeek Chat 时，在模型条目中设置 `prot
 
 服务启动时先初始化 RelDB 和 [Runner](../runner/README.md)，再将已启动的实例传给 `ai.init(config, { runner, acpPolicy })`。在 `acp.agents` 注册 Agent，并用 `environmentIds` 绑定 Runner 的固定镜像环境，用 `modelIds` 绑定 `llm.models` 的模型。Codex 需要 Responses 网关。API 和执行节点使用共享数据库与相同环境定义。关闭服务时先关闭 AI，再关闭 Runner 和数据库。
 
-`task` 为本次会话启动独占 Worker，`user` 可在同一主体与启动配置下复用。`auto` 按策略选择。`shared` 只适用于明确支持共享的只读适配器，且会话不能申请私有上下文、工作区或工具，内置 Codex、DeepSeek Harness 和 Goose 仍使用独立模式。配置示例见 [ACP 配置](../../docs/usage/configuration/ai.md#acp-接入与模型能力)。
+`task` 为本次会话启动独占 Worker，`user` 可在同一主体与启动配置下复用。`auto` 先检查共享条件，再按应用策略决定能否复用个人 Worker，其余使用独占 Worker。`shared` 只允许使用只读会话，且限于无需私有上下文、工作区或工具的请求。固定版本 DeepSeek Harness 0.2.1-rc.5 可显式启用 `sharedMode`。内置 Codex 和 Goose 使用个人或独占模式。配置示例见 [ACP 配置](../../docs/usage/configuration/ai.md#acp-接入与模型能力)。
 
 ```ts
 import type { RunnerScope } from '@h-ai/runner' // tenantId 和 userId 来自已认证的应用会话。
@@ -490,7 +490,7 @@ async function continueWork(identity: RunnerScope) {
 
 使用 `agents.describe(agentId)` 查询内置适配器的能力，`sessions.get(id)` 由同一主体在其他 API 节点取得句柄，`session.stream(prompt, options)` 迭代持久事件并在失败时抛错。`tasks.get(taskId)` 返回执行回执，`tasks.cancel(taskId)` 接受取消并返回当前状态。可在 `run` 或 `prompt` 的 `onEvent` 中取得 `accepted` 事件的 `taskId`，然后用另一请求查看或取消。
 
-`acpPolicy` 负责 `workspaceId` 快照、知识库、记忆、文件、Skills 和工具的业务授权。`allowTools` 与 `bindTools` 可接入下文的 MCP 入口。应用取得 `approval` 事件中的 `approvalId` 后，从同一主体调用 `approvals.respond(id, 'allow-once' | 'allow-session' | 'always-allow' | 'deny')`，成功返回 `undefined`。`approvals.rules(offset, limit)` 分页返回仍可用的规则和 `expiresAt`，`approvals.revoke(ruleId)` 撤销当前主体的规则。`full-access` 需要应用明确允许且使用 `task`。工作区提供只读快照，切换后可按需带入用户确认的 `historySummary`。更多示例见 [受管调用](../../docs/usage/development/ai-acp.md#多用户应用的受管调用)。
+`acpPolicy` 负责 `workspaceId` 快照、知识库、记忆、文件、Skills 和工具的业务授权。`allowTools` 与 `bindTools` 可接入下文的 MCP 入口。应用取得 `approval` 事件中的 `approvalId` 后，从同一主体调用 `approvals.respond(id, 'allow-once' | 'allow-session' | 'always-allow' | 'deny')`，成功返回 `undefined`。`approvals.rules(offset, limit)` 分页返回仍可用的规则和 `expiresAt`，`approvals.revoke(ruleId)` 撤销当前主体的规则。`full-access` 需要应用明确允许且使用 `task`。`session.submit({ prompt, idempotencyKey, context })` 返回可续读的任务回执。浏览器带 `taskId` 和已读序号调用 `tasks.events`。`session.status()` 可发现空闲回收的会话，创建新会话时可带入用户确认的 `historySummary`。`workspaces.readGitSnapshot` 为独占环境读取普通文件树，成功后可保存改动补丁，并在用户确认后调用 `workspaces.publishSnapshot` 发布独立任务分支。更多示例见 [Agent 工作台](../../apps/agent/README.md) 和 [受管调用](../../docs/usage/development/ai-acp.md#多用户应用的受管调用)。
 
 #### 配置与数据库资源清单
 

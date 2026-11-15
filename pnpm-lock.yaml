@@ -741,6 +741,109 @@ importers:
         specifier: 'catalog:'
         version: 5.1.0(@opentelemetry/api@1.9.1)(@types/node@26.6.6)(jsdom@31.0.0)(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
 
+  apps/agent:
+    dependencies:
+      '@h-ai/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
+      '@h-ai/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@h-ai/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@h-ai/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
+      '@h-ai/iam':
+        specifier: workspace:*
+        version: link:../../packages/iam
+      '@h-ai/kit':
+        specifier: workspace:*
+        version: link:../../packages/kit
+      '@h-ai/reldb':
+        specifier: workspace:*
+        version: link:../../packages/reldb
+      '@h-ai/runner':
+        specifier: workspace:*
+        version: link:../../packages/runner
+      '@h-ai/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      '@h-ai/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      '@h-ai/vecdb':
+        specifier: workspace:*
+        version: link:../../packages/vecdb
+      sm-crypto:
+        specifier: 'catalog:'
+        version: 0.5.8
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.7
+    devDependencies:
+      '@h-ai/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@h-ai/deploy':
+        specifier: workspace:*
+        version: link:../../packages/deploy
+      '@iconify-json/tabler':
+        specifier: 'catalog:'
+        version: 1.2.43
+      '@iconify/tailwind4':
+        specifier: 'catalog:'
+        version: 1.2.3(tailwindcss@4.3.5)
+      '@inlang/paraglide-js':
+        specifier: 'catalog:'
+        version: 3.2.1(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(typescript@6.0.3)(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      '@inlang/plugin-message-format':
+        specifier: 'catalog:'
+        version: 4.6.0
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.65.0
+      '@sveltejs/adapter-node':
+        specifier: 'catalog:'
+        version: 6.0.1(@sveltejs/kit@3.1.1(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3(@typescript-eslint/types@8.71.1))(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))(svelte@5.57.3(@typescript-eslint/types@8.71.1))(typescript@6.0.3)(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))
+      '@sveltejs/kit':
+        specifier: 'catalog:'
+        version: 3.1.1(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3(@typescript-eslint/types@8.71.1))(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))(svelte@5.57.3(@typescript-eslint/types@8.71.1))(typescript@6.0.3)(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      '@sveltejs/vite-plugin-svelte':
+        specifier: 'catalog:'
+        version: 7.3.1(svelte@5.57.3(@typescript-eslint/types@8.71.1))(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      '@tailwindcss/vite':
+        specifier: 'catalog:'
+        version: 4.3.5(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      '@types/node':
+        specifier: ^26.6.6
+        version: 26.6.6
+      daisyui:
+        specifier: 'catalog:'
+        version: 5.7.50(patch_hash=cc3f25f906059647b501fe13a48fc4e7dc82cb6b9823fdef459514e0058fc6b6)
+      rimraf:
+        specifier: 'catalog:'
+        version: 6.1.4
+      svelte:
+        specifier: 'catalog:'
+        version: 5.57.3(@typescript-eslint/types@8.71.1)
+      svelte-check:
+        specifier: 'catalog:'
+        version: 4.7.8(picomatch@4.0.7)(svelte@5.57.3(@typescript-eslint/types@8.71.1))(typescript@6.0.3)
+      tailwindcss:
+        specifier: 'catalog:'
+        version: 4.3.5
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
+      vitest:
+        specifier: 'catalog:'
+        version: 5.1.0(@opentelemetry/api@1.9.1)(@types/node@26.6.6)(jsdom@31.0.0)(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+
   apps/ai-playground:
     dependencies:
       '@h-ai/ai':

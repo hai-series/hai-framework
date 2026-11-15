@@ -26,6 +26,8 @@ _以 Fullstack 为例：开发规范、客户端、接口契约和业务模块�
 
 通过 ACP 接入本机、Podman/Docker 容器或原生 HTTP/WS 智能体；复用模型清单，管理多仓库工作区、工程会话、可选 worktree 与显式 Git 发布。配置和数据库清单按 ID 合并，配置只读、数据库可维护。
 
+[Agent 工作台](apps/agent/README.md) 展示 Codex 和 DeepSeek 接入、三种 Worker 隔离方式、多节点任务续看，以及知识、记忆、语音、工具和代码审批的完整使用流程。
+
 [工程规范与 Skills](AGENTS.md) · [AI 开发与集成](docs/usage/development/ai.md) · [ACP 智能体接入](docs/usage/development/ai-acp.md)
 
 ![AI 实验台实际运行：模型对话与当前主体的记忆记录](docs/images/runtime-ai.zh-CN.png)

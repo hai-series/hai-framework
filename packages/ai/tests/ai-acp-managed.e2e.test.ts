@@ -23,6 +23,86 @@ function value<T>(result: HaiResult<T>) {
 }
 
 describe.skipIf(!image)('managed ACP on the real container runner', () => {
+  it('releases an inactive worker even when the browser left its conversation open', async () => {
+    const inspect = await shell(engine, [
+      'image',
+      'inspect',
+      '--format',
+      '{{.Id}}',
+      image!,
+    ])
+    const fixture = await readFile(new URL('./fixtures/acp-multiplex.mjs', import.meta.url), 'utf8')
+    const runner = createRunner()
+    value(await runner.init({
+      engine,
+      nodeId: 'idle-node',
+      environments: [
+        {
+          id: 'idle',
+          image: inspect.stdout.trim().replace(/^(?:sha256:)?/u, 'sha256:'),
+          resources: {
+            cpu: 0.5,
+            memoryMiB: 128,
+            pids: 32,
+            scratchMiB: 32,
+          },
+        },
+      ],
+    }))
+    try {
+      value(await ai.init({
+        acp: {
+          workerIdleTimeoutMs: 1000,
+          agents: [
+            {
+              id: 'fixture',
+              name: 'Fixture',
+              mode: 'embedded',
+              adapter: 'fixture',
+              environmentIds: ['idle'],
+            },
+          ],
+        },
+      }, {
+        runner,
+        acpAdapters: {
+          fixture: {
+            configure: () => ({
+              command: 'node',
+              args: ['/state/fixture.mjs'],
+              env: {},
+              files: { 'fixture.mjs': fixture },
+            }),
+          },
+        },
+      }))
+      const scoped = ai.acp.scoped({ tenantId: 'test', userId: 'owner' })
+      const request = {
+        agentId: 'fixture',
+        execution: { mode: 'task' },
+      } as const
+      const session = value(await scoped.sessions.create(request, { idempotencyKey: 'task-1' }))
+      expect(value(await scoped.sessions.create(request, { idempotencyKey: 'task-1' })).id).toBe(session.id)
+      expect(value(await session.status())).toBe('active')
+      await expect.poll(async () => value(await session.status()), { timeout: 7000 }).toBe('expired')
+      const replacement = value(await scoped.sessions.create(request, { historySummary: 'accepted previous history' }))
+      const continued = value(await replacement.prompt('inspect-history', {
+        output: { format: 'json' },
+      }))
+      expect(continued.output).toMatchObject({
+        json: [
+          expect.stringContaining('accepted previous history'),
+          'inspect-history',
+        ],
+      })
+      value(await replacement.close())
+    }
+    finally {
+      await ai.close()
+      value(await runner.close())
+    }
+  }, 25_000)
+
   it('isolates sessions, supports all three worker allocations, and deduplicates a one-shot task', async () => {
     const inspect = await shell(engine, [
       'image',
@@ -77,6 +157,15 @@ describe.skipIf(!image)('managed ACP on the real container runner', () => {
           },
         },
         acpPolicy: {
+          allowContext: (scope, _agent, context) => scope.userId === 'alice' && context.fileIds?.every(id => id === 'project-notes') === true,
+          resolveContext: async () => ({
+            blocks: [
+              { type: 'text', text: 'private project notes' },
+            ],
+            citations: [
+              { id: 'project-notes', title: 'Project notes', excerpt: 'private project notes' },
+            ],
+          }),
           allowTools: () => true,
           bindTools: async (_scope, _session, _ids, signal) => {
             const credential = new AbortController()
@@ -214,6 +303,62 @@ describe.skipIf(!image)('managed ACP on the real container runner', () => {
         effectiveOptions: { resolvedMode: 'user' },
       })
       const review = value(await alice.sessions.create({ agentId: 'fixture' }))
+      const queued = value(await review.submit({
+        prompt: 'timeline',
+        idempotencyKey: 'timeline-1',
+        context: {
+          fileIds: ['project-notes'],
+        },
+      }))
+      const reopened = value(await alice.sessions.get(review.id))
+      expect(value(await reopened.submit({
+        prompt: 'timeline',
+        idempotencyKey: 'timeline-1',
+        context: {
+          fileIds: ['project-notes'],
+        },
+      })).taskId).toBe(queued.taskId)
+      expect(await reopened.submit({
+        prompt: 'different',
+        idempotencyKey: 'timeline-1',
+        context: {
+          fileIds: ['project-notes'],
+        },
+      })).toMatchObject({ success: false })
+      expect(await bob.tasks.events(queued.taskId)).toMatchObject({ success: false })
+      await expect.poll(async () => value(await alice.tasks.get(queued.taskId)).status).toBe('succeeded')
+      const timeline = value(await alice.tasks.events(queued.taskId))
+      expect(timeline.map(event => event.data)).toEqual(expect.arrayContaining([
+        {
+          type: 'citation',
+          id: 'project-notes',
+          title: 'Project notes',
+          excerpt: 'private project notes',
+        },
+        expect.objectContaining({ type: 'tool', id: 'timeline-tool', status: 'in_progress' }),
+        expect.objectContaining({
+          type: 'tool',
+          id: 'timeline-tool',
+          status: 'completed',
+          result: expect.stringContaining('result visible'),
+        }),
+        { type: 'usage', used: 42, size: 1000 },
+        { type: 'text', text: 'private project notes' },
+      ]))
+      expect(JSON.stringify(timeline)).not.toContain('fixture-secret')
+      const resumed = value(await alice.tasks.events(queued.taskId, timeline[1]!.sequence))
+      expect(resumed).toEqual(timeline.slice(2))
+      expect(await reopened.submit({
+        prompt: 'timeline',
+        idempotencyKey: 'blocked',
+        context: {
+          fileIds: ['other-user-file'],
+        },
+      })).toMatchObject({ success: false })
+      const alone = value(await reopened.prompt('inspect-history', {
+        output: { format: 'json' },
+      }))
+      expect(alone.output.json).toEqual(['inspect-history'])
       expect(value(await review.prompt('{"answer":7}', {
         output: { format: 'json' },
       }))).toMatchObject({

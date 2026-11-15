@@ -132,7 +132,8 @@ export const nativeAdapterCapabilities: Readonly<Record<string, {
  */
 export const nativeAdapters: Record<string, ACPAgentAdapter> = {
   'deepseek-harness': {
-    configure({ agent, models, modelId, statePath, permissionProfile = 'workspace' }) {
+    sharedSessions: true,
+    configure({ agent, models, modelId, statePath, permissionProfile = 'workspace', shared }) {
       const selected = models.find(item => item.id === modelId)
       const apiKey = selected?.config.apiKey
       if (!selected || !apiKey)
@@ -200,13 +201,41 @@ export const nativeAdapters: Record<string, ACPAgentAdapter> = {
             model: model.model,
           },
         },
+        ...(shared
+          ? [
+              // 此列表对应内置镜像固定的 ACP profile。共享会话只保留模型推理和各自的会话。
+              ...[
+                'commands',
+                'plan-mode',
+                'tool-bash',
+                'tool-pwsh',
+                'tool-jobs',
+                'tool-working-directory',
+                'tool-fs',
+                'tool-fs-search',
+                'tool-skill',
+                'tool-subagent-control',
+                'tool-subagent-list-agents',
+                'tool-subagent',
+                'tool-subagent-fork',
+                'tool-workflow',
+                'tool-todo',
+                'tool-goal',
+                'tool-web',
+              ].map(id => ({ id, disabled: true })),
+            ]
+          : []),
       ]
       return {
-        command:
-          agent.mode === 'custom-service'
+        command: shared
+          ? '/bin/sh'
+          : agent.mode === 'custom-service'
             ? 'dsh'
             : (agent.command ?? 'dsh'),
         args: [
+          ...(shared
+            ? ['-ec', 'test "$(dsh --version)" = "0.2.1-rc.5" && exec dsh "$@"', 'hai-dsh']
+            : []),
           // 自定义命令可能是 node + JS 入口，入口参数必须先于 dsh 的原生选项。
           ...(agent.mode === 'custom-service'
             ? []
@@ -218,6 +247,7 @@ export const nativeAdapters: Record<string, ACPAgentAdapter> = {
         ],
         env: {
           DSH_HOME: statePath,
+          DSH_TELEMETRY_MODE: 'DISABLED',
           DSH_PERMISSION_MODE: {
             'read-only': 'read-only',
             'workspace': 'workspace-write',

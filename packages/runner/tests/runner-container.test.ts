@@ -244,6 +244,102 @@ describe('managed engine isolation', () => {
 })
 
 describe('isolated artifact export', () => {
+  it('starts a private writable project tree and captures only bounded regular files', async () => {
+    const projectImage = 'docker.io/library/node:24.22.1-bookworm-slim'
+    try {
+      await cli(engine, ['image', 'inspect', projectImage])
+    }
+    catch {
+      await cli(engine, ['pull', projectImage], { timeout: 120_000 })
+    }
+    const { stdout } = await cli(engine, [
+      'image',
+      'inspect',
+      '--format',
+      '{{.Id}}',
+      projectImage,
+    ])
+    expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
+    try {
+      expect((await runner.init({
+        engine,
+        nodeId: 'project-node',
+        environments: [
+          {
+            id: 'project',
+            image: stdout.trim().replace(/^(?:sha256:)?/u, 'sha256:'),
+            resources: {
+              cpu: 0.5,
+              memoryMiB: 128,
+              pids: 32,
+              scratchMiB: 64,
+            },
+          },
+        ],
+      })).success).toBe(true)
+      expect((await runner.register('project-test', async (input, context) => {
+        const unsafe = input === 'bad-path'
+        const started = await context.start({
+          command: '/bin/sh',
+          args: ['-ec', 'test "$(cat src/main.txt)" = original; printf edited > src/main.txt; ln -s /etc/passwd escape.txt; printf ready; read -r done'],
+          workspace: { [unsafe ? '../outside' : 'src/main.txt']: 'b3JpZ2luYWw=' },
+        })
+        if (!started.success) {
+          if (unsafe)
+            return { rejected: true }
+          throw new Error(started.error.message)
+        }
+        try {
+          await Promise.race([
+            once(started.data.stdout, 'data', { signal: context.signal }),
+            started.data.wait().then(({ code }) => {
+              throw new Error(`Project container stopped before readiness: ${code}`)
+            }),
+          ])
+          const capture = await started.data.snapshot(1024)
+          const tooLarge = await started.data.snapshot(3)
+          if (!capture.success)
+            throw new Error(capture.error.message)
+          return { files: capture.data, overBudget: !tooLarge.success }
+        }
+        finally {
+          await started.data.close()
+        }
+      })).success).toBe(true)
+      for (const [input, output] of [
+        [
+          'good-path',
+          {
+            files: { 'src/main.txt': 'ZWRpdGVk' },
+            overBudget: true,
+          },
+        ],
+        [
+          'bad-path',
+          { rejected: true },
+        ],
+      ] as const) {
+        const task = await runner.submit({
+          scope,
+          kind: 'project-test',
+          environmentId: 'project',
+          input,
+        })
+        if (!task.success)
+          throw new Error(task.error.message)
+        await expect.poll(() => runner.get(scope, task.data.id), { timeout: 15_000 })
+          .toMatchObject({
+            success: true,
+            data: { status: 'succeeded', output },
+          })
+      }
+    }
+    finally {
+      await runner.close()
+      await reldb.close()
+    }
+  }, 150_000)
+
   it.runIf(!!artifactImage)('consumes each ready container once after claim without carrying files between principals', async () => {
     expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
     const peer = createRunner()

@@ -27,9 +27,9 @@ async function answer(identity: { tenantId: string, userId: string }, requestId:
 | `shared` | 只读、无私有上下文的受控问答 | 同租户复用通过共享验收的适配器进程，每个会话独立路由 |
 | `user` | 同一用户的多项持续任务 | 同一用户且启动配置一致时复用，分别关闭原生会话 |
 | `task` | 需要隔离文件、写入或完整权限的任务 | 一个业务会话使用一个容器 |
-| `auto` | 业务方未指定隔离方式 | 应用策略允许个人复用时选 user，否则在经过验收的只读场景选 shared，其余使用 task |
+| `auto` | 业务方未指定隔离方式 | 先检查只读请求是否满足共享条件，再按应用策略判断能否复用个人 Worker，其他请求使用独占 Worker |
 
-Codex、DeepSeek Harness 和 Goose 使用固定版本的原生协议。内置适配器的共享模式仍需安全验收，当前默认走独立容器。持续对话使用 `scoped.sessions.create`、`session.prompt` 和 `session.close`。`session.changeExecution({ mode: 'task', acceptNewSession: true })` 保留业务会话 ID，结束旧原生会话并创建新会话。需要延续任务背景时，可传当前用户确认可带入的 `historySummary`，上限为 8 KiB UTF-8。摘要作为不可信历史文本随首次请求送入 `user` 或 `task` 会话，权限按新会话的规则重新检查。摘要发送失败后，由调用方决定是否重新提供。跨 Worker 可移交文本摘要，原生历史恢复和持久可写项目挂载仍待实现。
+Codex、DeepSeek Harness 和 Goose 使用固定版本的原生协议。DeepSeek Harness 0.2.1-rc.5 的受限只读 profile 可以由部署方设置 `sharedMode: true`。启用该选项时使用镜像默认命令和环境，停用内置工具及遥测。其他内置适配器使用个人或独占模式。持续对话使用 `scoped.sessions.create`、`session.prompt` 和 `session.close`。`session.changeExecution({ mode: 'task', acceptNewSession: true })` 保留业务会话 ID，结束旧原生会话并创建新会话。需要延续任务背景时，可传当前用户确认可带入的 `historySummary`，上限为 8 KiB UTF-8。摘要作为不可信历史文本随首次请求送入 `user` 或 `task` 会话，权限按新会话的规则重新检查。摘要发送失败后，由调用方决定是否重新提供。原生历史和容器文件归各自的 Worker 管理。
 
 受管调用可用 `workspaceId` 读取项目快照。应用在 `acpPolicy.allowWorkspace(scope, workspaceId)` 检查权限，并在 `resolveWorkspace(scope, workspaceId, signal)` 从业务存储返回 `Record<string, Uint8Array>`。执行节点在启动前加载文件，最多 8 个平铺文件，总量取 16 MiB 与环境 `scratchMiB` 中的较小值。文件名由 ASCII 字母或数字开头，后接字母、数字、点、下划线或连字符，最长 128 字符。`auto` 选择独占任务。容器从 `/input` 只读快照，在 `/workspace` 保存临时副本。工作区权限在每轮重新核验，需要立即撤销挂载时关闭会话，已发送给模型的内容按应用数据策略处理。
 
@@ -44,6 +44,16 @@ Codex、DeepSeek Harness 和 Goose 使用固定版本的原生协议。内置适
 失联宿主和控制任务进入 `unknown`。运维用 `runner.reconcileUnknown(scope, id, { operatorId, reason, hostResourcesStopped: true })` 释放占用，需要从相同 Linux 宿主和 PID 命名空间核实原进程已退出，并确认自管资源停止。子任务须等待父任务完成或核验。需要长期展示业务历史时，由应用保存获准保留的结果。
 
 `ai.acp` 将能操作工程的智能体接入 Node 服务端，提供智能体维护、项目目录、原生会话、事件交互和显式 Git 操作。可以用于代码协作、工程问答或应用构建；用户权限、任务规则、预览、验收和业务部署由应用负责。
+
+### 浏览器提交和断线重连
+
+用 `scoped.sessions.create(options, { idempotencyKey, historySummary })` 持久创建会话。收到会话句柄后用 `session.submit({ prompt, idempotencyKey, context })` 单独提交一轮。客户端保存返回的 `taskId`，用 `scoped.tasks.get` 查状态并用 `scoped.tasks.events` 按序号读取下一页。打开、刷新和换 API 节点都可以复用业务任务和历史。只有明确调用 `tasks.cancel` 才请求取消这次独立提交。
+
+每轮可重新选择附件、知识库、技能和记忆范围。若新增资料改变隔离要求，先重新规划或建立合适的会话。由可信绑定提供引用信息，框架保存工具进度、脱敏预览、后端报告的上下文用量及发布产物引用。Runner 有界保留事件，长期业务记录由调用应用保存。空闲 Worker 可回收，`session.status()` 返回 `active`、`closed` 或 `expired`。用有界摘要接续时开启新的原生会话。
+
+### 受管 Git 文件快照
+
+可信服务先检查工程 ACL，通过 `workspaces.readGitSnapshot` 从登记的本地 Git 仓库和 ref 读取普通文件树。设置 `acpPolicy.resolveProject` 时，执行器把该树复制到独占容器的 `/workspace`。完成后框架比较原始和当前文件生成补丁，由 `publishProject` 保存授权产物。使用 `workspaces.publishSnapshot` 可在明确确认后普通推送独立的 `agent/` 分支。源码和案卷不会作为 Runner 队列负载发送。完整示例见 [多用户工作台](agent.md)。
 
 ## 选择运行模式和传输
 

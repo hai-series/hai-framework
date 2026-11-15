@@ -7,8 +7,7 @@
  * @module audio/wav
  */
 
-/** 录音时默认使用的 ASR 友好采样率（16 kHz 单声道足够语音识别） */
-export const ASR_SAMPLE_RATE = 16000
+const ASR_SAMPLE_RATE = 16000
 
 /**
  * 将任意浏览器可解码的音频 Blob（如 MediaRecorder 的 webm）转换为单声道 16bit PCM WAV。
@@ -16,6 +15,14 @@ export const ASR_SAMPLE_RATE = 16000
  * @param blob - 录制得到的原始音频
  * @param sampleRate - 目标采样率（默认 16 kHz）
  * @returns `audio/wav` 类型的 Blob
+ * @example
+ * ```ts
+ * import { blobToWav } from '@h-ai/ai/client'
+ * async function prepareRecording(recording: Blob) {
+ *   const wav = await blobToWav(recording)
+ *   return new File([wav], 'recording.wav', { type: wav.type })
+ * }
+ * ```
  */
 export async function blobToWav(blob: Blob, sampleRate = ASR_SAMPLE_RATE): Promise<Blob> {
   const arrayBuffer = await blob.arrayBuffer()
