@@ -4,13 +4,13 @@
 
 | 包 | 公开子路径/条件 | 命名 API 数 |
 | --- | --- | --- |
-| @h-ai/ai | `. (browser/default)` | 346 |
-| @h-ai/ai | `. (browser/types)` | 346 |
-| @h-ai/ai | `. (default)` | 369 |
-| @h-ai/ai | `. (import)` | 369 |
-| @h-ai/ai | `. (types)` | 369 |
-| @h-ai/ai | `./client (import)` | 4 |
-| @h-ai/ai | `./client (types)` | 4 |
+| @h-ai/ai | `. (browser/default)` | 347 |
+| @h-ai/ai | `. (browser/types)` | 347 |
+| @h-ai/ai | `. (default)` | 374 |
+| @h-ai/ai | `. (import)` | 374 |
+| @h-ai/ai | `. (types)` | 374 |
+| @h-ai/ai | `./client (import)` | 5 |
+| @h-ai/ai | `./client (types)` | 5 |
 | @h-ai/api-client | `. (default)` | 14 |
 | @h-ai/api-client | `. (import)` | 14 |
 | @h-ai/api-client | `. (types)` | 14 |

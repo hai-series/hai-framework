@@ -1394,6 +1394,10 @@
                         "pattern": "^[a-z0-9][\\w-]{0,95}$"
                       }
                     },
+                    "sharedMode": {
+                      "default": false,
+                      "type": "boolean"
+                    },
                     "allowedCapabilities": {
                       "default": [],
                       "maxItems": 64,
@@ -1799,6 +1803,10 @@
                         "pattern": "^[a-z0-9][\\w-]{0,95}$"
                       }
                     },
+                    "sharedMode": {
+                      "default": false,
+                      "type": "boolean"
+                    },
                     "allowedCapabilities": {
                       "default": [],
                       "maxItems": 64,
@@ -2183,6 +2191,10 @@
                         "type": "string",
                         "pattern": "^[a-z0-9][\\w-]{0,95}$"
                       }
+                    },
+                    "sharedMode": {
+                      "default": false,
+                      "type": "boolean"
                     },
                     "allowedCapabilities": {
                       "default": [],

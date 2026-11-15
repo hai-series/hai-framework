@@ -51,6 +51,8 @@ await reldb.close()
 
 `reldb.config` returns a **redacted configuration snapshot**. Database `password`, URL credentials and the TLS client private key `ssl.key` are hidden. Use it to inspect state, not to replay connection details.
 
+Use `reldb.prepareSchema(key, ({ ddl, sql }) => ...)` to coordinate schema preparation across PostgreSQL nodes. The callback uses one locked transaction and rolls back on failure. Use the supplied operations and keep external work outside the transaction. Other providers retain their own DDL commit rules.
+
 ## Features
 
 Connections become available only after a successful health check. Failed initialization disposes its candidate; `error.ext.cleanupPending === true` identifies cleanup that still needs retry. `reldb.close()` returns `Promise<HaiResult<void>>`, waits for initialization, and coalesces concurrent close calls. Once cleanup starts, `isInitialized` is false and configuration/operations are unavailable. A failed cleanup retains the resource: the next `close()` or `init()` retries disposal before allocating a replacement. Always inspect the close result.

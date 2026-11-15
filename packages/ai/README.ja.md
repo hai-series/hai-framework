@@ -414,7 +414,7 @@ ACP は Node サービスで実行します。通常の API は HaiResult を返
 
 RelDB と [Runner](../runner/README.ja.md) を起動し、起動済みのインスタンスを `ai.init(config, { runner, acpPolicy })` に渡します。`acp.agents` に Agent を登録し、`environmentIds` で固定イメージの Runner 環境を、`modelIds` で `llm.models` のモデルを指定します。Codex には Responses ゲートウェイが必要です。API ノードと実行ノードではデータベースと環境定義を揃えます。終了時は AI、Runner、データベースの順に閉じます。
 
-`task` はそのセッション用の専用 Worker を起動します。`user` は主体と起動設定が一致する場合に Worker を再利用できます。`auto` はアプリのポリシーに基づいて選択します。`shared` を利用できるのは、共有を明示的に承認した読み取り専用アダプターで、非公開コンテキスト、ワークスペース、ツールを要求しない場合です。組み込みの Codex、DeepSeek Harness、Goose は専用モードを使用します。[ACP 設定例](../../docs/usage/configuration/ai.md#acp-接入与模型能力)
+`task` はそのセッション用の専用 Worker を起動します。`user` は主体と起動設定が一致する場合に Worker を再利用できます。`auto` は共有条件を確認し、次にアプリのポリシーで個人 Worker を検討します。いずれも利用できない場合は専用 Worker を起動します。`shared` は読み取り専用で、非公開コンテキスト、ワークスペース、ツールを扱いません。固定版 DeepSeek Harness 0.2.1-rc.5 のイメージでは `sharedMode` を明示的に有効化できます。Codex と Goose は個人または専用 Worker を使用します。[ACP 設定例](../../docs/usage/configuration/ai.md#acp-接入与模型能力)
 
 ```ts
 import type { RunnerScope } from '@h-ai/runner' // 認証済みアプリセッションから tenantId と userId を取得する。
@@ -470,6 +470,8 @@ async function continueWork(identity: RunnerScope) {
 ```
 
 `agents.describe(agentId)` で組み込みアダプターの機能を確認できます。`sessions.get(id)` は同じ主体が別の API ノードからハンドルを取得するために使います。`session.stream(prompt, options)` は保存済みイベントを順に返し、失敗時は例外を送出します。`tasks.get(taskId)` は実行受付票、`tasks.cancel(taskId)` はキャンセル受理後の状態を返します。`run` や `prompt` の `onEvent` に届く `accepted` イベントから `taskId` を取得し、別のリクエストで照会やキャンセルを行えます。
+
+`session.submit({ prompt, idempotencyKey, context })` はブラウザー接続に依存しない受付票を返します。再接続したら最後に受信した連番から `tasks.events(taskId, after, limit)` で再開します。アイドル中のセッションには `session.status()` で状態を確認できます。専用 Worker には `workspaces.readGitSnapshot` で認可済みのファイルを渡せます。ターン完了時にパッチを保存し、確認後に `workspaces.publishSnapshot` で独立した `agent/` ブランチを送信できます。[Agent ワークスペースの例](../../apps/agent/README.md)
 
 `acpPolicy` で `workspaceId` のスナップショット、ナレッジ、メモリ、ファイル、スキル、ツールを認可します。下記の MCP 入口には `allowTools` と `bindTools` を使います。`approval` イベントの `approvalId` に対して、同じ主体で `approvals.respond(id, 'allow-once' | 'allow-session' | 'always-allow' | 'deny')` を呼びます。成功時は `undefined` です。`approvals.rules(offset, limit)` は `expiresAt` を持つ有効なルールをページ取得し、`approvals.revoke(ruleId)` は主体自身のルールを取り消します。`full-access` にはアプリの明示的な承認と `task` モードが必要です。ワークスペースは読み取り専用スナップショットです。モード切り替え時にユーザーが確認した `historySummary` を渡せます。[管理対象 ACP の利用例](../../docs/usage/development/ai-acp.md#多用户应用的受管调用)
 

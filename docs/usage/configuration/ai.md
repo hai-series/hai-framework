@@ -73,6 +73,7 @@ Goose 原生服务用 `transport: http` 与 `http://.../acp`，或 `transport: w
 | Agent `enabled` | `true` | 暂停新任务时设为 `false`，新建和恢复会话被拒绝；不等于已撤销外部正在执行的副作用 |
 | Agent `defaultModelId` | 可省略 | 本机/托管 Agent 有多个 `modelIds` 时指定默认项，必须属于该数组；custom-service 不填写模型绑定 |
 | `adapter` / `command` / `args` | `generic` / 适配器默认启动方式 | 选择已安装原生 Agent；覆盖命令时提供程序与参数数组，不拼 shell，启动失败返回具体诊断 |
+| Agent `sharedMode` | `false` | 对固定的 DeepSeek Harness 0.2.1-rc.5 镜像启用只读共享会话。使用镜像默认命令和环境，关闭内置工具与遥测；个人资料和工具请求由个人或独占环境处理 |
 | `storage` | 工作区必填 | directory 指向本机目录，volume 的 `name`、`image` 必填；容器引擎及镜像与 Agent 一致，重启后仍应找到原工程 |
 | 仓库 `remote` | `origin` | 多远程工程选择受管 Git 远程名；`url` 与 `mainBranch` 必填，不自动猜主分支 |
 

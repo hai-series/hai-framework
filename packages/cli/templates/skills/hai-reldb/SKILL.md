@@ -25,6 +25,9 @@ description: "使用 @h-ai/reldb 访问 SQLite/PostgreSQL/MySQL，编写 SQL、C
 
 错误提示与诊断分离：HTTP/UI 边界用 core.error.toPublic，仅公开 i18n 安全消息及 error.traceId；重新翻译后用 core.error.formatMessage 保留关联。ToastContainer 默认只显示可读说明，自动将编号移入排查信息图标，展开后可查看、复制并提供给客户支持或开发人员。前后端日志传完整 Error 和操作上下文，使用同一 requestId/traceId 并脱敏；禁止只写通用错误标题，也不能把 cause/ext/SQL/绑定值直接返回用户。数据库日志保留安全的驱动错误码、消息和堆栈。
 
+
+多个 PostgreSQL 节点需要同时升级时，用 `reldb.prepareSchema` 传入固定模块标识及回调，使用回调内给出的 `ddl`、`sql`。DDL、目录检查和门闩行在同一会话提交。回调返回失败或抛错会回滚。
+
 ## 按需参考
 
 唯一约束冲突按 HaiReldbError.DUPLICATE_ENTRY 分支，不解析本地化 message 或驱动字符串。连接超时、队列已满等已有错误码保持不变；日志保留安全驱动 code/schema/routine/constraint 和堆栈位置，数值参数不遮蔽诊断标识。

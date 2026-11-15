@@ -8,6 +8,22 @@
     "constraint": "满足 IAM 密码策略；敏感值仅在本地或目标进程注入"
   },
   {
+    "name": "HAI_AGENT",
+    "module": "agent",
+    "path": "agent",
+    "description": "应用自定义的 agent 参数集合；字段由该应用配置声明，不会自动启用框架模块",
+    "value": "",
+    "constraint": "JSON 对象；整体替换该配置"
+  },
+  {
+    "name": "HAI_AGENT_TENANT",
+    "module": "agent",
+    "path": "HAI_AGENT_TENANT",
+    "description": "环境入口；使用位置 apps/agent/config/_agent.yml",
+    "value": "agent",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
     "name": "HAI_AI",
     "module": "ai",
     "path": "ai",
@@ -736,6 +752,14 @@
     "constraint": "字符串；最小字符数 1"
   },
   {
+    "name": "HAI_AI_ACP_AGENTS_0_SHAREDMODE",
+    "module": "ai",
+    "path": "ai.acp.agents.0.sharedMode",
+    "description": "由部署方对已验证的内置只读后端启用共享 Worker。",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
     "name": "HAI_AI_ACP_AGENTS_0_SUPPORTEDTRANSPORTS",
     "module": "ai",
     "path": "ai.acp.agents.0.supportedTransports",
@@ -811,7 +835,7 @@
     "name": "HAI_AI_ACP_WORKERIDLETIMEOUTMS",
     "module": "ai",
     "path": "ai.acp.workerIdleTimeoutMs",
-    "description": "无打开会话的受管 Worker 回收时限，毫秒。",
+    "description": "无在途操作的受管 Worker 空闲回收时限，毫秒。",
     "value": "300000",
     "constraint": "整数；>= 1000；<= 86400000"
   },
@@ -6168,12 +6192,68 @@
     "constraint": "字符串"
   },
   {
+    "name": "HAI_RUNNER",
+    "module": "runner",
+    "path": "runner",
+    "description": "应用自定义的 runner 参数集合；字段由该应用配置声明，不会自动启用框架模块",
+    "value": "",
+    "constraint": "JSON 对象；整体替换该配置"
+  },
+  {
+    "name": "HAI_RUNNER_ENGINE",
+    "module": "runner",
+    "path": "HAI_RUNNER_ENGINE",
+    "description": "环境入口；使用位置 apps/agent/config/_runner.yml",
+    "value": "podman",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
+    "name": "HAI_RUNNER_EXECUTOR",
+    "module": "runner",
+    "path": "HAI_RUNNER_EXECUTOR",
+    "description": "环境入口；使用位置 apps/agent/config/_runner.yml",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_RUNNER_NODEID",
+    "module": "runner",
+    "path": "HAI_RUNNER_NODEID",
+    "description": "环境入口；使用位置 apps/agent/config/_runner.yml",
+    "value": "agent-local",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
     "name": "ADMIN_E2E_BASE_URL",
     "module": "runtime",
     "path": "ADMIN_E2E_BASE_URL",
     "description": "管理台独立 E2E 服务地址，可由根验收透传以避开其它工作区端口",
     "value": "",
     "constraint": "本机 HTTP(S) URL；直接运行时 BASE_URL 优先"
+  },
+  {
+    "name": "AGENT_E2E_CHROME",
+    "module": "runtime",
+    "path": "AGENT_E2E_CHROME",
+    "description": "环境入口；使用位置 apps/agent/.env.example",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
+    "name": "AGENT_E2E_EXTERNAL",
+    "module": "runtime",
+    "path": "AGENT_E2E_EXTERNAL",
+    "description": "环境入口；使用位置 apps/agent/.env.example",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
+    "name": "AGENT_E2E_PORT",
+    "module": "runtime",
+    "path": "AGENT_E2E_PORT",
+    "description": "环境入口；使用位置 apps/agent/.env.example",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
   },
   {
     "name": "ALL_PROXY",

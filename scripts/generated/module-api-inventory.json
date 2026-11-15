@@ -565,6 +565,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "blobToWav",
+              "kind": "value",
+              "declaration": "blobToWav",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "CancelTaskRequest",
               "kind": "type",
               "declaration": "CancelTaskRequest",
@@ -2652,6 +2658,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "blobToWav",
+              "kind": "value",
+              "declaration": "blobToWav",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "CancelTaskRequest",
               "kind": "type",
               "declaration": "CancelTaskRequest",
@@ -4312,6 +4324,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ACPCitation",
+              "kind": "type",
+              "declaration": "ACPCitation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ACPClientOptions",
               "kind": "type",
               "declaration": "ACPClientOptions",
@@ -4366,10 +4384,28 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ACPProjectChanges",
+              "kind": "type",
+              "declaration": "ACPProjectChanges",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPProjectSnapshot",
+              "kind": "type",
+              "declaration": "ACPProjectSnapshot",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ACPPublishSchema",
               "kind": "value",
               "declaration": "ACPPublishSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPPublishSnapshot",
+              "kind": "type",
+              "declaration": "ACPPublishSnapshot",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ACPRepositorySchema",
@@ -4400,6 +4436,12 @@
               "kind": "type",
               "declaration": "ACPSessionWorkspace",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPSubmitTurn",
+              "kind": "type",
+              "declaration": "ACPSubmitTurn",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ACPTransport",
@@ -6536,6 +6578,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ACPCitation",
+              "kind": "type",
+              "declaration": "ACPCitation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ACPClientOptions",
               "kind": "type",
               "declaration": "ACPClientOptions",
@@ -6590,10 +6638,28 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ACPProjectChanges",
+              "kind": "type",
+              "declaration": "ACPProjectChanges",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPProjectSnapshot",
+              "kind": "type",
+              "declaration": "ACPProjectSnapshot",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ACPPublishSchema",
               "kind": "value",
               "declaration": "ACPPublishSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPPublishSnapshot",
+              "kind": "type",
+              "declaration": "ACPPublishSnapshot",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ACPRepositorySchema",
@@ -6624,6 +6690,12 @@
               "kind": "type",
               "declaration": "ACPSessionWorkspace",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPSubmitTurn",
+              "kind": "type",
+              "declaration": "ACPSubmitTurn",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ACPTransport",
@@ -8760,6 +8832,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ACPCitation",
+              "kind": "type",
+              "declaration": "ACPCitation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ACPClientOptions",
               "kind": "type",
               "declaration": "ACPClientOptions",
@@ -8814,10 +8892,28 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ACPProjectChanges",
+              "kind": "type",
+              "declaration": "ACPProjectChanges",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPProjectSnapshot",
+              "kind": "type",
+              "declaration": "ACPProjectSnapshot",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ACPPublishSchema",
               "kind": "value",
               "declaration": "ACPPublishSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPPublishSnapshot",
+              "kind": "type",
+              "declaration": "ACPPublishSnapshot",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ACPRepositorySchema",
@@ -8848,6 +8944,12 @@
               "kind": "type",
               "declaration": "ACPSessionWorkspace",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPSubmitTurn",
+              "kind": "type",
+              "declaration": "ACPSubmitTurn",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ACPTransport",
@@ -10876,6 +10978,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "blobToWav",
+              "kind": "value",
+              "declaration": "blobToWav",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "createAudioClient",
               "kind": "value",
               "declaration": "createAudioClient",
@@ -10908,6 +11016,12 @@
               "kind": "type",
               "declaration": "AudioTicketRequest",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "blobToWav",
+              "kind": "value",
+              "declaration": "blobToWav",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "createAudioClient",

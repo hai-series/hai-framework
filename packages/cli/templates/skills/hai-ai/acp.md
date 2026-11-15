@@ -24,6 +24,10 @@ Agent 镜像按任务选择 `minimal`、`documents`、`office`、`browser` 或 `
 
 Linux 上运行 embedded Codex 前，按 [Codex 沙箱前置](https://learn.chatgpt.com/docs/sandboxing) 准备 bubblewrap 和所需的 AppArmor profile，并用 `codex sandbox` 在临时目录验证读写。沙箱初始化失败应先修复宿主环境，不能通过关闭沙箱或让模型猜测文件内容完成任务。
 
+浏览器工作台用 `scoped.sessions.create(options, { idempotencyKey, historySummary })` 创建会话，并用 `session.submit({ prompt, idempotencyKey, context })` 获取持久回执。用 `tasks.events(taskId, after, limit)` 读序号后的事件，页面断开时保留任务，显式 `tasks.cancel` 才取消。单轮可覆盖授权的资料和记忆，改变所需隔离时先选择合适会话。`session.status()` 可区分活动、显式关闭和空闲回收。
+
+只有部署方在固定 DeepSeek Harness 0.2.1-rc.5 镜像的登记项开启 `sharedMode: true` 时，内置共享 profile 才可运行。它使用默认启动配置，停用工具。逐轮工具及产物信息保留有界脱敏事件。工程任务可通过 `resolveProject` 装载 `workspaces.readGitSnapshot` 的文件树，完成后由 `publishProject` 交付生成的补丁。托管任务的推送调用 `workspaces.publishSnapshot`，服务端先重新查验当前 Git 发布权限。
+
 ## Goose 的原生接入
 
 受管 Goose 使用 `goose acp`，选择 `adapter: 'goose'`、`mode: 'embedded'` 或 `'builtin-service'`，绑定登记的 Hai 模型。适配器使用独立 Goose 状态目录和逐次工具审批，模型协议支持 Chat Completions、Responses 和 Anthropic。Goose 和 DSH 的每次受管启动只注入本次选中模型的凭据。

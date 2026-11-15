@@ -414,7 +414,7 @@ Managed Git rejects submodules and Git LFS attributes with ACP_UNSUPPORTED inste
 
 Start RelDB and [Runner](../runner/README.en.md), then pass the initialized instance to `ai.init(config, { runner, acpPolicy })`. Register agents in `acp.agents`. Set `environmentIds` to pinned Runner environments and `modelIds` to entries in `llm.models`. Codex needs a Responses gateway. API and executor nodes share the database and use the same environment definitions. On shutdown, close AI, Runner, and the database in that order.
 
-`task` starts a dedicated worker for the session. `user` may reuse a worker when the principal and startup settings match. `auto` selects a mode using application policy. `shared` is available to adapters explicitly approved for sharing with a read-only profile and without private context, workspaces, or tools. The built-in Codex, DeepSeek Harness, and Goose adapters use dedicated modes. See the [ACP configuration example](../../docs/usage/configuration/ai.md#acp-接入与模型能力).
+`task` starts a dedicated worker for the session. `user` may reuse a worker when the principal and startup settings match. `auto` checks shared eligibility before asking the application whether to reuse a personal worker, then falls back to a dedicated worker. `shared` is read-only and excludes private context, workspaces, and tools. Set `sharedMode` with the pinned DeepSeek Harness 0.2.1-rc.5 image to opt in. Codex and Goose use personal or dedicated workers. See the [ACP configuration example](../../docs/usage/configuration/ai.md#acp-接入与模型能力).
 
 ```ts
 import type { RunnerScope } from '@h-ai/runner' // tenantId and userId come from an authenticated application session.
@@ -470,6 +470,8 @@ async function continueWork(identity: RunnerScope) {
 ```
 
 `agents.describe(agentId)` reports built-in adapter capabilities. `sessions.get(id)` obtains a handle from another API node for the same principal. `session.stream(prompt, options)` yields durable events and throws on failure. `tasks.get(taskId)` returns the execution receipt. `tasks.cancel(taskId)` acknowledges cancellation and returns current status. Read the `taskId` from the `accepted` event in a `run` or `prompt` observer to query or cancel from another request.
+
+`session.submit({ prompt, idempotencyKey, context })` returns a receipt independent of the browser connection. Read `tasks.events(taskId, after, limit)` from the last received sequence after reconnecting. Check `session.status()` before submitting to an idle session. `workspaces.readGitSnapshot` loads authorized source files for dedicated workers. Completed turns can publish a patch. After explicit confirmation, `workspaces.publishSnapshot` pushes a separate `agent/` branch. See the [Agent workspace example](../../apps/agent/README.md).
 
 The application supplies `acpPolicy` to authorize `workspaceId` snapshots, knowledge, memory, files, skills, and tools. Use `allowTools` and `bindTools` for the MCP broker below. After receiving an `approval` event, the same principal calls `approvals.respond(id, 'allow-once' | 'allow-session' | 'always-allow' | 'deny')` with its `approvalId`. Success returns `undefined`. `approvals.rules(offset, limit)` pages through valid rules with `expiresAt`, and `approvals.revoke(ruleId)` revokes a rule owned by the principal. `full-access` requires explicit application approval and `task` mode. A workspace provides a read-only snapshot. Mode changes can carry a user-approved `historySummary`. See [managed ACP usage](../../docs/usage/development/ai-acp.md#多用户应用的受管调用) for additional examples.
 
