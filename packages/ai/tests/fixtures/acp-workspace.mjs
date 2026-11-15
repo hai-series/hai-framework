@@ -24,6 +24,21 @@ channel.on('line', (line) => {
   if (method === 'session/close')
     return reply({})
   if (method === 'session/prompt') {
+    if (params.prompt.at(-1).text === 'edit project') {
+      const path = '/workspace/src/readme.txt'
+      writeFileSync(path, readFileSync(path, 'utf8').replace('original', 'edited'))
+      send({
+        method: 'session/update',
+        params: {
+          sessionId: params.sessionId,
+          update: {
+            sessionUpdate: 'agent_message_chunk',
+            content: { type: 'text', text: 'updated' },
+          },
+        },
+      })
+      return reply({ stopReason: 'end_turn' })
+    }
     const path = '/input/notes.txt'
     const source = readFileSync(path, 'utf8')
     let readOnly = false

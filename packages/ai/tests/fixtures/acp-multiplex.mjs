@@ -98,6 +98,29 @@ input.on('line', (line) => {
         })
         return undefined
       }
+      if (params.prompt.at(-1).text === 'timeline') {
+        for (const update of [
+          {
+            sessionUpdate: 'tool_call',
+            toolCallId: 'timeline-tool',
+            title: 'Lookup',
+            status: 'in_progress',
+            rawInput: { apiKey: 'fixture-secret', query: 'notes' },
+          },
+          {
+            sessionUpdate: 'tool_call_update',
+            toolCallId: 'timeline-tool',
+            status: 'completed',
+            rawOutput: { text: 'result visible', authToken: 'fixture-secret' },
+          },
+          { sessionUpdate: 'usage_update', used: 42, size: 1000 },
+        ]) {
+          send({
+            method: 'session/update',
+            params: { sessionId: params.sessionId, update },
+          })
+        }
+      }
       setTimeout(() => {
         const content = params.prompt.at(-1).text === 'inspect-history'
           ? {

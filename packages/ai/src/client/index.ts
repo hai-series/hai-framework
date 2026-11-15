@@ -5,3 +5,5 @@
  * @module index
  */
 export * from './ai-audio-client.js'
+
+export { blobToWav } from './ai-audio-wav.js'

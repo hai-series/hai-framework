@@ -149,6 +149,8 @@ export interface RunnerLaunch {
   files?: Record<string, string>
   /** 规范 Base64 输入文件；提供空对象时也会分配 /input 与 /output。 */
   inputs?: Record<string, string>
+  /** 规范 Base64 普通文件树，按相对路径初始化私有可写 /workspace。 */
+  workspace?: Record<string, string>
   cwd?: string
 }
 
@@ -167,6 +169,8 @@ export interface RunnerProcess {
   wait: () => Promise<{ code: number | null, signal: NodeJS.Signals | null }>
   /** 从仍运行的工具容器读取一个受限普通文件，返回规范 Base64。 */
   artifact: (name: string, maxBytes: number) => Promise<HaiResult<string>>
+  /** 从已配置工作区的运行容器获取有界普通文件树；镜像提供 Node.js。 */
+  snapshot: (maxBytes: number) => Promise<HaiResult<Record<string, string>>>
   close: () => Promise<HaiResult<void>>
 }
 

@@ -95,6 +95,8 @@ export interface ACPAgentAdapterInput {
   statePath: string
   /** 受管任务请求的权限范围。 */
   permissionProfile?: 'read-only' | 'workspace' | 'full-access'
+  /** 为经过隔离验证的原生适配器启用只读共享启动配置。 */
+  shared?: boolean
   /** 已由适配器 Schema 校验的原生扩展选项。 */
   nativeOptions?: Record<string, import('@h-ai/runner').RunnerJson>
   /** 模型声明支持且适配器可落实的推理级别。 */
