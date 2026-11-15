@@ -16,6 +16,11 @@ RUN if [ -d node_modules/better-sqlite3 ]; then node -e "const Database=require(
 ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
 RUN --mount=type=cache,id=hai-example-pnpm,target=/pnpm/store pnpm pm deploy --filter agent --prod /prod/app
 FROM node:24.22.1-bookworm-slim AS runtime
+# Web 节点确认发布任务分支时使用 Git，HTTPS 远端需要系统证书链。
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates git openssh-client \
+    && git --version \
+    && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000

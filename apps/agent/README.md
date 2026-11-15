@@ -51,9 +51,11 @@ NODE_ENV=development pnpm --filter agent preview --mode dev # 用开发配置运
 | `HAI_AGENT_TOOLURL`、`HAI_AGENT_TOOLPORT`         | 执行节点自己的 MCP Broker 可达 URL 和监听端口。Web 节点可以执行查询及审批。外部服务和各工具输入 Schema 在模型进入运行前登记                                    |
 | `HAI_DB`、`HAI_CACHE`、`HAI_VECDB`、`HAI_STORAGE` | 多进程分别使用共享 PostgreSQL、Redis、Qdrant 及 S3。所有执行节点和 API 节点使用一致的配置和项目基线                                                            |
 
-真实共享环境采用 TLS 反向代理，并显式管理 IAM 注册和账号。Web 镜像默认不领取作业，执行进程使用相同构建产物及各自的 Runner ID。有多个执行端时，每个端点都使用自己的 MCP Broker 地址。线上代理清理外部提供的 `X-Forwarded-*` 后再设置真实值。如果应用后端需要根据受信代理还原方案，可设置适配器的 `PROTOCOL_HEADER=x-forwarded-proto`。文件上传需在 Web 端和代理上允许相应请求体大小，SvelteKit Node 可设置 `BODY_SIZE_LIMIT=12M`。使用完全访问的管理员仍受容器资源、挂载和出口范围约束。
+真实共享环境采用 TLS 反向代理，并显式管理 IAM 注册和账号。Web 镜像默认不领取作业，内置确认发布任务分支所需的 Git 和证书。执行进程使用相同应用构建产物和各自的 Runner ID，宿主须有 Podman 或 Docker；启用工程功能时须同时安装 Git。有多个执行端时，每个端点都使用自己的 MCP Broker 地址。线上代理清理外部提供的 `X-Forwarded-*` 后再设置真实值。如果应用后端需要根据受信代理还原方案，可设置适配器的 `PROTOCOL_HEADER=x-forwarded-proto`。文件上传需在 Web 端和代理上允许相应请求体大小，SvelteKit Node 可设置 `BODY_SIZE_LIMIT=12M`。使用完全访问的管理员仍受容器资源、挂载和出口范围约束。
 
 工具授权及项目清单均从服务器配置读取。模型调用用限域中继凭据，真实上游密钥放在中继端；不要通过可执行任务的环境变量发放通用账户密钥。项目示例最多导入 512 个普通文件和 16 MiB 输入，具体容量还受 Runner 临时盘约束。模式和后端变化可以带文本摘要，但跨 Worker 的原生历史和当前工作目录独立；应先保存需要的补丁。
+
+在 Web 节点和执行节点为对应服务用户准备同一 Git 提交。Web 容器以 UID 1000 运行，可将该用户拥有的工程目录只读挂载。远端需允许部署方使用自己的认证材料推送 `agent/` 分支，SSH 私钥和 `known_hosts` 由部署方从宿主只读挂入 `/home/node/.ssh`。
 
 ### 调用示例
 
