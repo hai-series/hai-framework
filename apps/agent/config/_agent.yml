@@ -1,0 +1,5 @@
+# 示例应用的项目、工具及个人工作台设置，可用 HAI_AGENT JSON 覆盖。
+tenant: ${HAI_AGENT_TENANT:agent}
+tools: []
+skills: []
+projects: []

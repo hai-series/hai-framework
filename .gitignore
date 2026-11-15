@@ -50,6 +50,7 @@ tmp/
 temp/
 .cache/
 .tmp-*/
+**/*.inlang/cache/
 
 test-results/
 test-data/

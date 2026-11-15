@@ -1,0 +1,15 @@
+# 说明：登录启用配置
+# 取值：配置块（填写下方缩进字段）
+login:
+  # 说明：是否启用密码登录
+  # 取值：true | false
+  password: ${HAI_IAM_LOGIN_PASSWORD:true}
+  # 说明：是否启用 OTP 登录
+  # 取值：true | false
+  otp: ${HAI_IAM_LOGIN_OTP:false}
+# 说明：注册配置
+# 取值：配置块（填写下方缩进字段）
+register:
+  # 说明：是否允许访客自助注册；关闭后隐藏注册入口并由服务端拒绝注册，不影响已有账号登录或管理员创建账号。
+  # 取值：true | false
+  enabled: ${HAI_IAM_REGISTER_ENABLED:false}

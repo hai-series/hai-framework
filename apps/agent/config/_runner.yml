@@ -1,0 +1,4 @@
+nodeId: ${HAI_RUNNER_NODEID:agent-local}
+executor: ${HAI_RUNNER_EXECUTOR:true}
+engine: ${HAI_RUNNER_ENGINE:podman}
+environments: []

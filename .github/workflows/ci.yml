@@ -234,7 +234,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [admin-console, ai-playground, corporate-website, h5-app, mobile-app, framework-website]
+        app: [admin-console, agent, ai-playground, corporate-website, h5-app, mobile-app, framework-website]
     uses: ./.github/workflows/ci-stage.yml
     with:
       stage: browser-${{ matrix.app }}
