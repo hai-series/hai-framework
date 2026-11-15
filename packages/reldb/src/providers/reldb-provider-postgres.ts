@@ -15,6 +15,7 @@ import type {
   ExecuteResult,
   PaginationQueryOptions,
   ReldbColumnDef,
+  ReldbFunctions,
 } from '../reldb-types.js'
 import type { ReldbOpsContext } from './reldb-provider-base.js'
 import type { ReldbProvider } from './reldb-provider-types.js'
@@ -69,7 +70,7 @@ interface PgPool {
  * ```
  */
 interface PgClient {
-  query: (text: string, values?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>
+  query: (text: string, values?: unknown[]) => Promise<{ rows: unknown[], rowCount: number, command?: string }>
   release: () => void
 }
 
@@ -348,45 +349,75 @@ export function createPostgresProvider(): ReldbProvider {
 
   // ─── DDL 操作 ───
 
-  const rawDdl: DdlOperations = {
-    async createTable(name, columns, ifNotExists = true) {
-      const quotedTable = quoteIdentifier(name)
-      const sql = buildDefaultCreateTableSql(pgBuildColumnSql, quotedTable, columns, ifNotExists)
-      await executeStatement(sql)
-      return ok(undefined)
-    },
-    async dropTable(name, ifExists) {
-      const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
-      await pool!.query(`DROP TABLE ${ifExistsClause}${quoteIdentifier(name)}`)
-      return ok(undefined)
-    },
-    async addColumn(table, column, def) {
-      const colSql = pgBuildColumnSql(column, def)
-      await pool!.query(`ALTER TABLE ${quoteIdentifier(table)} ADD COLUMN ${colSql}`)
-      return ok(undefined)
-    },
-    async dropColumn(table, column) {
-      await pool!.query(`ALTER TABLE ${quoteIdentifier(table)} DROP COLUMN ${quoteIdentifier(column)}`)
-      return ok(undefined)
-    },
-    async renameTable(oldName, newName) {
-      await pool!.query(buildDefaultRenameTableSql(quoteIdentifier(oldName), quoteIdentifier(newName)))
-      return ok(undefined)
-    },
-    async createIndex(table, index, def) {
-      const sql = buildDefaultCreateIndexSql(quoteIdentifier, quoteIdentifier(table), quoteIdentifier(index), def)
-      await executeStatement(sql)
-      return ok(undefined)
-    },
-    async dropIndex(index, ifExists = true) {
-      const sql = buildDefaultDropIndexSql(quoteIdentifier, index, ifExists)
-      await pool!.query(sql)
-      return ok(undefined)
-    },
-    async raw(sql) {
-      await executeStatement(sql)
-      return ok(undefined)
-    },
+  function createRawDdl(execute: PgClient['query'], scoped = false): DdlOperations {
+    return {
+      async createTable(name, columns, ifNotExists = true) {
+        const quotedTable = quoteIdentifier(name)
+        if (scoped && ifNotExists) {
+          const found = await execute('SELECT 1 FROM pg_catalog.pg_class WHERE oid = pg_catalog.to_regclass($1) AND relkind IN (\'r\', \'p\')', [quotedTable])
+          if (found.rows.length)
+            return ok(undefined)
+        }
+        await execute(buildDefaultCreateTableSql(pgBuildColumnSql, quotedTable, columns, ifNotExists && !scoped))
+        return ok(undefined)
+      },
+      async dropTable(name, ifExists) {
+        const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
+        await execute(`DROP TABLE ${ifExistsClause}${quoteIdentifier(name)}`)
+        return ok(undefined)
+      },
+      async addColumn(table, column, def) {
+        const colSql = pgBuildColumnSql(column, def)
+        await execute(`ALTER TABLE ${quoteIdentifier(table)} ADD COLUMN ${colSql}`)
+        return ok(undefined)
+      },
+      async dropColumn(table, column) {
+        await execute(`ALTER TABLE ${quoteIdentifier(table)} DROP COLUMN ${quoteIdentifier(column)}`)
+        return ok(undefined)
+      },
+      async renameTable(oldName, newName) {
+        await execute(buildDefaultRenameTableSql(quoteIdentifier(oldName), quoteIdentifier(newName)))
+        return ok(undefined)
+      },
+      async createIndex(table, index, def) {
+        const quotedTable = quoteIdentifier(table)
+        const statement = buildDefaultCreateIndexSql(quoteIdentifier, quotedTable, quoteIdentifier(index), def)
+        if (!scoped) {
+          await execute(statement)
+          return ok(undefined)
+        }
+        // 已有可用索引避免重复加表锁。同名其它对象由实际 CREATE INDEX 报错。
+        const existing = await execute(`
+          SELECT i.indisvalid AND i.indisunique = $3 AND i.indnatts = $4
+            AND (i.indpred IS NOT NULL) = $5 AND i.indexprs IS NULL
+            AND ARRAY(SELECT a.attname::text FROM unnest(i.indkey) WITH ORDINALITY AS k(num, pos)
+              JOIN pg_catalog.pg_attribute AS a ON a.attrelid = i.indrelid AND a.attnum = k.num
+              ORDER BY k.pos) = $6::text[] AS usable
+          FROM pg_catalog.pg_index AS i JOIN pg_catalog.pg_class AS c ON c.oid = i.indexrelid
+          WHERE i.indrelid = pg_catalog.to_regclass($1) AND c.relname = $2
+        `, [
+          quotedTable,
+          index,
+          !!def.unique,
+          def.columns.length,
+          !!def.where,
+          def.columns,
+        ])
+        if ((existing.rows[0] as { usable?: boolean } | undefined)?.usable)
+          return ok(undefined)
+        await execute(statement.replace('INDEX IF NOT EXISTS ', 'INDEX '))
+        return ok(undefined)
+      },
+      async dropIndex(index, ifExists = true) {
+        const sql = buildDefaultDropIndexSql(quoteIdentifier, index, ifExists)
+        await execute(sql)
+        return ok(undefined)
+      },
+      async raw(sql) {
+        await execute(sql)
+        return ok(undefined)
+      },
+    }
   }
 
   // ─── DML 操作 ───
@@ -517,6 +548,46 @@ export function createPostgresProvider(): ReldbProvider {
     }))
   }
 
+  const prepareSchema: ReldbFunctions['prepareSchema'] = async (key, prepare) => {
+    const releaseOwnership = retainTransaction()
+    let client: PgClient | undefined
+    try {
+      client = await pool!.connect()
+      const connection = client
+      await connection.query('BEGIN ISOLATION LEVEL READ COMMITTED')
+      await connection.query('SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1, 0))', [key])
+      const transactionContext = {
+        ...ctx,
+        isConnected: () => client !== undefined,
+      }
+      const result = await prepare({
+        sql: createBaseDmlOps(transactionContext, createPgTxDmlOps(connection)),
+        ddl: createBaseDdlOps(transactionContext, createRawDdl((text, values) => connection.query(text, values), true)),
+      })
+      if (!result.success) {
+        await connection.query('ROLLBACK')
+        return result
+      }
+      const committed = await connection.query('COMMIT')
+      if (committed.command === 'ROLLBACK')
+        return err(HaiReldbError.DDL_FAILED, reldbM('reldb_ddlFailed'))
+      return result
+    }
+    catch (error) {
+      await client?.query('ROLLBACK').catch(() => {})
+      return err(HaiReldbError.DDL_FAILED, reldbM('reldb_ddlFailed'), error)
+    }
+    finally {
+      try {
+        client?.release()
+      }
+      finally {
+        client = undefined
+        releaseOwnership()
+      }
+    }
+  }
+
   // ─── 组装 Provider ───
 
   const dmlOps = createBaseDmlOps(ctx, rawDml)
@@ -599,7 +670,8 @@ export function createPostgresProvider(): ReldbProvider {
     close: closeResource,
 
     isConnected: () => ctx.isConnected(),
-    ddl: createBaseDdlOps(ctx, rawDdl),
+    ddl: createBaseDdlOps(ctx, createRawDdl(executeStatement)),
+    prepareSchema,
     sql: dmlOps,
     crud: createBaseCrudManager(dmlOps),
     tx: createBaseTxManager(ctx, beginTx),

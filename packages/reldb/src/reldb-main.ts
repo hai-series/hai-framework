@@ -313,6 +313,20 @@ export const reldb: ReldbFunctions = {
     return schemaColumns(reldb, table, sql)
   },
 
+  async prepareSchema(key, prepare) {
+    const provider = currentProvider
+    if (!provider?.isConnected())
+      return notInitialized.result()
+    if (provider.prepareSchema)
+      return provider.prepareSchema(key, prepare)
+    try {
+      return await prepare({ ddl: provider.ddl, sql: provider.sql })
+    }
+    catch (error) {
+      return err(HaiReldbError.DDL_FAILED, reldbM('reldb_ddlFailed'), error)
+    }
+  },
+
   /** 获取当前脱敏后的配置快照（未初始化时为 null） */
   get config(): ReldbConfig | null {
     if (!currentConfig)

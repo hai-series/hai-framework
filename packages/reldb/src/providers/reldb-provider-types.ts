@@ -1,7 +1,7 @@
 /** 内置 reldb Provider 共享契约，不属于 package.exports 公共 API。 */
 import type { HaiResult } from '@h-ai/core'
 import type { ReldbConfig } from '../reldb-config.js'
-import type { CrudManager, DdlOperations, DmlOperations, TxManager } from '../reldb-types.js'
+import type { CrudManager, DdlOperations, DmlOperations, ReldbFunctions, TxManager } from '../reldb-types.js'
 
 /**
  * 数据库 Provider 接口
@@ -30,6 +30,8 @@ export interface ReldbProvider {
   readonly crud: CrudManager
   /** 事务管理器 */
   readonly tx: TxManager
+  /** 提供事务化结构准备的后端实现。 */
+  readonly prepareSchema?: ReldbFunctions['prepareSchema']
   /** 连接数据库 */
   connect: (config: ReldbConfig) => Promise<HaiResult<void>>
   /** 关闭连接 */

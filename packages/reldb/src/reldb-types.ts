@@ -848,6 +848,22 @@ export interface ReldbFunctions {
    */
   schemaColumns: (table: string, sql?: DmlOperations) => Promise<HaiResult<string[]>>
 
+  /**
+   * 准备模块结构。PostgreSQL 在一条连接上等待同名事务锁，再执行 DDL 和结构检查。
+   * 失败结果或异常均回滚；回调使用传入的操作。其他后端沿用各自 DDL 提交规则。
+   * @param key - 部署各节点共用的固定模块标识。
+   * @param prepare - 同一结构变更的检查、DDL 和种子写入。
+   * @returns 结构准备结果。
+   * @example
+   * ```ts
+   * import { reldb } from '@h-ai/reldb'
+   * const ready = await reldb.prepareSchema('hai:example:schema', ({ ddl }) =>
+   *   ddl.createTable('example_records', { id: { type: 'TEXT', primaryKey: true } }))
+   * if (!ready.success) throw new Error(ready.error.message)
+   * ```
+   */
+  prepareSchema: <T>(key: string, prepare: (db: Pick<ReldbFunctions, 'ddl' | 'sql'>) => Promise<HaiResult<T>>) => Promise<HaiResult<T>>
+
   /** 当前数据库脱敏配置快照（未初始化时为 null） */
   readonly config: ReldbConfig | null
 
