@@ -617,7 +617,7 @@
                 <article class='grid gap-4'>
                   <div class='agent-rail max-w-[92%] justify-self-end whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm'>{turn.text}</div>
                   {#if turn.output?.text || (turn.id === lastTurn?.id && streamed)}
-                    <div class='min-w-0 text-sm leading-relaxed'>
+                    <div class='agent-answer min-w-0 text-sm leading-relaxed'>
                       <MarkdownRenderer content={turn.output?.text || streamed} />
                       {#if turn.output?.json}<pre class='overflow-auto rounded-lg border agent-divider p-3'>{JSON.stringify(turn.output.json, null, 2)}</pre>{/if}
                       {#if home.speech.tts && turn.output?.text}

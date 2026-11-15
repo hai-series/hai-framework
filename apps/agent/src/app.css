@@ -50,6 +50,10 @@ body {
   box-shadow: 0 4px 25px color-mix(in oklab, var(--color-base-content) 7%, transparent);
 }
 
+.agent-answer :where(th, td):first-child {
+  min-inline-size: 5rem;
+}
+
 .agent-mark {
   display: grid;
   place-items: center;
