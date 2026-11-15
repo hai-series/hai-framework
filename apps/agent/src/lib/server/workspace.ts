@@ -218,16 +218,30 @@ async function toMessages(user: string, task: string, currentId: string) {
   ])
 }
 
-async function contextSummary(history: ChatMessage[]) {
+export async function contextSummary(history: ChatMessage[]) {
   if (!history.length)
     return undefined
-  const bounded = history.slice(-16).map(message => ({
-    ...message,
-    content: String(message.content ?? '').slice(0, 1500),
-  }))
+  const maxTokens = 1600
+  const messageBudget = 750
+  // 最近的用户消息和回复都受压缩器保护，先给每条消息留出明确预算。
+  const bounded = history.slice(-16).map((message) => {
+    const characters = Array.from(String(message.content ?? '')).slice(0, 1500)
+    let length = characters.length
+    while (length > 0) {
+      const candidate = {
+        ...message,
+        content: characters.slice(0, length).join(''),
+      }
+      const tokens = ai.token.estimateMessages([candidate])
+      if (tokens <= messageBudget)
+        return candidate
+      length = Math.floor(length * messageBudget / tokens)
+    }
+    return { ...message, content: '' }
+  })
   const reduced = value(await ai.compress.tryCompress(bounded, {
     strategy: 'sliding-window',
-    maxTokens: 1600,
+    maxTokens,
     preserveLastN: 1,
   }))
   const summary = reduced.messages

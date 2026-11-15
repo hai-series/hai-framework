@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
+import { ai } from '@h-ai/ai'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { addResource, findTask, initWorkspace, insertTask, owner, reserveTurn, resource, withTask, writeTask, writeTurn } from '#lib/server/data.js'
-import { view } from '#lib/server/workspace.js'
+import { contextSummary, view } from '#lib/server/workspace.js'
 import { sendSchema, settingsSchema } from '#lib/workspace.js'
 
 beforeEach(async () => {
@@ -72,4 +73,21 @@ it('streams the newest round without resending conversation history', async () =
   expect(history).toHaveLength(2)
   expect((await view(scope, task.id, 0, 0, true)).turns).toEqual(history?.slice(-1))
   await expect(view({ ...scope, userId: 'bob' }, task.id, 0, 0, true)).rejects.toMatchObject({ status: 404 })
+})
+
+it('carries the protected recent messages from a long Chinese conversation within the token budget', async () => {
+  expect((await ai.init({})).success).toBe(true)
+  try {
+    const long = '青竹项目交付检查资料'.repeat(1500)
+    const summary = await contextSummary([
+      { role: 'user', content: long },
+      { role: 'assistant', content: '已记录本轮要点' },
+    ])
+    expect(summary).toContain('青竹项目交付检查资料')
+    expect(summary).toContain('已记录本轮要点')
+    expect(ai.token.estimateText(summary!)).toBeLessThanOrEqual(1600)
+  }
+  finally {
+    await ai.close()
+  }
 })
