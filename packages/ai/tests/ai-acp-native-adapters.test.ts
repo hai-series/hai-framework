@@ -118,7 +118,7 @@ describe('原生智能体适配器', () => {
       expect(denied.error.code).toBe('hai:ai:083')
   })
 
-  it('dSH 只暴露本次启动的模型密钥和原生模型目录', async () => {
+  it('dSH 只暴露本次启动的模型密钥与原生配置，并关闭遥测', async () => {
     const agent = registeredAgent('deepseek-harness')
     const launch = await nativeAdapters['deepseek-harness']!.configure({
       agent,
@@ -126,7 +126,12 @@ describe('原生智能体适配器', () => {
       modelId: 'responses-model',
       statePath: '/state/task',
     })
-    expect(launch.env).toEqual({ DSH_HOME: '/state/task', HAI_ACP_MODEL_0: 'responses-fixture', DSH_PERMISSION_MODE: 'workspace-write' })
+    expect(launch.env).toEqual({
+      DSH_HOME: '/state/task',
+      HAI_ACP_MODEL_0: 'responses-fixture',
+      DSH_PERMISSION_MODE: 'workspace-write',
+      DSH_TELEMETRY_MODE: 'DISABLED',
+    })
     expect(JSON.parse(launch.files!['hai-config.json']!)).toMatchObject([
       {
         id: 'llm-pi-ai',
