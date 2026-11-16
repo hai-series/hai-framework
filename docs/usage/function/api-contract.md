@@ -1,6 +1,8 @@
 # @h-ai/api-contract 功能说明
 
-前后端共享 oRPC 方法、路径和 Zod 输入输出定义。把 contract 交给服务端实现与调用方生成类型，服务端仍需绑定实际处理函数。
+通过 `apiContract` 定义前后端共享的 HTTP 方法、路径和参数格式。服务端用这些定义校验请求，并绑定实际处理函数。客户端使用同一份定义获得 TypeScript 类型。
+
+组合 HTTP 契约用 `apiContract.create()`。各领域单独导出的 Schema 用于检查特定输入、输出或类型，下面分别注明这些依赖。
 
 [模块 README](../../../packages/api-contract/README.md) · [配置清单](../configuration/api-contract.md) · [数据结构](../data/api-contract.md) · [前后端接入](../development/frontend-backend.md)
 
@@ -121,7 +123,7 @@ const app = serv.createApp({
 
 密码登录只提交 `identifier` 和 `password`；`AuthPanel` 将 `LoginForm` 的 `username` 映射为 `identifier`。会话有效期由服务端 `session.maxAge` / `session.refreshTokenMaxAge` 配置决定，登录表单不提供按次登录的持久会话选项。
 
-协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
+服务端可在认证配置中提供用户协议和隐私政策的 Markdown 正文或 URL。如果正文和 URL 同时存在，登录页面的弹窗优先显示经过安全处理的 Markdown。
 
 标准 IAM contract 新增 GET /auth/config、POST /auth/login/ldap、POST /auth/password-reset/request、POST /auth/password-reset/confirm。公开配置 Schema 是安全白名单。IamLdapLoginInput、IamPublicConfig 对调用方提供真实类型。密码长度以 IAM 运行时策略为准，contract 不固定注册密码最小长度。
 
@@ -151,15 +153,19 @@ const path = apiContract.pathOf(contract.feedback.reports.submit)
 
 IamCreateCaptchaInputSchema / IamCaptchaChallengeSchema 定义 POST /auth/captcha 的用途与可公开挑战，交互鉴别输入允许最多4096字符的可选 captcha。IamPublicConfigSchema.captcha 仅含 enabled，缺省关闭。Schema 校验结构，证明有效期、用途和单次消费由服务端 IAM 执行。
 
-策略、默认值和恢复边界见 [IAM](../../../packages/iam/README.md)。
+何时要求验证、验证失败后如何处理，见 [IAM 配置](../configuration/iam.md)和 [IAM 功能说明](./iam.md)。
 
 ### 页面离开会话策略
 
-`session.endOnPageHide` 默认 `false`。启用后宿主调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })` 并在卸载时调用返回的清理函数；标准 admin/H5/fullstack 模板已经接入。非 BFCache 的 `pagehide`（也包括刷新、整页导航）通过 POST `/auth/session/close` 尽力撤销当前 access 及关联 refresh，沿用 CSRF/传输加密，使用 `keepalive` 且不自动刷新会话。该响应不清 Cookie/本地凭据，避免旧响应覆盖下一次登录。显式退出仍使用正常 logout，可靠撤销并清理当前凭据。浏览器可能不发送页面离开请求，因此必须按业务配合服务端 `idleTimeout`/`absoluteTimeout`；不能据此保证关闭即撤销。
+`session.endOnPageHide` 默认关闭。开启后，在浏览器页面加载时调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })`，卸载时执行它返回的函数，移除监听器。标准 admin、H5 和 fullstack 模板已接好此步骤。这里的 `actions` 来自 `apiClient.createAuthActions(...)` 或 SvelteKit 的 `kit.client.createAuthActions(...)`。配置从登录页使用的公开认证接口读取。
+
+浏览器触发 `pagehide` 时会尝试调用 `POST /auth/session/close`。这包括刷新或整页导航，但页面进入往返缓存（BFCache）时会跳过。请求沿用 CSRF 防护和已启用的传输加密，并使用 `keepalive` 争取在页面关闭后完成。该请求不会刷新会话，响应也不会清除 Cookie 或本地凭据，以免较早的请求清掉新的登录状态。
+
+浏览器可能根本没有发出请求。服务端仍需用 `idleTimeout` 或 `absoluteTimeout` 限制会话寿命。用户主动退出时，应正常调用应用的 logout 接口，让服务端撤销凭据，并清除客户端保存的登录状态。
 
 ### 反馈传输预算
 
-`resolveFeedbackBudget` 从一组应用选项计算附件、证据、ZIP 和 HTTP 可用字节，供服务端与浏览器使用一致规则。
+`apiContract.feedback` 声明反馈路由的请求和响应格式。要计算单个附件、证据、ZIP 和全量 HTTP 请求能容纳的字节数，可在服务端或浏览器单独从 `@h-ai/api-contract/feedback` 导入 `resolveFeedbackBudget()`，按同一组上限计算。
 
 ```ts
 import { FeedbackBudgetSchema, resolveFeedbackBudget } from '@h-ai/api-contract/feedback'

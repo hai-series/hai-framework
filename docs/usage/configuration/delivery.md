@@ -2,7 +2,7 @@
 
 [配置手册](README.md) · [应用创建步骤](../getting-started/create.md) · [部署操作指南](../operations/deployment.md)
 
-部署可靠性需要制品、环境、成功基线和数据恢复共同成立。全量表示更新本项目完整服务组合，不表示删除数据卷；增量表示基于服务器最后成功状态仅替换选中服务，不是把部分文件随意覆盖到服务器。容器恢复与数据库回退分别设计。
+全量部署更新项目的所有服务。增量部署以服务器上一次成功发布的版本为基础，只更新命令中选中的服务。两种方式都保留已有数据卷。准备回滚时分别记录旧的容器版本和数据库备份，恢复旧容器不会撤销已经写入的数据。
 
 ## 配置入口和角色
 
@@ -168,7 +168,7 @@ pnpm build --target image --image-source custom --image-mirrors "docker.io=mirro
 | --- | --- | --- |
 | SvelteKit的admin、h5、website | 构建进程的`PUBLIC_BASE_PATH`默认空字符串，`kit.paths.base`为空 | `/yyy`使页面、资源及生成模板中的认证地址、登录跳转和守卫都带此前缀；更改后重新构建 |
 | Vite的Fullstack Web及独立mobile浏览器端 | `vite.config`默认base为`./`；`runtime-config.js`使用相对引用；页面使用hash导航 | 不指定目录时，同一份构建可以经剥离目录的网关挂载；显式`PUBLIC_BASE_PATH`会将Vite基址固定为该目录加`/` |
-| App/Desktop原生包 | Vite资源使用`./`，原生build目标不接受`PUBLIC_BASE_PATH` | 本地资源由原生宿主加载；原生API地址仍按设备配置，网站目录不代表设备API地址 |
+| App/Desktop原生包 | Vite资源使用`./`，原生build目标不接受`PUBLIC_BASE_PATH` | Android、iOS 和桌面应用从安装包读取本地页面。设备访问的 API 地址要单独设置 |
 | SDK管理的网站目录 | `hai build --target image`读取构建进程的`PUBLIC_BASE_PATH`，默认根目录 | 只传给web镜像；设置后自动生成匹配的Nginx/SSR健康检查和带目录的访问地址 |
 
 `PUBLIC_BASE_PATH`是公开的**构建期进程变量**。例如 `/yyy`、`/portal/admin`有效；根目录用空字符串。各段仅允许ASCII字母、数字、`_`、`.`、`-`，不接受末尾斜杠、外部URL、查询、片段、编码分隔符或单独的`.`/`..`段。`/`应改为空字符串。构建不会从根`.env`或私有`.env.local`读取这个控制值；请在当前终端或CI构建任务中显式设置。
@@ -211,7 +211,7 @@ finally {
 
 Fullstack Web的运行配置先于应用模块加载。未指定固定目录时，模板中的`./runtime-config.js`与Vite `base: './'`允许页面挂在`/yyy/`下；网关将该前缀剥离后交给根目录静态服务。访问入口应规范为带末尾斜杠的`/yyy/`，hash导航和刷新保持在这个目录。
 
-Web的API地址按显式`baseUrl`、`runtime-config.js`、构建时`PUBLIC_API_BASE`、当前`origin`的顺序选择；只提供`origin`时补`/api/v1`。独立托管Web时，在公开运行配置中设置实际API的完整地址及前缀，不放密钥。SDK部署Fullstack时，同源运行配置由当前`_serv.http.apiPrefix`生成；额外网关也要转发该API前缀。网站在`/yyy/`，并不自动把API改为`/yyy/api/v1`。详见[HTTP与客户端配置](http.md)。
+Web的API地址按显式`baseUrl`、`runtime-config.js`、构建时`PUBLIC_API_BASE`、当前`origin`的顺序选择；只提供`origin`时补`/api/v1`。独立托管Web时，在公开运行配置中设置实际API的完整地址及前缀，不放密钥。用 SDK 部署 Fullstack 时，SDK 按 `_serv.yml` 的 `http.apiPrefix` 写入前端可读取的 API 地址。加装自己的网关时，也要转发这个前缀。网站在`/yyy/`，并不自动把API改为`/yyy/api/v1`。详见[HTTP与客户端配置](http.md)。
 
 ![前后端分离应用的子目录入口](../images/subpath-vite-login.png)
 
@@ -372,7 +372,7 @@ GitHub仓库Pages选择Actions，上传build时显式include-hidden-files:true�
 
 运行时`.env.runtime`在交付tar内，属于私有产物；`NODE_ENV`默认dev→development、test→test、prod及其他模式→production，显式环境可覆盖。构建优化模式不改变部署运行默认。反向代理和加密预算从解析后的Serv/Kit配置推导，容量变化要同时验附件与页面/API。
 
-Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>/config/.env.runtime`。应用配置与托管连接在此合并，修改 `HAI_STORAGE_PUBLICENDPOINT` 等细项后重启对应后端即可；同一来源的细项覆盖父 JSON。配置目录只读挂载到 `/run/hai/config`，编辑器原子替换文件也会被下一次启动读取。私有代理标记和 Node 启动参数由部署装配管理；静态 Web、中间件原生环境、端口/挂载、Nginx 路由与限额变更仍需部署。仅更新 Web/中间件保留当前应用配置；后端局部更新保留服务器托管连接，其余值来自新包，全量更新采用新包并按已有凭据状态定稿。手工修改先备份，长期配置同步回源环境。
+Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>/config/.env.runtime`。这个文件同时保存应用设置及已开通的数据库、缓存等连接参数，修改 `HAI_STORAGE_PUBLICENDPOINT` 等细项后重启对应后端即可；例如同一文件里先读取 `HAI_STORAGE` 的整组 JSON，再用 `HAI_STORAGE_PUBLICENDPOINT` 改写其中的公开访问地址。配置目录只读挂载到 `/run/hai/config`，编辑器原子替换文件也会被下一次启动读取。私有代理标记和 Node 启动参数由部署装配管理；静态 Web、中间件原生环境、端口/挂载、Nginx 路由与限额变更仍需部署。仅更新 Web/中间件保留当前应用配置；后端局部更新保留服务器托管连接，其余值来自新包，全量更新采用新包并按已有凭据状态定稿。手工修改先备份，长期配置同步回源环境。
 
 容器打包时，监听地址采用 `0.0.0.0`，端口采用制品声明值（未声明时采用部署配置），并生成 `HOST`、`PORT` 和 Serv 的对应细项。本机 `.env` 中的回环地址与开发端口继续用于本地运行。修改容器端口时更新制品与部署布局后重新部署。
 
@@ -388,7 +388,7 @@ Fullstack 创建阶段为各环境生成独立的账号初始密码；打包阶�
 
 ### 修改配置后如何生效
 
-交付时先解析粗细覆盖结果，再生成细项；数组、动态字典和显式空对象保留原意，整体对象替换的最上层 `{}` 重置标记防止旧 YAML 值恢复。核心环境标记、职责账号初始密码和传输密钥环由启动代码直接读取，继续保留；`NODE_OPTIONS` 和私有代理标记以部署装配为准。
+生成运行配置文件时，部署工具先按来源优先级算出最终设置，再将结果写入服务器配置文件。若用整组 JSON 替换 YAML，工具会保留清除旧设置的标记，以免旧文件中原有的字段在重启后重新出现。应用启动代码还会直接读取环境标记、内置账号的初始密码和传输密钥列表。Node 启动参数与代理设置由部署工具写入。
 
 交付目录的 `README.txt` 列出服务器固定配置路径 `<部署目录>/config/.env.runtime` 和本次快照路径。配置目录挂载到 `/run/hai/config`，备份后编辑其中的 `.env.runtime`。
 
@@ -405,7 +405,7 @@ Fullstack 创建阶段为各环境生成独立的账号初始密码；打包阶�
 
 ## SSH、端口、中间件与云服务
 
-连接、远端运行时、入口端口与自建服务字段见 [Deploy 配置清单](deploy.md#配置清单)。离线打包用 `--bundle-only` 时可以暂不提供 SSH 参数。发布时核对 SSH 主机指纹、宿主端口与防火墙，并使容器端口与制品一致。
+连接、远端运行时、入口端口与自建服务字段见 [Deploy 配置清单](deploy.md#配置清单)。离线打包用 `--bundle-only` 时可以暂不提供 SSH 参数。发布时核对目标机的 SSH 指纹和防火墙。应用容器的监听端口应与镜像声明一致，服务器公开端口应可通过防火墙访问。
 
 ```json schema=@h-ai/deploy:DeployConfigSchema
 {
@@ -597,7 +597,7 @@ sh ./apply.sh
 
 ### 目标服务器的引擎身份
 
-持久卷检查在SSH目标Linux服务器执行`apply.sh`时生效。该服务器使用固定SSH用户和本地daemon/store：Docker要求`default` `context`，Podman必须实际以本地模式运行；非默认`context`、远程连接及显式存储覆盖会被拒绝。不要把操作机和服务器混为一谈：Windows/`macOS`操作机仍可用Docker Desktop或远程Podman VM构建、打包，再经SSH发布到符合条件的服务器。
+部署工具通过 SSH 在目标 Linux 服务器运行 `apply.sh` 时检查持久卷。目标机须使用同一个 SSH 用户和本地容器引擎：Docker要求`default` `context`，Podman必须实际以本地模式运行；非默认`context`、远程连接及显式存储覆盖会被拒绝。不要把操作机和服务器混为一谈：Windows/`macOS`操作机仍可用Docker Desktop或远程Podman VM构建、打包，再经SSH发布到符合条件的服务器。
 
 具体检查目标服务器执行环境中非空的DOCKER_HOST、DOCKER_CONTEXT、CONTAINER_HOST、CONTAINER_CONNECTION、CONTAINERS_STORAGE_CONF、CONTAINERS_CONF、STORAGE_DRIVER、STORAGE_OPTS；这些覆盖值会被拒绝。先核对服务器实际daemon和数据位置，不通过临时删除状态文件掩盖环境变化。该规则不要求移除操作机用于构建的VM连接设置。
 
@@ -654,7 +654,7 @@ images/                 # 本次镜像归档
 | 本地SSH退出/超时，远端无完整结果 | unknown | 新连接只读核对result/current/容器，不能自动重复发布或回滚 |
 | 服务器stage=complete、`exitCode`=0，操作机公开地址复核失败 | 服务器可能已发布成功 | 先排查防火墙/DNS/外部网络；保留部署ID/result路径，不自动把成功状态改回失败 |
 
-自动恢复先核对新发布保存的旧绑定快照、长期账本和旧卷，再按旧发布记录的端口和健康路径验证旧容器与HTTP。快照损坏、卷缺失或绑定冲突会阻止恢复，不把空库启动当恢复成功；只compose up成功同样不能作为恢复完成。SDK通过`getDeployCommandState(error)`给出本地终止、远端执行和恢复状态，CLI分别展示。强杀/断电不执行trap，锁释放也不意味着副作用回退。
+自动恢复时，部署工具先核对上一次发布记录中的数据卷映射和数据卷是否还在，再按原来的端口和健康检查路径启动并检查旧容器。记录损坏、卷找不到或同名卷指向另一处数据时，恢复会停止。容器能启动之后，仍须验证健康请求和业务数据。SDK通过`getDeployCommandState(error)`给出本地终止、远端执行和恢复状态，CLI分别展示。强杀/断电不执行trap，锁释放也不意味着副作用回退。
 
 在隔离环境验证恢复时，分别模拟解包校验失败、服务更新失败、健康失败和 SSH 结果未知，核对上表状态以及实际业务和持久数据。源码仓库可用 `pnpm --filter @h-ai/deploy test:e2e` 检查脚本恢复分支；它启用所需夹具前置，但不能代替目标应用的真实数据库和业务恢复演练。
 
@@ -673,4 +673,4 @@ pnpm run deploy --env prod --artifact-dir .hai/build/docker/<上一批次目录>
 
 旧`buildId`通常保留serv/web应用镜像；重新打包的中间件仍由当前CLI固定版本规划，这一步不保证精确回退所有中间件版本。发布前单独核实引擎主版本、数据目录格式与Schema兼容；跨服务器、daemon或数据恢复也要独立验证。
 
-容器/配置回退不恢复已写业务数据、Schema迁移、已发通知和支付副作用。生产发布前准备维护窗口、数据库/卷/账本/凭据备份、前一次发布的制品和实际恢复演练；保留记录直到观察期结束。
+回滚容器和配置之后，已保存的业务数据、数据库迁移、已发出的通知和已完成的付款仍然存在。生产发布前保留上一个发布包，备份数据库、数据卷、部署记录和凭据，安排维护窗口验证恢复步骤。

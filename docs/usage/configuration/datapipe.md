@@ -4,7 +4,7 @@
 
 ## 配置入口
 
-宿主通过 `datapipe.clean(text, options)` 和 `datapipe.chunk(text, options)` 为每次任务传入选项。纯文本工具由调用方准备参数和输入；由 AI 知识库使用时，依据 [AI 配置](ai.md#knowledge) 中的 `knowledge.cleanOptions` 与 `knowledge.chunkOptions`。
+把一段文本和处理选项传给 `datapipe.clean(text, options)` 或 `datapipe.chunk(text, options)`。Datapipe 在每次调用时读取这次的选项。给 AI 知识库导入资料时，可以在 [AI 配置](ai.md#knowledge) 里设置 `knowledge.cleanOptions` 和 `knowledge.chunkOptions`，由知识库将它们传给清洗和切块函数。
 
 ## 配置示例
 
@@ -14,9 +14,21 @@ maxSize: 1000
 overlap: 0
 ```
 
+直接在代码中传入选项时，可以用下面的短文本看到按词切块的结果。`maxSize: 1` 表示每块最多一个词，原文中词之间的空格会保留。
+
+```ts
+import { datapipe } from '@h-ai/datapipe'
+
+const result = datapipe.chunk('alpha beta gamma', { mode: 'word', maxSize: 1 })
+if (!result.success)
+  throw new Error(result.error.message)
+const contents = result.data.map(chunk => chunk.content)
+// ['alpha ', 'beta ', 'gamma']
+```
+
 ## 配置清单
 
-表中的默认值适用于当前配置区块存在时。标为“必填”的字段在使用对应区块或后端时填写。“可省略”表示 Schema 不填充值；如有运行时回退，单独注明。`[]` 表示数组中每一项。
+例如调用 `datapipe.chunk(text, { mode: 'paragraph' })`，不填写 `overlap` 会使用 `0`，相邻块不保留重叠内容。导入 AI 知识库时，知识库有自己的默认分块选项，对同一文本切出的块可能不同。
 
 ### 文本清洗
 

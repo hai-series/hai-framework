@@ -1,6 +1,6 @@
 # @h-ai/runner 功能说明
 
-在 Node.js 服务端提交、查询和取消执行任务，或运行领取队列任务的 Worker。按节点角色配置容器及关系库依赖。
+在 Node.js 服务端用 `runner` 提交、查询和取消任务。API 节点负责接收请求。启用了执行角色的节点从共享数据库领取任务，并按配置在容器中执行。
 
 [模块 README](../../../packages/runner/README.md) · [配置清单](../configuration/runner.md) · [数据结构](../data/runner.md) · [Agent 与 Runner 接入](../development/agent.md)
 
@@ -90,25 +90,25 @@ finally {
 
 ## 功能说明
 
-| 能力         | 用途                                         | 公开入口                                                             |
-| ------------ | -------------------------------------------- | -------------------------------------------------------------------- |
-| 节点生命周期 | 启动 API 与执行角色，查询环境                | `init`、`close`、`isExecutor`、`environment`、`createRunner`         |
-| 任务与事件   | 持久提交、幂等恢复、查询、取消及分页订阅     | `register`、`submit`、`find`、`get`、`events`、`cancel`              |
-| 容器和文件   | 用固定镜像执行，读写标准流并取回授权产物     | `context.start`、`context.emit`、`process.wait`、`artifact`、`close` |
-| 子任务与预热 | 将控制任务交给父任务节点，给工具保留容量     | `submit({ parentId })`、`registerWarmPool`                           |
-| 未知状态核验 | 核对容器或宿主进程已停止，并记录操作员和工单 | `reconcileUnknown`                                                   |
+| 能力         | 用途                                         | 公开入口                                                                                          |
+| ------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 节点生命周期 | 启动 API 与执行角色，查询环境                | `runner.init`、`runner.close`、`runner.isExecutor`、`runner.environment`                          |
+| 任务与事件   | 持久提交、幂等恢复、查询、取消及分页订阅     | `runner.register`、`runner.submit`、`runner.find`、`runner.get`、`runner.events`、`runner.cancel` |
+| 容器和文件   | 用固定镜像执行，读写标准流并取回授权产物     | `context.start`、`context.emit`、`process.wait`、`artifact`、`close`                              |
+| 子任务与预热 | 将控制任务交给父任务节点，给工具保留容量     | `submit({ parentId })`、`registerWarmPool`                                                        |
+| 未知状态核验 | 核对容器或宿主进程已停止，并记录操作员和工单 | `runner.reconcileUnknown`                                                                         |
 
 ### 分配节点角色与读取环境
 
 默认 PostgreSQL Store 可由多个节点同时初始化。空库创建表、旧库补列与索引、初始化门闩在同一事务中完成；失败回滚，修正权限或结构冲突后可在同一实例重试 `init`。
 
-单进程应用可使用 `runner`。`createRunner()` 返回独立实例，适用于分别注入节点角色或隔离测试。多节点生产部署使用共享 PostgreSQL 或 MySQL，同一部署使用一致的环境定义和并发上限。执行节点 ID 必须唯一，并在节点重启后保持稳定。以下示例假定 RelDB 已启动，`imageId` 由部署方提供，是每台执行节点本地已缓存的 OCI 镜像 ID 或清单 digest。
+每个应用进程通常直接使用 `runner`。API 节点只负责提交和查询，执行节点负责领取和执行，两者都连接同一 PostgreSQL 或 MySQL 数据库，并使用相同的环境定义和并发上限。每台执行节点使用不同且重启后不变的 ID。以下示例假定 RelDB 已启动，`imageId` 是每台执行节点上已经准备好的 OCI 镜像 ID 或带摘要的镜像引用。若测试时需要在同一进程比较多个节点，可用包级工厂 `createRunner()` 创建彼此独立的实例，再分别调用各自的 `init()` 和 `close()`。
 
 ```ts
 import type { RunnerConfigInput } from '@h-ai/runner' // 用公开类型检查两类节点共用的设置。
-import { createRunner, RunnerConfigSchema } from '@h-ai/runner' // 工厂返回实例，Schema 校验配置与默认值。
+import { runner } from '@h-ai/runner' // 在 API 进程中使用默认实例。
 
-function prepareApi(imageId: string) {
+async function startApi(imageId: string) {
   const settings: RunnerConfigInput = {
     nodeId: 'api-east', // 节点 ID，执行节点改用独立 ID。
     executor: false, // API 节点提交任务、查询和取消。
@@ -126,25 +126,17 @@ function prepareApi(imageId: string) {
       }
     ],
   }
-  return RunnerConfigSchema.safeParse(settings) // 成功后 data 包含 engine: 'podman' 和 offline 环境默认值。
-}
-
-async function startApi(imageId: string) {
-  const settings = prepareApi(imageId) // 非法摘要或资源配置会得到 Zod 错误。
-  if (!settings.success)
-    throw new Error(settings.error.message)
-  const api = createRunner() // 新实例，未启动时 isExecutor 为 false。
-  const started = await api.init(settings.data) // 成功时 data 为 undefined。
+  const started = await runner.init(settings) // 校验配置、补齐默认值。成功时没有业务数据。
   if (!started.success)
     throw new Error(started.error.message)
-  const docs = api.environment('docs') // 成功返回配置副本，data.image 等于 imageId。
+  const docs = runner.environment('docs') // 成功返回配置副本，data.image 等于 imageId。
   if (!docs.success)
     throw new Error(docs.error.message)
-  return api // 应用停止时先调用并检查 api.close()，再关闭 RelDB。
+  return docs.data // 应用停止时先调用并检查 runner.close()，再关闭 RelDB。
 }
 ```
 
-执行节点以 `executor: true` 启动，并通过 `register(kind, handler)` 登记可信处理器。API 节点也可以执行相同装配逻辑，其 `register` 返回空注销函数。`runner.environment(id)` 可读当前环境，未知 ID 返回 `NOT_FOUND`。
+执行节点用 `runner.init({ ...settings, executor: true })` 启动，再用 `runner.register(kind, handler)` 登记应用编写的处理函数。若同一段启动代码也在 API 节点运行，`runner.register()` 会返回一个空的注销函数。`runner.environment(id)` 读取当前执行环境，未知 ID 返回 `NOT_FOUND`。
 
 ### 恢复任务、读取事件和取消
 
@@ -294,7 +286,7 @@ async function queuePrewarmedCopy(scope: RunnerScope) {
 
 失租或清理失败可能将任务标为 `unknown`，并保留资源占用。运维先确认实际容器和外部副作用，再在原执行节点调用管理入口。Runner 校验引擎身份、实际容器已移除及本地暂存已清理，保留审计记录。
 
-没有容器的可信宿主任务在运维确认应用侧资源均已停止后传入 `hostResourcesStopped: true`。Runner 在同一 Linux 宿主、系统启动代次和 PID 命名空间中核验旧执行进程已退出。控制子任务还要求父执行已结束或已经核验。旧记录缺少进程证明，或者预定使用容器的任务缺少容器凭据时，继续保留占用。
+如果任务不使用容器，先由运维确认应用启动的所有资源都已停止，再传 `hostResourcesStopped: true`。Runner 还会核对是否在原执行进程所在的 Linux 主机、同一次系统启动和同一个 PID 命名空间，并确认旧进程已经停止。控制子任务还要求父任务已结束或已核实停止。旧记录无法证明进程身份，或原任务应在容器中却找不到容器记录时，容量不会释放。
 
 ```ts
 import type { RunnerScope } from '@h-ai/runner' // 从任务归属和可信管理会话取得。

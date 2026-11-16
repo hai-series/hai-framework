@@ -1,6 +1,6 @@
 # @h-ai/ui 功能说明
 
-在 Svelte 5 应用中按组件导入并绑定数据、事件及插槽。构建、Svelte 状态模块、主题和样式各有自己的公开子路径。
+在 Svelte 5 组件里导入表单、表格和其他界面组件，通过属性和事件连接页面数据。主题、样式、语言状态和自动导入器有专用导入路径，按下文各节选用。
 
 [模块 README](../../../packages/ui/README.md) · [配置清单](../configuration/ui.md) · [数据结构](../data/ui.md) · [UI 接入](../development/ui.md)
 
@@ -85,7 +85,7 @@ UI 无 init/close；以下片段在应用组件或浏览器交互上下文中使
 | `cn`                             | 合并类名             | `...string\|boolean\|null\|undefined values`                         | `string`                                                   | `cn("flex", active && "text-primary")`                                                     |
 | `getDataAttributes`              | 只透传 data 属性     | `props record`                                                       | `ForwardedDataAttributes`                                  | `getDataAttributes({ "data-testid": "save" })`                                             |
 | `generateId`                     | 生成 UI 标识         | `prefix?; not a security token generator`                            | `string`                                                   | `generateId("field")`                                                                      |
-| `portal`                         | 将节点挂到宿主       | `HTMLElement, target HTMLElement or selector?`                       | `Svelte action result with cleanup`                        | `portal(node, document.body)`                                                              |
+| `portal`                         | 把节点移到目标容器   | `HTMLElement, target HTMLElement or selector?`                       | `Svelte action result with cleanup`                        | `portal(node, document.body)`                                                              |
 | `detectPlatform`                 | 检测终端类型         | `none`                                                               | `Platform`                                                 | `detectPlatform()`                                                                         |
 | `isMobile`                       | 检查移动端           | `none`                                                               | `boolean`                                                  | `isMobile()`                                                                               |
 | `isNativeApp`                    | 检查原生壳           | `none`                                                               | `boolean`                                                  | `isNativeApp()`                                                                            |
@@ -371,7 +371,7 @@ Monaco 和同源 worker 由 Vite 在浏览器按需加载。主题默认跟随 H
 
 | 组件         | 描述                             | 主要属性                                               |
 | ------------ | -------------------------------- | ------------------------------------------------------ |
-| `GuideHost`  | 首次邀请、页面导览与帮助弹窗宿主 | `guide`, `locale`, `scope`, `autoStart`                |
+| `GuideHost`  | 显示首次邀请、页面导览与帮助弹窗 | `guide`, `locale`, `scope`, `autoStart`                |
 | `HelpCenter` | 可独立使用的帮助中心             | `articles`, `tours`, `locale`, `selectedId`, `onstart` |
 
 ##### App 应用级
@@ -392,7 +392,7 @@ Monaco 和同源 worker 由 Vite 在浏览器按需加载。主题默认跟随 H
 
 将详情 jobs 中 type: webhook 的任务传给 FeedbackDetail.webhook，显示状态、尝试次数及安全错误码；onretry 负责调用受权 retry API。业务异步证据在“业务信息”页签分页查询 kind: business，压缩附件在“操作现场”下载。
 
-反馈说明可为空；宿主先用 `@h-ai/feedback/client` 的 `prepare()` 固定现场，再打开弹窗。表单通过 `onfileschange` 准备主动附件、通过 `onannotate` 将标注烧录到图片；受理失败保留输入并可本地导出。列表展示说明或服务端事实摘要，以 `onquerychange` 取得分页数据；界面权限不代替服务端授权。完整接入与离线工具见 [feedback 模块](../../../packages/feedback/README.md)。
+反馈说明可为空；应用先调用已创建的 `feedbackClient.prepare()` 收集此时的排查信息，再打开弹窗。表单通过 `onfileschange` 准备主动附件、通过 `onannotate` 把标注写入图片像素；受理失败保留输入并可本地导出。列表展示说明或服务端事实摘要，以 `onquerychange` 取得分页数据；界面权限不代替服务端授权。完整接入与离线工具见 [feedback 模块](../../../packages/feedback/README.md)。
 
 ##### IAM 身份认证
 
@@ -527,7 +527,7 @@ Monaco 和同源 worker 由 Vite 在浏览器按需加载。主题默认跟随 H
 > `CrudPage`、`FeedbackList` 统一使用卡片内的查询栏、独立滚动表格和底部分页。搜索、查询、重置始终可见，扩展筛选默认收起且保留输入；点击查询或 Enter 一次提交全部条件，修改字段不自动查询。翻页和排序沿用已提交条件；重置清空搜索、筛选和排序并回到第一页。排序按钮只在支持排序的列头显示，`sortableColumns` 应只列出后端支持的字段。`detailColumns` 配置详情入口，`toolbarLeading` / `toolbarActions` 配置卡片上方的说明和业务操作；`card` 与 `tableCell` 保留自定义内容。过滤字段支持 `select`、`boolean`、`number`、`date`、`date-range`、`text`。 未提供 `sortableColumns` 时不显示排序按钮，避免把当前页排序当成服务端排序。
 >
 > 页面根容器会占满父级可用高度。表格无论是否有数据都会撑满剩余空间，仅数据区域滚动；表头固定在数据区顶部，分页栏固定在列表卡片底部。
-> 宿主从视口外壳到内容区须逐层传递剩余高度（例如 `flex flex-1 min-h-0 flex-col`），中间包装层不能仅按内容自动计算高度。空表、少量数据和长列表均沿用底部分页。
+> 从视口外层容器到表格内容区之间的每层容器都需要使用可分配的剩余高度（例如 `flex flex-1 min-h-0 flex-col`），中间包装层不能仅按内容自动计算高度。空表、少量数据和长列表均沿用底部分页。
 >
 > 表格列会优先压缩到 7rem 并截断超长文本；列总宽度仍超过容器时才显示横向滚动条。操作列固定在右侧，横向滚动时保持可见。
 
@@ -798,7 +798,7 @@ toast.add({
 
 反馈的 `evidence` 显示实际已脱敏材料；`oncapture(id?)` 支持隐藏弹窗后跨页补图或替换。接入 `onfileschange` 后提供浏览器原生无声短录屏，停止后作为 WebM/MP4 附件预览或删除（最多 60 秒 / 5 MiB，录屏不自动脱敏）。`FeedbackDetail.onreplay` 按需返回完整页面事件，在“页面回放”播放和定位；日志/环境仍分页读取。
 
-反馈表单的材料内容独立滚动，底部按钮始终可见，展开内容不会穿过操作栏。`FeedbackList` 保留无障碍名称，页面标题由宿主显示，避免管理页重复标题。
+反馈表单的材料内容独立滚动，底部按钮始终可见，展开内容不会穿过操作栏。`FeedbackList` 保留无障碍名称，页面标题由应用的页面组件显示，避免管理页重复标题。
 
 ### 样式依赖
 
@@ -868,7 +868,7 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 
 使用内置的主题工具函数管理 15 个精选 DaisyUI 主题、高对比、直角商务及护眼主题：
 
-`high-contrast` 随共享 theme.css 提供：黑底亮字、清晰边框/焦点、增强次要文字及占位符对比度。ThemeSelector 提供三语名称；示例与默认生成工程可选择，fullstack 的显式 themes 列表仍由宿主决定。配色按普通文字 7:1 的目标验收，不代表任意业务内容已通过整站无障碍认证。
+`high-contrast` 随共享 theme.css 提供：黑底亮字、清晰边框/焦点、增强次要文字及占位符对比度。ThemeSelector 提供三语名称；示例与默认生成工程可选择，可在 fullstack 的主题配置中指定可选主题。配色按普通文字 7:1 的目标验收，不代表任意业务内容已通过整站无障碍认证。
 
 `eye-care` 随共享 theme.css 提供暖绿色背景、深色正文、可读占位符与清晰焦点。主题选择器显示“护眼”，示例及默认模板可直接选择，刷新后保留偏好；现有默认主题及 fullstack 显式 themes 白名单不变。
 
@@ -1052,7 +1052,7 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 
 `@h-ai/ui/guide` 提供 `createGuide`、`GuideHost`、`HelpCenter` 和相关类型。无需 init/close；引擎在开始导览时按需加载，浮层复用当前主题。组件内置中英日文按钮、进度和错误提示，业务内容使用应用 i18n。
 
-同一入口的 `resolveGuideText(text?)` 可解析字符串或 i18n 回调；宿主组件已自动解析文案。
+同一入口的 `resolveGuideText(text?)` 可解析字符串或 i18n 回调；`GuideHost` 会自动解析文案。
 
 下例放在应用布局中；`nav` 是应用现有 NavAdapter，`locale`、`user` 与翻译函数 `m` 来自应用，翻译 key 需在应用消息中定义。目标按钮放在 `/users` 页面。
 
@@ -1100,7 +1100,7 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 - `openHelp(articleId?)` 打开帮助，`stop()` 取消导览，`reset(id)` 删除当前用户的偏好。完成、稍后和不再提醒分别记录；稍后暂缓一天，Cookie 默认保存一年。
 - 关闭按钮、Escape 和遮罩点击在首帧定位期间也会取消等待、清除 `busy`；启动中的 `start()` 返回 false，不记录完成。
 - `persistence` 支持 cookie（默认）、localStorage、memory；受限存储回退到实例内存。scope 使用非敏感用户标识，version 变化会重新提示。
-- 通过已有 NavAdapter 接入 SvelteKit、SPA 或原生 WebView；默认完整导航使用 sessionStorage 保存短期启动记录。宿主只在浏览器挂载后读取记录，SSR 实例不得跨用户共享。
+- 通过已有 NavAdapter 接入 SvelteKit、SPA 或原生 WebView；默认完整导航使用 sessionStorage 保存短期启动记录。应用只在浏览器的组件挂载后读取记录。服务端渲染时，为每个请求创建独立实例。
 - 目标等待默认 3000ms，可用 waitTimeout 调整。before(signal) 可展开页签/抽屉；必要元素缺失停止，可选步骤使用 optional 跳过。引导不会自动提交业务表单。
 - 业务文案用函数延迟求值，并传入当前 locale。步骤内容按纯文本显示；帮助正文复用安全 MarkdownRenderer，原始 HTML 关闭。
 - HelpCenter 可独立放入帮助页面，props 为 articles、tours（可选）、locale、selectedId 和 onstart；支持类别标签、标题/正文搜索和关联导览。
@@ -1124,13 +1124,13 @@ import { cn, generateId, getSizeClass, getVariantClass } from '@h-ai/ui'
 import { toast } from '@h-ai/ui'
 ```
 
-组件子路径只开放 package.exports 明确列出的 barrel，例如 `@h-ai/ui/components/primitives/index`；不开放任意组件实现或内部存储辅助函数。宿主剪贴板注册仍是公开能力。
+组件子路径只开放 package.exports 明确列出的 barrel，例如 `@h-ai/ui/components/primitives/index`；不开放任意组件实现或内部存储辅助函数。原生外壳可以调用 `registerClipboardHostWriter()` 提供自己的剪贴板写入方法。
 
 ### 请求语言隔离
 
-Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest())`；SvelteKit 可使用 `kit.i18n.runWithLocale(locale, () => resolve(event))`，serv 自动按请求头建立上下文。异步子任务继承请求语言，优先级为显式 `MessageOptions.locale`、请求语言、进程启动默认语言。`setGlobalLocale` 在请求上下文中只更新当前请求；上下文外仅用于启动默认值，不能在请求 hook 中调用它修改默认值。
+多位用户的请求可能同时在一个 Node.js 进程里执行。用 `core.i18n.runWithLocale(locale, () => handleRequest())` 为本次请求和它启动的异步工作设定语言。SvelteKit 可以用 `kit.i18n.runWithLocale(locale, () => resolve(event))`，Serv 会按请求头自动设定。翻译优先使用显式传入的 `MessageOptions.locale`，其次使用本次请求的语言，最后使用进程启动时的默认语言。
 
-浏览器继续使用应用级 `setGlobalLocale` / `createLocaleStore`。SSR 的 UI store 初始化和 setter 只修改自身状态，不写全局语言；UI 消息从请求上下文读取。`runWithLocale` 仅支持 Node 入口，浏览器通过显式 locale 或应用状态翻译。
+设定请求语言后，`setGlobalLocale()` 只改本次请求。启动时在请求之外调用它，可设置进程默认语言。服务端渲染时，UI 的语言状态对象只更新自己，翻译读取本次请求的语言。浏览器中从 `@h-ai/ui/i18n` 导入 `createLocaleStore()` 管理当前页面语言，或在翻译时直接传入 `locale`。
 
 ### 输入约束与 HTTP 能力
 
@@ -1142,7 +1142,7 @@ Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest()
 
 同名 `PageHeader` 自动省略重复标题，保留说明和操作；`SettingsLayout` 复用该行为。工作区中的 `CrudPage` 默认不重复显示页面标题，操作并入工具栏；独立使用仍显示标题，可用 `showHeader` 显式覆盖。
 
-`FilterBar` 的 leading 和 actions 保持可见，children 默认收起，`bind:expanded` 控制展开，`activeCount` 提示已启用条件，`onreset` 提供内置三语重置按钮。收起保留控件和值；重置和请求逻辑由宿主回调处理。`TableToolbar` 复用该布局并提供原生查询表单，`CrudFilterBar` 复用相同实现；`onsearch` 在提交时读取当前绑定的搜索和筛选草稿，`onfilterchange` 只通知草稿变化。`onreset`（TableToolbar 使用 `onclearfilters`）必须同步清空宿主已提交条件并重新查询。列表排序使用 DataTable 的 `sortKey`、`sortDir`、`onsort`。 扩展筛选按容器宽度自适应为 1/2/4/6 列，字段横向间距 20px、纵向间距 16px，标签和控件分别对齐；日期范围占两列，窄屏占整行。
+`FilterBar` 的 leading 和 actions 保持可见，children 默认收起，`bind:expanded` 控制展开，`activeCount` 提示已启用条件，`onreset` 提供内置三语重置按钮。收起保留控件和值；应用传入的回调可以清空筛选条件并重新发起查询。`TableToolbar` 复用该布局并提供原生查询表单，`CrudFilterBar` 复用相同实现；`onsearch` 在提交时读取当前绑定的搜索和筛选草稿，`onfilterchange` 只通知草稿变化。`onreset`（TableToolbar 使用 `onclearfilters`）必须同步清空宿主已提交条件并重新查询。列表排序使用 DataTable 的 `sortKey`、`sortDir`、`onsort`。 扩展筛选按容器宽度自适应为 1/2/4/6 列，字段横向间距 20px、纵向间距 16px，标签和控件分别对齐；日期范围占两列，窄屏占整行。
 
 下例的 m、statusOptions、clearFilters 和 loadRows 由业务应用提供；清空回调须重置搜索及全部条件。
 
@@ -1175,7 +1175,7 @@ Tabs 支持方向键/Home/End、禁用项跳过和单一 Tab 入口；表格提�
 
 AuthPanel 在 config.captcha.enabled 时通过 actions.createCaptcha 自动生成并异步求解自托管 ALTCHA，按 login/register/sendOtp/passwordReset/renewPassword 用途提交单用证明；关闭时不加载求解器。createAuthActions 已提供动作，自定义动作须保留 captcha，缺少动作时不放行。证明仅存在当前请求内存，服务端始终校验与消费。
 
-策略、默认值和恢复边界见 [IAM](../../../packages/iam/README.md)。
+何时要求验证、验证失败后如何处理，见 [IAM 配置](../configuration/iam.md)和 [IAM 功能说明](./iam.md)。
 
 ### 全局消息框与错误页预设
 
@@ -1210,10 +1210,12 @@ const fallback = resolveErrorPreset(undefined) // 输入缺省状态，返回通
 
 ## 错误处理
 
-组件的 loading/error 与业务完成状态由宿主提供。业务接口返回 HaiResult 时，在应用适配层先检查 success，再传入安全本地化文案；UI 工具本身遵循表中的直接返回值，不统一包装 HaiResult。未知异常交给 notifyError/errorMessage 隐藏内部原文。downloadAiDocument 等异步浏览器工具会拒绝 Promise，必须由交互边界捕获并释放 loading。UserProfile.onsubmit 只有返回 true 才结束编辑。
+应用将查询、保存或上传的进度与结果传给组件，例如设置 `loading` 或 `error`。业务接口返回 HaiResult 时，在应用适配层先检查 success，再传入安全本地化文案；UI 工具本身遵循表中的直接返回值，不统一包装 HaiResult。未知异常交给 notifyError/errorMessage 隐藏内部原文。downloadAiDocument 等异步浏览器工具会拒绝 Promise，必须由交互边界捕获并释放 loading。UserProfile.onsubmit 只有返回 true 才结束编辑。
 
 ### 错误提示与关联日志
 
 HTTP 错误返回安全本地化文案及追踪编号；ToastContainer 默认只显示可读说明，编号由排查图标展开和复制。响应同时包含 `error.traceId` 和 `X-Trace-Id`。框架复用本次 requestId 作为 traceId，前后端日志自动关联。底层异常、堆栈和操作上下文经凭据脱敏后写入日志，不通过 cause/ext 向用户公开。字段校验只返回本地化的字段名和错误。
 
-`core.error.toPublic(error, traceId?)` 用于接口/UI 边界；`core.error.formatMessage(error)` 用于重新翻译后的提示，重复调用不会重复追加标识。日志传入完整 Error 对象，不能只记录通用标题或提前 String(error) 丢失上下文。数据库失败记录驱动错误码、消息、堆栈及表/列；SQL 原文、绑定值和连接凭据不进入日志。
+服务端把错误发给浏览器之前，可用 `core.error.toPublic(error, traceId)` 去除内部信息。界面需要重新显示错误时，可用 `core.error.formatMessage(error)` 格式化提示，重复调用也只附一次追踪编号。
+
+写服务端日志时传入完整的 Error 对象，保留堆栈和错误原因。数据库操作失败时，可按驱动错误码、表和列定位问题。日志不记录 SQL 原文、参数值或数据库凭据。

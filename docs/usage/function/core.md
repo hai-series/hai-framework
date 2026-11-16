@@ -1,6 +1,6 @@
 # @h-ai/core 功能说明
 
-从 `@h-ai/core` 根入口导入 `core`。浏览器和 Node.js 共用基础工具，Node.js 入口还负责文件和环境配置、请求上下文和访问策略。
+从 `@h-ai/core` 导入 `core`。在浏览器和 Node.js 中都能用它写日志、翻译消息和处理数据。在 Node.js 中还可以读取本地配置文件、为每个请求保存自己的编号，并检查访问条件。
 
 [模块 README](../../../packages/core/README.md) · [配置清单](../configuration/core.md) · [数据结构](../data/core.md) · [应用开发](../getting-started/develop.md)
 
@@ -61,7 +61,9 @@ const requestId = core.id.request()
 core.logger.warn('Request needs attention', { requestId })
 ```
 
-浏览器配置由宿主通过公开字段下发，不传完整服务端配置或密钥。`core.config.get()` / `has()` / `keys()` 分别返回 `undefined` / `false` / `[]`；`loadEnvFiles()`、`load()`、`validate()`、`reload()` 返回 `SERVICE_UNAVAILABLE`，`getOrThrow()` 抛错。`watch()` 立即回调同一不可用错误并返回空取消函数。
+浏览器里的 `core.init()` 使用页面代码传入的日志选项，示例直接在前端写入 `warn`。如果页面还需要显示服务器上的应用名称，可以让后端的页面加载函数返回 `{ name: settings.name }`，再由浏览器读取。在发送给浏览器的数据中只放页面要用、访客可以看到的值。数据库密码、传输私钥和完整 `_core.yml` 等配置留在服务器上。
+
+在浏览器调用 `core.config.get()` 会得到 `undefined`，`core.config.has()` 得到 `false`，`core.config.keys()` 得到空数组。`core.config.loadEnvFiles()`、`core.config.load()`、`core.config.validate()` 和 `core.config.reload()` 返回带 `SERVICE_UNAVAILABLE` 的失败结果。`core.config.getOrThrow()` 会抛出异常。`core.config.watch()` 会立即把同一错误交给你的回调，并返回一个调用后什么也不做的停止函数。
 
 ## 功能说明
 
@@ -96,11 +98,11 @@ core.logger.warn('Request needs attention', { requestId })
 
 `core.init({ configDir, configSchemas?, watchConfig? })` 扫描指定目录直属的 `.yml` / `.yaml` 文件；`_core.yml` 注册为 `core`，`_db.yml` 注册为 `db`，`app.yml` 注册为 `app`。构建/部署设置由 CLI 从项目根 `hai.json` 读取，不属于运行时 YAML。
 
-`_core.yml` 使用 `CoreConfigSchema` 校验，只接受 `name`、`version`、`env`、`defaultLocale` 和 `logging`。默认值依次为 `hai Admin`、`0.1.0`、`development`、`zh-CN`；`logging` 可省略。元数据不会自行修改 `NODE_ENV`、切换消息语言或注册业务翻译。日志应从此处配置；显式传入 `core.init({ logging })` 会覆盖本次初始化对 YAML 日志设置的应用。
+`core.init()` 自动检查 `_core.yml` 里允许的五个字段，并补齐未填写的名称、版本、运行环境和默认语言。写 `logging: {}` 会应用默认的 `info` 级别和 `json` 格式。完全省略 `logging` 会保留应用当前的日志设置。启动代码直接传入的 `core.init({ logging })` 优先使用。完整默认值、日志示例和 HTTP 访问设置的文件位置见 [Core 配置清单](../configuration/core.md)。
 
-批量加载业务配置时，传入 `core.init({ configDir: './config', configSchemas: { app: AppSchema } })`，让 Core 按 Schema 识别可选字段及插值类型。随后调用 `core.config.validate('app', AppSchema)`，检查 `success` 后读取 `data`。
+应用自己的 `app.yml` 可以用 `AppSchema` 指明哪些字段可省略、环境变量替换后的值应该是字符串还是数字。将它作为 `configSchemas.app` 传给 `core.init()`，Core 读取目录时会用它识别这些字段。再调用 `core.config.validate('app', AppSchema)` 验证字段取值，成功后从 `data` 读取配置。
 
-`validate()` 每次都从最近一次成功加载的 YAML 快照开始，用当前环境变量和传入的 Schema 解析、校验。例如 `code: ${APP_CODE:00123}` 在变量未设置时，按字符串字段校验会得到 `'00123'`，即使先前未提供 Schema 就加载成了数字。重复校验时，Schema 转换仍从原始数据开始。修改文件后用 `reload()` 读取新内容，成功后一起更新快照和结果。
+`core.config.validate()` 用最近一次成功读到的 YAML 内容，重新应用当前环境变量，再验证取值。例如 `code: ${APP_CODE:00123}` 在变量未设置时，按字符串规则校验会得到 `'00123'`，即使上次读取得到的是数字 `123`。要读磁盘上刚改过的 YAML，调用 `core.config.reload()`。读文件和校验都成功后才会替换已保存的配置。
 
 以下文件示例使用这份 `config/app.yml`，并假设没有额外环境变量覆盖：
 
@@ -405,7 +407,7 @@ core.sanitize.sanitizeText('Request failed with a known private value', ['privat
 
 ### 结果与错误：`core.error`
 
-用 `core.error` 定义模块错误、创建本次失败的实例，并在 HTTP/UI 边界生成安全提示。错误码稳定，消息可以按当前语言产生；接口响应状态和响应头由 Serv/Kit 等 HTTP 框架处理。
+用 `core.error` 给失败定义稳定错误码，再为本次失败生成当前语言的消息。服务端准备把失败返回给浏览器时，用 `core.error.toPublic()` 去掉内部诊断数据。Serv 或 Kit 根据错误定义设置 HTTP 状态码和追踪响应头。
 
 ```ts
 import { core } from '@h-ai/core'
@@ -451,9 +453,9 @@ if (!failed.success)
   core.logger.warn('Calculation rejected', { code: failed.error.code })
 ```
 
-在 HTTP/UI 边界使用 `core.error.toPublic(error, traceId?, locale?)`：5xx 改为本地化通用提示，清理其他消息中的已知凭据，仅保留安全字段。追踪编号依次取显式参数、上下文 traceId/requestId、已有 error.traceId，否则生成；`formatMessage()` 在消息中附加合法编号，重复调用不会重复追加同一编号。
+返回 HTTP 错误或显示页面提示前，应用可以调用 `core.error.toPublic(error, traceId?, locale?)`。它把服务器错误（5xx）换成当前语言的通用提示，并从可显示的错误消息中清理已知凭据。追踪编号优先取传入值，再取本次请求的 `traceId` / `requestId`，最后检查 `error.traceId`。这几处都没有编号时会生成一个。`core.error.formatMessage()` 把编号加到消息里，同一个编号只显示一次。
 
-内部 `cause` / `ext` 默认不公开；400/422 的字段校验可保留 `field` / `message`，明确批准且经业务 Schema 校验的 `publicExt` 会脱敏后转为公开 `ext`。Core 不自动验证 `publicExt` 的业务安全性。HTTP 状态、响应头和提示组件由 Serv/Kit/UI 宿主装配。
+`cause` 和普通 `ext` 留给服务器诊断。HTTP 400 或 422 的表单校验错误可返回 `field` 和 `message`，让页面指出要修改的输入。应用也可以通过 `publicExt` 指定要额外返回的值，应先检查这些值是否可以让用户看到。Core 会处理其中的已知凭据字段，客户端收到这些值的位置是 `error.ext`。
 
 | 配置错误                  | 错误码         | 场景                       |
 | ------------------------- | -------------- | -------------------------- |
@@ -467,7 +469,7 @@ if (!failed.success)
 
 通用错误 `HaiCommonError.RATE_LIMIT_EXCEEDED` 对应 `hai:common:203` / HTTP 429；Kit 的快捷响应和守卫同样使用通用错误码。
 
-HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 `httpStatus` 或状态非法时按 500 返回安全提示。手写业务错误须提供完整错误定义或显式状态，不能依赖缺省状态展示原文。
+要让用户看到业务错误消息，错误须带合法的 4xx 状态，例如 404。省略 `httpStatus` 或填写无效状态时，`core.error.toPublic()` 按 HTTP 500 生成通用提示。
 
 ### 消息与语言：`core.i18n`
 
@@ -632,12 +634,12 @@ core.module.requiresSharedState({ NODE_ENV: 'production', HAI_E2E: '1' }) // fal
 
 ### 请求访问检查：`core.access`（Node）
 
-HTTP 请求入口可用这些工具解析可信客户端 IP，再检查地址、路径、方法和允许时段。Core 只提供检查结果；Serv 的 http.access 或 Kit 的 createHandle({ access }) 负责把检查接到请求流程。
+用 `core.access` 可以从受信代理转发头中取出真实客户端 IP，也可以判断这个地址能否在当前时间访问指定路径。配置独立 API 时在 `_serv.yml` 的 `http.access` 填写策略，配置 SvelteKit 服务时使用 `_kit.yml` 的 `access`。`serv.createApp({ http })` 和 `kit.createHandle({ access })` 会在启动时创建检查器，并在每次处理请求时调用它。
 
 #### 解析与检查客户端地址
 
 ```ts
-import { AccessConditionSchema, core } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 core.access.normalizeClientIp('::ffff:198.51.100.23') // 198.51.100.23。
 const resolve = core.access.createClientIpResolver(['192.0.2.10']) // 返回 IP 解析函数，只信任这个代理。
@@ -646,9 +648,13 @@ const request = new Request('https://example.test/api/orders', {
 })
 // 第二参数必须来自真实 socket/可信平台；这里用测试地址模拟代理对端。
 const clientIp = resolve(request, '192.0.2.10') // '198.51.100.23'，读取受信代理的转发头。
-const check = core.access.createConditionCheck(AccessConditionSchema.parse({
-  allowIps: ['198.51.100.0/24']
-}))
+// 只限制地址。denyIps 和 windows 为空表示没有额外的拒绝地址或时段限制。
+const check = core.access.createConditionCheck({
+  allowIps: ['198.51.100.0/24'],
+  denyIps: [],
+  timezone: 'UTC',
+  windows: [],
+})
 // createConditionCheck 返回检查函数；check(clientIp) 得到 { allowed: true }。
 core.logger.info('Address checked', { allowed: check(clientIp).allowed })
 ```
@@ -658,8 +664,8 @@ core.logger.info('Address checked', { allowed: check(clientIp).allowed })
 ```ts
 import { core } from '@h-ai/core'
 
-// 可改为 loadPolicy({ file: './config/security/request-access.yml' }) 在启动时读独立文件。
-const policy = core.access.loadPolicy({
+// 服务启动时传入规则，得到一个可以重复调用的请求检查器。
+const check = core.access.createRequestCheck({
   rules: [
     {
       id: 'external-api',
@@ -670,18 +676,27 @@ const policy = core.access.loadPolicy({
     }
   ],
 })
-// policy.rules[0] 保留上方规则，并补 denyIps: []、windows: []、timezone: 'UTC'。
-const check = core.access.createRequestCheck(policy) // 返回请求检查函数，另带 encryption 方法和 requiresEncryption 属性。
 const decision = check('/api/external/sync', 'POST', '192.0.2.10') // { allowed: true }。
 check.encryption('/api/external/sync', 'POST') // disabled，供 HTTP 框架选择传输模式。
 check.requiresEncryption // false；本例没有 required 规则。
 core.logger.info('Request access checked', { allowed: decision.allowed })
 ```
 
-- 创建检查器时验证并编译规则；`loadPolicy({ file })` 启动时读取独立 YAML，最大 1 MiB，配置错误抛出并阻止宿主启动。内联规则与文件不能混用。
-- 全局条件与所有命中规则取交集，拒绝地址优先；空 IP/时间列表不限制对应维度，时区默认 UTC。路径包含部署前缀，支持精确路径和末尾 `/**`，GET 不隐含 HEAD。
-- `createClientIpResolver()` 默认 `auto` 在普通宿主忽略转发头，仅受管私有 Compose 采用容器网段。`[]` 关闭代理信任，自管入口明确填写代理 IP/CIDR；对端地址必须来自 socket 或可信平台。
-- 路径 `encryption` 可为 `required` / `disabled`，省略沿用宿主；重叠路径和方法的相反声明在创建时失败。`check.encryption()` / `requiresEncryption` 供宿主装配传输模式，Core 不持有密钥或执行加解密，仍需 HTTPS 和身份鉴别。
+将路径规则保存到 `config/security/request-access.yml` 时，用下面的方式创建同一个检查器。文件结构从 `rules` 或 `global` 开始，见[独立文件示例](../configuration/request-access.md#41-准备文件)。
+
+```ts
+import { core } from '@h-ai/core'
+
+// 相对路径从 Node 进程的工作目录起算。文件只在创建检查器时读取。
+const check = core.access.createRequestCheck({ file: './config/security/request-access.yml' })
+// 链接中的示例文件拒绝 192.0.2.7，结果的 allowed 为 false，reason 为 'address'。
+const decision = check('/api/v1/external/sync', 'GET', '192.0.2.7')
+```
+
+- 检查器创建时验证规则。文件最大 1 MiB，文件读不到或内容不合法时会抛错，调用方应停止启动。部署工具等只想读取和验证规则内容时，可以用 `core.access.loadPolicy({ file })`。
+- 请求要通过全局条件和每条命中的规则。即使地址在允许名单里，命中拒绝名单也会被拒绝。允许名单为空时不限制地址，时段列表为空时全天可访问。时段默认使用 UTC。
+- `core.access.createClientIpResolver()` 默认使用 `auto`。由框架生成的私有 Compose 部署可识别其网关所在网段。直接运行 Node 时默认忽略转发头。使用自行配置的代理时传入它连接后端所用的 IP 或网段，从服务器套接字或可信平台接口取得对端地址。
+- Serv 和 Kit 使用 `check.encryption()` 和 `check.requiresEncryption` 决定路径是否使用框架的请求加密。省略 `encryption` 时沿用该服务的加密设置。相同路径、方法的加密模式有冲突时，检查器创建失败。HTTPS 和鉴权仍由 HTTP 服务处理。
 
 完整默认值、独立文件、代理拓扑及部署步骤见[请求访问控制手册](../configuration/request-access.md).
 

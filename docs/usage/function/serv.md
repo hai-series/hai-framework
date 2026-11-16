@@ -1,6 +1,6 @@
 # @h-ai/serv 功能说明
 
-在 Node.js 中用 `serv` 创建 HTTP 应用和中间件，把公共 contract 挂载成 oRPC 路由。各功能的公开子路径提供对应契约的服务实现。
+在 Node.js 中用 `serv.createApp()` 把契约和处理函数组成 HTTP 应用。根入口提供监听、认证和中间件接口。各功能子路径提供 IAM、Storage、AI 和 Feedback 接口的处理函数。
 
 [模块 README](../../../packages/serv/README.md) · [配置清单](../configuration/serv.md) · [数据结构](../data/serv.md) · [前后端接入](../development/frontend-backend.md)
 
@@ -70,25 +70,25 @@ AI 默认 procedures 从可信 `context.session.userId` 绑定 `objectId`，客�
 
 ### 用途、输入与输出
 
-下表的调用片段复用本页已初始化的服务；命名变量代表应用已提供的请求、Schema、资源定义或配置。完整步骤和失败处理见对应功能示例。`HaiResult` 先判断 `success`，异步项按签名 `await`。
+表中的调用片段使用各节示例已经打开的服务或建立的对象。示例变量由应用提供，例如当前 HTTP 请求、用于校验输入的 Schema、资源定义或配置。返回 Promise 时用 `await` 等待。返回 `HaiResult` 时先判断 `success`，再读取数据或错误。
 
-| 入口                               | 场景             | 输入                                                                    | 输出                                                                 | 调用片段                                                                                                 |
-| ---------------------------------- | ---------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `serv.createApp`                   | 组装接口应用     | `contract, procedures, http?, iam?, middlewares?, transport?`           | `ServHttpApp (fetch/request)`                                        | `serv.createApp({ contract, procedures })`                                                               |
-| `serv.listen`                      | 启动 Node 监听   | `app, { host?, port?, onClose?, onListening? }`                         | `ServNodeServer { server, address, close(): Promise<void> }`         | `serv.listen(app, { host: "127.0.0.1", port: 3000 })`                                                    |
-| `serv.toFetch`                     | 接入 Fetch 宿主  | `ServHttpApp`                                                           | `(Request) => Promise<Response>`                                     | `serv.toFetch(app)`                                                                                      |
-| `serv.implement`                   | 实现领域路由     | `typed contract`                                                        | `ServImplementer; context/route/auth/permission/role/handle/build`   | `serv.implement(contract)`                                                                               |
-| `serv.parseRequestContext`         | 解析追踪与令牌   | `{ request, platform? }`                                                | `ServContext with requestId/locale/accessToken; no verified session` | `serv.parseRequestContext({ request })`                                                                  |
-| `serv.buildAuthContextFactory`     | 构造可信会话     | `(accessToken) => Promise<HaiResult<ServSession>>`                      | `CreateServContext; invalid credentials leave session absent`        | `serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))`                                     |
-| `serv.cors`                        | 限定跨域入口     | `{ origin?, methods?, allowedHeaders?, exposedHeaders?, credentials? }` | `ServMiddleware`                                                     | `serv.cors({ origin: "https://app.example.com", credentials: true })`                                    |
-| `serv.createRuntimeSecurityPolicy` | 收敛环境安全策略 | `{ environment, corsOrigin, nativeOrigins? }`                           | `allowOrigin, secureRefreshCookie, exposeApiDocs`                    | `serv.createRuntimeSecurityPolicy({ environment: "production", corsOrigin: "https://app.example.com" })` |
-| `serv.storageAssets`               | 授权的只读资源   | `ServStorageAssetsConfig with reader/key/MIME policy`                   | `GET/HEAD middleware with ETag`                                      | `serv.storageAssets(assetOptions)`                                                                       |
-| `serv.generateSpec`                | 生成 OpenAPI     | `contract, { title?, version?, description?, apiPrefix? }`              | `Promise<OpenAPI.Document>`                                          | `serv.generateSpec(contract, { title: "Orders", version: "1.0.0" })`                                     |
-| `serv.validateInputOrFail`         | 校验业务输入     | `Zod schema, input, locale?`                                            | `HaiResult<z.infer<Schema>>; failure contains safe field errors`     | `serv.validateInputOrFail(InputSchema, input, context.locale)`                                           |
-| `serv.resolveRequestLocale`        | 解析请求语言     | `Headers`                                                               | `normalized supported locale`                                        | `serv.resolveRequestLocale(request.headers)`                                                             |
-| `serv.m`                           | 翻译模块提示     | `message key, { locale?, ...messageOptions }`                           | `string`                                                             | `serv.m("serv_errorForbidden", { locale: "zh-CN" })`                                                     |
-| `serv.WILDCARD_PERMISSION`         | 显式全权限常量   | `none`                                                                  | `string constant; only use in trusted permission policy`             | `serv.WILDCARD_PERMISSION`                                                                               |
-| `serv.WILDCARD_ROLE`               | 显式全角色常量   | `none`                                                                  | `string constant; does not authorize arbitrary requests`             | `serv.WILDCARD_ROLE`                                                                                     |
+| 入口                               | 场景                    | 输入                                                                    | 输出                                                                 | 调用片段                                                                                                 |
+| ---------------------------------- | ----------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `serv.createApp`                   | 组装接口应用            | `contract, procedures, http?, iam?, middlewares?, transport?`           | `ServHttpApp (fetch/request)`                                        | `serv.createApp({ contract, procedures })`                                                               |
+| `serv.listen`                      | 启动 Node 监听          | `app, { host?, port?, onClose?, onListening? }`                         | `ServNodeServer { server, address, close(): Promise<void> }`         | `serv.listen(app, { host: "127.0.0.1", port: 3000 })`                                                    |
+| `serv.toFetch`                     | 连接使用 Fetch 的服务器 | `ServHttpApp`                                                           | `(Request) => Promise<Response>`                                     | `serv.toFetch(app)`                                                                                      |
+| `serv.implement`                   | 实现领域路由            | `typed contract`                                                        | `ServImplementer; context/route/auth/permission/role/handle/build`   | `serv.implement(contract)`                                                                               |
+| `serv.parseRequestContext`         | 解析追踪与令牌          | `{ request, platform? }`                                                | `ServContext with requestId/locale/accessToken; no verified session` | `serv.parseRequestContext({ request })`                                                                  |
+| `serv.buildAuthContextFactory`     | 构造可信会话            | `(accessToken) => Promise<HaiResult<ServSession>>`                      | `CreateServContext; invalid credentials leave session absent`        | `serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))`                                     |
+| `serv.cors`                        | 限定跨域入口            | `{ origin?, methods?, allowedHeaders?, exposedHeaders?, credentials? }` | `ServMiddleware`                                                     | `serv.cors({ origin: "https://app.example.com", credentials: true })`                                    |
+| `serv.createRuntimeSecurityPolicy` | 收敛环境安全策略        | `{ environment, corsOrigin, nativeOrigins? }`                           | `allowOrigin, secureRefreshCookie, exposeApiDocs`                    | `serv.createRuntimeSecurityPolicy({ environment: "production", corsOrigin: "https://app.example.com" })` |
+| `serv.storageAssets`               | 授权的只读资源          | `ServStorageAssetsConfig with reader/key/MIME policy`                   | `GET/HEAD middleware with ETag`                                      | `serv.storageAssets(assetOptions)`                                                                       |
+| `serv.generateSpec`                | 生成 OpenAPI            | `contract, { title?, version?, description?, apiPrefix? }`              | `Promise<OpenAPI.Document>`                                          | `serv.generateSpec(contract, { title: "Orders", version: "1.0.0" })`                                     |
+| `serv.validateInputOrFail`         | 校验业务输入            | `Zod schema, input, locale?`                                            | `HaiResult<z.infer<Schema>>; failure contains safe field errors`     | `serv.validateInputOrFail(InputSchema, input, context.locale)`                                           |
+| `serv.resolveRequestLocale`        | 解析请求语言            | `Headers`                                                               | `normalized supported locale`                                        | `serv.resolveRequestLocale(request.headers)`                                                             |
+| `serv.m`                           | 翻译模块提示            | `message key, { locale?, ...messageOptions }`                           | `string`                                                             | `serv.m("serv_errorForbidden", { locale: "zh-CN" })`                                                     |
+| `serv.WILDCARD_PERMISSION`         | 显式全权限常量          | `none`                                                                  | `string constant; only use in trusted permission policy`             | `serv.WILDCARD_PERMISSION`                                                                               |
+| `serv.WILDCARD_ROLE`               | 显式全角色常量          | `none`                                                                  | `string constant; does not authorize arbitrary requests`             | `serv.WILDCARD_ROLE`                                                                                     |
 
 - 一行启动：`serv.createApp(...)` → `serv.listen(app, { port })`，应用代码不需要 import Hono
 - 扁平 API（最小知识）：`serv.createApp / serv.implement / serv.listen / serv.toFetch / serv.generateSpec / ...`
@@ -102,7 +102,7 @@ AI 默认 procedures 从可信 `context.session.userId` 绑定 `objectId`，客�
 - 可选传输加密：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` 自动挂载密钥协商与请求/响应加解密
 - 可选语音入口：`serv.createApp({ audio: { ai, verifyTicket, authorize } })` 挂载统一语音 WebSocket；连接建立即用一次性 ticket 鉴权（返回 `{ session, grant? }`，独立预鉴权超时），每帧运行时 Zod 校验 + 严格状态机，输入/积压/发送缓冲背压与级联取消；授权回调负责服务端确认操作、模型、音色、配额与并发占用
 
-> 生命周期说明：`@h-ai/serv` 本身是无状态 HTTP App 装配器，不需要 `init()` / `close()`；请在创建 app 前初始化 `iam` / `storage` / `ai` / `crypto` 等依赖，并在 `serv.listen(..., { onClose })` 中反向释放它们。`serv.createApp()` 遇到启动期配置错误（例如 transport manager 创建失败）会 fail-fast 抛出，便于进程启动阶段暴露问题。 onClose 是 SIGINT/SIGTERM 的关闭回调；主动调用返回句柄的 close 关闭 HTTP 监听与语音连接，业务模块由宿主另行反序释放。
+> `serv.createApp()` 根据传入的路由和依赖创建应用。先初始化所用的 `iam`、`storage`、`ai` 或 `crypto`。如果创建传输加密管理器等启动步骤出错，工厂会立即抛出错误。通过 `serv.listen(app, { onClose })` 注册退出信号回调，可以在服务器停止后关闭这些依赖。主动调用监听句柄的 `close()` 时，它只关闭监听、连接和信号处理，依赖模块由调用方关闭。
 
 监听句柄可在启动后立即关闭，以取消尚未完成的绑定；重复关闭复用同一结果。地址占用等真实监听失败仍会拒绝关闭结果，不会当作正常退出。
 
@@ -121,7 +121,7 @@ server:
 
 ### 标准 fetch 签名适配
 
-toFetch 提供标准 fetch 调用签名，适合 Node 兼容宿主与测试注入；包根仍依赖 Node API，不能据此承诺无需 Node 能力的 Workers/Deno/边缘部署。
+`serv.toFetch(app)` 返回接受 `Request`、异步返回 `Response` 的函数。测试可以直接传入构造好的请求，其他 Node.js 服务器也可以把自己的 Fetch 请求交给它。根入口依赖 Node.js API。
 
 ```ts
 const handler = serv.toFetch(app)
@@ -251,11 +251,13 @@ const app = serv.createApp({
 
 > **安全策略**：启用 `transport` 后，除 `excludePaths` 与密钥协商端点外，业务请求必须携带有效 `X-Client-Id`。缺失或未知 clientId 会返回 400；响应体无法加密、非 JSON 业务响应或超过单次加密上限时返回错误，不会明文透传业务数据。
 
-传输使用认证 v2 封装，先验签和 MAC 再解密，并绑定方法、路径、时间与响应状态。共享 registry 原子消费 nonce；TLS、可信代理、业务授权及幂等仍由宿主负责。自定义跨域入口须允许并暴露 `X-Hai-Transport`。完整字段、无正文响应、时钟窗口和防重放要求统一见 [Transport 协议](../../../packages/crypto/TRANSPORT-PROTOCOL.md)。
+加密传输使用 v2 格式。服务端先核对签名、消息认证码（MAC）、请求方法、路径和时间，再解密。客户端还会校验响应状态。服务节点共用同一处 Redis 或数据库，每个请求编号只准登记一次，以拒绝重复发送的加密报文。应用仍需使用 HTTPS、配置接受转发头的代理、检查当前用户权限，并防止重试导致业务重复执行。跨域接入时，CORS 需允许请求携带 `X-Hai-Transport`，并让前端读取同名响应头。完整规则见 [Transport 协议](../../../packages/crypto/TRANSPORT-PROTOCOL.md)。
 
 业务容量通过 `transport.maxPlaintextBytes` 统一配置：默认 1 MiB，整数范围 1 KiB～64 MiB，请求和响应共用 UTF-8 明文字节预算。客户端从握手自动获取上限，密文与部署代理预算由 `resolveTransportBodyLimits()` 推导（两倍明文 + 32 KiB）。握手、公钥、认证头和防重放约束独立；超限取消原流并释放 reader，请求 413、响应为加密的 500 容量错误，客户端识别 `TransportBodyTooLargeError` / `hai:crypto:070`。 [Transport capacity and upgrade](../../../packages/crypto/TRANSPORT-CAPACITY.md)。
 
-普通业务仍使用 `transport.maxPlaintextBytes`（auto/省略为 1 MiB）；Feedback 的报告受理、证据、附件及 ZIP 下载路由通过 `routePlaintextBytes` 单独声明 `feedback.budget.maxTransportBytes`。路径中的 `*` 仅匹配一个完整路径段；宿主显式路由值优先。握手、adapter-node 与代理使用各路由最大容量，普通业务不会随材料预算扩大。HTTP 适配器为单独声明且大于 1 MiB 的材料路由保留最多 2 个槽，普通业务另有 16 个槽，完整响应/失败后释放；忙碌返回 503 / `hai:crypto:072`，不自动重放业务写入。
+普通接口沿用 `transport.maxPlaintextBytes`，设为 `auto` 或省略时上限为 1 MiB。反馈上报、证据、附件和 ZIP 下载通常需要更大正文。给这些路由单独设置 `routePlaintextBytes`，取值可用 `feedback.budget.maxTransportBytes`。路径中的 `*` 只匹配一个路径段。若应用已为某条路由配置额度，以该值为准。
+
+握手、Node HTTP 适配器和反向代理按各路由的最大值预留空间。HTTP 适配器为显式配置且超过 1 MiB 的路由最多同时处理 2 个请求，普通路由另有 16 个名额。响应发送完毕或请求失败时释放名额。忙碌时返回 HTTP 503（`hai:crypto:072`），应用决定是否重试。
 
 Serv/Kit 对通过请求绑定、签名和 MAC 校验但超出时间窗口的请求返回加密的 HTTP 400 错误。客户端抛出 `TransportTimeError`（`hai:crypto:071`），显示校验时的服务器 UTC 时间，提示开启设备的自动校时或手工修改时间后刷新。`serverTime` 为 Unix 毫秒。`api-client` 映射为 `VALIDATION_FAILED`，在 `cause.transportCode` 和 `cause.serverTime` 保留诊断信息。
 
@@ -514,14 +516,14 @@ await apiClient.init({
 
 > 刷新 Cookie 带有 `HttpOnly` 和 `SameSite=Strict`，路径限制为 `{apiPrefix}/auth/refresh`。生产默认还会设置 `Secure`。
 
-刷新失败也经过统一公开错误投影：5xx 和缺失或非法状态返回安全提示与 traceId，内部原因只写入服务端日志。只有 401 认证失效会清除刷新 Cookie；限流和后端故障保留凭据，允许稍后重试。自动审计使用同一归一化状态记录失败。
+刷新失败时，如果状态码为 5xx 或服务端无法识别状态码，客户端只收到可公开的提示和 `traceId`。实际错误原因写入服务端日志。只有 401 认证失效会清除刷新 Cookie；限流和后端故障保留凭据，允许稍后重试。自动审计使用同一归一化状态记录失败。
 
 ### API 概览
 
 - `serv.createApp(options)`：创建 HTTP App 抽象，挂载自定义 `middlewares`、健康检查、OpenAPI handler 与可选文档
 - `serv.parseRequestContext({ request })`：默认上下文解析（提取 Bearer token + requestId，不填充 session）
 - `serv.listen(app, options)`：在 Node.js 启动 HTTP 服务，返回 `{ server, address, close }`
-  返回句柄的 `close()` 可重复调用：停止接入并关闭 Audio WebSocket，1 秒后强制终止未配合的音频连接，随后等待 HTTP 关闭。主动关闭也移除进程信号监听器；业务模块仍由宿主反序释放。
+  返回句柄的 `close()` 可重复调用：停止接入并关闭 Audio WebSocket，1 秒后强制终止未配合的音频连接，随后等待 HTTP 关闭。主动关闭也移除进程信号监听器；应用仍需按依赖顺序关闭自己初始化的业务模块。
 - `serv.toFetch(app)`：包装为标准 `fetch(Request)` handler
 - `serv.generateSpec(contract, options)`：由 contract 生成 OpenAPI 3.1 spec
 - `serv.storageAssets(config)`：创建只读 Storage 资源 middleware，内置 key/MIME 白名单、GET/HEAD 与 ETag
@@ -546,17 +548,17 @@ await apiClient.init({
 
 ### 每次请求的访问控制
 
-路径规则可设置 `encryption: required` 或 `disabled`，省略沿用宿主。disabled 接口接收普通 HTTPS 数据，仍检查 IP、时段和认证；带框架加密信封的请求返回 400。required 优先于宿主 `excludePaths`，未装配 transport 时拒绝创建 App。重叠路径和方法的相反模式在装配时失败；不自动降级或按声明顺序覆盖。
+路径规则可设置 `encryption: required` 或 `disabled`，省略时使用应用的传输加密设置。disabled 接口接收普通 HTTPS 数据，仍检查 IP、时段和认证；带框架加密信封的请求返回 400。required 优先于应用的 `excludePaths`，如果未启用传输加密，`serv.createApp()` 会拒绝创建应用。重叠路径和方法的相反模式在装配时失败；不自动降级或按声明顺序覆盖。
 
-`http.access` 默认 `false`。需要仅限制对外接口时，在 `_serv.yml` 配置 `http.access.rules`，例如 `{ id: 'external', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.0/24'] }`；`http.access.global` 则约束宿主处理的全部请求，包含健康检查。全局与所有匹配规则同时生效，时间窗口默认 UTC，空列表不限对应维度。已有会话也会在每次请求时重新检查；IAM `loginAccess` 只负责登录。
+`http.access` 默认 `false`。需要仅限制对外接口时，在 `_serv.yml` 配置 `http.access.rules`，例如 `{ id: 'external', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.0/24'] }`；`http.access.global` 则约束该 HTTP 应用处理的全部请求，包含健康检查。全局与所有匹配规则同时生效，时间窗口默认 UTC，空列表不限对应维度。已有会话也会在每次请求时重新检查；IAM `loginAccess` 只负责登录。
 
 较大策略使用 `http.access: { file: './config/security/request-access.yml' }`。文件按服务工作目录解析，仅在创建 App 时读取，最大 1 MiB；无效配置阻止启动，修改后重新创建 App。拒绝返回 HTTP 403、`hai:common:104`，启用 transport 的普通请求保留加密响应。日志用规则 ID、拒绝原因和请求编号定位，不记录策略正文。
 
-`http.trustedProxies` 默认 `auto`：普通宿主忽略转发头；受管 Compose 的私有代理拓扑才自动采用容器网段。自管代理指定真实 IP/CIDR，`[]` 显式关闭。代理必须清洗转发头，Node 监听器或 Fetch 平台必须提供可信对端元数据。独立文件、外层代理和部署回滚步骤见[请求访问控制手册](../configuration/request-access.md)。
+`http.trustedProxies` 默认 `auto`：未配置托管代理的应用默认不使用转发头；受管 Compose 的私有代理拓扑才自动采用容器网段。自管代理指定真实 IP/CIDR，`[]` 显式关闭。代理必须清洗转发头，Node 监听器或 Fetch 平台必须提供可信对端元数据。独立文件、外层代理和部署回滚步骤见[请求访问控制手册](../configuration/request-access.md)。
 
 ### 配置驱动认证页面
 
-协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
+服务端可在认证配置中提供用户协议和隐私政策的 Markdown 正文或 URL。如果正文和 URL 同时存在，登录页面的弹窗优先显示经过安全处理的 Markdown。
 
 `createIamProcedures({ iam })` 直接实现公开配置、密码/LDAP/OTP、注册与密码重置，无需应用复制 procedure。LDAP 登录沿用现有浏览器 httpOnly refresh Cookie 和可信原生 Token 传输。管理端创建调用 iam.user.createUser，自助注册关闭时管理功能仍可用；授权仍由既有 permission guard 执行。
 
@@ -564,9 +566,9 @@ await apiClient.init({
 
 ### 请求语言隔离
 
-Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest())`；SvelteKit 可使用 `kit.i18n.runWithLocale(locale, () => resolve(event))`，serv 自动按请求头建立上下文。异步子任务继承请求语言，优先级为显式 `MessageOptions.locale`、请求语言、进程启动默认语言。`setGlobalLocale` 在请求上下文中只更新当前请求；上下文外仅用于启动默认值，不能在请求 hook 中调用它修改默认值。
+多位用户的请求可能同时在一个 Node.js 进程里执行。用 `core.i18n.runWithLocale(locale, () => handleRequest())` 为本次请求和它启动的异步工作设定语言。SvelteKit 可以用 `kit.i18n.runWithLocale(locale, () => resolve(event))`，Serv 会按请求头自动设定。翻译优先使用显式传入的 `MessageOptions.locale`，其次使用本次请求的语言，最后使用进程启动时的默认语言。
 
-浏览器继续使用应用级 `setGlobalLocale` / `createLocaleStore`。SSR 的 UI store 初始化和 setter 只修改自身状态，不写全局语言；UI 消息从请求上下文读取。`runWithLocale` 仅支持 Node 入口，浏览器通过显式 locale 或应用状态翻译。
+设定请求语言后，`setGlobalLocale()` 只改本次请求。启动时在请求之外调用它，可设置进程默认语言。服务端渲染时，UI 的语言状态对象只更新自己，翻译读取本次请求的语言。浏览器中从 `@h-ai/ui/i18n` 导入 `createLocaleStore()` 管理当前页面语言，或在翻译时直接传入 `locale`。
 
 ### 输入约束与 HTTP 能力
 
@@ -574,7 +576,7 @@ Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest()
 
 ### 可选的反馈服务与可信范围
 
-通过 `@h-ai/serv/features/feedback` 的 `createFeedbackProcedures` 挂载 `apiContract.feedback`；只导入运行时根入口不会加载反馈服务。宿主先初始化 reldb/storage/reach/feedback，再从已验证的会话与部署策略映射反馈范围。resolveContext 返回 null 或用户不匹配时拒绝访问；领域模块再次校验范围与权限。
+通过 `@h-ai/serv/features/feedback` 的 `createFeedbackProcedures` 挂载 `apiContract.feedback`；只导入运行时根入口不会加载反馈服务。应用启动时先初始化 RelDB 和私有 Storage。使用 Reach 投递通知时，还应在 Feedback 之前初始化 Reach。收到请求后，从已验证会话和部署配置确定该用户可访问的反馈范围。resolveContext 返回 null 或用户不匹配时拒绝访问；领域模块再次校验范围与权限。
 
 所有 HTTP 响应（包括探活、404、中间件短路）携带有界 X-Request-Id。普通业务日志需由已有 createContext 的可选 scopeId 建立可信范围，scopeId 从不读取客户端头。HTTP 入口清理旧身份，认证后的异步业务日志自动继承当前请求 ID 与用户。
 
@@ -609,11 +611,15 @@ const app = serv.createApp({
 
 标准 IAM procedure 包含 POST /auth/captcha，输入 operation，返回可公开的 ALTCHA 挑战。开启 IAM captcha 时密码/OTP/LDAP、注册、通知请求及匿名原密码续期均由 IAM 强制检查单用证明；请求映射保留 captcha，不依赖菜单或客户端判断。
 
-策略、默认值和恢复边界见 [IAM](../../../packages/iam/README.md)。
+何时要求验证、验证失败后如何处理，见 [IAM 配置](../configuration/iam.md)和 [IAM 功能说明](./iam.md)。
 
 ### 页面离开会话策略
 
-`session.endOnPageHide` 默认 `false`。启用后宿主调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })` 并在卸载时调用返回的清理函数；标准 admin/H5/fullstack 模板已经接入。非 BFCache 的 `pagehide`（也包括刷新、整页导航）通过 POST `/auth/session/close` 尽力撤销当前 access 及关联 refresh，沿用 CSRF/传输加密，使用 `keepalive` 且不自动刷新会话。该响应不清 Cookie/本地凭据，避免旧响应覆盖下一次登录。显式退出仍使用正常 logout，可靠撤销并清理当前凭据。浏览器可能不发送页面离开请求，因此必须按业务配合服务端 `idleTimeout`/`absoluteTimeout`；不能据此保证关闭即撤销。
+`session.endOnPageHide` 默认关闭。开启后，在浏览器页面加载时调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })`，卸载时执行它返回的函数，移除监听器。标准 admin、H5 和 fullstack 模板已接好此步骤。这里的 `actions` 来自 `apiClient.createAuthActions(...)` 或 SvelteKit 的 `kit.client.createAuthActions(...)`。配置从登录页使用的公开认证接口读取。
+
+浏览器触发 `pagehide` 时会尝试调用 `POST /auth/session/close`。这包括刷新或整页导航，但页面进入往返缓存（BFCache）时会跳过。请求沿用 CSRF 防护和已启用的传输加密，并使用 `keepalive` 争取在页面关闭后完成。该请求不会刷新会话，响应也不会清除 Cookie 或本地凭据，以免较早的请求清掉新的登录状态。
+
+浏览器可能根本没有发出请求。服务端仍需用 `idleTimeout` 或 `absoluteTimeout` 限制会话寿命。用户主动退出时，应正常调用应用的 logout 接口，让服务端撤销凭据，并清除客户端保存的登录状态。
 
 ## 错误处理
 
@@ -670,8 +676,10 @@ const procedures = serv
 
 原生 Audio WebSocket 同样使用安全错误边界：内部 Provider/SDK 错误与堆栈只进入脱敏日志，客户端收到稳定错误码、安全提示和 traceId。自定义跨域配置需保留敏感操作使用的 X-Hai-Reauthentication；默认 Serv/Kit 已允许。
 
-HTTP 错误返回本地化安全文案及追踪编号；ToastContainer 默认隐藏编号，由排查信息图标展开和复制。响应同时包含 `error.traceId` 和 `X-Trace-Id`。框架复用本次 requestId 作为 traceId，前后端日志自动关联。底层异常、堆栈和操作上下文经凭据脱敏后写入日志，不通过 cause/ext 向用户公开。字段校验只返回本地化的字段名和错误。
+HTTP 错误向浏览器返回当前语言的提示和追踪编号。编号既在响应的 `error.traceId`，也在 `X-Trace-Id` 响应头，等于本次请求的 `requestId`。用户可在 Toast 的排查信息中展开并复制编号，开发人员可用它查找前后端日志。异常详情、堆栈和操作信息去除凭据后写入服务端日志。字段校验仅返回字段名和可显示的错误提示。
 
-`core.error.toPublic(error, traceId?)` 用于接口/UI 边界；`core.error.formatMessage(error)` 用于重新翻译后的提示，重复调用不会重复追加标识。日志传入完整 Error 对象，不能只记录通用标题或提前 String(error) 丢失上下文。数据库失败记录驱动错误码、消息、堆栈及表/列；SQL 原文、绑定值和连接凭据不进入日志。
+服务端把错误发给浏览器之前，可用 `core.error.toPublic(error, traceId)` 去除内部信息。界面需要重新显示错误时，可用 `core.error.formatMessage(error)` 格式化提示，重复调用也只附一次追踪编号。
+
+写服务端日志时传入完整的 Error 对象，保留堆栈和错误原因。数据库操作失败时，可按驱动错误码、表和列定位问题。日志不记录 SQL 原文、参数值或数据库凭据。
 
 audit 已初始化时，procedure 自动绑定经过验证的身份、可信连接地址与请求/范围编号，业务 audit.log 继承此上下文。写操作及失败/拒绝记录 request.execute；契约校验、协议、中间件和缺失路由的 HTTP 拒绝记录 http.reject。入口只记录操作、方法、状态和原因码，不复制请求体、动态 URL、令牌或错误详情。capture.enabled 可关闭自动采集，capture.includeReads 可开启成功读取；显式业务 log 不受影响。业务语义仍须应用在完成/失败边界记录。

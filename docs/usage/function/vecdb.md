@@ -1,12 +1,14 @@
 # @h-ai/vecdb 功能说明
 
-在服务端连接向量存储并操作向量集合，按统一相似度搜索，或按游标遍历文档 ID。集合维度必须与写入和查询向量一致。
+通过 `vecdb` 把文档向量写入集合，按相似度搜索，或分批读取文档 ID。集合定义了每个向量有多少个数值，写入向量和检索向量必须具有同样的长度。
 
 [模块 README](../../../packages/vecdb/README.md) · [配置清单](../configuration/vecdb.md) · [数据结构](../data/vecdb.md) · [数据服务接入](../development/data.md)
 
 ## 最小接入示例
 
-所有 Provider 的 `score` 都为 0–1，越大越相似；`minScore` 在转换后过滤。余弦使用 `(1 + cosine) / 2`，内积使用 `sigmoid(dotProduct)`，欧氏使用 `1 / (1 + distance)`；LanceDB/Chroma 的 distance 是原生 squared L2，其余后端使用原生 L2。不同 metric/后端的阈值仍需按业务校准，score 不代表概率。Qdrant 的公开 minScore 使用统一相似度，而非原生距离阈值。
+搜索结果的 `score` 在 0 到 1 之间，值越大越相似。例如 `minScore: 0.7` 会滤掉转换后小于 0.7 的条目。得分不是百分比，换用距离算法或数据库后，应重新用实际数据确认阈值。
+
+余弦使用 `(1 + cosine) / 2`，内积使用 `sigmoid(dotProduct)`，欧氏距离使用 `1 / (1 + distance)`。LanceDB 和 Chroma 返回的是欧氏距离的平方，其余后端使用欧氏距离。Qdrant 同样按模块转换后的分数筛选。
 
 ```ts
 import { vecdb } from '@h-ai/vecdb'
@@ -58,7 +60,7 @@ finally {
 
 ### 功能输入输出
 
-以下片段依赖上面的最小接入示例。示例中的业务值由宿主校验和授权后传入；异步领域结果先判断 success，再读取 data。表中 void 表示操作已完成且没有返回数据，null 表示不存在；同步工厂/工具直接返回表中类型。
+下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
 #### vecdb.collection
 
@@ -111,11 +113,13 @@ const connection = vecdb.rawConnection // 无需参数，返回同进程集成�
 
 模块未初始化或正在关闭时，`vecdb.config` 与 `vecdb.rawConnection` 均返回 `null`。`rawConnection` 可能含未脱敏凭据，仅在可信服务端同进程内传递。
 
-close 立即停止当前操作与此前取得的操作引用；连接失败候选和关闭失败资源仅作为待清理所有权保留，不再提供业务服务。并发 close 合并，进行中的 init 先确定资源归属再关闭。失败结果的 error.ext.cleanupPending 表示仍须用同一模块的 close 重试；清理成功前 init 不创建替代资源。内嵌 Chroma 等待实际 spawn，终止直接启动的服务器后等待 exit；普通终止超过 1.5 秒后升级强制终止，再等待 1.5 秒，未确认退出返回失败并保留句柄。该验证覆盖直接子进程，不把信号回执等同于进程树退出或真实 Chroma CLI 上线验收。
+调用 `vecdb.close()` 后，模块停止接收新的操作，之前保存的操作对象也不能继续提交请求。多次同时关闭共用一次清理。如果连接或关闭失败后仍有资源未释放，`error.ext.cleanupPending` 会提示应用再次调用 `vecdb.close()`。资源未清理完时，`vecdb.init()` 不会另外打开连接。
+
+使用进程内启动的 Chroma 时，模块会等待直接启动的服务器进程退出。正常终止等待 1.5 秒，超时后尝试强制终止并再等待 1.5 秒。仍未确认退出时返回失败，并保留句柄供后续清理。这一步确认的是模块直接启动的进程。
 
 ## 错误处理
 
-返回 `HaiResult<T>` 的操作通过 `result.success` 区分成功与失败。业务成功后读取 `data`，诊断失败时记录 `error.code` 和关联编号。
+收到 `HaiResult<T>` 时先检查 `result.success`。成功时读取 `result.data`，失败时查看 `result.error`。记录故障时保留错误码和追踪编号，便于从日志找到对应请求。
 
 ```ts
 import { HaiVecdbError, vecdb } from '@h-ai/vecdb'

@@ -1,12 +1,14 @@
 # @h-ai/feedback 功能说明
 
-通过服务端 `feedback` 受理和处理用户反馈，通过浏览器客户端采集现场信息，通过离线工具核对反馈包。
+在服务端用 `feedback` 接收、查询和处理用户报告。在浏览器中用 Feedback 客户端收集用户允许提供的日志、截图等排查材料。导出的 ZIP 可以用命令行工具离线查看。
+
+服务端从 `@h-ai/feedback` 导入 `feedback`。浏览器从 `@h-ai/feedback/client` 创建自己的客户端实例，离线查看工具从 `@h-ai/feedback/bundle` 导入。
 
 [模块 README](../../../packages/feedback/README.md) · [配置清单](../configuration/feedback.md) · [数据结构](../data/feedback.md) · [反馈运维](../operations/feedback.md)
 
 ## 最小接入示例
 
-服务端先初始化 core、reldb 和私有 storage，再初始化 feedback；仅 reach 通知模式需先初始化 Reach。生产使用共享数据库和私有对象存储，连接凭据由宿主管理。
+应用启动时先初始化 Core、RelDB 和私有 Storage，再初始化 Feedback。通知方式是 Reach 时，还须先初始化 Reach。生产部署为所有实例配置同一数据库和非公开对象存储，凭据从服务端私有配置读取。
 
 示例在应用启动时初始化模块。提交函数接收可信服务端生成的 `context` 和客户端为本次提交生成的 `submissionId`。
 
@@ -14,7 +16,7 @@
 import type { FeedbackContext } from '@h-ai/feedback'
 import { feedback } from '@h-ai/feedback'
 
-// 装配 orders 的反馈服务。在本地开发以 console 记录受理状态。
+// 为 orders 初始化反馈服务。本地开发通过日志查看受理状态。
 const initialized = await feedback.init({
   appId: 'orders',
   appVersion: '1.0.0',
@@ -40,7 +42,7 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 
 浏览器从 `@h-ai/feedback/client` 导入 `createFeedbackClient()`，通过 `init({ appId, actions })` 注入 typed API 的 submit、appendEvidence、completeCollection、upload。先调用 `prepare()` 固定现场，成功后再显示 `FeedbackModal`；`submit()` 返回受理回执，后台 `flush()` 续传。`close()` 释放监听器和记录器。Cookie 白名单、持久草稿与回放均由产品显式启用，凭证类值始终排除。
 
-浏览器和服务端共用文本脱敏规则，覆盖常见凭据键、JSON/转义 JSON、Bearer/Basic 授权值；入库、API 与离线包保持同一脱敏结果。业务专有敏感字段仍应由宿主配置白名单和敏感区域标记。
+浏览器和服务端共用文本脱敏规则，覆盖常见凭据键、JSON/转义 JSON、Bearer/Basic 授权值；写入数据库、接口和离线包使用同样的脱敏规则。应用仍需标出页面上的敏感区域，并明确哪些字段允许采集。
 
 `text/plain` 附件在 5 MiB 文件上限内全文脱敏，保留安全正文和末尾日志，不套用结构化证据的单字段截断。超过上限的原文件在读取前拒绝，脱敏结果仍受同一附件字节上限约束。JSON 附件和结构化证据继续限制字段长度、深度及数量，可能被裁剪；需要完整日志时使用纯文本附件。待提交附件与首次包络冻结后本地导出的新增附件使用相同规则。
 
@@ -54,21 +56,21 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 
 并发 `init` 返回 `INIT_IN_PROGRESS`；`close` 等待有界截图退出后清理会话。截图期间关闭使 `prepare` 返回失败，不复活草稿。异步标注完成时若草稿已冻结、关闭、删除图片或被另一标注更新，则返回 `CONFLICT`，不改变已提交附件的字节或 checksum。
 
-草稿由 SDK 持有并通过 `annotate`、`addFiles` 等方法更新。Svelte 宿主保存该引用时使用 `$state.raw<FeedbackDraft>()`，操作成功后从 `getDraft()` 刷新附件视图；不要将 SDK 草稿放入深度 `$state` 代理，否则 SDK 替换图片字节后，代理可能继续返回已缓存的旧字节。
+草稿由 SDK 持有并通过 `annotate`、`addFiles` 等方法更新。在 Svelte 组件中保存这份草稿时使用 `$state.raw<FeedbackDraft>()`，操作成功后从 `getDraft()` 刷新附件视图；不要将 SDK 草稿放入深度 `$state` 代理，否则 SDK 替换图片字节后，代理可能继续返回已缓存的旧字节。
 
 `maxTotalBytes` 默认 32 MiB（4–40 MiB）。`feedback.budget` 从同一总量推导单附件、附件总量、双份证据与 Base64/加密传输预算；默认单附件 5 MiB、附件合计 22 MiB、证据 4 MiB/2000 条，并预留 2 MiB 给历史、元数据和查看器。受理前检查附件声明总量，补采原子检查证据预算，处理历史限制 256 KiB，避免成功受理后因容量永久无法导出。客户端通过受权 `reports.policy({})` 取得有效值，表单展示容量；
 
-普通业务仍使用 `transport.maxPlaintextBytes`（auto/省略为 1 MiB）；Feedback 的报告受理、证据、附件及 ZIP 下载路由通过 `routePlaintextBytes` 单独声明容量。启动时用 `@h-ai/api-contract/feedback` 的 `resolveFeedbackBudget(已校验的反馈配置).maxTransportBytes` 预计算，避免可选反馈故障/重试期间缓存模块默认预算。路径中的 `*` 仅匹配一个完整路径段；宿主显式路由值优先。握手、adapter-node 与代理使用各路由最大容量，普通业务不会随材料预算扩大。HTTP 适配器为单独声明且大于 1 MiB 的材料路由保留最多 2 个槽，普通业务另有 16 个槽，完整响应/失败后释放；忙碌返回 503 / `hai:crypto:072`，不自动重放业务写入。
+普通业务仍使用 `transport.maxPlaintextBytes`（auto/省略为 1 MiB）；Feedback 的报告受理、证据、附件及 ZIP 下载路由通过 `routePlaintextBytes` 单独声明容量。启动时用 `@h-ai/api-contract/feedback` 的 `resolveFeedbackBudget(已校验的反馈配置).maxTransportBytes` 预计算，避免可选反馈故障/重试期间缓存模块默认预算。路径中的 `*` 仅匹配一个完整路径段；优先使用应用为该路由明确设置的值。握手、adapter-node 与代理使用各路由最大容量，普通业务不会随材料预算扩大。HTTP 适配器为单独声明且大于 1 MiB 的材料路由保留最多 2 个槽，普通业务另有 16 个槽，完整响应/失败后释放；忙碌返回 503 / `hai:crypto:072`，不自动重放业务写入。
 
 `keyScreenshots` 默认 false，需显式开启自动关键截图；手动 `prepare()` 仍可截图。截图超时会传递 AbortSignal，底层尚未结束时不允许重叠截图。默认渲染最多 10000 DOM 节点，继续受画布像素预算限制。`replay:true` 的默认 `replayStart` 为 `prepare`，打开反馈时才录制；明确需要预录时配置 `replayStart: init`。关闭反馈界面调用 `pause()` 停止 DOM 回放和截图，保留轻量日志、草稿及上传；退出身份仍调用 `close({ discard:true })`。自定义 `captureScreenshot({ signal })` 应尊重取消信号。
 
-反馈受理后，SDK 后台补传附件和后续证据。网络、5xx、408 或 429 失败按 1、2、4、8、16 秒重试，连续六次失败后暂停；其他 4xx 立即暂停。草稿和附件保持不变，修复网络或重新认证后，通过 `flush()` 或再次准备反馈显式重试。未提交反馈、采集已完成时不发起后台补传。`close({ discard: true })` 等待已开始的请求结束，不再发起旧草稿的后续请求；宿主必须等待关闭完成再初始化下一身份。
+反馈受理后，SDK 后台补传附件和后续证据。网络、5xx、408 或 429 失败按 1、2、4、8、16 秒重试，连续六次失败后暂停；其他 4xx 立即暂停。草稿和附件保持不变，修复网络或重新认证后，通过 `flush()` 或再次准备反馈显式重试。未提交反馈、采集已完成时不发起后台补传。`close({ discard: true })` 等待已开始的请求结束，不再发起旧草稿的后续请求；切换账号时，应用应先等待关闭完成，再为新账号初始化客户端。
 
 自动截图使用 html2canvas 渲染经遮挡的克隆 DOM。跨域图片、iframe、video 和尚未就绪的网络字体可能缺失；浏览器或 CSP 限制导致失败时明确标记 missing，用户仍可手动添加附件。
 
-`saveDraft(input?)` 统一本地导出与保存：Web 下载、Tauri 原生保存对话框、Capacitor 缓存文件原生分享。取消返回 `status: 'cancelled'`；错误仍返回失败。原生插件为可选 peer，生成 App/Desktop 已配置依赖与 Tauri 权限；自定义宿主需安装对应插件。`createFeedbackReview(typedClient.feedback.reports)` 提供 `loadReplay(id)` 与可取消的 `exportReport(id)`，不再由应用分页和轮询。退出身份调用 `review.close()` 与 `client.close({ discard: true })`，停止采集、轮询，清理预览和持久草稿。
+`saveDraft(input?)` 统一本地导出与保存：Web 下载、Tauri 原生保存对话框、Capacitor 缓存文件原生分享。取消返回 `status: 'cancelled'`；错误仍返回失败。生成的移动端和桌面端模板已声明插件与对应的 Tauri 权限。手工接入的应用要按目标平台安装对应插件。`createFeedbackReview(typedClient.feedback.reports)` 提供 `loadReplay(id)` 与可取消的 `exportReport(id)`，不再由应用分页和轮询。退出身份调用 `review.close()` 与 `client.close({ discard: true })`，停止采集、轮询，清理预览和持久草稿。
 
-Web 客户端不解析或安装原生插件。自定义 Tauri/Capacitor 宿主分别从 @h-ai/feedback/tauri 或 @h-ai/feedback/capacitor 导入 saveTauriFeedbackFile/saveCapacitorFeedbackFile，并在启动时调用 configureFeedbackSaving(saver)；生成工程已接入，业务无需处理原生文件生命周期。
+Web 客户端不解析或安装原生插件。手工搭建的 Tauri 应用从 `@h-ai/feedback/tauri` 导入 `saveTauriFeedbackFile`，Capacitor 应用从 `@h-ai/feedback/capacitor` 导入 `saveCapacitorFeedbackFile`，并在启动时调用 configureFeedbackSaving(saver)；生成工程已接入，业务无需处理原生文件生命周期。
 
 ## 功能说明
 
@@ -80,7 +82,7 @@ Web 客户端不解析或安装原生插件。自定义 Tauri/Capacitor 宿主�
 
 ### 功能输入输出
 
-以下片段依赖上面的最小接入示例。示例中的业务值由宿主校验和授权后传入；异步领域结果先判断 success，再读取 data。表中 void 表示操作已完成且没有返回数据，null 表示不存在；同步工厂/工具直接返回表中类型。
+下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
 input 中的 id 是反馈 ID，attachmentId/jobId 指向同一反馈；context 来自可信认证，包含当前主体/范围/权限。evidence、submission 和 base64 均受容量及归属检查。
 
@@ -131,19 +133,19 @@ input 中的 id 是反馈 ID，attachmentId/jobId 指向同一反馈；context �
 
 支持录屏的浏览器可在反馈中选择“录屏 → 开始录屏”，授权页面/窗口后录制无声视频，最多 60 秒 / 5 MiB，低帧率和码率；停止共享、取消、超时和组件销毁均释放流。录屏是用户主动选择的原始画面，不会自动遮挡敏感信息，停止后可预览和删除。WebM/MP4 与其他附件使用相同的私有存储、校验和及 5 MiB 限制；不支持录屏的浏览器可直接添加视频文件。
 
-参考管理台和启用 feedback 的 fullstack 模板显式启用 `replay: true`；SDK 默认仍关闭。管理员在反馈详情的“页面回放”播放或定位页面操作，宿主 `onreplay` 须分页读取完整 `kind: replay` 事件，不能只传普通材料的一页。无记录时明确提示；录屏在“操作现场”预览。保存反馈到本地后可用 `hai feedback view <zip>` 查看附件、录屏和回放；本地包明确缺少尚未取得的服务端材料。
+参考管理台和启用 feedback 的 fullstack 模板显式启用 `replay: true`；SDK 默认仍关闭。管理员在反馈详情的“页面回放”播放或定位页面操作，应用提供的 `onreplay` 回调需要分页读取完整 `kind: replay` 事件，不能只传普通材料的一页。无记录时明确提示；录屏在“操作现场”预览。保存反馈到本地后可用 `hai feedback view <zip>` 查看附件、录屏和回放；本地包明确缺少尚未取得的服务端材料。
 
 构建身份统一限制 128 字符；显式非法 HAI_BUILD_ID/HAI_BUILD_COMMIT 在构建时拒绝，错误不回显私密值。默认脱敏包含 verificationCode、otpCode、短信/邮件/一次性/二次验证码；业务 code 字段不会一概隐藏。
 
 服务策略暂不可用时，客户端按有界本地预算继续采集并标记 server-policy-unavailable，允许本地导出；在线提交前重新获取有效策略，失败不受理。addFiles(files, removedAttachmentIds?) 在同一原子批次移除已删除的旧附件，容量显示与实际合并一致。
 
-console/disabled 无 Reach npm 依赖；选 reach 模式需显式安装 @h-ai/reach（optional peer）并由宿主初始化。凭据通知只返回生成的 receiptId，不保存或回传可能携带载荷的 Provider messageId。
+console/disabled 无 Reach npm 依赖；选 reach 模式需显式安装 @h-ai/reach（optional peer）并由应用启动代码初始化。凭据通知只返回生成的 receiptId，不保存或回传可能携带载荷的 Provider messageId。
 
 ### 业务证据扩展
 
 业务系统通过 `feedback.init(config, { collectEvidence })` 注册一个服务端采集函数。它在反馈可靠入库后由持久 `collect` 任务调用，支持直接返回或 `async/await`；提交请求无需等待业务日志生成。相比进程内事件订阅，任务在重启或切换实例后仍可恢复。所有处理同一 appId 的实例必须注册相同采集函数。
 
-下例运行在依赖已初始化的服务端；`config` 为宿主加载的 `FeedbackConfigInput`，业务预先生成并脱敏 `diagnostics/sanitized-logs.zip`，生产中可在回调内等待自己的日志收集服务：
+下例运行在依赖已初始化的服务端；`config` 是应用从服务端配置中读出的 `FeedbackConfigInput`，业务预先生成并脱敏 `diagnostics/sanitized-logs.zip`，生产中可在回调内等待自己的日志收集服务：
 
 ```ts
 import type { FeedbackConfigInput } from '@h-ai/feedback'
@@ -173,7 +175,7 @@ async function startFeedback(config: FeedbackConfigInput) {
 
 `text/data` 以 `source: server:business`、`kind: business` 写入证据，详情“业务信息”页签可分页查询；附件关联同一反馈，详情下载和离线导出均包含。短文本/JSON 遵循已有脱敏、字段截断和证据预算；完整日志使用 `text/plain` 附件，会全文脱敏。ZIP/GZIP 原样存储，仅校验类型标记、字节数与 SHA-256，不解压、不执行、不自动脱敏内部文件；业务须在压缩前清理凭据和个人敏感内容。浏览器 `addFiles` 同样支持 ZIP、GZ、TGZ。
 
-回调最多等待 `businessCollectionTimeoutMs`（默认 30000ms，1–300000）；超时或关闭触发 `signal`，框架停止等待，宿主必须将 signal 传给异步操作。抛错、超限、非法文件或存储失败均记录采集任务失败并按 `maxAttempts` 重试；耗尽后 `collectionStatus: failed`，管理员可 `retry({ id, target: 'collect' }, context)`。回调可能重新执行，使用 report.id 实现外部操作幂等。附件全部存储完成后，证据和附件索引在持有租约的同一事务发布；成功标记入库后不再调用回调。附件 ID 稳定且为 1–100 字符，框架自动加 `server:business:` 前缀；所有附件共享 20 项、单项/合计预算，不另开无限容量。
+回调最多等待 `businessCollectionTimeoutMs`（默认 30000ms，1–300000）；超时或关闭触发 `signal`，框架停止等待，回调必须把 `signal` 传给自己启动的异步操作，使其也能取消。抛错、超限、非法文件或存储失败均记录采集任务失败并按 `maxAttempts` 重试；耗尽后 `collectionStatus: failed`，管理员可 `retry({ id, target: 'collect' }, context)`。回调可能重新执行，使用 report.id 实现外部操作幂等。附件全部存储完成后，证据和附件索引在持有租约的同一事务发布；成功标记入库后不再调用回调。附件 ID 稳定且为 1–100 字符，框架自动加 `server:business:` 前缀；所有附件共享 20 项、单项/合计预算，不另开无限容量。
 
 ### Webhook 回调
 
@@ -196,9 +198,11 @@ webhookTimeoutMs: ${HAI_FEEDBACK_WEBHOOKTIMEOUTMS:10000}
 
 `list/get/getEvidence` 返回受权记录、详情与分页证据；`setStatus({ id, status, expectedVersion }, context)` 以版本检查执行处理/撤销。`retry` 仅重排可恢复项。`export` 固定证据修订并创建任务，通过 `getExport` 获取已生成的 ZIP；导出未完成不伪装成功。材料缺失和截断随包保留，回放不是重新执行业务。
 
-`getExport` 先检查范围及 `feedback:export` 权限。有效快照的 `pending/running` 任务返回 `CONFLICT`（409，生成中），调用方仅对此状态有界轮询；`failed` 返回 `OPERATION_FAILED`（500），需显示失败并由管理员决定是否 `retry`。任务不存在、不属于该反馈或待生成快照已过期时返回 `NOT_FOUND`（404），缺少导出权限返回 `FORBIDDEN`（403）。当前修订的生成快照过期后可重新 `export`；已完成 ZIP 的下载仍校验存储读取及 checksum。
+用 `feedback.getExport()` 查询导出时，服务端先验证反馈归属和 `feedback:export` 权限。导出任务仍为 `pending` 或 `running`，且导出所用的报告副本还有效时，返回 `CONFLICT`（409），可在有限时间内继续查询。任务失败时返回 `OPERATION_FAILED`（500），管理员核对后可调用 `feedback.retry()`。任务不存在、不属于这份反馈或报告副本已过期时返回 `NOT_FOUND`（404）。缺少导出权限时返回 `FORBIDDEN`（403）。导出副本过期后可对当前版本重新调用 `feedback.export()`。已完成的 ZIP 在读取时仍会核对文件校验和。
 
-按 `errorId` 查询时以错误锚点的来源、请求和序号取前后各最多 100 条日志；重叠窗口保留各自锚点，不按日志首次归属的 errorId 丢弃上下文。到期任务清理报告、证据、附件、历史及含快照的任务，并按对象前缀删除孤立上传 attempt。随后只保留不含现场的前缀/24 小时截止墓碑，反复清理迟到对象后删除；清理故障持续重试。
+按 `errorId` 查看错误时，用错误产生的来源、请求和日志位置来选取前后各最多 100 条。两处错误的日志范围重叠时，两处都能看到共有的日志。
+
+报告到期后，后台任务删除报告、证据、附件、历史和待导出记录。未附着到报告的上传也按对象路径前缀删除。为了清掉较晚才传完的文件，后台额外保留该前缀和 24 小时的截止时间，其间多次扫描，不保留报告或附件内容。清理失败时会重试。
 
 ### 离线工具
 
@@ -234,7 +238,7 @@ const activeAppId = feedback.config?.appId // 无需参数，读取运行配置�
 
 ### console 通知的隐私边界
 
-`consoleContent` 默认为 `metadata`：仅记录反馈编号、应用/版本/构建定位与采集状态，不输出说明、summary、附件、证据、通知正文或接收地址。需要通用脱敏摘要时显式设为 `summary`；通用脱敏不能识别所有业务秘密。该选项不需要 Reach，也不改变 disabled/reach 的通道语义。
+`consoleContent` 默认为 `metadata`，只打印反馈编号、应用、版本、构建标识和采集状态。设置 `summary` 会额外打印经过通用脱敏的摘要。确认摘要不会包含应用自己的敏感数据后再启用。这个选项仅影响 `console` 通知方式，无需初始化 Reach。
 
 服务端环境证据与反馈受理共同提交；环境写入失败不留下已受理但缺失环境的半成品，相同 submissionId 可安全重试。管理界面用 `createFeedbackReview(...).retryReport(id)` 重试可恢复材料与失败通知/Webhook，控制器去重目标并传播失败，退出调用 close 阻止迟到请求继续编排。
 
@@ -256,7 +260,7 @@ const activeAppId = feedback.config?.appId // 无需参数，读取运行配置�
 | `feedbackClient.submit`            | `await feedbackClient.submit()` 发送草稿，可附描述等表单输入                             | `HaiResult<FeedbackReport>`，包含受理 ID 和编号         |
 | `feedbackClient.flush`             | `await feedbackClient.flush()` 尝试续传待处理证据                                        | `HaiResult<void>`                                       |
 | `feedbackClient.exportDraft`       | `await feedbackClient.exportDraft()` 将当前草稿导出为 ZIP                                | `HaiResult<Uint8Array>`，应用可交给保存适配器           |
-| `feedbackClient.saveDraft`         | `await feedbackClient.saveDraft()` 用宿主默认保存方式保存 ZIP                            | `HaiResult<FeedbackSaveResult>`，成功也可能表示用户取消 |
+| `feedbackClient.saveDraft`         | `await feedbackClient.saveDraft()` 通过当前平台默认方式保存 ZIP，例如浏览器下载          | `HaiResult<FeedbackSaveResult>`，成功也可能表示用户取消 |
 | `feedbackClient.pause`             | `feedbackClient.pause()` 关闭反馈面板时停止 DOM 录制等                                   | `void`，保留可恢复草稿和后台上传                        |
 | `feedbackClient.close`             | `await feedbackClient.close({ discard: true })` 退出身份并丢弃草稿                       | `Promise<void>`，结束后台任务和本地记录                 |
 
@@ -265,10 +269,10 @@ import { getFeedbackBundleViewerFiles } from '@h-ai/feedback/bundle'
 import { feedbackDataBytes, saveFeedbackFile } from '@h-ai/feedback/client'
 
 const bytes = feedbackDataBytes({ name: 'sample.txt', contentType: 'text/plain', dataBase64: 'YQ==' }) // 将附件 DTO 中的 Base64 解码成正文 Uint8Array。
-const saved = await saveFeedbackFile(bytes, 'sample.txt', 'text/plain') // 交给宿主保存，读取 HaiResult<FeedbackSaveResult>。
+const saved = await saveFeedbackFile(bytes, 'sample.txt', 'text/plain') // 交给当前平台的保存工具。读取 HaiResult<FeedbackSaveResult>。
 const viewer = getFeedbackBundleViewerFiles()['viewer/index.html'] // 无需输入，取得离线包内置查看器入口的字节。
 ```
 
 ## 错误处理
 
-领域操作先判断 `result.success`，失败按本模块错误定义与安全提示处理，服务端保留错误码、关联编号和脱敏原因。同步工具、工厂、流迭代及生命周期按各自签名处理，不把 Promise 完成视为业务成功。具体失败与恢复边界见对应功能。
+调用返回 `HaiResult` 的操作后，先检查 `result.success`。失败时在服务端保留错误码、追踪编号和已去除敏感信息的原因。创建客户端、读取流和关闭模块的返回方式见各节示例。

@@ -6,7 +6,7 @@
 
 ## 数据库类型与地址
 
-位置：`config/_db.yml`，宿主用 `ReldbConfigSchema` 校验后传给 reldb。`type` 没有默认，必须明确填写 `sqlite`、`postgresql` 或 `mysql`。
+项目的数据库参数写在 `config/_db.yml`。服务启动时读取这个文件，再调用 `reldb.init()` 来检查设置和建立连接。`type` 没有默认，必须明确填写 `sqlite`、`postgresql` 或 `mysql`。
 
 关系数据库连接字段和运行默认值见 [RelDB 配置清单](reldb.md#配置清单)。应用容器需要能解析并访问数据库地址。容器内的 `localhost` 指向容器自身，应用凭据使用私有环境文件注入。
 
@@ -44,7 +44,7 @@ sqlite:
 
 按所有实例的连接池上限计算数据库总连接预算。PostgreSQL 的 `pool.min` 保留已建连接，MySQL 的 `pool.acquireTimeout` 同时计入排队与建连。修改字符集时同步核对表结构和排序规则。TLS 证书和数据源主机名应匹配；诊断日志只输出安全摘要并受全局日志等级过滤。
 
-确认方式：在隔离库做参数化写入、查询、事务中失败和回滚，再检查连接在超时/关闭后释放。事务回调正常返回会提交，返回失败 `HaiResult` 并不会自动回滚，业务必须按公开事务机制处理失败。MySQL DDL 隐式提交，迁移步骤必须可重入；数据库结构和数据回退要单独准备。
+先在测试库插入并查询一条数据，再让事务中的操作失败，检查是否回滚。事务回调即使返回失败的 `HaiResult`，只要正常返回也会提交。需要回滚时按 `reldb.tx` 的事务错误处理方式退出。MySQL 的建表等结构变更可能自动提交，迁移脚本要能在中途失败后安全重试。
 
 MySQL 使用单独的池配置；例如业务最多占用 8 个连接、连接等待预算 5 秒：
 
@@ -83,9 +83,9 @@ readOnly: false
 
 Redis 地址、模式和超时见 [Cache 配置清单](cache.md#配置清单)。Cluster 使用其支持的数据库及读路由。显式设置有界超时，业务写入仍要自己处理重试与幂等。
 
-初始化后做带 TTL 写读、到期读取、条件写与锁释放。`kv.set` 的 `success: true` 表示调用成功，是否真的条件写入还看 `data`；不能把未取得锁当作已获授权。
+初始化后用 `cache.kv.set()` 写入一条设有过期时间的测试数据，检查过期前能读回、过期后读不到。使用条件写入时，`success: true` 只表示调用没有报错，仍需查看 `data` 确认是否写入。
 
-Redis 单实例、Cluster 和 Sentinel 使用同一业务门面，配置选择实际部署拓扑。下面是 Sentinel 输入示例，`name` 必须匹配服务端登记的主节点名，节点列表用于发现主节点：
+无论连接单台 Redis、Redis Cluster 还是 Sentinel，业务都调用 `cache.kv` 等同一套方法。应用按实际 Redis 部署填写连接字段。下面是 Sentinel 输入示例，`name` 必须匹配服务端登记的主节点名，节点列表用于发现主节点：
 
 ```yaml schema=@h-ai/cache:CacheConfigSchema
 type: redis
@@ -174,15 +174,15 @@ prefix: private
 
 生成链接的应用 API 仍受认证、权限和请求策略约束。文件直连由 Nginx 与 S3 校验，**不会再次执行 Serv/Kit 的会话、IP 或时段守卫**；已经发出的链接也不会因退出登录或改变角色立即撤销。下载请求本身需要网络/时间限制时，在受管入口或存储网络策略中配置并实测，同时采用符合业务要求的短有效期。
 
-普通应用通过 Core 的环境覆盖规则加载此项；可在 YAML 写明 `publicEndpoint: ${HAI_STORAGE_PUBLICENDPOINT:https://app.example.com}`，或在私有环境文件整体配置 `HAI_STORAGE`。环境父对象覆盖 YAML；同一来源细项可继续覆盖父 JSON，更高来源父对象会清除低来源细项，见[配置来源](runtime.md#配置从哪里来)。Compose 默认自建会替换内部连接和托管凭据，保留桶、区域、`prefix`、`publicEndpoint`、`publicUrl` 和操作日志设置。外部 S3、R2 或既有连接按其自身地址访问，不生成指向本地 Storage 的路由。
+应用启动时由 Core 读取 YAML 和环境变量。可在 YAML 写明 `publicEndpoint: ${HAI_STORAGE_PUBLICENDPOINT:https://app.example.com}`，或在私有环境文件整体配置 `HAI_STORAGE`。同一文件中同时设置 `HAI_STORAGE` 和 `HAI_STORAGE_PUBLICENDPOINT` 时，先读整组存储设置，再用后者改公开地址。如果更高优先级的文件重新设置整个 `HAI_STORAGE`，低优先级文件中的地址也会被替换，见[配置来源](runtime.md#配置从哪里来)。Compose 默认自建会替换内部连接和托管凭据，保留桶、区域、`prefix`、`publicEndpoint`、`publicUrl` 和操作日志设置。外部 S3、R2 或既有连接按其自身地址访问，不生成指向本地 Storage 的路由。
 
 ![从授权请求到私有对象直接下载](../images/storage-private-download.svg)
 
 ### 应用开发者：先授权，再给用户下载链接
 
-默认自建模式在 `bucket`/`region` 为空时补为 `hai` / `us-east-1`；这是部署注入值，Storage Schema 本身仍要求填写这两项。`publicEndpoint` 没有自动猜测值，SSH Host 别名、HTTP 端口与用户实际访问的 HTTPS 地址可能不同，部署前应明确填写。
+由框架部署自建存储时，没填 `bucket` 和 `region` 就分别使用 `hai` 和 `us-east-1`。应用直接调用 `storage.init()` 连接 S3 时，仍需提供这两项。`publicEndpoint` 没有自动猜测值，SSH Host 别名、HTTP 端口与用户实际访问的 HTTPS 地址可能不同，部署前应明确填写。
 
-1. 初始化模块并检查结果。HTTP Storage feature 必须具备资源授权策略；签名 API 仍经过认证、权限及对象归属检查。
+1. 先调用 `storage.init()` 并检查成功。应用的签名 API 应先核对登录身份、下载权限和文件归属，再生成地址。
 2. 调用 `apiClient.storage.presignedUrls.createDownload({ key, expiresIn: 300 })`，确认 `result.success` 后使用 `result.data.url`。下载时浏览器直接请求这条 URL；下载字节不经过生成签名的 Serv 请求。
 3. 需要浏览器保存大文件时，可把 URL 用作正常下载链接，并由 `responseContentDisposition` 声明文件名；不要为了下载再让应用 API 读取整个对象。现有 `downloadWithPresignedUrl` 也直连存储，但它为了进度/Blob 保存会占用客户端内存，应按文件规模选择。
 4. 失败时重新经过授权获取新链接。返回 URL 已含配置的代理目录，调用方不能再加网站目录、改域名、改桶名或删查询；GET 的签名也不能拿来发送 HEAD 请求。客户端取消只结束本次传输，不撤销已经授予的 URL 或远端上传。
@@ -191,7 +191,7 @@ prefix: private
 
 ### 运维与安全人员：直连路由、增量与回滚
 
-前后端分离部署把桶路由加到已有 Web Nginx；SvelteKit SSR 和独立 API 增加 `gateway`，宿主机公开端口由它持有，应用只在 Compose 网络监听。Storage 的 9000 端口与控制台不直接发布。Nginx 保留签名 Host、原始 URI 和查询，关闭对象请求/响应缓冲及对象路由日志，支持 Range；仅允许 GET/HEAD、PUT 和 OPTIONS，实际对象权限仍由 S3 校验。外层负载均衡、CDN和日志平台也必须清除签名查询；跨源浏览器需要在实际 S3 服务配置精确 CORS，网关不会自动放开来源。
+前后端分离部署把桶路由加到已有 Web Nginx；SvelteKit SSR 和独立 API 增加 `gateway`，由该网关对外监听公开端口，应用只在 Compose 网络监听。Storage 的 9000 端口与控制台不向公网开放。Nginx 保留签名 Host、原始 URI 和查询，关闭对象请求/响应缓冲及对象路由日志，支持 Range；仅允许 GET/HEAD、PUT 和 OPTIONS，实际对象权限仍由 S3 校验。外层负载均衡、CDN和日志平台也必须清除签名查询；跨源浏览器需要在实际 S3 服务配置精确 CORS，网关不会自动放开来源。
 
 首次建立文件网关、改变公开端点、桶或其他自建 S3 访问配置时使用全量部署。交付包记录代理服务和不含密钥的配置摘要；与已装配置不一致的增量包会在更新服务前拒绝。正常应用/Storage 增量保留未选服务；容器 IP 变化后刷新保留代理的 DNS。失败回滚按原发布的拓扑、端口和健康路径恢复。容器回滚不撤销对象写入，数据仍按原卷和托管凭据保留；改变 `prefix`/`bucket` 前应准备数据迁移与业务核对。
 
@@ -209,7 +209,7 @@ prefix: private
 
 Datapipe 是函数，不通过 `_clean.yml` / `_chunk.yml` 初始化。调用时传选项；没有 `close()`。
 
-通用选项见 [Datapipe 配置清单](datapipe.md#配置清单)。AI 知识库有独立的缺省清洗和分块选项，见 [AI 知识库配置](ai.md#knowledge)。
+通用选项见 [Datapipe 配置清单](datapipe.md#配置清单)。导入 AI 知识库时，应用按知识库设置清洗和切块，可能与单独调用 `datapipe.chunk()` 得到不同结果，见 [AI 知识库配置](ai.md#knowledge)。
 
 先用一段短文本确认分块位置和重叠内容，再用真实非敏感文档评估检索效果。
 

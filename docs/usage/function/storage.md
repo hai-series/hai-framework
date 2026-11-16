@@ -1,6 +1,8 @@
 # @h-ai/storage 功能说明
 
-通过 Node.js 入口访问对象存储，或通过浏览器客户端使用已签名的 URL 执行受限的上传、下载操作。
+在 Node.js 服务端用 `storage` 读写本地文件或 S3 兼容对象存储。浏览器要直接上传或下载 S3 对象时，先向应用服务端取得为指定对象和操作签名的临时 URL。
+
+Node.js 进程中的文件操作从 `storage` 调用。浏览器用 `apiClient.storage` 向应用服务端申请签名地址，再选用 `@h-ai/storage/client` 的上传、下载工具直接访问存储服务。
 
 [模块 README](../../../packages/storage/README.md) · [配置清单](../configuration/storage.md) · [数据结构](../data/storage.md) · [存储接入](../development/data.md)
 
@@ -81,7 +83,9 @@ export async function uploadImage(key: string, file: File) {
 
 ## 功能说明
 
-初始化只在健康检查成功后发布连接；失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`storage.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作不再可用；清理失败仍保留资源，后续 `close()` 或 `init()` 先重试释放，成功前不会创建替代连接。调用方必须检查关闭结果。
+模块在健康检查通过后才允许业务读写。如果初始化失败，会尝试释放已经打开的资源。释放也失败时，返回的 `error.ext.cleanupPending` 为 `true`。
+
+关闭会等待正在进行的初始化，多次同时关闭只执行一次清理。关闭期间 `isInitialized` 为 `false`，配置与读写操作暂停。关闭失败时，下次调用 `close()` 或 `init()` 会先重试释放原连接。检查 `await storage.close()` 的结果，再停止本模块依赖的其他服务。
 
 ```ts
 const closed = await storage.close()
@@ -97,7 +101,7 @@ S3 普通请求客户端与禁用请求重试的批量删除客户端分别释�
 
 ### 功能输入输出
 
-以下片段依赖上面的最小接入示例。示例中的业务值由宿主校验和授权后传入；异步领域结果先判断 success，再读取 data。表中 void 表示操作已完成且没有返回数据，null 表示不存在；同步工厂/工具直接返回表中类型。
+下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
 #### storage.file
 
@@ -284,7 +288,7 @@ const prefix = StoragePrefixSchema.safeParse('reports/fe') // success 为 true�
 
 ## 错误处理
 
-返回 `HaiResult<T>` 的操作通过 `result.success` 区分成功与失败。业务成功后读取 `data`，诊断失败时记录 `error.code` 和关联编号。
+收到 `HaiResult<T>` 时先检查 `result.success`。成功时读取 `result.data`，失败时查看 `result.error`。记录故障时保留错误码和追踪编号，便于从日志找到对应请求。
 
 ```ts
 import { HaiStorageError, storage } from '@h-ai/storage'

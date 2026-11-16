@@ -2,7 +2,7 @@
 
 [配置手册](README.md) · [收到问题后的操作和排查](../operations/feedback.md)
 
-运行维护要区分业务结果和后台任务结果。反馈受理不等于材料齐全，通知入队不等于接收方收到，任务函数成功不等于执行记录已持久保存。下面按这些边界配置，失败时才知道应恢复哪一步。
+处理故障时先确定哪一步失败。反馈报告可能已保存，但截图还在上传。通知任务可能已入队，但接收方尚未收到。定时任务可能已经执行，也可能只是在保存执行日志时出错。
 
 ## Feedback通知、采集和保留
 
@@ -34,7 +34,7 @@ envAllowlist: [NODE_ENV]
 
 ### 预算与附件限制
 
-调整未压缩总预算后，同步核对附件、证据、路由与代理容量。单日报告数、存储字节和历史导出期限由服务端分别核算，字段含义见 [Feedback 配置清单](feedback.md#配置清单)。
+修改 Feedback 的总大小限制后，也检查加密路由和反向代理能否接受相应体量的请求。服务端分别限制一天的提交数、存储大小和历史导出的时间范围，字段含义见 [Feedback 配置清单](feedback.md#配置清单)。
 
 ```yaml schema=@h-ai/feedback:FeedbackConfigSchema
 appId: orders
@@ -54,7 +54,7 @@ exportRetentionHours: 12
 
 ### 页面闲置、退出和重试
 
-无未完成受理任务时，客户端不会因闲置自行创建或补传。已有任务的网络/5xx/408/429失败按1/2/4/8/16秒退避，连续6次失败暂停，其他4xx立即暂停。草稿保留，认证/连接恢复后用flush或再次准备显式重试；不要每秒主动flush绕过退避。这是客户端固定策略，不是`_feedback.yml.maxAttempts`服务端持久任务预算。
+页面闲置不会创建新的反馈任务。上传已有材料时，如断网或收到 5xx、408、429，客户端依次等待 1、2、4、8、16 秒再重试。连续 6 次失败或收到其他 4xx 时暂停，草稿仍保留。网络或登录恢复后，可调用客户端的 `flush()` 继续，也可重新打开反馈准备流程。这是客户端固定策略，不是`_feedback.yml.maxAttempts`服务端持久任务预算。
 
 退出时先`await client.close({ discard: true })`，再切身份；等待已开始请求但不继续后续旧草稿操作，不能承诺撤销已经发出的请求。pause只暂停截图/DOM回放，不能替代身份清理。现场闲置错误仍需时间、失败请求和追踪编号确认根因。
 
@@ -66,9 +66,9 @@ exportRetentionHours: 12
 
 API 回调省略 `requireHttps` 时，生产环境中的敏感消息（`sensitive: true`）会强制使用 HTTPS；普通消息和开发环境不自动强制。生产环境按 `NODE_ENV` 或 `HAI_CORE_ENV` 为 `production` 判断，显式 E2E 测试例外。填写 `false` 会覆盖这个自动判断。敏感消息始终不跟随重定向，与 `requireHttps` 的取值无关。
 
-API 的整个 `headers` 字典都作为私密配置处理，不靠 `Authorization` 等特定头名猜测秘密。使用环境私有文件或 Secret 注入；`reach.config` 隐藏全部 API 头值，只是安全诊断快照，不能用它重新初始化真实凭据。`timeout: 0` 会在计时器下一次执行时取消请求，不表示无限等待；普通通道应设置能完成实际请求的正数预算。
+API 的整个 `headers` 字典都作为私密配置处理，不靠 `Authorization` 等特定头名猜测秘密。把 API 请求头的密钥放进私有环境文件或部署平台的密钥管理中。`reach.config` 会隐藏这些请求头的值，只适合检查启用的渠道，重新连接仍应从私有配置读取原值。`timeout: 0` 会在计时器下一次执行时取消请求，不表示无限等待；普通通道应设置能完成实际请求的正数预算。
 
-阿里云隔离网关使用 `POST` 和已签名查询参数，`gateway.url` 填写完整路径。需要空 JSON 时填写 `body: {}`。网关需要逐次生成请求头或正文时，由服务端通过 `reach.init(config, { gatewayHooks: { sms: hook } })` 按 Provider 名称注入函数。网关默认使用 HTTPS，受信内网的明文地址需显式启用 `gateway.allowInsecureHttp`。明文查询串包含手机号和模板变量，网关及代理日志应对查询串脱敏。验收时确认网关把签名参数转发到阿里云 `/`，并回传 `Code: OK` 和 `BizId`；最终送达以运营商回执为准。
+阿里云隔离网关使用 `POST` 和已签名查询参数，`gateway.url` 填写完整路径。需要空 JSON 时填写 `body: {}`。网关需要逐次生成请求头或正文时，服务端在 `reach.init(config, { gatewayHooks: { sms: hook } })` 中传入生成数据的函数，`sms` 对应渠道的 `name`。网关默认使用 HTTPS，受信内网的明文地址需显式启用 `gateway.allowInsecureHttp`。明文查询串包含手机号和模板变量，网关及代理日志应对查询串脱敏。验收时确认网关把签名参数转发到阿里云 `/`，并回传 `Code: OK` 和 `BizId`；最终送达以运营商回执为准。
 
 免打扰的 `start` 和 `end` 使用运行进程的本地时区，不继承 IAM 或 Scheduler 的时区设置。部署时设置进程的 `TZ`，并让同一环境的节点保持一致。`22:00` 到 `08:00` 表示跨午夜，包含起点、不包含终点；起止时间相等表示**没有免打扰时段**。因此只打开 `enabled: true`，仍保留 `00:00` 到 `00:00`，不会拦截通知。必须送达的消息选择 `delay` 并先初始化关系数据库；选择 `discard` 会丢弃消息。
 
@@ -176,7 +176,7 @@ backup:
 
 内存紧张时可调小 `batchSize`。单条记录超过 `maxRecordBytes` 时备份报告错误，原始记录保留。
 
-应用需要接入 `audit.schedulerPlan`；生成工程有对应装配入口时复用它。仅保存 Cron 表达式不会凭空启动后台任务。首次开启后手动执行一次备份，确认对象存在、可由授权人员读取且不能匿名下载。
+应用需要将 `audit.schedulerPlan()` 返回的备份任务注册到 Scheduler。CLI 生成项目如已注册任务，修改 Cron 后重启即可。首次开启后手动执行一次备份，确认对象存在、可由授权人员读取且不能匿名下载。
 
 ### 失败操作过多时通知管理员
 
@@ -224,7 +224,7 @@ userNameColumn: display_name
 
 位置：`config/_scheduler.yml`，必须使用共享RelDB。
 
-租约、节点和清理配置见 [Scheduler 配置清单](scheduler.md#配置清单)。缩短扫描间隔会增加数据库访问。任务 Cron 缺省按 UTC 解释，可提供 IANA 时区，跨日和夏令时应按实际日历验证。
+租约、节点和清理配置见 [Scheduler 配置清单](scheduler.md#配置清单)。缩短扫描间隔会增加数据库访问。任务没有指定时区时，调度器按 UTC 解释 Cron。可指定 `Asia/Shanghai` 之类的时区。涉及跨日或夏令时时，先核对日期和执行时间。
 
 ```yaml schema=@h-ai/scheduler:SchedulerConfigSchema
 enableDb: true
@@ -235,6 +235,6 @@ maxLogs: 10000
 retentionDays: 30
 ```
 
-先注册无外部副作用的任务，查看执行与日志，再模拟落库失败用`repairLog`补写。unknown先停止旧runner、核对实际副作用，再按`expectedUpdatedAt`调用`resolveUnknown`；不能只因租约释放重跑。生产多节点行锁、时钟偏差和故障恢复须目标服务验收。
+先注册一个不会发消息或修改业务数据的测试任务，确认能查看执行结果和日志。日志保存失败时，用 `scheduler.execution.repairLog()` 补写。若执行结果是 `unknown`，应先确认旧执行进程已停止，再到外部系统核对任务是否已产生效果，最后带当前的 `expectedUpdatedAt` 调用 `scheduler.execution.resolveUnknown()`。生产多节点行锁、时钟偏差和故障恢复须目标服务验收。
 
 使用 PostgreSQL 时，同一分钟重启或多节点同时领取可能遇到已有执行记录或被占用的任务槽，调度器按正常竞争处理。通过 `scheduler.execution.get(occurrenceId)` 核对实际执行状态，保留执行账本和唯一约束以防止任务重复执行。

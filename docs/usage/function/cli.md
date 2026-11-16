@@ -1,6 +1,8 @@
 # @h-ai/cli 功能说明
 
-使用 `hai` 终端命令生成、构建、部署和诊断项目。命令的参数、工作目录和产物路径决定执行范围。
+在终端运行 `hai` 命令创建、构建、部署和检查应用。命令默认在当前目录查找项目，可用 `--cwd` 指定其他目录。构建生成的目录可交给部署命令使用。
+
+这里的示例都是终端命令。看见 `hai xxx` 时，在应用根目录打开终端执行。
 
 [模块 README](../../../packages/cli/README.md) · [配置清单](../configuration/cli.md) · [数据结构](../data/cli.md) · [创建与开发项目](../getting-started/create.md)
 
@@ -8,7 +10,7 @@
 
 ### 安装 CLI
 
-使用符合 `engines` 的 Node.js（`^22.23.4 || ^24.22.1 || ^26.12.1`）与 pnpm 12.11.2。PowerShell 使用 `pnpm.cmd`。
+安装前核对 Node.js 版本，支持 22.23.4、24.22.1 或 26.12.1 起的对应主版本。使用 pnpm 12.11.2。在 PowerShell 中，可运行 `pnpm.cmd`。
 
 ```sh
 pnpm view @h-ai/cli@latest version # 查询注册表，输出最新已发布版本。
@@ -63,7 +65,7 @@ hai generate model order # 输入模型名，生成数据库模型骨架。
 hai generate migration add-orders # 输入迁移名，生成待填写的迁移文件。
 ```
 
-名称不含路径，默认不覆盖业务文件。`--workspace` 选包名或相对目录；SvelteKit的 `--output` 必须位于src/routes，Serv生成器不接受该参数。page仅用于文件路由；纯Vite页面/API组合明确拒绝。Serv只更新带 `@hai-generator` 标记的聚合入口。整批预检，写入失败回滚本次修改；`--force` 仅替换生成文件。迁移输出up/down函数，不执行数据变更。
+生成名称只填写名称本身。通过 `--workspace` 指定包名或相对目录。SvelteKit 用 `--output` 时，输出必须在 `src/routes` 下，Serv 生成器没有这个选项。带文件路由的模板才能用 `hai generate page` 生成页面。生成 Serv 路由时，CLI 只更新带 `@hai-generator` 的集中入口。CLI 写入前先检查所有目标，失败时撤回本次修改，`--force` 也只会替换生成文件。迁移命令只生成 `up` 和 `down` 函数，实际迁移在之后运行。
 
 ### 构建、静态站与原生包
 
@@ -73,9 +75,9 @@ hai build --target app --platform android --runtime auto --debug # 选择 Androi
 hai build --target desktop --platform windows --arch x64 # 按 Windows x64 目标生成桌面制品。
 ```
 
-target默认compile，其他目标为image/app/desktop。镜像角色为serv/web；原生app/desktop不作为Compose服务。镜像默认最多并行2项，runtime的auto优先可用Podman、再选Docker，显式选择不降级。Android省略runtime时使用本机工具链；iOS需macOS/Xcode与签名。
+默认目标 `compile` 用于编译，也可用 `--target image`、`app` 或 `desktop` 打包。容器镜像只包括 `serv` 和 `web` 两类角色，手机安装包和桌面应用单独发布。镜像最多同时构建 2 个。构建镜像时，`--runtime auto` 优先选择可用的 Podman，再选择 Docker。显式指定的运行时不可用时直接报错。Android 省略运行时时使用本机工具链，iOS 需要 macOS、Xcode 和签名。
 
-输出在 `.hai/build/` 的独立批次目录，成功归档后更新相对 `latest`。`--json` 的stdout仅包含本次镜像构建JSON，`artifactDir` 可供后续部署使用；进度和失败写stderr。Git来源为unknown或dirty未知时不能当干净制品。[命名、签名和自动化](../getting-started/build.md)
+每次成功构建都会在 `.hai/build/` 下保留独立目录，然后更新 `latest` 指向。使用 `--json` 时，命令的标准输出只包含本次镜像构建的 JSON，可把其中的 `artifactDir` 传给部署命令。进度和错误写到标准错误。若 Git 来源为 `unknown` 或无法判断是否有未提交修改，应先核实来源再部署。[命名、签名和自动化](../getting-started/build.md)
 
 website静态构建在构建进程设置 `HAI_BUILD_STATIC=1` 与实际 `PUBLIC_BASE_PATH`，再执行 `pnpm build`，只发布build目录并保留.nojekyll。静态构建拒绝动态API/actions、服务端业务初始化、私密资产及链接；联系表单未接服务时只提示并保留输入。网站目录变化需要重建；API地址独立配置。[静态与子目录部署](../configuration/delivery.md)
 
@@ -88,7 +90,7 @@ hai deploy --env prod --build --bundle-only # 先构建，再输出可手工交�
 hai deploy --env prod --build --services "serv,web" # 对满足基线的生产环境构建并发布选定服务。
 ```
 
-plan只校验并输出计划；inspect-remote另通过SSH读取基线事实，not-inspected不表示通过。bundle-only不连接目标，输出归档、目标描述、上传/本机部署脚本和说明；归档中的APPLY.txt解释手工入口。首次安装和拓扑变化使用完整包，部分服务更新要求匹配服务器成功基线。
+用 `--plan` 校验配置和查看部署计划。加上 `--inspect-remote` 后，CLI 才通过 SSH 读取远端上次成功发布的信息。看到 `not-inspected` 表示还没有检查远端。使用 `--bundle-only` 时无需连接目标服务器，输出归档、目标描述、执行脚本和 `APPLY.txt`。首次发布或调整服务结构时用完整包。只更新部分服务前，应核对服务器上的上一次成功发布与本次构建的预期一致。
 
 排查打包或部署故障时，在所选环境设置 `HAI_CORE_LOGGING_LEVEL=debug`，查看部署模块的诊断日志。`--plan` 的标准输出保留为 JSON。
 

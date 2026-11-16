@@ -1,6 +1,8 @@
 # @h-ai/capacitor 功能说明
 
-在 Capacitor Android/iOS 容器中访问设备、推送、相机和安全存储。插件能力取决于原生运行时、同步结果和用户授权。
+通过 `capacitor` 在 Capacitor 的 Android/iOS 应用中获取设备信息、注册推送、拍照或读写应用偏好。先安装需要的原生插件并将其同步到 Android/iOS 项目，运行时按需向用户请求权限。认证凭据使用独立的安全存储适配器。
+
+设备相关调用从 `capacitor` 进入。为 API 客户端创建原生安全凭据存储时，使用下面的独立工厂 `createCapacitorTokenStorage()`。
 
 [模块 README](../../../packages/capacitor/README.md) · [配置清单](../configuration/capacitor.md) · [数据结构](../data/capacitor.md) · [构建和原生交付](../getting-started/build.md)
 
@@ -38,11 +40,11 @@ if (failures.length)
 
 ### 用途、输入与输出
 
-capacitor 的子功能在初始化成功后使用。HaiResult<T> 先判断 success，再读成功 data；void 没有业务数据，Promise 必须 await。tokens 是 createCapacitorTokenStorage() 返回的独立适配器，其读写/清理在原生存储失败时拒绝 Promise。独立 Preferences 辅助函数不依赖模块状态，把同一插件操作包装为 HaiResult。
+设备和推送操作要在 `capacitor.init()` 成功后调用。表中的 `tokens` 是 `createCapacitorTokenStorage()` 返回的对象。插件读写失败时，这个对象的方法会拒绝 Promise。读写普通偏好用 `capacitor.preferences`。
 
 | 入口                             | 使用场景               | 输入（`—` 表示无参数）                                                                                 | 返回值                                                                                                | 调用示例                                                                        |
 | -------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `capacitor.init`                 | 检测并准备原生宿主     | `—`                                                                                                    | `Promise<HaiResult<void>>`                                                                            | `await capacitor.init()`                                                        |
+| `capacitor.init`                 | 检测平台并准备原生插件 | `—`                                                                                                    | `Promise<HaiResult<void>>`                                                                            | `await capacitor.init()`                                                        |
 | `capacitor.close`                | 释放推送监听等资源     | `—`                                                                                                    | `Promise<HaiResult<void>>`                                                                            | `await capacitor.close()`                                                       |
 | `capacitor.getPlatform`          | 选择平台行为           | `—`                                                                                                    | `string: ios / android / web`                                                                         | `capacitor.getPlatform()`                                                       |
 | `capacitor.isNative`             | 判断是否原生环境       | `—`                                                                                                    | `boolean`                                                                                             | `capacitor.isNative()`                                                          |
@@ -95,7 +97,9 @@ await apiClient.init({
 
 `createCapacitorTokenStorage()` 仅在 Android/iOS 原生环境中持久化 token，并要求已安装 `@aparajita/capacitor-secure-storage`。适配器的方法直接返回 Promise：Web 调用、插件不可用、读写或删除失败都会拒绝 Promise，不能当作空凭据或保存/退出成功。Web 入口应选择 api-client 的 Cookie/内存存储。
 
-`clear()` 一开始就屏蔽本实例两类旧凭据，并等待所有原生删除结束后才报告结果；失败时保持屏蔽，相应 key 成功写入后才重新开放。通过 `apiClient.auth` 更新凭据以串行提交写入，并处理 `setTokens()` / `clear()` 的拒绝；界面仍须释放 loading、清理退出身份并提示失败。屏蔽只作用于当前适配器实例，不代表持久数据已删除，跨重启撤销依赖服务端退出/撤销会话。插件恢复后可以用同一实例重试，无需重建模块。
+调用 `tokens.clear()` 时，当前实例立即停止返回旧的访问令牌和刷新令牌，再等待原生存储删除它们。删除失败时，当前实例仍不会读出旧凭据。单个键重新写入成功后才能再次读取。
+
+已连接客户端时，使用 `apiClient.auth.setTokens()` 和 `apiClient.auth.clear()` 保证按顺序写入。页面需在成功或失败后结束加载状态，退出时清除页面上的登录信息。设备删除失败时提示用户重试，并通过服务端退出接口撤销会话，避免重启后旧凭据仍能使用。插件恢复后可以用原实例重试。
 
 任一凭据写入失败都会屏蔽整对凭据，因此 access 已保存而 refresh 保存失败时也不会留下可读的半完成会话。登录/注册保存失败后应尝试 `auth.clear()` 清理部分持久数据；清理再次失败须明确提示，不得声称设备凭据已删除。
 
@@ -117,7 +121,9 @@ if (reg.success) {
 }
 ```
 
-推送仅在实际原生平台调用插件。`push.register({ signal? })` 与 `push.listen(callbacks, { signal? })` 的设置阶段限时 30 秒（包含权限和监听器挂载）；失败、超时、取消及 `capacitor.close()` 都会停止回调并移除本次拥有的句柄，迟到的句柄在完成后立即移除，不调用影响其他消费者的 removeAllListeners。listen 成功后信号仍有效，也可调用返回的 cleanup。cleanup 与 close 均返回 `HaiResult<void>`；原生 remove 失败返回 `PUSH_CLEANUP_FAILED`（`capacitor:032`），失败句柄保留供再次调用重试，成功移除的句柄不重复操作。模块关闭后立即不可用；重新初始化前先重试遗留清理。自动化验证控制插件时序，不能代替 Android/iOS 真机 FCM/APNs 权限、注册与反复挂载验收。
+`capacitor.push.register({ signal })` 与 `capacitor.push.listen(callbacks, { signal })` 只在 Android/iOS 原生应用调用插件。申请权限和注册监听的过程最多等 30 秒。失败、超时、取消或调用 `capacitor.close()` 时，本次注册的监听会停止。若原生插件稍后才返回监听句柄，模块也会尝试移除它。
+
+`capacitor.push.listen()` 成功后，可以继续用传入的 `signal` 取消，也可以调用结果中返回的清理函数。清理函数和 `capacitor.close()` 都返回 `HaiResult<void>`。插件移除失败时返回 `PUSH_CLEANUP_FAILED`，调用方可重试清理。
 
 ### 状态栏
 

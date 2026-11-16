@@ -1,6 +1,6 @@
 # @h-ai/cache 功能说明
 
-通过同一接口使用内存缓存或 Redis，读写缓存结构并管理分布式锁。初始化完成后再取用操作对象。
+通过 `cache` 使用进程内缓存或 Redis，保存键值、列表和集合。多个进程可借助共享 Redis 获取同一把有时效的锁。先检查 `cache.init()` 成功，再读写数据或获取锁。
 
 [模块 README](../../../packages/cache/README.md) · [配置清单](../configuration/cache.md) · [数据结构](../data/cache.md) · [数据服务接入](../development/data.md)
 
@@ -30,7 +30,7 @@ finally {
 }
 ```
 
-`cache.config` 返回的是**脱敏后的配置快照**：如后续接入 Redis `password` / `url` 等凭证字段，会自动做安全处理，不应用作回写原始密钥。
+`cache.config` 返回当前配置的一份副本。Redis 的 `password` 或连接 URL 里的认证信息会隐藏。排查配置时可读取这个属性，启动时请从原配置位置读取真实凭据。
 
 ## 功能说明
 
@@ -38,7 +38,9 @@ finally {
 
 Memory 的 KV、Hash、List、Set、ZSet 共用 key 命名空间。`exists/expire/expireAt/ttl/persist/keys/scan/del/type` 覆盖全部结构，期限到达后结构操作也立即视为不存在；del 按实际删除的逻辑 key 计数，错误类型的结构操作返回失败。
 
-初始化只在健康检查成功后发布连接；失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`cache.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作不再可用；清理失败仍保留资源，后续 `close()` 或 `init()` 先重试释放，成功前不会创建替代连接。调用方必须检查关闭结果。
+`cache.init()` 在确认后端可用后才让应用开始读写。连接失败时先尝试释放资源。如果释放也失败，返回错误的 `error.ext.cleanupPending` 为 `true`。
+
+`cache.close()` 等待正在进行的初始化。多次同时关闭时共用同一次清理。开始清理后，`cache.isInitialized` 为 `false`，读写暂停。检查 `await cache.close()` 的结果。如果关闭失败，下次调用 `cache.close()` 或 `cache.init()` 会先重试清理原连接，清理完成后才能重新连接。
 
 ```ts
 const closed = await cache.close()
@@ -54,13 +56,13 @@ Redis 的 QUIT 失败后会强制 disconnect；只有实际释放成功才报告
 
 ### 功能输入输出
 
-以下片段依赖上面的最小接入示例。示例中的业务值由宿主校验和授权后传入；异步领域结果先判断 success，再读取 data。表中 void 表示操作已完成且没有返回数据，null 表示不存在；同步工厂/工具直接返回表中类型。
+下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
-key/keys 是业务键，field/fields 是哈希字段，value/members 为 JSON 值；start/stop/index 为下标，min/max 为分数边界；seconds/ttl/timeout 为秒，timestamp 为 Unix 秒；owner 只能使用 acquire 返回值。
+示例中的 `key` 是业务数据的键，`field` 是哈希中的字段名。列表下标用 `start`、`stop` 或 `index`，有序集合的分数范围用 `min` 和 `max`。表中 `seconds`、`ttl`、`timeout` 按秒传入，`timestamp` 是 Unix 秒数。释放或续期锁时，`owner` 使用获取锁时实际返回的值。
 
 #### cache.kv · 读写 JSON 值
 
-缓存 JSON 快照。get/mget 返回值或 null（批量保序）；set 输入期限/NX/XX，返回实际写入 boolean；mset 接收 [key,value][] 返回 void。
+用 `cache.kv.set()` 保存可序列化为 JSON 的值。留下过期时间后，过期的键读出为 `null`。批量读取按传入的键顺序返回。设置 `nx` 仅在键不存在时写入，设置 `xx` 仅在键已存在时写入，返回布尔值表示是否写入。
 
 | 入口            | 输入参数            | 成功结果        | 调用示例                                                   |
 | --------------- | ------------------- | --------------- | ---------------------------------------------------------- |
@@ -71,7 +73,7 @@ key/keys 是业务键，field/fields 是哈希字段，value/members 为 JSON �
 
 #### cache.kv · 比较并交换
 
-跨节点版本提交。key、expected、value 加期限选项原子比较后返回 applied；undefined 代表不存在/删除，比较失败不改原值或 TTL。
+用 `cache.kv.compareAndSwap()` 在同一次操作中比较现有值并写入新值。传 `expected: undefined` 表示只有键不存在时才应用新值，传 `value: undefined` 表示删除键。比较失败时返回 `false`，原值和有效期都保留。
 
 | 入口                      | 输入参数                      | 成功结果  | 调用示例                                         |
 | ------------------------- | ----------------------------- | --------- | ------------------------------------------------ |
@@ -111,7 +113,7 @@ key/keys 是业务键，field/fields 是哈希字段，value/members 为 JSON �
 
 #### cache.kv · 扫描键
 
-运维遍历。keys 接收 glob 返回键数组；scan 接收不透明游标和 match/count，返回 [新游标,键数组]，不保证快照或无重复。
+排查缓存时可用 `cache.kv.keys()` 按匹配模式列出键，或用 `cache.kv.scan()` 分批扫描。每次扫描返回一组键和下次调用的游标。扫描过程中可能有其他请求修改键，同一个键也可能出现多次。
 
 | 入口            | 输入参数        | 成功结果             | 调用示例                                                 |
 | --------------- | --------------- | -------------------- | -------------------------------------------------------- |
@@ -272,7 +274,7 @@ if (acquired.success && acquired.data)
 - **Redis 后端**：使用 `SET NX EX` 原子获锁，Lua 脚本实现 owner 验证的安全释放/续期
 - `acquire` 返回本次获锁的唯一凭据，锁占用时为 `null`；释放/续租必须传回该凭据，禁止使用节点 ID 或无凭据强制操作。
 
-owner 只保护锁的续期与释放，不是资源 fencing token。进程暂停或租约到期后旧任务仍能继续；最终写入必须在资源存储中使用 CAS、代际条件或事务约束。续租成功或最后返回失败都不能代替提交条件。
+续期和释放锁时，`owner` 用于证明调用者持有这把锁。持锁进程暂停或锁已过期时，旧任务仍可能继续执行。要防止旧任务覆盖新结果，在最终写入数据时再检查记录版本，或使用数据库事务加上对应写入条件。
 
 ### 生产共享状态
 
@@ -280,9 +282,9 @@ owner 只保护锁的续期与释放，不是资源 fencing token。进程暂停
 
 ## 错误处理
 
-返回 `HaiResult<T>` 的操作通过 `result.success` 区分成功与失败。业务成功后读取 `data`，诊断失败时记录 `error.code` 和关联编号。
+收到 `HaiResult<T>` 时先检查 `result.success`。成功时读取 `result.data`，失败时查看 `result.error`。记录故障时保留错误码和追踪编号，便于从日志找到对应请求。
 
-所有操作返回 `HaiResult<T>`，常用错误码如下：
+缓存读写和锁操作返回 `HaiResult<T>`，配置和就绪状态等属性可直接读取。常用错误码如下。
 
 | 错误码                                 | code            | 说明             |
 | -------------------------------------- | --------------- | ---------------- |

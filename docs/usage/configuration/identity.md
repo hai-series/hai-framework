@@ -4,7 +4,7 @@
 
 认证配置同时影响服务端判断和用户看到的步骤。先初始化 RelDB 和 Cache，再初始化 IAM。浏览器只接收 `await iam.getPublicConfig()` 的成功结果，不能下发完整服务端配置；同步 `iam.publicConfig` 是文件快照，不能代替数据库合并后的实际策略。
 
-下文 YAML 均写入 `config/_iam.yml`，是可以合并的功能示例。字段、默认值与生效条件见 [IAM 配置清单](iam.md#配置清单)，公开投影见 [API Contract 配置](api-contract.md#配置清单)。更改后重启或按宿主生命周期重新初始化；已经存在的会话、账号标记和数据库策略还需按业务核对。
+把需要的示例合并到 `config/_iam.yml`。例如，只调整登录方式时只修改 `login`。服务重启后会读取新设置，旧会话和旧账号是否受影响要按具体策略确认。[IAM 字段和默认值](iam.md#配置清单) · [登录页能收到的配置](api-contract.md#配置清单)
 
 ## 登录方式、注册与协议
 
@@ -22,7 +22,7 @@ agreements:
 
 用未登录账号打开登录页，确认只有配置的登录方式和协议入口；直接调用被关闭的注册/登录方式也应被服务端拒绝。本例不代替 OTP/LDAP 实际连通验收。
 
-只使用密码与权限管理时，不需要初始化 Reach。需要 OTP 或密码重置时，宿主可注入自己的发送回调，也可显式安装、初始化并注入 Reach；回调与模板的完整装配见[IAM通知接入](../../../packages/iam/README.md#使用可选-reach-自动发送)。Console 日志不代表用户已收到验证码。
+只使用密码与权限管理时，不需要初始化 Reach。需要验证码或密码重置时，应用在调用 `iam.init()` 时提供发送函数。也可以先用 `reach.init()` 连接邮件或短信渠道，再由发送函数调用 Reach。发送函数和模板的用法见[IAM通知接入](../../../packages/iam/README.md#使用可选-reach-自动发送)。Console 日志不代表用户已收到验证码。
 
 ### 使用组织目录登录
 
@@ -139,11 +139,11 @@ captcha: { enabled: true, ttlSeconds: 120, cost: 5000, maxCounter: 100 }
 otp: { email: true, sms: false, length: 6, expiresIn: 300, maxAttempts: 3, resendInterval: 60 }
 ```
 
-在隔离账号上测试错误尝试、锁定、等待后恢复、挑战过期/错误用途/重复消费；避免对正常用户账号做阈值试验。
+在隔离账号上测试错误尝试、锁定、等待后恢复、挑战过期、用途不匹配和重复提交同一证明；避免对正常用户账号做阈值试验。
 
 公开登录和初始改密统一显示“用户名或密码不正确”。不存在、无本地口令、休眠、注销、到期和锁定账号都采用同一反馈；受限期间即使输入正确密码也不能登录或换密，且不会继续累计失败次数。这能避免通过提示或锁定期间的密码尝试判断账号状态和密码是否命中。用户确认凭据无误后，应联系管理员；管理员在已认证的账号管理中核对生命周期、有效期和锁定状态，再按实际原因处理。密码计算、数据库等依赖故障保留为系统错误供开发人员追踪，不误计为用户输错密码。
 
-`loginAccess` 可省略，默认 `enabled`=false、`allowIps`/`denyIps`/`windows`为空、`timezone`=UTC。启用后按可信地址和时间窗限制新登录；days 使用1–7，时段是 HH:mm，时区必须明确。先在 Serv/Kit 装配可信客户端 IP，再应用下面的示例，文档网段必须替换：
+`loginAccess` 可省略，默认 `enabled`=false、`allowIps`/`denyIps`/`windows`为空、`timezone`=UTC。启用后按可信地址和时间窗限制新登录；days 使用1–7，时段是 HH:mm，时区必须明确。应用应先配置 Serv 或 Kit 识别受信代理，确保 IAM 得到真实客户端 IP，再应用下面的例子，文档网段必须替换：
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
 loginAccess:
@@ -186,7 +186,7 @@ loginAccess:
 
 ## 权限、二次认证与 API Key
 
-公开注册使用满足运行需要的最小权限角色。敏感操作由 API 守卫及客户端提交同名操作标识，再认证证明只消费一次。API Key `scopes` 从使用者已有的角色授权继续收敛。
+公开注册使用满足运行需要的最小权限角色。为敏感接口和对应按钮使用同一个操作 ID。服务端验证这次操作的再认证证明，并只接受一次。API Key 的 `scopes` 只能进一步缩小账号已有权限。
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
 rbac: { enabled: true, superAdminRole: super_admin, defaultRole: user }
@@ -199,7 +199,7 @@ apikey: { maxKeysPerUser: 10, defaultExpirationDays: 30, prefix: 'orders_' }
 
 `apikey.prefix` 只是新生成 Key 的开头。例如 `orders_` 会生成形如 `orders_<随机内容>` 的 Key，便于区分应用；它不增加权限，也不应包含密码。修改前缀只影响之后创建的 Key，已有 Key 不会被重写。
 
-UI 使用 `createSensitiveActions` / `ReauthenticationDialog`；服务端仍校验用户、会话、操作、资源范围并单次消费证明。取消验证不发送敏感业务请求。通过普通用户/管理员/跨资源 ID 的请求验证边界，不能只看按钮是否隐藏。
+UI 使用 `createSensitiveActions` / `ReauthenticationDialog`；服务端同时校验证明是否属于当前用户、会话、操作和资源，并将证明标记为已使用。取消验证不发送敏感业务请求。通过普通用户/管理员/跨资源 ID 的请求验证边界，不能只看按钮是否隐藏。
 
 ## 账号生命周期与管理
 
@@ -215,7 +215,7 @@ UI 使用 `createSensitiveActions` / `ReauthenticationDialog`；服务端仍校�
 | `dormant`，休眠 | 拒绝新登录及旧 `access` / `refresh` 凭据 | 核实身份和使用需求后激活，用户重新登录 |
 | `closed`，注销 | 拒绝鉴别与既有凭据，保留账号记录 | 按业务注销及个人数据保留流程处理；物理删除另用 `deleteUser` |
 
-账号默认类型为 `permanent`（长期），状态为 `active`。`temporary`（临时）账号必须提供将来的 `accountExpiresAt`；到期后不能继续使用原会话。更改状态、类型或有效期会推进凭据代际并撤销旧会话，重新激活不会恢复旧凭据。只保存没有变化的状态和资料不会无故登出用户。
+账号默认类型为 `permanent`（长期），状态为 `active`。`temporary`（临时）账号必须提供将来的 `accountExpiresAt`；到期后不能继续使用原会话。改变账号状态、类型或有效期会撤销已有会话。重新激活后，用户也需要重新登录。只保存没有变化的状态和资料不会无故登出用户。
 
 在 Fullstack 的“用户管理”中编辑账号，“账号状态”只提供激活、休眠、注销三个选项。保存后核对列表中的状态；选择休眠或注销后，目标用户需要先由管理员恢复为激活，再重新登录。前端隐藏菜单不能代替这些服务端检查。
 

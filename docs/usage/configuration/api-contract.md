@@ -4,7 +4,7 @@
 
 ## 配置入口
 
-应用通过 `apiContract.create()` 组合需要发布的领域契约，并把同一个组合用于服务端实现和类型化客户端。协议 Schema 校验请求、业务响应和安全公开配置。应用的认证策略仍由 [IAM 配置](iam.md) 提供。
+应用用 `apiContract.create()` 选出要提供的接口。服务端照这份接口定义写处理函数，客户端用同一份定义检查调用参数，并知道结果里有哪些字段。接口定义也规定登录页能收到哪些设置，例如验证码是否开启。密码规则、注册方式和会话时间在服务端的 [IAM 配置](iam.md) 中设置。
 
 ## 配置示例
 
@@ -33,4 +33,4 @@ const contract = apiContract.create({ iam: apiContract.iam })
 
 ## 生效与核对
 
-构造标准认证界面时，将宿主返回的公开配置交给相应前端组件。对照协议 Schema 验证输出并检查实际路由、校验响应和错误映射。[IAM 服务端配置](iam.md) · [API 客户端配置](api-client.md)
+标准登录页可调用 `apiClient.iam.auth.publicConfig()`，把成功返回的 `data` 交给 `AuthPanel` 的 `config` 属性。例如关闭 IAM 注册后，登录页应随响应隐藏注册入口，服务端也应拒绝该注册请求。[IAM 服务端配置](iam.md) · [API 客户端配置](api-client.md)

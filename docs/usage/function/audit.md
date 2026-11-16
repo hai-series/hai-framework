@@ -1,6 +1,6 @@
 # @h-ai/audit 功能说明
 
-在服务端记录审计事件、查询和统计审计历史，以及安排留存、归档和告警。先初始化所借用的数据库，再初始化审计。
+通过 `audit` 在服务端记录谁做了什么、操作是否成功，以及能用于排查的请求编号。可以查询和统计记录、定期清理旧记录、归档到私有存储或按异常数量告警。先连接保存审计记录的关系数据库。
 
 [模块 README](../../../packages/audit/README.md) · [配置清单](../configuration/audit.md) · [数据结构](../data/audit.md) · [服务集成](../development/integrations.md)
 
@@ -63,7 +63,7 @@ SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 
 
 ### 功能输入输出
 
-以下片段依赖上面的最小接入示例。示例中的业务值由宿主校验和授权后传入；异步领域结果先判断 success，再读取 data。表中 void 表示操作已完成且没有返回数据，null 表示不存在；同步工厂/工具直接返回表中类型。
+下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
 #### audit · 记录事件与请求上下文
 
@@ -110,7 +110,7 @@ SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 
 
 #### audit · 检查异常告警
 
-定时检查异常，输入可选 signal，返回规则命中及通知结果；交由 scheduler 编排而非自行假设后台已启动。
+调用 `audit.checkAlerts({ signal })` 会检查本次达到阈值的规则，返回尝试发送的通知结果。需要自动定时检查时，把计划交给 Scheduler 执行。
 
 | 入口                | 输入参数 | 成功结果           | 调用示例                    |
 | ------------------- | -------- | ------------------ | --------------------------- |
@@ -138,7 +138,7 @@ SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 
 - `audit.helper.login/logout/register/...` - 便捷记录器
 - `audit.close()` - 关闭模块
 
-常见事件通过 `audit.helper` 记录，对应的 `AuditHelper` 类型保持公开；便捷记录器的内部装配工厂不属于包 API。
+使用 `audit.helper` 记录登录、删除等常见事件。给这个对象加类型时可以导入 `AuditHelper`。
 
 #### 输入约束
 
@@ -157,7 +157,7 @@ SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 
 
 `audit.log(input, tx)` 与 `audit.capture(input, { tx })` 可使用调用者现有 RelDB 事务；事件与变更一并提交或回滚，不独立提交，也不留下回滚成功的假记录。事务回滚会移除其中的事件，调用入口应在回滚完成后记录失败/拒绝。自动采集写入失败会输出关联诊断，已生效的业务不会被改写成可盲目重试的失败；需要强制审计的业务应在同一事务检查显式 log 的 HaiResult 后再提交。
 
-新记录包含 `category`（system/business）、`outcome`（success/failure/denied）、`severity`（info/warning/error/critical）、请求/链路/范围标识和 `actorSnapshot`。身份快照在事件发生时复制，改名、改角色或删除账号不会改写它。只传 userId 时按配置映射尝试捕获用户名；映射不可读时记录明确缺少名称的身份并输出诊断。可信 HTTP 宿主应通过 `audit.withContext({ actor, requestId, ipAddress, userAgent }, operation)` 提供完整上下文，不能用未验证的请求体充当操作者。该工具保留 operation 的同步/异步结果及异常，业务写入仍返回 HaiResult。
+新记录包含 `category`（system/business）、`outcome`（success/failure/denied）、`severity`（info/warning/error/critical）、请求/链路/范围标识和 `actorSnapshot`。身份快照在事件发生时复制，改名、改角色或删除账号不会改写它。只传 userId 时按配置映射尝试捕获用户名；映射不可读时记录明确缺少名称的身份并输出诊断。HTTP 处理函数应从已认证会话获取操作者，并通过 `audit.withContext({ actor, requestId, ipAddress, userAgent }, operation)` 提供完整上下文，不能用未验证的请求体充当操作者。该工具保留 operation 的同步/异步结果及异常，业务写入仍返回 HaiResult。
 
 `audit.list({ category, outcome, severity, scopeId, requestId, traceId, sortBy, sortDirection })` 支持分类筛选和受控排序，`getStats(7, { category: 'system' })` 统计指定类别的操作。`privacy.enabled` 默认开启，隐藏邮箱、电话等业务字段；`privacy.fields` 可补充项目字段名。凭据始终脱敏，关闭业务隐私不会泄漏 password/token。自由文本包含隐私时应配置整个对应字段隐藏。
 
@@ -165,7 +165,7 @@ SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 
 
 `audit.init()` 准备当前表结构和留存策略，结构不符时返回初始化失败。列表中的用户名来自事件时的身份快照，缺失时为 `null`。写入失败返回失败并输出关联诊断。`audit.close()` 等待已开始的写入，随后可关闭 RelDB。
 
-脱敏匹配整个字段：对象、数组以及自定义 JSON 投影内的敏感值同样隐藏。关闭或尚未初始化 Audit 时，capture 返回未初始化失败；只有已初始化模块的关闭采集配置才跳过自动事件。
+脱敏匹配整个字段：对象、数组以及按应用要求选出的 JSON 字段中的敏感值同样隐藏。关闭或尚未初始化 Audit 时，capture 返回未初始化失败；只有已初始化模块的关闭采集配置才跳过自动事件。
 
 ### 私有备份与定时归档
 
@@ -175,7 +175,7 @@ SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 
 
 归档 v1 按行保存 header、`{type:'entry',record}` 和 footer。记录保留原始 ID、ISO 日期、已存详情及可空历史身份；不关联当前用户名。footer 的 SHA-256 覆盖之前所有 UTF-8 行及换行，且 recordCount 等于 entry 数量。可核对后离线读取或恢复至独立查询存储；不覆盖在线受保护记录。在线导出按固定截止时间与主键游标扫描，包含范围以实际扫描为准；需要同一时点的全量恢复时先暂停写入和清理，或采用数据库原生一致性快照。
 
-定时配置位于 `backup.schedule`：`enabled`、五字段 cron（默认 `0 2 * * *`）、IANA timezone（默认 UTC）。开启后 `audit.schedulerPlan` 返回可显式合并进 `scheduler.init()` 的 tasks/hooks 计划；没有自动任务时为 null。回调复用 Scheduler 的共享执行编号和取消信号，并在失败时抛错使任务准确失败；未知执行按 Scheduler 规则核对，不能盲目重跑。示例/fullstack 已装配此计划，其它宿主显式合并已有任务与回调。先关闭 Scheduler，再关闭 IAM、Audit、Storage 和 RelDB；Audit 取消并等待自己的备份，不关闭宿主 Storage。
+定时配置位于 `backup.schedule`：`enabled`、五字段 cron（默认 `0 2 * * *`）、IANA timezone（默认 UTC）。开启后 `audit.schedulerPlan` 返回可显式合并进 `scheduler.init()` 的 tasks/hooks 计划；没有自动任务时为 null。回调复用 Scheduler 的共享执行编号和取消信号，并在失败时抛错使任务准确失败；未知执行按 Scheduler 规则核对，不能盲目重跑。示例应用和 fullstack 模板已经把计划传给 Scheduler。手工接入的应用需要把计划并入已有任务和回调。先关闭 Scheduler，再关闭 IAM、Audit、Storage 和 RelDB；Audit 取消并等待自己的备份，不关闭宿主 Storage。
 
 ```ts
 const plan = audit.schedulerPlan
@@ -192,21 +192,21 @@ if (plan) {
 }
 ```
 
-上例由宿主导入 `audit`、`scheduler` 并提供已校验的 schedulerSettings，Audit/Storage/RelDB 已初始化。归档使用私有存储，开启备份时拒绝配置了公开 publicUrl 的 S3；部署仍须限制桶/CDN访问。公开静态文件入口应仅开放指定资源；管理示例与 fullstack 仅公开规范头像路径，如提供归档下载，须通过审计授权接口处理，关闭备份也不改变已有文件的私有边界。
+把上例放入服务端启动代码。先初始化 Audit、Storage 和 RelDB，再提供已校验的 `schedulerSettings`。归档使用私有存储，开启备份时拒绝配置了公开 publicUrl 的 S3；部署仍须限制桶/CDN访问。公开静态文件入口应仅开放指定资源；管理示例与 fullstack 仅公开规范头像路径，如提供归档下载，须通过审计授权接口处理，关闭备份也不改变已有文件的私有边界。
 
 ### 分级异常告警
 
 `alerts.enabled` 默认关闭。开启时注入已初始化的 Reach：`audit.init({ reach, alerts: { enabled: true, rules: [...] } })`。规则通过稳定 id、actions（精确事件名）、可选 resource、outcomes、minimumSeverity 筛选事件，threshold/windowSeconds 指定固定窗口阈值，severity 指定通知等级，targets 中的 id/provider/to 指定人员或目标。默认窗口300秒，范围60–86400秒；默认仅失败/拒绝，空 outcomes 表示所有结果。规则和目标 id 必须各自唯一；provider 须已在 Reach 注册。不将具体业务角色写入框架。
 
-`audit.checkAlerts({signal?})` 检查已提交事件的当前及前一个固定窗口，回滚事件不触发；停机超过两窗不补发历史通知。它不是滑动窗口或完整监控系统。默认单轮最多尝试100次，maxNotificationsPerCheck 可配置，report.more 表示仍有目标待后续检查。已达阈值的规则/目标/窗口在共享数据库原子领取，一次外部尝试前持久化；领取同时核验数据库执行时钟，避免节点偏差或挂起恢复重发。规则语义或通知目标变更形成新策略，可能产生新的通知。
+调用 `audit.checkAlerts({ signal })` 会统计当前和上一个固定时间段内已经提交的事件。如果停机超过两个时间段，不会补发更早的通知。默认每次最多尝试发送 100 条，可配置 `maxNotificationsPerCheck`。报告中的 `more: true` 表示下次调用还要继续检查。共享数据库为同一规则、收件人和时间段登记一次通知，并在发送前核对执行期限。这样多个节点看到同一批事件时不会分别发送。更改规则条件或收件人后，系统视为一条新通知规则。
 
 通知只包含规则/目标编号、等级、计数与窗口，不复制审计详情或凭据。submitted 表示 Provider 接受，queued 仅表示 Reach 持久入队，可通过 queueId 查询；都不等于人员已收到或阅读。失败/中断/崩溃留下 unknown、sending 或 claimed 回执，不自动重发不确定外部效果。运维先检查 `audit.alert` 事件与 `hai_audit_alert_claims`，核验通知端后处理；Reach 已入队的消息遵循其自身恢复规则。领取表不保存地址/正文，查询范围外已确认提交/入队的领取定期清理；未决回执保留供运维核验，通知审计遵守审计保留策略。
 
-`alerts.schedule` 可独立启用，默认每分钟、UTC。`audit.schedulerPlan` 合并已启用的备份和告警任务，由宿主显式交给 Scheduler；计划没有自动任务时为 null。调度回调在检查失败或 failed>0 时准确失败。先关闭 Scheduler，再关闭 Audit 和 Reach；关闭 Audit 取消后续领取并等待在途通知完成（受 Reach Provider 超时约束），不关闭宿主 Reach。数据库查询/审计失败返回失败；通知业务失败在成功检查报告的 failed 字段体现，调用方必须检查。
+`alerts.schedule` 可独立启用，默认每分钟、UTC。`audit.schedulerPlan` 合并已启用的备份和告警任务，由应用启动代码传给 `scheduler.init()`；计划没有自动任务时为 null。调度回调在检查失败或 failed>0 时准确失败。先关闭 Scheduler，再关闭 Audit 和 Reach；关闭 Audit 取消后续领取并等待在途通知完成（受 Reach Provider 超时约束），Reach 仍由应用在 Audit 关闭后关闭。数据库查询/审计失败返回失败；通知业务失败在成功检查报告的 failed 字段体现，调用方必须检查。
 
 ## 错误处理
 
-返回 `HaiResult<T>` 的操作通过 `result.success` 区分成功与失败。业务成功后读取 `data`，诊断失败时记录 `error.code` 和关联编号。
+收到 `HaiResult<T>` 时先检查 `result.success`。成功时读取 `result.data`，失败时查看 `result.error`。记录故障时保留错误码和追踪编号，便于从日志找到对应请求。
 
 业务数据操作返回 `HaiResult<T>`，常用错误码如下：
 

@@ -2,7 +2,7 @@
 
 [配置手册](README.md) · [下一章：数据与共享状态](data.md)
 
-先解决“谁加载、最后哪个值生效、谁消费”三个问题，再调整具体模块参数。生成工程已装配常用入口；自己写启动代码时，也要逐项校验并检查初始化结果。
+修改配置时先找应用的启动命令，再看它读了哪些文件、哪个值覆盖了其他值、最后将配置传给哪个模块。例如，数据库地址由应用启动代码读取，然后传给 `reldb.init()` 建立连接。CLI 生成的项目已经包含这套启动代码。
 
 ## 配置从哪里来
 
@@ -15,15 +15,15 @@
 | `.env.local` | 本机私有覆盖，不提交版本库 |
 | `.env.<mode>` | 环境公共差异，例如 `.env.prod`；不放真实秘密 |
 | `.env` | 公共基础值 |
-| YAML 中的 `HAI_<配置名>_<路径>` 覆盖 | 环境值覆盖 YAML；同源先父 JSON 后细项，`camelCase` 不拆词 |
-| `${VAR}` / `${VAR:回退值}` | 没有约定节点覆盖时解析插值；必需变量缺失返回 `CONFIG_ENV_VAR_MISSING` |
-| Schema 默认 | 最后补齐该 Schema 明确声明的缺省字段，不能补真实服务地址和凭据 |
+| `HAI_<配置名>_<路径>` | 用环境变量替换 YAML 中的对应项。同一来源先应用整个 JSON 对象，再应用对象内的单项变量。`camelCase` 不在单词间加下划线 |
+| `${VAR}` / `${VAR:回退值}` | YAML 中引用环境变量。在对应配置项没有被 `HAI_*` 覆盖时替换。变量缺失且没有回退值会返回 `CONFIG_ENV_VAR_MISSING` |
+| 模块的默认值 | 检查配置时填入该模块规定的默认值。必填的服务器地址或凭据仍要由项目提供 |
 
-`core.init()` 不读取 dotenv。Node/Vite 宿主先调用 `core.config.loadEnvFiles` 并检查 success，生成工程的 Node 启动命令复用 `scripts/run-node.mjs`。Core、构建和部署使用相同顺序。更高来源整段替换节点时先清除低来源细项，同来源再按父到子应用，与行序无关。同文件重复变量报错。
+在自己的 Node 启动代码中，先调用 `core.config.loadEnvFiles()`，确认 `success` 后把返回值写入 `process.env`，再调用 `core.init()`。CLI 生成项目的 Node 启动命令通过 `scripts/run-node.mjs` 完成环境文件加载。环境文件、构建和部署按同样的优先级处理。高优先级来源为整个对象赋值时，会清除低优先级来源写入的子项。一个来源内始终先用整个对象，再用单项变量，文件行序无关。在同一个文件里重复定义变量会报错。
 
-`mode` 选择环境文件后缀，例如 `dev/test/prod`；`envDir` 选择读取目录。它们是宿主加载函数的参数，不是 `_core.yml.env` 的别名。输入 `mode: 'prod', envDir: '.'` 时读取该目录的生产文件组合；输出 `env.data` 是已合并字典，仍需由宿主装入进程并初始化消费模块，不向浏览器返回该字典。
+`core.config.loadEnvFiles({ mode: 'prod', envDir: '.' })` 从当前目录读取 `.env`、`.env.prod` 等适用文件，成功时把合并后的变量放在 `result.data`。应用启动代码用 `Object.assign(process.env, result.data)` 安装这些变量。`mode` 决定文件名中的后缀，`_core.yml` 的 `env` 只记录应用运行环境。合并后的变量可能含密码，保存在服务进程中。
 
-例如同一文件有 `HAI_IAM_SESSION='{"maxAge":3600}'` 和 `HAI_IAM_SESSION_MAXAGE=1800`，最终为 1800。宿主显式提供模块 `configSchemas` 后，Schema 中合法的可选路径即使未写入 YAML 也能接收细项；扫描仅使用结构和类型，模块仍执行完整校验。没有 Schema 时按已有 YAML/JSON 结构定位，未知路径不凭空创建。
+例如同一文件有 `HAI_IAM_SESSION='{"maxAge":3600}'` 和 `HAI_IAM_SESSION_MAXAGE=1800`，最终的 `session.maxAge` 是 `1800`。应用启动时可以在 `core.init({ configSchemas })` 中提供字段规则。这样，可选字段即使还没写进 YAML，也可以用环境变量设置。目录扫描用这些规则识别字段和类型，应用还要在初始化模块前检查具体取值。未提供规则时，Core 只按已有的 YAML 或 JSON 结构定位字段。
 
 遇到 `CONFIG_VALIDATION_ERROR` 时，检查对应的 YAML 和环境覆盖。`validate()` 使用最近一次成功加载的 YAML 快照和当前环境重新校验。比如 `code: ${APP_CODE:00123}` 在环境变量未设置时，用字符串 Schema 校验会得到 `'00123'`。编辑 YAML 后调用 `reload()` 读取新内容。单个文件可以直接用 `core.config.load(name, file, schema)` 读取和校验。
 
@@ -68,7 +68,7 @@ logging:
   redact: [customer.email, customer.phone]
 ```
 
-应用启动后通过公开 app.info/宿主白名单核对名称、版本；切换界面语言确认核心错误和 UI 一起切换。服务端不要下发整个 `_core.yml`，只公开必要字段。Vite 注入的编译默认值要重新构建后才改变，不能承诺任意 YAML 热更新到静态页面。
+页面如果要显示应用名称和版本，可从应用自己的 `app.info` 接口或服务端页面加载函数读取 `name` 和 `version`。构造响应时只复制页面要用、访客可以看到的值，完整 `_core.yml` 留在后端。修改 Vite 在构建时写入静态页面的默认值后，需要重新构建网页。切换界面语言时，可用一条测试错误确认 Core 提示和页面文案都已使用新语言。
 
 ## 日志采集与隐私
 
@@ -140,7 +140,7 @@ Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>
 
 容器打包时，监听地址采用 `0.0.0.0`，端口采用制品声明值（未声明时采用部署配置），并生成 `HOST`、`PORT` 和 Serv 的对应细项。本机 `.env` 中的回环地址与开发端口继续用于本地运行。修改容器端口时更新制品与部署布局后重新部署。
 
-运行文件固定为服务器 `<部署目录>/config/.env.runtime`，各发布记录在自己的 `config/.env.runtime` 保存快照。宿主部署根目录保护凭据，容器只读挂载配置目录。先备份，再编辑，重启并核对健康和一条受影响的业务请求；加载或 Schema 校验失败时恢复文件再重启。进程启动后不会持续监视文件。
+后端使用服务器 `<部署目录>/config/.env.runtime`，每次发布还会在该版本的目录里保存一份运行文件。用服务器的文件权限保护其中的凭据，容器以只读方式挂载配置目录。修改前先备份，改完重启后检查健康接口和一条受影响的业务请求。读文件或配置校验失败时，恢复备份后再重启。运行中的容器不会持续监听该文件。
 
 归档同名文件是本次部署的输入。外部 PostgreSQL 密码来自打包源环境，包含主应用的发布会用新包值定稿。Hai 随包运行的 PostgreSQL 使用服务器 `managed-secrets.env`，受管状态同时用于生成应用连接和镜像原生变量。只有 Compose 引用的中间件使用 `.hai/middleware-runtime.env`。
 
@@ -160,7 +160,7 @@ SvelteKit SSR 在 Node 服务正常停止后，会先关闭业务模块，再释
 
 ## 保存以后如何生效
 
-以下是独立 Node 宿主的完整装配片段；生成工程已有同类入口时直接复用。
+下面的代码可以放在独立 Node 应用的启动文件中。它先读取环境变量，再检查数据库配置并开启连接。CLI 生成的项目已经包含相应步骤。
 
 ```ts
 import { core } from '@h-ai/core'
@@ -174,12 +174,12 @@ const db = core.config.validate('db', ReldbConfigSchema)
 if (!db.success) throw new Error(db.error.message)
 const started = await reldb.init(db.data)
 if (!started.success) throw new Error(started.error.message)
-// 宿主退出时 await reldb.close()，检查关闭结果。
+// 服务退出时 await reldb.close()，并检查它的关闭结果。
 ```
 
 这是启动边界的失败退出，不是要求业务 API 改成抛异常。`core.init` 会记录单项加载失败并继续；结束不表示每项有效，必需配置必须 validate。目录扫描/日志设置等异常也可能传播。Core 是同步入口，没有 `core.close()`。
 
-配置缓存变化不表示连接池、会话或外部客户端已经热更新。先停接请求，再按宿主顺序释放旧模块，校验新配置并重新初始化。多模块优先复用 `core.module.createRuntime`：顺序启动，失败回滚，反序关闭；关闭失败保留待清理模块及依赖，不能先关闭仍被使用的数据库。
+`core.config.reload()` 更新保存在 Core 内存中的配置。已经创建的连接池、会话和外部客户端继续使用创建时的设置。要换新配置，先停止接收请求，关闭正在使用旧配置的模块，再检查新值并启动模块。多个模块可以交给 `core.module.createRuntime()` 按依赖顺序启动，停止时反向关闭。如果业务模块关不掉，运行对象会保留它和仍在使用的数据库，供下一次关闭时重试。
 
 | 能力 | 前置与关闭顺序 |
 | --- | --- |
@@ -187,7 +187,7 @@ if (!started.success) throw new Error(started.error.message)
 | Feedback | 先 RelDB/私有 Storage；先停止并排空采集任务，再关依赖 |
 | AI 持久化 | RelDB/VecDB 或显式持久 Store；生产不能退回进程内存冒充可用 |
 | Audit/Scheduler/Payment | 共享 RelDB；通知按需 Reach，未知副作用先核对再恢复 |
-| Serv/Kit/UI/Datapipe | 工厂、宿主适配、组件或纯函数，按公开契约，不统一套 init/close |
+| Serv/Kit/UI/Datapipe | 用 `serv.createApp()` 创建 HTTP 应用，`kit.createHandle()` 创建请求处理函数。UI 通过组件参数设置，Datapipe 的选项随 `datapipe.clean()` 等调用传入 |
 
 配置输入、可观察输出和失败检查分别核对：
 

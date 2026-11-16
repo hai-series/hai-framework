@@ -1,6 +1,6 @@
 # @h-ai/iam 功能说明
 
-在 Node.js 中使用 `iam` 做身份认证、会话、授权和用户管理。应用浏览器入口通过公开 HTTP 契约操作账号，读取浏览器版 IAM 的共享值。
+在 Node.js 服务端用 `iam` 验证身份、管理会话，并为用户分配角色和权限。浏览器通过应用的 HTTP 接口登录和管理账号，也可以导入浏览器入口公开的类型、错误定义和权限标识。
 
 [模块 README](../../../packages/iam/README.md) · [配置清单](../configuration/iam.md) · [数据结构](../data/iam.md) · [身份认证接入](../development/authentication.md)
 
@@ -17,7 +17,7 @@ pnpm add @h-ai/iam
 - `@h-ai/reldb` — 数据库（用户/角色/权限持久化），**需在 iam.init() 前初始化**
 - `@h-ai/cache` — 缓存（会话/OTP/一次性票据），**需在 iam.init() 前初始化**
 - `@h-ai/crypto` — 密码哈希（内部使用，自动初始化）
-- `@h-ai/audit` — 宿主初始化后自动记录 IAM 安全事件；未选用时不调用采集器。启用后的审计写失败仍记录错误，外部事务应回滚。
+- `@h-ai/audit` — 应用初始化 Audit 后会自动记录 IAM 安全事件。如果写入审计失败，本次操作会报告错误，应用应回滚交给 IAM 的事务。
 
 - `@h-ai/reach` — **可选**，应用安装、初始化并注入后可使用标准邮件/短信模板；自定义发送回调无需 Reach。
 - `ldapts` — **可选**，仅在显式启用 LDAP 且没有注入 `ldapClientFactory` 时加载。
@@ -79,9 +79,9 @@ if (!result.success)
 
 ### 功能输入输出
 
-以下片段依赖上面的最小接入示例。示例中的业务值由宿主校验和授权后传入；异步领域结果先判断 success，再读取 data。表中 void 表示操作已完成且没有返回数据，null 表示不存在；同步工厂/工具直接返回表中类型。
+下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
-ID/code 必须来自已授权业务；accessToken/refreshToken/用途票据不是用户 ID。options/data 是本功能的公开输入类型，expectedVersion 为读取所得版本，tx 为同一已开启事务。低层写入口不替宿主检查管理员权限。
+应用先检查当前用户是否有权操作这个用户 ID 或权限编号，再调用 IAM 管理方法。用户 ID、访问令牌、刷新令牌和一次性操作票据分别按参数传入。`expectedVersion` 取自最近一次读取的版本，`tx` 是应用已打开的同一个事务。
 
 #### iam.auth · 登录与注册
 
@@ -270,7 +270,7 @@ ldap:
   connectTimeout: 5000
 ```
 
-`ldaps://` 使用 TLS；`ldap://` 加 `useTls: true` 使用 StartTLS。Active Directory 可用 `searchFilter: "(sAMAccountName={{username}})"` 和 `usernameAttribute: sAMAccountName`；占位符会转义后搜索。首次登录默认同步本地用户并分配默认角色，账户禁用与锁定仍有效。`ldapSyncUser: false` 要求已有且处于激活状态的本地用户以绑定数据库凭据代际；不创建虚拟 DN 用户。可传自定义 `ldapClientFactory`；工厂返回具备 `bind/search/unbind` 的客户端，结果均为 HaiResult。注入工厂时无需安装 ldapts。
+`ldaps://` 使用 TLS；`ldap://` 加 `useTls: true` 使用 StartTLS。Active Directory 可用 `searchFilter: "(sAMAccountName={{username}})"` 和 `usernameAttribute: sAMAccountName`；占位符会转义后搜索。首次登录默认同步本地用户并分配默认角色，账户禁用与锁定仍有效。`ldapSyncUser: false` 要求已有且处于激活状态的本地用户以绑定数据库里记录的凭据版本；不创建虚拟 DN 用户。可传自定义 `ldapClientFactory`；工厂返回具备 `bind/search/unbind` 的客户端，结果均为 HaiResult。注入工厂时无需安装 ldapts。
 
 ```ts
 import type { IamConfigSettingsInput } from '@h-ai/iam'
@@ -454,7 +454,7 @@ verifyToken(accessToken)
   → session.get(accessToken) → 缓存查询
   → 读取共享缓存中的当前用户/凭据状态，检查启用状态、期限与会话绑定的 credentialVersion；不可信时回源 DB
   → 滑动续期模式下自动延长 TTL
-  → 复用上述用户资料，读取共享代际缓存中的当前角色/权限；冷读使用单条 JOIN
+  → 复用上述用户资料，在 Redis 缓存里读取当前角色和权限。缓存不可用或结果过期时，通过一条数据库 JOIN 查询读取
   → 必要状态读取失败、用户缺失/停用/到期或凭据代不匹配时拒绝；API Key 会话再次收敛 scope
   → 返回当前 Session 对象（含 userId、roles、permissions）
 ```
@@ -535,7 +535,7 @@ create(options) [singleDevice=true]
 
 登录成功后通过 `tokens.accessToken` 认证请求，通过 `tokens.refreshToken` 换取新令牌；`expiresIn` 单位为秒。独立 API 使用 `Authorization: Bearer <accessToken>`；SvelteKit Cookie 入口使用 kit 的标准认证集成，详见下方前端调用。
 
-受保护请求使用 `iam.auth.verifyToken`，返回当前用户资料、角色和权限；`iam.session.get/verifyToken` 是低层会话快照入口，不能替代当前授权。`session.create` 只用于可信服务端集成，不接受客户端自报 roles/permissions 或 API Key 绑定。
+每个受保护接口使用 `iam.auth.verifyToken()` 读取当前用户资料、角色和权限。`iam.session.get()` 和 `iam.session.verifyToken()` 返回的是会话中保存的角色和权限。管理员后来撤销权限时，这份会话记录可能仍保留旧值，因此应用做权限判断时用 `iam.auth.verifyToken()`。只有服务端能调用 `iam.session.create()` 并决定角色、权限或 API Key，不能使用客户端自报的值。
 
 ```ts
 import { iam } from '@h-ai/iam'
@@ -579,7 +579,7 @@ async function forceSignOut(userId: string) {
 
 会话仓库将缓存读取/提交失败返回为失败 HaiResult，不解释为会话不存在或过期，也不执行清理补偿。用户会话及索引共用一个文档，批量授权更新不再逐 token 调用 get/ttl 或维护第二份索引；只按已确认的绝对期限清理。故障恢复后可重新读取并重试更新/退出，logoutAll 仍覆盖原有全部记录。结构损坏同样失败关闭并保留原值，交由运维处理，禁止用空文档覆盖未知授权状态。
 
-Session.credentialVersion 绑定创建时的数据库凭据代际；CreateSessionOptions.expectedCredentialVersion 仅供已验证策略传入，旧代拒绝。省略它的受信低层 create 仍读取真实、激活且未到期的本地用户并绑定当前代，不能伪造缺少数据库记录的身份。
+`Session.credentialVersion` 记录创建会话时的凭据版本。认证方式已经验证过凭据时，可把当时读取到的版本作为 `CreateSessionOptions.expectedCredentialVersion` 传入，版本已变更则拒绝创建会话。服务端直接调用 `iam.session.create()` 即使省略这个参数，也会读取数据库中的账号，确认它仍为激活状态、未过期，再使用当前凭据版本。
 
 ---
 
@@ -601,7 +601,7 @@ Session.credentialVersion 绑定创建时的数据库凭据代际；CreateSessio
 ```
 checkPermission(userId, permission)
   → RBAC 未启用 → 直接返回 true
-  → 从共享代际缓存读取当前角色与权限，冷读使用单条 JOIN
+  → 从 Redis 读取当前的角色和权限，缓存里没有时通过一条数据库 JOIN 查询读取
   → 包含超管角色则返回 true；必要状态读取失败返回错误
   → 逐权限匹配：精确匹配 或 通配符匹配（`admin:*` 匹配 `admin:read`）
   → 返回 true / false
@@ -669,7 +669,7 @@ async function currentAuthorization(userId: string) {
 - **通配符匹配**：`admin:*` 匹配 `admin:read`、`admin:write:detail` 等（单层 `*` 匹配冒号后全部）
 - **超管角色**：配置的 `rbac.superAdminRole`（默认 `super_admin`）自动拥有所有权限
 - **事务保护**：`deleteRole` / `deletePermission` 使用 DB 事务，先清关联再删实体
-- **会话同步**：缓存更新为 best-effort；受保护请求使用 `iam.auth.verifyToken`，使用共享代际缓存校验当前用户状态、期限及会话绑定的凭据代，再读取当前授权；缓存不可信时回源，必要读取失败即拒绝。`iam.session.get/verifyToken` 复用同一当前用户/凭据读取并检查启用状态与 `credentialVersion`，但角色/权限字段仍是会话快照，不能替代当前授权。`iam.authz.getUserAuthorization(userId)` 复用单次 JOIN 冷读与共享缓存。
+- **会话和权限检查**：更新会话缓存失败时，受保护请求仍由 `iam.auth.verifyToken()` 核对账号是否有效、凭据版本是否已改变、当前能做哪些操作。Redis 缓存不能作为依据时，改查数据库。无法取得必要的信息就拒绝请求。`iam.session.get()` 和 `iam.session.verifyToken()` 也核对账号状态和凭据版本，但角色和权限仍是会话最初保存的值。要查用户的当前授权，也可以用 `iam.authz.getUserAuthorization(userId)`。
 - **种子数据**：`seedDefaultData: true` 时自动创建 admin/user/guest 三个默认角色及基础权限，幂等执行
 
 ---
@@ -1042,7 +1042,11 @@ agreements:
 
 #### 分布式安全与边界
 
-所有节点共享同一数据库和 Redis；Memory 仅用于单进程测试。OTP 的验证码、尝试次数和冷却期保存在同一身份 key，通过 CAS 发布和消费；冲突拒绝旧代，消费/耗尽保留冷却期。密码重置的摘要、有效期、尝试次数和 resetVersion 保存在用户数据库行，策略失败计次，最终一条条件 SQL 同时改密、消费令牌并推进 credentialVersion；新令牌、后续尝试、停用或到期都会阻止迟到提交。发送重置请求只推进 resetVersion，不撤销现有会话；成功改密才推进 credentialVersion。认证策略保存已验证的凭据代际，建立会话/认证/刷新均校验共享代际缓存或安全回源的当前状态；缓存批量清理失败也不能使旧会话有效。通知只在成功发布后调用，第三参数为 { expiresAt, idempotencyKey }，应用及 Reach Provider 必须用该稳定键持久化去重。异常/超时可能已送达，返回结果未知，不自动重发或回滚已发布凭据；没有接收端幂等保障时不能承诺外部副作用恰好一次。
+所有节点连接同一数据库和 Redis。Memory 仅用于单进程测试。对同一邮箱或手机号，Redis 在一个键里保存验证码、剩余尝试次数和重发冷却时间。发出新码、尝试验证码或使用验证码时，核对记录仍是本次读取的版本。验证码已使用或次数耗尽后，冷却时间仍生效。
+
+密码重置在用户的数据库记录里保存令牌摘要、截止时间、尝试次数和 `resetVersion`。密码不符合规则时也会计一次尝试。一条有条件的 SQL 同时核对令牌、更新密码并更改 `credentialVersion`。如果另一条请求发出了新令牌、消耗了此次尝试、停用了账号，或者令牌已过期，较早的请求就不能改密码。发送重置请求只改变 `resetVersion`，用户实际改密后才改变 `credentialVersion`，使旧会话失效。建立、验证和刷新会话都会核对当前凭据版本。缓存清理失败也不会恢复旧会话。
+
+验证码或重置令牌保存成功后才调用通知回调。第三个参数包含 `expiresAt` 和 `idempotencyKey`，应用和 Reach 通知渠道都应使用同一个键避免重发。回调超时或出错时，外部通知可能已经发出，先核对渠道记录再决定是否补发。
 
 可选字段（如 `ldap`）若尚未写入 YAML，请先声明该字段，或通过 `HAI_IAM` 的 JSON 值整体覆盖模块配置；已有字段支持 `HAI_IAM_LOGIN_OTP` 等环境变量覆盖。
 
@@ -1050,7 +1054,9 @@ agreements:
 
 ### 共享鉴权缓存
 
-验签所需账号/凭据状态、角色权限、敏感操作和已验证 API Key 使用 Redis 共享缓存（60 秒 DTO TTL），缓存值不保存数据库中的密码/API Key 验证哈希、明文密钥或重置令牌；API Key 缓存地址使用明文 Key 的单向 SHA-256 指纹；账号/密码/Key 到期时间每次按当前时间核验。权限冷读使用单次 JOIN。所有 IAM 写入口在数据库变更前建立共享脏标记，提交/回滚后推进代际，外部事务同样等到完成才允许回填；冷读与代际变化并发时不发布旧缓存。正常热路径不查 PG，写入中、失效未确认或缓存读失败时回源；会话 Redis 本身不可用仍拒绝验签。
+Redis 缓存账号状态、凭据版本、角色权限、敏感操作清单和已经验证的 API Key，默认保留 60 秒。它不保存密码或 API Key 的验证哈希、明文密钥或重置令牌。API Key 的缓存索引由明文 Key 做 SHA-256 得到。即使缓存还有效，读取时也会重新检查账号、密码和 Key 的到期时间。没有权限缓存时通过一条 JOIN 查询读取数据库。
+
+IAM 在数据库变更前标记这一批缓存暂时不可用。在事务提交或回滚后更换缓存版本，避免另一个节点把旧版本的查询结果重新写入 Redis。使用应用自行开启的事务时，同样要等事务结束后才恢复缓存。变更中、无法确认缓存状态或读取缓存失败时，授权信息改查数据库。保存会话的 Redis 本身无法访问时，令牌校验仍会失败。
 
 写前无法登记失效时拒绝变更；已提交后失效失败不会伪装回滚，持久脏标记使后续授权继续读数据库。进程崩溃或提交结果未知时不通过 TTL 擅自清除此标记；应告警并在确认没有 IAM 写事务的维护窗口修复缓存状态。多节点必须同时升级并通过 IAM API 写权限/账号；直接 SQL、旧版本写节点或独立系统改表不触发缓存失效，需停写并使 IAM 缓存整体失效后再恢复，不能与在线缓存写入混用。API Key 明文验证命中缓存后避免重复昂贵哈希，lastUsedAt 在冷验证时采样更新（最多约一分钟延迟）。
 
@@ -1058,7 +1064,7 @@ agreements:
 
 `captcha.enabled` 默认关闭。开启后使用 ALTCHA 自托管计算挑战，配置 `ttlSeconds`（默认120，1–600秒）、`cost`（默认5000，100–50000）和 `maxCounter`（默认100，1–2000）控制期限与工作量。不需要外部验证码账号，HMAC 秘密与单次消费状态只保存在既有共享 Cache；生产仍须使用共享后端。计算挑战增加自动化尝试成本，不保证请求来自真人。
 
-`iam.auth.createCaptcha({operation})` 返回 `{id,challenge}`；operation 为 login/register/sendOtp/passwordReset/renewPassword。调用者用官方 `altcha/lib` 的 solveChallenge/pbkdf2 求解，将 `JSON.stringify({id,solution})` 作为 captcha 字段交给对应操作。密码/OTP/LDAP 登录、公开注册、匿名原密码续期都在服务端强制检查；sendOtp(identifier,{captcha}) 和 requestPasswordReset(identifier,{captcha}) 接收可选第二参数。证明用途绑定、短期单用，验证成功后原子删除；密码错误也会消费证明，重试需要新挑战。Cache 故障不降级放行；有效期由 Cache TTL 决定，重初始化不续期。管理员创建/邀请、已登录改密和 API Key 机器鉴别沿用各自授权与凭据，不额外加入交互挑战。
+`iam.auth.createCaptcha({ operation })` 为登录、注册、发送验证码、重置密码或续期返回 `{ id, challenge }`。页面用 `altcha/lib` 的 `solveChallenge` 和 `pbkdf2` 解题，将 `JSON.stringify({ id, solution })` 作为 `captcha` 字段提交。发送验证码和请求重置密码时，作为第二个参数 `{ captcha }` 传入。服务端检查挑战是否对应当前操作、是否过期或已使用。即使密码错误，这次挑战也会失效。Cache 故障时会拒绝需要挑战的请求。管理员创建或邀请账号、已登录改密等服务端操作继续按各自权限规则检查。
 
 标准 Kit/Serv 暴露 POST /auth/captcha（Kit 同源前缀为 /api），并保留 captcha 字段。`iam.publicConfig.captcha` 只公开 enabled。框架 AuthPanel 与 createAuthActions 在启用后提交时自动生成、异步求解并提交新证明，关闭时不加载求解器；自定义表单可复用同一协议。UI 配置启用但缺少 createCaptcha 动作时拒绝提交，取消/卸载会停止尚未提交的鉴别请求。captcha 证明按凭据规则始终脱敏，不写浏览器持久存储。030/031/032/033 分别表示需要验证、证明无效/已用/过期、未启用、服务不可用。
 
@@ -1110,15 +1116,19 @@ Web 原地恢复使用 UI 的 `createSessionRecovery` / `SessionRecoveryDialog` 
 
 ### 页面离开会话策略
 
-`session.endOnPageHide` 默认 `false`。启用后宿主调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })` 并在卸载时调用返回的清理函数；标准 admin/H5/fullstack 模板已经接入。非 BFCache 的 `pagehide`（也包括刷新、整页导航）通过 POST `/auth/session/close` 尽力撤销当前 access 及关联 refresh，沿用 CSRF/传输加密，使用 `keepalive` 且不自动刷新会话。该响应不清 Cookie/本地凭据，避免旧响应覆盖下一次登录。显式退出仍使用正常 logout，可靠撤销并清理当前凭据。浏览器可能不发送页面离开请求，因此必须按业务配合服务端 `idleTimeout`/`absoluteTimeout`；不能据此保证关闭即撤销。
+`session.endOnPageHide` 默认关闭。开启后，在浏览器页面加载时调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })`，卸载时执行它返回的函数，移除监听器。标准 admin、H5 和 fullstack 模板已接好此步骤。这里的 `actions` 来自 `apiClient.createAuthActions(...)` 或 SvelteKit 的 `kit.client.createAuthActions(...)`。配置从登录页使用的公开认证接口读取。
+
+浏览器触发 `pagehide` 时会尝试调用 `POST /auth/session/close`。这包括刷新或整页导航，但页面进入往返缓存（BFCache）时会跳过。请求沿用 CSRF 防护和已启用的传输加密，并使用 `keepalive` 争取在页面关闭后完成。该请求不会刷新会话，响应也不会清除 Cookie 或本地凭据，以免较早的请求清掉新的登录状态。
+
+浏览器可能根本没有发出请求。服务端仍需用 `idleTimeout` 或 `absoluteTimeout` 限制会话寿命。用户主动退出时，应正常调用应用的 logout 接口，让服务端撤销凭据，并清除客户端保存的登录状态。
 
 标准 `/auth/me` 也检查 `iam.profile.update` / `iam.profile.avatar`；混合修改优先选取已启用的资料用途，否则使用头像用途。`authz.getSensitiveOperations(operation?)` 可只查询一个操作；未传则列出全部有效数据库规则。超管身份每次从共享角色读取，默认种子允许并发创建冲突后重读，并传播权限分配失败。
 
 ## 错误处理
 
-返回 `HaiResult<T>` 的操作通过 `result.success` 区分成功与失败。业务成功后读取 `data`，诊断失败时记录 `error.code` 和关联编号。
+收到 `HaiResult<T>` 时先检查 `result.success`。成功时读取 `result.data`，失败时查看 `result.error`。记录故障时保留错误码和追踪编号，便于从日志找到对应请求。
 
-所有操作返回 `HaiResult<T>`，通过 `HaiIamError` 做分支判断：
+登录、续期和管理操作返回 `HaiResult<T>`。模块状态和配置等属性可直接读取。需要区分多个失败原因时，用 `HaiIamError` 中的错误码判断。
 
 ```ts
 import { HaiIamError, iam } from '@h-ai/iam'

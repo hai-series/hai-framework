@@ -2,13 +2,13 @@
 
 [配置手册](README.md) · [页面操作指南](../development/ui.md) · [支付/原生接入](../development/integrations.md)
 
-这一章的配置分别由组件、支付模块和原生工具消费。它们不共用一个“应用设置”对象；服务器密钥也不能因为前端需要状态展示就放入 `PUBLIC_` / `VITE_` 变量。
+页面布局在 Svelte 组件中设置，支付渠道在服务端的 `config/_payment.yml` 中设置，手机应用的展示名称和权限在原生工程中设置。`PUBLIC_` 和 `VITE_` 变量可被前端读取，只放 API 地址等可以公开的信息。
 
 ## 表单布局与校验
 
 通用组件、主题和语言入口见 [UI 配置清单](ui.md#配置清单)。
 
-位置：页面组件props，没有 `_ui.yml`。`Form` / `FormLayout` 默认一列、标签在上；`columns={2}` 适合宽容器，`labelPosition="left"` 让短标签对齐，`labelWidth` 按实际内容选择。`FormField.colSpan` 默认 `auto`，宽控件占满一行，自定义宽控件用 `data-form-wide`，也可明确指定 `1` 或 `2`。
+在页面中把选项直接传给组件。`Form` / `FormLayout` 默认一列、标签在上；`columns={2}` 适合宽容器，`labelPosition="left"` 让短标签对齐，`labelWidth` 按实际内容选择。`FormField.colSpan` 默认 `auto`，宽控件占满一行，自定义宽控件用 `data-form-wide`，也可明确指定 `1` 或 `2`。
 
 ```svelte
 <FormLayout columns={2} labelPosition="left" labelWidth="6rem">
@@ -62,7 +62,7 @@ toast.add({
 
 主题偏好和语言初始化及其默认值见 [UI 配置清单](ui.md#配置清单)。
 
-主题由宿主选择，没有跨应用固定默认主题。`applyTheme`/`getSavedTheme`管理选择和持久化，可选主题须已有CSS。颜色使用主题tokens，长文/深色/错误状态都要实际检查。
+每个应用在根布局选择默认主题。浏览器调用 `applyTheme()` 更换主题，用 `getSavedTheme()` 读出之前保存的主题。要能显示某个主题，构建产物中必须有相应 CSS。切换深色后检查长文、图表文字和错误状态是否仍清晰可读。
 
 ![浅色设置页](../images/settings-light.png)
 
@@ -80,7 +80,7 @@ Markdown 的 `allowHtmlTags` 默认 `false`，`true` 只渲染允许的HTML并�
 
 ## 支付渠道配置
 
-位置：`config/_payment.yml`，先共享RelDB，再初始化所需渠道。当前微信为JSAPI，支付宝/Stripe为H5，不能推断未实现交易方式已支持。
+把渠道参数写入 `config/_payment.yml`。启用 Stripe 时，先用 `reldb.init()` 让各服务连接同一个数据库，再调用 `payment.init()`。当前微信使用 JSAPI、支付宝使用 H5、Stripe 使用托管付款页面。
 
 渠道字段、默认值和验签必填项见 [Payment 配置清单](payment.md#配置清单)。轮换微信平台证书时同时保留受信的新旧标识。支付宝返回页和 Stripe 取消页负责导航；订单状态由签名核验后按商户、订单及金额确认。
 
@@ -127,11 +127,11 @@ alipay:
 
 ## 原生地址、权限与安全存储
 
-Capacitor配置由原生工程和能力调用消费，不从同名YAML自动接入。`app` 是 Android / iOS 安装包，`desktop` 是桌面安装包，`web` 才是浏览器交付角色。
+打包手机应用时，Capacitor 读取 `capacitor.config.ts`，相机等功能还要在调用时提供选项。构建目标 `app` 生成 Android 或 iOS 安装包，`desktop` 生成桌面安装包，`web` 生成浏览器页面。
 
-Tauri开发回退API 地址为 `http://localhost:3000/api/v1`；手机上的 `localhost` 指手机自身，Capacitor应明确真实可达地址。静态公开`runtime-config.js`只存公开API地址等白名单，不能放服务端密钥。原生`token`使用安全 `TokenStorage`，WebView的`localStorage`不适合敏感凭据。
+Tauri 开发时未另行设置 API 地址，会使用 `http://localhost:3000/api/v1`；手机上的 `localhost` 指手机自身，Capacitor应明确真实可达地址。浏览器可直接下载 `runtime-config.js`，其中只放 API 地址等可公开的信息。原生`token`使用安全 `TokenStorage`，WebView的`localStorage`不适合敏感凭据。
 
-原生工程还需分别配置应用标识、展示名称、打包 Web 目录、平台权限和签名；这些由 `capacitor.config.ts` / Tauri 工程及平台工具链消费，不是 `_core.yml.name` 的替代。输入一个设备真实可达的公开 API 地址后，应能从真机发出健康请求；相机、推送和安全存储还需分别验证授权允许、拒绝和重启恢复。仅同步资源或生成安装包不会证明设备权限、令牌存储与业务请求正常，完整能力选项见[原生接入](../development/integrations.md)。
+原生工程还需分别配置应用标识、展示名称、打包 Web 目录、平台权限和签名；将这些值写入 `capacitor.config.ts` 或相应的 Tauri 和平台工程。仅修改 `_core.yml` 中的应用名，不会更改已打包的原生项目。输入一个设备真实可达的公开 API 地址后，应能从真机发出健康请求；相机、推送和安全存储还需分别验证授权允许、拒绝和重启恢复。仅同步资源或生成安装包不会证明设备权限、令牌存储与业务请求正常，完整能力选项见[原生接入](../development/integrations.md)。
 
 相机、状态栏、推送及原生工程选项见 [Capacitor 配置清单](capacitor.md#配置清单)。相机的尺寸和质量设置用于控制照片，上传前按原文件字节数检查实际限制。状态栏覆盖设置应在真机安全区验证。
 

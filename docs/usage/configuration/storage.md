@@ -4,9 +4,9 @@
 
 ## 配置入口
 
-生成项目使用 `config/_storage.yml`，配置注册名为 `storage`，环境覆盖前缀为 `HAI_STORAGE_`。覆盖顺序和无敏感值示例见[运行配置](runtime.md#配置从哪里来)。
+生成的项目把文件存储地址放在 `config/_storage.yml`。应用启动时从 `core.config.get('storage')` 读取并传给 `storage.init()`。用环境变量覆盖时使用 `HAI_STORAGE_` 前缀。见[配置来源和覆盖顺序](runtime.md#配置从哪里来)。
 
-`storage.init(config)` 按 `StorageConfigSchema` 选择本地目录或 S3 兼容后端。服务端读写地址、浏览器签名地址及静态公开地址各由对应字段配置。
+选 `type: local` 时，文件写进服务端磁盘。选 `type: s3` 时，服务端通过 `endpoint` 读写对象，客户端临时下载链接可通过 `publicEndpoint` 指向另一个浏览器能访问的地址。需要提供永久公开地址时配置 `publicUrl`，对象本身仍受桶的访问权限限制。
 
 ## 配置示例
 
@@ -17,11 +17,11 @@ root: ./data/files
 
 ## 配置清单
 
-表中的默认值适用于当前配置区块存在时。标为“必填”的字段在使用对应区块或后端时填写。“可省略”表示 Schema 不填充值；如有运行时回退，单独注明。`[]` 表示数组中每一项。
+本地存储必须填 `root`，S3 存储必须填桶名、区域和凭据。若启用 `operationLog`，其各字段再分别按下表取值。
 
 | 配置项                    | 适用条件     | 默认值/必填             | 说明                                                                                                                   |
 | ------------------------- | ------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `type`                    | `type=s3`    | 必填                    | 存储类型。可填`"s3"`                                                                                                   |
+| `type`                    | `type=s3`    | 必填                    | 存储类型。可填 `"s3"`                                                                                                  |
 | `bucket`                  | `type=s3`    | 必填                    | 存储桶名称。可填字符串，至少 1 个字符                                                                                  |
 | `createBucket`            | `type=s3`    | `false`                 | 初始化时检查并创建缺失的桶                                                                                             |
 | `region`                  | `type=s3`    | 必填                    | 区域。可填字符串，至少 1 个字符                                                                                        |
@@ -39,7 +39,7 @@ root: ./data/files
 | `operationLog.read`       | `type=s3`    | `false`                 | 以 debug 记录读取操作，默认关闭                                                                                        |
 | `operationLog.write`      | `type=s3`    | `true`                  | 以 debug 记录写入操作，默认开启                                                                                        |
 | `operationLog.maxLength`  | `type=s3`    | `1000`                  | 诊断摘要的字符上限，0 省略摘要。非负整数                                                                               |
-| `type`                    | `type=local` | 必填                    | 存储类型。可填`"local"`                                                                                                |
+| `type`                    | `type=local` | 必填                    | 存储类型。可填 `"local"`                                                                                               |
 | `root`                    | `type=local` | 必填                    | 根目录路径。可填字符串，至少 1 个字符                                                                                  |
 | `directoryMode`           | `type=local` | `0o755`（十进制 `493`） | 目录创建权限，POSIX 模式                                                                                               |
 | `fileMode`                | `type=local` | `0o644`（十进制 `420`） | 文件创建权限，POSIX 模式                                                                                               |

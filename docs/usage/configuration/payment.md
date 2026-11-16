@@ -4,9 +4,9 @@
 
 ## 配置入口
 
-生成项目使用 `config/_payment.yml`，配置注册名为 `payment`，环境覆盖前缀为 `HAI_PAYMENT_`。覆盖顺序和无敏感值示例见[运行配置](runtime.md#配置从哪里来)。
+生成的项目把付款渠道的设置放在 `config/_payment.yml`。应用启动时从 `core.config.get('payment')` 读取并传给 `payment.init()`。用环境变量覆盖时使用 `HAI_PAYMENT_` 前缀。见[配置来源和覆盖顺序](runtime.md#配置从哪里来)。
 
-`payment.init(config)` 读取 `PaymentConfigSchema` 校验后的渠道配置；填入哪些渠道就接入哪些渠道。应用负责配置外部回调路由、核对回调签名并按业务订单幂等更新。
+应用按需配置微信支付、支付宝和 Stripe。收到渠道的支付通知时，服务端把原始通知交给 `payment.handleNotify()` 验签，确认成功后再更新业务订单。更新时检查订单号和已处理状态，避免渠道重复通知导致重复发货。
 
 ## 配置示例
 
@@ -19,7 +19,7 @@ stripe:
 
 ## 配置清单
 
-表中的默认值适用于当前配置区块存在时。标为“必填”的字段在使用对应区块或后端时填写。“可省略”表示 Schema 不填充值；如有运行时回退，单独注明。`[]` 表示数组中每一项。
+例如，只填写 `stripe` 时，微信支付和支付宝没有启用。启用 Stripe 时必须填写 `stripe.secretKey`、`stripe.webhookSecret` 及 `stripe.successUrl`。
 
 | 配置项                           | 默认值/必填 | 说明                                                                                           |
 | -------------------------------- | ----------- | ---------------------------------------------------------------------------------------------- |
@@ -37,7 +37,7 @@ stripe:
 | `alipay.privateKey`              | 必填        | alipay：商户签名私钥（PEM）。可填字符串，至少 1 个字符                                         |
 | `alipay.alipayPublicKey`         | 必填        | alipay：支付宝平台公钥，用于验签。可填字符串，至少 1 个字符                                    |
 | `alipay.returnUrl`               | 必填        | 手机网站支付完成后返回的可信 HTTPS 地址；仅用于页面导航，不能证明付款。可填字符串，URL         |
-| `alipay.signType`                | `"RSA2"`    | alipay：请求和通知允许的签名算法。可填`"RSA2"`、`"RSA"`                                        |
+| `alipay.signType`                | `"RSA2"`    | alipay：请求和通知允许的签名算法。可填 `"RSA2"`、`"RSA"`                                       |
 | `alipay.sandbox`                 | `false`     | alipay：是否使用沙箱网关                                                                       |
 | `stripe`                         | 可省略      | Stripe渠道的商户配置与验签参数                                                                 |
 | `stripe.secretKey`               | 必填        | stripe：Stripe 服务端密钥                                                                      |

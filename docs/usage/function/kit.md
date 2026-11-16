@@ -1,6 +1,8 @@
 # @h-ai/kit 功能说明
 
-在 SvelteKit 中通过 `kit` 组织请求管道、endpoint 和同源客户端。根入口按环境解析，独立子路径还提供适配器、传输加密及 A2A 集成。
+在 SvelteKit 中使用 `kit` 组合处理请求的 hooks、编写 API 路由和创建同源 HTTP 客户端。根入口会按服务端或浏览器选择可用功能。需要 Node 部署适配器、传输加密中间件或 A2A 接入时，见下文对应的导入路径。
+
+SvelteKit 的服务端和浏览器代码都可以导入 `kit`。请求校验和访问控制由服务端执行。浏览器可以创建同源客户端和绑定登录表单的操作。
 
 [模块 README](../../../packages/kit/README.md) · [配置清单](../configuration/kit.md) · [数据结构](../data/kit.md) · [前后端接入](../development/frontend-backend.md)
 
@@ -56,7 +58,7 @@ export default defineConfig({
 
 ### 用途、输入与输出
 
-下表的调用片段复用本页已初始化的服务；命名变量代表应用已提供的请求、Schema、资源定义或配置。完整步骤和失败处理见对应功能示例。`HaiResult` 先判断 `success`，异步项按签名 `await`。
+表中的调用片段使用各节示例已经打开的服务或建立的对象。示例变量由应用提供，例如当前 HTTP 请求、用于校验输入的 Schema、资源定义或配置。返回 Promise 时用 `await` 等待。返回 `HaiResult` 时先判断 `success`，再读取数据或错误。
 
 | 入口                                        | 场景               | 输入                                                               | 输出                                                              | 调用片段                                                                    |
 | ------------------------------------------- | ------------------ | ------------------------------------------------------------------ | ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
@@ -200,7 +202,7 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 kit 的传输加密也统一委托 `@h-ai/crypto`：服务端通过 `crypto.transport.createServer({ serverKeyRing, keyStore })` 创建管理器，浏览器端通过 `kit.client.installBrowserTransport(kitConfig, { crypto })` 一行安装同源 fetch 包装。服务端还须注入受管密钥环和共享 registry。
 
-部署到子目录时，配置 `paths.relative: false`，从 `$app/paths` 以 `resolve('/').replace(/\/$/, '')` 得到 `base`：服务端 `crypto.transport` 传入 `basePath: base`，浏览器调用 `installBrowserTransport(kitConfig, { crypto, basePath: base })`；独立 `kit.client.create` 的 `transport.basePath` 采用同一值。默认空字符串表示域名根目录。这个运行时参数来自宿主的构建目录，不在 YAML 另设一份，也不从转发头推断。`keyExchangePath`、`excludePaths` 和路由容量仍使用完整请求路径。CLI 的 SSR 模板已同步装配。
+`paths.relative: false` 使 SvelteKit 生成绝对的应用路径。以部署到 `/console` 为例，应用可用 `resolve('/').replace(/\/$/, '')` 从 `$app/paths` 取得 `base`。将 `basePath: base` 同时交给服务端 `crypto.transport` 和浏览器的 `kit.client.installBrowserTransport(kitConfig, { crypto, basePath: base })`。若使用独立客户端，把相同值传给 `kit.client.create()` 的 `transport.basePath`。根目录使用空字符串。这个值由 SvelteKit 构建时设置，无需在 YAML 或请求头重复填写。密钥交换、排除规则和路由字节上限仍使用完整的请求路径。SSR 模板已配置这些值。
 
 **src/hooks.server.ts**：
 
@@ -282,11 +284,13 @@ export const { apiFetch } = kit.client.create()
 
 transport 默认作用于同源 `/api/*` endpoint 与 SvelteKit `__data.json` 页面数据请求（以及密钥协商端点本身）；页面文档与静态资源仍保持明文，不要求携带 `X-Client-Id`。文件上传等 `multipart/form-data` 请求会保持原样发送，需在服务端 `excludePaths` 中显式放行对应上传路径。
 
-传输使用认证 v2 封装，先验签和 MAC 再解密，并绑定方法、路径、时间与响应状态。共享 registry 原子消费 nonce；TLS、可信代理、业务授权及幂等仍由宿主负责。自定义跨域入口须允许并暴露 `X-Hai-Transport`。完整字段、无正文响应、时钟窗口和防重放要求统一见 [Transport 协议](../../../packages/crypto/TRANSPORT-PROTOCOL.md)。
+加密传输使用 v2 格式。服务端先核对签名、消息认证码（MAC）、请求方法、路径和时间，再解密。客户端还会校验响应状态。服务节点共用同一处 Redis 或数据库，每个请求编号只准登记一次，以拒绝重复发送的加密报文。应用仍需使用 HTTPS、配置接受转发头的代理、检查当前用户权限，并防止重试导致业务重复执行。跨域接入时，CORS 需允许请求携带 `X-Hai-Transport`，并让前端读取同名响应头。完整规则见 [Transport 协议](../../../packages/crypto/TRANSPORT-PROTOCOL.md)。
 
 业务容量通过 `transport.maxPlaintextBytes` 统一配置：默认 1 MiB，整数范围 1 KiB～64 MiB，请求和响应共用 UTF-8 明文字节预算。客户端从握手自动获取上限，密文与部署代理预算由 `resolveTransportBodyLimits()` 推导（两倍明文 + 32 KiB）。握手、公钥、认证头和防重放约束独立；超限取消原流并释放 reader，请求 413、响应为加密的 500 容量错误，客户端识别 `TransportBodyTooLargeError` / `hai:crypto:070`。 [Transport capacity and upgrade](../../../packages/crypto/TRANSPORT-CAPACITY.md)。
 
-普通业务仍使用 `transport.maxPlaintextBytes`（auto/省略为 1 MiB）；Feedback 的报告受理、证据、附件及 ZIP 下载路由通过 `routePlaintextBytes` 单独声明 `feedback.budget.maxTransportBytes`。路径中的 `*` 仅匹配一个完整路径段；宿主显式路由值优先。握手、adapter-node 与代理使用各路由最大容量，普通业务不会随材料预算扩大。HTTP 适配器为单独声明且大于 1 MiB 的材料路由保留最多 2 个槽，普通业务另有 16 个槽，完整响应/失败后释放；忙碌返回 503 / `hai:crypto:072`，不自动重放业务写入。
+普通接口沿用 `transport.maxPlaintextBytes`，设为 `auto` 或省略时上限为 1 MiB。反馈上报、证据、附件和 ZIP 下载通常需要更大正文。给这些路由单独设置 `routePlaintextBytes`，取值可用 `feedback.budget.maxTransportBytes`。路径中的 `*` 只匹配一个路径段。若应用已为某条路由配置额度，以该值为准。
+
+握手、Node HTTP 适配器和反向代理按各路由的最大值预留空间。HTTP 适配器为显式配置且超过 1 MiB 的路由最多同时处理 2 个请求，普通路由另有 16 个名额。响应发送完毕或请求失败时释放名额。忙碌时返回 HTTP 503（`hai:crypto:072`），应用决定是否重试。
 
 Serv/Kit 对通过请求绑定、签名和 MAC 校验但超出时间窗口的请求返回加密的 HTTP 400 错误。客户端抛出 `TransportTimeError`（`hai:crypto:071`），显示校验时的服务器 UTC 时间，提示开启设备的自动校时或手工修改时间后刷新。`serverTime` 为 Unix 毫秒。`api-client` 映射为 `VALIDATION_FAILED`，在 `cause.transportCode` 和 `cause.serverTime` 保留诊断信息。标准认证动作将已认证的传输时间错误转为 `HaiResult`，保留校验时间和校时提示，AuthPanel 可直接展示。
 
@@ -312,7 +316,7 @@ transport:
 import { core } from '@h-ai/core'
 import { KitConfigSchema } from '@h-ai/kit'
 
-// 仅放在 src/lib/server 中；浏览器通过 layout data 接收公共投影。
+// 仅放在 src/lib/server 中；浏览器只收到 +layout.server.ts 返回的公开设置。
 const loaded = core.config.load('kit', './config/_kit.yml', KitConfigSchema)
 if (!loaded.success)
   throw new Error(loaded.error.message)
@@ -320,7 +324,7 @@ export const appKitConfig = loaded.data
 export const publicKitConfig = { transport: appKitConfig.transport }
 ```
 
-在 `src/routes/+layout.server.ts` 将公共投影交给上述浏览器布局，不导入服务端配置文件：
+在 `src/routes/+layout.server.ts` 返回浏览器建立连接需要的值，由页面的布局数据读取。下面的示例只返回对客户端有用的 `kitConfig`。
 
 ```ts
 import { publicKitConfig } from '#lib/server/kit-config.js'
@@ -330,9 +334,9 @@ export function load() {
 }
 ```
 
-`resolveKitConfig()` 同时解析 `server` （host/port）与 `transport`；host/port 优先级为 `HOST` / `PORT` 环境变量 > `_kit.yml` 的 `server` > 默认 `127.0.0.1:3000`，供 SvelteKit 服务器入口统一消费（与 `@h-ai/serv` 同构）。
+读取 HTTP 监听设置时，服务端启动代码可从 `@h-ai/kit` 导入独立的 `resolveKitConfig()`。它在服务器启动前解析 `server` 和 `transport`。监听地址和端口先用 `HOST` / `PORT` 环境变量，再读取 `_kit.yml` 的 `server`，最后才用 `127.0.0.1:3000`。
 如只在服务端读取配置，也可配合 `core.config.validate('kit', KitConfigSchema)` 使用。
-完整 `_kit.yml` 由服务端读取，可包含内部代理网段和访问策略文件路径。`+layout.server.ts` 只返回 `{ kitConfig: publicKitConfig }` 等明确公共投影，浏览器消费其中的 transport；禁止用 `?raw` 把完整配置或策略文件打入客户端，也不要在其中写入密钥。
+完整的 `_kit.yml` 在服务端读取，其中可以包含内部代理网段和访问规则的文件位置。通过 `+layout.server.ts` 传给浏览器的 `kitConfig` 只需包含浏览器会读取的字段，例如传输加密是否开启、密钥交换路径和不加密的路径。不要把代理地址、规则文件、私钥或完整配置发给浏览器，也不要用 `?raw` 导入服务端配置。
 
 ### 依赖
 
@@ -353,7 +357,7 @@ export function load() {
 
 密码登录只提交 `identifier` 和 `password`；`AuthPanel` 将 `LoginForm` 的 `username` 映射为 `identifier`。会话有效期由服务端 `session.maxAge` / `session.refreshTokenMaxAge` 配置决定，登录表单不提供按次登录的持久会话选项。
 
-协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
+服务端可在认证配置中提供用户协议和隐私政策的 Markdown 正文或 URL。如果正文和 URL 同时存在，登录页面的弹窗优先显示经过安全处理的 Markdown。
 
 路由直接导出 `kit.auth.createApi(iam)` 的 login、loginWithOtp、loginWithLdap、register、publicConfig、sendOtp、requestPasswordReset、confirmPasswordReset handler；自动执行 schema 验证、Cookie 设置和 HaiResult 映射。匿名白名单使用 `kit.auth.publicPaths`，不会放开 /me 和改密端点。浏览器用 `kit.client.createAuthActions({ apiFetch })` 直接连接 AuthPanel，复用 CSRF/transport。
 
@@ -367,15 +371,15 @@ export function load() {
 
 ### 请求语言隔离
 
-Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest())`；SvelteKit 可使用 `kit.i18n.runWithLocale(locale, () => resolve(event))`，serv 自动按请求头建立上下文。异步子任务继承请求语言，优先级为显式 `MessageOptions.locale`、请求语言、进程启动默认语言。`setGlobalLocale` 在请求上下文中只更新当前请求；上下文外仅用于启动默认值，不能在请求 hook 中调用它修改默认值。
+多位用户的请求可能同时在一个 Node.js 进程里执行。用 `core.i18n.runWithLocale(locale, () => handleRequest())` 为本次请求和它启动的异步工作设定语言。SvelteKit 可以用 `kit.i18n.runWithLocale(locale, () => resolve(event))`，Serv 会按请求头自动设定。翻译优先使用显式传入的 `MessageOptions.locale`，其次使用本次请求的语言，最后使用进程启动时的默认语言。
 
-浏览器继续使用应用级 `setGlobalLocale` / `createLocaleStore`。SSR 的 UI store 初始化和 setter 只修改自身状态，不写全局语言；UI 消息从请求上下文读取。`runWithLocale` 仅支持 Node 入口，浏览器通过显式 locale 或应用状态翻译。
+设定请求语言后，`setGlobalLocale()` 只改本次请求。启动时在请求之外调用它，可设置进程默认语言。服务端渲染时，UI 的语言状态对象只更新自己，翻译读取本次请求的语言。浏览器中从 `@h-ai/ui/i18n` 导入 `createLocaleStore()` 管理当前页面语言，或在翻译时直接传入 `locale`。
 
 ### 反馈接口与普通请求关联
 
-`kit.createFeedbackHandler` 可作为 `/api/feedback/[...path]/+server.ts` 的 GET/POST/PATCH handler，复用 api-contract schema，与 serv 使用同一数据契约；输入流受大小上限约束，客户端身份/租户字段被拒绝。宿主通过 resolveContext 从已经验证的 locals.session 映射范围和权限，null 拒绝访问，并保留现有 createHandle 的 CSRF、认证与传输加密。
+在 `/api/feedback/[...path]/+server.ts` 中，可以把 `kit.createFeedbackHandler()` 返回的函数导出为 GET、POST、PATCH。Kit 和 Serv 使用同一份 Feedback API 契约。服务端限制正文大小，也拒绝客户端声称自己的身份或租户。应用实现 `resolveContext`，从已经验证的 `locals.session` 取用户信息并决定反馈范围和权限。返回 `null` 表示拒绝。现有的 CSRF、认证和传输加密仍由 `kit.createHandle()` 中设置的中间件处理。
 
-createHandle 保留有效且有界的入站 X-Request-Id，补写响应头，并为异步业务传递请求 ID 和已验证用户。需要收集普通业务后端日志时，在宿主 middleware 中以 `core.context.run({ scopeId: 'configured-product' }, next)` 包住实际业务；该可信范围应与反馈接口一致，不能从客户端头推导。
+createHandle 保留有效且有界的入站 X-Request-Id，补写响应头，并为异步业务传递请求 ID 和已验证用户。需要收集普通业务后端日志时，在应用的请求中间件中以 `core.context.run({ scopeId: 'configured-product' }, next)` 包住实际业务；该可信范围应与反馈接口一致，不能从客户端头推导。
 
 ```ts
 import type { SessionData } from '@h-ai/kit'
@@ -400,7 +404,7 @@ export const PATCH = handler
 
 将 kit.auth.createApi(iam).createCaptcha 导出为 POST /api/auth/captcha；kit.auth.publicPaths 已包含它。kit.client.createAuthActions() 保留标准交互请求的 captcha 字段，并提供 createCaptcha；AuthPanel 提交时自动求解。匿名首次/过期改密仍须导出 /api/auth/password/renew。服务端 IAM 检查证明，开启策略不会只依赖界面。
 
-策略、默认值和恢复边界见 [IAM](../../../packages/iam/README.md)。
+何时要求验证、验证失败后如何处理，见 [IAM 配置](../configuration/iam.md)和 [IAM 功能说明](./iam.md)。
 
 ### 原地恢复过期会话
 
@@ -408,31 +412,35 @@ export const PATCH = handler
 
 ### 页面离开会话策略
 
-`session.endOnPageHide` 默认 `false`。启用后宿主调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })` 并在卸载时调用返回的清理函数；标准 admin/H5/fullstack 模板已经接入。非 BFCache 的 `pagehide`（也包括刷新、整页导航）通过 POST `/auth/session/close` 尽力撤销当前 access 及关联 refresh，沿用 CSRF/传输加密，使用 `keepalive` 且不自动刷新会话。该响应不清 Cookie/本地凭据，避免旧响应覆盖下一次登录。显式退出仍使用正常 logout，可靠撤销并清理当前凭据。浏览器可能不发送页面离开请求，因此必须按业务配合服务端 `idleTimeout`/`absoluteTimeout`；不能据此保证关闭即撤销。
+`session.endOnPageHide` 默认关闭。开启后，在浏览器页面加载时调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })`，卸载时执行它返回的函数，移除监听器。标准 admin、H5 和 fullstack 模板已接好此步骤。这里的 `actions` 来自 `apiClient.createAuthActions(...)` 或 SvelteKit 的 `kit.client.createAuthActions(...)`。配置从登录页使用的公开认证接口读取。
+
+浏览器触发 `pagehide` 时会尝试调用 `POST /auth/session/close`。这包括刷新或整页导航，但页面进入往返缓存（BFCache）时会跳过。请求沿用 CSRF 防护和已启用的传输加密，并使用 `keepalive` 争取在页面关闭后完成。该请求不会刷新会话，响应也不会清除 Cookie 或本地凭据，以免较早的请求清掉新的登录状态。
+
+浏览器可能根本没有发出请求。服务端仍需用 `idleTimeout` 或 `absoluteTimeout` 限制会话寿命。用户主动退出时，应正常调用应用的 logout 接口，让服务端撤销凭据，并清除客户端保存的登录状态。
 
 ### 每次请求的访问控制
 
-路径规则的 `encryption` 可选 required / disabled，省略沿用宿主。disabled 不解密请求或加密响应，仍执行访问和身份检查；不接受框架传输信封。required 可保护自定义 JSON 端点并优先于 `excludePaths`，没有 Crypto、密钥环和 registry 时不能启用。模式冲突在创建 Handle 时拒绝。CLI 的 crypto 模板同步装配服务端和浏览器，生产选择 db 和共享数据库；策略及代理配置不下发浏览器，明文调用方按公开传输排除路径选择协议。
+路径规则的 `encryption` 可以填 `required` 或 `disabled`，省略时沿用应用的传输加密配置。设为 `disabled` 时，服务端按普通 HTTPS 正文处理，仍检查 IP、时段和身份，收到框架加密数据会拒绝。设为 `required` 时优先于 `excludePaths`，没有启用 Crypto、服务端密钥环和共享密钥登记存储就无法创建 Handle。相互冲突的路径规则也会使创建失败。CLI 的 Crypto 模板已配置两端。浏览器只需要知道哪些路由走普通请求，代理地址和完整访问规则保留在服务端。
 
-将服务端 `_kit.yml` 的 `trustedProxies` 和 `access` 显式传给 `kit.createHandle`。示例和生成模板在应用初始化后只创建一次 Handle。`access` 默认为 `false`；内联 `{ rules: [{ id: 'external', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.0/24'] }] }` 只限制匹配接口，`global` 则限制宿主处理的全部请求。实际路径包含部署前缀；静态服务器直接返回的资源不经过 Handle。
+将服务端 `_kit.yml` 的 `trustedProxies` 和 `access` 显式传给 `kit.createHandle`。示例和生成模板在应用初始化后只创建一次 Handle。`access` 默认为 `false`；内联 `{ rules: [{ id: 'external', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.0/24'] }] }` 只限制匹配接口，`global` 则限制应用 Handle 处理的全部请求。实际路径包含部署前缀；静态服务器直接返回的资源不经过 Handle。
 
 独立文件使用 `access: { file: './config/security/request-access.yml' }`，按工作目录解析，启动读取一次，最大 1 MiB，修改后重建 Handle。全局与所有匹配规则取交集，空列表不限对应维度，时区默认 UTC。时间窗口结束后，已有会话的后续请求同样被拒绝。预检和密钥交换也执行策略；普通 transport 请求的 HTTP 403 / `hai:common:104` 保留响应加密。
 
-`trustedProxies: auto` 在普通宿主不信任转发头；受管 Compose 只有后端私有且存在入口代理时才采用容器网段。自管入口显式指定代理 IP/CIDR，`[]` 可关闭。解析后的 `event.getClientAddress()` 与策略、IAM、审计使用相同地址。外层代理、不可恢复的源地址丢失、环境变量与部署回滚见[请求访问控制手册](../configuration/request-access.md)。
+`trustedProxies: auto` 在未配置托管代理的应用中不使用转发头；受管 Compose 只有后端私有且存在入口代理时才采用容器网段。自管入口显式指定代理 IP/CIDR，`[]` 可关闭。解析后的 `event.getClientAddress()` 与策略、IAM、审计使用相同地址。外层代理、不可恢复的源地址丢失、环境变量与部署回滚见[请求访问控制手册](../configuration/request-access.md)。
 
 ### 客户端、CRUD 和传输的命名导出
 
-| 公开入口                                              | 使用与输入                                                                           | 输出                                                     |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------- |
-| `@h-ai/kit/client` 的 `createKitClient`               | `createKitClient({})`，可传 CSRF、base path 和加密等选项                             | 独立同源客户端，调用方式同 `kit.client.create`           |
-| `@h-ai/kit/client` 的 `createKitAuthActions`          | `createKitAuthActions({ apiFetch: client.apiFetch })`，指定已创建客户端的 fetch      | 提供登录、会话恢复和密码相关动作的对象                   |
-| `@h-ai/kit/client` 的 `createSvelteKitNavAdapter`     | `createSvelteKitNavAdapter()`                                                        | 包含当前路径和 `navigate` / `refresh` 的 UI 导航适配器   |
-| `@h-ai/kit` 的 `defineCrud`                           | `defineCrud(resource)`，用表单字段及资源操作定义 CRUD                                | `CrudOperations<T>`，同 `kit.crud.define`                |
-| `@h-ai/kit` 的 `matchPermission`                      | `matchPermission('reports:read', ['reports:read'])`                                  | `true`，表示权限匹配；受保护接口依旧由服务端校验         |
-| `@h-ai/kit` 的 `resolveText`                          | `resolveText('Name')`，或传返回本地化文案的函数                                      | 字符串 `'Name'`                                          |
-| `@h-ai/kit` 的 `resolveOptions`                       | `resolveOptions([{ label: 'Active', value: true }])`，也可传返回选项的函数           | 解析选项后的 `{ label, value }[]`                        |
-| `@h-ai/kit` 的 `resolveKitTransportConfig`            | `resolveKitTransportConfig(false)`，或传传输部分配置                                 | `false` 表示禁用，其余返回完整 `KitTransportConfig`      |
-| `@h-ai/kit/crypto` 的 `transportEncryptionMiddleware` | `transportEncryptionMiddleware(transportConfig)`，可传按路径、方法判定加密模式的函数 | SvelteKit 请求中间件；宿主管理 Crypto 和密钥存储生命周期 |
+| 公开入口                                              | 使用与输入                                                                           | 输出                                                                   |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `@h-ai/kit/client` 的 `createKitClient`               | `createKitClient({})`，可传 CSRF、base path 和加密等选项                             | 独立同源客户端，调用方式同 `kit.client.create`                         |
+| `@h-ai/kit/client` 的 `createKitAuthActions`          | `createKitAuthActions({ apiFetch: client.apiFetch })`，指定已创建客户端的 fetch      | 提供登录、会话恢复和密码相关动作的对象                                 |
+| `@h-ai/kit/client` 的 `createSvelteKitNavAdapter`     | `createSvelteKitNavAdapter()`                                                        | 包含当前路径和 `navigate` / `refresh` 的 UI 导航适配器                 |
+| `@h-ai/kit` 的 `defineCrud`                           | `defineCrud(resource)`，用表单字段及资源操作定义 CRUD                                | `CrudOperations<T>`，同 `kit.crud.define`                              |
+| `@h-ai/kit` 的 `matchPermission`                      | `matchPermission('reports:read', ['reports:read'])`                                  | `true`，表示权限匹配；受保护接口依旧由服务端校验                       |
+| `@h-ai/kit` 的 `resolveText`                          | `resolveText('Name')`，或传返回本地化文案的函数                                      | 字符串 `'Name'`                                                        |
+| `@h-ai/kit` 的 `resolveOptions`                       | `resolveOptions([{ label: 'Active', value: true }])`，也可传返回选项的函数           | 解析选项后的 `{ label, value }[]`                                      |
+| `@h-ai/kit` 的 `resolveKitTransportConfig`            | `resolveKitTransportConfig(false)`，或传传输部分配置                                 | `false` 表示禁用，其余返回完整 `KitTransportConfig`                    |
+| `@h-ai/kit/crypto` 的 `transportEncryptionMiddleware` | `transportEncryptionMiddleware(transportConfig)`，可传按路径、方法判定加密模式的函数 | SvelteKit 请求中间件；应用负责初始化 Crypto 和密钥存储，并在退出时关闭 |
 
 `client`、`resource` 和 `transportConfig` 分别为已创建的 Kit Client、应用定义的 CRUD 资源及校验完成的传输配置。
 
@@ -466,8 +474,10 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 
 快捷响应、认证守卫和限流均使用 `HaiCommonError` 标准错误码，附带 `httpStatus`、`traceId` 与 `X-Trace-Id`。未认证返回 `UNAUTHORIZED.code`，无权限返回 `FORBIDDEN.code`，限流返回 `RATE_LIMIT_EXCEEDED.code`（429）；限流存储故障返回安全的 503，原始原因只记服务端日志。
 
-HTTP 错误返回本地化安全文案及追踪编号；ToastContainer 默认隐藏编号，由排查信息图标展开和复制。响应同时包含 `error.traceId` 和 `X-Trace-Id`。框架复用本次 requestId 作为 traceId，前后端日志自动关联。底层异常、堆栈和操作上下文经凭据脱敏后写入日志，不通过 cause/ext 向用户公开。字段校验只返回本地化的字段名和错误。
+HTTP 错误向浏览器返回当前语言的提示和追踪编号。编号既在响应的 `error.traceId`，也在 `X-Trace-Id` 响应头，等于本次请求的 `requestId`。用户可在 Toast 的排查信息中展开并复制编号，开发人员可用它查找前后端日志。异常详情、堆栈和操作信息去除凭据后写入服务端日志。字段校验仅返回字段名和可显示的错误提示。
 
-`core.error.toPublic(error, traceId?)` 用于接口/UI 边界；`core.error.formatMessage(error)` 用于重新翻译后的提示，重复调用不会重复追加标识。日志传入完整 Error 对象，不能只记录通用标题或提前 String(error) 丢失上下文。数据库失败记录驱动错误码、消息、堆栈及表/列；SQL 原文、绑定值和连接凭据不进入日志。
+服务端把错误发给浏览器之前，可用 `core.error.toPublic(error, traceId)` 去除内部信息。界面需要重新显示错误时，可用 `core.error.formatMessage(error)` 格式化提示，重复调用也只附一次追踪编号。
+
+写服务端日志时传入完整的 Error 对象，保留堆栈和错误原因。数据库操作失败时，可按驱动错误码、表和列定位问题。日志不记录 SQL 原文、参数值或数据库凭据。
 
 audit 已初始化时，createHandle 为业务 audit.log 绑定已验证会话的身份/角色快照、平台 getClientAddress 地址和请求编号。自动入口事件 request.execute 包含路由模板、方法、状态和成功/失败/拒绝，包含守卫跳转及 SvelteKit HTTP 控制流；不复制请求体或错误详情。capture.enabled 可关闭自动采集，capture.includeReads 可开启成功读取；默认保留失败读取、跳过成功读取。业务含义仍在应用完成/失败边界显式记录，关闭自动采集不影响业务 log。

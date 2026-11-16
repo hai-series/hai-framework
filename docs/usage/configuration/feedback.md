@@ -4,9 +4,9 @@
 
 ## 配置入口
 
-生成项目使用 `config/_feedback.yml`，配置注册名为 `feedback`，环境覆盖前缀为 `HAI_FEEDBACK_`。覆盖顺序和无敏感值示例见[运行配置](runtime.md#配置从哪里来)。
+生成的项目将反馈相关设置写在 `config/_feedback.yml`。应用启动时从 `core.config.get('feedback')` 取出配置并传给 `feedback.init()`。用环境变量覆盖时使用 `HAI_FEEDBACK_` 前缀。见[配置来源和覆盖顺序](runtime.md#配置从哪里来)。
 
-调用 `feedback.init(config, options?)`，`FeedbackConfigSchema` 校验 `config`；由宿主通过 `options.collectEvidence` 注册可选的业务采集回调。服务端负责持久化、后台采集及投递。应用身份和构建标识用于定位收集来源，同一部署的前后端应保持标识一致。
+服务端保存报告、执行后台任务并发送通知。应用要把自己的业务日志一并附在报告中时，可以在 `feedback.init(config, { collectEvidence })` 中传入收集函数。同一次部署的页面和服务端应使用同一构建标识，便于把用户反馈对应到具体版本。
 
 ## 配置示例
 
@@ -18,7 +18,7 @@ consoleContent: metadata
 
 ## 配置清单
 
-表中的默认值适用于当前配置区块存在时。标为“必填”的字段在使用对应区块或后端时填写。“可省略”表示 Schema 不填充值；如有运行时回退，单独注明。`[]` 表示数组中每一项。
+例如，省略 `notificationMode` 默认使用 `reach` 发送通知，因此需要为该模式设置收件方。下例显式改为 `console`，开发时只在服务端日志中看到反馈编号等基本信息。
 
 | 配置项                        | 默认值/必填   | 说明                                                                                                             |
 | ----------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -26,8 +26,8 @@ consoleContent: metadata
 | `appVersion`                  | 可省略        | 当前应用版本，作为默认诊断信息保存。可填字符串，最多 128 个字符                                                  |
 | `buildId`                     | 可省略        | 构建标识，帮助定位发布产物。可填字符串，最多 128 个字符                                                          |
 | `commit`                      | 可省略        | 源码提交标识，帮助定位对应代码。可填字符串，最多 128 个字符                                                      |
-| `notificationMode`            | `"reach"`     | disabled 不通知，console 默认仅输出元数据，reach 使用已有通知通道。可填`"disabled"`、`"console"`、`"reach"`      |
-| `consoleContent`              | `"metadata"`  | console 通知内容；metadata 只输出定位和采集状态，summary 显式加入通用脱敏摘要。可填`"metadata"`、`"summary"`     |
+| `notificationMode`            | `"reach"`     | disabled 不通知，console 默认仅输出元数据，reach 使用已有通知通道。可填 `"disabled"`、`"console"`、`"reach"`     |
+| `consoleContent`              | `"metadata"`  | console 通知内容；metadata 只输出定位和采集状态，summary 显式加入通用脱敏摘要。可填 `"metadata"`、`"summary"`    |
 | `recipients`                  | `[]`          | Reach 接收方，由实际 Provider 校验邮箱、手机号或业务目的地。可填数组（元素为字符串，1–320 个字符），最多 20 项   |
 | `notificationProvider`        | `"email"`     | 已初始化 Reach Provider 的唯一名称，不限制为邮件。可填字符串，至少 1 个字符                                      |
 | `adminUrl`                    | 可省略        | 管理员通知中的反馈管理页面地址。可填字符串，URL                                                                  |
@@ -36,7 +36,7 @@ consoleContent: metadata
 | `webhookUrl`                  | `""`          | 反馈采集结束后的 Webhook 地址；空字符串禁用，只允许可信 HTTP(S) 地址且不跟随重定向。可填字符串，最多 2048 个字符 |
 | `webhookSecret`               | `""`          | Webhook HMAC-SHA256 签名密钥；空字符串不签名，仅服务端私有环境配置。可填字符串，最多 4096 个字符                 |
 | `webhookTimeoutMs`            | `10000`       | 单次 Webhook 请求超时，单位毫秒；非 2xx 或超时均进入持久重试。可填整数，1–60000                                  |
-| `workerIntervalMs`            | `1000`        | 持久任务扫描间隔，单位毫秒；零值由宿主手动运行任务。可填整数，0–60000                                            |
+| `workerIntervalMs`            | `1000`        | 持久任务扫描间隔，单位毫秒；设为 0 后不会自动扫描，应用可按需手动运行后台任务。可填整数，0–60000                 |
 | `leaseMs`                     | `30000`       | 持久任务执行租约时长，单位毫秒；过期后允许其他实例接管。可填整数，1000–300000                                    |
 | `maxAttempts`                 | `5`           | 汇集、通知、Webhook 和导出任务最大尝试次数；到期清理持续重试。可填整数，1–20                                     |
 | `retentionDays`               | `30`          | 已受理反馈及对象附件的保留天数。可填整数，1–3650                                                                 |
@@ -53,4 +53,4 @@ consoleContent: metadata
 
 ## 生效与核对
 
-开发可以用 `console` 记录反馈元信息。使用 `reach` 前配置收件人及实际 Provider；`webhookUrl` 启用独立回调，密钥只在服务端注入。调整限制后分别验证上传、入库、后台处理、通知和导出。[反馈通知、采集和保留](operations.md#feedback通知采集和保留)
+开发可用 `console` 在日志中记下反馈编号等信息。用 `reach` 时，需要填收件人，并提供实际能投递的邮件、短信或 API 渠道。填入 `webhookUrl` 后，服务端还会调用该地址。回调密钥在服务端读取。修改容量限制后，提交一份带附件的测试报告，再核对是否能在管理端查询和导出。[反馈通知、采集和保留](operations.md#feedback通知采集和保留)

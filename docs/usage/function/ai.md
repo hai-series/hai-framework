@@ -1,6 +1,8 @@
 # @h-ai/ai 功能说明
 
-用 Node.js 服务端的 `ai` 对象调用模型、工具、知识库和代理协议。浏览器通过应用的 HTTP API 或 `@h-ai/ai/client` 的语音客户端访问服务端。
+在 Node.js 服务端用 `ai` 调用模型、执行工具、搜索知识库或连接其他智能体。浏览器的聊天页面通过应用提供的 HTTP 接口发送消息。需要录音或播放时，从 `@h-ai/ai/client` 创建浏览器语音客户端。
+
+模型、工具和知识库的服务端操作从 `ai` 调用。浏览器语音客户端、MCP 服务端工厂和 A2A 协议消息类型有独立导入路径，下文分别注明。
 
 [模块 README](../../../packages/ai/README.md) · [配置清单](../configuration/ai.md) · [数据结构](../data/ai.md) · [AI 接入](../development/ai.md)
 
@@ -45,7 +47,7 @@ finally {
 
 除标明“direct”、AsyncIterable 或 Promise 直接结果的项目外，输出列均指 HaiResult 成功后的 data；先检查 success。表中 request/definition/options 等变量必须按该行真实输入类型在应用提供，不能把类型名当成运行时值。流和显式工具可能抛错，应在消费边界处理。
 
-下表的调用片段复用本页已初始化的服务；命名变量代表应用已提供的请求、Schema、资源定义或配置。完整步骤和失败处理见对应功能示例。`HaiResult` 先判断 `success`，异步项按签名 `await`。
+表中的调用片段使用各节示例已经打开的服务或建立的对象。示例变量由应用提供，例如当前 HTTP 请求、用于校验输入的 Schema、资源定义或配置。返回 Promise 时用 `await` 等待。返回 `HaiResult` 时先判断 `success`，再读取数据或错误。
 
 | 入口                              | 场景                    | 输入                                                                              | 输出                                                                      | 调用片段                                                                                  |
 | --------------------------------- | ----------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -278,7 +280,7 @@ if (failures.length)
   throw new AggregateError(failures, 'AI operation or cleanup failed')
 ```
 
-默认 PostgreSQL Store 支持空库首次部署和旧库升级时并发调用 `ai.init`。各节点通过事务级 advisory lock 排队准备表、索引和写入门闩。结构变更失败时回滚，修正权限或结构后可重试。已有索引直接复用。向量重建在事务提交后异步执行，节点失联后由其他节点接续。
+多个服务节点首次连接同一 PostgreSQL 时，或部署包含新表结构的版本时，都可以调用 `ai.init()`。数据库锁会让各节点按顺序建表、建索引或准备写入控制记录。失败时回滚数据库事务，修复权限或结构后可以重试。事务提交后，后台再重建向量索引。某个服务节点退出时，其他节点继续处理剩余工作。
 
 MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确的 ER_DUP_KEYNAME/1061，并重新核对列及顺序、非唯一完整列、升序可见 BTREE 和无表达式；已有同名错误结构仍失败。账户需要建表和 INDEX 权限，元数据读取、权限或其他 DDL 错误使 ai.init 返回 CONFIGURATION_ERROR。返回前等待全部已启动 DDL 结束；MySQL DDL 不回滚，失败保留已创建结构，修复权限/结构后再重试。逐步检查初始化结果，失败不接收业务请求，并逆序关闭 AI、vecdb、reldb。
 
@@ -308,7 +310,7 @@ await ai.close()
 - `ai.tools` 与 `ai.stream` 是纯函数子系统，无需初始化即可使用。
 - 开发/测试缺少 reldb/vecdb 时使用临时 Store；两者均已初始化时自动使用 DB Provider。生产校验真实数据库与向量后端共享能力，自定义 Provider 必须如实声明 `stateScope`。
 
-公共扩展通过 AIStoreProvider 注入 Store；内置 LLM Provider/工厂依赖与 Context 内部依赖不属于公开 API。模型接入使用配置，历史查询、AskOptions 和 ChatRecord 保持公开。
+如果要用自己的存储系统，实现 `AIStoreProvider` 后在 `ai.init()` 时传入。接入模型时在 LLM 配置里设置供应商和模型参数。应用可通过公开的历史查询接口读取 `ChatRecord`。
 
 ### API 概览
 
@@ -504,7 +506,7 @@ async function continueWork(identity: RunnerScope) {
 
 A2A 的 journal、context 归属与消息表在 `ai.init()` 阶段初始化。任务按可信 `agentId` 隔离（含获取、取消和续接）；匿名请求共享匿名主体，生产应在可信传输层认证。`listMessages` 是服务端管理接口，支持 `callerId`、`contextId`、`since`，不能向未授权客户端暴露。
 
-Task 与事件使用同一共享 journal，不再装配独立的旧 TaskStore。push notification 配置和 authenticated extended card RPC 返回 SDK 标准“不支持/未配置”错误，不执行任务；executor 相关类型保留公开导出，内部 handler/Store 装配类型不属于公共契约。
+A2A 任务记录及其事件保存在同一处共享存储，可以在另一个服务节点上继续读取事件。push notification 配置和 authenticated extended card RPC 返回 SDK 标准“不支持/未配置”错误，不执行任务；executor 相关类型保留公开导出，内部 handler/Store 装配类型不属于公共契约。
 
 入站消息必须持久化后才进入 executor，并在等待后重新校验共享执行代际与期限；agent 消息在同一有界事件队列内等待日志成功后才提交 journal。日志失败会产生 failed/interrupted Task，不会发布虚假的成功结果；同一消息重试不重新执行。日志与 journal 不是跨记录事务，已有日志不等于成功交付，最终以 Task 的 `requiresEffectReconciliation` 标记核对可能已发生的业务效果。消息查询失败返回 `A2A_LIST_MESSAGES_FAILED`（984），不暴露原始 SQL 或连接详情。
 
@@ -543,7 +545,7 @@ const stdio = createMcpServer({ name: 'reports', version: '1.0.0' }) // 以服�
 await stdio.connect(new StdioServerTransport()) // 无额外参数，连接标准输入输出；连接故障拒绝 Promise。
 ```
 
-`new SSEServerTransport('/mcp/messages', response)` 使用 POST 消息地址与当前 Node `ServerResponse` 创建传输对象，交给 `server.connect(transport)` 后由宿主 HTTP 路由维护会话及消息入口。
+`new SSEServerTransport('/mcp/messages', response)` 使用 POST 消息地址与当前 Node `ServerResponse` 创建传输对象，然后调用 `server.connect(transport)`。应用要为新建 SSE 会话及后续 POST 消息各注册一条 HTTP 路由。
 
 ##### 调用远程 MCP 和独立工具作业
 
@@ -589,7 +591,7 @@ function mountTools(options: MCPServiceBrokerOptions) {
   const server = createServer((req, res) => {
     void broker.handleRequest(req, res)
   }) // 处理绑定地址上的 MCP 请求。
-  return { broker, server } // 宿主监听固定地址并负责传输保护，关闭时调用 broker.close() 和 server.close()。
+  return { broker, server } // 应用服务器监听固定地址，并通过 HTTPS 保护传输，关闭时调用 broker.close() 和 server.close()。
 }
 
 async function bindManual(broker: ReturnType<typeof mountTools>['broker'], principal: MCPServiceAuthorization['principal'], sessionId: string, signal: AbortSignal) {
@@ -855,7 +857,9 @@ if (result.success) {
 
 自动记忆提取在本节点后台运行；`pendingMemoryTasks=0` 不代表全部成功。`flush()` 等待本批任务，异常和失败 HaiResult 都返回 `MEMORY_EXTRACT_FAILED`（含失败数量），同轮并发观察者共享结果。返回即确认该批报告，后续只观察新任务，不自动重放可能部分完成的提取。`save()`、`reset({ waitForMemoryTasks: true })`、`consolidate()` 遇到该失败立即返回，不继续后续状态或记忆写入。进程崩溃后的外部效果仍须人工核对。
 
-`scope: { objectId, sessionId }` 必填。相同 scope 的所有节点共用一条版本记录，原子保存消息、摘要、生成 owner、轮次及待提交状态；`addMessage`、每个对外流式 delta 和最终提交即时持久化，`save()` 只刷新共享快照、等待本节点记忆任务并同步会话目录。`getMessages/getTurns/getSummaries/getTokenUsage` 返回最近一次成功读写的独立快照；跨节点读取前调用 `await manager.reload()` 或 `restoreManager()`。
+创建对话上下文时必须给出 `scope: { objectId, sessionId }`，分别标识数据归属和会话。连接同一存储的服务节点按这一对值读写同一个上下文。添加消息、向客户端输出每段生成文本及提交最终结果时都会保存进度。`manager.save()` 刷新当前实例、等待本节点启动的记忆任务，并更新会话列表里的记录。
+
+`manager.getMessages()`、`getTurns()`、`getSummaries()` 和 `getTokenUsage()` 读到的是本实例最近成功读取或写入的副本。需要查看其他节点已经更新的内容时，先调用 `await manager.reload()`，或通过 `ai.context.restoreManager()` 重新取得实例。
 
 并发限制按共享 scope 生效；`reject` 立即返回忙，`queue` 可取消地轮询（不承诺 FIFO）。生成租约为存储端时钟 30 秒，每 10 秒续租，最终写入同时校验版本、owner 和期限。失联生成过期后由下一次操作标为 interrupted，保留生成记录，不自动重放 LLM、工具或记忆提取。manual 的 pending 不自动过期，可在另一节点/重启后按同一 turnId 提交；相同终态与文本重复提交幂等，不同内容拒绝。外部工具/LLM/后台记忆不与上下文跨系统原子提交，进程失联后须核对未知副作用，不能据此承诺外部恰好一次。`reset` 更换共享纪元；`removeSession` 清空正文并保留永久墓碑，同一 scope 不复用，旧节点不能重建。
 
@@ -983,7 +987,7 @@ const manager = ai.context.createManager({
 
 ### 返回句柄的用法
 
-`registry` 来自 `ai.tools.createRegistry()`；`manager` 来自 `ai.context.createManager/restoreManager` 成功后的 data；`session` 来自受管 ACP sessions.create/get/resume 的 data，`connection` 来自 `ai.acp.connect` 的 data。每种句柄只在自己的生命周期及授权范围内使用。scoped Memory 的十个方法与上表同名，主体/作用域已由工厂绑定，不再接受 objectId/scope 覆盖。
+下面各对象由 API 创建，后续方法直接在返回对象上调用。用 `ai.tools.createRegistry()` 得到 `registry`。用 `ai.context.createManager()` 或 `ai.context.restoreManager()` 的成功结果取得 `manager`。受管 ACP 的 `session` 由作用域对象的 `sessions.create()`、`sessions.get()` 或 `sessions.resume()` 返回，`connection` 由 `ai.acp.connect()` 返回。已通过 `ai.memory.scoped()` 创建的记忆对象始终以同一个用户和作用域执行，不再单独传这两个字段。
 
 | 入口                       | 场景               | 输入                                                       | 输出                                                                   | 调用片段                                                 |
 | -------------------------- | ------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------- |
@@ -1052,7 +1056,7 @@ async function prepareAudio(recorded: Blob) { // 输入浏览器采集且可被 
 
 ### ACP 仓库快照与 A2A 协议构建器
 
-以下 ACP 调用运行在 Node.js。工作区输入由应用授权后提供，发布前由宿主核对目标仓库、分支和补丁。返回领域结果的操作先检查 `success`。
+以下 ACP 调用运行在 Node.js。应用先确认当前用户可访问该工作区。提交变更前，检查目标仓库、分支和补丁内容。返回领域结果的操作先检查 `success`。
 
 | 入口                                | 使用与输入                                                                                                              | 成功输出              |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------- |

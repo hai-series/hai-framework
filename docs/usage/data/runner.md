@@ -4,27 +4,27 @@
 
 ## 数据库
 
-模块借用共享 [reldb](reldb.md) 持久化执行、容量和事件。时间列以数据库时间戳协调。未列默认值时由代码在写入时设置。
+Runner 把任务、资源配额和执行事件保存在共享 [reldb](reldb.md)。多个执行节点使用数据库时钟判断截止时间。未列默认值的字段由写入代码设置。
 
 ### `hai_runner_executions`
 
-| 字段                                                     | 含义与约束                                                                  |
-| -------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `id`                                                     | 执行主键                                                                    |
-| `scope_key`、`kind`                                      | 权限范围标识、已注册的执行类型                                              |
-| `request_key`、`reuse_key`                               | 请求指纹、可空唯一的复用键                                                  |
-| `request_json`、`environment_key`                        | JSON 保存受信输入、范围、环境与资源上限及执行超时；可空环境标识关联相应环境 |
-| `state`、`reason`                                        | 状态与可空失败原因                                                          |
-| `owner_node`、`owner_generation`、`owner_process_json`   | 可空执行所有者节点、代际和进程标识                                          |
-| `pinned_node`、`pinned_generation`、`parent_id`          | 可空节点或代际绑定，以及父执行标识                                          |
-| `leased_until`、`queue_until`、`run_until`               | 租约、排队和运行截止时间                                                    |
-| `event_sequence`、`event_bytes`                          | 事件游标和已写入字节数，后者 SQL 默认 0                                     |
-| `cpu_milli`、`memory_mib`、`pids`、`scratch_mib`         | CPU 毫核、内存 MiB、进程数和临时空间 MiB 的额度                             |
-| `result_json`、`container_json`                          | 可空结果和容器身份/运行信息                                                 |
-| `created_at`、`updated_at`                               | 创建和更新时间                                                              |
-| `reconciliation_json`、`reconciled_at`                   | 可空人工裁定内容和时间                                                      |
-| `capacity_class`、`concurrency_key`、`concurrency_limit` | 容量类别、可空并发组及其上限                                                |
-| `pool_fingerprint`、`pool_limit`、`warm_state`           | 可空预热池指纹、容量上限和预热状态                                          |
+| 字段                                                     | 含义与约束                                                                                              |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `id`                                                     | 执行主键                                                                                                |
+| `scope_key`、`kind`                                      | 权限范围标识、已注册的执行类型                                                                          |
+| `request_key`、`reuse_key`                               | 请求内容的核对标识，以及可为空的唯一去重键。提交同一次任务时可用同一去重键找到之前的执行                |
+| `request_json`、`environment_key`                        | JSON 保存服务端认可的任务参数、范围、环境、资源上限和执行超时。第二列可为空，有值时标明使用哪个容器环境 |
+| `state`、`reason`                                        | 状态与可空失败原因                                                                                      |
+| `owner_node`、`owner_generation`、`owner_process_json`   | 可空。保存哪个节点、该节点的哪次启动和哪个进程领取了任务                                                |
+| `pinned_node`、`pinned_generation`、`parent_id`          | 可空。记录任务只能由哪个节点或哪次节点启动处理，以及上级任务的 ID                                       |
+| `leased_until`、`queue_until`、`run_until`               | 租约、排队和运行截止时间                                                                                |
+| `event_sequence`、`event_bytes`                          | 事件游标和已写入字节数，后者 SQL 默认 0                                                                 |
+| `cpu_milli`、`memory_mib`、`pids`、`scratch_mib`         | CPU 毫核、内存 MiB、进程数和临时空间 MiB 的额度                                                         |
+| `result_json`、`container_json`                          | 可空结果和容器身份/运行信息                                                                             |
+| `created_at`、`updated_at`                               | 创建和更新时间                                                                                          |
+| `reconciliation_json`、`reconciled_at`                   | 可空人工裁定内容和时间                                                                                  |
+| `capacity_class`、`concurrency_key`、`concurrency_limit` | 记录任务占用哪类资源、归入哪组并发统计及该组上限。并发组及上限可为空                                    |
+| `pool_fingerprint`、`pool_limit`、`warm_state`           | 可空。记录提前启动容器所用的预热池标识、容量上限和准备状态                                              |
 
 索引覆盖排队状态、节点及租约、范围及容量、并发组、父执行、清理游标以及三类超时。
 
@@ -35,8 +35,8 @@
 | `hai_runner_events` | `id` 是事件主键，`execution_id` 是执行编号，`sequence_number` 是可续读顺序，`event_json` 保存事件，`created_at` 是写入时间。按执行和顺序建索引 |
 | `hai_runner_gate`   | `id` 是容量事务的单行主键 1，`revision` 初始为 0，随事务更新，用于协调共享资源预算                                                             |
 
-常规记录默认按 7 天保留期清理。效果待核对的记录保留共享状态，直至裁定后才进入相应回收流程。
+通常在记录满 7 天后清理。无法确认任务是否已在容器中执行完成时，数据库会保留相关记录，待人工或业务核对结果后再进入清理流程。
 
 ## 缓存
 
-模块没有 Redis 键。进程和容器句柄属于执行节点，跨节点查询、租约和裁定以数据库为准。
+模块没有 Redis 键。只有启动任务的节点持有本机进程和容器对象。其他节点通过数据库查询执行状态、检查是否已被领取，或者记录核对后的结果。

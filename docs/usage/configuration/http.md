@@ -2,11 +2,11 @@
 
 [配置手册](README.md) · [前后端接入操作](../development/frontend-backend.md)
 
-先区分独立 Serv 和 SvelteKit/Kit。Serv 负责 Node API 的监听与路由，Kit 适配 SvelteKit 宿主；浏览器 API Client 还需要自己的地址和认证配置。把服务端 YAML 复制到客户端不会自动接通。
+独立的 Node.js API 用 Serv 创建和监听 HTTP 服务。SvelteKit 项目在服务端入口用 Kit 处理请求。页面或原生应用调用 API 时，另外用 `apiClient.init()` 配置客户端要访问的地址和认证方式。
 
 ## Serv监听和路由
 
-位置：`config/_serv.yml`，宿主校验后传 `serv.createApp`/`serv.listen`。提供合法 HOST/PORT 进程变量时优先于 `server` 配置，非法 PORT 被忽略并回退；不要依赖这种回退隐藏部署配置错误。
+应用的启动代码读取 `config/_serv.yml`，把路由设置传给 `serv.createApp()`，再把地址和端口传给 `serv.listen()`。应用解析监听设置时，有效的 `HOST` 和 `PORT` 优先于文件中 `server` 的值。例如 `PORT=8080` 使用 8080，`PORT=abc` 会被忽略。
 
 监听、路由和默认值见 [Serv 配置清单](serv.md#配置清单)。生产入口的代理路径、应用 `http.apiPrefix` 与客户端 `baseUrl` 需要一致。
 
@@ -30,11 +30,11 @@ transport: false
 
 ### Serv 工厂参数与运行时依赖
 
-以下参数传给 `serv.createApp()`。契约、模块实例和回调由服务端代码装配，不放进 `_serv.yml`；只有表中的 `http` 使用前述可序列化配置。
+以下参数由服务端启动代码传给 `serv.createApp()`。应用从 `_serv.yml` 读出 `http` 设置，并在代码中提供接口定义、处理函数和已初始化的模块。
 
 | 参数 | 默认与前置 | 用途、输出和边界 |
 | --- | --- | --- |
-| `contract` / `procedures` | 必填，形状互相匹配 | 前者声明接口输入输出，后者实现业务；创建后返回可交给 `serv.listen` 或 Fetch 宿主的 App，不会初始化业务模块 |
+| `contract` / `procedures` | 必填，形状互相匹配 | `contract` 定义接口的输入输出，`procedures` 实现接口。应用先启动数据库等依赖，再将返回的 App 交给 `serv.listen()` 或接到自己的 Fetch 入口 |
 | `http` | 省略采用前述默认值 | 挂载 API、健康和文档路径，实施请求来源与协议策略；与业务依赖分开 |
 | `middlewares[].middleware` / `path` | 可省略；每项必须有 middleware，path 省略匹配全部 | 普通中间件在访问策略及解密后、业务路由前执行，提前响应仍走加密；二进制端点须显式排除传输加密。`serv.cors` 的响应头补充在外层，预检仍检查访问策略 |
 | `iam` | 可选的已初始化 IAM 实例 | 为 Bearer access token 派生会话校验；启用 refreshCookie 时也提供刷新能力。只创建 IAM procedures 不会代替顶层注入 |
@@ -42,7 +42,7 @@ transport: false
 | `createContext` | 可选回调，优先于 verifyToken 和 iam | 完全接管请求上下文，框架不再自动填充 session。回调须保留传入请求元数据、可信地址并自行验证身份，不能照信用户自报 userId/roles |
 | `refreshCookie` | 省略不启用 | 管理 refresh 传输；浏览器 HttpOnly Cookie 与受信原生 body 分开，具体字段见下表 |
 | `transport` | 省略不启用 | 显式提供已初始化 crypto、受管 serverKeyRing 与共享 keyStore；容量、时间、路径和排除项见[传输配置](#加密传输与容量)，不能只提供 YAML 而漏私有依赖 |
-| `audio` | 省略不挂载 WebSocket | 提供已初始化 ai、一次性票据验证及可选付费授权，容量和生命周期见下表；Node 宿主使用 serv.listen 才自动装配升级处理 |
+| `audio` | 省略不挂载 WebSocket | 在服务端传入已初始化的 `ai`、一次性票据的验证函数，以及可选的付费授权函数。在 Node.js 中使用 `serv.listen()` 会处理 WebSocket 协议升级 |
 
 上下文优先级为 **createContext → verifyToken → iam.auth.verifyToken → 只解析请求元数据**。没有验证器时 session 不会凭空出现；即使配置了验证器，资源授权仍由 procedure/业务守卫执行。
 
@@ -51,10 +51,10 @@ transport: false
 | `cookieName` | `hai_refresh_token` | 修改后浏览器需要取得新 Cookie；access token 的传输不因此改变 |
 | `maxAge` | 2592000 秒（30 天） | 浏览器 Cookie 的保存期限，应与 IAM refresh TTL 对齐，不会延长已失效的服务端令牌 |
 | `secure` | 显式 boolean 最优先 | 优先于 `HAI_SERV_REFRESH_COOKIE_SECURE`，两者都省略时由 NODE_ENV/HAI_CORE_ENV 是否 production 决定；测试开关不关闭此默认保护 |
-| `onRefresh` | 可选，优先于顶层 iam.session.refresh | 输入 refreshToken，返回令牌对 HaiResult。两个刷新来源都缺少时创建 App 失败；不能捕获后继续提供半装配认证 |
+| `onRefresh` | 可选，优先于顶层 iam.session.refresh | 传入刷新令牌，成功时返回新的令牌对。如果未提供此函数，也没有 `iam.session.refresh()`，`serv.createApp()` 会报错，应用应停止启动 |
 | `nativeTokenTransport.isRequest` | 可选，无默认信任回调 | 同时核对原生客户端标识及允许的 Origin。匹配时登录/注册/刷新使用 body 中的 refreshToken，不读写浏览器 Cookie；不能只信可伪造的单个头 |
 
-下例是完整的 IAM HTTP 装配片段。宿主已按 IAM 指南成功初始化数据库、缓存和 IAM；函数在依赖未就绪时拒绝创建。业务凭据由请求输入，不写进启动代码。
+下例创建可处理登录请求的 HTTP 应用。运行示例前先连接数据库和缓存，再调用 `iam.init()`。若 IAM 还未初始化，函数会报错。用户名和密码由用户在登录时提交。
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
@@ -76,7 +76,7 @@ export function createAuthApp() {
 }
 ```
 
-输入是已经初始化的 IAM 及匹配的 contract/procedures，输出是 App；宿主把它交给 `serv.listen` 或自己的 Fetch 入口。未登录请求访问受保护 procedure 应得到 401，成功登录后浏览器响应保存刷新 Cookie，刷新成功后旧 refresh 失效。上例省略 `secure`，因此进程覆盖才有机会生效；生产 HTTPS 无覆盖时 Cookie 带 Secure。它没有启用应用层传输加密、原生 body 通道或 API 文档，应用按所需功能分别装配。关闭先停止 HTTP 句柄，再释放 IAM 及其依赖。
+函数返回 App，应用可以把它交给 `serv.listen()` 开始监听。未登录时请求受保护接口应得到 401。登录响应会让浏览器保存刷新 Cookie，刷新成功后旧刷新令牌失效。上例省略 `secure`，因此进程覆盖才有机会生效；生产 HTTPS 无覆盖时 Cookie 带 Secure。它没有启用应用层传输加密、原生 body 通道或 API 文档，应用按所需功能分别装配。关闭先停止 HTTP 句柄，再释放 IAM 及其依赖。
 
 `serv.listen(app, options)` 的 `host`/`port` 省略时为 `127.0.0.1:3000`，不会自行读取 HOST/PORT；应用先解析上述 Serv 配置，再把 `server.host/port` 显式传入监听器。`onListening(info)` 用于记录实际地址，`onClose()` 是可选异步清理回调。提供 onClose 才自动注册信号关闭；手动调用返回句柄的 close() 只停止监听及连接，应用还须显式等待业务模块清理，不能以端口关闭代替数据库、任务和凭据的释放。
 
@@ -86,7 +86,7 @@ export function createAuthApp() {
 
 | 字段 | 默认与输入 | 输出、影响和限制 |
 | --- | --- | --- |
-| `ai` / `verifyTicket` | 必填的已初始化实例与回调 | 原子消费一次性短票据，返回可信 session 和可选 grant；不能只校验格式或用长期 access token 冒充已消费票据 |
+| `ai` / `verifyTicket` | 必填的已初始化实例与回调 | 验证票据并同时标记为已使用，使并发提交同一张票据时也只有一次成功。成功返回会话和可选授权信息 |
 | `authorize(session, request, grant)` | 可选回调 | 返回服务端确认的操作/模型/声音等付费参数。省略时只保留操作和音频格式，客户端自报 model/voice/instruction 不生效 |
 | `onSessionEnd(session, request)` | 可选异步回调 | 释放套餐并发占用等资源，成功、失败及断连至多调用一次；不把回调当跨系统事务 |
 | `path` | `/ai/audio`，相对 apiPrefix | 修改后客户端 WebSocket 地址同步；不是普通 JSON procedure |
@@ -136,7 +136,7 @@ HAI_SERV_REFRESH_COOKIE_SECURE=false
 
 Kit 的 YAML 字段与默认值见 [Kit 配置清单](kit.md#配置清单)。
 
-`config/_kit.yml` 的 `server` 默认同Serv，`transport` 默认 `false`；默认协商路径为 `/api/_hai/key-exchange`，与Serv默认不同。Kit 没有 `close()`，认证、Cookie、限流和请求处理由 hooks 工厂参数装配，不能把Serv 整个 `http` 对象放入Kit。
+`config/_kit.yml` 的 `server` 默认同Serv，`transport` 默认 `false`；默认协商路径为 `/api/_hai/key-exchange`，与Serv默认不同。Kit 没有 `close()`，应用在 `hooks.server.ts` 调用 `kit.createHandle()` 时传入认证、Cookie、限流和请求处理函数，不能把Serv 整个 `http` 对象放入Kit。
 
 SvelteKit 部署在 `/yyy` 等目录时，在 Vite 的 sveltekit 配置设置 `paths.relative: false`，从 `$app/paths` 用 `resolve('/').replace(/\/$/, '')` 读取构建挂载目录 `base`，在服务端 `crypto.transport` 传入 `basePath: base`，浏览器使用 `kit.client.installBrowserTransport(公开配置, { crypto, basePath: base })`。独立 Kit client 的 `transport.basePath` 采用同一个值。默认空字符串表示根目录；它是宿主构建参数，不在 YAML 重复配置。这样 `/yyy/api/*` 的默认加密范围与页面目录保持一致，交换路径和排除列表仍填写完整请求路径。
 
@@ -149,7 +149,7 @@ transport: false
 
 ### Hooks 参数与运行时依赖
 
-这些参数传给 `kit.createHandle()`，不是全部写入 `_kit.yml`。函数、私钥和存储实例由可信服务端装配：
+在服务端代码中调用 `kit.createHandle()` 时传这些参数。地址等设置可以来自 `_kit.yml`，函数、私钥和已初始化的存储对象由服务端代码提供。
 
 | 参数 | 默认与用途 | 输入改变后的结果和限制 |
 | --- | --- | --- |
@@ -173,10 +173,10 @@ if (!ready.success) throw new Error(ready.error.message)
 const handle = kit.createHandle({
   crypto: { crypto, encryptedCookies: ['order_preferences'] },
 })
-// 宿主将 handle 导出给 SvelteKit；私有环境已提供 HAI_KIT_COOKIE_KEY。
+// 从 hooks.server.ts 导出 handle，先在服务端环境设置 HAI_KIT_COOKIE_KEY。
 ```
 
-输入为宿主写入的 `order_preferences` 文本；浏览器看到认证密文，宿主读取时得到原文本。篡改密文不应得到有效偏好值。该示例只装配Cookie加密，未启用传输加密或业务认证，需与项目现有Hook配置合并；密钥不得发送到浏览器。
+应用向 `order_preferences` Cookie 写入文本后，浏览器保存密文，服务端读取时解密为原文本。验证时可修改 Cookie 的加密值，确认服务端拒绝读取。示例只开启 Cookie 加密，可把这段设置合并到已有的请求处理函数中。密钥留在服务端。
 
 ## API客户端地址、期限和恢复
 
@@ -217,7 +217,7 @@ transport:
   excludePaths: [/health, /ready]
 ```
 
-先用受控小请求确认协商与解密，再发超过普通预算的无敏感材料确认拒绝，最后核对反馈预算、代理body限制和指定路由预算一致。私有ring通过Secret装配，示例仅描述路径，不含私钥。多节点轮换应准备新旧重叠、重启和未完成会话验证，不能由Schema结果宣称完成。
+用不含敏感信息的小请求测试浏览器能否完成握手并读取响应，再发送超出大小上限的请求，确认服务端拒绝。上传反馈附件时，反向代理和加密路由的大小上限都应能容纳这条请求。服务端从私有变量读取密钥列表。多台服务换钥时保留旧密钥一段时间，让已有会话有机会完成，再验证重启后的老会话和新会话。
 
 ### 浏览器版本过低时的提示
 
@@ -235,7 +235,7 @@ Edge 100 缺少加密客户端读取请求正文所用的 `Request.body`，可�
 
 ### Crypto共享注册表与算法参数
 
-Crypto通过公开工厂/调用参数装配，不依赖`_crypto.yml`。先执行 `await crypto.init()` 并检查结果，再用Serv/Kit/API Client统一协议；自定义适配才直接`createServer`/`createClient`。
+先调用 `await crypto.init()` 并检查成功，再在 Serv 或 Kit 中开启服务端加密，并在 API Client 中启用客户端加密。自行接入其他 HTTP 框架时，调用 `crypto.transport.createServer()` 和 `crypto.transport.createClient()`。
 
 为 Redis 或数据库注册表设置 `ttlSeconds: 3600` 后，每次密钥协商会登记一个有效期为一小时的客户端公钥。Serv 和 Kit 在握手响应中返回该期限。用户闲置后再次操作时，客户端按需重新协商，再发送业务请求。登录会话按身份模块的期限单独续期。可在测试环境缩短登记有效期，确认过期后的第一个业务请求使用新的 `X-Client-Id`。
 

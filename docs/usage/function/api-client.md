@@ -1,12 +1,16 @@
 # @h-ai/api-client 功能说明
 
-在浏览器、原生容器等客户端创建 oRPC/OpenAPI 调用实例。每个实例使用自己的 Token 存储和刷新流程，受保护的 HTTP 路由由服务端注册。
+通过 `apiClient` 从浏览器、移动应用或 Node.js 调用 HTTP 接口。共享的 API 契约提供参数及返回类型。每个客户端实例管理自己的登录凭据和刷新流程，服务端决定请求能否访问目标资源。
 
 [模块 README](../../../packages/api-client/README.md) · [配置清单](../configuration/api-client.md) · [数据结构](../data/api-client.md) · [前后端接入](../development/frontend-backend.md)
 
 ## 最小接入示例
 
-`close()` 会使旧刷新失效并等待已有凭据写入完成，保留外置 TokenStorage 当前值；关闭完成后可复用同一存储重新初始化。`timeout` 覆盖响应头、完整 JSON 正文及所有非成功响应正文（包括 HTML 错误页）；超时或取消后不再刷新凭据。内置 Cookie 适配器的登录和刷新使用 `credentials: include`，跨域服务须明确允许凭据与 Origin；内存和原生存储保留原请求的凭据策略。应用自定义流按需读取，其正文由调用方 signal 取消。
+`apiClient.close()` 停止旧的凭据刷新，并等正在写入的凭据存储操作结束。应用传入的 `TokenStorage` 会保留原有凭据，之后可以交给新的客户端使用。要退出登录，先调用应用的退出接口，再清除本地凭据。
+
+`timeout` 包含等待响应头、读完整的 JSON 正文及读取所有失败响应正文的时间，例如代理返回的 HTML 错误页。请求超时或被取消后，客户端不会再为它刷新令牌。需要取消自定义流时，传入 `AbortSignal` 并用它停止读取。
+
+用内置 Cookie 模式登录或刷新时，请求设置 `credentials: 'include'`。如果服务端和页面地址不同，服务端的 CORS 配置须允许页面的具体 Origin 和凭据。内存和原生存储模式沿用原请求的 Cookie 发送设置。
 
 ```ts
 import type { IamAuthLoginInput } from '@h-ai/api-client'
@@ -45,7 +49,7 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 
 ### 用途、输入与输出
 
-调用前完成本页初始化。命名变量为经校验的宿主输入；HaiResult 先判 success。auth 和存储操作的 Promise<void> 失败会 reject，必须显示失败并处理清理故障，不能按业务 success 假报登录完成。
+开始调用前先检查 `apiClient.init()` 成功。表中的变量由应用提供并校验，例如订单 ID、登录参数或回调函数。收到 `HaiResult` 时先检查 `success`。凭据保存和清除直接返回 `Promise<void>`，失败会抛出异常。登录界面应等写入完成再显示登录成功。
 
 | 入口                                    | 输入                            | 输出                       | 用途与失败边界                                     | 示例                                                         |
 | --------------------------------------- | ------------------------------- | -------------------------- | -------------------------------------------------- | ------------------------------------------------------------ |
@@ -91,7 +95,7 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 
 #### 默认业务领域
 
-默认领域是 api-contract 的 HTTP 契约，不是服务端模块对象的完整镜像；自定义 client 仅包含传入 contract 的领域。
+默认客户端包含共享契约列出的 IAM、Storage 和 AI 路由。服务端对象另有管理和内部操作。用 `apiClient.create(contract)` 创建自定义客户端时，只可调用该契约声明的接口。
 
 - `apiClient.iam`: IAM 登录/注册/用户/角色/权限 — [API Contract](../../../packages/api-contract/README.md), [IAM](../../../packages/iam/README.md).
 - `apiClient.storage`: 存储列表、元数据、预签名和删除 — [API Contract](../../../packages/api-contract/README.md), [Storage](../../../packages/storage/README.md).
@@ -136,9 +140,15 @@ await apiClient.close()
 await crypto.close()
 ```
 
-认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求默认有效期为 5 分钟，客户端时间最多可领先服务器 30 秒。服务端可用 `maxRequestAgeSeconds`（1～600）和 `maxFutureSkewSeconds`（0～300）调整，单位为整数秒。共享 registry 原子消费 (clientId, requestId)，nonce 保留到 issuedAt + 11 分钟，覆盖最长可配窗口及节点时钟差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
+加密传输使用 v2 格式。客户端为请求随机选取 SM4-CBC 密钥和 HMAC-SM3 密钥，用 SM2 将密钥加密。客户端用自己的私钥签名请求，服务端用请求选中的服务端密钥版本签名响应。接收端先验签，再核对消息认证码（MAC），最后解密。
 
-空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口由 Serv/Kit 路径规则 `encryption: disabled` 或宿主 `excludePaths` 显式允许；调用方同步选择普通请求，API Client/Kit 包装器使用自己的 `excludePaths`。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
+认证会核对消息方向、两端的密钥或客户端编号、请求编号、发送时间、HTTP 方法、路径与原始查询字符串。响应还会核对 HTTP 状态码。客户端生成的 128 位随机请求编号也用来防止同一个密文被反复发送。服务端默认只接受 5 分钟内发出的请求，客户端时钟最多可快 30 秒。可用 `maxRequestAgeSeconds`（1 到 600 秒）和 `maxFutureSkewSeconds`（0 到 300 秒）调整。
+
+所有服务节点通过同一处 Redis 或数据库登记 `(clientId, requestId)`。重复的编号不会再次接受，登记自请求发出起保留 11 分钟。存储不可用时拒绝请求。Redis 应选择 `noeviction` 并开启可靠的持久化，节点时钟应同步。应用自行重试付款、发信等操作时，应通过自己的业务键去重。
+
+没有正文的 POST 仍需要认证。GET、HEAD 以及 204、304、HEAD 等无正文响应，把认证数据放在 `X-Hai-Transport` 头。其他请求或响应把密文放在 JSON 正文，并设置 `X-Encrypted: true`。客户端收到加密响应会用原请求和实际状态码验证。标记丢失、格式过旧或认证失败时，调用会抛出错误。
+
+如果某个接口必须接收普通 HTTPS 正文，服务端把该路由设为 `encryption: disabled` 或加入 `excludePaths`。浏览器请求同一路由时也应配置客户端的 `excludePaths`。跨域接入还须允许并公开 `X-Hai-Transport` 请求头和响应头。使用 HTTPS 可以验证握手接收的公钥确实来自目标服务器。访问资源前，服务端仍需检查当前用户的 IAM 权限。
 
 ### API 契约
 
@@ -167,7 +177,7 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 
 密码登录只提交 `identifier` 和 `password`；`AuthPanel` 将 `LoginForm` 的 `username` 映射为 `identifier`。会话有效期由服务端 `session.maxAge` / `session.refreshTokenMaxAge` 配置决定，登录表单不提供按次登录的持久会话选项。
 
-协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
+服务端可在认证配置中提供用户协议和隐私政策的 Markdown 正文或 URL。如果正文和 URL 同时存在，登录页面的弹窗优先显示经过安全处理的 Markdown。
 
 `apiClient.createAuthActions(client)` 为含标准 iam contract 的客户端提供 publicConfig、login、register、sendOtp、requestPasswordReset、confirmPasswordReset。login 输入使用 identifier/password/method/code，method 为 password、ldap、email、sms。成功认证自动调用既有安全 TokenStorage；应用只需把动作传给 AuthPanel，并在 onauthenticated 中刷新自己的用户状态或导航。
 
@@ -195,11 +205,11 @@ unsubscribe()
 
 createAuthActions(client) 提供 createCaptcha({operation})，所有登录映射与续期/注册会保留 captcha；sendOtp(identifier,{captcha})、requestPasswordReset(identifier,{captcha}) 接收可选第二参数。框架 AuthPanel 自动求解，自定义表单复用 ALTCHA 协议，证明不进入安全 TokenStorage。
 
-策略、默认值和恢复边界见 [IAM](../../../packages/iam/README.md)。
+何时要求验证、验证失败后如何处理，见 [IAM 配置](../configuration/iam.md)和 [IAM 功能说明](./iam.md)。
 
 ### 敏感请求再认证
 
-客户端单次调用的 `options.context.reauthentication` 携带 `reauthenticate` 返回的用途凭据，由请求管线生成 `X-Hai-Reauthentication`。不要写入客户端全局 header、持久存储或日志。服务端同时检查当前权限、资源范围和凭据用途，并原子消费；并发普通请求不会继承该 header。跨域宿主须允许此 header，默认 Serv/Kit 已包含。
+用户为某个敏感操作再次验证密码后，用本次调用的 `options.context.reauthentication` 传入 `actions.reauthenticate()` 返回的短期凭据。客户端会将它写到该请求的 `X-Hai-Reauthentication` 头。服务端会核对当前权限、请求涉及的资源范围及票据用途，并使票据只能成功使用一次。不要把此票据加入公共请求头、持久存储或日志。
 
 ### 原地恢复过期会话
 
@@ -207,13 +217,17 @@ createAuthActions(client) 提供 createCaptcha({operation})，所有登录映射
 
 ### 页面离开会话策略
 
-`session.endOnPageHide` 默认 `false`。启用后宿主调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })` 并在卸载时调用返回的清理函数；标准 admin/H5/fullstack 模板已经接入。非 BFCache 的 `pagehide`（也包括刷新、整页导航）通过 POST `/auth/session/close` 尽力撤销当前 access 及关联 refresh，沿用 CSRF/传输加密，使用 `keepalive` 且不自动刷新会话。该响应不清 Cookie/本地凭据，避免旧响应覆盖下一次登录。显式退出仍使用正常 logout，可靠撤销并清理当前凭据。浏览器可能不发送页面离开请求，因此必须按业务配合服务端 `idleTimeout`/`absoluteTimeout`；不能据此保证关闭即撤销。
+`session.endOnPageHide` 默认关闭。开启后，在浏览器页面加载时调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })`，卸载时执行它返回的函数，移除监听器。标准 admin、H5 和 fullstack 模板已接好此步骤。这里的 `actions` 来自 `apiClient.createAuthActions(...)` 或 SvelteKit 的 `kit.client.createAuthActions(...)`。配置从登录页使用的公开认证接口读取。
+
+浏览器触发 `pagehide` 时会尝试调用 `POST /auth/session/close`。这包括刷新或整页导航，但页面进入往返缓存（BFCache）时会跳过。请求沿用 CSRF 防护和已启用的传输加密，并使用 `keepalive` 争取在页面关闭后完成。该请求不会刷新会话，响应也不会清除 Cookie 或本地凭据，以免较早的请求清掉新的登录状态。
+
+浏览器可能根本没有发出请求。服务端仍需用 `idleTimeout` 或 `absoluteTimeout` 限制会话寿命。用户主动退出时，应正常调用应用的 logout 接口，让服务端撤销凭据，并清除客户端保存的登录状态。
 
 敏感调用通过本次 `reauthorize: () => sensitiveActions.authorize(operation)` 重新确认用途：Kit 放 apiFetch 第三参数，typed client 放 options.context。会话刷新/恢复或明确的再认证拒绝后仅续发一次；取消不写入，未提供回调不重放旧证明。
 
 ### 标准 HTTP 业务调用
 
-创建的实例由其 contract 决定公开领域。以下示例使用默认 `apiClient`；表中的结果指成功结果的 `data`。每次请求先判断 `success`，异常处理见下节。示例中的用户 ID、凭据、工单 ID 等由应用提供，相关接口还需在宿主挂载。
+以下示例使用已初始化的默认 `apiClient`。各条调用都对应服务端已注册的 HTTP 处理函数，否则请求会找不到路由。应用应传入真实的用户 ID、凭据和工单 ID，并在调用后先检查 `success`，再读取表中列出的 `data`。
 
 #### IAM 认证、资料与会话
 
@@ -302,6 +316,8 @@ else {
 
 客户端以 `debug` 记录 4xx 和携带服务端追踪编号的结构化错误。未关联服务端错误的网络、协议和 5xx 失败使用 `error`，包含错误码及可取得的传输诊断字段。
 
-HTTP 错误返回本地化安全文案及追踪编号；ToastContainer 默认隐藏编号，由排查信息图标展开和复制。响应同时包含 `error.traceId` 和 `X-Trace-Id`。框架复用本次 requestId 作为 traceId，前后端日志自动关联。底层异常、堆栈和操作上下文经凭据脱敏后写入日志，不通过 cause/ext 向用户公开。字段校验只返回本地化的字段名和错误。
+HTTP 错误向浏览器返回当前语言的提示和追踪编号。编号既在响应的 `error.traceId`，也在 `X-Trace-Id` 响应头，等于本次请求的 `requestId`。用户可在 Toast 的排查信息中展开并复制编号，开发人员可用它查找前后端日志。异常详情、堆栈和操作信息去除凭据后写入服务端日志。字段校验仅返回字段名和可显示的错误提示。
 
-`core.error.toPublic(error, traceId?)` 用于接口/UI 边界；`core.error.formatMessage(error)` 用于重新翻译后的提示，重复调用不会重复追加标识。日志传入完整 Error 对象，不能只记录通用标题或提前 String(error) 丢失上下文。数据库失败记录驱动错误码、消息、堆栈及表/列；SQL 原文、绑定值和连接凭据不进入日志。
+服务端把错误发给浏览器之前，可用 `core.error.toPublic(error, traceId)` 去除内部信息。界面需要重新显示错误时，可用 `core.error.formatMessage(error)` 格式化提示，重复调用也只附一次追踪编号。
+
+写服务端日志时传入完整的 Error 对象，保留堆栈和错误原因。数据库操作失败时，可按驱动错误码、表和列定位问题。日志不记录 SQL 原文、参数值或数据库凭据。

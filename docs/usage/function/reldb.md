@@ -1,6 +1,6 @@
 # @h-ai/reldb 功能说明
 
-在服务端管理关系数据库连接，执行 SQL、事务和可复用的 CRUD。业务 schema 与迁移由使用方或上层模块管理。
+通过 `reldb` 连接 SQLite、PostgreSQL 或 MySQL，执行 SQL、事务及增删改查。使用框架模块时，由模块初始化自己的表。应用的订单等业务表由应用定义和迁移。
 
 [模块 README](../../../packages/reldb/README.md) · [配置清单](../configuration/reldb.md) · [数据结构](../data/reldb.md) · [数据服务接入](../development/data.md)
 
@@ -53,7 +53,9 @@ await reldb.close()
 
 ## 功能说明
 
-初始化只在健康检查成功后发布连接；失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`reldb.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作不再可用；清理失败仍保留资源，后续 `close()` 或 `init()` 先重试释放，成功前不会创建替代连接。调用方必须检查关闭结果。
+模块在健康检查通过后才允许业务读写。如果初始化失败，会尝试释放已经打开的资源。释放也失败时，返回的 `error.ext.cleanupPending` 为 `true`。
+
+关闭会等待正在进行的初始化，多次同时关闭只执行一次清理。关闭期间 `isInitialized` 为 `false`，配置与读写操作暂停。关闭失败时，下次调用 `close()` 或 `init()` 会先重试释放原连接。检查 `await reldb.close()` 的结果，再停止数据库服务。
 
 ```ts
 const closed = await reldb.close()
@@ -69,7 +71,7 @@ if (!closed.success) {
 
 ### 功能输入输出
 
-以下片段依赖上面的最小接入示例。示例中的业务值由宿主校验和授权后传入；异步领域结果先判断 success，再读取 data。表中 void 表示操作已完成且没有返回数据，null 表示不存在；同步工厂/工具直接返回表中类型。
+下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
 table/column/index 名必须来自可信代码；sql 是可信语句，params 绑定业务值；steps 是模块迁移步骤，options 控制预检和分页。
 
@@ -194,7 +196,7 @@ catch (error) {
   const rolledBack = await tx.rollback()
   if (!rolledBack.success)
     return rolledBack
-  throw error // 只传播非业务异常，由宿主边界处理。
+  throw error // 只传播非业务异常，由应用统一的异常处理函数记录。
 }
 ```
 
@@ -621,13 +623,13 @@ const segments = parseJsonPath('$.profile.name') // 按支持的 JSON Path 语�
 const ops = createJsonOps('postgresql') // 返回 PostgreSQL 的 JSON 操作构造器，使用方式见 JSON 路径操作。
 ```
 
-`parseJsonPath` 解析支持的路径段，遇到无法继续解析的内容时可能只返回已读的部分。已经初始化 `reldb` 的应用可优先用 `reldb.json` 自动选取活动后端的方言。
+`parseJsonPath()` 按受支持的路径语法读取 JSON 字段。遇到无法识别的部分时，可能只返回此前识别的路径段，需要完整校验时应检查应用允许的键及路径格式。通常通过 `reldb.json` 构造 SQL，它会选择已连接数据库的方言。只有尚未连接数据库但需要为指定方言生成表达式时，才用独立的 `createJsonOps()`。
 
 ## 错误处理
 
-返回 `HaiResult<T>` 的操作通过 `result.success` 区分成功与失败。业务成功后读取 `data`，诊断失败时记录 `error.code` 和关联编号。
+收到 `HaiResult<T>` 时先检查 `result.success`。成功时读取 `result.data`，失败时查看 `result.error`。记录故障时保留错误码和追踪编号，便于从日志找到对应请求。
 
-所有操作返回 `HaiResult<T>`，通过 `result.success` 判断成功或失败。
+执行 SQL 或操作事务得到 `HaiResult<T>`。SQL 标识符检查和 JSON 表达式构造工具的返回类型见各节示例。
 
 ```ts
 import { HaiReldbError, reldb } from '@h-ai/reldb'
@@ -668,6 +670,8 @@ if (!result.success) {
 
 唯一约束冲突统一返回 `HaiReldbError.DUPLICATE_ENTRY`（409）；超时、队列已满等已有错误码保持不变。业务按错误码分支，不解析本地化消息或驱动错误文本。日志保留驱动 code/schema/routine/constraint 和堆栈行号；数字绑定值不会误遮蔽这些诊断标识。
 
-HTTP 错误返回本地化安全文案及追踪编号；ToastContainer 默认隐藏编号，由排查信息图标展开和复制。响应同时包含 `error.traceId` 和 `X-Trace-Id`。框架复用本次 requestId 作为 traceId，前后端日志自动关联。底层异常、堆栈和操作上下文经凭据脱敏后写入日志，不通过 cause/ext 向用户公开。字段校验只返回本地化的字段名和错误。
+HTTP 错误向浏览器返回当前语言的提示和追踪编号。编号既在响应的 `error.traceId`，也在 `X-Trace-Id` 响应头，等于本次请求的 `requestId`。用户可在 Toast 的排查信息中展开并复制编号，开发人员可用它查找前后端日志。异常详情、堆栈和操作信息去除凭据后写入服务端日志。字段校验仅返回字段名和可显示的错误提示。
 
-`core.error.toPublic(error, traceId?)` 用于接口/UI 边界；`core.error.formatMessage(error)` 用于重新翻译后的提示，重复调用不会重复追加标识。日志传入完整 Error 对象，不能只记录通用标题或提前 String(error) 丢失上下文。数据库失败记录驱动错误码、消息、堆栈及表/列；SQL 原文、绑定值和连接凭据不进入日志。
+服务端把错误发给浏览器之前，可用 `core.error.toPublic(error, traceId)` 去除内部信息。界面需要重新显示错误时，可用 `core.error.formatMessage(error)` 格式化提示，重复调用也只附一次追踪编号。
+
+写服务端日志时传入完整的 Error 对象，保留堆栈和错误原因。数据库操作失败时，可按驱动错误码、表和列定位问题。日志不记录 SQL 原文、参数值或数据库凭据。

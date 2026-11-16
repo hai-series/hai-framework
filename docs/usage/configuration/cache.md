@@ -4,9 +4,9 @@
 
 ## 配置入口
 
-生成项目使用 `config/_cache.yml`，配置注册名为 `cache`，环境覆盖前缀为 `HAI_CACHE_`。覆盖顺序和无敏感值示例见[运行配置](runtime.md#配置从哪里来)。
+生成的项目将缓存设置写在 `config/_cache.yml`。应用启动时从 `core.config.get('cache')` 读取并传给 `cache.init()`。用环境变量覆盖时使用 `HAI_CACHE_` 前缀。见[配置来源和覆盖顺序](runtime.md#配置从哪里来)。
 
-`cache.init(config)` 按 `type` 选择内存或 Redis。共享会话、锁、限流等使用方需要连接同一份实际共享的 Redis；内存用于单进程开发和测试。
+`type: memory` 把缓存放在当前进程，服务重启后数据消失。多台服务需要共用登录会话、任务锁或限流计数时，给它们配置同一套 Redis 和相同的业务键前缀。
 
 ## 配置示例
 
@@ -18,12 +18,12 @@ keyPrefix: 'orders:'
 
 ## 配置清单
 
-表中的默认值适用于当前配置区块存在时。标为“必填”的字段在使用对应区块或后端时填写。“可省略”表示 Schema 不填充值；如有运行时回退，单独注明。`[]` 表示数组中每一项。
+用 `type` 选择 `memory` 或 `redis`。Redis 的三个 `sentinel.*` 字段中，只有选择 Sentinel 时才需要填 `name` 和 `sentinels`。例如，普通 Redis 可只填 `host`，端口会使用表中的默认值。
 
 | 配置项                      | 适用条件      | 默认值/必填   | 说明                                                                  |
 | --------------------------- | ------------- | ------------- | --------------------------------------------------------------------- |
-| `type`                      | `type=memory` | 必填          | 后端或功能类型，按枚举选择。可填`"memory"`                            |
-| `type`                      | `type=redis`  | 必填          | 后端或功能类型，按枚举选择。可填`"redis"`                             |
+| `type`                      | `type=memory` | 必填          | 此处填写 `"memory"`                                                   |
+| `type`                      | `type=redis`  | 必填          | 此处填写 `"redis"`                                                    |
 | `url`                       | `type=redis`  | 可省略        | 完整 `redis://` 或 `rediss://` 连接地址，在 URL 中指定凭据与库编号    |
 | `host`                      | `type=redis`  | `"localhost"` | 主机地址                                                              |
 | `port`                      | `type=redis`  | `6379`        | 端口号。可填整数，1–65535                                             |

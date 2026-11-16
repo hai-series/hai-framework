@@ -1,6 +1,6 @@
 # @h-ai/deploy 功能说明
 
-在 Node.js 中调用部署 SDK，或通过 CLI 编排构建加部署。SDK 使用已构建的镜像和 Vercel prebuilt 产物。
+可以用 `hai` 命令先构建再部署，也可以在 Node.js 脚本中用 `deploy` 部署已经构建好的 Docker 镜像或 Vercel 预构建目录。
 
 [模块 README](../../../packages/deploy/README.md) · [配置清单](../configuration/deploy.md) · [数据结构](../data/deploy.md) · [部署操作](../operations/deployment.md)
 
@@ -23,7 +23,7 @@ pnpm run deploy --env prod --build
 
 ### 功能输入输出
 
-以下片段依赖上面的最小接入示例。示例中的业务值由宿主校验和授权后传入；异步领域结果先判断 success，再读取 data。表中 void 表示操作已完成且没有返回数据，null 表示不存在；同步工厂/工具直接返回表中类型。
+下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
 #### deploy
 
@@ -329,7 +329,9 @@ SvelteKit SSR 的 HTTP/HTTPS 均使用独立 `gateway`，后端不公开端口�
 
 外层 TLS 终止须将负载均衡真实 IP/CIDR 加入 `trustedEdgeProxies`；独立 gateway 仅对白名单真实对端接受单值 `http` / `https`，其他来源和组合值使用本连接协议，外部 `Forwarded` 与主机/端口转发头不直接透传。
 
-Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>/config/.env.runtime`。应用配置与托管连接在此合并，修改 `HAI_STORAGE_PUBLICENDPOINT` 等细项后重启对应后端即可；同一来源的细项覆盖父 JSON。配置目录只读挂载到 `/run/hai/config`，编辑器原子替换文件也会被下一次启动读取。私有代理标记和 Node 启动参数由部署装配管理；静态 Web、中间件原生环境、端口/挂载、Nginx 路由与限额变更仍需部署。仅更新 Web/中间件保留当前应用配置；后端局部更新保留服务器托管连接，其余值来自新包，全量更新采用新包并按已有凭据状态定稿。手工修改先备份，长期配置同步回源环境。
+Serv 和 SvelteKit SSR 在服务器启动时读取部署目录下的 `config/.env.runtime`。其中包含应用配置和部署工具为数据库等服务生成的连接信息。修改 `HAI_STORAGE_PUBLICENDPOINT` 等运行参数后，重启对应后端即可。在同一来源内，单独设置的字段优先于整段 JSON 中的同名字段。部署工具会把配置目录以只读方式提供给容器，容器内的路径是 `/run/hai/config`。下次启动会读取编辑器替换后的文件。
+
+私有代理标记和 Node 启动参数由部署工具写入。静态页面、数据库或 Redis 自身的环境变量、端口、挂载目录、Nginx 路由和请求上限需要重新部署才会更新。只更新 Web 或中间件时保留现有应用配置。只更新部分后端时保留服务器已配置的托管连接，其余设置用新包的值。全量发布使用新包配置，并核对服务器上已有凭据。手工修改服务器配置前先备份，长期有效的设置也应写回项目的环境文件。
 
 Node 运行文件由包内的启动器读取。生成的 dotenv 会转义值中的回车和 CRLF，编辑时请保留行末的 `# hai:json` 标记。旧版运行文件可按原格式读取。
 
@@ -369,7 +371,7 @@ Serv 的 `http.access`、SvelteKit 的 `access` 可引用独立 yml/yaml。部�
 
 如需由运维独立改规则、重启后生效，可在交付之外管理只读文件，并用 Compose override 替换同一 `/run/hai/request-access.yml` 挂载。该外部文件不参与 SDK 自动回滚，首次附加挂载需要重新创建容器；后续文件修改后重启即可。自行维护且只用 Compose `env_file` 注入环境的容器，修改该文件仍需重新创建，通常无需重建镜像；这与 SDK 默认挂载读取的后端 `.env.runtime` 不同。步骤与验证边界见[独立文件重启配置](../configuration/request-access.md#44-运维独立管理文件修改后重启生效).
 
-受管 Compose 只有存在 Web/gateway 代理且后端没有公开端口时，才设置 `HAI_DEPLOY_PRIVATE_PROXY=1`。Serv/Kit 默认 `trustedProxies: auto` 在此采用容器网段，其他宿主默认忽略转发头。生成 Nginx 用实际对端覆盖客户端提交的转发头；外层负载均衡需在 Docker SSH Provider 的 `trustedEdgeProxies` 显式配置真实 IP/CIDR，省略时不信任上游，`[]` 同样关闭信任。根本未传到 Nginx 的源 IP 无法恢复，Podman rootless 等环境应实际核验入口日志。完整示例和验证步骤见[请求访问控制手册](../configuration/request-access.md).
+受管 Compose 只有存在 Web/gateway 代理且后端没有公开端口时，才设置 `HAI_DEPLOY_PRIVATE_PROXY=1`。Serv/Kit 默认 `trustedProxies: auto` 在此采用容器网段，未部署托管反向代理的应用默认忽略转发头。生成 Nginx 用实际对端覆盖客户端提交的转发头；外层负载均衡需在 Docker SSH Provider 的 `trustedEdgeProxies` 显式配置真实 IP/CIDR，省略时不信任上游，`[]` 同样关闭信任。根本未传到 Nginx 的源 IP 无法恢复，Podman rootless 等环境应实际核验入口日志。完整示例和验证步骤见[请求访问控制手册](../configuration/request-access.md).
 
 ### 只读部署计划
 
@@ -406,4 +408,4 @@ Serv 的 `http.access`、SvelteKit 的 `access` 可引用独立 yml/yaml。部�
 
 ## 错误处理
 
-领域操作先判断 `result.success`，失败按本模块错误定义与安全提示处理，服务端保留错误码、关联编号和脱敏原因。同步工具、工厂、流迭代及生命周期按各自签名处理，不把 Promise 完成视为业务成功。具体失败与恢复边界见对应功能。
+调用返回 `HaiResult` 的操作后，先检查 `result.success`。失败时在服务端保留错误码、追踪编号和已去除敏感信息的原因。创建客户端、读取流和关闭模块的返回方式见各节示例。

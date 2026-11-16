@@ -2,11 +2,11 @@
 
 [配置手册](README.md) · [配置清单](#配置清单) · [AI调用与页面操作](../development/ai.md)
 
-先让一条无敏感信息的模型请求成功，再接会话、知识库和工具。模型能回答不表示会话已持久保存；Schema通过不表示供应商凭据、模型名或额度可用。密钥保存在服务端，前端通过受权限检查保护的API发起调用。
+先配置一个模型，用不含敏感信息的提示词测试服务连接。若模型能回答，再分别接入会话记录、知识库和工具。配置检查只能确认字段和格式，供应商密钥、模型名和帐号额度仍需实际请求验证。服务端保存模型密钥，浏览器调用应用自己的 API，由应用核验登录与权限。
 
 ## ACP 接入与模型能力
 
-多用户部署可登记 `acp.agents[].environmentIds`，引用 Runner 启动配置中具有固定镜像 digest 的环境。下例展示 Runner 配置对象，其中 `digest` 替换为已构建并部署的镜像 ID。环境的 CPU、内存、PID 和临时空间上限同时约束所有按任务传入的覆盖值。
+在多用户项目中，可把 Runner 的环境 ID 填到 `acp.agents[].environmentIds`，指定 Agent 能使用哪些容器。下例是传给 `runner.init()` 的配置。把 `<digest>` 替换成已构建镜像的 SHA-256 摘要，避免容器随标签变动而换用其他镜像。单个任务申请的 CPU、内存、进程数和临时空间都不能高于环境上限。
 
 ```yaml
 nodeId: worker-east
@@ -23,9 +23,9 @@ environments:
       scratchMiB: 256
 ```
 
-`offline` 适合本地工具和不需要联网的夹具。模型网关或 MCP broker 由部署方放在已配置的隔离网络上，Runner 检查该网络为 `internal`。应只允许访问任务需要的服务，任务的网络权限仍以实际部署策略为准。API 节点和执行节点共享数据库、Agent 清单及环境配置。
+`networkPolicy: offline` 适合只访问本地文件的任务。需要连接模型网关或远程工具时，把它们与任务容器放在已配置的隔离网络上，再用 `networkPolicy: internal` 和 `network` 指定该网络。应用的 API 服务与运行任务的服务需要连接同一个数据库，使用相同的 Agent 和容器环境设置。
 
-`acp` 的 requestTimeout（30000ms）、promptTimeout（600000ms）、cancelTimeout（5000ms）、maxContentBytes（8388608）、maxPendingEvents（1024）控制连接、取消和输出边界。环境变量对应 `HAI_AI_ACP_REQUESTTIMEOUT` 等。agents/workspaces 可在配置文件定义或通过 `ai.acp` 写数据库；session 是运行记录，不从配置导入。配置与数据库按 ID 合并的规则见[资源清单](#配置与数据库清单)。
+`acp.requestTimeout` 默认允许请求等待 30 秒，`promptTimeout` 默认给一次提示执行 10 分钟，`cancelTimeout` 默认等待取消请求 5 秒。`maxContentBytes` 和 `maxPendingEvents` 分别把内容大小和待处理的事件数限制在 8 MiB 和 1024 条。可用 `HAI_AI_ACP_REQUESTTIMEOUT` 等环境变量覆盖。Agent 和工作区可写进 YAML，也可通过 `ai.acp.agents` 和 `ai.acp.workspaces` 登记到数据库。会话由实际运行创建。[配置和数据库条目如何合并](#配置与数据库清单)
 
 `llm.models[].capabilities` 可配置 contextWindow、maxOutputTokens、inputModalities、outputModalities、toolCalling、reasoning.supported/efforts；未知时省略。输出预算 maxTokens 不是模型输出容量，maxOutputTokens 不能大于 contextWindow。DSH 自定义模型需要已确认的容量/输入/工具/推理信息；支持推理时还需明确 efforts。Codex 的上游必须原生提供 Responses；Hai 客户端已有协议转换不会提供反向网关。
 
@@ -37,7 +37,7 @@ DeepSeek Harness 连接 DeepSeek Chat 时使用 `protocol: chat`。适配器识�
 | `mode: builtin-service`、image、engine | 原生 stdio 容器；auto 优先就绪 Podman，再试 Docker | volume 工作区，Agent/workspace 的 image 和引擎须匹配；复用 Hai 模型 |
 | `mode: custom-service`、url、transport、supportedTransports、headerEnv | 连接明确声明支持的 HTTP/WS 服务 | 不绑定 Hai 模型；传远端 cwd，服务方维护模型与文件 |
 
-下面是本机 Codex 的可加载配置形状。替换真实模型、端点和路径；仓库 url 与每个工程的 mainBranch 明确填写，不推测远端主分支。取消 CLI 模板的一层外层注释只启用配置，还需在服务端初始化 AI 并接入业务。
+把下例写进 `config/_ai.yml`，并换成自己的模型名、服务地址及工作区路径。每个仓库需填 `url` 和默认分支 `mainBranch`。用 CLI 模板时，删掉相应段落各行开头的注释符 `#`，服务端仍需读取配置并调用 `ai.init()`，再用 `ai.acp` 创建会话。
 
 ```yaml schema=@h-ai/ai:AIConfigSchema
 llm:
@@ -63,9 +63,9 @@ acp:
           mainBranch: trunk
 ```
 
-Goose 原生服务用 `transport: http` 与 `http://.../acp`，或 `transport: ws` 与 `ws://.../acp`；`supportedTransports` 只填实际部署支持的类型。`headerEnv: { X-Secret-Key: HAI_GOOSE_SECRET }` 在启动连接时从宿主变量解析服务认证信息。Goose 自身通过 GOOSE_PROVIDER/GOOSE_MODEL/供应商密钥配置模型；不要给 custom-service 绑定 modelIds，也不要把服务凭据放进 URL。远程 TLS、卷、Git 与服务进程由部署方维护。
+Goose 原生服务用 `transport: http` 与 `http://.../acp`，或 `transport: ws` 与 `ws://.../acp`；`supportedTransports` 只填实际部署支持的类型。`headerEnv: { X-Secret-Key: HAI_GOOSE_SECRET }` 在启动连接时从运行应用的服务进程中读取认证信息。Goose 自身通过 GOOSE_PROVIDER/GOOSE_MODEL/供应商密钥配置模型；不要给 custom-service 绑定 modelIds，也不要把服务凭据放进 URL。远程 TLS、卷、Git 与服务进程由部署方维护。
 
-受管仓库的读写凭据使用 `acp.workspaces[].gitEnvironmentRefs`，映射的值是宿主变量名，只有框架执行远程克隆、拉取或推送时才解析。Agent 专用变量使用 `acp.agents[].environmentRefs`。工作区 `environmentRefs` 是共用映射，不能在这里放只应交给 Git 的秘密。可信部署方提供认证工具、路径或 HTTP 认证头。
+在 `acp.workspaces[].gitEnvironmentRefs` 中写 Git 进程要读取的变量名及其对应的服务端环境变量名。框架远程克隆、拉取或推送时，才从服务端进程读取这些变量值。Agent 专用变量在 `acp.agents[].environmentRefs` 中设置。工作区自身的 `environmentRefs` 会给多个进程使用，Git 登录凭据只放在 `gitEnvironmentRefs` 对应的变量中。
 
 | ACP 条目字段 | 默认或要求 | 场景、影响与可观察结果 |
 | --- | --- | --- |
@@ -77,7 +77,7 @@ Goose 原生服务用 `transport: http` 与 `http://.../acp`，或 `transport: w
 | `storage` | 工作区必填 | directory 指向本机目录，volume 的 `name`、`image` 必填；容器引擎及镜像与 Agent 一致，重启后仍应找到原工程 |
 | 仓库 `remote` | `origin` | 多远程工程选择受管 Git 远程名；`url` 与 `mainBranch` 必填，不自动猜主分支 |
 
-本节 YAML 的输入是模型短名 `coding`、Agent `coder` 与工作区 `project`。初始化后，对应清单的 list/get 应能查到这些只读配置资源；真正创建会话还需原生程序、有效凭据和可访问仓库。用无敏感任务写一份临时文件并独立读回，才能确认工具实际执行；只查到清单不证明模型可用。
+初始化后，`ai.acp.agents.get('coder')` 和 `ai.acp.workspaces.get('project')` 会返回相应条目。开始会话还需要已安装的 Agent 程序、有效模型密钥和可访问的仓库地址。测试时可让 Agent 写一个不含敏感信息的临时文件，再确认文件确实写到了指定目录。
 
 运行步骤和 API 示例见 [ACP 智能体与工程会话](../development/ai-acp.md)。
 
@@ -144,7 +144,7 @@ llm:
 | `audio.models[0].baseUrl` | `HAI_AI_AUDIO_MODELS_0_BASEURL` |
 | `image.models[0].apiKey` | `HAI_AI_IMAGE_MODELS_0_APIKEY` |
 
-第二个模型把变量中的 `_0_` 改为 `_1_`。地址、模型名等环境差异放 `.env.test` / `.env.prod`，真实密钥放 `.env.local` 或由目标环境注入。同一来源的父 JSON 先应用、细项后覆盖；更高来源的父对象会清除低来源细项。尽量只维护一份清晰的基础结构与必要覆盖，完整规则见[环境来源](runtime.md#配置从哪里来)。
+给第二个模型设置环境变量时，把 `_0_` 改成 `_1_`。测试和生产使用不同模型时，可分别在 `.env.test` 和 `.env.prod` 写模型名。密钥放在未提交的 `.env.local` 或由部署平台提供。例如同一个文件中同时定义 `HAI_AI_LLM` 和 `HAI_AI_LLM_MODEL`，先读前者的整组 JSON，再用后者改模型名。如果更高优先级的文件重设整个 `HAI_AI_LLM`，低优先级文件中原先的模型名也会被替换。[环境来源](runtime.md#配置从哪里来)
 
 ## 知识分块与`embedding`
 
@@ -236,7 +236,7 @@ metric: cosine
 
 ## 会话记忆、压缩与检索
 
-`memory/token/summary/compress/retrieval/file` 均为可选对象。配置对象并不会自动把进程内Store变为共享数据库；按公开Store契约明确装配持久后端。
+`memory`、`token`、`summary`、`compress`、`retrieval` 和 `file` 都可按需配置。例如延长记忆容量只会改变保存条数。要让重启后的服务还能读到原来的会话，应用还需接入数据库等持久存储。可在 `ai.init()` 时提供 `storeProvider`，或使用已初始化的 RelDB、VecDB 及框架提供的默认数据库存储。
 
 | 配置 | 框架默认（对象存在时） | 影响 |
 | --- | --- | --- |
@@ -345,7 +345,7 @@ image:
 
 音频 Provider 接受 `openai/mimo/qwen/doubao/whisper/indextts`，图片 Provider 接受 `openai/google/qwen/seedream/pollinations`。先按实际服务选择 Provider，再登记该服务支持的模型与操作；枚举值合法不代表任意模型都支持所有操作。上例中输入短录音应由 `speech-in` 返回转写文本，输入文本由 `speech-out` 返回音频，图片提示由 `pictures` 返回生成结果；超出字节/数量预算时应在调用厂商前拒绝，不产生额外外部调用。
 
-源码仓库的 `pnpm model:run <name>` 只发布本机 `127.0.0.1`，宿主配置 `HAI_MODEL_API_KEY` 时向容器传入同名变量，客户端使用匹配凭据；Qwen由启动桥接转为vLLM原生环境认证。模型构建、固定树元数据联网前置、可信缓存与离线制品准备见[模型服务](../../../packages/ai/models/README.md)，对外生产服务另行配置网络、HTTPS和资源限额。
+源码仓库的 `pnpm model:run <name>` 只发布本机 `127.0.0.1`，在运行命令的终端设置 `HAI_MODEL_API_KEY` 后，命令会把该变量传给容器，客户端使用匹配凭据；Qwen由启动桥接转为vLLM原生环境认证。模型构建、固定树元数据联网前置、可信缓存与离线制品准备见[模型服务](../../../packages/ai/models/README.md)，对外生产服务另行配置网络、HTTPS和资源限额。
 
 ## MCP和A2A
 
@@ -371,7 +371,7 @@ mcp:
 
 固定工具容器使用同一目录中的 `transport: job`，填写 `environmentId`、`allowedTools` 和可选超时。Runner 环境需使用固定镜像摘要、`networkPolicy: offline`，并声明对应的能力。支持 `documents.extract`、`office.convert`、`office.recalculate` 和 `ocr.recognize`。调用参数是授权的 `fileId`。OCR 可传 `language`。应用通过 `AIInitOptions.mcpJobFiles` 在领取节点复核文件 ACL 并暂存产物，只把产物 ID 返回给调用者。
 
-工具作业使用 Runner 的 `toolCapacity` 和 `toolMaxRunning`，为等待工具的 Agent 保留独立的执行额度。每个服务通过 `pool.maxRunning` 限制全体执行节点同时运行的实例数，默认 4。达到任一上限时继续排队，直至额度释放或超时。部署方按节点实际资源配置普通和工具额度，两者的总量需要由宿主承载。
+工具作业使用 Runner 的 `toolCapacity` 和 `toolMaxRunning`，为等待工具的 Agent 保留独立的执行额度。每个服务通过 `pool.maxRunning` 限制全体执行节点同时运行的实例数，默认 4。达到任一上限时继续排队，直至额度释放或超时。部署方按节点实际资源配置普通和工具额度，两种任务占用的资源加起来不能超过执行节点的实际容量。
 
 经常使用的服务可在部署配置中增加 `pool.minReady` 与 `pool.maxTotal`。Runner 尽量保留 `minReady` 个未接触任务数据的容器。容器处理一次请求后销毁。预热、启动、运行和销毁中容器均计入集群的 `maxTotal`，实际运行仍受 `maxRunning` 和节点容量限制。`maxTotal` 至少为 `minReady` 和 `maxRunning` 的较大者。API 与执行节点使用相同的服务池配置。数据库动态登记的服务可设置 `maxRunning`，预热池由部署配置维护。
 
@@ -411,11 +411,11 @@ ACP 会话通过 `mcpServerIds` 使用外部 MCP 清单；Agent 和远程服务�
 
 ## 配置清单
 
-生成项目使用 `config/_ai.yml`，配置注册名为 `ai`，环境覆盖前缀为 `HAI_AI_`。传入 `ai.init(config, options)` 的配置由 `AIConfigSchema` 校验。凭据和模型地址的实际查找顺序见[凭据和地址按哪个顺序生效](#凭据和地址按哪个顺序生效)。
+生成的项目使用 `config/_ai.yml`。启动时应用用 `core.config.get('ai')` 读出设置，再传给 `ai.init()`。用环境变量覆盖时使用 `HAI_AI_` 前缀。[凭据和地址的读取顺序](#凭据和地址按哪个顺序生效)
 
-`AIInitOptions` 由宿主代码注入，包含用于覆盖持久层的 `storeProvider`、受管 `runner`、受管 ACP 授权策略 `acpPolicy`、作业文件访问 `mcpJobFiles` 和原生适配器 `acpAdapters`，各项均按实际启用能力提供。
+应用也可通过 `ai.init(config, options)` 的第二个参数接入代码对象。`storeProvider` 决定怎么读写数据，`runner` 负责执行受管任务，`acpPolicy` 决定用户可以创建和操作哪些会话，`mcpJobFiles` 负责访问任务文件，`acpAdapters` 提供原生 Agent 的连接方式。
 
-表中的默认值适用于当前配置区块存在时。标为“必填”的字段在使用对应区块或后端时填写。“可省略”表示 Schema 不填充值；如有运行时回退，单独注明。`[]` 表示数组中每一项。
+下表按功能给出字段和默认值。`llm.models[]` 表示模型列表中的每一项。例如省略整个 `knowledge.chunkOptions` 时，知识库用 Markdown 模式切块，每块最多 1500 个字符，相邻块重叠 200 个字符。若只写 `chunkOptions: { mode: markdown }`，未填的 `overlap` 按 Datapipe 取 `0`。
 
 ### `acp`
 
@@ -432,7 +432,7 @@ Agent 可用 `custom-service`、`embedded` 或 `builtin-service`。先按[接入
 | `acp.agents[].modelIds`                               | 所有 Agent 模式                         | `[]`        | 绑定 Hai LLM 模型 ID。可填数组（元素为字符串，至少 1 个字符）                                                                           |
 | `acp.agents[].defaultModelId`                         | 所有 Agent 模式                         | 可省略      | 默认选择的模型 ID，必须存在于 modelIds。可填字符串，至少 1 个字符                                                                       |
 | `acp.agents[].environmentRefs`                        | 所有 Agent 模式                         | `{}`        | 启动代理时注入的环境变量映射，值引用私有变量名                                                                                          |
-| `acp.agents[].environmentRefs.<名称>`                 | 所有 Agent 模式                         | 必填        | 键为代理接收的环境变量名，值为宿主的环境变量名                                                                                          |
+| `acp.agents[].environmentRefs.<名称>`                 | 所有 Agent 模式                         | 必填        | 键为代理接收的环境变量名，值为运行应用的服务进程中的变量名                                                                                          |
 | `acp.agents[].environmentIds`                         | 所有 Agent 模式                         | `[]`        | 可由受管 Runner 使用的已登记环境，首项是默认候选。可填数组（元素为字符串），最多 64 项                                                  |
 | `acp.agents[].sharedMode`                             | 所有 Agent 模式                         | `false`     | 由部署方对已验证的内置只读后端启用共享 Worker                                                                                           |
 | `acp.agents[].allowedCapabilities`                    | 所有 Agent 模式                         | `[]`        | 此 Agent 可选择的能力上限。可填数组（元素为字符串），最多 64 项                                                                         |
@@ -507,14 +507,14 @@ Agent 可用 `custom-service`、`embedded` 或 `builtin-service`。先按[接入
 | `acp.workspaces[].repositories[].mainBranch`          | 通用                                    | 必填        | 该工程明确指定的主分支，更新和 merge-main 发布均使用此值。可填字符串，1–240 个字符                                                      |
 | `acp.workspaces[].repositories[].remote`              | 通用                                    | `"origin"`  | Git remote 名，默认 origin                                                                                                              |
 | `acp.workspaces[].environmentRefs`                    | 通用                                    | `{}`        | 工作区所引用的私有环境变量映射                                                                                                          |
-| `acp.workspaces[].environmentRefs.<名称>`             | 通用                                    | 必填        | 键为工作区变量名，值为宿主环境变量名                                                                                                    |
+| `acp.workspaces[].environmentRefs.<名称>`             | 通用                                    | 必填        | 键为工作区变量名，值为运行应用的服务进程中的变量名                                                                                                    |
 | `acp.workspaces[].gitEnvironmentRefs`                 | 通用                                    | `{}`        | 仅供受管 Git 远程操作使用的环境变量引用，值不传给 Agent 或本地提交                                                                      |
-| `acp.workspaces[].gitEnvironmentRefs.<名称>`          | 通用                                    | 必填        | 键为 Git 流程接收的变量名，值为宿主环境变量名                                                                                           |
+| `acp.workspaces[].gitEnvironmentRefs.<名称>`          | 通用                                    | 必填        | 键为 Git 流程接收的变量名，值为运行应用的服务进程中的变量名                                                                                           |
 | `acp.requestTimeout`                                  | 通用                                    | `30000`     | 握手和控制请求超时，毫秒。正整数                                                                                                        |
 | `acp.promptTimeout`                                   | 通用                                    | `600000`    | 单轮任务超时，毫秒。正整数                                                                                                              |
 | `acp.cancelTimeout`                                   | 通用                                    | `5000`      | 取消后等待终态的上限，毫秒。正整数                                                                                                      |
 | `acp.maxContentBytes`                                 | 通用                                    | `8388608`   | 单轮输入和累计输出的字节上限。正整数                                                                                                    |
-| `acp.maxPendingEvents`                                | 通用                                    | `1024`      | 未消费事件数量上限。正整数                                                                                                              |
+| `acp.maxPendingEvents`                                | 通用                                    | `1024`      | 等待处理的最大事件数。正整数                                                                                                              |
 | `acp.workerIdleTimeoutMs`                             | 通用                                    | `300000`    | 无在途操作的受管 Worker 空闲回收时限，毫秒。可填整数，1000–86400000                                                                     |
 
 ### `llm`
@@ -575,9 +575,9 @@ Agent 可用 `custom-service`、`embedded` 或 `builtin-service`。先按[接入
 | `mcp.servers[].args`                   | `[]`        | 数组（元素为字符串）                                                                                                       |
 | `mcp.servers[].url`                    | 可省略      | 字符串，URL                                                                                                                |
 | `mcp.servers[].environmentRefs`        | `{}`        | 键值对象                                                                                                                   |
-| `mcp.servers[].environmentRefs.<名称>` | 必填        | 键为 MCP 进程接收的变量名，值为宿主环境变量名                                                                              |
+| `mcp.servers[].environmentRefs.<名称>` | 必填        | 键为 MCP 进程接收的变量名，值为运行应用的服务进程中的变量名                                                                              |
 | `mcp.servers[].headerEnv`              | `{}`        | 键值对象                                                                                                                   |
-| `mcp.servers[].headerEnv.<名称>`       | 必填        | 键为 HTTP 请求头名称，值为提供其内容的宿主环境变量名                                                                       |
+| `mcp.servers[].headerEnv.<名称>`       | 必填        | 键为 HTTP 请求头名称，值为提供其内容的运行应用的服务进程中的变量名                                                                       |
 | `mcp.servers[].allowedTools`           | 可省略      | 受管工具入口允许调用的名称；省略时不开放给 ai.mcp.services。可填数组（元素为字符串，1–128 个字符），至少 1 项、最多 256 项 |
 | `mcp.servers[].timeoutMs`              | 可省略      | 受管工具连接和调用的总超时，单位毫秒；缺省为 30 秒。可填整数，1–300000                                                     |
 | `mcp.servers[].pool`                   | 可省略      | 集群范围内该服务允许同时领取的作业数量，仅 job 模式使用                                                                    |

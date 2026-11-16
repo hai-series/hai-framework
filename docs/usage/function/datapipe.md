@@ -1,6 +1,6 @@
 # @h-ai/datapipe 功能说明
 
-直接调用 `datapipe.clean`、`datapipe.chunk` 或 `datapipe.pipeline`。清洗与分块返还同步领域结果，管线构造器逐步登记处理动作并异步执行。
+通过 `datapipe.clean()` 清理文本，通过 `datapipe.chunk()` 把长文本拆成小段。两者立即返回结果。使用 `datapipe.pipeline()` 创建一套可复用的处理步骤，再调用返回对象的 `run()` 执行。
 
 [模块 README](../../../packages/datapipe/README.md) · [配置清单](../configuration/datapipe.md) · [数据结构](../data/datapipe.md) · [AI 与文档处理](../development/ai.md)
 
@@ -57,7 +57,11 @@ HTML 清洗用于提取文本，不是安全消毒；结果用于 HTML 渲染时
 | character | 按字符数分块                     |
 | custom    | 自定义分隔符（需提供 separator） |
 
-分块 `maxSize` 默认 1500，`overlap` 默认 0 且必须满足 `0 <= overlap < maxSize`。word 模式两者均按非空白词计量（连续中文可视为一个长词），其余模式均按 Unicode code point 计量，不是 UTF-16 length、字节或模型 token。上限包含重叠与分隔符；自然句/段/页/自定义边界只影响优先切点，超长段统一按 `maxSize-overlap` 滑窗。保留原始空白、标点、分页符及自定义分隔符，移除重叠后可还原全文；分块保留原始文本，不做 split/join 或 trim。Markdown section 之间不重叠，section 内使用相同硬上限，代码围栏内的标题保留为正文；仅 `markdownKeepTitle=false` 明确移除标题行。空/全空白的整体输入返回空数组。自定义正则须由可信配置提供，非法表达式返回 CHUNK_FAILED。
+每块默认最多 1500 个单位，块与块默认没有重叠。用 `overlap` 保留上一个块末尾的一部分内容，比如 `maxSize: 100, overlap: 20` 时，下一个块最多从上一个块结束前 20 个单位开始。重叠量必须小于单块上限。
+
+`word` 模式以空白字符分词，一串未用空白分隔的中文可能计为一个词。其他模式按 Unicode 码点计数，例如一个常见表情符号通常计为一个码点。单块上限包含分隔符和重叠内容。优先在句子、段落、分页符或指定的分隔位置切开。若一个自然段就已超过上限，则在段内逐步切分。
+
+原始空白、标点和分隔符保留，可去掉重叠部分后拼回原文。Markdown 各节之间无重叠，代码块里的 `#` 仍是正文。设置 `markdownKeepTitle: false` 时会主动省掉标题。空文本或全空白返回空数组。使用 `custom` 模式时，将已经检查过的正则作为分隔符，非法正则返回 `CHUNK_FAILED`。
 
 ### 文本清洗与管线步骤
 
@@ -71,11 +75,11 @@ HTML 清洗用于提取文本，不是安全消毒；结果用于 HTML 渲染时
 | `.chunkTransform(parts => parts.filter(part => part.content.length > 10))` | 对分块数组执行的同步或异步转换 | 返回构造器，下一步使用筛选后的数组                                        |
 | `.run('A sample sentence.')`                                               | 原始文本                       | `Promise<HaiResult<PipelineResult>>`，成功时 `data` 为 `{ text, chunks }` |
 
-管线按登记顺序运行。通常先清洗及转换文本，再分块及后处理。未登记分块步骤时 `data.chunks` 为空，`data.text` 仍包含处理后的全文。DOM 渲染仍须走应用的安全渲染流程。
+处理步骤按添加顺序执行。可以先移除 HTML 标签、统一大小写，再拆成小块并过滤过短的结果。没有添加分块步骤时，`data.chunks` 是空数组，`data.text` 仍有清洗后的正文。页面显示结果时，仍按应用的安全渲染规则处理。
 
 ## 错误处理
 
-返回 `HaiResult<T>` 的操作通过 `result.success` 区分成功与失败。业务成功后读取 `data`，诊断失败时记录 `error.code` 和关联编号。
+收到 `HaiResult<T>` 时先检查 `result.success`。成功时读取 `result.data`，失败时查看 `result.error`。记录故障时保留错误码和追踪编号，便于从日志找到对应请求。
 
 清洗、分块和管线执行返回领域结果，以 `result.success` 区分成功与失败。管线步骤构造器直接返回构造器本身。错误码为字符串格式 `hai:datapipe:NNN`。
 

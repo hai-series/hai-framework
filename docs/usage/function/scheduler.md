@@ -1,6 +1,6 @@
 # @h-ai/scheduler 功能说明
 
-在服务端创建、修改和运行任务，查询执行情况，并在任务生命周期中接收回调。数据库后端用于共享任务定义和运行历史。
+在服务端用 `scheduler` 创建、修改、触发定时任务并查询执行记录。执行前后可以运行回调。配置数据库后，多个服务进程可以共用任务定义和运行记录。
 
 [模块 README](../../../packages/scheduler/README.md) · [配置清单](../configuration/scheduler.md) · [数据结构](../data/scheduler.md) · [服务集成](../development/integrations.md)
 
@@ -8,7 +8,7 @@
 
 ### 依赖
 
-- `@h-ai/reldb` — 必须先初始化共享数据库，保存任务、执行 journal 与自动续租；`enableDb` 只能为 true。
+- `@h-ai/reldb` 用来保存任务、执行结果和当前领取期限，须先连接。若提供 `enableDb`，只能设为 `true`。
 
 ```ts
 import { reldb } from '@h-ai/reldb'
@@ -75,11 +75,11 @@ await scheduler.close()
 
 ### 功能输入输出
 
-以下片段依赖上面的最小接入示例。示例中的业务值由宿主校验和授权后传入；异步领域结果先判断 success，再读取 data。表中 void 表示操作已完成且没有返回数据，null 表示不存在；同步工厂/工具直接返回表中类型。
+下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
 #### scheduler · 管理任务定义
 
-任务定义管理：完整任务、ID、ID+补丁或无参数刷新，分别返回 void HaiResult。tasks 是最近成功只读快照，不是权限或实时数据库依据。
+把完整定义交给 `scheduler.register()`，按 ID 使用 `scheduler.updateTask()` 修改或用 `scheduler.unregister()` 删除。`scheduler.refreshTasks()` 无需参数，会重新读取定义。`scheduler.tasks` 显示本进程上一次成功读取的任务列表。
 
 | 入口                     | 输入参数        | 成功结果 | 调用示例                                                                                       |
 | ------------------------ | --------------- | -------- | ---------------------------------------------------------------------------------------------- |
@@ -101,7 +101,7 @@ start/stop 无参数返回同步 HaiResult；trigger 输入任务 ID/参数返�
 
 #### scheduler · 执行器与事件回调
 
-接入业务执行/事件，输入回调集合或无参清除，返回同步 HaiResult。Hook 必须响应 signal 并保证外部效果幂等。
+使用 `scheduler.setHooks()` 设置执行回调，使用 `scheduler.clearHooks()` 清除。回调收到取消信号后应停止工作。同一次任务在重试时可能调用多次，请将外部操作按任务标识去重。
 
 | 入口                   | 输入参数 | 成功结果 | 调用示例                        |
 | ---------------------- | -------- | -------- | ------------------------------- |
@@ -110,7 +110,7 @@ start/stop 无参数返回同步 HaiResult；trigger 输入任务 ID/参数返�
 
 #### scheduler.execution
 
-权威执行账本。get 输入 occurrenceId 返回项/null；两种 list 输入 limit/offset 返回数组；repairLog 输入 ID 幂等补日志；resolveUnknown 输入 ID、人工终态及 expectedUpdatedAt 条件释放槽位，返回 void。
+执行记录保存在共享数据库。用 `scheduler.execution.get(occurrenceId)` 按每次计划运行的 ID 查询。记录缺失时返回 `null`。可分页查询结果不明和日志待补写的记录，分别调用 `scheduler.execution.resolveUnknown()` 或 `scheduler.execution.repairLog()` 处理。
 
 | 入口                                  | 输入参数                 | 成功结果                          | 调用示例                                                                                           |
 | ------------------------------------- | ------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -253,17 +253,29 @@ tasks.forEach((task, id) => { // 输入回调，接收定义和 ID，返回 void
 
 ### 运行行为与边界
 
-所有节点必须先初始化同一共享 RelDB（跨主机生产使用 PostgreSQL/MySQL；SQLite 文件只适合可正确共享同一文件的本机进程）。数据库保存任务、执行 journal、全局任务占位和租约，`enableDb` 只能为 true；不再依赖缓存。`leaseMs` 默认 300000，范围 1000～86400000 毫秒，执行中自动续期。cron、手动和跨周期执行均争用同一任务槽，过期 owner 不能续活或提交。节点每个 `tickInterval` 刷新定义，`tasks` 只是最近成功快照；定义读取失败、删除、禁用、改期均中断旧尝试，已发生副作用不会回滚。
+所有调度节点应先连接同一 PostgreSQL 或 MySQL。SQLite 文件适合正确共享同一文件的本机进程。数据库保存任务定义、实际执行结果及谁可以在期限内执行它。无需另外初始化 Cache，`enableDb` 只能为 `true`。
 
-`context.occurrenceId` 是持久发生标识；同一 cron 分钟跨节点一致，手动可传 1～128 字符 `idempotencyKey` 重用原记录，省略时每次独立。`executionToken` 每次领取变化，`sequence` / `attempt` 提供执行代信息。API 会覆盖 `Idempotency-Key`、`X-Scheduler-Sequence`、`X-Scheduler-Attempt`、`X-Scheduler-Task`（任务 ID 使用 percent-encoding）。Hook 及生命周期回调已领取时的 `event.context` 使用同一发生标识；观测回调若产生副作用也须去重。
+每个任务同一时间只能有一次执行，无论从 cron、手工触发或后续周期进入。一次领取默认有效 5 分钟（`leaseMs`，1 秒至 24 小时），调度器在执行期间续期。超过期限的节点无法续期或登记执行结果。各节点每隔 `tickInterval` 读取任务定义，`scheduler.tasks` 显示上一次成功读取的结果。如果读取失败，或者任务已删除、禁用或改期，旧尝试会中断。业务已经执行的操作不会随之撤销。
+
+`context.occurrenceId` 是一次计划运行在数据库中的 ID。同一个任务在同一个计划分钟内，所有节点得到相同 ID。手动触发时可传 1 到 128 个字符的 `idempotencyKey`，再次用同一个值触发会复用原记录。省略时每次创建新记录。
+
+每次领取都会产生不同的 `executionToken`，`sequence` 和 `attempt` 可区分执行次数。HTTP 任务会写入 `Idempotency-Key`、`X-Scheduler-Sequence`、`X-Scheduler-Attempt` 及 `X-Scheduler-Task`（任务 ID 经过百分号编码），覆盖同名请求头。Hook 与执行事件中的 `event.context` 使用同一个 `occurrenceId`，需要发送、写入或调用外部服务的回调可用它去重。
 
 使用 PostgreSQL 时，同一分钟重启或多个节点同时领取可能遇到已有执行记录或被占用的任务槽。调度器将这些冲突作为正常竞争处理。排查任务是否完成时，用 `scheduler.execution.get(occurrenceId)` 查看执行状态，并保留账本和唯一约束以防止重复执行。
 
-`idempotent` 默认为 false；只有接收端已将幂等账本和全部副作用原子持久提交，才声明 true。租约过期的已执行任务仅在 true 时以同 occurrenceId 接管；非幂等或耗尽本 occurrence 保存的 retry.maxAttempts（默认 1，范围 1–100，包含首次执行及恢复）时进入 `unknown` 并继续占住任务槽。租约无法强制撤销暂停进程已发出的外部操作，单有 HTTP 头不构成去重实现。重试同样受幂等声明约束。
+默认 `idempotent: false`。只有接收端能在同一次提交中登记去重记录并完成业务写入，才可设为 `true`。例如 HTTP 接收端不能只读取 `Idempotency-Key` 就承诺重复请求只扣款一次，它还要把这次扣款和已处理的请求编号一起保存。
+
+已开始的任务领取超时后，只有声明可安全重试且未超过次数上限，其他节点才能用原 `occurrenceId` 接手。重试次数包括第一次执行和超时接手，`retry.maxAttempts` 默认为 1，范围为 1 到 100。其余情况标记为 `unknown`，暂停该任务的后续执行，等人工核对旧节点或远端请求是否已产生结果。
 
 `scheduler.execution.get(occurrenceId)` 查询权威状态；`listUnknown({ limit, offset })` 分页获取未知结果，limit 为 1～100，offset 为 0～1000000。可信人工先核实外部效果、确认旧 runner 已终止，再按 `expectedUpdatedAt` CAS 调用 `resolveUnknown(id, { status: 'success' | 'discarded', expectedUpdatedAt })` 释放占位；不能直接把 unknown 重排。`log.occurrenceId` 可作查询回执；`getLogs` 仅为尝试观测日志，日志保留策略不删除 journal/幂等历史。
 
-日志的 `id` 是每次尝试固定的 UUID，`persistence.status` 与业务 `status` 独立：`persisted` 表示日志及确认回执已持久化；`pending` 表示业务终态已提交但日志待补写；`unconfirmed` 表示没有已确认的业务终态，不能据此补写成功。只有 owner 与有效租约条件提交的终态会发布完整尝试列表，随后才投影日志；失租节点不能投影成功。日志失败不会把业务成功改成失败，也不会因此重跑业务。
+每次执行尝试都有固定的日志 UUID。业务是否成功和日志是否写完分别记录。日志的 `persistence.status` 有以下取值。
+
+- `persisted` 表示结果和日志都已写入。
+- `pending` 表示业务结果已确认，日志需要补写。
+- `unconfirmed` 表示没有可确认的业务终态，不能按成功补写。
+
+节点仅在领取有效期内才可提交最终结果，提交后调度器再生成日志。写日志失败时，已经提交的业务结果保持有效，也不会因为日志故障再次执行任务。
 
 补写会缩小 pending 列表；批量补写应反复读取 offset=0，避免一边补写一边增加 offset 跳过记录。
 
@@ -307,9 +319,9 @@ API 任务的 `timeout`（默认 30000 毫秒）覆盖请求和完整响应体�
 
 ## 错误处理
 
-返回 `HaiResult<T>` 的操作通过 `result.success` 区分成功与失败。业务成功后读取 `data`，诊断失败时记录 `error.code` 和关联编号。
+收到 `HaiResult<T>` 时先检查 `result.success`。成功时读取 `result.data`，失败时查看 `result.error`。记录故障时保留错误码和追踪编号，便于从日志找到对应请求。
 
-所有公共 API（除 `close()`）返回 `HaiResult<T>`。
+任务写入、触发与执行查询返回 `HaiResult<T>`。读取 `scheduler.tasks` 等属性直接得到返回值。关闭时等待 `scheduler.close()` 返回的 `Promise<void>`。
 
 常用错误码：
 
