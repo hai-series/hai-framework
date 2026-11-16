@@ -61,6 +61,7 @@
     "@h-ai/tools": "workspace:*",
     "@h-ai/vecdb": "workspace:*",
     "@modelcontextprotocol/sdk": "catalog:",
+    "fflate": "catalog:",
     "nanoid": "catalog:",
     "openai": "catalog:",
     "parse5": "catalog:",

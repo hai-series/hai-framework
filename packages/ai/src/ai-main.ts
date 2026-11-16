@@ -41,6 +41,9 @@ import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } fro
 import { adaptToolRegistry } from './llm/ai-llm-tool.js'
 import { createDbStoreProviderFromModules, isDbStoreAvailable } from './store/providers/ai-store-provider-db.js'
 import { createMemoryStoreProvider } from './store/providers/ai-store-provider-memory.js'
+import { createBuiltinToolBroker } from './tools/ai-tools-broker.js'
+import { createBuiltinTools } from './tools/ai-tools-builtin.js'
+import { createMcpTools } from './tools/ai-tools-mcp.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'main' })
 
@@ -307,6 +310,13 @@ async function resetAllState(): Promise<void> {
 // ─── 纯函数操作（不依赖初始化） ───
 
 const toolsOperations: ToolsOperations = {
+  createMcpTools: options => createMcpTools(options, () => (currentMCP ?? notInitializedMCP).services),
+  createBuiltinTools: options => createBuiltinTools(options, {
+    image: () => currentImage ?? notInitializedImage,
+    audio: () => currentAudio ?? notInitializedAudio,
+    llm: () => currentLLM ?? notInitializedLLM,
+  }),
+  createBroker: createBuiltinToolBroker,
   adapt: adaptToolRegistry,
 }
 

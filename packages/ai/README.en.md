@@ -6,6 +6,8 @@
 
 AI capabilities through a unified `ai` service: LLM chat, image generation, tools, MCP, embeddings, memory, retrieval/RAG, knowledge bases, context management, file parsing, reranking, audio (ASR/TTS), and A2A. Initialize with `ai.init()` on Node.js; browsers access it through APIs/clients.
 
+[Tools](../tools/README.en.md) owns shared definitions and execution. `ai.tools.adapt` handles model protocols; `createBuiltinTools` wraps images, audio, document rewriting and an optional full website-video workflow. `createMcpTools/createBroker` reuse MCP. Factories do not call models immediately; the host configures enabled tools, resource permissions and Runner. See the [AI tools guide](../cli/templates/skills/hai-ai/tools.md) (Chinese).
+
 ## Quick Start
 
 [Open the quick-start guide](../../docs/usage/function/ai.md#最小接入示例) (Chinese).

@@ -1,3 +1,5 @@
+import type { HaiResult } from '@h-ai/core'
+import type { ToolDefinition } from '@h-ai/tools'
 import type { MCPExternalServer } from '../ai-config.js'
 import type { MCPServiceBindingRequest, MCPServiceBroker, MCPServiceBrokerOptions, MCPServiceOperations } from './ai-mcp-types.js'
 import { Buffer } from 'node:buffer'
@@ -10,6 +12,7 @@ import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv
 import { z } from 'zod'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
+import { projectToolProtocolSchema } from '../tools/ai-tools-protocol-schema.js'
 import { StreamableHTTPServerTransport } from './ai-mcp-server.js'
 
 const id = z.string().trim().min(1).max(128)
@@ -26,6 +29,19 @@ const bindingSchema = z.strictObject({
   ttlMs: z.number().int().min(1).max(86_400_000).optional(),
   signal: z.instanceof(AbortSignal).optional(),
 })
+/**
+ * 本地服务只复用现有短期绑定；不登记伪外部端点或额外授权状态。
+ * @example 模块内部上下文
+ * ```ts
+ * function serviceId(service: MCPBrokerLocalService) { return service.id }
+ * ```
+ */
+export interface MCPBrokerLocalService {
+  id: string
+  catalog: (principal: MCPServiceBindingRequest['principal'], taskId: string, signal?: AbortSignal) => Promise<HaiResult<ToolDefinition[]>>
+  invoke: (request: Parameters<MCPServiceOperations['invoke']>[0], authorization: Parameters<MCPServiceOperations['invoke']>[1], idempotencyKey: string) => ReturnType<MCPServiceOperations['invoke']>
+}
+
 const maxRequestBytes = 1024 * 1024
 const digest = (token: string) => createHash('sha256').update(token).digest('hex')
 /**
@@ -51,6 +67,7 @@ export function createMCPServiceBroker(
   invoke: MCPServiceOperations['invoke'],
   options: MCPServiceBrokerOptions,
   lifecycle: AbortSignal,
+  local?: MCPBrokerLocalService,
 ) {
   const endpoint = URL.parse(options?.url)
   if (!endpoint || !['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.hash || endpoint.search || typeof options.authorize !== 'function')
@@ -112,11 +129,21 @@ export function createMCPServiceBroker(
         const services = new Map<string, MCPExternalServer | undefined>()
         const validators = new Map<string, ToolValidator>()
         for (const tool of input.tools) {
-          if (!services.has(tool.serviceId))
-            services.set(tool.serviceId, await read(tool.serviceId))
-          const service = services.get(tool.serviceId)
-          if (!service || !['http', 'job'].includes(service.transport) || !service.allowedTools?.includes(tool.tool))
-            return err(HaiAIError.MCP_TOOL_FORBIDDEN, aiM('ai_mcpServiceForbidden'))
+          if (local?.id === tool.serviceId) {
+            const catalog = await local.catalog(input.principal, input.taskId, input.signal)
+            const actual = catalog.success
+              ? catalog.data.find(item => item.name === tool.tool)
+              : undefined
+            if (!actual || actual.description !== tool.description || JSON.stringify(actual.inputSchema) !== JSON.stringify(tool.inputSchema))
+              return err(HaiAIError.MCP_TOOL_FORBIDDEN, aiM('ai_mcpServiceForbidden'))
+          }
+          else {
+            if (!services.has(tool.serviceId))
+              services.set(tool.serviceId, await read(tool.serviceId))
+            const service = services.get(tool.serviceId)
+            if (!service || !['http', 'job'].includes(service.transport) || !service.allowedTools?.includes(tool.tool))
+              return err(HaiAIError.MCP_TOOL_FORBIDDEN, aiM('ai_mcpServiceForbidden'))
+          }
           // 每个工具独占编译命名空间，允许不同 Schema 使用同一个 $id。
           validators.set(tool.id, new AjvJsonSchemaValidator().getValidator(tool.inputSchema))
         }
@@ -155,10 +182,13 @@ export function createMCPServiceBroker(
         return
       }
       const token = /^Bearer ([\w-]{43})$/i.exec(request.headers.authorization ?? '')?.[1]
-      const grant = !closed && token
-        ? grants.get(digest(token))
+      const tokenKey = token
+        ? digest(token)
         : undefined
-      if (!grant || grant.signal.aborted) {
+      const grant = !closed && tokenKey
+        ? grants.get(tokenKey)
+        : undefined
+      if (!grant || !tokenKey || grant.signal.aborted) {
         response.writeHead(401).end()
         return
       }
@@ -196,19 +226,37 @@ export function createMCPServiceBroker(
           chunks.push(part)
         }
         const body: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'))
-        server.setRequestHandler(ListToolsRequestSchema, () => ({
-          tools: grant.input.tools.map(({ id, description, inputSchema }) => ({ name: id, description, inputSchema })),
-        }))
-        server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
+        server.setRequestHandler(ListToolsRequestSchema, async () => {
+          let definitions = grant.input.tools
+          if (local) {
+            const catalog = await local.catalog(grant.input.principal, grant.input.taskId, signal)
+            const available = new Set(catalog.success
+              ? catalog.data.map(tool => tool.name)
+              : [])
+            definitions = definitions.filter(tool => tool.serviceId !== local.id || available.has(tool.tool))
+          }
+          return {
+            tools: definitions.map(({ id, description, inputSchema }) => ({
+              name: id,
+              description,
+              inputSchema: projectToolProtocolSchema(inputSchema),
+            })),
+          }
+        })
+        server.setRequestHandler(CallToolRequestSchema, async ({ params }, extra) => {
           const tool = grant.input.tools.find(tool => tool.id === params.name)
           if (!tool || signal.aborted || !grant.validators.get(params.name)?.(params.arguments ?? {}).valid)
             return failure()
-          const result = await invoke({ serviceId: tool.serviceId, tool: tool.tool, arguments: params.arguments }, {
+          const request = { serviceId: tool.serviceId, tool: tool.tool, arguments: params.arguments }
+          const authorization: Parameters<MCPServiceOperations['invoke']>[1] = {
             principal: grant.input.principal,
             taskId: grant.input.taskId,
             signal,
             authorize: input => options.authorize({ ...input, taskId: grant.input.taskId }),
-          })
+          }
+          const result = local?.id === tool.serviceId
+            ? await local.invoke(request, authorization, digest(`${tokenKey}:${String(extra.requestId)}`))
+            : await invoke(request, authorization)
           if (!result.success) {
             return {
               isError: true,

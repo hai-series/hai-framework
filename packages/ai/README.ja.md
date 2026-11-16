@@ -6,6 +6,8 @@
 
 共通の `ai` サービスで LLM 対話、画像生成、ツール、MCP、Embedding、記憶、検索/RAG、知識ベース、コンテキスト管理、ファイル解析、Rerank、音声（ASR/TTS）、A2A を提供します。Node.js では `ai.init()` で初期化し、ブラウザーからは API/client を経由します。
 
+定義と実行は [Tools](../tools/README.ja.md) に集約します。`ai.tools.adapt` はモデルのプロトコルを変換し、`createBuiltinTools` は画像・音声・文書の書き換えと任意のURL動画制作フローを提供します。`createMcpTools/createBroker` は既存MCPを利用します。ファクトリーは直ちにモデルを呼び出さず、有効化・リソース権限・Runnerはホストが設定します。[AIツールガイド](../cli/templates/skills/hai-ai/tools.md)（中国語）を参照してください。
+
 ## クイックスタート
 
 [最小構成の導入手順](../../docs/usage/function/ai.md#最小接入示例)（中国語）を参照してください。

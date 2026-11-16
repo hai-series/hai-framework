@@ -11,6 +11,7 @@ import type { ToolCall, ToolMessage, ToolRegistryOperations } from './ai-llm-typ
 import { core, err, ok } from '@h-ai/core'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
+import { projectToolProtocolSchema } from '../tools/ai-tools-protocol-schema.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'tool-protocol' })
 
@@ -63,7 +64,7 @@ export function adaptToolRegistry(registry: NeutralToolRegistryOperations): Tool
       function: {
         name: definition.name,
         description: definition.description,
-        parameters: definition.inputSchema,
+        parameters: projectToolProtocolSchema(definition.inputSchema),
       },
     })),
     async execute(call, options) {

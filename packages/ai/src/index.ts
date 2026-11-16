@@ -30,3 +30,6 @@ export * from './store/ai-store-types.js'
 export * from './summary/ai-summary-types.js'
 
 export * from './token/ai-token-types.js'
+
+export type { McpToolOptions } from './tools/ai-tools-mcp.js'
+export type { BuiltinArtifact, BuiltinArtifactAccess, BuiltinArtifactReference, BuiltinToolBinding, BuiltinToolBroker, BuiltinToolBrokerOptions, BuiltinToolOptions, CreateBuiltinTools } from './tools/ai-tools-types.js'

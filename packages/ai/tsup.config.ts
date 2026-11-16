@@ -23,6 +23,7 @@ export default defineConfig({
     '@h-ai/reldb',
     '@h-ai/datapipe',
     '@h-ai/tools',
+    'fflate',
     'openai',
     'nanoid',
     '@modelcontextprotocol/sdk',

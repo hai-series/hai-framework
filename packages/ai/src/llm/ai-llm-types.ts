@@ -11,8 +11,10 @@ import type OpenAI from 'openai'
 import type { ZodType } from 'zod'
 
 import type { ApiType } from '../ai-config.js'
-
 import type { InteractionScope, SessionInfo } from '../store/ai-store-types.js'
+
+import type { createMcpTools } from '../tools/ai-tools-mcp.js'
+import type { BuiltinToolBroker, BuiltinToolBrokerOptions, CreateBuiltinTools } from '../tools/ai-tools-types.js'
 
 // ─── 消息类型 ───
 
@@ -467,6 +469,12 @@ export interface ToolRegistryOperations {
  * ```
  */
 export interface ToolsOperations {
+  /** 将已登记 MCP 服务接入同一工具目录及执行管道。 */
+  createMcpTools: (options: Parameters<typeof createMcpTools>[0]) => ReturnType<typeof createMcpTools>
+  /** 组合现有模型能力为带资源授权的工具定义，不执行模型请求。 */
+  createBuiltinTools: CreateBuiltinTools
+  /** 通过现有短期 MCP Broker 向原生 Agent 开放本地工具服务。 */
+  createBroker: (options: BuiltinToolBrokerOptions) => HaiResult<BuiltinToolBroker>
   /** 使用同一份工具注册表；不复制工具或授权状态。 */
   adapt: (registry: NeutralToolRegistryOperations) => ToolRegistryOperations
 }

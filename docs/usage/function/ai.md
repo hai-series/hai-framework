@@ -62,6 +62,9 @@ finally {
 | `ai.llm.getHistory`               | 读取对话历史            | `{ objectId, sessionId }, { limit?, order? }?`                                    | `ChatRecord[]`                                                            | `ai.llm.getHistory({ objectId: "u1", sessionId: "s1" })`                                  |
 | `ai.llm.listSessions`             | 列出主体会话            | `objectId: string`                                                                | `SessionInfo[]`                                                           | `ai.llm.listSessions("u1")`                                                               |
 | `ai.tools.adapt`                  | 将中立工具适配给模型    | `registry: @h-ai/tools ToolRegistryOperations`                                   | `ToolRegistryOperations; no init required`                               | `ai.tools.adapt(registry)`                                                               |
+| `ai.tools.createBuiltinTools` | 组合图片、语音、文档改写与可选网址视频 | `BuiltinToolOptions: context, files, executeJob?` | `direct ToolSet; model calls run only during execution` | `ai.tools.createBuiltinTools(options)` |
+| `ai.tools.createMcpTools` | 将已登记 MCP 纳入统一执行 | `McpToolOptions: context, definitions, authorize` | `HaiResult<ToolSet>` | `ai.tools.createMcpTools(options)` |
+| `ai.tools.createBroker` | 向原生 Agent 开放同一工具服务 | `BuiltinToolBrokerOptions: service, url` | `HaiResult<BuiltinToolBroker>` | `ai.tools.createBroker({ service, url })` |
 | `ai.stream.createProcessor`       | 积累增量文本            | `none`                                                                            | `direct StreamProcessor`                                                  | `ai.stream.createProcessor()`                                                             |
 | `ai.stream.collect`               | 完整消费聊天流          | `AsyncIterable<ChatCompletionChunk>`                                              | `Promise<StreamResult>; stream failure rejects`                           | `ai.stream.collect(ai.llm.chatStream({ messages }))`                                      |
 | `ai.stream.createSSEDecoder`      | 跨片段解码 SSE          | `none`                                                                            | `direct SSEDecoder with decode/reset`                                     | `ai.stream.createSSEDecoder()`                                                            |
@@ -408,6 +411,12 @@ const chat = await ai.llm.chat({
   tools: modelTools.getDefinitions()
 })
 ```
+
+#### 图片、语音、文档与网址视频工具
+
+`ai.tools.createBuiltinTools({context,files,executeJob?})` 把已有 AI 能力包装为中立 `ToolSet`：image_generate、audio_synthesize、audio_transcribe、document_rewrite。注入可信 executeJob 回调后增加 website_video，通过同一 ToolsService 依次采集网页、生成脚本/分镜、配音、组装可编辑 HTML 工程并渲染 MP4。保留脚本、分镜、配音、字幕、封面、工程与最终视频，支持复用产物分阶段重做；document_rewrite 返回提议，不自动保存。
+
+工具创建不代表启用，仍由统一服务选择工具组并在提交/执行时授权。资源字节由授权回调读取/保存，任务结果只传引用；借用 Runner 的服务和 Broker 不关闭 Runner。`ai.tools.createMcpTools` 可把成熟 MCP 服务纳入同一目录，`ai.tools.createBroker` 让原生 Agent 使用同一服务的短期授权。参数、资源回调、视频限制与生命周期见 [AI 工具指南](../../../packages/cli/templates/skills/hai-ai/tools.md)。
 
 #### ACP 智能体、工作区和会话
 

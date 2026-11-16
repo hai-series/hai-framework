@@ -6,6 +6,8 @@
 
 AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、文生图、工具调用、MCP、Embedding、记忆、检索/RAG、知识库、上下文管理、文件解析、Rerank、语音（ASR/TTS）与 A2A。Node.js 侧通过 `ai.init()` 初始化，浏览器侧通过 API/client 代理访问。
 
+工具定义与执行由 [Tools](../tools/README.md) 统一提供；`ai.tools.adapt` 负责模型协议，`createBuiltinTools` 包装图片、语音、文档改写及可选完整网址视频，`createMcpTools/createBroker` 复用现有 MCP。工厂不立即执行模型，启用集合、资源权限与 Runner 仍由宿主装配。见 [AI 工具指南](../cli/templates/skills/hai-ai/tools.md)。
+
 ## 快速开始
 
 [跟着最小示例完成接入](../../docs/usage/function/ai.md#最小接入示例)。

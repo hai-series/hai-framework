@@ -84,7 +84,7 @@ export interface AILLMFunctions {
   /** LLM 操作接口（对话 / 流式对话 / 模型列表 / 历史 / 会话） */
   llm: LLMOperations
   /** 模型工具协议适配接口 */
-  tools: ToolsOperations
+  tools: Pick<ToolsOperations, 'adapt'>
   /** 流处理操作接口（流处理器 / SSE 编解码） */
   stream: StreamOperations
 }
@@ -604,7 +604,7 @@ export function createAILLMFunctions(
     },
   }
 
-  const tools: ToolsOperations = {
+  const tools: Pick<ToolsOperations, 'adapt'> = {
     adapt: adaptToolRegistry,
   }
 

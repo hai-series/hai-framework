@@ -17,6 +17,43 @@ function call(name: string, input: unknown, id = 'call-1'): ToolCall {
 }
 
 describe('ai.tools.adapt', () => {
+  it('只从模型Schema删除资源选择format，保留目录元数据和其他格式/默认数据', () => {
+    const registry = tools.createRegistry()
+    expect(registry.register(tools.define({
+      name: 'resource',
+      description: 'Resource',
+      parameters: z.object({
+        file: z.string().meta({ format: 'artifact-id' }),
+        nested: z.object({
+          references: z.array(z.string()).meta({ format: 'artifact-ids' }),
+          date: z.string().meta({ format: 'date-time' }),
+        }),
+        configuration: z.object({
+          format: z.string(),
+        }).default({ format: 'artifact-id' }),
+      }),
+      handler: input => input,
+    })).success).toBe(true)
+    const model = ai.tools.adapt(registry).getDefinitions()[0].function.parameters
+    expect(model).toMatchObject({
+      properties: {
+        file: { type: 'string' },
+        nested: {
+          properties: {
+            references: { type: 'array' },
+            date: { format: 'date-time' },
+          },
+        },
+        configuration: {
+          default: { format: 'artifact-id' },
+        },
+      },
+    })
+    const serialized = JSON.stringify(model)
+    expect(serialized).not.toContain('"format":"artifact-ids"')
+    expect(serialized.match(/"format":"artifact-id"/g)).toHaveLength(1)
+    expect(JSON.stringify(registry.getDefinitions())).toContain('"format":"artifact-ids"')
+  })
   it('直接业务调用和模型调用共享实现与实时注册状态', async () => {
     const registry = tools.createRegistry()
     const modelTools = ai.tools.adapt(registry)
