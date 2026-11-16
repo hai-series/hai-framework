@@ -100,7 +100,9 @@ Read YAML, apply environment overrides, validate configuration types, and manage
 
 `_core.yml` is validated with `CoreConfigSchema`, accepting only `name`, `version`, `env`, `defaultLocale`, and `logging`. The metadata defaults are `hai Admin`, `0.1.0`, `development`, and `zh-CN`; `logging` is optional. Metadata does not set `NODE_ENV`, switch message languages, or register application translations. Configure logging here; explicit `core.init({ logging })` overrides the application of YAML logging settings during that initialization.
 
-To load multiple application files, pass `core.init({ configDir: './config', configSchemas: { app: AppSchema } })` so Core can find optional fields and interpret interpolated values. Then call `core.config.validate('app', AppSchema)` and check `success` before reading `data`. `validate()` reads from the current cache. If a schema transforms its input into a different output type, use the first successful result directly and call `reload()` when you need to read and validate the file again.
+To load multiple application files, pass `core.init({ configDir: './config', configSchemas: { app: AppSchema } })` so Core can find optional fields and interpret interpolated values. Then call `core.config.validate('app', AppSchema)` and check `success` before reading `data`.
+
+Each `validate()` call starts from the last successfully loaded YAML snapshot and uses the current environment variables and the supplied schema. For example, with `code: ${APP_CODE:00123}` and no environment override, a string schema gets `'00123'` even if the initial load without a schema returned a number. Repeated validation applies schema transforms to the original input each time. Use `reload()` after editing the file. A successful reload updates both the snapshot and the result.
 
 The following file examples use this `config/app.yml` with no additional environment overrides:
 

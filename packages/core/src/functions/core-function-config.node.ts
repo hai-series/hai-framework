@@ -20,15 +20,21 @@ import { i18n } from '../i18n/core-i18n-utils.js'
 import { mergeEnv, parseEnvironment, resolveEnvironment, stringifyEnv, toEnv } from './core-function-environment.node.js'
 
 /**
- * 缓存项（存储已加载的配置及其元信息）
+ * 最近一次成功加载的 YAML 快照和可供调用方使用的配置结果。
  * @example 模块内部上下文
  * ```ts
- * const entry: CacheEntry<{ enabled: boolean }> = { data: { enabled: true }, filePath: '/srv/app/config/app.yml', loadedAt: Date.now() }
+ * const entry: CacheEntry<{ enabled: boolean }> = {
+ *   source: { enabled: true },
+ *   data: { enabled: true },
+ *   filePath: '/srv/app/config/app.yml',
+ * }
  * const enabled = entry.data.enabled
  * ```
  */
 interface CacheEntry<T = unknown> {
-  /** 解析后的配置数据 */
+  /** 加载成功时的 YAML 原始数据，供后续环境覆盖、插值和校验使用。 */
+  source: unknown
+  /** 应用环境覆盖以及可选 Schema 后对外提供的结果。 */
   data: T
   /** 配置文件路径 */
   filePath: string
@@ -36,8 +42,6 @@ interface CacheEntry<T = unknown> {
   schema?: ZodType<T>
   /** 宿主提供的结构提示；模块仍自行执行完整业务校验。 */
   schemaHint?: ZodType
-  /** 加载时间戳（毫秒） */
-  loadedAt: number
 }
 
 // ─── 内部工具 ───
@@ -118,16 +122,12 @@ function notifyWatchCallbacks(callbacks: Iterable<WatchCallback<unknown>>, resul
 }
 
 /**
- * 加载 YAML 配置文件（不带 Schema 验证）。
+ * 读取已解析、尚未应用环境覆盖和 Schema 的 YAML 快照。
  *
- * 流程：检查文件存在 → 读取 YAML → 约定式环境变量映射与显式插值。
- *
- * @param name - 配置名称，用于生成 `HAI_<配置名>_<YAML 路径>` 环境变量名
  * @param filePath - YAML 文件路径
- * @param schema - 可选结构提示，用于识别路径与类型
- * @returns 解析后的配置，或读取、解析及环境覆盖的错误
+ * @returns 原始数据或文件读取和解析错误
  */
-function loadYaml(name: string, filePath: string, schema?: ZodType): HaiResult<unknown> {
+function readYaml(filePath: string): HaiResult<unknown> {
   if (!existsSync(filePath)) {
     return err(HaiConfigError.CONFIG_FILE_NOT_FOUND, i18n.coreM('core_configFileNotExist', {
       params: { filePath },
@@ -136,8 +136,7 @@ function loadYaml(name: string, filePath: string, schema?: ZodType): HaiResult<u
 
   try {
     const content = readFileSync(filePath, 'utf-8')
-    const parsed = parse(content)
-    return resolveEnvironment({ name, value: parsed, schema })
+    return ok(parse(content))
   }
   catch (error) {
     return err(HaiConfigError.CONFIG_PARSE_ERROR, i18n.coreM('core_configParseFailed', {
@@ -147,35 +146,19 @@ function loadYaml(name: string, filePath: string, schema?: ZodType): HaiResult<u
 }
 
 /**
- * 加载并验证配置文件。
- *
- * 流程：加载 YAML → 环境变量映射与插值 → Zod Schema 校验。
- *
- * @param name - 配置名称
- * @param filePath - YAML 文件路径
- * @param schema - Zod 校验 Schema
- * @returns 校验后的配置数据；可能的错误码：FILE_NOT_FOUND / PARSE_ERROR / ENV_VAR_MISSING / VALIDATION_ERROR
+ * 从 YAML 快照应用当前环境覆盖，再执行同步 Schema 校验。
+ * @param name - 配置名称，用于解析约定环境变量
+ * @param source - YAML 原始数据
+ * @param schema - 结构提示及 Zod 校验、转换规则
+ * @returns 校验数据或环境解析、Schema 校验失败的原因
  */
-function loadConfig<T>(
-  name: string,
-  filePath: string,
-  schema: ZodType<T>,
-): HaiResult<T> {
-  const yamlResult = loadYaml(name, filePath, schema)
-  return yamlResult.success
-    ? validateConfig(yamlResult.data, schema)
-    : yamlResult
-}
+function validateConfig<T>(name: string, source: unknown, schema: ZodType<T>): HaiResult<T> {
+  const resolved = resolveEnvironment({ name, value: source, schema })
+  if (!resolved.success)
+    return resolved
 
-/**
- * 在同步配置 API 的边界统一转换 Schema 失败。
- * @param value - 环境覆盖后的值
- * @param schema - Zod 校验和转换规则
- * @returns 校验后的数据；失败时保留 Zod issues 或自定义校验抛出的异常
- */
-function validateConfig<T>(value: unknown, schema: ZodType<T>): HaiResult<T> {
   try {
-    const parsed = schema.safeParse(value)
+    const parsed = schema.safeParse(resolved.data)
     if (parsed.success)
       return ok(parsed.data)
     return err(HaiConfigError.CONFIG_VALIDATION_ERROR, i18n.coreM('core_configValidationFailed'), parsed.error.issues)
@@ -186,27 +169,32 @@ function validateConfig<T>(value: unknown, schema: ZodType<T>): HaiResult<T> {
 }
 
 /**
- * 加载配置并写入缓存。
+ * 读取并解析配置，成功后一起替换 YAML 快照和对外的配置值。
  *
  * @param name - 配置名称（缓存 key）
- * @param filePath - YAML 文件路径
- * @param schema - 可选 Zod Schema（不传则跳过校验）
- * @returns 加载结果；成功时同时更新缓存
+ * @param file - YAML 路径和可选的校验 Schema 或结构提示
+ * @returns 配置值或错误。失败时保留上次缓存。
  */
 function loadAndCache<T>(
   name: string,
-  filePath: string,
-  schema?: ZodType<T>,
+  file: Pick<CacheEntry<T>, 'filePath' | 'schema' | 'schemaHint'>,
 ): HaiResult<T> {
+  const { filePath, schema, schemaHint } = file
+  const source = readYaml(filePath)
+  if (!source.success)
+    return source
+
+  // 无校验 Schema 时，公开 load API 的泛型由调用方指定。
   const result = schema
-    ? loadConfig(name, filePath, schema)
-    : loadYaml(name, filePath) as HaiResult<T>
+    ? validateConfig(name, source.data, schema)
+    : resolveEnvironment({ name, value: source.data, schema: schemaHint }) as HaiResult<T>
   if (result.success) {
     configCache.set(name, {
+      source: source.data,
       data: result.data,
       filePath,
-      schema: schema as ZodType<unknown> | undefined,
-      loadedAt: Date.now(),
+      schema,
+      schemaHint,
     })
   }
   return result
@@ -225,26 +213,17 @@ function loadAndCache<T>(
  * ```
  */
 export function loadConfigStructure(name: string, filePath: string, schemaHint?: ZodType): HaiResult<unknown> {
-  const result = loadYaml(name, filePath, schemaHint)
-  if (result.success) {
-    configCache.set(name, {
-      data: result.data,
-      filePath,
-      schemaHint,
-      loadedAt: Date.now(),
-    })
-  }
-  return result
+  return loadAndCache(name, { filePath, schemaHint })
 }
 
 /**
  * 校验已加载的配置并写回缓存。
  *
- * 基于当前缓存数据应用约定式环境覆盖，再用 Schema 校验。成功后保存校验结果和 Schema，供后续重载使用。
+ * 基于最近一次成功加载的 YAML 和当前环境校验。成功后更新结果和后续重载使用的 Schema。
  *
  * @param name - 配置名称
  * @param schema - Zod Schema
- * @returns 校验结果；未加载时返回 NOT_LOADED，校验失败返回 VALIDATION_ERROR
+ * @returns 校验结果；未加载时返回 CONFIG_NOT_LOADED，校验失败保留旧结果
  */
 function validateLoadedConfig<T>(name: string, schema: ZodType<T>): HaiResult<T> {
   const entry = configCache.get(name)
@@ -252,10 +231,7 @@ function validateLoadedConfig<T>(name: string, schema: ZodType<T>): HaiResult<T>
     return err(createNotLoadedError(name))
   }
 
-  const resolved = resolveEnvironment({ name, value: entry.data, schema }, true)
-  if (!resolved.success)
-    return resolved
-  const validated = validateConfig(resolved.data, schema)
+  const validated = validateConfig(name, entry.source, schema)
   if (!validated.success)
     return validated
 
@@ -263,7 +239,6 @@ function validateLoadedConfig<T>(name: string, schema: ZodType<T>): HaiResult<T>
     ...entry,
     data: validated.data,
     schema,
-    loadedAt: Date.now(),
   })
 
   return validated
@@ -282,17 +257,7 @@ function reloadAndNotify(name: string): HaiResult<unknown> {
   if (!entry)
     return err(createNotLoadedError(name))
 
-  // 无 Schema 时直接加载 YAML（不做校验），避免 schema 为 undefined 导致运行时崩溃
-  const result = entry.schema
-    ? loadConfig(name, entry.filePath, entry.schema)
-    : loadYaml(name, entry.filePath, entry.schemaHint)
-  if (result.success) {
-    configCache.set(name, {
-      ...entry,
-      data: result.data,
-      loadedAt: Date.now(),
-    })
-  }
+  const result = loadAndCache(name, entry)
   const subscribed = watchEntries.get(name)
   if (subscribed)
     notifyWatchCallbacks(subscribed.callbacks, result)
@@ -549,18 +514,18 @@ export const config = {
    * ```
    */
   load<T>(name: string, filePath: string, schema?: ZodType<T>): HaiResult<T> {
-    return loadAndCache(name, filePath, schema)
+    return loadAndCache(name, { filePath, schema })
   },
 
   /**
    * 验证已加载的配置数据。
    *
-   * 用 Schema 校验当前缓存数据，成功后以校验结果替换缓存，并为 reload 保存 Schema。
-   * 需要按 Schema 解析 YAML 插值时，在 init 时提供结构提示，或直接将 Schema 传给 load。
+   * 从最近一次成功加载的 YAML 快照取值，使用当前环境变量和本次 Schema 解析、校验。
+   * 成功后更新配置缓存及重载使用的 Schema。需要读取文件的新内容时使用 reload。
    *
    * @param name - 配置名称
-   * @param schema - 接受当前缓存值作为输入的同步 Zod Schema
-   * @returns 校验后的配置；未加载返回 CONFIG_NOT_LOADED，Schema 失败返回 CONFIG_VALIDATION_ERROR
+   * @param schema - 接受环境解析后 YAML 数据的同步 Zod Schema
+   * @returns 校验后的配置，或未加载、环境解析和 Schema 校验错误
    *
    * @example
    * ```ts
@@ -623,7 +588,7 @@ export const config = {
   /**
    * 重新加载配置。
    *
-   * 从磁盘重新读取配置，应用当前环境及缓存的 Schema。成功更新缓存，失败保留最近成功的值。两种结果均通知订阅方。
+   * 从磁盘重新读取配置，应用当前环境及缓存的 Schema。成功同时更新 YAML 快照和结果，失败保留两者。两种结果均通知订阅方。
    *
    * @param name - 配置名称
    * @returns 重载结果；未加载时返回 NOT_LOADED

@@ -96,7 +96,7 @@ const formErrors = core.zodValidation.mapZodErrorToFormErrors(zodError, getMessa
 
 Node 的 `loadEnvFiles({ mode, envDir? })` 返回合并变量的 HaiResult，不修改进程；`core.init` 不自动读取 dotenv。`resolve`/`mergeEnv`/`toEnv`/`parseEnv`/`stringifyEnv` 用于配置生成，返回值可能含秘密，不能整体记录日志。完整来源与生成规则见[基础配置手册](https://github.com/hai-series/hai-framework/blob/main/docs/usage/configuration/runtime.md)。
 
-`load(name, file, schema)` 按同步 Schema 解析并校验。扫描时也可用 `configSchemas` 为插值提供类型提示，随后由 `validate()` 校验缓存值。Schema 失败返回 `CONFIG_VALIDATION_ERROR`，`error.cause` 保留 issues 或自定义校验抛出的异常。使用改变输入类型的 Schema 时，校验成功后使用返回值，重新读盘校验用 `reload()`。
+`load(name, file, schema)` 按同步 Schema 解析并校验。扫描时可用 `configSchemas` 为插值提供类型提示。`validate()` 每次从最近一次成功加载的 YAML 快照出发，用当前环境变量和传入的 Schema 校验，`reload()` 会先重新读盘。Schema 失败返回 `CONFIG_VALIDATION_ERROR`，`error.cause` 保留 issues 或自定义校验抛出的异常。
 
 变量替换示例：`app.yml` 写 `port: ${PORT:3000}`，PORT 未设置时读取默认值 3000，`PORT=4000` 时读取 4000；设置 `HAI_APP_PORT=5000` 则直接覆盖为 5000，不再要求 PORT 存在。Schema 的数字/布尔字段可把单个表达式转换为对应类型，字符串字段保留前导零；混合文本仍为字符串。空串表示已设置，不使用默认值；环境值里的 `${PORT}` 保持原样，不继续替换。分步解释与可运行示例见[Core 文件与环境配置](https://github.com/hai-series/hai-framework/blob/main/packages/core/README.md#文件与环境配置coreconfig)。
 

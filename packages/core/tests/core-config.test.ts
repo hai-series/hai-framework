@@ -353,6 +353,54 @@ describe('core.config', () => {
     expect(result.success).toBe(true)
   })
 
+  it('validate 从同一份 YAML 快照重新解析插值和校验转换', () => {
+    vi.stubEnv('HAI_CORE_TEST_CODE', undefined)
+    vi.stubEnv('HAI_APP_CODE', undefined)
+    // eslint-disable-next-line no-template-curly-in-string -- 保存供配置加载器处理的 YAML 插值。
+    writeFileSync(configPath, 'code: ${HAI_CORE_TEST_CODE:00123}\n')
+    expect(core.config.load('app', configPath)).toEqual({
+      success: true,
+      data: { code: 123 },
+    })
+
+    const codeSchema = z.object({
+      code: z.string(),
+    }).transform(({ code }) => code)
+    writeFileSync(configPath, 'code: "disk-value"\n')
+    expect(core.config.validate('app', codeSchema)).toEqual({ success: true, data: '00123' })
+    expect(core.config.validate('app', codeSchema)).toEqual({ success: true, data: '00123' })
+
+    vi.stubEnv('HAI_APP_CODE', '00456')
+    expect(core.config.validate('app', codeSchema)).toEqual({ success: true, data: '00456' })
+    vi.stubEnv('HAI_APP_CODE', undefined)
+    vi.stubEnv('HAI_CORE_TEST_CODE', '00789')
+    expect(core.config.validate('app', codeSchema)).toEqual({ success: true, data: '00789' })
+    vi.stubEnv('HAI_CORE_TEST_CODE', undefined)
+    expect(core.config.get('app')).toBe('00789')
+    expect(core.config.validate('app', codeSchema)).toEqual({ success: true, data: '00123' })
+  })
+
+  it('重载通过校验后同时发布原始快照与校验结果，失败时保留两者', () => {
+    const codeSchema = z.object({
+      code: z.string().regex(/^\d{5}$/),
+    }).transform(({ code }) => Number(code))
+    writeFileSync(configPath, 'code: "00123"\n')
+    expect(core.config.load('app', configPath, codeSchema)).toEqual({ success: true, data: 123 })
+
+    writeFileSync(configPath, 'code: "unfinished"\n')
+    const rejected = core.config.reload('app')
+    expect(rejected.success).toBe(false)
+    if (!rejected.success)
+      expect(rejected.error.code).toBe(HaiConfigError.CONFIG_VALIDATION_ERROR.code)
+    expect(core.config.get('app')).toBe(123)
+    expect(core.config.validate('app', codeSchema)).toEqual({ success: true, data: 123 })
+
+    writeFileSync(configPath, 'code: "00456"\n')
+    expect(core.config.reload('app')).toEqual({ success: true, data: 456 })
+    expect(core.config.get('app')).toBe(456)
+    expect(core.config.validate('app', codeSchema)).toEqual({ success: true, data: 456 })
+  })
+
   it('validate 应该在校验失败时返回 VALIDATION_ERROR', () => {
     writeFileSync(configPath, 'foo: a\nbar: b\n', 'utf-8')
 

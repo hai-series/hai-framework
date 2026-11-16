@@ -173,7 +173,7 @@ export function stringifyEnv(values: Record<string, string>, options: { target?:
  * const result = resolveEnvironment({ name: 'app', value: { name: 'Example' }, environment: { HAI_APP_NAME: 'Test' } })
  * ```
  */
-export function resolveEnvironment(options: { name: string, value: unknown, environment?: Environment, schema?: ZodType, shape?: Readonly<Record<string, unknown>>, missing?: 'error' | 'empty' }, literal = false): HaiResult<unknown> {
+export function resolveEnvironment(options: { name: string, value: unknown, environment?: Environment, schema?: ZodType, shape?: Readonly<Record<string, unknown>>, missing?: 'error' | 'empty' }): HaiResult<unknown> {
   const environment = options.environment ?? process.env
   const missingNames = new Set<string>()
   let root: Shape
@@ -324,7 +324,7 @@ export function resolveEnvironment(options: { name: string, value: unknown, envi
       : resolved
   }
   try {
-    return ok(visit(options.value, prefix, root, literal, 0))
+    return ok(visit(options.value, prefix, root, false, 0))
   }
   catch (failure) {
     const name = failure instanceof Error && /^[A-Z_]\w*$/i.test(failure.message)

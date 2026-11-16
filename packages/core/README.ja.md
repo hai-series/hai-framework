@@ -100,7 +100,9 @@ YAML の読み込み、環境変数による上書き、型の検証、設定キ
 
 `_core.yml` は `CoreConfigSchema` で検証し、`name`、`version`、`env`、`defaultLocale`、`logging` だけを受け付けます。メタデータの既定値は順に `hai Admin`、`0.1.0`、`development`、`zh-CN` で、`logging` は省略可能です。メタデータは `NODE_ENV` の変更、メッセージ言語の切り替え、業務翻訳の登録を行いません。通常はここでログを設定します。明示的な `core.init({ logging })` は、その初期化における YAML ログ設定の適用を上書きします。
 
-複数の設定ファイルを読み込むときは、`core.init({ configDir: './config', configSchemas: { app: AppSchema } })` を使います。Core はスキーマから任意項目のパスや置換後の型を判断します。その後 `core.config.validate('app', AppSchema)` を呼び、`success` を確認して `data` を取得します。 `validate()` が検証するのは現在のキャッシュです。入力と出力で型が変わるスキーマでは、最初の成功結果をそのまま使い、ファイルを読み直すときは `reload()` を呼びます。
+複数の設定ファイルを読み込むときは、`core.init({ configDir: './config', configSchemas: { app: AppSchema } })` を使います。Core はスキーマから任意項目のパスや置換後の型を判断します。その後 `core.config.validate('app', AppSchema)` を呼び、`success` を確認して `data` を取得します。
+
+`validate()` は、直近の読み込みに成功した YAML を使い、現在の環境変数と指定したスキーマで毎回検証します。例えば `code: ${APP_CODE:00123}` で環境変数による上書きがなければ、最初にスキーマを指定せず数値として読み込んだ場合も、文字列型で検証すると `'00123'` が得られます。繰り返し検証しても変換は元の値から実行します。ファイルを編集した場合は `reload()` を使います。成功すると読み込んだ YAML と検証結果の両方が更新されます。
 
 以下のファイル例では、この `config/app.yml` を使い、環境変数による追加の上書きがないものとします。
 

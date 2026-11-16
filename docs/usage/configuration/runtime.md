@@ -25,6 +25,8 @@
 
 例如同一文件有 `HAI_IAM_SESSION='{"maxAge":3600}'` 和 `HAI_IAM_SESSION_MAXAGE=1800`，最终为 1800。宿主显式提供模块 `configSchemas` 后，Schema 中合法的可选路径即使未写入 YAML 也能接收细项；扫描仅使用结构和类型，模块仍执行完整校验。没有 Schema 时按已有 YAML/JSON 结构定位，未知路径不凭空创建。
 
+遇到 `CONFIG_VALIDATION_ERROR` 时，检查对应的 YAML 和环境覆盖。`validate()` 使用最近一次成功加载的 YAML 快照和当前环境重新校验。比如 `code: ${APP_CODE:00123}` 在环境变量未设置时，用字符串 Schema 校验会得到 `'00123'`。编辑 YAML 后调用 `reload()` 读取新内容。单个文件可以直接用 `core.config.load(name, file, schema)` 读取和校验。
+
 ### JSON 兜底与生成规则
 
 手写 JSON 可用于任何对象或数组，放在对应模块细项之前便于阅读。生成命令优先写细项，数组保留 JSON。动态字典、显式空对象以及本身要求 JSON 文本的字段保留原义；整体替换对象展开时可能留下最上层 `{}` 重置标记，避免旧 YAML 字段重新出现。

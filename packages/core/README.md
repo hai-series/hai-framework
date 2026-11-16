@@ -100,7 +100,9 @@ core.logger.warn('Request needs attention', { requestId })
 
 `_core.yml` 使用 `CoreConfigSchema` 校验，只接受 `name`、`version`、`env`、`defaultLocale` 和 `logging`。默认值依次为 `hai Admin`、`0.1.0`、`development`、`zh-CN`；`logging` 可省略。元数据不会自行修改 `NODE_ENV`、切换消息语言或注册业务翻译。日志应从此处配置；显式传入 `core.init({ logging })` 会覆盖本次初始化对 YAML 日志设置的应用。
 
-批量加载业务配置时，传入 `core.init({ configDir: './config', configSchemas: { app: AppSchema } })`，让 Core 按 Schema 识别可选字段及插值类型。随后调用 `core.config.validate('app', AppSchema)`，检查 `success` 后读取 `data`。 `validate()` 从当前缓存取值；使用输入和输出类型不同的 Schema 时，首次校验成功后直接使用结果。需要重新读取并校验该文件时用 `reload()`。
+批量加载业务配置时，传入 `core.init({ configDir: './config', configSchemas: { app: AppSchema } })`，让 Core 按 Schema 识别可选字段及插值类型。随后调用 `core.config.validate('app', AppSchema)`，检查 `success` 后读取 `data`。
+
+`validate()` 每次都从最近一次成功加载的 YAML 快照开始，用当前环境变量和传入的 Schema 解析、校验。例如 `code: ${APP_CODE:00123}` 在变量未设置时，按字符串字段校验会得到 `'00123'`，即使先前未提供 Schema 就加载成了数字。重复校验时，Schema 转换仍从原始数据开始。修改文件后用 `reload()` 读取新内容，成功后一起更新快照和结果。
 
 以下文件示例使用这份 `config/app.yml`，并假设没有额外环境变量覆盖：
 
