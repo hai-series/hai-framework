@@ -4,19 +4,11 @@
 
 认证配置同时影响服务端判断和用户看到的步骤。先初始化 RelDB 和 Cache，再初始化 IAM。浏览器只接收 `await iam.getPublicConfig()` 的成功结果，不能下发完整服务端配置；同步 `iam.publicConfig` 是文件快照，不能代替数据库合并后的实际策略。
 
-下文 YAML 均写入 `config/_iam.yml`，是可以合并的功能示例。更改后重启或按宿主生命周期重新初始化；已经存在的会话、账号标记和数据库策略还需按业务核对。
+下文 YAML 均写入 `config/_iam.yml`，是可以合并的功能示例。字段、默认值与生效条件见 [IAM 配置清单](iam.md#配置清单)，公开投影见 [API Contract 配置](api-contract.md#配置清单)。更改后重启或按宿主生命周期重新初始化；已经存在的会话、账号标记和数据库策略还需按业务核对。
 
 ## 登录方式、注册与协议
 
-| 配置 | 框架默认 | 作用和不同取值的影响 |
-| --- | --- | --- |
-| `login.password` / `otp` | true / true | 启用密码/一次性验证码；OTP 还需配置通道和可用发送回调，可接应用已有服务或可选 Reach，不是打开按钮就能送达 |
-| `login.ldap` / `apikey` | false / false | 启用目录/API Key 策略；API Key 不等同于交互网页登录 |
-| `register.enabled` | `true` | `false` 关闭公开注册；员工应用通常按业务关闭 |
-| `register.defaultAccountStatus` | active | active 注册后可登录；dormant 创建为休眠账号，等待管理员激活。仅影响新自助注册账号，管理员创建可另选状态 |
-| `agreements.showOnRegister` / `showOnLogin` | true / false | 控制公开认证页协议入口；未提供内容不会自动生成法务文本 |
-| `userAgreementMarkdown` / `privacyPolicyMarkdown` | 无默认 | 内嵌内容，须经业务审定；对应 URL 字段也无默认 |
-| `userAgreementUrl` / `privacyPolicyUrl` | 无默认 | 可信 HTTP(S) 页面地址，避免任意跳转或含秘密的链接 |
+企业应用可关闭公开注册；需要先人工激活时，设置 `register.defaultAccountStatus: dormant`。OTP 登录还需应用提供发送回调或接入 Reach。协议 Markdown 与 URL 由应用维护并选择展示位置。
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
 login: { password: true, otp: false, ldap: false, apikey: false }
@@ -66,14 +58,7 @@ ldap:
 
 ## 密码复杂度、初始密码与复用
 
-| 配置（`password` 下） | 框架默认 | 调整后的影响 |
-| --- | --- | --- |
-| `minLength`/`maxLength` | 8/128 | 范围越严越影响输入体验；最大允许256，示例12不是默认 |
-| `requireUppercase`/`requireLowercase`/`requireNumber` | 均为 `true` | 分别要求大写、小写、数字；关闭一项不代表关闭其他项 |
-| `requireSpecialChar`/`minCharacterClasses` | false/0 | 可增加特殊字符或最少字符类别；类别计数与显式必含规则一起生效 |
-| `requireInitialChange` | `false` | `true` 要求被标记为初始凭据的账号先改密，不会自动把全部老账号标为初始密码 |
-| `preventSamePassword` | `false` | `true` 拒绝复用当前密码；不是完整历史密码库 |
-| `expirationDays` | 0 | 0 不启用定期到期策略；正值按天限制，需配套改密和恢复流程 |
+密码复杂度同时使用显式字符类别规则和最少类别数。首次改密限制适用于带初始凭据标记的账号。开启期限限制前，先接入改密和恢复流程。[密码字段](iam.md#password)
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
 password:
@@ -111,15 +96,7 @@ passwordReset:
 
 ## 会话有效期与终端配额
 
-| 配置（`session` 下） | 框架默认 | 取值影响 |
-| --- | --- | --- |
-| `maxAge`/`refreshTokenMaxAge` | 86400/604800秒 | 访问凭据与刷新凭据分别计时；访问到期不必然要求用户立即重登 |
-| `sliding` | `true` | 允许按实现续期；不能绕过绝对/闲置期限 |
-| `idleTimeout`/`absoluteTimeout` | 0/0秒 | 0 关闭额外限制；正值分别按实际业务闲置、会话总时长限制，自动刷新不延长闲置 |
-| `endOnPageHide` | `false` | `true` 尝试在页面隐藏/退出时结束；浏览器送达尽力而为，不能作为唯一撤销保障 |
-| `singleDevice`/`singleDeviceMode` | `false` / `replace` | 开启单设备策略后，`replace` 替换旧会话，`reject` 拒绝新登录 |
-| `maxSessions` | 0 | 0 不限额；正数控制总会话数，需用独立上下文确认 |
-| `terminalLimits`/`terminalLimitMode` | `{}` / `reject` | 显式列终端后，未列出的 `web`、`app`、`desktop`、`api` 不能新登录；`replace` 替换旧配额，终端标识不是硬件证明 |
+访问和刷新凭据分别计时。自动刷新不延长业务闲置期限，滑动续期仍受会话绝对期限约束。浏览器页面关闭时发送结束会话通知属于尽力送达，应同时配置服务端期限。[会话字段](iam.md#session)
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
 session:
@@ -150,14 +127,7 @@ session:
 
 ## 锁定、验证码与登录来源
 
-| 配置 | 框架默认 | 作用与条件 |
-| --- | --- | --- |
-| `security.lockoutEnabled` | `true` | 账号失败累计锁定，不替代网络/接口限流 |
-| `failureWindow`/`maxLoginAttempts`/`lockoutDuration` | 86400秒/5次/900秒 | 分别是累计窗口、阈值、锁定时长，不能把窗口当锁定期 |
-| `captcha.enabled` | `false` | 开启自托管计算挑战，标准 AuthPanel 自动接入，自定义请求也要传用途对应挑战 |
-| `captcha.ttlSeconds` / `captcha.cost` / `captcha.maxCounter` | 120秒/5000/100 | 提高计算量可能影响低性能设备，按真实设备耗时选择 |
-| `otp.email` / `sms` | 对象内 true/true | 能否送达仍需通道，不能由配置替代 |
-| `otp.length` / `expiresIn` / `maxAttempts` / `resendInterval` | 6位/300秒/3次/60秒 | 期限、错误次数和重发冷却分别限制，过期/重放仍服务端拒绝 |
+按实际登录流量选择失败累计窗口、阈值和锁定期，并在入口配置限流。启用计算挑战时，标准 AuthPanel 会提交证明；自定义界面要按用途生成证明并测试低性能设备。OTP 发出后分别受重发、过期和验证次数约束。
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
 security:
@@ -216,12 +186,7 @@ loginAccess:
 
 ## 权限、二次认证与 API Key
 
-| 配置 | 框架默认 | 影响 |
-| --- | --- | --- |
-| `rbac.enabled` / `superAdminRole` / `defaultRole` | true/super_admin/user | 默认角色按业务最小权限；示例 admin 不应作为公开注册角色 |
-| `seedDefaultData` | `true` | 初始化框架默认角色/权限，不代替应用资源授权 |
-| `reauthentication`.`enabled`/`operations`/`ttlSeconds` | 对象内 false/[]/300秒 | 指定敏感操作的一次性证明；仅加操作名不会自动保护自定义接口，两端接同名守卫 |
-| `apikey`.`maxKeysPerUser`/`defaultExpirationDays`/`prefix` | 对象内10/0天/hai_ | 0 表示无默认到期；scopes 只收敛现有角色授权，不授予额外权限 |
+公开注册使用满足运行需要的最小权限角色。敏感操作由 API 守卫及客户端提交同名操作标识，再认证证明只消费一次。API Key `scopes` 从使用者已有的角色授权继续收敛。
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
 rbac: { enabled: true, superAdminRole: super_admin, defaultRole: user }

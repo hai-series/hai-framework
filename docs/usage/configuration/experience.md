@@ -6,6 +6,8 @@
 
 ## 表单布局与校验
 
+通用组件、主题和语言入口见 [UI 配置清单](ui.md#配置清单)。
+
 位置：页面组件props，没有 `_ui.yml`。`Form` / `FormLayout` 默认一列、标签在上；`columns={2}` 适合宽容器，`labelPosition="left"` 让短标签对齐，`labelWidth` 按实际内容选择。`FormField.colSpan` 默认 `auto`，宽控件占满一行，自定义宽控件用 `data-form-wide`，也可明确指定 `1` 或 `2`。
 
 ```svelte
@@ -58,6 +60,8 @@ toast.add({
 
 ## 主题、语言和AI内容显示
 
+主题偏好和语言初始化及其默认值见 [UI 配置清单](ui.md#配置清单)。
+
 主题由宿主选择，没有跨应用固定默认主题。`applyTheme`/`getSavedTheme`管理选择和持久化，可选主题须已有CSS。颜色使用主题tokens，长文/深色/错误状态都要实际检查。
 
 ![浅色设置页](../images/settings-light.png)
@@ -78,14 +82,7 @@ Markdown 的 `allowHtmlTags` 默认 `false`，`true` 只渲染允许的HTML并�
 
 位置：`config/_payment.yml`，先共享RelDB，再初始化所需渠道。当前微信为JSAPI，支付宝/Stripe为H5，不能推断未实现交易方式已支持。
 
-| 渠道/项 | 默认与必填 | 影响 |
-| --- | --- | --- |
-| 微信`mchId`/`apiV3Key`/`serialNo`/`privateKey`/`appId`/`platformKeys` | 全部必填，无默认 | `platformKeys`按受信 `Wechatpay-Serial` 精确选键；轮换期间同时保留新旧标识，不能请求自带任意公钥 |
-| 支付宝`appId`/`sellerId`/`privateKey`/`alipayPublicKey`/`returnUrl` | 全部必填，无默认 | `returnUrl`必须可信HTTPS，仅导航；核对app/商户/订单/币种金额，不由跳转判付款 |
-| 支付宝`signType`/`sandbox` | `RSA2` / `false` | 沙箱与生产账号分离；不能将开关当真实账户可用性检查 |
-| Stripe `secretKey`/`webhookSecret`/`successUrl` | 必填，无默认 | test/live密钥匹配环境；通知验签独立于API密钥 |
-| Stripe `cancelUrl` | 无默认 | 配置才提供取消返回地址，不能作为订单已取消的付款证明 |
-| `webhookToleranceSeconds` | Stripe300秒 | 过短可能拒绝合法延迟，过长增加重放窗口；配合幂等和时钟同步 |
+渠道字段、默认值和验签必填项见 [Payment 配置清单](payment.md#配置清单)。轮换微信平台证书时同时保留受信的新旧标识。支付宝返回页和 Stripe 取消页负责导航；订单状态由签名核验后按商户、订单及金额确认。
 
 ```yaml schema=@h-ai/payment:PaymentConfigSchema
 stripe:
@@ -136,12 +133,7 @@ Tauri开发回退API 地址为 `http://localhost:3000/api/v1`；手机上的 `lo
 
 原生工程还需分别配置应用标识、展示名称、打包 Web 目录、平台权限和签名；这些由 `capacitor.config.ts` / Tauri 工程及平台工具链消费，不是 `_core.yml.name` 的替代。输入一个设备真实可达的公开 API 地址后，应能从真机发出健康请求；相机、推送和安全存储还需分别验证授权允许、拒绝和重启恢复。仅同步资源或生成安装包不会证明设备权限、令牌存储与业务请求正常，完整能力选项见[原生接入](../development/integrations.md)。
 
-| 能力参数 | 默认与输入 | 输出、影响和限制 |
-| --- | --- | --- |
-| `camera.takePhoto` 的 `source` | `prompt`；可选 camera/photos | 选择相机或图库，需要平台权限和对应插件；拒绝授权时返回失败结果 |
-| `quality` / `width` / `height` | quality=90（0–100）；宽高可省略、单位像素 | 限制照片质量/尺寸，不是服务器上传大小保证，上传前仍核对真实字节 |
-| `resultType` | uri；可选 base64/dataUrl | `data` 分别为可访问路径、Base64字符串、Data URL；`format` 是 jpeg 等扩展名，不是 MIME 类型 |
-| `statusBar.configure` 的 `style` | dark/light/default，可省略 | 改变文字样式；backgroundColor 为十六进制颜色，overlay 控制是否覆盖内容，需要按真机安全区检查 |
+相机、状态栏、推送及原生工程选项见 [Capacitor 配置清单](capacitor.md#配置清单)。相机的尺寸和质量设置用于控制照片，上传前按原文件字节数检查实际限制。状态栏覆盖设置应在真机安全区验证。
 
 例如已初始化 Capacitor 后调用 `camera.takePhoto({ source: 'photos', resultType: 'uri', width: 1200 })`，输入是用户选择操作与尺寸预算，成功结果包含 `data/format`。先检查 `success` 再使用内容；关闭页面和模块时释放本轮监听，不能把取图成功当作已经上传或保存。
 

@@ -1,6 +1,6 @@
 # AI、知识、会话记忆与向量配置
 
-[配置手册](README.md) · [AI调用与页面操作](../development/ai.md)
+[配置手册](README.md) · [配置清单](#配置清单) · [AI调用与页面操作](../development/ai.md)
 
 先让一条无敏感信息的模型请求成功，再接会话、知识库和工具。模型能回答不表示会话已持久保存；Schema通过不表示供应商凭据、模型名或额度可用。密钥保存在服务端，前端通过受权限检查保护的API发起调用。
 
@@ -408,3 +408,347 @@ a2a:
 ACP 会话通过 `mcpServerIds` 使用外部 MCP 清单；Agent 和远程服务在启动时解析 environmentRefs/headerEnv，受管 Git 在访问登记的远程仓库时解析 gitEnvironmentRefs。运行中的会话保留模型绑定，恢复时检测配置变化。音频同步 getCapabilities 使用最近目录读写或异步调用刷新的快照。目录是可信服务端管理 API，不应直接向浏览器暴露含密钥的模型定义。
 
 错误码 090 只读、091 不存在、092 冲突、093 无效定义、094 存储失败。CLI 生成项目中的 `.agents/skills/hai-ai/resources.md` 包含配置和 CRUD 示例。
+
+## 配置清单
+
+生成项目使用 `config/_ai.yml`，配置注册名为 `ai`，环境覆盖前缀为 `HAI_AI_`。传入 `ai.init(config, options)` 的配置由 `AIConfigSchema` 校验。凭据和模型地址的实际查找顺序见[凭据和地址按哪个顺序生效](#凭据和地址按哪个顺序生效)。
+
+`AIInitOptions` 由宿主代码注入，包含用于覆盖持久层的 `storeProvider`、受管 `runner`、受管 ACP 授权策略 `acpPolicy`、作业文件访问 `mcpJobFiles` 和原生适配器 `acpAdapters`，各项均按实际启用能力提供。
+
+表中的默认值适用于当前配置区块存在时。标为“必填”的字段在使用对应区块或后端时填写。“可省略”表示 Schema 不填充值；如有运行时回退，单独注明。`[]` 表示数组中每一项。
+
+### `acp`
+
+Agent 可用 `custom-service`、`embedded` 或 `builtin-service`。先按[接入方式](#acp-接入与模型能力)登记 Agent 和工作区，再设置环境、执行限制与默认参数。
+
+| 配置项                                                | 适用条件                                | 默认值/必填 | 说明                                                                                                                                    |
+| ----------------------------------------------------- | --------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `acp`                                                 | 通用                                    | 可省略      | ACP 会话与执行限制（仅 Node 服务端）                                                                                                    |
+| `acp.agents`                                          | 通用                                    | `[]`        | 配置文件定义的只读智能体，与数据库记录按 ID 合并。可填数组（元素为 `mode=custom-service` 或 `mode=embedded` 或 `mode=builtin-service`） |
+| `acp.agents[].id`                                     | 所有 Agent 模式                         | 必填        | 稳定的 Agent ID，应用通过此 ID 选择代理                                                                                                 |
+| `acp.agents[].name`                                   | 所有 Agent 模式                         | 必填        | 用于引用或区分这一项的名称。可填字符串，至少 1 个字符                                                                                   |
+| `acp.agents[].enabled`                                | 所有 Agent 模式                         | `true`      | 默认启用，禁用后禁止新建和恢复会话                                                                                                      |
+| `acp.agents[].adapter`                                | 所有 Agent 模式                         | `"generic"` | 字符串，至少 1 个字符                                                                                                                   |
+| `acp.agents[].modelIds`                               | 所有 Agent 模式                         | `[]`        | 绑定 Hai LLM 模型 ID。可填数组（元素为字符串，至少 1 个字符）                                                                           |
+| `acp.agents[].defaultModelId`                         | 所有 Agent 模式                         | 可省略      | 默认选择的模型 ID，必须存在于 modelIds。可填字符串，至少 1 个字符                                                                       |
+| `acp.agents[].environmentRefs`                        | 所有 Agent 模式                         | `{}`        | 启动代理时注入的环境变量映射，值引用私有变量名                                                                                          |
+| `acp.agents[].environmentRefs.<名称>`                 | 所有 Agent 模式                         | 必填        | 键为代理接收的环境变量名，值为宿主的环境变量名                                                                                          |
+| `acp.agents[].environmentIds`                         | 所有 Agent 模式                         | `[]`        | 可由受管 Runner 使用的已登记环境，首项是默认候选。可填数组（元素为字符串），最多 64 项                                                  |
+| `acp.agents[].sharedMode`                             | 所有 Agent 模式                         | `false`     | 由部署方对已验证的内置只读后端启用共享 Worker                                                                                           |
+| `acp.agents[].allowedCapabilities`                    | 所有 Agent 模式                         | `[]`        | 此 Agent 可选择的能力上限。可填数组（元素为字符串），最多 64 项                                                                         |
+| `acp.agents[].defaults`                               | 所有 Agent 模式                         | 可省略      | 可由每次调用或会话覆盖的受管默认值                                                                                                      |
+| `acp.agents[].defaults.model`                         | 所有 Agent 模式                         | 可省略      | 会话缺省模型及推理参数                                                                                                                  |
+| `acp.agents[].defaults.model.id`                      | 所有 Agent 模式                         | 可省略      | 会话默认选择的模型 ID                                                                                                                   |
+| `acp.agents[].defaults.model.reasoningEffort`         | 所有 Agent 模式                         | 可省略      | 模型声明支持的推理级别。可填字符串，1–100 个字符                                                                                        |
+| `acp.agents[].defaults.model.temperature`             | 所有 Agent 模式                         | 可省略      | 模型采样温度，范围 0–2                                                                                                                  |
+| `acp.agents[].defaults.model.maxOutputTokens`         | 所有 Agent 模式                         | 可省略      | 模型单次输出的 Token 上限，要求为正整数                                                                                                 |
+| `acp.agents[].defaults.execution`                     | 所有 Agent 模式                         | 可省略      | 会话默认执行方式、环境以及资源分配                                                                                                      |
+| `acp.agents[].defaults.execution.mode`                | 所有 Agent 模式                         | 可省略      | `"auto"`、`"shared"`、`"user"`、`"task"`                                                                                                |
+| `acp.agents[].defaults.execution.environmentId`       | 所有 Agent 模式                         | 可省略      | 默认受管 Runner 环境 ID                                                                                                                 |
+| `acp.agents[].defaults.execution.resources`           | 所有 Agent 模式                         | 可省略      | 默认资源覆盖，仍受已登记环境上限约束                                                                                                    |
+| `acp.agents[].defaults.execution.resources.cpu`       | 所有 Agent 模式                         | 可省略      | CPU 核心数。可填数值，0–1024（不含下界）                                                                                                |
+| `acp.agents[].defaults.execution.resources.memoryMiB` | 所有 Agent 模式                         | 可省略      | 内存 MiB。至少 16 的整数                                                                                                                |
+| `acp.agents[].defaults.workspaceId`                   | 所有 Agent 模式                         | 可省略      | 会话默认工作区 ID                                                                                                                       |
+| `acp.agents[].defaults.context`                       | 所有 Agent 模式                         | 可省略      | 本次请求引用的业务资料                                                                                                                  |
+| `acp.agents[].defaults.context.fileIds`               | 所有 Agent 模式                         | 可省略      | 可授权读取的文件 ID。可填数组（元素为字符串，1–100 个字符），最多 64 项                                                                 |
+| `acp.agents[].defaults.context.knowledgeBaseIds`      | 所有 Agent 模式                         | 可省略      | 可授权检索的知识库 ID。可填数组（元素为字符串，1–100 个字符），最多 64 项                                                               |
+| `acp.agents[].defaults.context.skillIds`              | 所有 Agent 模式                         | 可省略      | 登记的技能 ID。可填数组（元素为字符串，1–100 个字符），最多 64 项                                                                       |
+| `acp.agents[].defaults.context.memory`                | 所有 Agent 模式                         | 可省略      | 会话默认记忆读取和写入范围                                                                                                              |
+| `acp.agents[].defaults.context.memory.scope`          | 所有 Agent 模式                         | 必填        | 记忆的用户或空间范围。可填 `"none"`、`"user"`、`"space"`                                                                                |
+| `acp.agents[].defaults.context.memory.spaceId`        | 所有 Agent 模式                         | 可省略      | 指定共享空间 ID。可填字符串，1–100 个字符                                                                                               |
+| `acp.agents[].defaults.context.memory.write`          | 所有 Agent 模式                         | 可省略      | 记忆写入策略。可填 `"none"`、`"confirm"`、`"on-success"`                                                                                |
+| `acp.agents[].defaults.tools`                         | 所有 Agent 模式                         | 可省略      | 会话默认工具白名单                                                                                                                      |
+| `acp.agents[].defaults.tools.allow`                   | 所有 Agent 模式                         | 可省略      | 允许使用的已登记工具 ID。可填数组（元素为字符串，1–100 个字符），最多 64 项                                                             |
+| `acp.agents[].defaults.capabilities`                  | 所有 Agent 模式                         | 可省略      | 数组（元素为字符串，1–100 个字符），最多 64 项                                                                                          |
+| `acp.agents[].defaults.permissions`                   | 所有 Agent 模式                         | 可省略      | 任务权限范围和审批策略                                                                                                                  |
+| `acp.agents[].defaults.permissions.profile`           | 所有 Agent 模式                         | 可省略      | 原生权限预设。可填 `"read-only"`、`"workspace"`、`"full-access"`                                                                        |
+| `acp.agents[].defaults.permissions.approval`          | 所有 Agent 模式                         | 可省略      | 是否允许发起交互审批。可填 `"on-request"`、`"never"`                                                                                    |
+| `acp.agents[].defaults.permissions.ruleIds`           | 所有 Agent 模式                         | 可省略      | 应用可校验的持久授权规则。可填数组（元素为字符串，1–100 个字符），最多 64 项                                                            |
+| `acp.agents[].defaults.limits`                        | 所有 Agent 模式                         | 可省略      | 执行、排队、审批和输出上限                                                                                                              |
+| `acp.agents[].defaults.limits.queueTimeoutMs`         | 所有 Agent 模式                         | 可省略      | 排队等待上限，毫秒。可填整数，1–86400000                                                                                                |
+| `acp.agents[].defaults.limits.runTimeoutMs`           | 所有 Agent 模式                         | 可省略      | 单轮执行上限，毫秒。可填整数，1–86400000                                                                                                |
+| `acp.agents[].defaults.limits.approvalTimeoutMs`      | 所有 Agent 模式                         | 可省略      | 单次审批等待上限，毫秒。可填整数，1–86400000                                                                                            |
+| `acp.agents[].defaults.limits.maxOutputBytes`         | 所有 Agent 模式                         | 可省略      | 文本输出上限，字节。可填整数，1–8388608                                                                                                 |
+| `acp.agents[].defaults.output`                        | 所有 Agent 模式                         | 可省略      | 文本或结构化输出                                                                                                                        |
+| `acp.agents[].defaults.output.format`                 | 所有 Agent 模式                         | 必填        | 结果格式。可填 `"text"`、`"json"`                                                                                                       |
+| `acp.agents[].defaults.output.schema`                 | 所有 Agent 模式                         | 可省略      | 用于校验最终 JSON 的 Schema                                                                                                             |
+| `acp.agents[].defaults.output.schema.<名称>`          | 所有 Agent 模式                         | 必填        | 字符串 或 数值 或 布尔值 或 `null` 或 数组 或 键值对象                                                                                  |
+| `acp.agents[].defaults.native`                        | 所有 Agent 模式                         | 可省略      | 由适配器验证的原生选项                                                                                                                  |
+| `acp.agents[].defaults.native.adapter`                | 所有 Agent 模式                         | 必填        | 用于校验原生参数的适配器名称                                                                                                            |
+| `acp.agents[].defaults.native.options`                | 所有 Agent 模式                         | 必填        | 适配器声明支持的原生参数                                                                                                                |
+| `acp.agents[].defaults.native.options.<名称>`         | 所有 Agent 模式                         | 必填        | 字符串 或 数值 或 布尔值 或 `null` 或 数组 或 键值对象                                                                                  |
+| `acp.agents[].defaults.metadata`                      | 所有 Agent 模式                         | 可省略      | 有限的业务标签，不作为身份依据                                                                                                          |
+| `acp.agents[].defaults.metadata.<名称>`               | 所有 Agent 模式                         | 必填        | 字符串，最多 128 个字符                                                                                                                 |
+| `acp.agents[].mode`                                   | `mode=custom-service`                   | 必填        | `"custom-service"`                                                                                                                      |
+| `acp.agents[].transport`                              | `mode=custom-service`                   | 必填        | `"http"`、`"ws"`                                                                                                                        |
+| `acp.agents[].url`                                    | `mode=custom-service`                   | 必填        | 字符串，URL                                                                                                                             |
+| `acp.agents[].headerEnv`                              | `mode=custom-service`                   | `{}`        | 键值对象                                                                                                                                |
+| `acp.agents[].headerEnv.<名称>`                       | `mode=custom-service`                   | 必填        | 字符串                                                                                                                                  |
+| `acp.agents[].supportedTransports`                    | `mode=custom-service`                   | 必填        | 自定义服务显式声明的原生 HTTP/WS 能力。可填数组（元素为 `"http"`、`"ws"`），至少 1 项                                                   |
+| `acp.agents[].command`                                | `mode=embedded`、`mode=builtin-service` | 可省略      | 字符串，至少 1 个字符                                                                                                                   |
+| `acp.agents[].args`                                   | `mode=embedded`、`mode=builtin-service` | 可省略      | 数组（元素为字符串）                                                                                                                    |
+| `acp.agents[].mode`                                   | `mode=embedded`                         | 必填        | `"embedded"`                                                                                                                            |
+| `acp.agents[].transport`                              | `mode=embedded`、`mode=builtin-service` | `"stdio"`   | `"stdio"`                                                                                                                               |
+| `acp.agents[].mode`                                   | `mode=builtin-service`                  | 必填        | `"builtin-service"`                                                                                                                     |
+| `acp.agents[].image`                                  | `mode=builtin-service`                  | 必填        | 字符串，至少 1 个字符                                                                                                                   |
+| `acp.agents[].engine`                                 | `mode=builtin-service`                  | `"auto"`    | auto 优先可用 Podman，再选 Docker；显式选择不自动降级。可填 `"auto"`、`"podman"`、`"docker"`                                            |
+| `acp.workspaces`                                      | 通用                                    | `[]`        | 配置文件定义的只读工作区，与数据库记录按 ID 合并                                                                                        |
+| `acp.workspaces[].id`                                 | 通用                                    | 必填        | 稳定的工作区 ID，会话可按此字段引用工作区                                                                                               |
+| `acp.workspaces[].storage`                            | 通用                                    | 必填        | 持久存储位置；directory 供本机，volume 供托管容器。可填 `type=directory` 或 `type=volume`                                               |
+| `acp.workspaces[].storage.type`                       | `type=directory`                        | 必填        | 选择后端或配置方式。可填 `"directory"`                                                                                                  |
+| `acp.workspaces[].storage.path`                       | `type=directory`                        | 必填        | 本机绝对或相对目录，运行时归一化为真实绝对路径。可填字符串，至少 1 个字符                                                               |
+| `acp.workspaces[].storage.type`                       | `type=volume`                           | 必填        | 选择后端或配置方式。可填 `"volume"`                                                                                                     |
+| `acp.workspaces[].storage.name`                       | `type=volume`                           | 必填        | 用于引用或区分这一项的名称                                                                                                              |
+| `acp.workspaces[].storage.engine`                     | `type=volume`                           | `"auto"`    | auto 优先可用 Podman，再选 Docker；显式选择不自动降级。可填 `"auto"`、`"podman"`、`"docker"`                                            |
+| `acp.workspaces[].storage.image`                      | `type=volume`                           | 必填        | 字符串，至少 1 个字符                                                                                                                   |
+| `acp.workspaces[].repositories`                       | 通用                                    | `[]`        | 多个 Git 工程                                                                                                                           |
+| `acp.workspaces[].repositories[].id`                  | 通用                                    | 必填        | 工作区内的仓库标识                                                                                                                      |
+| `acp.workspaces[].repositories[].url`                 | 通用                                    | 必填        | 字符串，至少 1 个字符                                                                                                                   |
+| `acp.workspaces[].repositories[].mainBranch`          | 通用                                    | 必填        | 该工程明确指定的主分支，更新和 merge-main 发布均使用此值。可填字符串，1–240 个字符                                                      |
+| `acp.workspaces[].repositories[].remote`              | 通用                                    | `"origin"`  | Git remote 名，默认 origin                                                                                                              |
+| `acp.workspaces[].environmentRefs`                    | 通用                                    | `{}`        | 工作区所引用的私有环境变量映射                                                                                                          |
+| `acp.workspaces[].environmentRefs.<名称>`             | 通用                                    | 必填        | 键为工作区变量名，值为宿主环境变量名                                                                                                    |
+| `acp.workspaces[].gitEnvironmentRefs`                 | 通用                                    | `{}`        | 仅供受管 Git 远程操作使用的环境变量引用，值不传给 Agent 或本地提交                                                                      |
+| `acp.workspaces[].gitEnvironmentRefs.<名称>`          | 通用                                    | 必填        | 键为 Git 流程接收的变量名，值为宿主环境变量名                                                                                           |
+| `acp.requestTimeout`                                  | 通用                                    | `30000`     | 握手和控制请求超时，毫秒。正整数                                                                                                        |
+| `acp.promptTimeout`                                   | 通用                                    | `600000`    | 单轮任务超时，毫秒。正整数                                                                                                              |
+| `acp.cancelTimeout`                                   | 通用                                    | `5000`      | 取消后等待终态的上限，毫秒。正整数                                                                                                      |
+| `acp.maxContentBytes`                                 | 通用                                    | `8388608`   | 单轮输入和累计输出的字节上限。正整数                                                                                                    |
+| `acp.maxPendingEvents`                                | 通用                                    | `1024`      | 未消费事件数量上限。正整数                                                                                                              |
+| `acp.workerIdleTimeoutMs`                             | 通用                                    | `300000`    | 无在途操作的受管 Worker 空闲回收时限，毫秒。可填整数，1000–86400000                                                                     |
+
+### `llm`
+
+| 配置项                                          | 默认值/必填     | 说明                                                                                                                                                              |
+| ----------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `llm`                                           | 存在，见子项    | 对话模型、默认参数及场景路由                                                                                                                                      |
+| `llm.apiKey`                                    | 可省略          | 默认服务密钥；模型项可单独覆盖。未填写时读取 HAI_AI_LLM_APIKEY 或对应供应商密钥变量，真实值只放服务端                                                             |
+| `llm.baseUrl`                                   | 可省略          | 默认模型服务地址；使用代理时填写，模型项可覆盖。未填写时按协议读取环境地址或使用供应商默认地址。可填字符串，URL                                                   |
+| `llm.model`                                     | `"gpt-4o-mini"` | 默认模型名称                                                                                                                                                      |
+| `llm.protocol`                                  | `"chat"`        | 默认请求格式：chat 为 Chat Completions，responses 为 OpenAI Responses，anthropic 为 Anthropic Messages；模型项可覆盖。可填 `"chat"`、`"responses"`、`"anthropic"` |
+| `llm.maxTokens`                                 | `4096`          | 单次回答最多生成多少 Token，默认 4096；模型项可覆盖，需符合供应商限制。可填数值，大于 0                                                                           |
+| `llm.temperature`                               | `0.7`           | 回答的随机程度，0–2，默认 0.7；较低通常更稳定，模型项可覆盖，部分模型不支持自定义。可填数值，0–2                                                                  |
+| `llm.timeout`                                   | `60000`         | 一次模型请求最多等待多少毫秒，默认 60000；模型项可覆盖。可填数值，大于 0                                                                                          |
+| `llm.tempModelCacheTtl`                         | `600000`        | 临时模型客户端缓存存活时间（毫秒，默认 `600000` = 10 分钟；超时后临时模型客户端实例失效并重建）。可填数值，大于 0                                                 |
+| `llm.models`                                    | 可省略          | 多模型配置列表（各字段可选，未指定时回退到全局默认值）                                                                                                            |
+| `llm.models[].id`                               | 必填            | 用于场景路由和应用调用的模型条目 ID                                                                                                                               |
+| `llm.models[].capabilities`                     | 可省略          | 模型的上下文容量、输入输出模态和工具调用能力声明                                                                                                                  |
+| `llm.models[].capabilities.contextWindow`       | 可省略          | 可用上下文总容量（Token）；未知时省略，不由输出预算推断。正整数                                                                                                   |
+| `llm.models[].capabilities.maxOutputTokens`     | 可省略          | 整数，0–9007199254740991（不含下界）                                                                                                                              |
+| `llm.models[].capabilities.inputModalities`     | 可省略          | 已确认支持的输入模态；未知时省略。可填数组（元素为 `"text"`、`"image"`、`"audio"`、`"video"`），至少 1 项                                                         |
+| `llm.models[].capabilities.outputModalities`    | 可省略          | 已确认支持的输出模态；仍需调用接口支持。可填数组（元素为 `"text"`、`"image"`、`"audio"`、`"video"`），至少 1 项                                                   |
+| `llm.models[].capabilities.toolCalling`         | 可省略          | 模型是否支持函数工具调用；未知时省略                                                                                                                              |
+| `llm.models[].capabilities.reasoning`           | 可省略          | 推理能力元数据，不自动启用推理请求参数                                                                                                                            |
+| `llm.models[].capabilities.reasoning.supported` | 必填            | 是否支持推理能力                                                                                                                                                  |
+| `llm.models[].capabilities.reasoning.efforts`   | 可省略          | 已确认可选择的推理级别。可填数组（元素为字符串，至少 1 个字符），至少 1 项                                                                                        |
+| `llm.models[].model`                            | 必填            | 供应商 API 使用的实际模型名                                                                                                                                       |
+| `llm.models[].protocol`                         | 可省略          | `"chat"`、`"responses"`、`"anthropic"`                                                                                                                            |
+| `llm.models[].apiKey`                           | 可省略          | 此模型的独立供应商密钥。可用服务端私有环境变量插值                                                                                                                |
+| `llm.models[].baseUrl`                          | 可省略          | 字符串，URL                                                                                                                                                       |
+| `llm.models[].maxTokens`                        | 可省略          | 数值，大于 0                                                                                                                                                      |
+| `llm.models[].temperature`                      | 可省略          | 数值，0–2                                                                                                                                                         |
+| `llm.models[].timeout`                          | 可省略          | 数值，大于 0                                                                                                                                                      |
+| `llm.scenarios`                                 | 可省略          | 场景模型映射（场景名 → 模型 ID 或直接模型名称，各场景均可选）                                                                                                     |
+| `llm.scenarios.default`                         | 可省略          | 场景 default 使用的模型 ID，须与 llm.models 中的 ID 一致                                                                                                          |
+| `llm.scenarios.chat`                            | 可省略          | 场景 chat 使用的模型 ID，须与 llm.models 中的 ID 一致                                                                                                             |
+| `llm.scenarios.reasoning`                       | 可省略          | 场景 reasoning 使用的模型 ID，须与 llm.models 中的 ID 一致                                                                                                        |
+| `llm.scenarios.plan`                            | 可省略          | 场景 plan 使用的模型 ID，须与 llm.models 中的 ID 一致                                                                                                             |
+| `llm.scenarios.execute`                         | 可省略          | 场景 execute 使用的模型 ID，须与 llm.models 中的 ID 一致                                                                                                          |
+| `llm.scenarios.extraction`                      | 可省略          | 场景 extraction 使用的模型 ID，须与 llm.models 中的 ID 一致                                                                                                       |
+| `llm.scenarios.summary`                         | 可省略          | 场景 summary 使用的模型 ID，须与 llm.models 中的 ID 一致                                                                                                          |
+| `llm.scenarios.embedding`                       | 可省略          | 场景 embedding 使用的模型 ID，须与 llm.models 中的 ID 一致                                                                                                        |
+| `llm.scenarios.rerank`                          | 可省略          | 场景 rerank 使用的模型 ID，须与 llm.models 中的 ID 一致                                                                                                           |
+| `llm.scenarios.ocr`                             | 可省略          | 场景 ocr 使用的模型 ID，须与 llm.models 中的 ID 一致                                                                                                              |
+| `llm.scenarios.fast`                            | 可省略          | 场景 fast 使用的模型 ID，须与 llm.models 中的 ID 一致                                                                                                             |
+
+### `mcp`
+
+| 配置项                                 | 默认值/必填 | 说明                                                                                                                       |
+| -------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `mcp`                                  | 可省略      | MCP 配置                                                                                                                   |
+| `mcp.servers`                          | 可省略      | 外部 MCP 服务只读清单；与数据库记录合并供受管 Agent 使用                                                                   |
+| `mcp.servers[].id`                     | 必填        | 字符串，至少 1 个字符                                                                                                      |
+| `mcp.servers[].name`                   | 必填        | 用于引用或区分这一项的名称。可填字符串，至少 1 个字符                                                                      |
+| `mcp.servers[].transport`              | 必填        | `"stdio"`、`"http"`、`"sse"`、`"job"`                                                                                      |
+| `mcp.servers[].environmentId`          | 可省略      | 受管 MCP 执行时使用的 Runner 环境 ID                                                                                       |
+| `mcp.servers[].command`                | 可省略      | 字符串，至少 1 个字符                                                                                                      |
+| `mcp.servers[].args`                   | `[]`        | 数组（元素为字符串）                                                                                                       |
+| `mcp.servers[].url`                    | 可省略      | 字符串，URL                                                                                                                |
+| `mcp.servers[].environmentRefs`        | `{}`        | 键值对象                                                                                                                   |
+| `mcp.servers[].environmentRefs.<名称>` | 必填        | 键为 MCP 进程接收的变量名，值为宿主环境变量名                                                                              |
+| `mcp.servers[].headerEnv`              | `{}`        | 键值对象                                                                                                                   |
+| `mcp.servers[].headerEnv.<名称>`       | 必填        | 键为 HTTP 请求头名称，值为提供其内容的宿主环境变量名                                                                       |
+| `mcp.servers[].allowedTools`           | 可省略      | 受管工具入口允许调用的名称；省略时不开放给 ai.mcp.services。可填数组（元素为字符串，1–128 个字符），至少 1 项、最多 256 项 |
+| `mcp.servers[].timeoutMs`              | 可省略      | 受管工具连接和调用的总超时，单位毫秒；缺省为 30 秒。可填整数，1–300000                                                     |
+| `mcp.servers[].pool`                   | 可省略      | 集群范围内该服务允许同时领取的作业数量，仅 job 模式使用                                                                    |
+| `mcp.servers[].pool.maxRunning`        | 必填        | 同时执行的实例上限；未配置服务池时默认为 4。可填整数，1–1000                                                               |
+| `mcp.servers[].pool.minReady`          | 可省略      | 部署预热池期望保留的干净实例数量。可填整数，0–1000                                                                         |
+| `mcp.servers[].pool.maxTotal`          | 可省略      | 集群内预热、启动、运行、销毁中实例的总上限。可填整数，1–1000                                                               |
+| `mcp.server`                           | 可省略      | 服务器配置                                                                                                                 |
+| `mcp.server.name`                      | 必填        | 服务器名称                                                                                                                 |
+| `mcp.server.version`                   | `"1.0.0"`   | 服务器版本                                                                                                                 |
+| `mcp.server.capabilities`              | 可省略      | 服务器能力声明                                                                                                             |
+| `mcp.server.capabilities.tools`        | `true`      | 是否支持工具调用                                                                                                           |
+| `mcp.server.capabilities.resources`    | `true`      | 是否支持资源访问                                                                                                           |
+| `mcp.server.capabilities.prompts`      | `true`      | 是否支持提示词模板                                                                                                         |
+
+### `embedding`
+
+| 配置项                 | 默认值/必填 | 说明                                                   |
+| ---------------------- | ----------- | ------------------------------------------------------ |
+| `embedding`            | 可省略      | Embedding 配置                                         |
+| `embedding.dimensions` | 可省略      | 向量维度（可选，部分模型支持指定维度）。正整数         |
+| `embedding.batchSize`  | `100`       | 批量大小（单次请求最多处理的文本数，默认 100）。正整数 |
+
+### `knowledge`
+
+| 配置项                                                    | 默认值/必填                               | 说明                                                                                                                                                       |
+| --------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `knowledge`                                               | 可省略                                    | 知识库集合、清洗、分块、实体提取和检索设置                                                                                                                 |
+| `knowledge.collection`                                    | `"hai_ai_knowledge"`                      | 默认向量集合名                                                                                                                                             |
+| `knowledge.dimension`                                     | `1536`                                    | 向量维度。正整数                                                                                                                                           |
+| `knowledge.enableEntityExtraction`                        | `true`                                    | 是否启用实体提取                                                                                                                                           |
+| `knowledge.cleanOptions`                                  | 存在，见 [Datapipe](datapipe.md#文本清洗) | 导入知识材料前的文本清洗选项                                                                                                                               |
+| `knowledge.cleanOptions.removeHtml`                       | `true`                                    | 移除 HTML 标签                                                                                                                                             |
+| `knowledge.cleanOptions.removeUrls`                       | `false`                                   | 移除 URL                                                                                                                                                   |
+| `knowledge.cleanOptions.removeEmails`                     | `false`                                   | 移除 Email 地址                                                                                                                                            |
+| `knowledge.cleanOptions.normalizeWhitespace`              | `true`                                    | 标准化空白字符（多空格→单空格、去掉多余空行，默认 true）                                                                                                   |
+| `knowledge.cleanOptions.trim`                             | `true`                                    | 去除首尾空白                                                                                                                                               |
+| `knowledge.cleanOptions.customReplacements`               | 可省略                                    | 自定义替换规则（正则→替换字符串） ❗ 安全提示：pattern 会通过 `new RegExp()` 构造，如果其值来源于用户输入，请在调用方先行校验以防止 ReDoS 攻击             |
+| `knowledge.cleanOptions.customReplacements[].pattern`     | 必填                                      | 用于匹配文本的正则格式字符串                                                                                                                               |
+| `knowledge.cleanOptions.customReplacements[].replacement` | 必填                                      | 命中时使用的替换字符串                                                                                                                                     |
+| `knowledge.chunkOptions`                                  | Markdown、1500、200                       | 整个对象省略时使用 `mode: markdown`、`maxSize: 1500`、`overlap: 200`                                                                                       |
+| `knowledge.chunkOptions.mode`                             | 传入对象时必填                            | 可选 `sentence`、`paragraph`、`markdown`、`page`、`word`、`character` 或 `custom`                                                                          |
+| `knowledge.chunkOptions.maxSize`                          | `1500`                                    | 每块上限包含 overlap/分隔符；word 按非空白词，其他按 Unicode code point，默认 1500。正整数                                                                 |
+| `knowledge.chunkOptions.overlap`                          | 传入对象时 `0`                            | 相邻块重叠量，单位与 `maxSize` 一致，必须严格小于 `maxSize`                                                                                                |
+| `knowledge.chunkOptions.separator`                        | 可省略                                    | 自定义分隔符正则（仅 mode='custom' 时使用） ❗ 安全提示：separator 会通过 `new RegExp()` 构造，如果其值来源于用户输入，请在调用方先行校验以防止 ReDoS 攻击 |
+| `knowledge.chunkOptions.markdownMinLevel`                 | `2`                                       | Markdown 标题分割深度（1-6，默认 2，即 # 和 ## 作为分块边界；设为 3 则 ### 也作为分块边界）。可填整数，1–6                                                 |
+| `knowledge.chunkOptions.markdownKeepTitle`                | `true`                                    | 是否保留 Markdown 标题在分块内容中                                                                                                                         |
+| `knowledge.entityBoostWeight`                             | `0.15`                                    | 实体查询命中的额外加权系数。可填数值，0–1                                                                                                                  |
+| `knowledge.entityTypes`                                   | 可省略                                    | 自定义实体类型列表（不指定时使用内置默认类型）。可填数组（元素为字符串）                                                                                   |
+| `knowledge.systemPrompt`                                  | 可省略                                    | 自定义实体提取系统提示词（不指定时使用内置默认提示词）                                                                                                     |
+
+### `memory`
+
+| 配置项                          | 默认值/必填 | 说明                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `memory`                        | 可省略      | Memory 配置                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `memory.provider`               | `"native"`  | 记忆后端：native 使用框架原生存储与批量合并；mem0 将框架提取结果以 Mem0 数据格式写入 Qdrant。可填 `"native"`、`"mem0"`                                                                                                                                                                                                                                                                                                             |
+| `memory.vectorNamespace`        | `"default"` | 原生记忆向量命名空间，首次初始化后与关系库绑定                                                                                                                                                                                                                                                                                                                                                                                     |
+| `memory.allowEphemeralFallback` | `false`     | 是否允许在配置了持久化向量后端但 mem0 无法映射时退回内存存储（默认 false） 仅影响 `provider='mem0'`：当前框架适配仅映射 qdrant；其它持久化后端使用 native Provider。底层 vecdb 是 lancedb / chroma / 未知后端时，默认 fail-fast（初始化失败），避免服务重启后记忆静默丢失； 仅当显式设为 true 时才在开发或明确 E2E 环境退回内存存储（数据不持久）。 生产始终要求实际持久化连接，不能通过此开关绕过共享状态要求                     |
+| `memory.maxEntriesPerObject`    | `1000`      | 单个主体（objectId）的最大记忆条数（默认 1000） native 淘汰按 objectId 分区触发：某个主体写入超过此上限时，只淘汰该主体自身 最低优先级的条目，不会波及其他主体的记忆。正整数                                                                                                                                                                                                                                                       |
+| `memory.maxEntriesGlobal`       | `100000`    | 全局最大记忆条数（默认 100000） 跨所有主体的总量上限，作为整体保护阈值；超过时淘汰全局最低优先级条目。正整数                                                                                                                                                                                                                                                                                                                       |
+| `memory.systemPrompt`           | 可省略      | 自定义记忆提取 systemPrompt（可选，覆盖内置默认提示词）                                                                                                                                                                                                                                                                                                                                                                            |
+| `memory.recencyDecay`           | `0.95`      | 时间衰减系数。可填数值，0–1                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `memory.embeddingEnabled`       | `true`      | 是否启用向量检索                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `memory.defaultTopK`            | `10`        | 检索时默认返回数量。正整数                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `memory.candidateMultiplier`    | `5`         | 候选池倍数（默认 5） 检索时先从向量后端取回 `topK × candidateMultiplier` 条候选，再按 scope / 重要性等 条件在内存中过滤，最后截取 topK。用于修正「向量后端仅返回 topK，随后被 scope 过滤 掉大部分、导致同一主体下特定主题/角色记忆漏召回」的问题：候选池越大，scope 命中越充分。 native provider 会对全部候选评分，故此值仅影响向量预取宽度；mem0 provider 无法下推 scope，必须依赖更大的候选池才能保证 scope 内记忆被召回。正整数 |
+| `memory.writebackRelatedTopK`   | `20`        | 写回 / 合并时检索相关记忆的数量（仅 native，默认 20）。正整数                                                                                                                                                                                                                                                                                                                                                                      |
+
+### `token`
+
+| 配置项             | 默认值/必填 | 说明                                   |
+| ------------------ | ----------- | -------------------------------------- |
+| `token`            | 可省略      | Token 配置                             |
+| `token.tokenRatio` | `0.25`      | Token 估算每字符系数。可填数值，大于 0 |
+
+### `summary`
+
+| 配置项                 | 默认值/必填 | 说明                                                |
+| ---------------------- | ----------- | --------------------------------------------------- |
+| `summary`              | 可省略      | Summary 配置                                        |
+| `summary.systemPrompt` | 可省略      | 自定义摘要 systemPrompt（可选，覆盖内置默认提示词） |
+
+### `compress`
+
+| 配置项                      | 默认值/必填 | 说明                                                           |
+| --------------------------- | ----------- | -------------------------------------------------------------- |
+| `compress`                  | 可省略      | Compress 配置                                                  |
+| `compress.defaultStrategy`  | `"hybrid"`  | 默认压缩策略。可填 `"summary"`、`"sliding-window"`、`"hybrid"` |
+| `compress.defaultMaxTokens` | `0`         | 默认 Token 预算。非负整数                                      |
+| `compress.preserveLastN`    | `4`         | 默认保留最近消息数。非负整数                                   |
+
+### `retrieval`
+
+| 配置项                           | 默认值/必填 | 说明                                                  |
+| -------------------------------- | ----------- | ----------------------------------------------------- |
+| `retrieval`                      | 可省略      | Retrieval 配置（预注册检索源）                        |
+| `retrieval.sources`              | 可省略      | 预注册检索源列表                                      |
+| `retrieval.sources[].id`         | 必填        | 应用在跨源检索时引用的来源 ID                         |
+| `retrieval.sources[].collection` | 必填        | 检索来源所用的向量集合名称                            |
+| `retrieval.sources[].name`       | 可省略      | 用于引用或区分这一项的名称                            |
+| `retrieval.sources[].url`        | 可省略      | 该来源的公开链接，用于关联检索结果                    |
+| `retrieval.sources[].topK`       | 可省略      | 最大返回条数。正整数                                  |
+| `retrieval.sources[].minScore`   | 可省略      | 最低相似度 0~1（低于此值的结果被过滤）。可填数值，0–1 |
+| `retrieval.sources[].filter`     | 可省略      | 元数据过滤条件                                        |
+
+### `file`
+
+| 配置项              | 默认值/必填 | 说明                                       |
+| ------------------- | ----------- | ------------------------------------------ |
+| `file`              | 可省略      | File 解析配置                              |
+| `file.systemPrompt` | 可省略      | OCR 系统提示词（可选，覆盖内置默认提示词） |
+
+### `a2a`
+
+| 配置项                               | 默认值/必填   | 说明                                                                               |
+| ------------------------------------ | ------------- | ---------------------------------------------------------------------------------- |
+| `a2a`                                | 可省略        | A2A 配置（Agent-to-Agent 协议）                                                    |
+| `a2a.execution`                      | `{}`          | 共享执行预算；最终提交同时受数据库租约与绝对执行期限约束                           |
+| `a2a.execution.leaseMs`              | `30000`       | 活跃执行租约毫秒数，默认30秒，范围1秒至1天。可填整数，1000–86400000                |
+| `a2a.execution.pollIntervalMs`       | `250`         | 共享事件/状态订阅轮询间隔毫秒数，默认250。可填整数，10–5000                        |
+| `a2a.execution.maxExecutionMs`       | `300000`      | 单次执行绝对上限毫秒数，默认5分钟；超时标中断，不自动重放。可填整数，1000–86400000 |
+| `a2a.agentCard`                      | 必填          | Agent Card 配置                                                                    |
+| `a2a.agentCard.name`                 | 必填          | Agent 名称                                                                         |
+| `a2a.agentCard.description`          | 可省略        | Agent 描述                                                                         |
+| `a2a.agentCard.url`                  | 必填          | Agent 对外 URL                                                                     |
+| `a2a.agentCard.version`              | 可省略        | Agent 版本                                                                         |
+| `a2a.agentCard.skills`               | 可省略        | Agent 技能列表                                                                     |
+| `a2a.agentCard.skills[].id`          | 必填          | 对外公开的能力 ID                                                                  |
+| `a2a.agentCard.skills[].name`        | 必填          | 用于引用或区分这一项的名称                                                         |
+| `a2a.agentCard.skills[].description` | 可省略        | 对外公开的能力描述                                                                 |
+| `a2a.agentCard.skills[].tags`        | 可省略        | 标签列表。可填数组（元素为字符串）                                                 |
+| `a2a.security`                       | 可省略        | A2A 安全认证配置                                                                   |
+| `a2a.security.apiKey`                | 可省略        | API Key 认证（通过 IAM apiKey.verifyApiKey 验证）                                  |
+| `a2a.security.apiKey.in`             | `"header"`    | API Key 的传递位置。可填 `"header"`、`"query"`                                     |
+| `a2a.security.apiKey.name`           | `"x-api-key"` | 参数名                                                                             |
+
+### `audio`
+
+| 配置项                       | 默认值/必填 | 说明                                                                                                           |
+| ---------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------- |
+| `audio`                      | 可省略      | Audio 配置（语音识别 / 语音合成）                                                                              |
+| `audio.models`               | 可省略      | 注册的语音模型列表                                                                                             |
+| `audio.models[].id`          | 必填        | 用于分配语音操作的模型条目 ID                                                                                  |
+| `audio.models[].provider`    | 必填        | `"openai"`、`"mimo"`、`"qwen"`、`"doubao"`、`"whisper"`、`"indextts"`                                          |
+| `audio.models[].model`       | 必填        | 语音供应商 API 使用的实际模型名                                                                                |
+| `audio.models[].operations`  | 必填        | 模型允许执行的操作；解析模型时会在调用厂商前校验。可填数组（元素为 `"transcribe"`、`"synthesize"`），至少 1 项 |
+| `audio.models[].apiKey`      | 可省略      | 该语音模型的供应商密钥，可由服务端私有环境变量注入                                                             |
+| `audio.models[].baseUrl`     | 可省略      | 供应商网关或自有服务地址                                                                                       |
+| `audio.models[].appKey`      | 可省略      | 需要应用密钥的语音供应商的应用标识                                                                             |
+| `audio.models[].accessKey`   | 可省略      | 所选语音供应商的访问密钥                                                                                       |
+| `audio.models[].resourceId`  | 可省略      | 所选语音服务的资源 ID                                                                                          |
+| `audio.models[].workspaceId` | 可省略      | 所选供应商的工作空间 ID                                                                                        |
+| `audio.models[].timeout`     | 可省略      | 数值，大于 0                                                                                                   |
+| `audio.inheritLlmApiKey`     | `false`     | 是否允许未单独配置密钥的语音模型继承 LLM 全局密钥；跨供应商部署应保持关闭                                      |
+| `audio.transcribeModel`      | 可省略      | 默认识别模型 ID（`ai.audio.transcribe*` 未指定 model 时使用）                                                  |
+| `audio.synthesizeModel`      | 可省略      | 默认合成模型 ID（`ai.audio.synthesize*` 未指定 model 时使用）                                                  |
+| `audio.maxAudioBytes`        | `10485760`  | 单次音频字节上限。正整数                                                                                       |
+| `audio.maxStreamDurationMs`  | `300000`    | 实时连接最长持续时间（毫秒，默认 5 分钟）。正整数                                                              |
+
+### `image`
+
+| 配置项                       | 默认值/必填 | 说明                                                                                                              |
+| ---------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------- |
+| `image`                      | 可省略      | Image 配置（文生图）                                                                                              |
+| `image.maxImageBytes`        | `20971520`  | 单张图片或参考图的字节上限，默认 20 MiB；JSON 上限为 max(64 KiB, 两倍图片上限)。可填整数，0–104857600（不含下界） |
+| `image.maxImages`            | `4`         | 单次生成/参考图数量上限，默认 4，最大 16；临时 URL 串行下载。可填整数，0–16（不含下界）                           |
+| `image.models`               | 可省略      | 注册的文生图模型                                                                                                  |
+| `image.models[].id`          | 必填        | 文生图路由使用的模型条目 ID                                                                                       |
+| `image.models[].provider`    | 必填        | `"openai"`、`"google"`、`"qwen"`、`"seedream"`、`"pollinations"`                                                  |
+| `image.models[].model`       | 必填        | 图像供应商 API 使用的实际模型名                                                                                   |
+| `image.models[].apiKey`      | 可省略      | 图像供应商密钥，可由服务端私有环境变量注入                                                                        |
+| `image.models[].baseUrl`     | 可省略      | 字符串，URL                                                                                                       |
+| `image.models[].workspaceId` | 可省略      | 所选供应商的工作空间 ID                                                                                           |
+| `image.models[].timeout`     | `120000`    | 整数，0–2147483647（不含下界）                                                                                    |
+| `image.generateModel`        | 可省略      | 默认文生图模型 ID                                                                                                 |

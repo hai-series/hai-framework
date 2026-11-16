@@ -8,13 +8,7 @@
 
 位置：`config/_serv.yml`，宿主校验后传 `serv.createApp`/`serv.listen`。提供合法 HOST/PORT 进程变量时优先于 `server` 配置，非法 PORT 被忽略并回退；不要依赖这种回退隐藏部署配置错误。
 
-| 项 | 框架默认 | 影响 |
-| --- | --- | --- |
-| `server`.`host`/`port` | 127.0.0.1/3000 | 本机回环；容器通常明确监听0.0.0.0，暴露端口不代表已做认证 |
-| `http.apiPrefix` | /api/v1 | 无末尾斜杠的合法绝对路径，可为 `/somepath/api/v1`；客户端 `baseUrl` 与代理路径必须一致 |
-| `http.health` | /`health` 和 /ready | false 关闭；健康与依赖就绪分开，检查路径也应同步部署 `health` |
-| `http.openapi` | `false` | 对象启用，默认 `path: /openapi.json`；生产按公开范围选择 |
-| `http.docs` | `false` | 对象启用，默认 `path: /docs`；`requireAuth` 可显式要求认证 |
+监听、路由和默认值见 [Serv 配置清单](serv.md#配置清单)。生产入口的代理路径、应用 `http.apiPrefix` 与客户端 `baseUrl` 需要一致。
 
 容器部署的后端探针按最终有效的 `http.health.path` 请求，`health: false` 时跳过该 HTTP 探针。Fullstack 同源入口转发实际启用的健康/就绪路径、OpenAPI JSON、docs 和文档目录下的 `_hai/scalar.js`；生产模板按实际 Core 环境关闭文档，代理不绕过 `docs.requireAuth`。同来源以整段 `HAI_SERV` 为基础、细项覆盖；更高来源的整段替换才清除低来源细项，来源优先级见 [运行时配置](runtime.md)。改变路径或文档路由后需重新部署，以同步 Nginx 和部署探针；普通业务配置仍可修改运行文件后重启后端。
 
@@ -108,14 +102,7 @@ export function createAuthApp() {
 
 ## CORS与可信代理
 
-| 项 | 框架默认 | 取值影响 |
-| --- | --- | --- |
-| `http.trustedProxies` / Kit `trustedProxies` | `auto` | 普通宿主忽略转发头；受管私有 Compose 代理采用实际容器网段。自建代理填写 IP/CIDR，`[]` 显式忽略转发头 |
-| `http.access` / Kit `access` | `false` | 对每次请求限制 IP、时间和路径；可引用独立 YAML，详细配置见[请求策略](request-access.md) |
-| `cors.origin` / `nativeOrigins` | 无默认 | 指定真实浏览器和原生来源；按生成宿主规则解析来源字符串 |
-| `cors.credentials` | `false` | 跨源 Cookie 需明确 `true`并匹配允许来源；通配来源不能代替身份验证 |
-| `cors.allowedHeaders` | Authorization、Content-Type、X-Requested-With、X-Hai-Reauthentication、X-Hai-Terminal | 自定义头需明确加入，保留框架敏感动作和终端头 |
-| `cors.exposedHeaders` | [] | 仅向浏览器脚本公开需要读取的响应头，不泄露内部诊断 |
+跨源 Cookie 需要允许实际浏览器来源并启用 `cors.credentials`，按需放行原生来源和自定义请求头。[Serv](serv.md#配置清单) 与 [Kit](kit.md#配置清单) 都能配置可信代理，具体入口传递地址的方式见[请求访问策略](request-access.md)。
 
 ```yaml schema=@h-ai/serv:ServConfigSchema
 http:
@@ -146,6 +133,8 @@ HAI_SERV_REFRESH_COOKIE_SECURE=false
 重新登录后，在浏览器网络面板确认登录响应的刷新 Cookie 省略了 `Secure`。重载页面时，确认 `POST /api/v1/auth/refresh` 携带该 Cookie、返回 `200` 并恢复登录。切回 HTTPS 时移除变量或设为 `true`，同步实际 HTTPS Origin，再重新登录确认 Cookie 带 `Secure`。
 
 ## Kit、Cookie与请求上下文
+
+Kit 的 YAML 字段与默认值见 [Kit 配置清单](kit.md#配置清单)。
 
 `config/_kit.yml` 的 `server` 默认同Serv，`transport` 默认 `false`；默认协商路径为 `/api/_hai/key-exchange`，与Serv默认不同。Kit 没有 `close()`，认证、Cookie、限流和请求处理由 hooks 工厂参数装配，不能把Serv 整个 `http` 对象放入Kit。
 
@@ -193,18 +182,7 @@ const handle = kit.createHandle({
 
 入口是 `apiClient.init/create` 参数，没有自动加载的 `_api-client.yml`。
 
-| 参数 | 默认与条件 | 影响 |
-| --- | --- | --- |
-| `baseUrl` | 必填，无默认 | 含API前缀，例 `https://api.example.invalid/api/v1`；原生端不能假定浏览器同源地址 |
-| `timeout` | 30000ms | 中断客户端等待，不保证服务端副作用取消；超时后先按业务ID查结果 |
-| auth | 省略时不创建TokenManager | 传 `{}` 启用默认HttpOnly Cookie适配，或在 `auth.storage` 注入内存/原生安全的 `TokenStorage` 实例；不传字符串类型的后端名 |
-| `auth.refreshPath` | /auth/refresh，相对`baseUrl` | 与服务端刷新入口一致，不要重复拼/api/v1 |
-| `auth.refreshTimeoutMs` / `terminalType` | 10000ms/web | 刷新期限独立于请求期限；终端须服务端允许，不证明物理设备 |
-| `auth.recoverSession` | 可选回调，无默认 | 原地恢复同一用户，取消或结果不明不能返回true；成功仅重试原请求一次 |
-| `auth.onTokenRefreshed` / `onRefreshFailed` | 可选回调，无默认 | 同步状态或引导重登；不抛错或记录`token`，暂时网络失败保留凭据 |
-| `clientName` | hai-api-client | 写入x-request-client头，明确业务客户端有助定位 |
-| `headers` / `fetch` | 可选 | 静态/异步头与平台 `fetch` 适配，不在通用`headers`放超权限秘密 |
-| `transport` | 可省略，默认不启用 | 开启需匹配服务端和`crypto`能力；不能只打开客户端单边加密 |
+完整参数见 [API Client 配置清单](api-client.md#配置清单)。客户端停止等待后，已发送请求可能已在服务端产生结果。遇到超时先按业务 ID 查询，再决定是否重试；原地恢复只恢复同一用户的会话。
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -226,16 +204,7 @@ Kit 的 `kit.response.validationError(errors)` 与 `fromError` 使用同一字�
 
 配置是三件事：Serv/Kit启用入口和路径；服务端提供持久私有keyring、共享`keyStore`；客户端提供匹配`crypto`和协商路径。缺任一项都不是完整配置。HTTPS仍负责传输网络身份与通道保护，加密业务载荷不替代它。
 
-| 参数 | 默认 | 影响与条件 |
-| --- | --- | --- |
-| `transport` | `false` | `false` 使用明文宿主流程；对象启用后还需运行时私有依赖 |
-| `maxPlaintextBytes` | auto，实际1MiB；范围1KiB–64MiB | 双向明文UTF-8预算，超限尽早拒绝；不能只看加密后body长度 |
-| `routePlaintextBytes` | 无默认 | 按完整路径段匹配，`*`匹配单段，附件/导出单独给预算 |
-| `maxFutureSkewSeconds` | 30 秒 | 客户端请求时间可领先服务器的秒数，整数 0～300，包含上限 |
-| `maxRequestAgeSeconds` | 300 秒 | 自签发起的请求有效期，整数 1～600，到达上限即过期 |
-| `keyExchangePath` | Serv `/_hai/key-exchange`；Kit `/api/_hai/key-exchange` | Serv 是相对 `http.apiPrefix` 的子路径；Kit 是服务端完整路径；API Client 相对 `baseUrl`。例如 Serv 前缀 `/backend/api`、子路径 `/_hai/key-exchange` 对应 `/backend/api/_hai/key-exchange`，客户端 baseUrl 使用 `/backend/api` |
-| `excludePaths` | [] | 按需要排除健康等非业务入口，不能排除敏感请求逃避策略 |
-| 服务端keyring/`keyStore` | 无通用秘密默认 | 同环境各节点共用可持久密钥环和共享状态，禁止每次启动随机生成 |
+Serv 的密钥协商路径是相对于 `http.apiPrefix` 的子路径，Kit 使用服务端完整路径，API Client 相对于 `baseUrl`。例如 Serv 前缀 `/backend/api` 配合子路径 `/_hai/key-exchange`，完整路径为 `/backend/api/_hai/key-exchange`，客户端 `baseUrl` 使用 `/backend/api`。明文预算按 UTF-8 字节计量，使用 `routePlaintextBytes` 为附件等大材料按完整路径段预算。[Serv](serv.md#配置清单) · [Kit](kit.md#配置清单) · [API Client](api-client.md#配置清单) · [Crypto](crypto.md#http-传输与-registry)
 
 ```yaml schema=@h-ai/serv:ServConfigSchema
 transport:
@@ -270,13 +239,6 @@ Crypto通过公开工厂/调用参数装配，不依赖`_crypto.yml`。先执行
 
 为 Redis 或数据库注册表设置 `ttlSeconds: 3600` 后，每次密钥协商会登记一个有效期为一小时的客户端公钥。Serv 和 Kit 在握手响应中返回该期限。用户闲置后再次操作时，客户端按需重新协商，再发送业务请求。登录会话按身份模块的期限单独续期。可在测试环境缩短登记有效期，确认过期后的第一个业务请求使用新的 `X-Client-Id`。
 
-| 工厂/选项 | 默认与条件 | 影响 |
-| --- | --- | --- |
-| `createServer`的`serverKeyRing`/`keyStore` | 显式提供，无秘密/内存回退 | 多节点必须同一有效ring与共享registry，重启加载原ring；不能每次启动新建 |
-| `createRedisTransportKeyStore`的`cache`/`ttlSeconds` | 已初始化`cache`；ttl省略不过期 | 显式ttl为1–2147483647秒；Redis原生TTL，无DB式容量上限，需要noeviction和可靠持久化 |
-| `createReldbTransportKeyStore`的 `reldb` / `ttlSeconds`/`maxClients` | 已初始化共享reldb；ttl省略不过期；`maxClients`=10000 | 所有节点容量一致，满时拒绝，不驱逐有效公钥或nonce；定期调用`pruneExpired` |
-| `createInMemoryKeyStore(maxClients?)` | 省略或非有限值用 10000；有限值向下取整且至少为 1 | 仅开发/测试的本进程公钥容量，满时淘汰最早公钥；有效 nonce 不随公钥提前淘汰，不能代替跨节点注册表 |
-| `apiClient.transport.maxPlaintextBytes` | 省略跟服务端；显式取较小值 | 本地更严格预算，不放宽服务端限制 |
-| 对称 `encrypt` 默认 | SM4 CBC+自动随机IV，返回结构化密文 | 保存 `mode`、`ciphertext`、`iv`、`encoding` 一起解密；同密钥不得复用IV |
+共享 registry 的容量、有效期和生产设置见 [Crypto 配置清单](crypto.md#http-传输与-registry)。数据库 registry 可定期执行 `pruneExpired()`。
 
 请求认证有效期、未来偏差和nonce保留是协议约束，不能为“兼容时钟错误”任意放宽。服务端时钟同步，数据存储故障拒绝请求；nonce防重放不代替业务幂等键。完整SM2/SM3/SM4、密码哈希和协议选项见[Crypto公开用法](../../../packages/crypto/README.md)及[Transport协议](../../../packages/crypto/TRANSPORT-PROTOCOL.md)，它们是API参考，本手册不重复算法接口。

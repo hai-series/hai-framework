@@ -54,13 +54,7 @@ HAI_REACH_PROVIDERS='[{"name":"mail","type":"smtp","host":"smtp.example.com","po
 
 配置位置：`config/_core.yml`。用途：统一应用元信息、核心错误语言和日志；不会自动翻译业务页面文案。
 
-| 项 | 框架默认 | 不同值的影响 |
-| --- | --- | --- |
-| `name` | `hai Admin` | 宿主读取的应用名称，生成应用应明确填业务名称 |
-| `version` | `0.1.0` | 应用公开信息；发布制品版本另由根 `package.json` 驱动，不能只改这里 |
-| `env` | `development` | 可选 development/production/test/staging；不会自行设置 `NODE_ENV` 或启动依赖 |
-| `defaultLocale` | `zh-CN` | 供宿主读取的默认语言元数据；Core 加载配置不会自动切换消息语言，宿主须调用 `core.i18n.setGlobalLocale`；每个请求的 locale 用上下文隔离，浏览器 UI 使用自身语言入口 |
-| `logging` | 整个对象可省略 | 省略对象不会等同于传入 `{}`，见下一节 |
+Core 的名称、版本、运行环境、语言和日志配置见 [Core 配置清单](core.md#配置清单)。生成应用应填写业务名称，制品版本另由项目 `package.json` 驱动。通过 `core.i18n.setGlobalLocale()` 设置 Core 消息语言，每个 SSR 请求可单独选择语言上下文。
 
 ```yaml schema=@h-ai/core:CoreConfigSchema
 name: Orders
@@ -78,12 +72,7 @@ logging:
 
 ## 日志采集与隐私
 
-| 项 | 框架默认 | 修改后的影响与检查 |
-| --- | --- | --- |
-| `logging.level` | `info` | 在 Node 和浏览器过滤低于设定级别的日志。例如 `warn` 保留 warn、error、fatal，`fatal` 只保留 fatal |
-| `logging.format` | 对象存在时 `json`；未配置 Logger 初始为 `pretty` | JSON 适合逐行采集；pretty 适合终端且需 pino-pretty，不能靠默认环境推断 |
-| `logging.context` | 无默认 | 追加稳定服务/节点标识，不放密码或用户敏感正文 |
-| `logging.redact` | `[]` | 追加业务隐私路径，凭据默认脱敏仍生效；已有历史日志不会被追溯清理 |
+结构化 JSON 便于按行采集，开发终端可使用 `pretty`。日志等级、对象省略时的默认行为和附加脱敏选项见 [Core 配置清单](core.md#配置清单)。
 
 错误输出走 `core.error.toPublic`，UI 经 ToastContainer 默认显示可读说明，排查图标才展示编号。日志可以保留脱敏 Error 和同一个 `traceId`；不要把 cause、SQL、绑定值或凭据返回用户。默认脱敏覆盖 `passwordHash`/`secretKey` 等已知字段，不保证识别任意无标签秘密；业务隐私要显式清理。
 

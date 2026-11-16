@@ -63,16 +63,7 @@ Nginx 直达对象存储的下载也不经过 Node。若文件下载本身需要
 
 ### 2.1 策略入口
 
-| 配置项 | 框架默认 | 用途与取值影响 |
-| --- | --- | --- |
-| `http.access` / `access` | `false` | `false` 关闭；对象开启内联策略，或用 `{ file: ... }` 引用一个文件 |
-| `file` | 无默认 | `.yml` 或 `.yaml` 文件，最大 1 MiB；相对路径按服务工作目录解析 |
-| `global` | 省略 | 对宿主处理的全部请求增加条件，包括健康检查和密钥交换 |
-| `rules` | `[]` | 按路径和方法选择受限请求；最多 1000 条 |
-| `rules[].id` | 必填，无默认 | 唯一的规则编号，用于日志定位；1–64 个字母、数字、下划线、点或连字符 |
-| `rules[].paths` | 必填，无默认 | 1–100 个精确路径或末尾 `/**` 路径；不支持任意正则 |
-| `rules[].methods` | `[]` | 空数组包含全部方法；指定 POST 后只限制 POST，GET 不自动包含 HEAD |
-| `rules[].encryption` | 未设置，沿用宿主 | `required` 强制应用层加密；`disabled` 接收普通明文应用数据；均不改变 HTTPS、认证和 IP/时间条件 |
+根据宿主选择 [Serv 的 `http.access`](serv.md#配置清单) 或 [Kit 的 `access`](kit.md#配置清单)。条件字段、默认值和文件约束见 [Core 请求访问策略](core.md#请求访问策略)。
 
 文件引用与内联的 `global/rules` 二选一，混合配置会报错。文件只包含策略正文，不再包一层 `http`、`access` 或 `serv`。
 
@@ -84,14 +75,7 @@ Nginx 直达对象存储的下载也不经过 Node。若文件下载本身需要
 
 `global` 与每条路径规则均可设置以下字段：
 
-| 字段 | 框架默认 | 含义 |
-| --- | --- | --- |
-| `allowIps` | `[]` | 空数组不限允许来源；非空时必须匹配至少一个 IPv4、IPv6 或 CIDR |
-| `denyIps` | `[]` | 明确拒绝的来源，优先于允许列表 |
-| `timezone` | `UTC` | 该条规则使用的 IANA 时区；每条规则独立解释，不继承全局时区 |
-| `windows` | `[]` | 空数组不限时间；有窗口时，满足任意一个窗口即可通过该条时间条件 |
-| `windows[].days` | 必填 | 周一为 1，周日为 7；跨午夜填写开始日 |
-| `windows[].start/end` | 必填 | `HH:mm`，包含开始、不包含结束；结束早于开始表示跨午夜，相同值无效 |
+每个 `global` 或路径规则可以分别设允许/拒绝来源和时间窗口，按自己的 IANA 时区解释。拒绝列表优先；同一个规则存在多个时间窗口时，时刻满足其中一个即可。
 
 地址列表各最多 1000 项，时间窗口最多 100 个。配置了地址条件却没有可信客户端 IP 时，请求会被拒绝；不会把代理地址或请求正文里的 IP 当作用户地址。
 
@@ -167,6 +151,8 @@ Serv 从 Node socket 获取对端地址；Kit 使用平台提供的 `getClientAd
 Kit 接入代理解析后，IAM、审计、限流和业务路由的 `getClientAddress()` 使用同一结果。使用 SvelteKit Node adapter 时，保留原始 socket 地址给框架校验，不同时用未经边界校验的 `ADDRESS_HEADER` 覆盖它；其他平台按平台对客户端地址的保证配置。
 
 ### 3.2 本框架生成的 Compose
+
+受管部署入口的 `provider.trustedEdgeProxies` 见 [Deploy 配置清单](deploy.md#provider)。
 
 Fullstack 的 Web Nginx，以及自建对象存储所需的 SSR/API 网关，会把后端收口到项目私有容器网络。部署器仅在这种拓扑中向后端注入内部标记 `HAI_DEPLOY_PRIVATE_PROXY=1`。auto 在服务启动时收敛本容器的实际网段，Nginx 则用自己确认的 `$remote_addr` 覆盖 XFF 和 X-Real-IP，清除客户端伪造的转发链。
 

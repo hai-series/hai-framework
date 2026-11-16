@@ -58,10 +58,32 @@
             { "id": "configuration-request-access", "title": "请求来源、时段与接口加密", "path": "configuration/request-access.md" }
           ]
         },
-        { "id": "configuration-ai", "title": "模型、知识与向量", "path": "configuration/ai.md" },
+        { "id": "configuration-ai", "title": "AI 配置清单与使用场景", "path": "configuration/ai.md" },
         { "id": "configuration-operations", "title": "反馈、通知、审计与任务", "path": "configuration/operations.md" },
         { "id": "configuration-experience", "title": "页面、支付与设备", "path": "configuration/experience.md" },
-        { "id": "configuration-delivery", "title": "构建、部署与恢复", "path": "configuration/delivery.md" }
+        { "id": "configuration-delivery", "title": "构建、部署与恢复", "path": "configuration/delivery.md" },
+        { "id": "configuration-module-api-client", "title": "@h-ai/api-client", "path": "configuration/api-client.md" },
+        { "id": "configuration-module-api-contract", "title": "@h-ai/api-contract", "path": "configuration/api-contract.md" },
+        { "id": "configuration-module-audit", "title": "@h-ai/audit", "path": "configuration/audit.md" },
+        { "id": "configuration-module-cache", "title": "@h-ai/cache", "path": "configuration/cache.md" },
+        { "id": "configuration-module-capacitor", "title": "@h-ai/capacitor", "path": "configuration/capacitor.md" },
+        { "id": "configuration-module-cli", "title": "@h-ai/cli", "path": "configuration/cli.md" },
+        { "id": "configuration-module-core", "title": "@h-ai/core", "path": "configuration/core.md" },
+        { "id": "configuration-module-crypto", "title": "@h-ai/crypto", "path": "configuration/crypto.md" },
+        { "id": "configuration-module-datapipe", "title": "@h-ai/datapipe", "path": "configuration/datapipe.md" },
+        { "id": "configuration-module-deploy", "title": "@h-ai/deploy", "path": "configuration/deploy.md" },
+        { "id": "configuration-module-feedback", "title": "@h-ai/feedback", "path": "configuration/feedback.md" },
+        { "id": "configuration-module-iam", "title": "@h-ai/iam", "path": "configuration/iam.md" },
+        { "id": "configuration-module-kit", "title": "@h-ai/kit", "path": "configuration/kit.md" },
+        { "id": "configuration-module-payment", "title": "@h-ai/payment", "path": "configuration/payment.md" },
+        { "id": "configuration-module-reach", "title": "@h-ai/reach", "path": "configuration/reach.md" },
+        { "id": "configuration-module-reldb", "title": "@h-ai/reldb", "path": "configuration/reldb.md" },
+        { "id": "configuration-module-runner", "title": "@h-ai/runner", "path": "configuration/runner.md" },
+        { "id": "configuration-module-scheduler", "title": "@h-ai/scheduler", "path": "configuration/scheduler.md" },
+        { "id": "configuration-module-serv", "title": "@h-ai/serv", "path": "configuration/serv.md" },
+        { "id": "configuration-module-storage", "title": "@h-ai/storage", "path": "configuration/storage.md" },
+        { "id": "configuration-module-ui", "title": "@h-ai/ui", "path": "configuration/ui.md" },
+        { "id": "configuration-module-vecdb", "title": "@h-ai/vecdb", "path": "configuration/vecdb.md" }
       ]
     },
     {
@@ -81,6 +103,66 @@
         { "id": "governance-maintenance", "title": "维护框架与同步资料", "path": "governance/framework-maintenance.md" },
         { "id": "governance-security", "title": "安全审查与恢复条件", "path": "governance/security-review.md" },
         { "id": "governance-verification", "title": "验证、截图与适用边界", "path": "governance/verification.md" }
+      ]
+    },
+    {
+      "id": "data",
+      "title": "7. 模块数据结构",
+      "path": "data/README.md",
+      "children": [
+        { "id": "data-module-ai", "title": "@h-ai/ai", "path": "data/ai.md" },
+        { "id": "data-module-api-client", "title": "@h-ai/api-client", "path": "data/api-client.md" },
+        { "id": "data-module-api-contract", "title": "@h-ai/api-contract", "path": "data/api-contract.md" },
+        { "id": "data-module-audit", "title": "@h-ai/audit", "path": "data/audit.md" },
+        { "id": "data-module-cache", "title": "@h-ai/cache", "path": "data/cache.md" },
+        { "id": "data-module-capacitor", "title": "@h-ai/capacitor", "path": "data/capacitor.md" },
+        { "id": "data-module-cli", "title": "@h-ai/cli", "path": "data/cli.md" },
+        { "id": "data-module-core", "title": "@h-ai/core", "path": "data/core.md" },
+        { "id": "data-module-crypto", "title": "@h-ai/crypto", "path": "data/crypto.md" },
+        { "id": "data-module-datapipe", "title": "@h-ai/datapipe", "path": "data/datapipe.md" },
+        { "id": "data-module-deploy", "title": "@h-ai/deploy", "path": "data/deploy.md" },
+        { "id": "data-module-feedback", "title": "@h-ai/feedback", "path": "data/feedback.md" },
+        { "id": "data-module-iam", "title": "@h-ai/iam", "path": "data/iam.md" },
+        { "id": "data-module-kit", "title": "@h-ai/kit", "path": "data/kit.md" },
+        { "id": "data-module-payment", "title": "@h-ai/payment", "path": "data/payment.md" },
+        { "id": "data-module-reach", "title": "@h-ai/reach", "path": "data/reach.md" },
+        { "id": "data-module-reldb", "title": "@h-ai/reldb", "path": "data/reldb.md" },
+        { "id": "data-module-runner", "title": "@h-ai/runner", "path": "data/runner.md" },
+        { "id": "data-module-scheduler", "title": "@h-ai/scheduler", "path": "data/scheduler.md" },
+        { "id": "data-module-serv", "title": "@h-ai/serv", "path": "data/serv.md" },
+        { "id": "data-module-storage", "title": "@h-ai/storage", "path": "data/storage.md" },
+        { "id": "data-module-ui", "title": "@h-ai/ui", "path": "data/ui.md" },
+        { "id": "data-module-vecdb", "title": "@h-ai/vecdb", "path": "data/vecdb.md" }
+      ]
+    },
+    {
+      "id": "function",
+      "title": "8. 模块功能说明",
+      "path": "function/README.md",
+      "children": [
+        { "id": "function-module-ai", "title": "@h-ai/ai", "path": "function/ai.md" },
+        { "id": "function-module-api-client", "title": "@h-ai/api-client", "path": "function/api-client.md" },
+        { "id": "function-module-api-contract", "title": "@h-ai/api-contract", "path": "function/api-contract.md" },
+        { "id": "function-module-audit", "title": "@h-ai/audit", "path": "function/audit.md" },
+        { "id": "function-module-cache", "title": "@h-ai/cache", "path": "function/cache.md" },
+        { "id": "function-module-capacitor", "title": "@h-ai/capacitor", "path": "function/capacitor.md" },
+        { "id": "function-module-cli", "title": "@h-ai/cli", "path": "function/cli.md" },
+        { "id": "function-module-core", "title": "@h-ai/core", "path": "function/core.md" },
+        { "id": "function-module-crypto", "title": "@h-ai/crypto", "path": "function/crypto.md" },
+        { "id": "function-module-datapipe", "title": "@h-ai/datapipe", "path": "function/datapipe.md" },
+        { "id": "function-module-deploy", "title": "@h-ai/deploy", "path": "function/deploy.md" },
+        { "id": "function-module-feedback", "title": "@h-ai/feedback", "path": "function/feedback.md" },
+        { "id": "function-module-iam", "title": "@h-ai/iam", "path": "function/iam.md" },
+        { "id": "function-module-kit", "title": "@h-ai/kit", "path": "function/kit.md" },
+        { "id": "function-module-payment", "title": "@h-ai/payment", "path": "function/payment.md" },
+        { "id": "function-module-reach", "title": "@h-ai/reach", "path": "function/reach.md" },
+        { "id": "function-module-reldb", "title": "@h-ai/reldb", "path": "function/reldb.md" },
+        { "id": "function-module-runner", "title": "@h-ai/runner", "path": "function/runner.md" },
+        { "id": "function-module-scheduler", "title": "@h-ai/scheduler", "path": "function/scheduler.md" },
+        { "id": "function-module-serv", "title": "@h-ai/serv", "path": "function/serv.md" },
+        { "id": "function-module-storage", "title": "@h-ai/storage", "path": "function/storage.md" },
+        { "id": "function-module-ui", "title": "@h-ai/ui", "path": "function/ui.md" },
+        { "id": "function-module-vecdb", "title": "@h-ai/vecdb", "path": "function/vecdb.md" }
       ]
     }
   ]

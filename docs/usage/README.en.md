@@ -12,7 +12,9 @@ Start with the work you need to complete. New users can follow the [English crea
 4. [Manage configuration by domain](configuration/README.md): purpose, defaults, value differences, complete examples and actual result images.
 5. [Deploy and operate](operations/README.md): full/incremental updates, recovery conditions, feedback and troubleshooting.
 6. [Maintain, review security and validate](governance/README.md): public contracts, synchronized documentation and evidence boundaries.
+7. [Module data structures](data/README.md). Find tables, columns, cache keys and retention by package.
+8. [Module features](function/README.md). Find public entry points, usage examples and operational notes by package.
 
-Each role links to the same maintained content. The website consumes these authored Markdown files and `navigation.json`; configuration defaults are maintained in the domain handbook rather than copied into separate role manuals.
+The package READMEs share the Chinese reference pages. Look up individual settings in the [configuration reference](configuration/README.md#按模块查配置) and cross-package setup in the domain guides. The website reads these Markdown files and `navigation.json`.
 
 Query `pnpm view @h-ai/cli@latest version` or consult [npm](https://www.npmjs.com/package/@h-ai/cli?activeTab=versions) for the current release. Pin the returned version for reproducible installations. Main is not proof of registry availability. [Verification](governance/verification.md) distinguishes actual runs from environment-dependent work.

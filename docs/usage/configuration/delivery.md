@@ -6,6 +6,8 @@
 
 ## 配置入口和角色
 
+项目构建、下载源和代理见 [CLI 配置清单](cli.md#配置清单)。目标、端口和服务开通参数见 [Deploy 配置清单](deploy.md#配置清单)。
+
 `package.json.name`是项目资源身份，去scope、转小写并规范非法字符；不能通过目录名猜测，缺失会报错。应用根`version`用于制品版本。`hai.json.build`描述编译/镜像/原生打包，`hai.json.deploy`描述部署；服务目录仅用于扫描依赖和运行配置。
 
 `deploy.environment` 或命令 `--env` 选择 `.env.<环境>` 的部署模式，例如 test/prod；`local` 与 `example` 不是可部署模式。它不选择构建期密钥，也不把一份制品变成已验证的生产版本。
@@ -13,6 +15,8 @@
 中间件向导选择默认或自定义时，保留同后端的完整有效配置，表单未展示项也会传到运行环境：数据库连接池/操作日志、S3 的 `publicEndpoint/publicUrl/prefix`、Redis 重试/键前缀、向量检索选项、SMTP 发件人和 LDAP 属性映射。自建与云开通只定稿实际连接及凭据，切换后端清除不兼容字段。生成端优先输出细项，同来源细项覆盖手写 JSON 基础。配置合并在 Core，字段 Schema 与业务验证属于所属模块；CLI 部署向导只收集输入并调用 SDK。
 
 ### 连接已有数据库、缓存和对象存储
+
+按需在目标服务配置 [RelDB](reldb.md)、[Cache](cache.md) 和 [Storage](storage.md)。
 
 在部署向导中为对应服务选择“自定义”，填写已有服务的连接信息。部署会保留同一后端的连接池、TLS、Redis 库编号与键前缀、S3 对象前缀和公开下载地址，不会另外创建该服务的本地容器或数据卷。
 
@@ -100,6 +104,8 @@ SQLite 原生二进制随完整 npm 包交付，跟随所选 npm registry 获取
 后端探针、模板镜像和 Fullstack 同源代理按最终健康路径生成，支持 `HAI_SERV_HTTP_HEALTH_PATH=/status`。同一来源先应用 `HAI_SERV` 父 JSON，再由叶字段覆盖；更高来源的父对象才会清除低来源细项，完整顺序见[运行时配置](runtime.md)。已启用的文档页面、OpenAPI JSON 与本地 Scalar 脚本会转发至后端，保留生产关闭与认证限制。路径和路由变更需要重新部署，同步 Nginx 与发布探针。
 
 ### 下载源和代理
+
+项目保存的字段见 [CLI 构建配置](cli.md#haijson)。
 
 Windows/PowerShell 下，构建入口会转发并规范子进程输出的换行；pnpm fetch/install 使用 `--reporter=append-only`，保留警告、错误和退出码。构建完成前等待输出流关闭，防止完成提示与最后几行交错。
 
@@ -399,18 +405,7 @@ Fullstack 创建阶段为各环境生成独立的账号初始密码；打包阶�
 
 ## SSH、端口、中间件与云服务
 
-| `deploy.provider`字段 | 框架默认/必填 | 影响 |
-| --- | --- | --- |
-| `type` | 必填，docker-ssh或vercel | Docker-SSH支持本文离线/增量；Vercel只消费已有.vercel/output |
-| `ssh.host` / `username` | 实际连接必填 | 文档域名不是可用目标；`--bundle-only`可先不提供完整SSH |
-| `ssh.port` / `connectTimeoutSeconds` | 22/10秒 | 连接建立期限，不是整个部署超时 |
-| `ssh.auth` | 省略时非空`password`选`password`，否则使用 `key` 或 `agent` | 显式`key`忽略残留`password`；不在命令参数公开密码 |
-| `ssh.password` / `identityFile` / `knownHostsFile` | 无默认 | 密码私有，私钥只保存路径，换操作机后路径需有效 |
-| `strictHostKeyChecking` | `true` | 实际首次采用 `accept-new`，拒绝指纹变化；敏感环境预置已核实指纹 |
-| `remote`.`baseDir`/`runtime` | /opt/hai/apps / auto | auto优先Podman；生产建议固定已验收的docker或podman，后续引擎身份变化会被拒绝。改目录不迁移数据 |
-| `expose.hostPort` | 必填，无默认 | 例18080只是示例；核对防火墙、HTTPS入口与端口冲突 |
-| `expose.containerPort` | 3000 | 需与应用/制品端口匹配，增量不允许任意改布局 |
-| `container.s3Engine` | rustfs | 可选minio；已有成功基线后不能原地切引擎共用旧卷，需要独立目标和迁移方案 |
+连接、远端运行时、入口端口与自建服务字段见 [Deploy 配置清单](deploy.md#配置清单)。离线打包用 `--bundle-only` 时可以暂不提供 SSH 参数。发布时核对 SSH 主机指纹、宿主端口与防火墙，并使容器端口与制品一致。
 
 ```json schema=@h-ai/deploy:DeployConfigSchema
 {
@@ -432,14 +427,7 @@ Fullstack 创建阶段为各环境生成独立的账号初始密码；打包阶�
 
 数据库PostgreSQL/MySQL、文件RustFS/MinIO和向量库后端可能各自复用同一逻辑卷名。全量和增量都会核对实际卷与服务器长期保存的后端账本，拒绝把不兼容数据目录交给新引擎。服务从当前拓扑移除，不代表遗留卷变成空白环境；重新加入时仍核对原绑定。更换引擎需要独立身份、新卷及明确的数据迁移方案，不能靠改一个`type`绕过。具体故障处理见下文[持久凭据、数据和发布成功基线](#持久凭据数据和发布成功基线)。
 
-| 可选云开通项 | 无默认的必需信息 |
-| --- | --- |
-| `services.db` / `provisioner: neon` | `apiKey` |
-| `services.cache` / `provisioner: upstash` | email、`apiKey` |
-| `services.storage` / `provisioner: cloudflare-r2` | `accessKeyId`、`secretAccessKey`、`accountId`、`apiToken` |
-| `services.email` / `provisioner: resend` | from、`apiKey` |
-| `services.sms` / `provisioner: aliyun` | `signName`、`accessKeyId`、`accessKeySecret` |
-| `provider.type`=vercel | `token`；仅prebuilt，无Compose离线/按服务更新 |
+云开通凭据见 [Deploy 服务配置](deploy.md#services)。
 
 云开通需要外网和账号授权，不是完全离线自包含部署。自建中间件镜像随完整包交付，外部服务还需目标网络可达。
 
