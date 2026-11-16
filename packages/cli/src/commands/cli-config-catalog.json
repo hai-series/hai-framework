@@ -3083,8 +3083,8 @@
     "name": "HAI_CORE_LOGGING_FORMAT",
     "module": "core",
     "path": "core.logging.format",
-    "description": "日志格式：'json' 用于生产环境，'pretty' 用于开发环境（默认 'json'）",
-    "value": "json",
+    "description": "日志格式：默认 'pretty'，需要由日志系统按行采集时可显式选择 'json'。",
+    "value": "pretty",
     "constraint": "字符串；取值：json | pretty"
   },
   {

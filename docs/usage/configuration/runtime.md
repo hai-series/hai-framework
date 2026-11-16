@@ -29,7 +29,7 @@
 
 ### JSON 兜底与生成规则
 
-手写 JSON 可用于任何对象或数组，放在对应模块细项之前便于阅读。生成命令优先写细项，数组保留 JSON。动态字典、显式空对象以及本身要求 JSON 文本的字段保留原义；整体替换对象展开时可能留下最上层 `{}` 重置标记，避免旧 YAML 字段重新出现。
+可以用一个环境变量传入整个对象，例如用 `HAI_STORAGE` 一次设置存储类型、桶名和区域。再在同一个文件里用 `HAI_STORAGE_ENDPOINT` 单独设置地址。CLI 生成环境文件时，普通对象通常拆成单项变量，数组写成一个 JSON 值。如果生成结果同时出现 `{}` 和子项变量，`{}` 会先清空 YAML 中的旧对象，然后再应用子项。
 
 ```dotenv
 # 对象基础在前，细项在后；本例最终公开地址包含 12348 端口。
@@ -39,16 +39,18 @@ HAI_STORAGE_FORCEPATHSTYLE=true
 HAI_STORAGE_PUBLICENDPOINT=http://192.0.2.10:12348/files
 HAI_STORAGE_CREATEBUCKET=true
 
-# 列表保留一个 JSON；索引只修改已有项，不追加、不生成空洞。
+# 先定义一个通知通道。该通道是列表的第 0 项。
 HAI_REACH_PROVIDERS='[{"name":"mail","type":"smtp","host":"smtp.example.com","port":465,"secure":true,"from":"noreply@example.com"}]'
-# 密码单独写 .env.test.local：HAI_REACH_PROVIDERS_0_PASS=...
+# 在 .env.test.local 中给第 0 项设置密码：HAI_REACH_PROVIDERS_0_PASS=...
 ```
 
-生成工具不会同时写一份包含相同属性的大 JSON 和细项。空字符串、false、0、空数组均为显式值；Schema 字符串保留前导零，JSON/环境值中的 `${...}` 不再次插值。数组越界或缺少列表声明时报错。
+`0` 代表第一项，`1` 代表第二项。上面的列表只有一项，设置 `HAI_REACH_PROVIDERS_1_HOST` 会报错。要增加第二项，先在 YAML 的 `providers` 或 `HAI_REACH_PROVIDERS` 的 JSON 数组里加入第二个通道，再用 `_1_` 修改它的字段。生成工具把列表整体写成一个 JSON 数组。
 
-![环境值合并、YAML 覆盖与模块初始化](../images/configuration-sources.svg)
+空字符串、`false`、`0` 和 `[]` 都是明确填写的值。字段的类型决定替换后的值如何读取。例如在 `_core.yml` 写 `version: ${APP_VERSION:00123}`，`APP_VERSION` 未设置时，Core 得到字符串 `"00123"`，前面的两个 `0` 会保留。
 
-环境层解决“这个环境用什么值”，YAML 描述字段结构，最后由模块校验并使用。
+Core 只替换原始 YAML 里的占位符。例如 YAML 写 `name: ${APP_TITLE}`，环境变量 `APP_TITLE` 的值如果是字面文本 `${RELEASE_LABEL}`，应用名称就会是 `${RELEASE_LABEL}`。用环境变量 `HAI_CORE='{"name":"${RELEASE_LABEL}"}'` 覆盖名称时，结果也是同一段文本。
+
+![应用启动时先合并环境变量，再用它们处理 YAML，校验后把配置交给模块](../images/configuration-sources.svg)
 
 ## 应用信息与语言
 
@@ -78,7 +80,9 @@ logging:
 
 Core 自动加载或重载配置失败时，日志提供文件路径、错误码，以及能取得的 YAML 行列和追踪编号。显式调用加载或校验方法会从 `error.cause` 返回更多诊断，应用记录这类错误时应只选取必要字段。
 
-日志脱敏先生成数据副本，不执行自定义 `toJSON()`。类实例只读取自有可枚举数据属性，不保留原型方法，访问器不会被调用；日期转为 ISO 字符串，URL 转为脱敏字符串。原对象不变，仍应只选取排查所需字段，避免收集无关隐私。
+日志系统会复制传入的数据，在副本中遮盖敏感值。业务代码之后读取原对象时，数据还是原值。
+
+例如，把订单类的实例传给日志时，`this.orderId` 这类直接保存在实例上的普通字段可以写入日志。类上的方法、`get total()` 和自定义 `toJSON()` 都不会运行。如果需要记录金额，可以从业务代码已经算好的结果中取 `total`，与 `orderId` 一起传给日志。日期会写成 `2026-01-15T08:30:00.000Z` 这样的字符串。URL 会写成字符串，其中的用户名、密码和已知敏感参数会被遮盖。传给日志的数据应只包含排查需要的字段。
 
 ### `logging.redact` 怎么填写
 

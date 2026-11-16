@@ -37,7 +37,7 @@
             ]
           },
           "format": {
-            "default": "json",
+            "default": "pretty",
             "type": "string",
             "enum": [
               "json",

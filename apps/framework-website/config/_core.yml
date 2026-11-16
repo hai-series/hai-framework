@@ -18,7 +18,7 @@ logging:
   # 说明：日志级别（默认 'info'）
   # 取值：字符串；取值：trace | debug | info | warn | error | fatal
   level: ${HAI_CORE_LOGGING_LEVEL:info}
-  # 说明：日志格式：'json' 用于生产环境，'pretty' 用于开发环境（默认 'json'）
+  # 说明：日志格式：默认 'pretty'，需要由日志系统按行采集时可显式选择 'json'。
   # 取值：字符串；取值：json | pretty
   format: ${HAI_CORE_LOGGING_FORMAT:pretty}
   # context: # 说明：默认上下文，会自动添加到每条日志；取值：配置块（填写下方缩进字段）

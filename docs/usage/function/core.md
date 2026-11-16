@@ -98,7 +98,7 @@ core.logger.warn('Request needs attention', { requestId })
 
 `core.init({ configDir, configSchemas?, watchConfig? })` 扫描指定目录直属的 `.yml` / `.yaml` 文件；`_core.yml` 注册为 `core`，`_db.yml` 注册为 `db`，`app.yml` 注册为 `app`。构建/部署设置由 CLI 从项目根 `hai.json` 读取，不属于运行时 YAML。
 
-`core.init()` 自动检查 `_core.yml` 里允许的五个字段，并补齐未填写的名称、版本、运行环境和默认语言。写 `logging: {}` 会应用默认的 `info` 级别和 `json` 格式。完全省略 `logging` 会保留应用当前的日志设置。启动代码直接传入的 `core.init({ logging })` 优先使用。完整默认值、日志示例和 HTTP 访问设置的文件位置见 [Core 配置清单](../configuration/core.md)。
+`core.init()` 自动检查 `_core.yml` 里允许的五个字段，并补齐未填写的名称、版本、运行环境和默认语言。写 `logging: {}` 会应用默认的 `info` 级别和 `pretty` 格式。完全省略 `logging` 会保留应用当前的日志设置。启动代码直接传入的 `core.init({ logging })` 优先使用。完整默认值、日志示例和 HTTP 访问设置的文件位置见 [Core 配置清单](../configuration/core.md)。
 
 应用自己的 `app.yml` 可以用 `AppSchema` 指明哪些字段可省略、环境变量替换后的值应该是字符串还是数字。将它作为 `configSchemas.app` 传给 `core.init()`，Core 读取目录时会用它识别这些字段。再调用 `core.config.validate('app', AppSchema)` 验证字段取值，成功后从 `data` 读取配置。
 
@@ -294,7 +294,7 @@ core.logger.info('Generated config verified', { port: restored.HAI_APP_PORT })
 
 日志按 `trace`、`debug`、`info`、`warn`、`error`、`fatal` 递增，只输出达到当前阈值的记录。阈值为 `fatal` 时只输出这一等级，应用自行决定是否退出。
 
-默认日志级别为 `info`，格式为 `pretty`。在 YAML 中提供 `logging` 对象时，其省略的 `format` 由 Schema 补为 `json`。Node 使用 pino，缺少可选的 `pino-pretty` 时输出 JSON。浏览器写入开发者控制台，其中的 `bigint` 值输出为十进制字符串，循环引用显示为 `[Circular]`。
+默认日志级别为 `info`，格式为 `pretty`。在 YAML 中只写 `logging.level` 时，格式仍为 `pretty`。应用可以显式设置 `logging.format: json` 供日志系统按行读取。Node 找不到可选依赖 `pino-pretty` 时会输出 JSON。浏览器写入开发者控制台，其中的 `bigint` 值输出为十进制字符串，循环引用显示为 `[Circular]`。
 
 ```ts
 import { core } from '@h-ai/core'

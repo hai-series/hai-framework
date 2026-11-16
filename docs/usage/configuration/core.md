@@ -19,7 +19,7 @@ logging:
   redact: [customer.email]
 ```
 
-服务启动后只输出 `warn` 及更高等级的日志，格式为每行一条 JSON。日志数据里的 `customer.email` 会显示为 `[REDACTED]`。
+服务启动后只输出 `warn` 及更高等级的日志，默认使用 `pretty`。如果日志系统要求每行一条 JSON，在 `logging` 下加上 `format: json`。两种格式都会把日志里的 `customer.email` 遮盖为 `[REDACTED]`。
 
 ## 配置清单
 
@@ -31,23 +31,96 @@ logging:
 | `defaultLocale`   | `"zh-CN"`              | 应用期望使用的语言。启动代码把该值传给 `core.i18n.setGlobalLocale()` 后，Core 消息才会按这个语言输出。页面文案由应用的翻译文件决定。 |
 | `logging`         | 省略时保留当前日志设置 | 有这个键时可以只写想调整的子项，例如 `logging: { level: warn }`。                                                                    |
 | `logging.level`   | `"info"`               | 最低日志级别，可选 `trace`、`debug`、`info`、`warn`、`error`、`fatal`。                                                              |
-| `logging.format`  | `"json"`               | `json` 便于按行采集。`pretty` 便于在终端阅读，Node 需要可用的 `pino-pretty`。                                                        |
+| `logging.format`  | `"pretty"`             | `pretty` 便于在终端阅读。Node 找不到可选依赖 `pino-pretty` 时会输出 JSON。日志采集需要固定格式时，可显式填写 `json`。                |
 | `logging.context` | 可省略                 | 每条日志附带的固定字段，例如 `{ service: 'orders-api' }`。                                                                           |
 | `logging.redact`  | `[]`                   | 额外隐藏的日志字段，例如 `customer.email` 或 `recipients[*].phone`。`*` 匹配一层。已知凭据字段始终隐藏。                             |
 
 以新启动的 Node 服务为例。
 
 - 完全省略 `logging`。日志沿用启动时的 `info` 级别和 `pretty` 格式。
-- 写 `logging: {}`。Core 应用默认日志设置，级别为 `info`，格式为 `json`，附加的脱敏路径为空。
-- 写 `logging: { level: warn }`。级别改为 `warn`，未填写的格式仍为 `json`。
+- 写 `logging: {}`。Core 应用默认日志设置，级别为 `info`，格式为 `pretty`，附加的脱敏路径为空。
+- 写 `logging: { level: warn }`。级别改为 `warn`，格式仍为 `pretty`。
 
 如果启动代码直接传了 `core.init({ logging: ... })`，本次启动以代码传入的日志设置为准。
 
 ### 请求访问策略
 
-配置位置取决于负责处理请求的服务。独立 API 的 Serv 读取 `_serv.yml` 的 `http.access`，SvelteKit 服务读取 `_kit.yml` 的 `access`。两者创建 HTTP 应用或请求处理函数时，都会用 Core 的同一套规则检查设置。`_core.yml` 负责应用信息和日志。
+#### 策略写在哪个文件
 
-`access: false` 关闭这项检查。要启用时，在 `access` 下直接写 `global` 或 `rules`，也可以写 `file: ./config/security/request-access.yml`，让服务器启动时读一份独立文件。两种写法选一种。文件内容从 `global` 或 `rules` 开始，最大 1 MiB，相对路径从服务器进程的工作目录起算。使用其他 HTTP 框架时，Node 启动代码可以直接调用 `core.access.createRequestCheck({ file })`，再用返回的函数检查请求。
+Core 提供检查请求的函数。应用启动时把访问策略交给负责接收请求的服务，服务会用它检查每一次请求。
+
+| 后端            | 配置位置                            | 启动代码怎样传入                                               |
+| --------------- | ----------------------------------- | -------------------------------------------------------------- |
+| 独立的 Serv API | `config/_serv.yml` 的 `http.access` | 将读取到的 `http` 传给 `serv.createApp({ http, ... })`。       |
+| SvelteKit 服务  | `config/_kit.yml` 的顶层 `access`   | 将读取到的 `access` 传给 `kit.createHandle({ access, ... })`。 |
+
+`config/_core.yml` 只能填写上面配置清单中的字段。把 `access` 或 `global` 写进这个文件会触发配置校验错误。按上表选择真正接收请求的后端文件。省略 `access` 或将它设为 `false` 时，服务不会执行这些额外的地址及时段检查。
+
+#### 示例一：在 Serv 中限制整个服务的来源，再限制订单接口的时间
+
+在 `config/_serv.yml` 中填写以下配置。将示例网段替换为实际允许的客户端网段。
+
+```yaml schema=@h-ai/serv:ServConfigSchema
+http:
+  access:
+    global:
+      allowIps: [192.0.2.0/24]
+      denyIps: [192.0.2.7]
+    rules:
+      - id: orders-hours
+        paths: [/api/v1/orders/**]
+        timezone: Asia/Shanghai
+        windows:
+          - days: [1, 2, 3, 4, 5]
+            start: '09:00'
+            end: '18:00'
+```
+
+`global` 对本服务处理的每个请求生效，包括健康检查。`192.0.2.7` 已列在拒绝名单里，一律拒绝。从 `192.0.2.10` 发出的订单请求还要满足 `orders-hours`，因此周一 10:00 可以通过策略，周一 18:00 就会被拒绝。其他路径只检查全局条件。
+
+#### 示例二：在 SvelteKit 中让所有动态请求只在工作时段通过
+
+在 `config/_kit.yml` 的顶层设置 `access`。`global` 也可以只写时段，本例只限制进入 SvelteKit 请求处理函数的请求。
+
+```yaml schema=@h-ai/kit:KitConfigSchema
+access:
+  global:
+    timezone: Asia/Shanghai
+    windows:
+      - days: [1, 2, 3, 4, 5]
+        start: '09:00'
+        end: '18:00'
+```
+
+此配置在上海时间周一到周五 `09:00` 至 `18:00` 之间允许访问，`18:00` 整即停止放行。只想限制部分接口时，可把这个时段条件移进 `rules` 的一条路径规则，避免影响登录页或健康检查。
+
+#### 示例三：引用独立的规则文件
+
+将策略写到 `config/security/request-access.yml`，从 `global` 或 `rules` 开始。
+
+```yaml schema=@h-ai/core:RequestAccessPolicySchema
+global:
+  denyIps: [192.0.2.7]
+```
+
+Serv 在 `config/_serv.yml` 通过 `http.access.file` 引用它。
+
+```yaml schema=@h-ai/serv:ServConfigSchema
+http:
+  access:
+    file: ./config/security/request-access.yml
+```
+
+SvelteKit 在 `config/_kit.yml` 通过 `access.file` 引用它。
+
+```yaml schema=@h-ai/kit:KitConfigSchema
+access:
+  file: ./config/security/request-access.yml
+```
+
+`access` 里写了 `file` 就把规则都放进该文件，大小上限为 1 MiB。相对路径从后端进程的工作目录起算。服务启动时读取文件，改完配置后重启后端。使用其他 Node HTTP 框架时，启动代码可以调用 `core.access.createRequestCheck({ file: './config/security/request-access.yml' })`，再将请求路径、方法和可信客户端 IP 交给返回的函数。
+
+#### 请求访问策略字段
 
 | 字段                 | 默认值             | 对请求的影响                                                                                                                                         |
 | -------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |

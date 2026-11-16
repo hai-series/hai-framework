@@ -74,6 +74,25 @@ describe('core.init', () => {
     core.logger.setLevel('info')
   })
 
+  it.each([
+    ['{}', 'info', 'pretty'],
+    ['{ level: warn }', 'warn', 'pretty'],
+    ['{ format: json }', 'info', 'json'],
+  ])('从 _core.yml 读取 logging: %s 后应用日志格式', (logging, level, format) => {
+    vi.stubEnv('HAI_CORE', undefined)
+    vi.stubEnv('HAI_CORE_LOGGING', undefined)
+    vi.stubEnv('HAI_CORE_LOGGING_FORMAT', undefined)
+    vi.stubEnv('HAI_CORE_LOGGING_LEVEL', undefined)
+    vi.stubEnv('HAI_CORE_LOGGING_REDACT', undefined)
+    vi.stubEnv('HAI_CORE_LOGGING_CONTEXT', undefined)
+    writeFileSync(join(tempDir, '_core.yml'), `logging: ${logging}\n`)
+    const configure = vi.spyOn(core.logger, 'configure').mockImplementation(() => {})
+
+    core.init({ configDir: tempDir })
+
+    expect(configure).toHaveBeenCalledExactlyOnceWith({ level, format, redact: [] })
+  })
+
   it('init 配置目录不存在应不崩溃', () => {
     expect(() => core.init({
       configDir: join(tempDir, 'nonexistent'),

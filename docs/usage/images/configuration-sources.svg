@@ -1,1 +1,56 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="540" viewBox="0 0 1080 540" role="img" aria-labelledby="title desc"><title id="title">统一配置来源与细项覆盖</title><desc id="desc">五层环境来源从低到高合并。同一来源先父 JSON 后细项，高来源整体替换清除低来源细项。模块 Schema 决定结构、类型和最终校验。</desc><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10Z" fill="#66758b"/></marker></defs><g font-family="Segoe UI,Microsoft YaHei,sans-serif"><rect width="1080" height="540" rx="18" fill="#fff"/><rect x="1" y="1" width="1078" height="538" rx="17" fill="none" stroke="#dce3ef"/><text x="30" y="43" font-size="26" fill="#172b4d" font-weight="700">统一配置来源与细项覆盖</text><text x="30" y="74" font-size="16" fill="#526179">Core、Node/Vite 和部署共用规则；JSON 作为基础，细项继续覆盖。</text><rect x="30" y="105" width="315" height="64" rx="12" fill="#eaf0ff" stroke="#315bf5" stroke-opacity=".28"/><text x="47" y="132" font-size="19" fill="#315bf5" font-weight="650">① 进程环境</text><text x="47" y="155" font-size="15" fill="#24344c">显式注入，优先级最高</text><path d="M345 137 L405 205" fill="none" stroke="#66758b" stroke-width="2" marker-end="url(#arrow)"/><rect x="30" y="181" width="315" height="64" rx="12" fill="#eaf0ff" stroke="#315bf5" stroke-opacity=".28"/><text x="47" y="208" font-size="19" fill="#315bf5" font-weight="650">② .env.&lt;mode&gt;.local</text><text x="47" y="231" font-size="15" fill="#24344c">当前环境的私有值</text><path d="M345 213 L405 231" fill="none" stroke="#66758b" stroke-width="2" marker-end="url(#arrow)"/><rect x="30" y="257" width="315" height="64" rx="12" fill="#eaf0ff" stroke="#315bf5" stroke-opacity=".28"/><text x="47" y="284" font-size="19" fill="#315bf5" font-weight="650">③ .env.local</text><text x="47" y="307" font-size="15" fill="#24344c">本机共享私有值</text><path d="M345 289 L405 257" fill="none" stroke="#66758b" stroke-width="2" marker-end="url(#arrow)"/><rect x="30" y="333" width="315" height="64" rx="12" fill="#eaf0ff" stroke="#315bf5" stroke-opacity=".28"/><text x="47" y="360" font-size="19" fill="#315bf5" font-weight="650">④ .env.&lt;mode&gt;</text><text x="47" y="383" font-size="15" fill="#24344c">当前环境的公共差异</text><path d="M345 365 L405 283" fill="none" stroke="#66758b" stroke-width="2" marker-end="url(#arrow)"/><rect x="30" y="409" width="315" height="64" rx="12" fill="#eaf0ff" stroke="#315bf5" stroke-opacity=".28"/><text x="47" y="436" font-size="19" fill="#315bf5" font-weight="650">⑤ .env</text><text x="47" y="459" font-size="15" fill="#24344c">公共基础值</text><path d="M345 441 L405 309" fill="none" stroke="#66758b" stroke-width="2" marker-end="url(#arrow)"/><rect x="425" y="180" width="270" height="175" rx="14" fill="#fff5dc" stroke="#946400" stroke-opacity=".28"/><text x="443" y="213" font-size="20" fill="#946400" font-weight="650">YAML / Schema 结构</text><text x="443" y="245" font-size="16" fill="#24344c">同源：父 JSON → 细项</text><text x="443" y="273" font-size="16" fill="#24344c">高来源整段替换清除旧细项</text><text x="443" y="301" font-size="16" fill="#24344c">宿主显式提供模块 Schema</text><text x="443" y="329" font-size="16" fill="#24344c">可选字段也可按路径设置</text><rect x="770" y="180" width="280" height="175" rx="14" fill="#e8f7f3" stroke="#0b7661" stroke-opacity=".28"/><text x="788" y="213" font-size="20" fill="#0b7661" font-weight="650">模块校验与初始化</text><text x="788" y="245" font-size="16" fill="#24344c">所属 Schema 检查类型和范围</text><text x="788" y="273" font-size="16" fill="#24344c">应用默认值，保留显式空值</text><text x="788" y="301" font-size="16" fill="#24344c">模块使用最终配置</text><text x="788" y="329" font-size="16" fill="#24344c">生成细项，列表保留 JSON</text><path d="M695 265 L750 265" fill="none" stroke="#66758b" stroke-width="2" marker-end="url(#arrow)"/><text x="30" y="516" font-size="16" fill="#526179">服务器只编辑 config/.env.runtime，重启 Node 后端后验证健康与业务。</text></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="540" viewBox="0 0 1080 540" role="img" aria-labelledby="title desc">
+  <title id="title">Node 应用启动时如何读取配置</title>
+  <desc id="desc">应用合并 dotenv 文件与进程环境，将结果写入 process.env，再调用 core.init()。Core 读取 YAML，用环境变量覆盖相应配置项，并替换其余 YAML 字符串里的占位符。校验时补齐默认值，校验成功后应用把配置交给模块。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10Z" fill="#66758b"/>
+    </marker>
+  </defs>
+
+  <rect x="1" y="1" width="1078" height="538" rx="17" fill="#fff" stroke="#dce3ef"/>
+  <g font-family="Segoe UI, Microsoft YaHei, sans-serif" fill="#24344c">
+    <text x="32" y="48" font-size="27" font-weight="700" fill="#172b4d">Node 应用启动时如何读取配置</text>
+    <text x="32" y="78" font-size="16" fill="#526179">用 core.config.loadEnvFiles() 合并环境变量，把结果写入 process.env，再调用 core.init()</text>
+
+    <g font-size="17">
+      <rect x="32" y="113" width="284" height="245" rx="12" fill="#eef3ff" stroke="#c3d3f7"/>
+      <text x="51" y="149" font-size="20" font-weight="700" fill="#254bb6">1  合并环境变量</text>
+      <text x="51" y="181" fill="#526179">优先级从高到低</text>
+      <text x="51" y="212">进程环境</text>
+      <text x="51" y="240">.env.&lt;mode&gt;.local</text>
+      <text x="51" y="268">.env.local</text>
+      <text x="51" y="296">.env.&lt;mode&gt;</text>
+      <text x="51" y="324">.env</text>
+
+      <rect x="32" y="390" width="284" height="96" rx="12" fill="#f4f6fa" stroke="#dce3ef"/>
+      <text x="51" y="427" font-size="20" font-weight="700" fill="#172b4d">读取 YAML 作为基础配置</text>
+      <text x="51" y="458" fill="#526179">例如 config/_db.yml</text>
+
+      <rect x="374" y="161" width="330" height="276" rx="12" fill="#fff6e2" stroke="#eed8a5"/>
+      <text x="395" y="199" font-size="20" font-weight="700" fill="#765311">2  用环境变量处理 YAML</text>
+      <text x="395" y="235">HAI_* 覆盖相应字段</text>
+      <text x="395" y="266">同一来源先应用整段 JSON，</text>
+      <text x="395" y="291">再用同来源的变量覆盖单项</text>
+      <text x="395" y="326">高优先级的整段 JSON 会</text>
+      <text x="395" y="351">清除低优先级的单项覆盖</text>
+      <text x="395" y="386">替换其余 YAML 字段里的</text>
+      <text x="395" y="411">${VAR} 或 ${VAR:回退值}</text>
+
+      <rect x="762" y="161" width="286" height="276" rx="12" fill="#eaf7f1" stroke="#b9dacd"/>
+      <text x="783" y="199" font-size="20" font-weight="700" fill="#13654f">3  校验并使用配置</text>
+      <text x="783" y="235">按字段类型校验取值，</text>
+      <text x="783" y="260">填入该模块规定的默认值</text>
+      <path d="M783 287 H1027" stroke="#b9dacd"/>
+      <text x="783" y="320">校验成功后，应用把</text>
+      <text x="783" y="345">结果传给相应模块</text>
+      <text x="783" y="389" fill="#356c5b">例如用 reldb.init()</text>
+      <text x="783" y="414" fill="#356c5b">建立数据库连接</text>
+    </g>
+
+    <g fill="none" stroke="#66758b" stroke-width="2">
+      <path d="M316 220 H345 V428 H316"/>
+      <path d="M345 298 H372" marker-end="url(#arrow)"/>
+      <path d="M704 298 H760" marker-end="url(#arrow)"/>
+    </g>
+  </g>
+</svg>

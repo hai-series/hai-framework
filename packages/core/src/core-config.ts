@@ -66,8 +66,8 @@ export const LogFormatSchema = z.enum(['json', 'pretty'])
 export const LoggingConfigSchema = z.object({
   /** 日志级别（默认 'info'） */
   level: LogLevelSchema.default('info'),
-  /** 日志格式：'json' 用于生产环境，'pretty' 用于开发环境（默认 'json'） */
-  format: LogFormatSchema.default('json'),
+  /** 日志格式：默认 'pretty'，需要由日志系统按行采集时可显式选择 'json'。 */
+  format: LogFormatSchema.default('pretty'),
   /** 默认上下文，会自动添加到每条日志 */
   context: z.record(z.string(), z.unknown()).optional(),
   /** 额外业务隐私的日志字段路径，如 customer.email、recipients[*].phone；* 匹配一层，区分大小写，默认 []。已知密码/令牌始终脱敏。 */
