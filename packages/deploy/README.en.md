@@ -6,14 +6,7 @@ Deploy existing images or Vercel prebuilt output, including complete offline bun
 
 ## Quick Start
 
-Run in an application created by the CLI with a configured deploy script. Inspect the read-only plan, verify the environment, destination and selected services, then build and deploy:
-
-```sh
-pnpm run deploy --env prod --plan
-pnpm run deploy --env prod --build
-```
-
-The command returns a deployment URL or an offline delivery directory. On failure, check the safe message and local/remote execution states. Keep production credentials in `.env.prod.local` and prepare data backups and recovery before deployment. The sections below explain build, configuration and delivery boundaries.
+[Open the quick-start guide](../../docs/usage/function/deploy.md#最小接入示例) (Chinese).
 
 ## Configuration Reference
 
@@ -23,11 +16,7 @@ See the [configuration reference](../../docs/usage/configuration/deploy.md) in C
 
 ## Features
 
-See the [feature reference](../../docs/usage/function/deploy.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
-
-- `deploy.init` / `deploy.close` / `deploy.config` / `deploy.isInitialized` / `deploy.scan` — Read targets, manage connections and discover middleware
-- `deploy.credentials` / `deploy.provisionAll` / `deploy.deployApp` — Load credentials, provision dependencies and deploy applications
-- `loadDeploymentConfig` / `loadDeploymentEnvironment` / `saveDeploymentEnvironment` / `getDeployRecovery` — Import these standalone functions from `@h-ai/deploy` to read deployment settings, read or save variables for an environment, or inspect recovery details after a failure
+[Browse the API list](../../docs/usage/function/deploy.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 

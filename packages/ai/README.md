@@ -8,38 +8,7 @@ AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、文生
 
 ## 快速开始
 
-`ai.close()` 会等正在进行的初始化结束，再释放资源。多个关闭请求共用同一次清理。如果要换一套配置，`ai.init()` 会先关闭已有实例。关闭进行中时，新初始化会返回失败。
-
-### 开发 LLM-only（零数据库依赖）
-
-```ts
-import { ai } from '@h-ai/ai'
-
-const init = await ai.init({
-  llm: {
-    model: 'gpt-4o-mini',
-    apiKey: process.env.HAI_AI_LLM_APIKEY,
-  },
-})
-if (!init.success)
-  throw new Error(init.error.message)
-
-try {
-  const result = await ai.llm.chat({
-    messages: [
-      { role: 'user', content: '你好！' }
-    ],
-  })
-  if (!result.success)
-    throw new Error(result.error.message)
-  const reply = result.data.choices[0]?.message.content ?? ''
-}
-finally {
-  await ai.close()
-}
-```
-
-开发或显式测试时，如果没有可用的 RelDB 和向量数据库，AI 可以把会话等记录暂存在当前进程内。关闭模块、重启进程或切换到其他实例后便读不到这些记录。只要 `NODE_ENV` 或 `HAI_CORE_ENV` 为 `production`，初始化就要求多个实例能读写同一份数据。请先连接共享关系数据库和网络向量数据库，或传入支持共享数据及按版本更新的自定义存储。
+[跟着最小示例完成接入](../../docs/usage/function/ai.md#最小接入示例)。
 
 ## 配置清单
 
@@ -49,14 +18,7 @@ finally {
 
 ## 功能说明
 
-在[功能说明](../../docs/usage/function/ai.md)中查看调用示例、输入输出、错误处理与使用要点。
-
-- `ai.init` / `ai.close` / `ai.config` / `ai.isInitialized` — 初始化模型连接，查看或关闭模块。需要跨进程保存会话时可另配存储
-- `ai.llm` / `ai.stream` / `ai.reasoning` / `ai.token` / `ai.summary` / `ai.compress` / `ai.context` — 发送聊天请求、逐段接收响应、估算 Token 数并缩短对话历史
-- `ai.embedding` / `ai.rerank` / `ai.retrieval` / `ai.rag` / `ai.knowledge` — 把内容转成向量，搜索和重新排序匹配结果，将文档加入知识库
-- `ai.memory` / `ai.persona` — 维护会话记忆和角色设定
-- `ai.tools` / `ai.mcp` / `ai.acp` / `ai.a2a` — 注册工具、接入 MCP、控制 ACP 会话、调用 A2A 智能体
-- `ai.file` / `ai.image` / `ai.audio` — 文件、图像与语音操作
+[查 API 清单](../../docs/usage/function/ai.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 ## 数据结构
 

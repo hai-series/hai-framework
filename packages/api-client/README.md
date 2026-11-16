@@ -10,44 +10,7 @@ hai-framework 的跨端 oRPC/OpenAPI typed client，面向 Web、App、小程序
 
 ## 快速开始
 
-调用 `apiClient.close()` 后，关闭前已经开始的刷新不能再更新会话。该调用会等正在写入的操作结束，保留外部 `TokenStorage` 中的凭据，之后可以复用该存储重新初始化。
-
-设置 `timeout` 后，客户端在规定时间内等待响应头和完整的 JSON 正文。服务端返回错误时，读取错误正文也计入时限，包括 HTML 错误页。调用超时或被取消后，不会再尝试刷新令牌。应用自行读取的成功流式正文由传入的取消信号控制。
-
-默认 Cookie 存储方式会让浏览器在登录和刷新时携带 Cookie（`credentials: "include"`）。网页和 API 不在同一来源时，API 需要在 CORS 配置中允许网页的实际来源和凭据。使用内存或原生存储时，客户端沿用应用为请求设置的 `credentials`。
-
-```ts
-import type { IamAuthLoginInput } from '@h-ai/api-client'
-import { apiClient } from '@h-ai/api-client'
-
-async function loginAndLoadProfile(input: IamAuthLoginInput) {
-  const initialized = await apiClient.init({ baseUrl: '/api/v1', auth: {} })
-  if (!initialized.success)
-    return initialized
-  try {
-    const actions = apiClient.createAuthActions(apiClient)
-    const loggedIn = await actions.login(input)
-    if (!loggedIn.success)
-      return loggedIn
-    const profile = await apiClient.iam.auth.currentUser()
-    if (!profile.success)
-      return profile
-    return profile
-  }
-  catch (writeError) {
-    try {
-      await apiClient.auth.clear()
-    }
-    catch (cleanupError) {
-      throw new AggregateError([writeError, cleanupError], 'Credential persistence and cleanup failed')
-    }
-    throw writeError
-  }
-  finally {
-    await apiClient.close()
-  }
-}
-```
+[跟着最小示例完成接入](../../docs/usage/function/api-client.md#最小接入示例)。
 
 ## 配置清单
 
@@ -57,11 +20,7 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 
 ## 功能说明
 
-在[功能说明](../../docs/usage/function/api-client.md)中查看调用示例、输入输出、错误处理与使用要点。
-
-- `apiClient.init` / `apiClient.create` / `apiClient.close` / `apiClient.config` / `apiClient.isInitialized` — 初始化默认客户端或创建独立实例
-- `apiClient.auth` / `apiClient.tokenStorage` / `apiClient.createAuthActions` — 选择凭据保存方式，创建登录和刷新会话等操作
-- `apiClient.iam` / `apiClient.storage` / `apiClient.ai` / `apiClient.observeRequests` — 调用用户、文件和 AI 接口，或订阅每次调用结束时的结果和耗时
+[查 API 清单](../../docs/usage/function/api-client.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 ## 数据结构
 

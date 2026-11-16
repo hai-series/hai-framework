@@ -8,31 +8,7 @@
 
 ## クイックスタート
 
-```ts
-import { cache } from '@h-ai/cache'
-import { core } from '@h-ai/core'
-
-const initialized = await cache.init({ type: 'redis', host: 'localhost' })
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-try {
-  const written = await cache.kv.set('user:1', { name: 'Alice' }, { ex: 3600 })
-  if (!written.success)
-    throw new Error(written.error.message)
-  const user = await cache.kv.get<{ name: string }>('user:1')
-  if (!user.success)
-    throw new Error(user.error.message)
-  if (user.data)
-    core.logger.info('Cached user', { name: user.data.name })
-}
-finally {
-  const closed = await cache.close()
-  if (!closed.success)
-    core.logger.error('Cache cleanup pending', { code: closed.error.code })
-}
-```
-
-`cache.config` は**機密情報をマスクした設定スナップショット**を返します。Redis の `password` / `url` などの認証情報は自動処理されるため、元の秘密情報を書き戻す用途には使わないでください。
+[最小構成の導入手順](../../docs/usage/function/cache.md#最小接入示例)（中国語）を参照してください。
 
 ## 設定一覧
 
@@ -42,11 +18,7 @@ finally {
 
 ## 機能
 
-使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/cache.md)（中国語）を参照してください。
-
-- `cache.init` / `cache.close` / `cache.config` / `cache.isInitialized` / `cache.ping` — 接続管理と可用性の確認
-- `cache.kv` / `cache.hash` / `cache.list` / `cache.set_` / `cache.zset` — キー値、ハッシュ、リスト、集合、ソート済み集合の操作
-- `cache.lock` — 有効期限付きロックで排他処理を調整
+[API 一覧](../../docs/usage/function/cache.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 

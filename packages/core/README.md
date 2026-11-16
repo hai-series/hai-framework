@@ -8,64 +8,7 @@
 
 ## 快速开始
 
-```bash
-pnpm add @h-ai/core
-```
-
-从 `@h-ai/core` 导入 `core` 后，就可以记录日志、读取消息或使用通用工具。`ok`、`err`、类型、Schema 和错误常量也从同一入口导入。运行自定义配置和表单校验示例前，请安装 Zod（`pnpm add zod`）。
-
-### 初始化：`core.init`
-
-Node 应用可以在启动时读取 YAML 并设置日志。浏览器只需传入页面使用的日志选项。数据库、缓存等模块的启动见[应用启动与关闭](../../docs/usage/function/core.md#应用启动与关闭)。
-
-#### Node.js
-
-准备 `config/_core.yml`：
-
-```yaml
-name: orders
-version: 0.1.0
-env: development
-defaultLocale: zh-CN
-logging:
-  level: info
-  format: pretty
-```
-
-```ts
-import type { CoreConfig } from '@h-ai/core'
-import { core } from '@h-ai/core'
-
-// 读取 config 目录。_core.yml 校验成功后以 core 为名存入缓存。
-core.init({ configDir: './config' })
-const settings = core.config.getOrThrow<CoreConfig>('core')
-
-// 应用默认语言并记录启动成功。
-core.i18n.setGlobalLocale(settings.defaultLocale)
-core.logger.info('Application ready', { app: settings.name }) // app: 'orders'
-```
-
-`core.init()` 同步加载目录。单项配置读取或校验失败时，日志会记录文件和错误码，然后继续加载其他文件。示例中的 `getOrThrow()` 会在必需的 `core` 配置缺失时中止启动。目录扫描和日志设置仍可能抛出异常。
-
-#### 浏览器
-
-```ts
-import { core } from '@h-ai/core'
-
-// 在页面启动时设置日志阈值和默认语言。
-core.init({
-  logging: { level: 'warn' }
-})
-core.i18n.setGlobalLocale('zh-CN')
-
-// 把请求编号写入日志，便于关联后续记录。
-const requestId = core.id.request()
-core.logger.warn('Request needs attention', { requestId })
-```
-
-浏览器中的 `core.init()` 只使用页面代码传入的日志选项。页面需要应用名称时，后端可以在页面加载结果中只返回 `{ name: settings.name }`。整个 `_core.yml` 和密钥留在服务器上。
-
-读取、校验和监听本地配置文件是 Node.js 功能。在浏览器调用这些方法的返回值见[浏览器配置说明](../../docs/usage/function/core.md#浏览器)。
+[跟着最小示例完成接入](../../docs/usage/function/core.md#最小接入示例)。
 
 ## 配置清单
 
@@ -75,12 +18,7 @@ core.logger.warn('Request needs attention', { requestId })
 
 ## 功能说明
 
-在[功能说明](../../docs/usage/function/core.md)中查看调用示例、输入输出、错误处理与使用要点。
-
-- `core.init` / `core.config` / `core.module` — 加载配置、初始化日志和编排应用依赖
-- `core.logger` / `core.context` / `core.sanitize` — 记录并关联日志，清理诊断数据
-- `core.error` / `core.i18n` / `core.zodValidation` / `core.access` — 处理结果与错误、本地化校验消息并检查请求策略
-- `core.id` / `core.typeUtils` / `core.object` / `core.string` / `core.array` / `core.async` / `core.time` — 生成标识并处理常用数据与异步操作
+[查 API 清单](../../docs/usage/function/core.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 <a id="应用启动与关闭"></a>
 

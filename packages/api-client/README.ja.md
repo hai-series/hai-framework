@@ -10,44 +10,7 @@ hai-framework のクロスプラットフォーム oRPC/OpenAPI 型付きクラ�
 
 ## クイックスタート
 
-`apiClient.close()` を呼び出すと、すでに始まっている更新処理はセッションを書き換えられなくなります。進行中の認証情報の書き込みを待ち、外部の `TokenStorage` の値は残します。再初期化時に同じ保存先を使えます。
-
-タイムアウトには応答ヘッダー、JSON 本文全体、HTML エラーページなどのエラー本文を読む時間が含まれます。タイムアウトや取り消し後にトークンは更新しません。アプリが成功応答をストリームとして読む場合は、渡した中断シグナルで読み取りを止めます。
-
-既定の Cookie 保存方式では、ログインと更新時に `credentials: "include"` でブラウザーの Cookie を送信します。ページと API のオリジンが異なる場合は、API の CORS 設定でページのオリジンと認証情報の送信を許可します。メモリーやネイティブストレージでは、アプリがリクエストに指定した `credentials` 設定を使います。
-
-```ts
-import type { IamAuthLoginInput } from '@h-ai/api-client'
-import { apiClient } from '@h-ai/api-client'
-
-async function loginAndLoadProfile(input: IamAuthLoginInput) {
-  const initialized = await apiClient.init({ baseUrl: '/api/v1', auth: {} })
-  if (!initialized.success)
-    return initialized
-  try {
-    const actions = apiClient.createAuthActions(apiClient)
-    const loggedIn = await actions.login(input)
-    if (!loggedIn.success)
-      return loggedIn
-    const profile = await apiClient.iam.auth.currentUser()
-    if (!profile.success)
-      return profile
-    return profile
-  }
-  catch (writeError) {
-    try {
-      await apiClient.auth.clear()
-    }
-    catch (cleanupError) {
-      throw new AggregateError([writeError, cleanupError], 'Credential persistence and cleanup failed')
-    }
-    throw writeError
-  }
-  finally {
-    await apiClient.close()
-  }
-}
-```
+[最小構成の導入手順](../../docs/usage/function/api-client.md#最小接入示例)（中国語）を参照してください。
 
 ## 設定一覧
 
@@ -57,11 +20,7 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 
 ## 機能
 
-使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/api-client.md)（中国語）を参照してください。
-
-- `apiClient.init` / `apiClient.create` / `apiClient.close` / `apiClient.config` / `apiClient.isInitialized` — 既定クライアントの初期化、独立インスタンスの作成
-- `apiClient.auth` / `apiClient.tokenStorage` / `apiClient.createAuthActions` — 認証情報の保存先を選び、ログインやセッション更新の処理を作る
-- `apiClient.iam` / `apiClient.storage` / `apiClient.ai` / `apiClient.observeRequests` — ユーザー、ファイル、AI の API を呼び出し、各呼び出しが終わったときの結果と所要時間を取得する
+[API 一覧](../../docs/usage/function/api-client.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 

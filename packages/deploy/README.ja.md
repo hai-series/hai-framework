@@ -6,14 +6,7 @@
 
 ## クイックスタート
 
-CLI で作成し deploy スクリプトを設定した工程のルートで実行します。読取専用計画で環境・対象・サービスを確認してからビルドと配布を行います。
-
-```sh
-pnpm run deploy --env prod --plan
-pnpm run deploy --env prod --build
-```
-
-配布 URL またはオフライン成果物のディレクトリーを返します。失敗時は安全な説明とローカル/リモートの実行状態を確認してください。本番資格情報は `.env.prod.local` に保存し、事前にデータのバックアップと回復手順を準備します。以下で構築・設定・配布の範囲を説明します。
+[最小構成の導入手順](../../docs/usage/function/deploy.md#最小接入示例)（中国語）を参照してください。
 
 ## 設定一覧
 
@@ -23,11 +16,7 @@ pnpm run deploy --env prod --build
 
 ## 機能
 
-使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/deploy.md)（中国語）を参照してください。
-
-- `deploy.init` / `deploy.close` / `deploy.config` / `deploy.isInitialized` / `deploy.scan` — 配布先の読み込み、接続管理、ミドルウェアの検出
-- `deploy.credentials` / `deploy.provisionAll` / `deploy.deployApp` — 認証情報の読み込み、依存サービスの準備、アプリの配布
-- `loadDeploymentConfig` / `loadDeploymentEnvironment` / `saveDeploymentEnvironment` / `getDeployRecovery` — `@h-ai/deploy` から個別にインポートし、配布設定の読み込み、環境ごとの変数の読み書き、失敗時の復旧情報の確認に使う
+[API 一覧](../../docs/usage/function/deploy.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 

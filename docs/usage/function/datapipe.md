@@ -1,8 +1,12 @@
 # @h-ai/datapipe 功能说明
 
+[English](datapipe.en.md) · [日本語](datapipe.ja.md)
+
 通过 `datapipe.clean()` 清理文本，通过 `datapipe.chunk()` 把长文本拆成小段。两者立即返回结果。使用 `datapipe.pipeline()` 创建一套可复用的处理步骤，再调用返回对象的 `run()` 执行。
 
 [模块 README](../../../packages/datapipe/README.md) · [配置清单](../configuration/datapipe.md) · [数据结构](../data/datapipe.md) · [AI 与文档处理](../development/ai.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 
@@ -33,15 +37,19 @@ if (!result.success)
   throw new Error(result.error.message)
 ```
 
+<a id="api-reference"></a>
+
 ## 功能说明
 
 HTML 清洗用于提取文本，不是安全消毒；结果用于 HTML 渲染时仍需使用 UI 的安全渲染机制。内置标签与邮箱清洗处理长异常输入时避免重复回溯；自定义正则来自可信配置，不直接接收外部用户提交的模式。
 
-| 功能     | 说明                                                        |
-| -------- | ----------------------------------------------------------- |
-| 文本清洗 | 移除 HTML 标签、URL、Email，标准化空白，自定义正则替换      |
-| 文本分块 | 句子、段落、Markdown 标题、分页符、字数、字符、自定义分隔符 |
-| 管线组合 | 链式组合清洗 → 转换 → 分块 → 分块后处理，一次执行           |
+| API                              | 用途                                               | 参数与默认值                                                                    | 返回值                                                                          | 示例                                                    |
+| -------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `datapipe.clean(text, options?)` | 移除 HTML 标签，按需清理 URL、邮件地址或自定义文本 | `text` 是字符串。默认移除标签、统一空白并去掉首尾空白，保留 URL 和邮件地址      | `HaiResult<string>`                                                             | `datapipe.clean('<p>Hello</p>')`                        |
+| `datapipe.chunk(text, options)`  | 按句、段、标题等边界拆分文本                       | 必填 `text` 和 `options.mode`。每块的 `maxSize` 默认 `1500`，`overlap` 默认 `0` | `HaiResult<DataChunk[]>`。空白文本返回空数组                                    | `datapipe.chunk('One. Two.', { mode: 'sentence' })`     |
+| `datapipe.pipeline()`            | 组合清洗、转换、分块和筛选步骤                     | 无参数。按需添加步骤，再给 `run(text)` 传入原文                                 | `PipelineBuilder`。调用它的 `run()` 后得到 `Promise<HaiResult<PipelineResult>>` | `await datapipe.pipeline().clean().run('<p>Hello</p>')` |
+
+完整选项见 [Datapipe 配置](../configuration/datapipe.md)。
 
 > 安全提示：`customReplacements` 与 `mode: 'custom'` 的 `separator` 会作为正则使用。仅传入受信任、已审查的模式；不要把用户输入直接拼进正则，避免 ReDoS 或意外大范围替换。
 

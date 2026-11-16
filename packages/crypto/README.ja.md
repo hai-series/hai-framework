@@ -8,16 +8,7 @@
 
 ## クイックスタート
 
-並行する `close()` は未完了の `init()` を無効にし、遅い初期化がモジュールを再開しないようにします。その初期化の完了を待ってから再初期化できます。
-
-```ts
-import { crypto } from '@h-ai/crypto'
-
-// 初始化（使用前必须调用）
-const initialized = await crypto.init()
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-```
+[最小構成の導入手順](../../docs/usage/function/crypto.md#最小接入示例)（中国語）を参照してください。
 
 ## 設定一覧
 
@@ -27,11 +18,7 @@ if (!initialized.success)
 
 ## 機能
 
-使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/crypto.md)（中国語）を参照してください。
-
-- `crypto.init` / `crypto.close` / `crypto.isInitialized` — 暗号機能の初期化と終了
-- `crypto.asymmetric` / `crypto.symmetric` / `crypto.hash` / `crypto.password` — 暗号化と復号、署名、ダイジェスト、パスワードハッシュ
-- `crypto.transport` — HTTP クライアントとサーバー間の暗号化セッションを確立・更新
+[API 一覧](../../docs/usage/function/crypto.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 

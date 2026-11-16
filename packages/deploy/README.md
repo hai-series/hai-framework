@@ -6,14 +6,7 @@
 
 ## 快速开始
 
-在 CLI 创建并已配置 `deploy` 脚本的工程根目录执行。先查看只读计划，核对环境、目标和服务范围，再构建并发布：
-
-```sh
-pnpm run deploy --env prod --plan
-pnpm run deploy --env prod --build
-```
-
-命令返回部署 URL 或离线交付目录；失败时按安全提示及本地/远端执行状态排查。生产凭据放 `.env.prod.local`，部署前准备数据备份与恢复方案。以下功能介绍分别说明构建、配置和交付边界。
+[跟着最小示例完成接入](../../docs/usage/function/deploy.md#最小接入示例)。
 
 ## 配置清单
 
@@ -23,11 +16,7 @@ pnpm run deploy --env prod --build
 
 ## 功能说明
 
-在[功能说明](../../docs/usage/function/deploy.md)中查看调用示例、输入输出、错误处理与使用要点。
-
-- `deploy.init` / `deploy.close` / `deploy.config` / `deploy.isInitialized` / `deploy.scan` — 读取目标，管理连接并探测中间件
-- `deploy.credentials` / `deploy.provisionAll` / `deploy.deployApp` — 读取凭据、准备依赖并发布应用
-- `loadDeploymentConfig` / `loadDeploymentEnvironment` / `saveDeploymentEnvironment` / `getDeployRecovery` — 这些独立函数可从 `@h-ai/deploy` 导入，用于读取发布配置、读写指定环境的变量，或查看出错后可用的恢复记录
+[查 API 清单](../../docs/usage/function/deploy.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 ## 数据结构
 

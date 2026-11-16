@@ -8,38 +8,7 @@ AI capabilities through a unified `ai` service: LLM chat, image generation, tool
 
 ## Quick Start
 
-`ai.close()` waits for any initialization in progress, then releases resources. Concurrent callers share that cleanup. If you call `ai.init()` with new settings, it closes the previous instance first. Initialization returns a failure while a close is in progress.
-
-### Development LLM-only (no database dependencies)
-
-```ts
-import { ai } from '@h-ai/ai'
-
-const init = await ai.init({
-  llm: {
-    model: 'gpt-4o-mini',
-    apiKey: process.env.HAI_AI_LLM_APIKEY,
-  },
-})
-if (!init.success)
-  throw new Error(init.error.message)
-
-try {
-  const result = await ai.llm.chat({
-    messages: [
-      { role: 'user', content: '你好！' }
-    ],
-  })
-  if (!result.success)
-    throw new Error(result.error.message)
-  const reply = result.data.choices[0]?.message.content ?? ''
-}
-finally {
-  await ai.close()
-}
-```
-
-In development or explicit test mode, AI can keep sessions and other records in the current process when RelDB and a vector database are unavailable. Closing the module, restarting, or switching instances loses access to those records. If either `NODE_ENV` or `HAI_CORE_ENV` is `production`, connect a shared relational database and a network vector database first, or supply a custom store that shares records across instances and supports conditional updates by version.
+[Open the quick-start guide](../../docs/usage/function/ai.md#最小接入示例) (Chinese).
 
 ## Configuration Reference
 
@@ -49,14 +18,7 @@ See the [configuration reference](../../docs/usage/configuration/ai.md) in Chine
 
 ## Features
 
-See the [feature reference](../../docs/usage/function/ai.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
-
-- `ai.init` / `ai.close` / `ai.config` / `ai.isInitialized` — Initialize model settings, check readiness, or close the module. You can configure storage for sessions that must survive a restart
-- `ai.llm` / `ai.stream` / `ai.reasoning` / `ai.token` / `ai.summary` / `ai.compress` / `ai.context` — Send chat requests, stream responses, estimate token counts, and shorten conversation history
-- `ai.embedding` / `ai.rerank` / `ai.retrieval` / `ai.rag` / `ai.knowledge` — Turn content into vectors, retrieve and rerank matches, and add documents to a knowledge base
-- `ai.memory` / `ai.persona` — Manage conversation memory and personas
-- `ai.tools` / `ai.mcp` / `ai.acp` / `ai.a2a` — Register tools, connect MCP, control ACP sessions and call A2A agents
-- `ai.file` / `ai.image` / `ai.audio` — Work with files, images and audio
+[Browse the API list](../../docs/usage/function/ai.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 

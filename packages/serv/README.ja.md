@@ -10,65 +10,7 @@ hai-framework の API サービスランタイム。公開 HTTP App 抽象を通
 
 ## クイックスタート
 
-アプリの起動時に `core`、`iam`、`storage`、`ai` を初期化し、`serv` の設定を読み込んで検証してから `startApi(closeApp)` を呼び出します。`closeApp` は業務リソースを初期化と逆の順序で解放する非同期コールバックです。関数は Node のリスナーハンドルを返します。コールバックを渡すと、終了シグナルの受信時に `serv.listen` がリスナーを閉じてから呼び出します。ヘルスチェックだけを提供する場合は、空の契約と procedures でアプリを作成できます。
-
-```ts
-import type { ServConfig } from '@h-ai/serv'
-import { ai } from '@h-ai/ai'
-import { apiContract } from '@h-ai/api-contract'
-import { core } from '@h-ai/core'
-import { iam } from '@h-ai/iam'
-import { serv } from '@h-ai/serv'
-import { createAiProcedures } from '@h-ai/serv/features/ai'
-import { createIamProcedures } from '@h-ai/serv/features/iam'
-import { createStorageProcedures } from '@h-ai/serv/features/storage'
-import { storage } from '@h-ai/storage'
-
-export function startApi(closeApp: () => Promise<void>) {
-  // 3 つのモジュールの契約から HTTP ルートの契約を作成します。
-  const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
-
-  // 初期化済みのモジュールを procedures に結び付け、各ストレージキーの所有権を確認します。
-  const procedures = {
-    iam: createIamProcedures({ iam }),
-    storage: createStorageProcedures({
-      storage,
-      authorize: ({ context, keys }) => keys.every(key =>
-        key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
-    }),
-    ai: createAiProcedures({ ai }),
-  }
-
-  // 契約、procedures、HTTP 設定を使ってアプリを組み立てます。
-  const app = serv.createApp({
-    contract,
-    procedures,
-    iam,
-    http: {
-      apiPrefix: '/api/v1',
-      openapi: { path: '/openapi.json' },
-      docs: { path: '/docs' },
-    },
-  })
-
-  // 読み込み済みのリスナー設定を使い、アドレスと close() を持つハンドルを返します。
-  const { server } = core.config.getOrThrow<ServConfig>('serv')
-  return serv.listen(app, {
-    host: server.host,
-    port: server.port,
-    onListening: info => core.logger.info('API service listening', { port: info.port }),
-    onClose: closeApp,
-  })
-}
-```
-
-Storage procedures には `authorize({ context, operation, keys })` が必須で、未設定の場合はアクセスを拒否します。認証済み session から所有者・テナントを判定し、ダウンロード、アップロード、一覧、メタデータ、削除に適用します。上記の例は `users/<エンコードした userId>/` 配下だけを許可し、一覧にもその prefix が必要です。一括処理はすべての key が許可された後に実行し、管理者アクセスはアプリ側で明示的に許可します。
-
-`apiClient.storage.files.deleteMany()` の成功データは `{ deletedKeys, failures: [] }` です。失敗進捗は `error.ext.deleteMany`（`failed / unknown / notAttempted`）にあり、HTTP 200 だけで完了と判断しません。[Storage の一括削除](../../docs/usage/function/storage.md#api-概览)を参照してください。
-
-AI procedures は省略された `objectId` を信頼できる `context.session.userId` に結び付けます。会話・メッセージの保存、履歴、会話一覧、記憶 recall/list は認可された主体で処理し、会話は `objectId + sessionId` で分離します。書き込み時の sessionId の既定値は `default` です。他の objectId へのアクセスは既定で拒否し、管理者も信頼できる権限とテナント関係を検証する明示的な `authorizeObject` ポリシーが必要です。
-
-`apiClient.ai.chats.createCompletion()`（`POST /ai/chats/completions`）は非ストリーミングの `HaiResult<AiChatCompletionData>` を一度返します。function `tools` のネストした JSON Schema と `strict`、`tool_choice`（`auto` / `none` / `required` / 提供した関数名）をモデルへ渡し、役割、`name`、ユーザー画像、ツール呼び出しを保持します。ツール結果には `role: 'tool'` と空でない `tool_call_id` が必須で、指定名は今回のツール定義に含まれる必要があります。procedure はツールを実行しません。アプリ側で認可・実行後、助手の `tool_calls` と対応する結果を送信します。入力に `stream` はなく、`true` / `false` とも Provider 呼び出し前に HTTP 400 で拒否します。ストリーミングには `ai.llm.chatStream()` と対応する出力型を使う専用 endpoint を定義します。
+[最小構成の導入手順](../../docs/usage/function/serv.md#最小接入示例)（中国語）を参照してください。
 
 ## 設定一覧
 
@@ -78,12 +20,7 @@ AI procedures は省略された `objectId` を信頼できる `context.session.
 
 ## 機能
 
-使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/serv.md)（中国語）を参照してください。
-
-- `serv.createApp` / `serv.listen` / `serv.toFetch` / `serv.cors` / `serv.storageAssets` — HTTP アプリを作成して Node.js で待ち受けるか Fetch ハンドラーに変換し、必要に応じて CORS や静的ファイルの配信を設定する
-- `serv.implement` / `serv.validateInputOrFail` / `serv.generateSpec` / `serv.m` — 型付きエンドポイント、入力検証、OpenAPI 生成
-- `serv.parseRequestContext` / `serv.buildAuthContextFactory` / `serv.resolveRequestLocale` / `serv.createRuntimeSecurityPolicy` — リクエストの送信元と言語を読み取り、認証チェックとアクセスルールを設定する
-- `@h-ai/serv/features/*` — 必要な認証、ストレージ、AI、フィードバックの処理関数をインポートし、`serv.createApp()` に渡す
+[API 一覧](../../docs/usage/function/serv.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 

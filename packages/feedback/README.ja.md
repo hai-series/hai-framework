@@ -8,33 +8,7 @@
 
 ## クイックスタート
 
-Core、RelDB、非公開 Storage を先に初期化します。通知に Reach を使う場合は Reach も先に初期化します。
-
-アプリの起動時にモジュールを初期化します。送信関数は、信頼できるサーバーのコンテキストと、クライアントが送信ごとに生成する ID を受け取ります。
-
-```ts
-import type { FeedbackContext } from '@h-ai/feedback'
-import { feedback } from '@h-ai/feedback'
-
-// orders のフィードバックサービスを起動します。この例では開発用コンソールに通知を出力します。
-const initialized = await feedback.init({
-  appId: 'orders',
-  appVersion: '1.0.0',
-  notificationMode: 'console',
-  adminUrl: 'https://app.example.test/admin/feedback',
-})
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-
-export async function submitFeedback(context: FeedbackContext, submissionId: string) {
-  // 成功時は受付番号付きのレポートを返す。失敗時は呼び出し側が error を参照。
-  return feedback.submit({ appId: 'orders', submissionId }, context)
-}
-```
-
-終了時は `await feedback.close()` の結果を確認してから依存モジュールを閉じます。再試行では同じ `submissionId` を使います。
-
-ブラウザーでの収集、HTTP ルート、添付の再試行は[機能リファレンス](../../docs/usage/function/feedback.md)（中国語）を参照してください。
+[最小構成の導入手順](../../docs/usage/function/feedback.md#最小接入示例)（中国語）を参照してください。
 
 ## 設定一覧
 
@@ -44,12 +18,7 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 
 ## 機能
 
-使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/feedback.md)（中国語）を参照してください。
-
-- `feedback.init` / `feedback.close` / `feedback.isInitialized` / `feedback.config` / `feedback.budget` — サービスを開始・終了し、設定や添付ファイル・証拠の上限を確認する
-- `feedback.submit` / `feedback.uploadAttachment` / `feedback.getAttachment` / `feedback.appendEvidence` / `feedback.completeCollection` — フィードバックを送信し、添付をアップロード・ダウンロードし、後から収集した証拠を追加する
-- `feedback.list` / `feedback.get` / `feedback.getEvidence` / `feedback.setStatus` / `feedback.retry` / `feedback.runJobs` / `feedback.export` / `feedback.getExport` — 照会、処理、再試行、エクスポート
-- `feedbackClient`（`@h-ai/feedback/client`） — ブラウザーで診断情報を収集・送信する。オフラインの診断パックは `@h-ai/feedback/bundle` で読み、ネイティブ環境でのファイル保存には `@h-ai/feedback/capacitor` や `@h-ai/feedback/tauri` を使う
+[API 一覧](../../docs/usage/function/feedback.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 

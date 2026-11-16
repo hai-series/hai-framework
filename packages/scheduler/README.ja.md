@@ -8,66 +8,7 @@
 
 ## クイックスタート
 
-### 依存関係
-
-- `@h-ai/reldb`：先に共有 DB を初期化し、タスク・journal・リースを保存します。`enableDb` は true のみです。
-
-```ts
-import { reldb } from '@h-ai/reldb'
-import { scheduler } from '@h-ai/scheduler'
-
-await reldb.init({ type: 'sqlite', database: './scheduler.db' })
-
-await scheduler.init({
-  enableDb: true,
-  maxLogs: 1000,
-  retentionDays: 30,
-  hooks: {
-    onTaskStart(event) {
-      void event
-    },
-  },
-})
-
-await scheduler.register({
-  id: 'health-check',
-  name: '健康检查',
-  description: '每 5 分钟执行一次系统健康检查',
-  cron: '*/5 * * * *',
-  params: { channel: 'ops' },
-  handler: {
-    kind: 'api',
-    url: 'https://api.example.com/health',
-    method: 'GET',
-    timeout: 10000,
-  },
-})
-
-await scheduler.register({
-  id: 'cleanup',
-  name: '清理过期数据',
-  description: '每日凌晨执行过期数据清理',
-  cron: '0 2 * * *',
-  deleteAfterRun: true,
-  params: { source: 'nightly' },
-  handler: {
-    kind: 'js',
-    code: '(context) => ({ taskId: context.taskId, params: context.params })',
-  },
-})
-
-scheduler.start()
-
-const manualResult = await scheduler.trigger('cleanup', { source: 'admin-console' })
-const logs = await scheduler.getLogs({
-  triggerType: 'manual',
-  triggerSource: 'admin-console',
-  startedAfter: Date.now() - 24 * 60 * 60 * 1000,
-})
-
-scheduler.stop()
-await scheduler.close()
-```
+[最小構成の導入手順](../../docs/usage/function/scheduler.md#最小接入示例)（中国語）を参照してください。
 
 ## 設定一覧
 
@@ -77,11 +18,7 @@ await scheduler.close()
 
 ## 機能
 
-使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/scheduler.md)（中国語）を参照してください。
-
-- `scheduler.init` / `scheduler.close` / `scheduler.config` / `scheduler.isInitialized` / `scheduler.isRunning` / `scheduler.start` / `scheduler.stop` — 設定と状態を確認し、タスクの検索を開始・停止し、終了時にリソースを解放する
-- `scheduler.register` / `scheduler.updateTask` / `scheduler.unregister` / `scheduler.refreshTasks` / `scheduler.tasks` — タスクを登録・更新・削除し、データベースから再読み込みして現在の一覧を表示する
-- `scheduler.trigger` / `scheduler.getLogs` / `scheduler.setHooks` / `scheduler.clearHooks` / `scheduler.hooks` / `scheduler.execution` — タスクを即時実行し、ログを確認し、コールバックを設定し、実行中の情報を取得する
+[API 一覧](../../docs/usage/function/scheduler.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 

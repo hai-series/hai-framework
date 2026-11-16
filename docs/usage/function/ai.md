@@ -43,6 +43,8 @@ finally {
 
 ## 功能说明
 
+<a id="api-reference"></a>
+
 ### 用途、输入与输出
 
 除标明“direct”、AsyncIterable 或 Promise 直接结果的项目外，输出列均指 HaiResult 成功后的 data；先检查 success。表中 request/definition/options 等变量必须按该行真实输入类型在应用提供，不能把类型名当成运行时值。流和显式工具可能抛错，应在消费边界处理。

@@ -47,6 +47,8 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 
 ## 功能说明
 
+<a id="api-reference"></a>
+
 ### 用途、输入与输出
 
 开始调用前先检查 `apiClient.init()` 成功。表中的变量由应用提供并校验，例如订单 ID、登录参数或回调函数。收到 `HaiResult` 时先检查 `success`。凭据保存和清除直接返回 `Promise<void>`，失败会抛出异常。登录界面应等写入完成再显示登录成功。

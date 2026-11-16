@@ -68,30 +68,30 @@ AI 默认 procedures 从可信 `context.session.userId` 绑定 `objectId`，客�
 
 ## 功能说明
 
+<a id="api-reference"></a>
+
 ### 用途、输入与输出
 
 表中的调用片段使用各节示例已经打开的服务或建立的对象。示例变量由应用提供，例如当前 HTTP 请求、用于校验输入的 Schema、资源定义或配置。返回 Promise 时用 `await` 等待。返回 `HaiResult` 时先判断 `success`，再读取数据或错误。
 
-| 入口                               | 场景                    | 输入                                                                    | 输出                                                                 | 调用片段                                                                                                 |
-| ---------------------------------- | ----------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `serv.createApp`                   | 组装接口应用            | `contract, procedures, http?, iam?, middlewares?, transport?`           | `ServHttpApp (fetch/request)`                                        | `serv.createApp({ contract, procedures })`                                                               |
-| `serv.listen`                      | 启动 Node 监听          | `app, { host?, port?, onClose?, onListening? }`                         | `ServNodeServer { server, address, close(): Promise<void> }`         | `serv.listen(app, { host: "127.0.0.1", port: 3000 })`                                                    |
-| `serv.toFetch`                     | 连接使用 Fetch 的服务器 | `ServHttpApp`                                                           | `(Request) => Promise<Response>`                                     | `serv.toFetch(app)`                                                                                      |
-| `serv.implement`                   | 实现领域路由            | `typed contract`                                                        | `ServImplementer; context/route/auth/permission/role/handle/build`   | `serv.implement(contract)`                                                                               |
-| `serv.parseRequestContext`         | 解析追踪与令牌          | `{ request, platform? }`                                                | `ServContext with requestId/locale/accessToken; no verified session` | `serv.parseRequestContext({ request })`                                                                  |
-| `serv.buildAuthContextFactory`     | 构造可信会话            | `(accessToken) => Promise<HaiResult<ServSession>>`                      | `CreateServContext; invalid credentials leave session absent`        | `serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))`                                     |
-| `serv.cors`                        | 限定跨域入口            | `{ origin?, methods?, allowedHeaders?, exposedHeaders?, credentials? }` | `ServMiddleware`                                                     | `serv.cors({ origin: "https://app.example.com", credentials: true })`                                    |
-| `serv.createRuntimeSecurityPolicy` | 收敛环境安全策略        | `{ environment, corsOrigin, nativeOrigins? }`                           | `allowOrigin, secureRefreshCookie, exposeApiDocs`                    | `serv.createRuntimeSecurityPolicy({ environment: "production", corsOrigin: "https://app.example.com" })` |
-| `serv.storageAssets`               | 授权的只读资源          | `ServStorageAssetsConfig with reader/key/MIME policy`                   | `GET/HEAD middleware with ETag`                                      | `serv.storageAssets(assetOptions)`                                                                       |
-| `serv.generateSpec`                | 生成 OpenAPI            | `contract, { title?, version?, description?, apiPrefix? }`              | `Promise<OpenAPI.Document>`                                          | `serv.generateSpec(contract, { title: "Orders", version: "1.0.0" })`                                     |
-| `serv.validateInputOrFail`         | 校验业务输入            | `Zod schema, input, locale?`                                            | `HaiResult<z.infer<Schema>>; failure contains safe field errors`     | `serv.validateInputOrFail(InputSchema, input, context.locale)`                                           |
-| `serv.resolveRequestLocale`        | 解析请求语言            | `Headers`                                                               | `normalized supported locale`                                        | `serv.resolveRequestLocale(request.headers)`                                                             |
-| `serv.m`                           | 翻译模块提示            | `message key, { locale?, ...messageOptions }`                           | `string`                                                             | `serv.m("serv_errorForbidden", { locale: "zh-CN" })`                                                     |
-| `serv.WILDCARD_PERMISSION`         | 显式全权限常量          | `none`                                                                  | `string constant; only use in trusted permission policy`             | `serv.WILDCARD_PERMISSION`                                                                               |
-| `serv.WILDCARD_ROLE`               | 显式全角色常量          | `none`                                                                  | `string constant; does not authorize arbitrary requests`             | `serv.WILDCARD_ROLE`                                                                                     |
+| API | 用途 | 参数与默认值 | 返回值 | 示例 |
+| --- | --- | --- | --- | --- |
+| `serv.createApp(options)` | 组装 HTTP 应用 | 必填 `contract`、`procedures`。HTTP、IAM、中间件、传输加密和语音可按需配置，见[默认值](../configuration/serv.md) | 提供 `fetch` 和 `request` 的 `ServHttpApp` | `serv.createApp({ contract, procedures })` |
+| `serv.listen(app, options?)` | 启动 Node 监听 | 必填 `app`。默认 `host: '127.0.0.1'`、`port: 3000`。可传 `onListening`、`onClose` | `ServNodeServer`，含 `server`、`address` 和异步 `close()` | `serv.listen(app, { port: 3001 })` |
+| `serv.toFetch(app)` | 供支持 Fetch 的环境使用 | 由 `createApp()` 返回的应用 | `(request: Request) => Promise<Response>` | `const fetch = serv.toFetch(app)` |
+| `serv.implement(contract)` | 实现契约中的路由 | 必填带类型的路由契约 | `ServImplementer`，可继续设置上下文和各路由的鉴权、权限、角色及处理函数 | `serv.implement(contract)` |
+| `serv.parseRequestContext(input)` | 读取追踪编号、语言与访问令牌 | `request` 必填，`platform` 可选 | `ServContext`，其中令牌尚未验证 | `serv.parseRequestContext({ request })` |
+| `serv.buildAuthContextFactory(verifyToken)` | 构造验证访问令牌的上下文工厂 | 回调接收访问令牌，返回 `Promise<HaiResult<ServSession>>` | `CreateServContext`，无效令牌时不填 `session` | `serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))` |
+| `serv.cors(config?)` | 处理跨域预检和响应头 | 默认来源 `'*'`，`credentials: false`、`maxAge: 86400` 秒。可指定方法、允许和暴露的头 | `ServMiddleware` | `serv.cors({ origin: 'https://app.example.com', credentials: true })` |
+| `serv.createRuntimeSecurityPolicy(input)` | 根据环境确定跨域、Cookie 和接口文档策略 | `environment` 省略时按非生产处理，来源默认 `'*'`。生产须提供明确的 Web 来源，可加 `nativeOrigins` | 含 `allowOrigin`、`secureRefreshCookie`、`exposeApiDocs` 的策略 | `serv.createRuntimeSecurityPolicy({ environment: 'production', corsOrigin: 'https://app.example.com' })` |
+| `serv.storageAssets(config)` | 用 Storage 提供授权后的只读资源 | 传入读取函数、键规则和 MIME 检查，按需配置缓存 | 支持 GET、HEAD 和 ETag 的 `ServMiddleware` | `serv.storageAssets(assetOptions)` |
+| `serv.generateSpec(contract, options?)` | 生成 OpenAPI 描述 | 契约必填，标题默认 `hai-framework API`，版本默认 `0.1.0`；描述和前缀可省略 | `Promise<OpenAPI.Document>`，转换失败时拒绝 | `await serv.generateSpec(contract, { title: 'Orders', version: '1.0.0' })` |
+| `serv.validateInputOrFail(schema, input, locale?)` | 校验业务输入并生成字段错误 | Zod Schema 和待校验值必填，语言默认 `zh-CN`，可传当前请求语言 | `HaiResult<z.infer<Schema>>`，失败中含可公开的字段错误 | `serv.validateInputOrFail(InputSchema, input, context.locale)` |
+| `serv.resolveRequestLocale(headers)` | 根据 HTTP 请求头选择语言 | 传入 `Headers` 或头字段对象。先读 `x-hai-locale`，再读 `Accept-Language`，默认 `zh-CN` | 规范化的语言标识 | `serv.resolveRequestLocale(request.headers)` |
+| `serv.m(key, options?)` | 读取本地化提示 | 消息键必填，可传 `locale` 和插值参数 | `string` | `serv.m('serv_errorForbidden', { locale: 'zh-CN' })` |
+| `serv.WILDCARD_PERMISSION` | 在可信策略中表示所有权限 | 只读常量 | `string` | `const allPermissions = [serv.WILDCARD_PERMISSION]` |
+| `serv.WILDCARD_ROLE` | 在可信策略中表示所有角色 | 只读常量 | `string` | `const allRoles = [serv.WILDCARD_ROLE]` |
 
-- 一行启动：`serv.createApp(...)` → `serv.listen(app, { port })`，应用代码不需要 import Hono
-- 扁平 API（最小知识）：`serv.createApp / serv.implement / serv.listen / serv.toFetch / serv.generateSpec / ...`
 - 链式 procedure：`implement().context().route().auth/permission/role().handle().build()`
 - 自定义 pipeline：`createApp({ middlewares })` 挂 HTTP middleware；请求级字段通过 context 工厂注入
 - 只读 Storage 资源：`serv.storageAssets(...)` 统一处理安全 key、MIME 白名单、GET/HEAD、ETag 与缓存头

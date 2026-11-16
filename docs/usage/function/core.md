@@ -1,5 +1,7 @@
 # @h-ai/core 功能说明
 
+[English](core.en.md) · [日本語](core.ja.md)
+
 从 `@h-ai/core` 导入 `core`。在浏览器和 Node.js 中都能用它写日志、翻译消息和处理数据。在 Node.js 中还可以读取本地配置文件、为每个请求保存自己的编号，并检查访问条件。
 
 [模块 README](../../../packages/core/README.md) · [配置清单](../configuration/core.md) · [数据结构](../data/core.md) · [应用开发](../getting-started/develop.md)
@@ -65,6 +67,8 @@ core.logger.warn('Request needs attention', { requestId })
 
 在浏览器调用 `core.config.get()` 会得到 `undefined`，`core.config.has()` 得到 `false`，`core.config.keys()` 得到空数组。`core.config.loadEnvFiles()`、`core.config.load()`、`core.config.validate()` 和 `core.config.reload()` 返回带 `SERVICE_UNAVAILABLE` 的失败结果。`core.config.getOrThrow()` 会抛出异常。`core.config.watch()` 会立即把同一错误交给你的回调，并返回一个调用后什么也不做的停止函数。
 
+<a id="api-reference"></a>
+
 ## 功能说明
 
 | 能力             | 解决的问题                                                                                   | 主要入口                                                |
@@ -93,6 +97,36 @@ core.logger.warn('Request needs attention', { requestId })
 ### 文件与环境配置：`core.config`
 
 读取 YAML、应用环境变量覆盖、检查配置类型，并管理配置缓存与文件监听。下列文件与环境操作仅在 Node 中可用。
+
+<a id="config-api"></a>
+
+#### 配置 API 清单
+
+表中的 `name` 是配置在 Core 里的名字，例如 `_core.yml` 对应 `core`，`app.yml` 对应 `app`。标有 `?` 的参数可以省略。示例里的 `AppSchema` 是应用自己定义的 Zod 校验规则。[加载示例](#加载校验与读取)给出了完整定义和所用的 YAML 文件。
+
+| API                                         | 用途                                                   | 参数与默认值                                                                                                                                                        | 返回值或失败                                                                    | 调用示例                                                                                                                                |
+| ------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `core.init(options?)`                       | 启动时设置日志、读取指定目录里的 YAML                  | `configDir` 省略时跳过目录扫描。`configSchemas` 省略时仅 `_core.yml` 自动使用内置规则。`watchConfig` 默认 `false`。传入 `logging` 会优先于 `_core.yml` 里的日志设置 | 同步返回 `void`。单个文件加载失败会写日志并继续，目录扫描或日志初始化仍可能抛错 | `core.init({ configDir: './config', configSchemas: { app: AppSchema }, watchConfig: true })`                                            |
+| `core.config.loadEnvFiles(options)`         | 合并 dotenv 文件与进程已有环境变量                     | `mode` 必填，例如 `'dev'`。`envDir` 默认当前工作目录                                                                                                                | `HaiResult<Record<string, string>>`。成功后由应用决定是否写入 `process.env`     | `core.config.loadEnvFiles({ mode: 'dev' })`                                                                                             |
+| `core.config.load(name, filePath, schema?)` | 读取一个 YAML 文件，应用环境覆盖，成功后保存结果       | `name` 和 `filePath` 必填。省略 `schema` 时只解析与替换                                                                                                             | `HaiResult<T>`。读取或校验失败时保留上次成功的结果                              | `core.config.load('app', './config/app.yml', AppSchema)`                                                                                |
+| `core.config.validate(name, schema)`        | 用当前环境和指定规则重新检查上次成功读到的 YAML        | `name` 和 `schema` 必填。只改了磁盘文件时应先调用 `core.config.reload()`                                                                                            | `HaiResult<T>`。成功后更新已保存的数据和后续重载使用的规则                      | `core.config.validate('app', AppSchema)`                                                                                                |
+| `core.config.get<T>(name)`                  | 读取已保存的配置值                                     | `name` 必填。`T` 只用于 TypeScript 类型标注                                                                                                                         | `T` 或 `undefined`                                                              | `core.config.get<{ port: number }>('app')`                                                                                              |
+| `core.config.getOrThrow<T>(name)`           | 读取应用启动所需的配置值                               | `name` 必填。`T` 只用于 TypeScript 类型标注                                                                                                                         | `T`。配置未加载时抛错                                                           | `core.config.getOrThrow<{ port: number }>('app')`                                                                                       |
+| `core.config.has(name)`                     | 查询配置是否已加载                                     | `name` 必填                                                                                                                                                         | `boolean`                                                                       | `core.config.has('app')`                                                                                                                |
+| `core.config.keys()`                        | 列出已加载的配置名                                     | 无参数                                                                                                                                                              | `string[]`，首次加载前为空数组                                                  | `core.config.keys()`                                                                                                                    |
+| `core.config.reload(name)`                  | 重新读文件，应用当前环境和已保存的校验规则，通知订阅方 | `name` 必填                                                                                                                                                         | `HaiResult<unknown>`。未加载时返回 `CONFIG_NOT_LOADED`，重载失败时保留旧值      | `core.config.reload('app')`                                                                                                             |
+| `core.config.watch<T>(name, callback)`      | 在文件改变后重载并通知回调                             | `name` 和 `callback` 必填。`T` 默认为 `unknown`。回调成功时取得新值，失败时取得 `null` 和错误                                                                       | 返回取消本次订阅的函数。未加载配置时立即向回调报告 `CONFIG_NOT_LOADED`          | `const stop = core.config.watch('app', (value, error) => { if (error) core.logger.warn('Config watch failed', { code: error.code }) })` |
+| `core.config.isWatching(name)`              | 检查某份配置是否有活跃的文件监听                       | `name` 必填                                                                                                                                                         | `boolean`                                                                       | `core.config.isWatching('app')`                                                                                                         |
+| `core.config.unwatch(name?)`                | 停止监听，保留已加载的配置                             | 省略 `name` 时停止全部监听                                                                                                                                          | `void`                                                                          | `core.config.unwatch('app')`                                                                                                            |
+| `core.config.clear(name?)`                  | 清除已加载的配置，并停止对应监听                       | 省略 `name` 时清除全部配置                                                                                                                                          | `void`。文件内容保持原样                                                        | `core.config.clear('app')`                                                                                                              |
+
+| 生成环境配置用的 API                         | 用途                                 | 参数与默认值                                                                                                                                                                         | 返回值或失败                                                       | 调用示例                                                                                             |
+| -------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `core.config.resolve(options)`               | 在内存里应用覆盖和占位符替换         | `name` 和 `value` 必填。`environment` 默认 `process.env`。可用 `schema`（Zod）或 `shape`（JSON Schema）识别字段。`missing` 默认 `'error'`，可传 `'empty'` 将缺失占位符替换为空字符串 | `HaiResult<unknown>`，应用仍需验证最终数据                         | `core.config.resolve({ name: 'app', value: { port: 3000 }, environment: { HAI_APP_PORT: '4000' } })` |
+| `core.config.toEnv(options)`                 | 将配置对象转换为环境变量             | `prefix` 和 `value` 必填。可选 `schema` 或 `shape` 提供字段结构                                                                                                                      | `Record<string, string>`，不自动遮盖敏感值。非法名称会抛错         | `core.config.toEnv({ prefix: 'HAI_APP', value: { port: 3000, tags: ['local'] } })`                   |
+| `core.config.mergeEnv(layers)`               | 按优先级合并多个来源                 | 传入由低到高排列的变量对象                                                                                                                                                           | `Record<string, string>`。高优先级的整段覆盖会清除低优先级的旧子项 | `core.config.mergeEnv([{ HAI_APP_PORT: '3000' }, { HAI_APP_PORT: '4000' }])`                         |
+| `core.config.parseEnv(text)`                 | 将 dotenv 文本读成字面变量           | `text` 必填                                                                                                                                                                          | `Record<string, string>`。重复键或无效的生成标记值会抛错           | `core.config.parseEnv('HAI_APP_PORT=3000\n')`                                                        |
+| `core.config.stringifyEnv(values, options?)` | 把环境变量编码为可写入 dotenv 的文本 | `values` 必填。`target` 默认 `'node'`，为 Compose 生成时使用 `'compose'`                                                                                                             | `string`。非法变量名会抛错                                         | `core.config.stringifyEnv({ HAI_APP_PORT: '3000' })`                                                 |
 
 #### 加载、校验与读取
 
@@ -290,7 +324,18 @@ core.logger.info('Generated config verified', { port: restored.HAI_APP_PORT })
 
 普通对象默认展开，数组、动态字典和空对象保留为 JSON。默认生成的 Node dotenv 由 `parseEnv()` 或 `loadEnvFiles()` 读取，值里的回车（`\r`）和 CRLF 都能保留。请保留生成行末的 `# hai:json` 标记。供 Compose 的 `env_file` 使用时，传入 `{ target: 'compose' }`。[基础配置手册](../configuration/runtime.md)
 
+<a id="logging-api"></a>
+
 ### 记录日志：`core.logger`
+
+| API | 用途 | 参数与默认值 | 返回值 | 示例 |
+| --- | --- | --- | --- | --- |
+| `core.logger.trace()`、`debug()`、`info()`、`warn()`、`error()`、`fatal()` | 记录指定等级的事件 | 传入消息，按需附上字段。默认阈值 `info` | `void` | `core.logger.warn('Retry scheduled', { attempt: 2 })` |
+| `core.logger.create(options?)` | 创建独立的模块 Logger | 名称、级别、格式和上下文按需传入，未指定的设置继承全局 | `Logger` | `const orders = core.logger.create({ name: 'orders' })` |
+| `core.logger.child(fields)` | 创建带固定字段的子 Logger | 传入字段对象 | `Logger` | `core.logger.child({ requestId: 'req-1' })` |
+| `core.logger.configure(options)` | 配置全局日志输出和脱敏 | 传入要设置的日志选项，字段见[配置清单](../configuration/core.md) | `void` | `core.logger.configure({ format: 'json', redact: ['customer.email'] })` |
+| `core.logger.setLevel(level)`、`getLevel()` | 调整或读取当前全局阈值 | `setLevel` 必须传入级别，`getLevel` 无参数 | 分别为 `void` 和 `LogLevel` | `core.logger.setLevel('warn')`、`core.logger.getLevel()` |
+| `core.logger.observe(callback)` | 订阅过滤和脱敏后的日志记录 | 回调接收一条记录 | 取消订阅函数 `() => void` | `const stop = core.logger.observe(record => { recentMessages.push(record.message) })` |
 
 日志按 `trace`、`debug`、`info`、`warn`、`error`、`fatal` 递增，只输出达到当前阈值的记录。阈值为 `fatal` 时只输出这一等级，应用自行决定是否退出。
 
@@ -350,7 +395,14 @@ finally {
 }
 ```
 
+<a id="context-api"></a>
+
 ### 关联同一次请求：`core.context`
+
+| API | 用途 | 参数与默认值 | 返回值 | 示例 |
+| --- | --- | --- | --- | --- |
+| `core.context.run(context, operation)` | 在回调内设置请求或任务编号 | 传入关联字段对象和回调。默认不暂停日志观察回调 | 回调的原始返回值，含 Promise | `await core.context.run({ requestId: 'req-1' }, async () => core.context.get().requestId)` |
+| `core.context.get()` | 读取当前上下文 | 无参数 | 只读 `RequestContext`，无上下文时为空对象 | `const { requestId } = core.context.get()` |
 
 `run()` 让一次请求或任务携带 requestId、userId、scopeId、jobId 等关联信息，`get()` 读取当前值。Node 中等待数据库或其他异步操作后，仍能读取这次请求自己的信息，其他请求不会覆盖它。已有 Logger 会自动带上这些字段。
 
@@ -373,7 +425,18 @@ core.context.run({ suppressLogObservers: true }, () => core.logger.warn('Collect
 
 浏览器只能在 run 回调的同步代码中保留信息，await 后不再保留。关联编号不是身份授权，用户和租户范围必须由可信服务端代码提供。
 
+<a id="sanitize-api"></a>
+
 ### 清理诊断数据：`core.sanitize`
+
+| API | 用途 | 参数与默认值 | 返回值 | 示例 |
+| --- | --- | --- | --- | --- |
+| `core.sanitize.isSensitiveKey(key, matcher?)` | 判断字段名是否应隐去 | 字段名必填，默认用内置规则 | `boolean` | `core.sanitize.isSensitiveKey('apiKey')` |
+| `core.sanitize.sanitizeSensitiveValue(value, key, options?)` | 清理一项值 | 传值和字段名，未知字段名时传 `null`。默认替换标记 `[REDACTED]` | 原值或清理后的值 | `core.sanitize.sanitizeSensitiveValue('example-only', 'password')` |
+| `core.sanitize.sanitizeSensitiveFields(value, options?)` | 生成脱敏后的数据副本 | 值必填，可指定 `matcher` 和 `replacement` | 脱敏后的数据 | `core.sanitize.sanitizeSensitiveFields({ password: 'example-only' })` |
+| `core.sanitize.sanitizeUrl(url, options?)` | 清理 URL 中的凭据 | URL 字符串，可自定义替换选项 | `string`，解析失败返回 `(invalid url)` | `core.sanitize.sanitizeUrl('https://example.com/?token=example-only')` |
+| `core.sanitize.sanitizeText(text, secretValues?)` | 清理文本中有明确格式或已知值的凭据 | 字符串必填，已知值列表默认 `[]` | `string` | `core.sanitize.sanitizeText('Bearer example-only')` |
+| `core.sanitize.defaultSensitiveKeyRegex`、`defaultSensitiveReplacement` | 读取内置规则及替换值 | 只读常量 | `RegExp` 和 `string` | `const replacement = core.sanitize.defaultSensitiveReplacement` |
 
 用于日志、诊断包或公开错误输出前清理凭据。可以判断字段名是否敏感、清理单个值、递归处理对象、遮蔽 URL 凭据，或清理文本中带标签的凭据和调用方已知的秘密值。
 
@@ -405,7 +468,17 @@ core.sanitize.sanitizeText('Request failed with a known private value', ['privat
 
 脱敏结果只保留数据：普通对象和类实例复制自有、可枚举的数据属性，不保留类原型，不执行访问器或自定义 `toJSON()`。日期转为 ISO 字符串，URL 转为已脱敏的字符串；原对象保持不变。记录 SDK/业务对象时仍应只选取排查所需字段，未标注的秘密和业务隐私需由应用明确清理。
 
+<a id="error-api"></a>
+
 ### 结果与错误：`core.error`
+
+| API | 用途 | 参数与默认值 | 返回值 | 示例 |
+| --- | --- | --- | --- | --- |
+| `core.error.buildHaiErrorsDef(module, codes)` | 生成模块的稳定错误定义 | 模块名和错误名称到 `业务码:HTTP状态` 的映射 | 按键索引的错误定义 | `const errors = core.error.buildHaiErrorsDef('orders', { NOT_FOUND: '300:404' })` |
+| `core.error.buildHaiErrorInst(def, message, cause?, suggestion?)` | 给本次失败附上消息和诊断信息 | 错误定义和消息必填，原因和建议可省略 | `HaiError` | `const error = core.error.buildHaiErrorInst(errors.NOT_FOUND, 'Order not found')` |
+| `core.error.toPublic(error, traceId?)` | 准备可返回浏览器的错误 | 错误必填，可传追踪编号 | 删除内部诊断字段的错误 | `core.error.toPublic(error, 'req-1')` |
+| `core.error.formatMessage(error)` | 生成带追踪编号的文案 | 传入含消息及可选追踪编号的对象 | `string` | `core.error.formatMessage(error)` |
+| `ok(data)`、`err(def, message, cause?)` | 构造成功或失败结果 | 从 `@h-ai/core` 独立导入。成功传数据，失败传错误定义和消息，也可直接传完整错误 | `HaiResult` 的对应分支 | `ok({ id: 'order-1' })`、`err(errors.NOT_FOUND, 'Order not found')` |
 
 用 `core.error` 给失败定义稳定错误码，再为本次失败生成当前语言的消息。服务端准备把失败返回给浏览器时，用 `core.error.toPublic()` 去掉内部诊断数据。Serv 或 Kit 根据错误定义设置 HTTP 状态码和追踪响应头。
 
@@ -471,7 +544,17 @@ if (!failed.success)
 
 要让用户看到业务错误消息，错误须带合法的 4xx 状态，例如 404。省略 `httpStatus` 或填写无效状态时，`core.error.toPublic()` 按 HTTP 500 生成通用提示。
 
+<a id="i18n-api"></a>
+
 ### 消息与语言：`core.i18n`
+
+| API | 用途 | 参数与默认值 | 返回值 | 示例 |
+| --- | --- | --- | --- | --- |
+| `core.i18n.setGlobalLocale(locale)`、`getGlobalLocale()` | 设置或读取当前语言 | 设置时传入语言。初始默认 `zh-CN` | 分别为 `void` 和当前语言 | `core.i18n.setGlobalLocale('ja-JP')`、`core.i18n.getGlobalLocale()` |
+| `core.i18n.runWithLocale(locale, operation)` | 给当前 Node 请求设置独立的语言 | 语言和回调必填 | 回调的返回值，与回调同步或异步行为一致 | `await core.i18n.runWithLocale('en-US', async () => core.i18n.coreM('core_errorNotFound'))` |
+| `core.i18n.createMessageGetter(dictionaries)` | 从应用字典创建消息函数 | 传入语言到消息字典的映射 | `(key, options?) => string` | `const message = core.i18n.createMessageGetter({ 'zh-CN': { welcome: '欢迎' } })` |
+| `core.i18n.coreM(key, options?)` | 查询 Core 内置文案 | 键必填，可指定 `locale` 和 `params` | `string`，缺少对应键时返回键名 | `core.i18n.coreM('core_errorNotFound', { locale: 'en-US' })` |
+| `core.i18n.DEFAULT_LOCALE`、`DEFAULT_LOCALES` | 读取框架的默认和内置语言 | 只读常量 | `zh-CN` 和语言选项列表 | `const choices = core.i18n.DEFAULT_LOCALES` |
 
 为业务字典创建带参数替换的消息获取器，也可取得 Core 内置消息和当前语言。常量列出框架内置语言，不会自动为应用注册翻译。
 
@@ -510,7 +593,14 @@ core.logger.info('Greeting prepared', { greeting })
 
 Node 请求/SSR 用 `runWithLocale()` 包裹实际异步处理；Serv 自动建立请求语言上下文，Kit 提供同名入口。在请求上下文内 `setGlobalLocale()` 只修改当前请求；上下文外仅用于启动默认值。浏览器使用应用级 `setGlobalLocale()` 或显式 locale；SSR 的 UI store 不应修改进程默认语言。
 
+<a id="validation-api"></a>
+
 ### 字段校验提示：`core.zodValidation`
+
+| API | 用途 | 参数与默认值 | 返回值 | 示例 |
+| --- | --- | --- | --- | --- |
+| `core.zodValidation.createPrefixedZodMessageGetter(prefix, message)` | 适配有模块前缀的消息键 | 前缀和实际查询消息的函数必填 | 消息函数 | `const translate = core.zodValidation.createPrefixedZodMessageGetter('core', message)` |
+| `core.zodValidation.mapZodErrorToFormErrors(error, message)` | 生成字段错误列表 | 传入 Zod 校验失败对象和适配后的消息函数 | `{ field, message }[]` | `core.zodValidation.mapZodErrorToFormErrors(parsed.error, translate)` |
 
 把 Zod 校验错误转换为可显示在表单字段旁的 `{ field, message }[]`。`createPrefixedZodMessageGetter()` 按前缀选择翻译键，`mapZodErrorToFormErrors()` 完成提取、翻译和字段路径转换。
 
@@ -536,7 +626,15 @@ if (!parsed.success) {
 
 传给映射器的是 `safeParse()` 失败结果中的 `error`。它读取 Zod v3/v4 的 `issues` 或 `errors` 数组，跳过缺少有效路径或文案的条目。默认英文消息会翻译，业务自定义消息会保留。路径如 `items.0.email`，整张表单的错误用 `_`。严格 Schema 的未知字段使用统一的 `validationUnexpectedFields` 提示。
 
+<a id="module-api"></a>
+
 ### 模块启动与辅助工具：`core.module`
+
+| API | 用途 | 参数与默认值 | 返回值 | 示例 |
+| --- | --- | --- | --- | --- |
+| `core.module.createRuntime(steps)` | 按顺序管理应用依赖 | 每步传入名称、启动和关闭函数。可用 `enabled` 控制是否执行 | `ModuleRuntime`，其 `start()` 和 `close()` 均返回 `Promise<HaiResult<void>>` | `const runtime = core.module.createRuntime([{ name: 'cache', start: () => cache.init({ type: 'memory' }), close: () => cache.close() }])` |
+| `core.module.createNotInitializedKit(error, message?)` | 构造尚未初始化时的错误与操作代理 | 传错误定义和文案函数，或传已含文案的完整错误 | 带 `error()`、`result()`、`proxy()` 的对象。代理默认异步 | `core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Initialize the module first')` |
+| `core.module.requiresSharedState(environment)` | 判断当前环境是否要求共享后端 | 传入环境变量对象，生产环境中的显式 E2E 模式可豁免 | `boolean` | `core.module.requiresSharedState(process.env)` |
 
 这些工具供应用启动代码和框架模块实现复用，既能管理多个模块，也能在模块尚未初始化时返回一致错误。它们不会替应用决定使用哪些模块。
 
@@ -632,7 +730,17 @@ core.module.requiresSharedState({ NODE_ENV: 'production' }) // true：应使用�
 core.module.requiresSharedState({ NODE_ENV: 'production', HAI_E2E: '1' }) // false：显式 E2E 例外。
 ```
 
+<a id="access-api"></a>
+
 ### 请求访问检查：`core.access`（Node）
+
+| API | 用途 | 参数与默认值 | 返回值 | 示例 |
+| --- | --- | --- | --- | --- |
+| `core.access.normalizeClientIp(value?)` | 统一 IPv4/IPv6 地址格式 | IP 字符串可省略 | IP 字符串或 `undefined` | `core.access.normalizeClientIp('::ffff:198.51.100.23')` |
+| `core.access.createClientIpResolver(trustedProxies?)` | 解析请求的可信客户端地址 | 默认 `auto`，也可明确指定受信代理地址 | `(request, remoteAddress?) => IP 或 undefined` | `const resolve = core.access.createClientIpResolver(['192.0.2.10'])` |
+| `core.access.createConditionCheck(condition)` | 提前准备一组地址及时段条件 | 条件对象必填，字段和默认值见[请求策略](../configuration/core.md#request-access) | `(ip?) => AccessDecision` | `core.access.createConditionCheck({ allowIps: [], denyIps: [], timezone: 'UTC', windows: [] })` |
+| `core.access.createRequestCheck(input?)` | 启动时准备整个请求策略 | 可传规则、文件或 `false`，省略时关闭策略 | 可重复调用的 `RequestAccessCheck`，配置无效时抛错 | `core.access.createRequestCheck({ file: './config/security/request-access.yml' })` |
+| `core.access.loadPolicy(input?, baseDirectory?)` | 读取并校验规则内容 | 路径默认从进程工作目录起算 | `RequestAccessPolicy` 或 `false`，无效时抛错 | `core.access.loadPolicy({ file: './config/security/request-access.yml' })` |
 
 用 `core.access` 可以从受信代理转发头中取出真实客户端 IP，也可以判断这个地址能否在当前时间访问指定路径。配置独立 API 时在 `_serv.yml` 的 `http.access` 填写策略，配置 SvelteKit 服务时使用 `_kit.yml` 的 `access`。`serv.createApp({ http })` 和 `kit.createHandle({ access })` 会在启动时创建检查器，并在每次处理请求时调用它。
 

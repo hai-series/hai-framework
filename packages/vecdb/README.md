@@ -8,49 +8,7 @@
 
 ## 快速开始
 
-所有 Provider 的 `score` 都为 0–1，越大越相似；`minScore` 在转换后过滤。余弦使用 `(1 + cosine) / 2`，内积使用 `sigmoid(dotProduct)`，欧氏使用 `1 / (1 + distance)`；LanceDB/Chroma 的 distance 是原生 squared L2，其余后端使用原生 L2。不同 metric/后端的阈值仍需按业务校准，score 不代表概率。Qdrant 的公开 minScore 使用统一相似度，而非原生距离阈值。
-
-```ts
-import { vecdb } from '@h-ai/vecdb'
-
-// 打开本地 LanceDB 连接。
-const initialized = await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-
-try {
-  // 创建余弦相似度集合，每个向量有 3 个数值。
-  const created = await vecdb.collection.create('docs', { dimension: 3, metric: 'cosine' })
-  if (!created.success)
-    throw new Error(created.error.message)
-
-  // 写入一条文档向量，content 和 metadata 会随结果返回。
-  const inserted = await vecdb.vector.insert('docs', [
-    {
-      id: 'doc-1',
-      vector: [1, 0, 0],
-      content: '安装说明',
-      metadata: { source: 'wiki' }
-    },
-  ])
-  if (!inserted.success)
-    throw new Error(inserted.error.message)
-
-  // 用接近已写入向量的查询值，返回最多 5 条命中。
-  const matches = await vecdb.vector.search('docs', [0.9, 0.1, 0], { topK: 5, minScore: 0.7 })
-  if (!matches.success)
-    throw new Error(matches.error.message)
-  // 命中项包含 id、score、content 和 metadata。
-  const firstMatch = matches.data[0]
-  process.stdout.write(`${JSON.stringify(firstMatch)}\n`)
-}
-finally {
-  // 释放连接，即使创建、写入或搜索失败也执行。
-  const closed = await vecdb.close()
-  if (!closed.success)
-    process.stderr.write(`Vecdb close failed: ${closed.error.code}\n`)
-}
-```
+[跟着最小示例完成接入](../../docs/usage/function/vecdb.md#最小接入示例)。
 
 ## 配置清单
 
@@ -60,11 +18,7 @@ finally {
 
 ## 功能说明
 
-在[功能说明](../../docs/usage/function/vecdb.md)中查看调用示例、输入输出、错误处理与使用要点。
-
-- `vecdb.init` / `vecdb.close` / `vecdb.config` / `vecdb.isInitialized` / `vecdb.rawConnection` — 连接向量数据库、查看配置与连接状态，或取得当前进程的底层连接
-- `vecdb.collection` — 创建、列出和删除集合
-- `vecdb.vector` — 写入、检索、分页扫描和删除向量
+[查 API 清单](../../docs/usage/function/vecdb.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 ## 数据结构
 

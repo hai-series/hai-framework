@@ -8,78 +8,7 @@ An object storage module with a unified `storage` entry point for S3-compatible 
 
 ## Quick Start
 
-### Node.js server
-
-Pass validated S3 or local settings and the PNG bytes to `storeImage`. This example owns the full connection lifecycle. Long-running services initialize storage at startup and close it at shutdown.
-
-```ts
-import type { FileMetadata, StorageConfigInput } from '@h-ai/storage'
-import type { Buffer } from 'node:buffer'
-import { storage } from '@h-ai/storage'
-
-export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8Array) {
-  // Select one backend and check the initialization result.
-  const initialized = await storage.init(config)
-  if (!initialized.success)
-    throw new Error(initialized.error.message)
-
-  let result: { metadata: FileMetadata, bytes: Buffer, downloadUrl?: string }
-  let closed
-  try {
-    const key = 'uploads/image.png'
-    // Write the PNG bytes at the object key and read the resulting object metadata.
-    const uploaded = await storage.file.put(key, imageBuffer, { contentType: 'image/png' })
-    if (!uploaded.success)
-      throw new Error(uploaded.error.message)
-
-    // Read the same key to obtain the contents as a Buffer.
-    const downloaded = await storage.file.get(key)
-    if (!downloaded.success)
-      throw new Error(downloaded.error.message)
-
-    result = { metadata: uploaded.data, bytes: downloaded.data }
-    if (config.type === 's3') {
-      // On S3, issue a download URL valid for 3,600 seconds.
-      const signed = await storage.presign.getUrl(key, { expiresIn: 3600 })
-      if (!signed.success)
-        throw new Error(signed.error.message)
-      result.downloadUrl = signed.data
-    }
-  }
-  finally {
-    // Release the connection and let the caller handle any failure.
-    closed = await storage.close()
-  }
-  if (!closed.success)
-    throw new Error(closed.error.message)
-  return result
-}
-```
-
-### Browser client
-
-The browser uses an initialized `apiClient` to obtain an S3 upload URL. Pass a key authorized by your application and the user-selected `File` to `uploadImage`.
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-import { uploadWithPresignedUrl } from '@h-ai/storage/client'
-
-export async function uploadImage(key: string, file: File) {
-  // Use the same Content-Type for signing and uploading.
-  const contentType = file.type || 'application/octet-stream'
-  const signed = await apiClient.storage.presignedUrls.createUpload({ key, contentType })
-  if (!signed.success)
-    throw new Error(signed.error.message)
-
-  // Upload directly to object storage and return the object key confirmed by the server.
-  const uploaded = await uploadWithPresignedUrl(signed.data.url, file, { contentType })
-  if (!uploaded.success)
-    throw new Error(uploaded.error ?? 'Upload failed')
-  return signed.data.key
-}
-```
-
-> Note: `@h-ai/storage` does not include HTTP routes. Implement the signed URL API in the application layer.
+[Open the quick-start guide](../../docs/usage/function/storage.md#最小接入示例) (Chinese).
 
 ## Configuration Reference
 
@@ -89,11 +18,7 @@ See the [configuration reference](../../docs/usage/configuration/storage.md) in 
 
 ## Features
 
-See the [feature reference](../../docs/usage/function/storage.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
-
-- `storage.init` / `storage.close` / `storage.config` / `storage.isInitialized` — Select a local directory or S3-compatible storage, check connection status, and release resources at shutdown
-- `storage.file` / `storage.dir` / `storage.checksum` / `storage.presign` — Read or write files, list directories, verify checksums, and generate time-limited access links for S3 objects
-- `@h-ai/storage/client` / `@h-ai/storage/schemas` — Upload, download and validate keys in browsers
+[Browse the API list](../../docs/usage/function/storage.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 

@@ -8,49 +8,7 @@
 
 ## クイックスタート
 
-すべての Provider の `score` は 0–1 で、高いほど類似し、`minScore` は変換後に適用します。cosine は `(1 + cosine) / 2`、dot は `sigmoid(dotProduct)`、euclidean は `1 / (1 + distance)` です。LanceDB/Chroma はネイティブの squared L2、他のバックエンドはネイティブ L2 を使います。閾値は metric・バックエンドごとに業務で校正し、score を確率とは扱いません。Qdrant は公開 minScore をネイティブ距離の閾値として直接送信しません。
-
-```ts
-import { vecdb } from '@h-ai/vecdb'
-
-// ローカルの LanceDB 接続を開く。
-const initialized = await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-
-try {
-  // 3 要素のベクトルをコサイン類似度で検索するコレクションを作成。
-  const created = await vecdb.collection.create('docs', { dimension: 3, metric: 'cosine' })
-  if (!created.success)
-    throw new Error(created.error.message)
-
-  // ドキュメントのベクトルを登録。本文とメタデータは検索結果にも含まれる。
-  const inserted = await vecdb.vector.insert('docs', [
-    {
-      id: 'doc-1',
-      vector: [1, 0, 0],
-      content: 'インストールガイド',
-      metadata: { source: 'wiki' }
-    },
-  ])
-  if (!inserted.success)
-    throw new Error(inserted.error.message)
-
-  // 登録したベクトルに近い値で検索し、最大 5 件を取得。
-  const matches = await vecdb.vector.search('docs', [0.9, 0.1, 0], { topK: 5, minScore: 0.7 })
-  if (!matches.success)
-    throw new Error(matches.error.message)
-  // 各結果には id、score、content、metadata が含まれる。
-  const firstMatch = matches.data[0]
-  process.stdout.write(`${JSON.stringify(firstMatch)}\n`)
-}
-finally {
-  // 作成、登録、検索に失敗した場合も接続を閉じる。
-  const closed = await vecdb.close()
-  if (!closed.success)
-    process.stderr.write(`Vecdb close failed: ${closed.error.code}\n`)
-}
-```
+[最小構成の導入手順](../../docs/usage/function/vecdb.md#最小接入示例)（中国語）を参照してください。
 
 ## 設定一覧
 
@@ -60,11 +18,7 @@ finally {
 
 ## 機能
 
-使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/vecdb.md)（中国語）を参照してください。
-
-- `vecdb.init` / `vecdb.close` / `vecdb.config` / `vecdb.isInitialized` / `vecdb.rawConnection` — ベクトルデータベースへ接続し、設定と接続状態を確認し、必要なら現在のプロセスから実際の接続情報を取得する
-- `vecdb.collection` — コレクションの作成、一覧取得、削除
-- `vecdb.vector` — ベクトルの書き込み、検索、ページング、削除
+[API 一覧](../../docs/usage/function/vecdb.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 

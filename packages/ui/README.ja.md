@@ -12,123 +12,7 @@ HTTP/UI 境界で業務メッセージを公開するのは、明示された有
 
 ## クイックスタート
 
-### インストール
-
-```bash
-npm install @h-ai/ui @h-ai/core
-```
-
-Node サーバーでは UI と core の両方を本番依存に含め、ログなどのネイティブ依存を通常どおり読み込めるようにします。
-
-### 1. package.json のアプリ内インポートを設定
-
-```json
-{ "imports": { "#lib/*": "./src/lib/*" } }
-```
-
-### 2. vite.config.ts を設定
-
-SvelteKit 3 の前処理、コンパイラー、アダプターは Vite プラグインで設定します。通常の Svelte/Vite プロジェクトのみ svelte.config.js を保持します。
-
-`vitePreprocess()` などのスタイル・テンプレート言語変換を先に、`autoImportHaiUi()` を後に実行してください。自動 import は Svelte 全体の AST を読み取るため、変換前の SCSS・Pug などの非標準構文は受け付けません。直接の markup API は同期のままです。
-
-```ts
-import { autoImportHaiUi } from '@h-ai/ui/auto-import'
-import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
-import adapter from '@sveltejs/adapter-node'
-import { sveltekit } from '@sveltejs/kit/vite'
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
-import tailwindcss from '@tailwindcss/vite'
-import { defineConfig } from 'vite'
-
-export default defineConfig({
-  plugins: [
-    sveltekit({
-      preprocess: [
-        vitePreprocess(),
-        autoImportHaiUi()
-      ],
-      compilerOptions: { runes: true },
-      adapter: adapter(),
-      paths: { relative: false },
-    }),
-    tailwindcss(),
-  ],
-  optimizeDeps: {
-    exclude: [...haiOptimizeExclude],
-    include: [...haiPrebundledDeps]
-  },
-  ssr: {
-    noExternal: ['@h-ai/ui', '@h-ai/kit'],
-    external: ['@h-ai/core', 'sm-crypto']
-  },
-})
-```
-
-### 3. src/app.css の設定
-
-Crypto または Kit/IAM を使うアプリでは `sm-crypto@0.5.8` を本番依存に追加します。CLI は設定済みです。手動導入では `pnpm add sm-crypto@0.5.8` を実行してください。external だけでは不十分で、adapter-node がネイティブ解決を維持するには直接の本番依存が必要です。
-
-```css
-@import 'tailwindcss';
-@import '@h-ai/ui/styles/global.css';
-@import '@h-ai/ui/styles/theme.css';
-@source "../node_modules/@h-ai/ui/dist/**/*.{svelte,js,ts}";
-@source "../../../node_modules/@h-ai/ui/dist/**/*.{svelte,js,ts}";
-
-@plugin "daisyui" {
-  themes:
-    light --default,
-    dark --prefersdark,
-    cupcake,
-    emerald,
-    corporate,
-    nord,
-    dracula,
-    night;
-}
-
-/* 图标（可选） */
-@plugin "@iconify/tailwind4" {
-  prefixes: tabler;
-}
-```
-
-> `@source` で TailwindCSS に `@h-ai/ui` の class を走査させます。ない場合はスタイルが欠落します。monorepo 内のアプリでは依存がルート `node_modules` に置かれる場合があるため、両方のパスを残すことを推奨します。
-
-### 4. コンポーネントの使用
-
-```svelte
-<script>
-  import { Button, Card, Input } from '@h-ai/ui'
-</script>
-
-<Card title='示例表单'>
-  <Input placeholder='请输入用户名' />
-  <Button variant='primary' onclick={handleSubmit}>提交</Button>
-</Card>
-```
-
-自動 import を有効にすると、個別の import なしでテンプレートから使えます：
-
-```svelte
-<!-- 无需 import { Button } from '@h-ai/ui' -->
-<Button variant='primary'>提交</Button>
-```
-
-> `toast`・型 import・DOM の `Range` と衝突する `Range` を除き、公開 Svelte コンポーネントは `@h-ai/ui/auto-import` で自動注入できます。
-
-ページで数個のコンポーネントしか使わない場合は、対応するコンポーネントの入口から直接読み込めます。テーマだけなら `@h-ai/ui/theme` から読み込むと、AI やグラフのコンポーネントは読み込まれません。言語だけなら `@h-ai/ui/i18n` から読み込むと、ほかのコンポーネントや初回ガイドの CSS は含まれません。以下は公開されているインポート先です。
-
-自動インポートを有効にしてテンプレートで `<Button>` を使うと、ファイル内に `Button` の宣言やインポートがない場合にビルド時にインポートが追加されます。コメント、`textarea` の内容、JavaScript の文字列内のタグは対象外です。スクリプトの宣言や `each`、`await`、`snippet` ですでに使っている同名の変数が優先されます。
-
-`@h-ai/ui` から型としてのみ読み込んだコンポーネントをテンプレートで使うと、プラグインが描画に使えるインポートに変換します。別のパッケージの型とコンポーネント名が衝突した場合、ビルドエラーにファイル名とコンポーネント名が表示されます。型またはコンポーネントを別名でインポートしてください。
-
-```ts
-import { Card } from '@h-ai/ui/components/compounds/index'
-import { Button } from '@h-ai/ui/components/primitives/index'
-import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
-```
+[最小構成の導入手順](../../docs/usage/function/ui.md#最小接入示例)（中国語）を参照してください。
 
 ## 設定一覧
 
@@ -138,12 +22,7 @@ import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
 
 ## 機能
 
-使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/ui.md)（中国語）を参照してください。
-
-- **基本・複合・レイアウトコンポーネント** — 入力、フォーム、テーブル、ダイアログ、レイアウト
-- **業務コンポーネント** — CRUD、IAM、フィードバック、ファイル、グラフ、AI コンテンツ、コードワークスペース
-- `@h-ai/ui/theme` / `@h-ai/ui/i18n` / `@h-ai/ui/toast` / `@h-ai/ui/guide` — 外観、言語、通知、オンボーディングの管理
-- `@h-ai/ui/vite` / `@h-ai/ui/auto-import` — Vite の依存関係と自動インポートの設定
+[API 一覧](../../docs/usage/function/ui.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 

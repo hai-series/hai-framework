@@ -8,33 +8,7 @@ hai Framework のモバイルアプリ向け Capacitor ネイティブブリッ�
 
 ## クイックスタート
 
-```ts
-import { capacitor } from '@h-ai/capacitor'
-
-const initialized = await capacitor.init()
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-const failures: unknown[] = []
-try {
-  const saved = await capacitor.preferences.set('theme', 'dark')
-  if (!saved.success)
-    throw new Error(saved.error.message)
-  const theme = await capacitor.preferences.get('theme')
-  if (!theme.success)
-    throw new Error(theme.error.message)
-  // theme.data は 'dark'。保存していないキーは null。
-}
-catch (cause) {
-  failures.push(cause)
-}
-finally {
-  const closed = await capacitor.close()
-  if (!closed.success)
-    failures.push(closed.error)
-}
-if (failures.length)
-  throw new AggregateError(failures, 'Native preference operation failed')
-```
+[最小構成の導入手順](../../docs/usage/function/capacitor.md#最小接入示例)（中国語）を参照してください。
 
 ## 設定一覧
 
@@ -44,12 +18,7 @@ Capacitor プロジェクトで、プッシュ通知やカメラなど必要な�
 
 ## 機能
 
-使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/capacitor.md)（中国語）を参照してください。
-
-- `capacitor.init` / `capacitor.close` / `capacitor.isInitialized` / `capacitor.getPlatform` / `capacitor.isNative` — プラグイン初期化とプラットフォーム判定
-- `capacitor.device` / `capacitor.camera` / `capacitor.push` / `capacitor.statusBar` — 端末情報の取得、撮影、プッシュ登録、ステータスバーの調整
-- `capacitor.preferences` — アプリの一般設定を端末に保存する
-- `createCapacitorTokenStorage()` — `@h-ai/capacitor` から個別にインポートし、返された安全な保存先を認証トークン用に API クライアントへ渡す
+[API 一覧](../../docs/usage/function/capacitor.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 

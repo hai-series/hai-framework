@@ -10,51 +10,7 @@ On the SvelteKit server, import `kit` from `@h-ai/kit` and use `kit.createHandle
 
 ## Quick Start
 
-When `kit.sequence()` combines several SvelteKit handlers, inner handlers transform the generated page first, followed by outer handlers. If more than one sets a `preload` option or a filter for serialized response headers, the first setting wins. This lets the locale middleware update the HTML `lang` attribute.
-
-### Installation
-
-```bash
-npm install @h-ai/kit @h-ai/core sm-crypto@0.5.8
-npm install svelte @sveltejs/kit zod
-npm install -D @sveltejs/vite-plugin-svelte vite @tailwindcss/vite tailwindcss
-```
-
-### Project configuration
-
-**vite.config.ts**：
-
-```ts
-import adapter from '@sveltejs/adapter-node'
-import { sveltekit } from '@sveltejs/kit/vite'
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
-import tailwindcss from '@tailwindcss/vite'
-import { defineConfig } from 'vite'
-
-export default defineConfig({
-  plugins: [
-    sveltekit({
-      adapter: adapter(),
-      preprocess: [
-        vitePreprocess()
-      ],
-      compilerOptions: { runes: true },
-      // 绝对路径保持 SSR 与浏览器端认证、加密路径一致。
-      paths: { base: '', relative: false },
-    }),
-    tailwindcss(),
-  ],
-  optimizeDeps: {
-    exclude: ['bits-ui']
-  },
-  ssr: {
-    noExternal: ['@h-ai/ui', '@h-ai/kit'],
-    external: ['@h-ai/core', 'sm-crypto']
-  },
-})
-```
-
-When using Crypto or Kit/IAM, include `sm-crypto@0.5.8` in application production dependencies. CLI projects already do this; for manual setup, run `pnpm add sm-crypto@0.5.8`. The external option alone is insufficient: adapter-node also uses direct production dependencies to preserve native package loading.
+[Open the quick-start guide](../../docs/usage/function/kit.md#最小接入示例) (Chinese).
 
 ## Configuration Reference
 
@@ -64,12 +20,7 @@ See the [configuration reference](../../docs/usage/configuration/kit.md) in Chin
 
 ## Features
 
-See the [feature reference](../../docs/usage/function/kit.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
-
-- `kit.createHandle` / `kit.sequence` / `kit.middleware` / `kit.guard` / `kit.handler` — Combine SvelteKit request handlers, routes, and permission checks
-- `kit.response` / `kit.validate` / `kit.crud` / `kit.i18n` — Validate inputs and produce responses, CRUD definitions and localized content
-- `kit.auth` / `kit.client` / `kit.createFeedbackHandler` — Handle browser sign-in state and requests, or create an HTTP endpoint for user feedback
-- `@h-ai/kit/adapter` / `@h-ai/kit/crypto` / `@h-ai/kit/a2a` — Configure build adapters, encrypted transport and A2A routes
+[Browse the API list](../../docs/usage/function/kit.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 

@@ -4,6 +4,8 @@
 
 普通安装使用 npm 的 `latest` 标签，最新版本以[注册表](https://www.npmjs.com/package/@h-ai/cli?activeTab=versions)为准。团队需要可复现安装时，先查询实际版本再固定；不以工作区版本或文档中的历史发布记录判断当前最新版。
 
+<a id="install-cli"></a>
+
 ## 第一步：确认并安装CLI
 
 先查询发布渠道和目标版本：
@@ -22,6 +24,8 @@ hai --version
 
 检查 `hai --version` 与安装目标一致。如果查询失败或目标还未发布，先使用实际已发布版本及其对应文档，不把工作区目标版本当成可用包。
 
+<a id="run-app"></a>
+
 ## 第二步：创建并启动应用
 
 以下创建 Web + API 工程，默认安装依赖并初始化 Git：
@@ -33,6 +37,8 @@ pnpm dev
 ```
 
 需要交互选择时，运行 `hai create my-app`。如果使用 `--no-install`，进入工程后先运行 `pnpm install`。创建默认包含部署开发工具；不需要时可加 `--no-deploy`。Windows PowerShell 使用 `pnpm.cmd` 执行这些命令。
+
+<a id="project-types"></a>
 
 ## 选择项目类型
 
@@ -48,6 +54,8 @@ pnpm dev
 
 已有项目可用 `hai add <module>` 添加适用模块，例如 `hai add deploy`。`page` 生成器用于 SvelteKit 文件路由；`api` 按目标 workspace 生成 SvelteKit 路由或 Serv 的 contract、procedure 及聚合入口，使用 `--workspace` 选择服务。fullstack 的 hash 页面按生成结构继续开发。
 
+<a id="project-layout"></a>
+
 ## 理解目录再改代码
 
 各模板只安装实际使用的模块：admin/h5 使用认证、验证码/找回密码通知及其 DB/cache/crypto 依赖，website 使用 Core/Kit/UI，API 使用认证、通知、上传和反馈，fullstack 使用管理后台的认证、审计、存储、通知、调度和反馈，mobile-app 只使用客户端能力。AI、payment、vecdb、datapipe 按业务需要添加。所有项目保留完整模块 YAML 和 `.env.example`；未启用项以注释提供，不进入公共环境默认值，也不触发部署中间件提示。添加功能时安装依赖、启用所需配置，再接入初始化、关闭和业务代码；依赖安装本身不启用功能。
@@ -55,6 +63,8 @@ pnpm dev
 新建 website 默认 Node SSR，只安装 Core/Kit/UI，可直接按[静态构建配置](../configuration/delivery.md#静态website与github-pages)发布。后续接入的服务端业务依赖、初始化、API/`actions` 需要在静态发布前移除；注释配置和环境变量参考不影响静态构建。
 
 以本例为准：`packages/my-app-contract` 定义接口，`packages/my-app-serv` 实现API，`packages/my-app-shared` 保存共享内容，`apps/my-app-web` 提供Web页面。fullstack环境文件在工程根；独立API模板的环境文件在 `apps/my-app-serv`。开始修改前先读生成项目的 `README.md` 和 `AGENTS.md`。
+
+<a id="first-run-check"></a>
 
 ## 确认首次运行成功
 

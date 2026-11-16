@@ -8,78 +8,7 @@
 
 ## 快速开始
 
-### Node.js 服务端
-
-将已校验的 S3 或 local 配置和 PNG 字节传给 `storeImage`。本例管理一次完整的连接生命周期。常驻服务应在应用启动时初始化，并在停机时关闭。
-
-```ts
-import type { FileMetadata, StorageConfigInput } from '@h-ai/storage'
-import type { Buffer } from 'node:buffer'
-import { storage } from '@h-ai/storage'
-
-export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8Array) {
-  // 选择一个后端，检查初始化结果。
-  const initialized = await storage.init(config)
-  if (!initialized.success)
-    throw new Error(initialized.error.message)
-
-  let result: { metadata: FileMetadata, bytes: Buffer, downloadUrl?: string }
-  let closed
-  try {
-    const key = 'uploads/image.png'
-    // 用对象 key 写入 PNG 字节，成功时返回对象元数据。
-    const uploaded = await storage.file.put(key, imageBuffer, { contentType: 'image/png' })
-    if (!uploaded.success)
-      throw new Error(uploaded.error.message)
-
-    // 用同一 key 读取对象内容，成功时返回 Buffer。
-    const downloaded = await storage.file.get(key)
-    if (!downloaded.success)
-      throw new Error(downloaded.error.message)
-
-    result = { metadata: uploaded.data, bytes: downloaded.data }
-    if (config.type === 's3') {
-      // S3 可签发有效期为 3600 秒的下载 URL。
-      const signed = await storage.presign.getUrl(key, { expiresIn: 3600 })
-      if (!signed.success)
-        throw new Error(signed.error.message)
-      result.downloadUrl = signed.data
-    }
-  }
-  finally {
-    // 释放本次连接，失败时交由调用方处理。
-    closed = await storage.close()
-  }
-  if (!closed.success)
-    throw new Error(closed.error.message)
-  return result
-}
-```
-
-### 浏览器客户端
-
-浏览器通过已初始化的 `apiClient` 获取 S3 上传地址。将应用授权的对象 key 和用户选择的 `File` 传给 `uploadImage`。
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-import { uploadWithPresignedUrl } from '@h-ai/storage/client'
-
-export async function uploadImage(key: string, file: File) {
-  // 用相同的 Content-Type 请求签名和上传。
-  const contentType = file.type || 'application/octet-stream'
-  const signed = await apiClient.storage.presignedUrls.createUpload({ key, contentType })
-  if (!signed.success)
-    throw new Error(signed.error.message)
-
-  // 直接上传到对象存储，成功时返回服务端确认的对象 key。
-  const uploaded = await uploadWithPresignedUrl(signed.data.url, file, { contentType })
-  if (!uploaded.success)
-    throw new Error(uploaded.error ?? 'Upload failed')
-  return signed.data.key
-}
-```
-
-> 注意：`@h-ai/storage` 不内置 HTTP 路由；请在应用层自行实现签名 URL API。
+[跟着最小示例完成接入](../../docs/usage/function/storage.md#最小接入示例)。
 
 ## 配置清单
 
@@ -89,11 +18,7 @@ export async function uploadImage(key: string, file: File) {
 
 ## 功能说明
 
-在[功能说明](../../docs/usage/function/storage.md)中查看调用示例、输入输出、错误处理与使用要点。
-
-- `storage.init` / `storage.close` / `storage.config` / `storage.isInitialized` — 选择本地目录或 S3 兼容存储，查看连接状态，关闭时释放连接
-- `storage.file` / `storage.dir` / `storage.checksum` / `storage.presign` — 读写文件、列出目录、核对内容摘要，以及为 S3 对象生成限时访问链接
-- `@h-ai/storage/client` / `@h-ai/storage/schemas` — 通过浏览器上传、下载和校验 key
+[查 API 清单](../../docs/usage/function/storage.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 <a id="api-概览"></a>
 

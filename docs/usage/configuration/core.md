@@ -1,5 +1,7 @@
 # Core 配置
 
+[English](core.en.md) · [日本語](core.ja.md)
+
 [配置手册](README.md) · [Core 功能说明](../function/core.md)
 
 ## 配置入口
@@ -42,6 +44,8 @@ logging:
 - 写 `logging: { level: warn }`。级别改为 `warn`，格式仍为 `pretty`。
 
 如果启动代码直接传了 `core.init({ logging: ... })`，本次启动以代码传入的日志设置为准。
+
+<a id="request-access"></a>
 
 ### 请求访问策略
 

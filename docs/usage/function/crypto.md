@@ -19,6 +19,8 @@ if (!initialized.success)
 
 ## 功能说明
 
+<a id="api-reference"></a>
+
 ### 用途、输入与输出
 
 先成功初始化 crypto，再使用算法。HaiResult<T> 先判断 success，成功 data 才是 T；void 没有业务数据，Promise 必须 await。publicKey/privateKey 来自成功的密钥生成，ciphertext、signature、digest、payload 来自相应成功结果。manager 是 createServer 的成功 data，session 是 createClient 直接返回的实例；requestContext/messageContext 由 HTTP 适配器从实际请求取得，不能接收客户端自报的身份。下文给出完整加解密与 HTTP 装配。

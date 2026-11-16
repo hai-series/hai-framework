@@ -46,7 +46,7 @@
 
 ![管理台代码工作区中的文件树、多标签、行标注及选区检查](../images/code-workspace.png)
 
-1. 从 `@h-ai/ui/components/scenes/code/index` 导入 `CodeWorkspace`。先传入实现 `listChildren` 和 `readFile` 的 `source`，即可通过文件树浏览源码。`listChildren(null, signal)` 返回根节点，展开目录时再传入该目录。浏览过程中保持 `source` 引用稳定，切换仓库或分支时替换它。 [最小接入示例](../../../packages/ui/README.md#代码工作区)
+1. 从 `@h-ai/ui/components/scenes/code/index` 导入 `CodeWorkspace`。先传入实现 `listChildren` 和 `readFile` 的 `source`，即可通过文件树浏览源码。`listChildren(null, signal)` 返回根节点，展开目录时再传入该目录。浏览过程中保持 `source` 引用稳定，切换仓库或分支时替换它。 [最小接入示例](../function/ui.md#代码工作区)
 2. 给 `source` 添加 `search` 启用文件名和工作区内容搜索。用 `mode` 区分两种搜索，把查询交给宿主索引，搜索范围可覆盖未展开目录。每个命中返回 `node`，按需加上从根下第一级目录到父目录的 `ancestors`、`range` 和 `preview`。返回 `nextCursor` 会显示继续加载入口，下一次请求通过 `cursor` 携带该值。将回调收到的 `AbortSignal` 传给宿主请求，让快速切换查询、文件或仓库时可以取消等待。
 3. 在节点的 `markers` 中提供标记名称、短文本和语义色。在 `readFile` 的结果中返回 `annotations`，将 Git 状态或检查结论显示在行前、对应范围或两处。搜索和标注使用同一份文件版本与坐标，行和列从 1 开始，列按 UTF-16 计数，结束位置不包含在范围内。工作区按节点 ID 和版本复用标签。读取结果与搜索命中的版本不一致时，工作区会提示重新搜索。
 4. 按需添加下面两个 snippet。右侧面板收到当前文件和可为空的选区，可以用 `reveal` 跳到当前文件的标注。浮动操作收到非空选区，可用 `openInspector` 打开右栏。示例沿用步骤 1 定义的 `source`，实际应用将按钮文案接入自身翻译字典。

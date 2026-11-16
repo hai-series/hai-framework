@@ -16,51 +16,7 @@
 
 ## 快速开始
 
-用 `kit.sequence()` 组合多个 SvelteKit 请求处理函数时，较内层处理函数先转换生成的页面，外层再转换其结果。如果多个处理函数同时设置了 `preload` 或可序列化的响应头筛选条件，SvelteKit 使用先设置的那项。语言中间件可以借这条处理链更新 HTML 的 `lang` 属性。
-
-### 安装
-
-```bash
-npm install @h-ai/kit @h-ai/core sm-crypto@0.5.8
-npm install svelte @sveltejs/kit zod
-npm install -D @sveltejs/vite-plugin-svelte vite @tailwindcss/vite tailwindcss
-```
-
-### 项目配置
-
-**vite.config.ts**：
-
-```ts
-import adapter from '@sveltejs/adapter-node'
-import { sveltekit } from '@sveltejs/kit/vite'
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
-import tailwindcss from '@tailwindcss/vite'
-import { defineConfig } from 'vite'
-
-export default defineConfig({
-  plugins: [
-    sveltekit({
-      adapter: adapter(),
-      preprocess: [
-        vitePreprocess()
-      ],
-      compilerOptions: { runes: true },
-      // 绝对路径保持 SSR 与浏览器端认证、加密路径一致。
-      paths: { base: '', relative: false },
-    }),
-    tailwindcss(),
-  ],
-  optimizeDeps: {
-    exclude: ['bits-ui']
-  },
-  ssr: {
-    noExternal: ['@h-ai/ui', '@h-ai/kit'],
-    external: ['@h-ai/core', 'sm-crypto']
-  },
-})
-```
-
-使用 Crypto 或依赖它的 Kit/IAM 时，应用生产依赖需包含 `sm-crypto@0.5.8`。CLI 已配好这一项；手工接入时运行 `pnpm add sm-crypto@0.5.8`。仅设置 external 不够，adapter-node 还需要这项直接依赖声明才能保留原包加载。
+[跟着最小示例完成接入](../../docs/usage/function/kit.md#最小接入示例)。
 
 ## 配置清单
 
@@ -70,12 +26,7 @@ export default defineConfig({
 
 ## 功能说明
 
-在[功能说明](../../docs/usage/function/kit.md)中查看调用示例、输入输出、错误处理与使用要点。
-
-- `kit.createHandle` / `kit.sequence` / `kit.middleware` / `kit.guard` / `kit.handler` — 组合 SvelteKit 请求处理函数、路由和权限检查
-- `kit.response` / `kit.validate` / `kit.crud` / `kit.i18n` — 校验输入并生成结果、CRUD 配置和本地化内容
-- `kit.auth` / `kit.client` / `kit.createFeedbackHandler` — 处理浏览器登录状态和请求，或创建接收用户反馈的 HTTP 接口
-- `@h-ai/kit/adapter` / `@h-ai/kit/crypto` / `@h-ai/kit/a2a` — 配置构建适配器、传输加密和 A2A 路由
+[查 API 清单](../../docs/usage/function/kit.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 ## 数据结构
 

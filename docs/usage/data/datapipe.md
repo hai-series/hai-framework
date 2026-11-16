@@ -1,5 +1,7 @@
 # datapipe 数据结构
 
+[English](datapipe.en.md) · [日本語](datapipe.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/datapipe.md) · [功能说明](../function/datapipe.md)
 
 ## 数据库与缓存

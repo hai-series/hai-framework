@@ -38,6 +38,8 @@ import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
 
 ## 功能说明
 
+<a id="api-reference"></a>
+
 ### 用途、输入与输出
 
 UI 无 init/close；以下片段在应用组件或浏览器交互上下文中使用，命名变量代表应用已提供的请求、Schema、资源定义或配置。完整步骤和失败处理见对应功能示例。`HaiResult` 先判断 `success`，异步项按签名 `await`。

@@ -8,16 +8,7 @@ A cryptography module for asymmetric encryption, hashing, symmetric encryption, 
 
 ## Quick Start
 
-Concurrent `close()` invalidates an unfinished `init()`, so late initialization cannot reopen the module. Wait for that initialization to settle before initializing again.
-
-```ts
-import { crypto } from '@h-ai/crypto'
-
-// 初始化（使用前必须调用）
-const initialized = await crypto.init()
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-```
+[Open the quick-start guide](../../docs/usage/function/crypto.md#最小接入示例) (Chinese).
 
 ## Configuration Reference
 
@@ -27,11 +18,7 @@ See the [configuration reference](../../docs/usage/configuration/crypto.md) in C
 
 ## Features
 
-See the [feature reference](../../docs/usage/function/crypto.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
-
-- `crypto.init` / `crypto.close` / `crypto.isInitialized` — Initialize and release cryptographic operations
-- `crypto.asymmetric` / `crypto.symmetric` / `crypto.hash` / `crypto.password` — Encrypt, sign, digest and hash passwords
-- `crypto.transport` — Establish and renew encrypted HTTP sessions
+[Browse the API list](../../docs/usage/function/crypto.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 

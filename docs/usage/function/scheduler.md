@@ -73,6 +73,8 @@ await scheduler.close()
 - 支持 HTTP、受信任的 JavaScript 和应用 Hook，提供重试与取消。
 - 共享数据库持久化任务、执行状态与可续期租约，支持未知结果隔离。
 
+<a id="api-reference"></a>
+
 ### 功能输入输出
 
 下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。

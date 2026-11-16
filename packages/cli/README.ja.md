@@ -14,12 +14,9 @@ Node.js は `engines`（`^22.23.4 || ^24.22.1 || ^26.12.1`）、pnpm は12.11.2�
 pnpm view @h-ai/cli@latest version
 pnpm add -g @h-ai/cli@latest
 hai --version
-hai create my-app --type fullstack --frontends web
-cd my-app
-pnpm dev
 ```
 
-入力は工程名とテンプレート種別、出力は生成工程です。依存インストールとGit初期化は既定で有効です。`--defaults` は既定値を使い、`--no-install`、`--no-git`、`--no-deploy` はそれぞれインストール、Git、デプロイ開発依存を省略します。省略項目は対話で選択します。各コマンドの引数は `hai <command> --help` で確認してください。
+[最小構成の導入手順](../../docs/usage/function/cli.md#最小接入示例)（中国語）を参照してください。
 
 ## 設定一覧
 
@@ -29,12 +26,7 @@ pnpm dev
 
 ## 機能
 
-使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/cli.md)（中国語）を参照してください。
-
-- `hai create` / `hai add` / `hai init` — プロジェクト作成、モジュール追加、設定補完
-- `hai generate` / `hai g` — ページ、コンポーネント、API、モデル、マイグレーションの生成
-- `hai build` / `hai deploy` — 成果物のビルド、配布計画の確認、公開と復旧
-- `hai upgrade` / `hai feedback` — アップグレード先の事前確認とオフラインフィードバックの調査
+[API 一覧](../../docs/usage/function/cli.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 

@@ -8,66 +8,7 @@
 
 ## 快速开始
 
-### 依赖
-
-- `@h-ai/reldb` — 必须先初始化共享数据库，保存任务、执行 journal 与自动续租；`enableDb` 只能为 true。
-
-```ts
-import { reldb } from '@h-ai/reldb'
-import { scheduler } from '@h-ai/scheduler'
-
-await reldb.init({ type: 'sqlite', database: './scheduler.db' })
-
-await scheduler.init({
-  enableDb: true,
-  maxLogs: 1000,
-  retentionDays: 30,
-  hooks: {
-    onTaskStart(event) {
-      void event
-    },
-  },
-})
-
-await scheduler.register({
-  id: 'health-check',
-  name: '健康检查',
-  description: '每 5 分钟执行一次系统健康检查',
-  cron: '*/5 * * * *',
-  params: { channel: 'ops' },
-  handler: {
-    kind: 'api',
-    url: 'https://api.example.com/health',
-    method: 'GET',
-    timeout: 10000,
-  },
-})
-
-await scheduler.register({
-  id: 'cleanup',
-  name: '清理过期数据',
-  description: '每日凌晨执行过期数据清理',
-  cron: '0 2 * * *',
-  deleteAfterRun: true,
-  params: { source: 'nightly' },
-  handler: {
-    kind: 'js',
-    code: '(context) => ({ taskId: context.taskId, params: context.params })',
-  },
-})
-
-scheduler.start()
-
-const manualResult = await scheduler.trigger('cleanup', { source: 'admin-console' })
-const logs = await scheduler.getLogs({
-  triggerType: 'manual',
-  triggerSource: 'admin-console',
-  startedAfter: Date.now() - 24 * 60 * 60 * 1000,
-})
-
-scheduler.stop()
-await scheduler.close()
-```
+[跟着最小示例完成接入](../../docs/usage/function/scheduler.md#最小接入示例)。
 
 ## 配置清单
 
@@ -77,11 +18,7 @@ await scheduler.close()
 
 ## 功能说明
 
-在[功能说明](../../docs/usage/function/scheduler.md)中查看调用示例、输入输出、错误处理与使用要点。
-
-- `scheduler.init` / `scheduler.close` / `scheduler.config` / `scheduler.isInitialized` / `scheduler.isRunning` / `scheduler.start` / `scheduler.stop` — 读取调度设置、检查状态、启动或停止扫描，并在应用退出时释放资源
-- `scheduler.register` / `scheduler.updateTask` / `scheduler.unregister` / `scheduler.refreshTasks` / `scheduler.tasks` — 登记、更新或删除任务，读取数据库中的最新内容和当前任务列表
-- `scheduler.trigger` / `scheduler.getLogs` / `scheduler.setHooks` / `scheduler.clearHooks` / `scheduler.hooks` / `scheduler.execution` — 立即运行任务、查询执行日志、设置处理前后的回调并读取当前执行信息
+[查 API 清单](../../docs/usage/function/scheduler.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 ## 数据结构
 

@@ -8,33 +8,7 @@ A Capacitor native bridge for hai Framework mobile apps, with a unified API for 
 
 ## Quick Start
 
-```ts
-import { capacitor } from '@h-ai/capacitor'
-
-const initialized = await capacitor.init()
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-const failures: unknown[] = []
-try {
-  const saved = await capacitor.preferences.set('theme', 'dark')
-  if (!saved.success)
-    throw new Error(saved.error.message)
-  const theme = await capacitor.preferences.get('theme')
-  if (!theme.success)
-    throw new Error(theme.error.message)
-  // theme.data is 'dark'; an absent key returns null.
-}
-catch (cause) {
-  failures.push(cause)
-}
-finally {
-  const closed = await capacitor.close()
-  if (!closed.success)
-    failures.push(closed.error)
-}
-if (failures.length)
-  throw new AggregateError(failures, 'Native preference operation failed')
-```
+[Open the quick-start guide](../../docs/usage/function/capacitor.md#最小接入示例) (Chinese).
 
 ## Configuration Reference
 
@@ -44,12 +18,7 @@ See the [configuration reference](../../docs/usage/configuration/capacitor.md) i
 
 ## Features
 
-See the [feature reference](../../docs/usage/function/capacitor.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
-
-- `capacitor.init` / `capacitor.close` / `capacitor.isInitialized` / `capacitor.getPlatform` / `capacitor.isNative` — Initialize plugins and detect the current platform
-- `capacitor.device` / `capacitor.camera` / `capacitor.push` / `capacitor.statusBar` — Read device info, take photos, register push and manage the status bar
-- `capacitor.preferences` — Store ordinary application settings on the device
-- `createCapacitorTokenStorage()` — Import separately from `@h-ai/capacitor` and pass the returned secure storage to the API client for authentication tokens
+[Browse the API list](../../docs/usage/function/capacitor.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 

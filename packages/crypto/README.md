@@ -8,16 +8,7 @@
 
 ## 快速开始
 
-并发调用 `close()` 会使尚未完成的 `init()` 失效，迟到初始化不会重新打开模块；等待该次初始化返回后可再次初始化。
-
-```ts
-import { crypto } from '@h-ai/crypto'
-
-// 初始化（使用前必须调用）
-const initialized = await crypto.init()
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-```
+[跟着最小示例完成接入](../../docs/usage/function/crypto.md#最小接入示例)。
 
 ## 配置清单
 
@@ -27,11 +18,7 @@ if (!initialized.success)
 
 ## 功能说明
 
-在[功能说明](../../docs/usage/function/crypto.md)中查看调用示例、输入输出、错误处理与使用要点。
-
-- `crypto.init` / `crypto.close` / `crypto.isInitialized` — 初始化和清理密码操作
-- `crypto.asymmetric` / `crypto.symmetric` / `crypto.hash` / `crypto.password` — 加解密、签名、摘要和口令哈希
-- `crypto.transport` — 在 HTTP 双端建立和更新加密会话
+[查 API 清单](../../docs/usage/function/crypto.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 ## 数据结构
 

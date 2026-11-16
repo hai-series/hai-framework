@@ -8,66 +8,7 @@ WeChat Pay、Alipay、Stripe に対応する統一決済モジュールです。
 
 ## クイックスタート
 
-### 依存関係
-
-- `@h-ai/audit`：任意の監査ログ。初期化済みの場合、決済操作を自動記録します。
-- `@h-ai/reldb`：Stripe 有効時は必須です。共有データベースを先に初期化し、チャネル識別子と冪等結果を永続化します。WeChat/Alipay のみなら必須ではありません。
-
-並行する `close()` は未完了の `init()` を無効にし、遅い初期化がモジュールを再開しないようにします。その初期化の完了を待ってから再初期化できます。
-
-#### Node.js サーバー
-
-```typescript
-import type { PaymentConfigInput } from '@h-ai/payment'
-import { payment } from '@h-ai/payment'
-
-export async function paymentExample(trustedConfig: PaymentConfigInput, trustedOpenid: string) {
-  // 常駐サービスでは起動時に初期化し、停止時に閉じます。
-  // Stripe を有効にする場合は、先に共有 reldb の初期化結果を確認します。
-  const initialized = await payment.init(trustedConfig)
-  if (!initialized.success)
-    throw new Error(initialized.error.message)
-  try {
-    const created = await payment.createOrder('wechat', {
-      orderNo: 'ORD001',
-      amount: 100,
-      description: 'サンプル商品',
-      tradeType: 'jsapi',
-      userId: trustedOpenid,
-      notifyUrl: 'https://api.example.com/payment/notify/wechat',
-    })
-    if (!created.success)
-      throw new Error(created.error.message)
-    const query = await payment.queryOrder('wechat', 'ORD001')
-    if (!query.success)
-      throw new Error(query.error.message)
-    return { order: created.data, status: query.data.status }
-  }
-  finally {
-    await payment.close() // その後、アプリが reldb.close() でデータベース接続を閉じます。
-  }
-}
-```
-
-#### ブラウザークライアント
-
-バックエンドの `payment.createOrder` が成功時に返した注文データを `startPayment` に渡します。WeChat 内では `WeixinJSBridgeReady` を待ってから呼び出します。
-
-```typescript
-import type { PaymentOrder } from '@h-ai/payment'
-import { invokePayment } from '@h-ai/payment/client'
-
-export async function startPayment(orderData: PaymentOrder) {
-  // 注文とプロバイダーのパラメーターで決済を開始し、実行結果を確認します。
-  const invoked = await invokePayment(orderData)
-  if (!invoked.success)
-    throw new Error(invoked.error.message)
-  if (!invoked.data.invoked)
-    throw new Error(invoked.data.message)
-  // 起動結果を返します。決済の成立はサーバーの照会や非同期通知で確認します。
-  return invoked.data
-}
-```
+[最小構成の導入手順](../../docs/usage/function/payment.md#最小接入示例)（中国語）を参照してください。
 
 ## 設定一覧
 
@@ -77,11 +18,7 @@ export async function startPayment(orderData: PaymentOrder) {
 
 ## 機能
 
-使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/payment.md)（中国語）を参照してください。
-
-- `payment.init` / `payment.close` / `payment.config` / `payment.isInitialized` / `payment.registerProvider` / `payment.getProvider` — 決済チャネルを初期化・停止・確認し、必要なら独自の実装を登録する
-- `payment.createOrder` / `payment.queryOrder` / `payment.refund` / `payment.closeOrder` / `payment.handleNotify` — 注文作成、照会、返金、終了、通知の署名検証
-- `invokePayment` — `@h-ai/payment/client` から個別にインポートし、サーバーが返した注文を使ってブラウザーで決済を開始する
+[API 一覧](../../docs/usage/function/payment.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 

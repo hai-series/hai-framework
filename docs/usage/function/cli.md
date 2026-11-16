@@ -25,20 +25,27 @@ pnpm dev # 启动项目声明的开发服务，终端输出本地访问地址。
 
 ## 功能说明
 
+<a id="api-reference"></a>
+
 ### 命令、输入与输出
 
 直接在终端运行 `hai`。根据命令输出和退出码判断结果。升级示例中的 `TARGET_VERSION` 需替换为 `pnpm view` 查到的已发布精确版本。
 
-| 命令         | 用途与输入                                | 输出与示例                                                                                                                      |
-| ------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| create       | 创建项目；名称、type、fullstack前端选择   | `hai create orders --type admin --defaults` 生成可运行的管理应用                                                                |
-| add          | 给已有工程增加模块；模块名及当前目录      | `hai add ai` 补依赖、配置和技能，保留已有业务内容；应用仍需接入初始化、关闭和路由                                               |
-| init         | 补齐已有工程的配置与AI入口                | `hai init` 补缺失文件；`--force` 可重建模块配置，执行前核对差异                                                                 |
-| generate / g | 生成业务骨架；类型、名称、目标workspace   | `hai generate api orders --workspace orders-serv` 生成路由或contract/procedure；同类快捷命令为 g:page/g:component/g:api/g:model |
-| build        | 编译或打包；target、镜像/平台与源码       | `hai build --target image --json` 输出本次制品JSON；build不接收部署环境                                                         |
-| deploy       | 计划、打包或发布；环境、制品、所选服务    | `hai deploy --env prod --plan` 输出只读计划；去掉plan才进入交付流程                                                             |
-| upgrade      | 检查目标完整发布；精确版本、工程目录      | `hai upgrade TARGET_VERSION` 输出依赖、完整性、配置和技能漂移报告，不自动安装或覆盖                                             |
-| feedback     | 查看离线诊断ZIP；action、包路径和过滤条件 | `hai feedback summary feedback.zip` 输出摘要；inspect/evidence/view分别输出清单、证据或本机查看器                               |
+| 命令 | 用途 | 参数与默认值 | 输出 | 示例 |
+| --- | --- | --- | --- | --- |
+| `hai create [name]` | 创建一个应用 | 用 `--type` 选模板。省略名称或类型时询问，`--defaults` 采用默认值。默认安装依赖、初始化 Git 并准备部署工具 | 新项目及启动提示 | `hai create orders --type admin --defaults` |
+| `hai add [module]` | 向已有应用添加框架能力 | 模块名省略时询问。默认安装依赖，可加 `--no-install` | 依赖、配置和相应 Skills，应用随后接入调用 | `hai add ai` |
+| `hai init` | 给现有工程补配置和 AI 入口 | 默认保留已有文件，`--force` 可以重建模块配置 | 缺少的应用配置和 AI 文件 | `hai init` |
+| `hai generate [type] [name]` 或 `hai g` | 生成业务骨架 | 类型和名称可交互选择。多 workspace 工程用 `--workspace`；默认保护已有文件 | 页面、组件、路由、模型或迁移文件 | `hai generate api orders --workspace orders-serv` |
+| `hai g:page <name>` | 生成页面 | 页面名必填，按需设 `--workspace` | 页面文件 | `hai g:page orders` |
+| `hai g:component <name>` | 生成组件 | 组件名必填，按需设 `--workspace` | 组件文件 | `hai g:component OrderList` |
+| `hai g:api <name>` | 生成 HTTP 入口 | 名称必填，按需设 `--workspace` 选择应用或服务 | 对应模板的路由，或契约及 procedure | `hai g:api orders --workspace orders-serv` |
+| `hai g:model <name>` | 生成模型定义 | 名称必填，按需设 `--workspace` | 模型文件 | `hai g:model order` |
+| `hai build` | 编译源码或打包 | `--target` 默认 `compile`。镜像默认并行 2 项。原生打包默认 release | 编译结果、镜像归档或安装包。镜像可用 `--json` 输出产物信息 | `hai build --target image --json` |
+| `hai deploy [appDir]` | 计划、打包或部署应用 | 目录默认由当前工程确定。需选择或传入 `--env`。制品、服务及环境文件可单独指定 | 计划 JSON、离线交付包或部署结果 | `hai deploy --env prod --plan` |
+| `hai upgrade <version>` | 预检完整发布和迁移差异 | 填写已发布的精确版本，目录默认当前工程 | 依赖、配置及 Skills 差异报告 | `hai upgrade TARGET_VERSION` |
+| `hai feedback <action> <bundle>` | 查看离线诊断包 | 操作和 ZIP 路径必填，`evidence` 可按请求、错误及时间范围过滤 | 摘要、清单、证据或本机查看器地址 | `hai feedback summary feedback.zip` |
+| `hai --version`、`hai --help` | 查看版本或选项 | 也可用 `hai <command> --help` | 已安装版本或命令用法 | `hai deploy --help` |
 
 全局 `--cwd/-C` 指定工程目录，`--verbose/-v` 开启详细诊断。CLI消息按 `HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` 选择中英日文；生成应用的默认语言独立配置。
 

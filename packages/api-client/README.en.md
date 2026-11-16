@@ -10,44 +10,7 @@ A cross-platform oRPC/OpenAPI typed client for hai-framework, with consistent AP
 
 ## Quick Start
 
-`apiClient.close()` prevents refreshes already in flight from updating the session. It waits for credential writes already in progress and leaves values in external `TokenStorage` intact. You can reuse that storage when you initialize again.
-
-The timeout covers the response headers, the full JSON body, and error bodies such as HTML error pages. A timed-out or cancelled call will not attempt to refresh the token. If your application reads a successful response stream itself, use its abort signal to stop reading.
-
-The default cookie storage sends browser cookies for sign-in and refresh with `credentials: "include"`. If the page and API are on different origins, configure the API’s CORS policy to allow the page’s origin and credentials. Memory and native storage keep the `credentials` setting supplied by the application.
-
-```ts
-import type { IamAuthLoginInput } from '@h-ai/api-client'
-import { apiClient } from '@h-ai/api-client'
-
-async function loginAndLoadProfile(input: IamAuthLoginInput) {
-  const initialized = await apiClient.init({ baseUrl: '/api/v1', auth: {} })
-  if (!initialized.success)
-    return initialized
-  try {
-    const actions = apiClient.createAuthActions(apiClient)
-    const loggedIn = await actions.login(input)
-    if (!loggedIn.success)
-      return loggedIn
-    const profile = await apiClient.iam.auth.currentUser()
-    if (!profile.success)
-      return profile
-    return profile
-  }
-  catch (writeError) {
-    try {
-      await apiClient.auth.clear()
-    }
-    catch (cleanupError) {
-      throw new AggregateError([writeError, cleanupError], 'Credential persistence and cleanup failed')
-    }
-    throw writeError
-  }
-  finally {
-    await apiClient.close()
-  }
-}
-```
+[Open the quick-start guide](../../docs/usage/function/api-client.md#最小接入示例) (Chinese).
 
 ## Configuration Reference
 
@@ -57,11 +20,7 @@ See the [configuration reference](../../docs/usage/configuration/api-client.md) 
 
 ## Features
 
-See the [feature reference](../../docs/usage/function/api-client.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
-
-- `apiClient.init` / `apiClient.create` / `apiClient.close` / `apiClient.config` / `apiClient.isInitialized` — Initialize the default client or create an independent instance
-- `apiClient.auth` / `apiClient.tokenStorage` / `apiClient.createAuthActions` — Choose where to store credentials and create sign-in and session refresh actions
-- `apiClient.iam` / `apiClient.storage` / `apiClient.ai` / `apiClient.observeRequests` — Call user, file, and AI APIs, or observe the result and duration of each completed call
+[Browse the API list](../../docs/usage/function/api-client.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 

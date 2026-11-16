@@ -97,6 +97,8 @@ Provider 失败保留完整模块错误定义（含 HTTP 状态），SMTP/短信
 
 模板发送只需 `template`、`to` 和 `vars`，Provider 默认来自模板；显式 `provider` 仍可覆盖。无模板的直接发送必须提供 Provider，缺少时返回失败 HaiResult。
 
+<a id="api-reference"></a>
+
 ### 功能输入输出
 
 下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。

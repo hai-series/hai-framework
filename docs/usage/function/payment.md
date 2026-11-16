@@ -81,6 +81,8 @@ export async function startPayment(orderData: PaymentOrder) {
 
 协议依据：[微信 JSAPI 下单](https://pay.wechatpay.cn/doc/v3/merchant/4012791897)、[JSAPI 调起](https://pay.wechatpay.cn/doc/v3/merchant/4012791857)、[支付宝官方 Node SDK pageExecute](https://github.com/alipay/alipay-sdk-nodejs-all#pageexecute-示例代码)。定向测试验证请求/签名形状、真实 RSA 验签、jsdom 表单消费及 Chrome 实际 POST（网关请求由测试拦截）；未使用真实商户凭据、渠道沙箱账户或手机设备，不能据此宣称已完成真实支付验收。
 
+<a id="api-reference"></a>
+
 ### 功能输入输出
 
 ```ts

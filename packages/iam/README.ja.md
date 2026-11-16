@@ -8,64 +8,7 @@
 
 ## クイックスタート
 
-### インストール
-
-```bash
-pnpm add @h-ai/iam
-```
-
-### 依存関係
-
-- `@h-ai/reldb`：ユーザー・ロール・権限の永続化。**iam.init() より先に初期化**。
-- `@h-ai/cache`：セッション・OTP・一度限りのチケット。**iam.init() より先に初期化**。
-- `@h-ai/crypto`：内部で使用するパスワードハッシュ。自動初期化。
-- `@h-ai/audit` — 任意。起動時にアプリが `audit.init()` を呼び出すと、IAM がセキュリティイベントを記録します。記録に失敗した場合はエラーログを確認し、影響を受けたアプリ管理のトランザクションをロールバックしてください。
-
-- `@h-ai/reach` — 任意。標準のメールや SMS テンプレートを使う場合は、Reach をインストール・初期化し、[通知の例](../../docs/usage/function/iam.md#使用可选-reach-自动发送)（中国語）に従って IAM に接続します。独自の送信関数を用意することもできます。
-- `ldapts`：**任意**。LDAP を明示的に有効化し、`ldapClientFactory` がない場合だけ読み込みます。
-
-```ts
-import { cache } from '@h-ai/cache'
-import { core } from '@h-ai/core'
-import { iam } from '@h-ai/iam'
-import { reldb } from '@h-ai/reldb'
-
-// 基础密码认证不需要安装 Reach 或 ldapts。
-async function example() {
-  try {
-    const db = await reldb.init({ type: 'sqlite', database: './data.db' })
-    if (!db.success)
-      return db
-    const cached = await cache.init({ type: 'memory' })
-    if (!cached.success)
-      return cached
-    const initialized = await iam.init({})
-    if (!initialized.success)
-      return initialized
-    const registered = await iam.user.register({ username: 'demo', password: 'Password123' })
-    if (!registered.success)
-      return registered
-    const login = await iam.auth.login({ identifier: 'demo', password: 'Password123' })
-    if (!login.success)
-      return login
-    return await iam.auth.verifyToken(login.data.tokens.accessToken)
-  }
-  finally {
-    // 应用关闭时按依赖的反向顺序释放。
-    await iam.close()
-    await cache.close()
-    await reldb.close()
-  }
-}
-
-const result = await example()
-if (!result.success)
-  core.logger.error('Authentication example failed', { code: result.error.code })
-```
-
-LDAP は既定で無効です。`otp` と対応する送信関数を設定して初めて、`iam.publicConfig` にワンタイムコードでのログインが利用可能と表示されます。ログイン画面にパスワード再設定を表示するには、再設定通知の送信関数も必要です。
-
-`iam.config` は**機密情報をマスクした設定スナップショット**を返します。LDAP の `url` / `bindPassword` などは自動的に非表示になります。状態確認用で、元の設定の代わりにはなりません。
+[最小構成の導入手順](../../docs/usage/function/iam.md#最小接入示例)（中国語）を参照してください。
 
 ## 設定一覧
 
@@ -75,11 +18,7 @@ LDAP は既定で無効です。`otp` と対応する送信関数を設定して
 
 ## 機能
 
-使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/iam.md)（中国語）を参照してください。
-
-- `iam.init` / `iam.close` / `iam.config` / `iam.isInitialized` / `iam.publicConfig` / `iam.getPublicConfig` / `iam.isRegisterEnabled` — 認証サービスを開始・終了する。公開設定を読み、ログイン方式や登録リンクの表示を決める
-- `iam.auth` / `iam.user` / `iam.session` — 認証、アカウントとセッションの管理
-- `iam.authz` / `iam.apiKey` / `iam.ticket` — ロールと権限を確認し、API キーを管理し、一度だけ使えるチケットを発行・引き換える
+[API 一覧](../../docs/usage/function/iam.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 

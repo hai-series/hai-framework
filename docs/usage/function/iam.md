@@ -77,6 +77,8 @@ if (!result.success)
 | **一次性票据** | 短期、一次性能力票据（签发 / 原子消费），用于 WebSocket 等无法携带 Bearer Token 的通道 |
 | **前端客户端** | HTTP API 契约定义，支持独立前端使用                                                    |
 
+<a id="api-reference"></a>
+
 ### 功能输入输出
 
 下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。

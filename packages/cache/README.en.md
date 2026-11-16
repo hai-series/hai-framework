@@ -8,31 +8,7 @@ A unified cache module. The `cache` object provides KV / Hash / List / Set / ZSe
 
 ## Quick Start
 
-```ts
-import { cache } from '@h-ai/cache'
-import { core } from '@h-ai/core'
-
-const initialized = await cache.init({ type: 'redis', host: 'localhost' })
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-try {
-  const written = await cache.kv.set('user:1', { name: 'Alice' }, { ex: 3600 })
-  if (!written.success)
-    throw new Error(written.error.message)
-  const user = await cache.kv.get<{ name: string }>('user:1')
-  if (!user.success)
-    throw new Error(user.error.message)
-  if (user.data)
-    core.logger.info('Cached user', { name: user.data.name })
-}
-finally {
-  const closed = await cache.close()
-  if (!closed.success)
-    core.logger.error('Cache cleanup pending', { code: closed.error.code })
-}
-```
-
-`cache.config` returns a **redacted configuration snapshot**. Redis credential fields such as `password` / `url` are sanitized automatically; do not use the snapshot to write back original secrets.
+[Open the quick-start guide](../../docs/usage/function/cache.md#最小接入示例) (Chinese).
 
 ## Configuration Reference
 
@@ -42,11 +18,7 @@ See the [configuration reference](../../docs/usage/configuration/cache.md) in Ch
 
 ## Features
 
-See the [feature reference](../../docs/usage/function/cache.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
-
-- `cache.init` / `cache.close` / `cache.config` / `cache.isInitialized` / `cache.ping` — Manage connections and check availability
-- `cache.kv` / `cache.hash` / `cache.list` / `cache.set_` / `cache.zset` — Work with key-value data, hashes, lists, sets and sorted sets
-- `cache.lock` — Coordinate exclusive work with expiring locks
+[Browse the API list](../../docs/usage/function/cache.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 

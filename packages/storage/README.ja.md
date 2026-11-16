@@ -8,78 +8,7 @@
 
 ## クイックスタート
 
-### Node.js サーバー
-
-検証済みの S3 または local の設定と PNG データを `storeImage` に渡します。この例は接続を初期化し、処理後に閉じます。常駐サービスでは起動時に初期化し、停止時に閉じます。
-
-```ts
-import type { FileMetadata, StorageConfigInput } from '@h-ai/storage'
-import type { Buffer } from 'node:buffer'
-import { storage } from '@h-ai/storage'
-
-export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8Array) {
-  // バックエンドを 1 つ選び、初期化結果を確認します。
-  const initialized = await storage.init(config)
-  if (!initialized.success)
-    throw new Error(initialized.error.message)
-
-  let result: { metadata: FileMetadata, bytes: Buffer, downloadUrl?: string }
-  let closed
-  try {
-    const key = 'uploads/image.png'
-    // オブジェクトキーに PNG データを書き込み、メタデータを取得します。
-    const uploaded = await storage.file.put(key, imageBuffer, { contentType: 'image/png' })
-    if (!uploaded.success)
-      throw new Error(uploaded.error.message)
-
-    // 同じキーでファイルを読み込み、内容を Buffer として取得します。
-    const downloaded = await storage.file.get(key)
-    if (!downloaded.success)
-      throw new Error(downloaded.error.message)
-
-    result = { metadata: uploaded.data, bytes: downloaded.data }
-    if (config.type === 's3') {
-      // S3 では 3,600 秒有効なダウンロード URL を発行します。
-      const signed = await storage.presign.getUrl(key, { expiresIn: 3600 })
-      if (!signed.success)
-        throw new Error(signed.error.message)
-      result.downloadUrl = signed.data
-    }
-  }
-  finally {
-    // 接続を解放し、失敗時は呼び出し元にエラーを返します。
-    closed = await storage.close()
-  }
-  if (!closed.success)
-    throw new Error(closed.error.message)
-  return result
-}
-```
-
-### ブラウザークライアント
-
-初期化済みの `apiClient` で S3 のアップロード URL を取得します。アプリが許可したキーとユーザーが選択した `File` を `uploadImage` に渡します。
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-import { uploadWithPresignedUrl } from '@h-ai/storage/client'
-
-export async function uploadImage(key: string, file: File) {
-  // 署名とアップロードには同じ Content-Type を使います。
-  const contentType = file.type || 'application/octet-stream'
-  const signed = await apiClient.storage.presignedUrls.createUpload({ key, contentType })
-  if (!signed.success)
-    throw new Error(signed.error.message)
-
-  // オブジェクトストレージに直接アップロードし、サーバーが確認したキーを返します。
-  const uploaded = await uploadWithPresignedUrl(signed.data.url, file, { contentType })
-  if (!uploaded.success)
-    throw new Error(uploaded.error ?? 'Upload failed')
-  return signed.data.key
-}
-```
-
-> 注：`@h-ai/storage` に HTTP ルートは組み込まれていません。署名付き URL API はアプリケーション層で実装してください。
+[最小構成の導入手順](../../docs/usage/function/storage.md#最小接入示例)（中国語）を参照してください。
 
 ## 設定一覧
 
@@ -89,11 +18,7 @@ export async function uploadImage(key: string, file: File) {
 
 ## 機能
 
-使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/storage.md)（中国語）を参照してください。
-
-- `storage.init` / `storage.close` / `storage.config` / `storage.isInitialized` — ローカルディレクトリまたは S3 互換ストレージを選び、接続状態を確認し、終了時にリソースを解放する
-- `storage.file` / `storage.dir` / `storage.checksum` / `storage.presign` — ファイルを読み書きし、ディレクトリを一覧表示し、チェックサムを検証し、S3 オブジェクト用の期限付きリンクを作る
-- `@h-ai/storage/client` / `@h-ai/storage/schemas` — ブラウザーでのアップロード、ダウンロード、キー検証
+[API 一覧](../../docs/usage/function/storage.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 

@@ -8,31 +8,7 @@
 
 ## 快速开始
 
-```ts
-import { cache } from '@h-ai/cache'
-import { core } from '@h-ai/core'
-
-const initialized = await cache.init({ type: 'redis', host: 'localhost' })
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-try {
-  const written = await cache.kv.set('user:1', { name: 'Alice' }, { ex: 3600 })
-  if (!written.success)
-    throw new Error(written.error.message)
-  const user = await cache.kv.get<{ name: string }>('user:1')
-  if (!user.success)
-    throw new Error(user.error.message)
-  if (user.data)
-    core.logger.info('Cached user', { name: user.data.name })
-}
-finally {
-  const closed = await cache.close()
-  if (!closed.success)
-    core.logger.error('Cache cleanup pending', { code: closed.error.code })
-}
-```
-
-`cache.config` 返回的是**脱敏后的配置快照**：如后续接入 Redis `password` / `url` 等凭证字段，会自动做安全处理，不应用作回写原始密钥。
+[跟着最小示例完成接入](../../docs/usage/function/cache.md#最小接入示例)。
 
 ## 配置清单
 
@@ -42,11 +18,7 @@ finally {
 
 ## 功能说明
 
-在[功能说明](../../docs/usage/function/cache.md)中查看调用示例、输入输出、错误处理与使用要点。
-
-- `cache.init` / `cache.close` / `cache.config` / `cache.isInitialized` / `cache.ping` — 管理连接并检查可用性
-- `cache.kv` / `cache.hash` / `cache.list` / `cache.set_` / `cache.zset` — 操作键值、散列、列表、集合与有序集合
-- `cache.lock` — 用带有效期的锁协调互斥操作
+[查 API 清单](../../docs/usage/function/cache.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 ## 数据结构
 

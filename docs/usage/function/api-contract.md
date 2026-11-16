@@ -40,6 +40,8 @@ export const appContract = {
 
 ## 功能说明
 
+<a id="api-reference"></a>
+
 ### 用途、输入与输出
 
 本包声明接口和校验结构，不发送请求，也没有 init/close。表中 Schema 是校验器本身；调用 safeParse 后检查其 success。业务响应中的 HaiResult.success 与校验器的 success 属于不同层，不能混用。路由的输入/输出 Schema 由应用挂载到 Serv 或客户端后实际使用。

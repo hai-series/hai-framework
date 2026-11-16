@@ -8,32 +8,7 @@
 
 ## 快速开始
 
-```ts
-import { datapipe, HaiDatapipeError } from '@h-ai/datapipe'
-
-const rawText = '<p>Hello framework.</p>'
-const text = '# Getting started\n\nHello framework.'
-
-// 直接清洗
-const cleaned = datapipe.clean(rawText, { removeHtml: true })
-if (!cleaned.success)
-  throw new Error(cleaned.error.message)
-
-// 按 Markdown 标题分块
-const chunks = datapipe.chunk(text, { mode: 'markdown', maxSize: 2000 })
-if (!chunks.success)
-  throw new Error(chunks.error.message)
-
-// 管线模式（链式组合多步操作）
-const result = await datapipe.pipeline()
-  .clean({ removeHtml: true, removeUrls: true })
-  .transform(text => text.toLowerCase())
-  .chunk({ mode: 'paragraph', maxSize: 1000, overlap: 100 })
-  .chunkTransform(chunks => chunks.filter(c => c.content.length > 50))
-  .run(rawText)
-if (!result.success)
-  throw new Error(result.error.message)
-```
+[跟着最小示例完成接入](../../docs/usage/function/datapipe.md#最小接入示例)。
 
 ## 配置清单
 
@@ -43,10 +18,7 @@ if (!result.success)
 
 ## 功能说明
 
-在[功能说明](../../docs/usage/function/datapipe.md)中查看调用示例、输入输出、错误处理与使用要点。
-
-- `datapipe.clean` — 规范化和过滤文本
-- `datapipe.chunk` / `datapipe.pipeline` — 将文本分块或连续执行清洗与分块
+[查 API 清单](../../docs/usage/function/datapipe.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 ## 数据结构
 

@@ -8,35 +8,7 @@ hai-framework 的公共 HTTP API 契约包，用 oRPC contract 和 Zod 让前后
 
 ## 快速开始
 
-```ts
-import { apiContract } from '@h-ai/api-contract'
-
-export const contract = apiContract.create({
-  iam: apiContract.iam,
-  storage: apiContract.storage,
-  ai: false,
-})
-```
-
-自定义应用 contract 也从本包定义路由，不依赖 `@h-ai/serv`：
-
-```ts
-import { apiContract } from '@h-ai/api-contract'
-import { z } from 'zod'
-
-export const appContract = {
-  ping: apiContract
-    .route({
-      method: 'POST',
-      path: '/app/ping',
-      operationId: 'app.ping',
-      tags: ['app']
-    })
-    .output(apiContract.haiResultSchema(z.object({
-      pong: z.boolean()
-    }))),
-}
-```
+[跟着最小示例完成接入](../../docs/usage/function/api-contract.md#最小接入示例)。
 
 ## 配置清单
 
@@ -46,11 +18,7 @@ export const appContract = {
 
 ## 功能说明
 
-在[功能说明](../../docs/usage/function/api-contract.md)中查看调用示例、输入输出、错误处理与使用要点。
-
-- `apiContract.create` / `apiContract.route` / `apiContract.pathOf` — 组合接口定义、声明 HTTP 方法与路径，或读取已有接口的路径
-- `apiContract.haiResultSchema` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema` — 定义带有成功值或错误详情的响应结构，以及分页结果的结构
-- `apiContract.iam` / `apiContract.storage` / `apiContract.ai` / `apiContract.payment` / `apiContract.feedback` — 复用身份认证、文件、AI、支付和反馈的接口定义
+[查 API 清单](../../docs/usage/function/api-contract.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 ## 数据结构
 

@@ -20,4 +20,4 @@
 
 进入[发布运行章节](../operations/README.md)执行完整或增量部署。后续按[升级框架](upgrade.md)迁移公开API、配置与Skills，再重新验收交付。
 
-需要英语/日语完整传统流程时，阅读[English workflow](workflow.en.md)或[日本語の作成・配布手順](workflow.ja.md)。新的领域手册当前为中文，三语入口不会把中文正文标成已翻译。
+本章也可阅读 [English](workflow.en.md) 或 [日本語](workflow.ja.md)。

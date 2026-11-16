@@ -8,50 +8,7 @@
 
 ## クイックスタート
 
-```ts
-import { HaiReldbError, reldb } from '@h-ai/reldb'
-
-// 初始化
-const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' })
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-
-// DDL
-await reldb.ddl.createTable('users', {
-  id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
-  name: { type: 'TEXT', notNull: true },
-  email: { type: 'TEXT', unique: true },
-})
-
-// SQL
-await reldb.sql.execute('INSERT INTO users (name, email) VALUES (?, ?)', ['张三', 'test@example.com'])
-const users = await reldb.sql.query<{ id: number, name: string }>('SELECT * FROM users')
-
-// 分页查询
-const page = await reldb.sql.queryPage<{ id: number, name: string }>({
-  sql: 'SELECT id, name FROM users ORDER BY id',
-  pagination: { page: 1, pageSize: 20 },
-})
-
-// CRUD
-const userCrud = reldb.crud.table({
-  table: 'users',
-  idColumn: 'id',
-  select: ['id', 'name', 'email'],
-  createColumns: ['name', 'email'],
-  updateColumns: ['name', 'email'],
-  dbType: 'sqlite',
-})
-await userCrud.create({ name: '李四', email: 'li@test.com' })
-const user = await userCrud.findById(1)
-
-// 关闭
-await reldb.close()
-```
-
-`reldb.config` は**機密情報をマスクした設定スナップショット**を返します。DB の `password`、URL 内の認証情報、TLS クライアント秘密鍵 `ssl.key` を非表示にします。状態確認用であり、元の接続情報の再利用には使わないでください。
-
-PostgreSQL の複数ノードでスキーマを準備する場合は `reldb.prepareSchema(key, ({ ddl, sql }) => ...)` を使用します。コールバックはロック付きトランザクションで実行され、失敗時にロールバックされます。コールバック内では渡された操作を使用し、外部処理はトランザクションの外で実行します。
+[最小構成の導入手順](../../docs/usage/function/reldb.md#最小接入示例)（中国語）を参照してください。
 
 ## 設定一覧
 
@@ -61,11 +18,7 @@ PostgreSQL の複数ノードでスキーマを準備する場合は `reldb.prep
 
 ## 機能
 
-使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/reldb.md)（中国語）を参照してください。
-
-- `reldb.init` / `reldb.close` / `reldb.config` / `reldb.isInitialized` — データベース接続のライフサイクル管理
-- `reldb.ddl` / `reldb.schemaColumns` / `reldb.prepareSchema` — テーブル構造の定義・準備・確認
-- `reldb.sql` / `reldb.crud` / `reldb.tx` / `reldb.pagination` / `reldb.json` — SQL、CRUD、トランザクション、ページング、JSON パスの利用
+[API 一覧](../../docs/usage/function/reldb.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 

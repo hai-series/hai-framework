@@ -8,50 +8,7 @@ A relational database module with a unified `reldb` object for SQLite, PostgreSQ
 
 ## Quick Start
 
-```ts
-import { HaiReldbError, reldb } from '@h-ai/reldb'
-
-// 初始化
-const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' })
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-
-// DDL
-await reldb.ddl.createTable('users', {
-  id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
-  name: { type: 'TEXT', notNull: true },
-  email: { type: 'TEXT', unique: true },
-})
-
-// SQL
-await reldb.sql.execute('INSERT INTO users (name, email) VALUES (?, ?)', ['张三', 'test@example.com'])
-const users = await reldb.sql.query<{ id: number, name: string }>('SELECT * FROM users')
-
-// 分页查询
-const page = await reldb.sql.queryPage<{ id: number, name: string }>({
-  sql: 'SELECT id, name FROM users ORDER BY id',
-  pagination: { page: 1, pageSize: 20 },
-})
-
-// CRUD
-const userCrud = reldb.crud.table({
-  table: 'users',
-  idColumn: 'id',
-  select: ['id', 'name', 'email'],
-  createColumns: ['name', 'email'],
-  updateColumns: ['name', 'email'],
-  dbType: 'sqlite',
-})
-await userCrud.create({ name: '李四', email: 'li@test.com' })
-const user = await userCrud.findById(1)
-
-// 关闭
-await reldb.close()
-```
-
-`reldb.config` returns a **redacted configuration snapshot**. Database `password`, URL credentials and the TLS client private key `ssl.key` are hidden. Use it to inspect state, not to replay connection details.
-
-Use `reldb.prepareSchema(key, ({ ddl, sql }) => ...)` to coordinate schema preparation across PostgreSQL nodes. The callback uses one locked transaction and rolls back on failure. Use the supplied operations and keep external work outside the transaction. Other providers retain their own DDL commit rules.
+[Open the quick-start guide](../../docs/usage/function/reldb.md#最小接入示例) (Chinese).
 
 ## Configuration Reference
 
@@ -61,11 +18,7 @@ See the [configuration reference](../../docs/usage/configuration/reldb.md) in Ch
 
 ## Features
 
-See the [feature reference](../../docs/usage/function/reldb.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
-
-- `reldb.init` / `reldb.close` / `reldb.config` / `reldb.isInitialized` — Manage the database connection lifecycle
-- `reldb.ddl` / `reldb.schemaColumns` / `reldb.prepareSchema` — Define, prepare and inspect table schemas
-- `reldb.sql` / `reldb.crud` / `reldb.tx` / `reldb.pagination` / `reldb.json` — Run SQL, use CRUD and transactions, paginate and query JSON paths
+[Browse the API list](../../docs/usage/function/reldb.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 

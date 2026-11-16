@@ -8,66 +8,7 @@ Use `scheduler` to run JavaScript handlers or call HTTP endpoints on a cron sche
 
 ## Quick Start
 
-### Dependencies
-
-- `@h-ai/reldb`: initialize the shared database first; tasks, execution journals and leases are mandatory, and `enableDb` accepts only true.
-
-```ts
-import { reldb } from '@h-ai/reldb'
-import { scheduler } from '@h-ai/scheduler'
-
-await reldb.init({ type: 'sqlite', database: './scheduler.db' })
-
-await scheduler.init({
-  enableDb: true,
-  maxLogs: 1000,
-  retentionDays: 30,
-  hooks: {
-    onTaskStart(event) {
-      void event
-    },
-  },
-})
-
-await scheduler.register({
-  id: 'health-check',
-  name: '健康检查',
-  description: '每 5 分钟执行一次系统健康检查',
-  cron: '*/5 * * * *',
-  params: { channel: 'ops' },
-  handler: {
-    kind: 'api',
-    url: 'https://api.example.com/health',
-    method: 'GET',
-    timeout: 10000,
-  },
-})
-
-await scheduler.register({
-  id: 'cleanup',
-  name: '清理过期数据',
-  description: '每日凌晨执行过期数据清理',
-  cron: '0 2 * * *',
-  deleteAfterRun: true,
-  params: { source: 'nightly' },
-  handler: {
-    kind: 'js',
-    code: '(context) => ({ taskId: context.taskId, params: context.params })',
-  },
-})
-
-scheduler.start()
-
-const manualResult = await scheduler.trigger('cleanup', { source: 'admin-console' })
-const logs = await scheduler.getLogs({
-  triggerType: 'manual',
-  triggerSource: 'admin-console',
-  startedAfter: Date.now() - 24 * 60 * 60 * 1000,
-})
-
-scheduler.stop()
-await scheduler.close()
-```
+[Open the quick-start guide](../../docs/usage/function/scheduler.md#最小接入示例) (Chinese).
 
 ## Configuration Reference
 
@@ -77,11 +18,7 @@ See the [configuration reference](../../docs/usage/configuration/scheduler.md) i
 
 ## Features
 
-See the [feature reference](../../docs/usage/function/scheduler.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
-
-- `scheduler.init` / `scheduler.close` / `scheduler.config` / `scheduler.isInitialized` / `scheduler.isRunning` / `scheduler.start` / `scheduler.stop` — Read settings, check status, start or stop scanning for tasks, and release resources at shutdown
-- `scheduler.register` / `scheduler.updateTask` / `scheduler.unregister` / `scheduler.refreshTasks` / `scheduler.tasks` — Register, update, or remove tasks, reload them from the database, and inspect the current list
-- `scheduler.trigger` / `scheduler.getLogs` / `scheduler.setHooks` / `scheduler.clearHooks` / `scheduler.hooks` / `scheduler.execution` — Run a task now, inspect execution logs, register callbacks, and read information about the current run
+[Browse the API list](../../docs/usage/function/scheduler.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 

@@ -8,33 +8,7 @@ Capacitor 原生桥接模块，为 hai Framework 移动应用提供原生安全 
 
 ## 快速开始
 
-```ts
-import { capacitor } from '@h-ai/capacitor'
-
-const initialized = await capacitor.init()
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-const failures: unknown[] = []
-try {
-  const saved = await capacitor.preferences.set('theme', 'dark')
-  if (!saved.success)
-    throw new Error(saved.error.message)
-  const theme = await capacitor.preferences.get('theme')
-  if (!theme.success)
-    throw new Error(theme.error.message)
-  // theme.data 为 'dark'；尚未保存的键为 null。
-}
-catch (cause) {
-  failures.push(cause)
-}
-finally {
-  const closed = await capacitor.close()
-  if (!closed.success)
-    failures.push(closed.error)
-}
-if (failures.length)
-  throw new AggregateError(failures, 'Native preference operation failed')
-```
+[跟着最小示例完成接入](../../docs/usage/function/capacitor.md#最小接入示例)。
 
 ## 配置清单
 
@@ -44,12 +18,7 @@ if (failures.length)
 
 ## 功能说明
 
-在[功能说明](../../docs/usage/function/capacitor.md)中查看调用示例、输入输出、错误处理与使用要点。
-
-- `capacitor.init` / `capacitor.close` / `capacitor.isInitialized` / `capacitor.getPlatform` / `capacitor.isNative` — 管理插件初始化和平台判断
-- `capacitor.device` / `capacitor.camera` / `capacitor.push` / `capacitor.statusBar` — 读取设备信息、拍照、注册推送和调整状态栏
-- `capacitor.preferences` — 在设备上保存普通应用设置
-- `createCapacitorTokenStorage()` — 从 `@h-ai/capacitor` 单独导入，把创建的安全存储交给 API 客户端保存认证令牌
+[查 API 清单](../../docs/usage/function/capacitor.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 <a id="android-容器打包"></a>
 

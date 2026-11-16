@@ -8,35 +8,7 @@ Public HTTP API contracts for hai-framework, with oRPC contract + Zod as the sin
 
 ## Quick Start
 
-```ts
-import { apiContract } from '@h-ai/api-contract'
-
-export const contract = apiContract.create({
-  iam: apiContract.iam,
-  storage: apiContract.storage,
-  ai: false,
-})
-```
-
-Custom application contracts also define routes through this package, without depending on `@h-ai/serv`:
-
-```ts
-import { apiContract } from '@h-ai/api-contract'
-import { z } from 'zod'
-
-export const appContract = {
-  ping: apiContract
-    .route({
-      method: 'POST',
-      path: '/app/ping',
-      operationId: 'app.ping',
-      tags: ['app']
-    })
-    .output(apiContract.haiResultSchema(z.object({
-      pong: z.boolean()
-    }))),
-}
-```
+[Open the quick-start guide](../../docs/usage/function/api-contract.md#最小接入示例) (Chinese).
 
 ## Configuration Reference
 
@@ -46,11 +18,7 @@ See the [configuration reference](../../docs/usage/configuration/api-contract.md
 
 ## Features
 
-See the [feature reference](../../docs/usage/function/api-contract.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
-
-- `apiContract.create` / `apiContract.route` / `apiContract.pathOf` — Combine endpoint definitions, declare HTTP methods and paths, or look up an existing endpoint’s path
-- `apiContract.haiResultSchema` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema` — Define response structures for success, errors, and paginated results
-- `apiContract.iam` / `apiContract.storage` / `apiContract.ai` / `apiContract.payment` / `apiContract.feedback` — Reuse the definitions for identity, storage, AI, payment, and feedback APIs
+[Browse the API list](../../docs/usage/function/api-contract.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 

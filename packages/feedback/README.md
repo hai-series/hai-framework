@@ -8,33 +8,7 @@
 
 ## 快速开始
 
-服务端先初始化 Core、RelDB 和私有 Storage。使用 Reach 投递时，还需先初始化 Reach。
-
-示例在应用启动时初始化模块。提交函数接收可信服务端生成的 `context` 和客户端为本次提交生成的 `submissionId`。
-
-```ts
-import type { FeedbackContext } from '@h-ai/feedback'
-import { feedback } from '@h-ai/feedback'
-
-// 启动 orders 的反馈服务。此处选择在开发控制台记录反馈通知。
-const initialized = await feedback.init({
-  appId: 'orders',
-  appVersion: '1.0.0',
-  notificationMode: 'console',
-  adminUrl: 'https://app.example.test/admin/feedback',
-})
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-
-export async function submitFeedback(context: FeedbackContext, submissionId: string) {
-  // 受理成功返回含编号的报告。遇到失败时，调用方读取 error。
-  return feedback.submit({ appId: 'orders', submissionId }, context)
-}
-```
-
-应用退出时先检查 `await feedback.close()` 的结果，再关闭依赖。重试提交使用同一个 `submissionId`。
-
-浏览器采集、HTTP 路由和附件补传见[功能说明](../../docs/usage/function/feedback.md)。
+[跟着最小示例完成接入](../../docs/usage/function/feedback.md#最小接入示例)。
 
 ## 配置清单
 
@@ -44,12 +18,7 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 
 ## 功能说明
 
-在[功能说明](../../docs/usage/function/feedback.md)中查看调用示例、输入输出、错误处理与使用要点。
-
-- `feedback.init` / `feedback.close` / `feedback.isInitialized` / `feedback.config` / `feedback.budget` — 启动和关闭服务，查看反馈配置和每份反馈的附件、证据限额
-- `feedback.submit` / `feedback.uploadAttachment` / `feedback.getAttachment` / `feedback.appendEvidence` / `feedback.completeCollection` — 提交反馈、保存或下载附件，并补交收集到的现场信息
-- `feedback.list` / `feedback.get` / `feedback.getEvidence` / `feedback.setStatus` / `feedback.retry` / `feedback.runJobs` / `feedback.export` / `feedback.getExport` — 查询、处理、重试和导出
-- `feedbackClient`（`@h-ai/feedback/client`） — 浏览器从此入口采集和提交诊断信息。离线包通过 `@h-ai/feedback/bundle` 读取。`@h-ai/feedback/capacitor` 和 `@h-ai/feedback/tauri` 提供各自的原生文件保存函数
+[查 API 清单](../../docs/usage/function/feedback.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 ## 数据结构
 

@@ -21,6 +21,8 @@ pnpm run deploy --env prod --build
 - 完整包包含应用与自建中间件镜像；支持只更新选中的服务。
 - 离线交付生成 tar 和 Windows/Linux/macOS 操作脚本，记录步骤结果并在失败时尝试恢复。
 
+<a id="api-reference"></a>
+
 ### 功能输入输出
 
 下表中的调用假定模块已经初始化成功。应用代码提供实际的业务参数，并在调用前校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。

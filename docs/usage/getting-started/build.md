@@ -17,6 +17,8 @@ pnpm build --target app --platform android --runtime auto
 
 下载慢时可加 `--image-source cn --npm-source cn`；需要代理时选择 `--proxy-mode inherit|system|custom|none`。首次交互选择保存为项目默认，`--yes` 复用已保存值。自定义源、代理地址及引擎侧设置见[下载源和代理](../configuration/delivery.md#下载源和代理)。
 
+<a id="browser-startup"></a>
+
 ## 浏览器启动检测
 
 Web 入口在 HTML 解析时执行一段独立的经典脚本。检测到低版本后，浏览器进入本站的静态升级页，查看当前版本、最低要求和厂商的更新说明。升级后重新打开原站点即可。升级页使用中、英、日文案，主应用脚本和样式无法加载时也能显示。
@@ -43,6 +45,8 @@ Web 入口在 HTML 解析时执行一段独立的经典脚本。检测到低版�
 ```
 
 发布子目录时一起部署这三个同源资源。验收时可模拟低版本，并暂时阻断主应用 JS 和 CSS。确认升级页仍可打开，再用当前版本访问站点检查正常启动。
+
+<a id="verify-artifact"></a>
 
 ## 核对身份和产物
 
@@ -74,6 +78,8 @@ hai build --target image --json
 原生文件名包含平台、架构（Desktop）、debug/release 和版本，Android ABI/flavor 等输出差异继续保留；其他原生格式沿用 `.ipa`、`.dmg`、`.app`、`.deb`、`.AppImage`。只调整 `.hai/build` 中的归档名称，Gradle/Tauri 自身的工作目录和文件名仍由原生工具管理。`latest` 存批次相对目录名，manifest 中的 `buildId` 保持短标识；旧构建目录、旧 `latest` 和旧镜像清单仍可读取，无须改写历史产物。
 
 源码与镜像构建不选择生产环境、不注入运行密钥；镜像可跨环境复用。部分镜像制品不等于首次完整安装，部署模式由manifest和所选服务判断。
+
+<a id="native-builds"></a>
 
 ## 原生和离线条件
 

@@ -34,7 +34,7 @@ const result = await reldb.tx.wrap(async (tx) => {
 // 外层result是HaiResult；继续检查success。
 ```
 
-需要原样保留领域错误时用显式begin/rollback/`commit`，每一步检查结果。示例实际制造第二次写入主键冲突，确认前次写入回滚、残留0。动态值用参数；表名/排序列只能来自可信白名单。详见[RelDB事务](../../../packages/reldb/README.md#事务)。
+需要原样保留领域错误时用显式begin/rollback/`commit`，每一步检查结果。示例实际制造第二次写入主键冲突，确认前次写入回滚、残留0。动态值用参数；表名/排序列只能来自可信白名单。详见[RelDB 事务](../function/reldb.md#事务)。
 
 ## PostgreSQL / MySQL 与 TLS
 
@@ -50,7 +50,7 @@ Memory 的 KV、Hash、List、Set、ZSet 共用 key 命名空间。`exists/expir
 
 批量删除即使HTTP200也可能部分失败，检查逐项回执；unknown先查对象真实状态再补偿。`publicUrl`不是访问控制；服务端先检查私有文件的访问权限，再提供短期签名。
 
-开发/测试的 Local 文件与代际元数据一起备份；`.hai-storage-meta/` 是保留目录，不能作为业务 key。缺少有效元数据的读取会失败。写入先准备元数据再发布内容，具体提交和清理边界见 [Storage](../../../packages/storage/README.md#api-概览)。
+开发/测试的 Local 文件与代际元数据一起备份；`.hai-storage-meta/` 是保留目录，不能作为业务 key。缺少有效元数据的读取会失败。写入先准备元数据再发布内容，具体提交和清理边界见 [Storage](../function/storage.md#api-概览)。
 
 ## 清洗和分块
 

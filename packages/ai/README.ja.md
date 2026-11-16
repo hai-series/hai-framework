@@ -8,38 +8,7 @@
 
 ## クイックスタート
 
-`ai.close()` は進行中の初期化を待ってからリソースを解放します。同時に終了を呼び出しても、解放処理は一度です。設定を変更して `ai.init()` を呼び出すと、既存のインスタンスを先に閉じます。終了中に初期化を呼び出すと失敗します。
-
-### 開発用 LLM のみ（DB 依存なし）
-
-```ts
-import { ai } from '@h-ai/ai'
-
-const init = await ai.init({
-  llm: {
-    model: 'gpt-4o-mini',
-    apiKey: process.env.HAI_AI_LLM_APIKEY,
-  },
-})
-if (!init.success)
-  throw new Error(init.error.message)
-
-try {
-  const result = await ai.llm.chat({
-    messages: [
-      { role: 'user', content: '你好！' }
-    ],
-  })
-  if (!result.success)
-    throw new Error(result.error.message)
-  const reply = result.data.choices[0]?.message.content ?? ''
-}
-finally {
-  await ai.close()
-}
-```
-
-開発時や明示的なテストモードでは、RelDB とベクトルデータベースが使えない場合、会話などの記録をプロセスのメモリーに一時保存できます。モジュールの終了、再起動、別のインスタンスへの切り替え後は、その記録を参照できません。`NODE_ENV` または `HAI_CORE_ENV` が `production` の場合は、共有のリレーショナルデータベースとネットワーク経由のベクトルデータベースを先に接続するか、複数のインスタンスから同じ記録を読み書きでき、バージョンを確認して更新する独自ストアを渡してください。
+[最小構成の導入手順](../../docs/usage/function/ai.md#最小接入示例)（中国語）を参照してください。
 
 ## 設定一覧
 
@@ -49,14 +18,7 @@ finally {
 
 ## 機能
 
-使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/ai.md)（中国語）を参照してください。
-
-- `ai.init` / `ai.close` / `ai.config` / `ai.isInitialized` — モデル設定を読み込み、準備状態を確認し、モジュールを終了する。再起動後も会話を残す場合は保存先も指定可能
-- `ai.llm` / `ai.stream` / `ai.reasoning` / `ai.token` / `ai.summary` / `ai.compress` / `ai.context` — チャットを呼び出し、応答をストリーミングし、トークン数を見積もって会話履歴を短くする
-- `ai.embedding` / `ai.rerank` / `ai.retrieval` / `ai.rag` / `ai.knowledge` — 内容をベクトル化して検索・再順位付けし、文書をナレッジベースに登録する
-- `ai.memory` / `ai.persona` — 会話メモリとペルソナの管理
-- `ai.tools` / `ai.mcp` / `ai.acp` / `ai.a2a` — ツール登録、MCP 接続、ACP セッション制御、A2A エージェント呼び出し
-- `ai.file` / `ai.image` / `ai.audio` — ファイル、画像、音声の操作
+[API 一覧](../../docs/usage/function/ai.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 

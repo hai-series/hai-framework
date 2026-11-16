@@ -14,12 +14,9 @@
 pnpm view @h-ai/cli@latest version
 pnpm add -g @h-ai/cli@latest
 hai --version
-hai create my-app --type fullstack --frontends web
-cd my-app
-pnpm dev
 ```
 
-输入项目名称与模板类型，输出工程文件；默认安装依赖并初始化 Git。`--defaults` 采用默认选择，`--no-install`、`--no-git`、`--no-deploy` 分别关闭安装、Git 初始化和部署开发依赖。省略名称或类型时交互选择。每个命令的选项以 `hai <command> --help` 为准。
+[跟着最小示例完成接入](../../docs/usage/function/cli.md#最小接入示例)。
 
 ## 配置清单
 
@@ -29,12 +26,7 @@ pnpm dev
 
 ## 功能说明
 
-在[功能说明](../../docs/usage/function/cli.md)中查看调用示例、输入输出、错误处理与使用要点。
-
-- `hai create` / `hai add` / `hai init` — 创建工程、接入模块和补齐配置
-- `hai generate` / `hai g` — 生成页面、组件、接口、模型和迁移
-- `hai build` / `hai deploy` — 构建制品、检查发布计划、发布或恢复
-- `hai upgrade` / `hai feedback` — 预检目标版本和查看离线反馈包
+[查 API 清单](../../docs/usage/function/cli.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 ## 数据结构
 

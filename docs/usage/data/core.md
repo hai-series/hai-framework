@@ -1,5 +1,7 @@
 # core 数据结构
 
+[English](core.en.md) · [日本語](core.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/core.md) · [功能说明](../function/core.md)
 
 ## 数据库与缓存

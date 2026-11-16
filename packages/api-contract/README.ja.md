@@ -8,35 +8,7 @@ hai-framework の公開 HTTP API 契約パッケージ。oRPC contract + Zod を
 
 ## クイックスタート
 
-```ts
-import { apiContract } from '@h-ai/api-contract'
-
-export const contract = apiContract.create({
-  iam: apiContract.iam,
-  storage: apiContract.storage,
-  ai: false,
-})
-```
-
-独自のアプリケーション contract も、このパッケージでルートを定義します。`@h-ai/serv` への依存は不要です：
-
-```ts
-import { apiContract } from '@h-ai/api-contract'
-import { z } from 'zod'
-
-export const appContract = {
-  ping: apiContract
-    .route({
-      method: 'POST',
-      path: '/app/ping',
-      operationId: 'app.ping',
-      tags: ['app']
-    })
-    .output(apiContract.haiResultSchema(z.object({
-      pong: z.boolean()
-    }))),
-}
-```
+[最小構成の導入手順](../../docs/usage/function/api-contract.md#最小接入示例)（中国語）を参照してください。
 
 ## 設定一覧
 
@@ -46,11 +18,7 @@ export const appContract = {
 
 ## 機能
 
-使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/api-contract.md)（中国語）を参照してください。
-
-- `apiContract.create` / `apiContract.route` / `apiContract.pathOf` — インターフェース定義をまとめ、HTTP メソッドとパスを定義し、既存のパスを取得する
-- `apiContract.haiResultSchema` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema` — 成功・エラーの応答やページ付き結果の構造を定義する
-- `apiContract.iam` / `apiContract.storage` / `apiContract.ai` / `apiContract.payment` / `apiContract.feedback` — 認証、ファイル、AI、決済、フィードバックの API 定義を再利用する
+[API 一覧](../../docs/usage/function/api-contract.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 

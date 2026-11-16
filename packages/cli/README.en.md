@@ -14,12 +14,9 @@ Use Node.js matching `engines` (`^22.23.4 || ^24.22.1 || ^26.12.1`) and pnpm 12.
 pnpm view @h-ai/cli@latest version
 pnpm add -g @h-ai/cli@latest
 hai --version
-hai create my-app --type fullstack --frontends web
-cd my-app
-pnpm dev
 ```
 
-Input a project name and template type; output is a project with dependency installation and Git initialization enabled. `--defaults` accepts defaults. `--no-install`, `--no-git` and `--no-deploy` omit installation, Git and deployment development dependencies respectively. Missing choices are interactive. Check each installed command with `hai <command> --help`.
+[Open the quick-start guide](../../docs/usage/function/cli.md#最小接入示例) (Chinese).
 
 ## Configuration Reference
 
@@ -29,12 +26,7 @@ See the [configuration reference](../../docs/usage/configuration/cli.md) in Chin
 
 ## Features
 
-See the [feature reference](../../docs/usage/function/cli.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
-
-- `hai create` / `hai add` / `hai init` — Create projects, add modules and fill in configuration
-- `hai generate` / `hai g` — Scaffold pages, components, APIs, models and migrations
-- `hai build` / `hai deploy` — Build artifacts, inspect deployment plans, publish and recover
-- `hai upgrade` / `hai feedback` — Check an upgrade target and inspect offline feedback bundles
+[Browse the API list](../../docs/usage/function/cli.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 

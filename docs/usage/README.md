@@ -4,6 +4,8 @@
 
 从当前要完成的工作开始阅读。第一次使用先[认识框架](overview/framework.md)，再[准备环境](overview/environment.md)、[创建并运行](getting-started/create.md)；已有应用从[工作路线](overview/reading-paths.md)找到合适顺序。
 
+第一次接入时按第 1–3 章走完一条流程。遇到具体字段、调用方式或数据保存问题时，再查对应模块的[配置](configuration/README.md#按模块查配置)、[功能 API](function/README.md)和[数据结构](data/README.md)。模块 README 指向同一份参考文档。
+
 ## 文档章节
 
 1. **[认识框架与选择路线](overview/README.md)**：能力边界、应用结构、六类读者路线和环境准备。
@@ -19,7 +21,7 @@
 
 初次使用按第二章顺序运行一个应用；开发人员从第三章接通一条业务流程；配置管理先读第四章的来源与覆盖；运维从第五章核对目标和恢复条件；框架维护与安全审查从第六章查实现和证据。[六条阅读路线](overview/reading-paths.md)给出每条的完成目标和先后顺序。
 
-各包 README 共用模块参考页。单项配置集中在[模块配置清单](configuration/README.md#按模块查配置)，领域手册说明模块之间如何接线。官网直接读取本目录的 Markdown 和 `navigation.json`。详细参考正文为中文，英语和日语入口提供[完整创建流程](getting-started/README.md)。
+GitHub Pages 从本目录的 Markdown 生成正文，从 `navigation.json` 读取侧栏。英文和日文可从相同章节进入；尚未翻译的页面会显示中文正文与原文链接。
 
 ## 版本、示例与验证
 
