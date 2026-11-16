@@ -19,6 +19,8 @@
 
 ## 模块导航
 
+按包查阅[配置清单](docs/usage/configuration/README.md#按模块查配置)、[数据结构](docs/usage/data/README.md)和[功能说明](docs/usage/function/README.md)。
+
 下表指向生成应用也会交付的使用正文。仓库私有规范位于 .agents/instructions；仓库 skill 的公共使用契约通过相对转引共用模板正文。模块已交付 skill 不等于已安装或启用，接入时核对实际依赖与配置。
 
 | 模块 | 按需入口 |

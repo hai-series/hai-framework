@@ -154,7 +154,7 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 13. **公共 API JSDoc** → R6
 14. **测试** → R7
 15. **包配置**（`package.json` / `tsconfig.json` / `tsup.config.ts` / `vitest.config.ts`）→ R8
-16. **README** → R9：按模块对象的全部公开子功能逐项说明用途、示例和必要注意事项；同时核对模块入口约定与明确例外。
+16. **README 与模块手册** → [R9](reference.md#r9-readme-章节顺序面向人类)：按统一章节提供入口，详细配置、数据结构和公开功能分别写入 `docs/usage` 的模块参考页。核对模块入口约定与明确例外。
 
 ## §6 创建检查清单
 
