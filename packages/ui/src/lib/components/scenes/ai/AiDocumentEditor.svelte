@@ -2456,6 +2456,9 @@
     await onrewrite({
       actionId,
       selectedText,
+      selectionSnapshot: savedSelectionSnapshot
+        ? { ...savedSelectionSnapshot }
+        : undefined,
       content,
       title: title || undefined,
     })

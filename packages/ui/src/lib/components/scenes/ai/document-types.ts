@@ -127,6 +127,8 @@ export interface MarkdownRewriteRequest {
   actionId: string
   /** 当前选中的原文。 */
   selectedText: string
+  /** 可视正文中的精确纯文本偏移；宿主可据此映射原始 Markdown，不以纯文本猜测源码位置。 */
+  selectionSnapshot?: MarkdownSelectionSnapshot
   /** 触发请求时的完整文档内容。 */
   content: string
   /** 当前文档标题。 */

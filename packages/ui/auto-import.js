@@ -115,6 +115,9 @@ const UI_COMPONENTS = new Set([
   'AiDocumentEditor',
   'AiTableEditor',
   'MarkdownRenderer',
+  // scenes - tools
+  'ArtifactWorkspace',
+  'ToolWorkspace',
   // scenes - crud
   'CrudDeleteConfirm',
   'CrudDetailPanel',

@@ -216,6 +216,7 @@
   $effect(() => {
     if (open && portal && triggerElement && popoverElement)
       return registerDialogPortal(triggerElement, popoverElement)
+    return undefined
   })
 
   $effect(() => {

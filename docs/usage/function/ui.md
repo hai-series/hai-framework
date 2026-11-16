@@ -473,6 +473,91 @@ Monaco 和同源 worker 由 Vite 在浏览器按需加载。主题默认跟随 H
 />
 ```
 
+##### 工具与产物工作台
+
+`ArtifactWorkspace` 和 `ToolWorkspace` 通过 `@h-ai/ui/components/scenes/tools/index` 或根入口使用。组件不调用业务 HTTP、不访问数据库，也不创建工具实现；宿主通过回调提供已授权的数据和操作。异步读取、创建、保存、历史、改写、运行、查询和取消回调接收 `AbortSignal`，宿主应继续传给实际请求；`onselect/onartifact/onerror/onleaveguard/onrunchange` 等通知按各自签名调用，不额外传入信号。
+
+| 组件 | 必填输入 | 可选参数、回调与默认行为 | 输出 |
+| --- | --- | --- | --- |
+| `ArtifactWorkspace` | `artifacts`、`onread(id, version, signal)` | 默认选择第一项；`oncreate/onsave/onhistory/onrewrite/onselect/onerror/onleaveguard` 按需提供；未提供保存能力或产物未声明 `editable` 时只读 | 保存请求携带 `id/baseVersion/content`；选区改写先显示提议，再由用户应用和保存 |
+| `ToolWorkspace` | `tools`、`onrun(request, signal)` | `resources/initialRun/onrunchange/onstatus/oncancel/onartifact/onerror` 可选；查询默认间隔 1000 毫秒，最低 250 毫秒；没有状态回调时不轮询 | 表单参数转换成实际数字、布尔值或 JSON，执行结果和产物引用交给宿主 |
+
+提供 `oncreate({ title, kind, content }, signal)` 可启用内置新建表单，选择 Markdown、HTML、表格或图表模板；创建成功返回 `ArtifactDocument`。宿主将新产物加入列表；组件不会隐式持久化。
+
+产物摘要包含 `id/title/kind/version`，可选 `editable/mediaType/updatedAt/downloadUrl`；读取结果增加 `content/mediaUrl`。`kind` 支持 `markdown/html/table/chart/image/audio/video/file`。`version` 是业务内容版本，不代替工程补丁的 Git `revision`。
+
+以下示例只使用内存数据演示回调；实际应用在服务层访问接口，并在服务端校验主体、资源和基础版本。
+
+```svelte
+<script lang="ts">
+  import { ArtifactWorkspace, type ArtifactDocument, type ArtifactSaveRequest, type ArtifactSaveResponse } from '@h-ai/ui/components/scenes/tools/index'
+
+  let report: ArtifactDocument = {
+    id: 'report', title: '报告', kind: 'markdown', version: 1,
+    content: '# 简介\n\n产品介绍。', editable: true,
+  }
+  async function readArtifact() { return report }
+  async function saveArtifact(request: ArtifactSaveRequest): Promise<ArtifactSaveResponse> {
+    if (request.baseVersion !== report.version)
+      return { status: 'conflict', currentVersion: report.version }
+    report = { ...report, version: report.version + 1, content: request.content }
+    return { status: 'saved', document: report }
+  }
+</script>
+
+<ArtifactWorkspace artifacts={[report]} onread={readArtifact} onsave={saveArtifact} />
+```
+
+Markdown 复用 `AiDocumentEditor`。普通段落和标题支持可视编辑，代码、Mermaid、表格、HTML 和无法可靠还原的扩展保留原始块，通过源码页签修改；未修改块逐字保留。结构变化无法安全回写时不覆盖原文，保留当前编辑 DOM，提供复制文字与重新读取动作。历史查看为只读；以历史版本创建草稿时先读取最新基线，保存再生成新版本。版本冲突保留本地草稿，不能自动重试覆盖。
+
+表格 `content` 使用现成 `AiTableData` 的 JSON：`table_columns` 和 `table_rows`；单元格变更回写 JSON 草稿。图表 JSON 使用 `type/data/x/y`，仅支持既有五种基本图形，不透传未知回调或属性。图片、音频和视频使用宿主提供的授权 `mediaUrl`，视频读取由宿主支持 Range。文本下载与版本历史仍归业务服务管理。
+
+HTML 预览允许内联脚本交互，iframe 仅开放 `allow-scripts`，不开放 `allow-same-origin`、表单、下载或顶层导航。预览先插入默认离线的资源 CSP，移除 base、刷新、嵌套框架和外链跳转。此限制不能代替服务端出口隔离：宿主仍须配置独立预览来源、适当的父页面 `frame-src` 和受控网络，宿主父页面应设置 `frame-src 'self'` 阻止子框架外部导航；浏览器可能显示被阻止的框架错误页，应用可切源码再预览恢复。不要把子框架资源 CSP 当作完整网络边界。
+
+工具目录每项含 `name/description/inputSchema`，可选 `title/examples`。简单字段按 Schema 生成表单；`examples` 为 `{ label, input }[]`，点击后只填参数，仍需用户提交；嵌套结构放入高级参数。完整 Schema 和授权继续由服务端验证。可视改写使用选区快照精确映射普通标题、段落及完整加粗/链接，复杂或跨块选区提示切换源码选区；不近似定位替换。
+
+工具可选传 `resources: readonly { id, title, kind?, mediaType? }[]`。Schema 的 `format: artifact-id/artifact-ids` 自动使用可搜索单选/多选；可选 `contentMediaType` 按 MIME 过滤候选（如 image/*），仍保留手填 ID。列表只用于选择，宿主读取与执行时继续授权。
+
+```svelte
+<script lang="ts">
+  import { ToolWorkspace, type ToolCatalogItem, type ToolRun, type ToolRunRequest } from '@h-ai/ui/components/scenes/tools/index'
+  const catalog: ToolCatalogItem[] = [{
+    name: 'sum', description: '计算两个数的合计',
+    inputSchema: { type: 'object', required: ['a', 'b'], properties: { a: { type: 'number' }, b: { type: 'number' } } },
+    examples: [{ label: '2 + 3', input: { a: 2, b: 3 } }],
+  }]
+  async function run(request: ToolRunRequest): Promise<ToolRun> {
+    return { id: 'demo-run', status: 'succeeded', result: { total: Number(request.input.a) + Number(request.input.b) } }
+  }
+</script>
+
+<ToolWorkspace tools={catalog} onrun={run} />
+```
+
+宿主可通过 `onleaveguard(guard | undefined)` 注册产物异步离开确认，所有会销毁编辑工作台的菜单、切任务、新建任务、登出及 SPA 导航都应先调用；组件为硬刷新和关闭提供 beforeunload 提示。取消确认时草稿保留，确认丢弃才离开。
+
+工具的 `onrun` 请求还携带组件生成的 `idempotencyKey`；未知提交重试沿用同一个键。`initialRun/onrunchange` 可连接宿主持久回执，提供 `onstatus` 时挂载主动续看；`onstatus` 可返回 null，表示暂未找到受理记录，不宣称取消。宿主可在 URL 只保存 opaque receipt/key，通过授权服务找回；表单参数仍只在内存。未知提交若有原请求快照会锁定表单并原样重试；已知回执恢复期间也锁定工具选择。另开操作需确认旧任务可能继续，再生成新键。完成的工具产物按 ID 合并进最近 100 个候选资源。
+
+恢复引用通过 `initialRun` 初始化组件挂载；它不是随 props 更新而切换任务的受控值。`onrunchange(run | undefined)` 通知宿主保存或清除当前引用。未知提交须保留 `ToolRun.idempotencyKey`，已取得真实回执时省略该字段。以下字符串仅为格式示例，实际应使用宿主已保存的原始引用和键，不生成新键：
+
+```ts
+import type { ToolRun } from '@h-ai/ui/components/scenes/tools/index'
+
+const pendingSubmission: ToolRun = {
+  id: 'opaque-pending-reference',
+  status: 'unknown',
+  idempotencyKey: 'saved-user-action-key',
+}
+const acceptedSubmission: ToolRun = {
+  id: 'opaque-run-receipt',
+  status: 'unknown',
+}
+```
+
+将相应对象传为 `initialRun`，在 `onrunchange` 保存最新引用；`onstatus(id, signal): Promise<ToolRun | null>` 由宿主把待定引用映射到原幂等键查找、把已知回执映射到状态查询。找不到记录返回 `null`，不能伪造取消或成功。
+
+长任务的 `onrun` 应尽快返回带 `id/status` 的回执，由 `onstatus` 读取进度和终态。`progress` 是 0..1 的完成比例；`message` 必须已脱敏。`oncancel` 返回实际取消状态，未确认停止时保留运行或待核验状态；组件卸载只停止等待和轮询，不宣称服务端任务已结束。
+
 ##### Charts 图表
 
 轻量看板由 `MetricCard`（数值、单位、百分比变化）、`ReportCard`（标题、操作、内容、加载/空态）和 `DashboardGrid`（按容器宽度收拢为一/二/多列）组成。指标卡自身不加载图形引擎；`trend={12.8}` 表示 +12.8%，`trendTone` 独立表达业务好坏，下降也可以是 success。缺失或非有限数显示“—”，零值正常显示。

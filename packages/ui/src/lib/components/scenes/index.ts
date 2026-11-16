@@ -33,5 +33,8 @@ export * from './iam/index.js'
 
 // Storage 场景组件
 export * from './storage/index.js'
+
+// 工具和产物工作台
+export * from './tools/index.js'
 // 场景组件类型
 export * from './types.js'

@@ -131,6 +131,9 @@ declare global {
   const AiDocumentEditor: typeof import('@h-ai/ui')['AiDocumentEditor']
   const AiTableEditor: typeof import('@h-ai/ui')['AiTableEditor']
   const MarkdownRenderer: typeof import('@h-ai/ui')['MarkdownRenderer']
+  // scenes - tools
+  const ArtifactWorkspace: typeof import('@h-ai/ui')['ArtifactWorkspace']
+  const ToolWorkspace: typeof import('@h-ai/ui')['ToolWorkspace']
 
   // scenes - crud
   const CrudDeleteConfirm: typeof import('@h-ai/ui')['CrudDeleteConfirm']

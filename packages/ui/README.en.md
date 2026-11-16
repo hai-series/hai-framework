@@ -24,6 +24,8 @@ See the [configuration reference](../../docs/usage/configuration/ui.md) in Chine
 
 [Browse the API list](../../docs/usage/function/ui.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
+[Tool and artifact workspaces](../../docs/usage/function/ui.md#工具与产物工作台) provide parameter forms, examples, task progress, document editing, version conflicts, and media previews. Applications connect authorized read, write, and execution callbacks (guide in Chinese).
+
 ## Data Structures
 
 The module creates no database tables of its own.

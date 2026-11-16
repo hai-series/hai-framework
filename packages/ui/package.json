@@ -108,6 +108,11 @@
       "svelte": "./dist/components/scenes/storage/index.js",
       "import": "./dist/components/scenes/storage/index.js"
     },
+    "./components/scenes/tools/index": {
+      "types": "./dist/components/scenes/tools/index.d.ts",
+      "svelte": "./dist/components/scenes/tools/index.js",
+      "import": "./dist/components/scenes/tools/index.js"
+    },
     "./styles/*": "./dist/styles/*"
   },
   "main": "./dist/index.js",
