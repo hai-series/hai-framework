@@ -498,6 +498,13 @@ test('static Pages deep links, public assets and honest contact feedback', async
             excludePaths: ['/api/public/request-open', '/api/public/request-denied', '/api/prefix-probe'],
           },
         }))
+        // 本夹具额外启用传输加密，须等待浏览器安装协议再发唯一业务请求；默认模板可能关闭该能力。
+        const authSmokeFile = path.join(projectPath, 'e2e/app.spec.ts')
+        const authSmoke = await readFile(authSmokeFile, 'utf8')
+        const meAssertion = '  expect(await page.evaluate(async url => (await fetch(url)).status, new URL(\'./api/auth/me\', test.info().project.use.baseURL).href)).toBe(200)'
+        if (!authSmoke.includes(meAssertion))
+          throw new Error('Encrypted fixture could not locate the authentication reload check')
+        await writeFile(authSmokeFile, authSmoke.replace(meAssertion, `  await page.waitForFunction(() => Reflect.get(globalThis, '__haiKitTransportFetchInstalled') === true)\n${meAssertion}`))
         for (const name of ['request-open', 'request-denied', 'request-required']) {
           const route = path.join(projectPath, 'src/routes/api/public', name)
           await mkdir(route, { recursive: true })
