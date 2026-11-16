@@ -139,5 +139,6 @@
   "plan_user": "同じユーザーで再利用",
   "plan_shared": "共有条件を満たします",
   "plan_task": "タスクを分離",
-  "rename_task": "タスク名"
+  "rename_task": "タスク名",
+  "tools_workbench": "ツールワークスペース"
 }

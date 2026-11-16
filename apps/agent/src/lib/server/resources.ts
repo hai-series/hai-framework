@@ -8,8 +8,10 @@ import { core, err, ok } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { storage } from '@h-ai/storage'
 import { id } from '#lib/workspace.js'
+import { artifactStore } from './artifacts.js'
 import { config } from './config.js'
 import { addResource, listResources, missing, owner, resource, taskBySession, value, WorkspaceError } from './data.js'
+import { toolHost } from './tool-host.js'
 
 export const fileLimit = 8 * 1024 * 1024
 export function memory(subject: RunnerScope) {
@@ -34,6 +36,13 @@ export async function readFile(user: string, id: string) {
   const ref = await resource(user, id)
   if (ref.kind !== 'file' && ref.kind !== 'artifact')
     missing()
+  if (ref.kind === 'artifact' && ref.artifactKind) {
+    const artifact = await artifactStore.read(user, id)
+    return {
+      ref: artifact.ref,
+      bytes: Buffer.from(artifact.bytes),
+    }
+  }
   return {
     ref,
     bytes: value(await storage.file.get(key(user, ref.id))),
@@ -67,7 +76,7 @@ export async function allowedTool(scope: RunnerScope, task: string, serviceId: s
   const binding = await taskBySession(owner(scope), task)
   if (!binding || binding.archived)
     return false
-  const allowed = config().tools.find(item => item.serviceId === serviceId && item.tool === tool && binding.settings.tools.includes(item.id))
+  const allowed = config().tools.find(item => item.serviceId === serviceId && item.tool === tool && binding.settings.tools.includes(`mcp_${item.id}`))
   if (!allowed)
     return false
   for (const field of allowed.fileArguments) {
@@ -75,7 +84,9 @@ export async function allowedTool(scope: RunnerScope, task: string, serviceId: s
     if (!idValue.success)
       return false
     try {
-      await resource(owner(scope), idValue.data, 'file')
+      const ref = await resource(owner(scope), idValue.data)
+      if (ref.kind !== 'file' && ref.kind !== 'artifact')
+        return false
     }
     catch {
       return false
@@ -116,7 +127,7 @@ export const jobFiles: MCPJobFiles = {
   },
 }
 
-export function createPolicy(broker: () => import('@h-ai/ai').MCPServiceBroker | undefined): ACPPlatformPolicy {
+export function createPolicy(broker: () => import('@h-ai/ai').BuiltinToolBroker | undefined): ACPPlatformPolicy {
   return {
     preferUserWorker: () => true,
     allowFullAccess: async scope => value(await iam.authz.getUserRoles(scope.userId)).some(role => role.code === 'admin'),
@@ -140,16 +151,23 @@ export function createPolicy(broker: () => import('@h-ai/ai').MCPServiceBroker |
       }, Buffer.from(input.changes.patch))
       return { id: ref.id, name: ref.title }
     },
-    allowTools: (_scope, _agent, ids) => !!config().toolUrl && ids.every(id => config().tools.some(tool => tool.id === id)),
+    async allowTools(scope, _agent, ids) {
+      if (!ids.length)
+        return true
+      if (!config().toolUrl || !config().workbench.tools)
+        return false
+      const catalog = await toolHost.catalog(scope)
+      return ids.every(id => catalog.some(tool => tool.name === id))
+    },
     async bindTools(scope, taskId, ids, signal) {
       const current = broker()
       if (!current)
         throw new WorkspaceError(503, 'tools-offline')
-      const tools = config().tools.filter(tool => ids.includes(tool.id)).map(({ fileArguments, ...tool }) => tool)
       return value(await current.bind({
-        principal: scope,
-        taskId,
-        tools,
+        scope,
+        sessionId: taskId,
+        tools: ids,
+        ttlMs: 1_200_000,
         signal,
       }))
     },
@@ -253,6 +271,9 @@ export async function upload(user: string, file: File) {
     id: randomUUID(),
     kind: 'file',
     title: file.name,
+    mediaType: /^[a-z\d.+-]+\/[a-z\d.+-]+$/iu.test(file.type)
+      ? file.type
+      : 'application/octet-stream',
   }, new Uint8Array(await file.arrayBuffer()))
 }
 

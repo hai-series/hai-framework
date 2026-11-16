@@ -15,7 +15,7 @@ const integer = { type: 'BIGINT', notNull: true } as const
 const pk = { ...text, primaryKey: true }
 
 export class WorkspaceError extends Error {
-  constructor(readonly status: number, readonly code: string) {
+  constructor(readonly status: number, readonly code: string, readonly currentVersion?: number) {
     super(code)
   }
 }
@@ -254,11 +254,50 @@ export async function listResources(user: string, kind: AgentResource['kind']) {
   return found.map(row => stored<AgentResource>(row.data))
 }
 
-export async function resource(user: string, id: string, kind?: AgentResource['kind']) {
-  const entry = await one<AgentResource>(resources, user, id)
+export async function resource(user: string, id: string, kind?: AgentResource['kind'], sql: DmlOperations = reldb.sql) {
+  const entry = await one<AgentResource>(resources, user, id, sql)
   if (!entry || (kind && entry.kind !== kind))
     return missing()
   return entry
+}
+
+export async function withResource<T>(user: string, id: string, operation: (entry: AgentResource, sql: DmlOperations) => Promise<T>) {
+  const transaction = value(await reldb.tx.begin())
+  let committed = false
+  try {
+    value(await transaction.execute(`UPDATE ${resources} SET created_at = created_at WHERE owner = ? AND id = ?`, [user, id]))
+    const output = await operation(await resource(user, id, undefined, transaction), transaction)
+    value(await transaction.commit())
+    committed = true
+    return output
+  }
+  finally {
+    if (!committed) {
+      const rolledBack = await transaction.rollback()
+      if (!rolledBack.success)
+        core.logger.error('Agent resource rollback failed', { module: 'agent', errorCode: rolledBack.error.code })
+    }
+  }
+}
+
+export async function writeResource(user: string, entry: AgentResource, sql: DmlOperations = reldb.sql) {
+  const changed = value(await sql.execute(`UPDATE ${resources} SET data = ? WHERE owner = ? AND id = ?`, [
+    JSON.stringify(entry),
+    user,
+    entry.id,
+  ]))
+  if (changed.changes !== 1)
+    missing()
+}
+
+export async function insertResource(user: string, entry: AgentResource, sql: DmlOperations) {
+  return value(await sql.execute(`INSERT INTO ${resources} (id, owner, kind, created_at, data) VALUES (?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`, [
+    entry.id,
+    user,
+    entry.kind,
+    entry.createdAt ?? Date.now(),
+    JSON.stringify(entry),
+  ])).changes === 1
 }
 
 export async function addResource(user: string, entry: AgentResource) {
@@ -291,8 +330,15 @@ export async function writePrefs(user: string, data: AgentPreferences) {
 }
 
 export function handleWorkspaceError(error: unknown) {
-  if (error instanceof WorkspaceError)
-    return { status: error.status, code: error.code }
+  if (error instanceof WorkspaceError) {
+    return {
+      status: error.status,
+      code: error.code,
+      ...(error.currentVersion !== undefined
+        ? { currentVersion: error.currentVersion }
+        : {}),
+    }
+  }
   const traceId = randomUUID()
   core.logger.error('Agent workspace operation failed', {
     module: 'agent',

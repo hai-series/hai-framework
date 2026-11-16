@@ -1,5 +1,12 @@
 # 示例应用的项目、工具及个人工作台设置，可用 HAI_AGENT JSON 覆盖。
 tenant: ${HAI_AGENT_TENANT:agent}
 tools: []
+workbench:
+  artifacts: ${HAI_AGENT_WORKBENCH_ARTIFACTS:true}
+  tools: ${HAI_AGENT_WORKBENCH_TOOLS:true}
+  selection:
+    groups: [documents, image, audio, web, video, analysis, mcp]
+  # 通过 HAI_AGENT_WORKBENCH_ENVIRONMENTS JSON 登记固定 Runner 环境；网页工具另需 browserProxy。
+  environments: {}
 skills: []
 projects: []

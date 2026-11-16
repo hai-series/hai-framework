@@ -10,6 +10,7 @@ export interface HomeView {
   tools: { id: string, description: string }[]
   skills: { id: string, title: string }[]
   speech: { asr: boolean, tts: boolean }
+  workbench?: { artifacts: boolean, tools: boolean }
 }
 
 export interface TaskView {
@@ -28,7 +29,7 @@ export interface MemoryView {
 }
 
 export class AgentClientError extends Error {
-  constructor(readonly status: number, readonly code: string) {
+  constructor(readonly status: number, readonly code: string, readonly currentVersion?: number) {
     super(code)
   }
 }
@@ -39,7 +40,9 @@ async function checked(response: Response) {
   const body = await response.json().catch(() => null)
   throw new AgentClientError(response.status, typeof body?.code === 'string'
     ? body.code
-    : 'operation-failed')
+    : 'operation-failed', Number.isSafeInteger(body?.currentVersion) && body.currentVersion > 0
+    ? body.currentVersion
+    : undefined)
 }
 
 export function url(params?: Record<string, string>) {
@@ -52,13 +55,18 @@ export async function read<T>(params?: Record<string, string>, signal?: AbortSig
   return (await checked(await fetch(url(params), { signal }))).json()
 }
 
-export async function send<T>(command: WorkspaceAction): Promise<T> {
+export async function mutate<T>(command: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
   const response = await checked(await fetch(url(), {
     method: 'POST',
+    signal,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(command),
   }))
   return response.json()
+}
+
+export function send<T>(command: WorkspaceAction): Promise<T> {
+  return mutate(command)
 }
 
 export async function upload(file: File): Promise<AgentResource> {

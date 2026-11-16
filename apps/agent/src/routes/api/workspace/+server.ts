@@ -2,9 +2,12 @@ import type { RequestHandler } from './$types'
 import { kit } from '@h-ai/kit'
 import { json } from '@sveltejs/kit'
 import { z } from 'zod'
+import { artifactDocument, artifactMedia, artifactSummary } from '#lib/server/artifact-http.js'
+import { artifactStore } from '#lib/server/artifacts.js'
 import { config } from '#lib/server/config.js'
-import { handleWorkspaceError, owner, WorkspaceError } from '#lib/server/data.js'
+import { handleWorkspaceError, owner, resource, WorkspaceError } from '#lib/server/data.js'
 import { readFile, upload } from '#lib/server/resources.js'
+import { toolHost } from '#lib/server/tool-host.js'
 import { action, library, view } from '#lib/server/workspace.js'
 import { actionSchema, id } from '#lib/workspace.js'
 
@@ -12,6 +15,14 @@ const pageQuery = z.object({
   task: id.optional(),
   download: id.optional(),
   preview: id.optional(),
+  artifact: id.optional(),
+  artifactHistory: id.optional(),
+  media: id.optional(),
+  version: z.coerce.number().int().positive().max(999_999).optional(),
+  attachment: z.literal('1').optional(),
+  catalog: z.literal('1').optional(),
+  toolRun: z.string().min(1).max(512).optional(),
+  toolKey: z.string().min(1).max(200).optional(),
   pane: z.enum([
     'knowledge',
     'memory',
@@ -42,10 +53,32 @@ function endpoint(operation: (event: Pick<Parameters<RequestHandler>[0], 'reques
   })
 }
 
-export const GET = endpoint(async ({ url }, scope) => {
+export const GET = endpoint(async ({ url, request }, scope) => {
   const params = pageQuery.parse(Object.fromEntries(url.searchParams))
+  if (params.catalog)
+    return json(await toolHost.catalog(scope, request.signal))
+  if (params.toolRun)
+    return json(await toolHost.inspect(scope, params.toolRun, request.signal))
+  if (params.toolKey)
+    return json(await toolHost.find(scope, params.toolKey, request.signal))
+  if (params.artifact || params.artifactHistory || params.media) {
+    if (!config().workbench.artifacts)
+      throw new WorkspaceError(403, 'feature-disabled')
+    const user = owner(scope)
+    if (params.media)
+      return artifactMedia(user, params.media, request, params.version, params.attachment === '1')
+    if (params.artifactHistory)
+      return json((await artifactStore.history(user, params.artifactHistory)).map(ref => artifactSummary(ref, url.pathname)))
+    return json(await artifactDocument(user, params.artifact!, url.pathname, params.version))
+  }
   if (params.download) {
-    const { ref, bytes } = await readFile(owner(scope), params.download)
+    const ref = await resource(owner(scope), params.download)
+    if (ref.kind === 'artifact' && ref.artifactKind) {
+      if (!config().workbench.artifacts)
+        throw new WorkspaceError(403, 'feature-disabled')
+      return artifactMedia(owner(scope), params.download, request, undefined, true)
+    }
+    const { bytes } = await readFile(owner(scope), params.download)
     return new Response(Uint8Array.from(bytes).buffer, {
       headers: {
         'Content-Type': 'application/octet-stream',
@@ -81,5 +114,20 @@ export const POST = endpoint(async ({ request, url }, scope) => {
     return json(await upload(owner(scope), file))
   }
   const validated = actionSchema.parse(await request.json())
-  return json((await action(scope, validated)) ?? null)
+  const output = await action(scope, validated, request.signal)
+  if (validated.type === 'artifact-create' || validated.type === 'artifact-save') {
+    const committed = z.object({
+      id,
+      version: z.number().int().positive().max(999_999),
+    }).safeParse(output)
+    if (!committed.success)
+      throw new Error('Artifact operation returned invalid version metadata')
+    const document = await artifactDocument(owner(scope), committed.data.id, url.pathname, committed.data.version)
+    return json(validated.type === 'artifact-save'
+      ? { status: 'saved', document }
+      : document)
+  }
+  return json(output ?? null)
 })
+
+export const HEAD = GET

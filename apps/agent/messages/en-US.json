@@ -139,5 +139,6 @@
   "plan_user": "Reusable by this user",
   "plan_shared": "Eligible for sharing",
   "plan_task": "Isolated for this task",
-  "rename_task": "Task title"
+  "rename_task": "Task title",
+  "tools_workbench": "Tool workspace"
 }

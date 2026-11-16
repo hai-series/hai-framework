@@ -1,4 +1,4 @@
-import type { MCPServiceBroker } from '@h-ai/ai'
+import type { BuiltinToolBroker } from '@h-ai/ai'
 import type { Server } from 'node:http'
 import { once } from 'node:events'
 import { mkdir } from 'node:fs/promises'
@@ -13,11 +13,13 @@ import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 import { runner, RunnerConfigSchema } from '@h-ai/runner'
 import { storage, StorageConfigSchema } from '@h-ai/storage'
 import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
+import { artifactStore } from './artifacts.js'
 import { agentConfigSchema, config, production } from './config.js'
 import { initWorkspace, value } from './data.js'
-import { allowedTool, createPolicy, jobFiles } from './resources.js'
+import { createPolicy, jobFiles } from './resources.js'
+import { toolHost } from './tool-host.js'
 
-let broker: MCPServiceBroker | undefined
+let broker: BuiltinToolBroker | undefined
 let server: Server | undefined
 
 export const runtime = core.module.createRuntime([
@@ -37,6 +39,7 @@ export const runtime = core.module.createRuntime([
           vecdb: VecdbConfigSchema,
         },
       })
+      core.i18n.setGlobalLocale(core.config.get<{ defaultLocale: string }>('core')?.defaultLocale ?? 'zh-CN')
       if (production()) {
         const db = ReldbConfigSchema.parse(core.config.get('db'))
         const kv = CacheConfigSchema.parse(core.config.get('cache'))
@@ -89,6 +92,11 @@ export const runtime = core.module.createRuntime([
     close() {},
   },
   {
+    name: 'artifacts',
+    start: () => artifactStore.prepare(),
+    close() {},
+  },
+  {
     name: 'runner',
     start: () => runner.init(RunnerConfigSchema.parse(core.config.get('runner'))),
     close: () => runner.close(),
@@ -103,14 +111,19 @@ export const runtime = core.module.createRuntime([
     close: () => ai.close(),
   },
   {
+    name: 'tools',
+    start: () => toolHost.start(),
+    close: () => toolHost.close(),
+  },
+  {
     name: 'mcp-broker',
     async start() {
       const { toolUrl, toolPort } = config()
-      if (!toolUrl || !toolPort || !runner.isExecutor)
+      if (!toolUrl || !toolPort || !runner.isExecutor || !config().workbench.tools)
         return
-      broker = value(ai.mcp.services.createBroker({
+      broker = value(ai.tools.createBroker({
+        service: toolHost.service(),
         url: toolUrl,
-        authorize: ({ principal, serviceId, tool, taskId, arguments: args }) => allowedTool(principal, taskId, serviceId, tool, args ?? {}),
       }))
       const active = broker
       server = createServer((request, response) => {

@@ -1,0 +1,166 @@
+# Hai Agent
+
+[简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
+
+Hai Agent は複数ユーザー向けの Web ワークスペースです。実エージェントとの協業、資料の引用、ツール実行の承認、コード差分の確認、成果物の取得ができます。タスク、ナレッジ、添付、メモリ、個人設定はログインしたアカウントに帰属します。
+
+## クイックスタート
+
+リポジトリで固定された Node.js と pnpm を使います。実エージェントには Linux cgroup v2、Docker または Podman、接続できるモデルゲートウェイ、準備済み Agent イメージが必要です。開発時は SQLite、LanceDB、ローカルファイル、メモリキャッシュを使うため、先にログインと資料管理を確認できます。
+
+```sh
+pnpm install --frozen-lockfile
+pnpm exec turbo run build --filter=agent^...
+pnpm --filter agent build
+NODE_ENV=development pnpm --filter agent preview --mode dev
+```
+
+ローカル登録は `apps/agent/.env.local` の `HAI_IAM_REGISTER_ENABLED=true` で有効にします。実エージェント用にバックエンドと Runner 環境を登録します。ブラウザーテストは独立したアカウント・データディレクトリを作ります。
+
+## 使い方
+
+| 機能                   | 操作と確認できる結果                                                                                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| タスクと会話           | 新規タスクでバックエンドを選び送信。検索・再読込・改名・アーカイブ・復元が可能。更新や API ノードの切り替え後も保存済み進捗を取得                                              |
+| 実行と権限             | 自動・共有・個人・専用を選択し、権限・承認・モデル・期限・出力形式を設定。計画で実際の方式と理由を確認。実行停止、一度の許可、セッション許可、同種操作ルール、拒否・撤回に対応 |
+| ファイルとプロジェクト | 添付のアップロードや割り当て済み Git ブランチを選択。許可された資料だけを利用し、成功した変更は成果物・差分で確認。取得または確認後に専用タスクブランチへ公開                  |
+| ツールとスキル         | ツール画面のフォーム・プリセットで実行、またはタスク設定で同じカタログから選択。入力欄で公開スキルを選び、実際の状態と機密を除いた結果を確認                                   |
+| ナレッジ               | 個人用ナレッジベースにテキスト・ファイルを登録して索引化・引用。取得したタイトルや断片を確認し、失敗を再試行。削除した文書は検索から除外                                       |
+| メモリと個人設定       | メモリの追加・検索・編集・削除、既定方式・回答の好み・読み上げ音声・メモリ方針を設定。タスクごとの無効化と、既定で確認する新規提案                                             |
+| 音声                   | 録音・WAV/MP3 アップロード後、入力欄の認識結果を編集して送信。完了した回答を読み上げ・停止。録音は HTTPS または localhost が必要                                               |
+| Token とコンテキスト   | 見積もりとバックエンドの実測使用量を区別。長い履歴は新しいネイティブセッション向けに要約し、元の履歴も保持                                                                     |
+
+### 実行方式
+
+| 方式     | 隔離と用途                                                                                                                                                                                         |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auto`   | 対応バックエンドでツール・外部資料なしの読み取り専用会話は共有可能。通常処理は同一アカウント内で再利用し、プロジェクト・完全アクセスは専用                                                         |
+| `shared` | 管理者が許可した固定 DeepSeek Harness ACP イメージで、ツールなし読み取り専用会話。同一テナントでプロセスを共有し、会話はアカウント別。添付・個人情報・ナレッジ・メモリ・スキルは個人または専用方式 |
+| `user`   | 同一本人・同一起動設定だけで再利用。セッションごとの認可とルーティングは独立                                                                                                                       |
+| `task`   | タスクセッションごとに専用ワークスペースと Worker 枠を用意。プロジェクトのマウントと完全アクセスに使用                                                                                             |
+
+## 成果物と手動ツール
+
+成果物画面で Markdown・HTML・表・グラフを新規作成できます。通常の段落・見出しは視覚的に編集し、コード・Mermaid・表・複雑なブロックはソースを保持します。複雑な編集はソース画面を使います。表とグラフは既存コンポーネント、画像・音声・動画は認可されたプレビュー・ダウンロード URL を使います。
+
+バージョン保存は読み込んだ版を条件にします。履歴は読み取り専用で確認し、新しい下書きとして復元できます。同時更新では手元の下書きを残し、コピー後に最新版を取得できます。文書バージョンとプロジェクトの Git revision は別です。AI 選択範囲の書き換えは提案を確認・適用してから保存します。
+
+HTML は same-origin 権限のない iframe でスクリプト操作を許可し、既定でオフラインのリソース方針を使います。プレビューのオリジンと実際のネットワーク境界は配置側が管理し、ブラウザープレビューをコンテナ実行環境とは扱いません。
+
+ツールは名前で探し、フォームやプリセットから実行します。アップロード済みファイル・成果物は表示名で選択でき、手動 ID も使えます。複雑な構造だけ詳細パラメーターで編集します。待機・実行・キャンセル中・完了の実状態を表示し、成果物を直接開けます。キャンセル後は終端まで取得を継続し、状態更新で中断した待機を再開できます。
+
+手動操作とエージェントは同じ `@h-ai/tools/server` サービスを使います。タスク設定の ID は `artifact_create` などのツール名、外部 MCP は `mcp_<設定 id>` です。同じカタログ・有効化・認可を共有し、実行ノードで再確認します。MCP も同じ Broker と ToolsService から既存 `ai.mcp.services.invoke` へ転送し、別の実行経路は作りません。
+
+有効グループと環境割り当てでカタログが決まります。成果物・確定的な数値分析には別イメージは不要です。画像・音声・書き換えは AI モデル、文書・Office・OCR・Web 採集・プロジェクトプレビュー・動画ジョブは Runner 環境が必要です。環境なしのジョブは表示しません。`video_render` は準備済みプロジェクトを描画し、URL からの紹介動画全体は、次の AI ワークフローで採集・構成・ナレーション・素材も組み立てます。
+
+メニュー、タスク切り替え・新規作成、ログアウト、SPA 遷移は未保存内容を確認し、取消時に下書きを保持します。ツール提出前に URL に冪等キーを記録し、受付後に不透明な受領情報へ置換します。画面を開き直したり更新して状態を取得でき、応答不明時は元のツールと引数を固定し、同じキーで重複課金を防ぎます。復元中も既存の受領情報を保護します。別操作は旧タスクが継続する可能性を確認してから新しいキーを使います。URL に本人情報や引数は含めません。再読込は照会だけを復元し、メモリ内引数は再確認が必要です。
+
+### プロジェクトの Web プレビュー
+
+ルートに `index.html` があるプロジェクト ZIP をアップロードし、`preview_build` でファイル名から選択します。`environments.preview` を割り当てると、固定のオフライン構築器が対応するローカル HTML・JS/TS・CSS・ブラウザー専用 Svelte コンポーネントを一つの HTML 成果物にまとめ、既存の隔離プレビューで開けます。`web` グループに属し、ローカル構築には browserProxy は不要です。閉じると iframe を破棄し、常駐プレビューサーバーは残しません。
+
+制限付き Vite 形式の構成に対応し、package scripts・Vite/Svelte/TypeScript 設定は実行せず、依存関係も取得しません。SvelteKit・任意 npm パッケージ・node_modules・プラグインは非対応です。module の入口は一つで、srcset・async/defer・入れ子の文書は非対応、素材は対応するローカルファイルに限ります。展開合計 8 MiB、各ソースと最終 HTML はそれぞれ 1 MiB、構築コマンド 60 秒が上限です。失敗時に古いページは公開しません。[Tools プロジェクトプレビュー](../../docs/usage/function/tools.ja.md#プロジェクトから-web-プレビューを構築) を参照してください。
+
+### Web サイトの紹介動画
+
+全体の `workbench.selection` で `web_capture` と `video_render` の両方も有効にします。web/video の両グループ、または tools に website_video/web_capture/video_render を指定します。groups/tools の和集合から exclude を除きます。video だけ・website_video だけの選択や、依存の片方の除外では全体フローをカタログに表示しません。タスク設定は全体の無効化を上書きできません。
+
+LLM、既定 WAV TTS、web/video 環境、browserProxy を設定し、website_video で HTTPS URL と目標を入力します。6～30 秒の長さ、横・縦・正方形の画面も選択できます。実サイト採集、脚本・構成、ショット別ナレーション、工程の組み立てを経て MP4 を出力します。
+
+脚本・設計・編集可能な構成 Markdown・WAV・字幕・実画面の表紙・工程 ZIP・ワークフロー一覧を残します。構成変更後は storyboardId で再実行し、captureId と未変更の audioIds を再利用できます。字幕は文単位です。音声が長すぎる場合は切り捨てず明示的に失敗します。工程だけを再描画することも可能です。[動画ワークフロー](../../docs/usage/function/tools.ja.md#web-サイトから編集可能な紹介動画を作成) を参照してください。
+
+## 設定
+
+非公開値は `.env.local` に保存し、同じ項目のプロセス環境変数で上書きします。[.env.example](.env.example) と [ACP 設定](../../docs/usage/configuration/ai.md) を参照してください。
+
+| 設定                                                 | 用途                                                                                                                                                                                           |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HAI_AI_LLM`                                         | モデル ID、プロトコル、接続先、認証、能力。Codex は Responses、DeepSeek Harness は Chat を利用可能。検索は embedding シナリオと実際の次元を設定                                                |
+| `HAI_AI_ACP`                                         | Agent ID・アダプター・モデルと環境 ID。検証済み DeepSeek Harness 共有イメージだけ `sharedMode: true`。既定の起動コマンド・環境を使用                                                           |
+| `HAI_AI_IMAGE` / `HAI_AI_AUDIO`                      | 画像生成・ASR/TTS のモデル、シナリオ既定 ID、サーバー認証                                                                                                                                      |
+| `HAI_RUNNER`                                         | 再起動後も安定した一意の nodeId、エンジン、実行役割、固定イメージ、上限。モデル・ツール出口は許可リスト付きプロキシ、コンテナは内部ネットワーク                                                |
+| `HAI_AGENT`                                          | テナント、workbench のスイッチ・selection・環境・browserProxy、外部ツール、スキル、プロジェクト。信頼済み絶対 Git パス・登録 ref・閲覧者・公開者を指定し、登録リモートと専用ブランチだけに公開 |
+| `HAI_AGENT_TOOLURL` / `HAI_AGENT_TOOLPORT`           | 各実行ノードの到達可能な MCP Broker URL とポート。Web は照会・承認が可能。実行前に外部サービスと入力 Schema を登録                                                                             |
+| `HAI_DB` / `HAI_CACHE` / `HAI_VECDB` / `HAI_STORAGE` | 複数プロセスで PostgreSQL・Redis・Qdrant・S3 を共有。設定・Git 基準を統一。Tools は Runner の既存テーブル・リース・イベントを使い、別キューや状態保存先を作らない                              |
+
+### 必要なワークスペース機能を有効化
+
+`config/_agent.yml` に追記するか `HAI_AGENT` JSON で上書きします。環境の値はイメージ名ではなく登録済み Runner 環境 ID です。
+
+```yaml
+workbench:
+  artifacts: true
+  tools: true
+  selection:
+    groups: [documents, image, audio, web, video, analysis, mcp]
+  environments:
+    documents: document-tools
+    web: website-capture
+    preview: website-preview
+    video: video-render
+  browserProxy: http://172.28.0.1:4318
+```
+
+`artifacts/tools` は既定 true です。`selection` を省略すると例の内蔵グループを使い、明示的な `selection: {}` はすべて無効にします。`selection.groups/tools` の和集合から `selection.exclude` を除き、Tools の ToolSelection と同じ契約で個別の有効化・除外ができます。`environments` は既定で空です。必要に応じて `environments.office/ocr/browser/preview` を追加します。Office と OCR のツールは `documents`、ブラウザー画像とプロジェクトプレビューは `web` グループに属し、office/ocr/browser というツールグループはありません。既定の選択は documents/web を含むため、環境を割り当てた後はこれらのグループまたは個別ツール名で選択します。`mcp` はサーバーの `tools` 許可リストで inputSchema を明示した外部サービスだけを含みます。モデル・環境は別途設定し、スイッチだけでイメージ取得やサービス起動はしません。
+
+`browser/web` は環境と有効な `browserProxy` の両方が必要です。信頼済みホストが `http://完全なドット区切り10進 IPv4:明示ポート` を指定し、ポートは 1～65535、パスは空または `/` だけを許可します。HTTPS、ホスト名、IPv6、省略・16進 IP、認証情報、ルート以外のパス、query、fragment は使えません。`0.0.0.0`、`127.0.0.0/8`、`169.254.0.0/16`、`224.0.0.0/4` は拒否し、不正な設定では該当する browser/web ツールを登録しません。既存のモデル出口プロキシも再利用でき、アプリは `HAI_TOOL_BROWSER_PROXY` で渡します。モデル引数で指定・上書きはできません。文書・Office・OCR・プロジェクトプレビュー・動画描画はオフライン環境です。イメージ・capability・ネットワークは [Tools ジョブ](../../packages/tools/jobs/README.md) を参照してください。
+
+web/video の Runner 環境は `resources.pids: 512` から実機検証を始めることを推奨します。今回の検証では 128 PID の制限下で `EAGAIN` を確認しました。ノードの `toolCapacity.pids` も環境と予定する並列数を満たす必要があります。512 は検証の開始値で、すべてのサイト・解像度・負荷を保証しません。CPU・メモリ・一時ディスク・期限は別途実測して設定します。
+
+今回の動画 Runner 環境は `resources.scratchMiB: 6144`、ノードは `toolCapacity.scratchMiB: 8192` を試験開始値とします。HyperFrames 0.9.56 は tmp と output の両方に 1024 MiB 以上の空き容量を要求します。入力があると Runner は総一時領域の 4 分の 1 だけを tmp に割り当てるため、旧合計 512 MiB は描画前に失敗します。一時領域の上限は使用済みメモリ量ではなく、host 調整・並列容量も別途考慮し、ディスク検査は省略しません。[ジョブ設定](../../packages/tools/jobs/README.md#配置) を参照してください。実際の動画と全工程は別途受け入れ検証が必要です。
+
+ブラウザーとタスクは権限付きファイル ID を使い、読み取り・最終公開・保存時に本人を再確認します。Broker は短期トークンと撤回を再利用します。メディアの Range 取得も帰属を検証します。グループやタスクツール権限を取り消した後は、実行ノードが古いカタログを信用しません。
+
+共有環境は TLS と明示的なアカウント管理を使います。API ノードは Runner `executor: false`、Web イメージは既定でジョブを取得せず、確認済みブランチ公開用の Git と証明書を備えます。実行プロセスは同じアプリケーション成果物と独自 Runner ID を使い、Docker/Podman、プロジェクト利用時は Git も必要です。各実行ノードに到達可能な独自 Broker アドレスを用意します。
+
+プロキシは外部の `X-Forwarded-*` を除去して信頼済み値を設定します。その構成で必要な場合だけ `PROTOCOL_HEADER=x-forwarded-proto` を指定します。アップロードサイズはプロキシと Web の両方で許可し、Node では `BODY_SIZE_LIMIT=12M` を設定できます。完全アクセスでもリソース・マウント・出口制限は残ります。
+
+モデル要求は限定された中継資格情報を使い、上流キーを実行タスク環境に渡しません。例のプロジェクト入力は通常ファイル最大 512 個・16 MiB で一時ディスク制限も受けます。方式・バックエンド間で要約を渡せますが、Worker 間のネイティブ履歴・作業ディレクトリは独立しています。必要なパッチを先に保存してください。新規タスクは個人メモリ設定を使い、タスク切り替えは未送信下書き・一時引用を消去します。送信済み履歴は保持します。
+
+Web・実行ノードに同じ Git コミットを用意します。Web コンテナは UID 1000 で動作し、所有するプロジェクトを読み取り専用でマウントできます。配置用認証は対象 `agent/` ブランチの公開に使用し、SSH キーと known_hosts は `/home/node/.ssh` に読み取り専用で渡します。
+
+### 業務 API の例
+
+認証済み IAM セッションからサーバーで scope を作ります。バックエンドと環境は登録済みとし、再試行では業務 ID を維持します。
+
+```ts
+import { ai } from '@h-ai/ai'
+
+const scoped = ai.acp.scoped({ tenantId: 'agent', userId: 'authenticated-user' })
+const created = await scoped.sessions.create({
+  agentId: 'coder',
+  execution: { mode: 'auto' }
+}, { idempotencyKey: 'job-123' })
+if (!created.success)
+  throw new Error(created.error.message)
+const accepted = await created.data.submit({
+  prompt: '資料を読んで要約',
+  idempotencyKey: 'turn-1',
+  context: {
+    knowledgeBaseIds: ['project-docs']
+  }
+})
+if (!accepted.success)
+  throw new Error(accepted.error.message)
+const page = await scoped.tasks.events(accepted.data.taskId, 0, 100)
+if (!page.success)
+  throw new Error(page.error.message)
+```
+
+## 開発とテスト
+
+```sh
+pnpm --filter agent typecheck
+pnpm --filter agent test
+pnpm --filter agent test:e2e
+pnpm --filter agent test:e2e --config playwright.workbench.config.ts
+pnpm --filter agent test:e2e --config playwright.tools.config.ts
+```
+
+管理された E2E 入口が独立データを作成します。ツール専用設定は Runner executor を有効化し、既定のブラウザー設定はジョブを取得しません。ノード間の無効化テストには同じテスト DB・Storage を共有し `selection: {}` の別 API ノードが必要です。`AGENT_E2E_DISABLED_TOOLS_URL` で渡し、ない場合はその項目を明示的にスキップします。
+
+実モデルの受け入れにはゲートウェイ・モデル・コンテナ設定が必要です。2 アカウント・2 実行ノードで隔離、再開、承認、モデル、ファイル・ツールの帰属を確認し、ブラウザー証拠をテスト出力に保存します。
+
+## ライセンス
+
+[Apache-2.0](../../LICENSE)

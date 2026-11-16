@@ -139,5 +139,6 @@
   "plan_user": "同一用户可复用",
   "plan_shared": "符合共享条件",
   "plan_task": "按任务隔离",
-  "rename_task": "任务标题"
+  "rename_task": "任务标题",
+  "tools_workbench": "工具工作台"
 }

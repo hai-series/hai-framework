@@ -139,6 +139,38 @@ export const actionSchema = z.discriminatedUnion('type', [
     type: z.literal('publish'),
     id,
   }),
+  z.object({
+    type: z.literal('artifact-create'),
+    id: id.optional(),
+    title: z.string().trim().min(1).max(160),
+    kind: z.enum(['markdown', 'html', 'table', 'chart']),
+    content: z.string().max(1024 * 1024),
+  }),
+  z.object({
+    type: z.literal('artifact-save'),
+    id,
+    baseVersion: z.number().int().positive().max(999_999),
+    content: z.string().max(1024 * 1024),
+  }),
+  z.object({
+    type: z.literal('artifact-rewrite'),
+    id,
+    baseVersion: z.number().int().positive().max(999_999),
+    content: z.string().max(1024 * 1024),
+    selectedText: z.string().min(1).max(64_000),
+    instruction: z.string().trim().min(1).max(4000),
+  }),
+  z.object({
+    type: z.literal('tool-run'),
+    name: z.string().regex(/^[a-z][\w-]{0,63}$/i),
+    input: z.record(z.string(), z.unknown()),
+    idempotencyKey: z.string().min(1).max(128),
+    task: id.optional(),
+  }),
+  z.object({
+    type: z.literal('tool-cancel'),
+    id: z.string().min(1).max(512),
+  }),
 ])
 
 export type AgentSettings = z.infer<typeof settingsSchema>
@@ -201,4 +233,8 @@ export interface AgentResource {
   files?: string[]
   size?: number
   createdAt?: number
+  artifactKind?: 'markdown' | 'html' | 'table' | 'chart' | 'image' | 'audio' | 'video' | 'file'
+  version?: number
+  mediaType?: string
+  updatedAt?: number
 }

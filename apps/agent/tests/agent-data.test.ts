@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { ai } from '@h-ai/ai'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { addResource, findTask, initWorkspace, insertTask, owner, reserveTurn, resource, withTask, writeTask, writeTurn } from '#lib/server/data.js'
+import { allowedTool } from '#lib/server/resources.js'
 import { contextSummary, view } from '#lib/server/workspace.js'
 import { sendSchema, settingsSchema } from '#lib/workspace.js'
 
@@ -12,7 +14,42 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await reldb.close()
+})
+
+it('authorizes an MCP wrapper by the single task tool name and checks file ownership', async () => {
+  const scope = { tenantId: 'agent', userId: 'alice' }
+  const user = owner(scope)
+  vi.spyOn(core.config, 'get').mockReturnValue({
+    tools: [
+      {
+        id: 'search',
+        serviceId: 'search-provider',
+        tool: 'search',
+        description: 'Search',
+        inputSchema: {},
+        fileArguments: ['fileId'],
+      },
+    ],
+  })
+  const task = await insertTask(user, randomUUID(), settingsSchema.parse({
+    tools: ['mcp_search'],
+  }))
+  await writeTask(user, { ...task, acpId: 'session' })
+  const file = await addResource(user, {
+    id: randomUUID(),
+    title: 'input.txt',
+    kind: 'file',
+  })
+  expect(await allowedTool(scope, 'session', 'search-provider', 'search', { fileId: file.id })).toBe(true)
+  const other = await addResource('someone-else', {
+    id: randomUUID(),
+    title: 'private.txt',
+    kind: 'file',
+  })
+  expect(await allowedTool(scope, 'session', 'search-provider', 'search', { fileId: other.id })).toBe(false)
+  expect(await allowedTool({ ...scope, userId: 'bob' }, 'session', 'search-provider', 'search', { fileId: file.id })).toBe(false)
 })
 
 it('reserves only one active round and deduplicates a retry from the owner', async () => {

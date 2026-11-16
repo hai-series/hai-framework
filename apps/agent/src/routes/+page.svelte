@@ -1,20 +1,23 @@
 <script lang='ts'>
-  import type { CodeWorkspaceSource } from '@h-ai/ui'
+  import type { CodeWorkspaceSource, WorkspaceLeaveGuard } from '@h-ai/ui'
   import type { HomeView, KnowledgeView, TaskView } from '#lib/client.js'
   import type { AgentResource, AgentTask, AgentTurn, WorkspaceAction, WorkspaceEntry } from '#lib/workspace.js'
   import type { PageProps } from './$types'
+  import { afterNavigate, beforeNavigate, goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import { CodeWorkspace, Confirm, LanguageSwitch, MarkdownRenderer, ThemeToggle, WorkspaceLayout } from '@h-ai/ui'
   import { onDestroy, onMount } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
   import { AgentClientError, read, record, send, speak, transcribe, upload } from '#lib/client.js'
+  import AgentWorkbench from '#lib/components/AgentWorkbench.svelte'
   import Library from '#lib/components/Library.svelte'
   import TaskSettings from '#lib/components/TaskSettings.svelte'
   import * as m from '#lib/paraglide/messages.js'
   import { getLocale, setLocale } from '#lib/paraglide/runtime.js'
+  import { workbench } from '#lib/services/workbench.js'
 
   const { data, form }: PageProps = $props()
-  type Pane = 'workspace' | 'personal' | 'memory' | 'knowledge' | 'files' | 'permissions' | 'settings'
+  type Pane = 'workspace' | 'personal' | 'memory' | 'knowledge' | 'files' | 'permissions' | 'settings' | 'artifacts' | 'tools'
   const labels = {
     workspace: m.workspace,
     personal: m.personal,
@@ -23,6 +26,8 @@
     files: m.files,
     permissions: m.permissions,
     settings: m.settings,
+    artifacts: m.artifacts,
+    tools: m.tools_workbench,
   }
   const tabs = {
     activity: m.activity,
@@ -65,6 +70,9 @@
     'cancelling',
   ])
   let pane = $state<Pane>('workspace')
+  let leaveWorkbench: WorkspaceLeaveGuard | undefined
+  let allowNavigation = false
+  let allowLogout = false
   let tab = $state<keyof typeof tabs>('activity')
   let home = $state<HomeView>()
   let task = $state<AgentTask>()
@@ -94,6 +102,7 @@
   let archived = $state(false)
   let preview = $state<{ title: string, patch: string, files: string[], project: string }>()
   let previewId = $state('')
+  let artifactSelection = $state('')
   let publishResult = $state('')
   let confirmPublish = $state(false)
   let publishing = $state(false)
@@ -172,7 +181,60 @@
     home = await read<HomeView>()
   }
 
+  function registerLeaveGuard(guard: WorkspaceLeaveGuard | undefined) {
+    leaveWorkbench = guard
+  }
+
+  async function navigatePane(next: Pane): Promise<boolean> {
+    if (next !== pane && leaveWorkbench && !await leaveWorkbench())
+      return false
+    pane = next
+    showTasks = false
+    return true
+  }
+
+  async function logout(event: SubmitEvent) {
+    if (allowLogout || !leaveWorkbench)
+      return
+    event.preventDefault()
+    const form = event.currentTarget as HTMLFormElement
+    if (await leaveWorkbench()) {
+      allowLogout = true
+      form.requestSubmit()
+    }
+  }
+
+  beforeNavigate((navigation) => {
+    if (!leaveWorkbench || allowNavigation || navigation.willUnload)
+      return
+    navigation.cancel()
+    const destination = navigation.to
+    const delta = navigation.type === 'popstate'
+      ? navigation.delta
+      : undefined
+    void leaveWorkbench().then(async (allowed) => {
+      if (!allowed || !destination)
+        return
+      allowNavigation = true
+      if (navigation.type === 'popstate' && delta) {
+        window.history.go(delta)
+      }
+      else {
+        // 目标是 SvelteKit 提供的含 base 绝对 URL，不能再次 resolve。
+        // eslint-disable-next-line svelte/no-navigation-without-resolve
+        await goto(destination.url).finally(() => {
+          allowNavigation = false
+        })
+      }
+    }).catch(problem)
+  })
+  afterNavigate(() => {
+    allowNavigation = false
+  })
+
   async function openTask(id: string) {
+    if (!await navigatePane('workspace'))
+      return
     observer?.abort()
     clearTimeout(poll)
     observer = new AbortController()
@@ -196,7 +258,6 @@
     cursor = 0
     offset = 0
     receipt = undefined
-    pane = 'workspace'
     showTasks = false
     if (id) {
       sessionStorage.setItem('agent-active-task', id)
@@ -283,6 +344,10 @@
     if (!data.user)
       return
     void bootstrap().then(async () => {
+      if (home?.workbench?.tools && workbench.tools.resume()) {
+        pane = 'tools'
+        return
+      }
       const previous = sessionStorage.getItem('agent-active-task')
       if (previous && home?.tasks.some(item => item.id === previous && !item.archived))
         await openTask(previous)
@@ -297,6 +362,8 @@
   })
 
   async function newTask() {
+    if (!await navigatePane('workspace'))
+      return
     errorText = ''
     try {
       const id = crypto.randomUUID()
@@ -524,6 +591,16 @@
       <nav class='grid gap-0.5 px-3 pb-4 text-sm' aria-label={m.workspace()}>
         {#each [
           { id: 'workspace', icon: 'icon-[tabler--layout-sidebar]' },
+          ...(home?.workbench?.tools
+            ? [
+              { id: 'tools', icon: 'icon-[tabler--tools]' },
+            ]
+            : []),
+          ...(home?.workbench?.artifacts
+            ? [
+              { id: 'artifacts', icon: 'icon-[tabler--files]' },
+            ]
+            : []),
           { id: 'knowledge', icon: 'icon-[tabler--books]' },
           { id: 'memory', icon: 'icon-[tabler--brain]' },
           { id: 'files', icon: 'icon-[tabler--paperclip]' },
@@ -531,8 +608,7 @@
           { id: 'permissions', icon: 'icon-[tabler--shield-check]' },
         ] as item (item.id)}
           <button class:btn-active={pane === item.id} class='btn btn-ghost btn-sm justify-start' disabled={!home} onclick={() => {
-            pane = item.id as Pane
-            showTasks = false
+            void navigatePane(item.id as Pane)
           }}><span class={`${item.icon} agent-icon`}></span>{labels[item.id as keyof typeof labels]()}</button>
         {/each}
       </nav>
@@ -552,7 +628,7 @@
           {:else}<p class='agent-muted px-2 py-2 text-xs'>{m.empty_list()}</p>{/each}
         </div>
       </div>
-      <form method='POST' action='?/logout' class='flex items-center justify-between border-t agent-divider px-3 py-3'>
+      <form method='POST' action='?/logout' onsubmit={logout} class='flex items-center justify-between border-t agent-divider px-3 py-3'>
         <span class='truncate text-sm font-medium'>{data.user.name}</span>
         <button class='btn btn-ghost btn-square btn-sm' title={m.logout()} aria-label={m.logout()}><span class='icon-[tabler--logout] agent-icon'></span></button>
       </form>
@@ -564,7 +640,7 @@
       {#snippet leading()}<button class='btn btn-square btn-ghost btn-sm lg:hidden' onclick={() => { showTasks = !showTasks }} aria-label={m.show_tasks()}><span class='icon-[tabler--menu-2] agent-icon'></span></button>{/snippet}
       {#snippet actions()}
         {#if task && pane === 'workspace'}
-          <button class='btn btn-ghost btn-sm' onclick={() => { pane = 'settings' }} title={m.settings()} aria-label={m.settings()}><span class='icon-[tabler--settings] agent-icon'></span><span class='hidden sm:inline'>{m.settings()}</span></button>
+          <button class='btn btn-ghost btn-sm' onclick={() => navigatePane('settings')} title={m.settings()} aria-label={m.settings()}><span class='icon-[tabler--settings] agent-icon'></span><span class='hidden sm:inline'>{m.settings()}</span></button>
           <div class='dropdown dropdown-end'>
             <button class='btn btn-ghost btn-square btn-sm' title={m.task_history()} aria-label={m.task_history()}><span class='icon-[tabler--dots] agent-icon'></span></button>
             <ul class='dropdown-content menu z-30 mt-2 w-36 rounded-box border agent-divider bg-base-100 p-1 shadow-lg'>
@@ -579,8 +655,8 @@
           </div>
         {/if}
         <LanguageSwitch currentLanguage={getLocale()} onchange={(value) => { void setLocale(value as ReturnType<typeof getLocale>) }} compact />
-        <ThemeToggle />
-        <button class='btn btn-square btn-ghost btn-sm xl:hidden' onclick={() => { showResults = !showResults }} aria-label={m.show_results()}><span class='icon-[tabler--layout-sidebar-right] agent-icon'></span></button>
+        <ThemeToggle class='tooltip-end' />
+        {#if pane === 'workspace'}<button class='btn btn-square btn-ghost btn-sm xl:hidden' onclick={() => { showResults = !showResults }} aria-label={m.show_results()}><span class='icon-[tabler--layout-sidebar-right] agent-icon'></span></button>{/if}
       {/snippet}
       {#if errorText}
         <div role='alert' class='mx-auto mb-2 flex w-full max-w-4xl items-center gap-2 rounded-lg border border-error/30 bg-error/5 p-2 text-sm text-error'>
@@ -590,11 +666,16 @@
       {#if !home}
         <div class='grid flex-1 place-items-center agent-muted'>{m.loading()}</div>
       {:else if pane === 'settings' && task}
-        <TaskSettings {task} {home} onerror={problem} onclose={() => { pane = 'workspace' }} onsave={() => {
-          pane = 'workspace'
+        <TaskSettings {task} {home} onerror={problem} onclose={() => navigatePane('workspace')} onsave={() => {
+          void navigatePane('workspace')
           void refresh(selection)
         }} />
-      {:else if pane !== 'workspace' && pane !== 'settings'}
+      {:else if (pane === 'artifacts' || pane === 'tools') && home.workbench?.[pane]}
+        <AgentWorkbench {pane} selectedId={artifactSelection || undefined} onerror={problem} onleaveguard={registerLeaveGuard} onopen={async (id) => {
+          if (await navigatePane('artifacts'))
+            artifactSelection = id
+        }} />
+      {:else if pane !== 'workspace' && pane !== 'settings' && pane !== 'artifacts' && pane !== 'tools'}
         {#key pane}
           <Library {pane} {home} onerror={problem} onpreferences={(prefs) => {
             if (home)
@@ -719,7 +800,7 @@
                   </button>
                 </div>
                 <div class='flex items-center gap-1'>
-                  <button type='button' class='btn btn-ghost btn-sm max-w-48' onclick={() => { pane = 'settings' }}><span class='truncate'>{home.agents.find(agent => agent.id === task?.settings.agentId)?.name ?? m.backend()}</span> · {modes[task.settings.mode]?.()}</button>
+                  <button type='button' class='btn btn-ghost btn-sm max-w-48' onclick={() => navigatePane('settings')}><span class='truncate'>{home.agents.find(agent => agent.id === task?.settings.agentId)?.name ?? m.backend()}</span> · {modes[task.settings.mode]?.()}</button>
                   {#if running && lastTurn?.receipt}
                     <button type='button' class='btn btn-sm' onclick={() => lastTurn && change({ type: 'cancel', id: lastTurn.id })}><span class='icon-[tabler--player-stop] agent-icon'></span>{m.stop()}</button>
                   {:else}
@@ -750,50 +831,56 @@
       {/if}
     </WorkspaceLayout>
 
-    <aside aria-label={m.show_results()} class="agent-rail w-full shrink-0 flex-col border-t xl:border-t-0 xl:border-l agent-divider {showResults ? 'flex' : 'hidden xl:flex'} {tab === 'changes' && preview
-      ? 'xl:w-[520px]'
-      : 'xl:w-[315px]'}">
-      <div class='flex min-h-12 items-center gap-1 overflow-x-auto border-b agent-divider px-2' role='group' aria-label={m.show_results()}>
-        {#each Object.entries(tabs) as [name, label] (name)}
-          <button type='button' class:btn-active={name === tab} class='btn btn-ghost btn-xs' onclick={() => { tab = name as keyof typeof tabs }}>{label()}</button>
-        {/each}
-        <button class='btn btn-ghost btn-xs ml-auto xl:hidden' onclick={() => { showResults = false }} aria-label={m.close()}><span class='icon-[tabler--x] agent-icon'></span></button>
-      </div>
-      <div class='flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3'>
-        {#if tab === 'activity'}
-          {#if usage}<div class='agent-muted text-xs'>{m.native_usage()} {usage.used} / {usage.size}</div>{/if}
-          {#each tools as tool (tool.id)}
-            <details class='rounded-xl border agent-divider bg-base-100 px-3 py-2 text-sm'>
-              <summary class='cursor-pointer'><span class='icon-[tabler--terminal] agent-icon align-middle opacity-70'></span> {tool.title ?? tool.kind ?? m.activity()} <span class='agent-muted text-xs'>{tool.status ?? ''}</span></summary>
-              {#if tool.input}<pre class='mt-2 whitespace-pre-wrap break-all text-xs'>{tool.input}</pre>{/if}
-              {#if tool.result}<pre class='mt-2 whitespace-pre-wrap break-all text-xs'>{tool.result}</pre>{/if}
-            </details>
-          {:else}<p class='agent-muted px-1 text-sm'>{m.empty_activity()}</p>{/each}
-        {:else if tab === 'sources'}
-          {#each sources as source (source.id)}
-            <details class='rounded-xl border agent-divider bg-base-100 p-3 text-sm'>
-              <summary class='cursor-pointer font-medium'>{source.title}</summary><p class='agent-muted mt-2 whitespace-pre-wrap break-words text-sm'>{source.excerpt}</p>
-            </details>
-          {:else}<p class='agent-muted px-1 text-sm'>{m.empty_sources()}</p>{/each}
-        {:else if tab === 'artifacts'}
-          {#each artifacts as item (item.id)}
-            {#if item.id}<div class='rounded-xl border agent-divider bg-base-100 p-3'>
-              <p class='break-all text-sm font-medium'>{item.name || item.id}</p>
-              <a class='btn btn-ghost btn-xs mt-2' href={resolve(`/api/workspace?download=${encodeURIComponent(item.id)}`)}>{m.download()}</a>
-              {#if item.name === 'workspace.patch'}<button class='btn btn-ghost btn-xs mt-2' onclick={() => inspect(item.id!)}>{m.preview()}</button>{/if}
-            </div>{/if}
-          {:else}<p class='agent-muted px-1 text-sm'>{m.empty_artifacts()}</p>{/each}
-        {:else if patchSource && preview}
-          <div class='text-sm font-medium'>{preview.title}</div>
-          <ul class='agent-muted list-inside list-disc text-xs'>{#each preview.files as changed (changed)}<li class='break-all'>{changed}</li>{/each}</ul>
-          {#key previewId}<CodeWorkspace source={patchSource} initialFile={{ kind: 'file', id: previewId, name: preview.title }} height='22rem' />{/key}
-          <div class='flex flex-wrap gap-1'><button class='btn btn-primary btn-sm' onclick={() => { confirmPublish = true }}>{m.publish()}</button><a class='btn btn-sm' href={resolve(`/api/workspace?download=${encodeURIComponent(previewId)}`)}>{m.download()}</a></div>
-          {#if publishResult}<div class='break-all text-xs text-success' role='status'>{publishResult}</div>{/if}
-        {:else}
-          <p class='agent-muted px-1 text-sm'>{m.empty_artifacts()}</p>
-        {/if}
-      </div>
-    </aside>
+    {#if pane === 'workspace'}
+      <aside aria-label={m.show_results()} class="agent-rail w-full shrink-0 flex-col border-t xl:border-t-0 xl:border-l agent-divider {showResults ? 'flex' : 'hidden xl:flex'} {tab === 'changes' && preview
+        ? 'xl:w-[520px]'
+        : 'xl:w-[315px]'}">
+        <div class='flex min-h-12 items-center gap-1 overflow-x-auto border-b agent-divider px-2' role='group' aria-label={m.show_results()}>
+          {#each Object.entries(tabs) as [name, label] (name)}
+            <button type='button' class:btn-active={name === tab} class='btn btn-ghost btn-xs' onclick={() => { tab = name as keyof typeof tabs }}>{label()}</button>
+          {/each}
+          <button class='btn btn-ghost btn-xs ml-auto xl:hidden' onclick={() => { showResults = false }} aria-label={m.close()}><span class='icon-[tabler--x] agent-icon'></span></button>
+        </div>
+        <div class='flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3'>
+          {#if tab === 'activity'}
+            {#if usage}<div class='agent-muted text-xs'>{m.native_usage()} {usage.used} / {usage.size}</div>{/if}
+            {#each tools as tool (tool.id)}
+              <details class='rounded-xl border agent-divider bg-base-100 px-3 py-2 text-sm'>
+                <summary class='cursor-pointer'><span class='icon-[tabler--terminal] agent-icon align-middle opacity-70'></span> {tool.title ?? tool.kind ?? m.activity()} <span class='agent-muted text-xs'>{tool.status ?? ''}</span></summary>
+                {#if tool.input}<pre class='mt-2 whitespace-pre-wrap break-all text-xs'>{tool.input}</pre>{/if}
+                {#if tool.result}<pre class='mt-2 whitespace-pre-wrap break-all text-xs'>{tool.result}</pre>{/if}
+              </details>
+            {:else}<p class='agent-muted px-1 text-sm'>{m.empty_activity()}</p>{/each}
+          {:else if tab === 'sources'}
+            {#each sources as source (source.id)}
+              <details class='rounded-xl border agent-divider bg-base-100 p-3 text-sm'>
+                <summary class='cursor-pointer font-medium'>{source.title}</summary><p class='agent-muted mt-2 whitespace-pre-wrap break-words text-sm'>{source.excerpt}</p>
+              </details>
+            {:else}<p class='agent-muted px-1 text-sm'>{m.empty_sources()}</p>{/each}
+          {:else if tab === 'artifacts'}
+            {#each artifacts as item (item.id)}
+              {#if item.id}<div class='rounded-xl border agent-divider bg-base-100 p-3'>
+                <p class='break-all text-sm font-medium'>{item.name || item.id}</p>
+                <a class='btn btn-ghost btn-xs mt-2' href={resolve(`/api/workspace?download=${encodeURIComponent(item.id)}`)}>{m.download()}</a>
+                {#if item.name === 'workspace.patch'}<button class='btn btn-ghost btn-xs mt-2' onclick={() => inspect(item.id!)}>{m.preview()}</button>{/if}
+                {#if item.name !== 'workspace.patch' && home?.workbench?.artifacts}<button class='btn btn-ghost btn-xs mt-2' onclick={async () => {
+                  if (await navigatePane('artifacts'))
+                    artifactSelection = item.id!
+                }}>{m.preview()}</button>{/if}
+              </div>{/if}
+            {:else}<p class='agent-muted px-1 text-sm'>{m.empty_artifacts()}</p>{/each}
+          {:else if patchSource && preview}
+            <div class='text-sm font-medium'>{preview.title}</div>
+            <ul class='agent-muted list-inside list-disc text-xs'>{#each preview.files as changed (changed)}<li class='break-all'>{changed}</li>{/each}</ul>
+            {#key previewId}<CodeWorkspace source={patchSource} initialFile={{ kind: 'file', id: previewId, name: preview.title }} height='22rem' />{/key}
+            <div class='flex flex-wrap gap-1'><button class='btn btn-primary btn-sm' onclick={() => { confirmPublish = true }}>{m.publish()}</button><a class='btn btn-sm' href={resolve(`/api/workspace?download=${encodeURIComponent(previewId)}`)}>{m.download()}</a></div>
+            {#if publishResult}<div class='break-all text-xs text-success' role='status'>{publishResult}</div>{/if}
+          {:else}
+            <p class='agent-muted px-1 text-sm'>{m.empty_artifacts()}</p>
+          {/if}
+        </div>
+      </aside>
+    {/if}
     <Confirm bind:open={confirmPublish} title={m.publish()} message={m.confirm_publish()} confirmText={m.publish()} loading={publishing} onconfirm={publish} />
   </div>
 {/if}

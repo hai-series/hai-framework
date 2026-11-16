@@ -44,6 +44,11 @@ export default defineConfig(({ mode, command }) => {
             : [],
         },
         paths: { relative: false },
+        csp: {
+          directives: {
+            'frame-src': ['self'],
+          },
+        },
       }),
       tailwindcss(),
       paraglideVitePlugin({

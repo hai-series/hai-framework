@@ -42,10 +42,12 @@ const session: Handle = async ({ event, resolve }) => {
     }
   }
   if (event.url.pathname.includes('/api/')) {
-    const response = await resolve(event)
-    response.headers.set('Cache-Control', 'no-store')
-    response.headers.set('X-Content-Type-Options', 'nosniff')
-    return response
+    return paraglideMiddleware(event.request, ({ locale }) => kit.i18n.runWithLocale(locale, async () => {
+      const response = await resolve(event)
+      response.headers.set('Cache-Control', 'no-store')
+      response.headers.set('X-Content-Type-Options', 'nosniff')
+      return response
+    }))
   }
   // 语言由工作区的默认配置或 Paraglide 语言 Cookie 决定。
   if (!event.cookies.get('PARAGLIDE_LOCALE')) {

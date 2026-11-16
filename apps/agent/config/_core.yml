@@ -8,6 +8,9 @@ version: ${HAI_CORE_VERSION:0.1.0}
 # 说明：运行环境（默认 'development'）
 # 取值：字符串；取值：development | production | test | staging
 env: ${HAI_CORE_ENV:development}
+# 说明：默认语言（默认 'zh-CN'）
+# 取值：字符串
+defaultLocale: ${HAI_CORE_DEFAULTLOCALE:zh-CN}
 
 # 说明：日志配置（可选）
 # 取值：配置块（填写下方缩进字段）

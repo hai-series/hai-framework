@@ -7,9 +7,11 @@ import { ai, AIConfigSchema, HaiAIError } from '@h-ai/ai'
 import { core } from '@h-ai/core'
 import { z } from 'zod'
 import { settingsSchema } from '#lib/workspace.js'
+import { artifactStore } from './artifacts.js'
 import { config } from './config.js'
 import { activeTurn, addResource, findTask, getPrefs, insertTask, listResources, listTasks, listTurns, missing, owner, removeResource, reserveTurn, resource, turnById, value, withTask, WorkspaceError, writePrefs, writeTask, writeTurn } from './data.js'
 import { collection, knowledgeLists, memory, projects, readFile, readText } from './resources.js'
+import { toolHost } from './tool-host.js'
 
 const aiConfig = (): AIConfig => AIConfigSchema.parse(core.config.get('ai'))
 const acp = (scope: RunnerScope) => ai.acp.scoped(scope)
@@ -159,12 +161,13 @@ export async function view(scope: RunnerScope, task?: string, after = 0, offset 
       }
     }))
     return {
+      workbench: { artifacts: config().workbench.artifacts, tools: config().workbench.tools },
       preferences: prefs,
       tasks: await listTasks(user),
       agents,
       projects: (await projects(scope)).map(project => ({ id: project.id, title: project.title })),
-      tools: config().toolUrl
-        ? config().tools.map(tool => ({ id: tool.id, description: tool.description }))
+      tools: config().toolUrl && config().workbench.tools
+        ? (await toolHost.catalog(scope)).map(tool => ({ id: tool.name, description: tool.description }))
         : [],
       skills: config().skills.map(skill => ({ id: skill.id, title: skill.title })),
       speech: {
@@ -337,10 +340,23 @@ async function send(scope: RunnerScope, input: SendTurn) {
   }
 }
 
-export async function action(scope: RunnerScope, input: z.output<typeof actionSchema>) {
+export async function action(scope: RunnerScope, input: z.output<typeof actionSchema>, signal?: AbortSignal) {
   const user = owner(scope)
   const session = acp(scope)
   switch (input.type) {
+    case 'tool-run': return toolHost.submit(scope, input, signal)
+    case 'tool-cancel': return toolHost.cancel(scope, input.id, signal)
+    case 'artifact-rewrite': return toolHost.rewrite(scope, input, signal)
+    case 'artifact-create': {
+      if (!config().workbench.artifacts)
+        throw new WorkspaceError(403, 'feature-disabled')
+      return artifactStore.create(user, input)
+    }
+    case 'artifact-save': {
+      if (!config().workbench.artifacts)
+        throw new WorkspaceError(403, 'feature-disabled')
+      return artifactStore.save(user, input)
+    }
     case 'new': {
       const prefs = await getPrefs(user)
       return cleanTask(await insertTask(user, input.id, defaultSettings(prefs.agentId, prefs.mode)))

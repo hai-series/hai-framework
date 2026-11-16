@@ -48,6 +48,7 @@
     "@h-ai/reldb": "workspace:*",
     "@h-ai/runner": "workspace:*",
     "@h-ai/storage": "workspace:*",
+    "@h-ai/tools": "workspace:*",
     "@h-ai/ui": "workspace:*",
     "@h-ai/vecdb": "workspace:*",
     "sm-crypto": "catalog:",
