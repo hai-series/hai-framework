@@ -14,6 +14,7 @@
 | 需求/设计审查与文档驱动实施 | [hai-spec-review](.agents/skills/hai-spec-review/SKILL.md)、[hai-spec-implement](.agents/skills/hai-spec-implement/SKILL.md) |
 | 测试、CI 与证据 | [hai-app-tests](.agents/skills/hai-app-tests/SKILL.md)、[CI 分层与结果复用](docs/ci.md) |
 | UI 设计与组件实现 | [hai-ui-design](.agents/skills/hai-ui-design/SKILL.md)、[hai-ui](.agents/skills/hai-ui/SKILL.md)、[仓库设计约定](.agents/instructions/ui-design.md) |
+| Codex 对话能力与工具建设规划 | [能力清单、现有复用与 Tools 模块建议](docs/codex-capabilities-and-tools-plan.md)；分析方案，不代表已交付 API |
 | 版本升级、差异与技能同步 | [hai-framework-sync](packages/cli/templates/skills/hai-framework-sync/SKILL.md)；在线固定目标及各包实际发布产物，不预填“当前最新版本” |
 | 配置、功能及输入输出、核心逻辑、表或缓存结构、类型或模块边界变更 | [hai-change-plan](.agents/skills/hai-change-plan/SKILL.md)，实施前取得人工确认 |
 
