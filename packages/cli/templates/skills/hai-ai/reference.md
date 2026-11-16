@@ -12,7 +12,7 @@ MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确
 
 | 能力 | 是否需要 `ai.init()` | 依赖 |
 | --- | --- | --- |
-| `ai.tools` | 否 | 无 |
+| `ai.tools.adapt` | 否 | `@h-ai/tools` 注册器 |
 | `ai.stream` | 否 | 无 |
 | `ai.llm` | 是 | OpenAI 兼容 LLM 配置 |
 | `ai.embedding` | 是 | LLM/Embedding 模型配置 |
@@ -51,15 +51,11 @@ if (result.success) {
 
 ## Tools
 
-- `ai.tools.define({ name, description, parameters, handler })`
-- `ai.tools.createRegistry({ authorize? })`
-- `registry.register(tool)` / `registry.registerMany(tools)`：返回 `HaiResult<void>`，默认拒绝同名
-- `registry.replace(tool)`：显式替换已存在工具
-- `registry.unregister(name)`
-- `registry.getDefinitions()`：传给 LLM 的工具定义
-- `registry.execute(toolCall, { signal, objectId, sessionId, deadline?, timeoutMs?, authorize? })` / `registry.executeAll(toolCalls, { parallel?, ...ctx })`；默认串行；Registry/单次授权均 fail-closed；handler `(input, ctx)` 可响应取消/超时（默认 30s）
+工具通过 `@h-ai/tools` 的 `tools.define/createRegistry` 定义和注册，无需初始化。直接业务调用使用 `registry.execute(name, input, options?)`，返回中立业务结果。
 
-工具 handler 输入由 Zod schema 约束，外部输入不要绕过 schema。
+`ai.tools.adapt(registry)` 将同一注册器适配为模型工具定义和调用消息。返回的 `modelTools.getDefinitions()` 用于 LLM 请求，`modelTools.execute(toolCall, options?)` / `executeAll(toolCalls, options?)` 负责 JSON 编解码；业务校验、授权、超时和取消均经过原注册器。适配器不维护第二份工具集合。
+
+工具注册、自定义扩展、错误与多节点责任见 [hai-tools](../hai-tools/SKILL.md)。
 
 ## MCP
 

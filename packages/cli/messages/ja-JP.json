@@ -440,5 +440,7 @@
   "cli_build_dependency_reason_changed": "検証中にファイルまたはディレクトリが変更されました",
   "cli_build_dependency_reason_read": "キャッシュを読み取れません。アクセス権とファイルの使用状態を確認してください",
   "cli_build_dependency_reason_write": "キャッシュの書き込みまたは公開に失敗しました。アクセス権、空き容量とファイルの使用状態を確認してください",
-  "cli_build_dependency_reason_tracking": "キャッシュの追跡マニフェストが有効なJSONではありません"
+  "cli_build_dependency_reason_tracking": "キャッシュの追跡マニフェストが有効なJSONではありません",
+  "cli_featureToolsName": "ツール",
+  "cli_featureToolsDescription": "モデルに依存しないツール定義、検証、登録、認可付き実行"
 }

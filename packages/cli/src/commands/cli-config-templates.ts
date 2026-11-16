@@ -696,6 +696,7 @@ export function generateEnvExample(features: FeatureId[], configs?: ModuleConfig
       'api-client',
       'capacitor',
       'datapipe',
+      'tools',
     ].includes(feature)),
   ])
   const allKeys = [

@@ -139,6 +139,12 @@ const MODULE_MAP: Record<string, { packages: string[], configKey?: string, descr
       return cliM('cli_featureDatapipeName')
     },
   },
+  'tools': {
+    packages: ['@h-ai/tools'],
+    get description() {
+      return cliM('cli_featureToolsName')
+    },
+  },
   'reach': {
     packages: ['@h-ai/reach'],
     configKey: 'reach',

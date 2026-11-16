@@ -15,6 +15,7 @@ export type FeatureId
     | 'db' // 数据库
     | 'cache' // 缓存
     | 'ai' // AI 集成（含 MCP）
+    | 'tools' // 中立工具定义、注册与授权执行
     | 'storage' // 文件存储
     | 'crypto' // 加密模块
     | 'audit' // 审计日志

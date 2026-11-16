@@ -173,7 +173,7 @@ const FEATURES: Record<string, FeatureDefinition> = {
       return cliM('cli_featureAiDescription')
     },
     packages: ['@h-ai/ai'],
-    dependencies: ['db', 'vecdb'],
+    dependencies: ['db', 'vecdb', 'tools'],
   },
   'storage': {
     id: 'storage',
@@ -269,6 +269,16 @@ const FEATURES: Record<string, FeatureDefinition> = {
     },
     packages: ['@h-ai/scheduler'],
     dependencies: ['db'],
+  },
+  'tools': {
+    id: 'tools',
+    get name() {
+      return cliM('cli_featureToolsName')
+    },
+    get description() {
+      return cliM('cli_featureToolsDescription')
+    },
+    packages: ['@h-ai/tools'],
   },
   'deploy': {
     id: 'deploy',

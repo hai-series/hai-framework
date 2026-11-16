@@ -38,7 +38,7 @@ import { createAISubsystems } from './ai-functions.js'
 import { aiM } from './ai-i18n.js'
 import { HaiAIError } from './ai-types.js'
 import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './llm/ai-llm-stream.js'
-import { createToolRegistry, defineTool } from './llm/ai-llm-tool.js'
+import { adaptToolRegistry } from './llm/ai-llm-tool.js'
 import { createDbStoreProviderFromModules, isDbStoreAvailable } from './store/providers/ai-store-provider-db.js'
 import { createMemoryStoreProvider } from './store/providers/ai-store-provider-memory.js'
 
@@ -307,8 +307,7 @@ async function resetAllState(): Promise<void> {
 // ─── 纯函数操作（不依赖初始化） ───
 
 const toolsOperations: ToolsOperations = {
-  define: defineTool,
-  createRegistry: createToolRegistry,
+  adapt: adaptToolRegistry,
 }
 
 const streamOperations: StreamOperations = {

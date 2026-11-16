@@ -6,6 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { ToolRegistryOperations as NeutralToolRegistryOperations, ToolExecutionOptions } from '@h-ai/tools'
 import type OpenAI from 'openai'
 import type { ZodType } from 'zod'
 
@@ -429,281 +430,45 @@ export interface StreamOperations {
 // ─── 工具操作 ───
 
 /**
- * 工具错误类型枚举
+ * 模型工具协议适配器，只负责编解码并委托中立注册表执行。
  *
- * @example
- * ```ts
- * import type { ToolErrorType } from '@h-ai/ai'
- *
- * const value: ToolErrorType = 'FORBIDDEN'
- * ```
- */
-export type ToolErrorType
-  = | 'TOOL_NOT_FOUND'
-    | 'TOOL_ALREADY_REGISTERED'
-    | 'VALIDATION_FAILED'
-    | 'EXECUTION_FAILED'
-    | 'FORBIDDEN'
-    | 'TIMEOUT'
-
-/**
- * 工具执行上下文（传给 handler）
- *
- * 由框架在 `execute` / `executeAll` 时构造并透传给工具 handler，使工具能够：
- * - 响应取消（主持人打断、上层 AbortSignal）提前中止耗时操作（DB 查询 / HTTP 请求）；
- * - 感知超时截止时间；
- * - 获知当前交互主体 / 会话，做数据隔离或审计。
- *
- * `signal` 始终存在：即便调用方未传入信号，框架也会依据默认超时构造一个。
- *
- * @example
- * ```ts
- * import type { ToolExecutionContext } from '@h-ai/ai'
- *
- * function remainingMs(context: ToolExecutionContext): number | undefined {
- *   context.signal.throwIfAborted()
- *   return context.deadline === undefined ? undefined : Math.max(0, context.deadline - Date.now())
- * }
- * ```
- */
-export interface ToolExecutionContext {
-  /** 取消信号（始终存在；结合调用方信号与超时截止） */
-  signal: AbortSignal
-  /** 交互主体 ID（透传自 Context / Reasoning 作用域） */
-  objectId?: string
-  /** 会话 ID（透传自 Context / Reasoning 作用域） */
-  sessionId?: string
-  /** 截止时间（Unix 毫秒；到期自动取消） */
-  deadline?: number
-}
-
-/**
- * 工具授权请求
- *
- * `input` 已通过工具的 Zod schema 校验；授权函数在 handler 执行前调用。
- *
- * @example
- * ```ts
- * import type { ToolAuthorizationRequest } from '@h-ai/ai'
- *
- * const value: ToolAuthorizationRequest = { toolName: 'sum', input: { a: 1, b: 2 }, context: { objectId: 'user-42', signal: new AbortController().signal } }
- * ```
- */
-export interface ToolAuthorizationRequest<TInput = unknown> {
-  /** 工具名称 */
-  toolName: string
-  /** 已校验的工具输入 */
-  input: TInput
-  /** 本次执行上下文 */
-  context: ToolExecutionContext
-}
-
-/**
- * 工具授权函数；返回 `false` 或抛出异常时均拒绝执行（fail-closed）
- *
- * @example
- * ```ts
- * import type { ToolAuthorizer } from '@h-ai/ai'
- *
- * // objectId 由可信服务端会话绑定；授权函数拒绝未绑定身份。
- * const authorize: ToolAuthorizer = ({ toolName, context }) =>
- *   toolName === 'sum' && context.objectId === 'user-42'
- * ```
- */
-export type ToolAuthorizer = (request: ToolAuthorizationRequest) => Promise<boolean> | boolean
-
-/**
- * 工具执行入参（调用方传给 `execute` / `executeAll`）
- *
- * 所有字段可选。框架据此解析出传给 handler 的 {@link ToolExecutionContext}：
- * 组合调用方 `signal` 与超时信号，超时优先级 `deadline` > `timeoutMs` > 工具默认 > 全局默认。
- *
- * @example
- * ```ts
- * import type { ToolExecutionOptions } from '@h-ai/ai'
- *
- * const value: ToolExecutionOptions = { objectId: 'user-42', sessionId: 'weekly', timeoutMs: 5000, signal: new AbortController().signal }
- * ```
- */
-export interface ToolExecutionOptions {
-  /** 调用方取消信号（与超时信号组合） */
-  signal?: AbortSignal
-  /** 交互主体 ID */
-  objectId?: string
-  /** 会话 ID */
-  sessionId?: string
-  /** 截止时间（Unix 毫秒；优先级高于 timeoutMs） */
-  deadline?: number
-  /** 本次执行超时（毫秒；覆盖工具默认超时） */
-  timeoutMs?: number
-  /**
-   * 本次执行授权函数
-   *
-   * 与 Registry 级授权同时存在时必须全部通过。授权异常不会进入 handler，统一返回
-   * `TOOL_FORBIDDEN`，避免因授权服务故障而放行高风险操作。
-   */
-  authorize?: ToolAuthorizer
-}
-
-/**
- * 工具定义选项（传给 `ai.tools.define()`）
- *
- * @typeParam TInput - 参数类型（由 Zod schema 推断）
- * @typeParam TOutput - 返回值类型
- *
- * @example
- * ```ts
- * import type { DefineToolOptions } from '@h-ai/ai'
- * import { z } from 'zod'
- *
- * const options: DefineToolOptions<{ a: number, b: number }, number> = {
- *   name: 'sum',
- *   description: '计算两个数之和',
- *   parameters: z.object({ a: z.number(), b: z.number() }),
- *   handler: ({ a, b }, context) => {
- *     context.signal.throwIfAborted()
- *     return a + b
- *   },
- * }
- * ```
- */
-export interface DefineToolOptions<TInput, TOutput> {
-  /** 工具名称（需唯一，用于 function calling name 字段） */
-  name: string
-  /** 工具功能描述（供模型理解何时调用） */
-  description: string
-  /** Zod schema，用于参数校验和 JSON Schema 转换 */
-  parameters: ZodType<TInput>
-  /**
-   * 执行函数，接收校验后的参数与执行上下文，支持同步/异步
-   *
-   * `context.signal` 用于响应取消：长耗时操作应把它透传给 DB / HTTP 客户端，
-   * 以便打断或超时时提前中止。
-   */
-  handler: (input: TInput, context: ToolExecutionContext) => Promise<TOutput> | TOutput
-  /** 本工具默认执行超时（毫秒；execute 未指定 deadline/timeoutMs 时生效） */
-  timeoutMs?: number
-}
-
-/**
- * 工具实例（由 `ai.tools.define()` 创建）
- *
- * @typeParam TInput - 参数类型
- * @typeParam TOutput - 返回值类型
- *
+ * 定义、注册、授权、超时和取消由 `@h-ai/tools` 负责；执行失败保留原始 Tools 错误。
  * @example
  * ```ts
  * import { ai } from '@h-ai/ai'
+ * import { tools } from '@h-ai/tools'
  * import { z } from 'zod'
- *
- * const sum = ai.tools.define({ name: 'sum', description: '计算两个数之和', parameters: z.object({ a: z.number(), b: z.number() }), handler: ({ a, b }) => a + b })
- * const result = await sum.execute({ a: 1, b: 2 })
- * if (result.success) {
- *   const total = result.data
- * }
- * ```
- */
-export interface Tool<TInput = unknown, TOutput = unknown> {
-  /** 工具名称 */
-  name: string
-  /** 工具功能描述 */
-  description: string
-  /** Zod 参数 schema */
-  parameters: ZodType<TInput>
-  /** 执行工具（自动校验参数），失败返回 ToolError；超时 / 取消返回 TOOL_TIMEOUT */
-  execute: (input: TInput, options?: ToolExecutionOptions) => Promise<HaiResult<TOutput>>
-  /** 转换为 OpenAI function calling 定义格式（$schema 字段已移除） */
-  toDefinition: () => ToolDefinition
-}
-
-/**
- * 工具注册表接口（由 `ai.tools.createRegistry()` 创建）
- *
- * 管理一组工具的注册、查询与批量执行。注册方法返回 `HaiResult<void>`，
- * 调用方应显式处理重名等配置错误。
- *
- * @example
- * ```ts
- * import { ai } from '@h-ai/ai'
- * import { z } from 'zod'
- *
- * async function sumValues() {
- *   const registry = ai.tools.createRegistry()
- *   const registered = registry.register(ai.tools.define({ name: 'sum', description: '计算两个数之和', parameters: z.object({ a: z.number(), b: z.number() }), handler: ({ a, b }) => a + b }))
- *   if (!registered.success)
- *     return registered
- *   const result = await registry.execute({ id: 'call-sum-1', type: 'function', function: { name: 'sum', arguments: '{"a":1,"b":2}' } })
- *   if (!result.success)
- *     return result
- *   return result.data
- * }
+ * const registry = tools.createRegistry()
+ * const registered = registry.register(tools.define({ name: 'echo', description: '返回文本', parameters: z.object({ text: z.string() }), handler: input => input.text }))
+ * if (!registered.success) throw new Error(registered.error.message)
+ * const modelTools = ai.tools.adapt(registry)
+ * const result = await modelTools.execute({ id: 'call-1', type: 'function', function: { name: 'echo', arguments: '{"text":"你好"}' } })
+ * if (!result.success) throw new Error(result.error.message)
  * ```
  */
 export interface ToolRegistryOperations {
-  /** 注册工具；同名工具已存在时返回 `TOOL_ALREADY_REGISTERED` */
-  register: <TInput, TOutput>(tool: Tool<TInput, TOutput>) => HaiResult<void>
-  /** 原子批量注册；列表内或注册表内存在重名时不写入任何工具 */
-  registerMany: (tools: Tool<unknown, unknown>[]) => HaiResult<void>
-  /** 显式替换已注册工具；目标不存在时返回 `TOOL_NOT_FOUND` */
-  replace: <TInput, TOutput>(tool: Tool<TInput, TOutput>) => HaiResult<void>
-  /** 注销指定名称的工具，成功返回 `true`，不存在返回 `false` */
-  unregister: (name: string) => boolean
-  /** 按名称获取工具实例，不存在返回 `undefined` */
-  get: (name: string) => Tool | undefined
-  /** 判断指定名称的工具是否已注册 */
-  has: (name: string) => boolean
-  /** 获取所有已注册的工具名称列表 */
-  getNames: () => string[]
-  /** 获取所有工具的 OpenAI function calling 定义（用于传入 ChatCompletionRequest.tools） */
+  /** 读取当前中立注册表，转换为模型 function calling 定义。 */
   getDefinitions: () => ToolDefinition[]
-  /** 执行单个工具调用，自动解析 JSON 参数并校验；失败返回 ToolError，超时 / 取消返回 TOOL_TIMEOUT */
+  /** 解码 JSON 入参并执行；Tools 业务错误直接透传，协议错误属于 AI。 */
   execute: (toolCall: ToolCall, options?: ToolExecutionOptions) => Promise<HaiResult<ToolMessage>>
-  /** 批量执行工具调用（默认串行），任一失败立即返回错误；仅显式 `parallel: true` 时并行 */
+  /** 先检查所有调用格式，再由中立注册表串行或显式并行执行，按输入顺序编码消息。 */
   executeAll: (toolCalls: ToolCall[], options?: ToolExecutionOptions & { parallel?: boolean }) => Promise<HaiResult<ToolMessage[]>>
-  /** 清空所有已注册的工具 */
-  clear: () => void
-  /** 当前已注册的工具数量 */
-  readonly size: number
 }
 
 /**
- * 工具注册表创建选项
- *
- * @example
- * ```ts
- * import type { ToolRegistryOptions } from '@h-ai/ai'
- *
- * const value: ToolRegistryOptions = { authorize: ({ context }) => context.objectId === 'user-42' }
- * ```
- */
-export interface ToolRegistryOptions {
-  /**
-   * Registry 级授权函数
-   *
-   * 适合统一执行租户、角色、资源归属和高风险操作确认。它不能替代 handler 内针对最终资源的
-   * 业务校验；两层校验应共同采用最小权限原则。
-   */
-  authorize?: ToolAuthorizer
-}
-
-/**
- * 工具操作接口（通过 `ai.tools` 访问，纯函数，无需初始化）
- *
+ * AI 的工具协议接入，纯适配，无需初始化。
  * @example
  * ```ts
  * import { ai } from '@h-ai/ai'
- * import { z } from 'zod'
- *
- * // 工具定义与注册表无需初始化 ai。
- * const tool = ai.tools.define({ name: 'echo', description: '返回输入文本', parameters: z.object({ text: z.string() }), handler: ({ text }) => text })
- * const definition = tool.toDefinition()
+ * import { tools } from '@h-ai/tools'
+ * const registry = tools.createRegistry()
+ * const modelTools = ai.tools.adapt(registry)
+ * const definitions = modelTools.getDefinitions()
  * ```
  */
 export interface ToolsOperations {
-  /** 定义工具（Zod schema 类型推断 + 自动参数校验） */
-  define: <TInput, TOutput>(options: DefineToolOptions<TInput, TOutput>) => Tool<TInput, TOutput>
-  /** 创建新的工具注册表实例，可注入统一授权函数 */
-  createRegistry: (options?: ToolRegistryOptions) => ToolRegistryOperations
+  /** 使用同一份工具注册表；不复制工具或授权状态。 */
+  adapt: (registry: NeutralToolRegistryOperations) => ToolRegistryOperations
 }
 
 // ─── 对话记录 ───

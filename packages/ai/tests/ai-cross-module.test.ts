@@ -13,6 +13,7 @@ import type { EmbeddingOperations } from '../src/embedding/ai-embedding-types.js
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import type { RetrievalOperations, RetrievalSource } from '../src/retrieval/ai-retrieval-types.js'
 import type { AIRelStore, AIStoreProvider } from '../src/store/ai-store-types.js'
+import { tools } from '@h-ai/tools'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { HaiAIError } from '../src/ai-types.js'
@@ -380,9 +381,9 @@ describe('reasoning 跨模块进阶', () => {
 
 describe('tools 注册表组合场景', () => {
   it('批量注册 + 按名查找 + 执行', async () => {
-    const registry = ai.tools.createRegistry()
+    const registry = tools.createRegistry()
 
-    const add = ai.tools.define({
+    const add = tools.define({
       name: 'add',
       description: '加法',
       parameters: z.object({
@@ -392,7 +393,7 @@ describe('tools 注册表组合场景', () => {
       handler: ({ a, b }) => a + b,
     })
 
-    const multiply = ai.tools.define({
+    const multiply = tools.define({
       name: 'multiply',
       description: '乘法',
       parameters: z.object({
@@ -431,9 +432,9 @@ describe('tools 注册表组合场景', () => {
   })
 
   it('获取 OpenAI 兼容工具定义列表', async () => {
-    const registry = ai.tools.createRegistry()
+    const registry = tools.createRegistry()
 
-    registry.register(ai.tools.define({
+    registry.register(tools.define({
       name: 'greet',
       description: '问候',
       parameters: z.object({
@@ -442,16 +443,16 @@ describe('tools 注册表组合场景', () => {
       handler: ({ name }) => `Hello ${name}`,
     }))
 
-    const defs = registry.getDefinitions()
+    const defs = ai.tools.adapt(registry).getDefinitions()
     expect(defs).toHaveLength(1)
     expect(defs[0].type).toBe('function')
     expect((defs[0] as { type: string, function: { name: string } }).function.name).toBe('greet')
   })
 
   it('注册表 unregister + re-register', async () => {
-    const registry = ai.tools.createRegistry()
+    const registry = tools.createRegistry()
 
-    const tool = ai.tools.define({
+    const tool = tools.define({
       name: 'temp',
       description: 'Temporary',
       parameters: z.object({}),

@@ -22,6 +22,7 @@ export default defineConfig({
     '@h-ai/vecdb',
     '@h-ai/reldb',
     '@h-ai/datapipe',
+    '@h-ai/tools',
     'openai',
     'nanoid',
     '@modelcontextprotocol/sdk',

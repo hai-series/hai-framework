@@ -440,5 +440,7 @@
   "cli_build_dependency_reason_changed": "文件或目录在检查过程中发生变化",
   "cli_build_dependency_reason_read": "无法读取缓存，请检查访问权限和文件占用",
   "cli_build_dependency_reason_write": "无法写入或发布缓存，请检查访问权限、磁盘空间和文件占用",
-  "cli_build_dependency_reason_tracking": "缓存跟踪清单不是有效的JSON"
+  "cli_build_dependency_reason_tracking": "缓存跟踪清单不是有效的JSON",
+  "cli_featureToolsName": "工具",
+  "cli_featureToolsDescription": "独立于模型的工具定义、校验、注册与授权执行"
 }

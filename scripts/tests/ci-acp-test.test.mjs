@@ -20,7 +20,7 @@ describe('ci ACP 原生验收前置', () => {
       ['docker', 'build'],
       ['docker', 'build'],
       ['pnpm', '--filter'],
-      ['node', 'packages/ai/tools/tests/image-smoke.mjs'],
+      ['node', 'packages/tools/jobs/tests/image-smoke.mjs'],
       ['pnpm', 'test'],
     ])
     for (const [index, name] of ['codex-acp', 'deepseek-harness', 'goose'].entries()) {
@@ -28,7 +28,7 @@ describe('ci ACP 原生验收前置', () => {
       expect(calls[index + 1].args).toContain(`${manifest.image}:${manifest.version}`)
       expect(calls[index + 1].args).toContain('DEBIAN_MIRROR=https://deb.debian.org/debian')
     }
-    expect(calls[8].args).toEqual(['--filter', '@h-ai/ai', 'test:tools'])
+    expect(calls[8].args).toEqual(['--filter', '@h-ai/tools', 'test:jobs'])
     expect(calls[10].environment).toMatchObject({
       HAI_ACP_E2E_ENGINE: 'docker',
       HAI_ACP_E2E_IMAGE: calls[1].args.at(-2),
@@ -94,7 +94,7 @@ describe('ci ACP 原生验收前置', () => {
       ['docker', 'build'],
       ['docker', 'build'],
       ['pnpm', '--filter'],
-      ['node', 'packages/ai/tools/tests/image-smoke.mjs'],
+      ['node', 'packages/tools/jobs/tests/image-smoke.mjs'],
       ['pnpm', 'test'],
       ['npm', 'install'],
       ['codex-acp', '--version'],

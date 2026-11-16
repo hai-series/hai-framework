@@ -14,7 +14,7 @@ Find the tables, columns, and cache keys owned by a module. To check whether a r
 
 ## Application features
 
-[iam](iam.md) · [ai](ai.md) · [audit](audit.md) · [feedback](feedback.md) · [payment](payment.md) · [reach](reach.md) · [scheduler](scheduler.md) · [ui](ui.md) · [capacitor](capacitor.md)
+[iam](iam.md) · [ai](ai.md) · [tools](tools.en.md) · [audit](audit.md) · [feedback](feedback.md) · [payment](payment.md) · [reach](reach.md) · [scheduler](scheduler.md) · [ui](ui.md) · [capacitor](capacitor.md)
 
 ## Build and execution
 

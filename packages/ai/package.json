@@ -24,8 +24,7 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "models/agents",
-    "tools"
+    "models/agents"
   ],
   "publishConfig": {
     "access": "public"
@@ -42,7 +41,6 @@
     "test": "vitest run",
     "test:watch": "vitest watch",
     "test:coverage": "vitest run --coverage",
-    "test:tools": "python3 -B -m unittest discover -s tools/tests",
     "clean": "rimraf dist .turbo",
     "model:list": "node models/build.mjs list",
     "model:prepare": "node models/build.mjs prepare",
@@ -60,6 +58,7 @@
     "@h-ai/datapipe": "workspace:*",
     "@h-ai/reldb": "workspace:*",
     "@h-ai/runner": "workspace:*",
+    "@h-ai/tools": "workspace:*",
     "@h-ai/vecdb": "workspace:*",
     "@modelcontextprotocol/sdk": "catalog:",
     "nanoid": "catalog:",

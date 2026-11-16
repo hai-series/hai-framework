@@ -5,17 +5,18 @@
  */
 
 import type { ChatCompletionChunk } from '../src/index.js'
+import { HaiToolsError, tools } from '@h-ai/tools'
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { ai, HaiAIError } from '../src/index.js'
 
 // =============================================================================
-// ai.tools.define — 非 Error 异常
+// tools.define — 非 Error 异常
 // =============================================================================
 
-describe('ai.tools.define — 非 Error 类型异常', () => {
+describe('tools.define — 非 Error 类型异常', () => {
   it('handler 抛出字符串时返回 EXECUTION_FAILED', async () => {
-    const tool = ai.tools.define({
+    const tool = tools.define({
       name: 'throw_string',
       description: 'test',
       parameters: z.object({}),
@@ -26,13 +27,13 @@ describe('ai.tools.define — 非 Error 类型异常', () => {
     const result = await tool.execute({})
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(HaiAIError.TOOL_EXECUTION_FAILED.code)
-      expect(result.error.message).toBe('raw string error')
+      expect(result.error.code).toBe(HaiToolsError.EXECUTION_FAILED.code)
+      expect(result.error.cause).toBe('raw string error')
     }
   })
 
   it('handler 抛出 undefined 时返回 EXECUTION_FAILED', async () => {
-    const tool = ai.tools.define({
+    const tool = tools.define({
       name: 'throw_undefined',
       description: 'test',
       parameters: z.object({}),
@@ -43,13 +44,13 @@ describe('ai.tools.define — 非 Error 类型异常', () => {
     const result = await tool.execute({})
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(HaiAIError.TOOL_EXECUTION_FAILED.code)
-      expect(result.error.message).toBe('undefined')
+      expect(result.error.code).toBe(HaiToolsError.EXECUTION_FAILED.code)
+      expect(result.error.cause).toBeUndefined()
     }
   })
 
   it('handler 抛出数字时返回 EXECUTION_FAILED', async () => {
-    const tool = ai.tools.define({
+    const tool = tools.define({
       name: 'throw_number',
       description: 'test',
       parameters: z.object({}),
@@ -60,20 +61,20 @@ describe('ai.tools.define — 非 Error 类型异常', () => {
     const result = await tool.execute({})
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(HaiAIError.TOOL_EXECUTION_FAILED.code)
-      expect(result.error.message).toBe('42')
+      expect(result.error.code).toBe(HaiToolsError.EXECUTION_FAILED.code)
+      expect(result.error.cause).toBe(42)
     }
   })
 })
 
 // =============================================================================
-// ai.tools.createRegistry — handler 返回字符串的序列化
+// tools.createRegistry — handler 返回字符串的序列化
 // =============================================================================
 
-describe('ai.tools.createRegistry — 序列化边界', () => {
+describe('tools.createRegistry — 序列化边界', () => {
   it('handler 返回对象时 JSON.stringify 作为 content', async () => {
-    const registry = ai.tools.createRegistry()
-    const objTool = ai.tools.define({
+    const registry = tools.createRegistry()
+    const objTool = tools.define({
       name: 'obj_tool',
       description: 'test',
       parameters: z.object({}),
@@ -86,7 +87,7 @@ describe('ai.tools.createRegistry — 序列化边界', () => {
     })
     registry.register(objTool)
 
-    const result = await registry.execute({
+    const result = await ai.tools.adapt(registry).execute({
       id: 'c1',
       type: 'function',
       function: { name: 'obj_tool', arguments: '{}' },
@@ -105,8 +106,8 @@ describe('ai.tools.createRegistry — 序列化边界', () => {
   })
 
   it('handler 返回 null 时 JSON.stringify 为 "null"', async () => {
-    const registry = ai.tools.createRegistry()
-    const nullTool = ai.tools.define({
+    const registry = tools.createRegistry()
+    const nullTool = tools.define({
       name: 'null_tool',
       description: 'test',
       parameters: z.object({}),
@@ -114,7 +115,7 @@ describe('ai.tools.createRegistry — 序列化边界', () => {
     })
     registry.register(nullTool)
 
-    const result = await registry.execute({
+    const result = await ai.tools.adapt(registry).execute({
       id: 'c1',
       type: 'function',
       function: { name: 'null_tool', arguments: '{}' },
@@ -127,8 +128,8 @@ describe('ai.tools.createRegistry — 序列化边界', () => {
   })
 
   it('handler 返回数字时 JSON.stringify 为字符串', async () => {
-    const registry = ai.tools.createRegistry()
-    const numTool = ai.tools.define({
+    const registry = tools.createRegistry()
+    const numTool = tools.define({
       name: 'num_tool',
       description: 'test',
       parameters: z.object({}),
@@ -136,7 +137,7 @@ describe('ai.tools.createRegistry — 序列化边界', () => {
     })
     registry.register(numTool)
 
-    const result = await registry.execute({
+    const result = await ai.tools.adapt(registry).execute({
       id: 'c1',
       type: 'function',
       function: { name: 'num_tool', arguments: '{}' },

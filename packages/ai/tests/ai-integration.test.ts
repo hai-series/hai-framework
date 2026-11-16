@@ -5,6 +5,7 @@
  * 使用 mock OpenAI SDK 隔离外部依赖，验证子功能间的接口衔接。
  */
 
+import { tools } from '@h-ai/tools'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { ai, HaiAIError } from '../src/index.js'
@@ -119,7 +120,7 @@ describe('ai 全流程集成', () => {
 
   it('lLM chat + tool define + tool execute 全流程', async () => {
     // 定义工具
-    const calculator = ai.tools.define({
+    const calculator = tools.define({
       name: 'calculate',
       description: '计算数学表达式',
       parameters: z.object({
@@ -187,9 +188,9 @@ describe('ai 全流程集成', () => {
   // ─── Tools 注册表 ───
 
   it('tools.createRegistry 注册与查询', () => {
-    const registry = ai.tools.createRegistry()
+    const registry = tools.createRegistry()
 
-    const tool1 = ai.tools.define({
+    const tool1 = tools.define({
       name: 'search',
       description: '搜索',
       parameters: z.object({
@@ -198,7 +199,7 @@ describe('ai 全流程集成', () => {
       handler: ({ query }) => `results for ${query}`,
     })
 
-    const tool2 = ai.tools.define({
+    const tool2 = tools.define({
       name: 'translate',
       description: '翻译',
       parameters: z.object({
@@ -361,7 +362,7 @@ describe('ai 全流程集成', () => {
     }
 
     // tools 和 stream 是纯函数，仍可用
-    const tool = ai.tools.define({
+    const tool = tools.define({
       name: 'test',
       description: 'test',
       parameters: z.object({}),

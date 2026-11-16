@@ -8,7 +8,7 @@
 
 MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确的 ER_DUP_KEYNAME/1061，并重新核对列及顺序、非唯一完整列、升序可见 BTREE 和无表达式；已有同名错误结构仍失败。账户需要建表和 INDEX 权限，元数据读取、权限或其他 DDL 错误使 ai.init 返回 CONFIGURATION_ERROR。返回前等待全部已启动 DDL 结束；MySQL DDL 不回滚，失败保留已创建结构，修复权限/结构后再重试。逐步检查初始化结果，失败不接收业务请求，并逆序关闭 AI、vecdb、reldb。
 
-- `ai.tools`：无需 `ai.init()`；无外部依赖。
+- `ai.tools.adapt`：无需 `ai.init()`；接收 `@h-ai/tools` 的工具注册器。
 - `ai.stream`：无需 `ai.init()`；无外部依赖。
 - `ai.llm`：需要 `ai.init()`；依赖 OpenAI 兼容 LLM 配置。
 - `ai.embedding`：需要 `ai.init()`；依赖 LLM/Embedding 模型配置。
@@ -50,15 +50,11 @@ if (result.success) {
 
 ## Tools
 
-- `ai.tools.define({ name, description, parameters, handler })`
-- `ai.tools.createRegistry({ authorize? })`：Registry 级授权在 Zod 校验后、handler 前执行
-- `registry.register(tool)` / `registry.registerMany(tools)`：返回 `HaiResult<void>`，默认拒绝同名和隐式覆盖
-- `registry.replace(tool)`：仅用于显式替换已存在工具
-- `registry.unregister(name)`
-- `registry.getDefinitions()`
-- `registry.execute(toolCall, { signal, objectId, sessionId, deadline?, timeoutMs?, authorize? })` / `registry.executeAll(toolCalls, { parallel?, ...ctx })`；默认串行，只有显式 `parallel: true` 才并行；Registry 与单次授权必须全部通过；handler `(input, ctx)` 可响应取消/超时（默认 30s）
+工具通过 `@h-ai/tools` 的 `tools.define/createRegistry` 定义和注册，无需初始化。直接业务调用使用 `registry.execute(name, input, options?)`，返回中立业务结果。
 
-工具 handler 输入由 Zod schema 约束，外部输入不要绕过 schema。
+`ai.tools.adapt(registry)` 将同一注册器适配为模型工具定义和调用消息。返回的 `modelTools.getDefinitions()` 用于 LLM 请求，`modelTools.execute(toolCall, options?)` / `executeAll(toolCalls, options?)` 负责 JSON 编解码；业务校验、授权、超时和取消均经过原注册器。适配器不维护第二份工具集合。
+
+工具注册、自定义扩展、错误与多节点责任见 [Tools 手册](../../docs/usage/function/tools.md)。
 
 ## MCP
 

@@ -61,12 +61,12 @@ def read_text(path):
     return text_result(data.decode('utf-8'))
 
 
-def publish(source, output, signature):
+def publish(source, output, signature, signature_offset=0):
     info = source.lstat()
     if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= FILE_LIMIT:
         raise ToolError('INVALID_OUTPUT', 'Produced artifact is not a bounded regular file')
     with source.open('rb') as stream:
-        if not stream.read(len(signature)).startswith(signature):
+        if not stream.read(signature_offset + len(signature))[signature_offset:].startswith(signature):
             raise ToolError('INVALID_OUTPUT', 'Produced artifact has an unexpected format')
         stream.seek(0)
         try:

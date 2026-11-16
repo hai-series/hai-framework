@@ -22,6 +22,8 @@
   "ai_mcpPromptFailed": "MCP 提示词 '{name}' 执行失败：{error}",
   "ai_toolNotFound": "工具 '{name}' 未找到",
   "ai_toolInvalidJson": "工具调用参数 JSON 格式无效",
+  "ai_toolInvalidCall": "模型工具调用格式无效，仅支持 JSON 参数的 function 调用",
+  "ai_toolInvalidResult": "工具结果无法编码为模型消息",
   "ai_toolTimeout": "工具 '{name}' 在 {ms}ms 后超时或被取消",
   "ai_toolAlreadyRegistered": "工具 '{name}' 已注册；如需替换请显式调用 replace()",
   "ai_toolForbidden": "工具 '{name}' 未获执行授权",

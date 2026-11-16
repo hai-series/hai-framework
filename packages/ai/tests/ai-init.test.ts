@@ -4,6 +4,7 @@
 
 import type { AIStoreProvider } from '../src/index.js'
 
+import { tools } from '@h-ai/tools'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
@@ -325,9 +326,9 @@ describe('未初始化时的 MCP 操作', () => {
 })
 
 describe('ai.tools / ai.stream 无需初始化即可使用', () => {
-  it('ai.tools.define 无需 init', async () => {
+  it('tools.define 无需 init', async () => {
     await ai.close()
-    const tool = ai.tools.define({
+    const tool = tools.define({
       name: 't',
       description: 'test',
       parameters: z.object({}),
@@ -336,10 +337,11 @@ describe('ai.tools / ai.stream 无需初始化即可使用', () => {
     expect(tool.name).toBe('t')
   })
 
-  it('ai.tools.createRegistry 无需 init', async () => {
+  it('ai.tools.adapt 无需 init', async () => {
     await ai.close()
-    const registry = ai.tools.createRegistry()
-    expect(registry.size).toBe(0)
+    const registry = tools.createRegistry()
+    const modelTools = ai.tools.adapt(registry)
+    expect(modelTools.getDefinitions()).toEqual([])
   })
 
   it('ai.stream.createProcessor 无需 init', async () => {

@@ -12,6 +12,7 @@ export default mergeConfig(baseTestConfig, {
       '@h-ai/vecdb': '../vecdb/src/index.ts',
       '@h-ai/reldb': '../reldb/src/index.ts',
       '@h-ai/datapipe': '../datapipe/src/index.ts',
+      '@h-ai/tools': '../tools/src/index.ts',
     },
   },
 })

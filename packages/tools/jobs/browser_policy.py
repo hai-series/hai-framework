@@ -1,9 +1,9 @@
+"""网页作业共用的 URL 和部署出网代理校验。"""
 import ipaddress
 import os
-import pathlib
 import re
 from urllib.parse import urlsplit
-from tool import ToolError, publish, run_command
+from tool import ToolError
 
 HOST = re.compile(r'(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z][A-Za-z0-9-]{1,62}\Z', re.ASCII)
 
@@ -34,17 +34,3 @@ def deployment_proxy():
         return f'http://{host}:{proxy.port}'
     except (TypeError, ValueError):
         raise ToolError('NETWORK_POLICY_REQUIRED', 'A deployment-controlled egress proxy is required') from None
-
-
-def navigate(request, _source, artifact, workspace):
-    url = parse_url(request['url'])
-    if artifact.suffix.lower() != '.png':
-        raise ToolError('INVALID_REQUEST', 'Browser screenshot must be PNG')
-    proxy = deployment_proxy()
-    result = workspace / 'screen.png'
-    worker = pathlib.Path(__file__).with_name('render.mjs')
-    run_command(['node', str(worker), proxy, url, str(result)], 45, workspace)
-    return publish(result, artifact, b'\x89PNG\r\n\x1a\n')
-
-
-commands = {'browser.navigate': ({'url', 'output'}, set(), navigate)}

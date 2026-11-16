@@ -9,6 +9,7 @@ RUN set -eu; \
     rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /opt/hai-tools /input /output && chown 1000:1000 /output
 COPY tool.py /usr/local/bin/hai-tool
+COPY browser_policy.py /opt/hai-tools/browser_policy.py
 COPY browser/operation.py /opt/hai-tools/operation.py
 COPY browser/render.mjs /opt/hai-tools/render.mjs
 RUN npm install --prefix /opt/hai-tools --no-audit --no-fund --ignore-scripts playwright-core@1.65.0

@@ -195,20 +195,21 @@ const result = await ai.compress.tryCompress([
 ], { strategy: 'sliding-window', maxTokens: 80, preserveLastN: 1 })`,
   },
   'tools': {
-    api: 'ai.tools.define · ai.tools.createRegistry · execute',
+    api: 'tools.define · tools.createRegistry · ai.tools.adapt',
     code: `import { ai } from '@h-ai/ai'
+import { tools } from '@h-ai/tools'
 import { z } from 'zod'
 
 async function countWords() {
-  const registry = ai.tools.createRegistry()
-  const registered = registry.register(ai.tools.define({
+  const registry = tools.createRegistry()
+  const registered = registry.register(tools.define({
     name: 'count_words',
     description: 'Count words separated by whitespace',
     parameters: z.object({ text: z.string().min(1).max(4000) }),
     handler: ({ text }) => ({ words: text.trim().split(/\\s+/u).length }),
   }))
   if (!registered.success) return registered
-  return registry.execute({
+  return ai.tools.adapt(registry).execute({
     id: 'sample-call', type: 'function',
     function: { name: 'count_words', arguments: '{"text":"two words"}' },
   })

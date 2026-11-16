@@ -56,7 +56,7 @@ Codex 有原生启动分段、真实模型网关及内存数据。三个 Agent �
 
 ## 2. 镜像大小与文档测量
 
-首次独立工具镜像已在本机 rootless Podman（amd64）构建，四种镜像通过只读根文件系统及禁网启动检查。下表体积取自 Podman `image inspect` 的展开大小，容量及启动延迟仍需在实际作业负载下测量。镜像内容和操作见[工具镜像目录](../packages/ai/tools/README.md)。
+首次独立工具镜像已在本机 rootless Podman（amd64）构建，四种镜像通过只读根文件系统及禁网启动检查。下表体积取自 Podman `image inspect` 的展开大小，容量及启动延迟仍需在实际作业负载下测量。镜像内容和操作见[工具镜像目录](../packages/tools/jobs/README.md)。
 
 | 项目 | 证据 | 能说明什么 |
 | --- | --- | --- |

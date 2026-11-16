@@ -440,5 +440,7 @@
   "cli_build_dependency_reason_changed": "The file or directory changed during validation",
   "cli_build_dependency_reason_read": "Cannot read the cache; check access permissions and file locks",
   "cli_build_dependency_reason_write": "Cannot write or publish the cache; check access permissions, disk space and file locks",
-  "cli_build_dependency_reason_tracking": "The cache tracking manifest is not valid JSON"
+  "cli_build_dependency_reason_tracking": "The cache tracking manifest is not valid JSON",
+  "cli_featureToolsName": "Tools",
+  "cli_featureToolsDescription": "Model-independent tool definitions, validation, registration and authorized execution"
 }

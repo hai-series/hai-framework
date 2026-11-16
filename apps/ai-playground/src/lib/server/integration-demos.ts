@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { AgentEvent, ai, HaiAIError, Message } from '@h-ai/ai'
 import { err, ok } from '@h-ai/core'
 import { runner } from '@h-ai/runner'
+import { tools } from '@h-ai/tools'
 import { z } from 'zod'
 
 const manualService = 'playground-manuals'
@@ -132,8 +133,8 @@ export async function integrationDemoUnavailable(): Promise<Partial<Record<Integ
 }
 
 async function runTools(input: string, signal: AbortSignal) {
-  const registry = ai.tools.createRegistry()
-  const registered = registry.register(ai.tools.define({
+  const registry = tools.createRegistry()
+  const registered = registry.register(tools.define({
     name: 'count_words',
     description: 'Count whitespace-delimited words',
     parameters: z.object({
@@ -143,7 +144,8 @@ async function runTools(input: string, signal: AbortSignal) {
   }))
   if (!registered.success)
     return registered
-  const executed = await registry.execute({
+  const modelTools = ai.tools.adapt(registry)
+  const executed = await modelTools.execute({
     id: 'playground-call',
     type: 'function',
     function: {
@@ -153,7 +155,7 @@ async function runTools(input: string, signal: AbortSignal) {
   }, { signal })
   return executed.success
     ? ok({
-        definitions: registry.getDefinitions(),
+        definitions: modelTools.getDefinitions(),
         toolResult: executed.data,
       })
     : executed

@@ -128,7 +128,7 @@ export async function runACPContainerTests(run = execute, environment = process.
     'ocr',
     'browser',
   ]) {
-    const directory = resolve(root, 'packages/ai/tools')
+    const directory = resolve(root, 'packages/tools/jobs')
     const image = `${localImagePrefix}hai-tools-${name}:ci`
     await run(engine, [
       'build',
@@ -152,8 +152,8 @@ export async function runACPContainerTests(run = execute, environment = process.
     HAI_TOOL_IMAGE_ENGINE: engine,
     ...toolImages,
   }
-  await run('pnpm', ['--filter', '@h-ai/ai', 'test:tools'], fixtureTestEnvironment)
-  await run('node', ['packages/ai/tools/tests/image-smoke.mjs'], fixtureTestEnvironment)
+  await run('pnpm', ['--filter', '@h-ai/tools', 'test:jobs'], fixtureTestEnvironment)
+  await run('node', ['packages/tools/jobs/tests/image-smoke.mjs'], fixtureTestEnvironment)
   await run('pnpm', ['test'], fixtureTestEnvironment)
   if (!trustedMain)
     return

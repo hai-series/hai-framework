@@ -1,0 +1,9 @@
+{
+  "tools_notFound": "工具不存在或未启用",
+  "tools_alreadyRegistered": "工具名称已注册",
+  "tools_validationFailed": "工具参数无效",
+  "tools_executionFailed": "工具执行失败",
+  "tools_forbidden": "无权执行此工具",
+  "tools_timeout": "工具执行超时",
+  "tools_cancelled": "工具执行已取消"
+}

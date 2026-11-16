@@ -108,7 +108,7 @@ Skill 是可复用的操作指引，插件可以组合 Skill、MCP 和服务连�
 | `apps/agent` 工作台 | 对话、附件、审批、事件、引用、ASR/TTS、Library、产物下载与补丁发布 | 产物主要按文件交付，只有补丁等特定预览；需补通用类型分派和编辑保存 |
 | `apps/ai-playground` | 图片、语音、工具等能力的已存在调用示例 | 是集成起点，不是已经完成的统一 Agent 产物体验 |
 
-源码入口：[工具定义与执行](../packages/ai/src/llm/ai-llm-tool.ts)、[工具公共类型](../packages/ai/src/llm/ai-llm-types.ts)、[MCP 作业](../packages/ai/src/mcp/ai-mcp-jobs.ts)、[独立工具说明](../packages/ai/tools/README.md)、[Runner 手册](usage/function/runner.md)、[AI 手册](usage/function/ai.md)。
+源码入口：[工具定义与执行](../packages/ai/src/llm/ai-llm-tool.ts)、[工具公共类型](../packages/ai/src/llm/ai-llm-types.ts)、[MCP 作业](../packages/ai/src/mcp/ai-mcp-jobs.ts)、[独立工具说明](../packages/tools/jobs/README.md)、[Runner 手册](usage/function/runner.md)、[AI 手册](usage/function/ai.md)。
 
 UI 和应用入口：[文档组件与类型](../packages/ui/src/lib/components/scenes/ai/document-types.ts)、[代码预览策略](../packages/ui/src/lib/components/scenes/ai/code-preview.ts)、[文档导出](../packages/ui/src/lib/components/scenes/ai/document-download.ts)、[只读代码工作区](../packages/ui/src/lib/components/scenes/code/CodeWorkspaceEditor.svelte)、[Agent 文件与产物](../apps/agent/src/lib/server/resources.ts)、[Agent 工作台界面](../apps/agent/src/routes/+page.svelte)、[图片面板](../apps/ai-playground/src/lib/components/ImagePanel.svelte)。
 
@@ -273,7 +273,7 @@ MCP 本身是通用协议，长期可以由 Tools 承接协议接入部分。但
 
 1. **确认中立契约。** 区分工具输入输出与 OpenAI 消息；明确上下文、授权、失败、取消及产物引用的责任。本阶段先确认类型和错误映射，不迁数据库。
 2. **抽出通用执行内核和独立工具实现。** AI 保留模型协议适配，直接业务调用与 AI 调用使用同一个内核。Runner 的状态、租约和容量保持唯一归属。
-3. **迁移实际消费者。** 覆盖 Agent、Playground、AI reasoning/context、MCP 作业和模板。默认采用同批升级并移除旧入口；若发布节奏必须保留临时 `ai.tools` 门面，应明确退出版本和授权范围，门面只委托同一实现。
+3. **迁移实际消费者。** 覆盖 Agent、Playground、AI reasoning/context、MCP 作业和模板。按用户追加决定，同批升级并移除旧定义/注册入口，不保留兼容门面；`ai.tools.adapt` 仅承担模型协议转换。
 4. **按需要迁 MCP 底层。** 独立评估服务配置、存储和授权迁移，不与首轮拆内核捆绑。
 
 主要成本是公共类型、错误码、依赖关系和调用方升级，而非文件移动。同步范围包括包导出、浏览器类型入口、构建图、独立镜像构建路径、CLI 模板、API 清单、使用手册、skills 和 LLMS 导航。

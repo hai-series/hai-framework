@@ -204,6 +204,7 @@ const HAI_CATALOG_PACKAGE_NAMES = [
   '@h-ai/scheduler',
   '@h-ai/serv',
   '@h-ai/storage',
+  '@h-ai/tools',
   '@h-ai/ui',
   '@h-ai/vecdb',
 ] as const
@@ -438,6 +439,8 @@ function buildApiWorkspaceCatalogPackages(featureMap: Record<string, boolean>): 
     packageNames.push('@h-ai/vecdb')
   if (featureMap.datapipe)
     packageNames.push('@h-ai/datapipe')
+  if (featureMap.tools)
+    packageNames.push('@h-ai/tools')
   if (featureMap.scheduler)
     packageNames.push('@h-ai/scheduler')
   if (featureMap.deploy)
@@ -492,6 +495,8 @@ function buildAppHaiCatalogPackages(options: {
     packageNames.push('@h-ai/vecdb')
   if (options.featureMap.datapipe)
     packageNames.push('@h-ai/datapipe')
+  if (options.featureMap.tools)
+    packageNames.push('@h-ai/tools')
   if (options.featureMap.scheduler)
     packageNames.push('@h-ai/scheduler')
   if (options.featureMap.deploy)
@@ -535,6 +540,8 @@ function buildFullstackCatalogPackages(frontends: readonly FrontendTarget[], dep
     packageNames.push('@h-ai/payment')
   if (features.datapipe)
     packageNames.push('@h-ai/datapipe')
+  if (features.tools)
+    packageNames.push('@h-ai/tools')
 
   return pickCatalogPackages(packageNames, FULLSTACK_CATALOG_PACKAGES)
 }
@@ -933,6 +940,7 @@ export function buildTemplateContext(options: {
   if (featureMap.ai) {
     featureMap.db = true
     featureMap.vecdb = true
+    featureMap.tools = true
   }
 
   const isApi = options.appType === 'api'
@@ -970,7 +978,13 @@ export function buildTemplateContext(options: {
     moduleConfigs: options.moduleConfigs,
     hasUi,
     hasI18n: !isApi && !isFullstack,
-    websiteServerFeatures: Object.keys(featureMap).filter(feature => featureMap[feature] && !['deploy', 'ui', 'kit', 'datapipe'].includes(feature)),
+    websiteServerFeatures: Object.keys(featureMap).filter(feature => featureMap[feature] && ![
+      'deploy',
+      'ui',
+      'kit',
+      'datapipe',
+      'tools',
+    ].includes(feature)),
     isCapacitorApp,
     isApiWorkspace: isApi,
     isSvelteOnlyApp,

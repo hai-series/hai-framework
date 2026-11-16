@@ -89,12 +89,8 @@ const AIErrorInfo = {
   EMBEDDING_INPUT_TOO_LONG: '302:400',
 
   // 工具 (400-499)
-  TOOL_NOT_FOUND: '400:404',
-  TOOL_VALIDATION_FAILED: '401:400',
-  TOOL_EXECUTION_FAILED: '402:500',
-  TOOL_TIMEOUT: '403:504',
-  TOOL_ALREADY_REGISTERED: '404:409',
-  TOOL_FORBIDDEN: '405:403',
+  TOOL_PROTOCOL_ERROR: '400:400',
+  TOOL_RESULT_ERROR: '401:500',
 
   // Reasoning (500-599)
   REASONING_FAILED: '500:500',
@@ -298,7 +294,7 @@ export interface AIFunctions {
   readonly acp: ACPOperations
   /** MCP 本地函数注册及配置/数据库外部服务清单，需要先调用 `init()`。 */
   readonly mcp: ManagedMCPOperations
-  /** 工具操作（定义工具与注册表），纯函数，无需初始化 */
+  /** 模型工具协议适配，工具定义和执行复用 @h-ai/tools；无需初始化 */
   readonly tools: ToolsOperations
   /** 流处理操作（流处理器、SSE 编解码），纯函数，无需初始化 */
   readonly stream: StreamOperations

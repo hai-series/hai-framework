@@ -130,7 +130,7 @@ a2a:
 # 构建 Codex 精简镜像，JSON 输出含 imageId。将它放入私有变量 PLAYGROUND_AGENT_IMAGE。
 pnpm --filter @h-ai/ai agent:build codex-acp --engine=podman
 # 构建文档工具镜像，输入为文档 Dockerfile 与通用工具构建目录。
-podman build -f packages/ai/tools/documents/Dockerfile -t localhost/hai-tools-documents:playground packages/ai/tools
+podman build -f packages/tools/jobs/documents/Dockerfile -t localhost/hai-tools-documents:playground packages/tools/jobs
 # 输出文档工具的镜像 ID，放入私有变量 PLAYGROUND_DOCS_IMAGE，必要时补 sha256: 前缀。
 podman image inspect --format '{{.Id}}' localhost/hai-tools-documents:playground
 ```

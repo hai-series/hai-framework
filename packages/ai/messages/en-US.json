@@ -22,6 +22,8 @@
   "ai_mcpPromptFailed": "MCP prompt '{name}' execution failed: {error}",
   "ai_toolNotFound": "Tool '{name}' not found",
   "ai_toolInvalidJson": "Invalid JSON in tool call arguments",
+  "ai_toolInvalidCall": "Invalid model tool call; a function call with JSON arguments is required",
+  "ai_toolInvalidResult": "The tool result could not be encoded as a model message",
   "ai_toolTimeout": "Tool '{name}' timed out or was cancelled after {ms}ms",
   "ai_toolAlreadyRegistered": "Tool '{name}' is already registered; use replace() to replace it explicitly",
   "ai_toolForbidden": "Tool '{name}' execution is not authorized",

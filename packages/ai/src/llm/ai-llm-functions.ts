@@ -42,7 +42,7 @@ import {
   createStreamProcessor,
   encodeSSE,
 } from './ai-llm-stream.js'
-import { createToolRegistry, defineTool } from './ai-llm-tool.js'
+import { adaptToolRegistry } from './ai-llm-tool.js'
 import { createLLMProvider } from './providers/ai-llm-provider-router.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'llm' })
@@ -83,7 +83,7 @@ export interface AILLMStores {
 export interface AILLMFunctions {
   /** LLM 操作接口（对话 / 流式对话 / 模型列表 / 历史 / 会话） */
   llm: LLMOperations
-  /** 工具操作接口（定义工具 / 创建注册表） */
+  /** 模型工具协议适配接口 */
   tools: ToolsOperations
   /** 流处理操作接口（流处理器 / SSE 编解码） */
   stream: StreamOperations
@@ -605,8 +605,7 @@ export function createAILLMFunctions(
   }
 
   const tools: ToolsOperations = {
-    define: defineTool,
-    createRegistry: createToolRegistry,
+    adapt: adaptToolRegistry,
   }
 
   const stream: StreamOperations = {

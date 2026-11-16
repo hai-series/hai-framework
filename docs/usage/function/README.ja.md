@@ -14,7 +14,7 @@
 
 ## アプリ機能
 
-[iam](iam.md) · [ai](ai.md) · [audit](audit.md) · [feedback](feedback.md) · [payment](payment.md) · [reach](reach.md) · [scheduler](scheduler.md) · [ui](ui.md) · [capacitor](capacitor.md)
+[iam](iam.md) · [ai](ai.md) · [tools](tools.ja.md) · [audit](audit.md) · [feedback](feedback.md) · [payment](payment.md) · [reach](reach.md) · [scheduler](scheduler.md) · [ui](ui.md) · [capacitor](capacitor.md)
 
 ## ビルドと実行
 

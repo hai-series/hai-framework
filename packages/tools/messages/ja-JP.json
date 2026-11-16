@@ -1,0 +1,9 @@
+{
+  "tools_notFound": "ツールが存在しないか無効です",
+  "tools_alreadyRegistered": "ツール名は登録済みです",
+  "tools_validationFailed": "ツールの入力が無効です",
+  "tools_executionFailed": "ツールの実行に失敗しました",
+  "tools_forbidden": "このツールを実行する権限がありません",
+  "tools_timeout": "ツールの実行がタイムアウトしました",
+  "tools_cancelled": "ツールの実行をキャンセルしました"
+}

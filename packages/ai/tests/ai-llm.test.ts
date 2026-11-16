@@ -6,6 +6,7 @@
  */
 
 import process from 'node:process'
+import { tools } from '@h-ai/tools'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // vi.hoisted 确保变量在 vi.mock 工厂执行时已可用
@@ -1047,11 +1048,11 @@ describe('llm 完整对话流程', () => {
     }
   })
 
-  it('结合 ai.tools.createRegistry 执行工具调用', async () => {
+  it('结合 tools.createRegistry 执行工具调用', async () => {
     const { z } = await import('zod')
 
     // 定义并注册工具
-    const calculator = ai.tools.define({
+    const calculator = tools.define({
       name: 'calculate',
       description: '计算表达式',
       parameters: z.object({
@@ -1063,7 +1064,7 @@ describe('llm 完整对话流程', () => {
         return { result: 0 }
       },
     })
-    const registry = ai.tools.createRegistry()
+    const registry = tools.createRegistry()
     registry.register(calculator)
 
     // 模型返回工具调用
@@ -1082,7 +1083,7 @@ describe('llm 完整对话流程', () => {
       messages: [
         { role: 'user', content: '1+1=?' },
       ],
-      tools: registry.getDefinitions(),
+      tools: ai.tools.adapt(registry).getDefinitions(),
     })
 
     expect(chatResult.success).toBe(true)
@@ -1090,7 +1091,7 @@ describe('llm 完整对话流程', () => {
       return
 
     // 用注册表执行工具调用
-    const toolResult = await registry.executeAll(
+    const toolResult = await ai.tools.adapt(registry).executeAll(
       chatResult.data.choices[0].message.tool_calls!,
     )
 

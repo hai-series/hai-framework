@@ -123,6 +123,7 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 | `hai:audit`      | audit      | 审计                 |
 | `hai:scheduler`  | scheduler  | 定时任务             |
 | `hai:runner`     | runner     | 容器执行、容量与归属   |
+| `hai:tools`      | tools      | 中立工具校验、注册与授权执行 |
 | `hai:ai`         | ai         | AI / LLM / RAG / MCP |
 
 ### 分环境配置

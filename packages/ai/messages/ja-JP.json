@@ -22,6 +22,8 @@
   "ai_mcpPromptFailed": "MCPプロンプト「{name}」の実行に失敗しました: {error}",
   "ai_toolNotFound": "ツール「{name}」が見つかりません",
   "ai_toolInvalidJson": "ツール呼び出しの引数に無効なJSONが含まれています",
+  "ai_toolInvalidCall": "モデルのツール呼び出し形式が無効です。JSON 引数を持つ function 呼び出しが必要です",
+  "ai_toolInvalidResult": "ツールの結果をモデルのメッセージに変換できませんでした",
   "ai_toolTimeout": "ツール「{name}」は{ms}ms後にタイムアウトしたか、キャンセルされました",
   "ai_toolAlreadyRegistered": "ツール「{name}」は登録済みです。明示的に置き換えるにはreplace()を使用してください",
   "ai_toolForbidden": "ツール「{name}」の実行は許可されていません",

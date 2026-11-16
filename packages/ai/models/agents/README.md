@@ -32,7 +32,7 @@ pnpm --filter @h-ai/ai agent:build goose --variant=office
 | `browser`   | Chromium 和字体                                                            |
 | `developer` | 编译基础工具、Python 3、pip 和 venv，可另选 JDK、Rust/Cargo、Go            |
 
-运行 Codex 工作区沙箱要求宿主容器引擎支持 bubblewrap。Chromium 镜像需要满足浏览器沙箱和部署网络策略。固定的文档、Office、OCR 和浏览器作业另有独立镜像。[独立工具镜像](../../tools/README.md)
+运行 Codex 工作区沙箱要求宿主容器引擎支持 bubblewrap。Chromium 镜像需要满足浏览器沙箱和部署网络策略。固定的文档、Office、OCR 和浏览器作业另有独立镜像。[独立工具镜像](../../../tools/jobs/README.md)
 
 在 developer 变体按需增加工具链。
 

@@ -61,8 +61,7 @@ finally {
 | `ai.llm.listModels`               | 查询模型                | `none`                                                                            | `string[] model IDs`                                                      | `ai.llm.listModels()`                                                                     |
 | `ai.llm.getHistory`               | 读取对话历史            | `{ objectId, sessionId }, { limit?, order? }?`                                    | `ChatRecord[]`                                                            | `ai.llm.getHistory({ objectId: "u1", sessionId: "s1" })`                                  |
 | `ai.llm.listSessions`             | 列出主体会话            | `objectId: string`                                                                | `SessionInfo[]`                                                           | `ai.llm.listSessions("u1")`                                                               |
-| `ai.tools.define`                 | 定义可授权工具          | `{ name, description, parameters: Zod schema, handler, timeoutMs? }`              | `direct Tool<TInput,TOutput>; no init required`                           | `ai.tools.define(toolDefinition)`                                                         |
-| `ai.tools.createRegistry`         | 管理工具集合            | `{ authorize? }?`                                                                 | `direct ToolRegistryOperations; no init required`                         | `ai.tools.createRegistry({ authorize })`                                                  |
+| `ai.tools.adapt`                  | 将中立工具适配给模型    | `registry: @h-ai/tools ToolRegistryOperations`                                   | `ToolRegistryOperations; no init required`                               | `ai.tools.adapt(registry)`                                                               |
 | `ai.stream.createProcessor`       | 积累增量文本            | `none`                                                                            | `direct StreamProcessor`                                                  | `ai.stream.createProcessor()`                                                             |
 | `ai.stream.collect`               | 完整消费聊天流          | `AsyncIterable<ChatCompletionChunk>`                                              | `Promise<StreamResult>; stream failure rejects`                           | `ai.stream.collect(ai.llm.chatStream({ messages }))`                                      |
 | `ai.stream.createSSEDecoder`      | 跨片段解码 SSE          | `none`                                                                            | `direct SSEDecoder with decode/reset`                                     | `ai.stream.createSSEDecoder()`                                                            |
@@ -194,7 +193,7 @@ finally {
 | `ai.acp.connect`                  | 接入原生传输            | `ACPTransport: stdio/http/ws, ACPClientOptions?`                                  | `HaiResult<connection handle>`                                            | `ai.acp.connect({ type: "http", url: "https://agent.example.com/acp" })`                  |
 | `ai.acp.close`                    | 关闭子系统              | `none; normally call ai.close()`                                                  | `Promise<void>; cleanup may throw`                                        | `ai.acp.close()`                                                                          |
 
-- `ai.tools`：工具定义、注册表、批量执行；无需初始化。
+- `ai.tools.adapt`：将 Tools 注册器转换为模型工具定义与消息；定义和业务执行使用 [Tools](tools.md)。无需初始化。
 - `ai.stream`：ChatCompletion 流式 chunk 处理；无需初始化。
 - `ai.llm`：非流式/流式对话、模型列表、历史记录。
 - `ai.mcp` / `createMcpServer`：内置 MCP 注册表与独立 MCP Server。
@@ -374,13 +373,14 @@ if (result.success)
 #### 工具调用
 
 ```ts
+import { tools } from '@h-ai/tools'
 import { z } from 'zod'
 
-const registry = ai.tools.createRegistry({
+const registry = tools.createRegistry({
   // 统一授权在 Zod 校验后、handler 前执行；false/异常均 fail-closed
   authorize: ({ toolName, context }) => canExecuteTool(context.objectId, toolName),
 })
-const registered = registry.register(ai.tools.define({
+const registered = registry.register(tools.define({
   name: 'get_weather',
   description: '获取天气',
   parameters: z.object({
@@ -396,15 +396,16 @@ const registered = registry.register(ai.tools.define({
 if (!registered.success)
   return registered
 
-// 执行时可传入取消信号 / 超时 / 作用域；取消或超时返回 TOOL_TIMEOUT，且不再等待未响应的 handler
-const result = await registry.execute(toolCall, { signal: controller.signal, objectId: 'user-001', timeoutMs: 30_000 })
+// 同一注册器经模型适配后解析工具调用，授权和执行仍使用原 Tools 实现。
+const modelTools = ai.tools.adapt(registry)
+const result = await modelTools.execute(toolCall, { signal: controller.signal, objectId: 'user-001', timeoutMs: 30_000 })
 
 // 批量调用默认串行，避免副作用工具并发启动；纯读取且确认安全时才显式并行
-const batch = await registry.executeAll(toolCalls)
+const batch = await modelTools.executeAll(toolCalls)
 
 const chat = await ai.llm.chat({
   messages,
-  tools: registry.getDefinitions()
+  tools: modelTools.getDefinitions()
 })
 ```
 
@@ -551,7 +552,7 @@ await stdio.connect(new StdioServerTransport()) // 无额外参数，连接标�
 
 ##### 调用远程 MCP 和独立工具作业
 
-在 `mcp.servers` 的 `transport: http` 条目中登记第三方 Streamable HTTP 地址和 `allowedTools`。需要认证时用 `headerEnv` 引用服务器环境变量。`transport: job` 可用同一套调用接口运行离线文档、Office 和 OCR 工具。为作业配置 `environmentId`、允许操作和可选 `pool`，将 Runner 与 `mcpJobFiles` 传给 `ai.init`。作业请求只传已授权的 `fileId`，执行节点再次检查文件权限，产物以对象 ID 返回。浏览器镜像由部署方单独运行。详见 [MCP 配置](../configuration/ai.md#mcp和a2a) 与 [工具镜像](../../../packages/ai/tools/README.md)。
+在 `mcp.servers` 的 `transport: http` 条目中登记第三方 Streamable HTTP 地址和 `allowedTools`。需要认证时用 `headerEnv` 引用服务器环境变量。`transport: job` 可用同一套调用接口运行离线文档、Office 和 OCR 工具。为作业配置 `environmentId`、允许操作和可选 `pool`，将 Runner 与 `mcpJobFiles` 传给 `ai.init`。作业请求只传已授权的 `fileId`，执行节点再次检查文件权限，产物以对象 ID 返回。浏览器镜像由部署方单独运行。详见 [MCP 配置](../configuration/ai.md#mcp和a2a) 与 [工具镜像](../../../packages/tools/jobs/README.md)。
 
 ```ts
 import type { MCPServiceAuthorization } from '@h-ai/ai' // 应用从 IAM 构造主体和按实际参数复核权限的回调。
@@ -989,22 +990,13 @@ const manager = ai.context.createManager({
 
 ### 返回句柄的用法
 
-下面各对象由 API 创建，后续方法直接在返回对象上调用。用 `ai.tools.createRegistry()` 得到 `registry`。用 `ai.context.createManager()` 或 `ai.context.restoreManager()` 的成功结果取得 `manager`。受管 ACP 的 `session` 由作用域对象的 `sessions.create()`、`sessions.get()` 或 `sessions.resume()` 返回，`connection` 由 `ai.acp.connect()` 返回。已通过 `ai.memory.scoped()` 创建的记忆对象始终以同一个用户和作用域执行，不再单独传这两个字段。
+下面各对象由 API 创建，后续方法直接在返回对象上调用。用 `tools.createRegistry()` 得到业务注册器，再通过 `ai.tools.adapt(registry)` 得到 `modelTools`；注册管理见 [Tools 手册](tools.md)。用 `ai.context.createManager()` 或 `ai.context.restoreManager()` 的成功结果取得 `manager`。受管 ACP 的 `session` 由作用域对象的 `sessions.create()`、`sessions.get()` 或 `sessions.resume()` 返回，`connection` 由 `ai.acp.connect()` 返回。已通过 `ai.memory.scoped()` 创建的记忆对象始终以同一个用户和作用域执行，不再单独传这两个字段。
 
 | 入口                       | 场景               | 输入                                                       | 输出                                                                   | 调用片段                                                 |
 | -------------------------- | ------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------- |
-| `registry.register`        | 登记单个工具       | `Tool`                                                     | `HaiResult<void>; duplicate rejected`                                  | `registry.register(tool)`                                |
-| `registry.registerMany`    | 批量登记工具       | `Tool[]`                                                   | `HaiResult<void>`                                                      | `registry.registerMany(tools)`                           |
-| `registry.replace`         | 显式替换工具       | `Tool with existing name`                                  | `HaiResult<void>`                                                      | `registry.replace(tool)`                                 |
-| `registry.unregister`      | 移除工具           | `tool name`                                                | `boolean`                                                              | `registry.unregister("search")`                          |
-| `registry.get`             | 读取工具定义       | `tool name`                                                | `Tool or undefined`                                                    | `registry.get("search")`                                 |
-| `registry.has`             | 检查工具存在       | `tool name`                                                | `boolean`                                                              | `registry.has("search")`                                 |
-| `registry.getNames`        | 工具名称           | `none`                                                     | `string[]`                                                             | `registry.getNames()`                                    |
-| `registry.getDefinitions`  | 传给模型的定义     | `none`                                                     | `ToolDefinition[]`                                                     | `registry.getDefinitions()`                              |
-| `registry.execute`         | 授权后执行工具     | `ToolCall, ToolExecutionOptions?`                          | `Promise<HaiResult<ToolMessage>>`                                      | `registry.execute(toolCall, { objectId: "u1" })`         |
-| `registry.executeAll`      | 逐个或显式并行执行 | `ToolCall[], { parallel?, ...executionOptions }`           | `Promise<HaiResult<ToolMessage[]>>`                                    | `registry.executeAll(toolCalls)`                         |
-| `registry.clear`           | 清理本地工具       | `none`                                                     | `void`                                                                 | `registry.clear()`                                       |
-| `registry.size`            | 工具数量           | `none`                                                     | `number`                                                               | `registry.size`                                          |
+| `modelTools.getDefinitions` | 传给模型的定义 | 无 | `ToolDefinition[]` | `modelTools.getDefinitions()` |
+| `modelTools.execute` | 执行模型工具调用 | `ToolCall, ToolExecutionOptions?` | `Promise<HaiResult<ToolMessage>>` | `modelTools.execute(toolCall, { objectId: "u1" })` |
+| `modelTools.executeAll` | 批量执行模型工具调用 | `ToolCall[], { parallel?, ...executionOptions }` | `Promise<HaiResult<ToolMessage[]>>` | `modelTools.executeAll(toolCalls)` |
 | `manager.addMessage`       | 补充对话消息       | `ChatMessage`                                              | `Promise<HaiResult<void>>`                                             | `manager.addMessage({ role: "user", content: "你好" })`  |
 | `manager.getMessages`      | 读取对话快照       | `none`                                                     | `HaiResult<ChatMessage[]>`                                             | `manager.getMessages()`                                  |
 | `manager.reload`           | 刷新共享快照       | `none`                                                     | `Promise<HaiResult<void>>`                                             | `manager.reload()`                                       |

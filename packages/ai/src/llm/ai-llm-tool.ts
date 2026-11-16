@@ -1,386 +1,99 @@
 /**
- * @h-ai/ai — LLM 工具定义与注册表
+ * @h-ai/ai — 模型工具协议适配
  *
- * 提供 OpenAI function calling 的工具定义、参数校验和批量执行功能。
+ * 将模型 function calling 转为中立工具调用；执行、授权和取消仅由 Tools 内核负责。
  * @module ai-llm-tool
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { z } from 'zod'
-
-import type {
-  DefineToolOptions,
-  Tool,
-  ToolCall,
-  ToolDefinition,
-  ToolExecutionContext,
-  ToolExecutionOptions,
-  ToolMessage,
-  ToolRegistryOperations,
-  ToolRegistryOptions,
-} from './ai-llm-types.js'
-
-import { err, ok } from '@h-ai/core'
-import { z as zod } from 'zod'
-
+import type { ToolRegistryOperations as NeutralToolRegistryOperations, ToolInvocation } from '@h-ai/tools'
+import type { ToolCall, ToolMessage, ToolRegistryOperations } from './ai-llm-types.js'
+import { core, err, ok } from '@h-ai/core'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 
-/** 工具默认执行超时（毫秒）：未指定 deadline / timeoutMs / 工具默认时生效 */
-const DEFAULT_TOOL_TIMEOUT_MS = 30_000
+const logger = core.logger.child({ module: 'ai', scope: 'tool-protocol' })
 
-/**
- * 依据执行入参解析出传给 handler 的执行上下文（含始终存在的取消信号）。
- *
- * 组合调用方 `signal` 与超时信号：超时时长优先级 `deadline` > `timeoutMs` > 工具默认 > 全局默认。
- * 返回上下文与实际生效的超时毫秒数（用于超时错误信息）。
- */
-function resolveExecutionContext(
-  options: ToolExecutionOptions | undefined,
-  toolTimeoutMs: number | undefined,
-): { context: ToolExecutionContext, timeoutMs: number } {
-  const now = Date.now()
-  const timeoutMs = options?.deadline !== undefined
-    ? Math.max(0, options.deadline - now)
-    : options?.timeoutMs ?? toolTimeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
-  const deadline = options?.deadline ?? now + timeoutMs
+/** 模型入参只在协议层解析 JSON；业务 Schema 仍由中立工具校验。 */
+function decodeCall(call: ToolCall): HaiResult<ToolInvocation> {
+  if (call.type !== 'function')
+    return err(HaiAIError.TOOL_PROTOCOL_ERROR, aiM('ai_toolInvalidCall'))
+  try {
+    const input: unknown = JSON.parse(call.function.arguments)
+    return ok({ name: call.function.name, input })
+  }
+  catch (cause) {
+    return err(HaiAIError.TOOL_PROTOCOL_ERROR, aiM('ai_toolInvalidJson'), cause)
+  }
+}
 
-  const timeoutSignal = AbortSignal.timeout(timeoutMs)
-  const signal = options?.signal
-    ? AbortSignal.any([options.signal, timeoutSignal])
-    : timeoutSignal
-
-  return {
-    context: {
-      signal,
-      objectId: options?.objectId,
-      sessionId: options?.sessionId,
-      deadline,
-    },
-    timeoutMs,
+/** 编码失败保留内部原因，消息和日志不包含结果正文。 */
+function encodeResult(call: ToolCall, output: unknown): HaiResult<ToolMessage> {
+  try {
+    const content = typeof output === 'string'
+      ? output
+      : JSON.stringify(output === undefined
+          ? null
+          : output)
+    if (typeof content !== 'string')
+      throw new TypeError('Tool output is not JSON serializable')
+    return ok({ role: 'tool', tool_call_id: call.id, content })
+  }
+  catch (cause) {
+    logger.error('Tool result encoding failed', { code: HaiAIError.TOOL_RESULT_ERROR.code })
+    return err(HaiAIError.TOOL_RESULT_ERROR, aiM('ai_toolInvalidResult'), cause)
   }
 }
 
 /**
- * 执行 handler 并与取消信号竞速：即便 handler 未响应 signal，取消 / 超时后也立即停止等待。
- *
- * 返回 handler 结果，或在取消 / 超时时抛出（由调用方映射为 TOOL_TIMEOUT）。
- */
-async function runWithCancellation<T>(
-  run: (context: ToolExecutionContext) => Promise<T> | T,
-  context: ToolExecutionContext,
-): Promise<T> {
-  const { signal } = context
-  if (signal.aborted)
-    throw new DOMException('Aborted', 'AbortError')
-
-  return await new Promise<T>((resolve, reject) => {
-    const onAbort = (): void => reject(new DOMException('Aborted', 'AbortError'))
-    signal.addEventListener('abort', onAbort, { once: true })
-    Promise.resolve()
-      .then(() => run(context))
-      .then(
-        (value) => {
-          signal.removeEventListener('abort', onAbort)
-          resolve(value)
-        },
-        (error: unknown) => {
-          signal.removeEventListener('abort', onAbort)
-          reject(error instanceof Error
-            ? error
-            : new Error(String(error)))
-        },
-      )
-  })
-}
-
-/** 判断错误是否为取消 / 超时（AbortError / TimeoutError） */
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')
-}
-
-// ─── 工具定义 ───
-
-/**
- * 定义工具（Zod schema 类型推断 + 自动参数校验）
- *
- * 调用 `execute()` 时自动用 Zod schema 校验输入，校验失败返回 `VALIDATION_FAILED` 错误。
- *
- * @param options - 工具选项（名称、描述、参数 schema、处理函数）
- * @returns 工具实例（含 `execute` 和 `toDefinition`）
- *
- * @example
+ * 将现有中立注册表接入模型协议。每次读取和执行都使用原注册表。
+ * @param registry - 使用 tools.createRegistry() 创建的注册表
+ * @returns 仅提供模型定义与协议调用的适配器
+ * @example 模块内部上下文
  * ```ts
- * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
- * const add = defineTool({ name: 'add', description: '计算整数和', parameters: zod.object({ a: zod.number().int(), b: zod.number().int() }), handler: ({ a, b }) => a + b })
- * const result = await add.execute({ a: 2, b: 3 })
- * if (!result.success) throw new Error(result.error.message)
+ * function expose(registry: NeutralToolRegistryOperations) {
+ *   return adaptToolRegistry(registry).getDefinitions()
+ * }
  * ```
  */
-export function defineTool<TInput, TOutput>(
-  options: DefineToolOptions<TInput, TOutput>,
-): Tool<TInput, TOutput> {
-  const { name, description, parameters, handler, timeoutMs } = options
-
+export function adaptToolRegistry(registry: NeutralToolRegistryOperations): ToolRegistryOperations {
   return {
-    name,
-    description,
-    parameters,
-
-    async execute(input: TInput, execOptions?: ToolExecutionOptions): Promise<HaiResult<TOutput>> {
-      const parseResult = parameters.safeParse(input)
-      if (!parseResult.success) {
-        return err(HaiAIError.TOOL_VALIDATION_FAILED, parseResult.error.message)
-      }
-      const { context, timeoutMs: effectiveTimeout } = resolveExecutionContext(execOptions, timeoutMs)
-      const authorizer = execOptions?.authorize
-      if (authorizer) {
-        try {
-          const allowed = await runWithCancellation(
-            ctx => authorizer({ toolName: name, input: parseResult.data, context: ctx }),
-            context,
-          )
-          if (!allowed) {
-            return err(HaiAIError.TOOL_FORBIDDEN, aiM('ai_toolForbidden', {
-              params: { name },
-            }))
-          }
-        }
-        catch (error) {
-          if (isAbortError(error)) {
-            return err(HaiAIError.TOOL_TIMEOUT, aiM('ai_toolTimeout', {
-              params: { name, ms: effectiveTimeout },
-            }), error)
-          }
-          return err(HaiAIError.TOOL_FORBIDDEN, aiM('ai_toolForbidden', {
-            params: { name },
-          }))
-        }
-      }
-
-      try {
-        const output = await runWithCancellation(ctx => handler(parseResult.data, ctx), context)
-        return ok(output)
-      }
-      catch (error) {
-        if (isAbortError(error)) {
-          return err(HaiAIError.TOOL_TIMEOUT, aiM('ai_toolTimeout', {
-            params: { name, ms: effectiveTimeout },
-          }), error)
-        }
-        return err(HaiAIError.TOOL_EXECUTION_FAILED, error instanceof Error
-          ? error.message
-          : String(error), error)
-      }
-    },
-
-    toDefinition(): ToolDefinition {
-      return {
-        type: 'function',
-        function: {
-          name,
-          description,
-          parameters: zodToJsonSchema(parameters),
-        },
-      }
-    },
-  }
-}
-
-// ─── 工具注册表 ───
-
-/**
- * 创建工具注册表（闭包实现，非 class）
- *
- * 注册表默认拒绝重复名称；确需替换时必须显式调用 `replace()`。
- *
- * @returns 工具注册表实例
- *
- * @example
- * ```ts
- * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
- * const registry = createToolRegistry({ authorize: request => request.context.objectId === 'user-1' })
- * const echo = defineTool({ name: 'echo', description: '返回文本', parameters: zod.object({ text: zod.string() }), handler: input => input.text })
- * const registered = registry.register(echo)
- * if (!registered.success) throw new Error(registered.error.message)
- * const result = await registry.execute({ id: 'call-1', type: 'function', function: { name: 'echo', arguments: JSON.stringify({ text: '你好' }) } }, { objectId: 'user-1' })
- * if (!result.success) throw new Error(result.error.message)
- * ```
- */
-export function createToolRegistry(options: ToolRegistryOptions = {}): ToolRegistryOperations {
-  const tools: Map<string, Tool> = new Map()
-
-  function duplicateTool(name: string): HaiResult<void> {
-    return err(HaiAIError.TOOL_ALREADY_REGISTERED, aiM('ai_toolAlreadyRegistered', {
-      params: { name },
-    }))
-  }
-
-  const registry: ToolRegistryOperations = {
-    /** 注册单个工具；默认拒绝同名覆盖 */
-    register<TInput, TOutput>(tool: Tool<TInput, TOutput>): HaiResult<void> {
-      if (tools.has(tool.name))
-        return duplicateTool(tool.name)
-      tools.set(tool.name, tool as Tool)
-      return ok(undefined)
-    },
-
-    /** 原子批量注册工具；发现任何重名时不写入 */
-    registerMany(toolList: Tool<unknown, unknown>[]): HaiResult<void> {
-      const incomingNames = new Set<string>()
-      for (const tool of toolList) {
-        if (tools.has(tool.name) || incomingNames.has(tool.name))
-          return duplicateTool(tool.name)
-        incomingNames.add(tool.name)
-      }
-      for (const tool of toolList)
-        tools.set(tool.name, tool as Tool)
-      return ok(undefined)
-    },
-
-    /** 显式替换已注册工具 */
-    replace<TInput, TOutput>(tool: Tool<TInput, TOutput>): HaiResult<void> {
-      if (!tools.has(tool.name)) {
-        return err(HaiAIError.TOOL_NOT_FOUND, aiM('ai_toolNotFound', {
-          params: { name: tool.name },
-        }))
-      }
-      tools.set(tool.name, tool as Tool)
-      return ok(undefined)
-    },
-
-    /** 移除指定名称的工具，返回是否成功删除 */
-    unregister(name: string): boolean {
-      return tools.delete(name)
-    },
-
-    /** 按名称获取工具实例（未注册返回 `undefined`） */
-    get(name: string): Tool | undefined {
-      return tools.get(name)
-    },
-
-    /** 判断是否已注册指定名称的工具 */
-    has(name: string): boolean {
-      return tools.has(name)
-    },
-
-    /** 获取所有已注册工具的名称列表 */
-    getNames(): string[] {
-      return Array.from(tools.keys())
-    },
-
-    /** 获取所有工具的 OpenAI function calling 定义 */
-    getDefinitions(): ToolDefinition[] {
-      return Array.from(tools.values()).map(tool => tool.toDefinition())
-    },
-
-    /** 执行单个工具调用，解析 JSON 参数后调用工具的 execute 方法（透传执行上下文） */
-    async execute(toolCall: ToolCall, execOptions?: ToolExecutionOptions): Promise<HaiResult<ToolMessage>> {
-      // 仅支持 function 类型工具调用（OpenAI SDK union 含 custom 类型）
-      if (toolCall.type !== 'function') {
-        return err(HaiAIError.TOOL_NOT_FOUND, aiM('ai_toolNotFound', {
-          params: { name: 'unknown' },
-        }))
-      }
-      const tool = tools.get(toolCall.function.name)
-      if (!tool) {
-        return err(HaiAIError.TOOL_NOT_FOUND, aiM('ai_toolNotFound', {
-          params: { name: toolCall.function.name },
-        }))
-      }
-
-      let args: unknown
-      try {
-        args = JSON.parse(toolCall.function.arguments)
-      }
-      catch {
-        return err(HaiAIError.TOOL_VALIDATION_FAILED, aiM('ai_toolInvalidJson'))
-      }
-
-      const registryAuthorize = options.authorize
-      const executionAuthorize = execOptions?.authorize
-      const authorize = registryAuthorize || executionAuthorize
-        ? async (request: Parameters<NonNullable<ToolExecutionOptions['authorize']>>[0]): Promise<boolean> => {
-          if (registryAuthorize && !await registryAuthorize(request))
-            return false
-          if (executionAuthorize && !await executionAuthorize(request))
-            return false
-          return true
-        }
-        : undefined
-
-      const result = await tool.execute(args, { ...execOptions, authorize })
-      if (!result.success) {
+    getDefinitions: () => registry.getDefinitions().map(definition => ({
+      type: 'function',
+      function: {
+        name: definition.name,
+        description: definition.description,
+        parameters: definition.inputSchema,
+      },
+    })),
+    async execute(call, options) {
+      const decoded = decodeCall(call)
+      if (!decoded.success)
+        return decoded
+      const result = await registry.execute(decoded.data.name, decoded.data.input, options)
+      if (!result.success)
         return result
-      }
-
-      const content = typeof result.data === 'string'
-        ? result.data
-        : JSON.stringify(result.data)
-
-      return ok({
-        role: 'tool',
-        content,
-        tool_call_id: toolCall.id,
-      })
+      return encodeResult(call, result.data)
     },
-
-    /** 批量执行工具调用（默认串行），仅显式 parallel=true 时并行 */
-    async executeAll(
-      toolCalls: ToolCall[],
-      options: ToolExecutionOptions & { parallel?: boolean } = {},
-    ): Promise<HaiResult<ToolMessage[]>> {
-      const { parallel = false, ...execOptions } = options
+    async executeAll(calls, options) {
+      const invocations: ToolInvocation[] = []
+      for (const call of calls) {
+        const decoded = decodeCall(call)
+        if (!decoded.success)
+          return decoded
+        invocations.push(decoded.data)
+      }
+      const result = await registry.executeAll(invocations, options)
+      if (!result.success)
+        return result
       const messages: ToolMessage[] = []
-
-      if (parallel) {
-        const results = await Promise.all(
-          toolCalls.map(tc => registry.execute(tc, execOptions)),
-        )
-        for (const result of results) {
-          if (!result.success) {
-            return result
-          }
-          messages.push(result.data)
-        }
+      for (const [index, output] of result.data.entries()) {
+        const encoded = encodeResult(calls[index], output)
+        if (!encoded.success)
+          return encoded
+        messages.push(encoded.data)
       }
-      else {
-        for (const toolCall of toolCalls) {
-          const result = await registry.execute(toolCall, execOptions)
-          if (!result.success) {
-            return result
-          }
-          messages.push(result.data)
-        }
-      }
-
       return ok(messages)
     },
-
-    /** 清空所有已注册工具 */
-    clear(): void {
-      tools.clear()
-    },
-
-    /** 已注册工具数量 */
-    get size(): number {
-      return tools.size
-    },
   }
-
-  return registry
-}
-
-// ─── Zod → JSON Schema ───
-
-/**
- * 将 Zod schema 转换为 JSON Schema（移除 $schema 字段）
- *
- * @param schema - Zod 类型定义
- * @returns JSON Schema 对象
- */
-function zodToJsonSchema(schema: z.ZodType): Record<string, unknown> {
-  const jsonSchema = zod.toJSONSchema(schema)
-  const { $schema: _, ...rest } = jsonSchema as Record<string, unknown>
-  return rest
 }

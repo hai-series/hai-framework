@@ -59,6 +59,10 @@ const browsers = new Map([
     ['.'],
   ],
   [
+    'tools',
+    ['.'],
+  ],
+  [
     'storage',
     ['.', './client', './schemas'],
   ],

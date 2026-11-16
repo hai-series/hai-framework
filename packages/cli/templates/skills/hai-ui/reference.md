@@ -78,6 +78,7 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 | 在线代码浏览与检查 | `CodeWorkspace` | 两个读取回调接入文件树与多标签，按需添加工作区搜索、检查面板和选区操作 |
 | 移动端页面骨架 | `SafeArea` + `AppBar` + `BottomNav` | 原生壳页面优先这一套 |
 | AI 文档/Markdown 展示 | `MarkdownRenderer` / `AiDocumentEditor` | Mermaid、代码高亮、复制/下载已内置 |
+| 工具运行和产物编辑 | `ToolWorkspace` / `ArtifactWorkspace` | 按 [工作台接入](tool-workspaces.md) 连接表单、回调、版本和授权媒体，不在应用重写通用编辑器 |
 
 ### 4. 最后再决定是否自定义样式
 

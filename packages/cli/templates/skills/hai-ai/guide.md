@@ -6,7 +6,7 @@
 
 ## 使用边界
 
-- `ai.tools`、`ai.stream` 是纯函数能力，无需 `ai.init()`。
+- `ai.tools.adapt`、`ai.stream` 是纯函数能力，无需 `ai.init()`。
 - `ai.llm`、`ai.embedding`、`ai.memory`、`ai.retrieval`、`ai.rag`、`ai.knowledge`、`ai.context`、`ai.image`、`ai.audio`、`ai.a2a` 需要先 `await ai.init(...)`。
 - 开发/显式测试未初始化 reldb/vecdb 时，`ai.init()` 使用临时 Store；关闭/进程退出后丢失。
 - `NODE_ENV` 或 `HAI_CORE_ENV=production` 要求共享 Store，内置实现先初始化 PostgreSQL/MySQL 与网络 vecdb；自定义 `AIStoreProvider` 必须如实声明 stateScope=shared，不能把本机后端作为生产共享状态。
@@ -132,9 +132,9 @@ memory:
 | 多协议        | 模型 `protocol: chat/responses/anthropic`                                                                           | 底层走 Chat Completions / Responses / Anthropic，公共形状不变                                                                                                |
 | 请求取消      | `ai.llm.chat({ messages, signal })`                                                                            | 传 `AbortSignal`，`abort()` 立即停上游生成                                                                                                                   |
 | 临时模型      | `ai.llm.chat({ messages, tempModel })`                                                                         | 单次请求级临时端点，客户端按 TTL 缓存                                                                                                                        |
-| 工具定义      | `ai.tools.define(...)`                                                                                         | Zod schema 转 JSON Schema；`handler(input, ctx)` 第二参为执行上下文                                                                                          |
+| 工具定义      | `tools.define(...)`                                                                                         | Zod schema 转 JSON Schema；`handler(input, ctx)` 第二参为执行上下文                                                                                          |
 | 工具注册      | `registry.register/replace`                                                                                    | `register` 默认拒绝同名并返回 HaiResult；只有 `replace` 可显式替换                                                                                           |
-| 工具执行      | `registry.execute(tc, { signal, objectId, sessionId, deadline?, timeoutMs?, authorize? })` / `executeAll(...)` | Registry/单次授权必须同时通过；默认串行，支持取消/超时；只有确认无副作用时才 `parallel: true`                                                                |
+| 工具执行      | `ai.tools.adapt(registry).execute(tc, options)` / `executeAll(...)` | Registry/单次授权必须同时通过；默认串行，支持取消/超时；只有确认无副作用时才 `parallel: true`                                                                |
 | MCP 服务      | `createMcpServer(...)`                                                                                         | 按需连接 HTTP/SSE/Stdio transport                                                                                                                            |
 | Embedding     | `ai.embedding.embedText(text)`                                                                                 | 批量用 `embedBatch`                                                                                                                                          |
 | 记忆          | `ai.memory.extract/recall/injectMemories`                                                                      | `extract(..., { signal })` 可取消整条提取链；用 `objectId` 做主体隔离，`scope` 做业务作用域隔离；scope 隔离越细，`candidateMultiplier` 调大以防漏召回        |
@@ -154,12 +154,13 @@ memory:
 ## LLM + 工具调用
 
 ```ts
+import { tools } from '@h-ai/tools'
 import { z } from 'zod'
 
-const registry = ai.tools.createRegistry({
+const registry = tools.createRegistry({
   authorize: ({ toolName, context }) => canExecuteTool(context.objectId, toolName),
 })
-const registered = registry.register(ai.tools.define({
+const registered = registry.register(tools.define({
   name: 'get_weather',
   description: '获取天气',
   parameters: z.object({ city: z.string() }),
@@ -168,21 +169,22 @@ const registered = registry.register(ai.tools.define({
 if (!registered.success)
   return registered
 
+const modelTools = ai.tools.adapt(registry)
 const messages: ChatMessage[] = [{ role: 'user', content: '北京天气？' }]
 const objectId = 'user-001'
-let result = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
+let result = await ai.llm.chat({ messages, tools: modelTools.getDefinitions() })
 
 while (result.success && result.data.choices[0]?.finish_reason === 'tool_calls') {
   const assistant = result.data.choices[0].message
   const toolCalls = assistant.tool_calls ?? []
   messages.push(assistant)
 
-  const toolMessages = await registry.executeAll(toolCalls, { objectId })
+  const toolMessages = await modelTools.executeAll(toolCalls, { objectId })
   if (!toolMessages.success)
     return toolMessages
   messages.push(...toolMessages.data)
 
-  result = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
+  result = await ai.llm.chat({ messages, tools: modelTools.getDefinitions() })
 }
 ```
 

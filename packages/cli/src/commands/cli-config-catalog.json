@@ -7707,7 +7707,7 @@
     "name": "HAI_TOOL_BROWSER_PROXY",
     "module": "tool",
     "path": "HAI_TOOL_BROWSER_PROXY",
-    "description": "环境入口；使用位置 packages/ai/tools/browser/operation.py",
+    "description": "环境入口；使用位置 packages/tools/jobs/browser/operation.py",
     "value": "",
     "constraint": "字符串；按使用位置的校验规则填写"
   },

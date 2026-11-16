@@ -1,0 +1,9 @@
+{
+  "tools_notFound": "Tool is unavailable or disabled",
+  "tools_alreadyRegistered": "Tool name is already registered",
+  "tools_validationFailed": "Tool input is invalid",
+  "tools_executionFailed": "Tool execution failed",
+  "tools_forbidden": "Tool execution is not authorized",
+  "tools_timeout": "Tool execution timed out",
+  "tools_cancelled": "Tool execution was cancelled"
+}

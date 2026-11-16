@@ -12,6 +12,7 @@ import type { ChatCompletionChunk, LLMOperations, ToolCall } from '../src/llm/ai
 
 import type { MemoryOperations } from '../src/memory/ai-memory-types.js'
 import type { AIRelStore, SessionInfo } from '../src/store/ai-store-types.js'
+import { tools } from '@h-ai/tools'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { LLMConfigSchema } from '../src/ai-config.js'
@@ -1044,7 +1045,7 @@ describe('context chat tool call loop', () => {
     const ops = createOpsWithDeps(llm)
 
     // 定义并注册工具
-    const weatherTool = ai.tools.define({
+    const weatherTool = tools.define({
       name: 'getWeather',
       description: '获取天气',
       parameters: z.object({
@@ -1052,12 +1053,12 @@ describe('context chat tool call loop', () => {
       }),
       handler: async ({ city }) => ({ temp: 25, city, condition: '晴' }),
     })
-    const registry = ai.tools.createRegistry()
+    const registry = tools.createRegistry()
     registry.register(weatherTool)
 
     const managerResult = ops.createManager({
       compress: { maxTokens: 8000 },
-      tools: registry,
+      tools: ai.tools.adapt(registry),
     })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
@@ -1080,11 +1081,11 @@ describe('context chat tool call loop', () => {
     ])
     const ops = createOpsWithDeps(llm)
 
-    const registry = ai.tools.createRegistry()
+    const registry = tools.createRegistry()
 
     const managerResult = ops.createManager({
       compress: { maxTokens: 8000 },
-      tools: registry,
+      tools: ai.tools.adapt(registry),
     })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
@@ -1109,18 +1110,18 @@ describe('context chat tool call loop', () => {
     const llm = createToolCallLLM(toolCalls, '工具调用失败了，请稍后再试。')
     const ops = createOpsWithDeps(llm)
 
-    const failTool = ai.tools.define({
+    const failTool = tools.define({
       name: 'failTool',
       description: '总是失败的工具',
       parameters: z.object({}),
       handler: () => { throw new Error('Boom') },
     })
-    const registry = ai.tools.createRegistry()
+    const registry = tools.createRegistry()
     registry.register(failTool)
 
     const managerResult = ops.createManager({
       compress: { maxTokens: 8000 },
-      tools: registry,
+      tools: ai.tools.adapt(registry),
     })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
@@ -1232,7 +1233,7 @@ describe('context chat tool call loop', () => {
 
     const ops = createOpsWithDeps(llm)
 
-    const addTool = ai.tools.define({
+    const addTool = tools.define({
       name: 'add',
       description: '加法',
       parameters: z.object({
@@ -1241,12 +1242,12 @@ describe('context chat tool call loop', () => {
       }),
       handler: async ({ a, b }) => a + b,
     })
-    const registry = ai.tools.createRegistry()
+    const registry = tools.createRegistry()
     registry.register(addTool)
 
     const managerResult = ops.createManager({
       compress: { maxTokens: 8000 },
-      tools: registry,
+      tools: ai.tools.adapt(registry),
     })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
