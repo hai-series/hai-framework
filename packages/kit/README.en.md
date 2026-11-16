@@ -4,20 +4,20 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md) · [@h-ai/crypto](../crypto/README.en.md) · [@h-ai/iam](../iam/README.en.md)
 
-`@h-ai/kit` integrates SvelteKit with hai-framework, providing a shared request pipeline and same-origin endpoint utilities:
+`@h-ai/kit` helps SvelteKit applications handle requests, check identity, and write APIs. When the same site serves both the page and the API, the browser can call the API using that site’s address.
 
-Use runtime operations through `kit.xx`. Public namespace types are `KitFunctions` on the server and `BrowserKitFunctions` in the browser. The browser condition exposes only clients, CRUD, page tokens, and default locale operations. `AuthCookieWriter` describes the current request's minimal server authentication cookie writer. Re-exported methods and namespaces support consumer declaration emission without importing internal helpers.
+On the SvelteKit server, import `kit` from `@h-ai/kit` and use `kit.createHandle()` to create a request handler. In the browser, the same import supplies HTTP clients, list and form utilities, page tokens, and default locale settings. Use `KitFunctions` for the server object and `BrowserKitFunctions` for the browser object. `AuthCookieWriter` describes the cookie-writing methods the server needs to set cookies on the current response, such as after sign-in.
 
 ## Quick Start
 
-`sequence` preserves SvelteKit resolve options: page transformations run from inner to outer, while the first preload and serialized-header filter win. This preserves the i18n HTML language replacement.
+When `kit.sequence()` combines several SvelteKit handlers, inner handlers transform the generated page first, followed by outer handlers. If more than one sets a `preload` option or a filter for serialized response headers, the first setting wins. This lets the locale middleware update the HTML `lang` attribute.
 
 ### Installation
 
 ```bash
 npm install @h-ai/kit @h-ai/core sm-crypto@0.5.8
 npm install svelte @sveltejs/kit zod
-npm install -D @sveltejs/vite-plugin-svelte vite
+npm install -D @sveltejs/vite-plugin-svelte vite @tailwindcss/vite tailwindcss
 ```
 
 ### Project configuration
@@ -58,7 +58,7 @@ When using Crypto or Kit/IAM, include `sm-crypto@0.5.8` in application productio
 
 ## Configuration Reference
 
-Generated projects use `config/_kit.yml`. Pass parsed settings to the relevant SvelteKit hooks, clients and build adapters.
+Generated projects set the listening address and port in `config/_kit.yml`. At startup, pass the access and encryption settings to `kit.createHandle(options)`. Use the returned function as a SvelteKit server hook.
 
 See the [configuration reference](../../docs/usage/configuration/kit.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -66,9 +66,9 @@ See the [configuration reference](../../docs/usage/configuration/kit.md) in Chin
 
 See the [feature reference](../../docs/usage/function/kit.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `createHandle` / `sequence` / `middleware` / `guard` / `handler` — Compose SvelteKit hooks, endpoints and access checks
-- `response` / `validate` / `crud` / `i18n` — Validate inputs and produce responses, CRUD definitions and localized content
-- `auth` / `client` / `createFeedbackHandler` — Connect authentication, browser clients and feedback endpoints
+- `kit.createHandle` / `kit.sequence` / `kit.middleware` / `kit.guard` / `kit.handler` — Combine SvelteKit request handlers, routes, and permission checks
+- `kit.response` / `kit.validate` / `kit.crud` / `kit.i18n` — Validate inputs and produce responses, CRUD definitions and localized content
+- `kit.auth` / `kit.client` / `kit.createFeedbackHandler` — Handle browser sign-in state and requests, or create an HTTP endpoint for user feedback
 - `@h-ai/kit/adapter` / `@h-ai/kit/crypto` / `@h-ai/kit/a2a` — Configure build adapters, encrypted transport and A2A routes
 
 ## Data Structures

@@ -40,7 +40,7 @@ export const appContract = {
 
 ## 設定一覧
 
-`apiContract.create()` でアプリが公開するドメイン契約を組み合わせます。
+アプリが公開するインターフェース定義を `apiContract.create(options)` に渡します。オプションのキーが各グループ名になります。返された契約はサーバー、型付きクライアント、API ドキュメントで共有できます。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/api-contract.md)（中国語）を参照してください。
 
@@ -48,9 +48,9 @@ export const appContract = {
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/api-contract.md)（中国語）を参照してください。
 
-- `create` / `route` / `pathOf` — 契約、ルート、パスの定義
-- `haiResultSchema` / `voidResultSchema` / `paginatedSchema` — 結果形式とページングデータの検証
-- `iam` / `storage` / `ai` / `payment` / `feedback` — ドメイン別 HTTP 契約の再利用
+- `apiContract.create` / `apiContract.route` / `apiContract.pathOf` — インターフェース定義をまとめ、HTTP メソッドとパスを定義し、既存のパスを取得する
+- `apiContract.haiResultSchema` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema` — 成功・エラーの応答やページ付き結果の構造を定義する
+- `apiContract.iam` / `apiContract.storage` / `apiContract.ai` / `apiContract.payment` / `apiContract.feedback` — 認証、ファイル、AI、決済、フィードバックの API 定義を再利用する
 
 ## データ構造
 

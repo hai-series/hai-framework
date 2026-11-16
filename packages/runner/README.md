@@ -94,7 +94,7 @@ finally {
 
 <a id="配置"></a>
 
-应用在 `runner.init()` 中指定节点角色、执行器设置和任务保留策略。
+启动进程时用 `runner.init(options)` 指定这个节点是否执行任务、允许使用的容器环境，以及完成的任务记录保留多久。只提交和查询任务的节点可以关闭执行。
 
 在[模块配置清单](../../docs/usage/configuration/runner.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -102,9 +102,9 @@ finally {
 
 在[功能说明](../../docs/usage/function/runner.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `init` / `close` / `environment` / `isExecutor` — 装配节点角色与执行环境
-- `register` / `registerWarmPool` / `submit` — 注册执行器和预热池，提交任务
-- `find` / `get` / `events` / `cancel` / `reconcileUnknown` — 查找任务、读取事件、取消或核实未知结果
+- `runner.init` / `runner.close` / `runner.environment` / `runner.isExecutor` — 确定当前进程是否执行任务、能用哪些容器环境，并查看或关闭 Runner
+- `runner.register` / `runner.registerWarmPool` / `runner.submit` — 注册任务处理函数、配置提前启动的容器，再提交任务
+- `runner.find` / `runner.get` / `runner.events` / `runner.cancel` / `runner.reconcileUnknown` — 查找任务、读取事件、取消或核实未知结果
 
 ## 数据结构
 

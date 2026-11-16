@@ -21,7 +21,7 @@ if (!initialized.success)
 
 ## 配置清单
 
-算法选项随调用传入。通过 `crypto.transport` 装配传输参数和存储。
+调用加密、签名或哈希函数时传入算法选项。为 HTTP 请求建立加密会话时，调用 `crypto.transport.createServer(options)` 提供服务器密钥和密钥存储，调用 `crypto.transport.createClient(options)` 提供客户端使用的密钥协商地址。
 
 在[模块配置清单](../../docs/usage/configuration/crypto.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -29,9 +29,9 @@ if (!initialized.success)
 
 在[功能说明](../../docs/usage/function/crypto.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `init` / `close` / `isInitialized` — 初始化和清理密码操作
-- `asymmetric` / `symmetric` / `hash` / `password` — 加解密、签名、摘要和口令哈希
-- `transport` — 在 HTTP 双端建立和更新加密会话
+- `crypto.init` / `crypto.close` / `crypto.isInitialized` — 初始化和清理密码操作
+- `crypto.asymmetric` / `crypto.symmetric` / `crypto.hash` / `crypto.password` — 加解密、签名、摘要和口令哈希
+- `crypto.transport` — 在 HTTP 双端建立和更新加密会话
 
 ## 数据结构
 

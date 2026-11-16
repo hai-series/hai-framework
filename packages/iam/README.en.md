@@ -19,9 +19,9 @@ pnpm add @h-ai/iam
 - `@h-ai/reldb`: persistence for users/roles/permissions; **initialize before iam.init()**.
 - `@h-ai/cache`: sessions/OTP/one-time tickets; **initialize before iam.init()**.
 - `@h-ai/crypto`: password hashing, used internally and initialized automatically.
-- `@h-ai/audit`: automatic IAM security events after host initialization. An unused collector is not called; enabled audit failures remain observable and caller-owned transactions must roll back.
+- `@h-ai/audit` — Optional. IAM records security events automatically after the application calls `audit.init()`. If an audit write fails, check the error log and roll back any affected transaction managed by the application.
 
-- `@h-ai/reach`: **optional**, installed, initialized and injected by the application for standard notifications; custom callbacks do not require Reach.
+- `@h-ai/reach` — Optional. To use standard email or SMS templates, install and initialize Reach and connect it to IAM as shown in the [notification example](../../docs/usage/function/iam.md#使用可选-reach-自动发送) (Chinese). You can also provide your own delivery function.
 - `ldapts`: **optional**, loaded only when LDAP is explicitly enabled without an injected `ldapClientFactory`.
 
 ```ts
@@ -63,13 +63,13 @@ if (!result.success)
   core.logger.error('Authentication example failed', { code: result.error.code })
 ```
 
-LDAP is disabled by default. Public OTP methods require `otp` settings and send callbacks; password reset requires a notification callback.
+LDAP is off by default. `iam.publicConfig` lists a one-time code sign-in method as available only when you configure `otp` and supply a delivery function for that method. To offer a password reset option on the sign-in page, also provide a working reset notification function.
 
 `iam.config` returns a **redacted configuration snapshot**. Sensitive LDAP `url` / `bindPassword` and similar fields are hidden automatically. Use it to inspect state, not as the original configuration source.
 
 ## Configuration Reference
 
-Generated projects use `config/_iam.yml`, with `iam.init(config)` as the application configuration entry point.
+Generated projects define allowed sign-in methods, password rules, and session lifetimes in `config/_iam.yml`. At startup, the application reads the file and passes the settings object to `iam.init(config)`.
 
 See the [configuration reference](../../docs/usage/configuration/iam.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -77,9 +77,9 @@ See the [configuration reference](../../docs/usage/configuration/iam.md) in Chin
 
 See the [feature reference](../../docs/usage/function/iam.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `init` / `close` / `config` / `isInitialized` / `publicConfig` / `getPublicConfig` / `isRegisterEnabled` — Initialize identity services and expose safe configuration and registration details
-- `auth` / `user` / `session` — Authenticate users and manage accounts and sessions
-- `authz` / `apiKey` / `ticket` — Evaluate permissions and manage API keys and one-time tickets
+- `iam.init` / `iam.close` / `iam.config` / `iam.isInitialized` / `iam.publicConfig` / `iam.getPublicConfig` / `iam.isRegisterEnabled` — Start or stop the identity service. Read public settings to decide which sign-in methods and registration links to show
+- `iam.auth` / `iam.user` / `iam.session` — Authenticate users and manage accounts and sessions
+- `iam.authz` / `iam.apiKey` / `iam.ticket` — Check roles and permissions, manage API keys, and issue and redeem one-time tickets
 
 ## Data Structures
 

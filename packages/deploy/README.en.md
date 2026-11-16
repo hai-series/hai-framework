@@ -17,7 +17,7 @@ The command returns a deployment URL or an offline delivery directory. On failur
 
 ## Configuration Reference
 
-Read deployment targets from `hai.json.deploy` and load deployment variables for the selected environment.
+Set deployment targets in the project’s `hai.json.deploy`. When you run `hai deploy --env prod`, the CLI reads deployment variables for prod. Keep the application’s connection settings and credentials in the configuration for that environment.
 
 See the [configuration reference](../../docs/usage/configuration/deploy.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -25,9 +25,9 @@ See the [configuration reference](../../docs/usage/configuration/deploy.md) in C
 
 See the [feature reference](../../docs/usage/function/deploy.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `init` / `close` / `config` / `isInitialized` / `scan` — Read targets, manage connections and discover middleware
-- `credentials` / `provisionAll` / `deployApp` — Load credentials, provision dependencies and deploy applications
-- `loadDeploymentConfig` / `loadDeploymentEnvironment` / `saveDeploymentEnvironment` / `getDeployRecovery` — Load deployment configuration, save private environment values and inspect recovery
+- `deploy.init` / `deploy.close` / `deploy.config` / `deploy.isInitialized` / `deploy.scan` — Read targets, manage connections and discover middleware
+- `deploy.credentials` / `deploy.provisionAll` / `deploy.deployApp` — Load credentials, provision dependencies and deploy applications
+- `loadDeploymentConfig` / `loadDeploymentEnvironment` / `saveDeploymentEnvironment` / `getDeployRecovery` — Import these standalone functions from `@h-ai/deploy` to read deployment settings, read or save variables for an environment, or inspect recovery details after a failure
 
 ## Data Structures
 

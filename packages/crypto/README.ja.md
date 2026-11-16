@@ -21,7 +21,7 @@ if (!initialized.success)
 
 ## 設定一覧
 
-アルゴリズムのオプションは呼び出し時に渡します。`crypto.transport` で通信設定とストレージを指定します。
+暗号化、署名、ハッシュのオプションは各メソッドに渡します。HTTP の通信を暗号化する場合、`crypto.transport.createServer(options)` にサーバーの鍵と鍵の保存先を渡し、`crypto.transport.createClient(options)` に鍵交換用の URL を指定します。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/crypto.md)（中国語）を参照してください。
 
@@ -29,9 +29,9 @@ if (!initialized.success)
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/crypto.md)（中国語）を参照してください。
 
-- `init` / `close` / `isInitialized` — 暗号機能の初期化と終了
-- `asymmetric` / `symmetric` / `hash` / `password` — 暗号化と復号、署名、ダイジェスト、パスワードハッシュ
-- `transport` — HTTP クライアントとサーバー間の暗号化セッションを確立・更新
+- `crypto.init` / `crypto.close` / `crypto.isInitialized` — 暗号機能の初期化と終了
+- `crypto.asymmetric` / `crypto.symmetric` / `crypto.hash` / `crypto.password` — 暗号化と復号、署名、ダイジェスト、パスワードハッシュ
+- `crypto.transport` — HTTP クライアントとサーバー間の暗号化セッションを確立・更新
 
 ## データ構造
 

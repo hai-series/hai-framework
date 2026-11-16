@@ -36,7 +36,7 @@ finally {
 
 ## 設定一覧
 
-生成プロジェクトは `config/_cache.yml` を使用します。アプリで設定を取り込む入口は `cache.init(config)` です。
+生成したプロジェクトでは、バックエンドの種類と Redis の接続設定を `config/_cache.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `cache.init(config)` に渡します。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/cache.md)（中国語）を参照してください。
 
@@ -44,9 +44,9 @@ finally {
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/cache.md)（中国語）を参照してください。
 
-- `init` / `close` / `config` / `isInitialized` / `ping` — 接続管理と可用性の確認
-- `kv` / `hash` / `list` / `set_` / `zset` — キー値、ハッシュ、リスト、集合、ソート済み集合の操作
-- `lock` — 有効期限付きロックで排他処理を調整
+- `cache.init` / `cache.close` / `cache.config` / `cache.isInitialized` / `cache.ping` — 接続管理と可用性の確認
+- `cache.kv` / `cache.hash` / `cache.list` / `cache.set_` / `cache.zset` — キー値、ハッシュ、リスト、集合、ソート済み集合の操作
+- `cache.lock` — 有効期限付きロックで排他処理を調整
 
 ## データ構造
 

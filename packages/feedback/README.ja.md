@@ -16,7 +16,7 @@ Core、RelDB、非公開 Storage を先に初期化します。通知に Reach �
 import type { FeedbackContext } from '@h-ai/feedback'
 import { feedback } from '@h-ai/feedback'
 
-// orders のフィードバックを構成。ローカル開発では console で受理状態を記録。
+// orders のフィードバックサービスを起動します。この例では開発用コンソールに通知を出力します。
 const initialized = await feedback.init({
   appId: 'orders',
   appVersion: '1.0.0',
@@ -38,7 +38,7 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 
 ## 設定一覧
 
-生成プロジェクトは `config/_feedback.yml` を使用します。アプリで設定を取り込む入口は `feedback.init(config, options)` です。
+生成したプロジェクトでは、アプリ ID とフィードバック通知の設定を `config/_feedback.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `feedback.init(config, options)` に渡します。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/feedback.md)（中国語）を参照してください。
 
@@ -46,10 +46,10 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/feedback.md)（中国語）を参照してください。
 
-- `init` / `close` / `isInitialized` / `config` / `budget` — 依存関係の構成と収集上限の取得
-- `submit` / `uploadAttachment` / `getAttachment` / `appendEvidence` / `completeCollection` — 報告送信、添付の管理、非同期証拠の収集完了
-- `list` / `get` / `getEvidence` / `setStatus` / `retry` / `runJobs` / `export` / `getExport` — 照会、処理、再試行、エクスポート
-- `feedbackClient` / `bundle` / `capacitor` / `tauri` — 診断情報の収集、オフラインバンドルの確認、ネイティブファイルの保存
+- `feedback.init` / `feedback.close` / `feedback.isInitialized` / `feedback.config` / `feedback.budget` — サービスを開始・終了し、設定や添付ファイル・証拠の上限を確認する
+- `feedback.submit` / `feedback.uploadAttachment` / `feedback.getAttachment` / `feedback.appendEvidence` / `feedback.completeCollection` — フィードバックを送信し、添付をアップロード・ダウンロードし、後から収集した証拠を追加する
+- `feedback.list` / `feedback.get` / `feedback.getEvidence` / `feedback.setStatus` / `feedback.retry` / `feedback.runJobs` / `feedback.export` / `feedback.getExport` — 照会、処理、再試行、エクスポート
+- `feedbackClient`（`@h-ai/feedback/client`） — ブラウザーで診断情報を収集・送信する。オフラインの診断パックは `@h-ai/feedback/bundle` で読み、ネイティブ環境でのファイル保存には `@h-ai/feedback/capacitor` や `@h-ai/feedback/tauri` を使う
 
 ## データ構造
 

@@ -63,11 +63,13 @@ const requestId = core.id.request()
 core.logger.warn('Request needs attention', { requestId })
 ```
 
-浏览器配置由宿主通过公开字段下发，不传完整服务端配置或密钥。`core.config.get()` / `has()` / `keys()` 分别返回 `undefined` / `false` / `[]`；`loadEnvFiles()`、`load()`、`validate()`、`reload()` 返回 `SERVICE_UNAVAILABLE`，`getOrThrow()` 抛错。`watch()` 立即回调同一不可用错误并返回空取消函数。
+浏览器中的 `core.init()` 只使用页面代码传入的日志选项。页面需要应用名称时，后端可以在页面加载结果中只返回 `{ name: settings.name }`。整个 `_core.yml` 和密钥留在服务器上。
+
+读取、校验和监听本地配置文件是 Node.js 功能。在浏览器调用这些方法的返回值见[浏览器配置说明](../../docs/usage/function/core.md#浏览器)。
 
 ## 配置清单
 
-生成项目使用 `config/_core.yml`。应用可以通过 `core.init({ configDir })` 接入配置。
+应用启动时调用 `core.init({ configDir: './config' })` 读取 `config/_core.yml` 里的应用信息和日志设置。[Serv](../../docs/usage/configuration/serv.md) 或 [Kit](../../docs/usage/configuration/kit.md) 在创建 HTTP 服务时读取各自的访问策略。
 
 在[模块配置清单](../../docs/usage/configuration/core.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -75,10 +77,10 @@ core.logger.warn('Request needs attention', { requestId })
 
 在[功能说明](../../docs/usage/function/core.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `init` / `config` / `module` — 加载配置、初始化日志和编排应用依赖
-- `logger` / `context` / `sanitize` — 记录并关联日志，清理诊断数据
-- `error` / `i18n` / `zodValidation` / `access` — 处理结果与错误、本地化校验消息并检查请求策略
-- `id` / `typeUtils` / `object` / `string` / `array` / `async` / `time` — 生成标识并处理常用数据与异步操作
+- `core.init` / `core.config` / `core.module` — 加载配置、初始化日志和编排应用依赖
+- `core.logger` / `core.context` / `core.sanitize` — 记录并关联日志，清理诊断数据
+- `core.error` / `core.i18n` / `core.zodValidation` / `core.access` — 处理结果与错误、本地化校验消息并检查请求策略
+- `core.id` / `core.typeUtils` / `core.object` / `core.string` / `core.array` / `core.async` / `core.time` — 生成标识并处理常用数据与异步操作
 
 <a id="应用启动与关闭"></a>
 

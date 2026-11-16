@@ -55,7 +55,7 @@ Use `reldb.prepareSchema(key, ({ ddl, sql }) => ...)` to coordinate schema prepa
 
 ## Configuration Reference
 
-Generated projects use `config/_db.yml`, with `reldb.init(config)` as the application configuration entry point.
+Generated projects define the database type, address, and connection options in `config/_db.yml`. At startup, the application reads the file and passes the settings object to `reldb.init(config)`.
 
 See the [configuration reference](../../docs/usage/configuration/reldb.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -63,9 +63,9 @@ See the [configuration reference](../../docs/usage/configuration/reldb.md) in Ch
 
 See the [feature reference](../../docs/usage/function/reldb.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `init` / `close` / `config` / `isInitialized` — Manage the database connection lifecycle
-- `ddl` / `schemaColumns` / `prepareSchema` — Define, prepare and inspect table schemas
-- `sql` / `crud` / `tx` / `pagination` / `json` — Run SQL, use CRUD and transactions, paginate and query JSON paths
+- `reldb.init` / `reldb.close` / `reldb.config` / `reldb.isInitialized` — Manage the database connection lifecycle
+- `reldb.ddl` / `reldb.schemaColumns` / `reldb.prepareSchema` — Define, prepare and inspect table schemas
+- `reldb.sql` / `reldb.crud` / `reldb.tx` / `reldb.pagination` / `reldb.json` — Run SQL, use CRUD and transactions, paginate and query JSON paths
 
 ## Data Structures
 

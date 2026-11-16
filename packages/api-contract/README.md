@@ -40,7 +40,7 @@ export const appContract = {
 
 ## 配置清单
 
-用 `apiContract.create()` 组合需要发布的领域契约。
+把应用需要公开的接口定义传给 `apiContract.create(options)` 时，参数对象的键确定每组接口的名称。同一个返回对象可以用于生成 API 文档，也可作为服务端和类型化客户端的接口描述。
 
 在[模块配置清单](../../docs/usage/configuration/api-contract.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -48,9 +48,9 @@ export const appContract = {
 
 在[功能说明](../../docs/usage/function/api-contract.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `create` / `route` / `pathOf` — 定义契约、路由和路径
-- `haiResultSchema` / `voidResultSchema` / `paginatedSchema` — 说明结果和分页的校验方式
-- `iam` / `storage` / `ai` / `payment` / `feedback` — 复用各域的 HTTP 契约
+- `apiContract.create` / `apiContract.route` / `apiContract.pathOf` — 组合接口定义、声明 HTTP 方法与路径，或读取已有接口的路径
+- `apiContract.haiResultSchema` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema` — 定义带有成功值或错误详情的响应结构，以及分页结果的结构
+- `apiContract.iam` / `apiContract.storage` / `apiContract.ai` / `apiContract.payment` / `apiContract.feedback` — 复用身份认证、文件、AI、支付和反馈的接口定义
 
 ## 数据结构
 

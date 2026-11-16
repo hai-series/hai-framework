@@ -10,7 +10,7 @@
 
 ### 依赖
 
-- `@h-ai/reldb` — 数据库（发送日志与模板持久化）；配置非空 `templates` 或启用 DND delay 时必须先初始化，模板保存或必需表准备失败时 `reach.init()` 返回 `CONFIG_ERROR` 并关闭候选 Provider。不使用模板/延迟队列的即时发送可选
+- `@h-ai/reldb` — 用于保存发送日志和模板。如果配置了模板，或希望在免打扰时段先保存消息、稍后发送，请先调用 `reldb.init()`。如果模板或队列表准备失败，`reach.init()` 会释放这次打开的渠道连接，并返回 `CONFIG_ERROR`。不使用这两项功能时可直接发送，无需数据库。
 - `@h-ai/cache` — 缓存（DND delay 策略分布式锁），可选；已初始化时自动启用分布式锁
 
 #### 安装
@@ -90,7 +90,7 @@ Provider 失败保留完整模块错误定义（含 HTTP 状态），SMTP/短信
 
 ## 配置清单
 
-生成项目使用 `config/_reach.yml`。应用可以通过 `reach.init(config)` 接入配置。
+生成的项目在 `config/_reach.yml` 中设置发送渠道、模板、免打扰时段和重试规则。应用启动代码读取该文件，把配置对象传给 `reach.init(config)`。
 
 在[模块配置清单](../../docs/usage/configuration/reach.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -98,9 +98,9 @@ Provider 失败保留完整模块错误定义（含 HTTP 状态），SMTP/短信
 
 在[功能说明](../../docs/usage/function/reach.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `init` / `close` / `config` / `isInitialized` — 启停通知 Provider 和队列
-- `send` / `template` — 发送邮件、短信或 API 通知，渲染模板
-- `queue` — 检查结果、处理死信和未知发送状态
+- `reach.init` / `reach.close` / `reach.config` / `reach.isInitialized` — 配置邮件、短信或 HTTP 网关等发送渠道，启动或关闭队列
+- `reach.send` / `reach.template` — 发送邮件、短信或 API 通知，渲染模板
+- `reach.queue` — 查询发送结果，处理重试次数用尽或渠道尚未确认的消息
 
 ## 数据结构
 

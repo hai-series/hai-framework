@@ -118,9 +118,11 @@ export default defineConfig({
 
 > 除 `toast`、类型导入与 `Range`（会和 DOM `Range` 构造器冲突）外，其余公开 Svelte 组件都可通过 `@h-ai/ui/auto-import` 自动注入。
 
-管理后台等只使用部分组件的页面，可直接使用公开组件目录入口；主题工具通过轻量 `@h-ai/ui/theme` 导入，避免主题消费加载根入口中的 AI、图表等组件。状态层的语言工具使用 `@h-ai/ui/i18n`，不加载组件与引导 CSS。组件路径以已安装版本的 exports 为准，不导入包内 `src/` 或 `dist/`。
+页面只用到少数几个组件时，可以直接从对应的组件入口导入。只需要主题工具时，用 `@h-ai/ui/theme`，它不会加载 AI 或图表组件。只需要语言工具时，用 `@h-ai/ui/i18n`，它不会加载组件和引导样式。下方是可直接使用的导入路径。
 
-自动导入器只为模板 AST 中实际使用的组件注入导入，注释、textarea 和脚本字符串中的示例不触发导入；脚本声明以及 each、await、snippet 等模板局部绑定优先。无分号、跨行及带别名的真实导入按语法树识别，已绑定的运行时组件名称不会重复注入。根入口 `@h-ai/ui` 的仅类型组件绑定按需提升为值；外部模块的同名类型无法安全合并时，构建错误会列出文件和组件名，请为类型设置别名，或用其他本地名显式导入组件。
+启用自动导入后，如果模板使用了 `<Button>`，且文件没有自行声明或导入 `Button`，构建时会添加导入。写在注释、`textarea` 内容或 JavaScript 字符串中的标签不会触发导入；脚本声明以及 `each`、`await`、`snippet` 中已定义的同名变量也优先使用。
+
+如果模板用到了从 `@h-ai/ui` 只导入类型的组件，插件会补成可用于渲染的组件导入。如果其他包的同名类型与组件冲突，构建会指出相应文件和组件。可给类型起个别名，或者显式用别名导入组件。
 
 ```ts
 import { Card } from '@h-ai/ui/components/compounds/index'
@@ -130,7 +132,7 @@ import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
 
 ## 配置清单
 
-通过组件 props 配置交互，通过公开主题、语言和引导入口设置应用体验。
+在 Svelte 页面中给组件传入属性（props），例如给表格指定列和数据。应用级的主题、语言和新手引导分别从 `@h-ai/ui/theme`、`@h-ai/ui/i18n` 和 `@h-ai/ui/guide` 使用。
 
 在[模块配置清单](../../docs/usage/configuration/ui.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -151,7 +153,7 @@ import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
 
 模块没有自建数据库表。
 
-查看[数据结构](../../docs/usage/data/ui.md)，了解主题、语言、引导进度和组件状态的归属。
+查看[数据结构](../../docs/usage/data/ui.md)，查阅主题、语言和引导进度保存在浏览器的什么位置。
 
 ## 开发测试
 

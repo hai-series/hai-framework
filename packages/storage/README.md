@@ -83,7 +83,7 @@ export async function uploadImage(key: string, file: File) {
 
 ## 配置清单
 
-生成项目使用 `config/_storage.yml`。应用可以通过 `storage.init(config)` 接入配置。
+生成的项目在 `config/_storage.yml` 中设置本地目录或 S3 兼容存储的连接参数。应用启动代码读取该文件，把配置对象传给 `storage.init(config)`。
 
 在[模块配置清单](../../docs/usage/configuration/storage.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -91,8 +91,8 @@ export async function uploadImage(key: string, file: File) {
 
 在[功能说明](../../docs/usage/function/storage.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `init` / `close` / `config` / `isInitialized` — 装配本地和 S3 Provider
-- `file` / `dir` / `checksum` / `presign` — 处理文件、目录、内容校验与预签名
+- `storage.init` / `storage.close` / `storage.config` / `storage.isInitialized` — 选择本地目录或 S3 兼容存储，查看连接状态，关闭时释放连接
+- `storage.file` / `storage.dir` / `storage.checksum` / `storage.presign` — 读写文件、列出目录、核对内容摘要，以及为 S3 对象生成限时访问链接
 - `@h-ai/storage/client` / `@h-ai/storage/schemas` — 通过浏览器上传、下载和校验 key
 
 <a id="api-概览"></a>

@@ -38,7 +38,7 @@ if (failures.length)
 
 ## 配置清单
 
-原生插件在 Capacitor 工程中配置，应用通过 `capacitor.init()` 装配。
+在 Capacitor 项目中安装并配置要用的推送、相机等原生插件。应用启动时调用 `capacitor.init()`，随后从 `capacitor.push`、`capacitor.camera` 等入口使用已配置的插件。
 
 在[模块配置清单](../../docs/usage/configuration/capacitor.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -46,9 +46,10 @@ if (failures.length)
 
 在[功能说明](../../docs/usage/function/capacitor.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `init` / `close` / `isInitialized` / `getPlatform` / `isNative` — 管理插件初始化和平台判断
-- `device` / `camera` / `push` / `statusBar` — 读取设备信息、拍照、注册推送和调整状态栏
-- `preferences` / `createCapacitorTokenStorage` — 按用途存储设置与认证凭据
+- `capacitor.init` / `capacitor.close` / `capacitor.isInitialized` / `capacitor.getPlatform` / `capacitor.isNative` — 管理插件初始化和平台判断
+- `capacitor.device` / `capacitor.camera` / `capacitor.push` / `capacitor.statusBar` — 读取设备信息、拍照、注册推送和调整状态栏
+- `capacitor.preferences` — 在设备上保存普通应用设置
+- `createCapacitorTokenStorage()` — 从 `@h-ai/capacitor` 单独导入，把创建的安全存储交给 API 客户端保存认证令牌
 
 <a id="android-容器打包"></a>
 

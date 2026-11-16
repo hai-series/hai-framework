@@ -55,7 +55,7 @@ PostgreSQL の複数ノードでスキーマを準備する場合は `reldb.prep
 
 ## 設定一覧
 
-生成プロジェクトは `config/_db.yml` を使用します。アプリで設定を取り込む入口は `reldb.init(config)` です。
+生成したプロジェクトでは、データベースの種類、アドレス、接続オプションを `config/_db.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `reldb.init(config)` に渡します。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/reldb.md)（中国語）を参照してください。
 
@@ -63,9 +63,9 @@ PostgreSQL の複数ノードでスキーマを準備する場合は `reldb.prep
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/reldb.md)（中国語）を参照してください。
 
-- `init` / `close` / `config` / `isInitialized` — データベース接続のライフサイクル管理
-- `ddl` / `schemaColumns` / `prepareSchema` — テーブル構造の定義・準備・確認
-- `sql` / `crud` / `tx` / `pagination` / `json` — SQL、CRUD、トランザクション、ページング、JSON パスの利用
+- `reldb.init` / `reldb.close` / `reldb.config` / `reldb.isInitialized` — データベース接続のライフサイクル管理
+- `reldb.ddl` / `reldb.schemaColumns` / `reldb.prepareSchema` — テーブル構造の定義・準備・確認
+- `reldb.sql` / `reldb.crud` / `reldb.tx` / `reldb.pagination` / `reldb.json` — SQL、CRUD、トランザクション、ページング、JSON パスの利用
 
 ## データ構造
 

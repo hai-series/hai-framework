@@ -38,7 +38,7 @@ if (failures.length)
 
 ## 設定一覧
 
-Capacitor プロジェクトでネイティブプラグインを設定し、`capacitor.init()` で初期化します。
+Capacitor プロジェクトで、プッシュ通知やカメラなど必要なネイティブプラグインをインストールして設定します。起動時に `capacitor.init()` を呼び出した後、`capacitor.push` や `capacitor.camera` を使います。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/capacitor.md)（中国語）を参照してください。
 
@@ -46,9 +46,10 @@ Capacitor プロジェクトでネイティブプラグインを設定し、`cap
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/capacitor.md)（中国語）を参照してください。
 
-- `init` / `close` / `isInitialized` / `getPlatform` / `isNative` — プラグイン初期化とプラットフォーム判定
-- `device` / `camera` / `push` / `statusBar` — 端末情報の取得、撮影、プッシュ登録、ステータスバーの調整
-- `preferences` / `createCapacitorTokenStorage` — 設定と認証情報をそれぞれのストレージに保存
+- `capacitor.init` / `capacitor.close` / `capacitor.isInitialized` / `capacitor.getPlatform` / `capacitor.isNative` — プラグイン初期化とプラットフォーム判定
+- `capacitor.device` / `capacitor.camera` / `capacitor.push` / `capacitor.statusBar` — 端末情報の取得、撮影、プッシュ登録、ステータスバーの調整
+- `capacitor.preferences` — アプリの一般設定を端末に保存する
+- `createCapacitorTokenStorage()` — `@h-ai/capacitor` から個別にインポートし、返された安全な保存先を認証トークン用に API クライアントへ渡す
 
 ## データ構造
 

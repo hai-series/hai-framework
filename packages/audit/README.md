@@ -61,7 +61,7 @@ if (!closeResult.success) {
 
 ## 配置清单
 
-生成项目使用 `config/_audit.yml`。应用可以通过 `audit.init(config)` 接入配置。
+生成的项目在 `config/_audit.yml` 中设置审计采集、保留期限、备份和告警设置。应用启动代码读取该文件，把配置对象传给 `audit.init(config)`。
 
 在[模块配置清单](../../docs/usage/configuration/audit.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -69,10 +69,10 @@ if (!closeResult.success) {
 
 在[功能说明](../../docs/usage/function/audit.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `init` / `close` / `isInitialized` — 连接和关闭审计服务
-- `withContext` / `log` / `capture` / `helper` — 为业务操作记录可关联的审计事件
-- `list` / `getUserRecent` / `getStats` / `cleanup` — 查询记录和统计并清理历史
-- `backup` / `schedulerPlan` / `checkAlerts` — 导出私有归档、安排定时执行并检查告警
+- `audit.init` / `audit.close` / `audit.isInitialized` — 连接和关闭审计服务
+- `audit.withContext` / `audit.log` / `audit.capture` / `audit.helper` — 记录谁在何时做了什么，并附上可关联同一请求的编号
+- `audit.list` / `audit.getUserRecent` / `audit.getStats` / `audit.cleanup` — 查询记录和统计并清理历史
+- `audit.backup` / `audit.schedulerPlan` / `audit.checkAlerts` — 导出备份到私有存储，为清理、备份或告警生成定时任务，并按规则检查是否需要告警
 
 ## 数据结构
 

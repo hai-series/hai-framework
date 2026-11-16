@@ -10,7 +10,11 @@ hai-framework のクロスプラットフォーム oRPC/OpenAPI 型付きクラ�
 
 ## クイックスタート
 
-`close()` は旧更新を無効化し、進行中の認証情報書き込みを待ちます。外部 TokenStorage の値は保持され、終了後に再利用できます。`timeout` はヘッダー、JSON 本文全体、および HTML エラーページを含む全失敗応答の本文が対象です。タイムアウトや取消後は Token を更新しません。内蔵 Cookie アダプターはログインと更新で認証情報を送るため、CORS の Origin と credentials を設定します。メモリー・ネイティブ保存は元の要求の方針を維持します。独自ストリームは逐次読み取り、本文の中断には呼出側の signal を使います。
+`apiClient.close()` を呼び出すと、すでに始まっている更新処理はセッションを書き換えられなくなります。進行中の認証情報の書き込みを待ち、外部の `TokenStorage` の値は残します。再初期化時に同じ保存先を使えます。
+
+タイムアウトには応答ヘッダー、JSON 本文全体、HTML エラーページなどのエラー本文を読む時間が含まれます。タイムアウトや取り消し後にトークンは更新しません。アプリが成功応答をストリームとして読む場合は、渡した中断シグナルで読み取りを止めます。
+
+既定の Cookie 保存方式では、ログインと更新時に `credentials: "include"` でブラウザーの Cookie を送信します。ページと API のオリジンが異なる場合は、API の CORS 設定でページのオリジンと認証情報の送信を許可します。メモリーやネイティブストレージでは、アプリがリクエストに指定した `credentials` 設定を使います。
 
 ```ts
 import type { IamAuthLoginInput } from '@h-ai/api-client'
@@ -47,7 +51,7 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 
 ## 設定一覧
 
-`ApiClientConfig` で API のアドレス、認証、リクエスト、通信暗号化を設定します。
+`apiClient.init(config)` に API のベース URL を渡します。認証情報の保存先、リクエストのタイムアウト、通信の暗号化は必要に応じて指定します。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/api-client.md)（中国語）を参照してください。
 
@@ -55,15 +59,15 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/api-client.md)（中国語）を参照してください。
 
-- `init` / `create` / `close` / `config` / `isInitialized` — 既定クライアントの初期化、独立インスタンスの作成
-- `auth` / `tokenStorage` / `createAuthActions` — 認証情報の注入、セッション更新、認証操作の作成
-- `iam` / `storage` / `ai` / `observeRequests` — ドメイン API の呼び出しと論理リクエスト状態の監視
+- `apiClient.init` / `apiClient.create` / `apiClient.close` / `apiClient.config` / `apiClient.isInitialized` — 既定クライアントの初期化、独立インスタンスの作成
+- `apiClient.auth` / `apiClient.tokenStorage` / `apiClient.createAuthActions` — 認証情報の保存先を選び、ログインやセッション更新の処理を作る
+- `apiClient.iam` / `apiClient.storage` / `apiClient.ai` / `apiClient.observeRequests` — ユーザー、ファイル、AI の API を呼び出し、各呼び出しが終わったときの結果と所要時間を取得する
 
 ## データ構造
 
 モジュール独自のデータベーステーブルは作成しません。
 
-リクエストとセッションのメモリ状態、Cookie、差し替え可能な認証情報ストレージについては[データ構造](../../docs/usage/data/api-client.md)（中国語）を参照してください。
+アクセス用と更新用のトークンの保存先、およびトークンが消える条件については[データ構造](../../docs/usage/data/api-client.md)（中国語）を参照してください。
 
 ## 開発とテスト
 

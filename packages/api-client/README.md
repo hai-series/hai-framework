@@ -10,7 +10,11 @@ hai-framework 的跨端 oRPC/OpenAPI typed client，面向 Web、App、小程序
 
 ## 快速开始
 
-`close()` 会使旧刷新失效并等待已有凭据写入完成，保留外置 TokenStorage 当前值；关闭完成后可复用同一存储重新初始化。`timeout` 覆盖响应头、完整 JSON 正文及所有非成功响应正文（包括 HTML 错误页）；超时或取消后不再刷新凭据。内置 Cookie 适配器的登录和刷新使用 `credentials: include`，跨域服务须明确允许凭据与 Origin；内存和原生存储保留原请求的凭据策略。应用自定义流按需读取，其正文由调用方 signal 取消。
+调用 `apiClient.close()` 后，关闭前已经开始的刷新不能再更新会话。该调用会等正在写入的操作结束，保留外部 `TokenStorage` 中的凭据，之后可以复用该存储重新初始化。
+
+设置 `timeout` 后，客户端在规定时间内等待响应头和完整的 JSON 正文。服务端返回错误时，读取错误正文也计入时限，包括 HTML 错误页。调用超时或被取消后，不会再尝试刷新令牌。应用自行读取的成功流式正文由传入的取消信号控制。
+
+默认 Cookie 存储方式会让浏览器在登录和刷新时携带 Cookie（`credentials: "include"`）。网页和 API 不在同一来源时，API 需要在 CORS 配置中允许网页的实际来源和凭据。使用内存或原生存储时，客户端沿用应用为请求设置的 `credentials`。
 
 ```ts
 import type { IamAuthLoginInput } from '@h-ai/api-client'
@@ -47,7 +51,7 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 
 ## 配置清单
 
-通过 `ApiClientConfig` 设置 API 地址、认证、请求与加密。
+调用 `apiClient.init(config)` 时传入服务端 API 的基础地址。按需提供凭据存储方式、请求超时和传输加密选项。
 
 在[模块配置清单](../../docs/usage/configuration/api-client.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -55,15 +59,15 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 
 在[功能说明](../../docs/usage/function/api-client.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `init` / `create` / `close` / `config` / `isInitialized` — 初始化默认客户端或创建独立实例
-- `auth` / `tokenStorage` / `createAuthActions` — 注入凭据、刷新会话和建立认证操作
-- `iam` / `storage` / `ai` / `observeRequests` — 调用领域接口并订阅逻辑请求状态
+- `apiClient.init` / `apiClient.create` / `apiClient.close` / `apiClient.config` / `apiClient.isInitialized` — 初始化默认客户端或创建独立实例
+- `apiClient.auth` / `apiClient.tokenStorage` / `apiClient.createAuthActions` — 选择凭据保存方式，创建登录和刷新会话等操作
+- `apiClient.iam` / `apiClient.storage` / `apiClient.ai` / `apiClient.observeRequests` — 调用用户、文件和 AI 接口，或订阅每次调用结束时的结果和耗时
 
 ## 数据结构
 
 模块没有自建数据库表。
 
-查看[数据结构](../../docs/usage/data/api-client.md)，了解请求去重和会话的内存状态、Cookie 和可注入的凭据存储。
+查看[数据结构](../../docs/usage/data/api-client.md)，查阅访问令牌和刷新令牌分别保存在哪里，重新加载页面或关闭客户端后是否还可以使用。
 
 ## 开发测试
 

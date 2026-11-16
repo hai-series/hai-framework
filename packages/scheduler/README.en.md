@@ -4,7 +4,7 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md) · [@h-ai/reldb](../reldb/README.en.md)
 
-A scheduled task module with a unified task model, cron scheduling, JS function strings / HTTP API execution, persistence, execution log queries, and global task lifecycle hooks.
+Use `scheduler` to run JavaScript handlers or call HTTP endpoints on a cron schedule. It saves task settings and execution logs in the database and can call application callbacks before and after runs.
 
 ## Quick Start
 
@@ -71,7 +71,7 @@ await scheduler.close()
 
 ## Configuration Reference
 
-Generated projects use `config/_scheduler.yml`, with `scheduler.init(config)` as the application configuration entry point.
+Generated projects define how often to check for work and how long a worker owns a task in `config/_scheduler.yml`. At startup, the application reads the file and passes the settings object to `scheduler.init(config)`.
 
 See the [configuration reference](../../docs/usage/configuration/scheduler.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -79,9 +79,9 @@ See the [configuration reference](../../docs/usage/configuration/scheduler.md) i
 
 See the [feature reference](../../docs/usage/function/scheduler.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `init` / `close` / `config` / `isInitialized` / `isRunning` / `start` / `stop` — Manage the scheduler lifecycle
-- `register` / `updateTask` / `unregister` / `refreshTasks` / `tasks` — Maintain task definitions and the current task view
-- `trigger` / `getLogs` / `setHooks` / `clearHooks` / `hooks` / `execution` — Trigger tasks, query logs, configure hooks and read execution context
+- `scheduler.init` / `scheduler.close` / `scheduler.config` / `scheduler.isInitialized` / `scheduler.isRunning` / `scheduler.start` / `scheduler.stop` — Read settings, check status, start or stop scanning for tasks, and release resources at shutdown
+- `scheduler.register` / `scheduler.updateTask` / `scheduler.unregister` / `scheduler.refreshTasks` / `scheduler.tasks` — Register, update, or remove tasks, reload them from the database, and inspect the current list
+- `scheduler.trigger` / `scheduler.getLogs` / `scheduler.setHooks` / `scheduler.clearHooks` / `scheduler.hooks` / `scheduler.execution` — Run a task now, inspect execution logs, register callbacks, and read information about the current run
 
 ## Data Structures
 

@@ -19,9 +19,9 @@ pnpm add @h-ai/iam
 - `@h-ai/reldb`：ユーザー・ロール・権限の永続化。**iam.init() より先に初期化**。
 - `@h-ai/cache`：セッション・OTP・一度限りのチケット。**iam.init() より先に初期化**。
 - `@h-ai/crypto`：内部で使用するパスワードハッシュ。自動初期化。
-- `@h-ai/audit`：ホストが初期化した場合に IAM の安全イベントを自動記録します。未使用時は収集せず、使用中の書込失敗は記録し、外部トランザクションはロールバックします。
+- `@h-ai/audit` — 任意。起動時にアプリが `audit.init()` を呼び出すと、IAM がセキュリティイベントを記録します。記録に失敗した場合はエラーログを確認し、影響を受けたアプリ管理のトランザクションをロールバックしてください。
 
-- `@h-ai/reach`：**任意**。アプリがインストール、初期化、注入して通知テンプレートを使用します。独自送信コールバックでは不要です。
+- `@h-ai/reach` — 任意。標準のメールや SMS テンプレートを使う場合は、Reach をインストール・初期化し、[通知の例](../../docs/usage/function/iam.md#使用可选-reach-自动发送)（中国語）に従って IAM に接続します。独自の送信関数を用意することもできます。
 - `ldapts`：**任意**。LDAP を明示的に有効化し、`ldapClientFactory` がない場合だけ読み込みます。
 
 ```ts
@@ -63,13 +63,13 @@ if (!result.success)
   core.logger.error('Authentication example failed', { code: result.error.code })
 ```
 
-LDAP は既定で無効です。公開 OTP は `otp` 設定と送信コールバック、パスワードリセットは通知コールバックが必要です。
+LDAP は既定で無効です。`otp` と対応する送信関数を設定して初めて、`iam.publicConfig` にワンタイムコードでのログインが利用可能と表示されます。ログイン画面にパスワード再設定を表示するには、再設定通知の送信関数も必要です。
 
 `iam.config` は**機密情報をマスクした設定スナップショット**を返します。LDAP の `url` / `bindPassword` などは自動的に非表示になります。状態確認用で、元の設定の代わりにはなりません。
 
 ## 設定一覧
 
-生成プロジェクトは `config/_iam.yml` を使用します。アプリで設定を取り込む入口は `iam.init(config)` です。
+生成したプロジェクトでは、利用できるログイン方法、パスワードのルール、セッションの有効期間を `config/_iam.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `iam.init(config)` に渡します。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/iam.md)（中国語）を参照してください。
 
@@ -77,9 +77,9 @@ LDAP は既定で無効です。公開 OTP は `otp` 設定と送信コールバ
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/iam.md)（中国語）を参照してください。
 
-- `init` / `close` / `config` / `isInitialized` / `publicConfig` / `getPublicConfig` / `isRegisterEnabled` — ID サービスを初期化し、公開可能な設定と登録情報を提供
-- `auth` / `user` / `session` — 認証、アカウントとセッションの管理
-- `authz` / `apiKey` / `ticket` — 権限の評価、API キーとワンタイムチケットの管理
+- `iam.init` / `iam.close` / `iam.config` / `iam.isInitialized` / `iam.publicConfig` / `iam.getPublicConfig` / `iam.isRegisterEnabled` — 認証サービスを開始・終了する。公開設定を読み、ログイン方式や登録リンクの表示を決める
+- `iam.auth` / `iam.user` / `iam.session` — 認証、アカウントとセッションの管理
+- `iam.authz` / `iam.apiKey` / `iam.ticket` — ロールと権限を確認し、API キーを管理し、一度だけ使えるチケットを発行・引き換える
 
 ## データ構造
 

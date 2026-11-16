@@ -36,7 +36,7 @@ finally {
 
 ## 配置清单
 
-生成项目使用 `config/_cache.yml`。应用可以通过 `cache.init(config)` 接入配置。
+生成的项目在 `config/_cache.yml` 中设置后端类型和 Redis 连接参数。应用启动代码读取该文件，把配置对象传给 `cache.init(config)`。
 
 在[模块配置清单](../../docs/usage/configuration/cache.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -44,9 +44,9 @@ finally {
 
 在[功能说明](../../docs/usage/function/cache.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `init` / `close` / `config` / `isInitialized` / `ping` — 管理连接并检查可用性
-- `kv` / `hash` / `list` / `set_` / `zset` — 操作键值、散列、列表、集合与有序集合
-- `lock` — 用带有效期的锁协调互斥操作
+- `cache.init` / `cache.close` / `cache.config` / `cache.isInitialized` / `cache.ping` — 管理连接并检查可用性
+- `cache.kv` / `cache.hash` / `cache.list` / `cache.set_` / `cache.zset` — 操作键值、散列、列表、集合与有序集合
+- `cache.lock` — 用带有效期的锁协调互斥操作
 
 ## 数据结构
 

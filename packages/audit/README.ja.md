@@ -61,7 +61,7 @@ if (!closeResult.success) {
 
 ## 設定一覧
 
-生成プロジェクトは `config/_audit.yml` を使用します。アプリで設定を取り込む入口は `audit.init(config)` です。
+生成したプロジェクトでは、監査の記録、保持、バックアップ、通知の設定を `config/_audit.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `audit.init(config)` に渡します。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/audit.md)（中国語）を参照してください。
 
@@ -69,10 +69,10 @@ if (!closeResult.success) {
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/audit.md)（中国語）を参照してください。
 
-- `init` / `close` / `isInitialized` — 監査サービスの接続と終了
-- `withContext` / `log` / `capture` / `helper` — 操作コンテキスト付きの監査イベントを記録
-- `list` / `getUserRecent` / `getStats` / `cleanup` — 記録と統計の照会、履歴の削除
-- `backup` / `schedulerPlan` / `checkAlerts` — 非公開アーカイブの出力、ジョブの予約、アラートの確認
+- `audit.init` / `audit.close` / `audit.isInitialized` — 監査サービスの接続と終了
+- `audit.withContext` / `audit.log` / `audit.capture` / `audit.helper` — 誰がいつ何をしたかを、同じリクエストを追える番号とともに記録する
+- `audit.list` / `audit.getUserRecent` / `audit.getStats` / `audit.cleanup` — 記録と統計の照会、履歴の削除
+- `audit.backup` / `audit.schedulerPlan` / `audit.checkAlerts` — 非公開ストレージへバックアップを保存し、定期処理を用意し、通知ルールに一致するかを確認する
 
 ## データ構造
 

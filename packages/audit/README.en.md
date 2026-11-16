@@ -61,7 +61,7 @@ if (!closeResult.success) {
 
 ## Configuration Reference
 
-Generated projects use `config/_audit.yml`, with `audit.init(config)` as the application configuration entry point.
+Generated projects define capture, retention, backup, and alert settings in `config/_audit.yml`. At startup, the application reads the file and passes the settings object to `audit.init(config)`.
 
 See the [configuration reference](../../docs/usage/configuration/audit.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -69,10 +69,10 @@ See the [configuration reference](../../docs/usage/configuration/audit.md) in Ch
 
 See the [feature reference](../../docs/usage/function/audit.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `init` / `close` / `isInitialized` — Connect and close the audit service
-- `withContext` / `log` / `capture` / `helper` — Record auditable events with operation context
-- `list` / `getUserRecent` / `getStats` / `cleanup` — Query records and statistics and expire old records
-- `backup` / `schedulerPlan` / `checkAlerts` — Export private archives, schedule jobs and check alerts
+- `audit.init` / `audit.close` / `audit.isInitialized` — Connect and close the audit service
+- `audit.withContext` / `audit.log` / `audit.capture` / `audit.helper` — Record who did what and when, with a request ID for correlation
+- `audit.list` / `audit.getUserRecent` / `audit.getStats` / `audit.cleanup` — Query records and statistics and expire old records
+- `audit.backup` / `audit.schedulerPlan` / `audit.checkAlerts` — Write backups to private storage, prepare scheduled jobs, and check whether alert rules match
 
 ## Data Structures
 

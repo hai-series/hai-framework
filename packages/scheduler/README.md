@@ -4,7 +4,7 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md) · [@h-ai/reldb](../reldb/README.md)
 
-定时任务调度模块，支持统一任务模型、cron 调度、JS 函数字符串 / HTTP API 执行、任务持久化、执行日志查询，以及全局任务生命周期回调。
+用 `scheduler` 按 cron 表达式运行任务。任务可执行 JavaScript 处理函数或调用 HTTP 接口。模块把任务设置和执行日志写入数据库，也可在执行前后调用应用提供的函数。
 
 ## 快速开始
 
@@ -71,7 +71,7 @@ await scheduler.close()
 
 ## 配置清单
 
-生成项目使用 `config/_scheduler.yml`。应用可以通过 `scheduler.init(config)` 接入配置。
+生成的项目在 `config/_scheduler.yml` 中设置任务检查间隔和执行租约时长。应用启动代码读取该文件，把配置对象传给 `scheduler.init(config)`。
 
 在[模块配置清单](../../docs/usage/configuration/scheduler.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -79,9 +79,9 @@ await scheduler.close()
 
 在[功能说明](../../docs/usage/function/scheduler.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `init` / `close` / `config` / `isInitialized` / `isRunning` / `start` / `stop` — 管理调度生命周期
-- `register` / `updateTask` / `unregister` / `refreshTasks` / `tasks` — 维护任务定义与运行视图
-- `trigger` / `getLogs` / `setHooks` / `clearHooks` / `hooks` / `execution` — 手工触发、查询日志、设置回调并读取执行上下文
+- `scheduler.init` / `scheduler.close` / `scheduler.config` / `scheduler.isInitialized` / `scheduler.isRunning` / `scheduler.start` / `scheduler.stop` — 读取调度设置、检查状态、启动或停止扫描，并在应用退出时释放资源
+- `scheduler.register` / `scheduler.updateTask` / `scheduler.unregister` / `scheduler.refreshTasks` / `scheduler.tasks` — 登记、更新或删除任务，读取数据库中的最新内容和当前任务列表
+- `scheduler.trigger` / `scheduler.getLogs` / `scheduler.setHooks` / `scheduler.clearHooks` / `scheduler.hooks` / `scheduler.execution` — 立即运行任务、查询执行日志、设置处理前后的回调并读取当前执行信息
 
 ## 数据结构
 

@@ -44,7 +44,7 @@ export async function paymentExample(trustedConfig: PaymentConfigInput, trustedO
     return { order: created.data, status: query.data.status }
   }
   finally {
-    await payment.close() // The host then closes its reldb.
+    await payment.close() // The application calls reldb.close() afterward.
   }
 }
 ```
@@ -71,7 +71,7 @@ export async function startPayment(orderData: PaymentOrder) {
 
 ## Configuration Reference
 
-Generated projects use `config/_payment.yml`, with `payment.init(config)` as the application configuration entry point.
+Generated projects define the accounts and server-side credentials for each payment channel in `config/_payment.yml`. At startup, the application reads the file and passes the settings object to `payment.init(config)`.
 
 See the [configuration reference](../../docs/usage/configuration/payment.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -79,9 +79,9 @@ See the [configuration reference](../../docs/usage/configuration/payment.md) in 
 
 See the [feature reference](../../docs/usage/function/payment.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `init` / `close` / `config` / `isInitialized` / `registerProvider` / `getProvider` — Manage payment channel configuration and providers
-- `createOrder` / `queryOrder` / `refund` / `closeOrder` / `handleNotify` — Create, inspect, refund and close orders and verify notifications
-- `invokePayment` — Start the provider payment flow from a client
+- `payment.init` / `payment.close` / `payment.config` / `payment.isInitialized` / `payment.registerProvider` / `payment.getProvider` — Initialize, close, or inspect payment channels, and register custom implementations when needed
+- `payment.createOrder` / `payment.queryOrder` / `payment.refund` / `payment.closeOrder` / `payment.handleNotify` — Create, inspect, refund and close orders and verify notifications
+- `invokePayment` — Import separately from `@h-ai/payment/client` to launch a payment in the browser using an order returned by the server
 
 ## Data Structures
 

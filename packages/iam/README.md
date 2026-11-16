@@ -19,9 +19,9 @@ pnpm add @h-ai/iam
 - `@h-ai/reldb` — 数据库（用户/角色/权限持久化），**需在 iam.init() 前初始化**
 - `@h-ai/cache` — 缓存（会话/OTP/一次性票据），**需在 iam.init() 前初始化**
 - `@h-ai/crypto` — 密码哈希（内部使用，自动初始化）
-- `@h-ai/audit` — 宿主初始化后自动记录 IAM 安全事件；未选用时不调用采集器。启用后的审计写失败仍记录错误，外部事务应回滚。
+- `@h-ai/audit` — 可选。应用启动时调用 `audit.init()` 后，IAM 会自动记录安全事件。审计写入失败时可以在错误日志中看到原因。由应用管理的数据库事务需要在这种失败时回滚。
 
-- `@h-ai/reach` — **可选**，应用安装、初始化并注入后可使用标准邮件/短信模板；自定义发送回调无需 Reach。
+- `@h-ai/reach` — 可选。要使用标准的邮件或短信模板，先安装和初始化 Reach，再参照[用 Reach 发送通知](../../docs/usage/function/iam.md#使用可选-reach-自动发送)连接到 IAM。应用也可以直接提供自己的发送函数。
 - `ldapts` — **可选**，仅在显式启用 LDAP 且没有注入 `ldapClientFactory` 时加载。
 
 ```ts
@@ -63,13 +63,13 @@ if (!result.success)
   core.logger.error('Authentication example failed', { code: result.error.code })
 ```
 
-默认 LDAP 关闭；OTP 需要 `otp` 配置和可用发送回调，重置需要可用通知回调，才能在 `iam.publicConfig` 中启用。
+LDAP 默认关闭。只有设置了 `otp` 并提供对应的发送函数，`iam.publicConfig` 才会将该一次性验证码登录方式标为可用。密码重置同样需要可用的通知函数，登录页才能提供重置入口。
 
 `iam.config` 返回的是**脱敏后的配置快照**：LDAP `url` / `bindPassword` 等敏感配置会自动隐藏，便于状态检查但不能代替原始配置源。
 
 ## 配置清单
 
-生成项目使用 `config/_iam.yml`。应用可以通过 `iam.init(config)` 接入配置。
+生成的项目在 `config/_iam.yml` 中设置可用的登录方式、密码规则和会话期限。应用启动代码读取该文件，把配置对象传给 `iam.init(config)`。
 
 在[模块配置清单](../../docs/usage/configuration/iam.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -77,9 +77,9 @@ if (!result.success)
 
 在[功能说明](../../docs/usage/function/iam.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `init` / `close` / `config` / `isInitialized` / `publicConfig` / `getPublicConfig` / `isRegisterEnabled` — 装配身份服务并向前端提供安全的注册和配置视图
-- `auth` / `user` / `session` — 验证身份、管理账号和会话
-- `authz` / `apiKey` / `ticket` — 评估权限并处理 API Key 与一次性票据
+- `iam.init` / `iam.close` / `iam.config` / `iam.isInitialized` / `iam.publicConfig` / `iam.getPublicConfig` / `iam.isRegisterEnabled` — 启动或关闭身份服务。前端用公开配置判断登录页应显示哪些登录方式，以及是否显示注册链接
+- `iam.auth` / `iam.user` / `iam.session` — 验证身份、管理账号和会话
+- `iam.authz` / `iam.apiKey` / `iam.ticket` — 检查角色和权限，管理 API Key，并签发和兑换只能使用一次的票据
 
 <a id="可选-ldap-与通知接入"></a>
 

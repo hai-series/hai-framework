@@ -92,7 +92,7 @@ finally {
 
 ## 設定一覧
 
-`runner.init()` でノードの役割、実行設定、タスクの保持期間を指定します。
+起動時に `runner.init(options)` で、そのノードがタスクを実行するか、どのコンテナ環境を使えるか、完了したタスクをいつまで保持するかを指定します。タスクの送信と照会だけを行うノードでは実行を無効にできます。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/runner.md)（中国語）を参照してください。
 
@@ -100,9 +100,9 @@ finally {
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/runner.md)（中国語）を参照してください。
 
-- `init` / `close` / `environment` / `isExecutor` — ノードの役割と実行環境の構成
-- `register` / `registerWarmPool` / `submit` — 実行処理とウォームプールの登録、ジョブ投入
-- `find` / `get` / `events` / `cancel` / `reconcileUnknown` — ジョブ検索、イベントの取得、キャンセル、結果不明時の照合
+- `runner.init` / `runner.close` / `runner.environment` / `runner.isExecutor` — このプロセスがタスクを実行するか、どのコンテナ環境を使うかを設定し、Runner を確認・終了する
+- `runner.register` / `runner.registerWarmPool` / `runner.submit` — タスク処理を登録し、事前に起動するコンテナを設定して、タスクを投入する
+- `runner.find` / `runner.get` / `runner.events` / `runner.cancel` / `runner.reconcileUnknown` — ジョブ検索、イベントの取得、キャンセル、結果不明時の照合
 
 ## データ構造
 

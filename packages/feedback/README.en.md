@@ -16,7 +16,7 @@ Initialize the module at application startup. The submission function takes trus
 import type { FeedbackContext } from '@h-ai/feedback'
 import { feedback } from '@h-ai/feedback'
 
-// Configure feedback for orders, using console notifications for local development.
+// Start the feedback service for orders. This example writes notifications to the development console.
 const initialized = await feedback.init({
   appId: 'orders',
   appVersion: '1.0.0',
@@ -38,7 +38,7 @@ See the [feature reference](../../docs/usage/function/feedback.md) in Chinese fo
 
 ## Configuration Reference
 
-Generated projects use `config/_feedback.yml`, with `feedback.init(config, options)` as the application configuration entry point.
+Generated projects define the application ID and feedback notification settings in `config/_feedback.yml`. At startup, the application reads the file and passes the settings object to `feedback.init(config, options)`.
 
 See the [configuration reference](../../docs/usage/configuration/feedback.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -46,10 +46,10 @@ See the [configuration reference](../../docs/usage/configuration/feedback.md) in
 
 See the [feature reference](../../docs/usage/function/feedback.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `init` / `close` / `isInitialized` / `config` / `budget` — Configure dependencies and read collection limits
-- `submit` / `uploadAttachment` / `getAttachment` / `appendEvidence` / `completeCollection` — Submit reports, handle attachments and complete asynchronous evidence
-- `list` / `get` / `getEvidence` / `setStatus` / `retry` / `runJobs` / `export` / `getExport` — Query, triage, retry and export reports
-- `feedbackClient` / `bundle` / `capacitor` / `tauri` — Capture diagnostics, inspect offline bundles and save native files
+- `feedback.init` / `feedback.close` / `feedback.isInitialized` / `feedback.config` / `feedback.budget` — Start and stop the service and read its settings and limits for attachments and evidence
+- `feedback.submit` / `feedback.uploadAttachment` / `feedback.getAttachment` / `feedback.appendEvidence` / `feedback.completeCollection` — Submit feedback, upload or download attachments, and add evidence collected later
+- `feedback.list` / `feedback.get` / `feedback.getEvidence` / `feedback.setStatus` / `feedback.retry` / `feedback.runJobs` / `feedback.export` / `feedback.getExport` — Query, triage, retry and export reports
+- `feedbackClient` (`@h-ai/feedback/client`) — Capture and submit diagnostics in the browser. Read offline bundles with `@h-ai/feedback/bundle` and save files on native platforms with `@h-ai/feedback/capacitor` or `@h-ai/feedback/tauri`
 
 ## Data Structures
 

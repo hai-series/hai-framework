@@ -37,7 +37,7 @@ if (!result.success)
 
 ## 配置清单
 
-清洗与分块选项通过 `clean()`、`chunk()` 或 `pipeline()` 传入。
+把清洗选项传给 `datapipe.clean()`，把片段大小和重叠长度等选项传给 `datapipe.chunk()`。调用 `datapipe.pipeline()` 时可以一次指定两类选项。
 
 在[模块配置清单](../../docs/usage/configuration/datapipe.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -45,8 +45,8 @@ if (!result.success)
 
 在[功能说明](../../docs/usage/function/datapipe.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `clean` — 规范化和过滤文本
-- `chunk` / `pipeline` — 将文本分块或连续执行清洗与分块
+- `datapipe.clean` — 规范化和过滤文本
+- `datapipe.chunk` / `datapipe.pipeline` — 将文本分块或连续执行清洗与分块
 
 ## 数据结构
 

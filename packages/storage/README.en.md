@@ -83,7 +83,7 @@ export async function uploadImage(key: string, file: File) {
 
 ## Configuration Reference
 
-Generated projects use `config/_storage.yml`, with `storage.init(config)` as the application configuration entry point.
+Generated projects define the local directory or the connection settings for S3-compatible storage in `config/_storage.yml`. At startup, the application reads the file and passes the settings object to `storage.init(config)`.
 
 See the [configuration reference](../../docs/usage/configuration/storage.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -91,8 +91,8 @@ See the [configuration reference](../../docs/usage/configuration/storage.md) in 
 
 See the [feature reference](../../docs/usage/function/storage.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `init` / `close` / `config` / `isInitialized` — Set up local or S3 providers
-- `file` / `dir` / `checksum` / `presign` — Work with files, directories, content checks and presigned URLs
+- `storage.init` / `storage.close` / `storage.config` / `storage.isInitialized` — Select a local directory or S3-compatible storage, check connection status, and release resources at shutdown
+- `storage.file` / `storage.dir` / `storage.checksum` / `storage.presign` — Read or write files, list directories, verify checksums, and generate time-limited access links for S3 objects
 - `@h-ai/storage/client` / `@h-ai/storage/schemas` — Upload, download and validate keys in browsers
 
 ## Data Structures

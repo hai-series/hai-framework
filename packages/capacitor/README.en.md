@@ -38,7 +38,7 @@ if (failures.length)
 
 ## Configuration Reference
 
-Configure native plugins in the Capacitor project and initialize them through `capacitor.init()`.
+Install and configure the native plugins you need, such as push notifications or the camera, in the Capacitor project. Call `capacitor.init()` at startup, then use the configured plugins through `capacitor.push`, `capacitor.camera`, and related APIs.
 
 See the [configuration reference](../../docs/usage/configuration/capacitor.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -46,9 +46,10 @@ See the [configuration reference](../../docs/usage/configuration/capacitor.md) i
 
 See the [feature reference](../../docs/usage/function/capacitor.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `init` / `close` / `isInitialized` / `getPlatform` / `isNative` — Initialize plugins and detect the current platform
-- `device` / `camera` / `push` / `statusBar` — Read device info, take photos, register push and manage the status bar
-- `preferences` / `createCapacitorTokenStorage` — Store preferences and credentials in their designated stores
+- `capacitor.init` / `capacitor.close` / `capacitor.isInitialized` / `capacitor.getPlatform` / `capacitor.isNative` — Initialize plugins and detect the current platform
+- `capacitor.device` / `capacitor.camera` / `capacitor.push` / `capacitor.statusBar` — Read device info, take photos, register push and manage the status bar
+- `capacitor.preferences` — Store ordinary application settings on the device
+- `createCapacitorTokenStorage()` — Import separately from `@h-ai/capacitor` and pass the returned secure storage to the API client for authentication tokens
 
 ## Data Structures
 

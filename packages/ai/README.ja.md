@@ -8,7 +8,7 @@
 
 ## クイックスタート
 
-`ai.close()` は進行中の初期化を待ってから解放し、並行する close は一つにまとめます。再初期化は旧インスタンスを先に解放し、終了処理中の新規初期化は拒否します。
+`ai.close()` は進行中の初期化を待ってからリソースを解放します。同時に終了を呼び出しても、解放処理は一度です。設定を変更して `ai.init()` を呼び出すと、既存のインスタンスを先に閉じます。終了中に初期化を呼び出すと失敗します。
 
 ### 開発用 LLM のみ（DB 依存なし）
 
@@ -39,11 +39,11 @@ finally {
 }
 ```
 
-開発・明示的テストで reldb/vecdb が未初期化の場合、一時 Store を使い、終了やインスタンス切り替えで失われます。`NODE_ENV` または `HAI_CORE_ENV` が production の場合、一時 Store・SQLite・ローカル vecdb は初期化に失敗します。共有 RelDB とネットワーク vecdb を先に初期化するか、同等の原子的契約を満たす共有 Provider を指定してください。
+開発時や明示的なテストモードでは、RelDB とベクトルデータベースが使えない場合、会話などの記録をプロセスのメモリーに一時保存できます。モジュールの終了、再起動、別のインスタンスへの切り替え後は、その記録を参照できません。`NODE_ENV` または `HAI_CORE_ENV` が `production` の場合は、共有のリレーショナルデータベースとネットワーク経由のベクトルデータベースを先に接続するか、複数のインスタンスから同じ記録を読み書きでき、バージョンを確認して更新する独自ストアを渡してください。
 
 ## 設定一覧
 
-生成プロジェクトは `config/_ai.yml` を使用します。アプリで設定を取り込む入口は `ai.init(config, options)` です。
+生成したプロジェクトでは、モデル名や接続先の設定を `config/_ai.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `ai.init(config, options)` に渡します。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/ai.md)（中国語）を参照してください。
 
@@ -51,12 +51,12 @@ finally {
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/ai.md)（中国語）を参照してください。
 
-- `init` / `close` / `config` / `isInitialized` — モデルと任意のストアを構成
-- `llm` / `stream` / `reasoning` / `token` / `summary` / `compress` / `context` — コンテンツ生成、ストリーミング、コンテキスト予算
-- `embedding` / `rerank` / `retrieval` / `rag` / `knowledge` — 埋め込み、再順位付け、検索、ナレッジ登録
-- `memory` / `persona` — 会話メモリとペルソナの管理
-- `tools` / `mcp` / `acp` / `a2a` — ツール登録、MCP 接続、ACP セッション制御、A2A エージェント呼び出し
-- `file` / `image` / `audio` — ファイル、画像、音声の操作
+- `ai.init` / `ai.close` / `ai.config` / `ai.isInitialized` — モデル設定を読み込み、準備状態を確認し、モジュールを終了する。再起動後も会話を残す場合は保存先も指定可能
+- `ai.llm` / `ai.stream` / `ai.reasoning` / `ai.token` / `ai.summary` / `ai.compress` / `ai.context` — チャットを呼び出し、応答をストリーミングし、トークン数を見積もって会話履歴を短くする
+- `ai.embedding` / `ai.rerank` / `ai.retrieval` / `ai.rag` / `ai.knowledge` — 内容をベクトル化して検索・再順位付けし、文書をナレッジベースに登録する
+- `ai.memory` / `ai.persona` — 会話メモリとペルソナの管理
+- `ai.tools` / `ai.mcp` / `ai.acp` / `ai.a2a` — ツール登録、MCP 接続、ACP セッション制御、A2A エージェント呼び出し
+- `ai.file` / `ai.image` / `ai.audio` — ファイル、画像、音声の操作
 
 ## データ構造
 

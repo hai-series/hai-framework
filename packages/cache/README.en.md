@@ -36,7 +36,7 @@ finally {
 
 ## Configuration Reference
 
-Generated projects use `config/_cache.yml`, with `cache.init(config)` as the application configuration entry point.
+Generated projects define the backend type and Redis connection settings in `config/_cache.yml`. At startup, the application reads the file and passes the settings object to `cache.init(config)`.
 
 See the [configuration reference](../../docs/usage/configuration/cache.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -44,9 +44,9 @@ See the [configuration reference](../../docs/usage/configuration/cache.md) in Ch
 
 See the [feature reference](../../docs/usage/function/cache.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `init` / `close` / `config` / `isInitialized` / `ping` — Manage connections and check availability
-- `kv` / `hash` / `list` / `set_` / `zset` — Work with key-value data, hashes, lists, sets and sorted sets
-- `lock` — Coordinate exclusive work with expiring locks
+- `cache.init` / `cache.close` / `cache.config` / `cache.isInitialized` / `cache.ping` — Manage connections and check availability
+- `cache.kv` / `cache.hash` / `cache.list` / `cache.set_` / `cache.zset` — Work with key-value data, hashes, lists, sets and sorted sets
+- `cache.lock` — Coordinate exclusive work with expiring locks
 
 ## Data Structures
 

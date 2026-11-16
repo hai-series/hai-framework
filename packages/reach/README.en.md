@@ -10,7 +10,7 @@ A notification module supporting multiple providers (email, SMS, API callbacks) 
 
 ### Dependencies
 
-- `@h-ai/reldb`: persistence for delivery logs and templates. Initialize it before configuring nonempty `templates` or DND delay. Failed template persistence or required table preparation makes `reach.init()` return `CONFIG_ERROR` and close candidate providers. Optional for immediate sends without templates or delayed queues.
+- `@h-ai/reldb` stores delivery logs and templates. Call `reldb.init()` first if you configure templates or want to save messages during quiet hours and send them later. If Reach cannot prepare the required tables or save templates, `reach.init()` closes the connections it just opened and returns `CONFIG_ERROR`. Immediate delivery without either feature can run without a database.
 - `@h-ai/cache`: optional distributed locks for DND delay; enabled automatically when initialized.
 
 #### Installation
@@ -90,7 +90,7 @@ Each template send uses one template snapshot for its subject, body and default 
 
 ## Configuration Reference
 
-Generated projects use `config/_reach.yml`, with `reach.init(config)` as the application configuration entry point.
+Generated projects define delivery channels, templates, quiet hours, and retry rules in `config/_reach.yml`. At startup, the application reads the file and passes the settings object to `reach.init(config)`.
 
 See the [configuration reference](../../docs/usage/configuration/reach.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -98,9 +98,9 @@ See the [configuration reference](../../docs/usage/configuration/reach.md) in Ch
 
 See the [feature reference](../../docs/usage/function/reach.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `init` / `close` / `config` / `isInitialized` — Start and stop notification providers and queues
-- `send` / `template` — Send email, SMS or API notifications and render templates
-- `queue` — Inspect delivery results, dead letters and unknown outcomes
+- `reach.init` / `reach.close` / `reach.config` / `reach.isInitialized` — Configure delivery channels such as email, SMS, or an HTTP gateway, and start or close the queue
+- `reach.send` / `reach.template` — Send email, SMS or API notifications and render templates
+- `reach.queue` — Check delivery results and handle messages that exhausted retries or have an unconfirmed result
 
 ## Data Structures
 

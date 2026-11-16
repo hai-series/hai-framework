@@ -16,7 +16,7 @@
 import type { FeedbackContext } from '@h-ai/feedback'
 import { feedback } from '@h-ai/feedback'
 
-// 装配 orders 的反馈服务。在本地开发以 console 记录受理状态。
+// 启动 orders 的反馈服务。此处选择在开发控制台记录反馈通知。
 const initialized = await feedback.init({
   appId: 'orders',
   appVersion: '1.0.0',
@@ -38,7 +38,7 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 
 ## 配置清单
 
-生成项目使用 `config/_feedback.yml`。应用可以通过 `feedback.init(config, options)` 接入配置。
+生成的项目在 `config/_feedback.yml` 中设置应用标识和反馈通知设置。应用启动代码读取该文件，把配置对象传给 `feedback.init(config, options)`。
 
 在[模块配置清单](../../docs/usage/configuration/feedback.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -46,10 +46,10 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 
 在[功能说明](../../docs/usage/function/feedback.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `init` / `close` / `isInitialized` / `config` / `budget` — 装配依赖并读取采集限额
-- `submit` / `uploadAttachment` / `getAttachment` / `appendEvidence` / `completeCollection` — 提交反馈、管理附件和补齐异步证据
-- `list` / `get` / `getEvidence` / `setStatus` / `retry` / `runJobs` / `export` / `getExport` — 查询、处理、重试和导出
-- `feedbackClient` / `bundle` / `capacitor` / `tauri` — 采集现场、读取离线包并保存原生文件
+- `feedback.init` / `feedback.close` / `feedback.isInitialized` / `feedback.config` / `feedback.budget` — 启动和关闭服务，查看反馈配置和每份反馈的附件、证据限额
+- `feedback.submit` / `feedback.uploadAttachment` / `feedback.getAttachment` / `feedback.appendEvidence` / `feedback.completeCollection` — 提交反馈、保存或下载附件，并补交收集到的现场信息
+- `feedback.list` / `feedback.get` / `feedback.getEvidence` / `feedback.setStatus` / `feedback.retry` / `feedback.runJobs` / `feedback.export` / `feedback.getExport` — 查询、处理、重试和导出
+- `feedbackClient`（`@h-ai/feedback/client`） — 浏览器从此入口采集和提交诊断信息。离线包通过 `@h-ai/feedback/bundle` 读取。`@h-ai/feedback/capacitor` 和 `@h-ai/feedback/tauri` 提供各自的原生文件保存函数
 
 ## 数据结构
 

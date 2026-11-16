@@ -31,10 +31,10 @@ pnpm dev
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/cli.md)（中国語）を参照してください。
 
-- `create` / `add` / `init` — プロジェクト作成、モジュール追加、設定補完
-- `generate` / `g` — ページ、コンポーネント、API、モデル、マイグレーションの生成
-- `build` / `deploy` — 成果物のビルド、配布計画の確認、公開と復旧
-- `upgrade` / `feedback` — アップグレード先の事前確認とオフラインフィードバックの調査
+- `hai create` / `hai add` / `hai init` — プロジェクト作成、モジュール追加、設定補完
+- `hai generate` / `hai g` — ページ、コンポーネント、API、モデル、マイグレーションの生成
+- `hai build` / `hai deploy` — 成果物のビルド、配布計画の確認、公開と復旧
+- `hai upgrade` / `hai feedback` — アップグレード先の事前確認とオフラインフィードバックの調査
 
 ## データ構造
 

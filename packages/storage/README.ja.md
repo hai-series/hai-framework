@@ -83,7 +83,7 @@ export async function uploadImage(key: string, file: File) {
 
 ## 設定一覧
 
-生成プロジェクトは `config/_storage.yml` を使用します。アプリで設定を取り込む入口は `storage.init(config)` です。
+生成したプロジェクトでは、ローカルディレクトリまたは S3 互換ストレージへの接続設定を `config/_storage.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `storage.init(config)` に渡します。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/storage.md)（中国語）を参照してください。
 
@@ -91,8 +91,8 @@ export async function uploadImage(key: string, file: File) {
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/storage.md)（中国語）を参照してください。
 
-- `init` / `close` / `config` / `isInitialized` — ローカルまたは S3 プロバイダーの構成
-- `file` / `dir` / `checksum` / `presign` — ファイル、ディレクトリ、内容検証、署名付き URL の操作
+- `storage.init` / `storage.close` / `storage.config` / `storage.isInitialized` — ローカルディレクトリまたは S3 互換ストレージを選び、接続状態を確認し、終了時にリソースを解放する
+- `storage.file` / `storage.dir` / `storage.checksum` / `storage.presign` — ファイルを読み書きし、ディレクトリを一覧表示し、チェックサムを検証し、S3 オブジェクト用の期限付きリンクを作る
 - `@h-ai/storage/client` / `@h-ai/storage/schemas` — ブラウザーでのアップロード、ダウンロード、キー検証
 
 ## データ構造

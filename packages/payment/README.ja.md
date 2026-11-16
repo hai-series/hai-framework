@@ -44,7 +44,7 @@ export async function paymentExample(trustedConfig: PaymentConfigInput, trustedO
     return { order: created.data, status: query.data.status }
   }
   finally {
-    await payment.close() // ホストはその後で reldb を閉じます。
+    await payment.close() // その後、アプリが reldb.close() でデータベース接続を閉じます。
   }
 }
 ```
@@ -71,7 +71,7 @@ export async function startPayment(orderData: PaymentOrder) {
 
 ## 設定一覧
 
-生成プロジェクトは `config/_payment.yml` を使用します。アプリで設定を取り込む入口は `payment.init(config)` です。
+生成したプロジェクトでは、決済チャネルごとのアカウントとサーバー側の認証情報を `config/_payment.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `payment.init(config)` に渡します。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/payment.md)（中国語）を参照してください。
 
@@ -79,9 +79,9 @@ export async function startPayment(orderData: PaymentOrder) {
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/payment.md)（中国語）を参照してください。
 
-- `init` / `close` / `config` / `isInitialized` / `registerProvider` / `getProvider` — 決済チャネルの設定とプロバイダー管理
-- `createOrder` / `queryOrder` / `refund` / `closeOrder` / `handleNotify` — 注文作成、照会、返金、終了、通知の署名検証
-- `invokePayment` — クライアントからチャネルの決済フローを開始
+- `payment.init` / `payment.close` / `payment.config` / `payment.isInitialized` / `payment.registerProvider` / `payment.getProvider` — 決済チャネルを初期化・停止・確認し、必要なら独自の実装を登録する
+- `payment.createOrder` / `payment.queryOrder` / `payment.refund` / `payment.closeOrder` / `payment.handleNotify` — 注文作成、照会、返金、終了、通知の署名検証
+- `invokePayment` — `@h-ai/payment/client` から個別にインポートし、サーバーが返した注文を使ってブラウザーで決済を開始する
 
 ## データ構造
 

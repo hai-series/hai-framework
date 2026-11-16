@@ -6,7 +6,7 @@
 
 hai-framework 的 API 服务运行时：对外暴露稳定的 HTTP App 抽象，把 `@h-ai/api-contract` 契约挂载为跨端可访问的 HTTP API；Hono 仅作为内部运行时实现。
 
-运行时统一通过 `serv.xx` 使用。需要标注或转导出整个命名空间时，从根入口导入 `ServFunctions`；上下文工厂与泛型 `implement` 的公开签名可直接用于消费者声明生成，无需引用内部构建文件或独立 helper。
+从 `@h-ai/serv` 导入 `serv` 后，可用 `serv.createApp()` 创建 HTTP 应用、用 `serv.listen()` 启动监听。如果应用要为自己的封装标注类型，`ServFunctions` 也从同一包入口导入。
 
 ## 快速开始
 
@@ -62,17 +62,17 @@ export function startApi(closeApp: () => Promise<void>) {
 }
 ```
 
-Storage 默认 procedures 必须注入 `authorize({ context, operation, keys })`；未提供策略时默认拒绝。策略从已认证 session 确定资源范围，并覆盖下载、上传、列表、元数据和删除。上例只允许 `users/<编码后的 userId>/` 下的 key，列表同样必须携带该用户前缀；批量中任何一个 key 未获授权时全部不执行。管理员访问须由应用显式授权。
+用 `createStorageProcedures()` 创建文件接口时，需要传入 `authorize({ context, operation, keys })`。这个函数根据已登录用户判断该操作能否访问所有给定的对象键。下载、上传、列表、读取元数据和删除都会检查。没有配置检查函数的接口会拒绝请求。上例只允许 `users/<编码后的 userId>/` 下的 key，列表同样必须携带该用户前缀；批量中任何一个 key 未获授权时全部不执行。管理员访问须由应用显式授权。
 
-批量删除 `storage.files.deleteMany` 成功时返回 `{ deletedKeys, failures: [] }`；失败进度位于 `error.ext.deleteMany`（`failed / unknown / notAttempted`），不能只根据 HTTP 200 判断完成。详见 [Storage 批量删除](../storage/README.md#api-概览)。
+批量删除 `apiClient.storage.files.deleteMany()` 成功时返回 `{ deletedKeys, failures: [] }`；失败进度位于 `error.ext.deleteMany`（`failed / unknown / notAttempted`），不能只根据 HTTP 200 判断完成。详见 [Storage 批量删除](../storage/README.md#api-概览)。
 
-AI 默认 procedures 从可信 `context.session.userId` 绑定 `objectId`，客户端可省略该字段。聊天与消息写入、历史、会话列表和记忆 recall/list 均使用该主体；会话按 `objectId + sessionId` 隔离，写入未指定 sessionId 时使用 `default`。传入其它 objectId 默认返回 FORBIDDEN，管理员跨主体访问也必须显式传入 `authorizeObject` 并根据可信权限及租户关系授权。
+客户端未提供 `objectId` 时，AI 接口使用服务端已认证的 `context.session.userId`。聊天、写消息、查历史、列出会话和查询记忆都使用经过授权的 `objectId`。服务端按 `objectId` 与 `sessionId` 的组合区分会话。写入时省略 `sessionId` 会使用 `default`。传入其它 objectId 默认返回 FORBIDDEN，管理员跨主体访问也必须显式传入 `authorizeObject` 并根据可信权限及租户关系授权。
 
-`chats.createCompletion`（`POST /ai/chats/completions`）只返回一次非流式 `HaiResult<AiChatCompletionData>`。完整 function `tools`（含嵌套 JSON Schema、`strict`）和 `tool_choice`（`auto` / `none` / `required` / 指定名称）传递到模型；消息保留角色、`name`、用户图片和工具调用。工具结果必须使用 `role: 'tool'` 与非空 `tool_call_id`，指定工具选择须引用本次提供的工具。默认 procedure 不自动执行工具，应用授权并执行后，将助手的 `tool_calls` 与对应工具结果一并回传。输入不提供 `stream` 字段，传入 `true` 或 `false` 均在 HTTP 边界返回 400；需要流式时由应用使用 `ai.llm.chatStream()` 定义匹配流输出的独立 endpoint。
+`apiClient.ai.chats.createCompletion()`（`POST /ai/chats/completions`）只返回一次非流式 `HaiResult<AiChatCompletionData>`。完整 function `tools`（含嵌套 JSON Schema、`strict`）和 `tool_choice`（`auto` / `none` / `required` / 指定名称）传递到模型；消息保留角色、`name`、用户图片和工具调用。工具结果必须使用 `role: 'tool'` 与非空 `tool_call_id`，指定工具选择须引用本次提供的工具。默认 procedure 不自动执行工具，应用授权并执行后，将助手的 `tool_calls` 与对应工具结果一并回传。输入不提供 `stream` 字段，传入 `true` 或 `false` 均在 HTTP 边界返回 400；需要流式时由应用使用 `ai.llm.chatStream()` 定义匹配流输出的独立 endpoint。
 
 ## 配置清单
 
-生成项目使用 `config/_serv.yml`。应用可以通过 `serv.createApp(options)` 接入配置。
+生成的项目在 `config/_serv.yml` 中设置 HTTP 选项、监听地址和端口。服务端启动时先把 HTTP 选项、接口定义和处理函数传给 `serv.createApp(options)`，再把创建的应用、监听地址和端口交给 `serv.listen()`。
 
 在[模块配置清单](../../docs/usage/configuration/serv.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -80,16 +80,16 @@ AI 默认 procedures 从可信 `context.session.userId` 绑定 `objectId`，客�
 
 在[功能说明](../../docs/usage/function/serv.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `createApp` / `listen` / `toFetch` / `cors` / `storageAssets` — 装配 HTTP 应用、适配运行环境并提供静态资源
-- `implement` / `validateInputOrFail` / `generateSpec` / `m` — 实现类型化端点、校验输入并生成 OpenAPI
-- `parseRequestContext` / `buildAuthContextFactory` / `resolveRequestLocale` / `createRuntimeSecurityPolicy` — 解析请求、认证、语言和访问策略
-- `@h-ai/serv/features/*` — 装配 IAM、存储、AI 和反馈接口
+- `serv.createApp` / `serv.listen` / `serv.toFetch` / `serv.cors` / `serv.storageAssets` — 创建 HTTP 应用，在 Node.js 监听端口，或将应用转成 fetch 处理函数，并按需提供跨域和静态文件服务
+- `serv.implement` / `serv.validateInputOrFail` / `serv.generateSpec` / `serv.m` — 实现类型化端点、校验输入并生成 OpenAPI
+- `serv.parseRequestContext` / `serv.buildAuthContextFactory` / `serv.resolveRequestLocale` / `serv.createRuntimeSecurityPolicy` — 读取请求来源与语言，构建身份检查，并准备请求访问规则
+- `@h-ai/serv/features/*` — 按需导入 IAM、存储、AI 或反馈的接口处理函数，并传给 `serv.createApp()`
 
 ## 数据结构
 
 模块没有自建数据库表。
 
-查看[数据结构](../../docs/usage/data/serv.md)，了解HTTP 上下文、会话、静态资源和持久化归属。
+查看[数据结构](../../docs/usage/data/serv.md)，查阅会话 Cookie、文件和请求数据分别存在哪里。
 
 ## 开发测试
 

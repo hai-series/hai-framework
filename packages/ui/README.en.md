@@ -118,9 +118,11 @@ With auto-import enabled, use components directly in templates without individua
 
 > `@h-ai/ui/auto-import` injects all public Svelte components except `toast`, type imports, and `Range` (which conflicts with the DOM `Range` constructor).
 
-Pages using a subset of components, such as administration screens, can import public component-directory entry points directly. Import theme utilities from the lightweight `@h-ai/ui/theme` entry so theme consumers do not load the root entry's AI and chart components. Use `@h-ai/ui/i18n` for locale utilities in stores without loading components or tour CSS. Check the installed package's exports; do not import its internal `src/` or `dist/` paths.
+Import from the relevant component entry when a page only uses a few components. Importing `@h-ai/ui/theme` for themes avoids loading AI or chart components. Using `@h-ai/ui/i18n` for locale settings avoids loading components and onboarding styles. The example uses public import paths.
 
-The preprocessor imports only components actually used in the template AST; examples in comments, textarea content and script strings do not trigger imports. Script declarations and local each, await and snippet bindings take precedence. Real semicolon-free, multiline and aliased imports are recognized through the syntax tree, without duplicating existing runtime bindings. Type-only component bindings from the root `@h-ai/ui` entry are promoted to values when needed. A conflicting type-only import from another module causes a build error naming the file and component; alias the type, or explicitly import the component under another local name.
+With auto-import enabled, using `<Button>` in a template adds an import at build time if the file does not already define or import `Button`. A tag in a comment, `textarea` content, or a JavaScript string does not trigger an import. Declarations in the script and names already bound by `each`, `await`, or `snippet` take precedence.
+
+If a template uses a component imported only as a type from `@h-ai/ui`, the plugin makes it available for rendering. If a type from another package conflicts with a component name, the build identifies the file and component. Give the type an alias or explicitly import the component under a different name.
 
 ```ts
 import { Card } from '@h-ai/ui/components/compounds/index'
@@ -130,7 +132,7 @@ import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
 
 ## Configuration Reference
 
-Set component behavior through props. Use the public theme, locale and onboarding APIs for app-wide settings.
+Pass props to a Svelte component, such as the columns and rows of a table. Set the application theme, language, and onboarding through `@h-ai/ui/theme`, `@h-ai/ui/i18n`, and `@h-ai/ui/guide`.
 
 See the [configuration reference](../../docs/usage/configuration/ui.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -147,7 +149,7 @@ See the [feature reference](../../docs/usage/function/ui.md) in Chinese for exam
 
 The module creates no database tables of its own.
 
-See the [data reference](../../docs/usage/data/ui.md) in Chinese for ownership of theme, locale, guide progress and component state.
+See the [data reference](../../docs/usage/data/ui.md) in Chinese for where themes, language settings, and onboarding progress are stored in the browser.
 
 ## Development and Testing
 

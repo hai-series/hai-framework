@@ -17,7 +17,7 @@ pnpm run deploy --env prod --build
 
 ## 設定一覧
 
-`hai.json.deploy` から配布先を読み込み、対象環境の変数を適用します。
+プロジェクトの `hai.json.deploy` で配布先を指定します。`hai deploy --env prod` を実行すると、CLI は prod 環境用の変数を読み込みます。アプリの接続先や認証情報は対象環境の設定に用意します。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/deploy.md)（中国語）を参照してください。
 
@@ -25,9 +25,9 @@ pnpm run deploy --env prod --build
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/deploy.md)（中国語）を参照してください。
 
-- `init` / `close` / `config` / `isInitialized` / `scan` — 配布先の読み込み、接続管理、ミドルウェアの検出
-- `credentials` / `provisionAll` / `deployApp` — 認証情報の読み込み、依存サービスの準備、アプリの配布
-- `loadDeploymentConfig` / `loadDeploymentEnvironment` / `saveDeploymentEnvironment` / `getDeployRecovery` — 配布設定の読み込み、非公開環境値の保存、復旧状態の確認
+- `deploy.init` / `deploy.close` / `deploy.config` / `deploy.isInitialized` / `deploy.scan` — 配布先の読み込み、接続管理、ミドルウェアの検出
+- `deploy.credentials` / `deploy.provisionAll` / `deploy.deployApp` — 認証情報の読み込み、依存サービスの準備、アプリの配布
+- `loadDeploymentConfig` / `loadDeploymentEnvironment` / `saveDeploymentEnvironment` / `getDeployRecovery` — `@h-ai/deploy` から個別にインポートし、配布設定の読み込み、環境ごとの変数の読み書き、失敗時の復旧情報の確認に使う
 
 ## データ構造
 

@@ -31,10 +31,10 @@ pnpm dev
 
 在[功能说明](../../docs/usage/function/cli.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `create` / `add` / `init` — 创建工程、接入模块和补齐配置
-- `generate` / `g` — 生成页面、组件、接口、模型和迁移
-- `build` / `deploy` — 构建制品、检查发布计划、发布或恢复
-- `upgrade` / `feedback` — 预检目标版本和查看离线反馈包
+- `hai create` / `hai add` / `hai init` — 创建工程、接入模块和补齐配置
+- `hai generate` / `hai g` — 生成页面、组件、接口、模型和迁移
+- `hai build` / `hai deploy` — 构建制品、检查发布计划、发布或恢复
+- `hai upgrade` / `hai feedback` — 预检目标版本和查看离线反馈包
 
 ## 数据结构
 

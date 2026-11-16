@@ -55,7 +55,7 @@ await reldb.close()
 
 ## 配置清单
 
-生成项目使用 `config/_db.yml`。应用可以通过 `reldb.init(config)` 接入配置。
+生成的项目在 `config/_db.yml` 中设置数据库类型、地址和连接选项。应用启动代码读取该文件，把配置对象传给 `reldb.init(config)`。
 
 在[模块配置清单](../../docs/usage/configuration/reldb.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -63,9 +63,9 @@ await reldb.close()
 
 在[功能说明](../../docs/usage/function/reldb.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `init` / `close` / `config` / `isInitialized` — 管理数据库连接生命周期
-- `ddl` / `schemaColumns` / `prepareSchema` — 定义、准备和检查表结构
-- `sql` / `crud` / `tx` / `pagination` / `json` — 执行 SQL、生成 CRUD、使用事务、分页和 JSON 路径
+- `reldb.init` / `reldb.close` / `reldb.config` / `reldb.isInitialized` — 管理数据库连接生命周期
+- `reldb.ddl` / `reldb.schemaColumns` / `reldb.prepareSchema` — 定义、准备和检查表结构
+- `reldb.sql` / `reldb.crud` / `reldb.tx` / `reldb.pagination` / `reldb.json` — 执行 SQL、生成 CRUD、使用事务、分页和 JSON 路径
 
 <a id="事务"></a>
 

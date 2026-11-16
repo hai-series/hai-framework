@@ -63,11 +63,13 @@ const requestId = core.id.request()
 core.logger.warn('Request needs attention', { requestId })
 ```
 
-ホストは公開可能な設定項目だけを渡し、サーバー設定全体や秘密情報は送りません。ブラウザーの `core.config.get()` / `has()` / `keys()` は `undefined` / `false` / `[]` を返します。`loadEnvFiles()`、`load()`、`validate()`、`reload()` は `SERVICE_UNAVAILABLE` を返し、`getOrThrow()` は例外を送出します。`watch()` は同じ利用不可エラーを即座に通知し、何もしない解除関数を返します。
+ブラウザーの `core.init()` はページのコードから渡されたログ設定を使います。ページにアプリ名が必要なら、サーバーはページデータに `{ name: settings.name }` だけを含められます。`_core.yml` 全体と秘密情報はサーバーに置きます。
+
+ローカルの設定ファイルを読み込み、検証、監視するには Node.js が必要です。ブラウザーで呼び出した場合の戻り値は[ブラウザーの設定](../../docs/usage/function/core.md#浏览器)（中国語）を参照してください。
 
 ## 設定一覧
 
-生成プロジェクトは `config/_core.yml` を使用します。アプリで設定を取り込む入口は `core.init({ configDir })` です。
+Node の起動時に `core.init({ configDir: './config' })` を呼び出し、`config/_core.yml` からアプリ情報とログ設定を読み込みます。[Serv](../../docs/usage/configuration/serv.md) または [Kit](../../docs/usage/configuration/kit.md) は HTTP サービスを作成するときにアクセスルールを読み込みます。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/core.md)（中国語）を参照してください。
 
@@ -75,10 +77,10 @@ core.logger.warn('Request needs attention', { requestId })
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/core.md)（中国語）を参照してください。
 
-- `init` / `config` / `module` — 設定の読み込み、ログ初期化、依存モジュールの起動管理
-- `logger` / `context` / `sanitize` — ログの関連付けと診断データのサニタイズ
-- `error` / `i18n` / `zodValidation` / `access` — 結果とエラーの処理、検証メッセージの翻訳、リクエストポリシーの確認
-- `id` / `typeUtils` / `object` / `string` / `array` / `async` / `time` — 識別子の生成、汎用データと非同期処理の操作
+- `core.init` / `core.config` / `core.module` — 設定の読み込み、ログ初期化、依存モジュールの起動管理
+- `core.logger` / `core.context` / `core.sanitize` — ログの関連付けと診断データのサニタイズ
+- `core.error` / `core.i18n` / `core.zodValidation` / `core.access` — 結果とエラーの処理、検証メッセージの翻訳、リクエストポリシーの確認
+- `core.id` / `core.typeUtils` / `core.object` / `core.string` / `core.array` / `core.async` / `core.time` — 識別子の生成、汎用データと非同期処理の操作
 
 ## データ構造
 

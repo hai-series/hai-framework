@@ -54,7 +54,7 @@ finally {
 
 ## 設定一覧
 
-生成プロジェクトは `config/_vecdb.yml` を使用します。アプリで設定を取り込む入口は `vecdb.init(config)` です。
+生成したプロジェクトでは、ベクトルデータベースの種類と接続設定を `config/_vecdb.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `vecdb.init(config)` に渡します。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/vecdb.md)（中国語）を参照してください。
 
@@ -62,9 +62,9 @@ finally {
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/vecdb.md)（中国語）を参照してください。
 
-- `init` / `close` / `config` / `isInitialized` / `rawConnection` — プロバイダー接続の管理と基礎クライアントへのアクセス
-- `collection` — コレクションの作成、一覧取得、削除
-- `vector` — ベクトルの書き込み、検索、ページング、削除
+- `vecdb.init` / `vecdb.close` / `vecdb.config` / `vecdb.isInitialized` / `vecdb.rawConnection` — ベクトルデータベースへ接続し、設定と接続状態を確認し、必要なら現在のプロセスから実際の接続情報を取得する
+- `vecdb.collection` — コレクションの作成、一覧取得、削除
+- `vecdb.vector` — ベクトルの書き込み、検索、ページング、削除
 
 ## データ構造
 

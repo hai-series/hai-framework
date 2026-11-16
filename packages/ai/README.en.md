@@ -8,7 +8,7 @@ AI capabilities through a unified `ai` service: LLM chat, image generation, tool
 
 ## Quick Start
 
-`ai.close()` waits for an initialization already in progress and then cleans up; concurrent closes share one operation. Reinitialization first cleans up the previous instance, and new initialization is rejected while closing.
+`ai.close()` waits for any initialization in progress, then releases resources. Concurrent callers share that cleanup. If you call `ai.init()` with new settings, it closes the previous instance first. Initialization returns a failure while a close is in progress.
 
 ### Development LLM-only (no database dependencies)
 
@@ -39,11 +39,11 @@ finally {
 }
 ```
 
-Development/explicit tests without initialized reldb/vecdb use a temporary process store, lost on close, exit, or instance switching. When either `NODE_ENV` or `HAI_CORE_ENV` is production, temporary stores, SQLite and local vector backends fail initialization. Initialize shared RelDB and network vecdb first, or supply a shared provider with equivalent atomic guarantees.
+In development or explicit test mode, AI can keep sessions and other records in the current process when RelDB and a vector database are unavailable. Closing the module, restarting, or switching instances loses access to those records. If either `NODE_ENV` or `HAI_CORE_ENV` is `production`, connect a shared relational database and a network vector database first, or supply a custom store that shares records across instances and supports conditional updates by version.
 
 ## Configuration Reference
 
-Generated projects use `config/_ai.yml`, with `ai.init(config, options)` as the application configuration entry point.
+Generated projects define model names, endpoints, and other model settings in `config/_ai.yml`. At startup, the application reads the file and passes the settings object to `ai.init(config, options)`.
 
 See the [configuration reference](../../docs/usage/configuration/ai.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -51,12 +51,12 @@ See the [configuration reference](../../docs/usage/configuration/ai.md) in Chine
 
 See the [feature reference](../../docs/usage/function/ai.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `init` / `close` / `config` / `isInitialized` — Configure models and optional stores
-- `llm` / `stream` / `reasoning` / `token` / `summary` / `compress` / `context` — Generate content, stream responses and manage context budgets
-- `embedding` / `rerank` / `retrieval` / `rag` / `knowledge` — Embed, rerank, retrieve and ingest knowledge
-- `memory` / `persona` — Manage conversation memory and personas
-- `tools` / `mcp` / `acp` / `a2a` — Register tools, connect MCP, control ACP sessions and call A2A agents
-- `file` / `image` / `audio` — Work with files, images and audio
+- `ai.init` / `ai.close` / `ai.config` / `ai.isInitialized` — Initialize model settings, check readiness, or close the module. You can configure storage for sessions that must survive a restart
+- `ai.llm` / `ai.stream` / `ai.reasoning` / `ai.token` / `ai.summary` / `ai.compress` / `ai.context` — Send chat requests, stream responses, estimate token counts, and shorten conversation history
+- `ai.embedding` / `ai.rerank` / `ai.retrieval` / `ai.rag` / `ai.knowledge` — Turn content into vectors, retrieve and rerank matches, and add documents to a knowledge base
+- `ai.memory` / `ai.persona` — Manage conversation memory and personas
+- `ai.tools` / `ai.mcp` / `ai.acp` / `ai.a2a` — Register tools, connect MCP, control ACP sessions and call A2A agents
+- `ai.file` / `ai.image` / `ai.audio` — Work with files, images and audio
 
 ## Data Structures
 

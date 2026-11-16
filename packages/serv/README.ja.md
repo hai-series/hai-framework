@@ -6,7 +6,7 @@
 
 hai-framework の API サービスランタイム。公開 HTTP App 抽象を通じて `@h-ai/api-contract` を複数プラットフォームから使える HTTP API として提供します。Hono は内部実装です。
 
-実行時の操作は `serv.xx` を使います。名前空間の型注釈や再エクスポートにはルート入口の `ServFunctions` を利用できます。context ファクトリーと汎用 `implement` の公開シグネチャーは利用側の宣言生成に対応し、内部ビルドパスや独立した helper は不要です。
+`@h-ai/serv` から `serv` をインポートし、`serv.createApp()` で HTTP アプリを作成して `serv.listen()` で待ち受けを開始します。独自のラッパーの型を指定する場合は、同じ入口から `ServFunctions` をインポートできます。
 
 ## クイックスタート
 
@@ -64,15 +64,15 @@ export function startApi(closeApp: () => Promise<void>) {
 
 Storage procedures には `authorize({ context, operation, keys })` が必須で、未設定の場合はアクセスを拒否します。認証済み session から所有者・テナントを判定し、ダウンロード、アップロード、一覧、メタデータ、削除に適用します。上記の例は `users/<エンコードした userId>/` 配下だけを許可し、一覧にもその prefix が必要です。一括処理はすべての key が許可された後に実行し、管理者アクセスはアプリ側で明示的に許可します。
 
-`storage.files.deleteMany` の成功データは `{ deletedKeys, failures: [] }` です。失敗進捗は `error.ext.deleteMany`（`failed / unknown / notAttempted`）にあり、HTTP 200 だけで完了と判断しません。[Storage の一括削除](../../docs/usage/function/storage.md#api-概览)を参照してください。
+`apiClient.storage.files.deleteMany()` の成功データは `{ deletedKeys, failures: [] }` です。失敗進捗は `error.ext.deleteMany`（`failed / unknown / notAttempted`）にあり、HTTP 200 だけで完了と判断しません。[Storage の一括削除](../../docs/usage/function/storage.md#api-概览)を参照してください。
 
 AI procedures は省略された `objectId` を信頼できる `context.session.userId` に結び付けます。会話・メッセージの保存、履歴、会話一覧、記憶 recall/list は認可された主体で処理し、会話は `objectId + sessionId` で分離します。書き込み時の sessionId の既定値は `default` です。他の objectId へのアクセスは既定で拒否し、管理者も信頼できる権限とテナント関係を検証する明示的な `authorizeObject` ポリシーが必要です。
 
-`chats.createCompletion`（`POST /ai/chats/completions`）は非ストリーミングの `HaiResult<AiChatCompletionData>` を一度返します。function `tools` のネストした JSON Schema と `strict`、`tool_choice`（`auto` / `none` / `required` / 提供した関数名）をモデルへ渡し、役割、`name`、ユーザー画像、ツール呼び出しを保持します。ツール結果には `role: 'tool'` と空でない `tool_call_id` が必須で、指定名は今回のツール定義に含まれる必要があります。procedure はツールを実行しません。アプリ側で認可・実行後、助手の `tool_calls` と対応する結果を送信します。入力に `stream` はなく、`true` / `false` とも Provider 呼び出し前に HTTP 400 で拒否します。ストリーミングには `ai.llm.chatStream()` と対応する出力型を使う専用 endpoint を定義します。
+`apiClient.ai.chats.createCompletion()`（`POST /ai/chats/completions`）は非ストリーミングの `HaiResult<AiChatCompletionData>` を一度返します。function `tools` のネストした JSON Schema と `strict`、`tool_choice`（`auto` / `none` / `required` / 提供した関数名）をモデルへ渡し、役割、`name`、ユーザー画像、ツール呼び出しを保持します。ツール結果には `role: 'tool'` と空でない `tool_call_id` が必須で、指定名は今回のツール定義に含まれる必要があります。procedure はツールを実行しません。アプリ側で認可・実行後、助手の `tool_calls` と対応する結果を送信します。入力に `stream` はなく、`true` / `false` とも Provider 呼び出し前に HTTP 400 で拒否します。ストリーミングには `ai.llm.chatStream()` と対応する出力型を使う専用 endpoint を定義します。
 
 ## 設定一覧
 
-生成プロジェクトは `config/_serv.yml` を使用します。アプリで設定を取り込む入口は `serv.createApp(options)` です。
+生成したプロジェクトでは、HTTP の設定、待ち受けアドレス、ポートを `config/_serv.yml` に記述します。起動時に HTTP の設定、契約、処理関数を `serv.createApp(options)` に渡し、返されたアプリケーションをアドレスとポートとともに `serv.listen()` に渡します。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/serv.md)（中国語）を参照してください。
 
@@ -80,16 +80,16 @@ AI procedures は省略された `objectId` を信頼できる `context.session.
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/serv.md)（中国語）を参照してください。
 
-- `createApp` / `listen` / `toFetch` / `cors` / `storageAssets` — HTTP アプリの組み立て、実行環境への適合、静的ファイルの配信
-- `implement` / `validateInputOrFail` / `generateSpec` / `m` — 型付きエンドポイント、入力検証、OpenAPI 生成
-- `parseRequestContext` / `buildAuthContextFactory` / `resolveRequestLocale` / `createRuntimeSecurityPolicy` — リクエスト情報、認証、言語、アクセスポリシーの解決
-- `@h-ai/serv/features/*` — IAM、ストレージ、AI、フィードバック API の組み込み
+- `serv.createApp` / `serv.listen` / `serv.toFetch` / `serv.cors` / `serv.storageAssets` — HTTP アプリを作成して Node.js で待ち受けるか Fetch ハンドラーに変換し、必要に応じて CORS や静的ファイルの配信を設定する
+- `serv.implement` / `serv.validateInputOrFail` / `serv.generateSpec` / `serv.m` — 型付きエンドポイント、入力検証、OpenAPI 生成
+- `serv.parseRequestContext` / `serv.buildAuthContextFactory` / `serv.resolveRequestLocale` / `serv.createRuntimeSecurityPolicy` — リクエストの送信元と言語を読み取り、認証チェックとアクセスルールを設定する
+- `@h-ai/serv/features/*` — 必要な認証、ストレージ、AI、フィードバックの処理関数をインポートし、`serv.createApp()` に渡す
 
 ## データ構造
 
 モジュール独自のデータベーステーブルは作成しません。
 
-HTTP コンテキスト、セッション、静的ファイル、永続化の責務については[データ構造](../../docs/usage/data/serv.md)（中国語）を参照してください。
+セッション Cookie、静的ファイル、リクエストのデータの保存先については[データ構造](../../docs/usage/data/serv.md)（中国語）を参照してください。
 
 ## 開発とテスト
 

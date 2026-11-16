@@ -21,7 +21,7 @@ if (!initialized.success)
 
 ## Configuration Reference
 
-Pass algorithm options to each call. Use `crypto.transport` to configure transport settings and storage.
+Pass algorithm options when calling an encryption, signing, or hash method. To encrypt HTTP messages, call `crypto.transport.createServer(options)` with the server keys and key store. Pass the key exchange URL to `crypto.transport.createClient(options)`.
 
 See the [configuration reference](../../docs/usage/configuration/crypto.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -29,9 +29,9 @@ See the [configuration reference](../../docs/usage/configuration/crypto.md) in C
 
 See the [feature reference](../../docs/usage/function/crypto.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `init` / `close` / `isInitialized` — Initialize and release cryptographic operations
-- `asymmetric` / `symmetric` / `hash` / `password` — Encrypt, sign, digest and hash passwords
-- `transport` — Establish and renew encrypted HTTP sessions
+- `crypto.init` / `crypto.close` / `crypto.isInitialized` — Initialize and release cryptographic operations
+- `crypto.asymmetric` / `crypto.symmetric` / `crypto.hash` / `crypto.password` — Encrypt, sign, digest and hash passwords
+- `crypto.transport` — Establish and renew encrypted HTTP sessions
 
 ## Data Structures
 

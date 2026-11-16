@@ -31,10 +31,10 @@ See the [configuration reference](../../docs/usage/configuration/cli.md) in Chin
 
 See the [feature reference](../../docs/usage/function/cli.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `create` / `add` / `init` — Create projects, add modules and fill in configuration
-- `generate` / `g` — Scaffold pages, components, APIs, models and migrations
-- `build` / `deploy` — Build artifacts, inspect deployment plans, publish and recover
-- `upgrade` / `feedback` — Check an upgrade target and inspect offline feedback bundles
+- `hai create` / `hai add` / `hai init` — Create projects, add modules and fill in configuration
+- `hai generate` / `hai g` — Scaffold pages, components, APIs, models and migrations
+- `hai build` / `hai deploy` — Build artifacts, inspect deployment plans, publish and recover
+- `hai upgrade` / `hai feedback` — Check an upgrade target and inspect offline feedback bundles
 
 ## Data Structures
 

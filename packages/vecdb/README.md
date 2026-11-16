@@ -54,7 +54,7 @@ finally {
 
 ## 配置清单
 
-生成项目使用 `config/_vecdb.yml`。应用可以通过 `vecdb.init(config)` 接入配置。
+生成的项目在 `config/_vecdb.yml` 中设置向量数据库的类型和连接参数。应用启动代码读取该文件，把配置对象传给 `vecdb.init(config)`。
 
 在[模块配置清单](../../docs/usage/configuration/vecdb.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -62,9 +62,9 @@ finally {
 
 在[功能说明](../../docs/usage/function/vecdb.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `init` / `close` / `config` / `isInitialized` / `rawConnection` — 管理 Provider 连接与底层连接访问
-- `collection` — 创建、列出和删除集合
-- `vector` — 写入、检索、分页扫描和删除向量
+- `vecdb.init` / `vecdb.close` / `vecdb.config` / `vecdb.isInitialized` / `vecdb.rawConnection` — 连接向量数据库、查看配置与连接状态，或取得当前进程的底层连接
+- `vecdb.collection` — 创建、列出和删除集合
+- `vecdb.vector` — 写入、检索、分页扫描和删除向量
 
 ## 数据结构
 

@@ -63,11 +63,13 @@ const requestId = core.id.request()
 core.logger.warn('Request needs attention', { requestId })
 ```
 
-The host supplies public configuration fields; never send complete server settings or secrets. Browser `core.config.get()` / `has()` / `keys()` return `undefined` / `false` / `[]`. `loadEnvFiles()`, `load()`, `validate()`, and `reload()` return `SERVICE_UNAVAILABLE`; `getOrThrow()` throws. `watch()` immediately calls back with the same unavailable error and returns a no-op unsubscribe function.
+In the browser, `core.init()` takes its log options from page code. If the page needs the application name, the server can return just `{ name: settings.name }` in the page data. Keep the full `_core.yml` and secrets on the server.
+
+Reading, validating and watching local configuration files requires Node.js. See [browser configuration](../../docs/usage/function/core.md#浏览器) in Chinese for the results of calling these methods in a browser.
 
 ## Configuration Reference
 
-Generated projects use `config/_core.yml`, with `core.init({ configDir })` as the application configuration entry point.
+Call `core.init({ configDir: './config' })` at Node startup to read application metadata and logging settings from `config/_core.yml`. [Serv](../../docs/usage/configuration/serv.md) or [Kit](../../docs/usage/configuration/kit.md) reads its request policy when it creates the HTTP service.
 
 See the [configuration reference](../../docs/usage/configuration/core.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -75,10 +77,10 @@ See the [configuration reference](../../docs/usage/configuration/core.md) in Chi
 
 See the [feature reference](../../docs/usage/function/core.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `init` / `config` / `module` — Load configuration, set up logging and orchestrate dependencies
-- `logger` / `context` / `sanitize` — Correlate logs and sanitize diagnostic data
-- `error` / `i18n` / `zodValidation` / `access` — Handle results and errors, localize validation and evaluate request policies
-- `id` / `typeUtils` / `object` / `string` / `array` / `async` / `time` — Generate IDs and work with common data and asynchronous operations
+- `core.init` / `core.config` / `core.module` — Load configuration, set up logging and orchestrate dependencies
+- `core.logger` / `core.context` / `core.sanitize` — Correlate logs and sanitize diagnostic data
+- `core.error` / `core.i18n` / `core.zodValidation` / `core.access` — Handle results and errors, localize validation and evaluate request policies
+- `core.id` / `core.typeUtils` / `core.object` / `core.string` / `core.array` / `core.async` / `core.time` — Generate IDs and work with common data and asynchronous operations
 
 ## Data Structures
 

@@ -4,9 +4,9 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md) · [@h-ai/crypto](../crypto/README.md) · [@h-ai/iam](../iam/README.md)
 
-`@h-ai/kit` 是 hai-framework 的 SvelteKit 集成模块，提供统一的请求管道与同源 endpoint 工具：
+`@h-ai/kit` 为 SvelteKit 项目处理请求、校验身份和编写 API。页面和 API 由同一站点提供时，可以直接通过当前网站地址调用 API。
 
-运行时统一通过 `kit.xx` 使用。根入口公开 `KitFunctions`（服务端）和 `BrowserKitFunctions`（浏览器）命名空间类型，浏览器条件入口的 `kit` 仅包含客户端、CRUD、页面 Token 与默认语言操作。`AuthCookieWriter` 是服务端认证对当前请求 Cookie 的最小写入契约。导出这些方法或命名空间时，可直接生成消费者声明，无需导入内部 helper。
+在 SvelteKit 服务端从 `@h-ai/kit` 导入 `kit`，用 `kit.createHandle()` 创建请求处理函数。浏览器从同一包导入时，可以创建客户端、使用列表和表单工具、读取页面令牌和设置默认语言。为这些对象标注类型时，服务端使用 `KitFunctions`，浏览器使用 `BrowserKitFunctions`。`AuthCookieWriter` 描述服务端认证需要的 Cookie 写入方法，例如登录后设置当前请求响应里的 Cookie。
 
 - `kit.createHandle()`：会话解析、路由守卫、中间件链、可选传输加密与 Cookie 加密
 - `kit.handler()`：API 端点异常边界
@@ -16,14 +16,14 @@
 
 ## 快速开始
 
-`sequence` 保留并组合 SvelteKit 的 `resolve` 选项：页面转换由内向外执行，`preload` 与序列化响应头过滤使用首个配置，确保 i18n 的 HTML 语言标记正确替换。
+用 `kit.sequence()` 组合多个 SvelteKit 请求处理函数时，较内层处理函数先转换生成的页面，外层再转换其结果。如果多个处理函数同时设置了 `preload` 或可序列化的响应头筛选条件，SvelteKit 使用先设置的那项。语言中间件可以借这条处理链更新 HTML 的 `lang` 属性。
 
 ### 安装
 
 ```bash
 npm install @h-ai/kit @h-ai/core sm-crypto@0.5.8
 npm install svelte @sveltejs/kit zod
-npm install -D @sveltejs/vite-plugin-svelte vite
+npm install -D @sveltejs/vite-plugin-svelte vite @tailwindcss/vite tailwindcss
 ```
 
 ### 项目配置
@@ -64,7 +64,7 @@ export default defineConfig({
 
 ## 配置清单
 
-生成项目使用 `config/_kit.yml`。应用将解析后的配置传入 SvelteKit 的 hook、客户端和构建适配器。
+生成的项目将监听地址和端口写在 `config/_kit.yml`。服务启动时把访问检查与加密设置传给 `kit.createHandle(options)`，并在 SvelteKit 的服务端 hook 中使用它返回的处理函数。
 
 在[模块配置清单](../../docs/usage/configuration/kit.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -72,9 +72,9 @@ export default defineConfig({
 
 在[功能说明](../../docs/usage/function/kit.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `createHandle` / `sequence` / `middleware` / `guard` / `handler` — 组合 SvelteKit hooks、端点与权限检查
-- `response` / `validate` / `crud` / `i18n` — 校验输入并生成结果、CRUD 配置和本地化内容
-- `auth` / `client` / `createFeedbackHandler` — 连接认证、浏览器客户端和反馈接口
+- `kit.createHandle` / `kit.sequence` / `kit.middleware` / `kit.guard` / `kit.handler` — 组合 SvelteKit 请求处理函数、路由和权限检查
+- `kit.response` / `kit.validate` / `kit.crud` / `kit.i18n` — 校验输入并生成结果、CRUD 配置和本地化内容
+- `kit.auth` / `kit.client` / `kit.createFeedbackHandler` — 处理浏览器登录状态和请求，或创建接收用户反馈的 HTTP 接口
 - `@h-ai/kit/adapter` / `@h-ai/kit/crypto` / `@h-ai/kit/a2a` — 配置构建适配器、传输加密和 A2A 路由
 
 ## 数据结构

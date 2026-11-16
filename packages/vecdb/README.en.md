@@ -54,7 +54,7 @@ finally {
 
 ## Configuration Reference
 
-Generated projects use `config/_vecdb.yml`, with `vecdb.init(config)` as the application configuration entry point.
+Generated projects define the vector database type and its connection settings in `config/_vecdb.yml`. At startup, the application reads the file and passes the settings object to `vecdb.init(config)`.
 
 See the [configuration reference](../../docs/usage/configuration/vecdb.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -62,9 +62,9 @@ See the [configuration reference](../../docs/usage/configuration/vecdb.md) in Ch
 
 See the [feature reference](../../docs/usage/function/vecdb.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `init` / `close` / `config` / `isInitialized` / `rawConnection` — Manage the provider connection and access the underlying client
-- `collection` — Create, list and delete collections
-- `vector` — Write, search, scan and delete vectors
+- `vecdb.init` / `vecdb.close` / `vecdb.config` / `vecdb.isInitialized` / `vecdb.rawConnection` — Connect to a vector database, inspect configuration and readiness, or access the underlying connection in the current process
+- `vecdb.collection` — Create, list and delete collections
+- `vecdb.vector` — Write, search, scan and delete vectors
 
 ## Data Structures
 

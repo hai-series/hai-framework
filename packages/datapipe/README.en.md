@@ -37,7 +37,7 @@ if (!result.success)
 
 ## Configuration Reference
 
-Pass cleaning and chunking options to `clean()`, `chunk()` or `pipeline()`.
+Pass cleaning options to `datapipe.clean()` and options such as chunk size and overlap to `datapipe.chunk()`. Supply both sets of options when calling `datapipe.pipeline()`.
 
 See the [configuration reference](../../docs/usage/configuration/datapipe.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -45,8 +45,8 @@ See the [configuration reference](../../docs/usage/configuration/datapipe.md) in
 
 See the [feature reference](../../docs/usage/function/datapipe.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `clean` — Normalize and filter text
-- `chunk` / `pipeline` — Split text or run cleaning and splitting in sequence
+- `datapipe.clean` — Normalize and filter text
+- `datapipe.chunk` / `datapipe.pipeline` — Split text or run cleaning and splitting in sequence
 
 ## Data Structures
 

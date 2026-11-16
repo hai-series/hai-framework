@@ -40,7 +40,7 @@ export const appContract = {
 
 ## Configuration Reference
 
-Use `apiContract.create()` to compose the domain contracts your app exposes.
+Pass the definitions your application exposes to `apiContract.create(options)`. The keys in the options object name the interface groups. Use the resulting contract for the server, typed clients, and API documentation.
 
 See the [configuration reference](../../docs/usage/configuration/api-contract.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -48,9 +48,9 @@ See the [configuration reference](../../docs/usage/configuration/api-contract.md
 
 See the [feature reference](../../docs/usage/function/api-contract.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `create` / `route` / `pathOf` — Define contracts, routes and paths
-- `haiResultSchema` / `voidResultSchema` / `paginatedSchema` — Validate result envelopes and paginated data
-- `iam` / `storage` / `ai` / `payment` / `feedback` — Reuse domain HTTP contracts
+- `apiContract.create` / `apiContract.route` / `apiContract.pathOf` — Combine endpoint definitions, declare HTTP methods and paths, or look up an existing endpoint’s path
+- `apiContract.haiResultSchema` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema` — Define response structures for success, errors, and paginated results
+- `apiContract.iam` / `apiContract.storage` / `apiContract.ai` / `apiContract.payment` / `apiContract.feedback` — Reuse the definitions for identity, storage, AI, payment, and feedback APIs
 
 ## Data Structures
 

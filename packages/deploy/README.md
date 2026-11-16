@@ -17,7 +17,7 @@ pnpm run deploy --env prod --build
 
 ## 配置清单
 
-从 `hai.json.deploy` 读取发布目标，并按环境加载部署变量。
+在项目的 `hai.json.deploy` 中指定发布目标。执行 `hai deploy --env prod` 时，CLI 读取 prod 环境的部署变量；应用的连接地址和凭据应放在该环境对应的配置中。
 
 在[模块配置清单](../../docs/usage/configuration/deploy.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -25,9 +25,9 @@ pnpm run deploy --env prod --build
 
 在[功能说明](../../docs/usage/function/deploy.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `init` / `close` / `config` / `isInitialized` / `scan` — 读取目标，管理连接并探测中间件
-- `credentials` / `provisionAll` / `deployApp` — 读取凭据、准备依赖并发布应用
-- `loadDeploymentConfig` / `loadDeploymentEnvironment` / `saveDeploymentEnvironment` / `getDeployRecovery` — 加载交付配置、保存私有环境值并查看恢复状态
+- `deploy.init` / `deploy.close` / `deploy.config` / `deploy.isInitialized` / `deploy.scan` — 读取目标，管理连接并探测中间件
+- `deploy.credentials` / `deploy.provisionAll` / `deploy.deployApp` — 读取凭据、准备依赖并发布应用
+- `loadDeploymentConfig` / `loadDeploymentEnvironment` / `saveDeploymentEnvironment` / `getDeployRecovery` — 这些独立函数可从 `@h-ai/deploy` 导入，用于读取发布配置、读写指定环境的变量，或查看出错后可用的恢复记录
 
 ## 数据结构
 

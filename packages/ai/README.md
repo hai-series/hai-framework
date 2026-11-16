@@ -8,7 +8,7 @@ AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、文生
 
 ## 快速开始
 
-`ai.close()` 等待已开始的初始化完成并清理，合并并发关闭；重初始化先清理旧实例，关闭期间不接受新初始化。
+`ai.close()` 会等正在进行的初始化结束，再释放资源。多个关闭请求共用同一次清理。如果要换一套配置，`ai.init()` 会先关闭已有实例。关闭进行中时，新初始化会返回失败。
 
 ### 开发 LLM-only（零数据库依赖）
 
@@ -39,11 +39,11 @@ finally {
 }
 ```
 
-开发/显式测试未初始化 reldb/vecdb 时，AI 使用进程内临时 Store；关闭、退出或切换实例后不保留。`NODE_ENV` 或 `HAI_CORE_ENV` 为 production 时，临时 Store、SQLite 或本地向量后端会使初始化失败。生产必须先初始化共享 RelDB 与网络 vecdb，或传入满足同等原子契约的共享 Provider。
+开发或显式测试时，如果没有可用的 RelDB 和向量数据库，AI 可以把会话等记录暂存在当前进程内。关闭模块、重启进程或切换到其他实例后便读不到这些记录。只要 `NODE_ENV` 或 `HAI_CORE_ENV` 为 `production`，初始化就要求多个实例能读写同一份数据。请先连接共享关系数据库和网络向量数据库，或传入支持共享数据及按版本更新的自定义存储。
 
 ## 配置清单
 
-生成项目使用 `config/_ai.yml`。应用可以通过 `ai.init(config, options)` 接入配置。
+生成的项目在 `config/_ai.yml` 中设置模型列表、模型名称和服务地址。应用启动代码读取该文件，把配置对象传给 `ai.init(config, options)`。
 
 在[模块配置清单](../../docs/usage/configuration/ai.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -51,12 +51,12 @@ finally {
 
 在[功能说明](../../docs/usage/function/ai.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `init` / `close` / `config` / `isInitialized` — 装配模型与可选 Store
-- `llm` / `stream` / `reasoning` / `token` / `summary` / `compress` / `context` — 生成、流式响应和上下文预算
-- `embedding` / `rerank` / `retrieval` / `rag` / `knowledge` — 向量化、重排、检索和知识入库
-- `memory` / `persona` — 维护会话记忆和角色设定
-- `tools` / `mcp` / `acp` / `a2a` — 注册工具、接入 MCP、控制 ACP 会话、调用 A2A 智能体
-- `file` / `image` / `audio` — 文件、图像与语音操作
+- `ai.init` / `ai.close` / `ai.config` / `ai.isInitialized` — 初始化模型连接，查看或关闭模块。需要跨进程保存会话时可另配存储
+- `ai.llm` / `ai.stream` / `ai.reasoning` / `ai.token` / `ai.summary` / `ai.compress` / `ai.context` — 发送聊天请求、逐段接收响应、估算 Token 数并缩短对话历史
+- `ai.embedding` / `ai.rerank` / `ai.retrieval` / `ai.rag` / `ai.knowledge` — 把内容转成向量，搜索和重新排序匹配结果，将文档加入知识库
+- `ai.memory` / `ai.persona` — 维护会话记忆和角色设定
+- `ai.tools` / `ai.mcp` / `ai.acp` / `ai.a2a` — 注册工具、接入 MCP、控制 ACP 会话、调用 A2A 智能体
+- `ai.file` / `ai.image` / `ai.audio` — 文件、图像与语音操作
 
 ## 数据结构
 

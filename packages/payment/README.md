@@ -23,7 +23,7 @@ import { payment } from '@h-ai/payment'
 
 export async function paymentExample(trustedConfig: PaymentConfigInput, trustedOpenid: string) {
   // 常驻服务在启动/停机时分别 init/close；此函数演示完整生命周期。
-  // 如启用 Stripe，宿主已先初始化共享 reldb 并检查 success。
+  // 使用 Stripe 时，应用先用 reldb.init() 连接共享数据库，并检查初始化结果。
   const initialized = await payment.init(trustedConfig)
   if (!initialized.success)
     throw new Error(initialized.error.message)
@@ -44,7 +44,7 @@ export async function paymentExample(trustedConfig: PaymentConfigInput, trustedO
     return { order: created.data, status: query.data.status }
   }
   finally {
-    await payment.close() // 宿主随后才关闭其 reldb。
+    await payment.close() // 应用随后调用 reldb.close() 关闭数据库连接。
   }
 }
 ```
@@ -71,7 +71,7 @@ export async function startPayment(orderData: PaymentOrder) {
 
 ## 配置清单
 
-生成项目使用 `config/_payment.yml`。应用可以通过 `payment.init(config)` 接入配置。
+生成的项目在 `config/_payment.yml` 中设置各支付渠道的账号和服务端密钥。应用启动代码读取该文件，把配置对象传给 `payment.init(config)`。
 
 在[模块配置清单](../../docs/usage/configuration/payment.md)中查阅配置入口、默认值、取值限制和生效条件。
 
@@ -79,9 +79,9 @@ export async function startPayment(orderData: PaymentOrder) {
 
 在[功能说明](../../docs/usage/function/payment.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-- `init` / `close` / `config` / `isInitialized` / `registerProvider` / `getProvider` — 管理渠道配置与 Provider
-- `createOrder` / `queryOrder` / `refund` / `closeOrder` / `handleNotify` — 下单、查单、退款、关单和验签通知
-- `invokePayment` — 从客户端启动渠道支付流程
+- `payment.init` / `payment.close` / `payment.config` / `payment.isInitialized` / `payment.registerProvider` / `payment.getProvider` — 初始化、关闭或查询支付渠道，按需注册自定义渠道实现
+- `payment.createOrder` / `payment.queryOrder` / `payment.refund` / `payment.closeOrder` / `payment.handleNotify` — 下单、查单、退款、关单和验签通知
+- `invokePayment` — 从 `@h-ai/payment/client` 单独导入。在浏览器内用服务端订单发起渠道支付
 
 ## 数据结构
 

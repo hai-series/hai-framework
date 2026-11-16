@@ -4,7 +4,7 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md) · [@h-ai/reldb](../reldb/README.ja.md)
 
-共通のタスクモデル、cron スケジュール、JS 関数文字列・HTTP API の実行、永続化、実行ログ検索、全体のライフサイクル Hook を提供するスケジューラーモジュールです。
+`scheduler` は cron スケジュールに従って JavaScript の処理や HTTP API を実行します。タスク設定と実行ログをデータベースに保存し、実行前後にアプリが指定した処理も呼び出せます。
 
 ## クイックスタート
 
@@ -71,7 +71,7 @@ await scheduler.close()
 
 ## 設定一覧
 
-生成プロジェクトは `config/_scheduler.yml` を使用します。アプリで設定を取り込む入口は `scheduler.init(config)` です。
+生成したプロジェクトでは、タスクを探す間隔と実行権の有効期間を `config/_scheduler.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `scheduler.init(config)` に渡します。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/scheduler.md)（中国語）を参照してください。
 
@@ -79,9 +79,9 @@ await scheduler.close()
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/scheduler.md)（中国語）を参照してください。
 
-- `init` / `close` / `config` / `isInitialized` / `isRunning` / `start` / `stop` — スケジューラーのライフサイクル管理
-- `register` / `updateTask` / `unregister` / `refreshTasks` / `tasks` — タスク定義と現在のタスク一覧の管理
-- `trigger` / `getLogs` / `setHooks` / `clearHooks` / `hooks` / `execution` — 手動実行、ログ照会、フック設定、実行コンテキストの取得
+- `scheduler.init` / `scheduler.close` / `scheduler.config` / `scheduler.isInitialized` / `scheduler.isRunning` / `scheduler.start` / `scheduler.stop` — 設定と状態を確認し、タスクの検索を開始・停止し、終了時にリソースを解放する
+- `scheduler.register` / `scheduler.updateTask` / `scheduler.unregister` / `scheduler.refreshTasks` / `scheduler.tasks` — タスクを登録・更新・削除し、データベースから再読み込みして現在の一覧を表示する
+- `scheduler.trigger` / `scheduler.getLogs` / `scheduler.setHooks` / `scheduler.clearHooks` / `scheduler.hooks` / `scheduler.execution` — タスクを即時実行し、ログを確認し、コールバックを設定し、実行中の情報を取得する
 
 ## データ構造
 

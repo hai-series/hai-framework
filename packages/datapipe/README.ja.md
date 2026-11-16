@@ -37,7 +37,7 @@ if (!result.success)
 
 ## 設定一覧
 
-クリーニングと分割のオプションは `clean()`、`chunk()`、または `pipeline()` に渡します。
+クリーニングの設定は `datapipe.clean()` に、長さや重複範囲などの分割設定は `datapipe.chunk()` に渡します。`datapipe.pipeline()` には両方の設定を渡せます。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/datapipe.md)（中国語）を参照してください。
 
@@ -45,8 +45,8 @@ if (!result.success)
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/datapipe.md)（中国語）を参照してください。
 
-- `clean` — テキストの正規化とフィルタリング
-- `chunk` / `pipeline` — テキスト分割、またはクリーニングから分割までを連続処理
+- `datapipe.clean` — テキストの正規化とフィルタリング
+- `datapipe.chunk` / `datapipe.pipeline` — テキスト分割、またはクリーニングから分割までを連続処理
 
 ## データ構造
 

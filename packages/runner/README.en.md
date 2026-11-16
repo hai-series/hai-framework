@@ -92,7 +92,7 @@ finally {
 
 ## Configuration Reference
 
-Set node roles, executor options and task retention through `runner.init()`.
+At startup, use `runner.init(options)` to decide whether this node executes tasks, which container environments it may use, and how long to keep completed tasks. Disable execution on nodes that only submit and query tasks.
 
 See the [configuration reference](../../docs/usage/configuration/runner.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -100,9 +100,9 @@ See the [configuration reference](../../docs/usage/configuration/runner.md) in C
 
 See the [feature reference](../../docs/usage/function/runner.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `init` / `close` / `environment` / `isExecutor` — Configure node roles and execution environments
-- `register` / `registerWarmPool` / `submit` — Register executors and warm pools and submit jobs
-- `find` / `get` / `events` / `cancel` / `reconcileUnknown` — Find jobs, read events, cancel and reconcile unknown outcomes
+- `runner.init` / `runner.close` / `runner.environment` / `runner.isExecutor` — Set whether this process runs tasks, choose its container environments, and inspect or close Runner
+- `runner.register` / `runner.registerWarmPool` / `runner.submit` — Register task handlers, configure containers to start in advance, and submit tasks
+- `runner.find` / `runner.get` / `runner.events` / `runner.cancel` / `runner.reconcileUnknown` — Find jobs, read events, cancel and reconcile unknown outcomes
 
 ## Data Structures
 

@@ -4,9 +4,9 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md) · [@h-ai/crypto](../crypto/README.ja.md) · [@h-ai/iam](../iam/README.ja.md)
 
-`@h-ai/kit` は hai-framework の SvelteKit 統合モジュールで、共通のリクエストパイプラインと同一オリジンの endpoint ツールを提供します：
+`@h-ai/kit` は、SvelteKit でのリクエスト処理、認証、API の実装を支援します。ページと API を同じサイトから提供する場合、ブラウザーはそのサイトのアドレスで API を呼び出せます。
 
-実行時の操作は `kit.xx` を使います。公開名前空間の型はサーバー側の `KitFunctions` とブラウザー側の `BrowserKitFunctions` です。ブラウザー条件入口では client、CRUD、ページ内 Token、既定の言語操作だけを利用できます。`AuthCookieWriter` はサーバー認証が現在のリクエストの Cookie に書き込む最小契約です。内部 helper を import せずに、再エクスポートしたメソッドや名前空間の宣言を生成できます。
+SvelteKit のサーバーでは `@h-ai/kit` から `kit` をインポートし、`kit.createHandle()` でリクエスト処理関数を作成します。ブラウザーで同じパッケージをインポートすると、HTTP クライアント、一覧やフォームの補助機能、ページのトークン、既定言語の設定が使えます。型はサーバーで `KitFunctions`、ブラウザーで `BrowserKitFunctions` です。`AuthCookieWriter` はログイン後などにサーバーが現在のレスポンスに Cookie を設定するためのメソッドを定義します。
 
 - `kit.createHandle()`：セッション解析、ルートガード、middleware チェーン、任意の通信・Cookie 暗号化。
 - `kit.handler()`：API endpoint の例外処理境界。
@@ -16,14 +16,14 @@
 
 ## クイックスタート
 
-`sequence` は SvelteKit の resolve オプションを保持します。ページ変換は内側から外側へ実行し、preload とシリアライズ対象ヘッダーのフィルターは最初の設定を優先します。
+`kit.sequence()` で複数の SvelteKit ハンドラーを組み合わせると、生成したページは内側のハンドラーから外側への順に変換されます。複数のハンドラーが `preload` やシリアル化するレスポンスヘッダーのフィルターを指定した場合は、最初の設定が使われます。言語ミドルウェアはこの処理の中で HTML の `lang` 属性を更新できます。
 
 ### インストール
 
 ```bash
 npm install @h-ai/kit @h-ai/core sm-crypto@0.5.8
 npm install svelte @sveltejs/kit zod
-npm install -D @sveltejs/vite-plugin-svelte vite
+npm install -D @sveltejs/vite-plugin-svelte vite @tailwindcss/vite tailwindcss
 ```
 
 ### プロジェクト設定
@@ -64,7 +64,7 @@ Crypto または Kit/IAM を使う場合、アプリの本番依存に `sm-crypt
 
 ## 設定一覧
 
-生成プロジェクトは `config/_kit.yml` を使用します。解析済み設定を SvelteKit のフック、クライアント、ビルドアダプターに渡します。
+生成したプロジェクトでは、待ち受けアドレスとポートを `config/_kit.yml` に記述します。アクセス制限と暗号化の設定を `kit.createHandle(options)` に渡し、返された関数を SvelteKit のサーバーフックとして使います。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/kit.md)（中国語）を参照してください。
 
@@ -72,9 +72,9 @@ Crypto または Kit/IAM を使う場合、アプリの本番依存に `sm-crypt
 
 使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/kit.md)（中国語）を参照してください。
 
-- `createHandle` / `sequence` / `middleware` / `guard` / `handler` — SvelteKit のフック、エンドポイント、権限チェックを組み立て
-- `response` / `validate` / `crud` / `i18n` — 入力検証、レスポンス、CRUD 定義、ローカライズ処理
-- `auth` / `client` / `createFeedbackHandler` — 認証、ブラウザークライアント、フィードバック API の接続
+- `kit.createHandle` / `kit.sequence` / `kit.middleware` / `kit.guard` / `kit.handler` — SvelteKit のリクエスト処理、ルート、権限チェックをまとめる
+- `kit.response` / `kit.validate` / `kit.crud` / `kit.i18n` — 入力検証、レスポンス、CRUD 定義、ローカライズ処理
+- `kit.auth` / `kit.client` / `kit.createFeedbackHandler` — ブラウザーのログイン状態とリクエストを扱い、フィードバックを受け付ける HTTP エンドポイントを作る
 - `@h-ai/kit/adapter` / `@h-ai/kit/crypto` / `@h-ai/kit/a2a` — ビルドアダプター、暗号化通信、A2A ルートの設定
 
 ## データ構造

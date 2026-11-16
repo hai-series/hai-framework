@@ -6,7 +6,7 @@
 
 hai-framework's API service runtime: a stable public HTTP App abstraction that mounts `@h-ai/api-contract` contracts as cross-platform HTTP APIs. Hono is an internal implementation detail.
 
-Use runtime operations through `serv.xx`. Import `ServFunctions` from the root entry when annotating or re-exporting the namespace. Context factories and generic `implement` signatures support downstream declaration emission through public entries; no internal build paths or standalone helpers are needed.
+Import `serv` from `@h-ai/serv`. Use `serv.createApp()` to create the HTTP app and `serv.listen()` to start the listener. If you write your own wrapper, import its `ServFunctions` type from the same entry.
 
 ## Quick Start
 
@@ -64,15 +64,15 @@ export function startApi(closeApp: () => Promise<void>) {
 
 Storage procedures require `authorize({ context, operation, keys })` and deny access if the policy is missing. Derive resource ownership from the authenticated session for downloads, uploads, listing, metadata and deletion. The example only permits keys under `users/<encoded userId>/`; list requests must include that prefix. A batch is executed only after every key is authorized. Grant administrative access explicitly in the application policy.
 
-Batch deletion via `storage.files.deleteMany` returns `{ deletedKeys, failures: [] }` on success. Failures preserve progress in `error.ext.deleteMany` (`failed / unknown / notAttempted`); HTTP 200 alone does not mean completion. See [Storage batch deletion](../../docs/usage/function/storage.md#api-概览).
+Batch deletion via `apiClient.storage.files.deleteMany()` returns `{ deletedKeys, failures: [] }` on success. Failures preserve progress in `error.ext.deleteMany` (`failed / unknown / notAttempted`); HTTP 200 alone does not mean completion. See [Storage batch deletion](../../docs/usage/function/storage.md#api-概览).
 
 AI procedures bind `objectId` to the trusted `context.session.userId` when the client omits it. Chat/message writes, history, session lists and memory recall/list all use the authorized owner. Sessions are scoped by `objectId + sessionId`; writes default to session `default`. A different objectId is forbidden unless an explicit `authorizeObject` policy grants access using trusted permissions and tenant ownership, including for administrators.
 
-`chats.createCompletion` (`POST /ai/chats/completions`) returns one non-streaming `HaiResult<AiChatCompletionData>`. Function `tools` retain their complete nested JSON Schema and `strict`, and `tool_choice` supports `auto`, `none`, `required`, or a provided function name. Messages preserve roles, `name`, user images, and tool calls. Tool results require `role: 'tool'` and a nonempty `tool_call_id`; named choices must reference a supplied tool. The procedure does not execute tools: the application authorizes and executes them, then sends the assistant's `tool_calls` with their tool results. The input has no `stream` field; either boolean value is rejected with HTTP 400 before the provider runs. For streaming, define a separate endpoint with a matching stream output using `ai.llm.chatStream()`.
+`apiClient.ai.chats.createCompletion()` (`POST /ai/chats/completions`) returns one non-streaming `HaiResult<AiChatCompletionData>`. Function `tools` retain their complete nested JSON Schema and `strict`, and `tool_choice` supports `auto`, `none`, `required`, or a provided function name. Messages preserve roles, `name`, user images, and tool calls. Tool results require `role: 'tool'` and a nonempty `tool_call_id`; named choices must reference a supplied tool. The procedure does not execute tools: the application authorizes and executes them, then sends the assistant's `tool_calls` with their tool results. The input has no `stream` field; either boolean value is rejected with HTTP 400 before the provider runs. For streaming, define a separate endpoint with a matching stream output using `ai.llm.chatStream()`.
 
 ## Configuration Reference
 
-Generated projects use `config/_serv.yml`, with `serv.createApp(options)` as the application configuration entry point.
+Generated projects set HTTP options, the listening address, and the port in `config/_serv.yml`. At startup, pass the HTTP options, contract, and handlers to `serv.createApp(options)`. Pass the returned application, address, and port to `serv.listen()`.
 
 See the [configuration reference](../../docs/usage/configuration/serv.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
@@ -80,16 +80,16 @@ See the [configuration reference](../../docs/usage/configuration/serv.md) in Chi
 
 See the [feature reference](../../docs/usage/function/serv.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-- `createApp` / `listen` / `toFetch` / `cors` / `storageAssets` — Build HTTP apps, adapt runtimes and serve static assets
-- `implement` / `validateInputOrFail` / `generateSpec` / `m` — Implement typed endpoints, validate inputs and generate OpenAPI
-- `parseRequestContext` / `buildAuthContextFactory` / `resolveRequestLocale` / `createRuntimeSecurityPolicy` — Resolve request metadata, authentication, locale and access policy
-- `@h-ai/serv/features/*` — Mount IAM, storage, AI and feedback endpoints
+- `serv.createApp` / `serv.listen` / `serv.toFetch` / `serv.cors` / `serv.storageAssets` — Build an HTTP app, listen on a Node.js port or expose a Fetch handler, and add CORS or static file handling as needed
+- `serv.implement` / `serv.validateInputOrFail` / `serv.generateSpec` / `serv.m` — Implement typed endpoints, validate inputs and generate OpenAPI
+- `serv.parseRequestContext` / `serv.buildAuthContextFactory` / `serv.resolveRequestLocale` / `serv.createRuntimeSecurityPolicy` — Read request origin and language, set up authentication checks, and prepare request access rules
+- `@h-ai/serv/features/*` — Import identity, storage, AI, or feedback handlers as needed and pass them to `serv.createApp()`
 
 ## Data Structures
 
 The module creates no database tables of its own.
 
-See the [data reference](../../docs/usage/data/serv.md) in Chinese for HTTP context, sessions, static assets and persistence ownership.
+See the [data reference](../../docs/usage/data/serv.md) in Chinese for where session cookies, static files and request data are stored.
 
 ## Development and Testing
 
