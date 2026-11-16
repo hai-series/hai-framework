@@ -10,7 +10,7 @@
 [![Documentation website](https://github.com/hai-series/hai-framework/actions/workflows/pages.yml/badge.svg?branch=main)](https://hai-series.github.io/hai-framework/)
 [![License](https://img.shields.io/github/license/hai-series/hai-framework)](LICENSE)
 
-[Website and template previews](https://hai-series.github.io/hai-framework/) · [Usage guide](docs/usage/README.en.md) · [Configuration handbook](docs/usage/configuration/README.md) · [Releases](https://github.com/hai-series/hai-framework/releases/latest)
+[Website and template previews](https://hai-series.github.io/hai-framework/) · [Usage guide](docs/usage/README.en.md) · [Configuration handbook](docs/usage/configuration/README.en.md) · [Releases](https://github.com/hai-series/hai-framework/releases/latest)
 
 hai-framework is a full-stack application development and delivery framework for the AI era. Its unified, composable TypeScript foundation connects AI, data, security, interfaces and engineering tools. Developers and AI assistants share contracts, configuration, project guidance and validation workflows, from building applications to delivery across platforms and continued evolution. AI becomes part of both the development process and the applications themselves.
 
@@ -36,7 +36,7 @@ _The AI playground connects to a live model and shows multi-turn conversations a
 
 Models, databases, caches, files and vector search follow shared conventions for YAML, `HAI_*` environment mappings and schema validation. Select SQLite/PostgreSQL/MySQL, Memory/Redis, Local/S3 and other backends per environment. Development, test and deployment settings have an explicit entry point, while business code uses public module interfaces.
 
-[Configuration handbook](docs/usage/configuration/README.md) · [Data and storage](docs/usage/configuration/data.md)
+[Configuration handbook](docs/usage/configuration/README.en.md) · [Data and storage](docs/usage/configuration/data.md)
 
 ### Security-first: identity, cryptography and audit together
 
@@ -115,19 +115,19 @@ Install `@h-ai/*` as needed in existing projects, or use `hai add <module>` to a
 | APIs and platforms      | [api-contract](packages/api-contract/README.en.md): shared contracts; [serv](packages/serv/README.en.md): Hono/oRPC runtime; [api-client](packages/api-client/README.en.md): typed clients; [kit](packages/kit/README.en.md): SvelteKit integration; [capacitor](packages/capacitor/README.en.md): native bridge                             |
 | UI and engineering      | [ui](packages/ui/README.en.md): Svelte components and themes; [cli](packages/cli/README.en.md): scaffolding, generation and upgrades; [deploy](packages/deploy/README.en.md): Vercel and Docker SSH delivery                                                                                                                                 |
 
-Lifecycle modules follow `init → use → close`, checking `HaiResult.success` at each step. Core, pure functions, contracts and service factories follow their actual type contracts. Consult the [configuration handbook](docs/usage/configuration/README.md) for shared state, provider prerequisites and authorization boundaries.
+Lifecycle modules follow `init → use → close`, checking `HaiResult.success` at each step. Core, pure functions, contracts and service factories follow their actual type contracts. Consult the [configuration handbook](docs/usage/configuration/README.en.md) for shared state, provider prerequisites and authorization boundaries.
 
 ## Reading paths
 
-| Your task                             | Start here                                                                                                             |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Evaluate and create                   | [Capabilities and environment](docs/usage/overview/README.md) → [first delivery](docs/usage/getting-started/README.md) |
-| Develop business features or AI       | [Development guide](docs/usage/development/README.md) → module README                                                  |
-| Manage configuration and deployment   | [Defaults and configuration index](docs/usage/configuration/README.md) → [operations](docs/usage/operations/README.md) |
-| Review security and diagnose problems | [Security review](docs/usage/governance/security-review.md) → [feedback](docs/usage/operations/feedback.md)            |
-| Maintain the framework with AI        | [AGENTS.md](AGENTS.md) → [LLMS.txt](LLMS.txt) → task-specific Skills                                                   |
+| Your task                             | Start here                                                                                                                |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Evaluate and create                   | [Capabilities and environment](docs/usage/overview/README.md) → [first delivery](docs/usage/getting-started/README.md)    |
+| Develop business features or AI       | [Development guide](docs/usage/development/README.md) → module README                                                     |
+| Manage configuration and deployment   | [Defaults and configuration index](docs/usage/configuration/README.en.md) → [operations](docs/usage/operations/README.md) |
+| Review security and diagnose problems | [Security review](docs/usage/governance/security-review.md) → [feedback](docs/usage/operations/feedback.md)               |
+| Maintain the framework with AI        | [AGENTS.md](AGENTS.md) → [LLMS.txt](LLMS.txt) → task-specific Skills                                                      |
 
-The role-based domain handbook is currently in Chinese; the [English guide](docs/usage/README.en.md) links to the translated creation-to-delivery workflow.
+The [English guide](docs/usage/README.en.md) covers onboarding and links to configuration, data and API references. The documentation site marks pages that still use the Chinese source.
 
 ## Development
 

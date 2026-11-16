@@ -10,7 +10,7 @@
 [![Documentation website](https://github.com/hai-series/hai-framework/actions/workflows/pages.yml/badge.svg?branch=main)](https://hai-series.github.io/hai-framework/)
 [![License](https://img.shields.io/github/license/hai-series/hai-framework)](LICENSE)
 
-[公式サイトとテンプレート](https://hai-series.github.io/hai-framework/) · [利用ガイド](docs/usage/README.ja.md) · [設定マニュアル](docs/usage/configuration/README.md) · [リリース](https://github.com/hai-series/hai-framework/releases/latest)
+[公式サイトとテンプレート](https://hai-series.github.io/hai-framework/) · [利用ガイド](docs/usage/README.ja.md) · [設定マニュアル](docs/usage/configuration/README.ja.md) · [リリース](https://github.com/hai-series/hai-framework/releases/latest)
 
 hai-framework は AI 時代のフルスタックアプリ開発と配布を支えるフレームワークです。統一された組み合わせ可能な TypeScript 基盤で、AI、データ、セキュリティ、画面、開発ツールをつなぎます。開発者と AI は契約、設定、規約、検証手順を共有し、アプリの構築から複数プラットフォームへの配布、継続的な進化までを進められます。AI を開発プロセスとアプリ自体の双方に組み込めます。
 
@@ -36,7 +36,7 @@ _実際のモデルに接続した AI 実験台で、複数ターンの会話と
 
 モデル、DB、キャッシュ、ファイル、ベクトル検索は YAML、`HAI_*` 環境変数マッピング、Schema 検証の規約を共有します。環境ごとに SQLite/PostgreSQL/MySQL、Memory/Redis、Local/S3 などを選択し、開発・テスト・配布の設定入口を明確にしながら、業務コードはモジュールの公開インターフェースを利用します。
 
-[設定マニュアル](docs/usage/configuration/README.md) · [データとストレージ](docs/usage/configuration/data.md)
+[設定マニュアル](docs/usage/configuration/README.ja.md) · [データとストレージ](docs/usage/configuration/data.md)
 
 ### セキュリティ優先：認証、暗号化、監査をセットで提供
 
@@ -115,7 +115,7 @@ pnpm run deploy --env prod --build --bundle-only
 | API とプラットフォーム | [api-contract](packages/api-contract/README.ja.md)：共有契約；[serv](packages/serv/README.ja.md)：Hono/oRPC サービス；[api-client](packages/api-client/README.ja.md)：型付きクライアント；[kit](packages/kit/README.ja.md)：SvelteKit 連携；[capacitor](packages/capacitor/README.ja.md)：ネイティブ連携               |
 | UI と開発環境          | [ui](packages/ui/README.ja.md)：Svelte コンポーネントとテーマ；[cli](packages/cli/README.ja.md)：生成と更新；[deploy](packages/deploy/README.ja.md)：Vercel と Docker SSH 配布                                                                                                                                         |
 
-ライフサイクルを持つモジュールは `init → use → close` の順に使い、`HaiResult.success` を確認します。Core、純粋関数、契約、サービス生成関数は実際の型に従います。共有状態、Provider の前提、権限境界は[設定マニュアル](docs/usage/configuration/README.md)を参照してください。
+ライフサイクルを持つモジュールは `init → use → close` の順に使い、`HaiResult.success` を確認します。Core、純粋関数、契約、サービス生成関数は実際の型に従います。共有状態、Provider の前提、権限境界は[設定マニュアル](docs/usage/configuration/README.ja.md)を参照してください。
 
 ## 役割別の読み方
 
@@ -123,11 +123,11 @@ pnpm run deploy --env prod --build --bundle-only
 | ------------------ | -------------------------------------------------------------------------------------------------------------- |
 | 評価と新規作成     | [機能と環境](docs/usage/overview/README.md) → [最初の配布](docs/usage/getting-started/README.md)               |
 | 業務機能と AI      | [開発ガイド](docs/usage/development/README.md) → 各モジュール README                                           |
-| 設定とデプロイ管理 | [設定と既定値の索引](docs/usage/configuration/README.md) → [運用](docs/usage/operations/README.md)             |
+| 設定とデプロイ管理 | [設定と既定値の索引](docs/usage/configuration/README.ja.md) → [運用](docs/usage/operations/README.md)          |
 | 安全審査と障害調査 | [安全レビュー](docs/usage/governance/security-review.md) → [フィードバック](docs/usage/operations/feedback.md) |
 | 基盤保守と AI 協働 | [AGENTS.md](AGENTS.md) → [LLMS.txt](LLMS.txt) → 作業に合う Skills                                              |
 
-分野別マニュアルは現在中国語です。[日本語ガイド](docs/usage/README.ja.md)から、作成から配布までの日本語手順に進めます。
+[日本語ガイド](docs/usage/README.ja.md)には初回リリースの手順と、設定・データ・API の参照先があります。未翻訳のページは、ドキュメントサイトで中国語の原文と明示して表示します。
 
 ## 開発とテスト
 
