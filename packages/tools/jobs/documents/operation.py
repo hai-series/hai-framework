@@ -1,6 +1,7 @@
 import xml.etree.ElementTree as ET
 import zipfile
 from archives import OfficeArchive, office_archive_error
+from documents.generate import generate
 from tool import TEXT_LIMIT, ToolError, read_text, run_command, text_result
 
 WORD = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
@@ -77,4 +78,7 @@ def extract(_request, source, _artifact, workspace):
     raise ToolError('INVALID_INPUT', 'Unsupported document format')
 
 
-commands = {'documents.extract': ({'input'}, set(), extract)}
+commands = {
+    'documents.extract': ({'input'}, set(), extract),
+    'documents.generate': ({'input', 'output'}, set(), generate),
+}

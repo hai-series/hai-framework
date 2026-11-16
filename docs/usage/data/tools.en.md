@@ -1,13 +1,47 @@
 # @h-ai/tools data structures
 
-Lightweight tool definitions and registries have no database tables, cache keys, or persistent leases of their own. Names, Schemas, handlers, and authorization callbacks remain in the current process and are not retained after `clear()` or process exit.
+[Features](../function/tools.en.md) · [Configuration](../configuration/tools.en.md)
+
+Tools owns no database tables, cache keys or persistent leases. Lightweight definitions and registries live in the current process and disappear on `clear()` or exit. Server tasks reuse Runner storage without new queues or execution-state tables.
 
 | Data | Owner and lifecycle |
 | --- | --- |
-| Tool implementation collection | The host registers tools from configuration, and each node assembles its own collection; this is not shared task state |
-| Business records and document versions | The actual business service manages ownership, version conflicts, and retention |
-| Execution tasks, leases, status, and events | [Runner](runner.md) stores and cleans them up |
-| Input file and output artifact bytes | [Storage](storage.md) stores them; the host validates authorized file/artifact IDs |
-| MCP service catalog and Broker | Currently managed by [AI](ai.md) |
+| Implementations, Schemas, titles, examples and groups | Assembled by the host on each node; not shared task state |
+| Enablement and authorization | Trusted host configuration; rechecked at submission and execution |
+| Tasks, idempotency keys, leases, status and events | [Runner](runner.md); kind `hai.tools.<id>.v1` |
+| File and artifact bytes | [Storage](storage.md); host callbacks read and publish |
+| Document versions, ownership and conflicts | Business service; `baseVersion` guards the final write |
+| MCP service list and Broker | [AI](ai.md) and host; not duplicated in Tools |
 
-Return authorized references for large files. Do not put images, videos, or secrets into tool definitions, LLM messages, or task events. Logs should retain only sanitized operational diagnostics.
+## Tasks and receipts
+
+`ToolRun` includes `receipt: { id, key }`, Runner `status`, optional `output/failure`, `events` and incremental cursor `next`. Use `inspect(receipt, context, { after })` to continue reading. Retain the entire receipt: each node checks service and principal ownership rather than accepting a task ID alone.
+
+`queued/running/cancelling` are nonterminal. Cancellation requests a stop; Runner records actual completion, failure and cleanup. `service.close()` neither deletes tasks nor proves they stopped.
+
+## Artifact access contract
+
+The host implements `ToolArtifactAccess` and checks the current principal and final commit conditions for every operation.
+
+| Callback/data | Structure and purpose |
+| --- | --- |
+| `read(context, { id })` | `HaiResult<ToolArtifact>` with `id/name/mediaType/data` and optional `kind/version` |
+| `publish(context, { name, kind, mediaType, data, id? })` | Store bytes and return an authorized reference; host handles idempotency, ownership and retention |
+| `save(context, { id, baseVersion, content })` | Optional version-conditional write returning a reference; host reports conflicts |
+| `ToolArtifactReference` | `{ id, title, kind, version, mediaType }`, used in tool results and subsequent UI reads |
+
+Job output uses stable execution/output identities to support retry deduplication; the host must still validate publishing access and idempotency. Shared deployments use the same Storage and Runner database. One node's memory or local temporary path is not a shared artifact store.
+
+Browser egress proxy settings belong to the host deployment and reach jobs through `HAI_TOOL_BROWSER_PROXY`. They are neither user input nor shared business state. Keep proxy credentials out of model arguments and output.
+
+Model messages, events and logs contain only necessary structured data, sanitized errors and authorized references. Do not put secrets, images, audio/video or large byte bodies into definitions or LLM context. Downloads, Range requests and version reads remain subject to host authorization.
+
+website_video capture, script, editable storyboard, per-shot audio, subtitles, cover, project and video are host-authorized artifacts. captureId/storyboardId/audioIds support recovery but do not grant public download access. Reuse audio only when narration still matches; final publication rechecks ownership.
+
+`service.find(key, context)` reads the existing Runner idempotency record and returns success: true with data: undefined when absent (projected to null by the application HTTP API), without a new pending-submission table. Cancellation, disabling and lookup are distinct; the principal can still inspect owned receipts after disabling.
+
+`preview_build` reads only an authorized ZIP and publishes a new self-contained HTML reference. The ZIP, sources and HTML use the same ownership checks. Build directories are temporary task data cleaned by Runner, without a persistent build service. Expanded input is limited to 8 MiB, each source and final HTML to 1 MiB, and the fixed build command to 60 seconds; these tighter limits take precedence over generic file budgets. A failed build creates no new preview artifact.
+
+## Size and retention
+
+ToolService inherits Runner's 512 KiB JSON limit independently for submission, each event and final output. Job file/artifact bytes are limited to 50 MiB; container input totals also respect scratchMiB, using the smaller bound. These limits are not interchangeable; pass authorized references for file bodies. [Runner](runner.md) owns total event bytes/count and task/idempotency retention. Settled tasks default to seven days. After cleanup, find succeeds with data: undefined, which does not prove a request was never accepted or was cancelled. The host owns any longer-lived business deduplication.

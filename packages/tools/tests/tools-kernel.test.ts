@@ -1,10 +1,30 @@
 /** 通用工具的真实业务输入、执行隔离和失败边界。 */
-import { core, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { tools } from '../src/index.js'
+import { HaiToolsError, tools } from '../src/index.js'
 
 describe('tools 中立执行内核', () => {
+  it('显式 resultHandler 透传业务失败，普通结果中的 success 字段仍只是数据', async () => {
+    const denied = err(HaiToolsError.FORBIDDEN, 'Domain operation is forbidden')
+    const operation = tools.define({
+      name: 'domain_operation',
+      description: '业务结果',
+      parameters: z.object({}),
+      resultHandler: () => denied,
+    })
+    expect(await operation.execute({})).toBe(denied)
+    const raw = tools.define({
+      name: 'business_data',
+      description: '普通业务字段',
+      parameters: z.object({}),
+      handler: () => ({ success: false, count: 2 }),
+    })
+    const result = await raw.execute({})
+    expect(result.success).toBe(true)
+    if (result.success)
+      expect(result.data).toEqual({ success: false, count: 2 })
+  })
   it('自定义扩展通过 define 接入，拒绝绕过统一授权和验证的手写执行器', async () => {
     let executed = false
     const registry = tools.createRegistry({

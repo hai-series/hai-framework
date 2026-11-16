@@ -7,6 +7,7 @@ from tool import FILE_LIMIT, ToolError
 
 ENTRY_LIMIT = 256
 EXPANDED_LIMIT = 100 * 1024 * 1024
+CAPTURE_INSTRUCTION_FILES = frozenset({'AGENTS.md', 'CLAUDE.md', '.cursorrules'})
 
 
 def archive_path(name):
@@ -47,10 +48,13 @@ def extract_project(source, destination):
         raise ToolError('UNSAFE_PROJECT', 'Invalid or unsupported project archive') from None
 
 
-def collect_files(directory):
+def collect_files(directory, excluded_root_files=frozenset()):
     files = []
     total = 0
     for path in sorted(directory.rglob('*')):
+        # 仅排除调用方指定的根文件，不放宽素材或用户项目的路径规则。
+        if path.parent == directory and path.name in excluded_root_files:
+            continue
         info = path.lstat()
         if stat.S_ISDIR(info.st_mode):
             continue
@@ -66,7 +70,7 @@ def collect_files(directory):
 
 
 def bundle_capture(directory, output):
-    files = collect_files(directory)
+    files = collect_files(directory, CAPTURE_INSTRUCTION_FILES)
     with zipfile.ZipFile(output, 'x', compression=zipfile.ZIP_DEFLATED) as archive:
         for relative, source in files:
             archive.write(source, relative)

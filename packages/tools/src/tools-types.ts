@@ -30,8 +30,10 @@ export const HaiToolsError = core.error.buildHaiErrorsDef('tools', {
  */
 export interface ToolDefinition {
   name: string
+  title?: string
   description: string
   inputSchema: Record<string, unknown>
+  examples?: readonly { label: string, input: Record<string, unknown> }[]
 }
 
 /**
@@ -99,13 +101,20 @@ export interface ToolExecutionOptions {
  * const options: DefineToolOptions<{ value: string }, string> = { name: 'echo', description: 'Echo text', parameters: z.object({ value: z.string() }), handler: input => input.value }
  * ```
  */
-export interface DefineToolOptions<TInput, TOutput> {
+export type DefineToolOptions<TInput, TOutput> = {
   name: string
+  title?: string
   description: string
+  examples?: readonly { label: string, input: Record<string, unknown> }[]
   parameters: ZodType<TInput>
-  handler: (input: TInput, context: ToolExecutionContext) => TOutput | Promise<TOutput>
   timeoutMs?: number
-}
+} & ({
+  handler: (input: TInput, context: ToolExecutionContext) => TOutput | Promise<TOutput>
+  resultHandler?: never
+} | {
+  handler?: never
+  resultHandler: (input: TInput, context: ToolExecutionContext) => HaiResult<TOutput> | Promise<HaiResult<TOutput>>
+})
 
 /**
  * 工具实例，所有业务输入在执行时重新校验。

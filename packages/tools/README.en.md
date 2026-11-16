@@ -2,7 +2,7 @@
 
 [简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
 
-Model-independent tool definitions, validation, registration and authorized execution. The lightweight entry works in Node and browsers without initialization. Managed jobs reuse Runner.
+Model-independent tool definitions, validation, registration and authorized execution. The lightweight entry works in Node and browsers without initialization. `@h-ai/tools/server` provides recoverable services and artifact/job factories using Runner and host authorization.
 
 ## Quick start
 

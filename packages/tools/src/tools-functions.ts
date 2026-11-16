@@ -55,9 +55,11 @@ function joinedAuthorizer(registry?: ToolAuthorizer, execution?: ToolAuthorizer)
  * ```
  */
 export function defineTool<TInput, TOutput>(definition: DefineToolOptions<TInput, TOutput>): Tool<TInput, TOutput> {
-  const { name, description, parameters, handler, timeoutMs = 30_000 } = definition
+  const { name, description, parameters, handler, resultHandler, timeoutMs = 30_000 } = definition
   if (!portableName.test(name) || !validTimeout(timeoutMs))
     throw new TypeError('Tool definition requires a portable name and a valid timeout')
+  if ((typeof handler === 'function') === (typeof resultHandler === 'function'))
+    throw new TypeError('Tool definition requires exactly one handler or resultHandler')
 
   const tool: Tool<TInput, TOutput> = {
     name,
@@ -65,7 +67,17 @@ export function defineTool<TInput, TOutput>(definition: DefineToolOptions<TInput
     parameters,
     toDefinition() {
       const { $schema, ...inputSchema } = z.toJSONSchema(parameters, { io: 'input' })
-      return { name, description, inputSchema }
+      return {
+        name,
+        description,
+        inputSchema,
+        ...(definition.title
+          ? { title: definition.title }
+          : {}),
+        ...(definition.examples
+          ? { examples: definition.examples }
+          : {}),
+      }
     },
     async execute(input, options = {}) {
       const duration = options.deadline === undefined
@@ -137,9 +149,12 @@ export function defineTool<TInput, TOutput>(definition: DefineToolOptions<TInput
         }
         try {
           checkActive()
-          const output = await raceCancellation(() => handler(parsed.data, context), signal)
+          // 显式结果处理器保留上游业务错误；普通处理器的 success 字段仍作为数据。
+          const output = await raceCancellation(() => resultHandler
+            ? resultHandler(parsed.data, context)
+            : Promise.resolve(handler!(parsed.data, context)).then(ok), signal)
           checkActive()
-          return ok(output)
+          return output
         }
         catch (cause) {
           refreshDeadline()

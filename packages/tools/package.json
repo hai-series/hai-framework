@@ -3,6 +3,7 @@
   "type": "module",
   "version": "1.0.0-beta.30",
   "description": "Model-neutral tools, validation, authorization and execution for hai-framework",
+  "license": "Apache-2.0",
   "exports": {
     ".": {
       "browser": {
@@ -11,13 +12,24 @@
       },
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js"
     }
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "jobs"],
-  "publishConfig": { "access": "public" },
-  "engines": { "node": "^22.23.4 || ^24.22.1 || ^26.12.1" },
+  "files": [
+    "dist",
+    "jobs"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -30,11 +42,21 @@
     "test:coverage": "vitest run --coverage",
     "build:clean": "rimraf dist"
   },
+  "peerDependencies": {
+    "@h-ai/runner": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@h-ai/runner": {
+      "optional": true
+    }
+  },
   "dependencies": {
     "@h-ai/core": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@h-ai/reldb": "workspace:*",
+    "@h-ai/runner": "workspace:*",
     "rimraf": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",

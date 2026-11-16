@@ -1,0 +1,11 @@
+{
+  "name": "hai-tool-preview-build",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "acorn": "8.19.0",
+    "esbuild": "0.28.2",
+    "parse5": "8.1.0",
+    "svelte": "5.57.3"
+  }
+}

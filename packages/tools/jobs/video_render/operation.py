@@ -39,6 +39,9 @@ class Composition(HTMLParser):
 
     def handle_starttag(self, tag, attributes):
         values = dict(attributes)
+        # 浏览器采用首个重复属性，dict 则保留最后一个；拒绝歧义以保持校验与渲染一致。
+        if len(values) != len(attributes):
+            raise ToolError('INVALID_PROJECT', 'Project HTML contains duplicate attributes')
         if self.attributes is None and 'data-composition-id' in values:
             self.attributes = values
         for key in ('src', 'poster', 'data-composition-src'):

@@ -29,3 +29,7 @@ export async function calculateForUser(objectId: string) {
 `signal`、`deadline` 和工具超时传给处理函数。函数应把信号继续传给 HTTP、模型及文件操作。无法响应信号的进程放入受管作业；对外写入另按业务幂等键去重。
 
 工具组由宿主按配置注册和启用。停用时同时移除模型可见定义和服务端执行授权，不能只隐藏按钮。自定义工具复用同一注册器，无需修改 Tools 内核。
+
+已有业务接口返回 `HaiResult` 时使用 `resultHandler`，普通输出使用 `handler`，不可同时提供。`title` 和 `examples: { label, input }[]` 保留在中立定义中，用于可读名称及填表；预设不执行工具或授予权限。
+
+可恢复任务和内置产物/作业工厂见 [服务端指南](server-guide.md)，不要在页面另建执行状态机。

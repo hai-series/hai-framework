@@ -3,7 +3,7 @@ import json
 import pathlib
 from tool import TEXT_LIMIT, ToolError, publish, run_command
 from browser_policy import deployment_proxy, parse_url
-from media_files import bundle_capture, collect_files
+from media_files import CAPTURE_INSTRUCTION_FILES, bundle_capture, collect_files
 
 
 def capture(request, _source, artifact, workspace):
@@ -13,9 +13,26 @@ def capture(request, _source, artifact, workspace):
         raise ToolError('INVALID_REQUEST', 'Capture requires ZIP output and one to eight screenshots')
     proxy = deployment_proxy()
     worker = pathlib.Path(__file__).with_name('capture.mjs')
-    run_command(['node', str(worker), proxy, url, str(workspace / 'capture'), str(maximum)], 180, workspace)
+    try:
+        run_command(['node', str(worker), proxy, url, str(workspace / 'capture'), str(maximum)], 180, workspace)
+    except ToolError:
+        diagnostic = workspace / 'capture-error.json'
+        code = None
+        try:
+            if diagnostic.is_file() and not diagnostic.is_symlink() and diagnostic.stat().st_size <= 1024:
+                value = json.loads(diagnostic.read_text(encoding='utf-8'))
+                code = value.get('code') if isinstance(value, dict) else None
+        except (OSError, ValueError, UnicodeError):
+            pass
+        if code == 'SANDBOX_UNAVAILABLE':
+            raise ToolError('SANDBOX_UNAVAILABLE', 'The environment cannot enable the required Chromium sandbox') from None
+        if code == 'TIMEOUT':
+            raise ToolError('TIMEOUT', 'The capture deadline was exceeded') from None
+        if code == 'NAVIGATION_RETRY_FAILED':
+            raise ToolError('NAVIGATION_RETRY_FAILED', 'Navigation failed after one transient network retry') from None
+        raise
     directory = workspace / 'capture'
-    files = collect_files(directory)
+    files = collect_files(directory, CAPTURE_INSTRUCTION_FILES)
     names = [name for name, _ in files]
     if 'extracted/tokens.json' not in names or 'extracted/visible-text.txt' not in names:
         raise ToolError('INVALID_OUTPUT', 'Capture did not produce source text and design tokens')
@@ -37,12 +54,12 @@ def capture(request, _source, artifact, workspace):
         'colors': colors[:20],
         'screenshots': screenshots,
         'materials': names,
-        'renderer': {'name': 'hyperframes', 'version': '0.9.56'},
     }
-    (directory / 'capture.json').write_text(json.dumps(summary, ensure_ascii=False), encoding='utf-8')
+    document = {**summary, 'renderer': {'name': 'hyperframes', 'version': '0.9.56'}}
+    (directory / 'capture.json').write_text(json.dumps(document, ensure_ascii=False), encoding='utf-8')
     result = workspace / 'capture.zip'
     bundle_capture(directory, result)
-    return publish(result, artifact, b'PK\x03\x04')
+    return {**publish(result, artifact, b'PK\x03\x04'), 'summary': summary}
 
 
 commands = {'web.capture': ({'url', 'output'}, {'maxScreenshots'}, capture)}

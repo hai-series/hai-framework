@@ -2,15 +2,17 @@
 
 这些镜像使用同一个 JSON 协议。工具以非 root 用户执行一次请求，由部署方选择镜像并分配资源。文档、Office 和 OCR 支持通过受管 MCP 作业调用，应用也可直接提交这些作业。网页与视频镜像提供独立作业协议；上层需要登记实际操作及权限后才能开放给用户。远程导航与采集需先验收下文的代理和出网限制。
 
-| 镜像           | 操作                 | 输入与输出                                                                                           |
-| -------------- | -------------------- | ---------------------------------------------------------------------------------------------------- |
-| `documents`    | `documents.extract`  | TXT、Markdown、CSV、TSV、文本 PDF、DOCX、XLSX → 文本。XLSX 读已有单元格值与缓存，公式重算使用 Office |
-| `office`       | `office.convert`     | DOCX、ODT、XLSX、ODS、PPTX、ODP → PDF                                                                |
-| `office`       | `office.recalculate` | XLSX、ODS → 同格式文件。LibreOffice 重新计算公式                                                     |
-| `ocr`          | `ocr.recognize`      | PNG、JPEG、TIFF → 文本。可选 `language` 为 `eng`、`chi_sim`、`jpn`、`eng+chi_sim` 或 `eng+jpn`       |
-| `browser`      | `browser.navigate`   | 访问受控代理允许的 HTTPS 地址，输出 1280 × 720 PNG。关闭 JavaScript、下载和 Service Worker           |
-| `web_capture`  | `web.capture`        | HTTPS 网页 → 包含来源、正文、截图、品牌颜色与实际素材的 ZIP；固定 HyperFrames 0.9.56，支持动态页面   |
-| `video_render` | `video.render`       | 自包含 HTML 动画项目 ZIP → H.264 MP4；固定 HyperFrames 0.9.56，离线逐帧渲染并用 FFprobe 校验         |
+| 镜像            | 操作                 | 输入与输出                                                                                           |
+| --------------- | -------------------- | ---------------------------------------------------------------------------------------------------- |
+| `documents`     | `documents.extract`  | TXT、Markdown、CSV、TSV、文本 PDF、DOCX、XLSX → 文本。XLSX 读已有单元格值与缓存，公式重算使用 Office |
+| `documents`     | `documents.generate` | 有界 JSON 标题、段落、表格或幻灯片 → 真实 DOCX、XLSX、PPTX；表格文字保持字符串，不执行公式           |
+| `office`        | `office.convert`     | DOCX、ODT、XLSX、ODS、PPTX、ODP → PDF                                                                |
+| `office`        | `office.recalculate` | XLSX、ODS → 同格式文件。LibreOffice 重新计算公式                                                     |
+| `ocr`           | `ocr.recognize`      | PNG、JPEG、TIFF → 文本。可选 `language` 为 `eng`、`chi_sim`、`jpn`、`eng+chi_sim` 或 `eng+jpn`       |
+| `browser`       | `browser.navigate`   | 访问受控代理允许的 HTTPS 地址，输出 1280 × 720 PNG。关闭 JavaScript、下载和 Service Worker           |
+| `preview_build` | `preview.build`      | 受支持的本地 HTML/JS/TS/CSS/Svelte 项目 ZIP → 自包含 HTML；离线固定工具链，不执行项目脚本或安装依赖  |
+| `web_capture`   | `web.capture`        | HTTPS 网页 → 包含来源、正文、截图、品牌颜色与实际素材的 ZIP；固定 HyperFrames 0.9.56，支持动态页面   |
+| `video_render`  | `video.render`       | 自包含 HTML 动画项目 ZIP → H.264 MP4；固定 HyperFrames 0.9.56，离线逐帧渲染并用 FFprobe 校验         |
 
 ## 快速开始
 
@@ -34,6 +36,43 @@ podman build -f packages/tools/jobs/documents/Dockerfile -t localhost/hai-tools-
 ```json
 { "operation": "documents.extract", "input": "report.pdf" }
 ```
+
+### 生成可编辑的 Office 文档
+
+使用 `documents` 镜像。部署侧把已授权的 UTF-8 JSON 文件放入 `/input/source.json`，输入不超过 256 KiB。下面的内容可分别生成带标题、段落和表格的 DOCX、XLSX 或单页 PPTX；选择输出扩展名决定格式。
+
+```json
+{
+  "title": "工具平台说明",
+  "paragraphs": ["工具定义、受管执行与可复用产物。"],
+  "table": {
+    "headers": ["模块", "用途"],
+    "rows": [["Tools", "验证与授权"], ["Runner", "隔离执行"]]
+  }
+}
+```
+
+```json
+{ "operation": "documents.generate", "input": "source.json", "output": "report.docx" }
+```
+
+将 `output` 改为 `report.xlsx` 或 `report.pptx` 可生成相应文件，成功返回实际 `data.artifact`。XLSX 固定使用 `Report` 工作表，标题、段落和表格依次写入；所有用户文字显式设为字符串，包括以 `=`、`+` 或 `@` 开头的内容。
+
+标题最多 200 字符，段落可省略或最多 100 项、每项 2000 字符；表格必须提供 1～20 个 `headers`，`rows` 可省略或最多 200 行，每行列数与表头一致，单元格最多 2000 字符。输入拒绝未知字段、重复 JSON 字段和 XML 不支持的控制字符。
+
+多页 PPTX 使用 `slides`，每页提供 `title` 和可选的 `paragraphs`、`table`。提供 `slides` 时，顶层只保留文档 `title` 与 `slides`，不要再传顶层段落或表格。最多 20 页；每页标题最多 100 字符，正文最多 6 段、每段 160 字符、合计 800 字符。带表格的页最多 6 列、6 行数据，单元格最多 32 字符，并最多附一段 120 字符的说明，避免生成无法阅读的拥挤页面。
+
+```json
+{
+  "title": "工具平台",
+  "slides": [
+    { "title": "一个入口", "paragraphs": ["直接业务和 AI 复用同一工具。"] },
+    { "title": "受管执行", "paragraphs": ["Runner 负责容量、隔离与取消。"] }
+  ]
+}
+```
+
+镜像复用 Debian 的 DOCX、XLSX 和 XML/图像支持库，PPTX 使用固定的 `python-pptx` 1.0.2；额外 wheel 及其 SHA-256 在 [requirements.txt](documents/requirements.txt) 维护，构建时校验并安装，运行时不下载依赖。
 
 ### 转换 Office 文档与重算公式
 
@@ -63,15 +102,31 @@ podman build -f packages/tools/jobs/documents/Dockerfile -t localhost/hai-tools-
 { "operation": "browser.navigate", "url": "https://example.com/", "output": "page.png" }
 ```
 
+### 构建多文件网页预览
+
+使用可选 `preview_build` 镜像，在 Runner 登记 `preview.build` 能力及 `networkPolicy: offline`，再将环境 ID 传入 `tools.createJobTools` 的 `environments.preview`。Agent 的对应工具名为 `preview_build`，属于 `web` 组；只构建本地项目不需要出网代理。构建方式与其他镜像相同，将 Dockerfile 路径改为 `packages/tools/jobs/preview_build/Dockerfile`。
+
+```json
+{ "operation": "preview.build", "input": "project.zip", "output": "preview.html" }
+```
+
+ZIP 根目录必须有 `index.html`，允许一个模块入口及其本地 JS/TS/JSX/TSX/JSON、CSS 和 Svelte 浏览器组件。例如 HTML 使用 `<div id="app"></div><script type="module" src="/src/main.ts"></script>`，入口通过固定 `svelte` 运行时的 `mount` 加载本地 `App.svelte`。站点根引用映射到 ZIP 根，不能访问宿主路径。CSS 导入、图片/字体/音视频、本地组件静态 `src/poster` 会内联；动态组件资源先 import，再作为属性使用。组件 `srcset` 等不支持的资源形式明确失败，不发布缺少素材的预览。
+
+固定版本为 esbuild 0.28.2、Svelte 5.57.3、parse5 8.1.0、acorn 8.19.0，使用镜像内的 lockfile 安装并核验。用户项目的 package.json、Vite/Svelte/TypeScript 配置可存在，但一律不执行或采纳；不安装用户依赖，不支持 SvelteKit、任意 npm 裸导入、运行期动态 import 或远程构建素材。`import.meta.env` 只提供固定的生产字段，不支持 `import.meta.url`。归档不要包含 node_modules、Git、环境或凭据点文件。
+
+预览项目展开合计最多 8 MiB，单源码与最终 HTML 各最多 1 MiB，沿用最多 256 个安全归档条目的限制；编译最多 60 秒。建议从 CPU 1 核、内存 512 MiB、PID 128、临时盘 128 MiB 开始实测。成功返回真实 HTML 产物，应用发布为 `kind: html`、`mediaType: text/html`，直接交现有隔离工作台显示。作业结束即销毁构建容器；没有常驻开发服务器或预览网关。修改源码后重新构建得到新产物，构建失败不会发布旧输出；关闭预览卸载 iframe。
+
 ### 采集网页正文与制作素材
 
-使用 `web_capture` 镜像。部署代理必须先允许访问目标网站和需要的素材来源。此请求生成 `/output/capture.zip`；其中 `capture.json` 记录原始 `sourceUrl`、标题、正文 `text`、颜色、截图和素材相对路径。`capture-status.json` 记录实际 HTTP 状态、缺失素材数量及警告，其他目录保留捕获到的文件。网页正文为空、HTTP 请求失败或没有截图时不发布成功产物。
+使用 `web_capture` 镜像。部署代理必须先允许访问目标网站和需要的素材来源。此请求生成 `/output/capture.zip`；其中 `capture.json` 记录原始 `sourceUrl`、标题、正文 `text`、颜色、截图和素材相对路径。成功响应的 `data.summary` 同时返回这些内容，调用方可以直接将来源文本交给后续文案和分镜工具。`capture-status.json` 记录实际 HTTP 状态、缺失素材数量及警告，其他目录保留捕获到的文件。网页正文为空、HTTP 请求失败或没有截图时不发布成功产物。
 
 ```json
 { "operation": "web.capture", "url": "https://example.com/", "output": "capture.zip", "maxScreenshots": 4 }
 ```
 
 `maxScreenshots` 省略时为 4，支持 1～8 个主截图；HyperFrames 还可能生成素材联系表。协议不接受请求级代理、凭据或命令。素材可能因源站限制而缺失，上层应读取状态文件后再决定是否能够完成视频。
+
+打包时仅排除 HyperFrames 自动生成的根 `AGENTS.md`、`CLAUDE.md`、`.cursorrules` 助手指令文件；网页正文、截图、素材和素材缺失报告保留。其他未知点文件仍按原有归档规则拒绝，不会作为素材静默丢弃。
 
 ### 渲染真实 HTML 动画视频
 
@@ -95,15 +150,33 @@ podman build -f packages/tools/jobs/documents/Dockerfile -t localhost/hai-tools-
 
 浏览器镜像要求部署提供 `HAI_TOOL_BROWSER_PROXY=http://<代理的 IPv4 地址>:<端口>`。作业网络必须只允许连接该代理的地址和端口。代理逐个校验 CONNECT 目的地，执行任务授权、DNS/IP、内网限制及重定向和子资源策略。镜像启用 Chromium 沙箱，启动失败时由上层报告环境错误。部署未提供这些边界前保持操作停用。[Chromium 代理规则](https://chromium.googlesource.com/chromium/src/+/HEAD/net/docs/proxy.md)
 
-`web_capture` 复用相同部署代理校验，并将其传给 HyperFrames 自身的受控采集器；它允许页面 JavaScript，必须使用独立的受限容器，不能放进应用主进程。`video_render` 使用离线 Runner 环境。两者不接收用户指定的程序路径或环境变量；镜像内部校验 HyperFrames 精确版本为 `0.9.56`，关闭自动更新、可选依赖安装和项目 `.env` 读取。生产使用时记录最终镜像 digest，同时固定浏览器、字体与 FFmpeg 的实际版本。
+`browser.navigate` 保持 JavaScript、下载和 Service Worker 禁用，只对 `page.goto` 首行精确返回当前 URL 的 `net::ERR_NETWORK_CHANGED` 重试一次。两次导航共用最多 20 秒预算，整体使用 40 秒单调截止时间，另为截图保留最多 10 秒及关闭时间；Python 外层仍在 45 秒兜底回收。HTTP 403、沙箱失败、其他网络错误及截图失败不重试。失败时删除本次图片并关闭页面和浏览器，不发布旧图，也不公开原始 stderr。
 
-视频环境建议从 CPU 2 核、内存 2048 MiB、临时盘 2048 MiB、PID 256 开始实测；Runner 节点的工具容量须覆盖这些额度。采集子进程上限 180 秒，渲染子进程上限 300 秒，上层作业期限需要另外留出产物读取与清理时间。这些是工具预算，不会自动修改 Runner 默认配置。
+`web_capture` 复用相同部署代理校验，并将其传给 HyperFrames 自身的受控采集器；它允许页面 JavaScript，必须使用独立的受限容器，不能放进应用主进程。包装固定传入 `HYPERFRAMES_CHROME_SANDBOX=1`，禁止 HyperFrames 在检测到容器后自动关闭 Chromium sandbox；宿主环境的 `=0` 不能覆盖。Runner 使用非 root UID 1000，部署还须允许该用户创建 Chromium 需要的用户命名空间，并在 seccomp/AppArmor 策略中明确允许必要操作。不能通过增加 `CAP_SYS_ADMIN`、关闭整个安全策略或传入 `--no-sandbox` 让验证通过。环境拒绝 Chromium sandbox 时返回 `SANDBOX_UNAVAILABLE`，操作保持失败且不发布产物。
+
+部分 Podman 默认 seccomp 策略在外层容器移除 `CAP_SYS_CHROOT` 后同时拒绝 `chroot` 系统调用，但 Chromium 的嵌套用户命名空间仍需要该调用。应先用实际启动诊断确认原因；若确为这一条件规则，可从当前默认策略复制，只调整 `chroot` 的规则，保留所有其他规则和内核能力检查，再使用标准 `CONTAINERS_CONF_OVERRIDE` 为专用执行节点进程指定 `[containers] seccomp_profile`。不修改宿主全局策略，不授予额外 capability；实际 Runner 作业也必须通过该配置验收，独立探测容器成功不能代替正式执行成功。
+
+采集只对浏览器已启动、导航阶段明确返回 `net::ERR_NETWORK_CHANGED` 的只读请求重试一次；两次尝试及退避共用 170 秒内部截止时间。HTTP 403、沙箱启动失败和其他错误不重试。每次尝试使用独立临时目录，完整成功后原子发布；`capture-status.json` 的 `retries` 只记录固定阶段、错误码和次数，不包含 URL 或原始 stderr。再次导航失败返回 `NAVIGATION_RETRY_FAILED`，外层不会发布失败尝试残留的内容。
+
+`video_render` 使用离线 Runner 环境，其隔离边界是无网络、非 root、只读根文件系统及容器资源限制；不声称所有离线渲染都启用了 Chromium 自身的 sandbox。两者不接收用户指定的程序路径或环境变量；镜像内部校验 HyperFrames 精确版本为 `0.9.56`，关闭自动更新、可选依赖安装和项目 `.env` 读取。生产使用时记录最终镜像 digest，同时固定浏览器、字体与 FFmpeg 的实际版本。
+
+本轮媒体验收采用以下有界起测预算；应在实际站点、画幅和宿主上复测后调整，不能当作所有部署的性能保证：
+
+| 环境              | CPU 核 | 内存 MiB | PID  | 临时盘 MiB | 网络                 |
+| ----------------- | ------ | -------- | ---- | ---------- | -------------------- |
+| web               | 1      | 1024     | 512  | 512        | internal，经受控代理 |
+| video             | 1      | 1536     | 512  | 6144       | offline              |
+| 节点 toolCapacity | 2      | 3072     | 1024 | 8192       | 不适用               |
+
+`toolMaxRunning: 1` 可用于先验证串行作业，host 编排使用独立的 default 容量；节点物理预算还须额外覆盖该 host 容量。PID 128 的浏览器起测已出现线程创建失败，不能沿用旧的轻量作业 PID 配额。采集子进程上限 180 秒，渲染子进程上限 300 秒，上层作业期限需要另外留出产物读取与清理时间。这些是工具预算，不会自动修改 Runner 默认配置。
+
+HyperFrames `0.9.56` 在渲染前要求临时目录和输出目录各至少有 1024 MiB 可用空间。含输入文件的 Runner 会把 `scratchMiB` 分给 state、workspace、output 和 tmp，tmp 仅占四分之一；因此视频的 6144 MiB 总临时盘给 tmp 1536 MiB，不等于进程已经占用这些内存。不能把总预算 512 MiB 当成可运行的视频配置，也不跳过工具原有磁盘检查；实际内存占用和输出大小仍须在目标视频上验收。
 
 ## 错误处理
 
 校验 `success` 后再读 `data.text` 或 `data.artifact`。输入或输出文件名不合规时返回 `INVALID_REQUEST`。浏览器没有可用的部署代理配置时返回 `NETWORK_POLICY_REQUIRED`，工具子进程失败时返回 `TOOL_FAILED`。容器未返回成功时，宿主丢弃本次工作目录及未确认产物。
 
-媒体作业还会返回 `UNSAFE_PROJECT`（归档不安全或超限）、`INVALID_PROJECT`（合成参数或本地资源不符合要求）、`INVALID_OUTPUT`（捕获或渲染结果不完整）、`OUTPUT_LIMIT`（采集素材超限）及 `TIMEOUT`。取消与进程树回收继续由 Runner 负责。
+媒体作业还会返回 `UNSAFE_PROJECT`（归档不安全或超限）、`INVALID_PROJECT`（合成参数或本地资源不符合要求）、`INVALID_OUTPUT`（捕获或渲染结果不完整）、`OUTPUT_LIMIT`（采集素材超限）、`SANDBOX_UNAVAILABLE`（无法启用远程网页所需的 Chromium sandbox）及 `TIMEOUT`。生成文档时缺少库返回 `ENVIRONMENT_UNAVAILABLE`。取消与进程树回收继续由 Runner 负责。
 
 ## 开发测试
 

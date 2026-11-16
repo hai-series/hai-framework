@@ -8,7 +8,7 @@ import { promisify } from 'node:util'
 const execute = promisify(execFile)
 const require = createRequire(import.meta.url)
 
-export async function runHyperframes(args, directory, extra = {}) {
+export async function runHyperframes(args, directory, extra = {}, timeout = 280_000) {
   // 从镜像自身解析 CLI，不执行输入项目中的命令或依赖。
   const metadataPath = require.resolve('hyperframes/package.json')
   const metadata = JSON.parse(await readFile(metadataPath, 'utf8'))
@@ -39,7 +39,7 @@ export async function runHyperframes(args, directory, extra = {}) {
   ], {
     cwd: directory,
     env: environment,
-    timeout: 280_000,
+    timeout,
     maxBuffer: 2 * 1024 * 1024,
     windowsHide: true,
   })
