@@ -8,74 +8,59 @@
 
 ## 快速开始
 
-下面按 `core` 对象上的全部子功能介绍用途、示例与必要限制。需要加载配置时先看初始化；日志、消息和通用工具可直接使用。
-
-运行功能通过 `core.xxx()` 或 `core.<子功能>.xxx()` 调用。结果构造器 `ok` / `err`，以及类型、Schema 和错误常量，从包入口单独导入，具体用法见对应小节。
-
 ```bash
 pnpm add @h-ai/core
 ```
 
-下方自定义配置和表单校验示例还使用 Zod，运行这些示例前安装 `pnpm add zod`。数据库、缓存示例的额外依赖在相应小节说明。
+从 `@h-ai/core` 导入 `core` 后，就可以记录日志、读取消息或使用通用工具。`ok`、`err`、类型、Schema 和错误常量也从同一入口导入。运行自定义配置和表单校验示例前，请安装 Zod（`pnpm add zod`）。
 
 ### 初始化：`core.init`
 
-Node 启动时加载 YAML 并设置日志；浏览器只设置日志。初始化 Core 不会启动数据库等其他模块。
+Node 应用可以在启动时读取 YAML 并设置日志。浏览器只需传入页面使用的日志选项。数据库、缓存等模块的启动见[应用启动与关闭](#应用启动与关闭)。
 
 #### Node.js
 
 准备 `config/_core.yml`：
 
 ```yaml
-# 应用元信息，供启动代码和页面读取。
 name: orders
 version: 0.1.0
 env: development
-# 默认消息语言；启动代码读取后调用 setGlobalLocale 应用。
 defaultLocale: zh-CN
 logging:
-  level: info # 输出 info 及以上级别。
-  format: pretty # 本地开发使用便于阅读的日志。
+  level: info
+  format: pretty
 ```
 
 ```ts
-import { core, CoreConfigSchema } from '@h-ai/core'
+import type { CoreConfig } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
-// 1. 读取 config 目录中的 YAML，_core.yml 对应名称 core。
-core.init({ configDir: './config' }) // 返回 undefined；配置缓存中可读取 core。
+// 读取 config 目录。_core.yml 校验成功后以 core 为名存入缓存。
+core.init({ configDir: './config' })
+const settings = core.config.getOrThrow<CoreConfig>('core')
 
-// 2. 检查应用必需的配置；失败时停止启动，保留原始错误供排查。
-const config = core.config.validate('core', CoreConfigSchema)
-if (!config.success)
-  throw new Error(config.error.message, { cause: config.error })
-
-// 成功时 config.success 为 true；config.data.name 为 'orders'，defaultLocale 为 'zh-CN'。
-
-// 3. 将配置中的语言应用到默认消息；读取 YAML 本身不会切换语言。
-core.i18n.setGlobalLocale(config.data.defaultLocale) // 返回 undefined；后续默认消息使用中文。
-
-// 4. 记录已验证的应用名称，确认启动完成。
-core.logger.info('Application ready', { name: config.data.name }) // 返回 undefined；info 日志包含 name: 'orders'。
+// 应用默认语言并记录启动成功。
+core.i18n.setGlobalLocale(settings.defaultLocale)
+core.logger.info('Application ready', { app: settings.name }) // app: 'orders'
 ```
 
-启动边界在必需配置失败时中止启动。`core.init()` 对单项加载失败记日志并继续，所以不能把调用结束视为所有配置校验成功；目录扫描、日志设置等异常仍可能抛出。
+`core.init()` 同步加载目录。单项配置读取或校验失败时，日志会记录文件和错误码，然后继续加载其他文件。示例中的 `getOrThrow()` 会在必需的 `core` 配置缺失时中止启动。目录扫描和日志设置仍可能抛出异常。
 
 #### 浏览器
 
 ```ts
 import { core } from '@h-ai/core'
 
-// 浏览器不读取 YAML；此处只设置日志，输出 warn 及以上级别。
+// 在页面启动时设置日志阈值和默认语言。
 core.init({
   logging: { level: 'warn' }
-}) // 返回 undefined；之后 info 日志被过滤。
+})
+core.i18n.setGlobalLocale('zh-CN')
 
-// 设置当前页面使用的默认消息语言。
-core.i18n.setGlobalLocale('zh-CN') // 返回 undefined；页面默认消息使用中文。
-
-// 给一次请求生成编号，后续日志可用同一编号关联排查。
-const requestId = core.id.request() // 返回随机字符串，如 'req-V1StGXR8_Z5jdHi6B-myT'。
-core.logger.warn('Request needs attention', { requestId }) // 返回 undefined；浏览器输出 warn 消息及同一个 requestId。
+// 把请求编号写入日志，便于关联后续记录。
+const requestId = core.id.request()
+core.logger.warn('Request needs attention', { requestId })
 ```
 
 浏览器配置由宿主通过公开字段下发，不传完整服务端配置或密钥。`core.config.get()` / `has()` / `keys()` 分别返回 `undefined` / `false` / `[]`；`loadEnvFiles()`、`load()`、`validate()`、`reload()` 返回 `SERVICE_UNAVAILABLE`，`getOrThrow()` 抛错。`watch()` 立即回调同一不可用错误并返回空取消函数。
@@ -115,7 +100,7 @@ core.logger.warn('Request needs attention', { requestId }) // 返回 undefined�
 
 `_core.yml` 使用 `CoreConfigSchema` 校验，只接受 `name`、`version`、`env`、`defaultLocale` 和 `logging`。默认值依次为 `hai Admin`、`0.1.0`、`development`、`zh-CN`；`logging` 可省略。元数据不会自行修改 `NODE_ENV`、切换消息语言或注册业务翻译。日志应从此处配置；显式传入 `core.init({ logging })` 会覆盖本次初始化对 YAML 日志设置的应用。
 
-其他配置在扫描时仅借助宿主提供的 `configSchemas` 识别结构和类型，完整业务校验留给模块初始化或显式 `validate()`。直接 `load(name, file, schema)` 会立即校验。
+批量加载业务配置时，传入 `core.init({ configDir: './config', configSchemas: { app: AppSchema } })`，让 Core 按 Schema 识别可选字段及插值类型。随后调用 `core.config.validate('app', AppSchema)`，检查 `success` 后读取 `data`。 `validate()` 从当前缓存取值；使用输入和输出类型不同的 Schema 时，首次校验成功后直接使用结果。需要重新读取并校验该文件时用 `reload()`。
 
 以下文件示例使用这份 `config/app.yml`，并假设没有额外环境变量覆盖：
 
@@ -124,64 +109,62 @@ core.logger.warn('Request needs attention', { requestId }) // 返回 undefined�
 port: 3000
 ```
 
-`load()` 读取文件并可立即校验；`validate()` 校验已加载的缓存。`get()` 找不到时返回 undefined，`getOrThrow()` 找不到时抛错；泛型只帮助 TypeScript，不会替代实际校验。`has()` / `keys()` 用于检查有哪些配置。
+只需要一份配置时，直接用 `load()` 读盘并传入同步 Schema。Schema 拒绝数据或自定义校验抛错时，返回 `CONFIG_VALIDATION_ERROR`，在 `error.cause` 中保留问题列表或原始异常。`get()` 和 `getOrThrow()` 的泛型只声明读取类型，数据的校验由 Schema 完成。
 
 ```ts
 import { core } from '@h-ai/core'
 import { z } from 'zod'
 
-// 读取上方 config/app.yml；Schema 同时描述类型和校验规则。
 const AppSchema = z.object({
-  port: z.number().int().min(1).max(65535)
+  port: z.number().int().min(1).max(65535),
 })
+
+// 读取文件并立即校验。成功时得到 { success: true, data: { port: 3000 } }。
 const loaded = core.config.load('app', './config/app.yml', AppSchema)
 if (!loaded.success)
   throw new Error(loaded.error.message, { cause: loaded.error })
 
-// loaded：{ success: true, data: { port: 3000 } }。
-
-// validate 用于重新校验缓存；加载时未传 Schema 的配置也可在这里校验。
-const validated = core.config.validate('app', AppSchema)
-if (!validated.success)
-  throw new Error(validated.error.message, { cause: validated.error })
-
-// validated：{ success: true, data: { port: 3000 } }。
-
-// get 适合可选配置；getOrThrow 适合已确认存在的必需配置。
-if (core.config.has('app')) { // true：上方已成功加载 app。
-  const optional = core.config.get<z.infer<typeof AppSchema>>('app') // { port: 3000 }。
-  const required = core.config.getOrThrow<z.infer<typeof AppSchema>>('app') // { port: 3000 }；缺失则抛错。
-  core.logger.info('App config ready', { port: required.port, available: optional !== undefined })
-}
-core.config.keys() // 仅运行本节 load 示例时为 ['app']。
+// 以下结果假设当前只加载了 app。
+core.config.has('app') // true
+core.config.keys() // ['app']
+core.config.get<z.infer<typeof AppSchema>>('app') // { port: 3000 }
+core.config.getOrThrow<z.infer<typeof AppSchema>>('app') // { port: 3000 }
 ```
 
 #### 重载、监听与清理
 
-修改配置后可用 `reload()` 主动读盘，也可用 `watch()` 接收新值或错误。监听支持普通保存、文件原子替换以及删除后重建；失败保留最近一次成功的缓存。`unwatch()` 停止监听，`clear()` 同时清缓存；二者省略名称时作用于全部配置。
+`reload()` 重新读盘并通知订阅方。`watch()` 监听父目录中的目标文件，所以普通保存、原子替换和删除后重建都能触发重载。读取或校验失败时，旧缓存继续可用，回调收到 `null` 和错误。
 
-`watchConfig` 默认 false；重载缓存不会自动重新初始化数据库等已启动模块。下面的清理操作应在不再需要这份配置时调用。
+- 配置名尚未加载时，`watch()` 立即回调 `CONFIG_NOT_LOADED`。
+- 系统无法建立监听或监听过程中报告错误时，回调收到 `SERVICE_UNAVAILABLE`，`isWatching()` 返回 `false`。目录恢复后可重新调用 `watch()`。
+- 取消函数只移除当前回调。`unwatch(name)` 停止该配置的所有监听，`clear(name)` 还会移除缓存，两者省略名称时作用于全部配置。
+
+同名配置要换到另一份文件时，先停止原监听，再加载并监听新文件。
+
+`core.init()` 默认关闭 `watchConfig`。打开后只监听本次成功加载的文件。重载只更新 Core 缓存，应用模块按自己的生命周期重新应用设置。
 
 ```ts
 import { core } from '@h-ai/core'
 
-// 前提：app 已由 init/load 加载。回调需先处理读取或校验失败。
-const stop = core.config.watch('app', (_settings, error) => {
-  // 文件改成 port: 4000 后，成功回调收到 { port: 4000 }、error 为 undefined；失败时为 null 和错误对象。
-  if (error)
-    core.logger.error('Config reload failed', { error })
-  else
-    core.logger.info('Config reloaded')
+// 接着上一个示例。成功重载时，回调取得当前端口。
+const stop = core.config.watch<{ port: number }>('app', (settings, error) => {
+  if (error) {
+    core.logger.warn('App config watch reported a failure', { code: error.code })
+    return
+  }
+  core.logger.info('App config reloaded', { port: settings?.port })
 })
-// watch 返回取消函数 stop，不立即返回配置值。
-core.config.isWatching('app') // true。
-const reloaded = core.config.reload('app') // 文件仍为 port: 3000 时返回 { success: true, data: { port: 3000 } }。
-if (!reloaded.success)
-  core.logger.warn('Manual reload failed', { error: reloaded.error })
 
-stop() // 返回 undefined；取消当前回调，没有其他回调时停止底层监听。
-core.config.unwatch('app') // 返回 undefined；isWatching('app') 变为 false。
-core.config.clear('app') // 返回 undefined；get('app') 变为 undefined，has('app') 变为 false。
+try {
+  // 主动读取一次。文件仍为 port: 3000 时，回调记录 port: 3000。
+  const reloaded = core.config.reload('app')
+  if (!reloaded.success)
+    throw new Error(reloaded.error.message, { cause: reloaded.error })
+}
+finally {
+  stop()
+  core.config.clear('app')
+}
 ```
 
 #### 环境变量如何改变 YAML 配置
@@ -205,20 +188,21 @@ core.config.clear('app') // 返回 undefined；get('app') 变为 undefined，has
 
 #### 从 .env 文件读取变量
 
-`core.init()` 不自行读取 .env 文件。需要时先调用 `loadEnvFiles()`，确认 success 后把结果放入 process.env，再加载 YAML。`development` / `production` 映射为 `dev` / `prod`；缺失文件跳过，同文件重复键报错。优先级从高到低是：**进程环境 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML**。私有 .local 文件不提交 Git。
+在 Node 入口调用 `loadEnvFiles()`，检查 `success` 后把结果装入 `process.env`，再加载 YAML。`development` 和 `production` 分别选择 `dev` 和 `prod` 对应的文件。缺失的文件会跳过，同一文件重复声明键会报错。
+
+优先级从高到低为进程环境、`.env.<mode>.local`、`.env.local`、`.env.<mode>`、`.env`，最后由 YAML 提供基础值。`loadEnvFiles()` 会合并进程中已有的 `HAI_*` 变量和 dotenv 文件已声明的同名变量。含私密值的 `.local` 文件应留在本机。
 
 ```ts
 import { core } from '@h-ai/core'
 
-// 前提：.env 写 HAI_APP_PORT=4000，没有其他来源覆盖这个变量。
-// 先读取并合并 .env 文件与进程环境，失败时停止启动。
+// 准备 config/app.yml（port: 3000）和 .env（HAI_APP_PORT=4000）。假设没有更高优先级的覆盖。
 const result = core.config.loadEnvFiles({ mode: 'dev', envDir: '.' })
 if (!result.success)
   throw new Error(result.error.message, { cause: result.error })
-// 成功时 result.success 为 true，result.data.HAI_APP_PORT 为 '4000'；其他键来自合并后的环境。
-// 返回值不会自动写入进程；显式应用后再初始化。
+
 Object.assign(process.env, result.data)
-core.init({ configDir: './config' }) // 返回 undefined；app.yml 中 port: 3000 被覆盖为数字 4000。
+core.init({ configDir: './config' })
+core.config.get('app') // { port: 4000 }
 ```
 
 #### 替换后的值是什么类型
@@ -263,8 +247,7 @@ if (!resolved.success)
 const validated = AppSchema.safeParse(resolved.data)
 if (!validated.success)
   throw new Error(validated.error.message, { cause: validated.error })
-core.logger.info('Config resolved', { settings: validated.data })
-// settings: { port: 5000, enabled: false, label: 'server-4000', code: '00123' }
+core.logger.info('Config resolved', { port: validated.data.port }) // port: 5000
 ```
 
 空字符串表示“变量已经设置，只是内容为空”，不会被当成缺失、null、false 或 0。例如 `APP_CODE=''` 会使 code 保持 `''`，不会改用 00123；是否允许空串由 Schema 决定。数字字段收到空串则通常校验失败。
@@ -303,29 +286,24 @@ const restored = core.config.parseEnv(text) // 解析回字面字符串，不执
 core.logger.info('Generated config verified', { port: restored.HAI_APP_PORT })
 ```
 
-普通对象默认展开；数组、动态字典和空对象保留 JSON。整体替换对象的生成规则、完整来源优先级与应用接入见[基础配置手册](../../docs/usage/configuration/runtime.md).
+普通对象默认展开，数组、动态字典和空对象保留为 JSON。`stringifyEnv()` 默认生成供 Node 读取的文本，也可传入 `{ target: 'compose' }` 适配 Compose 的美元符号处理。Node 解析单引号值时会移除字面的回车字符（`\r`）。[基础配置手册](../../docs/usage/configuration/runtime.md)
 
 ### 记录日志：`core.logger`
 
-`core.logger` 用于记录结构化日志。六个级别从详细到严重依次为 trace、debug、info、warn、error、fatal；fatal 记录日志，是否退出由应用决定。
+日志按 `trace`、`debug`、`info`、`warn`、`error`、`fatal` 递增，只输出达到当前阈值的记录。阈值为 `fatal` 时只输出这一等级，应用自行决定是否退出。
 
-`core.logger` 支持 `trace` / `debug` / `info` / `warn` / `error` / `fatal`。Node 使用 pino，浏览器使用 loglevel；未配置时为 `info` / `pretty`。若提供经 `LoggingConfigSchema` 解析的 `logging` 对象，其格式默认 `json`。Node 缺少可选 `pino-pretty` 时使用 JSON 输出。
+默认日志级别为 `info`，格式为 `pretty`。在 YAML 中提供 `logging` 对象时，其省略的 `format` 由 Schema 补为 `json`。Node 使用 pino，缺少可选的 `pino-pretty` 时输出 JSON。浏览器写入开发者控制台，其中的 `bigint` 值输出为十进制字符串，循环引用显示为 `[Circular]`。
 
 ```ts
 import { core } from '@h-ai/core'
 
-// 先设置级别；低于当前级别的日志不会输出。
-core.logger.setLevel('trace') // 返回 undefined；以下六个级别均会输出。
-core.logger.trace('Processing detail', { step: 1 })
-core.logger.debug('Read started')
-core.logger.info('Order created', { orderId: 'order-1' })
+core.logger.setLevel('info')
+core.logger.debug('Read started') // 低于 info，跳过。
+core.logger.info('Order created', { orderId: 'order-1' }) // 日志包含 orderId。
 core.logger.warn('Retry scheduled')
 core.logger.error('Operation failed', {
   error: new Error('Example failure')
 })
-core.logger.fatal('Service cannot continue')
-// 六次日志调用均返回 undefined；分别输出对应级别、上面的消息及所传字段。
-// 例如 info 日志的消息为 'Order created'，字段 orderId 为 'order-1'。
 ```
 
 `create()` 创建有名称的 Logger，`child()` 给后续日志附带固定字段。`configure()` 设置输出与附加脱敏路径，`setLevel()` / `getLevel()` 调整或查看全局级别。
@@ -333,19 +311,19 @@ core.logger.fatal('Service cannot continue')
 ```ts
 import { core } from '@h-ai/core'
 
-// 全局配置可作用于已经创建的 Logger；redact 补充业务隐私字段。
 core.logger.configure({
   level: 'info',
   format: 'json',
-  redact: ['customer.email']
-}) // 返回 undefined；后续日志按此配置输出。
-const orders = core.logger.create({ name: 'orders' }) // 返回 Logger 对象，可调用 info/warn 等方法。
-const request = core.logger.child({ requestId: 'request-1' }) // 返回带固定 requestId 的 Logger。
+  redact: ['customer.email'],
+})
+const orders = core.logger.create({ name: 'orders' })
+const request = orders.child({ requestId: 'request-1' })
+
 orders.info('Order created', {
-  customer: { email: 'user@example.com' }
-}) // 返回 undefined；输出中 customer.email 为 '[REDACTED]'。
-request.warn('Request needs attention') // 返回 undefined；输出中 requestId 为 'request-1'。
-core.logger.getLevel() // 'info'。
+  customer: { email: 'user@example.com' },
+}) // customer.email: '[REDACTED]'
+request.warn('Request needs attention') // requestId: 'request-1'
+core.logger.getLevel() // 'info'
 ```
 
 已有默认、模块和嵌套 child Logger 的后续输出会使用当前全局配置，`setLevel()` 也即时生效。`create()` 显式指定的 level/format/context 优先；未指定项动态继承，调用时上下文覆盖固定上下文，当前请求关联字段再由 `core.context` 附加。浏览器 JSON 输出包含 `level` / `msg`，pretty 输出可读消息和上下文。
@@ -355,17 +333,19 @@ core.logger.getLevel() // 'info'。
 ```ts
 import { core } from '@h-ai/core'
 
-// 观察经过级别过滤和脱敏的记录；内存收集设置上限。
 const recentMessages: string[] = []
 const stop = core.logger.observe((record) => {
   if (recentMessages.length === 100)
     recentMessages.shift()
   recentMessages.push(record.message)
 })
-// observe 返回取消函数 stop；本例 warn 日志触发一次回调，record.message 为 'Observed event'。
-core.logger.warn('Observed event')
-recentMessages // ['Observed event']。
-stop() // 返回 undefined；后续日志不再进入这个回调。
+try {
+  core.logger.warn('Observed event')
+  recentMessages // ['Observed event']
+}
+finally {
+  stop()
+}
 ```
 
 ### 关联同一次请求：`core.context`
@@ -504,7 +484,7 @@ core.i18n.DEFAULT_LOCALE // zh-CN。
 core.i18n.DEFAULT_LOCALES // [{ code: 'zh-CN', label: '简体中文' }, { code: 'en-US', label: 'English' }, { code: 'ja-JP', label: '日本語' }]。
 ```
 
-消息语言支持 `zh-CN`、`en-US`、`ja-JP`，简写 `zh` / `en` / `ja` 会规范化。消息优先使用显式 locale，其次为 Node 请求语言，最后为应用默认语言；不支持的语言回退 `zh-CN`，缺失键返回键本身。
+`zh`、`en`、`ja` 分别对应 `zh-CN`、`en-US`、`ja-JP`。获取消息时，显式 `locale` 优先，其次是 Node 请求语言和应用默认语言。语言不受支持或缺少整份字典时，使用 `zh-CN` 字典。字典里没有对应消息时返回键名；参数缺失时保留 `{name}` 这类占位符。
 
 ```ts
 import { core } from '@h-ai/core'
@@ -552,7 +532,7 @@ if (!parsed.success) {
 }
 ```
 
-支持 Zod v3/v4 的 issues/errors 结构；默认英文消息会翻译，Schema 显式提供的业务消息保留。字段路径用点号，全局错误用 `_`。严格 Schema 的未知字段使用 validationUnexpectedFields，不公开内部字段名。
+传给映射器的是 `safeParse()` 失败结果中的 `error`。它读取 Zod v3/v4 的 `issues` 或 `errors` 数组，跳过缺少有效路径或文案的条目。默认英文消息会翻译，业务自定义消息会保留。路径如 `items.0.email`，整张表单的错误用 `_`。严格 Schema 的未知字段使用统一的 `validationUnexpectedFields` 提示。
 
 ### 模块启动与辅助工具：`core.module`
 
@@ -814,7 +794,7 @@ core.array.intersection([1, 2], [2, 3]) // [2]。
 core.array.difference([1, 2], [2, 3]) // [1]。
 ```
 
-groupBy 支持 `constructor`、`__proto__` 等原型同名键；chunk 的块大小应为正整数，size<=0 返回空数组。
+`groupBy()` 支持与原型属性同名的键，例如 `constructor`。`chunk()` 要求块大小为正安全整数，传入小数、无穷大或其他无效大小时返回空数组。
 
 ### 组织异步操作：`core.async`
 
@@ -838,7 +818,9 @@ search('orders') // 约 100ms 后回调收到 'orders'；100ms 内连续调用�
 scroll(100) // 本例第一次调用立即回调，position 为 100；100ms 内最多执行一次。
 ```
 
-withTimeout 只限制等待时间，不取消底层任务。retry 仅处理抛错/reject，失败 HaiResult 不会自动重试；当前 maxRetries 包含第一次尝试，例如 3 表示最多执行三次。parallel 的并发数须为大于 0 的安全整数，非法值使 Promise 以 RangeError 失败且不执行任务；结果顺序与输入一致。
+- `withTimeout()` 到时会拒绝等待的 Promise。底层任务的取消由调用方负责。
+- `retry()` 在操作抛错或拒绝时再次执行。`maxRetries` 包含第一次尝试，默认最多执行三次，间隔 1000 毫秒。返回失败 `HaiResult` 时，由调用方判断结果。
+- `parallel()` 按输入顺序返回结果。并发数须为正安全整数，无效时在执行任何任务前以 `RangeError` 拒绝。单个任务拒绝后，其余工作者仍可能继续处理队列。
 
 ### 处理日期与时间：`core.time`
 
@@ -847,22 +829,26 @@ withTimeout 只限制等待时间，不取消底层任务。retry 仅处理抛�
 ```ts
 import { core } from '@h-ai/core'
 
-// date 与以下日期运算使用本机时区；parseDate 中的 Z 表示 UTC。
+// 这些日期运算使用运行环境的本地时区。
 const date = new Date(2026, 0, 1, 12, 0, 0)
-core.time.formatDate(date, 'YYYY-MM-DD HH:mm:ss') // '2026-01-01 12:00:00'。
-core.i18n.setGlobalLocale('zh-CN') // 返回 undefined；相对时间使用中文。
-core.time.timeAgo(new Date(Date.now() - 60_000)) // '1 分钟前'（立即执行时）。
-core.time.now() // 当前毫秒时间戳，如 1767268800000；每次执行随时间变化。
-core.time.nowSeconds() // 当前秒时间戳，如 1767268800；相当于当前毫秒时间戳除以 1000 后向下取整。
-const parsed = core.time.parseDate('2026-01-01T00:00:00Z') // Date 对象，toISOString() 为 '2026-01-01T00:00:00.000Z'。
-core.time.isValidDate(parsed) // true；Invalid Date 返回 false。
-core.time.addDays(date, 7) // 新 Date，本机时间 2026-01-08 12:00:00。
-core.time.addHours(date, 2) // 新 Date，本机时间 2026-01-01 14:00:00。
-core.time.startOfDay(date) // 新 Date，本机时间 2026-01-01 00:00:00.000。
-core.time.endOfDay(date) // 新 Date，本机时间 2026-01-01 23:59:59.999。
+core.time.formatDate(date, 'YYYY-MM-DD HH:mm:ss') // '2026-01-01 12:00:00'
+core.time.formatDate(date, 'MM/DD (MM-DD)') // '01/01 (01-01)'
+
+core.i18n.setGlobalLocale('zh-CN')
+core.time.timeAgo(new Date(Date.now() - 120_000)) // '2 分钟前'
+core.time.now() // 当前 Unix 时间戳，单位为毫秒。
+core.time.nowSeconds() // 当前 Unix 时间戳，向下取整到秒。
+
+const parsed = core.time.parseDate('2026-01-01T00:00:00Z')
+parsed.toISOString() // '2026-01-01T00:00:00.000Z'
+core.time.isValidDate(parsed) // true
+core.time.addDays(date, 7) // 2026-01-08 12:00:00
+core.time.addHours(date, 2) // 2026-01-01 14:00:00
+core.time.startOfDay(date) // 2026-01-01 00:00:00.000
+core.time.endOfDay(date) // 2026-01-01 23:59:59.999
 ```
 
-formatDate 支持 YYYY/MM/DD/HH/mm/ss 占位符，默认 YYYY-MM-DD；日期运算返回新 Date。parseDate 不会因无效文本自动抛错，应使用 isValidDate 检查。
+`formatDate()` 默认使用 `YYYY-MM-DD`，会替换模板里每处日期占位符。`parseDate()` 使用原生 `Date` 解析，输入无效时可用 `isValidDate()` 检出。跨环境传输建议使用带时区的 ISO 字符串。`addDays()` 和 `addHours()` 按本地日历和时钟计算，在夏令时切换时，经过的实际时长可能不同。
 
 更完整的参数与少见选项见[Core 使用参考](../cli/templates/skills/hai-core/reference.md)；公开契约以当前包声明为准。
 

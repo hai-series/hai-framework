@@ -45,7 +45,7 @@ core.init({ configDir: './config' })
 core.init({ configDir: './config', watchConfig: true })
 ```
 
-项目根 `hai.json` 的 `build` / `deploy` 由 CLI 读取；Core 自动加载和监听配置目录内所有 YAML，不设置保留文件名。单项 `config.load` 返回失败时记录错误并继续，应用须 validate 必需配置并检查 success。目录扫描、日志设置等异常仍可能传播，不能把同步 void 当作所有配置加载成功的证明。
+Core 扫描配置目录直属的 YAML。启用 `watchConfig` 后只监听本次成功加载的配置。单项读取或校验失败时记录文件位置和错误码，再继续加载其他文件。应用在启动时应确认必需配置已加载，并检查业务校验结果。目录扫描、日志设置等异常仍可能传播。项目根 `hai.json` 的 `build` / `deploy` 由 CLI 读取。
 
 应用需要同时启动多个模块时，可将各模块的初始化/关闭函数交给 `core.module.createRuntime`。创建时只记录这些函数；调用返回对象的 start 按顺序初始化，close 反序释放，失败时清理已尝试启动的模块。两者返回 HaiResult，需检查 success。带注释的数据库/缓存示例见[应用启动与关闭](https://github.com/hai-series/hai-framework/blob/main/packages/core/README.md#应用启动与关闭)。
 
@@ -96,11 +96,13 @@ const formErrors = core.zodValidation.mapZodErrorToFormErrors(zodError, getMessa
 
 Node 的 `loadEnvFiles({ mode, envDir? })` 返回合并变量的 HaiResult，不修改进程；`core.init` 不自动读取 dotenv。`resolve`/`mergeEnv`/`toEnv`/`parseEnv`/`stringifyEnv` 用于配置生成，返回值可能含秘密，不能整体记录日志。完整来源与生成规则见[基础配置手册](https://github.com/hai-series/hai-framework/blob/main/docs/usage/configuration/runtime.md)。
 
+`load(name, file, schema)` 按同步 Schema 解析并校验。扫描时也可用 `configSchemas` 为插值提供类型提示，随后由 `validate()` 校验缓存值。Schema 失败返回 `CONFIG_VALIDATION_ERROR`，`error.cause` 保留 issues 或自定义校验抛出的异常。使用改变输入类型的 Schema 时，校验成功后使用返回值，重新读盘校验用 `reload()`。
+
 变量替换示例：`app.yml` 写 `port: ${PORT:3000}`，PORT 未设置时读取默认值 3000，`PORT=4000` 时读取 4000；设置 `HAI_APP_PORT=5000` 则直接覆盖为 5000，不再要求 PORT 存在。Schema 的数字/布尔字段可把单个表达式转换为对应类型，字符串字段保留前导零；混合文本仍为字符串。空串表示已设置，不使用默认值；环境值里的 `${PORT}` 保持原样，不继续替换。分步解释与可运行示例见[Core 文件与环境配置](https://github.com/hai-series/hai-framework/blob/main/packages/core/README.md#文件与环境配置coreconfig)。
 
 **`watch()` 回调处理**：
 
-监听支持原地写入、原子替换及删除重建；校验/读取失败时保留最近成功的缓存并通知错误，恢复有效文件后继续重载。它只响应目标文件，取消监听同时清除待执行重载，不会因此重新初始化应用模块。
+监听支持原地写入、原子替换及删除重建。读取或校验失败时，回调收到错误，最近成功的缓存仍能读取。配置名尚未加载时立即回调 `CONFIG_NOT_LOADED`。底层监听无法创建或报错时返回 `SERVICE_UNAVAILABLE`，目录恢复后可以重新注册。重载成功只更新 Core 缓存，各业务模块按自己的生命周期应用设置。
 
 ```typescript
 // watch 回调签名：(config: T | null, error?: HaiError) => void
@@ -113,7 +115,6 @@ const unwatch = core.config.watch('db', (cfg, error) => {
     core.logger.error('Config reload failed', {
       name: 'db',
       code: error.code,
-      message: error.message,
     })
     return
   }
@@ -199,7 +200,7 @@ core.logger.configure({
   level: 'warn',
   format: 'json',
   redact: ['password', 'token'], // 脱敏字段
-}) // Node.js 支持
+})
 core.logger.setLevel('debug')
 const level = core.logger.getLevel() // 'debug'
 ```
@@ -557,7 +558,8 @@ logger.debug('Data fetched', { count: items.length })
 | `core.config` 文件配置 | 不支持；文件相关方法返回 `SERVICE_UNAVAILABLE`，配置应由服务端读取后下发 |
 | `format: 'json' \| 'pretty'` | 始终输出到 DevTools console；json 为包含 level/msg 的 JSON 字符串，pretty 为可读消息与上下文 |
 | 自定义 `redact` 配置 | 与默认 sanitizeSensitiveFields 同时生效；支持嵌套点/括号路径与 `*`，不修改调用方对象；消息文本需调用方脱敏 |
-| `fatal` 级别 | 映射为 console.error；pretty 带 `[FATAL]` 前缀，json 使用 `level: 'fatal'` |
+| `fatal` 级别 | 阈值为 fatal 时只输出 fatal，由 console.error 写出。pretty 带 `[FATAL]` 前缀，json 使用 `level: 'fatal'` |
+| `bigint` 和循环引用 | 控制台使用十进制字符串和 `[Circular]` 标记 |
 | context 输出 | pretty 追加 JSON 上下文，json 合并上下文到结构化 JSON 字符串 |
 
 云资源输出格式与部署配置消费见 [hai-deploy](../hai-deploy/SKILL.md)；这里的父节点覆盖规则同样适用。

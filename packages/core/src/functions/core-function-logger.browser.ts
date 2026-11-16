@@ -43,6 +43,15 @@ const LEVEL_MAP: Record<LogLevel, log.LogLevelDesc> = {
   fatal: 'error', // loglevel 没有 fatal
 }
 
+const LEVEL_PRIORITY: Record<LogLevel, number> = {
+  trace: 0,
+  debug: 1,
+  info: 2,
+  warn: 3,
+  error: 4,
+  fatal: 5,
+}
+
 /**
  * 配置全局 Logger 选项。
  *
@@ -108,24 +117,37 @@ function sanitizeLogContext(ctx?: LogContext): LogContext | undefined {
 // ─── Logger 实现 ───
 
 /**
- * 格式化日志消息。
- *
- * 将消息文本与上下文拼接为单行输出（上下文序列化为 JSON）。
- *
- * @param message - 日志文本
- * @param context - 日志上下文（空对象时不输出）
- * @returns 格式化后的字符串
+ * 序列化已脱敏的日志。bigint 保留为十进制字符串，循环引用使用固定标记。
+ * @param message - 已脱敏的日志文本
+ * @param context - 已脱敏的上下文，pretty 格式省略空对象
+ * @param format - JSON 或可读文本
+ * @param level - 本条记录的级别
+ * @returns 交给浏览器控制台的字符串
  */
-function formatMessage(message: string, context?: LogContext, format: LogFormat = globalFormat, level: LogLevel = 'info'): string {
-  const sanitizedContext = sanitizeLogContext(context)
-
-  if (format === 'json')
-    return JSON.stringify({ ...sanitizedContext, level, msg: message })
-
-  if (!sanitizedContext || Object.keys(sanitizedContext).length === 0) {
+function formatMessage(message: string, context: LogContext, format: LogFormat, level: LogLevel): string {
+  if (format === 'pretty' && Object.keys(context).length === 0)
     return message
-  }
-  return `${message} ${JSON.stringify(sanitizedContext)}`
+
+  const record = format === 'json'
+    ? { ...context, level, msg: message }
+    : context
+  const ancestors: object[] = []
+  // 只替换指回祖先的引用；同一对象出现在不同字段下时可分别输出。
+  const json = JSON.stringify(record, function (this: object, _key, value: unknown) {
+    if (typeof value === 'bigint')
+      return value.toString()
+    if (value === null || typeof value !== 'object')
+      return value
+    while (ancestors.length > 0 && ancestors.at(-1) !== this)
+      ancestors.pop()
+    if (ancestors.includes(value))
+      return '[Circular]'
+    ancestors.push(value)
+    return value
+  })
+  return format === 'json'
+    ? json
+    : `${message} ${json}`
 }
 
 /**
@@ -133,23 +155,15 @@ function formatMessage(message: string, context?: LogContext, format: LogFormat 
  *
  * 将 loglevel 实例包装为统一 Logger 接口，自动合并基础上下文。
  *
- * @param resolveLogger - 当前级别的 loglevel 实例
+ * @param resolveLogger - 通过当前阈值时返回 loglevel 实例
  * @param resolveContext - 当前基础上下文（会与每次调用时的 ctx 合并）
  * @param resolveFormat - 当前输出格式
  * @returns 统一 Logger 实例
  */
-function wrapLoglevel(resolveLogger: () => log.Logger, resolveContext: () => Record<string, unknown>, resolveFormat: () => LogFormat): Logger {
+function wrapLoglevel(resolveLogger: (level: LogLevel) => log.Logger | undefined, resolveContext: () => Record<string, unknown>, resolveFormat: () => LogFormat): Logger {
   const write = (level: LogLevel, message: string, ctx?: LogContext): void => {
-    const output = resolveLogger()
-    const priorities: Record<LogLevel, number> = {
-      trace: 0,
-      debug: 1,
-      info: 2,
-      warn: 3,
-      error: 4,
-      fatal: 4,
-    }
-    if (priorities[level] < output.getLevel())
+    const output = resolveLogger(level)
+    if (!output)
       return
     const context = sanitizeLogContext({
       ...resolveContext(),
@@ -157,9 +171,10 @@ function wrapLoglevel(resolveLogger: () => log.Logger, resolveContext: () => Rec
       ...requestContext.get(),
     }) ?? {}
     message = sanitizeUtils.sanitizeText(message)
-    const text = formatMessage(message, context, resolveFormat(), level)
+    const format = resolveFormat()
+    const text = formatMessage(message, context, format, level)
     if (level === 'fatal') {
-      output.error(resolveFormat() === 'json'
+      output.error(format === 'json'
         ? text
         : `[FATAL] ${text}`)
     }
@@ -224,13 +239,16 @@ function createLogger(options: LoggerOptions = {}): Logger {
     ? log.getLogger(name)
     : log
 
-  const resolveLogger = (): log.Logger => {
-    const effectiveLevel = LEVEL_MAP[level ?? globalLevel]
+  const resolveLogger = (messageLevel: LogLevel): log.Logger | undefined => {
+    // loglevel 共用 error 通道输出 fatal，由 Core 先执行六级阈值判断。
+    const minimum = level ?? globalLevel
+    if (LEVEL_PRIORITY[messageLevel] < LEVEL_PRIORITY[minimum])
+      return undefined
+    const effectiveLevel = LEVEL_MAP[minimum]
     if (loggerInstance.getLevel() !== log.levels[String(effectiveLevel).toUpperCase() as keyof typeof log.levels])
       loggerInstance.setLevel(effectiveLevel)
     return loggerInstance
   }
-  resolveLogger()
   return wrapLoglevel(resolveLogger, () => ({
     ...globalContext,
     ...context,

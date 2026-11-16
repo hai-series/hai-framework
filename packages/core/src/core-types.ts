@@ -550,10 +550,10 @@ export interface LoggerFunctions {
  * ```
  */
 export interface CoreOptions {
-  /** 日志配置 */
+  /** 本次初始化应用的日志选项。Node 同时加载 _core.yml 时优先使用这里的设置。 */
   logging?: Partial<LoggingConfig>
   /**
-   * 配置目录（约定优于配置模式）
+   * Node 启动时读取的配置目录。相对路径以进程工作目录为基准。
    *
    * 指定后会自动扫描目录中的 yml/yaml 文件：
    * - `_core.yml` → 自动使用 CoreConfigSchema 校验
@@ -566,13 +566,14 @@ export interface CoreOptions {
    *
    * @example
    * ```ts
+   * import { core } from '@h-ai/core'
    * core.init({ configDir: './config' })
    * ```
    */
   configDir?: string
   /** 宿主显式提供模块 Schema，供扫描时识别可选字段和环境变量类型；Core 不注册业务模块。 */
   configSchemas?: Readonly<Record<string, z.ZodType>>
-  /** 是否启用配置文件监听（默认 false） */
+  /** 默认 false。Node 启用后监听本次成功加载的配置，随后只更新 Core 缓存。 */
   watchConfig?: boolean
 }
 
@@ -917,16 +918,18 @@ export type IdFn = typeof id
 export type ErrorFn = typeof error
 
 /**
- * 监听回调类型。
+ * 接收配置重载结果。成功时 data 为新值且 error 为 undefined，失败时 data 为 null 且提供 HaiError。
+ * 注册失败时同步调用；注册成功时等待文件变更或显式 reload。
  *
  * @template T - 配置数据类型
- * @example 模块内部上下文
+ * @example
  * ```ts
- * const callback: WatchCallback<{ enabled: boolean }> = (config, failure) => {
- *   if (failure) { messages.push(failure.message); return }
- *   if (config) messages.push(String(config.enabled))
- * }
+ * import type { WatchCallback } from '@h-ai/core'
  * const messages: string[] = []
+ * const callback: WatchCallback<{ enabled: boolean }> = (data, error) => {
+ *   if (error) messages.push(String(error.code))
+ *   else if (data) messages.push(String(data.enabled))
+ * }
  * ```
  */
 export type WatchCallback<T = unknown> = (config: T | null, error?: HaiError) => void

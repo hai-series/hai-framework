@@ -25,8 +25,8 @@ function delay(ms: number): Promise<void> {
  *
  * @param promise - 目标 Promise
  * @param ms - 超时时间（毫秒）
- * @returns 原 Promise 的结果
- * @throws 超时将抛出错误
+ * @returns 原 Promise 的结果；超时只结束等待，底层操作继续由调用方管理
+ * @throws 超时以本地化 Error 拒绝；原 Promise 先拒绝时保留其拒绝原因
  *
  * @example
  * ```ts
@@ -53,10 +53,11 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
  *
  * @param fn - 待重试函数
  * @param options - 重试配置
- * @param options.maxRetries - 最大重试次数
- * @param options.delay - 重试间隔（毫秒）
+ * @param options.maxRetries - 含第一次的总尝试次数，默认 3；传入 0 时仍执行一次
+ * @param options.delay - 两次尝试间的等待时长，默认 1000 毫秒
  * @returns 成功的结果
- * @throws 重试耗尽后抛出最后一次错误
+ * @throws 耗尽后以最后一次拒绝原因失败
+ * @remarks 回调正常返回失败 HaiResult 时，重试结束，由调用方处理该结果。
  *
  * @example
  * ```ts
@@ -91,7 +92,7 @@ async function retry<T>(
  * @param fn - 处理函数
  * @param concurrency - 最大并发数，必须为大于 0 的安全整数
  * @returns 处理结果列表
- * @remarks 结果顺序与输入顺序一致。
+ * @remarks 结果按输入排序。一个任务拒绝后，其它工作者可能继续处理队列。
  * @throws 并发数非法时拒绝为 RangeError，不执行任何任务；任务异常原样传播。
  *
  * @example

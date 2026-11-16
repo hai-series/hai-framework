@@ -15,7 +15,7 @@ import { parse } from 'yaml'
 
 // ─── 配置文件监听 ───
 
-import { err, HaiConfigError, ok } from '../core-types.js'
+import { err, HaiCommonError, HaiConfigError, ok } from '../core-types.js'
 import { i18n } from '../i18n/core-i18n-utils.js'
 import { mergeEnv, parseEnvironment, resolveEnvironment, stringifyEnv, toEnv } from './core-function-environment.node.js'
 
@@ -75,41 +75,45 @@ const watchEntries = new Map<string, WatchEntry>()
  * @returns HaiError，错误码为 NOT_LOADED
  */
 function createNotLoadedError(name: string): HaiError {
-  const result = err(HaiConfigError.CONFIG_NOT_LOADED, i18n.coreM('core_configNotLoaded', {
-    params: { name },
-  }))
-  if (!result.success)
-    return result.error
-
-  throw new Error('unreachable')
+  return {
+    ...HaiConfigError.CONFIG_NOT_LOADED,
+    message: i18n.coreM('core_configNotLoaded', {
+      params: { name },
+    }),
+  }
 }
 
 /**
- * 通知监听回调。
- *
+ * 把文件监听的系统异常转换成可重试的错误，已缓存的配置仍可使用。
  * @param name - 配置名称
+ * @param cause - 原始监听异常，供调用方诊断
+ * @returns SERVICE_UNAVAILABLE 错误
+ */
+function createWatchError(name: string, cause: unknown): HaiError {
+  return {
+    ...HaiCommonError.SERVICE_UNAVAILABLE,
+    message: i18n.coreM('core_configWatchUnavailable', {
+      params: { name },
+    }),
+    cause,
+  }
+}
+
+/**
+ * 向订阅方报告同一次重载或监听失败。单个回调抛错时仍通知其余回调。
+ *
+ * @param callbacks - 本次需要通知的回调
  * @param result - 重载结果（成功时传配置数据，失败时传错误）
  */
-function notifyWatchCallbacks(name: string, result: HaiResult<unknown>): void {
-  const entry = watchEntries.get(name)
-  if (!entry)
-    return
-
-  if (result.success) {
-    for (const callback of entry.callbacks) {
-      try {
+function notifyWatchCallbacks(callbacks: Iterable<WatchCallback<unknown>>, result: HaiResult<unknown>): void {
+  for (const callback of callbacks) {
+    try {
+      if (result.success)
         callback(result.data, undefined)
-      }
-      catch { /* 隔离单个回调异常，不影响其他回调 */ }
-    }
-  }
-  else {
-    for (const callback of entry.callbacks) {
-      try {
+      else
         callback(null, result.error)
-      }
-      catch { /* 隔离单个回调异常，不影响其他回调 */ }
     }
+    catch { /* 隔离单个回调异常，不影响其他回调 */ }
   }
 }
 
@@ -120,7 +124,8 @@ function notifyWatchCallbacks(name: string, result: HaiResult<unknown>): void {
  *
  * @param name - 配置名称，用于生成 `HAI_<配置名>_<YAML 路径>` 环境变量名
  * @param filePath - YAML 文件路径
- * @returns 解析结果；可能的错误码：FILE_NOT_FOUND / PARSE_ERROR / ENV_VAR_MISSING
+ * @param schema - 可选结构提示，用于识别路径与类型
+ * @returns 解析后的配置，或读取、解析及环境覆盖的错误
  */
 function loadYaml(name: string, filePath: string, schema?: ZodType): HaiResult<unknown> {
   if (!existsSync(filePath)) {
@@ -157,15 +162,27 @@ function loadConfig<T>(
   schema: ZodType<T>,
 ): HaiResult<T> {
   const yamlResult = loadYaml(name, filePath, schema)
-  if (!yamlResult.success)
-    return yamlResult
+  return yamlResult.success
+    ? validateConfig(yamlResult.data, schema)
+    : yamlResult
+}
 
-  const parseResult = schema.safeParse(yamlResult.data)
-  if (!parseResult.success) {
-    return err(HaiConfigError.CONFIG_VALIDATION_ERROR, i18n.coreM('core_configValidationFailed'), parseResult.error.issues)
+/**
+ * 在同步配置 API 的边界统一转换 Schema 失败。
+ * @param value - 环境覆盖后的值
+ * @param schema - Zod 校验和转换规则
+ * @returns 校验后的数据；失败时保留 Zod issues 或自定义校验抛出的异常
+ */
+function validateConfig<T>(value: unknown, schema: ZodType<T>): HaiResult<T> {
+  try {
+    const parsed = schema.safeParse(value)
+    if (parsed.success)
+      return ok(parsed.data)
+    return err(HaiConfigError.CONFIG_VALIDATION_ERROR, i18n.coreM('core_configValidationFailed'), parsed.error.issues)
   }
-
-  return ok(parseResult.data)
+  catch (cause) {
+    return err(HaiConfigError.CONFIG_VALIDATION_ERROR, i18n.coreM('core_configValidationFailed'), cause)
+  }
 }
 
 /**
@@ -196,7 +213,11 @@ function loadAndCache<T>(
 }
 
 /**
- * 扫描时仅借助宿主 Schema 识别路径和类型，保留原有模块初始化校验边界。
+ * 读取配置并写入缓存。扫描时只用宿主 Schema 识别环境变量路径和类型，完整校验由模块执行。
+ * @param name - 缓存名称
+ * @param filePath - YAML 文件路径
+ * @param schemaHint - 供读取和重载使用的结构提示
+ * @returns 应用环境覆盖后的配置或失败原因；失败保留旧缓存
  * @example 模块内部上下文
  * ```ts
  * const loaded = loadConfigStructure('app', '/srv/app/config/app.yml')
@@ -219,7 +240,7 @@ export function loadConfigStructure(name: string, filePath: string, schemaHint?:
 /**
  * 校验已加载的配置并写回缓存。
  *
- * 从缓存中取出原始数据重新用 Schema 校验，校验通过后更新缓存。
+ * 基于当前缓存数据应用约定式环境覆盖，再用 Schema 校验。成功后保存校验结果和 Schema，供后续重载使用。
  *
  * @param name - 配置名称
  * @param schema - Zod Schema
@@ -234,20 +255,18 @@ function validateLoadedConfig<T>(name: string, schema: ZodType<T>): HaiResult<T>
   const resolved = resolveEnvironment({ name, value: entry.data, schema }, true)
   if (!resolved.success)
     return resolved
-  const parseResult = schema.safeParse(resolved.data)
-  if (!parseResult.success) {
-    return err(HaiConfigError.CONFIG_VALIDATION_ERROR, i18n.coreM('core_configValidationFailed'), parseResult.error.issues)
-  }
+  const validated = validateConfig(resolved.data, schema)
+  if (!validated.success)
+    return validated
 
-  const validated = parseResult.data
   configCache.set(name, {
     ...entry,
-    data: validated,
+    data: validated.data,
     schema,
     loadedAt: Date.now(),
   })
 
-  return ok(validated)
+  return validated
 }
 
 /**
@@ -260,11 +279,8 @@ function validateLoadedConfig<T>(name: string, schema: ZodType<T>): HaiResult<T>
  */
 function reloadAndNotify(name: string): HaiResult<unknown> {
   const entry = configCache.get(name)
-  if (!entry) {
-    const result = err(createNotLoadedError(name))
-    notifyWatchCallbacks(name, result)
-    return result
-  }
+  if (!entry)
+    return err(createNotLoadedError(name))
 
   // 无 Schema 时直接加载 YAML（不做校验），避免 schema 为 undefined 导致运行时崩溃
   const result = entry.schema
@@ -277,7 +293,9 @@ function reloadAndNotify(name: string): HaiResult<unknown> {
       loadedAt: Date.now(),
     })
   }
-  notifyWatchCallbacks(name, result)
+  const subscribed = watchEntries.get(name)
+  if (subscribed)
+    notifyWatchCallbacks(subscribed.callbacks, result)
   return result
 }
 
@@ -285,65 +303,62 @@ function reloadAndNotify(name: string): HaiResult<unknown> {
  * 启动配置文件监听。
  *
  * 使用 `fs.watch` 监听父目录并筛选目标文件，支持原子替换及删除后重建。
- * 同一配置名只会创建一个 watcher，多次调用返回同一实例。
- *
  * @param name - 配置名称
- * @returns WatchEntry 实例；配置未加载时返回 null
+ * @param path - 配置文件路径
+ * @returns 供同名配置的订阅方共享的监听条目
+ * @throws 操作系统无法启动监听时抛出，由注册方法交给回调
  */
-function startFileWatcher(name: string): WatchEntry | null {
-  const existing = watchEntries.get(name)
-  if (existing)
-    return existing
-
-  const entry = configCache.get(name)
-  if (!entry)
-    return null
-
-  try {
-    const watchEntry: WatchEntry = {
-      watcher: null!,
-      callbacks: new Set(),
-      debounceTimer: null,
-    }
-
-    const filePath = resolve(entry.filePath)
-    const fileName = basename(filePath)
-    // 监听目录避免绑定已被 rename 替换的旧文件；无文件名时保守地检查目标配置。
-    const watcher = watch(dirname(filePath), (_eventType, changedName) => {
-      if (changedName !== null && changedName.toString() !== fileName)
-        return
-      if (watchEntry.debounceTimer)
-        clearTimeout(watchEntry.debounceTimer)
-      watchEntry.debounceTimer = setTimeout(() => {
-        watchEntry.debounceTimer = null
-        if (watchEntries.get(name) === watchEntry)
-          reloadAndNotify(name)
-      }, 100)
-    })
-
-    watchEntry.watcher = watcher
-    watchEntries.set(name, watchEntry)
-    return watchEntry
+function startFileWatcher(name: string, path: string): WatchEntry {
+  const filePath = resolve(path)
+  const fileName = basename(filePath)
+  // 监听目录避免绑定已被 rename 替换的旧文件；无文件名时保守地检查目标配置。
+  const watcher = watch(dirname(filePath))
+  const entry: WatchEntry = {
+    watcher,
+    callbacks: new Set(),
+    debounceTimer: null,
   }
-  catch {
-    return null
-  }
+  watcher.on('change', (_eventType, changedName) => {
+    if (changedName !== null && changedName !== fileName)
+      return
+    if (entry.debounceTimer)
+      clearTimeout(entry.debounceTimer)
+    entry.debounceTimer = setTimeout(() => {
+      entry.debounceTimer = null
+      if (watchEntries.get(name) === entry)
+        reloadAndNotify(name)
+    }, 100)
+  })
+  watcher.on('error', (cause) => {
+    if (watchEntries.get(name) !== entry)
+      return
+    // 先释放监听，再通知订阅方，允许回调在底层恢复后注册新的监听。
+    stopWatching(name)
+    notifyWatchCallbacks(entry.callbacks, err(createWatchError(name, cause)))
+  })
+  watchEntries.set(name, entry)
+  return entry
 }
 
 /**
- * 注册监听回调。
- *
- * 启动文件 watcher（若尚未启动）并注册回调。
- * 配置未加载时立即回调 NOT_LOADED 错误。
+ * 为一个已加载的配置注册监听回调。底层监听由当前配置名的回调共享。
  *
  * @param name - 配置名称
- * @param callback - 变更回调
- * @returns 取消监听函数；调用后自动清理（无回调时关闭 watcher）
+ * @param callback - 重载或监听失败的通知函数
+ * @returns 取消本次订阅的函数；最后一个回调取消时关闭底层监听
  */
 function registerWatch<T>(name: string, callback: WatchCallback<T>): () => void {
-  const entry = startFileWatcher(name)
-  if (!entry) {
+  const cached = configCache.get(name)
+  if (!cached) {
     callback(null, createNotLoadedError(name))
+    return () => { }
+  }
+  let entry: WatchEntry
+  try {
+    entry = watchEntries.get(name) ?? startFileWatcher(name, cached.filePath)
+  }
+  catch (cause) {
+    callback(null, createWatchError(name, cause))
     return () => { }
   }
 
@@ -355,12 +370,8 @@ function registerWatch<T>(name: string, callback: WatchCallback<T>): () => void 
       return
 
     current.callbacks.delete(callback as WatchCallback<unknown>)
-    if (current.callbacks.size === 0) {
-      if (current.debounceTimer)
-        clearTimeout(current.debounceTimer)
-      current.watcher.close()
-      watchEntries.delete(name)
-    }
+    if (current.callbacks.size === 0)
+      stopWatching(name)
   }
 }
 
@@ -370,22 +381,16 @@ function registerWatch<T>(name: string, callback: WatchCallback<T>): () => void 
  * @param name - 配置名称；不传则停止所有监听并清空映射
  */
 function stopWatching(name?: string): void {
-  if (name) {
-    const entry = watchEntries.get(name)
-    if (entry) {
-      if (entry.debounceTimer)
-        clearTimeout(entry.debounceTimer)
-      entry.watcher.close()
-      watchEntries.delete(name)
-    }
-  }
-  else {
-    for (const entry of watchEntries.values()) {
-      if (entry.debounceTimer)
-        clearTimeout(entry.debounceTimer)
-      entry.watcher.close()
-    }
-    watchEntries.clear()
+  for (const key of name === undefined
+    ? watchEntries.keys()
+    : [name]) {
+    const entry = watchEntries.get(key)
+    if (!entry)
+      continue
+    watchEntries.delete(key)
+    if (entry.debounceTimer)
+      clearTimeout(entry.debounceTimer)
+    entry.watcher.close()
   }
 }
 
@@ -395,7 +400,7 @@ function stopWatching(name?: string): void {
  * @param name - 配置名称；不传则清理全部缓存并停止所有监听
  */
 function clearCache(name?: string): void {
-  if (name) {
+  if (name !== undefined) {
     configCache.delete(name)
     stopWatching(name)
   }
@@ -437,7 +442,7 @@ export const config = {
    */
   parseEnv: parseEnvironment,
   /**
-   * 无损编码 dotenv，父变量排在细项前；含秘密时只能写入受保护文件。
+   * 编码 dotenv，父变量排在细项前。Node dotenv 解析器会规范化单引号字面值中的回车。
    * @param values - 字面变量，不进行脱敏。
    * @param options - 输出语法目标，默认 Node dotenv。
    * @param options.target - Compose 目标同时处理其美元符号插值规则。
@@ -476,6 +481,7 @@ export const config = {
    *
    * 优先级：已有进程环境 > .env.<mode>.local > .env.local > .env.<mode> > .env。
    * development/production 分别映射到 dev/prod；不存在的文件跳过。
+   * 进程环境参与合并的键包括 HAI_ 前缀变量和 dotenv 文件已经声明的变量。
    * 返回值可能包含私有配置，仅在 Node 启动/构建边界注入，不下发浏览器。
    * @param options - 文件所在目录及环境模式
    * @param options.mode - dev/test/prod 或 Vite 的 development/production
@@ -483,8 +489,9 @@ export const config = {
    * @returns 已合并的变量；非法模式或读取失败返回配置错误，不包含文件内容
    * @example
    * ```ts
+   * import { core } from '@h-ai/core'
    * const env = core.config.loadEnvFiles({ mode: 'dev', envDir: '.' })
-   * if (!env.success) throw new Error(env.error.message)
+   * if (!env.success) throw new Error(env.error.message, { cause: env.error })
    * Object.assign(process.env, env.data)
    * core.init({ configDir: './config' })
    * ```
@@ -526,19 +533,19 @@ export const config = {
   /**
    * 加载配置到缓存。
    *
-   * 加载 YAML 文件并可选地用 Zod Schema 校验，成功后写入缓存。
+   * 读取 YAML、应用环境覆盖，再按可选 Schema 同步校验。校验成功后缓存数据和 Schema。
    *
    * @param name - 配置名称（缓存 key）
    * @param filePath - YAML 文件路径
-   * @param schema - 可选 Zod Schema（不传则跳过校验）
-   * @returns 成功时返回解析后的配置数据；失败时返回 HaiError
+   * @param schema - 可选 Zod Schema；环境变量按字段类型转换，同步校验可执行业务规则
+   * @returns 解析或校验后的配置。校验失败保留原始 issues 或异常，旧缓存仍可读取。
    *
    * @example
    * ```ts
-   * const result = config.load('core', './config/_core.yml', CoreConfigSchema)
-   * if (result.success) {
-   *   // result.data 为校验后的配置
-   * }
+   * import { core, CoreConfigSchema } from '@h-ai/core'
+   * const result = core.config.load('core', './config/_core.yml', CoreConfigSchema)
+   * if (!result.success) throw new Error(result.error.message, { cause: result.error })
+   * core.i18n.setGlobalLocale(result.data.defaultLocale)
    * ```
    */
   load<T>(name: string, filePath: string, schema?: ZodType<T>): HaiResult<T> {
@@ -548,18 +555,21 @@ export const config = {
   /**
    * 验证已加载的配置数据。
    *
-   * 对缓存中的配置数据重新用 Schema 校验，校验通过后更新缓存。
+   * 用 Schema 校验当前缓存数据，成功后以校验结果替换缓存，并为 reload 保存 Schema。
+   * 需要按 Schema 解析 YAML 插值时，在 init 时提供结构提示，或直接将 Schema 传给 load。
    *
    * @param name - 配置名称
-   * @param schema - Zod 验证模式
-   * @returns 校验结果；未加载时返回 NOT_LOADED，格式错误返回 VALIDATION_ERROR
+   * @param schema - 接受当前缓存值作为输入的同步 Zod Schema
+   * @returns 校验后的配置；未加载返回 CONFIG_NOT_LOADED，Schema 失败返回 CONFIG_VALIDATION_ERROR
    *
    * @example
    * ```ts
-   * const result = config.validate('app', AppSchema)
-   * if (!result.success) {
-   *   // result.error.code 可能为 NOT_LOADED 或 VALIDATION_ERROR
-   * }
+   * import { core } from '@h-ai/core'
+   * import { z } from 'zod'
+   * const schema = z.object({ port: z.number().int().positive() })
+   * core.init({ configDir: './config', configSchemas: { app: schema } })
+   * const result = core.config.validate('app', schema)
+   * if (!result.success) throw new Error(result.error.message, { cause: result.error })
    * ```
    */
   validate<T>(name: string, schema: ZodType<T>): HaiResult<T> {
@@ -613,7 +623,7 @@ export const config = {
   /**
    * 重新加载配置。
    *
-   * 从磁盘重新读取配置文件并更新缓存，同时通知所有 watch 回调。
+   * 从磁盘重新读取配置，应用当前环境及缓存的 Schema。成功更新缓存，失败保留最近成功的值。两种结果均通知订阅方。
    *
    * @param name - 配置名称
    * @returns 重载结果；未加载时返回 NOT_LOADED
@@ -676,8 +686,9 @@ export const config = {
   /**
    * 监听配置文件变更并自动重载。
    *
-   * 普通写入、原子替换及删除重建均触发重载；失败保留最近成功的缓存并通知错误。
-   * 配置未加载时立即回调 NOT_LOADED 错误。
+   * 监听父目录中的目标文件，支持普通写入、原子替换及删除后重建。重载失败保留最近成功的缓存。
+   * 配置未加载时立即回调 CONFIG_NOT_LOADED。系统无法启动监听或已运行的监听出错时，回调收到 SERVICE_UNAVAILABLE，
+   * 此时可以读取旧缓存，也可以在监听目录恢复后重新注册。
    *
    * @param name - 配置名称
    * @param callback - 配置变更回调，接收新配置或错误
@@ -685,12 +696,13 @@ export const config = {
    *
    * @example
    * ```ts
-   * const unwatch = config.watch('app', (cfg, error) => {
-   *   if (error) { core.logger.error('reload failed', { error }); return }
-   *   core.logger.info('config updated', { cfg })
+   * import { core } from '@h-ai/core'
+   * const stop = core.config.watch('app', (_settings, error) => {
+   *   if (error) core.logger.warn('App config unavailable', { code: error.code })
+   *   else core.logger.info('App config reloaded')
    * })
-   * // 取消监听
-   * unwatch()
+   * // 停止使用配置时解除本次订阅。
+   * stop()
    * ```
    */
   watch<T = unknown>(name: string, callback: WatchCallback<T>): () => void {

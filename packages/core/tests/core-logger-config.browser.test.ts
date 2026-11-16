@@ -9,6 +9,47 @@ afterEach(() => {
 })
 
 describe('已有 Browser logger 应用 core 配置', () => {
+  it('fatal 阈值只输出 fatal，显式 error 级别仍输出两种记录', () => {
+    const output = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const observer = vi.fn()
+    const stop = core.logger.observe(observer)
+    try {
+      const explicit = core.logger.create({ name: 'error-threshold', level: 'error' })
+      core.logger.configure({ level: 'fatal', format: 'json' })
+      core.logger.error('Hidden error')
+      core.logger.fatal('Fatal event')
+      explicit.error('Explicit error')
+      explicit.fatal('Explicit fatal event')
+
+      expect(output.mock.calls.map(([entry]) => JSON.parse(String(entry)).level)).toEqual(['fatal', 'error', 'fatal'])
+      expect(observer.mock.calls.map(([entry]) => entry.level)).toEqual(['fatal', 'error', 'fatal'])
+    }
+    finally { stop() }
+  })
+
+  it('浏览器日志可以输出 bigint 和循环对象，仍正常脱敏并通知观察者', () => {
+    const output = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const observer = vi.fn()
+    const stop = core.logger.observe(observer)
+    try {
+      const item: { token: string, total: bigint, self?: object } = { token: 'demo-value', total: 9_007_199_254_740_993n }
+      item.self = item
+      for (const format of ['json', 'pretty'] as const) {
+        core.logger.configure({ level: 'warn', format })
+        core.logger.warn('Summary ready', { current: item, previous: item })
+      }
+
+      expect(output).toHaveBeenCalledTimes(2)
+      const entry = { token: '[REDACTED]', total: '9007199254740993', self: '[Circular]' }
+      expect(JSON.parse(String(output.mock.calls[0]?.[0]))).toMatchObject({ msg: 'Summary ready', current: entry, previous: entry })
+      expect(String(output.mock.calls[1]?.[0])).toContain(`"current":${JSON.stringify(entry)}`)
+      expect(observer).toHaveBeenCalledTimes(2)
+      expect(item.token).toBe('demo-value')
+      expect(item.self).toBe(item)
+    }
+    finally { stop() }
+  })
+
   it('初始化前创建的 logger 实际应用级别、JSON、上下文和自定义脱敏路径', () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => {})
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

@@ -64,7 +64,7 @@ import type {
  */
 interface ZodIssueLike {
   /** 字段路径片段；后续通常会被拼接为 `profile.email` 这类点号路径。 */
-  path: (string | number)[]
+  path: PropertyKey[]
   /** Zod 生成的原始消息；若是业务自定义消息，会被原样保留。 */
   message: string
   /** Zod issue code，例如 `invalid_type`、`too_small`、`invalid_format`。 */
@@ -164,12 +164,10 @@ const ZOD_DEFAULT_MESSAGE_PATTERNS: RegExp[] = [
 ]
 
 /**
- * 从 Zod SafeParseError / ZodError 中提取 issue 列表。
+ * 从 ZodError 或序列化的校验错误中提取可映射的条目。
  *
- * 兼容 Zod v3（`errors`）和 v4（`issues`）。
- *
- * @param error - Zod `SafeParseError`、`ZodError` 或任意未知对象
- * @returns 提取后的 issue 数组；若不是 Zod 风格错误对象则返回空数组
+ * @param error - Zod v3/v4 的错误对象或其他未知值
+ * @returns 具有有效路径和文案的 issue 数组
  *
  * @example
  * ```ts
@@ -183,8 +181,17 @@ const ZOD_DEFAULT_MESSAGE_PATTERNS: RegExp[] = [
 function extractZodIssues(error: unknown): ZodIssueLike[] {
   if (!error || typeof error !== 'object')
     return []
-  const obj = error as { issues?: ZodIssueLike[], errors?: ZodIssueLike[] }
-  return obj.issues ?? obj.errors ?? []
+  const issues: unknown[] = 'issues' in error && Array.isArray(error.issues)
+    ? error.issues
+    : 'errors' in error && Array.isArray(error.errors)
+      ? error.errors
+      : []
+  return issues.filter((issue): issue is ZodIssueLike =>
+    issue !== null && typeof issue === 'object'
+    && 'message' in issue && typeof issue.message === 'string'
+    && 'path' in issue && Array.isArray(issue.path)
+    && issue.path.every(part => typeof part === 'string' || typeof part === 'number' || typeof part === 'symbol'),
+  )
 }
 
 /**
@@ -334,17 +341,17 @@ function mapZodIssuesToFormErrors(
   getMessage: ZodMessageGetter,
 ): ValidationFormError[] {
   return issues.map(issue => ({
-    field: issue.path.join('.') || '_',
+    field: issue.path.map(String).join('.') || '_',
     message: localizeZodIssue(issue, getMessage),
   }))
 }
 
 /**
- * 一步把 Zod SafeParseError / ZodError 转为扁平 `ValidationFormError[]`。
+ * 将 ZodError 的校验问题转成表单能按路径展示的提示。safeParse 失败时传入 result.error。
  *
- * @param error - Zod `SafeParseError`、`ZodError` 或兼容的错误对象
+ * @param error - ZodError 或包含 issues/errors 数组的兼容对象
  * @param getMessage - 调用方注入的消息获取器
- * @returns 扁平化后的表单错误列表
+ * @returns 点号路径和提示文案组成的列表；空路径映射为 _，跳过缺少路径或文案的条目。
  *
  * @example
  * ```ts

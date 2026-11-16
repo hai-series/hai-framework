@@ -144,17 +144,54 @@ describe('core.init', () => {
     }
   })
 
-  it('其它单项配置失败仍记录错误并继续加载有效业务配置', () => {
-    writeFileSync(join(tempDir, 'broken.yml'), 'values: [\n')
-    writeFileSync(join(tempDir, 'app.yml'), 'ready: true\n')
-    const errors = vi.spyOn(core.logger, 'error').mockImplementation(() => {})
+  it('单项配置加载或重载失败时记录位置和追踪编号，保留有效配置且不输出原文', () => {
+    const appPath = join(tempDir, 'app.yml')
+    writeFileSync(join(tempDir, 'broken.yml'), 'connection: [demo-private-value\n')
+    writeFileSync(appPath, 'ready: true\n')
+    const errors = vi.fn()
+    const stop = core.logger.observe((record) => {
+      if (record.level === 'error')
+        errors(record)
+    })
 
-    expect(() => core.init({ configDir: tempDir })).not.toThrow()
+    try {
+      core.context.run({ requestId: 'config-startup' }, () => {
+        core.init({
+          configDir: tempDir,
+          logging: { level: 'info', format: 'json' },
+          watchConfig: true,
+        })
+      })
+      expect(errors).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+        message: expect.stringContaining('Config load failed: broken'),
+        context: expect.objectContaining({
+          code: HaiConfigError.CONFIG_PARSE_ERROR.code,
+          traceId: 'config-startup',
+          line: 2,
+          column: 1,
+        }),
+      }))
+      expect(JSON.stringify(errors.mock.calls)).not.toContain('demo-private-value')
+      expect(core.config.has('broken')).toBe(false)
+      expect(core.config.isWatching('broken')).toBe(false)
+      expect(core.config.isWatching('app')).toBe(true)
 
-    expect(errors).toHaveBeenCalledTimes(1)
-    expect(errors.mock.calls[0]?.[0]).toContain('Config load failed: broken')
-    expect(core.config.has('broken')).toBe(false)
-    expect(core.config.get('app')).toEqual({ ready: true })
+      errors.mockClear()
+      writeFileSync(appPath, 'connection: [demo-reload-value\n')
+      const reloaded = core.context.run({ requestId: 'config-reload' }, () => core.config.reload('app'))
+      expect(reloaded.success).toBe(false)
+      if (!reloaded.success) {
+        expect(reloaded.error.code).toBe(HaiConfigError.CONFIG_PARSE_ERROR.code)
+        expect(reloaded.error.cause).toBeInstanceOf(Error)
+      }
+      expect(errors).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+        message: expect.stringContaining('Config watch or reload failed: app'),
+        context: expect.objectContaining({ code: HaiConfigError.CONFIG_PARSE_ERROR.code, traceId: 'config-reload', filePath: appPath }),
+      }))
+      expect(JSON.stringify(errors.mock.calls)).not.toContain('demo-reload-value')
+      expect(core.config.get('app')).toEqual({ ready: true })
+    }
+    finally { stop() }
   })
 
   it('init watchConfig 应该启用配置文件监听', () => {

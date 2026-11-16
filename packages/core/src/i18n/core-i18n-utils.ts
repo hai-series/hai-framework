@@ -96,21 +96,21 @@ function runWithLocale<T>(locale: Locale, operation: () => T): T {
 /**
  * 创建消息获取函数。
  *
- * 各模块通过此函数创建消息获取器，依次读取显式 locale、Node 请求语言和应用默认语言。
- * 若指定的 locale 不支持，回退到默认语言；key 不存在时返回 key 本身。
+ * 消息获取器依次使用显式 locale、Node 请求语言和应用默认语言。
+ * 不支持的语言或缺少语言字典时使用 `zh-CN`。消息与参数只读取自有键，缺少消息时返回键名，缺少参数时保留占位符。
  *
  * @param messages - 多语言消息对象
  * @returns 消息获取函数
  *
  * @example
  * ```ts
- * const getMessage = createMessageGetter({
- *   'zh-CN': { hello: '你好' },
- *   'en-US': { hello: 'Hello' },
+ * import { core } from '@h-ai/core'
+ * const getMessage = core.i18n.createMessageGetter({
+ *   'zh-CN': { hello: '你好，{name}' },
+ *   'en-US': { hello: 'Hello, {name}' },
  * })
- * getMessage('hello')                              // '你好'
- * getMessage('hello', { locale: 'en-US' })          // 'Hello'
- * getMessage('msg', { params: { name: 'World' } }) // 插值
+ * getMessage('hello', { locale: 'en-US', params: { name: 'Ada' } }) // 'Hello, Ada'
+ * getMessage('hello', { locale: 'zh-CN' }) // '你好，{name}'
  * ```
  */
 function createMessageGetter<K extends string>(
@@ -124,16 +124,21 @@ function createMessageGetter<K extends string>(
 
     // 获取消息字典和模板
     const dict = messages[locale] ?? messages[DEFAULT_LOCALE]
-    const template = dict?.[key]
+    const template = dict && Object.hasOwn(dict, key)
+      ? dict[key]
+      : undefined
 
     if (!template) {
       return String(key)
     }
 
     // 执行占位符插值（{key} → value）
-    if (options?.params) {
+    const params = options?.params
+    if (params) {
       return template.replace(/\{(\w+)\}/g, (_, paramKey) => {
-        const value = options.params![paramKey]
+        const value = Object.hasOwn(params, paramKey)
+          ? params[paramKey]
+          : undefined
         return value !== undefined
           ? String(value)
           : `{${paramKey}}`

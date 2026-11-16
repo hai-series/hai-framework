@@ -6,14 +6,15 @@
 import { i18n } from '../i18n/core-i18n-utils.js'
 
 /**
- * 格式化日期。
- * @param date - 日期对象
- * @param format - 格式模板（默认 YYYY-MM-DD）
- * @returns 格式化后的字符串
+ * 按运行环境的本地时区格式化日期。
+ * @param date - 待格式化的有效 Date
+ * @param format - 模板，支持 YYYY、MM、DD、HH、mm、ss，默认为 YYYY-MM-DD
+ * @returns 替换模板内每处日期占位符后的字符串
  *
  * @example
  * ```ts
- * time.formatDate(new Date(), 'YYYY-MM-DD')
+ * import { core } from '@h-ai/core'
+ * core.time.formatDate(new Date(2026, 0, 1), 'DD/MM/YYYY') // '01/01/2026'
  * ```
  */
 function formatDate(date: Date, format = 'YYYY-MM-DD'): string {
@@ -25,12 +26,12 @@ function formatDate(date: Date, format = 'YYYY-MM-DD'): string {
   const seconds = String(date.getSeconds()).padStart(2, '0')
 
   return format
-    .replace('YYYY', String(year))
-    .replace('MM', month)
-    .replace('DD', day)
-    .replace('HH', hours)
-    .replace('mm', minutes)
-    .replace('ss', seconds)
+    .replaceAll('YYYY', String(year))
+    .replaceAll('MM', month)
+    .replaceAll('DD', day)
+    .replaceAll('HH', hours)
+    .replaceAll('mm', minutes)
+    .replaceAll('ss', seconds)
 }
 
 /**

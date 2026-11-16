@@ -58,9 +58,12 @@ describe('core.array', () => {
     })
   })
 
-  it('chunk size <= 0 应返回空数组', () => {
+  it('chunk 的块大小必须是正安全整数', () => {
     expect(core.array.chunk([1, 2, 3], 0)).toEqual([])
     expect(core.array.chunk([1, 2, 3], -1)).toEqual([])
+    expect(core.array.chunk([1, 2, 3], 0.5)).toEqual([])
+    expect(core.array.chunk([1, 2, 3], Number.NaN)).toEqual([])
+    expect(core.array.chunk([1, 2, 3], Number.POSITIVE_INFINITY)).toEqual([])
   })
 
   it('first/last 应该返回首末元素', () => {

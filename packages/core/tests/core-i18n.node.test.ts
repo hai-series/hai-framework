@@ -134,6 +134,19 @@ describe('core.i18n (node)', () => {
     expect(getMessage('nonexistent' as never)).toBe('nonexistent')
   })
 
+  it('消息和占位参数只读取自有键，缺失时使用键名或保留占位符', () => {
+    const getMessage = core.i18n.createMessageGetter<string>({
+      'zh-CN': { details: '{constructor}/{count}/{enabled}' },
+    })
+    expect(getMessage('constructor')).toBe('constructor')
+    expect(getMessage('details', {
+      params: { count: 0, enabled: false },
+    })).toBe('{constructor}/0/false')
+    expect(getMessage('details', {
+      params: { constructor: 'provided', count: 0, enabled: false },
+    })).toBe('provided/0/false')
+  })
+
   it('createMessageGetter 不存在的 locale 应回退到默认语言', () => {
     const getMessage = core.i18n.createMessageGetter({
       'zh-CN': { greet: '你好' },

@@ -52,8 +52,7 @@ function createBrowserCore(): BrowserCoreFunctions {
 export const core: BrowserCoreFunctions = createBrowserCore()
 
 /**
- * 初始化 Core（内部实现，通过 core.init() 调用）。
- * 注意：浏览器环境不支持 config 和 watchConfig 选项。
+ * 应用浏览器端日志选项。configDir 和 configSchemas 不参与浏览器初始化，启用 watchConfig 会输出警告。
  *
  * @param options - 初始化选项
  *

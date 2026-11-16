@@ -23,6 +23,7 @@ describe('core.time', () => {
     const date = new Date(2024, 4, 6, 7, 8, 9)
     expect(core.time.formatDate(date, 'YYYY-MM-DD')).toBe('2024-05-06')
     expect(core.time.formatDate(date, 'YYYY-MM-DD HH:mm:ss')).toBe('2024-05-06 07:08:09')
+    expect(core.time.formatDate(date, 'DD/MM/YYYY DD/MM/YYYY')).toBe('06/05/2024 06/05/2024')
   })
 
   it('formatDate 默认格式应为 YYYY-MM-DD', () => {

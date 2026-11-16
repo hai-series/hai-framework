@@ -8,74 +8,59 @@
 
 ## クイックスタート
 
-以下では Core の全機能について用途、例、制約を説明します。設定を読み込む場合は初期化から確認してください。ログ、メッセージ、汎用ツールは直接利用できます。
-
-実行機能は `core.xxx()` または `core.<子機能>.xxx()` で呼びます。結果構築関数 `ok` / `err`、型、Schema、エラー定数はパッケージの入口から個別に import します。使い方は該当節で説明します。
-
 ```bash
 pnpm add @h-ai/core
 ```
 
-独自設定やフォーム検証の例では Zod も使用するため、実行前に `pnpm add zod` でインストールしてください。データベース・キャッシュの追加依存は該当節で説明します。
+`@h-ai/core` から `core` をインポートすると、すぐにログ出力、メッセージ取得、汎用ツールを利用できます。`ok`、`err`、型、スキーマ、エラー定数も同じ入口からインポートできます。独自の設定やフォーム検証の例を実行するには、`pnpm add zod` で Zod を追加してください。
 
 ### 初期化：`core.init`
 
-Node 起動時に YAML を読み込み、ログを設定します。ブラウザーではログのみを設定します。Core の初期化ではデータベースなどの他モジュールは起動しません。
+Node では起動時に YAML の読み込みとログの設定を行います。ブラウザーではページで使うログの設定を渡します。データベースやキャッシュを起動する例は[アプリケーションの起動と終了](#アプリケーションの起動と終了)を参照してください。
 
 #### Node.js
 
 `config/_core.yml` を用意します。
 
 ```yaml
-# 应用元信息，供启动代码和页面读取。
 name: orders
 version: 0.1.0
 env: development
-# 默认消息语言；启动代码读取后调用 setGlobalLocale 应用。
-defaultLocale: zh-CN
+defaultLocale: ja-JP
 logging:
-  level: info # 输出 info 及以上级别。
-  format: pretty # 本地开发使用便于阅读的日志。
+  level: info
+  format: pretty
 ```
 
 ```ts
-import { core, CoreConfigSchema } from '@h-ai/core'
+import type { CoreConfig } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
-// 1. 读取 config 目录中的 YAML，_core.yml 对应名称 core。
-core.init({ configDir: './config' }) // 返回 undefined；配置缓存中可读取 core。
+// config ディレクトリを読み込みます。検証に成功した _core.yml は core として保存されます。
+core.init({ configDir: './config' })
+const settings = core.config.getOrThrow<CoreConfig>('core')
 
-// 2. 检查应用必需的配置；失败时停止启动，保留原始错误供排查。
-const config = core.config.validate('core', CoreConfigSchema)
-if (!config.success)
-  throw new Error(config.error.message, { cause: config.error })
-
-// 成功时 config.success 为 true；config.data.name 为 'orders'，defaultLocale 为 'zh-CN'。
-
-// 3. 将配置中的语言应用到默认消息；读取 YAML 本身不会切换语言。
-core.i18n.setGlobalLocale(config.data.defaultLocale) // 返回 undefined；后续默认消息使用中文。
-
-// 4. 记录已验证的应用名称，确认启动完成。
-core.logger.info('Application ready', { name: config.data.name }) // 返回 undefined；info 日志包含 name: 'orders'。
+// 既定の言語を設定し、起動完了をログに記録します。
+core.i18n.setGlobalLocale(settings.defaultLocale)
+core.logger.info('Application ready', { app: settings.name }) // app: 'orders'
 ```
 
-必須設定を取得できない場合、起動境界で停止します。`core.init()` は個々の読み込み失敗をログに記録して続行するため、完了してもすべての設定が有効とは限りません。ディレクトリー走査やログ設定では例外が伝播する場合があります。
+`core.init()` はディレクトリを同期的に読み込みます。個々のファイルの読み込みや検証に失敗した場合は、ファイル名とエラーコードを記録し、残りのファイルを読み込みます。この例では必須の `core` 設定がないと、`getOrThrow()` で起動が止まります。ディレクトリの走査やログの設定時にも例外が発生することがあります。
 
 #### ブラウザー
 
 ```ts
 import { core } from '@h-ai/core'
 
-// 浏览器不读取 YAML；此处只设置日志，输出 warn 及以上级别。
+// ページの起動時にログレベルと既定の言語を設定します。
 core.init({
   logging: { level: 'warn' }
-}) // 返回 undefined；之后 info 日志被过滤。
+})
+core.i18n.setGlobalLocale('ja-JP')
 
-// 设置当前页面使用的默认消息语言。
-core.i18n.setGlobalLocale('zh-CN') // 返回 undefined；页面默认消息使用中文。
-
-// 给一次请求生成编号，后续日志可用同一编号关联排查。
-const requestId = core.id.request() // 返回随机字符串，如 'req-V1StGXR8_Z5jdHi6B-myT'。
-core.logger.warn('Request needs attention', { requestId }) // 返回 undefined；浏览器输出 warn 消息及同一个 requestId。
+// 関連するログを追えるように、リクエスト ID を出力します。
+const requestId = core.id.request()
+core.logger.warn('Request needs attention', { requestId })
 ```
 
 ホストは公開可能な設定項目だけを渡し、サーバー設定全体や秘密情報は送りません。ブラウザーの `core.config.get()` / `has()` / `keys()` は `undefined` / `false` / `[]` を返します。`loadEnvFiles()`、`load()`、`validate()`、`reload()` は `SERVICE_UNAVAILABLE` を返し、`getOrThrow()` は例外を送出します。`watch()` は同じ利用不可エラーを即座に通知し、何もしない解除関数を返します。
@@ -115,7 +100,7 @@ YAML の読み込み、環境変数による上書き、型の検証、設定キ
 
 `_core.yml` は `CoreConfigSchema` で検証し、`name`、`version`、`env`、`defaultLocale`、`logging` だけを受け付けます。メタデータの既定値は順に `hai Admin`、`0.1.0`、`development`、`zh-CN` で、`logging` は省略可能です。メタデータは `NODE_ENV` の変更、メッセージ言語の切り替え、業務翻訳の登録を行いません。通常はここでログを設定します。明示的な `core.init({ logging })` は、その初期化における YAML ログ設定の適用を上書きします。
 
-その他のファイルでは、ホストが渡す `configSchemas` を構造と型のヒントとして使います。完全な業務検証はモジュール初期化または明示的な `validate()` で行います。`load(name, file, schema)` は即座に検証します。
+複数の設定ファイルを読み込むときは、`core.init({ configDir: './config', configSchemas: { app: AppSchema } })` を使います。Core はスキーマから任意項目のパスや置換後の型を判断します。その後 `core.config.validate('app', AppSchema)` を呼び、`success` を確認して `data` を取得します。 `validate()` が検証するのは現在のキャッシュです。入力と出力で型が変わるスキーマでは、最初の成功結果をそのまま使い、ファイルを読み直すときは `reload()` を呼びます。
 
 以下のファイル例では、この `config/app.yml` を使い、環境変数による追加の上書きがないものとします。
 
@@ -124,64 +109,62 @@ YAML の読み込み、環境変数による上書き、型の検証、設定キ
 port: 3000
 ```
 
-load() はファイルを読み、任意で即時検証します。validate() はキャッシュを検証します。get() は未登録時に undefined、getOrThrow() は例外です。型引数は TypeScript の補助であり、実データを検証しません。has()/keys() で登録を確認できます。
+ファイルを 1 つだけ読み込むときは、`load()` に同期スキーマを渡します。スキーマで検証に失敗した場合や独自の検証処理で例外が発生した場合は、`CONFIG_VALIDATION_ERROR` が返ります。`error.cause` には検証結果の問題一覧、または元の例外が残ります。`get()` と `getOrThrow()` の型引数は TypeScript 用です。実際の値はスキーマで検証します。
 
 ```ts
 import { core } from '@h-ai/core'
 import { z } from 'zod'
 
-// 读取上方 config/app.yml；Schema 同时描述类型和校验规则。
 const AppSchema = z.object({
-  port: z.number().int().min(1).max(65535)
+  port: z.number().int().min(1).max(65535),
 })
+
+// ファイルを読み込んで検証します。成功時は { success: true, data: { port: 3000 } } が返ります。
 const loaded = core.config.load('app', './config/app.yml', AppSchema)
 if (!loaded.success)
   throw new Error(loaded.error.message, { cause: loaded.error })
 
-// loaded：{ success: true, data: { port: 3000 } }。
-
-// validate 用于重新校验缓存；加载时未传 Schema 的配置也可在这里校验。
-const validated = core.config.validate('app', AppSchema)
-if (!validated.success)
-  throw new Error(validated.error.message, { cause: validated.error })
-
-// validated：{ success: true, data: { port: 3000 } }。
-
-// get 适合可选配置；getOrThrow 适合已确认存在的必需配置。
-if (core.config.has('app')) { // true：上方已成功加载 app。
-  const optional = core.config.get<z.infer<typeof AppSchema>>('app') // { port: 3000 }。
-  const required = core.config.getOrThrow<z.infer<typeof AppSchema>>('app') // { port: 3000 }；缺失则抛错。
-  core.logger.info('App config ready', { port: required.port, available: optional !== undefined })
-}
-core.config.keys() // 仅运行本节 load 示例时为 ['app']。
+// 以下は app だけを読み込んだ状態の結果です。
+core.config.has('app') // true
+core.config.keys() // ['app']
+core.config.get<z.infer<typeof AppSchema>>('app') // { port: 3000 }
+core.config.getOrThrow<z.infer<typeof AppSchema>>('app') // { port: 3000 }
 ```
 
 #### 再読み込み・監視・解放
 
-reload() で再読み込み、watch() で新しい値やエラーを受け取ります。通常保存、原子的な置換、削除後の再作成に対応し、失敗時は最後の成功値を保持します。unwatch() は監視停止、clear() はキャッシュも削除し、名前省略時は全件が対象です。
+`reload()` はファイルを読み直し、登録済みのコールバックに結果を渡します。`watch()` は親ディレクトリ内の対象ファイルを監視するため、通常の保存、原子的な置き換え、削除後の再作成にも反応します。読み込みや検証に失敗した場合は直近の成功値をキャッシュに残し、コールバックに `null` とエラーを渡します。
 
-watchConfig の既定値は false です。設定を再読込しても稼働中の DB モジュールは再初期化しません。以下の解放処理は設定が不要になった時に呼びます。
+- 指定した名前の設定をまだ読み込んでいない場合は、`watch()` がただちに `CONFIG_NOT_LOADED` を通知します。
+- OS が監視を開始できない場合や監視中にエラーを報告した場合は、`SERVICE_UNAVAILABLE` を通知し、`isWatching()` は `false` を返します。ディレクトリの状態が復旧したら `watch()` を再度呼び出せます。
+- 解除関数は対象のコールバックを 1 件だけ解除します。`unwatch(name)` はその設定の監視を停止し、`clear(name)` はキャッシュも削除します。名前を省略するとすべての設定が対象です。
+
+同じ設定名で別のファイルを使う場合は、現在の監視を止めてから、新しいファイルを読み込んで監視します。
+
+`watchConfig` の既定値は `false` です。有効にすると、`core.init()` は読み込みに成功したファイルを監視します。再読み込みで更新されるのは Core のキャッシュです。各モジュールへの反映は、そのモジュールのライフサイクルに沿って行います。
 
 ```ts
 import { core } from '@h-ai/core'
 
-// 前提：app 已由 init/load 加载。回调需先处理读取或校验失败。
-const stop = core.config.watch('app', (_settings, error) => {
-  // 文件改成 port: 4000 后，成功回调收到 { port: 4000 }、error 为 undefined；失败时为 null 和错误对象。
-  if (error)
-    core.logger.error('Config reload failed', { error })
-  else
-    core.logger.info('Config reloaded')
+// 前の例に続けて実行します。再読み込みに成功すると、コールバックに現在のポート番号が渡ります。
+const stop = core.config.watch<{ port: number }>('app', (settings, error) => {
+  if (error) {
+    core.logger.warn('App config watch reported a failure', { code: error.code })
+    return
+  }
+  core.logger.info('App config reloaded', { port: settings?.port })
 })
-// watch 返回取消函数 stop，不立即返回配置值。
-core.config.isWatching('app') // true。
-const reloaded = core.config.reload('app') // 文件仍为 port: 3000 时返回 { success: true, data: { port: 3000 } }。
-if (!reloaded.success)
-  core.logger.warn('Manual reload failed', { error: reloaded.error })
 
-stop() // 返回 undefined；取消当前回调，没有其他回调时停止底层监听。
-core.config.unwatch('app') // 返回 undefined；isWatching('app') 变为 false。
-core.config.clear('app') // 返回 undefined；get('app') 变为 undefined，has('app') 变为 false。
+try {
+  // 手動で読み直します。ファイルが port: 3000 のままなら、コールバックは port: 3000 を記録します。
+  const reloaded = core.config.reload('app')
+  if (!reloaded.success)
+    throw new Error(reloaded.error.message, { cause: reloaded.error })
+}
+finally {
+  stop()
+  core.config.clear('app')
+}
 ```
 
 #### 環境変数で YAML の値を変える
@@ -205,20 +188,21 @@ YAML に `${変数名}` を書くと、読み込み時に環境変数の値で�
 
 #### .env ファイルを読み込む
 
-core.init() は .env を読みません。loadEnvFiles() の success を確認し、結果を process.env に反映してから YAML を読みます。development/production は dev/prod に対応し、存在しないファイルは無視、同一ファイルの重複キーはエラーです。優先順位は **プロセス環境 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML** です。秘密を含む .local は Git に登録しません。
+Node の起動時に `loadEnvFiles()` を呼び、`success` を確認します。戻り値を `process.env` に反映してから YAML を読み込みます。`development` と `production` は `dev` と `prod` のファイルを選択します。存在しないファイルはスキップし、同じファイル内に同名のキーがある場合はエラーになります。
+
+優先順はプロセス環境、`.env.<mode>.local`、`.env.local`、`.env.<mode>`、`.env`、YAML です。`loadEnvFiles()` がプロセス環境から取り込むのは、`HAI_*` の変数と dotenv ファイルに同名のキーがある変数です。秘密情報を含む `.local` ファイルはローカルに置いてください。
 
 ```ts
 import { core } from '@h-ai/core'
 
-// 前提：.env 写 HAI_APP_PORT=4000，没有其他来源覆盖这个变量。
-// 先读取并合并 .env 文件与进程环境，失败时停止启动。
+// config/app.yml に port: 3000、.env に HAI_APP_PORT=4000 を設定します。より優先度の高い上書きがない場合の例です。
 const result = core.config.loadEnvFiles({ mode: 'dev', envDir: '.' })
 if (!result.success)
   throw new Error(result.error.message, { cause: result.error })
-// 成功时 result.success 为 true，result.data.HAI_APP_PORT 为 '4000'；其他键来自合并后的环境。
-// 返回值不会自动写入进程；显式应用后再初始化。
+
 Object.assign(process.env, result.data)
-core.init({ configDir: './config' }) // 返回 undefined；app.yml 中 port: 3000 被覆盖为数字 4000。
+core.init({ configDir: './config' })
+core.config.get('app') // { port: 4000 }
 ```
 
 #### 置換後の値の型
@@ -231,7 +215,7 @@ core.init({ configDir: './config' }) // 返回 undefined；app.yml 中 port: 300
 import { core } from '@h-ai/core'
 import { z } from 'zod'
 
-// 用显式环境数据演示覆盖顺序、数值/布尔转换与字符串保留。
+// process.env に依存しない例にするため、環境変数の値を直接渡します。
 const AppSchema = z.object({
   port: z.number(),
   enabled: z.boolean(),
@@ -242,13 +226,13 @@ const resolved = core.config.resolve({
   name: 'app',
 
   value: {
-    // eslint-disable-next-line no-template-curly-in-string -- 保留供配置解析器处理的字面占位符。
+    // eslint-disable-next-line no-template-curly-in-string -- Core が展開するプレースホルダー。
     port: '${PORT:3000}',
-    // eslint-disable-next-line no-template-curly-in-string -- 保留供配置解析器处理的字面占位符。
+    // eslint-disable-next-line no-template-curly-in-string -- Core が展開するプレースホルダー。
     enabled: '${ENABLED:false}',
-    // eslint-disable-next-line no-template-curly-in-string -- 保留供配置解析器处理的字面占位符。
+    // eslint-disable-next-line no-template-curly-in-string -- Core が展開するプレースホルダー。
     label: 'server-${PORT:3000}',
-    // eslint-disable-next-line no-template-curly-in-string -- 保留供配置解析器处理的字面占位符。
+    // eslint-disable-next-line no-template-curly-in-string -- Core が展開するプレースホルダー。
     code: '${APP_CODE:00123}'
   },
   environment: { PORT: '4000', HAI_APP_PORT: '5000' },
@@ -257,14 +241,13 @@ const resolved = core.config.resolve({
 if (!resolved.success)
   throw new Error(resolved.error.message, { cause: resolved.error })
 
-// resolved：{ success: true, data: { port: 5000, enabled: false, label: 'server-4000', code: '00123' } }。
+// resolved：{ success: true, data: { port: 5000, enabled: false, label: 'server-4000', code: '00123' } }
 
-// resolve 只做替换和类型还原；再用 Schema 确认最终数据符合要求。
+// 置換後の値をアプリのスキーマで検証します。
 const validated = AppSchema.safeParse(resolved.data)
 if (!validated.success)
   throw new Error(validated.error.message, { cause: validated.error })
-core.logger.info('Config resolved', { settings: validated.data })
-// settings: { port: 5000, enabled: false, label: 'server-4000', code: '00123' }
+core.logger.info('Config resolved', { port: validated.data.port }) // port: 5000
 ```
 
 空文字列は「設定済みだが文字がない」値で、未設定、null、false、0 ではありません。APP_CODE='' は 00123 に戻らず '' のままです。許可するかは Schema が決め、数値項目の空文字列は通常検証に失敗します。
@@ -280,7 +263,7 @@ resolve() はビルド・デプロイ時のメモリ上の設定計算にも使�
 ```ts
 import { core } from '@h-ai/core'
 
-// 配置生成器把普通对象转成 HAI_APP_PORT 等变量；数组保留为 JSON。
+// 設定を環境変数に変換します。配列は JSON のままです。
 const values = core.config.toEnv({
   prefix: 'HAI_APP',
   value: {
@@ -288,44 +271,39 @@ const values = core.config.toEnv({
     tags: ['local']
   }
 })
-// values：{ HAI_APP_PORT: '3000', HAI_APP_TAGS: '["local"]' }。
+// values：{ HAI_APP_PORT: '3000', HAI_APP_TAGS: '["local"]' }
 const merged = core.config.mergeEnv([
   values,
   { HAI_APP_PORT: '4000' }
 ])
-// merged：{ HAI_APP_PORT: '4000', HAI_APP_TAGS: '["local"]' }。
-const text = core.config.stringifyEnv(merged) // 编码为可写入 .env 的文本。
-// text 含以下两行，每行以换行符结尾：
+// merged：{ HAI_APP_PORT: '4000', HAI_APP_TAGS: '["local"]' }
+const text = core.config.stringifyEnv(merged) // dotenv 形式のテキストにします。
+// テキストには次の 2 行が入ります。
 // HAI_APP_PORT='4000'
 // HAI_APP_TAGS='["local"]'
-const restored = core.config.parseEnv(text) // 解析回字面字符串，不执行其中的变量。
-// restored：{ HAI_APP_PORT: '4000', HAI_APP_TAGS: '["local"]' }。
+const restored = core.config.parseEnv(text) // 値を文字列として読み戻します。
+// restored：{ HAI_APP_PORT: '4000', HAI_APP_TAGS: '["local"]' }
 core.logger.info('Generated config verified', { port: restored.HAI_APP_PORT })
 ```
 
-通常オブジェクトは展開し、配列・動的辞書・空オブジェクトは JSON を保持します。全体置換の生成規則、優先順位、組み込みは[基本設定ガイド](../../docs/usage/configuration/runtime.md)を参照してください。
+通常のオブジェクトは項目ごとに展開し、配列、動的な辞書、空オブジェクトは JSON のまま出力します。`stringifyEnv()` は既定で Node 用のテキストを生成します。Compose のドル記号の扱いに合わせるには `{ target: 'compose' }` を渡します。Node のパーサーは単引用符で囲まれた値に含まれる改行の復帰文字（`\r`）を取り除きます。[基本設定ガイド](../../docs/usage/configuration/runtime.md)
 
 ### ログ：`core.logger`
 
-core.logger は構造化ログを記録します。詳細から重大の順に trace、debug、info、warn、error、fatal です。fatal はログを記録し、終了するかはアプリが決めます。
+`core.logger` は設定レベル以上のログを出力します。重大度が低い順に `trace`、`debug`、`info`、`warn`、`error`、`fatal` です。レベルを `fatal` に設定すると `fatal` のログだけが出力されます。アプリを終了するかどうかは呼び出し側で判断します。
 
-`core.logger` は `trace` / `debug` / `info` / `warn` / `error` / `fatal` に対応します。Node は pino、ブラウザーは loglevel を使います。未設定時は `info` / `pretty` で、`LoggingConfigSchema` で解析した `logging` オブジェクトの形式既定値は `json` です。Node で任意依存の `pino-pretty` がなければ JSON 出力になります。
+初期状態のレベルは `info`、出力形式は `pretty` です。YAML に `logging` を指定した状態で `format` を省略すると、スキーマが `json` を補います。Node は pino を使い、任意依存の `pino-pretty` がなければ JSON を出力します。ブラウザーの開発者コンソールでは `bigint` を十進文字列、循環参照を `[Circular]` として出力します。
 
 ```ts
 import { core } from '@h-ai/core'
 
-// 先设置级别；低于当前级别的日志不会输出。
-core.logger.setLevel('trace') // 返回 undefined；以下六个级别均会输出。
-core.logger.trace('Processing detail', { step: 1 })
-core.logger.debug('Read started')
-core.logger.info('Order created', { orderId: 'order-1' })
+core.logger.setLevel('info')
+core.logger.debug('Read started') // info 未満のため出力されません。
+core.logger.info('Order created', { orderId: 'order-1' }) // orderId がログに含まれます。
 core.logger.warn('Retry scheduled')
 core.logger.error('Operation failed', {
   error: new Error('Example failure')
 })
-core.logger.fatal('Service cannot continue')
-// 六次日志调用均返回 undefined；分别输出对应级别、上面的消息及所传字段。
-// 例如 info 日志的消息为 'Order created'，字段 orderId 为 'order-1'。
 ```
 
 create() は名前付き Logger、child() は固定項目付き Logger を作ります。configure() は出力と追加マスキング、setLevel()/getLevel() はグローバルレベルの変更・取得です。
@@ -333,19 +311,19 @@ create() は名前付き Logger、child() は固定項目付き Logger を作り
 ```ts
 import { core } from '@h-ai/core'
 
-// 全局配置可作用于已经创建的 Logger；redact 补充业务隐私字段。
 core.logger.configure({
   level: 'info',
   format: 'json',
-  redact: ['customer.email']
-}) // 返回 undefined；后续日志按此配置输出。
-const orders = core.logger.create({ name: 'orders' }) // 返回 Logger 对象，可调用 info/warn 等方法。
-const request = core.logger.child({ requestId: 'request-1' }) // 返回带固定 requestId 的 Logger。
+  redact: ['customer.email'],
+})
+const orders = core.logger.create({ name: 'orders' })
+const request = orders.child({ requestId: 'request-1' })
+
 orders.info('Order created', {
-  customer: { email: 'user@example.com' }
-}) // 返回 undefined；输出中 customer.email 为 '[REDACTED]'。
-request.warn('Request needs attention') // 返回 undefined；输出中 requestId 为 'request-1'。
-core.logger.getLevel() // 'info'。
+  customer: { email: 'user@example.com' },
+}) // customer.email: '[REDACTED]'
+request.warn('Request needs attention') // requestId: 'request-1'
+core.logger.getLevel() // 'info'
 ```
 
 既存の既定・モジュール・入れ子 child Logger も、その後の出力で最新のグローバル設定を使います。`setLevel()` も即座に反映します。`create()` の明示的な level/format/context が優先し、省略項目は動的に継承します。呼び出し時の context が固定値を上書きし、最後に `core.context` のリクエスト関連項目を追加します。ブラウザーの JSON は `level` / `msg`、pretty は読みやすい文面と context を出力します。
@@ -355,17 +333,19 @@ observe() はレベル判定・マスキング済みレコードを診断収集�
 ```ts
 import { core } from '@h-ai/core'
 
-// 观察经过级别过滤和脱敏的记录；内存收集设置上限。
 const recentMessages: string[] = []
 const stop = core.logger.observe((record) => {
   if (recentMessages.length === 100)
     recentMessages.shift()
   recentMessages.push(record.message)
 })
-// observe 返回取消函数 stop；本例 warn 日志触发一次回调，record.message 为 'Observed event'。
-core.logger.warn('Observed event')
-recentMessages // ['Observed event']。
-stop() // 返回 undefined；后续日志不再进入这个回调。
+try {
+  core.logger.warn('Observed event')
+  recentMessages // ['Observed event']
+}
+finally {
+  stop()
+}
 ```
 
 ### リクエストの関連付け：`core.context`
@@ -375,18 +355,17 @@ run() は requestId、userId、scopeId、jobId などをリクエストやタス
 ```ts
 import { core } from '@h-ai/core'
 
-// Node 示例：同一请求等待异步处理后，仍能取得自己的编号。
+// Node では非同期処理を待った後も、リクエストの情報を取得できます。
 await core.context.run({ requestId: 'request-1', userId: 'user-1' }, async () => {
   await core.async.delay(1)
-  const current = core.context.get() // 包含 requestId: 'request-1'、traceId: 'request-1'、userId: 'user-1'；其他字段为 undefined。
+  const current = core.context.get() // requestId と traceId は 'request-1'、userId は 'user-1'。
   core.logger.info('Request continued', { requestId: current.requestId })
   return current.requestId
-}) // run 返回回调的结果；此处 await 后得到 'request-1'。
-core.context.get() // {}，回到外层后不保留上面请求的上下文。
+}) // コールバックの結果は 'request-1'。
+core.context.get() // リクエストの外では {}
 
-// 采集器自身写日志时，可暂停观察回调，正常日志输出仍然执行。
+// 収集処理自身のログを、監視コールバックを呼び出さずに出力できます。
 core.context.run({ suppressLogObservers: true }, () => core.logger.warn('Collector diagnostic'))
-// 返回 undefined；输出 warn 日志，但不会触发日志观察回调。
 ```
 
 ブラウザーでは同期コールバック中だけ保持し、await 後は保持しません。関連 ID は認可情報ではなく、主体とテナント範囲は信頼できるサーバーコードが渡します。
@@ -398,11 +377,11 @@ core.context.run({ suppressLogObservers: true }, () => core.logger.warn('Collect
 ```ts
 import { core } from '@h-ai/core'
 
-core.sanitize.isSensitiveKey('apiKey') // true。
-core.sanitize.sanitizeSensitiveValue('example-only', 'password') // '[REDACTED]'。
+core.sanitize.isSensitiveKey('apiKey') // true
+core.sanitize.sanitizeSensitiveValue('example-only', 'password') // '[REDACTED]'
 const safe = core.sanitize.sanitizeSensitiveFields({ password: 'example-only', email: 'user@example.com' })
-// safe：{ password: '[REDACTED]', email: 'user@example.com' }，原对象不变。
-// 默认仅遮蔽凭据；额外业务隐私可在已处理凭据的副本上继续清理。
+// safe は { password: '[REDACTED]', email: 'user@example.com' }。元のデータは変わりません。
+// 認証情報をマスクしたコピーに対して、メールアドレスもマスクします。
 core.sanitize.sanitizeSensitiveFields(safe, {
   matcher: ['email'],
   replacement: '***'
@@ -410,7 +389,7 @@ core.sanitize.sanitizeSensitiveFields(safe, {
 // => { password: '[REDACTED]', email: '***' }
 core.sanitize.sanitizeUrl('https://user:example-only@example.com/?token=example-only')
 // => 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]'
-core.sanitize.sanitizeText('Bearer example-only') // '[REDACTED]'。
+core.sanitize.sanitizeText('Bearer example-only') // '[REDACTED]'
 core.sanitize.sanitizeText('Request failed with a known private value', ['private value'])
 // => 'Request failed with a known [REDACTED]'
 ```
@@ -430,15 +409,15 @@ core.error はエラーコード定義、実際の失敗インスタンス、安
 ```ts
 import { core } from '@h-ai/core'
 
-// 定义稳定错误码，消息在创建实例时根据当前语言获取。
+// 固定のエラーコードを定義し、エラー生成時にメッセージを取得します。
 const OrderError = core.error.buildHaiErrorsDef('orders', { NOT_FOUND: '300:404' })
-// OrderError.NOT_FOUND：{ code: 'hai:orders:300', httpStatus: 404, system: 'hai', module: 'orders' }。
-const failure = core.error.buildHaiErrorInst(OrderError.NOT_FOUND, core.i18n.coreM('core_errorNotFound', { locale: 'zh-CN' }))
-// failure：上面的错误定义加上 message: '资源不存在'。
+// OrderError.NOT_FOUND：{ code: 'hai:orders:300', httpStatus: 404, system: 'hai', module: 'orders' }
+const failure = core.error.buildHaiErrorInst(OrderError.NOT_FOUND, core.i18n.coreM('core_errorNotFound', { locale: 'ja-JP' }))
+// failure はエラー定義と message: 'リソースが見つかりません' をまとめたものです。
 const publicError = core.error.toPublic(failure, 'request-1')
-// publicError：保留 code/httpStatus/system/module，增加 traceId: 'request-1'；
-// message 为 '资源不存在 (traceId: request-1)'。
-const message = core.error.formatMessage(publicError) // '资源不存在 (traceId: request-1)'，编号不会重复追加。
+// 公開エラーには code、httpStatus、system、module が残ります。
+// traceId は 'request-1'、メッセージは 'リソースが見つかりません (traceId: request-1)'。
+const message = core.error.formatMessage(publicError) // 'リソースが見つかりません (traceId: request-1)'
 core.logger.warn('Order unavailable', { error: failure, publicMessage: message })
 ```
 
@@ -450,15 +429,15 @@ core.logger.warn('Order unavailable', { error: failure, publicMessage: message }
 import type { HaiResult } from '@h-ai/core'
 import { core, err, HaiCommonError, ok } from '@h-ai/core'
 
-// 业务失败返回 err，成功返回 ok；共用构造器保持独立导入。
+// 業務処理の失敗には err、成功には ok を返します。
 function divide(a: number, b: number): HaiResult<number> {
   if (b === 0)
-    return err(HaiCommonError.VALIDATION_ERROR, core.i18n.coreM('core_errorValidation', { locale: 'zh-CN' }))
-  return ok(a / b) // 如 ok(5) 返回 { success: true, data: 5 }。
+    return err(HaiCommonError.VALIDATION_ERROR, core.i18n.coreM('core_errorValidation', { locale: 'ja-JP' }))
+  return ok(a / b) // ok(5) は { success: true, data: 5 } を返します。
 }
 
-// 先检查 success，再读取 data 或 error。
-const result = divide(10, 2) // { success: true, data: 5 }。
+// success を確認してから data または error を読み取ります。
+const result = divide(10, 2) // { success: true, data: 5 }
 if (!result.success)
   core.logger.warn('Calculation failed', { error: result.error })
 else
@@ -466,7 +445,7 @@ else
 
 const failed = divide(10, 0)
 // failed：{ success: false, error: { code: 'hai:common:200', httpStatus: 400,
-// system: 'hai', module: 'common', message: '验证失败' } }，无 data。
+// system: 'hai', module: 'common', message: '入力内容の検証に失敗しました' } }
 if (!failed.success)
   core.logger.warn('Calculation rejected', { code: failed.error.code })
 ```
@@ -496,33 +475,33 @@ HTTP/UI 境界で業務メッセージを公開するのは、明示された有
 ```ts
 import { core } from '@h-ai/core'
 
-// 页面语言或服务进程的启动默认值；请求中使用 runWithLocale 单独选择语言。
-core.i18n.setGlobalLocale('zh-CN') // 返回 undefined；后续默认消息使用中文。
-core.i18n.getGlobalLocale() // 'zh-CN'。
-core.i18n.coreM('core_errorNotFound') // '资源不存在'。
-core.i18n.DEFAULT_LOCALE // zh-CN。
-core.i18n.DEFAULT_LOCALES // [{ code: 'zh-CN', label: '简体中文' }, { code: 'en-US', label: 'English' }, { code: 'ja-JP', label: '日本語' }]。
+// ページの言語、または起動時のプロセス既定言語を設定します。
+core.i18n.setGlobalLocale('ja-JP')
+core.i18n.getGlobalLocale() // 'ja-JP'
+core.i18n.coreM('core_errorNotFound') // 'リソースが見つかりません'
+core.i18n.DEFAULT_LOCALE // zh-CN
+core.i18n.DEFAULT_LOCALES // [{ code: 'zh-CN', label: '简体中文' }, { code: 'en-US', label: 'English' }, { code: 'ja-JP', label: '日本語' }]
 ```
 
-対応言語は `zh-CN`、`en-US`、`ja-JP` で、略記 `zh` / `en` / `ja` を正規化します。明示 locale、Node リクエスト言語、アプリ既定言語の順に参照します。未対応言語は `zh-CN`、未定義キーはキー自体にフォールバックします。
+`zh`、`en`、`ja` はそれぞれ `zh-CN`、`en-US`、`ja-JP` の略記です。メッセージを取得するときは、明示した `locale`、Node のリクエスト言語、アプリの既定言語の順に参照します。未対応の言語か、その言語の辞書がない場合は `zh-CN` の辞書を使います。キーに対応する文言がなければキー自体を返し、パラメーターがなければ `{name}` などのプレースホルダーが文中に残ります。
 
 ```ts
 import { core } from '@h-ai/core'
 
-// 业务字典按语言组织；占位参数在取消息时传入。
+// 言語ごとに辞書を用意し、メッセージ取得時に置換する値を指定します。
 const message = core.i18n.createMessageGetter({
   'zh-CN': { welcome: '欢迎 {name}' },
   'en-US': { welcome: 'Welcome {name}' },
   'ja-JP': { welcome: 'ようこそ {name}' },
 })
-// createMessageGetter 返回消息函数；如 message('welcome', { locale: 'zh-CN', params: { name: 'Alice' } }) 得到 '欢迎 Alice'。
+// locale が 'zh-CN'、name が 'Alice' なら、message('welcome', ...) は '欢迎 Alice' を返します。
 const greeting = await core.i18n.runWithLocale('en-US', async () => {
   await Promise.resolve()
   return message('welcome', {
     params: { name: 'Alice' }
   })
 })
-// greeting：'Welcome Alice'；runWithLocale 返回回调的结果，此处等待 Promise 得到字符串。
+// コールバックの完了後、greeting は 'Welcome Alice'。
 core.logger.info('Greeting prepared', { greeting })
 ```
 
@@ -536,23 +515,23 @@ Zod エラーをフォームに表示できる { field, message }[] に変換し
 import { core } from '@h-ai/core'
 import { z } from 'zod'
 
-// 此例复用 Core 已有翻译；业务表单可注入自己的消息获取器。
+// この例では Core のメールアドレス用メッセージを使います。フォーム独自のメッセージ取得関数も渡せます。
 const message = core.zodValidation.createPrefixedZodMessageGetter('core', key =>
   key === 'core_validationEmail'
-    ? core.i18n.coreM('core_validationEmail', { locale: 'zh-CN' })
-    : core.i18n.coreM('core_errorValidation', { locale: 'zh-CN' }))
-// 返回消息函数；message('validationEmail') 得到 '请输入有效的邮箱地址'。
+    ? core.i18n.coreM('core_validationEmail', { locale: 'ja-JP' })
+    : core.i18n.coreM('core_errorValidation', { locale: 'ja-JP' }))
+// message('validationEmail') は '有効なメールアドレスを入力してください' を返します。
 const parsed = z.object({
   email: z.email()
 }).safeParse({ email: 'invalid' })
 if (!parsed.success) {
   const errors = core.zodValidation.mapZodErrorToFormErrors(parsed.error, message)
-  // errors：[{ field: 'email', message: '请输入有效的邮箱地址' }]。
+  // errors は [{ field: 'email', message: '有効なメールアドレスを入力してください' }]。
   core.logger.info('Validation failed', { errors })
 }
 ```
 
-Zod v3/v4 の issues/errors に対応し、既定英語は翻訳、業務の独自メッセージは保持します。パスはドット、全体エラーは _ です。厳密 Schema の未知項目は validationUnexpectedFields を使い、内部項目名を公開しません。
+`safeParse()` が失敗したときの `error` を渡します。Zod v3/v4 の `issues` または `errors` の配列から、パスとメッセージのある項目を読み取ります。Zod の英語の既定メッセージは翻訳し、アプリ独自の文言はそのまま使います。フィールドのパスは `items.0.email` のように表し、フォーム全体のエラーには `_` を使います。厳密なスキーマの未知項目には共通の `validationUnexpectedFields` メッセージが使われます。
 
 ### モジュールの起動と補助機能：`core.module`
 
@@ -569,7 +548,7 @@ import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 
-// 按需要的启动顺序，列出各模块的初始化和关闭函数。
+// 起動順に各モジュールの関数を並べます。
 const runtime = core.module.createRuntime([
   {
     name: 'database',
@@ -583,20 +562,20 @@ const runtime = core.module.createRuntime([
   },
 ])
 
-// createRuntime 返回带 start()/close() 的对象；到这里数据库和缓存尚未启动。
+// ホストが runtime.start() を呼ぶと、両方のモジュールの起動が始まります。
 
-// 依次启动数据库、缓存；失败时自动清理已尝试启动的模块。
-const started = await runtime.start() // 成功为 { success: true, data: undefined }；两个模块均已初始化。
+// データベースを起動してから、キャッシュを起動します。
+const started = await runtime.start() // 両方の起動に成功すると { success: true, data: undefined }。
 if (!started.success)
   throw new Error(started.error.message, { cause: started.error })
 
 try {
-  // 启动成功后再执行应用业务；这里演示记录启动结果。
+  // 両方の起動を確認してからアプリの処理を行います。
   core.logger.info('Application modules ready')
 }
 finally {
-  // 演示结束后先关闭缓存，再关闭数据库，并检查清理结果。
-  const closed = await runtime.close() // 成功为 { success: true, data: undefined }；两个模块均已关闭。
+  // キャッシュを閉じてから、データベースを閉じます。
+  const closed = await runtime.close() // 両方の終了に成功すると { success: true, data: undefined }。
   if (!closed.success)
     core.logger.error('Application cleanup failed', { error: closed.error })
 }
@@ -621,21 +600,18 @@ const message = core.i18n.createMessageGetter({
   'en-US': { notReady: 'Initialize the module first' },
   'ja-JP': { notReady: '先にモジュールを初期化してください' },
 })
-// 本例固定使用中文消息，便于观察返回值。
-core.i18n.setGlobalLocale('zh-CN') // 返回 undefined。
+core.i18n.setGlobalLocale('ja-JP')
 const waiting = core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => message('notReady'))
-// waiting 是带 error/result/proxy 的对象。
-waiting.error() // { code: 'hai:common:001', httpStatus: 500, system: 'hai', module: 'common', message: '请先初始化模块' }。
-waiting.result<string>() // { success: false, error: 上方错误对象 }，无 data。
+waiting.error() // { code: 'hai:common:001', httpStatus: 500, system: 'hai', module: 'common', message: '先にモジュールを初期化してください' }
+waiting.result<string>() // { success: false, error: waiting.error() }
 
-// 模块实现可把尚未就绪的操作暂时指向这些代理。
+// モジュールの起動が完了するまで、プロキシが各操作の応答を返します。
 const asyncOperations = waiting.proxy<{ read: () => Promise<HaiResult<string>> }>()
 const syncOperations = waiting.proxy<{ read: () => HaiResult<string> }>('sync')
-// 两次 proxy 调用分别返回异步和同步操作对象。
-const result = await asyncOperations.read() // { success: false, error: 上方错误对象 }。
+const result = await asyncOperations.read() // { success: false, error: waiting.error() }
 if (!result.success)
   core.logger.warn('Read before initialization', { error: result.error })
-syncOperations.read() // 直接返回 { success: false, error: 上方错误对象 }，不返回 Promise。
+syncOperations.read() // { success: false, error: waiting.error() } を同期的に返します。
 ```
 
 #### 共有状態の必要性を判断
@@ -645,9 +621,9 @@ requiresSharedState() は本番で単一ホスト限定の業務状態を拒否�
 ```ts
 import { core } from '@h-ai/core'
 
-// 此例用显式数据演示；服务端实际使用时传入 process.env。
-core.module.requiresSharedState({ NODE_ENV: 'production' }) // true：应使用跨主机共享后端。
-core.module.requiresSharedState({ NODE_ENV: 'production', HAI_E2E: '1' }) // false：显式 E2E 例外。
+// Node サービスでは process.env を渡します。
+core.module.requiresSharedState({ NODE_ENV: 'production' }) // true
+core.module.requiresSharedState({ NODE_ENV: 'production', HAI_E2E: '1' }) // E2E と明示した実行では false。
 ```
 
 ### リクエストアクセス検査：`core.access`（Node）
@@ -659,17 +635,17 @@ HTTP 入口で信頼できるクライアント IP を解決し、アドレス�
 ```ts
 import { AccessConditionSchema, core } from '@h-ai/core'
 
-core.access.normalizeClientIp('::ffff:198.51.100.23') // 198.51.100.23。
-const resolve = core.access.createClientIpResolver(['192.0.2.10']) // 返回 IP 解析函数，只信任这个代理。
+core.access.normalizeClientIp('::ffff:198.51.100.23') // 198.51.100.23
+const resolve = core.access.createClientIpResolver(['192.0.2.10']) // このプロキシだけを信頼します。
 const request = new Request('https://example.test/api/orders', {
   headers: { 'x-forwarded-for': '198.51.100.23' }
 })
-// 第二参数必须来自真实 socket/可信平台；这里用测试地址模拟代理对端。
-const clientIp = resolve(request, '192.0.2.10') // '198.51.100.23'，读取受信代理的转发头。
+// 第 2 引数にはソケットか信頼できるホストから取得した接続元アドレスを渡します。
+const clientIp = resolve(request, '192.0.2.10') // 信頼するプロキシから渡された '198.51.100.23'。
 const check = core.access.createConditionCheck(AccessConditionSchema.parse({
   allowIps: ['198.51.100.0/24']
 }))
-// createConditionCheck 返回检查函数；check(clientIp) 得到 { allowed: true }。
+// check(clientIp) は { allowed: true } を返します。
 core.logger.info('Address checked', { allowed: check(clientIp).allowed })
 ```
 
@@ -678,7 +654,7 @@ core.logger.info('Address checked', { allowed: check(clientIp).allowed })
 ```ts
 import { core } from '@h-ai/core'
 
-// 可改为 loadPolicy({ file: './config/security/request-access.yml' }) 在启动时读独立文件。
+// 起動時に別ファイルを読む場合は { file: './config/security/request-access.yml' } を渡します。
 const policy = core.access.loadPolicy({
   rules: [
     {
@@ -690,11 +666,11 @@ const policy = core.access.loadPolicy({
     }
   ],
 })
-// policy.rules[0] 保留上方规则，并补 denyIps: []、windows: []、timezone: 'UTC'。
-const check = core.access.createRequestCheck(policy) // 返回请求检查函数，另带 encryption 方法和 requiresEncryption 属性。
-const decision = check('/api/external/sync', 'POST', '192.0.2.10') // { allowed: true }。
-check.encryption('/api/external/sync', 'POST') // disabled，供 HTTP 框架选择传输模式。
-check.requiresEncryption // false；本例没有 required 规则。
+// ルールに denyIps: []、windows: []、timezone: 'UTC' の既定値が入ります。
+const check = core.access.createRequestCheck(policy) // encryption と requiresEncryption を持つチェック関数を返します。
+const decision = check('/api/external/sync', 'POST', '192.0.2.10') // { allowed: true }
+check.encryption('/api/external/sync', 'POST') // 'disabled'
+check.requiresEncryption // false
 core.logger.info('Request access checked', { allowed: decision.allowed })
 ```
 
@@ -712,15 +688,15 @@ core.logger.info('Request access checked', { allowed: decision.allowed })
 ```ts
 import { core } from '@h-ai/core'
 
-// 以下随机值仅展示格式，每次执行都不同。
-core.id.generate() // 如 'V1StGXR8_Z5jdHi6B-myT'，默认 21 字符；generate(8) 返回 8 字符。
-const shortId = core.id.short() // 如 'V1StGXR8_Z'，10 字符。
-core.id.withPrefix('order_') // 如 'order_V1StGXR8_Z5jdHi6B-myT'，前缀后接 21 字符。
-core.id.trace() // 如 'trace-V1StGXR8_Z5jdHi6B-myT'。
-core.id.request() // 如 'req-V1StGXR8_Z5jdHi6B-myT'。
-const uuid = core.id.uuid() // 如 '550e8400-e29b-41d4-a716-446655440000'，UUID v4。
-core.id.isValidUUID(uuid) // true。
-core.id.isValidNanoId(shortId, 10) // true。
+// 生成される値は毎回異なります。コメントは形式の例です。
+core.id.generate() // 例 'V1StGXR8_Z5jdHi6B-myT'（既定で 21 文字）。
+const shortId = core.id.short() // 例 'V1StGXR8_Z'（10 文字）。
+core.id.withPrefix('order_') // 例 'order_V1StGXR8_Z5jdHi6B-myT'。
+core.id.trace() // 例 'trace-V1StGXR8_Z5jdHi6B-myT'。
+core.id.request() // 例 'req-V1StGXR8_Z5jdHi6B-myT'。
+const uuid = core.id.uuid() // 例 '550e8400-e29b-41d4-a716-446655440000'（UUID v4）。
+core.id.isValidUUID(uuid) // true
+core.id.isValidNanoId(shortId, 10) // true
 ```
 
 ID を秘密鍵には使いません。UUID は暗号学的乱数を必要とし、なければ例外です。_core.yml に全体の長さ・接頭辞設定はなく、呼び出しごとに指定します。
@@ -732,14 +708,14 @@ ID を秘密鍵には使いません。UUID は暗号学的乱数を必要とし
 ```ts
 import { core } from '@h-ai/core'
 
-core.typeUtils.isDefined(null) // false，同时排除 null 和 undefined。
-core.typeUtils.isObject({ name: 'orders' }) // true；排除 null/数组，但也接受 Date 和类实例。
-core.typeUtils.isFunction(() => {}) // true。
-core.typeUtils.isPromise(Promise.resolve('ready')) // true。
-core.typeUtils.isString('orders') // true。
-core.typeUtils.isNumber(3000) // true；传 NaN 返回 false。
-core.typeUtils.isBoolean(false) // true。
-core.typeUtils.isArray([1, 2]) // true。
+core.typeUtils.isDefined(null) // null と undefined は false。
+core.typeUtils.isObject({ name: 'orders' }) // true。Date やクラスのインスタンスも対象で、配列と null は false。
+core.typeUtils.isFunction(() => {}) // true
+core.typeUtils.isPromise(Promise.resolve('ready')) // true
+core.typeUtils.isString('orders') // true
+core.typeUtils.isNumber(3000) // true。NaN は false。
+core.typeUtils.isBoolean(false) // true
+core.typeUtils.isArray([1, 2]) // true
 ```
 
 ### オブジェクト：`core.object`
@@ -750,17 +726,17 @@ core.typeUtils.isArray([1, 2]) // true。
 import { core } from '@h-ai/core'
 
 const defaults = { name: 'orders', port: 3000 }
-const copy = core.object.deepClone(defaults) // { name: 'orders', port: 3000 }，新副本。
-// 合并局部覆盖时，显式保留包含 name/port 的完整配置类型。
-const settings = core.object.deepMerge<typeof defaults>(copy, { port: 4000 }) // { name: 'orders', port: 4000 }。
-core.object.pick(settings, ['name']) // { name: 'orders' }。
-core.object.omit(settings, ['port']) // { name: 'orders' }。
-core.object.keys(settings) // ['name', 'port']，元素类型为 'name' | 'port'。
-core.object.values(settings) // ['orders', 4000]。
-core.object.entries(settings) // [['name', 'orders'], ['port', 4000]]。
+const copy = core.object.deepClone(defaults) // { name: 'orders', port: 3000 }（新しいオブジェクト）。
+// 一部の項目を上書きするときは、既定値のオブジェクトの型を指定します。
+const settings = core.object.deepMerge<typeof defaults>(copy, { port: 4000 }) // { name: 'orders', port: 4000 }
+core.object.pick(settings, ['name']) // { name: 'orders' }
+core.object.omit(settings, ['port']) // { name: 'orders' }
+core.object.keys(settings) // ['name', 'port']
+core.object.values(settings) // ['orders', 4000]
+core.object.entries(settings) // [['name', 'orders'], ['port', 4000]]
 core.object.fromEntries([
   ['mode', 'local']
-]) // { mode: 'local' }。
+]) // { mode: 'local' }
 ```
 
 deepClone は structuredClone で Date/Map/Set/循環など複製可能な値を扱い、関数など非対応値では例外です。deepMerge は通常オブジェクトのみ再帰結合し、配列・Date・集合・クラスは後の値で置換し、入力は変更しません。インスタンスの複製ではありません。
@@ -772,18 +748,18 @@ deepClone は structuredClone で Date/Map/Set/循環など複製可能な値を
 ```ts
 import { core } from '@h-ai/core'
 
-core.string.capitalize('hello') // 'Hello'。
-core.string.kebabCase('helloWorld') // 'hello-world'。
-core.string.camelCase('hello-world') // 'helloWorld'。
-core.string.snakeCase('helloWorld') // 'hello_world'。
-core.string.pascalCase('hello-world') // 'HelloWorld'。
-core.string.truncate('abcdef', 3) // 'abc...'。
-core.string.trim(' hello ') // 'hello'。
-core.string.isBlank(' ') // true。
-core.string.isNotBlank('hello') // true。
-core.string.padStart('5', 3, '0') // '005'。
-core.string.padEnd('5', 3, '0') // '500'。
-core.string.constantTimeEqual('same', 'same') // true；安全边界见下方说明。
+core.string.capitalize('hello') // 'Hello'
+core.string.kebabCase('helloWorld') // 'hello-world'
+core.string.camelCase('hello-world') // 'helloWorld'
+core.string.snakeCase('helloWorld') // 'hello_world'
+core.string.pascalCase('hello-world') // 'HelloWorld'
+core.string.truncate('abcdef', 3) // 'abc...'
+core.string.trim(' hello ') // 'hello'
+core.string.isBlank(' ') // true
+core.string.isNotBlank('hello') // true
+core.string.padStart('5', 3, '0') // '005'
+core.string.padEnd('5', 3, '0') // '500'
+core.string.constantTimeEqual('same', 'same') // true
 ```
 
 Node の constantTimeEqual は同じ長さの UTF-16 バイト列をネイティブ timingSafeEqual で比較し、長さが違えば即座に false です。ブラウザーは定時間保証がなく、サーバー認証の検査には使いません。
@@ -795,26 +771,26 @@ Node の constantTimeEqual は同じ長さの UTF-16 バイト列をネイティ
 ```ts
 import { core } from '@h-ai/core'
 
-core.array.unique([1, 1, 2]) // [1, 2]。
-core.array.chunk([1, 2, 3], 2) // [[1, 2], [3]]。
+core.array.unique([1, 1, 2]) // [1, 2]
+core.array.chunk([1, 2, 3], 2) // [[1, 2], [3]]
 core.array.groupBy([
   { role: 'admin' },
   { role: 'user' }
 ], item => item.role)
 // => { admin: [{ role: 'admin' }], user: [{ role: 'user' }] }
-core.array.first([1, 2, 3]) // 1；空数组为 undefined。
-core.array.last([1, 2, 3]) // 3；空数组为 undefined。
+core.array.first([1, 2, 3]) // 1。空配列では undefined。
+core.array.last([1, 2, 3]) // 3。空配列では undefined。
 core.array.flatten([
   [1],
   [2, 3]
-]) // [1, 2, 3]，只展开一层。
-core.array.compact([0, null, 1, undefined]) // [0, 1]，保留 0/false/空字符串。
-core.array.shuffle([1, 2, 3]) // 如 [2, 3, 1]，次序随机；新数组不修改输入。
-core.array.intersection([1, 2], [2, 3]) // [2]。
-core.array.difference([1, 2], [2, 3]) // [1]。
+]) // [1, 2, 3]（1 階層だけ展開）。
+core.array.compact([0, null, 1, undefined]) // [0, 1]。0、false、空文字列は残ります。
+core.array.shuffle([1, 2, 3]) // 例 [2, 3, 1]（新しい配列）。
+core.array.intersection([1, 2], [2, 3]) // [2]
+core.array.difference([1, 2], [2, 3]) // [1]
 ```
 
-groupBy は `constructor`/`__proto__` などと同名のキーにも対応します。chunk の大きさは正の整数で、size<=0 は空配列を返します。
+`groupBy()` は `constructor` など、オブジェクトのプロトタイプと同名のキーにも対応します。`chunk()` の分割サイズには正の安全な整数を指定します。小数や無限大などの無効なサイズでは空の配列が返ります。
 
 ### 非同期処理：`core.async`
 
@@ -823,22 +799,23 @@ groupBy は `constructor`/`__proto__` などと同名のキーにも対応しま
 ```ts
 import { core } from '@h-ai/core'
 
-await core.async.delay(1) // 等待约 1ms 后得到 undefined；计时以运行环境为准。
-await core.async.withTimeout(Promise.resolve('ready'), 1000) // 'ready'；超时则 reject 为 Error。
-await core.async.retry(async () => 'ready', { maxRetries: 3, delay: 10 }) // 'ready'，本例首次即成功。
-await core.async.parallel([1, 2, 3], async value => value * 2, 2) // [2, 4, 6]，最多同时执行两项。
-await core.async.serial([1, 2, 3], async value => value * 2) // [2, 4, 6]，按输入顺序逐项执行。
+await core.async.delay(1) // タイマーに従い、およそ 1ms 後に完了します。
+await core.async.withTimeout(Promise.resolve('ready'), 1000) // 'ready'。タイムアウト時は Error で拒否されます。
+await core.async.retry(async () => 'ready', { maxRetries: 3, delay: 10 }) // 初回で 'ready'。
+await core.async.parallel([1, 2, 3], async value => value * 2, 2) // [2, 4, 6]。同時に最大 2 件を処理します。
+await core.async.serial([1, 2, 3], async value => value * 2) // [2, 4, 6]。入力順に 1 件ずつ処理します。
 
-// 两种包装保留回调参数类型；调用 search/scroll 时传入同样类型的参数。
+// どちらのラッパーも、コールバックの引数の型を引き継ぎます。
 const search = core.async.debounce((term: string) => core.logger.debug('Search requested', { term }), 100)
 const scroll = core.async.throttle((position: number) => core.logger.debug('Scroll position', { position }), 100)
-// debounce/throttle 均返回包装函数，调用时返回 undefined。
-core.logger.setLevel('debug') // 返回 undefined；确保下面的 debug 日志可见。
-search('orders') // 约 100ms 后回调收到 'orders'；100ms 内连续调用只处理最后一次。
-scroll(100) // 本例第一次调用立即回调，position 为 100；100ms 内最多执行一次。
+core.logger.setLevel('debug')
+search('orders') // その後約 100ms 入力がなければ、'orders' でコールバックを呼び出します。
+scroll(100) // 初回はすぐに実行し、続く 100ms の呼び出しは飛ばします。
 ```
 
-withTimeout は待機だけを制限し、元の処理を中止しません。retry は例外/reject が対象で、失敗 HaiResult は再試行しません。現在の maxRetries は初回を含み、3 は最大 3 回です。parallel は 0 より大きい安全な整数の並行数が必要で、不正値は実行前に RangeError で失敗します。結果順序は入力と同じです。
+- `withTimeout()` はタイムアウト時に待機中の Promise を拒否します。元の処理を中止する場合は、呼び出し側で中止を管理します。
+- `retry()` は処理が例外を投げるか Promise が拒否された場合に再試行します。`maxRetries` には初回も含まれ、既定では 1000 ミリ秒間隔で最大 3 回実行します。失敗を示す `HaiResult` が返った場合は呼び出し側で処理します。
+- `parallel()` の結果は入力順に並びます。同時実行数には正の安全な整数を指定します。無効な値の場合は処理を始める前に `RangeError` で拒否されます。ある処理が拒否されても、他のワーカーは残りの処理を続ける場合があります。
 
 ### 日時：`core.time`
 
@@ -847,22 +824,26 @@ withTimeout は待機だけを制限し、元の処理を中止しません。re
 ```ts
 import { core } from '@h-ai/core'
 
-// date 与以下日期运算使用本机时区；parseDate 中的 Z 表示 UTC。
+// 日付の計算には実行環境のローカルタイムゾーンを使います。
 const date = new Date(2026, 0, 1, 12, 0, 0)
-core.time.formatDate(date, 'YYYY-MM-DD HH:mm:ss') // '2026-01-01 12:00:00'。
-core.i18n.setGlobalLocale('zh-CN') // 返回 undefined；相对时间使用中文。
-core.time.timeAgo(new Date(Date.now() - 60_000)) // '1 分钟前'（立即执行时）。
-core.time.now() // 当前毫秒时间戳，如 1767268800000；每次执行随时间变化。
-core.time.nowSeconds() // 当前秒时间戳，如 1767268800；相当于当前毫秒时间戳除以 1000 后向下取整。
-const parsed = core.time.parseDate('2026-01-01T00:00:00Z') // Date 对象，toISOString() 为 '2026-01-01T00:00:00.000Z'。
-core.time.isValidDate(parsed) // true；Invalid Date 返回 false。
-core.time.addDays(date, 7) // 新 Date，本机时间 2026-01-08 12:00:00。
-core.time.addHours(date, 2) // 新 Date，本机时间 2026-01-01 14:00:00。
-core.time.startOfDay(date) // 新 Date，本机时间 2026-01-01 00:00:00.000。
-core.time.endOfDay(date) // 新 Date，本机时间 2026-01-01 23:59:59.999。
+core.time.formatDate(date, 'YYYY-MM-DD HH:mm:ss') // '2026-01-01 12:00:00'
+core.time.formatDate(date, 'MM/DD (MM-DD)') // '01/01 (01-01)'
+
+core.i18n.setGlobalLocale('ja-JP')
+core.time.timeAgo(new Date(Date.now() - 120_000)) // '2分前'
+core.time.now() // 現在の Unix タイムスタンプ（ミリ秒）。
+core.time.nowSeconds() // 現在の Unix タイムスタンプ（秒未満は切り捨て）。
+
+const parsed = core.time.parseDate('2026-01-01T00:00:00Z')
+parsed.toISOString() // '2026-01-01T00:00:00.000Z'
+core.time.isValidDate(parsed) // true
+core.time.addDays(date, 7) // 2026-01-08 12:00:00
+core.time.addHours(date, 2) // 2026-01-01 14:00:00
+core.time.startOfDay(date) // 2026-01-01 00:00:00.000
+core.time.endOfDay(date) // 2026-01-01 23:59:59.999
 ```
 
-formatDate は YYYY/MM/DD/HH/mm/ss に対応し、既定は YYYY-MM-DD です。日付計算は新しい Date を返します。parseDate の不正入力は自動例外ではなく無効な Date になるため isValidDate で確認します。
+`formatDate()` の既定形式は `YYYY-MM-DD` です。テンプレート内の日付の置換記号は、同じものが複数あってもすべて置き換えます。`parseDate()` は標準の `Date` で解析します。結果は `isValidDate()` で確認でき、環境間で日時を渡す場合はタイムゾーン付きの ISO 文字列を使います。`addDays()` と `addHours()` はローカル時刻に沿って計算するため、夏時間の切り替えをまたぐと実際の経過時間が変わることがあります。
 
 詳しい引数と低頻度の選択肢は [Core 利用リファレンス](../cli/templates/skills/hai-core/reference.md)を参照し、公開契約は現在の宣言に従ってください。
 

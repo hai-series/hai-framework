@@ -78,12 +78,14 @@ logging:
 
 | 项 | 框架默认 | 修改后的影响与检查 |
 | --- | --- | --- |
-| `logging.level` | 对象存在时 `info` | trace/debug 更多诊断，warn/error 更少输出；检查目标级别是否被过滤 |
+| `logging.level` | `info` | 在 Node 和浏览器过滤低于设定级别的日志。例如 `warn` 保留 warn、error、fatal，`fatal` 只保留 fatal |
 | `logging.format` | 对象存在时 `json`；未配置 Logger 初始为 `pretty` | JSON 适合逐行采集；pretty 适合终端且需 pino-pretty，不能靠默认环境推断 |
 | `logging.context` | 无默认 | 追加稳定服务/节点标识，不放密码或用户敏感正文 |
 | `logging.redact` | `[]` | 追加业务隐私路径，凭据默认脱敏仍生效；已有历史日志不会被追溯清理 |
 
 错误输出走 `core.error.toPublic`，UI 经 ToastContainer 默认显示可读说明，排查图标才展示编号。日志可以保留脱敏 Error 和同一个 `traceId`；不要把 cause、SQL、绑定值或凭据返回用户。默认脱敏覆盖 `passwordHash`/`secretKey` 等已知字段，不保证识别任意无标签秘密；业务隐私要显式清理。
+
+Core 自动加载或重载配置失败时，日志提供文件路径、错误码，以及能取得的 YAML 行列和追踪编号。显式调用加载或校验方法会从 `error.cause` 返回更多诊断，应用记录这类错误时应只选取必要字段。
 
 日志脱敏先生成数据副本，不执行自定义 `toJSON()`。类实例只读取自有可枚举数据属性，不保留原型方法，访问器不会被调用；日期转为 ISO 字符串，URL 转为脱敏字符串。原对象不变，仍应只选取排查所需字段，避免收集无关隐私。
 

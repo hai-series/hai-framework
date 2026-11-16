@@ -5,12 +5,13 @@
  * @module core-main.node
  */
 
-import type { CoreOptions, NodeCoreFunctions } from './core-types.js'
+import type { CoreOptions, HaiError, HaiResult, LogContext, NodeCoreFunctions } from './core-types.js'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { Buffer } from 'node:buffer'
 import { timingSafeEqual } from 'node:crypto'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { YAMLParseError } from 'yaml'
 import { CoreConfigSchema } from './core-config.js'
 import { createCore } from './core-main.js'
 import { access } from './functions/core-function-access.node.js'
@@ -83,7 +84,7 @@ function createNodeCore(): NodeCoreFunctions {
  * import { core, CoreConfigSchema } from '@h-ai/core'
  * core.init({ configDir: './config' }) // 单项加载失败记录日志并继续。
  * const required = core.config.validate('core', CoreConfigSchema)
- * if (!required.success) core.logger.error('Required config unavailable', { error: required.error })
+ * if (!required.success) core.logger.error('Required config unavailable', { code: required.error.code })
  * else core.logger.info('Application ready', { name: required.data.name })
  * ```
  */
@@ -102,7 +103,7 @@ export const core: NodeCoreFunctions = createNodeCore()
 interface ConfigLoadItem {
   /** 配置名称（用作缓存 key，如 'core'、'db'、'app'） */
   name: string
-  /** 配置文件绝对路径 */
+  /** 配置文件路径，与调用方传入的配置目录使用同一相对或绝对基准。 */
   filePath: string
 }
 
@@ -164,10 +165,8 @@ function scanConfigDir(
 /**
  * 初始化 Core（内部实现，通过 `core.init()` 调用）。
  *
- * 执行流程：
- * 1. 配置日志（若提供 `options.logging`）
- * 2. 扫描并加载配置目录中的所有 YAML
- * 3. 启用配置文件监听（若 `options.watchConfig` 为 true）
+ * 显式日志选项优先。指定配置目录时先加载并校验 core 配置，再加载其余 YAML。
+ * 启用 `watchConfig` 后为本次成功加载的配置注册监听。
  *
  * 单项 `config.load` 返回失败时记录日志并继续；必需配置由调用方 `config.validate` 并检查 success。
  *
@@ -178,60 +177,46 @@ function scanConfigDir(
  * ```ts
  * core.init({ configDir: './config', watchConfig: true })
  * const required = core.config.validate('core', CoreConfigSchema)
- * if (!required.success) core.logger.error('Required config unavailable', { error: required.error })
+ * if (!required.success) core.logger.error('Required config unavailable', { code: required.error.code })
  * ```
  */
 function initCore(options: CoreOptions = {}): void {
   const startTime = Date.now()
   const logger = core.logger
 
-  // 1. Configure logging
   if (options.logging) {
-    core.logger.configure(options.logging)
+    logger.configure(options.logging)
   }
 
-  let configItems: ConfigLoadItem[] = []
-
-  if (options.configDir) {
-    // 约定优于配置模式
-    configItems = scanConfigDir(options.configDir)
-  }
+  const configItems = options.configDir
+    ? scanConfigDir(options.configDir)
+    : []
 
   // 先应用 core 的日志配置，避免其它配置加载日志使用初始化前的级别与格式。
   configItems.sort((left, right) => Number(right.name === 'core') - Number(left.name === 'core'))
 
-  // 2. Load config files
+  const loadedItems: ConfigLoadItem[] = []
   for (const item of configItems) {
+    let result: HaiResult<unknown>
     if (item.name === 'core') {
-      const result = config.load(item.name, item.filePath, CoreConfigSchema)
-      if (result.success) {
-        if (!options.logging) {
-          core.logger.configure(result.data.logging || {})
-        }
-        logger.info(`[core] Config loaded: ${item.name} <- ${item.filePath}`)
-      }
-      else {
-        logger.error(`[core] Config load failed: ${item.name}`, {
-          error: result.error,
-        })
-      }
+      const loaded = config.load(item.name, item.filePath, CoreConfigSchema)
+      if (loaded.success && !options.logging && loaded.data.logging)
+        logger.configure(loaded.data.logging)
+      result = loaded
     }
     else {
-      const result = loadConfigStructure(item.name, item.filePath, options.configSchemas?.[item.name])
-      if (result.success) {
-        logger.info(`[core] Config loaded: ${item.name} <- ${item.filePath}`)
-      }
-      else {
-        logger.error(`[core] Config load failed: ${item.name}`, {
-          error: result.error,
-        })
-      }
+      result = loadConfigStructure(item.name, item.filePath, options.configSchemas?.[item.name])
     }
+    if (!result.success) {
+      logger.error(`[core] Config load failed: ${item.name}`, configDiagnostic(item, result.error))
+      continue
+    }
+    loadedItems.push(item)
+    logger.info(`[core] Config loaded: ${item.name} <- ${item.filePath}`)
   }
 
-  // 3. Enable config file watching
-  if (options.watchConfig && configItems.length > 0) {
-    setupConfigWatch(configItems)
+  if (options.watchConfig) {
+    setupConfigWatch(loadedItems)
   }
 
   const duration = Date.now() - startTime
@@ -239,11 +224,28 @@ function initCore(options: CoreOptions = {}): void {
 }
 
 /**
- * 启用配置文件监听。
- *
- * 为每个已加载的配置项注册文件 watcher，变更时自动重载并输出日志。
- *
- * @param configs - 需要监听的配置项列表
+ * 保留配置失败的位置、错误码和关联编号。YAML 解析异常的消息与堆栈可能包含配置原文。
+ * @param item - 正在加载或监听的配置项
+ * @param error - 保留完整原因的内部错误结果
+ * @returns 可记录的诊断字段
+ */
+function configDiagnostic(item: ConfigLoadItem, error: HaiError): LogContext {
+  const position = error.cause instanceof YAMLParseError
+    ? error.cause.linePos?.[0]
+    : undefined
+  return {
+    filePath: item.filePath,
+    code: error.code,
+    traceId: error.traceId,
+    ...(position
+      ? { line: position.line, column: position.col }
+      : {}),
+  }
+}
+
+/**
+ * 为成功加载的配置注册监听。重载只更新缓存，每次变更均记录结果。
+ * @param configs - 本次启动加载成功的配置项列表
  */
 function setupConfigWatch(configs: ConfigLoadItem[]): void {
   const logger = core.logger
@@ -251,12 +253,13 @@ function setupConfigWatch(configs: ConfigLoadItem[]): void {
   for (const item of configs) {
     config.watch(item.name, (_config, error) => {
       if (error) {
-        logger.error(`[core] Config reload failed: ${item.name}`, { error })
+        logger.error(`[core] Config watch or reload failed: ${item.name}`, configDiagnostic(item, error))
         return
       }
       logger.info(`[core] Config reloaded: ${item.name}`)
     })
 
-    logger.debug(`[core] Config watch enabled: ${item.name}`)
+    if (config.isWatching(item.name))
+      logger.debug(`[core] Config watch enabled: ${item.name}`)
   }
 }

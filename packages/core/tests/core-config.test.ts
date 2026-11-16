@@ -4,12 +4,15 @@
  * =============================================================================
  */
 
+import * as fs from 'node:fs'
 import { mkdtempSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { core } from '../src/index.js'
+import { core, HaiCommonError, HaiConfigError } from '../src/index.js'
+
+vi.mock(import('node:fs'), { spy: true })
 
 describe('core.config', () => {
   let tempDir: string
@@ -374,6 +377,27 @@ describe('core.config', () => {
     }
   })
 
+  it('自定义 Schema 校验抛错时，读盘和缓存校验均保留原始原因和最近成功的值', () => {
+    writeFileSync(configPath, 'foo: a\nbar: b\n')
+    expect(core.config.load('app', configPath, schema).success).toBe(true)
+    const cause = new Error('Custom check failed')
+    const failingSchema = schema.refine(() => {
+      throw cause
+    })
+    for (const validate of [
+      () => core.config.load('app', configPath, failingSchema),
+      () => core.config.validate('app', failingSchema),
+    ]) {
+      const result = validate()
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(HaiConfigError.CONFIG_VALIDATION_ERROR.code)
+        expect(result.error.cause).toBe(cause)
+      }
+    }
+    expect(core.config.get('app')).toEqual({ foo: 'a', bar: 'b' })
+  })
+
   // =========================================================================
   // reload
   // =========================================================================
@@ -448,6 +472,55 @@ describe('core.config', () => {
     expect(receivedError?.code).toBe('hai:core:014')
   })
 
+  it('配置已缓存但监听目录不可用时，回调报告监听失败及原因', () => {
+    writeFileSync(configPath, 'foo: cached\nbar: value\n')
+    expect(core.config.load('app', configPath, schema).success).toBe(true)
+    rmSync(tempDir, { recursive: true })
+
+    const callback = vi.fn()
+    const unwatch = core.config.watch('app', callback)
+    expect(callback).toHaveBeenCalledExactlyOnceWith(null, expect.objectContaining({
+      code: HaiCommonError.SERVICE_UNAVAILABLE.code,
+      cause: expect.objectContaining({ code: 'ENOENT' }),
+    }))
+    expect(core.config.isWatching('app')).toBe(false)
+    expect(core.config.get('app')).toEqual({ foo: 'cached', bar: 'value' })
+    unwatch()
+  })
+
+  it('监听遇到系统错误时关闭旧 watcher，通知订阅方并允许重新注册', () => {
+    writeFileSync(configPath, 'foo: cached\nbar: value\n')
+    expect(core.config.load('app', configPath, schema).success).toBe(true)
+    const watch = vi.mocked(fs.watch)
+    watch.mockClear()
+    const onChange = vi.fn()
+    const second = vi.fn()
+    try {
+      const stop = core.config.watch('app', onChange)
+      core.config.watch('app', second)
+      const watcher = watch.mock.results[0]?.value
+      expect(watcher).toBeDefined()
+      const cause = new Error('Watch stopped unexpectedly')
+      watcher.emit('error', cause)
+      for (const callback of [onChange, second]) {
+        expect(callback).toHaveBeenCalledExactlyOnceWith(null, expect.objectContaining({
+          code: HaiCommonError.SERVICE_UNAVAILABLE.code,
+          cause,
+        }))
+      }
+      expect(core.config.isWatching('app')).toBe(false)
+      expect(core.config.get('app')).toEqual({ foo: 'cached', bar: 'value' })
+
+      const stopNew = core.config.watch('app', onChange)
+      expect(watch).toHaveBeenCalledTimes(2)
+      stop()
+      expect(core.config.isWatching('app')).toBe(true)
+      stopNew()
+      expect(core.config.isWatching('app')).toBe(false)
+    }
+    finally { core.config.unwatch('app') }
+  })
+
   it('watch 回归：连续原子替换、删除重建与校验失败后均能继续监听', async () => {
     writeFileSync(configPath, 'foo: original\nbar: value\n')
     expect(core.config.load('app', configPath, schema).success).toBe(true)
@@ -518,6 +591,20 @@ describe('core.config', () => {
     expect(core.config.isWatching('app')).toBe(true)
     unwatch()
     expect(core.config.isWatching('app')).toBe(false)
+  })
+
+  it('显式空配置名只清理该条目及其监听', () => {
+    writeFileSync(configPath, 'foo: a\nbar: b\n')
+    expect(core.config.load('', configPath, schema).success).toBe(true)
+    expect(core.config.load('app', configPath, schema).success).toBe(true)
+    core.config.watch('', () => {})
+    core.config.watch('app', () => {})
+
+    core.config.clear('')
+    expect(core.config.has('')).toBe(false)
+    expect(core.config.isWatching('')).toBe(false)
+    expect(core.config.has('app')).toBe(true)
+    expect(core.config.isWatching('app')).toBe(true)
   })
 
   it('unwatch 按名称应该停止特定监听', () => {

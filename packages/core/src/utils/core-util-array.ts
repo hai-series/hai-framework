@@ -56,17 +56,17 @@ function groupBy<T, K extends string | number>(
 /**
  * 分割为指定大小的块。
  * @param arr - 输入数组
- * @param size - 每块大小（应为正整数）
- * @returns 分块后的二维数组
- * @remarks size <= 0 时结果为空数组。
+ * @param size - 每块最多包含的元素数，须为正安全整数
+ * @returns 分块后的二维数组；大小无效时返回空数组
  *
  * @example
  * ```ts
- * array.chunk([1, 2, 3], 2) // [[1,2],[3]]
+ * import { core } from '@h-ai/core'
+ * core.array.chunk([1, 2, 3], 2) // [[1, 2], [3]]
  * ```
  */
 function chunk<T>(arr: T[], size: number): T[][] {
-  if (size <= 0)
+  if (!Number.isSafeInteger(size) || size <= 0)
     return []
   const result: T[][] = []
   for (let i = 0; i < arr.length; i += size) {

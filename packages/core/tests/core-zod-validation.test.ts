@@ -9,6 +9,21 @@ import { z } from 'zod'
 import { core } from '../src/index.js'
 
 describe('core.zodValidation', () => {
+  it('跳过非 issue 输入，支持 Zod 的 Symbol 字段路径', () => {
+    expect(core.zodValidation.mapZodErrorToFormErrors({ issues: {} }, key => key)).toEqual([])
+    const field = Symbol('field')
+    const parsed = z.custom(() => false, {
+      path: [field],
+    }).safeParse('invalid')
+    if (parsed.success)
+      throw new Error('Expected custom schema rejection')
+    expect(core.zodValidation.mapZodErrorToFormErrors({
+      issues: [null, {}, ...parsed.error.issues],
+    }, key => key)).toEqual([
+      { field: 'Symbol(field)', message: 'validationInvalid' },
+    ])
+  })
+
   it('严格 schema 的未知字段使用安全消息键，保留显式自定义消息', () => {
     const result = z.strictObject({
       name: z.string(),
