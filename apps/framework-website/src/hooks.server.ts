@@ -5,8 +5,11 @@
  */
 
 import type { Handle } from '@sveltejs/kit/hooks'
+import { resolve } from '$app/paths'
 import { core } from '@h-ai/core'
 import { kit, KitConfigSchema } from '@h-ai/kit'
+import { docChapter, docLocaleStrategy } from '#lib/doc-links.js'
+import { defineCustomServerStrategy } from '#lib/paraglide/runtime.js'
 import { paraglideMiddleware } from '#lib/paraglide/server.js'
 import { initApp } from '#lib/server/init.js'
 
@@ -38,6 +41,11 @@ const initHandle: Handle = async ({ event, resolve }) => {
 // =============================================================================
 // Paraglide i18n Middleware
 // =============================================================================
+
+const base = resolve('/').replace(/\/$/, '')
+defineCustomServerStrategy(docLocaleStrategy, {
+  getLocale: request => request && docChapter(new URL(request.url).pathname, base)?.locale,
+})
 
 /**
  * i18n Handle - 使用 Paraglide middleware 处理语言

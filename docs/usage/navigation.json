@@ -9,59 +9,64 @@
     {
       "id": "overview",
       "title": "1. 认识框架与选择路线",
+      "titles": { "en-US": "1. Understand the framework", "ja-JP": "1. フレームワークを知る" },
       "path": "overview/README.md",
       "children": [
-        { "id": "overview-framework", "title": "能力、边界与应用结构", "path": "overview/framework.md" },
-        { "id": "overview-reading-paths", "title": "按你的工作选择阅读顺序", "path": "overview/reading-paths.md" },
-        { "id": "overview-environment", "title": "开发、部署和原生环境准备", "path": "overview/environment.md" }
+        { "id": "overview-framework", "title": "能力、边界与应用结构", "titles": { "en-US": "Capabilities and application structure", "ja-JP": "主な機能とアプリ構成" }, "path": "overview/framework.md" },
+        { "id": "overview-reading-paths", "title": "按你的工作选择阅读顺序", "titles": { "en-US": "Find a guide for your task", "ja-JP": "目的別の読み方" }, "path": "overview/reading-paths.md" },
+        { "id": "overview-environment", "title": "开发、部署和原生环境准备", "titles": { "en-US": "Development, deployment and native tooling", "ja-JP": "開発・デプロイ・ネイティブ環境" }, "path": "overview/environment.md" }
       ]
     },
     {
       "id": "getting-started",
       "title": "2. 从创建到首次交付",
+      "titles": { "en-US": "2. Create and deliver an app", "ja-JP": "2. アプリの作成から初回リリースまで" },
       "path": "getting-started/README.md",
       "children": [
-        { "id": "getting-started-create", "title": "创建项目并首次运行", "path": "getting-started/create.md" },
-        { "id": "getting-started-develop", "title": "配置环境与实现功能", "path": "getting-started/develop.md" },
-        { "id": "getting-started-build", "title": "编译、镜像与原生打包", "path": "getting-started/build.md" },
-        { "id": "getting-started-upgrade", "title": "升级框架与验证迁移", "path": "getting-started/upgrade.md" }
+        { "id": "getting-started-create", "title": "创建项目并首次运行", "titles": { "en-US": "Create and run a project", "ja-JP": "プロジェクトの作成と起動" }, "path": "getting-started/create.md" },
+        { "id": "getting-started-develop", "title": "配置环境与实现功能", "titles": { "en-US": "Configure and develop an app", "ja-JP": "環境設定と機能開発" }, "path": "getting-started/develop.md" },
+        { "id": "getting-started-build", "title": "编译、镜像与原生打包", "titles": { "en-US": "Compile, build images and package native apps", "ja-JP": "コンパイル・イメージ作成・ネイティブパッケージ" }, "path": "getting-started/build.md" },
+        { "id": "getting-started-upgrade", "title": "升级框架与验证迁移", "titles": { "en-US": "Upgrade the framework and verify the migration", "ja-JP": "フレームワークの更新と移行確認" }, "path": "getting-started/upgrade.md" }
       ]
     },
     {
       "id": "development",
       "title": "3. 按业务能力开发",
+      "titles": { "en-US": "3. Develop application features", "ja-JP": "3. 機能別の開発ガイド" },
       "path": "development/README.md",
       "children": [
-        { "id": "development-http", "title": "前后端与接口授权", "path": "development/frontend-backend.md" },
-        { "id": "development-data", "title": "数据、事务和附件", "path": "development/data.md" },
-        { "id": "development-identity", "title": "登录、改密与退出", "path": "development/authentication.md" },
-        { "id": "development-ai", "title": "AI内容、模型与检索", "path": "development/ai.md" },
-        { "id": "development-acp", "title": "ACP智能体、工作区与会话", "path": "development/ai-acp.md" },
-        { "id": "development-agent", "title": "多用户 Agent 工作台", "path": "development/agent.md" },
-        { "id": "development-ui", "title": "页面布局、交互与提示", "path": "development/ui.md" },
-        { "id": "development-integrations", "title": "支付与原生能力", "path": "development/integrations.md" }
+        { "id": "development-http", "title": "前后端与接口授权", "titles": { "en-US": "Frontend, backend and API authorization", "ja-JP": "フロントエンド・バックエンド・API 認可" }, "path": "development/frontend-backend.md" },
+        { "id": "development-data", "title": "数据、事务和附件", "titles": { "en-US": "Data, transactions and attachments", "ja-JP": "データ・トランザクション・添付ファイル" }, "path": "development/data.md" },
+        { "id": "development-identity", "title": "登录、改密与退出", "titles": { "en-US": "Sign in, change passwords and sign out", "ja-JP": "ログイン・パスワード変更・ログアウト" }, "path": "development/authentication.md" },
+        { "id": "development-ai", "title": "AI内容、模型与检索", "titles": { "en-US": "AI content, models and retrieval", "ja-JP": "AI コンテンツ・モデル・検索" }, "path": "development/ai.md" },
+        { "id": "development-acp", "title": "ACP智能体、工作区与会话", "titles": { "en-US": "ACP agents, workspaces and sessions", "ja-JP": "ACP エージェント・ワークスペース・セッション" }, "path": "development/ai-acp.md" },
+        { "id": "development-agent", "title": "多用户 Agent 工作台", "titles": { "en-US": "Multi-user agent workspace", "ja-JP": "マルチユーザーのエージェントワークスペース" }, "path": "development/agent.md" },
+        { "id": "development-ui", "title": "页面布局、交互与提示", "titles": { "en-US": "Layout, interactions and feedback", "ja-JP": "レイアウト・操作・フィードバック" }, "path": "development/ui.md" },
+        { "id": "development-integrations", "title": "支付与原生能力", "titles": { "en-US": "Payments and native features", "ja-JP": "決済とネイティブ機能" }, "path": "development/integrations.md" }
       ]
     },
     {
       "id": "configuration",
       "title": "4. 按领域管理配置",
+      "titles": { "en-US": "4. Configure the framework", "ja-JP": "4. 分野別の設定" },
       "path": "configuration/README.md",
       "children": [
-        { "id": "configuration-runtime", "title": "基础、覆盖与生命周期", "path": "configuration/runtime.md" },
-        { "id": "configuration-data", "title": "数据库、缓存、文件与文本", "path": "configuration/data.md" },
-        { "id": "configuration-identity", "title": "身份、会话与安全策略", "path": "configuration/identity.md" },
+        { "id": "configuration-runtime", "title": "基础、覆盖与生命周期", "titles": { "en-US": "Configuration sources, overrides and lifecycle", "ja-JP": "設定の読み込み・上書き・ライフサイクル" }, "path": "configuration/runtime.md" },
+        { "id": "configuration-data", "title": "数据库、缓存、文件与文本", "titles": { "en-US": "Databases, caches, files and text", "ja-JP": "データベース・キャッシュ・ファイル・テキスト" }, "path": "configuration/data.md" },
+        { "id": "configuration-identity", "title": "身份、会话与安全策略", "titles": { "en-US": "Identity, sessions and security policies", "ja-JP": "ID・セッション・セキュリティポリシー" }, "path": "configuration/identity.md" },
         {
           "id": "configuration-http",
           "title": "HTTP、客户端与传输",
+          "titles": { "en-US": "HTTP, clients and transport", "ja-JP": "HTTP・クライアント・通信" },
           "path": "configuration/http.md",
           "children": [
-            { "id": "configuration-request-access", "title": "请求来源、时段与接口加密", "path": "configuration/request-access.md" }
+            { "id": "configuration-request-access", "title": "请求来源、时段与接口加密", "titles": { "en-US": "Request sources, access hours and API encryption", "ja-JP": "リクエスト元・アクセス時間帯・API 暗号化" }, "path": "configuration/request-access.md" }
           ]
         },
-        { "id": "configuration-ai", "title": "AI 配置清单与使用场景", "path": "configuration/ai.md" },
-        { "id": "configuration-operations", "title": "反馈、通知、审计与任务", "path": "configuration/operations.md" },
-        { "id": "configuration-experience", "title": "页面、支付与设备", "path": "configuration/experience.md" },
-        { "id": "configuration-delivery", "title": "构建、部署与恢复", "path": "configuration/delivery.md" },
+        { "id": "configuration-ai", "title": "AI 配置清单与使用场景", "titles": { "en-US": "AI settings and use cases", "ja-JP": "AI の設定と利用例" }, "path": "configuration/ai.md" },
+        { "id": "configuration-operations", "title": "反馈、通知、审计与任务", "titles": { "en-US": "Feedback, notifications, audit and jobs", "ja-JP": "フィードバック・通知・監査・ジョブ" }, "path": "configuration/operations.md" },
+        { "id": "configuration-experience", "title": "页面、支付与设备", "titles": { "en-US": "Pages, payments and devices", "ja-JP": "画面・決済・デバイス" }, "path": "configuration/experience.md" },
+        { "id": "configuration-delivery", "title": "构建、部署与恢复", "titles": { "en-US": "Build, deployment and recovery", "ja-JP": "ビルド・デプロイ・復旧" }, "path": "configuration/delivery.md" },
         { "id": "configuration-module-api-client", "title": "@h-ai/api-client", "path": "configuration/api-client.md" },
         { "id": "configuration-module-api-contract", "title": "@h-ai/api-contract", "path": "configuration/api-contract.md" },
         { "id": "configuration-module-audit", "title": "@h-ai/audit", "path": "configuration/audit.md" },
@@ -89,25 +94,28 @@
     {
       "id": "operations",
       "title": "5. 发布与日常运行",
+      "titles": { "en-US": "5. Deploy and operate", "ja-JP": "5. リリースと運用" },
       "path": "operations/README.md",
       "children": [
-        { "id": "operations-deployment", "title": "全量、增量与发布后回退", "path": "operations/deployment.md" },
-        { "id": "operations-feedback", "title": "用户反馈、任务与故障排查", "path": "operations/feedback.md" }
+        { "id": "operations-deployment", "title": "全量、增量与发布后回退", "titles": { "en-US": "Full and incremental releases, rollback", "ja-JP": "全体・差分リリースとロールバック" }, "path": "operations/deployment.md" },
+        { "id": "operations-feedback", "title": "用户反馈、任务与故障排查", "titles": { "en-US": "User feedback, jobs and troubleshooting", "ja-JP": "ユーザーフィードバック・ジョブ・障害調査" }, "path": "operations/feedback.md" }
       ]
     },
     {
       "id": "governance",
       "title": "6. 维护、安全与验收",
+      "titles": { "en-US": "6. Maintain, review and verify", "ja-JP": "6. 保守・セキュリティ・検証" },
       "path": "governance/README.md",
       "children": [
-        { "id": "governance-maintenance", "title": "维护框架与同步资料", "path": "governance/framework-maintenance.md" },
-        { "id": "governance-security", "title": "安全审查与恢复条件", "path": "governance/security-review.md" },
-        { "id": "governance-verification", "title": "验证、截图与适用边界", "path": "governance/verification.md" }
+        { "id": "governance-maintenance", "title": "维护框架与同步资料", "titles": { "en-US": "Maintain public contracts and documentation", "ja-JP": "公開仕様とドキュメントの保守" }, "path": "governance/framework-maintenance.md" },
+        { "id": "governance-security", "title": "安全审查与恢复条件", "titles": { "en-US": "Security review and recovery", "ja-JP": "セキュリティレビューと復旧" }, "path": "governance/security-review.md" },
+        { "id": "governance-verification", "title": "验证、截图与适用边界", "titles": { "en-US": "Verification, screenshots and scope", "ja-JP": "検証・スクリーンショット・対象範囲" }, "path": "governance/verification.md" }
       ]
     },
     {
       "id": "data",
       "title": "7. 模块数据结构",
+      "titles": { "en-US": "7. Module data structures", "ja-JP": "7. モジュールのデータ構造" },
       "path": "data/README.md",
       "children": [
         { "id": "data-module-ai", "title": "@h-ai/ai", "path": "data/ai.md" },
@@ -138,6 +146,7 @@
     {
       "id": "function",
       "title": "8. 模块功能说明",
+      "titles": { "en-US": "8. Module APIs", "ja-JP": "8. モジュール API" },
       "path": "function/README.md",
       "children": [
         { "id": "function-module-ai", "title": "@h-ai/ai", "path": "function/ai.md" },

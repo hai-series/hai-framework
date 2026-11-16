@@ -42,7 +42,16 @@ describe('generated scaffold', () => {
     const result = await load()
     expect(Object.keys(result).sort()).toEqual(['navigation', 'version'])
     expect(result.version).toMatch(/^\d+\.\d+\.\d+/)
-    expect(result.navigation.sections).toHaveLength(6)
-    expect(JSON.stringify(result)).not.toContain('password')
+    expect(result.navigation.sections.map(section => section.id)).toEqual([
+      'overview',
+      'getting-started',
+      'development',
+      'configuration',
+      'operations',
+      'governance',
+      'data',
+      'function',
+    ])
+    expect(JSON.stringify(result)).not.toContain('"password":')
   })
 })

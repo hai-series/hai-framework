@@ -2,9 +2,12 @@
   import type { PageProps } from './$types'
   import { asset, resolve } from '$app/paths'
   import { Badge, MarkdownRenderer } from '@h-ai/ui'
+  import { localizedDocSlug } from '#lib/doc-links.js'
   import * as m from '#lib/paraglide/messages.js'
+  import { getLocale } from '#lib/paraglide/runtime.js'
 
   const { data }: PageProps = $props()
+  const locale = getLocale()
   const install = '```sh\npnpm add -g @h-ai/cli@latest\nhai create my-app --type website --defaults\ncd my-app && pnpm dev\n```'
   const features = [
     {
@@ -99,7 +102,11 @@
       <Badge variant='primary'>{m.site_open_source()} · {data.version}</Badge>
       <h1>{m.site_headline()}<span>{m.site_tagline()}</span></h1>
       <p class='hero-description'>{m.site_description()}</p>
-      <div class='hero-actions'><a class='btn btn-primary' href={resolve('/docs/[...slug]', { slug: 'getting-started/create' })}>{m.site_start()} <span aria-hidden='true'>→</span></a><a class='btn btn-outline' href={resolve('/docs/[...slug]', { slug: '' })}>{m.site_read_docs()}</a></div>
+      <div class='hero-actions'><a class='btn btn-primary' href={resolve('/docs/[...slug]', {
+        slug: localizedDocSlug('getting-started/create', locale),
+      })}>{m.site_start()} <span aria-hidden='true'>→</span></a><a class='btn btn-outline' href={resolve('/docs/[...slug]', {
+        slug: localizedDocSlug('', locale),
+      })}>{m.site_read_docs()}</a></div>
       <p class='hero-footnote'>TypeScript · Svelte 5 · SvelteKit · pnpm</p>
     </div>
     <div class='install-panel'><div class='panel-heading'><span class='terminal-dots' aria-hidden='true'>● ● ●</span><span>{m.site_terminal()}</span></div><MarkdownRenderer content={install} /><p>{m.site_install_note()}</p></div>
@@ -109,7 +116,9 @@
     <div class='section-intro'><span class='eyebrow'>{m.site_capabilities_label()}</span><h2 id='capabilities'>{m.site_capabilities()}</h2><p>{m.site_capabilities_body()}</p></div>
     <div class='feature-grid'>
       {#each features as feature (feature.icon)}
-        <article class='feature-card'><span class={`${feature.icon} feature-icon`} aria-hidden='true'></span><h3>{feature.title()}</h3><p>{feature.body()}</p><a href={resolve('/docs/[...slug]', { slug: feature.slug })}>{m.site_learn_more()} <span aria-hidden='true'>→</span></a></article>
+        <article class='feature-card'><span class={`${feature.icon} feature-icon`} aria-hidden='true'></span><h3>{feature.title()}</h3><p>{feature.body()}</p><a href={resolve('/docs/[...slug]', {
+          slug: localizedDocSlug(feature.slug, locale),
+        })}>{m.site_learn_more()} <span aria-hidden='true'>→</span></a></article>
       {/each}
     </div>
   </section>
@@ -135,9 +144,15 @@
   <section class='home-section reading-paths' aria-labelledby='paths'>
     <div><span class='eyebrow'>{m.site_paths_label()}</span><h2 id='paths'>{m.site_paths()}</h2><p>{m.site_paths_body()}</p></div>
     <div class='path-grid'>
-      <a href={resolve('/docs/[...slug]', { slug: 'getting-started' })}><strong>{m.site_path_developer()}</strong><span>{m.site_path_developer_body()}</span><span aria-hidden='true'>↗</span></a>
-      <a href={resolve('/docs/[...slug]', { slug: 'configuration' })}><strong>{m.site_path_configuration()}</strong><span>{m.site_path_configuration_body()}</span><span aria-hidden='true'>↗</span></a>
-      <a href={resolve('/docs/[...slug]', { slug: 'governance/security-review' })}><strong>{m.site_path_security()}</strong><span>{m.site_path_security_body()}</span><span aria-hidden='true'>↗</span></a>
+      <a href={resolve('/docs/[...slug]', {
+        slug: localizedDocSlug('getting-started', locale),
+      })}><strong>{m.site_path_developer()}</strong><span>{m.site_path_developer_body()}</span><span aria-hidden='true'>↗</span></a>
+      <a href={resolve('/docs/[...slug]', {
+        slug: localizedDocSlug('configuration', locale),
+      })}><strong>{m.site_path_configuration()}</strong><span>{m.site_path_configuration_body()}</span><span aria-hidden='true'>↗</span></a>
+      <a href={resolve('/docs/[...slug]', {
+        slug: localizedDocSlug('governance/security-review', locale),
+      })}><strong>{m.site_path_security()}</strong><span>{m.site_path_security_body()}</span><span aria-hidden='true'>↗</span></a>
     </div>
   </section>
 

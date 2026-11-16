@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { docLink, docSlug } from '../src/lib/doc-links.js'
-import { contentHref, getDocument, getNavigation, routeDocuments, searchIndex } from '../src/lib/server/docs.js'
+import { docChapter, docLink, docSlug, docTitle } from '../src/lib/doc-links.js'
+import { contentHref, getDocument, getDocumentPage, getNavigation, routeDocuments, searchIndex } from '../src/lib/server/docs.js'
 import { searchDocuments } from '../src/lib/services/search.js'
 
 describe('公开手册的静态阅读契约', () => {
@@ -31,7 +31,7 @@ describe('公开手册的静态阅读契约', () => {
     expect(routes).toContain('operations/README.md')
     expect(routes).not.toContain('configuration.md')
     expect(routes).not.toContain('operations.md')
-    expect(new Set(routes.map(docSlug)).size).toBe(routes.length)
+    expect(new Set(routes.map(file => docSlug(file))).size).toBe(routes.length)
     const navigation = await getNavigation()
     const http = navigation.sections.find(section => section.id === 'configuration')?.children?.find(node => node.id === 'configuration-http')
     expect(http?.children?.map(node => node.path)).toContain('configuration/request-access.md')
@@ -52,5 +52,55 @@ describe('公开手册的静态阅读契约', () => {
     expect(results.some(result => result.href === '/hai-framework/docs/configuration/identity/')).toBe(true)
     expect(searchDocuments('maxAge 非存在关键词xyz', entries)).toEqual([])
     expect(new Set(entries.map(entry => entry.href)).size).toBe(entries.length)
+  })
+
+  it('三语地址对应同一章，中文和旧译文地址仍可访问', async () => {
+    const base = '/hai-framework'
+    expect(docLink('function/core.md', base)).toBe(`${base}/docs/function/core/`)
+    expect(docLink('function/core.md', base, 'en-US')).toBe(`${base}/docs/en/function/core/`)
+    expect(docLink('function/core.ja.md', base)).toBe(`${base}/docs/ja/function/core/`)
+    expect(docLink('getting-started/workflow.en.md', base)).toBe(`${base}/docs/en/getting-started/`)
+    const chapter = docChapter(`${base}/docs/en/function/core/`, base)
+    expect(chapter).toEqual({ slug: 'function/core', locale: 'en-US' })
+    expect(docChapter(`${base}/docs/function/core.en/`, base)).toEqual(chapter)
+    expect(docChapter(`${base}/docsmith/`, base)).toBeUndefined()
+    const translated = await getDocumentPage(chapter!, base)
+    expect(translated?.sourceLocale).toBe('en-US')
+    expect(translated?.sections.some(section => section.id === 'config-api')).toBe(true)
+    expect(translated?.sections.map(section => section.html).join('')).toContain('href="/hai-framework/docs/function/core/"')
+    expect(await getDocumentPage({ slug: 'missing', locale: 'en-US' }, base)).toBeUndefined()
+  })
+
+  it('缺译文时显示中文，并让侧栏、相关链接和搜索保留请求语言', async () => {
+    const base = '/hai-framework'
+    const fallback = await getDocumentPage({ slug: 'configuration/payment', locale: 'ja-JP' }, base)
+    expect(fallback?.locale).toBe('ja-JP')
+    expect(fallback?.sourceLocale).toBe('zh-CN')
+    expect(fallback?.file).toBe('configuration/payment.md')
+    expect(fallback?.sections.map(section => section.html).join('')).toContain('href="/hai-framework/docs/ja/configuration/"')
+    const navigation = await getNavigation()
+    expect(docTitle(navigation.sections.find(node => node.id === 'configuration')!, 'ja-JP')).toContain('設定')
+    const entries = await searchIndex(base, 'ja-JP')
+    expect(entries.every(entry => entry.href.startsWith(`${base}/docs/ja/`))).toBe(true)
+    expect(entries.find(entry => entry.href.endsWith('/configuration/payment/'))?.sourceLocale).toBe('zh-CN')
+    expect(new Set(entries.map(entry => entry.href)).size).toBe(entries.length)
+  })
+
+  it('各模块手册列出 API，部分译文在页面和索引中保留状态', async () => {
+    const base = '/hai-framework'
+    const { sections } = await getNavigation()
+    const modules = sections.find(section => section.id === 'function')?.children ?? []
+    expect(modules).toHaveLength(23)
+    for (const module of modules) {
+      const document = await getDocument(module.path, base)
+      expect(document?.sections.some(section => section.id === 'api-reference'), module.path).toBe(true)
+      expect(document?.sections.some(section => section.html.includes('<table>')), module.path).toBe(true)
+    }
+    const entries = await searchIndex(base, 'en-US')
+    expect(entries.find(entry => entry.href.endsWith('/function/core/'))?.partialTranslation).toBe(true)
+    expect(entries.find(entry => entry.href.endsWith('/function/datapipe/'))).toMatchObject({
+      sourceLocale: 'en-US',
+      partialTranslation: false,
+    })
   })
 })

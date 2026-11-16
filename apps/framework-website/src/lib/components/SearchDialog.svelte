@@ -1,16 +1,18 @@
 <script lang='ts'>
+  import type { DocLocale } from '#lib/doc-links.js'
   import type { SearchEntry } from '#lib/docs-types.js'
   import { resolve } from '$app/paths'
   import { Input, Modal } from '@h-ai/ui'
   import { notifyError } from '@h-ai/ui/toast'
   import { untrack } from 'svelte'
+  import { searchIndexLink } from '#lib/doc-links.js'
   import * as m from '#lib/paraglide/messages.js'
   import { loadSearchIndex, searchDocuments } from '#lib/services/search.js'
 
   // Vite 配置固定 paths.relative=false，HTTP 前缀不会随 SSR 页面深度改变。
   const base = resolve('/').replace(/\/$/, '')
 
-  let { open = $bindable(false) }: { open?: boolean } = $props()
+  let { open = $bindable(false), locale }: { open?: boolean, locale: DocLocale } = $props()
   let query = $state('')
   let entries = $state<SearchEntry[]>([])
   let loading = $state(false)
@@ -24,7 +26,7 @@
     loading = true
     failed = false
     try {
-      entries = await loadSearchIndex(`${base}/search-index.json`)
+      entries = await loadSearchIndex(searchIndexLink(base, locale))
     }
     catch (error) {
       failed = true
@@ -63,7 +65,12 @@
         {#each results as result (result.href)}
           <li><a href={resolve('/docs/[...slug]', {
             slug: result.href.slice(`${base}/docs/`.length).replace(/\/$/, ''),
-          })} onclick={() => { open = false }}><strong>{result.title}</strong><span>{result.excerpt}</span></a></li>
+          })} onclick={() => { open = false }}>
+            <strong>{result.title}</strong>
+            {#if result.sourceLocale !== locale}<small>{m.site_search_chinese_source()}</small>{/if}
+            {#if result.partialTranslation}<small>{m.site_search_partial_translation()}</small>{/if}
+            <span lang={result.sourceLocale}>{result.excerpt}</span>
+          </a></li>
         {/each}
       </ul>
     {/if}

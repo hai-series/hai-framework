@@ -463,13 +463,24 @@ summary {
 .document-meta {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 0.7rem;
   font-size: 0.7rem;
   color: color-mix(in oklab, var(--color-base-content) 65%, transparent);
   border-bottom: 1px solid color-mix(in oklab, var(--color-base-content) 10%, transparent);
   padding-bottom: 1rem;
   margin-bottom: 1.3rem;
+}
+.document-translation-note {
+  padding: 0.7rem 1rem;
+  margin-bottom: 1rem;
+  border-inline-start: 3px solid var(--color-primary);
+  background: var(--color-base-200);
+  font-size: 0.875rem;
+}
+.document-translation-note a {
+  text-decoration: underline;
+  white-space: nowrap;
 }
 .documentation-content {
   min-width: 0;

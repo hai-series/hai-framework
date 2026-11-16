@@ -1,15 +1,16 @@
+import type { DocChapter, DocLocale } from '../doc-links.js'
 import type { DocNavigation, DocNode, SearchEntry } from '../docs-types.js'
 import { Buffer } from 'node:buffer'
 import { open, readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { Marked } from 'marked'
-import { docLink, docSlug } from '../doc-links.js'
+import { docFileLocale, docLink, docSlug, docTitle } from '../doc-links.js'
 
 const repository = 'https://github.com/hai-series/hai-framework'
 const usageRoot = path.resolve('../../docs/usage')
 
 /** 只处理公开仓库路径，拒绝发布机器路径、私有验收目录和危险协议。 */
-export function contentHref(href: string, source: string, base: string): string {
+export function contentHref(href: string, source: string, base: string, locale = docFileLocale(source)): string {
   if (/^(?:https?:|mailto:|#)/i.test(href))
     return href
   if (/^[a-z][\w+.-]*:/i.test(href) || href.startsWith('//'))
@@ -20,8 +21,17 @@ export function contentHref(href: string, source: string, base: string): string 
     return '#'
   if (repositoryPath.startsWith('docs/usage/images/'))
     return `${base}/guide-images/${target.pathname.slice('/docs/usage/images/'.length)}${target.hash}`
-  if (repositoryPath.startsWith('docs/usage/') && repositoryPath.endsWith('.md'))
-    return `${docLink(repositoryPath.slice('docs/usage/'.length), base)}${target.hash}`
+  if (repositoryPath.startsWith('docs/usage/') && repositoryPath.endsWith('.md')) {
+    const file = repositoryPath.slice('docs/usage/'.length)
+    const language = docFileLocale(file)
+    const original = docFileLocale(source) !== 'zh-CN' && docSlug(file, 'zh-CN') === docSlug(source, 'zh-CN')
+    // 中文专用标题在译文中会变化；跨语言共享的小节使用显式 ASCII 锚点。
+    const chineseHeading = target.hash && /\p{Script=Han}/u.test(decodeURIComponent(target.hash))
+    const targetLocale = language === 'zh-CN' && !original && !chineseHeading
+      ? locale
+      : language
+    return `${docLink(file, base, targetLocale)}${target.hash}`
+  }
   return `${repository}/blob/main/${target.pathname.slice(1)}${target.hash}`
 }
 
@@ -39,6 +49,7 @@ function headingSlug(value: string): string {
 
 let navigationPromise: Promise<DocNavigation> | undefined
 let imageDimensionsPromise: Promise<Map<string, { width: number, height: number }>> | undefined
+let catalogPromise: Promise<Awaited<ReturnType<typeof buildCatalog>>> | undefined
 
 /** 读取截图与流程图尺寸，为浏览器预留空间，避免加载图片时把锚点推离视口。 */
 function imageDimensions() {
@@ -93,22 +104,40 @@ export async function documentFiles(directory = usageRoot): Promise<string[]> {
   return nested.flat().sort()
 }
 
-/** 每个文档 slug 生成一个静态入口，同名目录由其 README 承接。 */
-export async function routeDocuments(): Promise<string[]> {
-  const routes = new Map<string, string>()
-  for (const file of await documentFiles()) {
-    const slug = docSlug(file)
-    if (!routes.has(slug) || file.endsWith('/README.md'))
-      routes.set(slug, file)
+async function buildCatalog() {
+  const files = new Set(await documentFiles())
+  const chapters = new Map<string, Partial<Record<DocLocale, string>>>()
+  for (const file of files) {
+    const slug = docSlug(file, 'zh-CN')
+    const locale = docFileLocale(file)
+    const sources = chapters.get(slug) ?? {}
+    if (!sources[locale] || /\bREADME(?:\.(?:en|ja))?\.md$/.test(file))
+      sources[locale] = file
+    chapters.set(slug, sources)
   }
-  return [
-    ...routes.values(),
-  ]
+  return { files, chapters }
 }
 
-export async function getDocument(file: string, base: string) {
-  const files = await documentFiles()
-  if (!files.includes(file))
+function documentCatalog() {
+  catalogPromise ??= buildCatalog()
+  return catalogPromise
+}
+
+/** 以中文章节为准生成三语入口，同名目录由其 README 承接。 */
+export async function routeDocuments(): Promise<string[]> {
+  const { chapters } = await documentCatalog()
+  return [
+    ...chapters.values(),
+  ].flatMap(sources => sources['zh-CN'] ?? [])
+}
+
+function partialTranslation(content: string): boolean {
+  return /^<!-- translation: partial -->\s*$/m.test(content)
+}
+
+export async function getDocument(file: string, base: string, locale = docFileLocale(file)) {
+  const { files } = await documentCatalog()
+  if (!files.has(file))
     return undefined
   const content = await readFile(path.join(usageRoot, file), 'utf8')
   const dimensions = await imageDimensions()
@@ -137,7 +166,7 @@ export async function getDocument(file: string, base: string) {
         return `<h${depth} id="${escapeAttribute(id)}">${text}</h${depth}>`
       },
       link({ href, title, tokens }) {
-        const target = contentHref(href, file, base)
+        const target = contentHref(href, file, base, locale)
         const external = /^https?:/.test(target)
         return `<a href="${escapeAttribute(target)}"${title
           ? ` title="${escapeAttribute(title)}"`
@@ -169,6 +198,9 @@ export async function getDocument(file: string, base: string) {
   const description = plainText(content.replace(/^#.*$/gm, '').replace(/!\[[^\]]*\]\([^)]*\)/g, '')).replace(/\s+/g, ' ').slice(0, 160)
   return {
     file,
+    locale,
+    sourceLocale: docFileLocale(file),
+    partialTranslation: partialTranslation(content),
     title,
     description,
     sections,
@@ -177,28 +209,46 @@ export async function getDocument(file: string, base: string) {
   }
 }
 
-export async function searchIndex(base: string): Promise<SearchEntry[]> {
+export async function getDocumentPage(chapter: DocChapter, base: string) {
+  const { chapters } = await documentCatalog()
+  const sources = chapters.get(chapter.slug)
+  const original = sources?.['zh-CN']
+  if (!original)
+    return undefined
+  return getDocument(sources[chapter.locale] ?? original, base, chapter.locale)
+}
+
+export async function searchIndex(base: string, locale: DocLocale = 'zh-CN'): Promise<SearchEntry[]> {
   const navigation = await getNavigation()
-  function collect(nodes: DocNode[]): string[] {
+  const { chapters } = await documentCatalog()
+  function collect(nodes: DocNode[]): DocNode[] {
     return nodes.flatMap(node => [
-      node.path,
+      node,
       ...collect(node.children ?? []),
     ])
   }
-  const files = [
-    ...new Set([
-      ...collect(navigation.sections),
-      ...Object.values(navigation.locales).map(locale => locale.path),
-      'getting-started/workflow.en.md',
-      'getting-started/workflow.ja.md',
-    ]),
-  ]
-  return Promise.all(files.map(async (file) => {
+  const nodes = new Map<string, string>(collect(navigation.sections).map(node => [
+    docSlug(node.path, 'zh-CN'),
+    docTitle(node, locale),
+  ]))
+  nodes.set('', navigation.locales[locale].title)
+  return Promise.all([
+    ...nodes.entries(),
+  ].map(async ([chapter, title]) => {
+    const sources = chapters.get(chapter)
+    const file = sources?.[locale] ?? sources?.['zh-CN']
+    if (!file)
+      throw new Error(`Missing documentation source: ${chapter}`)
     const content = await readFile(path.join(usageRoot, file), 'utf8')
+    const sourceLocale = docFileLocale(file)
     return {
-      title: content.split('\n').find(line => line.startsWith('# '))?.slice(2).trim() ?? file,
-      href: docLink(file, base),
-      text: content.replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/[#`*_>|]/g, ' ').replace(/\s+/g, ' ').trim(),
+      title: sourceLocale === locale
+        ? content.split('\n').find(line => line.startsWith('# '))?.slice(2).trim() ?? title
+        : title,
+      href: docLink(file, base, locale),
+      text: content.replace(/<!--[\s\S]*?-->|!\[[^\]]*\]\([^)]*\)/g, '').replace(/[#`*_>|]/g, ' ').replace(/\s+/g, ' ').trim(),
+      sourceLocale,
+      partialTranslation: partialTranslation(content),
     }
   }))
 }

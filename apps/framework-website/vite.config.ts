@@ -17,6 +17,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 import { browserStartupAssets } from '../../scripts/vite-browser-startup.js'
 import { resolveBuildMetadata } from './scripts/build-metadata.js'
+import { docLocaleStrategy } from './src/lib/doc-links.js'
 
 export default defineConfig(({ mode, command }) => {
   const envResult = command === 'build' || process.env.HAI_E2E === '1'
@@ -80,7 +81,7 @@ export default defineConfig(({ mode, command }) => {
         outputStructure: 'message-modules',
         project: './project.inlang',
         outdir: './src/lib/paraglide',
-        strategy: ['cookie', 'baseLocale'],
+        strategy: [docLocaleStrategy, 'cookie', 'baseLocale'],
       }),
     ],
     optimizeDeps: {
