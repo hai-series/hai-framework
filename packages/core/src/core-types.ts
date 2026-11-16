@@ -6,8 +6,17 @@
  */
 
 import type { z } from 'zod'
-import type { AccessConditionSchema, RequestAccessConfigSchema, RequestAccessPolicySchema, TrustedProxiesSchema } from './core-access-config.js'
-import type { CoreConfigSchema, EnvSchema, LogFormatSchema, LoggingConfigSchema, LogLevelSchema } from './core-config.js'
+import type {
+  AccessConditionSchema,
+  CoreConfigSchema,
+  EnvSchema,
+  LogFormatSchema,
+  LoggingConfigSchema,
+  LogLevelSchema,
+  RequestAccessConfigSchema,
+  RequestAccessPolicySchema,
+  TrustedProxiesSchema,
+} from './core-config.js'
 import type { config as browserConfig } from './functions/core-function-config.browser.js'
 import type { config as nodeConfig } from './functions/core-function-config.node.js'
 import type { id } from './functions/core-function-id.js'
@@ -802,8 +811,9 @@ export type LogFormat = z.infer<typeof LogFormatSchema>
  * 经过默认值填充的 Logger 配置；redact 是输出脱敏路径。
  * @example
  * ```ts
- * import { LoggingConfigSchema, type LoggingConfig } from '@h-ai/core'
- * const config: LoggingConfig = LoggingConfigSchema.parse({})
+ * import { core, type LoggingConfig } from '@h-ai/core'
+ * const config: LoggingConfig = { level: 'info', format: 'json', redact: [] }
+ * core.init({ logging: config })
  * ```
  */
 export type LoggingConfig = z.infer<typeof LoggingConfigSchema>
@@ -812,8 +822,9 @@ export type LoggingConfig = z.infer<typeof LoggingConfigSchema>
  * 严格校验后的 Core 配置；业务配置使用独立 Schema。
  * @example
  * ```ts
- * import { CoreConfigSchema, type CoreConfig } from '@h-ai/core'
- * const config: CoreConfig = CoreConfigSchema.parse({})
+ * import { core, type CoreConfig } from '@h-ai/core'
+ * core.init({ configDir: './config' })
+ * const config = core.config.getOrThrow<CoreConfig>('core')
  * ```
  */
 export type CoreConfig = z.infer<typeof CoreConfigSchema>
@@ -832,8 +843,9 @@ export type TrustedProxies = z.infer<typeof TrustedProxiesSchema>
  * 已补齐默认值的 IP/时间条件。
  * @example
  * ```ts
- * import { AccessConditionSchema, type AccessCondition } from '@h-ai/core'
- * const condition: AccessCondition = AccessConditionSchema.parse({})
+ * import { core, type AccessCondition } from '@h-ai/core'
+ * const condition: AccessCondition = { allowIps: ['192.0.2.0/24'], denyIps: [], timezone: 'UTC', windows: [] }
+ * const check = core.access.createConditionCheck(condition)
  * ```
  */
 export type AccessCondition = z.infer<typeof AccessConditionSchema>
@@ -842,8 +854,8 @@ export type AccessCondition = z.infer<typeof AccessConditionSchema>
  * 已验证的请求策略。
  * @example
  * ```ts
- * import { RequestAccessPolicySchema, type RequestAccessPolicy } from '@h-ai/core'
- * const policy: RequestAccessPolicy = RequestAccessPolicySchema.parse({ rules: [] })
+ * import { core, type RequestAccessPolicy } from '@h-ai/core'
+ * const policy: RequestAccessPolicy | false = core.access.loadPolicy({ rules: [] })
  * ```
  */
 export type RequestAccessPolicy = z.infer<typeof RequestAccessPolicySchema>

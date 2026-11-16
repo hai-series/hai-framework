@@ -10,7 +10,7 @@ import { networkInterfaces } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { parse } from 'yaml'
-import { AccessConditionSchema, RequestAccessConfigSchema, RequestAccessPolicySchema } from '../core-access-config.js'
+import { AccessConditionSchema, RequestAccessConfigSchema, RequestAccessPolicySchema } from '../core-config.js'
 
 const allowed: AccessDecision = Object.freeze({ allowed: true })
 const invalidPath: AccessDecision = Object.freeze({ allowed: false, reason: 'path' })
@@ -197,8 +197,10 @@ function compileCondition(condition: AccessCondition, readTime?: TimeReader, rul
  * 编译单个 IP/时间条件，供登录与请求策略共用；请求期间不再解析 CIDR 或创建格式化器。
  * @example
  * ```ts
- * import { core, AccessConditionSchema } from '@h-ai/core'
- * const check = core.access.createConditionCheck(AccessConditionSchema.parse({ allowIps: ['192.0.2.0/24'] }))
+ * import { core } from '@h-ai/core'
+ * const check = core.access.createConditionCheck({
+ *   allowIps: ['192.0.2.0/24'], denyIps: [], timezone: 'UTC', windows: [],
+ * })
  * const decision = check('192.0.2.10')
  * ```
  */
