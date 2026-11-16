@@ -16,7 +16,7 @@ Read [frontend, backend and API authorization](frontend-backend.md) for a separa
 
 [AI content, models and retrieval](ai.md) starts with rendering content and adds model calls and persistent stores. [Payments and native features](integrations.md) distinguishes local checks from provider sandbox and device tests.
 
-For an agent that works in a real project, see [ACP agents, workspaces and sessions](ai-acp.md). Choose a local, container, or remote service, set the main branch for each Git workspace, and follow the session, worktree, and release flows. The [multi-user agent workspace](agent.md) connects sign-in, ACP, knowledge, memory, audio, and tool approvals.
+For an agent that works in a real project, see [ACP agents, workspaces and sessions](ai-acp.md). Choose a local, container, or remote service, set the main branch for each Git workspace, and follow the session, worktree, and release flows. The [multi-user agent workspace](agent.md) connects sign-in, ACP, knowledge, memory, audio, tool forms and editable artifacts; see the [application guide](../../../apps/agent/README.en.md).
 
 ## Verify one complete flow
 

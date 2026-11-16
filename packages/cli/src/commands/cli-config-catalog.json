@@ -24,6 +24,22 @@
     "constraint": "字符串；按使用位置的校验规则填写"
   },
   {
+    "name": "HAI_AGENT_WORKBENCH_ARTIFACTS",
+    "module": "agent",
+    "path": "HAI_AGENT_WORKBENCH_ARTIFACTS",
+    "description": "环境入口；使用位置 apps/agent/config/_agent.yml",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AGENT_WORKBENCH_TOOLS",
+    "module": "agent",
+    "path": "HAI_AGENT_WORKBENCH_TOOLS",
+    "description": "环境入口；使用位置 apps/agent/config/_agent.yml",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
     "name": "HAI_AI",
     "module": "ai",
     "path": "ai",
@@ -6240,6 +6256,14 @@
     "constraint": "字符串；按使用位置的校验规则填写"
   },
   {
+    "name": "AGENT_E2E_DISABLED_TOOLS_URL",
+    "module": "runtime",
+    "path": "AGENT_E2E_DISABLED_TOOLS_URL",
+    "description": "环境入口；使用位置 apps/agent/e2e/tools-workbench.spec.ts",
+    "value": "",
+    "constraint": "有效 URL；不得包含凭据"
+  },
+  {
     "name": "AGENT_E2E_EXTERNAL",
     "module": "runtime",
     "path": "AGENT_E2E_EXTERNAL",
@@ -7704,10 +7728,34 @@
     "constraint": "字符串；按使用位置的校验规则填写"
   },
   {
+    "name": "HAI_TOOL_BROWSER_PATH",
+    "module": "tool",
+    "path": "HAI_TOOL_BROWSER_PATH",
+    "description": "环境入口；使用位置 packages/tools/jobs/hyperframes-runtime.mjs",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
     "name": "HAI_TOOL_BROWSER_PROXY",
     "module": "tool",
     "path": "HAI_TOOL_BROWSER_PROXY",
-    "description": "环境入口；使用位置 packages/tools/jobs/browser/operation.py",
+    "description": "环境入口；使用位置 packages/tools/jobs/browser_policy.py",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
+    "name": "HAI_TOOL_FFMPEG_PATH",
+    "module": "tool",
+    "path": "HAI_TOOL_FFMPEG_PATH",
+    "description": "环境入口；使用位置 packages/tools/jobs/hyperframes-runtime.mjs",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
+    "name": "HAI_TOOL_FFPROBE_PATH",
+    "module": "tool",
+    "path": "HAI_TOOL_FFPROBE_PATH",
+    "description": "环境入口；使用位置 packages/tools/jobs/hyperframes-runtime.mjs",
     "value": "",
     "constraint": "字符串；按使用位置的校验规则填写"
   },

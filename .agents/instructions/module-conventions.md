@@ -263,7 +263,7 @@ node scripts/check-module-jsdoc.mjs --package core --coverage-only
 
 维护公开入口时先确认用途。配置、业务类型、公开操作与实际扩展点保留；内置适配器、Repository 状态和工厂依赖留在实现目录。`PaymentProvider` 通过 registerProvider/getProvider 扩展支付渠道，`AIStoreProvider` 通过初始化注入存储，二者是公共契约。cache/storage/reldb/reach 的固定后端 Provider、LLM 内部适配器/工厂依赖、Context 组装依赖及会话存储键不属于包 API。删除没有实现的入口，不为它补造功能。
 
-入口只聚合必要契约。允许选择性导出、类型转发、明确别名、Svelte 默认组件转发及 client/server 分隔。`export *` 适用于被转发源文件的全部导出都确为公共 API 的情况。Kit 的运行时方法通过 kit 命名空间及明确子路径使用；UI 只开放清单中的 13 个组件 barrel，保留样式资产子路径，不开放任意组件实现或内部存储 helper。Kit 没有 vite 插件；Vite 接入使用 `@sveltejs/kit/vite`，UI 开发预打包辅助使用真实的 `@h-ai/ui/vite`。
+入口只聚合必要契约。允许选择性导出、类型转发、明确别名、Svelte 默认组件转发及 client/server 分隔。`export *` 适用于被转发源文件的全部导出都确为公共 API 的情况。Kit 的运行时方法通过 kit 命名空间及明确子路径使用；UI 只开放清单中已发布的组件 barrel，保留样式资产子路径，不开放任意组件实现或内部存储 helper。Kit 没有 vite 插件；Vite 接入使用 `@sveltejs/kit/vite`，UI 开发预打包辅助使用真实的 `@h-ai/ui/vite`。
 
 Node 与浏览器条件分别指向真实 JS 和声明文件，browser 分支在 Node types 前。IAM 浏览器入口只提供配置、错误与类型；AI 浏览器入口提供配置、协议、领域类型及 HTTP 客户端；服务端实例、构造器和工厂留在 Node。core 浏览器保留配置占位接口，文件配置方法按原契约返回 SERVICE_UNAVAILABLE。不能仅依据源码 type-only 标记判断发布声明：声明打包器可能把星号类型转发提升为可调用值，实际输出须用正负类型消费验证；必要时改为明确的类型列表。
 

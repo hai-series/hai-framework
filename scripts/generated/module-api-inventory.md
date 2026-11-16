@@ -4,11 +4,11 @@
 
 | 包 | 公开子路径/条件 | 命名 API 数 |
 | --- | --- | --- |
-| @h-ai/ai | `. (browser/default)` | 347 |
-| @h-ai/ai | `. (browser/types)` | 347 |
-| @h-ai/ai | `. (default)` | 374 |
-| @h-ai/ai | `. (import)` | 374 |
-| @h-ai/ai | `. (types)` | 374 |
+| @h-ai/ai | `. (browser/default)` | 339 |
+| @h-ai/ai | `. (browser/types)` | 339 |
+| @h-ai/ai | `. (default)` | 375 |
+| @h-ai/ai | `. (import)` | 375 |
+| @h-ai/ai | `. (types)` | 375 |
 | @h-ai/ai | `./client (import)` | 5 |
 | @h-ai/ai | `./client (types)` | 5 |
 | @h-ai/api-client | `. (default)` | 14 |
@@ -116,9 +116,15 @@
 | @h-ai/storage | `./client (types)` | 9 |
 | @h-ai/storage | `./schemas (import)` | 8 |
 | @h-ai/storage | `./schemas (types)` | 8 |
-| @h-ai/ui | `. (import)` | 408 |
-| @h-ai/ui | `. (svelte)` | 408 |
-| @h-ai/ui | `. (types)` | 408 |
+| @h-ai/tools | `. (browser/default)` | 13 |
+| @h-ai/tools | `. (browser/types)` | 13 |
+| @h-ai/tools | `. (import)` | 13 |
+| @h-ai/tools | `. (types)` | 13 |
+| @h-ai/tools | `./server (import)` | 18 |
+| @h-ai/tools | `./server (types)` | 18 |
+| @h-ai/ui | `. (import)` | 425 |
+| @h-ai/ui | `. (svelte)` | 425 |
+| @h-ai/ui | `. (types)` | 425 |
 | @h-ai/ui | `./auto-import (import)` | 1 |
 | @h-ai/ui | `./auto-import (types)` | 1 |
 | @h-ai/ui | `./guide (import)` | 11 |
@@ -134,7 +140,7 @@
 | @h-ai/ui | `./toast (types)` | 8 |
 | @h-ai/ui | `./vite (import)` | 2 |
 | @h-ai/ui | `./vite (types)` | 2 |
-| @h-ai/ui | `./components/ 下的显式入口（14 个真实子路径，见 JSON）` | 逐项记录 |
+| @h-ai/ui | `./components/ 下的显式入口（15 个真实子路径，见 JSON）` | 逐项记录 |
 | @h-ai/ui | `./styles/*（8 个真实子路径，见 JSON）` | 逐项记录 |
 | @h-ai/vecdb | `. (default)` | 25 |
 | @h-ai/vecdb | `. (import)` | 25 |

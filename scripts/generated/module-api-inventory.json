@@ -751,12 +751,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "DefineToolOptions",
-              "kind": "type",
-              "declaration": "DefineToolOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "DeveloperMessage",
               "kind": "type",
               "declaration": "DeveloperMessage",
@@ -1951,24 +1945,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "Tool",
-              "kind": "type",
-              "declaration": "Tool",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolAuthorizationRequest",
-              "kind": "type",
-              "declaration": "ToolAuthorizationRequest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolAuthorizer",
-              "kind": "type",
-              "declaration": "ToolAuthorizer",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "ToolCall",
               "kind": "type",
               "declaration": "ToolCall",
@@ -1981,24 +1957,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "ToolErrorType",
-              "kind": "type",
-              "declaration": "ToolErrorType",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "ToolExecutionContext",
-              "kind": "type",
-              "declaration": "ToolExecutionContext",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolExecutionOptions",
-              "kind": "type",
-              "declaration": "ToolExecutionOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "ToolMessage",
               "kind": "type",
               "declaration": "ToolMessage",
@@ -2008,12 +1966,6 @@
               "name": "ToolRegistryOperations",
               "kind": "type",
               "declaration": "ToolRegistryOperations",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolRegistryOptions",
-              "kind": "type",
-              "declaration": "ToolRegistryOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -2844,12 +2796,6 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "DefineToolOptions",
-              "kind": "type",
-              "declaration": "DefineToolOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "DeveloperMessage",
               "kind": "type",
               "declaration": "DeveloperMessage",
@@ -4044,24 +3990,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "Tool",
-              "kind": "type",
-              "declaration": "Tool",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolAuthorizationRequest",
-              "kind": "type",
-              "declaration": "ToolAuthorizationRequest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolAuthorizer",
-              "kind": "type",
-              "declaration": "ToolAuthorizer",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "ToolCall",
               "kind": "type",
               "declaration": "ToolCall",
@@ -4074,24 +4002,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "ToolErrorType",
-              "kind": "type",
-              "declaration": "ToolErrorType",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "ToolExecutionContext",
-              "kind": "type",
-              "declaration": "ToolExecutionContext",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolExecutionOptions",
-              "kind": "type",
-              "declaration": "ToolExecutionOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "ToolMessage",
               "kind": "type",
               "declaration": "ToolMessage",
@@ -4101,12 +4011,6 @@
               "name": "ToolRegistryOperations",
               "kind": "type",
               "declaration": "ToolRegistryOperations",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolRegistryOptions",
-              "kind": "type",
-              "declaration": "ToolRegistryOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -4822,6 +4726,48 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "BuiltinArtifact",
+              "kind": "type",
+              "declaration": "BuiltinArtifact",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BuiltinArtifactAccess",
+              "kind": "type",
+              "declaration": "BuiltinArtifactAccess",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BuiltinArtifactReference",
+              "kind": "type",
+              "declaration": "BuiltinArtifactReference",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BuiltinToolBinding",
+              "kind": "type",
+              "declaration": "BuiltinToolBinding",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "BuiltinToolBroker",
+              "kind": "type",
+              "declaration": "BuiltinToolBroker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "BuiltinToolBrokerOptions",
+              "kind": "type",
+              "declaration": "BuiltinToolBrokerOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "BuiltinToolOptions",
+              "kind": "type",
+              "declaration": "BuiltinToolOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "CancelTaskRequest",
               "kind": "type",
               "declaration": "CancelTaskRequest",
@@ -4996,16 +4942,16 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "CreateBuiltinTools",
+              "kind": "type",
+              "declaration": "CreateBuiltinTools",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "createMcpServer",
               "kind": "value",
               "declaration": "createMcpServer",
               "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "DefineToolOptions",
-              "kind": "type",
-              "declaration": "DefineToolOptions",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "DeveloperMessage",
@@ -5600,6 +5546,12 @@
               "kind": "type",
               "declaration": "MCPToolHandler",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "McpToolOptions",
+              "kind": "type",
+              "declaration": "McpToolOptions",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "MemoryAccessScope",
@@ -6298,24 +6250,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "Tool",
-              "kind": "type",
-              "declaration": "Tool",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolAuthorizationRequest",
-              "kind": "type",
-              "declaration": "ToolAuthorizationRequest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolAuthorizer",
-              "kind": "type",
-              "declaration": "ToolAuthorizer",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "ToolCall",
               "kind": "type",
               "declaration": "ToolCall",
@@ -6328,24 +6262,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "ToolErrorType",
-              "kind": "type",
-              "declaration": "ToolErrorType",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "ToolExecutionContext",
-              "kind": "type",
-              "declaration": "ToolExecutionContext",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolExecutionOptions",
-              "kind": "type",
-              "declaration": "ToolExecutionOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "ToolMessage",
               "kind": "type",
               "declaration": "ToolMessage",
@@ -6355,12 +6271,6 @@
               "name": "ToolRegistryOperations",
               "kind": "type",
               "declaration": "ToolRegistryOperations",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolRegistryOptions",
-              "kind": "type",
-              "declaration": "ToolRegistryOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -7076,6 +6986,48 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "BuiltinArtifact",
+              "kind": "type",
+              "declaration": "BuiltinArtifact",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BuiltinArtifactAccess",
+              "kind": "type",
+              "declaration": "BuiltinArtifactAccess",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BuiltinArtifactReference",
+              "kind": "type",
+              "declaration": "BuiltinArtifactReference",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BuiltinToolBinding",
+              "kind": "type",
+              "declaration": "BuiltinToolBinding",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "BuiltinToolBroker",
+              "kind": "type",
+              "declaration": "BuiltinToolBroker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "BuiltinToolBrokerOptions",
+              "kind": "type",
+              "declaration": "BuiltinToolBrokerOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "BuiltinToolOptions",
+              "kind": "type",
+              "declaration": "BuiltinToolOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "CancelTaskRequest",
               "kind": "type",
               "declaration": "CancelTaskRequest",
@@ -7250,16 +7202,16 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "CreateBuiltinTools",
+              "kind": "type",
+              "declaration": "CreateBuiltinTools",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "createMcpServer",
               "kind": "value",
               "declaration": "createMcpServer",
               "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "DefineToolOptions",
-              "kind": "type",
-              "declaration": "DefineToolOptions",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "DeveloperMessage",
@@ -7854,6 +7806,12 @@
               "kind": "type",
               "declaration": "MCPToolHandler",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "McpToolOptions",
+              "kind": "type",
+              "declaration": "McpToolOptions",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "MemoryAccessScope",
@@ -8552,24 +8510,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "Tool",
-              "kind": "type",
-              "declaration": "Tool",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolAuthorizationRequest",
-              "kind": "type",
-              "declaration": "ToolAuthorizationRequest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolAuthorizer",
-              "kind": "type",
-              "declaration": "ToolAuthorizer",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "ToolCall",
               "kind": "type",
               "declaration": "ToolCall",
@@ -8582,24 +8522,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "ToolErrorType",
-              "kind": "type",
-              "declaration": "ToolErrorType",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "ToolExecutionContext",
-              "kind": "type",
-              "declaration": "ToolExecutionContext",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolExecutionOptions",
-              "kind": "type",
-              "declaration": "ToolExecutionOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "ToolMessage",
               "kind": "type",
               "declaration": "ToolMessage",
@@ -8609,12 +8531,6 @@
               "name": "ToolRegistryOperations",
               "kind": "type",
               "declaration": "ToolRegistryOperations",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolRegistryOptions",
-              "kind": "type",
-              "declaration": "ToolRegistryOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -9330,6 +9246,48 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "BuiltinArtifact",
+              "kind": "type",
+              "declaration": "BuiltinArtifact",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BuiltinArtifactAccess",
+              "kind": "type",
+              "declaration": "BuiltinArtifactAccess",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BuiltinArtifactReference",
+              "kind": "type",
+              "declaration": "BuiltinArtifactReference",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BuiltinToolBinding",
+              "kind": "type",
+              "declaration": "BuiltinToolBinding",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "BuiltinToolBroker",
+              "kind": "type",
+              "declaration": "BuiltinToolBroker",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "BuiltinToolBrokerOptions",
+              "kind": "type",
+              "declaration": "BuiltinToolBrokerOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "BuiltinToolOptions",
+              "kind": "type",
+              "declaration": "BuiltinToolOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "CancelTaskRequest",
               "kind": "type",
               "declaration": "CancelTaskRequest",
@@ -9504,16 +9462,16 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "CreateBuiltinTools",
+              "kind": "type",
+              "declaration": "CreateBuiltinTools",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "createMcpServer",
               "kind": "value",
               "declaration": "createMcpServer",
               "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "DefineToolOptions",
-              "kind": "type",
-              "declaration": "DefineToolOptions",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "DeveloperMessage",
@@ -10108,6 +10066,12 @@
               "kind": "type",
               "declaration": "MCPToolHandler",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "McpToolOptions",
+              "kind": "type",
+              "declaration": "McpToolOptions",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "MemoryAccessScope",
@@ -10806,24 +10770,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "Tool",
-              "kind": "type",
-              "declaration": "Tool",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolAuthorizationRequest",
-              "kind": "type",
-              "declaration": "ToolAuthorizationRequest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolAuthorizer",
-              "kind": "type",
-              "declaration": "ToolAuthorizer",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "ToolCall",
               "kind": "type",
               "declaration": "ToolCall",
@@ -10836,24 +10782,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "ToolErrorType",
-              "kind": "type",
-              "declaration": "ToolErrorType",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "ToolExecutionContext",
-              "kind": "type",
-              "declaration": "ToolExecutionContext",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolExecutionOptions",
-              "kind": "type",
-              "declaration": "ToolExecutionOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "ToolMessage",
               "kind": "type",
               "declaration": "ToolMessage",
@@ -10863,12 +10791,6 @@
               "name": "ToolRegistryOperations",
               "kind": "type",
               "declaration": "ToolRegistryOperations",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolRegistryOptions",
-              "kind": "type",
-              "declaration": "ToolRegistryOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -34894,6 +34816,601 @@
       ]
     },
     {
+      "package": "@h-ai/tools",
+      "entries": [
+        {
+          "subpath": ".",
+          "conditions": [
+            "browser",
+            "default"
+          ],
+          "target": "./dist/index.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "DefineToolOptions",
+              "kind": "type",
+              "declaration": "DefineToolOptions",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HaiToolsError",
+              "kind": "value",
+              "declaration": "HaiToolsError",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "Tool",
+              "kind": "type",
+              "declaration": "Tool",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolAuthorizationRequest",
+              "kind": "type",
+              "declaration": "ToolAuthorizationRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolAuthorizer",
+              "kind": "type",
+              "declaration": "ToolAuthorizer",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ToolDefinition",
+              "kind": "type",
+              "declaration": "ToolDefinition",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExecutionContext",
+              "kind": "type",
+              "declaration": "ToolExecutionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExecutionOptions",
+              "kind": "type",
+              "declaration": "ToolExecutionOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolInvocation",
+              "kind": "type",
+              "declaration": "ToolInvocation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRegistryOperations",
+              "kind": "type",
+              "declaration": "ToolRegistryOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRegistryOptions",
+              "kind": "type",
+              "declaration": "ToolRegistryOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "tools",
+              "kind": "value",
+              "declaration": "tools",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolsFunctions",
+              "kind": "type",
+              "declaration": "ToolsFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": ".",
+          "conditions": [
+            "browser",
+            "types"
+          ],
+          "target": "./dist/index.d.ts",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "DefineToolOptions",
+              "kind": "type",
+              "declaration": "DefineToolOptions",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HaiToolsError",
+              "kind": "value",
+              "declaration": "HaiToolsError",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "Tool",
+              "kind": "type",
+              "declaration": "Tool",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolAuthorizationRequest",
+              "kind": "type",
+              "declaration": "ToolAuthorizationRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolAuthorizer",
+              "kind": "type",
+              "declaration": "ToolAuthorizer",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ToolDefinition",
+              "kind": "type",
+              "declaration": "ToolDefinition",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExecutionContext",
+              "kind": "type",
+              "declaration": "ToolExecutionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExecutionOptions",
+              "kind": "type",
+              "declaration": "ToolExecutionOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolInvocation",
+              "kind": "type",
+              "declaration": "ToolInvocation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRegistryOperations",
+              "kind": "type",
+              "declaration": "ToolRegistryOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRegistryOptions",
+              "kind": "type",
+              "declaration": "ToolRegistryOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "tools",
+              "kind": "value",
+              "declaration": "tools",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolsFunctions",
+              "kind": "type",
+              "declaration": "ToolsFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": ".",
+          "conditions": [
+            "import"
+          ],
+          "target": "./dist/index.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "DefineToolOptions",
+              "kind": "type",
+              "declaration": "DefineToolOptions",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HaiToolsError",
+              "kind": "value",
+              "declaration": "HaiToolsError",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "Tool",
+              "kind": "type",
+              "declaration": "Tool",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolAuthorizationRequest",
+              "kind": "type",
+              "declaration": "ToolAuthorizationRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolAuthorizer",
+              "kind": "type",
+              "declaration": "ToolAuthorizer",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ToolDefinition",
+              "kind": "type",
+              "declaration": "ToolDefinition",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExecutionContext",
+              "kind": "type",
+              "declaration": "ToolExecutionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExecutionOptions",
+              "kind": "type",
+              "declaration": "ToolExecutionOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolInvocation",
+              "kind": "type",
+              "declaration": "ToolInvocation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRegistryOperations",
+              "kind": "type",
+              "declaration": "ToolRegistryOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRegistryOptions",
+              "kind": "type",
+              "declaration": "ToolRegistryOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "tools",
+              "kind": "value",
+              "declaration": "tools",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolsFunctions",
+              "kind": "type",
+              "declaration": "ToolsFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": ".",
+          "conditions": [
+            "types"
+          ],
+          "target": "./dist/index.d.ts",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "DefineToolOptions",
+              "kind": "type",
+              "declaration": "DefineToolOptions",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HaiToolsError",
+              "kind": "value",
+              "declaration": "HaiToolsError",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "Tool",
+              "kind": "type",
+              "declaration": "Tool",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolAuthorizationRequest",
+              "kind": "type",
+              "declaration": "ToolAuthorizationRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolAuthorizer",
+              "kind": "type",
+              "declaration": "ToolAuthorizer",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ToolDefinition",
+              "kind": "type",
+              "declaration": "ToolDefinition",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExecutionContext",
+              "kind": "type",
+              "declaration": "ToolExecutionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExecutionOptions",
+              "kind": "type",
+              "declaration": "ToolExecutionOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolInvocation",
+              "kind": "type",
+              "declaration": "ToolInvocation",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRegistryOperations",
+              "kind": "type",
+              "declaration": "ToolRegistryOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRegistryOptions",
+              "kind": "type",
+              "declaration": "ToolRegistryOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "tools",
+              "kind": "value",
+              "declaration": "tools",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolsFunctions",
+              "kind": "type",
+              "declaration": "ToolsFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": "./server",
+          "conditions": [
+            "import"
+          ],
+          "target": "./dist/server/index.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "ArtifactToolOptions",
+              "kind": "type",
+              "declaration": "ArtifactToolOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "JobToolOptions",
+              "kind": "type",
+              "declaration": "JobToolOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolArtifact",
+              "kind": "type",
+              "declaration": "ToolArtifact",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolArtifactAccess",
+              "kind": "type",
+              "declaration": "ToolArtifactAccess",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolArtifactReference",
+              "kind": "type",
+              "declaration": "ToolArtifactReference",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolCatalog",
+              "kind": "type",
+              "declaration": "ToolCatalog",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolGroup",
+              "kind": "type",
+              "declaration": "ToolGroup",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolReceipt",
+              "kind": "type",
+              "declaration": "ToolReceipt",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRun",
+              "kind": "type",
+              "declaration": "ToolRun",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "tools",
+              "kind": "value",
+              "declaration": "tools",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolSelection",
+              "kind": "type",
+              "declaration": "ToolSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolService",
+              "kind": "type",
+              "declaration": "ToolService",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolServiceAuthorization",
+              "kind": "type",
+              "declaration": "ToolServiceAuthorization",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolServiceContext",
+              "kind": "type",
+              "declaration": "ToolServiceContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolServiceOptions",
+              "kind": "type",
+              "declaration": "ToolServiceOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolSet",
+              "kind": "type",
+              "declaration": "ToolSet",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolsServerFunctions",
+              "kind": "type",
+              "declaration": "ToolsServerFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolSubmitRequest",
+              "kind": "type",
+              "declaration": "ToolSubmitRequest",
+              "declarationKind": "InterfaceDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": "./server",
+          "conditions": [
+            "types"
+          ],
+          "target": "./dist/server/index.d.ts",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "ArtifactToolOptions",
+              "kind": "type",
+              "declaration": "ArtifactToolOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "JobToolOptions",
+              "kind": "type",
+              "declaration": "JobToolOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolArtifact",
+              "kind": "type",
+              "declaration": "ToolArtifact",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolArtifactAccess",
+              "kind": "type",
+              "declaration": "ToolArtifactAccess",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolArtifactReference",
+              "kind": "type",
+              "declaration": "ToolArtifactReference",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolCatalog",
+              "kind": "type",
+              "declaration": "ToolCatalog",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolGroup",
+              "kind": "type",
+              "declaration": "ToolGroup",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolReceipt",
+              "kind": "type",
+              "declaration": "ToolReceipt",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRun",
+              "kind": "type",
+              "declaration": "ToolRun",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "tools",
+              "kind": "value",
+              "declaration": "tools",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolSelection",
+              "kind": "type",
+              "declaration": "ToolSelection",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolService",
+              "kind": "type",
+              "declaration": "ToolService",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolServiceAuthorization",
+              "kind": "type",
+              "declaration": "ToolServiceAuthorization",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolServiceContext",
+              "kind": "type",
+              "declaration": "ToolServiceContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolServiceOptions",
+              "kind": "type",
+              "declaration": "ToolServiceOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolSet",
+              "kind": "type",
+              "declaration": "ToolSet",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolsServerFunctions",
+              "kind": "type",
+              "declaration": "ToolsServerFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolSubmitRequest",
+              "kind": "type",
+              "declaration": "ToolSubmitRequest",
+              "declarationKind": "InterfaceDeclaration"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "package": "@h-ai/ui",
       "entries": [
         {
@@ -35059,6 +35576,60 @@
               "kind": "value",
               "declaration": "applyTheme",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "ArtifactCreateRequest",
+              "kind": "type",
+              "declaration": "ArtifactCreateRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactDocument",
+              "kind": "type",
+              "declaration": "ArtifactDocument",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactKind",
+              "kind": "type",
+              "declaration": "ArtifactKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactRewriteRequest",
+              "kind": "type",
+              "declaration": "ArtifactRewriteRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveRequest",
+              "kind": "type",
+              "declaration": "ArtifactSaveRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveResponse",
+              "kind": "type",
+              "declaration": "ArtifactSaveResponse",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactSummary",
+              "kind": "type",
+              "declaration": "ArtifactSummary",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspace",
+              "kind": "value+type",
+              "declaration": "ArtifactWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspaceProps",
+              "kind": "type",
+              "declaration": "ArtifactWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "authErrorMessage",
@@ -37245,6 +37816,36 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ToolCatalogItem",
+              "kind": "type",
+              "declaration": "ToolCatalogItem",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExample",
+              "kind": "type",
+              "declaration": "ToolExample",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolResource",
+              "kind": "type",
+              "declaration": "ToolResource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRun",
+              "kind": "type",
+              "declaration": "ToolRun",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRunRequest",
+              "kind": "type",
+              "declaration": "ToolRunRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "Tooltip",
               "kind": "value+type",
               "declaration": "Tooltip",
@@ -37254,6 +37855,18 @@
               "name": "TooltipProps",
               "kind": "type",
               "declaration": "TooltipProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolWorkspace",
+              "kind": "value+type",
+              "declaration": "ToolWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolWorkspaceProps",
+              "kind": "type",
+              "declaration": "ToolWorkspaceProps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -37345,6 +37958,12 @@
               "kind": "value+type",
               "declaration": "WorkspaceLayout",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "WorkspaceLeaveGuard",
+              "kind": "type",
+              "declaration": "WorkspaceLeaveGuard",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "writeTextToClipboard",
@@ -37519,6 +38138,60 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "ArtifactCreateRequest",
+              "kind": "type",
+              "declaration": "ArtifactCreateRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactDocument",
+              "kind": "type",
+              "declaration": "ArtifactDocument",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactKind",
+              "kind": "type",
+              "declaration": "ArtifactKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactRewriteRequest",
+              "kind": "type",
+              "declaration": "ArtifactRewriteRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveRequest",
+              "kind": "type",
+              "declaration": "ArtifactSaveRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveResponse",
+              "kind": "type",
+              "declaration": "ArtifactSaveResponse",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactSummary",
+              "kind": "type",
+              "declaration": "ArtifactSummary",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspace",
+              "kind": "value+type",
+              "declaration": "ArtifactWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspaceProps",
+              "kind": "type",
+              "declaration": "ArtifactWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "authErrorMessage",
               "kind": "value",
               "declaration": "authErrorMessage",
@@ -39703,6 +40376,36 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ToolCatalogItem",
+              "kind": "type",
+              "declaration": "ToolCatalogItem",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExample",
+              "kind": "type",
+              "declaration": "ToolExample",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolResource",
+              "kind": "type",
+              "declaration": "ToolResource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRun",
+              "kind": "type",
+              "declaration": "ToolRun",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRunRequest",
+              "kind": "type",
+              "declaration": "ToolRunRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "Tooltip",
               "kind": "value+type",
               "declaration": "Tooltip",
@@ -39712,6 +40415,18 @@
               "name": "TooltipProps",
               "kind": "type",
               "declaration": "TooltipProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolWorkspace",
+              "kind": "value+type",
+              "declaration": "ToolWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolWorkspaceProps",
+              "kind": "type",
+              "declaration": "ToolWorkspaceProps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -39803,6 +40518,12 @@
               "kind": "value+type",
               "declaration": "WorkspaceLayout",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "WorkspaceLeaveGuard",
+              "kind": "type",
+              "declaration": "WorkspaceLeaveGuard",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "writeTextToClipboard",
@@ -39977,6 +40698,60 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "ArtifactCreateRequest",
+              "kind": "type",
+              "declaration": "ArtifactCreateRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactDocument",
+              "kind": "type",
+              "declaration": "ArtifactDocument",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactKind",
+              "kind": "type",
+              "declaration": "ArtifactKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactRewriteRequest",
+              "kind": "type",
+              "declaration": "ArtifactRewriteRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveRequest",
+              "kind": "type",
+              "declaration": "ArtifactSaveRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveResponse",
+              "kind": "type",
+              "declaration": "ArtifactSaveResponse",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactSummary",
+              "kind": "type",
+              "declaration": "ArtifactSummary",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspace",
+              "kind": "value+type",
+              "declaration": "ArtifactWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspaceProps",
+              "kind": "type",
+              "declaration": "ArtifactWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "authErrorMessage",
               "kind": "value",
               "declaration": "authErrorMessage",
@@ -42161,6 +42936,36 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ToolCatalogItem",
+              "kind": "type",
+              "declaration": "ToolCatalogItem",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExample",
+              "kind": "type",
+              "declaration": "ToolExample",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolResource",
+              "kind": "type",
+              "declaration": "ToolResource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRun",
+              "kind": "type",
+              "declaration": "ToolRun",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRunRequest",
+              "kind": "type",
+              "declaration": "ToolRunRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "Tooltip",
               "kind": "value+type",
               "declaration": "Tooltip",
@@ -42170,6 +42975,18 @@
               "name": "TooltipProps",
               "kind": "type",
               "declaration": "TooltipProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolWorkspace",
+              "kind": "value+type",
+              "declaration": "ToolWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolWorkspaceProps",
+              "kind": "type",
+              "declaration": "ToolWorkspaceProps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -42261,6 +43078,12 @@
               "kind": "value+type",
               "declaration": "WorkspaceLayout",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "WorkspaceLeaveGuard",
+              "kind": "type",
+              "declaration": "WorkspaceLeaveGuard",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "writeTextToClipboard",
@@ -43289,6 +44112,60 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ArtifactCreateRequest",
+              "kind": "type",
+              "declaration": "ArtifactCreateRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactDocument",
+              "kind": "type",
+              "declaration": "ArtifactDocument",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactKind",
+              "kind": "type",
+              "declaration": "ArtifactKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactRewriteRequest",
+              "kind": "type",
+              "declaration": "ArtifactRewriteRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveRequest",
+              "kind": "type",
+              "declaration": "ArtifactSaveRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveResponse",
+              "kind": "type",
+              "declaration": "ArtifactSaveResponse",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactSummary",
+              "kind": "type",
+              "declaration": "ArtifactSummary",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspace",
+              "kind": "value+type",
+              "declaration": "ArtifactWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspaceProps",
+              "kind": "type",
+              "declaration": "ArtifactWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "authErrorMessage",
               "kind": "value",
               "declaration": "authErrorMessage",
@@ -44699,10 +45576,52 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ToolCatalogItem",
+              "kind": "type",
+              "declaration": "ToolCatalogItem",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExample",
+              "kind": "type",
+              "declaration": "ToolExample",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolResource",
+              "kind": "type",
+              "declaration": "ToolResource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRun",
+              "kind": "type",
+              "declaration": "ToolRun",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRunRequest",
+              "kind": "type",
+              "declaration": "ToolRunRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "Tooltip",
               "kind": "value+type",
               "declaration": "Tooltip",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolWorkspace",
+              "kind": "value+type",
+              "declaration": "ToolWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolWorkspaceProps",
+              "kind": "type",
+              "declaration": "ToolWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "UploadFile",
@@ -44775,6 +45694,12 @@
               "kind": "value+type",
               "declaration": "WorkspaceLayout",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "WorkspaceLeaveGuard",
+              "kind": "type",
+              "declaration": "WorkspaceLeaveGuard",
+              "declarationKind": "TypeAliasDeclaration"
             }
           ]
         },
@@ -44925,6 +45850,60 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ArtifactCreateRequest",
+              "kind": "type",
+              "declaration": "ArtifactCreateRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactDocument",
+              "kind": "type",
+              "declaration": "ArtifactDocument",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactKind",
+              "kind": "type",
+              "declaration": "ArtifactKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactRewriteRequest",
+              "kind": "type",
+              "declaration": "ArtifactRewriteRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveRequest",
+              "kind": "type",
+              "declaration": "ArtifactSaveRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveResponse",
+              "kind": "type",
+              "declaration": "ArtifactSaveResponse",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactSummary",
+              "kind": "type",
+              "declaration": "ArtifactSummary",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspace",
+              "kind": "value+type",
+              "declaration": "ArtifactWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspaceProps",
+              "kind": "type",
+              "declaration": "ArtifactWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "authErrorMessage",
               "kind": "value",
               "declaration": "authErrorMessage",
@@ -46335,10 +47314,52 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ToolCatalogItem",
+              "kind": "type",
+              "declaration": "ToolCatalogItem",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExample",
+              "kind": "type",
+              "declaration": "ToolExample",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolResource",
+              "kind": "type",
+              "declaration": "ToolResource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRun",
+              "kind": "type",
+              "declaration": "ToolRun",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRunRequest",
+              "kind": "type",
+              "declaration": "ToolRunRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "Tooltip",
               "kind": "value+type",
               "declaration": "Tooltip",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolWorkspace",
+              "kind": "value+type",
+              "declaration": "ToolWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolWorkspaceProps",
+              "kind": "type",
+              "declaration": "ToolWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "UploadFile",
@@ -46411,6 +47432,12 @@
               "kind": "value+type",
               "declaration": "WorkspaceLayout",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "WorkspaceLeaveGuard",
+              "kind": "type",
+              "declaration": "WorkspaceLeaveGuard",
+              "declarationKind": "TypeAliasDeclaration"
             }
           ]
         },
@@ -46561,6 +47588,60 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ArtifactCreateRequest",
+              "kind": "type",
+              "declaration": "ArtifactCreateRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactDocument",
+              "kind": "type",
+              "declaration": "ArtifactDocument",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactKind",
+              "kind": "type",
+              "declaration": "ArtifactKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactRewriteRequest",
+              "kind": "type",
+              "declaration": "ArtifactRewriteRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveRequest",
+              "kind": "type",
+              "declaration": "ArtifactSaveRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveResponse",
+              "kind": "type",
+              "declaration": "ArtifactSaveResponse",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactSummary",
+              "kind": "type",
+              "declaration": "ArtifactSummary",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspace",
+              "kind": "value+type",
+              "declaration": "ArtifactWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspaceProps",
+              "kind": "type",
+              "declaration": "ArtifactWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "authErrorMessage",
               "kind": "value",
               "declaration": "authErrorMessage",
@@ -47971,10 +49052,52 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ToolCatalogItem",
+              "kind": "type",
+              "declaration": "ToolCatalogItem",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExample",
+              "kind": "type",
+              "declaration": "ToolExample",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolResource",
+              "kind": "type",
+              "declaration": "ToolResource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRun",
+              "kind": "type",
+              "declaration": "ToolRun",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRunRequest",
+              "kind": "type",
+              "declaration": "ToolRunRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "Tooltip",
               "kind": "value+type",
               "declaration": "Tooltip",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolWorkspace",
+              "kind": "value+type",
+              "declaration": "ToolWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolWorkspaceProps",
+              "kind": "type",
+              "declaration": "ToolWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "UploadFile",
@@ -48047,6 +49170,12 @@
               "kind": "value+type",
               "declaration": "WorkspaceLayout",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "WorkspaceLeaveGuard",
+              "kind": "type",
+              "declaration": "WorkspaceLeaveGuard",
+              "declarationKind": "TypeAliasDeclaration"
             }
           ]
         },
@@ -51773,6 +52902,60 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ArtifactCreateRequest",
+              "kind": "type",
+              "declaration": "ArtifactCreateRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactDocument",
+              "kind": "type",
+              "declaration": "ArtifactDocument",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactKind",
+              "kind": "type",
+              "declaration": "ArtifactKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactRewriteRequest",
+              "kind": "type",
+              "declaration": "ArtifactRewriteRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveRequest",
+              "kind": "type",
+              "declaration": "ArtifactSaveRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveResponse",
+              "kind": "type",
+              "declaration": "ArtifactSaveResponse",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactSummary",
+              "kind": "type",
+              "declaration": "ArtifactSummary",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspace",
+              "kind": "value+type",
+              "declaration": "ArtifactWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspaceProps",
+              "kind": "type",
+              "declaration": "ArtifactWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "authErrorMessage",
               "kind": "value",
               "declaration": "authErrorMessage",
@@ -52835,6 +54018,48 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ToolCatalogItem",
+              "kind": "type",
+              "declaration": "ToolCatalogItem",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExample",
+              "kind": "type",
+              "declaration": "ToolExample",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolResource",
+              "kind": "type",
+              "declaration": "ToolResource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRun",
+              "kind": "type",
+              "declaration": "ToolRun",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRunRequest",
+              "kind": "type",
+              "declaration": "ToolRunRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolWorkspace",
+              "kind": "value+type",
+              "declaration": "ToolWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolWorkspaceProps",
+              "kind": "type",
+              "declaration": "ToolWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "UploadFile",
               "kind": "type",
               "declaration": "UploadFile",
@@ -52905,6 +54130,12 @@
               "kind": "value+type",
               "declaration": "WorkspaceLayout",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "WorkspaceLeaveGuard",
+              "kind": "type",
+              "declaration": "WorkspaceLeaveGuard",
+              "declarationKind": "TypeAliasDeclaration"
             }
           ]
         },
@@ -53019,6 +54250,60 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ArtifactCreateRequest",
+              "kind": "type",
+              "declaration": "ArtifactCreateRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactDocument",
+              "kind": "type",
+              "declaration": "ArtifactDocument",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactKind",
+              "kind": "type",
+              "declaration": "ArtifactKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactRewriteRequest",
+              "kind": "type",
+              "declaration": "ArtifactRewriteRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveRequest",
+              "kind": "type",
+              "declaration": "ArtifactSaveRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveResponse",
+              "kind": "type",
+              "declaration": "ArtifactSaveResponse",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactSummary",
+              "kind": "type",
+              "declaration": "ArtifactSummary",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspace",
+              "kind": "value+type",
+              "declaration": "ArtifactWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspaceProps",
+              "kind": "type",
+              "declaration": "ArtifactWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "authErrorMessage",
               "kind": "value",
               "declaration": "authErrorMessage",
@@ -54081,6 +55366,48 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ToolCatalogItem",
+              "kind": "type",
+              "declaration": "ToolCatalogItem",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExample",
+              "kind": "type",
+              "declaration": "ToolExample",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolResource",
+              "kind": "type",
+              "declaration": "ToolResource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRun",
+              "kind": "type",
+              "declaration": "ToolRun",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRunRequest",
+              "kind": "type",
+              "declaration": "ToolRunRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolWorkspace",
+              "kind": "value+type",
+              "declaration": "ToolWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolWorkspaceProps",
+              "kind": "type",
+              "declaration": "ToolWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "UploadFile",
               "kind": "type",
               "declaration": "UploadFile",
@@ -54151,6 +55478,12 @@
               "kind": "value+type",
               "declaration": "WorkspaceLayout",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "WorkspaceLeaveGuard",
+              "kind": "type",
+              "declaration": "WorkspaceLeaveGuard",
+              "declarationKind": "TypeAliasDeclaration"
             }
           ]
         },
@@ -54265,6 +55598,60 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ArtifactCreateRequest",
+              "kind": "type",
+              "declaration": "ArtifactCreateRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactDocument",
+              "kind": "type",
+              "declaration": "ArtifactDocument",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactKind",
+              "kind": "type",
+              "declaration": "ArtifactKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactRewriteRequest",
+              "kind": "type",
+              "declaration": "ArtifactRewriteRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveRequest",
+              "kind": "type",
+              "declaration": "ArtifactSaveRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveResponse",
+              "kind": "type",
+              "declaration": "ArtifactSaveResponse",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactSummary",
+              "kind": "type",
+              "declaration": "ArtifactSummary",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspace",
+              "kind": "value+type",
+              "declaration": "ArtifactWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspaceProps",
+              "kind": "type",
+              "declaration": "ArtifactWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "authErrorMessage",
               "kind": "value",
               "declaration": "authErrorMessage",
@@ -55327,6 +56714,48 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ToolCatalogItem",
+              "kind": "type",
+              "declaration": "ToolCatalogItem",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExample",
+              "kind": "type",
+              "declaration": "ToolExample",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolResource",
+              "kind": "type",
+              "declaration": "ToolResource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRun",
+              "kind": "type",
+              "declaration": "ToolRun",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRunRequest",
+              "kind": "type",
+              "declaration": "ToolRunRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolWorkspace",
+              "kind": "value+type",
+              "declaration": "ToolWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolWorkspaceProps",
+              "kind": "type",
+              "declaration": "ToolWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "UploadFile",
               "kind": "type",
               "declaration": "UploadFile",
@@ -55397,6 +56826,12 @@
               "kind": "value+type",
               "declaration": "WorkspaceLayout",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "WorkspaceLeaveGuard",
+              "kind": "type",
+              "declaration": "WorkspaceLeaveGuard",
+              "declarationKind": "TypeAliasDeclaration"
             }
           ]
         },
@@ -55499,6 +56934,342 @@
               "kind": "value+type",
               "declaration": "ImageUpload",
               "declarationKind": "VariableDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": "./components/scenes/tools/index",
+          "conditions": [
+            "import"
+          ],
+          "target": "./dist/components/scenes/tools/index.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "ArtifactCreateRequest",
+              "kind": "type",
+              "declaration": "ArtifactCreateRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactDocument",
+              "kind": "type",
+              "declaration": "ArtifactDocument",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactKind",
+              "kind": "type",
+              "declaration": "ArtifactKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactRewriteRequest",
+              "kind": "type",
+              "declaration": "ArtifactRewriteRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveRequest",
+              "kind": "type",
+              "declaration": "ArtifactSaveRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveResponse",
+              "kind": "type",
+              "declaration": "ArtifactSaveResponse",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactSummary",
+              "kind": "type",
+              "declaration": "ArtifactSummary",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspace",
+              "kind": "value+type",
+              "declaration": "ArtifactWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspaceProps",
+              "kind": "type",
+              "declaration": "ArtifactWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolCatalogItem",
+              "kind": "type",
+              "declaration": "ToolCatalogItem",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExample",
+              "kind": "type",
+              "declaration": "ToolExample",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolResource",
+              "kind": "type",
+              "declaration": "ToolResource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRun",
+              "kind": "type",
+              "declaration": "ToolRun",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRunRequest",
+              "kind": "type",
+              "declaration": "ToolRunRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolWorkspace",
+              "kind": "value+type",
+              "declaration": "ToolWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolWorkspaceProps",
+              "kind": "type",
+              "declaration": "ToolWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkspaceLeaveGuard",
+              "kind": "type",
+              "declaration": "WorkspaceLeaveGuard",
+              "declarationKind": "TypeAliasDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": "./components/scenes/tools/index",
+          "conditions": [
+            "svelte"
+          ],
+          "target": "./dist/components/scenes/tools/index.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "ArtifactCreateRequest",
+              "kind": "type",
+              "declaration": "ArtifactCreateRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactDocument",
+              "kind": "type",
+              "declaration": "ArtifactDocument",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactKind",
+              "kind": "type",
+              "declaration": "ArtifactKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactRewriteRequest",
+              "kind": "type",
+              "declaration": "ArtifactRewriteRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveRequest",
+              "kind": "type",
+              "declaration": "ArtifactSaveRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveResponse",
+              "kind": "type",
+              "declaration": "ArtifactSaveResponse",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactSummary",
+              "kind": "type",
+              "declaration": "ArtifactSummary",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspace",
+              "kind": "value+type",
+              "declaration": "ArtifactWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspaceProps",
+              "kind": "type",
+              "declaration": "ArtifactWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolCatalogItem",
+              "kind": "type",
+              "declaration": "ToolCatalogItem",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExample",
+              "kind": "type",
+              "declaration": "ToolExample",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolResource",
+              "kind": "type",
+              "declaration": "ToolResource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRun",
+              "kind": "type",
+              "declaration": "ToolRun",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRunRequest",
+              "kind": "type",
+              "declaration": "ToolRunRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolWorkspace",
+              "kind": "value+type",
+              "declaration": "ToolWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolWorkspaceProps",
+              "kind": "type",
+              "declaration": "ToolWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkspaceLeaveGuard",
+              "kind": "type",
+              "declaration": "WorkspaceLeaveGuard",
+              "declarationKind": "TypeAliasDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": "./components/scenes/tools/index",
+          "conditions": [
+            "types"
+          ],
+          "target": "./dist/components/scenes/tools/index.d.ts",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "ArtifactCreateRequest",
+              "kind": "type",
+              "declaration": "ArtifactCreateRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactDocument",
+              "kind": "type",
+              "declaration": "ArtifactDocument",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactKind",
+              "kind": "type",
+              "declaration": "ArtifactKind",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactRewriteRequest",
+              "kind": "type",
+              "declaration": "ArtifactRewriteRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveRequest",
+              "kind": "type",
+              "declaration": "ArtifactSaveRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactSaveResponse",
+              "kind": "type",
+              "declaration": "ArtifactSaveResponse",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ArtifactSummary",
+              "kind": "type",
+              "declaration": "ArtifactSummary",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspace",
+              "kind": "value+type",
+              "declaration": "ArtifactWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ArtifactWorkspaceProps",
+              "kind": "type",
+              "declaration": "ArtifactWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolCatalogItem",
+              "kind": "type",
+              "declaration": "ToolCatalogItem",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolExample",
+              "kind": "type",
+              "declaration": "ToolExample",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolResource",
+              "kind": "type",
+              "declaration": "ToolResource",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRun",
+              "kind": "type",
+              "declaration": "ToolRun",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRunRequest",
+              "kind": "type",
+              "declaration": "ToolRunRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolWorkspace",
+              "kind": "value+type",
+              "declaration": "ToolWorkspace",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToolWorkspaceProps",
+              "kind": "type",
+              "declaration": "ToolWorkspaceProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WorkspaceLeaveGuard",
+              "kind": "type",
+              "declaration": "WorkspaceLeaveGuard",
+              "declarationKind": "TypeAliasDeclaration"
             }
           ]
         },

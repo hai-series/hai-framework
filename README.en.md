@@ -26,7 +26,7 @@ Generated projects include `AGENTS.md`, module Skills and workflows for reviewin
 
 Connect ACP agents through local processes, Podman/Docker containers or native HTTP/WS services. Reuse model catalogs and manage multi-repository workspaces, engineering sessions, optional worktrees and explicit Git publishing. Configuration and database catalogs merge by ID; configuration is read-only, while database entries can be maintained.
 
-[Project guidance and Skills](AGENTS.md) · [AI development and integration](docs/usage/development/ai.md) · [ACP agent integration](docs/usage/development/ai-acp.md)
+[Project guidance and Skills](AGENTS.md) · [AI development and integration](docs/usage/development/ai.md) · [ACP agent integration](docs/usage/development/ai-acp.md) · [Agent workbench](apps/agent/README.en.md) · [Tools platform guide (Chinese)](docs/tools-platform-guide.md)
 
 ![Running AI playground: model conversations and memory for the current subject](docs/images/runtime-ai.en-US.png)
 

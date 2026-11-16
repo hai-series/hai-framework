@@ -26,7 +26,7 @@ _Fullstack の構成例：開発規約、クライアント、API 契約、業�
 
 ACP でローカルプロセス、Podman/Docker コンテナ、ネイティブ HTTP/WS サービスのエージェントに接続します。モデル一覧を再利用し、複数 Git のワークスペース、工程セッション、任意の worktree、明示的な Git 公開を管理します。設定と DB の一覧は ID で統合し、設定は読み取り専用、DB の項目は更新できます。
 
-[開発規約と Skills](AGENTS.md) · [AI 開発と統合](docs/usage/development/ai.md) · [ACP エージェント接続](docs/usage/development/ai-acp.md)
+[開発規約と Skills](AGENTS.md) · [AI 開発と統合](docs/usage/development/ai.md) · [ACP エージェント接続](docs/usage/development/ai-acp.md) · [Agent ワークスペース](apps/agent/README.ja.md) · [Tools ガイド（中国語）](docs/tools-platform-guide.md)
 
 ![実行中の AI 実験台：モデルとの会話と利用主体ごとのメモリ](docs/images/runtime-ai.ja-JP.png)
 
