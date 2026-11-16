@@ -35,60 +35,24 @@ if (!result.success)
   throw new Error(result.error.message)
 ```
 
+## 設定一覧
+
+クリーニングと分割のオプションは `clean()`、`chunk()`、または `pipeline()` に渡します。
+
+設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/datapipe.md)（中国語）を参照してください。
+
 ## 機能
 
-HTML 除去はテキスト抽出であり、安全な HTML 消毒ではありません。HTML として表示する際は UI の安全な描画機構を使用してください。組み込みのタグ・メール処理は長い不正入力での反復バックトラックを避けます。独自正規表現は信頼できる設定から与え、外部ユーザーの任意パターンを直接使用しないでください。
+使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/datapipe.md)（中国語）を参照してください。
 
-| 機能                   | 説明                                                                  |
-| ---------------------- | --------------------------------------------------------------------- |
-| テキストのクリーニング | HTML タグ・URL・Email の除去、空白の正規化、独自の正規表現による置換  |
-| テキストの分割         | 文、段落、Markdown 見出し、改ページ、単語数、文字数、独自の区切り文字 |
-| パイプラインの合成     | クリーニング → 変換 → 分割 → 後処理を連結し、一度に実行               |
+- `clean` — テキストの正規化とフィルタリング
+- `chunk` / `pipeline` — テキスト分割、またはクリーニングから分割までを連続処理
 
-> セキュリティ：`customReplacements` と `mode: 'custom'` の `separator` は正規表現として使用されます。信頼できる検証済みのパターンのみを渡し、ReDoS や意図しない広範囲の置換を防ぐため、ユーザー入力を直接正規表現に組み込まないでください。
+## データ構造
 
-### 分割モード
+モジュール独自のデータベーステーブルは作成しません。
 
-| モード    | 説明                                 |
-| --------- | ------------------------------------ |
-| sentence  | 文単位で分割                         |
-| paragraph | 段落単位で分割                       |
-| markdown  | Markdown 見出しで分割                |
-| page      | 改ページで分割                       |
-| word      | 単語数で分割                         |
-| character | 文字数で分割                         |
-| custom    | 独自の区切り文字（separator が必要） |
-
-分割の `maxSize` は既定1500、`overlap` は既定0で `0 <= overlap < maxSize` が必要です。word モードは非空白の語数（連続する中国語は1語になる場合があります）、その他は Unicode code point を単位とし、UTF-16 length・バイト・モデル token ではありません。重複と区切り文字も上限に含みます。自然な文・段落・ページ・独自境界は切点の優先度だけを決め、長い部分は `maxSize-overlap` で進みます。元の空白、句読点、改ページ、独自区切りを維持し、重複を除けば原文を復元できます。trim や改行の追加はしません。Markdown の重複は section 内だけで同じ上限を使い、コードフェンス内の見出しを本文として扱います。`markdownKeepTitle=false` の場合だけ見出し行を除きます。空または全空白の入力は空配列です。独自正規表現は信頼済み設定に限定し、不正な式は CHUNK_FAILED を返します。
-
-## 設定
-
-init・グローバル YAML・永続接続はありません。clean/chunk の指定は呼出しごと、pipeline の指定はそのパイプラインに属します。元文書の構造に応じ mode・maxSize・overlap を選び、独自正規表現は信頼する設定のみを使ってください。
-
-[項目別の用途・適用場面・例](../../docs/usage/configuration/ai.md).
-
-## エラー処理
-
-領域操作は result.success を確認し、失敗時はモジュールのエラー定義と安全な説明を使います。コード・関連 ID・秘匿した原因をサーバーログに残します。同期ツール・ファクトリー・ストリーム反復・ライフサイクルは各署名に従い、Promise 完了だけで成功と判断しません。回復条件は各機能を参照してください。
-
-すべての操作は `HaiResult<T>` を返します。`result.success` で成功・失敗を判定します。エラーコードは文字列形式 `hai:datapipe:NNN` です。
-
-```ts
-const result = datapipe.chunk(text, { mode: 'custom' })
-if (!result.success) {
-  switch (result.error.code) {
-    case HaiDatapipeError.MISSING_SEPARATOR.code:
-      // mode='custom' 时需要提供 separator
-      break
-    case HaiDatapipeError.CONFIG_ERROR.code:
-      // 配置参数校验失败
-      break
-    case HaiDatapipeError.CHUNK_FAILED.code:
-      // 输入或自定义正则导致处理失败；记录错误并回退到安全默认策略
-      break
-  }
-}
-```
+クリーニング結果、テキストチャンク、アプリ側の保存責務については[データ構造](../../docs/usage/data/datapipe.md)（中国語）を参照してください。
 
 ## 開発とテスト
 

@@ -11,225 +11,66 @@ A vector database module with a unified `vecdb` object for LanceDB, pgvector, Qd
 Every provider returns `score` in 0–1, with larger values indicating greater similarity; `minScore` filters converted scores. Cosine uses `(1 + cosine) / 2`, dot uses `sigmoid(dotProduct)`, and Euclidean uses `1 / (1 + distance)`. LanceDB/Chroma use native squared L2 while other backends use native L2. Calibrate thresholds for each metric/backend; scores are not probabilities. Qdrant no longer treats the public minScore as a native distance threshold.
 
 ```ts
-import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
+import { vecdb } from '@h-ai/vecdb'
 
-// 初始化（LanceDB）
+// Open the local LanceDB database.
 const initialized = await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
 if (!initialized.success)
   throw new Error(initialized.error.message)
 
-// 创建集合
-await vecdb.collection.create('docs', { dimension: 1536 })
+try {
+  // Create a cosine-similarity collection with three values per vector.
+  const created = await vecdb.collection.create('docs', { dimension: 3, metric: 'cosine' })
+  if (!created.success)
+    throw new Error(created.error.message)
 
-// 插入向量
-await vecdb.vector.insert('docs', [
-  {
-    id: 'doc-1',
-    vector: Array.from({ length: 1536 }).fill(0.1),
-    content: '文档内容',
-    metadata: { source: 'wiki' }
-  },
-])
+  // Insert a document vector with content and metadata for the search result.
+  const inserted = await vecdb.vector.insert('docs', [
+    {
+      id: 'doc-1',
+      vector: [1, 0, 0],
+      content: 'Installation guide',
+      metadata: { source: 'wiki' }
+    },
+  ])
+  if (!inserted.success)
+    throw new Error(inserted.error.message)
 
-// 搜索
-const searchResult = await vecdb.vector.search('docs', Array.from({ length: 1536 }).fill(0.2), { topK: 5, minScore: 0.7 })
-if (searchResult.success) {
-  for (const item of searchResult.data) {
-    // item.id, item.score, item.content
-  }
+  // Search with a vector close to the inserted one and return up to five matches.
+  const matches = await vecdb.vector.search('docs', [0.9, 0.1, 0], { topK: 5, minScore: 0.7 })
+  if (!matches.success)
+    throw new Error(matches.error.message)
+  // Each match contains id, score, content and metadata.
+  const firstMatch = matches.data[0]
+  process.stdout.write(`${JSON.stringify(firstMatch)}\n`)
 }
-
-// 关闭
-const closeResult = await vecdb.close()
-if (!closeResult.success) {
-  throw new Error(closeResult.error.message)
+finally {
+  // Release the connection even if creation, insertion or search fails.
+  const closed = await vecdb.close()
+  if (!closed.success)
+    process.stderr.write(`Vecdb close failed: ${closed.error.code}\n`)
 }
 ```
+
+## Configuration Reference
+
+Generated projects use `config/_vecdb.yml`, with `vecdb.init(config)` as the application configuration entry point.
+
+See the [configuration reference](../../docs/usage/configuration/vecdb.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-- Create collections with a defined vector dimension.
-- Store document vectors, search by similarity and filter metadata.
-- Use LanceDB, pgvector, Qdrant or Chroma; backend setup is described below.
+See the [feature reference](../../docs/usage/function/vecdb.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-### Operations and results
+- `init` / `close` / `config` / `isInitialized` / `rawConnection` — Manage the provider connection and access the underlying client
+- `collection` — Create, list and delete collections
+- `vector` — Write, search, scan and delete vectors
 
-Use the complete initialization flow in this section first. The host validates and authorizes example business values; check success before reading data from asynchronous domain results. Here void means completion without data, null means absent; synchronous factories/tools return the listed type directly.
+## Data Structures
 
-#### vecdb.collection
+See the [data reference](../../docs/usage/data/vecdb.md) in Chinese for collections, vectors, metadata, filters and provider storage layouts.
 
-Manage vector collections: create takes name/dimension options, drop a name and both yield void; exists yields boolean, info metadata, list names without arguments.
-
-| Entry                     | Input parameters | Successful result | Call example                                                      |
-| ------------------------- | ---------------- | ----------------- | ----------------------------------------------------------------- |
-| `vecdb.collection.create` | name, options    | `void`            | `await vecdb.collection.create('documents', { dimension: 1536 })` |
-| `vecdb.collection.drop`   | name             | `void`            | `await vecdb.collection.drop('documents')`                        |
-| `vecdb.collection.exists` | name             | `boolean`         | `await vecdb.collection.exists('documents')`                      |
-| `vecdb.collection.info`   | name             | `CollectionInfo`  | `await vecdb.collection.info('documents')`                        |
-| `vecdb.collection.list`   | No arguments     | `string[]`        | `await vecdb.collection.list()`                                   |
-
-#### vecdb.vector
-
-Insert/upsert take collection/documents, delete IDs, yielding void; search takes a vector and filter/topK and yields hits, count a total. Scores are normalized similarity, not probabilities.
-
-| Entry                 | Input parameters            | Successful result      | Call example                                                       |
-| --------------------- | --------------------------- | ---------------------- | ------------------------------------------------------------------ |
-| `vecdb.vector.insert` | collection, documents       | `void`                 | `await vecdb.vector.insert('documents', vectorDocuments)`          |
-| `vecdb.vector.upsert` | collection, documents       | `void`                 | `await vecdb.vector.upsert('documents', vectorDocuments)`          |
-| `vecdb.vector.delete` | collection, ids             | `void`                 | `await vecdb.vector.delete('documents', ['doc-1'])`                |
-| `vecdb.vector.search` | collection, vector, options | `VectorSearchResult[]` | `await vecdb.vector.search('documents', queryVector, { topK: 5 })` |
-| `vecdb.vector.count`  | collection                  | `number`               | `await vecdb.vector.count('documents')`                            |
-| `vecdb.vector.scan`   | collection, options         | `VectorScanPage`       | `await vecdb.vector.scan('documents', { limit: 32 })`              |
-
-Use `scan` to page through document IDs for reconciliation or cleanup. `collection` is the collection name. `options.limit` defaults to 64 and accepts 1 through 128. Omit `options.cursor` for the first page. Each page contains `{ id }` items. If `nextCursor` is present, continue with that cursor on the same collection and backend even when `items` is empty. Concurrent writes or deletions can affect pagination, so reconciliation jobs should run repeated sweeps. Qdrant returns only points that map back to framework document IDs.
-
-```ts
-// Input: collection name and page size. Output: HaiResult<VectorScanPage>.
-const page = await vecdb.vector.scan('documents', { limit: 32 })
-// On success, pass the cursor and page size to the same collection when another page exists.
-if (page.success && page.data.nextCursor !== undefined) {
-  const nextPage = await vecdb.vector.scan('documents', { cursor: page.data.nextCursor, limit: 32 })
-  // On success, nextPage.data.items contains the next IDs. An absent nextCursor marks the last page.
-}
-```
-
-### Production shared state
-
-Production uses Qdrant, pgvector or remote Chroma. LanceDB and embedded Chroma are for development/explicit tests. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../.agents/instructions/distributed-state.md).
-
-### Closing and recovery
-
-close immediately stops current operations, including previously captured operation references. Failed candidates and resources that failed to close retain cleanup ownership without serving requests. Concurrent close calls coalesce; an in-flight init settles ownership before close proceeds. error.ext.cleanupPending requires retrying close on the same module. init cannot replace a resource until cleanup succeeds. Embedded Chroma waits for the actual spawn event and direct child exit: 1.5 seconds after normal termination it sends a forced signal, then waits another 1.5 seconds. Unconfirmed exit returns failure and retains the handle. Direct-child verification does not establish process-tree termination or live Chroma CLI readiness.
-
-## Configuration
-
-Lifecycle: init takes backend/business configuration; use the module only after success. Await close before releasing borrowed dependencies. Follow the quick-start example and public signatures for exact return values.
-
-pgvector persists each collection metric in its vector column comment; indexes, info and queries use that definition. Changing the connection default leaves existing collections unchanged. Legacy collections recover the metric from their vector index; missing both index and valid metadata returns CONFIG_ERROR until repaired.
-
-```ts
-// LanceDB（默认，嵌入式本地存储）
-await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
-
-// pgvector（连接字符串）
-await vecdb.init({ type: 'pgvector', url: 'postgres://user:pass@localhost:5432/mydb' })
-
-// pgvector（分字段）
-await vecdb.init({
-  type: 'pgvector',
-  host: 'localhost',
-  port: 5432,
-  database: 'mydb',
-  user: 'admin',
-  password: 'secret',
-  indexType: 'hnsw',
-  tablePrefix: 'vec_',
-})
-
-// Qdrant
-await vecdb.init({ type: 'qdrant', url: 'http://localhost:6333', apiKey: 'optional-key' })
-
-// Chroma（嵌入式：自动拉起本地 `chroma run` 服务并持久化到 path）
-await vecdb.init({ type: 'chroma', path: './data/chroma' })
-
-// Chroma（直连已有服务，不拉起进程）
-await vecdb.init({ type: 'chroma', url: 'http://localhost:8000' })
-```
-
-> On Node, Chroma provides only an HTTP client, with no in-process embedded database. In embedded mode, `vecdb.init`
-> starts a local service with `serverCommand` (default: `chroma`), and `vecdb.close` stops the process.
-> The optional npm package `chromadb` supplies the HTTP client; install the server CLI separately. An unavailable command makes `init` return `CONNECTION_FAILED`.
-
-Chroma `url` accepts only an HTTP(S) root endpoint, such as `https://chroma.example.com:8443/`, and takes precedence over `host/port`. URL credentials, path prefixes, query strings and fragments are rejected. Without `url`, `host/port` uses HTTP. Configuration uses the `host/port/ssl/headers` arguments of `chromadb 3.5.0`; see the [official TypeScript client](https://docs.trychroma.com/reference/typescript/client).
-
-For Chroma, this module sends the optional `apiKey` as `Authorization: Bearer <apiKey>` to self-hosted services or gateways implementing that protocol. Use HTTPS for remote credentials. An empty string omits credentials; nonempty tokens cannot contain whitespace, control characters or non-ASCII characters. This interface uses the default tenant/database and does not configure Chroma Cloud. Initialization checks the collection-count data endpoint after heartbeat. Authentication or permission failures return `CONNECTION_FAILED` without publishing a connected state; callers must check `success`.
-
-Direct initialization has a total deadline of 5 seconds; local server startup uses `startupTimeout`. Expiry aborts candidate HTTP requests. Successful initialization clears the timer, so this deadline does not limit subsequent business requests.
-
-Qdrant uses fixed REST endpoints over native HTTP without an extra SDK. Unnamed cosine/euclidean/dot vectors are supported. The 30-second timeout covers the full response body; responses over 16 MiB fail explicitly. Path segments are encoded and writes/deletes await server application. External named-vector or Manhattan collections return `CONFIG_ERROR`; only HTTP 404 means absent. Logs use core sanitization.
-
-Fixed Qdrant requests reject HTTP redirects, preventing API Key forwarding to redirect targets.
-
-Chroma metadata/filter values follow native `chromadb 3.5.0` validation. Invalid values return operation errors without dropping filters or issuing unfiltered queries. Document content may be omitted and search still returns `undefined`; internal writes use the SDK's string field. Check each backend's null, complex-metadata and filter semantics separately.
-
-LanceDB stores dimensions in Arrow's fixed-size vector field and the collection metric in the same schema's metadata, including empty collections. The metric in `collection.create` takes precedence; the connection metric only supplies a default for new collections. Restarting or changing that default does not alter existing collections. Operations read persisted schemas and check other connections' commits. Missing or invalid definitions return `CONFIG_ERROR`, without dummy-vector probes or guessed metrics. Rebuild legacy/external tables that lack this definition; no compatibility inference is provided.
-
-LanceDB is an embedded local-file backend. Processes share data only when they access the same persistent directory on a filesystem supporting LanceDB's concurrent commits. Identically named local paths on separate nodes do not share data. Prefer pgvector, Qdrant, or a Chroma server for distributed services. AI Knowledge requires persistent reldb and vecdb stores pointing to the same business dataset; changing embedding dimensions requires a matching rebuilt collection.
-
-Search uses the persisted collection metric, mapping `euclidean` to LanceDB's `l2`. Scores follow the public 0–1, higher-is-more-similar contract: cosine uses `clamp(1 - distance / 2, 0, 1)`, euclidean uses `1 / (1 + squaredL2)`, and dot uses `sigmoid(dotProduct)` to preserve ranking, not to estimate probabilities. `minScore` filters converted scores; thresholds are not universally calibrated across metrics or backends.
-
-Atomic LanceDB writes are verified against `@lancedb/lancedb 0.40.0 / Lance 13`. New tables declare a non-null id primary key in their initial Arrow schema. Both insert and upsert use native merge on id for strict key conflict detection. Sources: [Lance 13 table format](https://github.com/lance-format/lance/blob/v13.0.0/docs/src/format/table/index.md#unenforced-primary-key), [Lance 13 transaction](https://github.com/lance-format/lance/blob/v13.0.0/protos/transaction.proto), [Node binding 0.40.0](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/table.ts).
-
-LanceDB `insert` preserves existing IDs; `upsert` inserts or replaces complete rows. Duplicate IDs within a batch, missing merge support, or missing persisted primary keys return `CONFIG_ERROR` before writing. Rebuild old tables; no automatic migration or cleanup occurs. Each merge commits atomically, with concurrent winners determined by commit order. Multiple merges and reldb/vecdb operations do not share a transaction. No delete/add fallback is used. Reconcile unknown outcomes by ID. External native add calls bypass these safeguards.
-
-LanceDB stores `metadata` in a native JSON field, accepts nested JSON, and restores search metadata as objects. Explicit Arrow JSON input schemas encode both insert and upsert as JSONB. Writes or filters on legacy Utf8 metadata tables return `CONFIG_ERROR`; rebuild them without automatic migration.
-
-LanceDB `filter` supports AND equality on literal top-level keys, for example `{ tenant: 'acme', page: 1, active: true, removedAt: null }`. Values may be strings, finite numbers, booleans, or null. Types remain distinct: `1` differs from `'1'`, and `true` from `'true'`. Null matches explicit JSON null, never a missing key. Dots/brackets are literal key characters; quotes, backslashes, `%`, and `_` have no SQL or wildcard meaning. An empty object adds no restriction. Objects, arrays, undefined, and nonfinite numbers return `CONFIG_ERROR`, never an unfiltered query. Filtering precedes vector topK selection; minScore then filters scores. Other providers retain native restrictions and do not promise identical null, complex-value, or path semantics. Check capabilities when switching backends. Sources: [Lance 13 JSON UDF](https://github.com/lance-format/lance/blob/v13.0.0/rust/lance-datafusion/src/udf/json.rs), [Node 0.40.0 JSON field](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/arrow.ts).
-
-### Operation logging
-
-Enable operation logging with `operationLog` in the vector database configuration. Logs are emitted before collection/vector operations reach the real provider, without a shared wrapper in `vecdb-main.ts`.
-
-```yaml
-# config/_vecdb.yml
-type: lancedb
-path: ./data/vecdb
-operationLog:
-  read: false # collection.exists/info/list, vector.search/count
-  write: false # collection.create/drop, vector.insert/upsert/delete
-  maxLength: 1000 # Maximum summary length in characters. Use 0 to omit the summary.
-  level: debug # info | debug | trace, defaults to debug
-```
-
-Logs include the operation and a summary such as document counts, dimensions, topK, and whether a filter was supplied.
-
-```ts
-await vecdb.init({
-  type: 'lancedb',
-  path: './data/vecdb',
-  operationLog: {
-    read: true,
-    write: true,
-    maxLength: 500,
-    level: 'debug',
-  },
-})
-```
-
-> Note: `vecdb.config` returns a **redacted configuration snapshot**. Connection-string usernames/passwords, standalone `password`, and `apiKey` are replaced with `[REDACTED]`.
-
-> Behavior: empty batch `insert/upsert/delete` calls are no-ops. Writes and searches validate vector dimensions, returning `HaiVecdbError.DIMENSION_MISMATCH` on a mismatch; missing optional drivers return `HaiVecdbError.DRIVER_NOT_FOUND`.
-
-Qdrant uses fixed REST endpoints over native HTTP without an extra SDK. Unnamed cosine/euclidean/dot vectors are supported. The 30-second timeout covers the full response body; responses over 16 MiB fail explicitly. Path segments are encoded and writes/deletes await server application. External named-vector or Manhattan collections return `CONFIG_ERROR`; only HTTP 404 means absent. Logs use core sanitization.
-
-The host loads and validates configuration before passing it to this module. Keep secrets in private server environment files. Select the backend, capacity, deadlines and logging for the actual use case; reinitialize and check the result after changes.
-
-[Per-option purpose, use cases and examples](../../docs/usage/configuration/data.md).
-
-## Error Handling
-
-Check result.success for domain operations. Handle failures with the module error definitions and safe messages; retain codes, correlation IDs and sanitized causes in server logs. Synchronous tools, factories, stream iteration and lifecycle calls follow their own signatures. A completed Promise alone is not business success. See each feature for recovery limits.
-
-All operations return `HaiResult<T>`; check `result.success` for success or failure.
-
-```ts
-const result = await vecdb.collection.create('docs', { dimension: 1536 })
-if (!result.success) {
-  switch (result.error.code) {
-    case HaiVecdbError.NOT_INITIALIZED.code:
-      // 请先调用 vecdb.init()
-      break
-    case HaiVecdbError.COLLECTION_ALREADY_EXISTS.code:
-      // 集合已存在
-      break
-    case HaiVecdbError.CONNECTION_FAILED.code:
-      // 连接失败
-      break
-  }
-}
-```
-
-## Development
+## Development and Testing
 
 ```bash
 pnpm --filter @h-ai/vecdb test

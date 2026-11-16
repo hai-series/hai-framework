@@ -35,62 +35,26 @@ if (!result.success)
   throw new Error(result.error.message)
 ```
 
+## Configuration Reference
+
+Pass cleaning and chunking options to `clean()`, `chunk()` or `pipeline()`.
+
+See the [configuration reference](../../docs/usage/configuration/datapipe.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+
 ## Features
 
-HTML removal extracts text; it is not an HTML security sanitizer. Use the UI's safe rendering mechanism before rendering HTML. Built-in tag and email cleaning avoids repeated backtracking on long malformed input. Custom regular expressions must come from trusted configuration, not external user-supplied patterns.
+See the [feature reference](../../docs/usage/function/datapipe.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-| Feature              | Description                                                                                           |
-| -------------------- | ----------------------------------------------------------------------------------------------------- |
-| Text cleaning        | Remove HTML tags, URLs, and emails; normalize whitespace; apply custom regex replacements             |
-| Text chunking        | Sentences, paragraphs, Markdown headings, page breaks, word counts, characters, and custom separators |
-| Pipeline composition | Chain cleaning → transformation → chunking → postprocessing in a single execution                     |
+- `clean` — Normalize and filter text
+- `chunk` / `pipeline` — Split text or run cleaning and splitting in sequence
 
-> Security: `customReplacements` and `separator` in `mode: 'custom'` are used as regular expressions. Only provide trusted, reviewed patterns; do not interpolate user input directly into regexes, to avoid ReDoS or unintended broad replacements.
+## Data Structures
 
-### Chunking modes
+The module creates no database tables of its own.
 
-| Mode      | Description                           |
-| --------- | ------------------------------------- |
-| sentence  | Split by sentence                     |
-| paragraph | Split by paragraph                    |
-| markdown  | Split by Markdown heading             |
-| page      | Split by page break                   |
-| word      | Split by word count                   |
-| character | Split by character count              |
-| custom    | Custom separator (requires separator) |
+See the [data reference](../../docs/usage/data/datapipe.md) in Chinese for cleaning results, text chunks and application-owned storage.
 
-Chunk `maxSize` defaults to 1500; `overlap` defaults to 0 and must satisfy `0 <= overlap < maxSize`. Both use non-whitespace words in word mode (continuous Chinese can be one long word), and Unicode code points in every other mode, rather than UTF-16 length, bytes or model tokens. The limit includes overlap and separators. Natural sentence/paragraph/page/custom boundaries only guide split positions; oversized segments use a `maxSize-overlap` sliding window. Original whitespace, punctuation, page markers and custom separators are preserved, so removing overlap reconstructs the source. Chunks are not trimmed or joined with added newlines. Markdown overlaps only within each section, uses the same hard limit and ignores headings inside fenced code. Only `markdownKeepTitle=false` explicitly removes heading lines. Empty or entirely whitespace input returns no chunks. Custom regular expressions must come from trusted configuration; invalid expressions return CHUNK_FAILED.
-
-## Configuration
-
-This module has no init, global YAML or persistent connection. Pass clean/chunk options per call; pipeline options belong to that pipeline. Choose mode, maxSize and overlap for the source structure; custom regex patterns must come from trusted configuration.
-
-[Per-option purpose, use cases and examples](../../docs/usage/configuration/ai.md).
-
-## Error Handling
-
-Check result.success for domain operations. Handle failures with the module error definitions and safe messages; retain codes, correlation IDs and sanitized causes in server logs. Synchronous tools, factories, stream iteration and lifecycle calls follow their own signatures. A completed Promise alone is not business success. See each feature for recovery limits.
-
-All operations return `HaiResult<T>`; check `result.success` for success or failure. Error codes use the string format `hai:datapipe:NNN`.
-
-```ts
-const result = datapipe.chunk(text, { mode: 'custom' })
-if (!result.success) {
-  switch (result.error.code) {
-    case HaiDatapipeError.MISSING_SEPARATOR.code:
-      // mode='custom' 时需要提供 separator
-      break
-    case HaiDatapipeError.CONFIG_ERROR.code:
-      // 配置参数校验失败
-      break
-    case HaiDatapipeError.CHUNK_FAILED.code:
-      // 输入或自定义正则导致处理失败；记录错误并回退到安全默认策略
-      break
-  }
-}
-```
-
-## Development
+## Development and Testing
 
 ```bash
 pnpm --filter @h-ai/datapipe test

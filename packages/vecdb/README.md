@@ -11,223 +11,64 @@
 所有 Provider 的 `score` 都为 0–1，越大越相似；`minScore` 在转换后过滤。余弦使用 `(1 + cosine) / 2`，内积使用 `sigmoid(dotProduct)`，欧氏使用 `1 / (1 + distance)`；LanceDB/Chroma 的 distance 是原生 squared L2，其余后端使用原生 L2。不同 metric/后端的阈值仍需按业务校准，score 不代表概率。Qdrant 的公开 minScore 使用统一相似度，而非原生距离阈值。
 
 ```ts
-import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
+import { vecdb } from '@h-ai/vecdb'
 
-// 初始化（LanceDB）
+// 打开本地 LanceDB 连接。
 const initialized = await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
 if (!initialized.success)
   throw new Error(initialized.error.message)
 
-// 创建集合
-await vecdb.collection.create('docs', { dimension: 1536 })
+try {
+  // 创建余弦相似度集合，每个向量有 3 个数值。
+  const created = await vecdb.collection.create('docs', { dimension: 3, metric: 'cosine' })
+  if (!created.success)
+    throw new Error(created.error.message)
 
-// 插入向量
-await vecdb.vector.insert('docs', [
-  {
-    id: 'doc-1',
-    vector: Array.from({ length: 1536 }).fill(0.1),
-    content: '文档内容',
-    metadata: { source: 'wiki' }
-  },
-])
+  // 写入一条文档向量，content 和 metadata 会随结果返回。
+  const inserted = await vecdb.vector.insert('docs', [
+    {
+      id: 'doc-1',
+      vector: [1, 0, 0],
+      content: '安装说明',
+      metadata: { source: 'wiki' }
+    },
+  ])
+  if (!inserted.success)
+    throw new Error(inserted.error.message)
 
-// 搜索
-const searchResult = await vecdb.vector.search('docs', Array.from({ length: 1536 }).fill(0.2), { topK: 5, minScore: 0.7 })
-if (searchResult.success) {
-  for (const item of searchResult.data) {
-    // item.id, item.score, item.content
-  }
+  // 用接近已写入向量的查询值，返回最多 5 条命中。
+  const matches = await vecdb.vector.search('docs', [0.9, 0.1, 0], { topK: 5, minScore: 0.7 })
+  if (!matches.success)
+    throw new Error(matches.error.message)
+  // 命中项包含 id、score、content 和 metadata。
+  const firstMatch = matches.data[0]
+  process.stdout.write(`${JSON.stringify(firstMatch)}\n`)
 }
-
-// 关闭
-const closeResult = await vecdb.close()
-if (!closeResult.success) {
-  throw new Error(closeResult.error.message)
-}
-```
-
-## 功能
-
-- 创建和管理固定向量维度的集合。
-- 写入文档向量，按相似度检索并过滤元数据。
-- 支持 LanceDB、pgvector、Qdrant 与 Chroma；后端准备方式见下方配置。
-
-### 功能输入输出
-
-以下片段依赖本节完整初始化流程。示例中的业务值由宿主校验和授权后传入；异步领域结果先判断 success，再读取 data。表中 void 表示操作已完成且没有返回数据，null 表示不存在；同步工厂/工具直接返回表中类型。
-
-#### vecdb.collection
-
-管理向量集合；create 输入名称/维度等定义，drop 输入名称均返回 void；exists 返回 boolean，info 返回维度等元数据，list 无参数返回名称数组。
-
-| 入口                      | 输入参数      | 成功结果         | 调用示例                                                          |
-| ------------------------- | ------------- | ---------------- | ----------------------------------------------------------------- |
-| `vecdb.collection.create` | name, options | `void`           | `await vecdb.collection.create('documents', { dimension: 1536 })` |
-| `vecdb.collection.drop`   | name          | `void`           | `await vecdb.collection.drop('documents')`                        |
-| `vecdb.collection.exists` | name          | `boolean`        | `await vecdb.collection.exists('documents')`                      |
-| `vecdb.collection.info`   | name          | `CollectionInfo` | `await vecdb.collection.info('documents')`                        |
-| `vecdb.collection.list`   | 无参数        | `string[]`       | `await vecdb.collection.list()`                                   |
-
-#### vecdb.vector
-
-写入/替换输入集合和文档数组，删除输入 ID 数组，均返回 void；search 输入查询向量和过滤/topK 返回命中数组，count 返回总数。分数为统一相似度，不是概率。
-
-| 入口                  | 输入参数                    | 成功结果               | 调用示例                                                           |
-| --------------------- | --------------------------- | ---------------------- | ------------------------------------------------------------------ |
-| `vecdb.vector.insert` | collection, documents       | `void`                 | `await vecdb.vector.insert('documents', vectorDocuments)`          |
-| `vecdb.vector.upsert` | collection, documents       | `void`                 | `await vecdb.vector.upsert('documents', vectorDocuments)`          |
-| `vecdb.vector.delete` | collection, ids             | `void`                 | `await vecdb.vector.delete('documents', ['doc-1'])`                |
-| `vecdb.vector.search` | collection, vector, options | `VectorSearchResult[]` | `await vecdb.vector.search('documents', queryVector, { topK: 5 })` |
-| `vecdb.vector.count`  | collection                  | `number`               | `await vecdb.vector.count('documents')`                            |
-| `vecdb.vector.scan`   | collection, options         | `VectorScanPage`       | `await vecdb.vector.scan('documents', { limit: 32 })`              |
-
-`scan` 分页返回文档 ID，可用于核对或批量清理集合。`collection` 是集合名，`options.limit` 默认为 64，取值为 1 到 128，`options.cursor` 在首页省略。每页的 `items` 只包含 `{ id }`。有 `nextCursor` 时，即使本页为空也继续读取，并将游标传给同一后端的同一集合。并发写入或删除可能改变分页结果，清理任务应重复扫描。Qdrant 只返回能映射回框架文档的记录。
-
-```ts
-// 输入集合名与页大小，输出 HaiResult<VectorScanPage>。
-const page = await vecdb.vector.scan('documents', { limit: 32 })
-// 成功且存在下一页时，将上一页游标与页大小传入同一集合。
-if (page.success && page.data.nextCursor !== undefined) {
-  const nextPage = await vecdb.vector.scan('documents', { cursor: page.data.nextCursor, limit: 32 })
-  // nextPage 成功时 data.items 是下一页文档 ID，data.nextCursor 缺失时已到末页。
+finally {
+  // 释放连接，即使创建、写入或搜索失败也执行。
+  const closed = await vecdb.close()
+  if (!closed.success)
+    process.stderr.write(`Vecdb close failed: ${closed.error.code}\n`)
 }
 ```
 
-### 生产共享状态
+## 配置清单
 
-生产使用 Qdrant、pgvector 或远端 Chroma；LanceDB 和嵌入式 Chroma 只用于开发/明确测试。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../.agents/instructions/distributed-state.md).
+生成项目使用 `config/_vecdb.yml`。应用可以通过 `vecdb.init(config)` 接入配置。
 
-### 关闭与失败恢复
+在[模块配置清单](../../docs/usage/configuration/vecdb.md)中查阅配置入口、默认值、取值限制和生效条件。
 
-close 立即停止当前操作与此前取得的操作引用；连接失败候选和关闭失败资源仅作为待清理所有权保留，不再提供业务服务。并发 close 合并，进行中的 init 先确定资源归属再关闭。失败结果的 error.ext.cleanupPending 表示仍须用同一模块的 close 重试；清理成功前 init 不创建替代资源。内嵌 Chroma 等待实际 spawn，终止直接启动的服务器后等待 exit；普通终止超过 1.5 秒后升级强制终止，再等待 1.5 秒，未确认退出返回失败并保留句柄。该验证覆盖直接子进程，不把信号回执等同于进程树退出或真实 Chroma CLI 上线验收。
+## 功能说明
 
-## 配置
+在[功能说明](../../docs/usage/function/vecdb.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-生命周期：init 输入后端/业务配置，成功后才能使用；close 在释放借用依赖前等待完成。返回值以快速开始示例和公开签名为准。
+- `init` / `close` / `config` / `isInitialized` / `rawConnection` — 管理 Provider 连接与底层连接访问
+- `collection` — 创建、列出和删除集合
+- `vector` — 写入、检索、分页扫描和删除向量
 
-pgvector 创建集合时将距离算法保存在 vector 列注释，索引、info 与查询均读取该集合定义；修改连接默认 metric 不改变已有集合。旧集合从实际向量索引恢复算法；索引和有效注释均缺失时返回 CONFIG_ERROR，须先恢复集合定义。
+## 数据结构
 
-```ts
-// LanceDB（默认，嵌入式本地存储）
-await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
-
-// pgvector（连接字符串）
-await vecdb.init({ type: 'pgvector', url: 'postgres://user:pass@localhost:5432/mydb' })
-
-// pgvector（分字段）
-await vecdb.init({
-  type: 'pgvector',
-  host: 'localhost',
-  port: 5432,
-  database: 'mydb',
-  user: 'admin',
-  password: 'secret',
-  indexType: 'hnsw',
-  tablePrefix: 'vec_',
-})
-
-// Qdrant
-await vecdb.init({ type: 'qdrant', url: 'http://localhost:6333', apiKey: 'optional-key' })
-
-// Chroma（嵌入式：自动拉起本地 `chroma run` 服务并持久化到 path）
-await vecdb.init({ type: 'chroma', path: './data/chroma' })
-
-// Chroma（直连已有服务，不拉起进程）
-await vecdb.init({ type: 'chroma', url: 'http://localhost:8000' })
-```
-
-> Chroma 在 Node 端只有 HTTP 客户端（无进程内嵌入式）。嵌入式模式下 `vecdb.init` 会
-> 通过 `serverCommand`（默认 `chroma`）拉起本地服务，`vecdb.close` 时关闭进程。
-> npm 可选依赖 `chromadb` 提供 HTTP 客户端；服务端 CLI 需另行安装，命令不可用时 `init` 返回 `CONNECTION_FAILED`。
-
-Chroma 直连 `url` 仅接受 HTTP(S) 根端点（例如 `https://chroma.example.com:8443/`），优先于 `host/port`；不接受 URL 凭据、路径前缀、query 或 fragment。未提供 `url` 时使用 `host/port` 的 HTTP 连接。配置使用 `chromadb 3.5.0` 的 `host/port/ssl/headers` 参数，依据：[官方 TypeScript 客户端](https://docs.trychroma.com/reference/typescript/client).
-
-Chroma 的可选 `apiKey` 按本模块约定发送 `Authorization: Bearer <apiKey>`，仅用于采用该认证协议的自托管服务或网关；远程凭据传输应使用 HTTPS。空串表示不带凭据，非空值不得包含空白、控制字符或非 ASCII 字符。本接口使用默认 tenant/database，不提供 Chroma Cloud 的客户端与租户配置。初始化在心跳后验证集合计数数据端点；认证/权限失败返回 `CONNECTION_FAILED`，不会发布已连接状态，调用方必须检查 `success`。
-
-直连初始化的总截止为 5 秒，本地服务拉起使用 `startupTimeout`。超时中止候选 HTTP 请求；成功后清除初始化 timer，此截止不限制后续业务请求。
-
-Qdrant 使用原生 HTTP 固定 REST 端点，无额外 SDK 依赖，支持未命名向量字段的 cosine/euclidean/dot。30 秒超时覆盖完整响应体，16 MiB 响应上限超出时明确失败；路径段编码，写入/删除等待实际应用完成。外部 named-vector 或 Manhattan 集合返回 `CONFIG_ERROR`，仅 HTTP 404 表示集合不存在，日志复用 core 脱敏。
-
-Qdrant 固定后端请求拒绝 HTTP 重定向，API Key 不会被转发到重定向目标。
-
-Chroma 的 metadata/filter 遵循 `chromadb 3.5.0` 原生校验，非法值返回操作错误，不丢弃过滤或回退为无过滤查询。可省略文档 content，搜索仍返回 `undefined`；内部按 SDK 的字符串字段传递。各后端的 null、复杂元数据与过滤语义需单独核对。
-
-LanceDB 将向量维度存于 Arrow 固定长度 vector 字段，将集合 metric 存于同一 schema 的 metadata；空表也可正确恢复。`collection.create` 中的 metric 优先于连接配置，连接 metric 仅是新集合的默认值。重启或更换默认值不会改变已有集合。每次操作读取持久 schema，并检查其它连接的提交；缺少有效集合定义时返回 `CONFIG_ERROR`，不探测假向量或猜测 metric。旧表/外部表如缺少该定义，需要重建集合，不提供兼容推断。
-
-LanceDB 是嵌入式本地文件后端。只有访问相同持久目录、且底层文件系统支持 LanceDB 并发提交的进程才能共享数据；不同节点各自的同名本地路径互不共享。分布式服务优先选择 pgvector、Qdrant 或 Chroma 服务端。AI Knowledge 的 reldb 与 vecdb 都须持久化并指向同一业务数据集，替换 embedding 维度时须重建匹配的集合。
-
-搜索始终使用集合 metric，`euclidean` 映射 LanceDB 的 `l2`。`score` 延续公开 API 的 0–1、越大越相似约定：cosine 为 `clamp(1 - distance / 2, 0, 1)`；euclidean 为 `1 / (1 + squaredL2)`；dot 为 `sigmoid(dotProduct)`，用于保持内积排序而非概率。`minScore` 在该转换后过滤；不同 metric/后端的阈值不应视为通用校准值。
-
-LanceDB 原子写入的验证基线为 `@lancedb/lancedb 0.40.0 / Lance 13`。新集合在初始 Arrow schema 声明 id 为不可空主键；insert/upsert 均使用原生 merge，以 id 参与严格键冲突检测。依据：[Lance 13 table format](https://github.com/lance-format/lance/blob/v13.0.0/docs/src/format/table/index.md#unenforced-primary-key)、[Lance 13 transaction](https://github.com/lance-format/lance/blob/v13.0.0/protos/transaction.proto)、[Node binding 0.40.0](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/table.ts).
-
-LanceDB 的 `insert` 仅插入新 ID，已有 ID 保留不覆盖；`upsert` 新增或整体替换。同批重复 ID、缺失 merge 能力/持久主键均返回 `CONFIG_ERROR`，不执行写入。旧表需重建，不自动迁移或清空。每个 merge 独立原子提交；并发胜者由提交顺序决定，不提供多个 merge 或 reldb/vecdb 间的共同事务。框架不会回退到 delete/add；写入结果不明时按 ID 核对。直接使用原生 add 的外部写入会绕过该保护，不属于本接口保证。
-
-LanceDB 的 `metadata` 使用原生 JSON 字段，仍可存储嵌套 JSON 对象，搜索结果还原为对象。写入时显式使用 Arrow JSON schema，确保 insert/upsert 都经过 JSONB 编码；旧 Utf8 metadata 表写入或过滤返回 `CONFIG_ERROR`，须重建，不自动迁移。
-
-LanceDB 的 `filter` 仅支持顶层键的 AND 精确匹配，例如 `{ tenant: 'acme', page: 1, active: true, removedAt: null }`。值支持字符串、有限数值、布尔和 null，严格区分 `1`/`'1'`、`true`/`'true'`；null 只匹配显式 JSON null，不匹配缺失字段。键是字面量，点号/括号不代表嵌套路径，引号、反斜线、`%`、`_` 均无 SQL/通配符含义。空对象不筛选；对象、数组、undefined、非有限数值返回 `CONFIG_ERROR`，不会执行无过滤查询。过滤在向量 topK 选取前执行，随后应用 minScore。其它 Provider 沿用各自原生过滤约束，不保证相同 null、复杂值或路径语义；跨后端时须核对实际能力。JSON 查询依据：[Lance 13 JSON UDF](https://github.com/lance-format/lance/blob/v13.0.0/rust/lance-datafusion/src/udf/json.rs)、[Node 0.40.0 JSON field](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/arrow.ts).
-
-### 操作日志
-
-可在向量数据库配置中通过 `operationLog` 开启操作日志。日志在集合/向量操作进入真实 Provider 前输出，不在 `vecdb-main.ts` 中做统一包装。
-
-```yaml
-# config/_vecdb.yml
-type: lancedb
-path: ./data/vecdb
-operationLog:
-  read: false # collection.exists/info/list, vector.search/count
-  write: false # collection.create/drop, vector.insert/upsert/delete
-  maxLength: 1000 # 安全摘要的最大字符数，0 省略摘要
-  level: debug # info | debug | trace，默认 debug
-```
-
-日志只记录操作类型和条数、维度、topK、是否有过滤条件等摘要。
-
-```ts
-await vecdb.init({
-  type: 'lancedb',
-  path: './data/vecdb',
-  operationLog: {
-    read: true,
-    write: true,
-    maxLength: 500,
-    level: 'debug',
-  },
-})
-```
-
-> 注意：`vecdb.config` 返回的是**脱敏配置快照**；连接字符串中的用户名/密码、独立 `password` 字段和 `apiKey` 会被替换为 `[REDACTED]`。
-
-> 行为说明：空批量 `insert/upsert/delete` 会被视为 no-op；写入与搜索会校验向量维度，不匹配时返回 `HaiVecdbError.DIMENSION_MISMATCH`；缺少可选驱动时返回 `HaiVecdbError.DRIVER_NOT_FOUND`。
-
-Qdrant 使用原生 HTTP 固定 REST 端点，无额外 SDK 依赖，支持未命名向量字段的 cosine/euclidean/dot。30 秒超时覆盖完整响应体，16 MiB 响应上限超出时明确失败；路径段编码，写入/删除等待实际应用完成。外部 named-vector 或 Manhattan 集合返回 `CONFIG_ERROR`，仅 HTTP 404 表示集合不存在，日志复用 core 脱敏。
-
-配置由宿主加载和校验，再传入本模块；私密值放服务端私有环境，不传到浏览器。按实际使用场景逐项选择后端、容量、期限和日志策略，修改后重新初始化并核验成功结果。
-
-[逐项配置说明、适用场景和示例](../../docs/usage/configuration/data.md).
-
-## 错误处理
-
-领域操作先判断 `result.success`，失败按本模块错误定义与安全提示处理，服务端保留错误码、关联编号和脱敏原因。同步工具、工厂、流迭代及生命周期按各自签名处理，不把 Promise 完成视为业务成功。具体失败与恢复边界见对应功能。
-
-所有操作返回 `HaiResult<T>`，通过 `result.success` 判断成功或失败。
-
-```ts
-const result = await vecdb.collection.create('docs', { dimension: 1536 })
-if (!result.success) {
-  switch (result.error.code) {
-    case HaiVecdbError.NOT_INITIALIZED.code:
-      // 请先调用 vecdb.init()
-      break
-    case HaiVecdbError.COLLECTION_ALREADY_EXISTS.code:
-      // 集合已存在
-      break
-    case HaiVecdbError.CONNECTION_FAILED.code:
-      // 连接失败
-      break
-  }
-}
-```
+查看[数据结构](../../docs/usage/data/vecdb.md)，了解集合、向量、元数据、过滤条件与各 Provider 的物理结构。
 
 ## 开发测试
 

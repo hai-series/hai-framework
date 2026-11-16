@@ -10,806 +10,86 @@ hai-framework の API サービスランタイム。公開 HTTP App 抽象を通
 
 ## クイックスタート
 
-以下の組立て例は、アプリで初期化済みの iam・storage・ai・core・logger と、アプリ側の closeApp を前提とします。初期化スクリプトではありません。健康確認だけなら空の contract/procedures を使えます。serv に init/close はなく、終了時はリスナーと業務モジュールを逆順に閉じます。
+アプリの起動時に `core`、`iam`、`storage`、`ai` を初期化し、`serv` の設定を読み込んで検証してから `startApi(closeApp)` を呼び出します。`closeApp` は業務リソースを初期化と逆の順序で解放する非同期コールバックです。関数は Node のリスナーハンドルを返します。コールバックを渡すと、終了シグナルの受信時に `serv.listen` がリスナーを閉じてから呼び出します。ヘルスチェックだけを提供する場合は、空の契約と procedures でアプリを作成できます。
 
 ```ts
+import type { ServConfig } from '@h-ai/serv'
+import { ai } from '@h-ai/ai'
 import { apiContract } from '@h-ai/api-contract'
+import { core } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
 import { serv } from '@h-ai/serv'
 import { createAiProcedures } from '@h-ai/serv/features/ai'
 import { createIamProcedures } from '@h-ai/serv/features/iam'
 import { createStorageProcedures } from '@h-ai/serv/features/storage'
+import { storage } from '@h-ai/storage'
 
-// 1) 创建契约
-const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
+export function startApi(closeApp: () => Promise<void>) {
+  // 3 つのモジュールの契約から HTTP ルートの契約を作成します。
+  const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
 
-// 2) 组装 procedures（注入 iam / storage / ai 已初始化的 functions）
-const procedures = {
-  iam: createIamProcedures({ iam }),
-  storage: createStorageProcedures({
-    storage,
-    authorize: ({ context, keys }) => keys.every(key =>
-      key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
-  }),
-  ai: createAiProcedures({ ai }),
+  // 初期化済みのモジュールを procedures に結び付け、各ストレージキーの所有権を確認します。
+  const procedures = {
+    iam: createIamProcedures({ iam }),
+    storage: createStorageProcedures({
+      storage,
+      authorize: ({ context, keys }) => keys.every(key =>
+        key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
+    }),
+    ai: createAiProcedures({ ai }),
+  }
+
+  // 契約、procedures、HTTP 設定を使ってアプリを組み立てます。
+  const app = serv.createApp({
+    contract,
+    procedures,
+    iam,
+    http: {
+      apiPrefix: '/api/v1',
+      openapi: { path: '/openapi.json' },
+      docs: { path: '/docs' },
+    },
+  })
+
+  // 読み込み済みのリスナー設定を使い、アドレスと close() を持つハンドルを返します。
+  const { server } = core.config.getOrThrow<ServConfig>('serv')
+  return serv.listen(app, {
+    host: server.host,
+    port: server.port,
+    onListening: info => core.logger.info('API service listening', { port: info.port }),
+    onClose: closeApp,
+  })
 }
-
-// 3) 创建 HTTP App
-const app = serv.createApp({
-  contract,
-  procedures,
-  iam,
-  http: {
-    apiPrefix: '/api/v1',
-    openapi: { path: '/openapi.json' },
-    docs: { path: '/docs' },
-  },
-})
-
-// 4) 启动 Node 服务（host/port 来自 _serv.yml 的 server；HOST/PORT 环境变量高于配置文件）
-const { server } = core.config.getOrThrow<ServConfig>('serv')
-serv.listen(app, {
-  host: server.host,
-  port: server.port,
-  onListening: info => logger.info('API service listening', { port: info.port }),
-  onClose: closeApp,
-})
-
-// 5) 优雅关闭由 serv 托管，无需手动注册 process.once('SIGINT', ...)
 ```
 
 Storage procedures には `authorize({ context, operation, keys })` が必須で、未設定の場合はアクセスを拒否します。認証済み session から所有者・テナントを判定し、ダウンロード、アップロード、一覧、メタデータ、削除に適用します。上記の例は `users/<エンコードした userId>/` 配下だけを許可し、一覧にもその prefix が必要です。一括処理はすべての key が許可された後に実行し、管理者アクセスはアプリ側で明示的に許可します。
 
-`storage.files.deleteMany` の成功データは `{ deletedKeys, failures: [] }` です。失敗進捗は `error.ext.deleteMany`（`failed / unknown / notAttempted`）にあり、HTTP 200 だけで完了と判断しません。[Storage の一括削除](../storage/README.ja.md#api-一覧)を参照してください。
+`storage.files.deleteMany` の成功データは `{ deletedKeys, failures: [] }` です。失敗進捗は `error.ext.deleteMany`（`failed / unknown / notAttempted`）にあり、HTTP 200 だけで完了と判断しません。[Storage の一括削除](../../docs/usage/function/storage.md#api-概览)を参照してください。
 
 AI procedures は省略された `objectId` を信頼できる `context.session.userId` に結び付けます。会話・メッセージの保存、履歴、会話一覧、記憶 recall/list は認可された主体で処理し、会話は `objectId + sessionId` で分離します。書き込み時の sessionId の既定値は `default` です。他の objectId へのアクセスは既定で拒否し、管理者も信頼できる権限とテナント関係を検証する明示的な `authorizeObject` ポリシーが必要です。
 
 `chats.createCompletion`（`POST /ai/chats/completions`）は非ストリーミングの `HaiResult<AiChatCompletionData>` を一度返します。function `tools` のネストした JSON Schema と `strict`、`tool_choice`（`auto` / `none` / `required` / 提供した関数名）をモデルへ渡し、役割、`name`、ユーザー画像、ツール呼び出しを保持します。ツール結果には `role: 'tool'` と空でない `tool_call_id` が必須で、指定名は今回のツール定義に含まれる必要があります。procedure はツールを実行しません。アプリ側で認可・実行後、助手の `tool_calls` と対応する結果を送信します。入力に `stream` はなく、`true` / `false` とも Provider 呼び出し前に HTTP 400 で拒否します。ストリーミングには `ai.llm.chatStream()` と対応する出力型を使う専用 endpoint を定義します。
 
+## 設定一覧
+
+生成プロジェクトは `config/_serv.yml` を使用します。アプリで設定を取り込む入口は `serv.createApp(options)` です。
+
+設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/serv.md)（中国語）を参照してください。
+
 ## 機能
 
-### 用途・入力・出力
+使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/serv.md)（中国語）を参照してください。
 
-呼出し断片は本ページで初期化したサービスを使います。変数はアプリ側で用意する要求・Schema・リソース定義・設定を表します。初期化と失敗処理は各機能の例を参照し、HaiResult.success の確認と非同期処理の await を行ってください。
+- `createApp` / `listen` / `toFetch` / `cors` / `storageAssets` — HTTP アプリの組み立て、実行環境への適合、静的ファイルの配信
+- `implement` / `validateInputOrFail` / `generateSpec` / `m` — 型付きエンドポイント、入力検証、OpenAPI 生成
+- `parseRequestContext` / `buildAuthContextFactory` / `resolveRequestLocale` / `createRuntimeSecurityPolicy` — リクエスト情報、認証、言語、アクセスポリシーの解決
+- `@h-ai/serv/features/*` — IAM、ストレージ、AI、フィードバック API の組み込み
 
-| 入口                               | 用途                 | 入力                                                                    | 出力                                                                 | 呼出し断片                                                                                               |
-| ---------------------------------- | -------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `serv.createApp`                   | API アプリを組立て   | `contract, procedures, http?, iam?, middlewares?, transport?`           | `ServHttpApp (fetch/request)`                                        | `serv.createApp({ contract, procedures })`                                                               |
-| `serv.listen`                      | Node リスナーを起動  | `app, { host?, port?, onClose?, onListening? }`                         | `ServNodeServer { server, address, close(): Promise<void> }`         | `serv.listen(app, { host: "127.0.0.1", port: 3000 })`                                                    |
-| `serv.toFetch`                     | Fetch ホストへ接続   | `ServHttpApp`                                                           | `(Request) => Promise<Response>`                                     | `serv.toFetch(app)`                                                                                      |
-| `serv.implement`                   | 領域ルートを実装     | `typed contract`                                                        | `ServImplementer; context/route/auth/permission/role/handle/build`   | `serv.implement(contract)`                                                                               |
-| `serv.parseRequestContext`         | 要求情報を解析       | `{ request, platform? }`                                                | `ServContext with requestId/locale/accessToken; no verified session` | `serv.parseRequestContext({ request })`                                                                  |
-| `serv.buildAuthContextFactory`     | 認証済み文脈を作成   | `(accessToken) => Promise<HaiResult<ServSession>>`                      | `CreateServContext; invalid credentials leave session absent`        | `serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))`                                     |
-| `serv.cors`                        | CORS を制限          | `{ origin?, methods?, allowedHeaders?, exposedHeaders?, credentials? }` | `ServMiddleware`                                                     | `serv.cors({ origin: "https://app.example.com", credentials: true })`                                    |
-| `serv.createRuntimeSecurityPolicy` | 実行時の安全方針     | `{ environment, corsOrigin, nativeOrigins? }`                           | `allowOrigin, secureRefreshCookie, exposeApiDocs`                    | `serv.createRuntimeSecurityPolicy({ environment: "production", corsOrigin: "https://app.example.com" })` |
-| `serv.storageAssets`               | 認可済み読取専用資源 | `ServStorageAssetsConfig with reader/key/MIME policy`                   | `GET/HEAD middleware with ETag`                                      | `serv.storageAssets(assetOptions)`                                                                       |
-| `serv.generateSpec`                | OpenAPI を生成       | `contract, { title?, version?, description?, apiPrefix? }`              | `Promise<OpenAPI.Document>`                                          | `serv.generateSpec(contract, { title: "Orders", version: "1.0.0" })`                                     |
-| `serv.validateInputOrFail`         | 業務入力を検証       | `Zod schema, input, locale?`                                            | `HaiResult<z.infer<Schema>>; failure contains safe field errors`     | `serv.validateInputOrFail(InputSchema, input, context.locale)`                                           |
-| `serv.resolveRequestLocale`        | 要求言語を解決       | `Headers`                                                               | `normalized supported locale`                                        | `serv.resolveRequestLocale(request.headers)`                                                             |
-| `serv.m`                           | モジュール文言を翻訳 | `message key, { locale?, ...messageOptions }`                           | `string`                                                             | `serv.m("serv_errorForbidden", { locale: "zh-CN" })`                                                     |
-| `serv.WILDCARD_PERMISSION`         | 全権限定数           | `none`                                                                  | `string constant; only use in trusted permission policy`             | `serv.WILDCARD_PERMISSION`                                                                               |
-| `serv.WILDCARD_ROLE`               | 全ロール定数         | `none`                                                                  | `string constant; does not authorize arbitrary requests`             | `serv.WILDCARD_ROLE`                                                                                     |
+## データ構造
 
-- `serv.createApp(...)` → `serv.listen(app, { port })` で起動。アプリは Hono を import する必要がありません。
-- フラットな API：`serv.createApp / serv.implement / serv.listen / serv.toFetch / serv.generateSpec / ...`。
-- procedure のチェーン：`implement().context().route().auth/permission/role().handle().build()`。
-- 独自パイプライン：`createApp({ middlewares })` で HTTP middleware を接続し、context ファクトリーでリクエストごとの値を注入。
-- 読み取り専用 Storage：`serv.storageAssets(...)` で安全な key、MIME 許可リスト、GET/HEAD、ETag、キャッシュヘッダーを管理。
-- 既定の機能 procedures：`createIamProcedures()`、`createStorageProcedures()`、`createAiProcedures()`。
-- `build()` は通常の router を同期的に返すため、標準 feature のネストした procedures を直接選択できます。接続する contract と procedures を一致させ、未選択の入口は公開しません。
-- 存在しないルートは翻訳された HaiResult JSON と HTTP 404 を返します。通信暗号化でも 404 を保ち、非 JSON 応答による 500 にしません。
-- 安全な応答ヘッダー・ヘルスチェックを内蔵し、OpenAPI JSON・Scalar 文書・
-- 任意の通信暗号化：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` で鍵交換とリクエスト・レスポンスの暗号化を自動接続。
-- 任意の音声入口：`serv.createApp({ audio: { ai, verifyTicket, authorize } })` が共通 WebSocket を接続します。接続直後に単回 ticket で認証（`{ session, grant? }`、独立した事前認証 timeout）。各フレームを Zod と厳密な状態機械で検証し、入力・キュー・送信バッファの背圧と連鎖キャンセルを管理します。サーバーの認可処理で操作・モデル・声・割当量・同時使用数を確認します。
+モジュール独自のデータベーステーブルは作成しません。
 
-> ライフサイクル：`@h-ai/serv` は状態を持たない HTTP App の構成機能で、`init()` / `close()` は不要です。app 作成前に `iam` / `storage` / `ai` / `crypto` などを初期化し、`serv.listen(..., { onClose })` で逆順に解放します。`serv.createApp()` は transport 管理器の生成失敗など起動設定のエラーを即座に throw します。 onClose は SIGINT/SIGTERM 用の終了コールバックです。返された handle.close の直接呼出しは HTTP リスナーと音声接続を閉じ、業務モジュールはホストが別途逆順に解放します。
-
-開始直後の close は未完了のバインドを取り消し、繰り返しの close は同じ結果を共有します。アドレス使用中など実際のリッスン失敗は正常終了として扱わず、close の拒否理由として保持します。
-
-### host / port 設定
-
-host/port は `config/_serv.yml` の `server` で指定し、`HOST` / `PORT` 環境変数 > 設定ファイル > `127.0.0.1:3000` の順です。既定の `127.0.0.1` はローカル専用で、コンテナー外に公開する場合は `0.0.0.0` にします：
-
-```yaml
-# config/_serv.yml
-server:
-  host: 127.0.0.1
-  port: 3000
-```
-
-解決済みの `server` を `serv.listen` に渡します。`host` / `port` の明示的な指定で上書きすることもできます。
-
-### 標準 fetch シグネチャのアダプター
-
-toFetch は Node 互換ホストやテスト注入用の標準 fetch シグネチャです。パッケージルートは Node API に依存しており、それらを持たない Workers・Deno・エッジへの対応を保証しません。
-
-```ts
-const handler = serv.toFetch(app)
-export default { fetch: handler }
-```
-
-Node `serv.listen()` は socket の接続元を自動で渡し、既定では転送ヘッダーを無視します。`http.trustedProxies` の IP/CIDR のみ信頼し、XFF を右から左へ調べ、最初の非信頼アドレスで停止します。その左側は無視します。信頼チェーンが不正・長すぎる場合は IP 未定義となり、代理をクライアントとして扱いません。代理は転送ヘッダーを清掃・追加してください。Fetch は `app.fetch(request, { remoteAddress: platformPeerAddress })` で信頼できる接続元を渡します。メタデータなしは IP 未定義です。任意のヘッダーをコピーしないでください。独自 `createContext(input)` は input 全体を再利用し、解決済み `input.ip` を保持します。
-
-toFetch は Request・URL・文字列を標準 Request(input, init) で構築し、入力フィールドを変更せず method・headers・body・signal などを上書きします。消費済み・ロック中の本文や不正な本文指定は返却 Promise を reject します。派発前の取消しは handler を呼ばず、実行中の取消しは呼出側の待機を終了し、有効な signal をアプリへ伝えます。終了・失敗・取消しで listener を外し、取消し後に遅れて返る本文も cancel します。開始済みの外部効果は巻き戻せず、Response 返却後のストリーム終了はアプリが request.signal を消費して管理します。
-
-### Audio WebSocket：ticket とサーバー認可
-
-音声接続には短期・単回 ticket が必要です。認証済み HTTP endpoint で発行（推奨：`iam.ticket.issue`）し、`verifyTicket` でアトミックに消費します（推奨：`iam.ticket.consume`）。接続直後に独立 timeout で認証し、認証前に業務フレームを処理しません。返された `ServSession` と任意の `grant` を保存してから `authorize` で有料パラメーターを確認します：
-
-```ts
-const app = serv.createApp({
-  contract,
-  procedures,
-  iam,
-  audio: {
-    ai,
-    verifyTicket: consumeAudioTicket, // → HaiResult<{ session, grant? }>
-    authorize: async (session, request, grant) => authorizeAudioRequest(session, request, grant),
-    onSessionEnd: async (session, request) => releaseAudioConcurrency(session.userId, request.operation),
-  },
-})
-```
-
-- `verifyTicket(ticket)` は用途・期限を確認し、1 回のみ成功させ、`HaiResult<AudioTicketVerification>`（`{ session, grant? }`）を返します。`grant` は ticket に固定した操作・モデル・セッションを保持。
-- `authorize(session, request, grant)` で IAM 権限、モデル・声の許可リスト、Persona、割当量、同時実行枠を確認し、`grant` と `start` の整合性を検証します。返された `AuthorizedAudioRequest` のみを `ai.audio` に渡します。
-- `authorize` がなければクライアントの `model`・`voice`・`instruction` は無視し、サーバー既定値（または `grant.model`）を使用します。`grant.operation` と異なる `start` は拒否。
-- 各フレームを Zod と厳密な状態機械で検証します。認識は音声、合成はテキストのみ、`start`/`done` は各 1 回、`segmentId` はセッション内で一意です。入力・滞留メッセージ・送信バッファを制限し、超過・キャンセル時はドメインエラーで閉じて上流も中止します。
-- 調整項目：`preAuthTimeoutMs`（既定 5000）、`maxPendingMessages`（256）、`maxSendBufferBytes`（8 MiB）、`maxMessageBytes` / `maxBufferedBytes` / `maxTextBytes` / `maxSessionMs`。
-- `onSessionEnd` は成功・失敗・切断後に最大 1 回呼び、同時実行枠の解放に使用。
-- ブラウザーの `createAudioClient({ url, getTicket })` は単回 `ticket` のみを URL に付けます。`getTicket(request)` は `operation` / `model` の概要から今回の操作専用 ticket を発行できます。通常の IAM access token は渡さないでください。
-
-### 通信暗号化（`@h-ai/crypto` と共通）
-
-serv 独自の暗号化ファクトリーはなく、`crypto.transport` から管理器を作成します。利用側はトップレベルの `crypto` のみを渡します：
-
-```ts
-import { cache } from '@h-ai/cache'
-import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
-import { serv } from '@h-ai/serv'
-
-await crypto.init()
-const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
-if (!ring.success)
-  throw new Error(ring.error.message)
-const serverKeyRing = ring.data
-await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
-
-const app = serv.createApp({
-  contract,
-  procedures,
-  http: { apiPrefix: '/api/v1' },
-  transport: {
-    crypto,
-    serverKeyRing,
-    // keyExchangePath 默认 '/_hai/key-exchange'，最终端点为 '/api/v1/_hai/key-exchange'
-    // excludePaths: ['/health'],
-    keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
-  },
-})
-```
-
-クライアントは `@h-ai/api-client` を使います：
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-
-await apiClient.init({
-  baseUrl: 'https://api.example.com/api/v1',
-  transport: { crypto },
-})
-```
-
-`@h-ai/core` で `config/_serv.yml` と `ServConfigSchema` を使う場合、transport もまとめて設定できます：
-
-```yaml
-# config/_serv.yml
-http:
-  trustedProxies: auto
-  access: false
-  apiPrefix: /api/v1
-
-transport:
-  keyExchangePath: /_hai/key-exchange
-  excludePaths:
-    - /health
-    - /ready
-    - /openapi.json
-    - /docs
-    - /_hai/scalar.js
-```
-
-```ts
-const servConfig = core.config.getOrThrow<import('@h-ai/serv').ServConfig>('serv')
-
-const app = serv.createApp({
-  contract,
-  procedures,
-  http: servConfig.http,
-  middlewares: [
-    {
-      middleware: serv.cors({
-        origin: servConfig.cors.origin,
-        credentials: servConfig.cors.credentials,
-        allowedHeaders: [...servConfig.cors.allowedHeaders],
-        exposedHeaders: [...servConfig.cors.exposedHeaders],
-      }),
-    }
-  ],
-  transport: servConfig.transport === false
-    ? undefined
-    : {
-        crypto,
-        serverKeyRing,
-        keyStore,
-        keyExchangePath: servConfig.transport.keyExchangePath,
-        excludePaths: [...servConfig.transport.excludePaths],
-      },
-})
-```
-
-> サーバーには同じ管理済み `serverKeyRing` と共有 `keyStore`（Redis または共有 DB）を明示的に渡します。クライアント公開鍵の共有だけではノード間で復号できません。暗黙のプロセス鍵・メモリー registry はなく、開発・テストでは `createInMemoryKeyStore(capacity)` を明示します。再起動後は同じ鍵環を読み込み、sticky session は不要です。
-
-> **安全方針**：`transport` 有効時は `excludePaths` と鍵交換以外で有効な `X-Client-Id` が必要です。不足・未知の clientId は 400、暗号化不能・非 JSON 応答・上限超過はエラーになり、平文の業務データは渡しません。
-
-転送は認証済み v2 封装を使い、署名と MAC を確認してから復号し、方法・パス・時刻・応答状態を束縛します。共有 registry が nonce を原子的に消費します。TLS・信頼する代理・業務認可・冪等性はホストの責任です。独自 CORS 入口は X-Hai-Transport を許可・公開してください。詳細は[転送プロトコル](../crypto/TRANSPORT-PROTOCOL.md)を参照してください。
-
-`transport.maxPlaintextBytes` でリクエストとレスポンスの JSON 平文容量を共通設定します。単位は UTF-8 バイト、既定値は 1 MiB、有効範囲は 1 KiB～64 MiB の整数です。クライアントは鍵交換で上限を取得し、`resolveTransportBodyLimits()` が暗号文とプロキシ容量（平文の 2 倍 + 32 KiB）を算出します。鍵交換、公開鍵、認証ヘッダー、防リプレイ制約は独立です。超過時は元ストリームを停止して reader を解放します。要求は 413、応答は暗号化された 500 容量エラーとなり、`TransportBodyTooLargeError` / `hai:crypto:070` で識別できます。 [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
-
-通常業務は `transport.maxPlaintextBytes`（auto/省略は 1 MiB）を維持します。Feedback の受理・証拠・添付・ZIP ダウンロードは `routePlaintextBytes` と `feedback.budget.maxTransportBytes` で別途宣言します。`*` は完全な1パス区間のみ一致し、ホストの明示値が優先です。ハンドシェイク、adapter-node、プロキシは経路の最大値を使用します。HTTP アダプターは個別宣言された 1 MiB 超の資料経路を最大2件、通常業務を別枠で16件まで許可し、応答完了・失敗時に解放します。混雑は503 / `hai:crypto:072` を返し、業務書込は自動再送しません。
-
-Serv/Kit は要求の結合、署名、MAC を検証した後、時刻の許容範囲を超えた要求に暗号化した HTTP 400 を返します。クライアントは `TransportTimeError`（`hai:crypto:071`）をスローし、検証時のサーバー UTC 時刻を表示して、自動時刻同期を有効にするか手動で時刻を設定してから再読み込みするよう案内します。`serverTime` は Unix ミリ秒です。`api-client` は `VALIDATION_FAILED` に変換し、`cause.transportCode` と `cause.serverTime` を保持します。
-
-### Token 認証（`iam` / `refreshCookie`）
-
-`serv.createApp` にトップレベルの `iam` を渡すと、次を自動構成します：
-
-- **access token 検証**：各リクエストで `iam.auth.verifyToken` を呼び `context.session` を設定（キャッシュなし）。
-- **refresh token の更新**：`refreshCookie` 有効時、`iam.session.refresh` を httpOnly cookie 更新処理に使用。
-
-**context の優先順位**：明示的 `createContext` > `verifyToken` > `iam.auth.verifyToken` > メタデータのみの既定解析。
-
-```ts
-// 推荐：传入 iam，一行打开认证与 Cookie 刷新
-const app = serv.createApp({
-  contract,
-  procedures,
-  iam,
-  refreshCookie: {}, // 可选：启用 httpOnly cookie 刷新路径
-})
-
-// 逃脱口 1：不使用 @h-ai/iam，自定义 verifyToken
-const app = serv.createApp({
-  contract,
-  procedures,
-  verifyToken: token => myAuthService.verify(token),
-})
-
-// 逃脱口 2（高级）：多租户等额外字段 — 完全接管上下文构造
-const app = serv.createApp({
-  contract,
-  procedures,
-  createContext: async ({ request }) => {
-    const base = serv.parseRequestContext({ request })
-    // 手动填充 session（serv 不再自动填充）
-    const result = await iam.auth.verifyToken(base.accessToken ?? '')
-    return {
-      ...base,
-      session: result.success ? result.data : undefined,
-      tenantId: request.headers.get('x-tenant') ?? null,
-    }
-  },
-})
-```
-
-標準 `auth.logout` は input.accessToken または Authorization Bearer の完全な Token を取り消し、有効な access 認証を前提にしません。userId による権限や取消対象は受け付けません。Token 不足は失敗、不存在 Token は冪等成功です。共有ストア障害は失敗 HaiResult を保ち、Cookie middleware は成功時だけ refresh Cookie を消去します。通常 procedure の HTTP 200 / HaiResult 契約は同じなので、クライアントは HTTP status だけでなく success を確認します。
-
-### 独自 procedure（認証 + 権限）
-
-```ts
-const procedures = serv
-  .implement(myContract)
-  .context<ServContext>()
-  .route('users.update')
-  .permission('users.write')
-  .handle(async ({ input, context }) => {
-    return await userService.update(input.id, input)
-  })
-  .build()
-```
-
-### 高度なパイプライン（HTTP middleware + context + route guard）
-
-`@h-ai/serv` のパイプラインは 3 層で、それぞれの拡張入口があります：
-
-1. **HTTP middleware 層**：`serv.createApp({ middlewares })` で注入。
-2. **context 層**：`verifyToken` / `createContext` / `serv.buildAuthContextFactory()` で拡張。
-3. **route guard 層**：`.auth()` / `.permission()` / `.role()` で認証・認可を宣言。
-
-#### 1) 独自 HTTP middleware
-
-ログ・trace・レート制限・CORS・テナントヘッダーなどの **HTTP 共通処理**、または JSON/oRPC contract に適さない WebSocket・ファイル・バイナリー endpoint には `middlewares` を使います。一般的な CORS は `serv.cors(...)` を再利用できます：
-
-```ts
-import type { ServMiddleware } from '@h-ai/serv'
-import { serv } from '@h-ai/serv'
-
-const requestMetrics: ServMiddleware = async (c, next) => {
-  const startedAt = Date.now()
-  await next()
-  c.header('x-response-time-ms', String(Date.now() - startedAt))
-}
-
-const app = serv.createApp({
-  contract,
-  procedures,
-  http: { apiPrefix: '/api/v1' },
-  middlewares: [
-    {
-      middleware: serv.cors({
-        origin: origin => origin === 'https://app.example.com',
-        credentials: true,
-        exposedHeaders: ['X-Encrypted', 'X-Request-Id'],
-      }),
-    },
-    { middleware: requestMetrics }, // 默认挂到 '*'
-    {
-      path: '/api/v1/*',
-      middleware: async (c, next) => {
-        if (!c.req.header('x-tenant-id'))
-          return c.text('Missing x-tenant-id', 400)
-        await next()
-      },
-    },
-    {
-      path: '/assets/*',
-      middleware: serv.storageAssets({
-        storage,
-        pathPrefix: '/assets/',
-        keyPattern: /^public\/[\w-]+\.png$/,
-        allowedContentTypes: ['image/png'],
-        cacheControl: 'public, max-age=31536000, immutable',
-        crossOriginResourcePolicy: 'cross-origin',
-      }),
-    },
-  ],
-})
-```
-
-実行順は固定です：
-
-1. 組み込み `securityHeaders`。
-2. 組み込み CORS 応答処理；鍵交換と preflight のアクセス判定。
-3. 組み込み `transport`（有効時）と各リクエストのアクセス判定。
-4. 独自の `middlewares`。
-5. health / refresh-cookie / OpenAPI / docs / oRPC routes
-
-補足：
-
-- `middlewares` は配列順に登録。
-- `path` 省略時は `'*'`。
-- 通常の middleware は復号とアクセス判定の後に実行し、途中の応答もポリシーと応答暗号化の対象です。バイナリー endpoint は `transport.excludePaths` に明記しますが、アクセス判定は省略されません。
-- 公開読み取り専用ファイルは `serv.storageAssets(...)` を優先。key/MIME 許可リスト・キャッシュ・CORS はアプリが指定し、アバターなどの業務概念は内蔵しません。
-- 非公開リソース・Range ダウンロード・動的認可は独自 middleware/procedure を使い、公開 helper は使いません。
-- この段階の `c.req.json()` は復号後の本文を読みます。組み込み `serv.cors(...)` の preflight もアクセス判定の対象です。
-- ブラウザーが `X-Encrypted` などを読む場合は `serv.cors({ exposedHeaders: [...] })` で明示的に公開。
-- この層は HTTP middleware context を操作し、`HaiResult` ではなく **HTTP Response** を返します。
-
-#### 2) 独自 context パイプライン
-
-`Bearer token -> session` を再利用し、テナント・workspace・送信元などの項目を追加する場合は、
-`serv.buildAuthContextFactory()` で独自の `createContext` を構成してください：
-
-```ts
-const baseContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
-
-const app = serv.createApp({
-  contract,
-  procedures,
-  createContext: async (input) => {
-    const context = await baseContext(input)
-    return {
-      ...context,
-      tenantId: input.request.headers.get('x-tenant-id') ?? null,
-    }
-  },
-})
-```
-
-拡張方法の選び方：
-
-- Token 検証のみを変更：`verifyToken`。
-- 既定の認証 context に項目を追加：`buildAuthContextFactory(...) + createContext`。
-- context 生成全体を置換：直接 `createContext`。
-
-#### 3) Route guard
-
-公開 procedure は `.route(path, handler)` を使い、ガードが必要な場合は次を使います：
-`.route(path).auth/permission/role().handle(handler)`：
-
-```ts
-const procedures = serv
-  .implement(widgetContract)
-  .context<ServContext>()
-  .route('widgets.list', ({ input }) => widgetService.list(input))
-  .route('widgets.create')
-  .permission('widgets.write')
-  .role('editor')
-  .handle(({ input, context }) => {
-    // guard 通过后 session 在类型上已是非空，不需要 `!`。
-    return widgetService.create(context.session.userId, input)
-  })
-  .build()
-```
-
-制約：
-
-- `.permission()` と `.role()` は認証も要求します。失敗時の HaiResult の `error.httpStatus` は未認証で 401、権限不足で 403 ですが、通常の procedure の HTTP 応答は既定で 200 です。
-- 同じルートの複数 permission/role はすべて満たす必要があります。`serv.WILDCARD_PERMISSION` / `serv.WILDCARD_ROLE` は各分類を許可。
-- 権限は IAM/Kit と同じコロン接頭辞にも対応します。`users:*` は `users:read` に一致し、`users2:read` やドット区切りの権限には一致しません。
-- 未処理の handler 例外は INTERNAL_ERROR の HaiResult に変換。予期する業務失敗は直接 `err(...)` を返します。
-- path・input・output は contract から推論。重複・未知のパスを拒否し、完全に実装するまで `.build()` は呼べません。
-
-公開 API の境界：
-
-- `src/pipelines/*` は内部の既定実装で、公開サブパス API ではありません。
-- アプリ向けの安定した入口はルートの `@h-ai/serv`。
-- `securityHeaders` / `buildHaiErrorBody` などの内部 helper は独立サブパスとして公開しません。
-
-### httpOnly Cookie 認証（本番推奨）
-
-httpOnly cookie モードは refresh token をサーバー管理の Cookie に保存し、ブラウザー JS から読めなくして XSS による漏洩を抑えます。
-
-2 種類の Token の役割：
-
-- `accessToken`：短期認証情報。クライアントのメモリーに保持し、`Authorization: Bearer <token>` で送信。
-  `serv.parseRequestContext()` / `extractBearerToken()` が読み取り、`buildAuthContextFactory()` が検証します。
-- `refreshToken`：長期認証情報。`refreshCookie` 有効時は JS に公開せず、httpOnly cookie にのみ保存。
-  `extractBearerToken()` はこれを**読みません**。サーバーの `/auth/refresh` のみが読み、新しい access token を発行します。
-  信頼されたネイティブクライアントは `nativeTokenTransport` で JSON body を使用でき、クライアント識別と Origin の両方を検証します。
-
-**処理の流れ：**
-
-1. ブラウザーログイン：サーバーが `Set-Cookie: hai_refresh_token=...;HttpOnly` を設定し、JSON から `refreshToken` を除去。
-2. access token をクライアントのメモリーに保持し、永続化しません。
-3. access token の期限切れで、ブラウザーが Cookie 付きで `/auth/refresh` を呼びます。
-4. サーバーが Cookie を読み `onRefresh` を呼び、新 access token と更新 Cookie を返します。本文に refresh token は公開しません。
-
-`nativeTokenTransport.isRequest` に一致するネイティブクライアントでは、ログイン・登録・更新の応答に更新後の
-`refreshToken` を残します。更新リクエストは body の `{ refreshToken }` を読み、全体でブラウザー Cookie を使いません。
-
-**サーバー設定：**
-
-```ts
-// 服务端：api-service/src/app.ts
-const app = serv.createApp({
-  contract,
-  procedures,
-  http: { apiPrefix: '/api/v1' },
-  iam, // 顶层 iam 同时驱动 verifyToken 与 refresh
-  refreshCookie: {
-    // cookieName: 'hai_refresh_token', // 默认
-    // maxAge: 30 * 24 * 3600,          // 默认 30 天
-    // secure: true,                    // NODE_ENV 或 HAI_CORE_ENV 为 production 时默认开启
-    // onRefresh: customFn,             // 可覆盖 iam.session.refresh。
-    nativeTokenTransport: {
-      // 必须 fail-closed：同时校验平台标识与允许的原生 Origin。
-      isRequest: request =>
-        request.headers.get('x-client-platform') === 'capacitor'
-        && security.isNativeOrigin(request.headers.get('origin') ?? ''),
-    },
-  },
-  // ✅ 无需再传 verifyToken，iam.auth.verifyToken 自动用于填充 context.session
-})
-```
-
-**クライアント設定（`@h-ai/api-client` と連携）：**
-
-```ts
-// 默认存储即 httpOnly cookie，refreshPath 默认 /auth/refresh，无需额外配置。
-await apiClient.init({
-  baseUrl: 'https://api.example.com/api/v1',
-  auth: {},
-})
-```
-
-> リフレッシュ Cookie には `HttpOnly` と `SameSite=Strict` が付き、パスは `{apiPrefix}/auth/refresh` に限定されます。本番では既定で `Secure` も付きます。
-
-更新失敗にも公開エラー処理を適用します。5xx と欠落・不正なステータスは安全なメッセージと traceId を返し、内部原因はサーバーログだけに残します。更新 Cookie を消去するのは認証失効の 401 のみです。レート制限やバックエンド障害では再試行できるよう資格情報を保持します。自動監査にも同じ正規化済み失敗ステータスを使います。
-
-### API 一覧
-
-- `serv.createApp(options)`：独自 middleware、ヘルスチェック、OpenAPI、任意の文書を備えた HTTP App を作成。
-- `serv.parseRequestContext({ request })`：Bearer token + requestId を抽出し、session は設定しません。
-- `serv.listen(app, options)`：Node.js HTTP サービスを起動し、`{ server, address, close }` を返す。
-  返された `close()` は冪等です。新規接続を止め、Audio WebSocket を閉じ、応答しない音声接続を 1 秒後に強制終了して HTTP 終了を待ちます。直接呼出しでもプロセスのシグナルリスナーを解除します。業務モジュールは引き続きホストが逆順に解放します。
-- `serv.toFetch(app)`：標準の `fetch(Request)` handler に変換。
-- `serv.generateSpec(contract, options)`：contract から OpenAPI 3.1 spec を生成。
-- `serv.storageAssets(config)`：key/MIME 許可リスト、GET/HEAD、ETag 付きの読み取り専用 Storage middleware。
-- `serv.implement(contract)`：チェーン形式の contract 実装器を作成。
-- `.context<ServContext>()`：procedure のリクエスト context を宣言。
-- `.route(path, handler)`：公開 procedure を登録。
-- `.route(path).auth/permission/role().handle(handler)`：認証・認可付き procedure を登録。
-- `.build()`：全 contract procedure の実装後に router を構築。
-- `serv.validateInputOrFail(zodSchema, input, locale)`：procedure 内の追加 Zod 検証。失敗時はローカライズ済み `HaiResult` + `ValidationFormError[]`。
-- `serv.resolveRequestLocale(headers)`：`x-hai-locale` / `Accept-Language` から locale を取得・正規化。
-- `serv.m(key, options)`：本モジュールのメッセージを読み、`options.locale` で呼び出しごとにローカライズ。
-
-その他のルート型・名前付きエクスポート：
-
-- `ServConfigSchema`：`core.config.validate('serv', ServConfigSchema)` で `config/_serv.yml` を検証。
-- HTTP App 抽象：`serv.createApp()` は公開 `fetch/request` 機能を持つオブジェクトを返し、内部の Hono 使用はアプリに影響しません。
-- `ServMiddlewareMount`：`createApp({ middlewares })` の要素型（`{ path?, middleware }`）。
-- `ServMiddleware` / `ServProcedureHandler`：独自パイプライン用の共通型。
-- `NativeRefreshTokenTransportConfig` / `ServStorageAssetsConfig`：ネイティブ Token 経路・読み取り専用リソース設定。
-
-> 通信暗号化は `createApp` の設定機能で、内部で `crypto.transport` に委譲します。`serv.xxx` の独立 API ではありません。
-
-### リクエストごとのアクセス制御
-
-ルールの `encryption` は `required` / `disabled` を指定でき、省略時はホストに従います。disabled は通常の HTTPS データを受け付けますが、IP・時刻・認証は検証し、暗号化信封には 400 を返します。required は `excludePaths` より優先し、transport 未設定では App 作成に失敗します。重複するパスとメソッドの反対指定は装配時に拒否し、宣言順の上書きや自動降格は行いません。
-
-`http.access` の既定値は `false` です。外部 API だけを制限する場合、`_serv.yml` の `http.access.rules` に `{ id: 'external', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.0/24'] }` などを設定します。`http.access.global` はヘルスチェックを含むホストの全要求を制限します。全体条件と一致するすべてのルールを満たす必要があります。時区は既定 UTC、空のリストは対象の制限なしです。既存セッションも毎回判定し、IAM `loginAccess` はログイン時だけを制限します。
-
-大きな設定には `http.access: { file: './config/security/request-access.yml' }` を使用します。サービスの作業ディレクトリを基準に、App 生成時だけ最大 1 MiB を読みます。不正な設定では起動を停止し、変更時は App を作り直します。拒否は HTTP 403、`hai:common:104` で、通常の暗号化要求は応答も暗号化します。ポリシー本文をログに複製せず、ルール ID・拒否理由・要求 ID で調査します。
-
-`http.trustedProxies` は既定 `auto` です。通常のホストでは転送ヘッダーを無視し、管理対象 Compose の非公開バックエンド構成だけでコンテナのネットワークを採用します。独自の代理は実際の IP/CIDR を指定し、`[]` は信頼を無効化します。代理はヘッダーを清掃し、Node・Fetch は信頼できる接続元情報を提供します。独立ファイル・外側の代理・復旧は[リクエスト制御手引き](../../docs/usage/configuration/request-access.md)を参照してください。
-
-### 設定による認証画面
-
-規約は設定の userAgreementMarkdown/privacyPolicyMarkdown または URL を使用できます。同じ規約は Markdown 本文を優先して安全な Modal で描画します。
-
-createIamProcedures({ iam }) は公開設定、LDAP/OTP/パスワード、登録、復旧を直接実装します。LDAP も既存の Cookie/ネイティブ Token 方針を使用し、自助登録が無効でも管理者のユーザー作成は権限検証の下で利用できます。
-
-[完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
-
-### リクエスト言語の分離
-
-Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleRequest())` で囲みます。SvelteKit は `kit.i18n.runWithLocale(locale, () => resolve(event))` を使えます。serv はリクエストヘッダーから自動設定します。非同期の子処理も言語を継承し、明示的な `MessageOptions.locale`、リクエスト言語、起動時の既定値の順で優先します。コンテキスト内の `setGlobalLocale` はそのリクエストだけを変更します。コンテキスト外の設定は起動時に限定し、リクエスト hook から呼びません。
-
-ブラウザーはアプリ全体の `setGlobalLocale` / `createLocaleStore` を使います。SSR の UI store 初期化と setter は自身の状態のみ変更し、メッセージはリクエストコンテキストを参照します。`runWithLocale` は Node 入口専用です。
-
-### 入力制約と HTTP 機能
-
-キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../storage/README.md#存储输入约束与跨端能力)を参照してください。
-
-### オプションのフィードバックサービスと信頼範囲
-
-`@h-ai/serv/features/feedback` の `createFeedbackProcedures` で `apiContract.feedback` を接続します。通常のランタイム入口は feedback サービスを読み込みません。ホストで reldb/storage/reach/feedback を初期化し、検証済みセッションと配置ポリシーから範囲を作ります。null またはユーザー不一致は拒否し、ドメイン側も範囲と権限を検証します。
-
-ヘルスチェック・404・中間件の早期応答を含む全 HTTP 応答に上限付き X-Request-Id を付けます。通常の業務ログでは既存 createContext の省略可能な scopeId を信頼できるホストから設定します。クライアントのヘッダーからは取得しません。HTTP 境界で古い認証情報を消去し、認証後の非同期処理に現在の ID とユーザーを伝播します。
-
-```ts
-import { apiContract } from '@h-ai/api-contract'
-import { feedback } from '@h-ai/feedback'
-import { iam } from '@h-ai/iam'
-import { serv } from '@h-ai/serv'
-import { createFeedbackProcedures } from '@h-ai/serv/features/feedback'
-
-const contract = apiContract.create({ feedback: apiContract.feedback })
-const authenticate = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
-const procedures = {
-  feedback: createFeedbackProcedures({
-    feedback,
-    resolveContext: context => context.scopeId
-      ? { scopeId: context.scopeId, userId: context.session.userId, permissions: context.session.permissions }
-      : null,
-  }),
-}
-const app = serv.createApp({
-  contract,
-  procedures,
-  createContext: async input => ({
-    ...await authenticate(input),
-    scopeId: 'configured-product'
-  }),
-})
-```
-
-### 任意の対話チャレンジ
-
-標準 IAM procedure は operation を受けて公開 ALTCHA チャレンジを返す POST /auth/captcha を含みます。有効時はパスワード/OTP/LDAP、登録、通知要求、匿名の旧パスワード更新で IAM が単用証明を検証し、captcha を保持してクライアント判断に依存しません。
-
-方針・既定値・復旧範囲は次を参照： [IAM](../iam/README.ja.md)。
-
-### ページ離脱時のセッション方針
-
-`session.endOnPageHide` の既定値は `false` です。ホストは `actions.bindPageExit({ enabled: config.session.endOnPageHide })` を呼び、破棄時に戻り値の解除関数を実行します。標準 admin/H5/fullstack テンプレートは接続済みです。BFCache 以外の `pagehide`（再読み込み、文書全体の移動を含む）で POST `/auth/session/close` を最善努力で送信し、保持する access と関連 refresh を失効します。既存の CSRF/暗号化転送を使用し、`keepalive` を付け、自動更新しません。古い応答が新しいログインを上書きしないよう Cookie/ローカル資格情報を消去しません。明示的ログアウトは通常どおり失効と消去を行います。ブラウザーが離脱要求を送らない場合もあるため、業務に応じてサーバーの `idleTimeout`/`absoluteTimeout` を併用してください。閉じた瞬間の失効は保証できません。
-
-## 設定
-
-### 用途に応じた設定入口
-
-| 設定入口                                               | 用途               | 入力                                                                     | 効果                                                                 | 例                                                             |
-| ------------------------------------------------------ | ------------------ | ------------------------------------------------------------------------ | -------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `server`                                               | Node リスナー      | host/port; HOST and PORT take precedence                                 | options passed to serv.listen; default 127.0.0.1:3000                | `server: { host: 127.0.0.1, port: 3000 }`                      |
-| `http.apiPrefix`                                       | API 接頭辞         | absolute validated prefix, default /api/v1                               | OpenAPI/REST mounting prefix                                         | `http: { apiPrefix: /api/v1 }`                                 |
-| `http.health`                                          | 生存と準備確認     | path, readyPath                                                          | health/readiness routes                                              | `health: { path: /health, readyPath: /ready }`                 |
-| `http.openapi / http.docs`                             | API 文書           | false or explicit path/authorization settings                            | spec/Scalar routes; production exposure controlled by host policy    | `openapi: false`                                               |
-| `http.trustedProxies / http.access`                    | 信頼する入口       | proxy list/auto and access policy                                        | trusted address and per-request entry policy                         | `trustedProxies: []`                                           |
-| `cors`                                                 | CORS 方針          | origin/nativeOrigins/credentials/allowedHeaders/exposedHeaders           | serv.cors middleware input; explicit production allowlist            | `cors: { origin: https://app.example.com, credentials: true }` |
-| `transport`                                            | 認証付き転送       | false or public paths/limits; serverKeyRing/keyStore injected separately | handshake and authenticated request/response handling                | `transport: { maxPlaintextBytes: auto }`                       |
-| `createApp.iam / refreshCookie / nativeTokenTransport` | ホスト認証の組立て | initialized IAM, secure Cookie policy and native transport rule          | trusted session/token channel; frontend receives only allowed fields | `serv.createApp({ contract, procedures, iam })`                |
-
-`@h-ai/serv` 自体は YAML を走査しません。`@h-ai/core` で `config/_serv.yml` を読み、解析結果を `serv.createApp()` に渡してください。
-
-```ts
-import { core } from '@h-ai/core'
-import { serv, ServConfigSchema } from '@h-ai/serv'
-
-core.init({ configDir: './config' })
-
-const validation = core.config.validate('serv', ServConfigSchema)
-if (!validation.success)
-  throw new Error(validation.error.message)
-
-const servConfig = core.config.getOrThrow<import('@h-ai/serv').ServConfig>('serv')
-
-const app = serv.createApp({
-  contract,
-  procedures,
-  http: servConfig.http,
-  transport: servConfig.transport === false
-    ? undefined
-    : {
-        crypto,
-        serverKeyRing,
-        keyStore,
-        keyExchangePath: servConfig.transport.keyExchangePath,
-        excludePaths: [...servConfig.transport.excludePaths],
-      },
-})
-```
-
-`config/_serv.yml` の例：
-
-```yaml
-server:
-  host: 127.0.0.1
-  port: 3000
-
-http:
-  trustedProxies: auto
-  access: false
-  apiPrefix: /api/v1
-  openapi:
-    path: /openapi.json
-  docs:
-    path: /docs
-  health:
-    path: /health
-    readyPath: /ready
-
-cors:
-  origin: https://app.example.com
-  nativeOrigins: capacitor://app.example.local,tauri://app.example.local
-  credentials: true
-  allowedHeaders:
-    - Authorization
-    - Content-Type
-    - X-Client-Id
-  exposedHeaders:
-    - X-Encrypted
-
-transport:
-  keyExchangePath: /_hai/key-exchange
-  excludePaths:
-    - /health
-    - /ready
-    - /openapi.json
-    - /docs
-    - /_hai/scalar.js
-```
-
-`server`（host/port）：`HOST` / `PORT` 環境変数 > 設定ファイル > `127.0.0.1:3000`。アプリが `servConfig.server` を `serv.listen` に渡します。
-
-`ServHttpConfigInput`：
-
-- `apiPrefix`：既定 `/api/v1`。`/somepath/api/v1` などの絶対接頭辞を指定できます。英数字・アンダースコア・ハイフン・点を使用し、末尾のスラッシュ、空区間、単独の `.`/`..`、クエリとフラグメントは拒否します。ヘルス・文書・公開ストレージのパスも同じディレクトリに別途設定します。
-- `health`：既定 `{ path: '/health', readyPath: '/ready' }`。
-- `openapi`：既定 `false`。`{ path: '/openapi.json' }` で有効化。
-- `docs`：既定 `false`。`{ path: '/docs' }` で有効化。文書ディレクトリ内の `_hai/scalar.js`（既定 `/_hai/scalar.js`）で Scalar UI を配信し、外部 CDN は不要です。スクリプトと spec の URL は相対指定です。ゲートウェイが接頭辞を保持する場合は docs/openapi も転送範囲内に配置し、接頭辞を除去する構成にも対応します。`requireAuth` は後端で検証します。
-- `cors`：origin・credentials・allowedHeaders・exposedHeaders を設定し、`serv.cors(...)` で接続。
-- `transport`：`config/_serv.yml` のトップレベル設定。`servConfig.transport` を `createApp({ transport })` に渡し、既定の鍵交換サブパスは `/_hai/key-exchange`。
-
-本番では `serv.createRuntimeSecurityPolicy(...)` で CORS・Cookie・文書の公開方針を制限してください：
-
-```ts
-const security = serv.createRuntimeSecurityPolicy({
-  environment: coreConfig.env,
-  corsOrigin: servConfig.cors.origin,
-  nativeOrigins: servConfig.cors.nativeOrigins,
-})
-
-const app = serv.createApp({
-  contract,
-  procedures,
-  http: {
-    ...servConfig.http,
-    openapi: security.exposeApiDocs ? servConfig.http.openapi : false,
-    docs: security.exposeApiDocs ? servConfig.http.docs : false,
-  },
-  iam,
-  refreshCookie: { secure: security.secureRefreshCookie },
-  middlewares: [
-    {
-      middleware: serv.cors({
-        origin: security.allowOrigin,
-        credentials: servConfig.cors.credentials,
-        allowedHeaders: [...servConfig.cors.allowedHeaders],
-        exposedHeaders: [...servConfig.cors.exposedHeaders],
-      }),
-    }
-  ],
-})
-```
-
-本番では `_serv.yml` の `cors.origin` に許可するオリジンを明示し、OpenAPI と docs は無効になります。Web と Capacitor/Tauri のオリジンは、正規化した値全体で照合します。
-
-管理されたプライベートネットワークや VPN の本番 HTTP 入口では、バックエンドのプロセス環境に `HAI_SERV_REFRESH_COOKIE_SECURE=false` を設定できます。再起動してログインし直すと、ログイン応答と更新応答の Cookie から `Secure` が外れ、HTTP でリフレッシュ認証情報が平文で送信されます。`true` は `Secure` を強制し、空欄や未対応の値では環境の既定値が使われます。`serv.createApp` を直接呼ぶ場合は、明示した `refreshCookie.secure`、この環境変数、`NODE_ENV` または `HAI_CORE_ENV` による本番判定の順に適用されます。
-
-### 転送容量とモジュール予算
-
-設定 transport.maxPlaintextBytes は 1 KiB～64 MiB の明示整数または auto を受け付けます。auto/省略は undefined に正規化され、要件なしの既定は 1 MiB、フィードバックのホストでは crypto.resolveTransportBodyLimits の requiredPlaintextBytes で統合します。明示上限の不足は起動/梱包時の失敗とし、上書きしません。プロキシ・adapter-node・ハンドシェイク・実行時の予算を一致させ、添付・展開・行数の制限は独立して検証します。
-
-## エラー処理
-
-通常の procedure は認証・認可・業務の失敗と捕捉した handler 例外を HaiResult として既定で HTTP 200 で返します。`error.httpStatus` はドメインエラーのメタデータで、HTTP 応答ステータスを変更しません。クライアントは `success` と `error.code` を確認してください。未認証では `error.httpStatus=401`、DB クエリー失敗や INTERNAL_ERROR では 500 です。
-
-oRPC contract の入力検証は procedure の前に失敗すると HTTP 400 となり、ローカライズ済み body に `error.httpStatus=400` とフィールドエラーを含みます。procedure 内の `serv.validateInputOrFail` の失敗は HTTP 200 のままです。HTTP middleware、refresh-cookie、OpenAPI のアクセス確認、transport のプロトコルエラーは各自の HTTP 応答契約に従います。api-client は実際の HTTP 401、または HTTP 200 の有効な失敗 HaiResult（`success=false`、文字列の `error.code/message`、`error.httpStatus=401`）で自動更新し、成功後に一度だけ再試行します。組み込みのログイン・登録と設定された更新パスは対象外で、403/500 でも更新しません。transport 有効時は更新と再試行も同じ暗号化 fetch を使用します。
-
-- 既定 procedures はすべて `HaiResult<T>` を返し、クライアントで `result.success` を確認。
-- 認証失敗 → `HaiCommonError.UNAUTHORIZED`。`.auth()` が `context.locale` でローカライズ。
-- 認可失敗 → `HaiCommonError.FORBIDDEN`。`.permission()` / `.role()` が `context.locale` でローカライズ。
-- 未捕捉例外 → `HaiCommonError.INTERNAL_ERROR`。route 実装器が処理して `context.locale` でローカライズ。
-
-通常の業務リクエストは 3 層で処理します：
-
-1. **oRPC contract 入力検証**：procedure 前に実行。`serv.createApp()` が Zod の既定英語エラーを捕捉し、ローカライズ済み `errors[]` に変換。
-2. **procedure 内の追加検証**：DB から読む値・複数フィールド制約など Zod で表せる規則は `serv.validateInputOrFail(zodSchema, input, context.locale)` を使います。単純な業務規則は `err(...)` を返し、統一のためだけの Schema は不要です。
-3. **業務・ドメインエラー**：予期する失敗は throw せず `err(...)` を返します。**メッセージの生成層**で `serv.m(..., { locale: context.locale })` や `widgetM(..., { locale: context.locale })` など対応モジュールの getter を使います。
-
-```ts
-import { err, HaiCommonError } from '@h-ai/core'
-import { serv } from '@h-ai/serv'
-import { z } from 'zod'
-
-const CreateWidgetSchema = z.object({
-  title: z.string().min(1),
-  slug: z.string().min(3),
-})
-
-const procedures = serv
-  .implement(widgetContract)
-  .context<ServContext>()
-  .route('widgets.create')
-  .permission('widgets.write')
-  .handle(({ input, context }) => {
-    const validated = serv.validateInputOrFail(CreateWidgetSchema, input, context.locale)
-    if (!validated.success)
-      return validated
-
-    if (validated.data.slug === 'admin') {
-      return err(
-        HaiCommonError.FORBIDDEN,
-        serv.m('serv_errorForbidden', { locale: context.locale }),
-      )
-    }
-
-    return widgetService.create(validated.data)
-  })
-  .build()
-```
-
-> 下流の 4xx メッセージは秘匿処理後に公開します。5xx と欠落・不正なステータスは traceId 付きの安全な内部エラーメッセージに統一し、完全な原因はサーバーログだけに記録します。`HaiError` は `messageKey/params` を持たないため、ドメインメッセージの i18n は生成元のモジュールでリクエストの locale を受け取って行います。
-
-### エラー表示とログの関連付け
-
-ネイティブ Audio WebSocket も安全なエラー境界を使います。Provider/SDK の内部情報やスタックはマスク済みログだけに残し、クライアントには安定コード、安全な表示、traceId を返します。独自 CORS 設定でも機密操作の X-Hai-Reauthentication を許可してください。Serv/Kit の既定設定には含まれます。
-
-HTTP エラーには安全な翻訳文と追跡番号を含めます。ToastContainer は番号を既定で非表示にし、調査情報のアイコンから表示・コピーできます。同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
-
-HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
-
-audit の初期化後、procedure は検証済み主体・信頼できる接続元・要求/範囲 ID を関連付け、業務 audit.log に継承します。書込と失敗/拒否は request.execute、入力検証・プロトコル・ミドルウェア・ルート未検出の HTTP エラーは http.reject を記録します。操作・メソッド・状態・理由コードのみを記録し、要求本文・動的 URL・トークン・内部エラーは記録しません。capture.enabled で自動記録を無効化、capture.includeReads で成功読取を有効化できます。明示的業務 log は維持し、業務の完了/失敗はアプリが記録します。
+HTTP コンテキスト、セッション、静的ファイル、永続化の責務については[データ構造](../../docs/usage/data/serv.md)（中国語）を参照してください。
 
 ## 開発とテスト
 

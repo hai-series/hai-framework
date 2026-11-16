@@ -88,236 +88,25 @@ Provider failures retain the complete module error definition, including HTTP st
 
 Each template send uses one template snapshot for its subject, body and default provider, keeping concurrent edits from mixing versions. An explicit `provider` still overrides the template route.
 
+## Configuration Reference
+
+Generated projects use `config/_reach.yml`, with `reach.init(config)` as the application configuration entry point.
+
+See the [configuration reference](../../docs/usage/configuration/reach.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+
 ## Features
 
-Template sends need only `template`, `to` and `vars`; the provider comes from the template. An explicit `provider` still overrides it. Direct sends require a provider; omitting it returns a failed HaiResult.
+See the [feature reference](../../docs/usage/function/reach.md) in Chinese for examples, inputs, outputs, error handling and usage notes.
 
-### Operations and results
+- `init` / `close` / `config` / `isInitialized` — Start and stop notification providers and queues
+- `send` / `template` — Send email, SMS or API notifications and render templates
+- `queue` — Inspect delivery results, dead letters and unknown outcomes
 
-Use the complete initialization flow in this section first. The host validates and authorizes example business values; check success before reading data from asynchronous domain results. Here void means completion without data, null means absent; synchronous factories/tools return the listed type directly.
+## Data Structures
 
-name identifies a template, vars replacement values, template its provider/body/subject definition. queueId is the persisted UUID; recovery/resolution includes the queried version and verified operator decision, never an untrusted claim.
+See the [data reference](../../docs/usage/data/reach.md) in Chinese for notification jobs, results, dead letters, idempotency records and shared locks.
 
-#### reach
-
-Send takes provider/template, recipients and vars and yields SendResult (sent/queued); acceptance is not final delivery, reconcile unknown outcomes first.
-
-| Entry        | Input parameters | Successful result | Call example                                                                                 |
-| ------------ | ---------------- | ----------------- | -------------------------------------------------------------------------------------------- |
-| `reach.send` | message          | `SendResult`      | `await reach.send({ template: 'welcome', to: 'user@example.com', vars: { name: 'Alice' } })` |
-
-#### reach.template
-
-Templates: resolve name yields a template; save object/array or remove name yields void; list yields templates; render name/vars yields body, subject and provider.
-
-| Entry                      | Input parameters | Successful result  | Call example                                                                                                   |
-| -------------------------- | ---------------- | ------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `reach.template.resolve`   | name             | `ReachTemplate`    | `await reach.template.resolve('welcome')`                                                                      |
-| `reach.template.save`      | template         | `void`             | `await reach.template.save({ name: 'welcome', provider: 'mail', body: 'Hello {{name}}', subject: 'Welcome' })` |
-| `reach.template.saveBatch` | templates        | `void`             | `await reach.template.saveBatch([{ name: 'welcome', provider: 'mail', body: 'Hello {{name}}' }])`              |
-| `reach.template.remove`    | name             | `void`             | `await reach.template.remove('welcome')`                                                                       |
-| `reach.template.list`      | No arguments     | `ReachTemplate[]`  | `await reach.template.list()`                                                                                  |
-| `reach.template.render`    | name, vars       | `RenderedTemplate` | `await reach.template.render('welcome', { name: 'Alice' })`                                                    |
-
-#### reach.queue
-
-Operations query queueId or filtered states: get yields entry/null, list entries. Requeue dead requires expected version/policy; resolve unknown requires a verified decision; success is void, not automatic replay.
-
-| Entry                        | Input parameters    | Successful result         | Call example                                                  |
-| ---------------------------- | ------------------- | ------------------------- | ------------------------------------------------------------- |
-| `reach.queue.get`            | queueId             | `ReachQueueEntry \| null` | `await reach.queue.get(queueId)`                              |
-| `reach.queue.list`           | options             | `ReachQueueEntry[]`       | `await reach.queue.list({ status: 'dead', limit: 20 })`       |
-| `reach.queue.requeueDead`    | queueId, options    | `void`                    | `await reach.queue.requeueDead(queueId, requeueDecision)`     |
-| `reach.queue.resolveUnknown` | queueId, resolution | `void`                    | `await reach.queue.resolveUnknown(queueId, verifiedDecision)` |
-
-### Distributed locks
-
-The optional cache lock reduces duplicate scans; nodes can scan concurrently after its 300-second TTL. Database delivery states provide correctness. A round claims at most 100 messages, one immediately before each delivery. An atomic owner/lease check persists `sending` before the external call; in-flight leases renew every third of their duration. Expired owners cannot revive leases, start another delivery, or commit results. Recovery continues every minute outside DND.
-
-- States follow `pending → processing → sending → sent`. Expired processing records can be claimed safely.
-- Only API providers configured with `idempotent: true` can automatically retry in-flight requests. This declares receiver capability. Every attempt uses the persistent queueId as both the `Idempotency-Key` header and `idempotencyKey` payload field. The receiver must atomically commit deduplication and side effects. Retention must cover late requests from resumed old workers; if lateness is unbounded, deduplication records must not expire. The same Provider name across nodes must use the same target and deduplication store.
-- SMTP, Aliyun SMS, and default API providers have no external idempotency guarantee. Failure, exceptions, or lease loss after sending begins produce an unknown outcome. Expired non-idempotent sends become `unknown` and are never automatically resent. Disconnected providers use persisted backoff; invalid stored JSON goes directly to dead before any external call. Console produces development metadata only.
-- Lease renewal, owner checks, and cancellation cannot undo an email, SMS, or HTTP side effect. The module provides no general exactly-once guarantee.
-
-### Reviewing unknown outcomes
-
-Trusted server administration can call `reach.queue.get(queueId)` to inspect `pending / processing / sending / unknown / sent / discarded / dead` without recipient or body data. For unknown outcomes, stop or isolate the old worker and verify Provider delivery records first. Then resolve to sent or discarded. UUID/status validation and a conditional update allow only one concurrent resolution; this never sends again. Discarding cannot cancel requests already started. Create a replacement only after confirming the old request can no longer take effect.
-
-```ts
-const state = await reach.queue.get(queueId)
-const resolved = await reach.queue.resolveUnknown(queueId, { status: 'sent', messageId: verifiedMessageId })
-if (!resolved.success)
-  throw new Error(resolved.error.message)
-```
-
-### Inspecting and restoring dead messages
-
-Trusted server administration can call `reach.queue.list({ status: 'dead', limit: 50, offset: 0 })`, or list `unknown`. Pages contain at most 100 records and offset is bounded by 1000000. Get/list return status, attemptCount, maxAttempts, nextAttemptAt, lastFailure, and updatedAt without recipients, bodies, or owner credentials. Fix the root cause, read the latest dead version, and conditionally restore it:
-
-```ts
-const state = await reach.queue.get(queueId)
-if (!state.success)
-  throw new Error(state.error.message)
-if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
-  const restored = await reach.queue.requeueDead(queueId, { expectedUpdatedAt: state.data.updatedAt })
-  if (!restored.success)
-    throw new Error(restored.error.message)
-}
-```
-
-Only the matching dead version is restored; concurrent/stale requests fail, and unknown cannot be requeued. Restoration resets attempts while retaining queueId, the original policy, and receiver idempotency requirements. Dead means automatic processing stopped, not that no external effect occurred: late requests from an earlier idempotent API worker may still arrive. Confirm durable receiver deduplication before restoring. Leave irreparable payloads in dead for investigation; restoration does not repair their content.
-
-### Production shared state
-
-Production rejects console providers and requires SMTP, SMS or an actual API service. A log write is not a delivery receipt. Reconcile unknown outcomes from non-idempotent providers rather than claiming exactly-once delivery. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../.agents/instructions/distributed-state.md).
-
-### Credential notifications and persistence setup
-
-Use `reach.send({ ..., sensitive: true, expiresAt, idempotencyKey })` for passwords, OTPs and reset tokens. expiresAt is Unix milliseconds; stable operation keys must contain no credentials. A shared ledger stores only metadata receipts/status and redacted destinations, never bodies, variables or credential hashes. There is no delayed credential queue. Success returns receiptId; DND/expired messages are not sent, and uncertain delivery is never automatically repeated. Explicit development console output is isolated from persistent observers. Production Console restrictions remain. Normal messages may use deferPolicy: reject to avoid a second queue.
-
-`reach.init()` creates and validates the send log and its queue identifier constraint. Incompatible tables cause initialization to fail. Preserve send receipts and reconcile uncertain outcomes before attempting further credential delivery.
-
-### API acknowledgements and destination boundaries
-
-An empty successful 2xx response, including 204/205, means receiver acceptance; messageId is optional and acceptance does not prove final delivery. Nonempty responses must be JSON objects with an optional messageId string of at most 255 characters. Responses are bounded to 64 KiB. Invalid responses, timeouts and network failures never become false success or expose receiver content.
-
-API `redirect` defaults to `error`; ordinary messages may explicitly use `follow`. Sensitive messages always reject redirects without forwarding payloads or private headers. `requireHttps:true` enforces initial HTTPS and cannot be combined with follow. When omitted, production sensitive messages require HTTPS; explicit false is only for an operator-approved trusted internal connection. Unknown source-side effects still require reconciliation and sensitive messages are never retried automatically. Application allowlists and network egress controls remain necessary.
-
-PostgreSQL/MySQL queue claims, renewals and final acknowledgements use the database execution clock inside SQL; batch cutoffs also come from the database. Node clock skew and row-lock waits cannot revive an expired owner. Local SQLite remains a development/test backend with a controllable test clock.
-
-## Configuration
-
-Lifecycle: init takes backend/business configuration; use the module only after success. Await close before releasing borrowed dependencies. Follow the quick-start example and public signatures for exact return values.
-
-Provider names must be unique; duplicates fail with CONFIG_ERROR before connections open. `close()` waits for initialization and releases its providers, preventing late publication after shutdown.
-
-### Console (development/tests)
-
-```ts
-const config = { name: 'dev', type: 'console' }
-```
-
-#### SMTP
-
-| Field    | Type      | Required | Default | Description             |
-| -------- | --------- | -------- | ------- | ----------------------- |
-| `name`   | `string`  | ✅       | —       | Provider name           |
-| `type`   | `string`  | ✅       | —       | Fixed `'smtp'`          |
-| `host`   | `string`  | ✅       | —       | SMTP server address     |
-| `port`   | `number`  | —        | `465`   | SMTP port               |
-| `secure` | `boolean` | —        | `true`  | Whether to use TLS      |
-| `user`   | `string`  | —        | —       | Authentication username |
-| `pass`   | `string`  | —        | —       | Authentication password |
-| `from`   | `string`  | ✅       | —       | Sender address          |
-
-#### Alibaba Cloud SMS
-
-| Field             | Type     | Required | Default                 | Description                |
-| ----------------- | -------- | -------- | ----------------------- | -------------------------- |
-| `name`            | `string` | ✅       | —                       | Provider name              |
-| `type`            | `string` | ✅       | —                       | Fixed `'aliyun-sms'`       |
-| `accessKeyId`     | `string` | ✅       | —                       | AccessKey ID               |
-| `accessKeySecret` | `string` | ✅       | —                       | AccessKey Secret           |
-| `signName`        | `string` | ✅       | —                       | SMS signature              |
-| `endpoint`        | `string` | —        | `dysmsapi.aliyuncs.com` | Direct HTTPS GET endpoint  |
-| `gateway`         | `object` | —        | —                       | Optional isolation gateway |
-
-Add `gateway` to an `aliyun-sms` provider to send a POST request to the full `url`. Alibaba Cloud signature input uses `POST`, the RPC path `/`, and the query parameters. The gateway path, headers, and body apply to the gateway hop.
-
-```yaml
-gateway:
-  url: https://sms-gateway.example.com/dx
-  headers:
-    X-Gateway-Client: delivery
-  body: {}
-```
-
-`headers` accepts string values. `body` accepts a JSON object, an array, or raw text. Omit `body` for a request without content. Objects and arrays default to `application/json`, and text defaults to `text/plain; charset=utf-8`. Set `Content-Type` to override the default. HTTP on a trusted private network requires `allowInsecureHttp: true`. The signed query, phone numbers, and template variables travel in plaintext over HTTP. Redact query strings in gateway and proxy access logs.
-
-Bind a synchronous or asynchronous server-side function with `reach.init(config, { gatewayHooks: { sms: buildGatewayFields } })`, using the configured provider name as the key. The hook receives `{ method, url, body, signal }`, with the static body already serialized, and can return `{ headers, body }`. Its headers override static values by case-insensitive name, and its body replaces the entire static body. Omitted fields inherit the static values. The HTTP client manages transport headers such as `Host` and `Content-Length`. Treat the signed URL as sensitive. The gateway snapshot in `reach.config` includes the URL and HTTP opt-in flag.
-
-The hook and request share a 10-second deadline. Redirects are rejected. HTTP 2xx with Alibaba Cloud `Code: OK` confirms acceptance, and `BizId` can be used to check delivery. Uncertain outcomes follow the existing delivery policy, without falling back to direct delivery.
-
-#### API callbacks
-
-| Field        | Type                     | Required | Default | Description                                                                          |
-| ------------ | ------------------------ | -------- | ------- | ------------------------------------------------------------------------------------ |
-| `name`       | `string`                 | ✅       | —       | Provider name                                                                        |
-| `type`       | `string`                 | ✅       | —       | Fixed `'api'`                                                                        |
-| `url`        | `string`                 | ✅       | —       | HTTP(S) callback URL                                                                 |
-| `method`     | `'POST' \| 'PUT'`        | —        | `POST`  | HTTP method                                                                          |
-| `headers`    | `Record<string, string>` | —        | —       | Custom request headers                                                               |
-| `timeout`    | `number`                 | —        | `10000` | Timeout in milliseconds                                                              |
-| `idempotent` | `boolean`                | —        | `false` | Enable only when the receiver atomically persists deduplication with its side effect |
-
-API callback addresses are trusted server configuration. Logs contain only the callback origin, not URL credentials, query parameters, recipients, or third-party failure bodies. For tenant/user-supplied addresses, applications must enforce a domain allowlist; enterprise deployments should also block internal metadata access through egress proxies or network policies.
-
-#### DND (do not disturb)
-
-| Field      | Type                   | Required | Default   | Description                           |
-| ---------- | ---------------------- | -------- | --------- | ------------------------------------- |
-| `enabled`  | `boolean`              | —        | `false`   | Enable DND                            |
-| `strategy` | `'discard' \| 'delay'` | —        | `discard` | discard: drop / delay: send after DND |
-| `start`    | `string`               | —        | `00:00`   | Start time (HH:mm)                    |
-| `end`      | `string`               | —        | `00:00`   | End time (HH:mm)                      |
-
-`delay` returns a successful `HaiResult` containing `{ success: true, deferred: true, queueId }` only after the database confirms the insert. This means queued, awaiting delivery. The receipt UUID is stored in `hai_reach_send_log.queue_id`; its row tracks `status` (`pending` / `processing` / `sending` / `unknown` / `sent` / `discarded` / `dead`). Missing storage, disconnection, or insertion failure never produces deferred success; enqueue failures return `SEND_FAILED`. After restart, another node connected to the same database with the same Provider name can resume delivery outside DND. Optional log failures after an immediate send do not report an already delivered message as failed.
-
-```ts
-const result = await reach.send(message)
-if (!result.success)
-  throw new Error(result.error.message)
-if (result.data.deferred) {
-  // Save the receipt for tracking; delivery is still pending.
-  await savePendingReceipt(result.data.queueId)
-}
-```
-
-Queue columns `created_at`, `updated_at`, `locked_until`, and `next_attempt_at` store Unix milliseconds as `BIGINT` (64-bit `INTEGER` on SQLite). The Reach repository normalizes integer strings returned by drivers such as PostgreSQL into safe integer `number` values. Negative, fractional, or unsafe stored integers return `SEND_FAILED` instead of being silently rounded. Template creation/update `TIMESTAMP` fields map to `Date`. Update the complete table schema during deployment, including attempt counters, backoff policy, and failure classification; module-owned persistence preparation maintains that structure (below).
-
-#### Durable retry policy
-
-The `queue` policy is persisted with each queued message. A restart or another node's changed configuration cannot reset an existing message's budget.
-
-| Setting                 | Default   | Bounds                                             |
-| ----------------------- | --------- | -------------------------------------------------- |
-| `queue.maxAttempts`     | `5`       | 1–100, including initial claims and crash recovery |
-| `queue.retryDelayMs`    | `60000`   | Initial backoff, 1000–86400000 milliseconds        |
-| `queue.maxRetryDelayMs` | `3600000` | Same bounds, at least retryDelayMs                 |
-
-Every claim atomically increments the stored `attemptCount`. Transient failures become eligible at `now + min(maxRetryDelayMs, retryDelayMs × 2^(attemptCount−1))`; the minute-based scan outside DND can deliver later. A round handles at most 100 messages using a fixed eligibility cutoff, so failed messages cannot reenter that round. Missing/disconnected providers, network errors, and HTTP 408/425/429/5xx allow bounded retry. Invalid stored JSON and other HTTP 4xx from an idempotent API go directly to `dead`. Exhaustion, including a crash after the last claim, also produces dead. In-flight non-idempotent requests still become `unknown` regardless of remaining attempts.
-
-The host loads and validates configuration before passing it to this module. Keep secrets in private server environment files. Select the backend, capacity, deadlines and logging for the actual use case; reinitialize and check the result after changes.
-
-[Per-option purpose, use cases and examples](../../docs/usage/configuration/operations.md).
-
-## Error Handling
-
-Check result.success for domain operations. Handle failures with the module error definitions and safe messages; retain codes, correlation IDs and sanitized causes in server logs. Synchronous tools, factories, stream iteration and lifecycle calls follow their own signatures. A completed Promise alone is not business success. See each feature for recovery limits.
-
-All operations return `HaiResult<T>`. Error codes are defined in `HaiReachError`:
-
-| Error code                             | code            | Description               |
-| -------------------------------------- | --------------- | ------------------------- |
-| `HaiReachError.SEND_FAILED`            | `hai:reach:001` | Delivery failed           |
-| `HaiReachError.TEMPLATE_NOT_FOUND`     | `hai:reach:002` | Template not found        |
-| `HaiReachError.TEMPLATE_RENDER_FAILED` | `hai:reach:003` | Template rendering failed |
-| `HaiReachError.INVALID_RECIPIENT`      | `hai:reach:004` | Invalid recipient         |
-| `HaiReachError.PROVIDER_NOT_FOUND`     | `hai:reach:005` | Provider not registered   |
-| `HaiReachError.DND_BLOCKED`            | `hai:reach:006` | Dropped by DND            |
-| `HaiReachError.NOT_INITIALIZED`        | `hai:reach:010` | Not initialized           |
-| `HaiReachError.UNSUPPORTED_TYPE`       | `hai:reach:011` | Unsupported type          |
-| `HaiReachError.CONFIG_ERROR`           | `hai:reach:012` | Invalid configuration     |
-| `HaiReachError.DELIVERY_REJECTED`      | `hai:reach:020` | Permanent API rejection   |
-
-```ts
-const result = await reach.send({ provider: 'email', to: 'user@example.com', body: 'hello' })
-if (!result.success) {
-  // result.error.code / result.error.message
-}
-```
-
-## Development
+## Development and Testing
 
 ```bash
 pnpm --filter @h-ai/reach test

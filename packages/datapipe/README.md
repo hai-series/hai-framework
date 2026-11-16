@@ -35,60 +35,24 @@ if (!result.success)
   throw new Error(result.error.message)
 ```
 
-## 功能
+## 配置清单
 
-HTML 清洗用于提取文本，不是安全消毒；结果用于 HTML 渲染时仍需使用 UI 的安全渲染机制。内置标签与邮箱清洗处理长异常输入时避免重复回溯；自定义正则来自可信配置，不直接接收外部用户提交的模式。
+清洗与分块选项通过 `clean()`、`chunk()` 或 `pipeline()` 传入。
 
-| 功能     | 说明                                                        |
-| -------- | ----------------------------------------------------------- |
-| 文本清洗 | 移除 HTML 标签、URL、Email，标准化空白，自定义正则替换      |
-| 文本分块 | 句子、段落、Markdown 标题、分页符、字数、字符、自定义分隔符 |
-| 管线组合 | 链式组合清洗 → 转换 → 分块 → 分块后处理，一次执行           |
+在[模块配置清单](../../docs/usage/configuration/datapipe.md)中查阅配置入口、默认值、取值限制和生效条件。
 
-> 安全提示：`customReplacements` 与 `mode: 'custom'` 的 `separator` 会作为正则使用。仅传入受信任、已审查的模式；不要把用户输入直接拼进正则，避免 ReDoS 或意外大范围替换。
+## 功能说明
 
-### 分块模式
+在[功能说明](../../docs/usage/function/datapipe.md)中查看调用示例、输入输出、错误处理与使用要点。
 
-| 模式      | 说明                             |
-| --------- | -------------------------------- |
-| sentence  | 按句子分块                       |
-| paragraph | 按段落分块                       |
-| markdown  | 按 Markdown 标题分块             |
-| page      | 按分页符分块                     |
-| word      | 按非空白词数分块                 |
-| character | 按字符数分块                     |
-| custom    | 自定义分隔符（需提供 separator） |
+- `clean` — 规范化和过滤文本
+- `chunk` / `pipeline` — 将文本分块或连续执行清洗与分块
 
-分块 `maxSize` 默认 1500，`overlap` 默认 0 且必须满足 `0 <= overlap < maxSize`。word 模式两者均按非空白词计量（连续中文可视为一个长词），其余模式均按 Unicode code point 计量，不是 UTF-16 length、字节或模型 token。上限包含重叠与分隔符；自然句/段/页/自定义边界只影响优先切点，超长段统一按 `maxSize-overlap` 滑窗。保留原始空白、标点、分页符及自定义分隔符，移除重叠后可还原全文；分块保留原始文本，不做 split/join 或 trim。Markdown section 之间不重叠，section 内使用相同硬上限，代码围栏内的标题保留为正文；仅 `markdownKeepTitle=false` 明确移除标题行。空/全空白的整体输入返回空数组。自定义正则须由可信配置提供，非法表达式返回 CHUNK_FAILED。
+## 数据结构
 
-## 配置
+模块没有自建数据库表。
 
-本模块没有 init、全局 YAML 或持久连接；clean/chunk 的选项按每次调用传入，pipeline 的步骤选项属于当前管线。按文本结构选择 mode、maxSize、overlap；自定义正则仅来自可信配置。
-
-[逐项配置说明、适用场景和示例](../../docs/usage/configuration/ai.md).
-
-## 错误处理
-
-领域操作先判断 `result.success`，失败按本模块错误定义与安全提示处理，服务端保留错误码、关联编号和脱敏原因。同步工具、工厂、流迭代及生命周期按各自签名处理，不把 Promise 完成视为业务成功。具体失败与恢复边界见对应功能。
-
-所有操作返回 `HaiResult<T>`，通过 `result.success` 判断成功或失败。错误码为字符串格式 `hai:datapipe:NNN`。
-
-```ts
-const result = datapipe.chunk(text, { mode: 'custom' })
-if (!result.success) {
-  switch (result.error.code) {
-    case HaiDatapipeError.MISSING_SEPARATOR.code:
-      // mode='custom' 时需要提供 separator
-      break
-    case HaiDatapipeError.CONFIG_ERROR.code:
-      // 配置参数校验失败
-      break
-    case HaiDatapipeError.CHUNK_FAILED.code:
-      // 输入或自定义正则导致处理失败；记录错误并回退到安全默认策略
-      break
-  }
-}
-```
+查看[数据结构](../../docs/usage/data/datapipe.md)，了解清洗结果、文本块与应用侧存储责任。
 
 ## 开发测试
 

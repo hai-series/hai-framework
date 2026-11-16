@@ -8,15 +8,15 @@
 
 ## クイックスタート
 
-ブラウザーとサーバーには各実成果物の `appVersion/buildId/commit` を渡します。フロント側は自分の識別情報を保持し、同じ SSR ビルドの client/server 出力は buildId を共有します。管理画面と base/API/fullstack テンプレートにはコンパイル時の識別情報を組み込んでいます。`hai build` は内部で識別情報を生成し、Docker のビルド引数にも渡します。バージョンは各対象の package.json から取得し、所属する Git コミットがない場合は `unknown` を記録します。テンプレートの `build-metadata.json` には同じ三つの非機密項目のみを保存します。
+Core、RelDB、非公開 Storage を先に初期化します。通知に Reach を使う場合は Reach も先に初期化します。
 
-core、reldb、非公開 storage の後に feedback を初期化します。Reach は reach 通知モードのみ必要です。本番は共有 DB と非公開ストレージを使用し、接続認証情報はホストが管理します。
-
-依存モジュール初期化済みの非同期関数内の例です。context は信頼できるサーバー認証・認可から取得します。
+アプリの起動時にモジュールを初期化します。送信関数は、信頼できるサーバーのコンテキストと、クライアントが送信ごとに生成する ID を受け取ります。
 
 ```ts
+import type { FeedbackContext } from '@h-ai/feedback'
 import { feedback } from '@h-ai/feedback'
 
+// orders のフィードバックを構成。ローカル開発では console で受理状態を記録。
 const initialized = await feedback.init({
   appId: 'orders',
   appVersion: '1.0.0',
@@ -24,228 +24,36 @@ const initialized = await feedback.init({
   adminUrl: 'https://app.example.test/admin/feedback',
 })
 if (!initialized.success)
-  return initialized
-const context = {
-  scopeId: 'tenant-1',
-  userId: 'user-1',
-  permissions: ['feedback:create']
+  throw new Error(initialized.error.message)
+
+export async function submitFeedback(context: FeedbackContext, submissionId: string) {
+  // 成功時は受付番号付きのレポートを返す。失敗時は呼び出し側が error を参照。
+  return feedback.submit({ appId: 'orders', submissionId }, context)
 }
-const submitted = await feedback.submit({ appId: 'orders', submissionId: 'stable-client-operation' }, context)
-if (!submitted.success)
-  return submitted
-return submitted
 ```
 
-終了時は `await feedback.close()` を確認した後で reach/storage/reldb を閉じます。再試行では同じ提出IDを使います。番号の発行は永続受理を示し、資料収集やメールの完了とは別です。
+終了時は `await feedback.close()` の結果を確認してから依存モジュールを閉じます。再試行では同じ `submissionId` を使います。
 
-`@h-ai/serv/features/feedback` の `createFeedbackProcedures({ feedback, resolveContext })` を `apiContract.feedback` と組み合わせます。ホストは信頼できる scope、user、permissions を返します。一般ユーザーは自身の資料だけを追加でき、管理者向け read/process/reopen/export 権限と資料・添付の範囲をサーバーでも検証します。
+ブラウザーでの収集、HTTP ルート、添付の再試行は[機能リファレンス](../../docs/usage/function/feedback.md)（中国語）を参照してください。
 
-範囲、ユーザー、アプリと証拠の識別子は文字列を厳密に比較します。MySQL の大小文字・アクセント・末尾空白の照合規則でも範囲を混同しません。添付 ID は元の値と大小文字を保ち、有効な Unicode の1〜128文字を受け付けます。ZIP 内のパスはダイジェストから生成するため、IDや表示名から推測せず manifest を参照してください。対応しないサロゲートは受理前に拒否します。
+## 設定一覧
 
-ブラウザーは `/client` の `createFeedbackClient()` を使用し、`init({ appId, actions })` に型付きAPI操作を渡します。モーダルを開く前に `prepare()` で現場を固定し、`submit()` 後も flush でアップロードを継続します。`close()` は記録器とイベントを解除します。Cookie の許可リスト、下書き永続化、再生記録は明示的な製品方針で有効化し、認証値は常に除外します。
+生成プロジェクトは `config/_feedback.yml` を使用します。アプリで設定を取り込む入口は `feedback.init(config, options)` です。
 
-ブラウザーとサーバーは共通のテキスト秘匿処理を使い、一般的な認証キー、JSON・エスケープされた JSON、Bearer/Basic の値を隠します。保存資料、API、オフライン ZIP でも同じ結果を維持します。業務固有の機密情報はホスト側の許可リストと機密 DOM マーカーで指定してください。
-
-`text/plain` 添付は 5 MiB のファイル上限内で全文を秘匿処理し、安全な本文と末尾のログを保持します。構造化証拠のフィールド切り捨ては適用しません。上限を超える元ファイルは読取前に拒否し、秘匿処理後も同じ添付バイト上限を適用します。JSON 添付と構造化証拠には文字列長・深さ・件数の上限が残り、切り捨てられる場合があります。完全なログにはプレーンテキスト添付を使用してください。送信前の添付と、初回送信内容の固定後にローカル出力へ追加したファイルに同じ規則を適用します。
-
-クライアントの全操作は `init(config)`、`prepare/captureScreenshot(attachmentId?)/submit/flush/record/getDraft/getView/annotate/addFiles/exportDraft/saveDraft/pause/close` です。フォームの `onfileschange` を `addFiles` に接続し、下書きの添付プレビューを更新すると、追加画像を送信前に注釈・遮蔽・削除できます。重要操作は `data-feedback-action`、機密部分は `data-feedback-private`、フィードバック画面自体の除外は `data-feedback-ignore` で指定します。初回送信後の内容は固定され、再試行中の入力変更は競合として入力を保持し、ローカル保存できます。
-
-`addFiles` は一括追加を原子的に行い、全ファイルの検証に成功してから統合します。一つでも失敗した場合、既存の添付と欠落マーカーを維持し、一部だけを保存しません。並行して成功した追加を上書きせず、統合後も最大 20 件です。読取中に下書きが変わるか初回送信内容が固定された場合は `CONFLICT` を返し、送信内容に含まれない添付を後から隠れてアップロードしません。
-
-ローカル添付は PNG/JPEG/WebP、WebM/MP4、TXT/LOG、JSON、PDF、ZIP/GZIP に対応します。MIME が空または `application/octet-stream` の場合は対応する拡張子で補い、一般的な MIME 別名も正規化します。サーバーは実際のバイトとチェックサムを引き続き検証し、未対応形式には具体的な案内を表示します。通常の入力欄は背景と枠を保持し、値だけを固定マスク文字に置き換えます。パスワード、`data-feedback-private`、`.rr-block`、`.rr-mask` は全面を遮蔽します。撮影用クローンだけを変更し、元の画面と入力値は保持します。
-
-`annotate(id, { ...rect, mode, coordinateSpace: 'ratio' })` は UI の 0–1 座標を直接受け取り、SDK がデコード後の元画像サイズで換算します。小数、1% 未満、逆方向、端や CSS 拡大縮小に対応します。省略時は従来のピクセル座標です。`getView()` がプレビュー URL を管理し、置換・削除・終了時に解放するため、ホストの画像デコードや URL 管理は不要です。
-
-並行 `init` は `INIT_IN_PROGRESS` を返します。`close` は時間制限付き画面取得の終了後にセッションを解放します。取得中の終了は `prepare` を失敗させ、草稿を復活させません。送信、終了、画像削除、別の注釈更新後に完了した注釈は `CONFLICT` を返し、送信済みバイト列と checksum を変更しません。
-
-下書きは SDK が保持し、`annotate` や `addFiles` で更新します。Svelte 側では参照を `$state.raw<FeedbackDraft>()` に保持し、操作成功後に `getDraft()` から添付ビューを更新してください。深い `$state` プロキシに格納すると、SDK が元の下書きの画像バイトを置き換えても、キャッシュされた古いバイトが返る場合があります。
-
-`maxTotalBytes` の既定値は 32 MiB（4–40 MiB）です。`feedback.budget` から単一・合計添付、二重保存する証拠と Base64/暗号化転送の上限を導出します。既定は各 5 MiB、添付合計 22 MiB、証拠 4 MiB/2000 件、履歴・メタデータ・ビューアー用 2 MiB です。受理前に添付宣言の合計を検証し、証拠更新は原子的に制限、処理履歴は 256 KiB までです。認証済み `reports.policy({})` でクライアントとフォームに有効値を渡します。
-
-通常業務は `transport.maxPlaintextBytes`（auto/省略は 1 MiB）を維持します。Feedback の受理・証拠・添付・ZIP ダウンロードは `routePlaintextBytes` で別途宣言します。起動時は `@h-ai/api-contract/feedback` の `resolveFeedbackBudget(検証済み設定).maxTransportBytes` を使い、任意の Feedback 初期化・再試行状態に依存しません。`*` は完全な1パス区間のみ一致し、ホストの明示値が優先です。ハンドシェイク、adapter-node、プロキシは経路の最大値を使用します。HTTP アダプターは個別宣言された 1 MiB 超の資料経路を最大2件、通常業務を別枠で16件まで許可し、応答完了・失敗時に解放します。混雑は503 / `hai:crypto:072` を返し、業務書込は自動再送しません。
-
-`keyScreenshots` の既定値は false で、自動撮影は明示的に有効化します。手動 `prepare()` は撮影可能です。タイムアウトは AbortSignal を伝え、実処理の終了まで重複撮影を禁止します。既定レンダラーは10000 DOMノードとキャンバス画素予算を制限します。`replay:true` の `replayStart` は既定 `prepare` です。事前記録には `replayStart: init` を明示します。画面を閉じる際の `pause()` はDOM記録と撮影を止め、軽量ログ・下書き・アップロードを維持します。ユーザー切替時は引き続き `close({ discard:true })` を呼び、独自撮影関数は `{ signal }` を尊重します。
-
-受理後、SDK は添付ファイルと後続の証拠をバックグラウンド送信します。通信障害、5xx、408、429 は 1、2、4、8、16 秒後に再試行し、連続六回の失敗で停止します。それ以外の 4xx は直ちに停止します。下書きと添付ファイルを保持するため、接続や認証を復旧してから `flush()` または再度の準備操作で再試行できます。未送信の下書きと収集完了後はバックグラウンド送信しません。`close({ discard: true })` は開始済みの要求を待ち、旧下書きの後続要求を開始しません。終了を待ってから次のユーザーを初期化してください。
-
-自動撮影は html2canvas で機密部分を隠したクローン DOM を描画します。クロスオリジン画像、iframe/video、未準備のネットワークフォントは欠落する場合があります。ブラウザーや CSP 制限による失敗は missing として記録され、画像の手動添付も利用できます。
+設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/feedback.md)（中国語）を参照してください。
 
 ## 機能
 
-- ブラウザーとサーバーのログ、リクエスト、操作、バージョン、許可された環境情報を上限付きで収集します。既定ではエラーの前後それぞれ最大100件です。
-- トランザクションによる受理、提出と証拠の冪等性、checksum 検証、処理・収集・通知状態の分離、永続ジョブとリース回復。
-- `notificationMode` は独立して選択できます。`disabled` は通知ジョブなし、`console` は本番でも既定でメタデータだけを出力し Reach/メール不要（consoleContent: summary で一般的なマスキング済み概要を明示）、`reach` は任意の Provider と宛先を使い、このモードのみ recipients が必要です。既定は `reach`、生成プロジェクトは `console` を明示します。Reach DND 中は feedback 自身の outbox で待機し、二重の遅延キューや他通知の方針変更を行いません。本番 Reach Console の制限は維持します。sent はチャネル受付であり受信完了を意味しません。
-- スクリーンショット、復元不能なマスク、注釈、任意の rrweb 記録、再試行とローカル出力。UI は `FeedbackModal`、`FeedbackList`、`FeedbackDetail` を提供します。
-- 自己完結 ZIP、SHA-256 検証、オフライン表示、証拠のページ検索。運用認証情報は含めません。
+使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/feedback.md)（中国語）を参照してください。
 
-### 操作と入出力
+- `init` / `close` / `isInitialized` / `config` / `budget` — 依存関係の構成と収集上限の取得
+- `submit` / `uploadAttachment` / `getAttachment` / `appendEvidence` / `completeCollection` — 報告送信、添付の管理、非同期証拠の収集完了
+- `list` / `get` / `getEvidence` / `setStatus` / `retry` / `runJobs` / `export` / `getExport` — 照会、処理、再試行、エクスポート
+- `feedbackClient` / `bundle` / `capacitor` / `tauri` — 診断情報の収集、オフラインバンドルの確認、ネイティブファイルの保存
 
-本節の完全な初期化手順を先に実行します。例の業務値はホストが検証・認可し、非同期領域結果は success を確認してから data を読みます。void はデータなし完了、null は不存在、同期ファクトリー/ツールは表の型を直接返します。
+## データ構造
 
-input.id は報告 ID、attachmentId/jobId は同じ報告に所属。context は信頼する認証の主体/範囲/権限。証拠・提出・base64 にも容量/所有権検査が適用。
-
-#### feedback
-
-受付と権限付き照会。入力と信頼する context から報告、list は条件/ページから一覧、get は ID から詳細、getEvidence は ID/条件から証拠ページ。
-
-| 入口                   | 入力引数       | 成功結果                   | 呼出し例                                                                       |
-| ---------------------- | -------------- | -------------------------- | ------------------------------------------------------------------------------ |
-| `feedback.submit`      | input, context | `報告`                     | `await feedback.submit(submission, context)`                                   |
-| `feedback.list`        | input, context | `報告ページ`               | `await feedback.list({ page: 1, pageSize: 20 }, context)`                      |
-| `feedback.get`         | id, context    | `報告・添付・履歴・ジョブ` | `await feedback.get(reportId, context)`                                        |
-| `feedback.getEvidence` | input, context | `証拠ページ`               | `await feedback.getEvidence({ id: reportId, page: 1, pageSize: 20 }, context)` |
-
-#### feedback
-
-管理処理は ID・状態/expectedVersion または retry target と信頼する context から報告/void。先に認可し、競合時は版を再取得。
-
-| 入口                 | 入力引数       | 成功結果   | 呼出し例                                                                                           |
-| -------------------- | -------------- | ---------- | -------------------------------------------------------------------------------------------------- |
-| `feedback.setStatus` | input, context | `更新報告` | `await feedback.setStatus({ id: reportId, status: 'handled', expectedVersion: version }, context)` |
-| `feedback.retry`     | input, context | `void`     | `await feedback.retry({ id: reportId, target: 'collect' }, context)`                               |
-
-#### feedback
-
-追加収集は報告 ID と証拠・missing・添付 ID/base64 を入力し、確認 ID/改訂・報告・メタデータ・base64 を返す。信頼する context と容量/所有権制限が必須。
-
-| 入口                          | 入力引数       | 成功結果                 | 呼出し例                                                                               |
-| ----------------------------- | -------------- | ------------------------ | -------------------------------------------------------------------------------------- |
-| `feedback.appendEvidence`     | input, context | `確認 ID 配列と証拠改訂` | `await feedback.appendEvidence({ id: reportId, evidence }, context)`                   |
-| `feedback.completeCollection` | input, context | `報告`                   | `await feedback.completeCollection({ id: reportId }, context)`                         |
-| `feedback.uploadAttachment`   | input, context | `添付メタデータ`         | `await feedback.uploadAttachment({ id: reportId, attachmentId, dataBase64 }, context)` |
-| `feedback.getAttachment`      | input, context | `名前・種類・base64`     | `await feedback.getAttachment({ id: reportId, attachmentId }, context)`                |
-
-#### feedback
-
-export は報告 ID/改訂からジョブ、getExport は報告/ジョブ ID から ZIP/base64。生成中だけ有限ポーリング。runJobs は期限到来分を処理し processed 件数。
-
-| 入口                 | 入力引数       | 成功結果                   | 呼出し例                                                     |
-| -------------------- | -------------- | -------------------------- | ------------------------------------------------------------ |
-| `feedback.export`    | input, context | `出力ジョブ`               | `await feedback.export({ id: reportId }, context)`           |
-| `feedback.getExport` | input, context | `ZIP の名前・種類・base64` | `await feedback.getExport({ id: reportId, jobId }, context)` |
-| `feedback.runJobs`   | 引数なし       | `processed 件数`           | `await feedback.runJobs()`                                   |
-
-### フィードバック収集と配布確認
-
-現在のページ画像を先頭に表示します。`captureScreenshot(attachmentId?)` は現在のページを追加し、IDを渡すと既存画像を置換します。`FeedbackModal.oncapture` に接続すると、入力を保持して画面を閉じ、ページを切り替えて撮影できます。`FeedbackForm.evidence` は脱敏済みログ、リクエスト、環境と操作記録を展開表示し、`evidenceSummary` は不足理由を補足します。ブラウザー環境は実際のURL（クエリとhashを除外）、画面、言語とビルドから取得します。サーバーは `envAllowlist` の非認証情報だけを収集し、未設定値は null です。
-
-対応ブラウザーでは「画面録画 → 録画を開始」からタブやウィンドウを選択し、最大60秒 / 5 MiBの無音動画を低フレームレート・低ビットレートで録画できます。共有停止、取消、時間切れとコンポーネント破棄でストリームを解放します。動画は選択した画面そのもので自動マスクされません。送信前に確認・削除できます。WebM/MP4も非公開保存、チェックサムと5 MiB制限に従い、非対応環境では動画ファイルを添付できます。
-
-管理台とfeedback有効のfullstackテンプレートは `replay: true` を明示し、SDKの既定は無効のままです。管理者は詳細の「ページ再生」で操作を再生・移動できます。宿主の `onreplay` は `kind: replay` の全ページを取得してください。未記録時は理由を表示し、録画は操作と添付で確認できます。ローカル保存後は `hai feedback view <zip>` で画像、録画と操作を表示できます。未取得のサーバー資料は不足として記録します。
-
-`saveDraft(input?)` は Web ダウンロード、Tauri 保存ダイアログ、Capacitor のキャッシュ/ネイティブ共有を統一します。取消は `status: 'cancelled'`、失敗は失敗として返します。ネイティブプラグインは optional peer で、生成 App/Desktop に依存と権限を設定済みです。独自ホストは対応プラグインを導入してください。`createFeedbackReview(typedClient.feedback.reports)` は `loadReplay(id)` と取消可能な `exportReport(id)` を提供します。ログアウト時は `review.close()` と `client.close({ discard: true })` で収集・ポーリング、プレビューと永続草稿を終了・削除します。
-
-ビルド識別子は一律 128 文字までです。明示した無効な HAI_BUILD_ID/HAI_BUILD_COMMIT は値を再表示せずビルドで拒否します。verificationCode、otpCode などを既定で脱機密化し、すべての業務 code を隠すことはしません。
-
-サーバーポリシー取得失敗時も有界のローカル収集・出力を継続し server-policy-unavailable を示します。オンライン送信前に再確認します。addFiles(files, removedAttachmentIds?) は旧添付削除と追加を原子的に処理し、表示と実容量を一致させます。
-
-console/disabled は Reach パッケージ不要です。reach モードは optional peer の @h-ai/reach を明示導入・初期化します。認証通知は生成 receiptId のみを返し、Provider messageId を保存・返却しません。
-
-Web クライアントは原生プラグインを解決・導入しません。独自ホストは @h-ai/feedback/tauri の saveTauriFeedbackFile または @h-ai/feedback/capacitor の saveCapacitorFeedbackFile を読み込み、起動時に configureFeedbackSaving(saver) を呼びます。生成工程には接続済みで、業務コードはネイティブファイルの管理を行いません。
-
-### 業務証拠の拡張
-
-`feedback.init(config, { collectEvidence })` にサーバー側の収集関数を登録します。受付コミット後に永続 collect タスクが同期・非同期の戻り値を待機するため、送信リクエストは業務ログの生成を待ちません。同じ appId を処理する全インスタンスに同じ関数を登録し、再起動・引き継ぎ後も復旧できるようにします。
-
-以下は依存モジュール初期化後の例です。config はホストが読み込んだ FeedbackConfigInput、diagnostics/sanitized-logs.zip は業務側で事前に生成・秘匿化したファイルです。実際には関数内で独自のログ収集処理を await できます。
-
-```ts
-import type { FeedbackConfigInput } from '@h-ai/feedback'
-import { readFile } from 'node:fs/promises'
-import { feedback } from '@h-ai/feedback'
-
-async function startFeedback(config: FeedbackConfigInput) {
-  const result = await feedback.init(config, {
-    collectEvidence: async ({ report, signal }) => ({
-      text: `Diagnostics for ${report.number}`,
-      data: { businessSystem: 'orders', scopeId: report.scopeId },
-      attachments: [
-        {
-          id: 'business-logs',
-          name: 'business-logs.zip',
-          contentType: 'application/zip',
-          bytes: await readFile('diagnostics/sanitized-logs.zip', { signal }),
-        }
-      ],
-    }),
-  })
-  if (!result.success)
-    return result
-  return result
-}
-```
-
-text/data は source: server:business、kind: business の証拠として詳細の「業務情報」タブにページ表示され、添付ファイルは認可付きダウンロードとオフライン出力に含まれます。短文・JSON は既存の秘匿化、切り詰め、証拠容量制限に従います。完全なログには全文を秘匿化する text/plain 添付を使用します。ZIP/GZIP は形式マーカー・サイズ・SHA-256 を確認してそのまま保存し、展開・実行・内部秘匿化は行いません。業務側で圧縮前に機密情報を除去してください。ブラウザーの addFiles も ZIP/GZ/TGZ に対応します。
-
-businessCollectionTimeoutMs は既定 30000ms（1–300000）。タイムアウトと終了時に signal を中止して待機を終了するため、非同期処理にも signal を渡します。例外、不正ファイル、容量超過、保存失敗は maxAttempts まで再試行し、最終失敗は collectionStatus: failed になります。管理者は retry({ id, target: 'collect' }, context) で再実行できます。関数は再実行される可能性があるため report.id で外部処理を冪等化します。全ファイル保存後、証拠と索引をリース付きの同一トランザクションで公開し、成功マーカー保存後は再収集しません。添付 ID は安定した 1–100 文字とし、server:business: が自動付加されます。全添付で既存の 20 件・単一/合計容量制限を共有します。
-
-### Webhook コールバック
-
-信頼するサーバー設定 webhookUrl を指定すると、受付トランザクションで独立した永続 webhook タスクを作成します。収集が complete/partial/failed になった後、feedback.created を POST application/json で送信します。収集失敗時も送信し、Reach、notificationMode、通知抑止とは独立します。
-
-```yaml
-businessCollectionTimeoutMs: 30000
-webhookUrl: ${HAI_FEEDBACK_WEBHOOKURL:}
-webhookSecret: ${HAI_FEEDBACK_WEBHOOKSECRET:}
-webhookTimeoutMs: ${HAI_FEEDBACK_WEBHOOKTIMEOUTMS:10000}
-```
-
-URL の空文字は無効化です。HTTP(S) のみ許可し、URL のユーザー資格情報・fragment は禁止、リダイレクトは追従しません。宛先は信頼できる配布設定で管理し、内部連携には内部 URL も使用できます。署名鍵はサーバーの非公開環境に保存し、PUBLIC_ 変数に含めません。webhookTimeoutMs は既定 10000ms（1–60000）。非 2xx、リダイレクト、通信障害、タイムアウトは 1s から最大 60s の指数バックオフで maxAttempts（既定 5）まで再試行します。
-
-公開型 FeedbackWebhookEvent は event/eventId/createdAt/report/evidence/detailUrl? を含みます。evidence は修訂、業務証拠の収集成功、添付メタデータを持ち、本文・保存キー・設定秘密・全ログは送信しません。内容は認可付き API またはオフライン ZIP から取得します。初回送信前に本文を固定し、再試行・再起動でも本文と Idempotency-Key: eventId を維持します。受信側は eventId を永続化・重複排除した後に 2xx を返してください。配信は少なくとも 1 回で、応答消失による重複があります。URL 変更後の旧タスクは別の宛先に転送せず失敗するため、切替前に処理を完了します。
-
-X-Hai-Feedback-Event と X-Hai-Feedback-Timestamp（Unix 秒）を送信します。鍵設定時は X-Hai-Feedback-Signature: sha256=<hex> を付加し、HMAC-SHA256(secret, timestamp + '.' + 元の本文) を計算します。受信側は元のバイトで検証し、定数時間比較、時刻許容幅、eventId による重複排除を実装します。get().jobs で状態、試行回数、安全な lastError コードを確認でき、管理台/Fullstack の詳細にも状態と再試行を表示します。管理者は retry({ id, target: 'webhook' }, context) を使用できます。notificationStatus とは別管理で、成功は受信先が 2xx を返したことを示します。
-
-### 一覧、処理、出力
-
-`list/get/getEvidence` は認可された報告・詳細・証拠ページを返します。`setStatus({ id, status, expectedVersion }, context)` で処理と取り消しの競合を防ぎます。`retry` は回復可能な操作のみ再登録します。`export` は証拠の版を固定し、`getExport` は完成済みZIPを返します。欠落や切り捨ては明示され、ページ再生は業務処理の再実行ではありません。
-
-`getExport` は最初に範囲と `feedback:export` 権限を検証します。有効なスナップショットの `pending/running` は `CONFLICT`（409、生成中）を返し、クライアントはこの状態だけを上限付きでポーリングします。`failed` は `OPERATION_FAILED`（500）を返し、失敗を表示して管理者が `retry` を判断します。存在しないタスク、別の報告に属するタスク、未完成で期限切れのスナップショットは `NOT_FOUND`（404）、権限不足は `FORBIDDEN`（403）です。現在の版の生成期限が切れた場合は `export` を再実行できます。完成済みZIPの取得時はストレージの読取結果と checksum を引き続き検証します。
-
-`errorId` 検索はアンカーのソース、リクエスト、連番を基準に前後最大100件のログを選びます。重複するエラー窓でも初回の errorId 帰属に依存せず各アンカーを保持します。期限切れでは報告、証拠、添付、履歴、スナップショットを含むジョブと孤立アップロードを削除します。その後はオブジェクト接頭辞と24時間期限だけの墓標で遅延オブジェクトを再清掃し、墓標も削除します。清掃失敗は再試行を継続します。
-
-### オフラインコマンド
-
-```sh
-hai feedback summary feedback-FB-1.zip
-hai feedback inspect feedback-FB-1.zip
-hai feedback evidence feedback-FB-1.zip --request-id req-1 --page 1 --page-size 20
-hai feedback view feedback-FB-1.zip
-```
-
-表示サービスは loopback のランダムURLだけで待機し、内蔵の信頼済みコードを使います。Ctrl+Cで終了します。`/bundle` の作成・読込・要約・検索関数はサーバー初期化や本番接続なしで利用できます。
-
-### 設定とエラー
-
-`FeedbackConfigSchema` は appId、notificationMode、recipients、maxTotalBytes、notificationProvider、adminUrl、collectionTimeoutMs、workerIntervalMs、leaseMs、maxAttempts、retentionDays、envAllowlist と資料の容量を検証します。YAML の環境参照は `HAI_FEEDBACK_*` を使い、ブラウザーへ SMTP/S3 の秘密を公開しません。
-
-各業務結果の `success` を確認してください。`HaiFeedbackError` は初期化、設定、権限、存在しない記録、競合、容量、checksum エラーを表します。HTTP 200やSMTP受理だけでは、業務成功や受信箱への配信を証明できません。不確実な送信は重複する可能性があります。
-
-### リソース、クォータと補助機能の可用性
-
-サーバーエラー証拠の待機列は3000件・8 MiB・5分を上限とし、最大32件/256 KiBの冪等バッチで保存します。DB障害は最大30秒までバックオフし、欠落理由を保存します。空のworkerも最大30秒まで待機し、同じノードでの送信・再試行・出力が起動します。`workerIntervalMs:0` には専用実行元が必要です。仮証拠はappId・期限索引を使って最大100件ずつ削除します。
-
-既定値は `maxReportsPerUserDay=20`、`maxBytesPerUserDay=2 GiB`、`maxStoredBytesPerScope=10 GiB`、`maxExportsPerReport=5`、`exportRetentionHours=24` です。共有DBの同一トランザクションで、DBのUTC日とapp/scope/user別に `maxTotalBytes * (maxExportsPerReport + 1)` バイトを予約します。報告容量と出力数は受理時に固定し、設定を増やしても既存予約を超えません。これは保守的な予約量で実ディスク計測ではありません。冪等再送は再計上せず、超過は429 `QUOTA_EXCEEDED` とし報告・オブジェクトを作りません。報告の期限削除成功でscope予約を解放し、日次累計は戻しません。期限切れ出力はダウンロード不可で段階削除します。固定スナップショット・作成日時と条件付書込でZIPを再利用し、業務証拠のファイル一覧は最初のアップロード前に固定します。`hai_feedback_quotas` のperiod=0と期限cleanupの滞留を監視し。
-
-参考admin/fullstackはfeedback起動失敗を業務の起動失敗にせず、30秒ごとに個別再試行し、同じ警告を繰り返しません。未準備のpolicyも503です。必須のDB/cache/IAM/auditは従来の障害方針を維持します。runtime.start全体の失敗を握りつぶしてロールバック済みのモジュールを使わないでください。終了時はfeedbackと再試行を停止してから依存を解放します。
-
-### console 通知のプライバシー境界
-
-`consoleContent` の既定は `metadata` で、報告番号、アプリ・バージョン・ビルド情報と収集状態だけを記録します。説明・概要・添付・証拠・通知本文・宛先は含みません。一般的なマスキング済み概要が必要な場合のみ `summary` を明示します。一般的なマスキングでは全業務機密を検出できません。Reach は不要で disabled/reach の意味は変わりません。
-
-サーバー環境証拠は受付トランザクションで同時に保存します。環境保存失敗時は不完全な受付を残さず、同じ submissionId で再試行できます。管理画面は `createFeedbackReview(...).retryReport(id)` を使い、復旧可能な収集と通知/Webhook失敗を再試行します。対象を重複排除し失敗を伝播し、close後は後続処理を止めます。
-
-## 設定
-
-ライフサイクル。init にバックエンド/業務設定を渡し成功後に使用します。借用依存先の解放前に close の完了を待ち、正確な戻り値は例と公開署名に従います。
-
-設定はホストが読込・検証してから渡します。秘密はサーバーの非公開環境に保存し、利用場面に応じてバックエンド・容量・期限・ログを選びます。変更後は再初期化の結果を確認してください。
-
-[項目別の用途・適用場面・例](../../docs/usage/configuration/operations.md).
-
-## エラー処理
-
-領域操作は result.success を確認し、失敗時はモジュールのエラー定義と安全な説明を使います。コード・関連 ID・秘匿した原因をサーバーログに残します。同期ツール・ファクトリー・ストリーム反復・ライフサイクルは各署名に従い、Promise 完了だけで成功と判断しません。回復条件は各機能を参照してください。
+報告、証拠、バックグラウンドジョブ、添付、オフラインバンドル、ブラウザーの下書きについては[データ構造](../../docs/usage/data/feedback.md)（中国語）を参照してください。
 
 ## 開発とテスト
 

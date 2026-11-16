@@ -38,134 +38,25 @@ export const appContract = {
 }
 ```
 
+## 設定一覧
+
+`apiContract.create()` でアプリが公開するドメイン契約を組み合わせます。
+
+設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/api-contract.md)（中国語）を参照してください。
+
 ## 機能
 
-### 用途・入力・出力
+使用例、入出力、エラー処理、利用上の注意は[機能リファレンス](../../docs/usage/function/api-contract.md)（中国語）を参照してください。
 
-このパッケージはルートと検証構造を定義し、通信や init/close は行いません。戻り値の Schema は検証器です。safeParse の success と、業務応答内の HaiResult.success は別の結果なので区別してください。入力・出力 Schema はアプリが Serv やクライアントに組み込む際に使われます。
+- `create` / `route` / `pathOf` — 契約、ルート、パスの定義
+- `haiResultSchema` / `voidResultSchema` / `paginatedSchema` — 結果形式とページングデータの検証
+- `iam` / `storage` / `ai` / `payment` / `feedback` — ドメイン別 HTTP 契約の再利用
 
-| 入口                           | 使用場面                       | 入力（`—` は引数なし）                     | 戻り値                                                                                  | 呼出例                                                                       |
-| ------------------------------ | ------------------------------ | ------------------------------------------ | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `apiContract.create`           | アプリの契約を組み合わせる     | `{ iam: apiContract.iam, payment: false }` | `{ iam: IamContract }`                                                                  | `apiContract.create({ iam: apiContract.iam, payment: false })`               |
-| `apiContract.route`            | HTTP エンドポイントを定義する  | `{ method: "GET", path: "/status" }`       | `ContractProcedureBuilder`                                                              | `apiContract.route({ method: "GET", path: "/status" })`                      |
-| `apiContract.pathOf`           | 定義したパスを取得する         | `apiContract.iam.auth.login`               | `string: "/auth/login"`                                                                 | `apiContract.pathOf(apiContract.iam.auth.login)`                             |
-| `apiContract.haiResultSchema`  | 成功・失敗の結果を検証する     | `z.string()`                               | `ZodSchema<HaiResult<string>>`                                                          | `apiContract.haiResultSchema(z.string())`                                    |
-| `apiContract.voidResultSchema` | データを返さない結果を検証する | `{ success: true, data: undefined }`       | `ZodSchema<HaiResult<void>>`                                                            | `apiContract.voidResultSchema.safeParse({ success: true, data: undefined })` |
-| `apiContract.paginatedSchema`  | ページ付き一覧を検証する       | `z.object({ id: z.string() })`             | `ZodSchema<{ items: { id: string }[], total: number, page: number, pageSize: number }>` | `apiContract.paginatedSchema(z.object({ id: z.string() }))`                  |
-| `apiContract.iam`              | 認証・アカウントの契約         | `—`                                        | `iam contract router`                                                                   | `apiContract.create({ iam: apiContract.iam })`                               |
-| `apiContract.storage`          | ファイルの契約                 | `—`                                        | `storage contract router`                                                               | `apiContract.create({ storage: apiContract.storage })`                       |
-| `apiContract.ai`               | AI の契約                      | `—`                                        | `ai contract router`                                                                    | `apiContract.create({ ai: apiContract.ai })`                                 |
-| `apiContract.payment`          | 決済の契約                     | `—`                                        | `payment contract router`                                                               | `apiContract.create({ payment: apiContract.payment })`                       |
-| `apiContract.feedback`         | フィードバックの契約           | `—`                                        | `feedback contract router`                                                              | `apiContract.create({ feedback: apiContract.feedback })`                     |
+## データ構造
 
-- 共通 DTO Schema：すべての HTTP 出力を `HaiResult<T>` でラップ。
-- IAM Token DTO は httpOnly cookie に対応。レスポンス本文に `refreshToken` が含まれない場合は、サーバーが `Set-Cookie` で管理します。
-- IAM の `auth.currentUser` はユーザー情報と現在のサーバーセッションの `roles` / `permissions` を返します。セッション復元のためにクライアントが権限のスナップショットを永続化する必要はありません。
+モジュール独自のデータベーステーブルは作成しません。
 
-支払い作成の入出力は WeChat `jsapi`・Alipay `h5`・Stripe `h5` のみ受け付け、WeChat は `userId`（openid）が必須です。App・Native・ミニプログラムなどは検証で拒否します。Alipay は `{ gateway, fields }` のページパラメーターを返し、作成成功は支払い完了を意味しません。クライアント処理は [Payment](../payment/README.ja.md) を参照してください。
-
-ユーザー一覧は `sortBy`（username/email/displayName/enabled/createdAt）と `sortDirection`（asc/desc）でページ分割前に並べ替えます。
-
-### API 契約
-
-独立した contract パッケージの宣言ファイルを生成するため、上流の公開型 `ContractProcedureBuilderWithInputOutput`、`ContractProcedureBuilderWithOutput`、`Schema` を本パッケージから再エクスポートしています。独自ルートの入出力の型推論を維持し、明示的な型が必要な場合は `@h-ai/api-contract` から `import type` で取得してください。依存パッケージの内部インストールパスは参照しないでください。
-
-```ts
-import { apiContract } from '@h-ai/api-contract'
-
-const myContract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
-
-myContract.iam.auth.login
-myContract.storage.presignedUrls.createUpload
-myContract.ai.chats.createCompletion
-```
-
-`ai.chats.createCompletion` は `POST /ai/chats/completions` で、非ストリーミングの `HaiResult<AiChatCompletionData>` を返します。厳密な入力 Schema は `stream` など未定義のフィールドを拒否します。function ツールのネストした JSON Schema と `strict` を保持し、選択は `auto` / `none` / `required` / 提供した関数名に対応します。system/assistant/tool はテキスト、user は画像にも対応し、ツール結果の空でない `tool_call_id`、助手の内容または `tool_calls` が必須です。アプリがツールを認可・実行し、ストリーミング用には別の契約を定義します。
-
-クライアントは `@h-ai/api-client` でネストしたメソッドを直接呼び出します：
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-
-await apiClient.init({ baseUrl: 'https://api.example.com/api/v1' })
-const login = await apiClient.iam.auth.login({ identifier: 'alice', password: 'secret' })
-await apiClient.close()
-```
-
-サーバーは `@h-ai/serv` で contract をマウントします：
-
-```ts
-import { apiContract } from '@h-ai/api-contract'
-import { serv } from '@h-ai/serv'
-
-const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
-
-const app = serv.createApp({
-  contract,
-  procedures,
-  http: { apiPrefix: '/api/v1' },
-})
-```
-
-### API 一覧
-
-- `apiContract.create(options)`：`false` / `undefined` のドメインを除外し、アプリケーション contract を構成。
-- `apiContract.route(routeConfig)`：独自 endpoint の method/path/operationId/tags などのルートメタデータを定義。
-- `apiContract.pathOf(procedure)`：`*-contract.ts` に宣言された業務パスを取得。独立した routes 定数の管理は不要です。
-- `apiContract.haiResultSchema(dataSchema)` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema(itemSchema)`：共通 DTO Schema のファクトリー。
-- `Iam*Schema` / `Storage*Schema` / `Ai*Schema` / `Payment*Schema`：複数の API・層で再利用する入力とデータ構造。
-
-`storage.files.deleteMany` の成功データは `{ deletedKeys, failures: [] }` です。失敗進捗は `error.ext.deleteMany`（`failed / unknown / notAttempted`）にあり、HTTP 200 だけで完了と判断しません。[Storage の一括削除](../storage/README.ja.md#api-一覧)を参照してください。
-
-業務 path は対応する `*-contract.ts` に直接記述します。一度しか使わない出力 Schema は `.output(...)` にインラインで定義します。同じ contract ファイル内で再利用する場合は非公開の定数にできますが、schemas からエクスポートしてはいけません。
-
-### 設定による認証画面
-
-パスワードログインの送信項目は `identifier` と `password` のみです。`AuthPanel` は `LoginForm` の `username` を `identifier` に変換します。有効期間はサーバーの `session.maxAge` / `session.refreshTokenMaxAge` で設定し、フォームにログインごとの永続セッション選択肢はありません。
-
-規約は設定の userAgreementMarkdown/privacyPolicyMarkdown または URL を使用できます。同じ規約は Markdown 本文を優先して安全な Modal で描画します。
-
-IAM に公開設定、LDAP、復旧要求と確定の標準 route を追加しました。IamPublicConfig は安全な Schema で、登録パスワードの長さは IAM 設定に従います。
-
-[完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
-
-### 入力制約と HTTP 機能
-
-キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../storage/README.md#存储输入约束与跨端能力)を参照してください。
-
-### フィードバック領域の契約
-
-FeedbackJob.type と FeedbackRetryInput.target は独立した webhook タスクに対応し、詳細 jobs に状態・試行回数・安全なエラーコードを含みます。業務収集関数と宛先は信頼するサーバーで設定し、HTTP 入力では指定できません。本文と ZIP/GZIP は既存 API で取得します。[feedback](../feedback/README.ja.md) を参照してください。
-
-`apiContract.feedback` は reports.submit/list/get/getEvidence/setStatus/retry/export/getExport/appendEvidence/completeCollection と attachments.upload/get を公開します。最小送信は submissionId/appId のみで、説明・例外は不要です。認証情報・権限・S3 key・メール受信者をクライアントから受け取りません。`@h-ai/api-contract/feedback` から同じ schema と型を個別に利用できます。
-
-証拠追加は acknowledged/evidenceRevision を返し、クライアントは確認済みの分割データのみ解放します。setStatus は expectedVersion が必要です。export は証拠改訂を固定し、getExport が完成したパッケージを読みます。base64 添付は元データ 5 MiB までとし、サーバー側で実際の容量・形式・SHA-256 を検証します。Report.appVersion はアプリ版、Report.version は同時更新制御用です。
-
-```ts
-import { apiContract, FeedbackSubmitInputSchema } from '@h-ai/api-contract'
-
-const input = FeedbackSubmitInputSchema.parse({ submissionId: 'operation-1', appId: 'orders' })
-const contract = apiContract.create({ feedback: apiContract.feedback })
-const path = apiContract.pathOf(contract.feedback.reports.submit)
-```
-
-### 任意の対話チャレンジ
-
-IamCreateCaptchaInputSchema/IamCaptchaChallengeSchema は POST /auth/captcha の用途と公開チャレンジを定義します。対話入力の captcha は任意で最大4096文字、公開設定は既定 false の enabled のみです。Schema は構造を検証し、期限・用途・単用消費はサーバー IAM が実行します。
-
-方針・既定値・復旧範囲は次を参照： [IAM](../iam/README.ja.md)。
-
-### ページ離脱時のセッション方針
-
-`session.endOnPageHide` の既定値は `false` です。ホストは `actions.bindPageExit({ enabled: config.session.endOnPageHide })` を呼び、破棄時に戻り値の解除関数を実行します。標準 admin/H5/fullstack テンプレートは接続済みです。BFCache 以外の `pagehide`（再読み込み、文書全体の移動を含む）で POST `/auth/session/close` を最善努力で送信し、保持する access と関連 refresh を失効します。既存の CSRF/暗号化転送を使用し、`keepalive` を付け、自動更新しません。古い応答が新しいログインを上書きしないよう Cookie/ローカル資格情報を消去しません。明示的ログアウトは通常どおり失効と消去を行います。ブラウザーが離脱要求を送らない場合もあるため、業務に応じてサーバーの `idleTimeout`/`absoluteTimeout` を併用してください。閉じた瞬間の失効は保証できません。
-
-## 設定
-
-このパッケージには実行時設定がなく、環境変数も読み込みません。
-
-## エラー処理
-
-Contract は入出力構造を定義し、業務エラーは procedure が返す `HaiResult<T>` で表します。Zod の `parse()` を直接呼ぶと不正な入力で検証例外が発生します。外部入力には `safeParse()` を使い、その `success` と業務応答内の `HaiResult.success` を別々に確認してください。
+公開 HTTP ペイロードと永続化の責務については[データ構造](../../docs/usage/data/api-contract.md)（中国語）を参照してください。
 
 ## 開発とテスト
 
