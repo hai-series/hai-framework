@@ -11,7 +11,7 @@ hai-framework monorepo：`packages/*` 为框架包，`apps/*` 为应用，`packa
 | 任务                                  | 入口                                                                                                                                                                                                                                  |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 仓库开发流程、影响分析、交付          | [.agents/instructions/workspace.md](.agents/instructions/workspace.md)                                                                                                                                                                |
-| 结构、配置、核心流程或模块边界变更    | [变更影响与方案确认](.agents/skills/hai-change-plan/SKILL.md)：先提简明方案，用户决定后实施                                                                                                                                           |
+| 须人工确认的变更                      | [变更影响与方案确认](.agents/skills/hai-change-plan/SKILL.md)                                                                                                                                                                         |
 | 修改框架包                            | [.agents/instructions/module-conventions.md](.agents/instructions/module-conventions.md)                                                                                                                                              |
 | 创建 / 审查框架模块                   | [.agents/skills/hai-module-create/SKILL.md](.agents/skills/hai-module-create/SKILL.md) / [hai-module-review](.agents/skills/hai-module-review/SKILL.md)                                                                               |
 | 修改应用                              | [.agents/instructions/app-conventions.md](.agents/instructions/app-conventions.md)；Svelte 另读 [svelte-conventions](.agents/instructions/svelte-conventions.md)                                                                      |
@@ -34,7 +34,7 @@ hai-framework monorepo：`packages/*` 为框架包，`apps/*` 为应用，`packa
 
 ## 硬约束
 
-- 框架增删改涉及数据结构（type/interface/Schema 等）、配置/环境变量、核心流程或模块边界时，按 [hai-change-plan](.agents/skills/hai-change-plan/SKILL.md) 先说明变更与影响，等待用户明确决定；已确认且未扩大的方案不重复确认。同步相关 README、配置说明、docs、GitHub Pages 内容源、注释、调用方与测试。
+- 框架、应用及 CLI 模板的改动，只要涉及配置项、功能点或功能输入输出（含 `<模块名>.xxx`）、核心实现逻辑、数据表或缓存结构、类型或模块边界，实施前都须说明具体方案和影响，等用户明确确认后再改。已确认的同一方案沿用原决定，超出范围的部分先补确认。按 [hai-change-plan](.agents/skills/hai-change-plan/SKILL.md) 核对触发项、确认依据及同步范围。
 
 - 先用 `rg` 查实现、引用、测试和文档，保留已有改动；复用优先，不为假设需求新增抽象。
 - 生命周期模块按 `init(config) → use → close()` 使用；纯函数、工厂、core、serv、kit 等按实际类型契约处理，不臆造生命周期。

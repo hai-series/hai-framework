@@ -9,6 +9,7 @@
 
 | 任务 | 入口 |
 | --- | --- |
+| 配置、功能及输入输出、核心逻辑、表或缓存结构、类型或模块边界变更 | 实施前取得人工确认，见 [hai-change-plan](.agents/skills/hai-change-plan/SKILL.md) |
 | 新增、修改、修复应用 | [hai-app-create](.agents/skills/hai-app-create/SKILL.md)；配置、注释与能力选择按需查 [development.md](.agents/skills/hai-app-create/development.md) |
 | 需求/设计文档审查 | [hai-spec-review](.agents/skills/hai-spec-review/SKILL.md) |
 | 文档驱动规划、实施或返修 | [hai-spec-implement](.agents/skills/hai-spec-implement/SKILL.md) |

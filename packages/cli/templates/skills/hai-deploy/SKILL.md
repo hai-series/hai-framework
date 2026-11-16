@@ -24,6 +24,8 @@ Vercel API/文件上传只请求官方入口，拒绝重定向，每次请求和
 
 ## 操作流程
 
+部署和恢复涉及配置项、核心流程或数据表、缓存结构变更时，实施前按 [hai-change-plan](../hai-change-plan/SKILL.md) 取得具体方案的人工确认。命令的 `--yes` 参数只控制交互，人工确认仍须来自用户。
+
 全量和增量部署都须在变更服务前核对实际卷及后端家族。已有卷须匹配 `persistent-backends`，缺少记录或活动卷时停止部署，先恢复核验过的备份。服务启动前写入账本，移除服务、首次安装失败和恢复都会保留。账本与 `managed-secrets.env`、数据卷成套备份。`previous-state-backends` 用于恢复前重新验证原绑定。
 
 身份限制只发生在 SSH 目标 Linux 服务器执行 `apply.sh`：固定 SSH uid、本地默认 Docker context 或实际本地 Podman，以及 daemon/store；远程连接、非默认 context、显式存储覆盖拒绝。生产显式 pin `remote.runtime`；auto 因新装 Podman 换引擎时，先恢复原 runtime/用户/store。Windows/macOS 操作机用 Docker Desktop/Podman VM 构建打包再 SSH 发布不受限。有意更换 daemon、服务器或恢复/替换数据时单独迁移，不能用 uid、路径或家族相同证明数据格式兼容；主版本和 Schema 兼容仍须单独确认。

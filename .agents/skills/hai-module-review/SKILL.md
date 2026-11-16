@@ -17,7 +17,7 @@ description: "审查 hai-framework packages 模块的公共契约、生命周期
 
 ## 使用路径
 
-发现修复需要改变结构、配置、核心流程或模块边界时，按 [变更影响与方案确认](../hai-change-plan/SKILL.md) 先提出具体方案，用户决定后实施；审查时核对最终改动是否超出获准范围，以及文档、网站、注释是否同步。
+按 [hai-change-plan](../hai-change-plan/SKILL.md) 核对实际差异及人工确认依据。修复若触发确认要求，取得用户对具体方案与影响的确认后再改。审查时逐项指出缺失的确认、超出获准范围的改动及待同步文档。
 
 问题表达和交付前同步检查遵循[沟通与同步维护](../../../packages/cli/templates/skills/hai-app-create/collaboration.md)；每项先讲场景、影响和改法，再附代码与验证依据。
 

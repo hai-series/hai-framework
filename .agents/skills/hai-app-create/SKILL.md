@@ -19,6 +19,7 @@ CLI 创建/补模块/初始化提示使用现有中英日 locale；终端语言�
 
 ## 使用路径
 
+- 修改应用前按 [hai-change-plan](../hai-change-plan/SKILL.md) 核对人工确认要求。先取得对具体方案和影响的确认，再实施对应改动与 TDD。
 - 业务以用户当前明确要求及其指定文档为准；模板规则、示例、代码与测试是初始方案，冲突时在已授权范围内适配并同步过期 AGENTS/skills/README，不要求将需求改回模板。具体判断见下方应用开发共同规则。
 - 根据需求/设计文档实施时，先使用 [hai-spec-review](../../../packages/cli/templates/skills/hai-spec-review/SKILL.md) 确认就绪，再使用 [hai-spec-implement](../../../packages/cli/templates/skills/hai-spec-implement/SKILL.md) 维护任务、TDD、分支交付与已验收基线；文档提交后按固定 Git 差异更新原任务或新建任务，整体验收后推进基线。仅要求规划或审查时不开始实现。
 - 需要使用脚手架、添加模块或生成代码时，先按 [CLI 安装说明](../../../packages/cli/README.md#安装-cli) 全局安装 `@h-ai/cli`，再执行 `hai` 命令；仓库内未发布模板按该 README 的本地构建与运行说明验证。

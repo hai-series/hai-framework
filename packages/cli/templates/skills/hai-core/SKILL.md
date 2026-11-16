@@ -17,6 +17,7 @@ description: "配置 hai 应用启动、YAML/环境变量、日志、i18n 与 Ha
 
 ## 使用路径
 
+- 变更配置项、默认值、来源优先级或 `core.*` 功能契约前，先按 [hai-change-plan](../hai-change-plan/SKILL.md) 取得人工确认。
 - Node 启动用 core.init({ configDir, configSchemas }) 加载配置；configSchemas 登记所用模块的公开 Schema，使 YAML 未声明的合法可选字段也能接收细项环境变量。勿传 logging 覆盖 _core.yml 中的日志设置，除非任务明确要求。
 - 扫描配置目录直属的 YAML。`watchConfig: true` 只监听本次成功加载的文件。监听支持原地保存、原子替换和删除后重建，重载失败时通知错误并保留最近成功的缓存。底层监听失败会报告 `SERVICE_UNAVAILABLE`，恢复后可重新注册。单项加载失败后会继续扫描，启动代码应确认必需配置可用。项目根 `hai.json` 的 `build` / `deploy` 由 CLI 读取。
 - 应用名称、版本、环境、默认语言和日志设置统一从 `_core.yml` 经 core.config 获取，日志使用 core.logger；UI 不另维护硬编码副本。SvelteKit layout / fullstack app.info 仅下发公开字段白名单；独立 Vite mobile-app 在 Node 构建时解析并注入公开默认值，修改这些编译默认值需要重新构建。静态 Web 的公开 API 地址等通过 `runtime-config.js` 覆盖时无需重建镜像，原生包在复制静态资源前准备配置入口。浏览器不加载 YAML，不接收完整模块配置、密钥或日志脱敏上下文。

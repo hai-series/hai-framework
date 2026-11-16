@@ -15,7 +15,7 @@
 | 测试、CI 与证据 | [hai-app-tests](.agents/skills/hai-app-tests/SKILL.md)、[CI 分层与结果复用](docs/ci.md) |
 | UI 设计与组件实现 | [hai-ui-design](.agents/skills/hai-ui-design/SKILL.md)、[hai-ui](.agents/skills/hai-ui/SKILL.md)、[仓库设计约定](.agents/instructions/ui-design.md) |
 | 版本升级、差异与技能同步 | [hai-framework-sync](packages/cli/templates/skills/hai-framework-sync/SKILL.md)；在线固定目标及各包实际发布产物，不预填“当前最新版本” |
-| 结构、配置、核心流程或边界变化 | [hai-change-plan](.agents/skills/hai-change-plan/SKILL.md)，沿当前会话已确认的方案与授权执行 |
+| 配置、功能及输入输出、核心逻辑、表或缓存结构、类型或模块边界变更 | [hai-change-plan](.agents/skills/hai-change-plan/SKILL.md)，实施前取得人工确认 |
 
 ## 模块导航
 

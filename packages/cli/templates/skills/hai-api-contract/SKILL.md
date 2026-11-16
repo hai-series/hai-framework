@@ -17,6 +17,8 @@ description: "新增、组合或修改共享 HTTP 接口的路径与输入输出
 
 ## 使用路径
 
+新增、修改或删除接口及其输入输出前，先说明对服务端和客户端调用方的影响，并按 [hai-change-plan](../hai-change-plan/SKILL.md) 取得人工确认。
+
 1. 查当前公开 exports 与已有领域 contract，确认业务路径唯一来源。
 2. 在 contract 中声明 method/path 与输入输出 Schema；只导出真正跨接口或跨层复用的 Schema。
 3. 用 `apiContract.create` 组合领域；不把服务实现、私有配置或传输前缀写进 contract。

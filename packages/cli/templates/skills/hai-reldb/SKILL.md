@@ -17,6 +17,7 @@ description: "使用 @h-ai/reldb 访问 SQLite/PostgreSQL/MySQL，编写 SQL、C
 
 ## 使用路径
 
+- 数据表、字段、约束或索引的增删改及迁移，先说明旧数据处理和调用方影响，按 [hai-change-plan](../hai-change-plan/SKILL.md) 取得人工确认后再实施。
 - `_db.yml` 对应 core.config 的 db；先校验 ReldbConfigSchema，再 init 并检查 success。仅做配置校验可从 `@h-ai/reldb/schemas` 导入，纯入口只依赖 Zod，不加载数据库实例/驱动，可用于 CLI 和浏览器；运行时数据库操作仍仅服务端。
 - `reldb.crud.table` / `tx.crud.table` 的 `dbType` 必填并与实际后端一致；`BaseReldbCrudRepository` 自动读取已初始化的配置。
 - 事务每步检查结果，避免把失败当普通返回值提交；同一事务操作须共享 tx。

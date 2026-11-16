@@ -17,6 +17,8 @@ description: "实现或排查 Memory/Redis 缓存、TTL、集合与分布式锁�
 
 ## 使用路径
 
+变更缓存键、值结构、过期或失效规则前，先说明旧缓存兼容和切换方式，并按 [hai-change-plan](../hai-change-plan/SKILL.md) 取得人工确认。
+
 1. 开发/显式测试可用单进程 Memory；生产环境即使只有一个实例，也必须使用 Redis 共享状态，不能把单实例当作 Memory 的生产适用条件。配置校验与 init 成功后才使用。cache 不依赖 reldb。
 2. 根据 KV/Hash/List/Set/ZSet 选择公开操作，明确 TTL、空值和回源失败的业务含义。
 3. 读取 acquire 成功返回的唯一 owner，检查 success 与 data；续期/释放复用该 owner，丢锁后停止受保护工作。
