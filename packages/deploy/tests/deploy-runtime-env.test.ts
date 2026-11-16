@@ -88,12 +88,21 @@ it.each([
   'dollar-$-$(not-a-command)',
   'both \'single\' and "double" $x',
   'line\nwith \' and " quotes',
+  'line\rwith bare carriage return',
+  'line\r\nwith "quotes" and literal \\r $value',
   'a\\path',
 ])('交付值 %s 在真实 Node 加载中保持原样且不执行 shell', value => fixture(({ directory, start }) => {
   writeFileSync(join(directory, '.env.runtime'), serializeEnvFile({ HAI_RUNTIME_VALUE: value }))
   const result = start()
   expect(result.status).toBe(0)
   expect(JSON.parse(String(result.stdout)).value).toBe(value)
+}))
+
+it('旧版 dotenv 的反斜线和引号在部署启动时仍按原规则读取', () => fixture(({ directory, start }) => {
+  writeFileSync(join(directory, '.env.runtime'), 'HAI_RUNTIME_VALUE="C:\\repo\\tools"\r\nHAI_RUNTIME_DB="first\\u0027line\\r\\nsecond"\r\n')
+  const result = start()
+  expect(result.status).toBe(0)
+  expect(JSON.parse(String(result.stdout))).toMatchObject({ value: 'C:\\repo\\tools', db: 'first\'line\r\nsecond' })
 }))
 
 it('空 Serv 父对象与运行进程覆盖均保留独立 Cookie 开关', () => fixture(({ directory, start }) => {

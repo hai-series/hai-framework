@@ -288,7 +288,7 @@ const restored = core.config.parseEnv(text) // 値を文字列として読み戻
 core.logger.info('Generated config verified', { port: restored.HAI_APP_PORT })
 ```
 
-通常のオブジェクトは項目ごとに展開し、配列、動的な辞書、空オブジェクトは JSON のまま出力します。`stringifyEnv()` は既定で Node 用のテキストを生成します。Compose のドル記号の扱いに合わせるには `{ target: 'compose' }` を渡します。Node のパーサーは単引用符で囲まれた値に含まれる改行の復帰文字（`\r`）を取り除きます。[基本設定ガイド](../../docs/usage/configuration/runtime.md)
+通常のオブジェクトは項目ごとに展開し、配列、動的な辞書、空オブジェクトは JSON のまま出力します。既定の Node 用 dotenv を `parseEnv()` または `loadEnvFiles()` で読むと、値に含まれる復帰文字（`\r`）と CRLF が保持されます。生成された行の末尾に `# hai:json` がある場合は、そのまま残してください。Compose の `env_file` 用に生成する場合は `{ target: 'compose' }` を指定します。[基本設定ガイド](../../docs/usage/configuration/runtime.md)
 
 ### ログ：`core.logger`
 

@@ -398,7 +398,8 @@ export const config = {
   /**
    * 解析 dotenv 字面文本，拒绝重复键，不执行 shell 或变量展开。
    * @param text - dotenv 文本，可能包含秘密。
-   * @returns 字面变量；重复键抛出不含变量值的错误。
+   * @returns 字面变量，包括 Core 生成并转义的回车和 CRLF。
+   * @throws 重复键或带 JSON 标记的值格式错误。错误消息只包含变量名。
    * @example
    * ```ts
    * import { core } from '@h-ai/core'
@@ -407,10 +408,10 @@ export const config = {
    */
   parseEnv: parseEnvironment,
   /**
-   * 编码 dotenv，父变量排在细项前。Node dotenv 解析器会规范化单引号字面值中的回车。
+   * 编码 dotenv，父变量排在细项前。回车使用转义，Node 输出由 parseEnv 或 loadEnvFiles 读取。
    * @param values - 字面变量，不进行脱敏。
    * @param options - 输出语法目标，默认 Node dotenv。
-   * @param options.target - Compose 目标同时处理其美元符号插值规则。
+   * @param options.target - Compose 目标使用 Compose 的回车转义和美元符号插值规则。
    * @returns dotenv 文本；非法变量名抛错。
    * @example
    * ```ts

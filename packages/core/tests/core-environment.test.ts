@@ -405,6 +405,28 @@ it('dotenv 序列化无损保留混合引号、多行、反斜线和 Unicode，J
   expect(core.config.parseEnv(manual)).toEqual(nativeParseEnv(manual))
 })
 
+it('生成的 Node dotenv 往返保留回车和 CRLF，旧文件沿用原有引号规则', () => {
+  const values = {
+    BARE_CR: 'first\rsecond',
+    CRLF: 'first\r\nsecond',
+    MIXED: 'first\r\n\'single\' and "double" with \\r $value',
+    LITERAL: 'first\\r\\nsecond',
+  }
+  const text = core.config.stringifyEnv(values)
+  expect(text).not.toContain('\r')
+  expect(core.config.parseEnv(text)).toEqual(values)
+  expect(core.config.parseEnv(text.replaceAll('\n', '\r\n'))).toEqual(values)
+
+  const manual = 'DIRECTORY="C:\\repo\\tools"\r\nLITERAL_ESCAPE="\\u000d"\r\nMULTILINE=\'first\r\nsecond\'\r\n'
+  expect(core.config.parseEnv(manual)).toEqual(nativeParseEnv(manual))
+  expect(core.config.parseEnv('QUOTED="first\\u0027line\\r\\nsecond"\n')).toEqual({ QUOTED: 'first\'line\r\nsecond' })
+})
+
+it('为 Compose 输出双引号转义的回车并保留字面美元符号', () => {
+  const value = 'first\r\n$example'
+  expect(core.config.stringifyEnv({ MESSAGE: value }, { target: 'compose' })).toBe('MESSAGE="first\\r\\n$$example"\n')
+})
+
 it('所有 dotenv 层使用统一来源优先级，高来源父对象不遗留低来源细项', () => {
   const directory = mkdtempSync(join(tmpdir(), 'hai-env-layers-'))
   directories.push(directory)

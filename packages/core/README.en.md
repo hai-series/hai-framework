@@ -288,7 +288,7 @@ const restored = core.config.parseEnv(text) // Read back the literal values.
 core.logger.info('Generated config verified', { port: restored.HAI_APP_PORT })
 ```
 
-Plain objects expand into fields. Arrays, dynamic dictionaries, and empty objects stay in JSON. `stringifyEnv()` generates text for Node by default. Pass `{ target: 'compose' }` for Compose’s dollar sign handling. The Node parser strips literal carriage returns (`\r`) from single-quoted values. [Runtime configuration guide](../../docs/usage/configuration/runtime.md)
+Plain objects expand into fields. Arrays, dynamic dictionaries, and empty objects stay in JSON. Read the default Node dotenv output with `parseEnv()` or `loadEnvFiles()` to preserve carriage returns (`\r`) and CRLF in values. Keep any generated `# hai:json` suffix in place. For a Compose `env_file`, pass `{ target: 'compose' }`. [Runtime configuration guide](../../docs/usage/configuration/runtime.md)
 
 ### Logging: `core.logger`
 

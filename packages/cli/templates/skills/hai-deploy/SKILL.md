@@ -67,7 +67,7 @@ SvelteKit SSR 的 HTTP/HTTPS 部署均通过独立 `gateway`，SSR 容器不映�
 
 Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>/config/.env.runtime`。应用配置与托管连接在此合并，修改 `HAI_STORAGE_PUBLICENDPOINT` 等细项后重启对应后端即可；同一来源的细项覆盖父 JSON。配置目录只读挂载到 `/run/hai/config`，编辑器原子替换文件也会被下一次启动读取。私有代理标记和 Node 启动参数由部署装配管理；静态 Web、中间件原生环境、端口/挂载、Nginx 路由与限额变更仍需部署。仅更新 Web/中间件保留当前应用配置；后端局部更新保留服务器托管连接，其余值来自新包，全量更新采用新包并按已有凭据状态定稿。手工修改先备份，长期配置同步回源环境。
 
-运行文件固定为 `<部署目录>/config/.env.runtime`，只读挂载目录到 `/run/hai/config`；各 release 保留配置快照。单文件不超过 1 MiB，缺失、不可读、重复变量或超限阻止启动；dotenv 字面解析不执行 shell。同源细项覆盖 JSON，显式进程 HAI 配置优先。修改后重启、验健康和受影响业务，失败恢复备份再重启。
+运行文件固定为 `<部署目录>/config/.env.runtime`，只读挂载目录到 `/run/hai/config`。各 release 保留配置快照。单文件不超过 1 MiB，缺失、不可读、重复变量或超限阻止启动。Node 启动器按字面规则加载 dotenv，行末的 `# hai:json` 用于恢复值中的回车等转义字符，编辑时保留。同源细项覆盖 JSON，显式进程 HAI 配置优先。修改后重启、验健康和受影响业务，失败恢复备份再重启。
 
 每个部署包的外层 `README.txt` 和归档内 `APPLY.txt` 都包含文件索引、环境优先级、当前包的变量名和排障步骤。解包目录的 `config/.env.runtime` 是发布输入，部署根下的是当前运行配置，`releases/<ID>/` 下的是历史记录。外部 PostgreSQL 改密后更新项目源环境并发布后端。部署校验拒绝 URL 与分字段密码冲突，增量切换外部与随包中间件需要改用全量发布。 `HAI_SERV_REFRESH_COOKIE_SECURE` 独立于 `HAI_SERV` 父配置，容器部署接受 `true`、`false` 或空值。
 

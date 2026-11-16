@@ -288,7 +288,7 @@ const restored = core.config.parseEnv(text) // 解析回字面字符串，不执
 core.logger.info('Generated config verified', { port: restored.HAI_APP_PORT })
 ```
 
-普通对象默认展开，数组、动态字典和空对象保留为 JSON。`stringifyEnv()` 默认生成供 Node 读取的文本，也可传入 `{ target: 'compose' }` 适配 Compose 的美元符号处理。Node 解析单引号值时会移除字面的回车字符（`\r`）。[基础配置手册](../../docs/usage/configuration/runtime.md)
+普通对象默认展开，数组、动态字典和空对象保留为 JSON。默认生成的 Node dotenv 由 `parseEnv()` 或 `loadEnvFiles()` 读取，值里的回车（`\r`）和 CRLF 都能保留。请保留生成行末的 `# hai:json` 标记。供 Compose 的 `env_file` 使用时，传入 `{ target: 'compose' }`。[基础配置手册](../../docs/usage/configuration/runtime.md)
 
 ### 记录日志：`core.logger`
 

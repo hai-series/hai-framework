@@ -49,7 +49,7 @@ function readText(name) {
   }
 }
 
-/** 使用与启动入口一致的 dotenv 字面规则，保留混合引号、UTF-8 和多行值。 */
+/** 与 Core 一致地读取 dotenv 字面值，包括生成器转义的回车和 CRLF。 */
 function readEnvironment(name) {
   if (name === '-')
     return {}
@@ -57,15 +57,23 @@ function readEnvironment(name) {
     const text = readText(name)
     const values = parseEnv(text)
     const names = new Set()
-    for (const match of text.matchAll(/^[ \t]*(?:export[ \t]+)?([A-Z_]\w*)[ \t]*=[ \t]*('[^']*'|"(?:[^"\\]|\\.)*"|`[^`]*`|[^\r\n]*)/gim)) {
+    // 此脚本独立交付，行尾标记与 Core 的 dotenv 编码保持一致。
+    const assignments = /^[ \t]*(?:export[ \t]+)?([A-Z_]\w*)[ \t]*=[ \t]*(?:'[^']*'|("(?:[^"\\]|\\.)*")(?:[ \t]+(# hai:json)[ \t]*(?=\r?\n|$))?|`[^`]*`|[^\r\n]*)/gim
+    for (const match of text.matchAll(assignments)) {
       if (names.has(match[1]))
         throw new Error('Duplicate environment variable')
       names.add(match[1])
-      if (match[2].startsWith('"') && (match[2].includes('\\"') || match[2].includes('\\u0027'))) {
+      const literal = match[2]
+      const marked = match[3] !== undefined
+      if (literal !== undefined && (marked || literal.includes('\\"') || literal.includes('\\u0027'))) {
         try {
-          values[match[1]] = JSON.parse(match[2])
+          values[match[1]] = JSON.parse(literal)
         }
-        catch { /* 普通 dotenv 双引号仍按 Node 原生规则解析。 */ }
+        catch {
+          if (marked)
+            throw new Error('Invalid JSON-encoded environment variable')
+          // 兼容旧格式中恰好含有 JSON 转义的普通 dotenv 双引号值。
+        }
       }
     }
     return values
@@ -142,12 +150,14 @@ function applyManagedPasswords(values, bindings, state) {
   }
 }
 
-/** 保留父 JSON 与显式细项；粗细覆盖由应用通用配置解析器完成。 */
+/** 保留父 JSON、细项和字面回车，结果由容器中同一版本的启动器读取。 */
 function serialize(values) {
   return `${Object.entries(values).sort(([left], [right]) => left.localeCompare(right)).filter(([name]) => !startupEnvironment.has(name)).map(([name, value]) => {
-    const literal = !value.includes('\'')
-      ? `'${value}'`
-      : JSON.stringify(value).replaceAll('\'', '\\u0027')
+    let literal = `'${value}'`
+    if (value.includes('\''))
+      literal = JSON.stringify(value).replaceAll('\'', '\\u0027')
+    else if (value.includes('\r'))
+      literal = `${JSON.stringify(value)} # hai:json`
     return `${name}=${literal}`
   }).join('\n')}\n`
 }

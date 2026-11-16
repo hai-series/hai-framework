@@ -119,7 +119,7 @@ export function mergeEnv(layers: readonly Environment[]): Record<string, string>
 }
 
 /**
- * dotenv 使用 Node 字面规则；补齐生成器双引号的 JSON 转义，拒绝同文件重复键。
+ * dotenv 使用 Node 字面规则，也读取生成器的 JSON 字符串。带回车的值用行尾标记区分手写的反斜线文本。
  * @example 模块内部上下文
  * ```ts
  * const values = parseEnvironment('HAI_APP_NAME=Example\n')
@@ -128,24 +128,33 @@ export function mergeEnv(layers: readonly Environment[]): Record<string, string>
 export function parseEnvironment(text: string): Record<string, string> {
   const result = nodeParseEnv(text)
   const names = new Set<string>()
-  const assignments = /^[ \t]*(?:export[ \t]+)?([A-Z_]\w*)[ \t]*=[ \t]*('[^']*'|"(?:[^"\\]|\\.)*"|`[^`]*`|[^\r\n]*)/gim
+  // 只在双引号闭合之后识别标记，避免与未加引号值的空白匹配重叠。部署启动器使用同一规则。
+  const assignments = /^[ \t]*(?:export[ \t]+)?([A-Z_]\w*)[ \t]*=[ \t]*(?:'[^']*'|("(?:[^"\\]|\\.)*")(?:[ \t]+(# hai:json)[ \t]*(?=\r?\n|$))?|`[^`]*`|[^\r\n]*)/gim
   for (const match of text.matchAll(assignments)) {
     const name = match[1]!
     if (names.has(name))
       throw new Error(`Duplicate environment variable: ${name}`)
     names.add(name)
-    if (match[2]!.startsWith('"') && (match[2]!.includes('\\"') || match[2]!.includes('\\u0027'))) {
+    const literal = match[2]
+    const marked = match[3] !== undefined
+    if (literal !== undefined && (marked || literal.includes('\\"') || literal.includes('\\u0027'))) {
       try {
-        result[name] = JSON.parse(match[2]!)
+        const value: unknown = JSON.parse(literal)
+        if (typeof value === 'string')
+          result[name] = value
       }
-      catch { /* 普通 dotenv 双引号仍按 Node 规则解析。 */ }
+      catch {
+        if (marked)
+          throw new Error(`Invalid JSON-encoded environment variable: ${name}`)
+        // 兼容旧格式中恰好含有 JSON 转义的普通 dotenv 双引号值。
+      }
     }
   }
   return Object.fromEntries(Object.entries(result).filter((entry): entry is [string, string] => entry[1] !== undefined))
 }
 
 /**
- * 所有值均按字面量编码；排序让模块 JSON 位于其细项之前。
+ * 将字面值编码为 Node 或 Compose dotenv，排序让模块 JSON 位于细项之前。
  * @example 模块内部上下文
  * ```ts
  * const text = stringifyEnv({ HAI_APP_NAME: 'Example' })
@@ -156,12 +165,17 @@ export function stringifyEnv(values: Record<string, string>, options: { target?:
     if (!/^[A-Z_]\w*$/i.test(name))
       throw new Error('Invalid environment variable name')
     const value = values[name]!
+    const apostrophe = value.includes('\'')
+    const carriageReturn = value.includes('\r')
     let literal: string
-    if (!value.includes('\''))
+    if (!apostrophe && !carriageReturn)
       literal = `'${value}'`
     else if (options.target === 'compose')
       literal = JSON.stringify(value).replaceAll('$', () => '$$')
-    else literal = JSON.stringify(value).replaceAll('\'', '\\u0027')
+    else if (apostrophe)
+      literal = JSON.stringify(value).replaceAll('\'', '\\u0027')
+    else
+      literal = `${JSON.stringify(value)} # hai:json`
     return `${name}=${literal}`
   }).join('\n')}\n`
 }
