@@ -4,8 +4,6 @@
 
 [Chinese source](payment.md) · [Configuration](../configuration/payment.en.md) · [Data structures](../data/payment.en.md)
 
-<a id="quick-start"></a>
-
 ## Quick start
 
 Initialize Payment before creating orders. Validate amounts and authorize operations in application code. Treat provider callbacks and query results as inputs to the app’s own order state machine.
@@ -58,24 +56,138 @@ export async function startPayment(orderData: PaymentOrder) {
 }
 ```
 
+<a id="api-list"></a>
+
 <a id="api-reference"></a>
 
-## API list
+## Features
 
-The output is successful HaiResult.data unless the operation is listed as returning a direct value or Promise<void>.
+Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
 
-| API | Purpose | Inputs and defaults | Output | Example |
+<a id="providers"></a>
+
+### Connect payment providers: `payment`
+
+Prepare providers with validated server settings. Custom providers implement the public contract; merchant secrets stay on the server.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `payment.init` | Initialize configured payment channels | `config` | `void` | `await payment.init(config)` |
 | `payment.close` | Release module state | None | `Promise<void>` | `await payment.close()` |
-| `payment.createOrder` | Create channel payment instructions | `providerName, input` | `PaymentOrder` | `await payment.createOrder(providerName, orderInput)` |
-| `payment.queryOrder` | Read current channel status | `providerName, orderNo` | `OrderStatus` | `await payment.queryOrder(providerName, orderNo)` |
-| `payment.refund` | Request a refund with a business refund ID | `providerName, input` | `RefundResult` | `await payment.refund(providerName, refundInput)` |
-| `payment.closeOrder` | Request cancellation of an unpaid order | `providerName, orderNo` | `void` | `await payment.closeOrder(providerName, orderNo)` |
-| `payment.handleNotify` | Verify the provider notification before use | `providerName, request` | `PaymentNotifyResult` | `await payment.handleNotify(providerName, originalNotification)` |
-| `payment.getProvider` | Look up a registered or configured provider | `name` | `PaymentProvider or undefined` | `payment.getProvider(name)` |
-| `payment.registerProvider` | Register an application-provided provider | `provider` | `void` | `payment.registerProvider(customProvider)` |
+| `payment.getProvider` | Read a registered payment provider | `name` | `PaymentProvider or undefined` | `payment.getProvider(name)` |
+| `payment.registerProvider` | Register an application payment provider | `provider` | `void` | `payment.registerProvider(customProvider)` |
 
-An order creation result does not mean the customer paid. Verify notifications and update application orders once per business event.
+#### Scenario: Connect payment providers
 
-Still untranslated: the channel-specific checkout, callback and refund examples. Read the [Chinese source section](payment.md#api-reference).
+Input is an application PaymentProvider instance. Registration and lookup are synchronous; initialization and shutdown are in the quick start.
+
+```ts
+import type { PaymentProvider } from '@h-ai/payment'
+
+function installProvider(provider: PaymentProvider) {
+  payment.registerProvider(provider)
+  return payment.getProvider(provider.name) === provider // true
+}
+payment.getProvider('not-registered') // undefined
+```
+
+<a id="orders"></a>
+
+### Create, query and close orders: `payment`
+
+Create a provider order with your business order number, query its status and close unpaid orders when appropriate.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `payment.createOrder` | Create a payment order | `providerName, input` | `PaymentOrder` | `await payment.createOrder(providerName, orderInput)` |
+| `payment.queryOrder` | Query payment status | `providerName, orderNo` | `OrderStatus` | `await payment.queryOrder(providerName, orderNo)` |
+| `payment.closeOrder` | Close a payment order | `providerName, orderNo` | `void` | `await payment.closeOrder(providerName, orderNo)` |
+
+#### Scenario: Create, query and close orders
+
+Order creation is in the quick start. Supply its provider and business order number; this function closes only pending orders and returns a final query result or failure.
+
+```ts
+async function inspectAndClose(providerName: string, orderNo: string) {
+  const queried = await payment.queryOrder(providerName, orderNo)
+  if (!queried.success)
+    return queried
+  if (queried.data.status !== 'pending')
+    return queried
+  const closed = await payment.closeOrder(providerName, orderNo)
+  if (!closed.success)
+    return closed
+  return payment.queryOrder(providerName, orderNo)
+}
+```
+
+<a id="refunds"></a>
+
+### Refund and inspect outcomes: `payment.refund`
+
+Request a refund using the original order and a distinct refund number; distinguish acceptance from final settlement.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `payment.refund` | Request a refund and read acceptance | `providerName, input` | `RefundResult` | `await payment.refund(providerName, refundInput)` |
+
+#### Scenario: Refund and inspect outcomes
+
+Input is a verified order and a unique refund number; 100 is in minor currency units. Neither failure nor processing confirms a completed refund.
+
+```ts
+async function refundOrder(providerName: string, orderNo: string, refundNo: string) {
+  const refunded = await payment.refund(providerName, { orderNo, refundNo, amount: 100 })
+  if (!refunded.success)
+    return refunded
+  return refunded // data.status distinguishes success from processing
+}
+```
+
+<a id="notifications"></a>
+
+### Verify payment callbacks: `payment.handleNotify`
+
+Use the original body and signature headers, verify the provider and update business state idempotently.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `payment.handleNotify` | Verify provider notifications and invoke callbacks | `providerName, request` | `PaymentNotifyResult` | `await payment.handleNotify(providerName, originalNotification)` |
+
+#### Scenario: Verify payment callbacks
+
+Input is the original route Request; output is HaiResult<PaymentNotifyResult>. Read the body once. After verification, validate and commit the order, amount, currency and event ID before acknowledging the provider.
+
+```ts
+async function verifyNotification(providerName: string, request: Request) {
+  return payment.handleNotify(providerName, {
+    body: await request.text(),
+    headers: Object.fromEntries(request.headers),
+  })
+}
+```
+
+
+<a id="browser-payment"></a>
+
+### Start payment in the browser: `invokePayment`
+
+Use startPayment in the quick start with an order successfully created by the server.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `invokePayment` | Open the provider payment UI | `orderData: PaymentOrder` | `Promise<HaiResult<InvokePaymentResult>>` | `await invokePayment(orderData)` |
+
+#### Scenario: Handle invocation results
+
+startPayment checks success and data.invoked and returns the invocation result. Cancellation, redirects and page loads do not confirm payment.

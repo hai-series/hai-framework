@@ -60,7 +60,7 @@ export async function storeImage(config: StorageConfigInput, imageBuffer: Uint8A
 }
 ```
 
-#### 浏览器客户端
+### 浏览器客户端
 
 浏览器通过已初始化的 `apiClient` 获取 S3 上传地址。将应用授权的对象 key 和用户选择的 `File` 传给 `uploadImage`。
 
@@ -85,7 +85,43 @@ export async function uploadImage(key: string, file: File) {
 
 > 注意：`@h-ai/storage` 不内置 HTTP 路由；请在应用层自行实现签名 URL API。
 
+<a id="api-reference"></a>
+
 ## 功能说明
+
+下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。`value` 先检查 `HaiResult.success`，失败保留原错误，成功返回 data；只用于读取结果。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+
+function value<T>(result: HaiResult<T>): T {
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
+  return result.data
+}
+```
+
+<a id="connection"></a>
+
+### 连接与关闭：`storage`
+
+本地目录和 S3 对象使用同一文件 API；应用负责初始化与关闭连接。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `storage.init` | 准备本地路径或 S3 存储客户端 | `config`（必填） | `Promise<HaiResult<void>>` | `await storage.init({ type: 'local', root: './data/files' })` |
+| `storage.close` | 释放存储客户端；已保存的文件仍由原后端持有 | 已保存的文件仍由原后端持有；无 | `Promise<HaiResult<void>>` | `await storage.close()` |
+
+#### 场景：连接与关闭
+
+```ts
+value(await storage.init({ type: 'local', root: './data/files-demo' }))
+value(await storage.close()) // undefined; saved files remain on disk
+```
+
+输入为开发环境目录。close 释放实例但不会删除目录内文件，下一场景先重新初始化。
 
 模块在健康检查通过后才允许业务读写。如果初始化失败，会尝试释放已经打开的资源。释放也失败时，返回的 `error.ext.cleanupPending` 为 `true`。
 
@@ -103,89 +139,57 @@ if (!closed.success) {
 
 S3 普通请求客户端与禁用请求重试的批量删除客户端分别释放；一个失败不阻止另一个清理，已释放的客户端不会重复释放。
 
-<a id="api-reference"></a>
-
-### 功能输入输出
-
 初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
-#### 初始化与关闭
+#### 生产后端要求
 
-| API | 用途 | 输入 | 输出 | 示例 |
+生产使用共享 S3 或兼容服务；local 只用于开发/明确测试。对象业务授权和读改写的条件提交由应用负责。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../../.agents/instructions/distributed-state.md).
+
+> 注意：`storage.config` 返回的是**脱敏配置快照**；S3 密钥类字段会被替换为 `[REDACTED]`，不能用于重新初始化。
+
+<a id="files"></a>
+
+<a id="api-概览"></a>
+
+### 读写与复制文件：`storage.file`
+
+以业务对象键定位文件；内容、元数据和流分别读取，批量删除要检查每项进度。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `storage.init` | 准备本地路径或 S3 存储客户端 | `config`（必填） | `Promise<HaiResult<void>>` | `await storage.init({ type: 'local', root: './data/files' })` |
-| `storage.close` | 释放存储客户端；已保存的文件仍由原后端持有 | 无 | `Promise<HaiResult<void>>` | `await storage.close()` |
+| `storage.file.put` | 写入文件内容与元数据 | key, data, options | `FileMetadata` | `await storage.file.put('report.txt', 'text', { contentType: 'text/plain' })` |
+| `storage.file.get` | 读取完整文件字节 | key, options | `Buffer<ArrayBufferLike>` | `await storage.file.get('report.txt')` |
+| `storage.file.getStream` | 取得逐块读取的文件流 | key, options | `AsyncIterable<Uint8Array<ArrayBufferLike>>` | `await storage.file.getStream('report.txt')` |
+| `storage.file.head` | 读取文件元数据 | key | `FileMetadata` | `await storage.file.head('report.txt')` |
+| `storage.file.exists` | 检查文件是否存在 | key | `boolean` | `await storage.file.exists('report.txt')` |
+| `storage.file.copy` | 复制到另一个对象键 | sourceKey, destKey, options | `FileMetadata` | `await storage.file.copy('report.txt', 'archive/report.txt')` |
+| `storage.file.delete` | 删除指定文件 | key | `void` | `await storage.file.delete('report.txt')` |
+| `storage.file.deleteMany` | 批量删除并报告逐项进度 | keys | `StorageDeleteResult` | `await storage.file.deleteMany(['report.txt', 'archive/report.txt'])` |
 
-#### storage.file
-
-对象生命周期输入原始 key、字节/流和选项；put/copy/head 返回元数据，get 返回 Buffer，getStream 返回异步字节流，exists 返回 boolean，delete 返回 void；deleteMany 返回逐项确认进度。
-
-| 入口                      | 输入参数                    | 成功结果                                     | 调用示例                                                                      |
-| ------------------------- | --------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------- |
-| `storage.file.put`        | key, data, options          | `FileMetadata`                               | `await storage.file.put('report.txt', 'text', { contentType: 'text/plain' })` |
-| `storage.file.get`        | key, options                | `Buffer<ArrayBufferLike>`                    | `await storage.file.get('report.txt')`                                        |
-| `storage.file.getStream`  | key, options                | `AsyncIterable<Uint8Array<ArrayBufferLike>>` | `await storage.file.getStream('report.txt')`                                  |
-| `storage.file.head`       | key                         | `FileMetadata`                               | `await storage.file.head('report.txt')`                                       |
-| `storage.file.exists`     | key                         | `boolean`                                    | `await storage.file.exists('report.txt')`                                     |
-| `storage.file.copy`       | sourceKey, destKey, options | `FileMetadata`                               | `await storage.file.copy('report.txt', 'archive/report.txt')`                 |
-| `storage.file.delete`     | key                         | `void`                                       | `await storage.file.delete('report.txt')`                                     |
-| `storage.file.deleteMany` | keys                        | `StorageDeleteResult`                        | `await storage.file.deleteMany(['report.txt', 'archive/report.txt'])`         |
-
-#### storage.dir
-
-按前缀浏览/清理；list 接收 prefix、分页选项返回文件列表/续页信息，delete 接收 prefix 返回 void，不能阻止并发新增。
-
-| 入口                 | 输入参数 | 成功结果     | 调用示例                                                      |
-| -------------------- | -------- | ------------ | ------------------------------------------------------------- |
-| `storage.dir.list`   | options  | `ListResult` | `await storage.dir.list({ prefix: 'reports/', maxKeys: 20 })` |
-| `storage.dir.delete` | prefix   | `void`       | `await storage.dir.delete('reports/')`                        |
-
-#### storage.presign
-
-S3 客户端直传/下载。key 和期限/响应选项生成 URL HaiResult；publicUrl 同步返回公开 URL 或 null，不代表获得访问授权。
-
-| 入口                        | 输入参数     | 成功结果         | 调用示例                                                                                    |
-| --------------------------- | ------------ | ---------------- | ------------------------------------------------------------------------------------------- |
-| `storage.presign.getUrl`    | key, options | `string`         | `await storage.presign.getUrl('report.txt', { expiresIn: 300 })`                            |
-| `storage.presign.putUrl`    | key, options | `string`         | `await storage.presign.putUrl('report.txt', { expiresIn: 300, contentType: 'text/plain' })` |
-| `storage.presign.publicUrl` | key          | `string \| null` | `storage.presign.publicUrl('report.txt')`                                                   |
-
-#### storage.checksum
-
-无需初始化的字节完整性校验；数据及算法/编码得到摘要，expected 得到匹配 boolean；流输入消费一次。
-
-| 入口                        | 输入参数                | 成功结果  | 调用示例                                               |
-| --------------------------- | ----------------------- | --------- | ------------------------------------------------------ |
-| `storage.checksum.generate` | data, options           | `string`  | `await storage.checksum.generate('text')`              |
-| `storage.checksum.verify`   | data, expected, options | `boolean` | `await storage.checksum.verify(bytes, expectedDigest)` |
-
-- S3 协议（AWS S3 / MinIO / RustFS / OSS 等）
-- 本地文件系统
-
-### HTTP API 契约
-
-公共 HTTP API 统一由 `@h-ai/api-contract` 提供，并由 `@h-ai/serv` 的 `createStorageProcedures({ storage, authorize })` 绑定到本模块能力。
+#### 场景：读写与复制文件
 
 ```ts
-import { apiClient } from '@h-ai/api-client'
-
-const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
-if (!result.success)
-  throw new Error(result.error.message)
+const saved = value(await storage.file.put('demo/report.txt', 'hello', { contentType: 'text/plain' }))
+// saved describes key demo/report.txt, size 5 and backend timestamps
+value(await storage.file.exists('demo/report.txt')) // true
+const metadata = value(await storage.file.head('demo/report.txt')) // same key and size
+value(await storage.file.get('demo/report.txt')).toString('utf8') // 'hello'
+const stream = value(await storage.file.getStream('demo/report.txt'))
+let byteCount = 0
+for await (const bytes of stream)
+  byteCount += bytes.byteLength
+// byteCount === 5; stream iteration can throw on later I/O failure
+value(await storage.file.copy('demo/report.txt', 'demo/copy.txt')) // metadata for the new key
+value(await storage.file.delete('demo/report.txt')) // undefined
+const deleted = value(await storage.file.deleteMany(['demo/copy.txt'])) // per-key deletion progress
+value(await storage.file.exists('demo/copy.txt')) // false after confirmed deletion
 ```
 
-预签名只支持 S3。local 的 `getUrl()` / `putUrl()` 返回 `HaiStorageError.UNSUPPORTED_OPERATION`（`hai:storage:018`），`publicUrl()` 返回 `null`；不会返回虚拟 URL。serv 与 apiClient 保留该失败结果，调用方须先检查 `success` 再消费 URL。本地开发文件可由应用已有的鉴权上传/下载接口处理，本模块不内置 HTTP 文件路由或签名验证服务。
+输入为 UTF-8 的 hello，共五个字节。流不能预设分几块返回，迭代中的 I/O 错误需要调用方处理；deleteMany 的成功结果仍要核对逐项确认，不能只判断 Promise 完成。
 
-### API 概览
-
-- `storage.file`
-  - `put/get/getStream/head/exists/delete/deleteMany/copy`
-- `storage.dir`
-  - `list/delete`
-- `storage.presign`
-  - `getUrl/putUrl/publicUrl`
-- `storage.checksum`
-  - `generate(data, options?) / verify(data, expected, options?)`
+#### 文件流、条件写与批量删除的约束
 
 `file.put()` 支持 Buffer、Uint8Array、字符串及 `AsyncIterable<Uint8Array>`（如 Node Readable）；流上传内部使用有界 S3 multipart。`getStream()` 返回字节流，支持 Range 与 `signal` 取消；初始失败返回 HaiResult，迭代期间的 I/O/取消错误由消费方处理。原 `get()` 仍返回完整 Buffer，适合小文件。
 
@@ -210,42 +214,31 @@ if (!result.success) {
 }
 ```
 
-`checksum` 是 Node 端无状态工具，无需初始化，按实际输入字节生成/校验，流输入仅消费一次。默认 SHA-256、小写 hex；可选 `algorithm: 'sha256' | 'sha384' | 'sha512' | 'sha1' | 'md5'`、`encoding: 'hex' | 'base64'` 和 `signal`。不匹配返回 `ok(false)`，非法格式/算法及读取失败返回错误。MD5/SHA-1 只用于兼容性完整性校验，不用于安全认证；ETag、S3 multipart 复合 checksum 不等同于完整文件摘要。此工具不强制 S3 兼容服务支持 AWS checksum 扩展。
+#### 场景：通过已授权的 HTTP 接口申请上传地址
 
-取消计算会结束对下一块数据的等待，并请求关闭输入迭代器。本地 `getStream()` 读取目录时直接返回 `INVALID_PATH`，不将目录报告为可消费的文件流。
+公共 HTTP API 统一由 `@h-ai/api-contract` 提供，并由 `@h-ai/serv` 的 `createStorageProcedures({ storage, authorize })` 绑定到本模块能力。
 
-> 注意：`publicUrl` 仅在 S3 配置了 `publicUrl` 时返回字符串；否则返回 `null`。
+```ts
+import { apiClient } from '@h-ai/api-client'
 
-> 注意：`storage.config` 返回的是**脱敏配置快照**；S3 密钥类字段会被替换为 `[REDACTED]`，不能用于重新初始化。
+const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
+if (!result.success)
+  throw new Error(result.error.message)
+```
 
-### 客户端辅助函数
+预签名只支持 S3。local 的 `getUrl()` / `putUrl()` 返回 `HaiStorageError.UNSUPPORTED_OPERATION`（`hai:storage:018`），`publicUrl()` 返回 `null`；不会返回虚拟 URL。serv 与 apiClient 保留该失败结果，调用方须先检查 `success` 再消费 URL。本地开发文件可由应用已有的鉴权上传/下载接口处理，本模块不内置 HTTP 文件路由或签名验证服务。
 
-`@h-ai/storage/client` 还提供以下浏览器侧工具：
-
-- `uploadWithPresignedUrl(url, data, options)`
-- `downloadWithPresignedUrl(url, options)`
-- `downloadAndSave(url, { filename })`
-- `getFileExtension(file)`
-- `getMimeType(extension)`
-- `formatFileSize(bytes)`
-
-### 生产共享状态
-
-生产使用共享 S3 或兼容服务；local 只用于开发/明确测试。对象业务授权和读改写的条件提交由应用负责。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../../.agents/instructions/distributed-state.md).
-
-### 输入约束与 HTTP 能力
+#### HTTP 输入约束
 
 存储 key 按 UTF-8 最多 1024 字节，并拒绝绝对路径、反斜线、控制字符及点路径段；公开 HTTP 批量删除每次 1–1000 项。`@h-ai/storage/schemas` 提供浏览器安全的共同规则。预签名有效期为整数 1–604800 秒（Node 默认 3600，HTTP 默认 900）；HTTP 上传仅接受 key/contentType/expiresIn，不支持 contentLength/maxSize/metadata/checksum。无效输入返回 HTTP 400，typed client 映射 VALIDATION_FAILED。FileUpload 的大小/类型限制仅为前端体验，实际对象须由应用服务端复核。Node 流式读写/checksum/条件写等没有默认 HTTP 端点。完整映射与授权边界见 [存储 API 能力](#存储输入约束与跨端能力).
 
-### 浏览器上传取消
+<a id="存储输入约束与跨端能力"></a>
 
-`uploadWithPresignedUrl(url, data, { onProgress, abortController })` 使用原生 XHR 报告进度；不传 `onProgress` 时使用 fetch。预先取消不发送请求，准备阶段和进行中取消、外部 XHR abort、网络/超时及进度回调异常都只结算一次失败，并移除本次监听。完成后再取消不会操作旧 XHR。取消只终止本地请求，不能回滚远端已写入的对象；应用须先核对对象状态，再授权删除。
-
-### 存储输入约束与跨端能力
+#### 共享输入规则与授权边界
 
 `@h-ai/storage/schemas` 是仅依赖 Zod 的浏览器安全入口；`api-contract` 与 `serv` 复用同一规则。Schema 只校验输入，服务端仍先认证、再按可信 session 授权每个资源，Local Provider 仍执行文件系统防逃逸。调用方不能把前缀校验或分页游标当成授权。
 
-#### 输入边界
+#### 对象键、分页与期限
 
 - `StorageKeySchema`：非空、不是纯空白，UTF-8 最多 1024 **字节**；不允许开头 `/`、反斜线、控制字符，以及独立的 `.` / `..` 路径段。不截断、不归一化 key。
 - `StoragePrefixSchema`：同样的路径和字节限制，另允许空字符串；允许部分文件名，`report` 不等于目录 `report/`。
@@ -267,7 +260,7 @@ if (key.success) {
 }
 ```
 
-#### 能力映射
+#### Node 与 HTTP 能力对应
 
 | Node storage 能力                                  | api-contract / serv 默认端点            | apiClient / 浏览器消费                                | 边界                                                                                          |
 | -------------------------------------------------- | --------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -283,7 +276,61 @@ if (key.success) {
 
 `FileUpload` / `ImageUpload` / `AvatarUpload` 的 `uploadHandler` 由应用实现。组件的 `maxSize`、`accept` 只负责前端选择体验，不能约束拿到签名后绕过组件的上传；服务端应在对象落库/回调或独立代理上传处验证实际大小、类型、内容和归属，再发布业务记录。不要把 Node `UploadOptions` 当成签名选项，也不要给组件编造不存在的框架上传端点。
 
-### 在表单和服务端共享对象键规则
+<a id="directories"></a>
+
+### 按前缀浏览与清理：`storage.dir`
+
+目录表示对象键前缀；分页列出其中的文件，删除前缀时应先确认授权和范围。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `storage.dir.list` | 分页列出前缀内的对象 | options | `ListResult` | `await storage.dir.list({ prefix: 'reports/', maxKeys: 20 })` |
+| `storage.dir.delete` | 删除指定前缀内的对象 | prefix | `void` | `await storage.dir.delete('reports/')` |
+
+#### 场景：按前缀浏览与清理
+
+```ts
+value(await storage.file.put('demo-prefix/a.txt', 'a'))
+const page = value(await storage.dir.list({ prefix: 'demo-prefix/', maxKeys: 20 }))
+// page contains metadata for demo-prefix/a.txt and backend pagination information
+value(await storage.dir.delete('demo-prefix/')) // undefined
+value(await storage.file.exists('demo-prefix/a.txt')) // false when no concurrent writer recreates it
+```
+
+输入限定 demo-prefix/。实际返回页包含文件元数据及续页信息；删除与并发写入不是同一个事务，其他请求仍可能重新创建对象。
+
+<a id="signed-urls"></a>
+
+### 授权直传与下载：`storage.presign`
+
+仅 S3 支持指定对象的短期签名 URL；应用先核验用户对该对象和操作的权限，再签发。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `storage.presign.getUrl` | 签发短期下载地址 | key, options | `string` | `await storage.presign.getUrl('report.txt', { expiresIn: 300 })` |
+| `storage.presign.putUrl` | 签发短期上传地址 | key, options | `string` | `await storage.presign.putUrl('report.txt', { expiresIn: 300, contentType: 'text/plain' })` |
+| `storage.presign.publicUrl` | 读取公开地址规则 | key | `string \| null` | `storage.presign.publicUrl('report.txt')` |
+
+#### 场景：授权直传与下载
+
+```ts
+// Requires initialized S3 storage and prior application authorization.
+const uploadUrl = value(await storage.presign.putUrl('reports/demo.txt', { expiresIn: 300, contentType: 'text/plain' }))
+const downloadUrl = value(await storage.presign.getUrl('reports/demo.txt', { expiresIn: 300 }))
+const publicUrl = storage.presign.publicUrl('reports/demo.txt') // string or null
+```
+
+输入为相同对象键、300 秒期限。输出 URL 的签名和主机取决于后端；上传时 Content-Type 必须与签发参数一致。publicUrl 只读取公开地址规则，不检查权限，也不会使私有文件变公开。
+
+#### 取消上传的结果
+
+`uploadWithPresignedUrl(url, data, { onProgress, abortController })` 使用原生 XHR 报告进度；不传 `onProgress` 时使用 fetch。预先取消不发送请求，准备阶段和进行中取消、外部 XHR abort、网络/超时及进度回调异常都只结算一次失败，并移除本次监听。完成后再取消不会操作旧 XHR。取消只终止本地请求，不能回滚远端已写入的对象；应用须先核对对象状态，再授权删除。
+
+#### 场景：校验对象键与目录前缀
 
 从 `@h-ai/storage/schemas` 导入 `getStorageKeyIssue` 检查一个原始键，或使用两个 Schema 直接校验并得到 Zod 结果。
 
@@ -301,7 +348,7 @@ const prefix = StoragePrefixSchema.safeParse('reports/fe') // success 为 true�
 
 <a id="download-authorization"></a>
 
-## 应用开发者：先授权，再给用户下载链接
+#### 场景：在应用中授权下载
 
 由框架部署自建存储时，没填 `bucket` 和 `region` 就分别使用 `hai` 和 `us-east-1`。应用直接调用 `storage.init()` 连接 S3 时，仍需提供这两项。`publicEndpoint` 没有自动猜测值，SSH Host 别名、HTTP 端口与用户实际访问的 HTTPS 地址可能不同，部署前应明确填写。
 
@@ -311,6 +358,77 @@ const prefix = StoragePrefixSchema.safeParse('reports/fe') // success 为 true�
 4. 失败时重新经过授权获取新链接。返回 URL 已含配置的代理目录，调用方不能再加网站目录、改域名、改桶名或删查询；GET 的签名也不能拿来发送 HEAD 请求。客户端取消只结束本次传输，不撤销已经授予的 URL 或远端上传。
 
 签名默认值仍分入口：Node 省略有效期为 3600 秒，HTTP 为 900 秒，允许整数 1–604800 秒；300 秒是上例建议值。下载签名可以设置响应 `Content-Type`、`Content-Disposition`；上传签名默认 `Content-Type` 为 `application/octet-stream`。上传 URL 只授权 PUT，不保证文件大小或内容符合业务要求，应用须在存储完成后核验实际对象。
+
+<a id="checksums"></a>
+
+### 检查字节是否一致：`storage.checksum`
+
+校验工具不要求初始化存储；发送方与接收方必须使用相同算法和编码。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `storage.checksum.generate` | 计算内容校验和 | data, options | `string` | `await storage.checksum.generate('text')` |
+| `storage.checksum.verify` | 核对内容校验和 | data, expected, options | `boolean` | `await storage.checksum.verify(bytes, expectedDigest)` |
+
+#### 场景：检查字节是否一致
+
+```ts
+const digest = value(await storage.checksum.generate('hello'))
+value(await storage.checksum.verify('hello', digest)) // true
+value(await storage.checksum.verify('changed', digest)) // false
+```
+
+同一份 hello 字节与摘要匹配，修改内容后为 false。摘要不是访问凭据，S3 的 ETag 也不等于这里的内容摘要。
+
+#### 摘要算法与取消规则
+
+`checksum` 是 Node 端无状态工具，无需初始化，按实际输入字节生成/校验，流输入仅消费一次。默认 SHA-256、小写 hex；可选 `algorithm: 'sha256' | 'sha384' | 'sha512' | 'sha1' | 'md5'`、`encoding: 'hex' | 'base64'` 和 `signal`。不匹配返回 `ok(false)`，非法格式/算法及读取失败返回错误。MD5/SHA-1 只用于兼容性完整性校验，不用于安全认证；ETag、S3 multipart 复合 checksum 不等同于完整文件摘要。此工具不强制 S3 兼容服务支持 AWS checksum 扩展。
+
+取消计算会结束对下一块数据的等待，并请求关闭输入迭代器。本地 `getStream()` 读取目录时直接返回 `INVALID_PATH`，不将目录报告为可消费的文件流。
+
+<a id="browser-files"></a>
+
+### 在浏览器上传、下载与保存：客户端工具
+
+这些工具接收服务端已经授权的 URL 或用户选择的文件；不初始化服务端 Storage，也不会自行申请业务权限。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `uploadWithPresignedUrl` | 直传文件 | `url, File/Blob/ArrayBuffer/string, options?` | `Promise<{ success: boolean; error?: string }>` | `await uploadWithPresignedUrl(url, file, { contentType: file.type })` |
+| `downloadWithPresignedUrl` | 读取下载内容 | `url, options?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await downloadWithPresignedUrl(url)` |
+| `downloadAndSave` | 下载并触发保存 | `url, { filename?, ...options }?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await downloadAndSave(url, { filename: "report.txt" })` |
+| `getFileExtension` | 读取扩展名 | `File` | `string` | `getFileExtension(file)` |
+| `getMimeType` | 按扩展名查类型 | `extension: string` | `string` | `getMimeType("txt")` |
+| `formatFileSize` | 显示字节大小 | `bytes: number` | `string` | `formatFileSize(1024)` |
+
+#### 场景：上传用户文件后下载保存
+
+input 的两个 URL 来自上方签名接口的成功响应，file 来自文件选择器；该函数由用户操作触发。上传和下载工具返回自己的 success/error 结构，不是 HaiResult。
+
+```ts
+import { downloadAndSave, downloadWithPresignedUrl, formatFileSize, getFileExtension, getMimeType, uploadWithPresignedUrl } from '@h-ai/storage/client'
+
+async function transfer(file: File, uploadUrl: string, downloadUrl: string) {
+  const extension = getFileExtension(file)
+  const contentType = file.type || getMimeType(extension)
+  const displayedSize = formatFileSize(file.size) // 1024 bytes displays as 1 KB
+  const uploaded = await uploadWithPresignedUrl(uploadUrl, file, { contentType })
+  if (!uploaded.success)
+    throw new Error(uploaded.error ?? 'Upload failed')
+  const downloaded = await downloadWithPresignedUrl(downloadUrl)
+  if (!downloaded.success || !downloaded.data)
+    throw new Error(downloaded.error ?? 'Download failed')
+  const saved = await downloadAndSave(downloadUrl, { filename: file.name })
+  if (!saved.success)
+    throw new Error(saved.error ?? 'Save failed')
+  return { extension, displayedSize, blob: downloaded.data }
+}
+```
+
 
 ## 错误处理
 

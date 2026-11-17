@@ -55,7 +55,39 @@ await reldb.close()
 
 多个部署节点同时准备模块结构时，使用 `reldb.prepareSchema(key, ({ ddl, sql }) => ...)`。PostgreSQL 通过固定模块标识的事务锁协调建表、检查索引和更新种子行，回调失败回滚。请通过回调提供的操作访问数据库，并将模型服务、容器等外部调用放在事务结束之后。其他提供方沿用自身 DDL 提交规则。
 
+<a id="api-reference"></a>
+
 ## 功能说明
+
+下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。`value` 先检查 `HaiResult.success`，失败保留原错误，成功返回 data；只用于读取结果。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+
+function value<T>(result: HaiResult<T>): T {
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
+  return result.data
+}
+```
+
+<a id="connection"></a>
+
+### 连接、准备结构与关闭：`reldb`
+
+应用先连接数据库；同库结构准备通过 prepareSchema 协调，结束事务后才关闭连接。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `reldb.init` | 创建并验证数据库连接 | `config`（必填） | `Promise<HaiResult<void>>` | `await reldb.init({ type: 'sqlite', database: ':memory:' })` |
+| `reldb.close` | 释放连接；先结束应用仍持有的事务 | 先结束应用仍持有的事务；无 | `Promise<HaiResult<void>>` | `await reldb.close()` |
+| `reldb.prepareSchema` | 同一个数据库连接上以指定名称协调表结构准备 | `key` 和异步回调 `prepare`；回调接收当前连接的 `ddl`、`sql` | `Promise<HaiResult<T>>` | `await reldb.prepareSchema('orders', db => db.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } }))` |
+
+#### 场景：连接、准备结构与关闭
+
+最小接入输入开发 SQLite 配置，init 与 close 成功无数据；prepareSchema 把当前连接的 ddl/sql 交给回调，成功数据是回调的结果。生产后端与清理边界见下文。
 
 模块在健康检查通过后才允许业务读写。如果初始化失败，会尝试释放已经打开的资源。释放也失败时，返回的 `error.ext.cleanupPending` 为 `true`。
 
@@ -73,106 +105,144 @@ if (!closed.success) {
 
 关闭会等待已借出的事务提交/回滚并释放句柄；应用必须结束事务才能完成关闭。SQLite 的 WAL 配置与 worker 握手也属于初始化资源链。PostgreSQL 空闲连接断开由连接池移除并在后续查询时替换，不使进程退出；日志仅记录安全错误标识，不输出驱动错误原文。
 
-<a id="api-reference"></a>
-
-### 功能输入输出
-
 初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
 table/column/index 名必须来自可信代码；sql 是可信语句，params 绑定业务值；steps 是模块迁移步骤，options 控制预检和分页。
 
-#### 初始化与关闭
+#### 场景：多个实例共同准备模块结构
 
-| API | 用途 | 输入 | 输出 | 示例 |
+输入是稳定的模块标识；回调仅使用它收到的 ddl/sql。成功返回回调的 data，本例没有业务数据。PostgreSQL 在事务锁下执行，失败回滚；其他后端遵守自身 DDL 提交规则。
+
+```ts
+value(await reldb.prepareSchema('docs:demo:schema', ({ ddl }) =>
+  ddl.createTable('demo_prepared', { id: { type: 'TEXT', primaryKey: true } }, true)))
+value(await reldb.schemaColumns('demo_prepared')) // ['id']
+value(await reldb.ddl.dropTable('demo_prepared', true))
+```
+
+#### 生产数据库要求
+
+生产仅使用 PostgreSQL/MySQL；SQLite（含磁盘文件）只用于开发/明确测试，不能作为跨主机共享状态。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../../.agents/instructions/distributed-state.md).
+
+<a id="schema"></a>
+
+### 创建与修改表：`reldb.ddl`
+
+结构操作只接收可信表名、列名和定义；执行前确认不会删除已有业务数据。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `reldb.init` | 创建并验证数据库连接 | `config`（必填） | `Promise<HaiResult<void>>` | `await reldb.init({ type: 'sqlite', database: ':memory:' })` |
-| `reldb.close` | 释放连接；先结束应用仍持有的事务 | 无 | `Promise<HaiResult<void>>` | `await reldb.close()` |
-| `reldb.prepareSchema` | 同一个数据库连接上以指定名称协调表结构准备 | `key` 和异步回调 `prepare`；回调接收当前连接的 `ddl`、`sql` | `Promise<HaiResult<T>>` | `await reldb.prepareSchema('orders', db => db.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } }))` |
+| `reldb.ddl.createTable` | 创建业务表 | tableName, columns, ifNotExists | `void` | `await reldb.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } })` |
+| `reldb.ddl.dropTable` | 删除表及其中数据 | tableName, ifExists | `void` | `await reldb.ddl.dropTable('orders_archive', true)` |
+| `reldb.ddl.addColumn` | 增加字段 | tableName, columnName, columnDef | `void` | `await reldb.ddl.addColumn('orders', 'note', { type: 'TEXT' })` |
+| `reldb.ddl.dropColumn` | 删除字段 | tableName, columnName | `void` | `await reldb.ddl.dropColumn('orders', 'note')` |
+| `reldb.ddl.renameTable` | 重命名表 | oldName, newName | `void` | `await reldb.ddl.renameTable('orders_draft', 'orders')` |
+| `reldb.ddl.createIndex` | 创建索引 | tableName, indexName, indexDef | `void` | `await reldb.ddl.createIndex('orders', 'orders_status', { columns: ['status'] })` |
+| `reldb.ddl.dropIndex` | 删除索引 | indexName, ifExists | `void` | `await reldb.ddl.dropIndex('orders_status', true)` |
+| `reldb.ddl.raw` | 执行可信的结构变更语句 | sql | `void` | `await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS app_marker (id TEXT PRIMARY KEY)')` |
+| `reldb.schemaColumns` | 检查表结构 | table, sql | `string[]` | `await reldb.schemaColumns('orders')` |
 
-#### reldb.ddl
+#### 场景：创建与修改表
 
-维护表、列和索引。输入可信标识符、列/索引定义或 DDL；成功返回 void，结构错误返回失败。
+```ts
+value(await reldb.ddl.createTable('demo_orders', { id: { type: 'TEXT', primaryKey: true } }))
+value(await reldb.ddl.addColumn('demo_orders', 'note', { type: 'TEXT' }))
+value(await reldb.schemaColumns('demo_orders')) // ['id', 'note']
+value(await reldb.ddl.createIndex('demo_orders', 'demo_orders_note', { columns: ['note'] }))
+value(await reldb.ddl.dropIndex('demo_orders_note', true))
+value(await reldb.ddl.dropColumn('demo_orders', 'note'))
+value(await reldb.ddl.renameTable('demo_orders', 'demo_orders_old'))
+value(await reldb.ddl.dropTable('demo_orders_old', true))
+value(await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS demo_marker (id TEXT PRIMARY KEY)'))
+// All successful DDL calls have no business data.
+```
 
-| 入口                    | 输入参数                         | 成功结果 | 调用示例                                                                             |
-| ----------------------- | -------------------------------- | -------- | ------------------------------------------------------------------------------------ |
-| `reldb.ddl.createTable` | tableName, columns, ifNotExists  | `void`   | `await reldb.ddl.createTable('orders', { id: { type: 'TEXT', primaryKey: true } })`  |
-| `reldb.ddl.dropTable`   | tableName, ifExists              | `void`   | `await reldb.ddl.dropTable('orders_archive', true)`                                  |
-| `reldb.ddl.addColumn`   | tableName, columnName, columnDef | `void`   | `await reldb.ddl.addColumn('orders', 'note', { type: 'TEXT' })`                      |
-| `reldb.ddl.dropColumn`  | tableName, columnName            | `void`   | `await reldb.ddl.dropColumn('orders', 'note')`                                       |
-| `reldb.ddl.renameTable` | oldName, newName                 | `void`   | `await reldb.ddl.renameTable('orders_draft', 'orders')`                              |
-| `reldb.ddl.createIndex` | tableName, indexName, indexDef   | `void`   | `await reldb.ddl.createIndex('orders', 'orders_status', { columns: ['status'] })`    |
-| `reldb.ddl.dropIndex`   | indexName, ifExists              | `void`   | `await reldb.ddl.dropIndex('orders_status', true)`                                   |
-| `reldb.ddl.raw`         | sql                              | `void`   | `await reldb.ddl.raw('CREATE TABLE IF NOT EXISTS app_marker (id TEXT PRIMARY KEY)')` |
+输入限定全新的 demo_ 表和索引，schemaColumns 返回真实列名数组。raw 只使用可信 SQL；DDL 的事务支持取决于数据库，别把该演示直接用于生产迁移。
 
-#### reldb.sql
+#### 场景：检查模块需要的表结构
 
-业务查询/写入。SQL 值通过 params 绑定；分别返回行数组、首行/null、写入结果、void 或分页结果。batch 接收语句数组。
+`reldb.schemaColumns(table, sql?)` 只读查询实际列名。传入当前事务的 SQL 操作句柄，可在同一事务中检查表结构。框架模块初始化时校验各自的表结构，业务表由应用管理。
 
-| 入口                  | 输入参数    | 成功结果             | 调用示例                                                                                                         |
-| --------------------- | ----------- | -------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `reldb.sql.query`     | sql, params | `T[]`                | `await reldb.sql.query('SELECT id FROM orders WHERE status = ?', ['pending'])`                                   |
-| `reldb.sql.get`       | sql, params | `T \| null`          | `await reldb.sql.get('SELECT id FROM orders WHERE id = ?', ['o1'])`                                              |
-| `reldb.sql.execute`   | sql, params | `ExecuteResult`      | `await reldb.sql.execute('UPDATE orders SET status = ? WHERE id = ?', ['paid', 'o1'])`                           |
-| `reldb.sql.batch`     | statements  | `void`               | `await reldb.sql.batch([{ sql: 'DELETE FROM orders WHERE id = ?', params: ['o1'] }])`                            |
-| `reldb.sql.queryPage` | options     | `PaginatedResult<T>` | `await reldb.sql.queryPage({ sql: 'SELECT id FROM orders ORDER BY id', pagination: { page: 1, pageSize: 20 } })` |
+<a id="sql"></a>
 
-#### reldb.pagination
+### 参数化查询与分页：`reldb.sql`、`reldb.pagination`
 
-界面分页。normalize 接收页码/页大小及上限，返回规范化参数；build 接收 items、total、分页参数，直接返回分页对象。
+动态值用参数传入，查询结果与执行结果分别处理；分页使用稳定排序。
 
-| 入口                         | 输入参数                 | 成功结果               | 调用示例                                                   |
-| ---------------------------- | ------------------------ | ---------------------- | ---------------------------------------------------------- |
-| `reldb.pagination.normalize` | options, overrides       | `NormalizedPagination` | `reldb.pagination.normalize({ page: 1, pageSize: 20 })`    |
-| `reldb.pagination.build`     | items, total, pagination | `PaginatedResult<T>`   | `reldb.pagination.build([], 0, { page: 1, pageSize: 20 })` |
+#### 接口清单
 
-#### reldb
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `reldb.sql.query` | 参数化读取多行 | sql, params | `T[]` | `await reldb.sql.query('SELECT id FROM orders WHERE status = ?', ['pending'])` |
+| `reldb.sql.get` | 参数化读取一行 | sql, params | `T \| null` | `await reldb.sql.get('SELECT id FROM orders WHERE id = ?', ['o1'])` |
+| `reldb.sql.execute` | 参数化写入并读取影响行数 | sql, params | `ExecuteResult` | `await reldb.sql.execute('UPDATE orders SET status = ? WHERE id = ?', ['paid', 'o1'])` |
+| `reldb.sql.batch` | 批量执行语句 | statements | `void` | `await reldb.sql.batch([{ sql: 'DELETE FROM orders WHERE id = ?', params: ['o1'] }])` |
+| `reldb.sql.queryPage` | 查询分页数据与总数 | options | `PaginatedResult<T>` | `await reldb.sql.queryPage({ sql: 'SELECT id FROM orders ORDER BY id', pagination: { page: 1, pageSize: 20 } })` |
+| `reldb.pagination.normalize` | 规范化页码和每页条数 | options, overrides | `NormalizedPagination` | `reldb.pagination.normalize({ page: 1, pageSize: 20 })` |
+| `reldb.pagination.build` | 组合分页结果 | items, total, pagination | `PaginatedResult<T>` | `reldb.pagination.build([], 0, { page: 1, pageSize: 20 })` |
 
-模块持久化准备。输入表名得到列名数组；输入模块名、迁移步骤和 dryRun 得到迁移计划。执行前备份并停止冲突写入。
+#### 场景：参数化查询与分页
 
-| 入口                  | 输入参数   | 成功结果   | 调用示例                              |
-| --------------------- | ---------- | ---------- | ------------------------------------- |
-| `reldb.schemaColumns` | table, sql | `string[]` | `await reldb.schemaColumns('orders')` |
+```ts
+value(await reldb.ddl.createTable('demo_sql', { id: { type: 'TEXT', primaryKey: true } }))
+const inserted = value(await reldb.sql.execute('INSERT INTO demo_sql (id) VALUES (?)', ['o1'])) // affected-row result
+value(await reldb.sql.query('SELECT id FROM demo_sql ORDER BY id')) // [{ id: 'o1' }]
+value(await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', ['o1'])) // { id: 'o1' }
+const pagination = reldb.pagination.normalize({ page: 1, pageSize: 20 })
+const page = value(await reldb.sql.queryPage({ sql: 'SELECT id FROM demo_sql ORDER BY id', pagination }))
+// page.items: [{ id: 'o1' }], total: 1
+reldb.pagination.build([{ id: 'o1' }], 1, { page: 1, pageSize: 20 }) // equivalent page envelope
+value(await reldb.sql.batch([{ sql: 'DELETE FROM demo_sql WHERE id = ?', params: ['o1'] }])) // undefined
+value(await reldb.sql.get('SELECT id FROM demo_sql WHERE id = ?', ['o1'])) // null
+```
 
-#### reldb.tx
+输入的 o1 是参数，不拼进 SQL。get 返回 null 是成功但没找到，query 返回数组；batch 成功没有业务数据。标识符不能用值参数占位。
 
-原子业务写入。begin 返回检查结果后的事务句柄，具备 query/get/execute/batch/queryPage/commit/rollback；wrap 接收回调并返回其结果。失败 HaiResult 必须显式触发回滚。
+#### 场景：验证可信标识符与选择 JSON 方言
 
-| 入口             | 输入参数 | 成功结果              | 调用示例                                                                                                                                                            |
-| ---------------- | -------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `reldb.tx.begin` | 无参数   | `DmlWithTxOperations` | `await reldb.tx.begin()`                                                                                                                                            |
-| `reldb.tx.wrap`  | fn       | `T`                   | `await reldb.tx.wrap(async tx => { const found = await tx.get('SELECT 1 AS value'); if (!found.success) throw new Error(found.error.message); return found.data })` |
+动态值优先通过 SQL 参数绑定。表名和列名由调用方从已授权集合中选择，使用标识符工具校验。
 
-#### reldb.crud
+```ts
+import { createJsonOps, escapeSqlString, parseJsonPath, quoteIdentifier, validateIdentifier, validateIdentifiers } from '@h-ai/reldb'
 
-为业务实体配置 table/字段映射，直接取得仓储；后续通过仓储执行 CRUD 和分页，不暴露数据库连接。
+const column = validateIdentifier('order_total') // 成功的 data 为 'order_total'。
+const columns = validateIdentifiers(['order_id', 'order_total']) // 成功的 data 为 undefined，任一非法时返回失败。
+const quoted = quoteIdentifier('order_total') // 结果为 '"order_total"'，适用支持双引号的方言。
+const escaped = escapeSqlString('O\'Reilly') // 将单引号加倍，返回 "O''Reilly"。
+const segments = parseJsonPath('$.profile.name') // 按支持的 JSON Path 语法返回路径段数组。
+const ops = createJsonOps('postgresql') // 返回 PostgreSQL 的 JSON 操作构造器，使用方式见 JSON 路径操作。
+```
 
-| 入口               | 输入参数 | 成功结果                     | 调用示例                                  |
-| ------------------ | -------- | ---------------------------- | ----------------------------------------- |
-| `reldb.crud.table` | config   | `ReldbCrudRepository<TItem>` | `reldb.crud.table(orderRepositoryConfig)` |
+`parseJsonPath()` 按受支持的路径语法读取 JSON 字段。遇到无法识别的部分时，可能只返回此前识别的路径段，需要完整校验时应检查应用允许的键及路径格式。通常通过 `reldb.json` 构造 SQL，它会选择已连接数据库的方言。只有尚未连接数据库但需要为指定方言生成表达式时，才用独立的 `createJsonOps()`。
 
-#### reldb.json
+<a id="transactions"></a>
 
-跨方言 JSON 表达式。输入可信列名、JSON 路径及值/patch，直接返回 SQL 表达式和绑定参数；不是立即执行 SQL。
+<a id="事务"></a>
 
-| 入口                 | 输入参数            | 成功结果      | 调用示例                                            |
-| -------------------- | ------------------- | ------------- | --------------------------------------------------- |
-| `reldb.json.extract` | column, path        | `JsonSqlExpr` | `reldb.json.extract('payload', '$.status')`         |
-| `reldb.json.set`     | column, path, value | `JsonSqlExpr` | `reldb.json.set('payload', '$.status', 'paid')`     |
-| `reldb.json.insert`  | column, path, value | `JsonSqlExpr` | `reldb.json.insert('payload', '$.note', 'checked')` |
-| `reldb.json.remove`  | column, path        | `JsonSqlExpr` | `reldb.json.remove('payload', '$.note')`            |
-| `reldb.json.merge`   | column, patch       | `JsonSqlExpr` | `reldb.json.merge('payload', { status: 'paid' })`   |
+### 一起提交或回滚：`reldb.tx`
 
-- 用同一套 API 连接 SQLite、PostgreSQL 和 MySQL。
-- 执行参数化 SQL，创建表和索引，读取分页结果。
-- 使用事务、CRUD 与 Repository 组织业务读写。
+多条读写要保持一致时放入同一事务；分步事务必须在所有路径提交或回滚。
 
-### 事务
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `reldb.tx.begin` | 开启手工事务 | 无参数 | `DmlWithTxOperations` | `await reldb.tx.begin()` |
+| `reldb.tx.wrap` | 自动提交或回滚回调中的事务 | fn | `T` | `await reldb.tx.wrap(async tx => { const found = await tx.get('SELECT 1 AS value'); if (!found.success) throw new Error(found.error.message); return found.data })` |
+
+#### 场景：一起提交或回滚
+
+下文分别演示 wrap 的返回值、抛错回滚、begin 后 commit/rollback，以及事务内分页和批量操作。业务 HaiResult 失败要先检查，不能把失败对象当回调的普通成功值提交。
+
+#### 事务结束与失败规则
 
 一个事务只允许一个结束操作。`commit()` 或 `rollback()` 开始后，新查询、重复提交和并发回滚立即返回 TRANSACTION_FAILED；连接只归还一次。调用方仍须等待首次结束结果，不能把并发结束当作故障恢复。
 
 三种使用方式：
 
-#### wrap（自动提交/回滚）
+#### 场景：一起写入并自动提交
 
 事务回调正常返回就会提交，返回失败 HaiResult 也不例外。必须检查每一步结果，并在失败时抛出异常触发回滚；wrap 会把异常转为 TRANSACTION_FAILED。需要保留原领域错误时，使用下方手动事务。各片段假定数据库已成功初始化且 users 表已经创建。
 
@@ -188,7 +258,7 @@ const result = await reldb.tx.wrap(async (tx) => {
 // 回调正常返回 → 自动提交；抛异常 → 自动回滚
 ```
 
-#### begin + commit（分步提交）
+#### 场景：手动提交并保留领域错误
 
 ```ts
 // 放在 async 业务函数内，失败时向调用方返回 HaiResult。
@@ -214,7 +284,7 @@ catch (error) {
 }
 ```
 
-#### begin + rollback（分步回滚）
+#### 场景：试写后主动回滚
 
 ```ts
 // 独立脚本：试写后回滚，不保留用户数据。
@@ -233,7 +303,7 @@ if (!rolledBack.success)
   throw new Error(rolledBack.error.message, { cause: rolledBack.error })
 ```
 
-#### 事务内使用 batch / queryPage
+#### 场景：在事务内批量写入并分页查询
 
 ```ts
 await reldb.tx.wrap(async (tx) => {
@@ -260,115 +330,15 @@ await reldb.tx.wrap(async (tx) => {
 })
 ```
 
-### Crud
-
-通过 `reldb.crud.table()` 创建单表 CRUD 仓库，免写 SQL：
-
-```ts
-const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
-  table: 'users',
-  idColumn: 'id', // 主键列，默认 'id'
-  select: ['id', 'name', 'email'], // 查询列，默认 '*'
-  createColumns: ['name', 'email'], // 允许插入的列
-  updateColumns: ['name', 'email'], // 允许更新的列
-  dbType: 'sqlite', // 数据库类型
-})
-```
-
-#### create / createMany
-
-```ts
-// 单条插入
-const result = await userCrud.create({ name: '张三', email: 'test@example.com' })
-// result.data → { changes: 1, lastInsertRowid: 1 }
-
-// 批量插入
-await userCrud.createMany([
-  { name: '用户A', email: 'a@test.com' },
-  { name: '用户B', email: 'b@test.com' },
-])
-```
-
-#### createOrUpdate
-
-主键存在时更新，否则创建（upsert）：
-
-```ts
-const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
-  table: 'users',
-  idColumn: 'id',
-  createColumns: ['id', 'name', 'email'],
-  updateColumns: ['name', 'email'],
-  dbType: 'sqlite',
-})
-
-await userCrud.createOrUpdate({ id: 1, name: '张三', email: 'test@example.com' })
-// 不存在 → 插入；已存在 → 更新 name、email
-```
-
-`BaseReldbCrudRepository` 自动获取 `dbType`，无需手动传入。
-
-#### findById / getById / findAll / findPage
-
-```ts
-// 主键查找（不存在时返回 null）
-const user = await userCrud.findById(1)
-// user.data → { id: 1, name: '张三', email: 'test@example.com' } | null
-
-// 主键获取（不存在时返回 RECORD_NOT_FOUND 错误）
-const user2 = await userCrud.getById(1)
-// user2.data → { id: 1, name: '张三', email: 'test@example.com' }
-
-// 条件查询（where + params 占位符）
-const actives = await userCrud.findAll({
-  where: 'name LIKE ?',
-  params: ['%张%'],
-  orderBy: 'id DESC',
-  limit: 10,
-  offset: 0,
-})
-
-// 分页查询
-const page = await userCrud.findPage({
-  where: 'name LIKE ?',
-  params: ['%张%'],
-  orderBy: 'id DESC',
-  pagination: { page: 1, pageSize: 20 },
-})
-// page.data → { items: [...], total: 100, page: 1, pageSize: 20 }
-```
-
-#### updateById / deleteById
-
-```ts
-await userCrud.updateById(1, { name: '李四' })
-await userCrud.deleteById(1)
-```
-
-#### count / exists / existsById
-
-```ts
-const total = await userCrud.count({
-  where: 'name LIKE ?',
-  params: ['%张%']
-})
-// total.data → 5
-
-const has = await userCrud.exists({
-  where: 'email = ?',
-  params: ['test@example.com']
-})
-// has.data → true
-
-const found = await userCrud.existsById(1)
-// found.data → true
-```
-
-#### 事务中使用 Crud
+#### 场景：让仓库操作使用同一事务
 
 所有方法均支持传入 `tx` 参数，自动路由到事务上下文：
 
 ```ts
+const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
+  table: 'users', idColumn: 'id', dbType: 'sqlite',
+  select: ['id', 'name', 'email'], createColumns: ['name', 'email'], updateColumns: ['name', 'email'],
+})
 await reldb.tx.wrap(async (tx) => {
   const created = await userCrud.create({ name: 'Alice', email: 'alice@example.com' }, tx)
   if (!created.success)
@@ -385,7 +355,66 @@ await reldb.tx.wrap(async (tx) => {
 })
 ```
 
-### BaseReldbCrudRepository
+<a id="repositories"></a>
+
+### 按记录操作数据：`reldb.crud`
+
+把表字段与应用对象映射为仓库，再创建、查询、更新或删除记录；事务内使用相应事务仓库。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `reldb.crud.table` | 创建指定表的 CRUD 操作对象 | config | `ReldbCrudRepository<TItem>` | `reldb.crud.table(orderRepositoryConfig)` |
+
+| `repository.create` | 新增记录 | `data, tx?` | `Promise<HaiResult<ExecuteResult>>` | `await repository.create({ id: 'r1', name: 'Ada' })` |
+| `repository.createMany` | 批量新增 | `items, tx?` | `Promise<HaiResult<void>>` | `await repository.createMany([{ id: 'r2', name: 'Lin' }])` |
+| `repository.createOrUpdate` | 按主键新增或更新 | `data, tx?` | `Promise<HaiResult<ExecuteResult>>` | `await repository.createOrUpdate({ id: 'r1', name: 'Ada v2' })` |
+| `repository.findById` | 查找一条，缺失为空 | `id, tx?` | `Promise<HaiResult<TItem \| null>>` | `await repository.findById('r1')` |
+| `repository.getById` | 查找一条，缺失失败 | `id, tx?` | `Promise<HaiResult<TItem>>` | `await repository.getById('r1')` |
+| `repository.findAll` | 条件查询 | `options?, tx?` | `Promise<HaiResult<TItem[]>>` | `await repository.findAll({ orderBy: 'id ASC' })` |
+| `repository.findPage` | 分页查询 | `options, tx?` | `Promise<HaiResult<PaginatedResult<TItem>>>` | `await repository.findPage({ pagination: { page: 1, pageSize: 10 } })` |
+| `repository.updateById` | 按主键更新 | `id, data, tx?` | `Promise<HaiResult<ExecuteResult>>` | `await repository.updateById('r1', { name: 'Ada v3' })` |
+| `repository.deleteById` | 按主键删除 | `id, tx?` | `Promise<HaiResult<ExecuteResult>>` | `await repository.deleteById('r2')` |
+| `repository.count` | 统计记录数 | `options?, tx?` | `Promise<HaiResult<number>>` | `await repository.count()` |
+| `repository.exists` | 检查条件是否命中 | `options?, tx?` | `Promise<HaiResult<boolean>>` | `await repository.exists({ where: 'name = ?', params: ['Lin'] })` |
+| `repository.existsById` | 检查主键是否存在 | `id, tx?` | `Promise<HaiResult<boolean>>` | `await repository.existsById('r2')` |
+
+#### 场景：按记录操作数据
+
+下文先给出完整仓库定义，再逐场景展示各实例方法的输入、成功记录/分页/计数和未找到结果；BaseReldbCrudRepository 是自定义仓库的基类。
+
+#### 场景：按同一记录完成创建、查询、更新与删除
+
+输入为全新的 demo_repository 表和固定 ID r1/r2。先建表再创建仓库；所有 success 数据写在调用旁。where/orderBy 是可信代码，业务值放 params。各方法最后可选传入同一事务句柄。
+
+```ts
+value(await reldb.ddl.createTable('demo_repository', {
+  id: { type: 'TEXT', primaryKey: true },
+  name: { type: 'TEXT', notNull: true },
+}))
+const repository = reldb.crud.table<{ id: string, name: string }>({
+  table: 'demo_repository', idColumn: 'id', dbType: 'sqlite',
+  select: ['id', 'name'], createColumns: ['id', 'name'], updateColumns: ['name'],
+})
+value(await repository.create({ id: 'r1', name: 'Ada' })).changes // 1
+value(await repository.createMany([{ id: 'r2', name: 'Lin' }])) // undefined
+value(await repository.createOrUpdate({ id: 'r1', name: 'Ada v2' })).changes // 1
+value(await repository.findById('r1')) // { id: 'r1', name: 'Ada v2' }
+value(await repository.getById('r1')) // same record; missing records fail
+value(await repository.findAll({ orderBy: 'id ASC' })).length // 2
+value(await repository.findPage({ orderBy: 'id ASC', pagination: { page: 1, pageSize: 10 } })).total // 2
+value(await repository.count()) // 2
+value(await repository.exists({ where: 'name = ?', params: ['Lin'] })) // true
+value(await repository.existsById('r2')) // true
+value(await repository.updateById('r1', { name: 'Ada v3' })).changes // 1
+value(await repository.deleteById('r2')).changes // 1
+value(await repository.findById('r2')) // null, a successful lookup with no match
+const missing = await repository.getById('r2') // success: false, RECORD_NOT_FOUND
+value(await reldb.ddl.dropTable('demo_repository', true)) // cleanup of this example's table
+```
+
+#### 场景：用字段映射扩展业务仓库
 
 业务仓库继承 `BaseReldbCrudRepository`，通过 `fields` 定义字段映射，自动建表、类型转换：
 
@@ -476,168 +505,69 @@ class UserRepository extends BaseReldbCrudRepository<UserRow> {
 
 // 使用
 const repo = new UserRepository()
-await repo.create({ name: '张三', email: 'test@example.com' })
-const user = await repo.findById(1)
+value(await repo.create({ name: '张三', email: 'test@example.com' }))
+const user = value(await repo.findById(1)) // UserRow or null
 
 // 创建或更新（upsert）
-await repo.createOrUpdate({ id: 1, name: '李四', email: 'test@example.com' })
+value(await repo.createOrUpdate({ id: 1, name: '李四', email: 'test@example.com' }))
 // id=1 已存在 → 更新 name；不存在 → 插入新记录
 
-// 跨仓库事务
-const txResult = await reldb.tx.begin()
-if (txResult.success) {
-  const tx = txResult.data
-  await repo.create({ name: '用户A', email: 'a@test.com' }, tx)
-  await repo.create({ name: '用户B', email: 'b@test.com' }, tx)
-  await tx.commit()
-}
+// 同一事务中全部成功才提交；value 在脚本中把失败转为异常触发回滚。
+value(await reldb.tx.wrap(async (tx) => {
+  value(await repo.create({ name: '用户A', email: 'a@test.com' }, tx))
+  value(await repo.create({ name: '用户B', email: 'b@test.com' }, tx))
+}))
 ```
 
-### JSON 路径操作
+<a id="json-fields"></a>
 
-通过 `reldb.json` 构建跨数据库统一的 JSON 路径操作 SQL 表达式。
+### 读写 JSON 字段：`reldb.json`
 
-路径格式遵循 SQL/JSON Path 标准（`$.key` / `$.key.subkey` / `$[0]`），各数据库后端自动映射到对应函数或操作符。
+这些函数构造参数化 SQL 表达式，不会立即修改数据库；通过 sql.execute/query 执行表达式。
 
-| 操作      | SQLite         | PostgreSQL     | MySQL              |
-| --------- | -------------- | -------------- | ------------------ |
-| `extract` | `json_extract` | `#>` (text[])  | `JSON_EXTRACT`     |
-| `set`     | `json_set`     | `jsonb_set`    | `JSON_SET`         |
-| `insert`  | `json_insert`  | `jsonb_insert` | `JSON_INSERT`      |
-| `remove`  | `json_remove`  | `#-` (text[])  | `JSON_REMOVE`      |
-| `merge`   | `json_patch`   | `\|\| ::jsonb` | `JSON_MERGE_PATCH` |
+#### 接口清单
 
-所有方法返回 `{ sql, params }` 片段，可直接嵌入 `reldb.sql.query` / `reldb.sql.execute`。
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `reldb.json.extract` | 生成提取 JSON 值的 SQL 表达式 | column, path | `JsonSqlExpr` | `reldb.json.extract('payload', '$.status')` |
+| `reldb.json.set` | 生成设置 JSON 路径的 SQL 表达式 | column, path, value | `JsonSqlExpr` | `reldb.json.set('payload', '$.status', 'paid')` |
+| `reldb.json.insert` | 生成仅新增 JSON 路径的 SQL 表达式 | column, path, value | `JsonSqlExpr` | `reldb.json.insert('payload', '$.note', 'checked')` |
+| `reldb.json.remove` | 生成删除 JSON 路径的 SQL 表达式 | column, path | `JsonSqlExpr` | `reldb.json.remove('payload', '$.note')` |
+| `reldb.json.merge` | 生成合并 JSON 对象的 SQL 表达式 | column, patch | `JsonSqlExpr` | `reldb.json.merge('payload', { status: 'paid' })` |
 
-#### extract — 提取 JSON 字段值
+#### 场景：读写 JSON 字段
+
+下面从一份 payload 演示 extract、set、insert、remove、merge 的输入路径和执行后的 JSON。方言工具与实际数据库匹配，不把表达式对象当已保存数据。
+
+#### 场景：逐步修改一份订单 JSON
+
+下面在开发用 SQLite 中创建一条记录，输入 ID j1 和初始 JSON。表达式只描述 SQL；执行成功后再查回完整值。各后端提取 JSON 标量的原始返回类型不同，应用需按真实数据库处理；不要把字符串引号规则写死为跨库约定。
 
 ```ts
-// 用于 WHERE 条件
-const { sql, params } = reldb.json.extract('settings', '$.theme')
-const rows = await reldb.sql.query(
-  `SELECT * FROM users WHERE ${sql} = ?`,
-  [...params, '"dark"'],
-)
-
-// 用于 SELECT 列
-const { sql, params } = reldb.json.extract('profile', '$.name')
-const result = await reldb.sql.query(
-  `SELECT id, ${sql} as display_name FROM users`,
-  params,
-)
+value(await reldb.ddl.createTable('demo_json', {
+  id: { type: 'TEXT', primaryKey: true }, payload: { type: 'JSON' },
+}))
+value(await reldb.sql.execute('INSERT INTO demo_json (id, payload) VALUES (?, ?)', [
+  'j1', JSON.stringify({ status: 'draft', obsolete: true }),
+]))
+const initialStatus = reldb.json.extract('payload', '$.status')
+value(await reldb.sql.get(`SELECT ${initialStatus.sql} AS status FROM demo_json WHERE id = ?`, [...initialStatus.params, 'j1']))
+// SQLite: { status: 'draft' }
+const changed = reldb.json.set('payload', '$.status', 'paid')
+value(await reldb.sql.execute(`UPDATE demo_json SET payload = ${changed.sql} WHERE id = ?`, [...changed.params, 'j1']))
+const inserted = reldb.json.insert('payload', '$.reviewer', 'Ada')
+value(await reldb.sql.execute(`UPDATE demo_json SET payload = ${inserted.sql} WHERE id = ?`, [...inserted.params, 'j1']))
+const removed = reldb.json.remove('payload', '$.obsolete')
+value(await reldb.sql.execute(`UPDATE demo_json SET payload = ${removed.sql} WHERE id = ?`, [...removed.params, 'j1']))
+const merged = reldb.json.merge('payload', { version: 2, reviewer: null })
+value(await reldb.sql.execute(`UPDATE demo_json SET payload = ${merged.sql} WHERE id = ?`, [...merged.params, 'j1']))
+const final = value(await reldb.sql.get<{ payload: string }>('SELECT payload FROM demo_json WHERE id = ?', ['j1']))
+if (final)
+  JSON.parse(final.payload) // { status: 'paid', version: 2 }
+value(await reldb.ddl.dropTable('demo_json', true))
 ```
 
-#### set — 设置 JSON 字段路径（创建或替换）
-
-```ts
-const { sql, params } = reldb.json.set('settings', '$.theme', 'dark')
-await reldb.sql.execute(
-  `UPDATE users SET settings = ${sql} WHERE id = ?`,
-  [...params, userId],
-)
-```
-
-#### insert — 插入 JSON 字段路径（仅当路径不存在时）
-
-```ts
-const { sql, params } = reldb.json.insert('data', '$.firstSeen', new Date().toISOString())
-await reldb.sql.execute(
-  `UPDATE events SET data = ${sql} WHERE id = ?`,
-  [...params, eventId],
-)
-```
-
-#### remove — 删除 JSON 字段路径
-
-```ts
-const { sql, params } = reldb.json.remove('settings', '$.deprecated')
-await reldb.sql.execute(
-  `UPDATE users SET settings = ${sql} WHERE id = ?`,
-  [...params, userId],
-)
-```
-
-#### merge — 合并 JSON 对象（RFC 7396 Merge Patch）
-
-```ts
-// 覆盖已有键、保留未提及键、将 null 键删除
-const { sql, params } = reldb.json.merge('profile', {
-  bio: '新简介',
-  avatar: null, // 传入 null 表示删除该键
-})
-await reldb.sql.execute(
-  `UPDATE users SET profile = ${sql} WHERE id = ?`,
-  [...params, userId],
-)
-```
-
-`json.merge(column, patch)` 在三种后端均实现 RFC 7396 的对象补丁：递归保留未改键，补丁 null 删除指定键，数组整体替换。PostgreSQL 用参数化递归 CTE 在单次 SQL 中修改当前行，不要求预装函数，也不先在应用读取再写回。补丁根必须是可 JSON 序列化的对象；此契约不扩展为任意 JSON 根补丁。列表达式由开发者静态提供，动态路径和值全部作为参数。参见 [RFC 7396](https://www.rfc-editor.org/rfc/rfc7396) 和 [PostgreSQL JSON 运算](https://www.postgresql.org/docs/16/functions-json.html).
-
-#### 完整示例
-
-```ts
-// 建表（含 JSON 列）
-await reldb.ddl.createTable('products', {
-  id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
-  meta: { type: 'JSON' },
-})
-
-// 插入初始 JSON
-await reldb.sql.execute(
-  `INSERT INTO products (meta) VALUES (?)`,
-  [
-    JSON.stringify({
-      status: 'draft',
-      tags: ['new'],
-      version: 1
-    })
-  ],
-)
-
-// 设置字段
-const { sql: setSql, params: setParams } = reldb.json.set('meta', '$.status', 'published')
-await reldb.sql.execute(`UPDATE products SET meta = ${setSql} WHERE id = ?`, [...setParams, 1])
-
-// 提取字段（用于过滤）
-const { sql: exSql, params: exParams } = reldb.json.extract('meta', '$.status')
-const published = await reldb.sql.query(
-  `SELECT * FROM products WHERE ${exSql} = ?`,
-  [...exParams, '"published"'],
-)
-
-// 合并更新
-const { sql: mSql, params: mParams } = reldb.json.merge('meta', { version: 2, reviewer: 'admin' })
-await reldb.sql.execute(`UPDATE products SET meta = ${mSql} WHERE id = ?`, [...mParams, 1])
-
-// 删除字段
-const { sql: rmSql, params: rmParams } = reldb.json.remove('meta', '$.reviewer')
-await reldb.sql.execute(`UPDATE products SET meta = ${rmSql} WHERE id = ?`, [...rmParams, 1])
-```
-
-### 生产共享状态
-
-生产仅使用 PostgreSQL/MySQL；SQLite（含磁盘文件）只用于开发/明确测试，不能作为跨主机共享状态。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../../.agents/instructions/distributed-state.md).
-
-### 检查数据表结构
-
-`reldb.schemaColumns(table, sql?)` 只读查询实际列名。传入当前事务的 SQL 操作句柄，可在同一事务中检查表结构。框架模块初始化时校验各自的表结构，业务表由应用管理。
-
-### SQL 标识符与独立 JSON 方言工具
-
-动态值优先通过 SQL 参数绑定。表名和列名由调用方从已授权集合中选择，使用标识符工具校验。
-
-```ts
-import { createJsonOps, escapeSqlString, parseJsonPath, quoteIdentifier, validateIdentifier, validateIdentifiers } from '@h-ai/reldb'
-
-const column = validateIdentifier('order_total') // 成功的 data 为 'order_total'。
-const columns = validateIdentifiers(['order_id', 'order_total']) // 成功的 data 为 undefined，任一非法时返回失败。
-const quoted = quoteIdentifier('order_total') // 结果为 '"order_total"'，适用支持双引号的方言。
-const escaped = escapeSqlString('O\'Reilly') // 将单引号加倍，返回 "O''Reilly"。
-const segments = parseJsonPath('$.profile.name') // 按支持的 JSON Path 语法返回路径段数组。
-const ops = createJsonOps('postgresql') // 返回 PostgreSQL 的 JSON 操作构造器，使用方式见 JSON 路径操作。
-```
-
-`parseJsonPath()` 按受支持的路径语法读取 JSON 字段。遇到无法识别的部分时，可能只返回此前识别的路径段，需要完整校验时应检查应用允许的键及路径格式。通常通过 `reldb.json` 构造 SQL，它会选择已连接数据库的方言。只有尚未连接数据库但需要为指定方言生成表达式时，才用独立的 `createJsonOps()`。
+set 创建或替换路径，insert 仅新增，remove 删除路径；merge 递归保留未改键，补丁 null 删除键，数组整体替换。补丁根必须是可序列化的对象。PostgreSQL 使用单条参数化递归 CTE，不要求预装函数，不在应用先读后写。路径格式支持 `$.key`、`$.key.subkey` 和 `$[0]`；列名来自可信代码，路径和值作为参数。
 
 ## 错误处理
 

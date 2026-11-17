@@ -4,8 +4,6 @@
 
 [Chinese source](reach.md) · [Configuration](../configuration/reach.en.md) · [Data structures](../data/reach.en.md)
 
-<a id="quick-start"></a>
-
 ## Quick start
 
 Initialize Reach and the configured backend. Send with a provider and a trusted recipient. For queued delivery inspect the recorded state before deciding to retry.
@@ -76,28 +74,138 @@ const ready = reach.isInitialized // 无需参数，至少一个通知 Provider 
 const activeConfig = reach.config // 无需参数，读取脱敏快照；关闭后为 null。
 ```
 
+<a id="api-list"></a>
+
 <a id="api-reference"></a>
 
-## API list
+## Features
 
-Delivery, template and queue methods return HaiResult; the table shows successful data. close returns no data.
+Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
 
-| API | Purpose | Inputs and defaults | Output | Example |
+Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. The value helper checks HaiResult.success and preserves the original error. Use isolated test data and explicit cleanup.
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+
+function value<T>(result: HaiResult<T>): T {
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
+  return result.data
+}
+```
+
+<a id="sending"></a>
+
+### Start providers and send: `reach`
+
+Prepare mail or SMS providers, then send using a template and recipient. Durable templates and queues require RelDB.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `reach.init` | Prepare providers and enabled queue dependencies | `config, options?` | `void` | `await reach.init(config)` |
 | `reach.close` | Stop the service and release its resources | None | `Promise<void>` | `await reach.close()` |
-| `reach.send` | Send now or queue for delivery | `message` | `SendResult` | `await reach.send(message)` |
-| `reach.template.resolve` | Read the resolved template | `name` | `ReachTemplate` | `await reach.template.resolve(name)` |
-| `reach.template.save` | Write one template | `template` | `void` | `await reach.template.save(template)` |
-| `reach.template.saveBatch` | Save several templates | `templates` | `void` | `await reach.template.saveBatch(templates)` |
-| `reach.template.remove` | Remove a stored template | `name` | `void` | `await reach.template.remove(name)` |
-| `reach.template.list` | List resolved templates | None | `ReachTemplate[]` | `await reach.template.list()` |
-| `reach.template.render` | Substitute variables without sending | `name, vars` | `RenderedTemplate` | `await reach.template.render(name, { code: '123456' })` |
-| `reach.queue.get` | Read one delivery record | `queueId` | `ReachQueueEntry or null` | `await reach.queue.get(queueId)` |
-| `reach.queue.list` | List deliveries matching the filter | `options` | `ReachQueueEntry[]` | `await reach.queue.list({ status: 'unknown' })` |
-| `reach.queue.requeueDead` | Requeue an eligible terminal failure | `queueId, options` | `void` | `await reach.queue.requeueDead(queueId, retryDecision)` |
-| `reach.queue.resolveUnknown` | Record a delivery outcome confirmed outside the queue | `queueId, resolution` | `void` | `await reach.queue.resolveUnknown(queueId, verifiedOutcome)` |
+| `reach.send` | Send a message or enqueue it durably | `message` | `SendResult` | `await reach.send(message)` |
+
+#### Scenario: Start providers and send
+
+```ts
+const sent = value(await reach.send({ template: 'demo-welcome', to: 'demo@example.com', vars: { name: 'Ada' } }))
+// sent: SendResult for this provider attempt, not proof that a person read the message
+```
+
+Use a configured template and test provider. Sending contacts an external service. init has no business data and close returns Promise<void>; queue acceptance is not delivery.
+
+Delivery, template and queue methods return HaiResult; the table shows successful data. close returns no data.
 
 Queue acceptance does not prove receipt. Only reconcile an unknown delivery after obtaining the provider’s actual outcome.
 
-Still untranslated: detailed delivery reconciliation, dead-letter recovery and production boundaries. Read the [Chinese source section](reach.md#detailed-workflow).
+[Detailed parameters and workflows](reach.md#sending)
+
+<a id="templates"></a>
+
+### Maintain and preview templates: `reach.template`
+
+Templates select a provider, body and subject. Render previews variable substitution without sending.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `reach.template.resolve` | Resolve an effective template | `name` | `ReachTemplate` | `await reach.template.resolve(name)` |
+| `reach.template.save` | Save a template | `template` | `void` | `await reach.template.save(template)` |
+| `reach.template.saveBatch` | Save multiple templates | `templates` | `void` | `await reach.template.saveBatch(templates)` |
+| `reach.template.remove` | Remove a custom template | `name` | `void` | `await reach.template.remove(name)` |
+| `reach.template.list` | List effective templates | None | `ReachTemplate[]` | `await reach.template.list()` |
+| `reach.template.render` | Render template variables | `name, vars` | `RenderedTemplate` | `await reach.template.render(name, { code: '123456' })` |
+
+#### Scenario: Maintain and preview templates
+
+```ts
+value(await reach.template.save({ name: 'demo-welcome', provider: 'local', body: 'Hello {name}', subject: 'Welcome' }))
+value(await reach.template.saveBatch([{ name: 'demo-goodbye', provider: 'local', body: 'Bye {name}' }]))
+const template = value(await reach.template.resolve('demo-welcome')) // saved template
+const preview = value(await reach.template.render('demo-welcome', { name: 'Ada' })) // body 'Hello Ada'
+const templates = value(await reach.template.list()) // includes both templates
+value(await reach.template.remove('demo-goodbye')) // undefined
+```
+
+Configure a test provider named mail first. The name variable produces Hello Ada. Removing a template does not recall sent messages.
+
+[Detailed parameters and workflows](reach.md#templates)
+
+<a id="queue"></a>
+
+### Inspect queued and failed sends: `reach.queue`
+
+Save queue IDs when sends are queued. Read their status or list dead letters for investigation.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `reach.queue.get` | Read a delivery by ID | `queueId` | `ReachQueueEntry or null` | `await reach.queue.get(queueId)` |
+| `reach.queue.list` | Filter and paginate deliveries | `options` | `ReachQueueEntry[]` | `await reach.queue.list({ status: 'unknown' })` |
+
+#### Scenario: Inspect queued and failed sends
+
+```ts
+const entries = value(await reach.queue.list({ status: 'dead', limit: 20 }))
+if (entries.length > 0) {
+  const entry = value(await reach.queue.get(entries[0].queueId)) // current entry or null
+}
+```
+
+Results depend on the queue. An empty array means no matching records; get returns null for a missing ID. Obtain IDs from send receipts or the list.
+
+[Detailed parameters and workflows](reach.md#queue)
+
+<a id="recovery"></a>
+
+### Recover after checking outcomes: `reach.queue`
+
+A provider may have sent a message even when its receipt was lost. Check provider records before retrying or recording completion.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `reach.queue.requeueDead` | Requeue a reconciled dead letter | `queueId, options` | `void` | `await reach.queue.requeueDead(queueId, retryDecision)` |
+| `reach.queue.resolveUnknown` | Reconcile an unknown delivery | `queueId, resolution` | `void` | `await reach.queue.resolveUnknown(queueId, verifiedOutcome)` |
+
+#### Scenario: Recover after checking outcomes
+
+Input is an authorized operator’s externally verified decision. Isolate the old sender first. Success has no business data and only confirms the stored resolution.
+
+```ts
+import type { ReachUnknownResolution } from '@h-ai/reach'
+
+async function recordVerifiedDelivery(queueId: string, decision: ReachUnknownResolution) {
+  const current = value(await reach.queue.get(queueId))
+  if (current?.status !== 'unknown')
+    throw new Error('Expected an unknown delivery')
+  value(await reach.queue.resolveUnknown(queueId, decision))
+  return value(await reach.queue.get(queueId)) // status is sent or discarded
+}
+```

@@ -88,25 +88,115 @@ finally {
 }
 ```
 
+<a id="api-一覧"></a>
+
 <a id="api-reference"></a>
 
-## API 一覧
+## 機能
+
+各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
+
+モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。value は HaiResult.success を確認し元エラーを保持します。独立したテストデータと明示した後片付けを使います。
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+
+function value<T>(result: HaiResult<T>): T {
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
+  return result.data
+}
+```
+
+<a id="nodes"></a>
+
+### ノードとハンドラーの準備：`runner`
+
+DB で実行記録を共有し、ハンドラーは各ノードで登録します。API ノードは投入、実行ノードは処理を担当します。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `runner.init(config)` | 为当前进程启动任务服务 | `config.nodeId` 必填。`executor` 默认 `true`。先初始化 RelDB | `HaiResult<void>` | `await runner.init({ nodeId: 'api-east', executor: false })` |
+| `runner.close()` | 停止领取任务并核验本节点执行的清理 | 无参数 | `HaiResult<void>` | `await runner.close()` |
+| `runner.isExecutor` | このノードが実行を担当するか確認 | 无参数 | `boolean` | `runner.isExecutor` |
+| `runner.environment(id)` | 读已登记的执行环境 | 执行环境 ID 必填 | `HaiResult<RunnerEnvironment>` | `runner.environment('docs')` |
+| `runner.register(kind, handler)` | 登记一种任务及处理函数 | 任务类型和异步处理函数必填 | `HaiResult<() => void>`; `data` | `runner.register('reports.v1', async input => input)` |
+
+#### 利用例：ノードとハンドラーの準備
+
+入門例は初期化・登録・投入・終了まで示します。environment(id) は環境定義か失敗、isExecutor は役割の真偽、register は解除関数を返します。
 
 表の成功データを使う前に success を確認します。environment、register と registerWarmPool は同期で HaiResult を返します。
 
-| API | 用途 | 入力と既定値 | 出力 | 例 |
-| --- | --- | --- | --- | --- |
-| `runner.init` | API ノードまたはワーカーとして起動 | `{ nodeId, executor = true, ... }` | `void` | `await runner.init({ nodeId: 'api-east', executor: false })` |
-| `runner.close` | 取得を止め、実行中の処理を確認して終了 | なし | `void` | `await runner.close()` |
-| `runner.isExecutor` | このノードが実行を担当するか確認 | 読み取り専用プロパティ | `boolean` | `runner.isExecutor` |
-| `runner.environment` | 登録済みの実行環境を取得 | `id` | `RunnerEnvironment` | `runner.environment('docs')` |
-| `runner.register` | ローカル処理を登録し、解除関数を取得 | `kind, handler` | `() => void` | `runner.register('example', handler)` |
-| `runner.registerWarmPool` | 準備済みコンテナを再利用するプールを登録 | `pool` | `() => void` | `runner.registerWarmPool(pool)` |
-| `runner.submit` | 新規ジョブを待機させるか、条件に合う既存実行を返す | `request` | `RunnerExecution` | `await runner.submit(request)` |
-| `runner.find` | 認可済み範囲、種別、再利用キーから実行を検索 | `scope, kind, key` | `RunnerExecution or undefined` | `await runner.find(scope, 'example', 'request-1')` |
-| `runner.get` | 認可済みの範囲の実行結果を取得 | `scope, id` | `RunnerExecution` | `await runner.get(scope, id)` |
-| `runner.cancel` | 待機中または実行中の処理に中止を要求 | `scope, id` | `RunnerExecution` | `await runner.cancel(scope, id)` |
-| `runner.reconcileUnknown` | 結果不明の実行について確認済みの結論を記録 | `scope, id, review` | `RunnerExecution` | `await runner.reconcileUnknown(scope, id, review)` |
-| `runner.events` | 保存した連番の続きからイベントを取得 | `scope, id, after = 0, limit = 100` | `RunnerEvent[]` | `await runner.events(scope, id, 0, 20)` |
-
 認証済みリクエストから範囲を決めます。中止要求は外部作業が停止した証拠ではありません。元のリソースを確認してから結果不明の実行を照合します。
+
+[引数と手順の詳細](runner.md#nodes)
+
+<a id="tasks"></a>
+
+### 投入・復元・参照・取消：`runner`
+
+一つの意図に対する再試行キーと実行 ID を保存します。切断後は受付を調べ、取消後も確認可能な状態まで読みます。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `runner.submit(request)` | 保存任务，等待可用节点领取 | `scope`、`kind`、`input` 必填。排队和运行的超时都默认 `300000` 毫秒 | `HaiResult<RunnerExecution>` | `await runner.submit({ scope, kind: 'reports.v1', input: { page: 1 } })` |
+| `runner.find(scope, kind, key)` | 按任务类型和业务幂等键找现有执行 | 三个参数均必填 | `data`; `undefined` | `await runner.find(scope, 'reports.v1', 'monthly-2026-01')` |
+| `runner.get(scope, id)` | 按可信归属读取执行记录 | `scope` 和 `id` 必填 | `HaiResult<RunnerExecution>` | `await runner.get(scope, id)` |
+| `runner.cancel(scope, id)` | 保存取消请求 | `scope` 和 `id` 必填 | `HaiResult<RunnerExecution>` | `await runner.cancel(scope, id)` |
+| `runner.events(scope, id, after?, limit?)` | 按序读取任务事件 | `scope` 和 `id` 必填。`after` 默认 `0`，`limit` 默认 `100` | `HaiResult<RunnerEvent[]>` | `await runner.events(scope, id, 0, 20)` |
+
+#### 利用例：投入・復元・参照・取消
+
+```ts
+const scope = { tenantId: 'studio', userId: 'alice' } // supplied by server authentication
+const accepted = value(await runner.submit({ scope, kind: 'report.v1', input: 'Monthly report', idempotencyKey: 'report-nov' }))
+const recovered = value(await runner.find(scope, 'report.v1', 'report-nov')) // execution or undefined
+const current = value(await runner.get(scope, accepted.id)) // current persisted state
+const events = value(await runner.events(scope, accepted.id, 0, 20)) // ordered RunnerEvent[]
+const cancelling = value(await runner.cancel(scope, accepted.id)) // actual state after requesting cancellation
+```
+
+scope は認証から取り、入門例の report.v1 を登録済みとします。並行実行で状態は変わり、待機・実行中・取消中は成功終端ではありません。イベント番号で差分を読みます。
+
+[引数と手順の詳細](runner.md#tasks)
+
+<a id="containers"></a>
+
+### 隔離コンテナーと予熱：`runner.registerWarmPool`
+
+ツールを制御された環境に結び、CPU・メモリ・プロセス・ディスクを制限します。予熱は再利用環境の事前準備です。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `runner.registerWarmPool(pool)` | 登记某类工具的预热目标和容量 | `pool` 必填，由应用给出环境、任务类型、预热数量和上限 | `HaiResult<() => void>`; `data` | `runner.registerWarmPool({ key: 'docs', kind: 'docs.v1', environmentId: 'docs', minReady: 1, maxRunning: 2, maxTotal: 3 })` |
+
+#### 利用例：隔離コンテナーと予熱
+
+環境・種類・準備数・上限を入力し、解除関数を得ます。起動・ファイル・成果物も結果を確認して解放します。
+
+[引数と手順の詳細](runner.md#containers)
+
+<a id="reconciliation"></a>
+
+### 不明な実行の手動確認：`runner.reconcileUnknown`
+
+元の資源の停止を確認してから結論を記録します。DB の状態変更で外部の副作用は取り消せません。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `runner.reconcileUnknown(scope, id, review)` | 在原执行节点记录对已停止资源的人工核验 | `scope`、`id` 和核验记录必填。无容器凭据时还须核对应用侧资源已停止 | `HaiResult<RunnerExecution>` | `await runner.reconcileUnknown(scope, id, { operatorId: 'ops-1', reason: '核验记录 OPS-42', hostResourcesStopped: true })` |
+
+#### 利用例：不明な実行の手動確認
+
+元の scope/id・確認者・根拠・停止確認から RunnerExecution を得ます。解放完了を業務成功の証拠にはしません。
+
+[引数と手順の詳細](runner.md#reconciliation)

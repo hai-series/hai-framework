@@ -1,7 +1,5 @@
 # Datapipe の API
 
-<!-- translation: partial -->
-
 [パッケージ README](../../../packages/datapipe/README.ja.md) · [設定](../configuration/datapipe.ja.md) · [データ構造](../data/datapipe.ja.md)
 
 テキストを整形したり、短いチャンクに分割したりできます。複数の処理を組み合わせる場合は再利用できるパイプラインを作ります。
@@ -30,27 +28,61 @@ const { text, chunks } = result.data // 'one. two.' と、文に分割したチ�
 
 <a id="api-reference"></a>
 
-## API 一覧
+## 機能
 
-| API | 用途 | 引数と既定値 | 戻り値 | 例 |
+各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
+
+<a id="call-options"></a>
+
+<a id="cleaning"></a>
+
+### テキストの抽出と整形：`datapipe.clean`
+
+HTML などから文字列を抽出し、必要に応じて URL や余分な空白を除きます。HTML の安全化とは異なります。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `datapipe.clean(text, options?)` | HTML タグを除去し、必要な項目を整形 | 文字列を渡します。既定ではタグを除去して空白を整理し、URL とメールアドレスは残します | `HaiResult<string>` | `datapipe.clean('<p>Hello</p>')` |
-| `datapipe.chunk(text, options)` | 文、段落、見出しなどで分割 | 文字列と `mode` が必須です。`maxSize` の既定値は `1500`、`overlap` は `0` です | `HaiResult<DataChunk[]>`。入力が空白だけなら空の配列 | `datapipe.chunk('One. Two.', { mode: 'sentence' })` |
-| `datapipe.pipeline()` | 処理を順に実行するビルダーの作成 | 引数なし | `PipelineBuilder` | `const pipeline = datapipe.pipeline().clean()` |
+| `datapipe.clean(text, options?)` | HTML タグを除去し、必要な項目を整形 | `text` 是字符串。默认移除标签、统一空白并去掉首尾空白，保留 URL 和邮件地址 | `HaiResult<string>` | `datapipe.clean('<p>Hello</p>')` |
 
-### パイプラインのメソッド
+#### 利用例：テキストの抽出と整形
 
-| メソッド | 用途 | 引数と既定値 | 戻り値 | 例 |
+```ts
+const cleaned = datapipe.clean('<p>Hello   Ada</p>', { removeHtml: true })
+if (!cleaned.success)
+  throw new Error(cleaned.error.message)
+cleaned.data // 'Hello Ada'
+```
+
+タグと連続した空白を含む文字列から、成功時にプレーンテキスト Hello Ada を得ます。空白の正規化は既定で有効です。
+
+[引数と手順の詳細](datapipe.md#cleaning)
+
+<a id="chunking"></a>
+
+### 文書を分割する：`datapipe.chunk`
+
+単語・文・段落・Markdown などの境界と最大サイズを選びます。元の区切り文字は結果に残ります。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `pipeline.clean(options?)` | テキストの整形 | 既定値は `datapipe.clean()` と同じ | ビルダー | `pipeline.clean({ removeUrls: true })` |
-| `pipeline.transform(callback)` | 分割前の文字列を変換 | コールバックは現在のテキストを受け取り、文字列または Promise を返します | ビルダー | `pipeline.transform(text => text.toLowerCase())` |
-| `pipeline.chunk(options)` | テキストを分割 | `mode` を含む分割オプション | ビルダー | `pipeline.chunk({ mode: 'paragraph' })` |
-| `pipeline.chunkTransform(callback)` | チャンクの絞り込みや変更 | コールバックは現在のチャンクを受け取り、チャンク配列または Promise を返します | ビルダー | `pipeline.chunkTransform(parts => parts.filter(part => part.content.length > 10))` |
-| `pipeline.run(text)` | 登録順に処理を実行 | 元のテキスト | `Promise<HaiResult<PipelineResult>>`。成功時は `{ text, chunks }` | `await pipeline.run('<p>Hello</p>')` |
+| `datapipe.chunk(text, options)` | 文、段落、見出しなどで分割 | 必填 `text` 和 `options.mode`。每块的 `maxSize` 默认 `1500`，`overlap` 默认 `0` | `HaiResult<DataChunk[]>` | `datapipe.chunk('One. Two.', { mode: 'sentence' })` |
 
-分割手順がない場合は処理後の本文と空のチャンク配列を返します。
+#### 利用例：文書を分割する
 
-### 分割と表示の注意点
+```ts
+const chunks = datapipe.chunk('alpha beta gamma', { mode: 'word', maxSize: 1 })
+if (!chunks.success)
+  throw new Error(chunks.error.message)
+chunks.data.map(part => part.content) // ['alpha ', 'beta ', 'gamma']
+```
+
+三つの単語を一語ずつに分割します。元の位置を追えるよう空白を残します。DataChunk の全フィールドはデータのページを参照してください。
+
+#### 分割と表示の注意点
 
 `sentence`、`paragraph`、`markdown`、`page` はそれぞれ文、段落、見出し、改ページで区切ります。`custom` は正規表現を使います。`word` は空白で分けた語の数を数えるため、空白を含まない日本語のまとまりが 1 語になることがあります。他のモードでは Unicode コードポイントを数えます。空白、句読点、区切り文字も残ります。一つのまとまりが上限を超える場合は途中で分割します。重複は上限未満で指定すると、前のチャンクの末尾を次のチャンクにも含められます。
 
@@ -58,51 +90,7 @@ Markdown のセクションをまたぐ重複はありません。コードブ�
 
 HTML として表示する場合は、整形後も UI の安全なレンダリングを使ってください。独自の置き換えや区切りに使う正規表現は内容を確認してから渡します。任意の入力から正規表現を作ると、処理時間が大幅に延びることがあります。
 
-## エラー
-
-`data` を読む前に `success` を確認します。`mode: 'custom'` で区切りが設定されていない場合は `MISSING_SEPARATOR`、正規表現が無効な場合は `CHUNK_FAILED` が返ります。設定が無効な場合は `CONFIG_ERROR` が返ることがあります。コードを比較するには `@h-ai/datapipe` から `HaiDatapipeError` をインポートし、`result.error.code === HaiDatapipeError.MISSING_SEPARATOR.code` のように使います。
-
-<a id="call-options"></a>
-
-## 呼び出し引数と接続オプション
-
-`datapipe.clean(text, options)` または `datapipe.chunk(text, options)` に、テキストとオプションを渡します。オプションは呼び出しごとに適用されます。AI のナレッジベースに文書を取り込む場合は、[`knowledge.cleanOptions` と `knowledge.chunkOptions`](../configuration/ai.md#knowledge) に、ナレッジベースから Datapipe に渡す設定を書きます。
-
-```yaml schema=@h-ai/datapipe:ChunkOptionsSchema
-mode: paragraph
-maxSize: 1000
-overlap: 0
-```
-
-短いテキストで、チャンクの単語数を確認できます。
-
-```ts
-import { datapipe } from '@h-ai/datapipe'
-
-// 3 語を渡し、チャンクごとの上限を 1 語にします。
-const result = datapipe.chunk('alpha beta gamma', { mode: 'word', maxSize: 1 })
-if (!result.success)
-  throw new Error(result.error.message)
-
-// 元のテキストに含まれる空白も各チャンクに残ります。
-const contents = result.data.map(chunk => chunk.content)
-// ['alpha ', 'beta ', 'gamma']
-```
-
-### テキストの整形
-
-| オプション | 既定値 | 動作 |
-| --- | --- | --- |
-| `removeHtml` | `true` | HTML タグを取り除きます。 |
-| `removeUrls` | `false` | URL を取り除きます。 |
-| `removeEmails` | `false` | メールアドレスを取り除きます。 |
-| `normalizeWhitespace` | `true` | 連続する空白と余分な空行を整理します。 |
-| `trim` | `true` | 先頭と末尾の空白を取り除きます。 |
-| `customReplacements` | 任意 | リストの順序で置き換えを適用します。 |
-| `customReplacements[].pattern` | 各要素に必須 | アプリが用意した正規表現か、正規表現として解釈する文字列です。 |
-| `customReplacements[].replacement` | 各要素に必須 | 置き換えに使う文字列です。 |
-
-### チャンクへの分割
+#### 分割オプション
 
 | オプション | 既定値 | 動作 |
 | --- | --- | --- |
@@ -117,6 +105,44 @@ const contents = result.data.map(chunk => chunk.content)
 
 <a id="text-import-guide"></a>
 
-## テキストの清洗と分割
+<a id="pipelines"></a>
 
-コード引数を扱うため設定手冊から移動しました。完全な手順は現在[中国語](datapipe.md#text-import-guide)にあり、この節は部分翻訳です。
+### 再利用する処理手順：`datapipe.pipeline`
+
+整形・文字列変換・分割・分割結果の加工を登録してから run します。登録しただけでは処理は始まりません。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `datapipe.pipeline()` | 独立した処理管線を作成 | なし | PipelineBuilder | `const pipeline = datapipe.pipeline()` |
+| `pipeline.clean(options?)` | クリーニングを登録 | clean と同じ省略可能な引数 | 同じビルダー | `pipeline.clean({ removeHtml: true })` |
+| `pipeline.transform(fn)` | テキスト変換を登録 | 同期・非同期の文字列変換関数 | 同じビルダー | `pipeline.transform(text => text.toLowerCase())` |
+| `pipeline.chunk(options)` | 分割を登録 | mode 必須。他は chunk と同じ既定値 | 同じビルダー | `pipeline.chunk({ mode: "word", maxSize: 1 })` |
+| `pipeline.chunkTransform(fn)` | 分割結果の変換を登録 | 同期・非同期の配列変換関数 | 同じビルダー | `pipeline.chunkTransform(parts => parts.filter(p => p.content.trim() !== "beta"))` |
+| `pipeline.run(text)` | 順に処理を実行 | 原文の文字列 | Promise<HaiResult<PipelineResult>>。手順の失敗は失敗結果 | `await pipeline.run("<p>ALPHA BETA GAMMA</p>")` |
+
+#### 利用例：再利用する処理手順
+
+```ts
+const pipeline = datapipe.pipeline()
+  .clean({ removeHtml: true })
+  .transform(text => text.toLowerCase())
+  .chunk({ mode: 'word', maxSize: 1 })
+  .chunkTransform(parts => parts.filter(part => part.content.trim() !== 'beta'))
+const result = await pipeline.run('<p>ALPHA BETA GAMMA</p>')
+if (!result.success)
+  throw new Error(result.error.message)
+result.data.text // 'alpha beta gamma'
+result.data.chunks.map(part => part.content) // ['alpha ', 'gamma']
+```
+
+整形と小文字化の結果が text です。分割結果だけを絞り込むため、text の beta は残ります。各ビルダーメソッドと run の入出力をこの流れで確認できます。
+
+#### 分割を省略した場合
+
+分割手順がない場合は処理後の本文と空のチャンク配列を返します。
+
+## エラー
+
+`data` を読む前に `success` を確認します。`mode: 'custom'` で区切りが設定されていない場合は `MISSING_SEPARATOR`、正規表現が無効な場合は `CHUNK_FAILED` が返ります。設定が無効な場合は `CONFIG_ERROR` が返ることがあります。コードを比較するには `@h-ai/datapipe` から `HaiDatapipeError` をインポートし、`result.error.code === HaiDatapipeError.MISSING_SEPARATOR.code` のように使います。

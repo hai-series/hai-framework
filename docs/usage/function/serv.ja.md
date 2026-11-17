@@ -62,25 +62,30 @@ export function startApi(closeApp: () => Promise<void>) {
 
 <a id="api-reference"></a>
 
-## API 一覧
+## 機能
+
+各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
+
+<a id="http-app"></a>
+
+### 契約の実装と HTTP の起動：`serv`
+
+共有契約を実装して Fetch アプリを組み立てます。Node の待受は戻された server.close() で閉じます。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `serv.createApp(options)` | 组装 HTTP 应用 | 必填 `contract`、`procedures`。HTTP、IAM、中间件、传输加密和语音可按需配置，见[默认值](../configuration/serv.md) | `fetch`; `request`; `ServHttpApp` | `serv.createApp({ contract, procedures })` |
+| `serv.listen(app, options?)` | 启动 Node 监听 | 必填 `app`。默认 `host: '127.0.0.1'`、`port: 3000`。可传 `onListening`、`onClose` | `ServNodeServer`; `server`; `address`; `close()` | `serv.listen(app, { port: 3001 })` |
+| `serv.toFetch(app)` | 供支持 Fetch 的环境使用 | 由 `createApp()` 返回的应用 | `(request: Request) => Promise<Response>` | `const fetch = serv.toFetch(app)` |
+| `serv.implement(contract)` | 实现契约中的路由 | 必填带类型的路由契约 | `ServImplementer` | `serv.implement(contract)` |
+
+#### 利用例：契約の実装と HTTP の起動
+
+status の契約と処理から JSON 成功応答を得ます。toFetch は関数を返すだけで、listen がポートを開きます。以下に両方と終了手順を示します。
 
 Serv はアプリを組み立てます。Node の待ち受けは listen だけが開始します。ミドルウェア、処理、アダプターでエラーの扱いは異なります。
-
-| API | 用途 | 入力と既定値 | 出力 | 例 |
-| --- | --- | --- | --- | --- |
-| `serv.createApp` | 契約と処理を HTTP アプリに割り当てる | `options` | `ServHttpApp` | `serv.createApp({ contract, procedures })` |
-| `serv.listen` | Node で待ち受け開始。既定は 127.0.0.1:3000 | `app, options?` | `ServNodeServer` | `serv.listen(app, { port: 3001 })` |
-| `serv.toFetch` | Fetch リクエストを扱う実装に変換 | `app` | `ServFetchHandler` | `serv.toFetch(app)` |
-| `serv.implement` | 型付きのルート処理を定義 | `contract` | `ServImplementer` | `serv.implement(contract)` |
-| `serv.parseRequestContext` | リクエストのメタデータを取得。セッション認証はしない | `input` | `ServContext` | `serv.parseRequestContext({ request, remoteAddress })` |
-| `serv.buildAuthContextFactory` | 渡したトークン検証を使うコンテキスト作成関数を組む | `verifyToken` | `CreateServContext` | `serv.buildAuthContextFactory(verifyToken)` |
-| `serv.resolveRequestLocale` | リクエストヘッダーから言語を決める | `headers` | `string` | `serv.resolveRequestLocale(request.headers)` |
-| `serv.cors` | オリジンをまたぐリクエストを設定 | `config?` | `ServMiddleware` | `serv.cors({ origin: 'https://app.example.com' })` |
-| `serv.storageAssets` | 許可された公開 Storage オブジェクトを配信 | `config` | `ServMiddleware` | `serv.storageAssets(storageConfig)` |
-| `serv.createRuntimeSecurityPolicy` | 配置環境に合うセキュリティ設定を解決 | `input` | `ServRuntimeSecurityPolicy` | `serv.createRuntimeSecurityPolicy(runtimeInput)` |
-| `serv.generateSpec` | OpenAPI の仕様を生成 | `contract, options?` | `OpenAPI.Document` | `await serv.generateSpec(contract)` |
-| `serv.validateInputOrFail` | 処理内で入力を検証し失敗時は翻訳済みの結果を返す | `schema, input, locale?` | `HaiResult<T>` | `serv.validateInputOrFail(schema, input)` |
-| `serv.m` | 指定または現在の言語で文言を取得 | `key, options?` | `string` | `serv.m('serv_validationFailed')` |
 
 借りているデータベースやキャッシュを閉じる前に Node の待ち受けを終了します。認証済みセッションとリクエストのメタデータは分けて扱います。
 
@@ -88,13 +93,112 @@ Serv はアプリを組み立てます。Node の待ち受けは listen だけ�
 
 <a id="host-options"></a>
 
-## ファクトリー引数と実行時の依存
+#### アプリ工場の引数と実行時依存
 
 コード引数を扱うため設定手冊から移動しました。完全な手順は現在[中国語](serv.md#host-options)にあり、この節は部分翻訳です。
 
-
 <a id="audio-options"></a>
 
-## 音声接続の認可と予算
+[引数と手順の詳細](serv.md#http-app)
+
+<a id="authentication"></a>
+
+### 主体の解決とルート保護：`serv`
+
+ヘッダー解析で得た資格情報は未検証です。検証成功後に session を作り、権限やロールを確認します。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `serv.parseRequestContext(input)` | 读取追踪编号、语言与访问令牌 | `request` 必填，`platform` 可选 | `ServContext` | `serv.parseRequestContext({ request })` |
+| `serv.buildAuthContextFactory(verifyToken)` | 构造验证访问令牌的上下文工厂 | 回调接收访问令牌，返回 `Promise<HaiResult<ServSession>>` | `CreateServContext`; `session` | `serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))` |
+| `serv.WILDCARD_PERMISSION` | 在可信策略中表示所有权限 | 只读常量 | `string` | `const allPermissions = [serv.WILDCARD_PERMISSION]` |
+| `serv.WILDCARD_ROLE` | 在可信策略中表示所有角色 | 只读常量 | `string` | `const allRoles = [serv.WILDCARD_ROLE]` |
+
+#### 利用例：主体の解決とルート保護
+
+実 Request と信頼できる verifyToken を入力し ServContext を得ます。不正な資格情報から認証済み session を作りません。ワイルドカードは信頼する方針用です。
+
+[引数と手順の詳細](serv.md#authentication)
+
+<a id="policies"></a>
+
+### アクセス・CORS・資源の制御：`serv`
+
+配置環境に合わせて許可元と Cookie 方針を決め、各要求と静的資源にも権限を確認します。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `serv.cors(config?)` | 处理跨域预检和响应头 | 默认来源 `'*'`，`credentials: false`、`maxAge: 86400` 秒。可指定方法、允许和暴露的头 | `ServMiddleware` | `serv.cors({ origin: 'https://app.example.com', credentials: true })` |
+| `serv.createRuntimeSecurityPolicy(input)` | 根据环境确定跨域、Cookie 和接口文档策略 | `environment` 省略时按非生产处理，来源默认 `'*'`。生产须提供明确的 Web 来源，可加 `nativeOrigins` | `allowOrigin`; `secureRefreshCookie`; `exposeApiDocs` | `serv.createRuntimeSecurityPolicy({ environment: 'production', corsOrigin: 'https://app.example.com' })` |
+| `serv.storageAssets(config)` | 用 Storage 提供授权后的只读资源 | 传入读取函数、键规则和 MIME 检查，按需配置缓存 | `ServMiddleware` | `serv.storageAssets(assetOptions)` |
+
+#### 利用例：アクセス・CORS・資源の制御
+
+```ts
+const policy = serv.createRuntimeSecurityPolicy({ environment: 'production', corsOrigin: 'https://app.example.com' })
+// policy.allowOrigin restricts requests to the explicit origin; secureRefreshCookie is enabled
+const cors = serv.cors({ origin: 'https://app.example.com', credentials: true }) // ServMiddleware
+```
+
+明示した本番の許可元から方針とミドルウェアを作ります。生成だけでは許可せず、組み込んだ後の OPTIONS/GET で確認します。資源読み取りと MIME 条件は後述します。
+
+[引数と手順の詳細](serv.md#policies)
+
+<a id="validation-locales"></a>
+
+### 入力の検証と API 記述：`serv`
+
+要求の言語を選んで入力を検証し、同じ契約から OpenAPI を作ります。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `serv.generateSpec(contract, options?)` | 生成 OpenAPI 描述 | 契约必填，标题默认 `hai-framework API`，版本默认 `0.1.0`；描述和前缀可省略 | `Promise<OpenAPI.Document>` | `await serv.generateSpec(contract, { title: 'Orders', version: '1.0.0' })` |
+| `serv.validateInputOrFail(schema, input, locale?)` | 校验业务输入并生成字段错误 | Zod Schema 和待校验值必填，语言默认 `zh-CN`，可传当前请求语言 | `HaiResult<z.infer<Schema>>` | `serv.validateInputOrFail(InputSchema, input, context.locale)` |
+| `serv.resolveRequestLocale(headers)` | 根据 HTTP 请求头选择语言 | 传入 `Headers` 或头字段对象。先读 `x-hai-locale`，再读 `Accept-Language`，默认 `zh-CN` | 规范化的语言标识 | `serv.resolveRequestLocale(request.headers)` |
+| `serv.m(key, options?)` | 读取本地化提示 | 消息键必填，可传 `locale` 和插值参数 | `string` | `serv.m('serv_errorForbidden', { locale: 'zh-CN' })` |
+
+#### 利用例：入力の検証と API 記述
+
+```ts
+import { z } from 'zod'
+const locale = serv.resolveRequestLocale(new Headers({ 'x-hai-locale': 'en-US' })) // 'en-US'
+const checked = serv.validateInputOrFail(z.object({ title: z.string().min(1) }), { title: 'Order' }, locale)
+if (!checked.success)
+  throw new Error(checked.error.message)
+checked.data // { title: 'Order' }
+const denied = serv.m('serv_errorForbidden', { locale }) // localized safe text
+// With the contract from quick start:
+const spec = await serv.generateSpec(contract, { title: 'Orders', version: '1.0.0' }) // OpenAPI document
+```
+
+英語ヘッダーと title=Order を入力し、言語と検証済みオブジェクトを得ます。仕様生成は Promise 拒否、入力検証は失敗 HaiResult です。
+
+[引数と手順の詳細](serv.md#validation-locales)
+
+<a id="integrations"></a>
+
+### 暗号・音声・フィードバックの接続：`serv.createApp`
+
+これらは createApp の引数とアプリ側サービスで接続します。別のグローバル初期化ではありません。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `serv.createApp` | 暗号化・音声・業務ルートを装配 | `contract, procedures; transport?, audio?, middlewares?` | `ServApp` | `serv.createApp({ contract, procedures, transport })` |
+
+#### 利用例：暗号・音声・フィードバックの接続
+
+createApp を使い、transport manager・音声チケットと認可・フィードバックの文脈を渡します。HTTP/WS の結果、容量超過、解放まで説明します。
+
+#### 音声接続の認可と予算
 
 コード引数を扱うため設定手冊から移動しました。完全な手順は現在[中国語](serv.md#audio-options)にあり、この節は部分翻訳です。
+
+[引数と手順の詳細](serv.md#integrations)

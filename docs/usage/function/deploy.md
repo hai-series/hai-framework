@@ -19,47 +19,61 @@ pnpm run deploy --env prod --build
 
 命令返回部署 URL 或离线交付目录；失败时按安全提示及本地/远端执行状态排查。生产凭据放 `.env.prod.local`，部署前准备数据备份与恢复方案。以下功能介绍分别说明构建、配置和交付边界。
 
-## 功能说明
-
-- 一条命令完成构建、打包、SSH 上传、启动和访问检查。
-- 完整包包含应用与自建中间件镜像；支持只更新选中的服务。
-- 离线交付生成 tar 和 Windows/Linux/macOS 操作脚本，记录步骤结果并在失败时尝试恢复。
-
 <a id="api-reference"></a>
 
-### 功能输入输出
+## 功能说明
 
-初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
+下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。`value` 先检查 `HaiResult.success`，失败保留原错误，成功返回 data；只用于读取结果。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
 
-#### 初始化与关闭
+```ts
+import type { HaiResult } from '@h-ai/core'
 
-| API | 用途 | 输入 | 输出 | 示例 |
+function value<T>(result: HaiResult<T>): T {
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
+  return result.data
+}
+```
+
+<a id="delivery"></a>
+
+### 扫描工程并交付应用：`deploy`
+
+先扫描环境需求与产物，再选择只读计划、离线包或实际部署；SDK 与 CLI 使用相同部署能力。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
 | `deploy.init` | 读取项目部署设置以供后续命令使用 | `config`（必填） | `Promise<HaiResult<void>>` | `await deploy.init(config)` |
-| `deploy.close` | 清除部署模块的运行时状态；不会停止部署到服务器的服务 | 无 | `Promise<void>` | `await deploy.close()` |
+| `deploy.close` | 清除部署模块的运行时状态；不会停止部署到服务器的服务 | 无参数 | `Promise<void>` | `await deploy.close()` |
+| `deploy.scan` | 识别项目与交付目标 | appDir, options | `ScanResult` | `await deploy.scan('./apps/orders', { environment: 'prod' })` |
+| `deploy.provisionAll` | 准备已选中间件 | projectName, services | `ProvisionResult[]` | `await deploy.provisionAll('orders', ['db', 'cache'])` |
+| `deploy.deployApp` | 交付应用或生成交付包 | appDir, options | `DeployResult` | `await deploy.deployApp('./apps/orders', { environment: 'prod', bundleOnly: true })` |
 
-#### deploy
+#### 场景：扫描工程并交付应用
 
-部署编排。scan 输入工程路径/环境返回扫描结果；provisionAll 输入工程名/服务范围返回开通数组；deployApp 输入工程/选项返回 URL、交付包及恢复回执，先检查结果。
+输入是已构建工程目录和初始化使用的真实部署配置；scan 先读取需求，provisionAll 会开通所选服务，必须在审查计划后使用，不能把它当只读探测。最小接入的 --plan 不执行开通。
 
-| 入口                  | 输入参数              | 成功结果            | 调用示例                                                                             |
-| --------------------- | --------------------- | ------------------- | ------------------------------------------------------------------------------------ |
-| `deploy.scan`         | appDir, options       | `ScanResult`        | `await deploy.scan('./apps/orders', { environment: 'prod' })`                        |
-| `deploy.provisionAll` | projectName, services | `ProvisionResult[]` | `await deploy.provisionAll('orders', ['db', 'cache'])`                               |
-| `deploy.deployApp`    | appDir, options       | `DeployResult`      | `await deploy.deployApp('./apps/orders', { environment: 'prod', bundleOnly: true })` |
+```ts
+import type { DeployConfigInput } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 
-#### deploy.credentials
+async function deliver(appDir: string, config: DeployConfigInput) {
+  const scan = value(await deploy.scan(appDir, { environment: 'prod' }))
+  value(await deploy.init(config))
+  try {
+    const provisioned = value(await deploy.provisionAll('orders', ['db', 'cache']))
+    const delivered = value(await deploy.deployApp(appDir, { environment: 'prod', bundleOnly: true }))
+    return { scan, provisioned, delivered } // bundlePath/instructions do not imply remote readiness
+  }
+  finally {
+    await deploy.close()
+  }
+}
+```
 
-本机私有凭据辅助无需初始化。getPath 返回文件路径，load 返回已加载变量名的 HaiResult；save/saveAll 输入键值/映射返回 void HaiResult，不返回真实秘密供展示。
-
-| 入口                         | 输入参数   | 成功结果   | 调用示例                                                              |
-| ---------------------------- | ---------- | ---------- | --------------------------------------------------------------------- |
-| `deploy.credentials.getPath` | 无参数     | `string`   | `deploy.credentials.getPath()`                                        |
-| `deploy.credentials.load`    | 无参数     | `string[]` | `deploy.credentials.load()`                                           |
-| `deploy.credentials.save`    | key, value | `void`     | `deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', providerToken)` |
-| `deploy.credentials.saveAll` | entries    | `void`     | `deploy.credentials.saveAll(privateCredentialEntries)`                |
-
-### 准备构建产物
+#### 准备构建产物
 
 创建项目默认安装部署工具，可用 `hai create my-app --no-deploy` 关闭。部署 SDK 属于开发依赖，不进入应用运行镜像。
 
@@ -138,7 +152,7 @@ pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source 
 
 每个镜像独立 Dockerfile；web 的 Nginx 配置与启动资源放 `images/web/`。Dockerfile 内保留编译/运行阶段，配置不再选择阶段。没有 Web 或 desktop 时删除相应项。
 
-业务容量通过 `transport.maxPlaintextBytes` 统一配置：默认 1 MiB，整数范围 1 KiB～64 MiB，请求和响应共用 UTF-8 明文字节预算。客户端从握手自动获取上限，密文与部署代理预算由 `resolveTransportBodyLimits()` 推导（两倍明文 + 32 KiB）。握手、公钥、认证头和防重放约束独立；超限取消原流并释放 reader，请求 413、响应为加密的 500 容量错误，客户端识别 `TransportBodyTooLargeError` / `hai:crypto:070`。 全量和 app 增量部署都从解析后的 `_serv.yml` 推导代理上限；容量变化会复用现有 Web 镜像重建代理，健康失败恢复旧配置。SvelteKit 的 adapter-node `BODY_SIZE_LIMIT` 从 `_kit.yml` 同步推导。 [Transport capacity](crypto.md#transport-capacity).
+业务容量通过 `transport.maxPlaintextBytes` 统一配置：默认 1 MiB，整数范围 1 KiB～64 MiB，请求和响应共用 UTF-8 明文字节预算。客户端从握手自动获取上限，密文与部署代理预算由 `crypto.transport.resolveBodyLimits()` 推导（两倍明文 + 32 KiB）。握手、公钥、认证头和防重放约束独立；超限取消原流并释放 reader，请求 413、响应为加密的 500 容量错误，客户端识别 `TransportBodyTooLargeError` / `hai:crypto:070`。 全量和 app 增量部署都从解析后的 `_serv.yml` 推导代理上限；容量变化会复用现有 Web 镜像重建代理，健康失败恢复旧配置。SvelteKit 的 adapter-node `BODY_SIZE_LIMIT` 从 `_kit.yml` 同步推导。 [Transport capacity](crypto.md#transport-capacity).
 
 无正文认证封装通过 X-Hai-Transport 头传输，生成配置使用 large_client_header_buffers 4 32k 与 proxy_buffer_size 32k 容纳头字段；自有代理也须允许并保留该头。
 
@@ -153,8 +167,6 @@ pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source 
 SDK据制品生成Nginx目录、运行配置入口、SSR健康路径和返回URL，额外网关应保留此前缀。同源API仍由Serv的http.apiPrefix独立决定，CORS允许源只包含协议、域名和端口。独立Vite站点保留其运行配置中的外部API地址。完整及部分构建保持同一PUBLIC_BASE_PATH，即使只构建serv；增量在替换前拒绝目录不一致，目录变更使用全量部署。失败恢复按旧发布记录的健康路径验证。操作示例、两种框架差异与真实截图见[网站子目录配置](../configuration/delivery.md#网站部署在子目录).
 
 <a id="detailed-workflow"></a>
-
-### 部署到环境
 
 #### 先准备环境与部署目标
 
@@ -277,11 +289,11 @@ SDK 在服务器本地健康通过并提交 `current` 后，还从操作机检�
 - 包含私有配置，安全搬运，不提交 Git；持久化卷身份跨版本稳定。
 - 实际断外网验证启动、登录、页面刷新、重启与数据持久化。生产 HTTPS、证书、DNS 和外部服务需另行准备。
 
-### 构建与交付优化
+#### 构建与交付优化
 
 镜像默认最多并行两项，`--concurrency 1` 可降低资源占用。Dockerfile 在复制源码前安装依赖；前后端仅复制各自必要源码，复用安装层和驱动缓存。运行镜像移除应用自身的声明文件、源码映射和说明文件。打包按镜像内容 ID 复用并校验中间件归档，复制应用镜像时同时计算摘要。默认交付压缩为 `.tar.gz`，显式 `--output release.tar` 可保留未压缩格式；交付目录包含 `README.txt`，归档内含手工部署说明 `APPLY.txt`。成功部署后清理本次 incoming 上传和解包目录，release 保留恢复配置和状态，镜像由容器引擎保存。
 
-### 可选 HTTPS 证书
+#### 可选 HTTPS 证书
 
 `pnpm run deploy` 为所有容器模板统一提供“不启用 / 已有 PEM 证书和私钥路径 / Let’s Encrypt”。相对路径以工程根为基准，已有证书校验域名、有效期和密钥匹配后复制到私有发布包。Let’s Encrypt 使用固定版本官方 Certbot 镜像申请，每 12 小时检查续期，Nginx 自动重载。需要确认服务条款、真实邮箱、公网 DNS、80 端口和 CA 网络；隔离环境使用已有证书。证书状态保留在服务器，私钥不进入应用镜像。`--yes` 复用保存配置。
 
@@ -289,7 +301,7 @@ SDK 在服务器本地健康通过并提交 `current` 后，还从操作机检�
 
 配置为 `hai.json.deploy.provider.expose.https`，也可用环境私有文件覆盖。默认 HTTPS 443、HTTP 跳转开启，未配置保持 HTTP；启停或更改模式、域名、端口、本地证书需全量部署。配置和续期边界见[HTTPS 手册](../configuration/delivery.md#可选https证书)。`--plan` 的 `root` 表示工程根，`serviceDir` 表示部署服务源码与配置目录，仅显示公开证书元数据。
 
-### SDK
+#### SDK
 
 ```ts
 import { deploy } from '@h-ai/deploy'
@@ -338,7 +350,82 @@ Vercel API 与文件上传固定请求官方入口，拒绝重定向，每次请
 
 SSH 中断始终先记 `remoteExecution: 'unknown'`。docker-ssh SDK 用新连接只读核对 `result-<deploymentId>.json`，仅完整、未截断且 ID 匹配的终态记录可确认 `finished`，同时给出真实阶段及退出码；脚本结束不表示容器停止。即使终态退出码为 0，原 SSH/输出失败仍保留为失败，避免丢失回执被伪装成成功。CLI 分别显示本地和远端状态及结果路径；缺结果、旧 ID、损坏内容或重连失败均保持未知，不自动重跑发布或回滚。手工上传脚本在 SSH 失败时保守提示未知和核对目录，部署 ID 见包内 manifest。先核对步骤文件、`current`、真实服务与数据，再决定恢复。
 
-### 运行环境文件与重复部署
+#### 只读部署计划
+
+`createDeploymentPlan(appDir, config, options)` 不初始化 Provider、不生成中间件凭据、不创建输出目录、不连接目标。复用实际扫描、环境解析、资源名称与制品 checksum 校验，返回工程根 `root`、部署服务目录 `serviceDir`、版本、构建 ID、范围、保留服务、配置文件与变量名、基线要求和恢复目录，省略所有变量值与 SSH 凭据。远端 current 未读取时明确 not-inspected；局部更新仍由执行端严格要求成功基线。Compose 恢复不会回退数据库数据或迁移。CLI 对应 `hai deploy --env prod --plan`。
+
+需要目标基线事实时使用 `--plan --inspect-remote`（SDK inspectRemote:true），仅通过 SSH 读取 current 及成功发布目录，报告 verified/missing/unavailable 和实际恢复发布 ID，不写目标。
+
+资源清单复用执行端的完整 sidecar 拓扑：`containers` 只列本次选中的显式容器名，LDAP/SMTP 等由 Compose 命名的服务列在 `composeManagedServices`；自建 S3 的 SSR/API gateway 也会列入实际更新或保留范围。`logicalVolumes` 是完整拓扑的 Compose 逻辑卷声明，包含保留服务和应用继续挂载的数据卷，不表示新建或重建这些卷；实际引擎卷名由 Compose 项目作用域决定。未选中间件的 action 为 keep，云开通仅按实际选择范围计算，不展示凭据值。
+
+#### 传输容量
+
+传输明文上限保留显式设置；反馈需求超过显式值时拒绝打包并说明冲突。缺省/auto 才按模块预算推导，Web 代理和 Kit BODY_SIZE_LIMIT 使用同一密文预算。计划的 target.runtime 表示远端 provider.remote.runtime，与本地镜像打包 options.runtime 分离；auto 不冒充已探测事实。
+
+<a id="credentials"></a>
+
+### 管理本机私有凭据：`deploy.credentials`
+
+凭据文件属于运行部署命令的用户；读取后只展示变量名，不展示秘密内容。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `deploy.credentials.getPath` | 取得本机凭据文件位置 | 无参数 | `string` | `deploy.credentials.getPath()` |
+| `deploy.credentials.load` | 读取本机凭据 | 无参数 | `string[]` | `deploy.credentials.load()` |
+| `deploy.credentials.save` | 保存一个目标的凭据 | key, value | `void` | `deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', providerToken)` |
+| `deploy.credentials.saveAll` | 保存完整凭据集合 | entries | `void` | `deploy.credentials.saveAll(privateCredentialEntries)` |
+
+#### 场景：管理本机私有凭据
+
+```ts
+const credentialPath = deploy.credentials.getPath() // operator-private path
+const loadedNames = value(deploy.credentials.load()) // loaded environment variable names
+// Save only credentials supplied securely by the operator:
+export function saveCredential(providerToken: string) {
+  value(deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', providerToken))
+  value(deploy.credentials.saveAll({ HAI_DEPLOY_PROVIDER_TOKEN: providerToken }))
+}
+```
+
+save/saveAll 输入从安全通道取得的真实值，成功无业务数据；load 成功只返回装入的键。例子不硬编码真实凭据。
+
+<a id="environments"></a>
+
+### 读取、合并与保存部署变量：环境辅助函数
+
+部署环境与应用运行文件分别读取，按明确优先级合并；保存操作只改选定环境文件。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `loadDeploymentEnvironment` | 读取部署环境层 | 指定环境名、环境目录，可要求文件存在 | `HaiResult<DeploymentEnvironment>` | `loadDeploymentEnvironment({ environment: 'prod', envDir: './deployment', requireFile: true })` |
+| `mergeEnvironmentLayers` | 按优先级合并环境变量 | 依优先顺序传入变量映射，可按前缀筛选 | 扁平变量映射 | `mergeEnvironmentLayers([workspaceValues, targetValues], 'HAI_CACHE')` |
+| `loadDeploymentConfig` | 读取目标环境的部署配置 | 运行时模块名、配置文件路径、解析时使用的环境变量 | `HaiResult<Record<string, unknown>>` | `loadDeploymentConfig('cache', './config/_cache.yml', environment.values)` |
+| `saveDeploymentEnvironment` | 保存部署环境变量 | 已读取的部署环境、新变量、可选 private/replace 参数 | `HaiResult<string[]>`，成功数据是写入的键 | `saveDeploymentEnvironment(environment, { HAI_DB_HOST: 'db' })` |
+| `saveMiddlewareEnvironment` | 保存中间件环境变量 | 部署环境及包含应用路径、后端与配置的选项 | `HaiResult<string[]>`，成功数据是写入的键 | `saveMiddlewareEnvironment(environment, { appDir: '.', requirement, backend: 'memory', configuration: { type: 'memory' } })` |
+
+#### 场景：读取、合并与保存部署变量
+
+输入目录由操作者选择，示例写入所选 prod 环境，只有在确认目录后调用。load/merge 读取变量，save 返回实际写入的键名；下面不会展示秘密值。
+
+```ts
+import type { MiddlewareRequirement } from '@h-ai/deploy'
+import { loadDeploymentEnvironment, loadDeploymentConfig, mergeEnvironmentLayers, saveDeploymentEnvironment, saveMiddlewareEnvironment } from '@h-ai/deploy'
+
+function updateEnvironment(envDir: string, appDir: string, requirement: MiddlewareRequirement) {
+  const environment = value(loadDeploymentEnvironment({ environment: 'prod', envDir, requireFile: true }))
+  const values = mergeEnvironmentLayers([environment.values, { HAI_CACHE_TYPE: 'memory' }], 'HAI_CACHE')
+  const config = value(loadDeploymentConfig('cache', `${appDir}/config/_cache.yml`, values))
+  const written = value(saveDeploymentEnvironment(environment, { HAI_CACHE_TYPE: 'memory' }, { private: true }))
+  const middleware = value(saveMiddlewareEnvironment(environment, { appDir, requirement, backend: 'memory', configuration: { type: 'memory' } }))
+  return { config, written, middleware } // use the memory cache requirement from this app's scan
+}
+```
+
+#### 运行环境文件与重复部署
 
 SvelteKit SSR 的 HTTP/HTTPS 均使用独立 `gateway`，后端不公开端口。网关覆盖标准转发头，Compose 固定 adapter 的协议/Host/客户端地址信任；这些值不接受业务运行文件覆盖。adapter 不读取运行期 `ORIGIN`，应用默认不固定构建期 `paths.origin`；变更 SSR 入口拓扑时生成全量交付包。
 
@@ -378,7 +465,7 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 自建中间件的密码由服务器 `<remoteDir>/managed-secrets.env` 持久保存（权限 0600），应与数据卷一起备份。每次打包只生成首次初始化的随机候选，不依赖打包机缓存；在线 SDK、deploy.sh、deploy.ps1 和 deploy-local.sh 都在部署锁内复用服务器值，同时更新应用连接配置及中间件原生变量。交付 tar 保持不可变，只有服务器私有运行文件使用定稿值。若状态缺失而对应数据卷已存在，部署在变更服务前明确停止，须恢复服务器凭据备份；不会自动换密或删除数据。
 
-### 请求策略文件与可信代理
+#### 请求策略文件与可信代理
 
 Serv 的 `http.access`、SvelteKit 的 `access` 可引用独立 yml/yaml。部署读取应用实际生效配置，包括 `.env.<环境>` / 私有覆盖中的 `HAI_SERV`、`HAI_SERV_HTTP_ACCESS` 或 `HAI_KIT_ACCESS`，校验文件后把规范化快照放入交付包。运行环境改为 `/run/hai/request-access.yml`，Compose 只读挂载；工程的原始文件引用不会被容器路径覆盖。快照参加 SHA-256 校验，无效或缺失文件在上传前失败。待上传的归档和其中的策略快照参与完整性校验，不应手工修改；替换 SDK 策略快照时重新打包部署。已部署 Node 后端挂载的 `.env.runtime` 可以按“运行配置重载”修改并重启，改变内联规则不会重写策略快照或 Nginx 配置。
 
@@ -388,38 +475,67 @@ Serv 的 `http.access`、SvelteKit 的 `access` 可引用独立 yml/yaml。部�
 
 受管 Compose 只有存在 Web/gateway 代理且后端没有公开端口时，才设置 `HAI_DEPLOY_PRIVATE_PROXY=1`。Serv/Kit 默认 `trustedProxies: auto` 在此采用容器网段，未部署托管反向代理的应用默认忽略转发头。生成 Nginx 用实际对端覆盖客户端提交的转发头；外层负载均衡需在 Docker SSH Provider 的 `trustedEdgeProxies` 显式配置真实 IP/CIDR，省略时不信任上游，`[]` 同样关闭信任。根本未传到 Nginx 的源 IP 无法恢复，Podman rootless 等环境应实际核验入口日志。完整示例和验证步骤见[请求访问控制手册](../configuration/request-access.md).
 
-### 只读部署计划
-
-`createDeploymentPlan(appDir, config, options)` 不初始化 Provider、不生成中间件凭据、不创建输出目录、不连接目标。复用实际扫描、环境解析、资源名称与制品 checksum 校验，返回工程根 `root`、部署服务目录 `serviceDir`、版本、构建 ID、范围、保留服务、配置文件与变量名、基线要求和恢复目录，省略所有变量值与 SSH 凭据。远端 current 未读取时明确 not-inspected；局部更新仍由执行端严格要求成功基线。Compose 恢复不会回退数据库数据或迁移。CLI 对应 `hai deploy --env prod --plan`。
-
-需要目标基线事实时使用 `--plan --inspect-remote`（SDK inspectRemote:true），仅通过 SSH 读取 current 及成功发布目录，报告 verified/missing/unavailable 和实际恢复发布 ID，不写目标。
-
-资源清单复用执行端的完整 sidecar 拓扑：`containers` 只列本次选中的显式容器名，LDAP/SMTP 等由 Compose 命名的服务列在 `composeManagedServices`；自建 S3 的 SSR/API gateway 也会列入实际更新或保留范围。`logicalVolumes` 是完整拓扑的 Compose 逻辑卷声明，包含保留服务和应用继续挂载的数据卷，不表示新建或重建这些卷；实际引擎卷名由 Compose 项目作用域决定。未选中间件的 action 为 keep，云开通仅按实际选择范围计算，不展示凭据值。
-
-### 传输容量
-
-传输明文上限保留显式设置；反馈需求超过显式值时拒绝打包并说明冲突。缺省/auto 才按模块预算推导，Web 代理和 Kit BODY_SIZE_LIMIT 使用同一密文预算。计划的 target.runtime 表示远端 provider.remote.runtime，与本地镜像打包 options.runtime 分离；auto 不冒充已探测事实。
-
-### 部署环境文件与中间件辅助函数
+#### 部署环境文件与中间件辅助函数
 
 以下命名导出独立于 `deploy.init`。文件写入操作应传入已选定的部署环境，调用方检查失败并保留脱敏诊断。
 
-| 入口                        | 用途与输入                                          | 输出                                                  | 示例                                                                                                                         |
-| --------------------------- | --------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `loadDeploymentEnvironment` | 指定环境名、环境目录，可要求文件存在                | `HaiResult<DeploymentEnvironment>`                    | `loadDeploymentEnvironment({ environment: 'prod', envDir: './deployment', requireFile: true })`                              |
-| `mergeEnvironmentLayers`    | 依优先顺序传入变量映射，可按前缀筛选                | 扁平变量映射                                          | `mergeEnvironmentLayers([workspaceValues, targetValues], 'HAI_CACHE')`                                                       |
-| `loadDeploymentConfig`      | 运行时模块名、配置文件路径、解析时使用的环境变量    | `HaiResult<Record<string, unknown>>`                  | `loadDeploymentConfig('cache', './config/_cache.yml', environment.values)`                                                   |
-| `saveDeploymentEnvironment` | 已读取的部署环境、新变量、可选 private/replace 参数 | `HaiResult<string[]>`，成功数据是写入的键             | `saveDeploymentEnvironment(environment, { HAI_DB_HOST: 'db' })`                                                              |
-| `canKeepMiddleware`         | 当前依赖需求、目录中选定的后端与目标环境            | 能否保留该中间件的 boolean                            | `canKeepMiddleware(requirement, backend, environment)`                                                                       |
-| `describeMiddlewareBackend` | 后端目录项，读取其 purpose                          | 本地化的功能说明                                      | `describeMiddlewareBackend(backend)`                                                                                         |
-| `validateMiddlewareField`   | 表单字符串、字段定义与后端名                        | 校验是否通过的 boolean                                | `validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' })`                   |
-| `parseMiddlewareField`      | 表单字符串、字段定义与后端名，可声明托管模式        | `HaiResult<unknown>`，数据按字段类型转换              | `parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })`                      |
-| `saveMiddlewareEnvironment` | 部署环境及包含应用路径、后端与配置的选项            | `HaiResult<string[]>`，成功数据是写入的键             | `saveMiddlewareEnvironment(environment, { appDir: '.', requirement, backend: 'memory', configuration: { type: 'memory' } })` |
-| `normalizeProjectName`      | 应用名称                                            | 规范化的部署项目名                                    | `normalizeProjectName('@shop/orders')`                                                                                       |
-| `artifactChecksum`          | 现有镜像或交付产物路径                              | `Promise<string>`，文件 SHA-256，读取失败拒绝 Promise | `await artifactChecksum('./serv.tar')`                                                                                       |
-| `getDeployRecovery`         | 部署失败的 `HaiError`                               | `DeployRecoveryInfo \| undefined`                     | `getDeployRecovery(result.error)`（在 `!result.success` 分支调用）                                                           |
-
 这里的 `environment` 来自成功的加载结果，`requirement` 来自项目扫描，`backend` 为对应服务的 `DEPLOY_MIDDLEWARE` 项。读取或写入目标变量前先核对环境名及目录。
+
+<a id="middleware-fields"></a>
+
+### 核对中间件表单：部署辅助函数
+
+先确认后端适合当前环境，再把表单字符串转换成实际布尔值或端口等类型。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `canKeepMiddleware` | 检查是否可保留现有中间件 | 当前依赖需求、目录中选定的后端与目标环境 | 能否保留该中间件的 boolean | `canKeepMiddleware(requirement, backend, environment)` |
+| `describeMiddlewareBackend` | 取得中间件后端说明 | 后端目录项，读取其 purpose | 本地化的功能说明 | `describeMiddlewareBackend(backend)` |
+| `validateMiddlewareField` | 检查中间件表单字段 | 表单字符串、字段定义与后端名 | 校验是否通过的 boolean | `validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' })` |
+| `parseMiddlewareField` | 解析中间件表单字段 | 表单字符串、字段定义与后端名，可声明托管模式 | `HaiResult<unknown>`，数据按字段类型转换 | `parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })` |
+
+#### 场景：核对中间件表单
+
+```ts
+import { parseMiddlewareField, validateMiddlewareField } from '@h-ai/deploy'
+validateMiddlewareField({ value: '5432', field: { name: 'port', kind: 'port' }, backend: 'postgresql' }) // true
+value(parseMiddlewareField({ value: 'false', field: { name: 'secure', kind: 'boolean' }, backend: 'smtp' })) // false
+```
+
+输入字符串 false，成功数据是 boolean false，不是失败；canKeepMiddleware 输出适用性，describeMiddlewareBackend 输出当前语言的用途文字，具体后端由已有目录项提供。
+
+<a id="artifacts-recovery"></a>
+
+### 核对产物身份与恢复信息：部署辅助函数
+
+同一工程使用稳定名称，交付前核对文件摘要；失败时读取结构化恢复信息再决定下一步。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `normalizeProjectName` | 规范化项目标识 | 应用名称 | 规范化的部署项目名 | `normalizeProjectName('@shop/orders')` |
+| `artifactChecksum` | 计算交付产物校验和 | 现有镜像或交付产物路径 | `Promise<string>`，文件 SHA-256，读取失败拒绝 Promise | `await artifactChecksum('./serv.tar')` |
+| `getDeployRecovery` | 读取本次部署恢复信息 | 部署失败的 `HaiError` | `DeployRecoveryInfo \| undefined` | `getDeployRecovery(result.error)`（在 `!result.success` 分支调用） |
+
+#### 场景：核对产物身份与恢复信息
+
+先构建出本次产物；digest 是该文件的 SHA-256。传入失败回执才能读取恢复信息，getDeployRecovery 不执行恢复，也不把未知远端结果改为成功。
+
+```ts
+import { artifactChecksum, getDeployRecovery, normalizeProjectName } from '@h-ai/deploy'
+
+async function inspectDelivery(appDir: string, artifactFile: string) {
+  const project = normalizeProjectName('@shop/orders') // 'orders'
+  const digest = await artifactChecksum(artifactFile) // existing artifact; failures reject
+  const delivered = await deploy.deployApp(appDir, { environment: 'prod', bundleOnly: true })
+  if (!delivered.success)
+    return { project, digest, error: delivered.error, recovery: getDeployRecovery(delivered.error) }
+  return { project, digest, delivery: delivered.data }
+}
+```
 
 ## 错误处理
 

@@ -75,29 +75,45 @@ export async function uploadImage(key: string, file: File) {
 
 <a id="api-reference"></a>
 
-## API 一覧
+## 機能
+
+各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
+
+モジュールの import は入門例と同じです。開始・終了の例以外は初期化成功後、終了前に実行します。value は HaiResult.success を確認し元エラーを保持します。独立したテストデータと明示した後片付けを使います。
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+
+function value<T>(result: HaiResult<T>): T {
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
+  return result.data
+}
+```
+
+<a id="connection"></a>
+
+### 接続と終了：`storage`
+
+ローカルと S3 は同じファイル API を使います。接続の開始・終了はアプリが管理します。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `storage.init` | 指定のストレージを開く | `config`（必填） | `void` | `await storage.init(config)` |
+| `storage.close` | 新規処理を止めてバックエンドを解放 | 已保存的文件仍由原后端持有；无 | `void` | `await storage.close()` |
+
+#### 利用例：接続と終了
+
+```ts
+value(await storage.init({ type: 'local', root: './data/files-demo' }))
+value(await storage.close()) // undefined; saved files remain on disk
+```
+
+開発用ディレクトリを入力します。close はインスタンスを解放しますがファイルを削除しません。続行前に再初期化してください。
 
 別の結果型である場合を除き、出力は成功時の HaiResult.data です。publicUrl は同期です。
-
-| API | 用途 | 入力と既定値 | 出力 | 例 |
-| --- | --- | --- | --- | --- |
-| `storage.init` | 指定のストレージを開く | `config` | `void` | `await storage.init(config)` |
-| `storage.close` | 新規処理を止めてバックエンドを解放 | なし | `void` | `await storage.close()` |
-| `storage.file.put` | バイト列と任意のメタデータを保存 | `key, data, options?` | `FileMetadata` | `await storage.file.put('report.txt', 'Hello')` |
-| `storage.file.get` | オブジェクトのバイト列をバッファで取得 | `key, options?` | `Buffer` | `await storage.file.get('report.txt')` |
-| `storage.file.getStream` | バイト列をストリームで読む。取得後の反復中にも失敗することがある | `key, options?` | `AsyncIterable<Uint8Array>` | `await storage.file.getStream('report.txt')` |
-| `storage.file.head` | 本文をダウンロードせずメタデータを取得 | `key` | `FileMetadata` | `await storage.file.head('report.txt')` |
-| `storage.file.exists` | キーの存在を確認 | `key` | `boolean` | `await storage.file.exists('report.txt')` |
-| `storage.file.delete` | 指定のオブジェクトを一件削除 | `key` | `void` | `await storage.file.delete('report.txt')` |
-| `storage.file.deleteMany` | 複数キーを削除し、失敗時も進捗を保持 | `keys` | `StorageDeleteResult` | `await storage.file.deleteMany(['a.txt', 'b.txt'])` |
-| `storage.file.copy` | 元のオブジェクトを別のキーにコピー | `sourceKey, destKey, options?` | `FileMetadata` | `await storage.file.copy('report.txt', 'backup/report.txt')` |
-| `storage.dir.list` | 必要に応じてプレフィックスで絞り、オブジェクトをページ取得 | `options?` | `ListResult` | `await storage.dir.list({ prefix: 'backup/' })` |
-| `storage.dir.delete` | 指定プレフィックス下のオブジェクトを削除 | `prefix` | `void` | `await storage.dir.delete('backup/')` |
-| `storage.presign.getUrl` | S3 で一時ダウンロード URL を発行 | `key, options?`（有効期間は既定で 3600 秒、1～604800 秒を指定可） | `string` | `await storage.presign.getUrl('report.txt')` |
-| `storage.presign.putUrl` | S3 で一時アップロード URL を発行 | `key, options?`（有効期間は既定で 3600 秒。MIME 型は既定で `application/octet-stream`） | `string` | `await storage.presign.putUrl('report.txt')` |
-| `storage.presign.publicUrl` | 公開 URL 設定があれば URL を組み立てる | `key` | `string or null` | `storage.presign.publicUrl('report.txt')` |
-| `storage.checksum.generate` | 内容のダイジェストを計算 | `data, options?` | `string` | `await storage.checksum.generate('Hello')` |
-| `storage.checksum.verify` | 内容と期待するダイジェストを照合 | `data, expected, options?` | `boolean` | `await storage.checksum.verify('Hello', expected)` |
 
 取得したストリームは読み切るか中止します。一括削除失敗時は再試行の前に error.ext.deleteMany を確認してください。結果が不明でも削除済みの場合があります。
 
@@ -105,6 +121,170 @@ export async function uploadImage(key: string, file: File) {
 
 <a id="download-authorization"></a>
 
-## 認可後のダウンロード URL 発行
+[引数と手順の詳細](storage.md#connection)
+
+<a id="files"></a>
+
+### ファイルの読み書きとコピー：`storage.file`
+
+オブジェクトキーでファイルを指定します。本文・メタデータ・ストリームを使い分け、一括削除では各項目の進捗を確認します。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `storage.file.put` | 内容とメタデータを保存 | key, data, options | `FileMetadata` | `await storage.file.put('report.txt', 'Hello')` |
+| `storage.file.get` | ファイル全体を取得 | key, options | `Buffer` | `await storage.file.get('report.txt')` |
+| `storage.file.getStream` | ストリームで取得 | key, options | `AsyncIterable<Uint8Array>` | `await storage.file.getStream('report.txt')` |
+| `storage.file.head` | メタデータを取得 | key | `FileMetadata` | `await storage.file.head('report.txt')` |
+| `storage.file.exists` | ファイルの存在確認 | key | `boolean` | `await storage.file.exists('report.txt')` |
+| `storage.file.copy` | 別キーにコピー | sourceKey, destKey, options | `FileMetadata` | `await storage.file.copy('report.txt', 'backup/report.txt')` |
+| `storage.file.delete` | ファイルを削除 | key | `void` | `await storage.file.delete('report.txt')` |
+| `storage.file.deleteMany` | 一括削除し個別の進捗を報告 | keys | `StorageDeleteResult` | `await storage.file.deleteMany(['a.txt', 'b.txt'])` |
+
+#### 利用例：ファイルの読み書きとコピー
+
+```ts
+const saved = value(await storage.file.put('demo/report.txt', 'hello', { contentType: 'text/plain' }))
+// saved describes key demo/report.txt, size 5 and backend timestamps
+value(await storage.file.exists('demo/report.txt')) // true
+const metadata = value(await storage.file.head('demo/report.txt')) // same key and size
+value(await storage.file.get('demo/report.txt')).toString('utf8') // 'hello'
+const stream = value(await storage.file.getStream('demo/report.txt'))
+let byteCount = 0
+for await (const bytes of stream)
+  byteCount += bytes.byteLength
+// byteCount === 5; stream iteration can throw on later I/O failure
+value(await storage.file.copy('demo/report.txt', 'demo/copy.txt')) // metadata for the new key
+value(await storage.file.delete('demo/report.txt')) // undefined
+const deleted = value(await storage.file.deleteMany(['demo/copy.txt'])) // per-key deletion progress
+value(await storage.file.exists('demo/copy.txt')) // false after confirmed deletion
+```
+
+UTF-8 の hello は 5 バイトです。ストリームの分割数は不定で、読み出し中に失敗することもあります。一括削除は完了した Promise だけでなく、各キーの確認結果を調べてください。
+
+[引数と手順の詳細](storage.md#files)
+
+<a id="directories"></a>
+
+### 接頭辞による一覧と削除：`storage.dir`
+
+ディレクトリはキーの接頭辞です。分割取得し、削除前に対象範囲全体の権限を確認します。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `storage.dir.list` | プレフィックス内をページ取得 | options | `ListResult` | `await storage.dir.list({ prefix: 'backup/' })` |
+| `storage.dir.delete` | プレフィックス内を削除 | prefix | `void` | `await storage.dir.delete('backup/')` |
+
+#### 利用例：接頭辞による一覧と削除
+
+```ts
+value(await storage.file.put('demo-prefix/a.txt', 'a'))
+const page = value(await storage.dir.list({ prefix: 'demo-prefix/', maxKeys: 20 }))
+// page contains metadata for demo-prefix/a.txt and backend pagination information
+value(await storage.dir.delete('demo-prefix/')) // undefined
+value(await storage.file.exists('demo-prefix/a.txt')) // false when no concurrent writer recreates it
+```
+
+demo-prefix/ に限定します。一覧はメタデータと継続情報を返します。並行アップロードとは同一トランザクションではないため、削除後に再作成される場合があります。
+
+[引数と手順の詳細](storage.md#directories)
+
+<a id="signed-urls"></a>
+
+### 直接転送用 URL の発行：`storage.presign`
+
+S3 の期限付き URL は特定のキーと操作に対応します。発行前に対象と操作の権限を確認します。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `storage.presign.getUrl` | 期限付きダウンロード URL を発行 | key, options | `string` | `await storage.presign.getUrl('report.txt')` |
+| `storage.presign.putUrl` | 期限付きアップロード URL を発行 | key, options | `string` | `await storage.presign.putUrl('report.txt')` |
+| `storage.presign.publicUrl` | 設定済み公開 URL を取得 | key | `string or null` | `storage.presign.publicUrl('report.txt')` |
+
+#### 利用例：直接転送用 URL の発行
+
+```ts
+// Requires initialized S3 storage and prior application authorization.
+const uploadUrl = value(await storage.presign.putUrl('reports/demo.txt', { expiresIn: 300, contentType: 'text/plain' }))
+const downloadUrl = value(await storage.presign.getUrl('reports/demo.txt', { expiresIn: 300 }))
+const publicUrl = storage.presign.publicUrl('reports/demo.txt') // string or null
+```
+
+同じキーと 300 秒を入力します。ホスト名と署名は実環境によります。アップロードの Content-Type は署名時と合わせます。publicUrl は公開 URL の規則を適用するだけで、権限確認や公開設定の変更はしません。
+
+#### 利用例：認可後のダウンロード URL 発行
 
 コード引数を扱うため設定手冊から移動しました。完全な手順は現在[中国語](storage.md#download-authorization)にあり、この節は部分翻訳です。
+
+[引数と手順の詳細](storage.md#signed-urls)
+
+<a id="checksums"></a>
+
+### バイト列の整合性確認：`storage.checksum`
+
+チェックサムはストレージの初期化なしで使えます。両側で同じアルゴリズムと文字列表現を選びます。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `storage.checksum.generate` | 内容のチェックサムを計算 | data, options | `string` | `await storage.checksum.generate('Hello')` |
+| `storage.checksum.verify` | チェックサムを検証 | data, expected, options | `boolean` | `await storage.checksum.verify('Hello', expected)` |
+
+#### 利用例：バイト列の整合性確認
+
+```ts
+const digest = value(await storage.checksum.generate('hello'))
+value(await storage.checksum.verify('hello', digest)) // true
+value(await storage.checksum.verify('changed', digest)) // false
+```
+
+同じ hello のバイト列は true、変更後は false です。チェックサムは認証情報ではなく、S3 の ETag とも同一ではありません。
+
+[引数と手順の詳細](storage.md#checksums)
+
+<a id="browser-files"></a>
+
+### ブラウザのアップロード・保存：クライアント補助
+
+サーバー認可済み URL や選択ファイルを扱います。Storage のサーバー初期化や業務認可は行いません。
+
+#### インターフェース一覧
+
+| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
+| --- | --- | --- | --- | --- |
+| `uploadWithPresignedUrl` | バイトを送信 | `url, File/Blob/ArrayBuffer/string, options?` | `Promise<{ success: boolean; error?: string }>` | `await uploadWithPresignedUrl(url, file, { contentType: file.type })` |
+| `downloadWithPresignedUrl` | Blob を取得 | `url, options?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await downloadWithPresignedUrl(url)` |
+| `downloadAndSave` | ダウンロードして保存 | `url, { filename?, ...options }?` | `Promise<{ success: boolean; data?: Blob; error?: string }>` | `await downloadAndSave(url, { filename: "report.txt" })` |
+| `getFileExtension` | 拡張子を取得 | `File` | `string` | `getFileExtension(file)` |
+| `getMimeType` | MIME 型を取得 | `extension: string` | `string` | `getMimeType("txt")` |
+| `formatFileSize` | バイト数を整形 | `bytes: number` | `string` | `formatFileSize(1024)` |
+
+#### 利用例：選択ファイルの送信とダウンロード保存
+
+二つの URL は署名 API の成功結果、file は選択されたファイルです。ユーザー操作で呼び出します。転送結果は HaiResult とは別の success/error 形式です。
+
+```ts
+import { downloadAndSave, downloadWithPresignedUrl, formatFileSize, getFileExtension, getMimeType, uploadWithPresignedUrl } from '@h-ai/storage/client'
+
+async function transfer(file: File, uploadUrl: string, downloadUrl: string) {
+  const extension = getFileExtension(file)
+  const contentType = file.type || getMimeType(extension)
+  const displayedSize = formatFileSize(file.size) // 1024 bytes displays as 1 KB
+  const uploaded = await uploadWithPresignedUrl(uploadUrl, file, { contentType })
+  if (!uploaded.success)
+    throw new Error(uploaded.error ?? 'Upload failed')
+  const downloaded = await downloadWithPresignedUrl(downloadUrl)
+  if (!downloaded.success || !downloaded.data)
+    throw new Error(downloaded.error ?? 'Download failed')
+  const saved = await downloadAndSave(downloadUrl, { filename: file.name })
+  if (!saved.success)
+    throw new Error(saved.error ?? 'Save failed')
+  return { extension, displayedSize, blob: downloaded.data }
+}
+```

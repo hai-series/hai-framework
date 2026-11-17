@@ -4,8 +4,6 @@
 
 [Chinese source](scheduler.md) · [Configuration](../configuration/scheduler.en.md) · [Data structures](../data/scheduler.en.md)
 
-<a id="quick-start"></a>
-
 ## Quick start
 
 Register tasks before starting the scheduler. Provide stable task IDs and make retriable handlers idempotent. Confirm uncertain external effects before replaying them.
@@ -54,34 +52,157 @@ finally {
 }
 ```
 
+<a id="api-list"></a>
+
 <a id="api-reference"></a>
 
-## API list
+## Features
 
-| API | Purpose | Input | Output | Example |
+Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
+
+Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. The value helper checks HaiResult.success and preserves the original error. Use isolated test data and explicit cleanup.
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+
+function value<T>(result: HaiResult<T>): T {
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
+  return result.data
+}
+```
+
+<a id="task-definitions"></a>
+
+### Prepare and maintain tasks: `scheduler`
+
+Register task definitions after connecting RelDB, and distinguish stored definitions from the local scheduler snapshot.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `scheduler.init` | Prepare database tables using an already connected RelDB | `config? = {}` | `Promise<HaiResult<void>>` | `await scheduler.init()` |
 | `scheduler.close` | Stop this instance and wait for its cleanup; the app closes RelDB | None | `Promise<void>` | `await scheduler.close()` |
-| `scheduler.register` | Store a definition under a stable ID. Set its cron expression and its handler or use a hook | `task: TaskDefinition` | `Promise<HaiResult<void>>` | `await scheduler.register(task)` |
-| `scheduler.unregister` | Remove a definition. Already recorded executions are separate | `taskId` | `Promise<HaiResult<void>>` | `await scheduler.unregister('daily')` |
-| `scheduler.updateTask` | Update part of a definition | `taskId, updates` | `Promise<HaiResult<void>>` | `await scheduler.updateTask('daily', { enabled: false })` |
-| `scheduler.refreshTasks` | Reload the task definitions from the database | None | `Promise<HaiResult<void>>` | `await scheduler.refreshTasks()` |
-| `scheduler.start` | Start polling for tasks due on their schedule | None | `HaiResult<void>` | `scheduler.start()` |
-| `scheduler.stop` | Stop scheduling; effects already made by a handler are not rolled back | None | `HaiResult<void>` | `scheduler.stop()` |
-| `scheduler.trigger` | Run a registered task immediately. Check data.status as well as success | `taskId, { source?, idempotencyKey? }?` | `Promise<HaiResult<TaskExecutionLog>>` | `await scheduler.trigger('daily', { source: 'admin-console' })` |
-| `scheduler.getLogs` | Read paginated execution logs. Filter on values such as task ID or trigger source | `options?; pagination.page = 1, pageSize = 20` | `Promise<HaiResult<PaginatedResult<TaskExecutionLog>>>` | `await scheduler.getLogs({ pagination: { page: 1, pageSize: 20 } })` |
-| `scheduler.setHooks` | Set the application's task callbacks for this process | `hooks: SchedulerTaskHooks` | `HaiResult<void>` | `scheduler.setHooks({ onTaskExecute })` |
-| `scheduler.clearHooks` | Remove this process's callbacks | None | `HaiResult<void>` | `scheduler.clearHooks()` |
-| `scheduler.execution.get` | Read a stored execution. The result is null if this ID does not exist | `occurrenceId` | `Promise<HaiResult<SchedulerExecutionEntry \| null>>` | `await scheduler.execution.get(occurrenceId)` |
-| `scheduler.execution.listUnknown` | List records whose outcome must be confirmed before making another attempt | `{ limit?, offset? }` (defaults: 50, 0) | `Promise<HaiResult<SchedulerExecutionEntry[]>>` | `await scheduler.execution.listUnknown({ limit: 20 })` |
-| `scheduler.execution.listLogFailures` | List records with logs that need to be written again | `{ limit?, offset? }` (defaults: 50, 0) | `Promise<HaiResult<SchedulerExecutionEntry[]>>` | `await scheduler.execution.listLogFailures({ limit: 20 })` |
-| `scheduler.execution.repairLog` | Write a missing log from the persisted execution without rerunning the task | `occurrenceId` | `Promise<HaiResult<void>>` | `await scheduler.execution.repairLog(occurrenceId)` |
-| `scheduler.execution.resolveUnknown` | After verifying the actual outcome, record success or discarded with the version you read | `occurrenceId, { status, expectedUpdatedAt }` | `Promise<HaiResult<void>>` | `await scheduler.execution.resolveUnknown(occurrenceId, { status: 'success', expectedUpdatedAt })` |
-| `scheduler.hooks.onTaskStart` | Called by Scheduler when an attempt starts | `SchedulerTaskStartEvent` | `void \| Promise<void>` | `scheduler.setHooks({ onTaskStart })` |
-| `scheduler.hooks.onTaskExecute` | Called when a task has no built-in handler; return its output and honor the abort signal | `SchedulerTaskExecuteEvent` | `unknown \| Promise<unknown>` | `scheduler.setHooks({ onTaskExecute })` |
-| `scheduler.hooks.onTaskInterrupted` | Called when an execution is interrupted | `SchedulerTaskInterruptedEvent` | `void \| Promise<void>` | `scheduler.setHooks({ onTaskInterrupted })` |
-| `scheduler.hooks.onTaskFinish` | Called when an execution finishes | `SchedulerTaskFinishEvent` | `void \| Promise<void>` | `scheduler.setHooks({ onTaskFinish })` |
+| `scheduler.register` | Register a task definition | `task: TaskDefinition` | `Promise<HaiResult<void>>` | `await scheduler.register(task)` |
+| `scheduler.unregister` | Remove a task definition | `taskId` | `Promise<HaiResult<void>>` | `await scheduler.unregister('daily')` |
+| `scheduler.updateTask` | Update a task definition | `taskId, updates` | `Promise<HaiResult<void>>` | `await scheduler.updateTask('daily', { enabled: false })` |
+| `scheduler.refreshTasks` | Read the current process task snapshot | None | `Promise<HaiResult<void>>` | `await scheduler.refreshTasks()` |
+
+#### Scenario: Prepare and maintain tasks
+
+```ts
+value(await scheduler.register({ id: 'demo-daily', name: 'Demo daily', cron: '0 2 * * *', timezone: 'UTC' }))
+value(await scheduler.updateTask('demo-daily', { enabled: false }))
+value(await scheduler.refreshTasks())
+value(await scheduler.unregister('demo-daily'))
+// Each successful result has no business data; only the stored definition changes.
+```
+
+The input schedules 02:00 UTC daily. Registration alone does not start scheduling. The quick start handles init’s HaiResult and close’s Promise<void>.
 
 The last four entries are optional callbacks. Register them with `scheduler.init({ hooks })` or `scheduler.setHooks(hooks)`; the application does not need to call them directly.
 
-Still untranslated: the task, retry, execution repair and manual reconciliation examples. Read the [Chinese source section](scheduler.md#api-reference).
+[Detailed parameters and workflows](scheduler.md#task-definitions)
+
+<a id="execution"></a>
+
+### Start scheduling and inspect logs: `scheduler`
+
+start enables timed claims, trigger requests a specific execution, and stop prevents future scheduling without undoing external effects.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `scheduler.start` | Start scheduling | None | `HaiResult<void>` | `scheduler.start()` |
+| `scheduler.stop` | Stop scheduling new work | None | `HaiResult<void>` | `scheduler.stop()` |
+| `scheduler.trigger` | Trigger a task manually | `taskId, { source?, idempotencyKey? }?` | `Promise<HaiResult<TaskExecutionLog>>` | `await scheduler.trigger('daily', { source: 'admin-console' })` |
+| `scheduler.getLogs` | Paginate execution logs | `options?; pagination.page = 1, pageSize = 20` | `Promise<HaiResult<PaginatedResult<TaskExecutionLog>>>` | `await scheduler.getLogs({ pagination: { page: 1, pageSize: 20 } })` |
+
+#### Scenario: Start scheduling and inspect logs
+
+After initialization and task registration, start/stop return synchronous HaiResult<void> and control polling. Check the status inside a successful trigger result; logs are filtered by this source.
+
+```ts
+async function runAndRead(taskId: string) {
+  value(scheduler.start())
+  try {
+    const run = value(await scheduler.trigger(taskId, { source: 'docs-console' }))
+    const logs = value(await scheduler.getLogs({ taskId, triggerSource: 'docs-console', pagination: { page: 1, pageSize: 20 } }))
+    return { status: run.status, logs: logs.items }
+  }
+  finally {
+    value(scheduler.stop())
+  }
+}
+```
+
+<a id="hooks"></a>
+
+### Integrate execution hooks: `scheduler.setHooks`
+
+Register business execution and lifecycle callbacks; each callback receives the scheduler’s current execution context.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `scheduler.setHooks` | Set executors and lifecycle hooks | `hooks: SchedulerTaskHooks` | `HaiResult<void>` | `scheduler.setHooks({ onTaskExecute })` |
+| `scheduler.clearHooks` | Clear current hooks | None | `HaiResult<void>` | `scheduler.clearHooks()` |
+
+#### Scenario: Integrate execution hooks
+
+The onTask* fields are callbacks passed to setHooks and called by the scheduler. A handler-free task uses onTaskExecute; the output contains start/finish events and a successful run.
+
+```ts
+const events: Array<{ stage: string, taskId: string }> = []
+value(scheduler.setHooks({
+  onTaskStart: event => { events.push({ stage: 'start', taskId: event.task.id }) },
+  onTaskExecute: event => ({ taskId: event.context.taskId }),
+  onTaskInterrupted: event => { events.push({ stage: 'interrupted', taskId: event.task.id }) },
+  onTaskFinish: event => { events.push({ stage: 'finish', taskId: event.task.id }) },
+}))
+value(await scheduler.register({ id: 'demo-hook', name: 'Hook demo', cron: '0 2 * * *' }))
+const run = value(await scheduler.trigger('demo-hook'))
+// run.status === 'success'; events contains start and finish for demo-hook.
+value(await scheduler.unregister('demo-hook'))
+value(scheduler.clearHooks()) // undefined; future tasks no longer use these callbacks
+```
+
+<a id="recovery"></a>
+
+### Reconcile unknown outcomes and repair logs: `scheduler.execution`
+
+Check external effects when execution is uncertain. Repair a missing log without rerunning the business operation.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `scheduler.execution.get` | Read an execution by ID | `occurrenceId` | `Promise<HaiResult<SchedulerExecutionEntry \| null>>` | `await scheduler.execution.get(occurrenceId)` |
+| `scheduler.execution.listUnknown` | Paginate unknown executions | `{ limit?, offset? }` (defaults: 50, 0) | `Promise<HaiResult<SchedulerExecutionEntry[]>>` | `await scheduler.execution.listUnknown({ limit: 20 })` |
+| `scheduler.execution.listLogFailures` | List execution log failures | `{ limit?, offset? }` (defaults: 50, 0) | `Promise<HaiResult<SchedulerExecutionEntry[]>>` | `await scheduler.execution.listLogFailures({ limit: 20 })` |
+| `scheduler.execution.repairLog` | Repair a reconciled execution log | `occurrenceId` | `Promise<HaiResult<void>>` | `await scheduler.execution.repairLog(occurrenceId)` |
+| `scheduler.execution.resolveUnknown` | Reconcile an execution outcome | `occurrenceId, { status, expectedUpdatedAt }` | `Promise<HaiResult<void>>` | `await scheduler.execution.resolveUnknown(occurrenceId, { status: 'success', expectedUpdatedAt })` |
+
+#### Scenario: Reconcile unknown outcomes and repair logs
+
+Log repair never executes business work. The separate resolution function accepts an externally verified decision and commits only against the latest updatedAt.
+
+```ts
+async function repairPendingLogs() {
+  const pending = value(await scheduler.execution.listLogFailures({ limit: 20, offset: 0 }))
+  for (const entry of pending)
+    value(await scheduler.execution.repairLog(entry.occurrenceId))
+  return pending.length // at most 20; the next scan starts at offset 0 again
+}
+async function recordVerifiedOutcome(occurrenceId: string, status: 'success' | 'discarded') {
+  const unknown = value(await scheduler.execution.listUnknown({ limit: 20, offset: 0 }))
+  const current = value(await scheduler.execution.get(occurrenceId))
+  if (current?.status !== 'unknown')
+    throw new Error('Expected an unknown execution')
+  value(await scheduler.execution.resolveUnknown(occurrenceId, { status, expectedUpdatedAt: current.updatedAt }))
+  return { scanned: unknown.length, entry: value(await scheduler.execution.get(occurrenceId)) }
+}
+```

@@ -56,21 +56,31 @@ finally {
 }
 ```
 
-## 功能说明
-
-- 创建和管理固定向量维度的集合。
-- 写入文档向量，按相似度检索并过滤元数据。
-- 支持 LanceDB、pgvector、Qdrant 与 Chroma；后端准备方式见[配置清单](../configuration/vecdb.md)。
-
 <a id="api-reference"></a>
 
-### 功能输入输出
+## 功能说明
 
-异步操作返回 `Promise<HaiResult<T>>`。下表的返回值说明成功时 `data` 的内容，失败时读取 `error`。集合和向量操作要在 `vecdb.init()` 成功后调用。
+下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。`value` 先检查 `HaiResult.success`，失败保留原错误，成功返回 data；只用于读取结果。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
 
-#### 连接与状态
+```ts
+import type { HaiResult } from '@h-ai/core'
 
-| API | 用途 | 参数与默认值 | 返回值 | 示例 |
+function value<T>(result: HaiResult<T>): T {
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
+  return result.data
+}
+```
+
+<a id="connection"></a>
+
+### 连接与关闭：`vecdb`
+
+先连接配置的向量后端，再创建集合和操作向量；原始连接只在可信服务端传递。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
 | `vecdb.init(config)` | 初始化配置指定的后端 | `config.type` 必填；后端字段和默认值见[配置清单](../configuration/vecdb.md) | `HaiResult<void>` | `await vecdb.init({ type: 'lancedb', path: './data/vecdb' })` |
 | `vecdb.close()` | 等待并释放当前连接 | 无参数 | `HaiResult<void>`；清理失败可重试 | `await vecdb.close()` |
@@ -78,44 +88,30 @@ finally {
 | `vecdb.config` | 读取当前脱敏配置 | 只读属性，未打开或关闭中为 `null` | `VecdbConfig` 或 `null` | `const backend = vecdb.config?.type` |
 | `vecdb.rawConnection` | 供同进程内的可信集成复用连接参数 | 只读属性，未打开或关闭中为 `null` | `VecdbConnection` 或 `null`。可能含凭据 | `const connection = vecdb.rawConnection` |
 
-#### vecdb.collection
-
-| API | 用途 | 参数与默认值 | 成功数据 | 示例 |
-| --- | --- | --- | --- | --- |
-| `vecdb.collection.create(name, options)` | 创建集合 | 集合名和 `options.dimension` 必填；`metric` 默认沿用向量库配置，未设置时为 `cosine` | `void` | `await vecdb.collection.create('documents', { dimension: 3 })` |
-| `vecdb.collection.drop(name)` | 删除集合和其中的文档向量 | 集合名必填 | `void` | `await vecdb.collection.drop('documents')` |
-| `vecdb.collection.exists(name)` | 检查集合是否存在 | 集合名必填 | `boolean` | `await vecdb.collection.exists('documents')` |
-| `vecdb.collection.info(name)` | 查询集合的维度、度量和文档数 | 集合名必填 | `CollectionInfo` | `await vecdb.collection.info('documents')` |
-| `vecdb.collection.list()` | 列出集合名称 | 无参数 | `string[]` | `await vecdb.collection.list()` |
-
-#### vecdb.vector
-
-| API | 用途 | 参数与默认值 | 成功数据 | 示例 |
-| --- | --- | --- | --- | --- |
-| `vecdb.vector.insert(collection, documents)` | 写入文档向量 | 集合名与文档数组必填。每条文档要有 `id` 和与集合维度一致的 `vector` | `void` | `await vecdb.vector.insert('documents', [{ id: 'doc-1', vector: [1, 0, 0] }])` |
-| `vecdb.vector.upsert(collection, documents)` | 插入文档，或按 ID 整条替换 | 集合名与文档数组必填。替换时传入完整文档 | `void` | `await vecdb.vector.upsert('documents', [{ id: 'doc-1', vector: [1, 0, 0], content: '新版' }])` |
-| `vecdb.vector.delete(collection, ids)` | 按 ID 删除文档 | 集合名与 ID 数组必填 | `void` | `await vecdb.vector.delete('documents', ['doc-1'])` |
-| `vecdb.vector.search(collection, vector, options?)` | 根据相似度搜索向量 | 集合名及查询向量必填。`topK` 默认 `10`，可传 `minScore` 和 `filter` | 按分数从高到低排列的 `VectorSearchResult[]` | `await vecdb.vector.search('documents', [0.9, 0.1, 0], { topK: 5 })` |
-| `vecdb.vector.count(collection)` | 统计集合中的文档数 | 集合名必填 | `number` | `await vecdb.vector.count('documents')` |
-| `vecdb.vector.scan(collection, options?)` | 按页列出可删除的文档 ID | 集合名必填，首页省略 `cursor`，`limit` 默认 `64` | `VectorScanPage` | `await vecdb.vector.scan('documents', { limit: 32 })` |
-
-`scan` 分页返回文档 ID，可用于核对或批量清理集合。`collection` 是集合名，`options.limit` 默认为 64，取值为 1 到 128，`options.cursor` 在首页省略。每页的 `items` 只包含 `{ id }`。有 `nextCursor` 时，即使本页为空也继续读取，并将游标传给同一后端的同一集合。并发写入或删除可能改变分页结果，清理任务应重复扫描。Qdrant 只返回能映射回框架文档的记录。
+#### 场景：连接与关闭
 
 ```ts
-// 输入集合名与页大小，输出 HaiResult<VectorScanPage>。
-const page = await vecdb.vector.scan('documents', { limit: 32 })
-// 成功且存在下一页时，将上一页游标与页大小传入同一集合。
-if (page.success && page.data.nextCursor !== undefined) {
-  const nextPage = await vecdb.vector.scan('documents', { cursor: page.data.nextCursor, limit: 32 })
-  // nextPage 成功时 data.items 是下一页文档 ID，data.nextCursor 缺失时已到末页。
-}
+value(await vecdb.init({ type: 'lancedb', path: './data/docs-demo' }))
+vecdb.isInitialized // true
+vecdb.config?.type // 'lancedb'
+const connection = vecdb.rawConnection // backend-specific connection; may contain credentials
+value(await vecdb.close()) // undefined
+vecdb.config // null
 ```
 
-### 生产共享状态
+本地示例限开发使用。close 成功后业务连接不可用；其他示例先重新连接。不要把 rawConnection 写入日志或返回浏览器。
+
+- 创建和管理固定向量维度的集合。
+- 写入文档向量，按相似度检索并过滤元数据。
+- 支持 LanceDB、pgvector、Qdrant 与 Chroma；后端准备方式见[配置清单](../configuration/vecdb.md)。
+
+异步操作返回 `Promise<HaiResult<T>>`。下表的返回值说明成功时 `data` 的内容，失败时读取 `error`。集合和向量操作要在 `vecdb.init()` 成功后调用。
+
+#### 生产后端要求
 
 生产使用 Qdrant、pgvector 或远端 Chroma；LanceDB 和嵌入式 Chroma 只用于开发/明确测试。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../../.agents/instructions/distributed-state.md).
 
-### 关闭与失败恢复
+#### 场景：连接清理失败后恢复
 
 ```ts
 const ready = vecdb.isInitialized // 无需参数，Provider 已连接并且未在关闭时为 true。
@@ -128,6 +124,83 @@ const connection = vecdb.rawConnection // 无需参数，返回同进程集成�
 调用 `vecdb.close()` 后，模块停止接收新的操作，之前保存的操作对象也不能继续提交请求。多次同时关闭共用一次清理。如果连接或关闭失败后仍有资源未释放，`error.ext.cleanupPending` 会提示应用再次调用 `vecdb.close()`。资源未清理完时，`vecdb.init()` 不会另外打开连接。
 
 使用进程内启动的 Chroma 时，模块会等待直接启动的服务器进程退出。正常终止等待 1.5 秒，超时后尝试强制终止并再等待 1.5 秒。仍未确认退出时返回失败，并保留句柄供后续清理。这一步确认的是模块直接启动的进程。
+
+<a id="collections"></a>
+
+### 准备与删除集合：`vecdb.collection`
+
+集合固定向量维度和距离算法；删除集合会删除其中所有向量。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `vecdb.collection.create(name, options)` | 创建集合 | 集合名和 `options.dimension` 必填；`metric` 默认沿用向量库配置，未设置时为 `cosine` | `void` | `await vecdb.collection.create('documents', { dimension: 3 })` |
+| `vecdb.collection.drop(name)` | 删除集合和其中的文档向量 | 集合名必填 | `void` | `await vecdb.collection.drop('documents')` |
+| `vecdb.collection.exists(name)` | 检查集合是否存在 | 集合名必填 | `boolean` | `await vecdb.collection.exists('documents')` |
+| `vecdb.collection.info(name)` | 查询集合的维度、度量和文档数 | 集合名必填 | `CollectionInfo` | `await vecdb.collection.info('documents')` |
+| `vecdb.collection.list()` | 列出集合名称 | 无参数 | `string[]` | `await vecdb.collection.list()` |
+
+#### 场景：准备与删除集合
+
+```ts
+value(await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' }))
+value(await vecdb.collection.exists('demo-docs')) // true
+value(await vecdb.collection.list()) // includes 'demo-docs'
+const info = value(await vecdb.collection.info('demo-docs')) // dimension 3, cosine, zero documents
+value(await vecdb.collection.drop('demo-docs')) // undefined
+value(await vecdb.collection.exists('demo-docs')) // false
+```
+
+输入为尚不存在的 demo-docs。后续向量场景需要再创建这个三维集合；删除不存在或无法访问的集合按后端返回失败。
+
+<a id="vectors"></a>
+
+### 写入、检索和清理文档：`vecdb.vector`
+
+使用相同维度的向量写入和搜索，按 ID 修改或删除文档；扫描用于分页盘点。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `vecdb.vector.insert(collection, documents)` | 写入文档向量 | 集合名与文档数组必填。每条文档要有 `id` 和与集合维度一致的 `vector` | `void` | `await vecdb.vector.insert('documents', [{ id: 'doc-1', vector: [1, 0, 0] }])` |
+| `vecdb.vector.upsert(collection, documents)` | 插入文档，或按 ID 整条替换 | 集合名与文档数组必填。替换时传入完整文档 | `void` | `await vecdb.vector.upsert('documents', [{ id: 'doc-1', vector: [1, 0, 0], content: '新版' }])` |
+| `vecdb.vector.delete(collection, ids)` | 按 ID 删除文档 | 集合名与 ID 数组必填 | `void` | `await vecdb.vector.delete('documents', ['doc-1'])` |
+| `vecdb.vector.search(collection, vector, options?)` | 根据相似度搜索向量 | 集合名及查询向量必填。`topK` 默认 `10`，可传 `minScore` 和 `filter` | 按分数从高到低排列的 `VectorSearchResult[]` | `await vecdb.vector.search('documents', [0.9, 0.1, 0], { topK: 5 })` |
+| `vecdb.vector.count(collection)` | 统计集合中的文档数 | 集合名必填 | `number` | `await vecdb.vector.count('documents')` |
+| `vecdb.vector.scan(collection, options?)` | 按页列出可删除的文档 ID | 集合名必填，首页省略 `cursor`，`limit` 默认 `64` | `VectorScanPage` | `await vecdb.vector.scan('documents', { limit: 32 })` |
+
+#### 场景：写入、检索和清理文档
+
+```ts
+value(await vecdb.collection.create('demo-docs', { dimension: 3, metric: 'cosine' }))
+value(await vecdb.vector.insert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install' }]))
+value(await vecdb.vector.count('demo-docs')) // 1
+value(await vecdb.vector.upsert('demo-docs', [{ id: 'doc-1', vector: [1, 0, 0], content: 'Install v2' }]))
+const matches = value(await vecdb.vector.search('demo-docs', [1, 0, 0], { topK: 1, minScore: 0.9 }))
+// matches[0]: id 'doc-1', content 'Install v2', score approximately 1
+const page = value(await vecdb.vector.scan('demo-docs', { limit: 32 }))
+// page.items: [{ id: 'doc-1' }]; continue using nextCursor when present
+value(await vecdb.vector.delete('demo-docs', ['doc-1'])) // undefined
+value(await vecdb.vector.count('demo-docs')) // 0
+```
+
+输入向量 [1,0,0] 与被存储向量一致，余弦转换分数约为 1。内容来自最新的整条 upsert。并发变化时扫描可能不完整，游标规则见下文；不要把 score 当百分比。
+
+#### 场景：按后端游标继续盘点文档
+
+`scan` 分页返回文档 ID，可用于核对或批量清理集合。`collection` 是集合名，`options.limit` 默认为 64，取值为 1 到 128，`options.cursor` 在首页省略。每页的 `items` 只包含 `{ id }`。有 `nextCursor` 时，即使本页为空也继续读取，并将游标传给同一后端的同一集合。并发写入或删除可能改变分页结果，清理任务应重复扫描。Qdrant 只返回能映射回框架文档的记录。
+
+```ts
+// 输入集合名与页大小，输出 HaiResult<VectorScanPage>。
+const page = await vecdb.vector.scan('documents', { limit: 32 })
+// 成功且存在下一页时，将上一页游标与页大小传入同一集合。
+if (page.success && page.data.nextCursor !== undefined) {
+  const nextPage = await vecdb.vector.scan('documents', { cursor: page.data.nextCursor, limit: 32 })
+  // nextPage 成功时 data.items 是下一页文档 ID，data.nextCursor 缺失时已到末页。
+}
+```
 
 ## 错误处理
 

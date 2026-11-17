@@ -73,93 +73,132 @@ export async function startPayment(orderData: PaymentOrder) {
 }
 ```
 
-## 功能说明
-
-| Provider | 支付场景                               |
-| -------- | -------------------------------------- |
-| 微信支付 | `jsapi`：微信公众号内置浏览器          |
-| 支付宝   | `h5`：WAP 签名表单 POST                |
-| Stripe   | h5：托管 Checkout 页面跳转（国际支付） |
-
-内置创建模式仅保留上表组合；公开 `TradeType` 为 `jsapi | h5`，App、Native、小程序及其它组合均在请求渠道前返回 `UNSUPPORTED_TRADE_TYPE`。微信 JSAPI 必须提供当前公众号的 `userId`（openid），微信与支付宝仅接受 CNY。微信下单缺失有效 `prepay_id` 时失败。支付宝 `createOrder` 只生成已签名的页面请求参数，不表示渠道已受理或已付款；返回 `{ gateway, fields }`，浏览器向固定正式/沙箱网关 POST 全部签名字段，不解析 HTML，也不接收任意 action。配置 `alipay.returnUrl` 必填且为 HTTPS，`HAI_PAYMENT_ALIPAY_RETURNURL` 可覆盖；回跳不代表付款成功。客户端先检查 `success`，再检查 `data.invoked`；微信桥接对象未就绪时 `invoked=false`，已调起后的取消回调也不代表付款。
-
-协议依据：[微信 JSAPI 下单](https://pay.wechatpay.cn/doc/v3/merchant/4012791897)、[JSAPI 调起](https://pay.wechatpay.cn/doc/v3/merchant/4012791857)、[支付宝官方 Node SDK pageExecute](https://github.com/alipay/alipay-sdk-nodejs-all#pageexecute-示例代码)。定向测试验证请求/签名形状、真实 RSA 验签、jsdom 表单消费及 Chrome 实际 POST（网关请求由测试拦截）；未使用真实商户凭据、渠道沙箱账户或手机设备，不能据此宣称已完成真实支付验收。
-
 <a id="api-reference"></a>
 
-### 功能输入输出
+## 功能说明
+
+<a id="providers"></a>
+
+### 连接支付渠道：`payment`
+
+应用用已校验的服务端配置准备渠道；自定义 Provider 必须实现公开契约，不把商户密钥交给浏览器。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `payment.init` | 按配置加载支付渠道；启用 Stripe 前先连接共享数据库 | `config: PaymentConfigInput`（必填） | `Promise<HaiResult<void>>` | `await payment.init(config)` |
+| `payment.close` | 停止当前支付模块；支付渠道中已创建的交易仍由渠道处理 | 无参数 | `Promise<void>` | `await payment.close()` |
+| `payment.getProvider` | 取得已注册支付渠道 | name | `PaymentProvider \| undefined` | `payment.getProvider(providerName)` |
+| `payment.registerProvider` | 注册应用提供的支付渠道 | provider | `void` | `payment.registerProvider(paymentProvider)` |
+
+#### 场景：连接支付渠道
+
+输入是应用实现的 PaymentProvider 实例；注册和查找均为同步调用。初始化与关闭见最小接入。
 
 ```ts
-const ready = payment.isInitialized // 无需参数，支付模块已发布运行配置时为 true。
-const activeConfig = payment.config // 无需参数，读取服务端运行配置，初始化前及关闭后为 null。
+import type { PaymentProvider } from '@h-ai/payment'
+
+function installProvider(provider: PaymentProvider) {
+  payment.registerProvider(provider)
+  return payment.getProvider(provider.name) === provider // true
+}
+payment.getProvider('not-registered') // undefined
 ```
 
-`payment.config` 可能含渠道密钥及回调凭据，仅在可信服务端使用。`payment.isInitialized` 反映模块状态，渠道响应和到账结果通过对应业务接口确认。
-
-初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
-
-#### 初始化与关闭
-
-| API | 用途 | 输入 | 输出 | 示例 |
-| --- | --- | --- | --- | --- |
-| `payment.init` | 按配置加载支付渠道；启用 Stripe 前先连接共享数据库 | `config`（必填） | `Promise<HaiResult<void>>` | `await payment.init(config)` |
-| `payment.close` | 停止当前支付模块；支付渠道中已创建的交易仍由渠道处理 | 无 | `Promise<void>` | `await payment.close()` |
-
-#### payment · 订单与退款
-
-按渠道处理订单；providerName 加订单结构/业务单号/退款结构，分别返回支付发起参数、渠道状态、退款结果或 void。客户端跳转与发起成功不代表到账。
-
-| 入口                  | 输入参数              | 成功结果       | 调用示例                                              |
-| --------------------- | --------------------- | -------------- | ----------------------------------------------------- |
-| `payment.createOrder` | providerName, input   | `PaymentOrder` | `await payment.createOrder(providerName, orderInput)` |
-| `payment.queryOrder`  | providerName, orderNo | `OrderStatus`  | `await payment.queryOrder(providerName, orderNo)`     |
-| `payment.refund`      | providerName, input   | `RefundResult` | `await payment.refund(providerName, refundInput)`     |
-| `payment.closeOrder`  | providerName, orderNo | `void`         | `await payment.closeOrder(providerName, orderNo)`     |
-
-#### payment · 接收异步通知
-
-渠道通知输入原始正文及验签所需头/参数，返回验签后的业务通知结果；应用仍需原子更新订单并幂等去重。
-
-| 入口                   | 输入参数              | 成功结果              | 调用示例                                                                |
-| ---------------------- | --------------------- | --------------------- | ----------------------------------------------------------------------- |
-| `payment.handleNotify` | providerName, request | `PaymentNotifyResult` | `await payment.handleNotify(providerName, verifiedNotificationRequest)` |
-
-#### payment · 接入额外 Provider
-
-可信服务端扩展；名称返回 Provider/undefined，注册真实 PaymentProvider 同步返回 void，不要求普通下单方了解实现细节。
-
-| 入口                       | 输入参数 | 成功结果                       | 调用示例                                    |
-| -------------------------- | -------- | ------------------------------ | ------------------------------------------- |
-| `payment.getProvider`      | name     | `PaymentProvider \| undefined` | `payment.getProvider(providerName)`         |
-| `payment.registerProvider` | provider | `void`                         | `payment.registerProvider(paymentProvider)` |
-
-### HTTP API 契约
+#### HTTP API 契约
 
 支付 HTTP API 由 `@h-ai/api-contract` 的 `apiContract.payment` 定义。组合进应用 contract 后，可通过 typed client 调用：
 
-```typescript
-const order = await api.payment.orders.create({
-  provider: 'wechat',
-  amount: 100,
-  description: '商品',
-  tradeType: 'jsapi',
-  userId: 'trusted-public-account-openid',
-})
+```ts
+import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+
+const contract = apiContract.create({ payment: apiContract.payment })
+const api = apiClient.create(contract)
+const initialized = await api.init({ baseUrl: 'https://api.example.com/api/v1' })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+try {
+  const order = await api.payment.orders.create({
+    provider: 'alipay', amount: 100,
+    description: 'Demo', tradeType: 'h5',
+  })
+  if (!order.success)
+    throw new Error(order.error.message)
+  // order.data contains the provider's payment parameters for this order.
+}
+finally {
+  await api.close()
+}
 ```
 
-### 通知身份、时钟与业务幂等
+<a id="orders"></a>
 
-微信 `platformKeys` 必填，key 是受信平台证书序列号或公钥 ID，value 为对应 PEM；通知只按 `Wechatpay-Serial` 精确选取，未知标识不自动信任。证书会核对自身序列号及有效期。轮换时在所有节点部署新旧项，确认渠道停止使用旧项后移除；不存在从通知中下载密钥的逻辑。微信签名时间戳必须为严格整数且与节点时钟相差不超过 300 秒，节点须同步时钟。通知只接受 `TRANSACTION.SUCCESS` / transaction 资源，解密后继续核对 `appid/mchid`。
+### 创建、查询与关单：`payment`
 
-支付宝必填 `sellerId`，验签后核对 `app_id/seller_id`，只接受配置的 RSA2/RSA 算法，拒绝重复表单字段、未知状态和非法日历时间。请求使用明确 `Asia/Shanghai` 的北京时间，签名和订单内容仅在 POST form body 中传输，不进入 URL。`notify_time/gmt_payment` 按北京时间解析；允许渠道跨日重试，不把交易时间或通知原始时间当作五分钟签名窗口。Stripe 校验严格签名时间，支持轮换期多个 v1 签名，并核对 test/live 模式；本 Provider 不支持 Connect/组织上下文事件，应为当前账户配置对应 Webhook secret。
+先用业务订单号创建渠道订单，再查询渠道状态；主动关单不等于退款。
 
-三个内置 Provider 均返回必填 `eventId` 和大写 `currency`，自定义 Provider 也须提供。事件 ID 分别为微信 id、支付宝 notify_id、Stripe event.id。验签解析不创建业务订单、不持久去重，也不保证履约一次；接入层必须用共享数据库核对渠道、订单、金额和币种，以渠道/商户为命名空间去重，并防止乱序回退。业务订单号不能删除后复用。
+#### 接口清单
 
-[可运行消费者示例](../../../packages/payment/examples/payment-notify-consumer.ts) 将业务订单 pending→paid 的条件更新、唯一通知记录和唯一履约 outbox 放进同一事务，SQL 失败必须抛错以回滚。重复 paid 和晚到 pending 不重复生成 outbox；不同金额、币种、渠道或交易号不能更新订单。只有数据库提交成功才向渠道确认成功。示例表属于应用，payment 不会自动创建它们；外部发货由 outbox 投递者携带稳定 ID 做幂等，数据库事务不能保证跨系统副作用恰好一次。定向双进程测试使用两个真实 Node 进程共享 SQLite，证明重复通知和重启后仍仅产生一条业务 outbox；多主机生产使用同一 PostgreSQL/MySQL。
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `payment.createOrder` | 向渠道创建支付订单 | providerName, input | `PaymentOrder` | `await payment.createOrder(providerName, orderInput)` |
+| `payment.queryOrder` | 查询渠道订单状态 | providerName, orderNo | `OrderStatus` | `await payment.queryOrder(providerName, orderNo)` |
+| `payment.closeOrder` | 向渠道关闭订单 | providerName, orderNo | `void` | `await payment.closeOrder(providerName, orderNo)` |
 
-依据：[微信证书与签名时钟](https://pay.wechatpay.cn/doc/v3/merchant/4013053420)、[微信公钥轮换](https://pay.wechatpay.cn/doc/v3/merchant/4012154180)、[支付宝通知核对与重试](https://developer.alibaba.com/docs/doc.htm?articleId=103296&docType=1&treeId=346).
+#### 场景：创建、查询与关单
 
-### 支付宝业务响应与退款状态
+创建订单见最小接入；此函数输入原渠道名和业务单号，只对 pending 订单申请关单，返回最终查询结果或失败。实际状态由渠道确认。
+
+```ts
+async function inspectAndClose(providerName: string, orderNo: string) {
+  const queried = await payment.queryOrder(providerName, orderNo)
+  if (!queried.success)
+    return queried
+  if (queried.data.status !== 'pending')
+    return queried
+  const closed = await payment.closeOrder(providerName, orderNo)
+  if (!closed.success)
+    return closed
+  return payment.queryOrder(providerName, orderNo)
+}
+```
+
+#### Stripe 托管 Checkout 与主动关单
+
+只实现 `mode=payment`、`ui_mode=hosted_page` 和 `tradeType=h5`，API 请求固定 `Stripe-Version: 2026-09-30.endive`。不支持 embedded/elements、JSAPI、App、Native 或小程序模式；创建入口、HTTP schema 与浏览器调用均拒绝未实现的场景。服务端 `successUrl` 必填，`cancelUrl` 可选，均为 HTTP(S) 地址；可在成功地址中保留 `{CHECKOUT_SESSION_ID}` 让 Stripe 替换。跳转配置属于服务端，不接受客户端覆盖；同订单重试也不能改变这组创建参数。
+
+`closeOrder('stripe', orderNo)` 按持久映射读取 Session：open/unpaid 调用 `/checkout/sessions/:id/expire`；已 expired 确认后幂等成功，complete/paid 返回失败。遇到并发关闭或响应丢失会重新查询，只有确认过期才成功。成功页/取消页跳转本身既不代表已支付，也不等于已关单。
+
+依据：[创建 Checkout Session](https://docs.stripe.com/api/checkout/sessions/create)、[主动过期 Session](https://docs.stripe.com/api/checkout/sessions/expire).
+
+<a id="refunds"></a>
+
+### 退款与核对结果：`payment.refund`
+
+用原订单号和独立退款号申请退款；受理结果与最终到账状态分别核对。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `payment.refund` | 申请退款并读取渠道受理结果 | providerName, input | `RefundResult` | `await payment.refund(providerName, refundInput)` |
+
+#### 场景：退款与核对结果
+
+输入是已核对订单及本次唯一退款号，金额100的单位为分；失败不更新业务账本，processing 也不能标为已退款。
+
+```ts
+async function refundOrder(providerName: string, orderNo: string, refundNo: string) {
+  const refunded = await payment.refund(providerName, { orderNo, refundNo, amount: 100 })
+  if (!refunded.success)
+    return refunded
+  return refunded // data.status distinguishes success from processing
+}
+```
+
+#### 支付宝业务响应与退款状态
 
 查单、退款和关单均校验对应方法的响应 envelope、字符串 `code=10000`、关键字段及返回订单号。HTTP 200、缺失 envelope 或只有成功码均不能当作业务成功。交易不存在、权限/余额不足等业务错误返回对应 `QUERY_ORDER_FAILED` / `REFUND_FAILED` / `CLOSE_ORDER_FAILED`；错误 cause 只保留有界的渠道错误标识，不透传原始响应和 `msg/sub_msg`。查单拒绝未知状态及非法金额，不能伪造 pending 或零金额。
 
@@ -178,15 +217,44 @@ if (closed.success) {
 
 依据：[支付宝退款接口与成功判定](https://aipay.alipay.com/docs/subscribe/api-list/other-basic-interfaces/alipay-trade-refund.html).
 
-### Stripe 托管 Checkout 与主动关单
+<a id="notifications"></a>
 
-只实现 `mode=payment`、`ui_mode=hosted_page` 和 `tradeType=h5`，API 请求固定 `Stripe-Version: 2026-09-30.endive`。不支持 embedded/elements、JSAPI、App、Native 或小程序模式；创建入口、HTTP schema 与浏览器调用均拒绝未实现的场景。服务端 `successUrl` 必填，`cancelUrl` 可选，均为 HTTP(S) 地址；可在成功地址中保留 `{CHECKOUT_SESSION_ID}` 让 Stripe 替换。跳转配置属于服务端，不接受客户端覆盖；同订单重试也不能改变这组创建参数。
+### 验证并接收支付通知：`payment.handleNotify`
 
-`closeOrder('stripe', orderNo)` 按持久映射读取 Session：open/unpaid 调用 `/checkout/sessions/:id/expire`；已 expired 确认后幂等成功，complete/paid 返回失败。遇到并发关闭或响应丢失会重新查询，只有确认过期才成功。成功页/取消页跳转本身既不代表已支付，也不等于已关单。
+从原始 HTTP 请求取得通知体与签名头，先验证渠道身份，再幂等更新业务订单。
 
-依据：[创建 Checkout Session](https://docs.stripe.com/api/checkout/sessions/create)、[主动过期 Session](https://docs.stripe.com/api/checkout/sessions/expire).
+#### 接口清单
 
-### Stripe 回调状态
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `payment.handleNotify` | 验证渠道通知并执行回调 | providerName, request | `PaymentNotifyResult` | `await payment.handleNotify(providerName, verifiedNotificationRequest)` |
+
+#### 场景：验证并接收支付通知
+
+输入是路由收到的原始 Request；返回 HaiResult<PaymentNotifyResult>。正文只读取一次，成功后仍须按下面的事务示例核对订单、金额、币种和事件 ID，再向渠道确认。
+
+```ts
+async function verifyNotification(providerName: string, request: Request) {
+  return payment.handleNotify(providerName, {
+    body: await request.text(),
+    headers: Object.fromEntries(request.headers),
+  })
+}
+```
+
+#### 通知身份、时钟与业务幂等
+
+微信 `platformKeys` 必填，key 是受信平台证书序列号或公钥 ID，value 为对应 PEM；通知只按 `Wechatpay-Serial` 精确选取，未知标识不自动信任。证书会核对自身序列号及有效期。轮换时在所有节点部署新旧项，确认渠道停止使用旧项后移除；不存在从通知中下载密钥的逻辑。微信签名时间戳必须为严格整数且与节点时钟相差不超过 300 秒，节点须同步时钟。通知只接受 `TRANSACTION.SUCCESS` / transaction 资源，解密后继续核对 `appid/mchid`。
+
+支付宝必填 `sellerId`，验签后核对 `app_id/seller_id`，只接受配置的 RSA2/RSA 算法，拒绝重复表单字段、未知状态和非法日历时间。请求使用明确 `Asia/Shanghai` 的北京时间，签名和订单内容仅在 POST form body 中传输，不进入 URL。`notify_time/gmt_payment` 按北京时间解析；允许渠道跨日重试，不把交易时间或通知原始时间当作五分钟签名窗口。Stripe 校验严格签名时间，支持轮换期多个 v1 签名，并核对 test/live 模式；本 Provider 不支持 Connect/组织上下文事件，应为当前账户配置对应 Webhook secret。
+
+三个内置 Provider 均返回必填 `eventId` 和大写 `currency`，自定义 Provider 也须提供。事件 ID 分别为微信 id、支付宝 notify_id、Stripe event.id。验签解析不创建业务订单、不持久去重，也不保证履约一次；接入层必须用共享数据库核对渠道、订单、金额和币种，以渠道/商户为命名空间去重，并防止乱序回退。业务订单号不能删除后复用。
+
+[可运行消费者示例](../../../packages/payment/examples/payment-notify-consumer.ts) 将业务订单 pending→paid 的条件更新、唯一通知记录和唯一履约 outbox 放进同一事务，SQL 失败必须抛错以回滚。重复 paid 和晚到 pending 不重复生成 outbox；不同金额、币种、渠道或交易号不能更新订单。只有数据库提交成功才向渠道确认成功。示例表属于应用，payment 不会自动创建它们；外部发货由 outbox 投递者携带稳定 ID 做幂等，数据库事务不能保证跨系统副作用恰好一次。定向双进程测试使用两个真实 Node 进程共享 SQLite，证明重复通知和重启后仍仅产生一条业务 outbox；多主机生产使用同一 PostgreSQL/MySQL。
+
+依据：[微信证书与签名时钟](https://pay.wechatpay.cn/doc/v3/merchant/4013053420)、[微信公钥轮换](https://pay.wechatpay.cn/doc/v3/merchant/4012154180)、[支付宝通知核对与重试](https://developer.alibaba.com/docs/doc.htm?articleId=103296&docType=1&treeId=346).
+
+#### Stripe 回调状态
 
 Stripe Provider 只处理 `mode=payment` 的 `checkout.session.completed`、`checkout.session.async_payment_succeeded`、`checkout.session.async_payment_failed`、`checkout.session.expired`。Webhook 端点只订阅这些事件；其它资源事件或不完整 Session 返回 `NOTIFY_PARSE_FAILED`，不会伪造 pending 订单。
 
@@ -196,7 +264,7 @@ Stripe Provider 只处理 `mode=payment` 的 `checkout.session.completed`、`che
 
 依据：[Stripe 事件类型](https://docs.stripe.com/api/events/types)、[Checkout Session 字段](https://docs.stripe.com/api/checkout/sessions/object).
 
-### Stripe 持久化与幂等
+#### Stripe 持久化与幂等
 
 启用 Stripe 前须先 `await reldb.init(dbConfig)` 并检查 success，再初始化 payment；关闭时先 payment 后 reldb。初始化会等待 `hai_payment_stripe_operations` 建表，失败不会发布 Stripe Provider。多节点使用同一 PostgreSQL/MySQL 数据库；SQLite 仅适合开发/明确共享文件的单机进程，不能把不同主机的本地文件当作共享存储。
 
@@ -206,7 +274,7 @@ Stripe Provider 只处理 `mode=payment` 的 `checkout.session.completed`、`che
 
 网络响应丢失或结果落库失败不会删除预留，也不会伪装成功。未知结果仅在数据库时间计算的 23 小时窗口内沿用同一幂等键重试；超出窗口必须先核对 Stripe 并修复记录，禁止删除记录后盲重试。已确认结果长期保留，不能按普通缓存 TTL 清理；退款返回的是该次受理结果，processing 不等于资金已退回。依据：[Stripe 幂等保留边界](https://docs.stripe.com/api/idempotent_requests).
 
-### 审计日志
+#### 审计日志
 
 关键支付操作执行成功后会自动写入审计日志（依赖 `@h-ai/audit`），无需额外配置。审计写入失败仅输出 warn 日志，不影响支付操作。
 
@@ -219,12 +287,34 @@ Stripe Provider 只处理 `mode=payment` 的 `checkout.session.completed`、`che
 
 > 订单查询（`queryOrder`）为只读操作，不写审计日志。
 
+<a id="browser-payment"></a>
+
+### 在浏览器发起付款：`invokePayment`
+
+使用最小接入中 startPayment 的完整示例；输入只能来自服务端成功创建的订单。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `invokePayment` | 打开渠道付款界面 | `orderData: PaymentOrder` | `Promise<HaiResult<InvokePaymentResult>>` | `await invokePayment(orderData)` |
+
+#### 场景：处理调起结果
+
+最小接入中的 startPayment 检查 success 和 data.invoked，返回调起结果；客户取消、跳转或支付页加载均不能代替服务端到账确认。
+
 ## 错误处理
 
 收到 `HaiResult<T>` 时先检查 `result.success`。成功时读取 `result.data`，失败时查看 `result.error`。记录故障时保留错误码和追踪编号，便于从日志找到对应请求。
 
 ```typescript
-const result = await payment.createOrder('wechat', orderInput)
+import { HaiPaymentError } from '@h-ai/payment'
+
+const orderInput: Parameters<typeof payment.createOrder>[1] = {
+  orderNo: 'ORD-ERROR-1', amount: 100, description: 'Demo', tradeType: 'h5',
+  notifyUrl: 'https://api.example.com/payment/notify/alipay',
+}
+const result = await payment.createOrder('alipay', orderInput)
 if (!result.success) {
   switch (result.error.code) {
     case HaiPaymentError.INVALID_AMOUNT.code:

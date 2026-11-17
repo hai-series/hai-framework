@@ -47,99 +47,91 @@ finally {
 }
 ```
 
+<a id="api-reference"></a>
+
 ## 功能说明
+
+下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。`value` 先检查 `HaiResult.success`，失败保留原错误，成功返回 data；只用于读取结果。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+
+function value<T>(result: HaiResult<T>): T {
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
+  return result.data
+}
+```
+
+<a id="lifecycle"></a>
+
+### 准备审计服务：`audit`
+
+先连接保存审计记录的 RelDB，再启动 Audit；关闭时反序释放。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `audit.init` | 等待审计表准备完成。先连接 RelDB | `config?`（省略时使用默认配置） | `Promise<HaiResult<void>>` | `await audit.init()` |
+| `audit.close` | 等待已开始的操作完成；RelDB 由应用关闭 | RelDB 由应用关闭；无 | `Promise<HaiResult<void>>` | `await audit.close()` |
+| `audit.isInitialized` | 检查审计服务是否就绪 | 只读属性，无参数 | `boolean` | `audit.isInitialized` |
+
+#### 场景：准备审计服务
+
+```ts
+value(await audit.init()) // undefined; audit tables are ready
+audit.isInitialized // true
+value(await audit.close()) // undefined; the borrowed RelDB remains open
+```
+
+输入省略时使用当前默认审计选项。重新初始化后再执行其他示例；close 不关闭借入的数据库。
 
 SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 `Date`，`details` 为 JSON 字符串或 `null`，缺失的可空字段返回 `null`。日期筛选与写入使用相同的驱动日期转换；统计数量为安全整数，超出范围返回 `STATS_FAILED`。
 
-<a id="api-reference"></a>
-
-### 功能输入输出
-
 初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
-#### 初始化与关闭
+<a id="events"></a>
 
-| API | 用途 | 输入 | 输出 | 示例 |
+### 记录操作与关联身份：`audit.log`、`audit.helper`
+
+在可信服务端取得用户与请求编号后记录事件；常见登录、注册和密码事件可用 helper。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `audit.init` | 等待审计表准备完成。先连接 RelDB | `config?`（省略时使用默认配置） | `Promise<HaiResult<void>>` | `await audit.init()` |
-| `audit.close` | 等待已开始的操作完成；RelDB 由应用关闭 | 无 | `Promise<HaiResult<void>>` | `await audit.close()` |
+| `audit.log` | 保存一条明确的审计事件 | input, tx | `AuditLog` | `await audit.log(event)` |
+| `audit.capture` | 按自动采集策略记录事件 | input, options | `void` | `await audit.capture(event)` |
+| `audit.withContext` | 给操作绑定可信身份与请求信息 | context, operation | `T` | `audit.withContext(trustedAuditContext, () => saveOrder())` |
+| `audit.helper.login` | 记录登录事件 | userId, ip, ua | `void` | `await audit.helper.login(userId)` |
+| `audit.helper.logout` | 记录退出事件 | userId, ip, ua | `void` | `await audit.helper.logout(userId)` |
+| `audit.helper.register` | 记录注册事件 | userId, ip, ua | `void` | `await audit.helper.register(userId)` |
+| `audit.helper.passwordResetRequest` | 记录密码重置请求 | email, ip, ua | `void` | `await audit.helper.passwordResetRequest(email)` |
+| `audit.helper.passwordResetComplete` | 记录密码重置完成 | userId, ip, ua | `void` | `await audit.helper.passwordResetComplete(userId)` |
+| `audit.helper.crud` | 记录资源增删改查 | input | `void` | `await audit.helper.crud(crudEvent)` |
 
-#### audit · 记录事件与请求上下文
+#### 场景：记录操作与关联身份
 
-记录结构化事件。log 输入事件及可选 tx 返回已保存记录；capture 按读写策略返回 void；withContext 输入可信关联信息及回调，直接返回回调值并隔离上下文。
+```ts
+const saved = value(await audit.log({ userId: 'demo-user', action: 'login', resource: 'auth' }))
+// saved includes its generated id and createdAt
+value(await audit.capture({ userId: 'demo-user', action: 'read', resource: 'orders' })) // undefined
+const id = await audit.withContext({ actor: { id: 'demo-user' } }, async () => {
+  const record = value(await audit.log({ action: 'update', resource: 'orders' }))
+  return record.id
+}) // id is the callback's returned record id
+value(await audit.helper.register('demo-user'))
+value(await audit.helper.login('demo-user'))
+value(await audit.helper.logout('demo-user'))
+value(await audit.helper.passwordResetRequest('demo@example.com'))
+value(await audit.helper.passwordResetComplete('demo-user'))
+// helper calls succeed with undefined; query their saved events using audit.list
+```
 
-| 入口                | 输入参数           | 成功结果   | 调用示例                                                    |
-| ------------------- | ------------------ | ---------- | ----------------------------------------------------------- |
-| `audit.log`         | input, tx          | `AuditLog` | `await audit.log(event)`                                    |
-| `audit.capture`     | input, options     | `void`     | `await audit.capture(event)`                                |
-| `audit.withContext` | context, operation | `T`        | `audit.withContext(trustedAuditContext, () => saveOrder())` |
+输入中的用户 ID 由应用鉴权取得，示例标识为虚构。log 返回已保存记录；capture 和 helper 成功无业务数据，withContext 直接保留回调的返回值。CRUD 事件结构见后续示例。
 
-#### audit · 查询、统计与清理
-
-检索/保留：过滤分页返回带用户信息的页，用户 ID/limit 返回近期数组，days/filters 返回统计数组，cleanup 保留天数返回删除数。
-
-| 入口                  | 输入参数      | 成功结果                            | 调用示例                                      |
-| --------------------- | ------------- | ----------------------------------- | --------------------------------------------- |
-| `audit.list`          | options       | `PaginatedResult<AuditLogWithUser>` | `await audit.list({ page: 1, pageSize: 20 })` |
-| `audit.getUserRecent` | userId, limit | `AuditLog[]`                        | `await audit.getUserRecent(userId, 20)`       |
-| `audit.getStats`      | days, filters | `AuditStatItem[]`                   | `await audit.getStats(7)`                     |
-| `audit.cleanup`       | olderThanDays | `number`                            | `await audit.cleanup(90)`                     |
-
-#### audit.helper
-
-常见事件封装。用户 ID（重置请求为 email）及可选 IP/UA，或 CRUD 事件输入，返回 void HaiResult；敏感字段仍脱敏。
-
-| 入口                                 | 输入参数       | 成功结果 | 调用示例                                           |
-| ------------------------------------ | -------------- | -------- | -------------------------------------------------- |
-| `audit.helper.login`                 | userId, ip, ua | `void`   | `await audit.helper.login(userId)`                 |
-| `audit.helper.logout`                | userId, ip, ua | `void`   | `await audit.helper.logout(userId)`                |
-| `audit.helper.register`              | userId, ip, ua | `void`   | `await audit.helper.register(userId)`              |
-| `audit.helper.passwordResetRequest`  | email, ip, ua  | `void`   | `await audit.helper.passwordResetRequest(email)`   |
-| `audit.helper.passwordResetComplete` | userId, ip, ua | `void`   | `await audit.helper.passwordResetComplete(userId)` |
-| `audit.helper.crud`                  | input          | `void`   | `await audit.helper.crud(crudEvent)`               |
-
-#### audit.backup
-
-私有归档。run 接收筛选/期限/取消选项，verify 接收对象 key；返回归档信息并校验内容完整性，不公开对象。
-
-| 入口                  | 输入参数     | 成功结果          | 调用示例                                |
-| --------------------- | ------------ | ----------------- | --------------------------------------- |
-| `audit.backup.run`    | options      | `AuditBackupInfo` | `await audit.backup.run()`              |
-| `audit.backup.verify` | key, options | `AuditBackupInfo` | `await audit.backup.verify(archiveKey)` |
-
-#### audit · 检查异常告警
-
-调用 `audit.checkAlerts({ signal })` 会检查本次达到阈值的规则，返回尝试发送的通知结果。需要自动定时检查时，把计划交给 Scheduler 执行。
-
-| 入口                | 输入参数 | 成功结果           | 调用示例                    |
-| ------------------- | -------- | ------------------ | --------------------------- |
-| `audit.checkAlerts` | options  | `AuditAlertReport` | `await audit.checkAlerts()` |
-
-- 记录用户操作与安全事件，支持按用户、时间和操作筛选。
-- 查询分页日志与操作统计，并按保留天数清理。
-- 使用关系数据库持久化，写入前隐藏凭证类字段。
-
-### 适用场景
-
-- 用户操作审计（登录、登出、注册、密码重置等）
-- CRUD 操作审计（创建、读取、更新、删除资源）
-- 安全事件追踪与合规审计
-- 运营数据统计（操作频次、活跃用户等）
-
-### API 概览
-
-- `audit.init(config)` - 初始化审计模块
-- `audit.log(input)` - 记录审计日志
-- `audit.list(options)` - 返回统一 `PaginatedResult<AuditLogWithUser>`（items/total/page/pageSize，含事件时的用户名）；页码/条数复用 core 分页规范化，默认 pageSize 为 20，调用方直接使用返回元数据。
-- `audit.getUserRecent(userId, limit)` - 获取用户最近活动
-- `audit.cleanup(days)` - 清理旧日志
-- `audit.getStats(days, filters)` - 获取按分类等条件筛选的操作统计
-- `audit.helper.login/logout/register/...` - 便捷记录器
-- `audit.close()` - 关闭模块
-
-使用 `audit.helper` 记录登录、删除等常见事件。给这个对象加类型时可以导入 `AuditHelper`。
-
-#### 输入约束
+#### 事件输入约束
 
 - `audit.log(input)`：`action` / `resource` 必须为非空字符串，且长度不超过 256。
 - `audit.log(input)`：`details` 中的凭证类敏感字段（如 `password` / `token` / `secret`）会在持久化前自动脱敏；业务隐私字段（如邮箱、手机号）默认同时隐藏，可通过 privacy 配置调整。
@@ -148,7 +140,7 @@ SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 
 - `audit.cleanup(days)`：`days`（如传入）必须为非负整数。
 - `audit.getStats(days)`：`days`（如传入）必须为非负整数。
 
-### 事件上下文、隐私与保留
+#### 场景：把业务变更与审计记录放进同一事务
 
 审计 createdAt、告警窗口与归档截止共用数据库时钟，不以各节点系统钟作为共享真值。备份与告警调度任务使用已验证的持久去重保障声明幂等；失败不会被错误地当作非幂等未知任务而阻塞后续调度。
 
@@ -166,7 +158,60 @@ SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 
 
 脱敏匹配整个字段：对象、数组以及按应用要求选出的 JSON 字段中的敏感值同样隐藏。关闭或尚未初始化 Audit 时，capture 返回未初始化失败；只有已初始化模块的关闭采集配置才跳过自动事件。
 
-### 私有备份与定时归档
+#### 场景：记录订单更新
+
+输入是可信操作者、资源名和订单 ID；成功结果没有业务数据，持久记录可通过 audit.list 查询。
+
+```ts
+value(await audit.helper.crud({
+  userId: 'demo-user', action: 'update', resource: 'orders', resourceId: 'order-42',
+})) // undefined
+```
+
+<a id="queries"></a>
+
+### 查询与清理旧记录：`audit`
+
+排查时按用户、操作和时间查询；保留期限到达后批量删除历史记录。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `audit.list` | 筛选并分页查询事件 | options | `PaginatedResult<AuditLogWithUser>` | `await audit.list({ page: 1, pageSize: 20 })` |
+| `audit.getUserRecent` | 查询用户近期活动 | userId, limit | `AuditLog[]` | `await audit.getUserRecent(userId, 20)` |
+| `audit.getStats` | 统计指定天数内的操作 | days, filters | `AuditStatItem[]` | `await audit.getStats(7)` |
+| `audit.cleanup` | 按保留策略删除旧记录 | olderThanDays | `number` | `await audit.cleanup(90)` |
+
+#### 场景：查询与清理旧记录
+
+```ts
+const page = value(await audit.list({ action: 'login', page: 1, pageSize: 20 })) // items, total, pagination
+const recent = value(await audit.getUserRecent('demo-user', 20)) // up to 20 AuditLog records
+const stats = value(await audit.getStats(7)) // action statistics for the last seven days
+const removed = value(await audit.cleanup(90)) // count of records older than 90 days
+```
+
+输出取决于真实历史记录；空页、空统计与删除零条都可成功。cleanup 会真正删除过期记录，示例只在测试数据库执行。
+
+<a id="backups"></a>
+
+### 归档与核对备份：`audit.backup`
+
+把历史记录归档到私有对象存储，核对完整性后才按保留策略处理原记录。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `audit.backup.run` | 创建或核对私有归档 | options | `AuditBackupInfo` | `await audit.backup.run()` |
+| `audit.backup.verify` | 检查归档格式与校验和 | key, options | `AuditBackupInfo` | `await audit.backup.verify(archiveKey)` |
+
+#### 场景：归档与核对备份
+
+下文输入为归档筛选条件；run 返回 AuditBackupInfo，其中对象键用于 verify。verify 返回核对后的归档信息，不能把归档地址当公开下载链接。
+
+#### 场景：启用私有归档与定时计划
 
 `backup.enabled` 默认关闭。开启时向 `audit.init({ storage, backup: { enabled: true } })` 注入已经初始化的 `StorageFunctions`；数据库仍先初始化。`backup.batchSize` 控制扫描批量（默认200），`maxRecordBytes` 限制单条 UTF-8 记录（默认1 MiB），超限返回失败并保留原始审计，不截断证据。
 
@@ -177,6 +222,9 @@ SQLite、PostgreSQL、MySQL 的读取结果保持同一契约：`createdAt` 为 
 定时配置位于 `backup.schedule`：`enabled`、五字段 cron（默认 `0 2 * * *`）、IANA timezone（默认 UTC）。开启后 `audit.schedulerPlan` 返回可显式合并进 `scheduler.init()` 的 tasks/hooks 计划；没有自动任务时为 null。回调复用 Scheduler 的共享执行编号和取消信号，并在失败时抛错使任务准确失败；未知执行按 Scheduler 规则核对，不能盲目重跑。示例应用和 fullstack 模板已经把计划传给 Scheduler。手工接入的应用需要把计划并入已有任务和回调。先关闭 Scheduler，再关闭 IAM、Audit、Storage 和 RelDB；Audit 取消并等待自己的备份，不关闭宿主 Storage。
 
 ```ts
+import { scheduler } from '@h-ai/scheduler'
+
+async function startAuditSchedule(schedulerSettings: Parameters<typeof scheduler.init>[0]) {
 const plan = audit.schedulerPlan
 if (plan) {
   const initialized = await scheduler.init({
@@ -189,11 +237,46 @@ if (plan) {
   if (!started.success)
     throw new Error(started.error.message)
 }
+}
 ```
 
 把上例放入服务端启动代码。先初始化 Audit、Storage 和 RelDB，再提供已校验的 `schedulerSettings`。归档使用私有存储，开启备份时拒绝配置了公开 publicUrl 的 S3；部署仍须限制桶/CDN访问。公开静态文件入口应仅开放指定资源；管理示例与 fullstack 仅公开规范头像路径，如提供归档下载，须通过审计授权接口处理，关闭备份也不改变已有文件的私有边界。
 
-### 分级异常告警
+#### 场景：手工归档后验证完整性
+
+前提：初始化时注入私有 Storage 并开启 backup。输入是本次归档 ID 和时间范围；run 返回的 key 交给 verify，后者返回同一归档的核对结果。
+
+```ts
+const archive = value(await audit.backup.run({
+  id: 'demo-login-archive',
+  from: new Date('2026-01-01T00:00:00Z'),
+  to: new Date('2026-01-02T00:00:00Z'),
+}))
+const verifiedArchive = value(await audit.backup.verify(archive.key))
+// verifiedArchive identifies the same private archive; its contents passed verification.
+```
+
+<a id="alerts"></a>
+
+### 检查异常并通知：`audit.checkAlerts`
+
+主动检查当前达到阈值的规则；周期调度由 Scheduler 管理。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `audit.checkAlerts` | 检查阈值并尝试通知 | options | `AuditAlertReport` | `await audit.checkAlerts()` |
+
+#### 场景：检查异常并通知
+
+```ts
+const report = value(await audit.checkAlerts()) // AuditAlertReport for this check
+```
+
+无参数时按当前规则检查。返回的是本轮检查及通知报告，不意味着每条通知都已送达；看报告中的实际结果。
+
+#### 场景：按异常规则发送通知
 
 `alerts.enabled` 默认关闭。开启时注入已初始化的 Reach：`audit.init({ reach, alerts: { enabled: true, rules: [...] } })`。规则通过稳定 id、actions（精确事件名）、可选 resource、outcomes、minimumSeverity 筛选事件，threshold/windowSeconds 指定固定窗口阈值，severity 指定通知等级，targets 中的 id/provider/to 指定人员或目标。默认窗口300秒，范围60–86400秒；默认仅失败/拒绝，空 outcomes 表示所有结果。规则和目标 id 必须各自唯一；provider 须已在 Reach 注册。不将具体业务角色写入框架。
 

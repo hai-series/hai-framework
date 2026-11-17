@@ -2,8 +2,6 @@
 
 [Chinese source](runner.md) · [Configuration](../configuration/runner.en.md) · [Data structures](../data/runner.en.md)
 
-<a id="quick-start"></a>
-
 ## Quick start
 
 Initialize the runner after the database. The API may submit work, but only a node configured as executor runs handlers. Use the same scope and idempotency key to recover an uncertain submission.
@@ -88,25 +86,115 @@ finally {
 }
 ```
 
+<a id="api-list"></a>
+
 <a id="api-reference"></a>
 
-## API list
+## Features
+
+Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
+
+Import the module as in the quick start. Except for lifecycle examples, run scenarios after initialization and before closure. The value helper checks HaiResult.success and preserves the original error. Use isolated test data and explicit cleanup.
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+
+function value<T>(result: HaiResult<T>): T {
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
+  return result.data
+}
+```
+
+<a id="nodes"></a>
+
+### Prepare nodes and handlers: `runner`
+
+The database shares executions while handlers are registered per node. API nodes submit and executors claim work.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `runner.init(config)` | 为当前进程启动任务服务 | `config.nodeId` 必填。`executor` 默认 `true`。先初始化 RelDB | `HaiResult<void>` | `await runner.init({ nodeId: 'api-east', executor: false })` |
+| `runner.close()` | 停止领取任务并核验本节点执行的清理 | 无参数 | `HaiResult<void>` | `await runner.close()` |
+| `runner.isExecutor` | Check whether this ready node executes jobs | Read-only property | `boolean` | `runner.isExecutor` |
+| `runner.environment(id)` | 读已登记的执行环境 | 执行环境 ID 必填 | `HaiResult<RunnerEnvironment>` | `runner.environment('docs')` |
+| `runner.register(kind, handler)` | 登记一种任务及处理函数 | 任务类型和异步处理函数必填 | `HaiResult<() => void>`; `data` | `runner.register('reports.v1', async input => input)` |
+
+#### Scenario: Prepare nodes and handlers
+
+The quick start shows initialization, registration, submission and shutdown. environment(id) resolves a configured environment or fails. isExecutor reports the node role; register returns a deregistration function.
 
 Check success before using the data shown below. environment, register and registerWarmPool return HaiResult synchronously.
 
-| API | Purpose | Inputs and defaults | Output | Example |
-| --- | --- | --- | --- | --- |
-| `runner.init` | Start this process as an API node or worker | `{ nodeId, executor = true, ... }` | `void` | `await runner.init({ nodeId: 'api-east', executor: false })` |
-| `runner.close` | Stop claims and check local execution cleanup | None | `void` | `await runner.close()` |
-| `runner.isExecutor` | Check whether this ready node executes jobs | Read-only property | `boolean` | `runner.isExecutor` |
-| `runner.environment` | Read a registered execution environment | `id` | `RunnerEnvironment` | `runner.environment('docs')` |
-| `runner.register` | Register a local handler and get its deregistration function | `kind, handler` | `() => void` | `runner.register('example', handler)` |
-| `runner.registerWarmPool` | Register a pool for reusing prepared containers | `pool` | `() => void` | `runner.registerWarmPool(pool)` |
-| `runner.submit` | Queue a new job or reuse a matching execution | `request` | `RunnerExecution` | `await runner.submit(request)` |
-| `runner.find` | Find an execution by authorized scope, kind and reuse key | `scope, kind, key` | `RunnerExecution or undefined` | `await runner.find(scope, 'example', 'request-1')` |
-| `runner.get` | Read one execution in its authorized scope | `scope, id` | `RunnerExecution` | `await runner.get(scope, id)` |
-| `runner.cancel` | Ask a queued or running execution to stop | `scope, id` | `RunnerExecution` | `await runner.cancel(scope, id)` |
-| `runner.reconcileUnknown` | Record a verified outcome for an unknown execution | `scope, id, review` | `RunnerExecution` | `await runner.reconcileUnknown(scope, id, review)` |
-| `runner.events` | Read events after a saved sequence | `scope, id, after = 0, limit = 100` | `RunnerEvent[]` | `await runner.events(scope, id, 0, 20)` |
-
 Derive scope from the authenticated request. A cancellation request is not proof of stopped external work. Reconcile an unknown execution only after examining the original resources.
+
+[Detailed parameters and workflows](runner.md#nodes)
+
+<a id="tasks"></a>
+
+### Submit, recover, inspect and cancel: `runner`
+
+Save an idempotency key and execution ID for one intent. Recover receipts after disconnects and inspect cancellation through its confirmed state.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `runner.submit(request)` | 保存任务，等待可用节点领取 | `scope`、`kind`、`input` 必填。排队和运行的超时都默认 `300000` 毫秒 | `HaiResult<RunnerExecution>` | `await runner.submit({ scope, kind: 'reports.v1', input: { page: 1 } })` |
+| `runner.find(scope, kind, key)` | 按任务类型和业务幂等键找现有执行 | 三个参数均必填 | `data`; `undefined` | `await runner.find(scope, 'reports.v1', 'monthly-2026-01')` |
+| `runner.get(scope, id)` | 按可信归属读取执行记录 | `scope` 和 `id` 必填 | `HaiResult<RunnerExecution>` | `await runner.get(scope, id)` |
+| `runner.cancel(scope, id)` | 保存取消请求 | `scope` 和 `id` 必填 | `HaiResult<RunnerExecution>` | `await runner.cancel(scope, id)` |
+| `runner.events(scope, id, after?, limit?)` | 按序读取任务事件 | `scope` 和 `id` 必填。`after` 默认 `0`，`limit` 默认 `100` | `HaiResult<RunnerEvent[]>` | `await runner.events(scope, id, 0, 20)` |
+
+#### Scenario: Submit, recover, inspect and cancel
+
+```ts
+const scope = { tenantId: 'studio', userId: 'alice' } // supplied by server authentication
+const accepted = value(await runner.submit({ scope, kind: 'report.v1', input: 'Monthly report', idempotencyKey: 'report-nov' }))
+const recovered = value(await runner.find(scope, 'report.v1', 'report-nov')) // execution or undefined
+const current = value(await runner.get(scope, accepted.id)) // current persisted state
+const events = value(await runner.events(scope, accepted.id, 0, 20)) // ordered RunnerEvent[]
+const cancelling = value(await runner.cancel(scope, accepted.id)) // actual state after requesting cancellation
+```
+
+scope comes from authentication. This example uses quick start’s report.v1 handler. Concurrent execution affects returned state; queued/running/cancelling are not success. Save event sequence numbers for incremental reads.
+
+[Detailed parameters and workflows](runner.md#tasks)
+
+<a id="containers"></a>
+
+### Isolated containers and warm pools: `runner.registerWarmPool`
+
+Map tools to controlled environments with CPU, memory, process and disk budgets. Warm pools prepare reusable capacity in advance.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `runner.registerWarmPool(pool)` | 登记某类工具的预热目标和容量 | `pool` 必填，由应用给出环境、任务类型、预热数量和上限 | `HaiResult<() => void>`; `data` | `runner.registerWarmPool({ key: 'docs', kind: 'docs.v1', environmentId: 'docs', minReady: 1, maxRunning: 2, maxTotal: 3 })` |
+
+#### Scenario: Isolated containers and warm pools
+
+The pool input includes environment, kind, desired warm count and limits. Registration returns deregistration; check launch, file and artifact results and release resources.
+
+[Detailed parameters and workflows](runner.md#containers)
+
+<a id="reconciliation"></a>
+
+### Review unknown executions: `runner.reconcileUnknown`
+
+Record a reviewed outcome only after confirming original resources stopped. A database state change cannot undo external effects.
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `runner.reconcileUnknown(scope, id, review)` | 在原执行节点记录对已停止资源的人工核验 | `scope`、`id` 和核验记录必填。无容器凭据时还须核对应用侧资源已停止 | `HaiResult<RunnerExecution>` | `await runner.reconcileUnknown(scope, id, { operatorId: 'ops-1', reason: '核验记录 OPS-42', hostResourcesStopped: true })` |
+
+#### Scenario: Review unknown executions
+
+Inputs are original scope/id, reviewer, evidence and stop confirmation; output is RunnerExecution. Cleaned resources do not prove a successful business outcome.
+
+[Detailed parameters and workflows](runner.md#reconciliation)

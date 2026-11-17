@@ -2,8 +2,6 @@
 
 [中文完整参考](core.md) · [日本語](core.ja.md) · [Core settings](../configuration/core.en.md) · [Core data](../data/core.en.md)
 
-<a id="quick-start"></a>
-
 ## Quick start
 
 Install the package with `pnpm add @h-ai/core`. Add `config/_core.yml` to a Node.js application.
@@ -26,36 +24,41 @@ core.logger.info('Application ready', { app: settings.name })
 Core loads the immediate YAML files in the directory. It registers `_core.yml` as `core`, and `app.yml` as `app`. The example stops startup if the required Core settings could not be loaded. In a browser, pass logging options directly to `core.init({ logging: { level: 'warn' } })`. If the page needs the application name, return that field in the server's page data and keep credentials on the server.
 
 <a id="api-reference"></a>
+
+## Features
+
 <a id="config-api"></a>
 
-## Configuration API
+### File and environment configuration: `core.config`
 
 The file and environment methods below are for Node.js. A name identifies the saved configuration, such as `app` for `config/app.yml`. Use a Zod schema such as `const AppSchema = z.object({ port: z.number().int().positive() })` to validate values loaded from a file containing `port: 3000`. Import `z` from `zod` for that example.
 
-| API                                          | Purpose                                                   | Inputs and defaults                                                                                                                                                                                               | Result                                                                                                     | Example                                                                                                                            |
-| -------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `core.init(options?)`                        | Configure logging and scan YAML at startup                | Without `configDir`, Core skips the scan. `configSchemas` optionally supplies field types by config name. `watchConfig` defaults to `false`. Explicit `logging` takes precedence over YAML logging settings       | `void`. Logs individual file failures and continues. Directory or logger errors can throw                  | `core.init({ configDir: './config', configSchemas: { app: AppSchema }, watchConfig: true })`                                       |
-| `core.config.loadEnvFiles(options)`          | Merge dotenv and existing environment variables           | `mode` required. `envDir` defaults to the working directory                                                                                                                                                       | `HaiResult<Record<string, string>>`. Apply `data` to `process.env` explicitly                              | `core.config.loadEnvFiles({ mode: 'dev' })`                                                                                        |
-| `core.config.load(name, filePath, schema?)`  | Load one file and apply overrides                         | `name` and `filePath` required. Omit `schema` to load without schema validation                                                                                                                                   | `HaiResult<T>`. A failure preserves the last successful value                                              | `core.config.load('app', './config/app.yml', AppSchema)`                                                                           |
-| `core.config.validate(name, schema)`         | Recheck the last loaded YAML with the current environment | Both parameters required. Use `reload()` to read edits on disk                                                                                                                                                    | `HaiResult<T>`. Success saves the checked values and the schema used for future reloads                    | `core.config.validate('app', AppSchema)`                                                                                           |
-| `core.config.get<T>(name)`                   | Read the last saved value                                 | `name` required. `T` supplies a TypeScript type                                                                                                                                                                   | `T` or `undefined`                                                                                         | `core.config.get<{ port: number }>('app')`                                                                                         |
-| `core.config.getOrThrow<T>(name)`            | Read a setting required to continue                       | `name` required                                                                                                                                                                                                   | `T`. Throws if the name has not been loaded                                                                | `core.config.getOrThrow<{ port: number }>('app')`                                                                                  |
-| `core.config.has(name)`                      | Check whether a name has been loaded                      | `name` required                                                                                                                                                                                                   | `boolean`                                                                                                  | `core.config.has('app')`                                                                                                           |
-| `core.config.keys()`                         | List loaded names                                         | No arguments                                                                                                                                                                                                      | `string[]`                                                                                                 | `core.config.keys()`                                                                                                               |
-| `core.config.reload(name)`                   | Read the file again and notify subscribers                | `name` required                                                                                                                                                                                                   | `HaiResult<unknown>`. Missing names return `CONFIG_NOT_LOADED`. Failed reloads preserve the previous value | `core.config.reload('app')`                                                                                                        |
-| `core.config.watch<T>(name, callback)`       | Reload on file changes                                    | Both parameters required. `T` defaults to `unknown`. The callback receives the new value on success or `null` and an error on failure                                                                             | A function that removes this subscription. An unloaded name reports `CONFIG_NOT_LOADED` immediately        | `const stop = core.config.watch('app', (_value, error) => { if (error) core.logger.warn('Reload failed', { code: error.code }) })` |
-| `core.config.isWatching(name)`               | Check whether a file watch is active                      | `name` required                                                                                                                                                                                                   | `boolean`                                                                                                  | `core.config.isWatching('app')`                                                                                                    |
-| `core.config.unwatch(name?)`                 | Stop watches and keep the loaded values                   | Omit `name` to stop all watches                                                                                                                                                                                   | `void`                                                                                                     | `core.config.unwatch('app')`                                                                                                       |
-| `core.config.clear(name?)`                   | Remove loaded values and stop their watches               | Omit `name` to clear all names                                                                                                                                                                                    | `void`. Leaves the files on disk intact                                                                    | `core.config.clear('app')`                                                                                                         |
-| `core.config.resolve(options)`               | Apply environment overrides in memory                     | `name` and `value` required. `environment` defaults to `process.env`. A `schema` or `shape` can provide field types. `missing` defaults to `'error'`; `'empty'` inserts an empty string for a missing placeholder | `HaiResult<unknown>`. Validate the result with the application schema                                      | `core.config.resolve({ name: 'app', value: { port: 3000 }, environment: { HAI_APP_PORT: '4000' } })`                               |
-| `core.config.toEnv(options)`                 | Flatten configuration into environment variables          | `prefix` and `value` required. Optional `schema` or `shape` describes fields                                                                                                                                      | `Record<string, string>`. Throws on invalid names                                                          | `core.config.toEnv({ prefix: 'HAI_APP', value: { port: 3000 } })`                                                                  |
-| `core.config.mergeEnv(layers)`               | Merge sources by precedence                               | Pass objects in order from lowest to highest priority                                                                                                                                                             | `Record<string, string>`                                                                                   | `core.config.mergeEnv([{ HAI_APP_PORT: '3000' }, { HAI_APP_PORT: '4000' }])`                                                       |
-| `core.config.parseEnv(text)`                 | Read literal variables from dotenv text                   | `text` required                                                                                                                                                                                                   | `Record<string, string>`. Throws for duplicate keys or malformed values marked as generated JSON           | `core.config.parseEnv('HAI_APP_PORT=3000\n')`                                                                                      |
-| `core.config.stringifyEnv(values, options?)` | Write dotenv text                                         | `values` required. `target` defaults to `'node'`. Choose `'compose'` for a Compose env file                                                                                                                       | A string. Throws on invalid names                                                                          | `core.config.stringifyEnv({ HAI_APP_PORT: '3000' })`                                                                               |
-
 Check `success` before using `data` from a `HaiResult`. Reloading changes the values held by Core. If a database or other service read its settings when it was initialized, arrange for that service to apply the new values.
 
-## Configuration in Node and the browser
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
+| --- | --- | --- | --- | --- |
+| `core.init(options?)` | Configure logging and scan YAML at startup | Without `configDir`, Core skips the scan. `configSchemas` optionally supplies field types by config name. `watchConfig` defaults to `false`. Explicit `logging` takes precedence over YAML logging settings | `void`. Logs individual file failures and continues. Directory or logger errors can throw | `core.init({ configDir: './config', configSchemas: { app: AppSchema }, watchConfig: true })` |
+| `core.config.loadEnvFiles(options)` | Merge dotenv and existing environment variables | `mode` required. `envDir` defaults to the working directory | `HaiResult<Record<string, string>>`. Apply `data` to `process.env` explicitly | `core.config.loadEnvFiles({ mode: 'dev' })` |
+| `core.config.load(name, filePath, schema?)` | Load one file and apply overrides | `name` and `filePath` required. Omit `schema` to load without schema validation | `HaiResult<T>`. A failure preserves the last successful value | `core.config.load('app', './config/app.yml', AppSchema)` |
+| `core.config.validate(name, schema)` | Recheck the last loaded YAML with the current environment | Both parameters required. Use `reload()` to read edits on disk | `HaiResult<T>`. Success saves the checked values and the schema used for future reloads | `core.config.validate('app', AppSchema)` |
+| `core.config.get<T>(name)` | Read the last saved value | `name` required. `T` supplies a TypeScript type | `T` or `undefined` | `core.config.get<{ port: number }>('app')` |
+| `core.config.getOrThrow<T>(name)` | Read a setting required to continue | `name` required | `T`. Throws if the name has not been loaded | `core.config.getOrThrow<{ port: number }>('app')` |
+| `core.config.has(name)` | Check whether a name has been loaded | `name` required | `boolean` | `core.config.has('app')` |
+| `core.config.keys()` | List loaded names | No arguments | `string[]` | `core.config.keys()` |
+| `core.config.reload(name)` | Read the file again and notify subscribers | `name` required | `HaiResult<unknown>`. Missing names return `CONFIG_NOT_LOADED`. Failed reloads preserve the previous value | `core.config.reload('app')` |
+| `core.config.watch<T>(name, callback)` | Reload on file changes | Both parameters required. `T` defaults to `unknown`. The callback receives the new value on success or `null` and an error on failure | A function that removes this subscription. An unloaded name reports `CONFIG_NOT_LOADED` immediately | `const stop = core.config.watch('app', (_value, error) => { if (error) core.logger.warn('Reload failed', { code: error.code }) })` |
+| `core.config.isWatching(name)` | Check whether a file watch is active | `name` required | `boolean` | `core.config.isWatching('app')` |
+| `core.config.unwatch(name?)` | Stop watches and keep the loaded values | Omit `name` to stop all watches | `void` | `core.config.unwatch('app')` |
+| `core.config.clear(name?)` | Remove loaded values and stop their watches | Omit `name` to clear all names | `void`. Leaves the files on disk intact | `core.config.clear('app')` |
+| `core.config.resolve(options)` | Apply environment overrides in memory | `name` and `value` required. `environment` defaults to `process.env`. A `schema` or `shape` can provide field types. `missing` defaults to `'error'`; `'empty'` inserts an empty string for a missing placeholder | `HaiResult<unknown>`. Validate the result with the application schema | `core.config.resolve({ name: 'app', value: { port: 3000 }, environment: { HAI_APP_PORT: '4000' } })` |
+| `core.config.toEnv(options)` | Flatten configuration into environment variables | `prefix` and `value` required. Optional `schema` or `shape` describes fields | `Record<string, string>`. Throws on invalid names | `core.config.toEnv({ prefix: 'HAI_APP', value: { port: 3000 } })` |
+| `core.config.mergeEnv(layers)` | Merge sources by precedence | Pass objects in order from lowest to highest priority | `Record<string, string>` | `core.config.mergeEnv([{ HAI_APP_PORT: '3000' }, { HAI_APP_PORT: '4000' }])` |
+| `core.config.parseEnv(text)` | Read literal variables from dotenv text | `text` required | `Record<string, string>`. Throws for duplicate keys or malformed values marked as generated JSON | `core.config.parseEnv('HAI_APP_PORT=3000\n')` |
+| `core.config.stringifyEnv(values, options?)` | Write dotenv text | `values` required. `target` defaults to `'node'`. Choose `'compose'` for a Compose env file | A string. Throws on invalid names | `core.config.stringifyEnv({ HAI_APP_PORT: '3000' })` |
+
+#### Scenario: Configuration in Node and the browser
 
 Node configuration can read and watch YAML and dotenv files. In a browser, embedded assets or server load data carry public settings. File operations return `SERVICE_UNAVAILABLE`, `getOrThrow()` throws, and watchers report the failure immediately. In the browser, `core.config.isWatching()` always returns `false` and `core.config.unwatch()` does nothing.
 
@@ -81,30 +84,15 @@ With `port: 3000` in `config/app.yml`, this logs port 3000 unless `HAI_APP_PORT`
 
 <a id="logging-api"></a>
 
-## Logging
+### Record logs: `core.logger`
 
 `core.logger` starts at `info` with `pretty` output. Set `format: 'json'` for log collection. Node also emits JSON when the optional `pino-pretty` dependency is unavailable. The browser uses the developer console. Messages below the current level are dropped. Named loggers inherit global settings unless configured explicitly. A child binds extra fields. The current request context is included, and sensitive values are masked before output.
 
 A child logger's fields apply to that child and its descendants. Creating one leaves the parent unchanged. The optional second argument, `ctx`, adds fields to a single entry. When fields share a key, later sources win: global fields → fields bound to the logger (from parent to child) → per-call `ctx` → current `core.context`.
 
-```ts
-import { core } from '@h-ai/core'
+#### Interface list
 
-const orders = core.logger.create({ name: 'orders' })
-const request = orders.child({ requestId: 'request-1' })
-
-orders.info('Order created', { attempt: 1 })
-request.warn('Request needs attention', { attempt: 2 })
-core.context.run({ requestId: 'request-2' }, () => {
-  orders.info('Order checked', { attempt: 1 })
-})
-```
-
-The first entry has `attempt: 1` and no request ID. The second has `attempt: 2` and the child's `requestId: 'request-1'`. The third uses the parent again, but `core.context.run()` adds `requestId: 'request-2'`.
-
-Use observers for bounded diagnostics. An observer receives entries after level filtering and redaction. Its exceptions and immediate recursive invocations are isolated. Calling the returned function unsubscribes the observer.
-
-| API | Purpose | Inputs and defaults | Return value | Example |
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `core.logger.trace` | Log the most detailed diagnostic steps | `message, ctx?` | `void` | `core.logger.trace('Callback entered')` |
 | `core.logger.debug` | Log diagnostic information | `message, ctx?` | `void` | `core.logger.debug('Cache miss', { key: 'total' })` |
@@ -119,24 +107,54 @@ Use observers for bounded diagnostics. An observer receives entries after level 
 | `core.logger.getLevel` | Read the current global threshold | None | `LogLevel` | `core.logger.getLevel()` |
 | `core.logger.observe` | Receive records after filtering and redaction | `callback` | `() => void` | `core.logger.observe(record => { recentMessages.push(record.message) })` |
 
+#### Scenario: Record business and diagnostic logs by level
+
+```ts
+import { core } from '@h-ai/core'
+
+const orders = core.logger.create({ name: 'orders' })
+core.logger.setLevel('info')
+core.logger.getLevel() // 'info'
+core.logger.fatal('Example startup failure') // Records a log; does not exit the process.
+const request = orders.child({ requestId: 'request-1' })
+
+orders.info('Order created', { attempt: 1 })
+request.warn('Request needs attention', { attempt: 2 })
+core.context.run({ requestId: 'request-2' }, () => {
+  orders.info('Order checked', { attempt: 1 })
+})
+```
+
+The first entry has `attempt: 1` and no request ID. The second has `attempt: 2` and the child's `requestId: 'request-1'`. The third uses the parent again, but `core.context.run()` adds `requestId: 'request-2'`.
+
+Use observers for bounded diagnostics. An observer receives entries after level filtering and redaction. Its exceptions and immediate recursive invocations are isolated. Calling the returned function unsubscribes the observer.
+
 <a id="context-api"></a>
 
-## Request context
+### Associate one request: `core.context`
 
-Use `core.context.run()` with correlation fields such as `requestId`, `userId`, `scopeId`, and `jobId`. In Node, each request retains its own context across `await`. In a browser the context only lasts through synchronous work. Loggers automatically include the current fields. Obtain user and tenant identifiers from trusted server code. If a collector logs its own diagnostics, run that work with `suppressLogObservers: true` to avoid notifying the observers again.
+Carry trusted request and user IDs across asynchronous calls so logs can be correlated.
 
-| API | Purpose | Inputs and defaults | Result | Example |
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `core.context.run(context, operation)` | Run within a request or task context | Fields and callback. Observers are enabled by default. | Callback result, including a promise | `await core.context.run({ requestId: 'req-1' }, async () => core.context.get().requestId)` |
 | `core.context.get()` | Read the current context | No arguments | Readonly `RequestContext` (empty object without context) | `const { requestId } = core.context.get()` |
 
+#### Scenario: Keep request IDs across asynchronous calls
+
+Use `core.context.run()` with correlation fields such as `requestId`, `userId`, `scopeId`, and `jobId`. In Node, each request retains its own context across `await`. In a browser the context only lasts through synchronous work. Loggers automatically include the current fields. Obtain user and tenant identifiers from trusted server code. If a collector logs its own diagnostics, run that work with `suppressLogObservers: true` to avoid notifying the observers again.
+
 <a id="sanitize-api"></a>
 
-## Redaction
+### Sanitize diagnostics: `core.sanitize`
 
-Use these helpers before retaining diagnostics or exposing messages. The standard matcher masks credential fields. To add a separate business field using a custom matcher, apply the standard redaction first. Structured redaction works on a copy. Class getters and custom `toJSON()` are never executed. Dates become ISO strings, and URLs are masked. Supply known secret values explicitly when you need to redact unlabelled text. A general object copy may still contain cycles.
+Clean sensitive object fields, URLs and text before diagnostics without altering business input.
 
-| API | Purpose | Inputs and defaults | Result | Example |
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `core.sanitize.isSensitiveKey(key, matcher?)` | Match a field name | Key and optional matcher | `boolean` | `core.sanitize.isSensitiveKey('apiKey')` |
 | `core.sanitize.sanitizeSensitiveValue(value, key, options?)` | Redact one value | Value, key (or `null`), optional replacement (default `[REDACTED]`) | Value | `core.sanitize.sanitizeSensitiveValue('example-only', 'password')` |
@@ -145,13 +163,19 @@ Use these helpers before retaining diagnostics or exposing messages. The standar
 | `core.sanitize.sanitizeText(text, secretValues?)` | Mask credential text | Text and known values (default `[]`) | `string` | `core.sanitize.sanitizeText('Bearer example-only')` |
 | `core.sanitize.defaultSensitiveKeyRegex`, `defaultSensitiveReplacement` | Read the built-in matcher and replacement | Read-only constants | `RegExp` / `string` | `const replacement = core.sanitize.defaultSensitiveReplacement` |
 
+#### Scenario: Hide sensitive fields before publishing diagnostics
+
+Use these helpers before retaining diagnostics or exposing messages. The standard matcher masks credential fields. To add a separate business field using a custom matcher, apply the standard redaction first. Structured redaction works on a copy. Class getters and custom `toJSON()` are never executed. Dates become ISO strings, and URLs are masked. Supply known secret values explicitly when you need to redact unlabelled text. A general object copy may still contain cycles.
+
 <a id="error-api"></a>
 
-## Results and errors
+### Results and errors: `core.error`
 
-A business caller checks `result.success` before reading `data` or `error`. Define codes once and translate messages when the failure occurs. Before sending an error over HTTP, strip internal causes with `core.error.toPublic()`. Return the visible error to the caller and correlate server logs using the trace ID. Import `ok` and `err` directly from `@h-ai/core`.
+Define domain errors, build complete diagnostics and safe public responses, and wrap successful data with result constructors.
 
-| API | Purpose | Inputs and defaults | Result | Example |
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `core.error.buildHaiErrorsDef(module, codes)` | Define stable module error codes | Module name and a name-to-code/status mapping | Error definitions | `const errors = core.error.buildHaiErrorsDef('orders', { NOT_FOUND: '300:404' })` |
 | `core.error.buildHaiErrorInst(def, message, cause?, suggestion?)` | Attach a message to a failure | Definition, message, optional cause and suggestion | `HaiError` | `const error = core.error.buildHaiErrorInst(errors.NOT_FOUND, 'Order not found')` |
@@ -159,13 +183,19 @@ A business caller checks `result.success` before reading `data` or `error`. Defi
 | `core.error.formatMessage(error)` | Format the visible message | Error message and optional trace ID | `string` | `core.error.formatMessage(error)` |
 | `ok(data)`, `err(def, message, cause?)` | Construct a business result | Success data, or error definition and message (or a complete error) | `HaiResult` | `ok({ id: 'order-1' })`, `err(errors.NOT_FOUND, 'Order not found')` |
 
+#### Scenario: Build domain failures and safe public messages
+
+A business caller checks `result.success` before reading `data` or `error`. Define codes once and translate messages when the failure occurs. Before sending an error over HTTP, strip internal causes with `core.error.toPublic()`. Return the visible error to the caller and correlate server logs using the trace ID. Import `ok` and `err` directly from `@h-ai/core`.
+
 <a id="i18n-api"></a>
 
-## Messages and locales
+### Messages and locales: `core.i18n`
 
-A message lookup uses its explicit locale first, then the Node request locale, then the global locale. Unsupported locales or missing dictionaries fall back to `zh-CN`. Language aliases `zh`, `en`, and `ja` resolve to the region-specific locales. Missing message keys return the key. Missing placeholder values leave the placeholder in the text. Use a separate dictionary for your application's messages.
+Choose a locale per request and read translated messages; avoid changing global locale for concurrent requests.
 
-| API | Purpose | Inputs and defaults | Result | Example |
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `core.i18n.setGlobalLocale(locale)` | Set the default locale | Locale code | `void` | `core.i18n.setGlobalLocale('ja-JP')` |
 | `core.i18n.getGlobalLocale()` | Read the current locale | None; initial default is `zh-CN` | Locale code | `core.i18n.getGlobalLocale()` |
@@ -174,30 +204,42 @@ A message lookup uses its explicit locale first, then the Node request locale, t
 | `core.i18n.coreM(key, options?)` | Read a built-in message | Key, optional locale and interpolation parameters | `string` | `core.i18n.coreM('core_errorNotFound', { locale: 'en-US' })` |
 | `core.i18n.DEFAULT_LOCALE`, `DEFAULT_LOCALES` | Read supported locales | Read-only constants | Locale and choices | `const choices = core.i18n.DEFAULT_LOCALES` |
 
+#### Scenario: Select message language for a request
+
+A message lookup uses its explicit locale first, then the Node request locale, then the global locale. Unsupported locales or missing dictionaries fall back to `zh-CN`. Language aliases `zh`, `en`, and `ja` resolve to the region-specific locales. Missing message keys return the key. Missing placeholder values leave the placeholder in the text. Use a separate dictionary for your application's messages.
+
 <a id="validation-api"></a>
 
-## Validation messages
+### Field validation messages: `core.zodValidation`
 
-The mapper turns Zod v3/v4 issues into field-level messages. Array indexes appear in paths such as `items.0.email`, and `_` represents the whole form. Custom messages stay intact. The getter maps library message keys to your own dictionary.
+Map Zod issues to localized form messages while retaining field paths.
 
-| API | Purpose | Inputs and defaults | Result | Example |
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `core.zodValidation.createPrefixedZodMessageGetter(prefix, message)` | Adapt a module message prefix | Prefix and message getter | Message getter | `const translate = core.zodValidation.createPrefixedZodMessageGetter('core', message)` |
 | `core.zodValidation.mapZodErrorToFormErrors(error, message)` | Map Zod issues to form fields | Failure value and adapted message getter | `{ field, message }[]` | `core.zodValidation.mapZodErrorToFormErrors(parsed.error, translate)` |
 
+#### Scenario: Map validation issues to form fields
+
+The mapper turns Zod v3/v4 issues into field-level messages. Array indexes appear in paths such as `items.0.email`, and `_` represents the whole form. Custom messages stay intact. The getter maps library message keys to your own dictionary.
+
 <a id="module-api"></a>
 
-## Module startup and shutdown
+### Start and stop modules: `core.module`
 
 `core.module.createRuntime()` returns a controller. Call `start()` when you are ready to initialize the dependencies in order, and call `close()` on shutdown to release them in reverse order. A failed start triggers cleanup. If cleanup fails, a later close or start retries it before releasing dependencies still in use. Concurrent starts share the pending operation. Check the `HaiResult` from both calls. Set `enabled` on a step to decide when it participates.
 
-| API | Purpose | Inputs and defaults | Result | Example |
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `core.module.createRuntime(steps)` | Manage dependency startup and shutdown | Named steps with start and close functions, optional enabled predicate | `ModuleRuntime`, each call returns `Promise<HaiResult<void>>` | `const runtime = core.module.createRuntime([{ name: 'cache', start: () => cache.init({ type: 'memory' }), close: () => cache.close() }])` |
 | `core.module.createNotInitializedKit(codeOrDef, messageFn)` | Return consistent failures before a module is ready | Both arguments are required: the error code or definition, and a function that returns the message. | `error()`, `result()`, `proxy()` | `core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Initialize the module first')` |
 | `core.module.requiresSharedState(environment)` | Check whether a shared backend is required | Environment values. Explicit production E2E runs can opt out. | `boolean` | `core.module.requiresSharedState(process.env)` |
 
-### Return a failure before initialization
+#### Scenario: Return a failure before initialization
 
 Module authors can use this helper to keep the same API available before the backend is ready. For example, before `cache.init()` succeeds, calling `cache.kv.get(key)` returns a not-initialized result without connecting to Redis. Once ready, the cache module exposes the backend's real operations. Applications using an existing module only need to initialize it first and check the result.
 
@@ -283,14 +325,20 @@ The proxy never turns into the real implementation. The `orderLookup.orders` get
 
 <a id="access-api"></a>
 
-## Request access checks in Node
+### Check request access: `core.access` (Node)
 
 Use `core.access` to decide whether the Node server should let a request through based on its path, HTTP method, client IP and the server's current time. The service still handles authentication and authorization.
 
 - **Serv or Kit:** Configure `http.access` in `_serv.yml` or `access` in `_kit.yml`, then pass the settings to `serv.createApp({ http, ... })` or `kit.createHandle({ access, ... })`. The framework prepares the checker at startup and returns HTTP 403 for denied requests. These rules do not go in `_core.yml`.
 - **Other Node HTTP frameworks:** Create the IP resolver and policy checker at startup. For each request, resolve the IP using the actual peer address from the server or a trusted platform. Pass the URL pathname, HTTP method and resolved IP to the checker. Use its decision to choose the HTTP response.
 
-| API | Purpose | Inputs and defaults | Result | Example |
+A request must satisfy `global` and every matching rule. If none match, only `global` applies. Omitting `methods` or passing an empty list matches all methods. A pattern ending in `/**` matches the path itself and its descendants. A denial includes `reason: 'address'`, `'time'` or `'path'`, and a `ruleId` when a path rule denies it.
+
+<a id="client-ip-resolver"></a>
+
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `core.access.normalizeClientIp(value?)` | Normalize an IPv4 or IPv6 address | Optional address string | `string` / `undefined` | `core.access.normalizeClientIp('::ffff:198.51.100.23')` |
 | `core.access.createClientIpResolver(trustedProxies?)` | Create a function that selects the IP for each access check | Trusted proxy configuration (default `auto`) | `resolveClientIp(request, remoteAddress?)` → IP or `undefined` | `const resolveClientIp = core.access.createClientIpResolver(['192.0.2.10'])` |
@@ -298,11 +346,7 @@ Use `core.access` to decide whether the Node server should let a request through
 | `core.access.createRequestCheck(input?)` | Compile a request policy | Rules, file reference, or `false`. Omission disables the policy. | `check(pathname, method, ip?)` → `AccessDecision` | `core.access.createRequestCheck({ file: './config/security/request-access.yml' })` |
 | `core.access.loadPolicy(input?, baseDirectory?)` | Read and validate policy content | Policy input and base directory (default working directory) | `RequestAccessPolicy` / `false` | `core.access.loadPolicy({ file: './config/security/request-access.yml' })` |
 
-A request must satisfy `global` and every matching rule. If none match, only `global` applies. Omitting `methods` or passing an empty list matches all methods. A pattern ending in `/**` matches the path itself and its descendants. A denial includes `reason: 'address'`, `'time'` or `'path'`, and a `ruleId` when a path rule denies it.
-
-<a id="client-ip-resolver"></a>
-
-### Which IP should the access check use?
+#### Scenario: Which IP should the access check use?
 
 **`core.access.createClientIpResolver()` selects the IP address for the access policy.** Suppose partner `198.51.100.23` reaches Node through reverse proxy `192.0.2.10`. Only the proxy connects directly to Node, so the socket shows `192.0.2.10`. Checking the socket address alone would check the proxy. The resolver uses the list of proxies you trust to decide whether to use a reported upstream address.
 
@@ -349,7 +393,7 @@ A resolved IP does not grant access by itself. Pass it to `checkIp(ip)` or `chec
 
 <a id="partner-sync-example"></a>
 
-### Scenario: Let a partner sync inventory during business hours
+#### Scenario: Let a partner sync inventory during business hours
 
 The service exposes `POST /api/partners/inventory/sync` behind a reverse proxy. Sync requests must come from the partner's `198.51.100.0/24` network and arrive Monday through Friday, from 09:00 inclusive to 18:00 exclusive, Shanghai time. The rule leaves `GET /health` available for monitoring.
 
@@ -407,11 +451,13 @@ Invalid policies throw when the checker is created. A referenced file is read on
 
 <a id="id-api"></a>
 
-## Identifiers
+### Generate and validate IDs: `core.id`
 
-IDs identify records and correlate operations. Use a credential generator for secrets. UUID generation throws when secure randomness is unavailable.
+Generate business, request and trace IDs, and check external formats. IDs are not secret keys.
 
-| API | Purpose | Inputs and defaults | Return value | Example |
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `core.id.generate` | Generate a random ID | `length = 21` | `string` | `core.id.generate(8)` |
 | `core.id.short` | Generate a short ID with 10 characters | None | `string` | `core.id.short()` |
@@ -422,13 +468,19 @@ IDs identify records and correlate operations. Use a credential generator for se
 | `core.id.isValidUUID` | Check the UUID v4 format | `value` | `boolean` | `core.id.isValidUUID('550e8400-e29b-41d4-a716-446655440000')` |
 | `core.id.isValidNanoId` | Check the character set and length | `value, length = 21` | `boolean` | `core.id.isValidNanoId('abc', 3)` |
 
+#### Scenario: Generate business and request IDs
+
+IDs identify records and correlate operations. Use a credential generator for secrets. UUID generation throws when secure randomness is unavailable.
+
 <a id="type-api"></a>
 
-## Type guards
+### Check value types: `core.typeUtils`
 
-These predicates narrow TypeScript types. Validate business data with a schema.
+Check boundary values and narrow TypeScript types; validate business input with a schema as well.
 
-| API | Purpose | Inputs and defaults | Return value | Example |
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `core.typeUtils.isDefined` | Check that a value is neither null nor undefined | `value` | `boolean` | `core.typeUtils.isDefined(null)` |
 | `core.typeUtils.isObject` | Check for an object excluding null and arrays | `value` | `boolean` | `core.typeUtils.isObject({ name: 'orders' })` |
@@ -439,13 +491,19 @@ These predicates narrow TypeScript types. Validate business data with a schema.
 | `core.typeUtils.isBoolean` | Check for a boolean | `value` | `boolean` | `core.typeUtils.isBoolean(false)` |
 | `core.typeUtils.isArray` | Check for an array | `value` | `boolean` | `core.typeUtils.isArray([1, 2])` |
 
+#### Scenario: Check inputs and narrow types
+
+These predicates narrow TypeScript types. Validate business data with a schema.
+
 <a id="object-api"></a>
 
-## Objects
+### Transform objects: `core.object`
 
-`deepClone` delegates to `structuredClone`. It can copy dates, maps, sets and cycles. Functions or other uncloneable inputs throw. `deepMerge` recurses into plain objects only. Later arrays, dates, collections and instances replace earlier values.
+Copy and merge configuration objects, select fields and convert entries.
 
-| API | Purpose | Inputs and defaults | Return value | Example |
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `core.object.deepClone` | Copy a cloneable value; functions and other uncloneable values throw | `value` | `T` | `core.object.deepClone({ mode: 'local' })` |
 | `core.object.deepMerge` | Merge plain objects recursively, with later values winning | `...objects` | `T` | `core.object.deepMerge({ port: 3000 }, { port: 4000 })` |
@@ -456,13 +514,19 @@ These predicates narrow TypeScript types. Validate business data with a schema.
 | `core.object.entries` | Return key/value pairs | `object` | `[keyof T, T[keyof T]][]` | `core.object.entries({ a: 1 })` |
 | `core.object.fromEntries` | Build an object from key/value pairs | `entries` | `Record<K, V>` | `core.object.fromEntries([['mode', 'local']])` |
 
+#### Scenario: Merge settings and select fields
+
+`deepClone` delegates to `structuredClone`. It can copy dates, maps, sets and cycles. Functions or other uncloneable inputs throw. `deepMerge` recurses into plain objects only. Later arrays, dates, collections and instances replace earlier values.
+
 <a id="string-api"></a>
 
-## Strings
+### Transform strings: `core.string`
 
-Node uses native timing-safe comparison for equal-length UTF-16 byte sequences. The browser cannot guarantee constant-time execution. Keep credential checks on the server.
+Normalize names, whitespace and display lengths; observe platform limits for secure comparison.
 
-| API | Purpose | Inputs and defaults | Return value | Example |
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `core.string.capitalize` | Uppercase the first character | `text` | `string` | `core.string.capitalize('hello')` |
 | `core.string.kebabCase` | Convert to hyphen-separated case | `text` | `string` | `core.string.kebabCase('helloWorld')` |
@@ -477,13 +541,19 @@ Node uses native timing-safe comparison for equal-length UTF-16 byte sequences. 
 | `core.string.padEnd` | Pad at the end to reach the target length | `text, length, pad = ' '` | `string` | `core.string.padEnd('5', 3, '0')` |
 | `core.string.constantTimeEqual` | Compare equal-length strings; different lengths immediately return false | `left, right` | `boolean` | `core.string.constantTimeEqual('same', 'same')` |
 
+#### Scenario: Normalize names and display text
+
+Node uses native timing-safe comparison for equal-length UTF-16 byte sequences. The browser cannot guarantee constant-time execution. Keep credential checks on the server.
+
 <a id="array-api"></a>
 
-## Arrays
+### Transform arrays: `core.array`
 
-These helpers preserve the input array. Chunk sizes must be positive safe integers. Invalid sizes return an empty array. Group keys such as `constructor` are supported.
+Deduplicate, group and chunk items, then inspect endpoints or compare membership.
 
-| API | Purpose | Inputs and defaults | Return value | Example |
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `core.array.unique` | Deduplicate in order of first appearance | `items` | `T[]` | `core.array.unique([1, 1, 2])` |
 | `core.array.groupBy` | Group by the key returned by the selector | `items, keySelector` | `Record<K, T[]>` | `core.array.groupBy(['a', 'bb'], value => value.length)` |
@@ -496,13 +566,19 @@ These helpers preserve the input array. Chunk sizes must be positive safe intege
 | `core.array.intersection` | Keep items in the first array that also appear in the second | `first, second` | `T[]` | `core.array.intersection([1, 2], [2, 3])` |
 | `core.array.difference` | Keep items in the first array that are absent from the second | `first, second` | `T[]` | `core.array.difference([1, 2], [2, 3])` |
 
+#### Scenario: Group, chunk and compare collections
+
+These helpers preserve the input array. Chunk sizes must be positive safe integers. Invalid sizes return an empty array. Group keys such as `constructor` are supported.
+
 <a id="async-api"></a>
 
-## Asynchronous operations
+### Coordinate asynchronous work: `core.async`
 
-A timeout rejects the waiting promise. The caller owns cancellation of the underlying work. Retry handles thrown errors and rejected promises. Inspect a failed `HaiResult` separately. Parallel work returns results in input order. The default concurrency is five. A rejected task does not stop every worker immediately.
+Delay, time out, retry or limit concurrency as needed, and debounce or throttle input events.
 
-| API | Purpose | Inputs and defaults | Return value | Example |
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `core.async.delay` | Wait approximately the supplied milliseconds | `ms` | `Promise<void>` | `await core.async.delay(10)` |
 | `core.async.withTimeout` | Bound how long the caller waits; rejects on timeout | `promise, ms` | `Promise<T>` | `await core.async.withTimeout(Promise.resolve('ready'), 1000)` |
@@ -512,13 +588,19 @@ A timeout rejects the waiting promise. The caller owns cancellation of the under
 | `core.async.debounce` | Run the latest call after a quiet period | `callback, ms` | `wrapper` | `core.async.debounce(callback, 100)` |
 | `core.async.throttle` | Run the first call immediately and skip later calls during the interval | `callback, ms` | `wrapper` | `core.async.throttle(callback, 100)` |
 
+#### Scenario: Apply timeouts, retries and concurrency limits
+
+A timeout rejects the waiting promise. The caller owns cancellation of the underlying work. Retry handles thrown errors and rejected promises. Inspect a failed `HaiResult` separately. Parallel work returns results in input order. The default concurrency is five. A rejected task does not stop every worker immediately.
+
 <a id="time-api"></a>
 
-## Dates and times
+### Work with dates and time: `core.time`
 
-Calendar operations use the runtime time zone. Daylight-saving changes can affect elapsed time. Pass ISO timestamps with offsets between systems.
+Parse and validate dates, format them and calculate local calendar boundaries. Include time zones in exchanged values.
 
-| API | Purpose | Inputs and defaults | Return value | Example |
+#### Interface list
+
+| API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `core.time.formatDate` | Fill date placeholders in the local time zone | `date, format = 'YYYY-MM-DD'` | `string` | `core.time.formatDate(new Date(2026, 0, 1))` |
 | `core.time.timeAgo` | Return localized relative time | `date` | `string` | `core.time.timeAgo(new Date(Date.now() - 120_000))` |
@@ -530,6 +612,10 @@ Calendar operations use the runtime time zone. Daylight-saving changes can affec
 | `core.time.addHours` | Shift by hours on the local clock | `date, hours` | `Date` | `core.time.addHours(date, 2)` |
 | `core.time.startOfDay` | Return local midnight at the start of the day | `date` | `Date` | `core.time.startOfDay(date)` |
 | `core.time.endOfDay` | Return the last millisecond of the local day | `date` | `Date` | `core.time.endOfDay(date)` |
+
+#### Scenario: Parse, format and calculate date boundaries
+
+Calendar operations use the runtime time zone. Daylight-saving changes can affect elapsed time. Pass ISO timestamps with offsets between systems.
 
 ## Error handling
 

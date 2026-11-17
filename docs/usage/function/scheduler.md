@@ -58,69 +58,58 @@ finally {
 }
 ```
 
+<a id="api-reference"></a>
+
 ## 功能说明
+
+下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。`value` 先检查 `HaiResult.success`，失败保留原错误，成功返回 data；只用于读取结果。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+
+function value<T>(result: HaiResult<T>): T {
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
+  return result.data
+}
+```
+
+<a id="task-definitions"></a>
+
+### 准备与维护任务定义：`scheduler`
+
+连接 RelDB 后登记任务定义；定义变化和当前进程正在使用的快照分开处理。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `scheduler.init` | 使用已连接的 RelDB 准备任务表和执行记录。随后另行调用 `scheduler.start()` | `config?`（省略时使用默认配置） | `Promise<HaiResult<void>>` | `await scheduler.init()` |
+| `scheduler.close` | 停止调度并释放自身资源；已发生的外部副作用无法撤销 | 已发生的外部副作用无法撤销；无 | `Promise<void>` | `await scheduler.close()` |
+| `scheduler.register` | 登记任务定义 | task | `Promise<HaiResult<void>>` | `await scheduler.register({ id: 'daily', name: 'Daily', cron: '0 2 * * *', timezone: 'UTC' })` |
+| `scheduler.unregister` | 移除任务定义 | taskId | `Promise<HaiResult<void>>` | `await scheduler.unregister('daily')` |
+| `scheduler.updateTask` | 修改任务定义 | taskId, updates | `Promise<HaiResult<void>>` | `await scheduler.updateTask('daily', { enabled: false })` |
+| `scheduler.refreshTasks` | 读取当前进程任务快照 | 无参数 | `Promise<HaiResult<void>>` | `await scheduler.refreshTasks()` |
+
+#### 场景：准备与维护任务定义
+
+```ts
+value(await scheduler.register({ id: 'demo-daily', name: 'Demo daily', cron: '0 2 * * *', timezone: 'UTC' }))
+value(await scheduler.updateTask('demo-daily', { enabled: false }))
+value(await scheduler.refreshTasks())
+value(await scheduler.unregister('demo-daily'))
+// Each successful result has no business data; only the stored definition changes.
+```
+
+输入是在 UTC 每天 02:00 的定义，未调用 start 不会自动开始调度；启停和单次触发见下一节。init/close 见最小接入，先检查 init 的 HaiResult，close 返回 Promise<void>。
 
 - 按 cron 定时执行，也可从业务代码手动触发。
 - 支持 HTTP、受信任的 JavaScript 和应用 Hook，提供重试与取消。
 - 共享数据库持久化任务、执行状态与可续期租约，支持未知结果隔离。
 
-<a id="api-reference"></a>
-
-### 功能输入输出
-
 初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
-#### 初始化与关闭
-
-| API | 用途 | 输入 | 输出 | 示例 |
-| --- | --- | --- | --- | --- |
-| `scheduler.init` | 使用已连接的 RelDB 准备任务表和执行记录。随后另行调用 `scheduler.start()` | `config?`（省略时使用默认配置） | `Promise<HaiResult<void>>` | `await scheduler.init()` |
-| `scheduler.close` | 停止调度并释放自身资源；已发生的外部副作用无法撤销 | 无 | `Promise<void>` | `await scheduler.close()` |
-
-#### scheduler · 管理任务定义
-
-把完整定义交给 `scheduler.register()`，按 ID 使用 `scheduler.updateTask()` 修改或用 `scheduler.unregister()` 删除。`scheduler.refreshTasks()` 无需参数，会重新读取定义。`scheduler.tasks` 显示本进程上一次成功读取的任务列表。
-
-| 入口                     | 输入参数        | 成功结果 | 调用示例                                                                                       |
-| ------------------------ | --------------- | -------- | ---------------------------------------------------------------------------------------------- |
-| `scheduler.register`     | task            | `void`   | `await scheduler.register({ id: 'daily', name: 'Daily', cron: '0 2 * * *', timezone: 'UTC' })` |
-| `scheduler.unregister`   | taskId          | `void`   | `await scheduler.unregister('daily')`                                                          |
-| `scheduler.updateTask`   | taskId, updates | `void`   | `await scheduler.updateTask('daily', { enabled: false })`                                      |
-| `scheduler.refreshTasks` | 无参数          | `void`   | `await scheduler.refreshTasks()`                                                               |
-
-#### scheduler · 启动、触发与日志
-
-start/stop 无参数返回同步 HaiResult；trigger 输入任务 ID/参数返回一次执行日志；getLogs 输入过滤/分页返回日志页。stop 不代表在途副作用已撤销。
-
-| 入口                | 输入参数        | 成功结果                            | 调用示例                                             |
-| ------------------- | --------------- | ----------------------------------- | ---------------------------------------------------- |
-| `scheduler.start`   | 无参数          | `void`                              | `scheduler.start()`                                  |
-| `scheduler.stop`    | 无参数          | `void`                              | `scheduler.stop()`                                   |
-| `scheduler.trigger` | taskId, options | `TaskExecutionLog`                  | `await scheduler.trigger('daily')`                   |
-| `scheduler.getLogs` | options         | `PaginatedResult<TaskExecutionLog>` | `await scheduler.getLogs({ pagination: { page: 1, pageSize: 20 } })` |
-
-#### scheduler · 执行器与事件回调
-
-使用 `scheduler.setHooks()` 设置执行回调，使用 `scheduler.clearHooks()` 清除。回调收到取消信号后应停止工作。同一次任务在重试时可能调用多次，请将外部操作按任务标识去重。
-
-| 入口                   | 输入参数 | 成功结果 | 调用示例                        |
-| ---------------------- | -------- | -------- | ------------------------------- |
-| `scheduler.setHooks`   | hooks    | `void`   | `scheduler.setHooks(taskHooks)` |
-| `scheduler.clearHooks` | 无参数   | `void`   | `scheduler.clearHooks()`        |
-
-#### scheduler.execution
-
-执行记录保存在共享数据库。用 `scheduler.execution.get(occurrenceId)` 按每次计划运行的 ID 查询。记录缺失时返回 `null`。可分页查询结果不明和日志待补写的记录，分别调用 `scheduler.execution.resolveUnknown()` 或 `scheduler.execution.repairLog()` 处理。
-
-| 入口                                  | 输入参数                 | 成功结果                          | 调用示例                                                                                           |
-| ------------------------------------- | ------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `scheduler.execution.get`             | occurrenceId             | `SchedulerExecutionEntry \| null` | `await scheduler.execution.get(occurrenceId)`                                                      |
-| `scheduler.execution.listUnknown`     | options                  | `SchedulerExecutionEntry[]`       | `await scheduler.execution.listUnknown({ limit: 20, offset: 0 })`                                  |
-| `scheduler.execution.listLogFailures` | options                  | `SchedulerExecutionEntry[]`       | `await scheduler.execution.listLogFailures({ limit: 20, offset: 0 })`                              |
-| `scheduler.execution.repairLog`       | occurrenceId             | `void`                            | `await scheduler.execution.repairLog(occurrenceId)`                                                |
-| `scheduler.execution.resolveUnknown`  | occurrenceId, resolution | `void`                            | `await scheduler.execution.resolveUnknown(occurrenceId, { status: 'success', expectedUpdatedAt })` |
-
-### 统一任务模型
+#### 统一任务模型
 
 ```ts
 interface TaskDefinition {
@@ -165,74 +154,7 @@ interface JsTaskConfig {
 
 > ⚠️ **安全警示**：`kind: 'js'` 仅适用于受信任的服务端代码。当前实现基于 Node.js `vm` 做便捷执行，**不是安全沙箱**；禁止直接接收用户、租户或后台任意输入的 JS 字符串。可配置任务优先使用 `kind: 'api'` 或 `hooks.onTaskExecute`。
 
-### 任务生命周期回调
-
-这些可选回调由 Scheduler 调用。应用用 `scheduler.init({ hooks })` 或 `scheduler.setHooks(hooks)` 注册；省略某一项就不会调用它。
-
-| 回调 | 什么时候调用 | 输入 | 返回 | 注册举例 |
-| --- | --- | --- | --- | --- |
-| `scheduler.hooks.onTaskStart` | 开始一次任务尝试 | `SchedulerTaskStartEvent` | `void`，可异步 | `scheduler.setHooks({ onTaskStart })` |
-| `scheduler.hooks.onTaskExecute` | 没有内置处理器的任务需要应用执行时 | `SchedulerTaskExecuteEvent`，含上下文和取消信号 | 任务输出，可异步 | `scheduler.setHooks({ onTaskExecute })` |
-| `scheduler.hooks.onTaskInterrupted` | 任务执行被中断时 | `SchedulerTaskInterruptedEvent` | `void`，可异步 | `scheduler.setHooks({ onTaskInterrupted })` |
-| `scheduler.hooks.onTaskFinish` | 一次执行结束时 | `SchedulerTaskFinishEvent` | `void`，可异步 | `scheduler.setHooks({ onTaskFinish })` |
-
-```ts
-await scheduler.init({
-  enableDb: true,
-  hooks: {
-    onTaskStart(event) {
-      void event
-    },
-    async onTaskExecute(event) {
-      return { via: 'hook', source: event.context.trigger.source }
-    },
-    onTaskInterrupted(event) {
-      void event
-    },
-    onTaskFinish(event) {
-      void event
-    },
-  },
-})
-```
-
-### 执行日志
-
-查询日志时可按触发来源过滤：
-
-```ts
-const logs = await scheduler.getLogs({
-  taskId: 'cleanup',
-  triggerType: 'manual',
-  triggerSource: 'admin-console',
-  startedAfter: Date.now() - 24 * 60 * 60 * 1000,
-  startedBefore: Date.now(),
-  pagination: { page: 1, pageSize: 20 },
-})
-```
-
-执行日志支持自动清理策略（初始化时配置）：
-
-- `maxLogs`：最多保留 N 条日志
-- `retentionDays`：最多保留最近 N 天日志
-
-### API 概览
-
-- `init(config?)`
-- `register(task)`
-- `unregister(taskId)`
-- `updateTask(taskId, updates)`
-- `refreshTasks()`
-- `start()` / `stop()`
-- `trigger(taskId, { source?, idempotencyKey? })`
-- `getLogs(options?)`
-- `execution.listLogFailures(options?)` / `execution.repairLog(occurrenceId)`
-- `execution.get(occurrenceId)` / `execution.listUnknown(options?)` / `execution.resolveUnknown(occurrenceId, input)`
-- `setHooks(hooks)` / `clearHooks()`
-- `tasks` / `hooks` / `config` / `isInitialized` / `isRunning`
-- `close()`
-
-### 读取本进程的任务定义快照
+#### 读取本进程的任务定义快照
 
 ```ts
 import { scheduler } from '@h-ai/scheduler'
@@ -258,7 +180,66 @@ tasks.forEach((task, id) => { // 输入回调，接收定义和 ID，返回 void
 
 修改任务请调用 `scheduler.updateTask` 等方法，查询运行结果请用 `scheduler.getLogs` 或 `scheduler.execution`。
 
-### 运行行为与边界
+#### 定义一致性与持久化准备
+
+任务定义的刷新、注册、更新和删除在同一进程内按接收顺序协调，包含写操作所需的刷新与提交。合法并发注册不会仅因快照交错而失败；真实数据库故障仍返回失败。close 先停止入口和 runner，取消只读等待和尚未开始写入的操作，再等待已开始的持久写入；迟到快照不发布，避免关闭后旧操作重新填充任务表。执行回调不占用这条队列；跨节点仍依靠共享数据库、版本与租约，不把进程内协调当分布式锁。
+
+先初始化 RelDB，再调用 `scheduler.init()` 创建和校验任务、执行及日志表。结构不符时返回初始化失败。执行账本与观测日志各有用途，应分别管理。
+
+<a id="execution"></a>
+
+### 启动调度与查看执行日志：`scheduler`
+
+start 开始按时间领取任务，trigger 主动执行指定任务；stop 停止后续调度，不撤销外部副作用。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `scheduler.start` | 启动调度轮询 | 无参数 | `HaiResult<void>` | `scheduler.start()` |
+| `scheduler.stop` | 停止接纳新的调度 | 无参数 | `HaiResult<void>` | `scheduler.stop()` |
+| `scheduler.trigger` | 手动触发任务 | taskId, options | `TaskExecutionLog` | `await scheduler.trigger('daily')` |
+| `scheduler.getLogs` | 分页查询执行日志 | options | `PaginatedResult<TaskExecutionLog>` | `await scheduler.getLogs({ pagination: { page: 1, pageSize: 20 } })` |
+
+#### 场景：启动调度与查看执行日志
+
+初始化并登记任务后运行；start/stop 都返回同步 HaiResult<void>，只控制定时轮询。trigger 仍需检查返回执行记录的 status，输出日志按本次来源筛选。
+
+```ts
+async function runAndRead(taskId: string) {
+  value(scheduler.start())
+  try {
+    const run = value(await scheduler.trigger(taskId, { source: 'docs-console' }))
+    const logs = value(await scheduler.getLogs({ taskId, triggerSource: 'docs-console', pagination: { page: 1, pageSize: 20 } }))
+    return { status: run.status, logs: logs.items }
+  }
+  finally {
+    value(scheduler.stop())
+  }
+}
+```
+
+#### 执行日志
+
+查询日志时可按触发来源过滤：
+
+```ts
+const logs = await scheduler.getLogs({
+  taskId: 'cleanup',
+  triggerType: 'manual',
+  triggerSource: 'admin-console',
+  startedAfter: Date.now() - 24 * 60 * 60 * 1000,
+  startedBefore: Date.now(),
+  pagination: { page: 1, pageSize: 20 },
+})
+```
+
+执行日志支持自动清理策略（初始化时配置）：
+
+- `maxLogs`：最多保留 N 条日志
+- `retentionDays`：最多保留最近 N 天日志
+
+#### 运行行为与边界
 
 所有调度节点应先连接同一 PostgreSQL 或 MySQL。SQLite 文件适合正确共享同一文件的本机进程。数据库保存任务定义、实际执行结果及谁可以在期限内执行它。无需另外初始化 Cache，`enableDb` 只能为 `true`。
 
@@ -274,34 +255,6 @@ tasks.forEach((task, id) => { // 输入回调，接收定义和 ID，返回 void
 
 已开始的任务领取超时后，只有声明可安全重试且未超过次数上限，其他节点才能用原 `occurrenceId` 接手。重试次数包括第一次执行和超时接手，`retry.maxAttempts` 默认为 1，范围为 1 到 100。其余情况标记为 `unknown`，暂停该任务的后续执行，等人工核对旧节点或远端请求是否已产生结果。
 
-`scheduler.execution.get(occurrenceId)` 查询权威状态；`listUnknown({ limit, offset })` 分页获取未知结果，limit 为 1～100，offset 为 0～1000000。可信人工先核实外部效果、确认旧 runner 已终止，再按 `expectedUpdatedAt` CAS 调用 `resolveUnknown(id, { status: 'success' | 'discarded', expectedUpdatedAt })` 释放占位；不能直接把 unknown 重排。`log.occurrenceId` 可作查询回执；`getLogs` 仅为尝试观测日志，日志保留策略不删除 journal/幂等历史。
-
-每次执行尝试都有固定的日志 UUID。业务是否成功和日志是否写完分别记录。日志的 `persistence.status` 有以下取值。
-
-- `persisted` 表示结果和日志都已写入。
-- `pending` 表示业务结果已确认，日志需要补写。
-- `unconfirmed` 表示没有可确认的业务终态，不能按成功补写。
-
-节点仅在领取有效期内才可提交最终结果，提交后调度器再生成日志。写日志失败时，已经提交的业务结果保持有效，也不会因为日志故障再次执行任务。
-
-补写会缩小 pending 列表；批量补写应反复读取 offset=0，避免一边补写一边增加 offset 跳过记录。
-
-可信服务端用 `execution.listLogFailures({ limit, offset })` 监控 pending（范围与 listUnknown 相同），用 `execution.repairLog(occurrenceId)` 从共享 journal 幂等补写；可跨节点、重启及并发调用。写入已提交但回执丢失时通过固定主键和完整内容核对去重。补写返回 `LOG_PERSIST_FAILED`（032）时继续保留 pending，并输出安全告警；全部数据库不可用且终态未提交时仍按 unknown 核对外部效果，不能假定存在可恢复结果。补写与日志保留均不调用业务 Hook。保留策略失败仅告警，不撤销已保存日志。`onTaskFinish` 是本地业务完成通知，其 unconfirmed 状态不是持久化确认；以 trigger 返回值及 execution.get 的 logPersistence 为准。
-
-领取前竞争/跳过的 interrupted 仅为观测日志，没有可补写的终态；其写入未确认时返回 unconfirmed。JSON 大载荷保存完整结果和全部重试记录，避免 MySQL 的 255 字符截断；执行账本保持独立。关闭会等待在途补写，先关闭 scheduler 再关闭数据库。
-
-```ts
-const result = await scheduler.trigger('cleanup', { idempotencyKey: 'cleanup-2026-10-23' })
-if (!result.success)
-  return result
-if (result.data.persistence.status === 'pending' && result.data.occurrenceId) {
-  const repaired = await scheduler.execution.repairLog(result.data.occurrenceId)
-  if (!repaired.success)
-    return repaired
-}
-// 不用日志补写失败重新 trigger 业务；定期按页扫描 listLogFailures。
-```
-
 `await scheduler.close()` 停止接收并取消 HTTP、JS Worker 与重试等待，再等待执行链退出后清理状态。重新初始化等待关闭完成。所有生命周期事件提供 `signal`；Hook 必须监听取消并停止自己的外部副作用（框架无法强制终止同一线程中的业务代码），不要在 Hook 中阻塞事件循环。取消后的旧执行不再重试、不自动删除任务，也不会调用新实例的 Hook。关闭期间保持数据库可用，待 scheduler 关闭后再关闭依赖。
 
 JS 字符串在每次调用的独立 Worker 中执行，`timeout` 默认 30000 毫秒（含启动）。到期后终止并等待线程退出，再记录失败或重试；同步死循环也不会阻塞主事件循环。上下文及返回值必须支持结构化克隆。Worker 中的 `vm` 仍不是安全沙箱，代码必须来自受信任的服务端来源。
@@ -314,15 +267,84 @@ API 任务的 `timeout`（默认 30000 毫秒）覆盖请求和完整响应体�
 
 共享租约的首次领取、开始、续租、完成、过期扫描和隔离，均在同一条数据库 SQL 内计算或核验存储端时间。PostgreSQL 使用 clock_timestamp、MySQL 使用 SYSDATE(3)、SQLite 使用存储端 now；先查时间再写入不能替代最终 deadline 条件。cron 也读取 DB 时间选定分钟 occurrence 并匹配表达式，省略 timezone 时固定 UTC；显式 IANA 时区仅改变 cron 的墙上时间解释，节点 TZ 不改变身份或匹配。节点 Date.now 仅用于耗时诊断，不授权 owner；两个节点相差数小时也不会提前接管或延长过期凭据。行锁等待结束后仍须通过期限条件，失租结果不能投影成功日志。数据库服务自身的时间须由运维保持可信；未知外部副作用仍须核对，不能自动重放。
 
-### 可选集成
+<a id="hooks"></a>
+
+### 接入业务执行与回调：`scheduler.setHooks`
+
+把业务处理及开始、中断、完成回调一次性登记；回调输入来自调度器的本次执行上下文。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `scheduler.setHooks` | 设置执行器与生命周期回调 | hooks | `HaiResult<void>` | `scheduler.setHooks(taskHooks)` |
+| `scheduler.clearHooks` | 清除当前回调 | 无参数 | `HaiResult<void>` | `scheduler.clearHooks()` |
+
+#### 场景：接入业务执行与回调
+
+四个 onTask* 是传给 setHooks 的回调字段，由调度器调用；不是让应用调用 scheduler.hooks.onTask*。输入任务不带 handler，执行回调返回任务 ID，输出包含 start/finish 事件与成功记录。
+
+```ts
+const events: Array<{ stage: string, taskId: string }> = []
+value(scheduler.setHooks({
+  onTaskStart: event => { events.push({ stage: 'start', taskId: event.task.id }) },
+  onTaskExecute: event => ({ taskId: event.context.taskId }),
+  onTaskInterrupted: event => { events.push({ stage: 'interrupted', taskId: event.task.id }) },
+  onTaskFinish: event => { events.push({ stage: 'finish', taskId: event.task.id }) },
+}))
+value(await scheduler.register({ id: 'demo-hook', name: 'Hook demo', cron: '0 2 * * *' }))
+const run = value(await scheduler.trigger('demo-hook'))
+// run.status === 'success'; events contains start and finish for demo-hook.
+value(await scheduler.unregister('demo-hook'))
+value(scheduler.clearHooks()) // undefined; future tasks no longer use these callbacks
+```
+
+#### 任务生命周期回调
+
+这些可选回调由 Scheduler 调用。应用用 `scheduler.init({ hooks })` 或 `scheduler.setHooks(hooks)` 注册；省略某一项就不会调用它。
+
+
+
+#### 可选集成
 
 调度任务触发 Reach 通知时，调度锁或任务完成不等于外部消息只投递一次。按 [Reach 队列语义](../../../packages/reach/README.md) 使用持久 queueId；HTTP 接收端须原子持久去重，SMTP/短信等在途未知结果须人工核对，不能由调度重试直接重发。
 
-### 定义一致性与持久化准备
+<a id="recovery"></a>
 
-任务定义的刷新、注册、更新和删除在同一进程内按接收顺序协调，包含写操作所需的刷新与提交。合法并发注册不会仅因快照交错而失败；真实数据库故障仍返回失败。close 先停止入口和 runner，取消只读等待和尚未开始写入的操作，再等待已开始的持久写入；迟到快照不发布，避免关闭后旧操作重新填充任务表。执行回调不占用这条队列；跨节点仍依靠共享数据库、版本与租约，不把进程内协调当分布式锁。
+### 核对未知结果与修复日志：`scheduler.execution`
 
-先初始化 RelDB，再调用 `scheduler.init()` 创建和校验任务、执行及日志表。结构不符时返回初始化失败。执行账本与观测日志各有用途，应分别管理。
+执行记录不确定时先核对外部结果；仅日志写失败时修复日志，不能重新执行业务冒充修复。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `scheduler.execution.get` | 按编号读取执行记录 | occurrenceId | `SchedulerExecutionEntry \| null` | `await scheduler.execution.get(occurrenceId)` |
+| `scheduler.execution.listUnknown` | 分页查询结果未知的执行 | options | `SchedulerExecutionEntry[]` | `await scheduler.execution.listUnknown({ limit: 20, offset: 0 })` |
+| `scheduler.execution.listLogFailures` | 查询日志写入失败的执行 | options | `SchedulerExecutionEntry[]` | `await scheduler.execution.listLogFailures({ limit: 20, offset: 0 })` |
+| `scheduler.execution.repairLog` | 修复已核对的执行日志 | occurrenceId | `void` | `await scheduler.execution.repairLog(occurrenceId)` |
+| `scheduler.execution.resolveUnknown` | 人工确认执行结果 | occurrenceId, resolution | `void` | `await scheduler.execution.resolveUnknown(occurrenceId, { status: 'success', expectedUpdatedAt })` |
+
+#### 场景：核对未知结果与修复日志
+
+补写与人工裁定分开进行：扫描 pending 日志不执行业务；裁定函数输入必须来自外部核验，带最新 updatedAt 才能提交。
+
+```ts
+async function repairPendingLogs() {
+  const pending = value(await scheduler.execution.listLogFailures({ limit: 20, offset: 0 }))
+  for (const entry of pending)
+    value(await scheduler.execution.repairLog(entry.occurrenceId))
+  return pending.length // at most 20; the next scan starts at offset 0 again
+}
+async function recordVerifiedOutcome(occurrenceId: string, status: 'success' | 'discarded') {
+  const unknown = value(await scheduler.execution.listUnknown({ limit: 20, offset: 0 }))
+  const current = value(await scheduler.execution.get(occurrenceId))
+  if (current?.status !== 'unknown')
+    throw new Error('Expected an unknown execution')
+  value(await scheduler.execution.resolveUnknown(occurrenceId, { status, expectedUpdatedAt: current.updatedAt }))
+  return { scanned: unknown.length, entry: value(await scheduler.execution.get(occurrenceId)) }
+}
+```
 
 ## 错误处理
 

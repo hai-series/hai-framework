@@ -49,57 +49,376 @@ async function loginAndLoadProfile(input: IamAuthLoginInput) {
 }
 ```
 
-## 功能说明
-
 <a id="api-reference"></a>
 
-### 用途、输入与输出
+## 功能说明
+
+下面的场景代码从本页最小接入中导入模块；除连接/关闭场景外，均在初始化成功后、关闭前运行。`value` 先检查 `HaiResult.success`，失败保留原错误，成功返回 data；只用于读取结果。各场景使用独立测试数据，不能把相邻片段当成无需清理的生产脚本。
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+
+function value<T>(result: HaiResult<T>): T {
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
+  return result.data
+}
+```
+
+<a id="client-lifecycle"></a>
+
+### 准备与隔离客户端：`apiClient`
+
+浏览器可使用默认客户端；SSR 按请求创建隔离实例，避免身份混用。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `apiClient.init` | 准备默认客户端 | config: baseUrl、认证及传输选项 | `Promise<HaiResult<void>>` | `await apiClient.init({ baseUrl: '/api/v1', auth: {} })` |
+| `apiClient.close` | 释放默认客户端资源 | 无参数 | `Promise<void>` | `await apiClient.close()` |
+| `apiClient.create` | 创建独立客户端 | contract: 应用共享契约 | `ApiClient<TContract>` | `apiClient.create(contract)` |
+| `apiClient.config` | 读取当前脱敏客户端配置 | 只读属性，无参数 | `ApiClientConfig \| null` | `apiClient.config` |
+| `apiClient.isInitialized` | 检查默认客户端是否就绪 | 只读属性，无参数 | `boolean` | `apiClient.isInitialized` |
+
+#### 场景：准备与隔离客户端
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+apiClient.isInitialized // default client readiness
+const settings = apiClient.config // redacted config or null
+const client = apiClient.create(apiContract.create({ iam: apiContract.iam }))
+value(await client.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} }))
+try {
+  const policy = value(await client.iam.auth.publicConfig()) // IamPublicConfig from this server
+}
+finally {
+  await client.close() // undefined; local resources released
+}
+```
+
+输入地址必须替换成已部署测试服务；create 不发送请求，init 后才能调用。close 仅释放客户端，不等于服务端注销。
 
 开始调用前先检查 `apiClient.init()` 成功。表中的变量由应用提供并校验，例如订单 ID、登录参数或回调函数。收到 `HaiResult` 时先检查 `success`。凭据保存和清除直接返回 `Promise<void>`，失败会抛出异常。登录界面应等写入完成再显示登录成功。
 
-| 入口                                    | 输入                            | 输出                       | 用途与失败边界                                     | 示例                                                         |
-| --------------------------------------- | ------------------------------- | -------------------------- | -------------------------------------------------- | ------------------------------------------------------------ |
-| `apiClient.init`                        | config: baseUrl、认证及传输选项 | `Promise<HaiResult<void>>` | 准备当前客户端，失败停止调用                       | `await apiClient.init({ baseUrl: '/api/v1', auth: {} })`     |
-| `apiClient.close`                       | 无参数                          | `Promise<void>`            | 作废在途刷新并释放本实例；不等于服务端退出         | `await apiClient.close()`                                    |
-| `apiClient.create`                      | contract: 应用共享契约          | `ApiClient<TContract>`     | 创建隔离实例，SSR 每个请求独立创建                 | `apiClient.create(contract)`                                 |
-| `apiClient.auth.setTokens`              | TokenPair: 可信认证响应         | `Promise<void>`            | 串行保存并废弃旧刷新；存储故障 reject              | `await apiClient.auth.setTokens(tokens)`                     |
-| `apiClient.auth.clear`                  | 无参数                          | `Promise<void>`            | 清理本地凭据；失败 reject，服务端仍须 logout       | `await apiClient.auth.clear()`                               |
-| `apiClient.auth.onTokenRefreshed`       | callback(TokenPair)             | `() => void`               | 保存成功后观察刷新，返回取消函数；不输出 Token     | `apiClient.auth.onTokenRefreshed(() => refreshProfile())`    |
-| `apiClient.tokenStorage.memory`         | 无参数                          | `TokenStorage`             | Node/SSR/测试的独立内存适配器                      | `apiClient.tokenStorage.memory()`                            |
-| `apiClient.tokenStorage.httpOnlyCookie` | 无参数                          | `TokenStorage`             | 浏览器 access 在内存，refresh 由服务端 Cookie 管理 | `apiClient.tokenStorage.httpOnlyCookie()`                    |
-| `apiClient.createAuthActions`           | client: 含标准 IAM 契约         | `Auth actions object`      | 连接认证表单；先 init 并启用 auth                  | `apiClient.createAuthActions(apiClient)`                     |
-| `apiClient.observeRequests`             | observer(ApiRequestRecord)      | `() => void`               | 观察脱敏逻辑结果，返回取消函数                     | `apiClient.observeRequests(record => reportOutcome(record))` |
+#### 调用入口
 
-#### 认证表单动作
+页面或原生应用的启动代码调用 `apiClient.init(config)`，告诉客户端往哪里发请求、如何验证身份，以及是否加密业务数据。多个客户端需要不同地址或认证设置时，用 `apiClient.create(contract)` 创建独立实例，再分别初始化。
 
-`const actions = apiClient.createAuthActions(apiClient)`
+`baseUrl` 填运行该客户端的浏览器或设备实际能访问的服务地址。例如 Web 页面和 API 同域时可以用 `/api/v1`，移动端可以用 `https://api.example.com/api/v1`。API 地址可以写入前端配置，服务端私钥和数据库密码应留在服务端。
 
-| 入口                           | 输入                                            | 输出                                          | 用途与失败边界                                           | 示例                                                                 |
-| ------------------------------ | ----------------------------------------------- | --------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------- |
-| `actions.publicConfig`         | —                                               | `Promise<HaiResult<T>>` → IamPublicConfig     | 读取公开登录/注册策略                                    | `await actions.publicConfig()`                                       |
-| `actions.createCaptcha`        | { operation }                                   | `Promise<HaiResult<T>>` → IamCaptchaChallenge | 获取所选操作的挑战                                       | `await actions.createCaptcha({ operation: 'login' })`                |
-| `actions.login`                | IamAuthLoginInput                               | `Promise<HaiResult<T>>` → 认证结果与 Token    | 映射 password/ldap/email/sms 并等待存储成功              | `await actions.login({ identifier, password })`                      |
-| `actions.register`             | IamRegisterInput                                | `Promise<HaiResult<T>>` → 注册认证结果        | 按服务端注册策略创建身份并保存凭据                       | `await actions.register({ username, password })`                     |
-| `actions.sendOtp`              | identifier, { captcha? }?                       | `Promise<HaiResult<T>>` → { expiresAt }       | 发送邮箱/手机验证码，不等于完成登录                      | `await actions.sendOtp(identifier)`                                  |
-| `actions.requestPasswordReset` | identifier, { captcha? }?                       | `Promise<HaiResult<T>>` → void                | 申请重置，按服务端策略隐藏账户存在性                     | `await actions.requestPasswordReset(identifier)`                     |
-| `actions.confirmPasswordReset` | token, newPassword                              | `Promise<HaiResult<T>>` → void                | 消费专用重置 Token 修改密码                              | `await actions.confirmPasswordReset(resetToken, newPassword)`        |
-| `actions.renewPassword`        | { identifier, password, newPassword, captcha? } | `Promise<HaiResult<T>>` → void                | 完成密码到期续密流程                                     | `await actions.renewPassword({ identifier, password, newPassword })` |
-| `actions.reauthenticate`       | password, operation                             | `Promise<HaiResult<T>>` → 用途票据            | 为本次敏感操作取得短期用途凭据                           | `await actions.reauthenticate(password, 'users:delete')`             |
-| `actions.bindPageExit`         | { enabled? }                                    | `() => void`                                  | 安装页面退出监听并返回清理函数；尽力撤销而非可靠离线通知 | `actions.bindPageExit({ enabled: endOnPageHide })`                   |
+#### 调用示例
 
-#### 安全存储实例
+```ts
+import { apiClient } from '@h-ai/api-client'
 
-`const storage = apiClient.tokenStorage.memory()`
+const initialized = await apiClient.init({
+  baseUrl: 'https://api.example.com/api/v1',
+  auth: { terminalType: 'web' },
+  timeout: 15000,
+})
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+```
 
-| 入口                      | 输入  | 输出                      | 用途与失败边界                                     | 示例                                          |
-| ------------------------- | ----- | ------------------------- | -------------------------------------------------- | --------------------------------------------- |
-| `storage.getAccessToken`  | —     | `Promise<string \| null>` | 读取 access；null 仅为不存在                       | `await storage.getAccessToken()`              |
-| `storage.setAccessToken`  | token | `Promise<void>`           | 保存 access，已绑定客户端改用 auth.setTokens       | `await storage.setAccessToken(accessToken)`   |
-| `storage.getRefreshToken` | —     | `Promise<string \| null>` | Cookie 模式是内部哨兵，不读取 httpOnly Cookie 原文 | `await storage.getRefreshToken()`             |
-| `storage.setRefreshToken` | token | `Promise<void>`           | 内存适配器保存；Cookie 适配器不改服务端 Cookie     | `await storage.setRefreshToken(refreshToken)` |
-| `storage.clear`           | —     | `Promise<void>`           | 清本适配器凭据，失败 reject；不撤销服务端会话      | `await storage.clear()`                       |
+<a id="call-options"></a>
+
+#### 参数清单
+
+| 参数                        | 默认值/必填                               | 说明                                                                                                                                                                |
+| ----------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `baseUrl`                     | 必填                                      | 完整 API 基础地址，通常含 `/api/v1`。刷新、密钥交换及业务请求都以此地址为基础                                                                                       |
+| `timeout`                     | `30000`                                   | 请求到响应头及 JSON 正文读取完毕的期限，单位毫秒。读取流式正文时使用调用方的取消信号                                                                                |
+| `clientName`                  | `hai-api-client`                          | 写入 `x-request-client`，便于服务端关联诊断                                                                                                                         |
+| `headers`                     | 无附加标头                                | 静态对象或返回请求头的同步/异步函数                                                                                                                                 |
+| `fetch`                       | 全局 `fetch`                              | 接入原生网络库或测试替身时，传入符合 Fetch 接口的函数，仍须正确处理取消和 Cookie                                                                                    |
+| `auth`                        | 不启用自动认证                            | 传入 `{}` 即启用默认行为。登录后客户端自动为请求带上访问令牌，过期后尝试刷新                                                                                        |
+| `auth.storage`                | `apiClient.tokenStorage.httpOnlyCookie()` | 浏览器把访问令牌放内存，浏览器自动收发由服务端设置的刷新 Cookie。服务端渲染和测试可为每个客户端单独调用 `apiClient.tokenStorage.memory()`，原生端可使用平台安全存储 |
+| `auth.refreshPath`            | `/auth/refresh`                           | 相对于 `baseUrl` 的服务端刷新路径                                                                                                                                   |
+| `auth.refreshTimeoutMs`       | `10000`                                   | 刷新请求超时毫秒数，超时保留已有凭据供后续重试                                                                                                                      |
+| `auth.terminalType`           | `web`                                     | 会话终端类别，也可用 `app`、`desktop`、`api`。需与 IAM 允许的类别一致                                                                                               |
+| `auth.recoverSession`         | 可省略                                    | 刷新明确失效后尝试恢复同一用户会话。返回 `true` 时自动重试原请求一次                                                                                                |
+| `auth.onTokenRefreshed`       | 可省略                                    | 刷新成功时调用此函数。应用可用它更新页面上的登录状态                                                                                                                |
+| `auth.onRefreshFailed`        | 可省略                                    | 刷新明确失败时调用此函数。应用可用它提示重新登录                                                                                                                    |
+| `transport`                   | 不启用加密                                | 传入对象启用端到端应用层传输加密                                                                                                                                    |
+| `transport.crypto`            | 启用时必填                                | 已初始化的 `@h-ai/crypto` 运行实例                                                                                                                                  |
+| `transport.keyExchangePath`   | `/_hai/key-exchange`                      | 相对于 `baseUrl` 的密钥协商路径。拼接后的完整地址须对应服务端已开启的协商接口                                                                                       |
+| `transport.maxPlaintextBytes` | 跟随服务端                                | 可选客户端明文字节上限，指定时取客户端和服务端较小值                                                                                                                |
+
+#### 使用与核对
+
+通过 `apiClient.config` 检查客户端实际使用的设置。它会遮盖密钥等敏感值。验证登录后的请求是否带有身份、会话过期后能否刷新、退出后是否无法继续使用原会话。原生应用还需在真机上检查安全存储。[地址、期限和恢复](api-client.md#client-integration)
+
+<a id="client-integration"></a>
+
+#### API客户端地址、期限和恢复
+
+入口是 `apiClient.init/create` 参数，没有自动加载的 `_api-client.yml`。
+
+完整参数见 [API Client 配置清单](../function/api-client.md#call-options)。客户端停止等待后，已发送请求可能已在服务端产生结果。遇到超时先按业务 ID 查询，再决定是否重试；原地恢复只恢复同一用户的会话。
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+
+const started = await apiClient.init({
+  baseUrl: 'https://api.example.invalid/api/v1',
+  timeout: 15000,
+  auth: {},
+  clientName: 'orders-web',
+})
+if (!started.success) throw new Error(started.error.message)
+```
+
+示例显式15秒是业务选择。按真实流程验证请求、401单次恢复、二次认证取消、退出与失败；跨身份请求不能复用旧刷新结果。非 2xx 合法 `HaiResult`保留业务码和`traceId`，5xx仍由实际HTTP状态执行安全隐藏。提示通过`notifyError` / `ToastContainer`，默认不展示编号。
+
+Kit 的 `kit.response.validationError(errors)` 与 `fromError` 使用同一字段白名单，响应 `error.cause` 只含本地化的 `field/message`；rejectedValue、SQL 和其他诊断字段不公开。
+
+<a id="credentials"></a>
+
+### 保存与更新凭据：`apiClient.auth`、`tokenStorage`
+
+由客户端统一更新凭据并处理刷新；独立内存适配器用于 SSR/测试，浏览器 refresh 沿 httpOnly Cookie 管理。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `apiClient.auth.setTokens` | 保存当前凭据 | TokenPair: 可信认证响应 | `Promise<void>` | `await apiClient.auth.setTokens(tokens)` |
+| `apiClient.auth.clear` | 清除当前凭据 | 无参数 | `Promise<void>` | `await apiClient.auth.clear()` |
+| `apiClient.auth.onTokenRefreshed` | 订阅凭据轮换 | callback(TokenPair) | `() => void` | `apiClient.auth.onTokenRefreshed(() => refreshProfile())` |
+| `apiClient.tokenStorage.memory` | 创建进程内凭据存储 | 无参数 | `TokenStorage` | `apiClient.tokenStorage.memory()` |
+| `apiClient.tokenStorage.httpOnlyCookie` | 配合服务端 Cookie 管理刷新凭据 | 无参数 | `TokenStorage` | `apiClient.tokenStorage.httpOnlyCookie()` |
+| `storage.getAccessToken` | 读取访问令牌 | — | `Promise<string \| null>` | `await storage.getAccessToken()` |
+| `storage.setAccessToken` | 保存访问令牌 | token | `Promise<void>` | `await storage.setAccessToken(accessToken)` |
+| `storage.getRefreshToken` | 读取刷新令牌 | — | `Promise<string \| null>` | `await storage.getRefreshToken()` |
+| `storage.setRefreshToken` | 保存刷新令牌 | token | `Promise<void>` | `await storage.setRefreshToken(refreshToken)` |
+| `storage.clear` | 清除全部凭据 | — | `Promise<void>` | `await storage.clear()` |
+
+#### 场景：保存与更新凭据
+
+输入参数来自可信登录响应，读写操作失败拒绝 Promise；finally 移除订阅并清理。clear 只清本地凭据，服务端会话由退出接口撤销。
+
+```ts
+async function useIssuedTokens(tokens: Parameters<typeof apiClient.auth.setTokens>[0]) {
+  const storage = apiClient.tokenStorage.memory()
+  await storage.setAccessToken(tokens.accessToken)
+  if (tokens.refreshToken)
+    await storage.setRefreshToken(tokens.refreshToken)
+  const stored = { access: await storage.getAccessToken(), refresh: await storage.getRefreshToken() }
+  await storage.clear()
+  const afterClear = await storage.getAccessToken() // null
+  const browserStorage = apiClient.tokenStorage.httpOnlyCookie() // refresh cookie is not readable
+  let refreshCount = 0
+  const stop = apiClient.auth.onTokenRefreshed(() => { refreshCount += 1 })
+  try {
+    await apiClient.auth.setTokens(tokens)
+    return { stored, afterClear, refreshCount }
+  }
+  finally {
+    stop()
+    await apiClient.auth.clear()
+  }
+}
+```
 
 <a id="detailed-workflow"></a>
+
+#### 凭据更新与关闭
+
+`auth.clear()` 和 `auth.setTokens()` 会立即取消并作废当前客户端的旧刷新请求。迟到的成功或 401 响应不会恢复已退出会话、覆盖新账号或触发旧刷新回调；存储写入串行提交，方法完成后不会再被之前已开始的异步写入覆盖。退出和切换账号须通过这些方法更新凭据，不直接修改 storage。httpOnly Cookie 和服务端会话仍由服务端退出接口撤销。
+
+已初始化后再次调用 `init()` 会返回 `CONFIG_ERROR`，不会覆盖现有 client；如需切换 `baseUrl` / `fetch` / `transport`，请先 `await apiClient.close()` 再重新初始化。
+
+<a id="auth-actions"></a>
+
+### 驱动认证表单：`apiClient.createAuthActions`
+
+把服务端公开策略交给 UI，再按用户选择调用登录、注册、验证码、续密或再次验证。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `apiClient.createAuthActions` | 把认证接口组合为表单动作 | client: 含标准 IAM 契约 | `Auth actions object` | `apiClient.createAuthActions(apiClient)` |
+| `actions.publicConfig` | 取得当前公开认证策略 | — | `Promise<HaiResult<T>>` → IamPublicConfig | `await actions.publicConfig()` |
+| `actions.createCaptcha` | 取得用途挑战 | { operation } | `Promise<HaiResult<T>>` → IamCaptchaChallenge | `await actions.createCaptcha({ operation: 'login' })` |
+| `actions.login` | 提交登录表单 | IamAuthLoginInput | `Promise<HaiResult<T>>` → 认证结果与 Token | `await actions.login({ identifier, password })` |
+| `actions.register` | 提交注册表单 | IamRegisterInput | `Promise<HaiResult<T>>` → 注册认证结果 | `await actions.register({ username, password })` |
+| `actions.sendOtp` | 请求发送验证码 | identifier, { captcha? }? | `Promise<HaiResult<T>>` → { expiresAt } | `await actions.sendOtp(identifier)` |
+| `actions.requestPasswordReset` | 请求发送重置通知 | identifier, { captcha? }? | `Promise<HaiResult<T>>` → void | `await actions.requestPasswordReset(identifier)` |
+| `actions.confirmPasswordReset` | 提交重置凭据与新密码 | token, newPassword | `Promise<HaiResult<T>>` → void | `await actions.confirmPasswordReset(resetToken, newPassword)` |
+| `actions.renewPassword` | 提交到期或首次改密 | { identifier, password, newPassword, captcha? } | `Promise<HaiResult<T>>` → void | `await actions.renewPassword({ identifier, password, newPassword })` |
+| `actions.reauthenticate` | 为敏感操作再次验证密码 | password, operation | `Promise<HaiResult<T>>` → 用途票据 | `await actions.reauthenticate(password, 'users:delete')` |
+| `actions.bindPageExit` | 绑定页面离开时的会话结束策略 | { enabled? } | `() => void` | `actions.bindPageExit({ enabled: endOnPageHide })` |
+
+#### 场景：驱动认证表单
+
+从页面取得表单字段，通过 actions 等待凭据保存，再把结果交给 UI。下面返回的处理函数分别对应用户选择的流程，不要连续调用它们来测试真实账号。验证码开启时由 AuthPanel 求解并传递 captcha。
+
+```ts
+const actions = apiClient.createAuthActions(apiClient)
+const config = value(await actions.publicConfig()) // IamPublicConfig | null
+if (!config)
+  throw new Error('Public authentication settings are unavailable')
+const unbind = actions.bindPageExit({ enabled: config.session.endOnPageHide })
+async function login(input: Parameters<typeof actions.login>[0]) {
+  return value(await actions.login(input)) // authenticated user and tokens, or throws preserved failure
+}
+async function register(input: Parameters<typeof actions.register>[0]) {
+  return value(await actions.register(input)) // registration/authentication result
+}
+async function sendCode(identifier: string) {
+  return value(await actions.sendOtp(identifier)) // expiresAt
+}
+async function requestReset(identifier: string) {
+  value(await actions.requestPasswordReset(identifier)) // undefined
+}
+async function resetPassword(token: string, newPassword: string) {
+  value(await actions.confirmPasswordReset(token, newPassword)) // undefined
+}
+async function renew(input: Parameters<typeof actions.renewPassword>[0]) {
+  value(await actions.renewPassword(input)) // undefined
+}
+async function confirmSensitive(password: string) {
+  return value(await actions.reauthenticate(password, 'users:delete')) // one-operation credential
+}
+const challenge = await actions.createCaptcha({ operation: 'login' }) // check success; solve through AuthPanel
+unbind() // call when this page is destroyed
+```
+
+#### 配置驱动认证页面
+
+密码登录只提交 `identifier` 和 `password`；`AuthPanel` 将 `LoginForm` 的 `username` 映射为 `identifier`。会话有效期由服务端 `session.maxAge` / `session.refreshTokenMaxAge` 配置决定，登录表单不提供按次登录的持久会话选项。
+
+服务端可在认证配置中提供用户协议和隐私政策的 Markdown 正文或 URL。如果正文和 URL 同时存在，登录页面的弹窗优先显示经过安全处理的 Markdown。
+
+`apiClient.createAuthActions(client)` 为含标准 iam contract 的客户端提供 publicConfig、login、register、sendOtp、requestPasswordReset、confirmPasswordReset。login 输入使用 identifier/password/method/code，method 为 password、ldap、email、sms。成功认证自动调用既有安全 TokenStorage；应用只需把动作传给 AuthPanel，并在 onauthenticated 中刷新自己的用户状态或导航。
+
+[IAM 配置清单](../configuration/iam.md)
+
+#### 可选交互挑战
+
+createAuthActions(client) 提供 createCaptcha({operation})，所有登录映射与续期/注册会保留 captcha；sendOtp(identifier,{captcha})、requestPasswordReset(identifier,{captcha}) 接收可选第二参数。框架 AuthPanel 自动求解，自定义表单复用 ALTCHA 协议，证明不进入安全 TokenStorage。
+
+何时要求验证、验证失败后如何处理，见 [IAM 配置](../configuration/iam.md)和 [IAM 功能说明](./iam.md)。
+
+#### 敏感请求再认证
+
+用户为某个敏感操作再次验证密码后，用本次调用的 `options.context.reauthentication` 传入 `actions.reauthenticate()` 返回的短期凭据。客户端会将它写到该请求的 `X-Hai-Reauthentication` 头。服务端会核对当前权限、请求涉及的资源范围及票据用途，并使票据只能成功使用一次。不要把此票据加入公共请求头、持久存储或日志。
+
+#### 原地恢复过期会话
+
+配置 `auth.recoverSession` 回调可在服务端明确拒绝会话时原地重新登录并保留页面输入。使用 `@h-ai/ui` 的 `createSessionRecovery` / `SessionRecoveryDialog`：根布局绑定公开配置与原用户，回调设为 `recovery.recover`，弹窗使用标准认证 actions，销毁时 `cancel()`。登录的 `expectedUserId` 由 IAM 限定原主体；常规验证码、锁定、改密和登录限制照常执行。只对明确未认证拒绝的原请求续接一次；取消、5xx、超时和结果不明的网络写入不重放。敏感操作证明绑定旧会话时可能需要再次确认，不复用到新会话。未传回调保持原处理方式；配置回调后由恢复流程处理，不再立即调用 onRefreshFailed 导航离开。终端分组通过 auth.terminalType（web/app/desktop/api，默认 web）传入；它不是硬件身份认证。
+
+#### 页面离开会话策略
+
+`session.endOnPageHide` 默认关闭。开启后，在浏览器页面加载时调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })`，卸载时执行它返回的函数，移除监听器。标准 admin、H5 和 fullstack 模板已接好此步骤。这里的 `actions` 来自 `apiClient.createAuthActions(...)` 或 SvelteKit 的 `kit.client.createAuthActions(...)`。配置从登录页使用的公开认证接口读取。
+
+浏览器触发 `pagehide` 时会尝试调用 `POST /auth/session/close`。这包括刷新或整页导航，但页面进入往返缓存（BFCache）时会跳过。请求沿用 CSRF 防护和已启用的传输加密，并使用 `keepalive` 争取在页面关闭后完成。该请求不会刷新会话，响应也不会清除 Cookie 或本地凭据，以免较早的请求清掉新的登录状态。
+
+浏览器可能根本没有发出请求。服务端仍需用 `idleTimeout` 或 `absoluteTimeout` 限制会话寿命。用户主动退出时，应正常调用应用的 logout 接口，让服务端撤销凭据，并清除客户端保存的登录状态。
+
+敏感调用通过本次 `reauthorize: () => sensitiveActions.authorize(operation)` 重新确认用途：Kit 放 apiFetch 第三参数，typed client 放 options.context。会话刷新/恢复或明确的再认证拒绝后仅续发一次；取消不写入，未提供回调不重放旧证明。
+
+<a id="iam-requests"></a>
+
+### 调用认证与用户管理 API：`apiClient.iam`
+
+使用标准 HTTP 契约管理账号、用户、角色和权限；每次操作的权限与资源范围由服务端检查。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `apiClient.iam.auth.publicConfig` | 读取公开认证配置 | 无必填参数 | 当前登录注册、密码、协议等公开策略 | `await apiClient.iam.auth.publicConfig()` |
+| `apiClient.iam.auth.createCaptcha` | 生成挑战 | `{ operation: 'login' }` | 登录挑战与凭证 | `await apiClient.iam.auth.createCaptcha({ operation: 'login' })` |
+| `apiClient.iam.auth.login` | 密码登录 | `{ identifier, password }` | 已认证用户与 Token | `await apiClient.iam.auth.login({ identifier, password })` |
+| `apiClient.iam.auth.loginWithLdap` | LDAP 登录 | `{ username, password }` | 已认证用户与 Token | `await apiClient.iam.auth.loginWithLdap({ username, password })` |
+| `apiClient.iam.auth.sendOtp` | 发送一次性验证码 | `{ identifier }` | 验证码失效时间 | `await apiClient.iam.auth.sendOtp({ identifier })` |
+| `apiClient.iam.auth.loginWithOtp` | 验证码登录 | `{ identifier, code }` | 已认证用户与 Token | `await apiClient.iam.auth.loginWithOtp({ identifier, code })` |
+| `apiClient.iam.auth.register` | 注册 | `{ username, password }` | 新用户与 Token | `await apiClient.iam.auth.register({ username, password })` |
+| `apiClient.iam.auth.currentUser` | 读取当前账号 | 无必填参数 | 当前用户以及角色和权限 | `await apiClient.iam.auth.currentUser()` |
+| `apiClient.iam.auth.updateCurrentUser` | 更新本人资料 | `{ displayName: 'Mina' }` | 更新后的用户资料 | `await apiClient.iam.auth.updateCurrentUser({ displayName: 'Mina' })` |
+| `apiClient.iam.auth.changePassword` | 已登录用户修改密码 | `{ oldPassword, newPassword }` | 无业务数据 | `await apiClient.iam.auth.changePassword({ oldPassword, newPassword })` |
+| `apiClient.iam.auth.renewPassword` | 密码到期后续密 | `{ identifier, password, newPassword }` | 无业务数据 | `await apiClient.iam.auth.renewPassword({ identifier, password, newPassword })` |
+| `apiClient.iam.auth.requestPasswordReset` | 申请密码重置 | `{ identifier }` | 无业务数据 | `await apiClient.iam.auth.requestPasswordReset({ identifier })` |
+| `apiClient.iam.auth.confirmPasswordReset` | 使用重置凭证 | `{ token, newPassword }` | 无业务数据 | `await apiClient.iam.auth.confirmPasswordReset({ token, newPassword })` |
+| `apiClient.iam.auth.reauthenticate` | 申请敏感操作票据 | `{ password, operation: 'users:delete' }` | 票据和到期时间 | `await apiClient.iam.auth.reauthenticate({ password, operation: 'users:delete' })` |
+| `apiClient.iam.auth.refresh` | 刷新凭据 | `{ refreshToken }` | 新 Token；通常由客户端刷新流程调用 | `await apiClient.iam.auth.refresh({ refreshToken })` |
+| `apiClient.iam.auth.logout` | 主动退出 | 无必填参数 | 无业务数据 | `await apiClient.iam.auth.logout()` |
+| `apiClient.iam.auth.closeSession` | 请求结束当前会话 | 无必填参数 | 无业务数据 | `await apiClient.iam.auth.closeSession()` |
+| `apiClient.iam.users.list` | 分页查询用户 | `{ page: 1, pageSize: 20 }` | 用户分页 | `await apiClient.iam.users.list({ page: 1, pageSize: 20 })` |
+| `apiClient.iam.users.get` | 读取用户 | `{ id: userId }` | 用户资料，或 `null` | `await apiClient.iam.users.get({ id: userId })` |
+| `apiClient.iam.users.create` | 创建用户 | `{ username, password }` | 新用户资料 | `await apiClient.iam.users.create({ username, password })` |
+| `apiClient.iam.users.invite` | 发出邀请 | `{ username, email }` | 已创建的待激活用户资料 | `await apiClient.iam.users.invite({ username, email })` |
+| `apiClient.iam.users.update` | 修改用户 | `{ id: userId, displayName: 'Mina' }` | 更新后的用户资料 | `await apiClient.iam.users.update({ id: userId, displayName: 'Mina' })` |
+| `apiClient.iam.users.delete` | 删除用户 | `{ id: userId }` | 无业务数据 | `await apiClient.iam.users.delete({ id: userId })` |
+| `apiClient.iam.users.resetPassword` | 管理员重置密码 | `{ id: userId, newPassword }` | 无业务数据 | `await apiClient.iam.users.resetPassword({ id: userId, newPassword })` |
+| `apiClient.iam.roles.list` | 查询角色 | 无必填参数 | 角色分页 | `await apiClient.iam.roles.list({})` |
+| `apiClient.iam.roles.get` | 读取角色 | `{ id: roleId }` | 角色记录，或 `null` | `await apiClient.iam.roles.get({ id: roleId })` |
+| `apiClient.iam.roles.create` | 创建角色 | `{ code: 'reader', name: 'Reader' }` | 新角色 | `await apiClient.iam.roles.create({ code: 'reader', name: 'Reader' })` |
+| `apiClient.iam.roles.update` | 更新角色 | `{ id: roleId, name: 'Report reader' }` | 更新后的角色 | `await apiClient.iam.roles.update({ id: roleId, name: 'Report reader' })` |
+| `apiClient.iam.roles.delete` | 删除角色 | `{ id: roleId }` | 无业务数据 | `await apiClient.iam.roles.delete({ id: roleId })` |
+| `apiClient.iam.permissions.list` | 分页查询权限 | `{ page: 1, type: 'api' }` | 权限分页 | `await apiClient.iam.permissions.list({ page: 1, type: 'api' })` |
+| `apiClient.iam.permissions.get` | 读取权限 | `{ id: permissionId }` | 权限记录，或 `null` | `await apiClient.iam.permissions.get({ id: permissionId })` |
+| `apiClient.iam.permissions.create` | 创建权限 | `{ code: 'reports:read', name: 'Read reports' }` | 新权限 | `await apiClient.iam.permissions.create({ code: 'reports:read', name: 'Read reports' })` |
+| `apiClient.iam.permissions.setSensitiveOperations` | 配置敏感操作 | `{ id: permissionId, sensitiveOperations: ['users:delete'] }` | 无业务数据 | `await apiClient.iam.permissions.setSensitiveOperations({ id: permissionId, sensitiveOperations: ['users:delete'] })` |
+| `apiClient.iam.permissions.delete` | 删除权限 | `{ id: permissionId }` | 无业务数据 | `await apiClient.iam.permissions.delete({ id: permissionId })` |
+
+#### 场景：调用认证与用户管理 API
+
+```ts
+const current = await apiClient.iam.auth.currentUser()
+if (!current.success)
+  throw new Error(current.error.message)
+const users = value(await apiClient.iam.users.list({ page: 1, pageSize: 20 }))
+// users.items is the authorized user page, not every user in the database
+const roles = value(await apiClient.iam.roles.list({})) // configured roles visible to this caller
+const permissions = value(await apiClient.iam.permissions.list({})) // permitted permission records
+```
+
+接口清单逐条给出具体输入及成功数据；用户、角色和权限 ID 来自前一步成功响应。列表内容依真实服务与权限而定；管理接口不是浏览器登录用户自动拥有的能力。
+
+#### 标准 HTTP 业务调用
+
+这里列出默认客户端里的业务方法。服务端必须为相同的契约安装处理函数，否则接口会返回找不到路由。示例中的 ID、凭据和对象键由当前业务或表单提供。调用后先检查 `success`，再读取表里的成功数据。需要取消请求时，可在第二个参数中传入 `{ signal }`。
+
+#### IAM 认证、资料与会话
+
+认证表单通常使用 `apiClient.createAuthActions` 负责保存 Token、续密和重新认证。直接请求业务端点时，负责凭据生命周期的应用需要根据认证结果更新 `apiClient.auth`。
+
+<a id="business-requests"></a>
+
+### 调用文件与 AI API：`apiClient.storage`、`apiClient.ai`
+
+签名 URL 用于对象存储直传；聊天、记忆和会话从相应服务取得，不把节点内部 API 暴露为浏览器能力。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `apiClient.storage.files.list` | 列出当前用户有权查看的对象 | 必须传对象，可填 `prefix`、`maxKeys`、`continuationToken`、`delimiter`；`maxKeys` 范围 1–1000 | 文件列表和继续分页所需的信息 | `await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 })` |
+| `apiClient.storage.files.getMetadata` | 读对象元数据 | `{ key }` | 键、大小、类型等 | `await apiClient.storage.files.getMetadata({ key })` |
+| `apiClient.storage.files.delete` | 删除单个对象 | `{ key }` | 无业务数据 | `await apiClient.storage.files.delete({ key })` |
+| `apiClient.storage.files.deleteMany` | 批量删除对象 | `{ keys: [key] }` | 已确认删除的键与空失败列表 | `await apiClient.storage.files.deleteMany({ keys: [key] })` |
+| `apiClient.storage.presignedUrls.createUpload` | 签发上传地址 | `{ key, contentType: 'application/pdf' }` | 临时上传 URL 和对象键 | `await apiClient.storage.presignedUrls.createUpload({ key, contentType: 'application/pdf' })` |
+| `apiClient.storage.presignedUrls.createDownload` | 签发下载地址 | `{ key, expiresIn: 60 }` | 临时下载 URL 和对象键 | `await apiClient.storage.presignedUrls.createDownload({ key, expiresIn: 60 })` |
+| `apiClient.ai.chats.createCompletion` | 发送不附带会话历史的消息，获取非流式补全结果 | `messages` 必填；可选模型和生成设置 | 补全文本及响应元信息 | `await apiClient.ai.chats.createCompletion({ messages: [{ role: 'user', content: 'Hello' }] })` |
+| `apiClient.ai.chats.sendMessage` | 发送会话消息 | `{ message, sessionId }` | 回复与当前会话信息 | `await apiClient.ai.chats.sendMessage({ message, sessionId })` |
+| `apiClient.ai.chats.listHistory` | 查询历史 | `{ sessionId, limit: 20 }` | 聊天记录列表 | `await apiClient.ai.chats.listHistory({ sessionId, limit: 20 })` |
+| `apiClient.ai.memories.list` | 查询记忆 | `{ objectId, limit: 20 }` | 记忆列表 | `await apiClient.ai.memories.list({ objectId, limit: 20 })` |
+| `apiClient.ai.memories.recall` | 按内容检索记忆 | `{ query: 'preferred language', topK: 3 }` | 召回的记忆项 | `await apiClient.ai.memories.recall({ query: 'preferred language', topK: 3 })` |
+| `apiClient.ai.sessions.list` | 查询对象的会话 | `{ objectId }` | 会话列表 | `await apiClient.ai.sessions.list({ objectId })` |
+
+#### 场景：调用文件与 AI API
+
+```ts
+const files = value(await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 }))
+// files contains metadata and pagination for this authorized prefix
+const sessions = value(await apiClient.ai.sessions.list({})) // visible AI sessions
+```
+
+逐接口示例使用 reports/ 对象和成功响应中的会话 ID；删除会产生实际效果，签名结果包含 URL、对象键和期限。AI 文本由模型返回，示例不承诺固定答案。
 
 #### 默认业务领域
 
@@ -126,7 +445,41 @@ if (!chat.success)
 
 `apiClient.config` 是脱敏运行快照（未初始化为 null），不能用于恢复真实密钥；`apiClient.isInitialized` 为就绪 boolean。它们是只读属性，不发起网络请求。需要设置 `fetch` 或刷新回调时，把函数传给 `apiClient.init(config)`，见[配置清单](../function/api-client.md#call-options)。
 
-### 启用传输加密
+#### 文件、聊天、记忆与会话
+
+按需通过 `apiClient.create(apiContract.create({ payment: apiContract.payment, feedback: apiContract.feedback }))` 得到包含支付或反馈契约的实例。各调用的路径与权限见[HTTP 契约](./api-contract.md)。
+
+<a id="transport-observation"></a>
+
+### 传输加密与观察逻辑结果：`apiClient`
+
+传输配置在初始化时注入；逻辑请求观察器接收脱敏结果，用于诊断一次业务调用最终发生了什么。
+
+#### 接口清单
+
+| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
+| --- | --- | --- | --- | --- |
+| `apiClient.observeRequests` | 观察逻辑请求的最终结果 | observer(ApiRequestRecord) | `() => void` | `apiClient.observeRequests(record => reportOutcome(record))` |
+
+#### 场景：传输加密与观察逻辑结果
+
+```ts
+const outcomes: string[] = []
+const stop = apiClient.observeRequests(record => { outcomes.push(JSON.stringify(record)) })
+try {
+  const result = await apiClient.iam.auth.publicConfig()
+  if (!result.success)
+    throw new Error(result.error.message)
+  // outcomes now contains the sanitized logical request record for this call
+}
+finally {
+  stop()
+}
+```
+
+输入是观察函数；输出取消函数，用完必须调用。记录不包含原始 Token，刷新或重试的内部步骤不应误报为多次业务成功。HTTP 能力与容量限制见本节。
+
+#### 启用传输加密
 
 服务端需先启用 `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })`；客户端只注入同一个 `@h-ai/crypto` 服务实例，无需手写密钥协商代码。
 
@@ -136,13 +489,13 @@ if (!chat.success)
 import { apiClient } from '@h-ai/api-client'
 import { crypto } from '@h-ai/crypto'
 
-await crypto.init()
+value(await crypto.init())
 
-await apiClient.init({
+value(await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   auth: {},
   transport: { crypto }, // 默认协商路径：/api/v1/_hai/key-exchange
-})
+}))
 
 await apiClient.close()
 await crypto.close()
@@ -152,50 +505,17 @@ await crypto.close()
 
 认证会核对消息方向、两端的密钥或客户端编号、请求编号、发送时间、HTTP 方法、路径与原始查询字符串。响应还会核对 HTTP 状态码。客户端生成的 128 位随机请求编号也用来防止同一个密文被反复发送。服务端默认只接受 5 分钟内发出的请求，客户端时钟最多可快 30 秒。可用 `maxRequestAgeSeconds`（1 到 600 秒）和 `maxFutureSkewSeconds`（0 到 300 秒）调整。
 
-所有服务节点通过同一处 Redis 或数据库登记 `(clientId, requestId)`。重复的编号不会再次接受，登记自请求发出起保留 11 分钟。存储不可用时拒绝请求。Redis 应选择 `noeviction` 并开启可靠的持久化，节点时钟应同步。应用自行重试付款、发信等操作时，应通过自己的业务键去重。
+所有服务节点通过同一套 @h-ai/cache 的共享 Redis 后端登记 `(clientId, requestId)`。重复的编号不会再次接受，登记自请求发出起保留 11 分钟。存储不可用时拒绝请求。Redis 应选择 `noeviction` 并开启可靠的持久化，节点时钟应同步。应用自行重试付款、发信等操作时，应通过自己的业务键去重。
 
-没有正文的 POST 仍需要认证。GET、HEAD 以及 204、304、HEAD 等无正文响应，把认证数据放在 `X-Hai-Transport` 头。其他请求或响应把密文放在 JSON 正文，并设置 `X-Encrypted: true`。客户端收到加密响应会用原请求和实际状态码验证。标记丢失、格式过旧或认证失败时，调用会抛出错误。
+没有正文的 POST 仍需要认证。GET、HEAD 以及 204、205、304 等无正文响应，把认证数据放在 `X-Hai-Transport` 头。其他请求或响应把密文放在 JSON 正文，并设置 `X-Encrypted: true`。客户端收到加密响应会用原请求和实际状态码验证。标记丢失、格式过旧或认证失败时，客户端底层传输拒绝该响应，业务调用返回失败 HaiResult。
 
 如果某个接口必须接收普通 HTTPS 正文，服务端把该路由设为 `encryption: disabled` 或加入 `excludePaths`。浏览器请求同一路由时也应配置客户端的 `excludePaths`。跨域接入还须允许并公开 `X-Hai-Transport` 请求头和响应头。使用 HTTPS 可以验证握手接收的公钥确实来自目标服务器。访问资源前，服务端仍需检查当前用户的 IAM 权限。
 
-### API 契约
-
-默认 `apiClient.ai.chats.createCompletion({ messages, tools, tool_choice })` 使用非流式 JSON 契约，完整传递 function 工具的嵌套 JSON Schema 与 `strict`。先判断 `success`，再读取 `data.choices[].message.tool_calls`；业务方授权执行后，把助手工具调用和带对应 `tool_call_id` 的工具结果放入下一次 `messages`。输入不支持 `stream`，即使绕过 TypeScript 传入也会被服务端拒绝；流式接口须绑定应用自己的流契约。
-
-自定义应用可以绑定自己的 oRPC contract：
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-import { apiContract } from '@h-ai/api-contract'
-
-const contract = apiContract.create({ iam: apiContract.iam })
-const client = apiClient.create(contract)
-
-await client.init({ baseUrl: 'https://api.example.com/api/v1' })
-const result = await client.iam.auth.login({ identifier: 'alice', password: 'secret' })
-```
-
-### 凭据更新与关闭
-
-`auth.clear()` 和 `auth.setTokens()` 会立即取消并作废当前客户端的旧刷新请求。迟到的成功或 401 响应不会恢复已退出会话、覆盖新账号或触发旧刷新回调；存储写入串行提交，方法完成后不会再被之前已开始的异步写入覆盖。退出和切换账号须通过这些方法更新凭据，不直接修改 storage。httpOnly Cookie 和服务端会话仍由服务端退出接口撤销。
-
-已初始化后再次调用 `init()` 会返回 `CONFIG_ERROR`，不会覆盖现有 client；如需切换 `baseUrl` / `fetch` / `transport`，请先 `await apiClient.close()` 再重新初始化。
-
-### 配置驱动认证页面
-
-密码登录只提交 `identifier` 和 `password`；`AuthPanel` 将 `LoginForm` 的 `username` 映射为 `identifier`。会话有效期由服务端 `session.maxAge` / `session.refreshTokenMaxAge` 配置决定，登录表单不提供按次登录的持久会话选项。
-
-服务端可在认证配置中提供用户协议和隐私政策的 Markdown 正文或 URL。如果正文和 URL 同时存在，登录页面的弹窗优先显示经过安全处理的 Markdown。
-
-`apiClient.createAuthActions(client)` 为含标准 iam contract 的客户端提供 publicConfig、login、register、sendOtp、requestPasswordReset、confirmPasswordReset。login 输入使用 identifier/password/method/code，method 为 password、ldap、email、sms。成功认证自动调用既有安全 TokenStorage；应用只需把动作传给 AuthPanel，并在 onauthenticated 中刷新自己的用户状态或导航。
-
-[IAM 配置清单](../configuration/iam.md)
-
-### 输入约束与 HTTP 能力
+#### 输入约束与 HTTP 能力
 
 对象键、上传能力、批量删除及预签名地址的共同规则见[存储 API 能力](./storage.md#存储输入约束与跨端能力)。
 
-### 逻辑请求观察
+#### 逻辑请求观察
 
 `client.observeRequests` 返回可取消的逻辑请求观察：requestId、procedure、耗时、HTTP 状态、最终 success/errorCode 与实际业务请求 attempts。HTTP 200 的失败 HaiResult 也记为失败，自动刷新后的重试保留同一 requestId，整个逻辑调用只产生一次结果。记录不包含正文、Token 或 URL 查询参数。刷新/密钥协商不伪装成用户业务操作；close 清理本实例的订阅，重新 init 后需重新订阅。
 
@@ -208,173 +528,6 @@ const unsubscribe = apiClient.observeRequests((record) => {
 })
 unsubscribe()
 ```
-
-### 可选交互挑战
-
-createAuthActions(client) 提供 createCaptcha({operation})，所有登录映射与续期/注册会保留 captcha；sendOtp(identifier,{captcha})、requestPasswordReset(identifier,{captcha}) 接收可选第二参数。框架 AuthPanel 自动求解，自定义表单复用 ALTCHA 协议，证明不进入安全 TokenStorage。
-
-何时要求验证、验证失败后如何处理，见 [IAM 配置](../configuration/iam.md)和 [IAM 功能说明](./iam.md)。
-
-### 敏感请求再认证
-
-用户为某个敏感操作再次验证密码后，用本次调用的 `options.context.reauthentication` 传入 `actions.reauthenticate()` 返回的短期凭据。客户端会将它写到该请求的 `X-Hai-Reauthentication` 头。服务端会核对当前权限、请求涉及的资源范围及票据用途，并使票据只能成功使用一次。不要把此票据加入公共请求头、持久存储或日志。
-
-### 原地恢复过期会话
-
-配置 `auth.recoverSession` 回调可在服务端明确拒绝会话时原地重新登录并保留页面输入。使用 `@h-ai/ui` 的 `createSessionRecovery` / `SessionRecoveryDialog`：根布局绑定公开配置与原用户，回调设为 `recovery.recover`，弹窗使用标准认证 actions，销毁时 `cancel()`。登录的 `expectedUserId` 由 IAM 限定原主体；常规验证码、锁定、改密和登录限制照常执行。只对明确未认证拒绝的原请求续接一次；取消、5xx、超时和结果不明的网络写入不重放。敏感操作证明绑定旧会话时可能需要再次确认，不复用到新会话。未传回调保持原处理方式；配置回调后由恢复流程处理，不再立即调用 onRefreshFailed 导航离开。终端分组通过 auth.terminalType（web/app/desktop/api，默认 web）传入；它不是硬件身份认证。
-
-### 页面离开会话策略
-
-`session.endOnPageHide` 默认关闭。开启后，在浏览器页面加载时调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })`，卸载时执行它返回的函数，移除监听器。标准 admin、H5 和 fullstack 模板已接好此步骤。这里的 `actions` 来自 `apiClient.createAuthActions(...)` 或 SvelteKit 的 `kit.client.createAuthActions(...)`。配置从登录页使用的公开认证接口读取。
-
-浏览器触发 `pagehide` 时会尝试调用 `POST /auth/session/close`。这包括刷新或整页导航，但页面进入往返缓存（BFCache）时会跳过。请求沿用 CSRF 防护和已启用的传输加密，并使用 `keepalive` 争取在页面关闭后完成。该请求不会刷新会话，响应也不会清除 Cookie 或本地凭据，以免较早的请求清掉新的登录状态。
-
-浏览器可能根本没有发出请求。服务端仍需用 `idleTimeout` 或 `absoluteTimeout` 限制会话寿命。用户主动退出时，应正常调用应用的 logout 接口，让服务端撤销凭据，并清除客户端保存的登录状态。
-
-敏感调用通过本次 `reauthorize: () => sensitiveActions.authorize(operation)` 重新确认用途：Kit 放 apiFetch 第三参数，typed client 放 options.context。会话刷新/恢复或明确的再认证拒绝后仅续发一次；取消不写入，未提供回调不重放旧证明。
-
-### 标准 HTTP 业务调用
-
-这里列出默认客户端里的业务方法。服务端必须为相同的契约安装处理函数，否则接口会返回找不到路由。示例中的 ID、凭据和对象键由当前业务或表单提供。调用后先检查 `success`，再读取表里的成功数据。需要取消请求时，可在第二个参数中传入 `{ signal }`。
-
-#### IAM 认证、资料与会话
-
-| API | 用途 | 示例输入 | 成功数据 | 调用示例 |
-| --- | --- | --- | --- | --- |
-| `apiClient.iam.auth.publicConfig` | 读取公开认证配置 | 无必填参数 | 当前登录注册、密码、协议等公开策略 | `await apiClient.iam.auth.publicConfig()` |
-| `apiClient.iam.auth.createCaptcha` | 生成挑战 | `{ operation: 'login' }` | 登录挑战与凭证 | `await apiClient.iam.auth.createCaptcha({ operation: 'login' })` |
-| `apiClient.iam.auth.login` | 密码登录 | `{ identifier, password }` | 已认证用户与 Token | `await apiClient.iam.auth.login({ identifier, password })` |
-| `apiClient.iam.auth.loginWithLdap` | LDAP 登录 | `{ username, password }` | 已认证用户与 Token | `await apiClient.iam.auth.loginWithLdap({ username, password })` |
-| `apiClient.iam.auth.sendOtp` | 发送一次性验证码 | `{ identifier }` | 验证码失效时间 | `await apiClient.iam.auth.sendOtp({ identifier })` |
-| `apiClient.iam.auth.loginWithOtp` | 验证码登录 | `{ identifier, code }` | 已认证用户与 Token | `await apiClient.iam.auth.loginWithOtp({ identifier, code })` |
-| `apiClient.iam.auth.register` | 注册 | `{ username, password }` | 新用户与 Token | `await apiClient.iam.auth.register({ username, password })` |
-| `apiClient.iam.auth.currentUser` | 读取当前账号 | 无必填参数 | 当前用户以及角色和权限 | `await apiClient.iam.auth.currentUser()` |
-| `apiClient.iam.auth.updateCurrentUser` | 更新本人资料 | `{ displayName: 'Mina' }` | 更新后的用户资料 | `await apiClient.iam.auth.updateCurrentUser({ displayName: 'Mina' })` |
-| `apiClient.iam.auth.changePassword` | 已登录用户修改密码 | `{ oldPassword, newPassword }` | 无业务数据 | `await apiClient.iam.auth.changePassword({ oldPassword, newPassword })` |
-| `apiClient.iam.auth.renewPassword` | 密码到期后续密 | `{ identifier, password, newPassword }` | 无业务数据 | `await apiClient.iam.auth.renewPassword({ identifier, password, newPassword })` |
-| `apiClient.iam.auth.requestPasswordReset` | 申请密码重置 | `{ identifier }` | 无业务数据 | `await apiClient.iam.auth.requestPasswordReset({ identifier })` |
-| `apiClient.iam.auth.confirmPasswordReset` | 使用重置凭证 | `{ token, newPassword }` | 无业务数据 | `await apiClient.iam.auth.confirmPasswordReset({ token, newPassword })` |
-| `apiClient.iam.auth.reauthenticate` | 申请敏感操作票据 | `{ password, operation: 'users:delete' }` | 票据和到期时间 | `await apiClient.iam.auth.reauthenticate({ password, operation: 'users:delete' })` |
-| `apiClient.iam.auth.refresh` | 刷新凭据 | `{ refreshToken }` | 新 Token；通常由客户端刷新流程调用 | `await apiClient.iam.auth.refresh({ refreshToken })` |
-| `apiClient.iam.auth.logout` | 主动退出 | 无必填参数 | 无业务数据 | `await apiClient.iam.auth.logout({})` |
-| `apiClient.iam.auth.closeSession` | 请求结束当前会话 | 无必填参数 | 无业务数据 | `await apiClient.iam.auth.closeSession({})` |
-
-认证表单通常使用 `apiClient.createAuthActions` 负责保存 Token、续密和重新认证。直接请求业务端点时，负责凭据生命周期的应用需要根据认证结果更新 `apiClient.auth`。
-
-#### IAM 用户、角色与权限管理
-
-| API | 用途 | 示例输入 | 成功数据 | 调用示例 |
-| --- | --- | --- | --- | --- |
-| `apiClient.iam.users.list` | 分页查询用户 | `{ page: 1, pageSize: 20 }` | 用户分页 | `await apiClient.iam.users.list({ page: 1, pageSize: 20 })` |
-| `apiClient.iam.users.get` | 读取用户 | `{ id: userId }` | 用户资料，或 `null` | `await apiClient.iam.users.get({ id: userId })` |
-| `apiClient.iam.users.create` | 创建用户 | `{ username, password }` | 新用户资料 | `await apiClient.iam.users.create({ username, password })` |
-| `apiClient.iam.users.invite` | 发出邀请 | `{ username, email }` | 已创建的待激活用户资料 | `await apiClient.iam.users.invite({ username, email })` |
-| `apiClient.iam.users.update` | 修改用户 | `{ id: userId, displayName: 'Mina' }` | 更新后的用户资料 | `await apiClient.iam.users.update({ id: userId, displayName: 'Mina' })` |
-| `apiClient.iam.users.delete` | 删除用户 | `{ id: userId }` | 无业务数据 | `await apiClient.iam.users.delete({ id: userId })` |
-| `apiClient.iam.users.resetPassword` | 管理员重置密码 | `{ id: userId, newPassword }` | 无业务数据 | `await apiClient.iam.users.resetPassword({ id: userId, newPassword })` |
-| `apiClient.iam.roles.list` | 查询角色 | 无必填参数 | 角色分页 | `await apiClient.iam.roles.list()` |
-| `apiClient.iam.roles.get` | 读取角色 | `{ id: roleId }` | 角色记录，或 `null` | `await apiClient.iam.roles.get({ id: roleId })` |
-| `apiClient.iam.roles.create` | 创建角色 | `{ code: 'reader', name: 'Reader' }` | 新角色 | `await apiClient.iam.roles.create({ code: 'reader', name: 'Reader' })` |
-| `apiClient.iam.roles.update` | 更新角色 | `{ id: roleId, name: 'Report reader' }` | 更新后的角色 | `await apiClient.iam.roles.update({ id: roleId, name: 'Report reader' })` |
-| `apiClient.iam.roles.delete` | 删除角色 | `{ id: roleId }` | 无业务数据 | `await apiClient.iam.roles.delete({ id: roleId })` |
-| `apiClient.iam.permissions.list` | 分页查询权限 | `{ page: 1, type: 'api' }` | 权限分页 | `await apiClient.iam.permissions.list({ page: 1, type: 'api' })` |
-| `apiClient.iam.permissions.get` | 读取权限 | `{ id: permissionId }` | 权限记录，或 `null` | `await apiClient.iam.permissions.get({ id: permissionId })` |
-| `apiClient.iam.permissions.create` | 创建权限 | `{ code: 'reports:read', name: 'Read reports' }` | 新权限 | `await apiClient.iam.permissions.create({ code: 'reports:read', name: 'Read reports' })` |
-| `apiClient.iam.permissions.setSensitiveOperations` | 配置敏感操作 | `{ id: permissionId, sensitiveOperations: ['users:delete'] }` | 无业务数据 | `await apiClient.iam.permissions.setSensitiveOperations({ id: permissionId, sensitiveOperations: ['users:delete'] })` |
-| `apiClient.iam.permissions.delete` | 删除权限 | `{ id: permissionId }` | 无业务数据 | `await apiClient.iam.permissions.delete({ id: permissionId })` |
-
-#### 文件、聊天、记忆与会话
-
-| API | 用途 | 示例输入 | 成功数据 | 调用示例 |
-| --- | --- | --- | --- | --- |
-| `apiClient.storage.files.list` | 列出当前用户有权查看的对象 | 必须传对象，可填 `prefix`、`maxKeys`、`continuationToken`、`delimiter`；`maxKeys` 范围 1–1000 | 文件列表和继续分页所需的信息 | `await apiClient.storage.files.list({ prefix: 'reports/', maxKeys: 20 })` |
-| `apiClient.storage.files.getMetadata` | 读对象元数据 | `{ key }` | 键、大小、类型等 | `await apiClient.storage.files.getMetadata({ key })` |
-| `apiClient.storage.files.delete` | 删除单个对象 | `{ key }` | 无业务数据 | `await apiClient.storage.files.delete({ key })` |
-| `apiClient.storage.files.deleteMany` | 批量删除对象 | `{ keys: [key] }` | 已确认删除的键与空失败列表 | `await apiClient.storage.files.deleteMany({ keys: [key] })` |
-| `apiClient.storage.presignedUrls.createUpload` | 签发上传地址 | `{ key, contentType: 'application/pdf' }` | 临时上传 URL 和对象键 | `await apiClient.storage.presignedUrls.createUpload({ key, contentType: 'application/pdf' })` |
-| `apiClient.storage.presignedUrls.createDownload` | 签发下载地址 | `{ key, expiresIn: 60 }` | 临时下载 URL 和对象键 | `await apiClient.storage.presignedUrls.createDownload({ key, expiresIn: 60 })` |
-| `apiClient.ai.chats.createCompletion` | 发送不附带会话历史的消息，获取非流式补全结果 | `messages` 必填；可选模型和生成设置 | 补全文本及响应元信息 | `await apiClient.ai.chats.createCompletion({ messages: [{ role: 'user', content: 'Summarize this report.' }] })` |
-| `apiClient.ai.chats.sendMessage` | 发送会话消息 | `{ message, sessionId }` | 回复与当前会话信息 | `await apiClient.ai.chats.sendMessage({ message, sessionId })` |
-| `apiClient.ai.chats.listHistory` | 查询历史 | `{ sessionId, limit: 20 }` | 聊天记录列表 | `await apiClient.ai.chats.listHistory({ sessionId, limit: 20 })` |
-| `apiClient.ai.memories.list` | 查询记忆 | `{ objectId, limit: 20 }` | 记忆列表 | `await apiClient.ai.memories.list({ objectId, limit: 20 })` |
-| `apiClient.ai.memories.recall` | 按内容检索记忆 | `{ query: 'preferred language', topK: 3 }` | 召回的记忆项 | `await apiClient.ai.memories.recall({ query: 'preferred language', topK: 3 })` |
-| `apiClient.ai.sessions.list` | 查询对象的会话 | `{ objectId }` | 会话列表 | `await apiClient.ai.sessions.list({ objectId })` |
-
-按需通过 `apiClient.create(apiContract.create({ payment: apiContract.payment, feedback: apiContract.feedback }))` 得到包含支付或反馈契约的实例。各调用的路径与权限见[HTTP 契约](./api-contract.md)。
-
-<a id="call-options"></a>
-
-## 调用参数与接入选项
-
-### 调用入口
-
-页面或原生应用的启动代码调用 `apiClient.init(config)`，告诉客户端往哪里发请求、如何验证身份，以及是否加密业务数据。多个客户端需要不同地址或认证设置时，用 `apiClient.create(contract)` 创建独立实例，再分别初始化。
-
-`baseUrl` 填运行该客户端的浏览器或设备实际能访问的服务地址。例如 Web 页面和 API 同域时可以用 `/api/v1`，移动端可以用 `https://api.example.com/api/v1`。API 地址可以写入前端配置，服务端私钥和数据库密码应留在服务端。
-
-### 调用示例
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-
-const initialized = await apiClient.init({
-  baseUrl: 'https://api.example.com/api/v1',
-  auth: { terminalType: 'web' },
-  timeout: 15000,
-})
-if (!initialized.success)
-  throw new Error(initialized.error.message)
-```
-
-### 参数清单
-
-| 参数                        | 默认值/必填                               | 说明                                                                                                                                                                |
-| ----------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `baseUrl`                     | 必填                                      | 完整 API 基础地址，通常含 `/api/v1`。刷新、密钥交换及业务请求都以此地址为基础                                                                                       |
-| `timeout`                     | `30000`                                   | 请求到响应头及 JSON 正文读取完毕的期限，单位毫秒。读取流式正文时使用调用方的取消信号                                                                                |
-| `clientName`                  | `hai-api-client`                          | 写入 `x-request-client`，便于服务端关联诊断                                                                                                                         |
-| `headers`                     | 无附加标头                                | 静态对象或返回请求头的同步/异步函数                                                                                                                                 |
-| `fetch`                       | 全局 `fetch`                              | 接入原生网络库或测试替身时，传入符合 Fetch 接口的函数，仍须正确处理取消和 Cookie                                                                                    |
-| `auth`                        | 不启用自动认证                            | 传入 `{}` 即启用默认行为。登录后客户端自动为请求带上访问令牌，过期后尝试刷新                                                                                        |
-| `auth.storage`                | `apiClient.tokenStorage.httpOnlyCookie()` | 浏览器把访问令牌放内存，浏览器自动收发由服务端设置的刷新 Cookie。服务端渲染和测试可为每个客户端单独调用 `apiClient.tokenStorage.memory()`，原生端可使用平台安全存储 |
-| `auth.refreshPath`            | `/auth/refresh`                           | 相对于 `baseUrl` 的服务端刷新路径                                                                                                                                   |
-| `auth.refreshTimeoutMs`       | `10000`                                   | 刷新请求超时毫秒数，超时保留已有凭据供后续重试                                                                                                                      |
-| `auth.terminalType`           | `web`                                     | 会话终端类别，也可用 `app`、`desktop`、`api`。需与 IAM 允许的类别一致                                                                                               |
-| `auth.recoverSession`         | 可省略                                    | 刷新明确失效后尝试恢复同一用户会话。返回 `true` 时自动重试原请求一次                                                                                                |
-| `auth.onTokenRefreshed`       | 可省略                                    | 刷新成功时调用此函数。应用可用它更新页面上的登录状态                                                                                                                |
-| `auth.onRefreshFailed`        | 可省略                                    | 刷新明确失败时调用此函数。应用可用它提示重新登录                                                                                                                    |
-| `transport`                   | 不启用加密                                | 传入对象启用端到端应用层传输加密                                                                                                                                    |
-| `transport.crypto`            | 启用时必填                                | 已初始化的 `@h-ai/crypto` 运行实例                                                                                                                                  |
-| `transport.keyExchangePath`   | `/_hai/key-exchange`                      | 相对于 `baseUrl` 的密钥协商路径。拼接后的完整地址须对应服务端已开启的协商接口                                                                                       |
-| `transport.maxPlaintextBytes` | 跟随服务端                                | 可选客户端明文字节上限，指定时取客户端和服务端较小值                                                                                                                |
-
-### 使用与核对
-
-通过 `apiClient.config` 检查客户端实际使用的设置。它会遮盖密钥等敏感值。验证登录后的请求是否带有身份、会话过期后能否刷新、退出后是否无法继续使用原会话。原生应用还需在真机上检查安全存储。[地址、期限和恢复](api-client.md#client-integration)
-
-<a id="client-integration"></a>
-
-## API客户端地址、期限和恢复
-
-入口是 `apiClient.init/create` 参数，没有自动加载的 `_api-client.yml`。
-
-完整参数见 [API Client 配置清单](../function/api-client.md#call-options)。客户端停止等待后，已发送请求可能已在服务端产生结果。遇到超时先按业务 ID 查询，再决定是否重试；原地恢复只恢复同一用户的会话。
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-
-const started = await apiClient.init({
-  baseUrl: 'https://api.example.invalid/api/v1',
-  timeout: 15000,
-  auth: {},
-  clientName: 'orders-web',
-})
-if (!started.success) throw new Error(started.error.message)
-```
-
-示例显式15秒是业务选择。按真实流程验证请求、401单次恢复、二次认证取消、退出与失败；跨身份请求不能复用旧刷新结果。非 2xx 合法 `HaiResult`保留业务码和`traceId`，5xx仍由实际HTTP状态执行安全隐藏。提示通过`notifyError` / `ToastContainer`，默认不展示编号。
-
-Kit 的 `kit.response.validationError(errors)` 与 `fromError` 使用同一字段白名单，响应 `error.cause` 只含本地化的 `field/message`；rejectedValue、SQL 和其他诊断字段不公开。
 
 ## 错误处理
 
