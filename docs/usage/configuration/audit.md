@@ -1,5 +1,7 @@
 # Audit 配置
 
+[English](audit.en.md) · [日本語](audit.ja.md)
+
 [配置手册](README.md)
 
 ## 配置入口

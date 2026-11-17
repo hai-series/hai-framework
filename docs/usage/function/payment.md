@@ -1,10 +1,14 @@
 # @h-ai/payment 功能说明
 
+[English](payment.en.md) · [日本語](payment.ja.md)
+
 在服务端用 `payment` 创建订单、接收支付平台发来的通知、查单和退款。浏览器接收后端返回的支付参数，再用对应平台的页面或原生界面发起付款。
 
 服务端以 `payment` 对象调用支付业务。浏览器需要引入 `@h-ai/payment/client` 的 `invokePayment()`，它使用服务端已经创建的订单参数打开支付流程。
 
 [模块 README](../../../packages/payment/README.md) · [配置清单](../configuration/payment.md) · [数据结构](../data/payment.md) · [业务集成](../development/integrations.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

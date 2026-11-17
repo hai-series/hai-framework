@@ -1,5 +1,7 @@
 # audit 数据结构
 
+[English](audit.en.md) · [日本語](audit.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/audit.md) · [功能说明](../function/audit.md)
 
 ## 数据库

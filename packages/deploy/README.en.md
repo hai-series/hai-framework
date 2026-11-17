@@ -6,23 +6,23 @@ Deploy existing images or Vercel prebuilt output, including complete offline bun
 
 ## Quick Start
 
-[Open the quick-start guide](../../docs/usage/function/deploy.md#最小接入示例) (Chinese).
+[Open the quick-start guide](../../docs/usage/function/deploy.en.md#quick-start).
 
 ## Configuration Reference
 
 Set deployment targets in the project’s `hai.json.deploy`. When you run `hai deploy --env prod`, the CLI reads deployment variables for prod. Keep the application’s connection settings and credentials in the configuration for that environment.
 
-See the [configuration reference](../../docs/usage/configuration/deploy.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/deploy.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/deploy.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/deploy.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 
 The module creates no database tables of its own.
 
-See the [data reference](../../docs/usage/data/deploy.md) in Chinese for artifacts, successful baselines, state, environment files and middleware data.
+See the [data reference](../../docs/usage/data/deploy.en.md) in Chinese for artifacts, successful baselines, state, environment files and middleware data.
 
 ## Development and Testing
 

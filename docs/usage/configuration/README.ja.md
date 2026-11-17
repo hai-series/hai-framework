@@ -18,11 +18,11 @@
 
 ### アプリ機能
 
-[iam](iam.md) · [ai](ai.md) · [tools](tools.ja.md) · [audit](audit.md) · [feedback](feedback.md) · [payment](payment.md) · [reach](reach.md) · [scheduler](scheduler.md) · [ui](ui.md) · [capacitor](capacitor.ja.md)
+[iam](iam.md) · [ai](ai.md) · [tools](tools.ja.md) · [audit](audit.ja.md) · [feedback](feedback.ja.md) · [payment](payment.ja.md) · [reach](reach.ja.md) · [scheduler](scheduler.ja.md) · [ui](ui.md) · [capacitor](capacitor.ja.md)
 
 ### ビルドと実行
 
-[cli](cli.ja.md) · [deploy](deploy.md) · [runner](runner.md)
+[cli](cli.ja.md) · [deploy](deploy.ja.md) · [runner](runner.ja.md)
 
 ## 分野別の設定
 

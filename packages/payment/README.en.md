@@ -8,21 +8,21 @@ A unified payment module for WeChat Pay, Alipay, and Stripe, with provider-based
 
 ## Quick Start
 
-[Open the quick-start guide](../../docs/usage/function/payment.md#最小接入示例) (Chinese).
+[Open the quick-start guide](../../docs/usage/function/payment.en.md#quick-start).
 
 ## Configuration Reference
 
 Generated projects define the accounts and server-side credentials for each payment channel in `config/_payment.yml`. At startup, the application reads the file and passes the settings object to `payment.init(config)`.
 
-See the [configuration reference](../../docs/usage/configuration/payment.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/payment.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/payment.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/payment.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 
-See the [data reference](../../docs/usage/data/payment.md) in Chinese for provider state, merchant order mappings and notification idempotency.
+See the [data reference](../../docs/usage/data/payment.en.md) in Chinese for provider state, merchant order mappings and notification idempotency.
 
 ## Development and Testing
 

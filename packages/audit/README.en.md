@@ -8,21 +8,21 @@ A unified audit logging module. The `audit` object records, queries, cleans up, 
 
 ## Quick Start
 
-[Open the quick-start guide](../../docs/usage/function/audit.md#最小接入示例) (Chinese).
+[Open the quick-start guide](../../docs/usage/function/audit.en.md#quick-start).
 
 ## Configuration Reference
 
 Generated projects define capture, retention, backup, and alert settings in `config/_audit.yml`. At startup, the application reads the file and passes the settings object to `audit.init(config)`.
 
-See the [configuration reference](../../docs/usage/configuration/audit.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/audit.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/audit.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/audit.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 
-See the [data reference](../../docs/usage/data/audit.md) in Chinese for audit rows, field mappings, archives and alert deduplication.
+See the [data reference](../../docs/usage/data/audit.en.md) in Chinese for audit rows, field mappings, archives and alert deduplication.
 
 ## Development and Testing
 

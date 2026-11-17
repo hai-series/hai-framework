@@ -1,5 +1,7 @@
 # deploy 数据结构
 
+[English](deploy.en.md) · [日本語](deploy.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/deploy.md) · [功能说明](../function/deploy.md)
 
 ## 数据库与缓存

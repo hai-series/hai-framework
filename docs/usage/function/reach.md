@@ -1,8 +1,12 @@
 # @h-ai/reach 功能说明
 
+[English](reach.en.md) · [日本語](reach.ja.md)
+
 在服务端用 `reach` 发送邮件、短信或 HTTP 通知。发送前配置相应渠道的服务商，按需要使用模板、避免重复投递或排队重试。超过重试次数的通知可在失败队列中检查和处理。
 
 [模块 README](../../../packages/reach/README.md) · [配置清单](../configuration/reach.md) · [数据结构](../data/reach.md) · [业务集成](../development/integrations.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

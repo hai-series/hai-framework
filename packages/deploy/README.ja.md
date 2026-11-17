@@ -6,23 +6,23 @@
 
 ## クイックスタート
 
-[最小構成の導入手順](../../docs/usage/function/deploy.md#最小接入示例)（中国語）を参照してください。
+[最小構成の導入手順](../../docs/usage/function/deploy.ja.md#quick-start)を参照してください。
 
 ## 設定一覧
 
 プロジェクトの `hai.json.deploy` で配布先を指定します。`hai deploy --env prod` を実行すると、CLI は prod 環境用の変数を読み込みます。アプリの接続先や認証情報は対象環境の設定に用意します。
 
-設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/deploy.md)（中国語）を参照してください。
+設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/deploy.ja.md)を参照してください。
 
 ## 機能
 
-[API 一覧](../../docs/usage/function/deploy.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
+[API 一覧](../../docs/usage/function/deploy.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 
 モジュール独自のデータベーステーブルは作成しません。
 
-配布成果物、成功時の基準、状態、環境ファイル、ミドルウェアデータについては[データ構造](../../docs/usage/data/deploy.md)（中国語）を参照してください。
+配布成果物、成功時の基準、状態、環境ファイル、ミドルウェアデータについては[データ構造](../../docs/usage/data/deploy.ja.md)を参照してください。
 
 ## 開発とテスト
 

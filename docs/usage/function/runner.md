@@ -1,8 +1,12 @@
 # @h-ai/runner 功能说明
 
+[English](runner.en.md) · [日本語](runner.ja.md)
+
 在 Node.js 服务端用 `runner` 提交、查询和取消任务。API 节点负责接收请求。启用了执行角色的节点从共享数据库领取任务，并按配置在容器中执行。
 
 [模块 README](../../../packages/runner/README.md) · [配置清单](../configuration/runner.md) · [数据结构](../data/runner.md) · [Agent 与 Runner 接入](../development/agent.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

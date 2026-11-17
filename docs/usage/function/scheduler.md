@@ -1,8 +1,12 @@
 # @h-ai/scheduler 功能说明
 
+[English](scheduler.en.md) · [日本語](scheduler.ja.md)
+
 在服务端用 `scheduler` 创建、修改、触发定时任务并查询执行记录。执行前后可以运行回调。配置数据库后，多个服务进程可以共用任务定义和运行记录。
 
 [模块 README](../../../packages/scheduler/README.md) · [配置清单](../configuration/scheduler.md) · [数据结构](../data/scheduler.md) · [服务集成](../development/integrations.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

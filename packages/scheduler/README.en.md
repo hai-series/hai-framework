@@ -8,21 +8,21 @@ Use `scheduler` to run JavaScript handlers or call HTTP endpoints on a cron sche
 
 ## Quick Start
 
-[Open the quick-start guide](../../docs/usage/function/scheduler.md#最小接入示例) (Chinese).
+[Open the quick-start guide](../../docs/usage/function/scheduler.en.md#quick-start).
 
 ## Configuration Reference
 
 Generated projects define how often to check for work and how long a worker owns a task in `config/_scheduler.yml`. At startup, the application reads the file and passes the settings object to `scheduler.init(config)`.
 
-See the [configuration reference](../../docs/usage/configuration/scheduler.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/scheduler.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/scheduler.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/scheduler.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 
-See the [data reference](../../docs/usage/data/scheduler.md) in Chinese for tasks, execution logs, distributed leases and recovery state.
+See the [data reference](../../docs/usage/data/scheduler.en.md) in Chinese for tasks, execution logs, distributed leases and recovery state.
 
 ## Development and Testing
 

@@ -1,5 +1,7 @@
 # reach 数据结构
 
+[English](reach.en.md) · [日本語](reach.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/reach.md) · [功能说明](../function/reach.md)
 
 ## 数据库

@@ -1,10 +1,14 @@
 # @h-ai/feedback 功能说明
 
+[English](feedback.en.md) · [日本語](feedback.ja.md)
+
 在服务端用 `feedback` 接收、查询和处理用户报告。在浏览器中用 Feedback 客户端收集用户允许提供的日志、截图等排查材料。导出的 ZIP 可以用命令行工具离线查看。
 
 服务端从 `@h-ai/feedback` 导入 `feedback`。浏览器从 `@h-ai/feedback/client` 创建自己的客户端实例，离线查看工具从 `@h-ai/feedback/bundle` 导入。
 
 [模块 README](../../../packages/feedback/README.md) · [配置清单](../configuration/feedback.md) · [数据结构](../data/feedback.md) · [反馈运维](../operations/feedback.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

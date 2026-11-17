@@ -1,5 +1,7 @@
 # Payment 配置
 
+[English](payment.en.md) · [日本語](payment.ja.md)
+
 [配置手册](README.md)
 
 ## 配置入口

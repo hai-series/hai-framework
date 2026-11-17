@@ -8,21 +8,21 @@ Runner は Node.js のサーバー側で管理対象の Agent Worker とツー�
 
 ## クイックスタート
 
-[最小構成の導入手順](../../docs/usage/function/runner.md#最小接入示例)（中国語）を参照してください。
+[最小構成の導入手順](../../docs/usage/function/runner.ja.md#quick-start)を参照してください。
 
 ## 設定一覧
 
 起動時に `runner.init(options)` で、そのノードがタスクを実行するか、どのコンテナ環境を使えるか、完了したタスクをいつまで保持するかを指定します。タスクの送信と照会だけを行うノードでは実行を無効にできます。
 
-設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/runner.md)（中国語）を参照してください。
+設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/runner.ja.md)を参照してください。
 
 ## 機能
 
-[API 一覧](../../docs/usage/function/runner.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
+[API 一覧](../../docs/usage/function/runner.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 
-永続タスク、実行リース、イベント、ワークスペース、コンテナ成果物については[データ構造](../../docs/usage/data/runner.md)（中国語）を参照してください。
+永続タスク、実行リース、イベント、ワークスペース、コンテナ成果物については[データ構造](../../docs/usage/data/runner.ja.md)を参照してください。
 
 ## 開発とテスト
 

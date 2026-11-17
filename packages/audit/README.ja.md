@@ -8,21 +8,21 @@
 
 ## クイックスタート
 
-[最小構成の導入手順](../../docs/usage/function/audit.md#最小接入示例)（中国語）を参照してください。
+[最小構成の導入手順](../../docs/usage/function/audit.ja.md#quick-start)を参照してください。
 
 ## 設定一覧
 
 生成したプロジェクトでは、監査の記録、保持、バックアップ、通知の設定を `config/_audit.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `audit.init(config)` に渡します。
 
-設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/audit.md)（中国語）を参照してください。
+設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/audit.ja.md)を参照してください。
 
 ## 機能
 
-[API 一覧](../../docs/usage/function/audit.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
+[API 一覧](../../docs/usage/function/audit.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 
-監査レコード、フィールド対応、アーカイブ、アラート重複排除については[データ構造](../../docs/usage/data/audit.md)（中国語）を参照してください。
+監査レコード、フィールド対応、アーカイブ、アラート重複排除については[データ構造](../../docs/usage/data/audit.ja.md)を参照してください。
 
 ## 開発とテスト
 

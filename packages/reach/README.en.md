@@ -8,21 +8,21 @@ A notification module supporting multiple providers (email, SMS, API callbacks) 
 
 ## Quick Start
 
-[Open the quick-start guide](../../docs/usage/function/reach.md#最小接入示例) (Chinese).
+[Open the quick-start guide](../../docs/usage/function/reach.en.md#quick-start).
 
 ## Configuration Reference
 
 Generated projects define delivery channels, templates, quiet hours, and retry rules in `config/_reach.yml`. At startup, the application reads the file and passes the settings object to `reach.init(config)`.
 
-See the [configuration reference](../../docs/usage/configuration/reach.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/reach.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/reach.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/reach.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 
-See the [data reference](../../docs/usage/data/reach.md) in Chinese for notification jobs, results, dead letters, idempotency records and shared locks.
+See the [data reference](../../docs/usage/data/reach.en.md) in Chinese for notification jobs, results, dead letters, idempotency records and shared locks.
 
 ## Development and Testing
 

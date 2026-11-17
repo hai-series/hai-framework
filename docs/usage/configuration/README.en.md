@@ -18,11 +18,11 @@ Start with the behavior you want to change. For example, shorten an idle session
 
 ### Application features
 
-[iam](iam.md) · [ai](ai.md) · [tools](tools.en.md) · [audit](audit.md) · [feedback](feedback.md) · [payment](payment.md) · [reach](reach.md) · [scheduler](scheduler.md) · [ui](ui.md) · [capacitor](capacitor.en.md)
+[iam](iam.md) · [ai](ai.md) · [tools](tools.en.md) · [audit](audit.en.md) · [feedback](feedback.en.md) · [payment](payment.en.md) · [reach](reach.en.md) · [scheduler](scheduler.en.md) · [ui](ui.md) · [capacitor](capacitor.en.md)
 
 ### Build and execution
 
-[cli](cli.en.md) · [deploy](deploy.md) · [runner](runner.md)
+[cli](cli.en.md) · [deploy](deploy.en.md) · [runner](runner.en.md)
 
 ## Configuration by task
 

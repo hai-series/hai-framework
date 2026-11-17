@@ -1,8 +1,12 @@
 # @h-ai/audit 功能说明
 
+[English](audit.en.md) · [日本語](audit.ja.md)
+
 通过 `audit` 在服务端记录谁做了什么、操作是否成功，以及能用于排查的请求编号。可以查询和统计记录、定期清理旧记录、归档到私有存储或按异常数量告警。先连接保存审计记录的关系数据库。
 
 [模块 README](../../../packages/audit/README.md) · [配置清单](../configuration/audit.md) · [数据结构](../data/audit.md) · [服务集成](../development/integrations.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

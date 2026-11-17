@@ -1,5 +1,7 @@
 # Reach 配置
 
+[English](reach.en.md) · [日本語](reach.ja.md)
+
 [配置手册](README.md)
 
 ## 配置入口

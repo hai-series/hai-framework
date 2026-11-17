@@ -1,5 +1,7 @@
 # payment 数据结构
 
+[English](payment.en.md) · [日本語](payment.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/payment.md) · [功能说明](../function/payment.md)
 
 ## 数据库

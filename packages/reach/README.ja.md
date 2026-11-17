@@ -8,21 +8,21 @@
 
 ## クイックスタート
 
-[最小構成の導入手順](../../docs/usage/function/reach.md#最小接入示例)（中国語）を参照してください。
+[最小構成の導入手順](../../docs/usage/function/reach.ja.md#quick-start)を参照してください。
 
 ## 設定一覧
 
 生成したプロジェクトでは、配信チャネル、テンプレート、通知を止める時間帯、再試行ルールを `config/_reach.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `reach.init(config)` に渡します。
 
-設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/reach.md)（中国語）を参照してください。
+設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/reach.ja.md)を参照してください。
 
 ## 機能
 
-[API 一覧](../../docs/usage/function/reach.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
+[API 一覧](../../docs/usage/function/reach.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 
-通知ジョブ、結果、デッドレター、冪等性レコード、共有ロックについては[データ構造](../../docs/usage/data/reach.md)（中国語）を参照してください。
+通知ジョブ、結果、デッドレター、冪等性レコード、共有ロックについては[データ構造](../../docs/usage/data/reach.ja.md)を参照してください。
 
 ## 開発とテスト
 

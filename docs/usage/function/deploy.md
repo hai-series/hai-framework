@@ -1,8 +1,12 @@
 # @h-ai/deploy 功能说明
 
+[English](deploy.en.md) · [日本語](deploy.ja.md)
+
 可以用 `hai` 命令先构建再部署，也可以在 Node.js 脚本中用 `deploy` 部署已经构建好的 Docker 镜像或 Vercel 预构建目录。
 
 [模块 README](../../../packages/deploy/README.md) · [配置清单](../configuration/deploy.md) · [数据结构](../data/deploy.md) · [部署操作](../operations/deployment.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

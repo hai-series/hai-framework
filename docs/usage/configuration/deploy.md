@@ -1,5 +1,7 @@
 # Deploy 配置
 
+[English](deploy.en.md) · [日本語](deploy.ja.md)
+
 [配置手册](README.md)
 
 ## 配置入口

@@ -8,21 +8,21 @@ Runner executes managed agent workers and tool jobs on Node.js. API nodes submit
 
 ## Quick Start
 
-[Open the quick-start guide](../../docs/usage/function/runner.md#最小接入示例) (Chinese).
+[Open the quick-start guide](../../docs/usage/function/runner.en.md#quick-start).
 
 ## Configuration Reference
 
 At startup, use `runner.init(options)` to decide whether this node executes tasks, which container environments it may use, and how long to keep completed tasks. Disable execution on nodes that only submit and query tasks.
 
-See the [configuration reference](../../docs/usage/configuration/runner.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/runner.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/runner.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/runner.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 
-See the [data reference](../../docs/usage/data/runner.md) in Chinese for persistent tasks, execution leases, events, workspaces and artifacts.
+See the [data reference](../../docs/usage/data/runner.en.md) in Chinese for persistent tasks, execution leases, events, workspaces and artifacts.
 
 ## Development and Testing
 

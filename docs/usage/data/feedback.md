@@ -1,5 +1,7 @@
 # feedback 数据结构
 
+[English](feedback.en.md) · [日本語](feedback.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/feedback.md) · [功能说明](../function/feedback.md)
 
 ## 数据库
