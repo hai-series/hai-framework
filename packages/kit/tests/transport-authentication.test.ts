@@ -1,8 +1,9 @@
 import type { TransportServerKeyRing } from '@h-ai/crypto'
 import type { RequestEvent } from '@sveltejs/kit'
 import type { Handle } from '@sveltejs/kit/hooks'
-import { createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL, TransportTimeError } from '@h-ai/crypto'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { cache } from '@h-ai/cache'
+import { createCacheTransportKeyStore, crypto, TRANSPORT_PROTOCOL, TransportTimeError } from '@h-ai/crypto'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { kit } from '../src/kit-main.js'
 
 let serverKeyRing: TransportServerKeyRing
@@ -32,6 +33,53 @@ describe('kit authenticated transport boundary', () => {
   })
   afterAll(async () => crypto.close())
 
+  it.each(['handshake', 'request'])('共享 %s 配额满返回 503 并阻止业务调用', async (stage) => {
+    const keyStore = createCacheTransportKeyStore({ cache, maxRegistrationsPerMinute: 1, maxRequestsPerMinute: 1 })
+    const resolve = vi.fn(() => Response.json({ accepted: true }))
+    const handle = kit.createHandle({
+      crypto: {
+        crypto,
+        transport: { serverKeyRing, keyStore },
+      },
+    })
+    const responses: Response[] = []
+    const fetchFn: typeof fetch = async (input, init) => {
+      const request = new Request(input, init)
+      const response = await dispatch(handle, request, resolve)
+      responses.push(response.clone())
+      return response
+    }
+    if (stage === 'handshake') {
+      const pair = crypto.asymmetric.generateKeyPair()
+      if (!pair.success)
+        throw new Error(pair.error.message)
+      const options = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientPublicKey: pair.data.publicKey }),
+      }
+      expect((await fetchFn('http://localhost/api/_hai/key-exchange', options)).status).toBe(200)
+      const denied = await fetchFn('http://localhost/api/_hai/key-exchange', options)
+      expect(denied.status).toBe(503)
+      expect(await denied.json()).toMatchObject({
+        error: expect.any(String),
+      })
+      expect(resolve).not.toHaveBeenCalled()
+      return
+    }
+    const client = crypto.transport.createClient({ keyExchangeUrl: 'http://localhost/api/_hai/key-exchange', fetch: fetchFn })
+    try {
+      expect((await client.encryptedFetch('http://localhost/api/order', { method: 'POST', body: '{}' })).status).toBe(200)
+      await expect(client.encryptedFetch('http://localhost/api/order', { method: 'POST', body: '{}' })).rejects.toThrow()
+      expect(responses.at(-1)?.status).toBe(503)
+      expect(await responses.at(-1)?.json()).toMatchObject({
+        error: expect.any(String),
+      })
+      expect(resolve).toHaveBeenCalledOnce()
+    }
+    finally { client.destroy() }
+  })
+
   it.each([
     { offset: 120_000, method: 'POST' },
     { offset: -20_000, method: 'HEAD' },
@@ -40,7 +88,7 @@ describe('kit authenticated transport boundary', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
           maxFutureSkewSeconds: 10,
           maxRequestAgeSeconds: 90,
@@ -96,7 +144,7 @@ describe('kit authenticated transport boundary', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -148,7 +196,7 @@ describe('kit authenticated transport boundary', () => {
   })
 
   it('两个 kit 节点共用 registry，并发重放仅一次 resolve', async () => {
-    const keyStore = createInMemoryKeyStore()
+    const keyStore = createCacheTransportKeyStore({ cache })
     const nodes = [0, 1].map(() => kit.createHandle({
       crypto: {
         crypto,
@@ -182,7 +230,7 @@ describe('kit authenticated transport boundary', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -197,4 +245,13 @@ describe('kit authenticated transport boundary', () => {
     expect(await response.text()).toBe('')
     expect(resolve).toHaveBeenCalledOnce()
   })
+})
+
+// 每个用例借用独立的 cache.memory 状态，模拟进程内测试环境。
+beforeEach(async () => {
+  const cacheTransportReady = await cache.init({ type: 'memory' })
+  expect(cacheTransportReady.success).toBe(true)
+})
+afterEach(async () => {
+  await cache.close()
 })

@@ -7,7 +7,6 @@ export default defineConfig({
   external: [
     '@h-ai/cache',
     '@h-ai/core',
-    '@h-ai/reldb',
     'sm-crypto',
   ],
 })

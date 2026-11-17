@@ -34,10 +34,7 @@
   "crypto_transportServerKeyRingInvalid": "サーバーの転送鍵リングが不足または不正です。非公開の HAI_CRYPTO_TRANSPORT_SERVERKEYRING が完全で有効な JSON であることを確認し、全ノードに同じリングを配布してください。",
   "crypto_transportServerKeyUnknown": "トランスポートのサーバーキーバージョンが不明、または失効しています",
   "crypto_transportKeyStoreRequired": "トランスポート暗号化にはクライアント公開キーストアの明示的な指定が必要です",
-  "crypto_transportKeyStoreTtlInvalid": "公開キーストアの TTL は1〜2147483647秒の整数で指定してください",
-  "crypto_transportKeyStoreCapacityInvalid": "公開キーストアの容量は正の安全な整数で指定してください",
-  "crypto_transportKeyStoreCapacityMismatch": "公開キーストアの共有容量設定が一致しません",
-  "crypto_transportKeyStoreCapacityReached": "公開キーストアの容量上限に達しました",
+  "crypto_transportKeyStoreTtlInvalid": "公開鍵の TTL は 1～86400 の整数秒にしてください",
   "crypto_transportKeyStoreOperationFailed": "公開キーストアの操作に失敗しました",
   "crypto_transportAuthenticationFailed": "トランスポート認証、リクエストとの紐付け、またはリプレイ検証に失敗しました",
   "crypto_transportKeyExchangeRequestFailed": "通信の鍵交換リクエストに失敗しました",
@@ -59,5 +56,8 @@
   "crypto_transportTimeInvalidWithServerTime": "端末とサーバーの時刻が同期していないか、要求の有効期限が切れています。サーバー時刻は {serverTime} です。端末の自動時刻同期を有効にするか、手動で時刻を設定してから、ページを再読み込みしてください。解消しない場合は管理者にサーバーの時刻確認を依頼してください。",
   "crypto_transportTimeConfigInvalid": "トランスポートの時刻設定が無効です。未来方向の時刻差は 0～300 秒、要求の有効期間は 1～600 秒の整数で指定してください。",
   "crypto_transportBodyLimitConflict": "明示された転送上限 {limit} バイトは有効なモジュールの必要量 {required} バイト未満です。予算または上限を変更してください",
-  "crypto_transportBusy": "資料の処理が混み合っています。しばらくしてから再試行してください。"
+  "crypto_transportBusy": "暗号化通信が混雑しています。後で再試行してください",
+  "crypto_transportKeyStoreQuotaInvalid": "通信ストアの分単位上限は正の安全な整数にしてください",
+  "crypto_transportKeyStoreQuotaMismatch": "共有通信ストアの分単位上限が一致しません",
+  "crypto_transportNonceExpiryInvalid": "リプレイ記録の残り保持時間は 16 分以内にしてください"
 }

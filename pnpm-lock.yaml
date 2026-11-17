@@ -1956,9 +1956,6 @@ importers:
       '@h-ai/cache':
         specifier: workspace:*
         version: link:../cache
-      '@h-ai/reldb':
-        specifier: workspace:*
-        version: link:../reldb
 
   packages/datapipe:
     dependencies:

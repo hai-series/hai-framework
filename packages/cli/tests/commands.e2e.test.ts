@@ -1,3 +1,4 @@
+import type { AppType } from '../src/cli-types.js'
 /**
  * =============================================================================
  * @h-ai/cli - CLI 命令 E2E 测试
@@ -14,7 +15,6 @@
  *   - generate      — 代码生成（page / component / api / model / migration）
  */
 
-import type { AppType } from '../src/cli-types.js'
 import { execSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
@@ -22,7 +22,8 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseEnv } from 'node:util'
-import { createInMemoryKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+import { cache } from '@h-ai/cache'
+import { createCacheTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
@@ -238,7 +239,7 @@ describe('createProject — api 类型', () => {
     expect(await exists(projectPath, '.')).toBe(true)
   })
 
-  it('aPI仅选crypto时生成私有密钥环并补充RelDB registry依赖', async () => {
+  it('aPI 仅选 crypto 时生成私有密钥环并补充 Cache registry 依赖', async () => {
     const name = 'proj-api-crypto-only'
     const directory = path.join(tmpRoot, name)
     await createProject({
@@ -259,9 +260,8 @@ describe('createProject — api 类型', () => {
     if (!ring.success)
       throw new Error(ring.error.message)
     const source = await readText(directory, `${prefix}/src/app.ts`)
-    expect(source).toContain('keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 })')
-    expect(source).not.toContain('keyStore: createInMemoryKeyStore()')
-    expect(source).toContain('from \'@h-ai/reldb\'')
+    expect(source).toContain('keyStore: createCacheTransportKeyStore({ cache })')
+    expect(source).toContain('from \'@h-ai/cache\'')
     expect(await readText(directory, `${prefix}/.env.example`)).toContain('HAI_CRYPTO_TRANSPORT_SERVERKEYRING')
     expect(await readText(directory, `${prefix}/.env`)).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
   })
@@ -966,14 +966,16 @@ describe('createProject — fullstack 类型', () => {
     expect(await readText(projectPath, '.env')).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
     expect(await readText(projectPath, '.env.example')).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
     try {
+      expect((await cache.init({ type: 'memory' })).success).toBe(true)
       expect((await crypto.init()).success).toBe(true)
       expect(crypto.transport.createServer({
         serverKeyRing: ring.data,
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
       }).success).toBe(true)
     }
     finally {
       await crypto.close()
+      await cache.close()
     }
     const passwords = new Set<string>()
     const bootstrapPasswords = new Set<string>()
@@ -1233,7 +1235,7 @@ describe('createProject — fullstack 类型', () => {
     expect(envExample).toContain('PUBLIC_API_BASE=http://127.0.0.1:3000')
     expect(await exists(projectPath, 'src/routes/api/auth/login/+server.ts')).toBe(false)
     expect(appServer).toContain('refreshCookie:')
-    expect(appServer).toContain('createReldbTransportKeyStore')
+    expect(appServer).toContain('createCacheTransportKeyStore')
     expect(appServer).toContain('X-HAI-Token-Transport')
   })
 

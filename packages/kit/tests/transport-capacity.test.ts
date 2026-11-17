@@ -1,7 +1,8 @@
 import type { TransportServerKeyRing } from '@h-ai/crypto'
 import type { RequestEvent } from '@sveltejs/kit'
-import { createInMemoryKeyStore, crypto } from '@h-ai/crypto'
-import { afterAll, beforeAll, expect, it, vi } from 'vitest'
+import { cache } from '@h-ai/cache'
+import { createCacheTransportKeyStore, crypto } from '@h-ai/crypto'
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { KitConfigSchema } from '../src/kit-config.js'
 import { kit } from '../src/kit-main.js'
 
@@ -25,7 +26,7 @@ function fixture(maxPlaintextBytes: number, resolve: (event: RequestEvent) => Pr
       crypto,
       transport: {
         serverKeyRing,
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         maxPlaintextBytes,
       },
     },
@@ -90,4 +91,13 @@ it('kit 配置保留容量字段并拒绝无效范围', () => {
   expect(KitConfigSchema.safeParse({
     transport: { maxPlaintextBytes: 0 },
   }).success).toBe(false)
+})
+
+// 每个用例借用独立的 cache.memory 状态，模拟进程内测试环境。
+beforeEach(async () => {
+  const cacheTransportReady = await cache.init({ type: 'memory' })
+  expect(cacheTransportReady.success).toBe(true)
+})
+afterEach(async () => {
+  await cache.close()
 })

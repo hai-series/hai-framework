@@ -20924,33 +20924,15 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "createInMemoryKeyStore",
+              "name": "createCacheTransportKeyStore",
               "kind": "value",
-              "declaration": "createInMemoryKeyStore",
+              "declaration": "createCacheTransportKeyStore",
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "createRedisTransportKeyStore",
-              "kind": "value",
-              "declaration": "createRedisTransportKeyStore",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "CreateRedisTransportKeyStoreOptions",
+              "name": "CreateCacheTransportKeyStoreOptions",
               "kind": "type",
-              "declaration": "CreateRedisTransportKeyStoreOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "createReldbTransportKeyStore",
-              "kind": "value",
-              "declaration": "createReldbTransportKeyStore",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "CreateReldbTransportKeyStoreOptions",
-              "kind": "type",
-              "declaration": "CreateReldbTransportKeyStoreOptions",
+              "declaration": "CreateCacheTransportKeyStoreOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -21065,12 +21047,6 @@
               "name": "ReadTransportBodyOptions",
               "kind": "type",
               "declaration": "ReadTransportBodyOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ReldbTransportKeyStore",
-              "kind": "type",
-              "declaration": "ReldbTransportKeyStore",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -21264,33 +21240,15 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "createInMemoryKeyStore",
+              "name": "createCacheTransportKeyStore",
               "kind": "value",
-              "declaration": "createInMemoryKeyStore",
+              "declaration": "createCacheTransportKeyStore",
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "createRedisTransportKeyStore",
-              "kind": "value",
-              "declaration": "createRedisTransportKeyStore",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "CreateRedisTransportKeyStoreOptions",
+              "name": "CreateCacheTransportKeyStoreOptions",
               "kind": "type",
-              "declaration": "CreateRedisTransportKeyStoreOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "createReldbTransportKeyStore",
-              "kind": "value",
-              "declaration": "createReldbTransportKeyStore",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "CreateReldbTransportKeyStoreOptions",
-              "kind": "type",
-              "declaration": "CreateReldbTransportKeyStoreOptions",
+              "declaration": "CreateCacheTransportKeyStoreOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -21405,12 +21363,6 @@
               "name": "ReadTransportBodyOptions",
               "kind": "type",
               "declaration": "ReadTransportBodyOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ReldbTransportKeyStore",
-              "kind": "type",
-              "declaration": "ReldbTransportKeyStore",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -21604,33 +21556,15 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "createInMemoryKeyStore",
+              "name": "createCacheTransportKeyStore",
               "kind": "value",
-              "declaration": "createInMemoryKeyStore",
+              "declaration": "createCacheTransportKeyStore",
               "declarationKind": "FunctionDeclaration"
             },
             {
-              "name": "createRedisTransportKeyStore",
-              "kind": "value",
-              "declaration": "createRedisTransportKeyStore",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "CreateRedisTransportKeyStoreOptions",
+              "name": "CreateCacheTransportKeyStoreOptions",
               "kind": "type",
-              "declaration": "CreateRedisTransportKeyStoreOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "createReldbTransportKeyStore",
-              "kind": "value",
-              "declaration": "createReldbTransportKeyStore",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "CreateReldbTransportKeyStoreOptions",
-              "kind": "type",
-              "declaration": "CreateReldbTransportKeyStoreOptions",
+              "declaration": "CreateCacheTransportKeyStoreOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -21745,12 +21679,6 @@
               "name": "ReadTransportBodyOptions",
               "kind": "type",
               "declaration": "ReadTransportBodyOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ReldbTransportKeyStore",
-              "kind": "type",
-              "declaration": "ReldbTransportKeyStore",
               "declarationKind": "InterfaceDeclaration"
             },
             {

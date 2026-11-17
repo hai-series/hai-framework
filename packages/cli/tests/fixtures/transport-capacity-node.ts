@@ -6,7 +6,8 @@ import { createServer } from 'node:http'
 import process from 'node:process'
 import { Readable } from 'node:stream'
 import { isMainThread, parentPort, Worker, workerData } from 'node:worker_threads'
-import { authenticateTransportRequest, createInMemoryKeyStore, crypto, readTransportBody, resolveTransportBodyLimits, TRANSPORT_BODY_LIMITS } from '@h-ai/crypto'
+import { cache } from '@h-ai/cache'
+import { authenticateTransportRequest, createCacheTransportKeyStore, crypto, readTransportBody, resolveTransportBodyLimits, TRANSPORT_BODY_LIMITS } from '@h-ai/crypto'
 import { createTransportWorkbook } from '../../../serv/tests/helpers/serv-transport-workbook.js'
 
 const maxPlaintextBytes = Number(process.env.HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES)
@@ -22,7 +23,7 @@ async function serveTransportBackend(): Promise<void> {
   if (!pair.success)
     throw new Error(pair.error.message)
   const created = crypto.transport.createServer({
-    keyStore: createInMemoryKeyStore(),
+    keyStore: createCacheTransportKeyStore({ cache }),
     serverKeyRing: {
       activeKeyId: 'v1',
       keys: { v1: pair.data },
@@ -180,6 +181,8 @@ async function verifyTransportCapacity(): Promise<void> {
   }
 }
 
+const connected = await cache.init({ type: 'memory' })
+assert.equal(connected.success, true)
 const initialized = await crypto.init()
 assert.equal(initialized.success, true)
 try {
@@ -190,4 +193,5 @@ try {
 }
 finally {
   await crypto.close()
+  await cache.close()
 }

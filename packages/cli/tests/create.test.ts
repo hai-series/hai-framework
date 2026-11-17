@@ -109,6 +109,18 @@ describe('buildTemplateContext', () => {
     expect(ctx.features.ai).toBeUndefined()
   })
 
+  it('crypto 单独启用时依赖 cache，不引入数据库', () => {
+    const context = buildTemplateContext({
+      name: 'crypto-cache-test',
+      appType: 'api',
+      features: ['crypto'],
+      packageManager: 'pnpm',
+    })
+    expect(context.features.crypto).toBe(true)
+    expect(context.features.cache).toBe(true)
+    expect(context.features.db).not.toBe(true)
+  })
+
   it('defaultLocale 应默认为 zh-CN', () => {
     const ctx = buildTemplateContext({
       name: 'test',

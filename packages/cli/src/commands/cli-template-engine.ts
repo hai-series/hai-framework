@@ -932,8 +932,11 @@ export function buildTemplateContext(options: {
     featureMap.cache = true
     featureMap.crypto = true
   }
+  // crypto 的传输状态统一借用 cache，纯加密不需要关系数据库。
+  if (featureMap.crypto)
+    featureMap.cache = true
   // audit / scheduler / payment 依赖 reldb
-  if (featureMap.audit || featureMap.scheduler || featureMap.payment || featureMap.crypto) {
+  if (featureMap.audit || featureMap.scheduler || featureMap.payment) {
     featureMap.db = true
   }
   // AI 的共享会话、记忆和知识依赖持久关系库与向量库。

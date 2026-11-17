@@ -1,5 +1,6 @@
 import type { TransportEncryptionManager } from '@h-ai/crypto'
-import { authenticateTransportRequest, createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { cache } from '@h-ai/cache'
+import { authenticateTransportRequest, createCacheTransportKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createKitClient, installBrowserTransportFetch } from '../src/client/kit-client.js'
 import { kit } from '../src/kit-main.js'
@@ -70,7 +71,7 @@ function createTransportFetch(options: { encryptedResponseBody?: string, maxPlai
   if (!key.success)
     throw new Error(key.error.message)
   const manager = expectManager(crypto.transport.createServer({
-    keyStore: createInMemoryKeyStore(),
+    keyStore: createCacheTransportKeyStore({ cache }),
     serverKeyRing: {
       activeKeyId: 'test-v1',
       keys: { 'test-v1': key.data },
@@ -581,4 +582,13 @@ describe('installBrowserTransportFetch', () => {
     ).length
     expect(keyExchangeCount).toBe(1)
   })
+})
+
+// 每个用例借用独立的 cache.memory 状态，模拟进程内测试环境。
+beforeEach(async () => {
+  const cacheTransportReady = await cache.init({ type: 'memory' })
+  expect(cacheTransportReady.success).toBe(true)
+})
+afterEach(async () => {
+  await cache.close()
 })

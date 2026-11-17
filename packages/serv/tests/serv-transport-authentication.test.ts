@@ -2,13 +2,14 @@ import type { TransportKeyStore, TransportServerKeyRing } from '@h-ai/crypto'
 import type { AddressInfo } from 'node:net'
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
-import { createInMemoryKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { cache } from '@h-ai/cache'
+import { createCacheTransportKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { serv } from '../src/serv-main.js'
 
 let serverKeyRing: TransportServerKeyRing
 
-function createApp(keyStore: TransportKeyStore = createInMemoryKeyStore()) {
+function createApp(keyStore: TransportKeyStore = createCacheTransportKeyStore({ cache })) {
   const contract = apiContract.create({})
   return serv.createApp({
     contract,
@@ -29,6 +30,49 @@ describe('serv authenticated transport boundary', () => {
     }
   })
   afterAll(async () => crypto.close())
+
+  it.each(['handshake', 'request'])('共享 %s 配额满返回 503 并阻止业务调用', async (stage) => {
+    const keyStore = createCacheTransportKeyStore({ cache, maxRegistrationsPerMinute: 1, maxRequestsPerMinute: 1 })
+    const resolve = vi.fn(() => Response.json({ accepted: true }))
+    const app = createApp(keyStore)
+    app.post('/api/v1/order', resolve)
+    const responses: Response[] = []
+    const fetchFn: typeof fetch = async (input, init) => {
+      const request = new Request(input, init)
+      const response = await app.fetch(request)
+      responses.push(response.clone())
+      return response
+    }
+    if (stage === 'handshake') {
+      const pair = crypto.asymmetric.generateKeyPair()
+      if (!pair.success)
+        throw new Error(pair.error.message)
+      const options = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientPublicKey: pair.data.publicKey }),
+      }
+      expect((await fetchFn('http://test.local/api/v1/_hai/key-exchange', options)).status).toBe(200)
+      const denied = await fetchFn('http://test.local/api/v1/_hai/key-exchange', options)
+      expect(denied.status).toBe(503)
+      expect(await denied.json()).toMatchObject({
+        error: expect.any(String),
+      })
+      expect(resolve).not.toHaveBeenCalled()
+      return
+    }
+    const client = crypto.transport.createClient({ keyExchangeUrl: 'http://test.local/api/v1/_hai/key-exchange', fetch: fetchFn })
+    try {
+      expect((await client.encryptedFetch('http://test.local/api/v1/order', { method: 'POST', body: '{}' })).status).toBe(200)
+      await expect(client.encryptedFetch('http://test.local/api/v1/order', { method: 'POST', body: '{}' })).rejects.toThrow()
+      expect(responses.at(-1)?.status).toBe(503)
+      expect(await responses.at(-1)?.json()).toMatchObject({
+        error: expect.any(String),
+      })
+      expect(resolve).toHaveBeenCalledOnce()
+    }
+    finally { client.destroy() }
+  })
 
   it.each([
     'iv',
@@ -99,7 +143,7 @@ describe('serv authenticated transport boundary', () => {
   })
 
   it('两套 Hono 节点并发收到同一请求时仅一个 handler 执行且正常响应可关联', async () => {
-    const store = createInMemoryKeyStore()
+    const store = createCacheTransportKeyStore({ cache })
     const a = createApp(store)
     const b = createApp(store)
     const handler = vi.fn(() => Response.json({ amount: 10000 }))
@@ -208,4 +252,13 @@ describe('serv authenticated transport boundary', () => {
       await node.close()
     }
   }, 30_000)
+})
+
+// 每个用例借用独立的 cache.memory 状态，模拟进程内测试环境。
+beforeEach(async () => {
+  const cacheTransportReady = await cache.init({ type: 'memory' })
+  expect(cacheTransportReady.success).toBe(true)
+})
+afterEach(async () => {
+  await cache.close()
 })

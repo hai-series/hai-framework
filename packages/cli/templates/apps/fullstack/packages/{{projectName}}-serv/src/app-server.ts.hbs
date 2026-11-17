@@ -1,3 +1,4 @@
+import { cache } from '@h-ai/cache'
 import type { CoreConfig } from '@h-ai/core'
 import type { {{#if features.feedback}}CreateServContext, {{/if}}ServHttpApp } from '@h-ai/serv'
 import process from 'node:process'
@@ -5,12 +6,11 @@ import process from 'node:process'
 import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
 {{/if}}
 import { core } from '@h-ai/core'
-import { createReldbTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+import { createCacheTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 {{#if features.feedback}}
 import { FeedbackConfigSchema } from '@h-ai/feedback'
 {{/if}}
 import { iam } from '@h-ai/iam'
-import { reldb } from '@h-ai/reldb'
 import { serv, ServConfigSchema } from '@h-ai/serv'
 import { storage } from '@h-ai/storage'
 import * as contracts from '{{fullstack.contractPackageName}}'
@@ -85,7 +85,7 @@ export function createServerApp(): ServHttpApp {
           && security.isNativeOrigin(request.headers.get('origin') ?? ''),
       },
     },
-    // 管理业务默认强制双向加密；各节点复用受管服务端密钥环与共享 reldb 客户端 registry。
+    // 管理业务默认强制双向加密；各节点复用受管服务端密钥环与共享 cache 客户端 registry。
     transport: {
       ...servConfig.transport,
 {{#if features.feedback}}
@@ -105,7 +105,7 @@ export function createServerApp(): ServHttpApp {
       ],
       crypto,
       serverKeyRing: ring.data,
-      keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),
+      keyStore: createCacheTransportKeyStore({ cache, ttlSeconds: 3600 }),
     },
     http: {
       ...servConfig.http,

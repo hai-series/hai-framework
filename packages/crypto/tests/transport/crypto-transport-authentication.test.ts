@@ -1,13 +1,14 @@
 import type { EncryptedPayload, EncryptedRequestPayload, TransportCreateServerOptions, TransportKeyPair, TransportMessageContext } from '../../src/index.js'
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { authenticateTransportRequest, createInMemoryKeyStore, crypto, HaiCryptoError, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportTimeError } from '../../src/index.js'
+import { cache } from '@h-ai/cache'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { authenticateTransportRequest, createCacheTransportKeyStore, crypto, HaiCryptoError, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportTimeError } from '../../src/index.js'
 import { sealTransportPayload } from '../../src/transport/crypto-transport-codec.js'
 
 let serverKey: TransportKeyPair
 let clientKey: TransportKeyPair
 
 async function fixture(timing?: Pick<TransportCreateServerOptions, 'maxFutureSkewSeconds' | 'maxRequestAgeSeconds'>) {
-  const keyStore = createInMemoryKeyStore()
+  const keyStore = createCacheTransportKeyStore({ cache })
   const ring = {
     activeKeyId: 'v1',
     keys: { v1: serverKey },
@@ -171,7 +172,7 @@ describe('authenticated transport protocol', () => {
         activeKeyId: 'v1',
         keys: { v1: serverKey },
       },
-      keyStore: createInMemoryKeyStore(),
+      keyStore: createCacheTransportKeyStore({ cache }),
       ...timing,
     })
     expect(result).toMatchObject({
@@ -445,7 +446,7 @@ describe('authenticated transport protocol', () => {
     client.destroy()
   }, 30_000)
 
-  it.each(['GET', 'HEAD'])('真实最长转义查询的 %s 请求与空响应使用紧凑路径摘要', async (method) => {
+  it.each(['GET', 'HEAD'].flatMap(method => [204, 205, 304].map(status => ({ method, status }))))('真实最长转义查询的 $method 请求与 $status 空响应使用紧凑路径摘要', async ({ method, status }) => {
     const f = await fixture()
     const url = new URL('https://example.test/orders?q=')
     url.search = `?q=${'\\'.repeat(8192 - url.pathname.length - 3)}`
@@ -467,11 +468,11 @@ describe('authenticated transport protocol', () => {
         const verified = await authenticateTransportRequest(f.b, request)
         if (!verified.success)
           throw new Error(verified.error.message)
-        const encrypted = await f.b.encryptResponse(verified.data.context, '', 204)
+        const encrypted = await f.b.encryptResponse(verified.data.context, '', status)
         if (!encrypted.success)
           throw new Error(encrypted.error.message)
         return new Response(null, {
-          status: 204,
+          status,
           headers: {
             'X-Encrypted': 'true',
             [TRANSPORT_PROTOCOL.ENVELOPE_HEADER]: JSON.stringify(encrypted.data),
@@ -479,7 +480,16 @@ describe('authenticated transport protocol', () => {
         })
       },
     })
-    expect((await client.encryptedFetch(new Request(url, { method }))).status).toBe(204)
+    expect((await client.encryptedFetch(new Request(url, { method }))).status).toBe(status)
     client.destroy()
   })
+})
+
+// 每个用例借用独立的 cache.memory 状态，模拟进程内测试环境。
+beforeEach(async () => {
+  const cacheTransportReady = await cache.init({ type: 'memory' })
+  expect(cacheTransportReady.success).toBe(true)
+})
+afterEach(async () => {
+  await cache.close()
 })

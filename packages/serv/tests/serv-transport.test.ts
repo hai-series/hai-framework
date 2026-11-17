@@ -1,11 +1,11 @@
 import type { CryptoFunctions, EncryptedPayload, EncryptedRequestPayload, TransportEncryptionManager, TransportServerKeyRing } from '@h-ai/crypto'
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
+import { cache } from '@h-ai/cache'
 import { err, ok } from '@h-ai/core'
-import { createInMemoryKeyStore, createReldbTransportKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportTimeError } from '@h-ai/crypto'
-import { reldb } from '@h-ai/reldb'
+import { createCacheTransportKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportTimeError } from '@h-ai/crypto'
 import { Hono } from 'hono'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { serv } from '../src/serv-main.js'
 import { createTransportMiddleware } from '../src/serv-transport.js'
 
@@ -91,7 +91,7 @@ describe('serv.createApp({ transport })', () => {
       procedures,
       http: { apiPrefix: '/api/v1', openapi: false, docs: false },
       transport: {
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         serverKeyRing,
         crypto,
         maxFutureSkewSeconds: 10,
@@ -148,7 +148,7 @@ describe('serv.createApp({ transport })', () => {
       procedures,
       http: { apiPrefix, openapi: false, docs: false },
       transport: {
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         serverKeyRing,
         crypto,
       },
@@ -182,7 +182,7 @@ describe('serv.createApp({ transport })', () => {
   })
 
   it('透传 transport.keyStore 到 crypto.transport.createServer', () => {
-    const keyStore = createInMemoryKeyStore(12)
+    const keyStore = createCacheTransportKeyStore({ cache })
     const createServer = vi.fn<CryptoFunctions['transport']['createServer']>(options => crypto.transport.createServer(options))
     const forwardingCrypto = createCryptoWithTransportServer(createServer)
 
@@ -221,7 +221,7 @@ describe('serv.createApp({ transport })', () => {
         },
       ],
       transport: {
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         serverKeyRing,
         crypto,
       },
@@ -247,7 +247,7 @@ describe('serv.createApp({ transport })', () => {
       procedures,
       http: { apiPrefix: '/api/v1', openapi: false, docs: false },
       transport: {
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         serverKeyRing,
         crypto,
       },
@@ -285,9 +285,7 @@ describe('serv.createApp({ transport })', () => {
   })
 
   it('renews an expired registry entry before sending concurrent POSTs', async () => {
-    const database = await reldb.init({ type: 'sqlite', database: ':memory:' })
-    expect(database.success).toBe(true)
-    const keyStore = createReldbTransportKeyStore({ reldb, ttlSeconds: 2 })
+    const keyStore = createCacheTransportKeyStore({ cache, ttlSeconds: 2 })
     const origin = 'http://test.local'
     const exchangeUrl = `${origin}/api/v1/_hai/key-exchange`
     const clientIds: string[] = []
@@ -349,7 +347,6 @@ describe('serv.createApp({ transport })', () => {
     }
     finally {
       client.destroy()
-      await reldb.close()
     }
   }, 8000)
 
@@ -358,7 +355,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         serverKeyRing,
         crypto,
       },
@@ -385,7 +382,7 @@ describe('serv.createApp({ transport })', () => {
       procedures,
       http: { apiPrefix: '/api/v1', openapi: false, docs: false },
       transport: {
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         serverKeyRing,
         crypto: failingCrypto,
       },
@@ -432,7 +429,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         serverKeyRing,
         crypto: transportCrypto,
       },
@@ -468,7 +465,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         serverKeyRing,
         crypto: transportCrypto,
       },
@@ -500,7 +497,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         serverKeyRing,
         crypto: transportCrypto,
       },
@@ -527,7 +524,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         serverKeyRing,
         crypto: transportCrypto,
       },
@@ -577,7 +574,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         serverKeyRing,
         crypto: createCryptoWithTransportServer(() => ok(manager)),
       },
@@ -597,7 +594,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         serverKeyRing,
         crypto: createCryptoWithTransportServer(() => ok(manager)),
       },
@@ -629,7 +626,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         serverKeyRing,
         crypto: createCryptoWithTransportServer(() => ok(manager)),
       },
@@ -649,7 +646,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         serverKeyRing,
         crypto: createCryptoWithTransportServer(() => ok(manager)),
       },
@@ -688,7 +685,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         serverKeyRing,
         crypto: createCryptoWithTransportServer(() => ok(manager)),
       },
@@ -719,7 +716,7 @@ describe('serv.createApp({ transport })', () => {
       contract,
       procedures,
       transport: {
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         serverKeyRing,
         crypto: createCryptoWithTransportServer(() => ok(manager)),
       },
@@ -787,7 +784,7 @@ describe('serv.createApp({ transport })', () => {
       procedures,
       http: { apiPrefix: '/api/v1', openapi: false, docs: false },
       transport: {
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         serverKeyRing,
         crypto,
       },
@@ -828,4 +825,13 @@ describe('serv.createApp({ transport })', () => {
       body: JSON.stringify({ x: 1 }),
     })).rejects.toThrow()
   })
+})
+
+// 每个用例借用独立的 cache.memory 状态，模拟进程内测试环境。
+beforeEach(async () => {
+  const cacheTransportReady = await cache.init({ type: 'memory' })
+  expect(cacheTransportReady.success).toBe(true)
+})
+afterEach(async () => {
+  await cache.close()
 })

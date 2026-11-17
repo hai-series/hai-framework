@@ -410,7 +410,7 @@ describe('shared production configuration', () => {
     expect(parseEnv(await readFile(path.join(root, '.env.prod'), 'utf8'))).toMatchObject({ HAI_DB_HOST: 'private-db.internal', HAI_VECDB_TYPE: 'qdrant' })
   })
 
-  it('仅crypto的真实API工程仍选择RelDB transport registry，模板上下文不漏硬依赖', async () => {
+  it('仅 crypto 的真实 API 工程选择 Cache registry，模板依赖不引入数据库', async () => {
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     const root = await mkdtemp(path.join(tmpdir(), 'hai-production-crypto-'))
@@ -427,14 +427,15 @@ describe('shared production configuration', () => {
     })
     const service = path.join(root, 'crypto-api', 'apps', 'crypto-api-serv')
     const app = await readFile(path.join(service, 'src', 'app.ts'), 'utf8')
-    expect(app).toContain('createReldbTransportKeyStore')
-    expect(app).not.toContain('createInMemoryKeyStore')
+    expect(app).toContain('createCacheTransportKeyStore')
+    expect(app).toContain('from \'@h-ai/cache\'')
     const context = buildTemplateContext({
       name: 'crypto-api',
       appType: 'api',
       features: ['crypto'],
       packageManager: 'pnpm',
     })
-    expect(context.features.db).toBe(true)
+    expect(context.features.cache).toBe(true)
+    expect(context.features.db).not.toBe(true)
   })
 })

@@ -38,8 +38,7 @@
     "sm-crypto": "catalog:"
   },
   "optionalDependencies": {
-    "@h-ai/cache": "workspace:*",
-    "@h-ai/reldb": "workspace:*"
+    "@h-ai/cache": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

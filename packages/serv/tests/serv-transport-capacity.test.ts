@@ -3,8 +3,9 @@ import type { ServContext } from '../src/serv-context.js'
 import { Buffer } from 'node:buffer'
 import { once } from 'node:events'
 import { apiContract } from '@h-ai/api-contract'
-import { createInMemoryKeyStore, crypto, resolveTransportBodyLimits } from '@h-ai/crypto'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { cache } from '@h-ai/cache'
+import { createCacheTransportKeyStore, crypto, resolveTransportBodyLimits } from '@h-ai/crypto'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ServConfigSchema } from '../src/serv-config.js'
 import { serv } from '../src/serv-main.js'
 import { createTransportWorkbook } from './helpers/serv-transport-workbook.js'
@@ -19,7 +20,7 @@ function createApplication(maxPlaintextBytes = 8 * 1024 * 1024) {
     transport: {
       crypto,
       serverKeyRing,
-      keyStore: createInMemoryKeyStore(),
+      keyStore: createCacheTransportKeyStore({ cache }),
       maxPlaintextBytes,
     },
   })
@@ -54,7 +55,7 @@ describe('serv configurable transport capacity', () => {
       transport: {
         crypto,
         serverKeyRing,
-        keyStore: createInMemoryKeyStore(),
+        keyStore: createCacheTransportKeyStore({ cache }),
         maxPlaintextBytes: 1024,
         routePlaintextBytes: { '/api/v1/material/*': 8192 },
       },
@@ -252,4 +253,13 @@ describe('serv configurable transport capacity', () => {
     }
     finally { client.destroy() }
   })
+})
+
+// 每个用例借用独立的 cache.memory 状态，模拟进程内测试环境。
+beforeEach(async () => {
+  const cacheTransportReady = await cache.init({ type: 'memory' })
+  expect(cacheTransportReady.success).toBe(true)
+})
+afterEach(async () => {
+  await cache.close()
 })

@@ -1,6 +1,7 @@
+import { cache } from '@h-ai/cache'
 import type { KeyExchangeResponse } from '@h-ai/crypto'
 import { HaiApiClientError } from '@h-ai/api-client'
-import { authenticateTransportRequest, createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { authenticateTransportRequest, createCacheTransportKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { initializeManagementApi, managementApi, resolveAvatarUrl } from '../src/lib/api/api-client.js'
 
@@ -24,7 +25,7 @@ function createServerFetch() {
       activeKeyId: 'test-v1',
       keys: { 'test-v1': key.data },
     },
-    keyStore: createInMemoryKeyStore(),
+    keyStore: createCacheTransportKeyStore({ cache }),
   })
   if (!created.success)
     throw new Error(created.error.message)
@@ -71,11 +72,13 @@ function createServerFetch() {
 
 describe('shared API transport', () => {
   beforeAll(async () => {
+    expect((await cache.init({ type: 'memory' })).success).toBe(true)
     expect((await crypto.init()).success).toBe(true)
   })
   afterAll(async () => {
     await managementApi.close()
     await crypto.close()
+    await cache.close()
   })
 
   it('decrypts configured core metadata and includes refresh cookies', async () => {

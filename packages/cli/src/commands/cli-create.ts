@@ -194,7 +194,7 @@ const FEATURES: Record<string, FeatureDefinition> = {
       return cliM('cli_featureCryptoDescription')
     },
     packages: ['@h-ai/crypto'],
-    dependencies: ['db'],
+    dependencies: ['cache'],
   },
   'audit': {
     id: 'audit',

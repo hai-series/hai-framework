@@ -301,12 +301,12 @@ export interface TransportCryptoServiceLike {
 // ─── 客户端密钥存储（可插拔，支持分布式） ───
 
 /**
- * 客户端公钥与nonce存储契约；生产显式共享Redis/数据库，真实共享与原子性由提供者保证。
+ * 客户端公钥与nonce存储契约；生产显式共享Redis，真实共享与原子性由提供者保证。
  * get的故障不能当未注册，claimRequest故障不能当成功；有效nonce不得在expiresAt前驱逐。
  *
  * @example
  * ```ts
- * import { crypto, createRedisTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+ * import { crypto, createCacheTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
  * import { cache } from '@h-ai/cache'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
@@ -314,7 +314,7 @@ export interface TransportCryptoServiceLike {
  *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
  *   if (!connected.success) throw new Error(connected.error.message)
  *   try {
- *     const registry = createRedisTransportKeyStore({ cache, ttlSeconds: 3600 })
+ *     const registry = createCacheTransportKeyStore({ cache, ttlSeconds: 3600 })
  *     const store: import('@h-ai/crypto').TransportKeyStore = registry
  *     const scope = store.stateScope
  *     // Redis部署须noeviction/可靠持久化，并同步各节点时钟。
@@ -337,20 +337,26 @@ export interface TransportKeyStore {
    *
    * @example
    * ```ts
+   * import { cache } from '@h-ai/cache'
    * import { crypto } from '@h-ai/crypto'
-   * const initialized = await crypto.init()
-   * if (!initialized.success) throw new Error(initialized.error.message)
+   * const cacheReady = await cache.init({ type: 'memory' })
+   * if (!cacheReady.success) throw new Error(cacheReady.error.message)
    * try {
-   *   const generated = crypto.asymmetric.generateKeyPair()
-   *   if (!generated.success) throw new Error(generated.error.message)
-   *   const pair = generated.data
-   *   const { createInMemoryKeyStore } = await import('@h-ai/crypto')
-   *   const registry = createInMemoryKeyStore(100)
-   *   try { const clientId = await registry.register(pair.publicKey) }
-   *   finally { await registry.close?.() }
-   *   // 本例仅开发/测试；生产替换为共享Redis/数据库registry。
+   *   const initialized = await crypto.init()
+   *   if (!initialized.success) throw new Error(initialized.error.message)
+   *   try {
+   *     const generated = crypto.asymmetric.generateKeyPair()
+   *     if (!generated.success) throw new Error(generated.error.message)
+   *     const pair = generated.data
+   *     const { createCacheTransportKeyStore } = await import('@h-ai/crypto')
+   *     const registry = createCacheTransportKeyStore({ cache })
+   *     try { const clientId = await registry.register(pair.publicKey) }
+   *     finally { await registry.close?.() }
+   *     // 本例仅开发/测试；生产替换为共享Redisregistry。
+   *   }
+   *   finally { await crypto.close() }
    * }
-   * finally { await crypto.close() }
+   * finally { await cache.close() }
    * ```
    */
   register: (publicKey: string) => Promise<string>
@@ -361,19 +367,25 @@ export interface TransportKeyStore {
    *
    * @example
    * ```ts
+   * import { cache } from '@h-ai/cache'
    * import { crypto } from '@h-ai/crypto'
-   * const initialized = await crypto.init()
-   * if (!initialized.success) throw new Error(initialized.error.message)
+   * const cacheReady = await cache.init({ type: 'memory' })
+   * if (!cacheReady.success) throw new Error(cacheReady.error.message)
    * try {
-   *   const generated = crypto.asymmetric.generateKeyPair()
-   *   if (!generated.success) throw new Error(generated.error.message)
-   *   const pair = generated.data
-   *   const { createInMemoryKeyStore } = await import('@h-ai/crypto')
-   *   const registry = createInMemoryKeyStore(100)
-   *   try { const clientId = await registry.register(pair.publicKey); const publicKey = await registry.get(clientId) }
-   *   finally { await registry.close?.() }
+   *   const initialized = await crypto.init()
+   *   if (!initialized.success) throw new Error(initialized.error.message)
+   *   try {
+   *     const generated = crypto.asymmetric.generateKeyPair()
+   *     if (!generated.success) throw new Error(generated.error.message)
+   *     const pair = generated.data
+   *     const { createCacheTransportKeyStore } = await import('@h-ai/crypto')
+   *     const registry = createCacheTransportKeyStore({ cache })
+   *     try { const clientId = await registry.register(pair.publicKey); const publicKey = await registry.get(clientId) }
+   *     finally { await registry.close?.() }
+   *   }
+   *   finally { await crypto.close() }
    * }
-   * finally { await crypto.close() }
+   * finally { await cache.close() }
    * ```
    */
   get: (clientId: string) => Promise<string | undefined>
@@ -387,26 +399,32 @@ export interface TransportKeyStore {
    *
    * @example
    * ```ts
+   * import { cache } from '@h-ai/cache'
    * import { crypto } from '@h-ai/crypto'
-   * const initialized = await crypto.init()
-   * if (!initialized.success) throw new Error(initialized.error.message)
+   * const cacheReady = await cache.init({ type: 'memory' })
+   * if (!cacheReady.success) throw new Error(cacheReady.error.message)
    * try {
-   *   const generated = crypto.asymmetric.generateKeyPair()
-   *   if (!generated.success) throw new Error(generated.error.message)
-   *   const pair = generated.data
-   *   const { createInMemoryKeyStore } = await import('@h-ai/crypto')
-   *   const registry = createInMemoryKeyStore(100)
+   *   const initialized = await crypto.init()
+   *   if (!initialized.success) throw new Error(initialized.error.message)
    *   try {
-   *     const clientId = await registry.register(pair.publicKey)
-   *     const requestId = globalThis.crypto.randomUUID().replaceAll('-', '')
-   *     const expiresAt = Date.now() + 360000
-   *     const first = await registry.claimRequest(clientId, requestId, expiresAt)
-   *     const replay = await registry.claimRequest(clientId, requestId, expiresAt)
-   *     // 单进程测试预期true/false；生产需要跨节点共享原子消费且有效期间不驱逐。
+   *     const generated = crypto.asymmetric.generateKeyPair()
+   *     if (!generated.success) throw new Error(generated.error.message)
+   *     const pair = generated.data
+   *     const { createCacheTransportKeyStore } = await import('@h-ai/crypto')
+   *     const registry = createCacheTransportKeyStore({ cache })
+   *     try {
+   *       const clientId = await registry.register(pair.publicKey)
+   *       const requestId = globalThis.crypto.randomUUID().replaceAll('-', '')
+   *       const expiresAt = Date.now() + 360000
+   *       const first = await registry.claimRequest(clientId, requestId, expiresAt)
+   *       const replay = await registry.claimRequest(clientId, requestId, expiresAt)
+   *       // 单进程测试预期true/false；生产需要跨节点共享原子消费且有效期间不驱逐。
+   *     }
+   *     finally { await registry.close?.() }
    *   }
-   *   finally { await registry.close?.() }
+   *   finally { await crypto.close() }
    * }
-   * finally { await crypto.close() }
+   * finally { await cache.close() }
    * ```
    */
   claimRequest: (clientId: string, requestId: string, expiresAt: number) => Promise<boolean>
@@ -417,32 +435,44 @@ export interface TransportKeyStore {
    *
    * @example
    * ```ts
+   * import { cache } from '@h-ai/cache'
    * import { crypto } from '@h-ai/crypto'
-   * const initialized = await crypto.init()
-   * if (!initialized.success) throw new Error(initialized.error.message)
+   * const cacheReady = await cache.init({ type: 'memory' })
+   * if (!cacheReady.success) throw new Error(cacheReady.error.message)
    * try {
-   *   const generated = crypto.asymmetric.generateKeyPair()
-   *   if (!generated.success) throw new Error(generated.error.message)
-   *   const pair = generated.data
-   *   const { createInMemoryKeyStore } = await import('@h-ai/crypto')
-   *   const registry = createInMemoryKeyStore(100)
-   *   try { const clientId = await registry.register(pair.publicKey); await registry.delete?.(clientId) }
-   *   finally { await registry.close?.() }
+   *   const initialized = await crypto.init()
+   *   if (!initialized.success) throw new Error(initialized.error.message)
+   *   try {
+   *     const generated = crypto.asymmetric.generateKeyPair()
+   *     if (!generated.success) throw new Error(generated.error.message)
+   *     const pair = generated.data
+   *     const { createCacheTransportKeyStore } = await import('@h-ai/crypto')
+   *     const registry = createCacheTransportKeyStore({ cache })
+   *     try { const clientId = await registry.register(pair.publicKey); await registry.delete?.(clientId) }
+   *     finally { await registry.close?.() }
+   *   }
+   *   finally { await crypto.close() }
    * }
-   * finally { await crypto.close() }
+   * finally { await cache.close() }
    * ```
    */
   delete?: (clientId: string) => Promise<void>
   /**
-   * 可选释放registry自有资源；借用的cache/reldb不由registry关闭。
+   * 可选释放registry自有资源；借用的cache不由registry关闭。
    * @returns 异步操作结果；存储或网络故障按方法契约拒绝。
    *
    * @example
    * ```ts
-   * import { createInMemoryKeyStore } from '@h-ai/crypto'
-   * const registry = createInMemoryKeyStore(100)
-   * await registry.close?.()
-   * // 共享registry借用的cache/reldb仍由应用反序关闭。
+   * import { cache } from '@h-ai/cache'
+   * import { createCacheTransportKeyStore } from '@h-ai/crypto'
+   * const cacheReady = await cache.init({ type: 'memory' })
+   * if (!cacheReady.success) throw new Error(cacheReady.error.message)
+   * try {
+   *   const registry = createCacheTransportKeyStore({ cache })
+   *   await registry.close?.()
+   *   // 共享registry借用的cache仍由应用反序关闭。
+   * }
+   * finally { await cache.close() }
    * ```
    */
   close?: () => Promise<void>
@@ -453,7 +483,7 @@ export interface TransportKeyStore {
  *
  * @example
  * ```ts
- * import { crypto, createRedisTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+ * import { crypto, createCacheTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
  * import { cache } from '@h-ai/cache'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
@@ -461,7 +491,7 @@ export interface TransportKeyStore {
  *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
  *   if (!connected.success) throw new Error(connected.error.message)
  *   try {
- *     const registry = createRedisTransportKeyStore({ cache, ttlSeconds: 3600 })
+ *     const registry = createCacheTransportKeyStore({ cache, ttlSeconds: 3600 })
  *     const parsed = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
  *     if (!parsed.success) throw new Error(parsed.error.message)
  *     const options: import('@h-ai/crypto').TransportCreateServerOptions = { serverKeyRing: parsed.data, keyStore: registry }
@@ -491,11 +521,11 @@ export interface TransportCreateServerOptions {
 
 /**
  * 服务端认证传输管理器；注册公钥，按真实HTTP上下文验签/MAC/时效并消费nonce，随后才返回明文。
- * 优先使用authenticateTransportRequest；响应只用已认证上下文。close释放registry自有资源，不关闭借用的cache/reldb。
+ * 优先使用authenticateTransportRequest；响应只用已认证上下文。close释放registry自有资源，不关闭借用的cache。
  *
  * @example
  * ```ts
- * import { crypto, createRedisTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+ * import { crypto, createCacheTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
  * import { cache } from '@h-ai/cache'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
@@ -503,7 +533,7 @@ export interface TransportCreateServerOptions {
  *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
  *   if (!connected.success) throw new Error(connected.error.message)
  *   try {
- *     const registry = createRedisTransportKeyStore({ cache, ttlSeconds: 3600 })
+ *     const registry = createCacheTransportKeyStore({ cache, ttlSeconds: 3600 })
  *     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
  *     if (!ring.success) throw new Error(ring.error.message)
  *     const created = crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: registry })
@@ -620,12 +650,12 @@ export interface TransportEncryptionManager {
    */
   decryptRequest: (payload: EncryptedRequestPayload, expected: TransportRequestContext) => Promise<HaiResult<string>>
   /**
-   * 释放registry自有资源；应用仍负责借用cache/reldb的关闭。
+   * 释放registry自有资源；应用仍负责借用cache的关闭。
    * @returns 异步操作结果；存储或网络故障按方法契约拒绝。
    *
    * @example
    * ```ts
-   * import { crypto, createRedisTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+   * import { crypto, createCacheTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
    * import { cache } from '@h-ai/cache'
    * const initialized = await crypto.init()
    * if (!initialized.success) throw new Error(initialized.error.message)
@@ -633,7 +663,7 @@ export interface TransportEncryptionManager {
    *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
    *   if (!connected.success) throw new Error(connected.error.message)
    *   try {
-   *     const registry = createRedisTransportKeyStore({ cache, ttlSeconds: 3600 })
+   *     const registry = createCacheTransportKeyStore({ cache, ttlSeconds: 3600 })
    *     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
    *     if (!ring.success) throw new Error(ring.error.message)
    *     const created = crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: registry })

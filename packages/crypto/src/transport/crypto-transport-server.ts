@@ -28,11 +28,11 @@ import { TRANSPORT_PROTOCOL, TRANSPORT_TIME_LIMITS } from './crypto-transport-ty
  * 生产要求共享registry；先认证实际HTTP绑定/签名/MAC/nonce，再交给业务，响应关联原上下文与实际状态。
  * @param cryptoService - 已初始化SM2/SM3/SM4能力。
  * @param options - 必填受管密钥环和客户端registry。
- * @returns 管理器或脱敏HaiResult失败；应用持有底层cache/reldb并负责关闭。
+ * @returns 管理器或脱敏HaiResult失败；应用持有底层cache并负责关闭。
  *
  * @example
  * ```ts
- * import { crypto, createRedisTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+ * import { crypto, createCacheTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
  * import { cache } from '@h-ai/cache'
  * const initialized = await crypto.init()
  * if (!initialized.success) throw new Error(initialized.error.message)
@@ -40,7 +40,7 @@ import { TRANSPORT_PROTOCOL, TRANSPORT_TIME_LIMITS } from './crypto-transport-ty
  *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
  *   if (!connected.success) throw new Error(connected.error.message)
  *   try {
- *     const registry = createRedisTransportKeyStore({ cache, ttlSeconds: 3600 })
+ *     const registry = createCacheTransportKeyStore({ cache, ttlSeconds: 3600 })
  *     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
  *     if (!ring.success) throw new Error(ring.error.message)
  *     const created = crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: registry })
@@ -184,7 +184,9 @@ export function createTransportEncryption(
           return timeFailure(claimedAt)
         return plaintext
       }
-      catch {
+      catch (error) {
+        if (error instanceof Error && 'code' in error && error.code === HaiCryptoError.TRANSPORT_BUSY.code)
+          return err(HaiCryptoError.TRANSPORT_BUSY, cryptoM('crypto_transportBusy'))
         return transportAuthenticationFailure()
       }
     },

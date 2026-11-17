@@ -1,50 +1,46 @@
-/** 两个独立 Node 进程共享 SQLite registry 的验收 worker；私钥只通过私有 IPC 装配。 */
 import process from 'node:process'
-import { authenticateTransportRequest, createReldbTransportKeyStore, crypto } from '@h-ai/crypto'
-import { reldb } from '@h-ai/reldb'
+/** 两个独立 Node 进程共享 Redis registry；私钥只通过私有 IPC 装配。 */
+import { cache } from '@h-ai/cache'
+import { authenticateTransportRequest, createCacheTransportKeyStore, crypto } from '@h-ai/crypto'
 
 let manager
 let handled = 0
-
 process.on('message', async (message) => {
   try {
     if (message.type === 'init') {
       const initialized = await crypto.init()
-      const database = await reldb.init({ type: 'sqlite', database: message.database })
-      if (!initialized.success || !database.success)
+      const connected = await cache.init(message.config)
+      if (!initialized.success || !connected.success)
         throw new Error('Worker initialization failed')
-      const keyStore = createReldbTransportKeyStore({ reldb })
-      await keyStore.get(message.clientId)
-      const server = crypto.transport.createServer({ serverKeyRing: message.serverKeyRing, keyStore })
-      if (!server.success)
+      const result = crypto.transport.createServer({
+        serverKeyRing: message.serverKeyRing,
+        keyStore: createCacheTransportKeyStore({ cache }),
+      })
+      if (!result.success)
         throw new Error('Worker manager initialization failed')
-      manager = server.data
-      process.send?.({ type: 'ready' })
+      manager = result.data
+      process.send?.({ id: message.id, success: true })
     }
     else if (message.type === 'request') {
-      const result = await authenticateTransportRequest(manager, new Request(message.url, message.init))
-      if (result.success) {
-        // 只有共享原子 claim 成功后，业务处理器才会得到明文。
+      const verified = await authenticateTransportRequest(manager, new Request(message.url, message.init))
+      if (verified.success) {
         handled++
-        const response = await manager.encryptResponse(result.data.context, JSON.stringify({ handled }), 200)
-        process.send?.({ id: message.id, success: response.success, handled })
+        const encrypted = await manager.encryptResponse(verified.data.context, JSON.stringify({ handled }), 200)
+        process.send?.({ id: message.id, success: encrypted.success, handled })
       }
       else {
         process.send?.({ id: message.id, success: false, handled })
       }
     }
     else if (message.type === 'close') {
-      await reldb.close()
+      await cache.close()
       await crypto.close()
       process.disconnect()
     }
   }
-  catch {
-    process.send?.({ id: message.id, success: false, error: 'Transport worker operation failed' })
-  }
+  catch { process.send?.({ id: message.id, success: false, error: 'Transport worker operation failed' }) }
 })
-
 process.on('disconnect', async () => {
-  await reldb.close()
+  await cache.close()
   await crypto.close()
 })

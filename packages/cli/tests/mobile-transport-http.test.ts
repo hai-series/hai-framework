@@ -1,12 +1,12 @@
-/** 实际生成客户端 + 真实 HTTP/SM2/SQLite registry，区分加密失败与显式明文模式。 */
+/** 实际生成客户端 + 真实 HTTP/SM2/Cache registry，区分加密失败与显式明文模式。 */
 import type { KeyExchangeResponse } from '@h-ai/crypto'
 import { Buffer } from 'node:buffer'
 import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { runInNewContext } from 'node:vm'
 import { apiClient } from '@h-ai/api-client'
-import { authenticateTransportRequest, createReldbTransportKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
-import { reldb } from '@h-ai/reldb'
+import { cache } from '@h-ai/cache'
+import { authenticateTransportRequest, createCacheTransportKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import Handlebars from 'handlebars'
 import ts from 'typescript'
 import { afterEach, expect, it } from 'vitest'
@@ -23,7 +23,7 @@ afterEach(async () => {
   }
   finally {
     try {
-      expect((await reldb.close()).success).toBe(true)
+      expect((await cache.close()).success).toBe(true)
     }
     finally {
       await crypto.close()
@@ -77,8 +77,8 @@ function generatedClient(baseUrl: string, encrypted: boolean): MobileClient {
 it.each(['encrypted', 'rejected-handshake', 'explicit-plaintext'] as const)('真实移动客户端 HTTP 模式 %s', async (mode) => {
   const initialized = await crypto.init()
   expect(initialized.success).toBe(true)
-  const database = await reldb.init({ type: 'sqlite', database: ':memory:' })
-  expect(database.success).toBe(true)
+  const connected = await cache.init({ type: 'memory' })
+  expect(connected.success).toBe(true)
   const pair = crypto.asymmetric.generateKeyPair()
   if (!pair.success)
     throw new Error(pair.error.message)
@@ -87,7 +87,7 @@ it.each(['encrypted', 'rejected-handshake', 'explicit-plaintext'] as const)('真
       activeKeyId: 'fixture-v1',
       keys: { 'fixture-v1': pair.data },
     },
-    keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 60 }),
+    keyStore: createCacheTransportKeyStore({ cache, ttlSeconds: 60 }),
   })
   if (!manager.success)
     throw new Error(manager.error.message)

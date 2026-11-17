@@ -1,10 +1,7 @@
 import type { EncryptedRequestPayload, TransportEncryptionManager, TransportServerKeyRing } from '../../src/index.js'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { basename, dirname, join, resolve } from 'node:path'
-import { reldb } from '@h-ai/reldb'
+import { cache } from '@h-ai/cache'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createReldbTransportKeyStore, crypto, HaiCryptoError, parseTransportServerKeyRing } from '../../src/index.js'
+import { createCacheTransportKeyStore, crypto, HaiCryptoError, parseTransportServerKeyRing } from '../../src/index.js'
 import { sealTransportPayload } from '../../src/transport/crypto-transport-codec.js'
 
 function createKeyRing(): TransportServerKeyRing {
@@ -20,7 +17,7 @@ function createKeyRing(): TransportServerKeyRing {
 function createManager(serverKeyRing: TransportServerKeyRing): TransportEncryptionManager {
   const server = crypto.transport.createServer({
     serverKeyRing,
-    keyStore: createReldbTransportKeyStore({ reldb }),
+    keyStore: createCacheTransportKeyStore({ cache }),
   })
   if (!server.success)
     throw new Error(server.error.message)
@@ -54,29 +51,15 @@ async function decrypt(manager: TransportEncryptionManager, payload: EncryptedRe
 }
 
 describe('managed transport server key ring', () => {
-  let directory: string | undefined
-  let database: string
-
   beforeEach(async () => {
     expect((await crypto.init()).success).toBe(true)
-    directory = await mkdtemp(join(tmpdir(), 'hai-crypto-keyring-'))
-    database = join(directory, 'registry.db')
-    expect((await reldb.init({ type: 'sqlite', database })).success).toBe(true)
   })
 
   afterEach(async () => {
-    await reldb.close()
     await crypto.close()
-    if (directory) {
-      const target = resolve(directory)
-      if (dirname(target) !== resolve(tmpdir()) || !basename(target).startsWith('hai-crypto-keyring-'))
-        throw new Error('Unexpected transport key ring test cleanup directory')
-      await rm(target, { recursive: true, force: true })
-      directory = undefined
-    }
   })
 
-  it('a 协商、B 解密，共享持久 registry 在管理器和数据库重启后继续工作', async () => {
+  it('a 协商、B 解密，管理器重建继续复用缓存公钥和 nonce', async () => {
     const ring = createKeyRing()
     const nodeA = createManager(ring)
     const nodeB = createManager(ring)
@@ -89,8 +72,6 @@ describe('managed transport server key ring', () => {
     expect(await decrypt(nodeB, request)).toMatchObject({ success: true, data: '{"message":"跨节点"}' })
     await nodeA.close()
     await nodeB.close()
-    await reldb.close()
-    expect((await reldb.init({ type: 'sqlite', database })).success).toBe(true)
     const restarted = createManager(ring)
     expect(await restarted.getClientPublicKey(clientId)).toBe(client.data.publicKey)
     expect((await decrypt(restarted, request)).success).toBe(false)
@@ -178,7 +159,7 @@ describe('managed transport server key ring', () => {
     expect(crypto.transport.createServer({ serverKeyRing: first }).success).toBe(false)
     // @ts-expect-error 验证非 TypeScript 调用方遗漏必填 ring 时不会隐式生成密钥。
     expect(crypto.transport.createServer({
-      keyStore: createReldbTransportKeyStore({ reldb }),
+      keyStore: createCacheTransportKeyStore({ cache }),
     }).success).toBe(false)
     expect(parseTransportServerKeyRing(undefined).success).toBe(false)
     expect(parseTransportServerKeyRing({ activeKeyId: 'missing', keys: first.keys }).success).toBe(false)
@@ -186,7 +167,7 @@ describe('managed transport server key ring', () => {
     expect(malformed.success).toBe(false)
     expect(JSON.stringify(malformed)).not.toContain(first.keys.v1!.privateKey)
     const mismatched = crypto.transport.createServer({
-      keyStore: createReldbTransportKeyStore({ reldb }),
+      keyStore: createCacheTransportKeyStore({ cache }),
       serverKeyRing: {
         activeKeyId: 'v1',
         keys: {
@@ -220,7 +201,7 @@ describe('managed transport server key ring', () => {
   it('真实共享 registry 故障时 encryptResponse 返回 HaiResult，注册按显式契约 reject', async () => {
     const ring = createKeyRing()
     const manager = createManager(ring)
-    await reldb.close()
+    await cache.close()
     const encrypted = await manager.encryptResponse({
       version: 2,
       serverKeyId: 'v1',
@@ -236,4 +217,13 @@ describe('managed transport server key ring', () => {
     await expect(manager.registerClientKey(ring.keys.v1!.publicKey)).rejects.toThrow()
     await expect(manager.getClientPublicKey('client-id')).rejects.toThrow()
   })
+})
+
+// 每个用例借用独立的 cache.memory 状态，模拟进程内测试环境。
+beforeEach(async () => {
+  const cacheTransportReady = await cache.init({ type: 'memory' })
+  expect(cacheTransportReady.success).toBe(true)
+})
+afterEach(async () => {
+  await cache.close()
 })

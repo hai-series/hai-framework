@@ -2,24 +2,20 @@ import type { CoreConfig } from '@h-ai/core'
 import type { {{#if features.feedback}}CreateServContext, {{/if}}ServConfig{{#if features.crypto}}, ServTransportConfig{{/if}} } from '@h-ai/serv'
 {{#if features.crypto}}
 import process from 'node:process'
+import { cache } from '@h-ai/cache'
 {{/if}}
 {{#if features.feedback}}
 import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
 {{/if}}
 import { core } from '@h-ai/core'
 {{#if features.crypto}}
-import { {{#if features.db}}createReldbTransportKeyStore{{else}}createInMemoryKeyStore{{/if}}, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+import { createCacheTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 {{/if}}
 {{#if features.feedback}}
 import { FeedbackConfigSchema } from '@h-ai/feedback'
 {{/if}}
 {{#if features.iam}}
 import { iam } from '@h-ai/iam'
-{{/if}}
-{{#if features.crypto}}
-{{#if features.db}}
-import { reldb } from '@h-ai/reldb'
-{{/if}}
 {{/if}}
 import { serv } from '@h-ai/serv'
 import { {{api.contractExportName}} } from '{{api.contractPackageName}}'
@@ -45,10 +41,6 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
   const transportMode = _options.transport ?? 'config'
   let transport: ServTransportConfig | undefined
   if (transportMode !== 'disabled' && servConfig.transport !== false) {
-{{#unless features.db}}
-if (coreConfig.env !== 'development' && coreConfig.env !== 'test')
-                throw new Error('Production transport requires a shared registry; enable the db feature and configure a shared database')
-{{/unless}}
     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     if (!ring.success)
       throw new Error(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ${ring.error.message} (${ring.error.code})`)
@@ -62,11 +54,7 @@ if (coreConfig.env !== 'development' && coreConfig.env !== 'test')
     transport = {
       crypto,
       serverKeyRing: ring.data,
-{{#if features.db}}
-      keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),
-{{else}}
-keyStore: createInMemoryKeyStore(), // 无 db 的模板仅在 development/test 使用内存 registry。
-{{/if}}
+      keyStore: createCacheTransportKeyStore({ cache }),
       keyExchangePath: servConfig.transport.keyExchangePath,
       maxPlaintextBytes: servConfig.transport.maxPlaintextBytes,
       maxFutureSkewSeconds: servConfig.transport.maxFutureSkewSeconds,

@@ -22,6 +22,7 @@ import type {
 } from './crypto-transport-types.js'
 import { err, HaiCommonError, ok } from '@h-ai/core'
 import { cryptoM } from '../crypto-i18n.js'
+import { isValidSM2PublicKey } from '../crypto-public-key.js'
 import { HaiCryptoError } from '../crypto-types.js'
 import { readTransportBody, resolveTransportBodyLimits, TRANSPORT_BODY_LIMITS, TransportBodyTooLargeError } from './crypto-transport-body.js'
 import { hashTransportPath, isValidEncryptedPayload, isValidTransportKeyTtlSeconds, openTransportPayload, sameTransportContext, sealTransportPayload } from './crypto-transport-codec.js'
@@ -454,7 +455,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     respHeaders.delete(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)
     respHeaders.delete('Content-Length')
     respHeaders.delete('Content-Encoding')
-    return new Response(method === 'HEAD' || [204, 304].includes(response.status)
+    return new Response(method === 'HEAD' || [204, 205, 304].includes(response.status)
       ? null
       : decResult.data, {
       status: response.status,
@@ -506,7 +507,7 @@ function isRequestLike(input: RequestInfo | URL): input is Request {
 }
 
 /**
- * 校验握手响应的有界结构/标识；TLS负责对端真实性，后续SM2操作仍检查公钥曲线点。
+ * 校验握手响应的有界结构、标识和真实公钥曲线点，全部有效后才提交可用会话；TLS负责来源真实性。
  * @param body - 未知JSON响应。
  * @returns 是否可提交当前会话所需字段。
  *
@@ -520,10 +521,9 @@ function isKeyExchangeResponse(body: unknown): body is KeyExchangeResponse {
   if (!body || typeof body !== 'object')
     return false
   const fields = body as Record<string, unknown>
-  return typeof fields.serverPublicKey === 'string' && fields.serverPublicKey.length > 0
-    && new TextEncoder().encode(fields.serverPublicKey).byteLength <= TRANSPORT_BODY_LIMITS.publicKeyBytes
-    && typeof fields.clientId === 'string' && fields.clientId.length > 0
-    && typeof fields.serverKeyId === 'string' && /^[\w-]{1,64}$/.test(fields.serverKeyId)
+  return isValidSM2PublicKey(fields.serverPublicKey)
+    && typeof fields.clientId === 'string' && fields.clientId.length >= 1 && fields.clientId.length <= 128 && !/[^\w-]/.test(fields.clientId)
+    && typeof fields.serverKeyId === 'string' && fields.serverKeyId.length >= 1 && fields.serverKeyId.length <= 64 && !/[^\w-]/.test(fields.serverKeyId)
     && typeof fields.maxPlaintextBytes === 'number'
     && (fields.clientKeyTtlSeconds === undefined || isValidTransportKeyTtlSeconds(fields.clientKeyTtlSeconds))
 }

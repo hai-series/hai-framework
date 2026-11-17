@@ -1,6 +1,8 @@
 import type { TransportServerKeyRing } from '../../src/index.js'
+import { cache } from '@h-ai/cache'
+import { HaiCommonError } from '@h-ai/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { authenticateTransportRequest, createInMemoryKeyStore, crypto, TRANSPORT_BODY_LIMITS } from '../../src/index.js'
+import { authenticateTransportRequest, createCacheTransportKeyStore, crypto, TRANSPORT_BODY_LIMITS } from '../../src/index.js'
 
 let serverKeyRing: TransportServerKeyRing
 
@@ -100,11 +102,41 @@ describe('crypto.transport', () => {
     expect(crypto.transport.protocol.ENCRYPTED_HEADER).toBe('X-Encrypted')
   })
 
+  it.each([
+    { serverPublicKey: 'not-a-key' },
+    { serverPublicKey: `04${'00'.repeat(64)}` },
+    { clientId: 'contains spaces' },
+    { clientId: 'valid-client\n' },
+    { serverKeyId: 'test-v1\n' },
+    {
+      clientId: 'c'.repeat(129),
+    },
+  ])('does not publish a session after an invalid handshake: %j', async (invalid) => {
+    const client = crypto.transport.createClient({
+      keyExchangeUrl: KEY_EXCHANGE_URL,
+      fetch: async () => Response.json({
+        clientId: 'valid-client',
+        serverKeyId: 'test-v1',
+        serverPublicKey: serverKeyRing.keys['test-v1'].publicKey,
+        maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+        ...invalid,
+      }),
+    })
+    try {
+      const result = await client.init()
+      expect(result.success).toBe(false)
+      if (!result.success)
+        expect(result.error.code).toBe(HaiCommonError.INTERNAL_ERROR.code)
+      expect(client.ready()).toBe(false)
+    }
+    finally { client.destroy() }
+  })
+
   it('createServer fails when crypto not initialized', async () => {
     await crypto.close()
     const result = crypto.transport.createServer({
       serverKeyRing,
-      keyStore: createInMemoryKeyStore(),
+      keyStore: createCacheTransportKeyStore({ cache }),
     })
     expect(result.success).toBe(false)
   })
@@ -112,7 +144,7 @@ describe('crypto.transport', () => {
   it('round-trips request/response through encrypted fetch', async () => {
     const serverResult = crypto.transport.createServer({
       serverKeyRing,
-      keyStore: createInMemoryKeyStore(),
+      keyStore: createCacheTransportKeyStore({ cache }),
     })
     expect(serverResult.success).toBe(true)
     if (!serverResult.success)
@@ -153,7 +185,7 @@ describe('crypto.transport', () => {
   it('round-trips through an injected keyStore', async () => {
     const serverResult = crypto.transport.createServer({
       serverKeyRing,
-      keyStore: createInMemoryKeyStore(32),
+      keyStore: createCacheTransportKeyStore({ cache }),
     })
     expect(serverResult.success).toBe(true)
     if (!serverResult.success)
@@ -181,7 +213,7 @@ describe('crypto.transport', () => {
     const server = crypto.transport.createServer({
       serverKeyRing,
       keyStore: {
-        ...createInMemoryKeyStore(),
+        ...createCacheTransportKeyStore({ cache }),
         clientKeyTtlSeconds: 60,
       },
     })
@@ -231,7 +263,7 @@ describe('crypto.transport', () => {
     const server = crypto.transport.createServer({
       serverKeyRing,
       keyStore: {
-        ...createInMemoryKeyStore(),
+        ...createCacheTransportKeyStore({ cache }),
         clientKeyTtlSeconds: 60,
       },
     })
@@ -304,7 +336,7 @@ describe('crypto.transport', () => {
   it('reads body from Request when init.body is absent (oRPC compat)', async () => {
     const serverResult = crypto.transport.createServer({
       serverKeyRing,
-      keyStore: createInMemoryKeyStore(),
+      keyStore: createCacheTransportKeyStore({ cache }),
     })
     if (!serverResult.success)
       throw new Error('createServer failed')
@@ -324,7 +356,7 @@ describe('crypto.transport', () => {
   it('destroy() clears session state', async () => {
     const serverResult = crypto.transport.createServer({
       serverKeyRing,
-      keyStore: createInMemoryKeyStore(),
+      keyStore: createCacheTransportKeyStore({ cache }),
     })
     if (!serverResult.success)
       throw new Error('createServer failed')
@@ -352,7 +384,7 @@ describe('crypto.transport', () => {
       .mockResolvedValueOnce(new Response(stream))
       .mockResolvedValueOnce(Response.json({
         serverKeyId: 'test-v1',
-        serverPublicKey: 'server-key',
+        serverPublicKey: serverKeyRing.keys['test-v1'].publicKey,
         clientId: 'client-id',
         maxPlaintextBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
       }))
@@ -466,7 +498,7 @@ describe('crypto.transport', () => {
   it('发送 ArrayBufferView 只读取有效切片并清除原正文的长度与编码头', async () => {
     const server = crypto.transport.createServer({
       serverKeyRing,
-      keyStore: createInMemoryKeyStore(),
+      keyStore: createCacheTransportKeyStore({ cache }),
     })
     if (!server.success)
       throw new Error('createServer failed')
@@ -492,7 +524,7 @@ describe('crypto.transport', () => {
     })
     const server = crypto.transport.createServer({
       serverKeyRing,
-      keyStore: createInMemoryKeyStore(),
+      keyStore: createCacheTransportKeyStore({ cache }),
     })
     if (!server.success)
       throw new Error(server.error.message)
@@ -540,4 +572,13 @@ describe('crypto.transport', () => {
     expect(cancel).toHaveBeenCalledOnce()
     expect(stream.locked).toBe(false)
   })
+})
+
+// 每个用例借用独立的 cache.memory 状态，模拟进程内测试环境。
+beforeEach(async () => {
+  const cacheTransportReady = await cache.init({ type: 'memory' })
+  expect(cacheTransportReady.success).toBe(true)
+})
+afterEach(async () => {
+  await cache.close()
 })

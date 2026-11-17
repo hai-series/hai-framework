@@ -1,9 +1,10 @@
 import type { CryptoFunctions, EncryptedPayload, EncryptedRequestPayload, KeyExchangeResponse, TransportEncryptionManager, TransportServerKeyRing } from '@h-ai/crypto'
 import type { RequestEvent } from '@sveltejs/kit'
 import type { Handle } from '@sveltejs/kit/hooks'
+import { cache } from '@h-ai/cache'
 import { err, HaiCommonError, ok } from '@h-ai/core'
-import { createInMemoryKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { createCacheTransportKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { kit } from '../src/kit-main.js'
 
 let serverKeyRing: TransportServerKeyRing
@@ -166,7 +167,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: transportCrypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -201,7 +202,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: transportCrypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -232,7 +233,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: transportCrypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -257,7 +258,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: createCryptoWithTransportServer(() => ok(manager)),
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -309,7 +310,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: createCryptoWithTransportServer(() => ok(manager)),
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -329,7 +330,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: createCryptoWithTransportServer(() => ok(manager)),
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -363,7 +364,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: createCryptoWithTransportServer(() => ok(manager)),
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -383,7 +384,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: createCryptoWithTransportServer(() => ok(manager)),
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -421,7 +422,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: createCryptoWithTransportServer(() => ok(manager)),
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -447,7 +448,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: createCryptoWithTransportServer(() => ok(manager)),
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -474,7 +475,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
         crypto,
         transport: {
           keyStore: {
-            ...createInMemoryKeyStore(),
+            ...createCacheTransportKeyStore({ cache }),
             clientKeyTtlSeconds,
           },
           serverKeyRing,
@@ -508,7 +509,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -531,7 +532,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: failingCrypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -550,7 +551,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
           basePath: '/yyy/',
           keyExchangePath: '/my/exchange',
           excludePaths: ['/yyy/api/public'],
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -579,7 +580,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
         crypto,
         transport: {
           basePath,
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -587,7 +588,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   })
 
   it('透传 transport.keyStore 到 crypto.transport.createServer', () => {
-    const keyStore = createInMemoryKeyStore(8)
+    const keyStore = createCacheTransportKeyStore({ cache })
     const createServer = vi.fn<CryptoFunctions['transport']['createServer']>(options => crypto.transport.createServer(options))
     const forwardingCrypto = createCryptoWithTransportServer(createServer)
 
@@ -607,7 +608,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -643,7 +644,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -671,7 +672,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -703,7 +704,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -738,7 +739,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto: failingCrypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -766,7 +767,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
           excludePaths: ['/api/upload'],
         },
@@ -782,7 +783,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -819,7 +820,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -853,7 +854,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
         },
       },
@@ -897,7 +898,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       crypto: {
         crypto,
         transport: {
-          keyStore: createInMemoryKeyStore(),
+          keyStore: createCacheTransportKeyStore({ cache }),
           serverKeyRing,
           keyExchangePath: '/custom/exchange',
         },
@@ -918,4 +919,13 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
     expect(response.status).toBe(200)
   })
+})
+
+// 每个用例借用独立的 cache.memory 状态，模拟进程内测试环境。
+beforeEach(async () => {
+  const cacheTransportReady = await cache.init({ type: 'memory' })
+  expect(cacheTransportReady.success).toBe(true)
+})
+afterEach(async () => {
+  await cache.close()
 })

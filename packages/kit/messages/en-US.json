@@ -51,6 +51,6 @@
   "kit_idRequired": "ID is required",
   "kit_rateLimitWindowInvalid": "The rate limit window must be an integer from 1 to 2147483647 milliseconds",
   "kit_rateLimitMemoryCapacity": "The development memory rate limit store is full; use a shared backend",
-  "kit_transportBusy": "Material processing is busy. Please retry shortly.",
+  "kit_transportBusy": "Encrypted transport is busy. Please retry shortly.",
   "kit_feedbackUnavailable": "Feedback is temporarily unavailable. Business features remain available."
 }

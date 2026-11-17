@@ -20,7 +20,7 @@ import type { RequestAccessCheck } from '@h-ai/core'
 import type { CryptoFunctions, KeyExchangeResponse, TransportEncryptionManager, TransportKeyStore, TransportMessageContext, TransportServerKeyRing } from '@h-ai/crypto'
 import type { MiddlewareHandler } from 'hono'
 import { core, err, HaiCommonError } from '@h-ai/core'
-import { authenticateTransportRequest, createTransportBodyPolicy, createTransportErrorResponse, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
+import { authenticateTransportRequest, createTransportBodyPolicy, createTransportErrorResponse, HaiCryptoError, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { servM } from './serv-i18n.js'
 
 const logger = core.logger.child({ module: 'serv', scope: 'transport' })
@@ -142,6 +142,8 @@ export function createTransportMiddleware(
       try {
         const verified = await authenticateTransportRequest(manager, c.req.raw, lease.limits)
         if (!verified.success) {
+          if (verified.error.code === HaiCryptoError.TRANSPORT_BUSY.code)
+            return jsonError(servM('serv_transportBusy'), 503)
           if (verified.error.cause instanceof TransportTimeError && verified.error.cause.context)
             return createTransportErrorResponse(verified.error.cause, { manager, context: verified.error.cause.context })
           return jsonError(servM('serv_transportDecryptFailed'), 400)
@@ -266,6 +268,8 @@ async function handleKeyExchange(request: Request, manager: TransportEncryptionM
     })
   }
   catch (cause) {
+    if (cause instanceof Error && 'code' in cause && cause.code === HaiCryptoError.TRANSPORT_BUSY.code)
+      return jsonError(servM('serv_transportBusy'), 503)
     logger.error('Key exchange failed', { error: cause })
     return jsonError(servM('serv_transportKeyExchangeFailed'), 500)
   }

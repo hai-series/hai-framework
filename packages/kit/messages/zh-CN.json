@@ -51,6 +51,6 @@
   "kit_idRequired": "ID 不能为空",
   "kit_rateLimitWindowInvalid": "限流窗口必须为 1 至 2147483647 的整数毫秒",
   "kit_rateLimitMemoryCapacity": "开发内存限流容量已满，请使用共享后端",
-  "kit_transportBusy": "材料处理繁忙，请稍后重试",
+  "kit_transportBusy": "加密传输繁忙，请稍后重试",
   "kit_feedbackUnavailable": "问题反馈暂不可用，业务功能可继续使用"
 }

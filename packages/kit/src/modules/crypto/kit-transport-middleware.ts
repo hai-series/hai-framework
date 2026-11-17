@@ -10,7 +10,7 @@ import type { KeyExchangeResponse, TransportEncryptionManager, TransportMessageC
 import type { Middleware } from '../../kit-types.js'
 import type { TransportEncryptionConfig } from './kit-crypto-types.js'
 import { core, err, HaiCommonError } from '@h-ai/core'
-import { authenticateTransportRequest, createTransportBodyPolicy, createTransportErrorResponse, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
+import { authenticateTransportRequest, createTransportBodyPolicy, createTransportErrorResponse, HaiCryptoError, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { kitM } from '../../kit-i18n.js'
 import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, normalizeTransportBasePath, shouldExcludeTransportPath, shouldHandleTransportPath } from './kit-transport-paths.js'
 
@@ -106,6 +106,8 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
       try {
         const verified = await authenticateTransportRequest(manager, event.request, lease.limits)
         if (!verified.success) {
+          if (verified.error.code === HaiCryptoError.TRANSPORT_BUSY.code)
+            return jsonError(kitM('kit_transportBusy'), 503)
           if (verified.error.cause instanceof TransportTimeError && verified.error.cause.context)
             return createTransportErrorResponse(verified.error.cause, { manager, context: verified.error.cause.context })
           return jsonError(kitM('kit_transportDecryptFailed'), 400)
@@ -249,7 +251,9 @@ async function handleKeyExchange(
       },
     )
   }
-  catch {
+  catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === HaiCryptoError.TRANSPORT_BUSY.code)
+      return jsonError(kitM('kit_transportBusy'), 503)
     return jsonError(kitM('kit_transportKeyExchangeFailed'), 500)
   }
 }

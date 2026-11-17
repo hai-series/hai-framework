@@ -12,10 +12,9 @@ import process from 'node:process'
 import { resolve } from '$app/paths'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { createReldbTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+import { createCacheTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
-import { reldb } from '@h-ai/reldb'
 import { paraglideMiddleware } from '#lib/paraglide/server.js'
 import { initApp } from '#lib/server/init.js'
 import { getAdminKitConfig } from '#lib/server/kit-config.js'
@@ -126,7 +125,7 @@ async function createHaiHandle(): Promise<Handle> {
       ...handleTransportConfig,
       basePath: base,
       serverKeyRing: ring.data,
-      keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),
+      keyStore: createCacheTransportKeyStore({ cache, ttlSeconds: 3600 }),
     }
   }
 

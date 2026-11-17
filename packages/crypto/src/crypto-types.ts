@@ -362,9 +362,9 @@ export type EncryptWithIVResult = SymmetricCbcEncryptedPayload
  * ```
  */
 export interface PasswordConfig {
-  /** 盐值长度（默认 16） */
+  /** 字母数字盐字符数，整数8～128，默认16 */
   saltLength?: number
-  /** 迭代次数（默认 10000） */
+  /** 迭代次数，整数1～1000000，默认10000 */
   iterations?: number
 }
 
@@ -417,10 +417,10 @@ export interface AsymmetricOperations {
   /**
    * 非对称加密
    *
-   * @param data - 待加密明文
+   * @param data - 非空明文；底层空结果不能区分认证失败，因此不接受空字符串
    * @param publicKey - 公钥（十六进制，支持带/不带 04 前缀）
    * @param options - 加密选项（密文模式、输出格式）
-   * @returns 成功时返回密文字符串；失败时返回 INVALID_KEY 或 ENCRYPTION_FAILED
+   * @returns 成功时返回密文字符串；失败时返回 INVALID_INPUT、INVALID_KEY 或 ENCRYPTION_FAILED
    *
    * @example
    * ```ts
@@ -441,7 +441,7 @@ export interface AsymmetricOperations {
   /**
    * 非对称解密
    *
-   * 自动检测 base64 格式输入并转换为 hex。
+   * 按显式 outputFormat 或编码检测转换为 hex；密文须完整，C3 认证失败返回失败，不以空串冒充成功。
    *
    * @param ciphertext - 密文（hex 或 base64）
    * @param privateKey - 私钥（64 字符十六进制）
@@ -494,7 +494,7 @@ export interface AsymmetricOperations {
    * 验签
    *
    * @param data - 原始数据
-   * @param signature - 签名（需与签名时使用相同的 hash/userId 选项）
+   * @param signature - 128 个十六进制字符；非规范编码返回 false，hash/userId 须与签名时一致
    * @param publicKey - 公钥（支持带/不带 04 前缀）
    * @param options - 验签选项
    * @returns 成功时返回 boolean；失败时返回 INVALID_KEY 或 VERIFY_FAILED
@@ -539,7 +539,7 @@ export interface AsymmetricOperations {
    */
   isValidPublicKey: (key: string) => boolean
   /**
-   * 校验64字符十六进制私钥格式；这是格式检查，不是密钥配对证明。
+   * 校验64字符十六进制私钥编码及1～n-2的有效签名标量范围，不是密钥配对证明。
    * @param key - 本次操作的密钥，不记录到日志。
    * @returns 直接boolean，false表示不匹配/未就绪。
    *
@@ -584,7 +584,7 @@ export interface HashOperations {
    *
    * @param data - 待哈希数据（字符串或 Uint8Array）
    * @param options - 输入编码选项
-   * @returns 成功时返回 64 字符十六进制哈希值；失败时返回 HASH_FAILED
+   * @returns 成功时返回 64 字符十六进制哈希值；失败时返回 INVALID_INPUT 或 HASH_FAILED
    *
    * @example
    * ```ts
@@ -603,7 +603,7 @@ export interface HashOperations {
    * 计算 HMAC
    *
    * 使用 HMAC 算法（RFC 2104）计算消息认证码。
-   * 当密钥长度超过块大小（64 字节）时，会先对密钥进行哈希。
+   * 当密钥的UTF-8字节长度超过块大小（64字节）时，会先对密钥进行哈希。
    *
    * @param data - 待计算数据
    * @param key - HMAC 密钥
@@ -713,7 +713,7 @@ export interface SymmetricOperations {
    * @param data - 待加密明文
    * @param key - 密钥（32 字符十六进制）
    * @param options - 加密模式/IV/输出格式
-   * @returns 成功时返回结构化密文；失败时返回 INVALID_KEY/INVALID_IV/ENCRYPTION_FAILED
+   * @returns 成功时返回结构化密文；失败时返回 INVALID_INPUT/INVALID_KEY/INVALID_IV/ENCRYPTION_FAILED
    *
    * @example
    * ```ts
@@ -946,7 +946,7 @@ export interface TransportOperations {
    *
    * @example
    * ```ts
-   * import { crypto, createRedisTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+   * import { crypto, createCacheTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
    * import { cache } from '@h-ai/cache'
    * const initialized = await crypto.init()
    * if (!initialized.success) throw new Error(initialized.error.message)
@@ -954,7 +954,7 @@ export interface TransportOperations {
    *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
    *   if (!connected.success) throw new Error(connected.error.message)
    *   try {
-   *     const registry = createRedisTransportKeyStore({ cache, ttlSeconds: 3600 })
+   *     const registry = createCacheTransportKeyStore({ cache, ttlSeconds: 3600 })
    *     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
    *     if (!ring.success) throw new Error(ring.error.message)
    *     const created = crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: registry })

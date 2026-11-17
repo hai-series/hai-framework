@@ -1,7 +1,8 @@
 import type { TransportMessageContext } from '@h-ai/crypto'
 import { apiContract } from '@h-ai/api-contract'
-import { authenticateTransportRequest, createInMemoryKeyStore, createTransportErrorResponse, crypto, HaiCryptoError, TRANSPORT_PROTOCOL, TransportTimeError } from '@h-ai/crypto'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { cache } from '@h-ai/cache'
+import { authenticateTransportRequest, createCacheTransportKeyStore, createTransportErrorResponse, crypto, HaiCryptoError, TRANSPORT_PROTOCOL, TransportTimeError } from '@h-ai/crypto'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { apiClient, HaiApiClientError } from '../src/index.js'
 
@@ -33,7 +34,7 @@ function makeServerFetch(clockOffset = 0): typeof fetch {
   if (!key.success)
     throw new Error(key.error.message)
   const mgrResult = crypto.transport.createServer({
-    keyStore: createInMemoryKeyStore(),
+    keyStore: createCacheTransportKeyStore({ cache }),
     serverKeyRing: {
       activeKeyId: 'test-v1',
       keys: { 'test-v1': key.data },
@@ -100,7 +101,7 @@ function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fet
     throw new Error(key.error.message)
   const mgrResult = crypto.transport.createServer({
     keyStore: {
-      ...createInMemoryKeyStore(),
+      ...createCacheTransportKeyStore({ cache }),
       clientKeyTtlSeconds: 60,
     },
     serverKeyRing: {
@@ -332,4 +333,13 @@ describe('api-client transport', () => {
       await client.close()
     }
   })
+})
+
+// 每个用例借用独立的 cache.memory 状态，模拟进程内测试环境。
+beforeEach(async () => {
+  const cacheTransportReady = await cache.init({ type: 'memory' })
+  expect(cacheTransportReady.success).toBe(true)
+})
+afterEach(async () => {
+  await cache.close()
 })

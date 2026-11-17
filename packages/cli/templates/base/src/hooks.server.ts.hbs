@@ -24,17 +24,12 @@ import { cache } from '@h-ai/cache'
 {{/if}}
 import { core } from '@h-ai/core'
 {{#if features.crypto}}
-import { {{#if features.db}}createReldbTransportKeyStore{{else}}createInMemoryKeyStore{{/if}}, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+import { createCacheTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 {{/if}}
 {{#if features.iam}}
 import { iam } from '@h-ai/iam'
 {{/if}}
 import { kit } from '@h-ai/kit'
-{{#if features.crypto}}
-{{#if features.db}}
-import { reldb } from '@h-ai/reldb'
-{{/if}}
-{{/if}}
 {{#if hasI18n}}
 import { paraglideMiddleware } from '#lib/paraglide/server.js'
 {{/if}}
@@ -109,10 +104,6 @@ const haiHandle: Handle = async (input) => {
 {{#if features.crypto}}
     let transport: TransportEncryptionOptions | undefined
     if (settings.transport !== false) {
-{{#unless features.db}}
-          if (core.module.requiresSharedState(process.env))
-            throw new Error('Production transport requires the db feature and a shared database registry')
-{{/unless}}
       const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
       if (!ring.success)
         throw new Error(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ${ring.error.message} (${ring.error.code})`)
@@ -120,11 +111,7 @@ const haiHandle: Handle = async (input) => {
         ...settings.transport,
         basePath: resolvePath('/').replace(/\/$/, ''),
         serverKeyRing: ring.data,
-{{#if features.db}}
-        keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),
-{{else}}
-            keyStore: createInMemoryKeyStore(),
-{{/if}}
+        keyStore: createCacheTransportKeyStore({ cache }),
       }
     }
 {{else}}
