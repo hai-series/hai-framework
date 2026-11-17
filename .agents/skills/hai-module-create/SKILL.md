@@ -29,6 +29,8 @@ description: "在 hai-framework 新增模块、子功能或 Provider，或撰写
 
 配置页先核对实际配置文件与读取者；API 的 config/options、依赖注入和组件 props 写功能页，响应结构写数据页。无独立配置文件时明确说明，不虚构模块 YAML，详见上述模块文档规范。
 
+功能页按大功能写三级标题（任务名称 + 真实入口），每节依次为用途、四级「接口清单」、四级场景。场景串联实际调用流程；逐项核对清单中的每个接口都有输入、调用及输出/可观察效果，不能只给孤立的调用总表。属性、组件、CLI、工厂和流按真实契约展示，三语分组与锚点一致。完整写法以[模块文档规范](../../instructions/module-documentation.md#功能清单与场景示例)为准。
+
 ## §1 架构决策（按顺序回答）
 
 新增、修改或删除配置项、`<模块名>.xxx` 功能及其输入输出、核心实现逻辑、表或缓存结构、类型或模块边界前，按 [hai-change-plan](../hai-change-plan/SKILL.md) 取得对具体方案与影响的人工确认。以下决策用于形成待确认方案。
@@ -161,7 +163,7 @@ description: "在 hai-framework 新增模块、子功能或 Provider，或撰写
 13. **公共 API JSDoc** → R6
 14. **测试** → R7
 15. **包配置**（`package.json` / `tsconfig.json` / `tsup.config.ts` / `vitest.config.ts`）→ R8
-16. **README 与模块手册** → 按[模块文档规范](../../instructions/module-documentation.md)和 [R9 写作顺序](reference.md#r9-readme-章节顺序面向人类)，先完成三类参考页及三语链接，再更新 README。
+16. **README 与模块手册** → 按[模块文档规范](../../instructions/module-documentation.md)和 [R9 写作顺序](reference.md#r9-readme-章节顺序面向人类)，先完成三类参考页及三语链接，再更新 README。功能页逐个大功能写用途、四级「接口清单」和场景，统一五列 `API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例`；逐项解释具体输入与结果，工厂继续演示返回实例的操作及清理。逐文件通读三语章节与示例，不能以批处理代替审查，不重复添加逐行场景链接或堆放锚点。
 
 ## §6 创建检查清单
 
