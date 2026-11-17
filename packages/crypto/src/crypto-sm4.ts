@@ -77,15 +77,6 @@ export function createSM4(): SymmetricOperations {
       key: string,
       options: SymmetricEncryptOptions = {},
     ): HaiResult<SymmetricEncryptedPayload> {
-      const {
-        mode = 'cbc',
-        iv,
-        outputFormat = 'hex',
-      } = options
-      const actualIv = mode === 'cbc'
-        ? iv ?? this.generateIV()
-        : undefined
-
       if (!this.isValidKey(key)) {
         return err(
           HaiCryptoError.INVALID_KEY,
@@ -93,16 +84,17 @@ export function createSM4(): SymmetricOperations {
         )
       }
 
-      if (mode === 'cbc') {
-        if (!actualIv || !this.isValidIV(actualIv)) {
-          return err(
-            HaiCryptoError.INVALID_IV,
-            cryptoM('crypto_sm4IvInvalid'),
-          )
-        }
-      }
-
       try {
+        const { mode = 'cbc', iv, outputFormat = 'hex' } = options
+        if (typeof data !== 'string' || (mode !== 'cbc' && mode !== 'ecb')
+          || (outputFormat !== 'hex' && outputFormat !== 'base64')) {
+          return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_inputInvalid'))
+        }
+        const actualIv = mode === 'cbc'
+          ? iv ?? this.generateIV()
+          : undefined
+        if (mode === 'cbc' && (!actualIv || !this.isValidIV(actualIv)))
+          return err(HaiCryptoError.INVALID_IV, cryptoM('crypto_sm4IvInvalid'))
         const sm4Options: Record<string, unknown> = {
           mode,
           padding: 'pkcs#7',
@@ -158,8 +150,6 @@ export function createSM4(): SymmetricOperations {
       payload: SymmetricDecryptInput,
       key: string,
     ): HaiResult<string> {
-      const { mode, iv } = payload
-
       if (!this.isValidKey(key)) {
         return err(
           HaiCryptoError.INVALID_KEY,
@@ -167,35 +157,43 @@ export function createSM4(): SymmetricOperations {
         )
       }
 
-      if (mode === 'cbc' && (!iv || !this.isValidIV(iv))) {
-        return err(
-          HaiCryptoError.INVALID_IV,
-          cryptoM('crypto_sm4IvInvalid'),
-        )
-      }
-
       try {
+        if (!payload || typeof payload !== 'object'
+          || (payload.mode !== 'cbc' && payload.mode !== 'ecb')
+          || (payload.encoding !== 'hex' && payload.encoding !== 'base64')
+          || typeof payload.ciphertext !== 'string') {
+          return err(HaiCryptoError.DECRYPTION_FAILED, cryptoM('crypto_sm4DecryptFailed'))
+        }
+        const { mode, iv } = payload
+        if (mode === 'cbc' && (!iv || !this.isValidIV(iv)))
+          return err(HaiCryptoError.INVALID_IV, cryptoM('crypto_sm4IvInvalid'))
         const input = decodeCiphertext(payload)
+        if (input.length === 0 || input.length % 32 !== 0 || /[^a-f0-9]/i.test(input))
+          return err(HaiCryptoError.DECRYPTION_FAILED, cryptoM('crypto_sm4DecryptFailed'))
 
         const sm4Options: Record<string, unknown> = {
           mode,
-          padding: 'pkcs#7',
+          // 自行检查完整 PKCS#7 范围，底层会接受 0 或大于分组长度的填充值。
+          padding: 'none',
+          output: 'array',
         }
 
         if (mode === 'cbc' && iv) {
           sm4Options.iv = iv
         }
 
-        const decrypted = sm4.decrypt(input, key, sm4Options)
-
-        if (decrypted === false || decrypted === null || decrypted === undefined) {
+        const decrypted: number[] = sm4.decrypt(input, key, sm4Options)
+        const padding = decrypted[decrypted.length - 1]
+        if (padding < 1 || padding > 16
+          || !decrypted.slice(-padding).every(byte => byte === padding)) {
           return err(
             HaiCryptoError.DECRYPTION_FAILED,
             cryptoM('crypto_sm4DecryptFailed'),
           )
         }
 
-        return ok(decrypted)
+        // 加密入口只接受文本，解密也须拒绝非法 UTF-8，不能静默替换损坏字节。
+        return ok(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(new Uint8Array(decrypted.slice(0, -padding))))
       }
       catch (error) {
         return err(
@@ -223,17 +221,19 @@ export function createSM4(): SymmetricOperations {
       data: string,
       key: string,
     ): HaiResult<EncryptWithIVResult> {
-      const iv = this.generateIV()
-      const result = this.encrypt(data, key, { mode: 'cbc', iv })
+      // 随机源失败也由 encrypt 的 HaiResult 边界捕获。
+      const result = this.encrypt(data, key, { mode: 'cbc' })
 
       if (!result.success) {
         return result
       }
+      if (!result.data.iv)
+        return err(HaiCryptoError.ENCRYPTION_FAILED, cryptoM('crypto_sm4EncryptEmpty'))
 
       return ok({
         mode: 'cbc',
         ciphertext: result.data.ciphertext,
-        iv,
+        iv: result.data.iv,
         encoding: result.data.encoding,
       })
     },
@@ -263,12 +263,12 @@ export function createSM4(): SymmetricOperations {
 
     /** 校验密钥格式是否合法（32 字符十六进制） */
     isValidKey(key: string): boolean {
-      return SM4_HEX_32_REGEX.test(key)
+      return typeof key === 'string' && key.length === 32 && SM4_HEX_32_REGEX.test(key)
     },
 
     /** 校验 IV 格式是否合法（32 字符十六进制） */
     isValidIV(iv: string): boolean {
-      return SM4_HEX_32_REGEX.test(iv)
+      return typeof iv === 'string' && iv.length === 32 && SM4_HEX_32_REGEX.test(iv)
     },
   }
 }
@@ -289,7 +289,7 @@ export function createSM4(): SymmetricOperations {
 function generateRandomHex(byteLength: number): string {
   const bytes = new Uint8Array(byteLength)
   // Web Crypto API，前后端通用
-  crypto.getRandomValues(bytes)
+  globalThis.crypto.getRandomValues(bytes)
   return Array.from(bytes)
     .map(b => b.toString(16).padStart(2, '0'))
     .join('')

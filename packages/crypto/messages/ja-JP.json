@@ -1,5 +1,7 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
+  "crypto_inputInvalid": "暗号操作の入力またはオプションが無効です",
+  "crypto_sm3HexInvalid": "SM3 の十六進入力は完全なバイト単位で指定してください",
   "crypto_notInitialized": "暗号モジュールが初期化されていません。先にcrypto.init()を呼び出してください",
   "crypto_initFailed": "暗号モジュールの初期化に失敗しました: {error}",
   "crypto_sm2PublicKeyInvalid": "SM2公開鍵の形式が無効です",

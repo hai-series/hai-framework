@@ -1,5 +1,7 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
+  "crypto_inputInvalid": "加密操作输入或选项无效",
+  "crypto_sm3HexInvalid": "SM3 十六进制输入必须由完整的十六进制字节组成",
   "crypto_notInitialized": "加密模块尚未初始化，请先调用 crypto.init()",
   "crypto_initFailed": "加密模块初始化失败：{error}",
   "crypto_sm2PublicKeyInvalid": "无效的 SM2 公钥格式",

@@ -22,6 +22,8 @@ const MAX_ITERATIONS = 1_000_000
 /** 盐值长度范围，限制异常输入 */
 const MIN_SALT_LENGTH = 8
 const MAX_SALT_LENGTH = 128
+/** 仅接受模块生成的规范记录，避免 parseInt 将畸形轮数截断为可用值。 */
+const PASSWORD_RECORD_REGEX = /^\$hai\$([1-9]\d{0,6})\$([A-Za-z0-9]{8,128})\$([a-f0-9]{64})$/
 
 // ─── 依赖接口 ───
 
@@ -144,10 +146,9 @@ export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations 
      * @returns 成功时返回格式化的哈希字符串；失败时返回 INVALID_INPUT 或 HASH_FAILED
      */
     hash(password: string, config: PasswordConfig = {}): HaiResult<string> {
-      const { saltLength = 16, iterations = 10000 } = config
-
       try {
-        if (!password) {
+        const { saltLength = 16, iterations = 10000 } = config
+        if (typeof password !== 'string' || !password) {
           return err(
             HaiCryptoError.INVALID_INPUT,
             cryptoM('crypto_passwordEmpty'),
@@ -188,7 +189,7 @@ export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations 
     /**
      * 验证密码是否匹配已存储的哈希
      *
-     * 从哈希字符串中解析迭代次数和盐值，重新计算后比较。
+     * 严格校验规范格式、迭代范围、8～128字符字母数字盐及64字符小写Hex摘要后计算并比较。
      * 格式要求: `$hai$<iterations>$<salt>$<hash>`
      *
      * @param password - 待验证的明文密码
@@ -197,24 +198,24 @@ export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations 
      */
     verify(password: string, hash: string): HaiResult<boolean> {
       try {
-        if (!password || !hash) {
+        if (typeof password !== 'string' || !password || typeof hash !== 'string' || !hash) {
           return err(
             HaiCryptoError.INVALID_INPUT,
             cryptoM('crypto_passwordHashEmpty'),
           )
         }
 
-        const parts = hash.split('$')
-        if (parts.length !== 5 || parts[1] !== 'hai') {
+        const parts = PASSWORD_RECORD_REGEX.exec(hash)
+        if (!parts || parts[0] !== hash) {
           return err(
             HaiCryptoError.INVALID_INPUT,
             cryptoM('crypto_hashFormatInvalid'),
           )
         }
 
-        const storedIterations = Number.parseInt(parts[2], 10)
-        const salt = parts[3]
-        const storedHash = parts[4]
+        const storedIterations = Number(parts[1])
+        const salt = parts[2]
+        const storedHash = parts[3]
 
         if (
           Number.isNaN(storedIterations)

@@ -6,22 +6,7 @@
  */
 
 /**
- * 内部编码启发式：仅检测+、/或末尾=，不是严格Base64验证器。
- * @param str - 原始密文文本。
- * @returns 是否走Base64解码分支；不能据此认可不可信输入。
- *
- * @example 模块内部上下文
- * ```ts
- * const likelyBase64 = isBase64('aGk=')
- * const likelyHex = isBase64('6869')
- * ```
- */
-export function isBase64(str: string): boolean {
-  return str.includes('+') || str.includes('/') || str.endsWith('=')
-}
-
-/**
- * 内部Hex转Base64工具；调用前保证有效且偶数长度Hex，本函数不校验编码。
+ * 内部Hex转Base64工具；按块转换，避免大密文展开为函数参数导致栈溢出。
  * @param hex - 已校验Hex字节文本。
  * @returns Base64编码；大输入须在上层先限制预算。
  *
@@ -32,11 +17,16 @@ export function isBase64(str: string): boolean {
  * ```
  */
 export function hexToBase64(hex: string): string {
-  const bytes = new Uint8Array(hex.length / 2)
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = Number.parseInt(hex.slice(i, i + 2), 16)
+  const chunks: string[] = []
+  const chunkBytes = 8192
+  for (let offset = 0; offset < hex.length; offset += chunkBytes * 2) {
+    const part = hex.slice(offset, offset + chunkBytes * 2)
+    const bytes = new Uint8Array(part.length / 2)
+    for (let i = 0; i < part.length; i += 2)
+      bytes[i / 2] = Number.parseInt(part.slice(i, i + 2), 16)
+    chunks.push(String.fromCharCode(...bytes))
   }
-  return btoa(String.fromCharCode(...bytes))
+  return btoa(chunks.join(''))
 }
 
 /**
@@ -52,6 +42,8 @@ export function hexToBase64(hex: string): string {
  * ```
  */
 export function base64ToHex(base64: string): string {
+  if (base64.length % 4 !== 0 || /[^A-Z0-9+/=]/i.test(base64) || !/^[A-Z0-9+/]*={0,2}$/i.test(base64))
+    throw new TypeError('Invalid Base64 encoding')
   const binary = atob(base64)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) {

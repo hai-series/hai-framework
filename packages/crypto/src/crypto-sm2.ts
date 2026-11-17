@@ -19,10 +19,12 @@ import {
   HaiCryptoError,
 
 } from './crypto-types.js'
-import { base64ToHex, hexToBase64, isBase64 } from './crypto-utils.js'
+import { base64ToHex, hexToBase64 } from './crypto-utils.js'
 
 const { sm2 } = smCrypto
 const SM2_PRIVATE_KEY_REGEX = /^[0-9a-f]{64}$/i
+// SM2 签名要求 1 <= d <= n-2；n-1 会使 (1+d) 不可逆，底层签名循环无法结束。
+const SM2_PRIVATE_KEY_MAX = 0xFFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFF7203DF6B21C6052B53BBF40939D54121n
 
 // ─── SM2 算法实现 ───
 
@@ -77,18 +79,16 @@ export function createSM2(): AsymmetricOperations {
      *
      * 公钥自动补齐 04 前缀；支持 hex/base64 输出。
      *
-     * @param data - 待加密明文
+     * @param data - 非空明文，空字符串返回 INVALID_INPUT
      * @param publicKey - 公钥（支持带/不带 04 前缀）
      * @param options - 加密选项（密文模式、输出格式）
-     * @returns 成功时返回密文；失败时返回 INVALID_KEY 或 ENCRYPTION_FAILED
+     * @returns 成功时返回密文；失败时返回 INVALID_INPUT、INVALID_KEY 或 ENCRYPTION_FAILED
      */
     encrypt(
       data: string,
       publicKey: string,
       options: AsymmetricEncryptOptions = {},
     ): HaiResult<string> {
-      const { cipherMode = 1, outputFormat = 'hex' } = options
-
       if (!this.isValidPublicKey(publicKey)) {
         return err(
           HaiCryptoError.INVALID_KEY,
@@ -97,6 +97,12 @@ export function createSM2(): AsymmetricOperations {
       }
 
       try {
+        const { cipherMode = 1, outputFormat = 'hex' } = options
+        // 底层将认证失败与合法空明文都表示为空串，原语拒绝空输入以保持失败可判定。
+        if (typeof data !== 'string' || data.length === 0
+          || (cipherMode !== 0 && cipherMode !== 1) || (outputFormat !== 'hex' && outputFormat !== 'base64')) {
+          return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_inputInvalid'))
+        }
         // 确保公钥带 04 前缀
         const key = publicKey.length === 130
           ? publicKey
@@ -134,7 +140,7 @@ export function createSM2(): AsymmetricOperations {
     /**
      * SM2 非对称解密
      *
-     * 自动检测 base64 格式输入并转换为 hex 后解密。
+     * 按显式编码或检测转换为 hex 后解密，C3 认证失败返回 DECRYPTION_FAILED。
      *
      * @param ciphertext - 密文（hex 或 base64）
      * @param privateKey - 私钥（64 字符十六进制）
@@ -146,8 +152,6 @@ export function createSM2(): AsymmetricOperations {
       privateKey: string,
       options: AsymmetricEncryptOptions = {},
     ): HaiResult<string> {
-      const { cipherMode = 1 } = options
-
       if (!this.isValidPrivateKey(privateKey)) {
         return err(
           HaiCryptoError.INVALID_KEY,
@@ -156,15 +160,22 @@ export function createSM2(): AsymmetricOperations {
       }
 
       try {
-        // 自动检测并转换 base64 格式
-        let input = ciphertext
-        if (isBase64(ciphertext)) {
-          input = base64ToHex(ciphertext)
+        const { cipherMode = 1, outputFormat } = options
+        if ((cipherMode !== 0 && cipherMode !== 1)
+          || (outputFormat !== undefined && outputFormat !== 'hex' && outputFormat !== 'base64')) {
+          return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_inputInvalid'))
         }
+        // 显式 Base64 或非 Hex 输入走完整解码，不依赖 +、/、= 的启发式。
+        const input = outputFormat === 'base64' || /[^a-f0-9]/i.test(ciphertext)
+          ? base64ToHex(ciphertext)
+          : ciphertext
+        // C1 64 字节、C3 32 字节，C2 至少包含一个字节；拒绝不完整和畸形编码。
+        if (input.length <= 192 || input.length % 2 !== 0 || /[^a-f0-9]/i.test(input))
+          return err(HaiCryptoError.DECRYPTION_FAILED, cryptoM('crypto_sm2DecryptFailed'))
 
         const decrypted = sm2.doDecrypt(input, privateKey, cipherMode)
 
-        if (decrypted === false || decrypted === null || decrypted === undefined) {
+        if (typeof decrypted !== 'string' || decrypted.length === 0) {
           return err(
             HaiCryptoError.DECRYPTION_FAILED,
             cryptoM('crypto_sm2DecryptFailed'),
@@ -203,8 +214,6 @@ export function createSM2(): AsymmetricOperations {
       privateKey: string,
       options: SignOptions = {},
     ): HaiResult<string> {
-      const { hash = true, userId = '1234567812345678' } = options
-
       if (!this.isValidPrivateKey(privateKey)) {
         return err(
           HaiCryptoError.INVALID_KEY,
@@ -213,6 +222,7 @@ export function createSM2(): AsymmetricOperations {
       }
 
       try {
+        const { hash = true, userId = '1234567812345678' } = options
         const signature = sm2.doSignature(data, privateKey, { hash, userId })
 
         if (!signature) {
@@ -256,8 +266,6 @@ export function createSM2(): AsymmetricOperations {
       publicKey: string,
       options: SignOptions = {},
     ): HaiResult<boolean> {
-      const { hash = true, userId = '1234567812345678' } = options
-
       if (!this.isValidPublicKey(publicKey)) {
         return err(
           HaiCryptoError.INVALID_KEY,
@@ -266,6 +274,10 @@ export function createSM2(): AsymmetricOperations {
       }
 
       try {
+        const { hash = true, userId = '1234567812345678' } = options
+        // 依赖按整数解析 r/s，必须先拒绝超长、前导填充和非 Hex 的非规范签名。
+        if (typeof signature !== 'string' || signature.length !== 128 || !/^[a-f0-9]{128}$/i.test(signature))
+          return ok(false)
         // 确保公钥带 04 前缀
         const key = publicKey.length === 130
           ? publicKey
@@ -302,9 +314,9 @@ export function createSM2(): AsymmetricOperations {
     },
 
     /**
-     * 校验私钥格式是否合法
+     * 校验私钥编码和有效签名标量范围
      *
-     * 合法格式：64 字符十六进制。
+     * 64 字符十六进制，数值须为 1～n-2；排除零、越界和不可签名的 n-1。
      *
      * @param key - 待校验私钥
      * @returns 格式合法返回 true
@@ -313,7 +325,10 @@ export function createSM2(): AsymmetricOperations {
       if (!key || typeof key !== 'string')
         return false
       // 私钥长度：64 字符
-      return SM2_PRIVATE_KEY_REGEX.test(key)
+      if (key.length !== 64 || !SM2_PRIVATE_KEY_REGEX.test(key))
+        return false
+      const scalar = BigInt(`0x${key}`)
+      return scalar > 0n && scalar <= SM2_PRIVATE_KEY_MAX
     },
   }
 }

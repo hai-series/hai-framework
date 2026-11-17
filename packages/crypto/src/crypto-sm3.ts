@@ -44,15 +44,18 @@ export function createSM3(): HashOperations {
      *
      * @param data - 待哈希数据
      * @param options - 输入编码与输出格式
-     * @returns 成功时返回 64 字符十六进制哈希值；失败时返回 HASH_FAILED
+     * @returns 成功时返回 64 字符十六进制哈希值；失败时返回 INVALID_INPUT 或 HASH_FAILED
      */
     hash(
       data: string | Uint8Array,
       options: HashOptions = {},
     ): HaiResult<string> {
-      const { inputEncoding = 'utf8' } = options
-
       try {
+        const { inputEncoding = 'utf8' } = options
+        if ((inputEncoding !== 'utf8' && inputEncoding !== 'hex')
+          || (typeof data !== 'string' && !(data instanceof Uint8Array))) {
+          return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_inputInvalid'))
+        }
         let input: string | number[]
 
         if (data instanceof Uint8Array) {
@@ -60,6 +63,8 @@ export function createSM3(): HashOperations {
           input = Array.from(data)
         }
         else if (inputEncoding === 'hex') {
+          if (data.length % 2 !== 0 || /[^a-f0-9]/i.test(data))
+            return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_sm3HexInvalid'))
           // 十六进制字符串转为数字数组
           input = hexToBytes(data)
         }
@@ -110,13 +115,11 @@ export function createSM3(): HashOperations {
         const ipad = 0x36
 
         // 处理密钥
-        let keyBytes: number[]
-        if (key.length > blockSize) {
-          const hashedKey = sm3(key)
+        let keyBytes = stringToBytes(key)
+        // RFC 2104 的块大小按字节计；多字节 UTF-8 密钥不能按 JS 字符数判断。
+        if (keyBytes.length > blockSize) {
+          const hashedKey = sm3(keyBytes)
           keyBytes = hexToBytes(hashedKey)
-        }
-        else {
-          keyBytes = stringToBytes(key)
         }
 
         // 填充密钥到块大小

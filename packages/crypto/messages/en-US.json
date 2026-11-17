@@ -1,5 +1,7 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
+  "crypto_inputInvalid": "Invalid cryptographic input or options",
+  "crypto_sm3HexInvalid": "SM3 hexadecimal input must contain complete hexadecimal bytes",
   "crypto_notInitialized": "Crypto module not initialized, call crypto.init() first",
   "crypto_initFailed": "Crypto module initialization failed: {error}",
   "crypto_sm2PublicKeyInvalid": "Invalid SM2 public key format",
