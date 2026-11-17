@@ -1,0 +1,4 @@
+# 用于测试进程在容器外生成真实的 Office 文件；生产镜像单独安装依赖。
+openpyxl==3.1.5
+python-docx==1.2.0
+python-pptx==1.0.2

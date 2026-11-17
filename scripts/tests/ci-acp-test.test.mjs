@@ -229,6 +229,11 @@ describe('ci ACP 原生验收前置', () => {
     expect(stage.jobs.check.env).not.toHaveProperty('OPENROUTER_APIKEY')
     const steps = stage.jobs.check.steps
     const execution = steps.findIndex(step => step.name === 'Execute verification')
+    const python = steps.findIndex(step => step.name === 'Prepare Python for Tools job unit tests')
+    expect(python).toBeGreaterThanOrEqual(0)
+    expect(python).toBeLessThan(execution)
+    expect(steps[python].if).toBe('steps.proof.outputs.run == \'true\' && inputs.stage == \'unit\'')
+    expect(steps[python].env).toBeUndefined()
     expect(steps[execution].env.OPENROUTER_APIKEY).toBe('$' + '{{ secrets.OPENROUTER_APIKEY }}')
     expect(JSON.stringify(steps.slice(0, execution))).not.toContain('secrets.OPENROUTER_APIKEY')
     const render = steps.find(step => step.name === 'Render ACP acceptance evidence')

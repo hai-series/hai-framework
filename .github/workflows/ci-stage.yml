@@ -128,6 +128,13 @@ jobs:
           for image in docker.io/library/postgres:16.15-alpine docker.io/library/mysql:8.4.11 docker.io/library/redis:7.4.11-alpine ghcr.io/rustfs/rustfs:1.0.1; do
             docker image inspect "$image" >/dev/null 2>&1 || docker pull "$image"
           done
+      - name: Prepare Python for Tools job unit tests
+        if: steps.proof.outputs.run == 'true' && inputs.stage == 'unit'
+        run: |
+          python3 -m venv "$RUNNER_TEMP/hai-tools-test-python"
+          "$RUNNER_TEMP/hai-tools-test-python/bin/python" -m pip install --disable-pip-version-check \
+            -r packages/tools/jobs/tests/requirements.txt
+          echo "$RUNNER_TEMP/hai-tools-test-python/bin" >> "$GITHUB_PATH"
       - name: Execute verification
         if: steps.proof.outputs.run == 'true'
         run: ${{ inputs.command }}
