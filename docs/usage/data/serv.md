@@ -1,5 +1,7 @@
 # serv 数据结构
 
+[English](serv.en.md) · [日本語](serv.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/serv.md) · [功能说明](../function/serv.md)
 
 ## 数据库与缓存

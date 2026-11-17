@@ -6,11 +6,11 @@ Find the tables, columns, and cache keys owned by a module. To check whether a r
 
 ## Runtime and APIs
 
-[core](core.en.md) · [api-contract](api-contract.en.md) · [api-client](api-client.en.md) · [crypto](crypto.en.md) · [serv](serv.md) · [kit](kit.md)
+[core](core.en.md) · [api-contract](api-contract.en.md) · [api-client](api-client.en.md) · [crypto](crypto.en.md) · [serv](serv.en.md) · [kit](kit.en.md)
 
 ## Data and files
 
-[reldb](reldb.md) · [cache](cache.en.md) · [storage](storage.md) · [vecdb](vecdb.md) · [datapipe](datapipe.en.md)
+[reldb](reldb.en.md) · [cache](cache.en.md) · [storage](storage.en.md) · [vecdb](vecdb.en.md) · [datapipe](datapipe.en.md)
 
 ## Application features
 

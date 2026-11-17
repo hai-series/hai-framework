@@ -10,23 +10,23 @@ hai-framework の API サービスランタイム。公開 HTTP App 抽象を通
 
 ## クイックスタート
 
-[最小構成の導入手順](../../docs/usage/function/serv.md#最小接入示例)（中国語）を参照してください。
+[最小構成の導入手順](../../docs/usage/function/serv.ja.md#quick-start)を参照してください。
 
 ## 設定一覧
 
 生成したプロジェクトでは、HTTP の設定、待ち受けアドレス、ポートを `config/_serv.yml` に記述します。起動時に HTTP の設定、契約、処理関数を `serv.createApp(options)` に渡し、返されたアプリケーションをアドレスとポートとともに `serv.listen()` に渡します。
 
-設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/serv.md)（中国語）を参照してください。
+設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/serv.ja.md)を参照してください。
 
 ## 機能
 
-[API 一覧](../../docs/usage/function/serv.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
+[API 一覧](../../docs/usage/function/serv.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 
 モジュール独自のデータベーステーブルは作成しません。
 
-セッション Cookie、静的ファイル、リクエストのデータの保存先については[データ構造](../../docs/usage/data/serv.md)（中国語）を参照してください。
+セッション Cookie、静的ファイル、リクエストのデータの保存先については[データ構造](../../docs/usage/data/serv.ja.md)を参照してください。
 
 ## 開発とテスト
 

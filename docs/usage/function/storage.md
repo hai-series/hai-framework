@@ -1,10 +1,14 @@
 # @h-ai/storage 功能说明
 
+[English](storage.en.md) · [日本語](storage.ja.md)
+
 在 Node.js 服务端用 `storage` 读写本地文件或 S3 兼容对象存储。浏览器要直接上传或下载 S3 对象时，先向应用服务端取得为指定对象和操作签名的临时 URL。
 
 Node.js 进程中的文件操作从 `storage` 调用。浏览器用 `apiClient.storage` 向应用服务端申请签名地址，再选用 `@h-ai/storage/client` 的上传、下载工具直接访问存储服务。
 
 [模块 README](../../../packages/storage/README.md) · [配置清单](../configuration/storage.md) · [数据结构](../data/storage.md) · [存储接入](../development/data.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

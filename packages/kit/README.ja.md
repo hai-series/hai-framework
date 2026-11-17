@@ -16,23 +16,23 @@ SvelteKit のサーバーでは `@h-ai/kit` から `kit` をインポートし�
 
 ## クイックスタート
 
-[最小構成の導入手順](../../docs/usage/function/kit.md#最小接入示例)（中国語）を参照してください。
+[最小構成の導入手順](../../docs/usage/function/kit.ja.md#quick-start)を参照してください。
 
 ## 設定一覧
 
 生成したプロジェクトでは、待ち受けアドレスとポートを `config/_kit.yml` に記述します。アクセス制限と暗号化の設定を `kit.createHandle(options)` に渡し、返された関数を SvelteKit のサーバーフックとして使います。
 
-設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/kit.md)（中国語）を参照してください。
+設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/kit.ja.md)を参照してください。
 
 ## 機能
 
-[API 一覧](../../docs/usage/function/kit.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
+[API 一覧](../../docs/usage/function/kit.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 
 モジュール独自のデータベーステーブルは作成しません。
 
-リクエストコンテキスト、Cookie、アプリ側の永続化については[データ構造](../../docs/usage/data/kit.md)（中国語）を参照してください。
+リクエストコンテキスト、Cookie、アプリ側の永続化については[データ構造](../../docs/usage/data/kit.ja.md)を参照してください。
 
 ## 開発とテスト
 

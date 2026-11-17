@@ -1,5 +1,7 @@
 # storage 数据结构
 
+[English](storage.en.md) · [日本語](storage.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/storage.md) · [功能说明](../function/storage.md)
 
 ## 数据库与缓存

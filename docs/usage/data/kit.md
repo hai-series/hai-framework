@@ -1,5 +1,7 @@
 # kit 数据结构
 
+[English](kit.en.md) · [日本語](kit.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/kit.md) · [功能说明](../function/kit.md)
 
 ## 数据库与缓存

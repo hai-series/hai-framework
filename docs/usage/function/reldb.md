@@ -1,8 +1,12 @@
 # @h-ai/reldb 功能说明
 
+[English](reldb.en.md) · [日本語](reldb.ja.md)
+
 通过 `reldb` 连接 SQLite、PostgreSQL 或 MySQL，执行 SQL、事务及增删改查。使用框架模块时，由模块初始化自己的表。应用的订单等业务表由应用定义和迁移。
 
 [模块 README](../../../packages/reldb/README.md) · [配置清单](../configuration/reldb.md) · [数据结构](../data/reldb.md) · [数据服务接入](../development/data.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

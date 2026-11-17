@@ -6,11 +6,11 @@
 
 ## 実行基盤と API
 
-[core](core.ja.md) · [api-contract](api-contract.ja.md) · [api-client](api-client.ja.md) · [crypto](crypto.ja.md) · [serv](serv.md) · [kit](kit.md)
+[core](core.ja.md) · [api-contract](api-contract.ja.md) · [api-client](api-client.ja.md) · [crypto](crypto.ja.md) · [serv](serv.ja.md) · [kit](kit.ja.md)
 
 ## データとファイル
 
-[reldb](reldb.md) · [cache](cache.ja.md) · [storage](storage.md) · [vecdb](vecdb.md) · [datapipe](datapipe.ja.md)
+[reldb](reldb.ja.md) · [cache](cache.ja.md) · [storage](storage.ja.md) · [vecdb](vecdb.ja.md) · [datapipe](datapipe.ja.md)
 
 ## アプリ機能
 

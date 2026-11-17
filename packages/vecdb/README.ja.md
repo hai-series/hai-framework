@@ -8,21 +8,21 @@
 
 ## クイックスタート
 
-[最小構成の導入手順](../../docs/usage/function/vecdb.md#最小接入示例)（中国語）を参照してください。
+[最小構成の導入手順](../../docs/usage/function/vecdb.ja.md#quick-start)を参照してください。
 
 ## 設定一覧
 
 生成したプロジェクトでは、ベクトルデータベースの種類と接続設定を `config/_vecdb.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `vecdb.init(config)` に渡します。
 
-設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/vecdb.md)（中国語）を参照してください。
+設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/vecdb.ja.md)を参照してください。
 
 ## 機能
 
-[API 一覧](../../docs/usage/function/vecdb.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
+[API 一覧](../../docs/usage/function/vecdb.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 
-コレクション、ベクトル、メタデータ、フィルター、プロバイダーの保存構造については[データ構造](../../docs/usage/data/vecdb.md)（中国語）を参照してください。
+コレクション、ベクトル、メタデータ、フィルター、プロバイダーの保存構造については[データ構造](../../docs/usage/data/vecdb.ja.md)を参照してください。
 
 ## 開発とテスト
 

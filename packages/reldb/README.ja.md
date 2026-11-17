@@ -8,23 +8,23 @@
 
 ## クイックスタート
 
-[最小構成の導入手順](../../docs/usage/function/reldb.md#最小接入示例)（中国語）を参照してください。
+[最小構成の導入手順](../../docs/usage/function/reldb.ja.md#quick-start)を参照してください。
 
 ## 設定一覧
 
 生成したプロジェクトでは、データベースの種類、アドレス、接続オプションを `config/_db.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `reldb.init(config)` に渡します。
 
-設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/reldb.md)（中国語）を参照してください。
+設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/reldb.ja.md)を参照してください。
 
 ## 機能
 
-[API 一覧](../../docs/usage/function/reldb.md#api-reference)（中国語）で、呼び出し方、入力、戻り値、使用例を確認できます。
+[API 一覧](../../docs/usage/function/reldb.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 
 モジュール独自のデータベーステーブルは作成しません。
 
-接続プール、アプリテーブル、DDL の規約、トランザクション状態については[データ構造](../../docs/usage/data/reldb.md)（中国語）を参照してください。
+接続プール、アプリテーブル、DDL の規約、トランザクション状態については[データ構造](../../docs/usage/data/reldb.ja.md)を参照してください。
 
 ## 開発とテスト
 

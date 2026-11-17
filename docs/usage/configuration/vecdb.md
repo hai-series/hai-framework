@@ -1,5 +1,7 @@
 # VecDB 配置
 
+[English](vecdb.en.md) · [日本語](vecdb.ja.md)
+
 [配置手册](README.md)
 
 ## 配置入口

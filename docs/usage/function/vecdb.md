@@ -1,8 +1,12 @@
 # @h-ai/vecdb 功能说明
 
+[English](vecdb.en.md) · [日本語](vecdb.ja.md)
+
 通过 `vecdb` 把文档向量写入集合，按相似度搜索，或分批读取文档 ID。集合定义了每个向量有多少个数值，写入向量和检索向量必须具有同样的长度。
 
 [模块 README](../../../packages/vecdb/README.md) · [配置清单](../configuration/vecdb.md) · [数据结构](../data/vecdb.md) · [数据服务接入](../development/data.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

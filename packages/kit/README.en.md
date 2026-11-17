@@ -10,23 +10,23 @@ On the SvelteKit server, import `kit` from `@h-ai/kit` and use `kit.createHandle
 
 ## Quick Start
 
-[Open the quick-start guide](../../docs/usage/function/kit.md#最小接入示例) (Chinese).
+[Open the quick-start guide](../../docs/usage/function/kit.en.md#quick-start).
 
 ## Configuration Reference
 
 Generated projects set the listening address and port in `config/_kit.yml`. At startup, pass the access and encryption settings to `kit.createHandle(options)`. Use the returned function as a SvelteKit server hook.
 
-See the [configuration reference](../../docs/usage/configuration/kit.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/kit.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/kit.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/kit.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 
 The module creates no database tables of its own.
 
-See the [data reference](../../docs/usage/data/kit.md) in Chinese for request context, cookies and application-owned persistence.
+See the [data reference](../../docs/usage/data/kit.en.md) in Chinese for request context, cookies and application-owned persistence.
 
 ## Development and Testing
 

@@ -1,8 +1,12 @@
 # @h-ai/serv 功能说明
 
+[English](serv.en.md) · [日本語](serv.ja.md)
+
 在 Node.js 中用 `serv.createApp()` 把契约和处理函数组成 HTTP 应用。根入口提供监听、认证和中间件接口。各功能子路径提供 IAM、Storage、AI 和 Feedback 接口的处理函数。
 
 [模块 README](../../../packages/serv/README.md) · [配置清单](../configuration/serv.md) · [数据结构](../data/serv.md) · [前后端接入](../development/frontend-backend.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

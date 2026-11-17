@@ -1,10 +1,14 @@
 # @h-ai/kit 功能说明
 
+[English](kit.en.md) · [日本語](kit.ja.md)
+
 在 SvelteKit 中使用 `kit` 组合处理请求的 hooks、编写 API 路由和创建同源 HTTP 客户端。根入口会按服务端或浏览器选择可用功能。需要 Node 部署适配器、传输加密中间件或 A2A 接入时，见下文对应的导入路径。
 
 SvelteKit 的服务端和浏览器代码都可以导入 `kit`。请求校验和访问控制由服务端执行。浏览器可以创建同源客户端和绑定登录表单的操作。
 
 [模块 README](../../../packages/kit/README.md) · [配置清单](../configuration/kit.md) · [数据结构](../data/kit.md) · [前后端接入](../development/frontend-backend.md)
+
+<a id="quick-start"></a>
 
 ## 最小接入示例
 

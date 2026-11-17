@@ -1,5 +1,7 @@
 # Kit 配置
 
+[English](kit.en.md) · [日本語](kit.ja.md)
+
 [配置手册](README.md)
 
 ## 配置入口

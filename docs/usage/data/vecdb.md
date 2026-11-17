@@ -1,5 +1,7 @@
 # vecdb 数据结构
 
+[English](vecdb.en.md) · [日本語](vecdb.ja.md)
+
 [数据结构索引](README.md) · [模块配置](../configuration/vecdb.md) · [功能说明](../function/vecdb.md)
 
 ## 数据库与集合

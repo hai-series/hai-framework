@@ -8,23 +8,23 @@ A relational database module with a unified `reldb` object for SQLite, PostgreSQ
 
 ## Quick Start
 
-[Open the quick-start guide](../../docs/usage/function/reldb.md#最小接入示例) (Chinese).
+[Open the quick-start guide](../../docs/usage/function/reldb.en.md#quick-start).
 
 ## Configuration Reference
 
 Generated projects define the database type, address, and connection options in `config/_db.yml`. At startup, the application reads the file and passes the settings object to `reldb.init(config)`.
 
-See the [configuration reference](../../docs/usage/configuration/reldb.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
+See the [configuration reference](../../docs/usage/configuration/reldb.en.md) in Chinese for configuration entry points, defaults, accepted values and when changes take effect.
 
 ## Features
 
-[Browse the API list](../../docs/usage/function/reldb.md#api-reference) for entry points, inputs, results and examples (Chinese).
+[Browse the API list](../../docs/usage/function/reldb.en.md#api-reference) for entry points, inputs, results and examples (Chinese).
 
 ## Data Structures
 
 The module creates no database tables of its own.
 
-See the [data reference](../../docs/usage/data/reldb.md) in Chinese for connection pools, application tables, DDL conventions and transaction state.
+See the [data reference](../../docs/usage/data/reldb.en.md) in Chinese for connection pools, application tables, DDL conventions and transaction state.
 
 ## Development and Testing
 
