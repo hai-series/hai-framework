@@ -129,16 +129,11 @@ test.describe('Corporate pages and partner flow', () => {
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/联系我们|Contact Us/)
 
     await page.goto('/')
-    await page.context().addCookies([
-      {
-        name: 'PARAGLIDE_LOCALE',
-        value: 'en-US',
-        path: '/',
-        domain: 'localhost',
-      },
-    ])
+    await page.getByRole('button', { name: /语言|language|言語/i }).click()
+    await page.getByRole('button', { name: /English/ }).click()
+    await expect(page.getByRole('link', { name: 'About', exact: true }).first()).toBeVisible()
     await page.reload()
-    await expect(page.getByRole('link', { name: 'About' }).first()).toBeVisible()
+    await expect(page.getByRole('link', { name: 'About', exact: true }).first()).toBeVisible()
   })
 
   test('partner register and admin records flow works', async ({ page }, testInfo) => {

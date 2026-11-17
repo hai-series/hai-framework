@@ -33,7 +33,8 @@ export default defineConfig({
           HAI_DB_DATABASE: `${root}/agent.db`,
           HAI_STORAGE_ROOT: `${root}/storage`,
           HAI_VECDB_PATH: `${root}/vectors`,
-          HAI_RUNNER_EXECUTOR: 'false',
+          // 单节点测试需要领取自己提交的进程内工具任务。
+          HAI_RUNNER_EXECUTOR: 'true',
         }),
       },
 })
