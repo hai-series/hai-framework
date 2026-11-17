@@ -14,9 +14,7 @@
 
 ## 設定一覧
 
-クリーニングの設定は `datapipe.clean()` に、長さや重複範囲などの分割設定は `datapipe.chunk()` に渡します。`datapipe.pipeline()` には両方の設定を渡せます。
-
-設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/datapipe.ja.md)を参照してください。
+独立した実行時設定ファイルはありません。[ファイルの所有者](../../docs/usage/configuration/datapipe.ja.md)と[引数・応答のリファレンス](../../docs/usage/function/datapipe.ja.md#call-options)。
 
 ## 機能
 

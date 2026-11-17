@@ -4,13 +4,93 @@
 
 [数据结构索引](README.md) · [模块配置](../configuration/deploy.md) · [功能说明](../function/deploy.md)
 
-## 数据库与缓存
+<a id="example-data"></a>
+
+## 这些数据用来做什么
+
+先看用途和例子，再按需查后面的字段与保存规则。例子中的编号和业务内容是虚构的，敏感值已隐藏。时间以 2026-11-17 00:00 UTC 为起点，具体单位在说明中标明。
+
+数据库和文件示例只列说明所需字段，不能直接当成完整写入数据；未列出的字段不表示可省略。不同例子可以展示处理过程中的不同时间。
+
+### 核对要发布的那一批文件
+
+对应结构：`manifest.json`。
+
+发布包内的清单让部署脚本确认拿到的是预期应用和构建批次。
+
+```json
+{
+  "version": 5,
+  "primaryService": "serv",
+  "appVersion": "1.0.0",
+  "buildId": "example-20261117",
+  "partial": false
+}
+```
+
+example-20261117 是构建标识。真实包还需镜像、摘要和元信息；只改清单文字不能生成有效产物。
+
+### 让人查到发布进行到了哪一步
+
+对应结构：`steps-<id>.jsonl`。
+
+每完成或失败一步就追加一行记录，连接中断后仍可定位故障阶段。
+
+```json
+{
+  "stage": "health",
+  "status": "passed",
+  "durationSeconds": 2
+}
+```
+
+health 步骤通过，用时2秒。这只证明该步骤通过，整个发布是否成功还要看最终结果文件。
+
+### 连接中断后还能确认什么
+
+对应结构：`DeployCommandState`。
+
+部署命令出错时告诉调用者哪些进程已退出、哪些远端结果仍未知，防止盲目重试。
+
+```json
+{
+  "reason": "timeout",
+  "localTermination": "confirmed",
+  "remoteExecution": "unknown",
+  "deploymentId": "deploy-orders-42",
+  "resultFile": "/opt/hai/apps/orders/result-deploy-orders-42.json"
+}
+```
+
+本地进程已结束，但远端是否完成未知；先查对应 resultFile，再决定后续动作。
+
+### 整个发布最后是否成功
+
+对应结构：`result-<id>.json`。
+
+部署脚本在退出前写最终结果，SSH 断线后也能根据同一部署编号核对。
+
+```json
+{
+  "deploymentId": "deploy-orders-42",
+  "stage": "complete",
+  "exitCode": 0,
+  "durationSeconds": 42,
+  "recoveryStatus": "not-needed"
+}
+```
+
+deploy-orders-42 在 complete 阶段以0退出，用时42秒且无需恢复；这不证明应用业务数据没有变化。
+
+## 字段、存储与清理参考
+
+### 数据库与缓存
 
 模块不创建 SQL 表或 Redis 键。项目目录存放本地构建结果。发布文件和结果写到目标服务器。通过云服务创建的资源由相应云服务记录。
 
 <a id="files"></a>
 
-## 文件状态
+### 文件状态
 
 | 路径                         | 数据与用途                                                                           |
 | ---------------------------- | ------------------------------------------------------------------------------------ |

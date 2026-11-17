@@ -102,3 +102,9 @@ The output is successful HaiResult.data unless shown as a distinct result. publi
 Consume or cancel opened streams. After a failed bulk delete, inspect error.ext.deleteMany before retrying: a key with an unknown outcome may already be deleted.
 
 Still untranslated: the streaming integrity, batch-delete recovery and external upload workflows. Read the [Chinese source section](storage.md#api-reference).
+
+<a id="download-authorization"></a>
+
+## Authorized download links
+
+This integration guide was moved from the configuration handbook because it describes code arguments. The complete walkthrough is currently available in [Chinese](storage.md#download-authorization); this subsection is partially translated.

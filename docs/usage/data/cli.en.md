@@ -2,6 +2,40 @@
 
 [Chinese source](cli.md) · [Configuration](../configuration/cli.en.md) · [API reference](../function/cli.en.md)
 
+<a id="example-data"></a>
+
+## What these records are for
+
+Start with the purpose and examples, then consult field and storage details below. IDs and business content are fictional; sensitive values are redacted. Times use 2026-11-17 00:00 UTC as the example start, with units explained for each record.
+
+Database and file samples show relevant fields, not complete writable records. Omitted fields are not automatically optional. Examples can represent different moments in a process.
+
+### Identify a build for deployment
+
+Structure: `manifest.json (DeploymentArtifact)`.
+
+The build writes a manifest so deployment can verify app version, build identity and images.
+
+```json
+{
+  "version": 5,
+  "primaryService": "serv",
+  "appVersion": "1.0.0",
+  "buildId": "example-20261117",
+  "source": {
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "dirty": false
+  },
+  "partial": false,
+  "hasWeb": false,
+  "images": []
+}
+```
+
+The primary service is serv at app version 1.0.0. Only identity is shown; empty images is an omission, not a deployable artifact.
+
+## Field, storage and cleanup reference
+
 The CLI generates project files and builds artifacts. The modules enabled in the generated app own runtime tables and keys.
 
 | Table, key or artifact | Shape and ownership |

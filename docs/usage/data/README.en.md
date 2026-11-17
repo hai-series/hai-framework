@@ -2,6 +2,8 @@
 
 [Guide home](../README.en.md) · [Module settings](../configuration/README.en.md#modules) · [Module APIs](../function/README.en.md)
 
+Each module page provides structures and [example data](crypto.en.md#example-data), identifying tables/keys/types, time units, field projections and redaction. Modules without storage show actual return or runtime objects.
+
 Find the tables, columns, and cache keys owned by a module. To check whether a record will survive a restart, look up where the module keeps it and which backend is configured. Check expiry and cleanup rules to find out when it is removed.
 
 ## Runtime and APIs

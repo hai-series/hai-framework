@@ -16,13 +16,15 @@ hai-framework のクロスプラットフォーム oRPC/OpenAPI 型付きクラ�
 
 ## 設定一覧
 
-`apiClient.init(config)` に API のベース URL を渡します。認証情報の保存先、リクエストのタイムアウト、通信の暗号化は必要に応じて指定します。
-
-設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/api-client.ja.md)を参照してください。
+独立した実行時設定ファイルはありません。[ファイルの所有者](../../docs/usage/configuration/api-client.ja.md)と[引数・応答のリファレンス](../../docs/usage/function/api-client.ja.md#call-options)。
 
 ## 機能
 
 [API 一覧](../../docs/usage/function/api-client.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
+
+`transport.maxPlaintextBytes` は鍵交換で取得します。ローカル上限を明示した場合は小さい値を採用します。容量エラーは `HaiApiClientError.PAYLOAD_TOO_LARGE`（`hai:api-client:020`）と方向・段階・バイト診断を返します。[容量と移行](../../docs/usage/function/crypto.ja.md#transport-capacity)を参照してください。
+
+Serv/Kit は要求の結合、署名、MAC を検証した後、時刻の許容範囲を超えた要求に暗号化した HTTP 400 を返します。クライアントは `TransportTimeError`（`hai:crypto:071`）をスローし、検証時のサーバー UTC 時刻を表示して、自動時刻同期を有効にするか手動で時刻を設定してから再読み込みするよう案内します。`serverTime` は Unix ミリ秒です。`api-client` は `VALIDATION_FAILED` に変換し、`cause.transportCode` と `cause.serverTime` を保持します。
 
 ## データ構造
 
@@ -36,10 +38,6 @@ hai-framework のクロスプラットフォーム oRPC/OpenAPI 型付きクラ�
 pnpm --filter @h-ai/api-client test
 pnpm --filter @h-ai/api-client typecheck
 ```
-
-`transport.maxPlaintextBytes` は鍵交換で取得します。ローカル上限を明示した場合は小さい値を採用します。容量エラーは `HaiApiClientError.PAYLOAD_TOO_LARGE`（`hai:api-client:020`）と方向・段階・バイト診断を返します。[容量と移行](../crypto/TRANSPORT-CAPACITY.md)を参照してください。
-
-Serv/Kit は要求の結合、署名、MAC を検証した後、時刻の許容範囲を超えた要求に暗号化した HTTP 400 を返します。クライアントは `TransportTimeError`（`hai:crypto:071`）をスローし、検証時のサーバー UTC 時刻を表示して、自動時刻同期を有効にするか手動で時刻を設定してから再読み込みするよう案内します。`serverTime` は Unix ミリ秒です。`api-client` は `VALIDATION_FAILED` に変換し、`cause.transportCode` と `cause.serverTime` を保持します。
 
 ## ライセンス
 

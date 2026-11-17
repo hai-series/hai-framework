@@ -102,3 +102,9 @@ export async function uploadImage(key: string, file: File) {
 取得したストリームは読み切るか中止します。一括削除失敗時は再試行の前に error.ext.deleteMany を確認してください。結果が不明でも削除済みの場合があります。
 
 未翻訳：ストリーム整合性、一括削除の復旧、外部アップロードの手順。[中国語の該当節](storage.md#api-reference)を参照してください。
+
+<a id="download-authorization"></a>
+
+## 認可後のダウンロード URL 発行
+
+コード引数を扱うため設定手冊から移動しました。完全な手順は現在[中国語](storage.md#download-authorization)にあり、この節は部分翻訳です。

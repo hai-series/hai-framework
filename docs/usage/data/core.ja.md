@@ -2,6 +2,116 @@
 
 [简体中文](core.md) · [English](core.en.md) · [Core の設定](../configuration/core.ja.md) · [設定 API](../function/core.ja.md#config-api)
 
+<a id="example-data"></a>
+
+## それぞれの記録の役割
+
+まず用途と例を読み、必要に応じて後半の項目・保存規則を確認してください。ID と業務内容は架空で、秘密は隠しています。時刻は 2026-11-17 00:00 UTC を起点とし、単位は各説明に記します。
+
+### 成功結果
+
+対応する構造：`success`。
+
+呼び出し側が成功後のデータを読むための値です。
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "order-42",
+    "status": "created"
+  }
+}
+```
+
+order-42 の作成が成功し、data に結果が入っています。
+
+### 失敗結果
+
+対応する構造：`failure`。
+
+失敗時に処理停止や通知を判断する値です。
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "hai:core:001",
+    "message": "Example failure",
+    "httpStatus": 500
+  }
+}
+```
+
+success が false なら error を読みます。message は説明用で、実際には翻訳済みの文言を使います。
+
+### このプロセスが読み込んだ設定
+
+対応する構造：`loaded configuration`。
+
+検証済み設定をメモリから読むための値です。
+
+```json
+{
+  "name": "Orders",
+  "env": "development",
+  "defaultLocale": "zh-CN"
+}
+```
+
+core 設定の一部で、再読込はアプリが管理し、他プロセスとは自動共有しません。
+
+### 追跡できるログ1件
+
+対応する構造：`LogRecord`。
+
+出来事と関連するリクエスト番号を記録します。
+
+```json
+{
+  "timestamp": 1794873600000,
+  "level": "info",
+  "message": "Order created",
+  "context": {
+    "requestId": "request-42"
+  }
+}
+```
+
+時刻は Unix ミリ秒で request-42 を関連付けます。保存先はログ後端が決めます。
+
+### 1回のリクエストで共有する追跡情報
+
+対応する構造：`RequestContext`。
+
+複数手順で同じ追跡番号を使います。
+
+```json
+{
+  "requestId": "request-42",
+  "scopeId": "team-1",
+  "userId": "user-42"
+}
+```
+
+team-1 の user-42 で、令牌を含まず、この情報自体は操作を許可しません。
+
+### アプリの依存が起動済みか
+
+対応する構造：`ModuleRuntime`。
+
+順に開始・逆順に終了し、未準備の利用を防ぎます。
+
+```json
+{
+  "isInitialized": true
+}
+```
+
+JSON には起動済み状態だけを示し、関数や DB 永続状態ではありません。
+
+## 項目・保存・削除のリファレンス
+
 Core は以下のデータを実行中のプロセスのメモリに保持します。データベースのテーブルや Redis のキー、ディスクキャッシュは作成しません。Node プロセスごとに必要な設定を読み込みます。
 
 | データ               | 内容                                                                                                              |

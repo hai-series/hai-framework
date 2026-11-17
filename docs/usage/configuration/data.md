@@ -178,17 +178,6 @@ prefix: private
 
 ![从授权请求到私有对象直接下载](../images/storage-private-download.svg)
 
-### 应用开发者：先授权，再给用户下载链接
-
-由框架部署自建存储时，没填 `bucket` 和 `region` 就分别使用 `hai` 和 `us-east-1`。应用直接调用 `storage.init()` 连接 S3 时，仍需提供这两项。`publicEndpoint` 没有自动猜测值，SSH Host 别名、HTTP 端口与用户实际访问的 HTTPS 地址可能不同，部署前应明确填写。
-
-1. 先调用 `storage.init()` 并检查成功。应用的签名 API 应先核对登录身份、下载权限和文件归属，再生成地址。
-2. 调用 `apiClient.storage.presignedUrls.createDownload({ key, expiresIn: 300 })`，确认 `result.success` 后使用 `result.data.url`。下载时浏览器直接请求这条 URL；下载字节不经过生成签名的 Serv 请求。
-3. 需要浏览器保存大文件时，可把 URL 用作正常下载链接，并由 `responseContentDisposition` 声明文件名；不要为了下载再让应用 API 读取整个对象。现有 `downloadWithPresignedUrl` 也直连存储，但它为了进度/Blob 保存会占用客户端内存，应按文件规模选择。
-4. 失败时重新经过授权获取新链接。返回 URL 已含配置的代理目录，调用方不能再加网站目录、改域名、改桶名或删查询；GET 的签名也不能拿来发送 HEAD 请求。客户端取消只结束本次传输，不撤销已经授予的 URL 或远端上传。
-
-签名默认值仍分入口：Node 省略有效期为 3600 秒，HTTP 为 900 秒，允许整数 1–604800 秒；300 秒是上例建议值。下载签名可以设置响应 `Content-Type`、`Content-Disposition`；上传签名默认 `Content-Type` 为 `application/octet-stream`。上传 URL 只授权 PUT，不保证文件大小或内容符合业务要求，应用须在存储完成后核验实际对象。
-
 ### 运维与安全人员：直连路由、增量与回滚
 
 前后端分离部署把桶路由加到已有 Web Nginx；SvelteKit SSR 和独立 API 增加 `gateway`，由该网关对外监听公开端口，应用只在 Compose 网络监听。Storage 的 9000 端口与控制台不向公网开放。Nginx 保留签名 Host、原始 URI 和查询，关闭对象请求/响应缓冲及对象路由日志，支持 Range；仅允许 GET/HEAD、PUT 和 OPTIONS，实际对象权限仍由 S3 校验。外层负载均衡、CDN和日志平台也必须清除签名查询；跨源浏览器需要在实际 S3 服务配置精确 CORS，网关不会自动放开来源。
@@ -205,25 +194,15 @@ prefix: private
 
 看到提示时，先回下载页面重新获取链接。重复失败时，管理员检查生效的 `HAI_STORAGE_PUBLICENDPOINT` 是否指向浏览器可访问的对象存储入口或已挂载的存储代理。调整后重新生成链接，并验证文件响应为 200、分段下载为 206。引入新代理规则的现有部署使用完整交付包更新。独立运行的静态 Web 镜像使用更新后的 CLI 模板重新构建。
 
-## 文本清洗和分块
 
-Datapipe 是函数，不通过 `_clean.yml` / `_chunk.yml` 初始化。调用时传选项；没有 `close()`。
+## AI 文本清洗与分块文件设置
 
-通用选项见 [Datapipe 配置清单](datapipe.md#配置清单)。导入 AI 知识库时，应用按知识库设置清洗和切块，可能与单独调用 `datapipe.chunk()` 得到不同结果，见 [AI 知识库配置](ai.md#knowledge)。
+AI 知识导入读取 `config/_ai.yml` 中的 `knowledge.cleanOptions` 与 `knowledge.chunkOptions`，字段和默认值见 [AI 知识库配置](ai.md#knowledge)。Datapipe 独立调用的参数与示例见[文本处理](../function/datapipe.md#text-import-guide)。下载链接的授权和签发调用见 [Storage 接入](../function/storage.md#download-authorization)。
 
-先用一段短文本确认分块位置和重叠内容，再用真实非敏感文档评估检索效果。
+<a id="应用开发者先授权再给用户下载链接"></a>
 
-```ts
-import { datapipe } from '@h-ai/datapipe'
+相关调用说明已移至[功能参考](../function/storage.md#download-authorization)。
 
-const cleaned = datapipe.clean('<b>Hello</b>', { removeHtml: true })
-// 输入是带标签文本，成功时 cleaned.data 为 'Hello'。
-if (!cleaned.success) throw new Error(cleaned.error.message)
+<a id="文本清洗和分块"></a>
 
-const chunks = datapipe.chunk('abcdef', { mode: 'character', maxSize: 3, overlap: 1 })
-if (!chunks.success) throw new Error(chunks.error.message)
-const contents = chunks.data.map(chunk => chunk.content)
-// 输出依次为 ['abc', 'cde', 'ef']；相邻块保留一个字符的上下文。
-```
-
-`customReplacements.pattern` 和 custom 模式的 `separator` 会作为正则执行，仅由可信配置提供；不能直接拼入用户输入。word 模式按词计量，其他模式按 Unicode code point，而不是字节或模型 Token。Markdown section 之间不重叠，围栏代码里的标题不参与切分；只有 `markdownKeepTitle: false` 才移除标题。
+相关调用说明已移至[功能参考](../function/datapipe.md#text-import-guide)。

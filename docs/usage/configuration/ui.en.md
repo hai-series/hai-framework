@@ -1,13 +1,9 @@
-# @h-ai/ui Configuration
+# @h-ai/ui File configuration
 
-[Chinese source](ui.md) · [Data structures](../data/ui.en.md) · [API reference](../function/ui.en.md)
+[Chinese](ui.md) · [日本語](ui.ja.md)
 
-Configure UI through the exported components and helper options. Keep app-specific theme, locale and guide options consistent between rendering and bootstrap.
+<a id="configuration-fields"></a>
 
-| Field | Default or requirement | Meaning |
-| --- | --- | --- |
-| `applyTheme(theme, persist)` | Required theme, `true` | Apply a theme and optionally persist it. |
-| `createThemeBootstrapScript.storageKey`, `defaultThemeId` | Required key, `light` | Choose the shared storage key and default theme. `defaultThemeColor`, `colorCssVar`, `toneDatasetKey` and `locale` are optional. |
-| `createLocaleStore.defaultLocale`, `supportedLocales`, `detectBrowser`, `persistKey` | `zh-CN`, built-in locales, `true`, `hai-locale` | Control default language, selection and storage. |
-| `createGuide.tours`, `articles`, `persistence`, `persistKey`, `nav`, `waitTimeout` | Required tours (can be empty), optional articles/nav, `cookie`, `hai-guide`, `3000` ms | Configure onboarding content, navigation, persistence and wait time. |
-| `AuthPanel.config`, `actions` | Required | The app supplies public authentication policies and the business callbacks. |
+This module has no standalone configuration file. Its runtime arguments belong to the API reference and are not YAML fields.
+
+See arguments, defaults and examples in [Call arguments and integration options](../function/ui.en.md#call-options).

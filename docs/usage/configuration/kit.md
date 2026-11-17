@@ -8,7 +8,7 @@
 
 生成的项目把 Kit 设置放在 `config/_kit.yml`。用环境变量覆盖时使用 `HAI_KIT_` 前缀。见[配置来源和覆盖顺序](runtime.md#配置从哪里来)。
 
-应用启动代码读取 `server` 中的地址和端口，用它们启动 SvelteKit 的 HTTP 服务。在 SvelteKit 的服务端请求入口（通常是 `hooks.server.ts`）中，应用把请求访问策略传给 `kit.createHandle()`，启用加密时再把 YAML 的 `transport` 设置传给 `crypto.transport`。Cookie 属性、私钥和已连接的存储实例也在这段服务端代码中传入。 [Hooks 参数](http.md#hooks-参数与运行时依赖)
+应用启动代码读取 `server` 中的地址和端口，用它们启动 SvelteKit 的 HTTP 服务。在 SvelteKit 的服务端请求入口（通常是 `hooks.server.ts`）中，应用把请求访问策略传给 `kit.createHandle()`，启用加密时再把 YAML 的 `transport` 设置传给 `crypto.transport`。Cookie 属性、私钥和已连接的存储实例也在这段服务端代码中传入。 [Hooks 参数](../function/kit.md#host-options)
 
 ## 配置示例
 

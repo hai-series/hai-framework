@@ -4,6 +4,8 @@
 
 [配置手册](README.md)
 
+实际文件入口是 `config/_runner.yml`，例如 AI Playground 的启动代码注册 `RunnerConfigSchema` 并读取该文件。以下清单只列文件字段；初始化时注入的服务实例和回调属于[功能接入](../function/runner.md)。
+
 ## 配置入口
 
 服务启动代码把对象传给 `runner.init(config)`。可以在代码中写这些设置，也可以从项目配置文件读取后再传入。Runner 初始化时会检查字段和取值。

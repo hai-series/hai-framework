@@ -14,9 +14,7 @@ Install with pnpm: `pnpm add @h-ai/api-contract`.
 
 ## Configuration Reference
 
-Pass the definitions your application exposes to `apiContract.create(options)`. The keys in the options object name the interface groups. Use the resulting contract for the server, typed clients, and API documentation.
-
-See the [configuration reference](../../docs/usage/configuration/api-contract.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
+This module has no standalone runtime configuration file. See [file ownership](../../docs/usage/configuration/api-contract.en.md); arguments or response structures are in the [reference](../../docs/usage/data/api-contract.en.md#public-settings).
 
 ## Features
 

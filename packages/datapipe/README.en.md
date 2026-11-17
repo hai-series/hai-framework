@@ -14,9 +14,7 @@ Install with pnpm: `pnpm add @h-ai/datapipe`.
 
 ## Configuration Reference
 
-Pass cleaning options to `datapipe.clean()` and options such as chunk size and overlap to `datapipe.chunk()`. Supply both sets of options when calling `datapipe.pipeline()`.
-
-See the [configuration reference](../../docs/usage/configuration/datapipe.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
+This module has no standalone runtime configuration file. See [file ownership](../../docs/usage/configuration/datapipe.en.md); arguments or response structures are in the [reference](../../docs/usage/function/datapipe.en.md#call-options).
 
 ## Features
 

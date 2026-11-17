@@ -363,7 +363,7 @@ const app = serv.createApp({
     crypto,
     serverKeyRing,
     // keyExchangePath 默认 '/_hai/key-exchange'
-    keyStore, // 已连接的共享 Redis/数据库 registry。
+    keyStore, // 已连接的基于 @h-ai/cache 的 Redis registry。
   },
 })
 ```
@@ -391,7 +391,7 @@ await apiClient.init({
 
 > 不要导入或暴露子目录内部 transport 工厂；公共装配点只有 `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })`。
 
-启用 transport 必须显式注入 `serverKeyRing` 与 `keyStore`；多节点使用相同受管 ring 和共享 Redis/数据库 registry，仅共享客户端公钥不足以跨节点解密。通过根入口 `parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)` 解析并检查 HaiResult，私钥不放 `_serv.yml`、PUBLIC_/VITE_、日志或响应。请求带协商 serverKeyId，未知/撤销 ID 拒绝。轮换先分发新旧 ring，再切 activeKeyId 并滚动重建；删除旧版本后客户端须 destroy 并重协商，不自动重放非幂等业务。开发和测试显式 `createInMemoryKeyStore(capacity)`。无需 sticky session，详见 hai-crypto 的密钥轮换说明。
+启用 transport 必须显式注入 `serverKeyRing` 与 `keyStore`；多节点使用相同受管 ring 和基于 @h-ai/cache 的 Redis registry，仅共享客户端公钥不足以跨节点解密。通过根入口 `parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)` 解析并检查 HaiResult，私钥不放 `_serv.yml`、PUBLIC_/VITE_、日志或响应。请求带协商 serverKeyId，未知/撤销 ID 拒绝。轮换先分发新旧 ring，再切 activeKeyId 并滚动重建；删除旧版本后客户端须 destroy 并重协商，不自动重放非幂等业务。开发和测试显式 `createCacheTransportKeyStore({ cache })`（cache 显式使用 memory）。无需 sticky session，详见 hai-crypto 的密钥轮换说明。
 
 **上下文工厂优先级**（`context.session` 填充来源）：
 

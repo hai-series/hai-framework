@@ -2,7 +2,7 @@
 
 [简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
 
-[框架首页](../../README.md) · 相关模块：[@h-ai/cache](../cache/README.md) · [@h-ai/core](../core/README.md) · [@h-ai/reldb](../reldb/README.md)
+[框架首页](../../README.md) · 相关模块：[@h-ai/cache](../cache/README.md) · [@h-ai/core](../core/README.md)
 
 加密模块，提供非对称加密、哈希、对称加密与密码哈希能力。
 
@@ -14,19 +14,19 @@
 
 ## 配置清单
 
-调用加密、签名或哈希函数时传入算法选项。为 HTTP 请求建立加密会话时，调用 `crypto.transport.createServer(options)` 提供服务器密钥和密钥存储，调用 `crypto.transport.createClient(options)` 提供客户端使用的密钥协商地址。
-
-在[模块配置清单](../../docs/usage/configuration/crypto.md)中查阅配置入口、默认值、取值限制和生效条件。
+本模块没有独立的运行配置文件。文件归属见[配置说明](../../docs/usage/configuration/crypto.md)，调用参数或响应结构见[参考页](../../docs/usage/function/crypto.md#call-options)。
 
 ## 功能说明
+
+传输的精确格式见[协议说明](../../docs/usage/function/crypto.md#transport-protocol)，算法输入边界见[输入校验](../../docs/usage/function/crypto.md#primitive-validation)。
 
 [查 API 清单](../../docs/usage/function/crypto.md#api-reference)，包含调用入口、输入、返回值和用法。
 
 ## 数据结构
 
-选择 RelDB 传输密钥仓库时创建数据库表。Redis 仓库使用缓存键保存公钥和防重放记录。
+传输状态统一使用 `@h-ai/cache`：有限期公钥、原子防重放记录和共享分钟配额；生产使用 Redis。Crypto 不创建数据库表。
 
-查看[数据结构](../../docs/usage/data/crypto.md)，了解密钥、传输会话、nonce 和可注入的存储组件。
+[传输状态](../../docs/usage/data/crypto.md#transport-state)
 
 ## 开发测试
 

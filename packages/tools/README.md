@@ -12,7 +12,7 @@
 
 ## 配置清单
 
-[定义、执行和启用策略](../../docs/usage/configuration/tools.md)
+本模块没有独立的运行配置文件。文件归属见[配置说明](../../docs/usage/configuration/tools.md)，调用参数或响应结构见[参考页](../../docs/usage/function/tools.md#call-options)。
 
 ## 功能说明
 

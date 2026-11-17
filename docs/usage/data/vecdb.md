@@ -4,7 +4,38 @@
 
 [数据结构索引](README.md) · [模块配置](../configuration/vecdb.md) · [功能说明](../function/vecdb.md)
 
-## 数据库与集合
+<a id="example-data"></a>
+
+## 这些数据用来做什么
+
+先看用途和例子，再按需查后面的字段与保存规则。例子中的编号和业务内容是虚构的，敏感值已隐藏。时间以 2026-11-17 00:00 UTC 为起点，具体单位在说明中标明。
+
+### 可按含义搜索的文档
+
+对应结构：`VectorDocument`。
+
+正文与代表其含义的向量一起保存，搜索时用相近向量找到相关内容，再把正文交给应用。
+
+```json
+{
+  "id": "doc-42",
+  "vector": [
+    0.1,
+    0.2,
+    0.3
+  ],
+  "content": "Example shipping policy",
+  "metadata": {
+    "source": "policy.txt"
+  }
+}
+```
+
+doc-42 的向量有3个数，所以集合维度必须是3；metadata 说明正文来自 policy.txt。
+
+## 字段、存储与清理参考
+
+### 数据库与集合
 
 调用 `vecdb.collection.create()` 时指定集合名与向量维度，也可指定比较向量的方法。新集合默认使用余弦相似度（`cosine`）。修改默认设置后，已有集合仍采用创建时的方法。每个文档包含 `id`（集合内标识）、`vector`（指定维度的数值数组）、可选 `content`（正文）与可选 `metadata`（业务属性）。
 
@@ -15,6 +46,6 @@
 | LanceDB  | 以集合名保存 Arrow 表。向量列为固定长度，schema metadata 中的 `hai.vecdb.metric` 保存相似度类型。表 schema 保存 ID、向量、正文和属性                                                                                                                                                                                                            |
 | Chroma   | collection 保存 ID、embeddings、文档和元数据，`hai_dimension` 与 `hnsw:space` 分别保存维度和距离度量                                                                                                                                                                                                                                            |
 
-## 缓存
+### 缓存
 
 模块不创建 Redis 键。查询直接从已连接的向量数据库读取。应用要把一页结果返回的游标保存下来，在同一个数据库、同一个集合的下一次查询中传回。

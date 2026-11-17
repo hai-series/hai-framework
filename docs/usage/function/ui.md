@@ -1317,6 +1317,137 @@ const preset = resolveErrorPreset(503) // 输入 HTTP 状态，返回对应预�
 const fallback = resolveErrorPreset(undefined) // 输入缺省状态，返回通用错误预设。
 ```
 
+<a id="call-options"></a>
+
+## 调用参数与接入选项
+
+### 调用入口
+
+在 Svelte 项目中安装样式依赖，并按项目需要设置 Tailwind CSS 和 DaisyUI。组件的标题、选项和操作函数直接写在组件标签上，例如 `<Button onclick={save}>保存</Button>`。整个页面共享的主题、语言和导览进度通常在根布局中设置一次。
+
+### 调用示例
+
+```ts
+import { createGuide } from '@h-ai/ui/guide'
+import { createLocaleStore } from '@h-ai/ui/i18n'
+import { applyTheme } from '@h-ai/ui/theme'
+
+applyTheme('light')
+const locale = createLocaleStore({ defaultLocale: 'zh-CN', persistKey: 'orders-locale' })
+const guide = createGuide({ tours: [], persistence: 'memory' })
+```
+
+在浏览器中调用 `applyTheme('light')` 后，页面切换为浅色主题。`createLocaleStore()` 返回给组件树共享的语言状态，示例使用 `orders-locale` 保存语言偏好。`createGuide()` 返回导览控制器。示例没有设置具体步骤，刷新页面后内存中的导览进度会丢失。可按功能使用以上三个公开导入路径。
+
+### 参数清单
+
+| 参数                                                     | 默认值/必填                         | 说明                                                                                                                         |
+| ---------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `applyTheme(theme, persist)`                               | `theme` 必填，`persist` 默认 `true` | 从支持的主题 ID 中选择。被持久化的主题写入浏览器的 `theme` 键                                                                |
+| 主题色 `DEFAULT_THEME_COLOR`                               | `#5765f0`                           | 内建主题色，应用可用 CSS 自定义属性替换                                                                                      |
+| `createThemeBootstrapScript.storageKey`                    | 必填                                | 首屏脚本读取的浏览器偏好存储键                                                                                               |
+| `createThemeBootstrapScript.defaultThemeId`                | `light`                             | 浏览器还没有有效偏好时使用的主题                                                                                             |
+| `createThemeBootstrapScript.defaultThemeColor`             | 可省略                              | 指定时使用十六进制颜色；空值跳过默认颜色设置                                                                                 |
+| `createThemeBootstrapScript.colorCssVar`、`toneDatasetKey` | 可省略                              | 指定后写入主题颜色 CSS 变量、亮暗色数据属性                                                                                  |
+| `createThemeBootstrapScript.locale`                        | 可省略                              | 同时规范化首屏语言信息，提供 `key`、`defaultValue`、`supportedValues`                                                        |
+| `createLocaleStore.defaultLocale`                          | `zh-CN`                             | 没有有效候选语言时的默认值                                                                                                   |
+| `createLocaleStore.supportedLocales`                       | 框架内建语言列表                    | 填应用实际支持的语言，每项有 `code` 和显示名称 `label`，例如 `{ code: 'en-US', label: 'English' }`                           |
+| `createLocaleStore.detectBrowser`                          | `true`                              | 浏览器有多项语言偏好时依序匹配                                                                                               |
+| `createLocaleStore.persistKey`                             | `hai-locale`                        | 用于保存浏览器语言偏好的键                                                                                                   |
+| `createGuide.tours`                                        | 必填，可为 `[]`                     | 可执行的导览与步骤                                                                                                           |
+| `createGuide.articles`                                     | 可省略                              | 帮助中心文章                                                                                                                 |
+| `createGuide.persistence`                                  | `cookie`                            | 也可选 `localStorage` 或 `memory`，用于存放导览进度                                                                          |
+| `createGuide.persistKey`                                   | `hai-guide`                         | 导览进度键前缀。同源部署多个应用时分别配置                                                                                   |
+| `createGuide.nav`                                          | 可省略                              | 应用自带的路由导航适配器                                                                                                     |
+| `createGuide.waitTimeout`                                  | `3000`                              | 等待每个导览目标 DOM 元素的毫秒数                                                                                            |
+| `AuthPanel.config`、`actions`                              | 由应用传入                          | `config` 决定页面显示哪些选项，可用 [IAM 接口返回的设置](../data/api-contract.md#public-settings)。`actions` 接收点击登录或注册时调用的函数 |
+| CRUD `resource`、`controller options`                      | 资源和 API 回调由应用提供           | 配置字段展示、表单、分页和加载行为，例如 `autoLoad: false` 关闭自动加载                                                      |
+| 表单、Toast、其他组件 Props                                | 由组件指定                          | 通过组件入参配置布局、回调或时长等控件表现。[页面体验配置](../configuration/experience.md)                                                    |
+
+### 使用与核对
+
+浏览器只保存主题和语言等外观偏好。服务端渲染时，为每次请求创建各自的语言状态。例如一个请求选择中文，另一个请求选择英文，两个页面都应显示各自的语言。手工接入时使用与 CLI 模板兼容的 Tailwind CSS 和 DaisyUI 版本。
+
+<a id="form-layout-guide"></a>
+
+## 表单布局与校验
+
+通用组件、主题和语言入口见 [UI 配置清单](../function/ui.md#call-options)。
+
+在页面中把选项直接传给组件。`Form` / `FormLayout` 默认一列、标签在上；`columns={2}` 适合宽容器，`labelPosition="left"` 让短标签对齐，`labelWidth` 按实际内容选择。`FormField.colSpan` 默认 `auto`，宽控件占满一行，自定义宽控件用 `data-form-wide`，也可明确指定 `1` 或 `2`。
+
+```svelte
+<FormLayout columns={2} labelPosition="left" labelWidth="6rem">
+  <FormField label={() => m.userName()} for="name">
+    <Input id="name" bind:value={name} required />
+  </FormField>
+</FormLayout>
+```
+
+片段放在已有Svelte页面中，`FormLayout`、`FormField`、`Input` 从 `@h-ai/ui` 导入，`m` 来自应用翻译，`name`为页面状态。配置立即改变布局，不需重启后端。
+
+![一列、标签在上](../images/ui-form-one-top.png)
+
+![两列、标签在左](../images/ui-form-two-left.png)
+
+![窄屏自动收拢](../images/ui-form-mobile.png)
+
+检查标签与 `for` / `id` 关联、Tab顺序、提交失败保留输入和防重复提交。校验错误统一Toast，控件保留 `aria-invalid` 和读屏说明；修正后清除旧提示，关闭提示后再次无效提交仍提示。服务端再次校验输入和权限。
+
+保存型场景组件还要明确成功信号。`UserProfile.onsubmit` 接收表单值，返回 `boolean | Promise<boolean>`：只有 `true` 才退出编辑；`false` 或异常保留草稿。输入一个会被服务端拒绝的值时，应看到安全错误提示且仍能继续编辑；不要把“请求结束”当成“保存成功”。
+
+<a id="toast-options"></a>
+
+## Toast位置、时长和排查信息
+
+根布局只挂载一个 `ToastContainer`。所有警告/错误均由它显示，`Alert` 仅支持 `info` / `success` 持续信息；恢复按钮留在原页面，用户能继续处理。
+
+| 参数 | 默认 | 对用户的影响 |
+| --- | --- | --- |
+| `position` | `bottom-right` | `top` / `bottom` 各搭配 `left` / `center` / `right`，共 6 个位置，所有位置共用FIFO队列 |
+| `duration` | `toast.add`默认3000ms | 0手动关闭；`notifyError`/`notifyWarning`默认5000ms，成功默认3000ms |
+| `dismissible` | `true` | `false` 隐藏关闭按钮，永久不可关闭消息可能阻塞队列，应谨慎 |
+| `traceId` | 无默认 | 有合法编号才显示排查图标；默认正文只显示可读信息 |
+
+```ts
+import { toast } from '@h-ai/ui/toast'
+
+toast.add({
+  message: '请刷新后重试', // 实际应用使用自己的翻译函数。
+  variant: 'warning',
+  duration: 5000,
+  traceId: 'example-request-id',
+})
+```
+
+![默认正文不显示编号](../images/feedback-conflict.png)
+
+![展开后说明用途并提供复制](../images/feedback-conflict-diagnostics.png)
+
+编号用于联系客户支持/开发定位日志，不显示堆栈、SQL或密钥。悬停、聚焦、展开时暂停计时，交互结束按剩余时间恢复；复制拒绝时可手动选择。F8进入/返回提示，Escape关闭并恢复焦点。
+
+<a id="theme-locale-guide"></a>
+
+## 主题、语言和AI内容显示
+
+主题偏好和语言初始化及其默认值见 [UI 配置清单](../function/ui.md#call-options)。
+
+每个应用在根布局选择默认主题。浏览器调用 `applyTheme()` 更换主题，用 `getSavedTheme()` 读出之前保存的主题。要能显示某个主题，构建产物中必须有相应 CSS。切换深色后检查长文、图表文字和错误状态是否仍清晰可读。
+
+![浅色设置页](../images/settings-light.png)
+
+![深色设置页](../images/settings-dark.png)
+
+Markdown 的 `allowHtmlTags` 默认 `false`，`true` 只渲染允许的HTML并继续安全清理；不能把它当脚本沙箱。字号、Mermaid与编辑器参数由组件props提供，按公开类型和业务阅读需求选择。修改后同时检查代码复制、图表文字和暗色对比度。
+
+![关闭HTML时的真实内容](../images/ai-markdown-html-off-zh-CN.png)
+
+![允许安全HTML及字号变化](../images/ai-markdown-html-on-zh-CN.png)
+
+![深色文档工具栏](../images/ai-document-dark.png)
+
+界面文字走 `zh-CN`、`en-US`、`ja-JP` 翻译，错误使用安全消息；不要通过翻译开关泄露原始异常。
+
 ## 错误处理
 
 应用将查询、保存或上传的进度与结果传给组件，例如设置 `loading` 或 `error`。业务接口返回 HaiResult 时，在应用适配层先检查 success，再传入安全本地化文案；UI 工具本身遵循表中的直接返回值，不统一包装 HaiResult。未知异常交给 notifyError/errorMessage 隐藏内部原文。downloadAiDocument 等异步浏览器工具会拒绝 Promise，必须由交互边界捕获并释放 loading。UserProfile.onsubmit 只有返回 true 才结束编辑。

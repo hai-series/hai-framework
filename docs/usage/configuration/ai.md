@@ -160,7 +160,7 @@ llm:
 | `entityBoostWeight` | 0.15 | 实体命中分数增益，范围0–1；需用实际查询评估 |
 | `entityTypes`/`systemPrompt` | 无配置默认 | 覆盖内置实体类型/提示；只写可信业务规则，不能扩大数据可见范围 |
 
-`cleanOptions.removeHtml`、`normalizeWhitespace`、`trim` 默认 `true`，`removeUrls`、`removeEmails` 默认 `false`；`customReplacements` 的每项 `pattern/replacement` 是可信规则，不是允许任意用户提交正则的入口。`chunkOptions.separator` 仅供 custom 模式，`markdownMinLevel` 默认 2、`markdownKeepTitle` 默认 true；具体清洗前后文本与分块结果见[文本处理配置](data.md#文本清洗和分块)。知识导入默认 overlap 为 200，独立 Datapipe 默认 0，不混用两者预算。
+`cleanOptions.removeHtml`、`normalizeWhitespace`、`trim` 默认 `true`，`removeUrls`、`removeEmails` 默认 `false`；`customReplacements` 的每项 `pattern/replacement` 是可信规则，不是允许任意用户提交正则的入口。`chunkOptions.separator` 仅供 custom 模式，`markdownMinLevel` 默认 2、`markdownKeepTitle` 默认 true；具体清洗前后文本与分块结果见[文本处理配置](../function/datapipe.md#text-import-guide)。知识导入默认 overlap 为 200，独立 Datapipe 默认 0，不混用两者预算。
 
 ```yaml schema=@h-ai/ai:AIConfigSchema
 llm:
@@ -612,7 +612,7 @@ Agent 可用 `custom-service`、`embedded` 或 `builtin-service`。先按[接入
 | `knowledge.collection`                                    | `"hai_ai_knowledge"`                      | 默认向量集合名                                                                                                                                             |
 | `knowledge.dimension`                                     | `1536`                                    | 向量维度。正整数                                                                                                                                           |
 | `knowledge.enableEntityExtraction`                        | `true`                                    | 是否启用实体提取                                                                                                                                           |
-| `knowledge.cleanOptions`                                  | 存在，见 [Datapipe](datapipe.md#文本清洗) | 导入知识材料前的文本清洗选项                                                                                                                               |
+| `knowledge.cleanOptions`                                  | 存在，见 [Datapipe](../function/datapipe.md#call-options) | 导入知识材料前的文本清洗选项                                                                                                                               |
 | `knowledge.cleanOptions.removeHtml`                       | `true`                                    | 移除 HTML 标签                                                                                                                                             |
 | `knowledge.cleanOptions.removeUrls`                       | `false`                                   | 移除 URL                                                                                                                                                   |
 | `knowledge.cleanOptions.removeEmails`                     | `false`                                   | 移除 Email 地址                                                                                                                                            |

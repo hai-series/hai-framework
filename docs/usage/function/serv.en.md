@@ -85,3 +85,16 @@ Serv assembles an application; only listen starts a Node listener. Middleware, p
 Close the Node listener before releasing borrowed database or cache services. Keep request metadata separate from an authenticated session.
 
 Still untranslated: the transport, streaming/audio and middleware integration examples. Read the [Chinese source section](serv.md#detailed-workflow).
+
+<a id="host-options"></a>
+
+## Factory arguments and runtime dependencies
+
+This integration guide was moved from the configuration handbook because it describes code arguments. The complete walkthrough is currently available in [Chinese](serv.md#host-options); this subsection is partially translated.
+
+
+<a id="audio-options"></a>
+
+## Audio authorization and budgets
+
+This integration guide was moved from the configuration handbook because it describes code arguments. The complete walkthrough is currently available in [Chinese](serv.md#audio-options); this subsection is partially translated.

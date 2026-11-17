@@ -4,11 +4,247 @@
 
 [数据结构索引](README.md) · [模块配置](../configuration/iam.md) · [功能说明](../function/iam.md)
 
-## 数据库
+<a id="example-data"></a>
+
+## 这些数据用来做什么
+
+先看用途和例子，再按需查后面的字段与保存规则。例子中的编号和业务内容是虚构的，敏感值已隐藏。时间以 2026-11-17 00:00 UTC 为起点，具体单位在说明中标明。
+
+数据库和文件示例只列说明所需字段，不能直接当成完整写入数据；未列出的字段不表示可省略。不同例子可以展示处理过程中的不同时间。
+
+### 账号本身
+
+对应结构：`hai_iam_users`。
+
+保存登录身份和账号是否允许使用，登录或授权时都要检查。
+
+```json
+{
+  "id": "user-42",
+  "username": "example-user",
+  "email": null,
+  "password_hash": null,
+  "account_type": "permanent",
+  "account_status": "active",
+  "must_change_password": false,
+  "login_failed_count": 0
+}
+```
+
+user-42 是启用中的长期账号；email 和 password_hash 为 null 表示本例没有这两项，不能据此用空密码登录。
+
+### 可以分配给用户的角色
+
+对应结构：`hai_iam_roles`。
+
+把一组职责起成角色，便于给多个用户分配相同权限。
+
+```json
+{
+  "id": "role-reader",
+  "code": "reader",
+  "name": "Reader",
+  "is_system": false
+}
+```
+
+role-reader 的业务代码是 reader，显示名称为 Reader；is_system:false 表示不是系统角色。
+
+### 应用能够检查的具体权限
+
+对应结构：`hai_iam_permissions`。
+
+给每一种受保护的操作一个稳定权限码，服务端检查用户是否拥有它。
+
+```json
+{
+  "id": "permission-read",
+  "code": "orders.read",
+  "name": "Read orders",
+  "resource": "orders",
+  "action": "read"
+}
+```
+
+orders.read 表示读取订单，resource/action 分别是 orders/read。仅创建这行不会自动给任何用户授权。
+
+### 哪个用户拥有哪个角色
+
+对应结构：`hai_iam_user_roles`。
+
+连接账号与角色，不把所有角色重复写进每个账号行。
+
+```json
+{
+  "user_id": "user-42",
+  "role_id": "role-reader"
+}
+```
+
+user-42 被分配了 role-reader；同一用户和角色的组合只保存一次。
+
+### 哪个角色包含哪个权限
+
+对应结构：`hai_iam_role_permissions`。
+
+连接角色与具体权限，用于计算用户最终可以做什么。
+
+```json
+{
+  "role_id": "role-reader",
+  "permission_id": "permission-read"
+}
+```
+
+role-reader 包含 permission-read，与前两条关联后，user-42 才获得 orders.read。
+
+### 供程序调用的 API 凭据登记
+
+对应结构：`hai_iam_api_keys`。
+
+让脚本或其他系统代表指定用户调用受限接口，只存密钥摘要以便验证。
+
+```json
+{
+  "id": "apikey-42",
+  "user_id": "user-42",
+  "name": "Example API",
+  "key_hash": "<hash:redacted>",
+  "key_prefix": "<prefix:redacted>",
+  "enabled": true,
+  "expires_at": null,
+  "scopes": [
+    "orders.read"
+  ]
+}
+```
+
+apikey-42 属于 user-42，只允许 orders.read。key_hash/key_prefix 已脱敏；原始密钥仅签发时返回，不能从这行还原。
+
+### 这个用户仍有效的登录会话
+
+对应结构：`hai:iam:sessions:{<scope-digest>}`。
+
+登录后保存令牌对应的会话，验证、刷新和退出都更新同一用户记录，避免并发修改把旧会话写回来。
+
+```json
+{
+  "revision": "revision-42",
+  "sessions": {
+    "<access-token:redacted>": {
+      "session": {
+        "userId": "user-42",
+        "username": "example-user",
+        "roles": [
+          "reader"
+        ],
+        "permissions": [
+          "orders.read"
+        ],
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "expiresAt": "2026-11-18T00:00:00.000Z"
+      },
+      "refreshExpiresAt": 1795478400000,
+      "refreshToken": "<refresh-token:redacted>"
+    }
+  }
+}
+```
+
+示例令牌对应 user-42。访问凭据到次日失效，刷新凭据可保留更久；revision 在内容变化时更换，凭据均已脱敏。
+
+### 一次性验证码和发送等待时间
+
+对应结构：`hai:iam:otp:example@example.invalid`。
+
+保存某个邮箱或手机号当前那一次验证码，以及输错次数和何时允许重发。
+
+```json
+{
+  "version": "otp-version-42",
+  "code": "<otp:redacted>",
+  "attempts": 0,
+  "expiresAt": 1794873900000,
+  "cooldownUntil": 1794873660000
+}
+```
+
+此例尚未输错，验证码5分钟有效、60秒内不能重发。code 已隐藏；成功使用后不能再次拿它通过验证。
+
+### 本次人机验证的服务端依据
+
+对应结构：`hai:iam:captcha:<id>`。
+
+服务端保存挑战及验证秘密，收到用户答案时检查用途是否匹配，并保证挑战只使用一次。
+
+```json
+{
+  "operation": "login",
+  "signatureSecret": "<secret:redacted>",
+  "keySecret": "<secret:redacted>"
+}
+```
+
+operation:login 表示只能用于登录；秘密已隐藏，公开挑战内容在此省略。这条私有记录不能整体发给页面。
+
+### 短时间内只准用一次的通行票
+
+对应结构：`hai:iam:ticket:<ticket:redacted>`。
+
+需要临时授权连接或操作时签发票据，兑换时检查主体、用途并立即作废。
+
+```json
+{
+  "subjectId": "user-42",
+  "purpose": "ai-audio",
+  "grant": {
+    "operation": "transcribe"
+  },
+  "expiresAt": 1794873630000
+}
+```
+
+user-42 获准进行 ai-audio 的 transcribe 操作，30秒后过期；拿同一张票第二次连接会失败。
+
+### 权限读取缓存是否仍可信
+
+对应结构：`hai:iam:read_cache:revision`。
+
+账号或权限正在变化时，用这个共享标记让读取方避开可能过时的缓存。
+
+```json
+{
+  "epoch": "epoch-42",
+  "writers": 0
+}
+```
+
+writers:0 表示当前没有登记中的写操作，epoch-42 标识这一批缓存；它本身不含用户权限，也不自动过期。
+
+### 短时间复用已查到的账号资料
+
+对应结构：`hai:iam:read_cache:epoch-42:user:v2:user-42`。
+
+让同一时期的重复读取少查数据库，权限或账号改动后不再采用旧批次缓存。
+
+```json
+{
+  "value": {
+    "id": "user-42",
+    "username": "example-user"
+  }
+}
+```
+
+value 是 user-42 资料的字段节选，默认60秒后过期。epoch-42 需要与当前版本标记一致才能使用。
+
+## 字段、存储与清理参考
+
+### 数据库
 
 [reldb](reldb.md) 保存账户、角色和权限。[cache](cache.md) 保存有期限的令牌、验证码，以及读取过的账户或权限信息。权限改动后，旧版本的缓存不会继续用于授权。下表注明 SQL 默认值，选填字段省略时保存 NULL。
 
-### `hai_iam_users`
+#### `hai_iam_users`
 
 | 字段                                                                                  | 含义、默认值和约束                                                                                           |
 | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -25,7 +261,7 @@
 | `reset_hash`、`reset_expires_at`、`reset_attempts`                                    | 可空重置凭据摘要、可空重置截止、尝试次数（默认 0）                                                           |
 | `metadata`、`created_at`、`updated_at`                                                | 可空 JSON 附加资料、创建时间、更新时间                                                                       |
 
-### 角色、权限和 API Key
+#### 角色、权限和 API Key
 
 | 表                         | 字段、默认值和约束                                                                                                                                                                                                                                   |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -39,7 +275,7 @@ API Key 原始值只在签发时返回。用 `iam.user`、`iam.authz` 等公开�
 
 <a id="data-fields"></a>
 
-## 缓存键
+### 缓存键
 
 下面是逻辑键。如果 [cache](cache.md) 配置了 `keyPrefix`，Redis 的物理键需要同时带该前缀。
 

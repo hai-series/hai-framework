@@ -4,13 +4,174 @@
 
 [数据结构索引](README.md) · [模块配置](../configuration/feedback.md) · [功能说明](../function/feedback.md)
 
-## 数据库
+<a id="example-data"></a>
+
+## 这些数据用来做什么
+
+先看用途和例子，再按需查后面的字段与保存规则。例子中的编号和业务内容是虚构的，敏感值已隐藏。时间以 2026-11-17 00:00 UTC 为起点，具体单位在说明中标明。
+
+数据库和文件示例只列说明所需字段，不能直接当成完整写入数据；未列出的字段不表示可省略。不同例子可以展示处理过程中的不同时间。
+
+### 用户提交的问题主单
+
+对应结构：`hai_feedback_reports`。
+
+保存问题描述、提交人和当前处理状态，是查看证据、附件和处理历史时的入口。
+
+```json
+{
+  "id": "feedback-42",
+  "number": "FB-EXAMPLE-42",
+  "scope_id": "team-1",
+  "user_id": "user-42",
+  "app_id": "orders",
+  "summary": "Example problem",
+  "status": "pending",
+  "collection_status": "collecting",
+  "version": 1,
+  "revision": 1,
+  "evidence_count": 0,
+  "evidence_bytes": 0,
+  "created_at": 1794873600000,
+  "updated_at": 1794873600000
+}
+```
+
+feedback-42 属于 team-1 的 user-42，尚待处理且仍在收集材料；evidence_count:0 表示此时还没有关联证据，不代表后面步骤也没有。
+
+### 帮助还原问题发生过程的证据
+
+对应结构：`hai_feedback_evidence`。
+
+把日志、错误或页面等现场信息按来源和顺序关联到反馈，便于定位当时发生了什么。
+
+```json
+{
+  "id": "evidence-42",
+  "report_id": "feedback-42",
+  "scope_id": "team-1",
+  "user_id": "user-42",
+  "app_id": "orders",
+  "sequence": 1,
+  "timestamp": 1794873600000,
+  "revision": 1,
+  "bytes": 24
+}
+```
+
+evidence-42 关联 feedback-42，是该来源的第1条、24字节；timestamp 表示发生时间。实际脱敏内容在 payload，本例未展开。
+
+### 附件放在哪里、是否完整
+
+对应结构：`hai_feedback_attachments`。
+
+数据库不存大文件正文，只登记私有对象存储中的位置、大小和校验值。
+
+```json
+{
+  "id": "attachment-42",
+  "client_id": "client-file-42",
+  "report_id": "feedback-42",
+  "scope_id": "team-1",
+  "object_key": "feedback/<scope-digest>/feedback-42/attachment-42",
+  "size": 5,
+  "checksum": "<checksum:redacted>"
+}
+```
+
+attachment-42 指向 feedback-42 的一个5字节对象；checksum 用来核对上传内容，示例已省略真实值，不能当作公开下载链接。
+
+### 谁把反馈状态改成了什么
+
+对应结构：`hai_feedback_history`。
+
+每次处理反馈时留下变更记录，方便看到处理过程和备注。
+
+```json
+{
+  "id": "history-42",
+  "report_id": "feedback-42",
+  "payload": {
+    "id": "history-42",
+    "feedbackId": "feedback-42",
+    "userId": "user-42",
+    "from": "pending",
+    "to": "handled",
+    "timestamp": 1794873660000
+  }
+}
+```
+
+示例中 user-42 把 feedback-42 从 pending 改为 handled；timestamp 是处理时间，不是最初提交时间。
+
+### 提交之后还要做的后台工作
+
+对应结构：`hai_feedback_jobs`。
+
+截图、补充证据、通知或导出需要异步完成，任务记录让节点领取、失败重试，并避免旧处理者覆盖新结果。
+
+```json
+{
+  "id": "job-42",
+  "app_id": "orders",
+  "report_id": "feedback-42",
+  "scope_id": "team-1",
+  "attempts": 0,
+  "token": null,
+  "lease_until": 0,
+  "next_run_at": 1794873600000
+}
+```
+
+job-42 属于 feedback-42，尚未尝试、没有领取 token；next_run_at 表示最早可开始时间，不保证届时一定完成。
+
+### 已经占用了多少反馈容量
+
+对应结构：`hai_feedback_quotas`。
+
+在受理和上传前核对条数、字节与导出预算，防止一个用户或范围无限占用存储。
+
+```json
+{
+  "id": "quota-42",
+  "app_id": "orders",
+  "scope_id": "team-1",
+  "user_id": "user-42",
+  "period": 0,
+  "report_count": 1,
+  "reserved_bytes": 1024,
+  "report_bytes": 0,
+  "export_limit": 0,
+  "updated_at": 1794873600000
+}
+```
+
+period:0 表示范围累计计量，当前计1条反馈、预留1024字节。它是配额账本，不是用户提交内容。
+
+### 短暂保留尚未提交的现场
+
+对应结构：`IndexedDB checkpoint`。
+
+浏览器临时保存采集现场，避免用户打开反馈页或刷新时立即丢失；它不是服务器长期历史。
+
+```json
+{
+  "evidence": [],
+  "expiresAt": 1794873900000
+}
+```
+
+evidence 为空表示此例尚无已缓存证据，expiresAt 是5分钟后的截止。到期不再恢复，提交成功后清理。
+
+## 字段、存储与清理参考
+
+### 数据库
 
 服务端收到提交后，把反馈、关联证据和需要执行的任务一起写入共享 [reldb](reldb.md)。这几项通过一次数据库事务全部保存，或在失败时一起回滚。除列出的 SQL 默认值外，字段由模块写入，选填字段缺失时为 NULL。时间字段以 Unix 毫秒记录。
 
 <a id="reports"></a>
 
-### `hai_feedback_reports`
+#### `hai_feedback_reports`
 
 | 字段                                                 | 含义与约束                                                                                         |
 | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -30,7 +191,7 @@
 
 <a id="jobs"></a>
 
-### 证据、附件、记录和异步任务
+#### 证据、附件、记录和异步任务
 
 | 表                         | 字段、默认值和约束                                                                                                                                                                                                                                                                                                                                                                                                   |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -44,7 +205,7 @@
 
 <a id="storage"></a>
 
-## 缓存与对象键
+### 缓存与对象键
 
 模块不创建 Redis 键。附件、导出和截图通过私有 [storage](storage.md) 管理，业务表记录附件校验和与状态。对象路径使用 `feedback/<范围 SHA-256 前 16 位>/<反馈 ID>/` 前缀，后接附件 ID、`business/<行 ID>-<校验和>` 或 `exports/<任务 ID>.zip`。ZIP 含 `manifest.json`、反馈、证据和处理历史，以及允许导出的附件。导出对象默认保留 24 小时。
 

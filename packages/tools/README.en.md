@@ -12,7 +12,7 @@ Install with pnpm: `pnpm add @h-ai/tools zod`.
 
 ## Configuration Reference
 
-[Definitions, execution and enablement](../../docs/usage/configuration/tools.en.md)
+This module has no standalone runtime configuration file. See [file ownership](../../docs/usage/configuration/tools.en.md); arguments or response structures are in the [reference](../../docs/usage/function/tools.en.md#call-options).
 
 ## Features
 

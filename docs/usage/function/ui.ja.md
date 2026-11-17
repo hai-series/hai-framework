@@ -68,3 +68,37 @@ import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
 ToolWorkspace に、サーバーで絞り込んだカタログ、スキーマ付きフォーム、認可済みの実行関数を渡します。実行の控えを保持し、進捗はホストから読み、指定された取消操作を使います。ArtifactWorkspace には、閲覧可能な本文、版、保存とプレビューの操作を渡します。保存が競合した場合は結果を返し、ユーザーが確認できるよう下書きを残します。
 
 未翻訳：全コンポーネントとプロパティ、導入例、実行時の制約。[中国語の該当節](ui.md#detailed-workflow)を参照してください。
+
+<a id="call-options"></a>
+
+## 呼び出し引数と接続オプション
+
+エクスポートされたコンポーネントとヘルパーで UI を設定します。アプリのテーマ、言語、ガイドは描画時と起動時で一致させます。
+
+| 項目 | 既定値・必須条件 | 用途 |
+| --- | --- | --- |
+| `applyTheme(theme, persist)` | Required theme, `true` | テーマを適用し、任意で永続化。 |
+| `createThemeBootstrapScript.storageKey`, `defaultThemeId` | Required key, `light` | 共通の保存キーと既定テーマ。`defaultThemeColor`、`colorCssVar`、`toneDatasetKey`、`locale` は任意。 |
+| `createLocaleStore.defaultLocale`, `supportedLocales`, `detectBrowser`, `persistKey` | `zh-CN`, built-in locales, `true`, `hai-locale` | 既定の言語、選択方法、保存先を指定。 |
+| `createGuide.tours`, `articles`, `persistence`, `persistKey`, `nav`, `waitTimeout` | Required tours (can be empty), optional articles/nav, `cookie`, `hai-guide`, `3000` ms | 案内内容、画面遷移、進捗の保存と待機時間を指定。 |
+| `AuthPanel.config`, `actions` | 必須 | アプリが公開認証ポリシーと業務コールバックを渡す。 |
+
+<a id="form-layout-guide"></a>
+
+## フォーム配置と検証
+
+コード引数を扱うため設定手冊から移動しました。完全な手順は現在[中国語](ui.md#form-layout-guide)にあり、この節は部分翻訳です。
+
+
+<a id="toast-options"></a>
+
+## Toast の位置・時間・診断
+
+コード引数を扱うため設定手冊から移動しました。完全な手順は現在[中国語](ui.md#toast-options)にあり、この節は部分翻訳です。
+
+
+<a id="theme-locale-guide"></a>
+
+## テーマ・言語・AI 表示
+
+コード引数を扱うため設定手冊から移動しました。完全な手順は現在[中国語](ui.md#theme-locale-guide)にあり、この節は部分翻訳です。

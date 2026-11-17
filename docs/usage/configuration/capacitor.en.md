@@ -6,8 +6,7 @@ Set `appId`, `appName` and the actual web output directory `webDir` in the nativ
 
 | Field | Default or requirement | Meaning |
 | --- | --- | --- |
-| `camera.takePhoto`: `source`, `quality`, `resultType` | `prompt`, `90`, `uri` | Select camera, album or prompt, quality from 0 to 100, and URI/Base64/Data URL output. |
-| `camera.takePhoto`: `width`, `height` | Optional | Maximum dimensions in pixels. |
-| `statusBar.configure`: `style`, `backgroundColor`, `overlay` | Optional | Preserve current settings when omitted. Use a hex color and choose whether to cover the WebView. |
-| `push.register`, `push.listen`: `signal` | Optional | Cancel registration or remove listeners when aborted. |
-| `push.listen`: `onReceived`, `onActionPerformed` | Optional | Callbacks for delivery and interaction. |
+| `appId` | Project supplies | Unique application identifier in `capacitor.config.ts`. |
+| `appName` | Project supplies | Display name in the native project. |
+| `webDir` | Match build output | Directory copied into the native package. |
+| `CAPACITOR_SERVER_URL` | Optional | Template reads this environment value for device development; release builds use synced assets. |

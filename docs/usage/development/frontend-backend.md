@@ -49,7 +49,7 @@ const initialized = await apiClient.init({
 if (!initialized.success) throw new Error(initialized.error.message)
 ```
 
-按shared contract创建typed业务客户端，每次先判断success。退出调用服务端logout成功撤销，再清理客户端；清内存不能删除服务端HttpOnly Cookie或撤销会话。期限与刷新策略见[客户端参数](../configuration/http.md#api客户端地址期限和恢复)，超时不表示服务端副作用取消。
+按shared contract创建typed业务客户端，每次先判断success。退出调用服务端logout成功撤销，再清理客户端；清内存不能删除服务端HttpOnly Cookie或撤销会话。期限与刷新策略见[客户端参数](../function/api-client.md#client-integration)，超时不表示服务端副作用取消。
 
 Storage procedures提供authorize，覆盖列表/批删等全部`key`；AI默认当前用户`objectId`，跨主体访问需显式`authorizeObject`。模型输出、工具参数和客户端资源ID不赋予权限。
 

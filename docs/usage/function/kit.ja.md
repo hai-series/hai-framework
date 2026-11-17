@@ -60,3 +60,9 @@ export default defineConfig({
 | `kit.auth.publicPaths` | 認証ガードで使う公開認証パスを取得。 | `kit.auth.publicPaths` |
 
 未翻訳：SvelteKit フック、セッションガード、暗号化 Fetch の接続手順。[中国語の該当節](kit.md#detailed-workflow)を参照してください。
+
+<a id="host-options"></a>
+
+## フック引数と実行時の依存
+
+コード引数を扱うため設定手冊から移動しました。完全な手順は現在[中国語](kit.md#host-options)にあり、この節は部分翻訳です。

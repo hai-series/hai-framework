@@ -14,19 +14,19 @@
 
 ## 設定一覧
 
-暗号化、署名、ハッシュのオプションは各メソッドに渡します。HTTP の通信を暗号化する場合、`crypto.transport.createServer(options)` にサーバーの鍵と鍵の保存先を渡し、`crypto.transport.createClient(options)` に鍵交換用の URL を指定します。
-
-設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/crypto.ja.md)を参照してください。
+独立した実行時設定ファイルはありません。[ファイルの所有者](../../docs/usage/configuration/crypto.ja.md)と[引数・応答のリファレンス](../../docs/usage/function/crypto.ja.md#call-options)。
 
 ## 機能
+
+[通信プロトコル](../../docs/usage/function/crypto.ja.md#transport-protocol)と[入力の互換性](../../docs/usage/function/crypto.ja.md#primitive-validation)も参照してください。
 
 [API 一覧](../../docs/usage/function/crypto.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
 ## データ構造
 
-RelDB の通信鍵レジストリはテーブルを作成します。Redis レジストリは公開鍵とリプレイ防止の情報をキャッシュキーに保存します。
+伝送状態は `@h-ai/cache` に統一し、有効期限付き公開鍵、原子的なリプレイ防止、共有分単位クォータを保存します。本番は Redis を使用し、Crypto はデータベース表を作成しません。
 
-鍵、通信セッション、nonce、差し替え可能なストレージについては[データ構造](../../docs/usage/data/crypto.ja.md)を参照してください。
+[伝送状態](../../docs/usage/data/crypto.ja.md#transport-state)
 
 ## 開発とテスト
 

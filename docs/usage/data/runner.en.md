@@ -2,13 +2,81 @@
 
 [Chinese source](runner.md) · [Configuration](../configuration/runner.en.md) · [API reference](../function/runner.en.md)
 
+<a id="example-data"></a>
+
+## What these records are for
+
+Start with the purpose and examples, then consult field and storage details below. IDs and business content are fictional; sensitive values are redacted. Times use 2026-11-17 00:00 UTC as the example start, with units explained for each record.
+
+Database and file samples show relevant fields, not complete writable records. Omitted fields are not automatically optional. Examples can represent different moments in a process.
+
+### One queued or running job
+
+Structure: `hai_runner_executions`.
+
+Track work, owner, resource budget and state so nodes coordinate one execution.
+
+```json
+{
+  "id": "execution-42",
+  "kind": "hai.tools.example.v1",
+  "state": "queued",
+  "owner_node": null,
+  "owner_generation": null,
+  "cpu_milli": 1000,
+  "memory_mib": 256,
+  "pids": 64,
+  "scratch_mib": 64,
+  "created_at": 1794873600000,
+  "updated_at": 1794873600000,
+  "event_sequence": 0,
+  "event_bytes": 0
+}
+```
+
+execution-42 is queued with no owner. Its budget is one CPU, 256 MiB RAM, 64 processes and 64 MiB scratch; no events yet.
+
+### Ordered messages from a job
+
+Structure: `hai_runner_events`.
+
+Persist ordered progress or output so a reconnecting client can resume reading without rerunning work.
+
+```json
+{
+  "id": "event-42",
+  "execution_id": "execution-42",
+  "sequence_number": 1,
+  "created_at": 1794873600000
+}
+```
+
+event-42 is execution-42’s first event. event_json holds its actual message, omitted from this linkage excerpt.
+
+### Coordinate shared capacity checks
+
+Structure: `hai_runner_gate`.
+
+Coordinate capacity checks before concurrent claims so nodes do not all spend the same spare capacity.
+
+```json
+{
+  "id": 1,
+  "revision": 1
+}
+```
+
+The table has one id:1 row. revision changes during coordination; it is neither a run count nor permanent ownership.
+
+## Field, storage and cleanup reference
+
 <a id="tables"></a>
 
-## Database tables
+### Database tables
 
 Use shared RelDB so nodes agree on ownership and deadlines. Times are Unix milliseconds; writes use the database clock. The table below uses the RelDB field types before backend-specific mapping.
 
-### `hai_runner_executions`
+#### `hai_runner_executions`
 
 | Field or table | Shape and meaning |
 | --- | --- |
@@ -30,7 +98,7 @@ Queues, leases, scope/capacity, concurrency, parent execution, deadlines and cle
 
 <a id="events"></a>
 
-## Events, capacity and cleanup
+### Events, capacity and cleanup
 
 | Field or table | Shape and meaning |
 | --- | --- |

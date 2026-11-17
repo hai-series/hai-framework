@@ -29,16 +29,6 @@ export default config
 | `appName`                                          | 工程提供       | 应用展示名称                                                              |
 | `webDir`                                           | 与构建输出一致 | 指定复制到原生包的静态资源目录                                            |
 | `CAPACITOR_SERVER_URL`                             | 可省略         | 由生成工程用于真机开发连接服务。发布时使用已同步至原生项目的静态资源      |
-| API 基础地址                                       | 由应用提供     | 填手机能访问的 API 地址，由应用启动代码交给 `apiClient.init({ baseUrl })` |
-| `camera.takePhoto` 的 `source`                     | `prompt`       | 也可以指定 `camera` 或 `photos`                                           |
-| `camera.takePhoto` 的 `quality`                    | `90`           | 图片质量，范围 0–100                                                      |
-| `camera.takePhoto` 的 `width`、`height`            | 可省略         | 图片最大宽度和高度，单位像素                                              |
-| `camera.takePhoto` 的 `resultType`                 | `uri`          | `uri`、`base64`、`dataUrl` 分别返回路径、Base64 和 Data URL               |
-| `statusBar.configure` 的 `style`                   | 沿用当前样式   | 可用 `dark`、`light`、`default`                                           |
-| `statusBar.configure` 的 `backgroundColor`         | 沿用当前颜色   | 十六进制背景色                                                            |
-| `statusBar.configure` 的 `overlay`                 | 沿用当前状态   | 控制状态栏是否覆盖原生 WebView                                            |
-| `push.register`、`push.listen` 的 `signal`         | 可省略         | 取消本次注册或者释放本次监听                                              |
-| `push.listen` 的 `onReceived`、`onActionPerformed` | 可省略         | 分别接收收件事件和用户点击事件                                            |
 
 ## 生效与核对
 

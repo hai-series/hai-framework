@@ -2,6 +2,8 @@
 
 [ガイドのトップ](../README.ja.md) · [初回リリースの手順](../getting-started/workflow.ja.md) · [検証ガイド](../governance/verification.md)
 
+このディレクトリは、実在する設定ファイル（YAML、hai.json、ネイティブ工程と環境ファイル）の項目と反映方法を扱います。引数、依存注入、コールバック、UI props は[機能リファレンス](../function/README.ja.md)、公開設定レスポンスは[データ構造](../data/README.ja.md)に記載します。独立ファイルのないモジュールでは所有者だけを説明します。
+
 変更したい動作から設定を探します。たとえば、操作していないセッションの有効時間を短くするには IAM のセッション設定を変更します。応答が遅い場合はクライアントの制限時間、接続プール、接続先サービスをそれぞれ確認します。パッケージ名が分かる場合は、下の一覧から設定項目と既定値を調べてください。
 
 <a id="modules"></a>
@@ -29,12 +31,12 @@
 | 分野 | 主な設定場所 |
 | --- | --- |
 | [起動・上書き・ログ・ライフサイクル](runtime.md) | `_core.yml`、dotenv、`HAI_*`、アプリ起動コード |
-| [データベース・キャッシュ・ファイル・テキスト](data.md) | `_db.yml`、`_cache.yml`、`_storage.yml`、Datapipe のオプション |
+| [データベース・キャッシュ・ファイル・テキスト](data.md) | `_db.yml`、`_cache.yml`、`_storage.yml`、`_ai.yml.knowledge` |
 | [ID・パスワード・セッション・権限](identity.md) | `_iam.yml`、認証ポリシー、サーバー側の認可 |
-| [HTTP・クライアント・通信](http.md) | `_serv.yml`、`_kit.yml`、`apiClient`、[リクエストのアクセスポリシー](request-access.md) |
+| [HTTP・クライアント・通信](http.md) | `_serv.yml`、`_kit.yml`、[リクエストのアクセスポリシー](request-access.md) |
 | [AI・ナレッジ・ベクトル](ai.md) | `_ai.yml`、`_vecdb.yml`、明示的に設定するストア |
 | [フィードバック・通知・監査・ジョブ](operations.md) | `_feedback.yml`、`_reach.yml`、`_audit.yml`、`_scheduler.yml` |
-| [画面・決済・デバイス](experience.md) | UI の props、`_payment.yml`、Capacitor とネイティブビルド |
+| [画面・決済・デバイス](experience.md) | `_payment.yml`、`capacitor.config.ts`、ネイティブ工程 |
 | [ビルド・デプロイ・復旧](delivery.md) | `hai.json` の `build` と `deploy`、`PUBLIC_BASE_PATH`、環境ファイル、前回成功したデプロイ |
 
 サブディレクトリで公開する場合は、[サイトの公開パス](delivery.md#网站部署在子目录) と [HTTP アドレス](http.md) を確認します。再読み込みでリソースを取得できること、API、ログイン、ヘルスチェックが意図したアドレスに届くことを確認してください。外部向け API にアクセス時間帯や IP 制限を設定する場合は、[リクエストのアクセスポリシー](request-access.md) と、元の IP アドレスを通知できるプロキシを確認します。

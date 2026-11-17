@@ -18,9 +18,7 @@ HTTP/UI 境界で業務メッセージを公開するのは、明示された有
 
 ## 設定一覧
 
-表の列と行など、Svelte コンポーネントの動作や表示に必要な値は props として渡します。テーマ、言語、初回ガイドにはそれぞれ `@h-ai/ui/theme`、`@h-ai/ui/i18n`、`@h-ai/ui/guide` を使います。
-
-設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/ui.ja.md)を参照してください。
+独立した実行時設定ファイルはありません。[ファイルの所有者](../../docs/usage/configuration/ui.ja.md)と[引数・応答のリファレンス](../../docs/usage/function/ui.ja.md#call-options)。
 
 ## 機能
 

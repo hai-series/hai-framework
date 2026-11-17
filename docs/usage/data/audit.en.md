@@ -2,13 +2,101 @@
 
 [Chinese source](audit.md) · [Configuration](../configuration/audit.en.md) · [API reference](../function/audit.en.md)
 
+<a id="example-data"></a>
+
+## What these records are for
+
+Start with the purpose and examples, then consult field and storage details below. IDs and business content are fictional; sensitive values are redacted. Times use 2026-11-17 00:00 UTC as the example start, with units explained for each record.
+
+Database and file samples show relevant fields, not complete writable records. Omitted fields are not automatically optional. Examples can represent different moments in a process.
+
+### Find who did what
+
+Structure: `hai_audit_logs`.
+
+Record actor, resource and outcome for investigation and audit retention.
+
+```json
+{
+  "id": "audit_example-42",
+  "action": "read",
+  "resource": "orders",
+  "resource_id": "order-42",
+  "user_id": "user-42",
+  "details": {
+    "fields": [
+      "status"
+    ]
+  },
+  "created_at": "2026-11-17T00:00:00.000Z"
+}
+```
+
+user-42 read order-42; details says only status was viewed. created_at shows the database event timestamp in UTC.
+
+### Which audit records must be retained
+
+Structure: `hai_audit_policy`.
+
+Store the database-enforced minimum retention so cleanup cannot delete protected events early.
+
+```json
+{
+  "id": 1,
+  "enabled": 1,
+  "min_days": 90
+}
+```
+
+The single id:1 policy is enabled and requires 90 days. It is not a daily policy-history row.
+
+### Claim one alert across nodes
+
+Structure: `hai_audit_alert_claims`.
+
+Claim an alert for one rule, target and time window to reduce duplicate notifications.
+
+```json
+{
+  "id": "<claim-digest>",
+  "rule_id": "failed-login",
+  "target_id": "security",
+  "window_start": 1794873600000
+}
+```
+
+This targets security under failed-login; window_start is Unix ms. A claim does not prove delivery to a person.
+
+### Which records an audit backup covers
+
+Structure: `backup JSONL`.
+
+A backup header defines format and export range, followed by event lines and a count/checksum footer.
+
+```json
+{
+  "type": "header",
+  "format": "hai-audit",
+  "version": 1,
+  "id": "backup-42",
+  "createdAt": "2026-11-17T00:00:00.000Z",
+  "cutoff": "2026-11-17T00:00:00.000Z",
+  "from": null,
+  "requestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
+```
+
+This is only a header, not a restorable archive. cutoff is the endpoint; null from means no start filter. Entries and footer still need verification.
+
+## Field, storage and cleanup reference
+
 <a id="tables"></a>
 
-## Database tables
+### Database tables
 
 Call `reldb.init()` first. `audit.init()` prepares the tables on that connection. Missing optional values are NULL; the writer supplies the values unless stated otherwise.
 
-### `hai_audit_logs`
+#### `hai_audit_logs`
 
 | Field or table | Shape and meaning |
 | --- | --- |
@@ -24,7 +112,7 @@ Call `reldb.init()` first. `audit.init()` prepares the tables on that connection
 
 <a id="policy"></a>
 
-## Retention and alert claims
+### Retention and alert claims
 
 | Field or table | Shape and meaning |
 | --- | --- |
@@ -35,6 +123,6 @@ The database prevents updates to protected audit records and prevents deletion b
 
 <a id="backups"></a>
 
-## Cache and backup objects
+### Cache and backup objects
 
 Audit writes no Redis keys. Backups are private Storage objects at `hai-private/audit-backups/<id>.jsonl`. The first line records format, version and cutoff; each middle line is an event; the last records row count and SHA-256. Storage policy controls object retention.

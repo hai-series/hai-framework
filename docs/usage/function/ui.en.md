@@ -68,3 +68,37 @@ import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
 Provide ToolWorkspace with a server-filtered catalog, schema-backed forms and authorized execution callbacks. Keep the job receipt, read progress from the host and use the supplied cancellation action. Provide ArtifactWorkspace with the authorized content, versions, save and preview operations. When a save conflicts, return the conflict and keep the current draft for review.
 
 Still untranslated: the full component and property catalog, integration examples and runtime constraints. Read the [Chinese source section](ui.md#detailed-workflow).
+
+<a id="call-options"></a>
+
+## Call arguments and integration options
+
+Configure UI through the exported components and helper options. Keep app-specific theme, locale and guide options consistent between rendering and bootstrap.
+
+| Field | Default or requirement | Meaning |
+| --- | --- | --- |
+| `applyTheme(theme, persist)` | Required theme, `true` | Apply a theme and optionally persist it. |
+| `createThemeBootstrapScript.storageKey`, `defaultThemeId` | Required key, `light` | Choose the shared storage key and default theme. `defaultThemeColor`, `colorCssVar`, `toneDatasetKey` and `locale` are optional. |
+| `createLocaleStore.defaultLocale`, `supportedLocales`, `detectBrowser`, `persistKey` | `zh-CN`, built-in locales, `true`, `hai-locale` | Control default language, selection and storage. |
+| `createGuide.tours`, `articles`, `persistence`, `persistKey`, `nav`, `waitTimeout` | Required tours (can be empty), optional articles/nav, `cookie`, `hai-guide`, `3000` ms | Configure onboarding content, navigation, persistence and wait time. |
+| `AuthPanel.config`, `actions` | Required | The app supplies public authentication policies and the business callbacks. |
+
+<a id="form-layout-guide"></a>
+
+## Form layout and validation
+
+This integration guide was moved from the configuration handbook because it describes code arguments. The complete walkthrough is currently available in [Chinese](ui.md#form-layout-guide); this subsection is partially translated.
+
+
+<a id="toast-options"></a>
+
+## Toast placement, duration and diagnostics
+
+This integration guide was moved from the configuration handbook because it describes code arguments. The complete walkthrough is currently available in [Chinese](ui.md#toast-options); this subsection is partially translated.
+
+
+<a id="theme-locale-guide"></a>
+
+## Themes, locales and AI content
+
+This integration guide was moved from the configuration handbook because it describes code arguments. The complete walkthrough is currently available in [Chinese](ui.md#theme-locale-guide); this subsection is partially translated.

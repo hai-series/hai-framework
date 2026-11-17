@@ -12,7 +12,7 @@
 
 ## 設定一覧
 
-[定義・実行・有効化](../../docs/usage/configuration/tools.ja.md)
+独立した実行時設定ファイルはありません。[ファイルの所有者](../../docs/usage/configuration/tools.ja.md)と[引数・応答のリファレンス](../../docs/usage/function/tools.ja.md#call-options)。
 
 ## 機能
 

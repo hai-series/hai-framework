@@ -5,6 +5,8 @@ description: "在 hai-framework 新增模块、子功能或 Provider，或撰写
 
 # hai-module-create — 模块创建决策手册
 
+数据结构参考必须同时提供结构说明与示例数据：覆盖每张表、每类缓存值、文件记录和主要接口/运行时对象，核对真实类型、时间单位、关联标识和脱敏；片段须标明字段投影。没有自有存储时展示实际返回或运行时结构，不虚构表。详细要求见[模块文档规范](../../instructions/module-documentation.md)。 先讲每类数据解决什么问题、谁读写、何时清理；每份示例解释业务状态和关键值。不能以 CAS/TTL 等实现词或无注解 JSON 代替用途，配额要说明周期、满额及恢复，详见同一文档规范。
+
 开发沟通和交付前同步检查遵循[沟通与同步维护](../../../packages/cli/templates/skills/hai-app-create/collaboration.md)，按实际影响维护使用文档、配置示例、截图、测试、CLI 模板和调用方。
 
 ## 能力契约
@@ -24,6 +26,8 @@ description: "在 hai-framework 新增模块、子功能或 Provider，或撰写
 > **变量约定**：`xx` = 模块名（如 storage、iam），`yy` / `zz` = 子功能名，`aaa` = Provider 实现名。
 
 只编写或修正文档时，直接按[模块文档规范](../../instructions/module-documentation.md)和 [R9 写作顺序](reference.md#r9-readme-章节顺序面向人类)执行；以现有公开契约为准。新增模块或能力时，再执行下列架构与实现步骤。
+
+配置页先核对实际配置文件与读取者；API 的 config/options、依赖注入和组件 props 写功能页，响应结构写数据页。无独立配置文件时明确说明，不虚构模块 YAML，详见上述模块文档规范。
 
 ## §1 架构决策（按顺序回答）
 

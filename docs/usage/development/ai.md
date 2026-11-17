@@ -1,6 +1,6 @@
 # AI内容、模型调用与知识检索操作指南
 
-[使用指南](../README.md) · [AI配置手册](../configuration/ai.md) · [内容显示参数](../configuration/experience.md#主题语言和ai内容显示)
+[使用指南](../README.md) · [AI配置手册](../configuration/ai.md) · [内容显示参数](../function/ui.md#theme-locale-guide)
 
 先确定任务：显示Markdown/编辑文档只需公共UI；聊天需服务端模型凭据；企业知识检索还需分块、`embedding`和向量存储。逐层接通，才能判断故障在界面、模型还是检索。
 

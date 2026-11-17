@@ -14,9 +14,7 @@
 
 ## 配置清单
 
-把清洗选项传给 `datapipe.clean()`，把片段大小和重叠长度等选项传给 `datapipe.chunk()`。调用 `datapipe.pipeline()` 时可以一次指定两类选项。
-
-在[模块配置清单](../../docs/usage/configuration/datapipe.md)中查阅配置入口、默认值、取值限制和生效条件。
+本模块没有独立的运行配置文件。文件归属见[配置说明](../../docs/usage/configuration/datapipe.md)，调用参数或响应结构见[参考页](../../docs/usage/function/datapipe.md#call-options)。
 
 ## 功能说明
 

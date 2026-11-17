@@ -18,9 +18,7 @@ HTTP/UI 边界只对明确的有效 4xx 状态公开业务提示；错误缺少 
 
 ## 配置清单
 
-在 Svelte 页面中给组件传入属性（props），例如给表格指定列和数据。应用级的主题、语言和新手引导分别从 `@h-ai/ui/theme`、`@h-ai/ui/i18n` 和 `@h-ai/ui/guide` 使用。
-
-在[模块配置清单](../../docs/usage/configuration/ui.md)中查阅配置入口、默认值、取值限制和生效条件。
+本模块没有独立的运行配置文件。文件归属见[配置说明](../../docs/usage/configuration/ui.md)，调用参数或响应结构见[参考页](../../docs/usage/function/ui.md#call-options)。
 
 ## 功能说明
 

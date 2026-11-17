@@ -14,9 +14,7 @@ hai-framework の公開 HTTP API 契約パッケージ。oRPC contract + Zod を
 
 ## 設定一覧
 
-アプリが公開するインターフェース定義を `apiContract.create(options)` に渡します。オプションのキーが各グループ名になります。返された契約はサーバー、型付きクライアント、API ドキュメントで共有できます。
-
-設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/api-contract.ja.md)を参照してください。
+独立した実行時設定ファイルはありません。[ファイルの所有者](../../docs/usage/configuration/api-contract.ja.md)と[引数・応答のリファレンス](../../docs/usage/data/api-contract.ja.md#public-settings)。
 
 ## 機能
 

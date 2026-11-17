@@ -4,6 +4,8 @@
 
 [原文（中国語）](runner.md) · [データ構造](../data/runner.ja.md) · [API リファレンス](../function/runner.ja.md)
 
+実際のファイルは `config/_runner.yml` で、AI Playground などが `RunnerConfigSchema` を登録して読み込みます。ここではファイル項目を扱い、実行時の依存やコールバックは [API](../function/runner.ja.md) に記載します。
+
 共有 RelDB の初期化後に `_runner.yml` を読み込みます。各プロセスに固有のノード ID を指定し、ジョブの登録前にワーカーノードの実行環境を用意します。
 
 ```yaml schema=@h-ai/runner:RunnerConfigSchema

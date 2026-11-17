@@ -18,9 +18,7 @@ Install with pnpm: `pnpm add @h-ai/ui`.
 
 ## Configuration Reference
 
-Pass props to a Svelte component, such as the columns and rows of a table. Set the application theme, language, and onboarding through `@h-ai/ui/theme`, `@h-ai/ui/i18n`, and `@h-ai/ui/guide`.
-
-See the [configuration reference](../../docs/usage/configuration/ui.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
+This module has no standalone runtime configuration file. See [file ownership](../../docs/usage/configuration/ui.en.md); arguments or response structures are in the [reference](../../docs/usage/function/ui.en.md#call-options).
 
 ## Features
 

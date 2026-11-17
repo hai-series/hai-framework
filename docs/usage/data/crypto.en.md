@@ -1,13 +1,97 @@
-# @h-ai/crypto Data structures
+# Crypto data structures
 
-[Chinese source](crypto.md) · [Configuration](../configuration/crypto.en.md) · [API reference](../function/crypto.en.md)
+[中文](crypto.md) · [日本語](crypto.ja.md)
 
-Long-term key ownership belongs to the application. The transport registry stores temporary client public keys and replay protection records.
+[Data index](README.en.md) · [File configuration](../configuration/crypto.en.md) · [API](../function/crypto.en.md)
 
-| Table, key or artifact | Shape and ownership |
-| --- | --- |
-| `hai_crypto_transport_client_keys` | Primary key `client_id`, SM2 `public_key`, `created_at_ms`, nullable `expires_at_ms`. |
-| `hai_crypto_transport_requests` | Unique `request_key` is a JSON pair of client and request ID. `expires_at` is in milliseconds. |
-| `hai_crypto_transport_capacity` | Single row `id=1`, `max_clients=10000`, `revision=0` initially. Shared across service instances. |
-| `hai:crypto:transport:client:<clientId>` | Redis registry for a client SM2 public key. |
-| `hai:crypto:transport:request:<clientId>:<requestId>` | Expiring replay marker with value `true`. |
+Encryption, decryption, signing and hashing do not need saved records. HTTP transport encryption needs to remember each client's public key and which requests have already been used, and to limit how quickly these records grow. Crypto stores this state through `@h-ai/cache`; it creates no database tables.
+
+<a id="transport-state"></a>
+<a id="example-data"></a>
+
+## What the four records are for
+
+These examples follow one client connecting to a service. They contain fictional IDs and a public key, never a private key. Keys shown here are the names passed to Cache; Redis also adds the application's `keyPrefix`.
+
+### 1. Client public key: recognize requests and encrypt replies for that client
+
+Key exchange registers the client's public key and assigns a `clientId`. The server uses this ID to find the key, verify request signatures and encrypt responses for the client.
+
+The key is `hai:crypto:transport:cache:client:<clientId>` and the value is a public-key string:
+
+```json
+{
+  "hai:crypto:transport:cache:client:c_example-42": "0432c4ae2c1f1981195f9904466a39c9948fe30bbff2660be1715a4589334c74c7bc3736a2f4f6779c59bdcee36b692153d0a9877cc62a474002df32e52139f0a0"
+}
+```
+
+This means `c_example-42` is registered with this SM2 key. The sample is the publicly known SM2 curve generator; real clients generate their own key pairs. Registration lasts one hour by default, configurable to 1–86400 seconds. Reading it does not extend the lifetime. On expiry the client performs key exchange again. This does not log the user out: IAM manages login sessions separately.
+
+### 2. Used request ID: stop the same encrypted request executing again
+
+The client creates a fresh `requestId` for each request. After checking the signature, contents and time, the server records that the ID has been used. Only a request that successfully creates this marker reaches business code. A later request with the same client and ID is rejected. Even when two servers receive it together, only one can create the marker.
+
+The key is `hai:crypto:transport:cache:request:<clientId>:<requestId>`. Its value is simply `true`: only existence matters, so the request body is not stored.
+
+```json
+{
+  "hai:crypto:transport:cache:request:c_example-42:0123456789abcdef0123456789abcdef": true
+}
+```
+
+This says client `c_example-42` has already used request `0123456789abcdef0123456789abcdef`. It must not execute again. `true` does not mean the business operation succeeded; a later business failure does not free the ID.
+
+A request issued at 00:00 keeps its marker until 00:11 (`issuedAt + 660000` ms). The marker covers the time during which that request could still be accepted. Afterwards the request itself is too old, so the marker can expire. Including permitted future clock skew, a new marker may live for at most another 16 minutes. Removing it early to free space could allow a used request through. A fresh submission with a new ID still needs business duplicate protection, such as an order idempotency key.
+
+### 3. New-key counter: stop repeated key exchanges filling the cache
+
+All servers share the one key `hai:crypto:transport:cache:quota:register`. Each new registration reserves one slot:
+
+```json
+{
+  "hai:crypto:transport:cache:quota:register": {
+    "used": 1,
+    "limit": 10000
+  }
+}
+```
+
+`used: 1` means one slot has been reserved in this window; `limit: 10000` allows at most 10000. A failed later write can still consume a slot, so this is an admission counter, not the number of live public keys. The first reservation starts a 60-second window; it does not reset on the clock's minute boundary. When full, Serv/Kit reject new key exchanges with HTTP 503. Existing registrations remain valid.
+
+### 4. New-request counter: stop used-ID records growing too quickly
+
+All servers share `hai:crypto:transport:cache:quota:request` to limit newly admitted request IDs:
+
+```json
+{
+  "hai:crypto:transport:cache:quota:request": {
+    "used": 1,
+    "limit": 100000
+  }
+}
+```
+
+One request has been admitted in this window; the default maximum is 100000. This window also lasts 60 seconds from the first reservation. A known used ID is rejected without another slot. Simultaneous duplicates can conservatively reserve several slots, but only one reaches business code. Full quota returns HTTP 503; existing markers are kept.
+
+## The 60-second windows, exhaustion and business rate limits
+
+These are application-wide cache-capacity safeguards against excessive record growth. They do not allocate allowances by IP, user or route and do not replace business rate limits. Aggregate admissions may reach this safeguard even when no individual business limit has fired.
+
+| Record | Default new admissions per window | When full | Recovery |
+| --- | --- | --- | --- |
+| Client public keys | 10000 | New exchanges return 503; existing keys remain | 60 seconds after this window’s first reservation |
+| Used request IDs | 100000 | New requests return 503; existing markers remain | 60 seconds after this window’s first reservation |
+
+Each counter has its own timer. A first registration at **00:00:10** ends that window at **00:01:10**. Filling it at 00:00:30 does not start a fresh window. The first registration after expiry starts the next 60-second window. Request counting follows its own first write.
+
+These are not lifetime totals or concurrent-client limits. Registering 10000 keys in each of two windows can leave 20000 valid keys. Public keys default to one hour; used-ID markers follow request time, independently of the counter window. Factory arguments can change the safeguards. Setting them too low can return 503 to normal traffic; raising them requires more Redis memory while keeping per-IP/user/route business limits.
+
+## Why these records do not grow forever
+
+Public keys and used IDs expire. The two counter keys expire after 60 seconds and keep fixed names, rather than creating a new key each minute. Lifetimes and admission limits bound live records. A conservative default estimate is about 610000 public keys and 1700000 used-ID markers. Memory also includes keys and backend overhead, and expired data may be reclaimed later.
+
+Registries on the same backend and keyPrefix share these counters; give separate applications different Cache prefixes when they need independent budgets. All nodes of one application must use the same Redis, prefix and quotas so that every node sees used requests. Use `noeviction`: refuse writes on insufficient memory instead of silently discarding valid markers. Reliable persistence is also needed; losing markers during restart or rollback weakens duplicate protection. Cache failures reject requests. Memory mode is for development and tests.
+
+The application opens and closes Cache. Closing a transport manager does not erase shared records; client `destroy()` clears its local session. Private keys remain with the server keyring or client. Keep node clocks synchronized and verify the deployment within ±30 seconds.
+
+[Lifetime and quota arguments](../function/crypto.en.md#call-options) · [Request authentication](../function/crypto.en.md#transport-protocol)

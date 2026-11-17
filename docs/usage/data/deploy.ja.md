@@ -2,9 +2,89 @@
 
 [原文（中国語）](deploy.md) · [設定](../configuration/deploy.ja.md) · [API リファレンス](../function/deploy.ja.md)
 
+<a id="example-data"></a>
+
+## それぞれの記録の役割
+
+まず用途と例を読み、必要に応じて後半の項目・保存規則を確認してください。ID と業務内容は架空で、秘密は隠しています。時刻は 2026-11-17 00:00 UTC を起点とし、単位は各説明に記します。
+
+DB・ファイルの例は関連項目の抜粋で、そのまま完全な書き込みデータには使えません。省略項目が任意とは限らず、例ごとに異なる段階を示す場合があります。
+
+### 配布するファイル群を照合
+
+対応する構造：`manifest.json`。
+
+展開スクリプトが目的のアプリとビルドか確認します。
+
+```json
+{
+  "version": 5,
+  "primaryService": "serv",
+  "appVersion": "1.0.0",
+  "buildId": "example-20261117",
+  "partial": false
+}
+```
+
+example-20261117 はビルド識別です。実際の包にはイメージと検査値も必要で、文章だけ変えても成果物にはなりません。
+
+### 展開が進んだ段階を確認
+
+対応する構造：`steps-<id>.jsonl`。
+
+各段階を1行ずつ記録し、切断後も進捗を調べられます。
+
+```json
+{
+  "stage": "health",
+  "status": "passed",
+  "durationSeconds": 2
+}
+```
+
+health は2秒で成功しましたが、全体の結果は最終結果ファイルで確認します。
+
+### 切断後に確認できる状態
+
+対応する構造：`DeployCommandState`。
+
+エラー後に終了済みと未確認を分け、無条件の再実行を避けます。
+
+```json
+{
+  "reason": "timeout",
+  "localTermination": "confirmed",
+  "remoteExecution": "unknown",
+  "deploymentId": "deploy-orders-42",
+  "resultFile": "/opt/hai/apps/orders/result-deploy-orders-42.json"
+}
+```
+
+ローカルは終了しましたが遠端は不明です。まず対応 resultFile を確認します。
+
+### 展開全体の最終結果
+
+対応する構造：`result-<id>.json`。
+
+切断後も同じ展開番号の結果を照合できます。
+
+```json
+{
+  "deploymentId": "deploy-orders-42",
+  "stage": "complete",
+  "exitCode": 0,
+  "durationSeconds": 42,
+  "recoveryStatus": "not-needed"
+}
+```
+
+0終了で42秒、復旧不要の例です。業務データが変わっていない証明ではありません。
+
+## 項目・保存・削除のリファレンス
+
 <a id="files"></a>
 
-## ファイルと管理主体
+### ファイルと管理主体
 
 Deploy は SQL テーブルや Redis キーを作りません。ビルド成果物は公開まではローカルにあり、公開済みリリースは配置先サーバーに保存します。クラウド上のリソースはそのサービスが管理します。
 

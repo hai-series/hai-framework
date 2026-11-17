@@ -14,19 +14,19 @@ Install with pnpm: `pnpm add @h-ai/crypto`.
 
 ## Configuration Reference
 
-Pass algorithm options when calling an encryption, signing, or hash method. To encrypt HTTP messages, call `crypto.transport.createServer(options)` with the server keys and key store. Pass the key exchange URL to `crypto.transport.createClient(options)`.
-
-See the [configuration reference](../../docs/usage/configuration/crypto.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
+This module has no standalone runtime configuration file. See [file ownership](../../docs/usage/configuration/crypto.en.md); arguments or response structures are in the [reference](../../docs/usage/function/crypto.en.md#call-options).
 
 ## Features
+
+See the [transport protocol](../../docs/usage/function/crypto.en.md#transport-protocol) and [input compatibility](../../docs/usage/function/crypto.en.md#primitive-validation).
 
 [Browse the API list](../../docs/usage/function/crypto.en.md#api-reference) for entry points, inputs, results and examples.
 
 ## Data Structures
 
-The RelDB transport key registry creates SQL tables. The Redis registry uses cache keys for public keys and replay protection.
+Transport state uses `@h-ai/cache` for expiring public keys, atomic replay protection and shared minute quotas; production uses Redis. Crypto creates no database tables.
 
-See the [data reference](../../docs/usage/data/crypto.en.md) for keys, transport sessions, nonces and pluggable storage components.
+[Transport state](../../docs/usage/data/crypto.en.md#transport-state)
 
 ## Development and Testing
 

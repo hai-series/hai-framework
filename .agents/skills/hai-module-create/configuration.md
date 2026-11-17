@@ -42,7 +42,9 @@ LLM 请求协议使用 `llm.protocol`、`llm.models[].protocol` 和 `tempModel.p
 - Feedback consoleContent 默认 metadata，仅输出白名单标识与采集状态；summary 需显式选择，操作者自行评估摘要中的业务隐私。
 - Reach API 默认 redirect:error，敏感消息始终拒绝重定向；生产敏感消息默认要求 HTTPS。requireHttps:false 是可信内网的显式例外；requireHttps:true 不能与 follow 组合。空成功回执可接受，非空必须是有界 JSON 对象。
 
-## 通过调用参数配置的模块
+## 代码调用参数与文件配置的边界
+
+下表记录代码入口，不能作为 docs/usage/configuration 的参数清单；函数参数写入功能参考，公开响应写入数据参考。Capacitor 的实际 capacitor.config.ts、CLI 的 hai.json 和 Datapipe 被 _ai.yml.knowledge 消费的字段仍属于对应真实文件。
 
 这些包没有统一的 `HAI_<包名>_*` 初始化约定。只有下面列出的显式入口才会读取环境变量，不能把任意函数选项添加到 `.env` 后声称已生效。
 
@@ -52,7 +54,7 @@ LLM 请求协议使用 `llm.protocol`、`llm.models[].protocol` 和 `tempModel.p
 | api-contract | 只有领域输入/输出 Schema 和 contract 工厂，没有连接配置或生命周期；其验证不代表鉴权、资源所有权或 Provider 已执行 | [README](../../../packages/api-contract/README.md)、[存储限制](../../../packages/storage/README.md#存储输入约束与跨端能力) |
 | capacitor | [公开类型](../../../packages/capacitor/src/capacitor-types.ts) 与 [init](../../../packages/capacitor/src/capacitor-main.ts) 驱动原生能力；Push 的取消/超时/清理和安全 TokenStorage 按实际插件契约使用。CAPACITOR_SERVER_URL 是示例原生构建入口，不是服务端框架配置 | [README](../../../packages/capacitor/README.md)、[skill](../../../packages/cli/templates/skills/hai-capacitor/reference.md) |
 | cli | [ModuleConfigs / FeatureId](../../../packages/cli/src/cli-types.ts) 由命令及 [配置生成器](../../../packages/cli/src/commands/cli-config-templates.ts) 消费；语言优先级 HAI_CORE_DEFAULTLOCALE → LC_ALL → LC_MESSAGES → LANG。命令与服务端配置不是同一生命周期 | [README](../../../packages/cli/README.md)、[应用创建 skill](../../../packages/cli/templates/skills/hai-app-create/development.md) |
-| crypto | 纯运算、transport 工厂和共享 key registry 通过 [公开类型](../../../packages/crypto/src/crypto-types.ts) 与 [transport 类型](../../../packages/crypto/src/transport/crypto-transport-types.ts) 接收参数；没有 `_crypto.yml` 统一初始化 Schema。transport 的 maxPlaintextBytes 默认 1 MiB、范围 1 KiB～64 MiB；serv/kit 的正式配置转发到服务端，握手同步客户端，resolveTransportBodyLimits 推导密文及代理预算，安全预算独立。服务端 keyring 由适配层显式读取 HAI_CRYPTO_TRANSPORT_SERVERKEYRING，绝不能下发给浏览器 | [README](../../../packages/crypto/README.md)、[skill](../../../packages/cli/templates/skills/hai-crypto/reference.md) |
+| crypto | 纯运算、transport 工厂和共享 key registry 通过 [公开类型](../../../packages/crypto/src/crypto-types.ts) 与 [transport 类型](../../../packages/crypto/src/transport/crypto-transport-types.ts) 接收参数；没有 `_crypto.yml`，crypto.init 无文件配置；算法/传输/registry 参数写入功能参考，registry 统一使用 @h-ai/cache，TTL 默认 3600 秒且上限 86400，共享分钟登记/请求配额默认 10000/100000。transport 的 maxPlaintextBytes 默认 1 MiB、范围 1 KiB～64 MiB；serv/kit 的正式配置转发到服务端，握手同步客户端，resolveTransportBodyLimits 推导密文及代理预算，安全预算独立。服务端 keyring 由适配层显式读取 HAI_CRYPTO_TRANSPORT_SERVERKEYRING，绝不能下发给浏览器 | [README](../../../packages/crypto/README.md)、[skill](../../../packages/cli/templates/skills/hai-crypto/reference.md) |
 | datapipe | [CleanOptionsSchema / ChunkOptionsSchema](../../../packages/datapipe/src/datapipe-config.ts) 在每次 clean/chunk 调用解析；独立 chunk 默认 overlap=0，AI Knowledge 父配置默认 overlap=200，不能把复用子 Schema 的默认值错写为消费者默认值 | [README](../../../packages/datapipe/README.md)、[skill](../../../packages/cli/templates/skills/hai-datapipe/reference.md) |
 | ui | Svelte props、store 工厂和主题/语言 API 通过调用参数配置；supportedLocales 属于 locale store 或应用翻译工程，不能写进 Core YAML 期待自动注册翻译。上传组件只负责交互，服务端校验不由 props 替代 | [README](../../../packages/ui/README.md)、[开发 skill](../hai-ui/SKILL.md)、[应用 skill](../../../packages/cli/templates/skills/hai-ui/reference.md) |
 

@@ -14,9 +14,7 @@ hai-framework 的公共 HTTP API 契约包，用 oRPC contract 和 Zod 让前后
 
 ## 配置清单
 
-把应用需要公开的接口定义传给 `apiContract.create(options)` 时，参数对象的键确定每组接口的名称。同一个返回对象可以用于生成 API 文档，也可作为服务端和类型化客户端的接口描述。
-
-在[模块配置清单](../../docs/usage/configuration/api-contract.md)中查阅配置入口、默认值、取值限制和生效条件。
+本模块没有独立的运行配置文件。文件归属见[配置说明](../../docs/usage/configuration/api-contract.md)，调用参数或响应结构见[参考页](../../docs/usage/data/api-contract.md#public-settings)。
 
 ## 功能说明
 

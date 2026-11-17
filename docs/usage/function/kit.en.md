@@ -60,3 +60,9 @@ export default defineConfig({
 | `kit.auth.publicPaths` | Obtain public authentication paths for authentication guards. | `kit.auth.publicPaths` |
 
 Still untranslated: the SvelteKit request hook, session guards and encrypted fetch setup. Read the [Chinese source section](kit.md#detailed-workflow).
+
+<a id="host-options"></a>
+
+## Hook arguments and runtime dependencies
+
+This integration guide was moved from the configuration handbook because it describes code arguments. The complete walkthrough is currently available in [Chinese](kit.md#host-options); this subsection is partially translated.

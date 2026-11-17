@@ -2,6 +2,8 @@
 
 [使用指南](../README.md) · [创建和发布](../getting-started/README.md) · [截图与验证范围](../governance/verification.md)
 
+本目录只说明实际配置文件（YAML、hai.json、原生工程配置和环境文件）的字段及生效方式。代码调用参数、依赖注入、回调和 UI props 见[功能参考](../function/README.md)，公开配置响应见[数据结构](../data/README.md)。没有独立文件的模块页只说明文件归属。
+
 配置的目的，是让应用在指定环境中按预期运行。先从要改变的行为选一章，按例子修改一个设置，再确认实际结果。例如缩短登录闲置期限，应修改 IAM 会话策略；服务响应慢，应分别检查客户端期限、连接池和下游服务，不能靠把所有超时一起调大解决。
 
 知道模块名时，可直接查它的配置字段、默认值和生效方式。要做跨模块的事，例如让网页连上另一个域名的 API，可按领域查看服务端和浏览器分别要改什么。
@@ -44,15 +46,15 @@
 | 领域                                     | 解决的问题                                             | 主要入口                                                                             |
 | ---------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | [基础、环境、日志和生命周期](runtime.md) | 配置为什么没生效，日志如何采集，依赖怎样启停           | `_core.yml`、dotenv、`HAI_*`、应用启动代码                                           |
-| [数据、缓存、文件和文本](data.md)        | 数据保存在哪里，连接池/证书/签名多久有效               | `_db.yml`、`_cache.yml`、`_storage.yml`、Datapipe 参数                               |
+| [数据、缓存、文件和文本](data.md)        | 数据保存在哪里，连接池/证书/签名多久有效               | `_db.yml`、`_cache.yml`、`_storage.yml`、`_ai.yml.knowledge`                               |
 | [身份、密码、会话和权限](identity.md)    | 登录方式、锁定、会话配额、改密和登录页                 | `_iam.yml`、公开认证策略、服务端守卫                                                 |
-| [HTTP、客户端和传输](http.md)            | 监听地址、跨域、可信代理、Cookie、加密和超时           | `_serv.yml`、`_kit.yml`、`apiClient`、[按路径配置 IP、时段与加密](request-access.md) |
+| [HTTP、客户端和传输](http.md)            | 监听地址、跨域、可信代理、Cookie、加密和超时           | `_serv.yml`、`_kit.yml`、[按路径配置 IP、时段与加密](request-access.md) |
 | [AI、知识与向量](ai.md)                  | 模型路由、令牌预算、检索、音频/图片和持久化            | `_ai.yml`、`_vecdb.yml`、显式 Store                                                  |
 | [反馈、通知、审计和任务](operations.md)  | 材料保留、通知回执、审计保护和任务恢复                 | `_feedback.yml`、`_reach.yml`、`_audit.yml`、`_scheduler.yml`                        |
-| [页面、支付与设备](experience.md)        | 表单/主题/提示、支付验签及原生配置                     | UI props、`_payment.yml`、Capacitor/原生构建                                         |
+| [页面、支付与设备](experience.md)        | 支付验签、原生标识、权限与构建                     | `_payment.yml`、`capacitor.config.ts`、原生工程                                         |
 | [构建、部署、增量和恢复](delivery.md)    | 交付什么、网站挂在哪个目录、更新哪些服务、失败如何恢复 | 根 `hai.json.build/deploy`、构建进程`PUBLIC_BASE_PATH`、环境文件、服务器成功基线     |
 
-CLI 生成的后端在启动时用 `core.init()` 读取 `config/`，再按模块检查并传入设置。例如，`config/_db.yml` 读成 `db`，应用把它交给 `reldb.init()` 才会建立数据库连接。Serv 和 Kit 在创建 HTTP 应用或请求处理函数时接收设置。API Client、Crypto、UI、Datapipe 和 Capacitor 的设置随各自的代码调用传入。API Contract 用代码定义接口输入输出。`hai.json` 中的构建和部署设置由 CLI 命令读取。
+CLI 生成的后端在启动时用 `core.init()` 读取 `config/`，再按模块检查并传入设置。例如，`config/_db.yml` 读成 `db`，应用把它交给 `reldb.init()` 才会建立数据库连接。Serv 和 Kit 在创建 HTTP 应用或请求处理函数时接收设置。API Client、Crypto、UI 的调用参数和 API Contract 的接口定义见功能参考。Datapipe 被 AI 文件配置消费的字段归入 `_ai.yml.knowledge`；Capacitor 原生字段归入 `capacitor.config.ts`。`hai.json` 中的构建和部署设置由 CLI 命令读取。
 
 ## 如何理解默认值与例子
 

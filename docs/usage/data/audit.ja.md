@@ -2,13 +2,101 @@
 
 [原文（中国語）](audit.md) · [設定](../configuration/audit.ja.md) · [API リファレンス](../function/audit.ja.md)
 
+<a id="example-data"></a>
+
+## それぞれの記録の役割
+
+まず用途と例を読み、必要に応じて後半の項目・保存規則を確認してください。ID と業務内容は架空で、秘密は隠しています。時刻は 2026-11-17 00:00 UTC を起点とし、単位は各説明に記します。
+
+DB・ファイルの例は関連項目の抜粋で、そのまま完全な書き込みデータには使えません。省略項目が任意とは限らず、例ごとに異なる段階を示す場合があります。
+
+### 誰が何をしたか後で確認
+
+対応する構造：`hai_audit_logs`。
+
+重要操作の主体・対象・結果を保存し、後で追跡します。
+
+```json
+{
+  "id": "audit_example-42",
+  "action": "read",
+  "resource": "orders",
+  "resource_id": "order-42",
+  "user_id": "user-42",
+  "details": {
+    "fields": [
+      "status"
+    ]
+  },
+  "created_at": "2026-11-17T00:00:00.000Z"
+}
+```
+
+user-42 が order-42 の status を読みました。時刻は DB が記録した UTC 表示です。
+
+### まだ削除できない監査記録の方針
+
+対応する構造：`hai_audit_policy`。
+
+DB が守る最短保持期間を保存します。
+
+```json
+{
+  "id": 1,
+  "enabled": 1,
+  "min_days": 90
+}
+```
+
+唯一の id:1 方針で90日保護が有効です。日ごとに追加する履歴ではありません。
+
+### 同じ警告を担当する処理を決める
+
+対応する構造：`hai_audit_alert_claims`。
+
+規則・通知先・期間ごとに担当を取得し、重複通知を減らします。
+
+```json
+{
+  "id": "<claim-digest>",
+  "rule_id": "failed-login",
+  "target_id": "security",
+  "window_start": 1794873600000
+}
+```
+
+failed-login から security 宛の例です。取得済みでも人への配達完了ではありません。
+
+### 監査バックアップが含む範囲
+
+対応する構造：`backup JSONL`。
+
+先頭行で形式と範囲を示し、その後にイベントと件数・検査値の末尾行が続きます。
+
+```json
+{
+  "type": "header",
+  "format": "hai-audit",
+  "version": 1,
+  "id": "backup-42",
+  "createdAt": "2026-11-17T00:00:00.000Z",
+  "cutoff": "2026-11-17T00:00:00.000Z",
+  "from": null,
+  "requestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
+```
+
+頭行だけの例で、完全な復元用バックアップではありません。
+
+## 項目・保存・削除のリファレンス
+
 <a id="tables"></a>
 
-## データベースのテーブル
+### データベースのテーブル
 
 `reldb.init()` の後に `audit.init()` を呼び出し、その接続先にテーブルを準備します。任意項目を省略すると NULL になり、特記のない値は書き込み側が設定します。
 
-### `hai_audit_logs`
+#### `hai_audit_logs`
 
 | フィールドまたはテーブル | 構造と意味 |
 | --- | --- |
@@ -24,7 +112,7 @@
 
 <a id="policy"></a>
 
-## 保持ポリシーとアラートの取得
+### 保持ポリシーとアラートの取得
 
 | フィールドまたはテーブル | 構造と意味 |
 | --- | --- |
@@ -35,6 +123,6 @@
 
 <a id="backups"></a>
 
-## キャッシュとバックアップ
+### キャッシュとバックアップ
 
 Audit は Redis のキーを作りません。バックアップは非公開の Storage オブジェクト `hai-private/audit-backups/<id>.jsonl` です。先頭行に形式・版・対象期限、中間行に各イベント、末尾に件数と SHA-256 を記録します。保持期間はストレージ側で設定します。

@@ -4,9 +4,84 @@
 
 [数据结构索引](README.md) · [模块配置](../configuration/scheduler.md) · [功能说明](../function/scheduler.md)
 
+<a id="example-data"></a>
+
+## 这些数据用来做什么
+
+先看用途和例子，再按需查后面的字段与保存规则。例子中的编号和业务内容是虚构的，敏感值已隐藏。时间以 2026-11-17 00:00 UTC 为起点，具体单位在说明中标明。
+
+数据库和文件示例只列说明所需字段，不能直接当成完整写入数据；未列出的字段不表示可省略。不同例子可以展示处理过程中的不同时间。
+
+### 以后按什么计划运行什么任务
+
+对应结构：`hai_scheduler_tasks`。
+
+保存任务计划和服务端处理方式，服务重启后仍能找回该运行什么。
+
+```json
+{
+  "id": 1,
+  "task_id": "daily-report",
+  "task_name": "Daily report",
+  "cron": "0 0 * * *",
+  "timezone": "UTC",
+  "enabled": true,
+  "idempotent": true,
+  "delete_after_run": false,
+  "params": {
+    "reportId": "report-42"
+  }
+}
+```
+
+daily-report 每天 UTC 零点执行，参数指向 report-42。idempotent:true 是处理器的业务声明，不会自动让外部系统只执行一次。
+
+### 这一次触发是否正在执行
+
+对应结构：`hai_scheduler_executions`。
+
+每次定时或手动触发都登记执行记录，用来防止同一任务被同时运行，并记录当前处理者。
+
+```json
+{
+  "sequence": 42,
+  "occurrence_id": "occurrence-42",
+  "task_id": "daily-report",
+  "active_task": "daily-report",
+  "status": "running",
+  "owner": "node-1",
+  "leased_until": 1794873630000,
+  "attempt_count": 1,
+  "max_attempts": 1
+}
+```
+
+occurrence-42 正由 node-1 运行，active_task 占住 daily-report；leased_until 是本次处理资格截止时间，超时不等于外部动作肯定没发生。
+
+### 给人查看的任务执行历史
+
+对应结构：`hai_scheduler_logs`。
+
+把一次执行的结果、耗时和诊断保存给管理页面查询；它不能代替执行占用记录。
+
+```json
+{
+  "id": "log-42",
+  "occurrence_id": "occurrence-42",
+  "task_id": "daily-report",
+  "task_name": "Daily report",
+  "status": "success",
+  "duration": 125
+}
+```
+
+此例表示 occurrence-42 后来成功，用时125毫秒；与上面 running 的例子是不同观察时刻。删除日志不会释放正在执行的任务。
+
+## 字段、存储与清理参考
+
 <a id="tables"></a>
 
-## 数据库
+### 数据库
 
 调度器把任务设置、当前由谁执行以及执行日志保存在 [reldb](reldb.md)。除下表列出的默认值外，字段值由写入代码提供。选填字段缺失时存为 NULL。
 
@@ -18,7 +93,7 @@
 
 定时触发和手动触发使用同一个任务占用标记，同一任务只能有一次活动执行。到期后如果不确定外部操作是否已完成，会保留占用标记，避免再次执行；确认结果后再处理。删除查询日志不会解除这个标记。
 
-## 缓存
+### 缓存
 
 模块不创建 Redis 键。服务实例利用本机计时器决定何时查找任务。能否领取、延长执行权或写入结果，以数据库里的记录与时间为准。
 

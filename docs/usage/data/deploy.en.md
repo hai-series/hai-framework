@@ -2,9 +2,89 @@
 
 [Chinese source](deploy.md) · [Configuration](../configuration/deploy.en.md) · [API reference](../function/deploy.en.md)
 
+<a id="example-data"></a>
+
+## What these records are for
+
+Start with the purpose and examples, then consult field and storage details below. IDs and business content are fictional; sensitive values are redacted. Times use 2026-11-17 00:00 UTC as the example start, with units explained for each record.
+
+Database and file samples show relevant fields, not complete writable records. Omitted fields are not automatically optional. Examples can represent different moments in a process.
+
+### Verify the deployment artifact
+
+Structure: `manifest.json`.
+
+A bundle manifest lets deployment verify the expected app and build.
+
+```json
+{
+  "version": 5,
+  "primaryService": "serv",
+  "appVersion": "1.0.0",
+  "buildId": "example-20261117",
+  "partial": false
+}
+```
+
+example-20261117 identifies the build. Real bundles also need images, checksums and metadata; editing text alone cannot create an artifact.
+
+### Inspect deployment progress
+
+Structure: `steps-<id>.jsonl`.
+
+Append one line per deployment step so progress survives a disconnected session.
+
+```json
+{
+  "stage": "health",
+  "status": "passed",
+  "durationSeconds": 2
+}
+```
+
+The health step passed in two seconds. This alone does not prove deployment success; check the final result.
+
+### What is known after interruption
+
+Structure: `DeployCommandState`.
+
+After a command error, report what stopped and what remains unknown before retrying.
+
+```json
+{
+  "reason": "timeout",
+  "localTermination": "confirmed",
+  "remoteExecution": "unknown",
+  "deploymentId": "deploy-orders-42",
+  "resultFile": "/opt/hai/apps/orders/result-deploy-orders-42.json"
+}
+```
+
+The local process ended, but the remote outcome is unknown. Inspect the matching resultFile first.
+
+### The deployment’s final outcome
+
+Structure: `result-<id>.json`.
+
+The script writes a final result so a disconnected caller can verify the same deployment ID.
+
+```json
+{
+  "deploymentId": "deploy-orders-42",
+  "stage": "complete",
+  "exitCode": 0,
+  "durationSeconds": 42,
+  "recoveryStatus": "not-needed"
+}
+```
+
+deploy-orders-42 completed with exit code 0 in 42 seconds, with no recovery needed. This is not a statement about business-data changes.
+
+## Field, storage and cleanup reference
+
 <a id="files"></a>
 
-## Files and ownership
+### Files and ownership
 
 Deploy does not create SQL tables or Redis keys. Build artifacts are local until published. The target server owns deployed releases; cloud-managed resources are tracked by the cloud provider.
 

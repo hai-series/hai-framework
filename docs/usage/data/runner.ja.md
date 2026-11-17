@@ -2,13 +2,81 @@
 
 [原文（中国語）](runner.md) · [設定](../configuration/runner.ja.md) · [API リファレンス](../function/runner.ja.md)
 
+<a id="example-data"></a>
+
+## それぞれの記録の役割
+
+まず用途と例を読み、必要に応じて後半の項目・保存規則を確認してください。ID と業務内容は架空で、秘密は隠しています。時刻は 2026-11-17 00:00 UTC を起点とし、単位は各説明に記します。
+
+DB・ファイルの例は関連項目の抜粋で、そのまま完全な書き込みデータには使えません。省略項目が任意とは限らず、例ごとに異なる段階を示す場合があります。
+
+### 待機中・実行中の作業
+
+対応する構造：`hai_runner_executions`。
+
+作業内容・担当・資源・状態を保存してノード間で協調します。
+
+```json
+{
+  "id": "execution-42",
+  "kind": "hai.tools.example.v1",
+  "state": "queued",
+  "owner_node": null,
+  "owner_generation": null,
+  "cpu_milli": 1000,
+  "memory_mib": 256,
+  "pids": 64,
+  "scratch_mib": 64,
+  "created_at": 1794873600000,
+  "updated_at": 1794873600000,
+  "event_sequence": 0,
+  "event_bytes": 0
+}
+```
+
+queued なので担当は未定、予算は1 CPU、256 MiB RAM、64プロセス、64 MiB一時領域です。
+
+### 作業中の順序付きメッセージ
+
+対応する構造：`hai_runner_events`。
+
+進捗や出力を順に保存し、切断後も続きから読めるようにします。
+
+```json
+{
+  "id": "event-42",
+  "execution_id": "execution-42",
+  "sequence_number": 1,
+  "created_at": 1794873600000
+}
+```
+
+execution-42 の第1イベントです。本文 event_json は省略しています。
+
+### 複数ノードの資源確認を調整
+
+対応する構造：`hai_runner_gate`。
+
+同じ空き容量を各ノードが重複使用しないよう確認を調整します。
+
+```json
+{
+  "id": 1,
+  "revision": 1
+}
+```
+
+id:1 の1行だけで、revision は実行件数や永久所有者を表しません。
+
+## 項目・保存・削除のリファレンス
+
 <a id="tables"></a>
 
-## データベースのテーブル
+### データベースのテーブル
 
 ノード間で担当と期限を共有するため、共通の RelDB を使います。時刻は Unix ミリ秒で書き込みにはデータベースの時計を使います。型はバックエンド変換前の RelDB の定義です。
 
-### `hai_runner_executions`
+#### `hai_runner_executions`
 
 | フィールドまたはテーブル | 構造と意味 |
 | --- | --- |
@@ -30,7 +98,7 @@
 
 <a id="events"></a>
 
-## イベント・容量・削除処理
+### イベント・容量・削除処理
 
 | フィールドまたはテーブル | 構造と意味 |
 | --- | --- |

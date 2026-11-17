@@ -34,3 +34,13 @@ pnpm dev # 启动项目声明的开发服务，终端输出本地访问地址。
 | `hai --version`, `hai --help` | Show the CLI version or command usage. | `hai deploy --help` |
 
 Still untranslated: the detailed command options and environment preparation examples. Read the [Chinese source section](cli.md#api-reference).
+
+<a id="command-options"></a>
+
+## Command overrides
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--yes` | Optional | Skip source selection. Without settings, use official sources. |
+
+`hai deploy --env prod` selects `.env.prod` and the matching deployment environment.

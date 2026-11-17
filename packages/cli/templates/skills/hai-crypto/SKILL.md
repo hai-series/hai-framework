@@ -26,7 +26,7 @@ transport 仅支持 v2：SM2 发送方签名、独立密钥的 Encrypt-then-HMAC
 3. 传输加密经 serv/kit/api-client 顶层配置接入，统一协商与刷新路径；不导入内部工厂。
 4. 验证加解密往返、错误密钥/签名和关闭，密钥与明文不写日志或浏览器公开配置。
 
-握手公钥先用无需 init 的 `isValidSM2PublicKey` 验证编码和 SM2 曲线点；内置 manager/registry 也校验，serv/kit 在写存储前拒绝。DB registry 用事务共享容量（maxClients 默认 10000、各节点一致），满容量拒绝、不驱逐有效 nonce；配置有限 ttlSeconds，并由应用周期调用 DB 工厂返回的 `pruneExpired()`（每次公钥/nonce 各最多 100 条）。Redis 使用原生 TTL，容量由部署管理。TTL 显式值只能为正整数秒，详见参考中的范围和迁移边界。
+握手公钥先用无需 init 的 `isValidSM2PublicKey` 验证编码和曲线点。registry 统一用 `createCacheTransportKeyStore({ cache })`，生产连接 Redis。公钥 TTL 默认 3600 秒、范围 1～86400；共享登记/请求分钟配额默认 10000/100000，各节点一致。所有键有 TTL，满额返回 503，不驱逐有效 nonce；没有数据库仓库或独立内存工厂。TTL 和配额是代码调用参数，不属于 `_crypto.yml`，具体范围见[参考](reference.md)。
 
 服务端必须显式注入受管 `serverKeyRing` 与共享 `keyStore`，没有进程随机私钥或内存 registry 默认值。请求携带协商 serverKeyId；各节点同 ring + registry 支持跨节点、重启和新旧版本轮换。密钥只从 Secret/私有环境注入，不进入公开配置、客户端或日志。开发/测试的内存 registry 须显式选择。
 

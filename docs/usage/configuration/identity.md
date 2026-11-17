@@ -4,7 +4,7 @@
 
 认证配置同时影响服务端判断和用户看到的步骤。先初始化 RelDB 和 Cache，再初始化 IAM。浏览器只接收 `await iam.getPublicConfig()` 的成功结果，不能下发完整服务端配置；同步 `iam.publicConfig` 是文件快照，不能代替数据库合并后的实际策略。
 
-把需要的示例合并到 `config/_iam.yml`。例如，只调整登录方式时只修改 `login`。服务重启后会读取新设置，旧会话和旧账号是否受影响要按具体策略确认。[IAM 字段和默认值](iam.md#配置清单) · [登录页能收到的配置](api-contract.md#配置清单)
+把需要的示例合并到 `config/_iam.yml`。例如，只调整登录方式时只修改 `login`。服务重启后会读取新设置，旧会话和旧账号是否受影响要按具体策略确认。[IAM 字段和默认值](iam.md#配置清单) · [登录页能收到的配置](../data/api-contract.md#public-settings)
 
 ## 登录方式、注册与协议
 

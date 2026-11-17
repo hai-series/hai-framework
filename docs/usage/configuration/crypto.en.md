@@ -1,21 +1,9 @@
-# @h-ai/crypto Configuration
+# Crypto configuration files
 
-<!-- translation: partial -->
+[Chinese](crypto.md) · [日本語](crypto.ja.md)
 
-[Chinese source](crypto.md) · [Data structures](../data/crypto.en.md) · [API reference](../function/crypto.en.md)
+[Configuration handbook](README.en.md)
 
-Configure primitives in code. The application supplies algorithm-specific options and owns private keys. HTTP transport uses server and client managers backed by a registry.
+Crypto has no standalone `config/_crypto.yml`; `crypto.init()` takes no file configuration. Algorithm options, transport-manager parameters and registry TTL/quotas are code arguments documented in [call options](../function/crypto.en.md#call-options).
 
-```yaml schema=@h-ai/serv:ServConfigSchema
-transport:
-  maxPlaintextBytes: 25165824
-```
-
-| Field | Default or requirement | Meaning |
-| --- | --- | --- |
-| `createInMemoryKeyStore(maxClients?)` | `10000` | Development or single-process tests. The oldest public key is evicted at capacity. |
-| `createRedisTransportKeyStore({ cache })` | Required | Borrow an initialized Redis backend for shared transport state. |
-| `createReldbTransportKeyStore({ reldb })` | Required | Borrow an initialized RelDB instance. |
-| `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` | Optional | Server loads a JSON key ring and validates it with `parseTransportServerKeyRing()`. |
-
-Still untranslated: provider limits, transport-body budgets and key-store options. Read the [Chinese source section](crypto.md#configuration-fields).
+HTTP file settings belong to `config/_serv.yml` and `config/_kit.yml`; see [Serv](serv.en.md) and [Kit](kit.en.md). Cache backend file settings belong to [Cache](cache.en.md). Trusted server startup injects private keys; never place them in public configuration.

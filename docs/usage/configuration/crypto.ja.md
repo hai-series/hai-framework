@@ -1,21 +1,9 @@
-# @h-ai/crypto 設定
+# Crypto の設定ファイル
 
-<!-- translation: partial -->
+[中国語](crypto.md) · [English](crypto.en.md)
 
-[原文（中国語）](crypto.md) · [データ構造](../data/crypto.ja.md) · [API リファレンス](../function/crypto.ja.md)
+[設定手冊](README.ja.md)
 
-暗号プリミティブはコードで設定します。アルゴリズム固有の設定と秘密鍵はアプリが管理します。HTTP 通信ではレジストリ付きのサーバー・クライアント管理機能を使用します。
+Crypto に独立した `config/_crypto.yml` はなく、`crypto.init()` はファイル設定を受け取りません。アルゴリズム、通信マネージャー、registry の TTL・上限はコードの引数です。[呼び出し引数](../function/crypto.ja.md#call-options)を参照してください。
 
-```yaml schema=@h-ai/serv:ServConfigSchema
-transport:
-  maxPlaintextBytes: 25165824
-```
-
-| 項目 | 既定値・必須条件 | 用途 |
-| --- | --- | --- |
-| `createInMemoryKeyStore(maxClients?)` | `10000` | 開発または単一プロセスのテスト向け。上限では最も古い公開鍵を除去。 |
-| `createRedisTransportKeyStore({ cache })` | 必須 | 初期化済み Redis を通信状態の共有に使用。 |
-| `createReldbTransportKeyStore({ reldb })` | 必須 | 初期化済み RelDB を使用。 |
-| `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` | 省略可 | サーバーで JSON の鍵リングを読み込み、`parseTransportServerKeyRing()` で検証。 |
-
-未翻訳：プロバイダー制限、通信本文の予算、鍵ストアの設定。[中国語の該当節](crypto.md#configuration-fields)を参照してください。
+HTTP のファイル設定は `config/_serv.yml` と `config/_kit.yml` です。[Serv](serv.ja.md) と [Kit](kit.ja.md)、キャッシュ接続は [Cache](cache.ja.md) を参照してください。秘密鍵は信頼できるサーバー起動処理から渡し、公開設定には置きません。

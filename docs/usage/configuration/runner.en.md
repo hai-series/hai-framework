@@ -4,6 +4,8 @@
 
 [Chinese source](runner.md) · [Data structures](../data/runner.en.md) · [API reference](../function/runner.en.md)
 
+The actual file is `config/_runner.yml`, loaded by applications such as AI Playground through `RunnerConfigSchema`. This page lists file fields; injected runtime services and callbacks belong to the [API guide](../function/runner.en.md).
+
 Load `_runner.yml` after initializing shared RelDB. Every participating process needs its own node ID. Register execution environments on worker nodes before submitting jobs.
 
 ```yaml schema=@h-ai/runner:RunnerConfigSchema

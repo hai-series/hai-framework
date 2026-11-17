@@ -16,13 +16,15 @@ Install with pnpm: `pnpm add @h-ai/api-client`.
 
 ## Configuration Reference
 
-Pass the API base URL to `apiClient.init(config)`. Add credential storage, a request timeout, or transport encryption options as needed.
-
-See the [configuration reference](../../docs/usage/configuration/api-client.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
+This module has no standalone runtime configuration file. See [file ownership](../../docs/usage/configuration/api-client.en.md); arguments or response structures are in the [reference](../../docs/usage/function/api-client.en.md#call-options).
 
 ## Features
 
 [Browse the API list](../../docs/usage/function/api-client.en.md#api-reference) for entry points, inputs, results and examples.
+
+Clients learn `transport.maxPlaintextBytes` from server key exchange. An explicit local limit selects the smaller value. Capacity failures return `HaiApiClientError.PAYLOAD_TOO_LARGE` (`hai:api-client:020`) with direction, stage and byte diagnostics. See [capacity and upgrade](../../docs/usage/function/crypto.en.md#transport-capacity).
+
+Serv/Kit return an encrypted HTTP 400 for an out-of-window request after validating request binding, signature and MAC. The client throws `TransportTimeError` (`hai:crypto:071`), displays the server’s UTC time at validation, and asks the user to enable automatic synchronization or set the device time manually before refreshing. `serverTime` is Unix milliseconds. `api-client` maps the error to `VALIDATION_FAILED` and preserves `cause.transportCode` and `cause.serverTime`.
 
 ## Data Structures
 
@@ -36,10 +38,6 @@ See the [data reference](../../docs/usage/data/api-client.en.md) for where acces
 pnpm --filter @h-ai/api-client test
 pnpm --filter @h-ai/api-client typecheck
 ```
-
-Clients learn `transport.maxPlaintextBytes` from server key exchange. An explicit local limit selects the smaller value. Capacity failures return `HaiApiClientError.PAYLOAD_TOO_LARGE` (`hai:api-client:020`) with direction, stage and byte diagnostics. See [capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md).
-
-Serv/Kit return an encrypted HTTP 400 for an out-of-window request after validating request binding, signature and MAC. The client throws `TransportTimeError` (`hai:crypto:071`), displays the server’s UTC time at validation, and asks the user to enable automatic synchronization or set the device time manually before refreshing. `serverTime` is Unix milliseconds. `api-client` maps the error to `VALIDATION_FAILED` and preserves `cause.transportCode` and `cause.serverTime`.
 
 ## License
 

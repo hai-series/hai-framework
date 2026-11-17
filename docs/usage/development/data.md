@@ -54,6 +54,6 @@ Memory 的 KV、Hash、List、Set、ZSet 共用 key 命名空间。`exists/expir
 
 ## 清洗和分块
 
-按[文本参数](../configuration/data.md#文本清洗和分块)选择清洗和边界，保留来源与顺序。分块失败不能继续`embedding`，原始材料保留用于追溯。
+按[文本参数](../function/datapipe.md#text-import-guide)选择清洗和边界，保留来源与顺序。分块失败不能继续`embedding`，原始材料保留用于追溯。
 
 例如按字符切分 `abcdefghij`，`maxSize: 4`、`overlap: 0` 得到 `abcd`、`efgh`、`ij`；`overlap: 1` 得到 `abcd`、`defg`、`ghij`。重叠能保留相邻片段的上下文，也会增加嵌入和存储开销。

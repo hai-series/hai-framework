@@ -8,7 +8,7 @@
 
 生成的项目把 HTTP 服务设置放在 `config/_serv.yml`。用环境变量覆盖时使用 `HAI_SERV_` 前缀。见[配置来源和覆盖顺序](runtime.md#配置从哪里来)。
 
-应用启动代码将读取后的 `http`、`cors` 和 `transport` 传给 `serv.createApp()`，然后把返回的 App 与 `server.host`、`server.port` 交给 `serv.listen()` 开始监听。私钥、已连接的存储和认证实例由服务端代码另行传入。 [应用实例、Cookie、语音连接和认证参数](http.md#serv-工厂参数与运行时依赖)
+应用启动代码将读取后的 `http`、`cors` 和 `transport` 传给 `serv.createApp()`，然后把返回的 App 与 `server.host`、`server.port` 交给 `serv.listen()` 开始监听。私钥、已连接的存储和认证实例由服务端代码另行传入。 [应用实例、Cookie、语音连接和认证参数](../function/serv.md#host-options)
 
 ## 配置示例
 
