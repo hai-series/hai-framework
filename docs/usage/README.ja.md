@@ -4,7 +4,7 @@
 
 初めて使う場合は[日本語の作成・配布手順](getting-started/workflow.ja.md)に沿って、アプリを作成し、起動してビルドします。API や設定を確認したい場合は、モジュール別のリファレンスを参照してください。ドキュメントサイトでは、翻訳待ちのページに案内を表示し、中国語の本文と原文へのリンクを掲載します。
 
-Core には日本語の[導入と設定 API](function/core.ja.md)、[設定一覧](configuration/core.ja.md)、[データ構造](data/core.ja.md)があります。
+Core には日本語の[API リファレンス](function/core.ja.md)、[設定一覧](configuration/core.ja.md)、[データ構造](data/core.ja.md)があります。
 
 ## 章構成
 

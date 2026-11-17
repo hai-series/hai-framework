@@ -4,7 +4,7 @@
 
 Start with the [English creation-to-delivery workflow](getting-started/workflow.en.md) to create, run and build an app. Use the module references to look up an API or setting as you work. On the documentation site, chapters awaiting translation display the Chinese text with a notice and a link to the original.
 
-For Core, see the [quick start and configuration API](function/core.en.md), [configuration settings](configuration/core.en.md) and [data reference](data/core.en.md).
+For Core, see the [API reference](function/core.en.md), [configuration settings](configuration/core.en.md) and [data reference](data/core.en.md).
 
 ## Chapters
 

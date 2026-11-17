@@ -18,7 +18,7 @@ Node の起動時に `core.init({ configDir: './config' })` を呼び出し、`c
 
 ## 機能
 
-[設定 API](../../docs/usage/function/core.ja.md#config-api) · [Core API 全体](../../docs/usage/function/core.md#api-reference)（中国語）
+[設定 API](../../docs/usage/function/core.ja.md#config-api) · [Core API 全体](../../docs/usage/function/core.ja.md#api-reference)
 
 ## データ構造
 

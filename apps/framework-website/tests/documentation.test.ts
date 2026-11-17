@@ -86,18 +86,18 @@ describe('公开手册的静态阅读契约', () => {
     expect(new Set(entries.map(entry => entry.href)).size).toBe(entries.length)
   })
 
-  it('各模块手册列出 API，部分译文在页面和索引中保留状态', async () => {
+  it('各模块手册列出 API，已完成译文在索引中不再标为部分', async () => {
     const base = '/hai-framework'
     const { sections } = await getNavigation()
     const modules = sections.find(section => section.id === 'function')?.children ?? []
-    expect(modules).toHaveLength(23)
+    expect(modules.map(module => module.path)).toContain('function/tools.md')
     for (const module of modules) {
       const document = await getDocument(module.path, base)
       expect(document?.sections.some(section => section.id === 'api-reference'), module.path).toBe(true)
       expect(document?.sections.some(section => section.html.includes('<table>')), module.path).toBe(true)
     }
     const entries = await searchIndex(base, 'en-US')
-    expect(entries.find(entry => entry.href.endsWith('/function/core/'))?.partialTranslation).toBe(true)
+    expect(entries.find(entry => entry.href.endsWith('/function/core/'))?.partialTranslation).toBe(false)
     expect(entries.find(entry => entry.href.endsWith('/function/datapipe/'))).toMatchObject({
       sourceLocale: 'en-US',
       partialTranslation: false,

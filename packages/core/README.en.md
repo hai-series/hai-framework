@@ -18,7 +18,7 @@ See the [configuration reference](../../docs/usage/configuration/core.en.md) for
 
 ## Features
 
-[Configuration API](../../docs/usage/function/core.en.md#config-api) · [All Core APIs](../../docs/usage/function/core.md#api-reference) (Chinese)
+[Configuration API](../../docs/usage/function/core.en.md#config-api) · [All Core APIs](../../docs/usage/function/core.en.md#api-reference)
 
 ## Data Structures
 

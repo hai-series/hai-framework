@@ -116,7 +116,7 @@ test('文档切换保留章节与共享锚点，目录和搜索使用当前语�
   await page.getByRole('button', { name: /English/ }).click()
   await expect(page).toHaveURL(`${docs}/en/function/core/#config-api`)
   await expect(page.locator('article')).toHaveAttribute('lang', 'en-US')
-  await expect(page.locator('.document-translation-note')).toContainText('partially translated')
+  await expect(page.locator('.document-translation-note')).toHaveCount(0)
   const sidebar = page.locator('.documentation-sidebar')
   await expect(sidebar.getByText('8. Module APIs')).toBeVisible()
   await expect(sidebar.getByRole('link', { name: '@h-ai/core', exact: true })).toHaveAttribute('aria-current', 'page')

@@ -6,6 +6,8 @@
 
 [模块 README](../../../packages/core/README.md) · [配置清单](../configuration/core.md) · [数据结构](../data/core.md) · [应用开发](../getting-started/develop.md)
 
+<a id="quick-start"></a>
+
 ## 最小接入示例
 
 ```bash
@@ -808,6 +810,8 @@ const decision = check('/api/v1/external/sync', 'GET', '192.0.2.7')
 
 完整默认值、独立文件、代理拓扑及部署步骤见[请求访问控制手册](../configuration/request-access.md).
 
+<a id="id-api"></a>
+
 ### 生成与校验标识：`core.id`
 
 生成业务标识与日志关联编号，或检查输入是否符合 UUID v4 / nanoid 格式。
@@ -828,6 +832,8 @@ core.id.isValidNanoId(shortId, 10) // true。
 
 ID 不能作为密钥。UUID 只使用密码学安全随机源，不可用时抛错；_core.yml 没有全局 ID 长度或前缀配置，按每次调用传参。
 
+<a id="type-api"></a>
+
 ### 判断值的类型：`core.typeUtils`
 
 对边界数据做类型判断，并帮助 TypeScript 在分支中缩小类型；这些判断不替代业务 Schema 校验。
@@ -844,6 +850,8 @@ core.typeUtils.isNumber(3000) // true；传 NaN 返回 false。
 core.typeUtils.isBoolean(false) // true。
 core.typeUtils.isArray([1, 2]) // true。
 ```
+
+<a id="object-api"></a>
 
 ### 处理对象：`core.object`
 
@@ -868,6 +876,8 @@ core.object.fromEntries([
 
 deepClone 使用 structuredClone，支持 Date/Map/Set/循环等可克隆值；不可克隆的函数等会抛错。deepMerge 只递归普通对象，数组、Date、集合和类实例由后值覆盖，不修改输入；不把它当作实例克隆。
 
+<a id="string-api"></a>
+
 ### 处理字符串：`core.string`
 
 统一命名格式、处理显示文字、判断空白以及比较字符串。
@@ -890,6 +900,8 @@ core.string.constantTimeEqual('same', 'same') // true；安全边界见下方说
 ```
 
 Node 的 constantTimeEqual 对等长 UTF-16 字节使用原生 timingSafeEqual，不同长度直接返回 false；浏览器不能提供引擎级恒时保证，不用于服务端凭据校验。
+
+<a id="array-api"></a>
 
 ### 处理数组：`core.array`
 
@@ -919,6 +931,8 @@ core.array.difference([1, 2], [2, 3]) // [1]。
 
 `groupBy()` 支持与原型属性同名的键，例如 `constructor`。`chunk()` 要求块大小为正安全整数，传入小数、无穷大或其他无效大小时返回空数组。
 
+<a id="async-api"></a>
+
 ### 组织异步操作：`core.async`
 
 安排延迟、超时、失败重试、限并发与串行处理，或为输入/滚动等事件添加防抖与节流。
@@ -944,6 +958,8 @@ scroll(100) // 本例第一次调用立即回调，position 为 100；100ms 内�
 - `withTimeout()` 到时会拒绝等待的 Promise。底层任务的取消由调用方负责。
 - `retry()` 在操作抛错或拒绝时再次执行。`maxRetries` 包含第一次尝试，默认最多执行三次，间隔 1000 毫秒。返回失败 `HaiResult` 时，由调用方判断结果。
 - `parallel()` 按输入顺序返回结果。并发数须为正安全整数，无效时在执行任何任务前以 `RangeError` 拒绝。单个任务拒绝后，其余工作者仍可能继续处理队列。
+
+<a id="time-api"></a>
 
 ### 处理日期与时间：`core.time`
 
