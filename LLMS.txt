@@ -11,6 +11,7 @@
 | 新增或修改应用 | [hai-app-create](.agents/skills/hai-app-create/SKILL.md)；现有业务由用户需求决定，模板不是固定限制 |
 | 应用代码或界面审查 | [hai-app-review](.agents/skills/hai-app-review/SKILL.md)、[hai-ui-review](.agents/skills/hai-ui-review/SKILL.md) |
 | 创建或审查框架模块 | [hai-module-create](.agents/skills/hai-module-create/SKILL.md)、[hai-module-review](.agents/skills/hai-module-review/SKILL.md) |
+| 撰写或审查框架模块文档 | [模块文档规范](.agents/instructions/module-documentation.md) |
 | 需求/设计审查与文档驱动实施 | [hai-spec-review](.agents/skills/hai-spec-review/SKILL.md)、[hai-spec-implement](.agents/skills/hai-spec-implement/SKILL.md) |
 | 测试、CI 与证据 | [hai-app-tests](.agents/skills/hai-app-tests/SKILL.md)、[CI 分层与结果复用](docs/ci.md) |
 | UI 设计与组件实现 | [hai-ui-design](.agents/skills/hai-ui-design/SKILL.md)、[hai-ui](.agents/skills/hai-ui/SKILL.md)、[仓库设计约定](.agents/instructions/ui-design.md) |

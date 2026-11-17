@@ -1,6 +1,6 @@
 ---
 name: hai-module-create
-description: "在 hai-framework 源码仓库新增模块、子功能或 Provider，并维护公共契约。"
+description: "在 hai-framework 新增模块、子功能或 Provider，或撰写模块 README、使用手册与公开注释。"
 ---
 
 # hai-module-create — 模块创建决策手册
@@ -11,10 +11,10 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 
 | 项目     | 契约                                                                                         |
 | -------- | -------------------------------------------------------------------------------------------- |
-| 能力     | 在 hai-framework 源码仓库新增模块、子功能或 Provider，并维护公共契约                         |
-| 适用场景 | 框架源码 packages 内新增能力                                                                 |
-| 输入     | 真实调用需求、目标 packages 路径、现有模块和导出约定                                         |
-| 输出     | 符合模块类型的实现、类型、错误定义、测试和文档                                               |
+| 能力     | 在 hai-framework 源码仓库新增模块、子功能或 Provider，维护公共契约与使用文档                 |
+| 适用场景 | 框架源码 packages 内新增能力，或编写、完善模块文档                                           |
+| 输入     | 读者或调用方的任务、目标模块、现有公开契约和验证依据                                         |
+| 输出     | 按任务交付实现与验证，或已核对的模块文档和示例                                               |
 | 限制     | 先决定生命周期/纯函数/工厂类型；无多个真实实现时不新增 Provider 抽象。错误命名空间不可冲突。 |
 
 > 面向 AI 助手的模块创建指南。**本文档只含决策表与原则**；代码范本（main.ts、types.ts、config.ts、package.json 等可直接套用的模板）请按需读 [reference.md](reference.md)。
@@ -22,6 +22,8 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 > 模块通用约束（命名、暴露形式、HaiResult、NotInitializedKit、日志、错误码段位）见 [.agents/instructions/module-conventions.md](../../instructions/module-conventions.md)（按 AGENTS.md 路由读取）。
 >
 > **变量约定**：`xx` = 模块名（如 storage、iam），`yy` / `zz` = 子功能名，`aaa` = Provider 实现名。
+
+只编写或修正文档时，直接按[模块文档规范](../../instructions/module-documentation.md)和 [R9 写作顺序](reference.md#r9-readme-章节顺序面向人类)执行；以现有公开契约为准。新增模块或能力时，再执行下列架构与实现步骤。
 
 ## §1 架构决策（按顺序回答）
 
@@ -155,7 +157,7 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 13. **公共 API JSDoc** → R6
 14. **测试** → R7
 15. **包配置**（`package.json` / `tsconfig.json` / `tsup.config.ts` / `vitest.config.ts`）→ R8
-16. **README 与模块手册** → [R9](reference.md#r9-readme-章节顺序面向人类)：按统一章节提供入口，详细配置、数据结构和公开功能分别写入 `docs/usage` 的模块参考页。核对模块入口约定与明确例外。
+16. **README 与模块手册** → 按[模块文档规范](../../instructions/module-documentation.md)和 [R9 写作顺序](reference.md#r9-readme-章节顺序面向人类)，先完成三类参考页及三语链接，再更新 README。
 
 ## §6 创建检查清单
 
@@ -174,7 +176,6 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 - [ ] 已实现 NotInitializedKit + `initInProgress` 并发防护（并发调用返回 HaiResult 错误）
 - [ ] 数据库租约使用同条条件 SQL 的存储端执行时钟；验证节点墙钟偏差与真实锁等待后仍拒绝过期提交，不能只续租或先读取时间
 - [ ] 测试覆盖正常 / 边界 / 多实现
-- [ ] README + 对应 CLI Skill 模板（如存在）同步
-- [ ] 运行功能遵循模块对象入口，特殊入口说明依据；使用入门覆盖全部公开子功能，每项有用途、展示输入与输出的带注释示例和必要限制；正文为面向使用者的最终说明，配置规则有结果及类型示例
+- [ ] 中英日 README、三类参考页、逐方法 API 清单及关键场景示例已按[模块文档规范](../../instructions/module-documentation.md)核对；文档链接、锚点和受影响的使用 skill 或 CLI 模板已同步
 - [ ] 构建后 generate:api/check:api/test:api 验证真实入口、声明及浏览器隔离；公开变化已核对全部消费者
 - [ ] 按 [工作规范](../../instructions/workspace.md#验证与交付) 分轮收集 typecheck/lint/build/test 及适用 E2E，汇总后集中修复；最终必需门禁对最终代码均有效通过
