@@ -57,10 +57,6 @@ overrides:
   tinypool@<2.1.2: 2.2.0
   xcode>uuid: 11.1.1
 
-patchedDependencies:
-  daisyui@5.7.50: patches/daisyui-5.7.50.patch
-  deepmerge@4.3.1: patches/deepmerge-4.3.1.patch
-
 allowBuilds:
   core-js: false
   cpu-features: true
@@ -177,7 +173,7 @@ catalog:
   chromadb: ^3.5.0
   croner: ^11.0.0
   d3-shape: ^3.2.1
-  daisyui: ^5.7.50
+  daisyui: ^5.8.1
   driver.js: 1.10.2
   esbuild: ^0.28.2
   # ---------------------------------------------------------------------------

@@ -93,7 +93,7 @@ const VERSIONS = {
   capacitorPushNotifications: '8.1.3',
   capacitorStatusBar: '8.0.4',
   // Tailwind / DaisyUI
-  daisyui: '5.7.50',
+  daisyui: '5.8.1',
   tailwindcss: '4.3.5',
   tailwindcssVite: '4.3.5',
   // i18n
@@ -1196,8 +1196,6 @@ export async function generateFromTemplates(
   else {
     // API/fullstack 自有骨架，质量门禁仍复用单包模板的同一份规则。
     await fse.copy(path.join(root, 'base', 'eslint-rules.js'), path.join(projectPath, 'eslint-rules.js'))
-    // 多包架构也必须携带 pnpm 配置引用的安全补丁，不能只生成注册项。
-    await fse.copy(path.join(root, 'base', 'patches'), path.join(projectPath, 'patches'))
   }
 
   // ─── ② 拷贝 apps/{appType} 路由 ───

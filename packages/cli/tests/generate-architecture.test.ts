@@ -60,15 +60,8 @@ describe('architecture-aware generation', () => {
   it.each(['api', 'fullstack'] as const)('%s 根目录自动选择后端，真实 contract/procedure 入口均注册新领域', async (type) => {
     const project = await create(type)
     const workspace = await readFile(path.join(project, 'pnpm-workspace.yaml'), 'utf8')
-    if (type === 'fullstack') {
-      expect(workspace).toContain('deepmerge@4.3.1: patches/deepmerge-4.3.1.patch')
-      expect(workspace).toContain('daisyui@5.7.50: patches/daisyui-5.7.50.patch')
-    }
-    else {
-      expect(workspace).not.toContain('patchedDependencies:')
-    }
-    expect(await readFile(path.join(project, 'patches/deepmerge-4.3.1.patch'), 'utf8')).toContain('key === \'__proto__\'')
-    expect(await readFile(path.join(project, 'patches/daisyui-5.7.50.patch'), 'utf8')).toContain(':where(:scope) > :where')
+    expect(workspace).not.toContain('patchedDependencies:')
+    expect(await fse.pathExists(path.join(project, 'patches'))).toBe(false)
     const parent = type === 'api'
       ? 'apps'
       : 'packages'

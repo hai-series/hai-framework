@@ -18,7 +18,7 @@ hai-framework 是通用能力和 skill 模板的源头；应用仓库消费这�
 
 ## 同步完整技能与入口
 
-依赖补丁必须与引用它的 pnpm 配置一起复制并验证安装。当前 DaisyUI 5.7.50 的 join 补丁是 CSS 构建兼容修复，**不是安全漏洞补丁**：它以零特异性的 `:where(:scope)` 避免优化器丢弃聚焦/悬停层级，依据 [官方问题](https://github.com/tailwindlabs/tailwindcss/issues/20668) 与[上游修复 PR](https://github.com/tailwindlabs/tailwindcss/pull/20671)。升级后验证实际 compile/optimize 与界面再决定移除；不要靠关闭优化或隐藏警告处理。纯 API 没有 UI/Svelte 构建依赖，不注册未使用的 DaisyUI/deepmerge 补丁；不能用安装豁免掩盖模板依赖差异。
+当前模板使用包含 [join 焦点/悬停层级修复](https://github.com/saadeghi/daisyui/issues/4851)的 DaisyUI 5.8.1。deepmerge 的 [GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4) 已撤回且不构成安全漏洞。模板不携带这两项自定义依赖补丁；同步依赖时核对版本与配置，验证实际安装、CSS compile/optimize 和界面，不靠关闭优化、隐藏警告或安装豁免处理问题。
 
 通过 CLI 补齐缺失文件时，先按 [CLI 安装与命令](../hai-app-create/development.md#cli-安装与命令) 安装所需精确版本的 `@h-ai/cli` 并检查 `hai --version` / `hai --help`，再从应用根运行 `hai init`。临时使用 CLI 可隔离安装到临时目录；不为读取模板要求全局安装或改变系统级工具。
 

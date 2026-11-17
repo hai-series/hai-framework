@@ -376,8 +376,8 @@ catalogs:
       specifier: ^3.2.1
       version: 3.2.1
     daisyui:
-      specifier: ^5.7.50
-      version: 5.7.50
+      specifier: ^5.8.1
+      version: 5.8.1
     driver.js:
       specifier: 1.10.2
       version: 1.10.2
@@ -554,10 +554,6 @@ overrides:
   tinypool@<2.1.2: 2.2.0
   xcode>uuid: 11.1.1
 
-patchedDependencies:
-  daisyui@5.7.50: cc3f25f906059647b501fe13a48fc4e7dc82cb6b9823fdef459514e0058fc6b6
-  deepmerge@4.3.1: 34278db44057e78936b50d3a656248df9c6369532a9dc35467e85ebd449e8832
-
 importers:
 
   .:
@@ -712,7 +708,7 @@ importers:
         version: 26.6.6
       daisyui:
         specifier: 'catalog:'
-        version: 5.7.50(patch_hash=cc3f25f906059647b501fe13a48fc4e7dc82cb6b9823fdef459514e0058fc6b6)
+        version: 5.8.1
       ldapts:
         specifier: 'catalog:'
         version: 9.2.0
@@ -824,7 +820,7 @@ importers:
         version: 26.6.6
       daisyui:
         specifier: 'catalog:'
-        version: 5.7.50(patch_hash=cc3f25f906059647b501fe13a48fc4e7dc82cb6b9823fdef459514e0058fc6b6)
+        version: 5.8.1
       rimraf:
         specifier: 'catalog:'
         version: 6.1.4
@@ -921,7 +917,7 @@ importers:
         version: 26.6.6
       daisyui:
         specifier: 'catalog:'
-        version: 5.7.50(patch_hash=cc3f25f906059647b501fe13a48fc4e7dc82cb6b9823fdef459514e0058fc6b6)
+        version: 5.8.1
       rimraf:
         specifier: 'catalog:'
         version: 6.1.4
@@ -1110,7 +1106,7 @@ importers:
         version: 26.6.6
       daisyui:
         specifier: 'catalog:'
-        version: 5.7.50(patch_hash=cc3f25f906059647b501fe13a48fc4e7dc82cb6b9823fdef459514e0058fc6b6)
+        version: 5.8.1
       rimraf:
         specifier: 'catalog:'
         version: 6.1.4
@@ -1183,7 +1179,7 @@ importers:
         version: 26.6.6
       daisyui:
         specifier: 'catalog:'
-        version: 5.7.50(patch_hash=cc3f25f906059647b501fe13a48fc4e7dc82cb6b9823fdef459514e0058fc6b6)
+        version: 5.8.1
       jsdom:
         specifier: 'catalog:'
         version: 31.0.0
@@ -1274,7 +1270,7 @@ importers:
         version: 26.6.6
       daisyui:
         specifier: 'catalog:'
-        version: 5.7.50(patch_hash=cc3f25f906059647b501fe13a48fc4e7dc82cb6b9823fdef459514e0058fc6b6)
+        version: 5.8.1
       eslint:
         specifier: 'catalog:'
         version: 10.14.0(jiti@2.7.0)(supports-color@7.2.0)
@@ -1386,7 +1382,7 @@ importers:
         version: 26.6.6
       daisyui:
         specifier: 'catalog:'
-        version: 5.7.50(patch_hash=cc3f25f906059647b501fe13a48fc4e7dc82cb6b9823fdef459514e0058fc6b6)
+        version: 5.8.1
       rimraf:
         specifier: 'catalog:'
         version: 6.1.4
@@ -1498,7 +1494,7 @@ importers:
         version: 26.6.6
       daisyui:
         specifier: 'catalog:'
-        version: 5.7.50(patch_hash=cc3f25f906059647b501fe13a48fc4e7dc82cb6b9823fdef459514e0058fc6b6)
+        version: 5.8.1
       rimraf:
         specifier: 'catalog:'
         version: 6.1.4
@@ -6513,8 +6509,8 @@ packages:
   dagre-d3-es@7.0.14:
     resolution: {integrity: sha512-P4rFMVq9ESWqmOgK+dlXvOtLwYg0i7u0HBGJER0LZDJT2VHIPAMZ/riPxqJceWMStH5+E61QxFra9kIS3AqdMg==}
 
-  daisyui@5.7.50:
-    resolution: {integrity: sha512-+/LRqnTCoc7s/bJEKKwtJSwzeXCVdAmRdNmZeZzgHCaQ9PJyl7j+2V2U32GQDMyD+VDkP9e/+JGoC72Y1hLk7w==}
+  daisyui@5.8.1:
+    resolution: {integrity: sha512-ptP4WHOJ6WltNnA5zwkg3GypOLhsyUM2FHuXCckWVEpWviioInFKsjnShCWYGYHsQ5P9bUCOH1tn45cKLeTUpg==}
 
   data-urls@8.0.0:
     resolution: {integrity: sha512-JQUCCK+/CAGbGGx618PlFZMXH81Jtj7t73CHv9dd/zVWvxgGT2zLFRjnKb+Ng46GIwcy+f7f88qd4duqllK+WQ==}
@@ -12233,7 +12229,7 @@ snapshots:
 
   '@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3(@typescript-eslint/types@8.71.1))(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))':
     dependencies:
-      deepmerge: 4.3.1(patch_hash=34278db44057e78936b50d3a656248df9c6369532a9dc35467e85ebd449e8832)
+      deepmerge: 4.3.1
       magic-string: 1.4.3
       obug: 2.2.1
       svelte: 5.57.3(@typescript-eslint/types@8.71.1)
@@ -13801,7 +13797,7 @@ snapshots:
       d3: 7.9.0
       lodash-es: 4.18.1
 
-  daisyui@5.7.50(patch_hash=cc3f25f906059647b501fe13a48fc4e7dc82cb6b9823fdef459514e0058fc6b6): {}
+  daisyui@5.8.1: {}
 
   data-urls@8.0.0:
     dependencies:
@@ -13830,7 +13826,7 @@ snapshots:
 
   deep-is@0.1.4: {}
 
-  deepmerge@4.3.1(patch_hash=34278db44057e78936b50d3a656248df9c6369532a9dc35467e85ebd449e8832): {}
+  deepmerge@4.3.1: {}
 
   define-lazy-prop@2.0.0: {}
 
