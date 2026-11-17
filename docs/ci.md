@@ -14,7 +14,7 @@ Windows、Android 和 iOS 在各自的 runner 上运行。Windows 和 Android �
 
 CI 的 unit 阶段显式启用真实 Storage Chrome 上传取消门禁，该开关进入 Turbo 缓存身份。脚手架生成门禁包含下载源/代理容器验证；部署门禁先准备固定 PostgreSQL/MySQL/Redis/RustFS 镜像，再验证外部中间件配置。Windows 进程回收、存储路径安全与 CLI 参数回归在独立 Windows job 执行，并进入最终必需汇总。脚手架运行器通过 pnpm 的真实入口启动子进程，目录含空格也不经过 shell 重新分词。
 
-发布完成判定同时核验所有包版本、GitHub Release 和全部 npm latest；标签部分推进后重新规划整轮仍会恢复未完成发布。
+发布完成判定从版本标签读取当时的公开包清单，再核验这些包的 npm 版本、GitHub Release 和 npm `latest`。例如，标签之后才加入的包需要新版本，不会让已经完成的旧版本重新进入发布。尚无标签时使用当前提交的公开包清单。已有标签但其发布尚未完成时，从原标签提交恢复；其他提交使用同一版本会在规划阶段报错。
 
 需要实际执行单元阶段时，CI 先为 Tools 的 Python 测试创建虚拟环境，并从 [测试依赖清单](../packages/tools/jobs/tests/requirements.txt) 安装 Office 库。生成真实 DOCX、XLSX 和 PPTX 的单元用例在 runner 上执行，后续镜像测试仍单独验证容器内的依赖和运行结果。
 

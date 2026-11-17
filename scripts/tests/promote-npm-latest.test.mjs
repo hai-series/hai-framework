@@ -3,7 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { promoteLatest, releasePackages } from '../promote-npm-latest.mjs'
+import { promoteLatest } from '../promote-npm-latest.mjs'
+import { releasePackages } from '../release-status.mjs'
 
 const packages = ['a', 'b'].map(name => ({ name: `@h-ai/${name}`, version: '1.0.0-beta.1' }))
 

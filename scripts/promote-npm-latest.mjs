@@ -4,9 +4,7 @@ import { appendFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { missingPackages, readLatest } from './release-status.mjs'
-
-const releaseVersion = /^\d+\.\d+\.\d+(?:-[0-9A-Z]+(?:[.-][0-9A-Z]+)*)?$/i
+import { missingPackages, readLatest, releasePackages, releaseVersion } from './release-status.mjs'
 
 /** 自动发布只推进已验证祖先之后的来源，未知/分叉默认版本保守保留，不依赖历史命名的 SemVer 顺序。 */
 function canAdvanceDefaults(root, version, defaults) {
@@ -31,20 +29,6 @@ function canAdvanceDefaults(root, version, defaults) {
   catch {
     return false
   }
-}
-
-export function releasePackages(root, version) {
-  if (!releaseVersion.test(version))
-    throw new Error('A release version is required')
-  const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
-  const tag = `v${version}`
-  const manifest = JSON.parse(git('show', `${tag}:package.json`))
-  if (manifest.version !== version)
-    throw new Error('Release tag and root version do not match')
-  return git('ls-tree', '-d', '--name-only', `${tag}:packages`).split('\n').map((directory) => {
-    const pkg = JSON.parse(git('show', `${tag}:packages/${directory}/package.json`))
-    return { name: pkg.name, version, private: pkg.private }
-  }).filter(pkg => !pkg.private)
 }
 
 export async function promoteLatest(packages, options = {}) {

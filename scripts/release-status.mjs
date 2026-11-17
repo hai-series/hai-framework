@@ -5,11 +5,32 @@ import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
+export const releaseVersion = /^\d+\.\d+\.\d+(?:-[0-9A-Z]+(?:[.-][0-9A-Z]+)*)?$/i
+
+function gitReader(root) {
+  return (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: 'pipe' }).trim()
+}
+
 export function publicPackages(root) {
   return readdirSync(join(root, 'packages'), { withFileTypes: true }).filter(entry => entry.isDirectory()).map((entry) => {
     const directory = `packages/${entry.name}`
     const pkg = JSON.parse(readFileSync(join(root, directory, 'package.json'), 'utf8'))
     return { ...pkg, directory }
+  }).filter(pkg => !pkg.private)
+}
+
+/** 版本已绑定 Git 标签后，只从该标签读取归属于这一版的公开包。 */
+export function releasePackages(root, version) {
+  if (!releaseVersion.test(version))
+    throw new Error('A release version is required')
+  const git = gitReader(root)
+  const tag = `refs/tags/v${version}`
+  const manifest = JSON.parse(git('show', `${tag}:package.json`))
+  if (manifest.version !== version)
+    throw new Error('Release tag and root version do not match')
+  return git('ls-tree', '-d', '--name-only', `${tag}:packages`).split('\n').map((directory) => {
+    const pkg = JSON.parse(git('show', `${tag}:packages/${directory}/package.json`))
+    return { name: pkg.name, version, private: pkg.private }
   }).filter(pkg => !pkg.private)
 }
 
@@ -88,6 +109,25 @@ export async function releasePending(packages, repository, version, options = {}
   return packages.some(pkg => latest.get(pkg.name) !== version)
 }
 
+export async function releasePendingForCheckout(root, repository, version, options = {}) {
+  const git = gitReader(root)
+  const tag = `refs/tags/v${version}`
+  try {
+    git('show-ref', '--verify', '--quiet', tag)
+  }
+  catch (error) {
+    if (error.status !== 1)
+      throw error
+    return releasePending(publicPackages(root), repository, version, options)
+  }
+
+  const source = git('rev-parse', '--verify', `${tag}^{commit}`)
+  const pending = await releasePending(releasePackages(root, version), repository, version, options)
+  if (pending && source !== git('rev-parse', 'HEAD'))
+    throw new Error(`Release v${version} is incomplete at its tagged source ${source}; rerun that source or use a new version.`)
+  return pending
+}
+
 /** 发布完成后提交版本；重跑时接受远端已存在的相同树，禁止覆盖后续源码。 */
 export function commitVersionSync(root, branch = 'main') {
   const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
@@ -111,9 +151,9 @@ async function main() {
     commitVersionSync(root, process.env.GITHUB_REF_NAME ?? 'main')
     return
   }
-  const packages = publicPackages(root)
   const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
   if (process.argv[2] === 'missing') {
+    const packages = publicPackages(root)
     if (packages.some(pkg => pkg.version !== version))
       throw new Error('Package versions must match the release version before publishing')
     const missing = await missingPackages(packages)
@@ -122,7 +162,7 @@ async function main() {
   }
   if (!process.env.GITHUB_REPOSITORY || !process.env.GITHUB_OUTPUT)
     throw new Error('GITHUB_REPOSITORY and GITHUB_OUTPUT are required for release status')
-  const pending = await releasePending(packages, process.env.GITHUB_REPOSITORY, version, { token: process.env.GITHUB_TOKEN, apiUrl: process.env.GITHUB_API_URL })
+  const pending = await releasePendingForCheckout(root, process.env.GITHUB_REPOSITORY, version, { token: process.env.GITHUB_TOKEN, apiUrl: process.env.GITHUB_API_URL })
   const channel = releaseChannel(version)
   appendFileSync(process.env.GITHUB_OUTPUT, `changed=${pending}\nversion=${version}\nnpm_tag=${channel.npmTag}\n`)
 }

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { commitVersionSync, missingPackages, releaseChannel, releasePending } from '../release-status.mjs'
+import { commitVersionSync, missingPackages, releaseChannel, releasePending, releasePendingForCheckout } from '../release-status.mjs'
 
 const packages = [
   { name: '@h-ai/a', version: '1.0.0', directory: 'packages/a' },
@@ -119,6 +119,56 @@ describe('release recovery', () => {
     }
     expect(await releasePending(packages, 'owner/repo', '2.0.0', { fetcher })).toBe(true)
     expect(requests.filter(url => new URL(url).origin === 'https://registry.npmjs.org').every(url => url.endsWith('/2.0.0'))).toBe(true)
+  })
+
+  it('keeps tagged package sets immutable and only resumes incomplete releases on their source commit', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hai-release-inventory-'))
+    const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: 'pipe' }).trim()
+    const version = '1.0.0'
+    const repository = 'owner/repo'
+    const addPackage = (name) => {
+      mkdirSync(join(root, 'packages', name), { recursive: true })
+      writeFileSync(join(root, 'packages', name, 'package.json'), JSON.stringify({ name: `@h-ai/${name}`, version }))
+    }
+    const requests = []
+    let missing = 'tools'
+    const fetcher = async (url) => {
+      requests.push(url)
+      if (url.endsWith(`%2f${missing}/${version}`))
+        return new Response('', { status: 404 })
+      return Response.json({ version, latest: version, draft: false })
+    }
+    const pending = () => releasePendingForCheckout(root, repository, version, { fetcher })
+    try {
+      git('init', '-b', 'main')
+      git('config', 'user.name', 'Release test')
+      git('config', 'user.email', 'release@example.invalid')
+      git('config', 'core.hooksPath', '/dev/null')
+      writeFileSync(join(root, 'package.json'), JSON.stringify({ version }))
+      addPackage('core')
+      git('add', '.')
+      git('commit', '-m', 'original release source')
+      git('tag', `v${version}`)
+
+      missing = 'core'
+      expect(await pending()).toBe(true)
+
+      addPackage('tools')
+      git('add', '.')
+      git('commit', '-m', 'add a package after the release')
+      await expect(pending()).rejects.toThrow('incomplete at its tagged source')
+      missing = 'tools'
+      requests.length = 0
+      expect(await pending()).toBe(false)
+      expect(requests.some(url => url.includes('@h-ai%2ftools'))).toBe(false)
+
+      git('tag', '-d', `v${version}`)
+      expect(await pending()).toBe(true)
+      expect(requests.some(url => url.includes('@h-ai%2ftools'))).toBe(true)
+    }
+    finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
   it('retries missing npm packages even when a release already exists', async () => {
     const fetcher = async url => new URL(url).pathname.split('/').includes('@h-ai%2fb')
