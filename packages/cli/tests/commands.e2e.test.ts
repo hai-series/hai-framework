@@ -1666,7 +1666,14 @@ describe('ai 支持交付与回填', () => {
       expect(await readText(dir, `.agents/skills/${resource}`)).toBe(expected)
     }
     expect(await readText(dir, 'AGENTS.md')).toBe(customAgents)
-    expect(await readJson(dir, 'package.json')).toEqual(originalPackage)
+    // init 只回填工程资源；add ai 还要为旧项目补上 AI 现在依赖的 Tools。
+    const expectedPackage = command === 'add'
+      ? {
+          ...originalPackage,
+          dependencies: { ...originalPackage.dependencies, '@h-ai/tools': HAI_DEP_VERSION },
+        }
+      : originalPackage
+    expect(await readJson(dir, 'package.json')).toEqual(expectedPackage)
   })
 
   it('单模块回填应补全工作流资源并保留已有 Skill 内容', async () => {
